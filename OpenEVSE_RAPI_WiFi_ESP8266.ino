@@ -229,11 +229,12 @@ int mdns1(int webtype)
       {
         IPAddress ip = WiFi.softAPIP();
         String ipStr = String(ip[0]) + '.' + String(ip[1]) + '.' + String(ip[2]) + '.' + String(ip[3]);
-        s = "HTTP/1.1 200 OK\r\nContent-Type: text/html\r\n\r\n<!DOCTYPE HTML>\r\n<html>Welcome to OpenEVSE Wifi Configuration";
+        s = "HTTP/1.1 200 OK\r\nContent-Type: text/html\r\n\r\n<!DOCTYPE HTML>\r\n<html><font size='20'><font color=006666>Open</font><b>EVSE</b></font><p><b>Open Source Hardware</b><p>Wireless Configuration<p>Networks Found:<p>";
         //s += ipStr;
         s += "<p>";
         s += st;
-        s += "<form method='get' action='a'><label>SSID: </label><input name='ssid' length=32><input name='pass' length=64><input type='submit'></form>";
+        s += "<p>";
+        s += "<form method='get' action='a'><label><b><i>WiFi SSID:</b></i></label><input name='ssid' length=32><p><label><b><i>Password  :</b></i></label><input name='pass' length=64><p><input type='submit'></form>";
         s += "</html>\r\n\r\n";
         Serial.println("Sending 200");
       }
@@ -266,9 +267,9 @@ int mdns1(int webtype)
             Serial.println("*"); 
           }    
         EEPROM.commit();
-        s = "HTTP/1.1 200 OK\r\nContent-Type: text/html\r\n\r\n<!DOCTYPE HTML>\r\n<html>SSID and Password";
+        s = "HTTP/1.1 200 OK\r\nContent-Type: text/html\r\n\r\n<!DOCTYPE HTML>\r\n<html><font size='20'><font color=006666>Open</font><b>EVSE</b></font><p><b>Open Source Hardware</b><p>Wireless Configuration<p>SSID and Password<p>";
         //s += req;
-        s += "<p> Saved to Memory... Please reset to join your network</html>\r\n\r\n";
+        s += "<p>Saved to Memory...<p>Please reset to join your network</html>\r\n\r\n";
       }
       else
       {
@@ -286,8 +287,8 @@ int mdns1(int webtype)
         Serial.println("Sending 200");
       }
       else if ( req.startsWith("/reset") ) {
-        s = "HTTP/1.1 200 OK\r\nContent-Type: text/html\r\n\r\n<!DOCTYPE HTML>\r\n<html>OpenEVSE Wifi Reset";
-        s += "<p>Clearing the EEPROM<p>";
+        s = "HTTP/1.1 200 OK\r\nContent-Type: text/html\r\n\r\n<!DOCTYPE HTML>\r\n<html><font size='20'><font color=006666>Open</font><b>EVSE</b></font><p><b>Open Source Hardware</b><p>Wireless Configuration<p>Reset to Defaults:<p>";
+        s += "<p><b>Clearing the EEPROM</b><p>";
         s += "</html>\r\n\r\n";
         Serial.println("Sending 200");  
         Serial.println("Clearing Memory");
