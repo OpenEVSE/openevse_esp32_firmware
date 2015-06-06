@@ -10,10 +10,7 @@ WiFiServer server(80);
 const char* ssid = "OpenEVSE";
 const char* password = "openevse";
 String st;
-
-//Enter your Emoncms.org Write key here
-const char* privateKey = "your_Write_API_key";
-
+String privateKey ="";
 
 const char* host = "www.emoncms.org";
 const char* inputID_AMP   = "OpenEVSE_AMP:";
@@ -48,6 +45,8 @@ Serial.println();
   delay(100);
   Serial.println("$FP 0 1 Starting");
   delay(1000);
+  
+  
   // read eeprom for ssid and pass
   Serial.println("Reading EEPROM for SSID");
   String esid;
@@ -63,6 +62,11 @@ Serial.println();
     {
       epass += char(EEPROM.read(i));
     }
+  //String privateKey ="";
+  for (int i = 96; i < 128; ++i)
+    {
+      privateKey += char(EEPROM.read(i));
+    }
   Serial.print("PASS: ");
   Serial.println("********");  
   if ( esid.length() > 1 ) {
@@ -75,6 +79,7 @@ Serial.println();
       delay(100);
       Serial.print("$FP 0 1 ");
       Serial.println(esid.c_str());
+      
       delay(50);
    
       if ( testWifi() == 20 ) { 
@@ -234,23 +239,33 @@ int mdns1(int webtype)
         s += "<p>";
         s += st;
         s += "<p>";
-        s += "<form method='get' action='a'><label><b><i>WiFi SSID:</b></i></label><input name='ssid' length=32><p><label><b><i>Password  :</b></i></label><input name='pass' length=64><p><input type='submit'></form>";
+        s += "<form method='get' action='a'><label><b><i>WiFi SSID:</b></i></label><input name='ssid' length=32><p><label><b><i>Password  :</b></i></label><input name='pass' length=64><p><label><b><i>Emon Key:</b></i></label><input name='ekey' length=32><p><input type='submit'></form>";
         s += "</html>\r\n\r\n";
         Serial.println("Sending 200");
       }
       else if ( req.startsWith("/a?ssid=") ) {
         // /a?ssid=blahhhh&pass=poooo
         Serial.println("clearing eeprom");
-        for (int i = 0; i < 96; ++i) { EEPROM.write(i, 0); }
+        for (int i = 0; i < 128; ++i) { EEPROM.write(i, 0); }
         String qsid; 
         qsid = req.substring(8,req.indexOf('&'));
         Serial.println(qsid);
         Serial.println("");
+        int lastStringLength = (14 + qsid.length());
         String qpass;
-        qpass = req.substring(req.lastIndexOf('=')+1);
+        qpass = req.substring(lastStringLength,req.indexOf('&ekey')-4);
         qpass.replace("%23", "#");
         Serial.println(qpass);
         Serial.println("");
+        
+        String qkey;
+        qkey = req.substring(req.lastIndexOf('ekey=')+1);
+        Serial.println(qkey);
+        Serial.println("");
+        //String req = req.replace(qkey, " ");
+        
+        
+
         
         Serial.println("Writing SSID to Memory:");
         for (int i = 0; i < qsid.length(); ++i)
@@ -265,7 +280,14 @@ int mdns1(int webtype)
             EEPROM.write(32+i, qpass[i]);
             Serial.print("Wrote: ");
             Serial.println("*"); 
-          }    
+          }
+      Serial.println("Writing EMON Key to Memory:"); 
+        for (int i = 0; i < qkey.length(); ++i)
+          {
+            EEPROM.write(96+i, qkey[i]);
+            Serial.print("Wrote: ");
+            Serial.println(qkey[i]); 
+          }        
         EEPROM.commit();
         s = "HTTP/1.1 200 OK\r\nContent-Type: text/html\r\n\r\n<!DOCTYPE HTML>\r\n<html><font size='20'><font color=006666>Open</font><b>EVSE</b></font><p><b>Open Source Hardware</b><p>Wireless Configuration<p>SSID and Password<p>";
         //s += req;
@@ -292,7 +314,7 @@ int mdns1(int webtype)
         s += "</html>\r\n\r\n";
         Serial.println("Sending 200");  
         Serial.println("Clearing Memory");
-        for (int i = 0; i < 96; ++i) { EEPROM.write(i, 0); }
+        for (int i = 0; i < 128; ++i) { EEPROM.write(i, 0); }
         EEPROM.commit();
       }
       else
@@ -391,7 +413,7 @@ int temp3 = Integer.parseInt(tokens[3]);
     }
   url += url_pilot;
   url += "}&apikey=";
-  url += privateKey;
+  url += privateKey.c_str();
     
 // This will send the request to the server
   client.print(String("GET ") + url + " HTTP/1.1\r\n" +
