@@ -7,6 +7,7 @@ MDNSResponder mdns;
 WiFiServer server(80);
 
 
+
 const char* ssid = "OpenEVSE";
 const char* password = "openevse";
 String st;
@@ -27,9 +28,12 @@ int temp2 = 0;
 int temp3 = 0;
 int pilot = 0;
 
+int buttonState = 0;
+
 void setup() {
   Serial.begin(115200);
   EEPROM.begin(512);
+  pinMode(0, INPUT);
   delay(10000);
 Serial.println();
   Serial.println();
@@ -164,13 +168,7 @@ void setupAP(void) {
     {
       // Print SSID and RSSI for each network found
       st += "<li>";
-      //st +=i + 1;
-      //st += ": ";
       st += WiFi.SSID(i);
-      //st += " (";
-      //st += WiFi.RSSI(i);
-      //st += ")";
-      //st += (WiFi.encryptionType(i) == ENC_TYPE_NONE)?" ":"*";
       st += "</li>";
     }
   st += "</ul>";
@@ -329,14 +327,25 @@ int mdns1(int webtype)
 }
 
 void loop() {
-  
-  delay(5000);
-//  ++amp;
-//  ++temp1;
-//OpenEVSE RAPI
-// Get pilot setting $GE*B0
-// Get amps and volts $GG*B2
-// Get Temps $GP*BB
+int erase = 0;  
+buttonState = digitalRead(0);
+while (buttonState == LOW) {
+    buttonState = digitalRead(0);
+    erase++;
+    if (erase >= 1000) {
+        Serial.println("Erasing EEPROM");
+          for (int i = 0; i < 128; ++i) { 
+          EEPROM.write(i, 0);
+          Serial.print("#"); 
+          }
+     EEPROM.commit();
+     Serial.println("#");
+     Serial.println("Finished..."); 
+     int erase = 0;
+     }
+} 
+delay(5000);
+
  Serial.flush();
  Serial.println("$GE*B0");
  delay(100);
@@ -450,15 +459,10 @@ Serial.flush();
                "Connection: close\r\n\r\n");
   delay(10);
   
- // udp.beginPacketMulticast(addr, port, WiFi.localIP())
- // udp.write(ReplyBuffer);
- //   udp.endPacket();
-  
   while(client.available()){
     String line = client.readStringUntil('\r');
     Serial.print(line);
     }
-    
   
   Serial.print("connecting to ");
   Serial.println(host);
