@@ -356,16 +356,15 @@ void loop() {
  Serial.println("$GG*B2");
  delay(100);
  while(Serial.available()) {
- String rapiString1 = Serial.readStringUntil('\r');
-     if ( rapiString1.startsWith("$OK") ) {
+ String rapiString = Serial.readStringUntil('\r');
+     if ( rapiString.startsWith("$OK") ) {
         String qrapi; 
-        qrapi = rapiString1.substring(rapiString1.indexOf(' '));
+        qrapi = rapiString.substring(rapiString.indexOf(' '));
         amp = qrapi.toInt();
         Serial.print("RAPI Amps = ");
         Serial.println(amp);
         String qrapi1;
-        int lastStringLength = (qrapi.length());
-        qrapi1 = rapiString1.substring(lastStringLength,rapiString1.indexOf(' '));
+        qrapi1 = rapiString.substring(rapiString.lastIndexOf(' '));
         volt = qrapi1.toInt();
         Serial.print("RAPI Volts = ");
         Serial.println(volt);
@@ -378,22 +377,21 @@ Serial.flush();
  Serial.println("$GP*BB");
  delay(100);
  while(Serial.available()) {
-   String rapiString2 = Serial.readStringUntil('\r');
-     if ( rapiString2.startsWith("$OK") ) {
+   String rapiString = Serial.readStringUntil('\r');
+     if (rapiString.startsWith("$OK") ) {
         String qrapi; 
-        qrapi = rapiString2.substring(rapiString2.indexOf(' '));
+        qrapi = rapiString.substring(rapiString.indexOf(' '));
         temp1 = qrapi.toInt();
         Serial.print("RAPI Temp 1 = ");
         Serial.println(temp1);
         String qrapi1;
-        int lastStringLength = (qrapi.length());
-        qrapi1 = rapiString2.substring(lastStringLength,rapiString2.indexOf(' '));
+        int firstRapiCmd = rapiString.indexOf(' ');
+        qrapi1 = rapiString.substring(rapiString.indexOf(' ', firstRapiCmd + 1 ));
         temp2 = qrapi1.toInt();
         Serial.print("RAPI Temp2 = ");
         Serial.println(temp2);
         String qrapi2;
-        int lastStringLength1 = (qrapi.length() + qrapi1.length());
-        qrapi2 = rapiString2.substring(lastStringLength1,rapiString2.indexOf(' '));
+        qrapi2 = rapiString.substring(rapiString.lastIndexOf(' '));
         temp3 = qrapi2.toInt();
         Serial.print("RAPI Temp3 = ");
         Serial.println(temp3);
