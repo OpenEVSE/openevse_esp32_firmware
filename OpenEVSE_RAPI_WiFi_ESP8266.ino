@@ -21,11 +21,11 @@ const char* inputID_TEMP3   = "OpenEVSE_TEMP3:";
 const char* inputID_PILOT   = "OpenEVSE_PILOT:";
 
 int amp = 0;
-int volt = 240;
-int temp1 = 10;
+int volt = 0;
+int temp1 = 0;
 int temp2 = 0;
 int temp3 = 0;
-int pilot = 16;
+int pilot = 0;
 
 void setup() {
   Serial.begin(115200);
@@ -331,45 +331,76 @@ int mdns1(int webtype)
 void loop() {
   
   delay(5000);
-  ++amp;
-  ++temp1;
+//  ++amp;
+//  ++temp1;
 //OpenEVSE RAPI
 // Get pilot setting $GE*B0
 // Get amps and volts $GG*B2
 // Get Temps $GP*BB
-
+ Serial.flush();
  Serial.println("$GE*B0");
- delay(10);
+ delay(100);
  while(Serial.available()) {
    String rapiString = Serial.readStringUntil('\r');
-   //String delims = " ";
-   //String tokens = rapiString.split(delims);
-   }
- //int pilot = int(parseInt(tokens[1]));
-
- 
- Serial.println("$GG*B2");
- delay(10);
- /*
- while(Serial.available()) {
-   String rapiString = Serial.readStringUntil('\r');
-   String delims = "[ ]";
-   String[] tokens = rapiString.split(delims);
-   }
-int amp = Integer.parseInt(tokens[1]);
-int volt = Integer.parseInt(tokens[2]);
+     if ( rapiString.startsWith("$OK ") ) {
+        String qrapi; 
+        qrapi = rapiString.substring(rapiString.indexOf(' '));
+        pilot = qrapi.toInt();
+        Serial.print("RAPI Pilot = ");
+        Serial.println(pilot);
+        }
+     }  
    
- Serial.println("$GP*BB");
- delay(10);
+ delay(100);
+ Serial.flush();
+ Serial.println("$GG*B2");
+ delay(100);
  while(Serial.available()) {
-   String rapiString = Serial.readStringUntil('\r');
-   String delims = "[ ]";
-   String[] tokens = rapiString.split(delims);
-   }
-int temp1 = Integer.parseInt(tokens[1]);
-int temp2 = Integer.parseInt(tokens[2]);
-int temp3 = Integer.parseInt(tokens[3]);
-*/
+ String rapiString1 = Serial.readStringUntil('\r');
+     if ( rapiString1.startsWith("$OK") ) {
+        String qrapi; 
+        qrapi = rapiString1.substring(rapiString1.indexOf(' '));
+        amp = qrapi.toInt();
+        Serial.print("RAPI Amps = ");
+        Serial.println(amp);
+        String qrapi1;
+        int lastStringLength = (qrapi.length());
+        qrapi1 = rapiString1.substring(lastStringLength,rapiString1.indexOf(' '));
+        volt = qrapi1.toInt();
+        Serial.print("RAPI Volts = ");
+        Serial.println(volt);
+     }
+ }
+ 
+   
+ delay(100);
+Serial.flush(); 
+ Serial.println("$GP*BB");
+ delay(100);
+ while(Serial.available()) {
+   String rapiString2 = Serial.readStringUntil('\r');
+     if ( rapiString2.startsWith("$OK") ) {
+        String qrapi; 
+        qrapi = rapiString2.substring(rapiString2.indexOf(' '));
+        temp1 = qrapi.toInt();
+        Serial.print("RAPI Temp 1 = ");
+        Serial.println(temp1);
+        String qrapi1;
+        int lastStringLength = (qrapi.length());
+        qrapi1 = rapiString2.substring(lastStringLength,rapiString2.indexOf(' '));
+        temp2 = qrapi1.toInt();
+        Serial.print("RAPI Temp2 = ");
+        Serial.println(temp2);
+        String qrapi2;
+        int lastStringLength1 = (qrapi.length() + qrapi1.length());
+        qrapi2 = rapiString2.substring(lastStringLength1,rapiString2.indexOf(' '));
+        temp3 = qrapi2.toInt();
+        Serial.print("RAPI Temp3 = ");
+        Serial.println(temp3);
+     }
+ }
+ 
+ 
 // Use WiFiClient class to create TCP connections
   WiFiClient client;
   const int httpPort = 80;
