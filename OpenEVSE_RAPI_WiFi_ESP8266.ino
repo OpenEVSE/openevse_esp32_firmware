@@ -13,7 +13,7 @@ const char* password = "openevse";
 String st;
 String privateKey ="";
 
-const char* host = "www.emoncms.org";
+const char* host = "data.openevse.com";
 const char* inputID_AMP   = "OpenEVSE_AMP:";
 const char* inputID_VOLT   = "OpenEVSE_VOLT:";
 const char* inputID_TEMP1   = "OpenEVSE_TEMP1:";
@@ -417,7 +417,7 @@ Serial.flush();
   }
   
 // We now create a URL for OpenEVSE RAPI data upload request
-  String url = "/input/post.json?json={";
+  String url = "/emoncms/input/post.json?node=1&json={";
   String url_amp = inputID_AMP;
     url_amp += amp;
     url_amp += ",";
