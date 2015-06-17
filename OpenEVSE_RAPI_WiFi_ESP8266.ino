@@ -1,19 +1,35 @@
+// -*- C++ -*-
+/*
+ * Copyright (c) 2015 Chris Howell
+ * Copyright (c) 2015 Sam C. Lin
+ *
+ * This file is part of Open EVSE.
+ * Open EVSE is free software; you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License as published by
+ * the Free Software Foundation; either version 3, or (at your option)
+ * any later version.
+ * Open EVSE is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * GNU General Public License for more details.
+ * You should have received a copy of the GNU General Public License
+ * along with Open EVSE; see the file COPYING.  If not, write to the
+ * Free Software Foundation, Inc., 59 Temple Place - Suite 330,
+ * Boston, MA 02111-1307, USA.
+ */
 #include "ESP8266WiFi.h"
 #include <ESP8266mDNS.h>
 #include <WiFiClient.h>
 #include <EEPROM.h>
 
-MDNSResponder mdns;
-WiFiServer server(80);
-
-
-
 const char* ssid = "OpenEVSE";
 const char* password = "openevse";
 String st;
-String privateKey ="";
+String privateKey = "";
 
 const char* host = "data.openevse.com";
+String url = "/emoncms/input/post.json?node=1&json={";
+
 const char* inputID_AMP   = "OpenEVSE_AMP:";
 const char* inputID_VOLT   = "OpenEVSE_VOLT:";
 const char* inputID_TEMP1   = "OpenEVSE_TEMP1:";
@@ -30,105 +46,210 @@ int pilot = 0;
 
 int buttonState = 0;
 
+/* For Serial Debug
+inline void dbgprint(const char *s) {
+  Serial.print(s);
+}
+inline void dbgprintln(const char *s) {
+  Serial.println(s);
+}
+*/
+
+#define dbgprint(s) Serial.print(s)
+#define dbgprintln(s) Serial.println(s)
+
+#define RAPI_TIMEOUT_MS 1000
+#define RAPI_BUFLEN 40
+#define RAPI_MAX_TOKENS 10
+class RapiSerial {
+  char respBuf[RAPI_BUFLEN];
+  void tokenize();
+  void _sendCmd(const char *cmdstr);
+public:
+  int tokenCnt;
+  char *tokens[RAPI_MAX_TOKENS];
+
+  RapiSerial() {*respBuf = 0;}
+  void sendString(const char *str) { dbgprint(str); }
+  int sendCmd(const char *cmdstr);
+};
+
+void RapiSerial::_sendCmd(const char *cmdstr)
+{
+  Serial.print(cmdstr);
+
+  const char *s = cmdstr;
+  uint8_t chk = 0;
+  while (*s) {
+    chk ^= *(s++);
+  }
+  sprintf(respBuf,"^%02X\r",(unsigned)chk);
+  Serial.print(respBuf);
+
+  *respBuf = 0;
+}
+
+
+void RapiSerial::tokenize()
+{
+  char *s = respBuf;
+  while (*s) {
+    tokens[tokenCnt++] = s++;
+    if (tokenCnt == RAPI_MAX_TOKENS) break;
+    while (*s && (*s != ' ')) s++;
+    if (*s == ' ') *(s++) = '\0';
+  }
+}
+
+/*
+ * return values:
+ * -1= timeout
+ * 0= success
+ * 1=$NK
+ * 2=invalid RAPI response
+*/
+int RapiSerial::sendCmd(const char *cmdstr)
+{
+ start:
+  tokenCnt = 0;
+  *respBuf = 0;
+
+  int rc;
+  _sendCmd(cmdstr);
+  int bufpos = 0;
+  unsigned long mss = millis();
+  do {
+    int bytesavail = Serial.available();
+    if (bytesavail) {
+      for (int i=0;i < bytesavail;i++) {
+	char c = Serial.read();
+
+	if (!bufpos && c != '$') {
+	  // wait for start character
+	  continue;
+	}
+	else if (c == '\r') {
+	  respBuf[bufpos] = '\0';
+	  tokenize();
+	  
+	}
+	else {
+	  respBuf[bufpos++] = c;
+	  if (bufpos >= (RAPI_BUFLEN-1)) return -2;
+	}
+      }
+    }
+  } while (!tokenCnt && ((millis() - mss) < RAPI_TIMEOUT_MS));
+  
+/*  
+    dbgprint("\n\rTOKENCNT: ");dbgprintln(tokenCnt);
+    for (int i=0;i < tokenCnt;i++) {
+      dbgprintln(tokens[i]);
+    }
+    dbgprintln("");
+*/
+  
+
+  if (tokenCnt) {
+    if (!strcmp(respBuf,"$OK")) {
+      return 0;
+    }
+    else if (!strcmp(respBuf,"$NK")) {
+      return 1;
+    }
+    else if (!strcmp(respBuf,"$WF")) { // async WIFI
+      ResetEEPROM();
+      goto start;
+    }
+    else if (!strcmp(respBuf,"$ST")) { // async EVSE state transition
+      // placeholder.. no action et
+      goto start;
+    }
+    else {
+      return 2;
+    }
+  }
+  else {
+    return -1;
+  }
+}
+
+MDNSResponder mdns;
+WiFiServer server(80);
+RapiSerial rapi;
+char tmpStr[40];
+
+void ResetEEPROM()
+{
+  dbgprintln("Erasing EEPROM");
+  for (int i = 0; i < 512; ++i) { 
+    EEPROM.write(i, 0);
+    //Always print this so user can see activity during button reset
+    Serial.print("#"); 
+  }
+  EEPROM.commit();   
+}
+
 void setup() {
   Serial.begin(115200);
   EEPROM.begin(512);
   pinMode(0, INPUT);
-  delay(10000);
-Serial.println();
-  Serial.println();
-  delay(100);
-  Serial.println("$FB 5");
-  delay(100);
-  Serial.println("$FP 0 0 ................");
-  delay(100);
-  Serial.println("$FP 0 1 ................");
-  delay(100);
-  Serial.println("OpenEVSE WiFi Startup");
-  Serial.println("$FP 0 0 OpenEVSE.WiFi...");
-  delay(100);
-  Serial.println("$FP 0 1 Starting");
-  delay(1000);
-  
-  
   // read eeprom for ssid and pass
-  Serial.println("Reading EEPROM for SSID");
   String esid;
   for (int i = 0; i < 32; ++i)
     {
       esid += char(EEPROM.read(i));
     }
-  Serial.print("SSID: ");
-  Serial.println(esid);
-  Serial.println("Reading EEPROM for PASSWORD");
   String epass = "";
   for (int i = 32; i < 96; ++i)
     {
       epass += char(EEPROM.read(i));
     }
-  //String privateKey ="";
   for (int i = 96; i < 128; ++i)
     {
       privateKey += char(EEPROM.read(i));
     }
-  Serial.print("PASS: ");
-  Serial.println("********");  
-  if ( esid.length() > 1 ) {
-      // test esid 
+  if ( esid.length() > 1 ) { 
+    if (WiFi.status() != WL_CONNECTED){
+      // test esid
+      WiFi.mode(WIFI_STA);
+      WiFi.disconnect(); 
       WiFi.begin(esid.c_str(), epass.c_str());
-      delay(100);
-      Serial.println("$FP 0 0 Connecting.to...");
-      delay(100);
-      Serial.println("$FP 0 1 ................");
-      delay(100);
-      Serial.print("$FP 0 1 ");
-      Serial.println(esid.c_str());
-      
       delay(50);
-   
-      if ( testWifi() == 20 ) { 
-          //launchWeb(0);
-          Serial.println("$FP 0 0 OpenEVSE.WiFi...");
-          delay(100);
-          Serial.println("$FP 0 1 Connected.......");
-          delay(100);
-          return;
+    }
+ if ( testWifi() == 20 ) { 
+     //launchWeb(0);
+      return;
       }
   else {
     setupAP(); 
   }
-  }
-   //Serial.println("$FS*BD");
+ }
 } 
 
 int testWifi(void) {
   int c = 0;
-  Serial.println("Waiting for Wifi to connect");  
+  dbgprintln("Waiting for Wifi to connect");  
   while ( c < 20 ) {
     if (WiFi.status() == WL_CONNECTED) { return(20); } 
     delay(500);
-    Serial.print(WiFi.status());    
+    dbgprintln(WiFi.status());    
     c++;
   }
-  Serial.println("Connect timed out, opening AP");
   return(10);
 } 
 
 void launchWeb(int webtype) {
-          Serial.println("");
-          Serial.println("WiFi connected");
-          Serial.println(WiFi.localIP());
-          Serial.println(WiFi.softAPIP());
+          dbgprintln(WiFi.localIP());
+          dbgprintln(WiFi.softAPIP());
           if (!mdns.begin("esp8266", WiFi.localIP())) {
-            Serial.println("Error setting up MDNS responder!");
+            dbgprintln("Error setting up MDNS responder!");
             while(1) { 
               delay(1000);
             }
           }
-          Serial.println("mDNS responder started");
-          // Start the server
           server.begin();
-          Serial.println("Server started");   
+          dbgprintln("Server started");   
           int b = 20;
           int c = 0;
           while(b == 20) { 
@@ -142,27 +263,9 @@ void setupAP(void) {
   WiFi.disconnect();
   delay(100);
   int n = WiFi.scanNetworks();
-  Serial.println("scan done");
-  if (n == 0)
-    Serial.println("no networks found");
-  else
-  {
-    Serial.print(n);
-    Serial.println(" networks found");
-    for (int i = 0; i < n; ++i)
-     {
-      // Print SSID and RSSI for each network found
-      Serial.print(i + 1);
-      Serial.print(": ");
-      Serial.print(WiFi.SSID(i));
-      Serial.print(" (");
-      Serial.print(WiFi.RSSI(i));
-      Serial.println(")");
-      //Serial.println((WiFi.encryptionType(i) == ENC_TYPE_NONE)?" ":"*");
-      delay(10);
-     }
-  }
-  Serial.println(""); 
+    dbgprint(n);
+    dbgprintln(" networks found");
+    
   st = "<ul>";
   for (int i = 0; i < n; ++i)
     {
@@ -174,21 +277,21 @@ void setupAP(void) {
   st += "</ul>";
   delay(100);
   WiFi.softAP(ssid, password);
-  Serial.println("softap");
-  Serial.println("");
+  dbgprintln("Access Point Mode");
+  dbgprintln("");
   delay(100);
-  Serial.println("$FP 0 0 SSID...OpenEVSE.");
+  rapi.sendCmd("$FP 0 0 SSID...OpenEVSE.");
   delay(100);
-  Serial.println("$FP 0 1 PASS...openevse.");
+  rapi.sendCmd("$FP 0 1 PASS...openevse.");
   delay(5000);
-  Serial.println("$FP 0 0 IP_Address......");
+  rapi.sendCmd("$FP 0 0 IP_Address......");
   delay(100);
-  Serial.print("$FP 0 1 ");
-  Serial.print(WiFi.softAPIP());
-  Serial.println(".....");
+  IPAddress ip = WiFi.softAPIP();
+  sprintf(tmpStr,"$FP 0 1 %d.%d.%d.%d",ip[0],ip[1],ip[2],ip[3]);
+  rapi.sendCmd(tmpStr);
+  dbgprintln(".....");
   delay(50); 
   launchWeb(1);
-  Serial.println("over");
 }
 
 int mdns1(int webtype)
@@ -201,10 +304,6 @@ int mdns1(int webtype)
   if (!client) {
     return(20);
   }
-  Serial.println("");
-  Serial.println("New client");
-  
-
   // Wait for data from client to become available
   while(client.connected() && !client.available()){
     delay(1);
@@ -218,13 +317,11 @@ int mdns1(int webtype)
   int addr_start = req.indexOf(' ');
   int addr_end = req.indexOf(' ', addr_start + 1);
   if (addr_start == -1 || addr_end == -1) {
-    Serial.print("Invalid request: ");
-    Serial.println(req);
+    dbgprint("Invalid request: ");
+    dbgprintln(req);
     return(20);
    }
   req = req.substring(addr_start + 1, addr_end);
-  Serial.print("Request: ");
-  Serial.println(req);
   client.flush(); 
   String s;
   if ( webtype == 1 ) {
@@ -239,63 +336,54 @@ int mdns1(int webtype)
         s += "<p>";
         s += "<form method='get' action='a'><label><b><i>WiFi SSID:</b></i></label><input name='ssid' length=32><p><label><b><i>Password  :</b></i></label><input name='pass' length=64><p><label><b><i>Emon Key:</b></i></label><input name='ekey' length=32><p><input type='submit'></form>";
         s += "</html>\r\n\r\n";
-        Serial.println("Sending 200");
       }
       else if ( req.startsWith("/a?ssid=") ) {
         // /a?ssid=blahhhh&pass=poooo
-        Serial.println("clearing eeprom");
-        for (int i = 0; i < 128; ++i) { EEPROM.write(i, 0); }
+        ResetEEPROM();
         String qsid; 
-        qsid = req.substring(8,req.indexOf('&'));
-        Serial.println(qsid);
-        Serial.println("");
-        int lastStringLength = (14 + qsid.length());
-        String qpass;
-        qpass = req.substring(lastStringLength,req.indexOf('&ekey')-4);
+        int idx = req.indexOf("&pass");
+        qsid = req.substring(req.indexOf("ssid=")+5,idx);
+        dbgprintln(qsid);
+        dbgprintln("");
+	int idx2 = req.indexOf("&ekey");
+        String qpass = req.substring(idx+6,idx2);
         qpass.replace("%23", "#");
-        Serial.println(qpass);
-        Serial.println("");
-        
+        qpass.replace('+', ' ');
+                
         String qkey;
-        qkey = req.substring(req.lastIndexOf('ekey=')+1);
-        Serial.println(qkey);
-        Serial.println("");
-        //String req = req.replace(qkey, " ");
-        
-        
-
-        
-        Serial.println("Writing SSID to Memory:");
+        qkey = req.substring(idx2+6);
         for (int i = 0; i < qsid.length(); ++i)
           {
             EEPROM.write(i, qsid[i]);
-            Serial.print("Wrote: ");
-            Serial.println(qsid[i]); 
+            dbgprint("Wrote: ");
+            dbgprintln(qsid[i]); 
           }
-        Serial.println("Writing Password to Memory:"); 
+        dbgprintln("Writing Password to Memory:"); 
         for (int i = 0; i < qpass.length(); ++i)
           {
             EEPROM.write(32+i, qpass[i]);
-            Serial.print("Wrote: ");
-            Serial.println("*"); 
+            dbgprint("Wrote: ");
+            dbgprintln("*"); 
           }
-      Serial.println("Writing EMON Key to Memory:"); 
+      dbgprintln("Writing EMON Key to Memory:"); 
         for (int i = 0; i < qkey.length(); ++i)
           {
             EEPROM.write(96+i, qkey[i]);
-            Serial.print("Wrote: ");
-            Serial.println(qkey[i]); 
+            dbgprint("Wrote: ");
+            dbgprintln(qkey[i]); 
           }        
         EEPROM.commit();
         s = "HTTP/1.1 200 OK\r\nContent-Type: text/html\r\n\r\n<!DOCTYPE HTML>\r\n<html><font size='20'><font color=006666>Open</font><b>EVSE</b></font><p><b>Open Source Hardware</b><p>Wireless Configuration<p>SSID and Password<p>";
         //s += req;
-        s += "<p>Saved to Memory...<p>Please reset to join your network</html>\r\n\r\n";
+        s += "<p>Saved to Memory...<p>Wifi will reset to join your network</html>\r\n\r\n";
+        WiFi.disconnect();
+        delay(1000);
+        ESP.reset();
       }
       else
       {
         s = "HTTP/1.1 404 Not Found\r\n\r\n";
-        Serial.println("Sending 404");
-      }
+       }
   } 
   else
   {
@@ -304,25 +392,23 @@ int mdns1(int webtype)
         s = "HTTP/1.1 200 OK\r\nContent-Type: text/html\r\n\r\n<!DOCTYPE HTML>\r\n<html>OpenEVSE WiFi Configuration";
         s += "<p>";
         s += "</html>\r\n\r\n";
-        Serial.println("Sending 200");
       }
       else if ( req.startsWith("/reset") ) {
         s = "HTTP/1.1 200 OK\r\nContent-Type: text/html\r\n\r\n<!DOCTYPE HTML>\r\n<html><font size='20'><font color=006666>Open</font><b>EVSE</b></font><p><b>Open Source Hardware</b><p>Wireless Configuration<p>Reset to Defaults:<p>";
         s += "<p><b>Clearing the EEPROM</b><p>";
         s += "</html>\r\n\r\n";
-        Serial.println("Sending 200");  
-        Serial.println("Clearing Memory");
-        for (int i = 0; i < 128; ++i) { EEPROM.write(i, 0); }
+        ResetEEPROM();
         EEPROM.commit();
+        WiFi.disconnect();
+        delay(1000);
+        ESP.reset();
       }
       else
       {
         s = "HTTP/1.1 404 Not Found\r\n\r\n";
-        Serial.println("Sending 404");
-      }       
+       }       
   }
   client.print(s);
-  Serial.println("Done with client");
   return(20);
 }
 
@@ -333,91 +419,45 @@ while (buttonState == LOW) {
     buttonState = digitalRead(0);
     erase++;
     if (erase >= 1000) {
-        Serial.println("Erasing EEPROM");
-          for (int i = 0; i < 128; ++i) { 
-          EEPROM.write(i, 0);
-          Serial.print("#"); 
-          }
-     EEPROM.commit();
-     Serial.println("#");
-     Serial.println("Finished..."); 
-     int erase = 0;
-     }
-} 
-delay(5000);
+        ResetEEPROM();
+        int erase = 0;
+        WiFi.disconnect();
+        dbgprintln("Finished...");
+        delay(1000);
+        ESP.reset(); 
+     } 
+   }
 
  Serial.flush();
- Serial.println("$GE*B0");
- delay(100);
- while(Serial.available()) {
-   String rapiString = Serial.readStringUntil('\r');
-     if ( rapiString.startsWith("$OK ") ) {
-        String qrapi; 
-        qrapi = rapiString.substring(rapiString.indexOf(' '));
-        pilot = qrapi.toInt();
-        Serial.print("RAPI Pilot = ");
-        Serial.println(pilot);
-        }
-     }  
-   
- delay(100);
- Serial.flush();
- Serial.println("$GG*B2");
- delay(100);
- while(Serial.available()) {
- String rapiString = Serial.readStringUntil('\r');
-     if ( rapiString.startsWith("$OK") ) {
-        String qrapi; 
-        qrapi = rapiString.substring(rapiString.indexOf(' '));
-        amp = qrapi.toInt();
-        Serial.print("RAPI Amps = ");
-        Serial.println(amp);
-        String qrapi1;
-        qrapi1 = rapiString.substring(rapiString.lastIndexOf(' '));
-        volt = qrapi1.toInt();
-        Serial.print("RAPI Volts = ");
-        Serial.println(volt);
-     }
+ if (!rapi.sendCmd("$GE*B0") && (rapi.tokenCnt == 2)) {
+   pilot = atoi(rapi.tokens[1]);
+   Serial.flush();
+ }   
+
+ if (!rapi.sendCmd("$GG*B2") && (rapi.tokenCnt == 3)) {
+   amp = atoi(rapi.tokens[1]);
+   volt = atoi(rapi.tokens[2]);
+   Serial.flush(); 
  }
  
-   
- delay(100);
-Serial.flush(); 
- Serial.println("$GP*BB");
- delay(100);
- while(Serial.available()) {
-   String rapiString = Serial.readStringUntil('\r');
-     if (rapiString.startsWith("$OK") ) {
-        String qrapi; 
-        qrapi = rapiString.substring(rapiString.indexOf(' '));
-        temp1 = qrapi.toInt();
-        Serial.print("RAPI Temp 1 = ");
-        Serial.println(temp1);
-        String qrapi1;
-        int firstRapiCmd = rapiString.indexOf(' ');
-        qrapi1 = rapiString.substring(rapiString.indexOf(' ', firstRapiCmd + 1 ));
-        temp2 = qrapi1.toInt();
-        Serial.print("RAPI Temp2 = ");
-        Serial.println(temp2);
-        String qrapi2;
-        qrapi2 = rapiString.substring(rapiString.lastIndexOf(' '));
-        temp3 = qrapi2.toInt();
-        Serial.print("RAPI Temp3 = ");
-        Serial.println(temp3);
-     }
+ if (!rapi.sendCmd("$GP*BB") && (rapi.tokenCnt == 4)) {
+   temp1 = atoi(rapi.tokens[1]);
+   temp2 = atoi(rapi.tokens[2]);
+   temp3 = atoi(rapi.tokens[3]);
+   Serial.flush();
  }
+ 
  
  
 // Use WiFiClient class to create TCP connections
   WiFiClient client;
   const int httpPort = 80;
   if (!client.connect(host, httpPort)) {
-    Serial.println("connection failed");
     return;
   }
   
 // We now create a URL for OpenEVSE RAPI data upload request
-  String url = "/emoncms/input/post.json?node=1&json={";
+  
   String url_amp = inputID_AMP;
     url_amp += amp;
     url_amp += ",";
@@ -461,15 +501,14 @@ Serial.flush();
   
   while(client.available()){
     String line = client.readStringUntil('\r');
-    Serial.print(line);
     }
   
-  Serial.print("connecting to ");
-  Serial.println(host);
-  Serial.print("Requesting URL: ");
-  Serial.println(url);
-  Serial.println();
-  Serial.println("closing connection");
+  
+  dbgprintln(host);
+  dbgprintln(url);
+  
+  
+  ESP.deepSleep(25000000, WAKE_RF_DEFAULT);
  
 }
 
