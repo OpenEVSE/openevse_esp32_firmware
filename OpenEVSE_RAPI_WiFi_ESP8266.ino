@@ -45,6 +45,7 @@ int temp3 = 0;
 int pilot = 0;
 
 int buttonState = 0;
+int clientTimeout = 0;
 
 /* For Serial Debug
 inline void dbgprint(const char *s) {
@@ -302,11 +303,21 @@ int mdns1(int webtype)
   // Check if a client has connected
   WiFiClient client = server.available();
   if (!client) {
+    delay(1);
+    clientTimeout++;
+    if (clientTimeout >= 90000){
+      Serial.print("Client timout - Rebooting");
+      //ESP.deepSleep(10000, WAKE_RF_DEFAULT);
+      ESP.reset();
+    }
     return(20);
   }
   // Wait for data from client to become available
+  int i = 0;
   while(client.connected() && !client.available()){
     delay(1);
+    
+      
    }
   
   // Read the first line of HTTP request
@@ -399,6 +410,7 @@ int mdns1(int webtype)
         s += "</html>\r\n\r\n";
         ResetEEPROM();
         EEPROM.commit();
+        client.print(s);
         WiFi.disconnect();
         delay(1000);
         ESP.reset();
@@ -429,6 +441,64 @@ while (buttonState == LOW) {
    }
 
  Serial.flush();
+ Serial.println("$GE*B0");
+ delay(100);
+ while(Serial.available()) {
+   String rapiString = Serial.readStringUntil('\r');
+     if ( rapiString.startsWith("$OK ") ) {
+        String qrapi; 
+        qrapi = rapiString.substring(rapiString.indexOf(' '));
+        pilot = qrapi.toInt();
+        Serial.print("RAPI Pilot = ");
+        Serial.println(pilot);
+        }
+     }  
+   
+ delay(100);
+ Serial.flush();
+ Serial.println("$GG*B2");
+ delay(100);
+ while(Serial.available()) {
+ String rapiString = Serial.readStringUntil('\r');
+     if ( rapiString.startsWith("$OK") ) {
+        String qrapi; 
+        qrapi = rapiString.substring(rapiString.indexOf(' '));
+        amp = qrapi.toInt();
+        Serial.print("RAPI Amps = ");
+        Serial.println(amp);
+        String qrapi1;
+        qrapi1 = rapiString.substring(rapiString.lastIndexOf(' '));
+        volt = qrapi1.toInt();
+        Serial.print("RAPI Volts = ");
+        Serial.println(volt);
+     }
+ }  
+delay(100);
+Serial.flush(); 
+ Serial.println("$GP*BB");
+ delay(100);
+ while(Serial.available()) {
+   String rapiString = Serial.readStringUntil('\r');
+     if (rapiString.startsWith("$OK") ) {
+        String qrapi; 
+        qrapi = rapiString.substring(rapiString.indexOf(' '));
+        temp1 = qrapi.toInt();
+        Serial.print("RAPI Temp 1 = ");
+        Serial.println(temp1);
+        String qrapi1;
+        int firstRapiCmd = rapiString.indexOf(' ');
+        qrapi1 = rapiString.substring(rapiString.indexOf(' ', firstRapiCmd + 1 ));
+        temp2 = qrapi1.toInt();
+        Serial.print("RAPI Temp2 = ");
+        Serial.println(temp2);
+        String qrapi2;
+        qrapi2 = rapiString.substring(rapiString.lastIndexOf(' '));
+        temp3 = qrapi2.toInt();
+        Serial.print("RAPI Temp3 = ");
+        Serial.println(temp3);
+     }
+ } 
+ /*
  if (!rapi.sendCmd("$GE*B0") && (rapi.tokenCnt == 2)) {
    pilot = atoi(rapi.tokens[1]);
    Serial.flush();
@@ -448,7 +518,7 @@ while (buttonState == LOW) {
  }
  
  
- 
+*/ 
 // Use WiFiClient class to create TCP connections
   WiFiClient client;
   const int httpPort = 80;
@@ -477,7 +547,7 @@ while (buttonState == LOW) {
     url_pilot += pilot;
   
   url += url_amp;
-  if (volt != 0) {
+  if (volt <= 0) {
     url += url_volt;
     }
   if (temp1 != 0) {
@@ -498,12 +568,12 @@ while (buttonState == LOW) {
                "Host: " + host + "\r\n" + 
                "Connection: close\r\n\r\n");
   delay(10);
-  
+ 
+ 
   while(client.available()){
     String line = client.readStringUntil('\r');
     }
-  
-  
+    
   dbgprintln(host);
   dbgprintln(url);
   
