@@ -26,16 +26,17 @@ const char* ssid = "OpenEVSE";
 const char* password = "openevse";
 String st;
 String privateKey = "";
+String node = "";
 
 const char* host = "data.openevse.com";
-String url = "/emoncms/input/post.json?node=1&json={";
-
+String url = "/emoncms/input/post.json?node=";
 const char* inputID_AMP   = "OpenEVSE_AMP:";
 const char* inputID_VOLT   = "OpenEVSE_VOLT:";
 const char* inputID_TEMP1   = "OpenEVSE_TEMP1:";
 const char* inputID_TEMP2   = "OpenEVSE_TEMP2:";
 const char* inputID_TEMP3   = "OpenEVSE_TEMP3:";
 const char* inputID_PILOT   = "OpenEVSE_PILOT:";
+
 
 int amp = 0;
 int volt = 0;
@@ -208,8 +209,11 @@ void setup() {
     }
   for (int i = 96; i < 128; ++i)
     {
-      privateKey += char(EEPROM.read(i));
+     privateKey += char(EEPROM.read(i));
     }
+     node += char(EEPROM.read(129));
+   
+    
   if ( esid.length() > 1 ) { 
     if (WiFi.status() != WL_CONNECTED){
       // test esid
@@ -343,25 +347,41 @@ int mdns1(int webtype)
         s += "<p>";
         s += st;
         s += "<p>";
-        s += "<form method='get' action='a'><label><b><i>WiFi SSID:</b></i></label><input name='ssid' length=32><p><label><b><i>Password  :</b></i></label><input name='pass' length=64><p><label><b><i>Emon Key:</b></i></label><input name='ekey' length=32><p><input type='submit'></form>";
+        s += "<form method='get' action='a'><label><b><i>WiFi SSID:</b></i></label><input name='ssid' length=32><p><label><b><i>Password  :</b></i></label><input name='pass' length=64><p><label><b><i>Emon Key:</b></i></label><input name='ekey' length=32><p><label><b><i>OpenEVSE:</b></i></label><select name='node'><option value='0'>0 - Default</option><option value='1'>1</option><option value='2'>2</option><option value='3'>3</option><option value='4'>4</option><option value='5'>5</option><option value='6'>6</option><option value='7'>7</option><option value='8'>8</option></select><p><input type='submit'></form>";
         s += "</html>\r\n\r\n";
         client.print(s);
       }
       else if ( req.startsWith("/a?ssid=") ) {
         // /a?ssid=blahhhh&pass=poooo
         ResetEEPROM();
-        String qsid; 
-        int idx = req.indexOf("&pass");
-        qsid = req.substring(req.indexOf("ssid=")+5,idx);
+        
+        String qsid;
+        String qpass;
+        String qkey;
+        String qnode; 
+        
+        int idx = req.indexOf("ssid=");
+        int idx1 = req.indexOf("&pass=");
+        int idx2 = req.indexOf("&ekey=");
+        int idx3 = req.indexOf("&node=");
+        
+        qsid = req.substring(idx+5,idx1);
+        qpass = req.substring(idx1+6,idx2);
+        qkey = req.substring(idx2+6, idx3);
+        qnode = req.substring(idx3+6);
+        
+        
+        
         dbgprintln(qsid);
         dbgprintln("");
-	int idx2 = req.indexOf("&ekey");
-        String qpass = req.substring(idx+6,idx2);
+	
+        
         qpass.replace("%23", "#");
         qpass.replace('+', ' ');
-                
-        String qkey;
-        qkey = req.substring(idx2+6);
+        
+        
+        
+        
         for (int i = 0; i < qsid.length(); ++i)
           {
             EEPROM.write(i, qsid[i]);
@@ -381,7 +401,12 @@ int mdns1(int webtype)
             EEPROM.write(96+i, qkey[i]);
             dbgprint("Wrote: ");
             dbgprintln(qkey[i]); 
-          }        
+          }
+      dbgprintln("Writing EMOM Node to Memory:"); 
+            EEPROM.write(129, qnode[i]);
+            dbgprint("Wrote: ");
+            dbgprintln(qnode[i]); 
+                 
         EEPROM.commit();
         s = "HTTP/1.1 200 OK\r\nContent-Type: text/html\r\n\r\n<!DOCTYPE HTML>\r\n<html><font size='20'><font color=006666>Open</font><b>EVSE</b></font><p><b>Open Source Hardware</b><p>Wireless Configuration<p>SSID and Password<p>";
         //s += req;
@@ -535,6 +560,8 @@ Serial.flush();
   String url_pilot = inputID_PILOT;
     url_pilot += pilot;
   
+  url += node;
+  url += "&json={";
   url += url_amp;
   if (volt <= 0) {
     url += url_volt;
