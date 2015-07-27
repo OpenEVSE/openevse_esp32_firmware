@@ -305,7 +305,7 @@ int mdns1(int webtype)
   if (!client) {
     delay(1);
     clientTimeout++;
-    if (clientTimeout >= 90000){
+    if (clientTimeout >= 300000){
       Serial.print("Client timout - Rebooting");
       //ESP.deepSleep(10000, WAKE_RF_DEFAULT);
       ESP.reset();
@@ -316,9 +316,7 @@ int mdns1(int webtype)
   int i = 0;
   while(client.connected() && !client.available()){
     delay(1);
-    
-      
-   }
+    }
   
   // Read the first line of HTTP request
   String req = client.readStringUntil('\r');
@@ -347,6 +345,7 @@ int mdns1(int webtype)
         s += "<p>";
         s += "<form method='get' action='a'><label><b><i>WiFi SSID:</b></i></label><input name='ssid' length=32><p><label><b><i>Password  :</b></i></label><input name='pass' length=64><p><label><b><i>Emon Key:</b></i></label><input name='ekey' length=32><p><input type='submit'></form>";
         s += "</html>\r\n\r\n";
+        client.print(s);
       }
       else if ( req.startsWith("/a?ssid=") ) {
         // /a?ssid=blahhhh&pass=poooo
@@ -387,22 +386,10 @@ int mdns1(int webtype)
         s = "HTTP/1.1 200 OK\r\nContent-Type: text/html\r\n\r\n<!DOCTYPE HTML>\r\n<html><font size='20'><font color=006666>Open</font><b>EVSE</b></font><p><b>Open Source Hardware</b><p>Wireless Configuration<p>SSID and Password<p>";
         //s += req;
         s += "<p>Saved to Memory...<p>Wifi will reset to join your network</html>\r\n\r\n";
+        client.print(s);
+        delay(2000);
         WiFi.disconnect();
-        delay(1000);
         ESP.reset();
-      }
-      else
-      {
-        s = "HTTP/1.1 404 Not Found\r\n\r\n";
-       }
-  } 
-  else
-  {
-      if (req == "/")
-      {
-        s = "HTTP/1.1 200 OK\r\nContent-Type: text/html\r\n\r\n<!DOCTYPE HTML>\r\n<html>OpenEVSE WiFi Configuration";
-        s += "<p>";
-        s += "</html>\r\n\r\n";
       }
       else if ( req.startsWith("/reset") ) {
         s = "HTTP/1.1 200 OK\r\nContent-Type: text/html\r\n\r\n<!DOCTYPE HTML>\r\n<html><font size='20'><font color=006666>Open</font><b>EVSE</b></font><p><b>Open Source Hardware</b><p>Wireless Configuration<p>Reset to Defaults:<p>";
@@ -418,11 +405,13 @@ int mdns1(int webtype)
       else
       {
         s = "HTTP/1.1 404 Not Found\r\n\r\n";
-       }       
+        client.print(s);
+       }    
   }
-  client.print(s);
+  
   return(20);
 }
+
 
 void loop() {
 int erase = 0;  
