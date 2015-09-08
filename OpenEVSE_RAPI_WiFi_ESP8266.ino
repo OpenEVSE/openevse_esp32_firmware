@@ -39,7 +39,7 @@ const char* inputID_PILOT   = "OpenEVSE_PILOT:";
 
 
 int amp = 0;
-int volt = 0;
+int32_t volt = 0;
 int temp1 = 0;
 int temp2 = 0;
 int temp3 = 0;
@@ -60,7 +60,7 @@ inline void dbgprintln(const char *s) {
 #define dbgprint(s) Serial.print(s)
 #define dbgprintln(s) Serial.println(s)
 
-#define RAPI_TIMEOUT_MS 1000
+#define RAPI_TIMEOUT_MS 500
 #define RAPI_BUFLEN 40
 #define RAPI_MAX_TOKENS 10
 class RapiSerial {
@@ -79,7 +79,6 @@ public:
 void RapiSerial::_sendCmd(const char *cmdstr)
 {
   Serial.print(cmdstr);
-
   const char *s = cmdstr;
   uint8_t chk = 0;
   while (*s) {
@@ -87,6 +86,7 @@ void RapiSerial::_sendCmd(const char *cmdstr)
   }
   sprintf(respBuf,"^%02X\r",(unsigned)chk);
   Serial.print(respBuf);
+  Serial.flush();
 
   *respBuf = 0;
 }
@@ -213,6 +213,8 @@ void setup() {
     }
      node += char(EEPROM.read(129));
    
+     dbgprint("\nesid:");dbgprint(esid.c_str());dbgprintln("-");
+     dbgprint("epass:");dbgprint(epass.c_str());dbgprintln("-");
     
   if ( esid.length() > 1 ) { 
     if (WiFi.status() != WL_CONNECTED){
@@ -235,7 +237,7 @@ void setup() {
 int testWifi(void) {
   int c = 0;
   dbgprintln("Waiting for Wifi to connect");  
-  while ( c < 20 ) {
+  while ( c < 30 ) {
     if (WiFi.status() == WL_CONNECTED) { return(20); } 
     delay(500);
     dbgprintln(WiFi.status());    
@@ -366,22 +368,20 @@ int mdns1(int webtype)
         int idx3 = req.indexOf("&node=");
         
         qsid = req.substring(idx+5,idx1);
+        qsid.replace("%23", "#");
+        qsid.replace('+', ' ');
+	qsid.trim();
         qpass = req.substring(idx1+6,idx2);
+        qpass.replace("%23", "#");
+        qpass.replace('+', ' ');
+	qpass.trim();
         qkey = req.substring(idx2+6, idx3);
         qnode = req.substring(idx3+6);
-        
         
         
         dbgprintln(qsid);
         dbgprintln("");
 	
-        
-        qpass.replace("%23", "#");
-        qpass.replace('+', ' ');
-        
-        
-        
-        
         for (int i = 0; i < qsid.length(); ++i)
           {
             EEPROM.write(i, qsid[i]);
@@ -438,6 +438,30 @@ int mdns1(int webtype)
 }
 
 
+// convert decimal string to int32_t
+int32_t dtoi32(const char *s)
+{
+  int32_t i = 0;
+  int8 sign;
+  if (*s == '-') {
+    sign = -1;
+    s++;
+  }
+  else {
+    sign = 0;
+  }
+  while (*s) {
+    i *= 10;
+    i += *(s++) - '0';
+  }
+
+  if (sign < 0) i = -i;
+  return i;
+}
+
+
+
+
 void loop() {
 int erase = 0;  
 buttonState = digitalRead(0);
@@ -454,6 +478,7 @@ while (buttonState == LOW) {
      } 
    }
 
+ /*
  Serial.flush();
  Serial.println("$GE*B0");
  delay(100);
@@ -512,27 +537,25 @@ Serial.flush();
         Serial.println(temp3);
      }
  } 
- /*
- if (!rapi.sendCmd("$GE*B0") && (rapi.tokenCnt == 2)) {
+*/ 
+
+ if (!rapi.sendCmd("$GE^26") && (rapi.tokenCnt == 3)) {
    pilot = atoi(rapi.tokens[1]);
-   Serial.flush();
  }   
 
- if (!rapi.sendCmd("$GG*B2") && (rapi.tokenCnt == 3)) {
+ if (!rapi.sendCmd("$GG^24") && (rapi.tokenCnt == 3)) {
    amp = atoi(rapi.tokens[1]);
-   volt = atoi(rapi.tokens[2]);
-   Serial.flush(); 
+   volt = dtoi32(rapi.tokens[2]);
+   if (volt < 0) volt = 0;
  }
  
- if (!rapi.sendCmd("$GP*BB") && (rapi.tokenCnt == 4)) {
+ if (!rapi.sendCmd("$GP^33") && (rapi.tokenCnt == 4)) {
    temp1 = atoi(rapi.tokens[1]);
    temp2 = atoi(rapi.tokens[2]);
    temp3 = atoi(rapi.tokens[3]);
-   Serial.flush();
  }
  
  
-*/ 
 // Use WiFiClient class to create TCP connections
   WiFiClient client;
   const int httpPort = 80;
@@ -563,7 +586,7 @@ Serial.flush();
   url += node;
   url += "&json={";
   url += url_amp;
-  if (volt <= 0) {
+  if (volt >= 0) {
     url += url_volt;
     }
   if (temp1 != 0) {
