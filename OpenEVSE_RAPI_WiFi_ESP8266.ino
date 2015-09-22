@@ -22,6 +22,11 @@
 #include <WiFiClient.h>
 #include <EEPROM.h>
 
+
+//#define DBG
+
+#define CLIENT_TIMEOUT 300000
+
 const char* ssid = "OpenEVSE";
 const char* password = "openevse";
 String st;
@@ -29,7 +34,7 @@ String privateKey = "";
 String node = "";
 
 const char* host = "data.openevse.com";
-String url = "/emoncms/input/post.json?node=";
+const char *uri = "/emoncms/input/post.json?";
 const char* inputID_AMP   = "OpenEVSE_AMP:";
 const char* inputID_VOLT   = "OpenEVSE_VOLT:";
 const char* inputID_TEMP1   = "OpenEVSE_TEMP1:";
@@ -57,8 +62,13 @@ inline void dbgprintln(const char *s) {
 }
 */
 
+#ifdef DBG
 #define dbgprint(s) Serial.print(s)
 #define dbgprintln(s) Serial.println(s)
+#else
+#define dbgprint(s) 
+#define dbgprintln(s) 
+#endif // DBG
 
 #define RAPI_TIMEOUT_MS 500
 #define RAPI_BUFLEN 40
@@ -209,29 +219,37 @@ void setup() {
     }
   for (int i = 96; i < 128; ++i)
     {
-     privateKey += char(EEPROM.read(i));
+      privateKey += char(EEPROM.read(i));
     }
-     node += char(EEPROM.read(129));
-   
-     dbgprint("\nesid:");dbgprint(esid.c_str());dbgprintln("-");
-     dbgprint("epass:");dbgprint(epass.c_str());dbgprintln("-");
-    
+  node += char(EEPROM.read(129));
+  
+  dbgprint("\nesid:");dbgprint(esid.c_str());dbgprintln("-");
+  dbgprint("epass:");dbgprint(epass.c_str());dbgprintln("-");
+  
   if ( esid.length() > 1 ) { 
     if (WiFi.status() != WL_CONNECTED){
+      dbgprintln("esid");
       // test esid
       WiFi.mode(WIFI_STA);
+      dbgprintln("esid0");
       WiFi.disconnect(); 
+      dbgprintln("esid1");
       WiFi.begin(esid.c_str(), epass.c_str());
+      dbgprintln("esid2");
       delay(50);
+      dbgprintln("esid3");
     }
- if ( testWifi() == 20 ) { 
-     //launchWeb(0);
+    if ( testWifi() == 20 ) { 
+      //launchWeb(0);
       return;
-      }
+    }
+    else {
+      setupAP(); 
+    }
+  }
   else {
     setupAP(); 
   }
- }
 } 
 
 int testWifi(void) {
@@ -265,11 +283,14 @@ void launchWeb(int webtype) {
 }
 
 void setupAP(void) {
-  
+  dbgprintln("setupap");
   WiFi.mode(WIFI_STA);
+  dbgprintln("su1");
   WiFi.disconnect();
+  dbgprintln("su2");
   delay(100);
   int n = WiFi.scanNetworks();
+  dbgprintln("su3");
     dbgprint(n);
     dbgprintln(" networks found");
     
@@ -287,6 +308,7 @@ void setupAP(void) {
   dbgprintln("Access Point Mode");
   dbgprintln("");
   delay(100);
+#ifdef DBG
   rapi.sendCmd("$FP 0 0 SSID...OpenEVSE.");
   delay(100);
   rapi.sendCmd("$FP 0 1 PASS...openevse.");
@@ -298,6 +320,7 @@ void setupAP(void) {
   rapi.sendCmd(tmpStr);
   dbgprintln(".....");
   delay(50); 
+#endif // DBG
   launchWeb(1);
 }
 
@@ -311,8 +334,8 @@ int mdns1(int webtype)
   if (!client) {
     delay(1);
     clientTimeout++;
-    if (clientTimeout >= 300000){
-      Serial.print("Client timout - Rebooting");
+    if (clientTimeout >= CLIENT_TIMEOUT){
+     dbgprintln("Client timeout - Rebooting");
       //ESP.deepSleep(10000, WAKE_RF_DEFAULT);
       ESP.reset();
     }
@@ -478,66 +501,6 @@ while (buttonState == LOW) {
      } 
    }
 
- /*
- Serial.flush();
- Serial.println("$GE*B0");
- delay(100);
- while(Serial.available()) {
-   String rapiString = Serial.readStringUntil('\r');
-     if ( rapiString.startsWith("$OK ") ) {
-        String qrapi; 
-        qrapi = rapiString.substring(rapiString.indexOf(' '));
-        pilot = qrapi.toInt();
-        Serial.print("RAPI Pilot = ");
-        Serial.println(pilot);
-        }
-     }  
-   
- delay(100);
- Serial.flush();
- Serial.println("$GG*B2");
- delay(100);
- while(Serial.available()) {
- String rapiString = Serial.readStringUntil('\r');
-     if ( rapiString.startsWith("$OK") ) {
-        String qrapi; 
-        qrapi = rapiString.substring(rapiString.indexOf(' '));
-        amp = qrapi.toInt();
-        Serial.print("RAPI Amps = ");
-        Serial.println(amp);
-        String qrapi1;
-        qrapi1 = rapiString.substring(rapiString.lastIndexOf(' '));
-        volt = qrapi1.toInt();
-        Serial.print("RAPI Volts = ");
-        Serial.println(volt);
-     }
- }  
-delay(100);
-Serial.flush(); 
- Serial.println("$GP*BB");
- delay(100);
- while(Serial.available()) {
-   String rapiString = Serial.readStringUntil('\r');
-     if (rapiString.startsWith("$OK") ) {
-        String qrapi; 
-        qrapi = rapiString.substring(rapiString.indexOf(' '));
-        temp1 = qrapi.toInt();
-        Serial.print("RAPI Temp 1 = ");
-        Serial.println(temp1);
-        String qrapi1;
-        int firstRapiCmd = rapiString.indexOf(' ');
-        qrapi1 = rapiString.substring(rapiString.indexOf(' ', firstRapiCmd + 1 ));
-        temp2 = qrapi1.toInt();
-        Serial.print("RAPI Temp2 = ");
-        Serial.println(temp2);
-        String qrapi2;
-        qrapi2 = rapiString.substring(rapiString.lastIndexOf(' '));
-        temp3 = qrapi2.toInt();
-        Serial.print("RAPI Temp3 = ");
-        Serial.println(temp3);
-     }
- } 
-*/ 
 
  if (!rapi.sendCmd("$GE^26") && (rapi.tokenCnt == 3)) {
    pilot = atoi(rapi.tokens[1]);
@@ -560,52 +523,32 @@ Serial.flush();
   WiFiClient client;
   const int httpPort = 80;
   if (!client.connect(host, httpPort)) {
+    dbgprintln("connect failed");
     return;
   }
   
 // We now create a URL for OpenEVSE RAPI data upload request
-  
-  String url_amp = inputID_AMP;
-    url_amp += amp;
-    url_amp += ",";
-  String url_volt = inputID_VOLT;
-    url_volt += volt;
-    url_volt += ",";
-  String url_temp1 = inputID_TEMP1;
-    url_temp1 += temp1;
-    url_temp1 += ",";
-  String url_temp2 = inputID_TEMP2;
-    url_temp2 += temp2;
-    url_temp2 += ","; 
-  String url_temp3 = inputID_TEMP3;
-    url_temp3 += temp3;
-    url_temp3 += ","; 
-  String url_pilot = inputID_PILOT;
-    url_pilot += pilot;
-  
-  url += node;
-  url += "&json={";
-  url += url_amp;
-  if (volt >= 0) {
-    url += url_volt;
-    }
-  if (temp1 != 0) {
-    url += url_temp1;
-    }
-  if (temp2 != 0) {
-    url += url_temp2;
-    }
-  if (temp3 != 0) {
-    url += url_temp3;
-    }
-  url += url_pilot;
-  url += "}&apikey=";
-  url += privateKey.c_str();
+  char req[300];
+  sprintf(req,"GET %snode=%s&apikey=%s&json={",uri,node.c_str(),privateKey.c_str());
+  sprintf(req+strlen(req),"%s%d,%s%d",inputID_AMP,amp,inputID_PILOT,pilot);
+   if (volt >= 0) {
+    sprintf(req+strlen(req),",%s%lu",inputID_VOLT,volt);
+   }
+  if (temp1 > 0) {
+    sprintf(req+strlen(req),",%s%d",inputID_TEMP1,temp1);
+  }
+  if (temp2 > 0) {
+    sprintf(req+strlen(req),",%s%d",inputID_TEMP2,temp2);
+  }
+  if (temp3 > 0) {
+    sprintf(req+strlen(req),",%s%d",inputID_TEMP3,temp3);
+  }
+  sprintf(req+strlen(req),"} HTTP/1.1\r\nHost: %s\r\nConnection: close\r\n\r\n",host);
     
-// This will send the request to the server
-  client.print(String("GET ") + url + " HTTP/1.1\r\n" +
-               "Host: " + host + "\r\n" + 
-               "Connection: close\r\n\r\n");
+  dbgprintln(req);
+  int prc = client.print(req);
+  dbgprint("prc:");dbgprintln(prc);
+
   delay(10);
  
  
@@ -613,11 +556,9 @@ Serial.flush();
     String line = client.readStringUntil('\r');
     }
     
-  dbgprintln(host);
-  dbgprintln(url);
   
   
-  ESP.deepSleep(25000000, WAKE_RF_DEFAULT);
- 
+  //  ESP.deepSleep(25000000, WAKE_RF_DEFAULT);
+  delay(25000);
 }
 
