@@ -415,8 +415,7 @@ int mdns1(int webtype)
 	qpass.trim();
         qkey = req.substring(idx2+6, idx3);
         qnode = req.substring(idx3+6);
-        
-<<<<<<< HEAD
+     
                
         dbgprintln(qsid);
         dbgprintln("");
@@ -425,12 +424,10 @@ int mdns1(int webtype)
         qpass.replace('+', ' ');
         
                
-=======
         
         dbgprintln(qsid);
         dbgprintln("");
 	
->>>>>>> origin/master
         for (int i = 0; i < qsid.length(); ++i)
           {
             EEPROM.write(i, qsid[i]);
@@ -554,8 +551,7 @@ while (buttonState == LOW) {
   }
   
 // We now create a URL for OpenEVSE RAPI data upload request
-<<<<<<< HEAD
-  
+/*  
   String url_amp = inputID_AMP;
     url_amp += amp;
     url_amp += ",";
@@ -592,7 +588,7 @@ while (buttonState == LOW) {
   url += url_pilot;
   url += "}&apikey=";
   url += privateKey.c_str();
-=======
+*/
   char req[300];
   sprintf(req,"GET %snode=%s&apikey=%s&json={",uri,node.c_str(),privateKey.c_str());
   sprintf(req+strlen(req),"%s%d,%s%d",inputID_AMP,amp,inputID_PILOT,pilot);
@@ -609,7 +605,6 @@ while (buttonState == LOW) {
     sprintf(req+strlen(req),",%s%d",inputID_TEMP3,temp3);
   }
   sprintf(req+strlen(req),"} HTTP/1.1\r\nHost: %s\r\nConnection: close\r\n\r\n",host);
->>>>>>> origin/master
     
   dbgprintln(req);
   int prc = client.print(req);
@@ -624,7 +619,7 @@ while (buttonState == LOW) {
     
   
   
-  //  ESP.deepSleep(25000000, WAKE_RF_DEFAULT);
-  delay(25000);
+    ESP.deepSleep(25000000, WAKE_RF_DEFAULT);
+  //delay(25000);
 }
 
