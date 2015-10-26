@@ -240,6 +240,21 @@ int testWifi(void) {
     delay(500);
     dbgprintln(WiFi.status());    
     c++;
+    int erase = 0;  
+buttonState = digitalRead(0);
+while (buttonState == LOW) {
+    buttonState = digitalRead(0);
+    erase++;
+    if (erase >= 1000) {
+        ResetEEPROM();
+        int erase = 0;
+        WiFi.disconnect();
+        dbgprintln("Finished...");
+        delay(1000);
+        ESP.reset(); 
+     } 
+   }
+
   }
   return(10);
 } 
@@ -352,7 +367,7 @@ int mdns1(int webtype)
         client.print(s);
       }
       else if ( req.startsWith("/a?ssid=") ) {
-        // /a?ssid=blahhhh&pass=poooo
+        
         ResetEEPROM();
         
         String qsid;
@@ -370,18 +385,14 @@ int mdns1(int webtype)
         qkey = req.substring(idx2+6, idx3);
         qnode = req.substring(idx3+6);
         
-        
-        
+               
         dbgprintln(qsid);
         dbgprintln("");
 	
-        
         qpass.replace("%23", "#");
         qpass.replace('+', ' ');
         
-        
-        
-        
+               
         for (int i = 0; i < qsid.length(); ++i)
           {
             EEPROM.write(i, qsid[i]);
@@ -563,7 +574,7 @@ Serial.flush();
   url += node;
   url += "&json={";
   url += url_amp;
-  if (volt <= 0) {
+  if (volt >= 0) {
     url += url_volt;
     }
   if (temp1 != 0) {
