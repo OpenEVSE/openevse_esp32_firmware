@@ -132,6 +132,16 @@ void handleRst() {
   ESP.reset();
 }
 
+
+void handleStatus() {
+  String s;
+  s = "<html><iframe style='width:480px; height:320px;' frameborder='0' scrolling='no' marginheight='0' marginwidth='0' src='http://data.openevse.com/emoncms/vis/rawdata?feedid=1&fill=0&colour=008080&units=W&dp=1&scale=1&embed=1'></iframe>";
+  s += "</html>\r\n\r\n";
+
+  server.send(200, "text/html", s);
+  
+}
+
 void setup() {
 	delay(1000);
 	Serial.begin(115200);
@@ -188,6 +198,7 @@ void setup() {
 	server.on("/", handleRoot);
   server.on("/a", handleCfg);
   server.on("/reset", handleRst);
+  server.on("/status", handleStatus);
 	server.begin();
 	Serial.println("HTTP server started");
 }
