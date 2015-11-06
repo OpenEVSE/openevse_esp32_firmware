@@ -74,6 +74,35 @@ void handleRoot() {
 	server.send(200, "text/html", s);
 }
 
+void handleRapi() {
+  String s;
+  s = "<html><font size='20'><font color=006666>Open</font><b>EVSE</b></font><p><b>Open Source Hardware</b><p>Send RAPI Command<p>Common Commands:<p>Set Current - $SC XX<p>Set Service Level - $SL 1 - $SL 2 - $SL A<p>Get Real-time Current - $GG<p>Get Temperatures - $GP<p>";
+        s += "<p>";
+        s += "<form method='get' action='r'><label><b><i>RAPI Command:</b></i></label><input name='rapi' length=32><p><input type='submit'></form>";
+        s += "</html>\r\n\r\n";
+  server.send(200, "text/html", s);
+}
+
+void handleRapiR() {
+  String s;
+  String rapiString;
+  String rapi = server.arg("rapi");
+  rapi.replace("%24", "$");
+  rapi.replace("+", " "); 
+  Serial.println(rapi);
+  delay(100);
+       while(Serial.available()) {
+         String rapiString = Serial.readStringUntil('\r');
+       }
+       
+   s = "<html><font size='20'><font color=006666>Open</font><b>EVSE</b></font><p><b>Open Source Hardware</b><p>RAPI Command Sent<p>";
+   s += rapi;
+   s += "<p>Response...<p>";
+   s += rapiString;
+   s += "Wifi will reset to join your network</html>\r\n\r\n";
+   server.send(200, "text/html", s);
+}
+
 void handleCfg() {
   String s;
   ResetEEPROM();
@@ -197,8 +226,10 @@ void setup() {
   //String req = server.on();
 	server.on("/", handleRoot);
   server.on("/a", handleCfg);
+  server.on("/r", handleRapiR);
   server.on("/reset", handleRst);
   server.on("/status", handleStatus);
+  server.on("/rapi", handleRapi);
 	server.begin();
 	Serial.println("HTTP server started");
 }
