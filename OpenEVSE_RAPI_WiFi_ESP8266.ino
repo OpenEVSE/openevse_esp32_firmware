@@ -91,17 +91,19 @@ void handleRapiR() {
   String rapi = server.arg("rapi");
   rapi.replace("%24", "$");
   rapi.replace("+", " "); 
+  Serial.flush();
   Serial.println(rapi);
   delay(100);
        while(Serial.available()) {
-         String rapiString = Serial.readStringUntil('\r');
-       }
-       
-   s = "<html><font size='20'><font color=006666>Open</font><b>EVSE</b></font><p><b>Open Source Hardware</b><p>RAPI Command Sent<p>";
+         rapiString = Serial.readStringUntil('\r');
+       }    
+   s = "<html><font size='20'><font color=006666>Open</font><b>EVSE</b></font><p><b>Open Source Hardware</b><p>RAPI Command Sent<p>Common Commands:<p>Set Current - $SC XX<p>Set Service Level - $SL 1 - $SL 2 - $SL A<p>Get Real-time Current - $GG<p>Get Temperatures - $GP<p>";
+   s += "<p>";
+   s += "<form method='get' action='r'><label><b><i>RAPI Command:</b></i></label><input name='rapi' length=32><p><input type='submit'></form>";
    s += rapi;
-   s += "<p>Response...<p>";
+   s += "<p>>";
    s += rapiString;
-   s += "Wifi will reset to join your network</html>\r\n\r\n";
+   s += "<p></html>\r\n\r\n";
    server.send(200, "text/html", s);
 }
 
@@ -325,11 +327,9 @@ if (wifi_mode == 0){
            String qrapi; 
            qrapi = rapiString.substring(rapiString.indexOf(' '));
            pilot = qrapi.toInt();
-           Serial.print("RAPI Pilot = ");
-           Serial.println(pilot);
          }
        }  
-   
+  
      delay(100);
      Serial.flush();
      Serial.println("$GG*B2");
@@ -340,13 +340,9 @@ if (wifi_mode == 0){
          String qrapi; 
          qrapi = rapiString.substring(rapiString.indexOf(' '));
          amp = qrapi.toInt();
-         Serial.print("RAPI Amps = ");
-         Serial.println(amp);
          String qrapi1;
          qrapi1 = rapiString.substring(rapiString.lastIndexOf(' '));
          volt = qrapi1.toInt();
-         Serial.print("RAPI Volts = ");
-         Serial.println(volt);
        }
     }  
     delay(100);
@@ -359,19 +355,13 @@ if (wifi_mode == 0){
         String qrapi; 
         qrapi = rapiString.substring(rapiString.indexOf(' '));
         temp1 = qrapi.toInt();
-        Serial.print("RAPI Temp 1 = ");
-        Serial.println(temp1);
         String qrapi1;
         int firstRapiCmd = rapiString.indexOf(' ');
         qrapi1 = rapiString.substring(rapiString.indexOf(' ', firstRapiCmd + 1 ));
         temp2 = qrapi1.toInt();
-        Serial.print("RAPI Temp2 = ");
-        Serial.println(temp2);
         String qrapi2;
         qrapi2 = rapiString.substring(rapiString.lastIndexOf(' '));
         temp3 = qrapi2.toInt();
-        Serial.print("RAPI Temp3 = ");
-        Serial.println(temp3);
       }
     } 
  
