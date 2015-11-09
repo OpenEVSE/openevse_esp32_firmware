@@ -23,6 +23,7 @@
 
 ESP8266WebServer server(80);
 
+//Default SSID and PASSWORD for AP Access Point Mode
 const char *ssid = "OpenEVSE";
 const char *password = "openevse";
 String st;
@@ -30,22 +31,24 @@ String privateKey = "";
 String node = "";
 
 
-
+//SERVER strings and interfers for OpenEVSE Energy Monotoring
 const char* host = "data.openevse.com";
-String url = "/emoncms/input/post.json?node=";
+const char* e_url = "/emoncms/input/post.json?node=";
 const char* inputID_AMP   = "OpenEVSE_AMP:";
 const char* inputID_VOLT   = "OpenEVSE_VOLT:";
 const char* inputID_TEMP1   = "OpenEVSE_TEMP1:";
 const char* inputID_TEMP2   = "OpenEVSE_TEMP2:";
 const char* inputID_TEMP3   = "OpenEVSE_TEMP3:";
 const char* inputID_PILOT   = "OpenEVSE_PILOT:";
-
 int amp = 0;
 int volt = 0;
 int temp1 = 0;
 int temp2 = 0;
 int temp3 = 0;
 int pilot = 0;
+int wifi_mode = 0; 
+
+
 
 int buttonState = 0;
 int clientTimeout = 0;
@@ -56,7 +59,6 @@ void ResetEEPROM(){
   Serial.println("Erasing EEPROM");
   for (int i = 0; i < 512; ++i) { 
     EEPROM.write(i, 0);
-    //Always print this so user can see activity during button reset
     Serial.print("#"); 
   }
   EEPROM.commit();   
@@ -191,14 +193,54 @@ void setup() {
   node += char(EEPROM.read(129));
      
   if ( esid != 0 ) { 
-    if (WiFi.status() != WL_CONNECTED){
+    Serial.println(" ");
+    Serial.print("Connecting as Wifi Client to: ");
+    Serial.println(esid.c_str());
+    WiFi.mode(WIFI_STA);
+    WiFi.disconnect(); 
+    WiFi.begin(esid.c_str(), epass.c_str());
+    delay(50);
+    int t = 0;
+    int attempt = 0;
+    while (WiFi.status() != WL_CONNECTED){
       // test esid
-      Serial.print("Configuring Wifi Client...");
-      WiFi.mode(WIFI_STA);
-      WiFi.disconnect(); 
-      WiFi.begin(esid.c_str(), epass.c_str());
-      delay(50);
+      Serial.print("#");
+      delay(500);
+      t++;
+      if (t >= 20){
+        Serial.println(" ");
+        Serial.println("Trying Again...");
+        delay(2000);
+        WiFi.disconnect(); 
+        WiFi.begin(esid.c_str(), epass.c_str());
+        t = 0;
+        attempt++;
+        if (attempt >= 5){
+          Serial.println();
+          Serial.print("Configuring access point...");
+          WiFi.mode(WIFI_STA);
+          WiFi.disconnect();
+          delay(100);
+          int n = WiFi.scanNetworks();
+          Serial.print(n);
+          Serial.println(" networks found");
+          st = "<ul>";
+          for (int i = 0; i < n; ++i){
+            st += "<li>";
+            st += WiFi.SSID(i);
+            st += "</li>";
+          }
+          st += "</ul>";
+          delay(100);
+          WiFi.softAP(ssid, password);
+          IPAddress myIP = WiFi.softAPIP();
+          Serial.print("AP IP address: ");
+          Serial.println(myIP);
+          wifi_mode = 1;
+          break;
+        }
       }
+    }
   }
   else {
     Serial.println();
@@ -221,9 +263,18 @@ void setup() {
     IPAddress myIP = WiFi.softAPIP();
     Serial.print("AP IP address: ");
     Serial.println(myIP);
+    
+    wifi_mode = 2; //AP mode with no SSID in EEPROM
   }
 	
-  //String req = server.on();
+	if (wifi_mode == 0){
+    Serial.println(" ");
+    Serial.println("Connected as a Client");
+    IPAddress myAddress = WiFi.localIP();
+    Serial.println(myAddress);
+  }
+  
+ 
 	server.on("/", handleRoot);
   server.on("/a", handleCfg);
   server.on("/r", handleRapiR);
@@ -232,26 +283,37 @@ void setup() {
   server.on("/rapi", handleRapi);
 	server.begin();
 	Serial.println("HTTP server started");
+  delay(100);
+  Timer = millis();
 }
 
+
+
 void loop() {
-	server.handleClient();
+server.handleClient();
   
-  int erase = 0;  
+int erase = 0;  
+buttonState = digitalRead(0);
+while (buttonState == LOW) {
   buttonState = digitalRead(0);
-  while (buttonState == LOW) {
-    buttonState = digitalRead(0);
-    erase++;
-    if (erase >= 5000) {
-        ResetEEPROM();
-        int erase = 0;
-        WiFi.disconnect();
-        Serial.print("Finished...");
-        delay(2000);
-        ESP.reset(); 
-     } 
+  erase++;
+  if (erase >= 5000) {
+    ResetEEPROM();
+    int erase = 0;
+    WiFi.disconnect();
+    Serial.print("Finished...");
+    delay(2000);
+    ESP.reset(); 
+  } 
+}
+// Remain in AP mode for 5 Minutes before resetting
+if (wifi_mode == 1){
+   if ((millis() - Timer) >= 300000){
+     ESP.reset();
    }
-   
+}   
+ 
+if (wifi_mode == 0){
    if ((millis() - Timer) >= 30000){
      Timer = millis();
      Serial.flush();
@@ -321,7 +383,7 @@ void loop() {
     }
   
 // We now create a URL for OpenEVSE RAPI data upload request
-  
+    String url = e_url;
     String url_amp = inputID_AMP;
     url_amp += amp;
     url_amp += ",";
@@ -366,5 +428,8 @@ void loop() {
     }
     Serial.println(host);
     Serial.println(url);
+    
   }
+}
+
 }
