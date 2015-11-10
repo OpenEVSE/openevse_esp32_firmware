@@ -109,9 +109,6 @@ void handleRapiR() {
 
 void handleCfg() {
   String s;
-  ResetEEPROM();
-        
-
   String qsid = server.arg("ssid");
   String qpass = server.arg("pass");      
   String qkey = server.arg("ekey");
@@ -121,37 +118,50 @@ void handleCfg() {
   Serial.println("");
   qpass.replace("%23", "#");
   qpass.replace('+', ' ');
-  for (int i = 0; i < qsid.length(); ++i){
-    EEPROM.write(i, qsid[i]);
-    Serial.print("Wrote: ");
-    Serial.println(qsid[i]); 
-  }
-  Serial.println("Writing Password to Memory:"); 
-  for (int i = 0; i < qpass.length(); ++i){
-    EEPROM.write(32+i, qpass[i]);
-    Serial.print("Wrote: ");
-    Serial.println("*"); 
-  }
-   Serial.println("Writing EMON Key to Memory:"); 
-   for (int i = 0; i < qkey.length(); ++i){
-     EEPROM.write(96+i, qkey[i]);
+  
+  if (qsid != 0){
+     ResetEEPROM();
+     for (int i = 0; i < qsid.length(); ++i){
+      EEPROM.write(i, qsid[i]);
+      Serial.print("Wrote: ");
+      Serial.println(qsid[i]); 
+    }
+    Serial.println("Writing Password to Memory:"); 
+    for (int i = 0; i < qpass.length(); ++i){
+      EEPROM.write(32+i, qpass[i]);
+      Serial.print("Wrote: ");
+      Serial.println("*"); 
+    }
+     Serial.println("Writing EMON Key to Memory:"); 
+     for (int i = 0; i < qkey.length(); ++i){
+       EEPROM.write(96+i, qkey[i]);
+       Serial.print("Wrote: ");
+       Serial.println(qkey[i]); 
+     }
+     Serial.println("Writing EMOM Node to Memory:"); 
+     EEPROM.write(129, qnode[i]);
      Serial.print("Wrote: ");
-     Serial.println(qkey[i]); 
-   }
-   Serial.println("Writing EMOM Node to Memory:"); 
-   EEPROM.write(129, qnode[i]);
-   Serial.print("Wrote: ");
-   Serial.println(qnode[i]);  
-   EEPROM.commit();
-   s = "<html><font size='20'><font color=006666>Open</font><b>EVSE</b></font><p><b>Open Source Hardware</b><p>Wireless Configuration<p>SSID and Password<p>";
-   //s += req;
-   s += "<p>Saved to Memory...<p>Wifi will reset to join your network</html>\r\n\r\n";
-   server.send(200, "text/html", s);
-   delay(2000);
-   WiFi.disconnect();
-   ESP.reset(); 
+     Serial.println(qnode[i]);  
+     EEPROM.commit();
+     s = "<html><font size='20'><font color=006666>Open</font><b>EVSE</b></font><p><b>Open Source Hardware</b><p>Wireless Configuration<p>SSID and Password<p>";
+     //s += req;
+     s += "<p>Saved to Memory...<p>Wifi will reset to join your network</html>\r\n\r\n";
+     server.send(200, "text/html", s);
+     delay(2000);
+     WiFi.disconnect();
+     ESP.reset(); 
+  }
+  else {
+     s = "<html><font size='20'><font color=006666>Open</font><b>EVSE</b></font><p><b>Open Source Hardware</b><p>Wireless Configuration<p>Networks Found:<p>";
+        //s += ipStr;
+        s += "<p>";
+        s += st;
+        s += "<p>";
+        s += "<form method='get' action='a'><label><b><i>WiFi SSID:</b></i></label><input name='ssid' length=32><p><font color=FF0000><b>SSID Required<b></font><p></font><label><b><i>Password  :</b></i></label><input name='pass' length=64><p><label><b><i>Emon Key:</b></i></label><input name='ekey' length=32><p><label><b><i>OpenEVSE:</b></i></label><select name='node'><option value='0'>0 - Default</option><option value='1'>1</option><option value='2'>2</option><option value='3'>3</option><option value='4'>4</option><option value='5'>5</option><option value='6'>6</option><option value='7'>7</option><option value='8'>8</option></select><p><input type='submit'></form>";
+        s += "</html>\r\n\r\n";
+     server.send(200, "text/html", s);
+  }
 }
-
 void handleRst() {
   String s;
   s = "<html><font size='20'><font color=006666>Open</font><b>EVSE</b></font><p><b>Open Source Hardware</b><p>Wireless Configuration<p>Reset to Defaults:<p>";
@@ -315,7 +325,7 @@ if (wifi_mode == 1){
    }
 }   
  
-if (wifi_mode == 0){
+if (wifi_mode == 0 && privateKey != 0){
    if ((millis() - Timer) >= 30000){
      Timer = millis();
      Serial.flush();
