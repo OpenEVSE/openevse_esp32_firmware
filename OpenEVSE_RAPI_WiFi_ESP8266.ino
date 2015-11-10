@@ -56,10 +56,10 @@ int i = 0;
 unsigned long Timer;
 
 void ResetEEPROM(){
-  Serial.println("Erasing EEPROM");
+  //Serial.println("Erasing EEPROM");
   for (int i = 0; i < 512; ++i) { 
     EEPROM.write(i, 0);
-    Serial.print("#"); 
+    //Serial.print("#"); 
   }
   EEPROM.commit();   
 }
@@ -113,9 +113,7 @@ void handleCfg() {
   String qpass = server.arg("pass");      
   String qkey = server.arg("ekey");
   String qnode = server.arg("node");
-  
-  Serial.println(qsid);
-  Serial.println("");
+ 
   qpass.replace("%23", "#");
   qpass.replace('+', ' ');
   
@@ -123,33 +121,25 @@ void handleCfg() {
      ResetEEPROM();
      for (int i = 0; i < qsid.length(); ++i){
       EEPROM.write(i, qsid[i]);
-      Serial.print("Wrote: ");
-      Serial.println(qsid[i]); 
     }
-    Serial.println("Writing Password to Memory:"); 
+    //Serial.println("Writing Password to Memory:"); 
     for (int i = 0; i < qpass.length(); ++i){
-      EEPROM.write(32+i, qpass[i]);
-      Serial.print("Wrote: ");
-      Serial.println("*"); 
+      EEPROM.write(32+i, qpass[i]); 
     }
-     Serial.println("Writing EMON Key to Memory:"); 
-     for (int i = 0; i < qkey.length(); ++i){
-       EEPROM.write(96+i, qkey[i]);
-       Serial.print("Wrote: ");
-       Serial.println(qkey[i]); 
-     }
-     Serial.println("Writing EMOM Node to Memory:"); 
-     EEPROM.write(129, qnode[i]);
-     Serial.print("Wrote: ");
-     Serial.println(qnode[i]);  
-     EEPROM.commit();
-     s = "<html><font size='20'><font color=006666>Open</font><b>EVSE</b></font><p><b>Open Source Hardware</b><p>Wireless Configuration<p>SSID and Password<p>";
-     //s += req;
-     s += "<p>Saved to Memory...<p>Wifi will reset to join your network</html>\r\n\r\n";
-     server.send(200, "text/html", s);
-     delay(2000);
-     WiFi.disconnect();
-     ESP.reset(); 
+    //Serial.println("Writing EMON Key to Memory:"); 
+    for (int i = 0; i < qkey.length(); ++i){
+      EEPROM.write(96+i, qkey[i]); 
+    }
+     
+    EEPROM.write(129, qnode[i]);
+    EEPROM.commit();
+    s = "<html><font size='20'><font color=006666>Open</font><b>EVSE</b></font><p><b>Open Source Hardware</b><p>Wireless Configuration<p>SSID and Password<p>";
+    //s += req;
+    s += "<p>Saved to Memory...<p>Wifi will reset to join your network</html>\r\n\r\n";
+    server.send(200, "text/html", s);
+    delay(2000);
+    WiFi.disconnect();
+    ESP.reset(); 
   }
   else {
      s = "<html><font size='20'><font color=006666>Open</font><b>EVSE</b></font><p><b>Open Source Hardware</b><p>Wireless Configuration<p>Networks Found:<p>";
@@ -190,6 +180,7 @@ void setup() {
 	Serial.begin(115200);
   EEPROM.begin(512);
   pinMode(0, INPUT);
+  char tmpStr[40];
   String esid;
   String epass = "";
  
@@ -205,9 +196,9 @@ void setup() {
   node += char(EEPROM.read(129));
      
   if ( esid != 0 ) { 
-    Serial.println(" ");
-    Serial.print("Connecting as Wifi Client to: ");
-    Serial.println(esid.c_str());
+    //Serial.println(" ");
+    //Serial.print("Connecting as Wifi Client to: ");
+    //Serial.println(esid.c_str());
     WiFi.mode(WIFI_STA);
     WiFi.disconnect(); 
     WiFi.begin(esid.c_str(), epass.c_str());
@@ -216,26 +207,26 @@ void setup() {
     int attempt = 0;
     while (WiFi.status() != WL_CONNECTED){
       // test esid
-      Serial.print("#");
+      //Serial.print("#");
       delay(500);
       t++;
       if (t >= 20){
-        Serial.println(" ");
-        Serial.println("Trying Again...");
+        //Serial.println(" ");
+        //Serial.println("Trying Again...");
         delay(2000);
         WiFi.disconnect(); 
         WiFi.begin(esid.c_str(), epass.c_str());
         t = 0;
         attempt++;
         if (attempt >= 5){
-          Serial.println();
-          Serial.print("Configuring access point...");
+          //Serial.println();
+          //Serial.print("Configuring access point...");
           WiFi.mode(WIFI_STA);
           WiFi.disconnect();
           delay(100);
           int n = WiFi.scanNetworks();
-          Serial.print(n);
-          Serial.println(" networks found");
+          //Serial.print(n);
+          //Serial.println(" networks found");
           st = "<ul>";
           for (int i = 0; i < n; ++i){
             st += "<li>";
@@ -246,8 +237,16 @@ void setup() {
           delay(100);
           WiFi.softAP(ssid, password);
           IPAddress myIP = WiFi.softAPIP();
-          Serial.print("AP IP address: ");
-          Serial.println(myIP);
+          //Serial.print("AP IP address: ");
+          //Serial.println(myIP);
+          Serial.println("$FP 0 0 SSID...OpenEVSE.");
+          delay(100);
+          Serial.println("$FP 0 1 PASS...openevse.");
+          delay(5000);
+          Serial.println("$FP 0 0 IP_Address......");
+          delay(100);
+          sprintf(tmpStr,"$FP 0 1 %d.%d.%d.%d",myIP[0],myIP[1],myIP[2],myIP[3]);
+          Serial.println(tmpStr);
           wifi_mode = 1;
           break;
         }
@@ -255,14 +254,12 @@ void setup() {
     }
   }
   else {
-    Serial.println();
-    Serial.print("Configuring access point...");
+    //Serial.println();
+    //Serial.print("Configuring access point...");
     WiFi.mode(WIFI_STA);
     WiFi.disconnect();
     delay(100);
     int n = WiFi.scanNetworks();
-    Serial.print(n);
-    Serial.println(" networks found");
     st = "<ul>";
     for (int i = 0; i < n; ++i){
       st += "<li>";
@@ -273,17 +270,30 @@ void setup() {
     delay(100);
     WiFi.softAP(ssid, password);
     IPAddress myIP = WiFi.softAPIP();
-    Serial.print("AP IP address: ");
-    Serial.println(myIP);
+    //Serial.print("AP IP address: ");
+    //Serial.println(myIP);
+    Serial.println("$FP 0 0 SSID...OpenEVSE.");
+    delay(100);
+    Serial.println("$FP 0 1 PASS...openevse.");
+    delay(5000);
+    Serial.println("$FP 0 0 IP_Address......");
+    delay(100);
+    sprintf(tmpStr,"$FP 0 1 %d.%d.%d.%d",myIP[0],myIP[1],myIP[2],myIP[3]);
+    Serial.println(tmpStr);
+   
     
     wifi_mode = 2; //AP mode with no SSID in EEPROM
   }
 	
 	if (wifi_mode == 0){
-    Serial.println(" ");
-    Serial.println("Connected as a Client");
+    //Serial.println(" ");
+    //Serial.println("Connected as a Client");
     IPAddress myAddress = WiFi.localIP();
-    Serial.println(myAddress);
+    //Serial.println(myAddress);
+    Serial.println("$FP 0 0 Client-IP.......");
+    delay(100);
+    sprintf(tmpStr,"$FP 0 1 %d.%d.%d.%d",myAddress[0],myAddress[1],myAddress[2],myAddress[3]);
+    Serial.println(tmpStr);
   }
   
  
@@ -294,7 +304,7 @@ void setup() {
   server.on("/status", handleStatus);
   server.on("/rapi", handleRapi);
 	server.begin();
-	Serial.println("HTTP server started");
+	//Serial.println("HTTP server started");
   delay(100);
   Timer = millis();
 }
@@ -426,8 +436,8 @@ if (wifi_mode == 0 && privateKey != 0){
     while(client.available()){
       String line = client.readStringUntil('\r');
     }
-    Serial.println(host);
-    Serial.println(url);
+    //Serial.println(host);
+    //Serial.println(url);
     
   }
 }
