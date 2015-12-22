@@ -24,8 +24,8 @@
 ESP8266WebServer server(80);
 
 //Default SSID and PASSWORD for AP Access Point Mode
-const char *ssid = "OpenEVSE";
-const char *password = "openevse";
+const char* ssid = "OpenEVSE";
+const char* password = "openevse";
 String st;
 String privateKey = "";
 String node = "";
@@ -40,16 +40,15 @@ const char* inputID_TEMP1   = "OpenEVSE_TEMP1:";
 const char* inputID_TEMP2   = "OpenEVSE_TEMP2:";
 const char* inputID_TEMP3   = "OpenEVSE_TEMP3:";
 const char* inputID_PILOT   = "OpenEVSE_PILOT:";
+
 int amp = 0;
 int volt = 0;
 int temp1 = 0;
 int temp2 = 0;
 int temp3 = 0;
 int pilot = 0;
+
 int wifi_mode = 0; 
-
-
-
 int buttonState = 0;
 int clientTimeout = 0;
 int i = 0;
@@ -71,7 +70,7 @@ void handleRoot() {
         s += "<p>";
         s += st;
         s += "<p>";
-        s += "<form method='get' action='a'><label><b><i>WiFi SSID:</b></i></label><input name='ssid' length=32><p><label><b><i>Password  :</b></i></label><input name='pass' length=64><p><label><b><i>Emon Key:</b></i></label><input name='ekey' length=32><p><label><b><i>OpenEVSE:</b></i></label><select name='node'><option value='0'>0 - Default</option><option value='1'>1</option><option value='2'>2</option><option value='3'>3</option><option value='4'>4</option><option value='5'>5</option><option value='6'>6</option><option value='7'>7</option><option value='8'>8</option></select><p><input type='submit'></form>";
+        s += "<form method='get' action='a'><label><b><i>WiFi SSID:</b></i></label><input name='ssid' length=32><p><label><b><i>Password  :</b></i></label><input name='pass' length=64><p><label><b><i>Device Access Key:</b></i></label><input name='ekey' length=32><p><label><b><i>Node:</b></i></label><select name='node'><option value='0'>0 - Default</option><option value='1'>1</option><option value='2'>2</option><option value='3'>3</option><option value='4'>4</option><option value='5'>5</option><option value='6'>6</option><option value='7'>7</option><option value='8'>8</option><option value='9'>9</option></select><p><input type='submit'></form>";
         s += "</html>\r\n\r\n";
 	server.send(200, "text/html", s);
 }
@@ -147,7 +146,7 @@ void handleCfg() {
         s += "<p>";
         s += st;
         s += "<p>";
-        s += "<form method='get' action='a'><label><b><i>WiFi SSID:</b></i></label><input name='ssid' length=32><p><font color=FF0000><b>SSID Required<b></font><p></font><label><b><i>Password  :</b></i></label><input name='pass' length=64><p><label><b><i>Emon Key:</b></i></label><input name='ekey' length=32><p><label><b><i>OpenEVSE:</b></i></label><select name='node'><option value='0'>0 - Default</option><option value='1'>1</option><option value='2'>2</option><option value='3'>3</option><option value='4'>4</option><option value='5'>5</option><option value='6'>6</option><option value='7'>7</option><option value='8'>8</option></select><p><input type='submit'></form>";
+        s += "<form method='get' action='a'><label><b><i>WiFi SSID:</b></i></label><input name='ssid' length=32><p><font color=FF0000><b>SSID Required<b></font><p></font><label><b><i>Password  :</b></i></label><input name='pass' length=64><p><label><b><i>Device Access Key:</b></i></label><input name='ekey' length=32><p><label><b><i>Node:</b></i></label><select name='node'><option value='0'>0</option><option value='1'>1</option><option value='2'>2</option><option value='3'>3</option><option value='4'>4</option><option value='5'>5</option><option value='6'>6</option><option value='7'>7</option><option value='8'>8</option><option value='9'>9</option></select><p><input type='submit'></form>";
         s += "</html>\r\n\r\n";
      server.send(200, "text/html", s);
   }
@@ -427,7 +426,7 @@ if (wifi_mode == 0 && privateKey != 0){
       url += url_temp3;
     }
     url += url_pilot;
-    url += "}&apikey=";
+    url += "}&devicekey=";
     url += privateKey.c_str();
     
 // This will send the request to the server
