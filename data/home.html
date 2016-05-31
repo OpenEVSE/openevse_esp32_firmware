@@ -1,0 +1,111 @@
+<html>
+    <head>
+    <meta http-equiv="content-type" content="text/html; charset=UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>OpenEVSE WiFi</title>
+    
+        
+    </head>
+    
+    <body>
+        <link rel="stylesheet" type="text/css" href="style.css">
+        <div id="page">
+            <div class="box">
+            <img src="logo.png" alt="OpenEVSE">
+            <p><b>To connect to your WiFi, select a network Enter Password and then enter your OpenEVSE Device Key.</b></p>
+            </div>
+            <div id="container">
+    
+    <input id="tab-1" type="radio" name="tab-group" checked="checked" />
+    <label for="tab-1">Network</label>
+    <input id="tab-2" type="radio" name="tab-group" />
+    <label for="tab-2">Status</label>
+    <input id="tab-3" type="radio" name="tab-group" />
+    <label for="tab-3">RAPI</label>
+    <input id="tab-4" type="radio" name="tab-group" />
+    <label for="tab-4">Energy</label>
+    <div id="content">
+      <div id="content-1">
+         <div class="box380">
+                <h2>Wifi Config</h2>
+                <p><b>Mode:</b> <span id="mode"></span></p>
+                <div id="client-view" style="display:none">
+                    <p><b>Network SSID:</b><br><span id="sta-ssid"></span></p>
+                    <p><b>IP Address:</b><br><span id="sta-ip"></span></p>
+                    <p><b>Successful packets:</b><br><span id="sta-psuccess"></span> of <span id="sta-psent"></span></p>
+                    <p><b>OpenEVSE</b></p>
+                    <p><b>RAPI packets:</b><br><span id="comm-psuccess"></span> of <span id="comm-psent"></span></p>
+
+                    <button id="apoff" style="display:none">Turn off Access Point</button>
+                    <button id="reset">Reset config and reboot</button>
+                </div>
+                <div id="ap-view" style="display:none">
+                    <p>Connect to network:</p>
+                    <table>
+                        <tr><th width=20>Select</th><th>Network</th></tr>
+                        <tbody id="networks"></tbody>
+                    </table>
+                    <p><b>Passkey:</b><br>
+                    <input id="passkey" type="text" style="width:280px;">
+                    <button id="connect">Connect</button>
+                    </p>
+                </div>
+                <div id="wait-view" style="display:none">
+                    <p>Connecting to WIFI Network...</p>
+                </div>
+            </div>
+        <div class="box380">
+            <h2>Server Config</h2>
+            <p><b>Device key:</b><br>
+                <input id="apikey" type="text" style="width:280px;">
+                <p><b>Device node:</b><br>
+                <input id="node" type="text" style="width:230px;">
+                <button id="save-apikey">Save</button>
+                </p>
+        </div>   
+        
+    </div>
+	<div id="content-2">
+             <div class="box380">
+               <h2>OpenEVSE</h2>
+               <p><b>Firmware: </b><span id="firmware"></span></p>
+               <p><b>Protocol: </b><span id="protocol"></span></p>
+             </div>
+             <div class="box380">
+               <h2>Latest Values</h2><span id="updated"></span>
+               <table>
+               <tr><th>Name</th><th>Value</th></tr>
+               <tbody id="datavalues"></tbody>
+               </table>
+             </div>           
+             <div class="box380">
+                <h2>Safety Settings</h2>
+                <table>
+                <tr><th>Name</th><th>Value</th></tr>
+                <tr><td>GFCI Self Test:</td><td><span id="gfcit"></span></td></tr>
+                <tr><td>Ground Monitoring:</td><td><span id="groundt"></span></td></tr>
+                <tr><td>Stuck Contact Detection:</td><td><span id="relayt"></span></td></tr>
+                <tr><td>Temperature Monitoring:</td><td><span id="tempt"></span></td></tr>
+                <tr><td>Diode Check:</td><td><span id="diodet"></span></td></tr>
+                <tr><td>Vent Required:</td><td><span id="ventt"></span></td></tr>
+                </table>
+             </div>
+          </div> 
+       <div id="content-3">
+		   <div class="box380">
+             <iframe style="width:380px; height:450px;" frameborder="0" scrolling="no" marginheight="0" marginwidth="0" src="/rapi">
+          </iframe>   
+           </div>
+        </div>
+        <div id="content-4">
+          <iframe style="width:420px; height:300px;" frameborder="0" scrolling="no" marginheight="0" marginwidth="0" src="https://data.openevse.com/emoncms/vis/multigraph?mid=3&embed=1">
+          </iframe>
+        </div>
+  </div>
+      
+    
+    </body>
+</html>
+
+<script src="config.js"></script>
+
