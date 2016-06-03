@@ -12,6 +12,8 @@ r1.onreadystatechange = function () {
   document.getElementById("passkey").value = status.pass;
   document.getElementById("apikey").value = status.apikey;
   document.getElementById("node").value = status.node;
+  document.getElementById("ohmkey").value = status.ohmkey;
+  document.getElementById("ohmhour").innerHTML = status.ohmhour;
 
   if (status.mode=="AP") {
       document.getElementById("mode").innerHTML = "Access Point (AP)";
@@ -76,6 +78,7 @@ function update() {
       document.getElementById("comm-psuccess").innerHTML = status.comm_success;
       document.getElementById("sta-psent").innerHTML = status.packets_sent;
       document.getElementById("sta-psuccess").innerHTML = status.packets_success;
+	  document.getElementById("ohmhour").innerHTML = status.ohmhour;
     };
     r1.send();
 	
@@ -143,10 +146,21 @@ document.getElementById("save-apikey").addEventListener("click", function(e) {
 
 });
 
+// -----------------------------------------------------------------------
+// Event: Save Ohm Connect Key
+// -----------------------------------------------------------------------
+document.getElementById("save-ohmkey").addEventListener("click", function(e) {
+    var ohmkey = document.getElementById("ohmkey").value;
+    var r = new XMLHttpRequest(); 
+    r.open("POST", "saveohmkey", true);
+    r.setRequestHeader("Content-type","application/x-www-form-urlencoded");
+    r.onreadystatechange = function () {};
+    r.send("&ohm="+ohmkey);
 
+});
 
 // -----------------------------------------------------------------------
-// Event: Turn off Access POint
+// Event: Turn off Access Point
 // -----------------------------------------------------------------------
 document.getElementById("apoff").addEventListener("click", function(e) {    
     var r = new XMLHttpRequest(); 
