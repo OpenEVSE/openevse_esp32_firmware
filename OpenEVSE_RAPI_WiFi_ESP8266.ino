@@ -34,10 +34,12 @@ const char* www_username = "admin";
 const char* www_password = "openevse";
 String st;
 
+//EEPROM Strings
 String esid = "";
 String epass = "";  
 String apikey = "";
 String node = "";
+
 
 String connected_network = "";
 String last_datastr = "";
@@ -62,6 +64,15 @@ int temp2 = 0; //Sensor MCP9808 Ambient
 int temp3 = 0; //Sensor TMP007 Infared
 int pilot = 0; //OpenEVSE Pilot Setting
 
+//Server strings for Ohm Connect 
+const char* ohm_host = "login.ohmconnect.com";
+const char* ohm_url = "/verify-ohm-hour/";
+String ohm = "";
+const int ohm_httpsPort = 443;
+const char* ohm_fingerprint = "6B 39 04 A4 BB E0 87 B2 EB B6 FE 77 CD D5 F6 A7 22 4B 3B ED";
+String ohm_hour = "NotConnected";
+int evse_sleep = 0;
+
 //Defaults OpenEVSE Settings
 int rgb_lcd = 1;
 int serial_dbg = 0;
@@ -85,8 +96,8 @@ String vent_ck = "1";
 String temp_ck = "1";
 String auto_start = "1";
 
-String firmware = "1.00.100";
-String protocol = "2.0.2b";
+String firmware = "";
+String protocol = "";
 
 //Default OpenEVSE Fault Counters
 int gfci_count = 0;
@@ -117,6 +128,7 @@ int buttonState = 0;
 int clientTimeout = 0;
 int i = 0;
 unsigned long Timer;
+unsigned long Timer2;
 unsigned long packets_sent = 0;
 unsigned long packets_success = 0;
 unsigned long comm_sent = 0;
@@ -404,6 +416,20 @@ void handleSaveApikey() {
     server.send(200, "text/html", "Saved");
   }
 }
+void handleSaveOhmkey() {
+  ohm = server.arg("ohm");
+  if (ohm!=0) {
+    for (int i = 0; i < 8; i++){
+      if (i<ohm.length()) {
+        EEPROM.write(i+130, ohm[i]);
+      } else {
+        EEPROM.write(i+130, 0);
+      }
+    }
+   EEPROM.commit();
+   server.send(200, "text/html", "Saved");
+}
+}
 
 // -------------------------------------------------------------------
 // Wifi scan /scan not currently used
@@ -449,6 +475,8 @@ void handleStatus() {
   s += "\"pass\":\""+epass+"\",";
   s += "\"apikey\":\""+apikey+"\",";
   s += "\"node\":\""+node+"\",";
+  s += "\"ohmkey\":\""+ohm+"\",";
+  s += "\"ohmhour\":\""+ohm_hour+"\",";
   s += "\"ipaddress\":\""+ipaddress+"\",";
   s += "\"comm_sent\":\""+String(comm_sent)+"\",";
   s += "\"comm_success\":\""+String(comm_success)+"\",";
@@ -558,7 +586,12 @@ void setup() {
     char c = char(EEPROM.read(i));
     if (c!=0) apikey += c;
   }
-  node += char(EEPROM.read(129));
+  char c = char(EEPROM.read(129));
+    if (c!=0) node += c;
+  for (int i = 130; i < 138; ++i){
+    char c = char(EEPROM.read(i));
+    if (c!=0) ohm += c;
+  }
      
   WiFi.disconnect();
   // 1) If no network configured start up access point
@@ -608,6 +641,7 @@ void setup() {
   });
   server.on("/savenetwork", handleSaveNetwork);
   server.on("/saveapikey", handleSaveApikey);
+  server.on("/saveohmkey", handleSaveOhmkey);
   server.on("/lastvalues",handleLastValues);
   server.on("/scan", handleScan);
   server.on("/apoff",handleAPOff);
@@ -648,7 +682,43 @@ if (wifi_mode == 1){
      ESP.reset();
    }
 }   
- 
+if (wifi_mode == 0 || wifi_mode == 3 && ohm != 0){
+  if ((millis() - Timer2) >= 60000){
+     Timer2 = millis();
+     WiFiClientSecure client;
+     if (!client.connect(ohm_host, ohm_httpsPort)) {
+       Serial.println("connection failed");
+       return;
+     }
+     if (client.verify(ohm_fingerprint, ohm_host)) {
+       client.print(String("GET ") + ohm_url + ohm + " HTTP/1.1\r\n" +
+               "Host: " + ohm_host + "\r\n" +
+               "User-Agent: OpenEVSE\r\n" +
+               "Connection: close\r\n\r\n");
+     String line = client.readString();
+     if(line.indexOf("False") > 0) {
+       //Serial.println("It is not an Ohm Hour");
+       ohm_hour = "False";
+       if (evse_sleep == 1){
+         evse_sleep = 0;
+         Serial.println("$FE*AF");
+       }
+     }
+     if(line.indexOf("True") > 0) {
+       //Serial.println("Ohm Hour");
+       ohm_hour = "True";
+       if (evse_sleep == 0){
+         evse_sleep = 1;
+         Serial.println("$FS*BD");
+       }
+     }
+    //Serial.println(line);
+  } 
+  else {
+    Serial.println("Certificate Invalid");
+    }
+  }
+} 
 if (wifi_mode == 0 || wifi_mode == 3 && apikey != 0){
    if ((millis() - Timer) >= 30000){
      Timer = millis();

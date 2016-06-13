@@ -11,9 +11,9 @@ r1.onreadystatechange = function () {
   
   document.getElementById("passkey").value = status.pass;
   document.getElementById("apikey").value = status.apikey;
-  document.getElementById("node").value = status.node;
-  document.getElementById("ohmkey").value = status.ohmkey;
-  document.getElementById("ohmhour").innerHTML = status.ohmhour;
+  //document.getElementById("node").value = status.node;
+  //document.getElementById("ohmkey").value = status.ohmkey;
+  //document.getElementById("ohmhour").innerHTML = status.ohmhour;
 
   if (status.mode=="AP") {
       document.getElementById("mode").innerHTML = "Access Point (AP)";
@@ -60,7 +60,7 @@ function update() {
 	    for (var z in namevaluepairs) {
 	        var namevalue = namevaluepairs[z].split(":");
 	        var units = "";
-                if (namevalue[0].indexOf("Pilot")==0) units = "A";
+            if (namevalue[0].indexOf("Pilot")==0) units = "A";
 	        if (namevalue[0].indexOf("CT")==0) units = "w";
 	        if (namevalue[0].indexOf("T")==0) units = "&deg;C";
 	        out += "<tr><td>"+namevalue[0]+"</td><td>"+namevalue[1]+units+"</td></tr>";
@@ -79,6 +79,10 @@ function update() {
       document.getElementById("sta-psent").innerHTML = status.packets_sent;
       document.getElementById("sta-psuccess").innerHTML = status.packets_success;
 	  document.getElementById("ohmhour").innerHTML = status.ohmhour;
+	  //document.getElementById("apikey").value = status.apikey;
+      document.getElementById("node").value = status.node;
+      document.getElementById("ohmkey").value = status.ohmkey;
+      document.getElementById("ohmhour").innerHTML = status.ohmhour;
     };
     r1.send();
 	
@@ -101,7 +105,38 @@ function update() {
   r2.send();
 }
 
-  
+function updateStatus() {
+  var r1 = new XMLHttpRequest(); 
+  r1.open("GET", "status", true);
+  r1.timeout = 2000;
+  r1.onreadystatechange = function () {
+    if (r1.readyState != 4 || r1.status != 200) return;
+    var status = JSON.parse(r1.responseText);
+    
+    document.getElementById("apikey").value = status.apikey;
+    
+    if (status.mode=="STA+AP" || status.mode=="STA") {
+        // Hide waiting message
+        document.getElementById("wait-view").style.display = 'none';
+        // Display mode
+        if (status.mode=="STA+AP") {
+            document.getElementById("mode").innerHTML = "Client + Access Point (STA+AP)";
+            document.getElementById("apoff").style.display = '';
+        }
+        if (status.mode=="STA") document.getElementById("mode").innerHTML = "Client (STA)";
+        document.getElementById("sta-ssid").innerHTML = status.ssid;
+        document.getElementById("sta-ip").innerHTML = "<a href='http://"+status.ipaddress+"'>"+status.ipaddress+"</a>";
+        document.getElementById("sta-psent").innerHTML = status.packets_sent;
+        document.getElementById("sta-psuccess").innerHTML = status.packets_success;
+        
+        // View display
+        document.getElementById("ap-view").style.display = 'none';
+        document.getElementById("client-view").style.display = '';
+    }
+    lastmode = status.mode;
+  };
+  r1.send();
+}  
 
 
 
