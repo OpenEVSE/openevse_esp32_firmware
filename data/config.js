@@ -99,7 +99,21 @@ function update() {
               document.getElementById("groundt").innerHTML = config.groundt;
               document.getElementById("relayt").innerHTML = config.relayt;
               document.getElementById("ventt").innerHTML = config.ventt;
-              document.getElementById("tempt").innerHTML = config.tempt;
+              document.getElementById("service").innerHTML = config.service;
+			  document.getElementById("l1min").innerHTML = config.l1min;
+			  document.getElementById("l1max").innerHTML = config.l1max;
+			  document.getElementById("l2min").innerHTML = config.l2min;
+			  document.getElementById("l2max").innerHTML = config.l2max;
+			  document.getElementById("scale").innerHTML = config.scale;
+			  document.getElementById("offset").innerHTML = config.offset;
+			  document.getElementById("tempt").innerHTML = config.tempt;
+			  document.getElementById("gfcicount").innerHTML = config.gfcicount;
+			  document.getElementById("nogndcount").innerHTML = config.nogndcount;
+			  document.getElementById("stuckcount").innerHTML = config.stuckcount;
+			  document.getElementById("kwhlimit").innerHTML = config.kwhlimit;
+			  document.getElementById("timelimit").innerHTML = config.timelimit;
+			  document.getElementById("wattsec").innerHTML = config.wattsec;
+			  document.getElementById("watthour").innerHTML = config.watthour;
       
   };
   r2.send();
@@ -241,35 +255,4 @@ var networkSelect = function() {
 for (var i = 0; i < networkcheckboxes.length; i++) {
     networkcheckboxes[i].addEventListener('click', networkSelect, false);
 }
-
-// lastupdated
-
-function list_format_updated(time){
-  time = time * 1000;
-  var servertime = (new Date()).getTime() - table.timeServerLocalOffset;
-  var update = (new Date(time)).getTime();
-
-  var secs = (servertime-update)/1000;
-  var mins = secs/60;
-  var hour = secs/3600;
-  var day = hour/24;
-
-  var updated = secs.toFixed(0) + "s";
-  if ((update == 0) || (!$.isNumeric(secs))) updated = "n/a";
-  else if (secs< 0) updated = secs.toFixed(0) + "s"; // update time ahead of server date is signal of slow network
-  else if (secs.toFixed(0) == 0) updated = "now";
-  else if (day>7) updated = "inactive";
-  else if (day>2) updated = day.toFixed(1)+" days";
-  else if (hour>2) updated = hour.toFixed(0)+" hrs";
-  else if (secs>180) updated = mins.toFixed(0)+" mins";
-
-  secs = Math.abs(secs);
-  var color = "rgb(255,0,0)";
-  if (secs<25) color = "rgb(50,200,50)"
-  else if (secs<60) color = "rgb(240,180,20)"; 
-  else if (secs<(3600*2)) color = "rgb(255,125,20)"
-
-  return "<span style='color:"+color+";'>"+updated+"</span>";
-}
-
 

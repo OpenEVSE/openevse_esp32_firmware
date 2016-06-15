@@ -78,7 +78,52 @@
         
     </div>
 	<div id="content-2">
-             <div class="box380">
+			 <div class="box380">
+                <h2>Current</h2>
+                <table>
+                <tr><th>Name</th><th>Value</th></tr>
+                <tr><td>Service Level:</td><td><span id="service"></span></td></tr>
+                <tr><td>Level 1 Minimum:</td><td><span id="l1min"></span></td></tr>
+                <tr><td>Level 1 Maximum:</td><td><span id="l1max"></span></td></tr>
+                <tr><td>Level 2 Minimum:</td><td><span id="l2min"></span></td></tr>
+                <tr><td>Level 2 Maximum:</td><td><span id="l2max"></span></td></tr>
+                <tr><td>Sensor Scale:</td><td><span id="scale"></span></td></tr>
+                <tr><td>Sensor Offset:</td><td><span id="offset"></span></td></tr>
+                </table>
+             </div>
+			 <div class="box380">
+                <h2>Safety</h2>
+                <table>
+                <tr><th>Test</th><th>Disabled</th></tr>
+                <tr><td>GFCI Self Test:</td><td><span id="gfcit"></span></td></tr>
+                <tr><td>Ground Monitoring:</td><td><span id="groundt"></span></td></tr>
+                <tr><td>Stuck Contact Detection:</td><td><span id="relayt"></span></td></tr>
+                <tr><td>Temperature Monitoring:</td><td><span id="tempt"></span></td></tr>
+                <tr><td>Diode Check:</td><td><span id="diodet"></span></td></tr>
+                <tr><td>Vent Required:</td><td><span id="ventt"></span></td></tr>
+                <tr><th>Error</th><th>Count</th></tr>
+                <tr><td>GFCI:</td><td><span id="gfcicount"></span></td></tr>
+                <tr><td>No Ground:</td><td><span id="nogndcount"></span></td></tr>
+                <tr><td>Stuck Contact:</td><td><span id="stuckcount"></span></td></tr>
+                </table>
+             </div>
+			 <div class="box380">
+                <h2>Session Options</h2>
+                <table>
+                <tr><th>Limits</th><th>Value</th></tr>
+                <tr><td>Kwh:</td><td><span id="kwhlimit"></span></td></tr>
+                <tr><td>Time:</td><td><span id="timelimit"></span></td></tr>
+                </table>
+             </div>
+			 <div class="box380">
+                <h2>Energy</h2>
+                <table>
+                <tr><th>Energy</th><th>kWh</th></tr>
+                <tr><td>This Session:</td><td><span id="wattsec"></span></td></tr>
+                <tr><td>Total:</td><td><span id="watthour"></span></td></tr>
+                </table>
+             </div>
+			 <div class="box380">
                <h2>OpenEVSE</h2>
                <p><b>Firmware: </b><span id="firmware"></span></p>
                <p><b>Protocol: </b><span id="protocol"></span></p>
@@ -89,18 +134,6 @@
                <tr><th>Name</th><th>Value</th></tr>
                <tbody id="datavalues"></tbody>
                </table>
-             </div>           
-             <div class="box380">
-                <h2>Safety Settings</h2>
-                <table>
-                <tr><th>Name</th><th>Value</th></tr>
-                <tr><td>GFCI Self Test:</td><td><span id="gfcit"></span></td></tr>
-                <tr><td>Ground Monitoring:</td><td><span id="groundt"></span></td></tr>
-                <tr><td>Stuck Contact Detection:</td><td><span id="relayt"></span></td></tr>
-                <tr><td>Temperature Monitoring:</td><td><span id="tempt"></span></td></tr>
-                <tr><td>Diode Check:</td><td><span id="diodet"></span></td></tr>
-                <tr><td>Vent Required:</td><td><span id="ventt"></span></td></tr>
-                </table>
              </div>
           </div> 
        <div id="content-3">
