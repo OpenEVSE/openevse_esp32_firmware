@@ -19,13 +19,19 @@
 #include <ESP8266WiFi.h>
 #include <WiFiClientSecure.h> 
 #include <ESP8266WebServer.h>
+#include <ESP8266HTTPUpdateServer.h>
 #include <EEPROM.h>
 #include "FS.h"
 #include <ArduinoJson.h>
 #include <ArduinoOTA.h>
 #include <ESP8266mDNS.h>
 
+ADC_MODE(ADC_VCC);
+
 ESP8266WebServer server(80);
+ESP8266HTTPUpdateServer httpUpdater;
+
+const char* fwversion = "D1.0.2";
 
 //Default SSID and PASSWORD for AP Access Point Mode
 const char* ssid = "OpenEVSE";
@@ -40,6 +46,9 @@ String epass = "";
 String apikey = "";
 String node = "";
 
+float espvcc = 0;
+int espflash = 0;
+int espfree = 0;
 
 String connected_network = "";
 String last_datastr = "";
@@ -473,6 +482,10 @@ void handleStatus() {
   s += "\"node\":\""+node+"\",";
   s += "\"ohmkey\":\""+ohm+"\",";
   s += "\"ohmhour\":\""+ohm_hour+"\",";
+  s += "\"version\":\""+String(fwversion)+"\",";
+  s += "\"espvcc\":\""+String(espvcc)+"\",";
+  s += "\"espflash\":\""+String(espflash)+"\",";
+  s += "\"espfree\":\""+String(espfree)+"\",";
   s += "\"ipaddress\":\""+ipaddress+"\",";
   s += "\"comm_sent\":\""+String(comm_sent)+"\",";
   s += "\"comm_success\":\""+String(comm_success)+"\",";
@@ -693,6 +706,9 @@ void setup() {
 	Serial.begin(115200);
   EEPROM.begin(512);
   pinMode(0, INPUT);
+  espflash = ESP.getFlashChipSize();
+  espvcc = ESP.getVcc() * 0.001;
+  espfree = ESP.getFreeHeap();
   //char tmpStr[40];
   
  
@@ -772,6 +788,7 @@ void setup() {
       server.send(404, "text/plain", "FileNotFound");
   });
   
+  httpUpdater.setup(&server);
 	server.begin();
 	//Serial.println("HTTP server started");
   delay(100);
@@ -844,6 +861,8 @@ if (wifi_mode == 0 || wifi_mode == 3 && ohm != 0){
 if (wifi_mode == 0 || wifi_mode == 3 && apikey != 0){
    if ((millis() - Timer) >= 30000){
      Timer = millis();
+     espvcc = ESP.getVcc() * 0.001;
+     espfree = ESP.getFreeHeap();
      Serial.flush();
      Serial.println("$GE*B0");
      comm_sent++;

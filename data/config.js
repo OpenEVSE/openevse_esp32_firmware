@@ -78,6 +78,10 @@ function update() {
       document.getElementById("comm-psuccess").innerHTML = status.comm_success;
       document.getElementById("sta-psent").innerHTML = status.packets_sent;
       document.getElementById("sta-psuccess").innerHTML = status.packets_success;
+	  document.getElementById("version").innerHTML = status.version;
+	  document.getElementById("espvcc").innerHTML = status.espvcc;
+	  document.getElementById("espflash").innerHTML = status.espflash;
+	  document.getElementById("espfree").innerHTML = status.espfree;
 	  document.getElementById("ohmhour").innerHTML = status.ohmhour;
 	  //document.getElementById("apikey").value = status.apikey;
       document.getElementById("node").value = status.node;

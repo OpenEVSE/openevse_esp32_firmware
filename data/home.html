@@ -46,13 +46,18 @@
                         <tbody id="networks"></tbody>
                     </table>
                     <p><b>Passkey:</b><br>
-                    <input id="passkey" type="text" style="width:280px;">
+                    <input id="passkey" type="text" style="width:250px;">
                     <button id="connect">Connect</button>
                     </p>
                 </div>
                 <div id="wait-view" style="display:none">
                     <p>Connecting to WIFI Network...</p>
                 </div>
+				<h2>Module</h2>
+                <p><b>Firmware:</b><br><span id="version"></span></p>
+			    <p><b>Voltage:</b><br><span id="espvcc"></span></p>
+			    <p><b>Flash Size:</b><br><span id="espflash"></span></p>
+			    <p><b>RAM Free:</b><br><span id="espfree"></span></p>
             </div>
         <div class="box380">
             <a href="https://data.openevse.com/emoncms"><img src="emoncms.png" alt="OpenEVSE Data"></a>
@@ -74,8 +79,7 @@
 				<p><b>Example: </b>https://login.ohmconnect.com/verify-ohm-hour/OnEoVse</p>
 				<p><b>Key: </b>OnEoVse</p>
 				</p>
-	    </div>
-        
+	    </div>    
     </div>
 	<div id="content-2">
 			 <div class="box380">
