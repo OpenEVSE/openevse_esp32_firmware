@@ -98,6 +98,7 @@ function update() {
               var config = JSON.parse(r2.responseText);
               document.getElementById("firmware").innerHTML = config.firmware;
               document.getElementById("protocol").innerHTML = config.protocol;
+			  document.getElementById("estate").innerHTML = config.estate;
               document.getElementById("diodet").innerHTML = config.diodet;
               document.getElementById("gfcit").innerHTML = config.gfcit;
               document.getElementById("groundt").innerHTML = config.groundt;

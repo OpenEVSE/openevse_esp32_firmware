@@ -54,10 +54,12 @@
                     <p>Connecting to WIFI Network...</p>
                 </div>
 				<h2>Module</h2>
-                <p><b>Firmware:</b><br><span id="version"></span></p>
-			    <p><b>Voltage:</b><br><span id="espvcc"></span></p>
-			    <p><b>Flash Size:</b><br><span id="espflash"></span></p>
-			    <p><b>RAM Free:</b><br><span id="espfree"></span></p>
+				<div id="client-view" style="display:none">
+					<p><b>Firmware:</b><br><span id="version"></span></p>
+					<p><b>Voltage:</b><br><span id="espvcc"></span></p>
+					<p><b>Flash Size:</b><br><span id="espflash"></span></p>
+					<p><b>RAM Free:</b><br><span id="espfree"></span></p>
+				</div>
             </div>
         <div class="box380">
             <a href="https://data.openevse.com/emoncms"><img src="emoncms.png" alt="OpenEVSE Data"></a>
@@ -76,8 +78,8 @@
                 <input id="ohmkey" type="text" style="width:280px;">
                 <button id="save-ohmkey">Save</button>
 				<p>Ohm Key can be obtained by logging in to OhmConnect, enter Settings and locate the link in "Open Source Projects"</p>
-				<p><b>Example: </b>https://login.ohmconnect.com/verify-ohm-hour/OnEoVse</p>
-				<p><b>Key: </b>OnEoVse</p>
+				<p><b>Example: </b>https://login.ohmconnect.com/verify-ohm-hour/OpnEoVse</p>
+				<p><b>Key: </b>OpnEoVse</p>
 				</p>
 	    </div>    
     </div>
@@ -131,6 +133,7 @@
                <h2>OpenEVSE</h2>
                <p><b>Firmware: </b><span id="firmware"></span></p>
                <p><b>Protocol: </b><span id="protocol"></span></p>
+			   <p><b>State: </b><span id="estate"></span></p>
              </div>
              <div class="box380">
                <h2>Latest Values</h2><span id="updated"></span>

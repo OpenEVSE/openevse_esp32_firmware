@@ -67,6 +67,7 @@ const char* inputID_TEMP1   = "OpenEVSE_TEMP1:"; //Sensor DS3232 Ambient
 const char* inputID_TEMP2   = "OpenEVSE_TEMP2:"; //Sensor MCP9808 Ambient
 const char* inputID_TEMP3   = "OpenEVSE_TEMP3:"; //Sensor TMP007 Infared
 const char* inputID_PILOT   = "OpenEVSE_PILOT:"; //OpenEVSE Pilot Setting
+const char* inputID_STATE   = "OpenEVSE_STATE:"; //OpenEVSE STATE
 
 int amp = 0; //OpenEVSE Current Sensor
 int volt = 0; //Not currently in used
@@ -74,6 +75,8 @@ int temp1 = 0; //Sensor DS3232 Ambient
 int temp2 = 0; //Sensor MCP9808 Ambient
 int temp3 = 0; //Sensor TMP007 Infared
 int pilot = 0; //OpenEVSE Pilot Setting
+long state = 0; //OpenEVSE State
+String estate = "Unknown"; // Common name for State
 
 //Server strings for Ohm Connect 
 const char* ohm_host = "login.ohmconnect.com";
@@ -500,6 +503,7 @@ void handleConfig() {
   String s = "{";
   s += "\"firmware\":\""+String(firmware)+"\",";
   s += "\"protocol\":\""+String(protocol)+"\",";
+  s += "\"estate\":\""+String(estate)+"\",";
   s += "\"diodet\":\""+String(diode_ck)+"\",";
   s += "\"gfcit\":\""+String(gfci_test)+"\",";
   s += "\"groundt\":\""+String(ground_ck)+"\",";
@@ -866,7 +870,7 @@ if (wifi_mode == 0 || wifi_mode == 3 && apikey != 0){
      Serial.flush();
      Serial.println("$GE*B0");
      comm_sent++;
-     delay(1000);
+     delay(100);
        while(Serial.available()) {
          String rapiString = Serial.readStringUntil('\r');
          if ( rapiString.startsWith("$OK ") ) {
@@ -877,7 +881,57 @@ if (wifi_mode == 0 || wifi_mode == 3 && apikey != 0){
            last_datastr = "Pilot:";
            last_datastr += pilot;
          }
-       }  
+       }
+     Serial.flush();
+     Serial.println("$GS*BE");
+     comm_sent++;
+     delay(100);
+       while(Serial.available()) {
+         String rapiString = Serial.readStringUntil('\r');
+         if ( rapiString.startsWith("$OK ") ) {
+           comm_success++; 
+           String qrapi = rapiString.substring(rapiString.indexOf(' '));
+           state = strtol(qrapi.c_str(), NULL, 16);
+           if (state == 1) {
+             estate = "Not Connected";
+           }
+           if (state == 2) {
+             estate = "EV Connected";
+           }
+           if (state == 3) {
+             estate = "Charging";
+           }
+           if (state == 4) {
+             estate = "Vent Required";
+           }
+           if (state == 5) {
+             estate = "Diode Check Failed";
+           } 
+           if (state == 6) {
+             estate = "GFCI Fault";
+           }
+           if (state == 7) {
+             estate = "No Earth Ground";
+           }
+           if (state == 8) {
+             estate = "Stuck Relay";
+           }
+           if (state == 9) {
+             estate = "GFCI Self Test Failed";
+           }
+           if (state == 10) {
+             estate = "Over Temperature";
+           }
+           if (state == 254) {
+             estate = "Sleeping";
+           }
+           if (state == 255) {
+             estate = "Disabled";
+           }                 
+           //last_datastr = ",State:";
+           //last_datastr += estate;
+         }
+       }    
   
      delay(100);
      Serial.flush();
@@ -954,7 +1008,10 @@ if (wifi_mode == 0 || wifi_mode == 3 && apikey != 0){
     url_temp2 += ","; 
     String url_temp3 = inputID_TEMP3;
     url_temp3 += temp3;
-    url_temp3 += ","; 
+    url_temp3 += ",";
+    String url_state = inputID_STATE;
+    url_state += state;
+    url_state += ","; 
     String url_pilot = inputID_PILOT;
     url_pilot += pilot;
     url += node;
@@ -972,6 +1029,7 @@ if (wifi_mode == 0 || wifi_mode == 3 && apikey != 0){
     if (temp3 != 0) {
       url += url_temp3;
     }
+    url += url_state;
     url += url_pilot;
     url += "}&devicekey=";
     url += apikey.c_str();
