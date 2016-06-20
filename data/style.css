@@ -1,8 +1,9 @@
 body {
-    background-color:#eee;
+    background-color:#fff;
     font-family:sans-serif;
     color:#333;
     font:14px/1.3 Helvetica, sans-serif;
+	height:1400px;
 }
     
 #page {
@@ -36,6 +37,7 @@ tr:nth-child(2n+2) {background-color:#f3f3f3;}
     
 .box {
     padding:20px;
+
 }
     
 .box380 {
@@ -46,6 +48,8 @@ tr:nth-child(2n+2) {background-color:#f3f3f3;}
     margin-right:20px;
     margin-bottom:20px;
     border: 1px solid #ddd;
+	border-radius: 1em 1em 1em 1em;
+	box-shadow: 1px 7px 7px 1px rgba(0, 0, 0, 0.4);
    
       
 }
@@ -53,14 +57,15 @@ tr:nth-child(2n+2) {background-color:#f3f3f3;}
 @media (min-width: 980px) {
     #page {
         width:980px;
-        height:1000px;
+		height: 1300px;
+        margin:0px
     }
 }
     
 @media (max-width: 980px) {
     #page {
         width:510px;
-        height:1250px;
+		height: 2000px;
         margin:0px;
     }
 }
@@ -77,6 +82,8 @@ button {
 }
 #container {
     margin: 20;
+	height: inherit;
+	padding-bottom:20px;
     
     
 }
@@ -88,7 +95,8 @@ button {
 
 #container label {
 	background: #008080; 
-	border-radius: .25em .25em 0 0;
+	border-radius: .3em .3em .3em .3em;
+	box-shadow: 0px 2px 2px 0px rgba(0, 0, 0, 0.4);
 	color: #fff;  
 	cursor: pointer;
 	display: block;
@@ -102,13 +110,13 @@ button {
 }
 
 #container input:hover + label {
-	background: #ddd;  
-	color: #666;  
+	background: #e1e1e1;  
+	color: #000;  
 }
 
 #container input:checked + label {
 	background: #f1f1f1;  
-	color: #444; 
+	color: #000; 
 	position: relative;
 	z-index: 6;
 	/*
@@ -120,19 +128,22 @@ button {
 }
 
 #content {
-	background: #e1e1e1;  
-	border-radius: 0 .25em .25em .25em;
+	background: #e1e1e1;
+	border-radius: .5em .5em .5em .5em;
+	box-shadow: 1px 7px 7px 1px rgba(0, 0, 0, 0.4);	
 	min-height: 50em;  
-        position: relative;
+    position: relative;
 	width: 100%;
+	height: 88%;
 	z-index: 5;
+	
         
 }
 
 #content div {
 	opacity: 0;
 	padding: 1.5em;
-        position: absolute;
+    position: absolute;
 	z-index: -100;
 	
 	/*
