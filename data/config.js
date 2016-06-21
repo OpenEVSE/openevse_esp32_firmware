@@ -11,9 +11,10 @@ r1.onreadystatechange = function () {
   
   document.getElementById("passkey").value = status.pass;
   document.getElementById("apikey").value = status.apikey;
-  //document.getElementById("node").value = status.node;
-  //document.getElementById("ohmkey").value = status.ohmkey;
-  //document.getElementById("ohmhour").innerHTML = status.ohmhour;
+  document.getElementById("node").value = status.node;
+  document.getElementById("ohmkey").value = status.ohmkey;
+  document.getElementById("version").innerHTML = status.version;
+  document.getElementById("espflash").innerHTML = status.espflash;
 
   if (status.mode=="AP") {
       document.getElementById("mode").innerHTML = "Access Point (AP)";
@@ -29,76 +30,21 @@ r1.onreadystatechange = function () {
       document.getElementById("mode").innerHTML = "Client (STA)";
       document.getElementById("sta-ssid").innerHTML = status.ssid;
       document.getElementById("sta-ip").innerHTML = "<a href='http://"+status.ipaddress+"'>"+status.ipaddress+"</a>";
-      document.getElementById("comm-psent").innerHTML = status.comm_sent;
-      document.getElementById("comm-psuccess").innerHTML = status.comm_success;
-      document.getElementById("sta-psent").innerHTML = status.packets_sent;
-      document.getElementById("sta-psuccess").innerHTML = status.packets_success;
       document.getElementById("ap-view").style.display = 'none';
       document.getElementById("client-view").style.display = '';
       ipaddress = status.ipaddress;
-  }
+  } 
 };
 r1.send();
 
-
-update();
-setInterval(update,10000);
-
-
-// -----------------------------------------------------------------------
-// Periodic 10s update of last data values
-// -----------------------------------------------------------------------
-function update() {
-
-    var r = new XMLHttpRequest(); 
-    r.open("GET", "lastvalues", true);
-    r.onreadystatechange = function () {
-	    if (r.readyState != 4 || r.status != 200) return;
-	    var str = r.responseText;
-	    var namevaluepairs = str.split(",");
-	    var out = "";
-	    for (var z in namevaluepairs) {
-	        var namevalue = namevaluepairs[z].split(":");
-	        var units = "";
-            if (namevalue[0].indexOf("Pilot")==0) units = "A";
-	        if (namevalue[0].indexOf("CT")==0) units = "w";
-	        if (namevalue[0].indexOf("T")==0) units = "&deg;C";
-	        out += "<tr><td>"+namevalue[0]+"</td><td>"+namevalue[1]+units+"</td></tr>";
-	    }
-	    document.getElementById("datavalues").innerHTML = out;
-    };
-    r.send();
-	
-	var r1 = new XMLHttpRequest(); 
-    r1.open("GET", "status", false);
-    r1.onreadystatechange = function () {
-    if (r1.readyState != 4 || r1.status != 200) return;
-      var status = JSON.parse(r1.responseText);
-	  document.getElementById("comm-psent").innerHTML = status.comm_sent;
-      document.getElementById("comm-psuccess").innerHTML = status.comm_success;
-      document.getElementById("sta-psent").innerHTML = status.packets_sent;
-      document.getElementById("sta-psuccess").innerHTML = status.packets_success;
-	  document.getElementById("version").innerHTML = status.version;
-	  document.getElementById("espvcc").innerHTML = status.espvcc;
-	  document.getElementById("espflash").innerHTML = status.espflash;
-	  document.getElementById("espfree").innerHTML = status.espfree;
-	  document.getElementById("ohmhour").innerHTML = status.ohmhour;
-	  //document.getElementById("apikey").value = status.apikey;
-      document.getElementById("node").value = status.node;
-      document.getElementById("ohmkey").value = status.ohmkey;
-      document.getElementById("ohmhour").innerHTML = status.ohmhour;
-    };
-    r1.send();
-	
-    var r2 = new XMLHttpRequest(); 
+var r2 = new XMLHttpRequest(); 
     r2.open("GET", "config", true);
-    r2.timeout = 2000;
+	r2.timeout = 2000;
     r2.onreadystatechange = function () {
             if (r2.readyState != 4 || r2.status != 200) return;
               var config = JSON.parse(r2.responseText);
               document.getElementById("firmware").innerHTML = config.firmware;
               document.getElementById("protocol").innerHTML = config.protocol;
-			  document.getElementById("estate").innerHTML = config.estate;
               document.getElementById("diodet").innerHTML = config.diodet;
               document.getElementById("gfcit").innerHTML = config.gfcit;
               document.getElementById("groundt").innerHTML = config.groundt;
@@ -117,11 +63,68 @@ function update() {
 			  document.getElementById("stuckcount").innerHTML = config.stuckcount;
 			  document.getElementById("kwhlimit").innerHTML = config.kwhlimit;
 			  document.getElementById("timelimit").innerHTML = config.timelimit;
-			  document.getElementById("wattsec").innerHTML = config.wattsec;
-			  document.getElementById("watthour").innerHTML = config.watthour;
+			
       
   };
   r2.send();
+  
+var r3 = new XMLHttpRequest(); 
+    r3.open("GET", "update", true);
+	r3.timeout = 8000;
+    r3.onreadystatechange = function () {
+    if (r3.readyState != 4 || r3.status != 200) return;
+      var update = JSON.parse(r3.responseText);
+	  document.getElementById("comm-psent").innerHTML = update.comm_sent;
+      document.getElementById("comm-psuccess").innerHTML = update.comm_success;
+      document.getElementById("sta-psent").innerHTML = update.packets_sent;
+      document.getElementById("sta-psuccess").innerHTML = update.packets_success;
+	  document.getElementById("estate").innerHTML = update.estate;
+	  document.getElementById("espvcc").innerHTML = update.espvcc;
+	  document.getElementById("espfree").innerHTML = update.espfree;
+	  document.getElementById("ohmhour").innerHTML = update.ohmhour;
+	  document.getElementById("wattsec").innerHTML = update.wattsec;
+	  document.getElementById("watthour").innerHTML = update.watthour;
+	  document.getElementById("pilot").innerHTML = update.pilot;
+	  document.getElementById("temp1").innerHTML = update.temp1;
+	  document.getElementById("temp2").innerHTML = update.temp2;
+	  document.getElementById("temp3").innerHTML = update.temp3;
+	
+	};
+	r3.send();
+
+update();
+setInterval(update,10000);
+
+
+// -----------------------------------------------------------------------
+// Periodic 10s update of last data values
+// -----------------------------------------------------------------------
+function update() {
+	
+	var r3 = new XMLHttpRequest(); 
+    r3.open("GET", "update", true);
+	r3.timeout = 8000;
+    r3.onreadystatechange = function () {
+    if (r3.readyState != 4 || r3.status != 200) return;
+      var update = JSON.parse(r3.responseText);
+	  document.getElementById("comm-psent").innerHTML = update.comm_sent;
+      document.getElementById("comm-psuccess").innerHTML = update.comm_success;
+      document.getElementById("sta-psent").innerHTML = update.packets_sent;
+      document.getElementById("sta-psuccess").innerHTML = update.packets_success;
+	  document.getElementById("estate").innerHTML = update.estate;
+	  document.getElementById("espvcc").innerHTML = update.espvcc;
+	  document.getElementById("espfree").innerHTML = update.espfree;
+	  document.getElementById("ohmhour").innerHTML = update.ohmhour;
+	  document.getElementById("wattsec").innerHTML = update.wattsec;
+	  document.getElementById("watthour").innerHTML = update.watthour;
+	  document.getElementById("pilot").innerHTML = update.pilot;
+	  document.getElementById("temp1").innerHTML = update.temp1;
+	  document.getElementById("temp2").innerHTML = update.temp2;
+	  document.getElementById("temp3").innerHTML = update.temp3;
+    };
+    r3.send();
+	
+    
 }
 
 function updateStatus() {
@@ -145,8 +148,8 @@ function updateStatus() {
         if (status.mode=="STA") document.getElementById("mode").innerHTML = "Client (STA)";
         document.getElementById("sta-ssid").innerHTML = status.ssid;
         document.getElementById("sta-ip").innerHTML = "<a href='http://"+status.ipaddress+"'>"+status.ipaddress+"</a>";
-        document.getElementById("sta-psent").innerHTML = status.packets_sent;
-        document.getElementById("sta-psuccess").innerHTML = status.packets_success;
+        document.getElementById("sta-psent").innerHTML = update.packets_sent;
+        document.getElementById("sta-psuccess").innerHTML = update.packets_success;
         
         // View display
         document.getElementById("ap-view").style.display = 'none';

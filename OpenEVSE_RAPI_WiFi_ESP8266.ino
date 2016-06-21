@@ -22,7 +22,6 @@
 #include <ESP8266HTTPUpdateServer.h>
 #include <EEPROM.h>
 #include "FS.h"
-#include <ArduinoJson.h>
 #include <ArduinoOTA.h>
 #include <ESP8266mDNS.h>
 
@@ -46,7 +45,7 @@ String epass = "";
 String apikey = "";
 String node = "";
 
-float espvcc = 0;
+int espvcc = 0;
 int espflash = 0;
 int espfree = 0;
 
@@ -56,18 +55,12 @@ String status_string = "";
 String ipaddress = "";
 
 //SERVER strings and interfers for OpenEVSE Energy Monotoring
-const char* host = "data.openevse.com";
-//const char* host = "www.emoncms.org";
-//const char* host = "192.168.1.123";
+const char* host = "data.openevse.com"; //Default to use the OpenEVSE EmonCMS Server
+//const char* host = "www.emoncms.org"; //Optional to use Open Energy EmonCMS servers
+//const char* host = "192.168.1.123";  //Optional to use your own EmonCMS server
 const int httpsPort = 443;
 const char* e_url = "/emoncms/input/post.json?node=";
-const char* inputID_AMP   = "OpenEVSE_AMP:";  //OpenEVSE Current Sensor
-const char* inputID_VOLT   = "OpenEVSE_VOLT:"; //Not currently in used
-const char* inputID_TEMP1   = "OpenEVSE_TEMP1:"; //Sensor DS3232 Ambient
-const char* inputID_TEMP2   = "OpenEVSE_TEMP2:"; //Sensor MCP9808 Ambient
-const char* inputID_TEMP3   = "OpenEVSE_TEMP3:"; //Sensor TMP007 Infared
-const char* inputID_PILOT   = "OpenEVSE_PILOT:"; //OpenEVSE Pilot Setting
-const char* inputID_STATE   = "OpenEVSE_STATE:"; //OpenEVSE STATE
+
 
 int amp = 0; //OpenEVSE Current Sensor
 int volt = 0; //Not currently in used
@@ -274,7 +267,6 @@ void ResetEEPROM(){
 // -------------------------------------------------------------------
 void handleHome() {
   String s;
-  SPIFFS.begin(); // mount the fs
   File f = SPIFFS.open("/home.html", "r");
   if (f) {
     String s = f.readString();
@@ -456,13 +448,6 @@ void handleScan() {
   server.send(200, "text/plain","["+st+"]");
 }
 
-// -------------------------------------------------------------------
-// url: /lastvalues
-// Last values on atmega serial
-// -------------------------------------------------------------------
-void handleLastValues() {
-  server.send(200, "text/html", last_datastr);
-}
 
 // -------------------------------------------------------------------
 // url: /status
@@ -484,16 +469,9 @@ void handleStatus() {
   s += "\"apikey\":\""+apikey+"\",";
   s += "\"node\":\""+node+"\",";
   s += "\"ohmkey\":\""+ohm+"\",";
-  s += "\"ohmhour\":\""+ohm_hour+"\",";
-  s += "\"version\":\""+String(fwversion)+"\",";
-  s += "\"espvcc\":\""+String(espvcc)+"\",";
   s += "\"espflash\":\""+String(espflash)+"\",";
-  s += "\"espfree\":\""+String(espfree)+"\",";
   s += "\"ipaddress\":\""+ipaddress+"\",";
-  s += "\"comm_sent\":\""+String(comm_sent)+"\",";
-  s += "\"comm_success\":\""+String(comm_success)+"\",";
-  s += "\"packets_sent\":\""+String(packets_sent)+"\",";
-  s += "\"packets_success\":\""+String(packets_success)+"\"";
+  s += "\"version\":\""+String(fwversion)+"\"";
   s += "}";
   server.send(200, "text/html", s);
 }
@@ -501,9 +479,8 @@ void handleStatus() {
 void handleConfig() {
 
   String s = "{";
-  s += "\"firmware\":\""+String(firmware)+"\",";
-  s += "\"protocol\":\""+String(protocol)+"\",";
-  s += "\"estate\":\""+String(estate)+"\",";
+  s += "\"firmware\":\""+firmware+"\",";
+  s += "\"protocol\":\""+protocol+"\",";
   s += "\"diodet\":\""+String(diode_ck)+"\",";
   s += "\"gfcit\":\""+String(gfci_test)+"\",";
   s += "\"groundt\":\""+String(ground_ck)+"\",";
@@ -511,21 +488,42 @@ void handleConfig() {
   s += "\"ventt\":\""+String(vent_ck)+"\",";
   s += "\"tempt\":\""+String(temp_ck)+"\",";
   s += "\"service\":\""+String(service)+"\",";
-  s += "\"l1min\":\""+String(current_l1min)+"\",";
-  s += "\"l1max\":\""+String(current_l1max)+"\",";
-  s += "\"l2min\":\""+String(current_l2min)+"\",";
-  s += "\"l2max\":\""+String(current_l2max)+"\",";
-  s += "\"scale\":\""+String(current_scale)+"\",";
-  s += "\"offset\":\""+String(current_offset)+"\",";
-  s += "\"gfcicount\":\""+String(gfci_count)+"\",";
-  s += "\"nogndcount\":\""+String(nognd_count)+"\",";
-  s += "\"stuckcount\":\""+String(stuck_count)+"\",";
-  s += "\"kwhlimit\":\""+String(kwh_limit)+"\",";
-  s += "\"timelimit\":\""+String(time_limit)+"\",";
-  s += "\"wattsec\":\""+String(wattsec)+"\",";
-  s += "\"watthour\":\""+String(watthour_total)+"\"";
+  s += "\"l1min\":\""+current_l1min+"\",";
+  s += "\"l1max\":\""+current_l1max+"\",";
+  s += "\"l2min\":\""+current_l2min+"\",";
+  s += "\"l2max\":\""+current_l2max+"\",";
+  s += "\"scale\":\""+current_scale+"\",";
+  s += "\"offset\":\""+current_offset+"\",";
+  s += "\"gfcicount\":\""+gfci_count+"\",";
+  s += "\"nogndcount\":\""+nognd_count+"\",";
+  s += "\"stuckcount\":\""+stuck_count+"\",";
+  s += "\"kwhlimit\":\""+kwh_limit+"\",";
+  s += "\"timelimit\":\""+time_limit+"\"";
   s += "}";
+  s.replace(" ", "");
   server.send(200, "text/html", s);
+ }
+  
+ void handleUpdate() {
+    
+  String s = "{";
+  s += "\"ohmhour\":\""+ohm_hour+"\",";
+  s += "\"espvcc\":\""+String(espvcc)+"\",";
+  s += "\"espfree\":\""+String(espfree)+"\",";
+  s += "\"comm_sent\":\""+String(comm_sent)+"\",";
+  s += "\"comm_success\":\""+String(comm_success)+"\",";
+  s += "\"packets_sent\":\""+String(packets_sent)+"\",";
+  s += "\"packets_success\":\""+String(packets_success)+"\",";
+  s += "\"pilot\":\""+String(pilot)+"\",";
+  s += "\"temp1\":\""+String(temp1)+"\",";
+  s += "\"temp2\":\""+String(temp2)+"\",";
+  s += "\"temp3\":\""+String(temp3)+"\",";
+  s += "\"estate\":\""+String(estate)+"\",";
+  s += "\"wattsec\":\""+wattsec+"\",";
+  s += "\"watthour\":\""+watthour_total+"\"";
+  s += "}";
+  s.replace(" ", "");
+ server.send(200, "text/html", s); 
 }
 
 // -------------------------------------------------------------------
@@ -709,9 +707,10 @@ void setup() {
 	delay(2000);
 	Serial.begin(115200);
   EEPROM.begin(512);
+  SPIFFS.begin(); // mount the fs
   pinMode(0, INPUT);
   espflash = ESP.getFlashChipSize();
-  espvcc = ESP.getVcc() * 0.001;
+  espvcc = ESP.getVcc();
   espfree = ESP.getFreeHeap();
   //char tmpStr[40];
   
@@ -776,6 +775,11 @@ void setup() {
       return server.requestAuthentication();
     handleConfig();
   });
+  server.on("/update", [](){
+    if(!server.authenticate(www_username, www_password))
+      return server.requestAuthentication();
+    handleUpdate();
+  });
   server.on("/rapi", [](){
     if(!server.authenticate(www_username, www_password))
       return server.requestAuthentication();
@@ -784,7 +788,6 @@ void setup() {
   server.on("/savenetwork", handleSaveNetwork);
   server.on("/saveapikey", handleSaveApikey);
   server.on("/saveohmkey", handleSaveOhmkey);
-  server.on("/lastvalues",handleLastValues);
   server.on("/scan", handleScan);
   server.on("/apoff",handleAPOff);
   server.onNotFound([](){
@@ -865,7 +868,7 @@ if (wifi_mode == 0 || wifi_mode == 3 && ohm != 0){
 if (wifi_mode == 0 || wifi_mode == 3 && apikey != 0){
    if ((millis() - Timer) >= 30000){
      Timer = millis();
-     espvcc = ESP.getVcc() * 0.001;
+     espvcc = ESP.getVcc();
      espfree = ESP.getFreeHeap();
      Serial.flush();
      Serial.println("$GE*B0");
@@ -878,8 +881,6 @@ if (wifi_mode == 0 || wifi_mode == 3 && apikey != 0){
            String qrapi; 
            qrapi = rapiString.substring(rapiString.indexOf(' '));
            pilot = qrapi.toInt();
-           last_datastr = "Pilot:";
-           last_datastr += pilot;
          }
        }
      Serial.flush();
@@ -893,34 +894,34 @@ if (wifi_mode == 0 || wifi_mode == 3 && apikey != 0){
            String qrapi = rapiString.substring(rapiString.indexOf(' '));
            state = strtol(qrapi.c_str(), NULL, 16);
            if (state == 1) {
-             estate = "Not Connected";
+             estate = "Not_Connected";
            }
            if (state == 2) {
-             estate = "EV Connected";
+             estate = "EV_Connected";
            }
            if (state == 3) {
              estate = "Charging";
            }
            if (state == 4) {
-             estate = "Vent Required";
+             estate = "Vent_Required";
            }
            if (state == 5) {
-             estate = "Diode Check Failed";
+             estate = "Diode_Check_Failed";
            } 
            if (state == 6) {
-             estate = "GFCI Fault";
+             estate = "GFCI_Fault";
            }
            if (state == 7) {
-             estate = "No Earth Ground";
+             estate = "No_Earth_Ground";
            }
            if (state == 8) {
-             estate = "Stuck Relay";
+             estate = "Stuck_Relay";
            }
            if (state == 9) {
-             estate = "GFCI Self Test Failed";
+             estate = "GFCI_Self_Test_Failed";
            }
            if (state == 10) {
-             estate = "Over Temperature";
+             estate = "Over_Temperature";
            }
            if (state == 254) {
              estate = "Sleeping";
@@ -948,14 +949,8 @@ if (wifi_mode == 0 || wifi_mode == 3 && apikey != 0){
          String qrapi1;
          qrapi1 = rapiString.substring(rapiString.lastIndexOf(' '));
          volt = qrapi1.toInt();
-         last_datastr += ",CT1:";
-         last_datastr += amp;
-         
        }
     }  
-    
-    
-    
     delay(100);
     Serial.flush(); 
     Serial.println("$GP*BB");
@@ -968,21 +963,13 @@ if (wifi_mode == 0 || wifi_mode == 3 && apikey != 0){
         String qrapi; 
         qrapi = rapiString.substring(rapiString.indexOf(' '));
         temp1 = qrapi.toInt();
-        last_datastr += ",T1:";
-        last_datastr += (temp1/10);
         String qrapi1;
         int firstRapiCmd = rapiString.indexOf(' ');
         qrapi1 = rapiString.substring(rapiString.indexOf(' ', firstRapiCmd + 1 ));
         temp2 = qrapi1.toInt();
-        last_datastr += ",T2:";
-        last_datastr += (temp2/10);
         String qrapi2;
         qrapi2 = rapiString.substring(rapiString.lastIndexOf(' '));
         temp3 = qrapi2.toInt();
-        last_datastr += ",T3:";
-        last_datastr += (temp3/10);
-    
-    
       }
     } 
  
@@ -991,52 +978,23 @@ if (wifi_mode == 0 || wifi_mode == 3 && apikey != 0){
     if (!client.connect(host, httpsPort)) {
       return;
     }
-  
-// We now create a URL for OpenEVSE RAPI data upload request
-    String url = e_url;
-    String url_amp = inputID_AMP;
-    url_amp += amp;
-    url_amp += ",";
-    String url_volt = inputID_VOLT;
-    url_volt += volt;
-    url_volt += ",";
-    String url_temp1 = inputID_TEMP1;
-    url_temp1 += temp1;
-    url_temp1 += ",";
-    String url_temp2 = inputID_TEMP2;
-    url_temp2 += temp2;
-    url_temp2 += ","; 
-    String url_temp3 = inputID_TEMP3;
-    url_temp3 += temp3;
-    url_temp3 += ",";
-    String url_state = inputID_STATE;
-    url_state += state;
-    url_state += ","; 
-    String url_pilot = inputID_PILOT;
-    url_pilot += pilot;
-    url += node;
-    url += "&json={";
-    url += url_amp;
-    if (volt <= 0) {
-      url += url_volt;
-    }
-    if (temp1 != 0) {
-      url += url_temp1;
-    }
-    if (temp2 != 0) {
-      url += url_temp2;
-    }
-    if (temp3 != 0) {
-      url += url_temp3;
-    }
-    url += url_state;
-    url += url_pilot;
-    url += "}&devicekey=";
-    url += apikey.c_str();
     
-// This will send the request to the server
+// Create the JSON String
+  
+  String s = e_url;
+  s += String(node)+"&json={";
+  s += "OpenEVSE_AMP:"+String(amp)+",";
+  s += "OpenEVSE_TEMP1:"+String(temp1)+",";
+  s += "OpenEVSE_TEMP2:"+String(temp2)+",";
+  s += "OpenEVSE_TEMP3:"+String(temp3)+",";
+  s += "OpenEVSE_PILOT:"+String(pilot)+",";
+  s += "OpenEVSE_STATE:"+String(state);
+  s += "}&devicekey="+String(apikey);
+     
+// Send the JSON request to the server
+    
     packets_sent++;
-    client.print(String("GET ") + url + " HTTP/1.1\r\n" + "Host: " + host + "\r\n" + "Connection: close\r\n\r\n");
+    client.print(String("GET ") + s + " HTTP/1.1\r\n" + "Host: " + host + "\r\n" + "Connection: close\r\n\r\n");
     delay(10);
     String line = client.readString();
       if (line.indexOf("ok") >= 0){

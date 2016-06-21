@@ -52,14 +52,7 @@
                 </div>
                 <div id="wait-view" style="display:none">
                     <p>Connecting to WIFI Network...</p>
-                </div>
-				<h2>Module</h2>
-				<div id="client-view" style="display:none">
-					<p><b>Firmware:</b><br><span id="version"></span></p>
-					<p><b>Voltage:</b><br><span id="espvcc"></span></p>
-					<p><b>Flash Size:</b><br><span id="espflash"></span></p>
-					<p><b>RAM Free:</b><br><span id="espfree"></span></p>
-				</div>
+                </div>		
             </div>
         <div class="box380">
             <a href="https://data.openevse.com/emoncms"><img src="emoncms.png" alt="OpenEVSE Data"></a>
@@ -130,17 +123,28 @@
                 </table>
              </div>
 			 <div class="box380">
-               <h2>OpenEVSE</h2>
-               <p><b>Firmware: </b><span id="firmware"></span></p>
-               <p><b>Protocol: </b><span id="protocol"></span></p>
-			   <p><b>State: </b><span id="estate"></span></p>
+                <h2>Hardware</h2>
+				<table>
+                <tr><th>OpenEVSE</th><th></th></tr>
+                <tr><td>Firmware:</td><td><span id="firmware"></span></td></tr>
+                <tr><td>Protocol:</td><td><span id="protocol"></span></td></tr>
+				<tr><th>WiFi</th><th></th></tr>
+				<tr><td>Firmware:</td><td><span id="version"></span></td></tr>
+                <tr><td>Voltage:</td><td><span id="espvcc"></span></td></tr>
+				<tr><td>Flash Size:</td><td><span id="espflash"></span></td></tr>
+                <tr><td>Free RAM:</td><td><span id="espfree"></span></td></tr>
+                </table>
              </div>
              <div class="box380">
-               <h2>Latest Values</h2><span id="updated"></span>
+               <h2>Sensor Values</h2>
                <table>
-               <tr><th>Name</th><th>Value</th></tr>
-               <tbody id="datavalues"></tbody>
-               </table>
+                <tr><th>Sensor</th><th>Value</th></tr>
+                <tr><td>State</td><td><span id="estate"></span></td></tr>
+                <tr><td>Pilot</td><td><span id="pilot"></span></td></tr>
+				<tr><td>Temp1</td><td><span id="temp1"></span></td></tr>
+				<tr><td>Temp2</td><td><span id="temp2"></span></td></tr>
+				<tr><td>Temp3</td><td><span id="temp3"></span></td></tr>
+                </table>
              </div>
           </div> 
        <div id="content-3">
@@ -150,8 +154,6 @@
            </div>
         </div>
         <div id="content-4">
-          <iframe style="width:420px; height:300px;" frameborder="0" scrolling="no" marginheight="0" marginwidth="0" src="https://data.openevse.com/emoncms/vis/multigraph?mid=3&embed=1">
-          </iframe>
         </div>
   </div>
       
