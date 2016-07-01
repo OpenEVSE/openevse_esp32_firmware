@@ -78,6 +78,7 @@ var r3 = new XMLHttpRequest();
       document.getElementById("comm-psuccess").innerHTML = update.comm_success;
       document.getElementById("sta-psent").innerHTML = update.packets_sent;
       document.getElementById("sta-psuccess").innerHTML = update.packets_success;
+	  document.getElementById("amp").innerHTML = update.amp;
 	  document.getElementById("estate").innerHTML = update.estate;
 	  document.getElementById("espvcc").innerHTML = update.espvcc;
 	  document.getElementById("espfree").innerHTML = update.espfree;
