@@ -514,6 +514,7 @@ void handleConfig() {
   s += "\"comm_success\":\""+String(comm_success)+"\",";
   s += "\"packets_sent\":\""+String(packets_sent)+"\",";
   s += "\"packets_success\":\""+String(packets_success)+"\",";
+  s += "\"amp\":\""+String(amp)+"\",";
   s += "\"pilot\":\""+String(pilot)+"\",";
   s += "\"temp1\":\""+String(temp1)+"\",";
   s += "\"temp2\":\""+String(temp2)+"\",";
