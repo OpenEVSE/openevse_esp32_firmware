@@ -153,6 +153,51 @@
              <iframe style="width:380px; height:550px;" frameborder="0" scrolling="no" marginheight="0" marginwidth="0" src="/rapi">
           </iframe>   
            </div>
+             <div class="box380">
+               <h2>RAPI Commands</h2>
+               <table>
+                  <tr><th>Get Parameter</th><th>Description</th></tr>
+                  <tr><td>$G3</td><td>Get Charge Time Limit, 15-minutes (1), 30-minutes (2), etc...</td></tr>
+                  <tr><td>$GA</td><td>Get Ammeter Scale/Offset, scale offset</td></tr>
+                  <tr><td>$GC</td><td>Get current capacity, integer</td></tr>
+                  <tr><td>$GE</td><td>Get settings, amps flags</td></tr>
+                  <tr><td>$GF</td><td>Get fault counters, gfi ground stuck (in hex)</td></tr>
+                  <tr><td>$GG</td><td>Get charge current and voltage, milliamps millivolts</td></tr>
+                  <tr><td>$GH</td><td>Get charge limit in kWh, integer</td></tr>
+                  <tr><td>$GM</td><td>Get Voltmeter Scale/Offset, scale offset</td></tr>
+                  <tr><td>$GO</td><td>Get Overtemperature thresholds, ambient infrared</td></tr>
+                  <tr><td>$GP</td><td>Get Temperatures, LCD mcp9808 infrared (all integers, Celcius * 10)</td></tr>
+                  <tr><td>$GS</td><td>Get EVSE State, state elapsed_seconds</td></tr>
+                  <tr><td>$GT</td><td>Get time, year month day hour minute second</td></tr>
+                  <tr><td>$GU</td><td>Get Energy usage, wattseconds watt_hour_accumulated</td></tr>
+                  <tr><td>$GV</td><td>Get Versions, evse_firmware protocol_version</td></tr>
+                  <tr><th>Set Parameter</th><th>Description</th></tr>
+                  <tr><td>$S0</td><td>Set LCD Type, Monochrome (0), Color (1)</td></tr>
+                  <tr><td>$S1</td><td>Set RTC Year Month Day Hour Minute Second (all 2-digit max)</td></tr>
+                  <tr><td>$S2</td><td>Enable (1)/ Disable (0) Ammeter Calibration Mode</td></tr>
+                  <tr><td>$S3</td><td>Set Charge Time Limit, 15-minutes (1), 30-minutes (2), etc...</td></tr>
+                  <tr><td>$SA</td><td>Set Ammeter Scale/Offset, scale offset</td></tr>
+                  <tr><td>$SC</td><td>Set current capacity, integer</td></tr>
+                  <tr><td>$SD</td><td>Enable (1) / Disable (0) Command Echo - <b>DO NOT SET WITH WIFI!</b></td></tr>
+                  <tr><td>$SF</td><td>Enable (1) / Disable (0) GFI self-check</td></tr>
+                  <tr><td>$SG</td><td>Enable (1) / Disable (0) Ground check</td></tr>
+                  <tr><td>$SH</td><td>Set charge limit in kWh, integer</td></tr>
+                  <tr><td>$SK</td><td>Set accumulated kWh, integer</td></tr>
+                  <tr><td>$SM</td><td>Set Voltmeter Scale/Offset, scale offset</td></tr>
+                  <tr><td>$SO</td><td>Set Overtemperature thresholds, ambient infrared</td></tr>
+                  <tr><td>$SR</td><td>Enable (1) / Disable (0) Stuck-relay check</td></tr>
+                  <tr><td>$SS</td><td>Enable (1) / Disable (0) GFI self-check</td></tr>
+                  <tr><td>$ST</td><td>Set timer, start_hour start_min end_hour end_min</td></tr>
+                  <tr><td>$SV</td><td>Enable (1) / Disable (0) vent required check</td></tr>
+                  <tr><th>Function</th><th>Description</th></tr>
+                  <tr><td>$FB</td><td>LCD Backlight Color (0-7)</td></tr>
+                  <tr><td>$FD</td><td>Disable EVSE</td></tr>
+                  <tr><td>$FE</td><td>Enable EVSE</td></tr>
+                  <tr><td>$FP</td><td>Output text at x y position text to LCD (x y text)</td></tr>
+                  <tr><td>$FR</td><td>Reset EVSE</td></tr>
+                  <tr><td>$FS</td><td>Put EVSE to sleep</td></tr>
+               </table>
+             </div>
         </div>
         <div id="content-4">
 		  
