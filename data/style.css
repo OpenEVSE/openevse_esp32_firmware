@@ -37,7 +37,6 @@ tr:nth-child(2n+2) {background-color:#f3f3f3;}
     
 .box {
     padding:20px;
-
 }
     
 .box380 {
@@ -50,8 +49,6 @@ tr:nth-child(2n+2) {background-color:#f3f3f3;}
     border: 1px solid #ddd;
 	border-radius: 1em 1em 1em 1em;
 	box-shadow: 1px 7px 7px 1px rgba(0, 0, 0, 0.4);
-   
-      
 }
   
 @media (min-width: 980px) {
@@ -71,21 +68,17 @@ tr:nth-child(2n+2) {background-color:#f3f3f3;}
 }
     
 input[type=text] {
-    padding:5px;
-    
+    padding:5px;   
 }
  
 button {
 	padding: 5px;
-
-
 }
+
 #container {
     margin: 20;
 	height: inherit;
-	padding-bottom:20px;
-    
-    
+	padding-bottom:20px;   
 }
 
 #container input {
@@ -135,9 +128,7 @@ button {
     position: relative;
 	width: 100%;
 	height: 88%;
-	z-index: 5;
-	
-        
+	z-index: 5; 
 }
 
 #content div {
@@ -170,22 +161,25 @@ button {
    z-index: 7;
 }
 
+#content-1 iframe {
+    position: relative; 
+    background: #ffffff;
+    opacity: 100;
+    z-index: 7;
+}
+
 #content-2 div {
     position: relative;    
     background: #ffffff;
     opacity: 100;
-    z-index: 8;
-   
+    z-index: 8;  
 }
-
-
 
 #content-3 div {
     position: relative; 
     background: #ffffff;
     opacity: 100;
-    z-index: 9;
-    
+    z-index: 9;   
 }
 
 #content-3 iframe {
@@ -194,15 +188,20 @@ button {
     opacity: 100;
     z-index: 9;
 }
-	
-	#content-4 iframe {
+
+#content-4 div {
     position: relative; 
     background: #ffffff;
     opacity: 100;
-    z-index: 9;
-    
+    z-index: 9;  
 }
-
+	
+#content-4 iframe {
+    position: relative; 
+    background: #ffffff;
+    opacity: 100;
+    z-index: 9;   
+}
 
 #container input#tab-1:checked ~ #content #content-1,
 #container input#tab-2:checked ~ #content #content-2,

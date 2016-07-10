@@ -69,7 +69,7 @@ var r2 = new XMLHttpRequest();
   r2.send();
   
 var r3 = new XMLHttpRequest(); 
-    r3.open("GET", "update", true);
+    r3.open("GET", "rapiupdate", true);
 	r3.timeout = 8000;
     r3.onreadystatechange = function () {
     if (r3.readyState != 4 || r3.status != 200) return;
@@ -103,7 +103,7 @@ setInterval(update,10000);
 function update() {
 	
 	var r3 = new XMLHttpRequest(); 
-    r3.open("GET", "update", true);
+    r3.open("GET", "rapiupdate", true);
 	r3.timeout = 8000;
     r3.onreadystatechange = function () {
     if (r3.readyState != 4 || r3.status != 200) return;
@@ -130,7 +130,7 @@ function update() {
 
 function updateStatus() {
   var r1 = new XMLHttpRequest(); 
-  r1.open("GET", "status", true);
+  r1.open("GET", "status", false);
   r1.timeout = 2000;
   r1.onreadystatechange = function () {
     if (r1.readyState != 4 || r1.status != 200) return;

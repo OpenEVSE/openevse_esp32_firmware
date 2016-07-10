@@ -23,7 +23,7 @@
     <input id="tab-3" type="radio" name="tab-group" />
     <label for="tab-3">RAPI</label>
     <input id="tab-4" type="radio" name="tab-group" />
-    <label for="tab-4">Energy</label>
+    <label for="tab-4">Timers</label>
     <div id="content">
       <div id="content-1">
          <div class="box380">
@@ -35,8 +35,10 @@
                     <p><b>Successful packets:</b><br><span id="sta-psuccess"></span> of <span id="sta-psent"></span></p>
                     <p><b>OpenEVSE</b></p>
                     <p><b>RAPI packets:</b><br><span id="comm-psuccess"></span> of <span id="comm-psent"></span></p>
-
                     <button id="apoff" style="display:none">Turn off Access Point</button>
+		            <p><b>Firmware: </b><span id="version"></span></p>
+						<iframe style="width:380px; height:50px;" frameborder="0" scrolling="no" marginheight="0" marginwidth="0" src="/update">
+						</iframe> 
                     <button id="reset">Reset config and reboot</button>
                 </div>
                 <div id="ap-view" style="display:none">
@@ -74,7 +76,7 @@
 				<p><b>Example: </b>https://login.ohmconnect.com/verify-ohm-hour/OpnEoVse</p>
 				<p><b>Key: </b>OpnEoVse</p>
 				</p>
-	    </div>    
+	    </div>  	
     </div>
 	<div id="content-2">
 			 <div class="box380">
@@ -129,7 +131,6 @@
                 <tr><td>Firmware:</td><td><span id="firmware"></span></td></tr>
                 <tr><td>Protocol:</td><td><span id="protocol"></span></td></tr>
 				<tr><th>WiFi</th><th></th></tr>
-				<tr><td>Firmware:</td><td><span id="version"></span></td></tr>
                 <tr><td>Voltage:</td><td><span id="espvcc"></span></td></tr>
 				<tr><td>Flash Size:</td><td><span id="espflash"></span></td></tr>
                 <tr><td>Free RAM:</td><td><span id="espfree"></span></td></tr>
@@ -139,7 +140,6 @@
                <h2>Sensor Values</h2>
                <table>
                 <tr><th>Sensor</th><th>Value</th></tr>
-                <tr><td>Current</td><td><span id="amp"></span></td></tr>
                 <tr><td>State</td><td><span id="estate"></span></td></tr>
                 <tr><td>Pilot</td><td><span id="pilot"></span></td></tr>
 				<tr><td>Temp1</td><td><span id="temp1"></span></td></tr>
@@ -155,6 +155,7 @@
            </div>
         </div>
         <div id="content-4">
+		  
         </div>
   </div>
       

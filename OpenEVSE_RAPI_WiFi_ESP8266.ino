@@ -29,8 +29,9 @@ ADC_MODE(ADC_VCC);
 
 ESP8266WebServer server(80);
 ESP8266HTTPUpdateServer httpUpdater;
+int commDelay = 60;
 
-const char* fwversion = "D1.0.2";
+const char* fwversion = "D1.0.3";
 
 //Default SSID and PASSWORD for AP Access Point Mode
 const char* ssid = "OpenEVSE";
@@ -557,7 +558,7 @@ void handleRapiR() {
   rapi.replace("+", " "); 
   Serial.flush();
   Serial.println(rapi);
-  delay(100);
+  delay(commDelay);
        while(Serial.available()) {
          rapiString = Serial.readStringUntil('\r');
        }    
@@ -571,11 +572,357 @@ void handleRapiR() {
    server.send(200, "text/html", s);
 }
 
+void handleDateTime(){
+  String s;
+// variables for command responses
+  String sFirst = "0";
+  String sSecond = "0";
+  String sThird = "0";
+  String sFourth = "0";
+  String sFifth = "0";
+  String sSixth = "0";
+  s = "<HTML>";
+  s +="<h2>Date and Time</h2>";  
+ //get date and time
+  Serial.flush();
+  Serial.println("$GT^37");
+  delay(commDelay);
+  int month = 0;
+  int day = 0;
+  int year = 0;
+  int hour = 0;
+  int minutes = 0;
+  int index;
+  while(Serial.available()) {
+    String rapiString = Serial.readStringUntil('\r');
+    if ( rapiString.startsWith("$OK") ) {
+      int first_blank_index = rapiString.indexOf(' ');
+      int second_blank_index = rapiString.indexOf(' ',first_blank_index + 1);
+      sFirst = rapiString.substring(first_blank_index + 1, second_blank_index);  // 2 digit year
+      year = sFirst.toInt();
+      first_blank_index = rapiString.indexOf(' ',second_blank_index + 1);
+      sSecond = rapiString.substring(second_blank_index + 1, first_blank_index); // month
+      month = sSecond.toInt();
+      second_blank_index = rapiString.indexOf(' ',first_blank_index + 1);
+      sThird = rapiString.substring(first_blank_index + 1, second_blank_index);  // day  
+      day = sThird.toInt();   
+      first_blank_index = rapiString.indexOf(' ',second_blank_index + 1);
+      sFourth = rapiString.substring(second_blank_index + 1, first_blank_index); // hour 
+      hour = sFourth.toInt();    
+      second_blank_index = rapiString.indexOf(' ',first_blank_index + 1);
+      sFifth = rapiString.substring(first_blank_index + 1, second_blank_index);  // min
+      minutes = sFifth.toInt();
+      sSixth = rapiString.substring(rapiString.lastIndexOf(' '),rapiString.indexOf('^'));    // sec   not used    
+    }
+  }
+  s += "<FORM METHOD='get' ACTION='datetimeR'>";
+  s += "<P><FONT FACE='Arial'><FONT SIZE=4>Current Date is ";
+  s += "<SELECT name='month'><OPTION value='1'";
+  if (month == 1)
+    s += " SELECTED";
+  s += " >January</OPTION><OPTION value='2'";
+  if (month == 2)
+   s += " SELECTED";
+  s += " >February</OPTION><OPTION value='3'";
+  if (month == 3)
+   s += " SELECTED";
+  s += " >March</OPTION><OPTION value='4'";
+  if (month == 4)
+   s += " SELECTED";
+  s += " >April</OPTION><OPTION value='5'";
+  if (month == 5)
+   s += " SELECTED";
+  s += " >May</OPTION><OPTION value='6'";
+  if (month == 6)
+   s += " SELECTED";
+  s += " >June</OPTION><OPTION value='7'";
+  if (month == 7)
+   s += " SELECTED";
+  s += " >July</OPTION><OPTION value='8'";
+  if (month == 8)
+   s += " SELECTED";
+  s += " >August</OPTION><OPTION value='9'";
+  if (month == 9)
+   s += " SELECTED";
+  s += " >September</OPTION><OPTION value='10'";
+  if (month == 10)
+   s += " SELECTED";
+  s += " >October</OPTION><OPTION value='11'";
+  if (month == 11)
+   s += " SELECTED";
+  s += " >November</OPTION><OPTION value='12'";
+  if (month ==12)
+   s += " SELECTED";
+  s += " >December</OPTION></SELECT>";
+  s += " <SELECT name='day'>";
+  for (index = 1; index <= 31; index++){
+     if (index == day)
+       s += "<OPTION value='" + String(index) + "'SELECTED>" + String(index) + "</OPTION>";
+     else
+       s += "<OPTION value='" + String(index) + "'>" + String(index) + "</OPTION>";
+  }
+  s += "</SELECT>, 20";
+  s += "<SELECT name='year'>";
+  for (index = 16; index <= 99; index++){
+     if (index == year)
+       s += "<OPTION value='" + String(index) + "'SELECTED>" + String(index) + "</OPTION>";
+     else
+       s += "<OPTION value='" + String(index) + "'>" + String(index) + "</OPTION>";
+  }
+  s += "</SELECT></P>";
+  s += "<P> Current Time (hh:mm) is ";
+  s += "<SELECT name='hour'>";
+  for (index = 0; index <= 9; index++){
+     if (index == hour)
+       s += "<OPTION value='" + String(index) + "'SELECTED>" + "0" + String(index) + "</OPTION>";
+     else
+       s += "<OPTION value='" + String(index) + "'>" + "0" + String(index) + "</OPTION>";
+  }
+  for (index = 10; index <= 23; index++){
+     if (index == hour)
+       s += "<OPTION value='" + String(index) + "'SELECTED>" + String(index) + "</OPTION>";
+     else
+       s += "<OPTION value='" + String(index) + "'>" + String(index) + "</OPTION>";
+  }
+  s += "</SELECT>:";
+  s += "<SELECT name='minutes'>";
+  for (index = 0; index <= 9; index++){
+     if (index == minutes)
+       s += "<OPTION value='" + String(index) + "'SELECTED>" + "0" + String(index) + "</OPTION>";
+     else
+       s += "<OPTION value='" + String(index) + "'>" + "0" + String(index) + "</OPTION>";
+  }
+  for (index = 10; index <= 59; index++){
+     if (index == minutes)
+       s += "<OPTION value='" + String(index) + "'SELECTED>" + String(index) + "</OPTION>";
+     else
+       s += "<OPTION value='" + String(index) + "'>" + String(index) + "</OPTION>";
+  }
+  s += "</SELECT></P>";
+  s += "&nbsp;<TABLE><TR>";
+  s += "<TD><INPUT TYPE=SUBMIT VALUE='    Submit    '></TD>";
+  s += "</FORM><FORM ACTION='home'>";
+  s += "<TD><INPUT TYPE=SUBMIT VALUE='    Cancel    '></TD>";
+  s += "</FORM>";
+  s += "</TR></TABLE>";
+  s += "</HTML>";
+  s += "\r\n\r\n";
+  server.send(200, "text/html", s);
+}
+
+void handleDateTimeR(){
+  String s;
+  String sMonth = server.arg("month");
+  String sDay = server.arg("day");      
+  String sYear = server.arg("year");
+  String sHour = server.arg("hour");
+  String sMinutes = server.arg("minutes");
+  int month = 0;
+  int day = 0;
+  int year = 0;
+
+  month = sMonth.toInt();
+  year = sYear.toInt();
+  switch (month){
+    case 1:
+      day = 31;
+      break;
+    case 2:
+      if (year%4 == 0)
+        day = 29;
+      else
+        day = 28;
+      break;
+    case 3:
+      day = 31;
+      break;
+    case 4:
+      day = 30;
+      break;
+    case 5:
+      day = 31;
+      break;
+    case 6:
+      day = 30;
+      break;
+    case 7:
+      day = 31;
+      break;
+    case 8:
+      day = 31;
+      break;
+    case 9:
+      day = 30;
+      break;
+    case 10:
+      day = 31;
+      break;
+    case 11:
+      day = 30;
+      break;
+    case 12:
+      day = 31;
+      break;
+    default:
+      day = 0;
+  }
+  s = "<HTML><FONT SIZE=4><FONT FACE='Arial'>";
+  if (sDay.toInt() <= day){
+    String sCommand = "$S1 " + sYear + " " + sMonth + " " + sDay + " " + sHour + " " + sMinutes + " 0"; 
+    Serial.flush();
+    Serial.println(sCommand);
+    delay(commDelay);   
+    s += "Success!<P><FORM ACTION='home'>";
+  }
+  else
+    s += "Invalid Date. Please try again.<P><FORM ACTION='datetime'>";  
+  s += "<INPUT TYPE=SUBMIT VALUE='     OK     '></FORM></P></FONT></FONT></HTML>\r\n\r\n";
+  server.send(200, "text/html", s);
+}
+
+void handleDelayTimer(){
+  String s;
+  // variables for command responses
+  String sFirst = "0";
+  String sSecond = "0";
+  String sThird = "0";
+  String sFourth = "0";
+  String sFifth = "0";
+  s = "<HTML>";
+  s += "<h2>Set Delay Timer</h2>";  
+ //get delay start timer
+  delay(commDelay);
+  Serial.flush();
+  Serial.println("$GD^27");
+  delay(commDelay);
+  int start_hour = 0;
+  int start_min = 0;
+  int stop_hour = 0;
+  int stop_min = 0;
+  int index;
+  while(Serial.available()) {
+    String rapiString = Serial.readStringUntil('\r');
+    if ( rapiString.startsWith("$OK") ) {
+      int first_blank_index = rapiString.indexOf(' ');
+      int second_blank_index = rapiString.indexOf(' ',first_blank_index + 1);
+      sFirst = rapiString.substring(first_blank_index + 1, second_blank_index);  // start hour
+      start_hour = sFirst.toInt();
+      first_blank_index = rapiString.indexOf(' ',second_blank_index + 1);
+      sSecond = rapiString.substring(second_blank_index + 1, first_blank_index); // start min
+      start_min = sSecond.toInt();
+      second_blank_index = rapiString.indexOf(' ',first_blank_index + 1);
+      sThird = rapiString.substring(first_blank_index + 1, second_blank_index);  // stop hour
+      stop_hour = sThird.toInt();
+      first_blank_index = rapiString.indexOf(' ',second_blank_index + 1);
+      sFourth = rapiString.substring(second_blank_index + 1, first_blank_index); // stop min
+      stop_min = sFourth.toInt();
+      sFifth = rapiString.substring(rapiString.lastIndexOf(' ') + 1,rapiString.indexOf('^'));  // timer enabled - not used    
+    }
+  }
+  s += "<FORM METHOD='get' ACTION='delaytimerR'>";
+  s += "<P><FONT FACE='Arial'><FONT SIZE=4>Start Time (hh:mm) - ";
+  s += " <SELECT name='starthour'>";
+  for (index = 0; index <= 9; index++){
+     if (index == start_hour)
+       s += "<OPTION value='" + String(index) + "'SELECTED>" + "0" + String(index) + "</OPTION>";
+     else
+       s += "<OPTION value='" + String(index) + "'>" + "0" + String(index) + "</OPTION>";
+  }
+    for (index = 10; index <= 23; index++){
+     if (index == start_hour)
+       s += "<OPTION value='" + String(index) + "'SELECTED>" + String(index) + "</OPTION>";
+     else
+       s += "<OPTION value='" + String(index) + "'>" + String(index) + "</OPTION>";
+  }
+  s += "</SELECT>:";
+  s += "<SELECT name='startmin'>";
+  for (index = 0; index <= 9; index++){
+     if (index == start_min)
+       s += "<OPTION value='" + String(index) + "'SELECTED>" + "0" + String(index) + "</OPTION>";
+     else
+       s += "<OPTION value='" + String(index) + "'>" + "0" + String(index) + "</OPTION>";
+  }
+  for (index = 10; index <= 59; index++){
+     if (index == start_min)
+       s += "<OPTION value='" + String(index) + "'SELECTED>" + String(index) + "</OPTION>";
+     else
+       s += "<OPTION value='" + String(index) + "'>" + String(index) + "</OPTION>";
+  }
+  s += "</SELECT></P>";
+  s += "<P>Stop Timer (hh:mm) - ";
+  s += "<SELECT name='stophour'>";
+  for (index = 0; index <= 9; index++){
+     if (index == stop_hour)
+       s += "<OPTION value='" + String(index) + "'SELECTED>" + "0" + String(index) + "</OPTION>";
+     else
+       s += "<OPTION value='" + String(index) + "'>" + "0" + String(index) + "</OPTION>";
+  }
+  for (index = 10; index <= 23; index++){
+     if (index == stop_hour)
+       s += "<OPTION value='" + String(index) + "'SELECTED>" + String(index) + "</OPTION>";
+     else
+       s += "<OPTION value='" + String(index) + "'>" + String(index) + "</OPTION>";
+  }
+  s += "</SELECT>:";
+  s += "<SELECT name='stopmin'>";
+  for (index = 0; index <= 9; index++){
+     if (index == stop_min)
+       s += "<OPTION value='" + String(index) + "'SELECTED>" + "0" + String(index) + "</OPTION>";
+     else
+       s += "<OPTION value='" + String(index) + "'>" + "0" + String(index) + "</OPTION>";
+  }
+  for (index = 10; index <= 59; index++){
+     if (index == stop_min)
+       s += "<OPTION value='" + String(index) + "'SELECTED>" + String(index) + "</OPTION>";
+     else
+       s += "<OPTION value='" + String(index) + "'>" + String(index) + "</OPTION>";
+  }
+  s += "</SELECT></P>";
+  s += "<P>Note. All zeros will turn OFF delay timer</P>";
+  s += "&nbsp;<TABLE><TR>";
+  s += "<TD><INPUT TYPE=SUBMIT VALUE='    Submit    '></TD>";
+  s += "</FORM><FORM ACTION='home'>";
+  s += "<TD><INPUT TYPE=SUBMIT VALUE='    Cancel    '></TD>";
+  s += "</FORM>";
+  s += "</TR></TABLE>";
+  s += "</HTML>";
+  s += "\r\n\r\n";
+  server.send(200, "text/html", s);
+}
+
+void handleDelayTimerR(){
+  String s;
+  String sStart_hour = server.arg("starthour");      
+  String sStart_min = server.arg("startmin");
+  String sStop_hour = server.arg("stophour");
+  String sStop_min = server.arg("stopmin");       
+  s = "<HTML>";
+  String sCommand = "$ST " + sStart_hour + " "+ sStart_min + " " + sStop_hour + " " + sStop_min; 
+  Serial.flush();
+  Serial.println(sCommand);
+  delay(commDelay);
+  if ( (sStart_hour != "00") || (sStart_min != "00") || (sStop_hour != "00") || (sStop_min != "00")) //turn off timer
+    sCommand = "$FS^31";     
+  else
+    sCommand = "$FE^27"; 
+  Serial.flush();
+  Serial.println(sCommand);
+  delay(commDelay);  
+  s += "<FORM ACTION='home'>";  
+  s += "<P><FONT SIZE=4><FONT FACE='Arial'>Success!</P>";
+  s += "<P><INPUT TYPE=SUBMIT VALUE='     OK     '></FONT></FONT></P>";
+  s += "</FORM>";
+  s += "</HTML>";
+  s += "\r\n\r\n";
+  server.send(200, "text/html", s);
+}
+
+
 void handleRapiRead() {
   Serial.flush(); 
   Serial.println("$GV*C1");
   comm_sent++;
-  delay(100);
+  delay(commDelay);
   while(Serial.available()) {
       String rapiString = Serial.readStringUntil('\r');
       if (rapiString.startsWith("$OK") ) {
@@ -586,10 +933,9 @@ void handleRapiRead() {
         protocol = rapiString.substring(secondRapiCmd);
       }
     }
-  Serial.flush();
   Serial.println("$GF*B1");
   comm_sent++;
-  delay(100);
+  delay(commDelay);
   while(Serial.available()) {
       String rapiString = Serial.readStringUntil('\r');
       if (rapiString.startsWith("$OK") ) {
@@ -602,10 +948,9 @@ void handleRapiRead() {
         stuck_count = rapiString.substring(thirdRapiCmd);
       }
     }
-  Serial.flush();  
   Serial.println("$GC*AE");
   comm_sent++;
-  delay(100);
+  delay(commDelay);
   while(Serial.available()) {
       String rapiString = Serial.readStringUntil('\r');
       if (rapiString.startsWith("$OK") ) {
@@ -622,10 +967,9 @@ void handleRapiRead() {
         }   
       }
     }
-  Serial.flush();
   Serial.println("$GA*AC");
   comm_sent++;
-  delay(100);
+  delay(commDelay);
   while(Serial.available()) {
       String rapiString = Serial.readStringUntil('\r');
       if (rapiString.startsWith("$OK") ) {
@@ -636,10 +980,9 @@ void handleRapiRead() {
         current_offset = rapiString.substring(secondRapiCmd);
       }
     }
-  Serial.flush();
   Serial.println("$GH");
   comm_sent++;
-  delay(100);
+  delay(commDelay);
   while(Serial.available()) {
       String rapiString = Serial.readStringUntil('\r');
       if (rapiString.startsWith("$OK") ) {
@@ -648,10 +991,9 @@ void handleRapiRead() {
         kwh_limit = rapiString.substring(firstRapiCmd);
       }
     }
-  Serial.flush();
   Serial.println("$G3");
   comm_sent++;
-  delay(100);
+  delay(commDelay);
   while(Serial.available()) {
       String rapiString = Serial.readStringUntil('\r');
       if (rapiString.startsWith("$OK") ) {
@@ -660,10 +1002,9 @@ void handleRapiRead() {
         time_limit = rapiString.substring(firstRapiCmd);
       }
     }
-  Serial.flush();
   Serial.println("$GU*C0");
   comm_sent++;
-  delay(100);
+  delay(commDelay);
   while(Serial.available()) {
       String rapiString = Serial.readStringUntil('\r');
       if (rapiString.startsWith("$OK") ) {
@@ -674,10 +1015,9 @@ void handleRapiRead() {
         watthour_total = rapiString.substring(secondRapiCmd);
       }
     }
-    Serial.flush();
     Serial.println("$GE*B0");
      comm_sent++;
-     delay(100);
+     delay(commDelay);
        while(Serial.available()) {
          String rapiString = Serial.readStringUntil('\r');
          if ( rapiString.startsWith("$OK ") ) {
@@ -776,7 +1116,7 @@ void setup() {
       return server.requestAuthentication();
     handleConfig();
   });
-  server.on("/update", [](){
+  server.on("/rapiupdate", [](){
     if(!server.authenticate(www_username, www_password))
       return server.requestAuthentication();
     handleUpdate();
@@ -791,6 +1131,10 @@ void setup() {
   server.on("/saveohmkey", handleSaveOhmkey);
   server.on("/scan", handleScan);
   server.on("/apoff",handleAPOff);
+  server.on("/datetime", handleDateTime);
+  server.on("/datetimeR", handleDateTimeR);
+  server.on("/delaytimer", handleDelayTimer);
+  server.on("/delaytimerR", handleDelayTimerR);
   server.onNotFound([](){
     if(!handleFileRead(server.uri()))
       server.send(404, "text/plain", "FileNotFound");
@@ -799,9 +1143,8 @@ void setup() {
   httpUpdater.setup(&server);
 	server.begin();
 	//Serial.println("HTTP server started");
-  delay(100);
   Timer = millis();
-  delay(5000);
+  delay(5000); //gives OpenEVSE time to finish self test on cold start
   handleRapiRead();
 }
 
@@ -874,7 +1217,7 @@ if (wifi_mode == 0 || wifi_mode == 3 && apikey != 0){
      Serial.flush();
      Serial.println("$GE*B0");
      comm_sent++;
-     delay(100);
+     delay(commDelay);
        while(Serial.available()) {
          String rapiString = Serial.readStringUntil('\r');
          if ( rapiString.startsWith("$OK ") ) {
@@ -887,7 +1230,7 @@ if (wifi_mode == 0 || wifi_mode == 3 && apikey != 0){
      Serial.flush();
      Serial.println("$GS*BE");
      comm_sent++;
-     delay(100);
+     delay(commDelay);
        while(Serial.available()) {
          String rapiString = Serial.readStringUntil('\r');
          if ( rapiString.startsWith("$OK ") ) {
@@ -935,11 +1278,11 @@ if (wifi_mode == 0 || wifi_mode == 3 && apikey != 0){
          }
        }    
   
-     delay(100);
+     delay(commDelay);
      Serial.flush();
      Serial.println("$GG*B2");
      comm_sent++;
-     delay(100);
+     delay(commDelay);
      while(Serial.available()) {
        String rapiString = Serial.readStringUntil('\r');
        if ( rapiString.startsWith("$OK") ) {
@@ -952,11 +1295,10 @@ if (wifi_mode == 0 || wifi_mode == 3 && apikey != 0){
          volt = qrapi1.toInt();
        }
     }  
-    delay(100);
     Serial.flush(); 
     Serial.println("$GP*BB");
     comm_sent++;
-    delay(100);
+    delay(commDelay);
     while(Serial.available()) {
       String rapiString = Serial.readStringUntil('\r');
       if (rapiString.startsWith("$OK") ) {
