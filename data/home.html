@@ -28,6 +28,7 @@
       <div id="content-1">
          <div class="box380">
                 <img src="wifi.jpg" alt="WiFi Config"></a>
+				<h2>Setup</h2>
                 <p><b>Mode:</b> <span id="mode"></span></p>
                 <div id="client-view" style="display:none">
                     <p><b>Network SSID:</b><br><span id="sta-ssid"></span></p>
@@ -58,6 +59,7 @@
             </div>
         <div class="box380">
             <a href="https://data.openevse.com/emoncms"><img src="emoncms.jpg" alt="OpenEVSE Data"></a>
+			<h2>Energy Monitoring</h2>
             <p><b>Device key:</b><br>
                 <input id="apikey" type="text" style="width:280px;">
                 <p><b>Device node:</b><br>
@@ -67,6 +69,7 @@
         </div>
         <div class="box380">
             <a href="https://www.ohmconnect.com/"><img src="ohm.jpg" alt="OhmConnect"></a>
+			<h2>OhmConnect</h2>
 	        <p>OhmConnect monitors real-time conditions on the electricity grid. When dirty and unsustainable power plants turn on, our users receive a notification to save energy.</p>
             <p><b>Ohm Hour: </b><span id="ohmhour"></span></p>
             <p><b>Ohm key:</b><br>
@@ -96,12 +99,12 @@
                 <h2>Safety</h2>
                 <table>
                 <tr><th>Test</th><th>Disabled</th></tr>
-                <tr><td>GFCI Self Test:</td><td><span id="gfcit"></span></td></tr>
-                <tr><td>Ground Monitoring:</td><td><span id="groundt"></span></td></tr>
-                <tr><td>Stuck Contact Detection:</td><td><span id="relayt"></span></td></tr>
-                <tr><td>Temperature Monitoring:</td><td><span id="tempt"></span></td></tr>
-                <tr><td>Diode Check:</td><td><span id="diodet"></span></td></tr>
-                <tr><td>Vent Required:</td><td><span id="ventt"></span></td></tr>
+                <tr><td>GFCI Self Test:</td><td><span id="gfcit"></span><a href="/r%24SS+1"><img src="check.png"><a href="/r%24SS+0"><img src="x.png"></a></td></tr>
+                <tr><td>Ground Monitoring:</td><td><span id="groundt"></span><a href="/r%24SG+1"><img src="check.png"><a href="/r%24SG+0"><img src="x.png"></a></td></tr>
+                <tr><td>Stuck Contact Detection:</td><td><span id="relayt"></span><a href="/r%24SR+1"><img src="check.png"><a href="/r%24SR+0"><img src="x.png"></a></td></tr>
+                <tr><td>Temperature Monitoring:</td><td><span id="tempt"></span><a href="/"><img src="check.png"><a href="/"><img src="x.png"></a></td></tr>
+                <tr><td>Diode Check:</td><td><span id="diodet"></span><a href="/r%24SD+1"><img src="check.png"><a href="/r%24SD+0"><img src="x.png"></a></td></tr>
+                <tr><td>Vent Required:</td><td><span id="ventt"></span><a href="/r%24SV+1"><img src="check.png"><a href="/r%24SV+0"><img src="x.png"></a></td></tr>
                 <tr><th>Error</th><th>Count</th></tr>
                 <tr><td>GFCI:</td><td><span id="gfcicount"></span></td></tr>
                 <tr><td>No Ground:</td><td><span id="nogndcount"></span></td></tr>
