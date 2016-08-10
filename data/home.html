@@ -1,38 +1,53 @@
-<html>
-    <head>
-    <meta http-equiv="content-type" content="text/html; charset=UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>OpenEVSE WiFi</title>
-    
-        
-    </head>
+
+<!doctype html>
+
+<html lang="en">
+
+<head>
+
+<meta charset="utf-8">
+<title>OpenEVSE</title>
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="viewport" content="width=device-width, user-scalable=no" />
+<meta name="description" content="OpenEVSE">
+<meta name="author" content="OpenEVSE">
+<meta name="theme-color" content="#000000" />
+<link rel="stylesheet" type="text/css" href="style.css">
+
+</head>
     
     <body>
-        <link rel="stylesheet" type="text/css" href="style.css">
         <div id="page">
-            <div class="box">
-            <a href="http://www.openevse.com/"><img src="logo.jpg" alt="OpenEVSE"></a>
-            <p><b>To connect to your WiFi, select a network Enter Password and then enter your OpenEVSE Device Key.</b></p>
-            </div>
-            <div id="container">
+			<div class="box">
+			<h1>Open<span>EVSE</span></h1>
+			<h3>WiFi Energy Monitor</h3>
+		</div>
+        <div id="container">
     
     <input id="tab-1" type="radio" name="tab-group" checked="checked" />
     <label for="tab-1">Network</label>
     <input id="tab-2" type="radio" name="tab-group" />
-    <label for="tab-2">Status</label>
+    <label for="tab-2">Services</label>
     <input id="tab-3" type="radio" name="tab-group" />
-    <label for="tab-3">RAPI</label>
+    <label for="tab-3">Status</label>
     <input id="tab-4" type="radio" name="tab-group" />
-    <label for="tab-4">Timers</label>
+    <label for="tab-4">RAPI</label>
     <div id="content">
       <div id="content-1">
          <div class="box380">
-                <img src="wifi.jpg" alt="WiFi Config"></a>
-				<h2>Setup</h2>
+				<h2>WiFi Setup</h2>
                 <p><b>Mode:</b> <span id="mode"></span></p>
                 <div id="client-view" style="display:none">
-                    <p><b>Network SSID:</b><br><span id="sta-ssid"></span></p>
-                    <p><b>IP Address:</b><br><span id="sta-ip"></span></p>
+                    <!--<p><b>Network SSID:</b><br><span id="sta-ssid"></span></p>
+                    <p><b>Network RSSI:</b><br><span id="sta-rssi"></span></p> -->
+
+					<table>
+						<tr><th>Network</th> <th>RSSI dBm</th> </tr>
+						<tbody id="sta-ssid"></tbody>
+					</table>
+
+					<p><b>IP Address:</b><br><span id="sta-ip"></span></p>
+					<button id="apoff" style="display:none">Turn off Access Point</button>
                     <p><b>Successful packets:</b><br><span id="sta-psuccess"></span> of <span id="sta-psent"></span></p>
                     <p><b>OpenEVSE</b></p>
                     <p><b>RAPI packets:</b><br><span id="comm-psuccess"></span> of <span id="comm-psent"></span></p>
@@ -43,46 +58,99 @@
                     <button id="reset">Reset config and reboot</button>
                 </div>
                 <div id="ap-view" style="display:none">
-                    <p>Connect to network:</p>
-                    <table>
-                        <tr><th width=20>Select</th><th>Network</th></tr>
-                        <tbody id="networks"></tbody>
-                    </table>
-                    <p><b>Passkey:</b><br>
-                    <input id="passkey" type="text" style="width:250px;">
-                    <button id="connect">Connect</button>
-                    </p>
-                </div>
-                <div id="wait-view" style="display:none">
-                    <p>Connecting to WIFI Network...</p>
-                </div>		
+					<p>Connect to network:</p>
+					<table>
+						<tr> <th>Select</th> <th>Network</th> <th>RSSI dBm</th> </tr>
+						<tbody id="networks"></tbody>
+					</table>
+
+					<p><b>Passkey:</b><br>
+					<input id="passkey" type="text">
+					<button id="connect">Connect</button>
+					</p>
+
+				</div>
+				<div id="wait-view" style="display:none">
+					<p>Connecting to WiFi Network...Please wait 10s</p>
+
+				</div>
             </div>
-        <div class="box380">
-            <a href="https://data.openevse.com/emoncms"><img src="emoncms.jpg" alt="OpenEVSE Data"></a>
+         			
+		
+		<div class="box380">
+			<h2>Firmware</h2>
+			<div id="firmware" style="display:none">
+
+              <table>
+                  <tr><th>Running</th><th>Latest</th></tr>
+                  <tbody id="firmware-version" ></tbody>
+              </table>
+
+              <br>
+              <a href="https://github.com/openenergymonitor/EmonESP/releases">View changelog</a>
+              <br> </div><br>
+              <button id="updatecheck">Check for Updates</button>
+              <button id="update" style="display:none">Apply Update</button>
+              <p><span id="update-info"></span></p>
+              <button id="upload">Upload</button>
+
+
+          </div>
+    </div>
+	<div id="content-2">
+			<div class="box380">
 			<h2>Energy Monitoring</h2>
-            <p><b>Device key:</b><br>
-                <input id="apikey" type="text" style="width:280px;">
-                <p><b>Device node:</b><br>
-                <input id="node" type="text" style="width:230px;">
-                <button id="save-apikey">Save</button>
-                </p>
+            <input id="emoncms_server" type="text" value="data.openevse.com">
+				</p><span>e.g 'data.openevse.com', 'emoncms.org','192.168.1.4/emoncms'</span><br>
+				<p><b>Node:</b><br>
+				<input id="emoncms_node" type="text" value="0">
+				</p><span>Note: EmonCMS only supports numberical nodeID's 1-32</span><br><br>
+				<p><b>Write apikey*:</b><br>
+				<input id="emoncms_apikey" type="text"><br>
+				<p><b>SSL SSH-1 Fingerprint:</b><br>
+				<input id="emoncms_fingerprint" type="text"><br>
+				</p>HTTPS will be enabled if present e.g: 7D:82:15:BE:D7:BC:72:58:87:7D:8E:40:D4:80:BA:1A:9F:8B:8D:DA<br>
+				<button id="save-emoncms">Save</button>
+				<b>&nbsp; Connected:&nbsp;<span id="emoncms_connected"></span></b><br><br>
+				<span id="psuccess"></span>
+
         </div>
+		<div class="box380">
+			<h2>MQTT</h2>
+
+			<p><b>MQTT Server*:</b><br>
+			<input id="mqtt_server" type="text">
+			</p><span>e.g 'emonpi', 'test.mosquitto.org', or '192.168.1.4'</span><br>
+			<p><b>MQTT Base-topic*:</b><br>
+			<input id="mqtt_topic" type="text">
+			</p><span>e.g 'emon/emonesp', 'emon/heatpump'</span><br><br>
+			<div id="small-text">Data will be published to sub topic e.g. 'emon/emonesp/CT1 > XXX'</div>
+			<p><b>Username:</b><br>
+			<input id="mqtt_user" type="text">
+			</p><span>Leave blank for no authentication</span><br>
+			<p><b>Password:</b><br>
+			<input id="mqtt_pass" type="text">
+			</p><span>Leave blank for no authentication</span><br><p>
+			<button id="save-mqtt">Save</button>
+			<b>&nbsp; Connected:&nbsp;<span id="mqtt_connected"></span></b>
+
+		</div>
         <div class="box380">
-            <a href="https://www.ohmconnect.com/"><img src="ohm.jpg" alt="OhmConnect"></a>
 			<h2>OhmConnect</h2>
 	        <p>OhmConnect monitors real-time conditions on the electricity grid. When dirty and unsustainable power plants turn on, our users receive a notification to save energy.</p>
             <p><b>Ohm Hour: </b><span id="ohmhour"></span></p>
             <p><b>Ohm key:</b><br>
-                <input id="ohmkey" type="text" style="width:280px;">
+                <input id="ohmkey" type="text">
                 <button id="save-ohmkey">Save</button>
 				<p>Ohm Key can be obtained by logging in to OhmConnect, enter Settings and locate the link in "Open Source Projects"</p>
 				<p><b>Example: </b>https://login.ohmconnect.com/verify-ohm-hour/OpnEoVse</p>
 				<p><b>Key: </b>OpnEoVse</p>
 				</p>
-	    </div>  	
-    </div>
-	<div id="content-2">
-			 <div class="box380">
+	    </div>
+			 
+          </div> 
+       <div id="content-3">
+			<div class="box380">
                 <h2>Current</h2>
                 <table>
                 <tr><th>Name</th><th>Value</th></tr>
@@ -150,16 +218,16 @@
 				<tr><td>Temp3</td><td><span id="temp3"></span></td></tr>
                 </table>
              </div>
-          </div> 
-       <div id="content-3">
-		   <div class="box380">
-             <iframe style="width:380px; height:550px;" frameborder="0" scrolling="no" marginheight="0" marginwidth="0" src="/rapi">
-          </iframe>   
-           </div>
+		 </div>  
+        <div id="content-4">
+			<div class="box380">
+             <iframe style="width:380px; height:670px;" frameborder="0" scrolling="no" marginheight="0" marginwidth="0" src="/rapi">
+			</iframe>   
+			</div>
              <div class="box380">
-               <h2>RAPI Commands</h2>
+               <h2>RAPI Get Commands</h2>
                <table>
-                  <tr><th>Get Parameter</th><th>Description</th></tr>
+                  <tr><th>Get</th><th>Description</th></tr>
                   <tr><td>$G3</td><td>Get Charge Time Limit, 15-minutes (1), 30-minutes (2), etc...</td></tr>
                   <tr><td>$GA</td><td>Get Ammeter Scale/Offset, scale offset</td></tr>
                   <tr><td>$GC</td><td>Get current capacity, integer</td></tr>
@@ -174,14 +242,18 @@
                   <tr><td>$GT</td><td>Get time, year month day hour minute second</td></tr>
                   <tr><td>$GU</td><td>Get Energy usage, wattseconds watt_hour_accumulated</td></tr>
                   <tr><td>$GV</td><td>Get Versions, evse_firmware protocol_version</td></tr>
-                  <tr><th>Set Parameter</th><th>Description</th></tr>
+                  </table>
+             </div>
+			 <div class="box380">
+               <h2>RAPI Set Commands</h2>
+               <table>
+				<tr><th>Set</th><th>Description</th></tr>
                   <tr><td>$S0</td><td>Set LCD Type, Monochrome (0), Color (1)</td></tr>
                   <tr><td>$S1</td><td>Set RTC Year Month Day Hour Minute Second (all 2-digit max)</td></tr>
                   <tr><td>$S2</td><td>Enable (1)/ Disable (0) Ammeter Calibration Mode</td></tr>
                   <tr><td>$S3</td><td>Set Charge Time Limit, 15-minutes (1), 30-minutes (2), etc...</td></tr>
                   <tr><td>$SA</td><td>Set Ammeter Scale/Offset, scale offset</td></tr>
                   <tr><td>$SC</td><td>Set current capacity, integer</td></tr>
-                  <tr><td>$SD</td><td>Enable (1) / Disable (0) Command Echo - <b>DO NOT SET WITH WIFI!</b></td></tr>
                   <tr><td>$SF</td><td>Enable (1) / Disable (0) GFI self-check</td></tr>
                   <tr><td>$SG</td><td>Enable (1) / Disable (0) Ground check</td></tr>
                   <tr><td>$SH</td><td>Set charge limit in kWh, integer</td></tr>
@@ -192,7 +264,12 @@
                   <tr><td>$SS</td><td>Enable (1) / Disable (0) GFI self-check</td></tr>
                   <tr><td>$ST</td><td>Set timer, start_hour start_min end_hour end_min</td></tr>
                   <tr><td>$SV</td><td>Enable (1) / Disable (0) vent required check</td></tr>
-                  <tr><th>Function</th><th>Description</th></tr>
+                  </table>
+			</div>
+				  <div class="box380">
+               <h2>RAPI System Functions</h2>
+               <table>
+				  <tr><th>Function</th><th>Description</th></tr>
                   <tr><td>$FB</td><td>LCD Backlight Color (0-7)</td></tr>
                   <tr><td>$FD</td><td>Disable EVSE</td></tr>
                   <tr><td>$FE</td><td>Enable EVSE</td></tr>
@@ -200,16 +277,17 @@
                   <tr><td>$FR</td><td>Reset EVSE</td></tr>
                   <tr><td>$FS</td><td>Put EVSE to sleep</td></tr>
                </table>
-             </div>
+			</div>  
         </div>
-        <div id="content-4">
-		  
-        </div>
-  </div>
+	</div>
       
     
     </body>
 </html>
-
+  <div id="footer">
+      <br><b> Powered by <a href="http://www.openevse.com">OpenEVSE</a> and <a href="http://openenergymonitor.org">OpenEnergyMonitor</a></b>
+	  <br> by Chris Howell, Trystan Lea, Glyn Hudson
+  </div>
+  
 <script src="config.js"></script>
 

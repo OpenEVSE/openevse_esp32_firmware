@@ -1,5 +1,13 @@
 /*
- * Copyright (c) 2015 Chris Howell
+ * Copyright (c) 2015-2016 Chris Howell
+ * 
+ * -------------------------------------------------------------------
+ * 
+ * Additional Adaptation of OpenEVSE ESP Wifi
+ * by Trystan Lea, Glyn Hudson, OpenEnergyMonitor
+ * All adaptation GNU General Public License as below.
+ *
+ * -------------------------------------------------------------------
  *
  * This file is part of Open EVSE.
  * Open EVSE is free software; you can redistribute it and/or modify
@@ -16,29 +24,48 @@
  * Boston, MA 02111-1307, USA.
  */
  
-#include <ESP8266WiFi.h>
-#include <WiFiClientSecure.h> 
-#include <ESP8266WebServer.h>
-#include <ESP8266HTTPUpdateServer.h>
-#include <EEPROM.h>
-#include "FS.h"
-#include <ArduinoOTA.h>
-#include <ESP8266mDNS.h>
+// Arduino espressif libs (tested with V2.3.0)
+#include <ESP8266WiFi.h>              // Connect to Wifi
+#include <WiFiClientSecure.h>         // Secure https GET request
+#include <ESP8266WebServer.h>         // Config portal
+#include <ESP8266HTTPClient.h>
+#include <EEPROM.h>                   // Save config settings
+#include "FS.h"                       // SPIFFS file-system: store web server html, CSS etc.
+#include <ArduinoOTA.h>               // local OTA update from Arduino IDE
+#include <ESP8266mDNS.h>              // Resolve URL for update server etc.
+#include <ESP8266httpUpdate.h>        // remote OTA update from server
+#include <ESP8266HTTPUpdateServer.h>  // upload update
+#include <DNSServer.h>                // Required for captive portal
+#include <PubSubClient.h>             // MQTT https://github.com/knolleary/pubsubclient PlatformIO lib: 89
+
+ESP8266WebServer server(80);          //Create class for Web server
+WiFiClientSecure client;              // Create class for HTTPS TCP connections get_https()
+HTTPClient http;                      // Create class for HTTP TCP connections get_http
+WiFiClient espClient;                 // Create client for MQTT
+PubSubClient mqttclient(espClient);   // Create client for MQTT
+ESP8266HTTPUpdateServer httpUpdater;  // Create class for webupdate handleWebUpdate()
+DNSServer dnsServer;                  // Create class DNS server, captive portal re-direct
+const byte DNS_PORT = 53;
 
 ADC_MODE(ADC_VCC);
 
-ESP8266WebServer server(80);
-ESP8266HTTPUpdateServer httpUpdater;
 int commDelay = 60;
 
-const char* fwversion = "D1.0.3";
+const char* fwversion = "D1.1.0";
 
 //Default SSID and PASSWORD for AP Access Point Mode
-const char* ssid = "OpenEVSE";
-const char* password = "openevse";
+const char* softAP_ssid = "OpenEVSE";
+const char* softAP_password = "openevse";
+IPAddress apIP(192, 168, 4, 1);
+IPAddress netMsk(255, 255, 255, 0);
+
+// Web server authentication (leave blank for none)
 const char* www_username = "admin";
 const char* www_password = "openevse";
-String st;
+String st, rssi;
+
+/* hostname for mDNS. Should work at least on windows. Try http://openevse.local */
+const char *esp_hostname = "openevse";
 
 //EEPROM Strings
 String esid = "";
@@ -57,22 +84,20 @@ String ipaddress = "";
 
 //SERVER strings and interfers for OpenEVSE Energy Monotoring
 const char* host = "data.openevse.com"; //Default to use the OpenEVSE EmonCMS Server
-const char* emon_fingerprint = "‎e8:02 ca 30 fc 5d a0 3c b0 34 60 d6 1b d2 54 ea 86 2a 09 16";
+const char* emon_fingerprint = "‎67:1E:C4:85:3B:1F:58:DB:B8:BD:B4:3D:2E:13:32:77:0D:C0:47:5E";
 //const char* host = "www.emoncms.org"; //Optional to use Open Energy EmonCMS servers
 //const char* emon_fingerprint = "6B 39 04 A4 BB E0 87 B2 EB B6 FE 77 CD D5 F6 A7 22 4B 3B ED";
 //const char* host = "192.168.1.123";  //Optional to use your own EmonCMS server
 const int httpsPort = 443;
-const char* e_url = "/emoncms/input/post.json?node=";
+const char* url = "/emoncms/input/post.json?node=";
 
 
-int amp = 0; //OpenEVSE Current Sensor
-int volt = 0; //Not currently in used
-int temp1 = 0; //Sensor DS3232 Ambient
-int temp2 = 0; //Sensor MCP9808 Ambient
-int temp3 = 0; //Sensor TMP007 Infared
-int pilot = 0; //OpenEVSE Pilot Setting
-long state = 0; //OpenEVSE State
-String estate = "Unknown"; // Common name for State
+String emoncms_server = "";
+String emoncms_node = "";
+String emoncms_apikey = "";
+String emoncms_fingerprint = "";
+boolean emoncms_connected = false;
+
 
 //Server strings for Ohm Connect 
 const char* ohm_host = "login.ohmconnect.com";
@@ -82,6 +107,43 @@ const int ohm_httpsPort = 443;
 const char* ohm_fingerprint = "6B 39 04 A4 BB E0 87 B2 EB B6 FE 77 CD D5 F6 A7 22 4B 3B ED";
 String ohm_hour = "NotConnected";
 int evse_sleep = 0;
+
+//MQTT Settings
+String mqtt_server = "";
+String mqtt_topic = "";
+String mqtt_user = "";
+String mqtt_pass = "";
+long lastMqttReconnectAttempt = 0;
+
+// -------------------------------------------------------------------
+//OTA UPDATE SETTINGS
+// -------------------------------------------------------------------
+//UPDATE SERVER strings and interfers for upate server
+// Array of strings Used to check firmware version
+const char* u_host = "217.9.195.227";
+const char* u_url = "/esp/firmware.php";
+
+const char* firmware_update_path = "/upload";
+
+// Get running firmware version from build tag environment variable
+#define TEXTIFY(A) #A
+#define ESCAPEQUOTE(A) TEXTIFY(A)
+String currentfirmware = ESCAPEQUOTE(BUILD_TAG);
+
+// -------------------------------------------------------------------
+//OpenEVSE Values
+// -------------------------------------------------------------------
+//UPDATE SERVER strings and interfers for upate server
+// Used for sensor values and settings
+
+int amp = 0; //OpenEVSE Current Sensor
+int volt = 0; //Not currently in used
+int temp1 = 0; //Sensor DS3232 Ambient
+int temp2 = 0; //Sensor MCP9808 Ambient
+int temp3 = 0; //Sensor TMP007 Infared
+int pilot = 0; //OpenEVSE Pilot Setting
+long state = 0; //OpenEVSE State
+String estate = "Unknown"; // Common name for State
 
 //Defaults OpenEVSE Settings
 byte rgb_lcd = 1;
@@ -185,10 +247,17 @@ void startAP() {
   st = "";
   for (int i = 0; i < n; ++i){
     st += "\""+WiFi.SSID(i)+"\"";
+    rssi += "\""+String(WiFi.RSSI(i))+"\"";
     if (i<n-1) st += ",";
+    if (i<n-1) rssi += ",";
   }
   delay(100);
-  WiFi.softAP(ssid, password);
+
+  WiFi.softAPConfig(apIP, apIP, netMsk);
+  // Create Unique SSID e.g "emonESP_XXXXXX"
+  String softAP_ssid_ID = String(softAP_ssid)+"_"+String(ESP.getChipId());;
+  WiFi.softAP(softAP_ssid_ID.c_str(), softAP_password);
+ 
   IPAddress myIP = WiFi.softAPIP();
   char tmpStr[40];
   Serial.println("$FP 0 0 SSID...OpenEVSE.");
@@ -255,14 +324,103 @@ void startClient() {
   }
 }
 
+#define EEPROM_ESID_SIZE                 32
+#define EEPROM_EPASS_SIZE                64
+#define EEPROM_EMON_API_KEY_SIZE         32
+#define EEPROM_EMON_SERVER_SIZE          45
+#define EEPROM_EMON_NODE_SIZE            32
+#define EEPROM_MQTT_SERVER_SIZE          45
+#define EEPROM_MQTT_TOPIC_SIZE           32
+#define EEPROM_MQTT_USER_SIZE            32
+#define EEPROM_MQTT_PASS_SIZE            64
+#define EEPROM_EMON_FINGERPRINT_SIZE     60
+#define EEPROM_OHM_KEY_SIZE               8
+#define EEPROM_SIZE                      512
+
+#define EEPROM_ESID_START                0
+#define EEPROM_ESID_END           (EEPROM_ESID_START + EEPROM_ESID_SIZE)
+#define EEPROM_EPASS_START        EEPROM_ESID_END
+#define EEPROM_EPASS_END          (EEPROM_EPASS_START + EEPROM_EPASS_SIZE)
+#define EEPROM_EMON_API_KEY_START EEPROM_EPASS_END
+#define EEPROM_EMON_API_KEY_END   (EEPROM_EMON_API_KEY_START + EEPROM_EMON_API_KEY_SIZE)
+#define EEPROM_EMON_SERVER_START  EEPROM_EMON_API_KEY_END
+#define EEPROM_EMON_SERVER_END    (EEPROM_EMON_SERVER_START + EEPROM_EMON_SERVER_SIZE)
+#define EEPROM_EMON_NODE_START    EEPROM_EMON_SERVER_END
+#define EEPROM_EMON_NODE_END      (EEPROM_EMON_NODE_START + EEPROM_EMON_NODE_SIZE)
+#define EEPROM_MQTT_SERVER_START  EEPROM_EMON_NODE_END
+#define EEPROM_MQTT_SERVER_END    (EEPROM_MQTT_SERVER_START + EEPROM_MQTT_SERVER_SIZE)
+#define EEPROM_MQTT_TOPIC_START   EEPROM_MQTT_SERVER_END
+#define EEPROM_MQTT_TOPIC_END     (EEPROM_MQTT_TOPIC_START + EEPROM_MQTT_TOPIC_SIZE)
+#define EEPROM_MQTT_USER_START    EEPROM_MQTT_TOPIC_END
+#define EEPROM_MQTT_USER_END      (EEPROM_MQTT_USER_START + EEPROM_MQTT_USER_SIZE)
+#define EEPROM_MQTT_PASS_START    EEPROM_MQTT_USER_END
+#define EEPROM_MQTT_PASS_END      (EEPROM_MQTT_PASS_START + EEPROM_MQTT_PASS_SIZE)
+#define EEPROM_EMON_FINGERPRINT_START  EEPROM_MQTT_PASS_END
+#define EEPROM_EMON_FINGERPRINT_END    (EEPROM_EMON_FINGERPRINT_START + EEPROM_EMON_FINGERPRINT_SIZE)
+#define EEPROM_OHM_KEY_START  EEPROM_EMON_FINGERPRINT_END
+#define EEPROM_OHM_KEY_END    (EEPROM_OHM_KEY_START + EEPROM_OHM_KEY_SIZE)
+
+
 void ResetEEPROM(){
   //Serial.println("Erasing EEPROM");
-  for (int i = 0; i < 512; ++i) { 
+  for (int i = 0; i < EEPROM_SIZE; ++i) { 
     EEPROM.write(i, 0);
     //Serial.print("#"); 
   }
   EEPROM.commit();   
 }
+
+
+void load_EEPROM_settings(){
+
+  EEPROM.begin(EEPROM_SIZE);
+  for (int i = EEPROM_ESID_START; i < EEPROM_ESID_END; ++i){
+    byte c = EEPROM.read(i);
+    if (c!=0 && c!=255) esid += (char) c;
+  }
+
+  for (int i = EEPROM_EPASS_START; i < EEPROM_EPASS_END; ++i){
+    byte c = EEPROM.read(i);
+    if (c!=0 && c!=255) epass += (char) c;
+  }
+  for (int i = EEPROM_EMON_API_KEY_START; i < EEPROM_EMON_API_KEY_END; ++i){
+    byte c = EEPROM.read(i);
+    if (c!=0 && c!=255) emoncms_apikey += (char) c;
+  }
+  for (int i = EEPROM_EMON_SERVER_START; i < EEPROM_EMON_SERVER_END; ++i){
+    byte c = EEPROM.read(i);
+    if (c!=0 && c!=255) emoncms_server += (char) c;
+  }
+  for (int i = EEPROM_EMON_NODE_START; i < EEPROM_EMON_NODE_END; ++i){
+    byte c = EEPROM.read(i);
+    if (c!=0 && c!=255) emoncms_node += (char) c;
+  }
+  for (int i = EEPROM_MQTT_SERVER_START; i < EEPROM_MQTT_SERVER_END; ++i){
+    byte c = EEPROM.read(i);
+    if (c!=0 && c!=255) mqtt_server += (char) c;
+  }
+  for (int i = EEPROM_MQTT_TOPIC_START; i < EEPROM_MQTT_TOPIC_END; ++i){
+    byte c = EEPROM.read(i);
+    if (c!=0 && c!=255) mqtt_topic += (char) c;
+  }
+  for (int i = EEPROM_MQTT_USER_START; i < EEPROM_MQTT_USER_END; ++i){
+    byte c = EEPROM.read(i);
+    if (c!=0 && c!=255) mqtt_user += (char) c;
+  }
+  for (int i = EEPROM_MQTT_PASS_START; i < EEPROM_MQTT_PASS_END; ++i){
+    byte c = EEPROM.read(i);
+    if (c!=0 && c!=255) mqtt_pass += (char) c;
+  }
+  for (int i = EEPROM_EMON_FINGERPRINT_START; i < EEPROM_EMON_FINGERPRINT_END; ++i){
+    byte c = EEPROM.read(i);
+    if (c!=0 && c!=255) emoncms_fingerprint += (char) c;
+  }
+  for (int i = EEPROM_OHM_KEY_START; i < EEPROM_OHM_KEY_END; ++i){
+    byte c = EEPROM.read(i);
+    if (c!=0 && c!=255) ohm += (char) c;
+  }
+}
+
 
 // -------------------------------------------------------------------
 // Load SPIFFS Home page
@@ -285,8 +443,9 @@ void handleHome() {
 void handleAPOff() {
   server.send(200, "text/html", "Turning Access Point Off");
   Serial.println("Turning Access Point Off");
-  delay(2000);
-  WiFi.mode(WIFI_STA); 
+  WiFi.disconnect();
+  delay(1000);
+  ESP.reset();
 }
 
 // -------------------------------------------------------------------
@@ -368,70 +527,171 @@ void handleSaveNetwork() {
   qsid.replace("%7E", "~");
   qsid.replace('+', ' ');
   
-  if (qsid != 0){
-    for (int i = 0; i < 32; i++){
+if (qsid != 0){
+    for (int i = 0; i < EEPROM_ESID_SIZE; i++){
       if (i<qsid.length()) {
-        EEPROM.write(i+0, qsid[i]);
+        EEPROM.write(i+EEPROM_ESID_START, qsid[i]);
       } else {
-        EEPROM.write(i+0, 0);
+        EEPROM.write(i+EEPROM_ESID_START, 0);
       }
     }
-    
-    for (int i = 0; i < 32; i++){
+
+    for (int i = 0; i < EEPROM_EPASS_SIZE; i++){
       if (i<qpass.length()) {
-        EEPROM.write(i+32, qpass[i]);
+        EEPROM.write(i+EEPROM_EPASS_START, qpass[i]);
       } else {
-        EEPROM.write(i+32, 0);
+        EEPROM.write(i+EEPROM_EPASS_START, 0);
       }
     }
-    
-    
+
     EEPROM.commit();
-    server.send(200, "text/html", "Saved");
+    server.send(200, "text/html", "saved");
     delay(2000);
+
     
     // Startup in STA + AP mode
     WiFi.mode(WIFI_AP_STA);
-    WiFi.softAP(ssid, password);
+    WiFi.softAPConfig(apIP, apIP, netMsk);
+
+  // Create Unique SSID e.g "OpenEVSE_XXXXXX"
+    String softAP_ssid_ID = String(softAP_ssid)+"_"+String(ESP.getChipId());;
+    WiFi.softAP(softAP_ssid_ID.c_str(), softAP_password);
+
+    /* Setup the DNS server redirecting all the domains to the apIP */
+    dnsServer.setErrorReplyCode(DNSReplyCode::NoError);
+    dnsServer.start(DNS_PORT, "*", apIP);
     wifi_mode = 3;
     startClient();
   }
 }
 
 // -------------------------------------------------------------------
-// Save apikey
-// url: /saveapikey
+// Save Emoncms
+// url: /saveemoncms
 // -------------------------------------------------------------------
-void handleSaveApikey() {
-  apikey = server.arg("apikey");
-  node = server.arg("node");
-  if (apikey!=0) {
-    EEPROM.write(129, node[i]);
-    for (int i = 0; i < 32; i++){
-      if (i<apikey.length()) {
-        EEPROM.write(i+96, apikey[i]);
+void handleSaveEmoncms() {
+  emoncms_server = server.arg("server");
+  emoncms_node = server.arg("node");
+  emoncms_apikey = server.arg("apikey");
+  emoncms_fingerprint = server.arg("fingerprint");
+  if (emoncms_apikey!=0 && emoncms_server!=0 && emoncms_node!=0) {
+    // save apikey to EEPROM
+    for (int i = 0; i < EEPROM_EMON_API_KEY_SIZE; i++){
+      if (i<emoncms_apikey.length()) {
+        EEPROM.write(i+EEPROM_EMON_API_KEY_START, emoncms_apikey[i]);
       } else {
-        EEPROM.write(i+96, 0);
-        EEPROM.write(129, 0);
-      }      
-    }
-    EEPROM.commit();
-    server.send(200, "text/html", "Saved");
-  }
-}
-void handleSaveOhmkey() {
-  ohm = server.arg("ohm");
-  if (ohm!=0) {
-    for (int i = 0; i < 8; i++){
-      if (i<ohm.length()) {
-        EEPROM.write(i+130, ohm[i]);
-      } else {
-        EEPROM.write(i+130, 0);
+        EEPROM.write(i+EEPROM_EMON_API_KEY_START, 0);
       }
     }
+    // save emoncms server to EEPROM max 45 characters
+    for (int i = 0; i < EEPROM_EMON_SERVER_SIZE; i++){
+      if (i<emoncms_server.length()) {
+        EEPROM.write(i+EEPROM_EMON_SERVER_START, emoncms_server[i]);
+      } else {
+        EEPROM.write(i+EEPROM_EMON_SERVER_START, 0);
+      }
+    }
+    // save emoncms node to EEPROM max 32 characters
+    for (int i = 0; i < EEPROM_EMON_NODE_SIZE; i++){
+      if (i<emoncms_node.length()) {
+        EEPROM.write(i+EEPROM_EMON_NODE_START, emoncms_node[i]);
+      } else {
+        EEPROM.write(i+EEPROM_EMON_NODE_START, 0);
+      }
+    }
+    // save emoncms HTTPS fingerprint to EEPROM max 60 characters
+    if (emoncms_fingerprint!=0){
+      for (int i = 0; i < EEPROM_EMON_FINGERPRINT_SIZE; i++){
+        if (i<emoncms_fingerprint.length()) {
+          EEPROM.write(i+EEPROM_EMON_FINGERPRINT_START, emoncms_fingerprint[i]);
+        } else {
+          EEPROM.write(i+EEPROM_EMON_FINGERPRINT_START, 0);
+        }
+      }
+    }
+    EEPROM.commit();
+    char tmpStr[169];
+    sprintf(tmpStr,"Saved: %s %s %s %s",emoncms_server.c_str(),emoncms_node.c_str(),emoncms_apikey.c_str(),emoncms_fingerprint.c_str());
+    Serial.println(tmpStr);
+    server.send(200, "text/html", tmpStr);
+  }
+}
+
+// -------------------------------------------------------------------
+// Save MQTT Config
+// url: /savemqtt
+// -------------------------------------------------------------------
+void handleSaveMqtt() {
+  mqtt_server = server.arg("server");
+  mqtt_topic = server.arg("topic");
+  mqtt_user = server.arg("user");
+  mqtt_pass = server.arg("pass");
+  if (mqtt_server!=0 && mqtt_topic!=0) {
+    // Save MQTT server max 45 characters
+    for (int i = 0; i < EEPROM_MQTT_SERVER_SIZE; i++){
+      if (i<mqtt_server.length()) {
+        EEPROM.write(i+EEPROM_MQTT_SERVER_START, mqtt_server[i]);
+      } else {
+        EEPROM.write(i+EEPROM_MQTT_SERVER_START, 0);
+      }
+    }
+    // Save MQTT topic max 32 characters
+    for (int i = 0; i < EEPROM_MQTT_TOPIC_SIZE; i++){
+      if (i<mqtt_topic.length()) {
+        EEPROM.write(i+EEPROM_MQTT_TOPIC_START, mqtt_topic[i]);
+      } else {
+        EEPROM.write(i+EEPROM_MQTT_TOPIC_START, 0);
+      }
+    }
+    // Save MQTT username max 32 characters
+
+    if (mqtt_user!=0 && mqtt_pass!=0){
+      for (int i = 0; i < EEPROM_MQTT_USER_SIZE; i++){
+        if (i<mqtt_user.length()) {
+          EEPROM.write(i+EEPROM_MQTT_USER_START, mqtt_user[i]);
+        } else {
+          EEPROM.write(i+EEPROM_MQTT_USER_START, 0);
+        }
+      }
+      // Save MQTT pass max 64 characters
+      for (int i = 0; i < EEPROM_MQTT_PASS_SIZE; i++){
+        if (i<mqtt_pass.length()) {
+          EEPROM.write(i+EEPROM_MQTT_PASS_START, mqtt_pass[i]);
+        } else {
+          EEPROM.write(i+EEPROM_MQTT_PASS_START, 0);
+        }
+      }
+    }
+    EEPROM.commit();
+    char tmpStr[80];
+    sprintf(tmpStr,"Saved: %s %s %s %s",mqtt_server.c_str(),mqtt_topic.c_str(),mqtt_user.c_str(),mqtt_pass.c_str());
+    Serial.println(tmpStr);
+    server.send(200, "text/html", tmpStr);
+    // If connected disconnect MQTT to trigger re-connect with new details
+    if (mqttclient.connected()) {
+      mqttclient.disconnect();
+    }
+  }
+}
+// -------------------------------------------------------------------
+// Save Ohm COnnect Config
+// url: /ohm
+// -------------------------------------------------------------------
+
+void handleSaveOhmkey() {
+  ohm = server.arg("ohm");
+  // save emoncms HTTPS fingerprint to EEPROM max 60 characters
+    if (ohm!=0){
+      for (int i = 0; i < EEPROM_OHM_KEY_SIZE; i++){
+        if (i<ohm.length()) {
+          EEPROM.write(i+EEPROM_OHM_KEY_START, ohm[i]);
+        } else {
+          EEPROM.write(i+EEPROM_OHM_KEY_START, 0);
+        }
+      }
    EEPROM.commit();
    server.send(200, "text/html", "Saved");
-}
+  }
 }
 
 // -------------------------------------------------------------------
@@ -444,11 +704,14 @@ void handleScan() {
   //Serial.print(n);
   //Serial.println(" networks found");
   st = "";
+  rssi = "";
   for (int i = 0; i < n; ++i){
     st += "\""+WiFi.SSID(i)+"\"";
+    rssi += "\""+String(WiFi.RSSI(i))+"\"";
     if (i<n-1) st += ",";
+    if (i<n-1) rssi += ",";
   }
-  server.send(200, "text/plain","["+st+"]");
+  server.send(200, "text/plain","[" +st+ "],[" +rssi+"]");
 }
 
 
@@ -458,6 +721,7 @@ void handleScan() {
 // -------------------------------------------------------------------
 void handleStatus() {
 
+  
   String s = "{";
   if (wifi_mode==0) {
     s += "\"mode\":\"STA\",";
@@ -467,14 +731,31 @@ void handleStatus() {
     s += "\"mode\":\"STA+AP\",";
   }
   s += "\"networks\":["+st+"],";
+  s += "\"rssi\":["+rssi+"],";
+
   s += "\"ssid\":\""+esid+"\",";
   s += "\"pass\":\""+epass+"\",";
-  s += "\"apikey\":\""+apikey+"\",";
-  s += "\"node\":\""+node+"\",";
-  s += "\"ohmkey\":\""+ohm+"\",";
-  s += "\"espflash\":\""+String(espflash)+"\",";
+  s += "\"srssi\":\""+String(WiFi.RSSI())+"\",";
   s += "\"ipaddress\":\""+ipaddress+"\",";
-  s += "\"version\":\""+String(fwversion)+"\"";
+  s += "\"emoncms_server\":\""+emoncms_server+"\",";
+  s += "\"emoncms_node\":\""+emoncms_node+"\",";
+  s += "\"emoncms_apikey\":\""+emoncms_apikey+"\",";
+  s += "\"emoncms_fingerprint\":\""+emoncms_fingerprint+"\",";
+  s += "\"emoncms_connected\":\""+String(emoncms_connected)+"\",";
+  s += "\"ohmkey\":\""+ohm+"\",";
+  s += "\"packets_sent\":\""+String(packets_sent)+"\",";
+  s += "\"packets_success\":\""+String(packets_success)+"\",";
+
+  s += "\"mqtt_server\":\""+mqtt_server+"\",";
+  s += "\"mqtt_topic\":\""+mqtt_topic+"\",";
+  s += "\"mqtt_user\":\""+mqtt_user+"\",";
+  s += "\"mqtt_pass\":\""+mqtt_pass+"\",";
+  s += "\"mqtt_connected\":\""+String(mqttclient.connected())+"\",";
+
+  s += "\"version\":\""+String(fwversion)+"\",";
+  s += "\"espflash\":\""+String(espflash)+"\",";
+  s += "\"free_heap\":\""+String(ESP.getFreeHeap())+"\"";
+
   s += "}";
   server.send(200, "text/html", s);
 }
@@ -536,12 +817,180 @@ void handleConfig() {
 // -------------------------------------------------------------------
 void handleRst() {
   ResetEEPROM();
-  EEPROM.commit();
-  server.send(200, "text/html", "Reset");
+  server.send(200, "text/html", "1");
   WiFi.disconnect();
   delay(1000);
   ESP.reset();
 }
+
+// -------------------------------------------------------------------
+// Restart (Reboot)
+// url: /restart
+// -------------------------------------------------------------------
+void handleRestart() {
+  server.send(200, "text/html", "1");
+  delay(1000);
+  WiFi.disconnect();
+  ESP.restart();
+}
+
+// -------------------------------------------------------------------
+// Check for updates and display current version
+// url: /firmware
+// -------------------------------------------------------------------
+String handleUpdateCheck() {
+  Serial.println("Running: " + currentfirmware);
+  // Get latest firmware version number
+  String url = u_url;
+  String latestfirmware = get_http(u_host, url);
+  Serial.println("Latest: " + latestfirmware);
+  // Update web interface with firmware version(s)
+  String s = "{";
+  s += "\"current\":\""+currentfirmware+"\",";
+  s += "\"latest\":\""+latestfirmware+"\"";
+  s += "}";
+  server.send(200, "text/html", s);
+  return (latestfirmware);
+}
+
+// -------------------------------------------------------------------
+// Update firmware
+// url: /fupdate
+// -------------------------------------------------------------------
+void handleFUpdate() {
+  SPIFFS.end(); // unmount filesystem
+  Serial.println("UPDATING...");
+  delay(500);
+  t_httpUpdate_return ret = ESPhttpUpdate.update("http://" + String(u_host) + String(u_url) + "?tag=" + currentfirmware);
+  String str="error";
+  switch(ret) {
+      case HTTP_UPDATE_FAILED:
+          str = printf("Update failed error (%d): %s", ESPhttpUpdate.getLastError(), ESPhttpUpdate.getLastErrorString().c_str());
+          break;
+      case HTTP_UPDATE_NO_UPDATES:
+          str="No update, running latest firmware";
+          break;
+      case HTTP_UPDATE_OK:
+          str="Update done!";
+          break;
+  }
+  server.send(400,"text/html",str);
+  Serial.println(str);
+  SPIFFS.begin(); //mount-file system
+}
+
+// -------------------------------------------------------------------
+// HTTPS SECURE GET Request
+// url: N/A
+// -------------------------------------------------------------------
+
+String get_https(const char* fingerprint, const char* host, String url, int httpsPort){
+  // Use WiFiClient class to create TCP connections
+  if (!client.connect(host, httpsPort)) {
+    Serial.print(host + httpsPort); //debug
+    return("Connection erromqtt_publishr");
+  }
+  if (client.verify(fingerprint, host)) {
+    client.print(String("GET ") + url + " HTTP/1.1\r\n" + "Host: " + host + "\r\n" + "Connection: close\r\n\r\n");
+     // Handle wait for reply and timeout
+    unsigned long timeout = millis();
+    while (client.available() == 0) {
+      if (millis() - timeout > 5000) {
+        client.stop();
+        return("Client Timeout");
+      }
+    }
+    // Handle message receive
+    while(client.available()){
+      String line = client.readStringUntil('\r');
+      Serial.println(line); //debug
+      if (line.startsWith("HTTP/1.1 200 OK")) {
+        return("ok");
+      }
+    }
+  }
+  else {
+    return("HTTPS fingerprint no match");
+  }
+  return("error" + String(host));
+} // end https_get
+
+// -------------------------------------------------------------------
+// HTTP GET Request
+// url: N/A
+// -------------------------------------------------------------------
+String get_http(const char* host, String url){
+  http.begin(String("http://") + host + String(url));
+  int httpCode = http.GET();
+  if((httpCode > 0) && (httpCode == HTTP_CODE_OK)){
+    String payload = http.getString();
+    Serial.println(payload);
+    http.end();
+    return(payload);
+  }
+  else{
+    http.end();
+    return("server error: "+String(httpCode));
+  }
+} // end http_get
+
+// -------------------------------------------------------------------
+// MQTT Connect
+// -------------------------------------------------------------------
+boolean mqtt_connect() {
+  mqttclient.setServer(mqtt_server.c_str(), 1883);
+  Serial.println("MQTT Connecting...");
+  String strID = String(ESP.getChipId());
+  if (mqttclient.connect(strID.c_str(), mqtt_user.c_str(), mqtt_pass.c_str())) {  // Attempt to connect
+    Serial.println("MQTT connected");
+    mqttclient.publish(mqtt_topic.c_str(), "connected"); // Once connected, publish an announcement..
+  } else {
+    Serial.print("MQTT failed: ");
+    Serial.println(mqttclient.state());
+    return(0);
+  }
+  return (1);
+}
+
+// -------------------------------------------------------------------
+// Publish to MQTT
+// Split up data string into sub topics: e.g
+// data = CT1:3935,CT2:325,T1:12.5,T2:16.9,T3:11.2,T4:34.7
+// base topic = emon/emonesp
+// MQTT Publish: emon/emonesp/CT1 > 3935 etc..
+// -------------------------------------------------------------------
+void mqtt_publish(String base_topic, String data){
+  String mqtt_data = "";
+  String topic = base_topic + "/";
+  int i=0;
+  while (int(data[i])!=0){
+      // Construct MQTT topic e.g. <base_topic>/CT1 e.g. emonesp/CT1
+      while (data[i]!=':'){
+        topic+= data[i];
+        i++;
+        if (int(data[i])==0){
+          break;
+        }
+      }
+      i++;
+      // Construct data string to publish to above topic
+      while (data[i]!=','){
+        mqtt_data+= data[i];
+        i++;
+        if (int(data[i])==0){
+          break;
+        }
+      }
+      // send data via mqtt
+      delay(100);
+      mqttclient.publish(topic.c_str(), mqtt_data.c_str());
+      topic= base_topic + "/";
+      mqtt_data="";
+      i++;
+      if (int(data[i])==0) break;
+  }
+}
+
 
 void handleRapi() {
   String s;
@@ -572,351 +1021,6 @@ void handleRapiR() {
    s += rapiString;
    s += "<p></html>\r\n\r\n";
    server.send(200, "text/html", s);
-}
-
-void handleDateTime(){
-  String s;
-// variables for command responses
-  String sFirst = "0";
-  String sSecond = "0";
-  String sThird = "0";
-  String sFourth = "0";
-  String sFifth = "0";
-  String sSixth = "0";
-  s = "<HTML>";
-  s +="<h2>Date and Time</h2>";  
- //get date and time
-  Serial.flush();
-  Serial.println("$GT^37");
-  delay(commDelay);
-  int month = 0;
-  int day = 0;
-  int year = 0;
-  int hour = 0;
-  int minutes = 0;
-  int index;
-  while(Serial.available()) {
-    String rapiString = Serial.readStringUntil('\r');
-    if ( rapiString.startsWith("$OK") ) {
-      int first_blank_index = rapiString.indexOf(' ');
-      int second_blank_index = rapiString.indexOf(' ',first_blank_index + 1);
-      sFirst = rapiString.substring(first_blank_index + 1, second_blank_index);  // 2 digit year
-      year = sFirst.toInt();
-      first_blank_index = rapiString.indexOf(' ',second_blank_index + 1);
-      sSecond = rapiString.substring(second_blank_index + 1, first_blank_index); // month
-      month = sSecond.toInt();
-      second_blank_index = rapiString.indexOf(' ',first_blank_index + 1);
-      sThird = rapiString.substring(first_blank_index + 1, second_blank_index);  // day  
-      day = sThird.toInt();   
-      first_blank_index = rapiString.indexOf(' ',second_blank_index + 1);
-      sFourth = rapiString.substring(second_blank_index + 1, first_blank_index); // hour 
-      hour = sFourth.toInt();    
-      second_blank_index = rapiString.indexOf(' ',first_blank_index + 1);
-      sFifth = rapiString.substring(first_blank_index + 1, second_blank_index);  // min
-      minutes = sFifth.toInt();
-      sSixth = rapiString.substring(rapiString.lastIndexOf(' '),rapiString.indexOf('^'));    // sec   not used    
-    }
-  }
-  s += "<FORM METHOD='get' ACTION='datetimeR'>";
-  s += "<P><FONT FACE='Arial'><FONT SIZE=4>Current Date is ";
-  s += "<SELECT name='month'><OPTION value='1'";
-  if (month == 1)
-    s += " SELECTED";
-  s += " >January</OPTION><OPTION value='2'";
-  if (month == 2)
-   s += " SELECTED";
-  s += " >February</OPTION><OPTION value='3'";
-  if (month == 3)
-   s += " SELECTED";
-  s += " >March</OPTION><OPTION value='4'";
-  if (month == 4)
-   s += " SELECTED";
-  s += " >April</OPTION><OPTION value='5'";
-  if (month == 5)
-   s += " SELECTED";
-  s += " >May</OPTION><OPTION value='6'";
-  if (month == 6)
-   s += " SELECTED";
-  s += " >June</OPTION><OPTION value='7'";
-  if (month == 7)
-   s += " SELECTED";
-  s += " >July</OPTION><OPTION value='8'";
-  if (month == 8)
-   s += " SELECTED";
-  s += " >August</OPTION><OPTION value='9'";
-  if (month == 9)
-   s += " SELECTED";
-  s += " >September</OPTION><OPTION value='10'";
-  if (month == 10)
-   s += " SELECTED";
-  s += " >October</OPTION><OPTION value='11'";
-  if (month == 11)
-   s += " SELECTED";
-  s += " >November</OPTION><OPTION value='12'";
-  if (month ==12)
-   s += " SELECTED";
-  s += " >December</OPTION></SELECT>";
-  s += " <SELECT name='day'>";
-  for (index = 1; index <= 31; index++){
-     if (index == day)
-       s += "<OPTION value='" + String(index) + "'SELECTED>" + String(index) + "</OPTION>";
-     else
-       s += "<OPTION value='" + String(index) + "'>" + String(index) + "</OPTION>";
-  }
-  s += "</SELECT>, 20";
-  s += "<SELECT name='year'>";
-  for (index = 16; index <= 99; index++){
-     if (index == year)
-       s += "<OPTION value='" + String(index) + "'SELECTED>" + String(index) + "</OPTION>";
-     else
-       s += "<OPTION value='" + String(index) + "'>" + String(index) + "</OPTION>";
-  }
-  s += "</SELECT></P>";
-  s += "<P> Current Time (hh:mm) is ";
-  s += "<SELECT name='hour'>";
-  for (index = 0; index <= 9; index++){
-     if (index == hour)
-       s += "<OPTION value='" + String(index) + "'SELECTED>" + "0" + String(index) + "</OPTION>";
-     else
-       s += "<OPTION value='" + String(index) + "'>" + "0" + String(index) + "</OPTION>";
-  }
-  for (index = 10; index <= 23; index++){
-     if (index == hour)
-       s += "<OPTION value='" + String(index) + "'SELECTED>" + String(index) + "</OPTION>";
-     else
-       s += "<OPTION value='" + String(index) + "'>" + String(index) + "</OPTION>";
-  }
-  s += "</SELECT>:";
-  s += "<SELECT name='minutes'>";
-  for (index = 0; index <= 9; index++){
-     if (index == minutes)
-       s += "<OPTION value='" + String(index) + "'SELECTED>" + "0" + String(index) + "</OPTION>";
-     else
-       s += "<OPTION value='" + String(index) + "'>" + "0" + String(index) + "</OPTION>";
-  }
-  for (index = 10; index <= 59; index++){
-     if (index == minutes)
-       s += "<OPTION value='" + String(index) + "'SELECTED>" + String(index) + "</OPTION>";
-     else
-       s += "<OPTION value='" + String(index) + "'>" + String(index) + "</OPTION>";
-  }
-  s += "</SELECT></P>";
-  s += "&nbsp;<TABLE><TR>";
-  s += "<TD><INPUT TYPE=SUBMIT VALUE='    Submit    '></TD>";
-  s += "</FORM><FORM ACTION='home'>";
-  s += "<TD><INPUT TYPE=SUBMIT VALUE='    Cancel    '></TD>";
-  s += "</FORM>";
-  s += "</TR></TABLE>";
-  s += "</HTML>";
-  s += "\r\n\r\n";
-  server.send(200, "text/html", s);
-}
-
-void handleDateTimeR(){
-  String s;
-  String sMonth = server.arg("month");
-  String sDay = server.arg("day");      
-  String sYear = server.arg("year");
-  String sHour = server.arg("hour");
-  String sMinutes = server.arg("minutes");
-  int month = 0;
-  int day = 0;
-  int year = 0;
-
-  month = sMonth.toInt();
-  year = sYear.toInt();
-  switch (month){
-    case 1:
-      day = 31;
-      break;
-    case 2:
-      if (year%4 == 0)
-        day = 29;
-      else
-        day = 28;
-      break;
-    case 3:
-      day = 31;
-      break;
-    case 4:
-      day = 30;
-      break;
-    case 5:
-      day = 31;
-      break;
-    case 6:
-      day = 30;
-      break;
-    case 7:
-      day = 31;
-      break;
-    case 8:
-      day = 31;
-      break;
-    case 9:
-      day = 30;
-      break;
-    case 10:
-      day = 31;
-      break;
-    case 11:
-      day = 30;
-      break;
-    case 12:
-      day = 31;
-      break;
-    default:
-      day = 0;
-  }
-  s = "<HTML><FONT SIZE=4><FONT FACE='Arial'>";
-  if (sDay.toInt() <= day){
-    String sCommand = "$S1 " + sYear + " " + sMonth + " " + sDay + " " + sHour + " " + sMinutes + " 0"; 
-    Serial.flush();
-    Serial.println(sCommand);
-    delay(commDelay);   
-    s += "Success!<P><FORM ACTION='home'>";
-  }
-  else
-    s += "Invalid Date. Please try again.<P><FORM ACTION='datetime'>";  
-  s += "<INPUT TYPE=SUBMIT VALUE='     OK     '></FORM></P></FONT></FONT></HTML>\r\n\r\n";
-  server.send(200, "text/html", s);
-}
-
-void handleDelayTimer(){
-  String s;
-  // variables for command responses
-  String sFirst = "0";
-  String sSecond = "0";
-  String sThird = "0";
-  String sFourth = "0";
-  String sFifth = "0";
-  s = "<HTML>";
-  s += "<h2>Set Delay Timer</h2>";  
- //get delay start timer
-  delay(commDelay);
-  Serial.flush();
-  Serial.println("$GD^27");
-  delay(commDelay);
-  int start_hour = 0;
-  int start_min = 0;
-  int stop_hour = 0;
-  int stop_min = 0;
-  int index;
-  while(Serial.available()) {
-    String rapiString = Serial.readStringUntil('\r');
-    if ( rapiString.startsWith("$OK") ) {
-      int first_blank_index = rapiString.indexOf(' ');
-      int second_blank_index = rapiString.indexOf(' ',first_blank_index + 1);
-      sFirst = rapiString.substring(first_blank_index + 1, second_blank_index);  // start hour
-      start_hour = sFirst.toInt();
-      first_blank_index = rapiString.indexOf(' ',second_blank_index + 1);
-      sSecond = rapiString.substring(second_blank_index + 1, first_blank_index); // start min
-      start_min = sSecond.toInt();
-      second_blank_index = rapiString.indexOf(' ',first_blank_index + 1);
-      sThird = rapiString.substring(first_blank_index + 1, second_blank_index);  // stop hour
-      stop_hour = sThird.toInt();
-      first_blank_index = rapiString.indexOf(' ',second_blank_index + 1);
-      sFourth = rapiString.substring(second_blank_index + 1, first_blank_index); // stop min
-      stop_min = sFourth.toInt();
-      sFifth = rapiString.substring(rapiString.lastIndexOf(' ') + 1,rapiString.indexOf('^'));  // timer enabled - not used    
-    }
-  }
-  s += "<FORM METHOD='get' ACTION='delaytimerR'>";
-  s += "<P><FONT FACE='Arial'><FONT SIZE=4>Start Time (hh:mm) - ";
-  s += " <SELECT name='starthour'>";
-  for (index = 0; index <= 9; index++){
-     if (index == start_hour)
-       s += "<OPTION value='" + String(index) + "'SELECTED>" + "0" + String(index) + "</OPTION>";
-     else
-       s += "<OPTION value='" + String(index) + "'>" + "0" + String(index) + "</OPTION>";
-  }
-    for (index = 10; index <= 23; index++){
-     if (index == start_hour)
-       s += "<OPTION value='" + String(index) + "'SELECTED>" + String(index) + "</OPTION>";
-     else
-       s += "<OPTION value='" + String(index) + "'>" + String(index) + "</OPTION>";
-  }
-  s += "</SELECT>:";
-  s += "<SELECT name='startmin'>";
-  for (index = 0; index <= 9; index++){
-     if (index == start_min)
-       s += "<OPTION value='" + String(index) + "'SELECTED>" + "0" + String(index) + "</OPTION>";
-     else
-       s += "<OPTION value='" + String(index) + "'>" + "0" + String(index) + "</OPTION>";
-  }
-  for (index = 10; index <= 59; index++){
-     if (index == start_min)
-       s += "<OPTION value='" + String(index) + "'SELECTED>" + String(index) + "</OPTION>";
-     else
-       s += "<OPTION value='" + String(index) + "'>" + String(index) + "</OPTION>";
-  }
-  s += "</SELECT></P>";
-  s += "<P>Stop Timer (hh:mm) - ";
-  s += "<SELECT name='stophour'>";
-  for (index = 0; index <= 9; index++){
-     if (index == stop_hour)
-       s += "<OPTION value='" + String(index) + "'SELECTED>" + "0" + String(index) + "</OPTION>";
-     else
-       s += "<OPTION value='" + String(index) + "'>" + "0" + String(index) + "</OPTION>";
-  }
-  for (index = 10; index <= 23; index++){
-     if (index == stop_hour)
-       s += "<OPTION value='" + String(index) + "'SELECTED>" + String(index) + "</OPTION>";
-     else
-       s += "<OPTION value='" + String(index) + "'>" + String(index) + "</OPTION>";
-  }
-  s += "</SELECT>:";
-  s += "<SELECT name='stopmin'>";
-  for (index = 0; index <= 9; index++){
-     if (index == stop_min)
-       s += "<OPTION value='" + String(index) + "'SELECTED>" + "0" + String(index) + "</OPTION>";
-     else
-       s += "<OPTION value='" + String(index) + "'>" + "0" + String(index) + "</OPTION>";
-  }
-  for (index = 10; index <= 59; index++){
-     if (index == stop_min)
-       s += "<OPTION value='" + String(index) + "'SELECTED>" + String(index) + "</OPTION>";
-     else
-       s += "<OPTION value='" + String(index) + "'>" + String(index) + "</OPTION>";
-  }
-  s += "</SELECT></P>";
-  s += "<P>Note. All zeros will turn OFF delay timer</P>";
-  s += "&nbsp;<TABLE><TR>";
-  s += "<TD><INPUT TYPE=SUBMIT VALUE='    Submit    '></TD>";
-  s += "</FORM><FORM ACTION='home'>";
-  s += "<TD><INPUT TYPE=SUBMIT VALUE='    Cancel    '></TD>";
-  s += "</FORM>";
-  s += "</TR></TABLE>";
-  s += "</HTML>";
-  s += "\r\n\r\n";
-  server.send(200, "text/html", s);
-}
-
-void handleDelayTimerR(){
-  String s;
-  String sStart_hour = server.arg("starthour");      
-  String sStart_min = server.arg("startmin");
-  String sStop_hour = server.arg("stophour");
-  String sStop_min = server.arg("stopmin");       
-  s = "<HTML>";
-  String sCommand = "$ST " + sStart_hour + " "+ sStart_min + " " + sStop_hour + " " + sStop_min; 
-  Serial.flush();
-  Serial.println(sCommand);
-  delay(commDelay);
-  if ( (sStart_hour != "00") || (sStart_min != "00") || (sStop_hour != "00") || (sStop_min != "00")) //turn off timer
-    sCommand = "$FS^31";     
-  else
-    sCommand = "$FE^27"; 
-  Serial.flush();
-  Serial.println(sCommand);
-  delay(commDelay);  
-  s += "<FORM ACTION='home'>";  
-  s += "<P><FONT SIZE=4><FONT FACE='Arial'>Success!</P>";
-  s += "<P><INPUT TYPE=SUBMIT VALUE='     OK     '></FONT></FONT></P>";
-  s += "</FORM>";
-  s += "</HTML>";
-  s += "\r\n\r\n";
-  server.send(200, "text/html", s);
 }
 
 
@@ -1046,6 +1150,10 @@ void handleRapiRead() {
        }  
 }
 
+// -------------------------------------------------------------------
+// SETUP
+// -------------------------------------------------------------------
+
 void setup() {
 	delay(2000);
 	Serial.begin(115200);
@@ -1056,34 +1164,19 @@ void setup() {
   espvcc = ESP.getVcc();
   espfree = ESP.getFreeHeap();
   //char tmpStr[40];
-  
+
+// Read saved settings from EEPROM
+  load_EEPROM_settings();
  
-  for (int i = 0; i < 32; ++i){
-    char c = char(EEPROM.read(i));
-    if (c!=0) esid += c;
-  }
-  for (int i = 32; i < 96; ++i){
-    char c = char(EEPROM.read(i));
-    if (c!=0) epass += c;
-  }
-  for (int i = 96; i < 128; ++i){
-    char c = char(EEPROM.read(i));
-    if (c!=0) apikey += c;
-  }
-  char c = char(EEPROM.read(129));
-    if (c!=0) node += c;
-  for (int i = 130; i < 138; ++i){
-    char c = char(EEPROM.read(i));
-    if (c!=0) ohm += c;
-  }
+  
      
-  WiFi.disconnect();
+WiFi.disconnect();
   // 1) If no network configured start up access point
-  if (esid == 0)
+  if (esid == 0 || esid == "")
   {
     startAP();
-    wifi_mode = 2; // AP mode with no SSID in EEPROM    
-  } 
+    wifi_mode = 2; // AP mode with no SSID in EEPROM
+  }
   // 2) else try and connect to the configured network
   else
   {
@@ -1093,26 +1186,45 @@ void setup() {
   }
   
  ArduinoOTA.begin();
+
+   // Start hostname broadcast in STA mode
+  if ((wifi_mode==0 || wifi_mode==3)){
+    if (MDNS.begin(esp_hostname)) {
+            MDNS.addService("http", "tcp", 80);
+          }
+  }
+
+  // Setup firmware upload
+  httpUpdater.setup(&server, firmware_update_path);
+  
+  // Start server & server root html /
   server.on("/", [](){
-    if(!server.authenticate(www_username, www_password))
+    if(www_username!="" && !server.authenticate(www_username, www_password) && wifi_mode == 0)
       return server.requestAuthentication();
     handleHome();
   });
+  
   server.on("/r", [](){
     if(!server.authenticate(www_username, www_password))
       return server.requestAuthentication();
     handleRapiR();
   });
-  server.on("/reset", [](){
-    if(!server.authenticate(www_username, www_password))
-      return server.requestAuthentication();
-    handleRst();
-  });
   server.on("/status", [](){
-    if(!server.authenticate(www_username, www_password))
-      return server.requestAuthentication();
-    handleStatus();
+  if(www_username!="" && !server.authenticate(www_username, www_password) && wifi_mode == 0)
+    return server.requestAuthentication();
+  handleStatus();
   });
+  server.on("/reset", [](){
+  if(www_username!="" && !server.authenticate(www_username, www_password) && wifi_mode == 0)
+    return server.requestAuthentication();
+  handleRst();
+  });
+  server.on("/restart", [](){
+  if(www_username!="" && !server.authenticate(www_username, www_password) && wifi_mode == 0)
+    return server.requestAuthentication();
+  handleRestart();
+  });
+
   server.on("/config", [](){
     if(!server.authenticate(www_username, www_password))
       return server.requestAuthentication();
@@ -1129,14 +1241,15 @@ void setup() {
     handleRapi();
   });
   server.on("/savenetwork", handleSaveNetwork);
-  server.on("/saveapikey", handleSaveApikey);
+  server.on("/saveemoncms", handleSaveEmoncms);
+  server.on("/savemqtt", handleSaveMqtt);
   server.on("/saveohmkey", handleSaveOhmkey);
   server.on("/scan", handleScan);
   server.on("/apoff",handleAPOff);
-  server.on("/datetime", handleDateTime);
-  server.on("/datetimeR", handleDateTimeR);
-  server.on("/delaytimer", handleDelayTimer);
-  server.on("/delaytimerR", handleDelayTimerR);
+  server.on("/firmware",handleUpdateCheck);
+  server.on("/fupdate",handleFUpdate);
+  
+
   server.onNotFound([](){
     if(!handleFileRead(server.uri()))
       server.send(404, "text/plain", "FileNotFound");
@@ -1146,34 +1259,45 @@ void setup() {
 	server.begin();
 	//Serial.println("HTTP server started");
   Timer = millis();
+  lastMqttReconnectAttempt = 0;
   delay(5000); //gives OpenEVSE time to finish self test on cold start
   handleRapiRead();
-}
+} // end setup
+
+// -------------------------------------------------------------------
+// LOOP
+// -------------------------------------------------------------------
 
 void loop() {
 ArduinoOTA.handle();
 server.handleClient();
+dnsServer.processNextRequest();
   
-int erase = 0;  
-buttonState = digitalRead(0);
-while (buttonState == LOW) {
-  buttonState = digitalRead(0);
-  erase++;
-  if (erase >= 5000) {
-    ResetEEPROM();
-    int erase = 0;
-    WiFi.disconnect();
-    Serial.print("Finished...");
-    delay(2000);
-    ESP.reset(); 
-  } 
-}
+ // If Wifi is connected & MQTT server has been set then connect to mqtt server
+  if ((wifi_mode==0 || wifi_mode==3) && mqtt_server != 0){
+    if (!mqttclient.connected()) {
+      long now = millis();
+      // try and reconnect continuously for first 5s then try again once every 10s
+      if ( (now < 50000) || ((now - lastMqttReconnectAttempt)  > 100000) ) {
+        lastMqttReconnectAttempt = now;
+        if (mqtt_connect()) { // Attempt to reconnect
+          lastMqttReconnectAttempt = 0;
+        }
+      }
+    } else {
+      // if MQTT connected
+      mqttclient.loop();
+      }
+  }
+  
 // Remain in AP mode for 5 Minutes before resetting
 if (wifi_mode == 1){
    if ((millis() - Timer) >= 300000){
      ESP.reset();
    }
-}   
+}
+
+// If Ohm Key is set - Check for Ohm Hour once every minute   
 if (wifi_mode == 0 || wifi_mode == 3 && ohm != 0){
   if ((millis() - Timer2) >= 60000){
      Timer2 = millis();
@@ -1211,6 +1335,9 @@ if (wifi_mode == 0 || wifi_mode == 3 && ohm != 0){
     }
   }
 } 
+
+// If EMONCMS Key is set - Send data twice every minute
+
 if (wifi_mode == 0 || wifi_mode == 3 && apikey != 0){
    if ((millis() - Timer) >= 30000){
      Timer = millis();
@@ -1317,28 +1444,43 @@ if (wifi_mode == 0 || wifi_mode == 3 && apikey != 0){
         temp3 = qrapi2.toInt();
       }
     } 
- 
-// Use WiFiClient class to create TCP connections
-    WiFiClientSecure client;
-    if (!client.connect(host, httpsPort)) {
-      return;
-    }
-    
 // Create the JSON String
   
-  String s = e_url;
+  String s = url;
   s += String(node)+"&json={";
-  s += "OpenEVSE_AMP:"+String(amp)+",";
-  s += "OpenEVSE_TEMP1:"+String(temp1)+",";
-  s += "OpenEVSE_TEMP2:"+String(temp2)+",";
-  s += "OpenEVSE_TEMP3:"+String(temp3)+",";
-  s += "OpenEVSE_PILOT:"+String(pilot)+",";
-  s += "OpenEVSE_STATE:"+String(state);
+  String data = "";
+  data += "OpenEVSE_AMP:"+String(amp)+",";
+  data += "OpenEVSE_TEMP1:"+String(temp1)+",";
+  data += "OpenEVSE_TEMP2:"+String(temp2)+",";
+  data += "OpenEVSE_TEMP3:"+String(temp3)+",";
+  data += "OpenEVSE_PILOT:"+String(pilot)+",";
+  data += "OpenEVSE_STATE:"+String(state);
+  s += data;
   s += "}&devicekey="+String(apikey);
      
 // Send the JSON request to the server
+
+
     
     packets_sent++;
+     String result="";
+     if (emoncms_fingerprint!=0){
+        // HTTPS on port 443 if HTTPS fingerprint is present
+        Serial.println("HTTPS Enabled");
+        result = get_https(emoncms_fingerprint.c_str(), emoncms_server.c_str(), url, 443);
+      } else {
+        // Plain HTTP if other emoncms server e.g EmonPi
+        result = get_http(emoncms_server.c_str(), url);
+      }
+      if (result == "ok"){
+        packets_success++;
+        emoncms_connected = true;
+      }
+      else{
+        emoncms_connected=false;
+        Serial.print("Emoncms error: ");
+        Serial.println(result);
+      }
     client.print(String("GET ") + s + " HTTP/1.1\r\n" + "Host: " + host + "\r\n" + "Connection: close\r\n\r\n");
     delay(10);
     String line = client.readString();
@@ -1348,6 +1490,16 @@ if (wifi_mode == 0 || wifi_mode == 3 && apikey != 0){
     
     //Serial.println(host);
     //Serial.println(url);
+
+  if (mqtt_server != 0){
+        Serial.print("MQTT publish base-topic: "); Serial.println(mqtt_topic);
+        mqtt_publish(mqtt_topic, data);
+        String ram_topic = mqtt_topic + "/freeram";
+        String free_ram = String(ESP.getFreeHeap());
+        mqttclient.publish(ram_topic.c_str(), free_ram.c_str());
+        ram_topic = "";
+        free_ram ="";
+      }
     
   }
 }
