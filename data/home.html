@@ -37,62 +37,50 @@
          <div class="box380">
 				<h2>WiFi Setup</h2>
                 <p><b>Mode:</b> <span id="mode"></span></p>
-                <div id="client-view" style="display:none">
-                    <!--<p><b>Network SSID:</b><br><span id="sta-ssid"></span></p>
-                    <p><b>Network RSSI:</b><br><span id="sta-rssi"></span></p> -->
-
-					<table>
-						<tr><th>Network</th> <th>RSSI dBm</th> </tr>
-						<tbody id="sta-ssid"></tbody>
-					</table>
-
-					<p><b>IP Address:</b><br><span id="sta-ip"></span></p>
-					<button id="apoff" style="display:none">Turn off Access Point</button>
-                    <p><b>Successful packets:</b><br><span id="sta-psuccess"></span> of <span id="sta-psent"></span></p>
+                <div id="client-view">
+                  <table>
+                  <tr><th>Network</th> <th>RSSI dBm</th> </tr>
+                  <tbody id="sta-ssid"></tbody>
+                </table>
+                    <p><b>IP Address:</b><br><span id="sta-ip"></span></p>
+					<p><b>Successful packets:</b><br><span id="sta-psuccess"></span> of <span id="sta-psent"></span></p>
                     <p><b>OpenEVSE</b></p>
                     <p><b>RAPI packets:</b><br><span id="comm-psuccess"></span> of <span id="comm-psent"></span></p>
                     <button id="apoff" style="display:none">Turn off Access Point</button>
-		            <p><b>Firmware: </b><span id="version"></span></p>
-						<iframe style="width:380px; height:50px;" frameborder="0" scrolling="no" marginheight="0" marginwidth="0" src="/update">
-						</iframe> 
-                    <button id="reset">Reset config and reboot</button>
+                    
                 </div>
                 <div id="ap-view" style="display:none">
-					<p>Connect to network:</p>
-					<table>
-						<tr> <th>Select</th> <th>Network</th> <th>RSSI dBm</th> </tr>
-						<tbody id="networks"></tbody>
+                    <p>Connect to network:</p>
+                    <table>
+                  <tr> <th>Select</th> <th>Network</th> <th>RSSI dBm</th> </tr>
+                  <tbody id="networks"></tbody>
 					</table>
-
 					<p><b>Passkey:</b><br>
 					<input id="passkey" type="text">
 					<button id="connect">Connect</button>
 					</p>
-
-				</div>
-				<div id="wait-view" style="display:none">
-					<p>Connecting to WiFi Network...Please wait 10s</p>
-
-				</div>
+                </div>
+                <div id="wait-view" style="display:none">
+                    <p>Connecting to WIFI Network...</p>
+                </div>		
             </div>
-         			
+         	<div class="box380">
+			<h2>Administration</h2>
+				<p><b>Username:</b><br>
+				<input id="www_user" type="text" value="admin">
+				<p><b>Password:</b><br>
+				<input id="www_pass" type="text" value="openevse">
+				<button id="save-admin">Save</button>
+			</div>		
 		
 		<div class="box380">
 			<h2>Firmware</h2>
-			<div id="firmware" style="display:none">
-
-              <table>
-                  <tr><th>Running</th><th>Latest</th></tr>
-                  <tbody id="firmware-version" ></tbody>
-              </table>
-
-              <br>
-              <a href="https://github.com/openenergymonitor/EmonESP/releases">View changelog</a>
-              <br> </div><br>
-              <button id="updatecheck">Check for Updates</button>
-              <button id="update" style="display:none">Apply Update</button>
-              <p><span id="update-info"></span></p>
-              <button id="upload">Upload</button>
+			<p><b>Firmware: </b><span id="version"></span></p>
+						<iframe style="width:380px; height:50px;" frameborder="0" scrolling="no" marginheight="0" marginwidth="0" src="/update">
+						</iframe> 
+						<p><b>Free RAM:</b><br><span id="free_heap"></span>B</p>
+						<button id="restart">Restart</button>
+						<button id="reset">Reset config and reboot</button>
 
 
           </div>
@@ -116,23 +104,24 @@
 
         </div>
 		<div class="box380">
-			<h2>MQTT</h2>
-
-			<p><b>MQTT Server*:</b><br>
-			<input id="mqtt_server" type="text">
-			</p><span>e.g 'emonpi', 'test.mosquitto.org', or '192.168.1.4'</span><br>
-			<p><b>MQTT Base-topic*:</b><br>
-			<input id="mqtt_topic" type="text">
-			</p><span>e.g 'emon/emonesp', 'emon/heatpump'</span><br><br>
-			<div id="small-text">Data will be published to sub topic e.g. 'emon/emonesp/CT1 > XXX'</div>
-			<p><b>Username:</b><br>
-			<input id="mqtt_user" type="text">
-			</p><span>Leave blank for no authentication</span><br>
-			<p><b>Password:</b><br>
-			<input id="mqtt_pass" type="text">
-			</p><span>Leave blank for no authentication</span><br><p>
-			<button id="save-mqtt">Save</button>
-			<b>&nbsp; Connected:&nbsp;<span id="mqtt_connected"></span></b>
+		  <p><b>MQTT Server*:</b><br>
+          <input id="mqtt_server" type="text">
+          </p><span>e.g 'emonpi', 'test.mosquitto.org', '192.168.1.4'</span><br>
+          <p><b>MQTT Base-topic*:</b><br>
+          <input id="mqtt_topic" type="text">
+        </p><span>e.g 'openevse/tesla', 'openevse/leaf'</span><br><br>
+          <div id="small-text">Data will be published to sub topic e.g. 'openevse/tesla/Amp'</div>
+          <p><b>MQTT feed prefix:</b><br>
+          <input id="mqtt_feed_prefix" type="text">
+          <div id="small-text">value to prefix the feed names with, eg emonesp- would cause P0 to be named emonesp-P0</div>
+          <p><b>Username:</b><br>
+          <input id="mqtt_user" type="text">
+          </p><span>Leave blank for no authentication</span><br>
+          <p><b>Password:</b><br>
+          <input id="mqtt_pass" type="password">
+          </p><span>Leave blank for no authentication</span><br><p>
+          <button id="save-mqtt">Save</button>
+          <b>&nbsp; Connected:&nbsp;<span id="mqtt_connected"></span></b>
 
 		</div>
         <div class="box380">

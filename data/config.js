@@ -3,12 +3,13 @@ var selected_network_ssid = "";
 var lastmode = "";
 var ipaddress = "";
 
-var r1 = new XMLHttpRequest(); 
+// get statup status and populate input fields
+var r1 = new XMLHttpRequest();
 r1.open("GET", "status", false);
 r1.onreadystatechange = function () {
   if (r1.readyState != 4 || r1.status != 200) return;
   var status = JSON.parse(r1.responseText);
-  
+
   document.getElementById("passkey").value = status.pass;
 
   if ((status.emoncms_server!=0) & (status.emoncms_apikey!=0)){
@@ -17,6 +18,7 @@ r1.onreadystatechange = function () {
     document.getElementById("emoncms_node").value = status.emoncms_node;
     document.getElementById("emoncms_fingerprint").value = status.emoncms_fingerprint;
   }
+  
 
   if (status.emoncms_connected == "1"){
    document.getElementById("emoncms_connected").innerHTML = "Yes";
@@ -35,19 +37,16 @@ r1.onreadystatechange = function () {
       document.getElementById("mqtt_pass").value = status.mqtt_pass;
     }
   }
-
+  
   if (status.mqtt_connected == "1"){
    document.getElementById("mqtt_connected").innerHTML = "Yes";
   } else {
     document.getElementById("mqtt_connected").innerHTML = "No";
   }
 
-  
-  document.getElementById("ohmkey").value = status.ohmkey;
+  document.getElementById("free_heap").innerHTML = status.free_heap;
   document.getElementById("version").innerHTML = status.version;
-  document.getElementById("espflash").innerHTML = status.espflash;
 
-  
 
   if (status.mode=="AP") {
       document.getElementById("mode").innerHTML = "Access Point (AP)";
@@ -73,6 +72,7 @@ r1.onreadystatechange = function () {
       document.getElementById("sta-ip").innerHTML = "<a href='http://"+status.ipaddress+"'>"+status.ipaddress+"</a>";
       document.getElementById("ap-view").style.display = 'none';
       document.getElementById("client-view").style.display = '';
+	  
       ipaddress = status.ipaddress;
 
 
@@ -167,17 +167,13 @@ function update() {
 	  document.getElementById("temp3").innerHTML = update.temp3;
     };
     r3.send();
-	
-    
-
-
-var r2 = new XMLHttpRequest();
+	var r2 = new XMLHttpRequest();
     r2.open("GET", "status", false);
     r2.onreadystatechange = function () {
     if (r2.readyState != 4 || r2.status != 200) return;
       var status = JSON.parse(r2.responseText);
 
-      
+      document.getElementById("free_heap").innerHTML = status.free_heap;
 
       if (status.emoncms_connected == "1"){
        document.getElementById("emoncms_connected").innerHTML = "Yes";
@@ -202,8 +198,8 @@ var r2 = new XMLHttpRequest();
       }
     };
     r2.send();
-}  
-
+    
+}
 function updateStatus() {
   // Update status on Wifi connection
   var r1 = new XMLHttpRequest();
@@ -237,7 +233,7 @@ function updateStatus() {
 }
 
 // -----------------------------------------------------------------------
-// Event: Connect
+// Event: WiFi Connect
 // -----------------------------------------------------------------------
 document.getElementById("connect").addEventListener("click", function(e) {
     var passkey = document.getElementById("passkey").value;
@@ -246,8 +242,8 @@ document.getElementById("connect").addEventListener("click", function(e) {
     } else {
         document.getElementById("ap-view").style.display = 'none';
         document.getElementById("wait-view").style.display = '';
-        
-        var r = new XMLHttpRequest(); 
+
+        var r = new XMLHttpRequest();
         r.open("POST", "savenetwork", false);
         r.setRequestHeader("Content-type","application/x-www-form-urlencoded");
         r.onreadystatechange = function () {
@@ -255,7 +251,7 @@ document.getElementById("connect").addEventListener("click", function(e) {
 	        var str = r.responseText;
 	        console.log(str);
 	        document.getElementById("connect").innerHTML = "Connecting...please wait 10s";
-			
+
 	        statusupdate = setInterval(updateStatus,5000);
         };
         r.send("ssid="+selected_network_ssid+"&pass="+passkey);
@@ -321,40 +317,19 @@ document.getElementById("save-mqtt").addEventListener("click", function(e) {
     }
 });
 
-
-// -----------------------------------------------------------------------
-// Event: Save Ohm Connect Key
-// -----------------------------------------------------------------------
-document.getElementById("save-ohmkey").addEventListener("click", function(e) {
-    var ohmkey = document.getElementById("ohmkey").value;
-    var r = new XMLHttpRequest(); 
-    r.open("POST", "saveohmkey", true);
-    r.setRequestHeader("Content-type","application/x-www-form-urlencoded");
-	r.send("&ohm="+ohmkey);
-    r.onreadystatechange = function () {
-		console.log(ohmkey);
-        if (r.readyState != 4 || r.status != 200) return;
-        var str = r.responseText;
-  	    console.log(str);
-  	    if (str!=0) document.getElementById("ohmkey").innerHTML = "Saved";
-	};
-    
-
-});
-
 // -----------------------------------------------------------------------
 // Event: Turn off Access Point
 // -----------------------------------------------------------------------
-document.getElementById("apoff").addEventListener("click", function(e) {    
-    var r = new XMLHttpRequest(); 
+document.getElementById("apoff").addEventListener("click", function(e) {
+    var r = new XMLHttpRequest();
     r.open("POST", "apoff", true);
     r.onreadystatechange = function () {
         if (r.readyState != 4 || r.status != 200) return;
         var str = r.responseText;
         console.log(str);
         document.getElementById("apoff").style.display = 'none';
-        if (ipaddress!="") window.location = ipaddress;
-        
+        if (ipaddress!="") window.location = "http://"+ipaddress;
+
 	  };
     r.send();
 });
@@ -440,7 +415,7 @@ document.getElementById("updatecheck").addEventListener("click", function(e) {
 document.getElementById("update").addEventListener("click", function(e) {
     document.getElementById("update-info").innerHTML = "UPDATING..."
     var r1 = new XMLHttpRequest();
-    r1.open("POST", "fupdate", true);
+    r1.open("POST", "update", true);
     r1.onreadystatechange = function () {
         if (r1.readyState != 4 || r1.status != 200) return;
         var str1 = r1.responseText;
@@ -454,6 +429,5 @@ document.getElementById("update").addEventListener("click", function(e) {
 // Event:Upload Firmware
 // -----------------------------------------------------------------------
 document.getElementById("upload").addEventListener("click", function(e) {
-  window.location.href='/update'
+  window.location.href='/upload'
 });
-
