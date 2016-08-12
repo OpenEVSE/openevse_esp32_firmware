@@ -716,6 +716,7 @@ void handleStatus() {
   s += "\"mqtt_feed_prefix\":\""+mqtt_feed_prefix+"\",";
   s += "\"mqtt_user\":\""+mqtt_user+"\",";
   s += "\"mqtt_pass\":\""+mqtt_pass+"\",";
+  s += "\"version\":\""+String(fwversion)+"\",";
   s += "\"mqtt_connected\":\""+String(mqttclient.connected())+"\",";
 
   s += "\"www_username\":\""+www_username+"\",";
@@ -1295,7 +1296,7 @@ WiFi.disconnect();
   }
   
  // Start local OTA update server 
- ArduinoOTA.begin();
+
 
   // Start hostname broadcast in STA mode
   if ((wifi_mode==WIFI_MODE_STA || wifi_mode==WIFI_MODE_AP_AND_STA)){
@@ -1305,7 +1306,8 @@ WiFi.disconnect();
   }
 
   // Setup firmware upload
-  httpUpdater.setup(&server, firmware_update_path);
+  httpUpdater.setup(&server);
+  server.begin();
   
   // Start server & server root html /
   server.on("/", [](){

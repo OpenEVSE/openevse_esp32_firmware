@@ -12,7 +12,7 @@ r1.onreadystatechange = function () {
 
   document.getElementById("passkey").value = status.pass;
 
-  if ((status.emoncms_server!=0) & (status.emoncms_apikey!=0)){
+  if ((status.emoncms_server!==0) & (status.emoncms_apikey!==0)){
     document.getElementById("emoncms_apikey").value = status.emoncms_apikey;
     document.getElementById("emoncms_server").value = status.emoncms_server;
     document.getElementById("emoncms_node").value = status.emoncms_node;
@@ -29,10 +29,10 @@ r1.onreadystatechange = function () {
     document.getElementById("emoncms_connected").innerHTML = "No";
   }
 
-  if (status.mqtt_server!=0){
+  if (status.mqtt_server!==0){
     document.getElementById("mqtt_server").value = status.mqtt_server;
     document.getElementById("mqtt_topic").value = status.mqtt_topic;
-    if (status.mqtt_user!=0){
+    if (status.mqtt_user!==0){
       document.getElementById("mqtt_user").value = status.mqtt_user;
       document.getElementById("mqtt_pass").value = status.mqtt_pass;
     }
@@ -56,7 +56,7 @@ r1.onreadystatechange = function () {
       var out = "";
       for (var z in status.networks) {
         if (status.rssi[z]=="undefined") status.rssi[z]="";
-        out += "<tr><td><input class='networkcheckbox' name='"+status.networks[z]+"' type='checkbox'></td><td>"+status.networks[z]+"</td><td>"+status.rssi[z]+"</td></tr>"
+        out += "<tr><td><input class='networkcheckbox' name='"+status.networks[z]+"' type='checkbox'></td><td>"+status.networks[z]+"</td><td>"+status.rssi[z]+"</td></tr>";
       }
       document.getElementById("networks").innerHTML = out;
   } else {
@@ -65,9 +65,8 @@ r1.onreadystatechange = function () {
           document.getElementById("apoff").style.display = '';
       }
       if (status.mode=="STA") document.getElementById("mode").innerHTML = "Client (STA)";
-
-      var out="";
-      out += "<tr><td>"+status.ssid+"</td><td>"+status.srssi+"</td></tr>"
+	  var out = "";
+      out += "<tr><td>"+status.ssid+"</td><td>"+status.srssi+"</td></tr>";
       document.getElementById("sta-ssid").innerHTML = out;
       document.getElementById("sta-ip").innerHTML = "<a href='http://"+status.ipaddress+"'>"+status.ipaddress+"</a>";
       document.getElementById("ap-view").style.display = 'none';
@@ -193,7 +192,7 @@ function update() {
       if ((status.mode=="STA") || (status.mode=="STA+AP")){
         // Update connected network RSSI
         var out="";
-        out += "<tr><td>"+status.ssid+"</td><td>"+status.srssi+"</td></tr>"
+        out += "<tr><td>"+status.ssid+"</td><td>"+status.srssi+"</td></tr>";
         document.getElementById("sta-ssid").innerHTML = out;
       }
     };
@@ -237,7 +236,7 @@ function updateStatus() {
 // -----------------------------------------------------------------------
 document.getElementById("connect").addEventListener("click", function(e) {
     var passkey = document.getElementById("passkey").value;
-    if (selected_network_ssid=="") {
+    if (selected_network_ssid==="") {
         alert("Please select network");
     } else {
         document.getElementById("ap-view").style.display = 'none';
@@ -267,12 +266,12 @@ document.getElementById("save-emoncms").addEventListener("click", function(e) {
       apikey: document.getElementById("emoncms_apikey").value,
       node: document.getElementById("emoncms_node").value,
       fingerprint: document.getElementById("emoncms_fingerprint").value
-    }
-    if (emoncms.server=="" || emoncms.node==""){
+    };
+    if (emoncms.server==="" || emoncms.node===""){
         alert("Please enter Emoncms server and node");
       } else if (emoncms.apikey.length!=32) {
           alert("Please enter valid Emoncms apikey");
-      } else if (emoncms.fingerprint!="" && emoncms.fingerprint.length!=59) {
+      } else if (emoncms.fingerprint!=="" && emoncms.fingerprint.length!=59) {
         alert("Please enter valid SSL SHA-1 fingerprint");
       } else {
           document.getElementById("save-emoncms").innerHTML = "Saving...";
@@ -284,8 +283,8 @@ document.getElementById("save-emoncms").addEventListener("click", function(e) {
             if (r.readyState != 4 || r.status != 200) return;
             var str = r.responseText;
       	    console.log(str);
-      	    if (str!=0) document.getElementById("save-emoncms").innerHTML = "Saved";
-          }
+      	    if (str!==0) document.getElementById("save-emoncms").innerHTML = "Saved";
+          };
         }
 });
 
@@ -298,8 +297,8 @@ document.getElementById("save-mqtt").addEventListener("click", function(e) {
       topic: document.getElementById("mqtt_topic").value,
       user: document.getElementById("mqtt_user").value,
       pass: document.getElementById("mqtt_pass").value
-    }
-    if (mqtt.server=="") {
+    };
+    if (mqtt.server==="") {
       alert("Please enter MQTT server");
     } else {
       document.getElementById("save-mqtt").innerHTML = "Saving...";
@@ -312,7 +311,7 @@ document.getElementById("save-mqtt").addEventListener("click", function(e) {
         if (r.readyState != 4 || r.status != 200) return;
         var str = r.responseText;
   	    console.log(str);
-  	    if (str!=0) document.getElementById("save-mqtt").innerHTML = "Saved";
+  	    if (str!==0) document.getElementById("save-mqtt").innerHTML = "Saved";
       };
     }
 });
@@ -328,7 +327,7 @@ document.getElementById("apoff").addEventListener("click", function(e) {
         var str = r.responseText;
         console.log(str);
         document.getElementById("apoff").style.display = 'none';
-        if (ipaddress!="") window.location = "http://"+ipaddress;
+        if (ipaddress!=="") window.location = "http://"+ipaddress;
 
 	  };
     r.send();
@@ -346,7 +345,7 @@ document.getElementById("reset").addEventListener("click", function(e) {
           if (r.readyState != 4 || r.status != 200) return;
           var str = r.responseText;
           console.log(str);
-          if (str!=0) document.getElementById("reset").innerHTML = "Resetting...";
+          if (str!==0) document.getElementById("reset").innerHTML = "Resetting...";
   	  };
       r.send();
     }
@@ -364,7 +363,7 @@ document.getElementById("restart").addEventListener("click", function(e) {
           if (r.readyState != 4 || r.status != 200) return;
           var str = r.responseText;
           console.log(str);
-          if (str!=0) document.getElementById("reset").innerHTML = "Restarting";
+          if (str!==0) document.getElementById("reset").innerHTML = "Restarting";
   	  };
       r.send();
     }

@@ -11,15 +11,9 @@ body {
     background-color:#fff;
 }
 
-h1 {
-    padding-bottom: 0.3em;  
-    color:#73769f;
-}
+
  
-h2 {
-    padding-bottom: 0.2em;
-    border-bottom: 1px solid #eee;
-}
+
  
 table {
     width:100%;
@@ -46,7 +40,8 @@ tr:nth-child(2n+2) {background-color:#f3f3f3;}
     padding:20px;
 }
 
-.box h1 {
+h1 {
+	padding-bottom: 0.3em;  
 	color: #008080;
     font-size: 45px;
     font-weight: normal;
@@ -55,19 +50,23 @@ tr:nth-child(2n+2) {background-color:#f3f3f3;}
     margin: 0;
 }
 
-.box h1 span {
+h1 span {
 	font-weight: bold;
 	font-family: Garmond,"sans-serif";
     color: #000000;
 }
 
-.box h3 {
+h2 {
+    padding-bottom: 0.2em;
+    border-bottom: 1px solid #eee;
+}
+
+h3 {
     padding-top: -5px;
 	padding-left: 50px;
     font-weight: bold;
     font-family: Arial,"sans-serif";
     font-size: 17px;
-    text-align: 30px;
     color: #b6b6b6;
     margin: -25px 0 -5px 0;
 }
@@ -75,8 +74,8 @@ tr:nth-child(2n+2) {background-color:#f3f3f3;}
 .box380 {
     width:380px;
     float:left;
-    padding:0px;
-    margin-left:0px;
+    padding:0;
+    margin-left:0;
     margin-right:20px;
     margin-bottom:20px;
     border: 1px solid #ddd;
@@ -88,7 +87,7 @@ tr:nth-child(2n+2) {background-color:#f3f3f3;}
     #page {
         width:930px;
 		height: 1780px;
-        margin:0px
+        margin:0;
     }
 }
     
@@ -96,14 +95,14 @@ tr:nth-child(2n+2) {background-color:#f3f3f3;}
     #page {
         width:480px;
 		height: 3020px;
-        margin:0px;
+        margin:0;
     }
 }
     
 button {
     background-color: #008080;
     border-radius: 5px;
-	box-shadow: 0px 2px 2px 0px rgba(0, 0, 0, 0.4);
+	box-shadow: 0 2px 2px 0 rgba(0, 0, 0, 0.4);
     border: none;
     color: #ffffff;
     padding: 10px 28px;
@@ -150,7 +149,7 @@ input[type="password"] {
 #container label {
 	background: #008080; 
 	border-radius: 5px;
-	box-shadow: 0px 2px 2px 0px rgba(0, 0, 0, 0.4);
+	box-shadow: 0 2px 2px 0 rgba(0, 0, 0, 0.4);
 	color: #fff;  
 	cursor: pointer;
 	display: block;
@@ -272,23 +271,18 @@ input[type="password"] {
     z-index: 9;   
 }
 
-#container input#tab-1:checked ~ #content #content-1,
-#container input#tab-2:checked ~ #content #content-2,
-#container input#tab-3:checked ~ #content #content-3,
-#container input#tab-4:checked ~ #content #content-4 {
+#tab-1:checked ~ #content #content-1,
+#tab-2:checked ~ #content #content-2,
+#tab-3:checked ~ #content #content-3,
+#tab-4:checked ~ #content #content-4 {
     opacity: 1;
     z-index: 10;
-    visibility: visable;
-}
-
-
-input.visible {
-  visibility: visible !important;
+    visibility: visible;
 }
 
 #footer {
     font-family: Arial,"sans-serif";
     font-size: 15px;
     text-align: center;
-    margin-bottom: 5px;
+    margin-bottom: 0;
 }

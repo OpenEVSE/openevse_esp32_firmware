@@ -16,13 +16,14 @@
 
 </head>
     
-    <body>
-        <div id="page">
-			<div class="box">
-			<h1>Open<span>EVSE</span></h1>
-			<h3>WiFi Energy Monitor</h3>
-		</div>
-        <div id="container">
+<body>
+<div id="page">
+  <div class="box">
+  <h1>Open<span>EVSE</span></h1>
+  <h3>WiFi Energy Monitor</h3>
+  </div>
+
+<div id="container">
     
     <input id="tab-1" type="radio" name="tab-group" checked="checked" />
     <label for="tab-1">Network</label>
@@ -88,8 +89,9 @@
 	<div id="content-2">
 			<div class="box380">
 			<h2>Energy Monitoring</h2>
-            <input id="emoncms_server" type="text" value="data.openevse.com">
-				</p><span>e.g 'data.openevse.com', 'emoncms.org','192.168.1.4/emoncms'</span><br>
+				<p><b>Server:</b><br>
+				<input id="emoncms_server" type="text" value="data.openevse.com">
+				<span>e.g 'data.openevse.com', 'emoncms.org','192.168.1.4/emoncms'</span><br>
 				<p><b>Node:</b><br>
 				<input id="emoncms_node" type="text" value="0">
 				</p><span>Note: EmonCMS only supports numberical nodeID's 1-32</span><br><br>
@@ -104,22 +106,19 @@
 
         </div>
 		<div class="box380">
-		  <p><b>MQTT Server*:</b><br>
+		<h2>MQTT</h2>
+		  <p><b>Server:</b><br>
           <input id="mqtt_server" type="text">
           </p><span>e.g 'emonpi', 'test.mosquitto.org', '192.168.1.4'</span><br>
-          <p><b>MQTT Base-topic*:</b><br>
+          <p><b>Base-topic:</b><br>
           <input id="mqtt_topic" type="text">
         </p><span>e.g 'openevse/tesla', 'openevse/leaf'</span><br><br>
-          <div id="small-text">Data will be published to sub topic e.g. 'openevse/tesla/Amp'</div>
           <p><b>MQTT feed prefix:</b><br>
           <input id="mqtt_feed_prefix" type="text">
-          <div id="small-text">value to prefix the feed names with, eg emonesp- would cause P0 to be named emonesp-P0</div>
-          <p><b>Username:</b><br>
+          <p><b>Username:</b><span> blank - no authentication</span></p>
           <input id="mqtt_user" type="text">
-          </p><span>Leave blank for no authentication</span><br>
-          <p><b>Password:</b><br>
-          <input id="mqtt_pass" type="password">
-          </p><span>Leave blank for no authentication</span><br><p>
+          <p><b>Password:</b><span> blank - no authentication</span></p>
+          <input id="mqtt_pass" type="text"><br>
           <button id="save-mqtt">Save</button>
           <b>&nbsp; Connected:&nbsp;<span id="mqtt_connected"></span></b>
 
@@ -134,7 +133,7 @@
 				<p>Ohm Key can be obtained by logging in to OhmConnect, enter Settings and locate the link in "Open Source Projects"</p>
 				<p><b>Example: </b>https://login.ohmconnect.com/verify-ohm-hour/OpnEoVse</p>
 				<p><b>Key: </b>OpnEoVse</p>
-				</p>
+				
 	    </div>
 			 
           </div> 
@@ -156,12 +155,12 @@
                 <h2>Safety</h2>
                 <table>
                 <tr><th>Test</th><th>Disabled</th></tr>
-                <tr><td>GFCI Self Test:</td><td><span id="gfcit"></span><a href="/r%24SS+1"><img src="check.png"><a href="/r%24SS+0"><img src="x.png"></a></td></tr>
-                <tr><td>Ground Monitoring:</td><td><span id="groundt"></span><a href="/r%24SG+1"><img src="check.png"><a href="/r%24SG+0"><img src="x.png"></a></td></tr>
-                <tr><td>Stuck Contact Detection:</td><td><span id="relayt"></span><a href="/r%24SR+1"><img src="check.png"><a href="/r%24SR+0"><img src="x.png"></a></td></tr>
-                <tr><td>Temperature Monitoring:</td><td><span id="tempt"></span><a href="/"><img src="check.png"><a href="/"><img src="x.png"></a></td></tr>
-                <tr><td>Diode Check:</td><td><span id="diodet"></span><a href="/r%24SD+1"><img src="check.png"><a href="/r%24SD+0"><img src="x.png"></a></td></tr>
-                <tr><td>Vent Required:</td><td><span id="ventt"></span><a href="/r%24SV+1"><img src="check.png"><a href="/r%24SV+0"><img src="x.png"></a></td></tr>
+                <tr><td>GFCI Self Test:</td><td><span id="gfcit"></span><a href="/r%24SS+1"><img src="check.png"></a><a href="/r%24SS+0"><img src="x.png"></a></td></tr>
+                <tr><td>Ground Monitoring:</td><td><span id="groundt"></span><a href="/r%24SG+1"><img src="check.png"></a><a href="/r%24SG+0"><img src="x.png"></a></td></tr>
+                <tr><td>Stuck Contact Detection:</td><td><span id="relayt"></span><a href="/r%24SR+1"><img src="check.png"></a><a href="/r%24SR+0"><img src="x.png"></a></td></tr>
+                <tr><td>Temperature Monitoring:</td><td><span id="tempt"></span><a href="/"><img src="check.png"></a><a href="/"><img src="x.png"></a></td></tr>
+                <tr><td>Diode Check:</td><td><span id="diodet"></span><a href="/r%24SD+1"><img src="check.png"></a><a href="/r%24SD+0"><img src="x.png"></a></td></tr>
+                <tr><td>Vent Required:</td><td><span id="ventt"></span><a href="/r%24SV+1"><img src="check.png"></a><a href="/r%24SV+0"><img src="x.png"></a></td></tr>
                 <tr><th>Error</th><th>Count</th></tr>
                 <tr><td>GFCI:</td><td><span id="gfcicount"></span></td></tr>
                 <tr><td>No Ground:</td><td><span id="nogndcount"></span></td></tr>
@@ -255,7 +254,7 @@
                   <tr><td>$SV</td><td>Enable (1) / Disable (0) vent required check</td></tr>
                   </table>
 			</div>
-				  <div class="box380">
+			<div class="box380">
                <h2>RAPI System Functions</h2>
                <table>
 				  <tr><th>Function</th><th>Description</th></tr>
@@ -270,13 +269,16 @@
         </div>
 	</div>
       
+   
     
-    </body>
-</html>
   <div id="footer">
       <br><b> Powered by <a href="http://www.openevse.com">OpenEVSE</a> and <a href="http://openenergymonitor.org">OpenEnergyMonitor</a></b>
 	  <br> by Chris Howell, Trystan Lea, Glyn Hudson
   </div>
-  
-<script src="config.js"></script>
 
+
+<script src="config.js"></script>
+</div> 
+</div>
+</body>
+</html>
