@@ -199,6 +199,10 @@ unsigned long packets_sent = 0;
 unsigned long packets_success = 0;
 unsigned long comm_sent = 0;
 unsigned long comm_success = 0;
+int rapi_command = 1;
+int rapi_command_sent = 0;
+int comm_Delay = 1000; //Delay between each command and read or write
+unsigned long comm_Timer = 0; //Timer for Comm requests
 
 String getContentType(String filename){
   if(server.hasArg("download")) return "application/octet-stream";
@@ -338,7 +342,7 @@ void startClient() {
 #define EEPROM_MQTT_FEED_PREFIX_SIZE  10
 #define EEPROM_WWW_USER_SIZE      16
 #define EEPROM_WWW_PASS_SIZE      16
-#define EEPROM_OHM_KEY_SIZE               8
+#define EEPROM_OHM_KEY_SIZE       8
 #define EEPROM_SIZE 512
 
 #define EEPROM_ESID_START         0
@@ -670,9 +674,6 @@ void handleLastValues() {
 
 void handleSaveOhmkey() {
   String qohm = server.arg("ohm");
-
-  decodeURI(qohm);
-
   ohm = qohm;
 
   EEPROM_write_string(EEPROM_OHM_KEY_START, EEPROM_OHM_KEY_SIZE, qohm);
@@ -937,6 +938,7 @@ void mqtt_publish(String base_topic, String prefix, String data){
 void mqtt_loop()
 {
   if (!mqttclient.connected()) {
+     
     long now = millis();
     // try and reconnect continuously for first 5s then try again once every 10s
     if ( (now < 50000) || ((now - lastMqttReconnectAttempt)  > 100000) ) {
@@ -957,14 +959,49 @@ void mqtt_loop()
 // Call every time around loop() if connected to the WiFi
 // -------------------------------------------------------------------
 
-void emoncms_publish(String data)
+void emoncms_publish(String url)
 {
-espvcc = ESP.getVcc();
-     espfree = ESP.getFreeHeap();
-     Serial.flush();
-     Serial.println("$GE*B0");
-     comm_sent++;
-     delay(commDelay);
+  packets_sent++;
+  
+  // Send data to Emoncms server
+  String result="";
+  if (emoncms_fingerprint!=0){
+    // HTTPS on port 443 if HTTPS fingerprint is present
+    //DEBUG.println("HTTPS Enabled"); delay(10);
+    result = get_https(emoncms_fingerprint.c_str(), emoncms_server.c_str(), url, 443);
+  } else {
+    // Plain HTTP if other emoncms server e.g EmonPi
+    //DEBUG.println("Plain old HTTP"); delay(10);
+    result = get_http(emoncms_server.c_str(), url);
+  }
+  if (result == "ok"){
+    packets_success++;
+    emoncms_connected = true;
+  }
+  else{
+    emoncms_connected=false;
+    //DEBUG.print("Emoncms error: ");
+    //DEBUG.println(result);
+  }
+}
+
+// -------------------------------------------------------------------
+// OpenEVSE Request
+//
+// Get RAPI Values
+// -------------------------------------------------------------------
+
+void update_rapi_values(){
+   if ((millis() - comm_Timer) >= comm_Delay){  
+     if (rapi_command_sent == 0){
+       Serial.flush();
+     }
+     if (rapi_command_sent == 0 && rapi_command == 1){
+       espvcc = ESP.getVcc();
+       espfree = ESP.getFreeHeap();
+       Serial.println("$GE*B0");
+     }
+     if (rapi_command_sent == 1 && rapi_command == 1){
        while(Serial.available()) {
          String rapiString = Serial.readStringUntil('\r');
          if ( rapiString.startsWith("$OK ") ) {
@@ -974,10 +1011,11 @@ espvcc = ESP.getVcc();
            pilot = qrapi.toInt();
          }
        }
-     Serial.flush();
-     Serial.println("$GS*BE");
-     comm_sent++;
-     delay(commDelay);
+     }
+     if (rapi_command_sent == 0 && rapi_command == 2){
+       Serial.println("$GS*BE");
+       }
+     if (rapi_command_sent == 1 && rapi_command == 2){
        while(Serial.available()) {
          String rapiString = Serial.readStringUntil('\r');
          if ( rapiString.startsWith("$OK ") ) {
@@ -1019,88 +1057,103 @@ espvcc = ESP.getVcc();
            }
            if (state == 255) {
              estate = "Disabled";
-           }                 
-           //last_datastr = ",State:";
-           //last_datastr += estate;
+           }         
          }
-       }    
-  
-     delay(commDelay);
-     Serial.flush();
-     Serial.println("$GG*B2");
-     comm_sent++;
-     delay(commDelay);
-     while(Serial.available()) {
-       String rapiString = Serial.readStringUntil('\r');
-       if ( rapiString.startsWith("$OK") ) {
-         comm_success++;
-         String qrapi; 
-         qrapi = rapiString.substring(rapiString.indexOf(' '));
-         amp = qrapi.toInt();
-         String qrapi1;
-         qrapi1 = rapiString.substring(rapiString.lastIndexOf(' '));
-         volt = qrapi1.toInt();
-       }
-    }  
-    Serial.flush(); 
-    Serial.println("$GP*BB");
-    comm_sent++;
-    delay(commDelay);
-    while(Serial.available()) {
-      String rapiString = Serial.readStringUntil('\r');
-      if (rapiString.startsWith("$OK") ) {
-        comm_success++;
-        String qrapi; 
-        qrapi = rapiString.substring(rapiString.indexOf(' '));
-        temp1 = qrapi.toInt();
-        String qrapi1;
-        int firstRapiCmd = rapiString.indexOf(' ');
-        qrapi1 = rapiString.substring(rapiString.indexOf(' ', firstRapiCmd + 1 ));
-        temp2 = qrapi1.toInt();
-        String qrapi2;
-        qrapi2 = rapiString.substring(rapiString.lastIndexOf(' '));
-        temp3 = qrapi2.toInt();
+       }     
+     }
+     if (rapi_command_sent == 0 && rapi_command == 3){
+       Serial.println("$GG*B2");
       }
-    } 
-// Create the JSON String
-  
-  String url = e_url;
-  url += String(emoncms_node)+"&json={";
-  data = "";
-  data += "OpenEVSE_AMP:"+String(amp)+",";
-  data += "OpenEVSE_TEMP1:"+String(temp1)+",";
-  data += "OpenEVSE_TEMP2:"+String(temp2)+",";
-  data += "OpenEVSE_TEMP3:"+String(temp3)+",";
-  data += "OpenEVSE_PILOT:"+String(pilot)+",";
-  data += "OpenEVSE_STATE:"+String(state);
-  url += data;
-  url += "}&devicekey="+String(emoncms_apikey);
-     
-  packets_sent++;
-  
-  // Send data to Emoncms server
-  String result="";
-  if (emoncms_fingerprint!=0){
-    // HTTPS on port 443 if HTTPS fingerprint is present
-    //DEBUG.println("HTTPS Enabled"); delay(10);
-    result = get_https(emoncms_fingerprint.c_str(), emoncms_server.c_str(), url, 443);
-  } else {
-    // Plain HTTP if other emoncms server e.g EmonPi
-    //DEBUG.println("Plain old HTTP"); delay(10);
-    result = get_http(emoncms_server.c_str(), url);
-  }
-  if (result == "ok"){
-    packets_success++;
-    emoncms_connected = true;
-  }
-  else{
-    emoncms_connected=false;
-    //DEBUG.print("Emoncms error: ");
-    //DEBUG.println(result);
-  }
+     if (rapi_command_sent == 1 && rapi_command == 3){
+       while(Serial.available()) {
+         String rapiString = Serial.readStringUntil('\r');
+         if ( rapiString.startsWith("$OK") ) {
+           comm_success++;
+           String qrapi; 
+           qrapi = rapiString.substring(rapiString.indexOf(' '));
+           amp = qrapi.toInt();
+           String qrapi1;
+           qrapi1 = rapiString.substring(rapiString.lastIndexOf(' '));
+           volt = qrapi1.toInt();
+         }
+       }
+     }
+     if (rapi_command_sent == 0 && rapi_command == 4){ 
+       Serial.println("$GP*BB");
+     }
+     if (rapi_command_sent == 1 && rapi_command == 4){ 
+       while(Serial.available()) {
+         String rapiString = Serial.readStringUntil('\r');
+         if (rapiString.startsWith("$OK") ) {
+          comm_success++;
+          String qrapi; 
+          qrapi = rapiString.substring(rapiString.indexOf(' '));
+          temp1 = qrapi.toInt();
+          String qrapi1;
+          int firstRapiCmd = rapiString.indexOf(' ');
+          qrapi1 = rapiString.substring(rapiString.indexOf(' ', firstRapiCmd + 1 ));
+          temp2 = qrapi1.toInt();
+          String qrapi2;
+          qrapi2 = rapiString.substring(rapiString.lastIndexOf(' '));
+          temp3 = qrapi2.toInt();
+         }
+      }
+      rapi_command = 0; //Last RAPI command
+    }
+    if (rapi_command_sent == 0){
+      rapi_command_sent = 1;
+      comm_sent++;
+    }
+    else{
+     rapi_command++;
+     rapi_command_sent = 0; 
+    }
+    comm_Timer = millis();
+  }        
 }
 
+// -------------------------------------------------------------------
+// Ohm Connect "Ohm Hour"
+//
+// Call every once every 60 seconds if connected to the WiFi and 
+// Ohm Key is set
+// -------------------------------------------------------------------
 
+void ohm_connect(){
+  Timer2 = millis();
+     WiFiClientSecure client;
+     if (!client.connect(ohm_host, ohm_httpsPort)) {
+       Serial.println("connection failed");
+       return;
+     }
+     if (client.verify(ohm_fingerprint, ohm_host)) {
+       client.print(String("GET ") + ohm_url + ohm + " HTTP/1.1\r\n" +
+               "Host: " + ohm_host + "\r\n" +
+               "User-Agent: OpenEVSE\r\n" +
+               "Connection: close\r\n\r\n");
+     String line = client.readString();
+     if(line.indexOf("False") > 0) {
+       //Serial.println("It is not an Ohm Hour");
+       ohm_hour = "False";
+       if (evse_sleep == 1){
+         evse_sleep = 0;
+         Serial.println("$FE*AF");
+       }
+     }
+     if(line.indexOf("True") > 0) {
+       //Serial.println("Ohm Hour");
+       ohm_hour = "True";
+       if (evse_sleep == 0){
+         evse_sleep = 1;
+         Serial.println("$FS*BD");
+       }
+     }
+    //Serial.println(line);
+  } 
+  else {
+    Serial.println("Certificate Invalid");
+  }
+}
 
 
 
@@ -1357,10 +1410,10 @@ WiFi.disconnect();
   server.on("/saveemoncms", handleSaveEmoncms);
   server.on("/savemqtt", handleSaveMqtt);
   server.on("/saveadmin", handleSaveAdmin);
+  server.on("/saveohmkey",handleSaveOhmkey);
   server.on("/scan", handleScan);
   server.on("/apoff",handleAPOff);
-  server.on("/rapiupdate",handleUpdate);
-
+  
   server.onNotFound([](){
     if(!handleFileRead(server.uri()))
       server.send(404, "text/plain", "NotFound");
@@ -1370,6 +1423,7 @@ WiFi.disconnect();
 	server.begin();
 	//Serial.println("HTTP server started");
   Timer = millis();
+  comm_Timer = millis();
   lastMqttReconnectAttempt = 0;
   delay(5000); //gives OpenEVSE time to finish self test on cold start
   handleRapiRead();
@@ -1382,6 +1436,7 @@ WiFi.disconnect();
 void loop() {
 ArduinoOTA.handle();
 server.handleClient();           // Web server
+update_rapi_values();
 dnsServer.processNextRequest();  // Captive portal DNS re-dierct
 
   // If Wifi is connected & MQTT server has been set then connect to mqtt server
@@ -1398,54 +1453,35 @@ dnsServer.processNextRequest();  // Captive portal DNS re-dierct
   }
 
 // If Ohm Key is set - Check for Ohm Hour once every minute   
-if (wifi_mode == 0 || wifi_mode == 3 && ohm != 0){
+if ((wifi_mode==WIFI_MODE_STA || wifi_mode==WIFI_MODE_AP_AND_STA) && ohm != 0){
   if ((millis() - Timer2) >= 60000){
-     Timer2 = millis();
-     WiFiClientSecure client;
-     if (!client.connect(ohm_host, ohm_httpsPort)) {
-       Serial.println("connection failed");
-       return;
-     }
-     if (client.verify(ohm_fingerprint, ohm_host)) {
-       client.print(String("GET ") + ohm_url + ohm + " HTTP/1.1\r\n" +
-               "Host: " + ohm_host + "\r\n" +
-               "User-Agent: OpenEVSE\r\n" +
-               "Connection: close\r\n\r\n");
-     String line = client.readString();
-     if(line.indexOf("False") > 0) {
-       //Serial.println("It is not an Ohm Hour");
-       ohm_hour = "False";
-       if (evse_sleep == 1){
-         evse_sleep = 0;
-         Serial.println("$FE*AF");
-       }
-     }
-     if(line.indexOf("True") > 0) {
-       //Serial.println("Ohm Hour");
-       ohm_hour = "True";
-       if (evse_sleep == 0){
-         evse_sleep = 1;
-         Serial.println("$FS*BD");
-       }
-     }
-    //Serial.println(line);
-  } 
-  else {
-    Serial.println("Certificate Invalid");
-    }
-  }
-} 
+     ohm_connect();
+   }
+}    
 
 // If EMONCMS Key is set - Send data twice every minute
 
  if (wifi_mode==WIFI_MODE_STA || wifi_mode==WIFI_MODE_AP_AND_STA){
    if ((millis() - Timer) >= 30000){
      Timer = millis();
+     // Create the JSON String
+  
+  String url = e_url;
+  url += String(emoncms_node)+"&json={";
+  data += "OpenEVSE_AMP:"+String(amp)+",";
+  data += "OpenEVSE_TEMP1:"+String(temp1)+",";
+  data += "OpenEVSE_TEMP2:"+String(temp2)+",";
+  data += "OpenEVSE_TEMP3:"+String(temp3)+",";
+  data += "OpenEVSE_PILOT:"+String(pilot)+",";
+  data += "OpenEVSE_STATE:"+String(state);
+  url += data;
+  url += "}&devicekey="+String(emoncms_apikey);
+     
 
 // Send data to EmonCMS
 
       if(emoncms_apikey != 0){
-        emoncms_publish(data);
+        emoncms_publish(url);
       }
       
 // Send data to MQTT
