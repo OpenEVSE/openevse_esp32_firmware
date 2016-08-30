@@ -28,9 +28,9 @@ From: https://github.com/esp8266/Arduino/blob/master/doc/filesystem.md
 
 #### 3. Compile and Upload
 
-- Open OpenEVSE_RAPI_WiFi_ESP8266.ino in the Arduino IDE.
+- Open EmonESP.ino in the Arduino IDE.
 - Compile and Upload as normal
-- Upload web server files using the ESP8266 Data Upload tool under Arduino tools.
+- Upload home.html web page using the ESP8266 Sketch Data Upload tool under Arduino tools.
 
 ### Licence
 
