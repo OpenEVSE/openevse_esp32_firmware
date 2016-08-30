@@ -2,7 +2,7 @@
 #define _EMONESP_H
 
 // Uncomment to use hardware UART 1 for debug else use UART 0
-//#define DEBUG_SERIAL1
+#define DEBUG_SERIAL1
 #ifdef DEBUG_SERIAL1
 #define DEBUG Serial1
 #else
