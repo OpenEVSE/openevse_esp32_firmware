@@ -52,3 +52,5 @@ $RECYCLE.BIN/
 
 # Windows shortcuts
 *.lnk
+.pioenvs
+.piolibdeps
