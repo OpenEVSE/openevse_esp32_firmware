@@ -15,16 +15,35 @@ int i = 0;
 
 
 // -------------------------------------------------------------------
+// Function to be called when msg is received on MQTT subscribed topic
+//
+// -------------------------------------------------------------------
+void mqttmsg_callback(char* topic, byte* payload, unsigned int length)
+{
+  DEBUG.println("MQTT message received");
+  DEBUG.print("Message arrived [");
+  DEBUG.print(topic);
+  DEBUG.print("] ");
+  for (int i=0;i<length;i++) {
+    DEBUG.print((char)payload[i]);
+  }
+  DEBUG.println();
+}
+
+// -------------------------------------------------------------------
 // MQTT Connect
 // -------------------------------------------------------------------
 boolean mqtt_connect()
 {
   mqttclient.setServer(mqtt_server.c_str(), 1883);
+  mqttclient.setCallback(mqttmsg_callback); //function to be called when mqtt msg is received on subscribed topic
   DEBUG.println("MQTT Connecting...");
   String strID = String(ESP.getChipId());
   if (mqttclient.connect(strID.c_str(), mqtt_user.c_str(), mqtt_pass.c_str())) {  // Attempt to connect
     DEBUG.println("MQTT connected");
     mqttclient.publish(mqtt_topic.c_str(), "connected"); // Once connected, publish an announcement..
+    String mqtt_sub_topic = mqtt_topic + "/rapi/#";
+    mqttclient.subscribe(mqtt_sub_topic.c_str());
   } else {
     DEBUG.print("MQTT failed: ");
     DEBUG.println(mqttclient.state());

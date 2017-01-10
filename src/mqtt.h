@@ -3,6 +3,7 @@
 
 #include <Arduino.h>
 
+extern void mqtt_msg_callback();
 extern void mqtt_loop();
 extern void mqtt_publish(String data);
 extern void mqtt_restart();
