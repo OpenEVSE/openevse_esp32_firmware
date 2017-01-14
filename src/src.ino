@@ -1,9 +1,9 @@
 
 /*
  * Copyright (c) 2015-2016 Chris Howell
- * 
+ *
  * -------------------------------------------------------------------
- * 
+ *
  * Additional Adaptation of OpenEVSE ESP Wifi
  * by Trystan Lea, Glyn Hudson, OpenEnergyMonitor
  * All adaptation GNU General Public License as below.
@@ -71,12 +71,12 @@ void setup() {
   DEBUG.println(ESP.getChipId());
   DEBUG.println("Firmware: "+ currentfirmware);
   
-  config_load_settings(); 
-  wifi_setup(); 
-  web_server_setup(); 
+  config_load_settings();
+  wifi_setup();
+  web_server_setup();
   delay(5000); //gives OpenEVSE time to finish self test on cold start
   handleRapiRead(); //Read all RAPI values
-  //  ota_setup();   
+  //  ota_setup();
 
 } // end setup
 
@@ -103,7 +103,7 @@ void loop(){
 // -------------------------------------------------------------------
     if ((millis() - Timer1) >= 30000){
       create_rapi_json(); // create JSON Strings for EmonCMS and MQTT
-      emoncms_publish(url);
+      if(emoncms_apikey != 0) emoncms_publish(url);
       Timer1 = millis();
      
       if(mqtt_server != 0) {
