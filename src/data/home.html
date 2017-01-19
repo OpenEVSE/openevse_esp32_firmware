@@ -63,7 +63,7 @@
                 </div>
                 <div id="wait-view" style="display:none">
                     <p>Connecting to WIFI Network...</p>
-                </div>		
+                </div>
             </div>
          	<div class="box380">
 			<h2>Administration</h2>
@@ -72,13 +72,13 @@
 				<p><b>Password:</b><br>
 				<input id="www_pass" type="text" value="openevse">
 				<button id="save-admin">Save</button>
-			</div>		
+			</div>
 		
 		<div class="box380">
 			<h2>Firmware</h2>
 			<p><b>Firmware: </b><span id="version"></span></p>
 						<iframe style="width:380px; height:50px;" frameborder="0" scrolling="no" marginheight="0" marginwidth="0" src="/update">
-						</iframe> 
+						</iframe>
 						<p><b>Free RAM:</b><br><span id="free_heap"></span>B</p>
 						<button id="restart">Restart</button>
 						<button id="reset">Reset config and reboot</button>
@@ -91,15 +91,19 @@
 			<h2>Energy Monitoring</h2>
 				<p><b>Server:</b><br>
 				<input id="emoncms_server" type="text" value="data.openevse.com">
-				<span>e.g 'data.openevse.com', 'emoncms.org','192.168.1.4/emoncms'</span><br>
+				<p></p><span>e.g 'data.openevse.com', 'emoncms.org', '192.168.1.4/emoncms'</span><br>
 				<p><b>Node:</b><br>
-				<input id="emoncms_node" type="text" value="0">
-				</p><span>Note: EmonCMS only supports numberical nodeID's 1-32</span><br><br>
+				<input id="emoncms_node" type="text">
+				</p><span>Emoncms.org only supports numberical nodeID's (1-32)</span>
 				<p><b>Write apikey*:</b><br>
 				<input id="emoncms_apikey" type="text"><br>
 				<p><b>SSL SSH-1 Fingerprint:</b><br>
 				<input id="emoncms_fingerprint" type="text"><br>
-				</p>HTTPS will be enabled if present e.g: 7D:82:15:BE:D7:BC:72:58:87:7D:8E:40:D4:80:BA:1A:9F:8B:8D:DA<br>
+        <br>HTTPS will be enabled if present e.g:
+        <span id=small-text>
+    			7D:82:15:BE:D7:BC:72:58:87:7D:8E:40:D4:80:BA:1A:9F:8B:8D:DA
+  			</span>
+      	<br></br>
 				<button id="save-emoncms">Save</button>
 				<b>&nbsp; Connected:&nbsp;<span id="emoncms_connected"></span></b><br><br>
 				<span id="psuccess"></span>
@@ -115,10 +119,16 @@
         </p><span>e.g 'openevse/tesla', 'openevse/leaf'</span><br><br>
           <p><b>MQTT feed prefix:</b><br>
           <input id="mqtt_feed_prefix" type="text">
+              <br> Value to prefix the feed names with:</br>
+          <span id="small-text">
+              &#60;base-topic&#62;/&#60;prefix&#62;&#60;feed-name&#62;.
+              Required for posting to AdafruitIO. Leave blank for no prefix.
+          </span>
           <p><b>Username:</b><span> blank - no authentication</span></p>
           <input id="mqtt_user" type="text">
           <p><b>Password:</b><span> blank - no authentication</span></p>
           <input id="mqtt_pass" type="text"><br>
+          <br></br>
           <button id="save-mqtt">Save</button>
           <b>&nbsp; Connected:&nbsp;<span id="mqtt_connected"></span></b>
 
@@ -136,7 +146,7 @@
 				
 	    </div>
 			 
-          </div> 
+          </div>
        <div id="content-3">
 			<div class="box380">
                 <h2>Current</h2>
@@ -206,11 +216,11 @@
 				<tr><td>Temp3</td><td><span id="temp3"></span></td></tr>
                 </table>
              </div>
-		 </div>  
+		 </div>
         <div id="content-4">
 			<div class="box380">
              <iframe style="width:380px; height:670px;" frameborder="0" scrolling="no" marginheight="0" marginwidth="0" src="/rapi">
-			</iframe>   
+			</iframe>
 			</div>
              <div class="box380">
                <h2>RAPI Get Commands</h2>
@@ -265,7 +275,7 @@
                   <tr><td>$FR</td><td>Reset EVSE</td></tr>
                   <tr><td>$FS</td><td>Put EVSE to sleep</td></tr>
                </table>
-			</div>  
+			</div>
         </div>
 	</div>
       
@@ -278,7 +288,7 @@
 
 
 <script src="config.js"></script>
-</div> 
+</div>
 </div>
 </body>
 </html>
