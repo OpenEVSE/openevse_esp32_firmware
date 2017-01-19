@@ -88,6 +88,8 @@ void loop(){
   web_server_loop();
   update_rapi_values();
   wifi_loop();
+  if (mqtt_server !=0) mqtt_loop();
+     
   
   if (wifi_mode==WIFI_MODE_STA || wifi_mode==WIFI_MODE_AP_AND_STA){
 // -------------------------------------------------------------------
@@ -105,11 +107,10 @@ void loop(){
       create_rapi_json(); // create JSON Strings for EmonCMS and MQTT
       if(emoncms_apikey != 0) emoncms_publish(url);
       Timer1 = millis();
-     
-      if(mqtt_server != 0) {
-        mqtt_loop();
-        mqtt_publish(data);
-      }
+      if(mqtt_server != 0) mqtt_publish(data);
     }
-  }
+  } // end WiFi connected
+
+  
+  
 } // end loop

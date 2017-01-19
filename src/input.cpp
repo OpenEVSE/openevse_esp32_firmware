@@ -81,7 +81,7 @@ void create_rapi_json(){
   data += "OpenEVSE_STATE:"+String(state);
   url += data;
   url += "}&devicekey="+String(emoncms_apikey);
-  DEBUG.print(emoncms_server.c_str() + String(url));
+  //DEBUG.print(emoncms_server.c_str() + String(url));
 }
 
 // -------------------------------------------------------------------
@@ -91,7 +91,7 @@ void create_rapi_json(){
 // -------------------------------------------------------------------
 
 void update_rapi_values(){
-   if ((millis() - comm_Timer) >= comm_Delay){  
+   if ((millis() - comm_Timer) >= comm_Delay){
      if (rapi_command_sent == 0){
        Serial.flush();
      }
@@ -105,7 +105,7 @@ void update_rapi_values(){
          String rapiString = Serial.readStringUntil('\r');
          if ( rapiString.startsWith("$OK ") ) {
            comm_success++;
-           String qrapi; 
+           String qrapi;
            qrapi = rapiString.substring(rapiString.indexOf(' '));
            pilot = qrapi.toInt();
          }
@@ -118,7 +118,7 @@ void update_rapi_values(){
        while(Serial.available()) {
          String rapiString = Serial.readStringUntil('\r');
          if ( rapiString.startsWith("$OK ") ) {
-           comm_success++; 
+           comm_success++;
            String qrapi = rapiString.substring(rapiString.indexOf(' '));
            state = strtol(qrapi.c_str(), NULL, 16);
            if (state == 1) {
@@ -135,7 +135,7 @@ void update_rapi_values(){
            }
            if (state == 5) {
              estate = "Diode_Check_Failed";
-           } 
+           }
            if (state == 6) {
              estate = "GFCI_Fault";
            }
@@ -156,9 +156,9 @@ void update_rapi_values(){
            }
            if (state == 255) {
              estate = "Disabled";
-           }         
+           }
          }
-       }     
+       }
      }
      if (rapi_command_sent == 0 && rapi_command == 3){
        Serial.println("$GG*B2");
@@ -168,7 +168,7 @@ void update_rapi_values(){
          String rapiString = Serial.readStringUntil('\r');
          if ( rapiString.startsWith("$OK") ) {
            comm_success++;
-           String qrapi; 
+           String qrapi;
            qrapi = rapiString.substring(rapiString.indexOf(' '));
            amp = qrapi.toInt();
            String qrapi1;
@@ -177,15 +177,15 @@ void update_rapi_values(){
          }
        }
      }
-     if (rapi_command_sent == 0 && rapi_command == 4){ 
+     if (rapi_command_sent == 0 && rapi_command == 4){
        Serial.println("$GP*BB");
      }
-     if (rapi_command_sent == 1 && rapi_command == 4){ 
+     if (rapi_command_sent == 1 && rapi_command == 4){
        while(Serial.available()) {
          String rapiString = Serial.readStringUntil('\r');
          if (rapiString.startsWith("$OK") ) {
           comm_success++;
-          String qrapi; 
+          String qrapi;
           qrapi = rapiString.substring(rapiString.indexOf(' '));
           temp1 = qrapi.toInt();
           String qrapi1;
@@ -205,14 +205,14 @@ void update_rapi_values(){
     }
     else{
      rapi_command++;
-     rapi_command_sent = 0; 
+     rapi_command_sent = 0;
     }
     comm_Timer = millis();
   }
 }
 
 void handleRapiRead() {
-  Serial.flush(); 
+  Serial.flush();
   Serial.println("$GV*C1");
   comm_sent++;
   delay(commDelay);
@@ -257,7 +257,7 @@ void handleRapiRead() {
         else {
           current_l2min = rapiString.substring(firstRapiCmd, secondRapiCmd);
           current_l2max = rapiString.substring(secondRapiCmd);
-        }   
+        }
       }
     }
   Serial.println("$GA*AC");
@@ -315,7 +315,7 @@ void handleRapiRead() {
          String rapiString = Serial.readStringUntil('\r');
          if ( rapiString.startsWith("$OK ") ) {
            comm_success++;
-           String qrapi; 
+           String qrapi;
            qrapi = rapiString.substring(rapiString.indexOf(' '));
            pilot = qrapi.toInt();
            String flag = rapiString.substring(rapiString.lastIndexOf(' '));
@@ -333,4 +333,4 @@ void handleRapiRead() {
            temp_ck = bitRead(flags, 10);
          }
        }
-     }  
+     }
