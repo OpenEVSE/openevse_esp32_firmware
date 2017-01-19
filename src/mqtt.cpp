@@ -20,10 +20,9 @@ int i = 0;
 // -------------------------------------------------------------------
 void mqttmsg_callback(char* topic, byte* payload, unsigned int length)
 {
-  DEBUG.println("MQTT message received");
-  DEBUG.print("Message arrived [");
+  DEBUG.print("Rx MQTT RAPI: ");
   DEBUG.print(topic);
-  DEBUG.print("] ");
+  DEBUG.print(" ");
   for (int i=0;i<length;i++) {
     DEBUG.print((char)payload[i]);
   }

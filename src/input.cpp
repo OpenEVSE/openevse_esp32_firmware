@@ -73,12 +73,12 @@ void create_rapi_json(){
   url = e_url;
   data = "";
   url += String(emoncms_node)+"&json={";
-  data += "OpenEVSE_AMP:"+String(amp)+",";
-  data += "OpenEVSE_TEMP1:"+String(temp1)+",";
-  data += "OpenEVSE_TEMP2:"+String(temp2)+",";
-  data += "OpenEVSE_TEMP3:"+String(temp3)+",";
-  data += "OpenEVSE_PILOT:"+String(pilot)+",";
-  data += "OpenEVSE_STATE:"+String(state);
+  data += "amp:"+String(amp)+",";
+  data += "temp1:"+String(temp1)+",";
+  data += "temp2:"+String(temp2)+",";
+  data += "temp3:"+String(temp3)+",";
+  data += "pilot:"+String(pilot)+",";
+  data += "state:"+String(state);
   url += data;
   url += "}&devicekey="+String(emoncms_apikey);
   //DEBUG.print(emoncms_server.c_str() + String(url));
