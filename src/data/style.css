@@ -41,7 +41,7 @@ tr:nth-child(2n+2) {background-color:#f3f3f3;}
 }
 
 h1 {
-	padding-bottom: 0.3em;  
+	padding-bottom: 0.3em;
 	color: #008080;
     font-size: 45px;
     font-weight: normal;
@@ -138,7 +138,7 @@ input[type="password"] {
 #container {
     margin: 20;
 	height: inherit;
-	padding-bottom:20px;   
+	padding-bottom:20px;
 }
 
 #container input {
@@ -147,14 +147,14 @@ input[type="password"] {
 }
 
 #container label {
-	background: #008080; 
+	background: #008080;
 	border-radius: 5px;
 	box-shadow: 0 2px 2px 0 rgba(0, 0, 0, 0.4);
-	color: #fff;  
+	color: #fff;
 	cursor: pointer;
 	display: block;
 	float: left;
-	font-size: 1em;  
+	font-size: 1em;
 	height: 2.5em;
 	line-height: 2.5em;
 	margin-right: .25em;
@@ -163,13 +163,13 @@ input[type="password"] {
 }
 
 #container input:hover + label {
-	background: #e1e1e1;  
-	color: #000;  
+	background: #e1e1e1;
+	color: #000;
 }
 
 #container input:checked + label {
-	background: #f1f1f1;  
-	color: #000; 
+	background: #f1f1f1;
+	color: #000;
 	position: relative;
 	z-index: 6;
 	/*
@@ -184,12 +184,12 @@ input[type="password"] {
 	visibility: visible;
 	background: #e1e1e1;
 	border-radius: .5em .5em .5em .5em;
-	box-shadow: 1px 7px 7px 1px rgba(0, 0, 0, 0.4);	
-	min-height: 50em;  
+	box-shadow: 1px 7px 7px 1px rgba(0, 0, 0, 0.4);
+	min-height: 50em;
     position: relative;
 	width: 100%;
 	height: 88%;
-	z-index: 5; 
+	z-index: 5;
 }
 
 #content div {
@@ -224,17 +224,17 @@ input[type="password"] {
 }
 
 #content-1 iframe {
-    position: relative; 
+    position: relative;
     background: #ffffff;
     opacity: 100;
     z-index: 7;
 }
 
 #content-2 div {
-    position: relative;    
+    position: relative;
     background: #ffffff;
     opacity: 100;
-    z-index: 8;  
+    z-index: 8;
 }
 #content-2 div input[type=text] {
     visibility: visible;
@@ -244,31 +244,31 @@ input[type="password"] {
 }
 
 #content-3 div {
-    position: relative; 
+    position: relative;
     background: #ffffff;
     opacity: 100;
-    z-index: 9;   
+    z-index: 9;
 }
 
 #content-3 iframe {
-    position: relative; 
+    position: relative;
     background: #ffffff;
     opacity: 100;
     z-index: 9;
 }
 
 #content-4 div {
-    position: relative; 
+    position: relative;
     background: #ffffff;
     opacity: 100;
-    z-index: 9;  
+    z-index: 9;
 }
 	
 #content-4 iframe {
-    position: relative; 
+    position: relative;
     background: #ffffff;
     opacity: 100;
-    z-index: 9;   
+    z-index: 9;
 }
 
 #tab-1:checked ~ #content #content-1,
@@ -285,4 +285,9 @@ input[type="password"] {
     font-size: 15px;
     text-align: center;
     margin-bottom: 0;
+}
+
+#small-text{
+font-size: 10px;
+word-wrap: break-word;
 }
