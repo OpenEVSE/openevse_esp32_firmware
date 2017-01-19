@@ -15,16 +15,50 @@ int i = 0;
 
 
 // -------------------------------------------------------------------
+// MQTT msg Received callback function:
+// Function to be called when msg is received on MQTT subscribed topic
+// Used to receive RAPI commands via MQTT
+// //e.g to set current to 13A: <base-topic>/rapi/SC 13
+// -------------------------------------------------------------------
+void mqttmsg_callback(char* topic, byte* payload, unsigned int length)
+{
+
+  // ASSUME RAPI COMMANDS ARE **ALWAYS PREFIX BY $ AND TWO CHARACTERS LONG**
+  
+  // print RAPI command received via MQTT sub topic e.g. "$SC"
+  String topic_string = String(topic);
+  int rapi_character_index = topic_string.indexOf('$');
+  
+  if (rapi_character_index > 1){
+    // Print to serial RAPI command from mqtt-sub topic
+    for (int i=rapi_character_index; i<rapi_character_index+3; i++){
+      DEBUG.print(topic[i]);
+    }
+    DEBUG.print(" ");
+    // print RAPI command value received via MQTT msg
+    for (int i=0;i<length;i++) {
+      DEBUG.print((char)payload[i]);
+    }
+    DEBUG.println("");
+  }
+    
+}
+
+// -------------------------------------------------------------------
 // MQTT Connect
 // -------------------------------------------------------------------
 boolean mqtt_connect()
 {
   mqttclient.setServer(mqtt_server.c_str(), 1883);
+  mqttclient.setCallback(mqttmsg_callback); //function to be called when mqtt msg is received on subscribed topic
   DEBUG.println("MQTT Connecting...");
   String strID = String(ESP.getChipId());
   if (mqttclient.connect(strID.c_str(), mqtt_user.c_str(), mqtt_pass.c_str())) {  // Attempt to connect
     DEBUG.println("MQTT connected");
     mqttclient.publish(mqtt_topic.c_str(), "connected"); // Once connected, publish an announcement..
+    String mqtt_sub_topic = mqtt_topic + "/rapi/#";      // MQTT Topic to subscribe to receive RAPI commands via MQTT
+    //e.g to set current to 13A: <base-topic>/rapi/$SC 13
+    mqttclient.subscribe(mqtt_sub_topic.c_str());
   } else {
     DEBUG.print("MQTT failed: ");
     DEBUG.println(mqttclient.state());
@@ -32,6 +66,8 @@ boolean mqtt_connect()
   }
   return (1);
 }
+
+
 
 // -------------------------------------------------------------------
 // Publish to MQTT
@@ -44,6 +80,7 @@ void mqtt_publish(String data)
 {
   String mqtt_data = "";
   String topic = mqtt_topic + "/" + mqtt_feed_prefix;
+  
   int i=0;
   while (int(data[i])!=0)
   {
@@ -73,8 +110,8 @@ void mqtt_publish(String data)
     i++;
     if (int(data[i])==0) break;
   }
-
-  String ram_topic = mqtt_topic + "/" + mqtt_feed_prefix + "freeram";
+  
+  String ram_topic = topic + "freeram";
   String free_ram = String(ESP.getFreeHeap());
   mqttclient.publish(ram_topic.c_str(), free_ram.c_str());
 }
