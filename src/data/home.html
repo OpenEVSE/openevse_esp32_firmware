@@ -117,17 +117,10 @@
           <p><b>Base-topic:</b><br>
           <input id="mqtt_topic" type="text">
         </p><span>e.g 'openevse/tesla', 'openevse/leaf'</span><br><br>
-          <p><b>MQTT feed prefix:</b><br>
-          <input id="mqtt_feed_prefix" type="text">
-              <br> Value to prefix the feed names with:</br>
-          <span id="small-text">
-              &#60;base-topic&#62;/&#60;prefix&#62;&#60;feed-name&#62;.
-              Required for posting to AdafruitIO. Leave blank for no prefix.
-          </span>
           <p><b>Username:</b><span> blank - no authentication</span></p>
           <input id="mqtt_user" type="text">
           <p><b>Password:</b><span> blank - no authentication</span></p>
-          <input id="mqtt_pass" type="password"><br>
+          <input id="mqtt_pass" type="text"><br>
           <br></br>
           <button id="save-mqtt">Save</button>
           <b>&nbsp; Connected:&nbsp;<span id="mqtt_connected"></span></b>

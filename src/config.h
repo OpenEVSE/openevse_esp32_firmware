@@ -24,7 +24,6 @@ extern String mqtt_server;
 extern String mqtt_topic;
 extern String mqtt_user;
 extern String mqtt_pass;
-extern String mqtt_feed_prefix;
 
 //Ohm Connect Settings
 extern String ohm;
@@ -35,7 +34,7 @@ extern String ohm;
 extern void config_load_settings();
 
 extern void config_save_emoncms(String server, String node, String apikey, String fingerprint);
-extern void config_save_mqtt(String server, String topic, String prefix, String user, String pass);
+extern void config_save_mqtt(String server, String topic, String user, String pass);
 extern void config_save_admin(String user, String pass);
 extern void config_save_wifi(String qsid, String qpass);
 extern void config_save_ohm(String qohm);

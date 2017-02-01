@@ -90,7 +90,7 @@ boolean mqtt_connect()
 void mqtt_publish(String data)
 {
   String mqtt_data = "";
-  String topic = mqtt_topic + "/" + mqtt_feed_prefix;
+  String topic = mqtt_topic + "/";
   
   int i=0;
   while (int(data[i])!=0)
@@ -116,7 +116,7 @@ void mqtt_publish(String data)
     //delay(100);
     DEBUG.printf("%s = %s\r\n", topic.c_str(), mqtt_data.c_str());
     mqttclient.publish(topic.c_str(), mqtt_data.c_str());
-    topic = mqtt_topic + "/" + mqtt_feed_prefix;
+    topic = mqtt_topic + "/";
     mqtt_data="";
     i++;
     if (int(data[i])==0) break;

@@ -37,7 +37,6 @@ r1.onreadystatechange = function () {
   if (status.mqtt_server!==0){
     document.getElementById("mqtt_server").value = status.mqtt_server;
     document.getElementById("mqtt_topic").value = status.mqtt_topic;
-	document.getElementById("mqtt_feed_prefix").value = status.mqtt_feed_prefix;
     if (status.mqtt_user!==0){
       document.getElementById("mqtt_user").value = status.mqtt_user;
       document.getElementById("mqtt_pass").value = status.mqtt_pass;
@@ -86,7 +85,7 @@ r1.onreadystatechange = function () {
 };
 r1.send();
 
-var r2 = new XMLHttpRequest(); 
+var r2 = new XMLHttpRequest();
     r2.open("GET", "config", true);
 	r2.timeout = 2000;
     r2.onreadystatechange = function () {
@@ -99,35 +98,35 @@ var r2 = new XMLHttpRequest();
 				document.getElementById("diodet").innerHTML = "Disabled <a title='Enable' href='/r?rapi=%24SD+1'><img src='check.png'></a>";
 				}
 				else {
-				document.getElementById("diodet").innerHTML = "Enabled <a title='Disable' href='/r?rapi=%24SD+0'><img src='x.png'></a>";	
+				document.getElementById("diodet").innerHTML = "Enabled <a title='Disable' href='/r?rapi=%24SD+0'><img src='x.png'></a>";
 				}
               document.getElementById("gfcit").innerHTML = config.gfcit;
 			  if (config.gfcit == "1"){
 				document.getElementById("gfcit").innerHTML = "Disabled <a title='Enable' href='/r?rapi=%24SS+1'><img src='check.png'></a>";
 				}
 				else {
-				document.getElementById("gfcit").innerHTML = "Enabled <a title='Disable' ref='/r?rapi=%24SS+0'><img src='x.png'></a>";	
+				document.getElementById("gfcit").innerHTML = "Enabled <a title='Disable' ref='/r?rapi=%24SS+0'><img src='x.png'></a>";
 				}
               document.getElementById("groundt").innerHTML = config.groundt;
 			  if (config.groundt == "1"){
 				document.getElementById("groundt").innerHTML = "Disabled <a title='Enable' href='/r?rapi=%24SG+1'><img src='check.png'></a>";
 				}
 				else {
-				document.getElementById("groundt").innerHTML = "Enabled <a title='Disable' href='/r?rapi=%24SG+0'><img src='x.png'></a>";	
+				document.getElementById("groundt").innerHTML = "Enabled <a title='Disable' href='/r?rapi=%24SG+0'><img src='x.png'></a>";
 				}
               document.getElementById("relayt").innerHTML = config.relayt;
 			  if (config.relayt == "1"){
 				document.getElementById("relayt").innerHTML = "Disabled <a title='Enable' href='/r?rapi=%24SR+1'><img src='check.png'></a>";
 				}
 				else {
-				document.getElementById("relayt").innerHTML = "Enabled <a title='Disable' href='/r?rapi=%24SR+0'><img src='x.png'></a>";	
+				document.getElementById("relayt").innerHTML = "Enabled <a title='Disable' href='/r?rapi=%24SR+0'><img src='x.png'></a>";
 				}
               document.getElementById("ventt").innerHTML = config.ventt;
 			  if (config.ventt == "1"){
 				document.getElementById("ventt").innerHTML = "Disabled <a title='Enable' href='/r?rapi=%24SV+1'><img src='check.png'></a>";
 				}
 				else {
-				document.getElementById("ventt").innerHTML = "Enabled <a title='Disable' href='/r?rapi=%24SV+0'><title='Disable'><img src='x.png'></a>";	
+				document.getElementById("ventt").innerHTML = "Enabled <a title='Disable' href='/r?rapi=%24SV+0'><title='Disable'><img src='x.png'></a>";
 				}
               document.getElementById("service").innerHTML = config.service;
 			  document.getElementById("l1min").innerHTML = config.l1min;
@@ -141,7 +140,7 @@ var r2 = new XMLHttpRequest();
 				document.getElementById("tempt").innerHTML = "Disabled";
 				}
 				else {
-				document.getElementById("tempt").innerHTML = "Enabled";	
+				document.getElementById("tempt").innerHTML = "Enabled";
 				}
 			  document.getElementById("gfcicount").innerHTML = config.gfcicount;
 			  document.getElementById("nogndcount").innerHTML = config.nogndcount;
@@ -153,7 +152,7 @@ var r2 = new XMLHttpRequest();
   };
   r2.send();
   
-var r3 = new XMLHttpRequest(); 
+var r3 = new XMLHttpRequest();
     r3.open("GET", "rapiupdate", true);
 	r3.timeout = 8000;
     r3.onreadystatechange = function () {
@@ -187,7 +186,7 @@ setInterval(update,10000);
 // -----------------------------------------------------------------------
 function update() {
 	
-	var r3 = new XMLHttpRequest(); 
+	var r3 = new XMLHttpRequest();
     r3.open("GET", "rapiupdate", true);
 	r3.timeout = 8000;
     r3.onreadystatechange = function () {
@@ -338,7 +337,6 @@ document.getElementById("save-mqtt").addEventListener("click", function(e) {
     var mqtt = {
       server: document.getElementById("mqtt_server").value,
       topic: document.getElementById("mqtt_topic").value,
-	  prefix: document.getElementById("mqtt_feed_prefix").value,
       user: document.getElementById("mqtt_user").value,
       pass: document.getElementById("mqtt_pass").value
     };
@@ -388,7 +386,7 @@ document.getElementById("save-admin").addEventListener("click", function(e) {
 document.getElementById("save-ohmkey").addEventListener("click", function(e) {
     var ohmkey = document.getElementById("ohmkey").value;
 	document.getElementById("save-ohmkey").innerHTML = "Saving...";
-    var r = new XMLHttpRequest(); 
+    var r = new XMLHttpRequest();
     r.open("POST", "saveohmkey", true);
     r.setRequestHeader("Content-type","application/x-www-form-urlencoded");
 	r.send("&ohm="+ohmkey);
