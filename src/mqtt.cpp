@@ -18,31 +18,42 @@ int i = 0;
 // MQTT msg Received callback function:
 // Function to be called when msg is received on MQTT subscribed topic
 // Used to receive RAPI commands via MQTT
-// //e.g to set current to 13A: <base-topic>/rapi/SC 13
+// //e.g to set current to 13A: <base-topic>/rapi/$SC 13
 // -------------------------------------------------------------------
 void mqttmsg_callback(char* topic, byte* payload, unsigned int length)
 {
 
-  // ASSUME RAPI COMMANDS ARE **ALWAYS PREFIX BY $ AND TWO CHARACTERS LONG**
-  
-  // print RAPI command received via MQTT sub topic e.g. "$SC"
   String topic_string = String(topic);
+  // Locate '$' character in the MQTT message to identify RAPI command
   int rapi_character_index = topic_string.indexOf('$');
+  DEBUG.println("MQTT received");
   
   if (rapi_character_index > 1){
-    // Print to serial RAPI command from mqtt-sub topic
+    // Print RAPI command from mqtt-sub topic e.g $SC
+    // ASSUME RAPI COMMANDS ARE ALWAYS PREFIX BY $ AND TWO CHARACTERS LONG)
     for (int i=rapi_character_index; i<rapi_character_index+3; i++){
-      DEBUG.print(topic[i]);
+      Serial.print(topic[i]);
     }
-    DEBUG.print(" ");
-    // print RAPI command value received via MQTT msg
+    Serial.print(" "); // print space to seperate RAPI commnd from value
+    // print RAPI value received via MQTT serial
     for (int i=0;i<length;i++) {
-      DEBUG.print((char)payload[i]);
+      Serial.print((char)payload[i]);
     }
-    DEBUG.println("");
-  }
+    Serial.print("\n"); // End of RAPI command serial print (new line)
     
-}
+    // Check RAPI command has been succesful by listing for $OK responce and publish to MQTT under "rapi" topic
+    while(Serial.available()) {
+         String rapiString = Serial.readStringUntil('\r');
+         if ( rapiString.startsWith("$OK ") ) {
+           String mqtt_data = rapiString;
+           String mqtt_sub_topic = mqtt_topic + "/rapi";
+           mqttclient.publish(mqtt_sub_topic.c_str(), mqtt_data.c_str());
+         }
+    }
+  }
+
+  
+} //end call back
 
 // -------------------------------------------------------------------
 // MQTT Connect
