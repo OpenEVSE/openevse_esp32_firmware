@@ -26,12 +26,13 @@ Standalone built on GitHub Atom IDE, or use PlatformIO Atom IDE plug-in if you a
 
 #### 2. Clone this repo
 
-`$ git clone https://github.com/openenergymonitor/EmonESP`
+`$ git clone https://github.com/chris1howell/OpenEVSE_RAPI_WiFi_ESP8266`
+
 
 #### 3. Compile
 
 ```
-$ cd EmonESP
+$ cd OpenEVSE_RAPI_WiFi_ESP8266
 $ pio run
 ```
 
@@ -52,7 +53,7 @@ The first time platformIO is ran the espressif arduino tool chain and all the re
 
 `$ pio run -t uploadfs`
 
-See [PlatfomrIO docs regarding SPIFFS uploading](http://docs.platformio.org/en/latest/platforms/espressif.html#uploading-files-to-file-system-spiffs)
+See [PlatfomIO docs regarding SPIFFS uploading](http://docs.platformio.org/en/latest/platforms/espressif.html#uploading-files-to-file-system-spiffs)
 
 ##### c.) OTA upload over local network (optional advanced)
 

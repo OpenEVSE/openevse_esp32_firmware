@@ -15,7 +15,7 @@ const char* softAP_password = "openevse";
 IPAddress apIP(192, 168, 4, 1);
 IPAddress netMsk(255, 255, 255, 0);
 
-// hostname for mDNS. Should work at least on windows. Try http://emonesp.local
+// hostname for mDNS. Should work at least on windows. Try http://openevse or http://openevse.local
 const char *esp_hostname = "openevse";
 
 // Wifi Network Strings
