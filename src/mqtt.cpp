@@ -71,8 +71,8 @@ boolean mqtt_connect()
 {
   mqttclient.setServer(mqtt_server.c_str(), 1883);
   mqttclient.setCallback(mqttmsg_callback); //function to be called when mqtt msg is received on subscribed topic
-  DEBUG.println("MQTT Connecting...");
-  DEBUG.print("Host: "); DEBUG.println(mqtt_user.c_str());
+  DEBUG.print("MQTT Connecting to...");
+  DEBUG.println(mqtt_user.c_str());
   String strID = String(ESP.getChipId());
   if (mqttclient.connect(strID.c_str(), mqtt_user.c_str(), mqtt_pass.c_str())) {  // Attempt to connect
     DEBUG.println("MQTT connected");
