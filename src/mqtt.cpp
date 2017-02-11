@@ -26,8 +26,17 @@ void mqttmsg_callback(char* topic, byte* payload, unsigned int length)
   String topic_string = String(topic);
   // Locate '$' character in the MQTT message to identify RAPI command
   int rapi_character_index = topic_string.indexOf('$');
-  DEBUG.println("MQTT received");
   
+  // print received MQTT to debug
+  DEBUG.println("MQTT received:");
+  DEBUG.print(topic);
+  DEBUG.print(" ");
+  for (int i=0;i<length;i++) {
+    DEBUG.print((char)payload[i]);
+  }
+  DEBUG.println();
+  
+  // Detect if MQTT message is a RAPI command e.g to set 13A <base-topic>/rapi/$SC 13
   if (rapi_character_index > 1){
     // Print RAPI command from mqtt-sub topic e.g $SC
     // ASSUME RAPI COMMANDS ARE ALWAYS PREFIX BY $ AND TWO CHARACTERS LONG)
@@ -63,6 +72,7 @@ boolean mqtt_connect()
   mqttclient.setServer(mqtt_server.c_str(), 1883);
   mqttclient.setCallback(mqttmsg_callback); //function to be called when mqtt msg is received on subscribed topic
   DEBUG.println("MQTT Connecting...");
+  DEBUG.print("Host: "); DEBUG.println(mqtt_user.c_str());
   String strID = String(ESP.getChipId());
   if (mqttclient.connect(strID.c_str(), mqtt_user.c_str(), mqtt_pass.c_str())) {  // Attempt to connect
     DEBUG.println("MQTT connected");
