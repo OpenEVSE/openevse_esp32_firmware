@@ -53,7 +53,7 @@ void mqttmsg_callback(char* topic, byte* payload, unsigned int length)
     // Check RAPI command has been succesful by listing for $OK responce and publish to MQTT under "rapi" topic
     while(Serial.available()) {
          String rapiString = Serial.readStringUntil('\r');
-         if ( rapiString.startsWith("$OK ") ) {
+         if ( rapiString.startsWith("$OK ") || rapiString.startsWith("$NK ")) {
            String mqtt_data = rapiString;
            String mqtt_sub_topic = mqtt_topic + "/rapi";
            mqttclient.publish(mqtt_sub_topic.c_str(), mqtt_data.c_str());
