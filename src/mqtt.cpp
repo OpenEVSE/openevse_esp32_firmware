@@ -43,12 +43,14 @@ void mqttmsg_callback(char* topic, byte* payload, unsigned int length)
     for (int i=rapi_character_index; i<rapi_character_index+3; i++){
       Serial.print(topic[i]);
     }
-    Serial.print(" "); // print space to seperate RAPI commnd from value
-    // print RAPI value received via MQTT serial
-    for (int i=0;i<length;i++) {
-      Serial.print((char)payload[i]);
+    if  (payload[0] != 0);{   // If MQTT msg contains a payload e.g $SC 13. Not all rapi commands have a payload e.g. $GC
+      Serial.print(" ");      // print space to seperate RAPI commnd from value
+      // print RAPI value received via MQTT serial
+      for (int i=0; i<length; i++) {
+        Serial.print((char)payload[i]);
+      }
     }
-    Serial.print("\n"); // End of RAPI command serial print (new line)
+    Serial.println(); // End of RAPI command serial print (new line)
     
     // Check RAPI command has been succesful by listing for $OK responce and publish to MQTT under "rapi" topic
     while(Serial.available()) {
