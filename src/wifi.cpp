@@ -84,9 +84,9 @@ void startAP() {
 // -------------------------------------------------------------------
 void startClient() {
   DEBUG.print("Connecting as client to ");
-  DEBUG.print(esid.c_str());
-  DEBUG.print(" epass:");
-  DEBUG.println(epass.c_str());
+  DEBUG.println(esid.c_str());
+  // DEBUG.print(" epass:");
+  // DEBUG.println(epass.c_str());
   WiFi.begin(esid.c_str(), epass.c_str());
 
   delay(50);
