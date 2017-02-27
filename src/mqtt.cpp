@@ -52,12 +52,12 @@ void mqttmsg_callback(char* topic, byte* payload, unsigned int length)
     }
     Serial.println(); // End of RAPI command serial print (new line)
     
-    // Check RAPI command has been succesful by listing for $OK responce and publish to MQTT under "rapi" topic
+    // Check RAPI command has been succesful by listing for $OK responce and publish to MQTT under "rapi/out" topic
     while(Serial.available()) {
          String rapiString = Serial.readStringUntil('\r');
          if ( rapiString.startsWith("$OK ") || rapiString.startsWith("$NK ")) {
            String mqtt_data = rapiString;
-           String mqtt_sub_topic = mqtt_topic + "/rapi";
+           String mqtt_sub_topic = mqtt_topic + "/rapi/out";
            mqttclient.publish(mqtt_sub_topic.c_str(), mqtt_data.c_str());
          }
     }
@@ -79,8 +79,8 @@ boolean mqtt_connect()
   if (mqttclient.connect(strID.c_str(), mqtt_user.c_str(), mqtt_pass.c_str())) {  // Attempt to connect
     DEBUG.println("MQTT connected");
     mqttclient.publish(mqtt_topic.c_str(), "connected"); // Once connected, publish an announcement..
-    String mqtt_sub_topic = mqtt_topic + "/rapi/#";      // MQTT Topic to subscribe to receive RAPI commands via MQTT
-    //e.g to set current to 13A: <base-topic>/rapi/$SC 13
+    String mqtt_sub_topic = mqtt_topic + "/rapi/in/#";      // MQTT Topic to subscribe to receive RAPI commands via MQTT
+    //e.g to set current to 13A: <base-topic>/rapi/in/$SC 13
     mqttclient.subscribe(mqtt_sub_topic.c_str());
   } else {
     DEBUG.print("MQTT failed: ");
@@ -93,11 +93,7 @@ boolean mqtt_connect()
 
 
 // -------------------------------------------------------------------
-// Publish to MQTT
-// Split up data string into sub topics: e.g
-// data = CT1:3935,CT2:325,T1:12.5,T2:16.9,T3:11.2,T4:34.7
-// base topic = emon/emonesp
-// MQTT Publish: emon/emonesp/CT1 > 3935 etc..
+// Publish status to MQTT
 // -------------------------------------------------------------------
 void mqtt_publish(String data)
 {
@@ -107,7 +103,7 @@ void mqtt_publish(String data)
   int i=0;
   while (int(data[i])!=0)
   {
-    // Construct MQTT topic e.g. <base_topic>/CT1 e.g. emonesp/CT1
+    // Construct MQTT topic e.g. <base_topic>/<status> data
     while (data[i]!=':'){
       topic+= data[i];
       i++;

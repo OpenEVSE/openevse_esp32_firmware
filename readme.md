@@ -73,19 +73,19 @@ OpenEVSE can post its status values (e.g. amp, temp1, temp2, temp3, pilot, statu
 
 RAPI commands can be issued via MQTT messages. The RAPI command should be published to the following MQTT:
 
-`<base-topic>/rapi/<$ rapi-command> payload`
+`<base-topic>/rapi/in/<$ rapi-command> payload`
 
 e.g assuming base-topic of `openevse` to following command will set current to 13A:
 
-`openevse/rapi/$SC 13`
+`openevse/rapi/in/$SC 13`
 
 The payload can be left blankc if the RAPI command does not require a payload e.g.
 
-`openevse/rapi/$GC`
+`openevse/rapi/in/$GC`
 
 The responce from the RAPI command is published by the OpenEVSE back to the same sub-topic and can be received by subscribing to:
 
-`<base-topic>/rapi/#`
+`<base-topic>/rapi/out/#`
 
 e.g. `$OK`
 
