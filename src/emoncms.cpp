@@ -16,7 +16,7 @@ unsigned long packets_success = 0;
 
 void emoncms_publish(String url){
   if(emoncms_apikey != 0) {
-    DEBUG.print(emoncms_server.c_str() + String(url));
+    DEBUG.println(emoncms_server.c_str() + String(url));
     packets_sent++;
     // Send data to Emoncms server
     String result="";

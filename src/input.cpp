@@ -80,7 +80,7 @@ void create_rapi_json(){
   data += "pilot:"+String(pilot)+",";
   data += "state:"+String(state);
   url += data;
-  if (emoncms_server = "data.openevse.com/emoncms"){
+  if (emoncms_server == "data.openevse.com/emoncms"){
     // data.openevse uses device module
     url += "}&devicekey="+String(emoncms_apikey);
   }
