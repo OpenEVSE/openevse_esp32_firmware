@@ -83,7 +83,7 @@ void startAP() {
 // Start Client, attempt to connect to Wifi network
 // -------------------------------------------------------------------
 void startClient() {
-  DEBUG.print("Connecting as client to ");
+  DEBUG.print("Connecting to SSID: ");
   DEBUG.println(esid.c_str());
   // DEBUG.print(" epass:");
   // DEBUG.println(epass.c_str());

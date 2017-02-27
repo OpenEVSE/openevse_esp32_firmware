@@ -6,6 +6,8 @@
 #include <PubSubClient.h>             // MQTT https://github.com/knolleary/pubsubclient PlatformIO lib: 89
 #include <WiFiClient.h>
 
+// #include "input.h"
+
 WiFiClient espClient;                 // Create client for MQTT
 PubSubClient mqttclient(espClient);   // Create client for MQTT
 
@@ -40,6 +42,7 @@ void mqttmsg_callback(char* topic, byte* payload, unsigned int length)
   if (rapi_character_index > 1){
     // Print RAPI command from mqtt-sub topic e.g $SC
     // ASSUME RAPI COMMANDS ARE ALWAYS PREFIX BY $ AND TWO CHARACTERS LONG)
+    Serial.flush();
     for (int i=rapi_character_index; i<rapi_character_index+3; i++){
       Serial.print(topic[i]);
     }
@@ -53,6 +56,7 @@ void mqttmsg_callback(char* topic, byte* payload, unsigned int length)
     Serial.println(); // End of RAPI command serial print (new line)
     
     // Check RAPI command has been succesful by listing for $OK responce and publish to MQTT under "rapi/out" topic
+    delay(60);        // commDelay = 60 (input.cpp)
     while(Serial.available()) {
          String rapiString = Serial.readStringUntil('\r');
          if ( rapiString.startsWith("$OK ") || rapiString.startsWith("$NK ")) {
