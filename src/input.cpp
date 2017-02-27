@@ -2,7 +2,7 @@
 #include "input.h"
 #include "config.h"
 
-const char* e_url = "/emoncms/input/post.json?node=";
+const char* e_url = "/input/post.json?node=";
 
 String url = "";
 String data = "";
