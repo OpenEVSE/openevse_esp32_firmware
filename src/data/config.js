@@ -94,40 +94,40 @@ var r2 = new XMLHttpRequest();
               document.getElementById("firmware").innerHTML = config.firmware;
               document.getElementById("protocol").innerHTML = config.protocol;
               document.getElementById("diodet").innerHTML = config.diodet;
-			  if (config.diodet == "1"){
-				document.getElementById("diodet").innerHTML = "Disabled <a title='Enable' href='/r?rapi=%24SD+1'><img src='check.png'></a>";
-				}
-				else {
-				document.getElementById("diodet").innerHTML = "Enabled <a title='Disable' href='/r?rapi=%24SD+0'><img src='x.png'></a>";
-				}
-              document.getElementById("gfcit").innerHTML = config.gfcit;
-			  if (config.gfcit == "1"){
-				document.getElementById("gfcit").innerHTML = "Disabled <a title='Enable' href='/r?rapi=%24SS+1'><img src='check.png'></a>";
-				}
-				else {
-				document.getElementById("gfcit").innerHTML = "Enabled <a title='Disable' ref='/r?rapi=%24SS+0'><img src='x.png'></a>";
-				}
-              document.getElementById("groundt").innerHTML = config.groundt;
-			  if (config.groundt == "1"){
-				document.getElementById("groundt").innerHTML = "Disabled <a title='Enable' href='/r?rapi=%24SG+1'><img src='check.png'></a>";
-				}
-				else {
-				document.getElementById("groundt").innerHTML = "Enabled <a title='Disable' href='/r?rapi=%24SG+0'><img src='x.png'></a>";
-				}
-              document.getElementById("relayt").innerHTML = config.relayt;
-			  if (config.relayt == "1"){
-				document.getElementById("relayt").innerHTML = "Disabled <a title='Enable' href='/r?rapi=%24SR+1'><img src='check.png'></a>";
-				}
-				else {
-				document.getElementById("relayt").innerHTML = "Enabled <a title='Disable' href='/r?rapi=%24SR+0'><img src='x.png'></a>";
-				}
-              document.getElementById("ventt").innerHTML = config.ventt;
-			  if (config.ventt == "1"){
-				document.getElementById("ventt").innerHTML = "Disabled <a title='Enable' href='/r?rapi=%24SV+1'><img src='check.png'></a>";
-				}
-				else {
-				document.getElementById("ventt").innerHTML = "Enabled <a title='Disable' href='/r?rapi=%24SV+0'><title='Disable'><img src='x.png'></a>";
-				}
+			 // if (config.diodet == "1"){
+				// document.getElementById("diodet").innerHTML = "Disabled <a title='Enable' href='/r?rapi=%24SD+1'><img src='check.png'></a>";
+				// }
+				// else {
+				// document.getElementById("diodet").innerHTML = "Enabled <a title='Disable' href='/r?rapi=%24SD+0'><img src='x.png'></a>";
+				// }
+    //           document.getElementById("gfcit").innerHTML = config.gfcit;
+			 // if (config.gfcit == "1"){
+				// document.getElementById("gfcit").innerHTML = "Disabled <a title='Enable' href='/r?rapi=%24SS+1'><img src='check.png'></a>";
+				// }
+				// else {
+				// document.getElementById("gfcit").innerHTML = "Enabled <a title='Disable' ref='/r?rapi=%24SS+0'><img src='x.png'></a>";
+				// }
+    //           document.getElementById("groundt").innerHTML = config.groundt;
+			 // if (config.groundt == "1"){
+				// document.getElementById("groundt").innerHTML = "Disabled <a title='Enable' href='/r?rapi=%24SG+1'><img src='check.png'></a>";
+				// }
+				// else {
+				// document.getElementById("groundt").innerHTML = "Enabled <a title='Disable' href='/r?rapi=%24SG+0'><img src='x.png'></a>";
+				// }
+    //           document.getElementById("relayt").innerHTML = config.relayt;
+			 // if (config.relayt == "1"){
+				// document.getElementById("relayt").innerHTML = "Disabled <a title='Enable' href='/r?rapi=%24SR+1'><img src='check.png'></a>";
+				// }
+				// else {
+				// document.getElementById("relayt").innerHTML = "Enabled <a title='Disable' href='/r?rapi=%24SR+0'><img src='x.png'></a>";
+				// }
+    //           document.getElementById("ventt").innerHTML = config.ventt;
+			 // if (config.ventt == "1"){
+				// document.getElementById("ventt").innerHTML = "Disabled <a title='Enable' href='/r?rapi=%24SV+1'><img src='check.png'></a>";
+				// }
+				// else {
+				// document.getElementById("ventt").innerHTML = "Enabled <a title='Disable' href='/r?rapi=%24SV+0'><title='Disable'><img src='x.png'></a>";
+				// }
               document.getElementById("service").innerHTML = config.service;
 			  document.getElementById("l1min").innerHTML = config.l1min;
 			  document.getElementById("l1max").innerHTML = config.l1max;
@@ -159,9 +159,9 @@ var r3 = new XMLHttpRequest();
     if (r3.readyState != 4 || r3.status != 200) return;
       var update = JSON.parse(r3.responseText);
 	  document.getElementById("comm-psent").innerHTML = update.comm_sent;
-      document.getElementById("comm-psuccess").innerHTML = update.comm_success;
-      document.getElementById("sta-psent").innerHTML = update.packets_sent;
-      document.getElementById("sta-psuccess").innerHTML = update.packets_success;
+    document.getElementById("comm-psuccess").innerHTML = update.comm_success;
+    document.getElementById("sta-psent").innerHTML = update.packets_sent;
+    document.getElementById("sta-psuccess").innerHTML = update.packets_success;
 	  document.getElementById("amp").innerHTML = update.amp;
 	  document.getElementById("estate").innerHTML = update.estate;
 	  document.getElementById("espvcc").innerHTML = update.espvcc;
