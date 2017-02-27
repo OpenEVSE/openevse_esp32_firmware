@@ -87,6 +87,7 @@ void startClient() {
   DEBUG.println(esid.c_str());
   // DEBUG.print(" epass:");
   // DEBUG.println(epass.c_str());
+  WiFi.hostname("openevse");
   WiFi.begin(esid.c_str(), epass.c_str());
 
   delay(50);
