@@ -80,7 +80,16 @@ void create_rapi_json(){
   data += "pilot:"+String(pilot)+",";
   data += "state:"+String(state);
   url += data;
-  url += "}&devicekey="+String(emoncms_apikey);
+  if (emoncms_server = "data.openevse.com/emoncms"){
+    // data.openevse uses device module
+    url += "}&devicekey="+String(emoncms_apikey);
+  }
+  else {
+    // emoncms.org does not use device module
+    url += "}&apikey="+String(emoncms_apikey);
+  }
+
+    
   //DEBUG.print(emoncms_server.c_str() + String(url));
 }
 
