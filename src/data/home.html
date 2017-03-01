@@ -75,13 +75,12 @@
 			</div>
 		
 		<div class="box380">
-			<h2>Firmware</h2>
-			<p><b>Firmware: </b><span id="version"></span></p>
+			<h2>OpenEVSE WiFi Firmware</h2>
+			<p><b>Version: </b><span id="version"></span></p>
 						<iframe style="width:380px; height:50px;" frameborder="0" scrolling="no" marginheight="0" marginwidth="0" src="/update">
 						</iframe>
-						<p><b>Free RAM:</b><br><span id="free_heap"></span>B</p>
 						<button id="restart">Restart</button>
-						<button id="reset">Reset config and reboot</button>
+						<button id="reset">Factory Reset</button>
 
 
           </div>
@@ -90,8 +89,8 @@
 			<div class="box380">
 			<h2>Energy Monitoring</h2>
 				<p><b>Server:</b><br>
-				<input id="emoncms_server" type="text" value="data.openevse.com">
-				<p></p><span>e.g 'data.openevse.com', 'emoncms.org', '192.168.1.4/emoncms'</span><br>
+				<input id="emoncms_server" type="text" value="data.openevse.com/emoncms">
+				<p></p><span>e.g 'data.openevse.com/emoncms', 'emoncms.org', 'emonpi/emoncms'</span><br>
 				<p><b>Node:</b><br>
 				<input id="emoncms_node" type="text">
 				</p><span>Emoncms.org only supports numberical nodeID's (1-32)</span>
@@ -116,14 +115,7 @@
           </p><span>e.g 'emonpi', 'test.mosquitto.org', '192.168.1.4'</span><br>
           <p><b>Base-topic:</b><br>
           <input id="mqtt_topic" type="text">
-        </p><span>e.g 'openevse/tesla', 'openevse/leaf'</span><br><br>
-          <p><b>MQTT feed prefix:</b><br>
-          <input id="mqtt_feed_prefix" type="text">
-              <br> Value to prefix the feed names with:</br>
-          <span id="small-text">
-              &#60;base-topic&#62;/&#60;prefix&#62;&#60;feed-name&#62;.
-              Required for posting to AdafruitIO. Leave blank for no prefix.
-          </span>
+        </p><span>e.g 'openevse', 'openevse/tesla', 'openevse/leaf'</span><br><br>
           <p><b>Username:</b><span> blank - no authentication</span></p>
           <input id="mqtt_user" type="text">
           <p><b>Password:</b><span> blank - no authentication</span></p>
@@ -200,7 +192,6 @@
                 <tr><td>Firmware:</td><td><span id="firmware"></span></td></tr>
                 <tr><td>Protocol:</td><td><span id="protocol"></span></td></tr>
 				<tr><th>WiFi</th><th></th></tr>
-                <tr><td>Voltage:</td><td><span id="espvcc"></span></td></tr>
 				<tr><td>Flash Size:</td><td><span id="espflash"></span></td></tr>
                 <tr><td>Free RAM:</td><td><span id="espfree"></span></td></tr>
                 </table>

@@ -12,13 +12,11 @@ r1.onreadystatechange = function () {
 
   document.getElementById("passkey").value = status.pass;
   
-   if ((status.www_user!=0) & (status.www_pass!=0)){
+  if ((status.www_user!=0) && (status.www_user!="undefined")  ){
     document.getElementById("www_user").value = status.www_username;
-    document.getElementById("www_pass").value = status.www_password;
   }
 
   if ((status.emoncms_server!==0) & (status.emoncms_apikey!==0)){
-    document.getElementById("emoncms_apikey").value = status.emoncms_apikey;
     document.getElementById("emoncms_server").value = status.emoncms_server;
     document.getElementById("emoncms_node").value = status.emoncms_node;
     document.getElementById("emoncms_fingerprint").value = status.emoncms_fingerprint;
@@ -37,10 +35,8 @@ r1.onreadystatechange = function () {
   if (status.mqtt_server!==0){
     document.getElementById("mqtt_server").value = status.mqtt_server;
     document.getElementById("mqtt_topic").value = status.mqtt_topic;
-	document.getElementById("mqtt_feed_prefix").value = status.mqtt_feed_prefix;
     if (status.mqtt_user!==0){
       document.getElementById("mqtt_user").value = status.mqtt_user;
-      document.getElementById("mqtt_pass").value = status.mqtt_pass;
     }
   }
   
@@ -86,7 +82,7 @@ r1.onreadystatechange = function () {
 };
 r1.send();
 
-var r2 = new XMLHttpRequest(); 
+var r2 = new XMLHttpRequest();
     r2.open("GET", "config", true);
 	r2.timeout = 2000;
     r2.onreadystatechange = function () {
@@ -95,40 +91,40 @@ var r2 = new XMLHttpRequest();
               document.getElementById("firmware").innerHTML = config.firmware;
               document.getElementById("protocol").innerHTML = config.protocol;
               document.getElementById("diodet").innerHTML = config.diodet;
-			  if (config.diodet == "1"){
-				document.getElementById("diodet").innerHTML = "Disabled <a title='Enable' href='/r?rapi=%24SD+1'><img src='check.png'></a>";
-				}
-				else {
-				document.getElementById("diodet").innerHTML = "Enabled <a title='Disable' href='/r?rapi=%24SD+0'><img src='x.png'></a>";	
-				}
-              document.getElementById("gfcit").innerHTML = config.gfcit;
-			  if (config.gfcit == "1"){
-				document.getElementById("gfcit").innerHTML = "Disabled <a title='Enable' href='/r?rapi=%24SS+1'><img src='check.png'></a>";
-				}
-				else {
-				document.getElementById("gfcit").innerHTML = "Enabled <a title='Disable' ref='/r?rapi=%24SS+0'><img src='x.png'></a>";	
-				}
-              document.getElementById("groundt").innerHTML = config.groundt;
-			  if (config.groundt == "1"){
-				document.getElementById("groundt").innerHTML = "Disabled <a title='Enable' href='/r?rapi=%24SG+1'><img src='check.png'></a>";
-				}
-				else {
-				document.getElementById("groundt").innerHTML = "Enabled <a title='Disable' href='/r?rapi=%24SG+0'><img src='x.png'></a>";	
-				}
-              document.getElementById("relayt").innerHTML = config.relayt;
-			  if (config.relayt == "1"){
-				document.getElementById("relayt").innerHTML = "Disabled <a title='Enable' href='/r?rapi=%24SR+1'><img src='check.png'></a>";
-				}
-				else {
-				document.getElementById("relayt").innerHTML = "Enabled <a title='Disable' href='/r?rapi=%24SR+0'><img src='x.png'></a>";	
-				}
-              document.getElementById("ventt").innerHTML = config.ventt;
-			  if (config.ventt == "1"){
-				document.getElementById("ventt").innerHTML = "Disabled <a title='Enable' href='/r?rapi=%24SV+1'><img src='check.png'></a>";
-				}
-				else {
-				document.getElementById("ventt").innerHTML = "Enabled <a title='Disable' href='/r?rapi=%24SV+0'><title='Disable'><img src='x.png'></a>";	
-				}
+			 // if (config.diodet == "1"){
+				// document.getElementById("diodet").innerHTML = "Disabled <a title='Enable' href='/r?rapi=%24SD+1'><img src='check.png'></a>";
+				// }
+				// else {
+				// document.getElementById("diodet").innerHTML = "Enabled <a title='Disable' href='/r?rapi=%24SD+0'><img src='x.png'></a>";
+				// }
+    //           document.getElementById("gfcit").innerHTML = config.gfcit;
+			 // if (config.gfcit == "1"){
+				// document.getElementById("gfcit").innerHTML = "Disabled <a title='Enable' href='/r?rapi=%24SS+1'><img src='check.png'></a>";
+				// }
+				// else {
+				// document.getElementById("gfcit").innerHTML = "Enabled <a title='Disable' ref='/r?rapi=%24SS+0'><img src='x.png'></a>";
+				// }
+    //           document.getElementById("groundt").innerHTML = config.groundt;
+			 // if (config.groundt == "1"){
+				// document.getElementById("groundt").innerHTML = "Disabled <a title='Enable' href='/r?rapi=%24SG+1'><img src='check.png'></a>";
+				// }
+				// else {
+				// document.getElementById("groundt").innerHTML = "Enabled <a title='Disable' href='/r?rapi=%24SG+0'><img src='x.png'></a>";
+				// }
+    //           document.getElementById("relayt").innerHTML = config.relayt;
+			 // if (config.relayt == "1"){
+				// document.getElementById("relayt").innerHTML = "Disabled <a title='Enable' href='/r?rapi=%24SR+1'><img src='check.png'></a>";
+				// }
+				// else {
+				// document.getElementById("relayt").innerHTML = "Enabled <a title='Disable' href='/r?rapi=%24SR+0'><img src='x.png'></a>";
+				// }
+    //           document.getElementById("ventt").innerHTML = config.ventt;
+			 // if (config.ventt == "1"){
+				// document.getElementById("ventt").innerHTML = "Disabled <a title='Enable' href='/r?rapi=%24SV+1'><img src='check.png'></a>";
+				// }
+				// else {
+				// document.getElementById("ventt").innerHTML = "Enabled <a title='Disable' href='/r?rapi=%24SV+0'><title='Disable'><img src='x.png'></a>";
+				// }
               document.getElementById("service").innerHTML = config.service;
 			  document.getElementById("l1min").innerHTML = config.l1min;
 			  document.getElementById("l1max").innerHTML = config.l1max;
@@ -141,7 +137,7 @@ var r2 = new XMLHttpRequest();
 				document.getElementById("tempt").innerHTML = "Disabled";
 				}
 				else {
-				document.getElementById("tempt").innerHTML = "Enabled";	
+				document.getElementById("tempt").innerHTML = "Enabled";
 				}
 			  document.getElementById("gfcicount").innerHTML = config.gfcicount;
 			  document.getElementById("nogndcount").innerHTML = config.nogndcount;
@@ -153,16 +149,16 @@ var r2 = new XMLHttpRequest();
   };
   r2.send();
   
-var r3 = new XMLHttpRequest(); 
+var r3 = new XMLHttpRequest();
     r3.open("GET", "rapiupdate", true);
 	r3.timeout = 8000;
     r3.onreadystatechange = function () {
     if (r3.readyState != 4 || r3.status != 200) return;
       var update = JSON.parse(r3.responseText);
 	  document.getElementById("comm-psent").innerHTML = update.comm_sent;
-      document.getElementById("comm-psuccess").innerHTML = update.comm_success;
-      document.getElementById("sta-psent").innerHTML = update.packets_sent;
-      document.getElementById("sta-psuccess").innerHTML = update.packets_success;
+    document.getElementById("comm-psuccess").innerHTML = update.comm_success;
+    document.getElementById("sta-psent").innerHTML = update.packets_sent;
+    document.getElementById("sta-psuccess").innerHTML = update.packets_success;
 	  document.getElementById("amp").innerHTML = update.amp;
 	  document.getElementById("estate").innerHTML = update.estate;
 	  document.getElementById("espvcc").innerHTML = update.espvcc;
@@ -187,7 +183,7 @@ setInterval(update,10000);
 // -----------------------------------------------------------------------
 function update() {
 	
-	var r3 = new XMLHttpRequest(); 
+	var r3 = new XMLHttpRequest();
     r3.open("GET", "rapiupdate", true);
 	r3.timeout = 8000;
     r3.onreadystatechange = function () {
@@ -338,7 +334,6 @@ document.getElementById("save-mqtt").addEventListener("click", function(e) {
     var mqtt = {
       server: document.getElementById("mqtt_server").value,
       topic: document.getElementById("mqtt_topic").value,
-	  prefix: document.getElementById("mqtt_feed_prefix").value,
       user: document.getElementById("mqtt_user").value,
       pass: document.getElementById("mqtt_pass").value
     };
@@ -388,7 +383,7 @@ document.getElementById("save-admin").addEventListener("click", function(e) {
 document.getElementById("save-ohmkey").addEventListener("click", function(e) {
     var ohmkey = document.getElementById("ohmkey").value;
 	document.getElementById("save-ohmkey").innerHTML = "Saving...";
-    var r = new XMLHttpRequest(); 
+    var r = new XMLHttpRequest();
     r.open("POST", "saveohmkey", true);
     r.setRequestHeader("Content-type","application/x-www-form-urlencoded");
 	r.send("&ohm="+ohmkey);

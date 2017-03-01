@@ -43,13 +43,13 @@
 #include "wifi.h"
 #include "web_server.h"
 #include "ohm.h"
-//#include "ota.h"
 #include "input.h"
 #include "emoncms.h"
 #include "mqtt.h"
 
 unsigned long Timer1; // Timer for events once every 30 seconds
 unsigned long Timer2; // Timer for events once every 1 Minute
+unsigned long Timer3; // Timer for events once every 5 seconds
 
 // -------------------------------------------------------------------
 // SETUP
@@ -86,12 +86,18 @@ void setup() {
 void loop(){
 //ota_loop();
   web_server_loop();
-  update_rapi_values();
   wifi_loop();
   if (mqtt_server !=0) mqtt_loop();
      
   
   if (wifi_mode==WIFI_MODE_STA || wifi_mode==WIFI_MODE_AP_AND_STA){
+// -------------------------------------------------------------------
+// Do these things once every 5s
+// -------------------------------------------------------------------
+    if ((millis() - Timer3) >= 5000){
+      update_rapi_values();
+      Timer3 = millis();
+    }
 // -------------------------------------------------------------------
 // Do these things once every Minute
 // -------------------------------------------------------------------

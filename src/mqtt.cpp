@@ -6,6 +6,8 @@
 #include <PubSubClient.h>             // MQTT https://github.com/knolleary/pubsubclient PlatformIO lib: 89
 #include <WiFiClient.h>
 
+// #include "input.h"
+
 WiFiClient espClient;                 // Create client for MQTT
 PubSubClient mqttclient(espClient);   // Create client for MQTT
 
@@ -18,31 +20,55 @@ int i = 0;
 // MQTT msg Received callback function:
 // Function to be called when msg is received on MQTT subscribed topic
 // Used to receive RAPI commands via MQTT
-// //e.g to set current to 13A: <base-topic>/rapi/SC 13
+// //e.g to set current to 13A: <base-topic>/rapi/$SC 13
 // -------------------------------------------------------------------
 void mqttmsg_callback(char* topic, byte* payload, unsigned int length)
 {
 
-  // ASSUME RAPI COMMANDS ARE **ALWAYS PREFIX BY $ AND TWO CHARACTERS LONG**
-  
-  // print RAPI command received via MQTT sub topic e.g. "$SC"
   String topic_string = String(topic);
+  // Locate '$' character in the MQTT message to identify RAPI command
   int rapi_character_index = topic_string.indexOf('$');
   
-  if (rapi_character_index > 1){
-    // Print to serial RAPI command from mqtt-sub topic
-    for (int i=rapi_character_index; i<rapi_character_index+3; i++){
-      DEBUG.print(topic[i]);
-    }
-    DEBUG.print(" ");
-    // print RAPI command value received via MQTT msg
-    for (int i=0;i<length;i++) {
-      DEBUG.print((char)payload[i]);
-    }
-    DEBUG.println("");
+  // print received MQTT to debug
+  DEBUG.println("MQTT received:");
+  DEBUG.print(topic);
+  DEBUG.print(" ");
+  for (int i=0;i<length;i++) {
+    DEBUG.print((char)payload[i]);
   }
+  DEBUG.println();
+  
+  // Detect if MQTT message is a RAPI command e.g to set 13A <base-topic>/rapi/$SC 13
+  if (rapi_character_index > 1){
+    // Print RAPI command from mqtt-sub topic e.g $SC
+    // ASSUME RAPI COMMANDS ARE ALWAYS PREFIX BY $ AND TWO CHARACTERS LONG)
+    Serial.flush();
+    for (int i=rapi_character_index; i<rapi_character_index+3; i++){
+      Serial.print(topic[i]);
+    }
+    if  (payload[0] != 0);{   // If MQTT msg contains a payload e.g $SC 13. Not all rapi commands have a payload e.g. $GC
+      Serial.print(" ");      // print space to seperate RAPI commnd from value
+      // print RAPI value received via MQTT serial
+      for (int i=0; i<length; i++) {
+        Serial.print((char)payload[i]);
+      }
+    }
+    Serial.println(); // End of RAPI command serial print (new line)
     
-}
+    // Check RAPI command has been succesful by listing for $OK responce and publish to MQTT under "rapi/out" topic
+    delay(60);        // commDelay = 60 (input.cpp)
+    while(Serial.available()) {
+         String rapiString = Serial.readStringUntil('\r');
+         if ( rapiString.startsWith("$OK ") || rapiString.startsWith("$NK ")) {
+           String mqtt_data = rapiString;
+           String mqtt_sub_topic = mqtt_topic + "/rapi/out";
+           mqttclient.publish(mqtt_sub_topic.c_str(), mqtt_data.c_str());
+         }
+    }
+  }
+
+  
+} //end call back
 
 // -------------------------------------------------------------------
 // MQTT Connect
@@ -51,13 +77,14 @@ boolean mqtt_connect()
 {
   mqttclient.setServer(mqtt_server.c_str(), 1883);
   mqttclient.setCallback(mqttmsg_callback); //function to be called when mqtt msg is received on subscribed topic
-  DEBUG.println("MQTT Connecting...");
+  DEBUG.print("MQTT Connecting to...");
+  DEBUG.println(mqtt_user.c_str());
   String strID = String(ESP.getChipId());
   if (mqttclient.connect(strID.c_str(), mqtt_user.c_str(), mqtt_pass.c_str())) {  // Attempt to connect
     DEBUG.println("MQTT connected");
     mqttclient.publish(mqtt_topic.c_str(), "connected"); // Once connected, publish an announcement..
-    String mqtt_sub_topic = mqtt_topic + "/rapi/#";      // MQTT Topic to subscribe to receive RAPI commands via MQTT
-    //e.g to set current to 13A: <base-topic>/rapi/$SC 13
+    String mqtt_sub_topic = mqtt_topic + "/rapi/in/#";      // MQTT Topic to subscribe to receive RAPI commands via MQTT
+    //e.g to set current to 13A: <base-topic>/rapi/in/$SC 13
     mqttclient.subscribe(mqtt_sub_topic.c_str());
   } else {
     DEBUG.print("MQTT failed: ");
@@ -70,21 +97,17 @@ boolean mqtt_connect()
 
 
 // -------------------------------------------------------------------
-// Publish to MQTT
-// Split up data string into sub topics: e.g
-// data = CT1:3935,CT2:325,T1:12.5,T2:16.9,T3:11.2,T4:34.7
-// base topic = emon/emonesp
-// MQTT Publish: emon/emonesp/CT1 > 3935 etc..
+// Publish status to MQTT
 // -------------------------------------------------------------------
 void mqtt_publish(String data)
 {
   String mqtt_data = "";
-  String topic = mqtt_topic + "/" + mqtt_feed_prefix;
+  String topic = mqtt_topic + "/";
   
   int i=0;
   while (int(data[i])!=0)
   {
-    // Construct MQTT topic e.g. <base_topic>/CT1 e.g. emonesp/CT1
+    // Construct MQTT topic e.g. <base_topic>/<status> data
     while (data[i]!=':'){
       topic+= data[i];
       i++;
@@ -105,7 +128,7 @@ void mqtt_publish(String data)
     //delay(100);
     DEBUG.printf("%s = %s\r\n", topic.c_str(), mqtt_data.c_str());
     mqttclient.publish(topic.c_str(), mqtt_data.c_str());
-    topic = mqtt_topic + "/" + mqtt_feed_prefix;
+    topic = mqtt_topic + "/";
     mqtt_data="";
     i++;
     if (int(data[i])==0) break;

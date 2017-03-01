@@ -190,14 +190,13 @@ void handleSaveEmoncms()
 void handleSaveMqtt() {
   config_save_mqtt(server.arg("server"),
                    server.arg("topic"),
-                   server.arg("prefix"),
                    server.arg("user"),
                    server.arg("pass"));
 
   char tmpStr[200];
   // BUG: Potential buffer overflow issue the values mqtt_xxx come from user
   //      input so could overflow the buffer no matter the length
-  sprintf(tmpStr,"Saved: %s %s %s %s %s",mqtt_server.c_str(),mqtt_topic.c_str(),mqtt_feed_prefix.c_str(),mqtt_user.c_str(),mqtt_pass.c_str());
+  sprintf(tmpStr,"Saved: %s %s %s %s",mqtt_server.c_str(),mqtt_topic.c_str(),mqtt_user.c_str(),mqtt_pass.c_str());
   DEBUG.println(tmpStr);
   server.send(200, "text/html", tmpStr);
 
@@ -250,12 +249,12 @@ void handleStatus() {
   s += "\"rssi\":["+rssi+"],";
 
   s += "\"ssid\":\""+esid+"\",";
-  //s += "\"pass\":\""+epass+"\",";
+  //s += "\"pass\":\""+epass+"\","; security risk: DONT RETURN PASSWORDS
   s += "\"srssi\":\""+String(WiFi.RSSI())+"\",";
   s += "\"ipaddress\":\""+ipaddress+"\",";
   s += "\"emoncms_server\":\""+emoncms_server+"\",";
   s += "\"emoncms_node\":\""+emoncms_node+"\",";
-  s += "\"emoncms_apikey\":\""+emoncms_apikey+"\",";
+  // s += "\"emoncms_apikey\":\""+emoncms_apikey+"\","; security risk: DONT RETURN APIKEY
   s += "\"emoncms_fingerprint\":\""+emoncms_fingerprint+"\",";
   s += "\"emoncms_connected\":\""+String(emoncms_connected)+"\",";
   s += "\"packets_sent\":\""+String(packets_sent)+"\",";
@@ -263,15 +262,14 @@ void handleStatus() {
 
   s += "\"mqtt_server\":\""+mqtt_server+"\",";
   s += "\"mqtt_topic\":\""+mqtt_topic+"\",";
-  s += "\"mqtt_feed_prefix\":\""+mqtt_feed_prefix+"\",";
   s += "\"mqtt_user\":\""+mqtt_user+"\",";
-  s += "\"mqtt_pass\":\""+mqtt_pass+"\",";
+  //s += "\"mqtt_pass\":\""+mqtt_pass+"\","; security risk: DONT RETURN PASSWORDS
   s += "\"mqtt_connected\":\""+String(mqtt_connected())+"\",";
 
   s += "\"ohmkey\":\""+ohm+"\",";
 
   s += "\"www_username\":\""+www_username+"\",";
-  //s += "\"www_password\":\""+www_password+"\",";
+  //s += "\"www_password\":\""+www_password+"\","; security risk: DONT RETURN PASSWORDS
 
   s += "\"free_heap\":\""+String(ESP.getFreeHeap())+"\",";
   s += "\"version\":\""+currentfirmware+"\"";
@@ -338,7 +336,7 @@ void handleConfig() {
   s += "\"watthour\":\""+watthour_total+"\"";
   s += "}";
   s.replace(" ", "");
- server.send(200, "text/html", s); 
+ server.send(200, "text/html", s);
 }
 
 
@@ -430,13 +428,13 @@ void handleRapiR() {
   String rapiString;
   String rapi = server.arg("rapi");
   rapi.replace("%24", "$");
-  rapi.replace("+", " "); 
+  rapi.replace("+", " ");
   Serial.flush();
   Serial.println(rapi);
   delay(commDelay);
        while(Serial.available()) {
          rapiString = Serial.readStringUntil('\r');
-       }    
+       }
    s = "<html><font size='20'><font color=006666>Open</font><b>EVSE</b></font><p><b>Open Source Hardware</b><p>RAPI Command Sent<p>Common Commands:<p>Set Current - $SC XX<p>Set Service Level - $SL 1 - $SL 2 - $SL A<p>Get Real-time Current - $GG<p>Get Temperatures - $GP<p>";
    s += "<p>";
    s += "<form method='get' action='r'><label><b><i>RAPI Command:</b></i></label><input name='rapi' length=32><p><input type='submit'></form>";

@@ -15,7 +15,7 @@ const char* softAP_password = "openevse";
 IPAddress apIP(192, 168, 4, 1);
 IPAddress netMsk(255, 255, 255, 0);
 
-// hostname for mDNS. Should work at least on windows. Try http://emonesp.local
+// hostname for mDNS. Should work at least on windows. Try http://openevse or http://openevse.local
 const char *esp_hostname = "openevse";
 
 // Wifi Network Strings
@@ -83,10 +83,11 @@ void startAP() {
 // Start Client, attempt to connect to Wifi network
 // -------------------------------------------------------------------
 void startClient() {
-  DEBUG.print("Connecting as client to ");
-  DEBUG.print(esid.c_str());
-  DEBUG.print(" epass:");
-  DEBUG.println(epass.c_str());
+  DEBUG.print("Connecting to SSID: ");
+  DEBUG.println(esid.c_str());
+  // DEBUG.print(" epass:");
+  // DEBUG.println(epass.c_str());
+  WiFi.hostname("openevse");
   WiFi.begin(esid.c_str(), epass.c_str());
 
   delay(50);
@@ -96,7 +97,8 @@ void startClient() {
   while (WiFi.status() != WL_CONNECTED){
     delay(500);
     t++;
-    if (t >= 20){
+    // push and hold boot button after power on to skip stright to AP mode
+    if (t >= 20 || digitalRead(0) == LOW){
       DEBUG.println(" ");
       DEBUG.println("Try Again...");
       delay(2000);
@@ -104,7 +106,7 @@ void startClient() {
       WiFi.begin(esid.c_str(), epass.c_str());
       t = 0;
       attempt++;
-      if (attempt >= 5){
+      if (attempt >= 5 || digitalRead(0) == LOW){
         startAP();
         // AP mode with SSID in EEPROM, connection will retry in 5 minutes
         wifi_mode = WIFI_MODE_AP_STA_RETRY;

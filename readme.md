@@ -2,9 +2,128 @@
 
 OpenEVSE ESP8266 WIFI serial to EmonCMS link
 
-![OpenEVSE_WiFi.jpg](OpenEVSE_WiFi.jpg)
+![OpenEVSE_WiFi.jpg](docs/OpenEVSE_WiFi.jpg)
 
-## Compile & Uplod Instructions
+***
+
+## Requirements
+
+- ESP-12E module with 4M Flash
+
+***
+
+# OpenEVSE User Guide
+
+## First Setup
+
+On first boot, OpenEVSE should broadcast a WiFI AP `OpenEVSE_XXX`. Connect to this AP (default password: `openevse`) and the [captive portal](https://en.wikipedia.org/wiki/Captive_portal) should forward you to the log-in page. If this does not happen navigate to `http://192.168.4.1`
+
+*Note: You may need to disable mobile data if connecting via a Android 6 device*
+
+![Wifi connect](docs/wifi-connect.png)
+
+### 1. WiFi Connection
+
+
+- Select your WiFi network from list of available networks
+- Enter WiFi PSK key then click `Connect`
+
+![Wifi setup](docs/wifi-scan.png)
+
+- OpenEVSE should now connect to local wifi network and return local IP address.
+- Browse to local IP address by clicking the hyperlink (assuming your computer is on the same WiFi network)
+On future boot up OpenEVSE will automatically connect to this network.
+
+*Note: on some networks it's possible to browse to the OpenEVSE using hostname [http://openevse](http://openevse) or on windows [http://openevse.local](http://openevse.local)*
+
+**If re-connection fails (e.g. network cannot be found) the OpenEVSE will automatically revert back to WiFi AP mode after a short while to allow a new network to be re-configued if required. Re-connection to existing network will be attempted every 5min.**
+
+*Holding the `boot` button at startup (for about 10's) will force AP mode. This is useful when trying to connect the unit to a new WiFi network.*
+
+
+## 2. Emoncms
+
+![emoncms setup](docs/emoncms.png)
+
+OpenEVSE can post its status values (e.g amp, temp1, temp2, temp3, pilot, status) to [emoncms.org](https://emoncms.org) or any other  Emoncms server (e.g. emonPi) using [Emoncms API](https://emoncms.org/site/api#input). Data will be posted every 30s.
+
+Data ca be posted using HTTP or HTTPS. For HTTPS the Emoncms server must support HTTPS (emoncms.org does, emonPi does not).Due to the limited resources on the ESP the SSL SSH-1 fingerprint for the Emoncms server must be manually entered and regularly updated.
+
+*Note: the emoncms.org fingerprint will change every 90 days when the SSL certificate is renewed.*
+
+**Currently emoncms.org only supports numerical node names, other emoncms servers e.g. emonPi do support alphanumeric node naming.**
+
+
+## 3. MQTT
+
+### OpenEVSE Status via MQTT
+
+![mqtt setup](docs/mqtt.png)
+
+OpenEVSE can post its status values (e.g. amp, temp1, temp2, temp3, pilot, status) to an MQTT server. Data will be published as a sub-topic of base topic.E.g `<base-topic>/amp`. Data is published to MQTT every 30s.
+
+- Enter MQTT server host and base-topic
+- (Optional) Enter server authentication details if required
+- Click connect
+- After a few seconds `Connected: No` should change to `Connected: Yes` if connection is successful. Re-connection will be attempted every 10s. A refresh of the page may be needed.
+
+*Note: `emon/xxxx` should be used as the base-topic if posting to emonPi MQTT server if you want the data to appear in emonPi Emoncms. See [emonPi MQTT docs](https://guide.openenergymonitor.org/technical/mqtt/).*
+
+### RAPI over MQTT
+
+RAPI commands can be issued via MQTT messages. The RAPI command should be published to the following MQTT:
+
+`<base-topic>/rapi/in/<$ rapi-command> payload`
+
+e.g assuming base-topic of `openevse` to following command will set current to 13A:
+
+`openevse/rapi/in/$SC 13`
+
+The payload can be left blankc if the RAPI command does not require a payload e.g.
+
+`openevse/rapi/in/$GC`
+
+The responce from the RAPI command is published by the OpenEVSE back to the same sub-topic and can be received by subscribing to:
+
+`<base-topic>/rapi/out/#`
+
+e.g. `$OK`
+
+
+## 5. Admin (Authentication)
+
+HTTP Authentication (highly recomended) can be enabled by saving admin config by default username and password
+
+**HTTP authentication is required for all HTTP requests including input API**
+
+![admin setup](docs/admin.png)
+
+## RAPI Commands over HTTP
+
+RAPI (rapid API) commands can also be issued directly via a single HTTP request.
+
+*Assuming `192.168.0.108` is the local IP address of the OpenEVSE ESP.*
+
+Eg.the RAPI command to set charging rate to 13A:
+
+[http://192.168.0.108/r?rapi=%24SC+13](http://192.168.0.108/r?rapi=%24SC+13)
+
+To sleep (pause a charge) issue RAPI command `$FS`
+
+[http://192.168.0.108/r?rapi=%24FS](http://192.168.0.108/r?rapi=%24FS)
+
+To enable (start / resume a charge) issue RAPI command `$FE`
+
+[http://192.168.0.108/r?rapi=%24FE](http://192.168.0.108/r?rapi=%24FE)
+
+
+There is also an [OpenEVSE RAPI command python library](https://github.com/tiramiseb/python-openevse).
+
+RAPI commands can be used to control and check the status of all OpenEVSE functions. A full list of RAPI commands can be found in the [OpenEVSE plus source code](https://github.com/lincomatic/open_evse/blob/stable/rapi_proc.h).
+
+***
+
+## Firmware Compile & Upload Instructions
 
 The code for the ESP8266 can be compiled and uploaded using PlatformIO or Arduino IDE. PlatformIO is the easiest to get started.
 
@@ -26,12 +145,13 @@ Standalone built on GitHub Atom IDE, or use PlatformIO Atom IDE plug-in if you a
 
 #### 2. Clone this repo
 
-`$ git clone https://github.com/openenergymonitor/EmonESP`
+`$ git clone https://github.com/chris1howell/OpenEVSE_RAPI_WiFi_ESP8266`
+
 
 #### 3. Compile
 
 ```
-$ cd EmonESP
+$ cd OpenEVSE_RAPI_WiFi_ESP8266
 $ pio run
 ```
 
@@ -52,7 +172,7 @@ The first time platformIO is ran the espressif arduino tool chain and all the re
 
 `$ pio run -t uploadfs`
 
-See [PlatfomrIO docs regarding SPIFFS uploading](http://docs.platformio.org/en/latest/platforms/espressif.html#uploading-files-to-file-system-spiffs)
+See [PlatfomIO docs regarding SPIFFS uploading](http://docs.platformio.org/en/latest/platforms/espressif.html#uploading-files-to-file-system-spiffs)
 
 ##### c.) OTA upload over local network (optional advanced)
 
