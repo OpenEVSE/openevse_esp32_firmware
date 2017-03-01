@@ -2,7 +2,7 @@
 
 OpenEVSE ESP8266 WIFI serial to EmonCMS link
 
-![OpenEVSE_WiFi.jpg](docs/OpenEVSE_WiFi.jpg)
+![OpenEVSE_WiFi.jpg](docs/OpenEVSE_WiFi.png)
 
 ***
 
@@ -22,7 +22,7 @@ On first boot, OpenEVSE should broadcast a WiFI AP `OpenEVSE_XXX`. Connect to th
 
 ![Wifi connect](docs/wifi-connect.png)
 
-### 1. WiFi Connection
+### WiFi Connection
 
 
 - Select your WiFi network from list of available networks
@@ -41,7 +41,7 @@ On future boot up OpenEVSE will automatically connect to this network.
 *Holding the `boot` button at startup (for about 10's) will force AP mode. This is useful when trying to connect the unit to a new WiFi network.*
 
 
-## 2. Emoncms
+## Emoncms
 
 ![emoncms setup](docs/emoncms.png)
 
@@ -69,6 +69,16 @@ OpenEVSE can post its status values (e.g. amp, temp1, temp2, temp3, pilot, statu
 
 *Note: `emon/xxxx` should be used as the base-topic if posting to emonPi MQTT server if you want the data to appear in emonPi Emoncms. See [emonPi MQTT docs](https://guide.openenergymonitor.org/technical/mqtt/).*
 
+## RAPI
+
+RAPI commands can be used to control and check the status of all OpenEVSE functions. A full list of RAPI commands can be found in the [OpenEVSE plus source code](https://github.com/lincomatic/open_evse/blob/stable/rapi_proc.h). RAPI commands can be issued via the web-interface, HTTP and MQTT.
+
+#### RAPI via web interface
+
+Enter RAPI commands directly into to web interface, RAPI responce is printed in return:
+  
+![](docs/rapi-web.png)
+
 ### RAPI over MQTT
 
 RAPI commands can be issued via MQTT messages. The RAPI command should be published to the following MQTT:
@@ -89,16 +99,9 @@ The responce from the RAPI command is published by the OpenEVSE back to the same
 
 e.g. `$OK`
 
+[See video demo of RAPI over MQTT])(https://www.youtube.com/watch?v=tjCmPpNl-sA&t=101s)
 
-## 5. Admin (Authentication)
-
-HTTP Authentication (highly recomended) can be enabled by saving admin config by default username and password
-
-**HTTP authentication is required for all HTTP requests including input API**
-
-![admin setup](docs/admin.png)
-
-## RAPI Commands over HTTP
+### RAPI over HTTP
 
 RAPI (rapid API) commands can also be issued directly via a single HTTP request.
 
@@ -119,7 +122,17 @@ To enable (start / resume a charge) issue RAPI command `$FE`
 
 There is also an [OpenEVSE RAPI command python library](https://github.com/tiramiseb/python-openevse).
 
-RAPI commands can be used to control and check the status of all OpenEVSE functions. A full list of RAPI commands can be found in the [OpenEVSE plus source code](https://github.com/lincomatic/open_evse/blob/stable/rapi_proc.h).
+
+
+## 5. Admin (Authentication)
+
+HTTP Authentication (highly recomended) can be enabled by saving admin config by default username and password.
+
+**HTTP authentication is required for all HTTP requests including input API**
+
+![admin setup](docs/admin.png)
+
+
 
 ***
 
