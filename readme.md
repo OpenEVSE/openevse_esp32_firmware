@@ -38,22 +38,18 @@ On future boot up OpenEVSE will automatically connect to this network.
 
 ## Emoncms
 
-![emoncms setup](docs/emoncms.png)
-
 OpenEVSE can post its status values (e.g amp, temp1, temp2, temp3, pilot, status) to [emoncms.org](https://emoncms.org) or any other  Emoncms server (e.g. emonPi) using [Emoncms API](https://emoncms.org/site/api#input). Data will be posted every 30s.
 
 Data ca be posted using HTTP or HTTPS. For HTTPS the Emoncms server must support HTTPS (emoncms.org does, emonPi does not).Due to the limited resources on the ESP the SSL SSH-1 fingerprint for the Emoncms server must be manually entered and regularly updated.
 
 *Note: the emoncms.org fingerprint will change every 90 days when the SSL certificate is renewed.*
 
-**Currently emoncms.org only supports numerical node names, other emoncms servers e.g. emonPi do support alphanumeric node naming.**
+**Currently emoncms.org only supports numerical node names, other emoncms servers e.g. emonPi and data.openevse does support alphanumeric node naming.**
 
 
 ## 3. MQTT
 
 ### OpenEVSE Status via MQTT
-
-![mqtt setup](docs/mqtt.png)
 
 OpenEVSE can post its status values (e.g. amp, temp1, temp2, temp3, pilot, status) to an MQTT server. Data will be published as a sub-topic of base topic.E.g `<base-topic>/amp`. Data is published to MQTT every 30s.
 
@@ -119,13 +115,19 @@ There is also an [OpenEVSE RAPI command python library](https://github.com/tiram
 
 
 
-## 5. Admin (Authentication)
+## Admin (Authentication)
 
 HTTP Authentication (highly recomended) can be enabled by saving admin config by default username and password.
 
 **HTTP authentication is required for all HTTP requests including input API**
 
 ![admin setup](docs/admin.png)
+
+## Firmware update
+
+Pre-compiled .bin's can be uploaded via the web interface, see [OpenEVSE Wifi releases](https://github.com/chris1howell/OpenEVSE_RAPI_WiFi_ESP8266/releases)
+
+*Note: the SPIFFS file-system (web page, CSS, java script and images) cannot currently be updated via web interface. They must be uploaded via serial see below.*
 
 
 
