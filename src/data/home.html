@@ -114,8 +114,8 @@
           <input id="mqtt_server" type="text">
           </p><span>e.g 'emonpi', 'test.mosquitto.org', '192.168.1.4'</span><br>
           <p><b>Base-topic:</b><br>
-          <input id="mqtt_topic" type="text">
-        </p><span>e.g 'openevse', 'openevse/tesla', 'openevse/leaf'</span><br><br>
+          <input id="mqtt_topic" type="text" value="openevse">
+        </p><span>e.g 'openevse'</span><br><br>
           <p><b>Username:</b><span> blank - no authentication</span></p>
           <input id="mqtt_user" type="text">
           <p><b>Password:</b><span> blank - no authentication</span></p>
@@ -143,7 +143,8 @@
 			<div class="box380">
                 <h2>Current</h2>
                 <table>
-                <tr><th>Name</th><th>Value</th></tr>
+                <tr><th>Name</th><th>
+			</th></tr>
                 <tr><td>Service Level:</td><td><span id="service"></span></td></tr>
                 <tr><td>Level 1 Minimum:</td><td><span id="l1min"></span></td></tr>
                 <tr><td>Level 1 Maximum:</td><td><span id="l1max"></span></td></tr>
