@@ -71,6 +71,8 @@ void startAP() {
   delay(5000);
   Serial.println("$FP 0 0 IP_Address......");
   delay(100);
+  Serial.println("$FP 0 1 ................");
+  delay(100);
   sprintf(tmpStr,"%d.%d.%d.%d",myIP[0],myIP[1],myIP[2],myIP[3]);
   DEBUG.print("AP IP Address: ");
   DEBUG.println(tmpStr);
@@ -121,6 +123,8 @@ void startClient() {
     sprintf(tmpStr,"%d.%d.%d.%d",myAddress[0],myAddress[1],myAddress[2],myAddress[3]);
     DEBUG.print("Connected, IP: ");
     Serial.println("$FP 0 0 Client-IP.......");
+    delay(100);
+    Serial.println("$FP 0 1 ................");
     delay(100);
     Serial.print("$FP 0 1 ");
     Serial.println(tmpStr);
