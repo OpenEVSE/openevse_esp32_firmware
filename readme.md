@@ -90,7 +90,7 @@ The responce from the RAPI command is published by the OpenEVSE back to the same
 
 e.g. `$OK`
 
-[See video demo of RAPI over MQTT])(https://www.youtube.com/watch?v=tjCmPpNl-sA&t=101s)
+[See video demo of RAPI over MQTT](https://www.youtube.com/watch?v=tjCmPpNl-sA&t=101s)
 
 ### RAPI over HTTP
 
