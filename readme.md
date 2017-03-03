@@ -121,7 +121,6 @@ HTTP Authentication (highly recomended) can be enabled by saving admin config by
 
 **HTTP authentication is required for all HTTP requests including input API**
 
-![admin setup](docs/admin.png)
 
 ## Firmware update
 
