@@ -163,79 +163,81 @@
 			 
           </div>
        <div id="content-3">
-			<div class="box380">
-                <h2>Current</h2>
-                <table>
-                <tr><th>Name</th><th>
-			</th></tr>
-                <tr><td>Service Level:</td><td><span id="service"></span></td></tr>
-                <tr><td>Level 1 Minimum:</td><td><span id="l1min"></span></td></tr>
-                <tr><td>Level 1 Maximum:</td><td><span id="l1max"></span></td></tr>
-                <tr><td>Level 2 Minimum:</td><td><span id="l2min"></span></td></tr>
-                <tr><td>Level 2 Maximum:</td><td><span id="l2max"></span></td></tr>
-                <tr><td>Sensor Scale:</td><td><span id="scale"></span></td></tr>
-                <tr><td>Sensor Offset:</td><td><span id="offset"></span></td></tr>
-                </table>
-             </div>
-			 <div class="box380">
-                <h2>Safety</h2>
-                <table>
-                <tr><th>Test</th><th>Status</th></tr>
-                <tr><td>GFCI Self Test:</td><td><span id="gfcit"></span></td></tr>
-                <tr><td>Ground Monitoring:</td><td><span id="groundt"></span></td></tr>
-                <tr><td>Stuck Contact Detection:</td><td><span id="relayt"></span></td></tr>
-                <tr><td>Temperature Monitoring:</td><td><span id="tempt"></span></td></tr>
-                <tr><td>Diode Check:</td><td><span id="diodet"></span></td></tr>
-                <tr><td>Vent Required:</td><td><span id="ventt"></span></td></tr>
-                <tr><th>Error</th><th>Count</th></tr>
-                <tr><td>GFCI:</td><td><span id="gfcicount"></span></td></tr>
-                <tr><td>No Ground:</td><td><span id="nogndcount"></span></td></tr>
-                <tr><td>Stuck Contact:</td><td><span id="stuckcount"></span></td></tr>
-                </table>
-             </div>
-			 <div class="box380">
-                <h2>Session Options</h2>
-                <table>
-                <tr><th>Limits</th><th>Value</th></tr>
-                <tr><td>Kwh:</td><td><span id="kwhlimit"></span></td></tr>
-                <tr><td>Time:</td><td><span id="timelimit"></span></td></tr>
-                </table>
-             </div>
-			 <div class="box380">
-                <h2>Energy</h2>
-                <table>
-                <tr><th>Energy</th><th>kWh</th></tr>
-                <tr><td>This Session:</td><td><span id="wattsec"></span></td></tr>
-                <tr><td>Total:</td><td><span id="watthour"></span></td></tr>
-                </table>
-             </div>
-			 <div class="box380">
-                <h2>Hardware</h2>
-				<table>
-                <tr><th>OpenEVSE</th><th></th></tr>
-                <tr><td>Firmware:</td><td><span id="firmware"></span></td></tr>
-                <tr><td>Protocol:</td><td><span id="protocol"></span></td></tr>
-				<tr><th>WiFi</th><th></th></tr>
-				<tr><td>Flash Size:</td><td><span id="espflash"></span></td></tr>
-                <tr><td>Free RAM:</td><td><span id="espfree"></span></td></tr>
-                </table>
-             </div>
-             <div class="box380">
-               <h2>Sensor Values</h2>
-               <table>
-                <tr><th>Sensor</th><th>Value</th></tr>
-                <tr><td>State</td><td><span id="estate"></span></td></tr>
-                <tr><td>Pilot</td><td><span id="pilot"></span></td></tr>
-				<tr><td>Temp1</td><td><span id="temp1"></span></td></tr>
-				<tr><td>Temp2</td><td><span id="temp2"></span></td></tr>
-				<tr><td>Temp3</td><td><span id="temp3"></span></td></tr>
-                </table>
-             </div>
-		 </div>
-        <div id="content-4">
-			<div class="box380">
-             <iframe style="width:380px; height:660px;" frameborder="0" scrolling="no" marginheight="0" marginwidth="0" src="/rapi">
-			</iframe>
+         
+  			<div class="box380">
+                  <h2>Current</h2>
+                  <table>
+                  <tr><th>Name</th><th>
+  			</th></tr>
+                  <tr><td>Service Level:</td><td><span id="service"></span></td></tr>
+                  <tr><td>Level 1 Minimum:</td><td><span id="l1min"></span></td></tr>
+                  <tr><td>Level 1 Maximum:</td><td><span id="l1max"></span></td></tr>
+                  <tr><td>Level 2 Minimum:</td><td><span id="l2min"></span></td></tr>
+                  <tr><td>Level 2 Maximum:</td><td><span id="l2max"></span></td></tr>
+                  <tr><td>Sensor Scale:</td><td><span id="scale"></span></td></tr>
+                  <tr><td>Sensor Offset:</td><td><span id="offset"></span></td></tr>
+                  </table>
+               </div>
+  			 <div class="box380">
+                  <h2>Safety</h2>
+                  <table>
+                  <tr><th>Test</th><th>Status</th></tr>
+                  <tr><td>GFCI Self Test:</td><td><span id="gfcit"></span></td></tr>
+                  <tr><td>Ground Monitoring:</td><td><span id="groundt"></span></td></tr>
+                  <tr><td>Stuck Contact Detection:</td><td><span id="relayt"></span></td></tr>
+                  <tr><td>Temperature Monitoring:</td><td><span id="tempt"></span></td></tr>
+                  <tr><td>Diode Check:</td><td><span id="diodet"></span></td></tr>
+                  <tr><td>Vent Required:</td><td><span id="ventt"></span></td></tr>
+                  <tr><th>Error</th><th>Count</th></tr>
+                  <tr><td>GFCI:</td><td><span id="gfcicount"></span></td></tr>
+                  <tr><td>No Ground:</td><td><span id="nogndcount"></span></td></tr>
+                  <tr><td>Stuck Contact:</td><td><span id="stuckcount"></span></td></tr>
+                  </table>
+               </div>
+  			 <div class="box380">
+                  <h2>Session Options</h2>
+                  <table>
+                  <tr><th>Limits</th><th>Value</th></tr>
+                  <tr><td>Kwh:</td><td><span id="kwhlimit"></span></td></tr>
+                  <tr><td>Time:</td><td><span id="timelimit"></span></td></tr>
+                  </table>
+               </div>
+  			 <div class="box380">
+                  <h2>Energy</h2>
+                  <table>
+                  <tr><th>Energy</th><th>kWh</th></tr>
+                  <tr><td>This Session:</td><td><span id="wattsec"></span></td></tr>
+                  <tr><td>Total:</td><td><span id="watthour"></span></td></tr>
+                  </table>
+               </div>
+  			 <div class="box380">
+                  <h2>Hardware</h2>
+  				<table>
+                  <tr><th>OpenEVSE</th><th></th></tr>
+                  <tr><td>Firmware:</td><td><span id="firmware"></span></td></tr>
+                  <tr><td>Protocol:</td><td><span id="protocol"></span></td></tr>
+  				<tr><th>WiFi</th><th></th></tr>
+  				<tr><td>Flash Size:</td><td><span id="espflash"></span></td></tr>
+                  <tr><td>Free RAM:</td><td><span id="espfree"></span></td></tr>
+                  </table>
+               </div>
+               <div class="box380">
+                 <h2>Sensor Values</h2>
+                 <table>
+                  <tr><th>Sensor</th><th>Value</th></tr>
+                  <tr><td>State:</td><td><span id="estate"></span></td></tr>
+                  <tr><td>Pilot:</td><td><span id="pilot"></span></td></tr>
+  				<tr><td>Temp1:</td><td><span id="temp1"></span></td></tr>
+  				<tr><td>Temp2:</td><td><span id="temp2"></span></td></tr>
+  				<tr><td>Temp3:</td><td><span id="temp3"></span></td></tr>
+                  </table>
+               </div>
+  		 </div>
+          <div id="content-4">
+  			<div class="box380">
+               <iframe style="width:380px; height:660px;" frameborder="0" scrolling="no" marginheight="0" marginwidth="0" src="/rapi">
+  			</iframe>
+
 			</div>
              <div class="box380">
                <h2>RAPI Get Commands</h2>
