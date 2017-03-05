@@ -20,13 +20,13 @@
 <div id="page">
   <div class="box">
   <h1>Open<span>EVSE</span></h1>
-  <h3>WiFi Energy Monitor</h3>
+  <h3>WiFi</h3>
   </div>
 
 <div id="container">
     
     <input id="tab-1" type="radio" name="tab-group" checked="checked" />
-    <label for="tab-1">Network</label>
+    <label for="tab-1">System</label>
     <input id="tab-2" type="radio" name="tab-group" />
     <label for="tab-2">Services</label>
     <input id="tab-3" type="radio" name="tab-group" />
@@ -88,41 +88,63 @@
 	<div id="content-2">
 			<div class="box380">
 			<h2>Energy Monitoring</h2>
-				<p><b>Server:</b><br>
+				<p><b>Emoncms Server*:</b><br>
 				<input id="emoncms_server" type="text" value="data.openevse.com/emoncms">
-				<p></p><span>e.g 'data.openevse.com/emoncms', 'emoncms.org', 'emonpi/emoncms'</span><br>
-				<p><b>Node:</b><br>
+				<!--<p></p><span id=small-text>e.g data.openevse.com/emoncms, 'emoncms.org', 'emonpi/emoncms'</span><br>-->
+				
+				<p></p><span id=small-text>e.g:
+				<a href="http://data.openevse.com/emoncms">data.openevse.com/emoncms</a>,
+				<a href="http://emoncms.org">emoncms.org</a>,
+				<a href="http://emonpi/emoncms">emonpi/emoncms</a>
+				</span><br>
+				
+				<p><b>Emoncms Node*:</b><br>
 				<input id="emoncms_node" type="text">
-				</p><span>Emoncms.org only supports numberical nodeID's (1-32)</span>
-				<p><b>Write apikey*:</b><br>
+				</p><span id=small-text>emoncms.org only supports numberical nodeID's (1-32)</span>
+				<p><b>Emoncms write-apikey*:</b><br>
 				<input id="emoncms_apikey" type="text"><br>
-				<p><b>SSL SSH-1 Fingerprint:</b><br>
+				<p><b>Emoncms SSL SSH-1 Fingerprint (optional):</b><br>
 				<input id="emoncms_fingerprint" type="text"><br>
-        <br>HTTPS will be enabled if present e.g:
+        <br><span id=small-text>HTTPS will be enabled if present e.g:</span>
         <span id=small-text>
     			7D:82:15:BE:D7:BC:72:58:87:7D:8E:40:D4:80:BA:1A:9F:8B:8D:DA
-  			</span>
-      	<br></br>
+  			</span><br>
+      	
 				<button id="save-emoncms">Save</button>
 				<b>&nbsp; Connected:&nbsp;<span id="emoncms_connected"></span></b><br><br>
 				<span id="psuccess"></span>
 
         </div>
 		<div class="box380">
-		<h2>MQTT</h2>
-		  <p><b>Server:</b><br>
+		<h2>MQTT Status & Control</h2>
+		  <p><b>Server*:</b><br>
           <input id="mqtt_server" type="text">
-          </p><span>e.g 'emonpi', 'test.mosquitto.org', '192.168.1.4'</span><br>
-          <p><b>Base-topic:</b><br>
+          </p><span id=small-text>e.g 'emonpi', 'test.mosquitto.org', '192.168.1.4'</span><br>
+          <p><b>Base-topic*:</b><br>
           <input id="mqtt_topic" type="text" value="openevse">
-        </p><span>e.g 'openevse'</span><br><br>
-          <p><b>Username:</b><span> blank - no authentication</span></p>
+        </p><span id=small-text>e.g 'openevse'</span>
+          <p><b>Username:</b><span> blank - no authentication</span>
           <input id="mqtt_user" type="text">
-          <p><b>Password:</b><span> blank - no authentication</span></p>
+          <p><b>Password:</b><span> blank - no authentication</span>
           <input id="mqtt_pass" type="text"><br>
-          <br></br>
           <button id="save-mqtt">Save</button>
           <b>&nbsp; Connected:&nbsp;<span id="mqtt_connected"></span></b>
+          
+          <p>Status published to:
+          <span id=small-text>{base-topic}/{staus} value</span><br>
+          <span id=small-text>e.g. openevse/amp 16</span><br>
+          <p>RAPI control subscribes to:
+          <span id=small-text>{base-topic}/rapi/in{command} value</span><br>
+          <span id=small-text>e.g. openevse/rapi/in/$SC 16</span><br>
+          <span id=small-text>e.g. openevse/rapi/in/$GC</span><br>
+          <p>RAPI responce published to:
+          <span id=small-text>{base-topic}/rapi/out responce</span><br>
+          <span id=small-text>e.g. openevse/rapi/out $OK 6 32</span><br>
+          </p>
+          
+          
+
+
 
 		</div>
         <div class="box380">
@@ -133,8 +155,9 @@
                 <input id="ohmkey" type="text">
                 <button id="save-ohmkey">Save</button>
 				<p>Ohm Key can be obtained by logging in to OhmConnect, enter Settings and locate the link in "Open Source Projects"</p>
-				<p><b>Example: </b>https://login.ohmconnect.com/verify-ohm-hour/OpnEoVse</p>
-				<p><b>Key: </b>OpnEoVse</p>
+				<p><a href="https://login.ohmconnect.com/verify-ohm-hour/OpnEoVse">See Example</a></p>
+				<b>Key: </b>OpnEoVse
+				
 				
 	    </div>
 			 
@@ -274,7 +297,7 @@
    
     
   <div id="footer">
-      <br><b> Powered by <a href="http://www.openevse.com">OpenEVSE</a> and <a href="http://openenergymonitor.org">OpenEnergyMonitor</a></b>
+      <br><b> Powered by <a href="http://www.openevse.com">OpenEVSE</a> and <a href="https://openenergymonitor.org">OpenEnergyMonitor</a></b>
 	  <br> by Chris Howell, Trystan Lea, Glyn Hudson
   </div>
 
