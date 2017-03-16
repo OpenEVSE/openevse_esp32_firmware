@@ -11,7 +11,7 @@ r1.onreadystatechange = function () {
   var status = JSON.parse(r1.responseText);
 
   document.getElementById("passkey").value = status.pass;
-  
+
    if (status.www_user!==0){
     document.getElementById("www_user").value = status.www_username;
   }
@@ -22,7 +22,7 @@ r1.onreadystatechange = function () {
     document.getElementById("emoncms_node").value = status.emoncms_node;
     document.getElementById("emoncms_fingerprint").value = status.emoncms_fingerprint;
   }
-  
+
 
   if (status.emoncms_connected == "1"){
    document.getElementById("emoncms_connected").innerHTML = "Yes";
@@ -41,14 +41,13 @@ r1.onreadystatechange = function () {
       // document.getElementById("mqtt_pass").value = status.mqtt_pass;
     }
   }
-  
+
   if (status.mqtt_connected == "1"){
    document.getElementById("mqtt_connected").innerHTML = "Yes";
   } else {
     document.getElementById("mqtt_connected").innerHTML = "No";
   }
 
-  document.getElementById("free_heap").innerHTML = status.free_heap;
   document.getElementById("version").innerHTML = status.version;
   document.getElementById("ohmkey").value = status.ohmkey;
 
@@ -70,7 +69,7 @@ r1.onreadystatechange = function () {
           document.getElementById("apoff").style.display = '';
       }
       if (status.mode=="STA") document.getElementById("mode").innerHTML = "Client (STA)";
-  	  
+
   	  out = "";
       out += "<tr><td>"+status.ssid+"</td><td>"+status.srssi+"</td></tr>";
       document.getElementById("sta-ssid").innerHTML = out;
@@ -120,7 +119,7 @@ r2.timeout = 2000;
   	} else {
   	  document.getElementById("ventt").innerHTML = "Enabled";
   	}
-	
+
     document.getElementById("service").innerHTML = config.service;
 	  document.getElementById("l1min").innerHTML = config.l1min;
 	  document.getElementById("l1max").innerHTML = config.l1max;
@@ -140,10 +139,10 @@ r2.timeout = 2000;
 	  document.getElementById("stuckcount").innerHTML = config.stuckcount;
 	  document.getElementById("kwhlimit").innerHTML = config.kwhlimit;
 	  document.getElementById("timelimit").innerHTML = config.timelimit;
-      
+
   };
 r2.send();
-  
+
 var r3 = new XMLHttpRequest();
 r3.open("GET", "rapiupdate", true);
 r3.timeout = 8000;
@@ -176,7 +175,7 @@ setInterval(update,10000);
 // Periodic 10s update of last data values
 // -----------------------------------------------------------------------
 function update() {
-	
+
 	var r3 = new XMLHttpRequest();
   r3.open("GET", "rapiupdate", true);
 	r3.timeout = 8000;
@@ -205,7 +204,6 @@ function update() {
     if (r2.readyState != 4 || r2.status != 200) return;
     var status = JSON.parse(r2.responseText);
 
-    document.getElementById("free_heap").innerHTML = status.free_heap;
 
     if (status.emoncms_connected == "1"){
      document.getElementById("emoncms_connected").innerHTML = "Yes";
