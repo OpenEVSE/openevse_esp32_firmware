@@ -67,7 +67,7 @@ RAPI commands can be used to control and check the status of all OpenEVSE functi
 #### RAPI via web interface
 
 Enter RAPI commands directly into to web interface, RAPI responce is printed in return:
-  
+
 ![](docs/rapi-web.png)
 
 ### RAPI over MQTT
@@ -193,6 +193,15 @@ Upload SPIFFS filesystem over OTA (and don't flash):
 
 OTA uses port 8266. See [PlatformIO ESP OTA docs](http://docs.platformio.org/en/latest/platforms/espressif.html#over-the-air-ota-update):
 
+##### Or upload all in one go  
+
+This wil upload both the fimware and spiffs file system in a single command. :-)
+
+- Requries esptool
+- Put ESP into bootloader mode
+
+`esptool.py write_flash 0x000000 .pioenvs/openevse/firmware.bin 0x300000 .pioenvs/openevse/spiffs.bin`
+
 ***
 
 ### Using Arduino IDE
@@ -226,8 +235,35 @@ From: https://github.com/esp8266/Arduino/blob/master/doc/filesystem.md
 
 ***
 
+#### Troubleshooting Upload
+
+##### Erase Flash
+
+If you are experiancing ESP hanging in a reboot loop after upload it may be that the ESP flash has remnants of previous code (which may have the used the ESP memory in a different way). The ESP flash can be fully erased using [esptool](https://github.com/themadinventor/esptool). With the unit in bootloder mode run:
+
+`$ esptool.py erase_flash`
+
+*`sudo` maybe be required*
+
+Output:
+
+```
+esptool.py v1.2-dev
+Connecting...
+Running Cesanta flasher stub...
+Erasing flash (this may take a while)...
+Erase took 8.0 seconds
+```
+
+##### Fully erase ESP-12E
+
+To fully erase all memory locations on an ESP-12 (4Mb) we neeed to upload a blank file to each memory location
+
+`esptool.py write_flash 0x000000 blank_1MB.bin 0x100000 blank_1MB.bin 0x200000 blank_1MB.bin 0x300000 blank_1MB.bin`
+
+***
 
 
 ### Licence
 
-GNU General Public License
+GNU General Public License (GPL) V3
