@@ -1,4 +1,3 @@
-
 <!doctype html>
 
 <html lang="en">
@@ -33,40 +32,48 @@
     <label for="tab-3">Status</label>
     <input id="tab-4" type="radio" name="tab-group" />
     <label for="tab-4">RAPI</label>
+    <input id="tab-5" type="radio" name="tab-group" />
+    <label for="tab-5">Mode</label>
+    
     <div id="content">
+      
       <div id="content-1">
-         <div class="box380">
+        
+       <div class="box380">
 				<h2>WiFi Setup</h2>
                 <p><b>Mode:</b> <span id="mode"></span></p>
                 <div id="client-view">
                   <table>
-                  <tr><th>Network</th> <th>RSSI dBm</th> </tr>
-                  <tbody id="sta-ssid"></tbody>
-                </table>
-                    <p><b>IP Address:</b><br><span id="sta-ip"></span></p>
-					<p><b>Successful packets:</b><br><span id="sta-psuccess"></span> of <span id="sta-psent"></span></p>
-                    <p><b>OpenEVSE</b></p>
-                    <p><b>RAPI packets:</b><br><span id="comm-psuccess"></span> of <span id="comm-psent"></span></p>
-                    <button id="apoff" style="display:none">Turn off Access Point</button>
-                    
+                    <tr><th>Network</th> <th>RSSI dBm</th> </tr>
+                    <tbody id="sta-ssid"></tbody>
+                  </table>
+                  <p><b>IP Address:</b><br><span id="sta-ip"></span></p>
+        					<p><b>Successful packets:</b><br><span id="sta-psuccess"></span> of <span id="sta-psent"></span></p>
+                  <p><b>OpenEVSE</b></p>
+                  <p><b>RAPI packets:</b><br><span id="comm-psuccess"></span> of <span id="comm-psent"></span></p>
+                  <button id="apoff" style="display:none">Turn off Access Point</button>
                 </div>
+                
                 <div id="ap-view" style="display:none">
                     <p>Connect to network:</p>
                     <table>
-                  <tr> <th>Select</th> <th>Network</th> <th>RSSI dBm</th> </tr>
-                  <tbody id="networks"></tbody>
-					</table>
-					<p><b>Passkey:</b><br>
-					<input id="passkey" type="text">
-					<button id="connect">Connect</button>
-					</p>
+                      <tr> <th>Select</th> <th>Network</th> <th>RSSI dBm</th> </tr>
+                      <tbody id="networks"></tbody>
+          					</table>
+	
+          					<p><b>Passkey:</b><br>
+          					<input id="passkey" type="text">
+          					<button id="connect">Connect</button>
+          					</p>
                 </div>
+                
                 <div id="wait-view" style="display:none">
                     <p>Connecting to WIFI Network...</p>
                 </div>
-            </div>
-         	<div class="box380">
-			<h2>Administration</h2>
+      </div>
+      
+     	<div class="box380">
+  			<h2>Administration</h2>
 				<p><b>Username:</b><br>
 				<input id="www_user" type="text" value="admin">
 				<p><b>Password:</b><br>
@@ -75,22 +82,22 @@
 				<button id="save-admin">Save</button>
 			</div>
 		
-		<div class="box380">
-			<h2>WiFi Firmware</h2>
-      <span id=small-text>ESP8266</span><br>
-
-			<p><b>Version: </b><span id="version"></span></p>
-						<iframe style="width:380px; height:50px;" frameborder="0" scrolling="no" marginheight="0" marginwidth="0" src="/update">
-						</iframe>
-						<button id="restart">Restart</button>
-						<button id="reset">Factory Reset</button>
-
-
-          </div>
-    </div>
+  		<div class="box380">
+  			<h2>WiFi Firmware</h2>
+        <span id=small-text>ESP8266</span><br>
+  
+  			<p><b>Version: </b><span id="version"></span></p>
+  			<iframe style="width:380px; height:50px;" frameborder="0" scrolling="no" marginheight="0" marginwidth="0" src="/update"></iframe>
+  			<button id="restart">Restart</button>
+  			<button id="reset">Factory Reset</button>
+      </div>
+    
+  </div>
+  <!--end content 1-->
+    
 	<div id="content-2">
 			<div class="box380">
-			<h2>&nbsp; Energy Monitoring <img src="emoncms.jpg" align=left></h2>
+  			<h2>&nbsp; Energy Monitoring <img src="emoncms.jpg" align=left></h2>
 				<p><b>Emoncms Server*:</b><br>
 				<input id="emoncms_server" type="text" value="data.openevse.com/emoncms">
 				<p></p><span id=small-text>e.g:
@@ -114,62 +121,80 @@
 				<button id="save-emoncms">Save</button>
 				<b>&nbsp; Connected:&nbsp;<span id="emoncms_connected"></span></b><br><br>
 				<span id="psuccess"></span>
+      </div>
+        
+    		<div class="box380">
+    		<h2>MQTT</h2>
+              <p>Status published to:
+              <span id=small-text>{base-topic}/{staus} value</span><br>
+              <span id=small-text>e.g. openevse/amp 16</span><br>
+              <p>RAPI control subscribes to:
+              <span id=small-text>{base-topic}/rapi/in{command} value</span><br>
+              <span id=small-text>e.g. openevse/rapi/in/$SC 16</span><br>
+              <span id=small-text>e.g. openevse/rapi/in/$GC</span><br>
+              <p>RAPI responce published to:
+              <span id=small-text>{base-topic}/rapi/out responce</span><br>
+              <span id=small-text>e.g. openevse/rapi/out $OK 6 32</span><br>
+              </p>
+        		  <p><b>Host*:</b><br>
+              <input id="mqtt_server" type="text" value=emonpi><br>
+              <span id=small-text>e.g 'emonpi', 'test.mosquitto.org', '192.168.1.4'. (port: 1883)</span><br>
+              <p><b>Username:</b><br>
+              <input id="mqtt_user" type="text" value=emonpimqtt><br>
+              <span id=small-text>Leave blank for no authentication.</span>
+              <p><b>Password:</b><br>
+              <input id="mqtt_pass" type="text" value=emonpimqtt2016><br>
+              <span id=small-text>Leave blank for no authentication.</span><br>
+          	  <span id=small-text><a href="https://guide.openenergymonitor.org/technical/credentials/">Pre populated with emonPi MQTT server host and authentication.</a></span>
+              <p><b>Base-topic*:</b><br>
+              <input id="mqtt_topic" type="text" value="openevse"><br>
+              <span id=small-text>e.g 'openevse'</span>
+          		
+          		<h2>Solar PV divert</h2>
+              <p>Modulate charge rate based on available solar PV power.</p>
+              
+              <span id=small-text><b>Enter either:</b> solar PV MQTT topic to modulate charge rate based on solar PV <b>gen</b> e.g. (charge rate = gen):</span><br>
+          		<p><b>SolarPV-gen topic:</b>
+          		<input id="mqtt_solar" type="text" value="emon/emonpi/power2"><br>
+          	  <span id=small-text>Always positive.</span><br><br>
 
-        </div>
-		<div class="box380">
-		<h2>MQTT</h2>
-		  <p><b>Server*:</b><br>
-          <input id="mqtt_server" type="text">
-          </p><span id=small-text>e.g 'emonpi', 'test.mosquitto.org', '192.168.1.4'</span><br>
-          <p><b>Base-topic*:</b><br>
-          <input id="mqtt_topic" type="text" value="openevse">
-        </p><span id=small-text>e.g 'openevse'</span>
-          <p><b>Username:</b><span> blank - no authentication</span>
-          <input id="mqtt_user" type="text">
-          <p><b>Password:</b><span> blank - no authentication</span>
-          <input id="mqtt_pass" type="text"><br>
-          <button id="save-mqtt">Save</button>
-          <b>&nbsp; Connected:&nbsp;<span id="mqtt_connected"></span></b>
-          
-          <p>Status published to:
-          <span id=small-text>{base-topic}/{staus} value</span><br>
-          <span id=small-text>e.g. openevse/amp 16</span><br>
-          <p>RAPI control subscribes to:
-          <span id=small-text>{base-topic}/rapi/in{command} value</span><br>
-          <span id=small-text>e.g. openevse/rapi/in/$SC 16</span><br>
-          <span id=small-text>e.g. openevse/rapi/in/$GC</span><br>
-          <p>RAPI responce published to:
-          <span id=small-text>{base-topic}/rapi/out responce</span><br>
-          <span id=small-text>e.g. openevse/rapi/out $OK 6 32</span><br>
-          </p>
-          
-          
+              <span id=small-text><b>Or enter:</b> Grid (+I/-E) MQTT topic to modulate charge rate based on <b>excess power</b> i.e. power that would otherwise be exported is diverted to EVSE. Assumed EVSE power is included in grid feed e.g. (charge rate = gen - use - EVSE)</span>
+              <p><b>Grid (+I/-E) topic:</b><br>
 
-
-
-		</div>
-        <div class="box380">
-			<h2>&nbsp; OhmConnect <img src="ohm.jpg" align=left></h2>
+          		<input id="mqtt_grid_ie" type="text" value="emon/emonpi/power1"><br>
+              
+              <span id=small-text>Grid: positive Import / negative Export </span>
+  
+          	  <p><span id="small-text"><i>Fields are pre-populated with <a href="https://guide.openenergymonitor.org/applications/solar-pv/">emonPi solar PV defaults</a>.</i></span></p>
+          	  <br>
+              <button id="save-mqtt">Save</button>
+              <b>&nbsp; Connected:&nbsp;<span id="mqtt_connected"></span></b>
+    		</div>
+    		
+      
+      <div class="box380">
+    			<h2>&nbsp; OhmConnect <img src="ohm.jpg" align=left></h2>
 	        <p>OhmConnect monitors real-time conditions on the electricity grid. When dirty and unsustainable power plants turn on, our users receive a notification to save energy.</p>
             <p><b>Ohm Hour: </b><span id="ohmhour"></span></p>
             <p><b>Ohm key:</b><br>
                 <input id="ohmkey" type="text">
                 <button id="save-ohmkey">Save</button>
-				<p>Ohm Key can be obtained by logging in to OhmConnect, enter Settings and locate the link in "Open Source Projects"</p>
-				<p><a href="https://login.ohmconnect.com/verify-ohm-hour/OpnEoVse">See Example</a></p>
-				<b>Key: </b>OpnEoVse
-				
-				
+  				<p>Ohm Key can be obtained by logging in to OhmConnect, enter Settings and locate the link in "Open Source Projects"</p>
+  				<p><a href="https://login.ohmconnect.com/verify-ohm-hour/OpnEoVse">See Example</a></p>
+  				<b>Key: </b>OpnEoVse
 	    </div>
 			 
-          </div>
-       <div id="content-3">
+  </div>
+  <!--end TAB 2-->
+      
+      <!--TAB 3    -->
+     <div id="content-3">
          
   			<div class="box380">
-                  <h2>Current</h2>
-                  <table>
+              <h2>Current</h2>
+              <table>
                   <tr><th>Name</th><th>
-  			</th></tr>
+            			</th></tr>
                   <tr><td>Service Level:</td><td><span id="service"></span></td></tr>
                   <tr><td>Level 1 Minimum:</td><td><span id="l1min"></span></td></tr>
                   <tr><td>Level 1 Maximum:</td><td><span id="l1max"></span></td></tr>
@@ -177,11 +202,11 @@
                   <tr><td>Level 2 Maximum:</td><td><span id="l2max"></span></td></tr>
                   <tr><td>Sensor Scale:</td><td><span id="scale"></span></td></tr>
                   <tr><td>Sensor Offset:</td><td><span id="offset"></span></td></tr>
-                  </table>
-               </div>
+              </table>
+        </div>
   			 <div class="box380">
-                  <h2>Safety</h2>
-                  <table>
+            <h2>Safety</h2>
+            <table>
                   <tr><th>Test</th><th>Status</th></tr>
                   <tr><td>GFCI Self Test:</td><td><span id="gfcit"></span></td></tr>
                   <tr><td>Ground Monitoring:</td><td><span id="groundt"></span></td></tr>
@@ -193,53 +218,58 @@
                   <tr><td>GFCI:</td><td><span id="gfcicount"></span></td></tr>
                   <tr><td>No Ground:</td><td><span id="nogndcount"></span></td></tr>
                   <tr><td>Stuck Contact:</td><td><span id="stuckcount"></span></td></tr>
-                  </table>
-               </div>
+              </table>
+         </div>
   			 <div class="box380">
-                  <h2>Session Options</h2>
-                  <table>
+              <h2>Session Options</h2>
+              <table>
                   <tr><th>Limits</th><th>Value</th></tr>
                   <tr><td>Kwh:</td><td><span id="kwhlimit"></span></td></tr>
                   <tr><td>Time:</td><td><span id="timelimit"></span></td></tr>
-                  </table>
-               </div>
+              </table>
+          </div>
   			 <div class="box380">
-                  <h2>Energy</h2>
-                  <table>
+              <h2>Energy</h2>
+              <table>
                   <tr><th>Energy</th><th>kWh</th></tr>
                   <tr><td>This Session:</td><td><span id="wattsec"></span></td></tr>
                   <tr><td>Total:</td><td><span id="watthour"></span></td></tr>
-                  </table>
-               </div>
+              </table>
+        </div>
   			 <div class="box380">
-                  <h2>Hardware</h2>
-  				<table>
+              <h2>Hardware</h2>
+      				<table>
                   <tr><th>OpenEVSE</th><th></th></tr>
                   <tr><td>Firmware:</td><td><span id="firmware"></span></td></tr>
                   <tr><td>Protocol:</td><td><span id="protocol"></span></td></tr>
-  				<tr><th>WiFi</th><th></th></tr>
-  				<tr><td>Flash Size:</td><td><span id="espflash"></span></td></tr>
+          				<tr><th>WiFi</th><th></th></tr>
+          				<tr><td>Flash Size:</td><td><span id="espflash"></span></td></tr>
                   <tr><td>Free RAM:</td><td><span id="espfree"></span></td></tr>
-                  </table>
-               </div>
-               <div class="box380">
-                 <h2>Sensor Values</h2>
-                 <table>
+              </table>
+         </div>
+         
+         <div class="box380">
+               <h2>Sensor Values</h2>
+               <table>
                   <tr><th>Sensor</th><th>Value</th></tr>
                   <tr><td>State:</td><td><span id="estate"></span></td></tr>
                   <tr><td>Pilot:</td><td><span id="pilot"></span></td></tr>
-  				<tr><td>Temp1:</td><td><span id="temp1"></span></td></tr>
-  				<tr><td>Temp2:</td><td><span id="temp2"></span></td></tr>
-  				<tr><td>Temp3:</td><td><span id="temp3"></span></td></tr>
-                  </table>
-               </div>
+          				<tr><td>Temp1:</td><td><span id="temp1"></span></td></tr>
+          				<tr><td>Temp2:</td><td><span id="temp2"></span></td></tr>
+          				<tr><td>Temp3:</td><td><span id="temp3"></span></td></tr>
+               </table>
+         </div>
+         
   		 </div>
-          <div id="content-4">
+  		 <!--end tab 3-->
+    
+<!--TAB 4    -->
+    <div id="content-4">
+  			
   			<div class="box380">
-               <iframe style="width:380px; height:620px;" frameborder="0" scrolling="no" marginheight="0" marginwidth="0" src="/rapi">
-  			</iframe>
-
-			</div>
+               <iframe style="width:380px; height:620px;" frameborder="0" scrolling="no" marginheight="0" marginwidth="0" src="/rapi"></iframe>
+			  </div>
+			  
              <div class="box380">
                <h2>RAPI Get Commands</h2>
                <table>
@@ -260,10 +290,11 @@
                   <tr><td>$GV</td><td>Get Versions, evse_firmware protocol_version</td></tr>
                   </table>
              </div>
+             
 			 <div class="box380">
                <h2>RAPI Set Commands</h2>
                <table>
-				<tr><th>Set</th><th>Description</th></tr>
+          				<tr><th>Set</th><th>Description</th></tr>
                   <tr><td>$S0</td><td>Set LCD Type, Monochrome (0), Color (1)</td></tr>
                   <tr><td>$S1</td><td>Set RTC Year Month Day Hour Minute Second (all 2-digit max)</td></tr>
                   <tr><td>$S2</td><td>Enable (1)/ Disable (0) Ammeter Calibration Mode</td></tr>
@@ -282,10 +313,11 @@
                   <tr><td>$SV</td><td>Enable (1) / Disable (0) vent required check</td></tr>
                   </table>
 			</div>
+
 			<div class="box380">
                <h2>RAPI System Functions</h2>
                <table>
-				  <tr><th>Function</th><th>Description</th></tr>
+        				  <tr><th>Function</th><th>Description</th></tr>
                   <tr><td>$FB</td><td>LCD Backlight Color (0-7)</td></tr>
                   <tr><td>$FD</td><td>Disable EVSE</td></tr>
                   <tr><td>$FE</td><td>Enable EVSE</td></tr>
@@ -294,19 +326,43 @@
                   <tr><td>$FS</td><td>Put EVSE to sleep</td></tr>
                </table>
 			</div>
-        </div>
-	</div>
+			
+  </div>
+	<!--end TAB 4-->
+	
+	
+  <!--TAB 5 -->
+  <div id="content-5">
+    <div class="box380" id=solar-wrapper>
+    		<h2>Solar PV Divert</h2>
+        <p>Dynamically adjust charge rate based on solar PV generation.</p>
+    		<h2>Mode</h2>
+    		<button id="divertmode1">1: Normal</button>
+    		<button id="divertmode2">2: Eco</button>
+        <span id=small-text><i>Mode can also be controlled via MQTT: {base-topic}/mode</i></span><br>
+        <b><span id="divertmsg"></span></b><br>
+  	</div>
+  </div>
+   <!--end TAB 5 -->
+
+</div>
+<!--end content-->
       
    
-    
-  <div id="footer">
-      <br><b> Powered by <a href="http://www.openevse.com">OpenEVSE</a> and <a href="https://openenergymonitor.org">OpenEnergyMonitor</a></b>
-	  <br> by Chris Howell, Trystan Lea, Glyn Hudson
-  </div>
+  
+<div id="footer">
+    <br><b> Powered by <a href="http://www.openevse.com">OpenEVSE</a> and <a href="https://openenergymonitor.org">OpenEnergyMonitor</a></b>
+  <br> by Chris Howell, Trystan Lea, Glyn Hudson
+</div>
 
 
 <script src="config.js"></script>
+
 </div>
+<!--end container-->
+
 </div>
+<!--end page-->
+
 </body>
 </html>

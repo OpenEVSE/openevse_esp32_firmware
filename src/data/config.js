@@ -2,6 +2,8 @@ var statusupdate = false;
 var selected_network_ssid = "";
 var lastmode = "";
 var ipaddress = "";
+var divertmode = 0;
+
 
 // get statup status and populate input fields
 var r1 = new XMLHttpRequest();
@@ -12,7 +14,7 @@ r1.onreadystatechange = function () {
 
   document.getElementById("passkey").value = status.pass;
 
-   if (status.www_user!==0){
+  if ((status.www_user!==0) && (status.www_user!="undefined")){
     document.getElementById("www_user").value = status.www_username;
   }
 
@@ -36,6 +38,9 @@ r1.onreadystatechange = function () {
   if (status.mqtt_server!==0){
     document.getElementById("mqtt_server").value = status.mqtt_server;
     document.getElementById("mqtt_topic").value = status.mqtt_topic;
+    document.getElementById("mqtt_solar").value = status.mqtt_solar;
+    document.getElementById("mqtt_grid_ie").value = status.mqtt_grid_ie;
+
     if (status.mqtt_user!==0){
       document.getElementById("mqtt_user").value = status.mqtt_user;
       // document.getElementById("mqtt_pass").value = status.mqtt_pass;
@@ -50,6 +55,19 @@ r1.onreadystatechange = function () {
 
   document.getElementById("version").innerHTML = status.version;
   document.getElementById("ohmkey").value = status.ohmkey;
+  
+  // If MQTT solar pv topc or grid topic is not set then disable solar PV divert mode
+  if ((mqtt_solar===0) || (mqtt_grid_ie===0)) {
+    divertmode=0;
+    set_mode_button(divertmode); // disable mode button if solar PV / grid topics  are not configured
+  }
+  else{
+    // Set Solar PV divert mode button to current mode status
+    divertmode = status.divertmode;
+    document.getElementById("divertmsg").innerHTML = status.divertmsg;
+    set_mode_button(divertmode);
+  }
+
 
 
   if (status.mode=="AP") {
@@ -84,7 +102,7 @@ r1.send();
 var r2 = new XMLHttpRequest();
 r2.open("GET", "config", true);
 r2.timeout = 2000;
-  r2.onreadystatechange = function () {
+r2.onreadystatechange = function () {
     if (r2.readyState != 4 || r2.status != 200) return;
     var config = JSON.parse(r2.responseText);
     document.getElementById("firmware").innerHTML = config.firmware;
@@ -139,8 +157,7 @@ r2.timeout = 2000;
 	  document.getElementById("stuckcount").innerHTML = config.stuckcount;
 	  document.getElementById("kwhlimit").innerHTML = config.kwhlimit;
 	  document.getElementById("timelimit").innerHTML = config.timelimit;
-
-  };
+};
 r2.send();
 
 var r3 = new XMLHttpRequest();
@@ -328,6 +345,8 @@ document.getElementById("save-mqtt").addEventListener("click", function(e) {
       topic: document.getElementById("mqtt_topic").value,
       user: document.getElementById("mqtt_user").value,
       pass: document.getElementById("mqtt_pass").value
+      solar: document.getElementById("mqtt_solar").value
+      grid_ie: document.getElementById("mqtt_grid_ie").value
     };
     if (mqtt.server==="") {
       alert("Please enter MQTT server");
@@ -336,7 +355,7 @@ document.getElementById("save-mqtt").addEventListener("click", function(e) {
       var r = new XMLHttpRequest();
       r.open("POST", "savemqtt", true);
       r.setRequestHeader("Content-type","application/x-www-form-urlencoded");
-      r.send("&server="+mqtt.server+"&topic="+mqtt.topic+"&user="+mqtt.user+"&pass="+mqtt.pass);
+        r.send("&server="+mqtt.server+"&topic="+mqtt.topic+"&user="+mqtt.user+"&pass="+mqtt.pass+"&solar="+mqtt.solar+"&grid_ie="+mqtt.grid_ie);
       r.onreadystatechange = function () {
         console.log(mqtt);
         if (r.readyState != 4 || r.status != 200) return;
@@ -460,46 +479,128 @@ for (var i = 0; i < networkcheckboxes.length; i++) {
     networkcheckboxes[i].addEventListener('click', networkSelect, false);
 }
 
-// -----------------------------------------------------------------------
-// Event:Check for updates & display current / latest
-// URL /firmware
-// -----------------------------------------------------------------------
-document.getElementById("updatecheck").addEventListener("click", function(e) {
-    document.getElementById("firmware-version").innerHTML = "<tr><td>-</td><td>Connecting...</td></tr>";
-    var r = new XMLHttpRequest();
-    r.open("POST", "firmware", true);
-    r.onreadystatechange = function () {
-        if (r.readyState != 4 || r.status != 200) return;
-        var str = r.responseText;
-        console.log(str);
-        var firmware = JSON.parse(r.responseText);
-        document.getElementById("firmware").style.display = '';
-        document.getElementById("update").style.display = '';
-        document.getElementById("firmware-version").innerHTML = "<tr><td>"+firmware.current+"</td><td>"+firmware.latest+"</td></tr>";
-	  };
-    r.send();
-});
+// // -----------------------------------------------------------------------
+// // Event:Check for updates & display current / latest
+// // URL /firmware
+// // -----------------------------------------------------------------------
+// document.getElementById("updatecheck").addEventListener("click", function(e) {
+//     document.getElementById("firmware-version").innerHTML = "<tr><td>-</td><td>Connecting...</td></tr>";
+//     var r = new XMLHttpRequest();
+//     r.open("POST", "firmware", true);
+//     r.onreadystatechange = function () {
+//         if (r.readyState != 4 || r.status != 200) return;
+//         var str = r.responseText;
+//         console.log(str);
+//         var firmware = JSON.parse(r.responseText);
+//         document.getElementById("firmware").style.display = '';
+//         document.getElementById("update").style.display = '';
+//         document.getElementById("firmware-version").innerHTML = "<tr><td>"+firmware.current+"</td><td>"+firmware.latest+"</td></tr>";
+// 	  };
+//     r.send();
+// });
 
 
-// -----------------------------------------------------------------------
-// Event:Update Firmware
-// -----------------------------------------------------------------------
-document.getElementById("update").addEventListener("click", function(e) {
-    document.getElementById("update-info").innerHTML = "UPDATING..."
-    var r1 = new XMLHttpRequest();
-    r1.open("POST", "update", true);
-    r1.onreadystatechange = function () {
-        if (r1.readyState != 4 || r1.status != 200) return;
-        var str1 = r1.responseText;
-        document.getElementById("update-info").innerHTML = str1
-        console.log(str1);
-	  };
-    r1.send();
-});
+// // -----------------------------------------------------------------------
+// // Event:Update Firmware
+// // -----------------------------------------------------------------------
+// document.getElementById("update").addEventListener("click", function(e) {
+//     document.getElementById("update-info").innerHTML = "UPDATING..."
+//     var r1 = new XMLHttpRequest();
+//     r1.open("POST", "update", true);
+//     r1.onreadystatechange = function () {
+//         if (r1.readyState != 4 || r1.status != 200) return;
+//         var str1 = r1.responseText;
+//         document.getElementById("update-info").innerHTML = str1
+//         console.log(str1);
+// 	  };
+//     r1.send();
+// });
 
 // -----------------------------------------------------------------------
 // Event:Upload Firmware
 // -----------------------------------------------------------------------
 document.getElementById("upload").addEventListener("click", function(e) {
   window.location.href='/upload'
+});
+
+
+// -----------------------------------------------------------------------
+// Event: Change divertmode (solar PV divert)
+// -----------------------------------------------------------------------
+document.getElementById("divertmode1").addEventListener("click", function(e) {
+    divertmode = 1; // Normal
+    set_divertmode_button(divertmode);
+    changedivertmode(divertmode);
+});
+
+document.getElementById("divertmode2").addEventListener("click", function(e) {
+    divertmode = 2;     // Eco
+    set_divertmode_button(divertmode);
+    changedivertmode(divertmode);
+});
+
+
+function set_divertmode_button(divertmode){
+  // Set formatting solar PV divert divertmode button
+  if (divertmode === 0){
+    //DISABLE BUTTONS
+    document.getElementById("divertmode1").disabled = true;
+    document.getElementById("divertmode2").disabled = true;
+    document.getElementById("solarpvdivertmsg").innerHTML = "Error: MQTT config not configured with Solar PV / Grid topic.";
+    document.getElementById("solar-wrapper").style.opacity = "0.5";
+  } else {
+    document.getElementById("divertmode1").disabled = false;
+    document.getElementById("divertmode2").disabled = false;
+    document.getElementById("solarpvdivertmsg").innerHTML = "";
+    document.getElementById("solar-wrapper").style.opacity = "1.0";
+  }
+
+  if (divertmode == 1){
+    document.getElementById("divertmode1").style.color = '#000000';
+    document.getElementById("divertmode2").style.color = 'white';
+    document.getElementById("divertmode1").style.backgroundColor = '#f1f1f1';
+    document.getElementById("divertmode2").style.backgroundColor = '#008080';
+    document.getElementById("divertmode3").style.backgroundColor = '#008080';
+  }
+  if (divertmode == 2){
+    document.getElementById("divertmode1").style.color = 'white';
+    document.getElementById("divertmode2").style.color = '#000000';
+    document.getElementById("divertmode2").style.backgroundColor = '#f1f1f1';
+    document.getElementById("divertmode1").style.backgroundColor = '#008080';
+  }
+}
+
+function changedivertmode(divertmode){
+   var r = new XMLHttpRequest();
+    r.open("POST", "divertdivertmode", true);
+    r.setRequestHeader("Content-type","application/x-www-form-urlencoded");
+    r.send("&divertmode="+divertmode);
+    r.onreadystatechange = function () {
+      console.log(divertmode);
+      if (r.readyState != 4 || r.status != 200) return;
+      var str = r.responseText;
+      console.log(str);
+    }
+}
+
+// -----------------------------------------------------------------------
+// Event: Authentication save
+// -----------------------------------------------------------------------
+document.getElementById("save-admin").addEventListener("click", function(e) {
+    var admin = {
+      user: document.getElementById("www_user").value,
+      pass: document.getElementById("www_pass").value
+    }
+    document.getElementById("save-admin").innerHTML = "Saving...";
+    var r = new XMLHttpRequest();
+    r.open("POST", "saveadmin", true);
+    r.setRequestHeader("Content-type","application/x-www-form-urlencoded");
+    r.send("&user="+admin.user+"&pass="+admin.pass);
+    r.onreadystatechange = function () {
+      console.log(admin);
+      if (r.readyState != 4 || r.status != 200) return;
+      var str = r.responseText;
+	    console.log(str);
+	    if (str!=0) document.getElementById("save-admin").innerHTML = "Saved";
+    };
 });

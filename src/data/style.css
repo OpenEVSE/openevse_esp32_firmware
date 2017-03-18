@@ -283,10 +283,25 @@ input[type="password"] {
   z-index: 9;
 }
 
+#content-5 div {
+  position: relative;
+  background: #ffffff;
+  opacity: 100;
+  z-index: 9;
+}
+
+#content-5 iframe {
+  position: relative;
+  background: #ffffff;
+  opacity: 100;
+  z-index: 9;
+}
+
 #tab-1:checked ~ #content #content-1,
 #tab-2:checked ~ #content #content-2,
 #tab-3:checked ~ #content #content-3,
-#tab-4:checked ~ #content #content-4 {
+#tab-4:checked ~ #content #content-4,
+#tab-5:checked ~ #content #content-5 {
   opacity: 1;
   z-index: 10;
   visibility: visible;
