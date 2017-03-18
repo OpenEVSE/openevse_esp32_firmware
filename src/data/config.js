@@ -8,6 +8,7 @@ var divertmode = 0;
 // get statup status and populate input fields
 var r1 = new XMLHttpRequest();
 r1.open("GET", "status", false);
+r1.timeout = 2000;
 r1.onreadystatechange = function () {
   if (r1.readyState != 4 || r1.status != 200) return;
   var status = JSON.parse(r1.responseText);
@@ -56,16 +57,16 @@ r1.onreadystatechange = function () {
   document.getElementById("version").innerHTML = status.version;
   document.getElementById("ohmkey").value = status.ohmkey;
   
-  // If MQTT solar pv topc or grid topic is not set then disable solar PV divert mode
+  // If MQTT solar pv topic or grid topic is not set then disable solar PV divert mode
   if ((mqtt_solar===0) || (mqtt_grid_ie===0)) {
     divertmode=0;
-    set_mode_button(divertmode); // disable mode button if solar PV / grid topics  are not configured
+    set_divertmode_button(divertmode); // disable mode button if solar PV / grid topics  are not configured
   }
   else{
     // Set Solar PV divert mode button to current mode status
     divertmode = status.divertmode;
     document.getElementById("divertmsg").innerHTML = status.divertmsg;
-    set_mode_button(divertmode);
+    set_divertmode_button(divertmode);
   }
 
 
@@ -237,6 +238,18 @@ function update() {
      document.getElementById("mqtt_connected").innerHTML = "No";
     }
 
+    // If MQTT solar pv topic or grid topic is not set then disable solar PV divert mode
+    if ((mqtt_solar===0) || (mqtt_grid_ie===0)) {
+      divertmode=0;
+      set_divertmode_button(divertmode); // disable mode button if solar PV / grid topics  are not configured
+    }
+    else{
+      // Set Solar PV divert mode button to current mode status
+      divertmode = status.divertmode;
+      document.getElementById("divertmsg").innerHTML = status.divertmsg;
+      set_divertmode_button(divertmode);
+    }
+
     if ((status.mode=="STA") || (status.mode=="STA+AP")){
       // Update connected network RSSI
       var out="";
@@ -246,6 +259,7 @@ function update() {
   };
  r2.send();
 }
+// end update
 
 function updateStatus() {
   // Update status on Wifi connection
@@ -277,7 +291,8 @@ function updateStatus() {
     lastmode = status.mode;
   };
   r1.send();
-} //end update
+}
+//end update status
 
 // -----------------------------------------------------------------------
 // Event: WiFi Connect
