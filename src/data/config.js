@@ -8,7 +8,6 @@ var divertmode = 0;
 // get statup status and populate input fields
 var r1 = new XMLHttpRequest();
 r1.open("GET", "status", false);
-r1.timeout = 2000;
 r1.onreadystatechange = function () {
   if (r1.readyState != 4 || r1.status != 200) return;
   var status = JSON.parse(r1.responseText);
