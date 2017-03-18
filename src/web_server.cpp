@@ -270,16 +270,19 @@ void handleStatus() {
 String mqtt_solar="";
 String mqtt_grid_ie="";
 String divertmsg="";
+byte divertmode=1;
 // TEMP TEST//////////////////////////////////////////////////////////////////////////////////////////////////////////
 
   s += "\"mqtt_server\":\""+mqtt_server+"\",";
   s += "\"mqtt_topic\":\""+mqtt_topic+"\",";
   s += "\"mqtt_user\":\""+mqtt_user+"\",";
+  //s += "\"mqtt_pass\":\""+mqtt_pass+"\","; security risk: DONT RETURN PASSWORDS
   s += "\"mqtt_solar\":\""+mqtt_solar+"\",";
   s += "\"mqtt_grid_ie\":\""+mqtt_grid_ie+"\",";
-  s += "\"divertmsg\":\""+divertmsg+"\",";
-  //s += "\"mqtt_pass\":\""+mqtt_pass+"\","; security risk: DONT RETURN PASSWORDS
   s += "\"mqtt_connected\":\""+String(mqtt_connected())+"\",";
+  
+  s += "\"divertmsg\":\""+divertmsg+"\",";
+  s += "\"divertmode\":\""+String(divertmode)+"\",";
 
   s += "\"ohmkey\":\""+ohm+"\",";
 

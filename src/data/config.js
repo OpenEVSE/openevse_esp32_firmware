@@ -571,7 +571,7 @@ function set_divertmode_button(divertmode){
 
 function changedivertmode(divertmode){
    var r = new XMLHttpRequest();
-    r.open("POST", "divertdivertmode", true);
+    r.open("POST", "divertmode", true);
     r.setRequestHeader("Content-type","application/x-www-form-urlencoded");
     r.send("&divertmode="+divertmode);
     r.onreadystatechange = function () {
