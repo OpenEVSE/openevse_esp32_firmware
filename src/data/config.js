@@ -127,13 +127,13 @@ r2.onreadystatechange = function () {
   	}
     document.getElementById("relayt").innerHTML = config.relayt;
   	if (config.relayt == "1"){
-  	  document.getElementById("relayt").innerHTML = "Disabled"
+  	  document.getElementById("relayt").innerHTML = "Disabled";
   	} else {
   	document.getElementById("relayt").innerHTML = "Enabled";
   	}
     document.getElementById("ventt").innerHTML = config.ventt;
   	if (config.ventt == "1"){
-  	  document.getElementById("ventt").innerHTML = "Disabled"
+  	  document.getElementById("ventt").innerHTML = "Disabled";
   	} else {
   	  document.getElementById("ventt").innerHTML = "Enabled";
   	}
@@ -344,8 +344,8 @@ document.getElementById("save-mqtt").addEventListener("click", function(e) {
       server: document.getElementById("mqtt_server").value,
       topic: document.getElementById("mqtt_topic").value,
       user: document.getElementById("mqtt_user").value,
-      pass: document.getElementById("mqtt_pass").value
-      solar: document.getElementById("mqtt_solar").value
+      pass: document.getElementById("mqtt_pass").value,
+      solar: document.getElementById("mqtt_solar").value,
       grid_ie: document.getElementById("mqtt_grid_ie").value
     };
     if (mqtt.server==="") {
@@ -546,12 +546,12 @@ function set_divertmode_button(divertmode){
     //DISABLE BUTTONS
     document.getElementById("divertmode1").disabled = true;
     document.getElementById("divertmode2").disabled = true;
-    document.getElementById("solarpvdivertmsg").innerHTML = "Error: MQTT config not configured with Solar PV / Grid topic.";
+    document.getElementById("divertmsg").innerHTML = "Error: MQTT config not configured with Solar PV / Grid topic.";
     document.getElementById("solar-wrapper").style.opacity = "0.5";
   } else {
     document.getElementById("divertmode1").disabled = false;
     document.getElementById("divertmode2").disabled = false;
-    document.getElementById("solarpvdivertmsg").innerHTML = "";
+    document.getElementById("divertmsg").innerHTML = "";
     document.getElementById("solar-wrapper").style.opacity = "1.0";
   }
 
@@ -560,7 +560,6 @@ function set_divertmode_button(divertmode){
     document.getElementById("divertmode2").style.color = 'white';
     document.getElementById("divertmode1").style.backgroundColor = '#f1f1f1';
     document.getElementById("divertmode2").style.backgroundColor = '#008080';
-    document.getElementById("divertmode3").style.backgroundColor = '#008080';
   }
   if (divertmode == 2){
     document.getElementById("divertmode1").style.color = 'white';
