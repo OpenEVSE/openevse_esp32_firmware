@@ -11,8 +11,7 @@
 #include "mqtt.h"
 #include "input.h"
 #include "emoncms.h"
-//#include "ota.h"
-
+#include "divert.h"
 
 
 ESP8266WebServer server(80);          //Create class for Web server
@@ -202,6 +201,17 @@ void handleSaveMqtt() {
 
   // If connected disconnect MQTT to trigger re-connect with new details
   mqtt_restart();
+}
+
+// -------------------------------------------------------------------
+// Change divert mode (solar PV divert mode) e.g 1:Normal (default), 2:Eco
+// url: /mode
+// -------------------------------------------------------------------
+void handleDivertMode(){
+  divertmode_update(server.arg("divertmode").toInt());
+  server.send(200, "text/html", "Divert Mode changed");;
+  DEBUG.print("Divert Mode: ");
+  DEBUG.println(divertmode);
 }
 
 // -------------------------------------------------------------------

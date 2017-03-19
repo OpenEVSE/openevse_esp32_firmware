@@ -56,3 +56,5 @@ $RECYCLE.BIN/
 .piolibdeps
 .clang_complete
 .gcc-flags.json
+
+full-upload.sh
