@@ -335,12 +335,24 @@
   <div id="content-5">
     <div class="box380" id=solar-wrapper>
     		<h2>Solar PV Divert</h2>
-        <p>Dynamically adjust charge rate based on solar PV generation.</p>
+        <p>Dynamically adjust charge rate based on solar PV generation or excess power (grid export).</p>
     		<h2>Mode</h2>
     		<button id="divertmode1">1: Normal</button>
-    		<button id="divertmode2">2: Eco</button>
+    		<button id="divertmode2">2: Eco</button><br>
         <span id=small-text><i>Mode can also be controlled via MQTT: {base-topic}/mode</i></span><br>
         <b><span id="divertmsg"></span></b><br>
+        <span id=small-text><b>1. Normal (default):</b> charge at maximum current set by EVSE</span><br><br>
+        <span id=small-text><b>2. Eco:</b></span>
+        <ul>
+          <li><span id=small-text>If only solar PV feed available: charge rate is modulated based on <b>solar PV generation.</b></span></li>
+          <li><span id=small-text>If grid +I/-E (positive Import / negative Export) feed is avilable: charge rate will be modulated by available  <b>excess power.</b></span></li>
+          <li><span id=small-text>If EVSE is sleeping, charging will begin when solar PV / excess power > min chanrge rate.</span></li></li>
+          <li><span id=small-text>Charging will never pause, this avoids excess wear on the EVSE relay and the EV.</span></li>
+        </ul>
+        <span id=small-text><i>Note: It's assumed that EVSE power is included in the gird feed.</i></span><br>
+
+        
+        
   	</div>
   </div>
    <!--end TAB 5 -->

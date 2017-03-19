@@ -46,6 +46,7 @@
 #include "input.h"
 #include "emoncms.h"
 #include "mqtt.h"
+#include "divert.h"
 
 unsigned long Timer1; // Timer for events once every 30 seconds
 unsigned long Timer2; // Timer for events once every 1 Minute
@@ -103,6 +104,7 @@ void loop(){
 // -------------------------------------------------------------------
     if ((millis() - Timer2) >= 60000){
       ohm_loop();
+      divert_current_loop();
       Timer2 = millis();
     }
 

@@ -490,52 +490,44 @@ void web_server_setup()
   server.on("/status", [](){
   if(www_username!="" && !server.authenticate(www_username.c_str(), www_password.c_str()))
     return server.requestAuthentication();
-  handleStatus();
+    handleStatus();
   });
   server.on("/savenetwork", [](){
   if(www_username!="" && !server.authenticate(www_username.c_str(), www_password.c_str()))
     return server.requestAuthentication();
-  handleSaveNetwork();
+    handleSaveNetwork();
   });
   server.on("/saveemoncms", [](){
   if(www_username!="" && !server.authenticate(www_username.c_str(), www_password.c_str()))
     return server.requestAuthentication();
-  handleSaveEmoncms();
+    handleSaveEmoncms();
   });
   server.on("/savemqtt", [](){
   if(www_username!="" && !server.authenticate(www_username.c_str(), www_password.c_str()))
     return server.requestAuthentication();
-  handleSaveMqtt();
+    handleSaveMqtt();
   });
   server.on("/saveadmin", [](){
   if(www_username!="" && !server.authenticate(www_username.c_str(), www_password.c_str()))
     return server.requestAuthentication();
-  handleSaveAdmin();
+    handleSaveAdmin();
   });
   server.on("/scan", [](){
   if(www_username!="" && !server.authenticate(www_username.c_str(), www_password.c_str()))
     return server.requestAuthentication();
-  handleScan();
+    handleScan();
   });
 
   server.on("/apoff", [](){
   if(www_username!="" && !server.authenticate(www_username.c_str(), www_password.c_str()))
     return server.requestAuthentication();
-  handleAPOff();
+    handleAPOff();
   });
-  /*
-  server.on("/firmware", [](){
-  if(www_username!="" && !server.authenticate(www_username.c_str(), www_password.c_str()))
-    return server.requestAuthentication();
-    handleUpdateCheck();
+  server.on("/divertmode", [](){
+    if(www_username!="" && !server.authenticate(www_username.c_str(), www_password.c_str()))
+  return server.requestAuthentication();
+    handleDivertMode();
   });
-
-  server.on("/update", [](){
-  if(www_username!="" && !server.authenticate(www_username.c_str(), www_password.c_str()))
-    return server.requestAuthentication();
-  handleUpdate();
-  });
-  */
   server.on("/status", [](){
   if(www_username!="" && !server.authenticate(www_username.c_str(), www_password.c_str()))
     return server.requestAuthentication();
@@ -551,38 +543,31 @@ void web_server_setup()
     return server.requestAuthentication();
   handleRestart();
   });
-
   server.on("/rapiupdate", [](){
   if(www_username!="" && !server.authenticate(www_username.c_str(), www_password.c_str()))
     return server.requestAuthentication();
-  handleUpdate();
+    handleUpdate();
   });
-
   server.on("/rapi", [](){
   if(www_username!="" && !server.authenticate(www_username.c_str(), www_password.c_str()))
     return server.requestAuthentication();
-  handleRapi();
+    handleRapi();
   });
-
   server.on("/r", [](){
     if(www_username!="" && !server.authenticate(www_username.c_str(), www_password.c_str()))
       return server.requestAuthentication();
-    handleRapiR();
+      handleRapiR();
   });
-
   server.on("/config", [](){
   if(www_username!="" && !server.authenticate(www_username.c_str(), www_password.c_str()))
     return server.requestAuthentication();
   handleConfig();
   });
-
    server.on("/saveohmkey", [](){
   if(www_username!="" && !server.authenticate(www_username.c_str(), www_password.c_str()))
     return server.requestAuthentication();
-  handleSaveOhmkey();
+    handleSaveOhmkey();
   });
-  
-
   
 
   server.onNotFound([](){
