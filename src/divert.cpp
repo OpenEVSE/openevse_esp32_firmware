@@ -21,7 +21,8 @@
 
 // Default to normal charging unless set. Divert mode always defaults back to 1 if unit is reset (divertmode not saved in EEPROM)
 byte divertmode = 1;
-
+int solarpv = 0;
+int grid_ie = 0;
 
 // Update divert mode e.g. Normal / Eco
 void divertmode_update(byte newmode){

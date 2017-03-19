@@ -86,6 +86,13 @@ boolean mqtt_connect()
     String mqtt_sub_topic = mqtt_topic + "/rapi/in/#";      // MQTT Topic to subscribe to receive RAPI commands via MQTT
     //e.g to set current to 13A: <base-topic>/rapi/in/$SC 13
     mqttclient.subscribe(mqtt_sub_topic.c_str());
+    // subscribe to solar PV / grid_ie MQTT feeds
+    if (mqtt_solar!=""){
+      mqttclient.subscribe(mqtt_solar.c_str());
+    }
+    if (mqtt_grid_ie!=""){
+      mqttclient.subscribe(mqtt_grid_ie.c_str());
+    }
   } else {
     DEBUG.print("MQTT failed: ");
     DEBUG.println(mqttclient.state());
