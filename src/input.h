@@ -6,10 +6,6 @@
 extern String url;
 extern String data;
 
-extern int espvcc;
-extern int espflash;
-extern int espfree;
-
 extern int commDelay;
 
 extern int amp; //OpenEVSE Current Sensor

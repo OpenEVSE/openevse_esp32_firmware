@@ -59,9 +59,6 @@ void setup() {
   delay(2000);
   Serial.begin(115200);
   pinMode(0, INPUT);
-  espflash = ESP.getFlashChipSize();
-  espvcc = ESP.getVcc();
-  espfree = ESP.getFreeHeap();
 
 #ifdef DEBUG_SERIAL1
   Serial1.begin(115200);
@@ -75,7 +72,7 @@ void setup() {
   config_load_settings();
   wifi_setup();
   web_server_setup();
-  delay(5000); //gives OpenEVSE time to finish self test on cold start
+  // delay(5000); //gives OpenEVSE time to finish self test on cold start
   handleRapiRead(); //Read all RAPI values
   //  ota_setup();
 
@@ -85,17 +82,17 @@ void setup() {
 // LOOP
 // -------------------------------------------------------------------
 void loop(){
-//ota_loop();
+  
   web_server_loop();
   wifi_loop();
-  if (mqtt_server !=0) mqtt_loop();
-     
   
   if (wifi_mode==WIFI_MODE_STA || wifi_mode==WIFI_MODE_AP_AND_STA){
+  
+  if (mqtt_server !=0) mqtt_loop();
 // -------------------------------------------------------------------
-// Do these things once every 5s
+// Do these things once every 10s
 // -------------------------------------------------------------------
-    if ((millis() - Timer3) >= 5000){
+    if ((millis() - Timer3) >= 10000){
       update_rapi_values();
       Timer3 = millis();
     }
@@ -114,8 +111,8 @@ void loop(){
     if ((millis() - Timer1) >= 30000){
       create_rapi_json(); // create JSON Strings for EmonCMS and MQTT
       if(emoncms_apikey != 0) emoncms_publish(url);
-      Timer1 = millis();
       if(mqtt_server != 0) mqtt_publish(data);
+      Timer1 = millis();
     }
   } // end WiFi connected
 

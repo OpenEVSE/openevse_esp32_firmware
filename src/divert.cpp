@@ -5,10 +5,10 @@
 #include <Arduino.h>
 #include "emonesp.h"
 
-// 2: Normal / Fast Charge (default):
+// 1: Normal / Fast Charge (default):
 // Charging at maximum rate irrespective of solar PV / grid_ie output
 
-// 1: Eco :
+// 2: Eco :
 // Either modulate charge rate based solar PV generation (if only solar PV feed is available)
 
 // Or modulate charge rate based on on excess power (if grid feed (positive import / negative export) is available) i.e. power that would otherwise be exported to the grid is diverted to EVSE.

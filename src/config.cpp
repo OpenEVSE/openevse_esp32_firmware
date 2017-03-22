@@ -32,17 +32,14 @@ String ohm = "";
 #define EEPROM_ESID_SIZE               32
 #define EEPROM_EPASS_SIZE              64
 #define EEPROM_EMON_API_KEY_SIZE       32
-#define EEPROM_EMON_SERVER_SIZE        45
+#define EEPROM_EMON_SERVER_SIZE        40
 #define EEPROM_EMON_NODE_SIZE          32
-#define EEPROM_MQTT_SERVER_SIZE        45
-#define EEPROM_MQTT_TOPIC_SIZE         32
-#define EEPROM_MQTT_USER_SIZE          32
-#define EEPROM_MQTT_PASS_SIZE          64
-     
-#define EEPROM_MQTT_SOLAR_SIZE         32
-#define EEPROM_MQTT_GRID_IE_SIZE       32
-
-
+#define EEPROM_MQTT_SERVER_SIZE        40
+#define EEPROM_MQTT_TOPIC_SIZE         25
+#define EEPROM_MQTT_USER_SIZE          25
+#define EEPROM_MQTT_PASS_SIZE          50
+#define EEPROM_MQTT_SOLAR_SIZE         30
+#define EEPROM_MQTT_GRID_IE_SIZE       30
 #define EEPROM_EMON_FINGERPRINT_SIZE   60
 #define EEPROM_WWW_USER_SIZE           16
 #define EEPROM_WWW_PASS_SIZE           16
@@ -76,8 +73,8 @@ String ohm = "";
 #define EEPROM_WWW_USER_END            (EEPROM_WWW_USER_START + EEPROM_WWW_USER_SIZE)
 #define EEPROM_WWW_PASS_START          EEPROM_WWW_USER_END
 #define EEPROM_WWW_PASS_END            (EEPROM_WWW_PASS_START + EEPROM_WWW_PASS_SIZE)
-#define EEPROM_OHM_KEY_START          EEPROM_WWW_PASS_END
-#define EEPROM_OHM_KEY_END            (EEPROM_OHM_KEY_START + EEPROM_OHM_KEY_SIZE)
+#define EEPROM_OHM_KEY_START           EEPROM_WWW_PASS_END
+#define EEPROM_OHM_KEY_END             (EEPROM_OHM_KEY_START + EEPROM_OHM_KEY_SIZE)
 
 // -------------------------------------------------------------------
 // Reset EEPROM, wipes all settings

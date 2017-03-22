@@ -40,7 +40,7 @@ String getContentType(String filename){
 }
 
 bool handleFileRead(String path){
-  if(path.endsWith("/")) path += "index.htm";
+  if(path.endsWith("/")) path += "index.html";
   String contentType = getContentType(path);
   String pathWithGz = path + ".gz";
   if(SPIFFS.exists(pathWithGz) || SPIFFS.exists(path)){
@@ -105,13 +105,13 @@ void decodeURI(String& val)
 // -------------------------------------------------------------------
 void handleHome() {
   SPIFFS.begin(); // mount the fs
-  File f = SPIFFS.open("/home.html", "r");
+  File f = SPIFFS.open("/home.htm", "r");
   if (f) {
     String s = f.readString();
     server.send(200, "text/html", s);
     f.close();
   } else {
-    server.send(200, "text/plain","/home.html not found, have you flashed the SPIFFS?");
+      server.send(200, "text/plain","/home.html not found, have you flashed the SPIFFS?");
   }
 }
 
@@ -272,19 +272,6 @@ void handleStatus() {
   s += "\"packets_sent\":\""+String(packets_sent)+"\",";
   s += "\"packets_success\":\""+String(packets_success)+"\",";
 
-// TEMP TEST//////////////////////////////////////////////////////////////////////////////////////////////////////////
-// TEMP TEST//////////////////////////////////////////////////////////////////////////////////////////////////////////
-// TEMP TEST//////////////////////////////////////////////////////////////////////////////////////////////////////////
-// TEMP TEST//////////////////////////////////////////////////////////////////////////////////////////////////////////
-// TEMP TEST//////////////////////////////////////////////////////////////////////////////////////////////////////////
-// TEMP TEST//////////////////////////////////////////////////////////////////////////////////////////////////////////
-// TEMP TE//////////////////////////////////////////////////////////////////////////////////////////////////////////
-String mqtt_solar="";
-String mqtt_grid_ie="";
-String divertmsg="";
-byte divertmode=1;
-// TEMP TEST//////////////////////////////////////////////////////////////////////////////////////////////////////////
-
   s += "\"mqtt_server\":\""+mqtt_server+"\",";
   s += "\"mqtt_topic\":\""+mqtt_topic+"\",";
   s += "\"mqtt_user\":\""+mqtt_user+"\",";
@@ -293,7 +280,6 @@ byte divertmode=1;
   s += "\"mqtt_grid_ie\":\""+mqtt_grid_ie+"\",";
   s += "\"mqtt_connected\":\""+String(mqtt_connected())+"\",";
   
-  s += "\"divertmsg\":\""+divertmsg+"\",";
   s += "\"divertmode\":\""+String(divertmode)+"\",";
 
   s += "\"ohmkey\":\""+ohm+"\",";
@@ -350,8 +336,7 @@ void handleConfig() {
     
   String s = "{";
   s += "\"ohmhour\":\""+ohm_hour+"\",";
-  s += "\"espvcc\":\""+String(espvcc)+"\",";
-  s += "\"espfree\":\""+String(espfree)+"\",";
+  s += "\"espfree\":\""+String(ESP.getFreeHeap())+"\",";
   s += "\"comm_sent\":\""+String(comm_sent)+"\",";
   s += "\"comm_success\":\""+String(comm_success)+"\",";
   s += "\"packets_sent\":\""+String(packets_sent)+"\",";
@@ -430,9 +415,9 @@ void web_server_setup()
 {
   // Start server & server root html /
   server.on("/", [](){
-    if(www_username!="" && !server.authenticate(www_username.c_str(), www_password.c_str()) && wifi_mode == WIFI_MODE_STA)
+  if(www_username!="" && !server.authenticate(www_username.c_str(), www_password.c_str()))
       return server.requestAuthentication();
-    handleHome();
+      handleHome();
   });
 
   // Handle HTTP web interface button presses
