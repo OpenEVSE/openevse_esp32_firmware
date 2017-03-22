@@ -190,12 +190,14 @@ void handleSaveMqtt() {
   config_save_mqtt(server.arg("server"),
                    server.arg("topic"),
                    server.arg("user"),
-                   server.arg("pass"));
+                   server.arg("pass"),
+                   server.arg("solar"),
+                   server.arg("grid_ie"));
 
   char tmpStr[200];
   // BUG: Potential buffer overflow issue the values mqtt_xxx come from user
   //      input so could overflow the buffer no matter the length
-  sprintf(tmpStr,"Saved: %s %s %s %s",mqtt_server.c_str(),mqtt_topic.c_str(),mqtt_user.c_str(),mqtt_pass.c_str());
+  sprintf(tmpStr,"Saved: %s %s %s %s %s %s",mqtt_server.c_str(),mqtt_topic.c_str(),mqtt_user.c_str(),mqtt_pass.c_str(),mqtt_solar.c_str(),mqtt_grid_ie.c_str());
   DEBUG.println(tmpStr);
   server.send(200, "text/html", tmpStr);
 
@@ -391,56 +393,6 @@ void handleRestart() {
   ESP.restart();
 }
 
-
-
-/*
-// -------------------------------------------------------------------
-// Check for updates and display current version
-// url: /firmware
-// -------------------------------------------------------------------
-String handleUpdateCheck() {
-  DEBUG.println("Running: " + currentfirmware);
-  // Get latest firmware version number
-  String latestfirmware = ota_get_latest_version();
-  DEBUG.println("Latest: " + latestfirmware);
-  // Update web interface with firmware version(s)
-  String s = "{";
-  s += "\"current\":\""+currentfirmware+"\",";
-  s += "\"latest\":\""+latestfirmware+"\"";
-  s += "}";
-  server.send(200, "text/html", s);
-  return (latestfirmware);
-}
-
-
-// -------------------------------------------------------------------
-// Update firmware
-// url: /update
-// -------------------------------------------------------------------
-void handleUpdate() {
-  DEBUG.println("UPDATING...");
-  delay(500);
-
-  t_httpUpdate_return ret = ota_http_update();
-
-  int retCode = 400;
-  String str="error";
-  switch(ret) {
-    case HTTP_UPDATE_FAILED:
-      str = DEBUG.printf("Update failed error (%d): %s", ESPhttpUpdate.getLastError(), ESPhttpUpdate.getLastErrorString().c_str());
-      break;
-    case HTTP_UPDATE_NO_UPDATES:
-      str = "No update, running latest firmware";
-      break;
-    case HTTP_UPDATE_OK:
-      retCode = 200;
-      str = "Update done!";
-      break;
-  }
-  server.send(retCode, "text/plain", str);
-  DEBUG.println(str);
-}
-*/
 
 void handleRapi() {
   String s;
