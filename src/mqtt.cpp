@@ -5,6 +5,7 @@
 #include <Arduino.h>
 #include <PubSubClient.h>             // MQTT https://github.com/knolleary/pubsubclient PlatformIO lib: 89
 #include <WiFiClient.h>
+#include <divert.h>
 
 // #include "input.h"
 
@@ -26,8 +27,6 @@ void mqttmsg_callback(char* topic, byte* payload, unsigned int length)
 {
 
   String topic_string = String(topic);
-  // Locate '$' character in the MQTT message to identify RAPI command
-  int rapi_character_index = topic_string.indexOf('$');
   
   // print received MQTT to debug
   DEBUG.println("MQTT received:");
@@ -38,7 +37,26 @@ void mqttmsg_callback(char* topic, byte* payload, unsigned int length)
   }
   DEBUG.println();
   
+  
+  // If MQTT message is solar PV
+  if (topic_string = mqtt_solar){
+    solar = int(payload);
+  }
+  
+  // If MQTT message is grid import / export
+  if (topic_string = mqtt_grid_ie){
+    grid_ie = int(payload);
+  }
+  
+  // If MQTT message to set divert mode is received
+  if (topic_string = mqtt_topic + "divertmode"){
+    divertmode_update(int(payload));
+  }
+  
+  // If MQTT message is RAPI command
   // Detect if MQTT message is a RAPI command e.g to set 13A <base-topic>/rapi/$SC 13
+  // Locate '$' character in the MQTT message to identify RAPI command
+  int rapi_character_index = topic_string.indexOf('$');
   if (rapi_character_index > 1){
     // Print RAPI command from mqtt-sub topic e.g $SC
     // ASSUME RAPI COMMANDS ARE ALWAYS PREFIX BY $ AND TWO CHARACTERS LONG)
@@ -93,6 +111,9 @@ boolean mqtt_connect()
     if (mqtt_grid_ie!=""){
       mqttclient.subscribe(mqtt_grid_ie.c_str());
     }
+    mqtt_sub_topic = mqtt_topic + "divertmode";      // MQTT Topic to change divert mode
+    mqttclient.subscribe(mqtt_sub_topic.c_str());
+    
   } else {
     DEBUG.print("MQTT failed: ");
     DEBUG.println(mqttclient.state());

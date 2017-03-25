@@ -50,7 +50,7 @@
 
 unsigned long Timer1; // Timer for events once every 30 seconds
 unsigned long Timer2; // Timer for events once every 1 Minute
-unsigned long Timer3; // Timer for events once every 5 seconds
+unsigned long Timer3; // Timer for events once every 10 seconds
 
 // -------------------------------------------------------------------
 // SETUP

@@ -10,7 +10,7 @@
 // global variable
 extern byte divertmode;
 extern int solar;
-extern int use;
+extern int grid_ie;
 
 // Change mode
 void divertmode_update(byte divertmode);
