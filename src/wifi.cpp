@@ -168,10 +168,10 @@ void wifi_loop()
 
   // Remain in AP mode for 5 Minutes before resetting
   if (wifi_mode == WIFI_MODE_AP_STA_RETRY){
-     if ((millis() - Timer) >= 300000){
-       ESP.reset();
-       DEBUG.println("WIFI Mode = 1, resetting");
-     }
+    if ((millis() - Timer) >= 300000){
+      DEBUG.println("WIFI Mode = 1, resetting");
+      ESP.reset();
+    }
   }
 }
 
