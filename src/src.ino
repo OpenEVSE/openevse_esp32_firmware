@@ -89,6 +89,7 @@ void loop(){
   
   //Gives OpenEVSE time to finish self test on cold start
   if ( (millis() > 5000) && (rapi_read==0) ){
+    DEBUG.print("first read RAPI values");
     handleRapiRead(); //Read all RAPI values
     rapi_read=1;
   }
@@ -96,6 +97,7 @@ void loop(){
   // Do these things once every 10s. Even when in AP mode
   // -------------------------------------------------------------------
   if ((millis() - Timer3) >= 10000){
+    DEBUG.print("Timer3");
     update_rapi_values();
     Timer3 = millis();
   }
@@ -108,6 +110,7 @@ void loop(){
     // Do these things once every Minute
     // -------------------------------------------------------------------
     if ((millis() - Timer2) >= 60000){
+      DEBUG.print("Timer2");
       ohm_loop();
       divert_current_loop();
       Timer2 = millis();
@@ -117,6 +120,7 @@ void loop(){
     // Do these things once every 30 seconds
     // -------------------------------------------------------------------
     if ((millis() - Timer1) >= 30000){
+      DEBUG.print("Timer1");
       create_rapi_json(); // create JSON Strings for EmonCMS and MQTT
       if(emoncms_apikey != 0) emoncms_publish(url);
       if(mqtt_server != 0) mqtt_publish(data);
