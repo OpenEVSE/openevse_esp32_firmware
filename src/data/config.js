@@ -5,6 +5,8 @@ var ipaddress = "";
 var divertmode = 0;
 
 
+set_divertmode_button(divertmode);
+
 // get statup status and populate input fields
 var r1 = new XMLHttpRequest();
 r1.open("GET", "status", false);
