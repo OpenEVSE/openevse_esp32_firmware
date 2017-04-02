@@ -59,7 +59,7 @@ r1.onreadystatechange = function () {
   document.getElementById("ohmkey").value = status.ohmkey;
   
   // If MQTT solar pv topic or grid topic is not set then disable solar PV divert mode
-  if ((status.mqtt_solar===0) && (status.mqtt_grid_ie===0)) {
+  if ((status.mqtt_solar==="") && (status.mqtt_grid_ie==="")) {
     divertmode=0;
     set_divertmode_button(divertmode); // disable mode button if solar PV / grid topics  are not configured
   }
@@ -237,7 +237,7 @@ function update() {
     }
 
     // If MQTT solar pv topic or grid topic is not set then disable solar PV divert mode
-    if ((status.mqtt_solar===0) && (status.mqtt_grid_ie===0)) {
+    if ((status.mqtt_solar==="") && (status.mqtt_grid_ie==="")) {
       divertmode=0;
       set_divertmode_button(divertmode); // disable mode button if solar PV / grid topics  are not configured
     }

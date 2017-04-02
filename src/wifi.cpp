@@ -170,6 +170,7 @@ void wifi_loop()
   if (wifi_mode == WIFI_MODE_AP_STA_RETRY){
     if ((millis() - Timer) >= 300000){
       DEBUG.println("WIFI Mode = 1, resetting");
+      delay(50);
       ESP.reset();
     }
   }
