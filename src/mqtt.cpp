@@ -1,13 +1,11 @@
 #include "emonesp.h"
 #include "mqtt.h"
 #include "config.h"
+#include "divert.h"
 
 #include <Arduino.h>
 #include <PubSubClient.h>             // MQTT https://github.com/knolleary/pubsubclient PlatformIO lib: 89
 #include <WiFiClient.h>
-#include <divert.h>
-
-// #include "input.h"
 
 WiFiClient espClient;                 // Create client for MQTT
 PubSubClient mqttclient(espClient);   // Create client for MQTT
@@ -15,7 +13,6 @@ PubSubClient mqttclient(espClient);   // Create client for MQTT
 long lastMqttReconnectAttempt = 0;
 int clientTimeout = 0;
 int i = 0;
-
 
 // -------------------------------------------------------------------
 // MQTT msg Received callback function:
