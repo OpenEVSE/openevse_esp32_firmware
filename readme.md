@@ -16,7 +16,7 @@ OpenEVSE ESP8266 WIFI serial to EmonCMS link
 
 ## WiFi Setup
 
-On first boot, OpenEVSE should broadcast a WiFI AP `OpenEVSE_XXX`. Connect to this AP (default password: `openevse`) and the [captive portal](https://en.wikipedia.org/wiki/Captive_portal) should forward you to the log-in page. If this does not happen navigate to `http://192.168.4.1`
+On first boot, OpenEVSE should broadcast a WiFI AP `OpenEVSE_XXX`. Connect to this AP (default password: `openevse`) and the [captive portal](https://en.wikipedia.org/wiki/Captive_portal) should forward you to the log-in page. If this does not happen navigate to `http://openevse` or `http://192.168.4.1`
 
 *Note: You may need to disable mobile data if connecting via a Android 6 device*
 
