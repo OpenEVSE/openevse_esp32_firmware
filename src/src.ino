@@ -30,10 +30,8 @@
 #include <ESP8266WebServer.h>         // Config portal
 #include <ESP8266HTTPClient.h>
 #include <EEPROM.h>                   // Save config settings
-#include "FS.h"                       // SPIFFS file-system: store web server html, CSS etc.
-#include <ArduinoOTA.h>               // local OTA update from Arduino IDE
+#include <FS.h>                       // SPIFFS file-system: store web server html, CSS etc.
 #include <ESP8266mDNS.h>              // Resolve URL for update server etc.
-#include <ESP8266httpUpdate.h>        // remote OTA update from server
 #include <ESP8266HTTPUpdateServer.h>  // upload update
 #include <DNSServer.h>                // Required for captive portal
 #include <PubSubClient.h>             // MQTT https://github.com/knolleary/pubsubclient PlatformIO lib: 89
