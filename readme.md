@@ -80,7 +80,7 @@ e.g assuming base-topic of `openevse` to following command will set current to 1
 
 `openevse/rapi/in/$SC 13`
 
-The payload can be left blankc if the RAPI command does not require a payload e.g.
+The payload can be left blank if the RAPI command does not require a payload e.g.
 
 `openevse/rapi/in/$GC`
 

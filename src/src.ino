@@ -69,12 +69,12 @@ void setup() {
   DEBUG.print("OpenEVSE WiFI ");
   DEBUG.println(ESP.getChipId());
   DEBUG.println("Firmware: "+ currentfirmware);
-  
+
   config_load_settings();
   wifi_setup();
   web_server_setup();
   // delay(5000);
-  
+
   //  ota_setup();
 
 } // end setup
@@ -83,13 +83,13 @@ void setup() {
 // LOOP
 // -------------------------------------------------------------------
 void loop(){
-  
+
   web_server_loop();
   wifi_loop();
-  
+
   //Gives OpenEVSE time to finish self test on cold start
   if ( (millis() > 5000) && (rapi_read==0) ){
-    DEBUG.print("first read RAPI values");
+    DEBUG.println("first read RAPI values");
     handleRapiRead(); //Read all RAPI values
     rapi_read=1;
   }
@@ -97,36 +97,36 @@ void loop(){
   // Do these things once every 10s. Even when in AP mode
   // -------------------------------------------------------------------
   if ((millis() - Timer3) >= 10000){
-    DEBUG.print("Timer3");
+    DEBUG.println("Time3");
     update_rapi_values();
     Timer3 = millis();
   }
 
   if (wifi_mode==WIFI_MODE_STA || wifi_mode==WIFI_MODE_AP_AND_STA){
-  
+
     if (mqtt_server !=0) mqtt_loop();
-    
+
     // -------------------------------------------------------------------
     // Do these things once every Minute
     // -------------------------------------------------------------------
     if ((millis() - Timer2) >= 60000){
-      DEBUG.print("Timer2");
+      DEBUG.println("Time2");
       ohm_loop();
       divert_current_loop();
       Timer2 = millis();
     }
-  
+
     // -------------------------------------------------------------------
     // Do these things once every 30 seconds
     // -------------------------------------------------------------------
     if ((millis() - Timer1) >= 30000){
-      DEBUG.print("Timer1");
+      DEBUG.println("Time1");
       create_rapi_json(); // create JSON Strings for EmonCMS and MQTT
       if(emoncms_apikey != 0) emoncms_publish(url);
       if(mqtt_server != 0) mqtt_publish(data);
       Timer1 = millis();
     }
-    
+
   } // end WiFi connected
 
 } // end loop
