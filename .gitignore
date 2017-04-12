@@ -58,3 +58,4 @@ $RECYCLE.BIN/
 .gcc-flags.json
 
 full-upload.sh
+*.gch
