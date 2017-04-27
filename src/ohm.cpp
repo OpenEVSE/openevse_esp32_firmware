@@ -12,7 +12,7 @@
 const char* ohm_host = "login.ohmconnect.com";
 const char* ohm_url = "/verify-ohm-hour/";
 const int ohm_httpsPort = 443;
-const char* ohm_fingerprint = "6B 39 04 A4 BB E0 87 B2 EB B6 FE 77 CD D5 F6 A7 22 4B 3B ED";
+const char* ohm_fingerprint = "0C 53 16 B1 DE 52 CD 3E 57 C5 6C A9 45 A2 DD 0A 04 1A AD C6";
 String ohm_hour = "NotConnected";
 int evse_sleep = 0;
 
