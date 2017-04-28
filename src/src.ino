@@ -35,6 +35,9 @@
 #include <ESP8266HTTPUpdateServer.h>  // upload update
 #include <DNSServer.h>                // Required for captive portal
 #include <PubSubClient.h>             // MQTT https://github.com/knolleary/pubsubclient PlatformIO lib: 89
+#ifdef ENABLE_OTA
+#include <ArduinoOTA.h>
+#endif
 
 #include "emonesp.h"
 #include "config.h"
@@ -73,8 +76,11 @@ void setup() {
   web_server_setup();
   // delay(5000);
 
-  //  ota_setup();
-
+#ifdef ENABLE_OTA
+  // Start local OTA update server
+  ArduinoOTA.setHostname(esp_hostname);
+  ArduinoOTA.begin();
+#endif
 } // end setup
 
 // -------------------------------------------------------------------
@@ -84,9 +90,12 @@ void loop(){
 
   web_server_loop();
   wifi_loop();
+#ifdef ENABLE_OTA
+  ArduinoOTA.handle();
+#endif
 
-  //Gives OpenEVSE time to finish self test on cold start
-  if ( (millis() > 5000) && (rapi_read==0) ){
+  // Gives OpenEVSE time to finish self test on cold start
+  if ( (millis() > 5000) && (rapi_read==0) ) {
     DEBUG.println("first read RAPI values");
     handleRapiRead(); //Read all RAPI values
     rapi_read=1;

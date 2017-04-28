@@ -24,6 +24,9 @@ extern String rssi;
 // Network state
 extern String ipaddress;
 
+// mDNS hostname
+extern const char *esp_hostname;
+
 extern void wifi_setup();
 extern void wifi_loop();
 extern void wifi_restart();
