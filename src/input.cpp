@@ -267,25 +267,6 @@ void handleRapiRead() {
         protocol = rapiString.substring(secondRapiCmd);
       }
     }
-  Serial.println("$GC*AE");
-  comm_sent++;
-  delay(commDelay);
-  while(Serial.available()) {
-      String rapiString = Serial.readStringUntil('\r');
-      if (rapiString.startsWith("$OK") ) {
-        comm_success++;
-        int firstRapiCmd = rapiString.indexOf(' ');
-        int secondRapiCmd = rapiString.indexOf(' ', firstRapiCmd+1);
-        if (service == 1) {
-          current_l1min = rapiString.substring(firstRapiCmd, secondRapiCmd);
-          current_l1max = rapiString.substring(secondRapiCmd);
-        }
-        else {
-          current_l2min = rapiString.substring(firstRapiCmd, secondRapiCmd);
-          current_l2max = rapiString.substring(secondRapiCmd);
-        }
-      }
-    }
   Serial.println("$GA*AC");
   comm_sent++;
   delay(commDelay);
@@ -346,4 +327,23 @@ void handleRapiRead() {
            temp_ck = bitRead(flags, 10);
          }
        }
-     }
+  Serial.println("$GC*AE");
+  comm_sent++;
+  delay(commDelay);
+  while(Serial.available()) {
+      String rapiString = Serial.readStringUntil('\r');
+      if (rapiString.startsWith("$OK") ) {
+        comm_success++;
+        int firstRapiCmd = rapiString.indexOf(' ');
+        int secondRapiCmd = rapiString.indexOf(' ', firstRapiCmd+1);
+        if (service == 1) {
+          current_l1min = rapiString.substring(firstRapiCmd, secondRapiCmd);
+          current_l1max = rapiString.substring(secondRapiCmd);
+        }
+        else {
+          current_l2min = rapiString.substring(firstRapiCmd, secondRapiCmd);
+          current_l2max = rapiString.substring(secondRapiCmd);
+        }
+      }
+    }
+}
