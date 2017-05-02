@@ -288,6 +288,7 @@ void handleConfig() {
   String s = "{";
   s += "\"firmware\":\""+firmware+"\",";
   s += "\"protocol\":\""+protocol+"\",";
+  s += "\"espflash\":\""+String(espflash)+"\",";
   s += "\"diodet\":\""+String(diode_ck)+"\",";
   s += "\"gfcit\":\""+String(gfci_test)+"\",";
   s += "\"groundt\":\""+String(ground_ck)+"\",";
@@ -320,7 +321,6 @@ void handleConfig() {
     
   String s = "{";
   s += "\"ohmhour\":\""+ohm_hour+"\",";
-  s += "\"espvcc\":\""+String(espvcc)+"\",";
   s += "\"espfree\":\""+String(espfree)+"\",";
   s += "\"comm_sent\":\""+String(comm_sent)+"\",";
   s += "\"comm_success\":\""+String(comm_success)+"\",";

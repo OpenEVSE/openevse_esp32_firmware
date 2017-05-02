@@ -3,6 +3,14 @@ var selected_network_ssid = "";
 var lastmode = "";
 var ipaddress = "";
 
+// Convert string to number, divide by scale, return result
+// as a string with specified precision
+function scaleString(string, scale, precision)
+{
+  var tmpval = parseInt(string) / scale;
+  return tmpval.toFixed(precision);
+}
+
 // get statup status and populate input fields
 var r1 = new XMLHttpRequest();
 r1.open("GET", "status", false);
@@ -89,6 +97,7 @@ r2.timeout = 2000;
     var config = JSON.parse(r2.responseText);
     document.getElementById("firmware").innerHTML = config.firmware;
     document.getElementById("protocol").innerHTML = config.protocol;
+    document.getElementById("espflash").innerHTML = scaleString(config.espflash, 1024, 0) + "K";
     document.getElementById("diodet").innerHTML = config.diodet;
   	if (config.diodet == "1"){
   	  document.getElementById("diodet").innerHTML = "Disabled";
@@ -153,17 +162,17 @@ r3.onreadystatechange = function () {
   document.getElementById("comm-psuccess").innerHTML = update.comm_success;
   document.getElementById("sta-psent").innerHTML = update.packets_sent;
   document.getElementById("sta-psuccess").innerHTML = update.packets_success;
-  document.getElementById("amp").innerHTML = update.amp;
+  document.getElementById("amp").innerHTML = scaleString(update.amp, 1000, 2) + " A";
   document.getElementById("estate").innerHTML = update.estate;
-  document.getElementById("espvcc").innerHTML = update.espvcc;
-  document.getElementById("espfree").innerHTML = update.espfree;
+  document.getElementById("espfree").innerHTML = scaleString(update.espfree, 1024, 0) + "K";;
   document.getElementById("ohmhour").innerHTML = update.ohmhour;
-  document.getElementById("wattsec").innerHTML = update.wattsec;
-  document.getElementById("watthour").innerHTML = update.watthour;
+  // Convert watt-seconds and watt-hours to kWh
+  document.getElementById("wattsec").innerHTML = scaleString(update.wattsec, 3600000, 2);
+  document.getElementById("watthour").innerHTML = scaleString(update.watthour, 1000, 2);
   document.getElementById("pilot").innerHTML = update.pilot;
-  document.getElementById("temp1").innerHTML = update.temp1;
-  document.getElementById("temp2").innerHTML = update.temp2;
-  document.getElementById("temp3").innerHTML = update.temp3;
+  document.getElementById("temp1").innerHTML = scaleString(update.temp1, 10, 1) + " C";
+  document.getElementById("temp2").innerHTML = scaleString(update.temp2, 10, 1) + " C";
+  document.getElementById("temp3").innerHTML = scaleString(update.temp3, 10, 1) + " C";
 };
 r3.send();
 
@@ -182,20 +191,20 @@ function update() {
   r3.onreadystatechange = function () {
     if (r3.readyState != 4 || r3.status != 200) return;
     var update = JSON.parse(r3.responseText);
-	  document.getElementById("comm-psent").innerHTML = update.comm_sent;
+    document.getElementById("comm-psent").innerHTML = update.comm_sent;
     document.getElementById("comm-psuccess").innerHTML = update.comm_success;
     document.getElementById("sta-psent").innerHTML = update.packets_sent;
     document.getElementById("sta-psuccess").innerHTML = update.packets_success;
     document.getElementById("estate").innerHTML = update.estate;
-	  document.getElementById("espvcc").innerHTML = update.espvcc;
-	  document.getElementById("espfree").innerHTML = update.espfree;
-	  document.getElementById("ohmhour").innerHTML = update.ohmhour;
-	  document.getElementById("wattsec").innerHTML = update.wattsec;
-	  document.getElementById("watthour").innerHTML = update.watthour;
-	  document.getElementById("pilot").innerHTML = update.pilot;
-	  document.getElementById("temp1").innerHTML = update.temp1;
-	  document.getElementById("temp2").innerHTML = update.temp2;
-	  document.getElementById("temp3").innerHTML = update.temp3;
+    document.getElementById("espfree").innerHTML = scaleString(update.espfree, 1024, 0) + "K";;
+    document.getElementById("ohmhour").innerHTML = update.ohmhour;
+    // Convert watt-seconds and watt-hours to kWh
+    document.getElementById("wattsec").innerHTML = scaleString(update.wattsec, 3600000, 2);
+    document.getElementById("watthour").innerHTML = scaleString(update.watthour, 1000, 2);
+    document.getElementById("pilot").innerHTML = update.pilot;
+    document.getElementById("temp1").innerHTML = scaleString(update.temp1, 10, 1) + " C";
+    document.getElementById("temp2").innerHTML = scaleString(update.temp2, 10, 1) + " C";
+    document.getElementById("temp3").innerHTML = scaleString(update.temp3, 10, 1) + " C";
   };
   r3.send();
 	var r2 = new XMLHttpRequest();
@@ -464,42 +473,42 @@ for (var i = 0; i < networkcheckboxes.length; i++) {
 // Event:Check for updates & display current / latest
 // URL /firmware
 // -----------------------------------------------------------------------
-document.getElementById("updatecheck").addEventListener("click", function(e) {
-    document.getElementById("firmware-version").innerHTML = "<tr><td>-</td><td>Connecting...</td></tr>";
-    var r = new XMLHttpRequest();
-    r.open("POST", "firmware", true);
-    r.onreadystatechange = function () {
-        if (r.readyState != 4 || r.status != 200) return;
-        var str = r.responseText;
-        console.log(str);
-        var firmware = JSON.parse(r.responseText);
-        document.getElementById("firmware").style.display = '';
-        document.getElementById("update").style.display = '';
-        document.getElementById("firmware-version").innerHTML = "<tr><td>"+firmware.current+"</td><td>"+firmware.latest+"</td></tr>";
-	  };
-    r.send();
-});
+//document.getElementById("updatecheck").addEventListener("click", function(e) {
+//    document.getElementById("firmware-version").innerHTML = "<tr><td>-</td><td>Connecting...</td></tr>";
+//    var r = new XMLHttpRequest();
+//    r.open("POST", "firmware", true);
+//    r.onreadystatechange = function () {
+//        if (r.readyState != 4 || r.status != 200) return;
+//        var str = r.responseText;
+//        console.log(str);
+//        var firmware = JSON.parse(r.responseText);
+//        document.getElementById("firmware").style.display = '';
+//        document.getElementById("update").style.display = '';
+//        document.getElementById("firmware-version").innerHTML = "<tr><td>"+firmware.current+"</td><td>"+firmware.latest+"</td></tr>";
+//	  };
+//    r.send();
+//});
 
 
 // -----------------------------------------------------------------------
 // Event:Update Firmware
 // -----------------------------------------------------------------------
-document.getElementById("update").addEventListener("click", function(e) {
-    document.getElementById("update-info").innerHTML = "UPDATING..."
-    var r1 = new XMLHttpRequest();
-    r1.open("POST", "update", true);
-    r1.onreadystatechange = function () {
-        if (r1.readyState != 4 || r1.status != 200) return;
-        var str1 = r1.responseText;
-        document.getElementById("update-info").innerHTML = str1
-        console.log(str1);
-	  };
-    r1.send();
-});
+//document.getElementById("update").addEventListener("click", function(e) {
+//    document.getElementById("update-info").innerHTML = "UPDATING..."
+//    var r1 = new XMLHttpRequest();
+//    r1.open("POST", "update", true);
+//    r1.onreadystatechange = function () {
+//        if (r1.readyState != 4 || r1.status != 200) return;
+//        var str1 = r1.responseText;
+//        document.getElementById("update-info").innerHTML = str1
+//        console.log(str1);
+//	  };
+//    r1.send();
+//});
 
 // -----------------------------------------------------------------------
 // Event:Upload Firmware
 // -----------------------------------------------------------------------
-document.getElementById("upload").addEventListener("click", function(e) {
-  window.location.href='/upload'
-});
+//document.getElementById("upload").addEventListener("click", function(e) {
+//  window.location.href='/upload'
+//});
