@@ -288,6 +288,7 @@ void handleConfig() {
   String s = "{";
   s += "\"firmware\":\""+firmware+"\",";
   s += "\"protocol\":\""+protocol+"\",";
+  s += "\"espflash\":\""+String(espflash)+"\",";
   s += "\"diodet\":\""+String(diode_ck)+"\",";
   s += "\"gfcit\":\""+String(gfci_test)+"\",";
   s += "\"groundt\":\""+String(ground_ck)+"\",";

@@ -89,6 +89,7 @@ r2.timeout = 2000;
     var config = JSON.parse(r2.responseText);
     document.getElementById("firmware").innerHTML = config.firmware;
     document.getElementById("protocol").innerHTML = config.protocol;
+    document.getElementById("espflash").innerHTML = config.espflash;
     document.getElementById("diodet").innerHTML = config.diodet;
   	if (config.diodet == "1"){
   	  document.getElementById("diodet").innerHTML = "Disabled";
