@@ -321,7 +321,6 @@ void handleConfig() {
     
   String s = "{";
   s += "\"ohmhour\":\""+ohm_hour+"\",";
-  s += "\"espvcc\":\""+String(espvcc)+"\",";
   s += "\"espfree\":\""+String(espfree)+"\",";
   s += "\"comm_sent\":\""+String(comm_sent)+"\",";
   s += "\"comm_success\":\""+String(comm_success)+"\",";

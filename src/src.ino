@@ -59,7 +59,6 @@ void setup() {
   Serial.begin(115200);
   pinMode(0, INPUT);
   espflash = ESP.getFlashChipSize();
-  espvcc = ESP.getVcc();
   espfree = ESP.getFreeHeap();
 
 #ifdef DEBUG_SERIAL1

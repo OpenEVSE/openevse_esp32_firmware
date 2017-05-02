@@ -156,7 +156,6 @@ r3.onreadystatechange = function () {
   document.getElementById("sta-psuccess").innerHTML = update.packets_success;
   document.getElementById("amp").innerHTML = update.amp;
   document.getElementById("estate").innerHTML = update.estate;
-  document.getElementById("espvcc").innerHTML = update.espvcc;
   document.getElementById("espfree").innerHTML = update.espfree;
   document.getElementById("ohmhour").innerHTML = update.ohmhour;
   document.getElementById("wattsec").innerHTML = update.wattsec;
@@ -188,7 +187,6 @@ function update() {
     document.getElementById("sta-psent").innerHTML = update.packets_sent;
     document.getElementById("sta-psuccess").innerHTML = update.packets_success;
     document.getElementById("estate").innerHTML = update.estate;
-	  document.getElementById("espvcc").innerHTML = update.espvcc;
 	  document.getElementById("espfree").innerHTML = update.espfree;
 	  document.getElementById("ohmhour").innerHTML = update.ohmhour;
 	  document.getElementById("wattsec").innerHTML = update.wattsec;

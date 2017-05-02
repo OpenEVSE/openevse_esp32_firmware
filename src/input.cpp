@@ -7,7 +7,6 @@ const char* e_url = "/input/post.json?node=";
 String url = "";
 String data = "";
 
-int espvcc = 0;
 int espflash = 0;
 int espfree = 0;
 
@@ -105,7 +104,6 @@ void update_rapi_values(){
        Serial.flush();
      }
      if (rapi_command_sent == 0 && rapi_command == 1){
-       espvcc = ESP.getVcc();
        espfree = ESP.getFreeHeap();
        Serial.println("$GE*B0");
      }
