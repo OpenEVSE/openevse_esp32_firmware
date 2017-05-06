@@ -1,3 +1,11 @@
+// Work out the endpoint to use, for dev you can change to point at a remote ESP
+// and run the HTML/JS from file, no need to upload to the ESP to test
+
+var baseHost = window.location.hostname;
+//var baseHost = 'openevse.local';
+//var baseHost = 'test.com';
+var baseEndpoint = 'http://'+baseHost;
+
 var statusupdate = false;
 var selected_network_ssid = "";
 var lastmode = "";
@@ -11,6 +19,185 @@ function scaleString(string, scale, precision)
   return tmpval.toFixed(precision);
 }
 
+function BaseViewModel(defaults, remoteUrl, mappings = {})
+{
+  var self = this;
+  self.remoteUrl = remoteUrl;
+
+  // Observable promerties
+  ko.mapping.fromJS(defaults, mappings, self);
+  self.fetching = ko.observable(false);
+}
+
+BaseViewModel.prototype.update = function (after = function () {}) {
+  var self = this;
+  self.fetching(true);
+  $.get(self.remoteUrl, function (data) {
+      ko.mapping.fromJS(data, self);
+  }, 'json').always(function () {
+      self.fetching(false);
+      after();
+  });
+};
+
+
+function StatusViewModel()
+{
+  var self = this;
+
+  BaseViewModel.call(self, {
+    "mode":"STA",
+    "networks":[],
+    "rssi":[],
+    "ssid":"",
+    "srssi":"",
+    "ipaddress":"",
+    "emoncms_server":"",
+    "emoncms_node":"",
+    "emoncms_fingerprint":"",
+    "emoncms_connected":"",
+    "packets_sent":"",
+    "packets_success":"",
+    "mqtt_server":"",
+    "mqtt_topic":"",
+    "mqtt_user":"",
+    "mqtt_connected":"",
+    "ohmkey":"",
+    "www_username":"",
+    "www_password":"",
+    "free_heap":"",
+    "version":"0.0.0"},
+    baseEndpoint+'/status');
+
+  // Some devired values 
+  self.isWifiClient = ko.pureComputed(function () {
+    return ("STA" == self.mode()) || ("STA+AP" == self.mode());
+  });
+  self.isWifiAccessPoint = ko.pureComputed(function () {
+    return ("AP" == self.mode()) || ("STA+AP" == self.mode());
+  });
+  self.fullMode = ko.pureComputed(function() {
+    switch (self.mode())
+    {
+      case "AP":
+        return "Access Point (AP)";
+      case "STA":
+        return "Client (STA)";
+      case "STA+AP":
+        return "Client + Access Point (STA+AP)";
+    }
+
+    return "Unknown ("+self.mode()+")";
+  });
+}
+StatusViewModel.prototype = Object.create(BaseViewModel.prototype);
+StatusViewModel.prototype.constructor = StatusViewModel;
+
+function ConfigViewModel()
+{
+    BaseViewModel.call(this, {
+      "firmware":"-",
+      "protocol":"-",
+      "espflash":"",
+      "diodet":"",
+      "gfcit":"",
+      "groundt":"",
+      "relayt":"",
+      "ventt":"",
+      "tempt":"",
+      "service":"",
+      "l1min":"-",
+      "l1max":"-",
+      "l2min":"-",
+      "l2max":"-",
+      "scale":"-",
+      "offset":"-",
+      "gfcicount":"-",
+      "nogndcount":"-",
+      "stuckcount":"-",
+      "kwhlimit":"",
+      "timelimit":""},
+      baseEndpoint+'/config');
+}
+ConfigViewModel.prototype = Object.create(BaseViewModel.prototype);
+ConfigViewModel.prototype.constructor = ConfigViewModel;
+
+function RapiViewModel()
+{
+    BaseViewModel.call(this, {
+      "ohmhour":"NotConnected",
+      "espfree":"0",
+      "comm_sent":"0",
+      "comm_success":"0",
+      "packets_sent":"0",
+      "packets_success":"0",
+      "amp":"0",
+      "pilot":"0",
+      "temp1":"0",
+      "temp2":"0",
+      "temp3":"0",
+      "estate":"Unknown",
+      "wattsec":"0",
+      "watthour":"0"},
+      baseEndpoint+'/rapiupdate');
+}
+RapiViewModel.prototype = Object.create(BaseViewModel.prototype);
+RapiViewModel.prototype.constructor = RapiViewModel;
+
+function OpenEvseViewModel()
+{
+  var self = this;
+
+  self.config = new ConfigViewModel();
+  self.status = new StatusViewModel();
+  self.rapi = new RapiViewModel();
+
+  self.initialised = ko.observable(false);
+  self.updating = ko.observable(false);
+
+  var updateTimer = null;
+  var updateTime = 1 * 1000;
+
+  self.start = function () {
+    self.updating(true);
+    self.config.update(function () {
+      self.status.update(function () {
+        self.rapi.update(function () {
+          self.initialised(true);
+          updateTimer = setTimeout(self.update, updateTime);
+          self.updating(false);
+        });
+      });
+    });
+  };
+
+  self.update = function () {
+    if(self.updating()) {
+      return;
+    }
+    self.updating(true);
+    if(null !== updateTimer) {
+      clearTimeout(updateTimer);
+      updateTimer = null;
+    }
+    self.status.update(function () {
+      self.rapi.update(function() {
+        updateTimer = setTimeout(self.update, updateTime);
+        self.updating(false);
+      });
+    });
+  };
+}
+
+$(function() {
+  // Activates knockout.js
+  var openevse = new OpenEvseViewModel();
+  ko.applyBindings(openevse);
+  openevse.start();
+});
+
+
+/*
 // get statup status and populate input fields
 var r1 = new XMLHttpRequest();
 r1.open("GET", "status", false);
@@ -88,7 +275,9 @@ r1.onreadystatechange = function () {
     }
 };
 r1.send();
+*/
 
+/*
 var r2 = new XMLHttpRequest();
 r2.open("GET", "config", true);
 r2.timeout = 2000;
@@ -151,7 +340,9 @@ r2.timeout = 2000;
 
   };
 r2.send();
+*/
 
+/*
 var r3 = new XMLHttpRequest();
 r3.open("GET", "rapiupdate", true);
 r3.timeout = 8000;
@@ -175,16 +366,18 @@ r3.onreadystatechange = function () {
   document.getElementById("temp3").innerHTML = scaleString(update.temp3, 10, 1) + " C";
 };
 r3.send();
+*/
 
+/*
 update();
-setInterval(update,10000);
-
+setInterval(update, 10000);
+*/
 
 // -----------------------------------------------------------------------
 // Periodic 10s update of last data values
 // -----------------------------------------------------------------------
 function update() {
-
+/*
 	var r3 = new XMLHttpRequest();
   r3.open("GET", "rapiupdate", true);
 	r3.timeout = 8000;
@@ -237,6 +430,7 @@ function update() {
     }
   };
  r2.send();
+ */
 }
 
 function updateStatus() {

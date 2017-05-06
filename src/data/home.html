@@ -15,7 +15,7 @@
 <link rel="stylesheet" type="text/css" href="style.css">
 
 </head>
-    
+
 <body>
 <div id="page">
   <div class="box">
@@ -23,8 +23,12 @@
   <h3>WiFi</h3>
   </div>
 
-<div id="container">
-    
+  <div id="container" data-bind="visible: !initialised()">
+    Loading, please wait...
+  </div>
+
+  <div id="container" data-bind="visible: initialised" style="display: none">
+
     <input id="tab-1" type="radio" name="tab-group" checked="checked" />
     <label for="tab-1">System</label>
     <input id="tab-2" type="radio" name="tab-group" />
@@ -37,27 +41,38 @@
       <div id="content-1">
          <div class="box380">
 				<h2>WiFi Setup</h2>
-                <p><b>Mode:</b> <span id="mode"></span></p>
-                <div id="client-view">
+                <p><b>Mode:</b> <span id="mode" data-bind="text: status.fullMode"></span></p>
+                <div id="client-view" data-bind="visible: status.isWifiClient">
                   <table>
                   <tr><th>Network</th> <th>RSSI dBm</th> </tr>
-                  <tbody id="sta-ssid"></tbody>
+                  <tbody id="sta-ssid">
+                      <tr><td data-bind="text: status.ssid"></td><td data-bind="text: status.srssi"></td></tr>
+                  </tbody>
                 </table>
-                    <p><b>IP Address:</b><br><span id="sta-ip"></span></p>
-					<p><b>Successful packets:</b><br><span id="sta-psuccess"></span> of <span id="sta-psent"></span></p>
+                    <p><b>IP Address:</b><br><span id="sta-ip" data-bind="text: status.ipaddress"></span></p>
+					<p><b>Successful packets:</b><br><span data-bind="text: rapi.packets_success"></span> of <span data-bind="text: rapi.packets_sent"></span></p>
                     <p><b>OpenEVSE</b></p>
-                    <p><b>RAPI packets:</b><br><span id="comm-psuccess"></span> of <span id="comm-psent"></span></p>
-                    <button id="apoff" style="display:none">Turn off Access Point</button>
-                    
+                    <p><b>RAPI packets:</b><br><span data-bind="text: rapi.comm_success"></span> of <span data-bind="text: rapi.comm_sent"></span></p>
+                    <button id="apoff" data-bind="visible: status.isWifiAccessPoint">Turn off Access Point</button>
                 </div>
-                <div id="ap-view" style="display:none">
+                <div id="ap-view" data-bind="visible: status.isWifiAccessPoint">
                     <p>Connect to network:</p>
                     <table>
-                  <tr> <th>Select</th> <th>Network</th> <th>RSSI dBm</th> </tr>
-                  <tbody id="networks"></tbody>
+                      <tr> 
+                        <th>Select</th>
+                        <th>Network</th>
+                        <th>RSSI dBm</th>
+                      </tr>
+                      <tbody id="networks" data-bind="foreach: status.networks">
+                        <tr>
+                          <td><input class='networkcheckbox' data-bind="attr: name=$data" type='checkbox'></td>
+                          <td data-bind="text: $data"></td>
+                          <td data-bind="text: status.rssi[$index]"></td>
+                        </tr>
+                      </tbody>
 					</table>
 					<p><b>Passkey:</b><br>
-					<input id="passkey" type="text">
+					<input id="passkey" type="text" data-bind="textInput: status.pass">
 					<button id="connect">Connect</button>
 					</p>
                 </div>
@@ -68,24 +83,28 @@
          	<div class="box380">
 			<h2>Administration</h2>
 				<p><b>Username:</b><br>
-				<input id="www_user" type="text" value="admin">
+				<input id="www_user" type="text" value="admin" data-bind="textInput: status.www_username">
 				<p><b>Password:</b><br>
-				<input id="www_pass" type="text" value="openevse"><br>
+				<input id="www_pass" type="text" value="openevse" data-bind="textInput: status.www_password"><br>
         <span id=small-text>Web interface HTTP authentication.</span><br><br>
 				<button id="save-admin">Save</button>
 			</div>
-		
+
 		<div class="box380">
 			<h2>WiFi Firmware</h2>
       <span id=small-text>ESP8266</span><br>
 
-			<p><b>Version: </b><span id="version"></span></p>
-						<iframe style="width:380px; height:50px;" frameborder="0" scrolling="no" marginheight="0" marginwidth="0" src="/update">
-						</iframe>
+			<p><b>Version: </b><span data-bind="text: status.version"></span></p>
+            <p>
+				<form method='POST' action='update' enctype='multipart/form-data'>
+                  <input type='file' name='update'>
+                  <button id="update">Update</button>
+                </form>
+            </p>
+            <p>
 						<button id="restart">Restart</button>
 						<button id="reset">Factory Reset</button>
-
-
+            </p>
           </div>
     </div>
 	<div id="content-2">
@@ -98,7 +117,7 @@
 				<a href="http://emoncms.org">emoncms.org</a>,
 				<a href="http://emonpi/emoncms">emonpi/emoncms</a>
 				</span><br>
-				
+
 				<p><b>Emoncms Node*:</b><br>
 				<input id="emoncms_node" type="text">
 				<p><b>Emoncms write-apikey*:</b><br>
@@ -109,7 +128,7 @@
         <span id=small-text>
     			7D:82:15:BE:D7:BC:72:58:87:7D:8E:40:D4:80:BA:1A:9F:8B:8D:DA
   			</span><br>
-      	
+
 				<button id="save-emoncms">Save</button>
 				<b>&nbsp; Connected:&nbsp;<span id="emoncms_connected"></span></b><br><br>
 				<span id="psuccess"></span>
@@ -129,7 +148,7 @@
           <input id="mqtt_pass" type="text"><br>
           <button id="save-mqtt">Save</button>
           <b>&nbsp; Connected:&nbsp;<span id="mqtt_connected"></span></b>
-          
+
           <p>Status published to:
           <span id=small-text>{base-topic}/{staus} value</span><br>
           <span id=small-text>e.g. openevse/amp 16</span><br>
@@ -141,8 +160,8 @@
           <span id=small-text>{base-topic}/rapi/out responce</span><br>
           <span id=small-text>e.g. openevse/rapi/out $OK 6 32</span><br>
           </p>
-          
-          
+
+
 
 
 
@@ -157,13 +176,13 @@
 				<p>Ohm Key can be obtained by logging in to OhmConnect, enter Settings and locate the link in "Open Source Projects"</p>
 				<p><a href="https://login.ohmconnect.com/verify-ohm-hour/OpnEoVse">See Example</a></p>
 				<b>Key: </b>OpnEoVse
-				
-				
+
+
 	    </div>
-			 
+
           </div>
        <div id="content-3">
-         
+
   			<div class="box380">
                   <h2>Current</h2>
                   <table>
@@ -236,9 +255,22 @@
   		 </div>
           <div id="content-4">
   			<div class="box380">
-               <iframe style="width:380px; height:620px;" frameborder="0" scrolling="no" marginheight="0" marginwidth="0" src="/rapi">
-  			</iframe>
-
+                <p>Send RAPI Command</p>
+                <p>Common Commands:</p>
+                <p>Set Current - $SC XX</p>
+                <p>Set Service Level - $SL 1 - $SL 2 - $SL A</p>
+                <p>Get Real-time Current - $GG</p>
+                <p>Get Temperatures - $GP</p>
+                <p></p>
+                <p>
+                    <form method='get' action='r'>
+                        <label><b><i>RAPI Command:</b></i></label>
+                        <input type="text" name='rapi' length=32 />
+                        <p>
+                            <button id="rapisend">Send</button>
+                        </p>
+                    </form>
+                </p>
 			</div>
              <div class="box380">
                <h2>RAPI Get Commands</h2>
@@ -296,17 +328,14 @@
 			</div>
         </div>
 	</div>
-      
-   
-    
-  <div id="footer">
-      <br><b> Powered by <a href="http://www.openevse.com">OpenEVSE</a> and <a href="https://openenergymonitor.org">OpenEnergyMonitor</a></b>
-	  <br> by Chris Howell, Trystan Lea, Glyn Hudson
+
+    <div id="footer">
+        <br><b> Powered by <a href="http://www.openevse.com">OpenEVSE</a> and <a href="https://openenergymonitor.org">OpenEnergyMonitor</a></b>
+        <br> by Chris Howell, Trystan Lea, Glyn Hudson
+    </div>
   </div>
-
-
+</div>
+<script src="lib.js"></script>
 <script src="config.js"></script>
-</div>
-</div>
 </body>
 </html>

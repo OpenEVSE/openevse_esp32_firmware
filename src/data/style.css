@@ -116,7 +116,8 @@ button {
 }
 
 input[type="text"],
-input[type="password"] {
+input[type="password"],
+input[type="file"] {
   box-sizing: border-box;
   border-radius: 4px;
   padding: 10px;
@@ -229,6 +230,13 @@ input[type="password"] {
   z-index: 200;
 }
 
+#content-1 div input[type=file] {
+  visibility: visible;
+  border: 1px solid #ddd;
+  padding:5px;
+  z-index: 200;
+}
+
 #content-1 div table tbody input[type=checkbox] {
   visibility: visible;
   z-index: 7;
@@ -275,7 +283,13 @@ input[type="password"] {
   opacity: 100;
   z-index: 9;
 }
-	
+
+#content-4 div input[type=text] {
+  visibility: visible;
+  border: 1px solid #ddd;
+  padding:5px;
+  z-index: 200;
+}
 #content-4 iframe {
   position: relative;
   background: #ffffff;
