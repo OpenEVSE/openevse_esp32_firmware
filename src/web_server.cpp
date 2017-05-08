@@ -18,6 +18,8 @@
 ESP8266WebServer server(80);          //Create class for Web server
 ESP8266HTTPUpdateServer httpUpdater;
 
+bool enableCors = true;
+
 // Get running firmware version from build tag environment variable
 #define TEXTIFY(A) #A
 #define ESCAPEQUOTE(A) TEXTIFY(A)
@@ -316,9 +318,9 @@ void handleConfig() {
 // Returns Updates JSON
 // url: /rapiupdate
 // -------------------------------------------------------------------
-  
+
  void handleUpdate() {
-    
+
   String s = "{";
   s += "\"ohmhour\":\""+ohm_hour+"\",";
   s += "\"espfree\":\""+String(espfree)+"\",";
@@ -389,13 +391,13 @@ String handleUpdateCheck() {
 // Update firmware
 // url: /update
 // -------------------------------------------------------------------
+int retCode = 400;
 void handleUpdate() {
   DEBUG.println("UPDATING...");
   delay(500);
 
   t_httpUpdate_return ret = ota_http_update();
 
-  int retCode = 400;
   String str="error";
   switch(ret) {
     case HTTP_UPDATE_FAILED:
@@ -445,12 +447,25 @@ void handleRapiR() {
    server.send(200, "text/html", s);
 }
 
+bool requestPreProcess()
+{
+  if(www_username!="" && !server.authenticate(www_username.c_str(), www_password.c_str())) {
+    server.requestAuthentication();
+    return false;
+  }
+
+//  if(enableCors) {
+//    server.sendHeader("Access-Control-Allow-Origin", "*");
+//  }
+
+  return true;
+}
 
 void web_server_setup()
 {
   // Start server & server root html /
-  server.on("/", [](){
-    if(www_username!="" && !server.authenticate(www_username.c_str(), www_password.c_str()) && wifi_mode == WIFI_MODE_STA)
+  server.on("/", []() {
+    if(wifi_mode == WIFI_MODE_STA && www_username!="" && !server.authenticate(www_username.c_str(), www_password.c_str()))
       return server.requestAuthentication();
     handleHome();
   });
@@ -460,102 +475,59 @@ void web_server_setup()
   server.on("/fwlink", handleHome);  //Microsoft captive portal. Maybe not needed. Might be handled by notFound
 
   server.on("/status", [](){
-  if(www_username!="" && !server.authenticate(www_username.c_str(), www_password.c_str()))
-    return server.requestAuthentication();
-  handleStatus();
+    if(requestPreProcess()) handleStatus();
   });
   server.on("/savenetwork", [](){
-  if(www_username!="" && !server.authenticate(www_username.c_str(), www_password.c_str()))
-    return server.requestAuthentication();
-  handleSaveNetwork();
+    if(requestPreProcess()) handleSaveNetwork();
   });
   server.on("/saveemoncms", [](){
-  if(www_username!="" && !server.authenticate(www_username.c_str(), www_password.c_str()))
-    return server.requestAuthentication();
-  handleSaveEmoncms();
+    if(requestPreProcess()) handleSaveEmoncms();
   });
   server.on("/savemqtt", [](){
-  if(www_username!="" && !server.authenticate(www_username.c_str(), www_password.c_str()))
-    return server.requestAuthentication();
-  handleSaveMqtt();
+    if(requestPreProcess()) handleSaveMqtt();
   });
   server.on("/saveadmin", [](){
-  if(www_username!="" && !server.authenticate(www_username.c_str(), www_password.c_str()))
-    return server.requestAuthentication();
-  handleSaveAdmin();
+    if(requestPreProcess()) handleSaveAdmin();
   });
   server.on("/scan", [](){
-  if(www_username!="" && !server.authenticate(www_username.c_str(), www_password.c_str()))
-    return server.requestAuthentication();
-  handleScan();
+    if(requestPreProcess()) handleScan();
   });
-
   server.on("/apoff", [](){
-  if(www_username!="" && !server.authenticate(www_username.c_str(), www_password.c_str()))
-    return server.requestAuthentication();
-  handleAPOff();
+    if(requestPreProcess()) handleAPOff();
   });
   /*
   server.on("/firmware", [](){
-  if(www_username!="" && !server.authenticate(www_username.c_str(), www_password.c_str()))
-    return server.requestAuthentication();
-    handleUpdateCheck();
+    if(requestPreProcess())   handleUpdateCheck();
   });
 
   server.on("/update", [](){
-  if(www_username!="" && !server.authenticate(www_username.c_str(), www_password.c_str()))
-    return server.requestAuthentication();
-  handleUpdate();
+    if(requestPreProcess()) handleUpdate();
   });
   */
   server.on("/status", [](){
-  if(www_username!="" && !server.authenticate(www_username.c_str(), www_password.c_str()))
-    return server.requestAuthentication();
-  handleStatus();
+    if(requestPreProcess()) handleStatus();
   });
   server.on("/reset", [](){
-  if(www_username!="" && !server.authenticate(www_username.c_str(), www_password.c_str()))
-    return server.requestAuthentication();
-  handleRst();
+    if(requestPreProcess()) handleRst();
   });
   server.on("/restart", [](){
-  if(www_username!="" && !server.authenticate(www_username.c_str(), www_password.c_str()))
-    return server.requestAuthentication();
-  handleRestart();
+    if(requestPreProcess()) handleRestart();
   });
-
   server.on("/rapiupdate", [](){
-  if(www_username!="" && !server.authenticate(www_username.c_str(), www_password.c_str()))
-    return server.requestAuthentication();
-  handleUpdate();
+    if(requestPreProcess()) handleUpdate();
   });
-
   server.on("/rapi", [](){
-  if(www_username!="" && !server.authenticate(www_username.c_str(), www_password.c_str()))
-    return server.requestAuthentication();
-  handleRapi();
+    if(requestPreProcess()) handleRapi();
   });
-
   server.on("/r", [](){
-    if(www_username!="" && !server.authenticate(www_username.c_str(), www_password.c_str()))
-      return server.requestAuthentication();
-    handleRapiR();
+    if(requestPreProcess()) handleRapiR();
   });
-
   server.on("/config", [](){
-  if(www_username!="" && !server.authenticate(www_username.c_str(), www_password.c_str()))
-    return server.requestAuthentication();
-  handleConfig();
+    if(requestPreProcess()) handleConfig();
   });
-
-   server.on("/saveohmkey", [](){
-  if(www_username!="" && !server.authenticate(www_username.c_str(), www_password.c_str()))
-    return server.requestAuthentication();
-  handleSaveOhmkey();
+  server.on("/saveohmkey", [](){
+    if(requestPreProcess()) handleSaveOhmkey();
   });
-  
-
-  
 
   server.onNotFound([](){
   if(!handleFileRead(server.uri()))
