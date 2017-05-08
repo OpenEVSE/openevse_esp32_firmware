@@ -1,4 +1,3 @@
-
 /*
  * Copyright (c) 2015-2016 Chris Howell
  *
@@ -57,7 +56,8 @@ unsigned long Timer3; // Timer for events once every 5 seconds
 // -------------------------------------------------------------------
 // SETUP
 // -------------------------------------------------------------------
-void setup() {
+void
+setup() {
   delay(2000);
   Serial.begin(115200);
   pinMode(0, INPUT);
@@ -71,8 +71,8 @@ void setup() {
   DEBUG.println();
   DEBUG.print("OpenEVSE WiFI ");
   DEBUG.println(ESP.getChipId());
-  DEBUG.println("Firmware: "+ currentfirmware);
-  
+  DEBUG.println("Firmware: " + currentfirmware);
+
   config_load_settings();
   wifi_setup();
   web_server_setup();
@@ -88,44 +88,44 @@ void setup() {
 // -------------------------------------------------------------------
 // LOOP
 // -------------------------------------------------------------------
-void loop(){
-//ota_loop();
+void
+loop() {
+  // ota_loop();
   web_server_loop();
   wifi_loop();
+
 #ifdef ENABLE_OTA
   ArduinoOTA.handle();
 #endif
 
-  if (mqtt_server !=0) mqtt_loop();
-     
-  
-  if (wifi_mode==WIFI_MODE_STA || wifi_mode==WIFI_MODE_AP_AND_STA){
+  if (mqtt_server != 0)
+    mqtt_loop();
+
+  if (wifi_mode == WIFI_MODE_STA || wifi_mode == WIFI_MODE_AP_AND_STA) {
 // -------------------------------------------------------------------
 // Do these things once every 5s
 // -------------------------------------------------------------------
-    if ((millis() - Timer3) >= 5000){
+    if ((millis() - Timer3) >= 5000) {
       update_rapi_values();
       Timer3 = millis();
     }
 // -------------------------------------------------------------------
 // Do these things once every Minute
 // -------------------------------------------------------------------
-    if ((millis() - Timer2) >= 60000){
+    if ((millis() - Timer2) >= 60000) {
       ohm_loop();
       Timer2 = millis();
     }
-
 // -------------------------------------------------------------------
 // Do these things once every 30 seconds
 // -------------------------------------------------------------------
-    if ((millis() - Timer1) >= 30000){
+    if ((millis() - Timer1) >= 30000) {
       create_rapi_json(); // create JSON Strings for EmonCMS and MQTT
-      if(emoncms_apikey != 0) emoncms_publish(url);
+      if (emoncms_apikey != 0)
+        emoncms_publish(url);
       Timer1 = millis();
-      if(mqtt_server != 0) mqtt_publish(data);
+      if (mqtt_server != 0)
+        mqtt_publish(data);
     }
   } // end WiFi connected
-
-  
-  
 } // end loop

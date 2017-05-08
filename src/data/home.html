@@ -89,11 +89,9 @@
         <span id=small-text>Web interface HTTP authentication.</span><br><br>
 				<button id="save-admin">Save</button>
 			</div>
-
 		<div class="box380">
 			<h2>WiFi Firmware</h2>
       <span id=small-text>ESP8266</span><br>
-
 			<p><b>Version: </b><span data-bind="text: status.version"></span></p>
             <p>
 				<form method='POST' action='update' enctype='multipart/form-data'>
@@ -106,18 +104,17 @@
 						<button id="reset">Factory Reset</button>
             </p>
           </div>
-    </div>
+      </div> <!-- content-1 -->
 	<div id="content-2">
 			<div class="box380">
 			<h2>&nbsp; Energy Monitoring <img src="emoncms.jpg" align=left></h2>
 				<p><b>Emoncms Server*:</b><br>
 				<input id="emoncms_server" type="text" value="data.openevse.com/emoncms">
-				<p></p><span id=small-text>e.g:
+          <span id=small-text>e.g:
 				<a href="http://data.openevse.com/emoncms">data.openevse.com/emoncms</a>,
 				<a href="http://emoncms.org">emoncms.org</a>,
 				<a href="http://emonpi/emoncms">emonpi/emoncms</a>
 				</span><br>
-
 				<p><b>Emoncms Node*:</b><br>
 				<input id="emoncms_node" type="text">
 				<p><b>Emoncms write-apikey*:</b><br>
@@ -128,35 +125,37 @@
         <span id=small-text>
     			7D:82:15:BE:D7:BC:72:58:87:7D:8E:40:D4:80:BA:1A:9F:8B:8D:DA
   			</span><br>
-
 				<button id="save-emoncms">Save</button>
 				<b>&nbsp; Connected:&nbsp;<span id="emoncms_connected"></span></b><br><br>
 				<span id="psuccess"></span>
-
         </div>
 		<div class="box380">
 		<h2>MQTT</h2>
 		  <p><b>Server*:</b><br>
           <input id="mqtt_server" type="text">
-          </p><span id=small-text>e.g 'emonpi', 'test.mosquitto.org', '192.168.1.4'</span><br>
+          </p>
+          <span id=small-text>e.g 'emonpi', 'test.mosquitto.org', '192.168.1.4'</span><br>
           <p><b>Base-topic*:</b><br>
           <input id="mqtt_topic" type="text" value="openevse">
-        </p><span id=small-text>e.g 'openevse'</span>
+          </p>
+          <span id=small-text>e.g 'openevse'</span>
           <p><b>Username:</b><span> blank - no authentication</span>
           <input id="mqtt_user" type="text">
+          </p>
           <p><b>Password:</b><span> blank - no authentication</span>
           <input id="mqtt_pass" type="text"><br>
+          </p>
           <button id="save-mqtt">Save</button>
           <b>&nbsp; Connected:&nbsp;<span id="mqtt_connected"></span></b>
 
-          <p>Status published to:
+          <p>Status published to:</p>
           <span id=small-text>{base-topic}/{staus} value</span><br>
           <span id=small-text>e.g. openevse/amp 16</span><br>
-          <p>RAPI control subscribes to:
+          <p>RAPI control subscribes to:</p>
           <span id=small-text>{base-topic}/rapi/in{command} value</span><br>
           <span id=small-text>e.g. openevse/rapi/in/$SC 16</span><br>
           <span id=small-text>e.g. openevse/rapi/in/$GC</span><br>
-          <p>RAPI responce published to:
+          <p>RAPI responce published to:</p>
           <span id=small-text>{base-topic}/rapi/out responce</span><br>
           <span id=small-text>e.g. openevse/rapi/out $OK 6 32</span><br>
           </p>
@@ -176,13 +175,9 @@
 				<p>Ohm Key can be obtained by logging in to OhmConnect, enter Settings and locate the link in "Open Source Projects"</p>
 				<p><a href="https://login.ohmconnect.com/verify-ohm-hour/OpnEoVse">See Example</a></p>
 				<b>Key: </b>OpnEoVse
-
-
 	    </div>
-
-          </div>
+      </div> <!-- content-2 -->
        <div id="content-3">
-
   			<div class="box380">
                   <h2>Current</h2>
                   <table>
@@ -252,7 +247,7 @@
   				<tr><td>Temp3:</td><td><span id="temp3"></span></td></tr>
                   </table>
                </div>
-  		 </div>
+      </div> <!-- content-3 -->
           <div id="content-4">
   			<div class="box380">
                 <p>Send RAPI Command</p>
@@ -326,16 +321,17 @@
                   <tr><td>$FS</td><td>Put EVSE to sleep</td></tr>
                </table>
 			</div>
-        </div>
-	</div>
+      </div> <!-- content-4 -->
+    </div> <!-- content -->
 
     <div id="footer">
         <br><b> Powered by <a href="http://www.openevse.com">OpenEVSE</a> and <a href="https://openenergymonitor.org">OpenEnergyMonitor</a></b>
-        <br> by Chris Howell, Trystan Lea, Glyn Hudson
+      <br> by Chris Howell, Trystan Lea, Glyn Hudson
     </div>
   </div>
 </div>
 <script src="lib.js"></script>
-<script src="config.js"></script>
+  </div> <!-- container -->
+</div> <!-- page -->
 </body>
 </html>
