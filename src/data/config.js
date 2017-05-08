@@ -56,7 +56,8 @@ r1.onreadystatechange = function () {
     document.getElementById("mqtt_connected").innerHTML = "No";
   }
 
-  document.getElementById("version").innerHTML = status.version;
+  document.getElementById("system-version").innerHTML = status.version;
+  document.getElementById("status-version").innerHTML = status.version;
   document.getElementById("ohmkey").value = status.ohmkey;
 
 
