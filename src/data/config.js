@@ -110,6 +110,12 @@ r2.timeout = 2000;
     document.getElementById("ventt").innerHTML = (config.ventt == "1" ? "Disabled" : "Enabled");
 
     document.getElementById("service").innerHTML = config.service;
+    // Hide rows not relevant to the active service level
+    document.getElementById("l1min_r").style.display = (config.service == "2" ? "none" : "");
+    document.getElementById("l1max_r").style.display = (config.service == "2" ? "none" : "");
+    document.getElementById("l2min_r").style.display = (config.service == "1" ? "none" : "");
+    document.getElementById("l2max_r").style.display = (config.service == "1" ? "none" : "");
+    // Show min/max for each
     document.getElementById("l1min").innerHTML = config.l1min;
     document.getElementById("l1max").innerHTML = config.l1max;
     document.getElementById("l2min").innerHTML = config.l2min;
