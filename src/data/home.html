@@ -65,15 +65,16 @@
                       </tr>
                       <tbody id="networks" data-bind="foreach: status.networks">
                         <tr>
-                          <td><input class='networkcheckbox' data-bind="attr: name=$data" type='checkbox'></td>
+                          <td><input class='networkcheckbox' name='network' data-bind="checkedValue: $data, checked: $root.config.ssid" type='radio'></td>
                           <td data-bind="text: $data"></td>
-                          <td data-bind="text: status.rssi[$index]"></td>
+                          <td data-bind="text: $root.status.rssi()[$index()]"></td>
                         </tr>
                       </tbody>
 					</table>
+                    <p data-bind="text: config.ssid"></p>
 					<p><b>Passkey:</b><br>
-					<input id="passkey" type="text" data-bind="textInput: status.pass">
-					<button id="connect">Connect</button>
+					<input id="passkey" type="text" data-bind="textInput: config.pass">
+					<button id="connect" data-bind="click: saveWifi">Connect</button>
 					</p>
                 </div>
                 <div id="wait-view" style="display:none">
@@ -328,10 +329,9 @@
         <br><b> Powered by <a href="http://www.openevse.com">OpenEVSE</a> and <a href="https://openenergymonitor.org">OpenEnergyMonitor</a></b>
       <br> by Chris Howell, Trystan Lea, Glyn Hudson
     </div>
-  </div>
-</div>
-<script src="lib.js"></script>
   </div> <!-- container -->
 </div> <!-- page -->
+<script src="lib.js"></script>
+<script src="config.js"></script>
 </body>
 </html>

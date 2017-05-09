@@ -3,7 +3,7 @@
 
 var baseHost = window.location.hostname;
 //var baseHost = 'openevse.local';
-//var baseHost = 'test.com';
+//var baseHost = '192.168.4.1';
 var baseEndpoint = 'http://'+baseHost;
 
 var statusupdate = false;
@@ -46,25 +46,13 @@ function StatusViewModel()
   var self = this;
 
   BaseViewModel.call(self, {
-    "mode":"STA",
+    "mode":"ERR",
     "networks":[],
     "rssi":[],
-    "ssid":"",
     "srssi":"",
     "ipaddress":"",
-    "emoncms_server":"",
-    "emoncms_node":"",
-    "emoncms_fingerprint":"",
-    "emoncms_connected":"",
     "packets_sent":"",
     "packets_success":"",
-    "mqtt_server":"",
-    "mqtt_topic":"",
-    "mqtt_user":"",
-    "mqtt_connected":"",
-    "ohmkey":"",
-    "www_username":"",
-    "www_password":"",
     "free_heap":"",
     "version":"0.0.0"},
     baseEndpoint+'/status');
@@ -95,29 +83,43 @@ StatusViewModel.prototype.constructor = StatusViewModel;
 
 function ConfigViewModel()
 {
-    BaseViewModel.call(this, {
-      "firmware":"-",
-      "protocol":"-",
-      "espflash":"",
-      "diodet":"",
-      "gfcit":"",
-      "groundt":"",
-      "relayt":"",
-      "ventt":"",
-      "tempt":"",
-      "service":"",
-      "l1min":"-",
-      "l1max":"-",
-      "l2min":"-",
-      "l2max":"-",
-      "scale":"-",
-      "offset":"-",
-      "gfcicount":"-",
-      "nogndcount":"-",
-      "stuckcount":"-",
-      "kwhlimit":"",
-      "timelimit":""},
-      baseEndpoint+'/config');
+  BaseViewModel.call(this, {
+    "ssid":"",
+    "pass":"",
+    "emoncms_server":"",
+    "emoncms_node":"",
+    "emoncms_fingerprint":"",
+    "emoncms_connected":"",
+    "mqtt_server":"",
+    "mqtt_topic":"",
+    "mqtt_user":"",
+    "mqtt_connected":"",
+    "ohmkey":"",
+    "www_username":"",
+    "www_password":"",
+    "firmware":"-",
+    "protocol":"-",
+    "espflash":"",
+    "diodet":"",
+    "gfcit":"",
+    "groundt":"",
+    "relayt":"",
+    "ventt":"",
+    "tempt":"",
+    "service":"",
+    "l1min":"-",
+    "l1max":"-",
+    "l2min":"-",
+    "l2max":"-",
+    "scale":"-",
+    "offset":"-",
+    "gfcicount":"-",
+    "nogndcount":"-",
+    "stuckcount":"-",
+    "kwhlimit":"",
+    "timelimit":""},
+    baseEndpoint+'/config');
+
 }
 ConfigViewModel.prototype = Object.create(BaseViewModel.prototype);
 ConfigViewModel.prototype.constructor = ConfigViewModel;
@@ -187,6 +189,18 @@ function OpenEvseViewModel()
       });
     });
   };
+
+  self.saveWifi = function() {
+    if(self.config.ssid() === "") {
+      alert("Please select network");
+    } else {
+      $.post(baseEndpoint+"/savenetwork", {ssid: self.config.ssid(), pass: self.config.pass()})
+        .fail(function() {
+          alert("Failed to save WiFi config");
+        });
+    }
+  };
+
 }
 
 $(function() {
@@ -475,6 +489,7 @@ function updateStatus() {
 // -----------------------------------------------------------------------
 // Event: WiFi Connect
 // -----------------------------------------------------------------------
+/*
 document.getElementById("connect").addEventListener("click", function(e) {
 
     var passkey = document.getElementById("passkey").value;
@@ -499,6 +514,7 @@ document.getElementById("connect").addEventListener("click", function(e) {
         r.send("ssid="+selected_network_ssid+"&pass="+passkey);
     }
 });
+*/
 
 // -----------------------------------------------------------------------
 // Event: Emoncms save

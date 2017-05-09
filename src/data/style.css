@@ -237,7 +237,7 @@ input[type="file"] {
   z-index: 200;
 }
 
-#content-1 div table tbody input[type=checkbox] {
+#content-1 div table tbody input[type=radio] {
   visibility: visible;
   z-index: 7;
 }
