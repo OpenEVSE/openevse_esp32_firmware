@@ -76,7 +76,7 @@
         <div class="box380">
           <h2>WiFi Firmware</h2>
           <span id=small-text>ESP8266</span><br>
-          <p><b>Version: </b><span id="version"></span></p>
+          <p><b>Version: </b><span id="system-version"></span></p>
           <iframe style="width:380px; height:50px;" frameborder="0" scrolling="no" marginheight="0" marginwidth="0" src="/update">
           </iframe>
           <button id="restart">Restart</button>
@@ -127,14 +127,14 @@
           <b>&nbsp; Connected:&nbsp;<span id="mqtt_connected"></span></b>
           
           <p>Status published to:</p>
-          <span id=small-text>{base-topic}/{staus} value</span><br>
+          <span id=small-text>{base-topic}/{status} value</span><br>
           <span id=small-text>e.g. openevse/amp 16</span><br>
           <p>RAPI control subscribes to:</p>
-          <span id=small-text>{base-topic}/rapi/in{command} value</span><br>
+          <span id=small-text>{base-topic}/rapi/in/{command} value</span><br>
           <span id=small-text>e.g. openevse/rapi/in/$SC 16</span><br>
           <span id=small-text>e.g. openevse/rapi/in/$GC</span><br>
-          <p>RAPI responce published to:</p>
-          <span id=small-text>{base-topic}/rapi/out responce</span><br>
+          <p>RAPI response published to:</p>
+          <span id=small-text>{base-topic}/rapi/out response</span><br>
           <span id=small-text>e.g. openevse/rapi/out $OK 6 32</span><br>
         </div>
         <div class="box380">
@@ -145,7 +145,7 @@
                 <input id="ohmkey" type="text">
                 <button id="save-ohmkey">Save</button>
           <p>Ohm Key can be obtained by logging in to OhmConnect, enter Settings and locate the link in "Open Source Projects"</p>
-          <p><a href="https://login.ohmconnect.com/verify-ohm-hour/OpnEoVse">See Example</a></p>
+          <p>Example: https://login.ohmconnect.com/verify-ohm-hour/OpnEoVse</p>
           <b>Key: </b>OpnEoVse
         </div>
       </div> <!-- content-2 -->
@@ -156,10 +156,10 @@
             <tr><th>Name</th><th>
             </th></tr>
             <tr><td>Service Level:</td><td><span id="service"></span></td></tr>
-            <tr><td>Level 1 Minimum:</td><td><span id="l1min"></span></td></tr>
-            <tr><td>Level 1 Maximum:</td><td><span id="l1max"></span></td></tr>
-            <tr><td>Level 2 Minimum:</td><td><span id="l2min"></span></td></tr>
-            <tr><td>Level 2 Maximum:</td><td><span id="l2max"></span></td></tr>
+            <tr id="l1min_r"><td>Level 1 Minimum:</td><td><span id="l1min"></span></td></tr>
+            <tr id="l1max_r"><td>Level 1 Maximum:</td><td><span id="l1max"></span></td></tr>
+            <tr id="l2min_r"><td>Level 2 Minimum:</td><td><span id="l2min"></span></td></tr>
+            <tr id="l2max_r"><td>Level 2 Maximum:</td><td><span id="l2max"></span></td></tr>
             <tr><td>Sensor Scale:</td><td><span id="scale"></span></td></tr>
             <tr><td>Sensor Offset:</td><td><span id="offset"></span></td></tr>
           </table>
@@ -202,7 +202,8 @@
             <tr><th>OpenEVSE</th><th></th></tr>
             <tr><td>Firmware:</td><td><span id="firmware"></span></td></tr>
             <tr><td>Protocol:</td><td><span id="protocol"></span></td></tr>
-            <tr><th>WiFi</th><th></th></tr>
+            <tr><th>OpenEVSE WiFi</th><th></th></tr>
+            <tr><td>Firmware:</td><td><span id="status-version"></span></td></tr>
             <tr><td>Flash Size:</td><td><span id="espflash"></span></td></tr>
             <tr><td>Free RAM:</td><td><span id="espfree"></span></td></tr>
           </table>
@@ -231,7 +232,7 @@
             <tr><th>Get</th><th>Description</th></tr>
             <tr><td>$G3</td><td>Get Charge Time Limit, 15-minutes (1), 30-minutes (2), etc...</td></tr>
             <tr><td>$GA</td><td>Get Ammeter Scale/Offset, scale offset</td></tr>
-            <tr><td>$GC</td><td>Get current capacity, integer</td></tr>
+            <tr><td>$GC</td><td>Get current capacity range, integers</td></tr>
             <tr><td>$GE</td><td>Get settings, amps flags</td></tr>
             <tr><td>$GF</td><td>Get fault counters, gfi ground stuck (in hex)</td></tr>
             <tr><td>$GG</td><td>Get charge current and voltage, milliamps millivolts</td></tr>
@@ -255,10 +256,12 @@
             <tr><td>$S3</td><td>Set Charge Time Limit, 15-minutes (1), 30-minutes (2), etc...</td></tr>
             <tr><td>$SA</td><td>Set Ammeter Scale/Offset, scale offset</td></tr>
             <tr><td>$SC</td><td>Set current capacity, integer</td></tr>
+            <tr><td>$SD</td><td>Enable (1) / Disable (0) Diode self-check</td></tr>
             <tr><td>$SF</td><td>Enable (1) / Disable (0) GFI self-check</td></tr>
             <tr><td>$SG</td><td>Enable (1) / Disable (0) Ground check</td></tr>
             <tr><td>$SH</td><td>Set charge limit in kWh, integer</td></tr>
-            <tr><td>$SK</td><td>Set accumulated kWh, integer</td></tr>
+            <tr><td>$SK</td><td>Set accumulated Wh, integer</td></tr>
+            <tr><td>$SL</td><td>Set service level (1/2/A)</td></tr>
             <tr><td>$SM</td><td>Set Voltmeter Scale/Offset, scale offset</td></tr>
             <tr><td>$SO</td><td>Set Overtemperature thresholds, ambient infrared</td></tr>
             <tr><td>$SR</td><td>Enable (1) / Disable (0) Stuck-relay check</td></tr>
