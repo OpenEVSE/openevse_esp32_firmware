@@ -22,7 +22,7 @@ function BaseViewModel(defaults, remoteUrl, mappings = {}) {
   var self = this;
   self.remoteUrl = remoteUrl;
 
-  // Observable promerties
+  // Observable properties
   ko.mapping.fromJS(defaults, mappings, self);
   self.fetching = ko.observable(false);
 }
