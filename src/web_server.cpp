@@ -273,32 +273,34 @@ handleStatus() {
   s += "\"networks\":[" + st + "],";
   s += "\"rssi\":[" + rssi + "],";
 
-  s += "\"ssid\":\"" + esid + "\",";
-  //s += "\"pass\":\""+epass+"\","; security risk: DONT RETURN PASSWORDS
   s += "\"srssi\":\"" + String(WiFi.RSSI()) + "\",";
   s += "\"ipaddress\":\"" + ipaddress + "\",";
-  s += "\"emoncms_server\":\"" + emoncms_server + "\",";
-  s += "\"emoncms_node\":\"" + emoncms_node + "\",";
-  // s += "\"emoncms_apikey\":\""+emoncms_apikey+"\","; security risk: DONT RETURN APIKEY
-  s += "\"emoncms_fingerprint\":\"" + emoncms_fingerprint + "\",";
   s += "\"emoncms_connected\":\"" + String(emoncms_connected) + "\",";
   s += "\"packets_sent\":\"" + String(packets_sent) + "\",";
   s += "\"packets_success\":\"" + String(packets_success) + "\",";
 
-  s += "\"mqtt_server\":\"" + mqtt_server + "\",";
-  s += "\"mqtt_topic\":\"" + mqtt_topic + "\",";
-  s += "\"mqtt_user\":\"" + mqtt_user + "\",";
-  //s += "\"mqtt_pass\":\""+mqtt_pass+"\","; security risk: DONT RETURN PASSWORDS
   s += "\"mqtt_connected\":\"" + String(mqtt_connected()) + "\",";
 
-  s += "\"ohmkey\":\"" + ohm + "\",";
-
-  s += "\"www_username\":\"" + www_username + "\",";
-  //s += "\"www_password\":\""+www_password+"\","; security risk: DONT RETURN PASSWORDS
+  s += "\"ohm_hour\":\"" + ohm_hour + "\",";
 
   s += "\"free_heap\":\"" + String(ESP.getFreeHeap()) + "\",";
   s += "\"version\":\"" + currentfirmware + "\"";
 
+#ifdef ENABLE_LEGACY_API
+  s += "\",ssid\":\"" + esid + "\"";
+  //s += ",\"pass\":\""+epass+"\""; security risk: DONT RETURN PASSWORDS
+  s += "\",emoncms_server\":\"" + emoncms_server + "\"";
+  s += "\",emoncms_node\":\"" + emoncms_node + "\"";
+  // s += ",\"emoncms_apikey\":\""+emoncms_apikey+"\""; security risk: DONT RETURN APIKEY
+  s += "\",emoncms_fingerprint\":\"" + emoncms_fingerprint + "\"";
+  s += "\",mqtt_server\":\"" + mqtt_server + "\"";
+  s += "\",mqtt_topic\":\"" + mqtt_topic + "\"";
+  s += "\",mqtt_user\":\"" + mqtt_user + "\"";
+  //s += ",\"mqtt_pass\":\""+mqtt_pass+"\""; security risk: DONT RETURN PASSWORDS
+  s += "\",www_username\":\"" + www_username + "\"";
+  //s += ",\"www_password\":\""+www_password+"\""; security risk: DONT RETURN PASSWORDS
+  s += ",\"ohmkey\":\"" + ohm + "\"";
+#endif
   s += "}";
   server.send(200, "text/html", s);
 }
@@ -332,7 +334,19 @@ handleConfig() {
   s += "\"nogndcount\":\"" + nognd_count + "\",";
   s += "\"stuckcount\":\"" + stuck_count + "\",";
   s += "\"kwhlimit\":\"" + kwh_limit + "\",";
-  s += "\"timelimit\":\"" + time_limit + "\"";
+  s += "\"timelimit\":\"" + time_limit + "\",";
+  s += "\"ssid\":\"" + esid + "\",";
+  //s += "\"pass\":\""+epass+"\","; security risk: DONT RETURN PASSWORDS
+  s += "\"emoncms_server\":\"" + emoncms_server + "\",";
+  s += "\"emoncms_node\":\"" + emoncms_node + "\",";
+  // s += "\"emoncms_apikey\":\""+emoncms_apikey+"\","; security risk: DONT RETURN APIKEY
+  s += "\"emoncms_fingerprint\":\"" + emoncms_fingerprint + "\",";
+  s += "\"mqtt_server\":\"" + mqtt_server + "\",";
+  s += "\"mqtt_topic\":\"" + mqtt_topic + "\",";
+  s += "\"mqtt_user\":\"" + mqtt_user + "\",";
+  //s += "\"mqtt_pass\":\""+mqtt_pass+"\","; security risk: DONT RETURN PASSWORDS
+  s += "\"www_username\":\"" + www_username + "\"";
+  //s += "\"www_password\":\""+www_password+"\","; security risk: DONT RETURN PASSWORDS
   s += "}";
   s.replace(" ", "");
   server.send(200, "text/html", s);
@@ -347,12 +361,14 @@ void
 handleUpdate() {
 
   String s = "{";
-  s += "\"ohmhour\":\"" + ohm_hour + "\",";
-  s += "\"espfree\":\"" + String(espfree) + "\",";
   s += "\"comm_sent\":\"" + String(comm_sent) + "\",";
   s += "\"comm_success\":\"" + String(comm_success) + "\",";
+#ifdef ENABLE_LEGACY_API
+  s += "\"ohmhour\":\"" + ohm_hour + "\",";
+  s += "\"espfree\":\"" + String(espfree) + "\",";
   s += "\"packets_sent\":\"" + String(packets_sent) + "\",";
   s += "\"packets_success\":\"" + String(packets_success) + "\",";
+#endif
   s += "\"amp\":\"" + String(amp) + "\",";
   s += "\"pilot\":\"" + String(pilot) + "\",";
   s += "\"temp1\":\"" + String(temp1) + "\",";
