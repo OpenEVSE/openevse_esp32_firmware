@@ -359,7 +359,8 @@ r1.onreadystatechange = function () {
     document.getElementById("mqtt_connected").innerHTML = "No";
   }
 
-  document.getElementById("version").innerHTML = status.version;
+  document.getElementById("system-version").innerHTML = status.version;
+  document.getElementById("status-version").innerHTML = status.version;
   document.getElementById("ohmkey").value = status.ohmkey;
 
 
@@ -406,50 +407,27 @@ r2.timeout = 2000;
     document.getElementById("firmware").innerHTML = config.firmware;
     document.getElementById("protocol").innerHTML = config.protocol;
     document.getElementById("espflash").innerHTML = scaleString(config.espflash, 1024, 0) + "K";
-    document.getElementById("diodet").innerHTML = config.diodet;
-  	if (config.diodet == "1"){
-  	  document.getElementById("diodet").innerHTML = "Disabled";
-  	} else {
-  	  document.getElementById("diodet").innerHTML = "Enabled";
-  	}
-    document.getElementById("gfcit").innerHTML = config.gfcit;
-  	if (config.gfcit == "1"){
-  	  document.getElementById("gfcit").innerHTML = "Disabled";
-  	} else {
-  	document.getElementById("gfcit").innerHTML = "Enabled";
-  	}
-    document.getElementById("groundt").innerHTML = config.groundt;
-  	if (config.groundt == "1"){
-  	  document.getElementById("groundt").innerHTML = "Disabled";
-  	} else {
-  	document.getElementById("groundt").innerHTML = "Enabled";
-  	}
-    document.getElementById("relayt").innerHTML = config.relayt;
-  	if (config.relayt == "1"){
-  	  document.getElementById("relayt").innerHTML = "Disabled"
-  	} else {
-  	document.getElementById("relayt").innerHTML = "Enabled";
-  	}
-    document.getElementById("ventt").innerHTML = config.ventt;
-  	if (config.ventt == "1"){
-  	  document.getElementById("ventt").innerHTML = "Disabled"
-  	} else {
-  	  document.getElementById("ventt").innerHTML = "Enabled";
-  	}
+    document.getElementById("gfcit").innerHTML = (config.gfcit == "1" ? "Disabled" : "Enabled");
+    document.getElementById("groundt").innerHTML = (config.groundt == "1" ? "Disabled" : "Enabled");
+    document.getElementById("relayt").innerHTML = (config.relayt == "1" ? "Disabled" : "Enabled");
+    document.getElementById("tempt").innerHTML = (config.tempt  == "1" ? "Disabled" : "Enabled");
+    document.getElementById("diodet").innerHTML = (config.diodet == "1" ? "Disabled" : "Enabled");
+    document.getElementById("ventt").innerHTML = (config.ventt == "1" ? "Disabled" : "Enabled");
 
     document.getElementById("service").innerHTML = config.service;
+    // Hide rows not relevant to the active service level
+    document.getElementById("l1min_r").style.display = (config.service == "2" ? "none" : "");
+    document.getElementById("l1max_r").style.display = (config.service == "2" ? "none" : "");
+    document.getElementById("l2min_r").style.display = (config.service == "1" ? "none" : "");
+    document.getElementById("l2max_r").style.display = (config.service == "1" ? "none" : "");
+    // Show min/max for each
 	  document.getElementById("l1min").innerHTML = config.l1min;
 	  document.getElementById("l1max").innerHTML = config.l1max;
 	  document.getElementById("l2min").innerHTML = config.l2min;
 	  document.getElementById("l2max").innerHTML = config.l2max;
 	  document.getElementById("scale").innerHTML = config.scale;
 	  document.getElementById("offset").innerHTML = config.offset;
-	  document.getElementById("tempt").innerHTML = config.tempt;
-	  if (config.tempt == "1"){
-		  document.getElementById("tempt").innerHTML = "Disabled";
-    } else {
-		  document.getElementById("tempt").innerHTML = "Enabled";
-		}
+
 	  document.getElementById("gfcicount").innerHTML = config.gfcicount;
 	  document.getElementById("nogndcount").innerHTML = config.nogndcount;
 	  document.getElementById("stuckcount").innerHTML = config.stuckcount;

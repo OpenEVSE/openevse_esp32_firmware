@@ -176,18 +176,18 @@
 
             <p>
               Status published to:<br/>
-              <span class="small-text">{base-topic}/{staus} value</span><br>
+              <span class="small-text">{base-topic}/{status} value</span><br>
               <span class="small-text">e.g. <span data-bind="text: '' !== config.mqtt_topic() ? config.mqtt_topic() : 'openevse'"></span>/amp 16</span><br>
             </p>
             <p>
               RAPI control subscribes to:<br/>
-              <span class="small-text">{base-topic}/rapi/in{command} value</span><br>
+              <span class="small-text">{base-topic}/rapi/in/{command} value</span><br>
               <span class="small-text">e.g. <span data-bind="text: '' !== config.mqtt_topic() ? config.mqtt_topic() : 'openevse'"></span>/rapi/in/$SC 16</span><br>
               <span class="small-text">e.g. <span data-bind="text: '' !== config.mqtt_topic() ? config.mqtt_topic() : 'openevse'"></span>/rapi/in/$GC</span><br>
             <p>
             <p>
-              RAPI responce published to:<br/>
-              <span class="small-text">{base-topic}/rapi/out responce</span><br>
+              RAPI response published to:<br/>
+              <span class="small-text">{base-topic}/rapi/out response</span><br>
               <span class="small-text">e.g. <span data-bind="text: '' !== config.mqtt_topic() ? config.mqtt_topic() : 'openevse'"></span>/rapi/out $OK 6 32</span><br>
             </p>
           </div>
@@ -200,7 +200,7 @@
               <input data-bind="textInput: config.ohmkey" type="text"><br/>
               <button data-bind="click: saveOhmKey, text: (saveOhmKeyFetching() ? 'Saving' : (saveOhmKeySuccess() ? 'Saved' : 'Save')), enable: !saveOhmKeyFetching()">Save</button>
               <p>Ohm Key can be obtained by logging in to OhmConnect, enter Settings and locate the link in "Open Source Projects"</p>
-              <p><a href="https://login.ohmconnect.com/verify-ohm-hour/OpnEoVse">See Example</a></p>
+          <p>Example: https://login.ohmconnect.com/verify-ohm-hour/OpnEoVse</p>
               <b>Key: </b>OpnEoVse
             </p>
           </div>
@@ -219,19 +219,19 @@
                 <td>Service Level:</td>
                 <td><span data-bind="text: config.service"></span></td>
               </tr>
-              <tr>
+              <tr data-bind="visible: '1' == config.service()">
                 <td>Level 1 Minimum:</td>
                 <td><span data-bind="text: config.l1min"></span></td>
               </tr>
-              <tr>
+              <tr data-bind="visible: '1' == config.service()">
                 <td>Level 1 Maximum:</td>
                 <td><span data-bind="text: config.l1max"></span></td>
               </tr>
-              <tr>
+              <tr data-bind="visible: '2' == config.service()">
                 <td>Level 2 Minimum:</td>
                 <td><span data-bind="text: config.l2min"></span></td>
               </tr>
-              <tr>
+              <tr data-bind="visible: '2' == config.service()">
                 <td>Level 2 Maximum:</td>
                 <td><span data-bind="text: config.l2max"></span></td>
               </tr>
@@ -344,10 +344,14 @@
                 <td><span data-bind="text: config.protocol"></span></td>
               </tr>
               <tr>
-                <th>WiFi</th>
+                <th>OpenEVSE</th>
                 <th></th>
               </tr>
               <tr>
+                <td>Firmware:</td>
+                <td><span data-bind="text: config.version"></span></td>
+              </tr>
+               <tr>
                 <td>Flash Size:</td>
                 <td><span data-bind="text: scaleString(config.espflash(), 1024, 0) + 'K'"></span></td>
               </tr>
@@ -428,7 +432,7 @@
               </tr>
               <tr>
                 <td>$GC</td>
-                <td>Get current capacity, integer</td>
+                <td>Get current capacity range, integers</td>
               </tr>
               <tr>
                 <td>$GE</td>
@@ -507,6 +511,7 @@
                 <td>$SC</td>
                 <td>Set current capacity, integer</td>
               </tr>
+              <tr><td>$SD</td><td>Enable (1) / Disable (0) Diode self-check</td></tr>
               <tr>
                 <td>$SF</td>
                 <td>Enable (1) / Disable (0) GFI self-check</td>
@@ -523,6 +528,7 @@
                 <td>$SK</td>
                 <td>Set accumulated kWh, integer</td>
               </tr>
+              <tr><td>$SL</td><td>Set service level (1/2/A)</td></tr>
               <tr>
                 <td>$SM</td>
                 <td>Set Voltmeter Scale/Offset, scale offset</td>
