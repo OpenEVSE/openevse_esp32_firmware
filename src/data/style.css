@@ -312,7 +312,7 @@ input[type="file"] {
   margin-bottom: 0;
 }
 
-#small-text{
+.small-text{
   font-size: 10px;
   word-wrap: break-word;
 }
