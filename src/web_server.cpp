@@ -121,11 +121,10 @@ decodeURI(String & val) {
 // -------------------------------------------------------------------
 void
 handleHome() {
-  SPIFFS.begin(); // mount the fs
+  //SPIFFS.begin(); // mount the fs
   File f = SPIFFS.open("/home.html", "r");
   if (f) {
-    String s = f.readString();
-    server.send(200, "text/html", s);
+    size_t sent = server.streamFile(f, "text/html");
     f.close();
   } else {
     server.send(200, "text/plain",
@@ -521,14 +520,19 @@ bool requestPreProcess()
 
 void
 web_server_setup() {
+  SPIFFS.begin(); // mount the fs
+
   // Start server & server root html /
-  server.on("/",[]() {
-            if (www_username != ""
-                && !server.authenticate(www_username.c_str(),
-                                        www_password.c_str())
-                && wifi_mode == WIFI_MODE_STA)
-            return server.requestAuthentication(); handleHome();}
-  );
+  server.on("/",[]()
+  {
+    if (www_username != ""
+        && !server.authenticate(www_username.c_str(),
+                                www_password.c_str())
+        && wifi_mode == WIFI_MODE_STA) {
+      return server.requestAuthentication();
+    }
+    handleHome();
+  });
 
   // Handle HTTP web interface button presses
   server.on("/generate_204", handleHome);  //Android captive portal. Maybe not needed. Might be handled by notFound
