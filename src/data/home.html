@@ -55,7 +55,7 @@
                   </tr>
                 </tbody>
               </table>
-              <p><b>IP Address:</b><br><span id="sta-ip" data-bind="text: status.ipaddress"></span></p>
+              <p><b>IP Address:</b><br><a data-bind="text: status.ipaddress, attr: {src: 'http://'+status.ipaddress()}"></a></p>
               <p>
                 <b>Successful packets:</b><br>
                 <span data-bind="text: status.packets_success"></span> of <span data-bind="text: status.packets_sent"></span>
@@ -65,7 +65,7 @@
               <button id="apoff" data-bind="visible: status.isWifiAccessPoint">Turn off Access Point</button>
             </div>
 
-            <div id="ap-view" data-bind="visible: status.isWifiAccessPoint">
+            <div id="ap-view" data-bind="visible: !status.isWifiClient() &amp;&amp; !wifiConnecting()">
               <p>Connect to network:</p>
               <table>
                 <tr>
@@ -86,11 +86,11 @@
               <p>
                 <b>Passkey:</b><br>
                 <input type="text" data-bind="textInput: config.pass">
-                <button data-bind="click: saveNetwork">Connect</button>
+                <button data-bind="click: saveNetwork, text: (saveNetworkFetching() ? 'Saving' : (saveNetworkSuccess() ? 'Saved' : 'Connect')), disable: saveAdminFetching">Connect</button>
               </p>
             </div>
 
-            <div id="wait-view" style="display:none">
+            <div data-bind="visible: wifiConnecting">
               <p>Connecting to WIFI Network...</p>
             </div>
           </div>
