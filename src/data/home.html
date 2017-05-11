@@ -110,12 +110,8 @@
             <h2>WiFi Firmware</h2>
             <span class="small-text">ESP8266</span><br>
             <p><b>Version: </b><span data-bind="text: status.version"></span></p>
-            <p>
-              <form method='POST' action='update' enctype='multipart/form-data'>
-                <input type='file' name='update'>
-                <button id="update">Update</button>
-              </form>
-            </p>
+            <iframe style="width:380px; height:50px;" frameborder="0" scrolling="no" marginheight="0" marginwidth="0" data-bind="attr: {src: upgradeUrl}">
+            </iframe>
             <p>
               <button id="restart">Restart</button>
               <button id="reset">Factory Reset</button>

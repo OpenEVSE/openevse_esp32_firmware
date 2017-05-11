@@ -165,6 +165,9 @@ function OpenEvseViewModel() {
   var updateTimer = null;
   var updateTime = 1 * 1000;
 
+  // Upgrade URL
+  self.upgradeUrl = ko.observable('about:blank');
+
   // -----------------------------------------------------------------------
   // Initialise the app
   // -----------------------------------------------------------------------
@@ -175,6 +178,7 @@ function OpenEvseViewModel() {
         self.rapi.update(function () {
           self.initialised(true);
           updateTimer = setTimeout(self.update, updateTime);
+          self.upgradeUrl(baseEndpoint + '/update');
           self.updating(false);
         });
       });
@@ -316,7 +320,6 @@ function OpenEvseViewModel() {
       self.saveOhmKeyFetching(false);
     });
   };
-
 }
 
 $(function () {
