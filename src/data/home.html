@@ -104,7 +104,7 @@
               <b>Password:</b><br>
               <input type="text" value="openevse" data-bind="textInput: config.www_password"><br>
               <span class="small-text">Web interface HTTP authentication.</span><br><br>
-              <button data-bind="click: saveAdmin, text: (saveAdminFetching() ? 'Saving' : (saveAdminSuccess() ? 'Saved' : 'Save')), enable: !saveAdminFetching()">Save</button>
+              <button data-bind="click: saveAdmin, text: (saveAdminFetching() ? 'Saving' : (saveAdminSuccess() ? 'Saved' : 'Save')), disable: saveAdminFetching">Save</button>
           </div>
           <div class="box380">
             <h2>WiFi Firmware</h2>
@@ -150,7 +150,7 @@
               <span class="small-text">
                 7D:82:15:BE:D7:BC:72:58:87:7D:8E:40:D4:80:BA:1A:9F:8B:8D:DA
               </span><br>
-              <button data-bind="click: saveEmonCms, text: (saveEmonCmsFetching() ? 'Saving' : (saveEmonCmsSuccess() ? 'Saved' : 'Save')), enable: !saveEmonCmsFetching()">Save</button>
+              <button data-bind="click: saveEmonCms, text: (saveEmonCmsFetching() ? 'Saving' : (saveEmonCmsSuccess() ? 'Saved' : 'Save')), disable: saveEmonCmsFetching">Save</button>
               <div><b>&nbsp; Connected:&nbsp;<span data-bind="text: '1' === status.emoncms_connected() ? 'Yes' : 'No'"></span></b></div>
               <div data-bind="visible: '1' === status.emoncms_connected()"><b>&nbsp; Successful posts:&nbsp;<span data-bind="text: status.packets_success"></span></b></div>
             </p>
@@ -171,7 +171,7 @@
             <p><b>Password:</b><span> blank - no authentication</span>
               <input data-bind="textInput: config.mqtt_pass" type="text"><br>
             </p>
-            <button data-bind="click: saveMqtt, text: (saveMqttFetching() ? 'Saving' : (saveMqttSuccess() ? 'Saved' : 'Save')), enable: !saveMqttFetching()">Save</button>
+            <button data-bind="click: saveMqtt, text: (saveMqttFetching() ? 'Saving' : (saveMqttSuccess() ? 'Saved' : 'Save')), disable: saveMqttFetching">Save</button>
             <b>&nbsp; Connected:&nbsp;<span data-bind="text: '1' === status.mqtt_connected() ? 'Yes' : 'No'"></span></b>
 
             <p>
@@ -198,7 +198,7 @@
             <p><b>Ohm Hour:</b> <span data-bind="text: status.ohm_hour"></span></p>
             <p><b>Ohm key:</b><br>
               <input data-bind="textInput: config.ohmkey" type="text"><br/>
-              <button data-bind="click: saveOhmKey, text: (saveOhmKeyFetching() ? 'Saving' : (saveOhmKeySuccess() ? 'Saved' : 'Save')), enable: !saveOhmKeyFetching()">Save</button>
+              <button data-bind="click: saveOhmKey, text: (saveOhmKeyFetching() ? 'Saving' : (saveOhmKeySuccess() ? 'Saved' : 'Save')), disable: saveOhmKeyFetching">Save</button>
               <p>Ohm Key can be obtained by logging in to OhmConnect, enter Settings and locate the link in "Open Source Projects"</p>
           <p>Example: https://login.ohmconnect.com/verify-ohm-hour/OpnEoVse</p>
               <b>Key: </b>OpnEoVse
@@ -398,6 +398,7 @@
         <!-- content-3 -->
         <div id="content-4">
           <div class="box380">
+            <!--
             <p>Send RAPI Command</p>
             <p>Common Commands:</p>
             <p>Set Current - $SC XX</p>
@@ -405,15 +406,17 @@
             <p>Get Real-time Current - $GG</p>
             <p>Get Temperatures - $GP</p>
             <p></p>
-            <p>
-              <form method='get' action='r'>
-                <label><b><i>RAPI Command:</b></i></label>
-                <input type="text" name='rapi' length=32 />
-                <p>
-                  <button id="rapisend">Send</button>
-                </p>
-              </form>
-            </p>
+            -->
+            <form method='get' action='r' data-bind="with: rapi">
+              <p>
+                <b>RAPI Command:</b>
+                <input type="text" name='rapi' length='32' data-bind="textInput: cmd" />
+              </p>
+              <p>
+                <button data-bind="click: send, disable: rapiSend">Send</button>
+              </p>
+              <p data-bind="text: ret"></p>
+            </form>
           </div>
           <div class="box380">
             <h2>RAPI Get Commands</h2>

@@ -475,6 +475,7 @@ handleRapiR() {
   String s;
   String rapiString;
   String rapi = server.arg("rapi");
+  bool json = server.hasArg("json");
   rapi.replace("%24", "$");
   rapi.replace("+", " ");
   Serial.flush();
@@ -483,18 +484,25 @@ handleRapiR() {
   while (Serial.available()) {
          rapiString = Serial.readStringUntil('\r');
        }
-  s = "<html><font size='20'><font color=006666>Open</font><b>EVSE</b></font><p>";
-  s += "<b>Open Source Hardware</b><p>RAPI Command Sent<p>Common Commands:<p>";
-  s += "Set Current - $SC XX<p>Set Service Level - $SL 1 - $SL 2 - $SL A<p>";
-  s += "Get Real-time Current - $GG<p>Get Temperatures - $GP<p>";
-   s += "<p>";
-  s += "<form method='get' action='r'><label><b><i>RAPI Command:</b></i></label>";
-  s += "<input name='rapi' length=32><p><input type='submit'></form>";
-   s += rapi;
-   s += "<p>>";
-   s += rapiString;
-   s += "<p></html>\r\n\r\n";
-   server.send(200, "text/html", s);
+  if(json)
+  {
+    s = "{\"cmd\":\""+rapi+"\",\"ret\":\""+rapiString+"\"}";
+  }
+  else
+  {
+    s = "<html><font size='20'><font color=006666>Open</font><b>EVSE</b></font><p>";
+    s += "<b>Open Source Hardware</b><p>RAPI Command Sent<p>Common Commands:<p>";
+    s += "Set Current - $SC XX<p>Set Service Level - $SL 1 - $SL 2 - $SL A<p>";
+    s += "Get Real-time Current - $GG<p>Get Temperatures - $GP<p>";
+    s += "<p>";
+    s += "<form method='get' action='r'><label><b><i>RAPI Command:</b></i></label>";
+    s += "<input name='rapi' length=32><p><input type='submit'></form>";
+    s += rapi;
+    s += "<p>&gt;";
+    s += rapiString;
+    s += "<p></html>\r\n\r\n";
+  }
+  server.send(200, "text/html", s);
 }
 
 bool requestPreProcess()

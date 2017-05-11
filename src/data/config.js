@@ -134,9 +134,23 @@ function RapiViewModel() {
     "wattsec": "0",
     "watthour": "0"
   }, baseEndpoint + '/rapiupdate');
+
+  this.rapiSend = ko.observable(false);
+  this.cmd = ko.observable('');
+  this.ret = ko.observable('');
 }
 RapiViewModel.prototype = Object.create(BaseViewModel.prototype);
 RapiViewModel.prototype.constructor = RapiViewModel;
+RapiViewModel.prototype.send = function() {
+  var self = this;
+  self.rapiSend(true);
+  $.get(baseEndpoint + '/r?json=1&rapi='+encodeURI(self.cmd()), function (data) {
+    self.ret('>'+data.ret);
+    self.cmd(data.cmd);
+  }, 'json').always(function () {
+    self.rapiSend(false);
+  });
+};
 
 function OpenEvseViewModel() {
   var self = this;
