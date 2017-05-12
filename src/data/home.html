@@ -55,7 +55,7 @@
                   </tr>
                 </tbody>
               </table>
-              <p><b>IP Address:</b><br><a data-bind="text: status.ipaddress, attr: {src: 'http://'+status.ipaddress()}"></a></p>
+              <p><b>IP Address:</b><br><a data-bind="text: status.ipaddress, attr: {href: 'http://'+status.ipaddress()}"></a></p>
               <p>
                 <b>Successful packets:</b><br>
                 <span data-bind="text: status.packets_success"></span> of <span data-bind="text: status.packets_sent"></span>
@@ -196,7 +196,7 @@
               <input data-bind="textInput: config.ohmkey" type="text"><br/>
               <button data-bind="click: saveOhmKey, text: (saveOhmKeyFetching() ? 'Saving' : (saveOhmKeySuccess() ? 'Saved' : 'Save')), disable: saveOhmKeyFetching">Save</button>
               <p>Ohm Key can be obtained by logging in to OhmConnect, enter Settings and locate the link in "Open Source Projects"</p>
-          <p>Example: https://login.ohmconnect.com/verify-ohm-hour/OpnEoVse</p>
+              <p>Example: https://login.ohmconnect.com/verify-ohm-hour/OpnEoVse</p>
               <b>Key: </b>OpnEoVse
             </p>
           </div>
