@@ -490,6 +490,56 @@ void handleUpdate() {
 }
 */
 
+// -------------------------------------------------------------------
+// Update firmware
+// url: /update
+// -------------------------------------------------------------------
+void
+handleUpdateGet(AsyncWebServerRequest *request) {
+  request->send(200, "text/html", "<form method='POST' action='/update' enctype='multipart/form-data'><input type='file' name='update'><input type='submit' value='Update'></form>");
+}
+
+void
+handleUpdatePost(AsyncWebServerRequest *request) {
+  bool shouldReboot = !Update.hasError();
+  AsyncWebServerResponse *response = request->beginResponse(200, "text/plain", shouldReboot ? "OK" : "FAIL");
+  response->addHeader("Connection", "close");
+  request->send(response);
+
+  if(shouldReboot) {
+    systemRestartTime = millis() + 1000;
+  }
+}
+
+void
+handleUpdateUpload(AsyncWebServerRequest *request, String filename, size_t index, uint8_t *data, size_t len, bool final) {
+  if(!index){
+    DBUGF("Update Start: %s\n", filename.c_str());
+    Update.runAsync(true);
+    if(!Update.begin((ESP.getFreeSketchSpace() - 0x1000) & 0xFFFFF000)){
+#ifdef ENABLE_DEBUG
+      Update.printError(DEBUG_PORT);
+#endif
+    }
+  }
+  if(!Update.hasError()){
+    if(Update.write(data, len) != len){
+#ifdef ENABLE_DEBUG
+      Update.printError(DEBUG_PORT);
+#endif
+    }
+  }
+  if(final){
+    if(Update.end(true)){
+      DBUGF("Update Success: %uB\n", index+len);
+    } else {
+#ifdef ENABLE_DEBUG
+      Update.printError(DEBUG_PORT);
+#endif
+    }
+  }
+}
+
 void
 handleRapi(AsyncWebServerRequest *request) {
   bool json = request->hasArg("json");
@@ -624,6 +674,10 @@ web_server_setup() {
   server.on("/scan", handleScan);
   server.on("/apoff", handleAPOff);
 
+  // Simple Firmware Update Form
+  server.on("/update", HTTP_GET, handleUpdateGet);
+  server.on("/update", HTTP_POST, handleUpdatePost, handleUpdateUpload);
+
 //  server.on("/firmware", [](){
 //    if(requestPreProcess())   handleUpdateCheck();
 //  });
@@ -633,9 +687,6 @@ web_server_setup() {
 //  });
 
   server.onNotFound(handleNotFound);
-/*
-  httpUpdater.setup(&server);
-*/
   server.begin();
 
   DEBUG.println("Server started");
