@@ -53,8 +53,7 @@ function StatusViewModel() {
     "emoncms_connected": "",
     "mqtt_connected": "",
     "ohm_hour": "",
-    "free_heap": "",
-    "version": "0.0.0"
+    "free_heap": ""
   }, baseEndpoint + '/status');
 
   // Some devired values
@@ -115,7 +114,8 @@ function ConfigViewModel() {
     "nogndcount": "-",
     "stuckcount": "-",
     "kwhlimit": "",
-    "timelimit": ""
+    "timelimit": "",
+    "version": "0.0.0"
   }, baseEndpoint + '/config');
 }
 ConfigViewModel.prototype = Object.create(BaseViewModel.prototype);

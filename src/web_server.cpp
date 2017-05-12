@@ -282,21 +282,21 @@ handleStatus() {
 
   s += "\"ohm_hour\":\"" + ohm_hour + "\",";
 
-  s += "\"free_heap\":\"" + String(ESP.getFreeHeap()) + "\",";
-  s += "\"version\":\"" + currentfirmware + "\"";
+  s += "\"free_heap\":\"" + String(ESP.getFreeHeap()) + "\"";
 
 #ifdef ENABLE_LEGACY_API
-  s += "\",ssid\":\"" + esid + "\"";
+  s += ",\"version\":\"" + currentfirmware + "\"";
+  s += ",\"ssid\":\"" + esid + "\"";
   //s += ",\"pass\":\""+epass+"\""; security risk: DONT RETURN PASSWORDS
-  s += "\",emoncms_server\":\"" + emoncms_server + "\"";
-  s += "\",emoncms_node\":\"" + emoncms_node + "\"";
-  // s += ",\"emoncms_apikey\":\""+emoncms_apikey+"\""; security risk: DONT RETURN APIKEY
-  s += "\",emoncms_fingerprint\":\"" + emoncms_fingerprint + "\"";
-  s += "\",mqtt_server\":\"" + mqtt_server + "\"";
-  s += "\",mqtt_topic\":\"" + mqtt_topic + "\"";
-  s += "\",mqtt_user\":\"" + mqtt_user + "\"";
+  s += ",\"emoncms_server\":\"" + emoncms_server + "\"";
+  s += ",\"emoncms_node\":\"" + emoncms_node + "\"";
+  //s += ",\"emoncms_apikey\":\""+emoncms_apikey+"\""; security risk: DONT RETURN APIKEY
+  s += ",\"emoncms_fingerprint\":\"" + emoncms_fingerprint + "\"";
+  s += ",\"mqtt_server\":\"" + mqtt_server + "\"";
+  s += ",\"mqtt_topic\":\"" + mqtt_topic + "\"";
+  s += ",\"mqtt_user\":\"" + mqtt_user + "\"";
   //s += ",\"mqtt_pass\":\""+mqtt_pass+"\""; security risk: DONT RETURN PASSWORDS
-  s += "\",www_username\":\"" + www_username + "\"";
+  s += ",\"www_username\":\"" + www_username + "\"";
   //s += ",\"www_password\":\""+www_password+"\""; security risk: DONT RETURN PASSWORDS
   s += ",\"ohmkey\":\"" + ohm + "\"";
 #endif
@@ -316,6 +316,7 @@ handleConfig() {
   s += "\"firmware\":\"" + firmware + "\",";
   s += "\"protocol\":\"" + protocol + "\",";
   s += "\"espflash\":\"" + String(espflash) + "\",";
+  s += "\"version\":\"" + currentfirmware + "\",";
   s += "\"diodet\":\"" + String(diode_ck) + "\",";
   s += "\"gfcit\":\"" + String(gfci_test) + "\",";
   s += "\"groundt\":\"" + String(ground_ck) + "\",";
