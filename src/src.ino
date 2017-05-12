@@ -24,21 +24,8 @@
  * Boston, MA 02111-1307, USA.
  */
 
-#include <ESP8266WiFi.h>              // Connect to Wifi
-#include <WiFiClientSecure.h>         // Secure https GET request
-#include <ESP8266WebServer.h>         // Config portal
-#include <ESP8266HTTPClient.h>
-#include <EEPROM.h>                   // Save config settings
-#include "FS.h"                       // SPIFFS file-system: store web server html, CSS etc.
+#include <Arduino.h>
 #include <ArduinoOTA.h>               // local OTA update from Arduino IDE
-#include <ESP8266mDNS.h>              // Resolve URL for update server etc.
-#include <ESP8266httpUpdate.h>        // remote OTA update from server
-#include <ESP8266HTTPUpdateServer.h>  // upload update
-#include <DNSServer.h>                // Required for captive portal
-#include <PubSubClient.h>             // MQTT https://github.com/knolleary/pubsubclient PlatformIO lib: 89
-#ifdef ENABLE_OTA
-#include <ArduinoOTA.h>
-#endif
 
 #include "emonesp.h"
 #include "config.h"
