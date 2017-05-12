@@ -71,31 +71,60 @@ handleHome(AsyncWebServerRequest *request) {
 // -------------------------------------------------------------------
 // Wifi scan /scan not currently used
 // url: /scan
+//
+// First request will return 0 results unless you start scan from somewhere else (loop/setup)
+// Do not request more often than 3-5 seconds
 // -------------------------------------------------------------------
-/*
 void
-handleScan() {
-  wifi_scan();
-  server.send(200, "text/plain", "[" + st + "],[" + rssi + "]");
+handleScan(AsyncWebServerRequest *request) {
+  AsyncResponseStream *response;
+  if(false == requestPreProcess(request, response)) {
+    return;
+  }
+
+  String json = "[";
+  int n = WiFi.scanComplete();
+  if(n == -2) {
+    WiFi.scanNetworks(true);
+  } else if(n) {
+    for (int i = 0; i < n; ++i) {
+      if(i) json += ",";
+      json += "{";
+      json += "\"rssi\":"+String(WiFi.RSSI(i));
+      json += ",\"ssid\":\""+WiFi.SSID(i)+"\"";
+      json += ",\"bssid\":\""+WiFi.BSSIDstr(i)+"\"";
+      json += ",\"channel\":"+String(WiFi.channel(i));
+      json += ",\"secure\":"+String(WiFi.encryptionType(i));
+      json += ",\"hidden\":"+String(WiFi.isHidden(i)?"true":"false");
+      json += "}";
+    }
+    WiFi.scanDelete();
+    if(WiFi.scanComplete() == -2){
+      WiFi.scanNetworks(true);
+    }
+  }
+  json += "]";
+  request->send(200, "text/json", json);
 }
-*/
 
 // -------------------------------------------------------------------
 // Handle turning Access point off
 // url: /apoff
 // -------------------------------------------------------------------
-/*
 void
-handleAPOff() {
-  server.send(200, "text/html", "Turning AP Off");
-  DEBUG.println("Turning AP Off");
-  WiFi.disconnect();
-  delay(1000);
-  ESP.reset();
-  //delay(2000);
-  //WiFi.mode(WIFI_STA);
+handleAPOff(AsyncWebServerRequest *request) {
+  AsyncResponseStream *response;
+  if(false == requestPreProcess(request, response, "text/plain")) {
+    return;
+  }
+
+  response->setCode(200);
+  response->print("Turning AP Off");
+  request->send(response);
+
+  DBUGLN("Turning AP Off");
+  systemRebootTime = millis() + 1000;
 }
-*/
 
 // -------------------------------------------------------------------
 // Save selected network to EEPROM and attempt connection
@@ -566,13 +595,8 @@ web_server_setup() {
   server.on("/rapi", handleRapi);
   server.on("/r", handleRapi);
 
-/*
-  server.on("/scan", [](){
-    if(requestPreProcess()) handleScan();
-  });
-  server.on("/apoff", [](){
-    if(requestPreProcess()) handleAPOff();
-  });
+  server.on("/scan", handleScan);
+  server.on("/apoff", handleAPOff);
 
 //  server.on("/firmware", [](){
 //    if(requestPreProcess())   handleUpdateCheck();
@@ -582,8 +606,6 @@ web_server_setup() {
 //    if(requestPreProcess()) handleUpdate();
 //  });
 
-
-*/
   server.onNotFound(handleNotFound);
 /*
   httpUpdater.setup(&server);
