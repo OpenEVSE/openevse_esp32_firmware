@@ -1,298 +1,607 @@
-
 <!doctype html>
 
 <html lang="en">
 
 <head>
 
-<meta charset="utf-8">
-<title>OpenEVSE</title>
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
-<meta name="viewport" content="width=device-width, user-scalable=no" />
-<meta name="description" content="OpenEVSE">
-<meta name="author" content="OpenEVSE">
-<meta name="theme-color" content="#000000" />
-<link rel="stylesheet" type="text/css" href="style.css">
+  <meta charset="utf-8">
+  <title>OpenEVSE</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="viewport" content="width=device-width, user-scalable=no" />
+  <meta name="description" content="OpenEVSE">
+  <meta name="author" content="OpenEVSE">
+  <meta name="theme-color" content="#000000" />
+  <link rel="stylesheet" type="text/css" href="style.css">
 
 </head>
-    
+
 <body>
-<div id="page">
-  <div class="box">
-    <h1>Open<span>EVSE</span></h1>
-    <h3>WiFi</h3>
-  </div>
-
-  <div id="container">
-    
-    <input id="tab-1" type="radio" name="tab-group" checked="checked" />
-    <label for="tab-1">System</label>
-    <input id="tab-2" type="radio" name="tab-group" />
-    <label for="tab-2">Services</label>
-    <input id="tab-3" type="radio" name="tab-group" />
-    <label for="tab-3">Status</label>
-    <input id="tab-4" type="radio" name="tab-group" />
-    <label for="tab-4">RAPI</label>
-    <div id="content">
-      <div id="content-1">
-        <div class="box380">
-          <h2>WiFi Setup</h2>
-          <p><b>Mode:</b> <span id="mode"></span></p>
-          <div id="client-view">
-            <table>
-              <tr><th>Network</th> <th>RSSI dBm</th> </tr>
-              <tbody id="sta-ssid"></tbody>
-            </table>
-            <p><b>IP Address:</b><br><span id="sta-ip"></span></p>
-            <p><b>Successful packets:</b><br><span id="sta-psuccess"></span> of <span id="sta-psent"></span></p>
-            <p><b>OpenEVSE</b></p>
-            <p><b>RAPI packets:</b><br><span id="comm-psuccess"></span> of <span id="comm-psent"></span></p>
-            <button id="apoff" style="display:none">Turn off Access Point</button>
-          </div>
-          <div id="ap-view" style="display:none">
-            <p>Connect to network:</p>
-            <table>
-              <tr><th>Select</th> <th>Network</th> <th>RSSI dBm</th></tr>
-              <tbody id="networks"></tbody>
-            </table>
-            <p><b>Passkey:</b><br>
-              <input id="passkey" type="text">
-              <button id="connect">Connect</button>
-            </p>
-          </div>
-          <div id="wait-view" style="display:none">
-            <p>Connecting to WIFI Network...</p>
-          </div>
-        </div>
-        <div class="box380">
-          <h2>Administration</h2>
-          <p><b>Username:</b><br>
-          <input id="www_user" type="text" value="admin">
-          <p><b>Password:</b><br>
-          <input id="www_pass" type="text" value="openevse"><br>
-          <span id=small-text>Web interface HTTP authentication.</span><br><br>
-          <button id="save-admin">Save</button>
-        </div>
-        <div class="box380">
-          <h2>WiFi Firmware</h2>
-          <span id=small-text>ESP8266</span><br>
-          <p><b>Version: </b><span id="system-version"></span></p>
-          <iframe style="width:380px; height:50px;" frameborder="0" scrolling="no" marginheight="0" marginwidth="0" src="/update">
-          </iframe>
-          <button id="restart">Restart</button>
-          <button id="reset">Factory Reset</button>
-        </div>
-      </div> <!-- content-1 -->
-      <div id="content-2">
-        <div class="box380">
-          <h2>&nbsp; Energy Monitoring <img src="emoncms.jpg" align=left></h2>
-          <p><b>Emoncms Server*:</b><br>
-          <input id="emoncms_server" type="text" value="data.openevse.com/emoncms">
-          <span id=small-text>e.g:
-            <a href="http://data.openevse.com/emoncms">data.openevse.com/emoncms</a>,
-            <a href="http://emoncms.org">emoncms.org</a>,
-            <a href="http://emonpi/emoncms">emonpi/emoncms</a>
-          </span><br>
-          <p><b>Emoncms Node*:</b><br>
-          <input id="emoncms_node" type="text">
-          <p><b>Emoncms write-apikey*:</b><br>
-          <input id="emoncms_apikey" type="text"><br>
-          <p><b>Emoncms SSL SHA-1 Fingerprint (optional):</b><br>
-          <input id="emoncms_fingerprint" type="text"><br>
-          <br><span id=small-text>HTTPS will be enabled if present e.g:</span>
-          <span id=small-text>
-            7D:82:15:BE:D7:BC:72:58:87:7D:8E:40:D4:80:BA:1A:9F:8B:8D:DA
-          </span><br>
-          <button id="save-emoncms">Save</button>
-          <b>&nbsp; Connected:&nbsp;<span id="emoncms_connected"></span></b><br><br>
-          <span id="psuccess"></span>
-        </div>
-        <div class="box380">
-          <h2>MQTT</h2>
-          <p><b>Server*:</b><br>
-            <input id="mqtt_server" type="text">
-          </p>
-          <span id=small-text>e.g 'emonpi', 'test.mosquitto.org', '192.168.1.4'</span><br>
-          <p><b>Base-topic*:</b><br>
-            <input id="mqtt_topic" type="text" value="openevse">
-          </p>
-          <span id=small-text>e.g 'openevse'</span>
-          <p><b>Username:</b><span> blank - no authentication</span>
-            <input id="mqtt_user" type="text">
-          </p>
-          <p><b>Password:</b><span> blank - no authentication</span>
-            <input id="mqtt_pass" type="text"><br>
-          </p>
-          <button id="save-mqtt">Save</button>
-          <b>&nbsp; Connected:&nbsp;<span id="mqtt_connected"></span></b>
-          
-          <p>Status published to:</p>
-          <span id=small-text>{base-topic}/{status} value</span><br>
-          <span id=small-text>e.g. openevse/amp 16</span><br>
-          <p>RAPI control subscribes to:</p>
-          <span id=small-text>{base-topic}/rapi/in/{command} value</span><br>
-          <span id=small-text>e.g. openevse/rapi/in/$SC 16</span><br>
-          <span id=small-text>e.g. openevse/rapi/in/$GC</span><br>
-          <p>RAPI response published to:</p>
-          <span id=small-text>{base-topic}/rapi/out response</span><br>
-          <span id=small-text>e.g. openevse/rapi/out $OK 6 32</span><br>
-        </div>
-        <div class="box380">
-          <h2>&nbsp; OhmConnect <img src="ohm.jpg" align=left></h2>
-          <p>OhmConnect monitors real-time conditions on the electricity grid. When dirty and unsustainable power plants turn on, our users receive a notification to save energy.</p>
-          <p><b>Ohm Hour: </b><span id="ohmhour"></span></p>
-          <p><b>Ohm key:</b><br>
-                <input id="ohmkey" type="text">
-                <button id="save-ohmkey">Save</button>
-          <p>Ohm Key can be obtained by logging in to OhmConnect, enter Settings and locate the link in "Open Source Projects"</p>
-          <p>Example: https://login.ohmconnect.com/verify-ohm-hour/OpnEoVse</p>
-          <b>Key: </b>OpnEoVse
-        </div>
-      </div> <!-- content-2 -->
-      <div id="content-3">
-        <div class="box380">
-          <h2>Current</h2>
-          <table>
-            <tr><th>Name</th><th>
-            </th></tr>
-            <tr><td>Service Level:</td><td><span id="service"></span></td></tr>
-            <tr id="l1min_r"><td>Level 1 Minimum:</td><td><span id="l1min"></span></td></tr>
-            <tr id="l1max_r"><td>Level 1 Maximum:</td><td><span id="l1max"></span></td></tr>
-            <tr id="l2min_r"><td>Level 2 Minimum:</td><td><span id="l2min"></span></td></tr>
-            <tr id="l2max_r"><td>Level 2 Maximum:</td><td><span id="l2max"></span></td></tr>
-            <tr><td>Sensor Scale:</td><td><span id="scale"></span></td></tr>
-            <tr><td>Sensor Offset:</td><td><span id="offset"></span></td></tr>
-          </table>
-        </div>
-        <div class="box380">
-          <h2>Safety</h2>
-          <table>
-            <tr><th>Test</th><th>Status</th></tr>
-            <tr><td>GFCI Self Test:</td><td><span id="gfcit"></span></td></tr>
-            <tr><td>Ground Monitoring:</td><td><span id="groundt"></span></td></tr>
-            <tr><td>Stuck Contact Detection:</td><td><span id="relayt"></span></td></tr>
-            <tr><td>Temperature Monitoring:</td><td><span id="tempt"></span></td></tr>
-            <tr><td>Diode Check:</td><td><span id="diodet"></span></td></tr>
-            <tr><td>Vent Required:</td><td><span id="ventt"></span></td></tr>
-            <tr><th>Error</th><th>Count</th></tr>
-            <tr><td>GFCI:</td><td><span id="gfcicount"></span></td></tr>
-            <tr><td>No Ground:</td><td><span id="nogndcount"></span></td></tr>
-            <tr><td>Stuck Contact:</td><td><span id="stuckcount"></span></td></tr>
-          </table>
-        </div>
-        <div class="box380">
-          <h2>Session Options</h2>
-          <table>
-            <tr><th>Limits</th><th>Value</th></tr>
-            <tr><td>Kwh:</td><td><span id="kwhlimit"></span></td></tr>
-            <tr><td>Time:</td><td><span id="timelimit"></span></td></tr>
-          </table>
-        </div>
-        <div class="box380">
-          <h2>Energy</h2>
-          <table>
-            <tr><th>Energy</th><th>kWh</th></tr>
-            <tr><td>This Session:</td><td><span id="wattsec"></span></td></tr>
-            <tr><td>Total:</td><td><span id="watthour"></span></td></tr>
-          </table>
-        </div>
-        <div class="box380">
-          <h2>Hardware</h2>
-          <table>
-            <tr><th>OpenEVSE</th><th></th></tr>
-            <tr><td>Firmware:</td><td><span id="firmware"></span></td></tr>
-            <tr><td>Protocol:</td><td><span id="protocol"></span></td></tr>
-            <tr><th>OpenEVSE WiFi</th><th></th></tr>
-            <tr><td>Firmware:</td><td><span id="status-version"></span></td></tr>
-            <tr><td>Flash Size:</td><td><span id="espflash"></span></td></tr>
-            <tr><td>Free RAM:</td><td><span id="espfree"></span></td></tr>
-          </table>
-        </div>
-        <div class="box380">
-          <h2>Sensor Values</h2>
-          <table>
-            <tr><th>Sensor</th><th>Value</th></tr>
-            <tr><td>State:</td><td><span id="estate"></span></td></tr>
-            <tr><td>Pilot:</td><td><span id="pilot"></span></td></tr>
-            <tr><td>Amps:</td><td><span id="amp"></span></td></tr>
-            <tr><td>Temp1:</td><td><span id="temp1"></span></td></tr>
-            <tr><td>Temp2:</td><td><span id="temp2"></span></td></tr>
-            <tr><td>Temp3:</td><td><span id="temp3"></span></td></tr>
-          </table>
-        </div>
-      </div> <!-- content-3 -->
-      <div id="content-4">
-        <div class="box380">
-          <iframe style="width:380px; height:620px;" frameborder="0" scrolling="no" marginheight="0" marginwidth="0" src="/rapi">
-          </iframe>
-        </div>
-        <div class="box380">
-          <h2>RAPI Get Commands</h2>
-          <table>
-            <tr><th>Get</th><th>Description</th></tr>
-            <tr><td>$G3</td><td>Get Charge Time Limit, 15-minutes (1), 30-minutes (2), etc...</td></tr>
-            <tr><td>$GA</td><td>Get Ammeter Scale/Offset, scale offset</td></tr>
-            <tr><td>$GC</td><td>Get current capacity range, integers</td></tr>
-            <tr><td>$GE</td><td>Get settings, amps flags</td></tr>
-            <tr><td>$GF</td><td>Get fault counters, gfi ground stuck (in hex)</td></tr>
-            <tr><td>$GG</td><td>Get charge current and voltage, milliamps millivolts</td></tr>
-            <tr><td>$GH</td><td>Get charge limit in kWh, integer</td></tr>
-            <tr><td>$GM</td><td>Get Voltmeter Scale/Offset, scale offset</td></tr>
-            <tr><td>$GO</td><td>Get Overtemperature thresholds, ambient infrared</td></tr>
-            <tr><td>$GP</td><td>Get Temperatures, LCD mcp9808 infrared (all integers, Celcius * 10)</td></tr>
-            <tr><td>$GS</td><td>Get EVSE State, state elapsed_seconds</td></tr>
-            <tr><td>$GT</td><td>Get time, year month day hour minute second</td></tr>
-            <tr><td>$GU</td><td>Get Energy usage, wattseconds watt_hour_accumulated</td></tr>
-            <tr><td>$GV</td><td>Get Versions, evse_firmware protocol_version</td></tr>
-          </table>
-        </div>
-        <div class="box380">
-          <h2>RAPI Set Commands</h2>
-          <table>
-            <tr><th>Set</th><th>Description</th></tr>
-            <tr><td>$S0</td><td>Set LCD Type, Monochrome (0), Color (1)</td></tr>
-            <tr><td>$S1</td><td>Set RTC Year Month Day Hour Minute Second (all 2-digit max)</td></tr>
-            <tr><td>$S2</td><td>Enable (1)/ Disable (0) Ammeter Calibration Mode</td></tr>
-            <tr><td>$S3</td><td>Set Charge Time Limit, 15-minutes (1), 30-minutes (2), etc...</td></tr>
-            <tr><td>$SA</td><td>Set Ammeter Scale/Offset, scale offset</td></tr>
-            <tr><td>$SC</td><td>Set current capacity, integer</td></tr>
-            <tr><td>$SD</td><td>Enable (1) / Disable (0) Diode self-check</td></tr>
-            <tr><td>$SF</td><td>Enable (1) / Disable (0) GFI self-check</td></tr>
-            <tr><td>$SG</td><td>Enable (1) / Disable (0) Ground check</td></tr>
-            <tr><td>$SH</td><td>Set charge limit in kWh, integer</td></tr>
-            <tr><td>$SK</td><td>Set accumulated Wh, integer</td></tr>
-            <tr><td>$SL</td><td>Set service level (1/2/A)</td></tr>
-            <tr><td>$SM</td><td>Set Voltmeter Scale/Offset, scale offset</td></tr>
-            <tr><td>$SO</td><td>Set Overtemperature thresholds, ambient infrared</td></tr>
-            <tr><td>$SR</td><td>Enable (1) / Disable (0) Stuck-relay check</td></tr>
-            <tr><td>$SS</td><td>Enable (1) / Disable (0) GFI self-check</td></tr>
-            <tr><td>$ST</td><td>Set timer, start_hour start_min end_hour end_min</td></tr>
-            <tr><td>$SV</td><td>Enable (1) / Disable (0) vent required check</td></tr>
-          </table>
-        </div>
-        <div class="box380">
-          <h2>RAPI System Functions</h2>
-          <table>
-            <tr><th>Function</th><th>Description</th></tr>
-            <tr><td>$FB</td><td>LCD Backlight Color (0-7)</td></tr>
-            <tr><td>$FD</td><td>Disable EVSE</td></tr>
-            <tr><td>$FE</td><td>Enable EVSE</td></tr>
-            <tr><td>$FP</td><td>Output text at x y position text to LCD (x y text)</td></tr>
-            <tr><td>$FR</td><td>Reset EVSE</td></tr>
-            <tr><td>$FS</td><td>Put EVSE to sleep</td></tr>
-          </table>
-        </div>
-      </div> <!-- content-4 -->
-    </div> <!-- content -->
-
-    <div id="footer">
-      <br><b> Powered by <a href="http://www.openevse.com">OpenEVSE</a> and <a href="https://openenergymonitor.org">OpenEnergyMonitor</a></b>
-      <br> by Chris Howell, Trystan Lea, Glyn Hudson
+  <div id="page">
+    <div class="box">
+      <h1>Open<span>EVSE</span></h1>
+      <h3>WiFi</h3>
     </div>
 
-    <script src="config.js"></script>
+    <div id="container" data-bind="visible: !initialised()">
+      Loading, please wait...
+    </div>
 
-  </div> <!-- container -->
-</div> <!-- page -->
+    <div id="container" data-bind="visible: initialised" style="display: none">
+
+      <input id="tab-1" type="radio" name="tab-group" checked="checked" />
+      <label for="tab-1">System</label>
+      <input id="tab-2" type="radio" name="tab-group" />
+      <label for="tab-2">Services</label>
+      <input id="tab-3" type="radio" name="tab-group" />
+      <label for="tab-3">Status</label>
+      <input id="tab-4" type="radio" name="tab-group" />
+      <label for="tab-4">RAPI</label>
+      <div id="content">
+        <div id="content-1">
+          <div class="box380">
+            <h2>WiFi Setup</h2>
+            <p><b>Mode:</b> <span id="mode" data-bind="text: status.fullMode"></span></p>
+
+            <div id="client-view" data-bind="visible: status.isWifiClient">
+              <table>
+                <tr>
+                  <th>Network</th>
+                  <th>RSSI dBm</th>
+                </tr>
+                <tbody id="sta-ssid">
+                  <tr>
+                    <td data-bind="text: config.ssid"></td>
+                    <td data-bind="text: status.srssi"></td>
+                  </tr>
+                </tbody>
+              </table>
+              <p><b>IP Address:</b><br><a data-bind="text: status.ipaddress, attr: {href: 'http://'+status.ipaddress()}"></a></p>
+              <p>
+                <b>Successful packets:</b><br>
+                <span data-bind="text: status.packets_success"></span> of <span data-bind="text: status.packets_sent"></span>
+              </p>
+              <p><b>OpenEVSE</b></p>
+              <p><b>RAPI packets:</b><br><span data-bind="text: rapi.comm_success"></span> of <span data-bind="text: rapi.comm_sent"></span></p>
+              <button id="apoff" data-bind="visible: status.isWifiAccessPoint">Turn off Access Point</button>
+            </div>
+
+            <div id="ap-view" data-bind="visible: !status.isWifiClient() &amp;&amp; !wifiConnecting()">
+              <p>Connect to network:</p>
+              <table>
+                <tr>
+                  <th>Select</th>
+                  <th>Network</th>
+                  <th>RSSI dBm</th>
+                </tr>
+                <tbody id="networks" data-bind="foreach: status.networks">
+                  <tr>
+                    <td><input class='networkcheckbox' name='network' data-bind="checkedValue: $data, checked: $root.config.ssid"
+                        type='radio'></td>
+                    <td data-bind="text: $data"></td>
+                    <td data-bind="text: $root.status.rssi()[$index()]"></td>
+                  </tr>
+                </tbody>
+              </table>
+              <p data-bind="text: config.ssid"></p>
+              <p>
+                <b>Passkey:</b><br>
+                <input type="text" data-bind="textInput: config.pass">
+                <button data-bind="click: saveNetwork, text: (saveNetworkFetching() ? 'Saving' : (saveNetworkSuccess() ? 'Saved' : 'Connect')), disable: saveAdminFetching">Connect</button>
+              </p>
+            </div>
+
+            <div data-bind="visible: wifiConnecting">
+              <p>Connecting to WIFI Network...</p>
+            </div>
+          </div>
+          <div class="box380">
+            <h2>Administration</h2>
+            <p>
+              <b>Username:</b><br>
+              <input type="text" value="admin" data-bind="textInput: config.www_username">
+            </p>
+            <p>
+              <b>Password:</b><br>
+              <input type="text" value="openevse" data-bind="textInput: config.www_password"><br>
+              <span class="small-text">Web interface HTTP authentication.</span><br><br>
+              <button data-bind="click: saveAdmin, text: (saveAdminFetching() ? 'Saving' : (saveAdminSuccess() ? 'Saved' : 'Save')), disable: saveAdminFetching">Save</button>
+          </div>
+          <div class="box380">
+            <h2>WiFi Firmware</h2>
+            <span class="small-text">ESP8266</span><br>
+            <p><b>Version: </b><span data-bind="text: config.version"></span></p>
+            <iframe style="width:380px; height:50px;" frameborder="0" scrolling="no" marginheight="0" marginwidth="0" data-bind="attr: {src: upgradeUrl}">
+            </iframe>
+            <p>
+              <button id="restart">Restart</button>
+              <button id="reset">Factory Reset</button>
+            </p>
+          </div>
+        </div>
+        <!-- content-1 -->
+        <div id="content-2">
+          <div class="box380">
+            <h2>&nbsp; Energy Monitoring <img src="emoncms.jpg" align=left></h2>
+            <p>
+              <b>Emoncms Server*:</b><br>
+              <input type="text" data-bind="textInput: config.emoncms_server"><br/>
+              <span class="small-text">e.g:
+                <a href="http://data.openevse.com/emoncms">data.openevse.com/emoncms</a>,
+                <a href="http://emoncms.org">emoncms.org</a>,
+                <a href="http://emonpi/emoncms">emonpi/emoncms</a>
+              </span><br>
+            </p>
+            <p>
+              <b>Emoncms Node*:</b><br>
+              <input type="text" data-bind="textInput: config.emoncms_node">
+            </p>
+            <p>
+              <b>Emoncms write-apikey*:</b><br>
+              <input type="text" data-bind="textInput: config.emoncms_apikey"><br>
+            </p>
+            <p>
+              <b>Emoncms SSL SHA-1 Fingerprint (optional):</b><br>
+              <input type="text" data-bind="textInput: config.emoncms_fingerprint"><br>
+              <br><span class="small-text">HTTPS will be enabled if present e.g:</span>
+              <span class="small-text">
+                7D:82:15:BE:D7:BC:72:58:87:7D:8E:40:D4:80:BA:1A:9F:8B:8D:DA
+              </span><br>
+              <button data-bind="click: saveEmonCms, text: (saveEmonCmsFetching() ? 'Saving' : (saveEmonCmsSuccess() ? 'Saved' : 'Save')), disable: saveEmonCmsFetching">Save</button>
+              <div><b>&nbsp; Connected:&nbsp;<span data-bind="text: '1' === status.emoncms_connected() ? 'Yes' : 'No'"></span></b></div>
+              <div data-bind="visible: '1' === status.emoncms_connected()"><b>&nbsp; Successful posts:&nbsp;<span data-bind="text: status.packets_success"></span></b></div>
+            </p>
+          </div>
+          <div class="box380">
+            <h2>MQTT</h2>
+            <p><b>Server*:</b><br>
+              <input data-bind="textInput: config.mqtt_server" type="text"><br/>
+              <span class="small-text">e.g 'emonpi', 'test.mosquitto.org', '192.168.1.4'</span>
+            </p>
+            <p><b>Base-topic*:</b><br>
+              <input data-bind="textInput: config.mqtt_topic" type="text"><br/>
+              <span class="small-text">e.g 'openevse'</span>
+            </p>
+            <p><b>Username:</b><span> blank - no authentication</span>
+              <input data-bind="textInput: config.mqtt_user" type="text">
+            </p>
+            <p><b>Password:</b><span> blank - no authentication</span>
+              <input data-bind="textInput: config.mqtt_pass" type="text"><br>
+            </p>
+            <button data-bind="click: saveMqtt, text: (saveMqttFetching() ? 'Saving' : (saveMqttSuccess() ? 'Saved' : 'Save')), disable: saveMqttFetching">Save</button>
+            <b>&nbsp; Connected:&nbsp;<span data-bind="text: '1' === status.mqtt_connected() ? 'Yes' : 'No'"></span></b>
+
+            <p>
+              Status published to:<br/>
+              <span class="small-text">{base-topic}/{status} value</span><br>
+              <span class="small-text">e.g. <span data-bind="text: '' !== config.mqtt_topic() ? config.mqtt_topic() : 'openevse'"></span>/amp 16</span><br>
+            </p>
+            <p>
+              RAPI control subscribes to:<br/>
+              <span class="small-text">{base-topic}/rapi/in/{command} value</span><br>
+              <span class="small-text">e.g. <span data-bind="text: '' !== config.mqtt_topic() ? config.mqtt_topic() : 'openevse'"></span>/rapi/in/$SC 16</span><br>
+              <span class="small-text">e.g. <span data-bind="text: '' !== config.mqtt_topic() ? config.mqtt_topic() : 'openevse'"></span>/rapi/in/$GC</span><br>
+            <p>
+            <p>
+              RAPI response published to:<br/>
+              <span class="small-text">{base-topic}/rapi/out response</span><br>
+              <span class="small-text">e.g. <span data-bind="text: '' !== config.mqtt_topic() ? config.mqtt_topic() : 'openevse'"></span>/rapi/out $OK 6 32</span><br>
+            </p>
+          </div>
+          <div class="box380">
+            <h2>&nbsp; OhmConnect <img src="ohm.jpg" align=left></h2>
+            <p>OhmConnect monitors real-time conditions on the electricity grid. When dirty and unsustainable power plants turn
+              on, our users receive a notification to save energy.</p>
+            <p><b>Ohm Hour:</b> <span data-bind="text: status.ohm_hour"></span></p>
+            <p><b>Ohm key:</b><br>
+              <input data-bind="textInput: config.ohmkey" type="text"><br/>
+              <button data-bind="click: saveOhmKey, text: (saveOhmKeyFetching() ? 'Saving' : (saveOhmKeySuccess() ? 'Saved' : 'Save')), disable: saveOhmKeyFetching">Save</button>
+              <p>Ohm Key can be obtained by logging in to OhmConnect, enter Settings and locate the link in "Open Source Projects"</p>
+              <p>Example: https://login.ohmconnect.com/verify-ohm-hour/OpnEoVse</p>
+              <b>Key: </b>OpnEoVse
+            </p>
+          </div>
+        </div>
+        <!-- content-2 -->
+        <div id="content-3">
+          <div class="box380">
+            <h2>Current</h2>
+            <table>
+              <tr>
+                <th>Name</th>
+                <th>
+                </th>
+              </tr>
+              <tr>
+                <td>Service Level:</td>
+                <td><span data-bind="text: config.service"></span></td>
+              </tr>
+              <tr data-bind="visible: '1' == config.service()">
+                <td>Level 1 Minimum:</td>
+                <td><span data-bind="text: config.l1min"></span></td>
+              </tr>
+              <tr data-bind="visible: '1' == config.service()">
+                <td>Level 1 Maximum:</td>
+                <td><span data-bind="text: config.l1max"></span></td>
+              </tr>
+              <tr data-bind="visible: '2' == config.service()">
+                <td>Level 2 Minimum:</td>
+                <td><span data-bind="text: config.l2min"></span></td>
+              </tr>
+              <tr data-bind="visible: '2' == config.service()">
+                <td>Level 2 Maximum:</td>
+                <td><span data-bind="text: config.l2max"></span></td>
+              </tr>
+              <tr>
+                <td>Sensor Scale:</td>
+                <td><span data-bind="text: config.scale"></span></td>
+              </tr>
+              <tr>
+                <td>Sensor Offset:</td>
+                <td><span data-bind="text: config.offset"></span></td>
+              </tr>
+            </table>
+          </div>
+          <div class="box380">
+            <h2>Safety</h2>
+            <table>
+              <tr>
+                <th>Test</th>
+                <th>Status</th>
+              </tr>
+              <tr>
+                <td>GFCI Self Test:</td>
+                <td><span data-bind="text: '1' === config.gfcit() ? 'Disabled' : 'Enabled'"></span></td>
+              </tr>
+              <tr>
+                <td>Ground Monitoring:</td>
+                <td><span data-bind="text: '1' === config.groundt() ? 'Disabled' : 'Enabled'"></span></td>
+              </tr>
+              <tr>
+                <td>Stuck Contact Detection:</td>
+                <td><span data-bind="text: '1' === config.relayt() ? 'Disabled' : 'Enabled'"></span></td>
+              </tr>
+              <tr>
+                <td>Temperature Monitoring:</td>
+                <td><span data-bind="text: '1' === config.tempt() ? 'Disabled' : 'Enabled'"></span></td>
+              </tr>
+              <tr>
+                <td>Diode Check:</td>
+                <td><span data-bind="text: '1' === config.diodet() ? 'Disabled' : 'Enabled'"></span></td>
+              </tr>
+              <tr>
+                <td>Vent Required:</td>
+                <td><span data-bind="text: '1' === config.ventt() ? 'Disabled' : 'Enabled'"></span></td>
+              </tr>
+              <tr>
+                <th>Error</th>
+                <th>Count</th>
+              </tr>
+              <tr>
+                <td>GFCI:</td>
+                <td><span data-bind="text: config.gfcicount"></span></td>
+              </tr>
+              <tr>
+                <td>No Ground:</td>
+                <td><span data-bind="text: config.nogndcount"></span></td>
+              </tr>
+              <tr>
+                <td>Stuck Contact:</td>
+                <td><span data-bind="text: config.stuckcount"></span></td>
+              </tr>
+            </table>
+          </div>
+          <div class="box380">
+            <h2>Session Options</h2>
+            <table>
+              <tr>
+                <th>Limits</th>
+                <th>Value</th>
+              </tr>
+              <tr>
+                <td>Kwh:</td>
+                <td><span data-bind="text: config.kwhlimit"></span></td>
+              </tr>
+              <tr>
+                <td>Time:</td>
+                <td><span data-bind="text: config.timelimit"></span></td>
+              </tr>
+            </table>
+          </div>
+          <div class="box380">
+            <h2>Energy</h2>
+            <table>
+              <tr>
+                <th>Energy</th>
+                <th>kWh</th>
+              </tr>
+              <tr>
+                <td>This Session:</td>
+                <td><span data-bind="text: scaleString(rapi.wattsec(), 3600000, 2)"></span></td>
+              </tr>
+              <tr>
+                <td>Total:</td>
+                <td><span data-bind="text: scaleString(rapi.watthour(), 1000, 2)"></span></td>
+              </tr>
+            </table>
+          </div>
+          <div class="box380">
+            <h2>Hardware</h2>
+            <table>
+              <tr>
+                <th>OpenEVSE</th>
+                <th></th>
+              </tr>
+              <tr>
+                <td>Firmware:</td>
+                <td><span data-bind="text: config.firmware"></span></td>
+              </tr>
+              <tr>
+                <td>Protocol:</td>
+                <td><span data-bind="text: config.protocol"></span></td>
+              </tr>
+              <tr>
+                <th>OpenEVSE WiFi</th>
+                <th></th>
+              </tr>
+              <tr>
+                <td>Firmware:</td>
+                <td><span data-bind="text: config.version"></span></td>
+              </tr>
+               <tr>
+                <td>Flash Size:</td>
+                <td><span data-bind="text: scaleString(config.espflash(), 1024, 0) + 'K'"></span></td>
+              </tr>
+              <tr>
+                <td>Free RAM:</td>
+                <td><span data-bind="text: scaleString(status.free_heap(), 1024, 0) + 'K'"></span></td>
+              </tr>
+            </table>
+          </div>
+          <div class="box380">
+            <h2>Sensor Values</h2>
+            <table>
+              <tr>
+                <th>Sensor</th>
+                <th>Value</th>
+              </tr>
+              <tr>
+                <td>State:</td>
+                <td><span data-bind="text: rapi.estate"></span></td>
+              </tr>
+              <tr>
+                <td>Pilot:</td>
+                <td><span data-bind="text: rapi.pilot"></span></td>
+              </tr>
+              <tr>
+                <td>Amps:</td>
+                <td><span data-bind="text: scaleString(rapi.amp(), 1000, 2) + ' A'"></span></td>
+              </tr>
+              <tr>
+                <td>Temp1:</td>
+                <td><span data-bind="text: scaleString(rapi.temp1(), 10, 1) + ' C'"></span></td>
+              </tr>
+              <tr>
+                <td>Temp2:</td>
+                <td><span data-bind="text: scaleString(rapi.temp2(), 10, 1) + ' C'"></span></td>
+              </tr>
+              <tr>
+                <td>Temp3:</td>
+                <td><span data-bind="text: scaleString(rapi.temp3(), 10, 1) + ' C'"></span></td>
+              </tr>
+            </table>
+          </div>
+        </div>
+        <!-- content-3 -->
+        <div id="content-4">
+          <div class="box380">
+            <!--
+            <p>Send RAPI Command</p>
+            <p>Common Commands:</p>
+            <p>Set Current - $SC XX</p>
+            <p>Set Service Level - $SL 1 - $SL 2 - $SL A</p>
+            <p>Get Real-time Current - $GG</p>
+            <p>Get Temperatures - $GP</p>
+            <p></p>
+            -->
+            <form method='get' action='r' data-bind="with: rapi">
+              <p>
+                <b>RAPI Command:</b>
+                <input type="text" name='rapi' length='32' data-bind="textInput: cmd" />
+              </p>
+              <p>
+                <button data-bind="click: send, disable: rapiSend">Send</button>
+              </p>
+              <p data-bind="text: ret"></p>
+            </form>
+          </div>
+          <div class="box380">
+            <h2>RAPI Get Commands</h2>
+            <table>
+              <tr>
+                <th>Get</th>
+                <th>Description</th>
+              </tr>
+              <tr>
+                <td>$G3</td>
+                <td>Get Charge Time Limit, 15-minutes (1), 30-minutes (2), etc...</td>
+              </tr>
+              <tr>
+                <td>$GA</td>
+                <td>Get Ammeter Scale/Offset, scale offset</td>
+              </tr>
+              <tr>
+                <td>$GC</td>
+                <td>Get current capacity range, integers</td>
+              </tr>
+              <tr>
+                <td>$GE</td>
+                <td>Get settings, amps flags</td>
+              </tr>
+              <tr>
+                <td>$GF</td>
+                <td>Get fault counters, gfi ground stuck (in hex)</td>
+              </tr>
+              <tr>
+                <td>$GG</td>
+                <td>Get charge current and voltage, milliamps millivolts</td>
+              </tr>
+              <tr>
+                <td>$GH</td>
+                <td>Get charge limit in kWh, integer</td>
+              </tr>
+              <tr>
+                <td>$GM</td>
+                <td>Get Voltmeter Scale/Offset, scale offset</td>
+              </tr>
+              <tr>
+                <td>$GO</td>
+                <td>Get Overtemperature thresholds, ambient infrared</td>
+              </tr>
+              <tr>
+                <td>$GP</td>
+                <td>Get Temperatures, LCD mcp9808 infrared (all integers, Celcius * 10)</td>
+              </tr>
+              <tr>
+                <td>$GS</td>
+                <td>Get EVSE State, state elapsed_seconds</td>
+              </tr>
+              <tr>
+                <td>$GT</td>
+                <td>Get time, year month day hour minute second</td>
+              </tr>
+              <tr>
+                <td>$GU</td>
+                <td>Get Energy usage, wattseconds watt_hour_accumulated</td>
+              </tr>
+              <tr>
+                <td>$GV</td>
+                <td>Get Versions, evse_firmware protocol_version</td>
+              </tr>
+            </table>
+          </div>
+          <div class="box380">
+            <h2>RAPI Set Commands</h2>
+            <table>
+              <tr>
+                <th>Set</th>
+                <th>Description</th>
+              </tr>
+              <tr>
+                <td>$S0</td>
+                <td>Set LCD Type, Monochrome (0), Color (1)</td>
+              </tr>
+              <tr>
+                <td>$S1</td>
+                <td>Set RTC Year Month Day Hour Minute Second (all 2-digit max)</td>
+              </tr>
+              <tr>
+                <td>$S2</td>
+                <td>Enable (1)/ Disable (0) Ammeter Calibration Mode</td>
+              </tr>
+              <tr>
+                <td>$S3</td>
+                <td>Set Charge Time Limit, 15-minutes (1), 30-minutes (2), etc...</td>
+              </tr>
+              <tr>
+                <td>$SA</td>
+                <td>Set Ammeter Scale/Offset, scale offset</td>
+              </tr>
+              <tr>
+                <td>$SC</td>
+                <td>Set current capacity, integer</td>
+              </tr>
+              <tr><td>$SD</td><td>Enable (1) / Disable (0) Diode self-check</td></tr>
+              <tr>
+                <td>$SF</td>
+                <td>Enable (1) / Disable (0) GFI self-check</td>
+              </tr>
+              <tr>
+                <td>$SG</td>
+                <td>Enable (1) / Disable (0) Ground check</td>
+              </tr>
+              <tr>
+                <td>$SH</td>
+                <td>Set charge limit in kWh, integer</td>
+              </tr>
+              <tr>
+                <td>$SK</td>
+                <td>Set accumulated kWh, integer</td>
+              </tr>
+              <tr><td>$SL</td><td>Set service level (1/2/A)</td></tr>
+              <tr>
+                <td>$SM</td>
+                <td>Set Voltmeter Scale/Offset, scale offset</td>
+              </tr>
+              <tr>
+                <td>$SO</td>
+                <td>Set Overtemperature thresholds, ambient infrared</td>
+              </tr>
+              <tr>
+                <td>$SR</td>
+                <td>Enable (1) / Disable (0) Stuck-relay check</td>
+              </tr>
+              <tr>
+                <td>$SS</td>
+                <td>Enable (1) / Disable (0) GFI self-check</td>
+              </tr>
+              <tr>
+                <td>$ST</td>
+                <td>Set timer, start_hour start_min end_hour end_min</td>
+              </tr>
+              <tr>
+                <td>$SV</td>
+                <td>Enable (1) / Disable (0) vent required check</td>
+              </tr>
+            </table>
+          </div>
+          <div class="box380">
+            <h2>RAPI System Functions</h2>
+            <table>
+              <tr>
+                <th>Function</th>
+                <th>Description</th>
+              </tr>
+              <tr>
+                <td>$FB</td>
+                <td>LCD Backlight Color (0-7)</td>
+              </tr>
+              <tr>
+                <td>$FD</td>
+                <td>Disable EVSE</td>
+              </tr>
+              <tr>
+                <td>$FE</td>
+                <td>Enable EVSE</td>
+              </tr>
+              <tr>
+                <td>$FP</td>
+                <td>Output text at x y position text to LCD (x y text)</td>
+              </tr>
+              <tr>
+                <td>$FR</td>
+                <td>Reset EVSE</td>
+              </tr>
+              <tr>
+                <td>$FS</td>
+                <td>Put EVSE to sleep</td>
+              </tr>
+            </table>
+          </div>
+        </div>
+        <!-- content-4 -->
+      </div>
+      <!-- content -->
+
+      <div id="footer">
+        <br><b> Powered by <a href="http://www.openevse.com">OpenEVSE</a> and <a href="https://openenergymonitor.org">OpenEnergyMonitor</a></b>
+        <br> by Chris Howell, Trystan Lea, Glyn Hudson
+      </div>
+    </div>
+    <!-- container -->
+  </div>
+  <!-- page -->
+  <script src="lib.js"></script>
+  <script src="config.js"></script>
 </body>
+
 </html>

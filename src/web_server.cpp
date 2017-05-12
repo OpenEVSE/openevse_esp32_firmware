@@ -275,32 +275,34 @@ handleStatus(AsyncWebServerRequest *request) {
   s += "\"networks\":[" + st + "],";
   s += "\"rssi\":[" + rssi + "],";
 
-  s += "\"ssid\":\"" + esid + "\",";
-  //s += "\"pass\":\""+epass+"\","; security risk: DONT RETURN PASSWORDS
   s += "\"srssi\":\"" + String(WiFi.RSSI()) + "\",";
   s += "\"ipaddress\":\"" + ipaddress + "\",";
-  s += "\"emoncms_server\":\"" + emoncms_server + "\",";
-  s += "\"emoncms_node\":\"" + emoncms_node + "\",";
-  // s += "\"emoncms_apikey\":\""+emoncms_apikey+"\","; security risk: DONT RETURN APIKEY
-  s += "\"emoncms_fingerprint\":\"" + emoncms_fingerprint + "\",";
   s += "\"emoncms_connected\":\"" + String(emoncms_connected) + "\",";
   s += "\"packets_sent\":\"" + String(packets_sent) + "\",";
   s += "\"packets_success\":\"" + String(packets_success) + "\",";
 
-  s += "\"mqtt_server\":\"" + mqtt_server + "\",";
-  s += "\"mqtt_topic\":\"" + mqtt_topic + "\",";
-  s += "\"mqtt_user\":\"" + mqtt_user + "\",";
-  //s += "\"mqtt_pass\":\""+mqtt_pass+"\","; security risk: DONT RETURN PASSWORDS
   s += "\"mqtt_connected\":\"" + String(mqtt_connected()) + "\",";
 
-  s += "\"ohmkey\":\"" + ohm + "\",";
+  s += "\"ohm_hour\":\"" + ohm_hour + "\",";
 
-  s += "\"www_username\":\"" + www_username + "\",";
-  //s += "\"www_password\":\""+www_password+"\","; security risk: DONT RETURN PASSWORDS
+  s += "\"free_heap\":\"" + String(ESP.getFreeHeap()) + "\"";
 
-  s += "\"free_heap\":\"" + String(ESP.getFreeHeap()) + "\",";
-  s += "\"version\":\"" + currentfirmware + "\"";
-
+#ifdef ENABLE_LEGACY_API
+  s += ",\"version\":\"" + currentfirmware + "\"";
+  s += ",\"ssid\":\"" + esid + "\"";
+  //s += ",\"pass\":\""+epass+"\""; security risk: DONT RETURN PASSWORDS
+  s += ",\"emoncms_server\":\"" + emoncms_server + "\"";
+  s += ",\"emoncms_node\":\"" + emoncms_node + "\"";
+  //s += ",\"emoncms_apikey\":\""+emoncms_apikey+"\""; security risk: DONT RETURN APIKEY
+  s += ",\"emoncms_fingerprint\":\"" + emoncms_fingerprint + "\"";
+  s += ",\"mqtt_server\":\"" + mqtt_server + "\"";
+  s += ",\"mqtt_topic\":\"" + mqtt_topic + "\"";
+  s += ",\"mqtt_user\":\"" + mqtt_user + "\"";
+  //s += ",\"mqtt_pass\":\""+mqtt_pass+"\""; security risk: DONT RETURN PASSWORDS
+  s += ",\"www_username\":\"" + www_username + "\"";
+  //s += ",\"www_password\":\""+www_password+"\""; security risk: DONT RETURN PASSWORDS
+  s += ",\"ohmkey\":\"" + ohm + "\"";
+#endif
   s += "}";
 
   response->setCode(200);
@@ -323,6 +325,7 @@ handleConfig(AsyncWebServerRequest *request) {
   s += "\"firmware\":\"" + firmware + "\",";
   s += "\"protocol\":\"" + protocol + "\",";
   s += "\"espflash\":\"" + String(espflash) + "\",";
+  s += "\"version\":\"" + currentfirmware + "\",";
   s += "\"diodet\":\"" + String(diode_ck) + "\",";
   s += "\"gfcit\":\"" + String(gfci_test) + "\",";
   s += "\"groundt\":\"" + String(ground_ck) + "\",";
@@ -340,7 +343,19 @@ handleConfig(AsyncWebServerRequest *request) {
   s += "\"nogndcount\":\"" + nognd_count + "\",";
   s += "\"stuckcount\":\"" + stuck_count + "\",";
   s += "\"kwhlimit\":\"" + kwh_limit + "\",";
-  s += "\"timelimit\":\"" + time_limit + "\"";
+  s += "\"timelimit\":\"" + time_limit + "\",";
+  s += "\"ssid\":\"" + esid + "\",";
+  //s += "\"pass\":\""+epass+"\","; security risk: DONT RETURN PASSWORDS
+  s += "\"emoncms_server\":\"" + emoncms_server + "\",";
+  s += "\"emoncms_node\":\"" + emoncms_node + "\",";
+  // s += "\"emoncms_apikey\":\""+emoncms_apikey+"\","; security risk: DONT RETURN APIKEY
+  s += "\"emoncms_fingerprint\":\"" + emoncms_fingerprint + "\",";
+  s += "\"mqtt_server\":\"" + mqtt_server + "\",";
+  s += "\"mqtt_topic\":\"" + mqtt_topic + "\",";
+  s += "\"mqtt_user\":\"" + mqtt_user + "\",";
+  //s += "\"mqtt_pass\":\""+mqtt_pass+"\","; security risk: DONT RETURN PASSWORDS
+  s += "\"www_username\":\"" + www_username + "\"";
+  //s += "\"www_password\":\""+www_password+"\","; security risk: DONT RETURN PASSWORDS
   s += "}";
   s.replace(" ", "");
 
@@ -362,12 +377,14 @@ handleUpdate(AsyncWebServerRequest *request) {
   }
 
   String s = "{";
-  s += "\"ohmhour\":\"" + ohm_hour + "\",";
-  s += "\"espfree\":\"" + String(espfree) + "\",";
   s += "\"comm_sent\":\"" + String(comm_sent) + "\",";
   s += "\"comm_success\":\"" + String(comm_success) + "\",";
+#ifdef ENABLE_LEGACY_API
+  s += "\"ohmhour\":\"" + ohm_hour + "\",";
+  s += "\"espfree\":\"" + String(espfree) + "\",";
   s += "\"packets_sent\":\"" + String(packets_sent) + "\",";
   s += "\"packets_success\":\"" + String(packets_success) + "\",";
+#endif
   s += "\"amp\":\"" + String(amp) + "\",";
   s += "\"pilot\":\"" + String(pilot) + "\",";
   s += "\"temp1\":\"" + String(temp1) + "\",";
@@ -455,7 +472,6 @@ void handleUpdate() {
 
   t_httpUpdate_return ret = ota_http_update();
 
-  int retCode = 400;
   String str="error";
   switch(ret) {
     case HTTP_UPDATE_FAILED:
