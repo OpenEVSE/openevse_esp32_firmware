@@ -26,6 +26,22 @@ String ipaddress = "";
 unsigned long Timer;
 String st, rssi;
 
+#ifdef WIFI_LED
+#ifndef WIFI_LED_ON_STATE
+#define WIFI_LED_ON_STATE LOW
+#endif
+
+#ifndef WIFI_LED_AP_TIME
+#define WIFI_LED_AP_TIME 1000
+#endif
+
+#ifndef WIFI_LED_STA_CONNECTING_TIME
+#define WIFI_LED_STA_CONNECTING_TIME 500
+#endif
+
+int wifiLedState = !WIFI_LED_ON_STATE;
+unsigned long wifiLedTimeOut = millis();
+#endif
 
 // -------------------------------------------------------------------
 int wifi_mode = WIFI_MODE_STA;
@@ -102,10 +118,19 @@ startClient() {
   int t = 0;
   int attempt = 0;
   while (WiFi.status() != WL_CONNECTED) {
+#ifdef WIFI_LED
+    wifiLedState = !wifiLedState;
+    digitalWrite(WIFI_LED, wifiLedState);
+#endif
+
     delay(500);
     t++;
     // push and hold boot button after power on to skip stright to AP mode
-    if (t >= 20 || digitalRead(0) == LOW) {
+    if (t >= 20
+#if !defined(WIFI_LED) || 0 != WIFI_LED
+       || digitalRead(0) == LOW
+#endif
+     ) {
       DEBUG.println(" ");
       DEBUG.println("Try Again...");
       delay(2000);
@@ -123,6 +148,11 @@ startClient() {
   }
 
   if (wifi_mode == WIFI_MODE_STA || wifi_mode == WIFI_MODE_AP_AND_STA) {
+#ifdef WIFI_LED
+    wifiLedState = WIFI_LED_ON_STATE;
+    digitalWrite(WIFI_LED, wifiLedState);
+#endif
+
     IPAddress myAddress = WiFi.localIP();
     char tmpStr[40];
     sprintf(tmpStr, "%d.%d.%d.%d", myAddress[0], myAddress[1], myAddress[2],
@@ -143,6 +173,11 @@ startClient() {
 
 void
 wifi_setup() {
+#ifdef WIFI_LED
+  pinMode(WIFI_LED, OUTPUT);
+  digitalWrite(WIFI_LED, wifiLedState);
+#endif
+
   WiFi.disconnect();
   // 1) If no network configured start up access point
   if (esid == 0 || esid == "") {
@@ -168,6 +203,14 @@ wifi_setup() {
 
 void
 wifi_loop() {
+#ifdef WIFI_LED
+  if (wifi_mode == WIFI_MODE_AP_ONLY && millis() > wifiLedTimeOut) {
+    wifiLedState = !wifiLedState;
+    digitalWrite(WIFI_LED, wifiLedState);
+    wifiLedTimeOut = millis() + WIFI_LED_AP_TIME;
+  }
+#endif
+
   dnsServer.processNextRequest();       // Captive portal DNS re-dierct
 
   // Remain in AP mode for 5 Minutes before resetting

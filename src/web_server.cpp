@@ -1,8 +1,8 @@
 #include <Arduino.h>
 #include <ESP8266WiFi.h>
-#include <ESP8266WebServer.h>   // Config portal
-#include <ESP8266HTTPUpdateServer.h>    // upload update
-#include <FS.h>                 // SPIFFS file-system: store web server html, CSS etc.
+#include <ESP8266WebServer.h>         // Config portal
+#include <ESP8266HTTPUpdateServer.h>  // upload update
+#include <FS.h>                       // SPIFFS file-system: store web server html, CSS etc.
 
 #include "emonesp.h"
 #include "web_server.h"
@@ -14,8 +14,10 @@
 //#include "ota.h"
 
 
-ESP8266WebServer server(80);    //Create class for Web server
+ESP8266WebServer server(80);          //Create class for Web server
 ESP8266HTTPUpdateServer httpUpdater;
+
+bool enableCors = true;
 
 // Get running firmware version from build tag environment variable
 #define TEXTIFY(A) #A
@@ -75,42 +77,42 @@ handleFileRead(String path) {
 // -------------------------------------------------------------------
 void
 decodeURI(String & val) {
-  val.replace("%21", "!");
+    val.replace("%21", "!");
 //    val.replace("%22", '"');
-  val.replace("%23", "#");
-  val.replace("%24", "$");
-  val.replace("%26", "&");
-  val.replace("%27", "'");
-  val.replace("%28", "(");
-  val.replace("%29", ")");
-  val.replace("%2A", "*");
-  val.replace("%2B", "+");
-  val.replace("%2C", ",");
-  val.replace("%2D", "-");
-  val.replace("%2E", ".");
-  val.replace("%2F", "/");
-  val.replace("%3A", ":");
-  val.replace("%3B", ";");
-  val.replace("%3C", "<");
-  val.replace("%3D", "=");
-  val.replace("%3E", ">");
-  val.replace("%3F", "?");
-  val.replace("%40", "@");
-  val.replace("%5B", "[");
-  val.replace("%5C", "'\'");
-  val.replace("%5D", "]");
-  val.replace("%5E", "^");
-  val.replace("%5F", "_");
-  val.replace("%60", "`");
-  val.replace("%7B", "{");
-  val.replace("%7C", "|");
-  val.replace("%7D", "}");
-  val.replace("%7E", "~");
-  val.replace('+', ' ');
+    val.replace("%23", "#");
+    val.replace("%24", "$");
+    val.replace("%26", "&");
+    val.replace("%27", "'");
+    val.replace("%28", "(");
+    val.replace("%29", ")");
+    val.replace("%2A", "*");
+    val.replace("%2B", "+");
+    val.replace("%2C", ",");
+    val.replace("%2D", "-");
+    val.replace("%2E", ".");
+    val.replace("%2F", "/");
+    val.replace("%3A", ":");
+    val.replace("%3B", ";");
+    val.replace("%3C", "<");
+    val.replace("%3D", "=");
+    val.replace("%3E", ">");
+    val.replace("%3F", "?");
+    val.replace("%40", "@");
+    val.replace("%5B", "[");
+    val.replace("%5C", "'\'");
+    val.replace("%5D", "]");
+    val.replace("%5E", "^");
+    val.replace("%5F", "_");
+    val.replace("%60", "`");
+    val.replace("%7B", "{");
+    val.replace("%7C", "|");
+    val.replace("%7D", "}");
+    val.replace("%7E", "~");
+    val.replace('+', ' ');
 
-  // Decode the % char last as there is always the posibility that the decoded
-  // % char coould be followed by one of the other replaces
-  val.replace("%25", "%");
+    // Decode the % char last as there is always the posibility that the decoded
+    // % char coould be followed by one of the other replaces
+    val.replace("%25", "%");
 }
 
 // -------------------------------------------------------------------
@@ -119,11 +121,10 @@ decodeURI(String & val) {
 // -------------------------------------------------------------------
 void
 handleHome() {
-  SPIFFS.begin();               // mount the fs
+  //SPIFFS.begin(); // mount the fs
   File f = SPIFFS.open("/home.html", "r");
   if (f) {
-    String s = f.readString();
-    server.send(200, "text/html", s);
+    size_t sent = server.streamFile(f, "text/html");
     f.close();
   } else {
     server.send(200, "text/plain",
@@ -271,32 +272,34 @@ handleStatus() {
   s += "\"networks\":[" + st + "],";
   s += "\"rssi\":[" + rssi + "],";
 
-  s += "\"ssid\":\"" + esid + "\",";
-  //s += "\"pass\":\""+epass+"\","; security risk: DONT RETURN PASSWORDS
   s += "\"srssi\":\"" + String(WiFi.RSSI()) + "\",";
   s += "\"ipaddress\":\"" + ipaddress + "\",";
-  s += "\"emoncms_server\":\"" + emoncms_server + "\",";
-  s += "\"emoncms_node\":\"" + emoncms_node + "\",";
-  // s += "\"emoncms_apikey\":\""+emoncms_apikey+"\","; security risk: DONT RETURN APIKEY
-  s += "\"emoncms_fingerprint\":\"" + emoncms_fingerprint + "\",";
   s += "\"emoncms_connected\":\"" + String(emoncms_connected) + "\",";
   s += "\"packets_sent\":\"" + String(packets_sent) + "\",";
   s += "\"packets_success\":\"" + String(packets_success) + "\",";
 
-  s += "\"mqtt_server\":\"" + mqtt_server + "\",";
-  s += "\"mqtt_topic\":\"" + mqtt_topic + "\",";
-  s += "\"mqtt_user\":\"" + mqtt_user + "\",";
-  //s += "\"mqtt_pass\":\""+mqtt_pass+"\","; security risk: DONT RETURN PASSWORDS
   s += "\"mqtt_connected\":\"" + String(mqtt_connected()) + "\",";
 
-  s += "\"ohmkey\":\"" + ohm + "\",";
+  s += "\"ohm_hour\":\"" + ohm_hour + "\",";
 
-  s += "\"www_username\":\"" + www_username + "\",";
-  //s += "\"www_password\":\""+www_password+"\","; security risk: DONT RETURN PASSWORDS
+  s += "\"free_heap\":\"" + String(ESP.getFreeHeap()) + "\"";
 
-  s += "\"free_heap\":\"" + String(ESP.getFreeHeap()) + "\",";
-  s += "\"version\":\"" + currentfirmware + "\"";
-
+#ifdef ENABLE_LEGACY_API
+  s += ",\"version\":\"" + currentfirmware + "\"";
+  s += ",\"ssid\":\"" + esid + "\"";
+  //s += ",\"pass\":\""+epass+"\""; security risk: DONT RETURN PASSWORDS
+  s += ",\"emoncms_server\":\"" + emoncms_server + "\"";
+  s += ",\"emoncms_node\":\"" + emoncms_node + "\"";
+  //s += ",\"emoncms_apikey\":\""+emoncms_apikey+"\""; security risk: DONT RETURN APIKEY
+  s += ",\"emoncms_fingerprint\":\"" + emoncms_fingerprint + "\"";
+  s += ",\"mqtt_server\":\"" + mqtt_server + "\"";
+  s += ",\"mqtt_topic\":\"" + mqtt_topic + "\"";
+  s += ",\"mqtt_user\":\"" + mqtt_user + "\"";
+  //s += ",\"mqtt_pass\":\""+mqtt_pass+"\""; security risk: DONT RETURN PASSWORDS
+  s += ",\"www_username\":\"" + www_username + "\"";
+  //s += ",\"www_password\":\""+www_password+"\""; security risk: DONT RETURN PASSWORDS
+  s += ",\"ohmkey\":\"" + ohm + "\"";
+#endif
   s += "}";
   server.send(200, "text/html", s);
 }
@@ -313,6 +316,7 @@ handleConfig() {
   s += "\"firmware\":\"" + firmware + "\",";
   s += "\"protocol\":\"" + protocol + "\",";
   s += "\"espflash\":\"" + String(espflash) + "\",";
+  s += "\"version\":\"" + currentfirmware + "\",";
   s += "\"diodet\":\"" + String(diode_ck) + "\",";
   s += "\"gfcit\":\"" + String(gfci_test) + "\",";
   s += "\"groundt\":\"" + String(ground_ck) + "\",";
@@ -330,7 +334,19 @@ handleConfig() {
   s += "\"nogndcount\":\"" + nognd_count + "\",";
   s += "\"stuckcount\":\"" + stuck_count + "\",";
   s += "\"kwhlimit\":\"" + kwh_limit + "\",";
-  s += "\"timelimit\":\"" + time_limit + "\"";
+  s += "\"timelimit\":\"" + time_limit + "\",";
+  s += "\"ssid\":\"" + esid + "\",";
+  //s += "\"pass\":\""+epass+"\","; security risk: DONT RETURN PASSWORDS
+  s += "\"emoncms_server\":\"" + emoncms_server + "\",";
+  s += "\"emoncms_node\":\"" + emoncms_node + "\",";
+  // s += "\"emoncms_apikey\":\""+emoncms_apikey+"\","; security risk: DONT RETURN APIKEY
+  s += "\"emoncms_fingerprint\":\"" + emoncms_fingerprint + "\",";
+  s += "\"mqtt_server\":\"" + mqtt_server + "\",";
+  s += "\"mqtt_topic\":\"" + mqtt_topic + "\",";
+  s += "\"mqtt_user\":\"" + mqtt_user + "\",";
+  //s += "\"mqtt_pass\":\""+mqtt_pass+"\","; security risk: DONT RETURN PASSWORDS
+  s += "\"www_username\":\"" + www_username + "\"";
+  //s += "\"www_password\":\""+www_password+"\","; security risk: DONT RETURN PASSWORDS
   s += "}";
   s.replace(" ", "");
   server.send(200, "text/html", s);
@@ -345,12 +361,14 @@ void
 handleUpdate() {
 
   String s = "{";
-  s += "\"ohmhour\":\"" + ohm_hour + "\",";
-  s += "\"espfree\":\"" + String(espfree) + "\",";
   s += "\"comm_sent\":\"" + String(comm_sent) + "\",";
   s += "\"comm_success\":\"" + String(comm_success) + "\",";
+#ifdef ENABLE_LEGACY_API
+  s += "\"ohmhour\":\"" + ohm_hour + "\",";
+  s += "\"espfree\":\"" + String(espfree) + "\",";
   s += "\"packets_sent\":\"" + String(packets_sent) + "\",";
   s += "\"packets_success\":\"" + String(packets_success) + "\",";
+#endif
   s += "\"amp\":\"" + String(amp) + "\",";
   s += "\"pilot\":\"" + String(pilot) + "\",";
   s += "\"temp1\":\"" + String(temp1) + "\",";
@@ -361,7 +379,7 @@ handleUpdate() {
   s += "\"watthour\":\"" + watthour_total + "\"";
   s += "}";
   s.replace(" ", "");
-  server.send(200, "text/html", s);
+ server.send(200, "text/html", s);
 }
 
 
@@ -413,13 +431,13 @@ String handleUpdateCheck() {
 // Update firmware
 // url: /update
 // -------------------------------------------------------------------
+int retCode = 400;
 void handleUpdate() {
   DEBUG.println("UPDATING...");
   delay(500);
 
   t_httpUpdate_return ret = ota_http_update();
 
-  int retCode = 400;
   String str="error";
   switch(ret) {
     case HTTP_UPDATE_FAILED:
@@ -445,10 +463,10 @@ handleRapi() {
   s += "<b>Open Source Hardware</b><p>Send RAPI Command<p>Common Commands:<p>";
   s += "Set Current - $SC XX<p>Set Service Level - $SL 1 - $SL 2 - $SL A<p>";
   s += "Get Real-time Current - $GG<p>Get Temperatures - $GP<p>";
-  s += "<p>";
+        s += "<p>";
   s += "<form method='get' action='r'><label><b><i>RAPI Command:</b></i></label>";
   s += "<input name='rapi' length=32><p><input type='submit'></form>";
-  s += "</html>\r\n\r\n";
+        s += "</html>\r\n\r\n";
   server.send(200, "text/html", s);
 }
 
@@ -457,153 +475,124 @@ handleRapiR() {
   String s;
   String rapiString;
   String rapi = server.arg("rapi");
+  bool json = server.hasArg("json");
   rapi.replace("%24", "$");
   rapi.replace("+", " ");
   Serial.flush();
   Serial.println(rapi);
   delay(commDelay);
   while (Serial.available()) {
-    rapiString = Serial.readStringUntil('\r');
+         rapiString = Serial.readStringUntil('\r');
+       }
+  if(json)
+  {
+    s = "{\"cmd\":\""+rapi+"\",\"ret\":\""+rapiString+"\"}";
   }
-  s = "<html><font size='20'><font color=006666>Open</font><b>EVSE</b></font><p>";
-  s += "<b>Open Source Hardware</b><p>RAPI Command Sent<p>Common Commands:<p>";
-  s += "Set Current - $SC XX<p>Set Service Level - $SL 1 - $SL 2 - $SL A<p>";
-  s += "Get Real-time Current - $GG<p>Get Temperatures - $GP<p>";
-  s += "<p>";
-  s += "<form method='get' action='r'><label><b><i>RAPI Command:</b></i></label>";
-  s += "<input name='rapi' length=32><p><input type='submit'></form>";
-  s += rapi;
-  s += "<p>>";
-  s += rapiString;
-  s += "<p></html>\r\n\r\n";
+  else
+  {
+    s = "<html><font size='20'><font color=006666>Open</font><b>EVSE</b></font><p>";
+    s += "<b>Open Source Hardware</b><p>RAPI Command Sent<p>Common Commands:<p>";
+    s += "Set Current - $SC XX<p>Set Service Level - $SL 1 - $SL 2 - $SL A<p>";
+    s += "Get Real-time Current - $GG<p>Get Temperatures - $GP<p>";
+    s += "<p>";
+    s += "<form method='get' action='r'><label><b><i>RAPI Command:</b></i></label>";
+    s += "<input name='rapi' length=32><p><input type='submit'></form>";
+    s += rapi;
+    s += "<p>&gt;";
+    s += rapiString;
+    s += "<p></html>\r\n\r\n";
+  }
   server.send(200, "text/html", s);
 }
 
+bool requestPreProcess()
+{
+  if(www_username!="" && !server.authenticate(www_username.c_str(), www_password.c_str())) {
+    server.requestAuthentication();
+    return false;
+  }
+
+//  if(enableCors) {
+//    server.sendHeader("Access-Control-Allow-Origin", "*");
+//  }
+
+  return true;
+}
 
 void
 web_server_setup() {
+  SPIFFS.begin(); // mount the fs
+
   // Start server & server root html /
-  server.on("/",[]() {
-            if (www_username != ""
-                && !server.authenticate(www_username.c_str(),
-                                        www_password.c_str())
-                && wifi_mode == WIFI_MODE_STA)
-            return server.requestAuthentication(); handleHome();}
-  );
+  server.on("/",[]()
+  {
+    if (www_username != ""
+        && !server.authenticate(www_username.c_str(),
+                                www_password.c_str())
+        && wifi_mode == WIFI_MODE_STA) {
+      return server.requestAuthentication();
+    }
+    handleHome();
+  });
 
   // Handle HTTP web interface button presses
-  server.on("/generate_204", handleHome);       //Android captive portal. Maybe not needed. Might be handled by notFound
-  server.on("/fwlink", handleHome);     //Microsoft captive portal. Maybe not needed. Might be handled by notFound
+  server.on("/generate_204", handleHome);  //Android captive portal. Maybe not needed. Might be handled by notFound
+  server.on("/fwlink", handleHome);  //Microsoft captive portal. Maybe not needed. Might be handled by notFound
 
-  server.on("/status",[]() {
-            if (www_username != ""
-                && !server.authenticate(www_username.c_str(),
-                                        www_password.c_str()))
-            return server.requestAuthentication(); handleStatus();}
-  );
-  server.on("/savenetwork",[]() {
-            if (www_username != ""
-                && !server.authenticate(www_username.c_str(),
-                                        www_password.c_str()))
-            return server.requestAuthentication(); handleSaveNetwork();}
-  );
-  server.on("/saveemoncms",[]() {
-            if (www_username != ""
-                && !server.authenticate(www_username.c_str(),
-                                        www_password.c_str()))
-            return server.requestAuthentication(); handleSaveEmoncms();}
-  );
-  server.on("/savemqtt",[]() {
-            if (www_username != ""
-                && !server.authenticate(www_username.c_str(),
-                                        www_password.c_str()))
-            return server.requestAuthentication(); handleSaveMqtt();}
-  );
-  server.on("/saveadmin",[]() {
-            if (www_username != ""
-                && !server.authenticate(www_username.c_str(),
-                                        www_password.c_str()))
-            return server.requestAuthentication(); handleSaveAdmin();}
-  );
-  server.on("/scan",[]() {
-            if (www_username != ""
-                && !server.authenticate(www_username.c_str(),
-                                        www_password.c_str()))
-            return server.requestAuthentication(); handleScan();}
-  );
-
-  server.on("/apoff",[]() {
-            if (www_username != ""
-                && !server.authenticate(www_username.c_str(),
-                                        www_password.c_str()))
-            return server.requestAuthentication(); handleAPOff();}
-  );
+  server.on("/status", [](){
+    if(requestPreProcess()) handleStatus();
+  });
+  server.on("/savenetwork", [](){
+    if(requestPreProcess()) handleSaveNetwork();
+  });
+  server.on("/saveemoncms", [](){
+    if(requestPreProcess()) handleSaveEmoncms();
+  });
+  server.on("/savemqtt", [](){
+    if(requestPreProcess()) handleSaveMqtt();
+  });
+  server.on("/saveadmin", [](){
+    if(requestPreProcess()) handleSaveAdmin();
+  });
+  server.on("/scan", [](){
+    if(requestPreProcess()) handleScan();
+  });
+  server.on("/apoff", [](){
+    if(requestPreProcess()) handleAPOff();
+  });
   /*
-     server.on("/firmware", [](){
-     if(www_username!="" && !server.authenticate(www_username.c_str(), www_password.c_str()))
-     return server.requestAuthentication();
-     handleUpdateCheck();
-     });
+  server.on("/firmware", [](){
+    if(requestPreProcess())   handleUpdateCheck();
+  });
 
-     server.on("/update", [](){
-     if(www_username!="" && !server.authenticate(www_username.c_str(), www_password.c_str()))
-     return server.requestAuthentication();
-     handleUpdate();
-     });
-   */
-  server.on("/status",[]() {
-            if (www_username != ""
-                && !server.authenticate(www_username.c_str(),
-                                        www_password.c_str()))
-            return server.requestAuthentication(); handleStatus();}
-  );
-  server.on("/reset",[]() {
-            if (www_username != ""
-                && !server.authenticate(www_username.c_str(),
-                                        www_password.c_str()))
-            return server.requestAuthentication(); handleRst();}
-  );
-  server.on("/restart",[]() {
-            if (www_username != ""
-                && !server.authenticate(www_username.c_str(),
-                                        www_password.c_str()))
-            return server.requestAuthentication(); handleRestart();}
-  );
-
-  server.on("/rapiupdate",[]() {
-            if (www_username != ""
-                && !server.authenticate(www_username.c_str(),
-                                        www_password.c_str()))
-            return server.requestAuthentication(); handleUpdate();}
-  );
-
-  server.on("/rapi",[]() {
-            if (www_username != ""
-                && !server.authenticate(www_username.c_str(),
-                                        www_password.c_str()))
-            return server.requestAuthentication(); handleRapi();}
-  );
-
-  server.on("/r",[]() {
-            if (www_username != ""
-                && !server.authenticate(www_username.c_str(),
-                                        www_password.c_str()))
-            return server.requestAuthentication(); handleRapiR();}
-  );
-
-  server.on("/config",[]() {
-            if (www_username != ""
-                && !server.authenticate(www_username.c_str(),
-                                        www_password.c_str()))
-            return server.requestAuthentication(); handleConfig();}
-  );
-
-  server.on("/saveohmkey",[]() {
-            if (www_username != ""
-                && !server.authenticate(www_username.c_str(),
-                                        www_password.c_str()))
-            return server.requestAuthentication(); handleSaveOhmkey();}
-  );
+  server.on("/update", [](){
+    if(requestPreProcess()) handleUpdate();
+  });
+  */
+  server.on("/status", [](){
+    if(requestPreProcess()) handleStatus();
+  });
+  server.on("/reset", [](){
+    if(requestPreProcess()) handleRst();
+  });
+  server.on("/restart", [](){
+    if(requestPreProcess()) handleRestart();
+  });
+  server.on("/rapiupdate", [](){
+    if(requestPreProcess()) handleUpdate();
+  });
+  server.on("/rapi", [](){
+    if(requestPreProcess()) handleRapi();
+  });
+  server.on("/r", [](){
+    if(requestPreProcess()) handleRapiR();
+  });
+  server.on("/config", [](){
+    if(requestPreProcess()) handleConfig();
+  });
+  server.on("/saveohmkey", [](){
+    if(requestPreProcess()) handleSaveOhmkey();
+  });
 
   server.onNotFound([]() {
                     if (!handleFileRead(server.uri()))
@@ -616,5 +605,5 @@ web_server_setup() {
 
 void
 web_server_loop() {
-  server.handleClient();        // Web server
+  server.handleClient();          // Web server
 }
