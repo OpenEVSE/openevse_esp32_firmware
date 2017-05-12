@@ -445,34 +445,15 @@ void handleUpdate() {
 }
 */
 
-/*
 void
-handleRapi() {
-  String s;
-  s = "<html><font size='20'><font color=006666>Open</font><b>EVSE</b></font><p>";
-  s += "<b>Open Source Hardware</b><p>Send RAPI Command<p>Common Commands:<p>";
-  s += "Set Current - $SC XX<p>Set Service Level - $SL 1 - $SL 2 - $SL A<p>";
-  s += "Get Real-time Current - $GG<p>Get Temperatures - $GP<p>";
-  s += "<p>";
-  s += "<form method='get' action='r'><label><b><i>RAPI Command:</b></i></label>";
-  s += "<input name='rapi' length=32><p><input type='submit'></form>";
-  s += "</html>\r\n\r\n";
-  server.send(200, "text/html", s);
-}
-
-void
-handleRapiR() {
-  String s;
-  String rapiString;
-  String rapi = server.arg("rapi");
-  rapi.replace("%24", "$");
-  rapi.replace("+", " ");
-  Serial.flush();
-  Serial.println(rapi);
-  delay(commDelay);
-  while (Serial.available()) {
-    rapiString = Serial.readStringUntil('\r');
+handleRapi(AsyncWebServerRequest *request) {
+  AsyncResponseStream *response;
+  if(false == requestPreProcess(request, response, "text/html")) {
+    return;
   }
+
+  String s;
+
   s = "<html><font size='20'><font color=006666>Open</font><b>EVSE</b></font><p>";
   s += "<b>Open Source Hardware</b><p>RAPI Command Sent<p>Common Commands:<p>";
   s += "Set Current - $SC XX<p>Set Service Level - $SL 1 - $SL 2 - $SL A<p>";
@@ -480,13 +461,30 @@ handleRapiR() {
   s += "<p>";
   s += "<form method='get' action='r'><label><b><i>RAPI Command:</b></i></label>";
   s += "<input name='rapi' length=32><p><input type='submit'></form>";
-  s += rapi;
-  s += "<p>>";
-  s += rapiString;
+
+  if(request->hasArg("rapi"))
+  {
+    String rapiString;
+    String rapi = request->arg("rapi");
+
+    // BUG: Really we should do this in the main loop not here...
+    Serial.flush();
+    Serial.println(rapi);
+    delay(commDelay);
+    while (Serial.available()) {
+      rapiString = Serial.readStringUntil('\r');
+    }
+
+    s += rapi;
+    s += "<p>&gt;";
+    s += rapiString;
+  }
   s += "<p></html>\r\n\r\n";
-  server.send(200, "text/html", s);
+
+  response->setCode(200);
+  response->print(s);
+  request->send(response);
 }
-*/
 
 void handleNotFound(AsyncWebServerRequest *request)
 {
@@ -565,6 +563,8 @@ web_server_setup() {
   server.on("/reset", handleRst);
   server.on("/restart", handleRestart);
 
+  server.on("/rapi", handleRapi);
+  server.on("/r", handleRapi);
 
 /*
   server.on("/scan", [](){
@@ -582,12 +582,6 @@ web_server_setup() {
 //    if(requestPreProcess()) handleUpdate();
 //  });
 
-  server.on("/rapi", [](){
-    if(requestPreProcess()) handleRapi();
-  });
-  server.on("/r", [](){
-    if(requestPreProcess()) handleRapiR();
-  });
 
 */
   server.onNotFound(handleNotFound);
