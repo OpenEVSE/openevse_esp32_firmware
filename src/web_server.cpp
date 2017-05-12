@@ -492,20 +492,24 @@ void handleUpdate() {
 
 void
 handleRapi(AsyncWebServerRequest *request) {
+  bool json = request->hasArg("json");
+
   AsyncResponseStream *response;
-  if(false == requestPreProcess(request, response, "text/html")) {
+  if(false == requestPreProcess(request, response, json ? "application/json" : "text/html")) {
     return;
   }
 
   String s;
 
-  s = "<html><font size='20'><font color=006666>Open</font><b>EVSE</b></font><p>";
-  s += "<b>Open Source Hardware</b><p>RAPI Command Sent<p>Common Commands:<p>";
-  s += "Set Current - $SC XX<p>Set Service Level - $SL 1 - $SL 2 - $SL A<p>";
-  s += "Get Real-time Current - $GG<p>Get Temperatures - $GP<p>";
-  s += "<p>";
-  s += "<form method='get' action='r'><label><b><i>RAPI Command:</b></i></label>";
-  s += "<input name='rapi' length=32><p><input type='submit'></form>";
+  if(false == json) {
+    s = "<html><font size='20'><font color=006666>Open</font><b>EVSE</b></font><p>";
+    s += "<b>Open Source Hardware</b><p>RAPI Command Sent<p>Common Commands:<p>";
+    s += "Set Current - $SC XX<p>Set Service Level - $SL 1 - $SL 2 - $SL A<p>";
+    s += "Get Real-time Current - $GG<p>Get Temperatures - $GP<p>";
+    s += "<p>";
+    s += "<form method='get' action='r'><label><b><i>RAPI Command:</b></i></label>";
+    s += "<input name='rapi' length=32><p><input type='submit'></form>";
+  }
 
   if(request->hasArg("rapi"))
   {
@@ -520,11 +524,17 @@ handleRapi(AsyncWebServerRequest *request) {
       rapiString = Serial.readStringUntil('\r');
     }
 
-    s += rapi;
-    s += "<p>&gt;";
-    s += rapiString;
+    if(json) {
+      s = "{\"cmd\":\""+rapi+"\",\"ret\":\""+rapiString+"\"}";
+    } else {
+      s += rapi;
+      s += "<p>&gt;";
+      s += rapiString;
+    }
   }
-  s += "<p></html>\r\n\r\n";
+  if(false == json) {
+    s += "<p></html>\r\n\r\n";
+  }
 
   response->setCode(200);
   response->print(s);
