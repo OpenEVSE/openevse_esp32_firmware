@@ -1,6 +1,5 @@
 #include <Arduino.h>
 #include <ESP8266WiFi.h>
-//#include <ESP8266HTTPUpdateServer.h>  // upload update
 #include <FS.h>                       // SPIFFS file-system: store web server html, CSS etc.
 
 #include "emonesp.h"
@@ -14,7 +13,6 @@
 #include "debug.h"
 
 AsyncWebServer server(80);          //Create class for Web server
-//ESP8266HTTPUpdateServer httpUpdater;
 
 bool enableCors = true;
 
