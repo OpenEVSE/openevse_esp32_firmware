@@ -1,7 +1,5 @@
 #include <Arduino.h>
 #include <ESP8266WiFi.h>
-#include <ESP8266WebServer.h>         // Config portal
-#include <ESP8266HTTPUpdateServer.h>  // upload update
 #include <FS.h>                       // SPIFFS file-system: store web server html, CSS etc.
 
 #include "emonesp.h"
@@ -12,107 +10,39 @@
 #include "input.h"
 #include "emoncms.h"
 //#include "ota.h"
+#include "debug.h"
 
-
-ESP8266WebServer server(80);          //Create class for Web server
-ESP8266HTTPUpdateServer httpUpdater;
+AsyncWebServer server(80);          //Create class for Web server
 
 bool enableCors = true;
+
+// Event timeouts
+unsigned long wifiRestartTime = 0;
+unsigned long mqttRestartTime = 0;
+unsigned long systemRestartTime = 0;
+unsigned long systemRebootTime = 0;
 
 // Get running firmware version from build tag environment variable
 #define TEXTIFY(A) #A
 #define ESCAPEQUOTE(A) TEXTIFY(A)
 String currentfirmware = ESCAPEQUOTE(BUILD_TAG);
 
-String
-getContentType(String filename) {
-  if (server.hasArg("download"))
-    return "application/octet-stream";
-  else if (filename.endsWith(".htm"))
-    return "text/html";
-  else if (filename.endsWith(".html"))
-    return "text/html";
-  else if (filename.endsWith(".css"))
-    return "text/css";
-  else if (filename.endsWith(".js"))
-    return "application/javascript";
-  else if (filename.endsWith(".png"))
-    return "image/png";
-  else if (filename.endsWith(".gif"))
-    return "image/gif";
-  else if (filename.endsWith(".jpg"))
-    return "image/jpeg";
-  else if (filename.endsWith(".ico"))
-    return "image/x-icon";
-  else if (filename.endsWith(".xml"))
-    return "text/xml";
-  else if (filename.endsWith(".pdf"))
-    return "application/x-pdf";
-  else if (filename.endsWith(".zip"))
-    return "application/x-zip";
-  else if (filename.endsWith(".gz"))
-    return "application/x-gzip";
-  return "text/plain";
-}
-
-bool
-handleFileRead(String path) {
-  if (path.endsWith("/"))
-    path += "index.htm";
-  String contentType = getContentType(path);
-  String pathWithGz = path + ".gz";
-  if (SPIFFS.exists(pathWithGz) || SPIFFS.exists(path)) {
-    if (SPIFFS.exists(pathWithGz))
-      path += ".gz";
-    File file = SPIFFS.open(path, "r");
-    size_t sent = server.streamFile(file, contentType);
-    file.close();
-    return true;
+// -------------------------------------------------------------------
+// Helper function to perform the standard operations on a request
+// -------------------------------------------------------------------
+bool requestPreProcess(AsyncWebServerRequest *request, AsyncResponseStream *&response, const char *contentType = "application/json")
+{
+  if(www_username!="" && !request->authenticate(www_username.c_str(), www_password.c_str())) {
+    request->requestAuthentication();
+    return false;
   }
-  return false;
-}
 
-// -------------------------------------------------------------------
-// Helper function to decode the URL values
-// -------------------------------------------------------------------
-void
-decodeURI(String & val) {
-    val.replace("%21", "!");
-//    val.replace("%22", '"');
-    val.replace("%23", "#");
-    val.replace("%24", "$");
-    val.replace("%26", "&");
-    val.replace("%27", "'");
-    val.replace("%28", "(");
-    val.replace("%29", ")");
-    val.replace("%2A", "*");
-    val.replace("%2B", "+");
-    val.replace("%2C", ",");
-    val.replace("%2D", "-");
-    val.replace("%2E", ".");
-    val.replace("%2F", "/");
-    val.replace("%3A", ":");
-    val.replace("%3B", ";");
-    val.replace("%3C", "<");
-    val.replace("%3D", "=");
-    val.replace("%3E", ">");
-    val.replace("%3F", "?");
-    val.replace("%40", "@");
-    val.replace("%5B", "[");
-    val.replace("%5C", "'\'");
-    val.replace("%5D", "]");
-    val.replace("%5E", "^");
-    val.replace("%5F", "_");
-    val.replace("%60", "`");
-    val.replace("%7B", "{");
-    val.replace("%7C", "|");
-    val.replace("%7D", "}");
-    val.replace("%7E", "~");
-    val.replace('+', ' ');
+  response = request->beginResponseStream(contentType);
+  if(enableCors) {
+    response->addHeader("Access-Control-Allow-Origin", "*");
+  }
 
-    // Decode the % char last as there is always the posibility that the decoded
-    // % char coould be followed by one of the other replaces
-    val.replace("%25", "%");
+  return true;
 }
 
 // -------------------------------------------------------------------
@@ -120,26 +50,59 @@ decodeURI(String & val) {
 // url: /
 // -------------------------------------------------------------------
 void
-handleHome() {
-  //SPIFFS.begin(); // mount the fs
-  File f = SPIFFS.open("/home.html", "r");
-  if (f) {
-    size_t sent = server.streamFile(f, "text/html");
-    f.close();
+handleHome(AsyncWebServerRequest *request) {
+  if (www_username != ""
+      && !request->authenticate(www_username.c_str(),
+                              www_password.c_str())
+      && wifi_mode == WIFI_MODE_STA) {
+    return request->requestAuthentication();
+  }
+
+  if (SPIFFS.exists("/home.html")) {
+    request->send(SPIFFS, "/home.html");
   } else {
-    server.send(200, "text/plain",
-                "/home.html not found, have you flashed the SPIFFS?");
+    request->send(200, "text/plain",
+                  "/home.html not found, have you flashed the SPIFFS?");
   }
 }
 
 // -------------------------------------------------------------------
 // Wifi scan /scan not currently used
 // url: /scan
+//
+// First request will return 0 results unless you start scan from somewhere else (loop/setup)
+// Do not request more often than 3-5 seconds
 // -------------------------------------------------------------------
 void
-handleScan() {
-  wifi_scan();
-  server.send(200, "text/plain", "[" + st + "],[" + rssi + "]");
+handleScan(AsyncWebServerRequest *request) {
+  AsyncResponseStream *response;
+  if(false == requestPreProcess(request, response)) {
+    return;
+  }
+
+  String json = "[";
+  int n = WiFi.scanComplete();
+  if(n == -2) {
+    WiFi.scanNetworks(true);
+  } else if(n) {
+    for (int i = 0; i < n; ++i) {
+      if(i) json += ",";
+      json += "{";
+      json += "\"rssi\":"+String(WiFi.RSSI(i));
+      json += ",\"ssid\":\""+WiFi.SSID(i)+"\"";
+      json += ",\"bssid\":\""+WiFi.BSSIDstr(i)+"\"";
+      json += ",\"channel\":"+String(WiFi.channel(i));
+      json += ",\"secure\":"+String(WiFi.encryptionType(i));
+      json += ",\"hidden\":"+String(WiFi.isHidden(i)?"true":"false");
+      json += "}";
+    }
+    WiFi.scanDelete();
+    if(WiFi.scanComplete() == -2){
+      WiFi.scanNetworks(true);
+    }
+  }
+  json += "]";
+  request->send(200, "text/json", json);
 }
 
 // -------------------------------------------------------------------
@@ -147,14 +110,18 @@ handleScan() {
 // url: /apoff
 // -------------------------------------------------------------------
 void
-handleAPOff() {
-  server.send(200, "text/html", "Turning AP Off");
-  DEBUG.println("Turning AP Off");
-  WiFi.disconnect();
-  delay(1000);
-  ESP.reset();
-  //delay(2000);
-  //WiFi.mode(WIFI_STA);
+handleAPOff(AsyncWebServerRequest *request) {
+  AsyncResponseStream *response;
+  if(false == requestPreProcess(request, response, "text/plain")) {
+    return;
+  }
+
+  response->setCode(200);
+  response->print("Turning AP Off");
+  request->send(response);
+
+  DBUGLN("Turning AP Off");
+  systemRebootTime = millis() + 1000;
 }
 
 // -------------------------------------------------------------------
@@ -162,24 +129,27 @@ handleAPOff() {
 // url: /savenetwork
 // -------------------------------------------------------------------
 void
-handleSaveNetwork() {
-  String s;
-  String qsid = server.arg("ssid");
-  String qpass = server.arg("pass");
+handleSaveNetwork(AsyncWebServerRequest *request) {
+  AsyncResponseStream *response;
+  if(false == requestPreProcess(request, response, "text/plain")) {
+    return;
+  }
 
-  decodeURI(qsid);
-  decodeURI(qpass);
+  String qsid = request->arg("ssid");
+  String qpass = request->arg("pass");
 
   if (qsid != 0) {
     config_save_wifi(qsid, qpass);
 
-    server.send(200, "text/plain", "saved");
-    delay(2000);
-
-    wifi_restart();
+    response->setCode(200);
+    response->print("saved");
+    wifiRestartTime = millis() + 2000;
   } else {
-    server.send(400, "text/plain", "No SSID");
+    response->setCode(400);
+    response->print("No SSID");
   }
+
+  request->send(response);
 }
 
 // -------------------------------------------------------------------
@@ -187,19 +157,28 @@ handleSaveNetwork() {
 // url: /saveemoncms
 // -------------------------------------------------------------------
 void
-handleSaveEmoncms() {
-  config_save_emoncms(server.arg("server"),
-                      server.arg("node"),
-                      server.arg("apikey"), server.arg("fingerprint"));
+handleSaveEmoncms(AsyncWebServerRequest *request) {
+  AsyncResponseStream *response;
+  if(false == requestPreProcess(request, response, "text/plain")) {
+    return;
+  }
 
-  // BUG: Potential buffer overflow issue the values emoncms_xxx come from user
-  //      input so could overflow the buffer no matter the length
+  config_save_emoncms(request->arg("server"),
+                      request->arg("node"),
+                      request->arg("apikey"),
+                      request->arg("fingerprint"));
+
   char tmpStr[200];
-  sprintf(tmpStr, "Saved: %s %s %s %s", emoncms_server.c_str(),
-          emoncms_node.c_str(), emoncms_apikey.c_str(),
-          emoncms_fingerprint.c_str());
-  DEBUG.println(tmpStr);
-  server.send(200, "text/html", tmpStr);
+  snprintf(tmpStr, sizeof(tmpStr), "Saved: %s %s %s %s",
+           emoncms_server.c_str(),
+           emoncms_node.c_str(),
+           emoncms_apikey.c_str(),
+           emoncms_fingerprint.c_str());
+  DBUGLN(tmpStr);
+
+  response->setCode(200);
+  response->print(tmpStr);
+  request->send(response);
 }
 
 // -------------------------------------------------------------------
@@ -207,21 +186,27 @@ handleSaveEmoncms() {
 // url: /savemqtt
 // -------------------------------------------------------------------
 void
-handleSaveMqtt() {
-  config_save_mqtt(server.arg("server"),
-                   server.arg("topic"),
-                   server.arg("user"), server.arg("pass"));
+handleSaveMqtt(AsyncWebServerRequest *request) {
+  AsyncResponseStream *response;
+  if(false == requestPreProcess(request, response, "text/plain")) {
+    return;
+  }
+
+  config_save_mqtt(request->arg("server"),
+                   request->arg("topic"),
+                   request->arg("user"),
+                   request->arg("pass"));
 
   char tmpStr[200];
-  // BUG: Potential buffer overflow issue the values mqtt_xxx come from user
-  //      input so could overflow the buffer no matter the length
-  sprintf(tmpStr, "Saved: %s %s %s %s", mqtt_server.c_str(),
+  snprintf(tmpStr, sizeof(tmpStr), "Saved: %s %s %s %s", mqtt_server.c_str(),
           mqtt_topic.c_str(), mqtt_user.c_str(), mqtt_pass.c_str());
-  DEBUG.println(tmpStr);
-  server.send(200, "text/html", tmpStr);
+  DBUGLN(tmpStr);
 
-  // If connected disconnect MQTT to trigger re-connect with new details
-  mqtt_restart();
+  response->setCode(200);
+  response->print(tmpStr);
+  request->send(response);
+
+  mqttRestartTime = millis();
 }
 
 // -------------------------------------------------------------------
@@ -229,28 +214,40 @@ handleSaveMqtt() {
 // url: /saveadmin
 // -------------------------------------------------------------------
 void
-handleSaveAdmin() {
-  String quser = server.arg("user");
-  String qpass = server.arg("pass");
+handleSaveAdmin(AsyncWebServerRequest *request) {
+  AsyncResponseStream *response;
+  if(false == requestPreProcess(request, response, "text/plain")) {
+    return;
+  }
 
-  decodeURI(quser);
-  decodeURI(qpass);
+  String quser = request->arg("user");
+  String qpass = request->arg("pass");
 
   config_save_admin(quser, qpass);
 
-  server.send(200, "text/html", "saved");
+  response->setCode(200);
+  response->print("saved");
+  request->send(response);
 }
 
 // -------------------------------------------------------------------
-// Save selected network to EEPROM and attempt connection
-// url: /savenetwork
+// Save the Ohm keyto EEPROM
+// url: /handleSaveOhmkey
 // -------------------------------------------------------------------
 void
-handleSaveOhmkey() {
-  String qohm = server.arg("ohm");
+handleSaveOhmkey(AsyncWebServerRequest *request) {
+  AsyncResponseStream *response;
+  if(false == requestPreProcess(request, response, "text/plain")) {
+    return;
+  }
+
+  String qohm = request->arg("ohm");
 
   config_save_ohm(qohm);
-  server.send(200, "text/html", "Saved");
+
+  response->setCode(200);
+  response->print("saved");
+  request->send(response);
 }
 
 // -------------------------------------------------------------------
@@ -258,7 +255,11 @@ handleSaveOhmkey() {
 // url: /status
 // -------------------------------------------------------------------
 void
-handleStatus() {
+handleStatus(AsyncWebServerRequest *request) {
+  AsyncResponseStream *response;
+  if(false == requestPreProcess(request, response)) {
+    return;
+  }
 
   String s = "{";
   if (wifi_mode == WIFI_MODE_STA) {
@@ -301,16 +302,22 @@ handleStatus() {
   s += ",\"ohmkey\":\"" + ohm + "\"";
 #endif
   s += "}";
-  server.send(200, "text/html", s);
+
+  response->setCode(200);
+  response->print(s);
+  request->send(response);
 }
 
 // -------------------------------------------------------------------
 // Returns OpenEVSE Config json
 // url: /config
 // -------------------------------------------------------------------
-
 void
-handleConfig() {
+handleConfig(AsyncWebServerRequest *request) {
+  AsyncResponseStream *response;
+  if(false == requestPreProcess(request, response)) {
+    return;
+  }
 
   String s = "{";
   s += "\"firmware\":\"" + firmware + "\",";
@@ -349,16 +356,23 @@ handleConfig() {
   //s += "\"www_password\":\""+www_password+"\","; security risk: DONT RETURN PASSWORDS
   s += "}";
   s.replace(" ", "");
-  server.send(200, "text/html", s);
+
+  response->setCode(200);
+  response->print(s);
+  request->send(response);
 }
 
  // -------------------------------------------------------------------
 // Returns Updates JSON
 // url: /rapiupdate
 // -------------------------------------------------------------------
-
 void
-handleUpdate() {
+handleUpdate(AsyncWebServerRequest *request) {
+
+  AsyncResponseStream *response;
+  if(false == requestPreProcess(request, response)) {
+    return;
+  }
 
   String s = "{";
   s += "\"comm_sent\":\"" + String(comm_sent) + "\",";
@@ -379,21 +393,31 @@ handleUpdate() {
   s += "\"watthour\":\"" + watthour_total + "\"";
   s += "}";
   s.replace(" ", "");
- server.send(200, "text/html", s);
-}
 
+  response->setCode(200);
+  response->print(s);
+  request->send(response);
+}
 
 // -------------------------------------------------------------------
 // Reset config and reboot
 // url: /reset
 // -------------------------------------------------------------------
 void
-handleRst() {
+handleRst(AsyncWebServerRequest *request) {
+  AsyncResponseStream *response;
+  if(false == requestPreProcess(request, response, "text/plain")) {
+    return;
+  }
+
   config_reset();
-  server.send(200, "text/html", "1");
-  wifi_disconnect();
-  delay(1000);
-  ESP.reset();
+  ESP.eraseConfig();
+
+  response->setCode(200);
+  response->print("1");
+  request->send(response);
+
+  systemRebootTime = millis() + 1000;
 }
 
 // -------------------------------------------------------------------
@@ -401,11 +425,17 @@ handleRst() {
 // url: /restart
 // -------------------------------------------------------------------
 void
-handleRestart() {
-  server.send(200, "text/html", "1");
-  delay(1000);
-  wifi_disconnect();
-  ESP.restart();
+handleRestart(AsyncWebServerRequest *request) {
+  AsyncResponseStream *response;
+  if(false == requestPreProcess(request, response, "text/plain")) {
+    return;
+  }
+
+  response->setCode(200);
+  response->print("1");
+  request->send(response);
+
+  systemRestartTime = millis() + 1000;
 }
 
 /*
@@ -413,6 +443,7 @@ handleRestart() {
 // Check for updates and display current version
 // url: /firmware
 // -------------------------------------------------------------------
+/*
 String handleUpdateCheck() {
   DEBUG.println("Running: " + currentfirmware);
   // Get latest firmware version number
@@ -426,12 +457,13 @@ String handleUpdateCheck() {
   server.send(200, "text/html", s);
   return (latestfirmware);
 }
+*/
 
 // -------------------------------------------------------------------
 // Update firmware
 // url: /update
 // -------------------------------------------------------------------
-int retCode = 400;
+/*
 void handleUpdate() {
   DEBUG.println("UPDATING...");
   delay(500);
@@ -456,40 +488,68 @@ void handleUpdate() {
 }
 */
 
+// -------------------------------------------------------------------
+// Update firmware
+// url: /update
+// -------------------------------------------------------------------
 void
-handleRapi() {
-  String s;
-  s = "<html><font size='20'><font color=006666>Open</font><b>EVSE</b></font><p>";
-  s += "<b>Open Source Hardware</b><p>Send RAPI Command<p>Common Commands:<p>";
-  s += "Set Current - $SC XX<p>Set Service Level - $SL 1 - $SL 2 - $SL A<p>";
-  s += "Get Real-time Current - $GG<p>Get Temperatures - $GP<p>";
-        s += "<p>";
-  s += "<form method='get' action='r'><label><b><i>RAPI Command:</b></i></label>";
-  s += "<input name='rapi' length=32><p><input type='submit'></form>";
-        s += "</html>\r\n\r\n";
-  server.send(200, "text/html", s);
+handleUpdateGet(AsyncWebServerRequest *request) {
+  request->send(200, "text/html", "<form method='POST' action='/update' enctype='multipart/form-data'><input type='file' name='update'><input type='submit' value='Update'></form>");
 }
 
 void
-handleRapiR() {
-  String s;
-  String rapiString;
-  String rapi = server.arg("rapi");
-  bool json = server.hasArg("json");
-  rapi.replace("%24", "$");
-  rapi.replace("+", " ");
-  Serial.flush();
-  Serial.println(rapi);
-  delay(commDelay);
-  while (Serial.available()) {
-         rapiString = Serial.readStringUntil('\r');
-       }
-  if(json)
-  {
-    s = "{\"cmd\":\""+rapi+"\",\"ret\":\""+rapiString+"\"}";
+handleUpdatePost(AsyncWebServerRequest *request) {
+  bool shouldReboot = !Update.hasError();
+  AsyncWebServerResponse *response = request->beginResponse(200, "text/plain", shouldReboot ? "OK" : "FAIL");
+  response->addHeader("Connection", "close");
+  request->send(response);
+
+  if(shouldReboot) {
+    systemRestartTime = millis() + 1000;
   }
-  else
-  {
+}
+
+void
+handleUpdateUpload(AsyncWebServerRequest *request, String filename, size_t index, uint8_t *data, size_t len, bool final) {
+  if(!index){
+    DBUGF("Update Start: %s\n", filename.c_str());
+    Update.runAsync(true);
+    if(!Update.begin((ESP.getFreeSketchSpace() - 0x1000) & 0xFFFFF000)){
+#ifdef ENABLE_DEBUG
+      Update.printError(DEBUG_PORT);
+#endif
+    }
+  }
+  if(!Update.hasError()){
+    if(Update.write(data, len) != len){
+#ifdef ENABLE_DEBUG
+      Update.printError(DEBUG_PORT);
+#endif
+    }
+  }
+  if(final){
+    if(Update.end(true)){
+      DBUGF("Update Success: %uB\n", index+len);
+    } else {
+#ifdef ENABLE_DEBUG
+      Update.printError(DEBUG_PORT);
+#endif
+    }
+  }
+}
+
+void
+handleRapi(AsyncWebServerRequest *request) {
+  bool json = request->hasArg("json");
+
+  AsyncResponseStream *response;
+  if(false == requestPreProcess(request, response, json ? "application/json" : "text/html")) {
+    return;
+  }
+
+  String s;
+
+  if(false == json) {
     s = "<html><font size='20'><font color=006666>Open</font><b>EVSE</b></font><p>";
     s += "<b>Open Source Hardware</b><p>RAPI Command Sent<p>Common Commands:<p>";
     s += "Set Current - $SC XX<p>Set Service Level - $SL 1 - $SL 2 - $SL A<p>";
@@ -497,113 +557,164 @@ handleRapiR() {
     s += "<p>";
     s += "<form method='get' action='r'><label><b><i>RAPI Command:</b></i></label>";
     s += "<input name='rapi' length=32><p><input type='submit'></form>";
-    s += rapi;
-    s += "<p>&gt;";
-    s += rapiString;
+  }
+
+  if(request->hasArg("rapi"))
+  {
+    String rapiString;
+    String rapi = request->arg("rapi");
+
+    // BUG: Really we should do this in the main loop not here...
+    Serial.flush();
+    Serial.println(rapi);
+    delay(commDelay);
+    while (Serial.available()) {
+      rapiString = Serial.readStringUntil('\r');
+    }
+
+    if(json) {
+      s = "{\"cmd\":\""+rapi+"\",\"ret\":\""+rapiString+"\"}";
+    } else {
+      s += rapi;
+      s += "<p>&gt;";
+      s += rapiString;
+    }
+  }
+  if(false == json) {
     s += "<p></html>\r\n\r\n";
   }
-  server.send(200, "text/html", s);
+
+  response->setCode(200);
+  response->print(s);
+  request->send(response);
 }
 
-bool requestPreProcess()
+void handleNotFound(AsyncWebServerRequest *request)
 {
-  if(www_username!="" && !server.authenticate(www_username.c_str(), www_password.c_str())) {
-    server.requestAuthentication();
-    return false;
+  DBUG("NOT_FOUND: ");
+  if(request->method() == HTTP_GET) {
+    DBUGF("GET");
+  } else if(request->method() == HTTP_POST) {
+    DBUGF("POST");
+  } else if(request->method() == HTTP_DELETE) {
+    DBUGF("DELETE");
+  } else if(request->method() == HTTP_PUT) {
+    DBUGF("PUT");
+  } else if(request->method() == HTTP_PATCH) {
+    DBUGF("PATCH");
+  } else if(request->method() == HTTP_HEAD) {
+    DBUGF("HEAD");
+  } else if(request->method() == HTTP_OPTIONS) {
+    DBUGF("OPTIONS");
+  } else {
+    DBUGF("UNKNOWN");
+  }
+  DBUGF(" http://%s%s", request->host().c_str(), request->url().c_str());
+
+  if(request->contentLength()){
+    DBUGF("_CONTENT_TYPE: %s", request->contentType().c_str());
+    DBUGF("_CONTENT_LENGTH: %u", request->contentLength());
   }
 
-//  if(enableCors) {
-//    server.sendHeader("Access-Control-Allow-Origin", "*");
-//  }
+  int headers = request->headers();
+  int i;
+  for(i=0; i<headers; i++) {
+    AsyncWebHeader* h = request->getHeader(i);
+    DBUGF("_HEADER[%s]: %s", h->name().c_str(), h->value().c_str());
+  }
 
-  return true;
+  int params = request->params();
+  for(i = 0; i < params; i++) {
+    AsyncWebParameter* p = request->getParam(i);
+    if(p->isFile()){
+      DBUGF("_FILE[%s]: %s, size: %u", p->name().c_str(), p->value().c_str(), p->size());
+    } else if(p->isPost()){
+      DBUGF("_POST[%s]: %s", p->name().c_str(), p->value().c_str());
+    } else {
+      DBUGF("_GET[%s]: %s", p->name().c_str(), p->value().c_str());
+    }
+  }
+
+  request->send(404);
 }
 
 void
 web_server_setup() {
   SPIFFS.begin(); // mount the fs
 
+  // Setup the static files
+  server.serveStatic("/", SPIFFS, "/")
+    .setDefaultFile("index.html")
+    .setAuthentication(www_username.c_str(), www_password.c_str());
+
   // Start server & server root html /
-  server.on("/",[]()
-  {
-    if (www_username != ""
-        && !server.authenticate(www_username.c_str(),
-                                www_password.c_str())
-        && wifi_mode == WIFI_MODE_STA) {
-      return server.requestAuthentication();
-    }
-    handleHome();
-  });
+  server.on("/",handleHome);
 
   // Handle HTTP web interface button presses
   server.on("/generate_204", handleHome);  //Android captive portal. Maybe not needed. Might be handled by notFound
   server.on("/fwlink", handleHome);  //Microsoft captive portal. Maybe not needed. Might be handled by notFound
+  server.on("/status", handleStatus);
+  server.on("/rapiupdate", handleUpdate);
+  server.on("/config", handleConfig);
 
-  server.on("/status", [](){
-    if(requestPreProcess()) handleStatus();
-  });
-  server.on("/savenetwork", [](){
-    if(requestPreProcess()) handleSaveNetwork();
-  });
-  server.on("/saveemoncms", [](){
-    if(requestPreProcess()) handleSaveEmoncms();
-  });
-  server.on("/savemqtt", [](){
-    if(requestPreProcess()) handleSaveMqtt();
-  });
-  server.on("/saveadmin", [](){
-    if(requestPreProcess()) handleSaveAdmin();
-  });
-  server.on("/scan", [](){
-    if(requestPreProcess()) handleScan();
-  });
-  server.on("/apoff", [](){
-    if(requestPreProcess()) handleAPOff();
-  });
-  /*
-  server.on("/firmware", [](){
-    if(requestPreProcess())   handleUpdateCheck();
-  });
+  server.on("/savenetwork", handleSaveNetwork);
+  server.on("/saveemoncms", handleSaveEmoncms);
+  server.on("/savemqtt", handleSaveMqtt);
+  server.on("/saveadmin", handleSaveAdmin);
+  server.on("/saveohmkey", handleSaveOhmkey);
 
-  server.on("/update", [](){
-    if(requestPreProcess()) handleUpdate();
-  });
-  */
-  server.on("/status", [](){
-    if(requestPreProcess()) handleStatus();
-  });
-  server.on("/reset", [](){
-    if(requestPreProcess()) handleRst();
-  });
-  server.on("/restart", [](){
-    if(requestPreProcess()) handleRestart();
-  });
-  server.on("/rapiupdate", [](){
-    if(requestPreProcess()) handleUpdate();
-  });
-  server.on("/rapi", [](){
-    if(requestPreProcess()) handleRapi();
-  });
-  server.on("/r", [](){
-    if(requestPreProcess()) handleRapiR();
-  });
-  server.on("/config", [](){
-    if(requestPreProcess()) handleConfig();
-  });
-  server.on("/saveohmkey", [](){
-    if(requestPreProcess()) handleSaveOhmkey();
-  });
+  server.on("/reset", handleRst);
+  server.on("/restart", handleRestart);
 
-  server.onNotFound([]() {
-                    if (!handleFileRead(server.uri()))
-                    server.send(404, "text/plain", "NotFound");}
-  );
-  httpUpdater.setup(&server);
+  server.on("/rapi", handleRapi);
+  server.on("/r", handleRapi);
+
+  server.on("/scan", handleScan);
+  server.on("/apoff", handleAPOff);
+
+  // Simple Firmware Update Form
+  server.on("/update", HTTP_GET, handleUpdateGet);
+  server.on("/update", HTTP_POST, handleUpdatePost, handleUpdateUpload);
+
+//  server.on("/firmware", [](){
+//    if(requestPreProcess())   handleUpdateCheck();
+//  });
+//
+//  server.on("/update", [](){
+//    if(requestPreProcess()) handleUpdate();
+//  });
+
+  server.onNotFound(handleNotFound);
   server.begin();
+
   DEBUG.println("Server started");
 }
 
 void
 web_server_loop() {
-  server.handleClient();          // Web server
+  // Do we need to restart the WiFi?
+  if(wifiRestartTime > 0 && millis() > wifiRestartTime) {
+    wifiRestartTime = 0;
+    wifi_restart();
+  }
+
+  // Do we need to restart MQTT?
+  if(mqttRestartTime > 0 && millis() > mqttRestartTime) {
+    mqttRestartTime = 0;
+    mqtt_restart();
+  }
+
+  // Do we need to restart the system?
+  if(systemRestartTime > 0 && millis() > systemRestartTime) {
+    systemRestartTime = 0;
+    wifi_disconnect();
+    ESP.restart();
+  }
+
+  // Do we need to reboot the system?
+  if(systemRebootTime > 0 && millis() > systemRebootTime) {
+    systemRebootTime = 0;
+    wifi_disconnect();
+    ESP.reset();
+  }
 }
