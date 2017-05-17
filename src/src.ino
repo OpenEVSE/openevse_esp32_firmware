@@ -1,4 +1,3 @@
-
 /*
  * Copyright (c) 2015-2016 Chris Howell
  *
@@ -57,7 +56,8 @@ boolean rapi_read = 0; //flag to indicate first read of RAPI status
 // -------------------------------------------------------------------
 // SETUP
 // -------------------------------------------------------------------
-void setup() {
+void
+setup() {
   delay(2000);
   Serial.begin(115200);
   pinMode(0, INPUT);
@@ -69,13 +69,11 @@ void setup() {
   DEBUG.println();
   DEBUG.print("OpenEVSE WiFI ");
   DEBUG.println(ESP.getChipId());
-  DEBUG.println("Firmware: "+ currentfirmware);
+  DEBUG.println("Firmware: " + currentfirmware);
 
   config_load_settings();
   wifi_setup();
   web_server_setup();
-  // delay(5000);
-
 #ifdef ENABLE_OTA
   // Start local OTA update server
   ArduinoOTA.setHostname(esp_hostname);
@@ -86,7 +84,8 @@ void setup() {
 // -------------------------------------------------------------------
 // LOOP
 // -------------------------------------------------------------------
-void loop(){
+void
+loop() {
 
   web_server_loop();
   wifi_loop();
@@ -116,24 +115,25 @@ void loop(){
     // -------------------------------------------------------------------
     // Do these things once every Minute
     // -------------------------------------------------------------------
-    if ((millis() - Timer2) >= 60000){
+    if ((millis() - Timer2) >= 60000) {
       DEBUG.println("Time2");
       ohm_loop();
       divert_current_loop();
       Timer2 = millis();
     }
-
     // -------------------------------------------------------------------
     // Do these things once every 30 seconds
     // -------------------------------------------------------------------
-    if ((millis() - Timer1) >= 30000){
+    if ((millis() - Timer1) >= 30000) {
       DEBUG.println("Time1");
       create_rapi_json(); // create JSON Strings for EmonCMS and MQTT
-      if(emoncms_apikey != 0) emoncms_publish(url);
+      if (emoncms_apikey != 0)
+        emoncms_publish(url);
       if(mqtt_server != 0) mqtt_publish(data);
       Timer1 = millis();
+      if (mqtt_server != 0)
+        mqtt_publish(data);
     }
 
   } // end WiFi connected
-
 } // end loop
