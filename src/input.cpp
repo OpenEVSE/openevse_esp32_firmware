@@ -127,41 +127,46 @@ update_rapi_values() {
           comm_success++;
           String qrapi = rapiString.substring(rapiString.indexOf(' '));
           state = strtol(qrapi.c_str(), NULL, 16);
-          if (state == 1) {
-            estate = "Not_Connected";
-          }
-          if (state == 2) {
-            estate = "EV_Connected";
-          }
-          if (state == 3) {
-            estate = "Charging";
-          }
-          if (state == 4) {
-            estate = "Vent_Required";
-          }
-          if (state == 5) {
-            estate = "Diode_Check_Failed";
-          }
-          if (state == 6) {
-            estate = "GFCI_Fault";
-          }
-          if (state == 7) {
-            estate = "No_Earth_Ground";
-          }
-          if (state == 8) {
-            estate = "Stuck_Relay";
-          }
-          if (state == 9) {
-            estate = "GFCI_Self_Test_Failed";
-          }
-          if (state == 10) {
-            estate = "Over_Temperature";
-          }
-          if (state == 254) {
-            estate = "Sleeping";
-          }
-          if (state == 255) {
-            estate = "Disabled";
+          switch (state) {
+            case 1:
+              estate = "Not Connected";
+              break;
+            case 2:
+              estate = "EV Connected";
+              break;
+            case 3:
+              estate = "Charging";
+              break;
+            case 4:
+              estate = "Vent Required";
+              break;
+            case 5:
+              estate = "Diode Check Failed";
+              break;
+            case 6:
+              estate = "GFCI Fault";
+              break;
+            case 7:
+              estate = "No Earth Ground";
+              break;
+            case 8:
+              estate = "Stuck Relay";
+              break;
+            case 9:
+              estate = "GFCI Self Test Failed";
+              break;
+            case 10:
+              estate = "Over Temperature";
+              break;
+            case 254:
+              estate = "Sleeping";
+              break;
+            case 255:
+              estate = "Disabled";
+              break;
+            default:
+              estate = "Invalid";
+              break;
           }
         }
       }

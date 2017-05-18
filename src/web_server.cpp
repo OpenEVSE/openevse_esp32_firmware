@@ -355,7 +355,6 @@ handleConfig(AsyncWebServerRequest *request) {
   s += "\"www_username\":\"" + www_username + "\"";
   //s += "\"www_password\":\""+www_password+"\","; security risk: DONT RETURN PASSWORDS
   s += "}";
-  s.replace(" ", "");
 
   response->setCode(200);
   response->print(s);
@@ -388,11 +387,10 @@ handleUpdate(AsyncWebServerRequest *request) {
   s += "\"temp1\":\"" + temp1 + "\",";
   s += "\"temp2\":\"" + temp2 + "\",";
   s += "\"temp3\":\"" + temp3 + "\",";
-  s += "\"estate\":\"" + String(estate) + "\",";
+  s += "\"estate\":\"" + estate + "\",";
   s += "\"wattsec\":\"" + wattsec + "\",";
   s += "\"watthour\":\"" + watthour_total + "\"";
   s += "}";
-  s.replace(" ", "");
 
   response->setCode(200);
   response->print(s);
