@@ -38,7 +38,7 @@
 
 unsigned long Timer1; // Timer for events once every 30 seconds
 unsigned long Timer2; // Timer for events once every 1 Minute
-unsigned long Timer3; // Timer for events once every 5 seconds
+unsigned long Timer3; // Timer for events once every 2 seconds
 
 // -------------------------------------------------------------------
 // SETUP
@@ -90,9 +90,9 @@ loop() {
 
   if (wifi_mode == WIFI_MODE_STA || wifi_mode == WIFI_MODE_AP_AND_STA) {
 // -------------------------------------------------------------------
-// Do these things once every 5s
+// Do these things once every 2s
 // -------------------------------------------------------------------
-    if ((millis() - Timer3) >= 5000) {
+    if ((millis() - Timer3) >= 2000) {
       update_rapi_values();
       Timer3 = millis();
     }
