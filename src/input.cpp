@@ -111,8 +111,10 @@ update_rapi_values() {
         String rapiString = Serial.readStringUntil('\r');
         if (rapiString.startsWith("$OK ")) {
           comm_success++;
+          int firstRapiCmd = rapiString.indexOf(' ');
+          int secondRapiCmd = rapiString.indexOf(' ', firstRapiCmd + 1);
           String qrapi;
-          qrapi = rapiString.substring(rapiString.indexOf(' '));
+          qrapi = rapiString.substring(firstRapiCmd + 1, secondRapiCmd);
           pilot = qrapi.toInt();
         }
       }
@@ -174,11 +176,13 @@ update_rapi_values() {
         String rapiString = Serial.readStringUntil('\r');
         if (rapiString.startsWith("$OK")) {
           comm_success++;
+          int firstRapiCmd = rapiString.indexOf(' ');
+          int secondRapiCmd = rapiString.indexOf(' ', firstRapiCmd + 1);
           String qrapi;
-          qrapi = rapiString.substring(rapiString.indexOf(' '));
+          qrapi = rapiString.substring(firstRapiCmd + 1, secondRapiCmd);
           amp = qrapi.toInt();
           String qrapi1;
-          qrapi1 = rapiString.substring(rapiString.lastIndexOf(' '));
+          qrapi1 = rapiString.substring(secondRapiCmd + 1);
           volt = qrapi1.toInt();
         }
       }
@@ -191,15 +195,17 @@ update_rapi_values() {
         String rapiString = Serial.readStringUntil('\r');
         if (rapiString.startsWith("$OK")) {
           comm_success++;
+          int firstRapiCmd = rapiString.indexOf(' ');
+          int secondRapiCmd = rapiString.indexOf(' ', firstRapiCmd + 1);
+          int thirdRapiCmd = rapiString.indexOf(' ', secondRapiCmd + 1);
           String qrapi;
-          qrapi = rapiString.substring(rapiString.indexOf(' '));
+          qrapi = rapiString.substring(firstRapiCmd + 1, secondRapiCmd);
           temp1 = qrapi.toInt();
           String qrapi1;
-          int firstRapiCmd = rapiString.indexOf(' ');
-          qrapi1 = rapiString.substring(rapiString.indexOf(' ', firstRapiCmd + 1));
+          qrapi1 = rapiString.substring(secondRapiCmd + 1, thirdRapiCmd);
           temp2 = qrapi1.toInt();
           String qrapi2;
-          qrapi2 = rapiString.substring(rapiString.lastIndexOf(' '));
+          qrapi2 = rapiString.substring(thirdRapiCmd + 1);
           temp3 = qrapi2.toInt();
         }
       }
@@ -214,8 +220,8 @@ update_rapi_values() {
           comm_success++;
           int firstRapiCmd = rapiString.indexOf(' ');
           int secondRapiCmd = rapiString.indexOf(' ', firstRapiCmd + 1);
-          wattsec = rapiString.substring(firstRapiCmd, secondRapiCmd);
-          watthour_total = rapiString.substring(secondRapiCmd);
+          wattsec = rapiString.substring(firstRapiCmd + 1, secondRapiCmd);
+          watthour_total = rapiString.substring(secondRapiCmd + 1);
         }
       }
     }
@@ -230,9 +236,9 @@ update_rapi_values() {
           int firstRapiCmd = rapiString.indexOf(' ');
           int secondRapiCmd = rapiString.indexOf(' ', firstRapiCmd + 1);
           int thirdRapiCmd = rapiString.indexOf(' ', secondRapiCmd + 1);
-          gfci_count = rapiString.substring(firstRapiCmd, secondRapiCmd);
-          nognd_count = rapiString.substring(secondRapiCmd, thirdRapiCmd);
-          stuck_count = rapiString.substring(thirdRapiCmd);
+          gfci_count = rapiString.substring(firstRapiCmd + 1, secondRapiCmd);
+          nognd_count = rapiString.substring(secondRapiCmd + 1, thirdRapiCmd);
+          stuck_count = rapiString.substring(thirdRapiCmd + 1);
         }
       }
       rapi_command = 0;         //Last RAPI command
@@ -260,8 +266,8 @@ handleRapiRead() {
       comm_success++;
       int firstRapiCmd = rapiString.indexOf(' ');
       int secondRapiCmd = rapiString.indexOf(' ', firstRapiCmd + 1);
-      firmware = rapiString.substring(firstRapiCmd, secondRapiCmd);
-      protocol = rapiString.substring(secondRapiCmd);
+      firmware = rapiString.substring(firstRapiCmd + 1, secondRapiCmd);
+      protocol = rapiString.substring(secondRapiCmd + 1);
     }
   }
   Serial.println("$GA*AC");
@@ -273,8 +279,8 @@ handleRapiRead() {
       comm_success++;
       int firstRapiCmd = rapiString.indexOf(' ');
       int secondRapiCmd = rapiString.indexOf(' ', firstRapiCmd + 1);
-      current_scale = rapiString.substring(firstRapiCmd, secondRapiCmd);
-      current_offset = rapiString.substring(secondRapiCmd);
+      current_scale = rapiString.substring(firstRapiCmd + 1, secondRapiCmd);
+      current_offset = rapiString.substring(secondRapiCmd + 1);
     }
   }
   Serial.println("$GH");
@@ -285,7 +291,7 @@ handleRapiRead() {
     if (rapiString.startsWith("$OK")) {
       comm_success++;
       int firstRapiCmd = rapiString.indexOf(' ');
-      kwh_limit = rapiString.substring(firstRapiCmd);
+      kwh_limit = rapiString.substring(firstRapiCmd + 1);
     }
   }
   Serial.println("$G3");
@@ -296,7 +302,7 @@ handleRapiRead() {
     if (rapiString.startsWith("$OK")) {
       comm_success++;
       int firstRapiCmd = rapiString.indexOf(' ');
-      time_limit = rapiString.substring(firstRapiCmd);
+      time_limit = rapiString.substring(firstRapiCmd + 1);
     }
   }
   Serial.println("$GE*B0");
@@ -306,10 +312,12 @@ handleRapiRead() {
     String rapiString = Serial.readStringUntil('\r');
     if (rapiString.startsWith("$OK ")) {
       comm_success++;
+      int firstRapiCmd = rapiString.indexOf(' ');
+      int secondRapiCmd = rapiString.indexOf(' ', firstRapiCmd + 1);
       String qrapi;
-      qrapi = rapiString.substring(rapiString.indexOf(' '));
+      qrapi = rapiString.substring(firstRapiCmd + 1, secondRapiCmd);
       pilot = qrapi.toInt();
-      String flag = rapiString.substring(rapiString.lastIndexOf(' '));
+      String flag = rapiString.substring(secondRapiCmd + 1);
       long flags = strtol(flag.c_str(), NULL, 16);
       service = bitRead(flags, 0) + 1;
       diode_ck = bitRead(flags, 1);
@@ -334,11 +342,11 @@ handleRapiRead() {
       int firstRapiCmd = rapiString.indexOf(' ');
       int secondRapiCmd = rapiString.indexOf(' ', firstRapiCmd + 1);
       if (service == 1) {
-        current_l1min = rapiString.substring(firstRapiCmd, secondRapiCmd);
-        current_l1max = rapiString.substring(secondRapiCmd);
+        current_l1min = rapiString.substring(firstRapiCmd + 1, secondRapiCmd);
+        current_l1max = rapiString.substring(secondRapiCmd + 1);
       } else {
-        current_l2min = rapiString.substring(firstRapiCmd, secondRapiCmd);
-        current_l2max = rapiString.substring(secondRapiCmd);
+        current_l2min = rapiString.substring(firstRapiCmd + 1, secondRapiCmd);
+        current_l2max = rapiString.substring(secondRapiCmd + 1);
       }
     }
   }
