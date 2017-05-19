@@ -11,13 +11,13 @@ extern int espfree;
 
 extern int commDelay;
 
-extern int amp; //OpenEVSE Current Sensor
-extern int volt; //Not currently in used
-extern int temp1; //Sensor DS3232 Ambient
-extern int temp2; //Sensor MCP9808 Ambient
-extern int temp3; //Sensor TMP007 Infared
-extern int pilot; //OpenEVSE Pilot Setting
-extern long state; //OpenEVSE State
+extern String amp;    // OpenEVSE Current Sensor
+extern String volt;   // Not currently in used
+extern String temp1;  // Sensor DS3232 Ambient
+extern String temp2;  // Sensor MCP9808 Ambient
+extern String temp3;  // Sensor TMP007 Infared
+extern String pilot;  // OpenEVSE Pilot Setting
+extern long state;    // OpenEVSE State
 extern String estate; // Common name for State
 
 //Defaults OpenEVSE Settings

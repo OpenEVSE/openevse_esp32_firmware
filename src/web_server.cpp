@@ -355,7 +355,6 @@ handleConfig(AsyncWebServerRequest *request) {
   s += "\"www_username\":\"" + www_username + "\"";
   //s += "\"www_password\":\""+www_password+"\","; security risk: DONT RETURN PASSWORDS
   s += "}";
-  s.replace(" ", "");
 
   response->setCode(200);
   response->print(s);
@@ -383,16 +382,15 @@ handleUpdate(AsyncWebServerRequest *request) {
   s += "\"packets_sent\":\"" + String(packets_sent) + "\",";
   s += "\"packets_success\":\"" + String(packets_success) + "\",";
 #endif
-  s += "\"amp\":\"" + String(amp) + "\",";
-  s += "\"pilot\":\"" + String(pilot) + "\",";
-  s += "\"temp1\":\"" + String(temp1) + "\",";
-  s += "\"temp2\":\"" + String(temp2) + "\",";
-  s += "\"temp3\":\"" + String(temp3) + "\",";
-  s += "\"estate\":\"" + String(estate) + "\",";
+  s += "\"amp\":\"" + amp + "\",";
+  s += "\"pilot\":\"" + pilot + "\",";
+  s += "\"temp1\":\"" + temp1 + "\",";
+  s += "\"temp2\":\"" + temp2 + "\",";
+  s += "\"temp3\":\"" + temp3 + "\",";
+  s += "\"estate\":\"" + estate + "\",";
   s += "\"wattsec\":\"" + wattsec + "\",";
   s += "\"watthour\":\"" + watthour_total + "\"";
   s += "}";
-  s.replace(" ", "");
 
   response->setCode(200);
   response->print(s);
