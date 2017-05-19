@@ -1,8 +1,8 @@
 // Work out the endpoint to use, for dev you can change to point at a remote ESP
 // and run the HTML/JS from file, no need to upload to the ESP to test
 
-var baseHost = window.location.hostname;
-//var baseHost = 'openevse.local';
+//var baseHost = window.location.hostname;
+var baseHost = 'openevse.local';
 //var baseHost = '192.168.4.1';
 var baseEndpoint = 'http://' + baseHost;
 
@@ -92,8 +92,8 @@ function ConfigViewModel() {
     "mqtt_topic": "",
     "mqtt_user": "",
     "mqtt_pass": "",
-    "mqtt_solar: "",
-    "mqtt_grid_ie: "",
+    "mqtt_solar": "",
+    "mqtt_grid_ie": "",
     "ohmkey": "",
     "www_username": "",
     "www_password": "",
@@ -123,8 +123,8 @@ function ConfigViewModel() {
 }
 ConfigViewModel.prototype = Object.create(BaseViewModel.prototype);
 ConfigViewModel.prototype.constructor = ConfigViewModel;
-  
 
+/*
     // If MQTT solar pv topic or grid topic is not set then disable solar PV divert mode
     if ((status.mqtt_solar==="") && (status.mqtt_grid_ie==="")) {
       divertmode=0;
@@ -146,6 +146,7 @@ ConfigViewModel.prototype.constructor = ConfigViewModel;
     divertmode = status.divertmode;
     set_divertmode_button(divertmode);
   }
+*/
 
 function RapiViewModel() {
   BaseViewModel.call(this, {
@@ -447,18 +448,6 @@ document.getElementById("restart").addEventListener("click", function (e) {
 //});
 
 
-document.getElementById("divertmode1").addEventListener("click", function(e) {
-    divertmode = 1; // Normal
-    set_divertmode_button(divertmode);
-    changedivertmode(divertmode);
-});
-
-document.getElementById("divertmode2").addEventListener("click", function(e) {
-    divertmode = 2;     // Eco
-    set_divertmode_button(divertmode);
-    changedivertmode(divertmode);
-});
-
 // -----------------------------------------------------------------------
 // Event:Update Firmware
 // -----------------------------------------------------------------------
@@ -475,6 +464,17 @@ document.getElementById("divertmode2").addEventListener("click", function(e) {
 //    r1.send();
 //});
 
+document.getElementById("divertmode1").addEventListener("click", function(e) {
+    divertmode = 1; // Normal
+    set_divertmode_button(divertmode);
+    changedivertmode(divertmode);
+});
+
+document.getElementById("divertmode2").addEventListener("click", function(e) {
+    divertmode = 2;     // Eco
+    set_divertmode_button(divertmode);
+    changedivertmode(divertmode);
+});
 
 function set_divertmode_button(divertmode){
   // Set formatting solar PV divert divertmode button

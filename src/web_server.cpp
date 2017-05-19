@@ -294,7 +294,7 @@ handleStatus() {
   s += "\"packets_success\":\"" + String(packets_success) + "\",";
 
   s += "\"mqtt_connected\":\"" + String(mqtt_connected()) + "\",";
-  
+
   s += "\"divertmode\":\""+String(divertmode)+"\",";
 
   s += "\"ohm_hour\":\"" + ohm_hour + "\",";
@@ -332,7 +332,7 @@ handleConfig() {
   String s = "{";
   s += "\"firmware\":\"" + firmware + "\",";
   s += "\"protocol\":\"" + protocol + "\",";
-  s += "\"espflash\":\"" + String(espflash) + "\",";
+  s += "\"espflash\":\"" + String(ESP.getFlashChipSize()) + "\",";
   s += "\"version\":\"" + currentfirmware + "\",";
   s += "\"diodet\":\"" + String(diode_ck) + "\",";
   s += "\"gfcit\":\"" + String(gfci_test) + "\",";
@@ -533,9 +533,7 @@ web_server_setup() {
     if(requestPreProcess()) handleAPOff();
   });
   server.on("/divertmode", [](){
-    if(www_username!="" && !server.authenticate(www_username.c_str(), www_password.c_str()))
-  return server.requestAuthentication();
-    handleDivertMode();
+    if(requestPreProcess()) handleDivertMode();
   });
   server.on("/status", [](){
     if(requestPreProcess()) handleStatus();

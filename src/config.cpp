@@ -140,8 +140,10 @@ config_load_settings() {
                      mqtt_user);
   EEPROM_read_string(EEPROM_MQTT_PASS_START, EEPROM_MQTT_PASS_SIZE,
                      mqtt_pass);
-  EEPROM_read_srting(EEPROM_MQTT_SOLAR_START, EEPROM_MQTT_SOLAR_SIZE, mqtt_solar);
-  EEPROM_read_srting(EEPROM_MQTT_GRID_IE_SIZE, EEPROM_MQTT_GRID_IE_SIZE, mqtt_grid_ie);
+  EEPROM_read_string(EEPROM_MQTT_SOLAR_START, EEPROM_MQTT_SOLAR_SIZE,
+                     mqtt_solar);
+  EEPROM_read_string(EEPROM_MQTT_GRID_IE_SIZE, EEPROM_MQTT_GRID_IE_SIZE,
+                     mqtt_grid_ie);
 
   // Web server credentials
   EEPROM_read_string(EEPROM_WWW_USER_START, EEPROM_WWW_USER_SIZE,
@@ -181,7 +183,7 @@ config_save_emoncms(String server, String node, String apikey,
 }
 
 void
-#config_save_mqtt(String server, String topic, String user, String pass, String solar, String grid_ie)
+config_save_mqtt(String server, String topic, String user, String pass, String solar, String grid_ie)
 {
   mqtt_server = server;
   mqtt_topic = topic;

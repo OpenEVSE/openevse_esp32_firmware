@@ -17,10 +17,10 @@
 
 <body>
   <div id="page">
-  <div class="box">
-  <h1>Open<span>EVSE</span></h1>
-  <h3>WiFi</h3>
-  </div>
+    <div class="box">
+      <h1>Open<span>EVSE</span></h1>
+      <h3>WiFi</h3>
+    </div>
 
     <div id="container" data-bind="visible: !initialised()">
       Loading, please wait...
@@ -28,27 +28,25 @@
 
     <div id="container" data-bind="visible: initialised" style="display: none">
 
-    <input id="tab-1" type="radio" name="tab-group" checked="checked" />
-    <label for="tab-1">System</label>
-    <input id="tab-2" type="radio" name="tab-group" />
-    <label for="tab-2">Services</label>
-    <input id="tab-3" type="radio" name="tab-group" />
-    <label for="tab-3">Status</label>
-    <input id="tab-4" type="radio" name="tab-group" />
-    <label for="tab-4">RAPI</label>
-    <input id="tab-5" type="radio" name="tab-group" />
-    <label for="tab-5">Mode</label>
-    
-    <div id="content">
-      
-      <div id="content-1">
-        
+      <input id="tab-1" type="radio" name="tab-group" checked="checked" />
+      <label for="tab-1">System</label>
+      <input id="tab-2" type="radio" name="tab-group" />
+      <label for="tab-2">Services</label>
+      <input id="tab-3" type="radio" name="tab-group" />
+      <label for="tab-3">Status</label>
+      <input id="tab-4" type="radio" name="tab-group" />
+      <label for="tab-4">RAPI</label>
+      <input id="tab-5" type="radio" name="tab-group" />
+      <label for="tab-5">Mode</label>
+
+      <div id="content">
+        <div id="content-1">
           <div class="box380">
-				<h2>WiFi Setup</h2>
+            <h2>WiFi Setup</h2>
             <p><b>Mode:</b> <span id="mode" data-bind="text: status.fullMode"></span></p>
 
             <div id="client-view" data-bind="visible: status.isWifiClient">
-                  <table>
+              <table>
                 <tr>
                   <th>Network</th>
                   <th>RSSI dBm</th>
@@ -68,10 +66,11 @@
               <p><b>OpenEVSE</b></p>
               <p><b>RAPI packets:</b><br><span data-bind="text: rapi.comm_success"></span> of <span data-bind="text: rapi.comm_sent"></span></p>
               <button id="apoff" data-bind="visible: status.isWifiAccessPoint">Turn off Access Point</button>
+            </div>
 
             <div id="ap-view" data-bind="visible: !status.isWifiClient() &amp;&amp; !wifiConnecting()">
-                    <p>Connect to network:</p>
-                    <table>
+              <p>Connect to network:</p>
+              <table>
                 <tr>
                   <th>Select</th>
                   <th>Network</th>
@@ -92,13 +91,13 @@
                 <input type="text" data-bind="textInput: config.pass">
                 <button data-bind="click: saveNetwork, text: (saveNetworkFetching() ? 'Saving' : (saveNetworkSuccess() ? 'Saved' : 'Connect')), disable: saveAdminFetching">Connect</button>
               </p>
-                </div>
+            </div>
 
             <div data-bind="visible: wifiConnecting">
-                    <p>Connecting to WIFI Network...</p>
-                </div>
+              <p>Connecting to WIFI Network...</p>
+            </div>
           </div>
-      
+
           <div class="box380">
             <h2>Administration</h2>
             <p>
@@ -110,7 +109,7 @@
               <input type="text" value="openevse" data-bind="textInput: config.www_password"><br>
               <span class="small-text">Web interface HTTP authentication.</span><br><br>
               <button data-bind="click: saveAdmin, text: (saveAdminFetching() ? 'Saving' : (saveAdminSuccess() ? 'Saved' : 'Save')), disable: saveAdminFetching">Save</button>
-			</div>
+          </div>
           <div class="box380">
             <h2>WiFi Firmware</h2>
             <span class="small-text">ESP8266</span><br>
@@ -121,21 +120,21 @@
               <button id="restart">Restart</button>
               <button id="reset">Factory Reset</button>
             </p>
-      </div>
-    
+          </div>
         </div>
-        <!-- content-1 -->
-	<div id="content-2">
-			<div class="box380">
+        <!--end content 1-->
+
+        <div id="content-2">
+          <div class="box380">
             <h2>&nbsp; Energy Monitoring <img src="emoncms.jpg" align=left></h2>
             <p>
               <b>Emoncms Server*:</b><br>
               <input type="text" data-bind="textInput: config.emoncms_server"><br/>
               <span class="small-text">e.g:
-				<a href="http://data.openevse.com/emoncms">data.openevse.com/emoncms</a>,
-				<a href="http://emoncms.org">emoncms.org</a>,
-				<a href="http://emonpi/emoncms">emonpi/emoncms</a>
-				</span><br>
+                <a href="http://data.openevse.com/emoncms">data.openevse.com/emoncms</a>,
+                <a href="http://emoncms.org">emoncms.org</a>,
+                <a href="http://emonpi/emoncms">emonpi/emoncms</a>
+              </span><br>
             </p>
             <p>
               <b>Emoncms Node*:</b><br>
@@ -150,67 +149,16 @@
               <input type="text" data-bind="textInput: config.emoncms_fingerprint"><br>
               <br><span class="small-text">HTTPS will be enabled if present e.g:</span>
               <span class="small-text">
-    			7D:82:15:BE:D7:BC:72:58:87:7D:8E:40:D4:80:BA:1A:9F:8B:8D:DA
-  			</span><br>
+                7D:82:15:BE:D7:BC:72:58:87:7D:8E:40:D4:80:BA:1A:9F:8B:8D:DA
+              </span><br>
               <button data-bind="click: saveEmonCms, text: (saveEmonCmsFetching() ? 'Saving' : (saveEmonCmsSuccess() ? 'Saved' : 'Save')), disable: saveEmonCmsFetching">Save</button>
               <div><b>&nbsp; Connected:&nbsp;<span data-bind="text: '1' === status.emoncms_connected() ? 'Yes' : 'No'"></span></b></div>
               <div data-bind="visible: '1' === status.emoncms_connected()"><b>&nbsp; Successful posts:&nbsp;<span data-bind="text: status.packets_success"></span></b></div>
             </p>
           </div>
-        
+
           <div class="box380">
             <h2>MQTT</h2>
-            <p><b>Server*:</b><br>
-              <input data-bind="textInput: config.mqtt_server" type="text"><br/>
-              <span class="small-text">e.g 'emonpi', 'test.mosquitto.org', '192.168.1.4'</span>
-            </p>
-            <p><b>Base-topic*:</b><br>
-              <input data-bind="textInput: config.mqtt_topic" type="text"><br/>
-              <span class="small-text">e.g 'openevse'</span>
-            </p>
-            <p><b>Username:</b><span> blank - no authentication</span>
-              <input data-bind="textInput: config.mqtt_user" type="text">
-            </p>
-            <p><b>Password:</b><span> blank - no authentication</span>
-              <input data-bind="textInput: config.mqtt_pass" type="text"><br>
-            </p>
-          		<h2>Solar PV divert</h2>
-              <p>Modulate charge rate based on available solar PV power.</p>
-              
-              <span id=small-text><b>Enter either:</b> solar PV MQTT topic to modulate charge rate based on solar PV <b>gen</b> e.g. (charge rate = gen):</span><br>
-          		<p><b>SolarPV-gen topic:</b>
-          		<input id="mqtt_solar" type="text" value="emon/emonpi/power2"><br>
-          	  <span id=small-text>Always positive.</span><br><br>
-
-
-
-
-
-
-
-
-
-
-
-
-              <span id=small-text><b>Or enter:</b> Grid (+I/-E) MQTT topic to modulate charge rate based on <b>excess power</b> i.e. power that would otherwise be exported is diverted to EVSE. Assumed EVSE power is included in grid feed e.g. (charge rate = gen - use - EVSE)</span>
-              <p><b>Grid (+I/-E) topic:</b><br>
-
-          		<input id="mqtt_grid_ie" type="text" value="emon/emonpi/power1"><br>
-              
-              <span id=small-text>Grid: positive Import / negative Export </span>
-  
-          	  <p><span id="small-text"><i>Fields are pre-populated with <a href="https://guide.openenergymonitor.org/applications/solar-pv/">emonPi solar PV defaults</a>.</i></span></p>
-          	  <br>
-            <button data-bind="click: saveMqtt, text: (saveMqttFetching() ? 'Saving' : (saveMqttSuccess() ? 'Saved' : 'Save')), disable: saveMqttFetching">Save</button>
-            <b>&nbsp; Connected:&nbsp;<span data-bind="text: '1' === status.mqtt_connected() ? 'Yes' : 'No'"></span></b>
-              <span id=small-text><b>Enter either:</b> solar PV MQTT topic to modulate charge rate based on solar PV <b>gen</b> e.g. (charge rate = gen):</span><br>
-          		<p><b>SolarPV-gen topic:</b>
-          		<input id="mqtt_solar" type="text" value="emon/emonpi/power2"><br>
-          	  <span id=small-text>Always positive.</span><br><br>
-
-
-
             <p>
               Status published to:<br/>
               <span class="small-text">{base-topic}/{status} value</span><br>
@@ -227,9 +175,40 @@
               <span class="small-text">{base-topic}/rapi/out response</span><br>
               <span class="small-text">e.g. <span data-bind="text: '' !== config.mqtt_topic() ? config.mqtt_topic() : 'openevse'"></span>/rapi/out $OK 6 32</span><br>
             </p>
+            <p><b>Host*:</b><br>
+              <input data-bind="textInput: config.mqtt_server" type="text"><br/>
+              <span class="small-text">e.g 'emonpi', 'test.mosquitto.org', '192.168.1.4'</span>
+            </p>
+            <p><b>Username:</b><span> blank - no authentication</span>
+              <input data-bind="textInput: config.mqtt_user" type="text">
+            </p>
+            <p><b>Password:</b><span> blank - no authentication</span>
+              <input data-bind="textInput: config.mqtt_pass" type="text"><br>
+            </p>
+            <p><b>Base-topic*:</b><br>
+              <input data-bind="textInput: config.mqtt_topic" type="text"><br/>
+              <span class="small-text">e.g 'openevse'</span>
+            </p>
+            <h2>Solar PV divert</h2>
+            <p>Modulate charge rate based on available solar PV power.</p>
+
+            <span class="small-text"><b>Enter either:</b> solar PV MQTT topic to modulate charge rate based on solar PV <b>gen</b> e.g. (charge rate = gen):</span><br>
+            <p><b>SolarPV-gen topic:</b>
+              <input id="mqtt_solar" type="text" value="emon/emonpi/power2"><br>
+              <span class="small-text">Always positive.</span><br><br>
+              <span class="small-text"><b>Or enter:</b> Grid (+I/-E) MQTT topic to modulate charge rate based on <b>excess power</b> i.e. power that would otherwise be exported is diverted to EVSE. Assumed EVSE power is included in grid feed e.g. (charge rate = gen - use - EVSE)</span>
+            </p>
+            <p><b>Grid (+I/-E) topic:</b><br>
+            <input id="mqtt_grid_ie" type="text" value="emon/emonpi/power1"><br>
+            <span class="small-text">Grid: positive Import / negative Export </span>
+            </p>
+            <p>
+              <span class="small-text"><i>Fields are pre-populated with <a href="https://guide.openenergymonitor.org/applications/solar-pv/">emonPi solar PV defaults</a>.</i></span></p>
+            </p>
+            <button data-bind="click: saveMqtt, text: (saveMqttFetching() ? 'Saving' : (saveMqttSuccess() ? 'Saved' : 'Save')), disable: saveMqttFetching">Save</button>
+            <b>&nbsp; Connected:&nbsp;<span data-bind="text: '1' === status.mqtt_connected() ? 'Yes' : 'No'"></span></b>
           </div>
-    		
-      
+
           <div class="box380">
             <h2>&nbsp; OhmConnect <img src="ohm.jpg" align=left></h2>
             <p>OhmConnect monitors real-time conditions on the electricity grid. When dirty and unsustainable power plants turn
@@ -243,10 +222,12 @@
               <b>Key: </b>OpnEoVse
             </p>
           </div>
-      <!--TAB 3    -->
-        <!-- content-2 -->
+        </div>
+        <!--end TAB 2-->
+
+        <!--TAB 3    -->
         <div id="content-3">
-  			<div class="box380">
+          <div class="box380">
             <h2>Current</h2>
             <table>
               <tr>
@@ -284,7 +265,7 @@
               </tr>
             </table>
           </div>
-  			 <div class="box380">
+          <div class="box380">
             <h2>Safety</h2>
             <table>
               <tr>
@@ -333,7 +314,7 @@
               </tr>
             </table>
           </div>
-  			 <div class="box380">
+          <div class="box380">
             <h2>Session Options</h2>
             <table>
               <tr>
@@ -350,7 +331,7 @@
               </tr>
             </table>
           </div>
-  			 <div class="box380">
+          <div class="box380">
             <h2>Energy</h2>
             <table>
               <tr>
@@ -367,7 +348,7 @@
               </tr>
             </table>
           </div>
-  			 <div class="box380">
+          <div class="box380">
             <h2>Hardware</h2>
             <table>
               <tr>
@@ -400,7 +381,7 @@
               </tr>
             </table>
           </div>
-         
+
           <div class="box380">
             <h2>Sensor Values</h2>
             <table>
@@ -434,12 +415,12 @@
               </tr>
             </table>
           </div>
-         
-  		 </div>
-        <!-- content-3 -->
+        </div>
+        <!--end tab 3-->
+
+        <!--TAB 4    -->
         <div id="content-4">
-  			
-  			<div class="box380">
+          <div class="box380">
             <!--
             <p>Send RAPI Command</p>
             <p>Common Commands:</p>
@@ -460,10 +441,9 @@
               <p data-bind="text: ret"></p>
             </form>
           </div>
-			  
-             <div class="box380">
-               <h2>RAPI Get Commands</h2>
-               <table>
+          <div class="box380">
+            <h2>RAPI Get Commands</h2>
+            <table>
               <tr>
                 <th>Get</th>
                 <th>Description</th>
@@ -524,12 +504,11 @@
                 <td>$GV</td>
                 <td>Get Versions, evse_firmware protocol_version</td>
               </tr>
-                  </table>
-             </div>
-             
-			 <div class="box380">
-               <h2>RAPI Set Commands</h2>
-               <table>
+            </table>
+          </div>
+          <div class="box380">
+            <h2>RAPI Set Commands</h2>
+            <table>
               <tr>
                 <th>Set</th>
                 <th>Description</th>
@@ -600,12 +579,12 @@
                 <td>$SV</td>
                 <td>Enable (1) / Disable (0) vent required check</td>
               </tr>
-                  </table>
-			</div>
+            </table>
+          </div>
 
-			<div class="box380">
-               <h2>RAPI System Functions</h2>
-               <table>
+          <div class="box380">
+            <h2>RAPI System Functions</h2>
+            <table>
               <tr>
                 <th>Function</th>
                 <th>Description</th>
@@ -634,22 +613,50 @@
                 <td>$FS</td>
                 <td>Put EVSE to sleep</td>
               </tr>
-               </table>
-			</div>
-			
-  </div>
-        <!-- content-4 -->
-      </div>
-      <!-- content -->
+            </table>
+          </div>
+        </div>
+	<!--end TAB 4-->
 
-<div id="footer">
+
+  <!--TAB 5 -->
+  <div id="content-5">
+    <div class="box380" id=solar-wrapper>
+    		<h2>Solar PV Divert</h2>
+        <p>Dynamically adjust charge rate based on solar PV generation or excess power (grid export).</p>
+    		<h2>Mode</h2>
+    		<button id="divertmode1">1: Normal (max)</button>
+    		<button id="divertmode2">2: Eco</button><br>
+        <span class="small-text"><i>Mode can also be controlled via MQTT: {base-topic}/divertmode</i></span><br>
+        <b><span id="divertmsg"></span></b><br><br>
+        <b>1. Normal (default):</b>
+        <ul>
+          <li><span class="small-text">Charge at maximum current set by EVSE.</span></li>
+        </ul>
+        <b>2. Eco:</b>
+        <ul>
+          <li><span class="small-text">If only solar PV feed available: charge rate is modulated based on <b>solar PV generation.</b></span></li>
+          <li><span class="small-text">If grid +I/-E (positive Import / negative Export) feed is avilable: charge rate will be modulated by available  <b>excess power.</b></span></li>
+          <li><span class="small-text">If EVSE is sleeping: charging will begin when solar PV / excess power > min charge rate.</span></li>
+          <li><span class="small-text">Charging will not pause; this avoids excess wear on the EVSE relay and the EV.</span></li>
+        </ul>
+        <span class="small-text"><i>Note: It's assumed that EVSE power is included in the gird feed.</i></span><br>
+
+          </div>
+        </div>
+        <!--end TAB 5 -->
+
+      </div>
+      <!--end content-->
+
+      <div id="footer">
         <br><b> Powered by <a href="http://www.openevse.com">OpenEVSE</a> and <a href="https://openenergymonitor.org">OpenEnergyMonitor</a></b>
         <br> by Chris Howell, Trystan Lea, Glyn Hudson
-</div>
+      </div>
     </div>
-    <!-- container -->
+    <!--end container -->
   </div>
-  <!-- page -->
+  <!--end page -->
   <script src="lib.js"></script>
   <script src="config.js"></script>
 </body>
