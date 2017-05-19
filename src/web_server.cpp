@@ -295,8 +295,6 @@ handleStatus() {
 
   s += "\"mqtt_connected\":\"" + String(mqtt_connected()) + "\",";
 
-  s += "\"divertmode\":\""+String(divertmode)+"\",";
-
   s += "\"ohm_hour\":\"" + ohm_hour + "\",";
 
   s += "\"free_heap\":\"" + String(ESP.getFreeHeap()) + "\"";
@@ -364,8 +362,9 @@ handleConfig() {
   //s += "\"mqtt_pass\":\""+mqtt_pass+"\","; security risk: DONT RETURN PASSWORDS
   s += "\"mqtt_solar\":\""+mqtt_solar+"\",";
   s += "\"mqtt_grid_ie\":\""+mqtt_grid_ie+"\",";
-  s += "\"www_username\":\"" + www_username + "\"";
+  s += "\"www_username\":\"" + www_username + "\",";
   //s += "\"www_password\":\""+www_password+"\","; security risk: DONT RETURN PASSWORDS
+  s += "\"divertmode\":\""+String(divertmode)+"\"";
   s += "}";
   s.replace(" ", "");
   server.send(200, "text/html", s);

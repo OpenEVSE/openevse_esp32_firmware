@@ -1,8 +1,8 @@
 // Work out the endpoint to use, for dev you can change to point at a remote ESP
 // and run the HTML/JS from file, no need to upload to the ESP to test
 
-//var baseHost = window.location.hostname;
-var baseHost = 'openevse.local';
+var baseHost = window.location.hostname;
+//var baseHost = 'openevse.local';
 //var baseHost = '192.168.4.1';
 var baseEndpoint = 'http://' + baseHost;
 
@@ -118,35 +118,12 @@ function ConfigViewModel() {
     "stuckcount": "-",
     "kwhlimit": "",
     "timelimit": "",
-    "version": "0.0.0"
+    "version": "0.0.0",
+    "divertmode": "0"
   }, baseEndpoint + '/config');
 }
 ConfigViewModel.prototype = Object.create(BaseViewModel.prototype);
 ConfigViewModel.prototype.constructor = ConfigViewModel;
-
-/*
-    // If MQTT solar pv topic or grid topic is not set then disable solar PV divert mode
-    if ((status.mqtt_solar==="") && (status.mqtt_grid_ie==="")) {
-      divertmode=0;
-      set_divertmode_button(divertmode); // disable mode button if solar PV / grid topics  are not configured
-    }
-    else{
-      // Set Solar PV divert mode button to current mode status
-      divertmode = status.divertmode;
-      set_divertmode_button(divertmode);
-    }
-
-  // If MQTT solar pv topic or grid topic is not set then disable solar PV divert mode
-  if ((status.mqtt_solar==="") && (status.mqtt_grid_ie==="")) {
-    divertmode=0;
-    set_divertmode_button(divertmode); // disable mode button if solar PV / grid topics  are not configured
-  }
-  else{
-    // Set Solar PV divert mode button to current mode status
-    divertmode = status.divertmode;
-    set_divertmode_button(divertmode);
-  }
-*/
 
 function RapiViewModel() {
   BaseViewModel.call(this, {
@@ -277,7 +254,6 @@ function OpenEvseViewModel() {
       self.saveAdminFetching(false);
     });
   };
-// end update
 
   // -----------------------------------------------------------------------
   // Event: Emoncms save
@@ -341,7 +317,6 @@ function OpenEvseViewModel() {
     }
   };
 
-
   // -----------------------------------------------------------------------
   // Event: Save Ohm Connect Key
   // -----------------------------------------------------------------------
@@ -358,6 +333,41 @@ function OpenEvseViewModel() {
       self.saveOhmKeyFetching(false);
     });
   };
+
+  // -----------------------------------------------------------------------
+  // Event: Change divertmode (solar PV divert)
+  // -----------------------------------------------------------------------
+  self.changeDivertModeFetching = ko.observable(false);
+  self.changeDivertModeSuccess = ko.observable(false);
+  self.changeDivertMode = function(divertmode) {
+    if(0 !== divertmode) {
+      self.config.divertmode(divertmode);
+      self.changeDivertModeFetching(true);
+      self.changeDivertModeSuccess(false);
+      $.post(baseEndpoint + "/divertmode", { divertmode: divertmode }, function (data) {
+        self.changeDivertModeSuccess(true);
+      }).fail(function () {
+        alert("Failed to save Ohm key config");
+      }).always(function () {
+        self.changeDivertModeFetching(false);
+      });
+    }
+  };
+
+  self.divertmode = ko.pureComputed({
+    read: function () {
+      if('' === self.config.mqtt_solar() &&
+         '' === self.config.mqtt_grid_ie())
+      {
+        return 0;
+      } else {
+        return self.config.divertmode();
+      }
+    },
+    write: function (value) {
+      self.changeDivertMode(value);
+    }
+  });
 }
 
 $(function () {
@@ -365,8 +375,6 @@ $(function () {
   var openevse = new OpenEvseViewModel();
   ko.applyBindings(openevse);
   openevse.start();
-
-  set_divertmode_button(divertmode);
 });
 
 // -----------------------------------------------------------------------
@@ -427,100 +435,3 @@ document.getElementById("restart").addEventListener("click", function (e) {
     r.send();
   }
 });
-
-// -----------------------------------------------------------------------
-// Event: Change divertmode (solar PV divert)
-// -----------------------------------------------------------------------
-//document.getElementById("updatecheck").addEventListener("click", function(e) {
-//    document.getElementById("firmware-version").innerHTML = "<tr><td>-</td><td>Connecting...</td></tr>";
-//    var r = new XMLHttpRequest();
-//    r.open("POST", "firmware", true);
-//    r.onreadystatechange = function () {
-//        if (r.readyState != 4 || r.status != 200) return;
-//        var str = r.responseText;
-//        console.log(str);
-//        var firmware = JSON.parse(r.responseText);
-//        document.getElementById("firmware").style.display = '';
-//        document.getElementById("update").style.display = '';
-//        document.getElementById("firmware-version").innerHTML = "<tr><td>"+firmware.current+"</td><td>"+firmware.latest+"</td></tr>";
-//	  };
-//    r.send();
-//});
-
-
-// -----------------------------------------------------------------------
-// Event:Update Firmware
-// -----------------------------------------------------------------------
-//document.getElementById("update").addEventListener("click", function(e) {
-//    document.getElementById("update-info").innerHTML = "UPDATING..."
-//    var r1 = new XMLHttpRequest();
-//    r1.open("POST", "update", true);
-//    r1.onreadystatechange = function () {
-//        if (r1.readyState != 4 || r1.status != 200) return;
-//        var str1 = r1.responseText;
-//        document.getElementById("update-info").innerHTML = str1
-//        console.log(str1);
-//	  };
-//    r1.send();
-//});
-
-document.getElementById("divertmode1").addEventListener("click", function(e) {
-    divertmode = 1; // Normal
-    set_divertmode_button(divertmode);
-    changedivertmode(divertmode);
-});
-
-document.getElementById("divertmode2").addEventListener("click", function(e) {
-    divertmode = 2;     // Eco
-    set_divertmode_button(divertmode);
-    changedivertmode(divertmode);
-});
-
-function set_divertmode_button(divertmode){
-  // Set formatting solar PV divert divertmode button
-  if (divertmode === 0){
-    //DISABLE BUTTONS
-    document.getElementById("divertmode1").disabled = true;
-    document.getElementById("divertmode2").disabled = true;
-    document.getElementById("divertmsg").innerHTML = "Error: MQTT config not configured with Solar PV / Grid topic.";
-    document.getElementById("solar-wrapper").style.opacity = "0.5";
-  } else {
-    document.getElementById("divertmode1").disabled = false;
-    document.getElementById("divertmode2").disabled = false;
-    document.getElementById("divertmsg").innerHTML = "";
-    document.getElementById("solar-wrapper").style.opacity = "1.0";
-  }
-
-  if (divertmode == 1){
-    document.getElementById("divertmode1").style.color = '#000000';
-    document.getElementById("divertmode2").style.color = 'white';
-    document.getElementById("divertmode1").style.backgroundColor = '#f1f1f1';
-    document.getElementById("divertmode2").style.backgroundColor = '#008080';
-  }
-  if (divertmode == 2){
-    document.getElementById("divertmode1").style.color = 'white';
-    document.getElementById("divertmode2").style.color = '#000000';
-    document.getElementById("divertmode2").style.backgroundColor = '#f1f1f1';
-    document.getElementById("divertmode1").style.backgroundColor = '#008080';
-  }
-}
-
-function changedivertmode(divertmode){
-   var r = new XMLHttpRequest();
-    r.open("POST", "divertmode", true);
-    r.setRequestHeader("Content-type","application/x-www-form-urlencoded");
-    r.send("&divertmode="+divertmode);
-    r.onreadystatechange = function () {
-      console.log(divertmode);
-      if (r.readyState != 4 || r.status != 200) return;
-      var str = r.responseText;
-      console.log(str);
-    }
-}
-
-// -----------------------------------------------------------------------
-// Event: Authentication save
-// -----------------------------------------------------------------------
-//document.getElementById("upload").addEventListener("click", function(e) {
-//  window.location.href='/upload'
-//});

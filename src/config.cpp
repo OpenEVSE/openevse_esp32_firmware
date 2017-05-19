@@ -142,7 +142,7 @@ config_load_settings() {
                      mqtt_pass);
   EEPROM_read_string(EEPROM_MQTT_SOLAR_START, EEPROM_MQTT_SOLAR_SIZE,
                      mqtt_solar);
-  EEPROM_read_string(EEPROM_MQTT_GRID_IE_SIZE, EEPROM_MQTT_GRID_IE_SIZE,
+  EEPROM_read_string(EEPROM_MQTT_GRID_IE_START, EEPROM_MQTT_GRID_IE_SIZE,
                      mqtt_grid_ie);
 
   // Web server credentials
