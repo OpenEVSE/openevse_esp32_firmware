@@ -1,9 +1,11 @@
 #ifndef _EMONESP_WEB_SERVER_H
 #define _EMONESP_WEB_SERVER_H
 
-#include <ESP8266WebServer.h>
+#include <Hash.h>
+#include <ESPAsyncTCP.h>
+#include <ESPAsyncWebServer.h>
 
-extern ESP8266WebServer server;
+extern AsyncWebServer server;
 extern String currentfirmware;
 
 extern void web_server_setup();

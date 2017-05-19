@@ -24,19 +24,8 @@
  * Boston, MA 02111-1307, USA.
  */
 
-#include <ESP8266WiFi.h>              // Connect to Wifi
-#include <WiFiClientSecure.h>         // Secure https GET request
-#include <ESP8266WebServer.h>         // Config portal
-#include <ESP8266HTTPClient.h>
-#include <EEPROM.h>                   // Save config settings
-#include <FS.h>                       // SPIFFS file-system: store web server html, CSS etc.
-#include <ESP8266mDNS.h>              // Resolve URL for update server etc.
-#include <ESP8266HTTPUpdateServer.h>  // upload update
-#include <DNSServer.h>                // Required for captive portal
-#include <PubSubClient.h>             // MQTT https://github.com/knolleary/pubsubclient PlatformIO lib: 89
-#ifdef ENABLE_OTA
-#include <ArduinoOTA.h>
-#endif
+#include <Arduino.h>
+#include <ArduinoOTA.h>               // local OTA update from Arduino IDE
 
 #include "emonesp.h"
 #include "config.h"
@@ -50,7 +39,7 @@
 
 unsigned long Timer1; // Timer for events once every 30 seconds
 unsigned long Timer2; // Timer for events once every 1 Minute
-unsigned long Timer3; // Timer for events once every 10 seconds
+unsigned long Timer3; // Timer for events once every 2 seconds
 
 boolean rapi_read = 0; //flag to indicate first read of RAPI status
 // -------------------------------------------------------------------
@@ -100,10 +89,9 @@ loop() {
     rapi_read=1;
   }
   // -------------------------------------------------------------------
-  // Do these things once every 10s. Even when in AP mode
+// Do these things once every 2s
   // -------------------------------------------------------------------
-  if ((millis() - Timer3) >= 10000){
-    DEBUG.println("Time3");
+    if ((millis() - Timer3) >= 2000) {
     update_rapi_values();
     Timer3 = millis();
   }

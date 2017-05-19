@@ -99,6 +99,11 @@ startAP() {
   Serial.print("$FP 0 1 ");
   Serial.println(tmpStr);
   ipaddress = tmpStr;
+  Serial.flush(); // Clear serial output buffer
+  delay(100);
+  // Clear serial input buffer for RAPI packet accounting
+  while (Serial.available())
+    Serial.read(); 
 }
 
 // -------------------------------------------------------------------
@@ -168,6 +173,11 @@ startClient() {
     // Copy the connected network and ipaddress to global strings for use in status request
     connected_network = esid;
     ipaddress = tmpStr;
+    Serial.flush(); // Clear serial output buffer
+    delay(100);
+    // Clear serial input buffer for RAPI packet accounting
+    while (Serial.available())
+      Serial.read(); 
   }
 }
 

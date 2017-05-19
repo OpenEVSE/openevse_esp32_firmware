@@ -240,19 +240,19 @@
               </tr>
               <tr data-bind="visible: '1' == config.service()">
                 <td>Level 1 Minimum:</td>
-                <td><span data-bind="text: config.l1min"></span></td>
+                <td><span data-bind="text: config.l1min() + ' A'"></span></td>
               </tr>
               <tr data-bind="visible: '1' == config.service()">
                 <td>Level 1 Maximum:</td>
-                <td><span data-bind="text: config.l1max"></span></td>
+                <td><span data-bind="text: config.l1max() + ' A'"></span></td>
               </tr>
               <tr data-bind="visible: '2' == config.service()">
                 <td>Level 2 Minimum:</td>
-                <td><span data-bind="text: config.l2min"></span></td>
+                <td><span data-bind="text: config.l2min() + ' A'"></span></td>
               </tr>
               <tr data-bind="visible: '2' == config.service()">
                 <td>Level 2 Maximum:</td>
-                <td><span data-bind="text: config.l2max"></span></td>
+                <td><span data-bind="text: config.l2max() + ' A'"></span></td>
               </tr>
               <tr>
                 <td>Sensor Scale:</td>
@@ -394,7 +394,7 @@
               </tr>
               <tr>
                 <td>Pilot:</td>
-                <td><span data-bind="text: rapi.pilot"></span></td>
+                <td><span data-bind="text: rapi.pilot() + ' A'"></span></td>
               </tr>
               <tr>
                 <td>Amps:</td>
@@ -402,15 +402,15 @@
               </tr>
               <tr>
                 <td>Temp1:</td>
-                <td><span data-bind="text: scaleString(rapi.temp1(), 10, 1) + ' C'"></span></td>
+                <td><span data-bind="text: scaleString(rapi.temp1(), 10, 1) + ' &deg;C'"></span></td>
               </tr>
               <tr>
                 <td>Temp2:</td>
-                <td><span data-bind="text: scaleString(rapi.temp2(), 10, 1) + ' C'"></span></td>
+                <td><span data-bind="text: scaleString(rapi.temp2(), 10, 1) + ' &deg;C'"></span></td>
               </tr>
               <tr>
                 <td>Temp3:</td>
-                <td><span data-bind="text: scaleString(rapi.temp3(), 10, 1) + ' C'"></span></td>
+                <td><span data-bind="text: scaleString(rapi.temp3(), 10, 1) + ' &deg;C'"></span></td>
               </tr>
             </table>
           </div>
@@ -430,6 +430,39 @@
               </p>
               <p data-bind="text: ret"></p>
             </form>
+          </div>
+          <div class="box380">
+            <h2>RAPI System Functions</h2>
+            <table>
+              <tr>
+                <th>Function</th>
+                <th>Description</th>
+              </tr>
+              <tr>
+                <td>$FB</td>
+                <td>LCD Backlight Color (0-7)</td>
+              </tr>
+              <tr>
+                <td>$FD</td>
+                <td>Disable EVSE</td>
+              </tr>
+              <tr>
+                <td>$FE</td>
+                <td>Enable EVSE</td>
+              </tr>
+              <tr>
+                <td>$FP</td>
+                <td>Output text at x y position text to LCD (x y text)</td>
+              </tr>
+              <tr>
+                <td>$FR</td>
+                <td>Reset EVSE</td>
+              </tr>
+              <tr>
+                <td>$FS</td>
+                <td>Put EVSE to sleep</td>
+              </tr>
+            </table>
           </div>
           <div class="box380">
             <h2>RAPI Get Commands</h2>
@@ -542,7 +575,7 @@
               </tr>
               <tr>
                 <td>$SK</td>
-                <td>Set accumulated kWh, integer</td>
+                <td>Set accumulated Wh, integer</td>
               </tr>
               <tr><td>$SL</td><td>Set service level (1/2/A)</td></tr>
               <tr>
@@ -571,41 +604,7 @@
               </tr>
             </table>
           </div>
-
-          <div class="box380">
-            <h2>RAPI System Functions</h2>
-            <table>
-              <tr>
-                <th>Function</th>
-                <th>Description</th>
-              </tr>
-              <tr>
-                <td>$FB</td>
-                <td>LCD Backlight Color (0-7)</td>
-              </tr>
-              <tr>
-                <td>$FD</td>
-                <td>Disable EVSE</td>
-              </tr>
-              <tr>
-                <td>$FE</td>
-                <td>Enable EVSE</td>
-              </tr>
-              <tr>
-                <td>$FP</td>
-                <td>Output text at x y position text to LCD (x y text)</td>
-              </tr>
-              <tr>
-                <td>$FR</td>
-                <td>Reset EVSE</td>
-              </tr>
-              <tr>
-                <td>$FS</td>
-                <td>Put EVSE to sleep</td>
-              </tr>
-            </table>
           </div>
-        </div>
 	<!--end TAB 4-->
 
 
@@ -615,8 +614,8 @@
     		<h2>Solar PV Divert</h2>
         <p>Dynamically adjust charge rate based on solar PV generation or excess power (grid export).</p>
     		<h2>Mode</h2>
-    		<button data-bind="click: changeDivertMode(1), disabled: 0 === divertmode(), style: { color: (1 === divertmode() ? '#000000' : '#ffffff'), backgroundColor: (1 === divertmode() ? '#f1f1f1' : '#008080') }">1: Normal (max)</button>
-    		<button data-bind="click: changeDivertMode(2), disabled: 0 === divertmode(), style: { color: (2 === divertmode() ? '#000000' : '#ffffff'), backgroundColor: (2 === divertmode() ? '#f1f1f1' : '#008080') }">2: Eco</button><br>
+    		<button data-bind="click: changeDivertMode.bind($data, 1), disabled: 0 === divertmode(), style: { color: (1 === divertmode() ? '#000000' : '#ffffff'), backgroundColor: (1 === divertmode() ? '#f1f1f1' : '#008080') }">1: Normal (max)</button>
+    		<button data-bind="click: changeDivertMode.bind($data, 2), disabled: 0 === divertmode(), style: { color: (2 === divertmode() ? '#000000' : '#ffffff'), backgroundColor: (2 === divertmode() ? '#f1f1f1' : '#008080') }">2: Eco</button><br>
         <span class="small-text"><i>Mode can also be controlled via MQTT: {base-topic}/divertmode</i></span><br>
         <b><span data-bind="visible: 0 === divertmode()">Error: MQTT config not configured with Solar PV / Grid topic.</span></b><br><br>
         <b>1. Normal (default):</b>
