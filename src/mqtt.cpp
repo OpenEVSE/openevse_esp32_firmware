@@ -108,7 +108,7 @@ mqtt_connect() {
     if (mqtt_grid_ie!=""){
       mqttclient.subscribe(mqtt_grid_ie.c_str());
     }
-    mqtt_sub_topic = mqtt_topic + "divertmode";      // MQTT Topic to change divert mode
+    mqtt_sub_topic = mqtt_topic + "/divertmode";      // MQTT Topic to change divert mode
     mqttclient.subscribe(mqtt_sub_topic.c_str());
     
   } else {
