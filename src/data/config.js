@@ -347,7 +347,7 @@ function OpenEvseViewModel() {
       $.post(baseEndpoint + "/divertmode", { divertmode: divertmode }, function (data) {
         self.changeDivertModeSuccess(true);
       }).fail(function () {
-        alert("Failed to save Ohm key config");
+        alert("Failed to set divert mode");
       }).always(function () {
         self.changeDivertModeFetching(false);
       });
