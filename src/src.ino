@@ -37,6 +37,10 @@
 #include "mqtt.h"
 #include "divert.h"
 
+#include "RapiSender.h"
+
+RapiSender rapiSender(&Serial);
+
 unsigned long Timer1; // Timer for events once every 30 seconds
 unsigned long Timer2; // Timer for events once every 1 Minute
 unsigned long Timer3; // Timer for events once every 2 seconds
@@ -68,6 +72,7 @@ setup() {
   ArduinoOTA.setHostname(esp_hostname);
   ArduinoOTA.begin();
 #endif
+  rapiSender.enableSequenceId(0);
 } // end setup
 
 // -------------------------------------------------------------------

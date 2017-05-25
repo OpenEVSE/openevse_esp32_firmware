@@ -567,45 +567,44 @@ handleRapi(AsyncWebServerRequest *request) {
   bool json = request->hasArg("json");
 
   AsyncResponseStream *response;
-  if(false == requestPreProcess(request, response, json ? "application/json" : "text/html")) {
+  if (false == requestPreProcess(request, response, json ? "application/json" : "text/html")) {
     return;
   }
 
   String s;
 
-  if(false == json) {
-  s = "<html><font size='20'><font color=006666>Open</font><b>EVSE</b></font><p>";
+  if (false == json) {
+    s = "<html><font size='20'><font color=006666>Open</font><b>EVSE</b></font><p>";
     s += "<b>Open Source Hardware</b><p>RAPI Command Sent<p>Common Commands:<p>";
-  s += "Set Current - $SC XX<p>Set Service Level - $SL 1 - $SL 2 - $SL A<p>";
-  s += "Get Real-time Current - $GG<p>Get Temperatures - $GP<p>";
-        s += "<p>";
-  s += "<form method='get' action='r'><label><b><i>RAPI Command:</b></i></label>";
-  s += "<input name='rapi' length=32><p><input type='submit'></form>";
-}
+    s += "Set Current - $SC XX<p>Set Service Level - $SL 1 - $SL 2 - $SL A<p>";
+    s += "Get Real-time Current - $GG<p>Get Temperatures - $GP<p>";
+    s += "<p>";
+    s += "<form method='get' action='r'><label><b><i>RAPI Command:</b></i></label>";
+    s += "<input name='rapi' length=32><p><input type='submit'></form>";
+  }
 
-  if(request->hasArg("rapi"))
-  {
-  String rapiString;
+  if (request->hasArg("rapi")) {
     String rapi = request->arg("rapi");
 
     // BUG: Really we should do this in the main loop not here...
-  Serial.flush();
-  Serial.println(rapi);
-  delay(commDelay);
-  while (Serial.available()) {
-         rapiString = Serial.readStringUntil('\r');
-       }
+    Serial.flush();
+    comm_sent++;
+    if (0 == rapiSender.sendCmd(rapi.c_str())) {
+      comm_success++;
+      String rapiString = rapiSender.getResponse();
 
-    if(json) {
-    s = "{\"cmd\":\""+rapi+"\",\"ret\":\""+rapiString+"\"}";
-    } else {
-      s += rapi;
-    s += "<p>&gt;";
-      s += rapiString;
+      if (json) {
+        s = "{\"cmd\":\""+rapi+"\",\"ret\":\""+rapiString+"\"}";
+      } else {
+        s += rapi;
+        s += "<p>&gt;";
+        s += rapiString;
+      }
     }
   }
-  if(false == json) {
-   s += "<p></html>\r\n\r\n";
+
+  if (false == json) {
+    s += "<p></html>\r\n\r\n";
   }
 
   response->setCode(200);
