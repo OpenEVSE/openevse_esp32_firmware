@@ -209,6 +209,7 @@ handleSaveMqtt(AsyncWebServerRequest *request) {
   response->print(tmpStr);
   request->send(response);
 
+  // If connected disconnect MQTT to trigger re-connect with new details
   mqttRestartTime = millis();
 }
 
