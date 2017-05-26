@@ -77,6 +77,8 @@ String ohm = "";
 #define EEPROM_OHM_KEY_START          EEPROM_WWW_PASS_END
 #define EEPROM_OHM_KEY_END            (EEPROM_OHM_KEY_START + EEPROM_OHM_KEY_SIZE)
 
+#define CHECKSUM_SEED 128
+
 // -------------------------------------------------------------------
 // Reset EEPROM, wipes all settings
 // -------------------------------------------------------------------
@@ -91,23 +93,39 @@ ResetEEPROM() {
 }
 
 void
-EEPROM_read_string(int start, int count, String & val) {
-  for (int i = 0; i < count; ++i) {
+EEPROM_read_string(int start, int count, String & val, String defaultVal = "") {
+  byte checksum = CHECKSUM_SEED;
+  for (int i = 0; i < count - 1; ++i) {
     byte c = EEPROM.read(start + i);
-    if (c != 0 && c != 255)
+    if (c != 0 && c != 255) {
+      checksum ^= c;
       val += (char) c;
+    } else {
+      break;
+    }
+  }
+
+  // Check the checksum
+  byte c = EEPROM.read(start + (count - 1));
+  DBUGF("Got '%s'  %d == %d", val.c_str(), c, checksum);
+  if(c != checksum) {
+    DBUGF("Using default '%s'", defaultVal.c_str());
+    val = defaultVal;
   }
 }
 
 void
 EEPROM_write_string(int start, int count, String val) {
-  for (int i = 0; i < count; ++i) {
+  byte checksum = CHECKSUM_SEED;
+  for (int i = 0; i < count - 1; ++i) {
     if (i < val.length()) {
+      checksum ^= val[i];
       EEPROM.write(start + i, val[i]);
     } else {
       EEPROM.write(start + i, 0);
     }
   }
+  EEPROM.write(start + (count - 1), checksum);
 }
 
 // -------------------------------------------------------------------
@@ -117,6 +135,8 @@ void
 config_load_settings() {
   EEPROM.begin(EEPROM_SIZE);
 
+  DBUGLN("Loading config");
+
   // Load WiFi values
   EEPROM_read_string(EEPROM_ESID_START, EEPROM_ESID_SIZE, esid);
   EEPROM_read_string(EEPROM_EPASS_START, EEPROM_EPASS_SIZE, epass);
@@ -125,21 +145,21 @@ config_load_settings() {
   EEPROM_read_string(EEPROM_EMON_API_KEY_START, EEPROM_EMON_API_KEY_SIZE,
                      emoncms_apikey);
   EEPROM_read_string(EEPROM_EMON_SERVER_START, EEPROM_EMON_SERVER_SIZE,
-                     emoncms_server);
+                     emoncms_server, "data.openevse.com/emoncms");
   EEPROM_read_string(EEPROM_EMON_NODE_START, EEPROM_EMON_NODE_SIZE,
-                     emoncms_node);
-  EEPROM_read_string(EEPROM_EMON_FINGERPRINT_START,
-                     EEPROM_EMON_FINGERPRINT_SIZE, emoncms_fingerprint);
+                     emoncms_node, "openevse");
+  EEPROM_read_string(EEPROM_EMON_FINGERPRINT_START, EEPROM_EMON_FINGERPRINT_SIZE,
+                     emoncms_fingerprint, "7D:82:15:BE:D7:BC:72:58:87:7D:8E:40:D4:80:BA:1A:9F:8B:8D:DA");
 
   // MQTT settings
   EEPROM_read_string(EEPROM_MQTT_SERVER_START, EEPROM_MQTT_SERVER_SIZE,
-                     mqtt_server);
+                     mqtt_server, "emonpi");
   EEPROM_read_string(EEPROM_MQTT_TOPIC_START, EEPROM_MQTT_TOPIC_SIZE,
-                     mqtt_topic);
+                     mqtt_topic, "openevse");
   EEPROM_read_string(EEPROM_MQTT_USER_START, EEPROM_MQTT_USER_SIZE,
-                     mqtt_user);
+                     mqtt_user, "emonpimqtt");
   EEPROM_read_string(EEPROM_MQTT_PASS_START, EEPROM_MQTT_PASS_SIZE,
-                     mqtt_pass);
+                     mqtt_pass, "emonpimqtt2016");
   EEPROM_read_string(EEPROM_MQTT_SOLAR_START, EEPROM_MQTT_SOLAR_SIZE,
                      mqtt_solar);
   EEPROM_read_string(EEPROM_MQTT_GRID_IE_START, EEPROM_MQTT_GRID_IE_SIZE,
@@ -147,11 +167,11 @@ config_load_settings() {
 
   // Web server credentials
   EEPROM_read_string(EEPROM_WWW_USER_START, EEPROM_WWW_USER_SIZE,
-                     www_username);
+                     www_username, "admin");
   EEPROM_read_string(EEPROM_WWW_PASS_START, EEPROM_WWW_PASS_SIZE,
-                     www_password);
+                     www_password, "openevse");
 
-  //Ohm Connect Settings
+  // Ohm Connect Settings
   EEPROM_read_string(EEPROM_OHM_KEY_START, EEPROM_OHM_KEY_SIZE, ohm);
 }
 

@@ -10,7 +10,6 @@
 #include "input.h"
 #include "emoncms.h"
 #include "divert.h"
-#include "debug.h"
 
 AsyncWebServer server(80);          //Create class for Web server
 

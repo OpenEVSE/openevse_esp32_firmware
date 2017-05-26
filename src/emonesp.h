@@ -11,5 +11,6 @@
 #define DEBUG Serial
 #endif
 
+#include "debug.h"
 
 #endif // _EMONESP_H
