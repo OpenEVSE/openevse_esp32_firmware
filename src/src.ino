@@ -60,8 +60,13 @@ setup() {
   DEBUG.println(ESP.getChipId());
   DEBUG.println("Firmware: " + currentfirmware);
 
+  // Read saved settings from the config
   config_load_settings();
+
+  // Initialise the WiFi
   wifi_setup();
+
+  // Bring up the web server
   web_server_setup();
 #ifdef ENABLE_OTA
   // Start local OTA update server
