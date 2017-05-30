@@ -36,6 +36,7 @@
 #include "emoncms.h"
 #include "mqtt.h"
 #include "divert.h"
+#include "ota.h"
 
 unsigned long Timer1; // Timer for events once every 30 seconds
 unsigned long Timer2; // Timer for events once every 1 Minute
@@ -69,9 +70,7 @@ setup() {
   // Bring up the web server
   web_server_setup();
 #ifdef ENABLE_OTA
-  // Start local OTA update server
-  ArduinoOTA.setHostname(esp_hostname);
-  ArduinoOTA.begin();
+  ota_setup();
 #endif
 } // end setup
 
@@ -84,7 +83,7 @@ loop() {
   web_server_loop();
   wifi_loop();
 #ifdef ENABLE_OTA
-  ArduinoOTA.handle();
+  ota_loop();
 #endif
 
   // Gives OpenEVSE time to finish self test on cold start
