@@ -34,7 +34,7 @@ bool requestPreProcess(AsyncWebServerRequest *request, AsyncResponseStream *&res
   if(www_username!="" && !request->authenticate(www_username.c_str(), www_password.c_str())) {
     request->requestAuthentication();
     return false;
-}
+  }
 
   response = request->beginResponseStream(contentType);
   if(enableCors) {
@@ -42,6 +42,13 @@ bool requestPreProcess(AsyncWebServerRequest *request, AsyncResponseStream *&res
   }
 
   return true;
+}
+
+// -------------------------------------------------------------------
+// Helper function to detect positive string
+// -------------------------------------------------------------------
+bool isPositive(const String &str) {
+  return str == "1" || str == "true";
 }
 
 // -------------------------------------------------------------------
@@ -162,7 +169,8 @@ handleSaveEmoncms(AsyncWebServerRequest *request) {
     return;
   }
 
-  config_save_emoncms(request->arg("server"),
+  config_save_emoncms(isPositive(request->arg("enable")),
+                      request->arg("server"),
                       request->arg("node"),
                       request->arg("apikey"),
                       request->arg("fingerprint"));
@@ -191,7 +199,8 @@ handleSaveMqtt(AsyncWebServerRequest *request) {
     return;
   }
 
-  config_save_mqtt(request->arg("server"),
+  config_save_mqtt(isPositive(request->arg("enable")),
+                   request->arg("server"),
                    request->arg("topic"),
                    request->arg("user"),
                    request->arg("pass"),
@@ -224,6 +233,11 @@ handleDivertMode(AsyncWebServerRequest *request){
   }
 
   divertmode_update(request->arg("divertmode").toInt());
+  uint32_t newFlags = flags & ~CONFIG_SERVICE_DIVERT;
+  if(isPositive(request->arg("enable"))) {
+    newFlags |= CONFIG_SERVICE_DIVERT;
+  }
+  config_save_flags(newFlags);
 
   response->setCode(200);
   response->print("Divert Mode changed");
@@ -264,9 +278,10 @@ handleSaveOhmkey(AsyncWebServerRequest *request) {
     return;
   }
 
+  bool enabled = isPositive(request->arg("enable"));
   String qohm = request->arg("ohm");
 
-  config_save_ohm(qohm);
+  config_save_ohm(enabled, qohm);
 
   response->setCode(200);
   response->print("saved");
@@ -367,10 +382,12 @@ handleConfig(AsyncWebServerRequest *request) {
   s += "\"timelimit\":\"" + time_limit + "\",";
   s += "\"ssid\":\"" + esid + "\",";
   //s += "\"pass\":\""+epass+"\","; security risk: DONT RETURN PASSWORDS
+  s += "\"emoncms_enabled\":" + String(config_emoncms_enabled() ? "true" : "false") + ",";
   s += "\"emoncms_server\":\"" + emoncms_server + "\",";
   s += "\"emoncms_node\":\"" + emoncms_node + "\",";
   // s += "\"emoncms_apikey\":\""+emoncms_apikey+"\","; security risk: DONT RETURN APIKEY
   s += "\"emoncms_fingerprint\":\"" + emoncms_fingerprint + "\",";
+  s += "\"mqtt_enabled\":" + String(config_mqtt_enabled() ? "true" : "false") + ",";
   s += "\"mqtt_server\":\"" + mqtt_server + "\",";
   s += "\"mqtt_topic\":\"" + mqtt_topic + "\",";
   s += "\"mqtt_user\":\"" + mqtt_user + "\",";
@@ -379,6 +396,8 @@ handleConfig(AsyncWebServerRequest *request) {
   s += "\"mqtt_grid_ie\":\""+mqtt_grid_ie+"\",";
   s += "\"www_username\":\"" + www_username + "\",";
   //s += "\"www_password\":\""+www_password+"\","; security risk: DONT RETURN PASSWORDS
+  s += "\"ohm_enabled\":" + String(config_ohm_enabled() ? "true" : "false") + ",";
+  s += "\"divert_enabled\":" + String(config_divert_enabled() ? "true" : "false") + ",";
   s += "\"divertmode\":\""+String(divertmode)+"\"";
   s += "}";
 

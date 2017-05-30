@@ -68,6 +68,7 @@ setup() {
 
   // Bring up the web server
   web_server_setup();
+
 #ifdef ENABLE_OTA
   // Start local OTA update server
   ArduinoOTA.setHostname(esp_hostname);
@@ -94,24 +95,30 @@ loop() {
     rapi_read=1;
   }
   // -------------------------------------------------------------------
-// Do these things once every 2s
+  // Do these things once every 2s
   // -------------------------------------------------------------------
-    if ((millis() - Timer3) >= 2000) {
+  if ((millis() - Timer3) >= 2000) {
     update_rapi_values();
     Timer3 = millis();
   }
 
-  if (wifi_mode==WIFI_MODE_STA || wifi_mode==WIFI_MODE_AP_AND_STA){
+  if (wifi_mode==WIFI_MODE_STA || wifi_mode==WIFI_MODE_AP_AND_STA) {
 
-    if (mqtt_server !=0) mqtt_loop();
+    if (config_mqtt_enabled()) {
+      mqtt_loop();
+    }
 
     // -------------------------------------------------------------------
     // Do these things once every Minute
     // -------------------------------------------------------------------
     if ((millis() - Timer2) >= 60000) {
       DEBUG.println("Time2");
-      ohm_loop();
-      divert_current_loop();
+      if(config_ohm_enabled()) {
+        ohm_loop();
+      }
+      if(config_divert_enabled()) {
+        divert_current_loop();
+      }
       Timer2 = millis();
     }
     // -------------------------------------------------------------------
@@ -119,13 +126,16 @@ loop() {
     // -------------------------------------------------------------------
     if ((millis() - Timer1) >= 30000) {
       DEBUG.println("Time1");
+
       create_rapi_json(); // create JSON Strings for EmonCMS and MQTT
-      if (emoncms_apikey != 0)
+      if (config_emoncms_enabled()) {
         emoncms_publish(url);
-      if(mqtt_server != 0) mqtt_publish(data);
-      Timer1 = millis();
-      if (mqtt_server != 0)
+      }
+      if (config_mqtt_enabled()) {
         mqtt_publish(data);
+      }
+
+      Timer1 = millis();
     }
 
   } // end WiFi connected
