@@ -44,7 +44,7 @@ String ohm = "";
 #define EEPROM_WWW_USER_SIZE          16
 #define EEPROM_WWW_PASS_SIZE          16
 #define EEPROM_OHM_KEY_SIZE           8
-#define EEPROM_SIZE                   512
+#define EEPROM_SIZE                   4096
 
 #define EEPROM_ESID_START             0
 #define EEPROM_ESID_END               (EEPROM_ESID_START + EEPROM_ESID_SIZE)
@@ -77,6 +77,10 @@ String ohm = "";
 #define EEPROM_OHM_KEY_START          EEPROM_WWW_PASS_END
 #define EEPROM_OHM_KEY_END            (EEPROM_OHM_KEY_START + EEPROM_OHM_KEY_SIZE)
 
+#if EEPROM_OHM_KEY_END > EEPROM_SIZE
+#error EEPROM_SIZE too small
+#endif
+
 #define CHECKSUM_SEED 128
 
 // -------------------------------------------------------------------
@@ -107,7 +111,7 @@ EEPROM_read_string(int start, int count, String & val, String defaultVal = "") {
 
   // Check the checksum
   byte c = EEPROM.read(start + (count - 1));
-  DBUGF("Got '%s'  %d == %d", val.c_str(), c, checksum);
+  DBUGF("Got '%s' %d == %d @ %d:%d", val.c_str(), c, checksum, start, count);
   if(c != checksum) {
     DBUGF("Using default '%s'", defaultVal.c_str());
     val = defaultVal;
@@ -126,6 +130,7 @@ EEPROM_write_string(int start, int count, String val) {
     }
   }
   EEPROM.write(start + (count - 1), checksum);
+  DBUGF("Saved '%s' %d @ %d:%d", val.c_str(), checksum, start, count);
 }
 
 // -------------------------------------------------------------------
