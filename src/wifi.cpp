@@ -103,7 +103,7 @@ startAP() {
   delay(100);
   // Clear serial input buffer for RAPI packet accounting
   while (Serial.available())
-    Serial.read(); 
+    Serial.read();
 }
 
 // -------------------------------------------------------------------
@@ -177,7 +177,7 @@ startClient() {
     delay(100);
     // Clear serial input buffer for RAPI packet accounting
     while (Serial.available())
-      Serial.read(); 
+      Serial.read();
   }
 }
 
@@ -213,6 +213,7 @@ wifi_setup() {
 
 void
 wifi_loop() {
+  Profile_Start(wifi_loop);
 #ifdef WIFI_LED
   if (wifi_mode == WIFI_MODE_AP_ONLY && millis() > wifiLedTimeOut) {
     wifiLedState = !wifiLedState;
@@ -231,6 +232,8 @@ wifi_loop() {
       ESP.reset();
     }
   }
+
+  Profile_End(wifi_loop, 5);
 }
 
 void

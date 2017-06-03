@@ -126,6 +126,8 @@ mqtt_connect() {
 // -------------------------------------------------------------------
 void
 mqtt_publish(String data) {
+  Profile_Start(mqtt_publish);
+
   String mqtt_data = "";
   String topic = mqtt_topic + "/";
 
@@ -168,6 +170,8 @@ mqtt_publish(String data) {
   str_topic = topic + "divertmode";
   str_msg = String(divertmode);
   mqttclient.publish(str_topic.c_str(), str_msg.c_str());
+
+  Profile_End(mqtt_publish, 5);
 }
 
 // -------------------------------------------------------------------
@@ -177,6 +181,7 @@ mqtt_publish(String data) {
 // -------------------------------------------------------------------
 void
 mqtt_loop() {
+  Profile_Start(mqtt_loop);
   if (!mqttclient.connected()) {
     long now = millis();
     // try and reconnect continuously for first 5s then try again once every 10s
@@ -190,6 +195,7 @@ mqtt_loop() {
     // if MQTT connected
     mqttclient.loop();
   }
+  Profile_End(mqtt_loop, 5);
 }
 
 void
