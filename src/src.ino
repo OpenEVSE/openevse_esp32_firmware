@@ -134,9 +134,6 @@ loop() {
       Timer1 = millis();
     }
 
-      Timer1 = millis();
-    }
-
   } // end WiFi connected
 
   Profile_End(loop, 10);
