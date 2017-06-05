@@ -88,13 +88,17 @@ function ConfigViewModel() {
     "emoncms_apikey": "",
     "emoncms_node": "",
     "emoncms_fingerprint": "",
+    "emoncms_enabled": 0,
     "mqtt_server": "",
     "mqtt_topic": "",
     "mqtt_user": "",
     "mqtt_pass": "",
     "mqtt_solar": "",
     "mqtt_grid_ie": "",
+    "mqtt_enabled": 0,
+    "ohm_enabled": 0,
     "ohmkey": "",
+    "divert_enabled": 0,
     "www_username": "",
     "www_password": "",
     "firmware": "-",
@@ -168,6 +172,14 @@ function OpenEvseViewModel() {
 
   var updateTimer = null;
   var updateTime = 1 * 1000;
+
+  // Tabs
+  self.tab = ko.observable('system');
+  self.isSystem = ko.pureComputed(function() { return 'system' === self.tab(); });
+  self.isServices = ko.pureComputed(function() { return 'services' === self.tab(); });
+  self.isStatus = ko.pureComputed(function() { return 'status' === self.tab(); });
+  self.isRapi = ko.pureComputed(function() { return 'rapi' === self.tab(); });
+  self.isMode = ko.pureComputed(function() { return 'mode' === self.tab(); });
 
   // Upgrade URL
   self.upgradeUrl = ko.observable('about:blank');
