@@ -165,15 +165,17 @@ input[type="file"] {
 
 .tabs {
   padding-bottom:4px;
+  overflow: hidden;
+}
+.tabs:after {
+  content: " ";
+  display: block;
+  height: 0;
+  clear: both;
 }
 
 .tabs input[type="radio"] {
-	height: 2.5em;
-	visibility: hidden;
-  width: 0;
-  padding: 0;
-  margin: 0;
-  /*display: none;*/
+  display: none;
 }
 
 .tabs label {
@@ -215,8 +217,14 @@ input[type="file"] {
 	background: #e1e1e1;
 	border-radius: .5em .5em .5em .5em;
 	box-shadow: 1px 7px 7px 1px rgba(0, 0, 0, 0.4);
-	min-height: 50em;
 	display: block;
+}
+
+#content:after {
+  content: " ";
+  display: block;
+  height: 0;
+  clear: both;
 }
 
 @media (max-width: 466px) {
