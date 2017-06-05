@@ -39,7 +39,6 @@ extern uint32_t flags;
 #define CONFIG_SERVICE_EMONCMS  (1 << 0)
 #define CONFIG_SERVICE_MQTT     (1 << 1)
 #define CONFIG_SERVICE_OHM      (1 << 2)
-#define CONFIG_SERVICE_DIVERT   (1 << 3)
 
 inline bool config_emoncms_enabled() {
   return CONFIG_SERVICE_EMONCMS == (flags & CONFIG_SERVICE_EMONCMS);
@@ -51,10 +50,6 @@ inline bool config_mqtt_enabled() {
 
 inline bool config_ohm_enabled() {
   return CONFIG_SERVICE_OHM == (flags & CONFIG_SERVICE_OHM);
-}
-
-inline bool config_divert_enabled() {
-  return CONFIG_SERVICE_DIVERT == (flags & CONFIG_SERVICE_DIVERT);
 }
 
 // Ohm Connect Settings

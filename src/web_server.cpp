@@ -180,7 +180,7 @@ handleSaveEmoncms(AsyncWebServerRequest *request) {
            emoncms_server.c_str(),
            emoncms_node.c_str(),
            emoncms_apikey.c_str(),
-          emoncms_fingerprint.c_str());
+           emoncms_fingerprint.c_str());
   DBUGLN(tmpStr);
 
   response->setCode(200);
@@ -233,11 +233,6 @@ handleDivertMode(AsyncWebServerRequest *request){
   }
 
   divertmode_update(request->arg("divertmode").toInt());
-  uint32_t newFlags = flags & ~CONFIG_SERVICE_DIVERT;
-  if(isPositive(request->arg("enable"))) {
-    newFlags |= CONFIG_SERVICE_DIVERT;
-  }
-  config_save_flags(newFlags);
 
   response->setCode(200);
   response->print("Divert Mode changed");
@@ -397,7 +392,6 @@ handleConfig(AsyncWebServerRequest *request) {
   s += "\"www_username\":\"" + www_username + "\",";
   //s += "\"www_password\":\""+www_password+"\","; security risk: DONT RETURN PASSWORDS
   s += "\"ohm_enabled\":" + String(config_ohm_enabled() ? "true" : "false") + ",";
-  s += "\"divert_enabled\":" + String(config_divert_enabled() ? "true" : "false") + ",";
   s += "\"divertmode\":\""+String(divertmode)+"\"";
   s += "}";
 

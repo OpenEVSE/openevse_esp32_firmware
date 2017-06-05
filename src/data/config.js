@@ -98,7 +98,6 @@ function ConfigViewModel() {
     "mqtt_enabled": 0,
     "ohm_enabled": 0,
     "ohmkey": "",
-    "divert_enabled": 0,
     "www_username": "",
     "www_password": "",
     "firmware": "-",
