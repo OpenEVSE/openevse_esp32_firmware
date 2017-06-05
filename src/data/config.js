@@ -378,8 +378,9 @@ function OpenEvseViewModel() {
   };
 
   self.divertmode = ko.pureComputed(function () {
-    if('' === self.config.mqtt_solar() ||
-        '' === self.config.mqtt_grid_ie())
+    if(!self.config.mqtt_enabled() ||
+       ('' === self.config.mqtt_solar() &&
+        '' === self.config.mqtt_grid_ie()))
     {
       return 0;
     } else {
