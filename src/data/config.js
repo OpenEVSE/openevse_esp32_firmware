@@ -174,7 +174,14 @@ function OpenEvseViewModel() {
   var updateTime = 1 * 1000;
 
   // Tabs
-  self.tab = ko.observable('system');
+  var tab = 'system';
+  if('' !== window.location.hash) {
+    tab = window.location.hash.substr(1);
+  }
+  self.tab = ko.observable(tab);
+  self.tab.subscribe(function (val) {
+    window.location.hash = '#' + val;
+  });
   self.isSystem = ko.pureComputed(function() { return 'system' === self.tab(); });
   self.isServices = ko.pureComputed(function() { return 'services' === self.tab(); });
   self.isStatus = ko.pureComputed(function() { return 'status' === self.tab(); });
