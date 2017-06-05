@@ -83,6 +83,10 @@ uint32_t flags;
 #define EEPROM_FLAGS_START            EEPROM_OHM_KEY_END
 #define EEPROM_FLAGS_END              (EEPROM_FLAGS_START + EEPROM_FLAGS_SIZE)
 
+#if EEPROM_OHM_KEY_END > EEPROM_SIZE
+#error EEPROM_SIZE too small
+#endif
+
 #define CHECKSUM_SEED 128
 
 // -------------------------------------------------------------------
@@ -113,7 +117,7 @@ EEPROM_read_string(int start, int count, String & val, String defaultVal = "") {
 
   // Check the checksum
   byte c = EEPROM.read(start + (count - 1));
-  DBUGF("Got '%s'  %d == %d", val.c_str(), c, checksum);
+  DBUGF("Got '%s' %d == %d @ %d:%d", val.c_str(), c, checksum, start, count);
   if(c != checksum) {
     DBUGF("Using default '%s'", defaultVal.c_str());
     val = defaultVal;
@@ -132,6 +136,7 @@ EEPROM_write_string(int start, int count, String val) {
     }
   }
   EEPROM.write(start + (count - 1), checksum);
+  DBUGF("Saved '%s' %d @ %d:%d", val.c_str(), checksum, start, count);
 }
 
 void

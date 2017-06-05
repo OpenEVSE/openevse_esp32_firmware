@@ -1,7 +1,7 @@
 #ifndef __DEBUG_H
 #define __DEBUG_H
 
-//#define DEBUG
+//#define ENABLE_DEBUG
 //#define DEBUG_PORT Serial
 
 #define TEXTIFY(A) #A
@@ -9,9 +9,14 @@
 
 #ifdef ENABLE_DEBUG
 
+#ifdef DEBUG_SERIAL1
+#error DEBUG_SERIAL1 defiend, please use -DDEBUG_PORT=Serial1 instead
+#endif
+
 #ifndef DEBUG_PORT
 #define DEBUG_PORT Serial1
 #endif
+#define DEBUG DEBUG_PORT
 
 #define DEBUG_BEGIN(speed)  DEBUG_PORT.begin(speed)
 
@@ -25,6 +30,12 @@
 #define DBUGF(...)
 #define DBUG(...)
 #define DBUGLN(...)
+
+#ifdef DEBUG_SERIAL1
+#define DEBUG Serial1
+#else
+#define DEBUG Serial
+#endif
 
 #endif // DEBUG
 

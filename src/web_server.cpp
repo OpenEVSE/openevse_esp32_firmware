@@ -730,6 +730,8 @@ web_server_setup() {
 
 void
 web_server_loop() {
+  Profile_Start(web_server_loop);
+
   // Do we need to restart the WiFi?
   if(wifiRestartTime > 0 && millis() > wifiRestartTime) {
     wifiRestartTime = 0;
@@ -755,4 +757,6 @@ web_server_loop() {
     wifi_disconnect();
     ESP.reset();
   }
+
+  Profile_End(web_server_loop, 5);
 }

@@ -98,6 +98,8 @@ create_rapi_json() {
 
 void
 update_rapi_values() {
+  Profile_Start(update_rapi_values);
+
   if ((millis() - comm_Timer) >= comm_Delay) {
     if (rapi_command_sent == 0) {
        Serial.flush();
@@ -244,10 +246,13 @@ update_rapi_values() {
     }
     comm_Timer = millis();
   }
+
+  Profile_End(update_rapi_values, 5);
 }
 
 void
 handleRapiRead() {
+  Profile_Start(handleRapiRead);
   Serial.flush();
   Serial.println("$GV*C1");
   comm_sent++;
@@ -340,4 +345,5 @@ handleRapiRead() {
      }
     }
   }
+  Profile_End(handleRapiRead, 10);
 }

@@ -16,6 +16,8 @@ unsigned long packets_success = 0;
 
 void
 emoncms_publish(String url) {
+  Profile_Start(emoncms_publish);
+
   if (emoncms_apikey != 0) {
     DEBUG.println(emoncms_server.c_str() + String(url));
     packets_sent++;
@@ -43,4 +45,6 @@ emoncms_publish(String url) {
       DEBUG.println(result);
     }
   }
+
+  Profile_End(emoncms_publish, 10);
 }

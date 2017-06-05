@@ -36,6 +36,7 @@
 #include "emoncms.h"
 #include "mqtt.h"
 #include "divert.h"
+#include "ota.h"
 
 unsigned long Timer1; // Timer for events once every 30 seconds
 unsigned long Timer2; // Timer for events once every 1 Minute
@@ -51,14 +52,12 @@ setup() {
   Serial.begin(115200);
   pinMode(0, INPUT);
 
-#ifdef DEBUG_SERIAL1
-  Serial1.begin(115200);
-#endif
+  DEBUG_BEGIN(115200);
 
-  DEBUG.println();
-  DEBUG.print("OpenEVSE WiFI ");
-  DEBUG.println(ESP.getChipId());
-  DEBUG.println("Firmware: " + currentfirmware);
+  DBUGLN();
+  DBUG("OpenEVSE WiFI ");
+  DBUGLN(ESP.getChipId());
+  DBUGLN("Firmware: " + currentfirmware);
 
   // Read saved settings from the config
   config_load_settings();
@@ -70,9 +69,7 @@ setup() {
   web_server_setup();
 
 #ifdef ENABLE_OTA
-  // Start local OTA update server
-  ArduinoOTA.setHostname(esp_hostname);
-  ArduinoOTA.begin();
+  ota_setup();
 #endif
 } // end setup
 
@@ -81,16 +78,17 @@ setup() {
 // -------------------------------------------------------------------
 void
 loop() {
+  Profile_Start(loop);
 
   web_server_loop();
   wifi_loop();
 #ifdef ENABLE_OTA
-  ArduinoOTA.handle();
+  ota_loop();
 #endif
 
   // Gives OpenEVSE time to finish self test on cold start
   if ( (millis() > 5000) && (rapi_read==0) ) {
-    DEBUG.println("first read RAPI values");
+    DBUGLN("first read RAPI values");
     handleRapiRead(); //Read all RAPI values
     rapi_read=1;
   }
@@ -98,6 +96,7 @@ loop() {
   // Do these things once every 2s
   // -------------------------------------------------------------------
   if ((millis() - Timer3) >= 2000) {
+    DBUGLN("Time3");
     update_rapi_values();
     Timer3 = millis();
   }
@@ -112,7 +111,7 @@ loop() {
     // Do these things once every Minute
     // -------------------------------------------------------------------
     if ((millis() - Timer2) >= 60000) {
-      DEBUG.println("Time2");
+      DBUGLN("Time2");
       if(config_ohm_enabled()) {
         ohm_loop();
       }
@@ -123,7 +122,7 @@ loop() {
     // Do these things once every 30 seconds
     // -------------------------------------------------------------------
     if ((millis() - Timer1) >= 30000) {
-      DEBUG.println("Time1");
+      DBUGLN("Time1");
 
       create_rapi_json(); // create JSON Strings for EmonCMS and MQTT
       if (config_emoncms_enabled()) {
@@ -132,9 +131,13 @@ loop() {
       if (config_mqtt_enabled()) {
         mqtt_publish(data);
       }
+      Timer1 = millis();
+    }
 
       Timer1 = millis();
     }
 
   } // end WiFi connected
+
+  Profile_End(loop, 10);
 } // end loop

@@ -33,7 +33,7 @@ int charge_rate = 0;
 // function called when divert mode is changed
 void divertmode_update(byte newmode){
   divertmode = newmode;
-  
+
   // restore max charge current if normal mode or zero if eco mode
   if (divertmode == 1) charge_rate = max_charge_current;
   if (divertmode == 2) charge_rate = 0;
@@ -41,25 +41,26 @@ void divertmode_update(byte newmode){
 
 // Set charge rate depending on divert mode and solar / grid_ie
 void divert_current_loop(){
+  Profile_Start(mqtt_loop);
 
   if (divertmode == 1){
     DEBUG.print("Divert mode: 1 Normal");
   }
-  
+
   // If divert mode = Eco (2)
   if (divertmode == 2){
     DEBUG.print("Divert mode: 2 Eco");
     int Isolar = 0;
     int Igrid_ie = 0;
-    
-    
-    
+
+
+
     // L1: voltage is 110V
     if (service == 1){
       // Calculate current
       if (mqtt_solar!="") Isolar = solar / 110;
       if (mqtt_grid_ie!="") Igrid_ie = grid_ie / 110;
-      
+
       // if grid feed is available and exporting: charge rate = export - EVSE current
       // grid_ie is negative when exporting
       // If grid feeds is available and exporting (negative)
@@ -70,14 +71,14 @@ void divert_current_loop(){
         }
       }
     } //end L1 service
-      
-      
+
+
     // L2: voltage is 240V
     if (service == 2) {
       // Calculate current
       if (mqtt_solar!="") Isolar = solar / 240;
       if (mqtt_grid_ie!="") Igrid_ie = grid_ie / 240;
-      
+
       // if grid feed is available and exporting: charge rate = export - EVSE current
       // grid_ie is negative when exporting
       // If grid feeds is available and exporting (negative)
@@ -88,24 +89,22 @@ void divert_current_loop(){
         }
       }
     } //end L2 service
-    
+
     // if grid feed is not available: charge rate = solar generation
     if ((mqtt_solar!="") && (mqtt_grid_ie="")) charge_rate = Isolar;
-      
+
     // Set charge rate via RAPI
     Serial.print("$SC");
     Serial.println(charge_rate);
     delay(60);
     DEBUG.print("Set charge rate: "); DEBUG.println(charge_rate);
-    
+
     // If charge rate > min current and EVSE is sleeping then start charging
     if ( (charge_rate > min_charge_current) && ((state == 254) || (state = 596)) ){
       DEBUG.print("Wake up EVSE");
       Serial.print("$FE");
     }
-    
-    
   } // end ecomode
-  
-  
+
+  Profile_End(mqtt_loop, 5);
 } //end divert_current_loop
