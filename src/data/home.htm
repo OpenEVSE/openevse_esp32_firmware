@@ -130,6 +130,10 @@
           <div class="box380">
             <h2>&nbsp; Energy Monitoring <img src="emoncms.jpg" align=left></h2>
             <p>
+              <input type="checkbox" id="emoncms_enabled" data-bind="checked: config.emoncms_enabled" />
+              <label for="emoncms_enabled"><b>Enable Emoncms</b></label>
+            </p>
+            <p data-bind="visible: config.emoncms_enabled">
               <b>Emoncms Server*:</b><br>
               <input type="text" data-bind="textInput: config.emoncms_server"><br/>
               <span class="small-text">e.g:
@@ -138,89 +142,119 @@
                 <a href="http://emonpi/emoncms">emonpi/emoncms</a>
               </span><br>
             </p>
-            <p>
+            <p data-bind="visible: config.emoncms_enabled">
               <b>Emoncms Node*:</b><br>
               <input type="text" data-bind="textInput: config.emoncms_node">
             </p>
-            <p>
+            <p data-bind="visible: config.emoncms_enabled">
               <b>Emoncms write-apikey*:</b><br>
               <input type="text" data-bind="textInput: config.emoncms_apikey"><br>
             </p>
-            <p>
+            <p data-bind="visible: config.emoncms_enabled">
               <b>Emoncms SSL SHA-1 Fingerprint (optional):</b><br>
               <input type="text" data-bind="textInput: config.emoncms_fingerprint"><br>
               <br><span class="small-text">HTTPS will be enabled if present e.g:</span>
               <span class="small-text">
                 7D:82:15:BE:D7:BC:72:58:87:7D:8E:40:D4:80:BA:1A:9F:8B:8D:DA
-              </span><br>
+              </span>
+            </p>
+            <p>
               <button data-bind="click: saveEmonCms, text: (saveEmonCmsFetching() ? 'Saving' : (saveEmonCmsSuccess() ? 'Saved' : 'Save')), disable: saveEmonCmsFetching">Save</button>
-              <span><b>&nbsp; Connected:&nbsp;<span data-bind="text: '1' === status.emoncms_connected() ? 'Yes' : 'No'"></span></b></span>
-              <span data-bind="visible: '1' === status.emoncms_connected()"><b>&nbsp; Successful posts:&nbsp;<span data-bind="text: status.packets_success"></span></b></span>
+              <span data-bind="visible: config.emoncms_enabled"><b>&nbsp; Connected:&nbsp;<span data-bind="text: '1' === status.emoncms_connected() ? 'Yes' : 'No'"></span></b></span>
+              <span data-bind="visible: config.emoncms_enabled() &amp;&amp; '1' === status.emoncms_connected()"><b>&nbsp; Successful posts:&nbsp;<span data-bind="text: status.packets_success"></span></b></span>
             </p>
           </div>
 
           <div class="box380">
             <h2>MQTT</h2>
             <p>
+              <input type="checkbox" id="mqtt_enabled" data-bind="checked: config.mqtt_enabled" />
+              <label for="mqtt_enabled"><b>Enable MQTT</b></label>
+            </p>
+            <p data-bind="visible: config.mqtt_enabled">
               Status published to:<br/>
               <span class="small-text">{base-topic}/{status} value</span><br>
               <span class="small-text">e.g. <span data-bind="text: '' !== config.mqtt_topic() ? config.mqtt_topic() : 'openevse'"></span>/amp 16</span><br>
             </p>
-            <p>
+            <p data-bind="visible: config.mqtt_enabled">
               RAPI control subscribes to:<br/>
               <span class="small-text">{base-topic}/rapi/in/{command} value</span><br>
               <span class="small-text">e.g. <span data-bind="text: '' !== config.mqtt_topic() ? config.mqtt_topic() : 'openevse'"></span>/rapi/in/$SC 16</span><br>
               <span class="small-text">e.g. <span data-bind="text: '' !== config.mqtt_topic() ? config.mqtt_topic() : 'openevse'"></span>/rapi/in/$GC</span><br>
-            <p>
-            <p>
+            </p>
+            <p data-bind="visible: config.mqtt_enabled">
               RAPI response published to:<br/>
               <span class="small-text">{base-topic}/rapi/out response</span><br>
               <span class="small-text">e.g. <span data-bind="text: '' !== config.mqtt_topic() ? config.mqtt_topic() : 'openevse'"></span>/rapi/out $OK 6 32</span><br>
             </p>
-            <p><b>Host*:</b><br>
+            <p data-bind="visible: config.mqtt_enabled">
+              <b>Host*:</b><br>
               <input data-bind="textInput: config.mqtt_server" type="text"><br/>
               <span class="small-text">e.g 'emonpi', 'test.mosquitto.org', '192.168.1.4'</span>
             </p>
-            <p><b>Username:</b><span> blank - no authentication</span>
+            <p data-bind="visible: config.mqtt_enabled">
+              <b>Username:</b><span> blank - no authentication</span>
               <input data-bind="textInput: config.mqtt_user" type="text">
             </p>
-            <p><b>Password:</b><span> blank - no authentication</span>
+            <p data-bind="visible: config.mqtt_enabled">
+              <b>Password:</b><span> blank - no authentication</span>
               <input data-bind="textInput: config.mqtt_pass" type="text"><br>
             </p>
-            <p><b>Base-topic*:</b><br>
+            <p data-bind="visible: config.mqtt_enabled">
+              <b>Base-topic*:</b><br>
               <input data-bind="textInput: config.mqtt_topic" type="text"><br/>
               <span class="small-text">e.g 'openevse'</span>
             </p>
-            <h2>Solar PV divert</h2>
-            <p>Modulate charge rate based on available solar PV power.</p>
-            <span class="small-text"><b>Enter either:</b> solar PV MQTT topic to modulate charge rate based on solar PV <b>gen</b> e.g. (charge rate = gen):</span><br>
-            <p><b>SolarPV-gen topic:</b>
+            <h2 data-bind="visible: config.mqtt_enabled">Solar PV divert</h2>
+            <p data-bind="visible: config.mqtt_enabled">
+              Modulate charge rate based on available solar PV power.<br/>
+              <span class="small-text"><b>Enter either:</b> solar PV MQTT topic to modulate charge rate based on solar
+               PV <b>gen</b> e.g. (charge rate = gen):</span><br>
+            </p>
+            <p data-bind="visible: config.mqtt_enabled">
+              <b>SolarPV-gen topic:</b>
               <input data-bind="textInput: config.mqtt_solar" type="text" value="emon/emonpi/power2"><br>
               <span class="small-text">Always positive.</span><br><br>
               <span class="small-text"><b>Or enter:</b> Grid (+I/-E) MQTT topic to modulate charge rate based on <b>excess power</b> i.e. power that would otherwise be exported is diverted to EVSE. Assumed EVSE power is included in grid feed e.g. (charge rate = gen - use - EVSE)</span>
             </p>
-            <p><b>Grid (+I/-E) topic:</b><br>
-            <input data-bind="textInput: config.mqtt_grid_ie" type="text" value="emon/emonpi/power1"><br>
-            <span class="small-text">Grid: positive Import / negative Export </span>
+            <p data-bind="visible: config.mqtt_enabled">
+              <b>Grid (+I/-E) topic:</b><br>
+              <input data-bind="textInput: config.mqtt_grid_ie" type="text" value="emon/emonpi/power1"><br>
+              <span class="small-text">Grid: positive Import / negative Export </span>
             </p>
-            <p>
+            <p data-bind="visible: config.mqtt_enabled">
               <span class="small-text"><i>Fields are pre-populated with <a href="https://guide.openenergymonitor.org/applications/solar-pv/">emonPi solar PV defaults</a>.</i></span></p>
             </p>
-            <button data-bind="click: saveMqtt, text: (saveMqttFetching() ? 'Saving' : (saveMqttSuccess() ? 'Saved' : 'Save')), disable: saveMqttFetching">Save</button>
-            <b>&nbsp; Connected:&nbsp;<span data-bind="text: '1' === status.mqtt_connected() ? 'Yes' : 'No'"></span></b>
+            <p>
+              <button data-bind="click: saveMqtt, text: (saveMqttFetching() ? 'Saving' : (saveMqttSuccess() ? 'Saved' : 'Save')), disable: saveMqttFetching">Save</button>
+              <span data-bind="visible: config.mqtt_enabled"><b>&nbsp; Connected:&nbsp;<span data-bind="text: '1' === status.mqtt_connected() ? 'Yes' : 'No'"></span></b></span>
+            </p>
           </div>
 
           <div class="box380">
             <h2>&nbsp; OhmConnect <img src="ohm.jpg" align=left></h2>
-            <p>OhmConnect monitors real-time conditions on the electricity grid. When dirty and unsustainable power plants turn
-              on, our users receive a notification to save energy.</p>
-            <p><b>Ohm Hour:</b> <span data-bind="text: status.ohm_hour"></span></p>
-            <p><b>Ohm key:</b><br>
-              <input data-bind="textInput: config.ohmkey" type="text"><br/>
-              <button data-bind="click: saveOhmKey, text: (saveOhmKeyFetching() ? 'Saving' : (saveOhmKeySuccess() ? 'Saved' : 'Save')), disable: saveOhmKeyFetching">Save</button>
-              <p>Ohm Key can be obtained by logging in to OhmConnect, enter Settings and locate the link in "Open Source Projects"</p>
-              <p>Example: https://login.ohmconnect.com/verify-ohm-hour/OpnEoVse</p>
+            <p>
+              <input type="checkbox" id="ohm_enabled" data-bind="checked: config.ohm_enabled" />
+              <label for="ohm_enabled"><b>Enable OhmConnect</b></label>
+            </p>
+            <p data-bind="visible: config.ohm_enabled">
+              OhmConnect monitors real-time conditions on the electricity grid. When dirty and unsustainable power plants turn
+              on, our users receive a notification to save energy.
+            </p>
+            <p data-bind="visible: config.ohm_enabled">
+              <b>Ohm Hour:</b> <span data-bind="text: status.ohm_hour"></span>
+            </p>
+            <p data-bind="visible: config.ohm_enabled">
+              <b>Ohm key:</b><br>
+              <input data-bind="textInput: config.ohmkey" type="text">
+            </p>
+            <p data-bind="visible: config.ohm_enabled">
+              Ohm Key can be obtained by logging in to OhmConnect, enter Settings and locate the link in "Open Source Projects"<br/>
+              Example: https://login.ohmconnect.com/verify-ohm-hour/OpnEoVse<br/>
               <b>Key: </b>OpnEoVse
+            </p>
+            <p>
+              <button data-bind="click: saveOhmKey, text: (saveOhmKeyFetching() ? 'Saving' : (saveOhmKeySuccess() ? 'Saved' : 'Save')), disable: saveOhmKeyFetching">Save</button>
             </p>
           </div>
         </div>
@@ -611,6 +645,12 @@
 
         <!--TAB 5 -->
         <div id="content-5" data-bind="visible: isMode">
+            <div data-bind="visible: 0 === divertmode()" class="box380 warning">
+              <h4>Solar PV Divert</h4>
+              Solar PV Divert requires the SolarPV-gen or Grid (+I/-E) MQTT topic to be defined on the
+              <a href="#services" data-bind="click: function() { tab('services'); config.mqtt_enabled(true); }">Services</a>
+              tab.
+            </div>
           <div class="box380" data-bind="style: { opacity: 0 === divertmode() ? 0.5 : 1.0 }">
             <h2>Solar PV Divert</h2>
             <p>Dynamically adjust charge rate based on solar PV generation or excess power (grid export).</p>

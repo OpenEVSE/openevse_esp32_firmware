@@ -202,8 +202,6 @@ input[type="file"] {
 .tabs input:checked + label {
 	background: #f1f1f1;
 	color: #000;
-	position: relative;
-	z-index: 6;
 	/*
 	-webkit-transition: .1s;
 	-moz-transition: .1s;
@@ -213,7 +211,6 @@ input[type="file"] {
 }
 
 #content {
-	visibility: visible;
 	background: #e1e1e1;
 	border-radius: .5em .5em .5em .5em;
 	box-shadow: 1px 7px 7px 1px rgba(0, 0, 0, 0.4);
@@ -233,27 +230,12 @@ input[type="file"] {
   }
 }
 
-
-#content-1 div input[type=text] {
+input[type=text] {
   border: 1px solid #ddd;
   padding:5px;
 }
 
-#content-1 div input[type=file] {
-  border: 1px solid #ddd;
-  padding:5px;
-}
-
-#content-2 div {
-  background: #ffffff;
-}
-
-#content-2 div input[type=text] {
-  border: 1px solid #ddd;
-  padding:5px;
-}
-
-#content-4 div input[type=text] {
+input[type=file] {
   border: 1px solid #ddd;
   padding:5px;
 }
@@ -267,4 +249,61 @@ input[type="file"] {
 .small-text{
   font-size: 10px;
   word-wrap: break-word;
+}
+
+/*
+#content input[type=radio], input[type=checkbox] {
+  display:none;
+}
+#content input[type=radio] + label:before {
+  content: "";
+  display: inline-block;
+  width: 20px;
+  height: 20px;
+  vertical-align:middle;
+  margin-right: 8px;
+  background-color: #008080;
+	box-shadow: 0 2px 2px 0 rgba(0, 0, 0, 0.4);
+	border-radius: 5px;
+}
+#content input[type=checkbox] + label:before {
+  content: "";
+  display: inline-block;
+  width: 20px;
+  height: 20px;
+  vertical-align:middle;
+  margin-right: 8px;
+  background-color: #008080;
+	box-shadow: 0 2px 2px 0 rgba(0, 0, 0, 0.4);
+	border-radius: 5px;
+}
+#content input[type=radio]:checked + label:before {
+  content: "\2022";
+  color:white;
+  background-color: #666;
+  font-size:1.8em;
+  text-align:center;
+  line-height:14px;
+  text-shadow:0px 0px 3px #eee;
+}
+#content input[type=checkbox]:checked + label:before {
+  content:"\2714";
+  color:white;
+  background-color: #666;
+  text-align:center;
+  line-height:15px;
+  text-shadow:0px 0px 3px #eee;
+}
+*/
+
+/* Common styles for all types */
+.warning {
+  border-left-color: #aa6708;
+  border-left-width: 5px;
+}
+
+.warning h4 {
+  color: #aa6708;
+  margin-top: 0;
+  margin-bottom: 5px;
 }
