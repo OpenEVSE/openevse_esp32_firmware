@@ -1,4 +1,4 @@
-/* global $, ko */
+/* global $, ko, OpenEVSE */
 
 (function() {
   "use strict";
@@ -152,10 +152,32 @@ RapiViewModel.prototype.send = function() {
 
 function OpenEvseViewModel() {
   var self = this;
+  self.openevse = new OpenEVSE(baseEndpoint + "/r");
+
+  self.timedate = ko.observable(new Date());
+  self.time = ko.pureComputed(function () {
+    var dt = self.timedate();
+    return dt.getDate()+"/"+dt.getMonth()+"/"+dt.getFullYear();
+  });
+  self.date = ko.pureComputed(function () {
+    var dt = self.timedate();
+    return dt.getHours()+":"+dt.getMinutes()+":"+dt.getSeconds();
+  });
+
+  self.update = function (after = function () { }) {
+    self.openevse.time(function (date) {
+      self.timedate(date);
+    }).always(after);
+  };
+}
+
+function OpenEvseWiFiViewModel() {
+  var self = this;
 
   self.config = new ConfigViewModel();
   self.status = new StatusViewModel();
   self.rapi = new RapiViewModel();
+  self.openevse = new OpenEvseViewModel();
 
   self.initialised = ko.observable(false);
   self.updating = ko.observable(false);
@@ -174,10 +196,12 @@ function OpenEvseViewModel() {
     self.config.update(function () {
       self.status.update(function () {
         self.rapi.update(function () {
-          self.initialised(true);
-          updateTimer = setTimeout(self.update, updateTime);
-          self.upgradeUrl(baseEndpoint + "/update");
-          self.updating(false);
+          self.openevse.update(function () {
+            self.initialised(true);
+            updateTimer = setTimeout(self.update, updateTime);
+            self.upgradeUrl(baseEndpoint + "/update");
+            self.updating(false);
+          });
         });
       });
     });
@@ -361,7 +385,7 @@ function OpenEvseViewModel() {
 
 $(function () {
   // Activates knockout.js
-  var openevse = new OpenEvseViewModel();
+  var openevse = new OpenEvseWiFiViewModel();
   ko.applyBindings(openevse);
   openevse.start();
 });

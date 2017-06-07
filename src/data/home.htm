@@ -33,7 +33,7 @@
       <input id="tab-2" type="radio" name="tab-group" />
       <label for="tab-2">Services</label>
       <input id="tab-3" type="radio" name="tab-group" />
-      <label for="tab-3">Status</label>
+      <label for="tab-3">OpenEVSE</label>
       <input id="tab-4" type="radio" name="tab-group" />
       <label for="tab-4">RAPI</label>
       <input id="tab-5" type="radio" name="tab-group" />
@@ -224,8 +224,21 @@
         </div>
         <!--end TAB 2-->
 
-        <!--TAB 3    -->
+        <!--TAB 3: OpenEVSE -->
         <div id="content-3">
+          <div class="box380" data-bind="with: openevse">
+            <h2>Settings</h2>
+            <table>
+              <tr>
+                <td>Time:</td>
+                <td>
+                  <input type="time" data-bind="text: time" />
+                  <input type="date" data-bind="text: date" />
+                </td>
+              </tr>
+            </table>
+          </div>
+
           <div class="box380">
             <h2>Current</h2>
             <table>
@@ -647,6 +660,7 @@
   </div>
   <!--end page -->
   <script src="lib.js"></script>
+  <script src="openevse.js"></script>
   <script src="config.js"></script>
 </body>
 
