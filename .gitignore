@@ -60,3 +60,4 @@ $RECYCLE.BIN/
 
 full-upload.sh
 *.gch
+.vscode/browse.vc.db*

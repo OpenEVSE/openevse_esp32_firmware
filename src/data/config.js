@@ -1,16 +1,17 @@
+/* global $, ko */
+
+(function() {
+  "use strict";
+
 // Work out the endpoint to use, for dev you can change to point at a remote ESP
 // and run the HTML/JS from file, no need to upload to the ESP to test
 
 var baseHost = window.location.hostname;
 //var baseHost = 'openevse.local';
 //var baseHost = '192.168.4.1';
-var baseEndpoint = 'http://' + baseHost;
+var baseEndpoint = "http://" + baseHost;
 
-var statusupdate = false;
-var selected_network_ssid = "";
-var lastmode = "";
 var ipaddress = "";
-var divertmode = 0;
 
 // Convert string to number, divide by scale, return result
 // as a string with specified precision
@@ -33,7 +34,7 @@ BaseViewModel.prototype.update = function (after = function () { }) {
   self.fetching(true);
   $.get(self.remoteUrl, function (data) {
     ko.mapping.fromJS(data, self);
-  }, 'json').always(function () {
+  }, "json").always(function () {
     self.fetching(false);
     after();
   });
@@ -55,14 +56,14 @@ function StatusViewModel() {
     "mqtt_connected": "",
     "ohm_hour": "",
     "free_heap": ""
-  }, baseEndpoint + '/status');
+  }, baseEndpoint + "/status");
 
   // Some devired values
   self.isWifiClient = ko.pureComputed(function () {
-    return ("STA" == self.mode()) || ("STA+AP" == self.mode());
+    return ("STA" === self.mode()) || ("STA+AP" === self.mode());
   });
   self.isWifiAccessPoint = ko.pureComputed(function () {
-    return ("AP" == self.mode()) || ("STA+AP" == self.mode());
+    return ("AP" === self.mode()) || ("STA+AP" === self.mode());
   });
   self.fullMode = ko.pureComputed(function () {
     switch (self.mode()) {
@@ -120,7 +121,7 @@ function ConfigViewModel() {
     "timelimit": "",
     "version": "0.0.0",
     "divertmode": "0"
-  }, baseEndpoint + '/config');
+  }, baseEndpoint + "/config");
 }
 ConfigViewModel.prototype = Object.create(BaseViewModel.prototype);
 ConfigViewModel.prototype.constructor = ConfigViewModel;
@@ -137,21 +138,21 @@ function RapiViewModel() {
     "estate": "Unknown",
     "wattsec": "0",
     "watthour": "0"
-  }, baseEndpoint + '/rapiupdate');
+  }, baseEndpoint + "/rapiupdate");
 
   this.rapiSend = ko.observable(false);
-  this.cmd = ko.observable('');
-  this.ret = ko.observable('');
+  this.cmd = ko.observable("");
+  this.ret = ko.observable("");
 }
 RapiViewModel.prototype = Object.create(BaseViewModel.prototype);
 RapiViewModel.prototype.constructor = RapiViewModel;
 RapiViewModel.prototype.send = function() {
   var self = this;
   self.rapiSend(true);
-  $.get(baseEndpoint + '/r?json=1&rapi='+encodeURI(self.cmd()), function (data) {
-    self.ret('>'+data.ret);
+  $.get(baseEndpoint + "/r?json=1&rapi="+encodeURI(self.cmd()), function (data) {
+    self.ret(">"+data.ret);
     self.cmd(data.cmd);
-  }, 'json').always(function () {
+  }, "json").always(function () {
     self.rapiSend(false);
   });
 };
@@ -170,7 +171,7 @@ function OpenEvseViewModel() {
   var updateTime = 1 * 1000;
 
   // Upgrade URL
-  self.upgradeUrl = ko.observable('about:blank');
+  self.upgradeUrl = ko.observable("about:blank");
 
   // -----------------------------------------------------------------------
   // Initialise the app
@@ -182,7 +183,7 @@ function OpenEvseViewModel() {
         self.rapi.update(function () {
           self.initialised(true);
           updateTimer = setTimeout(self.update, updateTime);
-          self.upgradeUrl(baseEndpoint + '/update');
+          self.upgradeUrl(baseEndpoint + "/update");
           self.updating(false);
         });
       });
@@ -270,7 +271,7 @@ function OpenEvseViewModel() {
 
     if (emoncms.server === "" || emoncms.node === "") {
       alert("Please enter Emoncms server and node");
-    } else if (emoncms.apikey.length != 32) {
+    } else if (emoncms.apikey.length !== 32) {
       alert("Please enter valid Emoncms apikey");
     } else if (emoncms.fingerprint !== "" && emoncms.fingerprint.length != 59) {
       alert("Please enter valid SSL SHA-1 fingerprint");
@@ -355,8 +356,8 @@ function OpenEvseViewModel() {
   };
 
   self.divertmode = ko.pureComputed(function () {
-    if('' === self.config.mqtt_solar() &&
-        '' === self.config.mqtt_grid_ie())
+    if("" === self.config.mqtt_solar() &&
+        "" === self.config.mqtt_grid_ie())
     {
       return 0;
     } else {
@@ -380,11 +381,12 @@ document.getElementById("apoff").addEventListener("click", function (e) {
   var r = new XMLHttpRequest();
   r.open("POST", "apoff", true);
   r.onreadystatechange = function () {
-    if (r.readyState != 4 || r.status != 200)
+    if (r.readyState !== 4 || r.status !== 200) {
       return;
+    }
     var str = r.responseText;
     console.log(str);
-    document.getElementById("apoff").style.display = 'none';
+    document.getElementById("apoff").style.display = "none";
     if (ipaddress !== "")
       window.location = "http://" + ipaddress;
   };
@@ -400,8 +402,9 @@ document.getElementById("reset").addEventListener("click", function (e) {
     var r = new XMLHttpRequest();
     r.open("POST", "reset", true);
     r.onreadystatechange = function () {
-      if (r.readyState != 4 || r.status != 200)
+      if (r.readyState !== 4 || r.status !== 200) {
         return;
+      }
       var str = r.responseText;
       console.log(str);
       if (str !== 0)
@@ -430,3 +433,5 @@ document.getElementById("restart").addEventListener("click", function (e) {
     r.send();
   }
 });
+
+})();
