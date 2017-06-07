@@ -7,18 +7,11 @@
 // and run the HTML/JS from file, no need to upload to the ESP to test
 
 var baseHost = window.location.hostname;
-//var baseHost = 'openevse.local';
-//var baseHost = '192.168.4.1';
+//var baseHost = "openevse.local";
+//var baseHost = "192.168.4.1";
 var baseEndpoint = "http://" + baseHost;
 
 var ipaddress = "";
-
-// Convert string to number, divide by scale, return result
-// as a string with specified precision
-function scaleString(string, scale, precision) {
-  var tmpval = parseInt(string) / scale;
-  return tmpval.toFixed(precision);
-}
 
 function BaseViewModel(defaults, remoteUrl, mappings = {}) {
   var self = this;
@@ -435,3 +428,12 @@ document.getElementById("restart").addEventListener("click", function (e) {
 });
 
 })();
+
+
+// Convert string to number, divide by scale, return result
+// as a string with specified precision
+function scaleString(string, scale, precision) {
+  "use strict";
+  var tmpval = parseInt(string) / scale;
+  return tmpval.toFixed(precision);
+}
