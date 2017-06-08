@@ -26,8 +26,11 @@ String mqtt_pass = "";
 String mqtt_solar = "";
 String mqtt_grid_ie = "";
 
-//Ohm Connect Settings
+// Ohm Connect Settings
 String ohm = "";
+
+// Flags
+uint32_t flags;
 
 #define EEPROM_ESID_SIZE              32
 #define EEPROM_EPASS_SIZE             64
@@ -43,7 +46,8 @@ String ohm = "";
 #define EEPROM_EMON_FINGERPRINT_SIZE  60
 #define EEPROM_WWW_USER_SIZE          16
 #define EEPROM_WWW_PASS_SIZE          16
-#define EEPROM_OHM_KEY_SIZE           8
+#define EEPROM_OHM_KEY_SIZE           10
+#define EEPROM_FLAGS_SIZE             4
 #define EEPROM_SIZE                   4096
 
 #define EEPROM_ESID_START             0
@@ -76,6 +80,8 @@ String ohm = "";
 #define EEPROM_WWW_PASS_END           (EEPROM_WWW_PASS_START + EEPROM_WWW_PASS_SIZE)
 #define EEPROM_OHM_KEY_START          EEPROM_WWW_PASS_END
 #define EEPROM_OHM_KEY_END            (EEPROM_OHM_KEY_START + EEPROM_OHM_KEY_SIZE)
+#define EEPROM_FLAGS_START            EEPROM_OHM_KEY_END
+#define EEPROM_FLAGS_END              (EEPROM_FLAGS_START + EEPROM_FLAGS_SIZE)
 
 #if EEPROM_OHM_KEY_END > EEPROM_SIZE
 #error EEPROM_SIZE too small
@@ -90,7 +96,7 @@ void
 ResetEEPROM() {
   //DEBUG.println("Erasing EEPROM");
   for (int i = 0; i < EEPROM_SIZE; ++i) {
-    EEPROM.write(i, 0);
+    EEPROM.write(i, 0xff);
     //DEBUG.print("#");
   }
   EEPROM.commit();
@@ -131,6 +137,37 @@ EEPROM_write_string(int start, int count, String val) {
   }
   EEPROM.write(start + (count - 1), checksum);
   DBUGF("Saved '%s' %d @ %d:%d", val.c_str(), checksum, start, count);
+}
+
+void
+EEPROM_read_uint24(int start, uint32_t & val, uint32_t defaultVal = 0) {
+  byte checksum = CHECKSUM_SEED;
+  val = 0;
+  for (int i = 0; i < 3; ++i) {
+    byte c = EEPROM.read(start + i);
+    checksum ^= c;
+    val = (val << 8) | c;
+  }
+
+  // Check the checksum
+  byte c = EEPROM.read(start + 3);
+  DBUGF("Got '%06x'  %d == %d", val, c, checksum);
+  if(c != checksum) {
+    DBUGF("Using default '%06x'", defaultVal);
+    val = defaultVal;
+  }
+}
+
+void
+EEPROM_write_uint24(int start, uint32_t val) {
+  byte checksum = CHECKSUM_SEED;
+  for (int i = 0; i < 3; ++i) {
+    byte c = val & 0xff;
+    val = val >> 8;
+    checksum ^= c;
+    EEPROM.write(start + i, c);
+  }
+  EEPROM.write(start + 3, checksum);
 }
 
 // -------------------------------------------------------------------
@@ -178,11 +215,20 @@ config_load_settings() {
 
   // Ohm Connect Settings
   EEPROM_read_string(EEPROM_OHM_KEY_START, EEPROM_OHM_KEY_SIZE, ohm);
+
+  // Flags
+  EEPROM_read_uint24(EEPROM_FLAGS_START, flags, 0);
 }
 
 void
-config_save_emoncms(String server, String node, String apikey,
-                    String fingerprint) {
+config_save_emoncms(bool enable, String server, String node, String apikey,
+                    String fingerprint)
+{
+  flags = flags & ~CONFIG_SERVICE_EMONCMS;
+  if(enable) {
+    flags |= CONFIG_SERVICE_EMONCMS;
+  }
+
   emoncms_server = server;
   emoncms_node = node;
   emoncms_apikey = apikey;
@@ -204,12 +250,19 @@ config_save_emoncms(String server, String node, String apikey,
   EEPROM_write_string(EEPROM_EMON_FINGERPRINT_START,
                       EEPROM_EMON_FINGERPRINT_SIZE, emoncms_fingerprint);
 
+  EEPROM_write_uint24(EEPROM_FLAGS_START, flags);
+
   EEPROM.commit();
 }
 
 void
-config_save_mqtt(String server, String topic, String user, String pass, String solar, String grid_ie)
+config_save_mqtt(bool enable, String server, String topic, String user, String pass, String solar, String grid_ie)
 {
+  flags = flags & ~CONFIG_SERVICE_MQTT;
+  if(enable) {
+    flags |= CONFIG_SERVICE_MQTT;
+  }
+
   mqtt_server = server;
   mqtt_topic = topic;
   mqtt_user = user;
@@ -228,6 +281,8 @@ config_save_mqtt(String server, String topic, String user, String pass, String s
   EEPROM_write_string(EEPROM_MQTT_SOLAR_START, EEPROM_MQTT_SOLAR_SIZE, mqtt_solar);
   EEPROM_write_string(EEPROM_MQTT_GRID_IE_START, EEPROM_MQTT_GRID_IE_SIZE, mqtt_grid_ie);
 
+  EEPROM_write_uint24(EEPROM_FLAGS_START, flags);
+
   EEPROM.commit();
 }
 
@@ -243,7 +298,8 @@ config_save_admin(String user, String pass) {
 }
 
 void
-config_save_wifi(String qsid, String qpass) {
+config_save_wifi(String qsid, String qpass)
+{
   esid = qsid;
   epass = qpass;
 
@@ -254,12 +310,32 @@ config_save_wifi(String qsid, String qpass) {
 }
 
 void
-config_save_ohm(String qohm) {
+config_save_ohm(bool enable, String qohm)
+{
+  flags = flags & ~CONFIG_SERVICE_OHM;
+  if(enable) {
+    flags |= CONFIG_SERVICE_OHM;
+  }
+
   ohm = qohm;
 
   EEPROM_write_string(EEPROM_OHM_KEY_START, EEPROM_OHM_KEY_SIZE, qohm);
 
+  EEPROM_write_uint24(EEPROM_FLAGS_START, flags);
+
   EEPROM.commit();
+}
+
+void
+config_save_flags(uint32_t newFlags) {
+  if(flags != newFlags)
+  {
+    flags = newFlags;
+
+    EEPROM_write_uint24(EEPROM_FLAGS_START, flags);
+
+    EEPROM.commit();
+  }
 }
 
 void

@@ -34,7 +34,7 @@ bool requestPreProcess(AsyncWebServerRequest *request, AsyncResponseStream *&res
   if(www_username!="" && !request->authenticate(www_username.c_str(), www_password.c_str())) {
     request->requestAuthentication();
     return false;
-}
+  }
 
   response = request->beginResponseStream(contentType);
   if(enableCors) {
@@ -42,6 +42,13 @@ bool requestPreProcess(AsyncWebServerRequest *request, AsyncResponseStream *&res
   }
 
   return true;
+}
+
+// -------------------------------------------------------------------
+// Helper function to detect positive string
+// -------------------------------------------------------------------
+bool isPositive(const String &str) {
+  return str == "1" || str == "true";
 }
 
 // -------------------------------------------------------------------
@@ -162,7 +169,8 @@ handleSaveEmoncms(AsyncWebServerRequest *request) {
     return;
   }
 
-  config_save_emoncms(request->arg("server"),
+  config_save_emoncms(isPositive(request->arg("enable")),
+                      request->arg("server"),
                       request->arg("node"),
                       request->arg("apikey"),
                       request->arg("fingerprint"));
@@ -172,7 +180,7 @@ handleSaveEmoncms(AsyncWebServerRequest *request) {
            emoncms_server.c_str(),
            emoncms_node.c_str(),
            emoncms_apikey.c_str(),
-          emoncms_fingerprint.c_str());
+           emoncms_fingerprint.c_str());
   DBUGLN(tmpStr);
 
   response->setCode(200);
@@ -191,7 +199,8 @@ handleSaveMqtt(AsyncWebServerRequest *request) {
     return;
   }
 
-  config_save_mqtt(request->arg("server"),
+  config_save_mqtt(isPositive(request->arg("enable")),
+                   request->arg("server"),
                    request->arg("topic"),
                    request->arg("user"),
                    request->arg("pass"),
@@ -264,9 +273,10 @@ handleSaveOhmkey(AsyncWebServerRequest *request) {
     return;
   }
 
+  bool enabled = isPositive(request->arg("enable"));
   String qohm = request->arg("ohm");
 
-  config_save_ohm(qohm);
+  config_save_ohm(enabled, qohm);
 
   response->setCode(200);
   response->print("saved");
@@ -367,10 +377,12 @@ handleConfig(AsyncWebServerRequest *request) {
   s += "\"timelimit\":\"" + time_limit + "\",";
   s += "\"ssid\":\"" + esid + "\",";
   //s += "\"pass\":\""+epass+"\","; security risk: DONT RETURN PASSWORDS
+  s += "\"emoncms_enabled\":" + String(config_emoncms_enabled() ? "true" : "false") + ",";
   s += "\"emoncms_server\":\"" + emoncms_server + "\",";
   s += "\"emoncms_node\":\"" + emoncms_node + "\",";
   // s += "\"emoncms_apikey\":\""+emoncms_apikey+"\","; security risk: DONT RETURN APIKEY
   s += "\"emoncms_fingerprint\":\"" + emoncms_fingerprint + "\",";
+  s += "\"mqtt_enabled\":" + String(config_mqtt_enabled() ? "true" : "false") + ",";
   s += "\"mqtt_server\":\"" + mqtt_server + "\",";
   s += "\"mqtt_topic\":\"" + mqtt_topic + "\",";
   s += "\"mqtt_user\":\"" + mqtt_user + "\",";
@@ -379,6 +391,7 @@ handleConfig(AsyncWebServerRequest *request) {
   s += "\"mqtt_grid_ie\":\""+mqtt_grid_ie+"\",";
   s += "\"www_username\":\"" + www_username + "\",";
   //s += "\"www_password\":\""+www_password+"\","; security risk: DONT RETURN PASSWORDS
+  s += "\"ohm_enabled\":" + String(config_ohm_enabled() ? "true" : "false") + ",";
   s += "\"divertmode\":\""+String(divertmode)+"\"";
   s += "}";
 
@@ -574,33 +587,33 @@ handleRapi(AsyncWebServerRequest *request) {
   String s;
 
   if(false == json) {
-  s = "<html><font size='20'><font color=006666>Open</font><b>EVSE</b></font><p>";
+    s = "<html><font size='20'><font color=006666>Open</font><b>EVSE</b></font><p>";
     s += "<b>Open Source Hardware</b><p>RAPI Command Sent<p>Common Commands:<p>";
-  s += "Set Current - $SC XX<p>Set Service Level - $SL 1 - $SL 2 - $SL A<p>";
-  s += "Get Real-time Current - $GG<p>Get Temperatures - $GP<p>";
-        s += "<p>";
-  s += "<form method='get' action='r'><label><b><i>RAPI Command:</b></i></label>";
-  s += "<input name='rapi' length=32><p><input type='submit'></form>";
-}
+    s += "Set Current - $SC XX<p>Set Service Level - $SL 1 - $SL 2 - $SL A<p>";
+    s += "Get Real-time Current - $GG<p>Get Temperatures - $GP<p>";
+    s += "<p>";
+    s += "<form method='get' action='r'><label><b><i>RAPI Command:</b></i></label>";
+    s += "<input name='rapi' length=32><p><input type='submit'></form>";
+  }
 
   if(request->hasArg("rapi"))
   {
-  String rapiString;
+    String rapiString;
     String rapi = request->arg("rapi");
 
     // BUG: Really we should do this in the main loop not here...
-  Serial.flush();
-  Serial.println(rapi);
-  delay(commDelay);
-  while (Serial.available()) {
-         rapiString = Serial.readStringUntil('\r');
-       }
+    Serial.flush();
+    Serial.println(rapi);
+    delay(commDelay);
+    while (Serial.available()) {
+      rapiString = Serial.readStringUntil('\r');
+    }
 
     if(json) {
-    s = "{\"cmd\":\""+rapi+"\",\"ret\":\""+rapiString+"\"}";
+      s = "{\"cmd\":\""+rapi+"\",\"ret\":\""+rapiString+"\"}";
     } else {
       s += rapi;
-    s += "<p>&gt;";
+      s += "<p>&gt;";
       s += rapiString;
     }
   }

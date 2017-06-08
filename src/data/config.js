@@ -88,12 +88,15 @@ function ConfigViewModel() {
     "emoncms_apikey": "",
     "emoncms_node": "",
     "emoncms_fingerprint": "",
+    "emoncms_enabled": 0,
     "mqtt_server": "",
     "mqtt_topic": "",
     "mqtt_user": "",
     "mqtt_pass": "",
     "mqtt_solar": "",
     "mqtt_grid_ie": "",
+    "mqtt_enabled": 0,
+    "ohm_enabled": 0,
     "ohmkey": "",
     "www_username": "",
     "www_password": "",
@@ -168,6 +171,21 @@ function OpenEvseViewModel() {
 
   var updateTimer = null;
   var updateTime = 1 * 1000;
+
+  // Tabs
+  var tab = 'system';
+  if('' !== window.location.hash) {
+    tab = window.location.hash.substr(1);
+  }
+  self.tab = ko.observable(tab);
+  self.tab.subscribe(function (val) {
+    window.location.hash = '#' + val;
+  });
+  self.isSystem = ko.pureComputed(function() { return 'system' === self.tab(); });
+  self.isServices = ko.pureComputed(function() { return 'services' === self.tab(); });
+  self.isStatus = ko.pureComputed(function() { return 'status' === self.tab(); });
+  self.isRapi = ko.pureComputed(function() { return 'rapi' === self.tab(); });
+  self.isMode = ko.pureComputed(function() { return 'mode' === self.tab(); });
 
   // Upgrade URL
   self.upgradeUrl = ko.observable('about:blank');
@@ -262,17 +280,18 @@ function OpenEvseViewModel() {
   self.saveEmonCmsSuccess = ko.observable(false);
   self.saveEmonCms = function () {
     var emoncms = {
+      enable: self.config.emoncms_enabled(),
       server: self.config.emoncms_server(),
       apikey: self.config.emoncms_apikey(),
       node: self.config.emoncms_node(),
       fingerprint: self.config.emoncms_fingerprint()
     };
 
-    if (emoncms.server === "" || emoncms.node === "") {
+    if (emoncms.enable && (emoncms.server === "" || emoncms.node === "")) {
       alert("Please enter Emoncms server and node");
-    } else if (emoncms.apikey.length != 32) {
+    } else if (emoncms.enable && emoncms.apikey.length != 32) {
       alert("Please enter valid Emoncms apikey");
-    } else if (emoncms.fingerprint !== "" && emoncms.fingerprint.length != 59) {
+    } else if (emoncms.enable && emoncms.fingerprint !== "" && emoncms.fingerprint.length != 59) {
       alert("Please enter valid SSL SHA-1 fingerprint");
     } else {
       self.saveEmonCmsFetching(true);
@@ -294,6 +313,7 @@ function OpenEvseViewModel() {
   self.saveMqttSuccess = ko.observable(false);
   self.saveMqtt = function () {
     var mqtt = {
+      enable: self.config.mqtt_enabled(),
       server: self.config.mqtt_server(),
       topic: self.config.mqtt_topic(),
       user: self.config.mqtt_user(),
@@ -302,7 +322,7 @@ function OpenEvseViewModel() {
       grid_ie: self.config.mqtt_grid_ie()
     };
 
-    if (mqtt.server === "") {
+    if (mqtt.enable && mqtt.server === "") {
       alert("Please enter MQTT server");
     } else {
       self.saveMqttFetching(true);
@@ -325,7 +345,10 @@ function OpenEvseViewModel() {
   self.saveOhmKey = function () {
     self.saveOhmKeyFetching(true);
     self.saveOhmKeySuccess(false);
-    $.post(baseEndpoint + "/saveohmkey", { ohm: self.config.ohmkey() }, function (data) {
+    $.post(baseEndpoint + "/saveohmkey", {
+      enable: self.config.ohm_enabled(),
+      ohm: self.config.ohmkey()
+    }, function (data) {
       self.saveOhmKeySuccess(true);
     }).fail(function () {
       alert("Failed to save Ohm key config");
@@ -355,8 +378,9 @@ function OpenEvseViewModel() {
   };
 
   self.divertmode = ko.pureComputed(function () {
-    if('' === self.config.mqtt_solar() &&
-        '' === self.config.mqtt_grid_ie())
+    if(!self.config.mqtt_enabled() ||
+       ('' === self.config.mqtt_solar() &&
+        '' === self.config.mqtt_grid_ie()))
     {
       return 0;
     } else {
