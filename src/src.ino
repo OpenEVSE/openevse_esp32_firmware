@@ -101,9 +101,9 @@ loop() {
     Timer3 = millis();
   }
 
-  if (wifi_mode==WIFI_MODE_STA || wifi_mode==WIFI_MODE_AP_AND_STA){
+  if (wifi_mode==WIFI_MODE_STA || wifi_mode==WIFI_MODE_AP_AND_STA) {
 
-    if (mqtt_server !=0) {
+    if (config_mqtt_enabled()) {
       mqtt_loop();
     }
 
@@ -112,7 +112,9 @@ loop() {
     // -------------------------------------------------------------------
     if ((millis() - Timer2) >= 60000) {
       DBUGLN("Time2");
-      ohm_loop();
+      if(config_ohm_enabled()) {
+        ohm_loop();
+      }
       divert_current_loop();
       Timer2 = millis();
     }
@@ -121,11 +123,12 @@ loop() {
     // -------------------------------------------------------------------
     if ((millis() - Timer1) >= 30000) {
       DBUGLN("Time1");
+
       create_rapi_json(); // create JSON Strings for EmonCMS and MQTT
-      if (emoncms_apikey != 0) {
+      if (config_emoncms_enabled()) {
         emoncms_publish(url);
       }
-      if(mqtt_server != 0) {
+      if (config_mqtt_enabled()) {
         mqtt_publish(data);
       }
       Timer1 = millis();
