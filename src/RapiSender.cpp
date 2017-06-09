@@ -87,7 +87,7 @@ RapiSender::_tokenize() {
   dbgprint("resp: ");
   dbgprintln(_respBuf);
 
-  while (*s != '^') {
+  while (*s != '^' && *s != '\0') {
     chk ^= *(s++);
   }
   if (*s == '^') {
@@ -101,23 +101,21 @@ RapiSender::_tokenize() {
       return 1;
     }
     *s = '\0';
-    s = _respBuf;
   }
 
   _tokenCnt = 0;
+  s = _respBuf;
   while (*s) {
     _tokens[_tokenCnt++] = s++;
     if (_tokenCnt == RAPI_MAX_TOKENS)
       break;
 
-    while (*s && (*s != ' ')) {
+    while (*s && (*s != ' ') && (*s != ESRAPI_SOS)) {
       s++;
     }
     if (*s == ' ') {
       *(s++) = '\0';
-    }
-
-    if (*s == ESRAPI_SOS) {
+    } else if (*s == ESRAPI_SOS) {
       *(s++) = '\0';
       uint8_t seqid = htou8(s + 1);
       if (seqid != _sequenceId) {
