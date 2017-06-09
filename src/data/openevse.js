@@ -68,11 +68,11 @@ function OpenEVSE(endpoint)
 
   self.CORRECT_RESPONSE_PREFIXES = ("$OK", "$NK");
 
-  self.regex = /.*\$(.*\^..).*/;
+  self.regex = /.*\$(.*)(\^..)?.*/;
 
   self._request = function(args, callback = function() {})
   {
-    var command = Array.isArray(args) ? args.join("+") : args;
+    var command = "$" + (Array.isArray(args) ? args.join("+") : args);
 
     var request = new OpenEVSERequest();
     $.get(self._endpoint + "?json=1&rapi="+encodeURI(command), function (data) {
@@ -80,7 +80,7 @@ function OpenEVSE(endpoint)
       if(null !== match)
       {
         var response = match[1].split(" ");
-        if("OK" === response) {
+        if("OK" === response[0]) {
           callback(response.slice(1));
           request._done(response.slice(1));
         } else {
@@ -183,7 +183,7 @@ function OpenEVSE(endpoint)
         var second = parseInt(data[5]);
 
           if(!isNaN(year) && !isNaN(month) && !isNaN(day) && !isNaN(hour) && !isNaN(minute) && !isNaN(second)) {
-          var date = new Date(year, month, day, hour, minute, second);
+          var date = new Date(2000+year, month-1, day, hour, minute, second);
           callback(date);
         } else {
           request._error(new OpenEVSEError("ParseError", "Could not parse time \""+data.join(" ")+"\" arguments"));
