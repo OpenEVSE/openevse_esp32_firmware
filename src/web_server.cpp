@@ -596,18 +596,15 @@ handleRapi(AsyncWebServerRequest *request) {
     s += "<input name='rapi' length=32><p><input type='submit'></form>";
   }
 
-  if(request->hasArg("rapi"))
-  {
-    String rapiString;
+  if (request->hasArg("rapi")) {
     String rapi = request->arg("rapi");
 
     // BUG: Really we should do this in the main loop not here...
     Serial.flush();
-    Serial.println(rapi);
-    delay(commDelay);
-    while (Serial.available()) {
-      rapiString = Serial.readStringUntil('\r');
-    }
+    comm_sent++;
+    if (0 == rapiSender.sendCmd(rapi.c_str())) {
+      comm_success++;
+      String rapiString = rapiSender.getResponse();
 
     if(json) {
       s = "{\"cmd\":\""+rapi+"\",\"ret\":\""+rapiString+"\"}";
@@ -617,6 +614,8 @@ handleRapi(AsyncWebServerRequest *request) {
       s += rapiString;
     }
   }
+  }
+
   if(false == json) {
    s += "<p></html>\r\n\r\n";
   }
