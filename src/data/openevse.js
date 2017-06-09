@@ -3,7 +3,9 @@
 // Based (loosely) on https://github.com/tiramiseb/python-openevse/
 
 /* global $ */
+/* jshint node: true, bitwise: false*/
 
+"use strict";
 
 function OpenEVSEError(type, message = "") {
   this.type = type;
@@ -12,7 +14,6 @@ function OpenEVSEError(type, message = "") {
 
 function OpenEVSERequest()
 {
-  "use strict";
   var self = this;
   self._done = function() {};
   self._error = function() {};
@@ -31,9 +32,9 @@ function OpenEVSERequest()
   };
 }
 
+/* exported OpenEVSE */
 function OpenEVSE(endpoint)
 {
-  "use strict";
   var self = this;
   self._version = "0.1";
   self._endpoint = endpoint;
@@ -53,7 +54,7 @@ function OpenEVSE(endpoint)
           254: "sleeping",
           255: "disabled"
   };
-  self._lcd_colors = ["off","red","green","yellow","blue","violet","teal","white"];
+  self._lcd_colors = ["off", "red", "green", "yellow", "blue", "violet", "teal", "white"];
   self._status_functions = {"disable":"FD", "enable":"FE", "sleep":"FS"};
   self._lcd_types=["monochrome", "rgb"];
   self._service_levels=["A", "1", "2"];
@@ -167,7 +168,7 @@ function OpenEVSE(endpoint)
         "S1", date.getFullYear() - 2000,
         date.getMonth(), date.getDate(),
         date.getHours(), date.getMinutes(),
-        date.getSeconds()], function(data) {
+        date.getSeconds()], function() {
         callback(date);
       });
     }
