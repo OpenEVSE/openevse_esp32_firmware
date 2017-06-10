@@ -108,7 +108,6 @@ RapiSender::_tokenize() {
     s = _respBuf;
   }
 
-
   _tokenCnt = 0;
   while (*s) {
     _tokens[_tokenCnt++] = s++;
@@ -167,11 +166,12 @@ start:
           continue;
         } else if (bufpos && (c == ESRAPI_EOC)) {
           _respBuf[bufpos] = '\0';
+          // Save the original response
+          strncpy(_respBufOrig, _respBuf, RAPI_BUFLEN);
           if (!_tokenize())
             break;
           else
             goto start;
-
         } else {
           _respBuf[bufpos++] = c;
           if (bufpos >= (RAPI_BUFLEN - 1))
@@ -190,8 +190,6 @@ start:
   dbgprintln("");
 #endif
 
-
-
   if (_tokenCnt) {
     if (!strcmp(_respBuf + 1, "OK")) {
       return 0;
@@ -208,10 +206,10 @@ start:
        goto start;
        }
      */
-    else {
+    else { // not OK or NK
       return 2;
     }
-  } else {
+  } else { // !_tokenCnt
     return -1;
   }
 }

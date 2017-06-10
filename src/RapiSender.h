@@ -25,6 +25,7 @@ class RapiSender {
   char *_tokens[RAPI_MAX_TOKENS];
 
   char _respBuf[RAPI_BUFLEN];
+  char _respBufOrig[RAPI_BUFLEN];
   int _tokenize();
   void _sendCmd(const char *cmdstr);
   uint8_t _sequenceIdEnabled() {
@@ -39,6 +40,7 @@ public:
   int sendCmd(const char *cmdstr,unsigned long timeout=RAPI_TIMEOUT_MS);
   void enableSequenceId(uint8_t tf);
   int8_t getTokenCnt() { return _tokenCnt; }
+  const char *getResponse() { return _respBufOrig; }
   const char *getToken(int i) {
     if (i < _tokenCnt) return _tokens[i];
     else return NULL;
