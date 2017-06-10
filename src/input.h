@@ -2,11 +2,12 @@
 #define _EMONESP_INPUT_H
 
 #include <Arduino.h>
+#include "RapiSender.h"
+
+extern RapiSender rapiSender;
 
 extern String url;
 extern String data;
-
-extern int commDelay;
 
 extern String amp;    // OpenEVSE Current Sensor
 extern String volt;   // Not currently in used
