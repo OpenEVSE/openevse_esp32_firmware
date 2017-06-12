@@ -24,8 +24,8 @@ class RapiSender {
   int _tokenCnt;
   char *_tokens[RAPI_MAX_TOKENS];
 
-  char _respBufOrig[RAPI_BUFLEN];
   char _respBuf[RAPI_BUFLEN];
+  char _respBufOrig[RAPI_BUFLEN];
   int _tokenize();
   void _sendCmd(const char *cmdstr);
   uint8_t _sequenceIdEnabled() {

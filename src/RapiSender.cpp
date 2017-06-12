@@ -175,7 +175,6 @@ start:
     }
   } while (!_tokenCnt && ((millis() - mss) < timeout));
 
-
 #ifdef DBG
   dbgprint("\n\rTOKENCNT: ");
   dbgprintln(_tokenCnt);

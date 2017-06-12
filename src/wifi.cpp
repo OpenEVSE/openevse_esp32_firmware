@@ -96,7 +96,7 @@ startAP() {
   rapiSender.sendCmd("$FP 0 1 PASS...openevse.");
   delay(5000);
   rapiSender.sendCmd("$FP 0 0 IP_Address......");
-  snprintf(tmpStr, 40, "%s %s", "$FP 0 1", ipaddress.c_str());
+  snprintf(tmpStr, 40, "$FP 0 1 %s", ipaddress.c_str());
   rapiSender.sendCmd(tmpStr);
 }
 
@@ -160,7 +160,7 @@ startClient() {
     DEBUG.print("Connected, IP: ");
     DEBUG.println(tmpStr);
     rapiSender.sendCmd("$FP 0 0 Client-IP.......");
-    snprintf(tmpStr, 40, "%s %s", "$FP 0 1", ipaddress.c_str());
+    snprintf(tmpStr, 40, "FP 0 1 %s", ipaddress.c_str());
     rapiSender.sendCmd(tmpStr);
     // Copy the connected network and ipaddress to global strings for use in status request
     connected_network = esid;
