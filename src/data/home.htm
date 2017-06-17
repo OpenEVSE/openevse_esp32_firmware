@@ -90,7 +90,7 @@
               <p data-bind="text: config.ssid"></p>
               <p>
                 <b>Passkey:</b><br>
-                <input type="text" data-bind="textInput: config.pass">
+                <input type="text" autocapitalize="none" autocapitalize="none" data-bind="textInput: config.pass">
                 <button data-bind="click: saveNetwork, text: (saveNetworkFetching() ? 'Saving' : (saveNetworkSuccess() ? 'Saved' : 'Connect')), disable: saveAdminFetching">Connect</button>
               </p>
             </div>
@@ -104,11 +104,11 @@
             <h2>Administration</h2>
             <p>
               <b>Username:</b><br>
-              <input type="text" value="admin" data-bind="textInput: config.www_username">
+              <input type="text" autocapitalize="none" value="admin" data-bind="textInput: config.www_username">
             </p>
             <p>
               <b>Password:</b><br>
-              <input type="text" value="openevse" data-bind="textInput: config.www_password"><br>
+              <input type="text" autocapitalize="none" value="openevse" data-bind="textInput: config.www_password"><br>
               <span class="small-text">Web interface HTTP authentication.</span><br><br>
               <button data-bind="click: saveAdmin, text: (saveAdminFetching() ? 'Saving' : (saveAdminSuccess() ? 'Saved' : 'Save')), disable: saveAdminFetching">Save</button>
           </div>
@@ -135,7 +135,7 @@
             </p>
             <p data-bind="visible: config.emoncms_enabled">
               <b>Emoncms Server*:</b><br>
-              <input type="text" data-bind="textInput: config.emoncms_server"><br/>
+              <input type="text" autocapitalize="none" data-bind="textInput: config.emoncms_server"><br/>
               <span class="small-text">e.g:
                 <a href="http://data.openevse.com/emoncms">data.openevse.com/emoncms</a>,
                 <a href="http://emoncms.org">emoncms.org</a>,
@@ -144,15 +144,15 @@
             </p>
             <p data-bind="visible: config.emoncms_enabled">
               <b>Emoncms Node*:</b><br>
-              <input type="text" data-bind="textInput: config.emoncms_node">
+              <input type="text" autocapitalize="none" data-bind="textInput: config.emoncms_node">
             </p>
             <p data-bind="visible: config.emoncms_enabled">
               <b>Emoncms write-apikey*:</b><br>
-              <input type="text" data-bind="textInput: config.emoncms_apikey"><br>
+              <input type="text" autocapitalize="none" data-bind="textInput: config.emoncms_apikey"><br>
             </p>
             <p data-bind="visible: config.emoncms_enabled">
               <b>Emoncms SSL SHA-1 Fingerprint (optional):</b><br>
-              <input type="text" data-bind="textInput: config.emoncms_fingerprint"><br>
+              <input type="text" autocapitalize="none" data-bind="textInput: config.emoncms_fingerprint"><br>
               <br><span class="small-text">HTTPS will be enabled if present e.g:</span>
               <span class="small-text">
                 7D:82:15:BE:D7:BC:72:58:87:7D:8E:40:D4:80:BA:1A:9F:8B:8D:DA
@@ -189,20 +189,20 @@
             </p>
             <p data-bind="visible: config.mqtt_enabled">
               <b>Host*:</b><br>
-              <input data-bind="textInput: config.mqtt_server" type="text"><br/>
+              <input data-bind="textInput: config.mqtt_server" type="text" autocapitalize="none"><br/>
               <span class="small-text">e.g 'emonpi', 'test.mosquitto.org', '192.168.1.4'</span>
             </p>
             <p data-bind="visible: config.mqtt_enabled">
               <b>Username:</b><span> blank - no authentication</span>
-              <input data-bind="textInput: config.mqtt_user" type="text">
+              <input data-bind="textInput: config.mqtt_user" type="text" autocapitalize="none">
             </p>
             <p data-bind="visible: config.mqtt_enabled">
               <b>Password:</b><span> blank - no authentication</span>
-              <input data-bind="textInput: config.mqtt_pass" type="text"><br>
+              <input data-bind="textInput: config.mqtt_pass" type="text" autocapitalize="none"><br>
             </p>
             <p data-bind="visible: config.mqtt_enabled">
               <b>Base-topic*:</b><br>
-              <input data-bind="textInput: config.mqtt_topic" type="text"><br/>
+              <input data-bind="textInput: config.mqtt_topic" type="text" autocapitalize="none"><br/>
               <span class="small-text">e.g 'openevse'</span>
             </p>
             <h2 data-bind="visible: config.mqtt_enabled">Solar PV divert</h2>
@@ -213,13 +213,13 @@
             </p>
             <p data-bind="visible: config.mqtt_enabled">
               <b>SolarPV-gen topic:</b>
-              <input data-bind="textInput: config.mqtt_solar" type="text" value="emon/emonpi/power2"><br>
+              <input data-bind="textInput: config.mqtt_solar" type="text" autocapitalize="none" value="emon/emonpi/power2"><br>
               <span class="small-text">Always positive.</span><br><br>
               <span class="small-text"><b>Or enter:</b> Grid (+I/-E) MQTT topic to modulate charge rate based on <b>excess power</b> i.e. power that would otherwise be exported is diverted to EVSE. Assumed EVSE power is included in grid feed e.g. (charge rate = gen - use - EVSE)</span>
             </p>
             <p data-bind="visible: config.mqtt_enabled">
               <b>Grid (+I/-E) topic:</b><br>
-              <input data-bind="textInput: config.mqtt_grid_ie" type="text" value="emon/emonpi/power1"><br>
+              <input data-bind="textInput: config.mqtt_grid_ie" type="text" autocapitalize="none" value="emon/emonpi/power1"><br>
               <span class="small-text">Grid: positive Import / negative Export </span>
             </p>
             <p data-bind="visible: config.mqtt_enabled">
@@ -246,7 +246,7 @@
             </p>
             <p data-bind="visible: config.ohm_enabled">
               <b>Ohm key:</b><br>
-              <input data-bind="textInput: config.ohmkey" type="text">
+              <input data-bind="textInput: config.ohmkey" type="text" autocapitalize="none">
             </p>
             <p data-bind="visible: config.ohm_enabled">
               Ohm Key can be obtained by logging in to OhmConnect, enter Settings and locate the link in "Open Source Projects"<br/>
@@ -459,7 +459,7 @@
             <form method='get' action='r' data-bind="with: rapi">
               <p>
                 <b>RAPI Command:</b>
-                <input type="text" name='rapi' length='32' data-bind="textInput: cmd" />
+                <input type="text" autocapitalize="none" name='rapi' length='32' data-bind="textInput: cmd" />
               </p>
               <p>
                 <button data-bind="click: send, disable: rapiSend">Send</button>
