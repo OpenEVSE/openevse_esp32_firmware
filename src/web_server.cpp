@@ -130,10 +130,11 @@ handleHome(AsyncWebServerRequest *request) {
 void
 handleScan(AsyncWebServerRequest *request) {
   AsyncResponseStream *response;
-  if(false == requestPreProcess(request, response)) {
+  if(false == requestPreProcess(request, response, "text/json")) {
     return;
   }
 
+#ifdef NO_ASYNC_WIFI_SCAN
   String json = "[";
   int n = WiFi.scanComplete();
   if(n == -2) {
@@ -156,7 +157,36 @@ handleScan(AsyncWebServerRequest *request) {
     }
   }
   json += "]";
-  request->send(200, "text/json", json);
+  response->print(json);
+  request->send(response);
+#else
+  if(WIFI_SCAN_RUNNING == WiFi.scanComplete()) {
+    response->setCode(500);
+    response->setContentType("text/plain");
+    response->print("Busy");
+    request->send(response);
+    return;
+  }
+
+  WiFi.scanNetworksAsync([request, response](int networksFound) {
+    String json = "[";
+    for (int i = 0; i < networksFound; ++i) {
+      if(i) json += ",";
+      json += "{";
+      json += "\"rssi\":"+String(WiFi.RSSI(i));
+      json += ",\"ssid\":\""+WiFi.SSID(i)+"\"";
+      json += ",\"bssid\":\""+WiFi.BSSIDstr(i)+"\"";
+      json += ",\"channel\":"+String(WiFi.channel(i));
+      json += ",\"secure\":"+String(WiFi.encryptionType(i));
+      json += ",\"hidden\":"+String(WiFi.isHidden(i)?"true":"false");
+      json += "}";
+    }
+    WiFi.scanDelete();
+    json += "]";
+    response->print(json);
+    request->send(response);
+  }, true);
+#endif
 }
 
 // -------------------------------------------------------------------
