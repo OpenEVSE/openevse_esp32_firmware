@@ -26,12 +26,60 @@ unsigned long systemRebootTime = 0;
 #define ESCAPEQUOTE(A) TEXTIFY(A)
 String currentfirmware = ESCAPEQUOTE(BUILD_TAG);
 
+void dumpRequest(AsyncWebServerRequest *request) {
+  if(request->method() == HTTP_GET) {
+    DBUGF("GET");
+  } else if(request->method() == HTTP_POST) {
+    DBUGF("POST");
+  } else if(request->method() == HTTP_DELETE) {
+    DBUGF("DELETE");
+  } else if(request->method() == HTTP_PUT) {
+    DBUGF("PUT");
+  } else if(request->method() == HTTP_PATCH) {
+    DBUGF("PATCH");
+  } else if(request->method() == HTTP_HEAD) {
+    DBUGF("HEAD");
+  } else if(request->method() == HTTP_OPTIONS) {
+    DBUGF("OPTIONS");
+  } else {
+    DBUGF("UNKNOWN");
+  }
+  DBUGF(" http://%s%s", request->host().c_str(), request->url().c_str());
+
+  if(request->contentLength()){
+    DBUGF("_CONTENT_TYPE: %s", request->contentType().c_str());
+    DBUGF("_CONTENT_LENGTH: %u", request->contentLength());
+  }
+
+  int headers = request->headers();
+  int i;
+  for(i=0; i<headers; i++) {
+    AsyncWebHeader* h = request->getHeader(i);
+    DBUGF("_HEADER[%s]: %s", h->name().c_str(), h->value().c_str());
+  }
+
+  int params = request->params();
+  for(i = 0; i < params; i++) {
+    AsyncWebParameter* p = request->getParam(i);
+    if(p->isFile()){
+      DBUGF("_FILE[%s]: %s, size: %u", p->name().c_str(), p->value().c_str(), p->size());
+    } else if(p->isPost()){
+      DBUGF("_POST[%s]: %s", p->name().c_str(), p->value().c_str());
+    } else {
+      DBUGF("_GET[%s]: %s", p->name().c_str(), p->value().c_str());
+    }
+  }
+}
+
 // -------------------------------------------------------------------
 // Helper function to perform the standard operations on a request
 // -------------------------------------------------------------------
 bool requestPreProcess(AsyncWebServerRequest *request, AsyncResponseStream *&response, const char *contentType = "application/json")
 {
-  if(www_username!="" && !request->authenticate(www_username.c_str(), www_password.c_str())) {
+  dumpRequest(request);
+
+  if(wifi_mode == WIFI_MODE_STA && www_username!="" &&
+     false == request->authenticate(www_username.c_str(), www_password.c_str())) {
     request->requestAuthentication();
     return false;
   }
@@ -59,7 +107,7 @@ void
 handleHome(AsyncWebServerRequest *request) {
   if (www_username != ""
       && !request->authenticate(www_username.c_str(),
-                              www_password.c_str())
+                                www_password.c_str())
       && wifi_mode == WIFI_MODE_STA) {
     return request->requestAuthentication();
   }
@@ -84,7 +132,7 @@ handleScan(AsyncWebServerRequest *request) {
   AsyncResponseStream *response;
   if(false == requestPreProcess(request, response)) {
     return;
-}
+  }
 
   String json = "[";
   int n = WiFi.scanComplete();
@@ -120,7 +168,7 @@ handleAPOff(AsyncWebServerRequest *request) {
   AsyncResponseStream *response;
   if(false == requestPreProcess(request, response, "text/plain")) {
     return;
-}
+  }
 
   response->setCode(200);
   response->print("Turning AP Off");
@@ -466,7 +514,7 @@ handleRestart(AsyncWebServerRequest *request) {
   AsyncResponseStream *response;
   if(false == requestPreProcess(request, response, "text/plain")) {
     return;
-}
+  }
 
   response->setCode(200);
   response->print("1");
@@ -628,50 +676,8 @@ handleRapi(AsyncWebServerRequest *request) {
 
 void handleNotFound(AsyncWebServerRequest *request)
 {
-  DBUG("NOT_FOUND: ");
-  if(request->method() == HTTP_GET) {
-    DBUGF("GET");
-  } else if(request->method() == HTTP_POST) {
-    DBUGF("POST");
-  } else if(request->method() == HTTP_DELETE) {
-    DBUGF("DELETE");
-  } else if(request->method() == HTTP_PUT) {
-    DBUGF("PUT");
-  } else if(request->method() == HTTP_PATCH) {
-    DBUGF("PATCH");
-  } else if(request->method() == HTTP_HEAD) {
-    DBUGF("HEAD");
-  } else if(request->method() == HTTP_OPTIONS) {
-    DBUGF("OPTIONS");
-  } else {
-    DBUGF("UNKNOWN");
-  }
-  DBUGF(" http://%s%s", request->host().c_str(), request->url().c_str());
-
-  if(request->contentLength()){
-    DBUGF("_CONTENT_TYPE: %s", request->contentType().c_str());
-    DBUGF("_CONTENT_LENGTH: %u", request->contentLength());
-  }
-
-  int headers = request->headers();
-  int i;
-  for(i=0; i<headers; i++) {
-    AsyncWebHeader* h = request->getHeader(i);
-    DBUGF("_HEADER[%s]: %s", h->name().c_str(), h->value().c_str());
-}
-
-  int params = request->params();
-  for(i = 0; i < params; i++) {
-    AsyncWebParameter* p = request->getParam(i);
-    if(p->isFile()){
-      DBUGF("_FILE[%s]: %s, size: %u", p->name().c_str(), p->value().c_str(), p->size());
-    } else if(p->isPost()){
-      DBUGF("_POST[%s]: %s", p->name().c_str(), p->value().c_str());
-    } else {
-      DBUGF("_GET[%s]: %s", p->name().c_str(), p->value().c_str());
-    }
-  }
-
+  DBUGF("NOT_FOUND: ");
+  dumpRequest(request);
   request->send(404);
 }
 
@@ -690,6 +696,7 @@ web_server_setup() {
   // Handle HTTP web interface button presses
   server.on("/generate_204", handleHome);  //Android captive portal. Maybe not needed. Might be handled by notFound
   server.on("/fwlink", handleHome);  //Microsoft captive portal. Maybe not needed. Might be handled by notFound
+  server.on("/connecttest.txt", handleHome);  //Microsoft captive portal. Maybe not needed. Might be handled by notFound
   server.on("/status", handleStatus);
   server.on("/rapiupdate", handleUpdate);
   server.on("/config", handleConfig);
