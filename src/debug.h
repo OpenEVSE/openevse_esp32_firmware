@@ -18,9 +18,10 @@
 #endif
 #define DEBUG DEBUG_PORT
 
+//#define DEBUG_BEGIN(speed)  DEBUG_PORT.begin(speed); DEBUG_PORT.setDebugOutput(true)
 #define DEBUG_BEGIN(speed)  DEBUG_PORT.begin(speed)
 
-#define DBUGF(format, ...)  DEBUG_PORT.printf(format "\n", ##__VA_ARGS__)
+#define DBUGF(format, ...)  DEBUG_PORT.printf(PSTR(format "\n"), ##__VA_ARGS__)
 #define DBUG(...)           DEBUG_PORT.print(__VA_ARGS__)
 #define DBUGLN(...)         DEBUG_PORT.println(__VA_ARGS__)
 
