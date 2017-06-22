@@ -96,7 +96,7 @@ loop() {
   // Do these things once every 2s
   // -------------------------------------------------------------------
   if ((millis() - Timer3) >= 2000) {
-    DBUGLN("Time3");
+    DBUGF("Free: %d", ESP.getFreeHeap());
     update_rapi_values();
     Timer3 = millis();
   }
