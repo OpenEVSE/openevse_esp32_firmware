@@ -139,11 +139,11 @@ handleScan(AsyncWebServerRequest *request) {
     return;
   }
 
-#ifdef NO_ASYNC_WIFI_SCAN
+#ifndef ENABLE_ASYNC_WIFI_SCAN
   String json = "[";
   int n = WiFi.scanComplete();
   if(n == -2) {
-    WiFi.scanNetworks(true);
+    WiFi.scanNetworks(true, false);
   } else if(n) {
     for (int i = 0; i < n; ++i) {
       if(i) json += ",";
@@ -164,7 +164,8 @@ handleScan(AsyncWebServerRequest *request) {
   json += "]";
   response->print(json);
   request->send(response);
-#else
+#else // ENABLE_ASYNC_WIFI_SCAN
+  // Async WiFi scan need the Git version of the ESP8266 core
   if(WIFI_SCAN_RUNNING == WiFi.scanComplete()) {
     response->setCode(500);
     response->setContentType(CONTENT_TYPE_TEXT);
@@ -190,7 +191,7 @@ handleScan(AsyncWebServerRequest *request) {
     json += "]";
     response->print(json);
     request->send(response);
-  }, true);
+  }, false);
 #endif
 }
 

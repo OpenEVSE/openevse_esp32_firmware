@@ -53,27 +53,9 @@ int wifi_mode = WIFI_MODE_STA;
 // -------------------------------------------------------------------
 void
 startAP() {
-  DEBUG.print("Starting AP");
+  DBUGLN("Starting AP");
   WiFi.mode(WIFI_STA);
   WiFi.disconnect();
-  delay(100);
-  DEBUG.print("Scan: ");
-  int n = WiFi.scanNetworks();
-  DEBUG.print(n);
-  DEBUG.println(" networks found");
-  st = "";
-  rssi = "";
-  for (int i = 0; i < n; ++i) {
-    st += "\"" + WiFi.SSID(i) + "\"";
-    rssi += "\"" + String(WiFi.RSSI(i)) + "\"";
-    if (i < n - 1)
-      st += ",";
-    if (i < n - 1)
-      rssi += ",";
-  }
-  delay(100);
-  WiFi.scanDelete();
-
   WiFi.softAPConfig(apIP, apIP, netMsk);
   // Create Unique SSID e.g "emonESP_XXXXXX"
   String softAP_ssid_ID =
@@ -253,24 +235,6 @@ wifi_restart() {
   dnsServer.start(DNS_PORT, "*", apIP);
   wifi_mode = WIFI_MODE_AP_AND_STA;
   startClient();
-}
-
-void
-wifi_scan() {
-  DEBUG.println("WIFI Scan");
-  int n = WiFi.scanNetworks();
-  DEBUG.print(n);
-  DEBUG.println(" networks found");
-  st = "";
-  rssi = "";
-  for (int i = 0; i < n; ++i) {
-    st += "\"" + WiFi.SSID(i) + "\"";
-    rssi += "\"" + String(WiFi.RSSI(i)) + "\"";
-    if (i < n - 1)
-      st += ",";
-    if (i < n - 1)
-      rssi += ",";
-  }
 }
 
 void
