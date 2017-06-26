@@ -32,7 +32,7 @@ String currentfirmware = ESCAPEQUOTE(BUILD_TAG);
 bool requestPreProcess(AsyncWebServerRequest *request, AsyncResponseStream *&response, const char *contentType = "application/json")
 {
   if(www_username!="" && !request->authenticate(www_username.c_str(), www_password.c_str())) {
-    request->requestAuthentication();
+    request->requestAuthentication(esp_hostname);
     return false;
   }
 
@@ -61,7 +61,7 @@ handleHome(AsyncWebServerRequest *request) {
       && !request->authenticate(www_username.c_str(),
                               www_password.c_str())
       && wifi_mode == WIFI_MODE_STA) {
-    return request->requestAuthentication();
+    return request->requestAuthentication(esp_hostname);
   }
 
   if (SPIFFS.exists("/home.htm")) {
