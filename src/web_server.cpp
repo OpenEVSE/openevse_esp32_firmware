@@ -85,7 +85,7 @@ bool requestPreProcess(AsyncWebServerRequest *request, AsyncResponseStream *&res
 
   if(wifi_mode == WIFI_MODE_STA && www_username!="" &&
      false == request->authenticate(www_username.c_str(), www_password.c_str())) {
-    request->requestAuthentication();
+    request->requestAuthentication(esp_hostname);
     return false;
   }
 
@@ -114,7 +114,7 @@ handleHome(AsyncWebServerRequest *request) {
       && !request->authenticate(www_username.c_str(),
                                 www_password.c_str())
       && wifi_mode == WIFI_MODE_STA) {
-    return request->requestAuthentication();
+    return request->requestAuthentication(esp_hostname);
   }
 
   if (SPIFFS.exists("/home.htm")) {
