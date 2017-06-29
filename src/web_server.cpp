@@ -21,24 +21,77 @@ unsigned long mqttRestartTime = 0;
 unsigned long systemRestartTime = 0;
 unsigned long systemRebootTime = 0;
 
+// Content Types
+static const char CONTENT_TYPE_HTML[] PROGMEM = "text/html";
+static const char CONTENT_TYPE_TEXT[] PROGMEM = "text/text";
+static const char CONTENT_TYPE_JSON[] PROGMEM = "application/json";
+
 // Get running firmware version from build tag environment variable
 #define TEXTIFY(A) #A
 #define ESCAPEQUOTE(A) TEXTIFY(A)
 String currentfirmware = ESCAPEQUOTE(BUILD_TAG);
 
+void dumpRequest(AsyncWebServerRequest *request) {
+  if(request->method() == HTTP_GET) {
+    DBUGF("GET");
+  } else if(request->method() == HTTP_POST) {
+    DBUGF("POST");
+  } else if(request->method() == HTTP_DELETE) {
+    DBUGF("DELETE");
+  } else if(request->method() == HTTP_PUT) {
+    DBUGF("PUT");
+  } else if(request->method() == HTTP_PATCH) {
+    DBUGF("PATCH");
+  } else if(request->method() == HTTP_HEAD) {
+    DBUGF("HEAD");
+  } else if(request->method() == HTTP_OPTIONS) {
+    DBUGF("OPTIONS");
+  } else {
+    DBUGF("UNKNOWN");
+  }
+  DBUGF(" http://%s%s", request->host().c_str(), request->url().c_str());
+
+  if(request->contentLength()){
+    DBUGF("_CONTENT_TYPE: %s", request->contentType().c_str());
+    DBUGF("_CONTENT_LENGTH: %u", request->contentLength());
+  }
+
+  int headers = request->headers();
+  int i;
+  for(i=0; i<headers; i++) {
+    AsyncWebHeader* h = request->getHeader(i);
+    DBUGF("_HEADER[%s]: %s", h->name().c_str(), h->value().c_str());
+  }
+
+  int params = request->params();
+  for(i = 0; i < params; i++) {
+    AsyncWebParameter* p = request->getParam(i);
+    if(p->isFile()){
+      DBUGF("_FILE[%s]: %s, size: %u", p->name().c_str(), p->value().c_str(), p->size());
+    } else if(p->isPost()){
+      DBUGF("_POST[%s]: %s", p->name().c_str(), p->value().c_str());
+    } else {
+      DBUGF("_GET[%s]: %s", p->name().c_str(), p->value().c_str());
+    }
+  }
+}
+
 // -------------------------------------------------------------------
 // Helper function to perform the standard operations on a request
 // -------------------------------------------------------------------
-bool requestPreProcess(AsyncWebServerRequest *request, AsyncResponseStream *&response, const char *contentType = "application/json")
+bool requestPreProcess(AsyncWebServerRequest *request, AsyncResponseStream *&response, const char *contentType = CONTENT_TYPE_JSON)
 {
-  if(www_username!="" && !request->authenticate(www_username.c_str(), www_password.c_str())) {
+  dumpRequest(request);
+
+  if(wifi_mode == WIFI_MODE_STA && www_username!="" &&
+     false == request->authenticate(www_username.c_str(), www_password.c_str())) {
     request->requestAuthentication(esp_hostname);
     return false;
   }
 
   response = request->beginResponseStream(contentType);
   if(enableCors) {
-    response->addHeader("Access-Control-Allow-Origin", "*");
+    response->addHeader(F("Access-Control-Allow-Origin"), F("*"));
   }
 
   return true;
@@ -59,7 +112,7 @@ void
 handleHome(AsyncWebServerRequest *request) {
   if (www_username != ""
       && !request->authenticate(www_username.c_str(),
-                              www_password.c_str())
+                                www_password.c_str())
       && wifi_mode == WIFI_MODE_STA) {
     return request->requestAuthentication(esp_hostname);
   }
@@ -67,8 +120,8 @@ handleHome(AsyncWebServerRequest *request) {
   if (SPIFFS.exists("/home.htm")) {
     request->send(SPIFFS, "/home.htm");
   } else {
-    request->send(200, "text/plain",
-                "/home.html not found, have you flashed the SPIFFS?");
+    request->send(200, CONTENT_TYPE_TEXT,
+                F("/home.html not found, have you flashed the SPIFFS?"));
   }
 }
 
@@ -82,14 +135,15 @@ handleHome(AsyncWebServerRequest *request) {
 void
 handleScan(AsyncWebServerRequest *request) {
   AsyncResponseStream *response;
-  if(false == requestPreProcess(request, response)) {
+  if(false == requestPreProcess(request, response, CONTENT_TYPE_JSON)) {
     return;
-}
+  }
 
+#ifndef ENABLE_ASYNC_WIFI_SCAN
   String json = "[";
   int n = WiFi.scanComplete();
   if(n == -2) {
-    WiFi.scanNetworks(true);
+    WiFi.scanNetworks(true, false);
   } else if(n) {
     for (int i = 0; i < n; ++i) {
       if(i) json += ",";
@@ -108,7 +162,37 @@ handleScan(AsyncWebServerRequest *request) {
     }
   }
   json += "]";
-  request->send(200, "text/json", json);
+  response->print(json);
+  request->send(response);
+#else // ENABLE_ASYNC_WIFI_SCAN
+  // Async WiFi scan need the Git version of the ESP8266 core
+  if(WIFI_SCAN_RUNNING == WiFi.scanComplete()) {
+    response->setCode(500);
+    response->setContentType(CONTENT_TYPE_TEXT);
+    response->print("Busy");
+    request->send(response);
+    return;
+  }
+
+  WiFi.scanNetworksAsync([request, response](int networksFound) {
+    String json = "[";
+    for (int i = 0; i < networksFound; ++i) {
+      if(i) json += ",";
+      json += "{";
+      json += "\"rssi\":"+String(WiFi.RSSI(i));
+      json += ",\"ssid\":\""+WiFi.SSID(i)+"\"";
+      json += ",\"bssid\":\""+WiFi.BSSIDstr(i)+"\"";
+      json += ",\"channel\":"+String(WiFi.channel(i));
+      json += ",\"secure\":"+String(WiFi.encryptionType(i));
+      json += ",\"hidden\":"+String(WiFi.isHidden(i)?"true":"false");
+      json += "}";
+    }
+    WiFi.scanDelete();
+    json += "]";
+    response->print(json);
+    request->send(response);
+  }, false);
+#endif
 }
 
 // -------------------------------------------------------------------
@@ -118,9 +202,9 @@ handleScan(AsyncWebServerRequest *request) {
 void
 handleAPOff(AsyncWebServerRequest *request) {
   AsyncResponseStream *response;
-  if(false == requestPreProcess(request, response, "text/plain")) {
+  if(false == requestPreProcess(request, response, CONTENT_TYPE_TEXT)) {
     return;
-}
+  }
 
   response->setCode(200);
   response->print("Turning AP Off");
@@ -137,7 +221,7 @@ handleAPOff(AsyncWebServerRequest *request) {
 void
 handleSaveNetwork(AsyncWebServerRequest *request) {
   AsyncResponseStream *response;
-  if(false == requestPreProcess(request, response, "text/plain")) {
+  if(false == requestPreProcess(request, response, CONTENT_TYPE_TEXT)) {
     return;
   }
 
@@ -165,7 +249,7 @@ handleSaveNetwork(AsyncWebServerRequest *request) {
 void
 handleSaveEmoncms(AsyncWebServerRequest *request) {
   AsyncResponseStream *response;
-  if(false == requestPreProcess(request, response, "text/plain")) {
+  if(false == requestPreProcess(request, response, CONTENT_TYPE_TEXT)) {
     return;
   }
 
@@ -195,7 +279,7 @@ handleSaveEmoncms(AsyncWebServerRequest *request) {
 void
 handleSaveMqtt(AsyncWebServerRequest *request) {
   AsyncResponseStream *response;
-  if(false == requestPreProcess(request, response, "text/plain")) {
+  if(false == requestPreProcess(request, response, CONTENT_TYPE_TEXT)) {
     return;
   }
 
@@ -228,7 +312,7 @@ handleSaveMqtt(AsyncWebServerRequest *request) {
 void
 handleDivertMode(AsyncWebServerRequest *request){
   AsyncResponseStream *response;
-  if(false == requestPreProcess(request, response, "text/plain")) {
+  if(false == requestPreProcess(request, response, CONTENT_TYPE_TEXT)) {
     return;
   }
 
@@ -248,7 +332,7 @@ handleDivertMode(AsyncWebServerRequest *request){
 void
 handleSaveAdmin(AsyncWebServerRequest *request) {
   AsyncResponseStream *response;
-  if(false == requestPreProcess(request, response, "text/plain")) {
+  if(false == requestPreProcess(request, response, CONTENT_TYPE_TEXT)) {
     return;
   }
 
@@ -269,7 +353,7 @@ handleSaveAdmin(AsyncWebServerRequest *request) {
 void
 handleSaveOhmkey(AsyncWebServerRequest *request) {
   AsyncResponseStream *response;
-  if(false == requestPreProcess(request, response, "text/plain")) {
+  if(false == requestPreProcess(request, response, CONTENT_TYPE_TEXT)) {
     return;
   }
 
@@ -443,7 +527,7 @@ handleUpdate(AsyncWebServerRequest *request) {
 void
 handleRst(AsyncWebServerRequest *request) {
   AsyncResponseStream *response;
-  if(false == requestPreProcess(request, response, "text/plain")) {
+  if(false == requestPreProcess(request, response, CONTENT_TYPE_TEXT)) {
     return;
   }
 
@@ -464,9 +548,9 @@ handleRst(AsyncWebServerRequest *request) {
 void
 handleRestart(AsyncWebServerRequest *request) {
   AsyncResponseStream *response;
-  if(false == requestPreProcess(request, response, "text/plain")) {
+  if(false == requestPreProcess(request, response, CONTENT_TYPE_TEXT)) {
     return;
-}
+  }
 
   response->setCode(200);
   response->print("1");
@@ -491,7 +575,7 @@ String handleUpdateCheck() {
   s += "\"current\":\""+currentfirmware+"\",";
   s += "\"latest\":\""+latestfirmware+"\"";
   s += "}";
-  server.send(200, "text/html", s);
+  server.send(200, CONTENT_TYPE_HTML, s);
   return (latestfirmware);
 }
 */
@@ -520,7 +604,7 @@ void handleUpdate() {
       str = "Update done!";
       break;
   }
-  server.send(retCode, "text/plain", str);
+  server.send(retCode, CONTENT_TYPE_TEXT, str);
   DEBUG.println(str);
 }
 */
@@ -531,13 +615,20 @@ void handleUpdate() {
 // -------------------------------------------------------------------
 void
 handleUpdateGet(AsyncWebServerRequest *request) {
-  request->send(200, "text/html", "<form method='POST' action='/update' enctype='multipart/form-data'><input type='file' name='update'><input type='submit' value='Update'></form>");
+  AsyncResponseStream *response;
+  if(false == requestPreProcess(request, response, CONTENT_TYPE_HTML)) {
+    return;
+  }
+
+  response->setCode(200);
+  response->print(PSTR("<form method='POST' action='/update' enctype='multipart/form-data'><input type='file' name='update'><input type='submit' value='Update'></form>"));
+  request->send(response);
 }
 
 void
 handleUpdatePost(AsyncWebServerRequest *request) {
   bool shouldReboot = !Update.hasError();
-  AsyncWebServerResponse *response = request->beginResponse(200, "text/plain", shouldReboot ? "OK" : "FAIL");
+  AsyncWebServerResponse *response = request->beginResponse(200, CONTENT_TYPE_TEXT, shouldReboot ? "OK" : "FAIL");
   response->addHeader("Connection", "close");
   request->send(response);
 
@@ -549,7 +640,7 @@ handleUpdatePost(AsyncWebServerRequest *request) {
 void
 handleUpdateUpload(AsyncWebServerRequest *request, String filename, size_t index, uint8_t *data, size_t len, bool final) {
   if(!index){
-    DBUGF("Update Start: %s\n", filename.c_str());
+    DBUGF("Update Start: %s", filename.c_str());
     Update.runAsync(true);
     if(!Update.begin((ESP.getFreeSketchSpace() - 0x1000) & 0xFFFFF000)){
 #ifdef ENABLE_DEBUG
@@ -557,8 +648,9 @@ handleUpdateUpload(AsyncWebServerRequest *request, String filename, size_t index
 #endif
     }
   }
-  if(!Update.hasError()){
-    if(Update.write(data, len) != len){
+  if(!Update.hasError()) {
+    DBUGF("Update Writing %d", index);
+    if(Update.write(data, len) != len) {
 #ifdef ENABLE_DEBUG
       Update.printError(DEBUG_PORT);
 #endif
@@ -566,7 +658,7 @@ handleUpdateUpload(AsyncWebServerRequest *request, String filename, size_t index
   }
   if(final){
     if(Update.end(true)){
-      DBUGF("Update Success: %uB\n", index+len);
+      DBUGF("Update Success: %uB", index+len);
     } else {
 #ifdef ENABLE_DEBUG
       Update.printError(DEBUG_PORT);
@@ -580,20 +672,20 @@ handleRapi(AsyncWebServerRequest *request) {
   bool json = request->hasArg("json");
 
   AsyncResponseStream *response;
-  if(false == requestPreProcess(request, response, json ? "application/json" : "text/html")) {
+  if(false == requestPreProcess(request, response, json ? CONTENT_TYPE_JSON : CONTENT_TYPE_HTML)) {
     return;
   }
 
   String s;
 
   if(false == json) {
-    s = "<html><font size='20'><font color=006666>Open</font><b>EVSE</b></font><p>";
-    s += "<b>Open Source Hardware</b><p>RAPI Command Sent<p>Common Commands:<p>";
-    s += "Set Current - $SC XX<p>Set Service Level - $SL 1 - $SL 2 - $SL A<p>";
-    s += "Get Real-time Current - $GG<p>Get Temperatures - $GP<p>";
-    s += "<p>";
-    s += "<form method='get' action='r'><label><b><i>RAPI Command:</b></i></label>";
-    s += "<input name='rapi' length=32><p><input type='submit'></form>";
+    s = F("<html><font size='20'><font color=006666>Open</font><b>EVSE</b></font><p>"
+          "<b>Open Source Hardware</b><p>RAPI Command Sent<p>Common Commands:<p>"
+          "Set Current - $SC XX<p>Set Service Level - $SL 1 - $SL 2 - $SL A<p>"
+          "Get Real-time Current - $GG<p>Get Temperatures - $GP<p>"
+          "<p>"
+          "<form method='get' action='r'><label><b><i>RAPI Command:</b></i></label>"
+          "<input name='rapi' length=32><p><input type='submit'></form>");
   }
 
   if(request->hasArg("rapi"))
@@ -613,12 +705,12 @@ handleRapi(AsyncWebServerRequest *request) {
       s = "{\"cmd\":\""+rapi+"\",\"ret\":\""+rapiString+"\"}";
     } else {
       s += rapi;
-      s += "<p>&gt;";
+      s += F("<p>&gt;");
       s += rapiString;
     }
   }
   if(false == json) {
-   s += "<p></html>\r\n\r\n";
+   s += F("<p></html>\r\n\r\n");
   }
 
   response->setCode(200);
@@ -628,50 +720,8 @@ handleRapi(AsyncWebServerRequest *request) {
 
 void handleNotFound(AsyncWebServerRequest *request)
 {
-  DBUG("NOT_FOUND: ");
-  if(request->method() == HTTP_GET) {
-    DBUGF("GET");
-  } else if(request->method() == HTTP_POST) {
-    DBUGF("POST");
-  } else if(request->method() == HTTP_DELETE) {
-    DBUGF("DELETE");
-  } else if(request->method() == HTTP_PUT) {
-    DBUGF("PUT");
-  } else if(request->method() == HTTP_PATCH) {
-    DBUGF("PATCH");
-  } else if(request->method() == HTTP_HEAD) {
-    DBUGF("HEAD");
-  } else if(request->method() == HTTP_OPTIONS) {
-    DBUGF("OPTIONS");
-  } else {
-    DBUGF("UNKNOWN");
-  }
-  DBUGF(" http://%s%s", request->host().c_str(), request->url().c_str());
-
-  if(request->contentLength()){
-    DBUGF("_CONTENT_TYPE: %s", request->contentType().c_str());
-    DBUGF("_CONTENT_LENGTH: %u", request->contentLength());
-  }
-
-  int headers = request->headers();
-  int i;
-  for(i=0; i<headers; i++) {
-    AsyncWebHeader* h = request->getHeader(i);
-    DBUGF("_HEADER[%s]: %s", h->name().c_str(), h->value().c_str());
-}
-
-  int params = request->params();
-  for(i = 0; i < params; i++) {
-    AsyncWebParameter* p = request->getParam(i);
-    if(p->isFile()){
-      DBUGF("_FILE[%s]: %s, size: %u", p->name().c_str(), p->value().c_str(), p->size());
-    } else if(p->isPost()){
-      DBUGF("_POST[%s]: %s", p->name().c_str(), p->value().c_str());
-    } else {
-      DBUGF("_GET[%s]: %s", p->name().c_str(), p->value().c_str());
-    }
-  }
-
+  DBUGF("NOT_FOUND: ");
+  dumpRequest(request);
   request->send(404);
 }
 
@@ -690,6 +740,7 @@ web_server_setup() {
   // Handle HTTP web interface button presses
   server.on("/generate_204", handleHome);  //Android captive portal. Maybe not needed. Might be handled by notFound
   server.on("/fwlink", handleHome);  //Microsoft captive portal. Maybe not needed. Might be handled by notFound
+  server.on("/connecttest.txt", handleHome);  //Microsoft captive portal. Maybe not needed. Might be handled by notFound
   server.on("/status", handleStatus);
   server.on("/rapiupdate", handleUpdate);
   server.on("/config", handleConfig);

@@ -78,12 +78,12 @@
                   <th>Network</th>
                   <th>RSSI dBm</th>
                 </tr>
-                <tbody id="networks" data-bind="foreach: status.networks">
+                <tbody id="networks" data-bind="foreach: scan.results">
                   <tr>
-                    <td><input class='networkcheckbox' name='network' data-bind="checkedValue: $data, checked: $root.config.ssid"
+                    <td><input class='networkcheckbox' name='network' data-bind="checkedValue: ssid(), checked: $root.config.ssid"
                         type='radio'></td>
-                    <td data-bind="text: $data"></td>
-                    <td data-bind="text: $root.status.rssi()[$index()]"></td>
+                    <td data-bind="text: ssid"></td>
+                    <td data-bind="text: rssi"></td>
                   </tr>
                 </tbody>
               </table>

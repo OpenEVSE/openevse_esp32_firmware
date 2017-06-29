@@ -39,14 +39,11 @@ BaseViewModel.prototype.update = function (after = function () { }) {
   });
 };
 
-
 function StatusViewModel() {
   var self = this;
 
   BaseViewModel.call(self, {
     "mode": "ERR",
-    "networks": [],
-    "rssi": [],
     "srssi": "",
     "ipaddress": "",
     "packets_sent": "",
@@ -79,6 +76,41 @@ function StatusViewModel() {
 }
 StatusViewModel.prototype = Object.create(BaseViewModel.prototype);
 StatusViewModel.prototype.constructor = StatusViewModel;
+
+function WiFiScanResultViewModel(data)
+{
+    var self = this;
+    ko.mapping.fromJS(data, {}, self);
+}
+
+function WiFiScanViewModel()
+{
+  var self = this;
+
+  self.results = ko.mapping.fromJS([], {
+    key: function(data) {
+      return ko.utils.unwrapObservable(data.ssid);
+    },
+    create: function (options) {
+      return new WiFiScanResultViewModel(options.data);
+    }
+  });
+
+  self.remoteUrl = baseEndpoint + '/scan';
+
+  // Observable properties
+  self.fetching = ko.observable(false);
+
+  self.update = function (after = function () { }) {
+    self.fetching(true);
+    $.get(self.remoteUrl, function (data) {
+      ko.mapping.fromJS(data, self.results);
+    }, 'json').always(function () {
+      self.fetching(false);
+      after();
+    });
+  };
+}
 
 function ConfigViewModel() {
   BaseViewModel.call(this, {
@@ -165,12 +197,17 @@ function OpenEvseViewModel() {
   self.config = new ConfigViewModel();
   self.status = new StatusViewModel();
   self.rapi = new RapiViewModel();
+  self.scan = new WiFiScanViewModel();
 
   self.initialised = ko.observable(false);
   self.updating = ko.observable(false);
+  self.scanUpdating = ko.observable(false);
 
   var updateTimer = null;
-  var updateTime = 1 * 1000;
+  var updateTime = 5 * 1000;
+
+  var scanTimer = null;
+  var scanTime = 3 * 1000;
 
   // Tabs
   var tab = 'system';
@@ -227,10 +264,49 @@ function OpenEvseViewModel() {
     });
   };
 
+  // -----------------------------------------------------------------------
+  // WiFi scan update
+  // -----------------------------------------------------------------------
+  var scanEnabled = false;
+  self.startScan = function () {
+    if (self.scanUpdating()) {
+      return;
+    }
+    scanEnabled = true;
+    self.scanUpdating(true);
+    if (null !== scanTimer) {
+      clearTimeout(scanTimer);
+      scanTimer = null;
+    }
+    self.scan.update(function () {
+      if(scanEnabled) {
+        scanTimer = setTimeout(self.startScan, scanTime);
+      }
+      self.scanUpdating(false);
+    });
+  };
+
+  self.stopScan = function() {
+    scanEnabled = false;
+    if (self.scanUpdating()) {
+      return;
+    }
+
+    if (null !== scanTimer) {
+      clearTimeout(scanTimer);
+      scanTimer = null;
+    }
+  };
+
   self.wifiConnecting = ko.observable(false);
   self.status.mode.subscribe(function (newValue) {
     if(newValue === "STA+AP" || newValue === "STA") {
       self.wifiConnecting(false);
+    }
+    if(newValue === "STA+AP" || newValue === "AP") {
+      self.startScan();
+    } else {
+      self.stopScan();
     }
   });
 
