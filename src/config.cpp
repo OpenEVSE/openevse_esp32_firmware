@@ -178,9 +178,7 @@ EEPROM_write_uint24(int start, uint32_t val) {
 void
 config_load_settings() {
   DBUGLN("Loading config");
-  DBUGF("Free: %d", ESP.getFreeHeap());
   EEPROM.begin(EEPROM_SIZE);
-  DBUGF("Free: %d", ESP.getFreeHeap());
 
   // Load WiFi values
   EEPROM_read_string(EEPROM_ESID_START, EEPROM_ESID_SIZE, esid);
@@ -222,9 +220,7 @@ config_load_settings() {
   // Flags
   EEPROM_read_uint24(EEPROM_FLAGS_START, flags, 0);
 
-  DBUGF("Free: %d", ESP.getFreeHeap());
   EEPROM.end();
-  DBUGF("Free: %d", ESP.getFreeHeap());
 }
 
 void
