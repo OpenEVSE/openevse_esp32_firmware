@@ -89,7 +89,7 @@ function WiFiScanViewModel()
 
   self.results = ko.mapping.fromJS([], {
     key: function(data) {
-      return ko.utils.unwrapObservable(data.ssid);
+      return ko.utils.unwrapObservable(data.bssid);
     },
     create: function (options) {
       return new WiFiScanResultViewModel(options.data);
@@ -105,6 +105,12 @@ function WiFiScanViewModel()
     self.fetching(true);
     $.get(self.remoteUrl, function (data) {
       ko.mapping.fromJS(data, self.results);
+      self.results.sort(function (left, right) {
+        if(left.ssid() == right.ssid()) {
+          return left.rssi() < right.rssi() ? 1 : -1;
+        }
+        return left.ssid() < right.ssid() ? -1 : 1;
+      });
     }, 'json').always(function () {
       self.fetching(false);
       after();
