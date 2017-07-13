@@ -9,7 +9,6 @@ var baseEndpoint = 'http://' + baseHost;
 var statusupdate = false;
 var selected_network_ssid = "";
 var lastmode = "";
-var ipaddress = "";
 var divertmode = 0;
 
 // Convert string to number, divide by scale, return result
@@ -440,6 +439,28 @@ function OpenEvseViewModel() {
   };
 
   // -----------------------------------------------------------------------
+  // Event: Turn off Access Point
+  // -----------------------------------------------------------------------
+  self.turnOffAccessPointFetching = ko.observable(false);
+  self.turnOffAccessPointSuccess = ko.observable(false);
+  self.turnOffAccessPoint = function (e) {
+    self.turnOffAccessPointFetching(true);
+    self.turnOffAccessPointSuccess(false);
+    $.post(baseEndpoint + "/apoff", {
+    }, function (data) {
+      console.log(data);
+      if (self.status.ipaddress() !== "") {
+        window.location = "http://" + self.status.ipaddress();
+      }
+      self.turnOffAccessPointSuccess(true);
+    }).fail(function () {
+      alert("Failed to turn off Access Point");
+    }).always(function () {
+      self.turnOffAccessPointFetching(false);
+    });
+  };
+
+  // -----------------------------------------------------------------------
   // Event: Change divertmode (solar PV divert)
   // -----------------------------------------------------------------------
   self.changeDivertModeFetching = ko.observable(false);
@@ -476,25 +497,6 @@ $(function () {
   var openevse = new OpenEvseViewModel();
   ko.applyBindings(openevse);
   openevse.start();
-});
-
-// -----------------------------------------------------------------------
-// Event: Turn off Access Point
-// -----------------------------------------------------------------------
-document.getElementById("apoff").addEventListener("click", function (e) {
-
-  var r = new XMLHttpRequest();
-  r.open("POST", "apoff", true);
-  r.onreadystatechange = function () {
-    if (r.readyState != 4 || r.status != 200)
-      return;
-    var str = r.responseText;
-    console.log(str);
-    document.getElementById("apoff").style.display = 'none';
-    if (ipaddress !== "")
-      window.location = "http://" + ipaddress;
-  };
-  r.send();
 });
 
 // -----------------------------------------------------------------------
