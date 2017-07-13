@@ -621,7 +621,7 @@ handleUpdateGet(AsyncWebServerRequest *request) {
   }
 
   response->setCode(200);
-  response->print(PSTR("<form method='POST' action='/update' enctype='multipart/form-data'><input type='file' name='update'><input type='submit' value='Update'></form>"));
+  response->print(F("<form method='POST' action='/update' enctype='multipart/form-data'><input type='file' name='update'><input type='submit' value='Update'></form>"));
   request->send(response);
 }
 
