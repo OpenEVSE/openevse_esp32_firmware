@@ -111,6 +111,8 @@ startClient() {
 
   delay(50);
 
+  WiFi.enableSTA(true);
+
   int t = 0;
   int attempt = 0;
   while (WiFi.status() != WL_CONNECTED) {
@@ -154,13 +156,13 @@ startClient() {
     sprintf(tmpStr, "%d.%d.%d.%d", myAddress[0], myAddress[1], myAddress[2],
             myAddress[3]);
     DEBUG.print("Connected, IP: ");
+    DEBUG.println(tmpStr);
     Serial.println("$FP 0 0 Client-IP.......");
     delay(100);
     Serial.println("$FP 0 1 ................");
     delay(100);
     Serial.print("$FP 0 1 ");
     Serial.println(tmpStr);
-    DEBUG.println(tmpStr);
     // Copy the connected network and ipaddress to global strings for use in status request
     connected_network = esid;
     ipaddress = tmpStr;

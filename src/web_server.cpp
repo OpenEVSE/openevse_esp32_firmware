@@ -211,7 +211,7 @@ handleAPOff(AsyncWebServerRequest *request) {
   request->send(response);
 
   DBUGLN("Turning AP Off");
-  systemRebootTime = millis() + 1000;
+  systemRebootTime = millis() + 5000;
 }
 
 // -------------------------------------------------------------------
