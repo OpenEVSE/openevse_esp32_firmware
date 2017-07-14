@@ -67,7 +67,7 @@
               </p>
               <p><b>OpenEVSE</b></p>
               <p><b>RAPI packets:</b><br><span data-bind="text: rapi.comm_success"></span> of <span data-bind="text: rapi.comm_sent"></span></p>
-              <button id="apoff" data-bind="visible: status.isWifiAccessPoint">Turn off Access Point</button>
+              <button id="apoff" data-bind="visible: status.isWifiAccessPoint, click: turnOffAccessPoint, disable: turnOffAccessPointFetching">Turn off Access Point</button>
             </div>
 
             <div id="ap-view" data-bind="visible: !status.isWifiClient() &amp;&amp; !wifiConnecting()">

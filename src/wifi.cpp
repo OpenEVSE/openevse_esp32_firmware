@@ -54,13 +54,21 @@ int wifi_mode = WIFI_MODE_STA;
 void
 startAP() {
   DBUGLN("Starting AP");
-  WiFi.mode(WIFI_STA);
-  WiFi.disconnect();
+
+  if((WiFi.getMode() & WIFI_STA) && WiFi.isConnected()) {
+    WiFi.disconnect(true);
+    WiFi.enableSTA(false);
+  }
+
+  WiFi.enableAP(true);
+
   WiFi.softAPConfig(apIP, apIP, netMsk);
   // Create Unique SSID e.g "emonESP_XXXXXX"
   String softAP_ssid_ID =
-    String(softAP_ssid) + "_" + String(ESP.getChipId());;
-  WiFi.softAP(softAP_ssid_ID.c_str(), softAP_password);
+    String(softAP_ssid) + "_" + String(ESP.getChipId());
+  // Pick a random channel out of 1, 6 or 11
+  int channel = (random(3) * 5) + 1;
+  WiFi.softAP(softAP_ssid_ID.c_str(), softAP_password, channel);
 
   // Setup the DNS server redirecting all the domains to the apIP
   dnsServer.setErrorReplyCode(DNSReplyCode::NoError);
@@ -102,6 +110,8 @@ startClient() {
   WiFi.begin(esid.c_str(), epass.c_str());
 
   delay(50);
+
+  WiFi.enableSTA(true);
 
   int t = 0;
   int attempt = 0;
@@ -146,13 +156,13 @@ startClient() {
     sprintf(tmpStr, "%d.%d.%d.%d", myAddress[0], myAddress[1], myAddress[2],
             myAddress[3]);
     DEBUG.print("Connected, IP: ");
+    DEBUG.println(tmpStr);
     Serial.println("$FP 0 0 Client-IP.......");
     delay(100);
     Serial.println("$FP 0 1 ................");
     delay(100);
     Serial.print("$FP 0 1 ");
     Serial.println(tmpStr);
-    DEBUG.println(tmpStr);
     // Copy the connected network and ipaddress to global strings for use in status request
     connected_network = esid;
     ipaddress = tmpStr;
@@ -171,7 +181,9 @@ wifi_setup() {
   digitalWrite(WIFI_LED, wifiLedState);
 #endif
 
-  WiFi.disconnect();
+  WiFi.persistent(false);
+  randomSeed(analogRead(0));
+
   // 1) If no network configured start up access point
   if (esid == 0 || esid == "") {
     startAP();

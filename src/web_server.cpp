@@ -111,9 +111,9 @@ bool isPositive(const String &str) {
 void
 handleHome(AsyncWebServerRequest *request) {
   if (www_username != ""
+      && wifi_mode == WIFI_MODE_STA
       && !request->authenticate(www_username.c_str(),
-                                www_password.c_str())
-      && wifi_mode == WIFI_MODE_STA) {
+                                www_password.c_str())) {
     return request->requestAuthentication(esp_hostname);
   }
 
@@ -211,7 +211,7 @@ handleAPOff(AsyncWebServerRequest *request) {
   request->send(response);
 
   DBUGLN("Turning AP Off");
-  systemRebootTime = millis() + 1000;
+  systemRebootTime = millis() + 5000;
 }
 
 // -------------------------------------------------------------------
@@ -621,7 +621,7 @@ handleUpdateGet(AsyncWebServerRequest *request) {
   }
 
   response->setCode(200);
-  response->print(PSTR("<form method='POST' action='/update' enctype='multipart/form-data'><input type='file' name='update'><input type='submit' value='Update'></form>"));
+  response->print(F("<form method='POST' action='/update' enctype='multipart/form-data'><input type='file' name='update'><input type='submit' value='Update'></form>"));
   request->send(response);
 }
 
@@ -735,16 +735,14 @@ web_server_setup() {
     .setAuthentication(www_username.c_str(), www_password.c_str());
 
   // Start server & server root html /
-  server.on("/",handleHome);
+  server.on("/", handleHome);
 
-  // Handle HTTP web interface button presses
-  server.on("/generate_204", handleHome);  //Android captive portal. Maybe not needed. Might be handled by notFound
-  server.on("/fwlink", handleHome);  //Microsoft captive portal. Maybe not needed. Might be handled by notFound
-  server.on("/connecttest.txt", handleHome);  //Microsoft captive portal. Maybe not needed. Might be handled by notFound
+  // Handle status updates
   server.on("/status", handleStatus);
   server.on("/rapiupdate", handleUpdate);
   server.on("/config", handleConfig);
 
+  // Handle HTTP web interface button presses
   server.on("/savenetwork", handleSaveNetwork);
   server.on("/saveemoncms", handleSaveEmoncms);
   server.on("/savemqtt", handleSaveMqtt);
