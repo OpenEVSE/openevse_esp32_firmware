@@ -1,6 +1,9 @@
 #include "emonesp.h"
 #include "wifi.h"
 #include "config.h"
+#include "RapiSender.h"
+
+extern RapiSender rapiSender;
 
 #include <ESP8266WiFi.h>              // Connect to Wifi
 #include <ESP8266mDNS.h>              // Resolve URL for update server etc.
@@ -76,25 +79,16 @@ startAP() {
 
   IPAddress myIP = WiFi.softAPIP();
   char tmpStr[40];
-  Serial.println("$FP 0 0 SSID...OpenEVSE.");
-  delay(100);
-  Serial.println("$FP 0 1 PASS...openevse.");
-  delay(5000);
-  Serial.println("$FP 0 0 IP_Address......");
-  delay(100);
-  Serial.println("$FP 0 1 ................");
-  delay(100);
   sprintf(tmpStr, "%d.%d.%d.%d", myIP[0], myIP[1], myIP[2], myIP[3]);
+  ipaddress = tmpStr;
   DEBUG.print("AP IP Address: ");
   DEBUG.println(tmpStr);
-  Serial.print("$FP 0 1 ");
-  Serial.println(tmpStr);
-  ipaddress = tmpStr;
-  Serial.flush(); // Clear serial output buffer
-  delay(100);
-  // Clear serial input buffer for RAPI packet accounting
-  while (Serial.available())
-    Serial.read();
+  rapiSender.sendCmd("$FP 0 0 SSID...OpenEVSE.");
+  rapiSender.sendCmd("$FP 0 1 PASS...openevse.");
+  delay(5000);
+  rapiSender.sendCmd("$FP 0 0 IP_Address......");
+  snprintf(tmpStr, 40, "$FP 0 1 %s", ipaddress.c_str());
+  rapiSender.sendCmd(tmpStr);
 }
 
 // -------------------------------------------------------------------
@@ -155,6 +149,7 @@ startClient() {
     char tmpStr[40];
     sprintf(tmpStr, "%d.%d.%d.%d", myAddress[0], myAddress[1], myAddress[2],
             myAddress[3]);
+    ipaddress = tmpStr;
     DEBUG.print("Connected, IP: ");
     DEBUG.println(tmpStr);
     Serial.println("$FP 0 0 Client-IP.......");
@@ -163,14 +158,11 @@ startClient() {
     delay(100);
     Serial.print("$FP 0 1 ");
     Serial.println(tmpStr);
+    rapiSender.sendCmd("$FP 0 0 Client-IP.......");
+    snprintf(tmpStr, 40, "FP 0 1 %s", ipaddress.c_str());
+    rapiSender.sendCmd(tmpStr);
     // Copy the connected network and ipaddress to global strings for use in status request
     connected_network = esid;
-    ipaddress = tmpStr;
-    Serial.flush(); // Clear serial output buffer
-    delay(100);
-    // Clear serial input buffer for RAPI packet accounting
-    while (Serial.available())
-      Serial.read();
   }
 }
 
