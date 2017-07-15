@@ -1,17 +1,12 @@
 #include <Arduino.h>
 #include "RapiSender.h"
+#include "debug.h"
 
-//#define DBG
-
-#ifdef DBG
-#include <SoftwareSerial.h>
-extern SoftwareSerial alt;
-#define dbgprint(s) alt.print(s)
-#define dbgprintln(s) alt.println(s)
-#else
-#define dbgprint(s)
-#define dbgprintln(s)
-#endif // DBG
+#define dbgprint(s) DBUG(s)
+#define dbgprintln(s) DBUGLN(s)
+#ifdef ENABLE_DEBUG
+#define DBG
+#endif
 
 // convert 2-digit hex string to uint8_t
 uint8_t
