@@ -191,6 +191,13 @@ update_rapi_values() {
 void
 handleRapiRead() {
   Profile_Start(handleRapiRead);
+
+  // HACK: Not everywhere is using RapiSender so make sure we do not have anything in the serial buffers
+  Serial.flush();
+  while(Serial.available()) {
+    Serial.read();
+  }
+
   comm_sent++;
   if (0 == rapiSender.sendCmd("$GV")) {
     comm_success++;
@@ -218,6 +225,8 @@ handleRapiRead() {
     comm_success++;
     pilot = rapiSender.getToken(1);
     String flag = rapiSender.getToken(2);
+
+    DBUGVAR(flags);
 
     long flags = strtol(flag.c_str(), NULL, 16);
     service = bitRead(flags, 0) + 1;
