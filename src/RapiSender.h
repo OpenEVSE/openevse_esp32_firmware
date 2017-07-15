@@ -28,6 +28,8 @@ class RapiSender {
   char _respBufOrig[RAPI_BUFLEN];
   int _tokenize();
   void _sendCmd(const char *cmdstr);
+  void _sendTail(uint8_t chk);
+  int _waitForResult(unsigned long timeout);
   uint8_t _sequenceIdEnabled() {
     return (_flags & RSF_SEQUENCE_ID_ENABLED) ? 1 : 0;
   }
@@ -37,7 +39,9 @@ public:
   RapiSender(Stream *stream);
   void setStream(Stream *stream) { _stream = stream; }
   //  void sendString(const char *str) { dbgprint(str); }
-  int sendCmd(const char *cmdstr,unsigned long timeout=RAPI_TIMEOUT_MS);
+  int sendCmd(const char *cmdstr, unsigned long timeout=RAPI_TIMEOUT_MS);
+  int sendCmd(String &cmdstr, unsigned long timeout=RAPI_TIMEOUT_MS);
+  int sendCmd(const __FlashStringHelper *cmdstr, unsigned long timeout=RAPI_TIMEOUT_MS);
   void enableSequenceId(uint8_t tf);
   int8_t getTokenCnt() { return _tokenCnt; }
   const char *getResponse() { return _respBufOrig; }

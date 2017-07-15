@@ -55,11 +55,16 @@ RapiSender::_sendCmd(const char *cmdstr) {
   while (*s) {
     chk ^= *(s++);
   }
+
+  _sendTail(chk);
+}
+
+void RapiSender::_sendTail(uint8_t chk) {
   if (_sequenceIdEnabled()) {
     if (++_sequenceId == RAPI_INVALID_SEQUENCE_ID)
       ++_sequenceId;
     sprintf(_respBuf, " %c%02X", ESRAPI_SOS, (unsigned) _sequenceId);
-    s = _respBuf;
+    const char *s = _respBuf;
     while (*s) {
       chk ^= *(s++);
     }
@@ -74,7 +79,6 @@ RapiSender::_sendCmd(const char *cmdstr) {
 
   *_respBuf = 0;
 }
-
 
 // return = 0 = OK
 //        = 1 = bad checksum
@@ -143,7 +147,58 @@ RapiSender::_tokenize() {
 int
 RapiSender::sendCmd(const char *cmdstr, unsigned long timeout) {
   _sendCmd(cmdstr);
+  return _waitForResult(timeout);
+}
 
+/*
+ * return values:
+ * -1= timeout
+ * 0= success
+ * 1=$NK
+ * 2=invalid RAPI response
+ * 3=cmdstr too long
+*/
+int
+RapiSender::sendCmd(String &cmdstr, unsigned long timeout) {
+  _sendCmd(cmdstr.c_str());
+  return _waitForResult(timeout);
+}
+
+/*
+ * return values:
+ * -1= timeout
+ * 0= success
+ * 1=$NK
+ * 2=invalid RAPI response
+ * 3=cmdstr too long
+*/
+int
+RapiSender::sendCmd(const __FlashStringHelper *cmdstr, unsigned long timeout) {
+  _stream->print(cmdstr);
+  dbgprint(cmdstr);
+
+  PGM_P p = reinterpret_cast<PGM_P>(cmdstr);
+  uint8_t chk = 0;
+  while (1) {
+    uint8_t c = pgm_read_byte(p++);
+    if (c == 0) break;
+    chk ^= c;
+  }
+
+  _sendTail(chk);
+  return _waitForResult(timeout);
+}
+
+/*
+ * return values:
+ * -1= timeout
+ * 0= success
+ * 1=$NK
+ * 2=invalid RAPI response
+ * 3=cmdstr too long
+*/
+int
+RapiSender::_waitForResult(unsigned long timeout) {
   unsigned long mss = millis();
 start:
   _tokenCnt = 0;
