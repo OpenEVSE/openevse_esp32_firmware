@@ -5,6 +5,10 @@
 #include <ArduinoOTA.h>               // local OTA update from Arduino IDE
 #include <FS.h>
 
+#include "RapiSender.h"
+
+extern RapiSender rapiSender;
+
 void ota_setup()
 {
   // Start local OTA update server
@@ -15,21 +19,26 @@ void ota_setup()
     // Clean SPIFFS
     SPIFFS.end();
 
-    Serial.println("$FP 0 0 OpenEVSE WiFi...");
-    delay(100);
-    Serial.println("$FP 0 1 ................");
+    rapiSender.sendCmd(F("$FP 0 0 OpenEVSE WiFi..."));
+    rapiSender.sendCmd(F("$FP 0 1 ................"));
   });
 
   ArduinoOTA.onProgress([](unsigned int progress, unsigned int total) {
-    Serial.printf("$FP 0 1 %u%%\rzn", (progress / (total / 100)));
+    String command = F("$FP 0 1 ");
+    command += (progress / (total / 100));
+    command += F("%");
+    rapiSender.sendCmd(command);
   });
 
   ArduinoOTA.onEnd([]() {
-    Serial.println("$FP 0 1 Complete");
+    rapiSender.sendCmd(F("$FP 0 1 Complete"));
   });
 
   ArduinoOTA.onError([](ota_error_t error) {
-    Serial.printf("$FP 0 1 Error[%u]\r\n", error);
+    String command = F("$FP 0 1 Error[");
+    command += error;
+    command += F("]");
+    rapiSender.sendCmd(command);
   });
 }
 
