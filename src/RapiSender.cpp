@@ -2,12 +2,11 @@
 #include "RapiSender.h"
 #include "debug.h"
 
+#define dbgprint(s) DBUG(s)
+#define dbgprintln(s) DBUGLN(s)
 #ifdef ENABLE_DEBUG
 #define DBG
 #endif
-
-#define dbgprint(s)   DBUG(s)
-#define dbgprintln(s) DBUGLN(s)
 
 // convert 2-digit hex string to uint8_t
 uint8_t

@@ -100,7 +100,7 @@ void divert_current_loop(){
     DEBUG.print("Set charge rate: "); DEBUG.println(charge_rate);
 
     // If charge rate > min current and EVSE is sleeping then start charging
-    if ( (charge_rate > min_charge_current) && ((state == 254) || (state = 596)) ){
+    if ( (charge_rate > min_charge_current) && ((state == 254) || (state == 596)) ){
       DEBUG.print("Wake up EVSE");
       Serial.print("$FE");
     }

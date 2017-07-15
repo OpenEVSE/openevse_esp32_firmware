@@ -11,7 +11,6 @@ var baseHost = "openevse.local";
 //var baseHost = "192.168.4.1";
 var baseEndpoint = "http://" + baseHost;
 
-var ipaddress = "";
 
 function BaseViewModel(defaults, remoteUrl, mappings = {}) {
   var self = this;
@@ -33,14 +32,11 @@ BaseViewModel.prototype.update = function (after = function () { }) {
   });
 };
 
-
 function StatusViewModel() {
   var self = this;
 
   BaseViewModel.call(self, {
     "mode": "ERR",
-    "networks": [],
-    "rssi": [],
     "srssi": "",
     "ipaddress": "",
     "packets_sent": "",
@@ -73,6 +69,47 @@ function StatusViewModel() {
 }
 StatusViewModel.prototype = Object.create(BaseViewModel.prototype);
 StatusViewModel.prototype.constructor = StatusViewModel;
+
+function WiFiScanResultViewModel(data)
+{
+    var self = this;
+    ko.mapping.fromJS(data, {}, self);
+}
+
+function WiFiScanViewModel()
+{
+  var self = this;
+
+  self.results = ko.mapping.fromJS([], {
+    key: function(data) {
+      return ko.utils.unwrapObservable(data.bssid);
+    },
+    create: function (options) {
+      return new WiFiScanResultViewModel(options.data);
+    }
+  });
+
+  self.remoteUrl = baseEndpoint + '/scan';
+
+  // Observable properties
+  self.fetching = ko.observable(false);
+
+  self.update = function (after = function () { }) {
+    self.fetching(true);
+    $.get(self.remoteUrl, function (data) {
+      ko.mapping.fromJS(data, self.results);
+      self.results.sort(function (left, right) {
+        if(left.ssid() == right.ssid()) {
+          return left.rssi() < right.rssi() ? 1 : -1;
+        }
+        return left.ssid() < right.ssid() ? -1 : 1;
+      });
+    }, 'json').always(function () {
+      self.fetching(false);
+      after();
+    });
+  };
+}
 
 function ConfigViewModel() {
   BaseViewModel.call(this, {
@@ -180,13 +217,18 @@ function OpenEvseWiFiViewModel() {
   self.config = new ConfigViewModel();
   self.status = new StatusViewModel();
   self.rapi = new RapiViewModel();
+  self.scan = new WiFiScanViewModel();
   self.openevse = new OpenEvseViewModel();
 
   self.initialised = ko.observable(false);
   self.updating = ko.observable(false);
+  self.scanUpdating = ko.observable(false);
 
   var updateTimer = null;
-  var updateTime = 1 * 1000;
+  var updateTime = 5 * 1000;
+
+  var scanTimer = null;
+  var scanTime = 3 * 1000;
 
   // Tabs
   var tab = "system";
@@ -245,10 +287,49 @@ function OpenEvseWiFiViewModel() {
     });
   };
 
+  // -----------------------------------------------------------------------
+  // WiFi scan update
+  // -----------------------------------------------------------------------
+  var scanEnabled = false;
+  self.startScan = function () {
+    if (self.scanUpdating()) {
+      return;
+    }
+    scanEnabled = true;
+    self.scanUpdating(true);
+    if (null !== scanTimer) {
+      clearTimeout(scanTimer);
+      scanTimer = null;
+    }
+    self.scan.update(function () {
+      if(scanEnabled) {
+        scanTimer = setTimeout(self.startScan, scanTime);
+      }
+      self.scanUpdating(false);
+    });
+  };
+
+  self.stopScan = function() {
+    scanEnabled = false;
+    if (self.scanUpdating()) {
+      return;
+    }
+
+    if (null !== scanTimer) {
+      clearTimeout(scanTimer);
+      scanTimer = null;
+    }
+  };
+
   self.wifiConnecting = ko.observable(false);
   self.status.mode.subscribe(function (newValue) {
     if(newValue === "STA+AP" || newValue === "STA") {
       self.wifiConnecting(false);
+    }
+    if(newValue === "STA+AP" || newValue === "AP") {
+      self.startScan();
+    } else {
+      self.stopScan();
     }
   });
 
@@ -376,6 +457,28 @@ function OpenEvseWiFiViewModel() {
   };
 
   // -----------------------------------------------------------------------
+  // Event: Turn off Access Point
+  // -----------------------------------------------------------------------
+  self.turnOffAccessPointFetching = ko.observable(false);
+  self.turnOffAccessPointSuccess = ko.observable(false);
+  self.turnOffAccessPoint = function (e) {
+    self.turnOffAccessPointFetching(true);
+    self.turnOffAccessPointSuccess(false);
+    $.post(baseEndpoint + "/apoff", {
+    }, function (data) {
+      console.log(data);
+      if (self.status.ipaddress() !== "") {
+        window.location = "http://" + self.status.ipaddress();
+      }
+      self.turnOffAccessPointSuccess(true);
+    }).fail(function () {
+      alert("Failed to turn off Access Point");
+    }).always(function () {
+      self.turnOffAccessPointFetching(false);
+    });
+  };
+
+  // -----------------------------------------------------------------------
   // Event: Change divertmode (solar PV divert)
   // -----------------------------------------------------------------------
   self.changeDivertModeFetching = ko.observable(false);
@@ -412,26 +515,6 @@ $(function () {
   var openevse = new OpenEvseWiFiViewModel();
   ko.applyBindings(openevse);
   openevse.start();
-});
-
-// -----------------------------------------------------------------------
-// Event: Turn off Access Point
-// -----------------------------------------------------------------------
-document.getElementById("apoff").addEventListener("click", function (e) {
-
-  var r = new XMLHttpRequest();
-  r.open("POST", "apoff", true);
-  r.onreadystatechange = function () {
-    if (r.readyState !== 4 || r.status !== 200) {
-      return;
-    }
-    var str = r.responseText;
-    console.log(str);
-    document.getElementById("apoff").style.display = "none";
-    if (ipaddress !== "")
-      window.location = "http://" + ipaddress;
-  };
-  r.send();
 });
 
 // -----------------------------------------------------------------------
