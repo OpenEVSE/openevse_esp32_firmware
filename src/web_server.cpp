@@ -700,13 +700,13 @@ handleRapi(AsyncWebServerRequest *request) {
       String rapiString = rapiSender.getResponse();
 
       if (json) {
-      s = "{\"cmd\":\""+rapi+"\",\"ret\":\""+rapiString+"\"}";
-    } else {
-      s += rapi;
+        s = "{\"cmd\":\""+rapi+"\",\"ret\":\""+rapiString+"\"}";
+      } else {
+        s += rapi;
         s += F("<p>&gt;");
-      s += rapiString;
+        s += rapiString;
+      }
     }
-  }
   }
   if (false == json) {
    s += F("<p></html>\r\n\r\n");
