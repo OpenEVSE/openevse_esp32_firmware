@@ -182,7 +182,7 @@ function OpenEVSE(endpoint)
         var minute = parseInt(data[4]);
         var second = parseInt(data[5]);
 
-          if(!isNaN(year) && !isNaN(month) && !isNaN(day) && !isNaN(hour) && !isNaN(minute) && !isNaN(second)) {
+        if(!isNaN(year) && !isNaN(month) && !isNaN(day) && !isNaN(hour) && !isNaN(minute) && !isNaN(second)) {
           var date = new Date(2000+year, month-1, day, hour, minute, second);
           callback(date);
         } else {
@@ -307,15 +307,35 @@ function OpenEVSE(endpoint)
     if(false !== level) {
       return self._request(["SL", self._service_levels[level]],
       function() {
-        callback(level);
+        self.service_level(callback);
       });
     }
 
     var request = self._flags(function(flags) {
-      if(flags.auto_service_level) {
-        callback(0);
+      callback(flags.auto_service_level ? 0 : flags.service_level, flags.service_level);
+    });
+    return request;
+  };
+
+  /**
+   * Get the current capacity range, in amperes
+   * (it depends on the service level)
+   * Returns the current capacity:
+   *     (min_capacity, max_capacity)
+   */
+  self.current_capacity_range = function(callback) {
+    var request = self._request("GC", function(data) {
+      if(data.length >= 2) {
+        var minCapacity = parseInt(data[0]);
+        var maxCapacity = parseInt(data[1]);
+        if(!isNaN(minCapacity) && !isNaN(maxCapacity)) {
+          callback(minCapacity, maxCapacity);
+        } else {
+          request._error(new OpenEVSEError("ParseError", "Could not parse \""+data.join(" ")+"\" arguments"));
+        }
+      } else {
+        request._error(new OpenEVSEError("ParseError", "Only received "+data.length+" arguments"));
       }
-      callback(flags.service_level);
     });
     return request;
   };

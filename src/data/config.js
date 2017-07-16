@@ -7,10 +7,10 @@
 // and run the HTML/JS from file, no need to upload to the ESP to test
 
 //var baseHost = window.location.hostname;
-var baseHost = "openevse.local";
+//var baseHost = "openevse.local";
 //var baseHost = "192.168.4.1";
+var baseHost = "172.16.0.54";
 var baseEndpoint = "http://" + baseHost;
-
 
 function BaseViewModel(defaults, remoteUrl, mappings = {}) {
   var self = this;
@@ -190,9 +190,24 @@ RapiViewModel.prototype.send = function() {
   });
 };
 
-function OpenEvseViewModel() {
+function OpenEvseViewModel(configViewModel) {
   var self = this;
   self.openevse = new OpenEVSE(baseEndpoint + "/r");
+  self.config = configViewModel;
+  self.updating = ko.observable(false);
+
+  // Option lists
+  self.serviceLevels = [
+    { name: "Auto", value: 0 },
+    { name: "1", value: 1 },
+    { name: "2", value: 2 }];
+  self.serviceLevel = ko.observable(-1);
+  self.actualServiceLevel = ko.observable(-1);
+
+  self.minCurrentLevel = ko.observable(-1);
+  self.maxCurrentLevel = ko.observable(-1);
+  self.currentCapacity = ko.observable(-1);
+  self.currentLevels = ko.observableArray([]);
 
   self.timedate = ko.observable(new Date());
   self.time = ko.pureComputed(function () {
@@ -204,28 +219,65 @@ function OpenEvseViewModel() {
     return dt.getHours()+":"+dt.getMinutes()+":"+dt.getSeconds();
   });
 
-  self.serviceLevel = ko.observable(-1);
-
   var updateList = [
     function () { return self.openevse.time(function (date) {
       self.timedate(date);
     }); },
-    function () { return self.openevse.service_level(function (level) {
+    function () { return self.openevse.service_level(function (level, actual) {
       self.serviceLevel(level);
+      self.actualServiceLevel(actual);
+    }); },
+    function () { return self.updateCurrentCapacity(); },
+    function () { return self.openevse.current_capacity(function (capacity) {
+      self.currentCapacity(capacity);
     }); }
   ];
   var updateCount = -1;
+
+  self.updateCurrentCapacity = function () {
+    return self.openevse.current_capacity_range(function (min, max) {
+      self.minCurrentLevel(min);
+      self.maxCurrentLevel(max);
+      var capacity = self.currentCapacity();
+      self.currentLevels.removeAll();
+      for(var i = self.minCurrentLevel(); i <= self.maxCurrentLevel(); i++) {
+        self.currentLevels.push({name: i+" A", value: i});
+      }
+      self.currentCapacity(capacity);
+    });
+  };
+
+  var subscribed = false;
+  self.subscribe = function ()
+  {
+    if(subscribed) {
+      return;
+    }
+
+    self.serviceLevel.subscribe(function (val) {
+      self.updating(true);
+      self.openevse.service_level(function (level, actual) {
+        self.actualServiceLevel(actual);
+        self.updateCurrentCapacity().always(function () {
+          self.updating(false);
+        });
+      }, val);
+    });
+
+    subscribed = true;
+  };
 
   self.update = function (after = function () { }) {
     updateCount = 0;
     self.nextUpdate(after);
   };
   self.nextUpdate = function (after) {
-    var updateFn = self.updateList[updateCount];
+    var updateFn = updateList[updateCount];
     updateFn().always(function () {
       if(++updateCount < updateList.length) {
         self.nextUpdate(after);
       } else {
+        self.subscribe();
         after();
       }
     });
@@ -239,7 +291,7 @@ function OpenEvseWiFiViewModel() {
   self.status = new StatusViewModel();
   self.rapi = new RapiViewModel();
   self.scan = new WiFiScanViewModel();
-  self.openevse = new OpenEvseViewModel();
+  self.openevse = new OpenEvseViewModel(self.config);
 
   self.initialised = ko.observable(false);
   self.updating = ko.observable(false);

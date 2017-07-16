@@ -285,23 +285,35 @@
               </tr>
               <tr>
                 <td>Service Level:</td>
-                <td><span data-bind="text: config.service"></span></td>
+                <td>
+                  <select data-bind="options: openevse.serviceLevels,
+                                     optionsText: 'name',
+                                     optionsValue: 'value',
+                                     value: openevse.serviceLevel"></select>
+                </td>
               </tr>
-              <tr data-bind="visible: '1' == config.service()">
-                <td>Level 1 Minimum:</td>
-                <td><span data-bind="text: config.l1min() + ' A'"></span></td>
+              <tr>
+                <td>Current capacity:</td>
+                <td>
+                  <select data-bind="options: openevse.currentLevels,
+                                     optionsText: 'name',
+                                     optionsValue: 'value',
+                                     value: openevse.currentCapacity"></select>
+                  <span data-bind="text: openevse.currentCapacity() + ' A'"></span>
+                </td>
               </tr>
-              <tr data-bind="visible: '1' == config.service()">
-                <td>Level 1 Maximum:</td>
-                <td><span data-bind="text: config.l1max() + ' A'"></span></td>
+
+              <tr>
+                <td>Level <span data-bind="text: openevse.actualServiceLevel"></span> Minimum:</td>
+                <td>
+                  <span data-bind="text: openevse.minCurrentLevel() + ' A'"></span>
+                </td>
               </tr>
-              <tr data-bind="visible: '2' == config.service()">
-                <td>Level 2 Minimum:</td>
-                <td><span data-bind="text: config.l2min() + ' A'"></span></td>
-              </tr>
-              <tr data-bind="visible: '2' == config.service()">
-                <td>Level 2 Maximum:</td>
-                <td><span data-bind="text: config.l2max() + ' A'"></span></td>
+              <tr>
+                <td>Level <span data-bind="text: openevse.actualServiceLevel"></span> Minimum:</td>
+                <td>
+                  <span data-bind="text: openevse.maxCurrentLevel() + ' A'"></span>
+                </td>
               </tr>
               <tr>
                 <td>Sensor Scale:</td>
