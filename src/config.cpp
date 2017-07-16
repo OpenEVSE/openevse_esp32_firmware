@@ -48,7 +48,7 @@ uint32_t flags;
 #define EEPROM_WWW_PASS_SIZE          16
 #define EEPROM_OHM_KEY_SIZE           10
 #define EEPROM_FLAGS_SIZE             4
-#define EEPROM_SIZE                   4096
+#define EEPROM_SIZE                   1024
 
 #define EEPROM_ESID_START             0
 #define EEPROM_ESID_END               (EEPROM_ESID_START + EEPROM_ESID_SIZE)
@@ -94,12 +94,14 @@ uint32_t flags;
 // -------------------------------------------------------------------
 void
 ResetEEPROM() {
+  EEPROM.begin(EEPROM_SIZE);
+
   //DEBUG.println("Erasing EEPROM");
   for (int i = 0; i < EEPROM_SIZE; ++i) {
     EEPROM.write(i, 0xff);
     //DEBUG.print("#");
   }
-  EEPROM.commit();
+  EEPROM.end();
 }
 
 void
@@ -175,9 +177,8 @@ EEPROM_write_uint24(int start, uint32_t val) {
 // -------------------------------------------------------------------
 void
 config_load_settings() {
-  EEPROM.begin(EEPROM_SIZE);
-
   DBUGLN("Loading config");
+  EEPROM.begin(EEPROM_SIZE);
 
   // Load WiFi values
   EEPROM_read_string(EEPROM_ESID_START, EEPROM_ESID_SIZE, esid);
@@ -218,12 +219,16 @@ config_load_settings() {
 
   // Flags
   EEPROM_read_uint24(EEPROM_FLAGS_START, flags, 0);
+
+  EEPROM.end();
 }
 
 void
 config_save_emoncms(bool enable, String server, String node, String apikey,
                     String fingerprint)
 {
+  EEPROM.begin(EEPROM_SIZE);
+
   flags = flags & ~CONFIG_SERVICE_EMONCMS;
   if(enable) {
     flags |= CONFIG_SERVICE_EMONCMS;
@@ -252,12 +257,14 @@ config_save_emoncms(bool enable, String server, String node, String apikey,
 
   EEPROM_write_uint24(EEPROM_FLAGS_START, flags);
 
-  EEPROM.commit();
+  EEPROM.end();
 }
 
 void
 config_save_mqtt(bool enable, String server, String topic, String user, String pass, String solar, String grid_ie)
 {
+  EEPROM.begin(EEPROM_SIZE);
+
   flags = flags & ~CONFIG_SERVICE_MQTT;
   if(enable) {
     flags |= CONFIG_SERVICE_MQTT;
@@ -283,35 +290,41 @@ config_save_mqtt(bool enable, String server, String topic, String user, String p
 
   EEPROM_write_uint24(EEPROM_FLAGS_START, flags);
 
-  EEPROM.commit();
+  EEPROM.end();
 }
 
 void
 config_save_admin(String user, String pass) {
+  EEPROM.begin(EEPROM_SIZE);
+
   www_username = user;
   www_password = pass;
 
   EEPROM_write_string(EEPROM_WWW_USER_START, EEPROM_WWW_USER_SIZE, user);
   EEPROM_write_string(EEPROM_WWW_PASS_START, EEPROM_WWW_PASS_SIZE, pass);
 
-  EEPROM.commit();
+  EEPROM.end();
 }
 
 void
 config_save_wifi(String qsid, String qpass)
 {
+  EEPROM.begin(EEPROM_SIZE);
+
   esid = qsid;
   epass = qpass;
 
   EEPROM_write_string(EEPROM_ESID_START, EEPROM_ESID_SIZE, qsid);
   EEPROM_write_string(EEPROM_EPASS_START, EEPROM_EPASS_SIZE, qpass);
 
-  EEPROM.commit();
+  EEPROM.end();
 }
 
 void
 config_save_ohm(bool enable, String qohm)
 {
+  EEPROM.begin(EEPROM_SIZE);
+
   flags = flags & ~CONFIG_SERVICE_OHM;
   if(enable) {
     flags |= CONFIG_SERVICE_OHM;
@@ -323,18 +336,20 @@ config_save_ohm(bool enable, String qohm)
 
   EEPROM_write_uint24(EEPROM_FLAGS_START, flags);
 
-  EEPROM.commit();
+  EEPROM.end();
 }
 
 void
 config_save_flags(uint32_t newFlags) {
   if(flags != newFlags)
   {
+    EEPROM.begin(EEPROM_SIZE);
+
     flags = newFlags;
 
     EEPROM_write_uint24(EEPROM_FLAGS_START, flags);
 
-    EEPROM.commit();
+    EEPROM.end();
   }
 }
 

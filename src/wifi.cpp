@@ -56,31 +56,22 @@ int wifi_mode = WIFI_MODE_STA;
 // -------------------------------------------------------------------
 void
 startAP() {
-  DEBUG.print("Starting AP");
-  WiFi.mode(WIFI_STA);
-  WiFi.disconnect();
-  delay(100);
-  DEBUG.print("Scan: ");
-  int n = WiFi.scanNetworks();
-  DEBUG.print(n);
-  DEBUG.println(" networks found");
-  st = "";
-  rssi = "";
-  for (int i = 0; i < n; ++i) {
-    st += "\"" + WiFi.SSID(i) + "\"";
-    rssi += "\"" + String(WiFi.RSSI(i)) + "\"";
-    if (i < n - 1)
-      st += ",";
-    if (i < n - 1)
-      rssi += ",";
+  DBUGLN("Starting AP");
+
+  if((WiFi.getMode() & WIFI_STA) && WiFi.isConnected()) {
+    WiFi.disconnect(true);
+    WiFi.enableSTA(false);
   }
-  delay(100);
+
+  WiFi.enableAP(true);
 
   WiFi.softAPConfig(apIP, apIP, netMsk);
   // Create Unique SSID e.g "emonESP_XXXXXX"
   String softAP_ssid_ID =
-    String(softAP_ssid) + "_" + String(ESP.getChipId());;
-  WiFi.softAP(softAP_ssid_ID.c_str(), softAP_password);
+    String(softAP_ssid) + "_" + String(ESP.getChipId());
+  // Pick a random channel out of 1, 6 or 11
+  int channel = (random(3) * 5) + 1;
+  WiFi.softAP(softAP_ssid_ID.c_str(), softAP_password, channel);
 
   // Setup the DNS server redirecting all the domains to the apIP
   dnsServer.setErrorReplyCode(DNSReplyCode::NoError);
@@ -113,6 +104,8 @@ startClient() {
   WiFi.begin(esid.c_str(), epass.c_str());
 
   delay(50);
+
+  WiFi.enableSTA(true);
 
   int t = 0;
   int attempt = 0;
@@ -174,7 +167,9 @@ wifi_setup() {
   digitalWrite(WIFI_LED, wifiLedState);
 #endif
 
-  WiFi.disconnect();
+  WiFi.persistent(false);
+  randomSeed(analogRead(0));
+
   // 1) If no network configured start up access point
   if (esid == 0 || esid == "") {
     startAP();
@@ -238,24 +233,6 @@ wifi_restart() {
   dnsServer.start(DNS_PORT, "*", apIP);
   wifi_mode = WIFI_MODE_AP_AND_STA;
   startClient();
-}
-
-void
-wifi_scan() {
-  DEBUG.println("WIFI Scan");
-  int n = WiFi.scanNetworks();
-  DEBUG.print(n);
-  DEBUG.println(" networks found");
-  st = "";
-  rssi = "";
-  for (int i = 0; i < n; ++i) {
-    st += "\"" + WiFi.SSID(i) + "\"";
-    rssi += "\"" + String(WiFi.RSSI(i)) + "\"";
-    if (i < n - 1)
-      st += ",";
-    if (i < n - 1)
-      rssi += ",";
-  }
 }
 
 void

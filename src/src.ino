@@ -63,17 +63,23 @@ setup() {
   DBUGLN(ESP.getChipId());
   DBUGLN("Firmware: " + currentfirmware);
 
+  DBUGF("Free: %d", ESP.getFreeHeap());
+
   // Read saved settings from the config
   config_load_settings();
+  DBUGF("After config_load_settings: %d", ESP.getFreeHeap());
 
   // Initialise the WiFi
   wifi_setup();
+  DBUGF("After wifi_setup: %d", ESP.getFreeHeap());
 
   // Bring up the web server
   web_server_setup();
+  DBUGF("After web_server_setup: %d", ESP.getFreeHeap());
 
 #ifdef ENABLE_OTA
   ota_setup();
+  DBUGF("After ota_setup: %d", ESP.getFreeHeap());
 #endif
   rapiSender.enableSequenceId(0);
 } // end setup
@@ -101,7 +107,7 @@ loop() {
   // Do these things once every 2s
   // -------------------------------------------------------------------
   if ((millis() - Timer3) >= 2000) {
-    DBUGLN("Time3");
+    DBUGF("Free: %d", ESP.getFreeHeap());
     update_rapi_values();
     Timer3 = millis();
   }
