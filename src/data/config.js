@@ -89,7 +89,7 @@ function WiFiScanViewModel()
     }
   });
 
-  self.remoteUrl = baseEndpoint + '/scan';
+  self.remoteUrl = baseEndpoint + "/scan";
 
   // Observable properties
   self.fetching = ko.observable(false);
@@ -104,7 +104,7 @@ function WiFiScanViewModel()
         }
         return left.ssid() < right.ssid() ? -1 : 1;
       });
-    }, 'json').always(function () {
+    }, "json").always(function () {
       self.fetching(false);
       after();
     });
