@@ -204,10 +204,31 @@ function OpenEvseViewModel() {
     return dt.getHours()+":"+dt.getMinutes()+":"+dt.getSeconds();
   });
 
-  self.update = function (after = function () { }) {
-    self.openevse.time(function (date) {
+  self.serviceLevel = ko.observable(-1);
+
+  var updateList = [
+    function () { return self.openevse.time(function (date) {
       self.timedate(date);
-    }).always(after);
+    }); },
+    function () { return self.openevse.service_level(function (level) {
+      self.serviceLevel(level);
+    }); }
+  ];
+  var updateCount = -1;
+
+  self.update = function (after = function () { }) {
+    updateCount = 0;
+    self.nextUpdate(after);
+  };
+  self.nextUpdate = function (after) {
+    var updateFn = self.updateList[updateCount];
+    updateFn().always(function () {
+      if(++updateCount < updateList.length) {
+        self.nextUpdate(after);
+      } else {
+        after();
+      }
+    });
   };
 }
 
@@ -563,6 +584,7 @@ document.getElementById("restart").addEventListener("click", function (e) {
 
 // Convert string to number, divide by scale, return result
 // as a string with specified precision
+/* exported scaleString */
 function scaleString(string, scale, precision) {
   "use strict";
   var tmpval = parseInt(string) / scale;

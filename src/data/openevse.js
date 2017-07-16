@@ -194,4 +194,129 @@ function OpenEVSE(endpoint)
     });
     return request;
   };
+
+  /**
+   * Get or set the charge time limit, in minutes.
+   *
+   * This time is rounded to the nearest quarter hour.
+   *
+   * The maximum value is 3825 minutes.
+   *
+   * Returns the limit
+   */
+  self.time_limit = function(callback, limit = false) {
+    if(false !== limit) {
+      return self._request(["S3", Math.round(limit/15.0)],
+      function() {
+        callback(limit);
+      });
+    }
+
+    var request = self._request("G3", function(data) {
+      if(data.length >= 1) {
+        var limit = parseInt(data[0]);
+
+        if(!isNaN(limit)) {
+          callback(limit * 15);
+        } else {
+          request._error(new OpenEVSEError("ParseError", "Could not parse \""+data.join(" ")+"\" arguments"));
+        }
+      } else {
+        request._error(new OpenEVSEError("ParseError", "Only received "+data.length+" arguments"));
+      }
+    });
+    return request;
+  };
+
+  /**
+   * Set or get the ammeter settings
+   *
+   * If either of the arguments is None, get the values instead of setting them.
+   *
+   * Returns scale factor and offset
+   */
+  self.ammeter_settings = function(callback, scaleFactor = false, offset = false) {
+    if(false !== scaleFactor && false !== offset) {
+      return self._request(["SA", scaleFactor, offset],
+      function() {
+        callback(scaleFactor, offset);
+      });
+    }
+
+    var request = self._request("GA", function(data) {
+      if(data.length >= 2) {
+        var scaleFactor = parseInt(data[0]);
+        var offset = parseInt(data[0]);
+
+        if(!isNaN(scaleFactor) && !isNaN(offset)) {
+          callback(scaleFactor, offset);
+        } else {
+          request._error(new OpenEVSEError("ParseError", "Could not parse \""+data.join(" ")+"\" arguments"));
+        }
+      } else {
+        request._error(new OpenEVSEError("ParseError", "Only received "+data.length+" arguments"));
+      }
+    });
+    return request;
+  };
+
+  /**
+   * Set or get the current capacity
+   *
+   * If capacity is None or 0, get the value
+   *
+   * Returns the capacity in amperes
+   */
+  self.current_capacity = function(callback, capacity = false) {
+    if(false !== capacity) {
+      return self._request(["SC", capacity],
+      function() {
+        callback(capacity);
+      });
+    }
+
+    var request = self._request("GE", function(data) {
+      if(data.length >= 1) {
+        var capacity = parseInt(data[0]);
+
+        if(!isNaN(capacity)) {
+          callback(capacity);
+        } else {
+          request._error(new OpenEVSEError("ParseError", "Could not parse \""+data.join(" ")+"\" arguments"));
+        }
+      } else {
+        request._error(new OpenEVSEError("ParseError", "Only received "+data.length+" arguments"));
+      }
+    });
+    return request;
+  };
+
+  /**
+   * Set or get the service level
+   *
+   * Allowed values:
+   * - 0: Auto
+   * - 1: Level 1, 120VAC 16A
+   * - 2: Level 2, 208-240VAC 80A
+   *
+   * If the level is not specified, the current level is returned
+   *
+   * Returns the current service level: 0 for auto, 1 or 2
+   */
+  self.service_level = function(callback, level = false) {
+    if(false !== level) {
+      return self._request(["SL", self._service_levels[level]],
+      function() {
+        callback(level);
+      });
+    }
+
+    var request = self._flags(function(flags) {
+      if(flags.auto_service_level) {
+        callback(0);
+      }
+      callback(flags.service_level);
+    });
+    return request;
+  };
 }
