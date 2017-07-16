@@ -210,11 +210,11 @@ function OpenEvseViewModel(configViewModel) {
   self.currentLevels = ko.observableArray([]);
 
   self.timedate = ko.observable(new Date());
-  self.time = ko.pureComputed(function () {
+  self.date = ko.pureComputed(function () {
     var dt = self.timedate();
     return dt.getDate()+"/"+dt.getMonth()+"/"+dt.getFullYear();
   });
-  self.date = ko.pureComputed(function () {
+  self.time = ko.pureComputed(function () {
     var dt = self.timedate();
     return dt.getHours()+":"+dt.getMinutes()+":"+dt.getSeconds();
   });
