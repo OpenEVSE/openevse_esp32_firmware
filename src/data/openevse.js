@@ -263,7 +263,7 @@ function OpenEVSE(endpoint)
   /**
    * Set or get the current capacity
    *
-   * If capacity is None or 0, get the value
+   * If capacity is false, get the value
    *
    * Returns the capacity in amperes
    */
@@ -271,7 +271,7 @@ function OpenEVSE(endpoint)
     if(false !== capacity) {
       return self._request(["SC", capacity],
       function() {
-        callback(capacity);
+        self.current_capacity(callback);
       });
     }
 

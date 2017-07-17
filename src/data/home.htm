@@ -289,7 +289,8 @@
                   <select data-bind="options: openevse.serviceLevels,
                                      optionsText: 'name',
                                      optionsValue: 'value',
-                                     value: openevse.serviceLevel"></select>
+                                     value: openevse.serviceLevel,
+                                     disabled: openevse.updatingServiceLevel()"></select>
                 </td>
               </tr>
               <tr>
@@ -298,8 +299,8 @@
                   <select data-bind="options: openevse.currentLevels,
                                      optionsText: 'name',
                                      optionsValue: 'value',
-                                     value: openevse.currentCapacity"></select>
-                  <span data-bind="text: openevse.currentCapacity() + ' A'"></span>
+                                     value: openevse.currentCapacity,
+                                     disabled: openevse.updatingServiceLevel() || openevse.updatingCurrentCapacity()"></select>
                 </td>
               </tr>
 
