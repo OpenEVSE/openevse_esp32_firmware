@@ -152,12 +152,6 @@ startClient() {
     ipaddress = tmpStr;
     DEBUG.print("Connected, IP: ");
     DEBUG.println(tmpStr);
-    Serial.println("$FP 0 0 Client-IP.......");
-    delay(100);
-    Serial.println("$FP 0 1 ................");
-    delay(100);
-    Serial.print("$FP 0 1 ");
-    Serial.println(tmpStr);
     rapiSender.sendCmd("$FP 0 0 Client-IP.......");
     snprintf(tmpStr, 40, "FP 0 1 %s", ipaddress.c_str());
     rapiSender.sendCmd(tmpStr);
