@@ -194,7 +194,6 @@ function OpenEvseViewModel(configViewModel) {
   var self = this;
   self.openevse = new OpenEVSE(baseEndpoint + "/r");
   self.config = configViewModel;
-  self.updating = ko.observable(false);
 
   // Option lists
   self.serviceLevels = [
@@ -247,6 +246,13 @@ function OpenEvseViewModel(configViewModel) {
     });
   };
 
+  self.updatingServiceLevel = ko.observable(false);
+  self.updatingCurrentCapacity = ko.observable(false);
+  /*self.updating = ko.pureComputed(function () {
+    return self.updatingServiceLevel() ||
+           self.updateCurrentCapacity();
+  });*/
+
   var subscribed = false;
   self.subscribe = function ()
   {
@@ -254,13 +260,28 @@ function OpenEvseViewModel(configViewModel) {
       return;
     }
 
+    // Updates to the service level
     self.serviceLevel.subscribe(function (val) {
-      self.updating(true);
+      self.updatingServiceLevel(true);
       self.openevse.service_level(function (level, actual) {
         self.actualServiceLevel(actual);
         self.updateCurrentCapacity().always(function () {
-          self.updating(false);
+          self.updatingServiceLevel(false);
         });
+      }, val);
+    });
+
+    // Updates to the current capacity
+    self.currentCapacity.subscribe(function (val) {
+      if(true === self.updatingServiceLevel()) {
+        return;
+      }
+      self.updatingCurrentCapacity(true);
+      self.openevse.current_capacity(function (capacity) {
+        if(val !== capacity) {
+          self.currentCapacity(capacity);
+        }
+        self.updatingCurrentCapacity(false);
       }, val);
     });
 
