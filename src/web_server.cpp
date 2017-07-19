@@ -510,7 +510,10 @@ handleUpdate(AsyncWebServerRequest *request) {
   s += "\"temp1\":\"" + temp1 + "\",";
   s += "\"temp2\":\"" + temp2 + "\",";
   s += "\"temp3\":\"" + temp3 + "\",";
+  s += "\"state\":" + String(state) + ",";
+#ifdef ENABLE_LEGACY_API
   s += "\"estate\":\"" + estate + "\",";
+#endif
   s += "\"wattsec\":\"" + wattsec + "\",";
   s += "\"watthour\":\"" + watthour_total + "\"";
   s += "}";

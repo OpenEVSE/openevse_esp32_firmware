@@ -21,7 +21,9 @@ String temp2 = "0";                  //Sensor MCP9808 Ambient
 String temp3 = "0";                  //Sensor TMP007 Infared
 String pilot = "0";                  //OpenEVSE Pilot Setting
 long state = 0; //OpenEVSE State
+#ifdef ENABLE_LEGACY_API
 String estate = "Unknown"; // Common name for State
+#endif
 
 //Defaults OpenEVSE Settings
 byte rgb_lcd = 1;
@@ -108,7 +110,10 @@ update_rapi_values() {
     if (0 == rapiSender.sendCmd("$GS")) {
       comm_success++;
       String qrapi = rapiSender.getToken(1);
-      state = strtol(qrapi.c_str(), NULL, 16);
+      DBUGVAR(qrapi);
+      state = strtol(qrapi.c_str(), NULL, 10);
+      DBUGVAR(state);
+#ifdef ENABLE_LEGACY_API
       switch (state) {
         case 1:
           estate = "Not Connected";
@@ -150,6 +155,7 @@ update_rapi_values() {
           estate = "Invalid";
           break;
       }
+#endif
     }
   }
   if (rapi_command == 3) {
@@ -195,7 +201,8 @@ handleRapiRead() {
   // HACK: Not everywhere is using RapiSender so make sure we do not have anything in the serial buffers
   Serial.flush();
   while(Serial.available()) {
-    Serial.read();
+    String dump = Serial.readString();
+    DBUGVAR(dump);
   }
 
   comm_sent++;
