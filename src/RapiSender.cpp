@@ -230,7 +230,7 @@ start:
   } while (!_tokenCnt && ((millis() - mss) < timeout));
 
 #ifdef DBG
-  dbgprint("\n\rTOKENCNT: ");
+  dbgprint("TOKENCNT: ");
   dbgprintln(_tokenCnt);
   for (int i = 0; i < _tokenCnt; i++) {
     dbgprintln(_tokens[i]);
@@ -238,23 +238,18 @@ start:
   dbgprintln("");
 #endif
 
-  if (_tokenCnt) {
-    if (!strcmp(_respBuf + 1, "OK")) {
+  if (_tokenCnt > 0) {
+    if (!strcmp(_tokens[0], "$OK")) {
       return 0;
-    } else if (!strcmp(_respBuf + 1, "NK")) {
+    } else if (!strcmp(_tokens[0], "$NK")) {
       return 1;
-    }
-    /*notyet
-       else if (!strcmp(_respBuf,"$WF")) { // async WIFI
-       ResetEEPROM();
-       goto start;
-       }
-       else if (!strcmp(respBuf,"$ST")) { // async EVSE state transition
-       // placeholder.. no action et
-       goto start;
-       }
-     */
-    else { // not OK or NK
+    } else if (!strcmp(_tokens[0],"$WF")) { // async WIFI
+      // placeholder.. no action yet
+      goto start;
+    } else if (!strcmp(_tokens[0],"$ST")) { // async EVSE state transition
+      // placeholder.. no action yet
+      goto start;
+    } else { // not OK or NK
       return 2;
     }
   } else { // !_tokenCnt
