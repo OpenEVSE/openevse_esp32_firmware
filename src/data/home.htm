@@ -265,6 +265,22 @@
           <div class="box380" data-bind="with: openevse">
             <h2>Settings</h2>
             <table>
+              <tr data-bind="visible: isCharging">
+                <td>Time limit:</td>
+                <td>
+                  <select data-bind="options: timeLimits,
+                                     optionsText: 'name',
+                                     optionsValue: 'value',
+                                     value: timeLimit,
+                                     disable: updatingTimeLimit"></select>
+                </td>
+              </tr>
+              <tr data-bind="visible: isCharging">
+                <td>Charge limit:</td>
+                <td>
+                  <input type="text" data-bind="value: chargeLimit, disable: updatingChargeLimit" /> kWh
+                </td>
+              </tr>
               <tr>
                 <td>Time:</td>
                 <td>
@@ -273,6 +289,7 @@
                 </td>
               </tr>
             </table>
+
           </div>
 
           <div class="box380">

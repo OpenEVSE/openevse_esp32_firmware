@@ -6,10 +6,10 @@
 // Work out the endpoint to use, for dev you can change to point at a remote ESP
 // and run the HTML/JS from file, no need to upload to the ESP to test
 
-//var baseHost = window.location.hostname;
+var baseHost = window.location.hostname;
 //var baseHost = "openevse.local";
 //var baseHost = "192.168.4.1";
-var baseHost = "172.16.0.54";
+//var baseHost = "172.16.0.58";
 var baseEndpoint = "http://" + baseHost;
 
 function BaseViewModel(defaults, remoteUrl, mappings = {}) {
@@ -160,6 +160,7 @@ ConfigViewModel.prototype = Object.create(BaseViewModel.prototype);
 ConfigViewModel.prototype.constructor = ConfigViewModel;
 
 function RapiViewModel() {
+  var self = this;
   BaseViewModel.call(this, {
     "comm_sent": "0",
     "comm_success": "0",
@@ -168,7 +169,7 @@ function RapiViewModel() {
     "temp1": "0",
     "temp2": "0",
     "temp3": "0",
-    "estate": "Unknown",
+    "state": -1,
     "wattsec": "0",
     "watthour": "0"
   }, baseEndpoint + "/rapiupdate");
@@ -176,6 +177,52 @@ function RapiViewModel() {
   this.rapiSend = ko.observable(false);
   this.cmd = ko.observable("");
   this.ret = ko.observable("");
+
+  this.estate = ko.pureComputed(function () {
+    var estate;
+    switch (self.state()) {
+      case 1:
+        estate = "Not Connected";
+        break;
+      case 2:
+        estate = "EV Connected";
+        break;
+      case 3:
+        estate = "Charging";
+        break;
+      case 4:
+        estate = "Vent Required";
+        break;
+      case 5:
+        estate = "Diode Check Failed";
+        break;
+      case 6:
+        estate = "GFCI Fault";
+        break;
+      case 7:
+        estate = "No Earth Ground";
+        break;
+      case 8:
+        estate = "Stuck Relay";
+        break;
+      case 9:
+        estate = "GFCI Self Test Failed";
+        break;
+      case 10:
+        estate = "Over Temperature";
+        break;
+      case 254:
+        estate = "Sleeping";
+        break;
+      case 255:
+        estate = "Disabled";
+        break;
+      default:
+        estate = "Invalid";
+        break;
+    }
+    return estate;
+  });
 }
 RapiViewModel.prototype = Object.create(BaseViewModel.prototype);
 RapiViewModel.prototype.constructor = RapiViewModel;
@@ -190,23 +237,58 @@ RapiViewModel.prototype.send = function() {
   });
 };
 
-function OpenEvseViewModel(configViewModel) {
+function OpenEvseViewModel(rapiViewModel) {
   var self = this;
   self.openevse = new OpenEVSE(baseEndpoint + "/r");
-  self.config = configViewModel;
+  self.rapi = rapiViewModel;
 
   // Option lists
   self.serviceLevels = [
     { name: "Auto", value: 0 },
     { name: "1", value: 1 },
     { name: "2", value: 2 }];
+  self.currentLevels = ko.observableArray([]);
+  self.timeLimits = [
+    { name: "off", value: 0 },
+    { name: "15 min", value: 15 },
+    { name: "30 min", value: 30 },
+    { name: "45 min", value: 45 },
+    { name: "1 hour", value: 60 },
+    { name: "1.5 hours", value: 1.5 * 60 },
+    { name: "2 hours", value: 2 * 60 },
+    { name: "2.5 hours", value: 2.5 * 60 },
+    { name: "3 hours", value: 3 * 60 },
+    { name: "4 hours", value: 4 * 60 },
+    { name: "5 hours", value: 5 * 60 },
+    { name: "6 hours", value: 6 * 60 },
+    { name: "7 hours", value: 7 * 60 },
+    { name: "8 hours", value: 8 * 60 }];
+
   self.serviceLevel = ko.observable(-1);
   self.actualServiceLevel = ko.observable(-1);
-
   self.minCurrentLevel = ko.observable(-1);
   self.maxCurrentLevel = ko.observable(-1);
   self.currentCapacity = ko.observable(-1);
-  self.currentLevels = ko.observableArray([]);
+  self.timeLimit = ko.observable(-1);
+  self.chargeLimit = ko.observable(-1);
+
+  self.isCharging = ko.pureComputed(function () {
+    return 3 === self.rapi.state();
+  });
+
+  // helper to select an appropriate value for time limit
+  self.selectTimeLimit = function(limit)
+  {
+    if(self.timeLimit() === limit) {
+      return;
+    }
+
+    for(var time in self.timeLimits) {
+      if(time.value >= limit) {
+        self.timeLimit(time.value);
+      }
+    }
+  };
 
   self.timedate = ko.observable(new Date());
   self.date = ko.pureComputed(function () {
@@ -229,6 +311,12 @@ function OpenEvseViewModel(configViewModel) {
     function () { return self.updateCurrentCapacity(); },
     function () { return self.openevse.current_capacity(function (capacity) {
       self.currentCapacity(capacity);
+    }); },
+    function () { return self.openevse.time_limit(function (limit) {
+      self.selectTimeLimit(limit);
+    }); },
+    function () { return self.openevse.charge_limit(function (limit) {
+      self.chargeLimit(limit);
     }); }
   ];
   var updateCount = -1;
@@ -248,6 +336,8 @@ function OpenEvseViewModel(configViewModel) {
 
   self.updatingServiceLevel = ko.observable(false);
   self.updatingCurrentCapacity = ko.observable(false);
+  self.updatingTimeLimit = ko.observable(false);
+  self.updatingChargeLimit = ko.observable(false);
   /*self.updating = ko.pureComputed(function () {
     return self.updatingServiceLevel() ||
            self.updateCurrentCapacity();
@@ -266,9 +356,10 @@ function OpenEvseViewModel(configViewModel) {
       self.openevse.service_level(function (level, actual) {
         self.actualServiceLevel(actual);
         self.updateCurrentCapacity().always(function () {
-          self.updatingServiceLevel(false);
         });
-      }, val);
+      }, val).always(function() {
+        self.updatingServiceLevel(false);
+      });
     });
 
     // Updates to the current capacity
@@ -281,8 +372,33 @@ function OpenEvseViewModel(configViewModel) {
         if(val !== capacity) {
           self.currentCapacity(capacity);
         }
+      }, val).always(function() {
         self.updatingCurrentCapacity(false);
-      }, val);
+      });
+    });
+
+    // Updates to the time limit
+    self.timeLimit.subscribe(function (val) {
+      self.updatingTimeLimit(true);
+      self.openevse.time_limit(function (limit) {
+        if(val !== limit) {
+          self.selectTimeLimit(limit);
+        }
+      }, val).always(function() {
+        self.updatingTimeLimit(false);
+      });
+    });
+
+    // Updates to the charge limit
+    self.chargeLimit.subscribe(function (val) {
+      self.updatingChargeLimit(true);
+      self.openevse.charge_limit(function (limit) {
+        if(val !== limit) {
+          self.chargeLimit(limit);
+        }
+      }, val).always(function() {
+        self.updatingChargeLimit(false);
+      });
     });
 
     subscribed = true;
@@ -312,7 +428,7 @@ function OpenEvseWiFiViewModel() {
   self.status = new StatusViewModel();
   self.rapi = new RapiViewModel();
   self.scan = new WiFiScanViewModel();
-  self.openevse = new OpenEvseViewModel(self.config);
+  self.openevse = new OpenEvseViewModel(self.rapi);
 
   self.initialised = ko.observable(false);
   self.updating = ko.observable(false);

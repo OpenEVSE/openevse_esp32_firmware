@@ -208,7 +208,7 @@ function OpenEVSE(endpoint)
     if(false !== limit) {
       return self._request(["S3", Math.round(limit/15.0)],
       function() {
-        callback(limit);
+        self.time_limit(callback);
       });
     }
 
@@ -218,6 +218,37 @@ function OpenEVSE(endpoint)
 
         if(!isNaN(limit)) {
           callback(limit * 15);
+        } else {
+          request._error(new OpenEVSEError("ParseError", "Could not parse \""+data.join(" ")+"\" arguments"));
+        }
+      } else {
+        request._error(new OpenEVSEError("ParseError", "Only received "+data.length+" arguments"));
+      }
+    });
+    return request;
+  };
+
+  /**
+   * Get or set the charge limit, in kWh.
+   *
+   * 0 = no charge limit
+   *
+   * Returns the limit
+   */
+  self.charge_limit = function(callback, limit = false) {
+    if(false !== limit) {
+      return self._request(["SH", limit],
+      function() {
+        self.charge_limit(callback);
+      });
+    }
+
+    var request = self._request("GH", function(data) {
+      if(data.length >= 1) {
+        var limit = parseInt(data[0]);
+
+        if(!isNaN(limit)) {
+          callback(limit);
         } else {
           request._error(new OpenEVSEError("ParseError", "Could not parse \""+data.join(" ")+"\" arguments"));
         }
