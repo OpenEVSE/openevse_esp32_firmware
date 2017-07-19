@@ -39,6 +39,7 @@ RapiSender::RapiSender(Stream * stream) {
   _stream = stream;
   *_respBuf = 0;
   _flags = 0;
+  _onRapiEvent = nullptr;
 
   _sequenceId = RAPI_INVALID_SEQUENCE_ID;
 }
@@ -243,11 +244,13 @@ start:
       return 0;
     } else if (!strcmp(_tokens[0], "$NK")) {
       return 1;
-    } else if (!strcmp(_tokens[0],"$WF")) { // async WIFI
-      // placeholder.. no action yet
-      goto start;
-    } else if (!strcmp(_tokens[0],"$ST")) { // async EVSE state transition
-      // placeholder.. no action yet
+    } else if (!strcmp(_tokens[0],"$WF") ||
+               !strcmp(_tokens[0],"$ST"))
+    {
+      // async EVSE state transition or WiFi event
+      if(nullptr != _onRapiEvent) {
+        _onRapiEvent();
+      }
       goto start;
     } else { // not OK or NK
       return 2;

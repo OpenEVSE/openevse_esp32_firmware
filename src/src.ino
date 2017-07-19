@@ -81,6 +81,19 @@ setup() {
   ota_setup();
   DBUGF("After ota_setup: %d", ESP.getFreeHeap());
 #endif
+  rapiSender.setOnEvent([]() {
+    if(!strcmp(rapiSender.getToken(0), "$ST")) {
+      String qrapi = rapiSender.getToken(1);
+      DBUGVAR(qrapi);
+      state = strtol(qrapi.c_str(), NULL, 16);
+      DBUGVAR(state);
+    } else if(!strcmp(rapiSender.getToken(0), "$WF")) {
+      String qrapi = rapiSender.getToken(1);
+      DBUGVAR(qrapi);
+      long wifiMode = strtol(qrapi.c_str(), NULL, 10);
+      DBUGVAR(wifiMode);
+    }
+  });
   rapiSender.enableSequenceId(0);
 } // end setup
 

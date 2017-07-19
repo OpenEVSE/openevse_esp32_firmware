@@ -17,12 +17,15 @@
 // _flags
 #define RSF_SEQUENCE_ID_ENABLED   0x01
 
+typedef void (* fnRapiEvent)();
+
 class RapiSender {
   Stream *_stream;
   uint8_t _sequenceId;
   uint8_t _flags;
   int _tokenCnt;
   char *_tokens[RAPI_MAX_TOKENS];
+  fnRapiEvent _onRapiEvent;
 
   char _respBuf[RAPI_BUFLEN];
   char _respBufOrig[RAPI_BUFLEN];
@@ -48,6 +51,9 @@ public:
   const char *getToken(int i) {
     if (i < _tokenCnt) return _tokens[i];
     else return NULL;
+  }
+  void setOnEvent(fnRapiEvent callback) {
+    _onRapiEvent = callback;
   }
 };
 
