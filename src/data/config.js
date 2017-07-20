@@ -196,7 +196,7 @@ RapiViewModel.prototype.send = function() {
   });
 };
 
-function WiFiPortal() {
+function OpenEvseViewModel() {
   var self = this;
 
   self.config = new ConfigViewModel();
@@ -494,7 +494,7 @@ function WiFiPortal() {
 
 $(function () {
   // Activates knockout.js
-  var openevse = new WiFiPortal();
+  var openevse = new OpenEvseViewModel();
   ko.applyBindings(openevse);
   openevse.start();
 });
