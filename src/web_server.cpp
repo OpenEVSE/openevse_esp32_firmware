@@ -26,6 +26,10 @@ static const char CONTENT_TYPE_HTML[] PROGMEM = "text/html";
 static const char CONTENT_TYPE_TEXT[] PROGMEM = "text/text";
 static const char CONTENT_TYPE_JSON[] PROGMEM = "application/json";
 
+// Pages
+static const char HOME_PAGE[] /*PROGMEM*/ = "/home.htm";
+static const char WIFI_PAGE[] /*PROGMEM*/ = "/wifi_portal.htm";
+
 // Get running firmware version from build tag environment variable
 #define TEXTIFY(A) #A
 #define ESCAPEQUOTE(A) TEXTIFY(A)
@@ -117,8 +121,10 @@ handleHome(AsyncWebServerRequest *request) {
     return request->requestAuthentication(esp_hostname);
   }
 
-  if (SPIFFS.exists("/home.htm")) {
-    request->send(SPIFFS, "/home.htm");
+  const char *page = (wifi_mode == WIFI_MODE_AP_ONLY) ? WIFI_PAGE : HOME_PAGE;
+
+  if (SPIFFS.exists(page)) {
+    request->send(SPIFFS, page);
   } else {
     request->send(200, CONTENT_TYPE_TEXT,
                 F("/home.html not found, have you flashed the SPIFFS?"));
@@ -730,8 +736,7 @@ web_server_setup() {
 
   // Setup the static files
   server.serveStatic("/", SPIFFS, "/")
-    .setDefaultFile("index.html")
-    .setAuthentication(www_username.c_str(), www_password.c_str());
+    .setDefaultFile("index.html");
 
   // Start server & server root html /
   server.on("/", handleHome);

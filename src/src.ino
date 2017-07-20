@@ -58,12 +58,12 @@ setup() {
 
   DEBUG_BEGIN(115200);
 
-  DBUGLN();
-  DBUG("OpenEVSE WiFI ");
-  DBUGLN(ESP.getChipId());
-  DBUGLN("Firmware: " + currentfirmware);
+  DEBUG.println();
+  DEBUG.print("OpenEVSE WiFI ");
+  DEBUG.println(ESP.getChipId());
+  DEBUG.println("Firmware: " + currentfirmware);
 
-  DBUGF("Free: %d", ESP.getFreeHeap());
+  DEBUG.printf("Free: %d\n", ESP.getFreeHeap());
 
   // Read saved settings from the config
   config_load_settings();
@@ -107,7 +107,7 @@ loop() {
   // Do these things once every 2s
   // -------------------------------------------------------------------
   if ((millis() - Timer3) >= 2000) {
-    DBUGF("Free: %d", ESP.getFreeHeap());
+    DEBUG.printf("Free: %d\n", ESP.getFreeHeap());
     update_rapi_values();
     Timer3 = millis();
   }
