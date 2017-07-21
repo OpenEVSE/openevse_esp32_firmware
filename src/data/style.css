@@ -138,7 +138,10 @@ button:disabled {
 
 input[type="text"],
 input[type="password"],
-input[type="file"] {
+input[type="file"],
+input[type="time"],
+input[type="date"],
+select {
   box-sizing: border-box;
   border-radius: 4px;
   padding: 10px;
@@ -146,10 +149,27 @@ input[type="file"] {
   width: 280px;
 }
 
+input[type="time"] {
+  width: 80px;
+}
+
+input[type="date"] {
+  width: 194px;
+}
+
 @media screen and (max-width: 420px) {
   input[type="text"],
-  input[type="password"]  {
+  input[type="password"],
+  select {
     width: 240px;
+  }
+
+  input[type="time"] {
+    width: 60px;
+  }
+
+  input[type="date"] {
+    width: 174px;
   }
 }
 
@@ -202,12 +222,6 @@ input[type="file"] {
 .tabs input:checked + label {
 	background: #f1f1f1;
 	color: #000;
-	/*
-	-webkit-transition: .1s;
-	-moz-transition: .1s;
-	-o-transition: .1s;
-	-ms-transition: .1s;
-	*/
 }
 
 #content {
@@ -230,12 +244,11 @@ input[type="file"] {
   }
 }
 
-input[type=text] {
-  border: 1px solid #ddd;
-  padding:5px;
-}
-
-input[type=file] {
+input[type=text],
+input[type=file],
+input[type=time],
+input[type=date],
+select {
   border: 1px solid #ddd;
   padding:5px;
 }
@@ -250,51 +263,6 @@ input[type=file] {
   font-size: 10px;
   word-wrap: break-word;
 }
-
-/*
-#content input[type=radio], input[type=checkbox] {
-  display:none;
-}
-#content input[type=radio] + label:before {
-  content: "";
-  display: inline-block;
-  width: 20px;
-  height: 20px;
-  vertical-align:middle;
-  margin-right: 8px;
-  background-color: #008080;
-	box-shadow: 0 2px 2px 0 rgba(0, 0, 0, 0.4);
-	border-radius: 5px;
-}
-#content input[type=checkbox] + label:before {
-  content: "";
-  display: inline-block;
-  width: 20px;
-  height: 20px;
-  vertical-align:middle;
-  margin-right: 8px;
-  background-color: #008080;
-	box-shadow: 0 2px 2px 0 rgba(0, 0, 0, 0.4);
-	border-radius: 5px;
-}
-#content input[type=radio]:checked + label:before {
-  content: "\2022";
-  color:white;
-  background-color: #666;
-  font-size:1.8em;
-  text-align:center;
-  line-height:14px;
-  text-shadow:0px 0px 3px #eee;
-}
-#content input[type=checkbox]:checked + label:before {
-  content:"\2714";
-  color:white;
-  background-color: #666;
-  text-align:center;
-  line-height:15px;
-  text-shadow:0px 0px 3px #eee;
-}
-*/
 
 /* Common styles for all types */
 .warning {

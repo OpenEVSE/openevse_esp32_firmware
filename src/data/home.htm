@@ -271,34 +271,21 @@
           <!-- Session Options -->
           <div data-bind="visible: !openevse.isError()" class="box380">
             <h2>Session Options</h2>
-            <table>
-              <tr>
-                <td>State:</td>
-                <td><span data-bind="text: rapi.estate"></span></td>
-              </tr>
-            </table>
-            <table data-bind="with: openevse, visible: openevse.isConnected">
-              <tr>
-                <th>Limits</th>
-                <th>Value</th>
-              </tr>
-              <tr>
-                <td>Time:</td>
-                <td>
-                  <select data-bind="options: timeLimits,
-                                     optionsText: 'name',
-                                     optionsValue: 'value',
-                                     value: timeLimit,
-                                     disable: updatingTimeLimit"></select>
-                </td>
-              </tr>
-              <tr>
-                <td>Charge:</td>
-                <td>
-                  <input type="text" data-bind="value: chargeLimit, disable: updatingChargeLimit" /> kWh
-                </td>
-              </tr>
-            </table>
+            <h4 data-bind="text: rapi.estate"></h4>
+
+            <p data-bind="with: openevse, visible: openevse.isConnected">
+              <b>Time limit:</b><br>
+              <select data-bind="options: timeLimits,
+                                  optionsText: 'name',
+                                  optionsValue: 'value',
+                                  value: timeLimit,
+                                  disable: updatingTimeLimit"></select>
+            </p>
+
+            <p data-bind="with: openevse, visible: openevse.isConnected">
+              <b>Charge limit:</b><br>
+              <input type="text" data-bind="value: chargeLimit, disable: updatingChargeLimit" /> kWh
+            </p>
           </div>
 
           <!-- Energy -->
@@ -363,24 +350,9 @@
               <tr>
                 <td>Service Level:</td>
                 <td>
-                  <select data-bind="options: openevse.serviceLevels,
-                                     optionsText: 'name',
-                                     optionsValue: 'value',
-                                     value: openevse.serviceLevel,
-                                     disable: openevse.updatingServiceLevel()"></select>
+                  <span data-bind="text: openevse.actualServiceLevel"></span>
                 </td>
               </tr>
-              <tr>
-                <td>Current capacity:</td>
-                <td>
-                  <select data-bind="options: openevse.currentLevels,
-                                     optionsText: 'name',
-                                     optionsValue: 'value',
-                                     value: openevse.currentCapacity,
-                                     disable: openevse.updatingServiceLevel() || openevse.updatingCurrentCapacity()"></select>
-                </td>
-              </tr>
-
               <tr>
                 <td>Level <span data-bind="text: openevse.actualServiceLevel"></span> Minimum:</td>
                 <td>
@@ -407,16 +379,29 @@
           <!-- Settings -->
           <div class="box380" data-bind="with: openevse">
             <h2>Setup</h2>
-            <table>
-              <tr>
-                <td>Time:</td>
-                <td>
-                  <input type="time" data-bind="text: time" />
-                  <input type="date" data-bind="text: date" />
-                </td>
-              </tr>
-            </table>
+            <p>
+              <b>Time:</b><br/>
+              <input type="time" data-bind="text: time" />
+              <input type="date" data-bind="text: date" />
+            </p>
 
+            <p>
+              <b>Service Level:</b><br/>
+              <select data-bind="options: serviceLevels,
+                                 optionsText: 'name',
+                                 optionsValue: 'value',
+                                 value: serviceLevel,
+                                 disable: updatingServiceLevel()"></select>
+            </p>
+
+            <p>
+              <b>Current capacity:</b><br/>
+              <select data-bind="options: currentLevels,
+                                  optionsText: 'name',
+                                  optionsValue: 'value',
+                                  value: currentCapacity,
+                                  disable: updatingServiceLevel() || updatingCurrentCapacity()"></select>
+            </p>
           </div>
 
           <!-- Safety -->
