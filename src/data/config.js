@@ -291,9 +291,11 @@ function OpenEvseViewModel(rapiViewModel) {
       return;
     }
 
-    for(var time in self.timeLimits) {
+    for(var i = 0; i < self.timeLimits.length; i++) {
+      var time = self.timeLimits[i];
       if(time.value >= limit) {
         self.timeLimit(time.value);
+        break;
       }
     }
   };
