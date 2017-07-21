@@ -734,9 +734,27 @@ handleRapi(AsyncWebServerRequest *request) {
 
 void handleNotFound(AsyncWebServerRequest *request)
 {
-  DBUGF("NOT_FOUND: ");
+  DBUG("NOT_FOUND: ");
   dumpRequest(request);
-  request->send(404);
+
+  if(wifi_mode == WIFI_MODE_AP_ONLY) {
+    // Redirect to the home page in AP mode (for the captive portal)
+    AsyncResponseStream *response = request->beginResponseStream(String(CONTENT_TYPE_HTML));
+
+    String url = F("http://");
+    url += ipaddress;
+
+    String s = F("<html><body><a href=\"");
+    s += url;
+    s += F("\">OpenEVES</a></body></html>");
+
+    response->setCode(301);
+    response->addHeader(F("Location"), url);
+    response->print(s);
+    request->send(response);
+  } else {
+    request->send(404);
+  }
 }
 
 void
