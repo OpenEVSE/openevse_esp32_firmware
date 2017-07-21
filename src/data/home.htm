@@ -262,11 +262,23 @@
 
         <!--TAB 3: OpenEVSE -->
         <div id="content-3" data-bind="visible: isStatus">
-          <div class="box380" data-bind="with: openevse">
-            <h2>Settings</h2>
+
+          <!-- Session Options -->
+          <div class="box380">
+            <h2>Session Options</h2>
             <table>
-              <tr data-bind="visible: isCharging">
-                <td>Time limit:</td>
+              <tr>
+                <td>State:</td>
+                <td><span data-bind="text: rapi.estate"></span></td>
+              </tr>
+            </table>
+            <table data-bind="with: openevse, visible: openevse.isConnected">
+              <tr>
+                <th>Limits</th>
+                <th>Value</th>
+              </tr>
+              <tr>
+                <td>Time:</td>
                 <td>
                   <select data-bind="options: timeLimits,
                                      optionsText: 'name',
@@ -275,23 +287,66 @@
                                      disable: updatingTimeLimit"></select>
                 </td>
               </tr>
-              <tr data-bind="visible: isCharging">
-                <td>Charge limit:</td>
+              <tr>
+                <td>Charge:</td>
                 <td>
                   <input type="text" data-bind="value: chargeLimit, disable: updatingChargeLimit" /> kWh
                 </td>
               </tr>
-              <tr>
-                <td>Time:</td>
-                <td>
-                  <input type="time" data-bind="text: time" />
-                  <input type="date" data-bind="text: date" />
-                </td>
-              </tr>
             </table>
-
           </div>
 
+          <!-- Energy -->
+          <div class="box380">
+            <h2>Energy</h2>
+            <table>
+              <tr>
+                <th>Energy</th>
+                <th>kWh</th>
+              </tr>
+              <tr>
+                <td>This Session:</td>
+                <td><span data-bind="text: scaleString(rapi.wattsec(), 3600000, 2)"></span></td>
+              </tr>
+              <tr>
+                <td>Total:</td>
+                <td><span data-bind="text: scaleString(rapi.watthour(), 1000, 2)"></span></td>
+              </tr>
+            </table>
+          </div>
+
+          <!-- Sensor Values -->
+          <div class="box380">
+            <h2>Sensor Values</h2>
+            <table>
+              <tr>
+                <th>Sensor</th>
+                <th>Value</th>
+              </tr>
+              <tr>
+                <td>Pilot:</td>
+                <td><span data-bind="text: rapi.pilot() + ' A'"></span></td>
+              </tr>
+              <tr>
+                <td>Amps:</td>
+                <td><span data-bind="text: scaleString(rapi.amp(), 1000, 2) + ' A'"></span></td>
+              </tr>
+              <tr>
+                <td>Temp1:</td>
+                <td><span data-bind="text: scaleString(rapi.temp1(), 10, 1) + ' &deg;C'"></span></td>
+              </tr>
+              <tr>
+                <td>Temp2:</td>
+                <td><span data-bind="text: scaleString(rapi.temp2(), 10, 1) + ' &deg;C'"></span></td>
+              </tr>
+              <tr>
+                <td>Temp3:</td>
+                <td><span data-bind="text: scaleString(rapi.temp3(), 10, 1) + ' &deg;C'"></span></td>
+              </tr>
+            </table>
+          </div>
+
+          <!-- Current -->
           <div class="box380">
             <h2>Current</h2>
             <table>
@@ -343,6 +398,23 @@
               </tr>
             </table>
           </div>
+
+          <!-- Settings -->
+          <div class="box380" data-bind="with: openevse">
+            <h2>Setup</h2>
+            <table>
+              <tr>
+                <td>Time:</td>
+                <td>
+                  <input type="time" data-bind="text: time" />
+                  <input type="date" data-bind="text: date" />
+                </td>
+              </tr>
+            </table>
+
+          </div>
+
+          <!-- Safety -->
           <div class="box380">
             <h2>Safety</h2>
             <table>
@@ -392,40 +464,8 @@
               </tr>
             </table>
           </div>
-          <div class="box380">
-            <h2>Session Options</h2>
-            <table>
-              <tr>
-                <th>Limits</th>
-                <th>Value</th>
-              </tr>
-              <tr>
-                <td>Kwh:</td>
-                <td><span data-bind="text: config.kwhlimit"></span></td>
-              </tr>
-              <tr>
-                <td>Time:</td>
-                <td><span data-bind="text: config.timelimit"></span></td>
-              </tr>
-            </table>
-          </div>
-          <div class="box380">
-            <h2>Energy</h2>
-            <table>
-              <tr>
-                <th>Energy</th>
-                <th>kWh</th>
-              </tr>
-              <tr>
-                <td>This Session:</td>
-                <td><span data-bind="text: scaleString(rapi.wattsec(), 3600000, 2)"></span></td>
-              </tr>
-              <tr>
-                <td>Total:</td>
-                <td><span data-bind="text: scaleString(rapi.watthour(), 1000, 2)"></span></td>
-              </tr>
-            </table>
-          </div>
+
+          <!-- Hardware -->
           <div class="box380">
             <h2>Hardware</h2>
             <table>
@@ -456,40 +496,6 @@
               <tr>
                 <td>Free RAM:</td>
                 <td><span data-bind="text: scaleString(status.free_heap(), 1024, 0) + 'K'"></span></td>
-              </tr>
-            </table>
-          </div>
-
-          <div class="box380">
-            <h2>Sensor Values</h2>
-            <table>
-              <tr>
-                <th>Sensor</th>
-                <th>Value</th>
-              </tr>
-              <tr>
-                <td>State:</td>
-                <td><span data-bind="text: rapi.estate"></span></td>
-              </tr>
-              <tr>
-                <td>Pilot:</td>
-                <td><span data-bind="text: rapi.pilot() + ' A'"></span></td>
-              </tr>
-              <tr>
-                <td>Amps:</td>
-                <td><span data-bind="text: scaleString(rapi.amp(), 1000, 2) + ' A'"></span></td>
-              </tr>
-              <tr>
-                <td>Temp1:</td>
-                <td><span data-bind="text: scaleString(rapi.temp1(), 10, 1) + ' &deg;C'"></span></td>
-              </tr>
-              <tr>
-                <td>Temp2:</td>
-                <td><span data-bind="text: scaleString(rapi.temp2(), 10, 1) + ' &deg;C'"></span></td>
-              </tr>
-              <tr>
-                <td>Temp3:</td>
-                <td><span data-bind="text: scaleString(rapi.temp3(), 10, 1) + ' &deg;C'"></span></td>
               </tr>
             </table>
           </div>

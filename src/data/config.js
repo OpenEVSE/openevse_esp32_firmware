@@ -99,7 +99,7 @@ function WiFiScanViewModel()
     $.get(self.remoteUrl, function (data) {
       ko.mapping.fromJS(data, self.results);
       self.results.sort(function (left, right) {
-        if(left.ssid() == right.ssid()) {
+        if(left.ssid() === right.ssid()) {
           return left.rssi() < right.rssi() ? 1 : -1;
         }
         return left.ssid() < right.ssid() ? -1 : 1;
@@ -271,6 +271,10 @@ function OpenEvseViewModel(rapiViewModel) {
   self.currentCapacity = ko.observable(-1);
   self.timeLimit = ko.observable(-1);
   self.chargeLimit = ko.observable(-1);
+
+  self.isConnected = ko.pureComputed(function () {
+    return [2, 3].indexOf(self.rapi.state()) !== -1;
+  });
 
   self.isCharging = ko.pureComputed(function () {
     return 3 === self.rapi.state();
