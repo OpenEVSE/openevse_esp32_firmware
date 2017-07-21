@@ -100,13 +100,6 @@ void
 update_rapi_values() {
   Profile_Start(update_rapi_values);
 
-  // HACK: Not everywhere is using RapiSender so make sure we do not have anything in the serial buffers
-  Serial.flush();
-  while(Serial.available()) {
-    String dump = Serial.readString();
-    DBUGVAR(dump);
-  }
-
   comm_sent++;
   if (rapi_command == 1) {
     if (0 == rapiSender.sendCmd("$GE"))
@@ -204,13 +197,6 @@ update_rapi_values() {
 void
 handleRapiRead() {
   Profile_Start(handleRapiRead);
-
-  // HACK: Not everywhere is using RapiSender so make sure we do not have anything in the serial buffers
-  Serial.flush();
-  while(Serial.available()) {
-    String dump = Serial.readString();
-    DBUGVAR(dump);
-  }
 
   comm_sent++;
   if (0 == rapiSender.sendCmd("$GV")) {

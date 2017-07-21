@@ -55,5 +55,6 @@ public:
   void setOnEvent(fnRapiEvent callback) {
     _onRapiEvent = callback;
   }
+  void loop();
 };
 

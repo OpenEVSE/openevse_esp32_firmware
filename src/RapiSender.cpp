@@ -270,3 +270,11 @@ RapiSender::enableSequenceId(uint8_t tf) {
     _flags &= ~RSF_SEQUENCE_ID_ENABLED;
   }
 }
+
+void
+RapiSender::loop()
+{
+  if(_stream->available()) {
+    _waitForResult(RAPI_TIMEOUT_MS);
+  }
+}

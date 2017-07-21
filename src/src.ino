@@ -85,8 +85,16 @@ setup() {
     if(!strcmp(rapiSender.getToken(0), "$ST")) {
       String qrapi = rapiSender.getToken(1);
       DBUGVAR(qrapi);
+
+      // Update our local state
       state = strtol(qrapi.c_str(), NULL, 16);
       DBUGVAR(state);
+
+      // Send to all clients
+      String event = F("{\"state\":");
+      event += state;
+      event += F("}");
+      web_server_event(event);
     } else if(!strcmp(rapiSender.getToken(0), "$WF")) {
       String qrapi = rapiSender.getToken(1);
       DBUGVAR(qrapi);
@@ -109,6 +117,7 @@ loop() {
 #ifdef ENABLE_OTA
   ota_loop();
 #endif
+  rapiSender.loop();
 
   // Gives OpenEVSE time to finish self test on cold start
   if ( (millis() > 5000) && (rapi_read==0) ) {

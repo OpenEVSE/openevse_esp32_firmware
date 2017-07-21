@@ -11,7 +11,8 @@
 #include "emoncms.h"
 #include "divert.h"
 
-AsyncWebServer server(80);          //Create class for Web server
+AsyncWebServer server(80);          // Create class for Web server
+AsyncWebSocket ws("/ws");
 
 bool enableCors = true;
 
@@ -727,6 +728,30 @@ void handleNotFound(AsyncWebServerRequest *request)
   request->send(404);
 }
 
+void onWsEvent(AsyncWebSocket * server, AsyncWebSocketClient *client, AwsEventType type, void *arg, uint8_t *data, size_t len) {
+  if(type == WS_EVT_CONNECT) {
+    DBUGF("ws[%s][%u] connect", server->url(), client->id());
+    client->ping();
+  } else if(type == WS_EVT_DISCONNECT) {
+    DBUGF("ws[%s][%u] disconnect: %u", server->url(), client->id());
+  } else if(type == WS_EVT_ERROR) {
+    DBUGF("ws[%s][%u] error(%u): %s", server->url(), client->id(), *((uint16_t*)arg), (char*)data);
+  } else if(type == WS_EVT_PONG) {
+    DBUGF("ws[%s][%u] pong[%u]: %s", server->url(), client->id(), len, (len)?(char*)data:"");
+  } else if(type == WS_EVT_DATA) {
+    AwsFrameInfo * info = (AwsFrameInfo*)arg;
+    String msg = "";
+    if(info->final && info->index == 0 && info->len == len)
+    {
+      //the whole message is in a single frame and we got all of it's data
+      DBUGF("ws[%s][%u] %s-message[%llu]: ", server->url(), client->id(), (info->opcode == WS_TEXT)?"text":"binary", info->len);
+      DBUGF("%.*s\n", len, (char *)data);
+    } else {
+      // TODO: handle messages that are comprised of multiple frames or the frame is split into multiple packets
+    }
+  }
+}
+
 void
 web_server_setup() {
   SPIFFS.begin(); // mount the fs
@@ -735,6 +760,10 @@ web_server_setup() {
   server.serveStatic("/", SPIFFS, "/")
     .setDefaultFile("index.html")
     .setAuthentication(www_username.c_str(), www_password.c_str());
+
+  // Add the Web Socket server
+  ws.onEvent(onWsEvent);
+  server.addHandler(&ws);
 
   // Start server & server root html /
   server.on("/", handleHome);
@@ -773,6 +802,8 @@ web_server_setup() {
 //    if(requestPreProcess()) handleUpdate();
 //  });
 
+
+
   server.onNotFound(handleNotFound);
   server.begin();
 
@@ -810,4 +841,9 @@ web_server_loop() {
   }
 
   Profile_End(web_server_loop, 5);
+}
+
+void web_server_event(String &event)
+{
+  ws.textAll(event);
 }
