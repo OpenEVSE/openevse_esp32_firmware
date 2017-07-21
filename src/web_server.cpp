@@ -22,13 +22,22 @@ unsigned long systemRestartTime = 0;
 unsigned long systemRebootTime = 0;
 
 // Content Types
-static const char CONTENT_TYPE_HTML[] PROGMEM = "text/html";
-static const char CONTENT_TYPE_TEXT[] PROGMEM = "text/text";
-static const char CONTENT_TYPE_JSON[] PROGMEM = "application/json";
+static const char _CONTENT_TYPE_HTML[] PROGMEM = "text/html";
+#define CONTENT_TYPE_HTML FPSTR(_CONTENT_TYPE_HTML)
+
+static const char _CONTENT_TYPE_TEXT[] PROGMEM = "text/text";
+#define CONTENT_TYPE_TEXT FPSTR(_CONTENT_TYPE_TEXT)
+
+static const char _CONTENT_TYPE_JSON[] PROGMEM = "application/json";
+#define CONTENT_TYPE_JSON FPSTR(_CONTENT_TYPE_JSON)
 
 // Pages
-static const char HOME_PAGE[] /*PROGMEM*/ = "/home.htm";
-static const char WIFI_PAGE[] /*PROGMEM*/ = "/wifi_portal.htm";
+static const char _HOME_PAGE[] PROGMEM = "/home.htm";
+#define HOME_PAGE FPSTR(_HOME_PAGE)
+
+static const char _WIFI_PAGE[] PROGMEM = "/wifi_portal.htm";
+#define WIFI_PAGE FPSTR(_WIFI_PAGE)
+
 
 // Get running firmware version from build tag environment variable
 #define TEXTIFY(A) #A
@@ -83,7 +92,7 @@ void dumpRequest(AsyncWebServerRequest *request) {
 // -------------------------------------------------------------------
 // Helper function to perform the standard operations on a request
 // -------------------------------------------------------------------
-bool requestPreProcess(AsyncWebServerRequest *request, AsyncResponseStream *&response, const char *contentType = CONTENT_TYPE_JSON)
+bool requestPreProcess(AsyncWebServerRequest *request, AsyncResponseStream *&response, const __FlashStringHelper *contentType = CONTENT_TYPE_JSON)
 {
   dumpRequest(request);
 
@@ -93,7 +102,7 @@ bool requestPreProcess(AsyncWebServerRequest *request, AsyncResponseStream *&res
     return false;
   }
 
-  response = request->beginResponseStream(contentType);
+  response = request->beginResponseStream(String(contentType));
   if(enableCors) {
     response->addHeader(F("Access-Control-Allow-Origin"), F("*"));
   }
@@ -121,7 +130,7 @@ handleHome(AsyncWebServerRequest *request) {
     return request->requestAuthentication(esp_hostname);
   }
 
-  const char *page = (wifi_mode == WIFI_MODE_AP_ONLY) ? WIFI_PAGE : HOME_PAGE;
+  String page = String((wifi_mode == WIFI_MODE_AP_ONLY) ? WIFI_PAGE : HOME_PAGE);
 
   if (SPIFFS.exists(page)) {
     request->send(SPIFFS, page);
