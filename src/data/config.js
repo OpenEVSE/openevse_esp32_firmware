@@ -280,6 +280,10 @@ function OpenEvseViewModel(rapiViewModel) {
     return 3 === self.rapi.state();
   });
 
+  self.isError = ko.pureComputed(function () {
+    return [4, 5, 6, 7, 8, 9, 10].indexOf(self.rapi.state()) !== -1;
+  });
+
   // helper to select an appropriate value for time limit
   self.selectTimeLimit = function(limit)
   {
@@ -479,6 +483,8 @@ function OpenEvseWiFiViewModel() {
         });
       });
     });
+
+    self.connect();
   };
 
   // -----------------------------------------------------------------------
@@ -604,7 +610,7 @@ function OpenEvseWiFiViewModel() {
       alert("Please enter Emoncms server and node");
     } else if (emoncms.enable && emoncms.apikey.length !== 32) {
       alert("Please enter valid Emoncms apikey");
-    } else if (emoncms.enable && emoncms.fingerprint !== "" && emoncms.fingerprint.length != 59) {
+    } else if (emoncms.enable && emoncms.fingerprint !== "" && emoncms.fingerprint.length !== 59) {
       alert("Please enter valid SSL SHA-1 fingerprint");
     } else {
       self.saveEmonCmsFetching(true);
@@ -722,6 +728,25 @@ function OpenEvseWiFiViewModel() {
       return self.config.divertmode();
     }
   });
+
+
+  // -----------------------------------------------------------------------
+  // Receive events from the server
+  // -----------------------------------------------------------------------
+  self.socket = false;
+  self.connect = function () {
+    self.socket = new WebSocket("ws://"+baseHost+"/ws");
+    self.socket.onopen = function (ev) {
+        console.log(ev);
+    };
+    self.socket.onclose = function (ev) {
+        console.log(ev);
+    };
+    self.socket.onmessage = function (msg) {
+        console.log(msg);
+        ko.mapping.fromJSON(msg.data, self.rapi);
+    };
+  };
 }
 
 $(function () {

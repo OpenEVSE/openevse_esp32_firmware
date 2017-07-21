@@ -307,3 +307,14 @@ input[type=file] {
   margin-top: 0;
   margin-bottom: 5px;
 }
+
+.error {
+  border-left-color: #a94442;
+  border-left-width: 5px;
+}
+
+.error h4 {
+  color: #a94442;
+  margin-top: 0;
+  margin-bottom: 5px;
+}
