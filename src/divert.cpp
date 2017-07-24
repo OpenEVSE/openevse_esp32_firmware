@@ -44,12 +44,12 @@ void divert_current_loop(){
   Profile_Start(mqtt_loop);
 
   if (divertmode == 1){
-    DEBUG.print("Divert mode: 1 Normal");
+    DEBUG.println("Divert mode: 1 Normal");
   }
 
   // If divert mode = Eco (2)
   if (divertmode == 2){
-    DEBUG.print("Divert mode: 2 Eco");
+    DEBUG.println("Divert mode: 2 Eco");
     int Isolar = 0;
     int Igrid_ie = 0;
 
