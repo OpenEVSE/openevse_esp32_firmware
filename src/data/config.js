@@ -10,6 +10,9 @@ var baseHost = window.location.hostname;
 //var baseHost = "openevse.local";
 //var baseHost = "192.168.4.1";
 //var baseHost = "172.16.0.60";
+if("" === baseHost) {
+  baseHost = "openevse.local";
+}
 var baseEndpoint = "http://" + baseHost;
 
 function BaseViewModel(defaults, remoteUrl, mappings = {}) {
