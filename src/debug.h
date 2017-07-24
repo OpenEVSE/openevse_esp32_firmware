@@ -26,7 +26,7 @@
 
 #else
 
-#define DEBUG_BEGIN(speed)
+#define DEBUG_BEGIN(speed)  DEBUG_PORT.begin(speed)
 #define DBUGF(...)
 #define DBUG(...)
 #define DBUGLN(...)

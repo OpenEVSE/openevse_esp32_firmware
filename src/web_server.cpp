@@ -22,9 +22,22 @@ unsigned long systemRestartTime = 0;
 unsigned long systemRebootTime = 0;
 
 // Content Types
-static const char CONTENT_TYPE_HTML[] PROGMEM = "text/html";
-static const char CONTENT_TYPE_TEXT[] PROGMEM = "text/text";
-static const char CONTENT_TYPE_JSON[] PROGMEM = "application/json";
+static const char _CONTENT_TYPE_HTML[] PROGMEM = "text/html";
+#define CONTENT_TYPE_HTML FPSTR(_CONTENT_TYPE_HTML)
+
+static const char _CONTENT_TYPE_TEXT[] PROGMEM = "text/text";
+#define CONTENT_TYPE_TEXT FPSTR(_CONTENT_TYPE_TEXT)
+
+static const char _CONTENT_TYPE_JSON[] PROGMEM = "application/json";
+#define CONTENT_TYPE_JSON FPSTR(_CONTENT_TYPE_JSON)
+
+// Pages
+static const char _HOME_PAGE[] PROGMEM = "/home.htm";
+#define HOME_PAGE FPSTR(_HOME_PAGE)
+
+static const char _WIFI_PAGE[] PROGMEM = "/wifi_portal.htm";
+#define WIFI_PAGE FPSTR(_WIFI_PAGE)
+
 
 // Get running firmware version from build tag environment variable
 #define TEXTIFY(A) #A
@@ -79,7 +92,7 @@ void dumpRequest(AsyncWebServerRequest *request) {
 // -------------------------------------------------------------------
 // Helper function to perform the standard operations on a request
 // -------------------------------------------------------------------
-bool requestPreProcess(AsyncWebServerRequest *request, AsyncResponseStream *&response, const char *contentType = CONTENT_TYPE_JSON)
+bool requestPreProcess(AsyncWebServerRequest *request, AsyncResponseStream *&response, const __FlashStringHelper *contentType = CONTENT_TYPE_JSON)
 {
   dumpRequest(request);
 
@@ -89,7 +102,7 @@ bool requestPreProcess(AsyncWebServerRequest *request, AsyncResponseStream *&res
     return false;
   }
 
-  response = request->beginResponseStream(contentType);
+  response = request->beginResponseStream(String(contentType));
   if(enableCors) {
     response->addHeader(F("Access-Control-Allow-Origin"), F("*"));
   }
@@ -117,8 +130,10 @@ handleHome(AsyncWebServerRequest *request) {
     return request->requestAuthentication(esp_hostname);
   }
 
-  if (SPIFFS.exists("/home.htm")) {
-    request->send(SPIFFS, "/home.htm");
+  String page = String((wifi_mode == WIFI_MODE_AP_ONLY) ? WIFI_PAGE : HOME_PAGE);
+
+  if (SPIFFS.exists(page)) {
+    request->send(SPIFFS, page);
   } else {
     request->send(200, CONTENT_TYPE_TEXT,
                 F("/home.html not found, have you flashed the SPIFFS?"));
@@ -719,9 +734,27 @@ handleRapi(AsyncWebServerRequest *request) {
 
 void handleNotFound(AsyncWebServerRequest *request)
 {
-  DBUGF("NOT_FOUND: ");
+  DBUG("NOT_FOUND: ");
   dumpRequest(request);
-  request->send(404);
+
+  if(wifi_mode == WIFI_MODE_AP_ONLY) {
+    // Redirect to the home page in AP mode (for the captive portal)
+    AsyncResponseStream *response = request->beginResponseStream(String(CONTENT_TYPE_HTML));
+
+    String url = F("http://");
+    url += ipaddress;
+
+    String s = F("<html><body><a href=\"");
+    s += url;
+    s += F("\">OpenEVES</a></body></html>");
+
+    response->setCode(301);
+    response->addHeader(F("Location"), url);
+    response->print(s);
+    request->send(response);
+  } else {
+    request->send(404);
+  }
 }
 
 void
@@ -730,8 +763,7 @@ web_server_setup() {
 
   // Setup the static files
   server.serveStatic("/", SPIFFS, "/")
-    .setDefaultFile("index.html")
-    .setAuthentication(www_username.c_str(), www_password.c_str());
+    .setDefaultFile("index.html");
 
   // Start server & server root html /
   server.on("/", handleHome);
