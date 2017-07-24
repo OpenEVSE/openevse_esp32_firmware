@@ -379,11 +379,21 @@
           <!-- Settings -->
           <div class="box380" data-bind="with: openevse">
             <h2>Setup</h2>
-            <p>
+            <p data-bind="with: time">
               <b>Time:</b><br/>
-              <input type="time" data-bind="text: time" />
-              <input type="date" data-bind="text: date" />
+              <input type="date" data-bind="value: date, disable: automaticTime" />
+              <input type="time" data-bind="value: time, disable: automaticTime" /><br/>
             </p>
+            <div data-bind="with: time">
+              <span data-bind="style: (!automaticTime() ? 'color: #ddd' : '')">Manual</span>
+              <label class="switch">
+                <input type="checkbox" data-bind="checked: automaticTime">
+                <div class="slider round"></div>
+              </label>
+              <span data-bind="style: (automaticTime() ? 'color: #ddd' : '')">Automatic<span>
+
+              <button style="margin-left: 30px" data-bind="click: setTime">Set</button>
+            </div>
 
             <p>
               <b>Service Level:</b><br/>

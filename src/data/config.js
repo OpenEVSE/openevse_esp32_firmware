@@ -9,7 +9,7 @@
 var baseHost = window.location.hostname;
 //var baseHost = "openevse.local";
 //var baseHost = "192.168.4.1";
-//var baseHost = "172.16.0.58";
+//var baseHost = "172.16.0.60";
 var baseEndpoint = "http://" + baseHost;
 
 function BaseViewModel(defaults, remoteUrl, mappings = {}) {
@@ -237,10 +237,88 @@ RapiViewModel.prototype.send = function() {
   });
 };
 
+
+function TimeViewModel(openevse)
+{
+  var self = this;
+
+  function addZero(val) {
+    return (val < 10 ? "0" : "") + val;
+  }
+  function startTimeUpdate() {
+    timeUpdateTimeout = setInterval(function () {
+      self.nowTimedate(new Date(self.evseTimedate().getTime() + ((new Date()) - self.localTimedate())));
+    }, 1000);
+  }
+  function stopTimeUpdate() {
+    if(null !== timeUpdateTimeout) {
+      clearInterval(timeUpdateTimeout);
+      timeUpdateTimeout = null;
+    }
+  }
+
+  self.evseTimedate = ko.observable(new Date());
+  self.localTimedate = ko.observable(new Date());
+  self.nowTimedate = ko.observable(null);
+  self.date = ko.pureComputed({
+    read: function () {
+      if(null === self.nowTimedate()) {
+        return "";
+      }
+
+      return self.nowTimedate().toISOString().split("T")[0];
+    },
+    write: function (val) {
+      self.evseTimedate(new Date(val));
+      self.localTimedate(new Date());
+    }});
+  self.time = ko.pureComputed({
+    read: function () {
+      if(null === self.nowTimedate()) {
+        return "--:--";
+      }
+      var dt = self.nowTimedate();
+      return addZero(dt.getHours())+":"+addZero(dt.getMinutes())+":"+addZero(dt.getSeconds());
+    },
+    write: function (val) {
+      var parts = val.split(":");
+      var date = self.evseTimedate();
+      date.setHours(parseInt(parts[0]));
+      date.setMinutes(parseInt(parts[1]));
+      self.evseTimedate(date);
+      self.localTimedate(new Date());
+    }});
+  var timeUpdateTimeout = null;
+  self.automaticTime = ko.observable(true);
+  self.automaticTime.subscribe(function (val) {
+    if(val) {
+      startTimeUpdate();
+    } else {
+      stopTimeUpdate();
+    }
+  });
+  self.setTime = function () {
+    var newTime = self.automaticTime() ? new Date() : self.evseTimedate();
+    // IMPROVE: set a few times and work out an average transmission delay, PID loop?
+    openevse.time(self.timeUpdate, newTime);
+  };
+
+  self.timeUpdate = function (date) {
+    stopTimeUpdate();
+    self.evseTimedate(date);
+    self.nowTimedate(date);
+    self.localTimedate(new Date());
+    if(self.automaticTime()) {
+      startTimeUpdate();
+    }
+  };
+}
+
 function OpenEvseViewModel(rapiViewModel) {
   var self = this;
   self.openevse = new OpenEVSE(baseEndpoint + "/r");
   self.rapi = rapiViewModel;
+  self.time = new TimeViewModel(self.openevse);
 
   // Option lists
   self.serviceLevels = [
@@ -272,6 +350,7 @@ function OpenEvseViewModel(rapiViewModel) {
   self.timeLimit = ko.observable(-1);
   self.chargeLimit = ko.observable(-1);
 
+  // Derived states
   self.isConnected = ko.pureComputed(function () {
     return [2, 3].indexOf(self.rapi.state()) !== -1;
   });
@@ -300,20 +379,10 @@ function OpenEvseViewModel(rapiViewModel) {
     }
   };
 
-  self.timedate = ko.observable(new Date());
-  self.date = ko.pureComputed(function () {
-    var dt = self.timedate();
-    return dt.getDate()+"/"+dt.getMonth()+"/"+dt.getFullYear();
-  });
-  self.time = ko.pureComputed(function () {
-    var dt = self.timedate();
-    return dt.getHours()+":"+dt.getMinutes()+":"+dt.getSeconds();
-  });
-
+  // List of items to update on calling update(). The list will be processed one item at
+  // a time.
   var updateList = [
-    function () { return self.openevse.time(function (date) {
-      self.timedate(date);
-    }); },
+    function () { return self.openevse.time(self.time.timeUpdate); },
     function () { return self.openevse.service_level(function (level, actual) {
       self.serviceLevel(level);
       self.actualServiceLevel(actual);

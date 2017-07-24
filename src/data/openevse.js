@@ -169,7 +169,7 @@ function OpenEVSE(endpoint)
         date.getMonth(), date.getDate(),
         date.getHours(), date.getMinutes(),
         date.getSeconds()], function() {
-        callback(date);
+        self.time(callback);
       });
     }
 
