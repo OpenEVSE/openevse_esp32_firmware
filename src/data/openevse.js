@@ -408,6 +408,46 @@ function OpenEVSE(endpoint)
     return request;
   };
 
+  /**
+   * Change the EVSE status.
+   *
+   * If an action is not specified, the status is requested
+   *
+   * Allowed actions:
+   *   * enable
+   *   * disable
+   *   * sleep
+   *
+   * Default: no action, request the status
+   *
+   * Returns the status of the EVSE as a string
+   *
+   */
+  self.status = function(callback, action = false) {
+    if(false !== action) {
+      var cmd = self._status_functions[action]
+      return self._request([cmd],
+      function() {
+        self.status(callback);
+      });
+    }
+
+    var request = self._request("GS", function(data) {
+      if(data.length >= 1) {
+        var state = parseInt(data[0]);
+        if(!isNaN(state)) {
+          callback(state);
+        } else {
+          request._error(new OpenEVSEError("ParseError", "Could not parse \""+data.join(" ")+"\" arguments"));
+        }
+      } else {
+        request._error(new OpenEVSEError("ParseError", "Only received "+data.length+" arguments"));
+      }
+    });
+
+    return request;
+  };
+
   self.setEndpoint = function (endpoint) {
     self._endpoint = endpoint;
   };

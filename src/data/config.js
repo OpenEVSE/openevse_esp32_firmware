@@ -6,10 +6,10 @@
 // Configure the endpoint to use, for dev you can change to point at a remote ESP
 // and run the HTML/JS from file, no need to upload to the ESP to test
 
-var baseHost = window.location.hostname;
+//var baseHost = window.location.hostname;
 //var baseHost = "openevse.local";
 //var baseHost = "192.168.4.1";
-//var baseHost = "172.16.0.60";
+var baseHost = "172.16.0.60";
 
 function BaseViewModel(defaults, remoteUrl, mappings = {}) {
   var self = this;
@@ -374,6 +374,18 @@ function OpenEvseViewModel(baseEndpoint, rapiViewModel) {
     return [4, 5, 6, 7, 8, 9, 10].indexOf(self.rapi.state()) !== -1;
   });
 
+  self.isEnabled = ko.pureComputed(function () {
+    return [1, 2, 3].indexOf(self.rapi.state()) !== -1;
+  });
+
+  self.isSleeping = ko.pureComputed(function () {
+    return 254 === self.rapi.state();
+  });
+
+  self.isDisabled = ko.pureComputed(function () {
+    return 255 === self.rapi.state();
+  });
+
   // helper to select an appropriate value for time limit
   self.selectTimeLimit = function(limit)
   {
@@ -429,6 +441,7 @@ function OpenEvseViewModel(baseEndpoint, rapiViewModel) {
   self.updatingTimeLimit = ko.observable(false);
   self.updatingChargeLimit = ko.observable(false);
   self.updatingDelayTimer = ko.observable(false);
+  self.updatingStatus = ko.observable(false);
   /*self.updating = ko.pureComputed(function () {
     return self.updatingServiceLevel() ||
            self.updateCurrentCapacity();
@@ -533,6 +546,16 @@ function OpenEvseViewModel(baseEndpoint, rapiViewModel) {
       self.delayTimerEnabled(false);
     }).always(function() {
       self.updatingDelayTimer(false);
+    });
+  };
+
+  // support for changing status
+  self.setStatus = function (action) {
+    self.updatingStatus(true);
+    self.openevse.status(function (state) {
+      self.rapi.state(state);
+    }, action).always(function() {
+      self.updatingStatus(false);
     });
   };
 }

@@ -273,6 +273,12 @@
             <h2>Session Options</h2>
             <h4 data-bind="text: rapi.estate"></h4>
 
+            <p data-bind="with: openevse, visible: !openevse.isError()">
+              <button data-bind="click: setStatus.bind($data, 'enable'), visible: !isEnabled()">Enable</button>
+              <button data-bind="click: setStatus.bind($data, 'disable'), visible: !isDisabled()">Disable</button>
+              <button data-bind="click: setStatus.bind($data, 'sleep'), visible: !isSleeping()">Sleep</button>
+            </p>
+
             <p data-bind="with: openevse, visible: openevse.isConnected">
               <b>Time limit:</b><br>
               <select data-bind="options: timeLimits,
@@ -431,29 +437,65 @@
                 <th>Test</th>
                 <th>Status</th>
               </tr>
-              <tr>
+              <tr data-bind="css: {error: 9 === rapi.state() }">
                 <td>GFCI Self Test:</td>
-                <td><span data-bind="text: '1' === config.gfcit() ? 'Disabled' : 'Enabled'"></span></td>
+                <td>
+                  <label class="switch">
+                    <input type="checkbox">
+                    <div class="slider round"></div>
+                  </label>
+                  <span data-bind="text: '1' === config.gfcit() ? 'Disabled' : 'Enabled'"></span>
+                </td>
               </tr>
-              <tr>
+              <tr data-bind="css: {error: 7 === rapi.state() }">
                 <td>Ground Monitoring:</td>
-                <td><span data-bind="text: '1' === config.groundt() ? 'Disabled' : 'Enabled'"></span></td>
+                <td>
+                  <label class="switch">
+                    <input type="checkbox">
+                    <div class="slider round"></div>
+                  </label>
+                  <span data-bind="text: '1' === config.groundt() ? 'Disabled' : 'Enabled'"></span>
+                </td>
               </tr>
-              <tr>
+              <tr data-bind="css: {error: 8 === rapi.state() }">
                 <td>Stuck Contact Detection:</td>
-                <td><span data-bind="text: '1' === config.relayt() ? 'Disabled' : 'Enabled'"></span></td>
+                <td>
+                  <label class="switch">
+                    <input type="checkbox">
+                    <div class="slider round"></div>
+                  </label>
+                  <span data-bind="text: '1' === config.relayt() ? 'Disabled' : 'Enabled'"></span>
+                </td>
               </tr>
-              <tr>
+              <tr data-bind="css: {error: 10 === rapi.state() }">
                 <td>Temperature Monitoring:</td>
-                <td><span data-bind="text: '1' === config.tempt() ? 'Disabled' : 'Enabled'"></span></td>
+                <td>
+                  <label class="switch">
+                    <input type="checkbox">
+                    <div class="slider round"></div>
+                  </label>
+                  <span data-bind="text: '1' === config.tempt() ? 'Disabled' : 'Enabled'"></span>
+                </td>
               </tr>
-              <tr>
+              <tr data-bind="css: {error: 5 === rapi.state() }">
                 <td>Diode Check:</td>
-                <td><span data-bind="text: '1' === config.diodet() ? 'Disabled' : 'Enabled'"></span></td>
+                <td>
+                  <label class="switch">
+                    <input type="checkbox">
+                    <div class="slider round"></div>
+                  </label>
+                  <span data-bind="text: '1' === config.diodet() ? 'Disabled' : 'Enabled'"></span>
+                </td>
               </tr>
-              <tr>
+              <tr data-bind="css: {error: 4 === rapi.state() }">
                 <td>Vent Required:</td>
-                <td><span data-bind="text: '1' === config.ventt() ? 'Disabled' : 'Enabled'"></span></td>
+                <td>
+                  <label class="switch">
+                    <input type="checkbox">
+                    <div class="slider round"></div>
+                  </label>
+                  <span data-bind="text: '1' === config.ventt() ? 'Disabled' : 'Enabled'"></span>
+                </td>
               </tr>
               <tr>
                 <th>Error</th>
@@ -698,10 +740,10 @@
               </tr>
             </table>
           </div>
-          </div>
-	<!--end TAB 4-->
+        </div>
+        <!--end TAB 4-->
 
-  <!--TAB 5 -->
+        <!--TAB 5 -->
         <div id="content-5" data-bind="visible: isMode">
           <div data-bind="visible: 0 === divertmode()" class="box380 warning">
             <h4>Solar PV Divert</h4>
