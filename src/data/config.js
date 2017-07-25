@@ -564,9 +564,9 @@ function OpenEvseWiFiViewModel() {
   self.start = function () {
     self.updating(true);
     self.status.update(function () {
-      if(self.baseHost().endsWith(".local")) {
-        self.baseHost(self.status.ipaddress());
-      }
+      //if(self.baseHost().endsWith(".local")) {
+      //  self.baseHost(self.status.ipaddress());
+      //}
       self.config.update(function () {
         self.rapi.update(function () {
           self.openevse.update(function () {
