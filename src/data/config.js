@@ -523,6 +523,17 @@ function OpenEvseWiFiViewModel() {
   self.updating = ko.observable(false);
   self.scanUpdating = ko.observable(false);
 
+  self.bssid = ko.observable("");
+  self.bssid.subscribe(function (bssid) {
+    for(var i in self.scan.results()) {
+      var net = self.scan.results()[i];
+      if(bssid === net.bssid()) {
+        self.config.ssid(net.ssid());
+        return;
+      }
+    }
+  });
+
   var updateTimer = null;
   var updateTime = 5 * 1000;
 
@@ -771,9 +782,13 @@ function OpenEvseWiFiViewModel() {
     }, function (data) {
       console.log(data);
       if (self.status.ipaddress() !== "") {
-        window.location = "http://" + self.status.ipaddress();
+        setTimeout(function () {
+          window.location = "http://" + self.status.ipaddress();
+          self.turnOffAccessPointSuccess(true);
+        }, 3000);
+      } else {
+        self.turnOffAccessPointSuccess(true);
       }
-      self.turnOffAccessPointSuccess(true);
     }).fail(function () {
       alert("Failed to turn off Access Point");
     }).always(function () {
