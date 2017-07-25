@@ -1,22 +1,15 @@
-// Work out the endpoint to use, for dev you can change to point at a remote ESP
+/* global $, ko */
+
+(function() {
+  "use strict";
+
+// Configure the endpoint to use, for dev you can change to point at a remote ESP
 // and run the HTML/JS from file, no need to upload to the ESP to test
 
-var baseHost = window.location.hostname;
-//var baseHost = 'openevse.local';
+//var baseHost = window.location.hostname;
+var baseHost = 'openevse.local';
 //var baseHost = '192.168.4.1';
-var baseEndpoint = 'http://' + baseHost;
-
-var statusupdate = false;
-var selected_network_ssid = "";
-var lastmode = "";
-var divertmode = 0;
-
-// Convert string to number, divide by scale, return result
-// as a string with specified precision
-function scaleString(string, scale, precision) {
-  var tmpval = parseInt(string) / scale;
-  return tmpval.toFixed(precision);
-}
+var baseEndpoint = "http://" + baseHost;
 
 function BaseViewModel(defaults, remoteUrl, mappings = {}) {
   var self = this;
@@ -32,7 +25,7 @@ BaseViewModel.prototype.update = function (after = function () { }) {
   self.fetching(true);
   $.get(self.remoteUrl, function (data) {
     ko.mapping.fromJS(data, self);
-  }, 'json').always(function () {
+  }, "json").always(function () {
     self.fetching(false);
     after();
   });
@@ -51,14 +44,14 @@ function StatusViewModel() {
     "mqtt_connected": "",
     "ohm_hour": "",
     "free_heap": ""
-  }, baseEndpoint + '/status');
+  }, baseEndpoint + "/status");
 
   // Some devired values
   self.isWifiClient = ko.pureComputed(function () {
-    return ("STA" == self.mode()) || ("STA+AP" == self.mode());
+    return ("STA" === self.mode()) || ("STA+AP" === self.mode());
   });
   self.isWifiAccessPoint = ko.pureComputed(function () {
-    return ("AP" == self.mode()) || ("STA+AP" == self.mode());
+    return ("AP" === self.mode()) || ("STA+AP" === self.mode());
   });
   self.fullMode = ko.pureComputed(function () {
     switch (self.mode()) {
@@ -95,7 +88,7 @@ function WiFiScanViewModel()
     }
   });
 
-  self.remoteUrl = baseEndpoint + '/scan';
+  self.remoteUrl = baseEndpoint + "/scan";
 
   // Observable properties
   self.fetching = ko.observable(false);
@@ -105,12 +98,12 @@ function WiFiScanViewModel()
     $.get(self.remoteUrl, function (data) {
       ko.mapping.fromJS(data, self.results);
       self.results.sort(function (left, right) {
-        if(left.ssid() == right.ssid()) {
+        if(left.ssid() === right.ssid()) {
           return left.rssi() < right.rssi() ? 1 : -1;
         }
         return left.ssid() < right.ssid() ? -1 : 1;
       });
-    }, 'json').always(function () {
+    }, "json").always(function () {
       self.fetching(false);
       after();
     });
@@ -125,7 +118,7 @@ function ConfigViewModel() {
     "protocol": "-",
     "espflash": "",
     "version": "0.0.0"
-  }, baseEndpoint + '/config');
+  }, baseEndpoint + "/config");
 }
 ConfigViewModel.prototype = Object.create(BaseViewModel.prototype);
 ConfigViewModel.prototype.constructor = ConfigViewModel;
@@ -141,7 +134,7 @@ function WiFiPortal() {
   self.updating = ko.observable(false);
   self.scanUpdating = ko.observable(false);
 
-  self.bssid = ko.observable('');
+  self.bssid = ko.observable("");
   self.bssid.subscribe(function (bssid) {
     for(var i in self.scan.results()) {
       var net = self.scan.results()[i];
@@ -247,7 +240,7 @@ function WiFiPortal() {
     } else {
       self.saveNetworkFetching(true);
       self.saveNetworkSuccess(false);
-      $.post(baseEndpoint + "/savenetwork", { ssid: self.config.ssid(), pass: self.config.pass() }, function (data) {
+      $.post(baseEndpoint + "/savenetwork", { ssid: self.config.ssid(), pass: self.config.pass() }, function () {
           self.saveNetworkSuccess(true);
           self.wifiConnecting(true);
         }).fail(function () {
@@ -263,7 +256,7 @@ function WiFiPortal() {
   // -----------------------------------------------------------------------
   self.turnOffAccessPointFetching = ko.observable(false);
   self.turnOffAccessPointSuccess = ko.observable(false);
-  self.turnOffAccessPoint = function (e) {
+  self.turnOffAccessPoint = function () {
     self.turnOffAccessPointFetching(true);
     self.turnOffAccessPointSuccess(false);
     $.post(baseEndpoint + "/apoff", {
@@ -291,3 +284,15 @@ $(function () {
   ko.applyBindings(openevse);
   openevse.start();
 });
+
+})();
+
+
+// Convert string to number, divide by scale, return result
+// as a string with specified precision
+/* exported scaleString */
+function scaleString(string, scale, precision) {
+  "use strict";
+  var tmpval = parseInt(string) / scale;
+  return tmpval.toFixed(precision);
+}

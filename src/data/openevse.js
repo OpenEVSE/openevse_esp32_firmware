@@ -373,5 +373,5 @@ function OpenEVSE(endpoint)
 
   self.setEndpoint = function (endpoint) {
     self._endpoint = endpoint;
-  }
+  };
 }
