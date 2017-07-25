@@ -370,4 +370,8 @@ function OpenEVSE(endpoint)
     });
     return request;
   };
+
+  self.setEndpoint = function (endpoint) {
+    self._endpoint = endpoint;
+  }
 }

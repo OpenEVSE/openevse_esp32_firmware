@@ -3,17 +3,12 @@
 (function() {
   "use strict";
 
-// Work out the endpoint to use, for dev you can change to point at a remote ESP
+// Configure the endpoint to use, for dev you can change to point at a remote ESP
 // and run the HTML/JS from file, no need to upload to the ESP to test
 
 var baseHost = window.location.hostname;
 //var baseHost = "openevse.local";
 //var baseHost = "192.168.4.1";
-//var baseHost = "172.16.0.60";
-if("" === baseHost) {
-  baseHost = "openevse.local";
-}
-var baseEndpoint = "http://" + baseHost;
 
 function BaseViewModel(defaults, remoteUrl, mappings = {}) {
   var self = this;
@@ -27,7 +22,7 @@ function BaseViewModel(defaults, remoteUrl, mappings = {}) {
 BaseViewModel.prototype.update = function (after = function () { }) {
   var self = this;
   self.fetching(true);
-  $.get(self.remoteUrl, function (data) {
+  $.get(self.remoteUrl(), function (data) {
     ko.mapping.fromJS(data, self);
   }, "json").always(function () {
     self.fetching(false);
@@ -35,8 +30,9 @@ BaseViewModel.prototype.update = function (after = function () { }) {
   });
 };
 
-function StatusViewModel() {
+function StatusViewModel(baseEndpoint) {
   var self = this;
+  var endpoint = ko.pureComputed(function () { return baseEndpoint() + "/status"; });
 
   BaseViewModel.call(self, {
     "mode": "ERR",
@@ -48,7 +44,7 @@ function StatusViewModel() {
     "mqtt_connected": "",
     "ohm_hour": "",
     "free_heap": ""
-  }, baseEndpoint + "/status");
+  }, endpoint);
 
   // Some devired values
   self.isWifiClient = ko.pureComputed(function () {
@@ -79,9 +75,10 @@ function WiFiScanResultViewModel(data)
     ko.mapping.fromJS(data, {}, self);
 }
 
-function WiFiScanViewModel()
+function WiFiScanViewModel(baseEndpoint)
 {
   var self = this;
+  var endpoint = ko.pureComputed(function () { return baseEndpoint() + "/scan"; });
 
   self.results = ko.mapping.fromJS([], {
     key: function(data) {
@@ -92,14 +89,12 @@ function WiFiScanViewModel()
     }
   });
 
-  self.remoteUrl = baseEndpoint + "/scan";
-
   // Observable properties
   self.fetching = ko.observable(false);
 
   self.update = function (after = function () { }) {
     self.fetching(true);
-    $.get(self.remoteUrl, function (data) {
+    $.get(endpoint(), function (data) {
       ko.mapping.fromJS(data, self.results);
       self.results.sort(function (left, right) {
         if(left.ssid() === right.ssid()) {
@@ -114,7 +109,8 @@ function WiFiScanViewModel()
   };
 }
 
-function ConfigViewModel() {
+function ConfigViewModel(baseEndpoint) {
+  var endpoint = ko.pureComputed(function () { return baseEndpoint() + "/config"; });
   BaseViewModel.call(this, {
     "ssid": "",
     "pass": "",
@@ -157,13 +153,17 @@ function ConfigViewModel() {
     "timelimit": "",
     "version": "0.0.0",
     "divertmode": "0"
-  }, baseEndpoint + "/config");
+  }, endpoint);
 }
 ConfigViewModel.prototype = Object.create(BaseViewModel.prototype);
 ConfigViewModel.prototype.constructor = ConfigViewModel;
 
-function RapiViewModel() {
+function RapiViewModel(baseEndpoint) {
   var self = this;
+
+  self.baseEndpoint = baseEndpoint;
+  var endpoint = ko.pureComputed(function () { return baseEndpoint() + "/rapiupdate"; });
+
   BaseViewModel.call(this, {
     "comm_sent": "0",
     "comm_success": "0",
@@ -175,7 +175,7 @@ function RapiViewModel() {
     "state": -1,
     "wattsec": "0",
     "watthour": "0"
-  }, baseEndpoint + "/rapiupdate");
+  }, endpoint);
 
   this.rapiSend = ko.observable(false);
   this.cmd = ko.observable("");
@@ -232,7 +232,7 @@ RapiViewModel.prototype.constructor = RapiViewModel;
 RapiViewModel.prototype.send = function() {
   var self = this;
   self.rapiSend(true);
-  $.get(baseEndpoint + "/r?json=1&rapi="+encodeURI(self.cmd()), function (data) {
+  $.get(self.baseEndpoint() + "/r?json=1&rapi="+encodeURI(self.cmd()), function (data) {
     self.ret(">"+data.ret);
     self.cmd(data.cmd);
   }, "json").always(function () {
@@ -317,9 +317,13 @@ function TimeViewModel(openevse)
   };
 }
 
-function OpenEvseViewModel(rapiViewModel) {
+function OpenEvseViewModel(baseEndpoint, rapiViewModel) {
   var self = this;
-  self.openevse = new OpenEVSE(baseEndpoint + "/r");
+  var endpoint = ko.pureComputed(function () { return baseEndpoint() + "/r"; });
+  self.openevse = new OpenEVSE(endpoint());
+  endpoint.subscribe(function (end) {
+    self.openevse.setEndpoint(end);
+  });
   self.rapi = rapiViewModel;
   self.time = new TimeViewModel(self.openevse);
 
@@ -506,11 +510,14 @@ function OpenEvseViewModel(rapiViewModel) {
 function OpenEvseWiFiViewModel() {
   var self = this;
 
-  self.config = new ConfigViewModel();
-  self.status = new StatusViewModel();
-  self.rapi = new RapiViewModel();
-  self.scan = new WiFiScanViewModel();
-  self.openevse = new OpenEvseViewModel(self.rapi);
+  self.baseHost = ko.observable("" !== baseHost ? baseHost : "openevse.local");
+  self.baseEndpoint = ko.pureComputed(function () { return "http://" + self.baseHost(); });
+
+  self.config = new ConfigViewModel(self.baseEndpoint);
+  self.status = new StatusViewModel(self.baseEndpoint);
+  self.rapi = new RapiViewModel(self.baseEndpoint);
+  self.scan = new WiFiScanViewModel(self.baseEndpoint);
+  self.openevse = new OpenEvseViewModel(self.baseEndpoint, self.rapi);
 
   self.initialised = ko.observable(false);
   self.updating = ko.observable(false);
@@ -545,20 +552,22 @@ function OpenEvseWiFiViewModel() {
   // -----------------------------------------------------------------------
   self.start = function () {
     self.updating(true);
-    self.config.update(function () {
-      self.status.update(function () {
+    self.status.update(function () {
+      if(self.baseHost().endsWith(".local")) {
+        self.baseHost(self.status.ipaddress());
+      }
+      self.config.update(function () {
         self.rapi.update(function () {
           self.openevse.update(function () {
             self.initialised(true);
             updateTimer = setTimeout(self.update, updateTime);
-            self.upgradeUrl(baseEndpoint + "/update");
+            self.upgradeUrl(self.baseEndpoint() + "/update");
             self.updating(false);
           });
         });
       });
+      self.connect();
     });
-
-    self.connect();
   };
 
   // -----------------------------------------------------------------------
@@ -638,7 +647,7 @@ function OpenEvseWiFiViewModel() {
     } else {
       self.saveNetworkFetching(true);
       self.saveNetworkSuccess(false);
-      $.post(baseEndpoint + "/savenetwork", { ssid: self.config.ssid(), pass: self.config.pass() }, function (data) {
+      $.post(self.baseEndpoint() + "/savenetwork", { ssid: self.config.ssid(), pass: self.config.pass() }, function (data) {
           self.saveNetworkSuccess(true);
           self.wifiConnecting(true);
         }).fail(function () {
@@ -657,7 +666,7 @@ function OpenEvseWiFiViewModel() {
   self.saveAdmin = function () {
     self.saveAdminFetching(true);
     self.saveAdminSuccess(false);
-    $.post(baseEndpoint + "/saveadmin", { user: self.config.www_username(), pass: self.config.www_password() }, function (data) {
+    $.post(self.baseEndpoint() + "/saveadmin", { user: self.config.www_username(), pass: self.config.www_password() }, function (data) {
       self.saveAdminSuccess(true);
     }).fail(function () {
       alert("Failed to save Admin config");
@@ -689,7 +698,7 @@ function OpenEvseWiFiViewModel() {
     } else {
       self.saveEmonCmsFetching(true);
       self.saveEmonCmsSuccess(false);
-      $.post(baseEndpoint + "/saveemoncms", emoncms, function (data) {
+      $.post(self.baseEndpoint() + "/saveemoncms", emoncms, function (data) {
         self.saveEmonCmsSuccess(true);
       }).fail(function () {
         alert("Failed to save Admin config");
@@ -720,7 +729,7 @@ function OpenEvseWiFiViewModel() {
     } else {
       self.saveMqttFetching(true);
       self.saveMqttSuccess(false);
-      $.post(baseEndpoint + "/savemqtt", mqtt, function (data) {
+      $.post(self.baseEndpoint() + "/savemqtt", mqtt, function (data) {
         self.saveMqttSuccess(true);
       }).fail(function () {
         alert("Failed to save MQTT config");
@@ -738,7 +747,7 @@ function OpenEvseWiFiViewModel() {
   self.saveOhmKey = function () {
     self.saveOhmKeyFetching(true);
     self.saveOhmKeySuccess(false);
-    $.post(baseEndpoint + "/saveohmkey", {
+    $.post(self.baseEndpoint() + "/saveohmkey", {
       enable: self.config.ohm_enabled(),
       ohm: self.config.ohmkey()
     }, function (data) {
@@ -758,7 +767,7 @@ function OpenEvseWiFiViewModel() {
   self.turnOffAccessPoint = function (e) {
     self.turnOffAccessPointFetching(true);
     self.turnOffAccessPointSuccess(false);
-    $.post(baseEndpoint + "/apoff", {
+    $.post(self.baseEndpoint() + "/apoff", {
     }, function (data) {
       console.log(data);
       if (self.status.ipaddress() !== "") {
@@ -782,7 +791,7 @@ function OpenEvseWiFiViewModel() {
       self.config.divertmode(divertmode);
       self.changeDivertModeFetching(true);
       self.changeDivertModeSuccess(false);
-      $.post(baseEndpoint + "/divertmode", { divertmode: divertmode }, function (data) {
+      $.post(self.baseEndpoint() + "/divertmode", { divertmode: divertmode }, function (data) {
         self.changeDivertModeSuccess(true);
       }).fail(function () {
         alert("Failed to set divert mode");
@@ -809,7 +818,7 @@ function OpenEvseWiFiViewModel() {
   // -----------------------------------------------------------------------
   self.socket = false;
   self.connect = function () {
-    self.socket = new WebSocket("ws://"+baseHost+"/ws");
+    self.socket = new WebSocket("ws://"+self.baseHost()+"/ws");
     self.socket.onopen = function (ev) {
         console.log(ev);
     };
