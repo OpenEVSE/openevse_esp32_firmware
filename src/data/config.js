@@ -9,6 +9,7 @@
 var baseHost = window.location.hostname;
 //var baseHost = "openevse.local";
 //var baseHost = "192.168.4.1";
+//var baseHost = "172.16.0.60";
 
 function BaseViewModel(defaults, remoteUrl, mappings = {}) {
   var self = this;
@@ -356,6 +357,9 @@ function OpenEvseViewModel(baseEndpoint, rapiViewModel) {
   self.currentCapacity = ko.observable(-1);
   self.timeLimit = ko.observable(-1);
   self.chargeLimit = ko.observable(-1);
+  self.delayTimerEnabled = ko.observable(false);
+  self.delayTimerStart = ko.observable("--:--");
+  self.delayTimerStop = ko.observable("--:--");
 
   // Derived states
   self.isConnected = ko.pureComputed(function () {
@@ -424,6 +428,7 @@ function OpenEvseViewModel(baseEndpoint, rapiViewModel) {
   self.updatingCurrentCapacity = ko.observable(false);
   self.updatingTimeLimit = ko.observable(false);
   self.updatingChargeLimit = ko.observable(false);
+  self.updatingDelayTimer = ko.observable(false);
   /*self.updating = ko.pureComputed(function () {
     return self.updatingServiceLevel() ||
            self.updateCurrentCapacity();
@@ -503,6 +508,31 @@ function OpenEvseViewModel(baseEndpoint, rapiViewModel) {
         self.subscribe();
         after();
       }
+    });
+  };
+
+  // delay timer logic
+  function isTime(val) {
+    var timeRegex = /([01]\d|2[0-3]):([0-5]\d)/;
+    return timeRegex.test(val);
+  }
+  self.delayTimerValid = ko.pureComputed(function () {
+    return isTime(self.delayTimerStart()) && isTime(self.delayTimerStop());
+  });
+  self.startDelayTimer = function () {
+    self.updatingDelayTimer(true);
+    self.openevse.timer(function () {
+      self.delayTimerEnabled(true);
+    }, self.delayTimerStart(), self.delayTimerStop()).always(function() {
+      self.updatingDelayTimer(false);
+    });
+  };
+  self.stopDelayTimer = function () {
+    self.updatingDelayTimer(true);
+    self.openevse.cancelTimer(function () {
+      self.delayTimerEnabled(false);
+    }).always(function() {
+      self.updatingDelayTimer(false);
     });
   };
 }

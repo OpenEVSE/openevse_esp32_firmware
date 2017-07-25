@@ -196,6 +196,43 @@ function OpenEVSE(endpoint)
   };
 
   /**
+   * Set or cancel the charge timer
+   *
+   * If any of the values is false, the timer is cancelled
+   *
+   */
+  self.timer = function(callback, start = false, stop = false)
+  {
+    if(false === start || false === stop) {
+      return self._request([
+        "ST", 0, 0, 0, 0], function() {
+        callback();
+      });
+    }
+
+    var timeRegex = /([01]\d|2[0-3]):([0-5]\d)/;
+    var startArray = start.match(timeRegex);
+    var stopArray = stop.match(timeRegex);
+
+    if(null !== startArray && null !== stopArray)
+    {
+      return self._request([
+        "ST",
+        parseInt(startArray[1]), parseInt(startArray[2]),
+        parseInt(stopArray[1]), parseInt(stopArray[2])], function() {
+        callback();
+      });
+    }
+
+    return false;
+  };
+
+  // Alias to cancel the timer
+  self.cancelTimer = function (callback) {
+    return self.timer(callback);
+  };
+
+  /**
    * Get or set the charge time limit, in minutes.
    *
    * This time is rounded to the nearest quarter hour.

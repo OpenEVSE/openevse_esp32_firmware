@@ -286,6 +286,15 @@
               <b>Charge limit:</b><br>
               <input type="text" data-bind="value: chargeLimit, disable: updatingChargeLimit" /> kWh
             </p>
+
+            <div data-bind="with: openevse, visible: !openevse.isError()">
+              <b>Delay Timer:</b><br>
+                Start: <input type="time" data-bind="value: delayTimerStart" />
+                &nbsp;&nbsp;
+                Stop: <input type="time" data-bind="value: delayTimerStop" /><br/>
+                <button data-bind="text: delayTimerEnabled() ? 'Set' : 'Start', enable: !updatingDelayTimer() &amp;&amp; delayTimerValid(), click: startDelayTimer">Start</button>
+                <button data-bind="visible: delayTimerEnabled(), enable: !updatingDelayTimer(), click: stopDelayTimer">Stop</button>
+            </div>
           </div>
 
           <!-- Energy -->
