@@ -6,9 +6,9 @@
 // Configure the endpoint to use, for dev you can change to point at a remote ESP
 // and run the HTML/JS from file, no need to upload to the ESP to test
 
-//var baseHost = window.location.hostname;
-var baseHost = 'openevse.local';
-//var baseHost = '192.168.4.1';
+var baseHost = window.location.hostname;
+//var baseHost = "openevse.local";
+//var baseHost = "192.168.4.1";
 var baseEndpoint = "http://" + baseHost;
 
 function BaseViewModel(defaults, remoteUrl, mappings = {}) {
@@ -136,7 +136,7 @@ function WiFiPortal() {
 
   self.bssid = ko.observable("");
   self.bssid.subscribe(function (bssid) {
-    for(var i in self.scan.results()) {
+    for(var i = 0; i < self.scan.results().length; i++) {
       var net = self.scan.results()[i];
       if(bssid === net.bssid()) {
         self.config.ssid(net.ssid());

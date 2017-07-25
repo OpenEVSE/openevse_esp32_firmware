@@ -525,7 +525,7 @@ function OpenEvseWiFiViewModel() {
 
   self.bssid = ko.observable("");
   self.bssid.subscribe(function (bssid) {
-    for(var i in self.scan.results()) {
+    for(var i = 0; i < self.scan.results().length; i++) {
       var net = self.scan.results()[i];
       if(bssid === net.bssid()) {
         self.config.ssid(net.ssid());
@@ -658,7 +658,7 @@ function OpenEvseWiFiViewModel() {
     } else {
       self.saveNetworkFetching(true);
       self.saveNetworkSuccess(false);
-      $.post(self.baseEndpoint() + "/savenetwork", { ssid: self.config.ssid(), pass: self.config.pass() }, function (data) {
+      $.post(self.baseEndpoint() + "/savenetwork", { ssid: self.config.ssid(), pass: self.config.pass() }, function () {
           self.saveNetworkSuccess(true);
           self.wifiConnecting(true);
         }).fail(function () {
@@ -677,7 +677,7 @@ function OpenEvseWiFiViewModel() {
   self.saveAdmin = function () {
     self.saveAdminFetching(true);
     self.saveAdminSuccess(false);
-    $.post(self.baseEndpoint() + "/saveadmin", { user: self.config.www_username(), pass: self.config.www_password() }, function (data) {
+    $.post(self.baseEndpoint() + "/saveadmin", { user: self.config.www_username(), pass: self.config.www_password() }, function () {
       self.saveAdminSuccess(true);
     }).fail(function () {
       alert("Failed to save Admin config");
@@ -709,7 +709,7 @@ function OpenEvseWiFiViewModel() {
     } else {
       self.saveEmonCmsFetching(true);
       self.saveEmonCmsSuccess(false);
-      $.post(self.baseEndpoint() + "/saveemoncms", emoncms, function (data) {
+      $.post(self.baseEndpoint() + "/saveemoncms", emoncms, function () {
         self.saveEmonCmsSuccess(true);
       }).fail(function () {
         alert("Failed to save Admin config");
@@ -740,7 +740,7 @@ function OpenEvseWiFiViewModel() {
     } else {
       self.saveMqttFetching(true);
       self.saveMqttSuccess(false);
-      $.post(self.baseEndpoint() + "/savemqtt", mqtt, function (data) {
+      $.post(self.baseEndpoint() + "/savemqtt", mqtt, function () {
         self.saveMqttSuccess(true);
       }).fail(function () {
         alert("Failed to save MQTT config");
@@ -761,7 +761,7 @@ function OpenEvseWiFiViewModel() {
     $.post(self.baseEndpoint() + "/saveohmkey", {
       enable: self.config.ohm_enabled(),
       ohm: self.config.ohmkey()
-    }, function (data) {
+    }, function () {
       self.saveOhmKeySuccess(true);
     }).fail(function () {
       alert("Failed to save Ohm key config");
@@ -775,7 +775,7 @@ function OpenEvseWiFiViewModel() {
   // -----------------------------------------------------------------------
   self.turnOffAccessPointFetching = ko.observable(false);
   self.turnOffAccessPointSuccess = ko.observable(false);
-  self.turnOffAccessPoint = function (e) {
+  self.turnOffAccessPoint = function () {
     self.turnOffAccessPointFetching(true);
     self.turnOffAccessPointSuccess(false);
     $.post(self.baseEndpoint() + "/apoff", {
@@ -806,12 +806,51 @@ function OpenEvseWiFiViewModel() {
       self.config.divertmode(divertmode);
       self.changeDivertModeFetching(true);
       self.changeDivertModeSuccess(false);
-      $.post(self.baseEndpoint() + "/divertmode", { divertmode: divertmode }, function (data) {
+      $.post(self.baseEndpoint() + "/divertmode", { divertmode: divertmode }, function () {
         self.changeDivertModeSuccess(true);
       }).fail(function () {
         alert("Failed to set divert mode");
       }).always(function () {
         self.changeDivertModeFetching(false);
+      });
+    }
+  };
+
+  // -----------------------------------------------------------------------
+  // Event: Reset config and reboot
+  // -----------------------------------------------------------------------
+  self.factoryResetFetching = ko.observable(false);
+  self.factoryResetSuccess = ko.observable(false);
+  self.factoryReset = function() {
+    if (confirm("CAUTION: Do you really want to Factory Reset? All setting and config will be lost.")) {
+      self.factoryResetFetching(true);
+      self.factoryResetSuccess(false);
+      $.post(self.baseEndpoint() + "/reset", { }, function () {
+        self.factoryResetSuccess(true);
+      }).fail(function () {
+        alert("Failed to Factory Reset");
+      }).always(function () {
+        self.factoryResetFetching(false);
+      });
+    }
+  };
+
+
+  // -----------------------------------------------------------------------
+  // Event: Restart
+  // -----------------------------------------------------------------------
+  self.restartFetching = ko.observable(false);
+  self.restartSuccess = ko.observable(false);
+  self.restart = function() {
+    if (confirm("Restart OpenEVSE? Current config will be saved, takes approximately 10s.")) {
+      self.restartFetching(true);
+      self.restartSuccess(false);
+      $.post(self.baseEndpoint() + "/restart", { }, function () {
+        self.restartSuccess(true);
+      }).fail(function () {
+        alert("Failed to restart");
+      }).always(function () {
+        self.restartFetching(false);
       });
     }
   };
@@ -852,47 +891,6 @@ $(function () {
   var openevse = new OpenEvseWiFiViewModel();
   ko.applyBindings(openevse);
   openevse.start();
-});
-
-// -----------------------------------------------------------------------
-// Event: Reset config and reboot
-// -----------------------------------------------------------------------
-document.getElementById("reset").addEventListener("click", function (e) {
-
-  if (confirm("CAUTION: Do you really want to Factory Reset? All setting and config will be lost.")) {
-    var r = new XMLHttpRequest();
-    r.open("POST", "reset", true);
-    r.onreadystatechange = function () {
-      if (r.readyState !== 4 || r.status !== 200) {
-        return;
-      }
-      var str = r.responseText;
-      console.log(str);
-      if (str !== 0)
-        document.getElementById("reset").innerHTML = "Resetting...";
-    };
-    r.send();
-  }
-});
-
-// -----------------------------------------------------------------------
-// Event: Restart
-// -----------------------------------------------------------------------
-document.getElementById("restart").addEventListener("click", function (e) {
-
-  if (confirm("Restart emonESP? Current config will be saved, takes approximately 10s.")) {
-    var r = new XMLHttpRequest();
-    r.open("POST", "restart", true);
-    r.onreadystatechange = function () {
-      if (r.readyState != 4 || r.status != 200)
-        return;
-      var str = r.responseText;
-      console.log(str);
-      if (str !== 0)
-        document.getElementById("reset").innerHTML = "Restarting";
-    };
-    r.send();
-  }
 });
 
 })();

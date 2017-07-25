@@ -119,8 +119,8 @@
             <iframe style="width:380px; height:50px;" frameborder="0" scrolling="no" marginheight="0" marginwidth="0" data-bind="attr: {src: upgradeUrl}">
             </iframe>
             <p>
-              <button id="restart">Restart</button>
-              <button id="reset">Factory Reset</button>
+              <button data-bind="click: restart, text: (restartFetching() ? 'Restarting...' : 'Restart'), disable: restartFetching">Restart</button>
+              <button data-bind="click: factoryReset, text: (factoryResetFetching() ? 'Resetting...' : 'Factory Reset'), disable: factoryResetFetching">Factory Reset</button>
             </p>
           </div>
         </div>
