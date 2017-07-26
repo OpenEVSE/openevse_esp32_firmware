@@ -287,6 +287,15 @@ select {
   margin-bottom: 5px;
 }
 
+.error td {
+  color: #a94442;
+}
+
+.error td:first-child {
+  border-left-color: #a94442;
+  border-left-width: 5px;
+}
+
 /* Nice slider switch */
 
 .switch {

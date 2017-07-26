@@ -6,10 +6,10 @@
 // Configure the endpoint to use, for dev you can change to point at a remote ESP
 // and run the HTML/JS from file, no need to upload to the ESP to test
 
-//var baseHost = window.location.hostname;
+var baseHost = window.location.hostname;
 //var baseHost = "openevse.local";
 //var baseHost = "192.168.4.1";
-var baseHost = "172.16.0.60";
+//var baseHost = "172.16.0.60";
 
 function BaseViewModel(defaults, remoteUrl, mappings = {}) {
   var self = this;
@@ -360,6 +360,12 @@ function OpenEvseViewModel(baseEndpoint, rapiViewModel) {
   self.delayTimerEnabled = ko.observable(false);
   self.delayTimerStart = ko.observable("--:--");
   self.delayTimerStop = ko.observable("--:--");
+  self.gfiSelfTestEnabled = ko.observable(false);
+  self.groundCheckEnabled = ko.observable(false);
+  self.stuckRelayEnabled = ko.observable(false);
+  self.tempCheckEnabled = ko.observable(false);
+  self.diodeCheckEnabled = ko.observable(false);
+  self.ventRequiredEnabled = ko.observable(false);
 
   // Derived states
   self.isConnected = ko.pureComputed(function () {
@@ -419,6 +425,24 @@ function OpenEvseViewModel(baseEndpoint, rapiViewModel) {
     }); },
     function () { return self.openevse.charge_limit(function (limit) {
       self.chargeLimit(limit);
+    }); },
+    function () { return self.openevse.gfi_self_test(function (enabled) {
+      self.gfiSelfTestEnabled(enabled);
+    }); },
+    function () { return self.openevse.ground_check(function (enabled) {
+      self.groundCheckEnabled(enabled);
+    }); },
+    function () { return self.openevse.stuck_relay_check(function (enabled) {
+      self.stuckRelayEnabled(enabled);
+    }); },
+    function () { return self.openevse.temp_check(function (enabled) {
+      self.tempCheckEnabled(enabled);
+    }); },
+    function () { return self.openevse.diode_check(function (enabled) {
+      self.diodeCheckEnabled(enabled);
+    }); },
+    function () { return self.openevse.vent_required(function (enabled) {
+      self.ventRequiredEnabled(enabled);
     }); }
   ];
   var updateCount = -1;
@@ -442,6 +466,12 @@ function OpenEvseViewModel(baseEndpoint, rapiViewModel) {
   self.updatingChargeLimit = ko.observable(false);
   self.updatingDelayTimer = ko.observable(false);
   self.updatingStatus = ko.observable(false);
+  self.updatingGfiSelfTestEnabled = ko.observable(false);
+  self.updatingGroundCheckEnabled = ko.observable(false);
+  self.updatingStuckRelayEnabled = ko.observable(false);
+  self.updatingTempCheckEnabled = ko.observable(false);
+  self.updatingDiodeCheckEnabled = ko.observable(false);
+  self.updatingVentRequiredEnabled = ko.observable(false);
   /*self.updating = ko.pureComputed(function () {
     return self.updatingServiceLevel() ||
            self.updateCurrentCapacity();
@@ -502,6 +532,78 @@ function OpenEvseViewModel(baseEndpoint, rapiViewModel) {
         }
       }, val).always(function() {
         self.updatingChargeLimit(false);
+      });
+    });
+
+    // Updates to the GFI self test
+    self.gfiSelfTestEnabled.subscribe(function (val) {
+      self.updatingGfiSelfTestEnabled(true);
+      self.openevse.gfi_self_test(function (enabled) {
+        if(val !== enabled) {
+          self.gfiSelfTestEnabled(enabled);
+        }
+      }, val).always(function() {
+        self.updatingGfiSelfTestEnabled(false);
+      });
+    });
+
+    // Updates to the ground check
+    self.groundCheckEnabled.subscribe(function (val) {
+      self.updatingGroundCheckEnabled(true);
+      self.openevse.ground_check(function (enabled) {
+        if(val !== enabled) {
+          self.groundCheckEnabled(enabled);
+        }
+      }, val).always(function() {
+        self.updatingGroundCheckEnabled(false);
+      });
+    });
+
+    // Updates to the stuck relay check
+    self.stuckRelayEnabled.subscribe(function (val) {
+      self.updatingStuckRelayEnabled(true);
+      self.openevse.stuck_relay_check(function (enabled) {
+        if(val !== enabled) {
+          self.stuckRelayEnabled(enabled);
+        }
+      }, val).always(function() {
+        self.updatingStuckRelayEnabled(false);
+      });
+    });
+
+    // Updates to the temp check
+    self.tempCheckEnabled.subscribe(function (val) {
+      self.updatingTempCheckEnabled(true);
+      self.openevse.temp_check(function (enabled) {
+        if(val !== enabled) {
+          self.tempCheckEnabled(enabled);
+        }
+      }, val).always(function() {
+        self.updatingTempCheckEnabled(false);
+      });
+    });
+
+    // Updates to the diode check
+    self.diodeCheckEnabled.subscribe(function (val) {
+      self.updatingDiodeCheckEnabled(true);
+      self.openevse.diode_check(function (enabled) {
+        if(val !== enabled) {
+          self.diodeCheckEnabled(enabled);
+        }
+      }, val).always(function() {
+        self.updatingDiodeCheckEnabled(false);
+      });
+    });
+
+    // Updates to the vent required
+    self.ventRequiredEnabled.subscribe(function (val) {
+      self.updatingVentRequiredEnabled(true);
+      self.openevse.vent_required(function (enabled) {
+        if(val !== enabled) {
+          self.ventRequiredEnabled(enabled);
+        }
+      }, val).always(function() {
+        self.updatingVentRequiredEnabled(false);
       });
     });
 

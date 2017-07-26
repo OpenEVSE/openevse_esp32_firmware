@@ -438,63 +438,63 @@
                 <th>Status</th>
               </tr>
               <tr data-bind="css: {error: 9 === rapi.state() }">
-                <td>GFCI Self Test:</td>
+                <td>GFI Self Test:</td>
                 <td>
                   <label class="switch">
-                    <input type="checkbox">
+                    <input type="checkbox" data-bind="checked: openevse.gfiSelfTestEnabled">
                     <div class="slider round"></div>
                   </label>
-                  <span data-bind="text: '1' === config.gfcit() ? 'Disabled' : 'Enabled'"></span>
+                  <span data-bind="text: openevse.gfiSelfTestEnabled() ? 'Enabled' : 'Disabled'"></span>
                 </td>
               </tr>
               <tr data-bind="css: {error: 7 === rapi.state() }">
                 <td>Ground Monitoring:</td>
                 <td>
                   <label class="switch">
-                    <input type="checkbox">
+                    <input type="checkbox" data-bind="checked: openevse.groundCheckEnabled">
                     <div class="slider round"></div>
                   </label>
-                  <span data-bind="text: '1' === config.groundt() ? 'Disabled' : 'Enabled'"></span>
+                  <span data-bind="text: openevse.groundCheckEnabled() ? 'Enabled' : 'Disabled'"></span>
                 </td>
               </tr>
               <tr data-bind="css: {error: 8 === rapi.state() }">
                 <td>Stuck Contact Detection:</td>
                 <td>
                   <label class="switch">
-                    <input type="checkbox">
+                    <input type="checkbox" data-bind="checked: openevse.stuckRelayEnabled">
                     <div class="slider round"></div>
                   </label>
-                  <span data-bind="text: '1' === config.relayt() ? 'Disabled' : 'Enabled'"></span>
+                  <span data-bind="text: openevse.stuckRelayEnabled() ? 'Enabled' : 'Disabled'"></span>
                 </td>
               </tr>
               <tr data-bind="css: {error: 10 === rapi.state() }">
                 <td>Temperature Monitoring:</td>
                 <td>
                   <label class="switch">
-                    <input type="checkbox">
+                    <input type="checkbox" data-bind="checked: openevse.tempCheckEnabled" disabled="disabled">
                     <div class="slider round"></div>
                   </label>
-                  <span data-bind="text: '1' === config.tempt() ? 'Disabled' : 'Enabled'"></span>
+                  <span data-bind="text: openevse.tempCheckEnabled() ? 'Enabled' : 'Disabled'"></span>
                 </td>
               </tr>
               <tr data-bind="css: {error: 5 === rapi.state() }">
                 <td>Diode Check:</td>
                 <td>
                   <label class="switch">
-                    <input type="checkbox">
+                    <input type="checkbox" data-bind="checked: openevse.diodeCheckEnabled">
                     <div class="slider round"></div>
                   </label>
-                  <span data-bind="text: '1' === config.diodet() ? 'Disabled' : 'Enabled'"></span>
+                  <span data-bind="text: openevse.diodeCheckEnabled() ? 'Enabled' : 'Disabled'"></span>
                 </td>
               </tr>
               <tr data-bind="css: {error: 4 === rapi.state() }">
                 <td>Vent Required:</td>
                 <td>
                   <label class="switch">
-                    <input type="checkbox">
+                    <input type="checkbox" data-bind="checked: openevse.ventRequiredEnabled">
                     <div class="slider round"></div>
                   </label>
-                  <span data-bind="text: '1' === config.ventt() ? 'Disabled' : 'Enabled'"></span>
+                  <span data-bind="text: openevse.ventRequiredEnabled() ? 'Enabled' : 'Disabled'"></span>
                 </td>
               </tr>
               <tr>

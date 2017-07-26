@@ -40,19 +40,19 @@ function OpenEVSE(endpoint)
   self._endpoint = endpoint;
 
   self.states = {
-          0: "unknown",
-          1: "not connected",
-          2: "connected",
-          3: "charging",
-          4: "vent required",
-          5: "diode check failed",
-          6: "gfci fault",
-          7: "no ground",
-          8: "stuck relay",
-          9: "gfci self-test failure",
-          10: "over temperature",
-          254: "sleeping",
-          255: "disabled"
+    0: "unknown",
+    1: "not connected",
+    2: "connected",
+    3: "charging",
+    4: "vent required",
+    5: "diode check failed",
+    6: "gfci fault",
+    7: "no ground",
+    8: "stuck relay",
+    9: "gfci self-test failure",
+    10: "over temperature",
+    254: "sleeping",
+    255: "disabled"
   };
   self._lcd_colors = ["off", "red", "green", "yellow", "blue", "violet", "teal", "white"];
   self._status_functions = {"disable":"FD", "enable":"FE", "sleep":"FS"};
@@ -112,13 +112,14 @@ function OpenEVSE(endpoint)
    * - ground_check
    * - stuck_relay_check
    * - vent_required
+   * - temp_check
    * - auto_start
    * - serial_debug
    */
   self._flags = function (callback)
   {
     var request = self._request("GE", function(data) {
-      var flags = parseInt(data[0]);
+      var flags = parseInt(data[1], 16);
       if(!isNaN(flags)) {
         var ret = {
           "service_level": (flags & 0x0001) + 1,
@@ -130,12 +131,13 @@ function OpenEVSE(endpoint)
           "auto_start": 0 === (flags & 0x0040),
           "serial_debug": 0 !== (flags & 0x0080),
           "lcd_type": 0 !== (flags & 0x0100) ? "monochrome" : "rgb",
-          "gfi_self_test": 0 === (flags & 0x0200)
+          "gfi_self_test": 0 === (flags & 0x0200),
+          "temp_check": 0 === (flags & 0x0400)
         };
 
         callback(ret);
       } else {
-        request._error(new OpenEVSEError("ParseError", "Failed to parse\""+data[0]+"\""));
+        request._error(new OpenEVSEError("ParseError", "Failed to parse \""+data[0]+"\""));
       }
     });
     return request;
@@ -445,6 +447,134 @@ function OpenEVSE(endpoint)
       }
     });
 
+    return request;
+  };
+
+  /**
+   * if enabled == True, enable the diode check
+   * if enabled == False, disable the diode check
+   * if enabled is not specified, request the diode check status
+   *
+   * Returns the diode check status
+   */
+  self.diode_check = function(callback, enabled = null) {
+    if(null !== enabled) {
+      return self._request(["SD", enabled ? "1" : "0"],
+      function() {
+        self.diode_check(callback);
+      });
+    }
+
+    var request = self._flags(function(flags) {
+      callback(flags.diode_check);
+    });
+    return request;
+  };
+
+  /**
+   * if enabled == True, enable the GFI self test
+   * if enabled == False, disable the GFI self test
+   * if enabled is not specified, request the GFI self test status
+   *
+   * Returns the GFI self test status
+   */
+  self.gfi_self_test = function(callback, enabled = null) {
+    if(null !== enabled) {
+      return self._request(["SF", enabled ? "1" : "0"],
+      function() {
+        self.gfi_self_test(callback);
+      });
+    }
+
+    var request = self._flags(function(flags) {
+      callback(flags.gfi_self_test);
+    });
+    return request;
+  };
+
+  /**
+   * if enabled == True, enable the ground check
+   * if enabled == False, disable the ground check
+   * if enabled is not specified, request the ground check status
+   *
+   * Returns the ground check status
+   */
+  self.ground_check = function(callback, enabled = null) {
+    if(null !== enabled) {
+      return self._request(["SG", enabled ? "1" : "0"],
+      function() {
+        self.ground_check(callback);
+      });
+    }
+
+    var request = self._flags(function(flags) {
+      callback(flags.ground_check);
+    });
+    return request;
+  };
+
+  /**
+   * if enabled == True, enable the stuck relay check
+   * if enabled == False, disable the stuck relay check
+   * if enabled is not specified, request the stuck relay check status
+   *
+   * Returns the stuck relay check status
+   */
+  self.stuck_relay_check = function(callback, enabled = null) {
+    if(null !== enabled) {
+      return self._request(["SR", enabled ? "1" : "0"],
+      function() {
+        self.stuck_relay_check(callback);
+      });
+    }
+
+    var request = self._flags(function(flags) {
+      callback(flags.stuck_relay_check);
+    });
+    return request;
+  };
+
+  /**
+   * if enabled == True, enable "ventilation required"
+   * if enabled == False, disable "ventilation required"
+   * if enabled is not specified, request the "ventilation required" status
+   *
+   * Returns the "ventilation required" status
+   */
+  self.vent_required = function(callback, enabled = null) {
+    if(null !== enabled) {
+      return self._request(["SR", enabled ? "1" : "0"],
+      function() {
+        self.vent_required(callback);
+      });
+    }
+
+    var request = self._flags(function(flags) {
+      callback(flags.vent_required);
+    });
+    return request;
+  };
+
+  /**
+   * if enabled == True, enable "ventilation required"
+   * if enabled == False, disable "ventilation required"
+   * if enabled is not specified, request the "ventilation required" status
+   *
+   * Returns the "ventilation required" status
+   */
+  self.temp_check = function(callback, enabled = null) {
+    /*
+    if(null !== enabled) {
+      return self._request(["S?", enabled ? "1" : "0"],
+      function() {
+        self.temp_check(callback);
+      });
+    }
+    */
+
+    var request = self._flags(function(flags) {
+      callback(flags.temp_check);
+    });
     return request;
   };
 
