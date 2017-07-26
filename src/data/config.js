@@ -734,8 +734,7 @@ function OpenEvseWiFiViewModel() {
       self.config.update(function () {
         // If we are accessing on a .local domain try and redirect
         if(self.baseHost().endsWith(".local")) {
-          if("" === self.config.www_username() &&
-             "" === self.config.www_password())
+          if("" === self.config.www_username())
           {
             // Redirect to the IP internally
             self.baseHost(self.status.ipaddress());
