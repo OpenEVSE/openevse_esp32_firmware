@@ -1,3 +1,7 @@
+#if defined(ENABLE_DEBUG) && !defined(ENABLE_DEBUG_RAPI)
+#undef ENABLE_DEBUG
+#endif
+
 #include <Arduino.h>
 #include "RapiSender.h"
 #include "debug.h"

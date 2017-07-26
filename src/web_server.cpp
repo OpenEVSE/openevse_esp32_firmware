@@ -1,3 +1,7 @@
+#if defined(ENABLE_DEBUG) && !defined(ENABLE_DEBUG_WEB)
+#undef ENABLE_DEBUG
+#endif
+
 #include <Arduino.h>
 #include <ESP8266WiFi.h>
 #include <FS.h>                       // SPIFFS file-system: store web server html, CSS etc.
@@ -833,8 +837,6 @@ web_server_setup() {
 //  server.on("/update", [](){
 //    if(requestPreProcess()) handleUpdate();
 //  });
-
-
 
   server.onNotFound(handleNotFound);
   server.begin();
