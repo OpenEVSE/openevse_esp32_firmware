@@ -731,10 +731,18 @@ function OpenEvseWiFiViewModel() {
   self.start = function () {
     self.updating(true);
     self.status.update(function () {
-      //if(self.baseHost().endsWith(".local")) {
-      //  self.baseHost(self.status.ipaddress());
-      //}
       self.config.update(function () {
+        // If we are accessing on a .local domain try and redirect
+        if(self.baseHost().endsWith(".local")) {
+          if("" === self.config.www_username() &&
+             "" === self.config.www_password())
+          {
+            // Redirect to the IP internally
+            self.baseHost(self.status.ipaddress());
+          } else {
+            window.location.replace("http://" + self.status.ipaddress());
+          }
+        }
         self.rapi.update(function () {
           self.openevse.update(function () {
             self.initialised(true);
