@@ -533,6 +533,11 @@
                 <td><span data-bind="text: config.protocol"></span></td>
               </tr>
               <tr>
+                <td colspan="2" data-bind="with: openevse">
+                  <button data-bind="click: restart, text: (restartFetching() ? 'Restarting...' : 'Restart'), disable: restartFetching">Restart</button>
+                </td>
+              </tr>
+              <tr>
                 <th>OpenEVSE WiFi</th>
                 <th></th>
               </tr>
@@ -547,6 +552,11 @@
               <tr>
                 <td>Free RAM:</td>
                 <td><span data-bind="text: scaleString(status.free_heap(), 1024, 0) + 'K'"></span></td>
+              </tr>
+              <tr>
+                <td colspan="2">
+                  <button data-bind="click: restart, text: (restartFetching() ? 'Restarting...' : 'Restart'), disable: restartFetching">Restart</button>
+                </td>
               </tr>
             </table>
           </div>

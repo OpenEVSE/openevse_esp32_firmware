@@ -660,6 +660,18 @@ function OpenEvseViewModel(baseEndpoint, rapiViewModel) {
       self.updatingStatus(false);
     });
   };
+
+  // Support for restarting the OpenEVSE
+  self.restartFetching = ko.observable(false);
+  self.restart = function() {
+    if (confirm("Restart OpenEVSE? Current config will be saved, takes approximately 10s.")) {
+      self.restartFetching(true);
+      self.openevse.reset().always(function () {
+        self.restartFetching(false);
+      });
+    }
+  };
+
 }
 
 function OpenEvseWiFiViewModel() {
@@ -997,7 +1009,7 @@ function OpenEvseWiFiViewModel() {
   self.restartFetching = ko.observable(false);
   self.restartSuccess = ko.observable(false);
   self.restart = function() {
-    if (confirm("Restart OpenEVSE? Current config will be saved, takes approximately 10s.")) {
+    if (confirm("Restart OpenEVSE WiFi? Current config will be saved, takes approximately 10s.")) {
       self.restartFetching(true);
       self.restartSuccess(false);
       $.post(self.baseEndpoint() + "/restart", { }, function () {
