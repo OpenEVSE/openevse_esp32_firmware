@@ -708,7 +708,7 @@ function OpenEvseWiFiViewModel() {
   var scanTime = 3 * 1000;
 
   // Tabs
-  var tab = "system";
+  var tab = "status";
   if("" !== window.location.hash) {
     tab = window.location.hash.substr(1);
   }
