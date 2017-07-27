@@ -43,6 +43,8 @@ static const char _HOME_PAGE[] PROGMEM = "/home.htm";
 static const char _WIFI_PAGE[] PROGMEM = "/wifi_portal.htm";
 #define WIFI_PAGE FPSTR(_WIFI_PAGE)
 
+static const char _DUMMY_PASSWORD[] PROGMEM = "___DUMMY_PASSWORD___";
+#define DUMMY_PASSWORD FPSTR(_DUMMY_PASSWORD)
 
 // Get running firmware version from build tag environment variable
 #define TEXTIFY(A) #A
@@ -247,6 +249,9 @@ handleSaveNetwork(AsyncWebServerRequest *request) {
 
   String qsid = request->arg("ssid");
   String qpass = request->arg("pass");
+  if(qpass.equals(DUMMY_PASSWORD)) {
+    qpass = epass;
+  }
 
   if (qsid != 0) {
     config_save_wifi(qsid, qpass);
@@ -273,10 +278,15 @@ handleSaveEmoncms(AsyncWebServerRequest *request) {
     return;
   }
 
+  String apikey = request->arg("apikey");
+  if(apikey.equals(DUMMY_PASSWORD)) {
+    apikey = emoncms_apikey;
+  }
+
   config_save_emoncms(isPositive(request->arg("enable")),
                       request->arg("server"),
                       request->arg("node"),
-                      request->arg("apikey"),
+                      apikey,
                       request->arg("fingerprint"));
 
   char tmpStr[200];
@@ -303,11 +313,16 @@ handleSaveMqtt(AsyncWebServerRequest *request) {
     return;
   }
 
+  String pass = request->arg("pass");
+  if(pass.equals(DUMMY_PASSWORD)) {
+    pass = mqtt_pass;
+  }
+
   config_save_mqtt(isPositive(request->arg("enable")),
                    request->arg("server"),
                    request->arg("topic"),
                    request->arg("user"),
-                   request->arg("pass"),
+                   pass,
                    request->arg("solar"),
                    request->arg("grid_ie"));
 
@@ -358,6 +373,9 @@ handleSaveAdmin(AsyncWebServerRequest *request) {
 
   String quser = request->arg("user");
   String qpass = request->arg("pass");
+  if(qpass.equals(DUMMY_PASSWORD)) {
+    qpass = www_password;
+  }
 
   config_save_admin(quser, qpass);
 
@@ -456,6 +474,8 @@ handleConfig(AsyncWebServerRequest *request) {
     return;
   }
 
+  String dummyPassword = String(DUMMY_PASSWORD);
+
   String s = "{";
   s += "\"firmware\":\"" + firmware + "\",";
   s += "\"protocol\":\"" + protocol + "\",";
@@ -480,21 +500,37 @@ handleConfig(AsyncWebServerRequest *request) {
   s += "\"kwhlimit\":\"" + kwh_limit + "\",";
   s += "\"timelimit\":\"" + time_limit + "\",";
   s += "\"ssid\":\"" + esid + "\",";
-  //s += "\"pass\":\""+epass+"\","; security risk: DONT RETURN PASSWORDS
+  s += "\"pass\":\"";
+  if(epass != 0) {
+    s += dummyPassword;
+  }
+  s += "\",";
   s += "\"emoncms_enabled\":" + String(config_emoncms_enabled() ? "true" : "false") + ",";
   s += "\"emoncms_server\":\"" + emoncms_server + "\",";
   s += "\"emoncms_node\":\"" + emoncms_node + "\",";
-  // s += "\"emoncms_apikey\":\""+emoncms_apikey+"\","; security risk: DONT RETURN APIKEY
+  s += "\"emoncms_apikey\":\"";
+  if(emoncms_apikey != 0) {
+    s += dummyPassword;
+  }
+  s += "\",";
   s += "\"emoncms_fingerprint\":\"" + emoncms_fingerprint + "\",";
   s += "\"mqtt_enabled\":" + String(config_mqtt_enabled() ? "true" : "false") + ",";
   s += "\"mqtt_server\":\"" + mqtt_server + "\",";
   s += "\"mqtt_topic\":\"" + mqtt_topic + "\",";
   s += "\"mqtt_user\":\"" + mqtt_user + "\",";
-  //s += "\"mqtt_pass\":\""+mqtt_pass+"\","; security risk: DONT RETURN PASSWORDS
+  s += "\"mqtt_pass\":\"";
+  if(mqtt_pass != 0) {
+    s += dummyPassword;
+  }
+  s += "\",";
   s += "\"mqtt_solar\":\""+mqtt_solar+"\",";
   s += "\"mqtt_grid_ie\":\""+mqtt_grid_ie+"\",";
   s += "\"www_username\":\"" + www_username + "\",";
-  //s += "\"www_password\":\""+www_password+"\","; security risk: DONT RETURN PASSWORDS
+  s += "\"www_password\":\"";
+  if(www_password != 0) {
+    s += dummyPassword;
+  }
+  s += "\",";
   s += "\"ohm_enabled\":" + String(config_ohm_enabled() ? "true" : "false") + ",";
   s += "\"divertmode\":\""+String(divertmode)+"\"";
   s += "}";
