@@ -1044,19 +1044,38 @@ function OpenEvseWiFiViewModel() {
   // -----------------------------------------------------------------------
   // Receive events from the server
   // -----------------------------------------------------------------------
+  self.pingInterval = false;
   self.socket = false;
   self.connect = function () {
     self.socket = new WebSocket("ws://"+self.baseHost()+"/ws");
     self.socket.onopen = function (ev) {
-        console.log(ev);
+      console.log(ev);
+      self.pingInterval = setInterval(function () {
+        self.socket.send("{\"ping\":1}");
+      });
     };
     self.socket.onclose = function (ev) {
-        console.log(ev);
+      console.log(ev);
+      self.reconnect();
     };
     self.socket.onmessage = function (msg) {
-        console.log(msg);
-        ko.mapping.fromJSON(msg.data, self.rapi);
+      console.log(msg);
+      ko.mapping.fromJSON(msg.data, self.rapi);
     };
+    self.socket.onerror = function (ev) {
+      console.log(ev);
+      self.socket.close();
+      self.reconnect();
+    };
+  };
+  self.reconnect = function() {
+    if(false !== self.pingInterval) {
+      clearInterval(self.pingInterval);
+      self.pingInterval = false;
+    }
+    setTimeout(function () {
+      self.connect();
+    }, 500);
   };
 }
 
