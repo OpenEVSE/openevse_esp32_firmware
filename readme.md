@@ -185,13 +185,20 @@ See [PlatfomIO docs regarding SPIFFS uploading](http://docs.platformio.org/en/la
 
 ##### c.) OTA upload over local network (optional advanced)
 
-`$  pio run  -t upload --upload-port <LOCAL-ESP-IP-ADDRESS>`
+To enable to OTA upload first upload via serial using the dev enviroment, this enables to OTA enable build flag:
 
-Upload SPIFFS filesystem over OTA (and don't flash):
+`$ pio run -t upload -e openevse_dev`
 
-` pio run -e emonesp_spiffs -t upload --upload-port <LOCAL-ESP-IP-ADDRESS>`
+Then upload using OTA enviroment, setting the hostname or IP address of the unit in `platformio.ini` ota enviroment section:
 
-OTA uses port 8266. See [PlatformIO ESP OTA docs](http://docs.platformio.org/en/latest/platforms/espressif.html#over-the-air-ota-update):
+`$  pio run  -t upload -e openevse_ota`
+
+SPIFFS can also be uploaded via OTA
+
+
+`$  pio run  -t uploadfs -e openevse_ota`
+
+OTA uses port 8266, make sure this port is open. See [PlatformIO ESP OTA docs](http://docs.platformio.org/en/latest/platforms/espressif.html#over-the-air-ota-update):
 
 ##### Or upload all in one go  
 
