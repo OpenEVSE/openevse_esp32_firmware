@@ -160,11 +160,15 @@ select {
 }
 
 input[type="time"] {
-  width: 80px;
+  width: 90px;
 }
 
-input[type="date"] {
-  width: 194px;
+.setup input[type="time"] {
+  width: 110px;
+}
+
+.setup input[type="date"] {
+  width: 164px;
 }
 
 @media screen and (max-width: 420px) {
