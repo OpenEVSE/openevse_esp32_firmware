@@ -282,13 +282,12 @@
 
           <!-- Session Options -->
           <div data-bind="visible: !openevse.isError()" class="box380">
-            <h2>Session Options</h2>
+            <h2>Charge Options</h2>
             <h4 data-bind="text: rapi.estate"></h4>
 
             <p data-bind="with: openevse, visible: !openevse.isError()">
-              <button data-bind="click: setStatus.bind($data, 'enable'), visible: !isEnabled()">Enable</button>
-              <button data-bind="click: setStatus.bind($data, 'disable'), visible: !isDisabled()">Disable</button>
-              <button data-bind="click: setStatus.bind($data, 'sleep'), visible: !isSleeping()">Sleep</button>
+              <button data-bind="click: setStatus.bind($data, 'enable'), visible: !isEnabled()">Start</button>
+              <button data-bind="click: setStatus.bind($data, 'sleep'), visible: !isSleeping()">Pause</button>
             </p>
 
             <p data-bind="with: openevse, visible: openevse.isConnected">

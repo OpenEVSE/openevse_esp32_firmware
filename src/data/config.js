@@ -216,7 +216,7 @@ function RapiViewModel(baseEndpoint) {
         estate = "Over Temperature";
         break;
       case 254:
-        estate = "Sleeping";
+        estate = "Waiting";
         break;
       case 255:
         estate = "Disabled";
