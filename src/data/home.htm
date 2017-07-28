@@ -43,7 +43,7 @@
 
       <div id="content">
         <div id="content-1" data-bind="visible: isSystem">
-          <div class="box380">
+          <div class="box380 left">
             <h2>WiFi Setup</h2>
             <p><b>Mode:</b> <span id="mode" data-bind="text: status.fullMode"></span></p>
 
@@ -100,7 +100,7 @@
             </div>
           </div>
 
-          <div class="box380">
+          <div class="box380 right">
             <h2>Administration</h2>
             <p>
               <b>Username:</b><br>
@@ -113,7 +113,7 @@
               <button data-bind="click: saveAdmin, text: (saveAdminFetching() ? 'Saving' : (saveAdminSuccess() ? 'Saved' : 'Save')), disable: saveAdminFetching">Save</button>
           </div>
 
-          <div class="box380">
+          <div class="box380 right">
             <h2>WiFi Firmware</h2>
             <span class="small-text">ESP8266</span><br>
             <p><b>Version: </b><span data-bind="text: config.version"></span></p>
@@ -125,7 +125,7 @@
             </p>
           </div>
 
-          <div class="box380">
+          <div class="box380 left">
             <h2>Developer Mode</h2>
             <div>
               <b>Enabled: </b>
@@ -139,7 +139,7 @@
         <!--end content 1-->
 
         <div id="content-2" data-bind="visible: isServices">
-          <div class="box380">
+          <div class="box380 left">
             <h2>&nbsp; Energy Monitoring <img src="emoncms.jpg" align=left></h2>
             <p>
               <input type="checkbox" id="emoncms_enabled" data-bind="checked: config.emoncms_enabled" />
@@ -177,7 +177,7 @@
             </p>
           </div>
 
-          <div class="box380">
+          <div class="box380 right">
             <h2>MQTT</h2>
             <p>
               <input type="checkbox" id="mqtt_enabled" data-bind="checked: config.mqtt_enabled" />
@@ -243,7 +243,7 @@
             </p>
           </div>
 
-          <div class="box380">
+          <div class="box380 left">
             <h2>&nbsp; OhmConnect <img src="ohm.jpg" align=left></h2>
             <p>
               <input type="checkbox" id="ohm_enabled" data-bind="checked: config.ohm_enabled" />
@@ -275,13 +275,13 @@
         <!--TAB 3: OpenEVSE -->
         <div id="content-3" data-bind="visible: isStatus">
 
-          <div data-bind="visible: openevse.isError" class="box380 error">
+          <div data-bind="visible: openevse.isError" class="box380 left error">
             <h4>EVSE Error</h4>
             <span data-bind="text: rapi.estate"></span>
           </div>
 
           <!-- Session Options -->
-          <div data-bind="visible: !openevse.isError()" class="box380">
+          <div data-bind="visible: !openevse.isError()" class="box380 left">
             <h2>Charge Options</h2>
             <h4 data-bind="text: rapi.estate"></h4>
 
@@ -315,7 +315,7 @@
           </div>
 
           <!-- Energy -->
-          <div class="box380">
+          <div class="box380 right">
             <h2>Energy</h2>
             <table>
               <tr>
@@ -334,7 +334,7 @@
           </div>
 
           <!-- Sensor Values -->
-          <div class="box380">
+          <div class="box380 right">
             <h2>Sensor Values</h2>
             <table>
               <tr>
@@ -365,7 +365,7 @@
           </div>
 
           <!-- Current -->
-          <div class="box380">
+          <div class="box380 right">
             <h2>Current</h2>
             <table>
               <tr>
@@ -403,7 +403,7 @@
           </div>
 
           <!-- Settings -->
-          <div class="box380 setup" data-bind="with: openevse">
+          <div class="box380 left setup" data-bind="with: openevse">
             <h2>Setup</h2>
             <p data-bind="with: time">
               <b>Time:</b><br/>
@@ -441,7 +441,7 @@
           </div>
 
           <!-- Safety -->
-          <div class="box380">
+          <div class="box380 left ">
 
             <h2>Safety</h2>
 
@@ -535,7 +535,7 @@
           </div>
 
           <!-- Hardware -->
-          <div class="box380">
+          <div class="box380 right">
             <h2>Hardware</h2>
             <table>
               <tr>
@@ -583,7 +583,7 @@
 
         <!--TAB 4    -->
         <div id="content-4" data-bind="visible: isRapi">
-          <div class="box380">
+          <div class="box380 left">
             <form method='get' action='r' data-bind="with: rapi">
               <p>
                 <b>RAPI Command:</b>
@@ -595,7 +595,7 @@
               <p data-bind="text: ret"></p>
             </form>
           </div>
-          <div class="box380">
+          <div class="box380 right">
             <h2>RAPI System Functions</h2>
             <table>
               <tr>
@@ -628,7 +628,7 @@
               </tr>
             </table>
           </div>
-          <div class="box380">
+          <div class="box380 left">
             <h2>RAPI Get Commands</h2>
             <table>
               <tr>
@@ -693,7 +693,7 @@
               </tr>
             </table>
           </div>
-          <div class="box380">
+          <div class="box380 right">
             <h2>RAPI Set Commands</h2>
             <table>
               <tr>
@@ -773,13 +773,13 @@
 
         <!--TAB 5 -->
         <div id="content-5" data-bind="visible: isMode">
-          <div data-bind="visible: 0 === divertmode()" class="box380 warning">
+          <div data-bind="visible: 0 === divertmode()" class="box380 left warning">
             <h4>Solar PV Divert</h4>
             Solar PV Divert requires the SolarPV-gen or Grid (+I/-E) MQTT topic to be defined on the
             <a href="#services" data-bind="click: function() { tab('services'); config.mqtt_enabled(true); }">Services</a>
             tab.
           </div>
-          <div class="box380" data-bind="style: { opacity: 0 === divertmode() ? 0.5 : 1.0 }">
+          <div class="box380 left" data-bind="style: { opacity: 0 === divertmode() ? 0.5 : 1.0 }">
             <h2>Solar PV Divert</h2>
             <p>Dynamically adjust charge rate based on solar PV generation or excess power (grid export).</p>
             <h2>Mode</h2>

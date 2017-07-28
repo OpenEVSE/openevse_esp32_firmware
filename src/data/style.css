@@ -39,7 +39,7 @@ tr:nth-child(2n+2) {
 }
 
 .header {
-    padding:20px;
+  padding:20px;
 }
 
 h1 {
@@ -84,7 +84,6 @@ h3 {
 
 .box380 {
   width: 380px;
-  float: left;
   padding: 20px;
   margin: 20px 20px 20px 20px;
   border: 1px solid #ddd;
@@ -93,6 +92,15 @@ h3 {
   background: #ffffff;
 }
 
+.left {
+  float: left;
+  clear: left;
+}
+
+.right {
+  float: right;
+  clear: right;
+}
 
 @media (max-width: 494px) {
   .box380 {
@@ -213,36 +221,36 @@ input[type="time"] {
 }
 
 .tabs label {
-	background: #008080;
-	border-radius: 5px;
-	box-shadow: 0 2px 2px 0 rgba(0, 0, 0, 0.4);
-	color: #fff;
-	cursor: pointer;
-	display: block;
-	float: left;
-	font-size: 1em;
-	height: 2.5em;
-	line-height: 2.5em;
-	margin-right: .25em;
-	padding: 0 1.5em;
-	text-align: center;
+  background: #008080;
+  border-radius: 5px;
+  box-shadow: 0 2px 2px 0 rgba(0, 0, 0, 0.4);
+  color: #fff;
+  cursor: pointer;
+  display: block;
+  float: left;
+  font-size: 1em;
+  height: 2.5em;
+  line-height: 2.5em;
+  margin-right: .25em;
+  padding: 0 1.5em;
+  text-align: center;
 }
 
 .tabs input:hover + label {
-	background: #e1e1e1;
-	color: #000;
+  background: #e1e1e1;
+  color: #000;
 }
 
 .tabs input:checked + label {
-	background: #f1f1f1;
-	color: #000;
+  background: #f1f1f1;
+  color: #000;
 }
 
 #content {
-	background: #e1e1e1;
-	border-radius: .5em .5em .5em .5em;
-	box-shadow: 1px 7px 7px 1px rgba(0, 0, 0, 0.4);
-	display: block;
+  background: #e1e1e1;
+  border-radius: .5em .5em .5em .5em;
+  box-shadow: 1px 7px 7px 1px rgba(0, 0, 0, 0.4);
+  display: block;
 }
 
 #content:after {
@@ -254,7 +262,7 @@ input[type="time"] {
 
 @media (max-width: 466px) {
   #content {
-	  top: 60px;
+  top: 60px;
   }
 }
 
