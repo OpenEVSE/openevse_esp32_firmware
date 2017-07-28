@@ -360,12 +360,22 @@ function OpenEvseViewModel(baseEndpoint, rapiViewModel) {
   self.delayTimerEnabled = ko.observable(false);
   self.delayTimerStart = ko.observable("--:--");
   self.delayTimerStop = ko.observable("--:--");
+
+  // Saftey tests
   self.gfiSelfTestEnabled = ko.observable(false);
   self.groundCheckEnabled = ko.observable(false);
   self.stuckRelayEnabled = ko.observable(false);
   self.tempCheckEnabled = ko.observable(false);
   self.diodeCheckEnabled = ko.observable(false);
   self.ventRequiredEnabled = ko.observable(false);
+  self.allTestsEnabled = ko.pureComputed(function () {
+    return self.gfiSelfTestEnabled() &&
+           self.groundCheckEnabled() &&
+           self.stuckRelayEnabled() &&
+           self.tempCheckEnabled() &&
+           self.diodeCheckEnabled() &&
+           self.ventRequiredEnabled();
+   });
 
   // Derived states
   self.isConnected = ko.pureComputed(function () {
@@ -700,6 +710,9 @@ function OpenEvseWiFiViewModel() {
       }
     }
   });
+
+  // Developer mode
+  self.developerMode = ko.observable(false);
 
   var updateTimer = null;
   var updateTime = 5 * 1000;

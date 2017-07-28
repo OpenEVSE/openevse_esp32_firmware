@@ -17,7 +17,7 @@
 
 <body>
   <div id="page">
-    <div class="box">
+    <div class="header">
       <h1>Open<span>EVSE</span></h1>
       <h3>WiFi</h3>
     </div>
@@ -35,8 +35,8 @@
         <label for="tab-1">System</label>
         <input id="tab-2" type="radio" name="tab-group" data-bind="checked: tab" value="services" />
         <label for="tab-2">Services</label>
-        <input id="tab-4" type="radio" name="tab-group" data-bind="checked: tab" value="rapi" />
-        <label for="tab-4">RAPI</label>
+        <input id="tab-4" data-bind="visible: developerMode" type="radio" name="tab-group" data-bind="checked: tab" value="rapi" />
+        <label for="tab-4" data-bind="visible: developerMode">RAPI</label>
         <input id="tab-5" type="radio" name="tab-group" data-bind="checked: tab" value="mode" />
         <label for="tab-5">Mode</label>
       </div>
@@ -112,6 +112,7 @@
               <span class="small-text">Web interface HTTP authentication.</span><br><br>
               <button data-bind="click: saveAdmin, text: (saveAdminFetching() ? 'Saving' : (saveAdminSuccess() ? 'Saved' : 'Save')), disable: saveAdminFetching">Save</button>
           </div>
+
           <div class="box380">
             <h2>WiFi Firmware</h2>
             <span class="small-text">ESP8266</span><br>
@@ -122,6 +123,17 @@
               <button data-bind="click: restart, text: (restartFetching() ? 'Restarting...' : 'Restart'), disable: restartFetching">Restart</button>
               <button data-bind="click: factoryReset, text: (factoryResetFetching() ? 'Resetting...' : 'Factory Reset'), disable: factoryResetFetching">Factory Reset</button>
             </p>
+          </div>
+
+          <div class="box380">
+            <h2>Developer Mode</h2>
+            <div>
+              <b>Enabled: </b>
+              <label class="switch">
+                <input type="checkbox" data-bind="checked: developerMode">
+                <div class="slider round"></div>
+              </label>
+            </div>
           </div>
         </div>
         <!--end content 1-->
@@ -431,7 +443,14 @@
 
           <!-- Safety -->
           <div class="box380">
+
             <h2>Safety</h2>
+
+            <div data-bind="visible: !openevse.allTestsEnabled()" class="box warning">
+              <h4>Warning!!</h4>
+              Not all the safety tests are enabled, please take extra care before charging your vehicle.
+            </div>
+
             <table>
               <tr>
                 <th>Test</th>
@@ -440,7 +459,7 @@
               <tr data-bind="css: {error: 9 === rapi.state() }">
                 <td>GFI Self Test:</td>
                 <td>
-                  <label class="switch">
+                  <label class="switch" data-bind="visible: developerMode">
                     <input type="checkbox" data-bind="checked: openevse.gfiSelfTestEnabled">
                     <div class="slider round"></div>
                   </label>
@@ -450,7 +469,7 @@
               <tr data-bind="css: {error: 7 === rapi.state() }">
                 <td>Ground Monitoring:</td>
                 <td>
-                  <label class="switch">
+                  <label class="switch" data-bind="visible: developerMode">
                     <input type="checkbox" data-bind="checked: openevse.groundCheckEnabled">
                     <div class="slider round"></div>
                   </label>
@@ -460,7 +479,7 @@
               <tr data-bind="css: {error: 8 === rapi.state() }">
                 <td>Stuck Contact Detection:</td>
                 <td>
-                  <label class="switch">
+                  <label class="switch" data-bind="visible: developerMode">
                     <input type="checkbox" data-bind="checked: openevse.stuckRelayEnabled">
                     <div class="slider round"></div>
                   </label>
@@ -470,7 +489,7 @@
               <tr data-bind="css: {error: 10 === rapi.state() }">
                 <td>Temperature Monitoring:</td>
                 <td>
-                  <label class="switch">
+                  <label class="switch" data-bind="visible: developerMode">
                     <input type="checkbox" data-bind="checked: openevse.tempCheckEnabled" disabled="disabled">
                     <div class="slider round"></div>
                   </label>
@@ -480,7 +499,7 @@
               <tr data-bind="css: {error: 5 === rapi.state() }">
                 <td>Diode Check:</td>
                 <td>
-                  <label class="switch">
+                  <label class="switch" data-bind="visible: developerMode">
                     <input type="checkbox" data-bind="checked: openevse.diodeCheckEnabled">
                     <div class="slider round"></div>
                   </label>
@@ -490,7 +509,7 @@
               <tr data-bind="css: {error: 4 === rapi.state() }">
                 <td>Vent Required:</td>
                 <td>
-                  <label class="switch">
+                  <label class="switch" data-bind="visible: developerMode">
                     <input type="checkbox" data-bind="checked: openevse.ventRequiredEnabled">
                     <div class="slider round"></div>
                   </label>

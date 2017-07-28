@@ -38,7 +38,7 @@ tr:nth-child(2n+2) {
   background-color:#f3f3f3;
 }
 
-.box {
+.header {
     padding:20px;
 }
 
@@ -71,6 +71,15 @@ h3 {
   font-size: 17px;
   color: #b6b6b6;
   margin: -25px 0 -5px 0;
+}
+
+.box {
+  padding: 20px;
+  border: 1px solid #ddd;
+  border-radius: 1em 1em 1em 1em;
+  box-shadow: 1px 7px 7px 1px rgba(0, 0, 0, 0.4);
+  background: #ffffff;
+  margin-bottom: 20px;
 }
 
 .box380 {
