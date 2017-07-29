@@ -574,56 +574,6 @@ handleRestart(AsyncWebServerRequest *request) {
   systemRestartTime = millis() + 1000;
 }
 
-/*
-// -------------------------------------------------------------------
-// Check for updates and display current version
-// url: /firmware
-// -------------------------------------------------------------------
-/*
-String handleUpdateCheck() {
-  DEBUG.println("Running: " + currentfirmware);
-  // Get latest firmware version number
-  String latestfirmware = ota_get_latest_version();
-  DEBUG.println("Latest: " + latestfirmware);
-  // Update web interface with firmware version(s)
-  String s = "{";
-  s += "\"current\":\""+currentfirmware+"\",";
-  s += "\"latest\":\""+latestfirmware+"\"";
-  s += "}";
-  server.send(200, CONTENT_TYPE_HTML, s);
-  return (latestfirmware);
-}
-*/
-
-// -------------------------------------------------------------------
-// Update firmware
-// url: /update
-// -------------------------------------------------------------------
-/*
-void handleUpdate() {
-  DEBUG.println("UPDATING...");
-  delay(500);
-
-  t_httpUpdate_return ret = ota_http_update();
-
-  String str="error";
-  switch(ret) {
-    case HTTP_UPDATE_FAILED:
-      str = DEBUG.printf("Update failed error (%d): %s", ESPhttpUpdate.getLastError(), ESPhttpUpdate.getLastErrorString().c_str());
-      break;
-    case HTTP_UPDATE_NO_UPDATES:
-      str = "No update, running latest firmware";
-      break;
-    case HTTP_UPDATE_OK:
-      retCode = 200;
-      str = "Update done!";
-      break;
-  }
-  server.send(retCode, CONTENT_TYPE_TEXT, str);
-  DEBUG.println(str);
-}
-*/
-
 // -------------------------------------------------------------------
 // Update firmware
 // url: /update
