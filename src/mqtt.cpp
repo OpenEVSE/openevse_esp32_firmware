@@ -13,6 +13,7 @@ PubSubClient mqttclient(espClient);   // Create client for MQTT
 long lastMqttReconnectAttempt = 0;
 int clientTimeout = 0;
 int i = 0;
+String payload_str = "";
 
 // -------------------------------------------------------------------
 // MQTT msg Received callback function:
@@ -23,32 +24,38 @@ int i = 0;
 void mqttmsg_callback(char *topic, byte * payload, unsigned int length) {
 
   String topic_string = String(topic);
-
+  payload_str = "";
   // print received MQTT to debug
   DEBUG.println("MQTT received:");
-  DEBUG.print(topic);
+  DEBUG.print(topic_string);
   DEBUG.print(" ");
   for (int i = 0; i < length; i++) {
     DEBUG.print((char) payload[i]);
+    payload_str += (char) payload[i];
   }
   DEBUG.println();
 
 
   // If MQTT message is solar PV
   if (topic_string = mqtt_solar){
-    solar = int(payload);
+    DEBUG.println("solar:" + payload_str + "W");
+    solar = payload_str.toInt();
   }
 
   // If MQTT message is grid import / export
   if (topic_string = mqtt_grid_ie){
-    grid_ie = int(payload);
+    DEBUG.println("grid:" + payload_str + "W");
+    grid_ie = payload_str.toInt();
+
   }
 
-  // If MQTT message to set divert mode is received
+  // // If MQTT message to set divert mode is received
   if (topic_string = mqtt_topic + "divertmode/set"){
+    DEBUG.println("Received divert: " + payload_str);
+    byte newdivert = payload_str.toInt();
     // Divert mode can only be '1' (normal) or '2' (eco)
-    if ((int(payload)==1) || (int(payload)==2)){
-      divertmode_update(int(payload));
+    if ((newdivert==1) || (newdivert==2)){
+      divertmode_update(newdivert);
     }
   }
 
@@ -57,6 +64,7 @@ void mqttmsg_callback(char *topic, byte * payload, unsigned int length) {
   // Locate '$' character in the MQTT message to identify RAPI command
   int rapi_character_index = topic_string.indexOf('$');
   if (rapi_character_index > 1) {
+    DEBUG.println("MQTT RAPI detected");
     // Print RAPI command from mqtt-sub topic e.g $SC
     // ASSUME RAPI COMMANDS ARE ALWAYS PREFIX BY $ AND TWO CHARACTERS LONG)
     Serial.flush();
