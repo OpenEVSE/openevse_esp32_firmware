@@ -20,8 +20,7 @@ int i = 0;
 // Used to receive RAPI commands via MQTT
 // //e.g to set current to 13A: <base-topic>/rapi/$SC 13
 // -------------------------------------------------------------------
-void
-mqttmsg_callback(char *topic, byte * payload, unsigned int length) {
+void mqttmsg_callback(char *topic, byte * payload, unsigned int length) {
 
   String topic_string = String(topic);
 
@@ -46,8 +45,11 @@ mqttmsg_callback(char *topic, byte * payload, unsigned int length) {
   }
 
   // If MQTT message to set divert mode is received
-  if (topic_string = mqtt_topic + "divertmode"){
-    divertmode_update(int(payload));
+  if (topic_string = mqtt_topic + "divertmode/set"){
+    // Divert mode can only be '1' (normal) or '2' (eco)
+    if ((int(payload)==1) || (int(payload)==2)){
+      divertmode_update(int(payload));
+    }
   }
 
   // If MQTT message is RAPI command
@@ -108,7 +110,7 @@ mqtt_connect() {
     if (mqtt_grid_ie!=""){
       mqttclient.subscribe(mqtt_grid_ie.c_str());
     }
-    mqtt_sub_topic = mqtt_topic + "/divertmode";      // MQTT Topic to change divert mode
+    mqtt_sub_topic = mqtt_topic + "/divertmode/set";      // MQTT Topic to change divert mode
     mqttclient.subscribe(mqtt_sub_topic.c_str());
 
   } else {
