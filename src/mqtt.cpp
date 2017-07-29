@@ -163,16 +163,6 @@ mqtt_publish(String data) {
       break;
   }
 
-  // Publish free RAM (heap) to <base-topic>/freeram
-  String str_topic = topic + "freeram";
-  String str_msg = String(ESP.getFreeHeap());
-  mqttclient.publish(str_topic.c_str(), str_msg.c_str());
-
-  // Publish divertmode to <base-topic>/divertmode
-  str_topic = topic + "divertmode";
-  str_msg = String(divertmode);
-  mqttclient.publish(str_topic.c_str(), str_msg.c_str());
-
   Profile_End(mqtt_publish, 5);
 }
 
