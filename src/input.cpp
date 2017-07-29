@@ -74,9 +74,9 @@ create_rapi_json() {
   data += "temp2:" + temp2 + ",";
   data += "temp3:" + temp3 + ",";
   data += "pilot:" + pilot + ",";
-  data += "freeram:" + String(ESP.getFreeHeap());
-  data += "state:" + String(state);
-  data += "divertmode:" + divertmode;
+  data += "state:" + String(state) + ",";
+  data += "freeram:" + String(ESP.getFreeHeap()) + ",";
+  data += "divertmode:" + String(divertmode);
   url += data;
   if (emoncms_server == "data.openevse.com/emoncms") {
     // data.openevse uses device module
