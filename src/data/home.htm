@@ -275,42 +275,49 @@
         <!--TAB 3: OpenEVSE -->
         <div id="content-3" data-bind="visible: isStatus">
 
-          <div data-bind="visible: openevse.isError" class="box380 left error">
-            <h4>EVSE Error</h4>
-            <span data-bind="text: rapi.estate"></span>
-          </div>
-
           <!-- Session Options -->
-          <div data-bind="visible: !openevse.isError()" class="box380 left">
+          <div class="box380 left">
             <h2>Charge Options</h2>
-            <h4 data-bind="text: rapi.estate"></h4>
+            <h4 data-bind="text: rapi.estate, visible: !openevse.isError()"></h4>
+
+            <div data-bind="visible: openevse.isError" class="box error">
+              <h4>EVSE Error</h4>
+              <span data-bind="text: rapi.estate"></span>
+            </div>
 
             <p data-bind="with: openevse, visible: !openevse.isError()">
               <button data-bind="click: setStatus.bind($data, 'enable'), visible: !isEnabled()">Start</button>
               <button data-bind="click: setStatus.bind($data, 'sleep'), visible: !isSleeping()">Pause</button>
             </p>
 
-            <p data-bind="with: openevse, visible: openevse.isConnected">
+            <p data-bind="with: openevse">
               <b>Time limit:</b><br>
               <select data-bind="options: timeLimits,
-                                  optionsText: 'name',
-                                  optionsValue: 'value',
-                                  value: timeLimit,
-                                  disable: updatingTimeLimit"></select>
+                                 optionsText: 'name',
+                                 optionsValue: 'value',
+                                 value: timeLimit,
+                                 enable: !updatingTimeLimit() &amp;&amp; isConnected()"></select>
             </p>
 
-            <p data-bind="with: openevse, visible: openevse.isConnected">
+            <p data-bind="with: openevse">
               <b>Charge limit:</b><br>
-              <input type="text" data-bind="value: chargeLimit, disable: updatingChargeLimit" /> kWh
+              <input type="text" data-bind="value: chargeLimit, enable: !updatingChargeLimit() &amp;&amp; isConnected()" /> kWh
             </p>
 
-            <div data-bind="with: openevse, visible: !openevse.isError()">
+            <div data-bind="with: openevse">
               <b>Delay Timer:</b><br>
-                Start: <input type="time" data-bind="value: delayTimerStart" />
+                Start: <input type="time" data-bind="value: delayTimerStart, disable: isError" />
                 &nbsp;&nbsp;
-                Stop: <input type="time" data-bind="value: delayTimerStop" /><br/>
-                <button data-bind="text: delayTimerEnabled() ? 'Set' : 'Start', enable: !updatingDelayTimer() &amp;&amp; delayTimerValid(), click: startDelayTimer">Start</button>
-                <button data-bind="visible: delayTimerEnabled(), enable: !updatingDelayTimer(), click: stopDelayTimer">Stop</button>
+                Stop: <input type="time" data-bind="value: delayTimerStop, disable: isError" /><br/>
+                <button data-bind="text: delayTimerEnabled() ? 'Set' : 'Start',
+                                   enable: !updatingDelayTimer() &amp;&amp;
+                                           delayTimerValid() &amp;&amp;
+                                           !isError(),
+                                   click: startDelayTimer">Start</button>
+                <button data-bind="visible: delayTimerEnabled(),
+                                   enable: !updatingDelayTimer() &amp;&amp;
+                                           !isError(),
+                                   click: stopDelayTimer">Stop</button>
             </div>
           </div>
 
@@ -364,44 +371,6 @@
             </table>
           </div>
 
-          <!-- Current -->
-          <div class="box380 right">
-            <h2>Current</h2>
-            <table>
-              <tr>
-                <th>Name</th>
-                <th>
-                </th>
-              </tr>
-              <tr>
-                <td>Service Level:</td>
-                <td>
-                  <span data-bind="text: openevse.actualServiceLevel"></span>
-                </td>
-              </tr>
-              <tr>
-                <td>Level <span data-bind="text: openevse.actualServiceLevel"></span> Minimum:</td>
-                <td>
-                  <span data-bind="text: openevse.minCurrentLevel() + ' A'"></span>
-                </td>
-              </tr>
-              <tr>
-                <td>Level <span data-bind="text: openevse.actualServiceLevel"></span> Maximum:</td>
-                <td>
-                  <span data-bind="text: openevse.maxCurrentLevel() + ' A'"></span>
-                </td>
-              </tr>
-              <tr>
-                <td>Sensor Scale:</td>
-                <td><span data-bind="text: config.scale"></span></td>
-              </tr>
-              <tr>
-                <td>Sensor Offset:</td>
-                <td><span data-bind="text: config.offset"></span></td>
-              </tr>
-            </table>
-          </div>
-
           <!-- Settings -->
           <div class="box380 left setup" data-bind="with: openevse">
             <h2>Setup</h2>
@@ -438,6 +407,44 @@
                                   value: currentCapacity,
                                   disable: updatingServiceLevel() || updatingCurrentCapacity()"></select>
             </p>
+          </div>
+
+          <!-- Current -->
+          <div class="box380 right">
+            <h2>Current</h2>
+            <table>
+              <tr>
+                <th>Name</th>
+                <th>
+                </th>
+              </tr>
+              <tr>
+                <td>Service Level:</td>
+                <td>
+                  <span data-bind="text: openevse.actualServiceLevel"></span>
+                </td>
+              </tr>
+              <tr>
+                <td>Level <span data-bind="text: openevse.actualServiceLevel"></span> Minimum:</td>
+                <td>
+                  <span data-bind="text: openevse.minCurrentLevel() + ' A'"></span>
+                </td>
+              </tr>
+              <tr>
+                <td>Level <span data-bind="text: openevse.actualServiceLevel"></span> Maximum:</td>
+                <td>
+                  <span data-bind="text: openevse.maxCurrentLevel() + ' A'"></span>
+                </td>
+              </tr>
+              <tr>
+                <td>Sensor Scale:</td>
+                <td><span data-bind="text: config.scale"></span></td>
+              </tr>
+              <tr>
+                <td>Sensor Offset:</td>
+                <td><span data-bind="text: config.offset"></span></td>
+              </tr>
+            </table>
           </div>
 
           <!-- Safety -->
