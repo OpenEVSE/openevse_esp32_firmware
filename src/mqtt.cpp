@@ -14,6 +14,7 @@ PubSubClient mqttclient(espClient);   // Create client for MQTT
 long lastMqttReconnectAttempt = 0;
 int clientTimeout = 0;
 int i = 0;
+String payload_str = "";
 
 // -------------------------------------------------------------------
 // MQTT msg Received callback function:
@@ -24,8 +25,9 @@ int i = 0;
 void mqttmsg_callback(char *topic, byte * payload, unsigned int length) {
 
   String topic_string = String(topic);
-
+  payload_str = "";
   // print received MQTT to debug
+<<<<<<< HEAD
   DBUGLN("MQTT received:");
   DBUGF("%s %.*s", topic, length, payload);
 
@@ -33,8 +35,25 @@ void mqttmsg_callback(char *topic, byte * payload, unsigned int length) {
   if (topic_string == mqtt_solar){
     solar = int(payload);
     DBUGVAR(solar);
+=======
+  DEBUG.println("MQTT received:");
+  DEBUG.print(topic_string);
+  DEBUG.print(" ");
+  for (int i = 0; i < length; i++) {
+    DEBUG.print((char) payload[i]);
+    payload_str += (char) payload[i];
+  }
+  DEBUG.println();
+
+
+  // If MQTT message is solar PV
+  if (topic_string = mqtt_solar){
+    DEBUG.println("solar:" + payload_str + "W");
+    solar = payload_str.toInt();
+>>>>>>> 0627389819b2d3818f3fec712ac02648478e88a9
   }
   // If MQTT message is grid import / export
+<<<<<<< HEAD
   else if (topic_string == mqtt_grid_ie){
     grid_ie = int(payload);
     DBUGVAR(grid_ie);
@@ -44,6 +63,22 @@ void mqttmsg_callback(char *topic, byte * payload, unsigned int length) {
     int mode = int(payload);
     DBUGVAR(mode);
     divertmode_update(mode);
+=======
+  if (topic_string = mqtt_grid_ie){
+    DEBUG.println("grid:" + payload_str + "W");
+    grid_ie = payload_str.toInt();
+
+  }
+
+  // // If MQTT message to set divert mode is received
+  if (topic_string = mqtt_topic + "divertmode/set"){
+    DEBUG.println("Received divert: " + payload_str);
+    byte newdivert = payload_str.toInt();
+    // Divert mode can only be '1' (normal) or '2' (eco)
+    if ((newdivert==1) || (newdivert==2)){
+      divertmode_update(newdivert);
+    }
+>>>>>>> 0627389819b2d3818f3fec712ac02648478e88a9
   }
   else
   {
@@ -64,6 +99,7 @@ void mqttmsg_callback(char *topic, byte * payload, unsigned int length) {
         }
       }
 
+<<<<<<< HEAD
       comm_sent++;
       if (0 == rapiSender.sendCmd(cmd.c_str())) {
         comm_success++;
@@ -73,6 +109,25 @@ void mqttmsg_callback(char *topic, byte * payload, unsigned int length) {
           String mqtt_sub_topic = mqtt_topic + "/rapi/out";
           mqttclient.publish(mqtt_sub_topic.c_str(), mqtt_data.c_str());
         }
+=======
+  // If MQTT message is RAPI command
+  // Detect if MQTT message is a RAPI command e.g to set 13A <base-topic>/rapi/$SC 13
+  // Locate '$' character in the MQTT message to identify RAPI command
+  int rapi_character_index = topic_string.indexOf('$');
+  if (rapi_character_index > 1) {
+    DEBUG.println("MQTT RAPI detected");
+    // Print RAPI command from mqtt-sub topic e.g $SC
+    // ASSUME RAPI COMMANDS ARE ALWAYS PREFIX BY $ AND TWO CHARACTERS LONG)
+    Serial.flush();
+    for (int i = rapi_character_index; i < rapi_character_index + 3; i++) {
+      Serial.print(topic[i]);
+    }
+    if (payload[0] != 0); {     // If MQTT msg contains a payload e.g $SC 13. Not all rapi commands have a payload e.g. $GC
+      Serial.print(" ");      // print space to seperate RAPI commnd from value
+      // print RAPI value received via MQTT serial
+      for (int i = 0; i < length; i++) {
+        Serial.print((char) payload[i]);
+>>>>>>> 0627389819b2d3818f3fec712ac02648478e88a9
       }
     }
   }

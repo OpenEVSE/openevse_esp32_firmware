@@ -32,6 +32,7 @@ int charge_rate = 0;
 // Update divert mode e.g. Normal / Eco
 // function called when divert mode is changed
 void divertmode_update(byte newmode){
+  DEBUG.println("Setting divertmode: " + newmode);
   divertmode = newmode;
 
   // restore max charge current if normal mode or zero if eco mode
@@ -43,16 +44,11 @@ void divertmode_update(byte newmode){
 void divert_current_loop(){
   Profile_Start(mqtt_loop);
 
-  if (divertmode == 1){
-    DEBUG.println("Divert mode: 1 Normal");
-  }
-
   // If divert mode = Eco (2)
   if (divertmode == 2){
-    DEBUG.println("Divert mode: 2 Eco");
+
     int Isolar = 0;
     int Igrid_ie = 0;
-
 
 
     // L1: voltage is 110V
