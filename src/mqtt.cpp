@@ -2,6 +2,7 @@
 #include "mqtt.h"
 #include "config.h"
 #include "divert.h"
+#include "input.h"
 
 #include <Arduino.h>
 #include <PubSubClient.h>             // MQTT https://github.com/knolleary/pubsubclient PlatformIO lib: 89
@@ -26,63 +27,56 @@ mqttmsg_callback(char *topic, byte * payload, unsigned int length) {
   String topic_string = String(topic);
 
   // print received MQTT to debug
-  DEBUG.println("MQTT received:");
-  DEBUG.print(topic);
-  DEBUG.print(" ");
-  for (int i = 0; i < length; i++) {
-    DEBUG.print((char) payload[i]);
-  }
-  DEBUG.println();
-
+  DBUGLN("MQTT received:");
+  DBUGF("%s %.*s", topic, length, payload);
 
   // If MQTT message is solar PV
-  if (topic_string = mqtt_solar){
+  if (topic_string == mqtt_solar){
     solar = int(payload);
+    DBUGVAR(solar);
   }
-
   // If MQTT message is grid import / export
-  if (topic_string = mqtt_grid_ie){
+  else if (topic_string == mqtt_grid_ie){
     grid_ie = int(payload);
+    DBUGVAR(grid_ie);
   }
-
   // If MQTT message to set divert mode is received
-  if (topic_string = mqtt_topic + "divertmode"){
-    divertmode_update(int(payload));
+  else if (topic_string == mqtt_topic + "divertmode"){
+    int mode = int(payload);
+    DBUGVAR(mode);
+    divertmode_update(mode);
   }
+  else
+  {
+    // If MQTT message is RAPI command
+    // Detect if MQTT message is a RAPI command e.g to set 13A <base-topic>/rapi/$SC 13
+    // Locate '$' character in the MQTT message to identify RAPI command
+    int rapi_character_index = topic_string.indexOf('$');
+    if (rapi_character_index > 1) {
+      DBUGF("Processing as RAPI");
+      // Print RAPI command from mqtt-sub topic e.g $SC
+      // ASSUME RAPI COMMANDS ARE ALWAYS PREFIX BY $ AND TWO CHARACTERS LONG)
+      String cmd = String(topic + rapi_character_index);
+      if (payload[0] != 0); {     // If MQTT msg contains a payload e.g $SC 13. Not all rapi commands have a payload e.g. $GC
+        cmd += " ";
+        // print RAPI value received via MQTT serial
+        for (int i = 0; i < length; i++) {
+          cmd += (char)payload[i];
+        }
+      }
 
-  // If MQTT message is RAPI command
-  // Detect if MQTT message is a RAPI command e.g to set 13A <base-topic>/rapi/$SC 13
-  // Locate '$' character in the MQTT message to identify RAPI command
-  int rapi_character_index = topic_string.indexOf('$');
-  if (rapi_character_index > 1) {
-    // Print RAPI command from mqtt-sub topic e.g $SC
-    // ASSUME RAPI COMMANDS ARE ALWAYS PREFIX BY $ AND TWO CHARACTERS LONG)
-    Serial.flush();
-    for (int i = rapi_character_index; i < rapi_character_index + 3; i++) {
-      Serial.print(topic[i]);
-    }
-    if (payload[0] != 0); {     // If MQTT msg contains a payload e.g $SC 13. Not all rapi commands have a payload e.g. $GC
-      Serial.print(" ");      // print space to seperate RAPI commnd from value
-      // print RAPI value received via MQTT serial
-      for (int i = 0; i < length; i++) {
-        Serial.print((char) payload[i]);
+      comm_sent++;
+      if (0 == rapiSender.sendCmd(cmd.c_str())) {
+        comm_success++;
+        String rapiString = rapiSender.getResponse();
+        if (rapiString.startsWith("$OK ") || rapiString.startsWith("$NK ")) {
+          String mqtt_data = rapiString;
+          String mqtt_sub_topic = mqtt_topic + "/rapi/out";
+          mqttclient.publish(mqtt_sub_topic.c_str(), mqtt_data.c_str());
+        }
       }
     }
-    Serial.println(); // End of RAPI command serial print (new line)
-
-    // Check RAPI command has been succesful by listing for $OK responce and publish to MQTT under "rapi/out" topic
-    delay(60);        // commDelay = 60 (input.cpp)
-    while (Serial.available()) {
-         String rapiString = Serial.readStringUntil('\r');
-      if (rapiString.startsWith("$OK ") || rapiString.startsWith("$NK ")) {
-           String mqtt_data = rapiString;
-           String mqtt_sub_topic = mqtt_topic + "/rapi/out";
-           mqttclient.publish(mqtt_sub_topic.c_str(), mqtt_data.c_str());
-         }
-    }
   }
-
-
 } //end call back
 
 // -------------------------------------------------------------------
