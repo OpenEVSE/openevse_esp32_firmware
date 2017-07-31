@@ -471,21 +471,29 @@ function OpenEvseViewModel(baseEndpoint, rapiViewModel) {
   };
 
   self.updatingServiceLevel = ko.observable(false);
+  self.savedServiceLevel = ko.observable(false);
   self.updatingCurrentCapacity = ko.observable(false);
+  self.savedCurrentCapacity = ko.observable(false);
   self.updatingTimeLimit = ko.observable(false);
+  self.savedTimeLimit = ko.observable(false);
   self.updatingChargeLimit = ko.observable(false);
+  self.savedChargeLimit = ko.observable(false);
   self.updatingDelayTimer = ko.observable(false);
+  self.savedDelayTimer = ko.observable(false);
   self.updatingStatus = ko.observable(false);
+  self.savedStatus = ko.observable(false);
   self.updatingGfiSelfTestEnabled = ko.observable(false);
+  self.savedGfiSelfTestEnabled = ko.observable(false);
   self.updatingGroundCheckEnabled = ko.observable(false);
+  self.savedGroundCheckEnabled = ko.observable(false);
   self.updatingStuckRelayEnabled = ko.observable(false);
+  self.savedStuckRelayEnabled = ko.observable(false);
   self.updatingTempCheckEnabled = ko.observable(false);
+  self.savedTempCheckEnabled = ko.observable(false);
   self.updatingDiodeCheckEnabled = ko.observable(false);
+  self.savedDiodeCheckEnabled = ko.observable(false);
   self.updatingVentRequiredEnabled = ko.observable(false);
-  /*self.updating = ko.pureComputed(function () {
-    return self.updatingServiceLevel() ||
-           self.updateCurrentCapacity();
-  });*/
+  self.savedVentRequiredEnabled = ko.observable(false);
 
   var subscribed = false;
   self.subscribe = function ()
@@ -497,7 +505,10 @@ function OpenEvseViewModel(baseEndpoint, rapiViewModel) {
     // Updates to the service level
     self.serviceLevel.subscribe(function (val) {
       self.updatingServiceLevel(true);
+      self.savedServiceLevel(false);
       self.openevse.service_level(function (level, actual) {
+        self.savedServiceLevel(true);
+        setTimeout(function () { self.savedServiceLevel(false); }, 2000);
         self.actualServiceLevel(actual);
         self.updateCurrentCapacity().always(function () {
         });
@@ -512,7 +523,10 @@ function OpenEvseViewModel(baseEndpoint, rapiViewModel) {
         return;
       }
       self.updatingCurrentCapacity(true);
+      self.savedCurrentCapacity(false);
       self.openevse.current_capacity(function (capacity) {
+        self.savedCurrentCapacity(true);
+        setTimeout(function () { self.savedCurrentCapacity(false); }, 2000);
         if(val !== capacity) {
           self.currentCapacity(capacity);
         }
@@ -524,7 +538,10 @@ function OpenEvseViewModel(baseEndpoint, rapiViewModel) {
     // Updates to the time limit
     self.timeLimit.subscribe(function (val) {
       self.updatingTimeLimit(true);
+      self.savedTimeLimit(false);
       self.openevse.time_limit(function (limit) {
+        self.savedTimeLimit(true);
+        setTimeout(function () { self.savedTimeLimit(false); }, 2000);
         if(val !== limit) {
           self.selectTimeLimit(limit);
         }
@@ -536,7 +553,10 @@ function OpenEvseViewModel(baseEndpoint, rapiViewModel) {
     // Updates to the charge limit
     self.chargeLimit.subscribe(function (val) {
       self.updatingChargeLimit(true);
+      self.savedChargeLimit(false);
       self.openevse.charge_limit(function (limit) {
+        self.savedChargeLimit(true);
+        setTimeout(function () { self.savedChargeLimit(false); }, 2000);
         if(val !== limit) {
           self.chargeLimit(limit);
         }
@@ -548,7 +568,10 @@ function OpenEvseViewModel(baseEndpoint, rapiViewModel) {
     // Updates to the GFI self test
     self.gfiSelfTestEnabled.subscribe(function (val) {
       self.updatingGfiSelfTestEnabled(true);
+      self.savedGfiSelfTestEnabled(false);
       self.openevse.gfi_self_test(function (enabled) {
+        self.savedGfiSelfTestEnabled(true);
+        setTimeout(function () { self.savedGfiSelfTestEnabled(false); }, 2000);
         if(val !== enabled) {
           self.gfiSelfTestEnabled(enabled);
         }
@@ -560,7 +583,10 @@ function OpenEvseViewModel(baseEndpoint, rapiViewModel) {
     // Updates to the ground check
     self.groundCheckEnabled.subscribe(function (val) {
       self.updatingGroundCheckEnabled(true);
+      self.savedGroundCheckEnabled(false);
       self.openevse.ground_check(function (enabled) {
+        self.savedGroundCheckEnabled(true);
+        setTimeout(function () { self.savedGroundCheckEnabled(false); }, 2000);
         if(val !== enabled) {
           self.groundCheckEnabled(enabled);
         }
@@ -572,7 +598,10 @@ function OpenEvseViewModel(baseEndpoint, rapiViewModel) {
     // Updates to the stuck relay check
     self.stuckRelayEnabled.subscribe(function (val) {
       self.updatingStuckRelayEnabled(true);
+      self.savedStuckRelayEnabled(false);
       self.openevse.stuck_relay_check(function (enabled) {
+        self.savedStuckRelayEnabled(true);
+        setTimeout(function () { self.savedStuckRelayEnabled(false); }, 2000);
         if(val !== enabled) {
           self.stuckRelayEnabled(enabled);
         }
@@ -584,7 +613,10 @@ function OpenEvseViewModel(baseEndpoint, rapiViewModel) {
     // Updates to the temp check
     self.tempCheckEnabled.subscribe(function (val) {
       self.updatingTempCheckEnabled(true);
+      self.savedTempCheckEnabled(false);
       self.openevse.temp_check(function (enabled) {
+        self.savedTempCheckEnabled(true);
+        setTimeout(function () { self.savedTempCheckEnabled(false); }, 2000);
         if(val !== enabled) {
           self.tempCheckEnabled(enabled);
         }
@@ -596,7 +628,10 @@ function OpenEvseViewModel(baseEndpoint, rapiViewModel) {
     // Updates to the diode check
     self.diodeCheckEnabled.subscribe(function (val) {
       self.updatingDiodeCheckEnabled(true);
+      self.savedDiodeCheckEnabled(false);
       self.openevse.diode_check(function (enabled) {
+        self.savedDiodeCheckEnabled(true);
+        setTimeout(function () { self.savedDiodeCheckEnabled(false); }, 2000);
         if(val !== enabled) {
           self.diodeCheckEnabled(enabled);
         }
@@ -608,7 +643,10 @@ function OpenEvseViewModel(baseEndpoint, rapiViewModel) {
     // Updates to the vent required
     self.ventRequiredEnabled.subscribe(function (val) {
       self.updatingVentRequiredEnabled(true);
+      self.savedVentRequiredEnabled(false);
       self.openevse.vent_required(function (enabled) {
+        self.savedVentRequiredEnabled(true);
+        setTimeout(function () { self.savedVentRequiredEnabled(false); }, 2000);
         if(val !== enabled) {
           self.ventRequiredEnabled(enabled);
         }

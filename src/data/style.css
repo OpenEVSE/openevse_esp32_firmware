@@ -277,7 +277,11 @@ input[type="time"] {
   word-wrap: break-word;
 }
 
-/* Common styles for all types */
+.saved {
+  border-color: #3c763d !important;
+  border-left-width: 5px !important;
+}
+
 .warning {
   border-left-color: #aa6708;
   border-left-width: 5px;

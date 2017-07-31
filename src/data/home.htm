@@ -296,12 +296,15 @@
                                  optionsText: 'name',
                                  optionsValue: 'value',
                                  value: timeLimit,
-                                 enable: !updatingTimeLimit() &amp;&amp; isConnected()"></select>
+                                 enable: !updatingTimeLimit() &amp;&amp; isConnected(),
+                                 css: { saved: savedTimeLimit }"></select>
             </p>
 
             <p data-bind="with: openevse">
               <b>Charge limit:</b><br>
-              <input type="text" data-bind="value: chargeLimit, enable: !updatingChargeLimit() &amp;&amp; isConnected()" /> kWh
+              <input type="text" data-bind="value: chargeLimit,
+                                            enable: !updatingChargeLimit() &amp;&amp; isConnected(),
+                                            css: { saved: savedChargeLimit }" /> kWh
             </p>
 
             <div data-bind="with: openevse">
@@ -396,7 +399,8 @@
                                  optionsText: 'name',
                                  optionsValue: 'value',
                                  value: serviceLevel,
-                                 disable: updatingServiceLevel()"></select>
+                                 disable: updatingServiceLevel(),
+                                 css: { saved: savedServiceLevel }"></select>
             </p>
 
             <p>
@@ -405,7 +409,8 @@
                                   optionsText: 'name',
                                   optionsValue: 'value',
                                   value: currentCapacity,
-                                  disable: updatingServiceLevel() || updatingCurrentCapacity()"></select>
+                                  disable: updatingServiceLevel() || updatingCurrentCapacity(),
+                                  css: { saved: savedCurrentCapacity }"></select>
             </p>
           </div>
 
