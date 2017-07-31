@@ -21,8 +21,7 @@ int i = 0;
 // Used to receive RAPI commands via MQTT
 // //e.g to set current to 13A: <base-topic>/rapi/$SC 13
 // -------------------------------------------------------------------
-void
-mqttmsg_callback(char *topic, byte * payload, unsigned int length) {
+void mqttmsg_callback(char *topic, byte * payload, unsigned int length) {
 
   String topic_string = String(topic);
 
@@ -41,7 +40,7 @@ mqttmsg_callback(char *topic, byte * payload, unsigned int length) {
     DBUGVAR(grid_ie);
   }
   // If MQTT message to set divert mode is received
-  else if (topic_string == mqtt_topic + "divertmode"){
+  else if (topic_string == mqtt_topic + "/divertmode/set"){
     int mode = int(payload);
     DBUGVAR(mode);
     divertmode_update(mode);
@@ -102,7 +101,7 @@ mqtt_connect() {
     if (mqtt_grid_ie!=""){
       mqttclient.subscribe(mqtt_grid_ie.c_str());
     }
-    mqtt_sub_topic = mqtt_topic + "/divertmode";      // MQTT Topic to change divert mode
+    mqtt_sub_topic = mqtt_topic + "/divertmode/set";      // MQTT Topic to change divert mode
     mqttclient.subscribe(mqtt_sub_topic.c_str());
 
   } else {
@@ -154,16 +153,6 @@ mqtt_publish(String data) {
     if (int (data[i]) == 0)
       break;
   }
-
-  // Publish free RAM (heap) to <base-topic>/freeram
-  String str_topic = topic + "freeram";
-  String str_msg = String(ESP.getFreeHeap());
-  mqttclient.publish(str_topic.c_str(), str_msg.c_str());
-
-  // Publish divertmode to <base-topic>/divertmode
-  str_topic = topic + "divertmode";
-  str_msg = String(divertmode);
-  mqttclient.publish(str_topic.c_str(), str_msg.c_str());
 
   Profile_End(mqtt_publish, 5);
 }

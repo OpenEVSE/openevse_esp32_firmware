@@ -1,6 +1,7 @@
 #include "emonesp.h"
 #include "input.h"
 #include "config.h"
+#include "divert.h"
 
 #include "RapiSender.h"
 
@@ -73,7 +74,9 @@ create_rapi_json() {
   data += "temp2:" + temp2 + ",";
   data += "temp3:" + temp3 + ",";
   data += "pilot:" + pilot + ",";
-  data += "state:" + String(state);
+  data += "state:" + String(state) + ",";
+  data += "freeram:" + String(ESP.getFreeHeap()) + ",";
+  data += "divertmode:" + String(divertmode);
   url += data;
   if (emoncms_server == "data.openevse.com/emoncms") {
     // data.openevse uses device module
