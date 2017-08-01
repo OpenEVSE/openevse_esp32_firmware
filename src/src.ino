@@ -126,7 +126,6 @@ loop() {
       if(config_ohm_enabled()) {
         ohm_loop();
       }
-      divert_current_loop();
       Timer2 = millis();
     }
     // -------------------------------------------------------------------
