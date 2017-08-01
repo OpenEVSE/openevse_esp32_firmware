@@ -29,12 +29,12 @@ void mqttmsg_callback(char *topic, byte * payload, unsigned int length) {
   // print received MQTT to debug
 
   DBUGLN("MQTT received:");
-  DBUGF("%s %.*s", topic, length, payload);
+  DBUGF("Topic: %s", topic);
 
   for (int i = 0; i < length; i++) {
-    DEBUG.print((char) payload[i]);
     payload_str += (char) payload[i];
   }
+  DEBUG.println("Payload: " + payload_str);
 
   // If MQTT message is solar PV
   if (topic_string == mqtt_solar){
@@ -49,7 +49,6 @@ void mqttmsg_callback(char *topic, byte * payload, unsigned int length) {
   // If MQTT message to set divert mode is received
   else if (topic_string == mqtt_topic + "/divertmode/set"){
     byte newdivert = payload_str.toInt();
-    DBUGF("New divert: %d", newdivert);
     if ((newdivert==1) || (newdivert==2)){
       divertmode_update(newdivert);
     }
