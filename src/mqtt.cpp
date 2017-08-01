@@ -2,6 +2,7 @@
 #include "mqtt.h"
 #include "config.h"
 #include "divert.h"
+#include "input.h"
 
 #include <Arduino.h>
 #include <PubSubClient.h>             // MQTT https://github.com/knolleary/pubsubclient PlatformIO lib: 89
@@ -13,6 +14,7 @@ PubSubClient mqttclient(espClient);   // Create client for MQTT
 long lastMqttReconnectAttempt = 0;
 int clientTimeout = 0;
 int i = 0;
+String payload_str = "";
 
 // -------------------------------------------------------------------
 // MQTT msg Received callback function:
@@ -20,69 +22,68 @@ int i = 0;
 // Used to receive RAPI commands via MQTT
 // //e.g to set current to 13A: <base-topic>/rapi/$SC 13
 // -------------------------------------------------------------------
-void
-mqttmsg_callback(char *topic, byte * payload, unsigned int length) {
+void mqttmsg_callback(char *topic, byte * payload, unsigned int length) {
 
   String topic_string = String(topic);
-
+  payload_str = "";
   // print received MQTT to debug
-  DEBUG.println("MQTT received:");
-  DEBUG.print(topic);
-  DEBUG.print(" ");
-  for (int i = 0; i < length; i++) {
-    DEBUG.print((char) payload[i]);
-  }
-  DEBUG.println();
 
+  DBUGLN("MQTT received:");
+  DBUGF("Topic: %s", topic);
+
+  for (int i = 0; i < length; i++) {
+    payload_str += (char) payload[i];
+  }
+  DEBUG.println("Payload: " + payload_str);
 
   // If MQTT message is solar PV
-  if (topic_string = mqtt_solar){
-    solar = int(payload);
+  if (topic_string == mqtt_solar){
+    solar = payload_str.toInt();
+    DBUGF("solar:%d W", solar);
   }
 
-  // If MQTT message is grid import / export
-  if (topic_string = mqtt_grid_ie){
-    grid_ie = int(payload);
+  else if (topic_string == mqtt_grid_ie){
+    grid_ie = payload_str.toInt();
+    DBUGF("grid:%d W", solar);
   }
-
   // If MQTT message to set divert mode is received
-  if (topic_string = mqtt_topic + "divertmode"){
-    divertmode_update(int(payload));
-  }
-
-  // If MQTT message is RAPI command
-  // Detect if MQTT message is a RAPI command e.g to set 13A <base-topic>/rapi/$SC 13
-  // Locate '$' character in the MQTT message to identify RAPI command
-  int rapi_character_index = topic_string.indexOf('$');
-  if (rapi_character_index > 1) {
-    // Print RAPI command from mqtt-sub topic e.g $SC
-    // ASSUME RAPI COMMANDS ARE ALWAYS PREFIX BY $ AND TWO CHARACTERS LONG)
-    Serial.flush();
-    for (int i = rapi_character_index; i < rapi_character_index + 3; i++) {
-      Serial.print(topic[i]);
+  else if (topic_string == mqtt_topic + "/divertmode/set"){
+    byte newdivert = payload_str.toInt();
+    if ((newdivert==1) || (newdivert==2)){
+      divertmode_update(newdivert);
     }
-    if (payload[0] != 0); {     // If MQTT msg contains a payload e.g $SC 13. Not all rapi commands have a payload e.g. $GC
-      Serial.print(" ");      // print space to seperate RAPI commnd from value
-      // print RAPI value received via MQTT serial
-      for (int i = 0; i < length; i++) {
-        Serial.print((char) payload[i]);
+  }
+  else
+  {
+    // If MQTT message is RAPI command
+    // Detect if MQTT message is a RAPI command e.g to set 13A <base-topic>/rapi/$SC 13
+    // Locate '$' character in the MQTT message to identify RAPI command
+    int rapi_character_index = topic_string.indexOf('$');
+    if (rapi_character_index > 1) {
+      DBUGF("Processing as RAPI");
+      // Print RAPI command from mqtt-sub topic e.g $SC
+      // ASSUME RAPI COMMANDS ARE ALWAYS PREFIX BY $ AND TWO CHARACTERS LONG)
+      String cmd = String(topic + rapi_character_index);
+      if (payload[0] != 0); {     // If MQTT msg contains a payload e.g $SC 13. Not all rapi commands have a payload e.g. $GC
+        cmd += " ";
+        // print RAPI value received via MQTT serial
+        for (int i = 0; i < length; i++) {
+          cmd += (char)payload[i];
+        }
+      }
+
+      comm_sent++;
+      if (0 == rapiSender.sendCmd(cmd.c_str())) {
+        comm_success++;
+        String rapiString = rapiSender.getResponse();
+        if (rapiString.startsWith("$OK ") || rapiString.startsWith("$NK ")) {
+          String mqtt_data = rapiString;
+          String mqtt_sub_topic = mqtt_topic + "/rapi/out";
+          mqttclient.publish(mqtt_sub_topic.c_str(), mqtt_data.c_str());
+        }
       }
     }
-    Serial.println(); // End of RAPI command serial print (new line)
-
-    // Check RAPI command has been succesful by listing for $OK responce and publish to MQTT under "rapi/out" topic
-    delay(60);        // commDelay = 60 (input.cpp)
-    while (Serial.available()) {
-         String rapiString = Serial.readStringUntil('\r');
-      if (rapiString.startsWith("$OK ") || rapiString.startsWith("$NK ")) {
-           String mqtt_data = rapiString;
-           String mqtt_sub_topic = mqtt_topic + "/rapi/out";
-           mqttclient.publish(mqtt_sub_topic.c_str(), mqtt_data.c_str());
-         }
-    }
   }
-
-
 } //end call back
 
 // -------------------------------------------------------------------
@@ -108,7 +109,7 @@ mqtt_connect() {
     if (mqtt_grid_ie!=""){
       mqttclient.subscribe(mqtt_grid_ie.c_str());
     }
-    mqtt_sub_topic = mqtt_topic + "/divertmode";      // MQTT Topic to change divert mode
+    mqtt_sub_topic = mqtt_topic + "/divertmode/set";      // MQTT Topic to change divert mode
     mqttclient.subscribe(mqtt_sub_topic.c_str());
 
   } else {
@@ -160,16 +161,6 @@ mqtt_publish(String data) {
     if (int (data[i]) == 0)
       break;
   }
-
-  // Publish free RAM (heap) to <base-topic>/freeram
-  String str_topic = topic + "freeram";
-  String str_msg = String(ESP.getFreeHeap());
-  mqttclient.publish(str_topic.c_str(), str_msg.c_str());
-
-  // Publish divertmode to <base-topic>/divertmode
-  str_topic = topic + "divertmode";
-  str_msg = String(divertmode);
-  mqttclient.publish(str_topic.c_str(), str_msg.c_str());
 
   Profile_End(mqtt_publish, 5);
 }

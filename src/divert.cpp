@@ -22,16 +22,17 @@
 
 
 // Default to normal charging unless set. Divert mode always defaults back to 1 if unit is reset (divertmode not saved in EEPROM)
-byte divertmode = 1;
+byte divertmode = 1;     //default normal mode
 int solar = 0;
 int grid_ie = 0;
-byte min_charge_current = 6;
-byte max_charge_current = 32;
+byte min_charge_current = 6;      //TO DO: set to be min charge current as set on the OpenEVSE e.g. "$GC min-current max-current"
+byte max_charge_current = 32;     //TO DO: to be set to be max charge current as set on the OpenEVSE e.g. "$GC min-current max-current"
 int charge_rate = 0;
 
 // Update divert mode e.g. Normal / Eco
 // function called when divert mode is changed
 void divertmode_update(byte newmode){
+  DBUGF("Set divertmode: %d", newmode);
   divertmode = newmode;
 
   // restore max charge current if normal mode or zero if eco mode
@@ -43,16 +44,11 @@ void divertmode_update(byte newmode){
 void divert_current_loop(){
   Profile_Start(mqtt_loop);
 
-  if (divertmode == 1){
-    DEBUG.println("Divert mode: 1 Normal");
-  }
-
   // If divert mode = Eco (2)
   if (divertmode == 2){
-    DEBUG.println("Divert mode: 2 Eco");
+
     int Isolar = 0;
     int Igrid_ie = 0;
-
 
 
     // L1: voltage is 110V
