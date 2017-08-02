@@ -38,8 +38,8 @@ tr:nth-child(2n+2) {
   background-color:#f3f3f3;
 }
 
-.box {
-    padding:20px;
+.header {
+  padding:20px;
 }
 
 h1 {
@@ -73,9 +73,17 @@ h3 {
   margin: -25px 0 -5px 0;
 }
 
+.box {
+  padding: 20px;
+  border: 1px solid #ddd;
+  border-radius: 1em 1em 1em 1em;
+  box-shadow: 1px 7px 7px 1px rgba(0, 0, 0, 0.4);
+  background: #ffffff;
+  margin-bottom: 20px;
+}
+
 .box380 {
   width: 380px;
-  float: left;
   padding: 20px;
   margin: 20px 20px 20px 20px;
   border: 1px solid #ddd;
@@ -84,6 +92,15 @@ h3 {
   background: #ffffff;
 }
 
+.left {
+  float: left;
+  clear: left;
+}
+
+.right {
+  float: right;
+  clear: right;
+}
 
 @media (max-width: 494px) {
   .box380 {
@@ -138,18 +155,43 @@ button:disabled {
 
 input[type="text"],
 input[type="password"],
-input[type="file"] {
+input[type="file"],
+input[type="time"],
+input[type="date"],
+select {
   box-sizing: border-box;
+  border: 1px solid #ddd;
   border-radius: 4px;
-  padding: 10px;
   margin-top: 10px;
   width: 280px;
+  padding:5px;
+}
+
+input[type="time"] {
+  width: 90px;
+}
+
+.setup input[type="time"] {
+  width: 110px;
+}
+
+.setup input[type="date"] {
+  width: 164px;
 }
 
 @media screen and (max-width: 420px) {
   input[type="text"],
-  input[type="password"]  {
+  input[type="password"],
+  select {
     width: 240px;
+  }
+
+  input[type="time"] {
+    width: 60px;
+  }
+
+  input[type="date"] {
+    width: 174px;
   }
 }
 
@@ -179,42 +221,36 @@ input[type="file"] {
 }
 
 .tabs label {
-	background: #008080;
-	border-radius: 5px;
-	box-shadow: 0 2px 2px 0 rgba(0, 0, 0, 0.4);
-	color: #fff;
-	cursor: pointer;
-	display: block;
-	float: left;
-	font-size: 1em;
-	height: 2.5em;
-	line-height: 2.5em;
-	margin-right: .25em;
-	padding: 0 1.5em;
-	text-align: center;
+  background: #008080;
+  border-radius: 5px;
+  box-shadow: 0 2px 2px 0 rgba(0, 0, 0, 0.4);
+  color: #fff;
+  cursor: pointer;
+  display: block;
+  float: left;
+  font-size: 1em;
+  height: 2.5em;
+  line-height: 2.5em;
+  margin-right: .25em;
+  padding: 0 1.5em;
+  text-align: center;
 }
 
 .tabs input:hover + label {
-	background: #e1e1e1;
-	color: #000;
+  background: #e1e1e1;
+  color: #000;
 }
 
 .tabs input:checked + label {
-	background: #f1f1f1;
-	color: #000;
-	/*
-	-webkit-transition: .1s;
-	-moz-transition: .1s;
-	-o-transition: .1s;
-	-ms-transition: .1s;
-	*/
+  background: #f1f1f1;
+  color: #000;
 }
 
 #content {
-	background: #e1e1e1;
-	border-radius: .5em .5em .5em .5em;
-	box-shadow: 1px 7px 7px 1px rgba(0, 0, 0, 0.4);
-	display: block;
+  background: #e1e1e1;
+  border-radius: .5em .5em .5em .5em;
+  box-shadow: 1px 7px 7px 1px rgba(0, 0, 0, 0.4);
+  display: block;
 }
 
 #content:after {
@@ -226,18 +262,8 @@ input[type="file"] {
 
 @media (max-width: 466px) {
   #content {
-	  top: 60px;
+  top: 60px;
   }
-}
-
-input[type=text] {
-  border: 1px solid #ddd;
-  padding:5px;
-}
-
-input[type=file] {
-  border: 1px solid #ddd;
-  padding:5px;
 }
 
 #footer {
@@ -251,52 +277,11 @@ input[type=file] {
   word-wrap: break-word;
 }
 
-/*
-#content input[type=radio], input[type=checkbox] {
-  display:none;
+.saved {
+  border-color: #3c763d !important;
+  border-left-width: 5px !important;
 }
-#content input[type=radio] + label:before {
-  content: "";
-  display: inline-block;
-  width: 20px;
-  height: 20px;
-  vertical-align:middle;
-  margin-right: 8px;
-  background-color: #008080;
-	box-shadow: 0 2px 2px 0 rgba(0, 0, 0, 0.4);
-	border-radius: 5px;
-}
-#content input[type=checkbox] + label:before {
-  content: "";
-  display: inline-block;
-  width: 20px;
-  height: 20px;
-  vertical-align:middle;
-  margin-right: 8px;
-  background-color: #008080;
-	box-shadow: 0 2px 2px 0 rgba(0, 0, 0, 0.4);
-	border-radius: 5px;
-}
-#content input[type=radio]:checked + label:before {
-  content: "\2022";
-  color:white;
-  background-color: #666;
-  font-size:1.8em;
-  text-align:center;
-  line-height:14px;
-  text-shadow:0px 0px 3px #eee;
-}
-#content input[type=checkbox]:checked + label:before {
-  content:"\2714";
-  color:white;
-  background-color: #666;
-  text-align:center;
-  line-height:15px;
-  text-shadow:0px 0px 3px #eee;
-}
-*/
 
-/* Common styles for all types */
 .warning {
   border-left-color: #aa6708;
   border-left-width: 5px;
@@ -306,4 +291,83 @@ input[type=file] {
   color: #aa6708;
   margin-top: 0;
   margin-bottom: 5px;
+}
+
+.error {
+  border-left-color: #a94442;
+  border-left-width: 5px;
+}
+
+.error h4 {
+  color: #a94442;
+  margin-top: 0;
+  margin-bottom: 5px;
+}
+
+.error td {
+  color: #a94442;
+}
+
+.error td:first-child {
+  border-left-color: #a94442;
+  border-left-width: 5px;
+}
+
+/* Nice slider switch */
+
+.switch {
+  position: relative;
+  display: inline-block;
+  width: 40px;
+  height: 24px;
+  vertical-align: -40%;
+}
+
+.switch input {display:none;}
+
+.slider {
+  position: absolute;
+  cursor: pointer;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background-color: #ccc;
+  -webkit-transition: .4s;
+  transition: .4s;
+}
+
+.slider:before {
+  position: absolute;
+  content: "";
+  height: 16px;
+  width: 16px;
+  left: 4px;
+  bottom: 4px;
+  background-color: white;
+  -webkit-transition: .4s;
+  transition: .4s;
+}
+
+input:checked + .slider {
+  background-color: #008080;
+}
+
+input:focus + .slider {
+  box-shadow: 0 0 1px #008080;
+}
+
+input:checked + .slider:before {
+  -webkit-transform: translateX(16px);
+  -ms-transform: translateX(16px);
+  transform: translateX(16px);
+}
+
+/* Rounded sliders */
+.slider.round {
+  border-radius: 12px;
+}
+
+.slider.round:before {
+  border-radius: 50%;
 }

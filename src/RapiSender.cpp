@@ -1,3 +1,7 @@
+#if defined(ENABLE_DEBUG) && !defined(ENABLE_DEBUG_RAPI)
+#undef ENABLE_DEBUG
+#endif
+
 #include <Arduino.h>
 #include "RapiSender.h"
 #include "debug.h"
@@ -39,6 +43,7 @@ RapiSender::RapiSender(Stream * stream) {
   _stream = stream;
   *_respBuf = 0;
   _flags = 0;
+  _onRapiEvent = nullptr;
 
   _sequenceId = RAPI_INVALID_SEQUENCE_ID;
 }
@@ -55,11 +60,16 @@ RapiSender::_sendCmd(const char *cmdstr) {
   while (*s) {
     chk ^= *(s++);
   }
+
+  _sendTail(chk);
+}
+
+void RapiSender::_sendTail(uint8_t chk) {
   if (_sequenceIdEnabled()) {
     if (++_sequenceId == RAPI_INVALID_SEQUENCE_ID)
       ++_sequenceId;
     sprintf(_respBuf, " %c%02X", ESRAPI_SOS, (unsigned) _sequenceId);
-    s = _respBuf;
+    const char *s = _respBuf;
     while (*s) {
       chk ^= *(s++);
     }
@@ -74,7 +84,6 @@ RapiSender::_sendCmd(const char *cmdstr) {
 
   *_respBuf = 0;
 }
-
 
 // return = 0 = OK
 //        = 1 = bad checksum
@@ -143,7 +152,58 @@ RapiSender::_tokenize() {
 int
 RapiSender::sendCmd(const char *cmdstr, unsigned long timeout) {
   _sendCmd(cmdstr);
+  return _waitForResult(timeout);
+}
 
+/*
+ * return values:
+ * -1= timeout
+ * 0= success
+ * 1=$NK
+ * 2=invalid RAPI response
+ * 3=cmdstr too long
+*/
+int
+RapiSender::sendCmd(String &cmdstr, unsigned long timeout) {
+  _sendCmd(cmdstr.c_str());
+  return _waitForResult(timeout);
+}
+
+/*
+ * return values:
+ * -1= timeout
+ * 0= success
+ * 1=$NK
+ * 2=invalid RAPI response
+ * 3=cmdstr too long
+*/
+int
+RapiSender::sendCmd(const __FlashStringHelper *cmdstr, unsigned long timeout) {
+  _stream->print(cmdstr);
+  dbgprint(cmdstr);
+
+  PGM_P p = reinterpret_cast<PGM_P>(cmdstr);
+  uint8_t chk = 0;
+  while (1) {
+    uint8_t c = pgm_read_byte(p++);
+    if (c == 0) break;
+    chk ^= c;
+  }
+
+  _sendTail(chk);
+  return _waitForResult(timeout);
+}
+
+/*
+ * return values:
+ * -1= timeout
+ * 0= success
+ * 1=$NK
+ * 2=invalid RAPI response
+ * 3=cmdstr too long
+*/
+int
+RapiSender::_waitForResult(unsigned long timeout) {
   unsigned long mss = millis();
 start:
   _tokenCnt = 0;
@@ -175,7 +235,7 @@ start:
   } while (!_tokenCnt && ((millis() - mss) < timeout));
 
 #ifdef DBG
-  dbgprint("\n\rTOKENCNT: ");
+  dbgprint("TOKENCNT: ");
   dbgprintln(_tokenCnt);
   for (int i = 0; i < _tokenCnt; i++) {
     dbgprintln(_tokens[i]);
@@ -183,23 +243,20 @@ start:
   dbgprintln("");
 #endif
 
-  if (_tokenCnt) {
-    if (!strcmp(_respBuf + 1, "OK")) {
+  if (_tokenCnt > 0) {
+    if (!strcmp(_tokens[0], "$OK")) {
       return 0;
-    } else if (!strcmp(_respBuf + 1, "NK")) {
+    } else if (!strcmp(_tokens[0], "$NK")) {
       return 1;
-    }
-    /*notyet
-       else if (!strcmp(_respBuf,"$WF")) { // async WIFI
-       ResetEEPROM();
-       goto start;
-       }
-       else if (!strcmp(respBuf,"$ST")) { // async EVSE state transition
-       // placeholder.. no action et
-       goto start;
-       }
-     */
-    else { // not OK or NK
+    } else if (!strcmp(_tokens[0],"$WF") ||
+               !strcmp(_tokens[0],"$ST"))
+    {
+      // async EVSE state transition or WiFi event
+      if(nullptr != _onRapiEvent) {
+        _onRapiEvent();
+      }
+      goto start;
+    } else { // not OK or NK
       return 2;
     }
   } else { // !_tokenCnt
@@ -215,5 +272,13 @@ RapiSender::enableSequenceId(uint8_t tf) {
   } else {
     _sequenceId = RAPI_INVALID_SEQUENCE_ID;
     _flags &= ~RSF_SEQUENCE_ID_ENABLED;
+  }
+}
+
+void
+RapiSender::loop()
+{
+  if(_stream->available()) {
+    _waitForResult(RAPI_TIMEOUT_MS);
   }
 }

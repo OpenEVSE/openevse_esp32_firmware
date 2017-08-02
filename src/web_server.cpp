@@ -1,3 +1,7 @@
+#if defined(ENABLE_DEBUG) && !defined(ENABLE_DEBUG_WEB)
+#undef ENABLE_DEBUG
+#endif
+
 #include <Arduino.h>
 #include <ESP8266WiFi.h>
 #include <FS.h>                       // SPIFFS file-system: store web server html, CSS etc.
@@ -11,7 +15,8 @@
 #include "emoncms.h"
 #include "divert.h"
 
-AsyncWebServer server(80);          //Create class for Web server
+AsyncWebServer server(80);          // Create class for Web server
+AsyncWebSocket ws("/ws");
 
 bool enableCors = true;
 
@@ -38,6 +43,8 @@ static const char _HOME_PAGE[] PROGMEM = "/home.htm";
 static const char _WIFI_PAGE[] PROGMEM = "/wifi_portal.htm";
 #define WIFI_PAGE FPSTR(_WIFI_PAGE)
 
+static const char _DUMMY_PASSWORD[] PROGMEM = "___DUMMY_PASSWORD___";
+#define DUMMY_PASSWORD FPSTR(_DUMMY_PASSWORD)
 
 // Get running firmware version from build tag environment variable
 #define TEXTIFY(A) #A
@@ -242,6 +249,9 @@ handleSaveNetwork(AsyncWebServerRequest *request) {
 
   String qsid = request->arg("ssid");
   String qpass = request->arg("pass");
+  if(qpass.equals(DUMMY_PASSWORD)) {
+    qpass = epass;
+  }
 
   if (qsid != 0) {
     config_save_wifi(qsid, qpass);
@@ -268,10 +278,15 @@ handleSaveEmoncms(AsyncWebServerRequest *request) {
     return;
   }
 
+  String apikey = request->arg("apikey");
+  if(apikey.equals(DUMMY_PASSWORD)) {
+    apikey = emoncms_apikey;
+  }
+
   config_save_emoncms(isPositive(request->arg("enable")),
                       request->arg("server"),
                       request->arg("node"),
-                      request->arg("apikey"),
+                      apikey,
                       request->arg("fingerprint"));
 
   char tmpStr[200];
@@ -298,11 +313,16 @@ handleSaveMqtt(AsyncWebServerRequest *request) {
     return;
   }
 
+  String pass = request->arg("pass");
+  if(pass.equals(DUMMY_PASSWORD)) {
+    pass = mqtt_pass;
+  }
+
   config_save_mqtt(isPositive(request->arg("enable")),
                    request->arg("server"),
                    request->arg("topic"),
                    request->arg("user"),
-                   request->arg("pass"),
+                   pass,
                    request->arg("solar"),
                    request->arg("grid_ie"));
 
@@ -353,6 +373,9 @@ handleSaveAdmin(AsyncWebServerRequest *request) {
 
   String quser = request->arg("user");
   String qpass = request->arg("pass");
+  if(qpass.equals(DUMMY_PASSWORD)) {
+    qpass = www_password;
+  }
 
   config_save_admin(quser, qpass);
 
@@ -451,6 +474,8 @@ handleConfig(AsyncWebServerRequest *request) {
     return;
   }
 
+  String dummyPassword = String(DUMMY_PASSWORD);
+
   String s = "{";
   s += "\"firmware\":\"" + firmware + "\",";
   s += "\"protocol\":\"" + protocol + "\",";
@@ -475,21 +500,37 @@ handleConfig(AsyncWebServerRequest *request) {
   s += "\"kwhlimit\":\"" + kwh_limit + "\",";
   s += "\"timelimit\":\"" + time_limit + "\",";
   s += "\"ssid\":\"" + esid + "\",";
-  //s += "\"pass\":\""+epass+"\","; security risk: DONT RETURN PASSWORDS
+  s += "\"pass\":\"";
+  if(epass != 0) {
+    s += dummyPassword;
+  }
+  s += "\",";
   s += "\"emoncms_enabled\":" + String(config_emoncms_enabled() ? "true" : "false") + ",";
   s += "\"emoncms_server\":\"" + emoncms_server + "\",";
   s += "\"emoncms_node\":\"" + emoncms_node + "\",";
-  // s += "\"emoncms_apikey\":\""+emoncms_apikey+"\","; security risk: DONT RETURN APIKEY
+  s += "\"emoncms_apikey\":\"";
+  if(emoncms_apikey != 0) {
+    s += dummyPassword;
+  }
+  s += "\",";
   s += "\"emoncms_fingerprint\":\"" + emoncms_fingerprint + "\",";
   s += "\"mqtt_enabled\":" + String(config_mqtt_enabled() ? "true" : "false") + ",";
   s += "\"mqtt_server\":\"" + mqtt_server + "\",";
   s += "\"mqtt_topic\":\"" + mqtt_topic + "\",";
   s += "\"mqtt_user\":\"" + mqtt_user + "\",";
-  //s += "\"mqtt_pass\":\""+mqtt_pass+"\","; security risk: DONT RETURN PASSWORDS
+  s += "\"mqtt_pass\":\"";
+  if(mqtt_pass != 0) {
+    s += dummyPassword;
+  }
+  s += "\",";
   s += "\"mqtt_solar\":\""+mqtt_solar+"\",";
   s += "\"mqtt_grid_ie\":\""+mqtt_grid_ie+"\",";
   s += "\"www_username\":\"" + www_username + "\",";
-  //s += "\"www_password\":\""+www_password+"\","; security risk: DONT RETURN PASSWORDS
+  s += "\"www_password\":\"";
+  if(www_password != 0) {
+    s += dummyPassword;
+  }
+  s += "\",";
   s += "\"ohm_enabled\":" + String(config_ohm_enabled() ? "true" : "false") + ",";
   s += "\"divertmode\":\""+String(divertmode)+"\"";
   s += "}";
@@ -525,7 +566,10 @@ handleUpdate(AsyncWebServerRequest *request) {
   s += "\"temp1\":\"" + temp1 + "\",";
   s += "\"temp2\":\"" + temp2 + "\",";
   s += "\"temp3\":\"" + temp3 + "\",";
+  s += "\"state\":" + String(state) + ",";
+#ifdef ENABLE_LEGACY_API
   s += "\"estate\":\"" + estate + "\",";
+#endif
   s += "\"wattsec\":\"" + wattsec + "\",";
   s += "\"watthour\":\"" + watthour_total + "\"";
   s += "}";
@@ -707,6 +751,30 @@ void handleNotFound(AsyncWebServerRequest *request)
   }
 }
 
+void onWsEvent(AsyncWebSocket * server, AsyncWebSocketClient *client, AwsEventType type, void *arg, uint8_t *data, size_t len) {
+  if(type == WS_EVT_CONNECT) {
+    DBUGF("ws[%s][%u] connect", server->url(), client->id());
+    client->ping();
+  } else if(type == WS_EVT_DISCONNECT) {
+    DBUGF("ws[%s][%u] disconnect: %u", server->url(), client->id());
+  } else if(type == WS_EVT_ERROR) {
+    DBUGF("ws[%s][%u] error(%u): %s", server->url(), client->id(), *((uint16_t*)arg), (char*)data);
+  } else if(type == WS_EVT_PONG) {
+    DBUGF("ws[%s][%u] pong[%u]: %s", server->url(), client->id(), len, (len)?(char*)data:"");
+  } else if(type == WS_EVT_DATA) {
+    AwsFrameInfo * info = (AwsFrameInfo*)arg;
+    String msg = "";
+    if(info->final && info->index == 0 && info->len == len)
+    {
+      //the whole message is in a single frame and we got all of it's data
+      DBUGF("ws[%s][%u] %s-message[%llu]: ", server->url(), client->id(), (info->opcode == WS_TEXT)?"text":"binary", info->len);
+      DBUGF("%.*s\n", len, (char *)data);
+    } else {
+      // TODO: handle messages that are comprised of multiple frames or the frame is split into multiple packets
+    }
+  }
+}
+
 void
 web_server_setup() {
   SPIFFS.begin(); // mount the fs
@@ -714,6 +782,10 @@ web_server_setup() {
   // Setup the static files
   server.serveStatic("/", SPIFFS, "/")
     .setDefaultFile("index.html");
+
+  // Add the Web Socket server
+  ws.onEvent(onWsEvent);
+  server.addHandler(&ws);
 
   // Start server & server root html /
   server.on("/", handleHome);
@@ -789,4 +861,9 @@ web_server_loop() {
   }
 
   Profile_End(web_server_loop, 5);
+}
+
+void web_server_event(String &event)
+{
+  ws.textAll(event);
 }

@@ -34,7 +34,7 @@ uint32_t flags;
 
 #define EEPROM_ESID_SIZE              32
 #define EEPROM_EPASS_SIZE             64
-#define EEPROM_EMON_API_KEY_SIZE      32
+#define EEPROM_EMON_API_KEY_SIZE      33
 #define EEPROM_EMON_SERVER_SIZE       45
 #define EEPROM_EMON_NODE_SIZE         32
 #define EEPROM_MQTT_SERVER_SIZE       45
@@ -54,9 +54,7 @@ uint32_t flags;
 #define EEPROM_ESID_END               (EEPROM_ESID_START + EEPROM_ESID_SIZE)
 #define EEPROM_EPASS_START            EEPROM_ESID_END
 #define EEPROM_EPASS_END              (EEPROM_EPASS_START + EEPROM_EPASS_SIZE)
-#define EEPROM_EMON_API_KEY_START     EEPROM_EPASS_END
-#define EEPROM_EMON_API_KEY_END       (EEPROM_EMON_API_KEY_START + EEPROM_EMON_API_KEY_SIZE)
-#define EEPROM_EMON_SERVER_START      EEPROM_EMON_API_KEY_END
+#define EEPROM_EMON_SERVER_START      EEPROM_EPASS_END + 32 /* EEPROM_EMON_API_KEY used to be stored before this */
 #define EEPROM_EMON_SERVER_END        (EEPROM_EMON_SERVER_START + EEPROM_EMON_SERVER_SIZE)
 #define EEPROM_EMON_NODE_START        EEPROM_EMON_SERVER_END
 #define EEPROM_EMON_NODE_END          (EEPROM_EMON_NODE_START + EEPROM_EMON_NODE_SIZE)
@@ -82,8 +80,11 @@ uint32_t flags;
 #define EEPROM_OHM_KEY_END            (EEPROM_OHM_KEY_START + EEPROM_OHM_KEY_SIZE)
 #define EEPROM_FLAGS_START            EEPROM_OHM_KEY_END
 #define EEPROM_FLAGS_END              (EEPROM_FLAGS_START + EEPROM_FLAGS_SIZE)
+#define EEPROM_EMON_API_KEY_START     EEPROM_FLAGS_END
+#define EEPROM_EMON_API_KEY_END       (EEPROM_EMON_API_KEY_START + EEPROM_EMON_API_KEY_SIZE)
+#define EEPROM_CONFIG_END             EEPROM_EMON_API_KEY_END
 
-#if EEPROM_OHM_KEY_END > EEPROM_SIZE
+#if EEPROM_CONFIG_END > EEPROM_SIZE
 #error EEPROM_SIZE too small
 #endif
 
@@ -153,7 +154,7 @@ EEPROM_read_uint24(int start, uint32_t & val, uint32_t defaultVal = 0) {
 
   // Check the checksum
   byte c = EEPROM.read(start + 3);
-  DBUGF("Got '%06x'  %d == %d", val, c, checksum);
+  DBUGF("Got '%06x'  %d == %d @ %d:4", val, c, checksum, start);
   if(c != checksum) {
     DBUGF("Using default '%06x'", defaultVal);
     val = defaultVal;
@@ -161,15 +162,17 @@ EEPROM_read_uint24(int start, uint32_t & val, uint32_t defaultVal = 0) {
 }
 
 void
-EEPROM_write_uint24(int start, uint32_t val) {
+EEPROM_write_uint24(int start, uint32_t value) {
   byte checksum = CHECKSUM_SEED;
-  for (int i = 0; i < 3; ++i) {
+  uint32_t val = value;
+  for (int i = 2; i >= 0; --i) {
     byte c = val & 0xff;
     val = val >> 8;
     checksum ^= c;
     EEPROM.write(start + i, c);
   }
   EEPROM.write(start + 3, checksum);
+  DBUGF("Saved '%06x' %d @ %d:4", value, checksum, start);
 }
 
 // -------------------------------------------------------------------
@@ -210,9 +213,9 @@ config_load_settings() {
 
   // Web server credentials
   EEPROM_read_string(EEPROM_WWW_USER_START, EEPROM_WWW_USER_SIZE,
-                     www_username, "admin");
+                     www_username, "");
   EEPROM_read_string(EEPROM_WWW_PASS_START, EEPROM_WWW_PASS_SIZE,
-                     www_password, "openevse");
+                     www_password, "");
 
   // Ohm Connect Settings
   EEPROM_read_string(EEPROM_OHM_KEY_START, EEPROM_OHM_KEY_SIZE, ohm);

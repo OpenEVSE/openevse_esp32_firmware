@@ -11,4 +11,6 @@ extern String currentfirmware;
 extern void web_server_setup();
 extern void web_server_loop();
 
+extern void web_server_event(String &event);
+
 #endif // _EMONESP_WEB_SERVER_H
