@@ -253,7 +253,7 @@
               <b>Mode:</b>
               <button data-bind="click: changeDivertMode.bind($data, 1), disabled: 0 === divertmode(), style: { color: (1 === divertmode() ? '#000000' : '#ffffff'), backgroundColor: (1 === divertmode() ? '#f1f1f1' : '#008080') }">1: Normal (max)</button>
               <button data-bind="click: changeDivertMode.bind($data, 2), disabled: 0 === divertmode(), style: { color: (2 === divertmode() ? '#000000' : '#ffffff'), backgroundColor: (2 === divertmode() ? '#f1f1f1' : '#008080') }">2: Eco</button><br>
-              <span class="small-text"><i>Mode can also be controlled via MQTT: {base-topic}/divertmode</i></span><br>
+              <span class="small-text"><i>Mode can also be controlled via MQTT: {base-topic}/divertmode/set</i></span><br>
               <b><span data-bind="visible: 0 === divertmode()">Error: MQTT config not configured with Solar PV / Grid topic.</span></b><br><br>
             </p>
             <p>
