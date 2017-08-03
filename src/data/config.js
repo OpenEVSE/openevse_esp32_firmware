@@ -9,7 +9,7 @@
 var baseHost = window.location.hostname;
 //var baseHost = "openevse.local";
 //var baseHost = "192.168.4.1";
-//var baseHost = "172.16.0.60";
+//var baseHost = "172.16.0.61";
 
 function BaseViewModel(defaults, remoteUrl, mappings = {}) {
   var self = this;
@@ -495,6 +495,11 @@ function OpenEvseViewModel(baseEndpoint, rapiViewModel) {
   self.updatingVentRequiredEnabled = ko.observable(false);
   self.savedVentRequiredEnabled = ko.observable(false);
 
+  self.setForTime = function (flag, time) {
+    flag(true);
+    setTimeout(function () { flag(false); }, time);
+  };
+
   var subscribed = false;
   self.subscribe = function ()
   {
@@ -505,10 +510,8 @@ function OpenEvseViewModel(baseEndpoint, rapiViewModel) {
     // Updates to the service level
     self.serviceLevel.subscribe(function (val) {
       self.updatingServiceLevel(true);
-      self.savedServiceLevel(false);
       self.openevse.service_level(function (level, actual) {
-        self.savedServiceLevel(true);
-        setTimeout(function () { self.savedServiceLevel(false); }, 2000);
+        self.setForTime(self.savedServiceLevel, 2000);
         self.actualServiceLevel(actual);
         self.updateCurrentCapacity().always(function () {
         });
@@ -523,10 +526,8 @@ function OpenEvseViewModel(baseEndpoint, rapiViewModel) {
         return;
       }
       self.updatingCurrentCapacity(true);
-      self.savedCurrentCapacity(false);
       self.openevse.current_capacity(function (capacity) {
-        self.savedCurrentCapacity(true);
-        setTimeout(function () { self.savedCurrentCapacity(false); }, 2000);
+        self.setForTime(self.savedCurrentCapacity, 2000);
         if(val !== capacity) {
           self.currentCapacity(capacity);
         }
@@ -538,10 +539,8 @@ function OpenEvseViewModel(baseEndpoint, rapiViewModel) {
     // Updates to the time limit
     self.timeLimit.subscribe(function (val) {
       self.updatingTimeLimit(true);
-      self.savedTimeLimit(false);
       self.openevse.time_limit(function (limit) {
-        self.savedTimeLimit(true);
-        setTimeout(function () { self.savedTimeLimit(false); }, 2000);
+        self.setForTime(self.savedTimeLimit, 2000);
         if(val !== limit) {
           self.selectTimeLimit(limit);
         }
@@ -553,10 +552,8 @@ function OpenEvseViewModel(baseEndpoint, rapiViewModel) {
     // Updates to the charge limit
     self.chargeLimit.subscribe(function (val) {
       self.updatingChargeLimit(true);
-      self.savedChargeLimit(false);
       self.openevse.charge_limit(function (limit) {
-        self.savedChargeLimit(true);
-        setTimeout(function () { self.savedChargeLimit(false); }, 2000);
+        self.setForTime(self.savedChargeLimit, 2000);
         if(val !== limit) {
           self.chargeLimit(limit);
         }
@@ -568,10 +565,8 @@ function OpenEvseViewModel(baseEndpoint, rapiViewModel) {
     // Updates to the GFI self test
     self.gfiSelfTestEnabled.subscribe(function (val) {
       self.updatingGfiSelfTestEnabled(true);
-      self.savedGfiSelfTestEnabled(false);
       self.openevse.gfi_self_test(function (enabled) {
-        self.savedGfiSelfTestEnabled(true);
-        setTimeout(function () { self.savedGfiSelfTestEnabled(false); }, 2000);
+        self.setForTime(self.savedGfiSelfTestEnabled, 2000);
         if(val !== enabled) {
           self.gfiSelfTestEnabled(enabled);
         }
@@ -583,10 +578,8 @@ function OpenEvseViewModel(baseEndpoint, rapiViewModel) {
     // Updates to the ground check
     self.groundCheckEnabled.subscribe(function (val) {
       self.updatingGroundCheckEnabled(true);
-      self.savedGroundCheckEnabled(false);
       self.openevse.ground_check(function (enabled) {
-        self.savedGroundCheckEnabled(true);
-        setTimeout(function () { self.savedGroundCheckEnabled(false); }, 2000);
+        self.setForTime(self.savedGroundCheckEnabled, 2000);
         if(val !== enabled) {
           self.groundCheckEnabled(enabled);
         }
@@ -613,10 +606,8 @@ function OpenEvseViewModel(baseEndpoint, rapiViewModel) {
     // Updates to the temp check
     self.tempCheckEnabled.subscribe(function (val) {
       self.updatingTempCheckEnabled(true);
-      self.savedTempCheckEnabled(false);
       self.openevse.temp_check(function (enabled) {
-        self.savedTempCheckEnabled(true);
-        setTimeout(function () { self.savedTempCheckEnabled(false); }, 2000);
+        self.setForTime(self.savedTempCheckEnabled, 2000);
         if(val !== enabled) {
           self.tempCheckEnabled(enabled);
         }
@@ -628,10 +619,8 @@ function OpenEvseViewModel(baseEndpoint, rapiViewModel) {
     // Updates to the diode check
     self.diodeCheckEnabled.subscribe(function (val) {
       self.updatingDiodeCheckEnabled(true);
-      self.savedDiodeCheckEnabled(false);
       self.openevse.diode_check(function (enabled) {
-        self.savedDiodeCheckEnabled(true);
-        setTimeout(function () { self.savedDiodeCheckEnabled(false); }, 2000);
+        self.setForTime(self.savedDiodeCheckEnabled, 2000);
         if(val !== enabled) {
           self.diodeCheckEnabled(enabled);
         }
@@ -643,10 +632,8 @@ function OpenEvseViewModel(baseEndpoint, rapiViewModel) {
     // Updates to the vent required
     self.ventRequiredEnabled.subscribe(function (val) {
       self.updatingVentRequiredEnabled(true);
-      self.savedVentRequiredEnabled(false);
       self.openevse.vent_required(function (enabled) {
-        self.savedVentRequiredEnabled(true);
-        setTimeout(function () { self.savedVentRequiredEnabled(false); }, 2000);
+        self.setForTime(self.savedVentRequiredEnabled, 2000);
         if(val !== enabled) {
           self.ventRequiredEnabled(enabled);
         }
@@ -749,6 +736,14 @@ function OpenEvseWiFiViewModel() {
     }
   });
 
+  // Info text display state
+  self.showMqttInfo = ko.observable(false);
+  self.showSolarDivert = ko.observable(false);
+
+  self.toggle = function (flag) {
+    flag(!flag());
+  };
+
   // Developer mode
   self.developerMode = ko.observable(false);
 
@@ -771,7 +766,6 @@ function OpenEvseWiFiViewModel() {
   self.isServices = ko.pureComputed(function() { return "services" === self.tab(); });
   self.isStatus = ko.pureComputed(function() { return "status" === self.tab(); });
   self.isRapi = ko.pureComputed(function() { return "rapi" === self.tab(); });
-  self.isMode = ko.pureComputed(function() { return "mode" === self.tab(); });
 
   // Upgrade URL
   self.upgradeUrl = ko.observable("about:blank");
