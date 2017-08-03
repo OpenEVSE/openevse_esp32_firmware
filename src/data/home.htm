@@ -312,14 +312,14 @@
             </p>
 
             <p data-bind="with: openevse">
-              <b>Charge limit:</b><br>
+              <b>Energy limit:</b><br>
               <input type="text" data-bind="value: chargeLimit,
                                             enable: !updatingChargeLimit() &amp;&amp; isConnected(),
                                             css: { saved: savedChargeLimit }" /> kWh
             </p>
 
             <div data-bind="with: openevse">
-              <b>Delay Timer:</b><br>
+              <b>Timer:</b><br>
                 Start: <input type="time" data-bind="value: delayTimerStart, disable: isError" />
                 &nbsp;&nbsp;
                 Stop: <input type="time" data-bind="value: delayTimerStop, disable: isError" /><br/>
@@ -367,7 +367,7 @@
                 <td><span data-bind="text: rapi.pilot() + ' A'"></span></td>
               </tr>
               <tr>
-                <td>Amps:</td>
+                <td>Current Now:</td>
                 <td><span data-bind="text: scaleString(rapi.amp(), 1000, 2) + ' A'"></span></td>
               </tr>
               <tr>
@@ -442,7 +442,7 @@
             </p>
 
             <p>
-              <b>Current capacity:</b><br/>
+              <b>Max Current:</b><br/>
               <select data-bind="options: currentLevels,
                                   optionsText: 'name',
                                   optionsValue: 'value',
