@@ -150,7 +150,7 @@
               <input type="text" autocapitalize="none" data-bind="textInput: config.emoncms_server"><br/>
               <span class="small-text">e.g:
                 <a href="http://data.openevse.com/emoncms">data.openevse.com/emoncms</a>,
-                <a href="http://emoncms.org">emoncms.org</a>,
+                <a href="https://emoncms.org">emoncms.org</a>,
                 <a href="http://emonpi/emoncms">emonpi/emoncms</a>
               </span><br>
             </p>
@@ -249,14 +249,6 @@
               <input data-bind="textInput: config.mqtt_grid_ie, enable: '' === config.mqtt_solar()" type="text" autocapitalize="none" hint="emon/emonpi/power1"><br>
               <span class="small-text">Grid (+I/-E) MQTT topic to modulate charge rate based on <b>excess power</b></span>
             </p>
-            <p data-bind="visible: config.mqtt_enabled">
-              <b>Mode:</b>
-              <button data-bind="click: changeDivertMode.bind($data, 1), disabled: 0 === divertmode(), style: { color: (1 === divertmode() ? '#000000' : '#ffffff'), backgroundColor: (1 === divertmode() ? '#f1f1f1' : '#008080') }">1: Normal (max)</button>
-              <button data-bind="click: changeDivertMode.bind($data, 2), disabled: 0 === divertmode(), style: { color: (2 === divertmode() ? '#000000' : '#ffffff'), backgroundColor: (2 === divertmode() ? '#f1f1f1' : '#008080') }">2: Eco</button><br>
-              <span class="small-text"><i>Mode can also be controlled via MQTT: {base-topic}/divertmode/set</i></span><br>
-              <b><span data-bind="visible: 0 === divertmode()">Error: MQTT config not configured with Solar PV / Grid topic.</span></b><br><br>
-            </p>
-            <p>
               <button data-bind="click: saveMqtt, text: (saveMqttFetching() ? 'Saving' : (saveMqttSuccess() ? 'Saved' : 'Save')), disable: saveMqttFetching">Save</button>
               <span data-bind="visible: config.mqtt_enabled"><b>&nbsp; Connected:&nbsp;<span data-bind="text: '1' === status.mqtt_connected() ? 'Yes' : 'No'"></span></b></span>
             </p>
@@ -391,6 +383,33 @@
                 <td><span data-bind="text: scaleString(rapi.temp3(), 10, 1) + ' &deg;C'"></span></td>
               </tr>
             </table>
+          </div>
+
+          <!-- Divert Mode -->
+          <div class="box380 right">
+            <h2 data-bind="visible: config.mqtt_enabled">Charge Mode<span class="info" data-bind="click: toggle.bind($data, showSolarDivert)"></span></h2>
+
+            <div class="box" data-bind="visible: showSolarDivert() &amp;&amp; config.mqtt_enabled()">
+              <div>Dynamically adjust charge rate based on solar PV generation or excess power (grid export).</div>
+              <p>
+                <b>1. Normal (default):</b>
+                <ul>
+                  <li><span class="small-text">Charge at maximum current set by EVSE.</span></li>
+                </ul>
+                <b>2. Eco (soalr PV divert):</b>
+                <ul>
+                  <li><span class="small-text">If only solar PV feed available: charge rate is modulated based on <b>solar PV generation.</b></span></li>
+                  <li><span class="small-text">If grid +I/-E (positive Import / negative Export) feed is avilable: charge rate will be modulated by available  <b>excess power.</b></span></li>
+                  <li><span class="small-text">If EVSE is sleeping: charging will begin when solar PV / excess power > min charge rate.</span></li>
+                  <li><span class="small-text">Charging will not pause; this avoids excess wear on the EVSE relay and the EV.</span></li>
+                </ul>
+                <span class="small-text"><i>Note: It's assumed that EVSE power is included in the gird feed</i></span><br><br>
+                <span class="small-text"><i>Charging mode can also be set via MQTT:<br>{base-topic}/divertmode/set</i></span>
+              </p>
+            </div>
+            <button data-bind="click: changeDivertMode.bind($data, 1), disabled: 0 === divertmode(), style: { color: (1 === divertmode() ? '#000000' : '#ffffff'), backgroundColor: (1 === divertmode() ? '#f1f1f1' : '#008080') }">1: Normal (max)</button>
+            <button data-bind="click: changeDivertMode.bind($data, 2), disabled: 0 === divertmode(), style: { color: (2 === divertmode() ? '#000000' : '#ffffff'), backgroundColor: (2 === divertmode() ? '#f1f1f1' : '#008080') }">2: Eco (PV divert)</button><br>
+            <b><span data-bind="visible: 0 === divertmode()">Error: MQTT config not configured with Solar PV / Grid topic.</span></b><br><br>
           </div>
 
           <!-- Settings -->
