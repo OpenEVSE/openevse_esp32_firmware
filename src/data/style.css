@@ -42,7 +42,7 @@ tr:nth-child(2n+2) {
   padding:20px;
 }
 
-h1 {
+.header h1 {
   padding-bottom: 0.3em;
   color: #008080;
   font-size: 45px;
@@ -52,7 +52,7 @@ h1 {
   margin: 0;
 }
 
-h1 span {
+.header h1 span {
   font-weight: bold;
   font-family: Garmond,"sans-serif";
   color: #000000;
@@ -63,7 +63,7 @@ h2 {
   border-bottom: 1px solid #eee;
 }
 
-h3 {
+.header h3 {
   padding-top: -5px;
   padding-left: 50px;
   font-weight: bold;
@@ -370,4 +370,24 @@ input:checked + .slider:before {
 
 .slider.round:before {
   border-radius: 50%;
+}
+
+.info {
+  background-color: #008080;
+  border-radius: 100%;
+  color: #ffffff;
+  display: inline-block;
+  font-family: serif;
+  font-size: 12px;
+  font-style: italic;
+  height: 16px;
+  margin-left: 16px;
+  text-align: center;
+  width: 16px;
+  vertical-align: 20%;
+}
+
+.info::before
+{
+  content: "i";
 }
