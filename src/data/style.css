@@ -156,7 +156,7 @@ button:disabled {
 button.on {
   background-color: #f1f1f1;
   color: #000000;
-};
+}
 
 input[type="text"],
 input[type="password"],
