@@ -6,6 +6,8 @@
 #include "emonesp.h"
 #include "input.h"
 #include "config.h"
+#include "RapiSender.h"
+#include "mqtt.h"
 
 // 1: Normal / Fast Charge (default):
 // Charging at maximum rate irrespective of solar PV / grid_ie output
@@ -19,88 +21,157 @@
 // If EVSE is sleeping charging will not start until solar PV / excess power > min chanrge rate
 // Once charging begins it will not pause even if solaer PV / excess power drops less then minimm charge rate. This avoids wear on the relay and the car
 
+#define SERVICE_LEVEL1_VOLTAGE  110
+#define SERVICE_LEVEL2_VOLTAGE  240
 
+#define DIVERT_MODE_NORMAL      1
+#define DIVERT_MODE_ECO         2
+
+#define OPENEVSE_STATE_SLEEPING 254
+
+#define GRID_IE_RESERVE_POWER   100.0
 
 // Default to normal charging unless set. Divert mode always defaults back to 1 if unit is reset (divertmode not saved in EEPROM)
-byte divertmode = 1;     //default normal mode
+byte divertmode = DIVERT_MODE_NORMAL;     // default normal mode
 int solar = 0;
 int grid_ie = 0;
-byte min_charge_current = 6;      //TO DO: set to be min charge current as set on the OpenEVSE e.g. "$GC min-current max-current"
-byte max_charge_current = 32;     //TO DO: to be set to be max charge current as set on the OpenEVSE e.g. "$GC min-current max-current"
+byte min_charge_current = 6;      // TO DO: set to be min charge current as set on the OpenEVSE e.g. "$GC min-current max-current"
+byte max_charge_current = 32;     // TO DO: to be set to be max charge current as set on the OpenEVSE e.g. "$GC min-current max-current"
 int charge_rate = 0;
+
+extern RapiSender rapiSender;
 
 // Update divert mode e.g. Normal / Eco
 // function called when divert mode is changed
-void divertmode_update(byte newmode){
+void divertmode_update(byte newmode)
+{
   DBUGF("Set divertmode: %d", newmode);
-  divertmode = newmode;
+  if(divertmode != newmode)
+  {
+    divertmode = newmode;
 
-  // restore max charge current if normal mode or zero if eco mode
-  if (divertmode == 1) charge_rate = max_charge_current;
-  if (divertmode == 2) charge_rate = 0;
+    // restore max charge current if normal mode or zero if eco mode
+    switch(divertmode)
+    {
+      case DIVERT_MODE_NORMAL:
+        // Restore the max charge current
+        rapiSender.sendCmd(String(F("$SC ")) + String(max_charge_current));
+        break;
+
+      case DIVERT_MODE_ECO:
+        charge_rate = 0;
+        // Read the current charge current, assume this is the max set by the user
+        if(0 == rapiSender.sendCmd(F("$GE"))) {
+          max_charge_current = String(rapiSender.getToken(1)).toInt();
+        }
+        break;
+
+      default:
+        return;
+    }
+
+    if (config_mqtt_enabled()) {
+      String event = F("divertmode:");
+      event += String(divertmode);
+      mqtt_publish(event);
+    }
+  }
 }
 
 // Set charge rate depending on divert mode and solar / grid_ie
-void divert_current_loop(){
-  Profile_Start(mqtt_loop);
+void divert_current_loop()
+{
+  Profile_Start(divert_current_loop);
+
+  DBUGVAR(divertmode);
 
   // If divert mode = Eco (2)
-  if (divertmode == 2){
+  if (divertmode == DIVERT_MODE_ECO)
+  {
+    int current_charge_rate;
 
-    int Isolar = 0;
-    int Igrid_ie = 0;
+    // Read the current charge rate
+    if(0 == rapiSender.sendCmd(F("$GE"))) {
+      current_charge_rate = String(rapiSender.getToken(1)).toInt();
+      DBUGVAR(current_charge_rate);
+    }
 
+    // IMPROVE: Read from OpenEVSE or emonTX (MQTT)
+    int voltage = 1 == service ? SERVICE_LEVEL1_VOLTAGE : SERVICE_LEVEL2_VOLTAGE;
 
-    // L1: voltage is 110V
-    if (service == 1){
-      // Calculate current
-      if (mqtt_solar!="") Isolar = solar / 110;
-      if (mqtt_grid_ie!="") Igrid_ie = grid_ie / 110;
-
-      // if grid feed is available and exporting: charge rate = export - EVSE current
+    // Calculate current
+    if (mqtt_grid_ie != "")
+    {
+      // if grid feed is available and exporting increment the charge rate,
+      // if importing drop the charge rate.
       // grid_ie is negative when exporting
       // If grid feeds is available and exporting (negative)
-      if ( (mqtt_grid_ie!="") || (Igrid_ie < 0) ) {
+
+      double Igrid_ie = (double)grid_ie / (double)voltage;
+      DBUGVAR(Igrid_ie);
+
+      // Subtract the current charge the EV is using from the Grid IE
+      if(0 == rapiSender.sendCmd(F("$GG"))) {
+        int milliAmps = String(rapiSender.getToken(1)).toInt();
+        double amps = (double)milliAmps / 1000.0;
+        DBUGVAR(amps);
+        Igrid_ie -= amps;
+        DBUGVAR(Igrid_ie);
+      }
+
+      if (Igrid_ie < 0)
+      {
         // If excess power
-        if ( (Igrid_ie + current_l1) < 0){
-          charge_rate = (Igrid_ie + current_l1)*-1;
+        double reserve = GRID_IE_RESERVE_POWER / (double)voltage;
+        DBUGVAR(reserve);
+        charge_rate = (int)floor(-Igrid_ie - reserve);
+      }
+      else
+      {
+        // no excess, so use the min charge
+        charge_rate = 0;
+      }
+    }
+    else if (mqtt_solar!="")
+    {
+      // if grid feed is not available: charge rate = solar generation
+
+      double Isolar = (double)solar / (double)voltage;
+      DBUGVAR(Isolar);
+      charge_rate = (int)floor(Isolar);
+    }
+
+    if(OPENEVSE_STATE_SLEEPING != state) {
+      // If we are not sleeping, make sure we are the minimum current
+      charge_rate = max(charge_rate, min_charge_current);
+    }
+
+    DBUGVAR(charge_rate);
+
+    if(charge_rate >= min_charge_current)
+    {
+      // Cap the charge rate at the configured maximum
+      charge_rate = min(charge_rate, max_charge_current);
+
+      // Change the charge rate is needed
+      if(current_charge_rate != charge_rate)
+      {
+        // Set charge rate via RAPI
+        if(0 == rapiSender.sendCmd(String(F("$SC ")) + String(charge_rate))) {
+          DBUGF("Charge rate set to %d", charge_rate);
+          pilot = charge_rate;
         }
       }
-    } //end L1 service
 
-
-    // L2: voltage is 240V
-    if (service == 2) {
-      // Calculate current
-      if (mqtt_solar!="") Isolar = solar / 240;
-      if (mqtt_grid_ie!="") Igrid_ie = grid_ie / 240;
-
-      // if grid feed is available and exporting: charge rate = export - EVSE current
-      // grid_ie is negative when exporting
-      // If grid feeds is available and exporting (negative)
-      if ( (mqtt_grid_ie!="") || (Igrid_ie < 0) ) {
-        // If excess power
-        if ( (Igrid_ie + current_l2) < 0){
-          charge_rate = (Igrid_ie + current_l2)*-1;
+      // If charge rate > min current and EVSE is sleeping then start charging
+      if (state == OPENEVSE_STATE_SLEEPING){
+        DBUGLN(F("Wake up EVSE"));
+        if(0 == rapiSender.sendCmd(F("$FE"))) {
+          DBUGLN(F("Starting charge"));
         }
       }
-    } //end L2 service
-
-    // if grid feed is not available: charge rate = solar generation
-    if ((mqtt_solar!="") && (mqtt_grid_ie="")) charge_rate = Isolar;
-
-    // Set charge rate via RAPI
-    Serial.print("$SC");
-    Serial.println(charge_rate);
-    delay(60);
-    DEBUG.print("Set charge rate: "); DEBUG.println(charge_rate);
-
-    // If charge rate > min current and EVSE is sleeping then start charging
-    if ( (charge_rate > min_charge_current) && ((state == 254) || (state == 596)) ){
-      DEBUG.print("Wake up EVSE");
-      Serial.print("$FE");
     }
   } // end ecomode
 
-  Profile_End(mqtt_loop, 5);
+  Profile_End(divert_current_loop, 5);
 } //end divert_current_loop
