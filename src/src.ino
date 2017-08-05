@@ -95,6 +95,12 @@ setup() {
       event += state;
       event += F("}");
       web_server_event(event);
+
+      if (config_mqtt_enabled()) {
+        event = F("state:");
+        event += String(state);
+        mqtt_publish(event);
+      }
     } else if(!strcmp(rapiSender.getToken(0), "$WF")) {
       String qrapi = rapiSender.getToken(1);
       DBUGVAR(qrapi);
