@@ -133,27 +133,20 @@ function ConfigViewModel(baseEndpoint) {
     "www_password": "",
     "firmware": "-",
     "protocol": "-",
-    "espflash": "",
-    "diodet": "",
-    "gfcit": "",
-    "groundt": "",
-    "relayt": "",
-    "ventt": "",
-    "tempt": "",
-    "service": "",
-    "l1min": "-",
-    "l1max": "-",
-    "l2min": "-",
-    "l2max": "-",
-    "scale": "-",
-    "offset": "-",
-    "gfcicount": "-",
-    "nogndcount": "-",
-    "stuckcount": "-",
-    "kwhlimit": "",
-    "timelimit": "",
+    "espflash": 0,
+    "diodet": 0,
+    "gfcit": 0,
+    "groundt": 0,
+    "relayt": 0,
+    "ventt": 0,
+    "tempt": 0,
+    "scale": 1,
+    "offset": 0,
+    "gfcicount": 0,
+    "nogndcount": 0,
+    "stuckcount": 0,
     "version": "0.0.0",
-    "divertmode": "0"
+    "divertmode": 0
   }, endpoint);
 }
 ConfigViewModel.prototype = Object.create(BaseViewModel.prototype);
@@ -166,16 +159,16 @@ function RapiViewModel(baseEndpoint) {
   var endpoint = ko.pureComputed(function () { return baseEndpoint() + "/rapiupdate"; });
 
   BaseViewModel.call(this, {
-    "comm_sent": "0",
-    "comm_success": "0",
-    "amp": "0",
-    "pilot": "0",
-    "temp1": "0",
-    "temp2": "0",
-    "temp3": "0",
-    "state": -1,
-    "wattsec": "0",
-    "watthour": "0"
+    "comm_sent": 0,
+    "comm_success": 0,
+    "amp": 0,
+    "pilot": 0,
+    "temp1": 0,
+    "temp2": 0,
+    "temp3": 0,
+    "state": 0,
+    "wattsec": 0,
+    "watthour": 0
   }, endpoint);
 
   this.rapiSend = ko.observable(false);
@@ -185,6 +178,9 @@ function RapiViewModel(baseEndpoint) {
   this.estate = ko.pureComputed(function () {
     var estate;
     switch (self.state()) {
+      case 0:
+        estate = "Starting";
+        break;
       case 1:
         estate = "Not Connected";
         break;
@@ -1021,7 +1017,7 @@ function OpenEvseWiFiViewModel() {
   self.changeDivertModeFetching = ko.observable(false);
   self.changeDivertModeSuccess = ko.observable(false);
   self.changeDivertMode = function(divertmode) {
-    if(0 !== divertmode) {
+    if(self.config.divertmode() !== divertmode) {
       self.config.divertmode(divertmode);
       self.changeDivertModeFetching(true);
       self.changeDivertModeSuccess(false);
@@ -1034,6 +1030,22 @@ function OpenEvseWiFiViewModel() {
       });
     }
   };
+
+  self.isEcoModeAvailable = ko.pureComputed(function () {
+    return self.config.mqtt_enabled() &&
+           ("" !== self.config.mqtt_solar() ||
+            "" !== self.config.mqtt_grid_ie());
+  });
+
+  self.ecoMode = ko.pureComputed({
+    read: function () {
+      return 2 === self.config.divertmode();
+    },
+    write: function(val) {
+      self.changeDivertMode(val ? 2 : 1);
+    }
+  });
+
 
   // -----------------------------------------------------------------------
   // Event: Reset config and reboot
@@ -1073,18 +1085,6 @@ function OpenEvseWiFiViewModel() {
       });
     }
   };
-
-  self.divertmode = ko.pureComputed(function () {
-    if(!self.config.mqtt_enabled() ||
-       ("" === self.config.mqtt_solar() &&
-        "" === self.config.mqtt_grid_ie()))
-    {
-      return 0;
-    } else {
-      return self.config.divertmode();
-    }
-  });
-
 
   // -----------------------------------------------------------------------
   // Receive events from the server

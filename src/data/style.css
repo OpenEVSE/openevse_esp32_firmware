@@ -396,3 +396,8 @@ input:checked + .slider:before {
 {
   content: "i";
 }
+
+span.selected
+{
+  color: #008080;
+}
