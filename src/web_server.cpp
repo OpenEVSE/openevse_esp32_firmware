@@ -425,22 +425,22 @@ handleStatus(AsyncWebServerRequest *request) {
   } else if (wifi_mode == WIFI_MODE_AP_AND_STA) {
     s += "\"mode\":\"STA+AP\",";
   }
-  s += "\"networks\":[" + st + "],";
-  s += "\"rssi\":[" + rssi + "],";
 
-  s += "\"srssi\":\"" + String(WiFi.RSSI()) + "\",";
+  s += "\"srssi\":" + String(WiFi.RSSI()) + ",";
   s += "\"ipaddress\":\"" + ipaddress + "\",";
-  s += "\"emoncms_connected\":\"" + String(emoncms_connected) + "\",";
-  s += "\"packets_sent\":\"" + String(packets_sent) + "\",";
-  s += "\"packets_success\":\"" + String(packets_success) + "\",";
+  s += "\"emoncms_connected\":" + String(emoncms_connected) + ",";
+  s += "\"packets_sent\":" + String(packets_sent) + ",";
+  s += "\"packets_success\":" + String(packets_success) + ",";
 
-  s += "\"mqtt_connected\":\"" + String(mqtt_connected()) + "\",";
+  s += "\"mqtt_connected\":" + String(mqtt_connected()) + ",";
 
   s += "\"ohm_hour\":\"" + ohm_hour + "\",";
 
-  s += "\"free_heap\":\"" + String(ESP.getFreeHeap()) + "\"";
+  s += "\"free_heap\":" + String(ESP.getFreeHeap());
 
 #ifdef ENABLE_LEGACY_API
+  s += ",\"networks\":[" + st + "]";
+  s += ",\"rssi\":[" + rssi + "]";
   s += ",\"version\":\"" + currentfirmware + "\"";
   s += ",\"ssid\":\"" + esid + "\"";
   //s += ",\"pass\":\""+epass+"\""; security risk: DONT RETURN PASSWORDS
@@ -479,26 +479,28 @@ handleConfig(AsyncWebServerRequest *request) {
   String s = "{";
   s += "\"firmware\":\"" + firmware + "\",";
   s += "\"protocol\":\"" + protocol + "\",";
-  s += "\"espflash\":\"" + String(ESP.getFlashChipSize()) + "\",";
+  s += "\"espflash\":" + String(ESP.getFlashChipSize()) + ",";
   s += "\"version\":\"" + currentfirmware + "\",";
-  s += "\"diodet\":\"" + String(diode_ck) + "\",";
-  s += "\"gfcit\":\"" + String(gfci_test) + "\",";
-  s += "\"groundt\":\"" + String(ground_ck) + "\",";
-  s += "\"relayt\":\"" + String(stuck_relay) + "\",";
-  s += "\"ventt\":\"" + String(vent_ck) + "\",";
-  s += "\"tempt\":\"" + String(temp_ck) + "\",";
-  s += "\"service\":\"" + String(service) + "\",";
+  s += "\"diodet\":" + String(diode_ck) + ",";
+  s += "\"gfcit\":" + String(gfci_test) + ",";
+  s += "\"groundt\":" + String(ground_ck) + ",";
+  s += "\"relayt\":" + String(stuck_relay) + ",";
+  s += "\"ventt\":" + String(vent_ck) + ",";
+  s += "\"tempt\":" + String(temp_ck) + ",";
+  s += "\"service\":" + String(service) + ",";
+#ifdef ENABLE_LEGACY_API
   s += "\"l1min\":\"" + current_l1min + "\",";
   s += "\"l1max\":\"" + current_l1max + "\",";
   s += "\"l2min\":\"" + current_l2min + "\",";
   s += "\"l2max\":\"" + current_l2max + "\",";
-  s += "\"scale\":\"" + current_scale + "\",";
-  s += "\"offset\":\"" + current_offset + "\",";
-  s += "\"gfcicount\":\"" + gfci_count + "\",";
-  s += "\"nogndcount\":\"" + nognd_count + "\",";
-  s += "\"stuckcount\":\"" + stuck_count + "\",";
   s += "\"kwhlimit\":\"" + kwh_limit + "\",";
   s += "\"timelimit\":\"" + time_limit + "\",";
+#endif
+  s += "\"scale\":" + current_scale + ",";
+  s += "\"offset\":" + current_offset + ",";
+  s += "\"gfcicount\":" + gfci_count + ",";
+  s += "\"nogndcount\":" + nognd_count + ",";
+  s += "\"stuckcount\":" + stuck_count + ",";
   s += "\"ssid\":\"" + esid + "\",";
   s += "\"pass\":\"";
   if(epass != 0) {
@@ -532,7 +534,7 @@ handleConfig(AsyncWebServerRequest *request) {
   }
   s += "\",";
   s += "\"ohm_enabled\":" + String(config_ohm_enabled() ? "true" : "false") + ",";
-  s += "\"divertmode\":\""+String(divertmode)+"\"";
+  s += "\"divertmode\":" + String(divertmode);
   s += "}";
 
   response->setCode(200);
@@ -553,25 +555,25 @@ handleUpdate(AsyncWebServerRequest *request) {
   }
 
   String s = "{";
-  s += "\"comm_sent\":\"" + String(comm_sent) + "\",";
-  s += "\"comm_success\":\"" + String(comm_success) + "\",";
+  s += "\"comm_sent\":" + String(comm_sent) + ",";
+  s += "\"comm_success\":" + String(comm_success) + ",";
 #ifdef ENABLE_LEGACY_API
   s += "\"ohmhour\":\"" + ohm_hour + "\",";
   s += "\"espfree\":\"" + String(espfree) + "\",";
   s += "\"packets_sent\":\"" + String(packets_sent) + "\",";
   s += "\"packets_success\":\"" + String(packets_success) + "\",";
 #endif
-  s += "\"amp\":\"" + amp + "\",";
-  s += "\"pilot\":\"" + pilot + "\",";
-  s += "\"temp1\":\"" + temp1 + "\",";
-  s += "\"temp2\":\"" + temp2 + "\",";
-  s += "\"temp3\":\"" + temp3 + "\",";
+  s += "\"amp\":" + amp + ",";
+  s += "\"pilot\":" + pilot + ",";
+  s += "\"temp1\":" + temp1 + ",";
+  s += "\"temp2\":" + temp2 + ",";
+  s += "\"temp3\":" + temp3 + ",";
   s += "\"state\":" + String(state) + ",";
 #ifdef ENABLE_LEGACY_API
   s += "\"estate\":\"" + estate + "\",";
 #endif
-  s += "\"wattsec\":\"" + wattsec + "\",";
-  s += "\"watthour\":\"" + watthour_total + "\"";
+  s += "\"wattsec\":" + wattsec + ",";
+  s += "\"watthour\":" + watthour_total;
   s += "}";
 
   response->setCode(200);
