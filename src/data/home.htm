@@ -285,16 +285,33 @@
 
         <!--TAB 3: OpenEVSE -->
         <div id="content-3" data-bind="visible: isStatus">
-
-          <!-- Session Options -->
+          
+          <!-- Status -->
           <div class="box380 left">
-            <h2>Charge Options</h2>
-            <h4 data-bind="text: rapi.estate, visible: !openevse.isError()"></h4>
-
+            <h2>Status</h2>
+            <h3 data-bind="text: rapi.estate, visible: !openevse.isError()"></h3>
             <div data-bind="visible: openevse.isError" class="box error">
               <h4>EVSE Error</h4>
               <span data-bind="text: rapi.estate"></span>
             </div>
+
+            <table>
+              <tr>
+                <th>Current Now</th>
+                <th>Session Energy</th>
+              </tr>
+              <tr>
+                <td><span data-bind="text: scaleString(rapi.amp(), 1000, 2) + ' A'"></span></td>
+                <td><span data-bind="text: scaleString(rapi.wattsec(), 3600000, 2) + ' kWh'"></span></td>
+              </tr>
+            </table>
+          </div>
+            
+          </div>
+
+          <!-- Session Options -->
+          <div class="box380 left">
+            <h2>Charge Options</h2>
 
             <p data-bind="with: openevse, visible: !openevse.isError()">
               <button data-bind="click: setStatus.bind($data, 'enable'), visible: !isEnabled()">Start</button>
@@ -341,15 +358,15 @@
             <table>
               <tr>
                 <th>Energy</th>
-                <th>kWh</th>
+                <th></th>
               </tr>
               <tr>
                 <td>This Session:</td>
-                <td><span data-bind="text: scaleString(rapi.wattsec(), 3600000, 2)"></span></td>
+                <td><span data-bind="text: scaleString(rapi.wattsec(), 3600000, 2)+ ' kWh'"></span></td>
               </tr>
               <tr>
                 <td>Total:</td>
-                <td><span data-bind="text: scaleString(rapi.watthour(), 1000, 2)"></span></td>
+                <td><span data-bind="text: scaleString(rapi.watthour(), 1000, 2)+ ' kWh'"></span></td>
               </tr>
             </table>
           </div>
