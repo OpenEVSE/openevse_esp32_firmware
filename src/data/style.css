@@ -114,30 +114,30 @@ h2 {
 
 @media (max-width: 494px) {
   #page {
-    width: 350px;
-    margin: 0 auto;
+    width: inherit;
+    margin: 5px auto;
+  }
+
+  #content {
+    padding: 1px;
   }
 
   .box380 {
-    margin: 10px auto;
+    margin: 8px 8px 12px 8px;
     padding: 10px;
-    width: 284px;
+    width: inherit;
     float: none;
   }
 
   .box-full {
-    width: 284px;
+    margin: 8px 8px 12px 8px;
+    padding: 10px;
+    width: inherit;
+    float: none;
   }
 }
 
-@media (min-width: 980px) {
-  #page {
-    width: 930px;
-    margin: 0 auto;
-  }
-}
-
-@media (max-width: 980px) {
+@media (min-width: 494px) and (max-width: 980px) {
   #page {
     width: 465px;
     margin: 0 auto;
@@ -145,6 +145,13 @@ h2 {
 
   .box-full {
     width: 380px;
+  }
+}
+
+@media (min-width: 980px) {
+  #page {
+    width: 930px;
+    margin: 0 auto;
   }
 }
 
@@ -279,12 +286,6 @@ input[type="time"] {
   display: block;
   height: 0;
   clear: both;
-}
-
-@media (max-width: 466px) {
-  #content {
-  top: 60px;
-  }
 }
 
 #footer {
