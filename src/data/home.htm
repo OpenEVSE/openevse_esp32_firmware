@@ -285,28 +285,35 @@
 
         <!--TAB 3: OpenEVSE -->
         <div id="content-3" data-bind="visible: isStatus">
-          
+
           <!-- Status -->
-          <div class="box380 left">
-            <h2>Status</h2>
-            <h3 data-bind="text: rapi.estate, visible: !openevse.isError()"></h3>
-            <div data-bind="visible: openevse.isError" class="box error">
-              <h4>EVSE Error</h4>
-              <span data-bind="text: rapi.estate"></span>
-            </div>
+          <div data-bind="visible: openevse.isError" class="box box-full left error">
+            <h4>EVSE Error</h4>
+            <span data-bind="text: rapi.estate"></span>
+          </div>
+
+          <div data-bind="visible: !openevse.isError(),
+                          css: { ready: openevse.isReady(),
+                                connected: openevse.isConnected() &amp;&amp; !openevse.isCharging(),
+                                charging: openevse.isCharging() }"
+               class="box box-full left">
+            <h2 class="left">Status</h2>
+            <h2 class="right" data-bind="text: rapi.estate"></h2>
 
             <table>
               <tr>
                 <th>Current Now</th>
                 <th>Session Energy</th>
+                <th>Elapsed</th>
               </tr>
               <tr>
                 <td><span data-bind="text: scaleString(rapi.amp(), 1000, 2) + ' A'"></span></td>
                 <td><span data-bind="text: scaleString(rapi.wattsec(), 3600000, 2) + ' kWh'"></span></td>
+                <td><span data-bind="text: openevse.time.elapsed"></span></td>
               </tr>
             </table>
           </div>
-            
+
           </div>
 
           <!-- Session Options -->

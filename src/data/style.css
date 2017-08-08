@@ -82,6 +82,16 @@ h2 {
   margin-bottom: 20px;
 }
 
+.box-full {
+  margin: 20px 20px 20px 20px;
+  width: 840px;
+}
+
+.box-half {
+  margin: 20px 20px 20px 20px;
+  width: 380px;
+}
+
 .box380 {
   width: 380px;
   padding: 20px;
@@ -103,11 +113,20 @@ h2 {
 }
 
 @media (max-width: 494px) {
+  #page {
+    width: 350px;
+    margin: 0 auto;
+  }
+
   .box380 {
-    margin: 20px auto;
+    margin: 10px auto;
     padding: 10px;
     width: 284px;
     float: none;
+  }
+
+  .box-full {
+    width: 284px;
   }
 }
 
@@ -123,12 +142,9 @@ h2 {
     width: 465px;
     margin: 0 auto;
   }
-}
 
-@media (max-width: 494px) {
-  #page {
-    width: 350px;
-    margin: 0 auto;
+  .box-full {
+    width: 380px;
   }
 }
 
@@ -396,3 +412,22 @@ input:checked + .slider:before {
 {
   content: "i";
 }
+
+.ready {
+  border-color: rgb(1, 196, 14);
+  border-left-width: 5px;
+  box-shadow: 1px 7px 7px 1px rgba(1, 196, 14, 0.3);
+}
+
+.connected {
+  border-color: rgb(213, 255, 112);
+  border-left-width: 5px;
+  box-shadow: 1px 7px 7px 1px rgba(213, 255, 112, 0.4);
+}
+
+.charging {
+  border-color: rgb(0, 146, 247);
+  border-left-width: 5px;
+  box-shadow: 1px 7px 7px 1px rgba(0, 146, 247, 0.4);
+}
+

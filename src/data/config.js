@@ -9,7 +9,7 @@
 var baseHost = window.location.hostname;
 //var baseHost = "openevse.local";
 //var baseHost = "192.168.4.1";
-//var baseHost = "172.16.0.61";
+//var baseHost = "172.16.0.70";
 
 function BaseViewModel(defaults, remoteUrl, mappings = {}) {
   var self = this;
@@ -174,6 +174,7 @@ function RapiViewModel(baseEndpoint) {
     "temp2": "0",
     "temp3": "0",
     "state": -1,
+    "elapsed": -1,
     "wattsec": "0",
     "watthour": "0"
   }, endpoint);
@@ -241,7 +242,6 @@ RapiViewModel.prototype.send = function() {
   });
 };
 
-
 function TimeViewModel(openevse)
 {
   var self = this;
@@ -251,7 +251,12 @@ function TimeViewModel(openevse)
   }
   function startTimeUpdate() {
     timeUpdateTimeout = setInterval(function () {
-      self.nowTimedate(new Date(self.evseTimedate().getTime() + ((new Date()) - self.localTimedate())));
+      if(self.automaticTime()) {
+        self.nowTimedate(new Date(self.evseTimedate().getTime() + ((new Date()) - self.localTimedate())));
+      }
+      if(openevse.isCharging()) {
+        self.elapsedNow(new Date((openevse.rapi.elapsed() * 1000) + ((new Date()) - self.elapsedLocal())));
+      }
     }, 1000);
   }
   function stopTimeUpdate() {
@@ -264,6 +269,10 @@ function TimeViewModel(openevse)
   self.evseTimedate = ko.observable(new Date());
   self.localTimedate = ko.observable(new Date());
   self.nowTimedate = ko.observable(null);
+
+  self.elapsedNow = ko.observable(new Date(0));
+  self.elapsedLocal = ko.observable(new Date());
+
   self.date = ko.pureComputed({
     read: function () {
       if(null === self.nowTimedate()) {
@@ -279,7 +288,7 @@ function TimeViewModel(openevse)
   self.time = ko.pureComputed({
     read: function () {
       if(null === self.nowTimedate()) {
-        return "--:--";
+        return "--:--:--";
       }
       var dt = self.nowTimedate();
       return addZero(dt.getHours())+":"+addZero(dt.getMinutes())+":"+addZero(dt.getSeconds());
@@ -292,19 +301,25 @@ function TimeViewModel(openevse)
       self.evseTimedate(date);
       self.localTimedate(new Date());
     }});
+  self.elapsed = ko.pureComputed(function () {
+    if(null === self.nowTimedate()) {
+      return "0:00:00";
+    }
+    var dt = self.elapsedNow();
+    return addZero(dt.getHours())+":"+addZero(dt.getMinutes())+":"+addZero(dt.getSeconds());
+  });
+
+  openevse.rapi.elapsed.subscribe(function (val) {
+      self.elapsedNow(new Date(val * 1000));
+      self.elapsedLocal(new Date());
+  });
+
   var timeUpdateTimeout = null;
   self.automaticTime = ko.observable(true);
-  self.automaticTime.subscribe(function (val) {
-    if(val) {
-      startTimeUpdate();
-    } else {
-      stopTimeUpdate();
-    }
-  });
   self.setTime = function () {
     var newTime = self.automaticTime() ? new Date() : self.evseTimedate();
     // IMPROVE: set a few times and work out an average transmission delay, PID loop?
-    openevse.time(self.timeUpdate, newTime);
+    openevse.openevse.time(self.timeUpdate, newTime);
   };
 
   self.timeUpdate = function (date) {
@@ -312,9 +327,7 @@ function TimeViewModel(openevse)
     self.evseTimedate(date);
     self.nowTimedate(date);
     self.localTimedate(new Date());
-    if(self.automaticTime()) {
-      startTimeUpdate();
-    }
+    startTimeUpdate();
   };
 }
 
@@ -326,7 +339,7 @@ function OpenEvseViewModel(baseEndpoint, rapiViewModel) {
     self.openevse.setEndpoint(end);
   });
   self.rapi = rapiViewModel;
-  self.time = new TimeViewModel(self.openevse);
+  self.time = new TimeViewModel(self);
 
   // Option lists
   self.serviceLevels = [
@@ -382,6 +395,10 @@ function OpenEvseViewModel(baseEndpoint, rapiViewModel) {
     return [2, 3].indexOf(self.rapi.state()) !== -1;
   });
 
+  self.isReady = ko.pureComputed(function () {
+    return [0, 1].indexOf(self.rapi.state()) !== -1;
+  });
+
   self.isCharging = ko.pureComputed(function () {
     return 3 === self.rapi.state();
   });
@@ -391,7 +408,7 @@ function OpenEvseViewModel(baseEndpoint, rapiViewModel) {
   });
 
   self.isEnabled = ko.pureComputed(function () {
-    return [1, 2, 3].indexOf(self.rapi.state()) !== -1;
+    return [0, 1, 2, 3].indexOf(self.rapi.state()) !== -1;
   });
 
   self.isSleeping = ko.pureComputed(function () {
