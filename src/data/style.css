@@ -414,6 +414,11 @@ input:checked + .slider:before {
   content: "i";
 }
 
+span.selected
+{
+  color: #008080;
+}
+
 .ready {
   border-color: rgb(1, 196, 14);
   border-left-width: 5px;

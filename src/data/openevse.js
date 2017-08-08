@@ -68,7 +68,7 @@ function OpenEVSE(endpoint)
 
   self.CORRECT_RESPONSE_PREFIXES = ("$OK", "$NK");
 
-  self.regex = /.*\$(.*)(\^..)?.*/;
+  self.regex = /\$([^\^]*)(\^..)?/;
 
   self._request = function(args, callback = function() {})
   {

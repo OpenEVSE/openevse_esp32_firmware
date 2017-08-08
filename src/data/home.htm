@@ -416,12 +416,12 @@
               <input type="time" data-bind="value: time, disable: automaticTime" /><br/>
             </p>
             <div data-bind="with: time">
-              <span data-bind="style: (!automaticTime() ? 'color: #ddd' : '')">Manual</span>
+              <span data-bind="css: {selected: !automaticTime() }">Manual</span>
               <label class="switch">
                 <input type="checkbox" data-bind="checked: automaticTime">
                 <div class="slider round"></div>
               </label>
-              <span data-bind="style: (automaticTime() ? 'color: #ddd' : '')">Automatic<span>
+              <span data-bind="css: {selected: automaticTime() }">Automatic<span>
 
               <button style="margin-left: 30px" data-bind="click: setTime">Set</button>
             </div>
@@ -451,7 +451,7 @@
           <div class="box380 right">
             <h2>Charge Mode <span class="info" data-bind="click: toggle.bind($data, showSolarDivert)"></span></h2>
 
-            <div class="box error" data-bind="visible: 0 === divertmode()">
+            <div class="box error" data-bind="visible: !isEcoModeAvailable()">
               <h4>MQTT config not configured with Solar PV / Grid topic.</h4>
               Solar PV Divert requires the SolarPV-gen or Grid (+I/-E) MQTT topic to be defined on the
               <a href="#services" data-bind="click: function() { tab('services'); config.mqtt_enabled(true); }">Services</a>
@@ -476,9 +476,13 @@
                 <span class="small-text"><i>Charging mode can also be set via MQTT:<br>{base-topic}/divertmode/set</i></span>
               </p>
             </div>
-            <div data-bind="visible: 0 !== divertmode()">
-              <button data-bind="click: changeDivertMode.bind($data, 1), disabled: 0 === divertmode(), css: { on: (1 === divertmode()) }">1: Normal (max)</button>
-              <button data-bind="click: changeDivertMode.bind($data, 2), disabled: 0 === divertmode(), css: { on: (2 === divertmode()) }">2: Eco (PV divert)</button>
+            <div data-bind="visible: isEcoModeAvailable">
+              <span data-bind="css: {selected: !ecoMode() }">Normal (max)</span>
+              <label class="switch">
+                <input type="checkbox" data-bind="checked: ecoMode">
+                <div class="slider round"></div>
+              </label>
+              <span data-bind="css: {selected: ecoMode }">Eco (PV divert)</span><br/>
             </div>
           </div>
 
