@@ -1,4 +1,4 @@
-#if defined(ENABLE_DEBUG) && !defined(ENABLE_DEBUG_RAPI)
+ #if defined(ENABLE_DEBUG) && !defined(ENABLE_DEBUG_RAPI)
 #undef ENABLE_DEBUG
 #endif
 
@@ -76,6 +76,7 @@ create_rapi_json() {
   data = "";
   url += String(emoncms_node) + "&json={";
   data += "amp:" + amp + ",";
+  data += "wh:" + wattsec + ",";
   data += "temp1:" + temp1 + ",";
   data += "temp2:" + temp2 + ",";
   data += "temp3:" + temp3 + ",";
