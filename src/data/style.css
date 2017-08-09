@@ -437,3 +437,8 @@ span.selected
   box-shadow: 1px 7px 7px 1px rgba(0, 146, 247, 0.4);
 }
 
+.sleeping {
+  border-color: rgb(146, 0, 247);
+  border-left-width: 5px;
+  box-shadow: 1px 7px 7px 1px rgba(146, 0, 247, 0.4);
+}
