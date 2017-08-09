@@ -550,8 +550,8 @@
               <tr data-bind="css: {error: 10 === rapi.state() }">
                 <td>Temperature Monitoring:</td>
                 <td>
-                  <label class="switch" data-bind="visible: developerMode">
-                    <input type="checkbox" data-bind="checked: openevse.tempCheckEnabled" disabled="disabled">
+                  <label class="switch" data-bind="visible: developerMode() &amp;&amp; openevse.tempCheckSupported()">
+                    <input type="checkbox" data-bind="checked: openevse.tempCheckEnabled">
                     <div class="slider round"></div>
                   </label>
                   <span data-bind="text: openevse.tempCheckEnabled() ? 'Enabled' : 'Disabled'"></span>

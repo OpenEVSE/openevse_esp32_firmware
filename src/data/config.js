@@ -9,7 +9,7 @@
 var baseHost = window.location.hostname;
 //var baseHost = "openevse.local";
 //var baseHost = "192.168.4.1";
-//var baseHost = "172.16.0.61";
+//var baseHost = "172.16.0.70";
 
 function BaseViewModel(defaults, remoteUrl, mappings = {}) {
   var self = this;
@@ -371,7 +371,9 @@ function OpenEvseViewModel(baseEndpoint, rapiViewModel) {
            self.tempCheckEnabled() &&
            self.diodeCheckEnabled() &&
            self.ventRequiredEnabled();
-   });
+    });
+
+  self.tempCheckSupported = ko.observable(false);
 
   // Derived states
   self.isConnected = ko.pureComputed(function () {
@@ -449,6 +451,11 @@ function OpenEvseViewModel(baseEndpoint, rapiViewModel) {
     }); },
     function () { return self.openevse.vent_required(function (enabled) {
       self.ventRequiredEnabled(enabled);
+    }); },
+    function () { return self.openevse.over_temperature_thresholds(function () {
+      self.tempCheckSupported(true);
+    }).error(function () {
+      self.tempCheckSupported(false);
     }); }
   ];
   var updateCount = -1;

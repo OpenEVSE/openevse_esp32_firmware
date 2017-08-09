@@ -563,17 +563,54 @@ function OpenEVSE(endpoint)
    * Returns the "ventilation required" status
    */
   self.temp_check = function(callback, enabled = null) {
-    /*
-    if(null !== enabled) {
-      return self._request(["S?", enabled ? "1" : "0"],
-      function() {
-        self.temp_check(callback);
-      });
+    if(null !== enabled)
+    {
+      if(enabled)
+      {
+        return self._request("GO", function(data) {
+          self._request(["SO", data[0], data[1]],
+            function() {
+              self.temp_check(callback);
+            });
+        });
+      }
+
+      return self._request(["SO", "0", "0"],
+        function() {
+          self.temp_check(callback);
+        });
     }
-    */
 
     var request = self._flags(function(flags) {
       callback(flags.temp_check);
+    });
+    return request;
+  };
+
+  /**
+   *
+   */
+  self.over_temperature_thresholds = function(callback, ambientthresh = false, irthresh = false) {
+    if(false !== ambientthresh && false !== irthresh) {
+      return self._request(["SO", ambientthresh, irthresh],
+      function() {
+        self.over_temperature_thresholds(callback);
+      });
+    }
+
+    var request = self._request("GO", function(data) {
+      if(data.length >= 2) {
+        var ambientthresh = parseInt(data[0]);
+        var irthresh = parseInt(data[0]);
+
+        if(!isNaN(ambientthresh) && !isNaN(irthresh)) {
+          callback(ambientthresh, irthresh);
+        } else {
+          request._error(new OpenEVSEError("ParseError", "Could not parse \""+data.join(" ")+"\" arguments"));
+        }
+      } else {
+        request._error(new OpenEVSEError("ParseError", "Only received "+data.length+" arguments"));
+      }
     });
     return request;
   };
