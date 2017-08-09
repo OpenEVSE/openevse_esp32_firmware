@@ -61,6 +61,7 @@ tr:nth-child(2n+2) {
 h2 {
   padding-bottom: 0.2em;
   border-bottom: 1px solid #eee;
+  margin-top: 2px;
 }
 
 .header h3 {
