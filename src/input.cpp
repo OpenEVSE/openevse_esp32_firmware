@@ -19,13 +19,14 @@ int espfree = 0;
 
 int rapi_command = 1;
 
-String amp = "0";                    //OpenEVSE Current Sensor
-String volt = "0";                   //Not currently in used
-String temp1 = "0";                  //Sensor DS3232 Ambient
-String temp2 = "0";                  //Sensor MCP9808 Ambient
-String temp3 = "0";                  //Sensor TMP007 Infared
-String pilot = "0";                  //OpenEVSE Pilot Setting
-long state = 0; //OpenEVSE State
+String amp = "0";                    // OpenEVSE Current Sensor
+String volt = "0";                   // Not currently in used
+String temp1 = "0";                  // Sensor DS3232 Ambient
+String temp2 = "0";                  // Sensor MCP9808 Ambient
+String temp3 = "0";                  // Sensor TMP007 Infared
+String pilot = "0";                  // OpenEVSE Pilot Setting
+long state = 0;                      // OpenEVSE State
+long elapsed = 0;                    // Elapsed time (only valid if charging)
 #ifdef ENABLE_LEGACY_API
 String estate = "Unknown"; // Common name for State
 #endif
@@ -121,6 +122,10 @@ update_rapi_values() {
       DBUGVAR(qrapi);
       state = strtol(qrapi.c_str(), NULL, 10);
       DBUGVAR(state);
+      qrapi = rapiSender.getToken(2);
+      DBUGVAR(qrapi);
+      elapsed = strtol(qrapi.c_str(), NULL, 10);
+      DBUGVAR(elapsed);
 #ifdef ENABLE_LEGACY_API
       switch (state) {
         case 1:

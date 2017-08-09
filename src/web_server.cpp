@@ -569,6 +569,7 @@ handleUpdate(AsyncWebServerRequest *request) {
   s += "\"temp2\":" + temp2 + ",";
   s += "\"temp3\":" + temp3 + ",";
   s += "\"state\":" + String(state) + ",";
+  s += "\"elapsed\":" + String(elapsed) + ",";
 #ifdef ENABLE_LEGACY_API
   s += "\"estate\":\"" + estate + "\",";
 #endif

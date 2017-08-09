@@ -286,15 +286,38 @@
         <!--TAB 3: OpenEVSE -->
         <div id="content-3" data-bind="visible: isStatus">
 
+          <!-- Status -->
+          <div data-bind="visible: openevse.isError" class="box box-full left error">
+            <h4>EVSE Error</h4>
+            <span data-bind="text: rapi.estate"></span>
+          </div>
+
+          <div data-bind="visible: !openevse.isError(),
+                          css: { ready: openevse.isReady(),
+                                 connected: openevse.isConnected() &amp;&amp; !openevse.isCharging(),
+                                 charging: openevse.isCharging(),
+                                 sleeping: openevse.isSleeping() }"
+               class="box box-full left">
+            <h2 class="left">Status</h2>
+            <h2 class="right" data-bind="text: rapi.estate"></h2>
+
+            <table>
+              <tr>
+                <th>Current Now</th>
+                <th>Session Energy</th>
+                <th>Elapsed</th>
+              </tr>
+              <tr>
+                <td><span data-bind="text: scaleString(rapi.amp(), 1000, 2) + ' A'"></span></td>
+                <td><span data-bind="text: scaleString(rapi.wattsec(), 3600000, 2) + ' kWh'"></span></td>
+                <td><span data-bind="text: openevse.time.elapsed"></span></td>
+              </tr>
+            </table>
+          </div>
+
           <!-- Session Options -->
           <div class="box380 left">
             <h2>Charge Options</h2>
-            <h4 data-bind="text: rapi.estate, visible: !openevse.isError()"></h4>
-
-            <div data-bind="visible: openevse.isError" class="box error">
-              <h4>EVSE Error</h4>
-              <span data-bind="text: rapi.estate"></span>
-            </div>
 
             <p data-bind="with: openevse, visible: !openevse.isError()">
               <button data-bind="click: setStatus.bind($data, 'enable'), visible: !isEnabled()">Start</button>
@@ -336,26 +359,26 @@
           </div>
 
           <!-- Energy -->
-          <div class="box380 right">
+          <div class="box380 right" data-bind="visible: advancedMode">
             <h2>Energy</h2>
             <table>
               <tr>
                 <th>Energy</th>
-                <th>kWh</th>
+                <th></th>
               </tr>
               <tr>
                 <td>This Session:</td>
-                <td><span data-bind="text: scaleString(rapi.wattsec(), 3600000, 2)"></span></td>
+                <td><span data-bind="text: scaleString(rapi.wattsec(), 3600000, 2)+ ' kWh'"></span></td>
               </tr>
               <tr>
                 <td>Total:</td>
-                <td><span data-bind="text: scaleString(rapi.watthour(), 1000, 2)"></span></td>
+                <td><span data-bind="text: scaleString(rapi.watthour(), 1000, 2)+ ' kWh'"></span></td>
               </tr>
             </table>
           </div>
 
           <!-- Sensor Values -->
-          <div class="box380 right">
+          <div class="box380 right" data-bind="visible: advancedMode">
             <h2>Sensor Values</h2>
             <table>
               <tr>
@@ -386,7 +409,7 @@
           </div>
 
           <!-- Settings -->
-          <div class="box380 left setup" data-bind="with: openevse">
+          <div class="box380 setup" data-bind="with: openevse, css: { right: !advancedMode(), left: advancedMode() }">
             <h2>Setup</h2>
             <p data-bind="with: time">
               <b>Time:</b><br/>
@@ -465,7 +488,7 @@
           </div>
 
           <!-- Current -->
-          <div class="box380 right">
+          <div class="box380 right" data-bind="visible: advancedMode">
             <h2>Current</h2>
             <table>
               <tr>
@@ -503,7 +526,7 @@
           </div>
 
           <!-- Safety -->
-          <div class="box380 left ">
+          <div class="box380 left" data-bind="visible: advancedMode() || !openevse.allTestsEnabled()">
 
             <h2>Safety</h2>
 
@@ -597,7 +620,7 @@
           </div>
 
           <!-- Hardware -->
-          <div class="box380 right">
+          <div class="box380 right" data-bind="visible: advancedMode">
             <h2>Hardware</h2>
             <table>
               <tr>
@@ -639,6 +662,19 @@
                 </td>
               </tr>
             </table>
+          </div>
+
+          <div class="box380" data-bind="css: { right: !advancedMode() &amp;&amp; !openevse.allTestsEnabled(),
+                                                left: advancedMode() || openevse.allTestsEnabled() }">
+            <h2>Display</h2>
+            <div>
+              <span data-bind="css: {selected: !advancedMode() }">Simple</span>
+              <label class="switch">
+                <input type="checkbox" data-bind="checked: advancedMode">
+                <div class="slider round"></div>
+              </label>
+              <span data-bind="css: {selected: advancedMode }">Advanced</span><br/>
+            </div>
           </div>
         </div>
         <!--end tab 3-->

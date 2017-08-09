@@ -16,6 +16,7 @@ extern String temp2;  // Sensor MCP9808 Ambient
 extern String temp3;  // Sensor TMP007 Infared
 extern String pilot;  // OpenEVSE Pilot Setting
 extern long state;    // OpenEVSE State
+extern long elapsed;  // Elapsed time (only valid if charging)
 extern String estate; // Common name for State
 
 //Defaults OpenEVSE Settings
