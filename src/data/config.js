@@ -757,8 +757,14 @@ function OpenEvseWiFiViewModel() {
     flag(!flag());
   };
 
+  // Advanced mode
+  self.advancedMode = ko.observable(false);
+
   // Developer mode
   self.developerMode = ko.observable(false);
+  self.developerMode.subscribe(function (val) { if(val) {
+    self.advancedMode(true); // Enabling dev mode implicitly enables advanced mode
+  }});
 
   var updateTimer = null;
   var updateTime = 5 * 1000;
