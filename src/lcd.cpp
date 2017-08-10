@@ -20,11 +20,14 @@ struct Message_s
 Message *head = NULL;
 Message *tail = NULL;
 
+bool lcdClaimed = false;
+uint32_t nextTime = 0;
+
 void lcd_display(Message *msg, int x, int y, int time, bool clear)
 {
   if(clear) {
     for(int i = strlen(msg->msg); i < LCD_MAX_LEN; i++) {
-      msg->msg[i] = ' ';
+      msg->msg[i] = '.';
     }
   }
 
@@ -48,6 +51,7 @@ void lcd_display(Message *msg, int x, int y, int time, bool clear)
     tail->next = msg;
   } else {
     head = msg;
+    nextTime = millis();
   }
   tail = msg;
 }
@@ -74,9 +78,6 @@ void lcd_display(const char *msg, int x, int y, int time, bool clear)
   lcd_display(msgStruct, x, y, time, clear);
 }
 
-bool lcdClaimed = false;
-uint32_t nextTime = 0;
-
 void lcd_loop()
 {
   if(millis() > nextTime)
@@ -92,7 +93,7 @@ void lcd_loop()
 
       // If the LCD has not been claimed, claim in
       if(false == lcdClaimed) {
-        rapiSender.sendCmd(F("$F0 1"));
+        rapiSender.sendCmd(F("$F0 0"));
         lcdClaimed = true;
       }
 
