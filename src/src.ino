@@ -37,6 +37,7 @@
 #include "mqtt.h"
 #include "divert.h"
 #include "ota.h"
+#include "lcd.h"
 
 #include "RapiSender.h"
 
@@ -117,6 +118,7 @@ void
 loop() {
   Profile_Start(loop);
 
+  lcd_loop();
   web_server_loop();
   wifi_loop();
 #ifdef ENABLE_OTA

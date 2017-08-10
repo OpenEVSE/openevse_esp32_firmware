@@ -1,9 +1,7 @@
 #include "emonesp.h"
 #include "wifi.h"
 #include "config.h"
-#include "RapiSender.h"
-
-extern RapiSender rapiSender;
+#include "lcd.h"
 
 #include <ESP8266WiFi.h>              // Connect to Wifi
 #include <ESP8266mDNS.h>              // Resolve URL for update server etc.
@@ -83,12 +81,10 @@ startAP() {
   ipaddress = tmpStr;
   DEBUG.print("AP IP Address: ");
   DEBUG.println(tmpStr);
-  rapiSender.sendCmd("$FP 0 0 SSID...OpenEVSE.");
-  rapiSender.sendCmd("$FP 0 1 PASS...openevse.");
-  delay(5000);
-  rapiSender.sendCmd("$FP 0 0 IP_Address......");
-  snprintf(tmpStr, 40, "$FP 0 1 %s", ipaddress.c_str());
-  rapiSender.sendCmd(tmpStr);
+  lcd_display(F("SSID: OpenEVSE"), 0, 0, 0, true);
+  lcd_display(F("SSID: openevse"), 0, 1, 5000, true);
+  lcd_display(F("IP Address"), 0, 0, 0, true);
+  lcd_display(tmpStr, 0, 1, 5000, true);
 }
 
 // -------------------------------------------------------------------
@@ -152,9 +148,8 @@ startClient() {
     ipaddress = tmpStr;
     DEBUG.print("Connected, IP: ");
     DEBUG.println(tmpStr);
-    rapiSender.sendCmd("$FP 0 0 Client-IP.......");
-    snprintf(tmpStr, 40, "$FP 0 1 %s", ipaddress.c_str());
-    rapiSender.sendCmd(tmpStr);
+    lcd_display(F("IP Address"), 0, 0, 0, true);
+    lcd_display(tmpStr, 0, 1, 5000, true);
     // Copy the connected network and ipaddress to global strings for use in status request
     connected_network = esid;
   }
