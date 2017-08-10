@@ -576,7 +576,7 @@ function OpenEVSE(endpoint)
    */
   self.vent_required = function(callback, enabled = null) {
     if(null !== enabled) {
-      return self._request(["SR", enabled ? "1" : "0"],
+      return self._request(["SV", enabled ? "1" : "0"],
       function() {
         self.vent_required(callback);
       });
