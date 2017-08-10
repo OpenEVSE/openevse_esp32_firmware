@@ -1,9 +1,10 @@
 #include "emonesp.h"
 #include "lcd.h"
-
-#include <cppQueue.h>
+#include "RapiSender.h"
 
 #define LCD_MAX_LEN 16
+
+extern RapiSender rapiSender;
 
 typedef struct Message_s Message;
 
@@ -42,6 +43,7 @@ void lcd_display(Message *msg, int x, int y, int time, bool clear)
     msg->time = time;
   }
 
+  msg->next = NULL;
   if(tail) {
     tail->next = msg;
   } else {
@@ -85,7 +87,7 @@ void lcd_loop()
       Message *msg = head;
       head = head->next;
       if(NULL == head) {
-        last = NULL;
+        tail = NULL;
       }
 
       // If the LCD has not been claimed, claim in
@@ -96,9 +98,9 @@ void lcd_loop()
 
       // Display the message
       String cmd = F("$FP ");
-      cmd += x;
+      cmd += msg->x;
       cmd += " ";
-      cmd += y;
+      cmd += msg->y;
       cmd += " ";
       cmd += msg->msg;
       rapiSender.sendCmd(cmd);
