@@ -1,4 +1,4 @@
-#if defined(ENABLE_DEBUG) && !defined(ENABLE_DEBUG_RAPI)
+ #if defined(ENABLE_DEBUG) && !defined(ENABLE_DEBUG_RAPI)
 #undef ENABLE_DEBUG
 #endif
 
@@ -19,13 +19,14 @@ int espfree = 0;
 
 int rapi_command = 1;
 
-String amp = "0";                    //OpenEVSE Current Sensor
-String volt = "0";                   //Not currently in used
-String temp1 = "0";                  //Sensor DS3232 Ambient
-String temp2 = "0";                  //Sensor MCP9808 Ambient
-String temp3 = "0";                  //Sensor TMP007 Infared
-String pilot = "0";                  //OpenEVSE Pilot Setting
-long state = 0; //OpenEVSE State
+String amp = "0";                    // OpenEVSE Current Sensor
+String volt = "0";                   // Not currently in used
+String temp1 = "0";                  // Sensor DS3232 Ambient
+String temp2 = "0";                  // Sensor MCP9808 Ambient
+String temp3 = "0";                  // Sensor TMP007 Infared
+String pilot = "0";                  // OpenEVSE Pilot Setting
+long state = 0;                      // OpenEVSE State
+long elapsed = 0;                    // Elapsed time (only valid if charging)
 #ifdef ENABLE_LEGACY_API
 String estate = "Unknown"; // Common name for State
 #endif
@@ -76,6 +77,7 @@ create_rapi_json() {
   data = "";
   url += String(emoncms_node) + "&json={";
   data += "amp:" + amp + ",";
+  data += "wh:" + wattsec + ",";
   data += "temp1:" + temp1 + ",";
   data += "temp2:" + temp2 + ",";
   data += "temp3:" + temp3 + ",";
@@ -120,6 +122,10 @@ update_rapi_values() {
       DBUGVAR(qrapi);
       state = strtol(qrapi.c_str(), NULL, 10);
       DBUGVAR(state);
+      qrapi = rapiSender.getToken(2);
+      DBUGVAR(qrapi);
+      elapsed = strtol(qrapi.c_str(), NULL, 10);
+      DBUGVAR(elapsed);
 #ifdef ENABLE_LEGACY_API
       switch (state) {
         case 1:

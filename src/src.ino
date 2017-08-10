@@ -43,7 +43,6 @@
 RapiSender rapiSender(&Serial);
 
 unsigned long Timer1; // Timer for events once every 30 seconds
-unsigned long Timer2; // Timer for events once every 1 Minute
 unsigned long Timer3; // Timer for events once every 2 seconds
 
 boolean rapi_read = 0; //flag to indicate first read of RAPI status
@@ -147,16 +146,6 @@ loop() {
     }
 
     // -------------------------------------------------------------------
-    // Do these things once every Minute
-    // -------------------------------------------------------------------
-    if ((millis() - Timer2) >= 60000) {
-      DBUGLN("Time2");
-      if(config_ohm_enabled()) {
-        ohm_loop();
-      }
-      Timer2 = millis();
-    }
-    // -------------------------------------------------------------------
     // Do these things once every 30 seconds
     // -------------------------------------------------------------------
     if ((millis() - Timer1) >= 30000) {
@@ -168,6 +157,9 @@ loop() {
       }
       if (config_mqtt_enabled()) {
         mqtt_publish(data);
+      }
+      if(config_ohm_enabled()) {
+        ohm_loop();
       }
       Timer1 = millis();
     }
