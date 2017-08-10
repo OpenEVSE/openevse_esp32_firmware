@@ -678,6 +678,8 @@ handleUpdateUpload(AsyncWebServerRequest *request, String filename, size_t index
   }
 }
 
+String delayTimer = "0 0 0 0";
+
 void
 handleRapi(AsyncWebServerRequest *request) {
   bool json = request->hasArg("json");
@@ -696,7 +698,7 @@ handleRapi(AsyncWebServerRequest *request) {
           "Get Real-time Current - $GG<p>Get Temperatures - $GP<p>"
           "<p>"
           "<form method='get' action='r'><label><b><i>RAPI Command:</b></i></label>"
-          "<input name='rapi' length=32><p><input type='submit'></form>");
+          "<input id='rapi' name='rapi' length=32><p><input type='submit'></form>");
   }
 
   if (request->hasArg("rapi"))
@@ -706,9 +708,25 @@ handleRapi(AsyncWebServerRequest *request) {
     // BUG: Really we should do this in the main loop not here...
     Serial.flush();
     comm_sent++;
-    if (0 == rapiSender.sendCmd(rapi.c_str())) {
-      comm_success++;
+    int ret = rapiSender.sendCmd(rapi.c_str());
+
+    // IMPROVE: handle other errors, eg timeout
+    if(0 == ret || 1 == ret)
+    {
       String rapiString = rapiSender.getResponse();
+      if(0 == ret) {
+        comm_success++;
+      }
+
+      // Fake $GD if not supported by firmware
+      if(0 == ret && rapi.startsWith(F("$ST"))) {
+        delayTimer = rapi.substring(4);
+      }
+      if(1 == ret && rapi.equals(F("$GD"))) {
+        ret = 0;
+        rapiString = F("$OK ");
+        rapiString += delayTimer;
+      }
 
       if (json) {
         s = "{\"cmd\":\""+rapi+"\",\"ret\":\""+rapiString+"\"}";
@@ -720,7 +738,8 @@ handleRapi(AsyncWebServerRequest *request) {
     }
   }
   if (false == json) {
-   s += F("<p></html>\r\n\r\n");
+    s += F("<script type='text/javascript'>document.getElementById('rapi').focus();</script>");
+    s += F("<p></html>\r\n\r\n");
   }
 
   response->setCode(200);

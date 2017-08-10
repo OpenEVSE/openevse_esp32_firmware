@@ -456,7 +456,12 @@ function OpenEvseViewModel(baseEndpoint, rapiViewModel) {
       self.tempCheckSupported(true);
     }).error(function () {
       self.tempCheckSupported(false);
-    }); }
+    }); },
+    function () { return self.openevse.timer(function (enabled, start, stop) {
+      self.delayTimerEnabled(enabled);
+      self.delayTimerStart(start);
+      self.delayTimerStop(stop);
+    }); },
   ];
   var updateCount = -1;
 

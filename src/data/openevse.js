@@ -198,40 +198,73 @@ function OpenEVSE(endpoint)
   };
 
   /**
-   * Set or cancel the charge timer
+   * Set or get the charge timer
    *
-   * If any of the values is false, the timer is cancelled
+   * Argument:
+   *  - start: The start time
+   *  - end: The stop time
    *
+   * If any of the values is false, get the timer
    */
   self.timer = function(callback, start = false, stop = false)
   {
-    if(false === start || false === stop) {
-      return self._request([
-        "ST", 0, 0, 0, 0], function() {
-        callback();
-      });
+    function addZero(val) {
+      return (val < 10 ? "0" : "") + val;
     }
 
-    var timeRegex = /([01]\d|2[0-3]):([0-5]\d)/;
-    var startArray = start.match(timeRegex);
-    var stopArray = stop.match(timeRegex);
+    if(false !== start && false !== stop) {
+      var timeRegex = /([01]\d|2[0-3]):([0-5]\d)/;
+      var startArray = start.match(timeRegex);
+      var stopArray = stop.match(timeRegex);
 
-    if(null !== startArray && null !== stopArray)
-    {
-      return self._request([
-        "ST",
-        parseInt(startArray[1]), parseInt(startArray[2]),
-        parseInt(stopArray[1]), parseInt(stopArray[2])], function() {
-        callback();
-      });
+      if(null !== startArray && null !== stopArray)
+      {
+        return self._request([
+          "ST",
+          parseInt(startArray[1]), parseInt(startArray[2]),
+          parseInt(stopArray[1]), parseInt(stopArray[2])
+        ], function() {
+          self.timer(callback);
+        });
+      }
+
+      return false;
     }
 
-    return false;
+    var request = self._request("GD", function(data) {
+      if(data.length >= 4) {
+        var startMinute = parseInt(data[0]);
+        var startSecond = parseInt(data[1]);
+        var stopMinute = parseInt(data[2]);
+        var stopSecond = parseInt(data[3]);
+
+        if(!isNaN(startMinute) && !isNaN(startSecond) && !isNaN(stopMinute) && !isNaN(stopSecond)) {
+          if(0 === startMinute && 0 === startSecond && 0 === stopMinute && 0 === stopSecond) {
+            callback(false, "--:--", "--:--");
+          } else {
+            start = addZero(startMinute) + ":" + addZero(startSecond);
+            stop = addZero(stopMinute) + ":" + addZero(stopSecond);
+
+            callback(true, start, stop);
+          }
+        } else {
+          request._error(new OpenEVSEError("ParseError", "Could not parse time \""+data.join(" ")+"\" arguments"));
+        }
+      } else {
+        request._error(new OpenEVSEError("ParseError", "Only received "+data.length+" arguments"));
+      }
+    });
+    return request;
   };
 
-  // Alias to cancel the timer
+  /**
+   * Cancel the timer
+   */
   self.cancelTimer = function (callback) {
-    return self.timer(callback);
+    return self._request([
+      "ST", 0, 0, 0, 0], function() {
+      callback();
+    });
   };
 
   /**
