@@ -142,8 +142,12 @@ handleHome(AsyncWebServerRequest *request) {
   if (SPIFFS.exists(page)) {
     request->send(SPIFFS, page);
   } else {
-    request->send(200, CONTENT_TYPE_TEXT,
-                F("/home.html not found, have you flashed the SPIFFS?"));
+    request->send(200, CONTENT_TYPE_HTML,
+      F("<html><body>"
+        "<h1><font color=006666>Open</font><b>EVSE</b> WiFi</h1>"
+        "<p>/home.html not found, have you flashed the SPIFFS?</p>"
+        "<p><a href='/update'>Update Firmware</a></p>"
+        "</body></html>"));
   }
 }
 
@@ -633,7 +637,11 @@ handleUpdateGet(AsyncWebServerRequest *request) {
   }
 
   response->setCode(200);
-  response->print(F("<form method='POST' action='/update' enctype='multipart/form-data'><input type='file' name='update'><input type='submit' value='Update'></form>"));
+  response->print(
+    F("<html><form method='POST' action='/update' enctype='multipart/form-data'>"
+        "<input type='file' name='firmware'> "
+        "<input type='submit' value='Update'>"
+      "</form></html>"));
   request->send(response);
 }
 
@@ -649,18 +657,36 @@ handleUpdatePost(AsyncWebServerRequest *request) {
   }
 }
 
+extern "C" uint32_t _SPIFFS_start;
+extern "C" uint32_t _SPIFFS_end;
+
 void
-handleUpdateUpload(AsyncWebServerRequest *request, String filename, size_t index, uint8_t *data, size_t len, bool final) {
-  if(!index){
+handleUpdateUpload(AsyncWebServerRequest *request, String filename, size_t index, uint8_t *data, size_t len, bool final)
+{
+  if(!index)
+  {
+    dumpRequest(request);
+
     DBUGF("Update Start: %s", filename.c_str());
+
+    DBUGVAR(data[0]);
+    int command = data[0] == 0xE9 ? U_FLASH : U_SPIFFS;
+    size_t updateSize = U_FLASH == command ?
+      (ESP.getFreeSketchSpace() - 0x1000) & 0xFFFFF000 :
+      ((size_t) &_SPIFFS_end - (size_t) &_SPIFFS_start);
+
+    DBUGVAR(command);
+    DBUGVAR(updateSize);
+
     Update.runAsync(true);
-    if(!Update.begin((ESP.getFreeSketchSpace() - 0x1000) & 0xFFFFF000)){
+    if(!Update.begin(updateSize, command)) {
 #ifdef ENABLE_DEBUG
       Update.printError(DEBUG_PORT);
 #endif
     }
   }
-  if(!Update.hasError()) {
+  if(!Update.hasError())
+  {
     DBUGF("Update Writing %d", index);
     if(Update.write(data, len) != len) {
 #ifdef ENABLE_DEBUG
@@ -668,8 +694,9 @@ handleUpdateUpload(AsyncWebServerRequest *request, String filename, size_t index
 #endif
     }
   }
-  if(final){
-    if(Update.end(true)){
+  if(final)
+  {
+    if(Update.end(true)) {
       DBUGF("Update Success: %uB", index+len);
     } else {
 #ifdef ENABLE_DEBUG
