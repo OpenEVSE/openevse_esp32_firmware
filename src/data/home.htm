@@ -172,8 +172,8 @@
             </p>
             <p>
               <button data-bind="click: saveEmonCms, text: (saveEmonCmsFetching() ? 'Saving' : (saveEmonCmsSuccess() ? 'Saved' : 'Save')), disable: saveEmonCmsFetching">Save</button>
-              <span data-bind="visible: config.emoncms_enabled"><b>&nbsp; Connected:&nbsp;<span data-bind="text: '1' === status.emoncms_connected() ? 'Yes' : 'No'"></span></b></span>
-              <span data-bind="visible: config.emoncms_enabled() &amp;&amp; '1' === status.emoncms_connected()"><b>&nbsp; Successful posts:&nbsp;<span data-bind="text: status.packets_success"></span></b></span>
+              <span data-bind="visible: config.emoncms_enabled"><b>&nbsp; Connected:&nbsp;<span data-bind="text: 1 === status.emoncms_connected() ? 'Yes' : 'No'"></span></b></span>
+              <span data-bind="visible: config.emoncms_enabled() &amp;&amp; 1 === status.emoncms_connected()"><b>&nbsp; Successful posts:&nbsp;<span data-bind="text: status.packets_success"></span></b></span>
             </p>
           </div>
 
@@ -250,7 +250,7 @@
               <span class="small-text">Grid (+I/-E) MQTT topic to modulate charge rate based on <b>excess power</b></span>
             </p>
               <button data-bind="click: saveMqtt, text: (saveMqttFetching() ? 'Saving' : (saveMqttSuccess() ? 'Saved' : 'Save')), disable: saveMqttFetching">Save</button>
-              <span data-bind="visible: config.mqtt_enabled"><b>&nbsp; Connected:&nbsp;<span data-bind="text: '1' === status.mqtt_connected() ? 'Yes' : 'No'"></span></b></span>
+              <span data-bind="visible: config.mqtt_enabled"><b>&nbsp; Connected:&nbsp;<span data-bind="text: 1 === status.mqtt_connected() ? 'Yes' : 'No'"></span></b></span>
             </p>
           </div>
 
