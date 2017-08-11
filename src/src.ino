@@ -65,6 +65,10 @@ setup() {
 
   DEBUG.printf("Free: %d\n", ESP.getFreeHeap());
 
+  lcd_display(F("OpenEVSE WiFI"), 0, 0, 0, LCD_CLEAR_LINE);
+  lcd_display(currentfirmware, 0, 1, 5 * 1000, LCD_CLEAR_LINE);
+  lcd_loop();
+
   // Read saved settings from the config
   config_load_settings();
   DBUGF("After config_load_settings: %d", ESP.getFreeHeap());

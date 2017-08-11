@@ -14,6 +14,7 @@
 #include "input.h"
 #include "emoncms.h"
 #include "divert.h"
+#include "lcd.h"
 
 AsyncWebServer server(80);          // Create class for Web server
 AsyncWebSocket ws("/ws");
@@ -678,6 +679,10 @@ handleUpdateUpload(AsyncWebServerRequest *request, String filename, size_t index
     DBUGVAR(command);
     DBUGVAR(updateSize);
 
+    lcd_display(U_FLASH == command ? F("Updating WiFi") : F("Updating SPIFFS"), 0, 0, 0, LCD_CLEAR_LINE);
+    lcd_display(F(""), 0, 1, 10 * 1000, LCD_CLEAR_LINE);
+    lcd_loop();
+
     Update.runAsync(true);
     if(!Update.begin(updateSize, command)) {
 #ifdef ENABLE_DEBUG
@@ -688,6 +693,8 @@ handleUpdateUpload(AsyncWebServerRequest *request, String filename, size_t index
   if(!Update.hasError())
   {
     DBUGF("Update Writing %d", index);
+    String text = String(index);
+    lcd_display(text, 0, 1, 10 * 1000, LCD_DISPLAY_NOW);
     if(Update.write(data, len) != len) {
 #ifdef ENABLE_DEBUG
       Update.printError(DEBUG_PORT);
@@ -698,7 +705,9 @@ handleUpdateUpload(AsyncWebServerRequest *request, String filename, size_t index
   {
     if(Update.end(true)) {
       DBUGF("Update Success: %uB", index+len);
+      lcd_display(F("Complete"), 0, 1, 10 * 1000, LCD_CLEAR_LINE | LCD_DISPLAY_NOW);
     } else {
+      lcd_display(F("Error"), 0, 1, 10 * 1000, LCD_CLEAR_LINE | LCD_DISPLAY_NOW);
 #ifdef ENABLE_DEBUG
       Update.printError(DEBUG_PORT);
 #endif

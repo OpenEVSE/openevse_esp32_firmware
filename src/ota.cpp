@@ -5,9 +5,9 @@
 #include <ArduinoOTA.h>               // local OTA update from Arduino IDE
 #include <FS.h>
 
-#include "RapiSender.h"
+#include "lcd.h"
 
-extern RapiSender rapiSender;
+int lastPercent = -1;
 
 void ota_setup()
 {
@@ -19,26 +19,29 @@ void ota_setup()
     // Clean SPIFFS
     SPIFFS.end();
 
-    rapiSender.sendCmd(F("$FP 0 0 OpenEVSE WiFi..."));
-    rapiSender.sendCmd(F("$FP 0 1 ................"));
+    lcd_display(F("Updating WiFi"), 0, 0, 0, LCD_CLEAR_LINE);
+    lcd_display(F(""), 0, 1, 10 * 1000, LCD_CLEAR_LINE);
+    lcd_loop();
   });
 
   ArduinoOTA.onProgress([](unsigned int progress, unsigned int total) {
-    String command = F("$FP 0 1 ");
-    command += (progress / (total / 100));
-    command += F("%");
-    rapiSender.sendCmd(command);
+    int percent = progress / (total / 100);
+    if(percent != lastPercent) {
+      String text = String(percent) + F("%");
+      lcd_display(text, 0, 1, 10 * 1000, LCD_DISPLAY_NOW);
+      lastPercent = percent;
+    }
   });
 
   ArduinoOTA.onEnd([]() {
-    rapiSender.sendCmd(F("$FP 0 1 Complete"));
+    lcd_display(F("Complete"), 0, 1, 10 * 1000, LCD_CLEAR_LINE | LCD_DISPLAY_NOW);
   });
 
   ArduinoOTA.onError([](ota_error_t error) {
-    String command = F("$FP 0 1 Error[");
-    command += error;
-    command += F("]");
-    rapiSender.sendCmd(command);
+    String text = F("Error[");
+    text += error;
+    text += F("]");
+    lcd_display(text, 0, 1, 5 * 1000, LCD_CLEAR_LINE | LCD_DISPLAY_NOW);
   });
 }
 
