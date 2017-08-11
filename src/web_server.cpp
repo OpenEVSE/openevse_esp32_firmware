@@ -660,6 +660,7 @@ handleUpdatePost(AsyncWebServerRequest *request) {
 
 extern "C" uint32_t _SPIFFS_start;
 extern "C" uint32_t _SPIFFS_end;
+static int lastPercent = -1;
 
 void
 handleUpdateUpload(AsyncWebServerRequest *request, String filename, size_t index, uint8_t *data, size_t len, bool final)
@@ -694,7 +695,19 @@ handleUpdateUpload(AsyncWebServerRequest *request, String filename, size_t index
   {
     DBUGF("Update Writing %d", index);
     String text = String(index);
-    lcd_display(text, 0, 1, 10 * 1000, LCD_DISPLAY_NOW);
+    size_t contentLength = request->contentLength();
+    DBUGVAR(contentLength);
+    if(contentLength > 0)
+    {
+      int percent = index / (contentLength / 100);
+      DBUGVAR(percent);
+      DBUGVAR(lastPercent);
+      if(percent != lastPercent) {
+        String text = String(percent) + F("%");
+        lcd_display(text, 0, 1, 10 * 1000, LCD_DISPLAY_NOW);
+        lastPercent = percent;
+      }
+    }
     if(Update.write(data, len) != len) {
 #ifdef ENABLE_DEBUG
       Update.printError(DEBUG_PORT);

@@ -7,7 +7,7 @@
 
 #include "lcd.h"
 
-int lastPercent = -1;
+static int lastPercent = -1;
 
 void ota_setup()
 {
