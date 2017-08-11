@@ -22,7 +22,7 @@
 
 #define DBUG(...)           DEBUG_PORT.print(__VA_ARGS__)
 #define DBUGLN(...)         DEBUG_PORT.println(__VA_ARGS__)
-#define DBUGVAR(x)          do { DEBUG_PORT.print(ESCAPEQUOTE(x) " = "); DEBUG_PORT.println(x); } while (false)
+#define DBUGVAR(x, ...)     do { DEBUG_PORT.print(ESCAPEQUOTE(x) " = "); DEBUG_PORT.println(x, ##__VA_ARGS__); } while (false)
 
 #else
 
@@ -30,7 +30,7 @@
 #define DBUGF(...)
 #define DBUG(...)
 #define DBUGLN(...)
-#define DBUGVAR(x)
+#define DBUGVAR(...)
 
 #endif // DEBUG
 
