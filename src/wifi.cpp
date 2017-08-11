@@ -81,10 +81,10 @@ startAP() {
   ipaddress = tmpStr;
   DEBUG.print("AP IP Address: ");
   DEBUG.println(tmpStr);
-  lcd_display(F("SSID: OpenEVSE"), 0, 0, 0, true);
-  lcd_display(F("SSID: openevse"), 0, 1, 5000, true);
-  lcd_display(F("IP Address"), 0, 0, 0, true);
-  lcd_display(tmpStr, 0, 1, 5000, true);
+  lcd_display(F("SSID: OpenEVSE"), 0, 0, 0, LCD_CLEAR_LINE);
+  lcd_display(F("SSID: openevse"), 0, 1, 5000, LCD_CLEAR_LINE);
+  lcd_display(F("IP Address"), 0, 0, 0, LCD_CLEAR_LINE);
+  lcd_display(tmpStr, 0, 1, 5000, LCD_CLEAR_LINE);
 }
 
 // -------------------------------------------------------------------
@@ -148,8 +148,8 @@ startClient() {
     ipaddress = tmpStr;
     DEBUG.print("Connected, IP: ");
     DEBUG.println(tmpStr);
-    lcd_display(F("IP Address"), 0, 0, 0, true);
-    lcd_display(tmpStr, 0, 1, 5000, true);
+    lcd_display(F("IP Address"), 0, 0, 0, LCD_CLEAR_LINE);
+    lcd_display(tmpStr, 0, 1, 5000, LCD_CLEAR_LINE);
     // Copy the connected network and ipaddress to global strings for use in status request
     connected_network = esid;
   }
