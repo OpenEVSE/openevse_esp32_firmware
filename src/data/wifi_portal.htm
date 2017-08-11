@@ -17,19 +17,15 @@
 
 <body>
   <div id="page">
-    <div class="box">
+    <div class="header">
       <h1>Open<span>EVSE</span></h1>
       <h3>WiFi</h3>
     </div>
 
-    <div class="container" data-bind="visible: !initialised()">
-      Loading, please wait...
-    </div>
+    <div class="container">
 
-    <div class="container" data-bind="visible: initialised" style="display: none">
-
-      <div id="content">
-        <div class="box380">
+      <div>
+        <div class="box">
           <h2>WiFi Setup</h2>
           <p><b>Mode:</b> <span id="mode" data-bind="text: status.fullMode"></span></p>
 
@@ -40,11 +36,13 @@
           <div id="ap-view" data-bind="visible: !status.isWifiClient() &amp;&amp; !wifiConnecting()">
             <p>Connect to network:</p>
             <table>
-              <tr>
-                <th>Select</th>
-                <th>Network</th>
-                <th>RSSI dBm</th>
-              </tr>
+              <thead>
+                <tr>
+                  <th>Select</th>
+                  <th>Network</th>
+                  <th>RSSI dBm</th>
+                </tr>
+              </thead>
               <tbody id="networks" data-bind="foreach: scan.results">
                 <tr>
                   <td><input class='networkcheckbox' name='network' data-bind="checkedValue: bssid(), checked: $root.bssid"
@@ -53,6 +51,11 @@
                   <td data-bind="text: rssi"></td>
                 </tr>
               </tbody>
+              <tfoot data-bind="visible: 0 == scan.results().length">
+                <tr>
+                  <td colspan="3">Scanning...</td>
+                </tr>
+              </tfoot>
             </table>
             <p data-bind="text: config.ssid"></p>
             <p>
