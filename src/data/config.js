@@ -1132,7 +1132,7 @@ function OpenEvseWiFiViewModel() {
       console.log(ev);
       self.pingInterval = setInterval(function () {
         self.socket.send("{\"ping\":1}");
-      });
+      }, 1000);
     };
     self.socket.onclose = function (ev) {
       console.log(ev);
