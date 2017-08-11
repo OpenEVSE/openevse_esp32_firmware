@@ -816,8 +816,7 @@ void onWsEvent(AsyncWebSocket * server, AsyncWebSocketClient *client, AwsEventTy
     if(info->final && info->index == 0 && info->len == len)
     {
       //the whole message is in a single frame and we got all of it's data
-      DBUGF("ws[%s][%u] %s-message[%llu]: ", server->url(), client->id(), (info->opcode == WS_TEXT)?"text":"binary", info->len);
-      DBUGF("%.*s\n", len, (char *)data);
+      DBUGF("ws[%s][%u] %s-message[%u]: ", server->url(), client->id(), (info->opcode == WS_TEXT)?"text":"binary", len);
     } else {
       // TODO: handle messages that are comprised of multiple frames or the frame is split into multiple packets
     }
