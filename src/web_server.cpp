@@ -14,6 +14,7 @@
 #include "input.h"
 #include "emoncms.h"
 #include "divert.h"
+#include "lcd.h"
 
 AsyncWebServer server(80);          // Create class for Web server
 AsyncWebSocket ws("/ws");
@@ -142,8 +143,12 @@ handleHome(AsyncWebServerRequest *request) {
   if (SPIFFS.exists(page)) {
     request->send(SPIFFS, page);
   } else {
-    request->send(200, CONTENT_TYPE_TEXT,
-                F("/home.html not found, have you flashed the SPIFFS?"));
+    request->send(200, CONTENT_TYPE_HTML,
+      F("<html><body>"
+        "<h1><font color=006666>Open</font><b>EVSE</b> WiFi</h1>"
+        "<p>/home.html not found, have you flashed the SPIFFS?</p>"
+        "<p><a href='/update'>Update Firmware</a></p>"
+        "</body></html>"));
   }
 }
 
@@ -633,7 +638,11 @@ handleUpdateGet(AsyncWebServerRequest *request) {
   }
 
   response->setCode(200);
-  response->print(F("<form method='POST' action='/update' enctype='multipart/form-data'><input type='file' name='update'><input type='submit' value='Update'></form>"));
+  response->print(
+    F("<html><form method='POST' action='/update' enctype='multipart/form-data'>"
+        "<input type='file' name='firmware'> "
+        "<input type='submit' value='Update'>"
+      "</form></html>"));
   request->send(response);
 }
 
@@ -649,35 +658,77 @@ handleUpdatePost(AsyncWebServerRequest *request) {
   }
 }
 
+extern "C" uint32_t _SPIFFS_start;
+extern "C" uint32_t _SPIFFS_end;
+static int lastPercent = -1;
+
 void
-handleUpdateUpload(AsyncWebServerRequest *request, String filename, size_t index, uint8_t *data, size_t len, bool final) {
-  if(!index){
+handleUpdateUpload(AsyncWebServerRequest *request, String filename, size_t index, uint8_t *data, size_t len, bool final)
+{
+  if(!index)
+  {
+    dumpRequest(request);
+
     DBUGF("Update Start: %s", filename.c_str());
+
+    DBUGVAR(data[0]);
+    int command = data[0] == 0xE9 ? U_FLASH : U_SPIFFS;
+    size_t updateSize = U_FLASH == command ?
+      (ESP.getFreeSketchSpace() - 0x1000) & 0xFFFFF000 :
+      ((size_t) &_SPIFFS_end - (size_t) &_SPIFFS_start);
+
+    DBUGVAR(command);
+    DBUGVAR(updateSize);
+
+    lcd_display(U_FLASH == command ? F("Updating WiFi") : F("Updating SPIFFS"), 0, 0, 0, LCD_CLEAR_LINE);
+    lcd_display(F(""), 0, 1, 10 * 1000, LCD_CLEAR_LINE);
+    lcd_loop();
+
     Update.runAsync(true);
-    if(!Update.begin((ESP.getFreeSketchSpace() - 0x1000) & 0xFFFFF000)){
+    if(!Update.begin(updateSize, command)) {
 #ifdef ENABLE_DEBUG
       Update.printError(DEBUG_PORT);
 #endif
     }
   }
-  if(!Update.hasError()) {
+  if(!Update.hasError())
+  {
     DBUGF("Update Writing %d", index);
+    String text = String(index);
+    size_t contentLength = request->contentLength();
+    DBUGVAR(contentLength);
+    if(contentLength > 0)
+    {
+      int percent = index / (contentLength / 100);
+      DBUGVAR(percent);
+      DBUGVAR(lastPercent);
+      if(percent != lastPercent) {
+        String text = String(percent) + F("%");
+        lcd_display(text, 0, 1, 10 * 1000, LCD_DISPLAY_NOW);
+        lastPercent = percent;
+      }
+    }
     if(Update.write(data, len) != len) {
 #ifdef ENABLE_DEBUG
       Update.printError(DEBUG_PORT);
 #endif
     }
   }
-  if(final){
-    if(Update.end(true)){
+  if(final)
+  {
+    if(Update.end(true)) {
       DBUGF("Update Success: %uB", index+len);
+      lcd_display(F("Complete"), 0, 1, 10 * 1000, LCD_CLEAR_LINE | LCD_DISPLAY_NOW);
     } else {
+      lcd_display(F("Error"), 0, 1, 10 * 1000, LCD_CLEAR_LINE | LCD_DISPLAY_NOW);
 #ifdef ENABLE_DEBUG
       Update.printError(DEBUG_PORT);
 #endif
     }
   }
 }
+
+String delayTimer = "0 0 0 0";
 
 void
 handleRapi(AsyncWebServerRequest *request) {
@@ -697,7 +748,7 @@ handleRapi(AsyncWebServerRequest *request) {
           "Get Real-time Current - $GG<p>Get Temperatures - $GP<p>"
           "<p>"
           "<form method='get' action='r'><label><b><i>RAPI Command:</b></i></label>"
-          "<input name='rapi' length=32><p><input type='submit'></form>");
+          "<input id='rapi' name='rapi' length=32><p><input type='submit'></form>");
   }
 
   if (request->hasArg("rapi"))
@@ -707,9 +758,25 @@ handleRapi(AsyncWebServerRequest *request) {
     // BUG: Really we should do this in the main loop not here...
     Serial.flush();
     comm_sent++;
-    if (0 == rapiSender.sendCmd(rapi.c_str())) {
-      comm_success++;
+    int ret = rapiSender.sendCmd(rapi.c_str());
+
+    // IMPROVE: handle other errors, eg timeout
+    if(0 == ret || 1 == ret)
+    {
       String rapiString = rapiSender.getResponse();
+      if(0 == ret) {
+        comm_success++;
+      }
+
+      // Fake $GD if not supported by firmware
+      if(0 == ret && rapi.startsWith(F("$ST"))) {
+        delayTimer = rapi.substring(4);
+      }
+      if(1 == ret && rapi.equals(F("$GD"))) {
+        ret = 0;
+        rapiString = F("$OK ");
+        rapiString += delayTimer;
+      }
 
       if (json) {
         s = "{\"cmd\":\""+rapi+"\",\"ret\":\""+rapiString+"\"}";
@@ -721,7 +788,8 @@ handleRapi(AsyncWebServerRequest *request) {
     }
   }
   if (false == json) {
-   s += F("<p></html>\r\n\r\n");
+    s += F("<script type='text/javascript'>document.getElementById('rapi').focus();</script>");
+    s += F("<p></html>\r\n\r\n");
   }
 
   response->setCode(200);
@@ -770,8 +838,7 @@ void onWsEvent(AsyncWebSocket * server, AsyncWebSocketClient *client, AwsEventTy
     if(info->final && info->index == 0 && info->len == len)
     {
       //the whole message is in a single frame and we got all of it's data
-      DBUGF("ws[%s][%u] %s-message[%llu]: ", server->url(), client->id(), (info->opcode == WS_TEXT)?"text":"binary", info->len);
-      DBUGF("%.*s\n", len, (char *)data);
+      DBUGF("ws[%s][%u] %s-message[%u]: ", server->url(), client->id(), (info->opcode == WS_TEXT)?"text":"binary", len);
     } else {
       // TODO: handle messages that are comprised of multiple frames or the frame is split into multiple packets
     }

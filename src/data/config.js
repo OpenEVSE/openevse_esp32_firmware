@@ -384,7 +384,9 @@ function OpenEvseViewModel(baseEndpoint, rapiViewModel) {
            self.tempCheckEnabled() &&
            self.diodeCheckEnabled() &&
            self.ventRequiredEnabled();
-   });
+    });
+
+  self.tempCheckSupported = ko.observable(false);
 
   // Derived states
   self.isConnected = ko.pureComputed(function () {
@@ -466,7 +468,17 @@ function OpenEvseViewModel(baseEndpoint, rapiViewModel) {
     }); },
     function () { return self.openevse.vent_required(function (enabled) {
       self.ventRequiredEnabled(enabled);
-    }); }
+    }); },
+    function () { return self.openevse.over_temperature_thresholds(function () {
+      self.tempCheckSupported(true);
+    }).error(function () {
+      self.tempCheckSupported(false);
+    }); },
+    function () { return self.openevse.timer(function (enabled, start, stop) {
+      self.delayTimerEnabled(enabled);
+      self.delayTimerStart(start);
+      self.delayTimerStop(stop);
+    }); },
   ];
   var updateCount = -1;
 
@@ -1120,7 +1132,7 @@ function OpenEvseWiFiViewModel() {
       console.log(ev);
       self.pingInterval = setInterval(function () {
         self.socket.send("{\"ping\":1}");
-      });
+      }, 1000);
     };
     self.socket.onclose = function (ev) {
       console.log(ev);
