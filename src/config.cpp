@@ -203,7 +203,7 @@ config_load_settings() {
   EEPROM_read_string(EEPROM_MQTT_TOPIC_START, EEPROM_MQTT_TOPIC_SIZE,
                      mqtt_topic, "openevse");
   EEPROM_read_string(EEPROM_MQTT_USER_START, EEPROM_MQTT_USER_SIZE,
-                     mqtt_user, "emonpimqtt");
+                     mqtt_user, "emonpi");
   EEPROM_read_string(EEPROM_MQTT_PASS_START, EEPROM_MQTT_PASS_SIZE,
                      mqtt_pass, "emonpimqtt2016");
   EEPROM_read_string(EEPROM_MQTT_SOLAR_START, EEPROM_MQTT_SOLAR_SIZE,
