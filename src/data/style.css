@@ -443,3 +443,11 @@ span.selected
   border-left-width: 5px;
   box-shadow: 1px 7px 7px 1px rgba(146, 0, 247, 0.4);
 }
+
+/*Separator lines*/
+hr {
+height: 1px;
+color: #eee;
+background-color: #eee;
+border: none;
+}

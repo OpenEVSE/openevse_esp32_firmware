@@ -323,7 +323,7 @@
               <button data-bind="click: setStatus.bind($data, 'enable'), visible: !isEnabled()">Start</button>
               <button data-bind="click: setStatus.bind($data, 'sleep'), visible: !isSleeping()">Pause</button>
             </p>
-
+            <hr>
             <p data-bind="with: openevse">
               <b>Time limit:</b><br>
               <select data-bind="options: timeLimits,
@@ -340,21 +340,22 @@
                                             enable: !updatingChargeLimit() &amp;&amp; isConnected(),
                                             css: { saved: savedChargeLimit }" /> kWh
             </p>
-
+            <hr> <br>
             <div data-bind="with: openevse">
               <b>Timer:</b><br>
                 Start: <input type="time" data-bind="value: delayTimerStart, disable: isError" />
                 &nbsp;&nbsp;
                 Stop: <input type="time" data-bind="value: delayTimerStop, disable: isError" /><br/>
-                <button data-bind="text: delayTimerEnabled() ? 'Set' : 'Start',
+                <br>
+                <button data-bind="text: delayTimerEnabled() ? 'Update' : 'Set',
                                    enable: !updatingDelayTimer() &amp;&amp;
                                            delayTimerValid() &amp;&amp;
                                            !isError(),
-                                   click: startDelayTimer">Start</button>
+                                   click: startDelayTimer">Set</button>
                 <button data-bind="visible: delayTimerEnabled(),
                                    enable: !updatingDelayTimer() &amp;&amp;
                                            !isError(),
-                                   click: stopDelayTimer">Stop</button>
+                                   click: stopDelayTimer">Cancel</button>
             </div>
           </div>
 
@@ -424,9 +425,9 @@
               </label>
               <span data-bind="css: {selected: automaticTime() }">Automatic<span>
 
-              <button style="margin-left: 30px" data-bind="click: setTime">Set</button>
+              <button style="margin-left: 30px" data-bind="click: setTime">Update</button>
             </div>
-
+            <hr>
             <p>
               <b>Service Level:</b><br/>
               <select data-bind="options: serviceLevels,
