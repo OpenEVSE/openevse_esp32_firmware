@@ -32,5 +32,8 @@ extern void wifi_loop();
 extern void wifi_restart();
 extern void wifi_scan();
 extern void wifi_disconnect();
+extern void wifi_turn_off_ap();
+extern void wifi_turn_on_ap();
+extern bool wifi_client_connected();
 
 #endif // _EMONESP_WIFI_H

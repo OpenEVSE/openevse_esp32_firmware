@@ -43,6 +43,11 @@
 
 RapiSender rapiSender(&Serial);
 
+#define OPENEVSE_WIFI_MODE_AP 0
+#define OPENEVSE_WIFI_MODE_CLIENT 1
+#define OPENEVSE_WIFI_MODE_AP_DEFAULT 2
+
+
 unsigned long Timer1; // Timer for events once every 30 seconds
 unsigned long Timer3; // Timer for events once every 2 seconds
 
@@ -110,6 +115,17 @@ setup() {
       DBUGVAR(qrapi);
       long wifiMode = strtol(qrapi.c_str(), NULL, 10);
       DBUGVAR(wifiMode);
+
+      switch(wifiMode)
+      {
+        case OPENEVSE_WIFI_MODE_AP:
+        case OPENEVSE_WIFI_MODE_AP_DEFAULT:
+          wifi_turn_on_ap();
+          break;
+        case OPENEVSE_WIFI_MODE_CLIENT:
+          wifi_turn_off_ap();
+          break;
+      }
     }
   });
   rapiSender.enableSequenceId(0);
@@ -145,8 +161,8 @@ loop() {
     Timer3 = millis();
   }
 
-  if (wifi_mode==WIFI_MODE_STA || wifi_mode==WIFI_MODE_AP_AND_STA) {
-
+  if(wifi_client_connected())
+  {
     if (config_mqtt_enabled()) {
       mqtt_loop();
     }
@@ -169,7 +185,6 @@ loop() {
       }
       Timer1 = millis();
     }
-
   } // end WiFi connected
 
   Profile_End(loop, 10);

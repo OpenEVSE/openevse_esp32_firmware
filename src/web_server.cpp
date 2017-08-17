@@ -26,6 +26,7 @@ unsigned long wifiRestartTime = 0;
 unsigned long mqttRestartTime = 0;
 unsigned long systemRestartTime = 0;
 unsigned long systemRebootTime = 0;
+unsigned long apOffTime = 0;
 
 // Content Types
 static const char _CONTENT_TYPE_HTML[] PROGMEM = "text/html";
@@ -147,7 +148,7 @@ handleHome(AsyncWebServerRequest *request) {
       F("<html><body>"
         "<h1><font color=006666>Open</font><b>EVSE</b> WiFi</h1>"
         "<p>/home.html not found, have you flashed the SPIFFS?</p>"
-        "<p><a href='/update'>Update Firmware</a></p>"
+        "<iframe style=\"width:380px; height:50px;\" frameborder=\"0\" scrolling=\"no\"></iframe>"
         "</body></html>"));
   }
 }
@@ -238,7 +239,7 @@ handleAPOff(AsyncWebServerRequest *request) {
   request->send(response);
 
   DBUGLN("Turning AP Off");
-  systemRebootTime = millis() + 5000;
+  apOffTime = millis() + 1000;
 }
 
 // -------------------------------------------------------------------
@@ -914,6 +915,12 @@ web_server_loop() {
   if(mqttRestartTime > 0 && millis() > mqttRestartTime) {
     mqttRestartTime = 0;
     mqtt_restart();
+  }
+
+  // Do we need to turn off the access point?
+  if(apOffTime > 0 && millis() > apOffTime) {
+    apOffTime = 0;
+    wifi_turn_off_ap();
   }
 
   // Do we need to restart the system?
