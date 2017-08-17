@@ -135,10 +135,15 @@ mqtt_publish(String data) {
   String topic = mqtt_topic + "/";
 
   int i = 0;
+  if(data[i] == '{') {
+    i++;
+  }
   while (int (data[i]) != 0) {
     // Construct MQTT topic e.g. <base_topic>/<status> data
     while (data[i] != ':') {
-      topic += data[i];
+      if(data[i] != '"') {
+        topic += data[i];
+      }
       i++;
       if (int (data[i]) == 0) {
         break;
@@ -147,7 +152,9 @@ mqtt_publish(String data) {
     i++;
     // Construct data string to publish to above topic
     while (data[i] != ',') {
-      mqtt_data += data[i];
+      if(data[i] != '}') {
+        mqtt_data += data[i];
+      }
       i++;
       if (int (data[i]) == 0) {
         break;
