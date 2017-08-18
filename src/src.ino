@@ -43,11 +43,6 @@
 
 RapiSender rapiSender(&Serial);
 
-#define OPENEVSE_WIFI_MODE_AP 0
-#define OPENEVSE_WIFI_MODE_CLIENT 1
-#define OPENEVSE_WIFI_MODE_AP_DEFAULT 2
-
-
 unsigned long Timer1; // Timer for events once every 30 seconds
 unsigned long Timer3; // Timer for events once every 2 seconds
 
@@ -90,44 +85,8 @@ setup() {
   ota_setup();
   DBUGF("After ota_setup: %d", ESP.getFreeHeap());
 #endif
-  rapiSender.setOnEvent([]() {
-    if(!strcmp(rapiSender.getToken(0), "$ST")) {
-      String qrapi = rapiSender.getToken(1);
-      DBUGVAR(qrapi);
 
-      // Update our local state
-      state = strtol(qrapi.c_str(), NULL, 16);
-      DBUGVAR(state);
-
-      // Send to all clients
-      String event = F("{\"state\":");
-      event += state;
-      event += F("}");
-      web_server_event(event);
-
-      if (config_mqtt_enabled()) {
-        event = F("state:");
-        event += String(state);
-        mqtt_publish(event);
-      }
-    } else if(!strcmp(rapiSender.getToken(0), "$WF")) {
-      String qrapi = rapiSender.getToken(1);
-      DBUGVAR(qrapi);
-      long wifiMode = strtol(qrapi.c_str(), NULL, 10);
-      DBUGVAR(wifiMode);
-
-      switch(wifiMode)
-      {
-        case OPENEVSE_WIFI_MODE_AP:
-        case OPENEVSE_WIFI_MODE_AP_DEFAULT:
-          wifi_turn_on_ap();
-          break;
-        case OPENEVSE_WIFI_MODE_CLIENT:
-          wifi_turn_off_ap();
-          break;
-      }
-    }
-  });
+  rapiSender.setOnEvent(on_rapi_event);
   rapiSender.enableSequenceId(0);
 } // end setup
 

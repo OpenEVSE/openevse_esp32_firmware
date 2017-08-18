@@ -6,8 +6,15 @@
 #include "input.h"
 #include "config.h"
 #include "divert.h"
+#include "mqtt.h"
+#include "web_server.h"
+#include "wifi.h"
 
 #include "RapiSender.h"
+
+#define OPENEVSE_WIFI_MODE_AP 0
+#define OPENEVSE_WIFI_MODE_CLIENT 1
+#define OPENEVSE_WIFI_MODE_AP_DEFAULT 2
 
 const char *e_url = "/input/post.json?node=";
 
@@ -266,4 +273,44 @@ handleRapiRead() {
     }
   }
   Profile_End(handleRapiRead, 10);
+}
+
+void on_rapi_event()
+{
+  if(!strcmp(rapiSender.getToken(0), "$ST")) {
+    String qrapi = rapiSender.getToken(1);
+    DBUGVAR(qrapi);
+
+    // Update our local state
+    state = strtol(qrapi.c_str(), NULL, 16);
+    DBUGVAR(state);
+
+    // Send to all clients
+    String event = F("{\"state\":");
+    event += state;
+    event += F("}");
+    web_server_event(event);
+
+    if (config_mqtt_enabled()) {
+      event = F("state:");
+      event += String(state);
+      mqtt_publish(event);
+    }
+  } else if(!strcmp(rapiSender.getToken(0), "$WF")) {
+    String qrapi = rapiSender.getToken(1);
+    DBUGVAR(qrapi);
+    long wifiMode = strtol(qrapi.c_str(), NULL, 10);
+    DBUGVAR(wifiMode);
+
+    switch(wifiMode)
+    {
+      case OPENEVSE_WIFI_MODE_AP:
+      case OPENEVSE_WIFI_MODE_AP_DEFAULT:
+        wifi_turn_on_ap();
+        break;
+      case OPENEVSE_WIFI_MODE_CLIENT:
+        wifi_turn_off_ap();
+        break;
+    }
+  }
 }
