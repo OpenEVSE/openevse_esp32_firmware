@@ -71,6 +71,27 @@ enum {
   Client_Connected
 } clientState = Client_Disconnected;
 
+void sync_mode(bool retry = false)
+{
+  DBUGVAR(WiFi.getMode());
+  switch(WiFi.getMode())
+  {
+    case WIFI_OFF:
+      break;
+    case WIFI_STA:
+      wifi_mode = WIFI_MODE_STA;
+      break;
+    case WIFI_AP:
+      wifi_mode = WIFI_MODE_AP_ONLY;
+      break;
+    case WIFI_AP_STA:
+      wifi_mode = retry ? WIFI_MODE_AP_STA_RETRY : WIFI_MODE_AP_AND_STA;
+      break;
+  }
+
+  DBUGVAR(wifi_mode);
+}
+
 // -------------------------------------------------------------------
 // Start Access Point
 // Access point is used for wifi network selection
@@ -81,7 +102,7 @@ startAP() {
 
   if((WiFi.getMode() & WIFI_STA) && WiFi.isConnected()) {
     WiFi.disconnect(true);
-    WiFi.enableSTA(false);
+    clientState = Client_Disconnected;
   }
 
   WiFi.enableAP(true);
@@ -105,13 +126,11 @@ startAP() {
   DEBUG.print("AP IP Address: ");
   DEBUG.println(tmpStr);
   lcd_display(F("SSID: OpenEVSE"), 0, 0, 0, LCD_CLEAR_LINE);
-  lcd_display(F("SSID: openevse"), 0, 1, 5000, LCD_CLEAR_LINE);
-  lcd_display(F("IP Address"), 0, 0, 0, LCD_CLEAR_LINE);
-  lcd_display(tmpStr, 0, 1, 5000, LCD_CLEAR_LINE);
+  lcd_display(F("SSID: openevse"), 0, 1, 15 * 1000, LCD_CLEAR_LINE);
 
   apClients = 0;
 
-  wifi_mode = 0 == (WiFi.getMode() & WIFI_STA) ? WIFI_MODE_AP_ONLY : WIFI_MODE_AP_AND_STA;
+  sync_mode();
 }
 
 // -------------------------------------------------------------------
@@ -131,10 +150,10 @@ startClient()
 
   clientState = Client_Connecting;
 
-  wifi_mode = 0 == (WiFi.getMode() & WIFI_AP) ? WIFI_MODE_STA : WIFI_MODE_AP_AND_STA;
+  sync_mode();
 }
 
-void wifi_onStationModeConnected(const WiFiEventStationModeConnected &event)
+void wifi_onStationModeGotIP(const WiFiEventStationModeGotIP &event)
 {
   #ifdef WIFI_LED
     wifiLedState = WIFI_LED_ON_STATE;
@@ -188,7 +207,7 @@ void wifi_onStationModeDisconnected(const WiFiEventStationModeDisconnected &even
   WIFI_DISCONNECT_REASON_HANDSHAKE_TIMEOUT == event.reason ? "WIFI_DISCONNECT_REASON_HANDSHAKE_TIMEOUT" :
   "UNKNOWN");
 
-  clientState = Client_Connecting;
+  clientState = WiFi.getMode() & WIFI_STA ? Client_Connecting : Client_Disconnected;
 }
 
 void
@@ -201,12 +220,17 @@ wifi_setup() {
   randomSeed(analogRead(0));
 
   WiFi.persistent(false);
-  WiFi.onStationModeConnected(wifi_onStationModeConnected);
-  WiFi.onStationModeDisconnected(wifi_onStationModeDisconnected);
-  WiFi.onSoftAPModeStationConnected([](const WiFiEventSoftAPModeStationConnected &event) {
+  WiFi.mode(WIFI_OFF);
+
+  static auto _onStationModeConnected = WiFi.onStationModeConnected([](const WiFiEventStationModeConnected &event) { DBUGF("Connected to %s", event.ssid.c_str()); });
+  static auto _onStationModeGotIP = WiFi.onStationModeGotIP(wifi_onStationModeGotIP);
+  static auto _onStationModeDisconnected = WiFi.onStationModeDisconnected(wifi_onStationModeDisconnected);
+  static auto _onSoftAPModeStationConnected = WiFi.onSoftAPModeStationConnected([](const WiFiEventSoftAPModeStationConnected &event) {
+    lcd_display(F("IP Address"), 0, 0, 0, LCD_CLEAR_LINE);
+    lcd_display(ipaddress, 0, 1, (0 == apClients ? 15 : 5) * 1000, LCD_CLEAR_LINE);
     apClients++;
   });
-  WiFi.onSoftAPModeStationDisconnected([](const WiFiEventSoftAPModeStationDisconnected &event) {
+  static auto _onSoftAPModeStationDisconnected = WiFi.onSoftAPModeStationDisconnected([](const WiFiEventSoftAPModeStationDisconnected &event) {
     apClients--;
   });
 
@@ -235,9 +259,10 @@ wifi_loop() {
   {
     wifiLedState = !wifiLedState;
     digitalWrite(WIFI_LED, wifiLedState);
-    wifiLedTimeOut = millis() +
-      (Client_Connecting == clientState ? WIFI_LED_STA_CONNECTING_TIME :
-      0 == apClients ? WIFI_LED_AP_TIME : WIFI_LED_AP_CONNECTED_TIME);
+
+    int ledTime = Client_Connecting == clientState ? WIFI_LED_STA_CONNECTING_TIME :
+                    0 == apClients ? WIFI_LED_AP_TIME : WIFI_LED_AP_CONNECTED_TIME;
+    wifiLedTimeOut = millis() + ledTime;
   }
 #endif
 
@@ -334,13 +359,15 @@ void wifi_turn_off_ap()
 {
   if(WIFI_MODE_AP_AND_STA == wifi_mode)
   {
-    WiFi.enableAP(false);
+    WiFi.softAPdisconnect(true);
     dnsServer.stop();
+    sync_mode();
   }
 }
 
 void wifi_turn_on_ap()
 {
+  DBUGF("wifi_turn_on_ap %d", wifi_mode);
   if(WIFI_MODE_STA == wifi_mode) {
     startAP();
   }
