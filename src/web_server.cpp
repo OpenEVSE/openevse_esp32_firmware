@@ -441,7 +441,22 @@ handleStatus(AsyncWebServerRequest *request) {
 
   s += "\"ohm_hour\":\"" + ohm_hour + "\",";
 
-  s += "\"free_heap\":" + String(ESP.getFreeHeap());
+  s += "\"free_heap\":" + String(ESP.getFreeHeap()) + ",";
+
+  s += "\"comm_sent\":" + String(comm_sent) + ",";
+  s += "\"comm_success\":" + String(comm_success) + ",";
+
+  s += "\"amp\":" + amp + ",";
+  s += "\"pilot\":" + pilot + ",";
+  s += "\"temp1\":" + temp1 + ",";
+  s += "\"temp2\":" + temp2 + ",";
+  s += "\"temp3\":" + temp3 + ",";
+  s += "\"state\":" + String(state) + ",";
+  s += "\"elapsed\":" + String(elapsed) + ",";
+  s += "\"wattsec\":" + wattsec + ",";
+  s += "\"watthour\":" + watthour_total + ",";
+
+  s += "\"divertmode\":" + String(divertmode);
 
 #ifdef ENABLE_LEGACY_API
   s += ",\"networks\":[" + st + "]";
@@ -538,8 +553,7 @@ handleConfig(AsyncWebServerRequest *request) {
     s += dummyPassword;
   }
   s += "\",";
-  s += "\"ohm_enabled\":" + String(config_ohm_enabled() ? "true" : "false") + ",";
-  s += "\"divertmode\":" + String(divertmode);
+  s += "\"ohm_enabled\":" + String(config_ohm_enabled() ? "true" : "false");
   s += "}";
 
   response->setCode(200);
@@ -547,7 +561,8 @@ handleConfig(AsyncWebServerRequest *request) {
   request->send(response);
 }
 
- // -------------------------------------------------------------------
+#ifdef ENABLE_LEGACY_API
+// -------------------------------------------------------------------
 // Returns Updates JSON
 // url: /rapiupdate
 // -------------------------------------------------------------------
@@ -562,12 +577,10 @@ handleUpdate(AsyncWebServerRequest *request) {
   String s = "{";
   s += "\"comm_sent\":" + String(comm_sent) + ",";
   s += "\"comm_success\":" + String(comm_success) + ",";
-#ifdef ENABLE_LEGACY_API
   s += "\"ohmhour\":\"" + ohm_hour + "\",";
   s += "\"espfree\":\"" + String(espfree) + "\",";
   s += "\"packets_sent\":\"" + String(packets_sent) + "\",";
   s += "\"packets_success\":\"" + String(packets_success) + "\",";
-#endif
   s += "\"amp\":" + amp + ",";
   s += "\"pilot\":" + pilot + ",";
   s += "\"temp1\":" + temp1 + ",";
@@ -575,9 +588,7 @@ handleUpdate(AsyncWebServerRequest *request) {
   s += "\"temp3\":" + temp3 + ",";
   s += "\"state\":" + String(state) + ",";
   s += "\"elapsed\":" + String(elapsed) + ",";
-#ifdef ENABLE_LEGACY_API
   s += "\"estate\":\"" + estate + "\",";
-#endif
   s += "\"wattsec\":" + wattsec + ",";
   s += "\"watthour\":" + watthour_total;
   s += "}";
@@ -586,6 +597,7 @@ handleUpdate(AsyncWebServerRequest *request) {
   response->print(s);
   request->send(response);
 }
+#endif
 
 // -------------------------------------------------------------------
 // Reset config and reboot
@@ -862,8 +874,10 @@ web_server_setup() {
 
   // Handle status updates
   server.on("/status", handleStatus);
-  server.on("/rapiupdate", handleUpdate);
   server.on("/config", handleConfig);
+#ifdef ENABLE_LEGACY_API
+  server.on("/rapiupdate", handleUpdate);
+#endif
 
   // Handle HTTP web interface button presses
   server.on("/savenetwork", handleSaveNetwork);
@@ -885,14 +899,6 @@ web_server_setup() {
   // Simple Firmware Update Form
   server.on("/update", HTTP_GET, handleUpdateGet);
   server.on("/update", HTTP_POST, handleUpdatePost, handleUpdateUpload);
-
-//  server.on("/firmware", [](){
-//    if(requestPreProcess())   handleUpdateCheck();
-//  });
-//
-//  server.on("/update", [](){
-//    if(requestPreProcess()) handleUpdate();
-//  });
 
   server.onNotFound(handleNotFound);
   server.begin();
