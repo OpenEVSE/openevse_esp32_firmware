@@ -123,6 +123,7 @@ loop() {
   ota_loop();
 #endif
   rapiSender.loop();
+  divert_current_loop();
 
   // Gives OpenEVSE time to finish self test on cold start
   if ( (millis() > 5000) && (rapi_read==0) ) {

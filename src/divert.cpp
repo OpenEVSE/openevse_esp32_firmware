@@ -78,21 +78,30 @@ void divertmode_update(byte newmode)
   }
 }
 
-// Set charge rate depending on divert mode and solar / grid_ie
 void divert_current_loop()
 {
   Profile_Start(divert_current_loop);
 
-  DBUGVAR(divertmode);
-
   if(last_state != state)
   {
+    DBUGVAR(last_state);
+    DBUGVAR(state);
+    DBUGVAR(divertmode);
+
     // Revert to normal mode on disconnecting the car
     if(OPENEVSE_STATE_NOT_CONNECTED == state && DIVERT_MODE_ECO == divertmode) {
       divertmode_update(DIVERT_MODE_NORMAL);
     }
     last_state = state;
   }
+
+  Profile_End(divert_current_loop, 5);
+} //end divert_current_loop
+
+// Set charge rate depending on divert mode and solar / grid_ie
+void divert_update_state()
+{
+  Profile_Start(divert_update_state);
 
   // If divert mode = Eco (2)
   if (divertmode == DIVERT_MODE_ECO)
@@ -182,5 +191,5 @@ void divert_current_loop()
     }
   } // end ecomode
 
-  Profile_End(divert_current_loop, 5);
-} //end divert_current_loop
+  Profile_End(divert_update_state, 5);
+} //end divert_update_state
