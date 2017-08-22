@@ -7,7 +7,7 @@
 // and run the HTML/JS from file, no need to upload to the ESP to test
 
 var baseHost = window.location.hostname;
-// var baseHost = "openevse.local";
+//var baseHost = "openevse.local";
 //var baseHost = "192.168.4.1";
 //var baseHost = "172.16.0.70";
 
@@ -358,7 +358,7 @@ function OpenEvseViewModel(baseEndpoint, rapiViewModel) {
     { name: "6 hours", value: 6 * 60 },
     { name: "7 hours", value: 7 * 60 },
     { name: "8 hours", value: 8 * 60 }];
-  
+
   self.chargeLimits = [
     { name: "none", value: 0 },
     { name: "1 kWh", value: 1 },
@@ -384,7 +384,7 @@ function OpenEvseViewModel(baseEndpoint, rapiViewModel) {
     { name: "70 kWh", value: 70 },
     { name: "80 kWh", value: 80 },
     { name: "90 kWh", value: 90 }];
-  
+
   self.serviceLevel = ko.observable(-1);
   self.actualServiceLevel = ko.observable(-1);
   self.minCurrentLevel = ko.observable(-1);
@@ -459,6 +459,22 @@ function OpenEvseViewModel(baseEndpoint, rapiViewModel) {
     }
   };
 
+  // helper to select an appropriate value for charge limit
+  self.selectChargeLimit = function(limit)
+  {
+    if(self.chargeLimit() === limit) {
+      return;
+    }
+
+    for(var i = 0; i < self.chargeLimits.length; i++) {
+      var charge = self.chargeLimits[i];
+      if(charge.value >= limit) {
+        self.chargeLimit(charge.value);
+        break;
+      }
+    }
+  };
+
   // List of items to update on calling update(). The list will be processed one item at
   // a time.
   var updateList = [
@@ -475,7 +491,7 @@ function OpenEvseViewModel(baseEndpoint, rapiViewModel) {
       self.selectTimeLimit(limit);
     }); },
     function () { return self.openevse.charge_limit(function (limit) {
-      self.chargeLimit(limit);
+      self.selectChargeLimit(limit);
     }); },
     function () { return self.openevse.gfi_self_test(function (enabled) {
       self.gfiSelfTestEnabled(enabled);
@@ -606,7 +622,7 @@ function OpenEvseViewModel(baseEndpoint, rapiViewModel) {
       self.openevse.charge_limit(function (limit) {
         self.setForTime(self.savedChargeLimit, 2000);
         if(val !== limit) {
-          self.chargeLimit(limit);
+          self.selectChargeLimit(limit);
         }
       }, val).always(function() {
         self.updatingChargeLimit(false);
