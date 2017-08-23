@@ -336,9 +336,12 @@
 
             <p data-bind="with: openevse">
               <b>Energy limit:</b><br>
-              <input type="text" data-bind="value: chargeLimit,
-                                            enable: !updatingChargeLimit() &amp;&amp; isConnected(),
-                                            css: { saved: savedChargeLimit }" /> kWh
+              <select type="text" data-bind="options: chargeLimits,
+                                             optionsText: 'name',
+                                             optionsValue: 'value',
+                                             value: chargeLimit,
+                                             enable: !updatingChargeLimit() &amp;&amp; isConnected(),
+                                             css: { saved: savedChargeLimit }" ></select>
             </p>
             <hr> <br>
             <div data-bind="with: openevse">
