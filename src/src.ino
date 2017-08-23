@@ -87,28 +87,22 @@ setup() {
 #endif
   rapiSender.setOnEvent([]() {
     if(!strcmp(rapiSender.getToken(0), "$ST")) {
-      String qrapi = rapiSender.getToken(1);
+      const char *qrapi = rapiSender.getToken(1);
       DBUGVAR(qrapi);
 
       // Update our local state
-      state = strtol(qrapi.c_str(), NULL, 16);
+      state = strtol(qrapi, NULL, 16);
       DBUGVAR(state);
 
       // Send to all clients
       String event = F("{\"state\":");
-      event += state;
+      event += String(state);
       event += F("}");
-      web_server_event(event);
-
-      if (config_mqtt_enabled()) {
-        event = F("state:");
-        event += String(state);
-        mqtt_publish(event);
-      }
+      event_send(event);
     } else if(!strcmp(rapiSender.getToken(0), "$WF")) {
-      String qrapi = rapiSender.getToken(1);
+      const char *qrapi = rapiSender.getToken(1);
       DBUGVAR(qrapi);
-      long wifiMode = strtol(qrapi.c_str(), NULL, 10);
+      long wifiMode = strtol(qrapi, NULL, 10);
       DBUGVAR(wifiMode);
     }
   });
@@ -129,6 +123,7 @@ loop() {
   ota_loop();
 #endif
   rapiSender.loop();
+  divert_current_loop();
 
   // Gives OpenEVSE time to finish self test on cold start
   if ( (millis() > 5000) && (rapi_read==0) ) {
@@ -174,3 +169,13 @@ loop() {
 
   Profile_End(loop, 10);
 } // end loop
+
+
+void event_send(String event)
+{
+  web_server_event(event);
+
+  if (config_mqtt_enabled()) {
+    mqtt_publish(event);
+  }
+}
