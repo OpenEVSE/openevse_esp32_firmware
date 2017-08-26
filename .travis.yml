@@ -31,6 +31,7 @@ cache:
 
 install:
   - pip install -U platformio
+  - platformio platform install espressif8266 --with-package tool-mkspiffs
 
 script:
   - platformio run -e $PIO_ENV
