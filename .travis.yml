@@ -33,5 +33,5 @@ install:
   - pip install -U platformio
 
 script:
-  - platformio run -e $PIO_ENV -t build
+  - platformio run -e $PIO_ENV
   - platformio run -e $PIO_ENV -t buildfs
