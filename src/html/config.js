@@ -859,7 +859,18 @@ function OpenEvseWiFiViewModel() {
         self.openevse.update(function () {
           self.initialised(true);
           updateTimer = setTimeout(self.update, updateTime);
+
+          // Load the upgrade frame
           self.upgradeUrl(self.baseEndpoint() + "/update");
+
+          // Load the images
+          var imgDefer = document.getElementsByTagName("img");
+          for (var i=0; i<imgDefer.length; i++) {
+            if(imgDefer[i].getAttribute("data-src")) {
+              imgDefer[i].setAttribute("src", imgDefer[i].getAttribute("data-src"));
+            }
+          }
+
           self.updating(false);
         });
       });
