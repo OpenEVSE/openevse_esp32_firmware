@@ -3,7 +3,7 @@ import json
 from pprint import pprint
 
 from css_html_js_minify.html_minifier import html_minify
-from css_html_js_minify.css_minifier import css_minify
+#from css_html_js_minify.css_minifier import css_minify
 #from css_html_js_minify.js_minifier import js_minify
 
 Import("env")
@@ -25,13 +25,22 @@ def js_minify(original):
     ])
 
     # Always use the following value for the Content-type header.
-    headers = { "Content-type": "application/x-www-form-urlencoded" }
+    headers = {"Content-type": "application/x-www-form-urlencoded"}
     conn = httplib.HTTPConnection('closure-compiler.appspot.com')
     conn.request('POST', '/compile', params, headers)
     response = conn.getresponse()
     data = response.read()
     conn.close()
     return data
+
+import requests
+
+def css_minify(original, wrap=False, comments=False, sort=True):
+    url = 'https://cssminifier.com/raw'
+    data = {'input': original }
+    response = requests.post(url, data=data)
+
+    return response.text
 
 def minify(env, target, source):
     output = ""
