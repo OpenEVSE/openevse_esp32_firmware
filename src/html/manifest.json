@@ -1,18 +1,17 @@
 {
   "home.htm": [ "home.htm" ],
   "home.js": [
-    "lib/jquery-3.2.1.js",
-    "lib/knockout-3.4.2.js",
-    "lib/knockout.mapping-2.4.1.js",
     "config.js",
     "openevse.js"
   ],
   "wifi_portal.htm": [ "wifi_portal.htm" ],
   "wifi_portal.js": [
+    "wifi_portal.js"
+  ],
+  "lib.js": [
     "lib/jquery-3.2.1.js",
     "lib/knockout-3.4.2.js",
-    "lib/knockout.mapping-2.4.1.js",
-    "wifi_portal.js"
+    "lib/knockout.mapping-2.4.1.js"
   ],
   "style.css": [ "style.css" ]
 }

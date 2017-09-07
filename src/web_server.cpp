@@ -4,10 +4,11 @@
 
 #include <Arduino.h>
 #include <ESP8266WiFi.h>
-#include <FS.h>                       // SPIFFS file-system: store web server html, CSS etc.
+//#include <FS.h>                       // SPIFFS file-system: store web server html, CSS etc.
 
 #include "emonesp.h"
 #include "web_server.h"
+#include "web_server_static.h"
 #include "config.h"
 #include "wifi.h"
 #include "mqtt.h"
@@ -18,6 +19,7 @@
 
 AsyncWebServer server(80);          // Create class for Web server
 AsyncWebSocket ws("/ws");
+StaticFileWebHandler staticFile;
 
 bool enableCors = true;
 
@@ -28,21 +30,11 @@ unsigned long systemRestartTime = 0;
 unsigned long systemRebootTime = 0;
 
 // Content Types
-static const char _CONTENT_TYPE_HTML[] PROGMEM = "text/html";
-#define CONTENT_TYPE_HTML FPSTR(_CONTENT_TYPE_HTML)
-
-static const char _CONTENT_TYPE_TEXT[] PROGMEM = "text/text";
-#define CONTENT_TYPE_TEXT FPSTR(_CONTENT_TYPE_TEXT)
-
-static const char _CONTENT_TYPE_JSON[] PROGMEM = "application/json";
-#define CONTENT_TYPE_JSON FPSTR(_CONTENT_TYPE_JSON)
-
-// Pages
-static const char _HOME_PAGE[] PROGMEM = "/home.htm";
-#define HOME_PAGE FPSTR(_HOME_PAGE)
-
-static const char _WIFI_PAGE[] PROGMEM = "/wifi_portal.htm";
-#define WIFI_PAGE FPSTR(_WIFI_PAGE)
+const char _CONTENT_TYPE_HTML[] PROGMEM = "text/html";
+const char _CONTENT_TYPE_TEXT[] PROGMEM = "text/text";
+const char _CONTENT_TYPE_CSS[] PROGMEM = "text/css";
+const char _CONTENT_TYPE_JSON[] PROGMEM = "application/json";
+const char _CONTENT_TYPE_JS[] PROGMEM = "application/javascript";
 
 static const char _DUMMY_PASSWORD[] PROGMEM = "___DUMMY_PASSWORD___";
 #define DUMMY_PASSWORD FPSTR(_DUMMY_PASSWORD)
@@ -129,6 +121,7 @@ bool isPositive(const String &str) {
 // Load Home page
 // url: /
 // -------------------------------------------------------------------
+/*
 void
 handleHome(AsyncWebServerRequest *request) {
   if (www_username != ""
@@ -151,6 +144,7 @@ handleHome(AsyncWebServerRequest *request) {
         "</body></html>"));
   }
 }
+*/
 
 // -------------------------------------------------------------------
 // Wifi scan /scan not currently used
@@ -859,18 +853,19 @@ void onWsEvent(AsyncWebSocket * server, AsyncWebSocketClient *client, AwsEventTy
 
 void
 web_server_setup() {
-  SPIFFS.begin(); // mount the fs
+//  SPIFFS.begin(); // mount the fs
 
   // Setup the static files
-  server.serveStatic("/", SPIFFS, "/")
-    .setDefaultFile("index.html");
+//  server.serveStatic("/", SPIFFS, "/")
+//    .setDefaultFile("index.html");
 
   // Add the Web Socket server
   ws.onEvent(onWsEvent);
   server.addHandler(&ws);
+  server.addHandler(&staticFile);
 
   // Start server & server root html /
-  server.on("/", handleHome);
+  //server.on("/", handleHome);
 
   // Handle status updates
   server.on("/status", handleStatus);
