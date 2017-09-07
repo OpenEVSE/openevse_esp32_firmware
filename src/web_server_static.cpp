@@ -147,7 +147,16 @@ size_t StaticFileResponse::writeData(AsyncWebServerRequest *request)
       copy = space;
     }
     //DBUGF("%p: write %d@%p", request, copy, ptr);
-    memcpy_P(buffer, ptr, copy);
+    if(IS_ALIGNED(ptr)) {
+      uint32_t *end = (uint32_t *)(ptr + copy);
+      for(uint32_t *src = (uint32_t *)ptr, *dst = (uint32_t *)buffer;
+          src < end; src++, dst++)
+      {
+        *dst = *src;
+      }
+    } else {
+      memcpy_P(buffer, ptr, copy);
+    }
 
     written = request->client()->add(buffer, copy);
     if(written > 0) {
