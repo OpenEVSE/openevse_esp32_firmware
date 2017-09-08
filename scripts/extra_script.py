@@ -1,4 +1,5 @@
 from os.path import join, isfile, basename
+from os import listdir
 import json
 from pprint import pprint
 import re
@@ -66,7 +67,9 @@ def minify(env, target, source):
 def get_c_name(source_file):
     return basename(source_file).upper().replace('.', '_').replace('-', '_')
 
-def text_to_header(original, source_file):
+def text_to_header(source_file):
+    with open(source_file) as source_fh:
+        original = source_fh.read().decode('utf-8')
     filename = get_c_name(source_file)
     output = "static const char CONTENT_{}[] PROGMEM = ".format(filename)
     for line in original.splitlines():
@@ -74,20 +77,34 @@ def text_to_header(original, source_file):
     output += ";\n"
     return output
 
-def binary_to_header(original, source_file):
-    return original
+def binary_to_header(source_file):
+    filename = get_c_name(source_file)
+    output = "static const char CONTENT_"+filename+"[] PROGMEM = {\n  "
+    count = 0
+
+    with open(source_file, "rb") as source_fh:
+        byte = source_fh.read(1)
+        while byte != "":
+            output += "0x{:02x}, ".format(ord(byte))
+            count += 1
+            if 16 == count:
+                output += "\n  "
+                count = 0
+
+            byte = source_fh.read(1)
+
+    output += "0x00 };\n"
+    return output
 
 def data_to_header(env, target, source):
     output = ""
     for source_file in source:
         #print("Reading {}".format(source_file))
         file = source_file.get_abspath()
-        with open(file) as source_fh:
-            original = source_fh.read().decode('utf-8')
         if file.endswith(".css") or file.endswith(".js") or file.endswith(".htm") or file.endswith(".html"):
-            output += text_to_header(original, file)
+            output += text_to_header(file)
         else:
-            output += binary_to_header(original, file)
+            output += binary_to_header(file)
     target_file = target[0].get_abspath()
     print("Generating {}".format(target_file))
     with open(target_file, "w") as output_file:
@@ -101,14 +118,21 @@ def make_static(env, target, source):
     with open(manifest) as manifest_file:
         man = json.load(manifest_file)
 
-    # include the files
+    out_files = []
     for out_file in man:
+        out_files.append(out_file)
+    for file in listdir(data_src):
+        if isfile(join(data_src, file)) and not file in out_files:
+          out_files.append(file)
+
+    # include the files
+    for out_file in out_files:
         filename = "web_server."+out_file+".h"
         output += "#include \"{}\"\n".format(filename)
 
     output += "StaticFile staticFiles[] = {\n"
 
-    for out_file in man:
+    for out_file in out_files:
         filetype = "TEXT"
         if out_file.endswith(".css"):
             filetype = "CSS"
@@ -116,6 +140,10 @@ def make_static(env, target, source):
             filetype = "JS"
         elif out_file.endswith(".htm") or out_file.endswith(".html"):
             filetype = "HTML"
+        elif out_file.endswith(".jpg"):
+            filetype = "JPEG"
+        elif out_file.endswith(".png"):
+            filetype = "PNG"
 
         c_name = get_c_name(out_file)
         output += "  { \"/"+out_file+"\", CONTENT_"+c_name+", sizeof(CONTENT_"+c_name+") - 1, _CONTENT_TYPE_"+filetype+" },\n"
@@ -135,18 +163,26 @@ def process_app_file(source_dir, source_files, data_dir, out_file, env):
     header_file = join("$PROJECTSRC_DIR", "web_server."+out_file+".h")
     env.Depends(header_file, env.Command(data_file, source, minify))
     #env.Depends("$PROJECTSRC_DIR/web_server.cpp", env.Command(header_file, data_file, data_to_header))
-    env.Depends("$BUILDSRC_DIR/web_server.o", env.Command(header_file, data_file, data_to_header))
+    env.Depends("$BUILDSRC_DIR/web_server_static.o", env.Command(header_file, data_file, data_to_header))
 
 def process_html_app(source, dest, env):
     manifest = join(source, "manifest.json")
+    out_files = []
     if isfile(manifest):
         with open(manifest) as manifest_file:
             man = json.load(manifest_file)
         for out_file in man:
             in_files = man[out_file]
+            out_files.append(out_file)
             process_app_file(source, in_files, dest, out_file, env)
+    for file in listdir(dest):
+        if isfile(join(dest, file)) and not file in out_files:
+            data_file = join(dest, file)
+            header_file = join("$PROJECTSRC_DIR", "web_server."+file+".h")
+            env.Depends("$BUILDSRC_DIR/web_server.o", env.Command(header_file, data_file, data_to_header))
+
     header_file = join("$PROJECTSRC_DIR", "web_server_static_files.h")
-    env.Depends("$BUILDSRC_DIR/web_server.o", env.Command(header_file, manifest, make_static))
+    env.Depends("$BUILDSRC_DIR/web_server_static.o", env.Command(header_file, manifest, make_static))
 
 #
 # Generate Web app resources
