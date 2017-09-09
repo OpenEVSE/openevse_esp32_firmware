@@ -63,3 +63,7 @@ full-upload.sh
 *.gch
 .vscode/browse.vc.db*
 .vscode/c_cpp_properties.json
+
+# Python code
+*.pyc
+.cache

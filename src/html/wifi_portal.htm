@@ -1,0 +1,86 @@
+<!doctype html>
+
+<html lang="en">
+
+<head>
+
+  <meta charset="utf-8">
+  <title>OpenEVSE</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="viewport" content="width=device-width, user-scalable=no" />
+  <meta name="description" content="OpenEVSE">
+  <meta name="author" content="OpenEVSE">
+  <meta name="theme-color" content="#000000" />
+  <link rel="stylesheet" type="text/css" href="style.css">
+
+</head>
+
+<body>
+  <div id="page">
+    <div class="header">
+      <h1>Open<span>EVSE</span></h1>
+      <h3>WiFi</h3>
+    </div>
+
+    <div class="container">
+
+      <div>
+        <div class="box">
+          <h2>WiFi Setup</h2>
+          <p><b>Mode:</b> <span id="mode" data-bind="text: status.fullMode"></span></p>
+
+          <div id="client-view" data-bind="visible: status.isWifiClient">
+            <button id="apoff" data-bind="click: turnOffAccessPoint, disable: turnOffAccessPointFetching">Continue</button>
+          </div>
+
+          <div id="ap-view" data-bind="visible: !status.isWifiClient() &amp;&amp; !wifiConnecting()">
+            <p>Connect to network:</p>
+            <table>
+              <thead>
+                <tr>
+                  <th>Select</th>
+                  <th>Network</th>
+                  <th>RSSI dBm</th>
+                </tr>
+              </thead>
+              <tbody id="networks" data-bind="foreach: scan.results">
+                <tr>
+                  <td><input class='networkcheckbox' name='network' data-bind="checkedValue: bssid(), checked: $root.bssid"
+                      type='radio'></td>
+                  <td data-bind="text: ssid"></td>
+                  <td data-bind="text: rssi"></td>
+                </tr>
+              </tbody>
+              <tfoot data-bind="visible: 0 == scan.results().length">
+                <tr>
+                  <td colspan="3">Scanning...</td>
+                </tr>
+              </tfoot>
+            </table>
+            <p data-bind="text: config.ssid"></p>
+            <p>
+              <b>Passkey:</b><br>
+              <input type="password" autocapitalize="none" autocapitalize="none" data-bind="textInput: config.pass">
+              <button data-bind="click: saveNetwork, text: (saveNetworkFetching() ? 'Saving' : (saveNetworkSuccess() ? 'Saved' : 'Connect')), disable: saveNetworkFetching">Connect</button>
+            </p>
+          </div>
+
+          <div data-bind="visible: wifiConnecting">
+            <p>Connecting to WIFI Network...</p>
+          </div>
+        </div>
+      </div>
+
+      <div id="footer">
+        <br><b> Powered by <a href="http://www.openevse.com">OpenEVSE</a> and <a href="https://openenergymonitor.org">OpenEnergyMonitor</a></b>
+        <br> by Chris Howell, Trystan Lea, Glyn Hudson
+      </div>
+    </div>
+    <!--end container -->
+  </div>
+  <!--end page -->
+  <script src="lib.js"></script>
+  <script src="wifi_portal.js"></script>
+</body>
+
+</html>

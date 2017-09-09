@@ -91,7 +91,7 @@ function OpenEVSE(endpoint)
       }
     }, "json").always(function () {
       request._always();
-    }).error(function () {
+    }).fail(function () {
       request._error(new OpenEVSEError("RequestFailed"));
     });
 
