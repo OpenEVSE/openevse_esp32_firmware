@@ -35,6 +35,8 @@ const char _CONTENT_TYPE_TEXT[] PROGMEM = "text/text";
 const char _CONTENT_TYPE_CSS[] PROGMEM = "text/css";
 const char _CONTENT_TYPE_JSON[] PROGMEM = "application/json";
 const char _CONTENT_TYPE_JS[] PROGMEM = "application/javascript";
+const char _CONTENT_TYPE_JPEG[] PROGMEM = "image/jpeg";
+const char _CONTENT_TYPE_PNG[] PROGMEM = "image/png";
 
 static const char _DUMMY_PASSWORD[] PROGMEM = "___DUMMY_PASSWORD___";
 #define DUMMY_PASSWORD FPSTR(_DUMMY_PASSWORD)

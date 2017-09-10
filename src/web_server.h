@@ -21,6 +21,12 @@ extern const char _CONTENT_TYPE_JSON[];
 extern const char _CONTENT_TYPE_JS[];
 #define CONTENT_TYPE_JS FPSTR(_CONTENT_TYPE_JS)
 
+extern const char _CONTENT_TYPE_JPEG[];
+#define CONTENT_TYPE_JPEG FPSTR(_CONTENT_TYPE_JPEG)
+
+extern const char _CONTENT_TYPE_PNG[];
+#define CONTENT_TYPE_PNG FPSTR(_CONTENT_TYPE_PNG)
+
 extern AsyncWebServer server;
 extern String currentfirmware;
 
