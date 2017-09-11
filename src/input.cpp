@@ -118,9 +118,10 @@ update_rapi_values() {
 
   comm_sent++;
   if (rapi_command == 1) {
-    if (0 == rapiSender.sendCmd("$GE"))
+    if (0 == rapiSender.sendCmd("$GE")) {
       comm_success++;
       pilot = rapiSender.getToken(1);
+    }
   }
   if (rapi_command == 2) {
     if (0 == rapiSender.sendCmd("$GS")) {
