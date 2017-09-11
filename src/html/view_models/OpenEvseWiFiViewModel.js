@@ -1,4 +1,4 @@
-/* global $, ko, ConfigViewModel, StatusViewModel, RapiViewModel, WiFiScanViewModel, OpenEvseViewModel */
+/* global $, ko, ConfigViewModel, StatusViewModel, RapiViewModel, WiFiScanViewModel, WiFiConfigViewModel, OpenEvseViewModel */
 /* exported OpenEvseWiFiViewModel */
 
 function OpenEvseWiFiViewModel(baseHost)
@@ -13,6 +13,7 @@ function OpenEvseWiFiViewModel(baseHost)
   self.status = new StatusViewModel(self.baseEndpoint);
   self.rapi = new RapiViewModel(self.baseEndpoint);
   self.scan = new WiFiScanViewModel(self.baseEndpoint);
+  self.wifi = new WiFiConfigViewModel(self.baseEndpoint, self.config, self.status, self.scan);
   self.openevse = new OpenEvseViewModel(self.baseEndpoint, self.status);
 
   self.initialised = ko.observable(false);

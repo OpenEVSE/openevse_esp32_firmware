@@ -30,10 +30,10 @@
           <p><b>Mode:</b> <span id="mode" data-bind="text: status.fullMode"></span></p>
 
           <div id="client-view" data-bind="visible: status.isWifiClient">
-            <button id="apoff" data-bind="click: turnOffAccessPoint, disable: turnOffAccessPointFetching">Continue</button>
+            <button id="apoff" data-bind="click: wifi.turnOffAccessPoint, disable: wifi.turnOffAccessPointFetching">Continue</button>
           </div>
 
-          <div id="ap-view" data-bind="visible: !status.isWifiClient() &amp;&amp; !wifiConnecting()">
+          <div id="ap-view" data-bind="visible: !status.isWifiClient() &amp;&amp; !wifi.wifiConnecting()">
             <p>Connect to network:</p>
             <table>
               <thead>
@@ -61,11 +61,11 @@
             <p>
               <b>Passkey:</b><br>
               <input type="password" autocapitalize="none" autocapitalize="none" data-bind="textInput: config.pass">
-              <button data-bind="click: saveNetwork, text: (saveNetworkFetching() ? 'Saving' : (saveNetworkSuccess() ? 'Saved' : 'Connect')), disable: saveNetworkFetching">Connect</button>
+              <button data-bind="click: wifi.saveNetwork, text: (wifi.saveNetworkFetching() ? 'Saving' : (wifi.saveNetworkSuccess() ? 'Saved' : 'Connect')), disable: wifi.saveNetworkFetching">Connect</button>
             </p>
           </div>
 
-          <div data-bind="visible: wifiConnecting">
+          <div data-bind="visible: wifi.wifiConnecting">
             <p>Connecting to WIFI Network...</p>
           </div>
         </div>

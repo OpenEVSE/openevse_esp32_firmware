@@ -1,14 +1,15 @@
 {
   "home.htm": [ "home.htm" ],
   "home.js": [
-    "view_model/RapiViewModel.js",
-    "view_model/OpenEvseViewModel.js",
-    "view_model/OpenEvseWiFiViewModel.js",
-    "config.js",
-    "openevse.js"
+    "openevse.js",
+    "view_models/RapiViewModel.js",
+    "view_models/OpenEvseViewModel.js",
+    "view_models/OpenEvseWiFiViewModel.js",
+    "home.js"
   ],
   "wifi_portal.htm": [ "wifi_portal.htm" ],
   "wifi_portal.js": [
+    "view_models/WiFiPortalViewModel.js",
     "wifi_portal.js"
   ],
   "lib.js": [
@@ -18,7 +19,8 @@
     "view_models/BaseViewModel.js",
     "view_models/ConfigViewModel.js",
     "view_models/StatusViewModel.js",
-    "view_models/WiFiScanViewModel.js"
+    "view_models/WiFiScanViewModel.js",
+    "view_models/WiFiConfigViewModel.js"
   ],
   "style.css": [ "style.css" ]
 }

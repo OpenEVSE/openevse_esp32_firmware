@@ -7,6 +7,7 @@ function StatusViewModel(baseEndpoint) {
 
   BaseViewModel.call(self, {
     "mode": "ERR",
+    "wifi_client_connected": 0,
     "srssi": "",
     "ipaddress": "",
     "packets_sent": 0,

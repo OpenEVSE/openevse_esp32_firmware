@@ -1,7 +1,7 @@
 /* global $, ko */
-/* exported WiFiScanViewModel */
+/* exported WiFiConfigViewModel */
 
-function WiFiScanViewModel(baseEndpoint, config, status, scan) {
+function WiFiConfigViewModel(baseEndpoint, config, status, scan) {
   "use strict";
   var self = this;
 

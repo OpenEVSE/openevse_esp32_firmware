@@ -1,4 +1,4 @@
-/* global $, ko, ConfigViewModel, StatusViewModel, WiFiScanViewModel */
+/* global $, ko, ConfigViewModel, StatusViewModel, WiFiScanViewModel, WiFiConfigViewModel */
 /* exported WiFiPortalViewModel */
 
 function WiFiPortalViewModel(baseHost)
@@ -12,7 +12,7 @@ function WiFiPortalViewModel(baseHost)
   self.config = new ConfigViewModel(self.baseEndpoint);
   self.status = new StatusViewModel(self.baseEndpoint);
   self.scan = new WiFiScanViewModel(self.baseEndpoint);
-  self.wifi = new WiFiConfigViewModel(self.baseEndpoint);
+  self.wifi = new WiFiConfigViewModel(self.baseEndpoint, self.config, self.status, self.scan);
 
   self.initialised = ko.observable(false);
   self.updating = ko.observable(false);

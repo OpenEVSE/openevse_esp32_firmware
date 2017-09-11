@@ -162,6 +162,7 @@ def process_app_file(source_dir, source_files, data_dir, out_file, env):
     data_file = join(data_dir, out_file)
     header_file = join("$PROJECTSRC_DIR", "web_server."+out_file+".h")
     env.Depends(header_file, env.Command(data_file, source, minify))
+    env.Depends("$BUILD_DIR/spiffs.bin", env.Command(data_file, source, minify))
     #env.Depends("$PROJECTSRC_DIR/web_server.cpp", env.Command(header_file, data_file, data_to_header))
     env.Depends("$BUILDSRC_DIR/web_server_static.o", env.Command(header_file, data_file, data_to_header))
 
