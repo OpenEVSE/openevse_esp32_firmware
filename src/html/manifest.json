@@ -1,6 +1,9 @@
 {
   "home.htm": [ "home.htm" ],
   "home.js": [
+    "view_model/RapiViewModel.js",
+    "view_model/OpenEvseViewModel.js",
+    "view_model/OpenEvseWiFiViewModel.js",
     "config.js",
     "openevse.js"
   ],
@@ -11,7 +14,11 @@
   "lib.js": [
     "lib/jquery-3.2.1.js",
     "lib/knockout-3.4.2.js",
-    "lib/knockout.mapping-2.4.1.js"
+    "lib/knockout.mapping-2.4.1.js",
+    "view_models/BaseViewModel.js",
+    "view_models/ConfigViewModel.js",
+    "view_models/StatusViewModel.js",
+    "view_models/WiFiScanViewModel.js"
   ],
   "style.css": [ "style.css" ]
 }

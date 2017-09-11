@@ -99,7 +99,7 @@ bool requestPreProcess(AsyncWebServerRequest *request, AsyncResponseStream *&res
 {
   dumpRequest(request);
 
-  if(wifi_mode == WIFI_MODE_STA && www_username!="" &&
+  if(wifi_mode_is_sta() && www_username!="" &&
      false == request->authenticate(www_username.c_str(), www_password.c_str())) {
     request->requestAuthentication(esp_hostname);
     return false;
@@ -419,17 +419,19 @@ handleStatus(AsyncWebServerRequest *request) {
   }
 
   String s = "{";
-  if (wifi_mode == WIFI_MODE_STA) {
+  WiFiMode_t wifi_mode = WiFi.getMode();
+  if (wifi_mode == WIFI_STA) {
     s += "\"mode\":\"STA\",";
-  } else if (wifi_mode == WIFI_MODE_AP_STA_RETRY
-             || wifi_mode == WIFI_MODE_AP_ONLY) {
+  } else if (wifi_mode == WIFI_AP) {
     s += "\"mode\":\"AP\",";
-  } else if (wifi_mode == WIFI_MODE_AP_AND_STA) {
+  } else if (wifi_mode == WIFI_AP_STA) {
     s += "\"mode\":\"STA+AP\",";
   }
 
+  s += "\"wifi_client_connected\":" + String(wifi_client_connected()) + ",";
   s += "\"srssi\":" + String(WiFi.RSSI()) + ",";
   s += "\"ipaddress\":\"" + ipaddress + "\",";
+
   s += "\"emoncms_connected\":" + String(emoncms_connected) + ",";
   s += "\"packets_sent\":" + String(packets_sent) + ",";
   s += "\"packets_success\":" + String(packets_success) + ",";
@@ -811,7 +813,7 @@ void handleNotFound(AsyncWebServerRequest *request)
   DBUG("NOT_FOUND: ");
   dumpRequest(request);
 
-  if(wifi_mode == WIFI_MODE_AP_ONLY) {
+  if(wifi_mode_is_ap_only()) {
     // Redirect to the home page in AP mode (for the captive portal)
     AsyncResponseStream *response = request->beginResponseStream(String(CONTENT_TYPE_HTML));
 

@@ -3,19 +3,6 @@
 
 #include <Arduino.h>
 
-// Wifi mode
-// 0 - STA (Client)
-// 1 - AP with STA retry
-// 2 - AP only
-// 3 - AP + STA
-
-#define WIFI_MODE_STA           0
-#define WIFI_MODE_AP_STA_RETRY  1
-#define WIFI_MODE_AP_ONLY       2
-#define WIFI_MODE_AP_AND_STA    3
-
-// The current WiFi mode
-extern int wifi_mode;
 
 // Last discovered WiFi access points
 extern String st;
@@ -35,5 +22,11 @@ extern void wifi_disconnect();
 extern void wifi_turn_off_ap();
 extern void wifi_turn_on_ap();
 extern bool wifi_client_connected();
+
+// Wifi mode
+#define wifi_mode_is_sta()           (WIFI_STA == (WiFi.getMode() & WIFI_STA))
+#define wifi_mode_is_sta_only()      (WIFI_STA == WiFi.getMode())
+#define wifi_mode_is_ap()            (WIFI_AP == (WiFi.getMode() & WIFI_AP))
+#define wifi_mode_is_ap_only()       (WIFI_AP == WiFi.getMode())
 
 #endif // _EMONESP_WIFI_H

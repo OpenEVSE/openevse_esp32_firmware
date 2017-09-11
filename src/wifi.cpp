@@ -22,11 +22,11 @@ const char *esp_hostname = "openevse";
 
 // Wifi Network Strings
 String connected_network = "";
-String status_string = "";
 String ipaddress = "";
 
-unsigned long Timer;
-String st, rssi;
+int client_disconnects = 0;
+bool client_retry = false;
+unsigned long client_retry_time = 0;
 
 #ifdef WIFI_LED
 #ifndef WIFI_LED_ON_STATE
@@ -57,40 +57,12 @@ unsigned long wifiLedTimeOut = millis();
 #define WIFI_BUTTON_TIMEOUT 5 * 1000
 #endif
 
+#ifndef WIFI_CLIENT_RETRY_TIMEOUT
+#define WIFI_CLIENT_RETRY_TIMEOUT (5 * 60 * 1000)
+#endif
+
 int wifiButtonState = HIGH;
 unsigned long wifiButtonTimeOut = millis();
-
-// -------------------------------------------------------------------
-int wifi_mode = WIFI_MODE_STA;
-
-// Client connection state
-enum {
-  Client_Disconnected,
-  Client_Connecting,
-  Client_Retry,
-  Client_Connected
-} clientState = Client_Disconnected;
-
-void sync_mode(bool retry = false)
-{
-  DBUGVAR(WiFi.getMode());
-  switch(WiFi.getMode())
-  {
-    case WIFI_OFF:
-      break;
-    case WIFI_STA:
-      wifi_mode = WIFI_MODE_STA;
-      break;
-    case WIFI_AP:
-      wifi_mode = WIFI_MODE_AP_ONLY;
-      break;
-    case WIFI_AP_STA:
-      wifi_mode = retry ? WIFI_MODE_AP_STA_RETRY : WIFI_MODE_AP_AND_STA;
-      break;
-  }
-
-  DBUGVAR(wifi_mode);
-}
 
 // -------------------------------------------------------------------
 // Start Access Point
@@ -102,15 +74,16 @@ startAP() {
 
   if((WiFi.getMode() & WIFI_STA) && WiFi.isConnected()) {
     WiFi.disconnect(true);
-    clientState = Client_Disconnected;
   }
 
   WiFi.enableAP(true);
 
   WiFi.softAPConfig(apIP, apIP, netMsk);
+
   // Create Unique SSID e.g "emonESP_XXXXXX"
   String softAP_ssid_ID =
     String(softAP_ssid) + "_" + String(ESP.getChipId());
+
   // Pick a random channel out of 1, 6 or 11
   int channel = (random(3) * 5) + 1;
   WiFi.softAP(softAP_ssid_ID.c_str(), softAP_password, channel);
@@ -129,8 +102,6 @@ startAP() {
   lcd_display(F("SSID: openevse"), 0, 1, 15 * 1000, LCD_CLEAR_LINE);
 
   apClients = 0;
-
-  sync_mode();
 }
 
 // -------------------------------------------------------------------
@@ -144,13 +115,9 @@ startClient()
   // DEBUG.print(" epass:");
   // DEBUG.println(epass.c_str());
 
-  WiFi.hostname("openevse");
+  WiFi.hostname(esp_hostname);
   WiFi.begin(esid.c_str(), epass.c_str());
   WiFi.enableSTA(true);
-
-  clientState = Client_Connecting;
-
-  sync_mode();
 }
 
 void wifi_onStationModeGotIP(const WiFiEventStationModeGotIP &event)
@@ -168,10 +135,13 @@ void wifi_onStationModeGotIP(const WiFiEventStationModeGotIP &event)
   DEBUG.println(tmpStr);
   lcd_display(F("IP Address"), 0, 0, 0, LCD_CLEAR_LINE);
   lcd_display(tmpStr, 0, 1, 5000, LCD_CLEAR_LINE);
+
   // Copy the connected network and ipaddress to global strings for use in status request
   connected_network = esid;
 
-  clientState = Client_Connected;
+  // Clear any error state
+  client_disconnects = 0;
+  client_retry = false;
 }
 
 void wifi_onStationModeDisconnected(const WiFiEventStationModeDisconnected &event)
@@ -207,7 +177,7 @@ void wifi_onStationModeDisconnected(const WiFiEventStationModeDisconnected &even
   WIFI_DISCONNECT_REASON_HANDSHAKE_TIMEOUT == event.reason ? "WIFI_DISCONNECT_REASON_HANDSHAKE_TIMEOUT" :
   "UNKNOWN");
 
-  clientState = WiFi.getMode() & WIFI_STA ? Client_Connecting : Client_Disconnected;
+  client_disconnects++;
 }
 
 void
@@ -252,95 +222,57 @@ void
 wifi_loop() {
   Profile_Start(wifi_loop);
 
+  bool isClient = wifi_mode_is_sta();
+  bool isClientOnly = wifi_mode_is_sta_only();
+  bool isAp = wifi_mode_is_ap();
+  bool isApOnly = wifi_mode_is_ap_only();
+
 #ifdef WIFI_LED
-  if ((WIFI_MODE_AP_ONLY == wifi_mode ||
-       Client_Connecting == clientState) &&
+  if ((isApOnly || !WiFi.isConnected()) &&
       millis() > wifiLedTimeOut)
   {
     wifiLedState = !wifiLedState;
     digitalWrite(WIFI_LED, wifiLedState);
 
-    int ledTime = Client_Connecting == clientState ? WIFI_LED_STA_CONNECTING_TIME :
-                    0 == apClients ? WIFI_LED_AP_TIME : WIFI_LED_AP_CONNECTED_TIME;
+    int ledTime = isApOnly ? (0 == apClients ? WIFI_LED_AP_TIME : WIFI_LED_AP_CONNECTED_TIME) : WIFI_LED_STA_CONNECTING_TIME;
     wifiLedTimeOut = millis() + ledTime;
   }
 #endif
 
-  // Manage the client connecting state
-  switch(clientState)
+  // Manage state while connecting
+  if(isClient && !WiFi.isConnected())
   {
-    case Client_Disconnected:
-      break;
-
-    case Client_Connecting:
-      {
-        // Pressing the boot button for 5 seconds while connecting will turn on AP mode
-        #if !defined(WIFI_LED) || WIFI_BUTTON != WIFI_LED
-          int button = digitalRead(WIFI_BUTTON);
-          if(wifiButtonState != button) {
-            wifiButtonState = button;
-            if(LOW == button) {
-              wifiButtonTimeOut = millis() + WIFI_BUTTON_TIMEOUT;
-            }
-          }
-
-          if(LOW == wifiButtonState && millis() > wifiButtonTimeOut) {
-            startAP();
-          }
-        #endif
+#if !defined(WIFI_LED) || WIFI_BUTTON != WIFI_LED
+    // Pressing the boot button for 5 seconds while connecting will turn on AP mode
+    int button = digitalRead(WIFI_BUTTON);
+    if(wifiButtonState != button) {
+      wifiButtonState = button;
+      if(LOW == button) {
+        wifiButtonTimeOut = millis() + WIFI_BUTTON_TIMEOUT;
       }
-      break;
+    }
 
-    case Client_Connected:
-      break;
-
-    case Client_Retry:
-      break;
-  }
-/*
-int t = 0;
-int attempt = 0;
-while (WiFi.status() != WL_CONNECTED) {
-  delay(500);
-  t++;
-  // push and hold boot button after power on to skip stright to AP mode
-  if (t >= 20
-#if !defined(WIFI_LED) || 0 != WIFI_LED
-     || digitalRead(0) == LOW
-#endif
-     )
-  {
-    DEBUG.println(" ");
-    DEBUG.println("Try Again...");
-    delay(2000);
-    WiFi.disconnect();
-    WiFi.begin(esid.c_str(), epass.c_str());
-    t = 0;
-    attempt++;
-    if (attempt >= 5 || digitalRead(0) == LOW) {
+    if(LOW == wifiButtonState && millis() > wifiButtonTimeOut) {
       startAP();
-      // AP mode with SSID in EEPROM, connection will retry in 5 minutes
-      wifi_mode = WIFI_MODE_AP_STA_RETRY;
-      break;
+    }
+#endif
+
+    // If we have failed to connect turn on the AP
+    if(client_disconnects > 2) {
+      startAP();
+      client_retry = true;
+      client_retry_time = millis() + WIFI_CLIENT_RETRY_TIMEOUT;
     }
   }
-}
-
-if (wifi_mode == WIFI_MODE_STA || wifi_mode == WIFI_MODE_AP_AND_STA) {
-}
-
-*/
-
-  dnsServer.processNextRequest(); // Captive portal DNS re-dierct
 
   // Remain in AP mode for 5 Minutes before resetting
-  if (wifi_mode == WIFI_MODE_AP_STA_RETRY) {
-    if ((millis() - Timer) >= 300000) {
-      DEBUG.println("WIFI Mode = 1, resetting");
-      delay(50);
-      ESP.reset();
-    }
+  if(isApOnly && client_retry && millis() > client_retry_time) {
+    DEBUG.println("client re-try, resetting");
+    delay(50);
+    ESP.reset();
   }
+
+  dnsServer.processNextRequest(); // Captive portal DNS re-dierct
 
   Profile_End(wifi_loop, 5);
 }
@@ -357,23 +289,22 @@ wifi_disconnect() {
 
 void wifi_turn_off_ap()
 {
-  if(WIFI_MODE_AP_AND_STA == wifi_mode)
+  if(wifi_mode_is_ap())
   {
     WiFi.softAPdisconnect(true);
     dnsServer.stop();
-    sync_mode();
   }
 }
 
 void wifi_turn_on_ap()
 {
-  DBUGF("wifi_turn_on_ap %d", wifi_mode);
-  if(WIFI_MODE_STA == wifi_mode) {
+  DBUGF("wifi_turn_on_ap %d", WiFi.getMode());
+  if(!wifi_mode_is_ap()) {
     startAP();
   }
 }
 
 bool wifi_client_connected()
 {
-  return WiFi.isConnected() && (wifi_mode == WIFI_MODE_STA || wifi_mode == WIFI_MODE_AP_AND_STA);
+  return WiFi.isConnected() && (WIFI_STA == (WiFi.getMode() & WIFI_STA));
 }
