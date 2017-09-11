@@ -39,12 +39,24 @@ function StatusViewModel(baseEndpoint) {
     "mode": "ERR",
     "srssi": "",
     "ipaddress": "",
-    "packets_sent": "",
-    "packets_success": "",
-    "emoncms_connected": "",
-    "mqtt_connected": "",
+    "packets_sent": 0,
+    "packets_success": 0,
+    "emoncms_connected": 0,
+    "mqtt_connected": 0,
     "ohm_hour": "",
-    "free_heap": ""
+    "free_heap": 0,
+    "comm_sent": 0,
+    "comm_success": 0,
+    "amp": 0,
+    "pilot": 0,
+    "temp1": 0,
+    "temp2": 0,
+    "temp3": 0,
+    "state": 0,
+    "elapsed": 0,
+    "wattsec": 0,
+    "watthour": 0,
+    "divertmode": 1
   }, endpoint);
 
   // Some devired values
@@ -66,115 +78,7 @@ function StatusViewModel(baseEndpoint) {
 
     return "Unknown (" + self.mode() + ")";
   });
-}
-StatusViewModel.prototype = Object.create(BaseViewModel.prototype);
-StatusViewModel.prototype.constructor = StatusViewModel;
 
-function WiFiScanResultViewModel(data)
-{
-    var self = this;
-    ko.mapping.fromJS(data, {}, self);
-}
-
-function WiFiScanViewModel(baseEndpoint)
-{
-  var self = this;
-  var endpoint = ko.pureComputed(function () { return baseEndpoint() + "/scan"; });
-
-  self.results = ko.mapping.fromJS([], {
-    key: function(data) {
-      return ko.utils.unwrapObservable(data.bssid);
-    },
-    create: function (options) {
-      return new WiFiScanResultViewModel(options.data);
-    }
-  });
-
-  // Observable properties
-  self.fetching = ko.observable(false);
-
-  self.update = function (after = function () { }) {
-    self.fetching(true);
-    $.get(endpoint(), function (data) {
-      ko.mapping.fromJS(data, self.results);
-      self.results.sort(function (left, right) {
-        if(left.ssid() === right.ssid()) {
-          return left.rssi() < right.rssi() ? 1 : -1;
-        }
-        return left.ssid() < right.ssid() ? -1 : 1;
-      });
-    }, "json").always(function () {
-      self.fetching(false);
-      after();
-    });
-  };
-}
-
-function ConfigViewModel(baseEndpoint) {
-  var endpoint = ko.pureComputed(function () { return baseEndpoint() + "/config"; });
-  BaseViewModel.call(this, {
-    "ssid": "",
-    "pass": "",
-    "emoncms_server": "data.openevse.com/emoncms",
-    "emoncms_apikey": "",
-    "emoncms_node": "",
-    "emoncms_fingerprint": "",
-    "emoncms_enabled": 0,
-    "mqtt_server": "",
-    "mqtt_topic": "",
-    "mqtt_user": "",
-    "mqtt_pass": "",
-    "mqtt_solar": "",
-    "mqtt_grid_ie": "",
-    "mqtt_enabled": 0,
-    "ohm_enabled": 0,
-    "ohmkey": "",
-    "www_username": "",
-    "www_password": "",
-    "firmware": "-",
-    "protocol": "-",
-    "espflash": 0,
-    "diodet": 0,
-    "gfcit": 0,
-    "groundt": 0,
-    "relayt": 0,
-    "ventt": 0,
-    "tempt": 0,
-    "scale": 1,
-    "offset": 0,
-    "gfcicount": 0,
-    "nogndcount": 0,
-    "stuckcount": 0,
-    "version": "0.0.0",
-    "divertmode": 0
-  }, endpoint);
-}
-ConfigViewModel.prototype = Object.create(BaseViewModel.prototype);
-ConfigViewModel.prototype.constructor = ConfigViewModel;
-
-function RapiViewModel(baseEndpoint) {
-  var self = this;
-
-  self.baseEndpoint = baseEndpoint;
-  var endpoint = ko.pureComputed(function () { return baseEndpoint() + "/rapiupdate"; });
-
-  BaseViewModel.call(this, {
-    "comm_sent": 0,
-    "comm_success": 0,
-    "amp": 0,
-    "pilot": 0,
-    "temp1": 0,
-    "temp2": 0,
-    "temp3": 0,
-    "state": 0,
-    "elapsed": 0,
-    "wattsec": 0,
-    "watthour": 0
-  }, endpoint);
-
-  this.rapiSend = ko.observable(false);
-  this.cmd = ko.observable("");
-  this.ret = ko.observable("");
 
   this.estate = ko.pureComputed(function () {
     var estate;
@@ -225,18 +129,110 @@ function RapiViewModel(baseEndpoint) {
     return estate;
   });
 }
-RapiViewModel.prototype = Object.create(BaseViewModel.prototype);
-RapiViewModel.prototype.constructor = RapiViewModel;
-RapiViewModel.prototype.send = function() {
+StatusViewModel.prototype = Object.create(BaseViewModel.prototype);
+StatusViewModel.prototype.constructor = StatusViewModel;
+
+
+function ConfigViewModel(baseEndpoint) {
+  var endpoint = ko.pureComputed(function () { return baseEndpoint() + "/config"; });
+  BaseViewModel.call(this, {
+    "ssid": "",
+    "pass": "",
+    "emoncms_server": "data.openevse.com/emoncms",
+    "emoncms_apikey": "",
+    "emoncms_node": "",
+    "emoncms_fingerprint": "",
+    "emoncms_enabled": 0,
+    "mqtt_server": "",
+    "mqtt_topic": "",
+    "mqtt_user": "",
+    "mqtt_pass": "",
+    "mqtt_solar": "",
+    "mqtt_grid_ie": "",
+    "mqtt_enabled": 0,
+    "ohm_enabled": 0,
+    "ohmkey": "",
+    "www_username": "",
+    "www_password": "",
+    "firmware": "-",
+    "protocol": "-",
+    "espflash": 0,
+    "diodet": 0,
+    "gfcit": 0,
+    "groundt": 0,
+    "relayt": 0,
+    "ventt": 0,
+    "tempt": 0,
+    "scale": 1,
+    "offset": 0,
+    "gfcicount": 0,
+    "nogndcount": 0,
+    "stuckcount": 0,
+    "version": "0.0.0"
+  }, endpoint);
+}
+ConfigViewModel.prototype = Object.create(BaseViewModel.prototype);
+ConfigViewModel.prototype.constructor = ConfigViewModel;
+
+function WiFiScanResultViewModel(data)
+{
+    var self = this;
+    ko.mapping.fromJS(data, {}, self);
+}
+
+function WiFiScanViewModel(baseEndpoint)
+{
   var self = this;
-  self.rapiSend(true);
-  $.get(self.baseEndpoint() + "/r?json=1&rapi="+encodeURI(self.cmd()), function (data) {
-    self.ret(">"+data.ret);
-    self.cmd(data.cmd);
-  }, "json").always(function () {
-    self.rapiSend(false);
+  var endpoint = ko.pureComputed(function () { return baseEndpoint() + "/scan"; });
+
+  self.results = ko.mapping.fromJS([], {
+    key: function(data) {
+      return ko.utils.unwrapObservable(data.bssid);
+    },
+    create: function (options) {
+      return new WiFiScanResultViewModel(options.data);
+    }
   });
-};
+
+  // Observable properties
+  self.fetching = ko.observable(false);
+
+  self.update = function (after = function () { }) {
+    self.fetching(true);
+    $.get(endpoint(), function (data) {
+      ko.mapping.fromJS(data, self.results);
+      self.results.sort(function (left, right) {
+        if(left.ssid() === right.ssid()) {
+          return left.rssi() < right.rssi() ? 1 : -1;
+        }
+        return left.ssid() < right.ssid() ? -1 : 1;
+      });
+    }, "json").always(function () {
+      self.fetching(false);
+      after();
+    });
+  };
+}
+
+function RapiViewModel(baseEndpoint) {
+  var self = this;
+
+  self.baseEndpoint = baseEndpoint;
+
+  self.rapiSend = ko.observable(false);
+  self.cmd = ko.observable("");
+  self.ret = ko.observable("");
+
+  self.send = function() {
+    self.rapiSend(true);
+    $.get(self.baseEndpoint() + "/r?json=1&rapi="+encodeURI(self.cmd()), function (data) {
+      self.ret(">"+data.ret);
+      self.cmd(data.cmd);
+    }, "json").always(function () {
+      self.rapiSend(false);
+    });
+  };
+}
 
 function TimeViewModel(openevse)
 {
@@ -251,7 +247,7 @@ function TimeViewModel(openevse)
         self.nowTimedate(new Date(self.evseTimedate().getTime() + ((new Date()) - self.localTimedate())));
       }
       if(openevse.isCharging()) {
-        self.elapsedNow(new Date((openevse.rapi.elapsed() * 1000) + ((new Date()) - self.elapsedLocal())));
+        self.elapsedNow(new Date((openevse.status.elapsed() * 1000) + ((new Date()) - self.elapsedLocal())));
       }
     }, 1000);
   }
@@ -305,7 +301,7 @@ function TimeViewModel(openevse)
     return addZero(dt.getHours())+":"+addZero(dt.getMinutes())+":"+addZero(dt.getSeconds());
   });
 
-  openevse.rapi.elapsed.subscribe(function (val) {
+  openevse.status.elapsed.subscribe(function (val) {
       self.elapsedNow(new Date(val * 1000));
       self.elapsedLocal(new Date());
   });
@@ -327,14 +323,14 @@ function TimeViewModel(openevse)
   };
 }
 
-function OpenEvseViewModel(baseEndpoint, rapiViewModel) {
+function OpenEvseViewModel(baseEndpoint, statusViewModel) {
   var self = this;
   var endpoint = ko.pureComputed(function () { return baseEndpoint() + "/r"; });
   self.openevse = new OpenEVSE(endpoint());
   endpoint.subscribe(function (end) {
     self.openevse.setEndpoint(end);
   });
-  self.rapi = rapiViewModel;
+  self.status = statusViewModel;
   self.time = new TimeViewModel(self);
 
   // Option lists
@@ -344,7 +340,7 @@ function OpenEvseViewModel(baseEndpoint, rapiViewModel) {
     { name: "2", value: 2 }];
   self.currentLevels = ko.observableArray([]);
   self.timeLimits = [
-    { name: "off", value: 0 },
+    { name: "none", value: 0 },
     { name: "15 min", value: 15 },
     { name: "30 min", value: 30 },
     { name: "45 min", value: 45 },
@@ -358,6 +354,32 @@ function OpenEvseViewModel(baseEndpoint, rapiViewModel) {
     { name: "6 hours", value: 6 * 60 },
     { name: "7 hours", value: 7 * 60 },
     { name: "8 hours", value: 8 * 60 }];
+
+  self.chargeLimits = [
+    { name: "none", value: 0 },
+    { name: "1 kWh", value: 1 },
+    { name: "2 kWh", value: 2 },
+    { name: "3 kWh", value: 3 },
+    { name: "4 kWh", value: 4 },
+    { name: "5 kWh", value: 5 },
+    { name: "6 kWh", value: 6 },
+    { name: "7 kWh", value: 7 },
+    { name: "8 kWh", value: 8 },
+    { name: "9 kWh", value: 9 },
+    { name: "10 kWh", value: 10 },
+    { name: "15 kWh", value: 11 },
+    { name: "20 kWh", value: 12 },
+    { name: "25 kWh", value: 25 },
+    { name: "30 kWh", value: 30 },
+    { name: "35 kWh", value: 35 },
+    { name: "40 kWh", value: 40 },
+    { name: "45 kWh", value: 45 },
+    { name: "50 kWh", value: 50 },
+    { name: "55 kWh", value: 55 },
+    { name: "60 kWh", value: 60 },
+    { name: "70 kWh", value: 70 },
+    { name: "80 kWh", value: 80 },
+    { name: "90 kWh", value: 90 }];
 
   self.serviceLevel = ko.observable(-1);
   self.actualServiceLevel = ko.observable(-1);
@@ -390,31 +412,31 @@ function OpenEvseViewModel(baseEndpoint, rapiViewModel) {
 
   // Derived states
   self.isConnected = ko.pureComputed(function () {
-    return [2, 3].indexOf(self.rapi.state()) !== -1;
+    return [2, 3].indexOf(self.status.state()) !== -1;
   });
 
   self.isReady = ko.pureComputed(function () {
-    return [0, 1].indexOf(self.rapi.state()) !== -1;
+    return [0, 1].indexOf(self.status.state()) !== -1;
   });
 
   self.isCharging = ko.pureComputed(function () {
-    return 3 === self.rapi.state();
+    return 3 === self.status.state();
   });
 
   self.isError = ko.pureComputed(function () {
-    return [4, 5, 6, 7, 8, 9, 10].indexOf(self.rapi.state()) !== -1;
+    return [4, 5, 6, 7, 8, 9, 10].indexOf(self.status.state()) !== -1;
   });
 
   self.isEnabled = ko.pureComputed(function () {
-    return [0, 1, 2, 3].indexOf(self.rapi.state()) !== -1;
+    return [0, 1, 2, 3].indexOf(self.status.state()) !== -1;
   });
 
   self.isSleeping = ko.pureComputed(function () {
-    return 254 === self.rapi.state();
+    return 254 === self.status.state();
   });
 
   self.isDisabled = ko.pureComputed(function () {
-    return 255 === self.rapi.state();
+    return 255 === self.status.state();
   });
 
   // helper to select an appropriate value for time limit
@@ -428,6 +450,22 @@ function OpenEvseViewModel(baseEndpoint, rapiViewModel) {
       var time = self.timeLimits[i];
       if(time.value >= limit) {
         self.timeLimit(time.value);
+        break;
+      }
+    }
+  };
+
+  // helper to select an appropriate value for charge limit
+  self.selectChargeLimit = function(limit)
+  {
+    if(self.chargeLimit() === limit) {
+      return;
+    }
+
+    for(var i = 0; i < self.chargeLimits.length; i++) {
+      var charge = self.chargeLimits[i];
+      if(charge.value >= limit) {
+        self.chargeLimit(charge.value);
         break;
       }
     }
@@ -449,7 +487,7 @@ function OpenEvseViewModel(baseEndpoint, rapiViewModel) {
       self.selectTimeLimit(limit);
     }); },
     function () { return self.openevse.charge_limit(function (limit) {
-      self.chargeLimit(limit);
+      self.selectChargeLimit(limit);
     }); },
     function () { return self.openevse.gfi_self_test(function (enabled) {
       self.gfiSelfTestEnabled(enabled);
@@ -580,7 +618,7 @@ function OpenEvseViewModel(baseEndpoint, rapiViewModel) {
       self.openevse.charge_limit(function (limit) {
         self.setForTime(self.savedChargeLimit, 2000);
         if(val !== limit) {
-          self.chargeLimit(limit);
+          self.selectChargeLimit(limit);
         }
       }, val).always(function() {
         self.updatingChargeLimit(false);
@@ -715,7 +753,7 @@ function OpenEvseViewModel(baseEndpoint, rapiViewModel) {
   self.setStatus = function (action) {
     self.updatingStatus(true);
     self.openevse.status(function (state) {
-      self.rapi.state(state);
+      self.status.state(state);
     }, action).always(function() {
       self.updatingStatus(false);
     });
@@ -744,7 +782,7 @@ function OpenEvseWiFiViewModel() {
   self.status = new StatusViewModel(self.baseEndpoint);
   self.rapi = new RapiViewModel(self.baseEndpoint);
   self.scan = new WiFiScanViewModel(self.baseEndpoint);
-  self.openevse = new OpenEvseViewModel(self.baseEndpoint, self.rapi);
+  self.openevse = new OpenEvseViewModel(self.baseEndpoint, self.status);
 
   self.initialised = ko.observable(false);
   self.updating = ko.observable(false);
@@ -818,13 +856,22 @@ function OpenEvseWiFiViewModel() {
             window.location.replace("http://" + self.status.ipaddress());
           }
         }
-        self.rapi.update(function () {
-          self.openevse.update(function () {
-            self.initialised(true);
-            updateTimer = setTimeout(self.update, updateTime);
-            self.upgradeUrl(self.baseEndpoint() + "/update");
-            self.updating(false);
-          });
+        self.openevse.update(function () {
+          self.initialised(true);
+          updateTimer = setTimeout(self.update, updateTime);
+
+          // Load the upgrade frame
+          self.upgradeUrl(self.baseEndpoint() + "/update");
+
+          // Load the images
+          var imgDefer = document.getElementsByTagName("img");
+          for (var i=0; i<imgDefer.length; i++) {
+            if(imgDefer[i].getAttribute("data-src")) {
+              imgDefer[i].setAttribute("src", imgDefer[i].getAttribute("data-src"));
+            }
+          }
+
+          self.updating(false);
         });
       });
       self.connect();
@@ -844,10 +891,8 @@ function OpenEvseWiFiViewModel() {
       updateTimer = null;
     }
     self.status.update(function () {
-      self.rapi.update(function () {
-        updateTimer = setTimeout(self.update, updateTime);
-        self.updating(false);
-      });
+      updateTimer = setTimeout(self.update, updateTime);
+      self.updating(false);
     });
   };
 
@@ -1052,8 +1097,8 @@ function OpenEvseWiFiViewModel() {
   self.changeDivertModeFetching = ko.observable(false);
   self.changeDivertModeSuccess = ko.observable(false);
   self.changeDivertMode = function(divertmode) {
-    if(self.config.divertmode() !== divertmode) {
-      self.config.divertmode(divertmode);
+    if(self.status.divertmode() !== divertmode) {
+      self.status.divertmode(divertmode);
       self.changeDivertModeFetching(true);
       self.changeDivertModeSuccess(false);
       $.post(self.baseEndpoint() + "/divertmode", { divertmode: divertmode }, function () {
@@ -1074,7 +1119,7 @@ function OpenEvseWiFiViewModel() {
 
   self.ecoMode = ko.pureComputed({
     read: function () {
-      return 2 === self.config.divertmode();
+      return 2 === self.status.divertmode();
     },
     write: function(val) {
       self.changeDivertMode(val ? 2 : 1);
@@ -1140,7 +1185,7 @@ function OpenEvseWiFiViewModel() {
     };
     self.socket.onmessage = function (msg) {
       console.log(msg);
-      ko.mapping.fromJSON(msg.data, self.rapi);
+      ko.mapping.fromJSON(msg.data, self.status);
     };
     self.socket.onerror = function (ev) {
       console.log(ev);

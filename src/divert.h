@@ -16,6 +16,9 @@ extern int grid_ie;
 void divertmode_update(byte divertmode);
 
 // Set charge rate depending on charge mode and solarPV output
+void divert_update_state();
+
+//
 void divert_current_loop();
 
 #endif // _EMONESP_DIVERT_H

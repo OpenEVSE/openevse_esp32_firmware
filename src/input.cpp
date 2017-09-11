@@ -279,11 +279,11 @@ handleRapiRead() {
 void on_rapi_event()
 {
   if(!strcmp(rapiSender.getToken(0), "$ST")) {
-    String qrapi = rapiSender.getToken(1);
+    const char *qrapi = rapiSender.getToken(1);
     DBUGVAR(qrapi);
 
     // Update our local state
-    state = strtol(qrapi.c_str(), NULL, 16);
+    state = strtol(qrapi, NULL, 16);
     DBUGVAR(state);
 
     // Send to all clients
@@ -298,11 +298,11 @@ void on_rapi_event()
       mqtt_publish(event);
     }
   } else if(!strcmp(rapiSender.getToken(0), "$WF")) {
-    String qrapi = rapiSender.getToken(1);
+    const char *qrapi = rapiSender.getToken(1);
     DBUGVAR(qrapi);
-    long wifiMode = strtol(qrapi.c_str(), NULL, 10);
-    DBUGVAR(wifiMode);
 
+    long wifiMode = strtol(qrapi, NULL, 10);
+    DBUGVAR(wifiMode);
     switch(wifiMode)
     {
       case OPENEVSE_WIFI_MODE_AP:

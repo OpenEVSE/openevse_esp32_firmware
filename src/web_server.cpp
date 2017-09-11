@@ -4,10 +4,11 @@
 
 #include <Arduino.h>
 #include <ESP8266WiFi.h>
-#include <FS.h>                       // SPIFFS file-system: store web server html, CSS etc.
+//#include <FS.h>                       // SPIFFS file-system: store web server html, CSS etc.
 
 #include "emonesp.h"
 #include "web_server.h"
+#include "web_server_static.h"
 #include "config.h"
 #include "wifi.h"
 #include "mqtt.h"
@@ -18,6 +19,7 @@
 
 AsyncWebServer server(80);          // Create class for Web server
 AsyncWebSocket ws("/ws");
+StaticFileWebHandler staticFile;
 
 bool enableCors = true;
 
@@ -29,21 +31,13 @@ unsigned long systemRebootTime = 0;
 unsigned long apOffTime = 0;
 
 // Content Types
-static const char _CONTENT_TYPE_HTML[] PROGMEM = "text/html";
-#define CONTENT_TYPE_HTML FPSTR(_CONTENT_TYPE_HTML)
-
-static const char _CONTENT_TYPE_TEXT[] PROGMEM = "text/text";
-#define CONTENT_TYPE_TEXT FPSTR(_CONTENT_TYPE_TEXT)
-
-static const char _CONTENT_TYPE_JSON[] PROGMEM = "application/json";
-#define CONTENT_TYPE_JSON FPSTR(_CONTENT_TYPE_JSON)
-
-// Pages
-static const char _HOME_PAGE[] PROGMEM = "/home.htm";
-#define HOME_PAGE FPSTR(_HOME_PAGE)
-
-static const char _WIFI_PAGE[] PROGMEM = "/wifi_portal.htm";
-#define WIFI_PAGE FPSTR(_WIFI_PAGE)
+const char _CONTENT_TYPE_HTML[] PROGMEM = "text/html";
+const char _CONTENT_TYPE_TEXT[] PROGMEM = "text/text";
+const char _CONTENT_TYPE_CSS[] PROGMEM = "text/css";
+const char _CONTENT_TYPE_JSON[] PROGMEM = "application/json";
+const char _CONTENT_TYPE_JS[] PROGMEM = "application/javascript";
+const char _CONTENT_TYPE_JPEG[] PROGMEM = "image/jpeg";
+const char _CONTENT_TYPE_PNG[] PROGMEM = "image/png";
 
 static const char _DUMMY_PASSWORD[] PROGMEM = "___DUMMY_PASSWORD___";
 #define DUMMY_PASSWORD FPSTR(_DUMMY_PASSWORD)
@@ -130,6 +124,7 @@ bool isPositive(const String &str) {
 // Load Home page
 // url: /
 // -------------------------------------------------------------------
+/*
 void
 handleHome(AsyncWebServerRequest *request) {
   if (www_username != ""
@@ -152,6 +147,7 @@ handleHome(AsyncWebServerRequest *request) {
         "</body></html>"));
   }
 }
+*/
 
 // -------------------------------------------------------------------
 // Wifi scan /scan not currently used
@@ -442,7 +438,22 @@ handleStatus(AsyncWebServerRequest *request) {
 
   s += "\"ohm_hour\":\"" + ohm_hour + "\",";
 
-  s += "\"free_heap\":" + String(ESP.getFreeHeap());
+  s += "\"free_heap\":" + String(ESP.getFreeHeap()) + ",";
+
+  s += "\"comm_sent\":" + String(comm_sent) + ",";
+  s += "\"comm_success\":" + String(comm_success) + ",";
+
+  s += "\"amp\":" + amp + ",";
+  s += "\"pilot\":" + pilot + ",";
+  s += "\"temp1\":" + temp1 + ",";
+  s += "\"temp2\":" + temp2 + ",";
+  s += "\"temp3\":" + temp3 + ",";
+  s += "\"state\":" + String(state) + ",";
+  s += "\"elapsed\":" + String(elapsed) + ",";
+  s += "\"wattsec\":" + wattsec + ",";
+  s += "\"watthour\":" + watthour_total + ",";
+
+  s += "\"divertmode\":" + String(divertmode);
 
 #ifdef ENABLE_LEGACY_API
   s += ",\"networks\":[" + st + "]";
@@ -539,8 +550,7 @@ handleConfig(AsyncWebServerRequest *request) {
     s += dummyPassword;
   }
   s += "\",";
-  s += "\"ohm_enabled\":" + String(config_ohm_enabled() ? "true" : "false") + ",";
-  s += "\"divertmode\":" + String(divertmode);
+  s += "\"ohm_enabled\":" + String(config_ohm_enabled() ? "true" : "false");
   s += "}";
 
   response->setCode(200);
@@ -548,7 +558,8 @@ handleConfig(AsyncWebServerRequest *request) {
   request->send(response);
 }
 
- // -------------------------------------------------------------------
+#ifdef ENABLE_LEGACY_API
+// -------------------------------------------------------------------
 // Returns Updates JSON
 // url: /rapiupdate
 // -------------------------------------------------------------------
@@ -563,12 +574,10 @@ handleUpdate(AsyncWebServerRequest *request) {
   String s = "{";
   s += "\"comm_sent\":" + String(comm_sent) + ",";
   s += "\"comm_success\":" + String(comm_success) + ",";
-#ifdef ENABLE_LEGACY_API
   s += "\"ohmhour\":\"" + ohm_hour + "\",";
   s += "\"espfree\":\"" + String(espfree) + "\",";
   s += "\"packets_sent\":\"" + String(packets_sent) + "\",";
   s += "\"packets_success\":\"" + String(packets_success) + "\",";
-#endif
   s += "\"amp\":" + amp + ",";
   s += "\"pilot\":" + pilot + ",";
   s += "\"temp1\":" + temp1 + ",";
@@ -576,9 +585,7 @@ handleUpdate(AsyncWebServerRequest *request) {
   s += "\"temp3\":" + temp3 + ",";
   s += "\"state\":" + String(state) + ",";
   s += "\"elapsed\":" + String(elapsed) + ",";
-#ifdef ENABLE_LEGACY_API
   s += "\"estate\":\"" + estate + "\",";
-#endif
   s += "\"wattsec\":" + wattsec + ",";
   s += "\"watthour\":" + watthour_total;
   s += "}";
@@ -587,6 +594,7 @@ handleUpdate(AsyncWebServerRequest *request) {
   response->print(s);
   request->send(response);
 }
+#endif
 
 // -------------------------------------------------------------------
 // Reset config and reboot
@@ -848,23 +856,26 @@ void onWsEvent(AsyncWebSocket * server, AsyncWebSocketClient *client, AwsEventTy
 
 void
 web_server_setup() {
-  SPIFFS.begin(); // mount the fs
+//  SPIFFS.begin(); // mount the fs
 
   // Setup the static files
-  server.serveStatic("/", SPIFFS, "/")
-    .setDefaultFile("index.html");
+//  server.serveStatic("/", SPIFFS, "/")
+//    .setDefaultFile("index.html");
 
   // Add the Web Socket server
   ws.onEvent(onWsEvent);
   server.addHandler(&ws);
+  server.addHandler(&staticFile);
 
   // Start server & server root html /
-  server.on("/", handleHome);
+  //server.on("/", handleHome);
 
   // Handle status updates
   server.on("/status", handleStatus);
-  server.on("/rapiupdate", handleUpdate);
   server.on("/config", handleConfig);
+#ifdef ENABLE_LEGACY_API
+  server.on("/rapiupdate", handleUpdate);
+#endif
 
   // Handle HTTP web interface button presses
   server.on("/savenetwork", handleSaveNetwork);
@@ -886,14 +897,6 @@ web_server_setup() {
   // Simple Firmware Update Form
   server.on("/update", HTTP_GET, handleUpdateGet);
   server.on("/update", HTTP_POST, handleUpdatePost, handleUpdateUpload);
-
-//  server.on("/firmware", [](){
-//    if(requestPreProcess())   handleUpdateCheck();
-//  });
-//
-//  server.on("/update", [](){
-//    if(requestPreProcess()) handleUpdate();
-//  });
 
   server.onNotFound(handleNotFound);
   server.begin();

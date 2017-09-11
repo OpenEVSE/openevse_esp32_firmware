@@ -104,6 +104,7 @@ loop() {
   ota_loop();
 #endif
   rapiSender.loop();
+  divert_current_loop();
 
   // Gives OpenEVSE time to finish self test on cold start
   if ( (millis() > 5000) && (rapi_read==0) ) {
@@ -148,3 +149,13 @@ loop() {
 
   Profile_End(loop, 10);
 } // end loop
+
+
+void event_send(String event)
+{
+  web_server_event(event);
+
+  if (config_mqtt_enabled()) {
+    mqtt_publish(event);
+  }
+}

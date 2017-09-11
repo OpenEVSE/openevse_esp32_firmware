@@ -8,6 +8,8 @@
 #include "config.h"
 #include "RapiSender.h"
 #include "mqtt.h"
+#include "event.h"
+#include "openevse.h"
 
 // 1: Normal / Fast Charge (default):
 // Charging at maximum rate irrespective of solar PV / grid_ie output
@@ -27,8 +29,6 @@
 #define DIVERT_MODE_NORMAL      1
 #define DIVERT_MODE_ECO         2
 
-#define OPENEVSE_STATE_SLEEPING 254
-
 #define GRID_IE_RESERVE_POWER   100.0
 
 // Default to normal charging unless set. Divert mode always defaults back to 1 if unit is reset (divertmode not saved in EEPROM)
@@ -38,6 +38,7 @@ int grid_ie = 0;
 byte min_charge_current = 6;      // TO DO: set to be min charge current as set on the OpenEVSE e.g. "$GC min-current max-current"
 byte max_charge_current = 32;     // TO DO: to be set to be max charge current as set on the OpenEVSE e.g. "$GC min-current max-current"
 int charge_rate = 0;
+int last_state = OPENEVSE_STATE_INVALID;
 
 extern RapiSender rapiSender;
 
@@ -70,20 +71,37 @@ void divertmode_update(byte newmode)
         return;
     }
 
-    if (config_mqtt_enabled()) {
-      String event = F("divertmode:");
-      event += String(divertmode);
-      mqtt_publish(event);
-    }
+    String event = F("{\"divertmode\":");
+    event += String(divertmode);
+    event += F("}");
+    event_send(event);
   }
 }
 
-// Set charge rate depending on divert mode and solar / grid_ie
 void divert_current_loop()
 {
   Profile_Start(divert_current_loop);
 
-  DBUGVAR(divertmode);
+  if(last_state != state)
+  {
+    DBUGVAR(last_state);
+    DBUGVAR(state);
+    DBUGVAR(divertmode);
+
+    // Revert to normal mode on disconnecting the car
+    if(OPENEVSE_STATE_NOT_CONNECTED == state && DIVERT_MODE_ECO == divertmode) {
+      divertmode_update(DIVERT_MODE_NORMAL);
+    }
+    last_state = state;
+  }
+
+  Profile_End(divert_current_loop, 5);
+} //end divert_current_loop
+
+// Set charge rate depending on divert mode and solar / grid_ie
+void divert_update_state()
+{
+  Profile_Start(divert_update_state);
 
   // If divert mode = Eco (2)
   if (divertmode == DIVERT_MODE_ECO)
@@ -173,5 +191,5 @@ void divert_current_loop()
     }
   } // end ecomode
 
-  Profile_End(divert_current_loop, 5);
-} //end divert_current_loop
+  Profile_End(divert_update_state, 5);
+} //end divert_update_state

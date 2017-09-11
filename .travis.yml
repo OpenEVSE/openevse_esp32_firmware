@@ -38,7 +38,9 @@ cache:
 
 install:
   - pip install -U platformio
-  - platformio platform install https://github.com/platformio/platform-espressif8266.git#feature/stage
+  - platformio platform install espressif8266 --with-package tool-mkspiffs
+  - platformio platform install https://github.com/platformio/platform-espressif8266.git#feature/stage --with-package tool-mkspiffs
 
 script:
   - platformio run -e $PIO_ENV
+  - platformio run -e $PIO_ENV -t buildfs
