@@ -40,6 +40,9 @@ install:
   - pip install -U platformio
   - platformio platform install espressif8266 --with-package tool-mkspiffs
   - platformio platform install https://github.com/platformio/platform-espressif8266.git#feature/stage --with-package tool-mkspiffs
+  # Make sure our cached copy is up-to-date
+  - platformio upgrade
+  - platformio update
 
 script:
   - platformio run -e $PIO_ENV
