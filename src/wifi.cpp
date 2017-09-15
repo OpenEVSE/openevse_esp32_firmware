@@ -279,6 +279,7 @@ wifi_loop() {
 
 void
 wifi_restart() {
+  wifi_turn_off_ap();
   startClient();
 }
 

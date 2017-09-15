@@ -3,6 +3,7 @@
   "home.js": [
     "openevse.js",
     "view_models/RapiViewModel.js",
+    "view_models/TimeViewModel.js",
     "view_models/OpenEvseViewModel.js",
     "view_models/OpenEvseWiFiViewModel.js",
     "home.js"

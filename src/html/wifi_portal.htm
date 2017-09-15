@@ -66,7 +66,11 @@
           </div>
 
           <div data-bind="visible: wifi.wifiConnecting">
-            <p>Connecting to WIFI Network...</p>
+            <h2>Connecting to <span data-bind="text: config.ssid"></span> ...</h2>
+            <p>Please connect this device to <span data-bind="text: config.ssid"></span> and navigate
+               to the IP address displayed on your OpenEVSE display.</p>
+            <p>Alternatively you can use <a href="http://openevse.local/">http://openevse.local/</a> or
+               <a href="http://openevse/">http://openevse/</a></p>
           </div>
         </div>
       </div>
