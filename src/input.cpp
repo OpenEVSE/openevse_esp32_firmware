@@ -38,20 +38,21 @@ long elapsed = 0;                    // Elapsed time (only valid if charging)
 String estate = "Unknown"; // Common name for State
 #endif
 
-//Defaults OpenEVSE Settings
+// Defaults OpenEVSE Settings
 byte rgb_lcd = 1;
 byte serial_dbg = 0;
 byte auto_service = 1;
 int service = 1;
 int current_l1 = 0;
 int current_l2 = 0;
-String current_l1min = "-";
-String current_l2min = "-";
-String current_l1max = "-";
-String current_l2max = "-";
-String current_scale = "-";
-String current_offset = "-";
-//Default OpenEVSE Safety Configuration
+String current_l1min = "0";
+String current_l2min = "0";
+String current_l1max = "0";
+String current_l2max = "0";
+String current_scale = "0";
+String current_offset = "0";
+
+// Default OpenEVSE Safety Configuration
 byte diode_ck = 1;
 byte gfci_test = 1;
 byte ground_ck = 1;
@@ -62,21 +63,21 @@ byte auto_start = 1;
 String firmware = "-";
 String protocol = "-";
 
-//Default OpenEVSE Fault Counters
-String gfci_count = "-";
-String nognd_count = "-";
-String stuck_count = "-";
-//OpenEVSE Session options
+// Default OpenEVSE Fault Counters
+String gfci_count = "0";
+String nognd_count = "0";
+String stuck_count = "0";
+
+// OpenEVSE Session options
 String kwh_limit = "0";
 String time_limit = "0";
 
-//OpenEVSE Usage Statistics
+// OpenEVSE Usage Statistics
 String wattsec = "0";
 String watthour_total = "0";
 
 unsigned long comm_sent = 0;
 unsigned long comm_success = 0;
-
 
 void
 create_rapi_json() {
