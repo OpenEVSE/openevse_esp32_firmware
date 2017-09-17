@@ -33,7 +33,7 @@ bool StaticFileWebHandler::_getFile(AsyncWebServerRequest *request, StaticFile *
   // Remove the found uri
   String path = request->url();
   if(path == "/") {
-    path = String((wifi_mode == WIFI_MODE_AP_ONLY) ? WIFI_PAGE : HOME_PAGE);
+    path = String(wifi_mode_is_ap_only() ? WIFI_PAGE : HOME_PAGE);
   }
 
   DBUGF("Looking for %s", path.c_str());
@@ -72,7 +72,7 @@ void StaticFileWebHandler::handleRequest(AsyncWebServerRequest *request)
   dumpRequest(request);
 
   // Are we authenticated
-  if(wifi_mode == WIFI_MODE_STA && www_username!="" &&
+  if(wifi_mode_is_sta() && www_username!="" &&
     false == request->authenticate(www_username.c_str(), www_password.c_str())) {
     request->requestAuthentication(esp_hostname);
     return;

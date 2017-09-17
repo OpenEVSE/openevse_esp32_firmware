@@ -1,15 +1,23 @@
 from os.path import join, isfile, basename
-from os import listdir
+from os import listdir, system
 import json
 from pprint import pprint
 import re
+import requests
 
 
-from css_html_js_minify.html_minifier import html_minify
-#from css_html_js_minify.css_minifier import css_minify
-#from css_html_js_minify.js_minifier import js_minify
+import css_html_js_minify.html_minifier as html_minifier
+#import css_html_js_minify.css_minifier as css_minifier
+#import css_html_js_minify.js_minifier as js_minifier
 
 Import("env")
+
+# Install pre-requisites
+java_installed = (0 == system("java -version"))
+if java_installed:
+    import pip
+    pip.main(["install", "closure"])
+    pip.main(["install", "yuicompressor"])
 
 #
 # Dump build environment (for debug)
@@ -19,7 +27,25 @@ Import("env")
 
 import httplib, urllib, sys
 
-def js_minify(original):
+def html_minify(file, comments=False):
+    with open(file) as source_fh:
+        original = source_fh.read().decode('utf-8')
+    return html_minifier.html_minify(original, comments)
+
+
+def js_minify(file_name):
+    if java_installed:
+        from subprocess import Popen, PIPE
+        p = Popen(['closure', '--js', file_name, '--compilation_level', 'SIMPLE'],
+                  stdout=PIPE, stderr=PIPE)
+        (closure_stdout, closure_stderr) = p.communicate()
+        if closure_stderr:
+            print(closure_stderr)
+        return closure_stdout
+
+    # Fall back to Web call
+    with open(file_name) as source_fh:
+        original = source_fh.read().decode('utf-8')
     params = urllib.urlencode([
         ('js_code', original),
         ('compilation_level', 'SIMPLE_OPTIMIZATIONS'),
@@ -36,29 +62,36 @@ def js_minify(original):
     conn.close()
     return data
 
-import requests
+def css_minify(file_name, wrap=False, comments=False, sort=True):
+    if java_installed:
+        from subprocess import Popen, PIPE
+        p = Popen(['yuicompressor', file_name],
+                  stdout=PIPE, stderr=PIPE)
+        (yuicompressor_stdout, yuicompressor_stderr) = p.communicate()
+        if yuicompressor_stderr:
+            print(yuicompressor_stderr)
+        return yuicompressor_stdout
 
-def css_minify(original, wrap=False, comments=False, sort=True):
+    # Fall back to Web call
+    with open(file_name) as source_fh:
+        original = source_fh.read().decode('utf-8')
     url = 'https://cssminifier.com/raw'
     data = {'input': original }
     response = requests.post(url, data=data)
-
     return response.text
 
 def minify(env, target, source):
     output = ""
     for source_file in source:
         #print("Reading {}".format(source_file))
-        file = source_file.get_abspath()
-        with open(file) as source_fh:
-            original = source_fh.read().decode('utf-8')
-        if file.endswith(".css"):
-            output += css_minify(original, wrap=False, comments=False, sort=True)
-        elif file.endswith(".js"):
-            output += js_minify(original)
+        abs_file = source_file.get_abspath()
+        if abs_file.endswith(".css"):
+            output += css_minify(abs_file, wrap=False, comments=False, sort=True)
+        elif abs_file.endswith(".js"):
+            output += js_minify(abs_file)
             #output += original
-        elif file.endswith(".htm") or file.endswith(".html"):
-            output += html_minify(original, comments=False)
+        elif abs_file.endswith(".htm") or abs_file.endswith(".html"):
+            output += html_minify(abs_file, comments=False)
     target_file = target[0].get_abspath()
     print("Generating {}".format(target_file))
     with open(target_file, "w") as output_file:
@@ -162,6 +195,7 @@ def process_app_file(source_dir, source_files, data_dir, out_file, env):
     data_file = join(data_dir, out_file)
     header_file = join("$PROJECTSRC_DIR", "web_server."+out_file+".h")
     env.Depends(header_file, env.Command(data_file, source, minify))
+    env.Depends("$BUILD_DIR/spiffs.bin", env.Command(data_file, source, minify))
     #env.Depends("$PROJECTSRC_DIR/web_server.cpp", env.Command(header_file, data_file, data_to_header))
     env.Depends("$BUILDSRC_DIR/web_server_static.o", env.Command(header_file, data_file, data_to_header))
 

@@ -13,18 +13,25 @@
 # * User Guide for `platformio ci` command
 #   < http://docs.platformio.org/page/userguide/cmd_ci.html >
 #
+
 language: python
+
 python:
 - '2.7'
+
 sudo: false
+
 env:
   - PIO_ENV=openevse
   - PIO_ENV=openevse_slow
   - PIO_ENV=openevse_ota
+  - PIO_ENV=openevse_dev
+  - PIO_ENV=openevse_staging
   - PIO_ENV=openevse
     PLATFORMIO_BUILD_FLAGS=-DENABLE_DEBUG
   - PIO_ENV=openevse
     PLATFORMIO_BUILD_FLAGS=-DENABLE_DEBUG -DENABLE_PROFILE
+
 cache:
   directories:
   - "~/.platformio"
@@ -32,6 +39,10 @@ cache:
 install:
   - pip install -U platformio
   - platformio platform install espressif8266 --with-package tool-mkspiffs
+  - platformio platform install https://github.com/platformio/platform-espressif8266.git#feature/stage --with-package tool-mkspiffs
+  # Make sure our cached copy is up-to-date
+  - platformio upgrade
+  - platformio update
 
 script:
   - platformio run -e $PIO_ENV

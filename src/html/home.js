@@ -1,4 +1,4 @@
-/* global $, ko, WiFiPortalViewModel */
+/* global $, ko, OpenEvseWiFiViewModel */
 
 (function() {
   "use strict";
@@ -9,11 +9,11 @@
 var baseHost = window.location.hostname;
 //var baseHost = "openevse.local";
 //var baseHost = "192.168.4.1";
-//var baseHost = "172.16.0.57";
+//var baseHost = "172.16.0.70";
 
 $(function () {
   // Activates knockout.js
-  var openevse = new WiFiPortalViewModel(baseHost);
+  var openevse = new OpenEvseWiFiViewModel(baseHost);
   ko.applyBindings(openevse);
   openevse.start();
 });

@@ -28,6 +28,7 @@ unsigned long wifiRestartTime = 0;
 unsigned long mqttRestartTime = 0;
 unsigned long systemRestartTime = 0;
 unsigned long systemRebootTime = 0;
+unsigned long apOffTime = 0;
 
 // Content Types
 const char _CONTENT_TYPE_HTML[] PROGMEM = "text/html";
@@ -98,7 +99,7 @@ bool requestPreProcess(AsyncWebServerRequest *request, AsyncResponseStream *&res
 {
   dumpRequest(request);
 
-  if(wifi_mode == WIFI_MODE_STA && www_username!="" &&
+  if(wifi_mode_is_sta() && www_username!="" &&
      false == request->authenticate(www_username.c_str(), www_password.c_str())) {
     request->requestAuthentication(esp_hostname);
     return false;
@@ -142,7 +143,7 @@ handleHome(AsyncWebServerRequest *request) {
       F("<html><body>"
         "<h1><font color=006666>Open</font><b>EVSE</b> WiFi</h1>"
         "<p>/home.html not found, have you flashed the SPIFFS?</p>"
-        "<p><a href='/update'>Update Firmware</a></p>"
+        "<iframe style=\"width:380px; height:50px;\" frameborder=\"0\" scrolling=\"no\"></iframe>"
         "</body></html>"));
   }
 }
@@ -234,7 +235,7 @@ handleAPOff(AsyncWebServerRequest *request) {
   request->send(response);
 
   DBUGLN("Turning AP Off");
-  systemRebootTime = millis() + 5000;
+  apOffTime = millis() + 1000;
 }
 
 // -------------------------------------------------------------------
@@ -418,17 +419,18 @@ handleStatus(AsyncWebServerRequest *request) {
   }
 
   String s = "{";
-  if (wifi_mode == WIFI_MODE_STA) {
+  if (wifi_mode_is_sta_only()) {
     s += "\"mode\":\"STA\",";
-  } else if (wifi_mode == WIFI_MODE_AP_STA_RETRY
-             || wifi_mode == WIFI_MODE_AP_ONLY) {
+  } else if (wifi_mode_is_ap_only()) {
     s += "\"mode\":\"AP\",";
-  } else if (wifi_mode == WIFI_MODE_AP_AND_STA) {
+  } else if (wifi_mode_is_ap() && wifi_mode_is_sta()) {
     s += "\"mode\":\"STA+AP\",";
   }
 
+  s += "\"wifi_client_connected\":" + String(wifi_client_connected()) + ",";
   s += "\"srssi\":" + String(WiFi.RSSI()) + ",";
   s += "\"ipaddress\":\"" + ipaddress + "\",";
+
   s += "\"emoncms_connected\":" + String(emoncms_connected) + ",";
   s += "\"packets_sent\":" + String(packets_sent) + ",";
   s += "\"packets_success\":" + String(packets_success) + ",";
@@ -810,7 +812,7 @@ void handleNotFound(AsyncWebServerRequest *request)
   DBUG("NOT_FOUND: ");
   dumpRequest(request);
 
-  if(wifi_mode == WIFI_MODE_AP_ONLY) {
+  if(wifi_mode_is_ap_only()) {
     // Redirect to the home page in AP mode (for the captive portal)
     AsyncResponseStream *response = request->beginResponseStream(String(CONTENT_TYPE_HTML));
 
@@ -917,6 +919,12 @@ web_server_loop() {
   if(mqttRestartTime > 0 && millis() > mqttRestartTime) {
     mqttRestartTime = 0;
     mqtt_restart();
+  }
+
+  // Do we need to turn off the access point?
+  if(apOffTime > 0 && millis() > apOffTime) {
+    apOffTime = 0;
+    wifi_turn_off_ap();
   }
 
   // Do we need to restart the system?

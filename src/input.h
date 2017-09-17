@@ -66,6 +66,7 @@ extern unsigned long comm_success;
 extern void handleRapiRead();
 extern void update_rapi_values();
 extern void create_rapi_json();
+extern void on_rapi_event();
 
 
 #endif // _EMONESP_INPUT_H

@@ -6,8 +6,15 @@
 #include "input.h"
 #include "config.h"
 #include "divert.h"
+#include "mqtt.h"
+#include "web_server.h"
+#include "wifi.h"
 
 #include "RapiSender.h"
+
+#define OPENEVSE_WIFI_MODE_AP 0
+#define OPENEVSE_WIFI_MODE_CLIENT 1
+#define OPENEVSE_WIFI_MODE_AP_DEFAULT 2
 
 const char *e_url = "/input/post.json?node=";
 
@@ -31,20 +38,21 @@ long elapsed = 0;                    // Elapsed time (only valid if charging)
 String estate = "Unknown"; // Common name for State
 #endif
 
-//Defaults OpenEVSE Settings
+// Defaults OpenEVSE Settings
 byte rgb_lcd = 1;
 byte serial_dbg = 0;
 byte auto_service = 1;
 int service = 1;
 int current_l1 = 0;
 int current_l2 = 0;
-String current_l1min = "-";
-String current_l2min = "-";
-String current_l1max = "-";
-String current_l2max = "-";
-String current_scale = "-";
-String current_offset = "-";
-//Default OpenEVSE Safety Configuration
+String current_l1min = "0";
+String current_l2min = "0";
+String current_l1max = "0";
+String current_l2max = "0";
+String current_scale = "0";
+String current_offset = "0";
+
+// Default OpenEVSE Safety Configuration
 byte diode_ck = 1;
 byte gfci_test = 1;
 byte ground_ck = 1;
@@ -55,21 +63,21 @@ byte auto_start = 1;
 String firmware = "-";
 String protocol = "-";
 
-//Default OpenEVSE Fault Counters
-String gfci_count = "-";
-String nognd_count = "-";
-String stuck_count = "-";
-//OpenEVSE Session options
+// Default OpenEVSE Fault Counters
+String gfci_count = "0";
+String nognd_count = "0";
+String stuck_count = "0";
+
+// OpenEVSE Session options
 String kwh_limit = "0";
 String time_limit = "0";
 
-//OpenEVSE Usage Statistics
+// OpenEVSE Usage Statistics
 String wattsec = "0";
 String watthour_total = "0";
 
 unsigned long comm_sent = 0;
 unsigned long comm_success = 0;
-
 
 void
 create_rapi_json() {
@@ -111,9 +119,10 @@ update_rapi_values() {
 
   comm_sent++;
   if (rapi_command == 1) {
-    if (0 == rapiSender.sendCmd("$GE"))
+    if (0 == rapiSender.sendCmd("$GE")) {
       comm_success++;
       pilot = rapiSender.getToken(1);
+    }
   }
   if (rapi_command == 2) {
     if (0 == rapiSender.sendCmd("$GS")) {
@@ -266,4 +275,44 @@ handleRapiRead() {
     }
   }
   Profile_End(handleRapiRead, 10);
+}
+
+void on_rapi_event()
+{
+  if(!strcmp(rapiSender.getToken(0), "$ST")) {
+    const char *qrapi = rapiSender.getToken(1);
+    DBUGVAR(qrapi);
+
+    // Update our local state
+    state = strtol(qrapi, NULL, 16);
+    DBUGVAR(state);
+
+    // Send to all clients
+    String event = F("{\"state\":");
+    event += state;
+    event += F("}");
+    web_server_event(event);
+
+    if (config_mqtt_enabled()) {
+      event = F("state:");
+      event += String(state);
+      mqtt_publish(event);
+    }
+  } else if(!strcmp(rapiSender.getToken(0), "$WF")) {
+    const char *qrapi = rapiSender.getToken(1);
+    DBUGVAR(qrapi);
+
+    long wifiMode = strtol(qrapi, NULL, 10);
+    DBUGVAR(wifiMode);
+    switch(wifiMode)
+    {
+      case OPENEVSE_WIFI_MODE_AP:
+      case OPENEVSE_WIFI_MODE_AP_DEFAULT:
+        wifi_turn_on_ap();
+        break;
+      case OPENEVSE_WIFI_MODE_CLIENT:
+        wifi_turn_off_ap();
+        break;
+    }
+  }
 }

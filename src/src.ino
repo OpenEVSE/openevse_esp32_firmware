@@ -85,27 +85,8 @@ setup() {
   ota_setup();
   DBUGF("After ota_setup: %d", ESP.getFreeHeap());
 #endif
-  rapiSender.setOnEvent([]() {
-    if(!strcmp(rapiSender.getToken(0), "$ST")) {
-      const char *qrapi = rapiSender.getToken(1);
-      DBUGVAR(qrapi);
 
-      // Update our local state
-      state = strtol(qrapi, NULL, 16);
-      DBUGVAR(state);
-
-      // Send to all clients
-      String event = F("{\"state\":");
-      event += String(state);
-      event += F("}");
-      event_send(event);
-    } else if(!strcmp(rapiSender.getToken(0), "$WF")) {
-      const char *qrapi = rapiSender.getToken(1);
-      DBUGVAR(qrapi);
-      long wifiMode = strtol(qrapi, NULL, 10);
-      DBUGVAR(wifiMode);
-    }
-  });
+  rapiSender.setOnEvent(on_rapi_event);
   rapiSender.enableSequenceId(0);
 } // end setup
 
@@ -140,8 +121,8 @@ loop() {
     Timer3 = millis();
   }
 
-  if (wifi_mode==WIFI_MODE_STA || wifi_mode==WIFI_MODE_AP_AND_STA) {
-
+  if(wifi_client_connected())
+  {
     if (config_mqtt_enabled()) {
       mqtt_loop();
     }
@@ -164,7 +145,6 @@ loop() {
       }
       Timer1 = millis();
     }
-
   } // end WiFi connected
 
   Profile_End(loop, 10);
