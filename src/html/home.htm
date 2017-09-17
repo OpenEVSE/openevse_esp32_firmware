@@ -80,7 +80,7 @@
                 </tr>
                 <tbody id="networks" data-bind="foreach: scan.results">
                   <tr>
-                    <td><input class='networkcheckbox' name='network' data-bind="checkedValue: bssid(), checked: $root.bssid"
+                    <td><input class='networkcheckbox' name='network' data-bind="checkedValue: bssid(), checked: $root.wifi.bssid"
                         type='radio'></td>
                     <td data-bind="text: ssid"></td>
                     <td data-bind="text: rssi"></td>

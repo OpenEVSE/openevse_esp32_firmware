@@ -24,54 +24,50 @@
 
     <div class="container">
 
-      <div>
-        <div class="box">
-          <h2>WiFi Setup</h2>
-          <p><b>Mode:</b> <span id="mode" data-bind="text: status.fullMode"></span></p>
+      <div class="box" data-bind="visible: !status.isWifiClient() &amp;&amp; !wifi.wifiConnecting()">
+        <h2>WiFi Setup</h2>
+        <p><b>Mode:</b> <span id="mode" data-bind="text: status.fullMode"></span></p>
 
-          <div id="client-view" data-bind="visible: status.isWifiClient">
-            <button id="apoff" data-bind="click: wifi.turnOffAccessPoint, disable: wifi.turnOffAccessPointFetching">Continue</button>
-          </div>
+        <p>Connect to network:</p>
+        <table>
+          <thead>
+            <tr>
+              <th>Select</th>
+              <th>Network</th>
+              <th>RSSI dBm</th>
+            </tr>
+          </thead>
+          <tbody id="networks" data-bind="foreach: scan.results">
+            <tr>
+              <td><input class='networkcheckbox' name='network' data-bind="checkedValue: bssid(), checked: $root.wifi.bssid"
+                  type='radio'></td>
+              <td data-bind="text: ssid"></td>
+              <td data-bind="text: rssi"></td>
+            </tr>
+          </tbody>
+          <tfoot data-bind="visible: 0 == scan.results().length">
+            <tr>
+              <td colspan="3">Scanning...</td>
+            </tr>
+          </tfoot>
+        </table>
+        <p data-bind="text: config.ssid"></p>
+        <p>
+          <b>Passkey:</b><br>
+          <input type="password" autocapitalize="none" autocapitalize="none" data-bind="textInput: config.pass">
+          <button data-bind="click: wifi.saveNetwork, text: (wifi.saveNetworkFetching() ? 'Saving' : (wifi.saveNetworkSuccess() ? 'Saved' : 'Connect')), disable: wifi.saveNetworkFetching">Connect</button>
+        </p>
+      </div>
 
-          <div id="ap-view" data-bind="visible: !status.isWifiClient() &amp;&amp; !wifi.wifiConnecting()">
-            <p>Connect to network:</p>
-            <table>
-              <thead>
-                <tr>
-                  <th>Select</th>
-                  <th>Network</th>
-                  <th>RSSI dBm</th>
-                </tr>
-              </thead>
-              <tbody id="networks" data-bind="foreach: scan.results">
-                <tr>
-                  <td><input class='networkcheckbox' name='network' data-bind="checkedValue: bssid(), checked: $root.bssid"
-                      type='radio'></td>
-                  <td data-bind="text: ssid"></td>
-                  <td data-bind="text: rssi"></td>
-                </tr>
-              </tbody>
-              <tfoot data-bind="visible: 0 == scan.results().length">
-                <tr>
-                  <td colspan="3">Scanning...</td>
-                </tr>
-              </tfoot>
-            </table>
-            <p data-bind="text: config.ssid"></p>
-            <p>
-              <b>Passkey:</b><br>
-              <input type="password" autocapitalize="none" autocapitalize="none" data-bind="textInput: config.pass">
-              <button data-bind="click: wifi.saveNetwork, text: (wifi.saveNetworkFetching() ? 'Saving' : (wifi.saveNetworkSuccess() ? 'Saved' : 'Connect')), disable: wifi.saveNetworkFetching">Connect</button>
-            </p>
-          </div>
+      <div class="box" data-bind="visible: wifi.wifiConnecting() || status.isWifiClient()">
+        <h2>Connecting to <span data-bind="text: config.ssid"></span> ...</h2>
+        <p>Please connect this device to <span data-bind="text: config.ssid"></span> and navigate to the IP address displayed
+          on your OpenEVSE display.</p>
+        <p>Alternatively you can use <a href="http://openevse.local/">http://openevse.local/</a> or
+          <a href="http://openevse/">http://openevse/</a></p>
 
-          <div data-bind="visible: wifi.wifiConnecting">
-            <h2>Connecting to <span data-bind="text: config.ssid"></span> ...</h2>
-            <p>Please connect this device to <span data-bind="text: config.ssid"></span> and navigate
-               to the IP address displayed on your OpenEVSE display.</p>
-            <p>Alternatively you can use <a href="http://openevse.local/">http://openevse.local/</a> or
-               <a href="http://openevse/">http://openevse/</a></p>
-          </div>
+        <div id="client-view" data-bind="visible: status.isWifiClient">
+          <button id="apoff" data-bind="click: wifi.turnOffAccessPoint, disable: wifi.turnOffAccessPointFetching">Continue</button>
         </div>
       </div>
 

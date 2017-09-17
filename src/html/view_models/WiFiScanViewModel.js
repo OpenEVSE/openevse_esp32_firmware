@@ -29,13 +29,15 @@ function WiFiScanViewModel(baseEndpoint)
   self.update = function (after = function () { }) {
     self.fetching(true);
     $.get(endpoint(), function (data) {
-      ko.mapping.fromJS(data, self.results);
-      self.results.sort(function (left, right) {
-        if(left.ssid() === right.ssid()) {
-          return left.rssi() < right.rssi() ? 1 : -1;
-        }
-        return left.ssid() < right.ssid() ? -1 : 1;
-      });
+      if(data.length > 0) {
+        ko.mapping.fromJS(data, self.results);
+        self.results.sort(function (left, right) {
+          if(left.ssid() === right.ssid()) {
+            return left.rssi() < right.rssi() ? 1 : -1;
+          }
+          return left.ssid() < right.ssid() ? -1 : 1;
+        });
+      }
     }, "json").always(function () {
       self.fetching(false);
       after();

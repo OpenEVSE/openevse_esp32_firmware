@@ -419,12 +419,11 @@ handleStatus(AsyncWebServerRequest *request) {
   }
 
   String s = "{";
-  WiFiMode_t wifi_mode = WiFi.getMode();
-  if (wifi_mode == WIFI_STA) {
+  if (wifi_mode_is_sta_only()) {
     s += "\"mode\":\"STA\",";
-  } else if (wifi_mode == WIFI_AP) {
+  } else if (wifi_mode_is_ap_only()) {
     s += "\"mode\":\"AP\",";
-  } else if (wifi_mode == WIFI_AP_STA) {
+  } else if (wifi_mode_is_ap() && wifi_mode_is_sta()) {
     s += "\"mode\":\"STA+AP\",";
   }
 

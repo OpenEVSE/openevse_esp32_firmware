@@ -72,7 +72,7 @@ void
 startAP() {
   DBUGLN("Starting AP");
 
-  if((WiFi.getMode() & WIFI_STA) && WiFi.isConnected()) {
+  if (wifi_mode_is_sta()) {
     WiFi.disconnect(true);
   }
 
@@ -118,6 +118,20 @@ startClient()
   WiFi.hostname(esp_hostname);
   WiFi.begin(esid.c_str(), epass.c_str());
   WiFi.enableSTA(true);
+}
+
+static void wifi_start()
+{
+  // 1) If no network configured start up access point
+  if (esid == 0 || esid == "")
+  {
+    startAP();
+  }
+  // 2) else try and connect to the configured network
+  else
+  {
+    startClient();
+  }
 }
 
 void wifi_onStationModeGotIP(const WiFiEventStationModeGotIP &event)
@@ -204,14 +218,7 @@ wifi_setup() {
     apClients--;
   });
 
-  // 1) If no network configured start up access point
-  if (esid == 0 || esid == "") {
-    startAP();
-  }
-  // 2) else try and connect to the configured network
-  else {
-    startClient();
-  }
+  wifi_start();
 
   if (MDNS.begin(esp_hostname)) {
     MDNS.addService("http", "tcp", 80);
@@ -279,13 +286,16 @@ wifi_loop() {
 
 void
 wifi_restart() {
-  wifi_turn_off_ap();
-  startClient();
+  wifi_disconnect();
+  wifi_start();
 }
 
 void
 wifi_disconnect() {
-  WiFi.disconnect();
+  wifi_turn_off_ap();
+  if (wifi_mode_is_sta()) {
+    WiFi.disconnect(true);
+  }
 }
 
 void wifi_turn_off_ap()
