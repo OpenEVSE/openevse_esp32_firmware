@@ -17,6 +17,7 @@ java_installed = (0 == system("java -version"))
 if java_installed:
     import pip
     pip.main(["install", "closure"])
+    pip.main(["install", "yuicompressor"])
 
 #
 # Dump build environment (for debug)
@@ -31,10 +32,11 @@ def html_minify(file, comments=False):
         original = source_fh.read().decode('utf-8')
     return html_minifier.html_minify(original, comments)
 
-def js_minify(file):
+
+def js_minify(file_name):
     if java_installed:
         from subprocess import Popen, PIPE
-        p = Popen(['closure', '--js', file, '--compilation_level', 'SIMPLE'],
+        p = Popen(['closure', '--js', file_name, '--compilation_level', 'SIMPLE'],
                   stdout=PIPE, stderr=PIPE)
         (closure_stdout, closure_stderr) = p.communicate()
         if closure_stderr:
@@ -42,7 +44,7 @@ def js_minify(file):
         return closure_stdout
 
     # Fall back to Web call
-    with open(file) as source_fh:
+    with open(file_name) as source_fh:
         original = source_fh.read().decode('utf-8')
     params = urllib.urlencode([
         ('js_code', original),
@@ -60,27 +62,36 @@ def js_minify(file):
     conn.close()
     return data
 
-def css_minify(file, wrap=False, comments=False, sort=True):
-    with open(file) as source_fh:
+def css_minify(file_name, wrap=False, comments=False, sort=True):
+    if java_installed:
+        from subprocess import Popen, PIPE
+        p = Popen(['yuicompressor', file_name],
+                  stdout=PIPE, stderr=PIPE)
+        (yuicompressor_stdout, yuicompressor_stderr) = p.communicate()
+        if yuicompressor_stderr:
+            print(yuicompressor_stderr)
+        return yuicompressor_stdout
+
+    # Fall back to Web call
+    with open(file_name) as source_fh:
         original = source_fh.read().decode('utf-8')
     url = 'https://cssminifier.com/raw'
     data = {'input': original }
     response = requests.post(url, data=data)
-
     return response.text
 
 def minify(env, target, source):
     output = ""
     for source_file in source:
         #print("Reading {}".format(source_file))
-        file = source_file.get_abspath()
-        if file.endswith(".css"):
-            output += css_minify(file, wrap=False, comments=False, sort=True)
-        elif file.endswith(".js"):
-            output += js_minify(file)
+        abs_file = source_file.get_abspath()
+        if abs_file.endswith(".css"):
+            output += css_minify(abs_file, wrap=False, comments=False, sort=True)
+        elif abs_file.endswith(".js"):
+            output += js_minify(abs_file)
             #output += original
-        elif file.endswith(".htm") or file.endswith(".html"):
-            output += html_minify(file, comments=False)
+        elif abs_file.endswith(".htm") or abs_file.endswith(".html"):
+            output += html_minify(abs_file, comments=False)
     target_file = target[0].get_abspath()
     print("Generating {}".format(target_file))
     with open(target_file, "w") as output_file:
