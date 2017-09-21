@@ -54,8 +54,8 @@ install:
   - sleep 3
   - export DISPLAY=:1.0
   - wget http://downloads.arduino.cc/arduino-1.8.1-linux64.tar.xz
-  - tar xf arduino-1.8.1-linux64.tar.xz
-  - sudo mv arduino-1.8.1 /usr/local/share/arduino
+  - tar xf arduino-1.8.4-linux64.tar.xz
+  - sudo mv arduino-1.8.4 /usr/local/share/arduino
   - sudo ln -s /usr/local/share/arduino/arduino /usr/local/bin/arduino
 
   # Setup Arduino IDE
