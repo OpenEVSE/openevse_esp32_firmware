@@ -203,6 +203,15 @@ wifi_setup() {
 
   randomSeed(analogRead(0));
 
+  // If we have an SSID configured at this point we have likely
+  // been running another firmware, clear the results
+  if(wifi_is_client_configured()) {
+    WiFi.persistent(true);
+    WiFi.disconnect();
+    ESP.eraseConfig();
+  }
+
+  // Stop the WiFi module
   WiFi.persistent(false);
   WiFi.mode(WIFI_OFF);
 
