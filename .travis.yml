@@ -54,9 +54,9 @@ install:
   - sleep 3
   - export DISPLAY=:1.0
   - ARDUINO_VERSION=1.8.4
-  - wget http://downloads.arduino.cc/arduino-$(ARDUINO_VERSION)-linux64.tar.xz
-  - tar xf arduino-$(ARDUINO_VERSION)-linux64.tar.xz
-  - sudo mv arduino-$(ARDUINO_VERSION) /usr/local/share/arduino
+  - wget http://downloads.arduino.cc/arduino-${ARDUINO_VERSION}-linux64.tar.xz
+  - tar xf arduino-${ARDUINO_VERSION}-linux64.tar.xz
+  - sudo mv arduino-${ARDUINO_VERSION} /usr/local/share/arduino
   - sudo ln -s /usr/local/share/arduino/arduino /usr/local/bin/arduino
 
   # Setup Arduino IDE
