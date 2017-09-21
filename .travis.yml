@@ -19,7 +19,7 @@ language: python
 python:
 - '2.7'
 
-sudo: false
+sudo: required
 
 env:
   - PIO_ENV=openevse
@@ -31,19 +31,38 @@ env:
     PLATFORMIO_BUILD_FLAGS=-DENABLE_DEBUG
   - PIO_ENV=openevse
     PLATFORMIO_BUILD_FLAGS=-DENABLE_DEBUG -DENABLE_PROFILE
+  - SCRIPT=ci_arduino.sh
+    BUILD_TARGET=esp8266:esp8266:huzzah
 
 cache:
   directories:
   - "~/.platformio"
+  - "/usr/local/share/arduino"
 
 install:
+  # Install Platform IO
   - pip install -U platformio
   - platformio platform install espressif8266 --with-package tool-mkspiffs
   - platformio platform install https://github.com/platformio/platform-espressif8266.git#feature/stage --with-package tool-mkspiffs
+
   # Make sure our cached copy is up-to-date
   - platformio upgrade
   - platformio update
 
+  # Install Arduino IDE
+  - "/sbin/start-stop-daemon --start --quiet --pidfile /tmp/custom_xvfb_1.pid --make-pidfile --background --exec /usr/bin/Xvfb -- :1 -ac -screen 0 1280x1024x16 -extension RANDR"
+  - sleep 3
+  - export DISPLAY=:1.0
+  - wget http://downloads.arduino.cc/arduino-1.8.1-linux64.tar.xz
+  - tar xf arduino-1.8.1-linux64.tar.xz
+  - sudo mv arduino-1.8.1 /usr/local/share/arduino
+  - sudo ln -s /usr/local/share/arduino/arduino /usr/local/bin/arduino
+
+  # Setup Arduino IDE
+  - arduino --pref "boardsmanager.additional.urls=http://arduino.esp8266.com/stable/package_esp8266com_index.json" --save-prefs
+  - arduino --install-boards "esp8266:esp8266"
+  - arduino --install-library "PubSubClient,ESPAsyncWebServer,ESPAsyncTCP"
+  - arduino --pref "boardsmanager.additional.urls=" --save-prefs
+
 script:
-  - platformio run -e $PIO_ENV
-  - platformio run -e $PIO_ENV -t buildfs
+  - bash -e scripts/${SCRIPT:-ci_platformio.sh}
