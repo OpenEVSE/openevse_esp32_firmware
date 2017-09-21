@@ -61,7 +61,7 @@ install:
   # Setup Arduino IDE
   - arduino --pref "boardsmanager.additional.urls=http://arduino.esp8266.com/stable/package_esp8266com_index.json" --save-prefs
   - arduino --install-boards "esp8266:esp8266"
-  - arduino --install-library "PubSubClient,ESPAsyncWebServer,ESPAsyncTCP"
+  - arduino --install-library "PubSubClient,ESP Async WebServer,ESP AsyncTCP"
   - arduino --pref "boardsmanager.additional.urls=" --save-prefs
 
 script:
