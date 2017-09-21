@@ -11,5 +11,5 @@ platformio run -e $PIO_ENV
 echo travis_fold:end:firmware
 
 echo travis_fold:start:spiffs
-platformio run -e $PIO_ENV -f buildfs
+platformio run -e $PIO_ENV -t buildfs
 echo travis_fold:end:spiffs
