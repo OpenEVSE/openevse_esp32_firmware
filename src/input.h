@@ -9,12 +9,12 @@ extern RapiSender rapiSender;
 extern String url;
 extern String data;
 
-extern String amp;    // OpenEVSE Current Sensor
-extern String volt;   // Not currently in used
-extern String temp1;  // Sensor DS3232 Ambient
-extern String temp2;  // Sensor MCP9808 Ambient
-extern String temp3;  // Sensor TMP007 Infared
-extern String pilot;  // OpenEVSE Pilot Setting
+extern long amp;    // OpenEVSE Current Sensor
+extern long volt;   // Not currently in used
+extern long temp1;  // Sensor DS3232 Ambient
+extern long temp2;  // Sensor MCP9808 Ambient
+extern long temp3;  // Sensor TMP007 Infared
+extern long pilot;  // OpenEVSE Pilot Setting
 extern long state;    // OpenEVSE State
 extern long elapsed;  // Elapsed time (only valid if charging)
 extern String estate; // Common name for State
@@ -24,14 +24,16 @@ extern byte rgb_lcd;
 extern byte serial_dbg;
 extern byte auto_service;
 extern int service;
-extern int current_l1;
-extern int current_l2;
-extern String current_l1min;
-extern String current_l2min;
-extern String current_l1max;
-extern String current_l2max;
-extern String current_scale;
-extern String current_offset;
+
+#ifdef ENABLE_LEGACY_API
+extern long current_l1min;
+extern long current_l2min;
+extern long current_l1max;
+extern long current_l2max;
+#endif
+
+extern long current_scale;
+extern long current_offset;
 
 //Default OpenEVSE Safety Configuration
 extern byte diode_ck;
@@ -46,17 +48,19 @@ extern String firmware;
 extern String protocol;
 
 //Default OpenEVSE Fault Counters
-extern String gfci_count;
-extern String nognd_count;
-extern String stuck_count;
+extern long gfci_count;
+extern long nognd_count;
+extern long stuck_count;
 
-//OpenEVSE Session options
-extern String kwh_limit;
-extern String time_limit;
+//OpenEVSE Session
+#ifdef ENABLE_LEGACY_API
+extern long kwh_limit;
+extern long time_limit;
+#endif
 
 //OpenEVSE Usage Statistics
-extern String wattsec;
-extern String watthour_total;
+extern long wattsec;
+extern long watthour_total;
 
 extern String ohm_hour;
 
