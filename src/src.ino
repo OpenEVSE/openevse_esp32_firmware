@@ -47,11 +47,11 @@ unsigned long Timer1; // Timer for events once every 30 seconds
 unsigned long Timer3; // Timer for events once every 2 seconds
 
 boolean rapi_read = 0; //flag to indicate first read of RAPI status
+
 // -------------------------------------------------------------------
 // SETUP
 // -------------------------------------------------------------------
-void
-setup() {
+void setup() {
   delay(2000);
   Serial.begin(115200);
   pinMode(0, INPUT);
