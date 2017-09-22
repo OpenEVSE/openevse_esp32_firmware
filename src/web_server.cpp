@@ -454,6 +454,10 @@ handleStatus(AsyncWebServerRequest *request) {
   s += "\"wattsec\":" + String(wattsec) + ",";
   s += "\"watthour\":" + String(watthour_total) + ",";
 
+  s += "\"gfcicount\":" + String(gfci_count) + ",";
+  s += "\"nogndcount\":" + String(nognd_count) + ",";
+  s += "\"stuckcount\":" + String(stuck_count) + ",";
+
   s += "\"divertmode\":" + String(divertmode);
 
 #ifdef ENABLE_LEGACY_API
@@ -513,12 +517,12 @@ handleConfig(AsyncWebServerRequest *request) {
   s += "\"l2max\":\"" + current_l2max + "\",";
   s += "\"kwhlimit\":\"" + kwh_limit + "\",";
   s += "\"timelimit\":\"" + time_limit + "\",";
-#endif
-  s += "\"scale\":" + String(current_scale) + ",";
-  s += "\"offset\":" + String(current_offset) + ",";
   s += "\"gfcicount\":" + String(gfci_count) + ",";
   s += "\"nogndcount\":" + String(nognd_count) + ",";
   s += "\"stuckcount\":" + String(stuck_count) + ",";
+#endif
+  s += "\"scale\":" + String(current_scale) + ",";
+  s += "\"offset\":" + String(current_offset) + ",";
   s += "\"ssid\":\"" + esid + "\",";
   s += "\"pass\":\"";
   if(epass != 0) {

@@ -34,9 +34,6 @@ function ConfigViewModel(baseEndpoint) {
     "tempt": 0,
     "scale": 1,
     "offset": 0,
-    "gfcicount": 0,
-    "nogndcount": 0,
-    "stuckcount": 0,
     "version": "0.0.0"
   }, endpoint);
 }
