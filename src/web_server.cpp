@@ -444,15 +444,19 @@ handleStatus(AsyncWebServerRequest *request) {
   s += "\"comm_sent\":" + String(comm_sent) + ",";
   s += "\"comm_success\":" + String(comm_success) + ",";
 
-  s += "\"amp\":" + amp + ",";
-  s += "\"pilot\":" + pilot + ",";
-  s += "\"temp1\":" + temp1 + ",";
-  s += "\"temp2\":" + temp2 + ",";
-  s += "\"temp3\":" + temp3 + ",";
+  s += "\"amp\":" + String(amp) + ",";
+  s += "\"pilot\":" + String(pilot) + ",";
+  s += "\"temp1\":" + String(temp1) + ",";
+  s += "\"temp2\":" + String(temp2) + ",";
+  s += "\"temp3\":" + String(temp3) + ",";
   s += "\"state\":" + String(state) + ",";
   s += "\"elapsed\":" + String(elapsed) + ",";
-  s += "\"wattsec\":" + wattsec + ",";
-  s += "\"watthour\":" + watthour_total + ",";
+  s += "\"wattsec\":" + String(wattsec) + ",";
+  s += "\"watthour\":" + String(watthour_total) + ",";
+
+  s += "\"gfcicount\":" + String(gfci_count) + ",";
+  s += "\"nogndcount\":" + String(nognd_count) + ",";
+  s += "\"stuckcount\":" + String(stuck_count) + ",";
 
   s += "\"divertmode\":" + String(divertmode);
 
@@ -513,12 +517,12 @@ handleConfig(AsyncWebServerRequest *request) {
   s += "\"l2max\":\"" + current_l2max + "\",";
   s += "\"kwhlimit\":\"" + kwh_limit + "\",";
   s += "\"timelimit\":\"" + time_limit + "\",";
+  s += "\"gfcicount\":" + String(gfci_count) + ",";
+  s += "\"nogndcount\":" + String(nognd_count) + ",";
+  s += "\"stuckcount\":" + String(stuck_count) + ",";
 #endif
-  s += "\"scale\":" + current_scale + ",";
-  s += "\"offset\":" + current_offset + ",";
-  s += "\"gfcicount\":" + gfci_count + ",";
-  s += "\"nogndcount\":" + nognd_count + ",";
-  s += "\"stuckcount\":" + stuck_count + ",";
+  s += "\"scale\":" + String(current_scale) + ",";
+  s += "\"offset\":" + String(current_offset) + ",";
   s += "\"ssid\":\"" + esid + "\",";
   s += "\"pass\":\"";
   if(epass != 0) {

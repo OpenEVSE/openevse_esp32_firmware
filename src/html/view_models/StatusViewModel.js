@@ -27,6 +27,9 @@ function StatusViewModel(baseEndpoint) {
     "elapsed": 0,
     "wattsec": 0,
     "watthour": 0,
+    "gfcicount": 0,
+    "nogndcount": 0,
+    "stuckcount": 0,
     "divertmode": 1
   }, endpoint);
 
