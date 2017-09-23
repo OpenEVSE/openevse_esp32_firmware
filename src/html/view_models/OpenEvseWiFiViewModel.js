@@ -402,6 +402,7 @@ function OpenEvseWiFiViewModel(baseHost)
   // Receive events from the server
   // -----------------------------------------------------------------------
   self.pingInterval = false;
+  self.reconnectInterval = false;
   self.socket = false;
   self.connect = function () {
     self.socket = new WebSocket("ws://"+self.baseHost()+"/ws");
@@ -430,8 +431,11 @@ function OpenEvseWiFiViewModel(baseHost)
       clearInterval(self.pingInterval);
       self.pingInterval = false;
     }
-    setTimeout(function () {
-      self.connect();
-    }, 500);
+    if(false === self.reconnectInterval) {
+      self.reconnectInterval = setTimeout(function () {
+        self.reconnectInterval = false;
+        self.connect();
+      }, 500);
+    }
   };
 }
