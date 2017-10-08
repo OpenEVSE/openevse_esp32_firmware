@@ -175,7 +175,15 @@ void divert_update_state()
       if(current_charge_rate != charge_rate)
       {
         // Set charge rate via RAPI
-        if(0 == rapiSender.sendCmd(String(F("$SC ")) + String(charge_rate))) {
+        bool chargeRateSet = false;
+        // Try and set with new API (and don't save the charge rate in EEPROM)
+        if(0 == rapiSender.sendCmd(String(F("$SC ")) + String(charge_rate) + String(F(" 1")))) {
+          chargeRateSet = true;
+        } else if(0 == rapiSender.sendCmd(String(F("$SC ")) + String(charge_rate))) {
+          // Fallback to old API
+          chargeRateSet = true;
+        }
+        if(chargeRateSet = true) {
           DBUGF("Charge rate set to %d", charge_rate);
           pilot = charge_rate;
         }
