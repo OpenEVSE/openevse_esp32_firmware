@@ -24,7 +24,39 @@ The WiFi gateway uses an ESP8266 (ESP-12) to communcate to the OpenEVSE controll
 - 'Eco' mode: automatically adjust charging current based on availability of power from solar PV or grid export
 - Ohmconnect integration (California USA only)
 
+***
 
+## Contents
+
+  * [WiFi Setup](#wifi-setup)
+  * [OpenEVSE Web Interface](#openevse-web-interface)
+  * [Charge Mode (eco)](#charge-mode-eco)
+  * [Services](#services)
+     * [Emoncms data logging](#emoncms-data-logging)
+     * [MQTT](#mqtt)
+        * [OpenEVSE Status via MQTT](#openevse-status-via-mqtt)
+        * [RAPI](#rapi)
+        * [RAPI via web interface](#rapi-via-web-interface)
+        * [RAPI over MQTT](#rapi-over-mqtt)
+        * [RAPI over HTTP](#rapi-over-http)
+     * [Ohmconnect](#ohmconnect)
+  * [System](#system)
+     * [Authentication](#authentication)
+     * [Firmware update](#firmware-update)
+  * [Firmware Compile &amp; Upload](#firmware-compile--upload)
+     * [Using PlatformIO](#using-platformio)
+        * [a. Install PlatformIO command line](#a-install-platformio-command-line)
+        * [b. And / Or use PlatformIO IDE](#b-and--or-use-platformio-ide)
+        * [1. Clone this repo](#1-clone-this-repo)
+        * [2. Compile &amp; upload](#2-compile--upload)
+     * [Using Arduino IDE](#using-arduino-ide)
+        * [1. Install ESP for Arduino with Boards Manager](#1-install-esp-for-arduino-with-boards-manager)
+        * [2. Compile and Upload](#2-compile-and-upload)
+     * [Troubleshooting Upload](#troubleshooting-upload)
+        * [Erase Flash](#erase-flash)
+        * [Fully erase ESP](#fully-erase-esp)
+  * [About](#about)
+  * [Licence](#licence)
 
 
 ***
@@ -159,9 +191,9 @@ There is also an [OpenEVSE RAPI command python library](https://github.com/tiram
 
 ![system](docs/system.png)
 
-### Admin (Authentication)
+### Authentication
 
-HTTP Authentication (highly recomended) can be enabled by saving admin config by default username and password.
+Admin HTTP Authentication (highly recomended) can be enabled by saving admin config by default username and password.
 
 **HTTP authentication is required for all HTTP requests including input API**
 
@@ -199,28 +231,23 @@ Standalone built on GitHub Atom IDE, or use PlatformIO Atom IDE plug-in if you a
 
 [Download PlatfomIO IDE](http://platformio.org/platformio-ide)
 
-#### 2. Clone this repo
+#### 1. Clone this repo
 
 `$ git clone https://github.com/OpenEVSE/ESP8266_WiFi_v2.x`
 
 
-#### 3. Compile
+#### 2. Compile & upload
 
-```
-$ cd ESP8266_WiFi_v2.x
-$ pio run
-```
-
-The first time platformIO is ran the espressif arduino tool chain and all the required libs will be installed if required.
-
-#### 3. Upload
 
 - Put ESP into bootloader mode
    - On other ESP boards (Adafruit HUZZAH) press and hold `boot` button then press `reset`, red LED should light dimly to indicate bootloader mode.
 
-##### a.) Compile & upload:
+```
+$ cd ESP8266_WiFi_v2.x
+$ pio run
+$ pio run -t upload
+```
 
-`$ pio run -t upload`
 
 *Note: uploading SPIFFS is no longet requires since web resources are [now embedded in the firmware](https://github.com/OpenEVSE/ESP8266_WiFi_v2.x/pull/87)
 
@@ -241,16 +268,16 @@ Starting with 1.6.4, Arduino allows installation of third-party platform package
 - Open Boards Manager from Tools > Board menu and install esp8266 platform (and don't forget to select your ESP8266 board from Tools > Board menu after installation).
 
 
-#### 3. Compile and Upload
+#### 2. Compile and Upload
 
 - Open `src.ino` in the Arduino IDE.
 - Compile and Upload as normal
 
 ***
 
-#### Troubleshooting Upload
+### Troubleshooting Upload
 
-##### Erase Flash
+#### Erase Flash
 
 If you are experiancing ESP hanging in a reboot loop after upload it may be that the ESP flash has remnants of previous code (which may have the used the ESP memory in a different way). The ESP flash can be fully erased using [esptool](https://github.com/themadinventor/esptool). With the unit in bootloder mode run:
 
@@ -268,7 +295,7 @@ Erasing flash (this may take a while)...
 Erase took 8.0 seconds
 ```
 
-##### Fully erase ESP
+#### Fully erase ESP
 
 To fully erase all memory locations on an ESP-12 (4Mb) we neeed to upload a blank file to each memory location
 
@@ -276,10 +303,11 @@ To fully erase all memory locations on an ESP-12 (4Mb) we neeed to upload a blan
 
 ***
 
-### About
+## About
 
-Collaboration between [OpenEnegyMonitor](http://openenergymonitor.org) and [OpenEVSE](https://openevse.com). Contributions by:
+Collaboration of [OpenEnegyMonitor](http://openenergymonitor.org) and [OpenEVSE](https://openevse.com).
 
+Contributions by:
 - @glynhudson
 - @chris1howell
 - @trystanlea
@@ -287,6 +315,6 @@ Collaboration between [OpenEnegyMonitor](http://openenergymonitor.org) and [Open
 - @sandeen
 - @lincomatic
 
-### Licence
+## Licence
 
 GNU General Public License (GPL) V3
