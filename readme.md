@@ -131,17 +131,17 @@ An [OpenEnergyMonitor solar PV energy monitor](https://guide.openenergymonitor.o
 
 To enable 'Eco' mode charging
 
-* Connect EV and ensure EV's internal charging timmer is switched off
-* Pause charge, OpenEVSE should display 'sleeping'
-* Enable Eco mode using web interface or via MQTT
-* EV will not begin charging when genaration / excess current reaches 6A (1.4kW @ 240V)
+- Connect EV and ensure EV's internal charging timmer is switched off
+- Pause charge, OpenEVSE should display 'sleeping'
+- Enable Eco mode using web interface or via MQTT
+- EV will not begin charging when genaration / excess current reaches 6A (1.4kW @ 240V)
 
-* During 'Eco' charing changes to charging current are temporary (not saved to EEPROM)
-* After an 'Eco mode' charge the OpenEVSE will revert to 'Normal' when EV is disconnected
-* Current is adjusted in 1A increments between 6A  (1.5kW @ 240V) > max charging current (as set in OpenEVSE setup)
-* 6A is the lowest supported charging current that SAE J1772 EV charging protocol supports
-* The OpenEVSE does not adjust the current itself but rather request that the EV adjusts its charging current by varying the duty cycle of the pilot signal, see [theory of opperation](https://openev.freshdesk.com/support/solutions/articles/6000052070-theory-of-operation) and [Basics of SAE J1772](https://openev.freshdesk.com/support/solutions/articles/6000052074-basics-of-sae-j1772).
-* Charging mode can be viewed and set via MQTT: `{base-topic}/divertmode/set`. (1 = normal, 2 = eco)
+- During 'Eco' charing changes to charging current are temporary (not saved to EEPROM)
+- After an 'Eco mode' charge the OpenEVSE will revert to 'Normal' when EV is disconnected
+- Current is adjusted in 1A increments between 6A  (1.5kW @ 240V) > max charging current (as set in OpenEVSE setup)
+- 6A is the lowest supported charging current that SAE J1772 EV charging protocol supports
+- The OpenEVSE does not adjust the current itself but rather request that the EV adjusts its charging current by varying the duty cycle of the pilot signal, see [theory of opperation](https://openev.freshdesk.com/support/solutions/articles/6000052070-theory-of-operation) and [Basics of SAE J1772](https://openev.freshdesk.com/support/solutions/articles/6000052074-basics-of-sae-j1772).
+- Charging mode can be viewed and set via MQTT: `{base-topic}/divertmode/set` (1 = normal, 2 = eco).
 
 ***
 
@@ -346,6 +346,7 @@ To fully erase all memory locations on an ESP-12 (4Mb) we neeed to upload a blan
 Collaboration of [OpenEnegyMonitor](http://openenergymonitor.org) and [OpenEVSE](https://openevse.com).
 
 Contributions by:
+
 - @glynhudson
 - @chris1howell
 - @trystanlea
