@@ -1,0 +1,27 @@
+{
+  "home.htm": [ "home.htm" ],
+  "home.js": [
+    "openevse.js",
+    "view_models/RapiViewModel.js",
+    "view_models/TimeViewModel.js",
+    "view_models/OpenEvseViewModel.js",
+    "view_models/OpenEvseWiFiViewModel.js",
+    "home.js"
+  ],
+  "wifi_portal.htm": [ "wifi_portal.htm" ],
+  "wifi_portal.js": [
+    "view_models/WiFiPortalViewModel.js",
+    "wifi_portal.js"
+  ],
+  "lib.js": [
+    "lib/jquery-3.2.1.js",
+    "lib/knockout-3.4.2.js",
+    "lib/knockout.mapping-2.4.1.js",
+    "view_models/BaseViewModel.js",
+    "view_models/ConfigViewModel.js",
+    "view_models/StatusViewModel.js",
+    "view_models/WiFiScanViewModel.js",
+    "view_models/WiFiConfigViewModel.js"
+  ],
+  "style.css": [ "style.css" ]
+}

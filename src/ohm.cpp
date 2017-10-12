@@ -8,7 +8,7 @@
 
 #include <Arduino.h>
 
-//Server strings for Ohm Connect 
+//Server strings for Ohm Connect
 const char *ohm_host = "login.ohmconnect.com";
 const char *ohm_url = "/verify-ohm-hour/";
 const int ohm_httpsPort = 443;
@@ -21,12 +21,13 @@ int evse_sleep = 0;
 // -------------------------------------------------------------------
 // Ohm Connect "Ohm Hour"
 //
-// Call every once every 60 seconds if connected to the WiFi and 
+// Call every once every 60 seconds if connected to the WiFi and
 // Ohm Key is set
 // -------------------------------------------------------------------
 
 void
 ohm_loop() {
+  Profile_Start(ohm_loop);
 
   if (ohm != 0) {
     WiFiClientSecure client;
@@ -60,4 +61,6 @@ ohm_loop() {
       DEBUG.println("ERROR Ohm Connect - Certificate Invalid");
     }
   }
+
+  Profile_End(ohm_loop, 5);
 }
