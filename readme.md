@@ -3,11 +3,7 @@
 [![Build Status](https://travis-ci.org/jeremypoulter/ESP8266_WiFi_v2.x.svg?branch=master)](https://travis-ci.org/jeremypoulter/ESP8266_WiFi_v2.x)
 [![Codacy Badge](https://api.codacy.com/project/badge/Grade/640ec33a27b24f6fb4fb1d7e74c7334c)](https://www.codacy.com/app/jeremy_poulter/ESP8266_WiFi_v2.x?utm_source=github.com&amp;utm_medium=referral&amp;utm_content=jeremypoulter/ESP8266_WiFi_v2.x&amp;utm_campaign=Badge_Grade)
 
-![mobile](docs/mobile-render.png)
-
-![main](docs/main.png)
-
-
+![main](docs/main2.png)
 
 The WiFi gateway uses an ESP8266 (ESP-12) to communcate to the OpenEVSE controller via serial utilizing the existing RAPI serial interface. The web interface is served directly from the ESP8266 and can be controlled via a connected device over a local network.
 
