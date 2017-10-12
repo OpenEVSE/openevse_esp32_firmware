@@ -283,19 +283,12 @@ Standalone built on GitHub Atom IDE, or use PlatformIO Atom IDE plug-in if you a
 
 #### 2. Compile & upload
 
-
 - Put ESP into bootloader mode
-   - On other ESP boards (Adafruit HUZZAH) press and hold `boot` button then press `reset`, red LED should light dimly to indicate bootloader mode.
+- On other ESP boards (Adafruit HUZZAH) press and hold `boot` button then press `reset`, red LED should light dimly to indicate bootloader mode.
 
-```
-$ cd ESP8266_WiFi_v2.x
-$ pio run
-$ pio run -t upload
-```
-
+*To enable to OTA upload first upload via serial using the dev enviroment, this enables to OTA enable build flag. See `platformio.ino*
 
 *Note: uploading SPIFFS is no longet requires since web resources are [now embedded in the firmware](https://github.com/OpenEVSE/ESP8266_WiFi_v2.x/pull/87)
-
 
 ***
 
