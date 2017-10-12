@@ -24,6 +24,17 @@ The WiFi gateway uses an ESP8266 (ESP-12) to communcate to the OpenEVSE controll
 - 'Eco' mode: automatically adjust charging current based on availability of power from solar PV or grid export
 - Ohmconnect integration (California USA only)
 
+## Requirements
+
+### OpenEVSE charging station
+  - Puchase via: [OpenEVSE Store (USA/Canda)](https://store.openevse.com) | [OpenEnergyMonitor (UK / EU)](https://shop.openenergymonitor.com/openevse-deluxe-ev-charge-controller-kit/)
+
+### WiFi Module
+
+- ESP8266 (ESP-12) e.g Adafruit Huzzah
+- Puchase via: [OpenEVSE Store (USA/Canda)](https://store.openevse.com/collections/frontpage/products/openevse-wifi-kit) | [OpenEnergyMonitor (UK / EU)](http://shop.openenergymonitor.com/openevse-wifi-kit/)
+- See [OpenEVSE WiFi setup guide](https://openevse.dozuki.com/Guide/OpenEVSE+WiFi+%28Beta%29/14) for WiFi module connection instructions
+
 ***
 
 ## Contents
