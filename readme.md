@@ -9,7 +9,7 @@
 
 
 
-The WiFi gateway uses an ESP8266 (ESP-12) to communcate to the OpenEVSE controller via serial utilizing the existing RAPI serial interface. The web interface is served directly from the ESP8266 and can be controlled via a connected device over a local network.
+The WiFi gateway uses an ESP8266 (ESP-12) to communicate to the OpenEVSE controller via serial utilizing the existing RAPI serial interface. The web interface is served directly from the ESP8266 and can be controlled via a connected device over a local network.
 
 ## Features
 
@@ -27,15 +27,15 @@ The WiFi gateway uses an ESP8266 (ESP-12) to communcate to the OpenEVSE controll
 ## Requirements
 
 ### OpenEVSE charging station
-  - Puchase via: [OpenEVSE Store (USA/Canda)](https://store.openevse.com) | [OpenEnergyMonitor (UK / EU)](https://shop.openenergymonitor.com/openevse-deluxe-ev-charge-controller-kit/)
-  - OpenEVSE FW [V4.8.0 recomended](https://github.com/OpenEVSE/open_evse/releases/tag/v4.8.0)
+  - Purchase via: [OpenEVSE Store (USA/Canda)](https://store.openevse.com) | [OpenEnergyMonitor (UK / EU)](https://shop.openenergymonitor.com/openevse-deluxe-ev-charge-controller-kit/)
+  - OpenEVSE FW [V4.8.0 recommended](https://github.com/OpenEVSE/open_evse/releases/tag/v4.8.0)
   - All new OpenEVSE units are shipped with V4.8.0 pre-loaded (October 2017 onwards)
   - OpenEVSE FW V3.10.4 will work with latest WiFi FW with some minor issues e.g. LCD text corruption
 
 ### WiFi Module
 
 - ESP8266 (ESP-12) e.g Adafruit Huzzah
-- Puchase via: [OpenEVSE Store (USA/Canda)](https://store.openevse.com/collections/frontpage/products/openevse-wifi-kit) | [OpenEnergyMonitor (UK / EU)](http://shop.openenergymonitor.com/openevse-wifi-kit/)
+- Purchase via: [OpenEVSE Store (USA/Canda)](https://store.openevse.com/collections/frontpage/products/openevse-wifi-kit) | [OpenEnergyMonitor (UK / EU)](http://shop.openenergymonitor.com/openevse-wifi-kit/)
 - See [OpenEVSE WiFi setup guide](https://openevse.dozuki.com/Guide/OpenEVSE+WiFi+%28Beta%29/14) for WiFi module connection instructions
 
 ***
@@ -92,7 +92,7 @@ On first boot, OpenEVSE should broadcast a WiFI AP `OpenEVSE_XXX`. Connect to th
 - OpenEVSE should now connect to local wifi network
 - Re-connect device to home WiFi network and connect OpenEVSE using [http://openevse.local](http://openevse.local), [http://openevse](http://openevse) or local IP address.
 
-**If connection / re-connection fails (e.g. network cannot be found or password is incorrect) the OpenEVSE will automatically revert back to WiFi access point mode after a short while to allow a new network to be re-configued if required. Re-connection to existing network will be attempted every 5min.**
+**If connection / re-connection fails (e.g. network cannot be found or password is incorrect) the OpenEVSE will automatically revert back to WiFi access point mode after a short while to allow a new network to be re-configured if required. Re-connection to existing network will be attempted every 5min.**
 
 *Holding the `boot` button on the ESP8266 module at startup (for about 10's) will force Wifi access point mode. This is useful when trying to connect the unit to a new WiFi network.*
 
@@ -100,7 +100,7 @@ On first boot, OpenEVSE should broadcast a WiFI AP `OpenEVSE_XXX`. Connect to th
 
 ## OpenEVSE Web Interface
 
-All functions of the OpenEVSE can be viewed and controlled via the web interface. Here is a screen grab showing 'advanecd' display mode:
+All functions of the OpenEVSE can be viewed and controlled via the web interface. Here is a screen grab showing 'advanced' display mode:
 
 ![advanced](docs/adv.png)
 
@@ -121,40 +121,40 @@ This is best illustrated using an Emoncms graph. The solar generation is shown i
 
 ![divert](docs/divert.png)
 
-- OpenEVSE is initally sleeping with EV connected
+- OpenEVSE is initially sleeping with EV connected
 - Once solar PV generation reaches 6A (1.5kW @ 240V) the OpenEVSE starts charged
 - Charging current is adjusted based on available solar PV generation
 - Once the charge is started even if generation drops below 6A this EV will continue to charge*
 
-**The decision was made not to pause charging if generation current drops below 6A since repeatedly starting / stoppping a charge causes excess wear to the OpenEVSE relay contactor.*
+**The decision was made not to pause charging if generation current drops below 6A since repeatedly starting / stopping a charge causes excess wear to the OpenEVSE relay contactor.*
 
-If a Grid +I/-E (positive import / negative export) feed was used the OpenEVSE would adjust it's charging rate based on *excess* power that would be exported to the grid e.g. If solar PV was producting 4kW and 1kW was being used on-site the OpenEVSE would charge at 3kW, grid export would be 0kW. If on-site consumption increases to 2kW OpenEVSE would reduce it's chargin rate to 2kW.
+If a Grid +I/-E (positive import / negative export) feed was used the OpenEVSE would adjust it's charging rate based on *excess* power that would be exported to the grid e.g. If solar PV was producing 4kW and 1kW was being used on-site the OpenEVSE would charge at 3kW, grid export would be 0kW. If on-site consumption increases to 2kW OpenEVSE would reduce it's charging rate to 2kW.
 
 An [OpenEnergyMonitor solar PV energy monitor](https://guide.openenergymonitor.org/applications/solar-pv/) with an AC-AC voltage sensor adaptor is required to monitor direction of current flow.
 
 ### Setup
 
 - To use Eco charging mode MQTT must be enabled 'Solar PV divert' MQTT topics must be entered.
-- Integration with OpenEnergyMonitor emonPi is strightforward:
+- Integration with OpenEnergyMonitor emonPi is straightforward:
   - Connect to emonPi MQTT server, [emonPi MQTT credentials](https://guide.openenergymonitor.org/technical/credentials/#mqtt) should be pre-populated
   - Enter solar PV generation / Grid (+I/-E) MQTT topic e.g. if solar PV is being monitored by emonPi CT channel 1 enter `emon/emonpi/power1`
   - [MQTT lens Chrome extension](https://chrome.google.com/webstore/detail/mqttlens/hemojaaeigabkbcookmlgmdigohjobjm?hl=en) can be used to view MQTT data e.g. subscribe to `emon/#` for all OpenEnergyMonitor MQTT data. To lean more about MQTT see [MQTT section of OpenEnergyMonitor user guide](https://guide.openenergymonitor.org/technical/mqtt/)
-  - If using Grid +I/-E (positive import / negative export) MQTT feed ensure the notation positive import / negative export is correct, CT sensor can be pyhsically reversed on the cable to invert the reading.
+  - If using Grid +I/-E (positive import / negative export) MQTT feed ensure the notation positive import / negative export is correct, CT sensor can be physically reversed on the cable to invert the reading.
 
 ### Opperation
 
 To enable 'Eco' mode charging
 
-- Connect EV and ensure EV's internal charging timmer is switched off
+- Connect EV and ensure EV's internal charging timer is switched off
 - Pause charge, OpenEVSE should display 'sleeping'
 - Enable Eco mode using web interface or via MQTT
-- EV will not begin charging when genaration / excess current reaches 6A (1.4kW @ 240V)
+- EV will not begin charging when generation / excess current reaches 6A (1.4kW @ 240V)
 
-- During 'Eco' charing changes to charging current are temporary (not saved to EEPROM)
+- During 'Eco' charging changes to charging current are temporary (not saved to EEPROM)
 - After an 'Eco mode' charge the OpenEVSE will revert to 'Normal' when EV is disconnected
 - Current is adjusted in 1A increments between 6A  (1.5kW @ 240V) > max charging current (as set in OpenEVSE setup)
 - 6A is the lowest supported charging current that SAE J1772 EV charging protocol supports
-- The OpenEVSE does not adjust the current itself but rather request that the EV adjusts its charging current by varying the duty cycle of the pilot signal, see [theory of opperation](https://openev.freshdesk.com/support/solutions/articles/6000052070-theory-of-operation) and [Basics of SAE J1772](https://openev.freshdesk.com/support/solutions/articles/6000052074-basics-of-sae-j1772).
+- The OpenEVSE does not adjust the current itself but rather request that the EV adjusts its charging current by varying the duty cycle of the pilot signal, see [theory of operation](https://openev.freshdesk.com/support/solutions/articles/6000052070-theory-of-operation) and [Basics of SAE J1772](https://openev.freshdesk.com/support/solutions/articles/6000052074-basics-of-sae-j1772).
 - Charging mode can be viewed and set via MQTT: `{base-topic}/divertmode/set` (1 = normal, 2 = eco).
 
 ***
@@ -195,7 +195,7 @@ RAPI commands can be used to control and check the status of all OpenEVSE functi
 
 #### RAPI via web interface
 
-Enter RAPI commands directly into to web interface (dev mode must be enabled), RAPI responce is printed in return:
+Enter RAPI commands directly into to web interface (dev mode must be enabled), RAPI response is printed in return:
 
 #### RAPI over MQTT
 
@@ -211,7 +211,7 @@ The payload can be left blank if the RAPI command does not require a payload e.g
 
 `openevse/rapi/in/$GC`
 
-The responce from the RAPI command is published by the OpenEVSE back to the same sub-topic and can be received by subscribing to:
+The response from the RAPI command is published by the OpenEVSE back to the same sub-topic and can be received by subscribing to:
 
 `<base-topic>/rapi/out/#`
 
@@ -252,7 +252,7 @@ There is also an [OpenEVSE RAPI command python library](https://github.com/tiram
 
 ### Authentication
 
-Admin HTTP Authentication (highly recomended) can be enabled by saving admin config by default username and password.
+Admin HTTP Authentication (highly recommended) can be enabled by saving admin config by default username and password.
 
 **HTTP authentication is required for all HTTP requests including input API**
 
@@ -300,9 +300,9 @@ Standalone built on GitHub Atom IDE, or use PlatformIO Atom IDE plug-in if you a
 - Put ESP into bootloader mode
 - On other ESP boards (Adafruit HUZZAH) press and hold `boot` button then press `reset`, red LED should light dimly to indicate bootloader mode.
 
-*To enable to OTA upload first upload via serial using the dev enviroment, this enables to OTA enable build flag. See `platformio.ino*
+*To enable to OTA upload first upload via serial using the dev environment, this enables to OTA enable build flag. See `platformio.ino*
 
-*Note: uploading SPIFFS is no longet requires since web resources are [now embedded in the firmware](https://github.com/OpenEVSE/ESP8266_WiFi_v2.x/pull/87)
+*Note: uploading SPIFFS is no longer required since web resources are [now embedded in the firmware](https://github.com/OpenEVSE/ESP8266_WiFi_v2.x/pull/87)
 
 ***
 
@@ -331,7 +331,7 @@ Starting with 1.6.4, Arduino allows installation of third-party platform package
 
 #### Erase Flash
 
-If you are experiancing ESP hanging in a reboot loop after upload it may be that the ESP flash has remnants of previous code (which may have the used the ESP memory in a different way). The ESP flash can be fully erased using [esptool](https://github.com/themadinventor/esptool). With the unit in bootloder mode run:
+If you are experiencing ESP hanging in a reboot loop after upload it may be that the ESP flash has remnants of previous code (which may have the used the ESP memory in a different way). The ESP flash can be fully erased using [esptool](https://github.com/themadinventor/esptool). With the unit in bootloder mode run:
 
 `$ esptool.py erase_flash`
 
@@ -349,7 +349,7 @@ Erase took 8.0 seconds
 
 #### Fully erase ESP
 
-To fully erase all memory locations on an ESP-12 (4Mb) we neeed to upload a blank file to each memory location
+To fully erase all memory locations on an ESP-12 (4Mb) we need to upload a blank file to each memory location
 
 `esptool.py write_flash 0x000000 blank_1MB.bin 0x100000 blank_1MB.bin 0x200000 blank_1MB.bin 0x300000 blank_1MB.bin`
 
