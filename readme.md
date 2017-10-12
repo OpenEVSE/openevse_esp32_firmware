@@ -28,6 +28,9 @@ The WiFi gateway uses an ESP8266 (ESP-12) to communcate to the OpenEVSE controll
 
 ### OpenEVSE charging station
   - Puchase via: [OpenEVSE Store (USA/Canda)](https://store.openevse.com) | [OpenEnergyMonitor (UK / EU)](https://shop.openenergymonitor.com/openevse-deluxe-ev-charge-controller-kit/)
+  - OpenEVSE FW [V4.8.0 recomended](https://github.com/OpenEVSE/open_evse/releases/tag/v4.8.0)
+  - All new OpenEVSE units are shipped with V4.8.0 pre-loaded (October 2017 onwards)
+  - OpenEVSE FW V3.10.4 will work with latest WiFi FW with some minor issues e.g. LCD text corruption
 
 ### WiFi Module
 
