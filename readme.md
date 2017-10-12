@@ -94,11 +94,54 @@ The interface has been optimised to work well for both desktop and mobile. Here 
 
 ![android-clock](docs/mobile-clock.png)
 
-## Charge Mode (eco)
-
-**TBC**
+## Charging Mode (Normal/Eco)
 
 ![eco](docs/eco.png)
+
+Eco charge mode allows the OpenEVSE to adjust the charging current automatically based on an MQTT feed. This feed could be the amount of solar PV generation or the amount of excess power (grid export).
+
+### Theory
+
+This is best illustrated using an Emoncms graph. The solar generation is shown in yellow and OpenEVSE power consumption in blue:
+
+
+![divert](docs/divert.png)
+
+- OpenEVSE is initally sleeping with EV connected
+- Once solar PV generation reaches 6A (1.5kW @ 240V) the OpenEVSE starts charged
+- Charging current is adjusted based on available solar PV generation
+- Once the charge is started even if generation drops below 6A this EV will continue to charge*
+
+**The decision was made not to pause charging if generation current drops below 6A since repeatedly starting / stoppping a charge causes excess wear to the OpenEVSE relay contactor.*
+
+If a Grid +I/-E (positive import / negative export) feed was used the OpenEVSE would adjust it's charging rate based on *excess* power that would be exported to the grid e.g. If solar PV was producting 4kW and 1kW was being used on-site the OpenEVSE would charge at 3kW, grid export would be 0kW. If on-site consumption increases to 2kW OpenEVSE would reduce it's chargin rate to 2kW.
+
+An [OpenEnergyMonitor solar PV energy monitor](https://guide.openenergymonitor.org/applications/solar-pv/) with an AC-AC voltage sensor adaptor is required to monitor direction of current flow.
+
+### Setup
+
+- To use Eco charging mode MQTT must be enabled 'Solar PV divert' MQTT topics must be entered.
+- Integration with OpenEnergyMonitor emonPi is strightforward:
+  - Connect to emonPi MQTT server, [emonPi MQTT credentials](https://guide.openenergymonitor.org/technical/credentials/#mqtt) should be pre-populated
+  - Enter solar PV generation / Grid (+I/-E) MQTT topic e.g. if solar PV is being monitored by emonPi CT channel 1 enter `emon/emonpi/power1`
+  - [MQTT lens Chrome extension](https://chrome.google.com/webstore/detail/mqttlens/hemojaaeigabkbcookmlgmdigohjobjm?hl=en) can be used to view MQTT data e.g. subscribe to `emon/#` for all OpenEnergyMonitor MQTT data. To lean more about MQTT see [MQTT section of OpenEnergyMonitor user guide](https://guide.openenergymonitor.org/technical/mqtt/)
+  - If using Grid +I/-E (positive import / negative export) MQTT feed ensure the notation positive import / negative export is correct, CT sensor can be pyhsically reversed on the cable to invert the reading.
+
+### Opperation
+
+To enable 'Eco' mode charging
+
+* Connect EV and ensure EV's internal charging timmer is switched off
+* Pause charge, OpenEVSE should display 'sleeping'
+* Enable Eco mode using web interface or via MQTT
+* EV will not begin charging when genaration / excess current reaches 6A (1.4kW @ 240V)
+
+* During 'Eco' charing changes to charging current are temporary (not saved to EEPROM)
+* After an 'Eco mode' charge the OpenEVSE will revert to 'Normal' when EV is disconnected
+* Current is adjusted in 1A increments between 6A  (1.5kW @ 240V) > max charging current (as set in OpenEVSE setup)
+* 6A is the lowest supported charging current that SAE J1772 EV charging protocol supports
+* The OpenEVSE does not adjust the current itself but rather request that the EV adjusts its charging current by varying the duty cycle of the pilot signal, see [theory of opperation](https://openev.freshdesk.com/support/solutions/articles/6000052070-theory-of-operation) and [Basics of SAE J1772](https://openev.freshdesk.com/support/solutions/articles/6000052074-basics-of-sae-j1772).
+* Charging mode can be viewed and set via MQTT: `{base-topic}/divertmode/set`. (1 = normal, 2 = eco)
 
 ***
 
@@ -120,6 +163,8 @@ Data can be posted using HTTP or HTTPS. For HTTPS the Emoncms server must suppor
 #### OpenEVSE Status via MQTT
 
 OpenEVSE can post its status values (e.g. amp, wh, temp1, temp2, temp3, pilot, status) to an MQTT server. Data will be published as a sub-topic of base topic.E.g `<base-topic>/amp`. Data is published to MQTT every 30s.
+
+MQTT setup is pre-populated with OpenEnergyMonitor [emonPi default MQTT server credentials](https://guide.openenergymonitor.org/technical/credentials/#mqtt).
 
 - Enter MQTT server host and base-topic
 - (Optional) Enter server authentication details if required
