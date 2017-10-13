@@ -1,60 +1,180 @@
-# OpenEVSE WiFi
+# OpenEVSE WiFi Gateway
 
 [![Build Status](https://travis-ci.org/jeremypoulter/ESP8266_WiFi_v2.x.svg?branch=master)](https://travis-ci.org/jeremypoulter/ESP8266_WiFi_v2.x)
 [![Codacy Badge](https://api.codacy.com/project/badge/Grade/640ec33a27b24f6fb4fb1d7e74c7334c)](https://www.codacy.com/app/jeremy_poulter/ESP8266_WiFi_v2.x?utm_source=github.com&amp;utm_medium=referral&amp;utm_content=jeremypoulter/ESP8266_WiFi_v2.x&amp;utm_campaign=Badge_Grade)
 
-OpenEVSE ESP8266 WIFI serial to EmonCMS link
+![main](docs/main2.png)
 
-![OpenEVSE_WiFi.jpg](docs/OpenEVSE_WiFi.png)
+The WiFi gateway uses an ESP8266 (ESP-12) to communicate to the OpenEVSE controller via serial utilizing the existing RAPI serial interface. The web interface is served directly from the ESP8266 and can be controlled via a connected device over a local network.
 
-***
+## Features
+
+- Web UI to view & control all OpenEVSE functions
+  - Start / pause
+  - Delay timer
+  - Time limit
+  - Energy Limit
+  - Adjust charging current
+- MQTT status & control
+- Log to Emoncms server e.g [data.openevse.org](http://data.openevse.org) or [emoncms.org](https://emoncms.org)
+- 'Eco' mode: automatically adjust charging current based on availability of power from solar PV or grid export
+- OhmConnect integration (California USA only)
 
 ## Requirements
 
-- ESP-12E module with 4M Flash
+### OpenEVSE charging station
+  - Purchase via: [OpenEVSE Store (USA/Canda)](https://store.openevse.com) | [OpenEnergyMonitor (UK / EU)](https://shop.openenergymonitor.com/openevse-deluxe-ev-charge-controller-kit/)
+  - OpenEVSE FW [V4.8.0 recommended](https://github.com/OpenEVSE/open_evse/releases/tag/v4.8.0)
+  - All new OpenEVSE units are shipped with V4.8.0 pre-loaded (October 2017 onwards)
+  - OpenEVSE FW V3.10.4 will work with latest WiFi FW with some minor issues e.g. LCD text corruption
+
+### WiFi Module
+
+- ESP8266 (ESP-12) e.g Adafruit Huzzah
+- Purchase via: [OpenEVSE Store (USA/Canda)](https://store.openevse.com/collections/frontpage/products/openevse-wifi-kit) | [OpenEnergyMonitor (UK / EU)](http://shop.openenergymonitor.com/openevse-wifi-kit/)
+- See [OpenEVSE WiFi setup guide](https://openevse.dozuki.com/Guide/OpenEVSE+WiFi+%28Beta%29/14) for WiFi module connection instructions
 
 ***
 
-# OpenEVSE User Guide
+## Contents
+
+  * [WiFi Setup](#wifi-setup)
+  * [OpenEVSE Web Interface](#openevse-web-interface)
+  * [Charge Mode (eco)](#charge-mode-eco)
+  * [Services](#services)
+     * [Emoncms data logging](#emoncms-data-logging)
+     * [MQTT](#mqtt)
+        * [OpenEVSE Status via MQTT](#openevse-status-via-mqtt)
+        * [RAPI](#rapi)
+        * [RAPI via web interface](#rapi-via-web-interface)
+        * [RAPI over MQTT](#rapi-over-mqtt)
+        * [RAPI over HTTP](#rapi-over-http)
+     * [OhmConnect](#ohmconnect)
+  * [System](#system)
+     * [Authentication](#authentication)
+     * [Firmware update](#firmware-update)
+  * [Firmware Compile &amp; Upload](#firmware-compile--upload)
+     * [Using PlatformIO](#using-platformio)
+        * [a. Install PlatformIO command line](#a-install-platformio-command-line)
+        * [b. And / Or use PlatformIO IDE](#b-and--or-use-platformio-ide)
+        * [1. Clone this repo](#1-clone-this-repo)
+        * [2. Compile &amp; upload](#2-compile--upload)
+     * [Using Arduino IDE](#using-arduino-ide)
+        * [1. Install ESP for Arduino with Boards Manager](#1-install-esp-for-arduino-with-boards-manager)
+        * [2. Compile and Upload](#2-compile-and-upload)
+     * [Troubleshooting Upload](#troubleshooting-upload)
+        * [Erase Flash](#erase-flash)
+        * [Fully erase ESP](#fully-erase-esp)
+  * [About](#about)
+  * [Licence](#licence)
+
+
+***
+
+# User Guide
 
 ## WiFi Setup
 
-On first boot, OpenEVSE should broadcast a WiFI AP `OpenEVSE_XXX`. Connect to this AP (default password: `openevse`) and the [captive portal](https://en.wikipedia.org/wiki/Captive_portal) should forward you to the log-in page. If this does not happen navigate to `http://openevse` or `http://192.168.4.1`
+On first boot, OpenEVSE should broadcast a WiFI AP `OpenEVSE_XXX`. Connect to this AP (default password: `openevse`) and the [captive portal](https://en.wikipedia.org/wiki/Captive_portal) should forward you to the log-in page. If this does not happen navigate to [http://openevse](http://openevse), [http://openevse.local](http://openevse.local) or [http://192.168.4.1](http://192.168.4.1)
 
-*Note: You may need to disable mobile data if connecting via a Android 6 device*
+*Note: You may need to disable mobile data if connecting via an Android device*
 
 ![Wifi connect](docs/wifi-connect.png) ![Wifi setup](docs/wifi-scan.png)
 
+
 - Select your WiFi network from list of available networks
 - Enter WiFi PSK key then click `Connect`
--
-- OpenEVSE should now connect to local wifi network and return local IP address.
-- Browse to local IP address by clicking the hyperlink (assuming your computer is on the same WiFi network)
-On future boot up OpenEVSE will automatically connect to this network.
 
-*Note: on some networks it's possible to browse to the OpenEVSE using hostname [http://openevse](http://openevse) or on windows [http://openevse.local](http://openevse.local)*
+- OpenEVSE should now connect to local WiFi network
+- Re-connect device to home WiFi network and connect to OpenEVSE using [http://openevse.local](http://openevse.local), [http://openevse](http://openevse) or local IP address.
 
-**If re-connection fails (e.g. network cannot be found) the OpenEVSE will automatically revert back to WiFi AP mode after a short while to allow a new network to be re-configued if required. Re-connection to existing network will be attempted every 5min.**
+**If connection / re-connection fails (e.g. network cannot be found or password is incorrect) the OpenEVSE will automatically revert back to WiFi access point mode after a short while to allow a new network to be re-configured if required. Re-connection to existing network will be attempted every 5 minutes.**
 
-*Holding the `boot` button at startup (for about 10's) will force AP mode. This is useful when trying to connect the unit to a new WiFi network.*
+*Holding the `boot` button on the ESP8266 module at startup (for about 10s) will force WiFi access point mode. This is useful when trying to connect the unit to a new WiFi network.*
+
+***
+
+## OpenEVSE Web Interface
+
+All functions of the OpenEVSE can be viewed and controlled via the web interface. Here is a screen grab showing the 'advanced' display mode:
+
+![advanced](docs/adv.png)
+
+The interface has been optimised to work well for both desktop and mobile. Here is an example setting a charging delay timer using an Android device:
+
+![android-clock](docs/mobile-clock.png)
+
+## Charging Mode (Normal/Eco)
+
+![eco](docs/eco.png)
+
+Eco charge mode allows the OpenEVSE to adjust the charging current automatically based on an MQTT feed. This feed could be the amount of solar PV generation or the amount of excess power (grid export).
+
+### Theory
+
+This is best illustrated using an Emoncms graph. The solar generation is shown in yellow and OpenEVSE power consumption in blue:
 
 
-## Emoncms
+![divert](docs/divert.png)
+
+- OpenEVSE is initially sleeping with an EV connected
+- Once solar PV generation reaches 6A (1.5kW @ 240V) the OpenEVSE initiates charging
+- Charging current is adjusted based on available solar PV generation
+- Once charging has begun, even if generation drops below 6A, the EV will continue to charge*
+
+**The decision was made not to pause charging if generation current drops below 6A since repeatedly starting / stopping a charge causes excess wear to the OpenEVSE relay contactor.*
+
+If a Grid +I/-E (positive import / negative export) feed was used the OpenEVSE would adjust its charging rate based on *excess* power that would be exported to the grid; for example, if solar PV was producing 4kW and 1kW was being used on-site, the OpenEVSE would charge at 3kW and the amount exported to the grid would be 0kW. If on-site consumption increases to 2kW the OpenEVSE would reduce its charging rate to 2kW.
+
+An [OpenEnergyMonitor solar PV energy monitor](https://guide.openenergymonitor.org/applications/solar-pv/) with an AC-AC voltage sensor adaptor is required to monitor direction of current flow.
+
+### Setup
+
+- To use 'Eco' charging mode MQTT must be enabled and 'Solar PV divert' MQTT topics must be entered.
+- Integration with an OpenEnergyMonitor emonPi is straightforward:
+  - Connect to emonPi MQTT server, [emonPi MQTT credentials](https://guide.openenergymonitor.org/technical/credentials/#mqtt) should be pre-populated
+  - Enter solar PV generation / Grid (+I/-E) MQTT topic e.g. if solar PV is being monitored by emonPi CT channel 1 enter `emon/emonpi/power1`
+  - [MQTT lens Chrome extension](https://chrome.google.com/webstore/detail/mqttlens/hemojaaeigabkbcookmlgmdigohjobjm?hl=en) can be used to view MQTT data e.g. subscribe to `emon/#` for all OpenEnergyMonitor MQTT data. To lean more about MQTT see [MQTT section of OpenEnergyMonitor user guide](https://guide.openenergymonitor.org/technical/mqtt/)
+  - If using Grid +I/-E (positive import / negative export) MQTT feed ensure the notation positive import / negative export is correct, CT sensor can be physically reversed on the cable to invert the reading.
+
+### Operation
+
+To enable 'Eco' mode charging:
+
+- Connect EV and ensure EV's internal charging timer is switched off
+- Pause charge; OpenEVSE should display 'sleeping'
+- Enable 'Eco' mode using web interface or via MQTT
+- EV will not begin charging when generation / excess current reaches 6A (1.4kW @ 240V)
+
+- During 'Eco' charging changes to charging current are temporary (not saved to EEPROM)
+- After an 'Eco mode' charge the OpenEVSE will revert to 'Normal' when EV is disconnected
+- Current is adjusted in 1A increments between 6A  (1.5kW @ 240V) > max charging current (as set in OpenEVSE setup)
+- 6A is the lowest supported charging current that SAE J1772 EV charging protocol supports
+- The OpenEVSE does not adjust the current itself but rather request that the EV adjusts its charging current by varying the duty cycle of the pilot signal, see [theory of operation](https://openev.freshdesk.com/support/solutions/articles/6000052070-theory-of-operation) and [Basics of SAE J1772](https://openev.freshdesk.com/support/solutions/articles/6000052074-basics-of-sae-j1772).
+- Charging mode can be viewed and set via MQTT: `{base-topic}/divertmode/set` (1 = normal, 2 = eco).
+
+***
+
+## Services
+
+![services](docs/services.png)
+
+### Emoncms data logging
 
 OpenEVSE can post its status values (e.g amp, temp1, temp2, temp3, pilot, status) to [emoncms.org](https://emoncms.org) or any other  Emoncms server (e.g. emonPi) using [Emoncms API](https://emoncms.org/site/api#input). Data will be posted every 30s.
 
-Data can be posted using HTTP or HTTPS. For HTTPS the Emoncms server must support HTTPS (emoncms.org does, emonPi does not).Due to the limited resources on the ESP the SSL SHA-1 fingerprint for the Emoncms server must be manually entered and regularly updated.
+Data can be posted using HTTP or HTTPS. For HTTPS the Emoncms server must support HTTPS (emoncms.org does, the emonPi does not).Due to the limited resources on the ESP the SSL SHA-1 fingerprint for the Emoncms server must be manually entered and regularly updated.
 
 *Note: the emoncms.org fingerprint will change every 90 days when the SSL certificate is renewed.*
 
-**Currently emoncms.org only supports numerical node names, other emoncms servers e.g. emonPi and data.openevse does support alphanumeric node naming.**
 
+### MQTT
 
-## 3. MQTT
+#### OpenEVSE Status via MQTT
 
-### OpenEVSE Status via MQTT
+OpenEVSE can post its status values (e.g. amp, wh, temp1, temp2, temp3, pilot, status) to an MQTT server. Data will be published as a sub-topic of base topic.E.g `<base-topic>/amp`. Data is published to MQTT every 30s.
 
-OpenEVSE can post its status values (e.g. amp, temp1, temp2, temp3, pilot, status) to an MQTT server. Data will be published as a sub-topic of base topic.E.g `<base-topic>/amp`. Data is published to MQTT every 30s.
+MQTT setup is pre-populated with OpenEnergyMonitor [emonPi default MQTT server credentials](https://guide.openenergymonitor.org/technical/credentials/#mqtt).
 
 - Enter MQTT server host and base-topic
 - (Optional) Enter server authentication details if required
@@ -63,23 +183,23 @@ OpenEVSE can post its status values (e.g. amp, temp1, temp2, temp3, pilot, statu
 
 *Note: `emon/xxxx` should be used as the base-topic if posting to emonPi MQTT server if you want the data to appear in emonPi Emoncms. See [emonPi MQTT docs](https://guide.openenergymonitor.org/technical/mqtt/).*
 
-## RAPI
+MQTT can also be used to control the OpenEVSE, see RAPI MQTT below.
+
+#### RAPI
 
 RAPI commands can be used to control and check the status of all OpenEVSE functions. A full list of RAPI commands can be found in the [OpenEVSE plus source code](https://github.com/lincomatic/open_evse/blob/stable/rapi_proc.h). RAPI commands can be issued via the web-interface, HTTP and MQTT.
 
 #### RAPI via web interface
 
-Enter RAPI commands directly into to web interface, RAPI responce is printed in return:
+Enter RAPI commands directly into to web interface (dev mode must be enabled), RAPI response is printed in return:
 
-![](docs/rapi-web.png)
-
-### RAPI over MQTT
+#### RAPI over MQTT
 
 RAPI commands can be issued via MQTT messages. The RAPI command should be published to the following MQTT:
 
 `<base-topic>/rapi/in/<$ rapi-command> payload`
 
-e.g assuming base-topic of `openevse` to following command will set current to 13A:
+e.g assuming base-topic of `openevse` the following command will set current to 13A:
 
 `openevse/rapi/in/$SC 13`
 
@@ -87,7 +207,7 @@ The payload can be left blank if the RAPI command does not require a payload e.g
 
 `openevse/rapi/in/$GC`
 
-The responce from the RAPI command is published by the OpenEVSE back to the same sub-topic and can be received by subscribing to:
+The response from the RAPI command is published by the OpenEVSE back to the same sub-topic and can be received by subscribing to:
 
 `<base-topic>/rapi/out/#`
 
@@ -95,7 +215,7 @@ e.g. `$OK`
 
 [See video demo of RAPI over MQTT](https://www.youtube.com/watch?v=tjCmPpNl-sA&t=101s)
 
-### RAPI over HTTP
+#### RAPI over HTTP
 
 RAPI (rapid API) commands can also be issued directly via a single HTTP request.
 
@@ -116,28 +236,39 @@ To enable (start / resume a charge) issue RAPI command `$FE`
 
 There is also an [OpenEVSE RAPI command python library](https://github.com/tiramiseb/python-openevse).
 
+### OhmConnect
 
+**TBC**
 
-## Admin (Authentication)
+***
 
-HTTP Authentication (highly recomended) can be enabled by saving admin config by default username and password.
+## System
+
+![system](docs/system.png)
+
+### Authentication
+
+Admin HTTP Authentication (highly recommended) can be enabled by saving admin config by default username and password.
 
 **HTTP authentication is required for all HTTP requests including input API**
 
 
-## Firmware update
+### Firmware update
 
-Pre-compiled .bin's can be uploaded via the web interface, see [OpenEVSE Wifi releases](https://github.com/chris1howell/OpenEVSE_RAPI_WiFi_ESP8266/releases)
-
-*Note: the SPIFFS file-system (web page, CSS, java script and images) cannot currently be updated via web interface. They must be uploaded via serial see below.*
-
+Pre-compiled .bin's can be uploaded via the web interface, see [OpenEVSE Wifi releases](https://github.com/OpenEVSE/ESP8266_WiFi_v2.x/releases) for latest updates.
 
 
 ***
 
-## Firmware Compile & Upload Instructions
+## Firmware Compile & Upload
 
-The code for the ESP8266 can be compiled and uploaded using PlatformIO or Arduino IDE. PlatformIO is the easiest to get started.
+**The ESP should be shipped with latest firmware pre-installed, firmware can be updated via the HTTP web interface.**
+
+**Updating from V1: it's possible to update from V1 to V2 firmware using the HTTP web interface uploader, just upload the latest .bin pre-compiled firmware release.***
+
+If required firmware can also be uploaded via serial using USB to UART cable.
+
+The code for the ESP8266 can be compiled and uploaded using PlatformIO or Arduino IDE. We recommend PlatformIO for its ease of use.
 
 ### Using PlatformIO
 
@@ -145,65 +276,29 @@ For more detailed ESP8266 Arduino core specific PlatfomIO notes see: https://git
 
 #### a. Install PlatformIO command line
 
-The easiest way if running Linux is to install use the install script, this installed pio via python pip and installs pip if not present. See [PlatformIO installation docs](http://docs.platformio.org/en/latest/installation.html#installer-script). Or PlatformIO IDE can be used :
+The easiest way if running Linux is to install using the install script. See [PlatformIO installation docs](http://docs.platformio.org/en/latest/installation.html#installer-script). Or PlatformIO IDE can be used :
 
 `$ sudo python -c "$(curl -fsSL https://raw.githubusercontent.com/platformio/platformio/master/scripts/get-platformio.py)"`
 
 #### b. And / Or use PlatformIO IDE
 
-Standalone built on GitHub Atom IDE, or use PlatformIO Atom IDE plug-in if you already have Atom installed. The IDE is nice, easy and self-explanitory.
+Standalone built on GitHub Atom IDE, or use PlatformIO Atom IDE plug-in if you already have Atom installed. The IDE is nice, easy and self-explanatory.
 
 [Download PlatfomIO IDE](http://platformio.org/platformio-ide)
 
-#### 2. Clone this repo
+#### 1. Clone this repo
 
-`$ git clone https://github.com/chris1howell/OpenEVSE_RAPI_WiFi_ESP8266`
+`$ git clone https://github.com/OpenEVSE/ESP8266_WiFi_v2.x`
 
 
-#### 3. Compile
-
-```
-$ cd OpenEVSE_RAPI_WiFi_ESP8266
-$ pio run
-```
-
-The first time platformIO is ran the espressif arduino tool chain and all the required libs will be installed if required.
-
-#### 3. Upload
+#### 2. Compile & upload
 
 - Put ESP into bootloader mode
-   - On other ESP boards (Adafruit HUZZAH) press and hold `GPIO0` button then press Reset, LED should light dimly to indicate bootloader mode
+- On other ESP boards (Adafruit HUZZAH) press and hold `boot` button then press `reset`, red LED should light dimly to indicate bootloader mode.
 
-##### a.) Compile & Upload main program:
+*To enable to OTA upload first upload via serial using the dev environment, this enables to OTA enable build flag. See `platformio.ino*
 
-`$ pio run -t upload`
-
-##### b.) Upload data folder to the file system (html, CSS etc.) (SPIFFS):
-
-- Put ESP back into bootloder mode, see above
-
-`$ pio run -t uploadfs`
-
-See [PlatfomIO docs regarding SPIFFS uploading](http://docs.platformio.org/en/latest/platforms/espressif.html#uploading-files-to-file-system-spiffs)
-
-##### c.) OTA upload over local network (optional advanced)
-
-`$  pio run  -t upload --upload-port <LOCAL-ESP-IP-ADDRESS>`
-
-Upload SPIFFS filesystem over OTA (and don't flash):
-
-` pio run -e emonesp_spiffs -t upload --upload-port <LOCAL-ESP-IP-ADDRESS>`
-
-OTA uses port 8266. See [PlatformIO ESP OTA docs](http://docs.platformio.org/en/latest/platforms/espressif.html#over-the-air-ota-update):
-
-##### Or upload all in one go  
-
-This wil upload both the fimware and spiffs file system in a single command. :-)
-
-- Requries esptool
-- Put ESP into bootloader mode
-
-`esptool.py write_flash 0x000000 .pioenvs/openevse/firmware.bin 0x300000 .pioenvs/openevse/spiffs.bin`
+*Note: uploading SPIFFS is no longer required since web resources are [now embedded in the firmware](https://github.com/OpenEVSE/ESP8266_WiFi_v2.x/pull/87)
 
 ***
 
@@ -220,29 +315,19 @@ Starting with 1.6.4, Arduino allows installation of third-party platform package
 - Enter http://arduino.esp8266.com/stable/package_esp8266com_index.json into Additional Board Manager URLs field. You can add multiple URLs, separating them with commas.
 - Open Boards Manager from Tools > Board menu and install esp8266 platform (and don't forget to select your ESP8266 board from Tools > Board menu after installation).
 
-#### 2. Install ESP filesystem file uploader
 
-From: https://github.com/esp8266/Arduino/blob/master/doc/filesystem.md
+#### 2. Compile and Upload
 
-- Download the tool: https://github.com/esp8266/arduino-esp8266fs-plugin/releases/download/0.2.0/ESP8266FS-0.2.0.zip.
-- In your Arduino sketchbook directory, create tools directory if it doesn't exist yet
-- Unpack the tool into tools directory (the path will look like <home_dir>/Arduino/tools/ESP8266FS/tool/esp8266fs.jar)
-- Restart Arduino
-
-#### 3. Compile and Upload
-
-- Open EmonESP.ino in the Arduino IDE.
+- Open `src.ino` in the Arduino IDE.
 - Compile and Upload as normal
-- Upload home.html web page using the ESP8266 Sketch Data Upload tool under Arduino tools.
-
 
 ***
 
-#### Troubleshooting Upload
+### Troubleshooting Upload
 
-##### Erase Flash
+#### Erase Flash
 
-If you are experiancing ESP hanging in a reboot loop after upload it may be that the ESP flash has remnants of previous code (which may have the used the ESP memory in a different way). The ESP flash can be fully erased using [esptool](https://github.com/themadinventor/esptool). With the unit in bootloder mode run:
+If you are experiencing ESP hanging in a reboot loop after upload it may be that the ESP flash has remnants of previous code (which may have the used the ESP memory in a different way). The ESP flash can be fully erased using [esptool](https://github.com/themadinventor/esptool). With the unit in bootloder mode run:
 
 `$ esptool.py erase_flash`
 
@@ -258,15 +343,27 @@ Erasing flash (this may take a while)...
 Erase took 8.0 seconds
 ```
 
-##### Fully erase ESP-12E
+#### Fully erase ESP
 
-To fully erase all memory locations on an ESP-12 (4Mb) we neeed to upload a blank file to each memory location
+To fully erase all memory locations on an ESP-12 (4Mb) we need to upload a blank file to each memory location
 
 `esptool.py write_flash 0x000000 blank_1MB.bin 0x100000 blank_1MB.bin 0x200000 blank_1MB.bin 0x300000 blank_1MB.bin`
 
 ***
 
+## About
 
-### Licence
+Collaboration of [OpenEnegyMonitor](http://openenergymonitor.org) and [OpenEVSE](https://openevse.com).
+
+Contributions by:
+
+- @glynhudson
+- @chris1howell
+- @trystanlea
+- @jeremypoulter
+- @sandeen
+- @lincomatic
+
+## Licence
 
 GNU General Public License (GPL) V3
