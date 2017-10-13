@@ -18,7 +18,7 @@ The WiFi gateway uses an ESP8266 (ESP-12) to communicate to the OpenEVSE control
 - MQTT status & control
 - Log to Emoncms server e.g [data.openevse.org](http://data.openevse.org) or [emoncms.org](https://emoncms.org)
 - 'Eco' mode: automatically adjust charging current based on availability of power from solar PV or grid export
-- Ohmconnect integration (California USA only)
+- OhmConnect integration (California USA only)
 
 ## Requirements
 
@@ -49,7 +49,7 @@ The WiFi gateway uses an ESP8266 (ESP-12) to communicate to the OpenEVSE control
         * [RAPI via web interface](#rapi-via-web-interface)
         * [RAPI over MQTT](#rapi-over-mqtt)
         * [RAPI over HTTP](#rapi-over-http)
-     * [Ohmconnect](#ohmconnect)
+     * [OhmConnect](#ohmconnect)
   * [System](#system)
      * [Authentication](#authentication)
      * [Firmware update](#firmware-update)
@@ -77,7 +77,7 @@ The WiFi gateway uses an ESP8266 (ESP-12) to communicate to the OpenEVSE control
 
 On first boot, OpenEVSE should broadcast a WiFI AP `OpenEVSE_XXX`. Connect to this AP (default password: `openevse`) and the [captive portal](https://en.wikipedia.org/wiki/Captive_portal) should forward you to the log-in page. If this does not happen navigate to [http://openevse](http://openevse), [http://openevse.local](http://openevse.local) or [http://192.168.4.1](http://192.168.4.1)
 
-*Note: You may need to disable mobile data if connecting via a Android device*
+*Note: You may need to disable mobile data if connecting via an Android device*
 
 ![Wifi connect](docs/wifi-connect.png) ![Wifi setup](docs/wifi-scan.png)
 
@@ -85,18 +85,18 @@ On first boot, OpenEVSE should broadcast a WiFI AP `OpenEVSE_XXX`. Connect to th
 - Select your WiFi network from list of available networks
 - Enter WiFi PSK key then click `Connect`
 
-- OpenEVSE should now connect to local wifi network
-- Re-connect device to home WiFi network and connect OpenEVSE using [http://openevse.local](http://openevse.local), [http://openevse](http://openevse) or local IP address.
+- OpenEVSE should now connect to local WiFi network
+- Re-connect device to home WiFi network and connect to OpenEVSE using [http://openevse.local](http://openevse.local), [http://openevse](http://openevse) or local IP address.
 
-**If connection / re-connection fails (e.g. network cannot be found or password is incorrect) the OpenEVSE will automatically revert back to WiFi access point mode after a short while to allow a new network to be re-configured if required. Re-connection to existing network will be attempted every 5min.**
+**If connection / re-connection fails (e.g. network cannot be found or password is incorrect) the OpenEVSE will automatically revert back to WiFi access point mode after a short while to allow a new network to be re-configured if required. Re-connection to existing network will be attempted every 5 minutes.**
 
-*Holding the `boot` button on the ESP8266 module at startup (for about 10's) will force Wifi access point mode. This is useful when trying to connect the unit to a new WiFi network.*
+*Holding the `boot` button on the ESP8266 module at startup (for about 10s) will force WiFi access point mode. This is useful when trying to connect the unit to a new WiFi network.*
 
 ***
 
 ## OpenEVSE Web Interface
 
-All functions of the OpenEVSE can be viewed and controlled via the web interface. Here is a screen grab showing 'advanced' display mode:
+All functions of the OpenEVSE can be viewed and controlled via the web interface. Here is a screen grab showing the 'advanced' display mode:
 
 ![advanced](docs/adv.png)
 
@@ -117,33 +117,33 @@ This is best illustrated using an Emoncms graph. The solar generation is shown i
 
 ![divert](docs/divert.png)
 
-- OpenEVSE is initially sleeping with EV connected
-- Once solar PV generation reaches 6A (1.5kW @ 240V) the OpenEVSE starts charged
+- OpenEVSE is initially sleeping with an EV connected
+- Once solar PV generation reaches 6A (1.5kW @ 240V) the OpenEVSE initiates charging
 - Charging current is adjusted based on available solar PV generation
-- Once the charge is started even if generation drops below 6A this EV will continue to charge*
+- Once charging has begun, even if generation drops below 6A, the EV will continue to charge*
 
 **The decision was made not to pause charging if generation current drops below 6A since repeatedly starting / stopping a charge causes excess wear to the OpenEVSE relay contactor.*
 
-If a Grid +I/-E (positive import / negative export) feed was used the OpenEVSE would adjust it's charging rate based on *excess* power that would be exported to the grid e.g. If solar PV was producing 4kW and 1kW was being used on-site the OpenEVSE would charge at 3kW, grid export would be 0kW. If on-site consumption increases to 2kW OpenEVSE would reduce it's charging rate to 2kW.
+If a Grid +I/-E (positive import / negative export) feed was used the OpenEVSE would adjust its charging rate based on *excess* power that would be exported to the grid; for example, if solar PV was producing 4kW and 1kW was being used on-site, the OpenEVSE would charge at 3kW and the amount exported to the grid would be 0kW. If on-site consumption increases to 2kW the OpenEVSE would reduce its charging rate to 2kW.
 
 An [OpenEnergyMonitor solar PV energy monitor](https://guide.openenergymonitor.org/applications/solar-pv/) with an AC-AC voltage sensor adaptor is required to monitor direction of current flow.
 
 ### Setup
 
-- To use Eco charging mode MQTT must be enabled 'Solar PV divert' MQTT topics must be entered.
-- Integration with OpenEnergyMonitor emonPi is straightforward:
+- To use 'Eco' charging mode MQTT must be enabled and 'Solar PV divert' MQTT topics must be entered.
+- Integration with an OpenEnergyMonitor emonPi is straightforward:
   - Connect to emonPi MQTT server, [emonPi MQTT credentials](https://guide.openenergymonitor.org/technical/credentials/#mqtt) should be pre-populated
   - Enter solar PV generation / Grid (+I/-E) MQTT topic e.g. if solar PV is being monitored by emonPi CT channel 1 enter `emon/emonpi/power1`
   - [MQTT lens Chrome extension](https://chrome.google.com/webstore/detail/mqttlens/hemojaaeigabkbcookmlgmdigohjobjm?hl=en) can be used to view MQTT data e.g. subscribe to `emon/#` for all OpenEnergyMonitor MQTT data. To lean more about MQTT see [MQTT section of OpenEnergyMonitor user guide](https://guide.openenergymonitor.org/technical/mqtt/)
   - If using Grid +I/-E (positive import / negative export) MQTT feed ensure the notation positive import / negative export is correct, CT sensor can be physically reversed on the cable to invert the reading.
 
-### Opperation
+### Operation
 
-To enable 'Eco' mode charging
+To enable 'Eco' mode charging:
 
 - Connect EV and ensure EV's internal charging timer is switched off
-- Pause charge, OpenEVSE should display 'sleeping'
-- Enable Eco mode using web interface or via MQTT
+- Pause charge; OpenEVSE should display 'sleeping'
+- Enable 'Eco' mode using web interface or via MQTT
 - EV will not begin charging when generation / excess current reaches 6A (1.4kW @ 240V)
 
 - During 'Eco' charging changes to charging current are temporary (not saved to EEPROM)
@@ -163,7 +163,7 @@ To enable 'Eco' mode charging
 
 OpenEVSE can post its status values (e.g amp, temp1, temp2, temp3, pilot, status) to [emoncms.org](https://emoncms.org) or any other  Emoncms server (e.g. emonPi) using [Emoncms API](https://emoncms.org/site/api#input). Data will be posted every 30s.
 
-Data can be posted using HTTP or HTTPS. For HTTPS the Emoncms server must support HTTPS (emoncms.org does, emonPi does not).Due to the limited resources on the ESP the SSL SHA-1 fingerprint for the Emoncms server must be manually entered and regularly updated.
+Data can be posted using HTTP or HTTPS. For HTTPS the Emoncms server must support HTTPS (emoncms.org does, the emonPi does not).Due to the limited resources on the ESP the SSL SHA-1 fingerprint for the Emoncms server must be manually entered and regularly updated.
 
 *Note: the emoncms.org fingerprint will change every 90 days when the SSL certificate is renewed.*
 
@@ -199,7 +199,7 @@ RAPI commands can be issued via MQTT messages. The RAPI command should be publis
 
 `<base-topic>/rapi/in/<$ rapi-command> payload`
 
-e.g assuming base-topic of `openevse` to following command will set current to 13A:
+e.g assuming base-topic of `openevse` the following command will set current to 13A:
 
 `openevse/rapi/in/$SC 13`
 
@@ -236,7 +236,7 @@ To enable (start / resume a charge) issue RAPI command `$FE`
 
 There is also an [OpenEVSE RAPI command python library](https://github.com/tiramiseb/python-openevse).
 
-### Ohmconnect
+### OhmConnect
 
 **TBC**
 
@@ -268,7 +268,7 @@ Pre-compiled .bin's can be uploaded via the web interface, see [OpenEVSE Wifi re
 
 If required firmware can also be uploaded via serial using USB to UART cable.
 
-The code for the ESP8266 can be compiled and uploaded using PlatformIO or Arduino IDE. IMO PlatformIO is the easiest..
+The code for the ESP8266 can be compiled and uploaded using PlatformIO or Arduino IDE. We recommend PlatformIO for its ease of use.
 
 ### Using PlatformIO
 
@@ -276,13 +276,13 @@ For more detailed ESP8266 Arduino core specific PlatfomIO notes see: https://git
 
 #### a. Install PlatformIO command line
 
-The easiest way if running Linux is to install use the install script, this installed pio via python pip and installs pip if not present. See [PlatformIO installation docs](http://docs.platformio.org/en/latest/installation.html#installer-script). Or PlatformIO IDE can be used :
+The easiest way if running Linux is to install using the install script. See [PlatformIO installation docs](http://docs.platformio.org/en/latest/installation.html#installer-script). Or PlatformIO IDE can be used :
 
 `$ sudo python -c "$(curl -fsSL https://raw.githubusercontent.com/platformio/platformio/master/scripts/get-platformio.py)"`
 
 #### b. And / Or use PlatformIO IDE
 
-Standalone built on GitHub Atom IDE, or use PlatformIO Atom IDE plug-in if you already have Atom installed. The IDE is nice, easy and self-explanitory.
+Standalone built on GitHub Atom IDE, or use PlatformIO Atom IDE plug-in if you already have Atom installed. The IDE is nice, easy and self-explanatory.
 
 [Download PlatfomIO IDE](http://platformio.org/platformio-ide)
 
