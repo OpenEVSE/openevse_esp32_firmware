@@ -187,7 +187,9 @@ MQTT can also be used to control the OpenEVSE, see RAPI MQTT below.
 
 #### RAPI
 
-RAPI commands can be used to control and check the status of all OpenEVSE functions. A full list of RAPI commands can be found in the [OpenEVSE plus source code](https://github.com/lincomatic/open_evse/blob/stable/rapi_proc.h). RAPI commands can be issued via the web-interface, HTTP and MQTT.
+RAPI commands can be used to control and check the status of all OpenEVSE functions. RAPI commands can be issued via the direct serial, web-interface, HTTP and MQTT. We recommend using RAPI over MQTT.
+
+**A full list of RAPI commands can be found in the [OpenEVSE plus source code](https://github.com/OpenEVSE/open_evse/blob/stable/firmware/open_evse/src/rapi_proc.h).** 
 
 #### RAPI via web interface
 
