@@ -98,7 +98,7 @@ mqtt_connect() {
   DEBUG.print("MQTT Connecting to...");
   DEBUG.println(mqtt_user.c_str());
   String strID = String(ESP.getChipId());
-  if (mqttclient.connect(strID.c_str(), mqtt_user.c_str(), mqtt_pass.c_str())) {  // Attempt to connect
+  if (mqttclient.connect(strID.c_str(), mqtt_user.c_str(), mqtt_pass.c_str(),mqtt_topic.c_str(),1,0,(char*)"disconnected")) {  // Attempt to connect
     DEBUG.println("MQTT connected");
     mqttclient.publish(mqtt_topic.c_str(), "connected"); // Once connected, publish an announcement..
     String mqtt_sub_topic = mqtt_topic + "/rapi/in/#";      // MQTT Topic to subscribe to receive RAPI commands via MQTT
