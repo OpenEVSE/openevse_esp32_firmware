@@ -88,6 +88,20 @@ void setup() {
 
   rapiSender.setOnEvent(on_rapi_event);
   rapiSender.enableSequenceId(0);
+
+  // Check state the OpenEVSE is in.
+  if (0 == rapiSender.sendCmd("$GS"))
+  {
+    if(rapiSender.getTokenCnt() >= 3)
+    {
+      const char *val = rapiSender.getToken(1);
+      DBUGVAR(val);
+      state = strtol(val, NULL, 10);
+      DBUGVAR(state);
+    }
+  } else {
+    DBUGLN("OpenEVSE not responding or not connected");
+  }
 } // end setup
 
 // -------------------------------------------------------------------

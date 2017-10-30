@@ -1,6 +1,8 @@
 #include "emonesp.h"
 #include "lcd.h"
 #include "RapiSender.h"
+#include "openevse.h"
+#include "input.h"
 
 #define LCD_MAX_LEN 16
 
@@ -79,6 +81,11 @@ void lcd_display(const char *msg, int x, int y, int time, uint32_t flags)
 
 void lcd_loop()
 {
+  // If the OpenEVSE has not started don't do anything
+  if(OPENEVSE_STATE_STARTING == state) {
+    return;
+  }
+
   while(millis() >= nextTime)
   {
     if(head)
