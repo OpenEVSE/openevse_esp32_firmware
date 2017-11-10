@@ -57,6 +57,7 @@ void divertmode_update(byte newmode)
       case DIVERT_MODE_NORMAL:
         // Restore the max charge current
         rapiSender.sendCmd(String(F("$SC ")) + String(max_charge_current));
+        DBUGF("Restore max I: %d", max_charge_current);
         break;
 
       case DIVERT_MODE_ECO:
@@ -64,6 +65,7 @@ void divertmode_update(byte newmode)
         // Read the current charge current, assume this is the max set by the user
         if(0 == rapiSender.sendCmd(F("$GE"))) {
           max_charge_current = String(rapiSender.getToken(1)).toInt();
+          DBUGF("Read max I: %d", max_charge_current);
         }
         break;
 

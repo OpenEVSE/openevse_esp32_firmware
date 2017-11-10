@@ -40,13 +40,13 @@ void mqttmsg_callback(char *topic, byte * payload, unsigned int length) {
   if (topic_string == mqtt_solar){
     solar = payload_str.toInt();
     DBUGF("solar:%dW", solar);
-    divert_current_loop();
+    divert_update_state();
   }
 
   else if (topic_string == mqtt_grid_ie){
     grid_ie = payload_str.toInt();
     DBUGF("grid:%dW", solar);
-    divert_current_loop();
+    divert_update_state();
   }
   // If MQTT message to set divert mode is received
   else if (topic_string == mqtt_topic + "/divertmode/set"){
