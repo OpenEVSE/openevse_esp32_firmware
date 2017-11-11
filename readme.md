@@ -106,14 +106,11 @@ The interface has been optimised to work well for both desktop and mobile. Here 
 
 ## Charging Mode (Normal/Eco)
 
-![eco](docs/eco.png)
-
 Eco charge mode allows the OpenEVSE to adjust the charging current automatically based on an MQTT feed. This feed could be the amount of solar PV generation or the amount of excess power (grid export).
 
-### Theory
+### Solar PV Divert Example
 
-This is best illustrated using an Emoncms graph. The solar generation is shown in yellow and OpenEVSE power consumption in blue:
-
+This is best illustrated using an Emoncms MySolar graph. The solar generation is shown in yellow and OpenEVSE power consumption in blue:
 
 ![divert](docs/divert.png)
 
@@ -129,6 +126,8 @@ If a Grid +I/-E (positive import / negative export) feed was used the OpenEVSE w
 An [OpenEnergyMonitor solar PV energy monitor](https://guide.openenergymonitor.org/applications/solar-pv/) with an AC-AC voltage sensor adaptor is required to monitor direction of current flow.
 
 ### Setup
+
+![eco](docs/eco.png)
 
 - To use 'Eco' charging mode MQTT must be enabled and 'Solar PV divert' MQTT topics must be entered.
 - Integration with an OpenEnergyMonitor emonPi is straightforward:
@@ -147,11 +146,13 @@ To enable 'Eco' mode charging:
 - EV will not begin charging when generation / excess current reaches 6A (1.4kW @ 240V)
 
 - During 'Eco' charging changes to charging current are temporary (not saved to EEPROM)
-- After an 'Eco mode' charge the OpenEVSE will revert to 'Normal' when EV is disconnected
-- Current is adjusted in 1A increments between 6A  (1.5kW @ 240V) > max charging current (as set in OpenEVSE setup)
+- After an 'Eco mode' charge the OpenEVSE will revert to 'Normal' when EV is disconnected and previous 'Normal' charging current will be reinstated.
+- Current is adjusted in 1A increments between 6A* (1.5kW @ 240V) > max charging current (as set in OpenEVSE setup)
 - 6A is the lowest supported charging current that SAE J1772 EV charging protocol supports
 - The OpenEVSE does not adjust the current itself but rather request that the EV adjusts its charging current by varying the duty cycle of the pilot signal, see [theory of operation](https://openev.freshdesk.com/support/solutions/articles/6000052070-theory-of-operation) and [Basics of SAE J1772](https://openev.freshdesk.com/support/solutions/articles/6000052074-basics-of-sae-j1772).
 - Charging mode can be viewed and set via MQTT: `{base-topic}/divertmode/set` (1 = normal, 2 = eco).
+
+\* *OpenEVSE contoller firmware [V4.8.0](https://github.com/OpenEVSE/open_evse/releases/tag/v4.8.0) has a bug which restricts the lowest charging current to 10A. The J1772 protcol can go down to 6A. This will be fixed with a future software update.* 
 
 ***
 
