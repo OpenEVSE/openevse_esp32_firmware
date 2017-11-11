@@ -38,36 +38,43 @@ The WiFi gateway uses an ESP8266 (ESP-12) to communicate to the OpenEVSE control
 
 ## Contents
 
+<!-- toc -->
+
+- [User Guide](#user-guide)
   * [WiFi Setup](#wifi-setup)
   * [OpenEVSE Web Interface](#openevse-web-interface)
-  * [Charge Mode (eco)](#Charging-mode:-eco)
+  * [Charging Mode: Eco](#charging-mode-eco)
+    + [Solar PV Divert Example](#solar-pv-divert-example)
+    + [Setup](#setup)
+    + [Operation](#operation)
   * [Services](#services)
-     * [Emoncms data logging](#emoncms-data-logging)
-     * [MQTT](#mqtt)
-        * [OpenEVSE Status via MQTT](#openevse-status-via-mqtt)
-        * [RAPI](#rapi)
-        * [RAPI via web interface](#rapi-via-web-interface)
-        * [RAPI over MQTT](#rapi-over-mqtt)
-        * [RAPI over HTTP](#rapi-over-http)
-     * [OhmConnect](#ohmconnect)
+    + [Emoncms data logging](#emoncms-data-logging)
+    + [MQTT](#mqtt)
+      - [OpenEVSE Status via MQTT](#openevse-status-via-mqtt)
+      - [RAPI](#rapi)
+      - [RAPI via web interface](#rapi-via-web-interface)
+      - [RAPI over MQTT](#rapi-over-mqtt)
+      - [RAPI over HTTP](#rapi-over-http)
+    + [OhmConnect](#ohmconnect)
   * [System](#system)
-     * [Authentication](#authentication)
-     * [Firmware update](#firmware-update)
-  * [Firmware Compile &amp; Upload](#firmware-compile--upload)
-     * [Using PlatformIO](#using-platformio)
-        * [a. Install PlatformIO command line](#a-install-platformio-command-line)
-        * [b. And / Or use PlatformIO IDE](#b-and--or-use-platformio-ide)
-        * [1. Clone this repo](#1-clone-this-repo)
-        * [2. Compile &amp; upload](#2-compile--upload)
-     * [Using Arduino IDE](#using-arduino-ide)
-        * [1. Install ESP for Arduino with Boards Manager](#1-install-esp-for-arduino-with-boards-manager)
-        * [2. Compile and Upload](#2-compile-and-upload)
-     * [Troubleshooting Upload](#troubleshooting-upload)
-        * [Erase Flash](#erase-flash)
-        * [Fully erase ESP](#fully-erase-esp)
+    + [Authentication](#authentication)
+    + [Firmware update](#firmware-update)
+  * [Firmware Compile & Upload](#firmware-compile--upload)
+    + [Using PlatformIO](#using-platformio)
+      - [a. Install PlatformIO command line](#a-install-platformio-command-line)
+      - [b. And / Or use PlatformIO IDE](#b-and--or-use-platformio-ide)
+      - [1. Clone this repo](#1-clone-this-repo)
+      - [2. Compile & upload](#2-compile--upload)
+    + [Using Arduino IDE](#using-arduino-ide)
+      - [1. Install ESP for Arduino with Boards Manager](#1-install-esp-for-arduino-with-boards-manager)
+      - [2. Compile and Upload](#2-compile-and-upload)
+    + [Troubleshooting Upload](#troubleshooting-upload)
+      - [Erase Flash](#erase-flash)
+      - [Fully erase ESP](#fully-erase-esp)
   * [About](#about)
   * [Licence](#licence)
 
+<!-- tocstop -->
 
 ***
 
@@ -152,7 +159,7 @@ To enable 'Eco' mode charging:
 - The OpenEVSE does not adjust the current itself but rather request that the EV adjusts its charging current by varying the duty cycle of the pilot signal, see [theory of operation](https://openev.freshdesk.com/support/solutions/articles/6000052070-theory-of-operation) and [Basics of SAE J1772](https://openev.freshdesk.com/support/solutions/articles/6000052074-basics-of-sae-j1772).
 - Charging mode can be viewed and set via MQTT: `{base-topic}/divertmode/set` (1 = normal, 2 = eco).
 
-\* *OpenEVSE contoller firmware [V4.8.0](https://github.com/OpenEVSE/open_evse/releases/tag/v4.8.0) has a bug which restricts the lowest charging current to 10A. The J1772 protcol can go down to 6A. This will be fixed with a future software update.* 
+\* *OpenEVSE contoller firmware [V4.8.0](https://github.com/OpenEVSE/open_evse/releases/tag/v4.8.0) has a bug which restricts the lowest charging current to 10A. The J1772 protcol can go down to 6A. This will be fixed with a future software update.*
 
 ***
 
@@ -190,7 +197,7 @@ MQTT can also be used to control the OpenEVSE, see RAPI MQTT below.
 
 RAPI commands can be used to control and check the status of all OpenEVSE functions. RAPI commands can be issued via the direct serial, web-interface, HTTP and MQTT. We recommend using RAPI over MQTT.
 
-**A full list of RAPI commands can be found in the [OpenEVSE plus source code](https://github.com/OpenEVSE/open_evse/blob/stable/firmware/open_evse/src/rapi_proc.h).** 
+**A full list of RAPI commands can be found in the [OpenEVSE plus source code](https://github.com/OpenEVSE/open_evse/blob/stable/firmware/open_evse/src/rapi_proc.h).**
 
 #### RAPI via web interface
 
