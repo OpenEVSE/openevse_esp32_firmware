@@ -40,7 +40,7 @@ The WiFi gateway uses an ESP8266 (ESP-12) to communicate to the OpenEVSE control
 
   * [WiFi Setup](#wifi-setup)
   * [OpenEVSE Web Interface](#openevse-web-interface)
-  * [Charge Mode (eco)](#charge-mode-eco)
+  * [Charge Mode (eco)](#Charging-mode:-eco)
   * [Services](#services)
      * [Emoncms data logging](#emoncms-data-logging)
      * [MQTT](#mqtt)
@@ -104,9 +104,9 @@ The interface has been optimised to work well for both desktop and mobile. Here 
 
 ![android-clock](docs/mobile-clock.png)
 
-## Charging Mode (Normal/Eco)
+## Charging Mode: Eco
 
-Eco charge mode allows the OpenEVSE to adjust the charging current automatically based on an MQTT feed. This feed could be the amount of solar PV generation or the amount of excess power (grid export).
+'Eco' charge mode allows the OpenEVSE to adjust the charging current automatically based on an MQTT feed. This feed could be the amount of solar PV generation or the amount of excess power (grid export). 'Normal' charge mode charges the EV at the maximum rate set.
 
 ### Solar PV Divert Example
 
