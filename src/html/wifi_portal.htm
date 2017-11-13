@@ -54,9 +54,14 @@
         <p data-bind="text: config.ssid"></p>
         <p>
           <b>Passkey:</b><br>
-          <input type="password" autocapitalize="none" autocapitalize="none" data-bind="textInput: config.pass">
+          <input type="password" style="width:180px" autocapitalize="none" autocapitalize="none" data-bind="textInput: config.pass">
           <button data-bind="click: wifi.saveNetwork, text: (wifi.saveNetworkFetching() ? 'Saving' : (wifi.saveNetworkSuccess() ? 'Saved' : 'Connect')), disable: wifi.saveNetworkFetching">Connect</button>
         </p>
+        <p>Connecting to a local WiFi network is not essentail. OpenEVSE can be configured and controlled while in AP mode:</p>
+        <div>
+          <button onclick="window.location.href='/home.htm'">Continue in AP mode</button>
+        </div>
+        <p><i><span class="small-text">Note: remote logging features e.g Emoncms will not work while in AP mode</span></i></p>
       </div>
 
       <div class="box" data-bind="visible: wifi.wifiConnecting() || status.isWifiClient()">
@@ -70,6 +75,18 @@
           <button id="apoff" data-bind="click: wifi.turnOffAccessPoint, disable: wifi.turnOffAccessPointFetching">Continue</button>
         </div>
       </div>
+      <!-- <div class="container">
+        <div class="box">
+          <h2>Continue without WiFi</h2>
+          <p>Connecting to a local WiFi network is not essentail.</p>
+          <p>OpenEVSE can be configured and controlled while in AP mode:</p>
+          <div>
+            <button onclick="window.location.href='/home.htm'">Continue</button>
+          </div>
+          <i>Note: remote logging features e.g Emoncms will not work while in AP mode</i>
+        </div>
+      </div> -->
+
 
       <div id="footer">
         <br><b> Powered by <a href="http://www.openevse.com">OpenEVSE</a> and <a href="https://openenergymonitor.org">OpenEnergyMonitor</a></b>
