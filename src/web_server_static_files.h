@@ -8,6 +8,7 @@
 #include "web_server.favicon-16x16.png.h"
 #include "web_server.emoncms.jpg.h"
 #include "web_server.ohm.jpg.h"
+#include "web_server.emoncms.jpg.h"
 StaticFile staticFiles[] = {
   { "/lib.js", CONTENT_LIB_JS, sizeof(CONTENT_LIB_JS) - 1, _CONTENT_TYPE_JS },
   { "/wifi_portal.htm", CONTENT_WIFI_PORTAL_HTM, sizeof(CONTENT_WIFI_PORTAL_HTM) - 1, _CONTENT_TYPE_HTML },
@@ -19,4 +20,5 @@ StaticFile staticFiles[] = {
   { "/favicon-16x16.png", CONTENT_FAVICON_16X16_PNG, sizeof(CONTENT_FAVICON_16X16_PNG) - 1, _CONTENT_TYPE_PNG },
   { "/emoncms.jpg", CONTENT_EMONCMS_JPG, sizeof(CONTENT_EMONCMS_JPG) - 1, _CONTENT_TYPE_JPEG },
   { "/ohm.jpg", CONTENT_OHM_JPG, sizeof(CONTENT_OHM_JPG) - 1, _CONTENT_TYPE_JPEG },
+  { "/emoncms.jpg", CONTENT_EMONCMS_JPG, sizeof(CONTENT_EMONCMS_JPG) - 1, _CONTENT_TYPE_JPEG },
 };
