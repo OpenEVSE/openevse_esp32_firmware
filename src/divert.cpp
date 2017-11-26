@@ -35,8 +35,8 @@
 byte divertmode = DIVERT_MODE_NORMAL;     // default normal mode
 int solar = 0;
 int grid_ie = 0;
-byte min_charge_current = 6;      // TO DO: set to be min charge current as set on the OpenEVSE e.g. "$GC min-current max-current"
-byte max_charge_current = 32;     // TO DO: to be set to be max charge current as set on the OpenEVSE e.g. "$GC min-current max-current"
+int min_charge_current = 6;      // TO DO: set to be min charge current as set on the OpenEVSE e.g. "$GC min-current max-current"
+int max_charge_current = 32;     // TO DO: to be set to be max charge current as set on the OpenEVSE e.g. "$GC min-current max-current"
 int charge_rate = 0;
 int last_state = OPENEVSE_STATE_INVALID;
 
