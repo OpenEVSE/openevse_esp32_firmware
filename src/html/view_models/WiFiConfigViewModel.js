@@ -44,6 +44,19 @@ function WiFiConfigViewModel(baseEndpoint, config, status, scan) {
       if(scanEnabled) {
         scanTimer = setTimeout(self.startScan, scanTime);
       }
+
+      // if bssid is not set see if we have a ssid that matches our configured result
+      if("" === self.bssid()) {
+        var ssid = self.config.ssid();
+        for(var i = 0; i < self.scan.results().length; i++) {
+          var net = self.scan.results()[i];
+          if(ssid === net.ssid()) {
+            self.bssid(net.bssid());
+            break;
+          }
+        }
+      }
+
       self.scanUpdating(false);
     });
   };
@@ -60,9 +73,18 @@ function WiFiConfigViewModel(baseEndpoint, config, status, scan) {
     }
   };
 
+  self.forceConfig = ko.observable(false);
+  self.canConfigure = ko.pureComputed(function () {
+    if(self.wifiConnecting()) {
+      return false;
+    }
+
+    return !self.status.isWifiClient() || self.forceConfig();
+  });
+
   self.wifiConnecting = ko.observable(false);
-  self.status.mode.subscribe(function (newValue) {
-    if(newValue === "STA+AP" || newValue === "AP") {
+  self.canConfigure.subscribe(function (newValue) {
+    if(newValue) {
       self.startScan();
     } else {
       self.stopScan();
@@ -86,8 +108,17 @@ function WiFiConfigViewModel(baseEndpoint, config, status, scan) {
       self.saveNetworkFetching(true);
       self.saveNetworkSuccess(false);
       $.post(self.baseEndpoint() + "/savenetwork", { ssid: self.config.ssid(), pass: self.config.pass() }, function () {
-          self.saveNetworkSuccess(true);
+          // HACK: Almost certainly won't get a status update with client connected set to false so manually clear it here
+          self.status.wifi_client_connected(false);
+
+          // Done with setting the config
+          self.forceConfig(false);
+
+          // Wait for a new WiFi connection
           self.wifiConnecting(true);
+
+          // And indiccate the save was successful
+          self.saveNetworkSuccess(true);
         }).fail(function () {
           alert("Failed to save WiFi config");
         }).always(function () {

@@ -47,14 +47,14 @@
             <h2>WiFi Setup</h2>
             <p><b>Mode:</b> <span id="mode" data-bind="text: status.fullMode"></span></p>
 
-            <div id="client-view" data-bind="visible: status.isWifiClient">
+            <div id="client-view" data-bind="visible: !wifi.canConfigure() &amp;&amp; !wifi.wifiConnecting()">
               <table>
                 <tr>
                   <th>Network</th>
                   <th>RSSI dBm</th>
                 </tr>
                 <tbody id="sta-ssid">
-                  <tr>
+                  <tr data-bind="click: function () { wifi.forceConfig(true); }">
                     <td data-bind="text: config.ssid"></td>
                     <td data-bind="text: status.srssi"></td>
                   </tr>
@@ -70,7 +70,7 @@
               <button id="apoff" data-bind="visible: status.isWifiAccessPoint, click: wifi.turnOffAccessPoint, disable: wifi.turnOffAccessPointFetching">Turn off Access Point</button>
             </div>
 
-            <div id="ap-view" data-bind="visible: !status.isWifiClient() &amp;&amp; !wifi.wifiConnecting()">
+            <div id="ap-view" data-bind="visible: wifi.canConfigure() &amp;&amp; !wifi.wifiConnecting()">
               <p>Connect to network:</p>
               <table>
                 <tr>
@@ -86,6 +86,11 @@
                     <td data-bind="text: rssi"></td>
                   </tr>
                 </tbody>
+                <tfoot data-bind="visible: 0 == scan.results().length">
+                  <tr>
+                    <td colspan="3">Scanning...</td>
+                  </tr>
+                </tfoot>
               </table>
               <p data-bind="text: config.ssid"></p>
               <p>
@@ -314,7 +319,7 @@
               </tr>
             </table>
           </div>
-          
+
           <!-- Divert Mode -->
           <div class="box380 right">
             <h2>Charge Mode <span class="info" data-bind="click: toggle.bind($data, showSolarDivert)"></span></h2>
