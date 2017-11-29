@@ -203,6 +203,10 @@ RAPI commands can be used to control and check the status of all OpenEVSE functi
 
 Enter RAPI commands directly into to web interface (dev mode must be enabled), RAPI response is printed in return:
 
+![enable-rapi](docs/enable-rapi.png)
+
+![rapi-web](docs/rapi-web.png)
+
 #### RAPI over MQTT
 
 RAPI commands can be issued via MQTT messages. The RAPI command should be published to the following MQTT:
