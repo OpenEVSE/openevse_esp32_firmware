@@ -51,7 +51,7 @@ The WiFi gateway uses an ESP8266 (ESP-12) to communicate to the OpenEVSE control
     + [Emoncms data logging](#emoncms-data-logging)
     + [MQTT](#mqtt)
       - [OpenEVSE Status via MQTT](#openevse-status-via-mqtt)
-      - [RAPI](#rapi)
+    + [RAPI](#rapi)
       - [RAPI via web interface](#rapi-via-web-interface)
       - [RAPI over MQTT](#rapi-over-mqtt)
       - [RAPI over HTTP](#rapi-over-http)
@@ -193,7 +193,7 @@ MQTT setup is pre-populated with OpenEnergyMonitor [emonPi default MQTT server c
 
 MQTT can also be used to control the OpenEVSE, see RAPI MQTT below.
 
-#### RAPI
+### RAPI
 
 RAPI commands can be used to control and check the status of all OpenEVSE functions. RAPI commands can be issued via the direct serial, web-interface, HTTP and MQTT. We recommend using RAPI over MQTT.
 
@@ -252,7 +252,9 @@ There is also an [OpenEVSE RAPI command python library](https://github.com/tiram
 
 ### OhmConnect
 
-**TBC**
+**USA California only**
+
+Uses [OhmConnect API](https://www.ohmconnect.com/) to pause charging during a 'ohm-hour' (period of high grid demand).
 
 ***
 
