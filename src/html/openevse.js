@@ -492,7 +492,9 @@ function OpenEVSE(endpoint)
    */
   self.diode_check = function(callback, enabled = null) {
     if(null !== enabled) {
-      return self._request(["SD", enabled ? "1" : "0"],
+      return self._request(["FF D", enabled ? "1" : "0"],
+      // OLD API < 4.0.1
+      // return self._request(["SD", enabled ? "1" : "0"],
       function() {
         self.diode_check(callback);
       });
@@ -513,7 +515,9 @@ function OpenEVSE(endpoint)
    */
   self.gfi_self_test = function(callback, enabled = null) {
     if(null !== enabled) {
-      return self._request(["SF", enabled ? "1" : "0"],
+      return self._request(["FF F", enabled ? "1" : "0"],
+      // OLD API < 4.0.1
+      // return self._request(["SF", enabled ? "1" : "0"],
       function() {
         self.gfi_self_test(callback);
       });
@@ -534,7 +538,9 @@ function OpenEVSE(endpoint)
    */
   self.ground_check = function(callback, enabled = null) {
     if(null !== enabled) {
-      return self._request(["SG", enabled ? "1" : "0"],
+      return self._request(["FF G", enabled ? "1" : "0"],
+      // OLD API < 4.0.1
+      // return self._request(["SG", enabled ? "1" : "0"],
       function() {
         self.ground_check(callback);
       });
@@ -555,7 +561,9 @@ function OpenEVSE(endpoint)
    */
   self.stuck_relay_check = function(callback, enabled = null) {
     if(null !== enabled) {
-      return self._request(["SR", enabled ? "1" : "0"],
+      return self._request(["FF R", enabled ? "1" : "0"],
+      // OLD API < 4.0.1
+      // return self._request(["SR", enabled ? "1" : "0"],
       function() {
         self.stuck_relay_check(callback);
       });
@@ -568,15 +576,17 @@ function OpenEVSE(endpoint)
   };
 
   /**
-   * if enabled == True, enable "ventilation required"
-   * if enabled == False, disable "ventilation required"
-   * if enabled is not specified, request the "ventilation required" status
+   * if enabled == True, enable "ventilation required check"
+   * if enabled == False, disable "ventilation required check"
+   * if enabled is not specified, request the "ventilation required check" status
    *
    * Returns the "ventilation required" status
    */
   self.vent_required = function(callback, enabled = null) {
     if(null !== enabled) {
-      return self._request(["SV", enabled ? "1" : "0"],
+      return self._request(["FF V", enabled ? "1" : "0"],
+      // OLD API < 4.0.1
+      // return self._request(["SV", enabled ? "1" : "0"],
       function() {
         self.vent_required(callback);
       });
@@ -589,29 +599,19 @@ function OpenEVSE(endpoint)
   };
 
   /**
-   * if enabled == True, enable "ventilation required"
-   * if enabled == False, disable "ventilation required"
-   * if enabled is not specified, request the "ventilation required" status
+   * if enabled == True, enable "temperature monitoring"
+   * if enabled == False, disable "temperature monitoring"
+   * if enabled is not specified, request the "temperature monitoring" status
    *
-   * Returns the "ventilation required" status
+   * Returns the "temperature monitoring" status
    */
+   
   self.temp_check = function(callback, enabled = null) {
-    if(null !== enabled)
-    {
-      if(enabled)
-      {
-        return self._request("GO", function(data) {
-          self._request(["SO", data[0], data[1]],
-            function() {
-              self.temp_check(callback);
-            });
-        });
-      }
-
-      return self._request(["SO", "0", "0"],
-        function() {
-          self.temp_check(callback);
-        });
+    if(null !== enabled) {
+      return self._request(["FF T", enabled ? "1" : "0"],
+      function() {
+        self.temp_check(callback);
+      });
     }
 
     var request = self._flags(function(flags) {
@@ -619,6 +619,34 @@ function OpenEVSE(endpoint)
     });
     return request;
   };
+  
+  
+  // OLD API < 4.0.1
+  // self.temp_check = function(callback, enabled = null) {
+  //   if(null !== enabled)
+  //   {
+  //     if(enabled)
+  //     {
+  //       return self._request("GO", function(data) {
+  //         self._request(["SO", data[0], data[1]],
+  //           function() {
+  //             self.temp_check(callback);
+  //           });
+  //       });
+  //     }
+  // **NOTE: SO has been removed totally in RAPI 4.0.0**
+  //     return self._request(["SO", "0", "0"],
+  //       function() {
+  //         self.temp_check(callback);
+  //       });
+  //   }
+  //   var request = self._flags(function(flags) {
+  //     callback(flags.temp_check);
+  //   });
+  //   return request;
+  // };
+  
+  
 
   /**
    *
