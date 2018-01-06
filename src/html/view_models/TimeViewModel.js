@@ -66,7 +66,7 @@ function TimeViewModel(openevse)
       return "0:00:00";
     }
     var dt = self.elapsedNow();
-    return addZero(dt.getHours())+":"+addZero(dt.getMinutes())+":"+addZero(dt.getSeconds());
+    return addZero(dt.getUTCHours())+":"+addZero(dt.getMinutes())+":"+addZero(dt.getSeconds());
   });
 
   openevse.status.elapsed.subscribe(function (val) {
