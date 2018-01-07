@@ -309,12 +309,13 @@
               </tr>
               <tr>
                 <td><span data-bind="text: scaleString(status.amp(), 1000, 2) + ' A'"></span></td>
-                <td><span data-bind="text: scaleString(status.wattsec(), 3600000, 2) + ' kWh'"></span></td>
+                <!--<td><span data-bind="text: scaleString(status.wattsec(), 3600000, 2) + ' kWh'"></span></td>-->
+                <td><span data-bind="text: scaleString(status.wattsec(), 3600000, 2) + ' kWh' +' ('+ scaleString(status.wattsec(), 3600000/3, 2) +'kWh 3phase)' "></span></td>
                 <td><span data-bind="text: openevse.time.elapsed"></span></td>
               </tr>
             </table>
           </div>
-          
+
           <!-- Divert Mode -->
           <div class="box380 right">
             <h2>Charge Mode <span class="info" data-bind="click: toggle.bind($data, showSolarDivert)"></span></h2>
