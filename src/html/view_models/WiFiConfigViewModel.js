@@ -73,6 +73,14 @@ function WiFiConfigViewModel(baseEndpoint, config, status, scan) {
     }
   };
 
+  self.enableScan = function (enable) {
+    if(enable) {
+      self.startScan();
+    } else {
+      self.stopScan();
+    }
+  }
+
   self.forceConfig = ko.observable(false);
   self.canConfigure = ko.pureComputed(function () {
     if(self.wifiConnecting()) {
@@ -84,17 +92,14 @@ function WiFiConfigViewModel(baseEndpoint, config, status, scan) {
 
   self.wifiConnecting = ko.observable(false);
   self.canConfigure.subscribe(function (newValue) {
-    if(newValue) {
-      self.startScan();
-    } else {
-      self.stopScan();
-    }
+    self.enableScan(newValue);
   });
   self.status.wifi_client_connected.subscribe(function (newValue) {
     if(newValue) {
       self.wifiConnecting(false);
     }
   });
+  self.enableScan(self.canConfigure());
 
   // -----------------------------------------------------------------------
   // Event: WiFi Connect
