@@ -256,7 +256,7 @@ wifi_loop() {
 #endif
 
   // Manage state while connecting
-  if(isClient && !WiFi.isConnected())
+  if(isClientOnly && !WiFi.isConnected())
   {
 #if !defined(WIFI_LED) || WIFI_BUTTON != WIFI_LED
     // Pressing the boot button for 5 seconds while connecting will turn on AP mode
