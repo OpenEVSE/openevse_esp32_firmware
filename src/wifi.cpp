@@ -282,7 +282,7 @@ wifi_loop() {
   }
 
   // Remain in AP mode for 5 Minutes before resetting
-  if(isApOnly && client_retry && millis() > client_retry_time) {
+  if(isApOnly && 0 == apClients && client_retry && millis() > client_retry_time) {
     DEBUG.println("client re-try, resetting");
     delay(50);
     ESP.reset();
