@@ -455,7 +455,7 @@
           <!-- Settings -->
           <div class="box380 setup" data-bind="with: openevse, css: { right: !advancedMode(), left: advancedMode() }">
             <h2>Setup</h2>
-            <p data-bind="with: time">
+            <p data-bind="disable: !hasRTC, with: time">
               <b>Time:</b><br/>
               <input type="date" data-bind="value: date, disable: automaticTime" />
               <input type="time" data-bind="value: time, disable: automaticTime" /><br/>

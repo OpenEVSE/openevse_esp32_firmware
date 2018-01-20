@@ -38,7 +38,6 @@ function OpenEVSE(endpoint)
   var self = this;
   self._version = "0.1";
   self._endpoint = endpoint;
-
   self.states = {
     0: "unknown",
     1: "not connected",
@@ -186,12 +185,11 @@ function OpenEVSE(endpoint)
 
         if(!isNaN(year) && !isNaN(month) && !isNaN(day) && !isNaN(hour) && !isNaN(minute) && !isNaN(second)) {
           if(year==165 && month==165 && day==165 && hour==165 && minute==165 && second==85){
-            //no RTC connected, use browser clock instead
-            var date = new Date();
-          } else {
+            request._error(new OpenEVSEError("No RTC found"));
+          }else{
             var date = new Date(2000+year, month, day, hour, minute, second);
+            callback(date);
           }
-          callback(date);
         } else {
           request._error(new OpenEVSEError("ParseError", "Could not parse time \""+data.join(" ")+"\" arguments"));
         }

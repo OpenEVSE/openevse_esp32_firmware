@@ -12,6 +12,14 @@ function OpenEvseViewModel(baseEndpoint, statusViewModel) {
   self.status = statusViewModel;
   self.time = new TimeViewModel(self);
 
+  self.hasRTC = ko.observable(true);
+  self.result=self.openevse.time(self, false);
+  if (self.result.error.type()=="No RTC found"){
+    self.hasRTC = ko.observable(false);
+  }
+
+
+
   // Option lists
   self.serviceLevels = [
     { name: "Auto", value: 0 },
