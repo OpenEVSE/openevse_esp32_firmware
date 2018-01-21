@@ -18,6 +18,13 @@ function OpenEvseViewModel(baseEndpoint, statusViewModel) {
 
 
 
+  self.hasRTC = ko.observable(false);
+  if (self.openevse.time()==Date(0)){
+    self.hasRTC = ko.observable(false);
+  }
+
+
+
   // Option lists
   self.serviceLevels = [
     { name: "Auto", value: 0 },

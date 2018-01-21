@@ -310,11 +310,13 @@
               <tr>
                 <td><span data-bind="text: scaleString(status.amp(), 1000, 2) + ' A'"></span></td>
                 <td><span data-bind="text: scaleString(status.wattsec(), 3600000, 2) + ' kWh'"></span></td>
+                <!--<td><span data-bind="text: scaleString(status.wattsec(), 3600000, 2) + ' kWh'"></span></td>-->
+                <td><span data-bind="text: scaleString(status.wattsec(), 3600000, 2) + ' kWh' +' ('+ scaleString(status.wattsec(), 3600000/3, 2) +'kWh 3phase)' "></span></td>
                 <td><span data-bind="text: openevse.time.elapsed"></span></td>
               </tr>
             </table>
           </div>
-          
+
           <!-- Divert Mode -->
           <div class="box380 right">
             <h2>Charge Mode <span class="info" data-bind="click: toggle.bind($data, showSolarDivert)"></span></h2>
@@ -454,12 +456,15 @@
           <!-- Settings -->
           <div class="box380 setup" data-bind="with: openevse, css: { right: !advancedMode(), left: advancedMode() }">
             <h2>Setup</h2>
-            <p data-bind="with: time">
+            <p data-bind="visible: !hasRTC(), with: time">
+              <b>Time: No RTC detected</b>
+            </p>
+            <p data-bind="visible: hasRTC(), with: time">
               <b>Time:</b><br/>
               <input type="date" data-bind="value: date, disable: automaticTime" />
               <input type="time" data-bind="value: time, disable: automaticTime" /><br/>
             </p>
-            <div data-bind="with: time">
+            <div data-bind="visible: hasRTC(), with: time">
               <span data-bind="css: {selected: !automaticTime() }">Manual</span>
               <label class="switch">
                 <input type="checkbox" data-bind="checked: automaticTime">
