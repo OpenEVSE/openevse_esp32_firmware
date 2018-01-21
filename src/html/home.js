@@ -8,7 +8,7 @@
 
 var baseHost = window.location.hostname;
 //var baseHost = "openevse.local";
-//var baseHost = "192.168.4.1";
+//var baseHost = "192.168.1.26";
 //var baseHost = "172.16.0.70";
 
 $(function () {
