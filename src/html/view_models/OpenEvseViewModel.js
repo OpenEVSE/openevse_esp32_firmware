@@ -18,11 +18,14 @@ function OpenEvseViewModel(baseEndpoint, statusViewModel) {
 
 
 
-  self.hasRTC = ko.observable(false);
-  if (self.openevse.time()==Date(0)){
+  self.hasRTC = ko.observable(true);
+  if (self.openevse.time(self.RTCcallback)){
     self.hasRTC = ko.observable(false);
   }
-
+  self.RTCcallback = function (date) {
+    var comparedate=new Date(0);
+    return (comparedate==date);
+  };
 
 
   // Option lists
