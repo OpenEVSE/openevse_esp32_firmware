@@ -309,9 +309,8 @@
               </tr>
               <tr>
                 <td><span data-bind="text: scaleString(status.amp(), 1000, 2) + ' A'"></span></td>
-                <td><span data-bind="text: scaleString(status.wattsec(), 3600000, 2) + ' kWh'"></span></td>
                 <!--<td><span data-bind="text: scaleString(status.wattsec(), 3600000, 2) + ' kWh'"></span></td>-->
-                <td><span data-bind="text: scaleString(status.wattsec(), 3600000, 2) + ' kWh' +' ('+ scaleString(status.wattsec(), 3600000/3, 2) +'kWh 3phase)' "></span></td>
+                <td><span data-bind="text: scaleString(status.wattsec(), 3600000, 2) + ' kWh' "></span></td>
                 <td><span data-bind="text: openevse.time.elapsed"></span></td>
               </tr>
             </table>

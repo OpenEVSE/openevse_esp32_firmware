@@ -184,17 +184,9 @@ function OpenEVSE(endpoint)
         var second = parseInt(data[5]);
 
         if(!isNaN(year) && !isNaN(month) && !isNaN(day) && !isNaN(hour) && !isNaN(minute) && !isNaN(second)) {
-<<<<<<< HEAD
-          if(year==165 && month==165 && day==165 && hour==165 && minute==165 && second==85){
-            //no RTC connected, use browser clock instead
-            var date = new Date();
-          } else {
-            var date = new Date(2000+year, month, day, hour, minute, second);
-=======
           var date = new Date(0);
           if (!(year==165 && month==165 && day==165 && hour==165 && minute==165 && second==85)){
             date = new Date(2000+year, month, day, hour, minute, second);
->>>>>>> stable
           }
           callback(date);
         } else {
