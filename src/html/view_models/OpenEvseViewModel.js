@@ -12,7 +12,7 @@ function OpenEvseViewModel(baseEndpoint, statusViewModel) {
   self.status = statusViewModel;
   self.time = new TimeViewModel(self);
 
-  self.hasRTC = ko.observable(false);
+  self.hasRTC = ko.observable(true);
   if (self.openevse.time()==Date(0)){
     self.hasRTC = ko.observable(false);
   }
