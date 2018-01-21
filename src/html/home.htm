@@ -455,12 +455,15 @@
           <!-- Settings -->
           <div class="box380 setup" data-bind="with: openevse, css: { right: !advancedMode(), left: advancedMode() }">
             <h2>Setup</h2>
-            <p data-bind="disable: !hasRTC, with: time">
+            <p data-bind="visible: !hasRTC(), with: time">
+              <b>Time: No RTC detected</b>
+            </p>
+            <p data-bind="visible: hasRTC(), with: time">
               <b>Time:</b><br/>
               <input type="date" data-bind="value: date, disable: automaticTime" />
               <input type="time" data-bind="value: time, disable: automaticTime" /><br/>
             </p>
-            <div data-bind="with: time">
+            <div data-bind="visible: hasRTC(), with: time">
               <span data-bind="css: {selected: !automaticTime() }">Manual</span>
               <label class="switch">
                 <input type="checkbox" data-bind="checked: automaticTime">
