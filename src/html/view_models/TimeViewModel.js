@@ -29,7 +29,7 @@ function TimeViewModel(openevse)
   self.evseTimedate = ko.observable(new Date());
   self.localTimedate = ko.observable(new Date());
   self.nowTimedate = ko.observable(null);
-
+  self.hasRTC= ko.observable(true);
   self.elapsedNow = ko.observable(new Date(0));
   self.elapsedLocal = ko.observable(new Date());
 
@@ -82,7 +82,8 @@ function TimeViewModel(openevse)
     openevse.openevse.time(self.timeUpdate, newTime);
   };
 
-  self.timeUpdate = function (date) {
+  self.timeUpdate = function (date,valid=true) {
+    self.hasRTC(valid);
     stopTimeUpdate();
     self.evseTimedate(date);
     self.nowTimedate(date);
