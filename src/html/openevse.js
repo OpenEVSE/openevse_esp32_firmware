@@ -190,7 +190,7 @@ function OpenEVSE(endpoint)
           }
           else{
             var date = new Date(2000+year, month, day, hour, minute, second);
-            callback(date);
+            callback(date,true);
           }
         } else {
           request._error(new OpenEVSEError("ParseError", "Could not parse time \""+data.join(" ")+"\" arguments"));
