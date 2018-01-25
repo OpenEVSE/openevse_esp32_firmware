@@ -60,6 +60,7 @@
                   </tr>
                 </tbody>
               </table>
+              <button data-bind="click: function () { wifi.forceConfig(true); }">Change WiFi network</button>
               <p><b>IP Address:</b><br><a data-bind="text: status.ipaddress, attr: {href: 'http://'+status.ipaddress()}"></a></p>
               <p>
                 <b>Successful packets:</b><br>
