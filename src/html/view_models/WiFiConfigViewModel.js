@@ -83,7 +83,7 @@ function WiFiConfigViewModel(baseEndpoint, config, status, scan) {
 
   self.forceConfig = ko.observable(false);
   self.canConfigure = ko.pureComputed(function () {
-    if(self.wifiConnecting()) {
+    if(self.status.isWiFiError() || self.wifiConnecting()) {
       return false;
     }
 

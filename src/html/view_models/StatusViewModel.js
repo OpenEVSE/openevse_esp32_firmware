@@ -34,6 +34,9 @@ function StatusViewModel(baseEndpoint) {
   }, endpoint);
 
   // Some devired values
+  self.isWiFiError = ko.pureComputed(function () {
+    return ("ERR" === self.mode());
+  });
   self.isWifiClient = ko.pureComputed(function () {
     return ("STA" === self.mode()) || ("STA+AP" === self.mode());
   });
