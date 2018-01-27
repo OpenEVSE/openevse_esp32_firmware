@@ -117,6 +117,7 @@ startClient()
 
   client_disconnects = 0;
 
+  WiFi.begin(esid.c_str(), epass.c_str());
   WiFi.hostname(esp_hostname);
   WiFi.enableSTA(true);
 }
