@@ -115,8 +115,8 @@ startClient()
   // DEBUG.print(" epass:");
   // DEBUG.println(epass.c_str());
 
-  WiFi.hostname(esp_hostname);
   WiFi.begin(esid.c_str(), epass.c_str());
+  WiFi.hostname(esp_hostname);
   WiFi.enableSTA(true);
 }
 
