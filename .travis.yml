@@ -26,7 +26,8 @@ env:
   - PIO_ENV=openevse_slow
   - PIO_ENV=openevse_ota
   - PIO_ENV=openevse_dev
-  # - PIO_ENV=openevse_staging
+  - PIO_ENV=openevse_staging
+  - PIO_ENV=openevse_staging_libs
   # - SCRIPT=ci_arduino.sh
   #   BUILD_TARGET=esp8266:esp8266:huzzah:FlashSize=4M1M
 
@@ -37,10 +38,10 @@ cache:
 
 install:
   # Install Platform IO
-  
+
   # Use normal version
   # - pip install -U platformio
-  
+
   # Use dev version
   - pip install -U https://github.com/platformio/platformio-core/archive/develop.zip
 

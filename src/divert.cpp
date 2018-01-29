@@ -35,8 +35,8 @@
 byte divertmode = DIVERT_MODE_NORMAL;     // default normal mode
 int solar = 0;
 int grid_ie = 0;
-byte min_charge_current = 6;      // TO DO: set to be min charge current as set on the OpenEVSE e.g. "$GC min-current max-current"
-byte max_charge_current = 32;     // TO DO: to be set to be max charge current as set on the OpenEVSE e.g. "$GC min-current max-current"
+int min_charge_current = 6;      // TO DO: set to be min charge current as set on the OpenEVSE e.g. "$GC min-current max-current"
+int max_charge_current = 32;     // TO DO: to be set to be max charge current as set on the OpenEVSE e.g. "$GC min-current max-current"
 int charge_rate = 0;
 int last_state = OPENEVSE_STATE_INVALID;
 
@@ -163,7 +163,7 @@ void divert_update_state()
 
     if(OPENEVSE_STATE_SLEEPING != state) {
       // If we are not sleeping, make sure we are the minimum current
-      charge_rate = max(charge_rate, min_charge_current);
+      charge_rate = max(charge_rate, static_cast<int>(min_charge_current));
     }
 
     DBUGVAR(charge_rate);
@@ -171,7 +171,7 @@ void divert_update_state()
     if(charge_rate >= min_charge_current)
     {
       // Cap the charge rate at the configured maximum
-      charge_rate = min(charge_rate, max_charge_current);
+      charge_rate = min(charge_rate, static_cast<int>(max_charge_current));
 
       // Change the charge rate is needed
       if(current_charge_rate != charge_rate)

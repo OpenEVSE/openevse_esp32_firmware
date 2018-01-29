@@ -67,3 +67,4 @@ full-upload.sh
 # Python code
 *.pyc
 .cache
+.vscode/launch.json
