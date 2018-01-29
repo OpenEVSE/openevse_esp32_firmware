@@ -115,6 +115,8 @@ startClient()
   // DEBUG.print(" epass:");
   // DEBUG.println(epass.c_str());
 
+  client_disconnects = 0;
+
   WiFi.begin(esid.c_str(), epass.c_str());
   WiFi.hostname(esp_hostname);
   WiFi.enableSTA(true);
@@ -256,7 +258,7 @@ wifi_loop() {
 #endif
 
   // Manage state while connecting
-  if(isClient && !WiFi.isConnected())
+  if(isClientOnly && !WiFi.isConnected())
   {
 #if !defined(WIFI_LED) || WIFI_BUTTON != WIFI_LED
     // Pressing the boot button for 5 seconds while connecting will turn on AP mode
@@ -282,7 +284,7 @@ wifi_loop() {
   }
 
   // Remain in AP mode for 5 Minutes before resetting
-  if(isApOnly && client_retry && millis() > client_retry_time) {
+  if(isApOnly && 0 == apClients && client_retry && millis() > client_retry_time) {
     DEBUG.println("client re-try, resetting");
     delay(50);
     ESP.reset();

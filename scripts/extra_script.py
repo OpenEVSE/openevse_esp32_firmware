@@ -209,7 +209,7 @@ def process_html_app(source, dest, env):
             in_files = man[out_file]
             out_files.append(out_file)
             process_app_file(source, in_files, dest, out_file, env)
-    for file in listdir(dest):
+    for file in sorted(listdir(dest)):
         if isfile(join(dest, file)) and not file in out_files:
             data_file = join(dest, file)
             header_file = join("$PROJECTSRC_DIR", "web_server."+file+".h")
