@@ -321,44 +321,6 @@
             </table>
           </div>
 
-          <!-- Divert Mode -->
-          <div class="box380 right">
-            <h2>Charge Mode <span class="info" data-bind="click: toggle.bind($data, showSolarDivert)"></span></h2>
-
-            <div class="box error" data-bind="visible: !isEcoModeAvailable()">
-              <h4>MQTT config not configured with Solar PV / Grid topic.</h4>
-              Solar PV Divert requires the SolarPV-gen or Grid (+I/-E) MQTT topic to be defined on the
-              <a href="#services" data-bind="click: function() { tab('services'); config.mqtt_enabled(true); }">Services</a>
-              tab.
-            </div>
-
-            <div class="box" data-bind="visible: showSolarDivert()">
-              <div>Dynamically adjust charge rate based on solar PV generation or excess power (grid export).</div>
-              <p>
-                <b>1. Normal (default):</b>
-                <ul>
-                  <li><span class="small-text">Charge at maximum current set by EVSE.</span></li>
-                </ul>
-                <b>2. Eco (soalr PV divert):</b>
-                <ul>
-                  <li><span class="small-text">If only solar PV feed available: charge rate is modulated based on <b>solar PV generation.</b></span></li>
-                  <li><span class="small-text">If grid +I/-E (positive Import / negative Export) feed is avilable: charge rate will be modulated by available  <b>excess power.</b></span></li>
-                  <li><span class="small-text">If EVSE is sleeping: charging will begin when solar PV / excess power > min charge rate.</span></li>
-                  <li><span class="small-text">Charging will not pause; this avoids excess wear on the EVSE relay and the EV.</span></li>
-                </ul>
-                <span class="small-text"><i>Note: It's assumed that EVSE power is included in the gird feed</i></span><br><br>
-                <span class="small-text"><i>Charging mode can also be set via MQTT:<br>{base-topic}/divertmode/set</i></span>
-              </p>
-            </div>
-            <div data-bind="visible: isEcoModeAvailable">
-              <span data-bind="css: {selected: !ecoMode() }">Normal (max)</span>
-              <label class="switch">
-                <input type="checkbox" data-bind="checked: ecoMode">
-                <div class="slider round"></div>
-              </label>
-              <span data-bind="css: {selected: ecoMode }">Eco (PV divert)</span><br/>
-            </div>
-          </div>
 
           <!-- Session Options -->
           <div class="box380 left">
@@ -426,6 +388,45 @@
             </table>
           </div>
 
+          <!-- Divert Mode -->
+          <div class="box380 right">
+            <h2>Charge Mode <span class="info" data-bind="click: toggle.bind($data, showSolarDivert)"></span></h2>
+
+            <div class="box error" data-bind="visible: !isEcoModeAvailable()">
+              <h4>MQTT config not configured with Solar PV / Grid topic.</h4>
+              Solar PV Divert requires the SolarPV-gen or Grid (+I/-E) MQTT topic to be defined on the
+              <a href="#services" data-bind="click: function() { tab('services'); config.mqtt_enabled(true); }">Services</a>
+              tab.
+            </div>
+
+            <div class="box" data-bind="visible: showSolarDivert()">
+              <div>Dynamically adjust charge rate based on solar PV generation or excess power (grid export).</div>
+              <p>
+                <b>1. Normal (default):</b>
+                <ul>
+                  <li><span class="small-text">Charge at maximum current set by EVSE.</span></li>
+                </ul>
+                <b>2. Eco (soalr PV divert):</b>
+                <ul>
+                  <li><span class="small-text">If only solar PV feed available: charge rate is modulated based on <b>solar PV generation.</b></span></li>
+                  <li><span class="small-text">If grid +I/-E (positive Import / negative Export) feed is avilable: charge rate will be modulated by available  <b>excess power.</b></span></li>
+                  <li><span class="small-text">If EVSE is sleeping: charging will begin when solar PV / excess power > min charge rate.</span></li>
+                  <li><span class="small-text">Charging will not pause; this avoids excess wear on the EVSE relay and the EV.</span></li>
+                </ul>
+                <span class="small-text"><i>Note: It's assumed that EVSE power is included in the gird feed</i></span><br><br>
+                <span class="small-text"><i>Charging mode can also be set via MQTT:<br>{base-topic}/divertmode/set</i></span>
+              </p>
+            </div>
+            <div data-bind="visible: isEcoModeAvailable">
+              <span data-bind="css: {selected: !ecoMode() }">Normal (max)</span>
+              <label class="switch">
+                <input type="checkbox" data-bind="checked: ecoMode">
+                <div class="slider round"></div>
+              </label>
+              <span data-bind="css: {selected: ecoMode }">Eco (PV divert)</span><br/>
+            </div>
+          </div>
+          
           <!-- Sensor Values -->
           <div class="box380 right" data-bind="visible: advancedMode">
             <h2>Sensor Values</h2>
