@@ -292,7 +292,7 @@
         <!--TAB 3: OpenEVSE -->
         <div id="content-3" data-bind="visible: isStatus">
 
-          <!-- Status -->
+          <!-- Session Status -->
           <div data-bind="visible: openevse.isError" class="box box-full left error">
             <h4>EVSE Error</h4>
             <span data-bind="text: status.estate"></span>
@@ -304,18 +304,20 @@
                                  charging: openevse.isCharging(),
                                  sleeping: openevse.isSleeping() }"
                class="box box-full left">
-            <h2 class="left">Status</h2>
+            <h2 class="left">Session Status</h2>
             <h2 class="right" data-bind="text: status.estate"></h2>
 
             <table>
               <tr>
-                <th>Current Now</th>
-                <th>Session Energy</th>
+                <th>Current</th>
+                <th>Energy</th>
+                <th>Temp</th>
                 <th>Elapsed</th>
               </tr>
               <tr>
                 <td><span data-bind="text: scaleString(status.amp(), 1000, 2) + ' A'"></span></td>
                 <td><span data-bind="text: scaleString(status.wattsec(), 3600000, 2) + ' kWh'"></span></td>
+                <td><span data-bind="text: scaleString(status.temp1(), 10, 1) + ' &deg;C'"></span></td>
                 <td><span data-bind="text: openevse.time.elapsed"></span></td>
               </tr>
             </table>
