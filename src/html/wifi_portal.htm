@@ -12,6 +12,8 @@
   <meta name="author" content="OpenEVSE">
   <meta name="theme-color" content="#000000" />
   <link rel="stylesheet" type="text/css" href="style.css">
+  <link rel="icon" type="image/png" href="favicon-32x32.png" sizes="32x32" />
+  <link rel="icon" type="image/png" href="favicon-16x16.png" sizes="16x16" />
 
 </head>
 
@@ -24,7 +26,7 @@
 
     <div class="container">
 
-      <div class="box" data-bind="visible: !status.isWifiClient() &amp;&amp; !wifi.wifiConnecting()">
+      <div class="box" data-bind="visible: wifi.canConfigure() &amp;&amp; !wifi.wifiConnecting()">
         <h2>WiFi Setup</h2>
         <p><b>Mode:</b> <span id="mode" data-bind="text: status.fullMode"></span></p>
 
@@ -64,7 +66,7 @@
         <p><i><span class="small-text">Note: remote logging features e.g Emoncms will not work while in AP mode</span></i></p>
       </div>
 
-      <div class="box" data-bind="visible: wifi.wifiConnecting() || status.isWifiClient()">
+      <div class="box" data-bind="visible: wifi.wifiConnecting() || !wifi.canConfigure()">
         <h2>Connecting to <span data-bind="text: config.ssid"></span> ...</h2>
         <p>Please connect this device to <span data-bind="text: config.ssid"></span> and navigate to the IP address displayed
           on your OpenEVSE display.</p>

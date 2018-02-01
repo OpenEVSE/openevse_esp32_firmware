@@ -47,19 +47,20 @@
             <h2>WiFi Setup</h2>
             <p><b>Mode:</b> <span id="mode" data-bind="text: status.fullMode"></span></p>
 
-            <div id="client-view" data-bind="visible: status.isWifiClient">
+            <div id="client-view" data-bind="visible: !wifi.canConfigure() &amp;&amp; !wifi.wifiConnecting()">
               <table>
                 <tr>
                   <th>Network</th>
                   <th>RSSI dBm</th>
                 </tr>
                 <tbody id="sta-ssid">
-                  <tr>
+                  <tr data-bind="click: function () { wifi.forceConfig(true); }">
                     <td data-bind="text: config.ssid"></td>
                     <td data-bind="text: status.srssi"></td>
                   </tr>
                 </tbody>
               </table>
+              <button data-bind="click: function () { wifi.forceConfig(true); }">Change WiFi network</button>
               <p><b>IP Address:</b><br><a data-bind="text: status.ipaddress, attr: {href: 'http://'+status.ipaddress()}"></a></p>
               <p>
                 <b>Successful packets:</b><br>
@@ -70,7 +71,7 @@
               <button id="apoff" data-bind="visible: status.isWifiAccessPoint, click: wifi.turnOffAccessPoint, disable: wifi.turnOffAccessPointFetching">Turn off Access Point</button>
             </div>
 
-            <div id="ap-view" data-bind="visible: !status.isWifiClient() &amp;&amp; !wifi.wifiConnecting()">
+            <div id="ap-view" data-bind="visible: wifi.canConfigure() &amp;&amp; !wifi.wifiConnecting()">
               <p>Connect to network:</p>
               <table>
                 <tr>
@@ -86,6 +87,11 @@
                     <td data-bind="text: rssi"></td>
                   </tr>
                 </tbody>
+                <tfoot data-bind="visible: 0 == scan.results().length">
+                  <tr>
+                    <td colspan="3">Scanning...</td>
+                  </tr>
+                </tfoot>
               </table>
               <p data-bind="text: config.ssid"></p>
               <p>
@@ -286,7 +292,7 @@
         <!--TAB 3: OpenEVSE -->
         <div id="content-3" data-bind="visible: isStatus">
 
-          <!-- Status -->
+          <!-- Session Status -->
           <div data-bind="visible: openevse.isError" class="box box-full left error">
             <h4>EVSE Error</h4>
             <span data-bind="text: status.estate"></span>
@@ -298,61 +304,25 @@
                                  charging: openevse.isCharging(),
                                  sleeping: openevse.isSleeping() }"
                class="box box-full left">
-            <h2 class="left">Status</h2>
+            <h2 class="left">Session Status</h2>
             <h2 class="right" data-bind="text: status.estate"></h2>
 
             <table>
               <tr>
-                <th>Current Now</th>
-                <th>Session Energy</th>
+                <th>Current</th>
+                <th>Energy</th>
+                <th>Temp</th>
                 <th>Elapsed</th>
               </tr>
               <tr>
                 <td><span data-bind="text: scaleString(status.amp(), 1000, 2) + ' A'"></span></td>
                 <td><span data-bind="text: scaleString(status.wattsec(), 3600000, 2) + ' kWh'"></span></td>
+                <td><span data-bind="text: scaleString(status.temp1(), 10, 1) + ' &deg;C'"></span></td>
                 <td><span data-bind="text: openevse.time.elapsed"></span></td>
               </tr>
             </table>
           </div>
-          
-          <!-- Divert Mode -->
-          <div class="box380 right">
-            <h2>Charge Mode <span class="info" data-bind="click: toggle.bind($data, showSolarDivert)"></span></h2>
 
-            <div class="box error" data-bind="visible: !isEcoModeAvailable()">
-              <h4>MQTT config not configured with Solar PV / Grid topic.</h4>
-              Solar PV Divert requires the SolarPV-gen or Grid (+I/-E) MQTT topic to be defined on the
-              <a href="#services" data-bind="click: function() { tab('services'); config.mqtt_enabled(true); }">Services</a>
-              tab.
-            </div>
-
-            <div class="box" data-bind="visible: showSolarDivert()">
-              <div>Dynamically adjust charge rate based on solar PV generation or excess power (grid export).</div>
-              <p>
-                <b>1. Normal (default):</b>
-                <ul>
-                  <li><span class="small-text">Charge at maximum current set by EVSE.</span></li>
-                </ul>
-                <b>2. Eco (soalr PV divert):</b>
-                <ul>
-                  <li><span class="small-text">If only solar PV feed available: charge rate is modulated based on <b>solar PV generation.</b></span></li>
-                  <li><span class="small-text">If grid +I/-E (positive Import / negative Export) feed is avilable: charge rate will be modulated by available  <b>excess power.</b></span></li>
-                  <li><span class="small-text">If EVSE is sleeping: charging will begin when solar PV / excess power > min charge rate.</span></li>
-                  <li><span class="small-text">Charging will not pause; this avoids excess wear on the EVSE relay and the EV.</span></li>
-                </ul>
-                <span class="small-text"><i>Note: It's assumed that EVSE power is included in the gird feed</i></span><br><br>
-                <span class="small-text"><i>Charging mode can also be set via MQTT:<br>{base-topic}/divertmode/set</i></span>
-              </p>
-            </div>
-            <div data-bind="visible: isEcoModeAvailable">
-              <span data-bind="css: {selected: !ecoMode() }">Normal (max)</span>
-              <label class="switch">
-                <input type="checkbox" data-bind="checked: ecoMode">
-                <div class="slider round"></div>
-              </label>
-              <span data-bind="css: {selected: ecoMode }">Eco (PV divert)</span><br/>
-            </div>
-          </div>
 
           <!-- Session Options -->
           <div class="box380 left">
@@ -420,6 +390,45 @@
             </table>
           </div>
 
+          <!-- Divert Mode -->
+          <div class="box380 right">
+            <h2>Charge Mode <span class="info" data-bind="click: toggle.bind($data, showSolarDivert)"></span></h2>
+
+            <div class="box error" data-bind="visible: !isEcoModeAvailable()">
+              <h4>MQTT config not configured with Solar PV / Grid topic.</h4>
+              Solar PV Divert requires the SolarPV-gen or Grid (+I/-E) MQTT topic to be defined on the
+              <a href="#services" data-bind="click: function() { tab('services'); config.mqtt_enabled(true); }">Services</a>
+              tab.
+            </div>
+
+            <div class="box" data-bind="visible: showSolarDivert()">
+              <div>Dynamically adjust charge rate based on solar PV generation or excess power (grid export).</div>
+              <p>
+                <b>1. Normal (default):</b>
+                <ul>
+                  <li><span class="small-text">Charge at maximum current set by EVSE.</span></li>
+                </ul>
+                <b>2. Eco (soalr PV divert):</b>
+                <ul>
+                  <li><span class="small-text">If only solar PV feed available: charge rate is modulated based on <b>solar PV generation.</b></span></li>
+                  <li><span class="small-text">If grid +I/-E (positive Import / negative Export) feed is avilable: charge rate will be modulated by available  <b>excess power.</b></span></li>
+                  <li><span class="small-text">If EVSE is sleeping: charging will begin when solar PV / excess power > min charge rate.</span></li>
+                  <li><span class="small-text">Charging will not pause; this avoids excess wear on the EVSE relay and the EV.</span></li>
+                </ul>
+                <span class="small-text"><i>Note: It's assumed that EVSE power is included in the gird feed</i></span><br><br>
+                <span class="small-text"><i>Charging mode can also be set via MQTT:<br>{base-topic}/divertmode/set</i></span>
+              </p>
+            </div>
+            <div data-bind="visible: isEcoModeAvailable">
+              <span data-bind="css: {selected: !ecoMode() }">Normal (max)</span>
+              <label class="switch">
+                <input type="checkbox" data-bind="checked: ecoMode">
+                <div class="slider round"></div>
+              </label>
+              <span data-bind="css: {selected: ecoMode }">Eco (PV divert)</span><br/>
+            </div>
+          </div>
+          
           <!-- Sensor Values -->
           <div class="box380 right" data-bind="visible: advancedMode">
             <h2>Sensor Values</h2>
@@ -454,12 +463,15 @@
           <!-- Settings -->
           <div class="box380 setup" data-bind="with: openevse, css: { right: !advancedMode(), left: advancedMode() }">
             <h2>Setup</h2>
-            <p data-bind="with: time">
+            <p data-bind="with: time, visible: !time.hasRTC()">
+              <b>Time: No RTC detected</b>
+            </p>
+            <p data-bind="with: time, visible: time.hasRTC()">
               <b>Time:</b><br/>
               <input type="date" data-bind="value: date, disable: automaticTime" />
               <input type="time" data-bind="value: time, disable: automaticTime" /><br/>
             </p>
-            <div data-bind="with: time">
+            <div data-bind="with: time, visible: time.hasRTC()">
               <span data-bind="css: {selected: !automaticTime() }">Manual</span>
               <label class="switch">
                 <input type="checkbox" data-bind="checked: automaticTime">
