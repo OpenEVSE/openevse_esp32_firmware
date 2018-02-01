@@ -178,8 +178,8 @@ void divert_update_state()
       {
         // Set charge rate via RAPI
         bool chargeRateSet = false;
-        // Try and set with new API (and don't save the charge rate in EEPROM)
-        if(0 == rapiSender.sendCmd(String(F("$SC ")) + String(charge_rate) + String(F(" 1")))) {
+        // Try and set current with new API with volatile flag (don't save the current rate to EEPROM)
+        if(0 == rapiSender.sendCmd(String(F("$SC ")) + String(charge_rate) + String(F(" V")))) {
           chargeRateSet = true;
         } else if(0 == rapiSender.sendCmd(String(F("$SC ")) + String(charge_rate))) {
           // Fallback to old API
