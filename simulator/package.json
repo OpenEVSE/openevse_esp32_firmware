@@ -1,0 +1,18 @@
+{
+  "name": "ws_server",
+  "version": "1.0.0",
+  "description": "Simple emulation of OpenEVSE WiFi WebSocket server",
+  "main": "index.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "author": "",
+  "license": "ISC",
+  "dependencies": {
+    "express": "^4.16.2",
+    "ws": "^4.0.0"
+  },
+  "devDependencies": {
+    "eslint": "^4.16.0"
+  }
+}
