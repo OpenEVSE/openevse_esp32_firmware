@@ -1,13 +1,14 @@
 /* jslint node: true, esversion: 6 */
 "use strict";
 
-const ws = require("ws");
+var port = 80;
+
 const express = require("express");
-const http = require("http");
 const path = require("path");
 const bodyParser = require("body-parser");
 
 const app = express();
+const expressWs = require("express-ws")(app);
 
 var config = {
   "firmware": "-",
@@ -72,23 +73,6 @@ var status = {
 //
 // Create HTTP server by ourselves.
 //
-
-const port = 80;
-
-const server = http.createServer(app);
-
-const wss = new ws.Server({
-  server: server,
-  path: "/ws"
-});
-
-wss.on("connection", function connection(ws) {
-  ws.on("message", function incoming(message) {
-    console.log("received: %s", message);
-  });
-
-  ws.send("something");
-});
 
 // Setup the static content
 app.use(express.static(path.join(__dirname, "../src/data"), { index: "home.htm" }));
@@ -193,5 +177,10 @@ app.get("/divertmode", function (req, res) {
   res.status(500).send("Not implemented");
 });
 
+app.ws("/ws", function(ws, req) {
+  ws.on("message", function(msg) {
+    //ws.send(msg);
+  });
+});
 
-app.listen(port, () => console.log("Example app listening on port " + port + "!"));
+app.listen(port, () => console.log("OpenEVSE WiFi Simulator listening on port " + port + "!"));
