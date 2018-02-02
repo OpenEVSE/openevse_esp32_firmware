@@ -82,7 +82,7 @@ let args = minimist(process.argv.slice(2), {
 });
 
 if(args.help) {
-  console.log("OpenOVSE WiFi Simulator");
+  console.log("OpenEVSE WiFi Simulator");
   return 0;
 }
 
