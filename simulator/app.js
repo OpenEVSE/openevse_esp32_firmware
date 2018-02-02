@@ -107,6 +107,9 @@ app.get("/status", function (req, res) {
 app.get("/update", function (req, res) {
   res.send("<html><form method='POST' action='/update' enctype='multipart/form-data'><input type='file' name='firmware'> <input type='submit' value='Update'></form></html>");
 });
+app.post("/update", function (req, res) {
+  res.status(500).send("Not implemented");
+});
 app.get("/r", function (req, res) {
   var rapi = {
     "$GT": "$OK 18 0 25 23 54 27^1B",
@@ -149,5 +152,46 @@ app.get("/r", function (req, res) {
 
   res.json({ "cmd": cmd, "ret": "$NK" });
 });
+
+app.get("/savenetwork", function (req, res) {
+  res.status(500).send("Not implemented");
+});
+
+app.get("/saveemoncms", function (req, res) {
+  res.status(500).send("Not implemented");
+});
+
+app.get("/savemqtt", function (req, res) {
+  res.status(500).send("Not implemented");
+});
+
+app.get("/saveadmin", function (req, res) {
+  res.status(500).send("Not implemented");
+});
+
+app.get("/saveohmkey", function (req, res) {
+  res.status(500).send("Not implemented");
+});
+
+app.get("/reset", function (req, res) {
+  res.status(500).send("Not implemented");
+});
+
+app.get("/restart", function (req, res) {
+  res.status(500).send("Not implemented");
+});
+
+app.get("/scan", function (req, res) {
+  res.status(500).send("Not implemented");
+});
+
+app.get("/apoff", function (req, res) {
+  res.status(500).send("Not implemented");
+});
+
+app.get("/divertmode", function (req, res) {
+  res.status(500).send("Not implemented");
+});
+
 
 app.listen(port, () => console.log("Example app listening on port " + port + "!"));
