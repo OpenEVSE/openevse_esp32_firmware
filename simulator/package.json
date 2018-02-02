@@ -11,6 +11,7 @@
   "dependencies": {
     "express": "^4.16.2",
     "express-ws": "^3.0.0",
+    "minimist": "^1.2.0",
     "ws": "^4.0.0"
   },
   "devDependencies": {

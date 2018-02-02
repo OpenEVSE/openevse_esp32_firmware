@@ -1,14 +1,12 @@
 /* jslint node: true, esversion: 6 */
 "use strict";
 
-var port = 80;
 
 const express = require("express");
 const path = require("path");
 const bodyParser = require("body-parser");
+const minimist = require("minimist");
 
-const app = express();
-const expressWs = require("express-ws")(app);
 
 var config = {
   "firmware": "-",
@@ -42,6 +40,7 @@ var config = {
   "www_password": "",
   "ohm_enabled": false
 };
+
 var status = {
   "mode": "STA",
   "wifi_client_connected": 1,
@@ -69,6 +68,33 @@ var status = {
   "stuckcount": 0,
   "divertmode": 1
 };
+
+let args = minimist(process.argv.slice(2), {
+  alias: {
+    h: "help",
+    v: "version"
+  },
+  default: {
+    help: false,
+    version: false,
+    port: 3000
+  },
+});
+
+if(args.help) {
+  console.log("OpenOVSE WiFi Simulator");
+  return 0;
+}
+
+if(args.version) {
+  console.log(config.version);
+  return 0;
+}
+
+var port = args.port;
+
+const app = express();
+const expressWs = require("express-ws")(app);
 
 //
 // Create HTTP server by ourselves.
