@@ -137,31 +137,31 @@ app.get("/r", function (req, res) {
   res.json({ "cmd": cmd, "ret": "$NK" });
 });
 
-app.get("/savenetwork", function (req, res) {
+app.post("/savenetwork", function (req, res) {
   res.status(500).send("Not implemented");
 });
 
-app.get("/saveemoncms", function (req, res) {
+app.post("/saveemoncms", function (req, res) {
   res.status(500).send("Not implemented");
 });
 
-app.get("/savemqtt", function (req, res) {
+app.post("/savemqtt", function (req, res) {
   res.status(500).send("Not implemented");
 });
 
-app.get("/saveadmin", function (req, res) {
+app.post("/saveadmin", function (req, res) {
   res.status(500).send("Not implemented");
 });
 
-app.get("/saveohmkey", function (req, res) {
+app.post("/saveohmkey", function (req, res) {
   res.status(500).send("Not implemented");
 });
 
-app.get("/reset", function (req, res) {
+app.post("/reset", function (req, res) {
   res.status(500).send("Not implemented");
 });
 
-app.get("/restart", function (req, res) {
+app.post("/restart", function (req, res) {
   res.status(500).send("Not implemented");
 });
 
@@ -169,11 +169,11 @@ app.get("/scan", function (req, res) {
   res.status(500).send("Not implemented");
 });
 
-app.get("/apoff", function (req, res) {
+app.post("/apoff", function (req, res) {
   res.status(500).send("Not implemented");
 });
 
-app.get("/divertmode", function (req, res) {
+app.post("/divertmode", function (req, res) {
   res.status(500).send("Not implemented");
 });
 
