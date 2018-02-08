@@ -9,7 +9,13 @@ Node web server app to simulate an OpenEVSE WiFi gateway, usually running on ESP
 ```
 cd simulator
 npm install
-node app.js --port 80
+node app.js --port 3000
 ```
 
-**Note: currently the server has to be run on port 80 as the UI code doesn't currently handle running on a different port**
+Then point your browser at http://localhost:3000/
+
+**Tip**
+The OpenEVSE WiFi HTML/JS/CSS can be 'compiled' without building the full firmware using the command:
+```
+pio run -t buildfs
+```

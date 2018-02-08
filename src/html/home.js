@@ -11,9 +11,11 @@ var baseHost = window.location.hostname;
 //var baseHost = "192.168.4.1";
 //var baseHost = "172.16.0.70";
 
+var basePort = window.location.port;
+
 $(function () {
   // Activates knockout.js
-  var openevse = new OpenEvseWiFiViewModel(baseHost);
+  var openevse = new OpenEvseWiFiViewModel(baseHost, basePort);
   ko.applyBindings(openevse);
   openevse.start();
 });
