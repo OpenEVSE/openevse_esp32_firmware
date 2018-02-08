@@ -238,11 +238,11 @@
                 <b>2. Eco:</b>
                 <ul>
                   <li><span class="small-text">If only solar PV feed available: charge rate is modulated based on <b>solar PV generation.</b></span></li>
-                  <li><span class="small-text">If grid +I/-E (positive Import / negative Export) feed is avilable: charge rate will be modulated by available  <b>excess power.</b></span></li>
+                  <li><span class="small-text">If grid +I/-E (positive Import / negative Export) feed is available: charge rate will be modulated by available  <b>excess power.</b></span></li>
                   <li><span class="small-text">If EVSE is sleeping: charging will begin when solar PV / excess power > min charge rate.</span></li>
                   <li><span class="small-text">Charging will not pause; this avoids excess wear on the EVSE relay and the EV.</span></li>
                 </ul>
-                <span class="small-text"><i>Note: It's assumed that EVSE power is included in the gird feed.</i></span><br>
+                <span class="small-text"><i>Note: It's assumed that EVSE power is included in the grid feed.</i></span><br>
               </p>
             </div>
             <p data-bind="visible: config.mqtt_enabled">
@@ -408,14 +408,14 @@
                 <ul>
                   <li><span class="small-text">Charge at maximum current set by EVSE.</span></li>
                 </ul>
-                <b>2. Eco (soalr PV divert):</b>
+                <b>2. Eco (solar PV divert):</b>
                 <ul>
                   <li><span class="small-text">If only solar PV feed available: charge rate is modulated based on <b>solar PV generation.</b></span></li>
-                  <li><span class="small-text">If grid +I/-E (positive Import / negative Export) feed is avilable: charge rate will be modulated by available  <b>excess power.</b></span></li>
+                  <li><span class="small-text">If grid +I/-E (positive Import / negative Export) feed is available: charge rate will be modulated by available  <b>excess power.</b></span></li>
                   <li><span class="small-text">If EVSE is sleeping: charging will begin when solar PV / excess power > min charge rate.</span></li>
                   <li><span class="small-text">Charging will not pause; this avoids excess wear on the EVSE relay and the EV.</span></li>
                 </ul>
-                <span class="small-text"><i>Note: It's assumed that EVSE power is included in the gird feed</i></span><br><br>
+                <span class="small-text"><i>Note: It's assumed that EVSE power is included in the grid feed</i></span><br><br>
                 <span class="small-text"><i>Charging mode can also be set via MQTT:<br>{base-topic}/divertmode/set</i></span>
               </p>
             </div>
@@ -428,7 +428,7 @@
               <span data-bind="css: {selected: ecoMode }">Eco (PV divert)</span><br/>
             </div>
           </div>
-          
+
           <!-- Sensor Values -->
           <div class="box380 right" data-bind="visible: advancedMode">
             <h2>Sensor Values</h2>
@@ -788,7 +788,7 @@
               </tr>
               <tr>
                 <td>$GP</td>
-                <td>Get Temperatures, LCD mcp9808 infrared (all integers, Celcius * 10)</td>
+                <td>Get Temperatures, LCD mcp9808 infrared (all integers, Celsius * 10)</td>
               </tr>
               <tr>
                 <td>$GS</td>
