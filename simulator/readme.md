@@ -4,6 +4,13 @@ Node web server app to simulate an OpenEVSE WiFi gateway, usually running on ESP
 
 *This simulator is for demo/testing, to get a feel for the interface. Not all features have been implemented fully.*
 
+## Requirements
+
+```
+sudo apt-get intall node nodejs npm
+```
+
+
 ## Setup
 
 ```
