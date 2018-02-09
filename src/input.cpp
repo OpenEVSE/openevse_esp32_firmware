@@ -90,6 +90,9 @@ create_rapi_json() {
   data = "";
   url += String(emoncms_node) + "&json={";
   data += "amp:" + String(amp) + ",";
+  if (volt > 0) {
+    data += "volt:" + String(volt) + ",";
+  }
   data += "wh:" + String(wattsec) + ",";
   data += "temp1:" + String(temp1) + ",";
   data += "temp2:" + String(temp2) + ",";
