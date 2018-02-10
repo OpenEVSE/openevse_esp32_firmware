@@ -158,6 +158,9 @@ def make_static(env, target, source):
         if isfile(join(data_src, file)) and not file in out_files:
           out_files.append(file)
 
+    # Sort files to make sure the order is constant
+    out_files = sorted(out_files);
+
     # include the files
     for out_file in out_files:
         filename = "web_server."+out_file+".h"

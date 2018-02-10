@@ -9,6 +9,8 @@ The WiFi gateway uses an ESP8266 (ESP-12) which communicates with the OpenEVSE c
 
 Live demo of WiFi gateway web UI: http://demo.openevse.com:3000/
 
+Live demo: https://openevse.openenergymonitor.org
+
 ## Features
 
 - Web UI to view & control all OpenEVSE functions

@@ -1,13 +1,20 @@
 /* global $, ko, ConfigViewModel, StatusViewModel, WiFiScanViewModel, WiFiConfigViewModel */
 /* exported WiFiPortalViewModel */
 
-function WiFiPortalViewModel(baseHost)
+function WiFiPortalViewModel(baseHost, basePort)
 {
   "use strict";
   var self = this;
 
   self.baseHost = ko.observable("" !== baseHost ? baseHost : "openevse.local");
-  self.baseEndpoint = ko.pureComputed(function () { return "http://" + self.baseHost(); });
+  self.basePort = ko.observable(basePort);
+  self.baseEndpoint = ko.pureComputed(function () {
+    var endpoint = "//" + self.baseHost();
+    if(80 !== self.basePort()) {
+      endpoint += ":"+self.basePort();
+    }
+    return endpoint;
+  });
 
   self.config = new ConfigViewModel(self.baseEndpoint);
   self.status = new StatusViewModel(self.baseEndpoint);
