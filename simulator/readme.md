@@ -37,11 +37,17 @@ Install apache `mod-proxy` module then enable it:
 sudo apt-get install libapache2-mod-proxy-html
 sudo a2enmod proxy
 sudo a2enmod proxy_http
+sudo a2enmod rewrite
 ```
 
-copy `example-openevse-apache.conf` to `/etc/apache2/sites-available` making the relevant changes for your server then symink to `/etc/apache2/sites-available`
+copy `example-openevse-apache.conf` to `/etc/apache2/sites-available` making the relevant changes for your server then enable the site using `a2ensite`. e.g.
 
-Create log files:
+```
+sudo cp example-openevse-apache.conf /etc/apache2/sites-available/openevse.conf
+sudo a2ensite openevse
+```
+
+Create log files, this step may not be needed but it's a good idea to check the permissions.
 
 ```
 sudo touch /var/log/apache2/openevse_error.log
