@@ -7,8 +7,6 @@
 
 The WiFi gateway uses an ESP8266 (ESP-12) which communicates with the OpenEVSE controller via serial utilizing the existing RAPI API serial interface. The web interface UI is served directly from the ESP8266 web server and can be controlled via a connected device over the network.
 
-Live demo of WiFi gateway web UI: http://demo.openevse.com:3000/
-
 Live demo: https://openevse.openenergymonitor.org
 
 ## Features
