@@ -145,7 +145,7 @@ function WiFiConfigViewModel(baseEndpoint, config, status, scan) {
       console.log(data);
       if (self.status.ipaddress() !== "") {
         setTimeout(function () {
-          window.location = "http://" + self.status.ipaddress();
+          window.location = "//" + self.status.ipaddress();
           self.turnOffAccessPointSuccess(true);
         }, 3000);
       } else {

@@ -1,13 +1,28 @@
 /* global $, ko, ConfigViewModel, StatusViewModel, RapiViewModel, WiFiScanViewModel, WiFiConfigViewModel, OpenEvseViewModel */
 /* exported OpenEvseWiFiViewModel */
 
-function OpenEvseWiFiViewModel(baseHost)
+function OpenEvseWiFiViewModel(baseHost, basePort)
 {
   "use strict";
   var self = this;
 
   self.baseHost = ko.observable("" !== baseHost ? baseHost : "openevse.local");
-  self.baseEndpoint = ko.pureComputed(function () { return "http://" + self.baseHost(); });
+  self.basePort = ko.observable(basePort);
+  self.baseEndpoint = ko.pureComputed(function () {
+    var endpoint = "//" + self.baseHost();
+    if(80 !== self.basePort()) {
+      endpoint += ":"+self.basePort();
+    }
+    return endpoint;
+  });
+  self.wsEndpoint = ko.pureComputed(function () {
+    var endpoint = "ws://" + self.baseHost();
+    if(80 !== self.basePort()) {
+      endpoint += ":"+self.basePort();
+    }
+    endpoint += "/ws";
+    return endpoint;
+  });
 
   self.config = new ConfigViewModel(self.baseEndpoint);
   self.status = new StatusViewModel(self.baseEndpoint);
@@ -87,7 +102,7 @@ function OpenEvseWiFiViewModel(baseHost)
             // Redirect to the IP internally
             self.baseHost(self.status.ipaddress());
           } else {
-            window.location.replace("http://" + self.status.ipaddress());
+            window.location.replace("http://" + self.status.ipaddress() + ":" + self.basePort());
           }
         }
         self.openevse.update(function () {
@@ -407,7 +422,7 @@ function OpenEvseWiFiViewModel(baseHost)
   self.reconnectInterval = false;
   self.socket = false;
   self.connect = function () {
-    self.socket = new WebSocket("ws://"+self.baseHost()+"/ws");
+    self.socket = new WebSocket(self.wsEndpoint());
     self.socket.onopen = function (ev) {
       console.log(ev);
       self.pingInterval = setInterval(function () {
