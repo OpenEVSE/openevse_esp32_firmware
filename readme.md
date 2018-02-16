@@ -84,9 +84,9 @@ Live demo: https://openevse.openenergymonitor.org
 
 ## WiFi Setup
 
-On first boot, OpenEVSE should broadcast a WiFI AP `OpenEVSE_XXX`. Connect to this AP (default password: `openevse`) and the [captive portal](https://en.wikipedia.org/wiki/Captive_portal) should forward you to the log-in page. If this does not happen navigate to [http://openevse](http://openevse), [http://openevse.local](http://openevse.local) or [http://192.168.4.1](http://192.168.4.1)
+On first boot, OpenEVSE should broadcast a WiFI sccess point (AP) `OpenEVSE_XXX`. Connect to this AP (default password: `openevse`) and the [captive portal](https://en.wikipedia.org/wiki/Captive_portal) should forward you to the log-in page. If this does not happen navigate to [http://openevse](http://openevse), [http://openevse.local](http://openevse.local) or [http://192.168.4.1](http://192.168.4.1)
 
-*Note: You may need to disable mobile data if connecting via an Android device*
+*Note: You may need to disable mobile data if connecting via a mobile*
 
 ![Wifi connect](docs/wifi-connect.png) ![Wifi setup](docs/wifi-scan.png)
 
@@ -95,9 +95,9 @@ On first boot, OpenEVSE should broadcast a WiFI AP `OpenEVSE_XXX`. Connect to th
 - Enter WiFi PSK key then click `Connect`
 
 - OpenEVSE should now connect to local WiFi network
-- Re-connect device to home WiFi network and connect to OpenEVSE using [http://openevse.local](http://openevse.local), [http://openevse](http://openevse) or local IP address.
+- Re-connect device to local WiFi network and connect to OpenEVSE using [http://openevse.local](http://openevse.local), [http://openevse](http://openevse) or local IP address.
 
-**If connection / re-connection fails (e.g. network cannot be found or password is incorrect) the OpenEVSE will automatically revert back to WiFi access point mode after a short while to allow a new network to be re-configured if required. Re-connection to existing network will be attempted every 5 minutes.**
+**If connection / re-connection fails (e.g. network cannot be found or password is incorrect) the OpenEVSE will automatically revert back to WiFi access point (AP) mode after a short while to allow a new network to be re-configured if required. Re-connection to existing network will be attempted every 5 minutes.**
 
 *Holding the `boot` button on the ESP8266 module at startup (for about 10s) will force WiFi access point mode. This is useful when trying to connect the unit to a new WiFi network.*
 
@@ -256,7 +256,9 @@ There is also an [OpenEVSE RAPI command python library](https://github.com/tiram
 
 **USA California only**
 
-Uses [OhmConnect API](https://www.ohmconnect.com/) to pause charging during a 'ohm-hour' (period of high grid demand).
+*NOT CURRENTLY ACTIVE*
+
+~~Uses [OhmConnect API](https://www.ohmconnect.com/) to pause charging during a 'ohm-hour' (period of high grid demand)~~
 
 ***
 
@@ -341,11 +343,14 @@ Starting with 1.6.4, Arduino allows installation of third-party platform package
 
 ***
 
-### Troubleshooting Upload
+### Troubleshooting
 
-#### Erase Flash
 
-If you are experiencing ESP hanging in a reboot loop after upload it may be that the ESP flash has remnants of previous code (which may have the used the ESP memory in a different way). The ESP flash can be fully erased using [esptool](https://github.com/themadinventor/esptool). With the unit in bootloder mode run:
+#### Uploading issues
+
+##### Erase Flash
+
+If you are experiencing ESP hanging in a reboot loop after upload it may be that the ESP flash has remnants of previous code (which may have the used the ESP memory in a different way). The ESP flash can be fully erased using [esptool](https://github.com/themadinventor/esptool). With the unit in bootloader mode run:
 
 `$ esptool.py erase_flash`
 
@@ -361,11 +366,21 @@ Erasing flash (this may take a while)...
 Erase took 8.0 seconds
 ```
 
-#### Fully erase ESP
+##### Fully erase ESP
 
 To fully erase all memory locations on an ESP-12 (4Mb) we need to upload a blank file to each memory location
 
 `esptool.py write_flash 0x000000 blank_1MB.bin 0x100000 blank_1MB.bin 0x200000 blank_1MB.bin 0x300000 blank_1MB.bin`
+
+#### View serial debug
+
+To help debug it may be useful to enable serial debug output. To do this upload using `openevse_dev` environment e.g.
+
+`pio run -t upload -eopenevse_dev`
+
+The default is to enable serial debug on serial1 the ESP's 2nd serial port. You will need to connect a debugger to the ESP serial1 Tx pin (GPIO2).
+
+To change to use serial0 (the main ESP's serial port) change `-DDEBUG_PORT=Serial1` to `-DDEBUG_PORT=Serial` in `platformio.ini`. Note that using serial 0 will adversely effect RAPI communication with the openevse controller.
 
 ***
 
@@ -381,6 +396,7 @@ Contributions by:
 - @jeremypoulter
 - @sandeen
 - @lincomatic
+- @joverbee
 
 ## Licence
 
