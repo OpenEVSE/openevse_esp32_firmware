@@ -10,13 +10,18 @@ Node web server app to simulate an OpenEVSE WiFi gateway, usually running on ESP
 sudo apt-get intall node nodejs npm
 ```
 
+Tested with `npm V5.6.0` and nodejs `v9.5.0`.
+
+If a new version of nodejs is not available for your distribution you may need to update, [see nodejs install page](https://nodejs.org/en/download/package-manager/#debian-and-ubuntu-based-linux-distributions).
+
+
 
 ## Setup
 
 ```
 cd simulator
 npm install
-node app.js --port 3000
+nodejs app.js --port 3000
 ```
 
 Then point your browser at http://localhost:3000/

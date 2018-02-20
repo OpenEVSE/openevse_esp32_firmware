@@ -7,7 +7,7 @@
 // and run the HTML/JS from file, no need to upload to the ESP to test
 
 var baseHost = window.location.hostname;
-//var baseHost = "openevse.local";
+// var baseHost = "openevse.local";
 //var baseHost = "192.168.4.1";
 //var baseHost = "172.16.0.57";
 
