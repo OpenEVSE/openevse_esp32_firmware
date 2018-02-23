@@ -108,19 +108,25 @@ app.use(bodyParser.json());
 app.use(bodyParser.urlencoded({ extended: true }));
 
 app.get("/config", function (req, res) {
+  res.header("Cache-Control", "no-cache, private, no-store, must-revalidate, max-stale=0, post-check=0, pre-check=0");
   res.json(config);
 });
 app.get("/status", function (req, res) {
+  res.header("Cache-Control", "no-cache, private, no-store, must-revalidate, max-stale=0, post-check=0, pre-check=0");
   status.srssi += 5 - (Math.floor(Math.random() * 11));
   res.json(status);
 });
 app.get("/update", function (req, res) {
+  res.header("Cache-Control", "no-cache, private, no-store, must-revalidate, max-stale=0, post-check=0, pre-check=0");
   res.send("<html><form method='POST' action='/update' enctype='multipart/form-data'><input type='file' name='firmware'> <input type='submit' value='Update'></form></html>");
 });
 app.post("/update", function (req, res) {
+  res.header("Cache-Control", "no-cache, private, no-store, must-revalidate, max-stale=0, post-check=0, pre-check=0");
   res.status(500).send("Not implemented");
 });
 app.get("/r", function (req, res) {
+  res.header("Cache-Control", "no-cache, private, no-store, must-revalidate, max-stale=0, post-check=0, pre-check=0");
+
   var rapi = {
     "$GT": "$OK 18 0 25 23 54 27^1B",
     "$GE": "$OK 20 0229^2B",
@@ -164,42 +170,52 @@ app.get("/r", function (req, res) {
 });
 
 app.post("/savenetwork", function (req, res) {
+  res.header("Cache-Control", "no-cache, private, no-store, must-revalidate, max-stale=0, post-check=0, pre-check=0");
   res.status(500).send("Not implemented");
 });
 
 app.post("/saveemoncms", function (req, res) {
+  res.header("Cache-Control", "no-cache, private, no-store, must-revalidate, max-stale=0, post-check=0, pre-check=0");
   res.status(500).send("Not implemented");
 });
 
 app.post("/savemqtt", function (req, res) {
+  res.header("Cache-Control", "no-cache, private, no-store, must-revalidate, max-stale=0, post-check=0, pre-check=0");
   res.status(500).send("Not implemented");
 });
 
 app.post("/saveadmin", function (req, res) {
+  res.header("Cache-Control", "no-cache, private, no-store, must-revalidate, max-stale=0, post-check=0, pre-check=0");
   res.status(500).send("Not implemented");
 });
 
 app.post("/saveohmkey", function (req, res) {
+  res.header("Cache-Control", "no-cache, private, no-store, must-revalidate, max-stale=0, post-check=0, pre-check=0");
   res.status(500).send("Not implemented");
 });
 
 app.post("/reset", function (req, res) {
+  res.header("Cache-Control", "no-cache, private, no-store, must-revalidate, max-stale=0, post-check=0, pre-check=0");
   res.status(500).send("Not implemented");
 });
 
 app.post("/restart", function (req, res) {
+  res.header("Cache-Control", "no-cache, private, no-store, must-revalidate, max-stale=0, post-check=0, pre-check=0");
   res.status(500).send("Not implemented");
 });
 
 app.get("/scan", function (req, res) {
+  res.header("Cache-Control", "no-cache, private, no-store, must-revalidate, max-stale=0, post-check=0, pre-check=0");
   res.status(500).send("Not implemented");
 });
 
 app.post("/apoff", function (req, res) {
+  res.header("Cache-Control", "no-cache, private, no-store, must-revalidate, max-stale=0, post-check=0, pre-check=0");
   res.status(500).send("Not implemented");
 });
 
 app.post("/divertmode", function (req, res) {
+  res.header("Cache-Control", "no-cache, private, no-store, must-revalidate, max-stale=0, post-check=0, pre-check=0");
   res.status(500).send("Not implemented");
 });
 
