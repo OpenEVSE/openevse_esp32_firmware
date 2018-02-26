@@ -5,7 +5,7 @@
 
 ![main](docs/main2.png)
 
-The WiFi gateway uses an ESP8266 (ESP-12) to communicate to the OpenEVSE controller via serial utilizing the existing RAPI serial interface. The web interface is served directly from the ESP8266 and can be controlled via a connected device over a local network.
+The WiFi gateway uses an ESP8266 (ESP-12) which communicates with the OpenEVSE controller via serial utilizing the existing RAPI API serial interface. The web interface UI is served directly from the ESP8266 web server and can be controlled via a connected device over the network.
 
 Live demo: https://openevse.openenergymonitor.org
 
@@ -26,7 +26,7 @@ Live demo: https://openevse.openenergymonitor.org
 
 ### OpenEVSE charging station
   - Purchase via: [OpenEVSE Store (USA/Canda)](https://store.openevse.com) | [OpenEnergyMonitor (UK / EU)](https://shop.openenergymonitor.com/openevse-deluxe-ev-charge-controller-kit/)
-  - OpenEVSE FW [V4.8.0 recommended](https://github.com/OpenEVSE/open_evse/releases/tag/v4.8.0)
+  - OpenEVSE FW [V4.8.0+ recommended](https://github.com/OpenEVSE/open_evse/releases)
   - All new OpenEVSE units are shipped with V4.8.0 pre-loaded (October 2017 onwards)
   - OpenEVSE FW V3.10.4 will work with latest WiFi FW with some minor issues e.g. LCD text corruption
 
