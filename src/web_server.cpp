@@ -198,7 +198,9 @@ handleScan(AsyncWebServerRequest *request) {
     return;
   }
 
+  DBUGF("Starting WiFi scan");
   WiFi.scanNetworksAsync([request, response](int networksFound) {
+    DBUGF("%d networks found", networksFound);
     String json = "[";
     for (int i = 0; i < networksFound; ++i) {
       if(i) json += ",";

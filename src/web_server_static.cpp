@@ -72,8 +72,10 @@ void StaticFileWebHandler::handleRequest(AsyncWebServerRequest *request)
   dumpRequest(request);
 
   // Are we authenticated
-  if(wifi_mode_is_sta() && www_username!="" &&
-    false == request->authenticate(www_username.c_str(), www_password.c_str())) {
+  if(wifi_mode_is_sta() &&
+     _username != "" && _password != "" &&
+     false == request->authenticate(_username.c_str(), _password.c_str()))
+  {
     request->requestAuthentication(esp_hostname);
     return;
   }

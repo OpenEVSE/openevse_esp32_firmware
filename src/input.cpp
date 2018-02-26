@@ -9,6 +9,7 @@
 #include "mqtt.h"
 #include "web_server.h"
 #include "wifi.h"
+#include "openevse.h"
 
 #include "RapiSender.h"
 
@@ -26,13 +27,13 @@ int espfree = 0;
 
 int rapi_command = 1;
 
-long amp = 0;                          // OpenEVSE Current Sensor
-long volt = 0;                         // Not currently in used
-long temp1 = 0;                        // Sensor DS3232 Ambient
-long temp2 = 0;                        // Sensor MCP9808 Ambient
-long temp3 = 0;                        // Sensor TMP007 Infared
-long pilot = 0;                        // OpenEVSE Pilot Setting
-long state = 0;                       // OpenEVSE State
+long amp = 0;                         // OpenEVSE Current Sensor
+long volt = 0;                        // Not currently in used
+long temp1 = 0;                       // Sensor DS3232 Ambient
+long temp2 = 0;                       // Sensor MCP9808 Ambient
+long temp3 = 0;                       // Sensor TMP007 Infared
+long pilot = 0;                       // OpenEVSE Pilot Setting
+long state = OPENEVSE_STATE_STARTING; // OpenEVSE State
 long elapsed = 0;                     // Elapsed time (only valid if charging)
 #ifdef ENABLE_LEGACY_API
 String estate = "Unknown"; // Common name for State
@@ -89,6 +90,9 @@ create_rapi_json() {
   data = "";
   url += String(emoncms_node) + "&json={";
   data += "amp:" + String(amp) + ",";
+  if (volt > 0) {
+    data += "volt:" + String(volt) + ",";
+  }
   data += "wh:" + String(wattsec) + ",";
   data += "temp1:" + String(temp1) + ",";
   data += "temp2:" + String(temp2) + ",";

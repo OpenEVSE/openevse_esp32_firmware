@@ -10,6 +10,6 @@ echo travis_fold:start:firmware
 platformio run -e $PIO_ENV
 echo travis_fold:end:firmware
 
-echo travis_fold:start:spiffs
-platformio run -e $PIO_ENV -t buildfs
-echo travis_fold:end:spiffs
+# echo travis_fold:start:spiffs
+# platformio run -e $PIO_ENV -t buildfs
+# echo travis_fold:end:spiffs

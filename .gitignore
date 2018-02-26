@@ -67,3 +67,8 @@ full-upload.sh
 # Python code
 *.pyc
 .cache
+.vscode/launch.json
+
+# Simulator
+node_modules
+package-lock.json
