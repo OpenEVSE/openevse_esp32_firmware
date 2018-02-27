@@ -14,9 +14,10 @@ var baseHost = window.location.hostname;
 var basePort = window.location.port;
 var baseProtocol = window.location.protocol;
 
-console.log(baseHost);
-console.log(basePort);
-console.log(baseProtocol);
+// DEBUG
+// console.log(baseHost);
+// console.log(basePort);
+// console.log(baseProtocol);
 
 $(function () {
   // Activates knockout.js
