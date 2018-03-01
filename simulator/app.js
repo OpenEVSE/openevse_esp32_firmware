@@ -69,6 +69,14 @@ var status = {
   "divertmode": 1
 };
 
+var autoService = 1;
+var autoStart   = 0;
+var serialDebug = 0;
+var lcdType     = 0;
+var commandEcho = 0;
+
+var ffSupported = true;
+
 let args = minimist(process.argv.slice(2), {
   alias: {
     h: "help",
@@ -95,6 +103,28 @@ var port = args.port;
 
 const app = express();
 const expressWs = require("express-ws")(app);
+
+function toHex(num, len)
+{
+  var str = num.toString(16);
+  while(str.length < len) {
+    str = "0" + str;
+  }
+
+  return str.toUpperCase();
+}
+
+function checksum(msg)
+{
+  var check = 0;
+  for(var i = 0; i < msg.length; i++) {
+    check ^= msg.charCodeAt(i);
+  }
+
+  var checkString = toHex(check, 2);
+
+  return msg + "^" + checkString;
+}
 
 //
 // Create HTTP server by ourselves.
@@ -127,22 +157,29 @@ app.post("/update", function (req, res) {
 app.get("/r", function (req, res) {
   res.header("Cache-Control", "no-cache, private, no-store, must-revalidate, max-stale=0, post-check=0, pre-check=0");
 
-  var rapi = {
-    "$GT": "$OK 18 0 25 23 54 27^1B",
-    "$GE": "$OK 20 0229^2B",
-    "$GC": "$OK 10 80^29",
-    "$G3": "$OK 0^30",
-    "$GH": "$OK 0^30",
-    "$GO": "$OK 650 650^20",
-    "$GD": "$OK 0 0 0 0^20"
+  var dummyData = {
+    "GT": "$OK 18 0 25 23 54 27^1B",
+    "GE": "$OK 20 0229^2B",
+    "GC": "$OK 10 80^29",
+    "G3": "$OK 0^30",
+    "GH": "$OK 0^30",
+    "GO": "$OK 650 650^20",
+    "GD": "$OK 0 0 0 0^20"
   };
 
-  var cmd = req.query.rapi;
+  var rapi = req.query.rapi;
 
   status.comm_sent++;
 
+  var regex = /\$([^\^]*)(\^..)?/;
+  var match = rapi.match(regex);
+  var request = match[1].split(" ");
+  var cmd = request[0];
+  var resp = { "cmd": rapi, "ret": "" };
+  var success = false;
+
   switch (cmd) {
-  case "$GT":
+  case "GT": {
     var date = new Date();
     var time = [
       date.getFullYear() % 100,
@@ -152,21 +189,93 @@ app.get("/r", function (req, res) {
       date.getMinutes(),
       date.getSeconds()
     ];
-    res.json({ "cmd": "$GT", "ret": "$OK " + time.join(" ") });
-    status.comm_success++;
-    return;
+    resp.ret = checksum("$OK " + time.join(" "));
+    success = true;
+    break;
+  }
+
+  case "GE": {
+    var flags = 0;
+    flags |= (2 === config.service  ? 0x0001 : 0);
+    flags |= (config.diodet         ? 0x0002 : 0);
+    flags |= (config.ventt          ? 0x0004 : 0);
+    flags |= (config.groundt        ? 0x0008 : 0);
+    flags |= (config.relayt         ? 0x0010 : 0);
+    flags |= (autoService           ? 0x0020 : 0);
+    flags |= (autoStart             ? 0x0040 : 0);
+    flags |= (serialDebug           ? 0x0080 : 0);
+    flags |= (lcdType               ? 0x0100 : 0);
+    flags |= (config.gfcit          ? 0x0200 : 0);
+    flags |= (config.tempt          ? 0x0400 : 0);
+
+    var flagsStr = toHex(flags, 4);
+
+    resp.ret = checksum("$OK " + status.pilot.toString() + " " + flagsStr);
+    success = true;
+    break;
+  }
+
+  case "FF": {
+    if(ffSupported && request.length >= 3)
+    {
+      switch(request[1])
+      {
+      case "D":
+        config.diodet = parseInt(request[2]) ? 0 : 1;
+        success = true;
+        break;
+
+      case "E":
+        commandEcho = parseInt(request[2]);
+        success = true;
+        break;
+
+      case "F":
+        config.gfcit = parseInt(request[2]) ? 0 : 1;
+        success = true;
+        break;
+
+      case "G":
+        config.groundt = parseInt(request[2]) ? 0 : 1;
+        success = true;
+        break;
+
+      case "R":
+        config.relayt = parseInt(request[2]) ? 0 : 1;
+        success = true;
+        break;
+
+      case "T":
+        config.tempt = parseInt(request[2]) ? 0 : 1;
+        success = true;
+        break;
+
+      case "V":
+        config.ventt = parseInt(request[2]) ? 0 : 1;
+        success = true;
+        break;
+      }
+
+      if(success) {
+        resp.ret = checksum("$OK");
+      }
+    }
+  } break;
+
   default:
     if (rapi.hasOwnProperty(cmd)) {
-      res.json({
-        "cmd": cmd,
-        "ret": rapi[cmd]
-      });
-      status.comm_success++;
-      return;
+      resp.ret = dummyData[cmd];
+      success = true;
+      break;
     }
   }
 
-  res.json({ "cmd": cmd, "ret": "$NK" });
+  if(success) {
+    res.json(resp);
+    status.comm_success++;
+  } else {
+    res.json({ "cmd": cmd, "ret": "$NK" });
+  }
 });
 
 app.post("/savenetwork", function (req, res) {
