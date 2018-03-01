@@ -14,8 +14,8 @@ var config = {
   "espflash": 4194304,
   "version": "DEMO",
   "diodet": 0,
-  "gfcit": 1,
-  "groundt": 1,
+  "gfcit": 0,
+  "groundt": 0,
   "relayt": 0,
   "ventt": 0,
   "tempt": 0,
@@ -75,7 +75,7 @@ var serialDebug = 0;
 var lcdType     = 0;
 var commandEcho = 0;
 
-var ffSupported = true;
+var ffSupported = false;
 
 let args = minimist(process.argv.slice(2), {
   alias: {
@@ -262,6 +262,54 @@ app.get("/r", function (req, res) {
     }
   } break;
 
+  case "SD": {
+    if(!ffSupported && request.length >= 2) {
+      config.diodet = parseInt(request[1]) ? 0 : 1;
+      success = true;
+      resp.ret = checksum("$OK");
+    }
+  } break;
+
+  case "SE": {
+    if(!ffSupported && request.length >= 2) {
+      commandEcho = parseInt(request[1]);
+      success = true;
+      resp.ret = checksum("$OK");
+    }
+  } break;
+
+  case "SF": {
+    if(!ffSupported && request.length >= 2) {
+      config.gfcit = parseInt(request[1]) ? 0 : 1;
+      success = true;
+      resp.ret = checksum("$OK");
+    }
+  } break;
+
+  case "SG": {
+    if(!ffSupported && request.length >= 2) {
+      config.groundt = parseInt(request[1]) ? 0 : 1;
+      success = true;
+      resp.ret = checksum("$OK");
+    }
+  } break;
+
+  case "SR": {
+    if(!ffSupported && request.length >= 2) {
+      config.relayt = parseInt(request[1]) ? 0 : 1;
+      success = true;
+      resp.ret = checksum("$OK");
+    }
+  } break;
+
+  case "SV": {
+    if(!ffSupported && request.length >= 2) {
+      config.ventt = parseInt(request[1]) ? 0 : 1;
+      success = true;
+      resp.ret = checksum("$OK");
+    }
+  } break;
+
   default:
     if (rapi.hasOwnProperty(cmd)) {
       resp.ret = dummyData[cmd];
@@ -271,11 +319,11 @@ app.get("/r", function (req, res) {
   }
 
   if(success) {
-    res.json(resp);
     status.comm_success++;
   } else {
-    res.json({ "cmd": cmd, "ret": "$NK" });
+    resp.ret = "$NK";
   }
+  res.json(resp);
 });
 
 app.post("/savenetwork", function (req, res) {
