@@ -12,10 +12,16 @@ var baseHost = window.location.hostname;
 //var baseHost = "172.16.0.70";
 
 var basePort = window.location.port;
+var baseProtocol = window.location.protocol;
+
+// DEBUG
+// console.log(baseHost);
+// console.log(basePort);
+// console.log(baseProtocol);
 
 $(function () {
   // Activates knockout.js
-  var openevse = new OpenEvseWiFiViewModel(baseHost, basePort);
+  var openevse = new OpenEvseWiFiViewModel(baseHost, basePort, baseProtocol);
   ko.applyBindings(openevse);
   openevse.start();
 });

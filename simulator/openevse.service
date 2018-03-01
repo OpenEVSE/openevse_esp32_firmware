@@ -1,0 +1,14 @@
+[Unit]
+Description=OpenEVSE WiFi Simulator
+Documentation=https://github.com/OpenEVSE/ESP8266_WiFi_v2.x
+After=network.target
+
+[Service]
+Environment=NODE_PORT=3000
+Type=simple
+User=ubuntu
+ExecStart=/usr/bin/node /vagrant/simulator/app.js --port $NODE_PORT
+Restart=on-failure
+
+[Install]
+WantedBy=multi-user.target
