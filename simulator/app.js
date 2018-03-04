@@ -75,7 +75,7 @@ var serialDebug = 0;
 var lcdType     = 0;
 var commandEcho = 0;
 
-var ffSupported = false;
+var ffSupported = true;
 
 let args = minimist(process.argv.slice(2), {
   alias: {
