@@ -17,7 +17,7 @@ function OpenEvseWiFiViewModel(baseHost, basePort, baseProtocol)
     }
     return endpoint;
   });
-  
+
   self.wsEndpoint = ko.pureComputed(function () {
     var endpoint = "ws://" + self.baseHost();
     if("https:" === self.baseProtocol()){
@@ -62,12 +62,18 @@ function OpenEvseWiFiViewModel(baseHost, basePort, baseProtocol)
 
   // Advanced mode
   self.advancedMode = ko.observable(false);
+  self.advancedMode.subscribe(function (val) {
+    self.setCookie("advancedMode", val.toString());
+  });
 
   // Developer mode
   self.developerMode = ko.observable(false);
-  self.developerMode.subscribe(function (val) { if(val) {
-    self.advancedMode(true); // Enabling dev mode implicitly enables advanced mode
-  }});
+  self.developerMode.subscribe(function (val) {
+    self.setCookie("developerMode", val.toString());
+    if(val) {
+      self.advancedMode(true); // Enabling dev mode implicitly enables advanced mode
+    }
+  });
 
   var updateTimer = null;
   var updateTime = 5 * 1000;
@@ -129,6 +135,10 @@ function OpenEvseWiFiViewModel(baseHost, basePort, baseProtocol)
       });
       self.connect();
     });
+
+    // Set the advanced and developer modes from Cookies
+    self.advancedMode(self.getCookie("advancedMode", "false") === "true");
+    self.developerMode(self.getCookie("developerMode", "false") === "true");
   };
 
   // -----------------------------------------------------------------------
@@ -458,5 +468,31 @@ function OpenEvseWiFiViewModel(baseHost, basePort, baseProtocol)
         self.connect();
       }, 500);
     }
+  };
+
+  // Cookie management, based on https://www.w3schools.com/js/js_cookies.asp
+  self.setCookie = function (cname, cvalue, exdays = false) {
+    var expires = "";
+    if(false !== exdays) {
+      var d = new Date();
+      d.setTime(d.getTime() + (exdays * 24 * 60 * 60 * 1000));
+      expires = ";expires="+d.toUTCString();
+    }
+    document.cookie = cname + "=" + cvalue + expires + ";path=/";
+  };
+
+  self.getCookie = function (cname, def = "") {
+    var name = cname + "=";
+    var ca = document.cookie.split(";");
+    for(var i = 0; i < ca.length; i++) {
+      var c = ca[i];
+      while (c.charAt(0) === " ") {
+        c = c.substring(1);
+      }
+      if (c.indexOf(name) === 0) {
+        return c.substring(name.length, c.length);
+      }
+    }
+    return def;
   };
 }
