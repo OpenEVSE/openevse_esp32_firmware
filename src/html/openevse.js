@@ -497,7 +497,7 @@ function OpenEVSE(endpoint)
    */
   self.diode_check = function(callback, enabled = null) {
     if(null !== enabled) {
-      return self._request(["FF D", enabled ? "1" : "0"],
+      return self._request(["FF", "D", enabled ? "1" : "0"],
       // OLD API < 4.0.1
       // return self._request(["SD", enabled ? "1" : "0"],
       function() {
@@ -610,7 +610,7 @@ function OpenEVSE(endpoint)
    *
    * Returns the "temperature monitoring" status
    */
-   
+
   self.temp_check = function(callback, enabled = null) {
     if(null !== enabled) {
       return self._request(["FF T", enabled ? "1" : "0"],
@@ -624,8 +624,8 @@ function OpenEVSE(endpoint)
     });
     return request;
   };
-  
-  
+
+
   // OLD API < 4.0.1
   // self.temp_check = function(callback, enabled = null) {
   //   if(null !== enabled)
@@ -650,8 +650,8 @@ function OpenEVSE(endpoint)
   //   });
   //   return request;
   // };
-  
-  
+
+
 
   /**
    *
