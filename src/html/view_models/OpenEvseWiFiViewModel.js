@@ -17,7 +17,7 @@ function OpenEvseWiFiViewModel(baseHost, basePort, baseProtocol)
     }
     return endpoint;
   });
-  
+
   self.wsEndpoint = ko.pureComputed(function () {
     var endpoint = "ws://" + self.baseHost();
     if("https:" === self.baseProtocol()){
@@ -95,10 +95,17 @@ function OpenEvseWiFiViewModel(baseHost, basePort, baseProtocol)
   // -----------------------------------------------------------------------
   // Initialise the app
   // -----------------------------------------------------------------------
+  self.loadedCount = ko.observable(0);
+  self.itemsLoaded = ko.pureComputed(function () {
+    return self.loadedCount() + self.openevse.updateCount();
+  });
+  self.itemsTotal = ko.observable(2 + self.openevse.updateTotal());
   self.start = function () {
     self.updating(true);
     self.status.update(function () {
+      self.loadedCount(self.loadedCount() + 1);
       self.config.update(function () {
+        self.loadedCount(self.loadedCount() + 1);
         // If we are accessing on a .local domain try and redirect
         if(self.baseHost().endsWith(".local") && "" !== self.status.ipaddress()) {
           if("" === self.config.www_username())
