@@ -1,6 +1,8 @@
 #ifndef __DEBUG_H
 #define __DEBUG_H
 
+#include <core_version.h>
+
 //#define ENABLE_DEBUG
 //#define DEBUG_PORT Serial
 
@@ -16,7 +18,7 @@
 
 #define DEBUG_BEGIN(speed)  DEBUG_PORT.begin(speed)
 
-#ifdef ARDUINO_ESP8266_RELEASE_2_3_0
+#ifdef ARDUINO_ESP8266_RELEASE_2_4_0
 // Serial.printf_P needs Git version of Arduino Core
 #define DBUGF(format, ...)  DEBUG_PORT.printf_P(PSTR(format "\n"), ##__VA_ARGS__)
 #else
