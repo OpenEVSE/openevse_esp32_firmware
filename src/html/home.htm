@@ -25,7 +25,7 @@
     </div>
 
     <div class="container" data-bind="visible: !initialised()">
-      Loading, please wait...
+      Loading, please wait... (<span data-bind="text: itemsLoaded"></span>/<span data-bind="text: itemsTotal"></span>)
     </div>
 
     <div class="container" data-bind="visible: initialised" style="display: none">

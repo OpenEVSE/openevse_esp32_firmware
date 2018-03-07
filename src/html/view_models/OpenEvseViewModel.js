@@ -197,7 +197,8 @@ function OpenEvseViewModel(baseEndpoint, statusViewModel) {
       self.delayTimerStop(stop);
     }); },
   ];
-  var updateCount = -1;
+  self.updateCount = ko.observable(0);
+  self.updateTotal = ko.observable(updateList.length);
 
   self.updateCurrentCapacity = function () {
     return self.openevse.current_capacity_range(function (min, max) {
@@ -388,13 +389,14 @@ function OpenEvseViewModel(baseEndpoint, statusViewModel) {
   };
 
   self.update = function (after = function () { }) {
-    updateCount = 0;
+    self.updateCount(0);
     self.nextUpdate(after);
   };
   self.nextUpdate = function (after) {
-    var updateFn = updateList[updateCount];
+    var updateFn = updateList[self.updateCount()];
     updateFn().always(function () {
-      if(++updateCount < updateList.length) {
+      self.updateCount(self.updateCount() + 1);
+      if(self.updateCount() < updateList.length) {
         self.nextUpdate(after);
       } else {
         self.subscribe();
