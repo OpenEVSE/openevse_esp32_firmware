@@ -186,9 +186,9 @@ function OpenEvseViewModel(baseEndpoint, statusViewModel) {
     function () { return self.openevse.vent_required(function (enabled) {
       self.ventRequiredEnabled(enabled);
     }); },
-    function () { return self.openevse.over_temperature_thresholds(function () {
+    function () { return self.openevse.temp_check(function () {
       self.tempCheckSupported(true);
-    }).error(function () {
+    }, self.tempCheckEnabled()).error(function () {
       self.tempCheckSupported(false);
     }); },
     function () { return self.openevse.timer(function (enabled, start, stop) {

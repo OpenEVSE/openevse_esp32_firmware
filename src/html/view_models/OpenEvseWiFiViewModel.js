@@ -55,6 +55,8 @@ function OpenEvseWiFiViewModel(baseHost, basePort, baseProtocol)
   // Info text display state
   self.showMqttInfo = ko.observable(false);
   self.showSolarDivert = ko.observable(false);
+  self.showSafety = ko.observable(false);
+  
 
   self.toggle = function (flag) {
     flag(!flag());

@@ -544,8 +544,12 @@
 
           <!-- Safety -->
           <div class="box380 left" data-bind="visible: advancedMode() || !openevse.allTestsEnabled()">
+            <h2>Safety<span class="info" data-bind="click: toggle.bind($data, showSafety)"></span></h2>
 
-            <h2>Safety</h2>
+            <div class="box" data-bind="visible: showSafety()">
+              Hardware safety checks. Enable dev mode (System > Developer Mode) to enable/disable or use the physical LCD + menu button.
+            </div>
+            
 
             <div data-bind="visible: !openevse.allTestsEnabled()" class="box warning">
               <h4>Warning!!</h4>
