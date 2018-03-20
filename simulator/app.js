@@ -54,7 +54,7 @@ var status = {
   "free_heap": 20816,
   "comm_sent": 1077,
   "comm_success": 1075,
-  "amp": 27.5,
+  "amp": 27500,
   "pilot": 32,
   "temp1": 247,
   "temp2": 0,
