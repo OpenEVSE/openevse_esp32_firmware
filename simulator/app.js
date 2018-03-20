@@ -60,7 +60,7 @@ var status = {
   "temp2": 0,
   "temp3": 230,
   "state": 3,
-  "elapsed": 1079034,
+  "elapsed": 10790,
   "wattsec": 437822,
   "watthour": 7297,
   "gfcicount": 0,
