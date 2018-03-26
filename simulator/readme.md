@@ -26,12 +26,41 @@ nodejs app.js --port 3000
 
 Then point your browser at http://localhost:3000/
 
+Depending on your npm setup you may need to install the following:
+
+```
+npm install body-parser
+npm install express
+npm install
+```
+
+
 **Tip**
 The OpenEVSE WiFi HTML/JS/CSS can be 'compiled' without building the full firmware using the command:
 
 ```
 pio run -t buildfs
 ```
+
+## Run as a service
+
+### Using systemd
+
+`sudo cp openevse.service /etc/systemd/system/openevse.service`
+
+Edit service file to specify correct path to match installation location
+
+`sudo nano /etc/systemd/system/openevse.service`
+
+Run at startup:
+
+```
+sudo systemctl daemon-reload
+sudo systemctl enable openevse.service
+```
+
+### Using PM2
+
 
 ## Serve via apache
 
