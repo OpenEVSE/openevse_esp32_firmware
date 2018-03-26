@@ -88,6 +88,8 @@ On first boot, OpenEVSE should broadcast a WiFI sccess point (AP) `OpenEVSE_XXX`
 
 *Note: You may need to disable mobile data if connecting via a mobile*
 
+*Note: Use of Internet Explorer 11 or earlier is not recommended, some issues have been reported. Please use Edge, Chrome, Safari or iOS/Android browser instead.*
+
 ![Wifi connect](docs/wifi-connect.png) ![Wifi setup](docs/wifi-scan.png)
 
 
