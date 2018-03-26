@@ -61,6 +61,20 @@ sudo systemctl enable openevse.service
 
 ### Using PM2
 
+```
+sudo npm install -g pm2
+pm2 start app.js
+```
+
+For status:
+
+```
+pm2 info app
+pm2 list
+pm2 restart app
+mp2 stop app
+```
+
 
 ## Serve via apache
 
