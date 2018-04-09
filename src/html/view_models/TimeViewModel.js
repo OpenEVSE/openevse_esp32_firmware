@@ -9,6 +9,7 @@ function TimeViewModel(openevse)
   function addZero(val) {
     return (val < 10 ? "0" : "") + val;
   }
+
   function startTimeUpdate() {
     timeUpdateTimeout = setInterval(function () {
       if(self.automaticTime()) {
@@ -19,6 +20,7 @@ function TimeViewModel(openevse)
       }
     }, 1000);
   }
+
   function stopTimeUpdate() {
     if(null !== timeUpdateTimeout) {
       clearInterval(timeUpdateTimeout);
@@ -40,12 +42,13 @@ function TimeViewModel(openevse)
       }
 
       var dt = self.nowTimedate();
-      return (dt.getFullYear() + 1900)+"-"+addZero(dt.getMonth())+"-"+addZero(dt.getDate());
+      return (dt.getFullYear())+"-"+addZero(dt.getMonth())+"-"+addZero(dt.getDate());
     },
     write: function (val) {
       self.evseTimedate(new Date(val));
       self.localTimedate(new Date());
     }});
+
   self.time = ko.pureComputed({
     read: function () {
       if(null === self.nowTimedate()) {
@@ -62,6 +65,7 @@ function TimeViewModel(openevse)
       self.evseTimedate(date);
       self.localTimedate(new Date());
     }});
+
   self.elapsed = ko.pureComputed(function () {
     if(null === self.nowTimedate()) {
       return "0:00:00";
