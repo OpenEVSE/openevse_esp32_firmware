@@ -183,7 +183,7 @@ app.get("/r", function (req, res) {
     var date = new Date();
     var time = [
       date.getFullYear() % 100,
-      date.getMonth(),
+      date.getMonth() + 1,
       date.getDate(),
       date.getHours(),
       date.getMinutes(),
