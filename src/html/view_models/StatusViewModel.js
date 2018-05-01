@@ -30,7 +30,11 @@ function StatusViewModel(baseEndpoint) {
     "gfcicount": 0,
     "nogndcount": 0,
     "stuckcount": 0,
-    "divertmode": 1
+    "divertmode": 1,
+    "solar": 0,
+    "grid_ie": 0,
+    "charge_rate": 0,
+    "divert_update": 0
   }, endpoint);
 
   // Some devired values

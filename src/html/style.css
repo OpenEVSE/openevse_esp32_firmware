@@ -451,3 +451,17 @@ color: #eee;
 background-color: #eee;
 border: none;
 }
+
+/* update colours */
+.updateBad {
+  color: rgb(255,0,0);
+}
+.updateGood {
+  color: rgb(50,200,50);
+}
+.updateSlow {
+  color: rgb(240,180,20);
+}
+.updateSlower {
+  color: rgb(255,125,20);
+}
