@@ -39,6 +39,7 @@ int min_charge_current = 6;      // TO DO: set to be min charge current as set o
 int max_charge_current = 32;     // TO DO: to be set to be max charge current as set on the OpenEVSE e.g. "$GC min-current max-current"
 int charge_rate = 0;
 int last_state = OPENEVSE_STATE_INVALID;
+uint32_t lastUpdate = 0;
 
 extern RapiSender rapiSender;
 
@@ -200,6 +201,21 @@ void divert_update_state()
       }
     }
   } // end ecomode
+
+  DBUGVAR(charge_rate);
+
+  String event = mqtt_grid_ie != "" ? F("{\"grid_ie\":") : F("{\"solar\":");
+  event += mqtt_grid_ie != "" ? String(grid_ie) : String(solar);
+  if (divertmode == DIVERT_MODE_ECO)
+  {
+    event += F(",\"charge_rate\":");
+    event += String(charge_rate);
+  }
+  event += F(",\"divert_update\":0}");
+  DBUGVAR(event);
+  event_send(event);
+
+  lastUpdate = millis();
 
   Profile_End(divert_update_state, 5);
 } //end divert_update_state
