@@ -47,7 +47,7 @@ function TimeViewModel(openevse)
       }
 
       var dt = self.nowTimedate();
-      return (dt.getFullYear())+"-"+addZero(dt.getMonth())+"-"+addZero(dt.getDate());
+      return (dt.getFullYear())+"-"+addZero(dt.getMonth() + 1)+"-"+addZero(dt.getDate());
     },
     write: function (val) {
       self.evseTimedate(new Date(val));
