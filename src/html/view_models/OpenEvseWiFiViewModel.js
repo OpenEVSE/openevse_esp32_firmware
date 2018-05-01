@@ -56,7 +56,7 @@ function OpenEvseWiFiViewModel(baseHost, basePort, baseProtocol)
   self.showMqttInfo = ko.observable(false);
   self.showSolarDivert = ko.observable(false);
   self.showSafety = ko.observable(false);
-  
+
 
   self.toggle = function (flag) {
     flag(!flag());
@@ -398,6 +398,13 @@ function OpenEvseWiFiViewModel(baseHost, basePort, baseProtocol)
     }
   });
 
+  self.haveSolar =ko.pureComputed(function () {
+    return "" !== self.config.mqtt_solar();
+  });
+
+  self.haveGridIe =ko.pureComputed(function () {
+    return "" !== self.config.mqtt_grid_ie();
+  });
 
   // -----------------------------------------------------------------------
   // Event: Reset config and reboot
