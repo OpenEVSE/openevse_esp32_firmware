@@ -1,10 +1,17 @@
 #include "emonesp.h"
-#include "wifi.h"
+#include "wifi_manager.h"
 #include "config.h"
 #include "lcd.h"
 
-#include <ESP8266WiFi.h>              // Connect to Wifi
+#ifdef ESP32
+#include <WiFi.h>
+#include <ESPmDNS.h>              // Resolve URL for update server etc.
+#elif defined(ESP8266)
+#include <ESP8266WiFi.h>
 #include <ESP8266mDNS.h>              // Resolve URL for update server etc.
+#else
+#error Platform not supported
+#endif
 #include <DNSServer.h>                // Required for captive portal
 
 DNSServer dnsServer;                  // Create class DNS server, captive portal re-direct
@@ -81,8 +88,13 @@ startAP() {
   WiFi.softAPConfig(apIP, apIP, netMsk);
 
   // Create Unique SSID e.g "emonESP_XXXXXX"
+  #ifdef ESP32
+  String softAP_ssid_ID =
+    String(softAP_ssid) + "_" + String((uint32_t)ESP.getEfuseMac());
+  #else
   String softAP_ssid_ID =
     String(softAP_ssid) + "_" + String(ESP.getChipId());
+  #endif
 
   // Pick a random channel out of 1, 6 or 11
   int channel = (random(3) * 5) + 1;
@@ -118,7 +130,9 @@ startClient()
   client_disconnects = 0;
 
   WiFi.begin(esid.c_str(), epass.c_str());
+#ifndef ESP32
   WiFi.hostname(esp_hostname);
+#endif // !ESP32
   WiFi.enableSTA(true);
 }
 
@@ -136,6 +150,7 @@ static void wifi_start()
   }
 }
 
+#ifndef ESP32
 void wifi_onStationModeGotIP(const WiFiEventStationModeGotIP &event)
 {
   #ifdef WIFI_LED
@@ -195,6 +210,7 @@ void wifi_onStationModeDisconnected(const WiFiEventStationModeDisconnected &even
 
   client_disconnects++;
 }
+#endif // !ESP32
 
 void
 wifi_setup() {
@@ -210,13 +226,16 @@ wifi_setup() {
   if(wifi_is_client_configured()) {
     WiFi.persistent(true);
     WiFi.disconnect();
+    #ifndef ESP32
     ESP.eraseConfig();
+    #endif // !ESP32
   }
 
   // Stop the WiFi module
   WiFi.persistent(false);
   WiFi.mode(WIFI_OFF);
 
+#ifndef ESP32
   static auto _onStationModeConnected = WiFi.onStationModeConnected([](const WiFiEventStationModeConnected &event) { DBUGF("Connected to %s", event.ssid.c_str()); });
   static auto _onStationModeGotIP = WiFi.onStationModeGotIP(wifi_onStationModeGotIP);
   static auto _onStationModeDisconnected = WiFi.onStationModeDisconnected(wifi_onStationModeDisconnected);
@@ -228,6 +247,7 @@ wifi_setup() {
   static auto _onSoftAPModeStationDisconnected = WiFi.onSoftAPModeStationDisconnected([](const WiFiEventSoftAPModeStationDisconnected &event) {
     apClients--;
   });
+#endif
 
   wifi_start();
 
@@ -287,7 +307,11 @@ wifi_loop() {
   if(isApOnly && 0 == apClients && client_retry && millis() > client_retry_time) {
     DEBUG.println("client re-try, resetting");
     delay(50);
+    #ifdef ESP32
+    esp_restart();
+    #else
     ESP.reset();
+    #endif
   }
 
   dnsServer.processNextRequest(); // Captive portal DNS re-dierct

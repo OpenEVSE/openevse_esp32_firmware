@@ -1,8 +1,8 @@
 #ifndef _EMONESP_WEB_SERVER_STATIC_H
 #define _EMONESP_WEB_SERVER_STATIC_H
 
-#include <Hash.h>
-#include <ESPAsyncTCP.h>
+//#include <Hash.h>
+//#include <ESPAsyncTCP.h>
 #include <ESPAsyncWebServer.h>
 
 struct StaticFile

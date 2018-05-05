@@ -97,7 +97,11 @@ mqtt_connect() {
   mqttclient.setCallback(mqttmsg_callback); //function to be called when mqtt msg is received on subscribed topic
   DEBUG.print("MQTT Connecting to...");
   DEBUG.println(mqtt_user.c_str());
+  #ifdef ESP32
+  String strID = String((uint32_t)ESP.getEfuseMac());
+  #else
   String strID = String(ESP.getChipId());
+  #endif
   if (mqttclient.connect(strID.c_str(), mqtt_user.c_str(), mqtt_pass.c_str(),mqtt_topic.c_str(),1,0,(char*)"disconnected")) {  // Attempt to connect
     DEBUG.println("MQTT connected");
     mqttclient.publish(mqtt_topic.c_str(), "connected"); // Once connected, publish an announcement..

@@ -1,10 +1,9 @@
 #ifndef _EMONESP_WEB_SERVER_H
 #define _EMONESP_WEB_SERVER_H
 
-#include <Hash.h>
-#include <ESPAsyncTCP.h>
+//#include <Hash.h>
+//#include <ESPAsyncTCP.h>
 #include <ESPAsyncWebServer.h>
-
 // Content Types
 extern const char _CONTENT_TYPE_HTML[];
 #define CONTENT_TYPE_HTML FPSTR(_CONTENT_TYPE_HTML)

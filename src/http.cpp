@@ -1,8 +1,17 @@
 #include "emonesp.h"
 #include "http.h"
 
+#include <Print.h>
 #include <WiFiClientSecure.h>   // Secure https GET request
+
+#ifdef ESP32
+#include <HTTPClient.h>
+#elif defined(ESP8266)
 #include <ESP8266HTTPClient.h>
+#else
+#error Platform not supported
+#endif
+
 
 WiFiClientSecure client;        // Create class for HTTPS TCP connections get_https()
 HTTPClient http;                // Create class for HTTP TCP connections get_http()
@@ -20,7 +29,10 @@ get_https(const char *fingerprint, const char *host, String url,
     DEBUG.print(host + httpsPort);      //debug
     return ("Connection error");
   }
+#ifndef ESP32
+  #warning HTTPS verification not enabled
   if (client.verify(fingerprint, host)) {
+#endif
     client.print(String("GET ") + url + " HTTP/1.1\r\n" + "Host: " + host +
                  "\r\n" + "Connection: close\r\n\r\n");
     // Handle wait for reply and timeout
@@ -39,9 +51,11 @@ get_https(const char *fingerprint, const char *host, String url,
         return ("ok");
       }
     }
+#ifndef ESP32
   } else {
     return ("HTTPS fingerprint no match");
   }
+#endif
   return ("error " + String(host));
 }
 

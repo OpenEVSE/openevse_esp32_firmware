@@ -1,10 +1,16 @@
 #include "emonesp.h"
 #include "input.h"
-#include "wifi.h"
+#include "wifi_manager.h"
 #include "config.h"
 
 #include <WiFiClientSecure.h>
+#ifdef ESP32
+#include <HTTPClient.h>
+#elif defined(ESP8266)
 #include <ESP8266HTTPClient.h>
+#else
+#error Platform not supported
+#endif
 
 #include <Arduino.h>
 
@@ -35,7 +41,10 @@ ohm_loop() {
       DEBUG.println("ERROR Ohm Connect - connection failed");
       return;
     }
+#ifndef ESP32
+    #warning HTTPS verification not enabled
     if (client.verify(ohm_fingerprint, ohm_host)) {
+#endif
       client.print(String("GET ") + ohm_url + ohm + " HTTP/1.1\r\n" +
                    "Host: " + ohm_host + "\r\n" +
                    "User-Agent: OpenEVSE\r\n" + "Connection: close\r\n\r\n");
@@ -57,9 +66,11 @@ ohm_loop() {
         }
       }
       DEBUG.println(line);
+#ifndef ESP32
     } else {
       DEBUG.println("ERROR Ohm Connect - Certificate Invalid");
     }
+#endif
   }
 
   Profile_End(ohm_loop, 5);

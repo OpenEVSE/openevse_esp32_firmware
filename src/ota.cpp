@@ -1,7 +1,8 @@
 #include "emonesp.h"
 #include "ota.h"
-#include "wifi.h"
+#include "wifi_manager.h"
 
+#include <WiFiUdp.h>
 #include <ArduinoOTA.h>               // local OTA update from Arduino IDE
 #include <FS.h>
 
@@ -17,7 +18,7 @@ void ota_setup()
 
   ArduinoOTA.onStart([]() {
     // Clean SPIFFS
-    SPIFFS.end();
+    //SPIFFS.end();
 
     lcd_display(F("Updating WiFi"), 0, 0, 0, LCD_CLEAR_LINE);
     lcd_display(F(""), 0, 1, 10 * 1000, LCD_CLEAR_LINE);

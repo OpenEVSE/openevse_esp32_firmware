@@ -8,7 +8,7 @@
 #include "divert.h"
 #include "mqtt.h"
 #include "web_server.h"
-#include "wifi.h"
+#include "wifi_manager.h"
 #include "openevse.h"
 
 #include "RapiSender.h"

@@ -3,14 +3,28 @@
 #endif
 
 #include <Arduino.h>
+
+#ifdef ESP32
+
+#include <WiFi.h>
+typedef const char *fstr_t;
+
+#elif defined(ESP8266)
+
 #include <ESP8266WiFi.h>
+typedef const __FlashStringHelper *fstr_t;
+
+#else
+#error Platform not supported
+#endif
+
 //#include <FS.h>                       // SPIFFS file-system: store web server html, CSS etc.
 
 #include "emonesp.h"
 #include "web_server.h"
 #include "web_server_static.h"
 #include "config.h"
-#include "wifi.h"
+#include "wifi_manager.h"
 #include "mqtt.h"
 #include "input.h"
 #include "emoncms.h"
@@ -95,7 +109,7 @@ void dumpRequest(AsyncWebServerRequest *request) {
 // -------------------------------------------------------------------
 // Helper function to perform the standard operations on a request
 // -------------------------------------------------------------------
-bool requestPreProcess(AsyncWebServerRequest *request, AsyncResponseStream *&response, const __FlashStringHelper *contentType = CONTENT_TYPE_JSON)
+bool requestPreProcess(AsyncWebServerRequest *request, AsyncResponseStream *&response, fstr_t contentType = CONTENT_TYPE_JSON)
 {
   dumpRequest(request);
 
@@ -177,7 +191,9 @@ handleScan(AsyncWebServerRequest *request) {
       json += ",\"bssid\":\""+WiFi.BSSIDstr(i)+"\"";
       json += ",\"channel\":"+String(WiFi.channel(i));
       json += ",\"secure\":"+String(WiFi.encryptionType(i));
+#ifndef ESP32
       json += ",\"hidden\":"+String(WiFi.isHidden(i)?"true":"false");
+#endif // !ESP32
       json += "}";
     }
     WiFi.scanDelete();
@@ -615,7 +631,9 @@ handleRst(AsyncWebServerRequest *request) {
   }
 
   config_reset();
+#ifndef ESP32
   ESP.eraseConfig();
+#endif // !ESP32
 
   response->setCode(200);
   response->print("1");
@@ -664,6 +682,7 @@ handleUpdateGet(AsyncWebServerRequest *request) {
 
 void
 handleUpdatePost(AsyncWebServerRequest *request) {
+  #ifndef ESP32
   bool shouldReboot = !Update.hasError();
   AsyncWebServerResponse *response = request->beginResponse(200, CONTENT_TYPE_TEXT, shouldReboot ? "OK" : "FAIL");
   response->addHeader("Connection", "close");
@@ -672,6 +691,14 @@ handleUpdatePost(AsyncWebServerRequest *request) {
   if(shouldReboot) {
     systemRestartTime = millis() + 1000;
   }
+
+  #else // ! ESP32
+
+  AsyncWebServerResponse *response = request->beginResponse(500, CONTENT_TYPE_TEXT, "Not supported");
+  response->addHeader("Connection", "close");
+  request->send(response);
+
+  #endif // !ESP32
 }
 
 extern "C" uint32_t _SPIFFS_start;
@@ -681,6 +708,7 @@ static int lastPercent = -1;
 void
 handleUpdateUpload(AsyncWebServerRequest *request, String filename, size_t index, uint8_t *data, size_t len, bool final)
 {
+#ifndef ESP32
   if(!index)
   {
     dumpRequest(request);
@@ -742,6 +770,7 @@ handleUpdateUpload(AsyncWebServerRequest *request, String filename, size_t index
 #endif
     }
   }
+#endif // ESP32
 }
 
 String delayTimer = "0 0 0 0";
@@ -966,7 +995,11 @@ web_server_loop() {
   if(systemRebootTime > 0 && millis() > systemRebootTime) {
     systemRebootTime = 0;
     wifi_disconnect();
+    #ifdef ESP32
+    esp_restart();
+    #else
     ESP.reset();
+    #endif
   }
 
   Profile_End(web_server_loop, 5);

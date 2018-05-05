@@ -1,7 +1,9 @@
 #ifndef __DEBUG_H
 #define __DEBUG_H
 
+#ifdef ESP8266
 #include <core_version.h>
+#endif
 
 //#define ENABLE_DEBUG
 //#define DEBUG_PORT Serial
