@@ -179,8 +179,10 @@ RapiSender::sendCmd(String &cmdstr, unsigned long timeout) {
 */
 int
 RapiSender::sendCmd(const __FlashStringHelper *cmdstr, unsigned long timeout) {
-  _stream->print(cmdstr);
+  dbgprint("Send: ");
   dbgprint(cmdstr);
+
+  _stream->print(cmdstr);
 
   PGM_P p = reinterpret_cast<PGM_P>(cmdstr);
   uint8_t chk = 0;
