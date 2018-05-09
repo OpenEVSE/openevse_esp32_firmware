@@ -809,7 +809,7 @@ handleRapi(AsyncWebServerRequest *request) {
     String rapi = request->arg("rapi");
 
     // BUG: Really we should do this in the main loop not here...
-    Serial.flush();
+    RAPI_PORT.flush();
     comm_sent++;
     int ret = rapiSender.sendCmd(rapi.c_str());
 

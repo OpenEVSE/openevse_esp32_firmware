@@ -42,7 +42,13 @@
 
 #include "RapiSender.h"
 
-RapiSender rapiSender(&Serial);
+
+#ifdef ESP32
+HardwareSerial Serial1(1);
+HardwareSerial Serial2(2);
+#endif
+
+RapiSender rapiSender(&RAPI_PORT);
 
 unsigned long Timer1; // Timer for events once every 30 seconds
 unsigned long Timer3; // Timer for events once every 2 seconds
@@ -54,7 +60,7 @@ boolean rapi_read = 0; //flag to indicate first read of RAPI status
 // -------------------------------------------------------------------
 void setup() {
   delay(2000);
-  Serial.begin(115200);
+  RAPI_PORT.begin(115200);
   pinMode(0, INPUT);
 
   DEBUG_BEGIN(115200);

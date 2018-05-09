@@ -54,7 +54,7 @@ ohm_loop() {
         ohm_hour = "False";
         if (evse_sleep == 1) {
           evse_sleep = 0;
-          Serial.println("$FE*AF");
+          RAPI_PORT.println("$FE*AF");
         }
       }
       if (line.indexOf("True") > 0) {
@@ -62,7 +62,7 @@ ohm_loop() {
         ohm_hour = "True";
         if (evse_sleep == 0) {
           evse_sleep = 1;
-          Serial.println("$FS*BD");
+          RAPI_PORT.println("$FS*BD");
         }
       }
       DEBUG.println(line);
