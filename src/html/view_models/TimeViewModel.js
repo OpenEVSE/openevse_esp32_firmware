@@ -18,6 +18,9 @@ function TimeViewModel(openevse)
       if(openevse.isCharging()) {
         self.elapsedNow(new Date((openevse.status.elapsed() * 1000) + ((new Date()) - self.elapsedLocal())));
       }
+      /*if(openevse.isEcoModeAvailable())*/ {
+        self.divertUpdateNow(new Date((openevse.status.divert_update() * 1000) + ((new Date()) - self.divertUpdateLocal())));
+      }
     }, 1000);
   }
 
@@ -34,6 +37,8 @@ function TimeViewModel(openevse)
   self.hasRTC= ko.observable(true);
   self.elapsedNow = ko.observable(new Date(0));
   self.elapsedLocal = ko.observable(new Date());
+  self.divertUpdateNow = ko.observable(new Date(0));
+  self.divertUpdateLocal = ko.observable(new Date());
 
   self.date = ko.pureComputed({
     read: function () {
@@ -42,7 +47,7 @@ function TimeViewModel(openevse)
       }
 
       var dt = self.nowTimedate();
-      return (dt.getFullYear())+"-"+addZero(dt.getMonth())+"-"+addZero(dt.getDate());
+      return (dt.getFullYear())+"-"+addZero(dt.getMonth() + 1)+"-"+addZero(dt.getDate());
     },
     write: function (val) {
       self.evseTimedate(new Date(val));
@@ -82,6 +87,19 @@ function TimeViewModel(openevse)
   openevse.status.elapsed.subscribe(function (val) {
       self.elapsedNow(new Date(val * 1000));
       self.elapsedLocal(new Date());
+  });
+
+  self.divert_update = ko.pureComputed(function () {
+    if(null === self.nowTimedate()) {
+      return false;
+    }
+    var time = self.divertUpdateNow().getTime();
+    return Math.round(time / 1000);
+  });
+
+  openevse.status.divert_update.subscribe(function (val) {
+      self.divertUpdateNow(new Date(val * 1000));
+      self.divertUpdateLocal(new Date());
   });
 
   var timeUpdateTimeout = null;

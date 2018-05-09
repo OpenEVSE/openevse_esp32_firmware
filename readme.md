@@ -84,7 +84,7 @@ Live demo: https://openevse.openenergymonitor.org
 
 ## WiFi Setup
 
-On first boot, OpenEVSE should broadcast a WiFI sccess point (AP) `OpenEVSE_XXX`. Connect to this AP (default password: `openevse`) and the [captive portal](https://en.wikipedia.org/wiki/Captive_portal) should forward you to the log-in page. If this does not happen navigate to [http://openevse](http://openevse), [http://openevse.local](http://openevse.local) or [http://192.168.4.1](http://192.168.4.1)
+On first boot, OpenEVSE should broadcast a WiFI access point (AP) `OpenEVSE_XXX`. Connect to this AP (default password: `openevse`) and the [captive portal](https://en.wikipedia.org/wiki/Captive_portal) should forward you to the log-in page. If this does not happen navigate to [http://openevse](http://openevse), [http://openevse.local](http://openevse.local) or [http://192.168.4.1](http://192.168.4.1)
 
 *Note: You may need to disable mobile data if connecting via a mobile*
 

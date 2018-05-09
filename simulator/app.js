@@ -66,7 +66,11 @@ var status = {
   "gfcicount": 0,
   "nogndcount": 0,
   "stuckcount": 0,
-  "divertmode": 1
+  "divertmode": 1,
+  "solar": 0,
+  "grid_ie": 0,
+  "charge_rate": 0,
+  "divert_update": 0
 };
 
 var autoService = 1;
@@ -183,7 +187,7 @@ app.get("/r", function (req, res) {
     var date = new Date();
     var time = [
       date.getFullYear() % 100,
-      date.getMonth(),
+      date.getMonth() + 1,
       date.getDate(),
       date.getHours(),
       date.getMinutes(),

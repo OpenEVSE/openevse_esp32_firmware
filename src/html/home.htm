@@ -427,6 +427,14 @@
               </label>
               <span data-bind="css: {selected: ecoMode }">Eco (PV divert)</span><br/>
             </div>
+            <div data-bind="visible: isEcoModeAvailable">
+              <br>
+              <span data-bind="visible: haveSolar"><b>Solar:</b></span>
+              <span data-bind="visible: haveGridIe"><b>Grid Import/Export:</b></span>
+              <span data-bind="text: haveGridIe() ? status.grid_ie() : status.solar()"></span>W -
+              <span data-bind="text: formatUpdate(openevse.time.divert_update()), css: updateClass(openevse.time.divert_update())"></span>
+              <span data-bind="visible: ecoMode"> | <b>Charge rate:</b> <span data-bind="text: status.charge_rate"></span>A</span>
+            </div>
           </div>
 
           <!-- Sensor Values -->

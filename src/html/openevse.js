@@ -167,7 +167,7 @@ function OpenEVSE(endpoint)
     if(false !== date) {
       return self._request([
         "S1", date.getFullYear() - 2000,
-        date.getMonth(), date.getDate(),
+        date.getMonth() + 1, date.getDate(),
         date.getHours(), date.getMinutes(),
         date.getSeconds()], function() {
         self.time(callback);
@@ -189,7 +189,7 @@ function OpenEVSE(endpoint)
             callback(date,false);//this pattern occurs when no RTC is connected to openevse
           }
           else{
-            var date = new Date(2000+year, month, day, hour, minute, second);
+            var date = new Date(2000+year, month - 1, day, hour, minute, second);
             callback(date,true);
           }
         } else {
