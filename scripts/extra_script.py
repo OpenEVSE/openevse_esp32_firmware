@@ -4,7 +4,8 @@ import json
 from pprint import pprint
 import re
 import requests
-
+import subprocess
+import sys
 
 import css_html_js_minify.html_minifier as html_minifier
 #import css_html_js_minify.css_minifier as css_minifier
@@ -15,9 +16,8 @@ Import("env")
 # Install pre-requisites
 java_installed = (0 == system("java -version"))
 if java_installed:
-    import pip
-    pip.main(["install", "closure"])
-    pip.main(["install", "yuicompressor"])
+    subprocess.check_call([sys.executable, '-m', 'pip', 'install', 'closure'])
+    subprocess.check_call([sys.executable, '-m', 'pip', 'install', 'yuicompressor'])
 
 #
 # Dump build environment (for debug)
@@ -35,9 +35,8 @@ def html_minify(file, comments=False):
 
 def js_minify(file_name):
     if java_installed:
-        from subprocess import Popen, PIPE
-        p = Popen(['closure', '--js', file_name, '--compilation_level', 'SIMPLE'],
-                  stdout=PIPE, stderr=PIPE)
+        p = subprocess.Popen(['closure', '--js', file_name, '--compilation_level', 'SIMPLE'],
+                  stdout=subprocess.PIPE, stderr=subprocess.PIPE)
         (closure_stdout, closure_stderr) = p.communicate()
         if closure_stderr:
             print(closure_stderr)
@@ -64,9 +63,8 @@ def js_minify(file_name):
 
 def css_minify(file_name, wrap=False, comments=False, sort=True):
     if java_installed:
-        from subprocess import Popen, PIPE
-        p = Popen(['yuicompressor', file_name],
-                  stdout=PIPE, stderr=PIPE)
+        p = subprocess.Popen(['yuicompressor', file_name],
+                  stdout=subprocess.PIPE, stderr=subprocess.PIPE)
         (yuicompressor_stdout, yuicompressor_stderr) = p.communicate()
         if yuicompressor_stderr:
             print(yuicompressor_stderr)
