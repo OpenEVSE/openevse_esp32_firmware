@@ -61,6 +61,7 @@ Live demo: https://openevse.openenergymonitor.org
   * [System](#system)
     + [Authentication](#authentication)
     + [Firmware update](#firmware-update)
+    + [Hardware reset](#hardware-reset)
   * [Firmware Compile & Upload](#firmware-compile--upload)
     + [Using PlatformIO](#using-platformio)
       - [a. Install PlatformIO command line](#a-install-platformio-command-line)
@@ -88,7 +89,7 @@ On first boot, OpenEVSE should broadcast a WiFI access point (AP) `OpenEVSE_XXX`
 
 *Note: You may need to disable mobile data if connecting via a mobile*
 
-*Note: Use of Internet Explorer 11 or earlier is not recommended, some issues have been reported. Please use Edge, Chrome, Safari or iOS/Android browser instead.*
+*Note: Use of Internet Explorer 11 or earlier is not recommended*
 
 ![Wifi connect](docs/wifi-connect.png) ![Wifi setup](docs/wifi-scan.png)
 
@@ -101,7 +102,7 @@ On first boot, OpenEVSE should broadcast a WiFI access point (AP) `OpenEVSE_XXX`
 
 **If connection / re-connection fails (e.g. network cannot be found or password is incorrect) the OpenEVSE will automatically revert back to WiFi access point (AP) mode after a short while to allow a new network to be re-configured if required. Re-connection to existing network will be attempted every 5 minutes.**
 
-*Holding the `boot` button on the ESP8266 module at startup (for about 10s) will force WiFi access point mode. This is useful when trying to connect the unit to a new WiFi network.*
+*Holding the `boot / GPIO0` button on the ESP8266 module for about 5s will force WiFi access point mode. This is useful when trying to connect the unit to a new WiFi network. If the unit cannot connect t0 a WiFi network it will resturn to AP more before retrying to connect*
 
 ***
 
@@ -163,7 +164,7 @@ To enable 'Eco' mode charging:
 - The OpenEVSE does not adjust the current itself but rather request that the EV adjusts its charging current by varying the duty cycle of the pilot signal, see [theory of operation](https://openev.freshdesk.com/support/solutions/articles/6000052070-theory-of-operation) and [Basics of SAE J1772](https://openev.freshdesk.com/support/solutions/articles/6000052074-basics-of-sae-j1772).
 - Charging mode can be viewed and set via MQTT: `{base-topic}/divertmode/set` (1 = normal, 2 = eco).
 
-\* *OpenEVSE contoller firmware [V4.8.0](https://github.com/OpenEVSE/open_evse/releases/tag/v4.8.0) has a bug which restricts the lowest charging current to 10A. The J1772 protcol can go down to 6A. This will be fixed with a future software update.*
+\* *OpenEVSE controller firmware [V4.8.0](https://github.com/OpenEVSE/open_evse/releases/tag/v4.8.0) has a bug which restricts the lowest charging current to 10A. The J1772 protocol can go down to 6A. This ~~will~~ has be fixed with a firmware update. See [OpenEnergyMonitor OpenEVSE FW releases](https://github.com/openenergymonitor/open_evse/releases/). A ISP programmer is required to update openevse controler FW.*
 
 ***
 
@@ -279,6 +280,11 @@ Admin HTTP Authentication (highly recommended) can be enabled by saving admin co
 
 Pre-compiled .bin's can be uploaded via the web interface, see [OpenEVSE Wifi releases](https://github.com/OpenEVSE/ESP8266_WiFi_v2.x/releases) for latest updates.
 
+### Hardware reset
+
+A Hardware reset can be made (all wifi and services config lost) by pressing and holding GPIO0 hardware button (on the Huzzah WiFi module) for 10s.
+
+Note: Holding the GPIO0 button for 5s will but the WiFi unit into AP (access point) mode to allow the WiFi network to be changed without loosing all the service config
 
 ***
 
