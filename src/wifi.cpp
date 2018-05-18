@@ -53,8 +53,12 @@ unsigned long wifiLedTimeOut = millis();
 #define WIFI_BUTTON 0
 #endif
 
-#ifndef WIFI_BUTTON_TIMEOUT
-#define WIFI_BUTTON_TIMEOUT 5 * 1000
+#ifndef WIFI_BUTTON_AP_TIMEOUT
+#define WIFI_BUTTON_AP_TIMEOUT              (5 * 1000)
+#endif
+
+#ifndef WIFI_BUTTON_FACTORY_RESET_TIMEOUT
+#define WIFI_BUTTON_FACTORY_RESET_TIMEOUT   (10 * 1000)
 #endif
 
 #ifndef WIFI_CLIENT_RETRY_TIMEOUT
@@ -63,6 +67,7 @@ unsigned long wifiLedTimeOut = millis();
 
 int wifiButtonState = HIGH;
 unsigned long wifiButtonTimeOut = millis();
+bool apMessage = false;
 
 // -------------------------------------------------------------------
 // Start Access Point
@@ -237,7 +242,8 @@ wifi_setup() {
 }
 
 void
-wifi_loop() {
+wifi_loop() 
+{
   Profile_Start(wifi_loop);
 
   bool isClient = wifi_mode_is_sta();
@@ -257,24 +263,60 @@ wifi_loop() {
   }
 #endif
 
+#if defined(WIFI_LED) && WIFI_BUTTON == WIFI_LED
+  digitalWrite(WIFI_BUTTON, HIGH);
+  pinMode(WIFI_BUTTON, INPUT_PULLUP);
+#endif
+
+  // Pressing the boot button for 5 seconds will turn on AP mode, 10 seconds will factory reset
+  int button = digitalRead(WIFI_BUTTON);
+
+#if defined(WIFI_LED) && WIFI_BUTTON == WIFI_LED
+  pinMode(WIFI_BUTTON, OUTPUT);
+  digitalWrite(WIFI_LED, wifiLedState);
+#endif
+
+  //DBUGF("%lu %d %d", millis() - wifiButtonTimeOut, button, wifiButtonState);
+  if(wifiButtonState != button)
+  {
+    wifiButtonState = button;
+    if(LOW == button) {
+      DBUGF("Button pressed");
+      wifiButtonTimeOut = millis();
+      apMessage = false;
+    } else {
+      DBUGF("Button released");
+      if(millis() > wifiButtonTimeOut + WIFI_BUTTON_AP_TIMEOUT) {
+        startAP();
+      }
+    }
+  }
+
+  if(LOW == wifiButtonState && millis() > wifiButtonTimeOut + WIFI_BUTTON_FACTORY_RESET_TIMEOUT)
+  {
+    lcd_display(F("Factory Reset"), 0, 0, 0, LCD_CLEAR_LINE);
+    lcd_display(F(""), 0, 1, 10 * 1000, LCD_CLEAR_LINE);
+    lcd_loop();
+
+    delay(1000);
+
+    config_reset();
+    ESP.eraseConfig();
+
+    delay(50);
+    ESP.reset();
+  }
+  else if(false == apMessage && LOW == wifiButtonState && millis() > wifiButtonTimeOut + WIFI_BUTTON_AP_TIMEOUT) 
+  {
+    lcd_display(F("Access Point"), 0, 0, 0, LCD_CLEAR_LINE);
+    lcd_display(F(""), 0, 1, 10 * 1000, LCD_CLEAR_LINE);
+    lcd_loop();
+    apMessage = true;
+  }
+
   // Manage state while connecting
   if(isClientOnly && !WiFi.isConnected())
   {
-#if !defined(WIFI_LED) || WIFI_BUTTON != WIFI_LED
-    // Pressing the boot button for 5 seconds while connecting will turn on AP mode
-    int button = digitalRead(WIFI_BUTTON);
-    if(wifiButtonState != button) {
-      wifiButtonState = button;
-      if(LOW == button) {
-        wifiButtonTimeOut = millis() + WIFI_BUTTON_TIMEOUT;
-      }
-    }
-
-    if(LOW == wifiButtonState && millis() > wifiButtonTimeOut) {
-      startAP();
-    }
-#endif
-
     // If we have failed to connect turn on the AP
     if(client_disconnects > 2) {
       startAP();

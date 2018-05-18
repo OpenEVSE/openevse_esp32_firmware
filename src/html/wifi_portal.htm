@@ -56,7 +56,7 @@
         <p data-bind="text: config.ssid"></p>
         <p>
           <b>Passkey:</b><br>
-          <input type="password" style="width:180px" autocapitalize="none" autocapitalize="none" data-bind="textInput: config.pass">
+          <input type="text" style="width:180px" autocapitalize="none" autocapitalize="none" data-bind="textInput: config.pass">
           <button data-bind="click: wifi.saveNetwork, text: (wifi.saveNetworkFetching() ? 'Saving' : (wifi.saveNetworkSuccess() ? 'Saved' : 'Connect')), disable: wifi.saveNetworkFetching">Connect</button>
         </p>
         <p>Connecting to a local WiFi network is not essential. OpenEVSE can be configured and controlled while in AP mode:</p>

@@ -110,6 +110,8 @@ bool requestPreProcess(AsyncWebServerRequest *request, AsyncResponseStream *&res
     response->addHeader(F("Access-Control-Allow-Origin"), F("*"));
   }
 
+  response->addHeader(F("Cache-Control"), F("no-cache, private, no-store, must-revalidate, max-stale=0, post-check=0, pre-check=0"));
+
   return true;
 }
 
