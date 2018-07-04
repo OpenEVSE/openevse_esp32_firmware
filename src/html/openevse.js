@@ -681,6 +681,16 @@ function OpenEVSE(endpoint)
     return request;
   };
 
+  /**
+   *
+   */
+  self.press_button = function(callback) {
+    var request = self._request("F1", function() {
+      callback();
+    });
+    return request;
+  };
+
   self.setEndpoint = function (endpoint) {
     self._endpoint = endpoint;
   };
