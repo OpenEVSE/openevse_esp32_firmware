@@ -260,11 +260,11 @@ There is also an [OpenEVSE RAPI command python library](https://github.com/tiram
 **USA California only**
 [Join here](https://ohm.co/openevse)
 
-**How does it Work**
-<iframe src="https://player.vimeo.com/video/119419875" width="640" height="360" frameborder="0" allowfullscreen></iframe>
+**Video - How does it Work**
+https://player.vimeo.com/video/119419875
 
-Sign Up
-Enter Ohm Key
+-Sign Up
+-Enter Ohm Key
 
 Ohm Key can be obtained by logging in to OhmConnect, enter Settings and locate the link in "Open Source Projects"
 Example: https://login.ohmconnect.com/verify-ohm-hour/OpnEoVse
