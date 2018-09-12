@@ -431,8 +431,39 @@ function OpenEvseViewModel(baseEndpoint, statusViewModel) {
   };
 
   // support for changing status
-  self.setStatus = function (action) {
+  self.setStatus = function (action)
+  {
+    var currentState = self.status.state();
+    if(("disabled" === action && 255 === currentState) ||
+       ("sleep" === action && 254 === currentState) ||
+       ("enable" === action && currentState < 254))
+    {
+      // nothing to do
+      return;
+    }
+
     self.updatingStatus(true);
+    if(self.delayTimerEnabled() && ("sleep" === action || "enable" === action))
+    {
+      // If the delay Timer is enabled we have to do a bit of hackery to work around a
+      // firmware issue
+      //
+      // When in timer mode the RAPI cpmmands to change state might not work, but
+      // Emulating a button press does toggle between sleep/enable
+
+      self.openevse.press_button(function () {
+        action = false;
+      }).always(function () {
+        self.openevse.status(function (state) {
+          self.status.state(state);
+        }, action).always(function() {
+          self.updatingStatus(false);
+        });
+      });
+
+      return;
+    }
+
     self.openevse.status(function (state) {
       self.status.state(state);
     }, action).always(function() {

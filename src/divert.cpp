@@ -193,9 +193,30 @@ void divert_update_state()
       }
 
       // If charge rate > min current and EVSE is sleeping then start charging
-      if (state == OPENEVSE_STATE_SLEEPING){
+      if (state == OPENEVSE_STATE_SLEEPING)
+      {
         DBUGLN(F("Wake up EVSE"));
-        if(0 == rapiSender.sendCmd(F("$FE"))) {
+        bool chargeStarted = false;
+
+        // Check if the timer is enabled, we need to do a bit of hackery if it is
+        if(0 == rapiSender.sendCmd("$GD"))
+        {
+          if(rapiSender.getTokenCnt() >= 5 &&
+             (0 != String(rapiSender.getToken(1)).toInt() ||
+              0 != String(rapiSender.getToken(2)).toInt() ||
+              0 != String(rapiSender.getToken(3)).toInt() ||
+              0 != String(rapiSender.getToken(4)).toInt()))
+          {
+            // Timer is enabled so we need to emulate a button press to work around
+            // an issue with $FE not working
+            if(false == chargeStarted && 0 == rapiSender.sendCmd(F("$F1"))) {
+              DBUGLN(F("Starting charge with button press"));
+              chargeStarted = true;
+            }
+          }
+        }
+
+        if(false == chargeStarted && 0 == rapiSender.sendCmd(F("$FE"))) {
           DBUGLN(F("Starting charge"));
         }
       }
