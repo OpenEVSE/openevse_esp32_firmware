@@ -93,7 +93,7 @@ create_rapi_json() {
   if (volt > 0) {
     data += "volt:" + String(volt) + ",";
   }
-  data += "wh:" + String(wattsec) + ",";
+  data += "wh:" + String(watthour_total) + ",";
   data += "temp1:" + String(temp1) + ",";
   data += "temp2:" + String(temp2) + ",";
   data += "temp3:" + String(temp3) + ",";
