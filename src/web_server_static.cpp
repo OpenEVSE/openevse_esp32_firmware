@@ -11,7 +11,7 @@
 #include "wifi.h"
 
 // Static files
-#include "web_server_static_files.h"
+#include "web_static/web_server_static_files.h"
 
 #define ARRAY_LENGTH(x) (sizeof(x)/sizeof((x)[0]))
 
