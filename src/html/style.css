@@ -195,13 +195,16 @@ select {
   width: 280px;
   padding:5px;
 }
-
-input:valid{
+input:optional{
+  border-color:#ddd;
+}
+input:required:valid{
   border-color:#249C4A
 }
 input:invalid{
   border-color:#ff0000
 }
+
 
 input[type="time"] {
   width: 110px;
