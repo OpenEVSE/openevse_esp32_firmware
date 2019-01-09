@@ -18,10 +18,10 @@
 #define IS_ALIGNED(x)   (0 == ((uint32_t)(x) & 0x3))
 
 // Pages
-static const char _HOME_PAGE[] PROGMEM = "/home.htm";
+static const char _HOME_PAGE[] PROGMEM = "/home.html";
 #define HOME_PAGE FPSTR(_HOME_PAGE)
 
-static const char _WIFI_PAGE[] PROGMEM = "/wifi_portal.htm";
+static const char _WIFI_PAGE[] PROGMEM = "/wifi_portal.html";
 #define WIFI_PAGE FPSTR(_WIFI_PAGE)
 
 StaticFileWebHandler::StaticFileWebHandler()
