@@ -39,7 +39,7 @@ const char _CONTENT_TYPE_JS[] PROGMEM = "application/javascript";
 const char _CONTENT_TYPE_JPEG[] PROGMEM = "image/jpeg";
 const char _CONTENT_TYPE_PNG[] PROGMEM = "image/png";
 
-static const char _DUMMY_PASSWORD[] PROGMEM = "___DUMMY_PASSWORD___";
+static const char _DUMMY_PASSWORD[] PROGMEM = "_DUMMY_PASSWORD";
 #define DUMMY_PASSWORD FPSTR(_DUMMY_PASSWORD)
 
 // Get running firmware version from build tag environment variable
