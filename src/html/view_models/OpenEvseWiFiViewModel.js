@@ -269,7 +269,7 @@ function OpenEvseWiFiViewModel(baseHost, basePort, baseProtocol)
 
     if (emoncms.enable && (emoncms.server === "" || emoncms.node === "")) {
       alert("Please enter Emoncms server and node");
-    } else if (emoncms.enable && emoncms.apikey.length !== 32 && emoncms.apikey !== "_DUMMY_PASSWORD") {
+    } else if (emoncms.enable && emoncms.apikey.length !== 32 && emoncms.apikey !== "___DUMMY_PASSWORD___") {
       alert("Please enter valid Emoncms apikey");
     } else if (emoncms.enable && emoncms.fingerprint !== "" && emoncms.fingerprint.length !== 59) {
       alert("Please enter valid SSL SHA-1 fingerprint");
