@@ -44,8 +44,8 @@ uint32_t flags;
 #define EEPROM_MQTT_SOLAR_SIZE        30
 #define EEPROM_MQTT_GRID_IE_SIZE      30
 #define EEPROM_EMON_FINGERPRINT_SIZE  60
-#define EEPROM_WWW_USER_SIZE          16
-#define EEPROM_WWW_PASS_SIZE          16
+#define EEPROM_WWW_USER_SIZE          15
+#define EEPROM_WWW_PASS_SIZE          15
 #define EEPROM_OHM_KEY_SIZE           10
 #define EEPROM_FLAGS_SIZE             4
 #define EEPROM_SIZE                   1024
