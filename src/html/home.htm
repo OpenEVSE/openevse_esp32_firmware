@@ -107,16 +107,15 @@
 
           <div class="box380 right">
             <h2>Administration</h2>
-            <input type="text" autocapitalize="none" data-bind="textInput: config.www_username">
             <p>
               <b>Username:</b><br>
               <input type="text" autocapitalize="none" data-bind="textInput: config.www_username" pattern=".{15}" title="The field requires 15 characters" maxlength="15" required="">
-              <span class="small-text validMessage">The field requires 15 characters</span>
+              <span class="small-text validMessage">15 characters max</span>
             </p>
             <p>
               <b>Password:</b><br>
               <input type="text" autocapitalize="none" data-bind="textInput: config.www_password" pattern=".{15}" title="The field requires 15 characters" maxlength="15" required="" >
-              <span class="small-text validMessage">The field requires 15 characters</span><br>
+              <span class="small-text validMessage">15 characters max</span><br>
               <span class="small-text">Web interface HTTP authentication.</span><br><br>
               <button data-bind="click: saveAdmin, text: (saveAdminFetching() ? 'Saving' : (saveAdminSuccess() ? 'Saved' : 'Save')), disable: saveAdminFetching">Save</button>
             </p>
