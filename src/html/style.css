@@ -195,6 +195,28 @@ select {
   width: 280px;
   padding:5px;
 }
+input:optional{
+  border-color:#ddd;
+}
+input:required{
+  border-color: #19a6ff;
+}
+
+input:required:valid{
+  border-color:#249C4A
+}
+
+input:required:valid + .validMessage{
+  display:none;
+}
+
+input:required + .validMessage{
+  display:block;
+  margin:5px 0;
+}
+
+
+
 
 input[type="time"] {
   width: 110px;
