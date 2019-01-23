@@ -23,7 +23,7 @@ If a new version of nodejs is not available for your distribution you may need t
 ```
 cd simulator
 npm install
-nodejs app.js --port 3000
+node app.js --port 3000
 ```
 
 Then point your browser at http://localhost:3000/
