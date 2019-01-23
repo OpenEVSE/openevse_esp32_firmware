@@ -1,4 +1,4 @@
-from os.path import join, isfile, basename
+from os.path import join, isfile, isdir, basename
 from os import listdir, system
 import json
 from pprint import pprint
@@ -68,8 +68,8 @@ def make_static(env, target, source):
     output = ""
 
     out_files = []
-    for file in listdir(data_src):
-        if isfile(join(data_src, file)):
+    for file in listdir(dist_dir):
+        if isfile(join(dist_dir, file)):
           out_files.append(file)
 
     # Sort files to make sure the order is constant
@@ -121,6 +121,24 @@ def process_html_app(source, dest, env):
 #
 # Generate Web app resources
 #
-headers_src = join(env.subst("$PROJECTSRC_DIR"), "web_static")
-data_src = join(env.subst("$PROJECT_DIR"), "gui", "dist")
-process_html_app(data_src, headers_src, env)
+if npm_installed:
+    headers_src = join(env.subst("$PROJECTSRC_DIR"), "web_static")
+
+    gui_dir = join(env.subst("$PROJECT_DIR"), "gui")
+    dist_dir = join(gui_dir, "dist")
+    node_modules = join(gui_dir, "node_modules")
+
+    # Check the GUI dir has been checked out
+    if(isfile(join(gui_dir, "package.json"))):
+        # Check to see if the Node modules have been downloaded
+        if(isdir(node_modules)):
+            if(isdir(dist_dir)):
+                process_html_app(dist_dir, headers_src, env)
+            else:
+                print("Warning: GUI not built, run 'cd %s; npm run build'" % gui_dir)
+        else:
+            print("Warning: GUI dependencies not found, run 'cd %s; npm install'" % gui_dir)
+    else:
+        print("Warning: GUI files not found, run 'git submodule update --init'")
+else:
+  print("Warning: Node.JS and NPM required to update the UI")
