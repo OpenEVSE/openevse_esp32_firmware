@@ -634,6 +634,7 @@ handleRst(AsyncWebServerRequest *request) {
   systemRebootTime = millis() + 1000;
 }
 
+
 // -------------------------------------------------------------------
 // Restart (Reboot)
 // url: /restart
@@ -650,6 +651,18 @@ handleRestart(AsyncWebServerRequest *request) {
   request->send(response);
 
   systemRestartTime = millis() + 1000;
+}
+
+
+// -------------------------------------------------------------------
+// Emoncms describe end point,
+// Allows local device discover using https://github.com/emoncms/find
+// url: //emoncms/describe
+// -------------------------------------------------------------------
+void handleDescribe(AsyncWebServerRequest *request) {
+  AsyncWebServerResponse *response = request->beginResponse(200, CONTENT_TYPE_TEXT, "openevse");
+  response->addHeader("Access-Control-Allow-Origin", "*");
+  request->send(response);
 }
 
 // -------------------------------------------------------------------
@@ -922,16 +935,14 @@ web_server_setup() {
   server.on("/savemqtt", handleSaveMqtt);
   server.on("/saveadmin", handleSaveAdmin);
   server.on("/saveohmkey", handleSaveOhmkey);
-
   server.on("/reset", handleRst);
   server.on("/restart", handleRestart);
-
   server.on("/rapi", handleRapi);
   server.on("/r", handleRapi);
-
   server.on("/scan", handleScan);
   server.on("/apoff", handleAPOff);
   server.on("/divertmode", handleDivertMode);
+  server.on("/emoncms/describe", handleDescribe);
 
   // Simple Firmware Update Form
   server.on("/update", HTTP_GET, handleUpdateGet);
