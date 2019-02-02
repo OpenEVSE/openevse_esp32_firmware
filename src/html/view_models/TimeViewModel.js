@@ -76,11 +76,11 @@ function TimeViewModel(openevse)
       return "0:00:00";
     }
     var time = self.elapsedNow().getTime();
-    time = Math.round(time / 1000);
+    time = Math.floor(time / 1000);
     var seconds = time % 60;
-    time = Math.round(time / 60);
+    time = Math.floor(time / 60);
     var minutes = time % 60;
-    var hours = Math.round(time / 60);
+    var hours = Math.floor(time / 60);
     return hours+":"+addZero(minutes)+":"+addZero(seconds);
   });
 
