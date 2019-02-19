@@ -32,6 +32,7 @@
 #include "wifi.h"
 #include "web_server.h"
 #include "ohm.h"
+#include "openevse.h"
 #include "input.h"
 #include "emoncms.h"
 #include "mqtt.h"
@@ -65,10 +66,6 @@ void setup() {
 
   DEBUG.printf("Free: %d\n", ESP.getFreeHeap());
 
-  lcd_display(F("OpenEVSE WiFI"), 0, 0, 0, LCD_CLEAR_LINE);
-  lcd_display(currentfirmware, 0, 1, 5 * 1000, LCD_CLEAR_LINE);
-  lcd_loop();
-
   // Read saved settings from the config
   config_load_settings();
   DBUGF("After config_load_settings: %d", ESP.getFreeHeap());
@@ -88,20 +85,6 @@ void setup() {
 
   rapiSender.setOnEvent(on_rapi_event);
   rapiSender.enableSequenceId(0);
-
-  // Check state the OpenEVSE is in.
-  if (0 == rapiSender.sendCmd("$GS"))
-  {
-    if(rapiSender.getTokenCnt() >= 3)
-    {
-      const char *val = rapiSender.getToken(1);
-      DBUGVAR(val);
-      state = strtol(val, NULL, 10);
-      DBUGVAR(state);
-    }
-  } else {
-    DBUGLN("OpenEVSE not responding or not connected");
-  }
 } // end setup
 
 // -------------------------------------------------------------------
@@ -120,19 +103,49 @@ loop() {
   rapiSender.loop();
   divert_current_loop();
 
-  // Gives OpenEVSE time to finish self test on cold start
-  if ( (millis() > 5000) && (rapi_read==0) ) {
-    DBUGLN("first read RAPI values");
-    handleRapiRead(); //Read all RAPI values
-    rapi_read=1;
+  if(OPENEVSE_STATE_STARTING != state &&
+     OPENEVSE_STATE_INVALID != state)
+  {
+    // Read initial state from OpenEVSE
+    if (rapi_read == 0)
+    {
+      lcd_display(F("OpenEVSE WiFI"), 0, 0, 0, LCD_CLEAR_LINE);
+      lcd_display(currentfirmware, 0, 1, 5 * 1000, LCD_CLEAR_LINE);
+      lcd_loop();
+
+      DBUGLN("first read RAPI values");
+      handleRapiRead(); //Read all RAPI values
+      rapi_read=1;
+    }
+
+    // -------------------------------------------------------------------
+    // Do these things once every 2s
+    // -------------------------------------------------------------------
+    if ((millis() - Timer3) >= 2000) {
+      DEBUG.printf("Free: %d\n", ESP.getFreeHeap());
+      update_rapi_values();
+      Timer3 = millis();
+    }
   }
-  // -------------------------------------------------------------------
-  // Do these things once every 2s
-  // -------------------------------------------------------------------
-  if ((millis() - Timer3) >= 2000) {
-    DEBUG.printf("Free: %d\n", ESP.getFreeHeap());
-    update_rapi_values();
-    Timer3 = millis();
+  else
+  {
+    // Check if we can talk to OpenEVSE
+    if ((millis() - Timer3) >= 1000)
+    {
+      // Check state the OpenEVSE is in.
+      if (0 == rapiSender.sendCmd("$GS"))
+      {
+        if(rapiSender.getTokenCnt() >= 3)
+        {
+          const char *val = rapiSender.getToken(1);
+          DBUGVAR(val);
+          state = strtol(val, NULL, 10);
+          DBUGVAR(state);
+        }
+      } else {
+        DBUGLN("OpenEVSE not responding or not connected");
+      }
+    }
   }
 
   if(wifi_client_connected())
