@@ -209,7 +209,7 @@ config_load_settings() {
   EEPROM_read_string(EEPROM_MQTT_SOLAR_START, EEPROM_MQTT_SOLAR_SIZE,
                      mqtt_solar);
   EEPROM_read_string(EEPROM_MQTT_GRID_IE_START, EEPROM_MQTT_GRID_IE_SIZE,
-                     mqtt_grid_ie, "emon/emonpi/power");
+                     mqtt_grid_ie, "emon/emonpi/power1");
 
   // Web server credentials
   EEPROM_read_string(EEPROM_WWW_USER_START, EEPROM_WWW_USER_SIZE,
