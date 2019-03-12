@@ -1,5 +1,7 @@
 # OpenEVSE WiFi Simulator
 
+*This is depricated in favour of the [Node.JS server](https://github.com/jeremypoulter/openevse_wifi_server)*
+
 Node web server app to simulate an OpenEVSE WiFi gateway, usually running on ESP8266 communicating with openevse controller via serial RAPI API
 
 *This simulator is for demo/testing, to get a feel for the interface. Not all features have been implemented fully.*

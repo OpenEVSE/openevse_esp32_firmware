@@ -332,6 +332,29 @@ Standalone built on GitHub Atom IDE, or use PlatformIO Atom IDE plug-in if you a
 
 *Note: uploading SPIFFS is no longer required since web resources are [now embedded in the firmware](https://github.com/OpenEVSE/ESP8266_WiFi_v2.x/pull/87)
 
+### Building the GUI
+
+The GUI files are minified and compiled into the firmware using a combination of Webpack and a custom build script. You will also need Node.JS and NPM installed.
+
+In addition the GUI is now maintained in a separate repository and included as a Git submodule. If the `gui` directory is empty use the following to retrieve the GUI source and fetch the dependencies.
+
+```shell
+git submodule update --init
+cd gui
+npm install
+```
+
+To 'build' the GUI use the following:
+
+```shell
+cd gui
+npm run build
+```
+
+You can then just compile and upload as above.
+
+For more details see the [GUI documentation](gui/readme.md)
+
 ***
 
 ### Using Arduino IDE
