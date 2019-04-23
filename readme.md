@@ -292,6 +292,15 @@ Note: Holding the GPIO0 button for 5s will but the WiFi unit into AP (access poi
 
 ***
 
+## Upload pre-compiled firmware 
+
+- Download pre-compiled FW from the [OpenEVSE Wifi releases](https://github.com/OpenEVSE/ESP8266_WiFi_v2.x/releases) page
+- Flash using esptool:
+
+`esptool.py write_flash 0x000000 firmware.bin`
+
+Or use esptool GUI (Pyflasher) avilable on windows/mac https://github.com/marcelstoer/nodemcu-pyflasher
+
 ## Firmware Compile & Upload
 
 **The ESP should be shipped with latest firmware pre-installed, firmware can be updated via the HTTP web interface.**
@@ -302,7 +311,8 @@ If required firmware can also be uploaded via serial using USB to UART cable.
 
 The code for the ESP8266 can be compiled and uploaded using PlatformIO or Arduino IDE. We recommend PlatformIO for its ease of use.
 
-### Using PlatformIO
+
+### Compile & Upload Using PlatformIO
 
 For more detailed ESP8266 Arduino core specific PlatfomIO notes see: https://github.com/esp8266/Arduino#using-platformio
 
@@ -357,7 +367,7 @@ For more details see the [GUI documentation](gui/readme.md)
 
 ***
 
-### Using Arduino IDE
+### Compile & Upload Using Arduino IDE
 
 #### 1. Install ESP for Arduino with Boards Manager
 
@@ -383,13 +393,11 @@ Starting with 1.6.4, Arduino allows installation of third-party platform package
 
 #### Uploading issues
 
-##### Erase Flash
-
-If you are experiencing ESP hanging in a reboot loop after upload it may be that the ESP flash has remnants of previous code (which may have the used the ESP memory in a different way). The ESP flash can be fully erased using [esptool](https://github.com/themadinventor/esptool). With the unit in bootloader mode run:
+- Double check device is in bootloder mode
+- Try reducing the upload ESP baudrate
+- Erase flash: If you are experiencing ESP hanging in a reboot loop after upload it may be that the ESP flash has remnants of previous code (which may have the used the ESP memory in a different way). The ESP flash can be fully erased using [esptool](https://github.com/themadinventor/esptool). With the unit in bootloader mode run:
 
 `$ esptool.py erase_flash`
-
-*`sudo` maybe be required*
 
 Output:
 
@@ -401,7 +409,7 @@ Erasing flash (this may take a while)...
 Erase took 8.0 seconds
 ```
 
-##### Fully erase ESP
+**Fully erase ESP**
 
 To fully erase all memory locations on an ESP-12 (4Mb) we need to upload a blank file to each memory location
 
