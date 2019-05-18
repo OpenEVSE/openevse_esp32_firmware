@@ -135,7 +135,7 @@ function checksum(msg)
 //
 
 // Setup the static content
-app.use(express.static(path.join(__dirname, "../src/data"), { index: "home.htm" }));
+app.use(express.static(path.join(__dirname, "../gui/dist"), { index: "home.html" }));
 
 // Setup the API endpoints
 app.use(bodyParser.json());

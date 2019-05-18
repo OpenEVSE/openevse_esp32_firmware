@@ -61,6 +61,7 @@ Live demo: https://openevse.openenergymonitor.org
   * [System](#system)
     + [Authentication](#authentication)
     + [Firmware update](#firmware-update)
+    + [Hardware reset](#hardware-reset)
   * [Firmware Compile & Upload](#firmware-compile--upload)
     + [Using PlatformIO](#using-platformio)
       - [a. Install PlatformIO command line](#a-install-platformio-command-line)
@@ -88,7 +89,7 @@ On first boot, OpenEVSE should broadcast a WiFI access point (AP) `OpenEVSE_XXX`
 
 *Note: You may need to disable mobile data if connecting via a mobile*
 
-*Note: Use of Internet Explorer 11 or earlier is not recommended, some issues have been reported. Please use Edge, Chrome, Safari or iOS/Android browser instead.*
+*Note: Use of Internet Explorer 11 or earlier is not recommended*
 
 ![Wifi connect](docs/wifi-connect.png) ![Wifi setup](docs/wifi-scan.png)
 
@@ -101,7 +102,7 @@ On first boot, OpenEVSE should broadcast a WiFI access point (AP) `OpenEVSE_XXX`
 
 **If connection / re-connection fails (e.g. network cannot be found or password is incorrect) the OpenEVSE will automatically revert back to WiFi access point (AP) mode after a short while to allow a new network to be re-configured if required. Re-connection to existing network will be attempted every 5 minutes.**
 
-*Holding the `boot` button on the ESP8266 module at startup (for about 10s) will force WiFi access point mode. This is useful when trying to connect the unit to a new WiFi network.*
+*Holding the `boot / GPIO0` button on the ESP8266 module for about 5s will force WiFi access point mode. This is useful when trying to connect the unit to a new WiFi network. If the unit cannot connect t0 a WiFi network it will resturn to AP more before retrying to connect*
 
 ***
 
@@ -163,7 +164,7 @@ To enable 'Eco' mode charging:
 - The OpenEVSE does not adjust the current itself but rather request that the EV adjusts its charging current by varying the duty cycle of the pilot signal, see [theory of operation](https://openev.freshdesk.com/support/solutions/articles/6000052070-theory-of-operation) and [Basics of SAE J1772](https://openev.freshdesk.com/support/solutions/articles/6000052074-basics-of-sae-j1772).
 - Charging mode can be viewed and set via MQTT: `{base-topic}/divertmode/set` (1 = normal, 2 = eco).
 
-\* *OpenEVSE contoller firmware [V4.8.0](https://github.com/OpenEVSE/open_evse/releases/tag/v4.8.0) has a bug which restricts the lowest charging current to 10A. The J1772 protcol can go down to 6A. This will be fixed with a future software update.*
+\* *OpenEVSE controller firmware [V4.8.0](https://github.com/OpenEVSE/open_evse/releases/tag/v4.8.0) has a bug which restricts the lowest charging current to 10A. The J1772 protocol can go down to 6A. This ~~will~~ has be fixed with a firmware update. See [OpenEnergyMonitor OpenEVSE FW releases](https://github.com/openenergymonitor/open_evse/releases/). A ISP programmer is required to update openevse controler FW.*
 
 ***
 
@@ -257,13 +258,17 @@ There is also an [OpenEVSE RAPI command python library](https://github.com/tiram
 ### OhmConnect
 
 **USA California only**
+[Join here](https://ohm.co/openevse)
 
-*NOT CURRENTLY ACTIVE*
+**Video - How does it Work**
+https://player.vimeo.com/video/119419875
 
-~~Uses [OhmConnect API](https://www.ohmconnect.com/) to pause charging during a 'ohm-hour' (period of high grid demand)~~
+-Sign Up
+-Enter Ohm Key
 
-***
-
+Ohm Key can be obtained by logging in to OhmConnect, enter Settings and locate the link in "Open Source Projects"
+Example: https://login.ohmconnect.com/verify-ohm-hour/OpnEoVse
+Key: OpnEoVse
 ## System
 
 ![system](docs/system.png)
@@ -279,8 +284,22 @@ Admin HTTP Authentication (highly recommended) can be enabled by saving admin co
 
 Pre-compiled .bin's can be uploaded via the web interface, see [OpenEVSE Wifi releases](https://github.com/OpenEVSE/ESP8266_WiFi_v2.x/releases) for latest updates.
 
+### Hardware reset
+
+A Hardware reset can be made (all wifi and services config lost) by pressing and holding GPIO0 hardware button (on the Huzzah WiFi module) for 10s.
+
+Note: Holding the GPIO0 button for 5s will but the WiFi unit into AP (access point) mode to allow the WiFi network to be changed without loosing all the service config
 
 ***
+
+## Upload pre-compiled firmware 
+
+- Download pre-compiled FW from the [OpenEVSE Wifi releases](https://github.com/OpenEVSE/ESP8266_WiFi_v2.x/releases) page
+- Flash using esptool:
+
+`esptool.py write_flash 0x000000 firmware.bin`
+
+Or use esptool GUI (Pyflasher) avilable on windows/mac https://github.com/marcelstoer/nodemcu-pyflasher
 
 ## Firmware Compile & Upload
 
@@ -292,7 +311,8 @@ If required firmware can also be uploaded via serial using USB to UART cable.
 
 The code for the ESP8266 can be compiled and uploaded using PlatformIO or Arduino IDE. We recommend PlatformIO for its ease of use.
 
-### Using PlatformIO
+
+### Compile & Upload Using PlatformIO
 
 For more detailed ESP8266 Arduino core specific PlatfomIO notes see: https://github.com/esp8266/Arduino#using-platformio
 
@@ -322,9 +342,32 @@ Standalone built on GitHub Atom IDE, or use PlatformIO Atom IDE plug-in if you a
 
 *Note: uploading SPIFFS is no longer required since web resources are [now embedded in the firmware](https://github.com/OpenEVSE/ESP8266_WiFi_v2.x/pull/87)
 
+### Building the GUI
+
+The GUI files are minified and compiled into the firmware using a combination of Webpack and a custom build script. You will also need Node.JS and NPM installed.
+
+In addition the GUI is now maintained in a separate repository and included as a Git submodule. If the `gui` directory is empty use the following to retrieve the GUI source and fetch the dependencies.
+
+```shell
+git submodule update --init
+cd gui
+npm install
+```
+
+To 'build' the GUI use the following:
+
+```shell
+cd gui
+npm run build
+```
+
+You can then just compile and upload as above.
+
+For more details see the [GUI documentation](gui/readme.md)
+
 ***
 
-### Using Arduino IDE
+### Compile & Upload Using Arduino IDE
 
 #### 1. Install ESP for Arduino with Boards Manager
 
@@ -350,13 +393,11 @@ Starting with 1.6.4, Arduino allows installation of third-party platform package
 
 #### Uploading issues
 
-##### Erase Flash
-
-If you are experiencing ESP hanging in a reboot loop after upload it may be that the ESP flash has remnants of previous code (which may have the used the ESP memory in a different way). The ESP flash can be fully erased using [esptool](https://github.com/themadinventor/esptool). With the unit in bootloader mode run:
+- Double check device is in bootloder mode
+- Try reducing the upload ESP baudrate
+- Erase flash: If you are experiencing ESP hanging in a reboot loop after upload it may be that the ESP flash has remnants of previous code (which may have the used the ESP memory in a different way). The ESP flash can be fully erased using [esptool](https://github.com/themadinventor/esptool). With the unit in bootloader mode run:
 
 `$ esptool.py erase_flash`
-
-*`sudo` maybe be required*
 
 Output:
 
@@ -368,7 +409,7 @@ Erasing flash (this may take a while)...
 Erase took 8.0 seconds
 ```
 
-##### Fully erase ESP
+**Fully erase ESP**
 
 To fully erase all memory locations on an ESP-12 (4Mb) we need to upload a blank file to each memory location
 

@@ -53,7 +53,7 @@ const char _CONTENT_TYPE_JS[] PROGMEM = "application/javascript";
 const char _CONTENT_TYPE_JPEG[] PROGMEM = "image/jpeg";
 const char _CONTENT_TYPE_PNG[] PROGMEM = "image/png";
 
-static const char _DUMMY_PASSWORD[] PROGMEM = "___DUMMY_PASSWORD___";
+static const char _DUMMY_PASSWORD[] PROGMEM = "_DUMMY_PASSWORD";
 #define DUMMY_PASSWORD FPSTR(_DUMMY_PASSWORD)
 
 // Get running firmware version from build tag environment variable
@@ -123,6 +123,8 @@ bool requestPreProcess(AsyncWebServerRequest *request, AsyncResponseStream *&res
   if(enableCors) {
     response->addHeader(F("Access-Control-Allow-Origin"), F("*"));
   }
+
+  response->addHeader(F("Cache-Control"), F("no-cache, private, no-store, must-revalidate, max-stale=0, post-check=0, pre-check=0"));
 
   return true;
 }
@@ -650,6 +652,7 @@ handleRst(AsyncWebServerRequest *request) {
   systemRebootTime = millis() + 1000;
 }
 
+
 // -------------------------------------------------------------------
 // Restart (Reboot)
 // url: /restart
@@ -666,6 +669,18 @@ handleRestart(AsyncWebServerRequest *request) {
   request->send(response);
 
   systemRestartTime = millis() + 1000;
+}
+
+
+// -------------------------------------------------------------------
+// Emoncms describe end point,
+// Allows local device discover using https://github.com/emoncms/find
+// url: //emoncms/describe
+// -------------------------------------------------------------------
+void handleDescribe(AsyncWebServerRequest *request) {
+  AsyncWebServerResponse *response = request->beginResponse(200, CONTENT_TYPE_TEXT, "openevse");
+  response->addHeader("Access-Control-Allow-Origin", "*");
+  request->send(response);
 }
 
 // -------------------------------------------------------------------
@@ -949,16 +964,14 @@ web_server_setup() {
   server.on("/savemqtt", handleSaveMqtt);
   server.on("/saveadmin", handleSaveAdmin);
   server.on("/saveohmkey", handleSaveOhmkey);
-
   server.on("/reset", handleRst);
   server.on("/restart", handleRestart);
-
   server.on("/rapi", handleRapi);
   server.on("/r", handleRapi);
-
   server.on("/scan", handleScan);
   server.on("/apoff", handleAPOff);
   server.on("/divertmode", handleDivertMode);
+  server.on("/emoncms/describe", handleDescribe);
 
   // Simple Firmware Update Form
   server.on("/update", HTTP_GET, handleUpdateGet);

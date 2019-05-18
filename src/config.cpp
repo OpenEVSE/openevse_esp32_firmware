@@ -44,8 +44,8 @@ uint32_t flags;
 #define EEPROM_MQTT_SOLAR_SIZE        30
 #define EEPROM_MQTT_GRID_IE_SIZE      30
 #define EEPROM_EMON_FINGERPRINT_SIZE  60
-#define EEPROM_WWW_USER_SIZE          16
-#define EEPROM_WWW_PASS_SIZE          16
+#define EEPROM_WWW_USER_SIZE          15
+#define EEPROM_WWW_PASS_SIZE          15
 #define EEPROM_OHM_KEY_SIZE           10
 #define EEPROM_FLAGS_SIZE             4
 #define EEPROM_SIZE                   1024
@@ -195,7 +195,7 @@ config_load_settings() {
   EEPROM_read_string(EEPROM_EMON_NODE_START, EEPROM_EMON_NODE_SIZE,
                      emoncms_node, "openevse");
   EEPROM_read_string(EEPROM_EMON_FINGERPRINT_START, EEPROM_EMON_FINGERPRINT_SIZE,
-                     emoncms_fingerprint, "7D:82:15:BE:D7:BC:72:58:87:7D:8E:40:D4:80:BA:1A:9F:8B:8D:DA");
+                     emoncms_fingerprint,"");
 
   // MQTT settings
   EEPROM_read_string(EEPROM_MQTT_SERVER_START, EEPROM_MQTT_SERVER_SIZE,
@@ -209,7 +209,7 @@ config_load_settings() {
   EEPROM_read_string(EEPROM_MQTT_SOLAR_START, EEPROM_MQTT_SOLAR_SIZE,
                      mqtt_solar);
   EEPROM_read_string(EEPROM_MQTT_GRID_IE_START, EEPROM_MQTT_GRID_IE_SIZE,
-                     mqtt_grid_ie);
+                     mqtt_grid_ie, "emon/emonpi/power1");
 
   // Web server credentials
   EEPROM_read_string(EEPROM_WWW_USER_START, EEPROM_WWW_USER_SIZE,

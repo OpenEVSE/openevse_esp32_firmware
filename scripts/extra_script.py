@@ -1,4 +1,4 @@
-from os.path import join, isfile, basename
+from os.path import join, isfile, isdir, basename
 from os import listdir, system
 import json
 from pprint import pprint
@@ -7,93 +7,16 @@ import requests
 import subprocess
 import sys
 
-import css_html_js_minify.html_minifier as html_minifier
-#import css_html_js_minify.css_minifier as css_minifier
-#import css_html_js_minify.js_minifier as js_minifier
-
 Import("env")
 
 # Install pre-requisites
-java_installed = (0 == system("java -version"))
-if java_installed:
-    subprocess.check_call([sys.executable, '-m', 'pip', 'install', 'closure'])
-    subprocess.check_call([sys.executable, '-m', 'pip', 'install', 'yuicompressor'])
+npm_installed = (0 == system("npm --version"))
 
 #
 # Dump build environment (for debug)
-#print env.Dump()
+# print env.Dump()
 #print("Current build targets", map(str, BUILD_TARGETS))
 #
-
-import httplib, urllib, sys
-
-def html_minify(file, comments=False):
-    with open(file) as source_fh:
-        original = source_fh.read().decode('utf-8')
-    return html_minifier.html_minify(original, comments)
-
-
-def js_minify(file_name):
-    if java_installed:
-        p = subprocess.Popen(['closure', '--js', file_name, '--compilation_level', 'SIMPLE'],
-                  stdout=subprocess.PIPE, stderr=subprocess.PIPE)
-        (closure_stdout, closure_stderr) = p.communicate()
-        if closure_stderr:
-            print(closure_stderr)
-        return closure_stdout
-
-    # Fall back to Web call
-    with open(file_name) as source_fh:
-        original = source_fh.read().decode('utf-8')
-    params = urllib.urlencode([
-        ('js_code', original),
-        ('compilation_level', 'SIMPLE_OPTIMIZATIONS'),
-        ('output_format', 'text'),
-        ('output_info', 'compiled_code'),
-    ])
-
-    # Always use the following value for the Content-type header.
-    headers = {"Content-type": "application/x-www-form-urlencoded"}
-    conn = httplib.HTTPConnection('closure-compiler.appspot.com')
-    conn.request('POST', '/compile', params, headers)
-    response = conn.getresponse()
-    data = response.read()
-    conn.close()
-    return data
-
-def css_minify(file_name, wrap=False, comments=False, sort=True):
-    if java_installed:
-        p = subprocess.Popen(['yuicompressor', file_name],
-                  stdout=subprocess.PIPE, stderr=subprocess.PIPE)
-        (yuicompressor_stdout, yuicompressor_stderr) = p.communicate()
-        if yuicompressor_stderr:
-            print(yuicompressor_stderr)
-        return yuicompressor_stdout
-
-    # Fall back to Web call
-    with open(file_name) as source_fh:
-        original = source_fh.read().decode('utf-8')
-    url = 'https://cssminifier.com/raw'
-    data = {'input': original }
-    response = requests.post(url, data=data)
-    return response.text
-
-def minify(env, target, source):
-    output = ""
-    for source_file in source:
-        #print("Reading {}".format(source_file))
-        abs_file = source_file.get_abspath()
-        if abs_file.endswith(".css"):
-            output += css_minify(abs_file, wrap=False, comments=False, sort=True)
-        elif abs_file.endswith(".js"):
-            output += js_minify(abs_file)
-            #output += original
-        elif abs_file.endswith(".htm") or abs_file.endswith(".html"):
-            output += html_minify(abs_file, comments=False)
-    target_file = target[0].get_abspath()
-    print("Generating {}".format(target_file))
-    with open(target_file, "w") as output_file:
-        output_file.write(output.encode('utf-8'))
 
 def get_c_name(source_file):
     return basename(source_file).upper().replace('.', '_').replace('-', '_')
@@ -104,7 +27,7 @@ def text_to_header(source_file):
     filename = get_c_name(source_file)
     output = "static const char CONTENT_{}[] PROGMEM = ".format(filename)
     for line in original.splitlines():
-        output += "\n  \"{}\\n\"".format(line.replace('\\', '\\\\').replace('"', '\\"'))
+        output += u"\n  \"{}\\n\"".format(line.replace('\\', '\\\\').replace('"', '\\"'))
     output += ";\n"
     return output
 
@@ -144,16 +67,9 @@ def data_to_header(env, target, source):
 def make_static(env, target, source):
     output = ""
 
-    # Load the manifest file
-    manifest = source[0].get_abspath()
-    with open(manifest) as manifest_file:
-        man = json.load(manifest_file)
-
     out_files = []
-    for out_file in man:
-        out_files.append(out_file)
-    for file in listdir(data_src):
-        if isfile(join(data_src, file)) and not file in out_files:
+    for file in listdir(dist_dir):
+        if isfile(join(dist_dir, file)):
           out_files.append(file)
 
     # Sort files to make sure the order is constant
@@ -189,39 +105,40 @@ def make_static(env, target, source):
     with open(target_file, "w") as output_file:
         output_file.write(output.encode('utf-8'))
 
-def process_app_file(source_dir, source_files, data_dir, out_file, env):
-    source = []
-    for file in source_files:
-        source.append(join(source_dir, file))
-    data_file = join(data_dir, out_file)
-    header_file = join("$PROJECTSRC_DIR", "web_server."+out_file+".h")
-    env.Depends(header_file, env.Command(data_file, source, minify))
-    env.Depends("$BUILD_DIR/spiffs.bin", env.Command(data_file, source, minify))
-    #env.Depends("$PROJECTSRC_DIR/web_server.cpp", env.Command(header_file, data_file, data_to_header))
-    env.Depends("$BUILDSRC_DIR/web_server_static.o", env.Command(header_file, data_file, data_to_header))
-
 def process_html_app(source, dest, env):
-    manifest = join(source, "manifest.json")
-    out_files = []
-    if isfile(manifest):
-        with open(manifest) as manifest_file:
-            man = json.load(manifest_file)
-        for out_file in man:
-            in_files = man[out_file]
-            out_files.append(out_file)
-            process_app_file(source, in_files, dest, out_file, env)
-    for file in sorted(listdir(dest)):
-        if isfile(join(dest, file)) and not file in out_files:
-            data_file = join(dest, file)
-            header_file = join("$PROJECTSRC_DIR", "web_server."+file+".h")
-            env.Depends("$BUILDSRC_DIR/web_server.o", env.Command(header_file, data_file, data_to_header))
+    web_server_static_files = join(dest, "web_server_static_files.h")
+    web_server_static = join("$BUILDSRC_DIR", "web_server_static.cpp.o")
 
-    header_file = join("$PROJECTSRC_DIR", "web_server_static_files.h")
-    env.Depends("$BUILDSRC_DIR/web_server_static.o", env.Command(header_file, manifest, make_static))
+    for file in sorted(listdir(source)):
+        if isfile(join(source, file)):
+            data_file = join(source, file)
+            header_file = join(dest, "web_server."+file+".h")
+            env.Command(header_file, data_file, data_to_header)
+            env.Depends(web_server_static_files, header_file)
+
+    env.Depends(web_server_static, env.Command(web_server_static_files, source, make_static))
 
 #
 # Generate Web app resources
 #
-html_src = join(env.subst("$PROJECTSRC_DIR"), "html")
-data_src = join(env.subst("$PROJECTSRC_DIR"), "data")
-process_html_app(html_src, data_src, env)
+if npm_installed:
+    headers_src = join(env.subst("$PROJECTSRC_DIR"), "web_static")
+
+    gui_dir = join(env.subst("$PROJECT_DIR"), "gui")
+    dist_dir = join(gui_dir, "dist")
+    node_modules = join(gui_dir, "node_modules")
+
+    # Check the GUI dir has been checked out
+    if(isfile(join(gui_dir, "package.json"))):
+        # Check to see if the Node modules have been downloaded
+        if(isdir(node_modules)):
+            if(isdir(dist_dir)):
+                process_html_app(dist_dir, headers_src, env)
+            else:
+                print("Warning: GUI not built, run 'cd %s; npm run build'" % gui_dir)
+        else:
+            print("Warning: GUI dependencies not found, run 'cd %s; npm install'" % gui_dir)
+    else:
+        print("Warning: GUI files not found, run 'git submodule update --init'")
+else:
+  print("Warning: Node.JS and NPM required to update the UI")
