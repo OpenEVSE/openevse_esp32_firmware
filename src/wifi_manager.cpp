@@ -262,7 +262,7 @@ wifi_setup() {
 }
 
 void
-wifi_loop() 
+wifi_loop()
 {
   Profile_Start(wifi_loop);
 
@@ -321,12 +321,18 @@ wifi_loop()
     delay(1000);
 
     config_reset();
+#ifdef ESP8266
     ESP.eraseConfig();
+#endif
 
     delay(50);
+#ifdef ESP32
+    ESP.restart();
+#elif defined(ESP8266)
     ESP.reset();
+#endif
   }
-  else if(false == apMessage && LOW == wifiButtonState && millis() > wifiButtonTimeOut + WIFI_BUTTON_AP_TIMEOUT) 
+  else if(false == apMessage && LOW == wifiButtonState && millis() > wifiButtonTimeOut + WIFI_BUTTON_AP_TIMEOUT)
   {
     lcd_display(F("Access Point"), 0, 0, 0, LCD_CLEAR_LINE);
     lcd_display(F(""), 0, 1, 10 * 1000, LCD_CLEAR_LINE);

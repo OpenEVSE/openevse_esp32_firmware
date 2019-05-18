@@ -39,14 +39,9 @@
 #include "divert.h"
 #include "ota.h"
 #include "lcd.h"
+#include "openevse.h"
 
 #include "RapiSender.h"
-
-
-#ifdef ESP32
-HardwareSerial Serial1(1);
-HardwareSerial Serial2(2);
-#endif
 
 RapiSender rapiSender(&RAPI_PORT);
 
