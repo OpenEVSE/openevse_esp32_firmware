@@ -337,6 +337,11 @@ Standalone built on GitHub Atom IDE, or use PlatformIO Atom IDE plug-in if you a
 
 - Put ESP into bootloader mode
 - On other ESP boards (Adafruit HUZZAH) press and hold `boot` button then press `reset`, red LED should light dimly to indicate bootloader mode.
+- Compile and upload using platformIO
+
+```
+pio run -t upload
+```
 
 *To enable to OTA upload first upload via serial using the dev environment, this enables to OTA enable build flag. See `platformio.ino*
 
