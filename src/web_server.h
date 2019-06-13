@@ -1,9 +1,8 @@
 #ifndef _EMONESP_WEB_SERVER_H
 #define _EMONESP_WEB_SERVER_H
 
-//#include <Hash.h>
-//#include <ESPAsyncTCP.h>
-#include <ESPAsyncWebServer.h>
+#include <MongooseHttpServer.h>
+
 // Content Types
 extern const char _CONTENT_TYPE_HTML[];
 #define CONTENT_TYPE_HTML FPSTR(_CONTENT_TYPE_HTML)
@@ -26,7 +25,7 @@ extern const char _CONTENT_TYPE_JPEG[];
 extern const char _CONTENT_TYPE_PNG[];
 #define CONTENT_TYPE_PNG FPSTR(_CONTENT_TYPE_PNG)
 
-extern AsyncWebServer server;
+extern MongooseHttpServer server;
 extern String currentfirmware;
 
 extern void web_server_setup();
@@ -34,6 +33,6 @@ extern void web_server_loop();
 
 extern void web_server_event(String &event);
 
-void dumpRequest(AsyncWebServerRequest *request);
+void dumpRequest(MongooseHttpServerRequest *request);
 
 #endif // _EMONESP_WEB_SERVER_H

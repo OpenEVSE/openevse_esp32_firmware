@@ -9,7 +9,7 @@
 #define Profile_End(x, max) \
   unsigned long profile ## x ## Diff = millis() - profile ## x; \
   if(profile ## x ## Diff > max) { \
-    DBUGF(">> Slow " #x " %dms", profile ## x ## Diff);\
+    DBUGF(">> Slow " #x " %ldms", profile ## x ## Diff);\
   }
 
 #else // ENABLE_PROFILE

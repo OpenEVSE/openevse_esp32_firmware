@@ -1,18 +1,11 @@
 #ifndef _EMONESP_WEB_SERVER_STATIC_H
 #define _EMONESP_WEB_SERVER_STATIC_H
 
-//#include <Hash.h>
-//#include <ESPAsyncTCP.h>
-#include <ESPAsyncWebServer.h>
+#include <MongooseHttpServer.h>
 
-struct StaticFile
-{
-  const char *filename;
-  const char *data;
-  size_t length;
-  const char *type;
-};
+bool web_static_handle(MongooseHttpServerRequest *request);
 
+/*
 class StaticFileWebHandler: public AsyncWebHandler
 {
   private:
@@ -43,5 +36,6 @@ class StaticFileResponse: public AsyncWebServerResponse
     bool _sourceValid() const { return true; }
 
 };
+*/
 
 #endif // _EMONESP_WEB_SERVER_STATIC_H

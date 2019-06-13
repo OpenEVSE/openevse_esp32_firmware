@@ -31,9 +31,9 @@ typedef const __FlashStringHelper *fstr_t;
 #include "divert.h"
 #include "lcd.h"
 
-AsyncWebServer server(80);          // Create class for Web server
-AsyncWebSocket ws("/ws");
-StaticFileWebHandler staticFile;
+MongooseHttpServer server;          // Create class for Web server
+//AsyncWebSocket ws("/ws");
+//StaticFileWebHandler staticFile;
 
 bool enableCors = true;
 
@@ -61,7 +61,7 @@ static const char _DUMMY_PASSWORD[] PROGMEM = "_DUMMY_PASSWORD";
 #define ESCAPEQUOTE(A) TEXTIFY(A)
 String currentfirmware = ESCAPEQUOTE(BUILD_TAG);
 
-void dumpRequest(AsyncWebServerRequest *request) {
+void dumpRequest(MongooseHttpServerRequest *request) {
   if(request->method() == HTTP_GET) {
     DBUGF("GET");
   } else if(request->method() == HTTP_POST) {
@@ -79,20 +79,24 @@ void dumpRequest(AsyncWebServerRequest *request) {
   } else {
     DBUGF("UNKNOWN");
   }
-  DBUGF(" http://%s%s", request->host().c_str(), request->url().c_str());
+  DBUGF(" http://%.*s%.*s", 
+    request->host().length(), request->host(), 
+    request->url().length(), request->url());
 
   if(request->contentLength()){
-    DBUGF("_CONTENT_TYPE: %s", request->contentType().c_str());
+    DBUGF("_CONTENT_TYPE: %.*s", request->contentType().length(), request->contentType());
     DBUGF("_CONTENT_LENGTH: %u", request->contentLength());
   }
 
   int headers = request->headers();
   int i;
   for(i=0; i<headers; i++) {
-    AsyncWebHeader* h = request->getHeader(i);
-    DBUGF("_HEADER[%s]: %s", h->name().c_str(), h->value().c_str());
+    DBUGF("_HEADER[%.*s]: %.*s", 
+      request->headerNames(i).length(), request->headerNames(i), 
+      request->headerValues(i).length(), request->headerValues(i));
   }
 
+  /*
   int params = request->params();
   for(i = 0; i < params; i++) {
     AsyncWebParameter* p = request->getParam(i);
@@ -104,12 +108,13 @@ void dumpRequest(AsyncWebServerRequest *request) {
       DBUGF("_GET[%s]: %s", p->name().c_str(), p->value().c_str());
     }
   }
+  */
 }
 
 // -------------------------------------------------------------------
 // Helper function to perform the standard operations on a request
 // -------------------------------------------------------------------
-bool requestPreProcess(AsyncWebServerRequest *request, AsyncResponseStream *&response, fstr_t contentType = CONTENT_TYPE_JSON)
+bool requestPreProcess(MongooseHttpServerRequest *request, MongooseHttpServerResponseStream *&response, fstr_t contentType = CONTENT_TYPE_JSON)
 {
   dumpRequest(request);
 
@@ -119,7 +124,7 @@ bool requestPreProcess(AsyncWebServerRequest *request, AsyncResponseStream *&res
     return false;
   }
 
-  response = request->beginResponseStream(String(contentType));
+  response = request->beginResponseStream(contentType);
   if(enableCors) {
     response->addHeader(F("Access-Control-Allow-Origin"), F("*"));
   }
@@ -142,7 +147,7 @@ bool isPositive(const String &str) {
 // -------------------------------------------------------------------
 /*
 void
-handleHome(AsyncWebServerRequest *request) {
+handleHome(MongooseHttpServerRequest *request) {
   if (www_username != ""
       && wifi_mode == WIFI_MODE_STA
       && !request->authenticate(www_username.c_str(),
@@ -173,8 +178,8 @@ handleHome(AsyncWebServerRequest *request) {
 // Do not request more often than 3-5 seconds
 // -------------------------------------------------------------------
 void
-handleScan(AsyncWebServerRequest *request) {
-  AsyncResponseStream *response;
+handleScan(MongooseHttpServerRequest *request) {
+  MongooseHttpServerResponseStream *response;
   if(false == requestPreProcess(request, response, CONTENT_TYPE_JSON)) {
     return;
   }
@@ -244,8 +249,8 @@ handleScan(AsyncWebServerRequest *request) {
 // url: /apoff
 // -------------------------------------------------------------------
 void
-handleAPOff(AsyncWebServerRequest *request) {
-  AsyncResponseStream *response;
+handleAPOff(MongooseHttpServerRequest *request) {
+  MongooseHttpServerResponseStream *response;
   if(false == requestPreProcess(request, response, CONTENT_TYPE_TEXT)) {
     return;
   }
@@ -263,14 +268,14 @@ handleAPOff(AsyncWebServerRequest *request) {
 // url: /savenetwork
 // -------------------------------------------------------------------
 void
-handleSaveNetwork(AsyncWebServerRequest *request) {
-  AsyncResponseStream *response;
+handleSaveNetwork(MongooseHttpServerRequest *request) {
+  MongooseHttpServerResponseStream *response;
   if(false == requestPreProcess(request, response, CONTENT_TYPE_TEXT)) {
     return;
   }
 
-  String qsid = request->arg("ssid");
-  String qpass = request->arg("pass");
+  String qsid = request->getParam("ssid");
+  String qpass = request->getParam("pass");
   if(qpass.equals(DUMMY_PASSWORD)) {
     qpass = epass;
   }
@@ -294,22 +299,22 @@ handleSaveNetwork(AsyncWebServerRequest *request) {
 // url: /saveemoncms
 // -------------------------------------------------------------------
 void
-handleSaveEmoncms(AsyncWebServerRequest *request) {
-  AsyncResponseStream *response;
+handleSaveEmoncms(MongooseHttpServerRequest *request) {
+  MongooseHttpServerResponseStream *response;
   if(false == requestPreProcess(request, response, CONTENT_TYPE_TEXT)) {
     return;
   }
 
-  String apikey = request->arg("apikey");
+  String apikey = request->getParam("apikey");
   if(apikey.equals(DUMMY_PASSWORD)) {
     apikey = emoncms_apikey;
   }
 
-  config_save_emoncms(isPositive(request->arg("enable")),
-                      request->arg("server"),
-                      request->arg("node"),
+  config_save_emoncms(isPositive(request->getParam("enable")),
+                      request->getParam("server"),
+                      request->getParam("node"),
                       apikey,
-                      request->arg("fingerprint"));
+                      request->getParam("fingerprint"));
 
   char tmpStr[200];
   snprintf(tmpStr, sizeof(tmpStr), "Saved: %s %s %s %s",
@@ -329,27 +334,27 @@ handleSaveEmoncms(AsyncWebServerRequest *request) {
 // url: /savemqtt
 // -------------------------------------------------------------------
 void
-handleSaveMqtt(AsyncWebServerRequest *request) {
-  AsyncResponseStream *response;
+handleSaveMqtt(MongooseHttpServerRequest *request) {
+  MongooseHttpServerResponseStream *response;
   if(false == requestPreProcess(request, response, CONTENT_TYPE_TEXT)) {
     return;
   }
 
-  String pass = request->arg("pass");
+  String pass = request->getParam("pass");
   if(pass.equals(DUMMY_PASSWORD)) {
     pass = mqtt_pass;
   }
 
-  config_save_mqtt(isPositive(request->arg("enable")),
-                   request->arg("server"),
-                   request->arg("topic"),
-                   request->arg("user"),
+  config_save_mqtt(isPositive(request->getParam("enable")),
+                   request->getParam("server"),
+                   request->getParam("topic"),
+                   request->getParam("user"),
                    pass,
-                   request->arg("solar"),
-                   request->arg("grid_ie"));
+                   request->getParam("solar"),
+                   request->getParam("grid_ie"));
 
   char tmpStr[200];
-  snprintf(tmpStr, sizeof(tmpStr), "Saved: %s %s %s %s", mqtt_server.c_str(),
+  snprintf(tmpStr, sizeof(tmpStr), "Saved: %s %s %s %s %s %s", mqtt_server.c_str(),
           mqtt_topic.c_str(), mqtt_user.c_str(), mqtt_pass.c_str(),
           mqtt_solar.c_str(), mqtt_grid_ie.c_str());
   DBUGLN(tmpStr);
@@ -367,13 +372,13 @@ handleSaveMqtt(AsyncWebServerRequest *request) {
 // url: /divertmode
 // -------------------------------------------------------------------
 void
-handleDivertMode(AsyncWebServerRequest *request){
-  AsyncResponseStream *response;
+handleDivertMode(MongooseHttpServerRequest *request){
+  MongooseHttpServerResponseStream *response;
   if(false == requestPreProcess(request, response, CONTENT_TYPE_TEXT)) {
     return;
   }
 
-  divertmode_update(request->arg("divertmode").toInt());
+  divertmode_update(request->getParam("divertmode").toInt());
 
   response->setCode(200);
   response->print("Divert Mode changed");
@@ -387,14 +392,14 @@ handleDivertMode(AsyncWebServerRequest *request){
 // url: /saveadmin
 // -------------------------------------------------------------------
 void
-handleSaveAdmin(AsyncWebServerRequest *request) {
-  AsyncResponseStream *response;
+handleSaveAdmin(MongooseHttpServerRequest *request) {
+  MongooseHttpServerResponseStream *response;
   if(false == requestPreProcess(request, response, CONTENT_TYPE_TEXT)) {
     return;
   }
 
-  String quser = request->arg("user");
-  String qpass = request->arg("pass");
+  String quser = request->getParam("user");
+  String qpass = request->getParam("pass");
   if(qpass.equals(DUMMY_PASSWORD)) {
     qpass = www_password;
   }
@@ -411,14 +416,14 @@ handleSaveAdmin(AsyncWebServerRequest *request) {
 // url: /handleSaveOhmkey
 // -------------------------------------------------------------------
 void
-handleSaveOhmkey(AsyncWebServerRequest *request) {
-  AsyncResponseStream *response;
+handleSaveOhmkey(MongooseHttpServerRequest *request) {
+  MongooseHttpServerResponseStream *response;
   if(false == requestPreProcess(request, response, CONTENT_TYPE_TEXT)) {
     return;
   }
 
-  bool enabled = isPositive(request->arg("enable"));
-  String qohm = request->arg("ohm");
+  bool enabled = isPositive(request->getParam("enable"));
+  String qohm = request->getParam("ohm");
 
   config_save_ohm(enabled, qohm);
 
@@ -432,8 +437,8 @@ handleSaveOhmkey(AsyncWebServerRequest *request) {
 // url: /status
 // -------------------------------------------------------------------
 void
-handleStatus(AsyncWebServerRequest *request) {
-  AsyncResponseStream *response;
+handleStatus(MongooseHttpServerRequest *request) {
+  MongooseHttpServerResponseStream *response;
   if(false == requestPreProcess(request, response)) {
     return;
   }
@@ -518,8 +523,8 @@ handleStatus(AsyncWebServerRequest *request) {
 // url: /config
 // -------------------------------------------------------------------
 void
-handleConfig(AsyncWebServerRequest *request) {
-  AsyncResponseStream *response;
+handleConfig(MongooseHttpServerRequest *request) {
+  MongooseHttpServerResponseStream *response;
   if(false == requestPreProcess(request, response)) {
     return;
   }
@@ -597,9 +602,9 @@ handleConfig(AsyncWebServerRequest *request) {
 // url: /rapiupdate
 // -------------------------------------------------------------------
 void
-handleUpdate(AsyncWebServerRequest *request) {
+handleUpdate(MongooseHttpServerRequest *request) {
 
-  AsyncResponseStream *response;
+  MongooseHttpServerResponseStream *response;
   if(false == requestPreProcess(request, response)) {
     return;
   }
@@ -634,8 +639,8 @@ handleUpdate(AsyncWebServerRequest *request) {
 // url: /reset
 // -------------------------------------------------------------------
 void
-handleRst(AsyncWebServerRequest *request) {
-  AsyncResponseStream *response;
+handleRst(MongooseHttpServerRequest *request) {
+  MongooseHttpServerResponseStream *response;
   if(false == requestPreProcess(request, response, CONTENT_TYPE_TEXT)) {
     return;
   }
@@ -658,8 +663,8 @@ handleRst(AsyncWebServerRequest *request) {
 // url: /restart
 // -------------------------------------------------------------------
 void
-handleRestart(AsyncWebServerRequest *request) {
-  AsyncResponseStream *response;
+handleRestart(MongooseHttpServerRequest *request) {
+  MongooseHttpServerResponseStream *response;
   if(false == requestPreProcess(request, response, CONTENT_TYPE_TEXT)) {
     return;
   }
@@ -677,8 +682,8 @@ handleRestart(AsyncWebServerRequest *request) {
 // Allows local device discover using https://github.com/emoncms/find
 // url: //emoncms/describe
 // -------------------------------------------------------------------
-void handleDescribe(AsyncWebServerRequest *request) {
-  AsyncWebServerResponse *response = request->beginResponse(200, CONTENT_TYPE_TEXT, "openevse");
+void handleDescribe(MongooseHttpServerRequest *request) {
+  MongooseHttpServerResponse *response = request->beginResponse(200, CONTENT_TYPE_TEXT, "openevse");
   response->addHeader("Access-Control-Allow-Origin", "*");
   request->send(response);
 }
@@ -688,8 +693,8 @@ void handleDescribe(AsyncWebServerRequest *request) {
 // url: /update
 // -------------------------------------------------------------------
 void
-handleUpdateGet(AsyncWebServerRequest *request) {
-  AsyncResponseStream *response;
+handleUpdateGet(MongooseHttpServerRequest *request) {
+  MongooseHttpServerResponseStream *response;
   if(false == requestPreProcess(request, response, CONTENT_TYPE_HTML)) {
     return;
   }
@@ -704,10 +709,10 @@ handleUpdateGet(AsyncWebServerRequest *request) {
 }
 
 void
-handleUpdatePost(AsyncWebServerRequest *request) {
+handleUpdatePost(MongooseHttpServerRequest *request) {
   #ifndef ESP32
   bool shouldReboot = !Update.hasError();
-  AsyncWebServerResponse *response = request->beginResponse(200, CONTENT_TYPE_TEXT, shouldReboot ? "OK" : "FAIL");
+  MongooseHttpServerResponse *response = request->beginResponse(200, CONTENT_TYPE_TEXT, shouldReboot ? "OK" : "FAIL");
   response->addHeader("Connection", "close");
   request->send(response);
 
@@ -717,7 +722,7 @@ handleUpdatePost(AsyncWebServerRequest *request) {
 
   #else // ! ESP32
 
-  AsyncWebServerResponse *response = request->beginResponse(500, CONTENT_TYPE_TEXT, "Not supported");
+  MongooseHttpServerResponse *response = request->beginResponse(500, CONTENT_TYPE_TEXT, "Not supported");
   response->addHeader("Connection", "close");
   request->send(response);
 
@@ -726,10 +731,10 @@ handleUpdatePost(AsyncWebServerRequest *request) {
 
 extern "C" uint32_t _SPIFFS_start;
 extern "C" uint32_t _SPIFFS_end;
-static int lastPercent = -1;
+//static int lastPercent = -1;
 
 void
-handleUpdateUpload(AsyncWebServerRequest *request, String filename, size_t index, uint8_t *data, size_t len, bool final)
+handleUpdateUpload(MongooseHttpServerRequest *request, String filename, size_t index, uint8_t *data, size_t len, bool final)
 {
 #ifndef ESP32
   if(!index)
@@ -799,10 +804,10 @@ handleUpdateUpload(AsyncWebServerRequest *request, String filename, size_t index
 String delayTimer = "0 0 0 0";
 
 void
-handleRapi(AsyncWebServerRequest *request) {
-  bool json = request->hasArg("json");
+handleRapi(MongooseHttpServerRequest *request) {
+  bool json = request->hasParam("json");
 
-  AsyncResponseStream *response;
+  MongooseHttpServerResponseStream *response;
   if(false == requestPreProcess(request, response, json ? CONTENT_TYPE_JSON : CONTENT_TYPE_HTML)) {
     return;
   }
@@ -819,9 +824,9 @@ handleRapi(AsyncWebServerRequest *request) {
           "<input id='rapi' name='rapi' length=32><p><input type='submit'></form>");
   }
 
-  if (request->hasArg("rapi"))
+  if (request->hasParam("rapi"))
   {
-    String rapi = request->arg("rapi");
+    String rapi = request->getParam("rapi");
 
     // BUG: Really we should do this in the main loop not here...
     RAPI_PORT.flush();
@@ -887,14 +892,19 @@ handleRapi(AsyncWebServerRequest *request) {
   request->send(response);
 }
 
-void handleNotFound(AsyncWebServerRequest *request)
+void handleNotFound(MongooseHttpServerRequest *request)
 {
+  // Not a dynamic handler, check the static resources
+  if(web_static_handle(request)) {
+    return;
+  }
+
   DBUG("NOT_FOUND: ");
   dumpRequest(request);
 
   if(wifi_mode_is_ap_only()) {
     // Redirect to the home page in AP mode (for the captive portal)
-    AsyncResponseStream *response = request->beginResponseStream(String(CONTENT_TYPE_HTML));
+    MongooseHttpServerResponseStream *response = request->beginResponseStream(String(CONTENT_TYPE_HTML));
 
     String url = F("http://");
     url += ipaddress;
@@ -912,6 +922,7 @@ void handleNotFound(AsyncWebServerRequest *request)
   }
 }
 
+/*
 void onWsEvent(AsyncWebSocket * server, AsyncWebSocketClient *client, AwsEventType type, void *arg, uint8_t *data, size_t len) {
   if(type == WS_EVT_CONNECT) {
     DBUGF("ws[%s][%u] connect", server->url(), client->id());
@@ -934,6 +945,7 @@ void onWsEvent(AsyncWebSocket * server, AsyncWebSocketClient *client, AwsEventTy
     }
   }
 }
+*/
 
 void
 web_server_setup() {
@@ -944,41 +956,38 @@ web_server_setup() {
 //    .setDefaultFile("index.html");
 
   // Add the Web Socket server
-  ws.onEvent(onWsEvent);
-  server.addHandler(&ws);
-  server.addHandler(&staticFile);
+//  ws.onEvent(onWsEvent);
+//  server.addHandler(&ws);
+//  server.addHandler(&staticFile);
 
   // Start server & server root html /
   //server.on("/", handleHome);
 
   // Handle status updates
-  server.on("/status", handleStatus);
-  server.on("/config", handleConfig);
-#ifdef ENABLE_LEGACY_API
-  server.on("/rapiupdate", handleUpdate);
-#endif
+  server.on("/status$", handleStatus);
+  server.on("/config$", handleConfig);
 
   // Handle HTTP web interface button presses
-  server.on("/savenetwork", handleSaveNetwork);
-  server.on("/saveemoncms", handleSaveEmoncms);
-  server.on("/savemqtt", handleSaveMqtt);
-  server.on("/saveadmin", handleSaveAdmin);
-  server.on("/saveohmkey", handleSaveOhmkey);
-  server.on("/reset", handleRst);
-  server.on("/restart", handleRestart);
-  server.on("/rapi", handleRapi);
-  server.on("/r", handleRapi);
-  server.on("/scan", handleScan);
-  server.on("/apoff", handleAPOff);
-  server.on("/divertmode", handleDivertMode);
-  server.on("/emoncms/describe", handleDescribe);
+  server.on("/savenetwork$", handleSaveNetwork);
+  server.on("/saveemoncms$", handleSaveEmoncms);
+  server.on("/savemqtt$", handleSaveMqtt);
+  server.on("/saveadmin$", handleSaveAdmin);
+  server.on("/saveohmkey$", handleSaveOhmkey);
+  server.on("/reset$", handleRst);
+  server.on("/restart$", handleRestart);
+  server.on("/rapi$", handleRapi);
+  server.on("/r$", handleRapi);
+  server.on("/scan$", handleScan);
+  server.on("/apoff$", handleAPOff);
+  server.on("/divertmode$", handleDivertMode);
+  server.on("/emoncms/describe$", handleDescribe);
 
   // Simple Firmware Update Form
-  server.on("/update", HTTP_GET, handleUpdateGet);
-  server.on("/update", HTTP_POST, handleUpdatePost, handleUpdateUpload);
+//  server.on("/update$", HTTP_GET, handleUpdateGet);
+//  server.on("/update$", HTTP_POST, handleUpdatePost, handleUpdateUpload);
 
   server.onNotFound(handleNotFound);
-  server.begin();
+  server.begin(80);
 
   DEBUG.println("Server started");
 }
@@ -991,7 +1000,7 @@ web_server_loop() {
   if(wifiRestartTime > 0 && millis() > wifiRestartTime) {
     wifiRestartTime = 0;
     wifi_restart();
-}
+  }
 
   // Do we need to restart MQTT?
   if(mqttRestartTime > 0 && millis() > mqttRestartTime) {
@@ -1028,5 +1037,5 @@ web_server_loop() {
 
 void web_server_event(String &event)
 {
-  ws.textAll(event);
+  //ws.textAll(event);
 }

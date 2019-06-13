@@ -11,6 +11,14 @@
 #include "wifi_manager.h"
 
 // Static files
+struct StaticFile
+{
+  const char *filename;
+  const char *data;
+  size_t length;
+  const char *type;
+};
+
 #include "web_static/web_server_static_files.h"
 
 #define ARRAY_LENGTH(x) (sizeof(x)/sizeof((x)[0]))
@@ -24,14 +32,19 @@ static const char _HOME_PAGE[] PROGMEM = "/home.html";
 static const char _WIFI_PAGE[] PROGMEM = "/wifi_portal.html";
 #define WIFI_PAGE FPSTR(_WIFI_PAGE)
 
-StaticFileWebHandler::StaticFileWebHandler()
+class StaticFileResponse: public MongooseHttpServerResponse
 {
-}
+  private:
+    StaticFile *_content;
 
-bool StaticFileWebHandler::_getFile(AsyncWebServerRequest *request, StaticFile **file)
+  public:
+    StaticFileResponse(int code, StaticFile *file);
+};
+
+static bool web_static_get_file(MongooseHttpServerRequest *request, StaticFile **file)
 {
   // Remove the found uri
-  String path = request->url();
+  String path = request->uri();
   if(path == "/") {
     path = String(wifi_mode_is_ap_only() ? WIFI_PAGE : HOME_PAGE);
   }
@@ -53,55 +66,40 @@ bool StaticFileWebHandler::_getFile(AsyncWebServerRequest *request, StaticFile *
   return false;
 }
 
-bool StaticFileWebHandler::canHandle(AsyncWebServerRequest *request)
+bool web_static_handle(MongooseHttpServerRequest *request)
 {
+  dumpRequest(request);
+
+  // Are we authenticated
+  if(wifi_mode_is_sta() && www_username!="" &&
+     false == request->authenticate(www_username.c_str(), www_password.c_str())) {
+    request->requestAuthentication(esp_hostname);
+    return false;
+  }
+
   StaticFile *file = NULL;
-  if (request->method() == HTTP_GET &&
-      _getFile(request, &file))
+  if (web_static_get_file(request, &file))
   {
-    request->_tempObject = file;
-    DBUGF("[StaticFileWebHandler::canHandle] TRUE");
+    MongooseHttpServerResponse *response = new StaticFileResponse(200, file);
+    request->send(response);
+
     return true;
   }
 
   return false;
 }
 
-void StaticFileWebHandler::handleRequest(AsyncWebServerRequest *request)
-{
-  dumpRequest(request);
-
-  // Are we authenticated
-  if(wifi_mode_is_sta() &&
-     _username != "" && _password != "" &&
-     false == request->authenticate(_username.c_str(), _password.c_str()))
-  {
-    request->requestAuthentication(esp_hostname);
-    return;
-  }
-
-  // Get the filename from request->_tempObject and free it
-  StaticFile *file = (StaticFile *)request->_tempObject;
-  if (file)
-  {
-    request->_tempObject = NULL;
-    AsyncWebServerResponse *response = new StaticFileResponse(200, file);
-    request->send(response);
-  } else {
-    request->send(404);
-  }
-}
-
 StaticFileResponse::StaticFileResponse(int code, StaticFile *content){
-  _code = code;
+//  _code = code;
   _content = content;
-  _contentType = String(FPSTR(content->type));
-  _contentLength = content->length;
-  ptr = content->data;
-  addHeader("Connection","close");
+//  _contentType = String(FPSTR(content->type));
+//  _contentLength = content->length;
+//  ptr = content->data;
+//  addHeader("Connection","close");
 }
 
-size_t StaticFileResponse::write(AsyncWebServerRequest *request)
+/*
+size_t StaticFileResponse::write(MongooseHttpServerRequest *request)
 {
   size_t total = 0;
   size_t written = 0;
@@ -121,7 +119,7 @@ size_t StaticFileResponse::write(AsyncWebServerRequest *request)
   }
 }
 
-size_t StaticFileResponse::writeData(AsyncWebServerRequest *request)
+size_t StaticFileResponse::writeData(MongooseHttpServerRequest *request)
 {
   size_t space = request->client()->space();
 
@@ -169,45 +167,43 @@ size_t StaticFileResponse::writeData(AsyncWebServerRequest *request)
       DBUGF("Failed to write data");
     }
 
-/*
-    bool aligned = RESPONSE_CONTENT == _state;
-    if(aligned && (!IS_ALIGNED(ptr) || length < 32))
-    {
-      char buffer[32];
-      uint32_t copy = sizeof(buffer) - ((uint32_t)ptr & 0x00000003); // byte aligned mask
-      if(copy > length) {
-        copy = length;
-      }
-      DBUGF("None aligned write %d@%p", copy, ptr);
-      memcpy_P(buffer, ptr, copy);
-
-      written = request->client()->write(buffer, copy);
-      if(written > 0) {
-        _writtenLength += written;
-        ptr += written;
-        length -= written;
-      } else {
-        DBUGF("Failed to write data");
-      }
-    }
-
-    if(!aligned || IS_ALIGNED(ptr))
-    {
-      size_t outLen = length;
-      if(outLen > space) {
-        outLen = space;
-      }
-      DBUGF("Aligned write %d@%p", outLen, ptr);
-      written = request->client()->write(ptr, outLen);
-      if(written > 0) {
-        _writtenLength += written;
-        ptr += written;
-        length -= written;
-      } else {
-        DBUGF("Failed to write data");
-      }
-    }
-*/
+//    bool aligned = RESPONSE_CONTENT == _state;
+//    if(aligned && (!IS_ALIGNED(ptr) || length < 32))
+//    {
+//      char buffer[32];
+//      uint32_t copy = sizeof(buffer) - ((uint32_t)ptr & 0x00000003); // byte aligned mask
+//      if(copy > length) {
+//        copy = length;
+//      }
+//      DBUGF("None aligned write %d@%p", copy, ptr);
+//      memcpy_P(buffer, ptr, copy);
+//
+//      written = request->client()->write(buffer, copy);
+//      if(written > 0) {
+//        _writtenLength += written;
+//        ptr += written;
+//        length -= written;
+//      } else {
+//        DBUGF("Failed to write data");
+//      }
+//    }
+//
+//    if(!aligned || IS_ALIGNED(ptr))
+//    {
+//      size_t outLen = length;
+//      if(outLen > space) {
+//        outLen = space;
+//      }
+//      DBUGF("Aligned write %d@%p", outLen, ptr);
+//      written = request->client()->write(ptr, outLen);
+//      if(written > 0) {
+//        _writtenLength += written;
+//        ptr += written;
+//        length -= written;
+//      } else {
+//        DBUGF("Failed to write data");
+//      }
+//    }
 
     if(0 == length)
     {
@@ -230,7 +226,7 @@ size_t StaticFileResponse::writeData(AsyncWebServerRequest *request)
   return 0;
 }
 
-void StaticFileResponse::_respond(AsyncWebServerRequest *request){
+void StaticFileResponse::_respond(MongooseHttpServerRequest *request){
   _state = RESPONSE_HEADERS;
   _header = _assembleHead(request->version());
 
@@ -241,7 +237,8 @@ void StaticFileResponse::_respond(AsyncWebServerRequest *request){
   write(request);
 }
 
-size_t StaticFileResponse::_ack(AsyncWebServerRequest *request, size_t len, uint32_t time){
+size_t StaticFileResponse::_ack(MongooseHttpServerRequest *request, size_t len, uint32_t time){
   _ackedLength += len;
   return write(request);
 }
+*/
