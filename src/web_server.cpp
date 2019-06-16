@@ -119,12 +119,14 @@ bool requestPreProcess(MongooseHttpServerRequest *request, MongooseHttpServerRes
   dumpRequest(request);
 
   if(wifi_mode_is_sta() && www_username!="" &&
-     false == request->authenticate(www_username.c_str(), www_password.c_str())) {
+     false == request->authenticate(www_username, www_password)) {
     request->requestAuthentication(esp_hostname);
     return false;
   }
 
-  response = request->beginResponseStream(contentType);
+  response = request->beginResponseStream();
+  response->setContentType(contentType);
+
   if(enableCors) {
     response->addHeader(F("Access-Control-Allow-Origin"), F("*"));
   }
@@ -683,8 +685,11 @@ handleRestart(MongooseHttpServerRequest *request) {
 // url: //emoncms/describe
 // -------------------------------------------------------------------
 void handleDescribe(MongooseHttpServerRequest *request) {
-  MongooseHttpServerResponse *response = request->beginResponse(200, CONTENT_TYPE_TEXT, "openevse");
+  MongooseHttpServerResponseBasic *response = request->beginResponse();
+  response->setCode(200);
+  response->setContentType(CONTENT_TYPE_TEXT);
   response->addHeader("Access-Control-Allow-Origin", "*");
+  response->setContent("openevse");
   request->send(response);
 }
 
@@ -722,9 +727,7 @@ handleUpdatePost(MongooseHttpServerRequest *request) {
 
   #else // ! ESP32
 
-  MongooseHttpServerResponse *response = request->beginResponse(500, CONTENT_TYPE_TEXT, "Not supported");
-  response->addHeader("Connection", "close");
-  request->send(response);
+  request->send(500, CONTENT_TYPE_TEXT, "Not supported");
 
   #endif // !ESP32
 }
@@ -904,7 +907,8 @@ void handleNotFound(MongooseHttpServerRequest *request)
 
   if(wifi_mode_is_ap_only()) {
     // Redirect to the home page in AP mode (for the captive portal)
-    MongooseHttpServerResponseStream *response = request->beginResponseStream(String(CONTENT_TYPE_HTML));
+    MongooseHttpServerResponseStream *response = request->beginResponseStream();
+    response->setContentType(CONTENT_TYPE_HTML);
 
     String url = F("http://");
     url += ipaddress;
@@ -951,6 +955,8 @@ void
 web_server_setup() {
 //  SPIFFS.begin(); // mount the fs
 
+  server.begin(80);
+
   // Setup the static files
 //  server.serveStatic("/", SPIFFS, "/")
 //    .setDefaultFile("index.html");
@@ -987,7 +993,6 @@ web_server_setup() {
 //  server.on("/update$", HTTP_POST, handleUpdatePost, handleUpdateUpload);
 
   server.onNotFound(handleNotFound);
-  server.begin(80);
 
   DEBUG.println("Server started");
 }

@@ -27,6 +27,7 @@
 #include <Arduino.h>
 #include <WiFiUdp.h>
 #include <ArduinoOTA.h>               // local OTA update from Arduino IDE
+#include <MongooseCore.h>
 
 #include "emonesp.h"
 #include "config.h"
@@ -79,6 +80,9 @@ void setup() {
   wifi_setup();
   DBUGF("After wifi_setup: %d", ESP.getFreeHeap());
 
+  // Initialise Mongoose networking library
+  Mongoose.begin();
+
   // Bring up the web server
   web_server_setup();
   DBUGF("After web_server_setup: %d", ESP.getFreeHeap());
@@ -99,6 +103,8 @@ void
 loop() {
   Profile_Start(loop);
 
+  Mongoose.poll(0);
+
   lcd_loop();
   web_server_loop();
   wifi_loop();
@@ -108,6 +114,7 @@ loop() {
   rapiSender.loop();
   divert_current_loop();
 
+/*
   if(OPENEVSE_STATE_STARTING != state &&
      OPENEVSE_STATE_INVALID != state)
   {
@@ -152,6 +159,7 @@ loop() {
       }
     }
   }
+*/
 
   if(wifi_client_connected())
   {
