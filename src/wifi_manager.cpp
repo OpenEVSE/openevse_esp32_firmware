@@ -15,6 +15,7 @@
 #include <DNSServer.h>                // Required for captive portal
 
 DNSServer dnsServer;                  // Create class DNS server, captive portal re-direct
+static bool dnsServerStarted = false;
 const byte DNS_PORT = 53;
 
 // Access Point SSID, password & IP address. SSID will be softAP_ssid + chipID to make SSID unique
@@ -111,7 +112,7 @@ startAP() {
 
   // Setup the DNS server redirecting all the domains to the apIP
   dnsServer.setErrorReplyCode(DNSReplyCode::NoError);
-  dnsServer.start(DNS_PORT, "*", apIP);
+  dnsServerStarted = dnsServer.start(DNS_PORT, "*", apIP);
 
   IPAddress myIP = WiFi.softAPIP();
   char tmpStr[40];
@@ -384,7 +385,9 @@ wifi_loop()
     #endif
   }
 
-  dnsServer.processNextRequest(); // Captive portal DNS re-dierct
+  if(dnsServerStarted) {
+    dnsServer.processNextRequest(); // Captive portal DNS re-dierct
+  }
 
   Profile_End(wifi_loop, 5);
 }
@@ -409,6 +412,7 @@ void wifi_turn_off_ap()
   {
     WiFi.softAPdisconnect(true);
     dnsServer.stop();
+    dnsServerStarted = false;
   }
 }
 
