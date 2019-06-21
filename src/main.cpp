@@ -103,7 +103,9 @@ void
 loop() {
   Profile_Start(loop);
 
+  Profile_Start(Mongoose);
   Mongoose.poll(0);
+  Profile_End(Mongoose, 10);
 
   lcd_loop();
   web_server_loop();

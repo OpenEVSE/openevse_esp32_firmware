@@ -3,6 +3,18 @@
 
 #if defined(ENABLE_PROFILE) && defined(ENABLE_DEBUG)
 
+#if defined(ENABLE_NOISY_PROFILE)
+
+#define Profile_Start(x) \
+  unsigned long profile ## x = millis(); \
+  DBUGLN(">> Start " #x)
+
+#define Profile_End(x, max) \
+  unsigned long profile ## x ## Diff = millis() - profile ## x; \
+  DBUGF(">> End " #x " %ldms", profile ## x ## Diff);\
+
+#else
+
 #define Profile_Start(x) \
   unsigned long profile ## x = millis()
 
@@ -11,6 +23,8 @@
   if(profile ## x ## Diff > max) { \
     DBUGF(">> Slow " #x " %ldms", profile ## x ## Diff);\
   }
+
+#endif
 
 #else // ENABLE_PROFILE
 

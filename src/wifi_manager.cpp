@@ -60,6 +60,10 @@ unsigned long wifiLedTimeOut = millis();
 #define WIFI_BUTTON 0
 #endif
 
+#ifndef WIFI_BUTTON_PRESSED_STATE
+#define WIFI_BUTTON_PRESSED_STATE LOW
+#endif
+
 #ifndef WIFI_BUTTON_AP_TIMEOUT
 #define WIFI_BUTTON_AP_TIMEOUT              (5 * 1000)
 #endif
@@ -271,6 +275,22 @@ wifi_loop()
   bool isAp = wifi_mode_is_ap();
   bool isApOnly = wifi_mode_is_ap_only();
 
+  static bool connected = false;
+  if(connected != WiFi.isConnected())
+  {
+    connected = WiFi.isConnected();
+    if(connected)
+    {
+      DBUGLN("WiFi connected");
+      DBUG("IP Address: ");
+      DBUGLN(WiFi.localIP());
+    }
+    else
+    {
+      DBUGLN("WiFi disconnected");
+    }
+  }
+
 #ifdef WIFI_LED
   if ((isApOnly || !WiFi.isConnected()) &&
       millis() > wifiLedTimeOut)
@@ -300,7 +320,7 @@ wifi_loop()
   if(wifiButtonState != button)
   {
     wifiButtonState = button;
-    if(LOW == button) {
+    if(WIFI_BUTTON_PRESSED_STATE == button) {
       DBUGF("Button pressed");
       wifiButtonTimeOut = millis();
       apMessage = false;
@@ -312,8 +332,10 @@ wifi_loop()
     }
   }
 
-  if(LOW == wifiButtonState && millis() > wifiButtonTimeOut + WIFI_BUTTON_FACTORY_RESET_TIMEOUT)
+  if(WIFI_BUTTON_PRESSED_STATE == wifiButtonState && millis() > wifiButtonTimeOut + WIFI_BUTTON_FACTORY_RESET_TIMEOUT)
   {
+    DBUGLN("*** Factory Reset ***");
+
     lcd_display(F("Factory Reset"), 0, 0, 0, LCD_CLEAR_LINE);
     lcd_display(F(""), 0, 1, 10 * 1000, LCD_CLEAR_LINE);
     lcd_loop();
