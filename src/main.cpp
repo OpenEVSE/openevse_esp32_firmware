@@ -114,7 +114,6 @@ loop() {
   rapiSender.loop();
   divert_current_loop();
 
-/*
   if(OPENEVSE_STATE_STARTING != state &&
      OPENEVSE_STATE_INVALID != state)
   {
@@ -159,7 +158,6 @@ loop() {
       }
     }
   }
-*/
 
   if(wifi_client_connected())
   {
