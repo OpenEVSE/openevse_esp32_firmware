@@ -28,6 +28,8 @@ env:
   - PIO_ENV=openevse_dev
   - PIO_ENV=openevse_staging
   - PIO_ENV=openevse_staging_libs
+  - PIO_ENV=openevse_esp32
+  - PIO_ENV=openevse_esp-wrover-kit
   # - SCRIPT=ci_arduino.sh
   #   BUILD_TARGET=esp8266:esp8266:huzzah:FlashSize=4M1M
 
@@ -44,6 +46,7 @@ install:
 
   # Use dev version
   - pip install -U https://github.com/platformio/platformio-core/archive/develop.zip
+  - pio lib install https://github.com/jeremypoulter/ArduinoMongoose.git
 
   # - platformio platform install espressif8266 --with-package tool-mkspiffs
   # - platformio platform install https://github.com/platformio/platform-espressif8266.git#feature/stage --with-package tool-mkspiffs
