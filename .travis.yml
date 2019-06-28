@@ -22,12 +22,12 @@ python:
 sudo: required
 
 env:
-  - PIO_ENV=openevse
-  - PIO_ENV=openevse_slow
-  - PIO_ENV=openevse_ota
-  - PIO_ENV=openevse_dev
-  - PIO_ENV=openevse_staging
-  - PIO_ENV=openevse_staging_libs
+  #- PIO_ENV=openevse
+  #- PIO_ENV=openevse_slow
+  #- PIO_ENV=openevse_ota
+  #- PIO_ENV=openevse_dev
+  #- PIO_ENV=openevse_staging
+  #- PIO_ENV=openevse_staging_libs
   - PIO_ENV=openevse_esp32
   - PIO_ENV=openevse_esp-wrover-kit
   # - SCRIPT=ci_arduino.sh
