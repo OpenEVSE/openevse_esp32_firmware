@@ -186,7 +186,7 @@ void divert_update_state()
           // Fallback to old API
           chargeRateSet = true;
         }
-        if(chargeRateSet = true) {
+        if(true == chargeRateSet) {
           DBUGF("Charge rate set to %d", charge_rate);
           pilot = charge_rate;
         }
