@@ -2,6 +2,9 @@
 #undef ENABLE_DEBUG
 #endif
 
+#include <Arduino.h>
+#include <ArduinoJson.h>
+
 #include "emonesp.h"
 #include "input.h"
 #include "config.h"
@@ -16,11 +19,6 @@
 #define OPENEVSE_WIFI_MODE_AP 0
 #define OPENEVSE_WIFI_MODE_CLIENT 1
 #define OPENEVSE_WIFI_MODE_AP_DEFAULT 2
-
-const char *e_url = "/input/post.json?node=";
-
-String url = "";
-String data = "";
 
 int espflash = 0;
 int espfree = 0;
@@ -84,31 +82,25 @@ long watthour_total = 0;
 unsigned long comm_sent = 0;
 unsigned long comm_success = 0;
 
-void
-create_rapi_json() {
-  url = e_url;
-  data = "";
-  url += String(emoncms_node) + "&json={";
-  data += "\"amp\":" + String(amp) + ",";
+void create_rapi_json(String &data)
+{
+  const size_t capacity = JSON_OBJECT_SIZE(10);
+  DynamicJsonDocument doc(capacity);
+
+  doc["amp"] = amp;
   if (volt > 0) {
-    data += "volt:" + String(volt) + ",";
+    doc["volt"] = volt;
   }
-  data += "\"wh\":" + String(watthour_total) + ",";
-  data += "\"temp1\":" + String(temp1) + ",";
-  data += "\"temp2\":" + String(temp2) + ",";
-  data += "\"temp3\":" + String(temp3) + ",";
-  data += "\"pilot\":" + String(pilot) + ",";
-  data += "\"state\":" + String(state) + ",";
-  data += "\"freeram\":" + String(ESP.getFreeHeap()) + ",";
-  data += "\"divertmode\":" + String(divertmode);
-  url += data;
-  if (emoncms_server == "data.openevse.com/emoncms") {
-    // data.openevse uses device module
-    url += "}&devicekey=" + emoncms_apikey;
-  } else {
-    // emoncms.org does not use device module
-    url += "}&apikey=" + emoncms_apikey;
-  }
+  doc["pilot"] = watthour_total;
+  doc["wh"] = temp1;
+  doc["temp1"] = temp2;
+  doc["temp2"] = temp3;
+  doc["temp3"] = pilot;
+  doc["state"] = state;
+  doc["freeram"] = ESP.getFreeHeap();
+  doc["divertmode"] = divertmode;
+
+  serializeJson(doc, data);
 
   //DEBUG.print(emoncms_server.c_str() + String(url));
 }

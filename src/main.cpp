@@ -173,9 +173,10 @@ loop() {
     if ((millis() - Timer1) >= 30000) {
       DBUGLN("Time1");
 
-      create_rapi_json(); // create JSON Strings for EmonCMS and MQTT
+      String data;
+      create_rapi_json(data); // create JSON Strings for EmonCMS and MQTT
       if (config_emoncms_enabled()) {
-        emoncms_publish(url);
+        emoncms_publish(data);
       }
       if (config_mqtt_enabled()) {
         mqtt_publish(data);
