@@ -109,7 +109,7 @@ void divert_update_state()
   // If divert mode = Eco (2)
   if (divertmode == DIVERT_MODE_ECO)
   {
-    int current_charge_rate;
+    int current_charge_rate = charge_rate;
 
     // Read the current charge rate
     if(0 == rapiSender.sendCmd(F("$GE"))) {
