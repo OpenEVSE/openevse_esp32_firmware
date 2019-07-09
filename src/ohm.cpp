@@ -1,33 +1,28 @@
+#include <Arduino.h>
+#include <MongooseString.h>
+#include <MongooseHttpClient.h>
+
 #include "emonesp.h"
 #include "input.h"
 #include "wifi_manager.h"
 #include "config.h"
 #include "RapiSender.h"
 
-#include <WiFiClientSecure.h>
-#ifdef ESP32
-#include <HTTPClient.h>
-#elif defined(ESP8266)
-#include <ESP8266HTTPClient.h>
-#else
-#error Platform not supported
-#endif
-
-#include <Arduino.h>
+#include "root_ca.h"
 
 #define ACTIVE_TAG_START  "<active>"
 #define ACTIVE_TAG_END    "</active>"
 
-//Server strings for Ohm Connect
-const char *ohm_host = "login.ohmconnect.com";
-const char *ohm_url = "/verify-ohm-hour/";
-const int ohm_httpsPort = 443;
-const char *ohm_fingerprint =
-  "0C 53 16 B1 DE 52 CD 3E 57 C5 6C A9 45 A2 DD 0A 04 1A AD C6";
+#ifndef OHM_URL
+#define OHM_URL "https://login.ohmconnect.com/verify-ohm-hour/";
+#endif
+
 String ohm_hour = "NotConnected";
 int evse_sleep = 0;
 
 extern RapiSender rapiSender;
+
+static MongooseHttpClient client;
 
 // -------------------------------------------------------------------
 // Ohm Connect "Ohm Hour"
@@ -42,32 +37,23 @@ void ohm_loop()
 
   if (ohm != 0)
   {
-    WiFiClientSecure client;
-    if (!client.connect(ohm_host, ohm_httpsPort)) {
-      DBUGLN(F("ERROR Ohm Connect - connection failed"));
-      return;
-    }
-#ifndef ESP32
-    if (client.verify(ohm_fingerprint, ohm_host))
-#else
-    #warning HTTPS verification not enabled
-#endif
+    client.setRootCa(root_ca);
+    String ohm_url = OHM_URL;
+    ohm_url += ohm;
+    DBUGVAR(ohm_url);
+    client.get(ohm_url, [](MongooseHttpClientResponse *response)
     {
-      client.print(String("GET ") + ohm_url + ohm + " HTTP/1.1\r\n" +
-                   "Host: " + ohm_host + "\r\n" +
-                   "User-Agent: OpenEVSE\r\n" + "Connection: close\r\n\r\n");
+      String result = response->body().toString();
+      DBUGVAR(result);
 
-      String line = client.readString();
-      DBUGVAR(line);
-
-      int active_start = line.indexOf(ACTIVE_TAG_START);
-      int active_end = line.indexOf(ACTIVE_TAG_END);
+      int active_start = result.indexOf(ACTIVE_TAG_START);
+      int active_end = result.indexOf(ACTIVE_TAG_END);
 
       if(active_start > 0 && active_end > 0)
       {
         active_start += sizeof(ACTIVE_TAG_START) - 1;
 
-        String new_ohm_hour = line.substring(active_start, active_end);
+        String new_ohm_hour = result.substring(active_start, active_end);
         DBUGVAR(new_ohm_hour);
 
         if(new_ohm_hour != ohm_hour)
@@ -79,7 +65,7 @@ void ohm_loop()
             if (evse_sleep == 0) {
               evse_sleep = 1;
               if(0 == rapiSender.sendCmd(F("$FS"))) {
-                DBUGLN(F("Charging Started"));
+                DBUGLN(F("Stopping Charge"));
               }
             }
           }
@@ -89,17 +75,13 @@ void ohm_loop()
             if (evse_sleep == 1) {
               evse_sleep = 0;
               if(0 == rapiSender.sendCmd(F("$FE"))) {
-                DBUGLN(F("Charging Stopped"));
+                DBUGLN(F("Charging enabled"));
               }
             }
           }
         }
       }
-#ifndef ESP32
-    } else {
-      DBUGLN(F("ERROR Ohm Connect - Certificate Invalid"));
-#endif
-    }
+    });
   }
 
   Profile_End(ohm_loop, 5);
