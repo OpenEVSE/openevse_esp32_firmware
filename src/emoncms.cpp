@@ -5,7 +5,6 @@
 #include "emonesp.h"
 #include "emoncms.h"
 #include "config.h"
-#include "http.h"
 #include "input.h"
 #include "root_ca.h"
 
