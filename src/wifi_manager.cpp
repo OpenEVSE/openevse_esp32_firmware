@@ -12,7 +12,12 @@
 #else
 #error Platform not supported
 #endif
+
 #include <DNSServer.h>                // Required for captive portal
+
+#ifdef ENABLE_WIRED_ETHERNET
+#include <ETH.h>
+#endif
 
 DNSServer dnsServer;                  // Create class DNS server, captive portal re-direct
 static bool dnsServerStarted = false;
@@ -80,6 +85,10 @@ unsigned long wifiLedTimeOut = millis();
 int wifiButtonState = HIGH;
 unsigned long wifiButtonTimeOut = millis();
 bool apMessage = false;
+
+#ifdef ENABLE_WIRED_ETHERNET
+static bool eth_connected = false;
+#endif
 
 // -------------------------------------------------------------------
 // Start Access Point
@@ -222,6 +231,77 @@ void wifi_onStationModeDisconnected(const WiFiEventStationModeDisconnected &even
 }
 #endif // !ESP32
 
+#ifdef ESP32
+void wifi_event(WiFiEvent_t event, system_event_info_t info)
+{
+  DBUGF("Got Network event %s",
+    SYSTEM_EVENT_WIFI_READY == event ? "SYSTEM_EVENT_WIFI_READY" :
+    SYSTEM_EVENT_SCAN_DONE == event ? "SYSTEM_EVENT_SCAN_DONE" :
+    SYSTEM_EVENT_STA_START == event ? "SYSTEM_EVENT_STA_START" :
+    SYSTEM_EVENT_STA_STOP == event ? "SYSTEM_EVENT_STA_STOP" :
+    SYSTEM_EVENT_STA_CONNECTED == event ? "SYSTEM_EVENT_STA_CONNECTED" :
+    SYSTEM_EVENT_STA_DISCONNECTED == event ? "SYSTEM_EVENT_STA_DISCONNECTED" :
+    SYSTEM_EVENT_STA_AUTHMODE_CHANGE == event ? "SYSTEM_EVENT_STA_AUTHMODE_CHANGE" :
+    SYSTEM_EVENT_STA_GOT_IP == event ? "SYSTEM_EVENT_STA_GOT_IP" :
+    SYSTEM_EVENT_STA_LOST_IP == event ? "SYSTEM_EVENT_STA_LOST_IP" :
+    SYSTEM_EVENT_STA_WPS_ER_SUCCESS == event ? "SYSTEM_EVENT_STA_WPS_ER_SUCCESS" :
+    SYSTEM_EVENT_STA_WPS_ER_FAILED == event ? "SYSTEM_EVENT_STA_WPS_ER_FAILED" :
+    SYSTEM_EVENT_STA_WPS_ER_TIMEOUT == event ? "SYSTEM_EVENT_STA_WPS_ER_TIMEOUT" :
+    SYSTEM_EVENT_STA_WPS_ER_PIN == event ? "SYSTEM_EVENT_STA_WPS_ER_PIN" :
+    SYSTEM_EVENT_AP_START == event ? "SYSTEM_EVENT_AP_START" :
+    SYSTEM_EVENT_AP_STOP == event ? "SYSTEM_EVENT_AP_STOP" :
+    SYSTEM_EVENT_AP_STACONNECTED == event ? "SYSTEM_EVENT_AP_STACONNECTED" :
+    SYSTEM_EVENT_AP_STADISCONNECTED == event ? "SYSTEM_EVENT_AP_STADISCONNECTED" :
+    SYSTEM_EVENT_AP_STAIPASSIGNED == event ? "SYSTEM_EVENT_AP_STAIPASSIGNED" :
+    SYSTEM_EVENT_AP_PROBEREQRECVED == event ? "SYSTEM_EVENT_AP_PROBEREQRECVED" :
+    SYSTEM_EVENT_GOT_IP6 == event ? "SYSTEM_EVENT_GOT_IP6" :
+    SYSTEM_EVENT_ETH_START == event ? "SYSTEM_EVENT_ETH_START" :
+    SYSTEM_EVENT_ETH_STOP == event ? "SYSTEM_EVENT_ETH_STOP" :
+    SYSTEM_EVENT_ETH_CONNECTED == event ? "SYSTEM_EVENT_ETH_CONNECTED" :
+    SYSTEM_EVENT_ETH_DISCONNECTED == event ? "SYSTEM_EVENT_ETH_DISCONNECTED" :
+    SYSTEM_EVENT_ETH_GOT_IP == event ? "SYSTEM_EVENT_ETH_GOT_IP" :
+    "UNKNOWN"
+  );
+
+  switch (event)
+  {
+#ifdef ENABLE_WIRED_ETHERNET
+    case SYSTEM_EVENT_ETH_START:
+      DBUGLN("ETH Started");
+      //set eth hostname here
+      ETH.setHostname("esp32-ethernet");
+      break;
+    case SYSTEM_EVENT_ETH_CONNECTED:
+      DBUGLN("ETH Connected");
+      break;
+    case SYSTEM_EVENT_ETH_GOT_IP:
+      DBUG("ETH MAC: ");
+      DBUG(ETH.macAddress());
+      DBUG(", IPv4: ");
+      DBUG(ETH.localIP());
+      if (ETH.fullDuplex()) {
+        DBUG(", FULL_DUPLEX");
+      }
+      DBUG(", ");
+      DBUG(ETH.linkSpeed());
+      DBUGLN("Mbps");
+      eth_connected = true;
+      break;
+    case SYSTEM_EVENT_ETH_DISCONNECTED:
+      DBUGLN("ETH Disconnected");
+      eth_connected = false;
+      break;
+    case SYSTEM_EVENT_ETH_STOP:
+      DBUGLN("ETH Stopped");
+      eth_connected = false;
+      break;
+#endif
+    default:
+      break;
+  }
+}
+#endif
+
 void
 wifi_setup() {
 #ifdef WIFI_LED
@@ -231,6 +311,12 @@ wifi_setup() {
 
   randomSeed(analogRead(0));
 
+  WiFi.onEvent(wifi_event);
+
+#ifdef ENABLE_WIRED_ETHERNET
+  ETH.begin();
+#endif
+/*
   // If we have an SSID configured at this point we have likely
   // been running another firmware, clear the results
   if(wifi_is_client_configured()) {
@@ -260,6 +346,7 @@ wifi_setup() {
 #endif
 
   wifi_start();
+*/
 
   if (MDNS.begin(esp_hostname)) {
     MDNS.addService("http", "tcp", 80);
