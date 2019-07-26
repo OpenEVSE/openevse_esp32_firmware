@@ -41,6 +41,7 @@
 #include "ota.h"
 #include "lcd.h"
 #include "openevse.h"
+#include "root_ca.h"
 
 #include "RapiSender.h"
 
@@ -82,6 +83,7 @@ void setup() {
 
   // Initialise Mongoose networking library
   Mongoose.begin();
+  Mongoose.setRootCa(root_ca);
 
   // Bring up the web server
   web_server_setup();
