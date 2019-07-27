@@ -711,7 +711,8 @@ handleUpdateUpload(AsyncWebServerRequest *request, String filename, size_t index
     DBUGF("Update Start: %s", filename.c_str());
 
     DBUGVAR(data[0]);
-    int command = data[0] == 0xE9 ? U_FLASH : U_SPIFFS;
+    //int command = data[0] == 0xE9 ? U_FLASH : U_SPIFFS;
+    int command = U_FLASH;
     size_t updateSize = U_FLASH == command ?
       (ESP.getFreeSketchSpace() - 0x1000) & 0xFFFFF000 :
       ((size_t) &_SPIFFS_end - (size_t) &_SPIFFS_start);
