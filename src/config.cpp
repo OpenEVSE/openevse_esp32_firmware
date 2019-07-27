@@ -12,6 +12,9 @@ String epass = "";
 String www_username = "";
 String www_password = "";
 
+// Advanced settings
+String esp_hostname = "";
+
 // EMONCMS SERVER strings
 String emoncms_server = "";
 String emoncms_node = "";
@@ -48,6 +51,7 @@ uint32_t flags;
 #define EEPROM_WWW_PASS_SIZE          15
 #define EEPROM_OHM_KEY_SIZE           10
 #define EEPROM_FLAGS_SIZE             4
+#define EEPROM_HOSTNAME_SIZE          32
 #define EEPROM_SIZE                   1024
 
 #define EEPROM_ESID_START             0
@@ -82,7 +86,9 @@ uint32_t flags;
 #define EEPROM_FLAGS_END              (EEPROM_FLAGS_START + EEPROM_FLAGS_SIZE)
 #define EEPROM_EMON_API_KEY_START     EEPROM_FLAGS_END
 #define EEPROM_EMON_API_KEY_END       (EEPROM_EMON_API_KEY_START + EEPROM_EMON_API_KEY_SIZE)
-#define EEPROM_CONFIG_END             EEPROM_EMON_API_KEY_END
+#define EEPROM_HOSTNAME_START         EEPROM_EMON_API_KEY_END
+#define EEPROM_HOSTNAME_END           (EEPROM_HOSTNAME_START + EEPROM_HOSTNAME_SIZE)
+#define EEPROM_CONFIG_END             EEPROM_HOSTNAME_END
 
 #if EEPROM_CONFIG_END > EEPROM_SIZE
 #error EEPROM_SIZE too small
@@ -217,6 +223,10 @@ config_load_settings() {
   EEPROM_read_string(EEPROM_WWW_PASS_START, EEPROM_WWW_PASS_SIZE,
                      www_password, "");
 
+  // Web server credentials
+  EEPROM_read_string(EEPROM_HOSTNAME_START, EEPROM_HOSTNAME_SIZE,
+                     esp_hostname, "openevse");
+
   // Ohm Connect Settings
   EEPROM_read_string(EEPROM_OHM_KEY_START, EEPROM_OHM_KEY_SIZE, ohm);
 
@@ -305,6 +315,17 @@ config_save_admin(String user, String pass) {
 
   EEPROM_write_string(EEPROM_WWW_USER_START, EEPROM_WWW_USER_SIZE, user);
   EEPROM_write_string(EEPROM_WWW_PASS_START, EEPROM_WWW_PASS_SIZE, pass);
+
+  EEPROM.end();
+}
+
+void
+config_save_advanced(String host) {
+  EEPROM.begin(EEPROM_SIZE);
+
+  esp_hostname = host;
+
+  EEPROM_write_string(EEPROM_HOSTNAME_START, EEPROM_HOSTNAME_SIZE, host);
 
   EEPROM.end();
 }

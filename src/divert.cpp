@@ -23,7 +23,6 @@
 // If EVSE is sleeping charging will not start until solar PV / excess power > min chanrge rate
 // Once charging begins it will not pause even if solaer PV / excess power drops less then minimm charge rate. This avoids wear on the relay and the car
 
-#define SERVICE_LEVEL1_VOLTAGE  110
 #define SERVICE_LEVEL2_VOLTAGE  240
 
 #define DIVERT_MODE_NORMAL      1
@@ -118,7 +117,7 @@ void divert_update_state()
     }
 
     // IMPROVE: Read from OpenEVSE or emonTX (MQTT)
-    int voltage = 1 == service ? SERVICE_LEVEL1_VOLTAGE : SERVICE_LEVEL2_VOLTAGE;
+    int voltage = SERVICE_LEVEL2_VOLTAGE;
 
     // Calculate current
     if (mqtt_grid_ie != "")

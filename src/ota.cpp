@@ -7,13 +7,14 @@
 #include <FS.h>
 
 #include "lcd.h"
+#include "config.h"
 
 static int lastPercent = -1;
 
 void ota_setup()
 {
   // Start local OTA update server
-  ArduinoOTA.setHostname(esp_hostname);
+  ArduinoOTA.setHostname(esp_hostname.c_str());
   ArduinoOTA.begin();
 
   ArduinoOTA.onStart([]() {
