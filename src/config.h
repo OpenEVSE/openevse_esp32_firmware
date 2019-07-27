@@ -19,6 +19,9 @@ extern String epass;
 extern String www_username;
 extern String www_password;
 
+// Advanced settings
+extern String esp_hostname;
+
 // EMONCMS SERVER strings
 extern String emoncms_server;
 extern String emoncms_node;
@@ -74,6 +77,11 @@ extern void config_save_mqtt(bool enable, String server, String topic, String us
 // Save the admin/web interface details
 // -------------------------------------------------------------------
 extern void config_save_admin(String user, String pass);
+
+// -------------------------------------------------------------------
+// Save advanced settings
+// -------------------------------------------------------------------
+extern void config_save_advanced(String host);
 
 // -------------------------------------------------------------------
 // Save the Wifi details

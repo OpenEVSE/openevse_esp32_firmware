@@ -17,9 +17,6 @@ IPAddress apIP(192, 168, 4, 1);
 IPAddress netMsk(255, 255, 255, 0);
 int apClients = 0;
 
-// hostname for mDNS. Should work at least on windows. Try http://openevse or http://openevse.local
-const char *esp_hostname = "openevse";
-
 // Wifi Network Strings
 String connected_network = "";
 String ipaddress = "";
@@ -236,7 +233,7 @@ wifi_setup() {
 
   wifi_start();
 
-  if (MDNS.begin(esp_hostname)) {
+  if (MDNS.begin(esp_hostname.c_str())) {
     MDNS.addService("http", "tcp", 80);
   }
 }

@@ -101,7 +101,7 @@ bool requestPreProcess(AsyncWebServerRequest *request, AsyncResponseStream *&res
 
   if(wifi_mode_is_sta() && www_username!="" &&
      false == request->authenticate(www_username.c_str(), www_password.c_str())) {
-    request->requestAuthentication(esp_hostname);
+    request->requestAuthentication(esp_hostname.c_str());
     return false;
   }
 
@@ -391,6 +391,26 @@ handleSaveAdmin(AsyncWebServerRequest *request) {
 }
 
 // -------------------------------------------------------------------
+// Save advanced settings
+// url: /saveadvanced
+// -------------------------------------------------------------------
+void
+handleSaveAdvanced(AsyncWebServerRequest *request) {
+  AsyncResponseStream *response;
+  if(false == requestPreProcess(request, response, CONTENT_TYPE_TEXT)) {
+    return;
+  }
+
+  String qhostname = request->arg("hostname");
+
+  config_save_advanced(qhostname);
+
+  response->setCode(200);
+  response->print("saved");
+  request->send(response);
+}
+
+// -------------------------------------------------------------------
 // Save the Ohm keyto EEPROM
 // url: /handleSaveOhmkey
 // -------------------------------------------------------------------
@@ -567,6 +587,7 @@ handleConfig(AsyncWebServerRequest *request) {
     s += dummyPassword;
   }
   s += "\",";
+  s += "\"hostname\":\"" + esp_hostname + "\",";
   s += "\"ohm_enabled\":" + String(config_ohm_enabled() ? "true" : "false");
   s += "}";
 
@@ -935,6 +956,7 @@ web_server_setup() {
   server.on("/saveemoncms", handleSaveEmoncms);
   server.on("/savemqtt", handleSaveMqtt);
   server.on("/saveadmin", handleSaveAdmin);
+  server.on("/saveadvanced", handleSaveAdvanced);
   server.on("/saveohmkey", handleSaveOhmkey);
   server.on("/reset", handleRst);
   server.on("/restart", handleRestart);
