@@ -52,6 +52,7 @@ $RECYCLE.BIN/
 
 # Windows shortcuts
 *.lnk
+.pio
 .pioenvs
 .piolibdeps
 .clang_complete
