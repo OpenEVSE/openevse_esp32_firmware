@@ -137,8 +137,10 @@ startClient()
   client_disconnects = 0;
 
   WiFi.begin(esid.c_str(), epass.c_str());
-#ifndef ESP32
-  WiFi.hostname(esp_hostname);
+#ifdef ESP32
+  WiFi.setHostname(esp_hostname.c_str());
+#else
+  WiFi.hostname(esp_hostname.c_str());
 #endif // !ESP32
   WiFi.enableSTA(true);
 }
