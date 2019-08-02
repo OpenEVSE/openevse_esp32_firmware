@@ -13,6 +13,7 @@ long lastMqttReconnectAttempt = 0;
 int clientTimeout = 0;
 int i = 0;
 String payload_str = "";
+bool connecting = false;
 
 // -------------------------------------------------------------------
 // MQTT msg Received callback function:
@@ -86,9 +87,15 @@ void mqttmsg_callback(MongooseString topic, MongooseString payload) {
 boolean
 mqtt_connect()
 {
+  if(connecting) {
+    return false;
+  }
+  connecting = true;
+
   mqttclient.onMessage(mqttmsg_callback); //function to be called when mqtt msg is received on subscribed topic
   mqttclient.onError([](uint8_t err) {
     DBUGF("Got error %u", err);
+    connecting = false;
   });
 
   DBUG("MQTT Connecting to...");
@@ -100,7 +107,7 @@ mqtt_connect()
   String strID = String(ESP.getChipId());
   #endif
 
-  mqttclient.connect(mqtt_server, mqtt_user, mqtt_pass, []()
+  mqttclient.connect(mqtt_server + ":1883", mqtt_user, mqtt_pass, []()
   {
     DBUGLN("MQTT connected");
 
@@ -117,6 +124,8 @@ mqtt_connect()
     }
     mqtt_sub_topic = mqtt_topic + "/divertmode/set";      // MQTT Topic to change divert mode
     mqttclient.subscribe(mqtt_sub_topic);
+
+    connecting = false;
   });
 
 /*
@@ -205,7 +214,7 @@ mqtt_publish(String data) {
 void
 mqtt_loop() {
   Profile_Start(mqtt_loop);
-  /*
+
   if (!mqttclient.connected()) {
     long now = millis();
     // try and reconnect continuously for first 5s then try again once every 10s
@@ -214,7 +223,7 @@ mqtt_loop() {
       mqtt_connect(); // Attempt to reconnect
     }
   }
-  */
+
   Profile_End(mqtt_loop, 5);
 }
 
