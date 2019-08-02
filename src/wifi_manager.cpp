@@ -78,6 +78,10 @@ int wifiButtonState = HIGH;
 unsigned long wifiButtonTimeOut = millis();
 bool apMessage = false;
 
+#ifdef ESP32
+#include "wifi_esp32.h"
+#endif
+
 // -------------------------------------------------------------------
 // Start Access Point
 // Access point is used for wifi network selection
@@ -159,8 +163,11 @@ static void wifi_start()
   }
 }
 
-#ifndef ESP32
-void wifi_onStationModeGotIP(const WiFiEventStationModeGotIP &event)
+static void wifi_onStationModeConnected(const WiFiEventStationModeConnected &event) { 
+  DBUGF("Connected to %s", event.ssid.c_str());
+}
+
+static void wifi_onStationModeGotIP(const WiFiEventStationModeGotIP &event)
 {
   #ifdef WIFI_LED
     wifiLedState = WIFI_LED_ON_STATE;
@@ -184,7 +191,7 @@ void wifi_onStationModeGotIP(const WiFiEventStationModeGotIP &event)
   client_retry = false;
 }
 
-void wifi_onStationModeDisconnected(const WiFiEventStationModeDisconnected &event)
+static void wifi_onStationModeDisconnected(const WiFiEventStationModeDisconnected &event)
 {
   DBUGF("WiFi dissconnected: %s",
   WIFI_DISCONNECT_REASON_UNSPECIFIED == event.reason ? "WIFI_DISCONNECT_REASON_UNSPECIFIED" :
@@ -219,7 +226,100 @@ void wifi_onStationModeDisconnected(const WiFiEventStationModeDisconnected &even
 
   client_disconnects++;
 }
-#endif // !ESP32
+
+static void wifi_onAPModeStationConnected(const WiFiEventSoftAPModeStationConnected &event) {
+  lcd_display(F("IP Address"), 0, 0, 0, LCD_CLEAR_LINE);
+  lcd_display(ipaddress, 0, 1, (0 == apClients ? 15 : 5) * 1000, LCD_CLEAR_LINE);
+  apClients++;
+};
+
+static void wifi_onAPModeStationDisconnected(const WiFiEventSoftAPModeStationDisconnected &event) {
+  apClients--;
+};
+
+#ifdef ESP32
+void wifi_event(WiFiEvent_t event, system_event_info_t info)
+{
+  DBUGF("Got Network event %s",
+    SYSTEM_EVENT_WIFI_READY == event ? "SYSTEM_EVENT_WIFI_READY" :
+    SYSTEM_EVENT_SCAN_DONE == event ? "SYSTEM_EVENT_SCAN_DONE" :
+    SYSTEM_EVENT_STA_START == event ? "SYSTEM_EVENT_STA_START" :
+    SYSTEM_EVENT_STA_STOP == event ? "SYSTEM_EVENT_STA_STOP" :
+    SYSTEM_EVENT_STA_CONNECTED == event ? "SYSTEM_EVENT_STA_CONNECTED" :
+    SYSTEM_EVENT_STA_DISCONNECTED == event ? "SYSTEM_EVENT_STA_DISCONNECTED" :
+    SYSTEM_EVENT_STA_AUTHMODE_CHANGE == event ? "SYSTEM_EVENT_STA_AUTHMODE_CHANGE" :
+    SYSTEM_EVENT_STA_GOT_IP == event ? "SYSTEM_EVENT_STA_GOT_IP" :
+    SYSTEM_EVENT_STA_LOST_IP == event ? "SYSTEM_EVENT_STA_LOST_IP" :
+    SYSTEM_EVENT_STA_WPS_ER_SUCCESS == event ? "SYSTEM_EVENT_STA_WPS_ER_SUCCESS" :
+    SYSTEM_EVENT_STA_WPS_ER_FAILED == event ? "SYSTEM_EVENT_STA_WPS_ER_FAILED" :
+    SYSTEM_EVENT_STA_WPS_ER_TIMEOUT == event ? "SYSTEM_EVENT_STA_WPS_ER_TIMEOUT" :
+    SYSTEM_EVENT_STA_WPS_ER_PIN == event ? "SYSTEM_EVENT_STA_WPS_ER_PIN" :
+    SYSTEM_EVENT_AP_START == event ? "SYSTEM_EVENT_AP_START" :
+    SYSTEM_EVENT_AP_STOP == event ? "SYSTEM_EVENT_AP_STOP" :
+    SYSTEM_EVENT_AP_STACONNECTED == event ? "SYSTEM_EVENT_AP_STACONNECTED" :
+    SYSTEM_EVENT_AP_STADISCONNECTED == event ? "SYSTEM_EVENT_AP_STADISCONNECTED" :
+    SYSTEM_EVENT_AP_STAIPASSIGNED == event ? "SYSTEM_EVENT_AP_STAIPASSIGNED" :
+    SYSTEM_EVENT_AP_PROBEREQRECVED == event ? "SYSTEM_EVENT_AP_PROBEREQRECVED" :
+    SYSTEM_EVENT_GOT_IP6 == event ? "SYSTEM_EVENT_GOT_IP6" :
+    SYSTEM_EVENT_ETH_START == event ? "SYSTEM_EVENT_ETH_START" :
+    SYSTEM_EVENT_ETH_STOP == event ? "SYSTEM_EVENT_ETH_STOP" :
+    SYSTEM_EVENT_ETH_CONNECTED == event ? "SYSTEM_EVENT_ETH_CONNECTED" :
+    SYSTEM_EVENT_ETH_DISCONNECTED == event ? "SYSTEM_EVENT_ETH_DISCONNECTED" :
+    SYSTEM_EVENT_ETH_GOT_IP == event ? "SYSTEM_EVENT_ETH_GOT_IP" :
+    "UNKNOWN"
+  );
+
+  switch (event)
+  {
+    case SYSTEM_EVENT_STA_CONNECTED:
+    {
+      auto& src = info.connected;
+      WiFiEventStationModeConnected dst;
+      dst.ssid = String(reinterpret_cast<char*>(src.ssid));
+      memcpy(dst.bssid, src.bssid, 6);
+      dst.channel = src.channel;
+      wifi_onStationModeConnected(dst);
+    } break;
+    case SYSTEM_EVENT_STA_DISCONNECTED:
+    {
+      auto& src = info.disconnected;
+      WiFiEventStationModeDisconnected dst;
+      dst.ssid = String(reinterpret_cast<char*>(src.ssid));
+      memcpy(dst.bssid, src.bssid, 6);
+      dst.reason = static_cast<WiFiDisconnectReason>(src.reason);
+      wifi_onStationModeDisconnected(dst);
+    } break;
+    case SYSTEM_EVENT_STA_GOT_IP:
+    {
+      auto& src = info.got_ip.ip_info;
+      WiFiEventStationModeGotIP dst;
+      dst.ip = src.ip.addr;
+      dst.mask = src.netmask.addr;
+      dst.gw = src.gw.addr;
+      wifi_onStationModeGotIP(dst);
+    } break;
+    case SYSTEM_EVENT_AP_STACONNECTED:
+    {
+      auto& src = info.sta_connected;
+      WiFiEventSoftAPModeStationConnected dst;
+      memcpy(dst.mac, src.mac, 6);
+      dst.aid = src.aid;
+      wifi_onAPModeStationConnected(dst);
+    } break;
+    case SYSTEM_EVENT_AP_STADISCONNECTED:
+    {
+      auto& src = info.sta_disconnected;
+      WiFiEventSoftAPModeStationDisconnected dst;
+      memcpy(dst.mac, src.mac, 6);
+      dst.aid = src.aid;
+      wifi_onAPModeStationDisconnected(dst);
+    } break;
+    default:
+      break;
+  }
+}
+#endif
+
 
 void
 wifi_setup() {
@@ -244,18 +344,16 @@ wifi_setup() {
   WiFi.persistent(false);
   WiFi.mode(WIFI_OFF);
 
-#ifndef ESP32
-  static auto _onStationModeConnected = WiFi.onStationModeConnected([](const WiFiEventStationModeConnected &event) { DBUGF("Connected to %s", event.ssid.c_str()); });
+
+
+#ifdef ESP32
+  WiFi.onEvent(wifi_event);
+#else
+  static auto _onStationModeConnected = WiFi.onStationModeConnected(wifi_onStationModeConnected);
   static auto _onStationModeGotIP = WiFi.onStationModeGotIP(wifi_onStationModeGotIP);
   static auto _onStationModeDisconnected = WiFi.onStationModeDisconnected(wifi_onStationModeDisconnected);
-  static auto _onSoftAPModeStationConnected = WiFi.onSoftAPModeStationConnected([](const WiFiEventSoftAPModeStationConnected &event) {
-    lcd_display(F("IP Address"), 0, 0, 0, LCD_CLEAR_LINE);
-    lcd_display(ipaddress, 0, 1, (0 == apClients ? 15 : 5) * 1000, LCD_CLEAR_LINE);
-    apClients++;
-  });
-  static auto _onSoftAPModeStationDisconnected = WiFi.onSoftAPModeStationDisconnected([](const WiFiEventSoftAPModeStationDisconnected &event) {
-    apClients--;
-  });
+  static auto _onSoftAPModeStationConnected = WiFi.onSoftAPModeStationConnected(wifi_onAPModeStationConnected);
+  static auto _onSoftAPModeStationDisconnected = WiFi.onSoftAPModeStationDisconnected(wifi_onAPModeStationDisconnected);
 #endif
 
   wifi_start();
@@ -270,26 +368,10 @@ wifi_loop()
 {
   Profile_Start(wifi_loop);
 
-  bool isClient = wifi_mode_is_sta();
+  //bool isClient = wifi_mode_is_sta();
   bool isClientOnly = wifi_mode_is_sta_only();
-  bool isAp = wifi_mode_is_ap();
+  //bool isAp = wifi_mode_is_ap();
   bool isApOnly = wifi_mode_is_ap_only();
-
-  static bool connected = false;
-  if(connected != WiFi.isConnected())
-  {
-    connected = WiFi.isConnected();
-    if(connected)
-    {
-      DBUGLN("WiFi connected");
-      DBUG("IP Address: ");
-      DBUGLN(WiFi.localIP());
-    }
-    else
-    {
-      DBUGLN("WiFi disconnected");
-    }
-  }
 
 #ifdef WIFI_LED
   if ((isApOnly || !WiFi.isConnected()) &&
