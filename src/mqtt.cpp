@@ -5,11 +5,9 @@
 #include "input.h"
 
 #include <Arduino.h>
-#include <PubSubClient.h>             // MQTT https://github.com/knolleary/pubsubclient PlatformIO lib: 89
-#include <WiFiClient.h>
+#include <MongooseMqttClient.h>
 
-WiFiClient espClient;                 // Create client for MQTT
-PubSubClient mqttclient(espClient);   // Create client for MQTT
+MongooseMqttClient mqttclient;
 
 long lastMqttReconnectAttempt = 0;
 int clientTimeout = 0;
@@ -22,19 +20,16 @@ String payload_str = "";
 // Used to receive RAPI commands via MQTT
 // //e.g to set current to 13A: <base-topic>/rapi/$SC 13
 // -------------------------------------------------------------------
-void mqttmsg_callback(char *topic, byte * payload, unsigned int length) {
+void mqttmsg_callback(MongooseString topic, MongooseString payload) {
 
-  String topic_string = String(topic);
-  payload_str = "";
+  String topic_string = topic.toString();
   // print received MQTT to debug
 
   DBUGLN("MQTT received:");
-  DBUGF("Topic: %s", topic);
+  DBUGLN("Topic: " + topic_string);
 
-  for (int i = 0; i < length; i++) {
-    payload_str += (char) payload[i];
-  }
-  DEBUG.println("Payload: " + payload_str);
+  payload_str = payload.toString();
+  DBUGLN("Payload: " + payload_str);
 
   // If MQTT message is solar PV
   if (topic_string == mqtt_solar){
@@ -42,7 +37,6 @@ void mqttmsg_callback(char *topic, byte * payload, unsigned int length) {
     DBUGF("solar:%dW", solar);
     divert_update_state();
   }
-
   else if (topic_string == mqtt_grid_ie){
     grid_ie = payload_str.toInt();
     DBUGF("grid:%dW", solar);
@@ -65,13 +59,11 @@ void mqttmsg_callback(char *topic, byte * payload, unsigned int length) {
       DBUGF("Processing as RAPI");
       // Print RAPI command from mqtt-sub topic e.g $SC
       // ASSUME RAPI COMMANDS ARE ALWAYS PREFIX BY $ AND TWO CHARACTERS LONG)
-      String cmd = String(topic + rapi_character_index);
-      if (payload[0] != 0); {     // If MQTT msg contains a payload e.g $SC 13. Not all rapi commands have a payload e.g. $GC
-        cmd += " ";
-        // print RAPI value received via MQTT serial
-        for (int i = 0; i < length; i++) {
-          cmd += (char)payload[i];
-        }
+      String cmd = topic_string.substring(rapi_character_index);
+      if (payload.length() > 0)
+      {
+        // If MQTT msg contains a payload e.g $SC 13. Not all rapi commands have a payload e.g. $GC
+        cmd += " "+payload_str;
       }
 
       comm_sent++;
@@ -81,7 +73,7 @@ void mqttmsg_callback(char *topic, byte * payload, unsigned int length) {
         if (rapiString.startsWith("$OK ") || rapiString.startsWith("$NK ")) {
           String mqtt_data = rapiString;
           String mqtt_sub_topic = mqtt_topic + "/rapi/out";
-          mqttclient.publish(mqtt_sub_topic.c_str(), mqtt_data.c_str());
+          mqttclient.publish(mqtt_sub_topic, mqtt_data);
         }
       }
     }
@@ -92,17 +84,43 @@ void mqttmsg_callback(char *topic, byte * payload, unsigned int length) {
 // MQTT Connect
 // -------------------------------------------------------------------
 boolean
-mqtt_connect() {
-  mqttclient.setServer(mqtt_server.c_str(), 1883);
-  mqttclient.setCallback(mqttmsg_callback); //function to be called when mqtt msg is received on subscribed topic
-  DEBUG.print("MQTT Connecting to...");
-  DEBUG.println(mqtt_user.c_str());
+mqtt_connect()
+{
+  mqttclient.onMessage(mqttmsg_callback); //function to be called when mqtt msg is received on subscribed topic
+  mqttclient.onError([](uint8_t err) {
+    DBUGF("Got error %u", err);
+  });
+
+  DBUG("MQTT Connecting to...");
+  DBUGLN(mqtt_server);
+
   #ifdef ESP32
   String strID = String((uint32_t)ESP.getEfuseMac());
   #else
   String strID = String(ESP.getChipId());
   #endif
-  if (mqttclient.connect(strID.c_str(), mqtt_user.c_str(), mqtt_pass.c_str(),mqtt_topic.c_str(),1,0,(char*)"disconnected")) {  // Attempt to connect
+
+  mqttclient.connect(mqtt_server, mqtt_user, mqtt_pass, []()
+  {
+    DBUGLN("MQTT connected");
+
+    mqttclient.publish(mqtt_topic, "connected"); // Once connected, publish an announcement..
+    String mqtt_sub_topic = mqtt_topic + "/rapi/in/#";      // MQTT Topic to subscribe to receive RAPI commands via MQTT
+    //e.g to set current to 13A: <base-topic>/rapi/in/$SC 13
+    mqttclient.subscribe(mqtt_sub_topic);
+    // subscribe to solar PV / grid_ie MQTT feeds
+    if (mqtt_solar!=""){
+      mqttclient.subscribe(mqtt_solar);
+    }
+    if (mqtt_grid_ie!=""){
+      mqttclient.subscribe(mqtt_grid_ie);
+    }
+    mqtt_sub_topic = mqtt_topic + "/divertmode/set";      // MQTT Topic to change divert mode
+    mqttclient.subscribe(mqtt_sub_topic);
+  });
+
+/*
+  if (mqttclient.connect( strID.c_str(), mqtt_user.c_str(), mqtt_pass.c_str(),mqtt_topic.c_str(),1,0,(char*)"disconnected")) {  // Attempt to connect
     DEBUG.println("MQTT connected");
     mqttclient.publish(mqtt_topic.c_str(), "connected"); // Once connected, publish an announcement..
     String mqtt_sub_topic = mqtt_topic + "/rapi/in/#";      // MQTT Topic to subscribe to receive RAPI commands via MQTT
@@ -123,7 +141,8 @@ mqtt_connect() {
     DEBUG.println(mqttclient.state());
     return (0);
   }
-  return (1);
+*/
+  return true;
 }
 
 
@@ -166,8 +185,8 @@ mqtt_publish(String data) {
     }
     // send data via mqtt
     //delay(100);
-    DEBUG.printf("%s = %s\r\n", topic.c_str(), mqtt_data.c_str());
-    mqttclient.publish(topic.c_str(), mqtt_data.c_str());
+    DBUGF("%s = %s", topic.c_str(), mqtt_data.c_str());
+    mqttclient.publish(topic, mqtt_data);
     topic = mqtt_topic + "/";
     mqtt_data = "";
     i++;
@@ -186,28 +205,26 @@ mqtt_publish(String data) {
 void
 mqtt_loop() {
   Profile_Start(mqtt_loop);
+  /*
   if (!mqttclient.connected()) {
     long now = millis();
     // try and reconnect continuously for first 5s then try again once every 10s
     if ((now < 50000) || ((now - lastMqttReconnectAttempt) > 100000)) {
       lastMqttReconnectAttempt = now;
-      if (mqtt_connect()) { // Attempt to reconnect
-        lastMqttReconnectAttempt = 0;
-      }
+      mqtt_connect(); // Attempt to reconnect
     }
-  } else {
-    // if MQTT connected
-    mqttclient.loop();
   }
+  */
   Profile_End(mqtt_loop, 5);
 }
 
 void
 mqtt_restart() {
-  if (mqttclient.connected()) {
-    mqttclient.disconnect();
-  }
-  lastMqttReconnectAttempt = 0;
+// TODO
+//  if (mqttclient.connected()) {
+//    mqttclient.disconnect();
+//  }
+//  lastMqttReconnectAttempt = 0;
 }
 
 boolean
