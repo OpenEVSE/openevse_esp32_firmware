@@ -20,7 +20,7 @@ void ota_setup()
   ArduinoOTA.onStart([]() {
     // Clean SPIFFS
     //SPIFFS.end();
-
+    DBUGF("Starting ArduinoOTA update");
     lcd_display(F("Updating WiFi"), 0, 0, 0, LCD_CLEAR_LINE);
     lcd_display(F(""), 0, 1, 10 * 1000, LCD_CLEAR_LINE);
     lcd_loop();
@@ -29,6 +29,7 @@ void ota_setup()
   ArduinoOTA.onProgress([](unsigned int progress, unsigned int total) {
     int percent = progress / (total / 100);
     if(percent != lastPercent) {
+      DBUGF("ArduinoOTA progress %d%%", percent);
       String text = String(percent) + F("%");
       lcd_display(text, 0, 1, 10 * 1000, LCD_DISPLAY_NOW);
       lastPercent = percent;
@@ -36,10 +37,12 @@ void ota_setup()
   });
 
   ArduinoOTA.onEnd([]() {
+    DBUGF("ArduinoOTA finished");
     lcd_display(F("Complete"), 0, 1, 10 * 1000, LCD_CLEAR_LINE | LCD_DISPLAY_NOW);
   });
 
   ArduinoOTA.onError([](ota_error_t error) {
+    DBUGF("ArduinoOTA error %d", error);
     String text = F("Error[");
     text += error;
     text += F("]");
