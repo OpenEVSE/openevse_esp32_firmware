@@ -368,7 +368,7 @@ npm run build
 
 You can then just compile and upload as above.
 
-For more details see the [GUI documentation](gui/readme.md)
+For more details see the [GUI documentation](https://github.com/OpenEVSE/openevse_wifi_gui/blob/master/readme.md)
 
 ***
 
