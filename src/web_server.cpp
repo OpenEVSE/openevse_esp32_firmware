@@ -771,7 +771,7 @@ handleUpdateUpload(MongooseHttpServerRequest *request, int ev, MongooseString fi
   {
 //    dumpRequest(request);
 
-    DBUGF("Update Start: %s", filename.c_str());
+    DEBUG_PORT.printf("Update Start: %s\n", filename.c_str());
 
     lcd_display(F("Updating WiFi"), 0, 0, 0, LCD_CLEAR_LINE);
     lcd_display(F(""), 0, 1, 10 * 1000, LCD_CLEAR_LINE);
@@ -796,6 +796,7 @@ handleUpdateUpload(MongooseHttpServerRequest *request, int ev, MongooseString fi
       if(percent != lastPercent) {
         String text = String(percent) + F("%");
         lcd_display(text, 0, 1, 10 * 1000, LCD_DISPLAY_NOW);
+        DEBUG_PORT.printf("Update: %d%%\n", percent);
         lastPercent = percent;
       }
     }
