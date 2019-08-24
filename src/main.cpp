@@ -175,17 +175,21 @@ loop() {
     if ((millis() - Timer1) >= 30000) {
       DBUGLN("Time1");
 
-      String data;
-      create_rapi_json(data); // create JSON Strings for EmonCMS and MQTT
-      if (config_emoncms_enabled()) {
-        emoncms_publish(data);
+      if(!Update.isRunning())
+      {
+        String data;
+        create_rapi_json(data); // create JSON Strings for EmonCMS and MQTT
+        if (config_emoncms_enabled()) {
+          emoncms_publish(data);
+        }
+        if (config_mqtt_enabled()) {
+          mqtt_publish(data);
+        }
+        if(config_ohm_enabled()) {
+          ohm_loop();
+        }
       }
-      if (config_mqtt_enabled()) {
-        mqtt_publish(data);
-      }
-      if(config_ohm_enabled()) {
-        ohm_loop();
-      }
+
       Timer1 = millis();
     }
   } // end WiFi connected
