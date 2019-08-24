@@ -6,7 +6,6 @@
 #include "emoncms.h"
 #include "config.h"
 #include "input.h"
-#include "root_ca.h"
 
 boolean emoncms_connected = false;
 
@@ -20,8 +19,6 @@ static MongooseHttpClient client;
 void emoncms_publish(String data)
 {
   Profile_Start(emoncms_publish);
-
-  client.setRootCa(root_ca);
 
   if (emoncms_apikey != 0)
   {

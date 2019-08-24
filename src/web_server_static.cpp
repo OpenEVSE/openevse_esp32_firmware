@@ -72,7 +72,7 @@ bool web_static_handle(MongooseHttpServerRequest *request)
 
   // Are we authenticated
   if(wifi_mode_is_sta() && www_username!="" &&
-     false == request->authenticate(www_username.c_str(), www_password.c_str())) {
+     false == request->authenticate(www_username, www_password)) {
     request->requestAuthentication(esp_hostname);
     return false;
   }

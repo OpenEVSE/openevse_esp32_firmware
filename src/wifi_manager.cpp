@@ -30,9 +30,6 @@ IPAddress apIP(192, 168, 4, 1);
 IPAddress netMsk(255, 255, 255, 0);
 int apClients = 0;
 
-// hostname for mDNS. Should work at least on windows. Try http://openevse or http://openevse.local
-const char *esp_hostname = "openevse";
-
 // Wifi Network Strings
 String connected_network = "";
 String ipaddress = "";
@@ -88,6 +85,10 @@ bool apMessage = false;
 
 #ifdef ENABLE_WIRED_ETHERNET
 static bool eth_connected = false;
+#endif
+
+#ifdef ESP32
+#include "wifi_esp32.h"
 #endif
 
 // -------------------------------------------------------------------
@@ -149,8 +150,10 @@ startClient()
   client_disconnects = 0;
 
   WiFi.begin(esid.c_str(), epass.c_str());
-#ifndef ESP32
-  WiFi.hostname(esp_hostname);
+#ifdef ESP32
+  WiFi.setHostname(esp_hostname.c_str());
+#else
+  WiFi.hostname(esp_hostname.c_str());
 #endif // !ESP32
   WiFi.enableSTA(true);
 }
@@ -169,8 +172,11 @@ static void wifi_start()
   }
 }
 
-#ifndef ESP32
-void wifi_onStationModeGotIP(const WiFiEventStationModeGotIP &event)
+static void wifi_onStationModeConnected(const WiFiEventStationModeConnected &event) {
+  DBUGF("Connected to %s", event.ssid.c_str());
+}
+
+static void wifi_onStationModeGotIP(const WiFiEventStationModeGotIP &event)
 {
   #ifdef WIFI_LED
     wifiLedState = WIFI_LED_ON_STATE;
@@ -194,7 +200,7 @@ void wifi_onStationModeGotIP(const WiFiEventStationModeGotIP &event)
   client_retry = false;
 }
 
-void wifi_onStationModeDisconnected(const WiFiEventStationModeDisconnected &event)
+static void wifi_onStationModeDisconnected(const WiFiEventStationModeDisconnected &event)
 {
   DBUGF("WiFi dissconnected: %s",
   WIFI_DISCONNECT_REASON_UNSPECIFIED == event.reason ? "WIFI_DISCONNECT_REASON_UNSPECIFIED" :
@@ -229,7 +235,16 @@ void wifi_onStationModeDisconnected(const WiFiEventStationModeDisconnected &even
 
   client_disconnects++;
 }
-#endif // !ESP32
+
+static void wifi_onAPModeStationConnected(const WiFiEventSoftAPModeStationConnected &event) {
+  lcd_display(F("IP Address"), 0, 0, 0, LCD_CLEAR_LINE);
+  lcd_display(ipaddress, 0, 1, (0 == apClients ? 15 : 5) * 1000, LCD_CLEAR_LINE);
+  apClients++;
+};
+
+static void wifi_onAPModeStationDisconnected(const WiFiEventSoftAPModeStationDisconnected &event) {
+  apClients--;
+};
 
 #ifdef ESP32
 void wifi_event(WiFiEvent_t event, system_event_info_t info)
@@ -265,6 +280,49 @@ void wifi_event(WiFiEvent_t event, system_event_info_t info)
 
   switch (event)
   {
+    case SYSTEM_EVENT_STA_CONNECTED:
+    {
+      auto& src = info.connected;
+      WiFiEventStationModeConnected dst;
+      dst.ssid = String(reinterpret_cast<char*>(src.ssid));
+      memcpy(dst.bssid, src.bssid, 6);
+      dst.channel = src.channel;
+      wifi_onStationModeConnected(dst);
+    } break;
+    case SYSTEM_EVENT_STA_DISCONNECTED:
+    {
+      auto& src = info.disconnected;
+      WiFiEventStationModeDisconnected dst;
+      dst.ssid = String(reinterpret_cast<char*>(src.ssid));
+      memcpy(dst.bssid, src.bssid, 6);
+      dst.reason = static_cast<WiFiDisconnectReason>(src.reason);
+      wifi_onStationModeDisconnected(dst);
+    } break;
+    case SYSTEM_EVENT_STA_GOT_IP:
+    {
+      auto& src = info.got_ip.ip_info;
+      WiFiEventStationModeGotIP dst;
+      dst.ip = src.ip.addr;
+      dst.mask = src.netmask.addr;
+      dst.gw = src.gw.addr;
+      wifi_onStationModeGotIP(dst);
+    } break;
+    case SYSTEM_EVENT_AP_STACONNECTED:
+    {
+      auto& src = info.sta_connected;
+      WiFiEventSoftAPModeStationConnected dst;
+      memcpy(dst.mac, src.mac, 6);
+      dst.aid = src.aid;
+      wifi_onAPModeStationConnected(dst);
+    } break;
+    case SYSTEM_EVENT_AP_STADISCONNECTED:
+    {
+      auto& src = info.sta_disconnected;
+      WiFiEventSoftAPModeStationDisconnected dst;
+      memcpy(dst.mac, src.mac, 6);
+      dst.aid = src.aid;
+      wifi_onAPModeStationDisconnected(dst);
+    } break;
 #ifdef ENABLE_WIRED_ETHERNET
     case SYSTEM_EVENT_ETH_START:
       DBUGLN("ETH Started");
@@ -331,24 +389,22 @@ wifi_setup() {
   WiFi.persistent(false);
   WiFi.mode(WIFI_OFF);
 
-#ifndef ESP32
-  static auto _onStationModeConnected = WiFi.onStationModeConnected([](const WiFiEventStationModeConnected &event) { DBUGF("Connected to %s", event.ssid.c_str()); });
+
+
+#ifdef ESP32
+  WiFi.onEvent(wifi_event);
+#else
+  static auto _onStationModeConnected = WiFi.onStationModeConnected(wifi_onStationModeConnected);
   static auto _onStationModeGotIP = WiFi.onStationModeGotIP(wifi_onStationModeGotIP);
   static auto _onStationModeDisconnected = WiFi.onStationModeDisconnected(wifi_onStationModeDisconnected);
-  static auto _onSoftAPModeStationConnected = WiFi.onSoftAPModeStationConnected([](const WiFiEventSoftAPModeStationConnected &event) {
-    lcd_display(F("IP Address"), 0, 0, 0, LCD_CLEAR_LINE);
-    lcd_display(ipaddress, 0, 1, (0 == apClients ? 15 : 5) * 1000, LCD_CLEAR_LINE);
-    apClients++;
-  });
-  static auto _onSoftAPModeStationDisconnected = WiFi.onSoftAPModeStationDisconnected([](const WiFiEventSoftAPModeStationDisconnected &event) {
-    apClients--;
-  });
+  static auto _onSoftAPModeStationConnected = WiFi.onSoftAPModeStationConnected(wifi_onAPModeStationConnected);
+  static auto _onSoftAPModeStationDisconnected = WiFi.onSoftAPModeStationDisconnected(wifi_onAPModeStationDisconnected);
 #endif
 
   wifi_start();
 */
 
-  if (MDNS.begin(esp_hostname)) {
+  if (MDNS.begin(esp_hostname.c_str())) {
     MDNS.addService("http", "tcp", 80);
   }
 }
@@ -358,26 +414,10 @@ wifi_loop()
 {
   Profile_Start(wifi_loop);
 
-  bool isClient = wifi_mode_is_sta();
+  //bool isClient = wifi_mode_is_sta();
   bool isClientOnly = wifi_mode_is_sta_only();
-  bool isAp = wifi_mode_is_ap();
+  //bool isAp = wifi_mode_is_ap();
   bool isApOnly = wifi_mode_is_ap_only();
-
-  static bool connected = false;
-  if(connected != WiFi.isConnected())
-  {
-    connected = WiFi.isConnected();
-    if(connected)
-    {
-      DBUGLN("WiFi connected");
-      DBUG("IP Address: ");
-      DBUGLN(WiFi.localIP());
-    }
-    else
-    {
-      DBUGLN("WiFi disconnected");
-    }
-  }
 
 #ifdef WIFI_LED
   if ((isApOnly || !WiFi.isConnected()) &&

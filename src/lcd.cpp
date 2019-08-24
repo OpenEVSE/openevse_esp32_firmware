@@ -13,7 +13,7 @@ typedef struct Message_s Message;
 struct Message_s
 {
   Message *next;
-  char msg[LCD_MAX_LEN];
+  char msg[LCD_MAX_LEN + 1];
   int x;
   int y;
   int time;

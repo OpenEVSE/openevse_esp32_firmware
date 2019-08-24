@@ -3,6 +3,7 @@
 #endif
 
 #include <Arduino.h>
+#include <Update.h>
 
 #ifdef ESP32
 
@@ -79,21 +80,21 @@ void dumpRequest(MongooseHttpServerRequest *request) {
   } else {
     DBUGF("UNKNOWN");
   }
-  DBUGF(" http://%.*s%.*s", 
-    request->host().length(), request->host(), 
-    request->url().length(), request->url());
+  DBUGF(" http://%.*s%.*s",
+    request->host().length(), request->host().c_str(),
+    request->uri().length(), request->uri().c_str());
 
   if(request->contentLength()){
-    DBUGF("_CONTENT_TYPE: %.*s", request->contentType().length(), request->contentType());
+    DBUGF("_CONTENT_TYPE: %.*s", request->contentType().length(), request->contentType().c_str());
     DBUGF("_CONTENT_LENGTH: %u", request->contentLength());
   }
 
   int headers = request->headers();
   int i;
   for(i=0; i<headers; i++) {
-    DBUGF("_HEADER[%.*s]: %.*s", 
-      request->headerNames(i).length(), request->headerNames(i), 
-      request->headerValues(i).length(), request->headerValues(i));
+    DBUGF("_HEADER[%.*s]: %.*s",
+      request->headerNames(i).length(), request->headerNames(i).c_str(),
+      request->headerValues(i).length(), request->headerValues(i).c_str());
   }
 
   /*
@@ -414,6 +415,26 @@ handleSaveAdmin(MongooseHttpServerRequest *request) {
 }
 
 // -------------------------------------------------------------------
+// Save advanced settings
+// url: /saveadvanced
+// -------------------------------------------------------------------
+void
+handleSaveAdvanced(MongooseHttpServerRequest *request) {
+  MongooseHttpServerResponseStream *response;
+  if(false == requestPreProcess(request, response, CONTENT_TYPE_TEXT)) {
+    return;
+  }
+
+  String qhostname = request->getParam("hostname");
+
+  config_save_advanced(qhostname);
+
+  response->setCode(200);
+  response->print("saved");
+  request->send(response);
+}
+
+// -------------------------------------------------------------------
 // Save the Ohm keyto EEPROM
 // url: /handleSaveOhmkey
 // -------------------------------------------------------------------
@@ -489,7 +510,9 @@ handleStatus(MongooseHttpServerRequest *request) {
   s += "\"solar\":" + String(solar) + ",";
   s += "\"grid_ie\":" + String(grid_ie) + ",";
   s += "\"charge_rate\":" + String(charge_rate) + ",";
-  s += "\"divert_update\":" + String((millis() - lastUpdate) / 1000);
+  s += "\"divert_update\":" + String((millis() - lastUpdate) / 1000) + ",";
+
+  s += "\"ota_update\":" + String(Update.isRunning());
 
 #ifdef ENABLE_LEGACY_API
   s += ",\"networks\":[" + st + "]";
@@ -590,6 +613,7 @@ handleConfig(MongooseHttpServerRequest *request) {
     s += dummyPassword;
   }
   s += "\",";
+  s += "\"hostname\":\"" + esp_hostname + "\",";
   s += "\"ohm_enabled\":" + String(config_ohm_enabled() ? "true" : "false");
   s += "}";
 
@@ -713,63 +737,57 @@ handleUpdateGet(MongooseHttpServerRequest *request) {
   request->send(response);
 }
 
+static MongooseHttpServerResponseStream *upgradeResponse = NULL;
+
 void
 handleUpdatePost(MongooseHttpServerRequest *request) {
-  #ifndef ESP32
-  bool shouldReboot = !Update.hasError();
-  MongooseHttpServerResponse *response = request->beginResponse(200, CONTENT_TYPE_TEXT, shouldReboot ? "OK" : "FAIL");
-  response->addHeader("Connection", "close");
-  request->send(response);
-
-  if(shouldReboot) {
-    systemRestartTime = millis() + 1000;
+  if(NULL != upgradeResponse) {
+    request->send(500, CONTENT_TYPE_TEXT, "Error: Upgrade in progress");
+    return;
   }
 
-  #else // ! ESP32
-
-  request->send(500, CONTENT_TYPE_TEXT, "Not supported");
-
-  #endif // !ESP32
+  if(false == requestPreProcess(request, upgradeResponse, CONTENT_TYPE_TEXT)) {
+    return;
+  }
 }
 
-extern "C" uint32_t _SPIFFS_start;
-extern "C" uint32_t _SPIFFS_end;
-//static int lastPercent = -1;
+static int lastPercent = -1;
 
-void
-handleUpdateUpload(MongooseHttpServerRequest *request, String filename, size_t index, uint8_t *data, size_t len, bool final)
+static void handleUpdateError(MongooseHttpServerRequest *request)
 {
-#ifndef ESP32
-  if(!index)
+  upgradeResponse->setCode(500);
+  upgradeResponse->printf("Error: %d", Update.getError());
+  request->send(upgradeResponse);
+  upgradeResponse = NULL;
+
+  // Anoyingly this uses Stream rather than Print...
+#ifdef ENABLE_DEBUG
+  Update.printError(DEBUG_PORT);
+#endif
+}
+
+size_t
+handleUpdateUpload(MongooseHttpServerRequest *request, int ev, MongooseString filename, uint64_t index, uint8_t *data, size_t len)
+{
+  if(MG_EV_HTTP_PART_BEGIN == ev)
   {
-    dumpRequest(request);
+//    dumpRequest(request);
 
-    DBUGF("Update Start: %s", filename.c_str());
+    DEBUG_PORT.printf("Update Start: %s\n", filename.c_str());
 
-    DBUGVAR(data[0]);
-    int command = data[0] == 0xE9 ? U_FLASH : U_SPIFFS;
-    size_t updateSize = U_FLASH == command ?
-      (ESP.getFreeSketchSpace() - 0x1000) & 0xFFFFF000 :
-      ((size_t) &_SPIFFS_end - (size_t) &_SPIFFS_start);
-
-    DBUGVAR(command);
-    DBUGVAR(updateSize);
-
-    lcd_display(U_FLASH == command ? F("Updating WiFi") : F("Updating SPIFFS"), 0, 0, 0, LCD_CLEAR_LINE);
+    lcd_display(F("Updating WiFi"), 0, 0, 0, LCD_CLEAR_LINE);
     lcd_display(F(""), 0, 1, 10 * 1000, LCD_CLEAR_LINE);
     lcd_loop();
 
-    Update.runAsync(true);
-    if(!Update.begin(updateSize, command)) {
-#ifdef ENABLE_DEBUG
-      Update.printError(DEBUG_PORT);
-#endif
+    if(!Update.begin()) {
+      handleUpdateError(request);
     }
   }
+
   if(!Update.hasError())
   {
-    DBUGF("Update Writing %d", index);
-    String text = String(index);
+    DBUGF("Update Writing %llu", index);
+
     size_t contentLength = request->contentLength();
     DBUGVAR(contentLength);
     if(contentLength > 0)
@@ -780,28 +798,43 @@ handleUpdateUpload(MongooseHttpServerRequest *request, String filename, size_t i
       if(percent != lastPercent) {
         String text = String(percent) + F("%");
         lcd_display(text, 0, 1, 10 * 1000, LCD_DISPLAY_NOW);
+        DEBUG_PORT.printf("Update: %d%%\n", percent);
         lastPercent = percent;
       }
     }
     if(Update.write(data, len) != len) {
-#ifdef ENABLE_DEBUG
-      Update.printError(DEBUG_PORT);
-#endif
+      handleUpdateError(request);
     }
   }
-  if(final)
+
+  if(MG_EV_HTTP_PART_END == ev)
   {
     if(Update.end(true)) {
-      DBUGF("Update Success: %uB", index+len);
+      DBUGF("Update Success: %lluB", index+len);
       lcd_display(F("Complete"), 0, 1, 10 * 1000, LCD_CLEAR_LINE | LCD_DISPLAY_NOW);
+      upgradeResponse->setCode(200);
+      upgradeResponse->print("OK");
+      request->send(upgradeResponse);
+      upgradeResponse = NULL;
     } else {
       lcd_display(F("Error"), 0, 1, 10 * 1000, LCD_CLEAR_LINE | LCD_DISPLAY_NOW);
-#ifdef ENABLE_DEBUG
-      Update.printError(DEBUG_PORT);
-#endif
+      handleUpdateError(request);
     }
   }
-#endif // ESP32
+
+  return len;
+}
+
+static void handleUpdateClose(MongooseHttpServerRequest *request)
+{
+  if(upgradeResponse) {
+    delete upgradeResponse;
+    upgradeResponse = NULL;
+  }
+
+  if(Update.isFinished() && !Update.hasError()) {
+    systemRebootTime = millis() + 1000;
+  }
 }
 
 String delayTimer = "0 0 0 0";
@@ -978,6 +1011,7 @@ web_server_setup() {
   server.on("/saveemoncms$", handleSaveEmoncms);
   server.on("/savemqtt$", handleSaveMqtt);
   server.on("/saveadmin$", handleSaveAdmin);
+  server.on("/saveadvanced$", handleSaveAdvanced);
   server.on("/saveohmkey$", handleSaveOhmkey);
   server.on("/reset$", handleRst);
   server.on("/restart$", handleRestart);
@@ -989,8 +1023,16 @@ web_server_setup() {
   server.on("/emoncms/describe$", handleDescribe);
 
   // Simple Firmware Update Form
-//  server.on("/update$", HTTP_GET, handleUpdateGet);
-//  server.on("/update$", HTTP_POST, handleUpdatePost, handleUpdateUpload);
+  server.on("/update$")->
+    onRequest([](MongooseHttpServerRequest *request) {
+      if(HTTP_GET == request->method()) {
+        handleUpdateGet(request);
+      } else if(HTTP_POST == request->method()) {
+        handleUpdatePost(request);
+      }
+    })->
+    onUpload(handleUpdateUpload)->
+    onClose(handleUpdateClose);
 
   server.onNotFound(handleNotFound);
 

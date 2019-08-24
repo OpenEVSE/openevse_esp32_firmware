@@ -8,8 +8,6 @@
 #include "config.h"
 #include "RapiSender.h"
 
-#include "root_ca.h"
-
 #define ACTIVE_TAG_START  "<active>"
 #define ACTIVE_TAG_END    "</active>"
 
@@ -37,7 +35,6 @@ void ohm_loop()
 
   if (ohm != 0)
   {
-    client.setRootCa(root_ca);
     String ohm_url = OHM_URL;
     ohm_url += ohm;
     DBUGVAR(ohm_url);
