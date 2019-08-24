@@ -510,7 +510,9 @@ handleStatus(MongooseHttpServerRequest *request) {
   s += "\"solar\":" + String(solar) + ",";
   s += "\"grid_ie\":" + String(grid_ie) + ",";
   s += "\"charge_rate\":" + String(charge_rate) + ",";
-  s += "\"divert_update\":" + String((millis() - lastUpdate) / 1000);
+  s += "\"divert_update\":" + String((millis() - lastUpdate) / 1000) + ",";
+
+  s += "\"ota_update\":" + String(Update.isRunning());
 
 #ifdef ENABLE_LEGACY_API
   s += ",\"networks\":[" + st + "]";
