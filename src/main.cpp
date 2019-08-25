@@ -56,10 +56,7 @@ boolean rapi_read = 0; //flag to indicate first read of RAPI status
 // SETUP
 // -------------------------------------------------------------------
 void setup() {
-  delay(2000);
   RAPI_PORT.begin(115200);
-  pinMode(0, INPUT);
-
   DEBUG_BEGIN(115200);
 
   DEBUG.println();

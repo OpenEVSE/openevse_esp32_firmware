@@ -67,6 +67,14 @@ unsigned long wifiLedTimeOut = millis();
 #define WIFI_BUTTON_PRESSED_STATE LOW
 #endif
 
+#ifndef WIFI_BUTTON_PRESSED_PIN_MODE
+#if LOW == WIFI_BUTTON_PRESSED_STATE
+#define WIFI_BUTTON_PRESSED_PIN_MODE INPUT_PULLUP
+#else
+#define WIFI_BUTTON_PRESSED_PIN_MODE INPUT_PULLDOWN
+#endif
+#endif
+
 #ifndef WIFI_BUTTON_AP_TIMEOUT
 #define WIFI_BUTTON_AP_TIMEOUT              (5 * 1000)
 #endif
@@ -77,6 +85,10 @@ unsigned long wifiLedTimeOut = millis();
 
 #ifndef WIFI_CLIENT_RETRY_TIMEOUT
 #define WIFI_CLIENT_RETRY_TIMEOUT (5 * 60 * 1000)
+#endif
+
+#ifndef RANDOM_SEED_CHANNEL
+#define RANDOM_SEED_CHANNEL 0
 #endif
 
 int wifiButtonState = HIGH;
@@ -172,18 +184,13 @@ static void wifi_start()
   }
 }
 
-static void wifi_onStationModeConnected(const WiFiEventStationModeConnected &event) {
-  DBUGF("Connected to %s", event.ssid.c_str());
-}
-
-static void wifi_onStationModeGotIP(const WiFiEventStationModeGotIP &event)
+static void wifi_connected(IPAddress myAddress)
 {
-  #ifdef WIFI_LED
-    wifiLedState = WIFI_LED_ON_STATE;
-    digitalWrite(WIFI_LED, wifiLedState);
-  #endif
+#ifdef WIFI_LED
+  wifiLedState = WIFI_LED_ON_STATE;
+  digitalWrite(WIFI_LED, wifiLedState);
+#endif
 
-  IPAddress myAddress = WiFi.localIP();
   char tmpStr[40];
   sprintf(tmpStr, "%d.%d.%d.%d", myAddress[0], myAddress[1], myAddress[2], myAddress[3]);
   ipaddress = tmpStr;
@@ -191,6 +198,15 @@ static void wifi_onStationModeGotIP(const WiFiEventStationModeGotIP &event)
   DEBUG.println(tmpStr);
   lcd_display(F("IP Address"), 0, 0, 0, LCD_CLEAR_LINE);
   lcd_display(tmpStr, 0, 1, 5000, LCD_CLEAR_LINE);
+}
+
+static void wifi_onStationModeConnected(const WiFiEventStationModeConnected &event) {
+  DBUGF("Connected to %s", event.ssid.c_str());
+}
+
+static void wifi_onStationModeGotIP(const WiFiEventStationModeGotIP &event)
+{
+  wifi_connected(WiFi.localIP());
 
   // Copy the connected network and ipaddress to global strings for use in status request
   connected_network = esid;
@@ -343,6 +359,7 @@ void wifi_event(WiFiEvent_t event, system_event_info_t info)
       DBUG(", ");
       DBUG(ETH.linkSpeed());
       DBUGLN("Mbps");
+      wifi_connected(ETH.localIP());
       eth_connected = true;
       break;
     case SYSTEM_EVENT_ETH_DISCONNECTED:
@@ -363,18 +380,18 @@ void wifi_event(WiFiEvent_t event, system_event_info_t info)
 void
 wifi_setup() {
 #ifdef WIFI_LED
+  DBUGF("Configuring pin %d for LED", WIFI_LED);
   pinMode(WIFI_LED, OUTPUT);
   digitalWrite(WIFI_LED, wifiLedState);
 #endif
 
-  randomSeed(analogRead(0));
-
-  WiFi.onEvent(wifi_event);
-
-#ifdef ENABLE_WIRED_ETHERNET
-  ETH.begin();
+#if defined(WIFI_BUTTON) && WIFI_BUTTON != WIFI_LED
+  DBUGF("Configuring pin %d for Button", WIFI_BUTTON);
+  pinMode(WIFI_BUTTON, WIFI_BUTTON_PRESSED_PIN_MODE);
 #endif
-/*
+
+  randomSeed(analogRead(RANDOM_SEED_CHANNEL));
+
   // If we have an SSID configured at this point we have likely
   // been running another firmware, clear the results
   if(wifi_is_client_configured()) {
@@ -389,8 +406,6 @@ wifi_setup() {
   WiFi.persistent(false);
   WiFi.mode(WIFI_OFF);
 
-
-
 #ifdef ESP32
   WiFi.onEvent(wifi_event);
 #else
@@ -402,7 +417,10 @@ wifi_setup() {
 #endif
 
   wifi_start();
-*/
+
+#ifdef ENABLE_WIRED_ETHERNET
+  ETH.begin();
+#endif
 
   if (MDNS.begin(esp_hostname.c_str())) {
     MDNS.addService("http", "tcp", 80);
@@ -433,7 +451,7 @@ wifi_loop()
 
 #if defined(WIFI_LED) && WIFI_BUTTON == WIFI_LED
   digitalWrite(WIFI_BUTTON, HIGH);
-  pinMode(WIFI_BUTTON, INPUT_PULLUP);
+  pinMode(WIFI_BUTTON, WIFI_BUTTON_PRESSED_PIN_MODE);
 #endif
 
   // Pressing the boot button for 5 seconds will turn on AP mode, 10 seconds will factory reset
