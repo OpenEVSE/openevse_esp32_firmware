@@ -31,7 +31,7 @@
 
 #include "emonesp.h"
 #include "config.h"
-#include "wifi_manager.h"
+#include "net_manager.h"
 #include "web_server.h"
 #include "ohm.h"
 #include "input.h"
@@ -75,8 +75,8 @@ void setup() {
   DBUGF("After config_load_settings: %d", ESP.getFreeHeap());
 
   // Initialise the WiFi
-  wifi_setup();
-  DBUGF("After wifi_setup: %d", ESP.getFreeHeap());
+  net_setup();
+  DBUGF("After net_setup: %d", ESP.getFreeHeap());
 
   // Initialise Mongoose networking library
   Mongoose.begin();
@@ -108,7 +108,7 @@ loop() {
 
   lcd_loop();
   web_server_loop();
-  wifi_loop();
+  net_loop();
 #ifdef ENABLE_OTA
   ota_loop();
 #endif
@@ -160,7 +160,7 @@ loop() {
     }
   }
 
-  if(wifi_client_connected())
+  if(net_wifi_client_connected() || net_eth_connected())
   {
     if (config_mqtt_enabled()) {
       mqtt_loop();

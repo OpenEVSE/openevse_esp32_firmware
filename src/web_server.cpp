@@ -25,7 +25,7 @@ typedef const __FlashStringHelper *fstr_t;
 #include "web_server.h"
 #include "web_server_static.h"
 #include "config.h"
-#include "wifi_manager.h"
+#include "net_manager.h"
 #include "mqtt.h"
 #include "input.h"
 #include "emoncms.h"
@@ -119,7 +119,7 @@ bool requestPreProcess(MongooseHttpServerRequest *request, MongooseHttpServerRes
 {
   dumpRequest(request);
 
-  if(wifi_mode_is_sta() && www_username!="" &&
+  if(!net_wifi_mode_is_ap_only() && www_username!="" &&
      false == request->authenticate(www_username, www_password)) {
     request->requestAuthentication(esp_hostname);
     return false;
@@ -143,35 +143,6 @@ bool requestPreProcess(MongooseHttpServerRequest *request, MongooseHttpServerRes
 bool isPositive(const String &str) {
   return str == "1" || str == "true";
 }
-
-// -------------------------------------------------------------------
-// Load Home page
-// url: /
-// -------------------------------------------------------------------
-/*
-void
-handleHome(MongooseHttpServerRequest *request) {
-  if (www_username != ""
-      && wifi_mode == WIFI_MODE_STA
-      && !request->authenticate(www_username.c_str(),
-                                www_password.c_str())) {
-    return request->requestAuthentication(esp_hostname);
-  }
-
-  String page = String((wifi_mode == WIFI_MODE_AP_ONLY) ? WIFI_PAGE : HOME_PAGE);
-
-  if (SPIFFS.exists(page)) {
-    request->send(SPIFFS, page);
-  } else {
-    request->send(200, CONTENT_TYPE_HTML,
-      F("<html><body>"
-        "<h1><font color=006666>Open</font><b>EVSE</b> WiFi</h1>"
-        "<p>/home.html not found, have you flashed the SPIFFS?</p>"
-        "<iframe style=\"width:380px; height:50px;\" frameborder=\"0\" scrolling=\"no\"></iframe>"
-        "</body></html>"));
-  }
-}
-*/
 
 // -------------------------------------------------------------------
 // Wifi scan /scan not currently used
@@ -467,15 +438,19 @@ handleStatus(MongooseHttpServerRequest *request) {
   }
 
   String s = "{";
-  if (wifi_mode_is_sta_only()) {
+  if (net_eth_connected()) {
+    s += "\"mode\":\"Wired\",";
+  } else if (net_wifi_mode_is_sta_only()) {
     s += "\"mode\":\"STA\",";
-  } else if (wifi_mode_is_ap_only()) {
+  } else if (net_wifi_mode_is_ap_only()) {
     s += "\"mode\":\"AP\",";
-  } else if (wifi_mode_is_ap() && wifi_mode_is_sta()) {
+  } else if (net_wifi_mode_is_ap() && net_wifi_mode_is_sta()) {
     s += "\"mode\":\"STA+AP\",";
   }
 
-  s += "\"wifi_client_connected\":" + String(wifi_client_connected()) + ",";
+  s += "\"wifi_client_connected\":" + String(net_wifi_client_connected()) + ",";
+  s += "\"eth_connected\":" + String(net_eth_connected()) + ",";
+  s += "\"net_connected\":" + String(net_is_connected()) + ",";
   s += "\"srssi\":" + String(WiFi.RSSI()) + ",";
   s += "\"ipaddress\":\"" + ipaddress + "\",";
 
@@ -938,7 +913,7 @@ void handleNotFound(MongooseHttpServerRequest *request)
   DBUG("NOT_FOUND: ");
   dumpRequest(request);
 
-  if(wifi_mode_is_ap_only()) {
+  if(net_wifi_mode_is_ap_only()) {
     // Redirect to the home page in AP mode (for the captive portal)
     MongooseHttpServerResponseStream *response = request->beginResponseStream();
     response->setContentType(CONTENT_TYPE_HTML);
@@ -1046,7 +1021,7 @@ web_server_loop() {
   // Do we need to restart the WiFi?
   if(wifiRestartTime > 0 && millis() > wifiRestartTime) {
     wifiRestartTime = 0;
-    wifi_restart();
+    net_wifi_restart();
   }
 
   // Do we need to restart MQTT?
@@ -1058,20 +1033,20 @@ web_server_loop() {
   // Do we need to turn off the access point?
   if(apOffTime > 0 && millis() > apOffTime) {
     apOffTime = 0;
-    wifi_turn_off_ap();
+    net_wifi_turn_off_ap();
   }
 
   // Do we need to restart the system?
   if(systemRestartTime > 0 && millis() > systemRestartTime) {
     systemRestartTime = 0;
-    wifi_disconnect();
+    net_wifi_disconnect();
     ESP.restart();
   }
 
   // Do we need to reboot the system?
   if(systemRebootTime > 0 && millis() > systemRebootTime) {
     systemRebootTime = 0;
-    wifi_disconnect();
+    net_wifi_disconnect();
     #ifdef ESP32
     esp_restart();
     #else

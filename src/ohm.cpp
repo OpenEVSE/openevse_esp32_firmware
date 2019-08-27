@@ -4,7 +4,6 @@
 
 #include "emonesp.h"
 #include "input.h"
-#include "wifi_manager.h"
 #include "config.h"
 #include "RapiSender.h"
 

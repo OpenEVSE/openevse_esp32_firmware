@@ -11,7 +11,7 @@
 #include "divert.h"
 #include "mqtt.h"
 #include "web_server.h"
-#include "wifi_manager.h"
+#include "net_manager.h"
 #include "openevse.h"
 
 #include "RapiSender.h"
@@ -390,10 +390,10 @@ void on_rapi_event()
     {
       case OPENEVSE_WIFI_MODE_AP:
       case OPENEVSE_WIFI_MODE_AP_DEFAULT:
-        wifi_turn_on_ap();
+        net_wifi_turn_on_ap();
         break;
       case OPENEVSE_WIFI_MODE_CLIENT:
-        wifi_turn_off_ap();
+        net_wifi_turn_off_ap();
         break;
     }
   }

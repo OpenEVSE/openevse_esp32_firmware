@@ -8,7 +8,7 @@
 #include "web_server.h"
 #include "web_server_static.h"
 #include "config.h"
-#include "wifi_manager.h"
+#include "net_manager.h"
 
 // Static files
 struct StaticFile
@@ -46,7 +46,7 @@ static bool web_static_get_file(MongooseHttpServerRequest *request, StaticFile *
   // Remove the found uri
   String path = request->uri();
   if(path == "/") {
-    path = String(wifi_mode_is_ap_only() ? WIFI_PAGE : HOME_PAGE);
+    path = String(net_wifi_mode_is_ap_only() ? WIFI_PAGE : HOME_PAGE);
   }
 
   DBUGF("Looking for %s", path.c_str());
@@ -71,7 +71,7 @@ bool web_static_handle(MongooseHttpServerRequest *request)
   dumpRequest(request);
 
   // Are we authenticated
-  if(wifi_mode_is_sta() && www_username!="" &&
+  if(!net_wifi_mode_is_ap_only() && www_username!="" &&
      false == request->authenticate(www_username, www_password)) {
     request->requestAuthentication(esp_hostname);
     return false;

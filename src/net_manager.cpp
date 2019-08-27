@@ -1,5 +1,5 @@
 #include "emonesp.h"
-#include "wifi_manager.h"
+#include "net_manager.h"
 #include "config.h"
 #include "lcd.h"
 
@@ -111,7 +111,7 @@ void
 startAP() {
   DBUGLN("Starting AP");
 
-  if (wifi_mode_is_sta()) {
+  if (net_wifi_mode_is_sta()) {
     WiFi.disconnect(true);
   }
 
@@ -170,7 +170,7 @@ startClient()
   WiFi.enableSTA(true);
 }
 
-static void wifi_start()
+static void net_wifi_start()
 {
   // 1) If no network configured start up access point
   if (esid == 0 || esid == "")
@@ -184,7 +184,7 @@ static void wifi_start()
   }
 }
 
-static void wifi_connected(IPAddress myAddress)
+static void net_connected(IPAddress myAddress)
 {
 #ifdef WIFI_LED
   wifiLedState = WIFI_LED_ON_STATE;
@@ -200,13 +200,13 @@ static void wifi_connected(IPAddress myAddress)
   lcd_display(tmpStr, 0, 1, 5000, LCD_CLEAR_LINE);
 }
 
-static void wifi_onStationModeConnected(const WiFiEventStationModeConnected &event) {
+static void net_wifi_onStationModeConnected(const WiFiEventStationModeConnected &event) {
   DBUGF("Connected to %s", event.ssid.c_str());
 }
 
-static void wifi_onStationModeGotIP(const WiFiEventStationModeGotIP &event)
+static void net_wifi_onStationModeGotIP(const WiFiEventStationModeGotIP &event)
 {
-  wifi_connected(WiFi.localIP());
+  net_connected(WiFi.localIP());
 
   // Copy the connected network and ipaddress to global strings for use in status request
   connected_network = esid;
@@ -216,7 +216,7 @@ static void wifi_onStationModeGotIP(const WiFiEventStationModeGotIP &event)
   client_retry = false;
 }
 
-static void wifi_onStationModeDisconnected(const WiFiEventStationModeDisconnected &event)
+static void net_wifi_onStationModeDisconnected(const WiFiEventStationModeDisconnected &event)
 {
   DBUGF("WiFi dissconnected: %s",
   WIFI_DISCONNECT_REASON_UNSPECIFIED == event.reason ? "WIFI_DISCONNECT_REASON_UNSPECIFIED" :
@@ -252,18 +252,18 @@ static void wifi_onStationModeDisconnected(const WiFiEventStationModeDisconnecte
   client_disconnects++;
 }
 
-static void wifi_onAPModeStationConnected(const WiFiEventSoftAPModeStationConnected &event) {
+static void net_wifi_onAPModeStationConnected(const WiFiEventSoftAPModeStationConnected &event) {
   lcd_display(F("IP Address"), 0, 0, 0, LCD_CLEAR_LINE);
   lcd_display(ipaddress, 0, 1, (0 == apClients ? 15 : 5) * 1000, LCD_CLEAR_LINE);
   apClients++;
 };
 
-static void wifi_onAPModeStationDisconnected(const WiFiEventSoftAPModeStationDisconnected &event) {
+static void net_wifi_onAPModeStationDisconnected(const WiFiEventSoftAPModeStationDisconnected &event) {
   apClients--;
 };
 
 #ifdef ESP32
-void wifi_event(WiFiEvent_t event, system_event_info_t info)
+void net_event(WiFiEvent_t event, system_event_info_t info)
 {
   DBUGF("Got Network event %s",
     SYSTEM_EVENT_WIFI_READY == event ? "SYSTEM_EVENT_WIFI_READY" :
@@ -303,7 +303,7 @@ void wifi_event(WiFiEvent_t event, system_event_info_t info)
       dst.ssid = String(reinterpret_cast<char*>(src.ssid));
       memcpy(dst.bssid, src.bssid, 6);
       dst.channel = src.channel;
-      wifi_onStationModeConnected(dst);
+      net_wifi_onStationModeConnected(dst);
     } break;
     case SYSTEM_EVENT_STA_DISCONNECTED:
     {
@@ -312,7 +312,7 @@ void wifi_event(WiFiEvent_t event, system_event_info_t info)
       dst.ssid = String(reinterpret_cast<char*>(src.ssid));
       memcpy(dst.bssid, src.bssid, 6);
       dst.reason = static_cast<WiFiDisconnectReason>(src.reason);
-      wifi_onStationModeDisconnected(dst);
+      net_wifi_onStationModeDisconnected(dst);
     } break;
     case SYSTEM_EVENT_STA_GOT_IP:
     {
@@ -321,7 +321,7 @@ void wifi_event(WiFiEvent_t event, system_event_info_t info)
       dst.ip = src.ip.addr;
       dst.mask = src.netmask.addr;
       dst.gw = src.gw.addr;
-      wifi_onStationModeGotIP(dst);
+      net_wifi_onStationModeGotIP(dst);
     } break;
     case SYSTEM_EVENT_AP_STACONNECTED:
     {
@@ -329,7 +329,7 @@ void wifi_event(WiFiEvent_t event, system_event_info_t info)
       WiFiEventSoftAPModeStationConnected dst;
       memcpy(dst.mac, src.mac, 6);
       dst.aid = src.aid;
-      wifi_onAPModeStationConnected(dst);
+      net_wifi_onAPModeStationConnected(dst);
     } break;
     case SYSTEM_EVENT_AP_STADISCONNECTED:
     {
@@ -337,7 +337,7 @@ void wifi_event(WiFiEvent_t event, system_event_info_t info)
       WiFiEventSoftAPModeStationDisconnected dst;
       memcpy(dst.mac, src.mac, 6);
       dst.aid = src.aid;
-      wifi_onAPModeStationDisconnected(dst);
+      net_wifi_onAPModeStationDisconnected(dst);
     } break;
 #ifdef ENABLE_WIRED_ETHERNET
     case SYSTEM_EVENT_ETH_START:
@@ -359,12 +359,14 @@ void wifi_event(WiFiEvent_t event, system_event_info_t info)
       DBUG(", ");
       DBUG(ETH.linkSpeed());
       DBUGLN("Mbps");
-      wifi_connected(ETH.localIP());
+      net_connected(ETH.localIP());
       eth_connected = true;
+      net_wifi_disconnect();
       break;
     case SYSTEM_EVENT_ETH_DISCONNECTED:
       DBUGLN("ETH Disconnected");
       eth_connected = false;
+      net_wifi_start();
       break;
     case SYSTEM_EVENT_ETH_STOP:
       DBUGLN("ETH Stopped");
@@ -378,7 +380,7 @@ void wifi_event(WiFiEvent_t event, system_event_info_t info)
 #endif
 
 void
-wifi_setup() {
+net_setup() {
 #ifdef WIFI_LED
   DBUGF("Configuring pin %d for LED", WIFI_LED);
   pinMode(WIFI_LED, OUTPUT);
@@ -394,7 +396,7 @@ wifi_setup() {
 
   // If we have an SSID configured at this point we have likely
   // been running another firmware, clear the results
-  if(wifi_is_client_configured()) {
+  if(net_wifi_is_client_configured()) {
     WiFi.persistent(true);
     WiFi.disconnect();
     #ifndef ESP32
@@ -407,16 +409,16 @@ wifi_setup() {
   WiFi.mode(WIFI_OFF);
 
 #ifdef ESP32
-  WiFi.onEvent(wifi_event);
+  WiFi.onEvent(net_event);
 #else
-  static auto _onStationModeConnected = WiFi.onStationModeConnected(wifi_onStationModeConnected);
-  static auto _onStationModeGotIP = WiFi.onStationModeGotIP(wifi_onStationModeGotIP);
-  static auto _onStationModeDisconnected = WiFi.onStationModeDisconnected(wifi_onStationModeDisconnected);
-  static auto _onSoftAPModeStationConnected = WiFi.onSoftAPModeStationConnected(wifi_onAPModeStationConnected);
-  static auto _onSoftAPModeStationDisconnected = WiFi.onSoftAPModeStationDisconnected(wifi_onAPModeStationDisconnected);
+  static auto _onStationModeConnected = WiFi.onStationModeConnected(net_wifi_onStationModeConnected);
+  static auto _onStationModeGotIP = WiFi.onStationModeGotIP(net_wifi_onStationModeGotIP);
+  static auto _onStationModeDisconnected = WiFi.onStationModeDisconnected(net_wifi_onStationModeDisconnected);
+  static auto _onSoftAPModeStationConnected = WiFi.onSoftAPModeStationConnected(net_wifi_onAPModeStationConnected);
+  static auto _onSoftAPModeStationDisconnected = WiFi.onSoftAPModeStationDisconnected(net_wifi_onAPModeStationDisconnected);
 #endif
 
-  wifi_start();
+  net_wifi_start();
 
 #ifdef ENABLE_WIRED_ETHERNET
   ETH.begin();
@@ -428,17 +430,17 @@ wifi_setup() {
 }
 
 void
-wifi_loop()
+net_loop()
 {
-  Profile_Start(wifi_loop);
+  Profile_Start(net_loop);
 
-  //bool isClient = wifi_mode_is_sta();
-  bool isClientOnly = wifi_mode_is_sta_only();
-  //bool isAp = wifi_mode_is_ap();
-  bool isApOnly = wifi_mode_is_ap_only();
+  //bool isClient = net_wifi_mode_is_sta();
+  bool isClientOnly = net_wifi_mode_is_sta_only();
+  //bool isAp = net_wifi_mode_is_ap();
+  bool isApOnly = net_wifi_mode_is_ap_only();
 
 #ifdef WIFI_LED
-  if ((isApOnly || !WiFi.isConnected()) &&
+  if ((isApOnly || !net_is_connected()) &&
       millis() > wifiLedTimeOut)
   {
     wifiLedState = !wifiLedState;
@@ -534,26 +536,26 @@ wifi_loop()
     dnsServer.processNextRequest(); // Captive portal DNS re-dierct
   }
 
-  Profile_End(wifi_loop, 5);
+  Profile_End(net_wifi_loop, 5);
 }
 
 void
-wifi_restart() {
-  wifi_disconnect();
-  wifi_start();
+net_wifi_restart() {
+  net_wifi_disconnect();
+  net_wifi_start();
 }
 
 void
-wifi_disconnect() {
-  wifi_turn_off_ap();
-  if (wifi_mode_is_sta()) {
+net_wifi_disconnect() {
+  net_wifi_turn_off_ap();
+  if (net_wifi_mode_is_sta()) {
     WiFi.disconnect(true);
   }
 }
 
-void wifi_turn_off_ap()
+void net_wifi_turn_off_ap()
 {
-  if(wifi_mode_is_ap())
+  if(net_wifi_mode_is_ap())
   {
     WiFi.softAPdisconnect(true);
     dnsServer.stop();
@@ -561,15 +563,29 @@ void wifi_turn_off_ap()
   }
 }
 
-void wifi_turn_on_ap()
+void net_wifi_turn_on_ap()
 {
-  DBUGF("wifi_turn_on_ap %d", WiFi.getMode());
-  if(!wifi_mode_is_ap()) {
+  DBUGF("net_wifi_turn_on_ap %d", WiFi.getMode());
+  if(!net_wifi_mode_is_ap()) {
     startAP();
   }
 }
 
-bool wifi_client_connected()
+bool net_is_connected()
+{
+  return net_wifi_client_connected() || net_eth_connected();
+}
+
+bool net_wifi_client_connected()
 {
   return WiFi.isConnected() && (WIFI_STA == (WiFi.getMode() & WIFI_STA));
+}
+
+bool net_eth_connected()
+{
+#ifdef ENABLE_WIRED_ETHERNET
+  return eth_connected;
+#else
+  return false;
+#endif
 }

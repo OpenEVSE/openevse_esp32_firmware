@@ -1,6 +1,5 @@
 #include "emonesp.h"
 #include "ota.h"
-#include "wifi_manager.h"
 
 #include <WiFiUdp.h>
 #include <ArduinoOTA.h>               // local OTA update from Arduino IDE
