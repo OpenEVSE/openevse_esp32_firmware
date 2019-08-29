@@ -79,9 +79,6 @@ long time_limit = 0;
 long wattsec = 0;
 long watthour_total = 0;
 
-unsigned long comm_sent = 0;
-unsigned long comm_success = 0;
-
 void create_rapi_json(String &data)
 {
   const size_t capacity = JSON_OBJECT_SIZE(10);
@@ -117,139 +114,150 @@ void
 update_rapi_values() {
   Profile_Start(update_rapi_values);
 
-  comm_sent++;
   switch(rapi_command)
   {
     case 1:
-      if (0 == rapiSender.sendCmd("$GE"))
+      rapiSender.sendCmd("$GE", [](int ret)
       {
-        if(rapiSender.getTokenCnt() >= 3)
+        if(RAPI_RESPONSE_OK == ret)
         {
-          const char *val = rapiSender.getToken(1);
-          pilot = strtol(val, NULL, 10);
-          comm_success++;
+          if(rapiSender.getTokenCnt() >= 3)
+          {
+            const char *val = rapiSender.getToken(1);
+            pilot = strtol(val, NULL, 10);
+          }
         }
-      }
+      });
       break;
     case 2:
-      if (0 == rapiSender.sendCmd("$GS"))
+      rapiSender.sendCmd("$GS", [](int ret)
       {
-        if(rapiSender.getTokenCnt() >= 3)
+        if(RAPI_RESPONSE_OK == ret)
         {
-          const char *val = rapiSender.getToken(1);
-          DBUGVAR(val);
-          state = strtol(val, NULL, 10);
-          DBUGVAR(state);
-          val = rapiSender.getToken(2);
-          DBUGVAR(val);
-          elapsed = strtol(val, NULL, 10);
-          DBUGVAR(elapsed);
-          comm_success++;
+          if(rapiSender.getTokenCnt() >= 3)
+          {
+            const char *val = rapiSender.getToken(1);
+            DBUGVAR(val);
+            state = strtol(val, NULL, 10);
+            DBUGVAR(state);
+            val = rapiSender.getToken(2);
+            DBUGVAR(val);
+            elapsed = strtol(val, NULL, 10);
+            DBUGVAR(elapsed);
 
-#ifdef ENABLE_LEGACY_API
-          switch (state) {
-            case 1:
-              estate = "Not Connected";
-              break;
-            case 2:
-              estate = "EV Connected";
-              break;
-            case 3:
-              estate = "Charging";
-              break;
-            case 4:
-              estate = "Vent Required";
-              break;
-            case 5:
-              estate = "Diode Check Failed";
-              break;
-            case 6:
-              estate = "GFCI Fault";
-              break;
-            case 7:
-              estate = "No Earth Ground";
-              break;
-            case 8:
-              estate = "Stuck Relay";
-              break;
-            case 9:
-              estate = "GFCI Self Test Failed";
-              break;
-            case 10:
-              estate = "Over Temperature";
-              break;
-            case 254:
-              estate = "Sleeping";
-              break;
-            case 255:
-              estate = "Disabled";
-              break;
-            default:
-              estate = "Invalid";
-              break;
+  #ifdef ENABLE_LEGACY_API
+            switch (state) {
+              case 1:
+                estate = "Not Connected";
+                break;
+              case 2:
+                estate = "EV Connected";
+                break;
+              case 3:
+                estate = "Charging";
+                break;
+              case 4:
+                estate = "Vent Required";
+                break;
+              case 5:
+                estate = "Diode Check Failed";
+                break;
+              case 6:
+                estate = "GFCI Fault";
+                break;
+              case 7:
+                estate = "No Earth Ground";
+                break;
+              case 8:
+                estate = "Stuck Relay";
+                break;
+              case 9:
+                estate = "GFCI Self Test Failed";
+                break;
+              case 10:
+                estate = "Over Temperature";
+                break;
+              case 254:
+                estate = "Sleeping";
+                break;
+              case 255:
+                estate = "Disabled";
+                break;
+              default:
+                estate = "Invalid";
+                break;
+            }
+  #endif
           }
-#endif
         }
-      }
+      });
       break;
     case 3:
-      if (0 == rapiSender.sendCmd("$GG"))
+      rapiSender.sendCmd("$GG", [](int ret)
       {
-        if(rapiSender.getTokenCnt() >= 3)
+        if(RAPI_RESPONSE_OK == ret)
         {
-          const char *val;
-          val = rapiSender.getToken(1);
-          amp = strtol(val, NULL, 10);
-          val = rapiSender.getToken(2);
-          volt = strtol(val, NULL, 10);
-          comm_success++;
+          if(rapiSender.getTokenCnt() >= 3)
+          {
+            const char *val;
+            val = rapiSender.getToken(1);
+            amp = strtol(val, NULL, 10);
+            val = rapiSender.getToken(2);
+            volt = strtol(val, NULL, 10);
+          }
         }
-      }
+      });
       break;
     case 4:
-      if (0 == rapiSender.sendCmd("$GP"))
+      rapiSender.sendCmd("$GP", [](int ret)
       {
-        if(rapiSender.getTokenCnt() >= 4)
+        if(RAPI_RESPONSE_OK == ret)
         {
-          const char *val;
-          val = rapiSender.getToken(1);
-          temp1 = strtol(val, NULL, 10);
-          val = rapiSender.getToken(2);
-          temp2 = strtol(val, NULL, 10);
-          val = rapiSender.getToken(3);
-          temp3 = strtol(val, NULL, 10);
-          comm_success++;
+          if(rapiSender.getTokenCnt() >= 4)
+          {
+            const char *val;
+            val = rapiSender.getToken(1);
+            temp1 = strtol(val, NULL, 10);
+            val = rapiSender.getToken(2);
+            temp2 = strtol(val, NULL, 10);
+            val = rapiSender.getToken(3);
+            temp3 = strtol(val, NULL, 10);
+          }
         }
-      }
+      });
       break;
     case 5:
-      if (0 == rapiSender.sendCmd("$GU"))
+      rapiSender.sendCmd("$GU", [](int ret)
       {
-        if(rapiSender.getTokenCnt() >= 3)
+        if(RAPI_RESPONSE_OK == ret)
         {
-          const char *val;
-          val = rapiSender.getToken(1);
-          wattsec = strtol(val, NULL, 10);
-          val = rapiSender.getToken(2);
-          watthour_total = strtol(val, NULL, 10);
-          comm_success++;
+          if(rapiSender.getTokenCnt() >= 3)
+          {
+            const char *val;
+            val = rapiSender.getToken(1);
+            wattsec = strtol(val, NULL, 10);
+            val = rapiSender.getToken(2);
+            watthour_total = strtol(val, NULL, 10);
+          }
         }
-      }
+      });
       break;
     case 6:
-      if (0 == rapiSender.sendCmd("$GF")) {
-        if(rapiSender.getTokenCnt() >= 4)
-        {
-          const char *val;
-          val = rapiSender.getToken(1);
-          gfci_count = strtol(val, NULL, 16);
-          val = rapiSender.getToken(2);
-          nognd_count = strtol(val, NULL, 16);
-          val = rapiSender.getToken(3);
-          stuck_count = strtol(val, NULL, 16);
-          comm_success++;
+      rapiSender.sendCmd("$GF", [](int ret)
+      {
+        if(RAPI_RESPONSE_OK == ret) {
+          if(rapiSender.getTokenCnt() >= 4)
+          {
+            const char *val;
+            val = rapiSender.getToken(1);
+            gfci_count = strtol(val, NULL, 16);
+            val = rapiSender.getToken(2);
+            nognd_count = strtol(val, NULL, 16);
+            val = rapiSender.getToken(3);
+            stuck_count = strtol(val, NULL, 16);
+          }
         }
-      }
+      });
       rapi_command = 0;         //Last RAPI command
       break;
   }
@@ -259,101 +267,113 @@ update_rapi_values() {
 }
 
 void
-handleRapiRead() {
+handleRapiRead() 
+{
   Profile_Start(handleRapiRead);
 
-  comm_sent++;
-  if (0 == rapiSender.sendCmd("$GV"))
+  rapiSender.sendCmd("$GV", [](int ret)
   {
-    if(rapiSender.getTokenCnt() >= 3)
+    if(RAPI_RESPONSE_OK == ret)
     {
-      firmware = rapiSender.getToken(1);
-      protocol = rapiSender.getToken(2);
-      comm_success++;
-    }
-  }
-  comm_sent++;
-  if (0 == rapiSender.sendCmd("$GA"))
-  {
-    if(rapiSender.getTokenCnt() >= 3)
-    {
-      const char *val;
-      val = rapiSender.getToken(1);
-      current_scale = strtol(val, NULL, 10);
-      val = rapiSender.getToken(2);
-      current_offset = strtol(val, NULL, 10);
-      comm_success++;
-    }
-  }
-#ifdef ENABLE_LEGACY_API
-  comm_sent++;
-  if (0 == rapiSender.sendCmd("$GH"))
-  {
-    if(rapiSender.getTokenCnt() >= 2)
-    {
-      const char *val;
-      val = rapiSender.getToken(1);
-      kwh_limit = strtol(val, NULL, 10);
-      comm_success++;
-    }
-  }
-  comm_sent++;
-  if (0 == rapiSender.sendCmd("$G3"))
-  {
-    if(rapiSender.getTokenCnt() >= 2)
-    {
-      const char *val;
-      val = rapiSender.getToken(1);
-      time_limit = strtol(val, NULL, 10);
-      comm_success++;
-    }
-  }
-#endif
-  comm_sent++;
-  if (0 == rapiSender.sendCmd("$GE"))
-  {
-    comm_success++;
-    const char *val;
-    val = rapiSender.getToken(1);
-    DBUGVAR(val);
-    pilot = strtol(val, NULL, 10);
-
-    val = rapiSender.getToken(2);
-    DBUGVAR(val);
-    long flags = strtol(val, NULL, 16);
-    service = bitRead(flags, 0) + 1;
-    diode_ck = bitRead(flags, 1);
-    vent_ck = bitRead(flags, 2);
-    ground_ck = bitRead(flags, 3);
-    stuck_relay = bitRead(flags, 4);
-    auto_service = bitRead(flags, 5);
-    auto_start = bitRead(flags, 6);
-    serial_dbg = bitRead(flags, 7);
-    rgb_lcd = bitRead(flags, 8);
-    gfci_test = bitRead(flags, 9);
-    temp_ck = bitRead(flags, 10);
-  }
-  comm_sent++;
-#ifdef ENABLE_LEGACY_API
-  if (0 == rapiSender.sendCmd("$GC"))
-  {
-    if(rapiSender.getTokenCnt() >= 3)
-    {
-      const char *val;
-      if (service == 1) {
-        val = rapiSender.getToken(1);
-        current_l1min = strtol(val, NULL, 10);
-        val = rapiSender.getToken(2);
-        current_l1max = strtol(val, NULL, 10);
-      } else {
-        val = rapiSender.getToken(1);
-        current_l2min = strtol(val, NULL, 10);
-        val = rapiSender.getToken(2);
-        current_l2max = strtol(val, NULL, 10);
+      if(rapiSender.getTokenCnt() >= 3)
+      {
+        firmware = rapiSender.getToken(1);
+        protocol = rapiSender.getToken(2);
       }
-      comm_success++;
     }
-  }
+  });
+
+  rapiSender.sendCmd("$GA", [](int ret)
+  {
+    if(RAPI_RESPONSE_OK == ret)
+    {
+      if(rapiSender.getTokenCnt() >= 3)
+      {
+        const char *val;
+        val = rapiSender.getToken(1);
+        current_scale = strtol(val, NULL, 10);
+        val = rapiSender.getToken(2);
+        current_offset = strtol(val, NULL, 10);
+      }
+    }
+  });
+
+#ifdef ENABLE_LEGACY_API
+  rapiSender.sendCmd("$GH", [](int ret)
+  {
+    if(RAPI_RESPONSE_OK == ret)
+    {
+      if(rapiSender.getTokenCnt() >= 2)
+      {
+        const char *val;
+        val = rapiSender.getToken(1);
+        kwh_limit = strtol(val, NULL, 10);
+      }
+    }
+  });
+
+  rapiSender.sendCmd("$G3", [](int ret)
+  {
+    if(RAPI_RESPONSE_OK == ret)
+    {
+      if(rapiSender.getTokenCnt() >= 2)
+      {
+        const char *val;
+        val = rapiSender.getToken(1);
+        time_limit = strtol(val, NULL, 10);
+      }
+    }
+  });
+#endif
+
+  rapiSender.sendCmd("$GE", [](int ret)
+  {
+    if(RAPI_RESPONSE_OK == ret)
+    {
+      const char *val;
+      val = rapiSender.getToken(1);
+      DBUGVAR(val);
+      pilot = strtol(val, NULL, 10);
+
+      val = rapiSender.getToken(2);
+      DBUGVAR(val);
+      long flags = strtol(val, NULL, 16);
+      service = bitRead(flags, 0) + 1;
+      diode_ck = bitRead(flags, 1);
+      vent_ck = bitRead(flags, 2);
+      ground_ck = bitRead(flags, 3);
+      stuck_relay = bitRead(flags, 4);
+      auto_service = bitRead(flags, 5);
+      auto_start = bitRead(flags, 6);
+      serial_dbg = bitRead(flags, 7);
+      rgb_lcd = bitRead(flags, 8);
+      gfci_test = bitRead(flags, 9);
+      temp_ck = bitRead(flags, 10);
+    }
+  });
+
+#ifdef ENABLE_LEGACY_API
+  rapiSender.sendCmd("$GC", [](int ret)
+  {
+    if(RAPI_RESPONSE_OK == ret)
+    {
+      if(rapiSender.getTokenCnt() >= 3)
+      {
+        const char *val;
+        if (service == 1) {
+          val = rapiSender.getToken(1);
+          current_l1min = strtol(val, NULL, 10);
+          val = rapiSender.getToken(2);
+          current_l1max = strtol(val, NULL, 10);
+        } else {
+          val = rapiSender.getToken(1);
+          current_l2min = strtol(val, NULL, 10);
+          val = rapiSender.getToken(2);
+          current_l2max = strtol(val, NULL, 10);
+        }
+      }
+    }
+  });
 #endif
 
   Profile_End(handleRapiRead, 10);
@@ -361,7 +381,8 @@ handleRapiRead() {
 
 void on_rapi_event()
 {
-  if(!strcmp(rapiSender.getToken(0), "$ST")) {
+  if(!strcmp(rapiSender.getToken(0), "$ST")) 
+  {
     const char *val = rapiSender.getToken(1);
     DBUGVAR(val);
 
@@ -380,7 +401,9 @@ void on_rapi_event()
       event += String(state);
       mqtt_publish(event);
     }
-  } else if(!strcmp(rapiSender.getToken(0), "$WF")) {
+  }
+  else if(!strcmp(rapiSender.getToken(0), "$WF"))
+  {
     const char *val = rapiSender.getToken(1);
     DBUGVAR(val);
 

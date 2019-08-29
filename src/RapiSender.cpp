@@ -12,6 +12,8 @@
 #define DBG
 #endif
 
+static CommandItem commandQueueItems[RAPI_MAX_COMMANDS];
+
 // convert 2-digit hex string to uint8_t
 uint8_t
 htou8(const char *s) {
@@ -38,14 +40,32 @@ htou8(const char *s) {
   return u;
 }
 
+RapiSender::RapiSender(Stream * stream) :
+  _stream(stream),
+  _sequenceId(RAPI_INVALID_SEQUENCE_ID),
+  _flags(0),
+  _tokenCnt(0),
+  _tokens({NULL}),
+  _onRapiEvent(nullptr),
+  _commandQueue(commandQueueItems, RAPI_MAX_COMMANDS),
+  _completeHandler(nullptr),
+  _timeout(0),
+  _waitingForReply(false),
+  _respBuf({0}),
+  _respBufOrig({0})
+{
+}
 
-RapiSender::RapiSender(Stream * stream) {
-  _stream = stream;
-  *_respBuf = 0;
-  _flags = 0;
-  _onRapiEvent = nullptr;
-
-  _sequenceId = RAPI_INVALID_SEQUENCE_ID;
+void RapiSender::_sendNextCmd()
+{
+  CommandItem cmd;
+  if(_commandQueue.pop(cmd))
+  {
+    _sendCmd(cmd.command.c_str());
+    _completeHandler = cmd.handler;
+    _timeout = millis() + cmd.timeout;
+    _waitingForReply = true;
+  }
 }
 
 // return = 0 = OK
@@ -62,6 +82,8 @@ RapiSender::_sendCmd(const char *cmdstr) {
   }
 
   _sendTail(chk);
+
+  _sent++;
 }
 
 void RapiSender::_sendTail(uint8_t chk) {
@@ -106,7 +128,7 @@ RapiSender::_tokenize() {
       sprintf(_respBuf, "bad chk %x %x %s", rchk, chk, s);
       dbgprintln(_respBuf);
 #endif
-      return 1;
+      return RAPI_RESPONSE_BAD_CHECKSUM;
     }
     *s = '\0';
   }
@@ -132,68 +154,86 @@ RapiSender::_tokenize() {
         dbgprintln(_respBuf);
 #endif
         _tokenCnt = 0;
-        return 2;
+        return RAPI_RESPONSE_BAD_SEQUENCE_ID;
       }
       break;                    // sequence id is last - break out
     }
   }
 
-  return 0;
+  return RAPI_RESPONSE_OK;
 }
 
-/*
- * return values:
- * -1= timeout
- * 0= success
- * 1=$NK
- * 2=invalid RAPI response
- * 3=cmdstr too long
-*/
-int
-RapiSender::sendCmd(const char *cmdstr, unsigned long timeout) {
-  _sendCmd(cmdstr);
-  return _waitForResult(timeout);
+void RapiSender::_commandComplete(int result)
+{
+  if(_waitingForReply) {
+    if(nullptr != _completeHandler) {
+      _completeHandler(result);
+    }
+    _waitingForReply = false;
+  }
+  _sendNextCmd();
 }
 
-/*
- * return values:
- * -1= timeout
- * 0= success
- * 1=$NK
- * 2=invalid RAPI response
- * 3=cmdstr too long
-*/
-int
-RapiSender::sendCmd(String &cmdstr, unsigned long timeout) {
-  _sendCmd(cmdstr.c_str());
-  return _waitForResult(timeout);
+void
+RapiSender::sendCmd(const char *cmdstr, RapiCommandCompleteHandler callback, unsigned long timeout) {
+  String cmd = cmdstr;
+  return sendCmd(cmd, callback, timeout);
 }
 
-/*
- * return values:
- * -1= timeout
- * 0= success
- * 1=$NK
- * 2=invalid RAPI response
- * 3=cmdstr too long
-*/
+void
+RapiSender::sendCmd(String &cmdstr, RapiCommandCompleteHandler callback, unsigned long timeout) {
+  CommandItem cmd = {
+    cmdstr,
+    callback,
+    timeout
+  };
+  if(_commandQueue.push(cmd)) {
+    if(!_waitingForReply) {
+      _sendNextCmd();
+    }
+  } else {
+    callback(RAPI_RESPONSE_QUEUE_FULL);
+  }
+}
+
+void
+RapiSender::sendCmd(const __FlashStringHelper *cmdstr, RapiCommandCompleteHandler callback, unsigned long timeout) {
+  String cmd = cmdstr;
+  return sendCmd(cmd, callback, timeout);
+}
+
 int
-RapiSender::sendCmd(const __FlashStringHelper *cmdstr, unsigned long timeout) {
-  dbgprint("Send: ");
-  dbgprint(cmdstr);
+RapiSender::sendCmdSync(const char *cmdstr, unsigned long timeout) {
+  String cmd = cmdstr;
+  return sendCmdSync(cmd, timeout);
+}
 
-  _stream->print(cmdstr);
+int
+RapiSender::sendCmdSync(String &cmdstr, unsigned long timeout)
+{
+  struct SendCmdSyncData
+  {
+    int ret;
+    bool finished;
+  } resultData;
+  SendCmdSyncData *result = &resultData;
 
-  PGM_P p = reinterpret_cast<PGM_P>(cmdstr);
-  uint8_t chk = 0;
-  while (1) {
-    uint8_t c = pgm_read_byte(p++);
-    if (c == 0) break;
-    chk ^= c;
+  sendCmd(cmdstr, [result](int ret) {
+    result->ret = ret;
+    result->finished = true;
+  });
+
+  while(!result->finished) {
+    loop();
   }
 
-  _sendTail(chk);
-  return _waitForResult(timeout);
+  return result->ret;
+}
+
+int
+RapiSender::sendCmdSync(const __FlashStringHelper *cmdstr, unsigned long timeout) {
+  String cmd = cmdstr;
+  return sendCmdSync(cmd, timeout);
 }
 
 /*
@@ -203,11 +243,13 @@ RapiSender::sendCmd(const __FlashStringHelper *cmdstr, unsigned long timeout) {
  * 1=$NK
  * 2=invalid RAPI response
  * 3=cmdstr too long
+ * 4=bad checksum
+ * 5=bad sequence ID
 */
 int
 RapiSender::_waitForResult(unsigned long timeout) {
   unsigned long mss = millis();
-start:
+
   _tokenCnt = 0;
   *_respBuf = 0;
   int bufpos = 0;
@@ -223,14 +265,15 @@ start:
           _respBuf[bufpos] = '\0';
           // Save the original response
           strncpy(_respBufOrig, _respBuf, RAPI_BUFLEN);
-          if (!_tokenize())
+          int ret = _tokenize();
+          if (RAPI_RESPONSE_OK == ret)
             break;
-          else
-            goto start;
+
+          return ret;
         } else {
           _respBuf[bufpos++] = c;
           if (bufpos >= (RAPI_BUFLEN - 1))
-            return -2;
+            return RAPI_RESPONSE_BUFFER_OVERFLOW;
         }
       }
     }
@@ -247,22 +290,19 @@ start:
 
   if (_tokenCnt > 0) {
     if (!strcmp(_tokens[0], "$OK")) {
-      return 0;
+      _success++;
+      return RAPI_RESPONSE_OK;
     } else if (!strcmp(_tokens[0], "$NK")) {
-      return 1;
+      return RAPI_RESPONSE_NK;
     } else if (!strcmp(_tokens[0],"$WF") ||
                !strcmp(_tokens[0],"$ST"))
     {
-      // async EVSE state transition or WiFi event
-      if(nullptr != _onRapiEvent) {
-        _onRapiEvent();
-      }
-      goto start;
+      return RAPI_RESPONSE_ASYNC_EVENT;
     } else { // not OK or NK
-      return 2;
+      return RAPI_RESPONSE_INVALID_RESPONSE;
     }
   } else { // !_tokenCnt
-    return -1;
+    return RAPI_RESPONSE_TIMEOUT;
   }
 }
 
@@ -280,7 +320,20 @@ RapiSender::enableSequenceId(uint8_t tf) {
 void
 RapiSender::loop()
 {
-  if(_stream->available()) {
-    _waitForResult(RAPI_TIMEOUT_MS);
+  if(_stream->available()) 
+  {
+    int ret = _waitForResult(RAPI_READ_TIMEOUT_MS);
+    if(RAPI_RESPONSE_ASYNC_EVENT == ret) {
+      // async EVSE state transition or WiFi event
+      if(nullptr != _onRapiEvent) {
+        _onRapiEvent();
+      }
+    } else {
+      _commandComplete(ret);
+    }
+  }
+  else if (_waitingForReply && millis() >= _timeout)
+  {
+    _commandComplete(RAPI_RESPONSE_TIMEOUT);
   }
 }

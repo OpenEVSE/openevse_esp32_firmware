@@ -145,22 +145,25 @@ loop() {
     if ((millis() - Timer3) >= 1000)
     {
       // Check state the OpenEVSE is in.
-      if (0 == rapiSender.sendCmd("$GS"))
-      {
-        if(rapiSender.getTokenCnt() >= 3)
+      rapiSender.sendCmd("$GS", [](int ret) {
+        if (RAPI_RESPONSE_OK == ret)
         {
-          const char *val = rapiSender.getToken(1);
-          DBUGVAR(val);
-          state = strtol(val, NULL, 10);
-          DBUGVAR(state);
+          if(rapiSender.getTokenCnt() >= 3)
+          {
+            const char *val = rapiSender.getToken(1);
+            DBUGVAR(val);
+            state = strtol(val, NULL, 10);
+            DBUGVAR(state);
+          }
+        } else {
+          DBUGLN("OpenEVSE not responding or not connected");
         }
-      } else {
-        DBUGLN("OpenEVSE not responding or not connected");
-      }
+      });
+      Timer3 = millis();
     }
   }
 
-  if(net_wifi_client_connected() || net_eth_connected())
+  if(net_is_connected())
   {
     if (config_mqtt_enabled()) {
       mqtt_loop();

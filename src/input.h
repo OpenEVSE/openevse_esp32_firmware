@@ -64,9 +64,6 @@ extern long watthour_total;
 
 extern String ohm_hour;
 
-extern unsigned long comm_sent;
-extern unsigned long comm_success;
-
 extern void handleRapiRead();
 extern void update_rapi_values();
 extern void create_rapi_json(String &data);

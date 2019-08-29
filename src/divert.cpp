@@ -56,14 +56,14 @@ void divertmode_update(byte newmode)
     {
       case DIVERT_MODE_NORMAL:
         // Restore the max charge current
-        rapiSender.sendCmd(String(F("$SC ")) + String(max_charge_current));
+        rapiSender.sendCmdSync(String(F("$SC ")) + String(max_charge_current));
         DBUGF("Restore max I: %d", max_charge_current);
         break;
 
       case DIVERT_MODE_ECO:
         charge_rate = 0;
         // Read the current charge current, assume this is the max set by the user
-        if(0 == rapiSender.sendCmd(F("$GE"))) {
+        if(0 == rapiSender.sendCmdSync(F("$GE"))) {
           max_charge_current = String(rapiSender.getToken(1)).toInt();
           DBUGF("Read max I: %d", max_charge_current);
         }
@@ -111,7 +111,7 @@ void divert_update_state()
     int current_charge_rate = charge_rate;
 
     // Read the current charge rate
-    if(0 == rapiSender.sendCmd(F("$GE"))) {
+    if(0 == rapiSender.sendCmdSync(F("$GE"))) {
       current_charge_rate = String(rapiSender.getToken(1)).toInt();
       DBUGVAR(current_charge_rate);
     }
@@ -131,7 +131,7 @@ void divert_update_state()
       DBUGVAR(Igrid_ie);
 
       // Subtract the current charge the EV is using from the Grid IE
-      if(0 == rapiSender.sendCmd(F("$GG"))) {
+      if(0 == rapiSender.sendCmdSync(F("$GG"))) {
         int milliAmps = String(rapiSender.getToken(1)).toInt();
         double amps = (double)milliAmps / 1000.0;
         DBUGVAR(amps);
@@ -179,9 +179,9 @@ void divert_update_state()
         // Set charge rate via RAPI
         bool chargeRateSet = false;
         // Try and set current with new API with volatile flag (don't save the current rate to EEPROM)
-        if(0 == rapiSender.sendCmd(String(F("$SC ")) + String(charge_rate) + String(F(" V")))) {
+        if(0 == rapiSender.sendCmdSync(String(F("$SC ")) + String(charge_rate) + String(F(" V")))) {
           chargeRateSet = true;
-        } else if(0 == rapiSender.sendCmd(String(F("$SC ")) + String(charge_rate))) {
+        } else if(0 == rapiSender.sendCmdSync(String(F("$SC ")) + String(charge_rate))) {
           // Fallback to old API
           chargeRateSet = true;
         }
@@ -198,7 +198,7 @@ void divert_update_state()
         bool chargeStarted = false;
 
         // Check if the timer is enabled, we need to do a bit of hackery if it is
-        if(0 == rapiSender.sendCmd("$GD"))
+        if(0 == rapiSender.sendCmdSync("$GD"))
         {
           if(rapiSender.getTokenCnt() >= 5 &&
              (0 != String(rapiSender.getToken(1)).toInt() ||
@@ -208,14 +208,14 @@ void divert_update_state()
           {
             // Timer is enabled so we need to emulate a button press to work around
             // an issue with $FE not working
-            if(false == chargeStarted && 0 == rapiSender.sendCmd(F("$F1"))) {
+            if(false == chargeStarted && 0 == rapiSender.sendCmdSync(F("$F1"))) {
               DBUGLN(F("Starting charge with button press"));
               chargeStarted = true;
             }
           }
         }
 
-        if(false == chargeStarted && 0 == rapiSender.sendCmd(F("$FE"))) {
+        if(false == chargeStarted && 0 == rapiSender.sendCmdSync(F("$FE"))) {
           DBUGLN(F("Starting charge"));
         }
       }

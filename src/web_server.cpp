@@ -464,8 +464,8 @@ handleStatus(MongooseHttpServerRequest *request) {
 
   s += "\"free_heap\":" + String(ESP.getFreeHeap()) + ",";
 
-  s += "\"comm_sent\":" + String(comm_sent) + ",";
-  s += "\"comm_success\":" + String(comm_success) + ",";
+  s += "\"comm_sent\":" + String(rapiSender.getSent()) + ",";
+  s += "\"comm_success\":" + String(rapiSender.getSuccess()) + ",";
 
   s += "\"amp\":" + String(amp) + ",";
   s += "\"pilot\":" + String(pilot) + ",";
@@ -611,8 +611,8 @@ handleUpdate(MongooseHttpServerRequest *request) {
   }
 
   String s = "{";
-  s += "\"comm_sent\":" + String(comm_sent) + ",";
-  s += "\"comm_success\":" + String(comm_success) + ",";
+  s += "\"comm_sent\":" + String(rapiSender.getSent()) + ",";
+  s += "\"comm_success\":" + String(rapiSender.getSuccess()) + ",";
   s += "\"ohmhour\":\"" + ohm_hour + "\",";
   s += "\"espfree\":\"" + String(espfree) + "\",";
   s += "\"packets_sent\":\"" + String(packets_sent) + "\",";
@@ -817,6 +817,7 @@ String delayTimer = "0 0 0 0";
 void
 handleRapi(MongooseHttpServerRequest *request) {
   bool json = request->hasParam("json");
+  int code = 200;
 
   MongooseHttpServerResponseStream *response;
   if(false == requestPreProcess(request, response, json ? CONTENT_TYPE_JSON : CONTENT_TYPE_HTML)) {
@@ -841,22 +842,18 @@ handleRapi(MongooseHttpServerRequest *request) {
 
     // BUG: Really we should do this in the main loop not here...
     RAPI_PORT.flush();
-    comm_sent++;
-    int ret = rapiSender.sendCmd(rapi.c_str());
+    int ret = rapiSender.sendCmdSync(rapi);
 
-    // IMPROVE: handle other errors, eg timeout
-    if(0 == ret || 1 == ret)
+    if(RAPI_RESPONSE_OK == ret ||
+       RAPI_RESPONSE_NK == ret)
     {
       String rapiString = rapiSender.getResponse();
-      if(0 == ret) {
-        comm_success++;
-      }
 
       // Fake $GD if not supported by firmware
-      if(0 == ret && rapi.startsWith(F("$ST"))) {
+      if(RAPI_RESPONSE_OK == ret && rapi.startsWith(F("$ST"))) {
         delayTimer = rapi.substring(4);
       }
-      if(1 == ret)
+      if(RAPI_RESPONSE_NK == ret)
       {
         if(rapi.equals(F("$GD"))) {
           ret = 0;
@@ -872,14 +869,10 @@ handleRapi(MongooseHttpServerRequest *request) {
 
           DBUGF("Attempting %s", fallback.c_str());
 
-          comm_sent++;
-          int ret = rapiSender.sendCmd(fallback.c_str());
-          if(0 == ret)
+          int ret = rapiSender.sendCmdSync(fallback.c_str());
+          if(RAPI_RESPONSE_OK == ret)
           {
             String rapiString = rapiSender.getResponse();
-            if(0 == ret) {
-              comm_success++;
-            }
           }
         }
       }
@@ -892,13 +885,38 @@ handleRapi(MongooseHttpServerRequest *request) {
         s += rapiString;
       }
     }
+    else
+    {
+      String errorString = 
+        RAPI_RESPONSE_QUEUE_FULL == ret ? F("RAPI_RESPONSE_QUEUE_FULL") :
+        RAPI_RESPONSE_BUFFER_OVERFLOW == ret ? F("RAPI_RESPONSE_BUFFER_OVERFLOW") :
+        RAPI_RESPONSE_TIMEOUT == ret ? F("RAPI_RESPONSE_TIMEOUT") :
+        RAPI_RESPONSE_OK == ret ? F("RAPI_RESPONSE_OK") :
+        RAPI_RESPONSE_NK == ret ? F("RAPI_RESPONSE_NK") :
+        RAPI_RESPONSE_INVALID_RESPONSE == ret ? F("RAPI_RESPONSE_INVALID_RESPONSE") :
+        RAPI_RESPONSE_CMD_TOO_LONG == ret ? F("RAPI_RESPONSE_CMD_TOO_LONG") :
+        RAPI_RESPONSE_BAD_CHECKSUM == ret ? F("RAPI_RESPONSE_BAD_CHECKSUM") :
+        RAPI_RESPONSE_BAD_SEQUENCE_ID == ret ? F("RAPI_RESPONSE_BAD_SEQUENCE_ID") :
+        RAPI_RESPONSE_ASYNC_EVENT == ret ? F("RAPI_RESPONSE_ASYNC_EVENT") :
+        F("UNKNOWN");
+
+      if (json) {
+        s = "{\"cmd\":\""+rapi+"\",\"error\":\""+errorString+"\"}";
+      } else {
+        s += rapi;
+        s += F("<p><strong>Error:</strong>");
+        s += errorString;
+      }
+
+      code = 500;
+    }
   }
   if (false == json) {
     s += F("<script type='text/javascript'>document.getElementById('rapi').focus();</script>");
     s += F("<p></html>\r\n\r\n");
   }
 
-  response->setCode(200);
+  response->setCode(code);
   response->print(s);
   request->send(response);
 }

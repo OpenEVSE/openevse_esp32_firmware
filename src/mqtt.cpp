@@ -67,16 +67,16 @@ void mqttmsg_callback(MongooseString topic, MongooseString payload) {
         cmd += " "+payload_str;
       }
 
-      comm_sent++;
-      if (0 == rapiSender.sendCmd(cmd.c_str())) {
-        comm_success++;
-        String rapiString = rapiSender.getResponse();
-        if (rapiString.startsWith("$OK ") || rapiString.startsWith("$NK ")) {
+      rapiSender.sendCmd(cmd, [](int ret) 
+      {
+        if (RAPI_RESPONSE_OK == ret || RAPI_RESPONSE_NK == ret) 
+        {
+          String rapiString = rapiSender.getResponse();
           String mqtt_data = rapiString;
           String mqtt_sub_topic = mqtt_topic + "/rapi/out";
           mqttclient.publish(mqtt_sub_topic, mqtt_data);
         }
-      }
+      });
     }
   }
 } //end call back
