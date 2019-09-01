@@ -466,6 +466,7 @@ handleStatus(MongooseHttpServerRequest *request) {
 
   s += "\"comm_sent\":" + String(rapiSender.getSent()) + ",";
   s += "\"comm_success\":" + String(rapiSender.getSuccess()) + ",";
+  s += "\"rapi_connected\":" + String(rapiSender.isConnected()) + ",";
 
   s += "\"amp\":" + String(amp) + ",";
   s += "\"pilot\":" + String(pilot) + ",";

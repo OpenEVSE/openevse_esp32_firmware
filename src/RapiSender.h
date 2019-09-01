@@ -55,6 +55,7 @@ private:
   Stream *_stream;
   uint32_t _sent;
   uint32_t _success;
+  bool _connected;
   uint8_t _sequenceId;
   uint8_t _flags;
   int _tokenCnt;
@@ -108,6 +109,9 @@ public:
   }
   uint32_t getSuccess() {
     return _success;
+  }
+  bool isConnected() {
+    return _connected;
   }
 
   void loop();

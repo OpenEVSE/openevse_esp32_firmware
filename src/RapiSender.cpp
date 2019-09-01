@@ -42,6 +42,9 @@ htou8(const char *s) {
 
 RapiSender::RapiSender(Stream * stream) :
   _stream(stream),
+  _sent(0),
+  _success(0),
+  _connected(false),
   _sequenceId(RAPI_INVALID_SEQUENCE_ID),
   _flags(0),
   _tokenCnt(0),
@@ -291,6 +294,7 @@ RapiSender::_waitForResult(unsigned long timeout) {
   if (_tokenCnt > 0) {
     if (!strcmp(_tokens[0], "$OK")) {
       _success++;
+      _connected = true;
       return RAPI_RESPONSE_OK;
     } else if (!strcmp(_tokens[0], "$NK")) {
       return RAPI_RESPONSE_NK;
@@ -302,6 +306,7 @@ RapiSender::_waitForResult(unsigned long timeout) {
       return RAPI_RESPONSE_INVALID_RESPONSE;
     }
   } else { // !_tokenCnt
+    _connected = false;
     return RAPI_RESPONSE_TIMEOUT;
   }
 }
