@@ -59,6 +59,10 @@ void setup() {
   RAPI_PORT.begin(115200);
   DEBUG_BEGIN(115200);
 
+#ifdef SERIAL_RX_PULLUP_PIN
+  pinMode(SERIAL_RX_PULLUP_PIN, INPUT_PULLUP);
+#endif
+
   DEBUG.println();
   DEBUG.print("OpenEVSE WiFI ");
 #ifdef ESP32
