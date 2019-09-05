@@ -48,14 +48,14 @@ RapiSender::RapiSender(Stream * stream) :
   _sequenceId(RAPI_INVALID_SEQUENCE_ID),
   _flags(0),
   _tokenCnt(0),
-  _tokens({NULL}),
+  _tokens{},
   _onRapiEvent(nullptr),
   _commandQueue(commandQueueItems, RAPI_MAX_COMMANDS),
   _completeHandler(nullptr),
   _timeout(0),
   _waitingForReply(false),
-  _respBuf({0}),
-  _respBufOrig({0})
+  _respBuf{},
+  _respBufOrig{}
 {
 }
 
@@ -325,7 +325,7 @@ RapiSender::enableSequenceId(uint8_t tf) {
 void
 RapiSender::loop()
 {
-  if(_stream->available()) 
+  if(_stream->available())
   {
     int ret = _waitForResult(RAPI_READ_TIMEOUT_MS);
     if(RAPI_RESPONSE_ASYNC_EVENT == ret) {

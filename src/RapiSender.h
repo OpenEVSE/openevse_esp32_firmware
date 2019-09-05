@@ -47,7 +47,7 @@ typedef std::function<void(int result)> RapiCommandCompleteHandler;
 struct CommandItem {
   String command;
   RapiCommandCompleteHandler handler;
-  int timeout;
+  unsigned int timeout;
 };
 
 class RapiSender {
