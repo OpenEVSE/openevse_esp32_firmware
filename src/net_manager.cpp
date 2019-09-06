@@ -2,6 +2,7 @@
 #include "net_manager.h"
 #include "config.h"
 #include "lcd.h"
+#include "hal.h"
 
 #ifdef ESP32
 #include <WiFi.h>
@@ -39,56 +40,8 @@ bool client_retry = false;
 unsigned long client_retry_time = 0;
 
 #ifdef WIFI_LED
-#ifndef WIFI_LED_ON_STATE
-#define WIFI_LED_ON_STATE LOW
-#endif
-
-#ifndef WIFI_LED_AP_TIME
-#define WIFI_LED_AP_TIME 1000
-#endif
-
-#ifndef WIFI_LED_AP_CONNECTED_TIME
-#define WIFI_LED_AP_CONNECTED_TIME 100
-#endif
-
-#ifndef WIFI_LED_STA_CONNECTING_TIME
-#define WIFI_LED_STA_CONNECTING_TIME 500
-#endif
-
 int wifiLedState = !WIFI_LED_ON_STATE;
 unsigned long wifiLedTimeOut = millis();
-#endif
-
-#ifndef WIFI_BUTTON
-#define WIFI_BUTTON 0
-#endif
-
-#ifndef WIFI_BUTTON_PRESSED_STATE
-#define WIFI_BUTTON_PRESSED_STATE LOW
-#endif
-
-#ifndef WIFI_BUTTON_PRESSED_PIN_MODE
-#if LOW == WIFI_BUTTON_PRESSED_STATE
-#define WIFI_BUTTON_PRESSED_PIN_MODE INPUT_PULLUP
-#else
-#define WIFI_BUTTON_PRESSED_PIN_MODE INPUT_PULLDOWN
-#endif
-#endif
-
-#ifndef WIFI_BUTTON_AP_TIMEOUT
-#define WIFI_BUTTON_AP_TIMEOUT              (5 * 1000)
-#endif
-
-#ifndef WIFI_BUTTON_FACTORY_RESET_TIMEOUT
-#define WIFI_BUTTON_FACTORY_RESET_TIMEOUT   (10 * 1000)
-#endif
-
-#ifndef WIFI_CLIENT_RETRY_TIMEOUT
-#define WIFI_CLIENT_RETRY_TIMEOUT (5 * 60 * 1000)
-#endif
-
-#ifndef RANDOM_SEED_CHANNEL
-#define RANDOM_SEED_CHANNEL 0
 #endif
 
 int wifiButtonState = HIGH;
@@ -120,13 +73,8 @@ startAP() {
   WiFi.softAPConfig(apIP, apIP, netMsk);
 
   // Create Unique SSID e.g "emonESP_XXXXXX"
-  #ifdef ESP32
   String softAP_ssid_ID =
-    String(softAP_ssid) + "_" + String((uint32_t)ESP.getEfuseMac());
-  #else
-  String softAP_ssid_ID =
-    String(softAP_ssid) + "_" + String(ESP.getChipId());
-  #endif
+    String(softAP_ssid) + "_" + HAL.getShortId();
 
   // Pick a random channel out of 1, 6 or 11
   int channel = (random(3) * 5) + 1;
@@ -399,9 +347,7 @@ net_setup() {
   if(net_wifi_is_client_configured()) {
     WiFi.persistent(true);
     WiFi.disconnect();
-    #ifndef ESP32
-    ESP.eraseConfig();
-    #endif // !ESP32
+    HAL.eraseConfig();
   }
 
   // Stop the WiFi module
@@ -491,16 +437,10 @@ net_loop()
     delay(1000);
 
     config_reset();
-#ifdef ESP8266
-    ESP.eraseConfig();
-#endif
+    HAL.eraseConfig();
 
     delay(50);
-#ifdef ESP32
-    ESP.restart();
-#elif defined(ESP8266)
-    ESP.reset();
-#endif
+    HAL.reset();
   }
   else if(false == apMessage && LOW == wifiButtonState && millis() > wifiButtonTimeOut + WIFI_BUTTON_AP_TIMEOUT)
   {
@@ -528,7 +468,7 @@ net_loop()
     #ifdef ESP32
     esp_restart();
     #else
-    ESP.reset();
+    HAL.reset();
     #endif
   }
 

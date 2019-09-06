@@ -42,6 +42,7 @@
 #include "lcd.h"
 #include "openevse.h"
 #include "root_ca.h"
+#include "hal.h"
 
 #include "RapiSender.h"
 
@@ -55,32 +56,24 @@ boolean rapi_read = 0; //flag to indicate first read of RAPI status
 // -------------------------------------------------------------------
 // SETUP
 // -------------------------------------------------------------------
-void setup() {
-  RAPI_PORT.begin(115200);
-  DEBUG_BEGIN(115200);
-
-#ifdef SERIAL_RX_PULLUP_PIN
-  pinMode(SERIAL_RX_PULLUP_PIN, INPUT_PULLUP);
-#endif
+void setup()
+{
+  HAL.begin();
 
   DEBUG.println();
   DEBUG.print("OpenEVSE WiFI ");
-#ifdef ESP32
-  DEBUG.println((uint32_t)ESP.getEfuseMac());
-#else
-  DEBUG.println(ESP.getChipId());
-#endif // ESP32
+  DEBUG.println(HAL.getShortId());
   DEBUG.println("Firmware: " + currentfirmware);
 
-  DEBUG.printf("Free: %d\n", ESP.getFreeHeap());
+  DEBUG.printf("Free: %d\n", HAL.getFreeHeap());
 
   // Read saved settings from the config
   config_load_settings();
-  DBUGF("After config_load_settings: %d", ESP.getFreeHeap());
+  DBUGF("After config_load_settings: %d", HAL.getFreeHeap());
 
   // Initialise the WiFi
   net_setup();
-  DBUGF("After net_setup: %d", ESP.getFreeHeap());
+  DBUGF("After net_setup: %d", HAL.getFreeHeap());
 
   // Initialise Mongoose networking library
   Mongoose.begin();
@@ -88,11 +81,11 @@ void setup() {
 
   // Bring up the web server
   web_server_setup();
-  DBUGF("After web_server_setup: %d", ESP.getFreeHeap());
+  DBUGF("After web_server_setup: %d", HAL.getFreeHeap());
 
 #ifdef ENABLE_OTA
   ota_setup();
-  DBUGF("After ota_setup: %d", ESP.getFreeHeap());
+  DBUGF("After ota_setup: %d", HAL.getFreeHeap());
 #endif
 
   rapiSender.setOnEvent(on_rapi_event);
@@ -138,7 +131,7 @@ loop() {
     // Do these things once every 2s
     // -------------------------------------------------------------------
     if ((millis() - Timer3) >= 2000) {
-      DEBUG.printf("Free: %d\n", ESP.getFreeHeap());
+      DEBUG.printf("Free: %d\n", HAL.getFreeHeap());
       update_rapi_values();
       Timer3 = millis();
     }

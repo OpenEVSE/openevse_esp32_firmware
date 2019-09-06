@@ -31,6 +31,7 @@ typedef const __FlashStringHelper *fstr_t;
 #include "emoncms.h"
 #include "divert.h"
 #include "lcd.h"
+#include "hal.h"
 
 MongooseHttpServer server;          // Create class for Web server
 //AsyncWebSocket ws("/ws");
@@ -462,7 +463,7 @@ handleStatus(MongooseHttpServerRequest *request) {
 
   s += "\"ohm_hour\":\"" + ohm_hour + "\",";
 
-  s += "\"free_heap\":" + String(ESP.getFreeHeap()) + ",";
+  s += "\"free_heap\":" + String(HAL.getFreeHeap()) + ",";
 
   s += "\"comm_sent\":" + String(rapiSender.getSent()) + ",";
   s += "\"comm_success\":" + String(rapiSender.getSuccess()) + ",";
@@ -535,7 +536,7 @@ handleConfig(MongooseHttpServerRequest *request) {
   String s = "{";
   s += "\"firmware\":\"" + firmware + "\",";
   s += "\"protocol\":\"" + protocol + "\",";
-  s += "\"espflash\":" + String(ESP.getFlashChipSize()) + ",";
+  s += "\"espflash\":" + String(HAL.getFlashChipSize()) + ",";
   s += "\"version\":\"" + currentfirmware + "\",";
   s += "\"diodet\":" + String(diode_ck) + ",";
   s += "\"gfcit\":" + String(gfci_test) + ",";
@@ -648,9 +649,7 @@ handleRst(MongooseHttpServerRequest *request) {
   }
 
   config_reset();
-#ifndef ESP32
-  ESP.eraseConfig();
-#endif // !ESP32
+  HAL.eraseConfig();
 
   response->setCode(200);
   response->print("1");
@@ -1059,18 +1058,14 @@ web_server_loop() {
   if(systemRestartTime > 0 && millis() > systemRestartTime) {
     systemRestartTime = 0;
     net_wifi_disconnect();
-    ESP.restart();
+    HAL.reset();
   }
 
   // Do we need to reboot the system?
   if(systemRebootTime > 0 && millis() > systemRebootTime) {
     systemRebootTime = 0;
     net_wifi_disconnect();
-    #ifdef ESP32
-    esp_restart();
-    #else
-    ESP.reset();
-    #endif
+    HAL.reset();
   }
 
   Profile_End(web_server_loop, 5);

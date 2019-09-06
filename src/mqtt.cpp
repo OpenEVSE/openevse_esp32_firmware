@@ -3,6 +3,7 @@
 #include "config.h"
 #include "divert.h"
 #include "input.h"
+#include "hal.h"
 
 #include <Arduino.h>
 #include <MongooseMqttClient.h>
@@ -101,11 +102,7 @@ mqtt_connect()
   DBUG("MQTT Connecting to...");
   DBUGLN(mqtt_server);
 
-  #ifdef ESP32
-  String strID = String((uint32_t)ESP.getEfuseMac());
-  #else
-  String strID = String(ESP.getChipId());
-  #endif
+  String strID = "openevse-"+HAL.getShortId();
 
   mqttclient.connect(mqtt_server + ":1883", mqtt_user, mqtt_pass, []()
   {

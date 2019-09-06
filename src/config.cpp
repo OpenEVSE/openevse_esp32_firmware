@@ -1,5 +1,6 @@
 #include "emonesp.h"
 #include "config.h"
+#include "hal.h"
 
 #include <Arduino.h>
 #include <EEPROM.h>             // Save config settings
@@ -14,6 +15,7 @@ String www_password = "";
 
 // Advanced settings
 String esp_hostname = "";
+String esp_hostname_default = "openevse-"+HAL.getShortId();
 
 // EMONCMS SERVER strings
 String emoncms_server = "";
@@ -28,6 +30,7 @@ String mqtt_user = "";
 String mqtt_pass = "";
 String mqtt_solar = "";
 String mqtt_grid_ie = "";
+String mqtt_announce_topic = "openevse/announce/"+HAL.getShortId();
 
 // Ohm Connect Settings
 String ohm = "";
@@ -189,6 +192,10 @@ config_load_settings() {
   DBUGLN("Loading config");
   EEPROM.begin(EEPROM_SIZE);
 
+  // Device Hostname, needs to be read first as other config defaults depend on it
+  EEPROM_read_string(EEPROM_HOSTNAME_START, EEPROM_HOSTNAME_SIZE,
+                     esp_hostname, esp_hostname_default);
+
   // Load WiFi values
   EEPROM_read_string(EEPROM_ESID_START, EEPROM_ESID_SIZE, esid);
   EEPROM_read_string(EEPROM_EPASS_START, EEPROM_EPASS_SIZE, epass);
@@ -199,7 +206,7 @@ config_load_settings() {
   EEPROM_read_string(EEPROM_EMON_SERVER_START, EEPROM_EMON_SERVER_SIZE,
                      emoncms_server, "data.openevse.com/emoncms");
   EEPROM_read_string(EEPROM_EMON_NODE_START, EEPROM_EMON_NODE_SIZE,
-                     emoncms_node, "openevse");
+                     emoncms_node, esp_hostname);
   EEPROM_read_string(EEPROM_EMON_FINGERPRINT_START, EEPROM_EMON_FINGERPRINT_SIZE,
                      emoncms_fingerprint,"");
 
@@ -207,7 +214,7 @@ config_load_settings() {
   EEPROM_read_string(EEPROM_MQTT_SERVER_START, EEPROM_MQTT_SERVER_SIZE,
                      mqtt_server, "emonpi");
   EEPROM_read_string(EEPROM_MQTT_TOPIC_START, EEPROM_MQTT_TOPIC_SIZE,
-                     mqtt_topic, "openevse");
+                     mqtt_topic, esp_hostname);
   EEPROM_read_string(EEPROM_MQTT_USER_START, EEPROM_MQTT_USER_SIZE,
                      mqtt_user, "emonpi");
   EEPROM_read_string(EEPROM_MQTT_PASS_START, EEPROM_MQTT_PASS_SIZE,
@@ -222,10 +229,6 @@ config_load_settings() {
                      www_username, "");
   EEPROM_read_string(EEPROM_WWW_PASS_START, EEPROM_WWW_PASS_SIZE,
                      www_password, "");
-
-  // Web server credentials
-  EEPROM_read_string(EEPROM_HOSTNAME_START, EEPROM_HOSTNAME_SIZE,
-                     esp_hostname, "openevse");
 
   // Ohm Connect Settings
   EEPROM_read_string(EEPROM_OHM_KEY_START, EEPROM_OHM_KEY_SIZE, ohm);
