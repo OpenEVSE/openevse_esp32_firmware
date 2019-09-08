@@ -2,6 +2,7 @@
 #define _HAL_H
 
 #include <Arduino.h>
+#include "emonesp.h"
 
 class HalClass
 {
@@ -14,6 +15,7 @@ class HalClass
     virtual void eraseConfig() = 0;
 
     virtual String getShortId();
+    virtual String getLongId(int base = HAL_ID_ENCODING_BASE);
     virtual void begin();
 };
 

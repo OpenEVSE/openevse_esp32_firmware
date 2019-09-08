@@ -74,4 +74,12 @@
 #endif
 #endif
 
+#ifndef HAL_ID_ENCODING_BASE
+#define HAL_ID_ENCODING_BASE 10
+#endif
+
+#ifndef HAL_SHORT_ID_LENGTH
+#define HAL_SHORT_ID_LENGTH 4
+#endif
+
 #endif // _EMONESP_H
