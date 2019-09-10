@@ -89,11 +89,11 @@ void create_rapi_json(String &data)
   if (volt > 0) {
     doc["volt"] = volt;
   }
-  doc["pilot"] = watthour_total;
-  doc["wh"] = temp1;
-  doc["temp1"] = temp2;
-  doc["temp2"] = temp3;
-  doc["temp3"] = pilot;
+  doc["pilot"] = pilot;
+  doc["wh"] = watthour_total;
+  doc["temp1"] = temp1;
+  doc["temp2"] = temp2;
+  doc["temp3"] = temp3;
   doc["state"] = state;
   doc["freeram"] = HAL.getFreeHeap();
   doc["divertmode"] = divertmode;
@@ -268,7 +268,7 @@ update_rapi_values() {
 }
 
 void
-handleRapiRead() 
+handleRapiRead()
 {
   Profile_Start(handleRapiRead);
 
@@ -382,7 +382,7 @@ handleRapiRead()
 
 void on_rapi_event()
 {
-  if(!strcmp(rapiSender.getToken(0), "$ST")) 
+  if(!strcmp(rapiSender.getToken(0), "$ST"))
   {
     const char *val = rapiSender.getToken(1);
     DBUGVAR(val);
