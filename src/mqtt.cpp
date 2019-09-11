@@ -4,8 +4,10 @@
 #include "divert.h"
 #include "input.h"
 #include "hal.h"
+#include "net_manager.h"
 
 #include <Arduino.h>
+#include <ArduinoJson.h>
 #include <MongooseMqttClient.h>
 
 MongooseMqttClient mqttclient;
@@ -15,6 +17,8 @@ int clientTimeout = 0;
 int i = 0;
 String payload_str = "";
 bool connecting = false;
+
+String lastWill = "";
 
 // -------------------------------------------------------------------
 // MQTT msg Received callback function:
@@ -68,9 +72,9 @@ void mqttmsg_callback(MongooseString topic, MongooseString payload) {
         cmd += " "+payload_str;
       }
 
-      rapiSender.sendCmd(cmd, [](int ret) 
+      rapiSender.sendCmd(cmd, [](int ret)
       {
-        if (RAPI_RESPONSE_OK == ret || RAPI_RESPONSE_NK == ret) 
+        if (RAPI_RESPONSE_OK == ret || RAPI_RESPONSE_NK == ret)
         {
           String rapiString = rapiSender.getResponse();
           String mqtt_data = rapiString;
@@ -95,28 +99,55 @@ mqtt_connect()
 
   mqttclient.onMessage(mqttmsg_callback); //function to be called when mqtt msg is received on subscribed topic
   mqttclient.onError([](uint8_t err) {
-    DBUGF("Got error %u", err);
+    DBUGF("MQTT error %u", err);
     connecting = false;
   });
 
   DBUG("MQTT Connecting to...");
   DBUGLN(mqtt_server);
 
-  String strID = "openevse-"+HAL.getShortId();
+  // Build the last will message
+  DynamicJsonDocument willDoc(JSON_OBJECT_SIZE(3) + 60);
 
-  mqttclient.connect(mqtt_server + ":1883", mqtt_user, mqtt_pass, []()
+  willDoc["state"] = "disconnected";
+  willDoc["id"] = HAL.getLongId();
+  willDoc["name"] = esp_hostname;
+
+  lastWill = "";
+  serializeJson(willDoc, lastWill);
+  DBUGVAR(lastWill);
+
+  mqttclient.setCredentials(mqtt_user, mqtt_pass);
+  mqttclient.setLastWillAndTestimment(mqtt_announce_topic, lastWill, true);
+  mqttclient.connect(mqtt_server + ":1883", esp_hostname, []()
   {
     DBUGLN("MQTT connected");
 
-    mqttclient.publish(mqtt_topic, "connected"); // Once connected, publish an announcement..
-    String mqtt_sub_topic = mqtt_topic + "/rapi/in/#";      // MQTT Topic to subscribe to receive RAPI commands via MQTT
-    //e.g to set current to 13A: <base-topic>/rapi/in/$SC 13
+    DynamicJsonDocument doc(JSON_OBJECT_SIZE(5) + 200);
+
+    doc["state"] = "connected";
+    doc["id"] = HAL.getLongId();
+    doc["name"] = esp_hostname;
+    doc["mqtt"] = mqtt_topic;
+    doc["http"] = "http://"+ipaddress+"/";
+
+    // Once connected, publish an announcement..
+    String announce = "";
+    serializeJson(doc, announce);
+    DBUGVAR(announce);
+    mqttclient.publish(mqtt_announce_topic, announce, true);
+
+    // MQTT Topic to subscribe to receive RAPI commands via MQTT
+    String mqtt_sub_topic = mqtt_topic + "/rapi/in/#";
+
+    // e.g to set current to 13A: <base-topic>/rapi/in/$SC 13
     mqttclient.subscribe(mqtt_sub_topic);
+
     // subscribe to solar PV / grid_ie MQTT feeds
-    if (mqtt_solar!=""){
+    if (mqtt_solar!="") {
       mqttclient.subscribe(mqtt_solar);
     }
-    if (mqtt_grid_ie!=""){
+    if (mqtt_grid_ie!="") {
       mqttclient.subscribe(mqtt_grid_ie);
     }
     mqtt_sub_topic = mqtt_topic + "/divertmode/set";      // MQTT Topic to change divert mode
@@ -125,29 +156,6 @@ mqtt_connect()
     connecting = false;
   });
 
-/*
-  if (mqttclient.connect( strID.c_str(), mqtt_user.c_str(), mqtt_pass.c_str(),mqtt_topic.c_str(),1,0,(char*)"disconnected")) {  // Attempt to connect
-    DEBUG.println("MQTT connected");
-    mqttclient.publish(mqtt_topic.c_str(), "connected"); // Once connected, publish an announcement..
-    String mqtt_sub_topic = mqtt_topic + "/rapi/in/#";      // MQTT Topic to subscribe to receive RAPI commands via MQTT
-    //e.g to set current to 13A: <base-topic>/rapi/in/$SC 13
-    mqttclient.subscribe(mqtt_sub_topic.c_str());
-    // subscribe to solar PV / grid_ie MQTT feeds
-    if (mqtt_solar!=""){
-      mqttclient.subscribe(mqtt_solar.c_str());
-    }
-    if (mqtt_grid_ie!=""){
-      mqttclient.subscribe(mqtt_grid_ie.c_str());
-    }
-    mqtt_sub_topic = mqtt_topic + "/divertmode/set";      // MQTT Topic to change divert mode
-    mqttclient.subscribe(mqtt_sub_topic.c_str());
-
-  } else {
-    DEBUG.print("MQTT failed: ");
-    DEBUG.println(mqttclient.state());
-    return (0);
-  }
-*/
   return true;
 }
 
@@ -159,6 +167,10 @@ mqtt_connect()
 void
 mqtt_publish(String data) {
   Profile_Start(mqtt_publish);
+
+  if(!mqttclient.connected()) {
+    return;
+  }
 
   String mqtt_data = "";
   String topic = mqtt_topic + "/";
