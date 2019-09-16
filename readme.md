@@ -1,6 +1,7 @@
 # OpenEVSE WiFi Gateway
 
-[![Build Status](https://travis-ci.org/OpenEVSE/ESP8266_WiFi_v2.x.svg?branch=master)](https://travis-ci.org/OpenEVSE/ESP8266_WiFi_v2.x)
+[![Build Status](https://travis-ci.org/OpenEVSE/ESP32_WiFi_V3.svg?branch=master)](https://travis-ci.org/OpenEVSE/ESP32_WiFi_V3.x)
+
 [![Codacy Badge](https://api.codacy.com/project/badge/Grade/640ec33a27b24f6fb4fb1d7e74c7334c)](https://www.codacy.com/app/jeremy_poulter/ESP8266_WiFi_v2.x?utm_source=github.com&amp;utm_medium=referral&amp;utm_content=jeremypoulter/ESP8266_WiFi_v2.x&amp;utm_campaign=Badge_Grade)
 
 ![main](docs/main2.png)
@@ -32,7 +33,8 @@ Live demo: https://openevse.openenergymonitor.org
 
 ### WiFi Module
 
-- ESP8266 (ESP-12) e.g Adafruit Huzzah
+- ESP32 
+Comming soon....
 - Purchase via: [OpenEVSE Store (USA/Canda)](https://store.openevse.com/collections/frontpage/products/openevse-wifi-kit) | [OpenEnergyMonitor (UK / EU)](http://shop.openenergymonitor.com/openevse-wifi-kit/)
 - See [OpenEVSE WiFi setup guide](https://openevse.dozuki.com/Guide/OpenEVSE+WiFi+%28Beta%29/14) for WiFi module connection instructions
 
