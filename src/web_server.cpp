@@ -887,7 +887,7 @@ handleRapi(MongooseHttpServerRequest *request) {
     }
     else
     {
-      String errorString = 
+      String errorString =
         RAPI_RESPONSE_QUEUE_FULL == ret ? F("RAPI_RESPONSE_QUEUE_FULL") :
         RAPI_RESPONSE_BUFFER_OVERFLOW == ret ? F("RAPI_RESPONSE_BUFFER_OVERFLOW") :
         RAPI_RESPONSE_TIMEOUT == ret ? F("RAPI_RESPONSE_TIMEOUT") :
@@ -939,9 +939,12 @@ void handleNotFound(MongooseHttpServerRequest *request)
     String url = F("http://");
     url += ipaddress;
 
-    String s = F("<html><body><a href=\"");
+    String s = F("<html>");
+    s += F("<head><meta http-equiv=\"Refresh\" content=\"0; url=");
     s += url;
-    s += F("\">OpenEVES</a></body></html>");
+    s += F("\" /></head><body><a href=\"");
+    s += url;
+    s += F("\">OpenEVSE</a></body></html>");
 
     response->setCode(301);
     response->addHeader(F("Location"), url);
