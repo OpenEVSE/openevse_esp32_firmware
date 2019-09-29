@@ -63,23 +63,29 @@ static const char _DUMMY_PASSWORD[] PROGMEM = "_DUMMY_PASSWORD";
 #define ESCAPEQUOTE(A) TEXTIFY(A)
 String currentfirmware = ESCAPEQUOTE(BUILD_TAG);
 
-void dumpRequest(MongooseHttpServerRequest *request) {
+void dumpRequest(MongooseHttpServerRequest *request)
+{
+  DBUGF("host.length = %d", request->host().length());
+  DBUGF("host.c_str = %p", request->host().c_str());
+  DBUGF("uri.length = %d", request->uri().length());
+  DBUGF("uri.c_str = %p", request->uri().c_str());
+
   if(request->method() == HTTP_GET) {
-    DBUGF("GET");
+    DBUG("GET");
   } else if(request->method() == HTTP_POST) {
-    DBUGF("POST");
+    DBUG("POST");
   } else if(request->method() == HTTP_DELETE) {
-    DBUGF("DELETE");
+    DBUG("DELETE");
   } else if(request->method() == HTTP_PUT) {
-    DBUGF("PUT");
+    DBUG("PUT");
   } else if(request->method() == HTTP_PATCH) {
-    DBUGF("PATCH");
+    DBUG("PATCH");
   } else if(request->method() == HTTP_HEAD) {
-    DBUGF("HEAD");
+    DBUG("HEAD");
   } else if(request->method() == HTTP_OPTIONS) {
-    DBUGF("OPTIONS");
+    DBUG("OPTIONS");
   } else {
-    DBUGF("UNKNOWN");
+    DBUG("UNKNOWN");
   }
   DBUGF(" http://%.*s%.*s",
     request->host().length(), request->host().c_str(),
@@ -511,10 +517,6 @@ handleStatus(MongooseHttpServerRequest *request) {
 #endif
   s += "}";
 
-  DBUGVAR(lastUpdate);
-  DBUGVAR(millis());
-  DBUGVAR((millis() - lastUpdate) / 1000);
-
   response->setCode(200);
   response->print(s);
   request->send(response);
@@ -724,6 +726,8 @@ handleUpdatePost(MongooseHttpServerRequest *request) {
   if(false == requestPreProcess(request, upgradeResponse, CONTENT_TYPE_TEXT)) {
     return;
   }
+
+  // TODO: Add support for returning 100: Continue
 }
 
 static int lastPercent = -1;
