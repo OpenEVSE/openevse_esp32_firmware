@@ -284,32 +284,37 @@ Admin HTTP Authentication (highly recommended) can be enabled by saving admin co
 **HTTP authentication is required for all HTTP requests including input API**
 
 
-### Firmware update
-
-Pre-compiled .bin's can be uploaded via the web interface, see [OpenEVSE Wifi releases](https://github.com/OpenEVSE/ESP8266_WiFi_v2.x/releases) for latest updates.
-
 ### Hardware reset
 
 A Hardware reset can be made (all wifi and services config lost) by pressing and holding GPIO0 hardware button (on the Huzzah WiFi module) for 10s.
 
-Note: Holding the GPIO0 button for 5s will but the WiFi unit into AP (access point) mode to allow the WiFi network to be changed without loosing all the service config
+*Note: Holding the GPIO0 button for 5s will but the WiFi unit into AP (access point) mode to allow the WiFi network to be changed without loosing all the service config*
 
-***
+### Firmware update
 
-## Upload pre-compiled firmware 
+See [OpenEVSE Wifi releases](https://github.com/OpenEVSE/ESP32_WiFi_v3.x/releases) for latest stable pre-compiled update releases.
 
-- Download pre-compiled FW from the [OpenEVSE Wifi releases](https://github.com/OpenEVSE/ESP8266_WiFi_v2.x/releases) page
-- Flash using esptool:
+## Via Web Interface 
+
+This is the easiest way to update, pre-compiled firmware files `.bin` can be uploaded via the web interface: System > Update. 
+
+If for whatever reason the web-interface won't load it's possibel to updated the firmware via CURL:
+
+`curl -F 'file=@firmware.bin'  http://<IP-ADDRESS>/update && echo`
+
+## Via Network OTA
+
+The firmware can also be updated via OTA over a local WiFi network usiong Arduino or Platformio
+
+`platformio run -t upload --upload-port <IP-ADDRESS>`
+
+## Via USB Serial Programmer 
 
 `esptool.py write_flash 0x000000 firmware.bin`
 
 Or use esptool GUI (Pyflasher) avilable on windows/mac https://github.com/marcelstoer/nodemcu-pyflasher
 
-## Firmware Compile & Upload
-
-**The ESP should be shipped with latest firmware pre-installed, firmware can be updated via the HTTP web interface.**
-
-**Updating from V1: it's possible to update from V1 to V2 firmware using the HTTP web interface uploader, just upload the latest .bin pre-compiled firmware release.***
+### Firmware Compile & Upload
 
 If required firmware can also be uploaded via serial using USB to UART cable.
 
@@ -373,27 +378,6 @@ npm run build
 You can then just compile and upload as above.
 
 For more details see the [GUI documentation](https://github.com/OpenEVSE/openevse_wifi_gui/blob/master/readme.md)
-
-***
-
-### Compile & Upload Using Arduino IDE
-
-#### 1. Install ESP for Arduino with Boards Manager
-
-From: https://github.com/esp8266/Arduino
-
-Starting with 1.6.4, Arduino allows installation of third-party platform packages using Boards Manager. ESP Arduino packages are available for Windows, Mac OS, and Linux (32 and 64 bit).
-
-- Install Arduino 1.6.8 from the Arduino website.
-- Start Arduino and open Preferences window.
-- Enter http://arduino.esp8266.com/stable/package_esp8266com_index.json into Additional Board Manager URLs field. You can add multiple URLs, separating them with commas.
-- Open Boards Manager from Tools > Board menu and install esp8266 platform (and don't forget to select your ESP8266 board from Tools > Board menu after installation).
-
-
-#### 2. Compile and Upload
-
-- Open `src.ino` in the Arduino IDE.
-- Compile and Upload as normal
 
 ***
 
