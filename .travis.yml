@@ -49,7 +49,7 @@ install:
 
   # Use dev version
   - pip install -U https://github.com/platformio/platformio-core/archive/develop.zip
-  - pio lib install https://github.com/jeremypoulter/ArduinoMongoose.git
+  # - pio lib install https://github.com/jeremypoulter/ArduinoMongoose.git
 
   # - platformio platform install espressif8266 --with-package tool-mkspiffs
   # - platformio platform install https://github.com/platformio/platform-espressif8266.git#feature/stage --with-package tool-mkspiffs
