@@ -23,7 +23,7 @@ def get_c_name(source_file):
 
 def text_to_header(source_file):
     with open(source_file) as source_fh:
-        original = source_fh.read().decode('utf-8')
+        original = source_fh.read()
     filename = get_c_name(source_file)
     output = "static const char CONTENT_{}[] PROGMEM = ".format(filename)
     for line in original.splitlines():
@@ -38,7 +38,7 @@ def binary_to_header(source_file):
 
     with open(source_file, "rb") as source_fh:
         byte = source_fh.read(1)
-        while byte != "":
+        while byte != b"":
             output += "0x{:02x}, ".format(ord(byte))
             count += 1
             if 16 == count:
@@ -62,7 +62,7 @@ def data_to_header(env, target, source):
     target_file = target[0].get_abspath()
     print("Generating {}".format(target_file))
     with open(target_file, "w") as output_file:
-        output_file.write(output.encode('utf-8'))
+        output_file.write(output)
 
 def make_static(env, target, source):
     output = ""
@@ -103,7 +103,7 @@ def make_static(env, target, source):
     target_file = target[0].get_abspath()
     print("Generating {}".format(target_file))
     with open(target_file, "w") as output_file:
-        output_file.write(output.encode('utf-8'))
+        output_file.write(output)
 
 def process_html_app(source, dest, env):
     web_server_static_files = join(dest, "web_server_static_files.h")
