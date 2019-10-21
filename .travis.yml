@@ -17,7 +17,7 @@
 language: python
 
 python:
-- '2.7'
+- '3.7'
 
 sudo: required
 
@@ -33,6 +33,7 @@ env:
   - PIO_ENV=openevse_huzzah32
   - PIO_ENV=openevse_featheresp32
   - PIO_ENV=openevse_esp32-gateway
+  - PIO_ENV=openevse_esp32-gateway-e
   # - SCRIPT=ci_arduino.sh
   #   BUILD_TARGET=esp8266:esp8266:huzzah:FlashSize=4M1M
 
