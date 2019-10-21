@@ -54,6 +54,7 @@ const char _CONTENT_TYPE_JSON[] PROGMEM = "application/json";
 const char _CONTENT_TYPE_JS[] PROGMEM = "application/javascript";
 const char _CONTENT_TYPE_JPEG[] PROGMEM = "image/jpeg";
 const char _CONTENT_TYPE_PNG[] PROGMEM = "image/png";
+const char _CONTENT_TYPE_SVG[] PROGMEM = "image/svg+xml";
 
 static const char _DUMMY_PASSWORD[] PROGMEM = "_DUMMY_PASSWORD";
 #define DUMMY_PASSWORD FPSTR(_DUMMY_PASSWORD)
@@ -65,6 +66,7 @@ String currentfirmware = ESCAPEQUOTE(BUILD_TAG);
 
 void dumpRequest(MongooseHttpServerRequest *request)
 {
+#ifdef ENABLE_DEBUG_WEB_REQUEST
   DBUGF("host.length = %d", request->host().length());
   DBUGF("host.c_str = %p", request->host().c_str());
   DBUGF("uri.length = %d", request->uri().length());
@@ -117,6 +119,7 @@ void dumpRequest(MongooseHttpServerRequest *request)
     }
   }
   */
+#endif
 }
 
 // -------------------------------------------------------------------
