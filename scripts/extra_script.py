@@ -55,7 +55,7 @@ def data_to_header(env, target, source):
     for source_file in source:
         #print("Reading {}".format(source_file))
         file = source_file.get_abspath()
-        if file.endswith(".css") or file.endswith(".js") or file.endswith(".htm") or file.endswith(".html"):
+        if file.endswith(".css") or file.endswith(".js") or file.endswith(".htm") or file.endswith(".html") or file.endswith(".svg"):
             output += text_to_header(file)
         else:
             output += binary_to_header(file)
@@ -94,6 +94,8 @@ def make_static(env, target, source):
             filetype = "JPEG"
         elif out_file.endswith(".png"):
             filetype = "PNG"
+        elif out_file.endswith(".svg"):
+            filetype = "SVG"
 
         c_name = get_c_name(out_file)
         output += "  { \"/"+out_file+"\", CONTENT_"+c_name+", sizeof(CONTENT_"+c_name+") - 1, _CONTENT_TYPE_"+filetype+" },\n"
