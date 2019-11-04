@@ -26,7 +26,7 @@ extern const char _CONTENT_TYPE_PNG[];
 #define CONTENT_TYPE_PNG FPSTR(_CONTENT_TYPE_PNG)
 
 extern const char _CONTENT_TYPE_SVG[];
-#define CONTENT_TYPE_PNG FPSTR(_CONTENT_TYPE_SVG)
+#define CONTENT_TYPE_SVG FPSTR(_CONTENT_TYPE_SVG)
 
 extern MongooseHttpServer server;
 extern String currentfirmware;
