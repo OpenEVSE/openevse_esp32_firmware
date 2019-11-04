@@ -1,4 +1,5 @@
 #include <Arduino.h>
+#include <ArduinoJson.h>
 #include <MongooseString.h>
 #include <MongooseHttpClient.h>
 
@@ -38,7 +39,15 @@ void emoncms_publish(String data)
     client.get(url, [](MongooseHttpClientResponse *response)
     {
       MongooseString result = response->body();
-      if (result == "ok") {
+      StaticJsonDocument<32> doc;
+      if(DeserializationError::Code::Ok == deserializeJson(doc, result.c_str(), result.length())) 
+      {
+        bool success = doc["success"]; // true
+        if(success) {
+          packets_success++;
+          emoncms_connected = true;
+        }
+      } else if (result == "ok") {
         packets_success++;
         emoncms_connected = true;
       } else {
