@@ -1,8 +1,6 @@
 # OpenEVSE WiFi Gateway
 
-[![Build Status](https://travis-ci.org/OpenEVSE/ESP32_WiFi_V3.svg?branch=master)](https://travis-ci.org/OpenEVSE/ESP32_WiFi_V3.x)
-
-[![Codacy Badge](https://api.codacy.com/project/badge/Grade/640ec33a27b24f6fb4fb1d7e74c7334c)](https://www.codacy.com/app/jeremy_poulter/ESP8266_WiFi_v2.x?utm_source=github.com&amp;utm_medium=referral&amp;utm_content=jeremypoulter/ESP8266_WiFi_v2.x&amp;utm_campaign=Badge_Grade)
+[![Build Status](https://travis-ci.org/OpenEVSE/ESP32_WiFi_V3.x.svg?branch=master)](https://travis-ci.org/OpenEVSE/ESP32_WiFi_V3.x)
 
 ![main](docs/main2.png)
 
