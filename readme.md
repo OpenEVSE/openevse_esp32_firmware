@@ -1,12 +1,10 @@
 # OpenEVSE WiFi Gateway
 
-[![Build Status](https://travis-ci.org/OpenEVSE/ESP32_WiFi_V3.svg?branch=master)](https://travis-ci.org/OpenEVSE/ESP32_WiFi_V3.x)
-
-[![Codacy Badge](https://api.codacy.com/project/badge/Grade/640ec33a27b24f6fb4fb1d7e74c7334c)](https://www.codacy.com/app/jeremy_poulter/ESP8266_WiFi_v2.x?utm_source=github.com&amp;utm_medium=referral&amp;utm_content=jeremypoulter/ESP8266_WiFi_v2.x&amp;utm_campaign=Badge_Grade)
+[![Build Status](https://travis-ci.org/OpenEVSE/ESP32_WiFi_V3.x.svg?branch=master)](https://travis-ci.org/OpenEVSE/ESP32_WiFi_V3.x)
 
 ![main](docs/main2.png)
 
-The WiFi gateway uses an **ESP32** which communicates with the OpenEVSE controller via serial utilizing the existing RAPI API serial interface. The web interface UI is served directly from the ESP8266 web server and can be controlled via a connected device over the network.
+The WiFi gateway uses an **ESP32** which communicates with the OpenEVSE controller via serial utilizing the existing RAPI API serial interface. The web interface UI is served directly from the ESP32 web server and can be controlled via a connected device over the network.
 
 [**See this repo for the older V2.x ESP8266 version**](https://github.com/openevse/ESP8266_WiFi_v2.x/)
 
@@ -35,7 +33,7 @@ Live demo: https://openevse.openenergymonitor.org
 
 ### WiFi Module
 
-- ESP32 
+- ESP32
 Comming soon....
 - Purchase via: [OpenEVSE Store (USA/Canda)](https://store.openevse.com/collections/frontpage/products/openevse-wifi-kit) | [OpenEnergyMonitor (UK / EU)](http://shop.openenergymonitor.com/openevse-wifi-kit/)
 - See [OpenEVSE WiFi setup guide](https://openevse.dozuki.com/Guide/OpenEVSE+WiFi+%28Beta%29/14) for WiFi module connection instructions
@@ -64,22 +62,21 @@ Comming soon....
     + [OhmConnect](#ohmconnect)
   * [System](#system)
     + [Authentication](#authentication)
-    + [Firmware update](#firmware-update)
     + [Hardware reset](#hardware-reset)
-  * [Firmware Compile & Upload](#firmware-compile--upload)
-    + [Using PlatformIO](#using-platformio)
-      - [a. Install PlatformIO command line](#a-install-platformio-command-line)
-      - [b. And / Or use PlatformIO IDE](#b-and--or-use-platformio-ide)
-      - [1. Clone this repo](#1-clone-this-repo)
-      - [2. Compile & upload](#2-compile--upload)
-    + [Using Arduino IDE](#using-arduino-ide)
-      - [1. Install ESP for Arduino with Boards Manager](#1-install-esp-for-arduino-with-boards-manager)
-      - [2. Compile and Upload](#2-compile-and-upload)
-    + [Troubleshooting Upload](#troubleshooting-upload)
-      - [Erase Flash](#erase-flash)
-      - [Fully erase ESP](#fully-erase-esp)
-  * [About](#about)
-  * [Licence](#licence)
+    + [Firmware update](#firmware-update)
+- [Development Guide](#development-guide)
+  * [Compiling and uploading firmware](#compiling-and-uploading-firmware)
+    + [Building GUI static assets](#building-the-gui-static-assets)
+    + [Compile and upload using PlatformIO](#compile-and-upload-using-platformio)
+      - [1. Install PlatformIO](#1-install-platformio)
+      - [2. Clone this repo](#2-clone-this-repo)
+      - [3. Compile & upload](#3-compile--upload)
+  * [Troubleshooting](#troubleshooting)
+    + [Uploading issues](#uploading-issues)
+    + [Fully erase ESP](#fully-erase-esp)
+    + [View serial debug](#view-serial-debug)
+- [About](#about)
+- [Licence](#licence)
 
 <!-- tocstop -->
 
@@ -273,6 +270,7 @@ https://player.vimeo.com/video/119419875
 Ohm Key can be obtained by logging in to OhmConnect, enter Settings and locate the link in "Open Source Projects"
 Example: https://login.ohmconnect.com/verify-ohm-hour/OpnEoVse
 Key: OpnEoVse
+
 ## System
 
 ![system](docs/system.png)
@@ -286,7 +284,7 @@ Admin HTTP Authentication (highly recommended) can be enabled by saving admin co
 
 ### Hardware reset
 
-A Hardware reset can be made (all wifi and services config lost) by pressing and holding GPIO0 hardware button (on the Huzzah WiFi module) for 10s.
+A Hardware reset can be made (all WiFi and services config lost) by pressing and holding GPIO0 hardware button (on the Huzzah WiFi module) for 10s.
 
 *Note: Holding the GPIO0 button for 5s will but the WiFi unit into AP (access point) mode to allow the WiFi network to be changed without loosing all the service config*
 
@@ -294,73 +292,43 @@ A Hardware reset can be made (all wifi and services config lost) by pressing and
 
 See [OpenEVSE Wifi releases](https://github.com/OpenEVSE/ESP32_WiFi_v3.x/releases) for latest stable pre-compiled update releases.
 
-## Via Web Interface 
+#### Via Web Interface
 
-This is the easiest way to update, pre-compiled firmware files `.bin` can be uploaded via the web interface: System > Update. 
+This is the easiest way to update. Pre-compiled firmware `.bin` files can be uploaded via the web interface: System > Update.
 
-If for whatever reason the web-interface won't load it's possibel to updated the firmware via CURL:
+If for whatever reason the web-interface won't load it's possible to update the firmware via CURL:
 
 `curl -F 'file=@firmware.bin'  http://<IP-ADDRESS>/update && echo`
 
-## Via Network OTA
+#### Via Network OTA
 
-The firmware can also be updated via OTA over a local WiFi network usiong Arduino or Platformio
+The firmware can also be updated via OTA over a local WiFi network using PlatformIO:
 
 `platformio run -t upload --upload-port <IP-ADDRESS>`
 
-## Via USB Serial Programmer 
+#### Via USB Serial Programmer
+
+On the command line using the [esptool.py utility](https://github.com/espressif/esptool):
 
 `esptool.py write_flash 0x000000 firmware.bin`
 
-Or use esptool GUI (Pyflasher) avilable on windows/mac https://github.com/marcelstoer/nodemcu-pyflasher
+Or with the [NodeMCU PyFlasher](https://github.com/marcelstoer/nodemcu-pyflasher) GUI, available with pre-built executable files for windows/mac.
 
-### Firmware Compile & Upload
+# Development guide
 
-If required firmware can also be uploaded via serial using USB to UART cable.
+## Compiling and uploading firmware
 
-The code for the ESP8266 can be compiled and uploaded using PlatformIO or Arduino IDE. We recommend PlatformIO for its ease of use.
+It is necessary to download and build the static web assets for the GUI before compiling and uploading to the ESP.
 
+### Building the GUI static assets
 
-### Compile & Upload Using PlatformIO
+The GUI static web assets are minified and compiled into the firmware using a combination of Webpack and a [custom python build script](scripts/extra_script.py).
 
-For more detailed ESP8266 Arduino core specific PlatfomIO notes see: https://github.com/esp8266/Arduino#using-platformio
+You will need Node.js and npm installed: https://nodejs.org/en/download/
 
-#### a. Install PlatformIO command line
+In addition, the GUI is now maintained in a [separate repository](https://nodejs.org/en/download/package-manager/) and is included as a Git submodule.
 
-The easiest way if running Linux is to install using the install script. See [PlatformIO installation docs](http://docs.platformio.org/en/latest/installation.html#installer-script). Or PlatformIO IDE can be used :
-
-`$ sudo python -c "$(curl -fsSL https://raw.githubusercontent.com/platformio/platformio/master/scripts/get-platformio.py)"`
-
-#### b. And / Or use PlatformIO IDE
-
-Standalone built on GitHub Atom IDE, or use PlatformIO Atom IDE plug-in if you already have Atom installed. The IDE is nice, easy and self-explanatory.
-
-[Download PlatfomIO IDE](http://platformio.org/platformio-ide)
-
-#### 1. Clone this repo
-
-`$ git clone https://github.com/OpenEVSE/ESP8266_WiFi_v2.x`
-
-
-#### 2. Compile & upload
-
-- Put ESP into bootloader mode
-- On other ESP boards (Adafruit HUZZAH) press and hold `boot` button then press `reset`, red LED should light dimly to indicate bootloader mode.
-- Compile and upload using platformIO
-
-```
-pio run -t upload
-```
-
-*To enable to OTA upload first upload via serial using the dev environment, this enables to OTA enable build flag. See `platformio.ino*
-
-*Note: uploading SPIFFS is no longer required since web resources are [now embedded in the firmware](https://github.com/OpenEVSE/ESP8266_WiFi_v2.x/pull/87)
-
-### Building the GUI
-
-The GUI files are minified and compiled into the firmware using a combination of Webpack and a custom build script. You will also need Node.JS and NPM installed.
-
-In addition the GUI is now maintained in a separate repository and included as a Git submodule. If the `gui` directory is empty use the following to retrieve the GUI source and fetch the dependencies.
+If the `gui` directory is empty, use the following to retrieve the GUI source and fetch the dependencies:
 
 ```shell
 git submodule update --init
@@ -368,27 +336,54 @@ cd gui
 npm install
 ```
 
-To 'build' the GUI use the following:
+To 'build' the GUI static assets, run the following from the `gui` directory:
 
 ```shell
-cd gui
 npm run build
 ```
 
-You can then just compile and upload as above.
+Now you are ready to compile and upload to the ESP32.
 
-For more details see the [GUI documentation](https://github.com/OpenEVSE/openevse_wifi_gui/blob/master/readme.md)
+### Compile and upload using PlatformIO
+
+For info on the Arduino core for the ESP32 using PlatformIO, see: https://github.com/espressif/arduino-esp32/blob/master/docs/platformio.md
+
+#### 1. Install PlatformIO
+
+PlatformIO can be installed as a command line utility (PlatformIO Core), a standalone IDE (PlatformIO IDO) or as an integration into other popular IDEs. Follow the [installation instructions](https://platformio.org/install).
+
+#### 2. Clone this repo
+
+`$ git clone https://github.com/OpenEVSE/ESP32_WiFi_v3.x`
+
+#### 3. Compile & upload
+
+- If necessary, put the ESP into bootloader mode. See [documentation on boot mode selection here](https://github.com/espressif/esptool/wiki/ESP32-Boot-Mode-Selection).
+  - Some boards handle entering bootloader mode automatically. On other ESP boards, like the Adafruit HUZZAH 32 Breakout board, you have to press and hold a `boot` button then press a `reset` button, as [seen here](https://learn.adafruit.com/huzzah32-esp32-breakout-board/using-with-arduino-ide#blink-test-3-13).
+
+Compile and upload using PlatformIO. To compile against the default env (for the ESP_WROVER_KIT, [docs](https://docs.platformio.org/en/latest/boards/espressif32/esp-wrover-kit.html)), run:
+
+```
+pio run -t upload
+```
+
+If you are using a different development board, you can specify one of the envs setup in `platformio.ini`, for example:
+
+```
+pio run -e openevse_huzzah32 -t upload
+```
+
+*To enable OTA updates, first upload via serial using the dev environment. This enables OTA enable build flag*
 
 ***
 
-### Troubleshooting
+## Troubleshooting
 
-
-#### Uploading issues
+### Uploading issues
 
 - Double check device is in bootloder mode
 - Try reducing the upload ESP baudrate
-- Erase flash: If you are experiencing ESP hanging in a reboot loop after upload it may be that the ESP flash has remnants of previous code (which may have the used the ESP memory in a different way). The ESP flash can be fully erased using [esptool](https://github.com/themadinventor/esptool). With the unit in bootloader mode run:
+- Erase flash: If you are experiencing ESP hanging in a reboot loop after upload it may be that the ESP flash has remnants of previous code (which may have the used the ESP memory in a different way). The ESP flash can be fully erased using [esptool](https://github.com/espressif/esptool). With the unit in bootloader mode run:
 
 `$ esptool.py erase_flash`
 
@@ -402,13 +397,13 @@ Erasing flash (this may take a while)...
 Erase took 8.0 seconds
 ```
 
-**Fully erase ESP**
+### Fully erase ESP
 
 To fully erase all memory locations on an ESP-12 (4Mb) we need to upload a blank file to each memory location
 
 `esptool.py write_flash 0x000000 blank_1MB.bin 0x100000 blank_1MB.bin 0x200000 blank_1MB.bin 0x300000 blank_1MB.bin`
 
-#### View serial debug
+### View serial debug
 
 To help debug it may be useful to enable serial debug output. To do this upload using `openevse_dev` environment e.g.
 
@@ -420,7 +415,7 @@ To change to use serial0 (the main ESP's serial port) change `-DDEBUG_PORT=Seria
 
 ***
 
-## About
+# About
 
 Collaboration of [OpenEnegyMonitor](http://openenergymonitor.org) and [OpenEVSE](https://openevse.com).
 
@@ -434,6 +429,6 @@ Contributions by:
 - @lincomatic
 - @joverbee
 
-## Licence
+# Licence
 
 GNU General Public License (GPL) V3
