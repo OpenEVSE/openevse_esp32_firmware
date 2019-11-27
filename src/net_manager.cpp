@@ -1,6 +1,6 @@
 #include "emonesp.h"
 #include "net_manager.h"
-#include "config.h"
+#include "app_config.h"
 #include "lcd.h"
 #include "hal.h"
 

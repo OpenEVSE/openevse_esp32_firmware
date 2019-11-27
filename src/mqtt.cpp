@@ -1,6 +1,6 @@
 #include "emonesp.h"
 #include "mqtt.h"
-#include "config.h"
+#include "app_config.h"
 #include "divert.h"
 #include "input.h"
 #include "hal.h"

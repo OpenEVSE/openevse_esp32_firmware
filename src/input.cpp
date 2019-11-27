@@ -7,7 +7,7 @@
 
 #include "emonesp.h"
 #include "input.h"
-#include "config.h"
+#include "app_config.h"
 #include "divert.h"
 #include "mqtt.h"
 #include "web_server.h"

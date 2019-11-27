@@ -5,7 +5,7 @@
 
 #include "emonesp.h"
 #include "emoncms.h"
-#include "config.h"
+#include "app_config.h"
 #include "input.h"
 
 boolean emoncms_connected = false;
@@ -40,7 +40,7 @@ void emoncms_publish(String data)
     {
       MongooseString result = response->body();
       StaticJsonDocument<32> doc;
-      if(DeserializationError::Code::Ok == deserializeJson(doc, result.c_str(), result.length())) 
+      if(DeserializationError::Code::Ok == deserializeJson(doc, result.c_str(), result.length()))
       {
         bool success = doc["success"]; // true
         if(success) {

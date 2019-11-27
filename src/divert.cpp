@@ -5,7 +5,7 @@
 #include <Arduino.h>
 #include "emonesp.h"
 #include "input.h"
-#include "config.h"
+#include "app_config.h"
 #include "RapiSender.h"
 #include "mqtt.h"
 #include "event.h"

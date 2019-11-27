@@ -6,7 +6,7 @@
 #include <FS.h>
 
 #include "lcd.h"
-#include "config.h"
+#include "app_config.h"
 
 static int lastPercent = -1;
 

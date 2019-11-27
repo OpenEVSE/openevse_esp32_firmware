@@ -28,9 +28,10 @@
 #include <WiFiUdp.h>
 #include <ArduinoOTA.h>               // local OTA update from Arduino IDE
 #include <MongooseCore.h>
+#include <MemTrace.h>
 
 #include "emonesp.h"
-#include "config.h"
+#include "app_config.h"
 #include "net_manager.h"
 #include "web_server.h"
 #include "ohm.h"
@@ -53,12 +54,16 @@ unsigned long Timer3; // Timer for events once every 2 seconds
 
 boolean rapi_read = 0; //flag to indicate first read of RAPI status
 
+static uint32_t start_mem = 0;
+static uint32_t last_mem = 0;
+
 // -------------------------------------------------------------------
 // SETUP
 // -------------------------------------------------------------------
 void setup()
 {
   HAL.begin();
+  //MemTrace.begin(DEBUG);
 
   DEBUG.println();
   DEBUG.print("OpenEVSE WiFI ");
@@ -90,6 +95,8 @@ void setup()
 
   rapiSender.setOnEvent(on_rapi_event);
   rapiSender.enableSequenceId(0);
+
+  start_mem = last_mem = HAL.getFreeHeap();
 } // end setup
 
 // -------------------------------------------------------------------
@@ -131,7 +138,12 @@ loop() {
     // Do these things once every 2s
     // -------------------------------------------------------------------
     if ((millis() - Timer3) >= 2000) {
-      DEBUG.printf("Free: %d\n", HAL.getFreeHeap());
+      uint32_t current = HAL.getFreeHeap();
+      int32_t diff = (int32_t)(last_mem - current);
+      if(diff != 0) {
+        DEBUG.printf("Free memory %u - diff %d %d\n", current, diff, start_mem - current);
+        last_mem = current;
+      }
       update_rapi_values();
       Timer3 = millis();
     }

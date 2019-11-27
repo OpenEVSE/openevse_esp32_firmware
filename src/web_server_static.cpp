@@ -7,7 +7,7 @@
 #include "emonesp.h"
 #include "web_server.h"
 #include "web_server_static.h"
-#include "config.h"
+#include "app_config.h"
 #include "net_manager.h"
 
 // Static files

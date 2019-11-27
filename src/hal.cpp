@@ -61,4 +61,6 @@ void HalClass::begin()
     digitalWrite(pin, !ONBOARD_LED_ON_STATE);
   }
 #endif
+
+  enableLoopWDT();
 }

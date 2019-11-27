@@ -4,7 +4,7 @@
 
 #include "emonesp.h"
 #include "input.h"
-#include "config.h"
+#include "app_config.h"
 #include "RapiSender.h"
 
 #define ACTIVE_TAG_START  "<active>"
