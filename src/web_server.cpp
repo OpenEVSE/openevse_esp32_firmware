@@ -5,15 +5,15 @@
 #include <Arduino.h>
 #include <Update.h>
 
+typedef const __FlashStringHelper *fstr_t;
+
 #ifdef ESP32
 
 #include <WiFi.h>
-typedef const char *fstr_t;
 
 #elif defined(ESP8266)
 
 #include <ESP8266WiFi.h>
-typedef const __FlashStringHelper *fstr_t;
 
 #else
 #error Platform not supported
@@ -24,7 +24,7 @@ typedef const __FlashStringHelper *fstr_t;
 #include "emonesp.h"
 #include "web_server.h"
 #include "web_server_static.h"
-#include "config.h"
+#include "app_config.h"
 #include "net_manager.h"
 #include "mqtt.h"
 #include "input.h"
