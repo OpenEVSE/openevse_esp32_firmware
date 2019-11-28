@@ -33,12 +33,14 @@ void emoncms_publish(String data)
     url += "&apikey=";
     url += emoncms_apikey;
 
-    DBUGLN(url);
+    DBUGVAR(url);
     packets_sent++;
 
     client.get(url, [](MongooseHttpClientResponse *response)
     {
       MongooseString result = response->body();
+      DBUGF("result = %.*s", result.length(), result.c_str());
+
       StaticJsonDocument<32> doc;
       if(DeserializationError::Code::Ok == deserializeJson(doc, result.c_str(), result.length()))
       {

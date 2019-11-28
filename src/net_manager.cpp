@@ -14,6 +14,8 @@
 #error Platform not supported
 #endif
 
+#include <MongooseCore.h>
+
 #include <DNSServer.h>                // Required for captive portal
 
 #ifdef ENABLE_WIRED_ETHERNET
@@ -146,6 +148,8 @@ static void net_connected(IPAddress myAddress)
   DEBUG.println(tmpStr);
   lcd_display(F("IP Address"), 0, 0, 0, LCD_CLEAR_LINE);
   lcd_display(tmpStr, 0, 1, 5000, LCD_CLEAR_LINE);
+
+  Mongoose.ipConfigChanged();
 }
 
 static void net_wifi_onStationModeConnected(const WiFiEventStationModeConnected &event) {
