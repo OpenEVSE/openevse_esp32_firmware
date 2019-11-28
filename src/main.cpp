@@ -28,7 +28,6 @@
 #include <WiFiUdp.h>
 #include <ArduinoOTA.h>               // local OTA update from Arduino IDE
 #include <MongooseCore.h>
-#include <MemTrace.h>
 
 #include "emonesp.h"
 #include "app_config.h"
@@ -63,7 +62,6 @@ static uint32_t last_mem = 0;
 void setup()
 {
   HAL.begin();
-  //MemTrace.begin(DEBUG);
 
   DEBUG.println();
   DEBUG.print("OpenEVSE WiFI ");
