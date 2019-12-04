@@ -46,7 +46,7 @@ int wifiLedState = !WIFI_LED_ON_STATE;
 unsigned long wifiLedTimeOut = millis();
 #endif
 
-int wifiButtonState = HIGH;
+int wifiButtonState = !WIFI_BUTTON_PRESSED_STATE;
 unsigned long wifiButtonTimeOut = millis();
 bool apMessage = false;
 

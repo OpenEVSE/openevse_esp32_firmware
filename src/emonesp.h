@@ -64,8 +64,14 @@
 #define WIFI_CLIENT_RETRY_TIMEOUT (5 * 60 * 1000)
 #endif
 
+// Used to change the ADC channel used for seeding the rndom number generator
+// Should be set to an unconnected pin
 #ifndef RANDOM_SEED_CHANNEL
+#if WIFI_BUTTON != 0 && (!defined(WIFI_LED) || WIFI_LED != 0)
 #define RANDOM_SEED_CHANNEL 0
+#else
+#define RANDOM_SEED_CHANNEL 1
+#endif
 #endif
 
 #ifdef ONBOARD_LEDS
