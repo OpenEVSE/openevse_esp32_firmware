@@ -42,7 +42,6 @@ bool enableCors = true;
 // Event timeouts
 unsigned long wifiRestartTime = 0;
 unsigned long mqttRestartTime = 0;
-unsigned long systemRestartTime = 0;
 unsigned long systemRebootTime = 0;
 unsigned long apOffTime = 0;
 
@@ -679,7 +678,7 @@ handleRestart(MongooseHttpServerRequest *request) {
   response->print("1");
   request->send(response);
 
-  systemRestartTime = millis() + 1000;
+  systemRebootTime = millis() + 1000;
 }
 
 
@@ -791,6 +790,7 @@ handleUpdateUpload(MongooseHttpServerRequest *request, int ev, MongooseString fi
 
   if(MG_EV_HTTP_PART_END == ev)
   {
+    DBUGLN("Upload finished");
     if(Update.end(true)) {
       DBUGF("Update Success: %lluB", index+len);
       lcd_display(F("Complete"), 0, 1, 10 * 1000, LCD_CLEAR_LINE | LCD_DISPLAY_NOW);
@@ -799,6 +799,7 @@ handleUpdateUpload(MongooseHttpServerRequest *request, int ev, MongooseString fi
       request->send(upgradeResponse);
       upgradeResponse = NULL;
     } else {
+      DBUGF("Update failed: %d", Update.getError());
       lcd_display(F("Error"), 0, 1, 10 * 1000, LCD_CLEAR_LINE | LCD_DISPLAY_NOW);
       handleUpdateError(request);
     }
@@ -809,6 +810,8 @@ handleUpdateUpload(MongooseHttpServerRequest *request, int ev, MongooseString fi
 
 static void handleUpdateClose(MongooseHttpServerRequest *request)
 {
+  DBUGLN("Update close");
+
   if(upgradeResponse) {
     delete upgradeResponse;
     upgradeResponse = NULL;
@@ -1062,13 +1065,6 @@ web_server_loop() {
   if(apOffTime > 0 && millis() > apOffTime) {
     apOffTime = 0;
     net_wifi_turn_off_ap();
-  }
-
-  // Do we need to restart the system?
-  if(systemRestartTime > 0 && millis() > systemRestartTime) {
-    systemRestartTime = 0;
-    net_wifi_disconnect();
-    HAL.reset();
   }
 
   // Do we need to reboot the system?
