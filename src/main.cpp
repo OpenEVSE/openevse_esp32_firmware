@@ -91,6 +91,9 @@ void setup()
   DBUGF("After ota_setup: %d", HAL.getFreeHeap());
 #endif
 
+  lcd_display(F("OpenEVSE WiFI"), 0, 0, 0, LCD_CLEAR_LINE);
+  lcd_display(currentfirmware, 0, 1, 5 * 1000, LCD_CLEAR_LINE);
+
   rapiSender.setOnEvent(on_rapi_event);
   rapiSender.enableSequenceId(0);
 
@@ -120,13 +123,10 @@ loop() {
   if(OPENEVSE_STATE_STARTING != state &&
      OPENEVSE_STATE_INVALID != state)
   {
+
     // Read initial state from OpenEVSE
     if (rapi_read == 0)
     {
-      lcd_display(F("OpenEVSE WiFI"), 0, 0, 0, LCD_CLEAR_LINE);
-      lcd_display(currentfirmware, 0, 1, 5 * 1000, LCD_CLEAR_LINE);
-      lcd_loop();
-
       DBUGLN("first read RAPI values");
       handleRapiRead(); //Read all RAPI values
       rapi_read=1;

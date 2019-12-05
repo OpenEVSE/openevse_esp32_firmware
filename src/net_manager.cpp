@@ -134,6 +134,15 @@ static void net_wifi_start()
   }
 }
 
+static void display_state()
+{
+  lcd_display(F("Hostname:"), 0, 0, 0, LCD_CLEAR_LINE);
+  lcd_display(esp_hostname.c_str(), 0, 1, 5000, LCD_CLEAR_LINE);
+
+  lcd_display(F("IP Address:"), 0, 0, 0, LCD_CLEAR_LINE);
+  lcd_display(ipaddress.c_str(), 0, 1, 5000, LCD_CLEAR_LINE);
+}
+
 static void net_connected(IPAddress myAddress)
 {
 #ifdef WIFI_LED
@@ -146,8 +155,8 @@ static void net_connected(IPAddress myAddress)
   ipaddress = tmpStr;
   DEBUG.print("Connected, IP: ");
   DEBUG.println(tmpStr);
-  lcd_display(F("IP Address"), 0, 0, 0, LCD_CLEAR_LINE);
-  lcd_display(tmpStr, 0, 1, 5000, LCD_CLEAR_LINE);
+
+  display_state();
 
   Mongoose.ipConfigChanged();
 }
@@ -426,6 +435,8 @@ net_loop()
       DBUGF("Button released");
       if(millis() > wifiButtonTimeOut + WIFI_BUTTON_AP_TIMEOUT) {
         startAP();
+      } else {
+        display_state();
       }
     }
   }
@@ -434,9 +445,8 @@ net_loop()
   {
     DBUGLN("*** Factory Reset ***");
 
-    lcd_display(F("Factory Reset"), 0, 0, 0, LCD_CLEAR_LINE);
-    lcd_display(F(""), 0, 1, 10 * 1000, LCD_CLEAR_LINE);
-    lcd_loop();
+    lcd_display(F("Factory Reset"), 0, 0, 0, LCD_CLEAR_LINE | LCD_DISPLAY_NOW);
+    lcd_display(F(""), 0, 1, 10 * 1000, LCD_CLEAR_LINE | LCD_DISPLAY_NOW);
 
     delay(1000);
 
@@ -448,9 +458,8 @@ net_loop()
   }
   else if(false == apMessage && LOW == wifiButtonState && millis() > wifiButtonTimeOut + WIFI_BUTTON_AP_TIMEOUT)
   {
-    lcd_display(F("Access Point"), 0, 0, 0, LCD_CLEAR_LINE);
-    lcd_display(F(""), 0, 1, 10 * 1000, LCD_CLEAR_LINE);
-    lcd_loop();
+    lcd_display(F("Access Point"), 0, 0, 0, LCD_CLEAR_LINE | LCD_DISPLAY_NOW);
+    lcd_display(F(""), 0, 1, 10 * 1000, LCD_CLEAR_LINE | LCD_DISPLAY_NOW);
     apMessage = true;
   }
 
