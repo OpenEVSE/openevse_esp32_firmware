@@ -113,11 +113,13 @@ startClient()
 
   WiFi.begin(esid.c_str(), epass.c_str());
 #ifdef ESP32
+  WiFi.enableSTA(true);
   WiFi.setHostname(esp_hostname.c_str());
+  DBUGVAR(WiFi.getHostname());
 #else
   WiFi.hostname(esp_hostname.c_str());
-#endif // !ESP32
   WiFi.enableSTA(true);
+#endif // !ESP32
 }
 
 static void net_wifi_start()
@@ -136,6 +138,8 @@ static void net_wifi_start()
 
 static void display_state()
 {
+  DBUGVAR(WiFi.getHostname());
+
   lcd_display(F("Hostname:"), 0, 0, 0, LCD_CLEAR_LINE);
   lcd_display(esp_hostname.c_str(), 0, 1, 5000, LCD_CLEAR_LINE);
 
