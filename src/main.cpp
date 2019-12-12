@@ -64,10 +64,9 @@ void setup()
   HAL.begin();
 
   DEBUG.println();
-  DEBUG.print("OpenEVSE WiFI ");
-  DEBUG.println(HAL.getShortId());
-  DEBUG.println("Firmware: " + currentfirmware);
-
+  DEBUG.printf("OpenEVSE WiFI %s\n", HAL.getShortId().c_str());
+  DEBUG.printf("Firmware: %s\n", currentfirmware.c_str());
+  DEBUG.printf("IDF version: %s\n", ESP.getSdkVersion());
   DEBUG.printf("Free: %d\n", HAL.getFreeHeap());
 
   // Read saved settings from the config
