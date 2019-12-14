@@ -194,7 +194,7 @@ RapiSender::sendCmd(String &cmdstr, RapiCommandCompleteHandler callback, unsigne
     if(!_waitingForReply) {
       _sendNextCmd();
     }
-  } else {
+  } else if(nullptr != callback) {
     callback(RAPI_RESPONSE_QUEUE_FULL);
   }
 }

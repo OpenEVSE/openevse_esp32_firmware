@@ -111,15 +111,11 @@ startClient()
 
   client_disconnects = 0;
 
-  WiFi.begin(esid.c_str(), epass.c_str());
-#ifdef ESP32
-  WiFi.enableSTA(true);
-  WiFi.setHostname(esp_hostname.c_str());
-  DBUGVAR(WiFi.getHostname());
-#else
+#ifndef ESP32
   WiFi.hostname(esp_hostname.c_str());
-  WiFi.enableSTA(true);
 #endif // !ESP32
+
+  WiFi.begin(esid.c_str(), epass.c_str());
 }
 
 static void net_wifi_start()
@@ -138,8 +134,6 @@ static void net_wifi_start()
 
 static void display_state()
 {
-  DBUGVAR(WiFi.getHostname());
-
   lcd_display(F("Hostname:"), 0, 0, 0, LCD_CLEAR_LINE);
   lcd_display(esp_hostname.c_str(), 0, 1, 5000, LCD_CLEAR_LINE);
 
@@ -261,6 +255,22 @@ void net_event(WiFiEvent_t event, system_event_info_t info)
 
   switch (event)
   {
+    case SYSTEM_EVENT_AP_START:
+    {
+      if(WiFi.softAPsetHostname(esp_hostname.c_str())) {
+        DBUGF("Set host name to %s", WiFi.softAPgetHostname());
+      } else {
+        DBUGF("Setting host name failed: %s", esp_hostname.c_str());
+      }
+    } break;
+    case SYSTEM_EVENT_STA_START:
+    {
+      if(WiFi.setHostname(esp_hostname.c_str())) {
+        DBUGF("Set host name to %s", WiFi.getHostname());
+      } else {
+        DBUGF("Setting host name failed: %s", esp_hostname.c_str());
+      }
+    } break;
     case SYSTEM_EVENT_STA_CONNECTED:
     {
       auto& src = info.connected;
@@ -308,7 +318,11 @@ void net_event(WiFiEvent_t event, system_event_info_t info)
     case SYSTEM_EVENT_ETH_START:
       DBUGLN("ETH Started");
       //set eth hostname here
-      ETH.setHostname("esp32-ethernet");
+      if(ETH.setHostname(esp_hostname.c_str())) {
+        DBUGF("Set host name to %s", WiFi.getHostname());
+      } else {
+        DBUGF("Setting host name failed: %s", esp_hostname.c_str());
+      }
       break;
     case SYSTEM_EVENT_ETH_CONNECTED:
       DBUGLN("ETH Connected");
