@@ -319,7 +319,7 @@ void net_event(WiFiEvent_t event, system_event_info_t info)
       DBUGLN("ETH Started");
       //set eth hostname here
       if(ETH.setHostname(esp_hostname.c_str())) {
-        DBUGF("Set host name to %s", WiFi.getHostname());
+        DBUGF("Set host name to %s", ETH.getHostname());
       } else {
         DBUGF("Setting host name failed: %s", esp_hostname.c_str());
       }
