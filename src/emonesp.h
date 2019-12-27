@@ -88,4 +88,12 @@
 #define HAL_SHORT_ID_LENGTH 4
 #endif
 
+#if defined(ENABLE_LORA)
+//#define LORA_BAND 433E6	// 433 Mhz (Asia)
+//#define LORA_BAND 868E6	// 868 Mhz (Europe,Russia,India,Africa)
+#define LORA_BAND 915E6		// 915 Mhz (US,Australia)
+
+#define LORA_PABOOST true
+#endif
+
 #endif // _EMONESP_H

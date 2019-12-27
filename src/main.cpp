@@ -40,6 +40,7 @@
 #include "divert.h"
 #include "ota.h"
 #include "lcd.h"
+#include "lora.h"
 #include "openevse.h"
 #include "root_ca.h"
 #include "hal.h"
@@ -88,6 +89,11 @@ void setup()
 #ifdef ENABLE_OTA
   ota_setup();
   DBUGF("After ota_setup: %d", HAL.getFreeHeap());
+#endif
+
+#ifdef ENABLE_LORA
+  lora_setup();
+  DBUGF("After lora_setup: %d", HAL.getFreeHeap());
 #endif
 
   lcd_display(F("OpenEVSE WiFI"), 0, 0, 0, LCD_CLEAR_LINE);
@@ -199,6 +205,12 @@ loop() {
       Timer1 = millis();
     }
   } // end WiFi connected
+
+#ifdef ENABLE_LORA
+  //if (config_lora_enabled()) {
+    lora_loop();
+  //}
+#endif
 
   Profile_End(loop, 10);
 } // end loop
