@@ -15,7 +15,6 @@ MongooseMqttClient mqttclient;
 long lastMqttReconnectAttempt = 0;
 int clientTimeout = 0;
 int i = 0;
-String payload_str = "";
 bool connecting = false;
 
 String lastWill = "";
@@ -34,7 +33,7 @@ void mqttmsg_callback(MongooseString topic, MongooseString payload) {
   DBUGLN("MQTT received:");
   DBUGLN("Topic: " + topic_string);
 
-  payload_str = payload.toString();
+  String payload_str = payload.toString();
   DBUGLN("Payload: " + payload_str);
 
   // If MQTT message is solar PV
@@ -61,6 +60,7 @@ void mqttmsg_callback(MongooseString topic, MongooseString payload) {
     // Detect if MQTT message is a RAPI command e.g to set 13A <base-topic>/rapi/$SC 13
     // Locate '$' character in the MQTT message to identify RAPI command
     int rapi_character_index = topic_string.indexOf('$');
+    DBUGVAR(rapi_character_index);
     if (rapi_character_index > 1) {
       DBUGF("Processing as RAPI");
       // Print RAPI command from mqtt-sub topic e.g $SC
