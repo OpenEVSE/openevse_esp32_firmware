@@ -588,6 +588,8 @@ handleConfig(MongooseHttpServerRequest *request) {
   s += "\",";
   s += "\"mqtt_solar\":\""+mqtt_solar+"\",";
   s += "\"mqtt_grid_ie\":\""+mqtt_grid_ie+"\",";
+  s += "\"mqtt_supported_protocols\":[\"mqtt\"],";
+  s += "\"http_supported_protocols\":[\"http\",\"https\"],";
   s += "\"www_username\":\"" + www_username + "\",";
   s += "\"www_password\":\"";
   if(www_password != 0) {
