@@ -967,48 +967,16 @@ void handleNotFound(MongooseHttpServerRequest *request)
   }
 }
 
-/*
-void onWsEvent(AsyncWebSocket * server, AsyncWebSocketClient *client, AwsEventType type, void *arg, uint8_t *data, size_t len) {
-  if(type == WS_EVT_CONNECT) {
-    DBUGF("ws[%s][%u] connect", server->url(), client->id());
-    client->ping();
-  } else if(type == WS_EVT_DISCONNECT) {
-    DBUGF("ws[%s][%u] disconnect: %u", server->url(), client->id());
-  } else if(type == WS_EVT_ERROR) {
-    DBUGF("ws[%s][%u] error(%u): %s", server->url(), client->id(), *((uint16_t*)arg), (char*)data);
-  } else if(type == WS_EVT_PONG) {
-    DBUGF("ws[%s][%u] pong[%u]: %s", server->url(), client->id(), len, (len)?(char*)data:"");
-  } else if(type == WS_EVT_DATA) {
-    AwsFrameInfo * info = (AwsFrameInfo*)arg;
-    String msg = "";
-    if(info->final && info->index == 0 && info->len == len)
-    {
-      //the whole message is in a single frame and we got all of it's data
-      DBUGF("ws[%s][%u] %s-message[%u]: ", server->url(), client->id(), (info->opcode == WS_TEXT)?"text":"binary", len);
-    } else {
-      // TODO: handle messages that are comprised of multiple frames or the frame is split into multiple packets
-    }
-  }
+void onWsFrame(MongooseHttpWebSocketConnection *connection, int flags, uint8_t *data, size_t len)
+{
+  DBUGF("Got message %.*s", len, (const char *)data);
 }
-*/
 
 void
 web_server_setup() {
 //  SPIFFS.begin(); // mount the fs
 
   server.begin(80);
-
-  // Setup the static files
-//  server.serveStatic("/", SPIFFS, "/")
-//    .setDefaultFile("index.html");
-
-  // Add the Web Socket server
-//  ws.onEvent(onWsEvent);
-//  server.addHandler(&ws);
-//  server.addHandler(&staticFile);
-
-  // Start server & server root html /
-  //server.on("/", handleHome);
 
   // Handle status updates
   server.on("/status$", handleStatus);
@@ -1041,6 +1009,8 @@ web_server_setup() {
     })->
     onUpload(handleUpdateUpload)->
     onClose(handleUpdateClose);
+
+  server.on("/ws$")->onFrame(onWsFrame);
 
   server.onNotFound(handleNotFound);
 
@@ -1081,5 +1051,5 @@ web_server_loop() {
 
 void web_server_event(String &event)
 {
-  //ws.textAll(event);
+  server.sendAll(event);
 }
