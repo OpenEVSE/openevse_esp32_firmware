@@ -299,7 +299,8 @@ RapiSender::_waitForResult(unsigned long timeout) {
     } else if (!strcmp(_tokens[0], "$NK")) {
       return RAPI_RESPONSE_NK;
     } else if (!strcmp(_tokens[0],"$WF") ||
-               !strcmp(_tokens[0],"$ST"))
+               !strcmp(_tokens[0],"$ST") ||
+               !strncmp(_tokens[0],"$A",2))
     {
       return RAPI_RESPONSE_ASYNC_EVENT;
     } else { // not OK or NK
