@@ -119,30 +119,32 @@ loop() {
   rapiSender.loop();
   divert_current_loop();
 
-  if(OPENEVSE_STATE_STARTING != state &&
-     OPENEVSE_STATE_INVALID != state)
+  if(OpenEVSE.isConnected())
   {
-
-    // Read initial state from OpenEVSE
-    if (rapi_read == 0)
+    if(OPENEVSE_STATE_STARTING != state &&
+       OPENEVSE_STATE_INVALID != state)
     {
-      DBUGLN("first read RAPI values");
-      handleRapiRead(); //Read all RAPI values
-      rapi_read=1;
-    }
-
-    // -------------------------------------------------------------------
-    // Do these things once every 2s
-    // -------------------------------------------------------------------
-    if ((millis() - Timer3) >= 2000) {
-      uint32_t current = HAL.getFreeHeap();
-      int32_t diff = (int32_t)(last_mem - current);
-      if(diff != 0) {
-        DEBUG.printf("Free memory %u - diff %d %d\n", current, diff, start_mem - current);
-        last_mem = current;
+      // Read initial state from OpenEVSE
+      if (rapi_read == 0)
+      {
+        DBUGLN("first read RAPI values");
+        handleRapiRead(); //Read all RAPI values
+        rapi_read=1;
       }
-      update_rapi_values();
-      Timer3 = millis();
+
+      // -------------------------------------------------------------------
+      // Do these things once every 2s
+      // -------------------------------------------------------------------
+      if ((millis() - Timer3) >= 2000) {
+        uint32_t current = HAL.getFreeHeap();
+        int32_t diff = (int32_t)(last_mem - current);
+        if(diff != 0) {
+          DEBUG.printf("Free memory %u - diff %d %d\n", current, diff, start_mem - current);
+          last_mem = current;
+        }
+        update_rapi_values();
+        Timer3 = millis();
+      }
     }
   }
   else
@@ -151,16 +153,13 @@ loop() {
     if ((millis() - Timer3) >= 1000)
     {
       // Check state the OpenEVSE is in.
-      rapiSender.sendCmd("$GS", [](int ret) {
-        if (RAPI_RESPONSE_OK == ret)
+      OpenEVSE.begin(rapiSender, [](bool connected)
+      {
+        if(connected)
         {
-          if(rapiSender.getTokenCnt() >= 3)
-          {
-            const char *val = rapiSender.getToken(1);
-            DBUGVAR(val);
-            state = strtol(val, NULL, 10);
-            DBUGVAR(state);
-          }
+          OpenEVSE.getStatus([](int ret, uint8_t evse_state, uint32_t session_time, uint8_t pilot_state, uint32_t vflags) {
+            state = evse_state;
+          });
         } else {
           DBUGLN("OpenEVSE not responding or not connected");
         }

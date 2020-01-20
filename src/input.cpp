@@ -1,4 +1,4 @@
- #if defined(ENABLE_DEBUG) && !defined(ENABLE_DEBUG_RAPI)
+#if defined(ENABLE_DEBUG) && !defined(ENABLE_DEBUG_INPUT)
 #undef ENABLE_DEBUG
 #endif
 
@@ -131,65 +131,56 @@ update_rapi_values() {
       });
       break;
     case 2:
-      rapiSender.sendCmd("$GS", [](int ret)
+      OpenEVSE.getStatus([](int ret, uint8_t evse_state, uint32_t session_time, uint8_t pilot_state, uint32_t vflags)
       {
         if(RAPI_RESPONSE_OK == ret)
         {
-          if(rapiSender.getTokenCnt() >= 3)
-          {
-            const char *val = rapiSender.getToken(1);
-            DBUGVAR(val);
-            state = strtol(val, NULL, 10);
-            DBUGVAR(state);
-            val = rapiSender.getToken(2);
-            DBUGVAR(val);
-            elapsed = strtol(val, NULL, 10);
-            DBUGVAR(elapsed);
+          state = evse_state;
+          elapsed = session_time;
 
-  #ifdef ENABLE_LEGACY_API
-            switch (state) {
-              case 1:
-                estate = "Not Connected";
-                break;
-              case 2:
-                estate = "EV Connected";
-                break;
-              case 3:
-                estate = "Charging";
-                break;
-              case 4:
-                estate = "Vent Required";
-                break;
-              case 5:
-                estate = "Diode Check Failed";
-                break;
-              case 6:
-                estate = "GFCI Fault";
-                break;
-              case 7:
-                estate = "No Earth Ground";
-                break;
-              case 8:
-                estate = "Stuck Relay";
-                break;
-              case 9:
-                estate = "GFCI Self Test Failed";
-                break;
-              case 10:
-                estate = "Over Temperature";
-                break;
-              case 254:
-                estate = "Sleeping";
-                break;
-              case 255:
-                estate = "Disabled";
-                break;
-              default:
-                estate = "Invalid";
-                break;
-            }
-  #endif
+#ifdef ENABLE_LEGACY_API
+          switch (state) {
+            case 1:
+              estate = "Not Connected";
+              break;
+            case 2:
+              estate = "EV Connected";
+              break;
+            case 3:
+              estate = "Charging";
+              break;
+            case 4:
+              estate = "Vent Required";
+              break;
+            case 5:
+              estate = "Diode Check Failed";
+              break;
+            case 6:
+              estate = "GFCI Fault";
+              break;
+            case 7:
+              estate = "No Earth Ground";
+              break;
+            case 8:
+              estate = "Stuck Relay";
+              break;
+            case 9:
+              estate = "GFCI Self Test Failed";
+              break;
+            case 10:
+              estate = "Over Temperature";
+              break;
+            case 254:
+              estate = "Sleeping";
+              break;
+            case 255:
+              estate = "Disabled";
+              break;
+            default:
+              estate = "Invalid";
+              break;
           }
+#endif
         }
       });
       break;
@@ -382,6 +373,8 @@ handleRapiRead()
 
 void on_rapi_event()
 {
+  DBUGF("Got ASYNC event %s", rapiSender.getToken(0));
+
   if(!strcmp(rapiSender.getToken(0), "$ST"))
   {
     const char *val = rapiSender.getToken(1);
