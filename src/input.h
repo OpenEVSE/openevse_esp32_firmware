@@ -67,7 +67,7 @@ extern String ohm_hour;
 extern void handleRapiRead();
 extern void update_rapi_values();
 extern void create_rapi_json(String &data);
-extern void on_rapi_event();
 
+extern void input_setup();
 
 #endif // _EMONESP_INPUT_H

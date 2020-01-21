@@ -21,6 +21,11 @@
 #define OPENEVSE_STATE_SLEEPING             254
 #define OPENEVSE_STATE_DISABLED             255
 
+#define OPENEVSE_POST_CODE_OK                     0
+#define OPENEVSE_POST_CODE_NO_EARTH_GROUND        7
+#define OPENEVSE_POST_CODE_STUCK_RELAY            8
+#define OPENEVSE_POST_CODE_GFI_SELF_TEST_FAILED   9
+
 // J1772EVSEController volatile m_wVFlags bits - not saved to EEPROM
 #define OPENEVSE_VFLAG_AUTOSVCLVL_SKIPPED   0x0001 // auto svc level test skipped during post
 #define OPENEVSE_VFLAG_HARD_FAULT           0x0002 // in non-autoresettable fault
@@ -40,9 +45,18 @@
 #define OPENEVSE_VFLAG_DEFAULT              ECVF_SESSION_ENDED
 #endif
 
+#define OPENEVSE_WIFI_MODE_AP 0
+#define OPENEVSE_WIFI_MODE_CLIENT 1
+#define OPENEVSE_WIFI_MODE_AP_DEFAULT 2
+
 #define OPENEVSE_ENCODE_VERSION(a,b,c) (((a)*1000) + ((b)*100) + (c))
 
 #define OPENEVSE_OCPP_SUPPORT_PROTOCOL_VERSION  OPENEVSE_ENCODE_VERSION(5,0,0)
+
+
+typedef std::function<void(uint8_t post_code, const char *firmware)> OpenEVSEBootCallback;
+typedef std::function<void(uint8_t evse_state, uint8_t pilot_state, uint32_t current_capacity, uint32_t vflags)> OpenEVSEStateCallback;
+typedef std::function<void(uint8_t event)> OpenEVSEWiFiCallback;
 
 class OpenEVSEClass
 {
@@ -51,6 +65,12 @@ class OpenEVSEClass
 
     bool _connected;
     uint32_t _protocol;
+
+    OpenEVSEBootCallback _boot;
+    OpenEVSEStateCallback _state;
+    OpenEVSEWiFiCallback _wifi;
+
+    void onEvent();
 
   public:
     OpenEVSEClass();
@@ -63,6 +83,16 @@ class OpenEVSEClass
 
     bool isConnected() {
       return _connected;
+    }
+
+    void onBoot(OpenEVSEBootCallback callback) {
+      _boot = callback;
+    }
+    void onState(OpenEVSEStateCallback callback) {
+      _state = callback;
+    }
+    void onWiFi(OpenEVSEWiFiCallback callback) {
+      _wifi = callback;
     }
 };
 

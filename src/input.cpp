@@ -17,10 +17,6 @@
 
 #include "RapiSender.h"
 
-#define OPENEVSE_WIFI_MODE_AP 0
-#define OPENEVSE_WIFI_MODE_CLIENT 1
-#define OPENEVSE_WIFI_MODE_AP_DEFAULT 2
-
 int espflash = 0;
 int espfree = 0;
 
@@ -371,18 +367,13 @@ handleRapiRead()
   Profile_End(handleRapiRead, 10);
 }
 
-void on_rapi_event()
+void input_setup()
 {
-  DBUGF("Got ASYNC event %s", rapiSender.getToken(0));
-
-  if(!strcmp(rapiSender.getToken(0), "$ST"))
+  OpenEVSE.onState([](uint8_t evse_state, uint8_t pilot_state, uint32_t current_capacity, uint32_t vflags)
   {
-    const char *val = rapiSender.getToken(1);
-    DBUGVAR(val);
-
-    // Update our local state
-    state = strtol(val, NULL, 16);
-    DBUGVAR(state);
+    // Update our global state
+    DBUGVAR(evse_state);
+    state = evse_state;
 
     // Send to all clients
     String event = F("{\"state\":");
@@ -395,13 +386,10 @@ void on_rapi_event()
       event += String(state);
       mqtt_publish(event);
     }
-  }
-  else if(!strcmp(rapiSender.getToken(0), "$WF"))
-  {
-    const char *val = rapiSender.getToken(1);
-    DBUGVAR(val);
+  });
 
-    long wifiMode = strtol(val, NULL, 10);
+  OpenEVSE.onWiFi([](uint8_t wifiMode)
+  {
     DBUGVAR(wifiMode);
     switch(wifiMode)
     {
@@ -413,5 +401,5 @@ void on_rapi_event()
         net_wifi_turn_off_ap();
         break;
     }
-  }
+  });
 }

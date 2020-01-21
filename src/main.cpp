@@ -90,11 +90,10 @@ void setup()
   DBUGF("After ota_setup: %d", HAL.getFreeHeap());
 #endif
 
+  input_setup();
+
   lcd_display(F("OpenEVSE WiFI"), 0, 0, 0, LCD_CLEAR_LINE);
   lcd_display(currentfirmware, 0, 1, 5 * 1000, LCD_CLEAR_LINE);
-
-  rapiSender.setOnEvent(on_rapi_event);
-  rapiSender.enableSequenceId(0);
 
   start_mem = last_mem = HAL.getFreeHeap();
 } // end setup
