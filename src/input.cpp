@@ -1,4 +1,4 @@
- #if defined(ENABLE_DEBUG) && !defined(ENABLE_DEBUG_RAPI)
+#if defined(ENABLE_DEBUG) && !defined(ENABLE_DEBUG_INPUT)
 #undef ENABLE_DEBUG
 #endif
 
@@ -16,10 +16,6 @@
 #include "hal.h"
 
 #include "RapiSender.h"
-
-#define OPENEVSE_WIFI_MODE_AP 0
-#define OPENEVSE_WIFI_MODE_CLIENT 1
-#define OPENEVSE_WIFI_MODE_AP_DEFAULT 2
 
 int espflash = 0;
 int espfree = 0;
@@ -131,65 +127,56 @@ update_rapi_values() {
       });
       break;
     case 2:
-      rapiSender.sendCmd("$GS", [](int ret)
+      OpenEVSE.getStatus([](int ret, uint8_t evse_state, uint32_t session_time, uint8_t pilot_state, uint32_t vflags)
       {
         if(RAPI_RESPONSE_OK == ret)
         {
-          if(rapiSender.getTokenCnt() >= 3)
-          {
-            const char *val = rapiSender.getToken(1);
-            DBUGVAR(val);
-            state = strtol(val, NULL, 10);
-            DBUGVAR(state);
-            val = rapiSender.getToken(2);
-            DBUGVAR(val);
-            elapsed = strtol(val, NULL, 10);
-            DBUGVAR(elapsed);
+          state = evse_state;
+          elapsed = session_time;
 
-  #ifdef ENABLE_LEGACY_API
-            switch (state) {
-              case 1:
-                estate = "Not Connected";
-                break;
-              case 2:
-                estate = "EV Connected";
-                break;
-              case 3:
-                estate = "Charging";
-                break;
-              case 4:
-                estate = "Vent Required";
-                break;
-              case 5:
-                estate = "Diode Check Failed";
-                break;
-              case 6:
-                estate = "GFCI Fault";
-                break;
-              case 7:
-                estate = "No Earth Ground";
-                break;
-              case 8:
-                estate = "Stuck Relay";
-                break;
-              case 9:
-                estate = "GFCI Self Test Failed";
-                break;
-              case 10:
-                estate = "Over Temperature";
-                break;
-              case 254:
-                estate = "Sleeping";
-                break;
-              case 255:
-                estate = "Disabled";
-                break;
-              default:
-                estate = "Invalid";
-                break;
-            }
-  #endif
+#ifdef ENABLE_LEGACY_API
+          switch (state) {
+            case 1:
+              estate = "Not Connected";
+              break;
+            case 2:
+              estate = "EV Connected";
+              break;
+            case 3:
+              estate = "Charging";
+              break;
+            case 4:
+              estate = "Vent Required";
+              break;
+            case 5:
+              estate = "Diode Check Failed";
+              break;
+            case 6:
+              estate = "GFCI Fault";
+              break;
+            case 7:
+              estate = "No Earth Ground";
+              break;
+            case 8:
+              estate = "Stuck Relay";
+              break;
+            case 9:
+              estate = "GFCI Self Test Failed";
+              break;
+            case 10:
+              estate = "Over Temperature";
+              break;
+            case 254:
+              estate = "Sleeping";
+              break;
+            case 255:
+              estate = "Disabled";
+              break;
+            default:
+              estate = "Invalid";
+              break;
           }
+#endif
         }
       });
       break;
@@ -380,16 +367,13 @@ handleRapiRead()
   Profile_End(handleRapiRead, 10);
 }
 
-void on_rapi_event()
+void input_setup()
 {
-  if(!strcmp(rapiSender.getToken(0), "$ST"))
+  OpenEVSE.onState([](uint8_t evse_state, uint8_t pilot_state, uint32_t current_capacity, uint32_t vflags)
   {
-    const char *val = rapiSender.getToken(1);
-    DBUGVAR(val);
-
-    // Update our local state
-    state = strtol(val, NULL, 16);
-    DBUGVAR(state);
+    // Update our global state
+    DBUGVAR(evse_state);
+    state = evse_state;
 
     // Send to all clients
     String event = F("{\"state\":");
@@ -402,13 +386,10 @@ void on_rapi_event()
       event += String(state);
       mqtt_publish(event);
     }
-  }
-  else if(!strcmp(rapiSender.getToken(0), "$WF"))
-  {
-    const char *val = rapiSender.getToken(1);
-    DBUGVAR(val);
+  });
 
-    long wifiMode = strtol(val, NULL, 10);
+  OpenEVSE.onWiFi([](uint8_t wifiMode)
+  {
     DBUGVAR(wifiMode);
     switch(wifiMode)
     {
@@ -420,5 +401,5 @@ void on_rapi_event()
         net_wifi_turn_off_ap();
         break;
     }
-  }
+  });
 }
