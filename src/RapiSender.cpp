@@ -218,7 +218,7 @@ RapiSender::sendCmdSync(String &cmdstr, unsigned long timeout)
   {
     int ret;
     bool finished;
-  } resultData;
+  } resultData = {0, false};
   SendCmdSyncData *result = &resultData;
 
   sendCmd(cmdstr, [result](int ret) {
