@@ -34,8 +34,6 @@ typedef const __FlashStringHelper *fstr_t;
 #include "hal.h"
 
 MongooseHttpServer server;          // Create class for Web server
-//AsyncWebSocket ws("/ws");
-//StaticFileWebHandler staticFile;
 
 bool enableCors = true;
 
@@ -828,7 +826,10 @@ String delayTimer = "0 0 0 0";
 
 void
 handleRapi(MongooseHttpServerRequest *request) {
-  bool json = request->hasParam("json");
+  char jsonString[8];
+  int jsonFound = request->getParam("json", jsonString, sizeof(jsonString));
+  bool json = jsonFound >= 0 && (0 == jsonFound || isPositive(String(jsonString)));
+
   int code = 200;
 
   MongooseHttpServerResponseStream *response;
@@ -854,7 +855,9 @@ handleRapi(MongooseHttpServerRequest *request) {
 
     // BUG: Really we should do this in the main loop not here...
     RAPI_PORT.flush();
+    DBUGVAR(rapi);
     int ret = rapiSender.sendCmdSync(rapi);
+    DBUGVAR(ret);
 
     if(RAPI_RESPONSE_OK == ret ||
        RAPI_RESPONSE_NK == ret)
