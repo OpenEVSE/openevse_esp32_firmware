@@ -3,6 +3,7 @@
 #include "app_config.h"
 #include "lcd.h"
 #include "hal.h"
+#include "sntp.h"
 
 #ifdef ESP32
 #include <WiFi.h>
@@ -32,6 +33,12 @@ const char *softAP_password = "openevse";
 IPAddress apIP(192, 168, 4, 1);
 IPAddress netMsk(255, 255, 255, 0);
 int apClients = 0;
+
+#ifndef SNTP_DEFAULT_HOST
+#define SNTP_DEFAULT_HOST "pool.ntp.org"
+#endif
+
+const char *sntp_host = SNTP_DEFAULT_HOST;
 
 // Wifi Network Strings
 String connected_network = "";
@@ -157,6 +164,8 @@ static void net_connected(IPAddress myAddress)
   display_state();
 
   Mongoose.ipConfigChanged();
+
+  sntp_begin(sntp_host);
 }
 
 static void net_wifi_onStationModeConnected(const WiFiEventStationModeConnected &event) {

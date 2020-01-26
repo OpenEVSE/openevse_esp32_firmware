@@ -80,7 +80,11 @@ class OpenEVSEClass
     void begin(RapiSender &sender, std::function<void(bool connected)> callback);
 
     void getStatus(std::function<void(int ret, uint8_t evse_state, uint32_t session_time, uint8_t pilot_state, uint32_t vflags)> callback);
+
     void getVersion(std::function<void(int ret, const char *firmware, const char *protocol)> callback);
+
+    void getTime(std::function<void(int ret, time_t time)> callback);
+    void setTime(time_t time, std::function<void(int ret)> callback);
 
     bool isConnected() {
       return _connected;

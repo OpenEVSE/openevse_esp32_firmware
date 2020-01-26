@@ -43,6 +43,7 @@
 #include "openevse.h"
 #include "root_ca.h"
 #include "hal.h"
+#include "sntp.h"
 
 #include "RapiSender.h"
 
@@ -117,6 +118,7 @@ loop() {
 #endif
   rapiSender.loop();
   divert_current_loop();
+  sntp_loop();
 
   if(OpenEVSE.isConnected())
   {
