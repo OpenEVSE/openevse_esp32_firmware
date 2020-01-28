@@ -12,13 +12,7 @@ static MongooseSntpClient sntp;
 
 static unsigned long next_time = 0;
 static bool fetching_time = false;
-
 static bool set_the_time = false;
-
-// The OpenEVSE's clock is only accurate to 1 second
-#ifndef SNTP_EVSE_THRESHOLD
-#define SNTP_EVSE_THRESHOLD 1.100
-#endif
 
 #ifndef SNTP_POLL_TIME
 // Check the time every 8 hours
@@ -98,7 +92,6 @@ void sntp_loop()
 
   if(set_the_time)
   {
-
     struct timeval local_time;
     gettimeofday(&local_time, NULL);
 
