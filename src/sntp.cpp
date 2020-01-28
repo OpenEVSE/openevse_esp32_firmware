@@ -98,13 +98,13 @@ void sntp_loop()
 
   if(set_the_time)
   {
-    set_the_time = false;
 
     struct timeval local_time;
     gettimeofday(&local_time, NULL);
 
-    if(local_time.tv_usec > 5000)
+    if(local_time.tv_usec >= 999500)
     {
+      set_the_time = false;
       DBUGF("Setting the time on the EVSE, %s", ctime(&local_time.tv_sec));
       OpenEVSE.setTime(local_time.tv_sec, [](int ret) {
         DBUGF("EVSE time %sset", RAPI_RESPONSE_OK == ret ? "" : "not ");
