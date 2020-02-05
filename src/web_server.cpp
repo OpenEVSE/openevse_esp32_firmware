@@ -404,8 +404,10 @@ handleSaveAdvanced(MongooseHttpServerRequest *request) {
   }
 
   String qhostname = request->getParam("hostname");
+  String qsntp_host = request->getParam("sntp_host");
+  bool qsntp_enable = isPositive(request->getParam("sntp_enable"));
 
-  config_save_advanced(qhostname);
+  config_save_advanced(qhostname, qsntp_enable, qsntp_host);
 
   response->setCode(200);
   response->print("saved");
@@ -595,6 +597,8 @@ handleConfig(MongooseHttpServerRequest *request) {
   }
   s += "\",";
   s += "\"hostname\":\"" + esp_hostname + "\",";
+  s += "\"sntp_enabled\":" + String(config_sntp_enabled() ? "true" : "false") + "\",";
+  s += "\"sntp_host\":\"" + sntp_hostname + "\",";
   s += "\"ohm_enabled\":" + String(config_ohm_enabled() ? "true" : "false");
   s += "}";
 

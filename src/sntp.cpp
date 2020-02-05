@@ -6,6 +6,7 @@
 #include "sntp.h"
 #include "net_manager.h"
 #include "openevse.h"
+#include "app_config.h"
 
 static const char *time_host;
 static MongooseSntpClient sntp;
@@ -44,7 +45,7 @@ void sntp_begin(const char *host)
 
 void sntp_loop()
 {
-  if(time_host &&
+  if(config_sntp_enabled() &&
      net_is_connected() &&
      false == fetching_time &&
      millis() >= next_time)
@@ -54,7 +55,7 @@ void sntp_loop()
     DBUGF("Trying to get time from %s", time_host);
     sntp.getTime(time_host, [](struct timeval server_time)
     {
-      struct timeval local_time;
+      timeval local_time;
 
       // Set the local time
       gettimeofday(&local_time, NULL);

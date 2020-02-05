@@ -88,4 +88,8 @@
 #define HAL_SHORT_ID_LENGTH 4
 #endif
 
+#ifndef SNTP_DEFAULT_HOST
+#define SNTP_DEFAULT_HOST "pool.ntp.org"
+#endif
+
 #endif // _EMONESP_H

@@ -131,6 +131,8 @@ update_rapi_values() {
       {
         if(RAPI_RESPONSE_OK == ret)
         {
+          DBUGF("evse_state = %02x, elapsed = %d, pilot_state = %02x, vflags = %08x", evse_state, elapsed, pilot_state, vflags);
+
           state = evse_state;
           elapsed = session_time;
 
