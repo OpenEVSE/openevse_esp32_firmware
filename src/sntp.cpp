@@ -17,8 +17,8 @@ static bool set_the_time = false;
 
 #ifndef SNTP_POLL_TIME
 // Check the time every 8 hours
-// #define SNTP_POLL_TIME 8 * 60 * 60 * 1000
-#define SNTP_POLL_TIME 10 * 1000
+#define SNTP_POLL_TIME 8 * 60 * 60 * 1000
+//#define SNTP_POLL_TIME 10 * 1000
 #endif
 
 static double diff_time(timeval tv1, timeval tv2)
