@@ -32,6 +32,7 @@ typedef const __FlashStringHelper *fstr_t;
 #include "divert.h"
 #include "lcd.h"
 #include "hal.h"
+#include "sntp.h"
 
 MongooseHttpServer server;          // Create class for Web server
 
@@ -393,6 +394,29 @@ handleSaveAdmin(MongooseHttpServerRequest *request) {
 }
 
 // -------------------------------------------------------------------
+// Save SNTP settings
+// url: /savesntp
+// -------------------------------------------------------------------
+void
+handleSaveSntp(MongooseHttpServerRequest *request) {
+  MongooseHttpServerResponseStream *response;
+  if(false == requestPreProcess(request, response, CONTENT_TYPE_TEXT)) {
+    return;
+  }
+
+  bool qsntp_enable = isPositive(request->getParam("enable"));
+
+  config_save_sntp(qsntp_enable);
+  if(config_sntp_enabled()) {
+    sntp_check_now();
+  }
+
+  response->setCode(200);
+  response->print("saved");
+  request->send(response);
+}
+
+// -------------------------------------------------------------------
 // Save advanced settings
 // url: /saveadvanced
 // -------------------------------------------------------------------
@@ -405,9 +429,8 @@ handleSaveAdvanced(MongooseHttpServerRequest *request) {
 
   String qhostname = request->getParam("hostname");
   String qsntp_host = request->getParam("sntp_host");
-  bool qsntp_enable = isPositive(request->getParam("sntp_enable"));
 
-  config_save_advanced(qhostname, qsntp_enable, qsntp_host);
+  config_save_advanced(qhostname, qsntp_host);
 
   response->setCode(200);
   response->print("saved");
@@ -996,6 +1019,7 @@ web_server_setup() {
   server.on("/saveadmin$", handleSaveAdmin);
   server.on("/saveadvanced$", handleSaveAdvanced);
   server.on("/saveohmkey$", handleSaveOhmkey);
+  server.on("/savesntp$", handleSaveSntp);
   server.on("/reset$", handleRst);
   server.on("/restart$", handleRestart);
   server.on("/rapi$", handleRapi);

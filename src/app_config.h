@@ -86,9 +86,14 @@ extern void config_save_mqtt(bool enable, String server, String topic, String us
 extern void config_save_admin(String user, String pass);
 
 // -------------------------------------------------------------------
+// Save the SNTP settings
+// -------------------------------------------------------------------
+extern void config_save_sntp(bool enable);
+
+// -------------------------------------------------------------------
 // Save advanced settings
 // -------------------------------------------------------------------
-extern void config_save_advanced(String hostname, bool sntp_enable, String sntp_host);
+extern void config_save_advanced(String hostname, String sntp_host);
 
 // -------------------------------------------------------------------
 // Save the Wifi details

@@ -330,20 +330,30 @@ config_save_admin(String user, String pass) {
 }
 
 void
-config_save_advanced(String hostname, bool sntp_enable, String sntp_host) {
-  EEPROM.begin(EEPROM_SIZE);
+config_save_sntp(bool sntp_enable) 
+{
+  if(sntp_enable != config_sntp_enabled())
+  {
+    flags = flags & ~CONFIG_SERVICE_SNTP;
+    if(sntp_enable) {
+      flags |= CONFIG_SERVICE_SNTP;
+    }
 
-  flags = flags & ~CONFIG_SERVICE_SNTP;
-  if(sntp_enable) {
-    flags |= CONFIG_SERVICE_SNTP;
+    EEPROM.begin(EEPROM_SIZE);
+    EEPROM_write_uint24(EEPROM_FLAGS_START, flags);
+    EEPROM.end();
   }
+}
+
+void
+config_save_advanced(String hostname, String sntp_host) {
+  EEPROM.begin(EEPROM_SIZE);
 
   esp_hostname = hostname;
   sntp_hostname = sntp_host;
 
   EEPROM_write_string(EEPROM_HOSTNAME_START, EEPROM_HOSTNAME_SIZE, hostname);
   EEPROM_write_string(EEPROM_SNTP_HOST_START, EEPROM_SNTP_HOST_SIZE, sntp_host);
-  EEPROM_write_uint24(EEPROM_FLAGS_START, flags);
 
   EEPROM.end();
 }

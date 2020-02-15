@@ -39,9 +39,13 @@ void sntp_begin(const char *host)
     next_time = millis() + 10 * 1000;
   });
 
-  next_time = millis();
+  sntp_check_now();
 }
 
+void sntp_check_now()
+{
+  next_time = millis();
+}
 
 void sntp_loop()
 {
