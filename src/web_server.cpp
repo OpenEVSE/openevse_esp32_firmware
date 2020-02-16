@@ -620,7 +620,7 @@ handleConfig(MongooseHttpServerRequest *request) {
   }
   s += "\",";
   s += "\"hostname\":\"" + esp_hostname + "\",";
-  s += "\"sntp_enabled\":" + String(config_sntp_enabled() ? "true" : "false") + "\",";
+  s += "\"sntp_enabled\":" + String(config_sntp_enabled() ? "true" : "false") + ",";
   s += "\"sntp_host\":\"" + sntp_hostname + "\",";
   s += "\"ohm_enabled\":" + String(config_ohm_enabled() ? "true" : "false");
   s += "}";
