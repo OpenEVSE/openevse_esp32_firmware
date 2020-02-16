@@ -144,3 +144,5 @@ if npm_installed:
         print("Warning: GUI files not found, run 'git submodule update --init'")
 else:
   print("Warning: Node.JS and NPM required to update the UI")
+
+print("PATH="+env['ENV']['PATH'])
