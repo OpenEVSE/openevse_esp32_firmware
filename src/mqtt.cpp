@@ -119,7 +119,9 @@ mqtt_connect()
 
   mqttclient.setCredentials(mqtt_user, mqtt_pass);
   mqttclient.setLastWillAndTestimment(mqtt_announce_topic, lastWill, true);
-  mqttclient.connect(mqtt_server + ":1883", esp_hostname, []()
+  mqttclient.connect((MongooseMqttProtocol)config_mqtt_protocol(),
+                     mqtt_server + (0 == config_mqtt_protocol() ? ":1883" : ":8883"), 
+                     esp_hostname, []()
   {
     DBUGLN("MQTT connected");
 
@@ -238,7 +240,7 @@ mqtt_loop() {
 
 void
 mqtt_restart() {
-// TODO
+// TODO, #
 //  if (mqttclient.connected()) {
 //    mqttclient.disconnect();
 //  }

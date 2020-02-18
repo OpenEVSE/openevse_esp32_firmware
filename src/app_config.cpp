@@ -277,13 +277,16 @@ config_save_emoncms(bool enable, String server, String node, String apikey,
 }
 
 void
-config_save_mqtt(bool enable, String server, String topic, String user, String pass, String solar, String grid_ie)
+config_save_mqtt(bool enable, String server, String topic, String user, String pass, String solar, String grid_ie, bool secure)
 {
   EEPROM.begin(EEPROM_SIZE);
 
-  flags = flags & ~CONFIG_SERVICE_MQTT;
+  flags = flags & ~(CONFIG_SERVICE_MQTT | CONFIG_MQTT_PROTOCOL);
   if(enable) {
     flags |= CONFIG_SERVICE_MQTT;
+  }
+  if(secure) {
+    flags |= CONFIG_MQTT_PROTOCOL;
   }
 
   mqtt_server = server;

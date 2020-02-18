@@ -326,13 +326,21 @@ handleSaveMqtt(MongooseHttpServerRequest *request) {
     pass = mqtt_pass;
   }
 
+  bool secure = false;
+  char protocol[6];
+  if(request->getParam("protocol", protocol, sizeof(protocol)) > 0) {
+    // Cheap and chearful check, obviously not checking for invalid input
+    secure = 's' == protocol[4];
+  }
+
   config_save_mqtt(isPositive(request->getParam("enable")),
                    request->getParam("server"),
                    request->getParam("topic"),
                    request->getParam("user"),
                    pass,
                    request->getParam("solar"),
-                   request->getParam("grid_ie"));
+                   request->getParam("grid_ie"),
+                   secure);
 
   char tmpStr[200];
   snprintf(tmpStr, sizeof(tmpStr), "Saved: %s %s %s %s %s %s", mqtt_server.c_str(),
@@ -576,6 +584,8 @@ handleConfig(MongooseHttpServerRequest *request) {
   s += "\",";
   s += "\"emoncms_fingerprint\":\"" + emoncms_fingerprint + "\",";
   s += "\"mqtt_enabled\":" + String(config_mqtt_enabled() ? "true" : "false") + ",";
+  s += "\"mqtt_protocol\":" + String(0 == config_mqtt_protocol() ? "mqtt" : "mqtts") + ",";
+  s += "\"mqtt_protocol_enable\":true,";
   s += "\"mqtt_server\":\"" + mqtt_server + "\",";
   s += "\"mqtt_topic\":\"" + mqtt_topic + "\",";
   s += "\"mqtt_user\":\"" + mqtt_user + "\",";
@@ -586,7 +596,7 @@ handleConfig(MongooseHttpServerRequest *request) {
   s += "\",";
   s += "\"mqtt_solar\":\""+mqtt_solar+"\",";
   s += "\"mqtt_grid_ie\":\""+mqtt_grid_ie+"\",";
-  s += "\"mqtt_supported_protocols\":[\"mqtt\"],";
+  s += "\"mqtt_supported_protocols\":[\"mqtt\",\"mqtts\"],";
   s += "\"http_supported_protocols\":[\"http\",\"https\"],";
   s += "\"www_username\":\"" + www_username + "\",";
   s += "\"www_password\":\"";

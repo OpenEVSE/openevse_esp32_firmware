@@ -43,6 +43,7 @@ extern uint32_t flags;
 #define CONFIG_SERVICE_EMONCMS  (1 << 0)
 #define CONFIG_SERVICE_MQTT     (1 << 1)
 #define CONFIG_SERVICE_OHM      (1 << 2)
+#define CONFIG_MQTT_PROTOCOL    (1 << 4) // Maybe leave a bit of space after for additional protocols
 
 inline bool config_emoncms_enabled() {
   return CONFIG_SERVICE_EMONCMS == (flags & CONFIG_SERVICE_EMONCMS);
@@ -54,6 +55,10 @@ inline bool config_mqtt_enabled() {
 
 inline bool config_ohm_enabled() {
   return CONFIG_SERVICE_OHM == (flags & CONFIG_SERVICE_OHM);
+}
+
+inline uint8_t config_mqtt_protocol() {
+  return (flags & CONFIG_MQTT_PROTOCOL) >> 4;
 }
 
 // Ohm Connect Settings
@@ -72,7 +77,7 @@ extern void config_save_emoncms(bool enable, String server, String node, String 
 // -------------------------------------------------------------------
 // Save the MQTT broker details
 // -------------------------------------------------------------------
-extern void config_save_mqtt(bool enable, String server, String topic, String user, String pass, String solar, String grid_ie);
+extern void config_save_mqtt(bool enable, String server, String topic, String user, String pass, String solar, String grid_ie, bool secure);
 
 // -------------------------------------------------------------------
 // Save the admin/web interface details
