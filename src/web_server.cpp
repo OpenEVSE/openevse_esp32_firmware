@@ -1025,10 +1025,17 @@ web_server_loop() {
   Profile_Start(web_server_loop);
 
   // Do we need to restart the WiFi?
-  if(wifiRestartTime > 0 && millis() > wifiRestartTime) {
+  if((wifiRestartTime > 0 && millis() > wifiRestartTime)) {
     wifiRestartTime = 0;
     net_wifi_restart();
   }
+  else if (WiFi.status() != WL_CONNECTED)
+  {
+    if (wifiRestartTime == 0)
+    	wifiRestartTime = millis() + 2000;
+  }
+  else
+    wifiRestartTime = 0;
 
   // Do we need to restart MQTT?
   if(mqttRestartTime > 0 && millis() > mqttRestartTime) {
