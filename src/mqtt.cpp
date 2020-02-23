@@ -98,13 +98,14 @@ mqtt_connect()
   connecting = true;
 
   mqttclient.onMessage(mqttmsg_callback); //function to be called when mqtt msg is received on subscribed topic
-  mqttclient.onError([](uint8_t err) {
-    DBUGF("MQTT error %u", err);
+  mqttclient.onError([](int err) {
+    DBUGF("MQTT error %d", err);
     connecting = false;
   });
 
-  DBUG("MQTT Connecting to...");
-  DBUGLN(mqtt_server);
+  String mqtt_host = mqtt_server + ":" + String(mqtt_port);
+
+  DBUGF("MQTT Connecting to... %s://%s", MQTT_MQTT == config_mqtt_protocol() ? "mqtt" : "mqtts", mqtt_host.c_str());
 
   // Build the last will message
   DynamicJsonDocument willDoc(JSON_OBJECT_SIZE(3) + 60);
@@ -119,9 +120,7 @@ mqtt_connect()
 
   mqttclient.setCredentials(mqtt_user, mqtt_pass);
   mqttclient.setLastWillAndTestimment(mqtt_announce_topic, lastWill, true);
-  mqttclient.connect((MongooseMqttProtocol)config_mqtt_protocol(),
-                     mqtt_server + (0 == config_mqtt_protocol() ? ":1883" : ":8883"), 
-                     esp_hostname, []()
+  mqttclient.connect((MongooseMqttProtocol)config_mqtt_protocol(), mqtt_host, esp_hostname, []()
   {
     DBUGLN("MQTT connected");
 
@@ -240,11 +239,10 @@ mqtt_loop() {
 
 void
 mqtt_restart() {
-// TODO, #
-//  if (mqttclient.connected()) {
-//    mqttclient.disconnect();
-//  }
-//  lastMqttReconnectAttempt = 0;
+  if (mqttclient.connected()) {
+    mqttclient.disconnect();
+  }
+  lastMqttReconnectAttempt = 0;
 }
 
 boolean

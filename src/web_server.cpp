@@ -326,21 +326,33 @@ handleSaveMqtt(MongooseHttpServerRequest *request) {
     pass = mqtt_pass;
   }
 
-  bool secure = false;
-  char protocol[6];
-  if(request->getParam("protocol", protocol, sizeof(protocol)) > 0) {
+  int protocol = MQTT_PROTOCOL_MQTT;
+  char proto[6];
+  if(request->getParam("protocol", proto, sizeof(proto)) > 0) {
     // Cheap and chearful check, obviously not checking for invalid input
-    secure = 's' == protocol[4];
+    protocol = 's' == proto[4] ? MQTT_PROTOCOL_MQTT_SSL : MQTT_PROTOCOL_MQTT;
   }
 
+  int port = 1883;
+  char portStr[8];
+  if(request->getParam("port", portStr, sizeof(portStr)) > 0) {
+    port = atoi(portStr);
+  }
+
+  char unauthString[8];
+  int unauthFound = request->getParam("reject_unauthorized", unauthString, sizeof(unauthString));
+  bool reject_unauthorized = unauthFound < 0 || 0 == unauthFound || isPositive(String(unauthString));
+
   config_save_mqtt(isPositive(request->getParam("enable")),
+                   protocol,
                    request->getParam("server"),
+                   port,
                    request->getParam("topic"),
                    request->getParam("user"),
                    pass,
                    request->getParam("solar"),
                    request->getParam("grid_ie"),
-                   secure);
+                   reject_unauthorized);
 
   char tmpStr[200];
   snprintf(tmpStr, sizeof(tmpStr), "Saved: %s %s %s %s %s %s", mqtt_server.c_str(),
@@ -584,9 +596,10 @@ handleConfig(MongooseHttpServerRequest *request) {
   s += "\",";
   s += "\"emoncms_fingerprint\":\"" + emoncms_fingerprint + "\",";
   s += "\"mqtt_enabled\":" + String(config_mqtt_enabled() ? "true" : "false") + ",";
-  s += "\"mqtt_protocol\":" + String(0 == config_mqtt_protocol() ? "mqtt" : "mqtts") + ",";
-  s += "\"mqtt_protocol_enable\":true,";
+  s += "\"mqtt_protocol\":\"" + String(0 == config_mqtt_protocol() ? "mqtt" : "mqtts") + "\",";
   s += "\"mqtt_server\":\"" + mqtt_server + "\",";
+  s += "\"mqtt_port\":" + String(mqtt_port) + ",";
+  s += "\"mqtt_reject_unauthorized\":" + String(config_mqtt_reject_unauthorized() ? "true" : "false") + ",";
   s += "\"mqtt_topic\":\"" + mqtt_topic + "\",";
   s += "\"mqtt_user\":\"" + mqtt_user + "\",";
   s += "\"mqtt_pass\":\"";
