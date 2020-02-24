@@ -12,12 +12,16 @@
 
 MongooseMqttClient mqttclient;
 
-long lastMqttReconnectAttempt = 0;
+long nextMqttReconnectAttempt = 0;
 int clientTimeout = 0;
 int i = 0;
 bool connecting = false;
 
 String lastWill = "";
+
+#ifndef MQTT_CONNECT_TIMEOUT
+#define MQTT_CONNECT_TIMEOUT (5 * 1000)
+#endif // !MQTT_CONNECT_TIMEOUT
 
 // -------------------------------------------------------------------
 // MQTT msg Received callback function:
@@ -118,9 +122,14 @@ mqtt_connect()
   serializeJson(willDoc, lastWill);
   DBUGVAR(lastWill);
 
+  if(!config_mqtt_reject_unauthorized()) {
+    DEBUG.println("WARNING: Certificate verification disabled");
+  }
+
   mqttclient.setCredentials(mqtt_user, mqtt_pass);
   mqttclient.setLastWillAndTestimment(mqtt_announce_topic, lastWill, true);
-  mqttclient.connect((MongooseMqttProtocol)config_mqtt_protocol(), mqtt_host, esp_hostname, []()
+  mqttclient.setRejectUnauthorized(config_mqtt_reject_unauthorized());
+  connecting = mqttclient.connect((MongooseMqttProtocol)config_mqtt_protocol(), mqtt_host, esp_hostname, []()
   {
     DBUGLN("MQTT connected");
 
@@ -227,9 +236,9 @@ mqtt_loop() {
 
   if (!mqttclient.connected()) {
     long now = millis();
-    // try and reconnect continuously for first 5s then try again once every 10s
-    if ((now < 50000) || ((now - lastMqttReconnectAttempt) > 100000)) {
-      lastMqttReconnectAttempt = now;
+    // try and reconnect every x seconds
+    if (now > nextMqttReconnectAttempt) {
+      nextMqttReconnectAttempt = now + MQTT_CONNECT_TIMEOUT;
       mqtt_connect(); // Attempt to reconnect
     }
   }
@@ -242,7 +251,7 @@ mqtt_restart() {
   if (mqttclient.connected()) {
     mqttclient.disconnect();
   }
-  lastMqttReconnectAttempt = 0;
+  nextMqttReconnectAttempt = 0;
 }
 
 boolean
