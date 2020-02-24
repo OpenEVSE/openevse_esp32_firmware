@@ -295,12 +295,12 @@ config_save_mqtt(bool enable, int protocol, String server, uint16_t port, String
 {
   EEPROM.begin(EEPROM_SIZE);
 
-  flags = flags & ~(CONFIG_SERVICE_MQTT | CONFIG_MQTT_PROTOCOL);
+  flags = flags & ~(CONFIG_SERVICE_MQTT | CONFIG_MQTT_PROTOCOL | CONFIG_MQTT_ALLOW_ANY_CERT);
   if(enable) {
     flags |= CONFIG_SERVICE_MQTT;
   }
-  if(reject_unauthorized) {
-    flags |= CONFIG_MQTT_REJECT_UNAUTHORIZED;
+  if(!reject_unauthorized) {
+    flags |= CONFIG_MQTT_ALLOW_ANY_CERT;
   }
   flags |= protocol << 4;  
 

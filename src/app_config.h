@@ -45,7 +45,7 @@ extern uint32_t flags;
 #define CONFIG_SERVICE_MQTT     (1 << 1)
 #define CONFIG_SERVICE_OHM      (1 << 2)
 #define CONFIG_MQTT_PROTOCOL    (7 << 4) // Maybe leave a bit of space after for additional protocols
-#define CONFIG_MQTT_REJECT_UNAUTHORIZED (1 << 7)
+#define CONFIG_MQTT_ALLOW_ANY_CERT (1 << 7)
 
 inline bool config_emoncms_enabled() {
   return CONFIG_SERVICE_EMONCMS == (flags & CONFIG_SERVICE_EMONCMS);
@@ -64,7 +64,7 @@ inline uint8_t config_mqtt_protocol() {
 }
 
 inline bool config_mqtt_reject_unauthorized() {
-  return CONFIG_MQTT_REJECT_UNAUTHORIZED == (flags & CONFIG_MQTT_REJECT_UNAUTHORIZED);
+  return 0 == (flags & CONFIG_MQTT_ALLOW_ANY_CERT);
 }
 
 // Ohm Connect Settings
