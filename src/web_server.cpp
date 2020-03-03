@@ -152,6 +152,12 @@ bool isPositive(const String &str) {
   return str == "1" || str == "true";
 }
 
+bool isPositive(MongooseHttpServerRequest *request, const char *param) {
+  char paramValue[8];
+  int paramFound = request->getParam(param, paramValue, sizeof(paramValue));
+  return paramFound >= 0 && (0 == paramFound || isPositive(String(paramValue)));
+}
+
 // -------------------------------------------------------------------
 // Wifi scan /scan not currently used
 // url: /scan
@@ -427,33 +433,46 @@ handleSetTime(MongooseHttpServerRequest *request) {
     return;
   }
 
-  String time = request->getParam("time");
+  bool qsntp_enable = isPositive(request, "ntp");
 
-  struct tm tm;
-
-  int yr, mnth, d, h, m, s;
-  if(6 == sscanf( time.c_str(), "%4d-%2d-%2dT%2d:%2d:%2dZ", &yr, &mnth, &d, &h, &m, &s))
-  {
-    tm.tm_year = yr - 1900;
-    tm.tm_mon = mnth;
-    tm.tm_mday = d;
-    tm.tm_hour = h;
-    tm.tm_min = m;
-    tm.tm_sec = s;
-
-    struct timeval set_time = {0,0};
-    set_time.tv_sec = mktime(&tm);
-
-    sntp_set_time(set_time, "manual");
-
-    response->setCode(200);
-    response->print("set");
+  config_save_sntp(qsntp_enable);
+  if(config_sntp_enabled()) {
+    sntp_check_now();
   }
-  else
+
+  if(false == qsntp_enable)
   {
-    response->setCode(400);
-    response->print("could not parse time");
+    String time = request->getParam("time");
+
+    struct tm tm;
+
+    int yr, mnth, d, h, m, s;
+    if(6 == sscanf( time.c_str(), "%4d-%2d-%2dT%2d:%2d:%2dZ", &yr, &mnth, &d, &h, &m, &s))
+    {
+      tm.tm_year = yr - 1900;
+      tm.tm_mon = mnth;
+      tm.tm_mday = d;
+      tm.tm_hour = h;
+      tm.tm_min = m;
+      tm.tm_sec = s;
+
+      struct timeval set_time = {0,0};
+      set_time.tv_sec = mktime(&tm);
+
+      sntp_set_time(set_time, "manual");
+
+    }
+    else
+    {
+      response->setCode(400);
+      response->print("could not parse time");
+      request->send(response);
+      return;
+    }
   }
+
+  response->setCode(200);
+  response->print("set");
   request->send(response);
 }
 
@@ -904,9 +923,7 @@ String delayTimer = "0 0 0 0";
 
 void
 handleRapi(MongooseHttpServerRequest *request) {
-  char jsonString[8];
-  int jsonFound = request->getParam("json", jsonString, sizeof(jsonString));
-  bool json = jsonFound >= 0 && (0 == jsonFound || isPositive(String(jsonString)));
+  bool json = isPositive(request, "json");
 
   int code = 200;
 

@@ -153,9 +153,24 @@ GET {{baseUrl}}/r?json=1&rapi=$S1+19+9+9+10+4+29 HTTP/1.1
 POST {{baseUrl}}/settime HTTP/1.1
 Content-Type: application/x-www-form-urlencoded
 
+ntp=true
+
+###
+
+POST {{baseUrl}}/settime HTTP/1.1
+Content-Type: application/x-www-form-urlencoded
+
+ntp=false&time=2018-08-10T14:30:00Z
+
+###
+
+POST {{baseUrl}}/settime HTTP/1.1
+Content-Type: application/x-www-form-urlencoded
+
 time=2018-08-10T14:30:00Z
 
 ###
+# Invalid, should return error
 
 POST {{baseUrl}}/settime HTTP/1.1
 Content-Type: application/x-www-form-urlencoded
