@@ -7,6 +7,7 @@
 #include "net_manager.h"
 #include "openevse.h"
 #include "app_config.h"
+#include "web_server.h"
 
 static const char *time_host;
 static MongooseSntpClient sntp;
@@ -57,41 +58,12 @@ void sntp_loop()
     fetching_time = true;
 
     DBUGF("Trying to get time from %s", time_host);
-    sntp.getTime(time_host, [](struct timeval server_time)
+    sntp.getTime(time_host, [](struct timeval set_time) 
     {
-      timeval local_time;
-
-      // Set the local time
-      gettimeofday(&local_time, NULL);
-      DBUGF("Local time: %s", ctime(&local_time.tv_sec));
-      DBUGF("Time from %s: %s", time_host, ctime(&server_time.tv_sec));
-      DBUGF("Diff %.2f\n", diff_time(server_time, local_time));
-      settimeofday(&server_time, NULL);
+      sntp_set_time(set_time, time_host);
 
       fetching_time = false;
       next_time = millis() + SNTP_POLL_TIME;
-
-      // Set the time on the OpenEVSE, set from the local time as this could take several ms
-      OpenEVSE.getTime([](int ret, time_t evse_time)
-      {
-        if(RAPI_RESPONSE_OK == ret)
-        {
-          struct timeval local_time;
-          gettimeofday(&local_time, NULL);
-
-          DBUGF("Local time: %s", ctime(&local_time.tv_sec));
-          DBUGF("Time from EVSE: %s", ctime(&evse_time));
-          time_t diff = local_time.tv_sec - evse_time;
-          DBUGF("Diff %ld", diff);
-
-          if(diff != 0)
-          {
-            // The EVSE can only be set to second accuracy, actually set the time in the loop on 0 ms
-            DBUGF("Time change required");
-            set_the_time = true;
-          }
-        }
-      });
     });
   }
 
@@ -104,10 +76,60 @@ void sntp_loop()
     {
       set_the_time = false;
       DBUGF("Setting the time on the EVSE, %s", ctime(&local_time.tv_sec));
-      OpenEVSE.setTime(local_time.tv_sec, [](int ret) {
+      OpenEVSE.setTime(local_time.tv_sec, [](int ret) 
+      {
         DBUGF("EVSE time %sset", RAPI_RESPONSE_OK == ret ? "" : "not ");
+        if(RAPI_RESPONSE_OK == ret) 
+        {
+          // Event the time change
+          struct timeval local_time;
+          gettimeofday(&local_time, NULL);
+
+          struct tm * timeinfo = gmtime(&local_time.tv_sec);
+
+          char time[64];
+          strftime(time, sizeof(time), "%FT%TZ", timeinfo);
+
+          String event = F("{\"time\":\"");
+          event += time;
+          event += F("\"}");
+          web_server_event(event);
+        }
       });
     }
   }
 }
 
+void sntp_set_time(struct timeval set_time, const char *source)
+{
+  timeval local_time;
+
+  // Set the local time
+  gettimeofday(&local_time, NULL);
+  DBUGF("Local time: %s", ctime(&local_time.tv_sec));
+  DBUGF("Time from %s: %s", source, ctime(&set_time.tv_sec));
+  DBUGF("Diff %.2f\n", diff_time(set_time, local_time));
+  settimeofday(&set_time, NULL);
+
+  // Set the time on the OpenEVSE, set from the local time as this could take several ms
+  OpenEVSE.getTime([](int ret, time_t evse_time)
+  {
+    if(RAPI_RESPONSE_OK == ret)
+    {
+      struct timeval local_time;
+      gettimeofday(&local_time, NULL);
+
+      DBUGF("Local time: %s", ctime(&local_time.tv_sec));
+      DBUGF("Time from EVSE: %s", ctime(&evse_time));
+      time_t diff = local_time.tv_sec - evse_time;
+      DBUGF("Diff %ld", diff);
+
+      if(diff != 0)
+      {
+        // The EVSE can only be set to second accuracy, actually set the time in the loop on 0 ms
+        DBUGF("Time change required");
+        set_the_time = true;
+      }
+    }
+  });
+}

@@ -261,15 +261,20 @@ handleRapiRead()
 {
   Profile_Start(handleRapiRead);
 
-  rapiSender.sendCmd("$GV", [](int ret)
+  OpenEVSE.getVersion([](int ret, const char *returned_firmware, const char *returned_protocol) {
+    if(RAPI_RESPONSE_OK == ret)
+    {
+      firmware = returned_firmware;
+      protocol = returned_protocol;
+    }
+  });
+
+  OpenEVSE.getTime([](int ret, time_t evse_time)
   {
     if(RAPI_RESPONSE_OK == ret)
     {
-      if(rapiSender.getTokenCnt() >= 3)
-      {
-        firmware = rapiSender.getToken(1);
-        protocol = rapiSender.getToken(2);
-      }
+      struct timeval set_time = { evse_time, 0 };
+      settimeofday(&set_time, NULL);
     }
   });
 

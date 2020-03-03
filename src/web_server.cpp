@@ -417,6 +417,47 @@ handleSaveSntp(MongooseHttpServerRequest *request) {
 }
 
 // -------------------------------------------------------------------
+// Manually set the time
+// url: /settime
+// -------------------------------------------------------------------
+void
+handleSetTime(MongooseHttpServerRequest *request) {
+  MongooseHttpServerResponseStream *response;
+  if(false == requestPreProcess(request, response, CONTENT_TYPE_TEXT)) {
+    return;
+  }
+
+  String time = request->getParam("time");
+
+  struct tm tm;
+
+  int yr, mnth, d, h, m, s;
+  if(6 == sscanf( time.c_str(), "%4d-%2d-%2dT%2d:%2d:%2dZ", &yr, &mnth, &d, &h, &m, &s))
+  {
+    tm.tm_year = yr - 1900;
+    tm.tm_mon = mnth;
+    tm.tm_mday = d;
+    tm.tm_hour = h;
+    tm.tm_min = m;
+    tm.tm_sec = s;
+
+    struct timeval set_time = {0,0};
+    set_time.tv_sec = mktime(&tm);
+
+    sntp_set_time(set_time, "manual");
+
+    response->setCode(200);
+    response->print("set");
+  }
+  else
+  {
+    response->setCode(400);
+    response->print("could not parse time");
+  }
+  request->send(response);
+}
+
+// -------------------------------------------------------------------
 // Save advanced settings
 // url: /saveadvanced
 // -------------------------------------------------------------------
@@ -469,6 +510,15 @@ handleStatus(MongooseHttpServerRequest *request) {
     return;
   }
 
+  // Get the current time
+  struct timeval local_time;
+  gettimeofday(&local_time, NULL);
+
+  struct tm * timeinfo = gmtime(&local_time.tv_sec);
+
+  char time[64];
+  strftime(time, sizeof(time), "%FT%TZ", timeinfo);
+
   String s = "{";
   if (net_eth_connected()) {
     s += "\"mode\":\"Wired\",";
@@ -520,7 +570,8 @@ handleStatus(MongooseHttpServerRequest *request) {
   s += "\"charge_rate\":" + String(charge_rate) + ",";
   s += "\"divert_update\":" + String((millis() - lastUpdate) / 1000) + ",";
 
-  s += "\"ota_update\":" + String(Update.isRunning());
+  s += "\"ota_update\":" + String(Update.isRunning()) + ",";
+  s += "\"time\":\"" + String(time) + "\"";
 
 #ifdef ENABLE_LEGACY_API
   s += ",\"networks\":[" + st + "]";
@@ -1020,6 +1071,7 @@ web_server_setup() {
   server.on("/saveadvanced$", handleSaveAdvanced);
   server.on("/saveohmkey$", handleSaveOhmkey);
   server.on("/savesntp$", handleSaveSntp);
+  server.on("/settime$", handleSetTime);
   server.on("/reset$", handleRst);
   server.on("/restart$", handleRestart);
   server.on("/rapi$", handleRapi);
