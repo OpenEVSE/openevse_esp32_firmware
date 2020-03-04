@@ -450,7 +450,7 @@ handleSetTime(MongooseHttpServerRequest *request) {
     if(6 == sscanf( time.c_str(), "%4d-%2d-%2dT%2d:%2d:%2dZ", &yr, &mnth, &d, &h, &m, &s))
     {
       tm.tm_year = yr - 1900;
-      tm.tm_mon = mnth;
+      tm.tm_mon = mnth - 1;
       tm.tm_mday = d;
       tm.tm_hour = h;
       tm.tm_min = m;
