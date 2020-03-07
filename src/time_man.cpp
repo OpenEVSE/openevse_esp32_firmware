@@ -3,7 +3,7 @@
 #include <MongooseCore.h>
 #include <MongooseSntpClient.h>
 
-#include "sntp.h"
+#include "time_man.h"
 #include "net_manager.h"
 #include "openevse.h"
 #include "app_config.h"
@@ -16,10 +16,10 @@ static unsigned long next_time = 0;
 static bool fetching_time = false;
 static bool set_the_time = false;
 
-#ifndef SNTP_POLL_TIME
+#ifndef TIME_POLL_TIME
 // Check the time every 8 hours
-#define SNTP_POLL_TIME 8 * 60 * 60 * 1000
-//#define SNTP_POLL_TIME 10 * 1000
+#define TIME_POLL_TIME 8 * 60 * 60 * 1000
+//#define TIME_POLL_TIME 10 * 1000
 #endif
 
 static double diff_time(timeval tv1, timeval tv2)
@@ -30,7 +30,7 @@ static double diff_time(timeval tv1, timeval tv2)
     return t1-t2;
 }
 
-void sntp_begin(const char *host)
+void time_begin(const char *host)
 {
   time_host = host;
 
@@ -40,15 +40,15 @@ void sntp_begin(const char *host)
     next_time = millis() + 10 * 1000;
   });
 
-  sntp_check_now();
+  time_check_now();
 }
 
-void sntp_check_now()
+void time_check_now()
 {
   next_time = millis();
 }
 
-void sntp_loop()
+void time_loop()
 {
   if(config_sntp_enabled() &&
      net_is_connected() &&
@@ -60,10 +60,10 @@ void sntp_loop()
     DBUGF("Trying to get time from %s", time_host);
     sntp.getTime(time_host, [](struct timeval set_time) 
     {
-      sntp_set_time(set_time, time_host);
+      time_set_time(set_time, time_host);
 
       fetching_time = false;
-      next_time = millis() + SNTP_POLL_TIME;
+      next_time = millis() + TIME_POLL_TIME;
     });
   }
 
@@ -80,8 +80,8 @@ void sntp_loop()
       localtime_r(&utc_time.tv_sec, &local_time);
       gmtime_r(&utc_time.tv_sec, &gm_time);
       DBUGF("Setting the time on the EVSE, Local: %s, UTC, %s", 
-        sntp_format_time(local_time).c_str(),
-        sntp_format_time(gm_time).c_str());
+        time_format_time(local_time).c_str(),
+        time_format_time(gm_time).c_str());
       OpenEVSE.setTime(local_time, [](int ret) 
       {
         DBUGF("EVSE time %sset", RAPI_RESPONSE_OK == ret ? "" : "not ");
@@ -111,14 +111,14 @@ void sntp_loop()
   }
 }
 
-void sntp_set_time(struct timeval set_time, const char *source)
+void time_set_time(struct timeval set_time, const char *source)
 {
   timeval local_time;
 
   // Set the local time
   gettimeofday(&local_time, NULL);
-  DBUGF("Local time: %s", sntp_format_time(local_time.tv_sec).c_str());
-  DBUGF("Time from %s: %s", source, sntp_format_time(set_time.tv_sec).c_str());
+  DBUGF("Local time: %s", time_format_time(local_time.tv_sec).c_str());
+  DBUGF("Time from %s: %s", source, time_format_time(set_time.tv_sec).c_str());
   DBUGF("Diff %.2f", diff_time(set_time, local_time));
   settimeofday(&set_time, NULL);
 
@@ -128,8 +128,8 @@ void sntp_set_time(struct timeval set_time, const char *source)
     if(RAPI_RESPONSE_OK == ret)
     {
       time_t local_time = time(NULL);
-      DBUGF("Local time: %s", sntp_format_time(local_time).c_str());
-      DBUGF("Time from EVSE: %s", sntp_format_time(evse_time).c_str());
+      DBUGF("Local time: %s", time_format_time(local_time).c_str());
+      DBUGF("Time from EVSE: %s", time_format_time(evse_time).c_str());
       time_t diff = local_time - evse_time;      
       DBUGF("Diff %ld", diff);
 
@@ -143,14 +143,14 @@ void sntp_set_time(struct timeval set_time, const char *source)
   });
 }
 
-String sntp_format_time(time_t time)
+String time_format_time(time_t time)
 {
   struct tm timeinfo;
   localtime_r(&time, &timeinfo);
-  return sntp_format_time(timeinfo);
+  return time_format_time(timeinfo);
 }
 
-String sntp_format_time(tm &time)
+String time_format_time(tm &time)
 {
   //See http://www.cplusplus.com/reference/ctime/strftime/
   char output[80];

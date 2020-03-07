@@ -32,7 +32,7 @@ typedef const __FlashStringHelper *fstr_t;
 #include "divert.h"
 #include "lcd.h"
 #include "hal.h"
-#include "sntp.h"
+#include "time_man.h"
 
 MongooseHttpServer server;          // Create class for Web server
 
@@ -415,7 +415,7 @@ handleSetTime(MongooseHttpServerRequest *request) {
 
   config_save_sntp(qsntp_enable, qtz);
   if(config_sntp_enabled()) {
-    sntp_check_now();
+    time_check_now();
   }
 
   if(false == qsntp_enable)
@@ -437,7 +437,7 @@ handleSetTime(MongooseHttpServerRequest *request) {
       struct timeval set_time = {0,0};
       set_time.tv_sec = mktime(&tm);
 
-      sntp_set_time(set_time, "manual");
+      time_set_time(set_time, "manual");
 
     }
     else
