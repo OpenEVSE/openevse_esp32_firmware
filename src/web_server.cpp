@@ -400,29 +400,6 @@ handleSaveAdmin(MongooseHttpServerRequest *request) {
 }
 
 // -------------------------------------------------------------------
-// Save SNTP settings
-// url: /savesntp
-// -------------------------------------------------------------------
-void
-handleSaveSntp(MongooseHttpServerRequest *request) {
-  MongooseHttpServerResponseStream *response;
-  if(false == requestPreProcess(request, response, CONTENT_TYPE_TEXT)) {
-    return;
-  }
-
-  bool qsntp_enable = isPositive(request->getParam("enable"));
-
-  config_save_sntp(qsntp_enable);
-  if(config_sntp_enabled()) {
-    sntp_check_now();
-  }
-
-  response->setCode(200);
-  response->print("saved");
-  request->send(response);
-}
-
-// -------------------------------------------------------------------
 // Manually set the time
 // url: /settime
 // -------------------------------------------------------------------
@@ -434,8 +411,9 @@ handleSetTime(MongooseHttpServerRequest *request) {
   }
 
   bool qsntp_enable = isPositive(request, "ntp");
+  String qtz = request->getParam("tz");
 
-  config_save_sntp(qsntp_enable);
+  config_save_sntp(qsntp_enable, qtz);
   if(config_sntp_enabled()) {
     sntp_check_now();
   }
@@ -536,7 +514,9 @@ handleStatus(MongooseHttpServerRequest *request) {
   struct tm * timeinfo = gmtime(&local_time.tv_sec);
 
   char time[64];
+  char offset[8];
   strftime(time, sizeof(time), "%FT%TZ", timeinfo);
+  strftime(offset, sizeof(offset), "%z", timeinfo);
 
   String s = "{";
   if (net_eth_connected()) {
@@ -590,7 +570,8 @@ handleStatus(MongooseHttpServerRequest *request) {
   s += "\"divert_update\":" + String((millis() - lastUpdate) / 1000) + ",";
 
   s += "\"ota_update\":" + String(Update.isRunning()) + ",";
-  s += "\"time\":\"" + String(time) + "\"";
+  s += "\"time\":\"" + String(time) + "\",";
+  s += "\"offset\":\"" + String(offset) + "\"";
 
 #ifdef ENABLE_LEGACY_API
   s += ",\"networks\":[" + st + "]";
@@ -690,6 +671,7 @@ handleConfig(MongooseHttpServerRequest *request) {
   }
   s += "\",";
   s += "\"hostname\":\"" + esp_hostname + "\",";
+  s += "\"time_zone\":\"" + time_zone + "\",";
   s += "\"sntp_enabled\":" + String(config_sntp_enabled() ? "true" : "false") + ",";
   s += "\"sntp_host\":\"" + sntp_hostname + "\",";
   s += "\"ohm_enabled\":" + String(config_ohm_enabled() ? "true" : "false");
@@ -1087,7 +1069,6 @@ web_server_setup() {
   server.on("/saveadmin$", handleSaveAdmin);
   server.on("/saveadvanced$", handleSaveAdvanced);
   server.on("/saveohmkey$", handleSaveOhmkey);
-  server.on("/savesntp$", handleSaveSntp);
   server.on("/settime$", handleSetTime);
   server.on("/reset$", handleRst);
   server.on("/restart$", handleRestart);

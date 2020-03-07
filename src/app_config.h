@@ -38,6 +38,9 @@ extern String mqtt_solar;
 extern String mqtt_grid_ie;
 extern String mqtt_announce_topic;
 
+// Time
+extern String time_zone;
+
 // 24-bits of Flags
 extern uint32_t flags;
 
@@ -88,7 +91,7 @@ extern void config_save_admin(String user, String pass);
 // -------------------------------------------------------------------
 // Save the SNTP settings
 // -------------------------------------------------------------------
-extern void config_save_sntp(bool enable);
+extern void config_save_sntp(bool enable, String tz);
 
 // -------------------------------------------------------------------
 // Save advanced settings

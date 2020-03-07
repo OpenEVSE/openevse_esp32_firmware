@@ -85,6 +85,7 @@ class OpenEVSEClass
 
     void getTime(std::function<void(int ret, time_t time)> callback);
     void setTime(time_t time, std::function<void(int ret)> callback);
+    void setTime(tm &time, std::function<void(int ret)> callback);
 
     bool isConnected() {
       return _connected;

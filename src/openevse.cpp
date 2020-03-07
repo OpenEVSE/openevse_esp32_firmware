@@ -124,7 +124,8 @@ void OpenEVSEClass::getTime(std::function<void(int ret, time_t time)> callback)
 
         if(165 != year && 165 != month && 165 != day && 165 != hour && 165 != minute && 85 != second)
         {
-          struct tm tm = {0};
+          struct tm tm;
+          memset(&tm, 0, sizeof(tm));
           
           tm.tm_year = 100+year;
           tm.tm_mon = month;
@@ -154,14 +155,19 @@ void OpenEVSEClass::setTime(time_t time, std::function<void(int ret)> callback)
   struct tm tm;
   gmtime_r(&time, &tm);
 
+  setTime(tm, callback);
+}
+
+void OpenEVSEClass::setTime(tm &time, std::function<void(int ret)> callback)
+{
   char command[64];
   snprintf(command, sizeof(command), "$S1 %d %d %d %d %d %d", 
-    tm.tm_year % 100, 
-    tm.tm_mon, 
-    tm.tm_mday, 
-    tm.tm_hour, 
-    tm.tm_min, 
-    tm.tm_sec);
+    time.tm_year % 100, 
+    time.tm_mon, 
+    time.tm_mday, 
+    time.tm_hour, 
+    time.tm_min, 
+    time.tm_sec);
 
   _sender->sendCmd(command, [this, callback](int ret)
   {

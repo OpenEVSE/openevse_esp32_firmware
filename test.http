@@ -153,21 +153,41 @@ GET {{baseUrl}}/r?json=1&rapi=$S1+19+9+9+10+4+29 HTTP/1.1
 POST {{baseUrl}}/settime HTTP/1.1
 Content-Type: application/x-www-form-urlencoded
 
-ntp=true
+ntp=true&tz=GMT0BST,M3.5.0/1,M10.5.0
 
 ###
 
 POST {{baseUrl}}/settime HTTP/1.1
 Content-Type: application/x-www-form-urlencoded
 
-ntp=false&time=2018-08-10T14:30:00Z
+ntp=true&tz=EST5EDT,M3.2.0,M11.1.0
 
 ###
 
 POST {{baseUrl}}/settime HTTP/1.1
 Content-Type: application/x-www-form-urlencoded
 
-time=2018-08-10T14:30:00Z
+ntp=true&tz=<+06>-6
+###
+
+POST {{baseUrl}}/settime HTTP/1.1
+Content-Type: application/x-www-form-urlencoded
+
+ntp=true&tz=Europe/Paris|CET-1CEST,M3.5.0,M10.5.0/3
+
+###
+
+POST {{baseUrl}}/settime HTTP/1.1
+Content-Type: application/x-www-form-urlencoded
+
+ntp=false&time=2018-08-10T14:30:00Z&tz=GMT0BST,M3.5.0/1,M10.5.0
+
+###
+
+POST {{baseUrl}}/settime HTTP/1.1
+Content-Type: application/x-www-form-urlencoded
+
+time=2018-08-10T14:30:00Z&tz=GMT0BST,M3.5.0/1,M10.5.0
 
 ###
 # Invalid, should return error
