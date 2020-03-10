@@ -310,7 +310,13 @@ The firmware can also be updated via OTA over a local WiFi network using Platfor
 
 On the command line using the [esptool.py utility](https://github.com/espressif/esptool):
 
-`esptool.py write_flash 0x000000 firmware.bin`
+If flashing a new ESP32 flashing bootloader and partitions file is required: 
+
+`esptool.py --baud 921600 --before default_reset --after hard_reset write_flash -z --flash_mode dio --flash_freq 40m --flash_size detect 0x1000 bootloader.bin 0x8000 partitions.bin 0x10000 firmware.bin`
+
+Then succesive uploads can just upload the firmware 
+
+`esptool.py --baud 921600 --before default_reset --after hard_reset write_flash -z --flash_mode dio --flash_freq 40m --flash_size detect 0x10000 firmware.bin`
 
 Or with the [NodeMCU PyFlasher](https://github.com/marcelstoer/nodemcu-pyflasher) GUI, available with pre-built executable files for windows/mac.
 
