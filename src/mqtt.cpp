@@ -44,7 +44,7 @@ void mqttmsg_callback(MongooseString topic, MongooseString payload) {
   }
   else if (topic_string == mqtt_grid_ie){
     grid_ie = payload_str.toInt();
-    DBUGF("grid:%dW", solar);
+    DBUGF("grid:%dW", grid_ie);
     divert_update_state();
   }
   // If MQTT message to set divert mode is received
