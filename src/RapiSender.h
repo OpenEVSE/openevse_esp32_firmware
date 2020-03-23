@@ -22,16 +22,17 @@
 #define RAPI_MAX_COMMANDS 10
 #endif
 
-#define RAPI_RESPONSE_QUEUE_FULL       -3
-#define RAPI_RESPONSE_BUFFER_OVERFLOW  -2
-#define RAPI_RESPONSE_TIMEOUT          -1
-#define RAPI_RESPONSE_OK                0
-#define RAPI_RESPONSE_NK                1
-#define RAPI_RESPONSE_INVALID_RESPONSE  2
-#define RAPI_RESPONSE_CMD_TOO_LONG      3
-#define RAPI_RESPONSE_BAD_CHECKSUM      4
-#define RAPI_RESPONSE_BAD_SEQUENCE_ID   5
-#define RAPI_RESPONSE_ASYNC_EVENT       6
+#define RAPI_RESPONSE_QUEUE_FULL             -3
+#define RAPI_RESPONSE_BUFFER_OVERFLOW        -2
+#define RAPI_RESPONSE_TIMEOUT                -1
+#define RAPI_RESPONSE_OK                      0
+#define RAPI_RESPONSE_NK                      1
+#define RAPI_RESPONSE_INVALID_RESPONSE        2
+#define RAPI_RESPONSE_CMD_TOO_LONG            3
+#define RAPI_RESPONSE_BAD_CHECKSUM            4
+#define RAPI_RESPONSE_BAD_SEQUENCE_ID         5
+#define RAPI_RESPONSE_ASYNC_EVENT             6
+#define RAPI_RESPONSE_FEATURE_NOT_SUPPORTED   7
 
 // _flags
 #define RSF_SEQUENCE_ID_ENABLED   0x01

@@ -21,6 +21,7 @@ extern String www_password;
 
 // Advanced settings
 extern String esp_hostname;
+extern String sntp_hostname;
 
 // EMONCMS SERVER strings
 extern String emoncms_server;
@@ -38,12 +39,16 @@ extern String mqtt_solar;
 extern String mqtt_grid_ie;
 extern String mqtt_announce_topic;
 
+// Time
+extern String time_zone;
+
 // 24-bits of Flags
 extern uint32_t flags;
 
 #define CONFIG_SERVICE_EMONCMS  (1 << 0)
 #define CONFIG_SERVICE_MQTT     (1 << 1)
 #define CONFIG_SERVICE_OHM      (1 << 2)
+#define CONFIG_SERVICE_SNTP     (1 << 3)
 #define CONFIG_MQTT_PROTOCOL    (7 << 4) // Maybe leave a bit of space after for additional protocols
 #define CONFIG_MQTT_ALLOW_ANY_CERT (1 << 7)
 
@@ -57,6 +62,10 @@ inline bool config_mqtt_enabled() {
 
 inline bool config_ohm_enabled() {
   return CONFIG_SERVICE_OHM == (flags & CONFIG_SERVICE_OHM);
+}
+
+inline bool config_sntp_enabled() {
+  return CONFIG_SERVICE_SNTP == (flags & CONFIG_SERVICE_SNTP);
 }
 
 inline uint8_t config_mqtt_protocol() {
@@ -91,9 +100,14 @@ extern void config_save_mqtt(bool enable, int protocol, String server, uint16_t 
 extern void config_save_admin(String user, String pass);
 
 // -------------------------------------------------------------------
+// Save the SNTP settings
+// -------------------------------------------------------------------
+extern void config_save_sntp(bool enable, String tz);
+
+// -------------------------------------------------------------------
 // Save advanced settings
 // -------------------------------------------------------------------
-extern void config_save_advanced(String host);
+extern void config_save_advanced(String hostname, String sntp_host);
 
 // -------------------------------------------------------------------
 // Save the Wifi details
