@@ -3,6 +3,7 @@
 #include "app_config.h"
 #include "lcd.h"
 #include "hal.h"
+#include "time_man.h"
 
 #ifdef ESP32
 #include <WiFi.h>
@@ -157,6 +158,8 @@ static void net_connected(IPAddress myAddress)
   display_state();
 
   Mongoose.ipConfigChanged();
+
+  time_begin(sntp_hostname.c_str());
 }
 
 static void net_wifi_onStationModeConnected(const WiFiEventStationModeConnected &event) {

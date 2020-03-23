@@ -16,6 +16,10 @@ String www_password = "";
 // Advanced settings
 String esp_hostname = "";
 String esp_hostname_default = "openevse-"+HAL.getShortId();
+String sntp_hostname = "";
+
+// Time
+String time_zone;
 
 // EMONCMS SERVER strings
 String emoncms_server = "";
@@ -55,6 +59,8 @@ uint32_t flags;
 #define EEPROM_OHM_KEY_SIZE           10
 #define EEPROM_FLAGS_SIZE             4
 #define EEPROM_HOSTNAME_SIZE          32
+#define EEPROM_SNTP_HOST_SIZE         45
+#define EEPROM_TIME_ZONE_SIZE         80
 #define EEPROM_SIZE                   1024
 
 #define EEPROM_ESID_START             0
@@ -91,7 +97,11 @@ uint32_t flags;
 #define EEPROM_EMON_API_KEY_END       (EEPROM_EMON_API_KEY_START + EEPROM_EMON_API_KEY_SIZE)
 #define EEPROM_HOSTNAME_START         EEPROM_EMON_API_KEY_END
 #define EEPROM_HOSTNAME_END           (EEPROM_HOSTNAME_START + EEPROM_HOSTNAME_SIZE)
-#define EEPROM_CONFIG_END             EEPROM_HOSTNAME_END
+#define EEPROM_SNTP_HOST_START        EEPROM_HOSTNAME_END
+#define EEPROM_SNTP_HOST_END          (EEPROM_SNTP_HOST_START + EEPROM_SNTP_HOST_SIZE)
+#define EEPROM_TIME_ZONE_START        EEPROM_SNTP_HOST_END
+#define EEPROM_TIME_ZONE_END          (EEPROM_TIME_ZONE_START + EEPROM_TIME_ZONE_SIZE)
+#define EEPROM_CONFIG_END             EEPROM_TIME_ZONE_END
 
 #if EEPROM_CONFIG_END > EEPROM_SIZE
 #error EEPROM_SIZE too small
@@ -184,6 +194,8 @@ EEPROM_write_uint24(int start, uint32_t value) {
   DBUGF("Saved '%06x' %d @ %d:4", value, checksum, start);
 }
 
+void setTimezone(String tz);
+
 // -------------------------------------------------------------------
 // Load saved settings from EEPROM
 // -------------------------------------------------------------------
@@ -234,7 +246,14 @@ config_load_settings() {
   EEPROM_read_string(EEPROM_OHM_KEY_START, EEPROM_OHM_KEY_SIZE, ohm);
 
   // Flags
-  EEPROM_read_uint24(EEPROM_FLAGS_START, flags, 0);
+  EEPROM_read_uint24(EEPROM_FLAGS_START, flags, CONFIG_SERVICE_SNTP);
+
+  // Advanced
+  EEPROM_read_string(EEPROM_SNTP_HOST_START, EEPROM_SNTP_HOST_SIZE, sntp_hostname, SNTP_DEFAULT_HOST);
+
+  // Timezone
+  EEPROM_read_string(EEPROM_TIME_ZONE_START, EEPROM_TIME_ZONE_SIZE, time_zone, DEFAULT_TIME_ZONE);
+  setTimezone(time_zone);
 
   EEPROM.end();
 }
@@ -323,12 +342,47 @@ config_save_admin(String user, String pass) {
 }
 
 void
-config_save_advanced(String host) {
+config_save_sntp(bool sntp_enable, String tz) 
+{
+  if(sntp_enable != config_sntp_enabled() || 
+     time_zone != tz)
+  {
+    flags = flags & ~CONFIG_SERVICE_SNTP;
+    if(sntp_enable) {
+      flags |= CONFIG_SERVICE_SNTP;
+    }
+
+    time_zone = tz;
+    setTimezone(tz);
+
+    EEPROM.begin(EEPROM_SIZE);
+    EEPROM_write_uint24(EEPROM_FLAGS_START, flags);
+    EEPROM_write_string(EEPROM_TIME_ZONE_START, EEPROM_TIME_ZONE_SIZE, time_zone);
+    EEPROM.end();
+  }
+}
+
+void setTimezone(String tz)
+{
+  const char *set_tz = tz.c_str();
+  const char *split_pos = strchr(set_tz, '|');
+  if(split_pos) {
+    set_tz = split_pos;
+  }
+
+  setenv("TZ", set_tz, 1);
+  tzset();
+}
+
+void
+config_save_advanced(String hostname, String sntp_host) {
   EEPROM.begin(EEPROM_SIZE);
 
-  esp_hostname = host;
+  esp_hostname = hostname;
+  sntp_hostname = sntp_host;
 
-  EEPROM_write_string(EEPROM_HOSTNAME_START, EEPROM_HOSTNAME_SIZE, host);
+  EEPROM_write_string(EEPROM_HOSTNAME_START, EEPROM_HOSTNAME_SIZE, hostname);
+  EEPROM_write_string(EEPROM_SNTP_HOST_START, EEPROM_SNTP_HOST_SIZE, sntp_host);
 
   EEPROM.end();
 }

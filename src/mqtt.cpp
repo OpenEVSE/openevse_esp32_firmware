@@ -1,3 +1,7 @@
+#if defined(ENABLE_DEBUG) && !defined(ENABLE_DEBUG_MQTT)
+#undef ENABLE_DEBUG
+#endif
+
 #include "emonesp.h"
 #include "mqtt.h"
 #include "app_config.h"
