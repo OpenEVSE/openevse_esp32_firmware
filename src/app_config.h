@@ -31,6 +31,7 @@ extern String emoncms_fingerprint;
 
 // MQTT Settings
 extern String mqtt_server;
+extern uint32_t mqtt_port;
 extern String mqtt_topic;
 extern String mqtt_user;
 extern String mqtt_pass;
@@ -48,6 +49,8 @@ extern uint32_t flags;
 #define CONFIG_SERVICE_MQTT     (1 << 1)
 #define CONFIG_SERVICE_OHM      (1 << 2)
 #define CONFIG_SERVICE_SNTP     (1 << 3)
+#define CONFIG_MQTT_PROTOCOL    (7 << 4) // Maybe leave a bit of space after for additional protocols
+#define CONFIG_MQTT_ALLOW_ANY_CERT (1 << 7)
 
 inline bool config_emoncms_enabled() {
   return CONFIG_SERVICE_EMONCMS == (flags & CONFIG_SERVICE_EMONCMS);
@@ -63,6 +66,14 @@ inline bool config_ohm_enabled() {
 
 inline bool config_sntp_enabled() {
   return CONFIG_SERVICE_SNTP == (flags & CONFIG_SERVICE_SNTP);
+}
+
+inline uint8_t config_mqtt_protocol() {
+  return (flags & CONFIG_MQTT_PROTOCOL) >> 4;
+}
+
+inline bool config_mqtt_reject_unauthorized() {
+  return 0 == (flags & CONFIG_MQTT_ALLOW_ANY_CERT);
 }
 
 // Ohm Connect Settings
@@ -81,7 +92,7 @@ extern void config_save_emoncms(bool enable, String server, String node, String 
 // -------------------------------------------------------------------
 // Save the MQTT broker details
 // -------------------------------------------------------------------
-extern void config_save_mqtt(bool enable, String server, String topic, String user, String pass, String solar, String grid_ie);
+extern void config_save_mqtt(bool enable, int protocol, String server, uint16_t port, String topic, String user, String pass, String solar, String grid_ie, bool reject_unauthorized);
 
 // -------------------------------------------------------------------
 // Save the admin/web interface details

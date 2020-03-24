@@ -29,6 +29,7 @@ String emoncms_fingerprint = "";
 
 // MQTT Settings
 String mqtt_server = "";
+uint32_t mqtt_port = 1883;
 String mqtt_topic = "";
 String mqtt_user = "";
 String mqtt_pass = "";
@@ -47,7 +48,8 @@ uint32_t flags;
 #define EEPROM_EMON_API_KEY_SIZE      33
 #define EEPROM_EMON_SERVER_SIZE       45
 #define EEPROM_EMON_NODE_SIZE         32
-#define EEPROM_MQTT_SERVER_SIZE       45
+#define EEPROM_MQTT_SERVER_V1_SIZE    45
+#define EEPROM_MQTT_SERVER_SIZE       96
 #define EEPROM_MQTT_TOPIC_SIZE        32
 #define EEPROM_MQTT_USER_SIZE         32
 #define EEPROM_MQTT_PASS_SIZE         64
@@ -59,6 +61,7 @@ uint32_t flags;
 #define EEPROM_OHM_KEY_SIZE           10
 #define EEPROM_FLAGS_SIZE             4
 #define EEPROM_HOSTNAME_SIZE          32
+#define EEPROM_MQTT_PORT_SIZE         4
 #define EEPROM_SNTP_HOST_SIZE         45
 #define EEPROM_TIME_ZONE_SIZE         80
 #define EEPROM_SIZE                   1024
@@ -71,9 +74,9 @@ uint32_t flags;
 #define EEPROM_EMON_SERVER_END        (EEPROM_EMON_SERVER_START + EEPROM_EMON_SERVER_SIZE)
 #define EEPROM_EMON_NODE_START        EEPROM_EMON_SERVER_END
 #define EEPROM_EMON_NODE_END          (EEPROM_EMON_NODE_START + EEPROM_EMON_NODE_SIZE)
-#define EEPROM_MQTT_SERVER_START      EEPROM_EMON_NODE_END
-#define EEPROM_MQTT_SERVER_END        (EEPROM_MQTT_SERVER_START + EEPROM_MQTT_SERVER_SIZE)
-#define EEPROM_MQTT_TOPIC_START       EEPROM_MQTT_SERVER_END
+#define EEPROM_MQTT_SERVER_V1_START   EEPROM_EMON_NODE_END
+#define EEPROM_MQTT_SERVER_V1_END     (EEPROM_MQTT_SERVER_V1_START + EEPROM_MQTT_SERVER_V1_SIZE)
+#define EEPROM_MQTT_TOPIC_START       EEPROM_MQTT_SERVER_V1_END
 #define EEPROM_MQTT_TOPIC_END         (EEPROM_MQTT_TOPIC_START + EEPROM_MQTT_TOPIC_SIZE)
 #define EEPROM_MQTT_USER_START        EEPROM_MQTT_TOPIC_END
 #define EEPROM_MQTT_USER_END          (EEPROM_MQTT_USER_START + EEPROM_MQTT_USER_SIZE)
@@ -101,7 +104,11 @@ uint32_t flags;
 #define EEPROM_SNTP_HOST_END          (EEPROM_SNTP_HOST_START + EEPROM_SNTP_HOST_SIZE)
 #define EEPROM_TIME_ZONE_START        EEPROM_SNTP_HOST_END
 #define EEPROM_TIME_ZONE_END          (EEPROM_TIME_ZONE_START + EEPROM_TIME_ZONE_SIZE)
-#define EEPROM_CONFIG_END             EEPROM_TIME_ZONE_END
+#define EEPROM_MQTT_SERVER_START      EEPROM_TIME_ZONE_END
+#define EEPROM_MQTT_SERVER_END        (EEPROM_MQTT_SERVER_START + EEPROM_MQTT_SERVER_SIZE)
+#define EEPROM_MQTT_PORT_START        EEPROM_MQTT_SERVER_END
+#define EEPROM_MQTT_PORT_END          (EEPROM_MQTT_PORT_START + EEPROM_MQTT_PORT_SIZE)
+#define EEPROM_CONFIG_END             EEPROM_MQTT_PORT_END
 
 #if EEPROM_CONFIG_END > EEPROM_SIZE
 #error EEPROM_SIZE too small
@@ -124,7 +131,7 @@ ResetEEPROM() {
   EEPROM.end();
 }
 
-void
+bool
 EEPROM_read_string(int start, int count, String & val, String defaultVal = "") {
   byte checksum = CHECKSUM_SEED;
   for (int i = 0; i < count - 1; ++i) {
@@ -143,7 +150,10 @@ EEPROM_read_string(int start, int count, String & val, String defaultVal = "") {
   if(c != checksum) {
     DBUGF("Using default '%s'", defaultVal.c_str());
     val = defaultVal;
+    return false;
   }
+
+  return true;
 }
 
 void
@@ -223,8 +233,11 @@ config_load_settings() {
                      emoncms_fingerprint,"");
 
   // MQTT settings
-  EEPROM_read_string(EEPROM_MQTT_SERVER_START, EEPROM_MQTT_SERVER_SIZE,
-                     mqtt_server, "emonpi");
+  if(false == EEPROM_read_string(EEPROM_MQTT_SERVER_START, EEPROM_MQTT_SERVER_SIZE,
+                                 mqtt_server, "emonpi")) {
+    EEPROM_read_string(EEPROM_MQTT_SERVER_V1_START, EEPROM_MQTT_SERVER_V1_SIZE,
+                       mqtt_server, "emonpi");
+  }
   EEPROM_read_string(EEPROM_MQTT_TOPIC_START, EEPROM_MQTT_TOPIC_SIZE,
                      mqtt_topic, esp_hostname);
   EEPROM_read_string(EEPROM_MQTT_USER_START, EEPROM_MQTT_USER_SIZE,
@@ -235,6 +248,7 @@ config_load_settings() {
                      mqtt_solar);
   EEPROM_read_string(EEPROM_MQTT_GRID_IE_START, EEPROM_MQTT_GRID_IE_SIZE,
                      mqtt_grid_ie, "emon/emonpi/power1");
+  EEPROM_read_uint24(EEPROM_MQTT_PORT_START, mqtt_port, 1883);
 
   // Web server credentials
   EEPROM_read_string(EEPROM_WWW_USER_START, EEPROM_WWW_USER_SIZE,
@@ -296,16 +310,21 @@ config_save_emoncms(bool enable, String server, String node, String apikey,
 }
 
 void
-config_save_mqtt(bool enable, String server, String topic, String user, String pass, String solar, String grid_ie)
+config_save_mqtt(bool enable, int protocol, String server, uint16_t port, String topic, String user, String pass, String solar, String grid_ie, bool reject_unauthorized)
 {
   EEPROM.begin(EEPROM_SIZE);
 
-  flags = flags & ~CONFIG_SERVICE_MQTT;
+  flags = flags & ~(CONFIG_SERVICE_MQTT | CONFIG_MQTT_PROTOCOL | CONFIG_MQTT_ALLOW_ANY_CERT);
   if(enable) {
     flags |= CONFIG_SERVICE_MQTT;
   }
+  if(!reject_unauthorized) {
+    flags |= CONFIG_MQTT_ALLOW_ANY_CERT;
+  }
+  flags |= protocol << 4;  
 
   mqtt_server = server;
+  mqtt_port = port;
   mqtt_topic = topic;
   mqtt_user = user;
   mqtt_pass = pass;
@@ -324,6 +343,7 @@ config_save_mqtt(bool enable, String server, String topic, String user, String p
   EEPROM_write_string(EEPROM_MQTT_GRID_IE_START, EEPROM_MQTT_GRID_IE_SIZE, mqtt_grid_ie);
 
   EEPROM_write_uint24(EEPROM_FLAGS_START, flags);
+  EEPROM_write_uint24(EEPROM_MQTT_PORT_START, port);
 
   EEPROM.end();
 }
