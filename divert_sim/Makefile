@@ -1,5 +1,6 @@
 CPP      := g++
-CPPFLAGS := -I FakeDuino -I ../src -D RAPI_PORT=Console
+CPPFLAGS := -I FakeDuino -I ../src -D RAPI_PORT=Console -ggdb 
+#-DENABLE_DEBUG -DDEBUG_PORT=Console
 LDFLAGS := -pthread
 
 TARGETS:= divert_sim

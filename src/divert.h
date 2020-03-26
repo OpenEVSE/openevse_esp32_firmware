@@ -7,6 +7,9 @@
 
 #include <Arduino.h>
 
+#define DIVERT_MODE_NORMAL      1
+#define DIVERT_MODE_ECO         2
+
 // global variable
 extern byte divertmode;
 extern int solar;

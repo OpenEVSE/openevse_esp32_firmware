@@ -10,6 +10,7 @@
 #include "mqtt.h"
 #include "event.h"
 #include "openevse.h"
+#include "divert.h"
 
 // 1: Normal / Fast Charge (default):
 // Charging at maximum rate irrespective of solar PV / grid_ie output
@@ -24,10 +25,6 @@
 // Once charging begins it will not pause even if solaer PV / excess power drops less then minimm charge rate. This avoids wear on the relay and the car
 
 #define SERVICE_LEVEL2_VOLTAGE  240
-
-#define DIVERT_MODE_NORMAL      1
-#define DIVERT_MODE_ECO         2
-
 #define GRID_IE_RESERVE_POWER   100.0
 
 // Default to normal charging unless set. Divert mode always defaults back to 1 if unit is reset (divertmode not saved in EEPROM)

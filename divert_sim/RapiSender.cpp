@@ -1,10 +1,8 @@
-#if defined(ENABLE_DEBUG) && !defined(ENABLE_DEBUG_RAPI)
-#undef ENABLE_DEBUG
-#endif
-
 #include <Arduino.h>
 #include "RapiSender.h"
 #include "debug.h"
+#include "openevse.h"
+#include "input.h"
 
 #define dbgprint(s) DBUG(s)
 #define dbgprintln(s) DBUGLN(s)
@@ -13,6 +11,7 @@
 #endif
 
 static CommandItem commandQueueItems[RAPI_MAX_COMMANDS];
+static int rapi_pilot = 32;
 
 RapiSender::RapiSender(Stream * stream) :
   _stream(stream),
@@ -77,8 +76,46 @@ RapiSender::sendCmdSync(const char *cmdstr, unsigned long timeout) {
 }
 
 int
-RapiSender::sendCmdSync(String &cmdstr, unsigned long timeout)
+RapiSender::sendCmdSync(String &cmd, unsigned long timeout)
 {
+  static char ok[] = "$OK";
+  static char zero[] = "0";
+  static char buf1[16];
+
+  if(cmd == "$GE") 
+  {
+    sprintf(buf1, "%d", rapi_pilot);
+    _tokens[0] = ok;
+    _tokens[1] = buf1;
+    _tokens[2] = zero;
+    _tokenCnt = 3;
+  }
+  else if(cmd.startsWith("$SC")) 
+  {
+    sscanf(cmd.c_str(), "$SC %d V", &rapi_pilot);
+    _tokens[0] = ok;
+    _tokenCnt = 1;
+  }
+  else if(cmd == "$GD") 
+  {
+    _tokens[0] = ok;
+    _tokens[1] = zero;
+    _tokens[2] = zero;
+    _tokens[3] = zero;
+    _tokens[4] = zero;
+    _tokenCnt = 5;
+  }
+  else if(cmd == "$FE") 
+  {
+    state = OPENEVSE_STATE_CHARGING;
+    _tokens[0] = ok;
+    _tokenCnt = 1;
+  }
+  else
+  {
+    DBUGF("Unhandled command: %s", cmd.c_str());
+  }
+
   return RAPI_RESPONSE_OK;
 }
 
