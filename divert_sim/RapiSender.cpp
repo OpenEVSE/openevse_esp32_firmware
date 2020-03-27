@@ -11,7 +11,6 @@
 #endif
 
 static CommandItem commandQueueItems[RAPI_MAX_COMMANDS];
-static int rapi_pilot = 32;
 
 RapiSender::RapiSender(Stream * stream) :
   _stream(stream),
@@ -84,7 +83,7 @@ RapiSender::sendCmdSync(String &cmd, unsigned long timeout)
 
   if(cmd == "$GE") 
   {
-    sprintf(buf1, "%d", rapi_pilot);
+    sprintf(buf1, "%ld", pilot);
     _tokens[0] = ok;
     _tokens[1] = buf1;
     _tokens[2] = zero;
@@ -92,7 +91,7 @@ RapiSender::sendCmdSync(String &cmd, unsigned long timeout)
   }
   else if(cmd.startsWith("$SC")) 
   {
-    sscanf(cmd.c_str(), "$SC %d V", &rapi_pilot);
+    sscanf(cmd.c_str(), "$SC %ld V", &pilot);
     _tokens[0] = ok;
     _tokenCnt = 1;
   }
@@ -110,6 +109,12 @@ RapiSender::sendCmdSync(String &cmd, unsigned long timeout)
     state = OPENEVSE_STATE_CHARGING;
     _tokens[0] = ok;
     _tokenCnt = 1;
+  }
+  else if(cmd == "$GG") 
+  {
+    _tokens[0] = ok;
+    _tokens[1] = zero;
+    _tokenCnt = 2;
   }
   else
   {
