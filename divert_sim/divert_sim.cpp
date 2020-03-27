@@ -1,5 +1,7 @@
 #include <iostream>
 
+#define RAPI_PORT Console
+
 #include "Console.h"
 #include "emonesp.h"
 #include "RapiSender.h"

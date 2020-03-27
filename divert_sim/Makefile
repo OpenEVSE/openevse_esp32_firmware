@@ -1,5 +1,5 @@
 CPP      := g++
-CPPFLAGS := -I FakeDuino -I ../src -D RAPI_PORT=Console -ggdb 
+CPPFLAGS := -I FakeDuino -I ../src -ggdb 
 #-DENABLE_DEBUG -DDEBUG_PORT=Console
 LDFLAGS := -pthread
 
