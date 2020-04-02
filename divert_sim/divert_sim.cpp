@@ -81,7 +81,7 @@ int main(int argc, char** argv)
   CsvParser parser(std::cin);
   int row_number = 0;
   
-  std::cout << "Date,Solar,Grid IE,Pilot" << std::endl;
+  std::cout << "Date,Solar,Grid IE,Pilot,Charge Power,Min Charge Power" << std::endl;
   for (auto& row : parser)
   {
     try
@@ -109,9 +109,13 @@ int main(int argc, char** argv)
       gmtime_r(&time, &tm);
 
       char buffer[32];
-      std::strftime(buffer, 32, "%d/%m/%Y %H:%M:%S", &tm);  
+      std::strftime(buffer, 32, "%d/%m/%Y %H:%M:%S", &tm);
 
-      std::cout << buffer << "," << solar << "," << grid_ie << "," << (OPENEVSE_STATE_CHARGING == state ? pilot : 0) << std::endl;
+      int ev_pilot = (OPENEVSE_STATE_CHARGING == state ? pilot : 0);
+      int ev_watt = ev_pilot * voltage;
+      int min_ev_watt = 6 * voltage;
+
+      std::cout << buffer << "," << solar << "," << grid_ie << "," << ev_pilot << "," << ev_watt << "," << min_ev_watt << std::endl;
     }
     catch(const std::invalid_argument& e)
     {
