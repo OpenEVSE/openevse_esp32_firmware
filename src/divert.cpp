@@ -37,6 +37,9 @@ int charge_rate = 0;
 int last_state = OPENEVSE_STATE_INVALID;
 uint32_t lastUpdate = 0;
 
+// IMPROVE: Read from OpenEVSE or emonTX (MQTT)
+int voltage = SERVICE_LEVEL2_VOLTAGE;
+
 extern RapiSender rapiSender;
 
 // Update divert mode e.g. Normal / Eco
@@ -112,9 +115,6 @@ void divert_update_state()
       current_charge_rate = String(rapiSender.getToken(1)).toInt();
       DBUGVAR(current_charge_rate);
     }
-
-    // IMPROVE: Read from OpenEVSE or emonTX (MQTT)
-    int voltage = SERVICE_LEVEL2_VOLTAGE;
 
     // Calculate current
     if (mqtt_grid_ie != "")
