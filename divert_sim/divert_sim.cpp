@@ -24,6 +24,8 @@ int date_col = 0;
 int grid_ie_col = -1;
 int solar_col = 1;
 
+extern double smothed_avalible_current;
+
 time_t parse_date(const char *dateStr)
 {
   int y,M,d,h,m,s;
@@ -81,7 +83,7 @@ int main(int argc, char** argv)
   CsvParser parser(std::cin);
   int row_number = 0;
   
-  std::cout << "Date,Solar,Grid IE,Pilot,Charge Power,Min Charge Power" << std::endl;
+  std::cout << "Date,Solar,Grid IE,Pilot,Charge Power,Min Charge Power,State,Smothed Avalible" << std::endl;
   for (auto& row : parser)
   {
     try
@@ -115,7 +117,9 @@ int main(int argc, char** argv)
       int ev_watt = ev_pilot * voltage;
       int min_ev_watt = 6 * voltage;
 
-      std::cout << buffer << "," << solar << "," << grid_ie << "," << ev_pilot << "," << ev_watt << "," << min_ev_watt << std::endl;
+      double smothed = smothed_avalible_current * voltage;
+
+      std::cout << buffer << "," << solar << "," << grid_ie << "," << ev_pilot << "," << ev_watt << "," << min_ev_watt << "," << state << "," << smothed << std::endl;
     }
     catch(const std::invalid_argument& e)
     {

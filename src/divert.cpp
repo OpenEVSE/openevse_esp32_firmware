@@ -37,6 +37,11 @@ int charge_rate = 0;
 int last_state = OPENEVSE_STATE_INVALID;
 uint32_t lastUpdate = 0;
 
+double increment_smoothing_factor = 0.4;
+double decrement_smoothing_factor = 0.05;
+double avalible_current = 0;
+double smothed_avalible_current = 0;
+
 // IMPROVE: Read from OpenEVSE or emonTX (MQTT)
 int voltage = SERVICE_LEVEL2_VOLTAGE;
 
@@ -141,22 +146,30 @@ void divert_update_state()
         // If excess power
         double reserve = GRID_IE_RESERVE_POWER / (double)voltage;
         DBUGVAR(reserve);
-        charge_rate = (int)floor(-Igrid_ie - reserve);
+        avalible_current = (-Igrid_ie - reserve);
       }
       else
       {
         // no excess, so use the min charge
-        charge_rate = 0;
+        avalible_current = 0;
       }
     }
     else if (mqtt_solar!="")
     {
       // if grid feed is not available: charge rate = solar generation
-
-      double Isolar = (double)solar / (double)voltage;
-      DBUGVAR(Isolar);
-      charge_rate = (int)floor(Isolar);
+      avalible_current = (double)solar / (double)voltage;
     }
+
+    if(avalible_current < 0) {
+      avalible_current = 0;
+    }
+    DBUGVAR(avalible_current);
+
+    double scale = avalible_current > smothed_avalible_current ? increment_smoothing_factor : decrement_smoothing_factor;
+    smothed_avalible_current = (avalible_current * scale) + (smothed_avalible_current * (1 - scale));
+    DBUGVAR(smothed_avalible_current);
+
+    charge_rate = (int)floor(avalible_current);
 
     if(OPENEVSE_STATE_SLEEPING != state) {
       // If we are not sleeping, make sure we are the minimum current
@@ -165,7 +178,7 @@ void divert_update_state()
 
     DBUGVAR(charge_rate);
 
-    if(charge_rate >= min_charge_current)
+    if(smothed_avalible_current >= min_charge_current)
     {
       // Cap the charge rate at the configured maximum
       charge_rate = min(charge_rate, static_cast<int>(max_charge_current));
@@ -214,6 +227,14 @@ void divert_update_state()
 
         if(false == chargeStarted && 0 == rapiSender.sendCmdSync(F("$FE"))) {
           DBUGLN(F("Starting charge"));
+        }
+      }
+    }
+    else
+    {
+      if(OPENEVSE_STATE_SLEEPING != state) {
+        if(0 == rapiSender.sendCmdSync(F("$FD"))) {
+          DBUGLN(F("Charge Stopped"));
         }
       }
     }

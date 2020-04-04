@@ -81,6 +81,13 @@
             });
           }
           opts.data.push({
+            name: "Smoothed",
+            type: "line",
+            lineThickness: 1,
+            showInLegend: true,
+            dataPoints: points[6]
+          });
+          opts.data.push({
             name: "Min Charge",
             type: "line",
             lineThickness: 1,

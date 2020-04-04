@@ -110,6 +110,12 @@ RapiSender::sendCmdSync(String &cmd, unsigned long timeout)
     _tokens[0] = ok;
     _tokenCnt = 1;
   }
+  else if(cmd == "$FD") 
+  {
+    state = OPENEVSE_STATE_SLEEPING;
+    _tokens[0] = ok;
+    _tokenCnt = 1;
+  }
   else if(cmd == "$GG") 
   {
     _tokens[0] = ok;
