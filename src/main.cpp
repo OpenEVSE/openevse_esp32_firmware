@@ -43,6 +43,7 @@
 #include "openevse.h"
 #include "root_ca.h"
 #include "hal.h"
+#include "time_man.h"
 
 #include "RapiSender.h"
 
@@ -117,6 +118,7 @@ loop() {
 #endif
   rapiSender.loop();
   divert_current_loop();
+  time_loop();
 
   if(OpenEVSE.isConnected())
   {
@@ -138,7 +140,7 @@ loop() {
         uint32_t current = HAL.getFreeHeap();
         int32_t diff = (int32_t)(last_mem - current);
         if(diff != 0) {
-          DEBUG.printf("Free memory %u - diff %d %d\n", current, diff, start_mem - current);
+          DEBUG.printf("%s: Free memory %u - diff %d %d\n", time_format_time(time(NULL)).c_str(), current, diff, start_mem - current);
           last_mem = current;
         }
         update_rapi_values();

@@ -32,5 +32,5 @@ StaticFile staticFiles[] = {
   { "/wifi_signal_3.svg", CONTENT_WIFI_SIGNAL_3_SVG, sizeof(CONTENT_WIFI_SIGNAL_3_SVG) - 1, _CONTENT_TYPE_SVG },
   { "/wifi_signal_4.svg", CONTENT_WIFI_SIGNAL_4_SVG, sizeof(CONTENT_WIFI_SIGNAL_4_SVG) - 1, _CONTENT_TYPE_SVG },
   { "/wifi_signal_5.svg", CONTENT_WIFI_SIGNAL_5_SVG, sizeof(CONTENT_WIFI_SIGNAL_5_SVG) - 1, _CONTENT_TYPE_SVG },
-  { "/zones.json", CONTENT_ZONES_JSON, sizeof(CONTENT_ZONES_JSON) - 1, _CONTENT_TYPE_TEXT },
+  { "/zones.json", CONTENT_ZONES_JSON, sizeof(CONTENT_ZONES_JSON) - 1, _CONTENT_TYPE_JSON },
 };

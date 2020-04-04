@@ -33,7 +33,7 @@ const char *root_ca = ""
 #endif
 
 #ifndef CA_AMAZON_1
-#define CA_AMAZON_1 0
+#define CA_AMAZON_1 1
 #endif
 
 

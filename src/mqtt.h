@@ -7,6 +7,11 @@
 
 #include <Arduino.h>
 
+#define MQTT_PROTOCOL_MQTT          0
+#define MQTT_PROTOCOL_MQTT_SSL      1
+#define MQTT_PROTOCOL_WEBSOCKET     2
+#define MQTT_PROTOCOL_WEBSOCKET_SSL 3
+
 extern void mqtt_msg_callback();
 
 // -------------------------------------------------------------------

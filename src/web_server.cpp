@@ -32,6 +32,7 @@ typedef const __FlashStringHelper *fstr_t;
 #include "divert.h"
 #include "lcd.h"
 #include "hal.h"
+#include "time_man.h"
 
 MongooseHttpServer server;          // Create class for Web server
 
@@ -149,6 +150,12 @@ bool requestPreProcess(MongooseHttpServerRequest *request, MongooseHttpServerRes
 // -------------------------------------------------------------------
 bool isPositive(const String &str) {
   return str == "1" || str == "true";
+}
+
+bool isPositive(MongooseHttpServerRequest *request, const char *param) {
+  char paramValue[8];
+  int paramFound = request->getParam(param, paramValue, sizeof(paramValue));
+  return paramFound >= 0 && (0 == paramFound || isPositive(String(paramValue)));
 }
 
 // -------------------------------------------------------------------
@@ -326,13 +333,33 @@ handleSaveMqtt(MongooseHttpServerRequest *request) {
     pass = mqtt_pass;
   }
 
+  int protocol = MQTT_PROTOCOL_MQTT;
+  char proto[6];
+  if(request->getParam("protocol", proto, sizeof(proto)) > 0) {
+    // Cheap and chearful check, obviously not checking for invalid input
+    protocol = 's' == proto[4] ? MQTT_PROTOCOL_MQTT_SSL : MQTT_PROTOCOL_MQTT;
+  }
+
+  int port = 1883;
+  char portStr[8];
+  if(request->getParam("port", portStr, sizeof(portStr)) > 0) {
+    port = atoi(portStr);
+  }
+
+  char unauthString[8];
+  int unauthFound = request->getParam("reject_unauthorized", unauthString, sizeof(unauthString));
+  bool reject_unauthorized = unauthFound < 0 || 0 == unauthFound || isPositive(String(unauthString));
+
   config_save_mqtt(isPositive(request->getParam("enable")),
+                   protocol,
                    request->getParam("server"),
+                   port,
                    request->getParam("topic"),
                    request->getParam("user"),
                    pass,
                    request->getParam("solar"),
-                   request->getParam("grid_ie"));
+                   request->getParam("grid_ie"),
+                   reject_unauthorized);
 
   char tmpStr[200];
   snprintf(tmpStr, sizeof(tmpStr), "Saved: %s %s %s %s %s %s", mqtt_server.c_str(),
@@ -393,6 +420,61 @@ handleSaveAdmin(MongooseHttpServerRequest *request) {
 }
 
 // -------------------------------------------------------------------
+// Manually set the time
+// url: /settime
+// -------------------------------------------------------------------
+void
+handleSetTime(MongooseHttpServerRequest *request) {
+  MongooseHttpServerResponseStream *response;
+  if(false == requestPreProcess(request, response, CONTENT_TYPE_TEXT)) {
+    return;
+  }
+
+  bool qsntp_enable = isPositive(request, "ntp");
+  String qtz = request->getParam("tz");
+
+  config_save_sntp(qsntp_enable, qtz);
+  if(config_sntp_enabled()) {
+    time_check_now();
+  }
+
+  if(false == qsntp_enable)
+  {
+    String time = request->getParam("time");
+
+    struct tm tm;
+
+    int yr, mnth, d, h, m, s;
+    if(6 == sscanf( time.c_str(), "%4d-%2d-%2dT%2d:%2d:%2dZ", &yr, &mnth, &d, &h, &m, &s))
+    {
+      tm.tm_year = yr - 1900;
+      tm.tm_mon = mnth - 1;
+      tm.tm_mday = d;
+      tm.tm_hour = h;
+      tm.tm_min = m;
+      tm.tm_sec = s;
+
+      struct timeval set_time = {0,0};
+      set_time.tv_sec = mktime(&tm);
+
+      time_set_time(set_time, "manual");
+
+    }
+    else
+    {
+      response->setCode(400);
+      response->print("could not parse time");
+      request->send(response);
+      return;
+    }
+  }
+
+  response->setCode(200);
+  response->print("set");
+  request->send(response);
+}
+
+// -------------------------------------------------------------------
 // Save advanced settings
 // url: /saveadvanced
 // -------------------------------------------------------------------
@@ -404,8 +486,9 @@ handleSaveAdvanced(MongooseHttpServerRequest *request) {
   }
 
   String qhostname = request->getParam("hostname");
+  String qsntp_host = request->getParam("sntp_host");
 
-  config_save_advanced(qhostname);
+  config_save_advanced(qhostname, qsntp_host);
 
   response->setCode(200);
   response->print("saved");
@@ -443,6 +526,17 @@ handleStatus(MongooseHttpServerRequest *request) {
   if(false == requestPreProcess(request, response)) {
     return;
   }
+
+  // Get the current time
+  struct timeval local_time;
+  gettimeofday(&local_time, NULL);
+
+  struct tm * timeinfo = gmtime(&local_time.tv_sec);
+
+  char time[64];
+  char offset[8];
+  strftime(time, sizeof(time), "%FT%TZ", timeinfo);
+  strftime(offset, sizeof(offset), "%z", timeinfo);
 
   String s = "{";
   if (net_eth_connected()) {
@@ -495,7 +589,9 @@ handleStatus(MongooseHttpServerRequest *request) {
   s += "\"charge_rate\":" + String(charge_rate) + ",";
   s += "\"divert_update\":" + String((millis() - lastUpdate) / 1000) + ",";
 
-  s += "\"ota_update\":" + String(Update.isRunning());
+  s += "\"ota_update\":" + String(Update.isRunning()) + ",";
+  s += "\"time\":\"" + String(time) + "\",";
+  s += "\"offset\":\"" + String(offset) + "\"";
 
 #ifdef ENABLE_LEGACY_API
   s += ",\"networks\":[" + st + "]";
@@ -576,7 +672,10 @@ handleConfig(MongooseHttpServerRequest *request) {
   s += "\",";
   s += "\"emoncms_fingerprint\":\"" + emoncms_fingerprint + "\",";
   s += "\"mqtt_enabled\":" + String(config_mqtt_enabled() ? "true" : "false") + ",";
+  s += "\"mqtt_protocol\":\"" + String(0 == config_mqtt_protocol() ? "mqtt" : "mqtts") + "\",";
   s += "\"mqtt_server\":\"" + mqtt_server + "\",";
+  s += "\"mqtt_port\":" + String(mqtt_port) + ",";
+  s += "\"mqtt_reject_unauthorized\":" + String(config_mqtt_reject_unauthorized() ? "true" : "false") + ",";
   s += "\"mqtt_topic\":\"" + mqtt_topic + "\",";
   s += "\"mqtt_user\":\"" + mqtt_user + "\",";
   s += "\"mqtt_pass\":\"";
@@ -586,7 +685,7 @@ handleConfig(MongooseHttpServerRequest *request) {
   s += "\",";
   s += "\"mqtt_solar\":\""+mqtt_solar+"\",";
   s += "\"mqtt_grid_ie\":\""+mqtt_grid_ie+"\",";
-  s += "\"mqtt_supported_protocols\":[\"mqtt\"],";
+  s += "\"mqtt_supported_protocols\":[\"mqtt\",\"mqtts\"],";
   s += "\"http_supported_protocols\":[\"http\",\"https\"],";
   s += "\"www_username\":\"" + www_username + "\",";
   s += "\"www_password\":\"";
@@ -595,6 +694,9 @@ handleConfig(MongooseHttpServerRequest *request) {
   }
   s += "\",";
   s += "\"hostname\":\"" + esp_hostname + "\",";
+  s += "\"time_zone\":\"" + time_zone + "\",";
+  s += "\"sntp_enabled\":" + String(config_sntp_enabled() ? "true" : "false") + ",";
+  s += "\"sntp_host\":\"" + sntp_hostname + "\",";
   s += "\"ohm_enabled\":" + String(config_ohm_enabled() ? "true" : "false");
   s += "}";
 
@@ -826,9 +928,7 @@ String delayTimer = "0 0 0 0";
 
 void
 handleRapi(MongooseHttpServerRequest *request) {
-  char jsonString[8];
-  int jsonFound = request->getParam("json", jsonString, sizeof(jsonString));
-  bool json = jsonFound >= 0 && (0 == jsonFound || isPositive(String(jsonString)));
+  bool json = isPositive(request, "json");
 
   int code = 200;
 
@@ -992,6 +1092,7 @@ web_server_setup() {
   server.on("/saveadmin$", handleSaveAdmin);
   server.on("/saveadvanced$", handleSaveAdvanced);
   server.on("/saveohmkey$", handleSaveOhmkey);
+  server.on("/settime$", handleSetTime);
   server.on("/reset$", handleRst);
   server.on("/restart$", handleRestart);
   server.on("/rapi$", handleRapi);
@@ -1025,10 +1126,17 @@ web_server_loop() {
   Profile_Start(web_server_loop);
 
   // Do we need to restart the WiFi?
-  if(wifiRestartTime > 0 && millis() > wifiRestartTime) {
+  if((wifiRestartTime > 0 && millis() > wifiRestartTime)) {
     wifiRestartTime = 0;
     net_wifi_restart();
   }
+  else if (WiFi.status() != WL_CONNECTED)
+  {
+    if (wifiRestartTime == 0)
+    	wifiRestartTime = millis() + 2000;
+  }
+  else
+    wifiRestartTime = 0;
 
   // Do we need to restart MQTT?
   if(mqttRestartTime > 0 && millis() > mqttRestartTime) {

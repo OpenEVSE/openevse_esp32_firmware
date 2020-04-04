@@ -88,4 +88,13 @@
 #define HAL_SHORT_ID_LENGTH 4
 #endif
 
+#ifndef SNTP_DEFAULT_HOST
+#define SNTP_DEFAULT_HOST "pool.ntp.org"
+#endif
+
+#ifndef DEFAULT_TIME_ZONE
+// Default time zone, Europe/London
+#define DEFAULT_TIME_ZONE "Europe/London|GMT0BST,M3.5.0/1,M10.5.0"
+#endif
+
 #endif // _EMONESP_H
