@@ -1,6 +1,9 @@
 #include <iostream>
+#include <sys/time.h>
 
+#ifndef RAPI_PORT
 #define RAPI_PORT Console
+#endif
 
 #include "Console.h"
 #include "emonesp.h"
@@ -23,6 +26,8 @@ String mqtt_grid_ie = "";
 int date_col = 0;
 int grid_ie_col = -1;
 int solar_col = 1;
+
+time_t simulated_time = 0;
 
 extern double smothed_avalible_current;
 
@@ -49,6 +54,11 @@ time_t parse_date(const char *dateStr)
 
   return mktime(&time);
 }
+
+time_t divertmode_get_time()
+{
+  return simulated_time;
+} 
 
 int main(int argc, char** argv)
 {
@@ -90,13 +100,12 @@ int main(int argc, char** argv)
     {    
       int col = 0;
       std::string date;
-      time_t time;
 
       for (auto& field : row)
       {
         if(date_col == col) {
           date = field;
-          time = parse_date(date.c_str());
+          simulated_time = parse_date(date.c_str());
         } else if (grid_ie_col == col) {
           grid_ie = stoi(field);
         } else if (solar_col == col) {
@@ -105,10 +114,11 @@ int main(int argc, char** argv)
 
         col++;
       }
+
       divert_update_state();
 
       tm tm;
-      gmtime_r(&time, &tm);
+      gmtime_r(&simulated_time, &tm);
 
       char buffer[32];
       std::strftime(buffer, 32, "%d/%m/%Y %H:%M:%S", &tm);

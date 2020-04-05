@@ -12,6 +12,10 @@
 #include "openevse.h"
 #include "divert.h"
 
+#ifndef ARDUINO
+#include <sys/time.h>
+#endif
+
 // 1: Normal / Fast Charge (default):
 // Charging at maximum rate irrespective of solar PV / grid_ie output
 
@@ -42,10 +46,21 @@ double decrement_smoothing_factor = 0.05;
 double avalible_current = 0;
 double smothed_avalible_current = 0;
 
+uint32_t min_charge_time = (10 * 60);
+time_t min_charge_end = 0;
+
 // IMPROVE: Read from OpenEVSE or emonTX (MQTT)
 int voltage = SERVICE_LEVEL2_VOLTAGE;
 
 extern RapiSender rapiSender;
+
+// define as 'weak' so the simulator can override
+time_t __attribute__((weak)) divertmode_get_time()
+{
+  struct timeval now;
+  gettimeofday(&now, NULL);
+  return now.tv_sec;
+}
 
 // Update divert mode e.g. Normal / Eco
 // function called when divert mode is changed
@@ -227,14 +242,22 @@ void divert_update_state()
 
         if(false == chargeStarted && 0 == rapiSender.sendCmdSync(F("$FE"))) {
           DBUGLN(F("Starting charge"));
+          chargeStarted = true;
+        }
+
+        if(chargeStarted) {
+          min_charge_end = divertmode_get_time() + min_charge_time;
         }
       }
     }
     else
     {
-      if(OPENEVSE_STATE_SLEEPING != state) {
-        if(0 == rapiSender.sendCmdSync(F("$FD"))) {
-          DBUGLN(F("Charge Stopped"));
+      if(OPENEVSE_STATE_SLEEPING != state)
+      {
+        if(divertmode_get_time() >= min_charge_end) {
+          if(0 == rapiSender.sendCmdSync(F("$FD"))) {
+            DBUGLN(F("Charge Stopped"));
+          }
         }
       }
     }
