@@ -1,0 +1,55 @@
+{
+  // Use IntelliSense to learn about possible attributes.
+  // Hover to view descriptions of existing attributes.
+  // For more information, visit: https://go.microsoft.com/fwlink/?linkid=830387
+  "version": "0.2.0",
+  "configurations": [
+    {
+      "name": "divert)sim: day1.csv",
+      "type": "cppdbg",
+      "request": "launch",
+      "program": "${workspaceFolder}/divert_sim",
+      "args": [
+        "<", "${workspaceFolder}/data/day1.csv"
+      ],
+      "stopAtEntry": false,
+      "cwd": "${workspaceFolder}",
+      "environment": [],
+      "externalConsole": false,
+      "MIMode": "gdb",
+      "setupCommands": [
+        {
+          "description": "Enable pretty-printing for gdb",
+          "text": "-enable-pretty-printing",
+          "ignoreFailures": true
+        }
+      ],
+      "preLaunchTask": "build",
+      "miDebuggerPath": "/usr/bin/gdb"
+    },
+    {
+      "name": "divert)sim: Day 1 Grid IE.csv",
+      "type": "cppdbg",
+      "request": "launch",
+      "program": "${workspaceFolder}/divert_sim",
+      "args": [
+        "-g", "2",
+        "<", "${workspaceFolder}/data/Day 1 Grid IE.csv"
+      ],
+      "stopAtEntry": false,
+      "cwd": "${workspaceFolder}",
+      "environment": [],
+      "externalConsole": false,
+      "MIMode": "gdb",
+      "setupCommands": [
+        {
+          "description": "Enable pretty-printing for gdb",
+          "text": "-enable-pretty-printing",
+          "ignoreFailures": true
+        }
+      ],
+      "preLaunchTask": "build",
+      "miDebuggerPath": "/usr/bin/gdb"
+    }
+  ]
+}
