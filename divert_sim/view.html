@@ -1,0 +1,123 @@
+<!DOCTYPE html>
+<html>
+
+<head>
+  <title>OpenEVSE Solar Divert Simulations</title>
+  <script type="text/javascript" src="https://canvasjs.com/assets/script/jquery-1.11.1.min.js"></script>
+  <script type="text/javascript" src="https://canvasjs.com/assets/script/canvasjs.min.js"></script>
+  <script type="text/javascript" src="https://cdnjs.cloudflare.com/ajax/libs/moment.js/2.24.0/moment.min.js"></script>
+  <script type="text/javascript">
+    window.onload = function () {
+      var dataPoints = [];
+
+      function getDataPointsFromCSV(csv) {
+        var dataPoints = csvLines = points = [];
+        csvLines = csv.split(/[\r?\n|\r|\n]+/);
+
+        for (var i = 1; i < csvLines.length; i++)
+          if (csvLines[i].length > 0) {
+            points = csvLines[i].split(",");
+
+            while (dataPoints.length < points.length - 1) {
+              dataPoints.push([]);
+            }
+
+            var date = moment(points[0], "DD/MM/YYYY HH:mm:ss").toDate();
+            for (var p = 1; p < points.length; p++) {
+              dataPoints[p - 1].push({
+                x: date,
+                y: parseFloat(points[p])
+              });
+            }
+          }
+        return dataPoints;
+      }
+
+      $(".solar,.gridie").each(function() {
+        $.get(this.getAttribute("csv"), (data) => {
+          var type = this.getAttribute("class");
+          var points = getDataPointsFromCSV(data);
+          var opts = {
+            animationEnabled: true,
+            zoomEnabled: true,
+            title: {
+              text: this.getAttribute("title"),
+              fontSize: 20
+            },
+            legend: {
+              fontSize: 16
+            },
+            axisY: {
+              labelFontSize: 14,
+              labelAngle: 0
+            },
+            axisX: {
+              labelFontSize: 14,
+              labelAngle: 0
+            },
+            data: []
+          }
+          opts.data.push({
+            name: "Charge Power",
+            type: "area",
+            color: "rgba(244,180,0,0.7)",
+            showInLegend: true,
+            dataPoints: points[3]
+          });
+          opts.data.push({
+            name: "Solar",
+            type: "line",
+            lineThickness: 1,
+            showInLegend: true,
+            dataPoints: points[0]
+          });
+          if("gridie" === type) {
+            opts.data.push({
+              name: "Grid IE",
+              type: "line",
+              lineThickness: 1,
+              showInLegend: true,
+              dataPoints: points[1]
+            });
+          }
+          opts.data.push({
+            name: "Min Charge",
+            type: "line",
+            lineThickness: 1,
+            lineDashType: "shortDash",
+            lineColor: "#38761d",
+            showInLegend: true,
+            dataPoints: points[4]
+          });
+
+          var chart = new CanvasJS.Chart(this.id, opts);
+
+          chart.render();
+        });
+
+      });
+    }
+  </script>
+  <style type="text/css" media="print">
+    .solar,.gridie
+    {
+      page-break-inside: avoid;
+    }
+  </style>
+</head>
+
+<body>
+  <h1>OpenEVSE Solar Divert Simulations</h1>
+  <h2>Solar only</h2>
+  <div id="solar1" style="width:100%; height:300px;" class="solar" csv="output/day1.csv" title="Day 1"></div>
+  <div id="solar2" style="width:100%; height:300px;" class="solar" csv="output/day2.csv" title="Day 2"></div>
+  <div id="solar3" style="width:100%; height:300px;" class="solar" csv="output/day3.csv" title="Day 3"></div>
+  <div id="solar4" style="width:100%; height:300px;" class="solar" csv="output/almostperfect.csv" title="Almost Perfect"></div>
+  <div id="solar5" style="width:100%; height:300px;" class="solar" csv="output/CloudyMorning.csv" title="Cloudy Morning"></div>
+  <h2>Grid IE</h2>
+  <div id="gridie1" style="width:100%; height:550px;" class="gridie" csv="output/day1_grid_ie.csv" title="Day 1"></div>
+  <div id="gridie2" style="width:100%; height:550px;" class="gridie" csv="output/day2_grid_ie.csv" title="Day 2"></div>
+  <div id="gridie3" style="width:100%; height:550px;" class="gridie" csv="output/day3_grid_ie.csv" title="Day 3"></div>
+</body>
+
+</html>
