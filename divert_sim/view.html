@@ -40,6 +40,17 @@
           var opts = {
             animationEnabled: true,
             zoomEnabled: true,
+            toolTip: {
+              shared: true,
+              contentFormatter: (e) => {
+                
+                var str = "<strong>"+moment(e.entries[0].dataPoint.x).format('h:mm a') + "</strong> <br/>";
+                for (var i = 0; i < e.entries.length; i++){
+                  str += "<span style=\"color:"+e.entries[i].dataSeries.color+"\">" + e.entries[i].dataSeries.name + "</span> <strong>"+  e.entries[i].dataPoint.y + "</strong> <br/>";
+                }
+                return (str);
+              }
+            },
             title: {
               text: this.getAttribute("title"),
               fontSize: 20
