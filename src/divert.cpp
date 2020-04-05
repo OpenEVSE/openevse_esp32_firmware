@@ -12,9 +12,7 @@
 #include "openevse.h"
 #include "divert.h"
 
-#ifndef ARDUINO
 #include <sys/time.h>
-#endif
 
 // 1: Normal / Fast Charge (default):
 // Charging at maximum rate irrespective of solar PV / grid_ie output
