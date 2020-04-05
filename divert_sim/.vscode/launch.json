@@ -5,7 +5,7 @@
   "version": "0.2.0",
   "configurations": [
     {
-      "name": "divert)sim: day1.csv",
+      "name": "divert_sim: day1.csv",
       "type": "cppdbg",
       "request": "launch",
       "program": "${workspaceFolder}/divert_sim",
@@ -28,7 +28,7 @@
       "miDebuggerPath": "/usr/bin/gdb"
     },
     {
-      "name": "divert)sim: Day 1 Grid IE.csv",
+      "name": "divert_sim: Day 1 Grid IE.csv",
       "type": "cppdbg",
       "request": "launch",
       "program": "${workspaceFolder}/divert_sim",
