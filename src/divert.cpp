@@ -39,8 +39,8 @@ int charge_rate = 0;
 int last_state = OPENEVSE_STATE_INVALID;
 uint32_t lastUpdate = 0;
 
-double increment_smoothing_factor = 0.4;
-double decrement_smoothing_factor = 0.05;
+double attack_smoothing_factor = 0.4;
+double decay_smoothing_factor = 0.05;
 double avalible_current = 0;
 double smothed_avalible_current = 0;
 
@@ -178,7 +178,7 @@ void divert_update_state()
     }
     DBUGVAR(avalible_current);
 
-    double scale = avalible_current > smothed_avalible_current ? increment_smoothing_factor : decrement_smoothing_factor;
+    double scale = avalible_current > smothed_avalible_current ? attack_smoothing_factor : decay_smoothing_factor;
     smothed_avalible_current = (avalible_current * scale) + (smothed_avalible_current * (1 - scale));
     DBUGVAR(smothed_avalible_current);
 
