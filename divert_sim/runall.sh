@@ -10,3 +10,7 @@ mkdir -p output
 ./divert_sim -g 2 < data/day1_grid_ie.csv > output/day1_grid_ie.csv
 ./divert_sim -g 2 < data/day2_grid_ie.csv > output/day2_grid_ie.csv
 ./divert_sim -g 2 < data/day3_grid_ie.csv > output/day3_grid_ie.csv
+./divert_sim -v 2 < data/solar-vrms.csv > output/solar-vrms.csv
+./divert_sim --sep \; --kw --decay 0.4 < data/Energy_and_Power_Day_2020-03-22.csv > output/Energy_and_Power_Day_2020-03-22.csv
+./divert_sim --sep \; --kw --decay 0.4 < data/Energy_and_Power_Day_2020-03-31.csv > output/Energy_and_Power_Day_2020-03-31.csv
+./divert_sim --sep \; --kw --decay 0.4 < data/Energy_and_Power_Day_2020-04-01.csv > output/Energy_and_Power_Day_2020-04-01.csv
