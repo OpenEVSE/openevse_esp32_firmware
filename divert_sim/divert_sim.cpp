@@ -1,5 +1,6 @@
 #include <iostream>
 #include <sys/time.h>
+#include <string>
 
 #ifndef RAPI_PORT
 #define RAPI_PORT Console
@@ -26,19 +27,35 @@ String mqtt_grid_ie = "";
 int date_col = 0;
 int grid_ie_col = -1;
 int solar_col = 1;
+int voltage_col = 1;
 
 time_t simulated_time = 0;
 
+bool kw = false;
+
 extern double smothed_avalible_current;
+extern double attack_smoothing_factor;
+extern double decay_smoothing_factor;
 
 time_t parse_date(const char *dateStr)
 {
-  int y,M,d,h,m,s;
+  int y = 2020, M = 1, d = 1, h = 0, m = 0, s = 0;
+  char ampm[5];
   if(6 != sscanf(dateStr, "%d-%d-%dT%d:%d:%dZ", &y, &M, &d, &h, &m, &s)) {
     if(6 != sscanf(dateStr, "%d-%d-%dT%d:%d:%d+00:00", &y, &M, &d, &h, &m, &s)) {
       if(6 != sscanf(dateStr, "%d-%d-%d %d:%d:%d", &y, &M, &d, &h, &m, &s)) {
-        if(1 == sscanf(dateStr, "%d", &s)) {
-          return s;
+        if(3 != sscanf(dateStr, "%d:%d %s", &h, &m, ampm)) {
+          if(1 == sscanf(dateStr, "%d", &s)) {
+            return s;
+          }
+        } else {
+          y = 2020; M = 1; d = 1; s = 0;
+          if(12 == h) {
+            h -= 12;
+          }
+          if('P' == ampm[0]) {
+            h += 12;
+          }
         }
       }
     }
@@ -55,6 +72,20 @@ time_t parse_date(const char *dateStr)
   return mktime(&time);
 }
 
+int get_watt(const char *val)
+{
+  float number = 0.0;
+  if(1 != sscanf(val, "%f", &number)) {
+    throw std::invalid_argument("Not a number");
+  }
+
+  if(kw) {
+    number *= 1000;
+  }
+
+  return (int)round(number);
+}
+
 time_t divertmode_get_time()
 {
   return simulated_time;
@@ -62,6 +93,9 @@ time_t divertmode_get_time()
 
 int main(int argc, char** argv)
 {
+  int voltage_arg = -1;
+  std::string sep = ",";
+
   cxxopts::Options options(argv[0], " - example command line options");
   options
     .positional_help("[optional args]")
@@ -72,7 +106,12 @@ int main(int argc, char** argv)
     ("help", "Print help")
     ("d,date", "The date column", cxxopts::value<int>(date_col), "N")
     ("s,solar", "The solar column", cxxopts::value<int>(solar_col), "N")
-    ("g,gridie", "The Grid IE column", cxxopts::value<int>(grid_ie_col), "N");
+    ("g,gridie", "The Grid IE column", cxxopts::value<int>(grid_ie_col), "N")
+    ("attack", "The attack factor for the smoothing", cxxopts::value<double>(attack_smoothing_factor))
+    ("decay", "The decay factor for the smoothing", cxxopts::value<double>(decay_smoothing_factor))
+    ("v,voltage", "The Voltage column if < 50, else the fixed voltage", cxxopts::value<int>(voltage_arg), "N")
+    ("kw", "values are KW")
+    ("sep", "Field separator", cxxopts::value<std::string>(sep));
 
   auto result = options.parse(argc, argv);
 
@@ -82,8 +121,18 @@ int main(int argc, char** argv)
     exit(0);
   }
 
+  kw = result.count("kw") > 0;
+
   mqtt_solar = grid_ie_col >= 0 ? "" : "yes";
   mqtt_grid_ie = grid_ie_col >= 0 ? "yes" : "";
+
+  if(voltage_arg >= 0) {
+    if(voltage_arg < 50) {
+      voltage_col = voltage_arg;
+    } else {
+      voltage = voltage_arg;
+    }
+  }
 
   solar = 0;
   grid_ie = 0;
@@ -91,6 +140,7 @@ int main(int argc, char** argv)
   divertmode_update(DIVERT_MODE_ECO);
 
   CsvParser parser(std::cin);
+  parser.delimiter(sep.c_str()[0]);
   int row_number = 0;
   
   std::cout << "Date,Solar,Grid IE,Pilot,Charge Power,Min Charge Power,State,Smothed Avalible" << std::endl;
@@ -99,17 +149,19 @@ int main(int argc, char** argv)
     try
     {    
       int col = 0;
-      std::string date;
+      std::string val;
 
       for (auto& field : row)
       {
+        val = field;
         if(date_col == col) {
-          date = field;
-          simulated_time = parse_date(date.c_str());
+          simulated_time = parse_date(val.c_str());
         } else if (grid_ie_col == col) {
-          grid_ie = stoi(field);
+          grid_ie = get_watt(val.c_str());
         } else if (solar_col == col) {
-          solar = stoi(field);
+          solar = get_watt(val.c_str());
+        } else if (voltage_col == col) {
+          voltage = stoi(field);
         }
 
         col++;
