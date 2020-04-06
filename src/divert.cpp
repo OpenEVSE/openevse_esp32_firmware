@@ -253,7 +253,7 @@ void divert_update_state()
       if(OPENEVSE_STATE_SLEEPING != state)
       {
         if(divertmode_get_time() >= min_charge_end) {
-          if(0 == rapiSender.sendCmdSync(F("$FD"))) {
+          if(0 == rapiSender.sendCmdSync(F("$FS"))) {
             DBUGLN(F("Charge Stopped"));
           }
         }
