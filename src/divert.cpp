@@ -45,7 +45,10 @@ double avalible_current = 0;
 double smothed_avalible_current = 0;
 
 uint32_t min_charge_time = (10 * 60);
+//uint32_t min_charge_time = 0;
 time_t min_charge_end = 0;
+
+bool divert_active = false;
 
 // IMPROVE: Read from OpenEVSE or emonTX (MQTT)
 int voltage = SERVICE_LEVEL2_VOLTAGE;
@@ -101,19 +104,6 @@ void divertmode_update(byte newmode)
 void divert_current_loop()
 {
   Profile_Start(divert_current_loop);
-
-  if(last_state != state)
-  {
-    DBUGVAR(last_state);
-    DBUGVAR(state);
-    DBUGVAR(divertmode);
-
-    // Revert to normal mode on disconnecting the car
-    if(OPENEVSE_STATE_NOT_CONNECTED == state && DIVERT_MODE_ECO == divertmode) {
-      divertmode_update(DIVERT_MODE_NORMAL);
-    }
-    last_state = state;
-  }
 
   Profile_End(divert_current_loop, 5);
 } //end divert_current_loop
@@ -208,9 +198,12 @@ void divert_update_state()
           // Fallback to old API
           chargeRateSet = true;
         }
-        if(true == chargeRateSet) {
+
+        if(true == chargeRateSet) 
+        {
           DBUGF("Charge rate set to %d", charge_rate);
           pilot = charge_rate;
+          divert_active = true;
         }
       }
 
@@ -252,9 +245,16 @@ void divert_update_state()
     {
       if(OPENEVSE_STATE_SLEEPING != state)
       {
-        if(divertmode_get_time() >= min_charge_end) {
-          if(0 == rapiSender.sendCmdSync(F("$FS"))) {
+        if(divert_active && divertmode_get_time() >= min_charge_end) 
+        {
+          if(0 == rapiSender.sendCmdSync(F("$FS"))) 
+          {
             DBUGLN(F("Charge Stopped"));
+            divert_active = false;
+
+            if(0 == rapiSender.sendCmdSync(String(F("$SC ")) + String(max_charge_current))) {
+              DBUGF("Restore max I: %d", max_charge_current);
+            }
           }
         }
       }
