@@ -99,6 +99,27 @@ void create_rapi_json(String &data)
   //DEBUG.print(emoncms_server.c_str() + String(url));
 }
 
+
+/// A small packed report of unit's status
+void create_rapi_packed(uint8_t *data)
+{
+  if (sizeof(data[0]) / sizeof(data) != 8) {
+    DBUGF("create_rapi_packed: Incorrect data size passed!");
+    return;
+  }
+  // Values with potential > 255 are reduced via a
+  // conversion factor.
+  data[0] = state;
+  data[1] = volt / 2;		// CF * 2
+  data[2] = amp;
+  data[3] = pilot;
+  data[4] = elapsed / 60;	// CF * 60
+  data[5] = temp1 / 10;		// CF * 10
+  data[6] = temp2 / 10;		// CF * 10
+  data[7] = temp3 / 10;		// CF * 10
+}
+
+
 // -------------------------------------------------------------------
 // OpenEVSE Request
 //
