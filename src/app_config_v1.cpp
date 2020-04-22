@@ -79,13 +79,14 @@
 #define CHECKSUM_SEED 128
 
 bool
-EEPROM_read_string(int start, int count, String & val, String defaultVal = "") {
+EEPROM_read_string(int start, int count, String & val) {
+  String newVal;
   byte checksum = CHECKSUM_SEED;
   for (int i = 0; i < count - 1; ++i) {
     byte c = EEPROM.read(start + i);
     if (c != 0 && c != 255) {
       checksum ^= c;
-      val += (char) c;
+      newVal += (char) c;
     } else {
       break;
     }
@@ -93,32 +94,30 @@ EEPROM_read_string(int start, int count, String & val, String defaultVal = "") {
 
   // Check the checksum
   byte c = EEPROM.read(start + (count - 1));
-  DBUGF("Got '%s' %d == %d @ %d:%d", val.c_str(), c, checksum, start, count);
-  if(c != checksum) {
-    DBUGF("Using default '%s'", defaultVal.c_str());
-    val = defaultVal;
-    return false;
+  DBUGF("Got '%s' %d == %d @ %d:%d", newVal.c_str(), c, checksum, start, count);
+  if(c == checksum) {
+    val = newVal;
+    return true;
   }
 
-  return true;
+  return false;
 }
 
 void
-EEPROM_read_uint24(int start, uint32_t & val, uint32_t defaultVal = 0) {
+EEPROM_read_uint24(int start, uint32_t & val) {
   byte checksum = CHECKSUM_SEED;
-  val = 0;
+  uint32_t newVal = 0;
   for (int i = 0; i < 3; ++i) {
     byte c = EEPROM.read(start + i);
     checksum ^= c;
-    val = (val << 8) | c;
+    newVal = (newVal << 8) | c;
   }
 
   // Check the checksum
   byte c = EEPROM.read(start + 3);
-  DBUGF("Got '%06x'  %d == %d @ %d:4", val, c, checksum, start);
-  if(c != checksum) {
-    DBUGF("Using default '%06x'", defaultVal);
-    val = defaultVal;
+  DBUGF("Got '%06x'  %d == %d @ %d:4", newVal, c, checksum, start);
+  if(c == checksum) {
+    val = newVal;
   }
 }
 
@@ -128,11 +127,10 @@ EEPROM_read_uint24(int start, uint32_t & val, uint32_t defaultVal = 0) {
 void
 config_load_v1_settings() {
   DBUGLN("Loading config");
-  EEPROM.begin(EEPROM_SIZE);
 
   // Device Hostname, needs to be read first as other config defaults depend on it
   EEPROM_read_string(EEPROM_HOSTNAME_START, EEPROM_HOSTNAME_SIZE,
-                     esp_hostname, esp_hostname_default);
+                     esp_hostname);
 
   // Load WiFi values
   EEPROM_read_string(EEPROM_ESID_START, EEPROM_ESID_SIZE, esid);
@@ -142,48 +140,46 @@ config_load_v1_settings() {
   EEPROM_read_string(EEPROM_EMON_API_KEY_START, EEPROM_EMON_API_KEY_SIZE,
                      emoncms_apikey);
   EEPROM_read_string(EEPROM_EMON_SERVER_START, EEPROM_EMON_SERVER_SIZE,
-                     emoncms_server, "https://data.openevse.com/emoncms");
+                     emoncms_server);
   EEPROM_read_string(EEPROM_EMON_NODE_START, EEPROM_EMON_NODE_SIZE,
-                     emoncms_node, esp_hostname);
+                     emoncms_node);
   EEPROM_read_string(EEPROM_EMON_FINGERPRINT_START, EEPROM_EMON_FINGERPRINT_SIZE,
-                     emoncms_fingerprint,"");
+                     emoncms_fingerprint);
 
   // MQTT settings
   if(false == EEPROM_read_string(EEPROM_MQTT_SERVER_START, EEPROM_MQTT_SERVER_SIZE,
-                                 mqtt_server, "emonpi")) {
+                                 mqtt_server)) {
     EEPROM_read_string(EEPROM_MQTT_SERVER_V1_START, EEPROM_MQTT_SERVER_V1_SIZE,
-                       mqtt_server, "emonpi");
+                       mqtt_server);
   }
   EEPROM_read_string(EEPROM_MQTT_TOPIC_START, EEPROM_MQTT_TOPIC_SIZE,
-                     mqtt_topic, esp_hostname);
+                     mqtt_topic);
   EEPROM_read_string(EEPROM_MQTT_USER_START, EEPROM_MQTT_USER_SIZE,
-                     mqtt_user, "emonpi");
+                     mqtt_user);
   EEPROM_read_string(EEPROM_MQTT_PASS_START, EEPROM_MQTT_PASS_SIZE,
-                     mqtt_pass, "emonpimqtt2016");
+                     mqtt_pass);
   EEPROM_read_string(EEPROM_MQTT_SOLAR_START, EEPROM_MQTT_SOLAR_SIZE,
                      mqtt_solar);
   EEPROM_read_string(EEPROM_MQTT_GRID_IE_START, EEPROM_MQTT_GRID_IE_SIZE,
-                     mqtt_grid_ie, "emon/emonpi/power1");
-  EEPROM_read_uint24(EEPROM_MQTT_PORT_START, mqtt_port, 1883);
+                     mqtt_grid_ie);
+  EEPROM_read_uint24(EEPROM_MQTT_PORT_START, mqtt_port);
 
   // Web server credentials
   EEPROM_read_string(EEPROM_WWW_USER_START, EEPROM_WWW_USER_SIZE,
-                     www_username, "");
+                     www_username);
   EEPROM_read_string(EEPROM_WWW_PASS_START, EEPROM_WWW_PASS_SIZE,
-                     www_password, "");
+                     www_password);
 
   // Ohm Connect Settings
   EEPROM_read_string(EEPROM_OHM_KEY_START, EEPROM_OHM_KEY_SIZE, ohm);
 
   // Flags
-  EEPROM_read_uint24(EEPROM_FLAGS_START, flags, CONFIG_SERVICE_SNTP);
+  EEPROM_read_uint24(EEPROM_FLAGS_START, flags);
 
   // Advanced
-  EEPROM_read_string(EEPROM_SNTP_HOST_START, EEPROM_SNTP_HOST_SIZE, sntp_hostname, SNTP_DEFAULT_HOST);
+  EEPROM_read_string(EEPROM_SNTP_HOST_START, EEPROM_SNTP_HOST_SIZE, sntp_hostname);
 
   // Timezone
-  EEPROM_read_string(EEPROM_TIME_ZONE_START, EEPROM_TIME_ZONE_SIZE, time_zone, DEFAULT_TIME_ZONE);
+  EEPROM_read_string(EEPROM_TIME_ZONE_START, EEPROM_TIME_ZONE_SIZE, time_zone);
   config_set_timezone(time_zone);
-
-  EEPROM.end();
 }
