@@ -4,115 +4,106 @@
 
 #include <Arduino.h>
 #include <EEPROM.h>             // Save config settings
+#include <ArduinoJson.h>
+
+bool modified = false;
+
+#define DEF_VALUE(type, val, d) \
+type val = d;\
+void config_set_ ## val (type value) \
+{ \
+  if(val != value) { \
+    val = value; \
+    modified = true; \
+  } \
+}
 
 // Wifi Network Strings
-String esid = "";
-String epass = "";
+DEF_VALUE(String, esid, "");
+DEF_VALUE(String, epass, "");
 
 // Web server authentication (leave blank for none)
-String www_username = "";
-String www_password = "";
+DEF_VALUE(String, www_username, "");
+DEF_VALUE(String, www_password, "");
 
-// Advanced settings
-String esp_hostname = "";
-String esp_hostname_default = "openevse-"+HAL.getShortId();
-String sntp_hostname = "";
+// Advanced setting)s
+DEF_VALUE(String, esp_hostname, "");
+DEF_VALUE(String, esp_hostname_default, "openevse-"+HAL.getShortId());
+DEF_VALUE(String, sntp_hostname, "");
 
 // Time
-String time_zone;
+DEF_VALUE(String, time_zone, "";);
 
 // EMONCMS SERVER strings
-String emoncms_server = "";
-String emoncms_node = "";
-String emoncms_apikey = "";
-String emoncms_fingerprint = "";
+DEF_VALUE(String, emoncms_server, "");
+DEF_VALUE(String, emoncms_node, "");
+DEF_VALUE(String, emoncms_apikey, "");
+DEF_VALUE(String, emoncms_fingerprint, "");
 
 // MQTT Settings
-String mqtt_server = "";
-uint32_t mqtt_port = 1883;
-String mqtt_topic = "";
-String mqtt_user = "";
-String mqtt_pass = "";
-String mqtt_solar = "";
-String mqtt_grid_ie = "";
-String mqtt_announce_topic = "openevse/announce/"+HAL.getShortId();
+DEF_VALUE(String, mqtt_server, "");
+DEF_VALUE(uint32_t, mqtt_port, 1883);
+DEF_VALUE(String, mqtt_topic, "");
+DEF_VALUE(String, mqtt_user, "");
+DEF_VALUE(String, mqtt_pass, "");
+DEF_VALUE(String, mqtt_solar, "");
+DEF_VALUE(String, mqtt_grid_ie, "");
+DEF_VALUE(String, mqtt_announce_topic, "openevse/announce/"+HAL.getShortId());
 
 // Ohm Connect Settings
-String ohm = "";
+DEF_VALUE(String, ohm, "");
 
 // Flags
-uint32_t flags;
+DEF_VALUE(uint32_t, flags, 0);
 
-#define EEPROM_ESID_SIZE              32
-#define EEPROM_EPASS_SIZE             64
-#define EEPROM_EMON_API_KEY_SIZE      33
-#define EEPROM_EMON_SERVER_SIZE       45
-#define EEPROM_EMON_NODE_SIZE         32
-#define EEPROM_MQTT_SERVER_V1_SIZE    45
-#define EEPROM_MQTT_SERVER_SIZE       96
-#define EEPROM_MQTT_TOPIC_SIZE        32
-#define EEPROM_MQTT_USER_SIZE         32
-#define EEPROM_MQTT_PASS_SIZE         64
-#define EEPROM_MQTT_SOLAR_SIZE        30
-#define EEPROM_MQTT_GRID_IE_SIZE      30
-#define EEPROM_EMON_FINGERPRINT_SIZE  60
-#define EEPROM_WWW_USER_SIZE          15
-#define EEPROM_WWW_PASS_SIZE          15
-#define EEPROM_OHM_KEY_SIZE           10
-#define EEPROM_FLAGS_SIZE             4
-#define EEPROM_HOSTNAME_SIZE          32
-#define EEPROM_MQTT_PORT_SIZE         4
-#define EEPROM_SNTP_HOST_SIZE         45
-#define EEPROM_TIME_ZONE_SIZE         80
-#define EEPROM_SIZE                   1024
+#define esp_hostname_LONG_NAME          "esp_hostname"
+#define esid_LONG_NAME                  "ssid"
+#define epass_LONG_NAME                 "pass"
+#define emoncms_apikey_LONG_NAME        "emoncms_apikey"
+#define emoncms_server_LONG_NAME        "emoncms_server"
+#define emoncms_node_LONG_NAME          "emoncms_node"
+#define emoncms_fingerprint_LONG_NAME   "emoncms_fingerprint"
+#define mqtt_server_LONG_NAME           "mqtt_server"
+#define mqtt_topic_LONG_NAME            "mqtt_topic"
+#define mqtt_user_LONG_NAME             "mqtt_user"
+#define mqtt_pass_LONG_NAME             "mqtt_pass"
+#define mqtt_solar_LONG_NAME            "mqtt_solar"
+#define mqtt_grid_ie_LONG_NAME          "mqtt_grid_ie"
+#define mqtt_port_LONG_NAME             "mqtt_port"
+#define www_username_LONG_NAME          "www_username"
+#define www_password_LONG_NAME          "www_password"
+#define ohm_LONG_NAME                   "ohm"
+#define flags_LONG_NAME                 "flags"
+#define sntp_hostname_LONG_NAME         "sntp_hostname"
+#define time_zone_LONG_NAME             "time_zone"
 
-#define EEPROM_ESID_START             0
-#define EEPROM_ESID_END               (EEPROM_ESID_START + EEPROM_ESID_SIZE)
-#define EEPROM_EPASS_START            EEPROM_ESID_END
-#define EEPROM_EPASS_END              (EEPROM_EPASS_START + EEPROM_EPASS_SIZE)
-#define EEPROM_EMON_SERVER_START      EEPROM_EPASS_END + 32 /* EEPROM_EMON_API_KEY used to be stored before this */
-#define EEPROM_EMON_SERVER_END        (EEPROM_EMON_SERVER_START + EEPROM_EMON_SERVER_SIZE)
-#define EEPROM_EMON_NODE_START        EEPROM_EMON_SERVER_END
-#define EEPROM_EMON_NODE_END          (EEPROM_EMON_NODE_START + EEPROM_EMON_NODE_SIZE)
-#define EEPROM_MQTT_SERVER_V1_START   EEPROM_EMON_NODE_END
-#define EEPROM_MQTT_SERVER_V1_END     (EEPROM_MQTT_SERVER_V1_START + EEPROM_MQTT_SERVER_V1_SIZE)
-#define EEPROM_MQTT_TOPIC_START       EEPROM_MQTT_SERVER_V1_END
-#define EEPROM_MQTT_TOPIC_END         (EEPROM_MQTT_TOPIC_START + EEPROM_MQTT_TOPIC_SIZE)
-#define EEPROM_MQTT_USER_START        EEPROM_MQTT_TOPIC_END
-#define EEPROM_MQTT_USER_END          (EEPROM_MQTT_USER_START + EEPROM_MQTT_USER_SIZE)
-#define EEPROM_MQTT_PASS_START        EEPROM_MQTT_USER_END
-#define EEPROM_MQTT_PASS_END          (EEPROM_MQTT_PASS_START + EEPROM_MQTT_PASS_SIZE)
-#define EEPROM_MQTT_SOLAR_START       EEPROM_MQTT_PASS_END
-#define EEPROM_MQTT_SOLAR_END         (EEPROM_MQTT_SOLAR_START + EEPROM_MQTT_SOLAR_SIZE)
-#define EEPROM_MQTT_GRID_IE_START     EEPROM_MQTT_SOLAR_END
-#define EEPROM_MQTT_GRID_IE_END       (EEPROM_MQTT_GRID_IE_START + EEPROM_MQTT_GRID_IE_SIZE)
-#define EEPROM_EMON_FINGERPRINT_START EEPROM_MQTT_GRID_IE_END
-#define EEPROM_EMON_FINGERPRINT_END   (EEPROM_EMON_FINGERPRINT_START + EEPROM_EMON_FINGERPRINT_SIZE)
-#define EEPROM_WWW_USER_START         EEPROM_EMON_FINGERPRINT_END
-#define EEPROM_WWW_USER_END           (EEPROM_WWW_USER_START + EEPROM_WWW_USER_SIZE)
-#define EEPROM_WWW_PASS_START         EEPROM_WWW_USER_END
-#define EEPROM_WWW_PASS_END           (EEPROM_WWW_PASS_START + EEPROM_WWW_PASS_SIZE)
-#define EEPROM_OHM_KEY_START          EEPROM_WWW_PASS_END
-#define EEPROM_OHM_KEY_END            (EEPROM_OHM_KEY_START + EEPROM_OHM_KEY_SIZE)
-#define EEPROM_FLAGS_START            EEPROM_OHM_KEY_END
-#define EEPROM_FLAGS_END              (EEPROM_FLAGS_START + EEPROM_FLAGS_SIZE)
-#define EEPROM_EMON_API_KEY_START     EEPROM_FLAGS_END
-#define EEPROM_EMON_API_KEY_END       (EEPROM_EMON_API_KEY_START + EEPROM_EMON_API_KEY_SIZE)
-#define EEPROM_HOSTNAME_START         EEPROM_EMON_API_KEY_END
-#define EEPROM_HOSTNAME_END           (EEPROM_HOSTNAME_START + EEPROM_HOSTNAME_SIZE)
-#define EEPROM_SNTP_HOST_START        EEPROM_HOSTNAME_END
-#define EEPROM_SNTP_HOST_END          (EEPROM_SNTP_HOST_START + EEPROM_SNTP_HOST_SIZE)
-#define EEPROM_TIME_ZONE_START        EEPROM_SNTP_HOST_END
-#define EEPROM_TIME_ZONE_END          (EEPROM_TIME_ZONE_START + EEPROM_TIME_ZONE_SIZE)
-#define EEPROM_MQTT_SERVER_START      EEPROM_TIME_ZONE_END
-#define EEPROM_MQTT_SERVER_END        (EEPROM_MQTT_SERVER_START + EEPROM_MQTT_SERVER_SIZE)
-#define EEPROM_MQTT_PORT_START        EEPROM_MQTT_SERVER_END
-#define EEPROM_MQTT_PORT_END          (EEPROM_MQTT_PORT_START + EEPROM_MQTT_PORT_SIZE)
-#define EEPROM_CONFIG_END             EEPROM_MQTT_PORT_END
+#define esp_hostname_SHORT_NAME         "hn"
+#define esid_SHORT_NAME                 "ws"
+#define epass_SHORT_NAME                "wp"
+#define emoncms_apikey_SHORT_NAME       "ea"
+#define emoncms_server_SHORT_NAME       "es"
+#define emoncms_node_SHORT_NAME         "en"
+#define emoncms_fingerprint_SHORT_NAME  "ef"
+#define mqtt_server_SHORT_NAME          "ms"
+#define mqtt_topic_SHORT_NAME           "mt"
+#define mqtt_user_SHORT_NAME            "mu"
+#define mqtt_pass_SHORT_NAME            "mp"
+#define mqtt_solar_SHORT_NAME           "ms"
+#define mqtt_grid_ie_SHORT_NAME         "mg"
+#define mqtt_port_SHORT_NAME            "mpt"
+#define www_username_SHORT_NAME         "au"
+#define www_password_SHORT_NAME         "ap"
+#define ohm_SHORT_NAME                  "o"
+#define flags_SHORT_NAME                "f"
+#define sntp_hostname_SHORT_NAME        "sh"
+#define time_zone_SHORT_NAME            "tz"
 
-#if EEPROM_CONFIG_END > EEPROM_SIZE
-#error EEPROM_SIZE too small
-#endif
+bool config_deserialize(String& json);
+bool config_deserialize(const char *json);
+
+bool config_serialize(String& json, bool longNames = true);
+
+#define EEPROM_SIZE                   4096
 
 #define CHECKSUM_SEED 128
 
@@ -131,258 +122,267 @@ ResetEEPROM() {
   EEPROM.end();
 }
 
-bool
-EEPROM_read_string(int start, int count, String & val, String defaultVal = "") {
-  byte checksum = CHECKSUM_SEED;
-  for (int i = 0; i < count - 1; ++i) {
-    byte c = EEPROM.read(start + i);
-    if (c != 0 && c != 255) {
-      checksum ^= c;
-      val += (char) c;
-    } else {
-      break;
-    }
-  }
-
-  // Check the checksum
-  byte c = EEPROM.read(start + (count - 1));
-  DBUGF("Got '%s' %d == %d @ %d:%d", val.c_str(), c, checksum, start, count);
-  if(c != checksum) {
-    DBUGF("Using default '%s'", defaultVal.c_str());
-    val = defaultVal;
-    return false;
-  }
-
-  return true;
-}
-
-void
-EEPROM_write_string(int start, int count, String val) {
-  byte checksum = CHECKSUM_SEED;
-  for (int i = 0; i < count - 1; ++i) {
-    if (i < val.length()) {
-      checksum ^= val[i];
-      EEPROM.write(start + i, val[i]);
-    } else {
-      EEPROM.write(start + i, 0);
-    }
-  }
-  EEPROM.write(start + (count - 1), checksum);
-  DBUGF("Saved '%s' %d @ %d:%d", val.c_str(), checksum, start, count);
-}
-
-void
-EEPROM_read_uint24(int start, uint32_t & val, uint32_t defaultVal = 0) {
-  byte checksum = CHECKSUM_SEED;
-  val = 0;
-  for (int i = 0; i < 3; ++i) {
-    byte c = EEPROM.read(start + i);
-    checksum ^= c;
-    val = (val << 8) | c;
-  }
-
-  // Check the checksum
-  byte c = EEPROM.read(start + 3);
-  DBUGF("Got '%06x'  %d == %d @ %d:4", val, c, checksum, start);
-  if(c != checksum) {
-    DBUGF("Using default '%06x'", defaultVal);
-    val = defaultVal;
-  }
-}
-
-void
-EEPROM_write_uint24(int start, uint32_t value) {
-  byte checksum = CHECKSUM_SEED;
-  uint32_t val = value;
-  for (int i = 2; i >= 0; --i) {
-    byte c = val & 0xff;
-    val = val >> 8;
-    checksum ^= c;
-    EEPROM.write(start + i, c);
-  }
-  EEPROM.write(start + 3, checksum);
-  DBUGF("Saved '%06x' %d @ %d:4", value, checksum, start);
-}
-
-void setTimezone(String tz);
-
 // -------------------------------------------------------------------
 // Load saved settings from EEPROM
 // -------------------------------------------------------------------
 void
-config_load_settings() {
-  DBUGLN("Loading config");
+config_load_settings() 
+{
   EEPROM.begin(EEPROM_SIZE);
 
-  // Device Hostname, needs to be read first as other config defaults depend on it
-  EEPROM_read_string(EEPROM_HOSTNAME_START, EEPROM_HOSTNAME_SIZE,
-                     esp_hostname, esp_hostname_default);
+  char start = 0;
+  uint8_t a = 0, b = 0;
+  EEPROM.get(0, a);
+  EEPROM.get(1, b);
+  int length = a | (b << 8);
 
-  // Load WiFi values
-  EEPROM_read_string(EEPROM_ESID_START, EEPROM_ESID_SIZE, esid);
-  EEPROM_read_string(EEPROM_EPASS_START, EEPROM_EPASS_SIZE, epass);
+  EEPROM.get(2, start);
 
-  // EmonCMS settings
-  EEPROM_read_string(EEPROM_EMON_API_KEY_START, EEPROM_EMON_API_KEY_SIZE,
-                     emoncms_apikey);
-  EEPROM_read_string(EEPROM_EMON_SERVER_START, EEPROM_EMON_SERVER_SIZE,
-                     emoncms_server, "https://data.openevse.com/emoncms");
-  EEPROM_read_string(EEPROM_EMON_NODE_START, EEPROM_EMON_NODE_SIZE,
-                     emoncms_node, esp_hostname);
-  EEPROM_read_string(EEPROM_EMON_FINGERPRINT_START, EEPROM_EMON_FINGERPRINT_SIZE,
-                     emoncms_fingerprint,"");
+  DBUGF("Got %d %c from EEPROM", length, start);
 
-  // MQTT settings
-  if(false == EEPROM_read_string(EEPROM_MQTT_SERVER_START, EEPROM_MQTT_SERVER_SIZE,
-                                 mqtt_server, "emonpi")) {
-    EEPROM_read_string(EEPROM_MQTT_SERVER_V1_START, EEPROM_MQTT_SERVER_V1_SIZE,
-                       mqtt_server, "emonpi");
+  if(2 <= length && length < EEPROM_SIZE &&
+    '{' == start)
+  {
+    char json[length + 1];
+    for(int i = 0; i < length; i++) {
+      json[i] = EEPROM.read(2+i);
+    }
+    json[length] = '\0';
+    DBUGF("Found stored JSON %s", json);
+    config_deserialize(json);
+    modified = false;
+  } else {
+    DBUGF("No JSON config found, trying v1 settings");
+    config_load_v1_settings();
   }
-  EEPROM_read_string(EEPROM_MQTT_TOPIC_START, EEPROM_MQTT_TOPIC_SIZE,
-                     mqtt_topic, esp_hostname);
-  EEPROM_read_string(EEPROM_MQTT_USER_START, EEPROM_MQTT_USER_SIZE,
-                     mqtt_user, "emonpi");
-  EEPROM_read_string(EEPROM_MQTT_PASS_START, EEPROM_MQTT_PASS_SIZE,
-                     mqtt_pass, "emonpimqtt2016");
-  EEPROM_read_string(EEPROM_MQTT_SOLAR_START, EEPROM_MQTT_SOLAR_SIZE,
-                     mqtt_solar);
-  EEPROM_read_string(EEPROM_MQTT_GRID_IE_START, EEPROM_MQTT_GRID_IE_SIZE,
-                     mqtt_grid_ie, "emon/emonpi/power1");
-  EEPROM_read_uint24(EEPROM_MQTT_PORT_START, mqtt_port, 1883);
-
-  // Web server credentials
-  EEPROM_read_string(EEPROM_WWW_USER_START, EEPROM_WWW_USER_SIZE,
-                     www_username, "");
-  EEPROM_read_string(EEPROM_WWW_PASS_START, EEPROM_WWW_PASS_SIZE,
-                     www_password, "");
-
-  // Ohm Connect Settings
-  EEPROM_read_string(EEPROM_OHM_KEY_START, EEPROM_OHM_KEY_SIZE, ohm);
-
-  // Flags
-  EEPROM_read_uint24(EEPROM_FLAGS_START, flags, CONFIG_SERVICE_SNTP);
-
-  // Advanced
-  EEPROM_read_string(EEPROM_SNTP_HOST_START, EEPROM_SNTP_HOST_SIZE, sntp_hostname, SNTP_DEFAULT_HOST);
-
-  // Timezone
-  EEPROM_read_string(EEPROM_TIME_ZONE_START, EEPROM_TIME_ZONE_SIZE, time_zone, DEFAULT_TIME_ZONE);
-  setTimezone(time_zone);
 
   EEPROM.end();
 }
 
-void
-config_save_emoncms(bool enable, String server, String node, String apikey,
-                    String fingerprint)
+void config_commit()
 {
-  EEPROM.begin(EEPROM_SIZE);
-
-  flags = flags & ~CONFIG_SERVICE_EMONCMS;
-  if(enable) {
-    flags |= CONFIG_SERVICE_EMONCMS;
+  if(false == modified) {
+    return;
   }
 
-  emoncms_server = server;
-  emoncms_node = node;
-  emoncms_apikey = apikey;
-  emoncms_fingerprint = fingerprint;
+  DBUGF("Saving config");
+  
+  EEPROM.begin(EEPROM_SIZE);
 
-  // save apikey to EEPROM
-  EEPROM_write_string(EEPROM_EMON_API_KEY_START, EEPROM_EMON_API_KEY_SIZE,
-                      emoncms_apikey);
+  String jsonStr;
+  config_serialize(jsonStr, false);
+  const char *json = jsonStr.c_str();
+  DBUGF("Writing %s to EEPROM", json);
+  int length = jsonStr.length();
+  EEPROM.put(0, length & 0xff);
+  EEPROM.put(1, (length >> 8) & 0xff);
+  for(int i = 0; i < length; i++) {
+    EEPROM.write(2+i, json[i]);
+  }
 
-  // save emoncms server to EEPROM max 45 characters
-  EEPROM_write_string(EEPROM_EMON_SERVER_START, EEPROM_EMON_SERVER_SIZE,
-                      emoncms_server);
+  DBUGF("%d bytes written to EEPROM, committing", length + 2);
 
-  // save emoncms node to EEPROM max 32 characters
-  EEPROM_write_string(EEPROM_EMON_NODE_START, EEPROM_EMON_NODE_SIZE,
-                      emoncms_node);
+  if(EEPROM.commit())
+  {
+    DBUGF("Done");
+    modified = false;
+  } else {
+    DBUGF("Writting EEPROM failed");
+  }
+}
 
-  // save emoncms HTTPS fingerprint to EEPROM max 60 characters
-  EEPROM_write_string(EEPROM_EMON_FINGERPRINT_START,
-                      EEPROM_EMON_FINGERPRINT_SIZE, emoncms_fingerprint);
+#define GET_VALUE(val, def) do { \
+  if(doc.containsKey(val ## _LONG_NAME)) { \
+    val = (doc[val ## _LONG_NAME]); \
+  } else if(doc.containsKey(val ## _SHORT_NAME)) { \
+    val = (doc[val ## _SHORT_NAME]); \
+  } else { \
+    val = def; \
+  }} while(false)
 
-  EEPROM_write_uint24(EEPROM_FLAGS_START, flags);
+#define GET_VALUE_AS(type, val, def) do { \
+  if(doc.containsKey(val ## _LONG_NAME)) { \
+    val = (doc[val ## _LONG_NAME].as<type>()); \
+  } else if(doc.containsKey(val ## _SHORT_NAME)) { \
+    val = (doc[val ## _SHORT_NAME].as<type>()); \
+  } else { \
+    val = def; \
+  }} while(false)
 
-  EEPROM.end();
+bool config_deserialize(String& json) {
+  return config_deserialize(json.c_str());
+}
+
+bool config_deserialize(const char *json) 
+{
+  const size_t capacity = JSON_OBJECT_SIZE(30) + EEPROM_SIZE;
+  DynamicJsonDocument doc(capacity);
+  
+  DeserializationError err = deserializeJson(doc, json);
+  if(DeserializationError::Code::Ok == err)
+  {
+    // Device Hostname, needs to be read first as other config defaults depend on it
+    GET_VALUE_AS(String, esp_hostname, esp_hostname_default);
+
+    // Load WiFi values
+    GET_VALUE_AS(String, esid, "");
+    GET_VALUE_AS(String, epass, "");
+
+    // EmonCMS settings
+    GET_VALUE_AS(String, emoncms_apikey, "");
+    GET_VALUE_AS(String, emoncms_server, "https://data.openevse.com/emoncms");
+    GET_VALUE_AS(String, emoncms_node, esp_hostname);
+    GET_VALUE_AS(String, emoncms_fingerprint, "");
+
+    // MQTT settings
+    GET_VALUE_AS(String, mqtt_server, "emonpi");
+    GET_VALUE_AS(String, mqtt_topic, esp_hostname);
+    GET_VALUE_AS(String, mqtt_user, "emonpi");
+    GET_VALUE_AS(String, mqtt_pass, "emonpimqtt2016");
+    GET_VALUE_AS(String, mqtt_solar, "");
+    GET_VALUE_AS(String, mqtt_grid_ie, "emon/emonpi/power1");
+    GET_VALUE(mqtt_port, 1883);
+
+    // Web server credentials
+    GET_VALUE_AS(String, www_username, "");
+    GET_VALUE_AS(String, www_password, "");
+
+    // Ohm Connect Settings
+    GET_VALUE_AS(String, ohm, "");
+
+    // Flags
+    GET_VALUE(flags, CONFIG_SERVICE_SNTP);
+
+    // Advanced
+    GET_VALUE_AS(String, sntp_hostname, SNTP_DEFAULT_HOST);
+
+    // Timezone
+    GET_VALUE_AS(String, time_zone, DEFAULT_TIME_ZONE);
+    config_set_timezone(time_zone);
+
+    return true;
+  }
+
+  return false;
+}
+
+#undef GET_VALUE
+#undef GET_VALUE_AS
+
+#define SET_VALUE(val) \
+  doc[(longNames ? val ## _LONG_NAME : val ## _SHORT_NAME)] = val
+
+bool config_serialize(String& json, bool longNames)
+{
+  const size_t capacity = JSON_OBJECT_SIZE(30) + EEPROM_SIZE;
+  DynamicJsonDocument doc(capacity);
+
+  SET_VALUE(esp_hostname);
+
+  // Load WiFi values
+  SET_VALUE(esid);
+  SET_VALUE(epass);
+
+  // EmonCMS settings
+  SET_VALUE(emoncms_apikey);
+  SET_VALUE(emoncms_server);
+  SET_VALUE(emoncms_node);
+  SET_VALUE(emoncms_fingerprint);
+
+  // MQTT settings
+  SET_VALUE(mqtt_server);
+  SET_VALUE(mqtt_topic);
+  SET_VALUE(mqtt_user);
+  SET_VALUE(mqtt_pass);
+  SET_VALUE(mqtt_solar);
+  SET_VALUE(mqtt_grid_ie);
+  SET_VALUE(mqtt_port);
+
+  // Web server credentials
+  SET_VALUE(www_username);
+  SET_VALUE(www_password);
+
+  // Ohm Connect Settings
+  SET_VALUE(ohm);
+
+  // Flags
+  SET_VALUE(flags);
+
+  // Advanced
+  SET_VALUE(sntp_hostname);
+
+  // Timezone
+  SET_VALUE(time_zone);
+
+  serializeJson(doc, json);
+
+  return true;
+}
+
+#undef SET_VALUE
+
+void config_save_emoncms(bool enable, String server, String node, String apikey,
+                    String fingerprint)
+{
+  uint32_t newflags = flags & ~CONFIG_SERVICE_EMONCMS;
+  if(enable) {
+    newflags |= CONFIG_SERVICE_EMONCMS;
+  }
+
+  config_set_emoncms_server(server);
+  config_set_emoncms_node(node);
+  config_set_emoncms_apikey(apikey);
+  config_set_emoncms_fingerprint(fingerprint);
+  config_set_flags(newflags);
+  config_commit();
 }
 
 void
 config_save_mqtt(bool enable, int protocol, String server, uint16_t port, String topic, String user, String pass, String solar, String grid_ie, bool reject_unauthorized)
 {
-  EEPROM.begin(EEPROM_SIZE);
-
-  flags = flags & ~(CONFIG_SERVICE_MQTT | CONFIG_MQTT_PROTOCOL | CONFIG_MQTT_ALLOW_ANY_CERT);
+  uint32_t newflags = flags & ~(CONFIG_SERVICE_MQTT | CONFIG_MQTT_PROTOCOL | CONFIG_MQTT_ALLOW_ANY_CERT);
   if(enable) {
-    flags |= CONFIG_SERVICE_MQTT;
+    newflags |= CONFIG_SERVICE_MQTT;
   }
   if(!reject_unauthorized) {
-    flags |= CONFIG_MQTT_ALLOW_ANY_CERT;
+    newflags |= CONFIG_MQTT_ALLOW_ANY_CERT;
   }
-  flags |= protocol << 4;  
+  newflags |= protocol << 4;  
 
-  mqtt_server = server;
-  mqtt_port = port;
-  mqtt_topic = topic;
-  mqtt_user = user;
-  mqtt_pass = pass;
-  mqtt_solar = solar;
-  mqtt_grid_ie = grid_ie;
-
-  EEPROM_write_string(EEPROM_MQTT_SERVER_START, EEPROM_MQTT_SERVER_SIZE,
-                      mqtt_server);
-  EEPROM_write_string(EEPROM_MQTT_TOPIC_START, EEPROM_MQTT_TOPIC_SIZE,
-                      mqtt_topic);
-  EEPROM_write_string(EEPROM_MQTT_USER_START, EEPROM_MQTT_USER_SIZE,
-                      mqtt_user);
-  EEPROM_write_string(EEPROM_MQTT_PASS_START, EEPROM_MQTT_PASS_SIZE,
-                      mqtt_pass);
-  EEPROM_write_string(EEPROM_MQTT_SOLAR_START, EEPROM_MQTT_SOLAR_SIZE, mqtt_solar);
-  EEPROM_write_string(EEPROM_MQTT_GRID_IE_START, EEPROM_MQTT_GRID_IE_SIZE, mqtt_grid_ie);
-
-  EEPROM_write_uint24(EEPROM_FLAGS_START, flags);
-  EEPROM_write_uint24(EEPROM_MQTT_PORT_START, port);
-
-  EEPROM.end();
+  config_set_mqtt_server(server);
+  config_set_mqtt_port(port);
+  config_set_mqtt_topic(topic);
+  config_set_mqtt_user(user);
+  config_set_mqtt_pass(pass);
+  config_set_mqtt_solar(solar);
+  config_set_mqtt_grid_ie(grid_ie);
+  config_set_flags(newflags);
+  config_commit();
 }
 
 void
 config_save_admin(String user, String pass) {
-  EEPROM.begin(EEPROM_SIZE);
-
-  www_username = user;
-  www_password = pass;
-
-  EEPROM_write_string(EEPROM_WWW_USER_START, EEPROM_WWW_USER_SIZE, user);
-  EEPROM_write_string(EEPROM_WWW_PASS_START, EEPROM_WWW_PASS_SIZE, pass);
-
-  EEPROM.end();
+  config_set_www_username(user);
+  config_set_www_password(pass);
+  config_commit();
 }
 
 void
 config_save_sntp(bool sntp_enable, String tz) 
 {
-  if(sntp_enable != config_sntp_enabled() || 
-     time_zone != tz)
-  {
-    flags = flags & ~CONFIG_SERVICE_SNTP;
-    if(sntp_enable) {
-      flags |= CONFIG_SERVICE_SNTP;
-    }
-
-    time_zone = tz;
-    setTimezone(tz);
-
-    EEPROM.begin(EEPROM_SIZE);
-    EEPROM_write_uint24(EEPROM_FLAGS_START, flags);
-    EEPROM_write_string(EEPROM_TIME_ZONE_START, EEPROM_TIME_ZONE_SIZE, time_zone);
-    EEPROM.end();
+  uint32_t newflags = flags & ~CONFIG_SERVICE_SNTP;
+  if(sntp_enable) {
+    newflags |= CONFIG_SERVICE_SNTP;
   }
+
+  config_set_time_zone(tz);
+  config_set_flags(newflags);
+  config_commit();
+
+  config_set_timezone(tz);
 }
 
-void setTimezone(String tz)
+void config_set_timezone(String tz)
 {
   const char *set_tz = tz.c_str();
   const char *split_pos = strchr(set_tz, '|');
@@ -396,62 +396,36 @@ void setTimezone(String tz)
 
 void
 config_save_advanced(String hostname, String sntp_host) {
-  EEPROM.begin(EEPROM_SIZE);
-
-  esp_hostname = hostname;
-  sntp_hostname = sntp_host;
-
-  EEPROM_write_string(EEPROM_HOSTNAME_START, EEPROM_HOSTNAME_SIZE, hostname);
-  EEPROM_write_string(EEPROM_SNTP_HOST_START, EEPROM_SNTP_HOST_SIZE, sntp_host);
-
-  EEPROM.end();
+  config_set_esp_hostname(hostname);
+  config_set_sntp_hostname(sntp_host);
+  config_commit();
 }
 
 void
 config_save_wifi(String qsid, String qpass)
 {
-  EEPROM.begin(EEPROM_SIZE);
-
-  esid = qsid;
-  epass = qpass;
-
-  EEPROM_write_string(EEPROM_ESID_START, EEPROM_ESID_SIZE, qsid);
-  EEPROM_write_string(EEPROM_EPASS_START, EEPROM_EPASS_SIZE, qpass);
-
-  EEPROM.end();
+  config_set_esid(qsid);
+  config_set_epass(qpass);
+  config_commit();
 }
 
 void
 config_save_ohm(bool enable, String qohm)
 {
-  EEPROM.begin(EEPROM_SIZE);
-
-  flags = flags & ~CONFIG_SERVICE_OHM;
+  uint32_t newflags = flags & ~CONFIG_SERVICE_OHM;
   if(enable) {
-    flags |= CONFIG_SERVICE_OHM;
+    newflags |= CONFIG_SERVICE_OHM;
   }
 
-  ohm = qohm;
-
-  EEPROM_write_string(EEPROM_OHM_KEY_START, EEPROM_OHM_KEY_SIZE, qohm);
-
-  EEPROM_write_uint24(EEPROM_FLAGS_START, flags);
-
-  EEPROM.end();
+  config_set_ohm(qohm);
+  config_set_flags(newflags);
+  config_commit();
 }
 
 void
 config_save_flags(uint32_t newFlags) {
-  if(flags != newFlags)
-  {
-    EEPROM.begin(EEPROM_SIZE);
-
-    flags = newFlags;
-
-    EEPROM_write_uint24(EEPROM_FLAGS_START, flags);
-
-    EEPROM.end();
-  }
+  config_set_flags(newFlags);
+  config_commit();
 }
 
 void

@@ -21,6 +21,7 @@ extern String www_password;
 
 // Advanced settings
 extern String esp_hostname;
+extern String esp_hostname_default;
 extern String sntp_hostname;
 
 // EMONCMS SERVER strings
@@ -83,6 +84,7 @@ extern String ohm;
 // Load saved settings
 // -------------------------------------------------------------------
 extern void config_load_settings();
+extern void config_load_v1_settings();
 
 // -------------------------------------------------------------------
 // Save the EmonCMS server details
@@ -128,5 +130,7 @@ extern void config_save_flags(uint32_t flags);
 // Reset the config back to defaults
 // -------------------------------------------------------------------
 extern void config_reset();
+
+void config_set_timezone(String tz);
 
 #endif // _EMONESP_CONFIG_H
