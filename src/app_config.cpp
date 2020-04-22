@@ -8,104 +8,177 @@
 
 bool modified = false;
 
-#define DEF_VALUE(type, val, d) \
-type val = d;\
-void config_set_ ## val (type value) \
-{ \
-  if(val != value) { \
-    val = value; \
-    modified = true; \
-  } \
-}
-
 // Wifi Network Strings
-DEF_VALUE(String, esid, "");
-DEF_VALUE(String, epass, "");
+String esid;
+String epass;
 
 // Web server authentication (leave blank for none)
-DEF_VALUE(String, www_username, "");
-DEF_VALUE(String, www_password, "");
+String www_username;
+String www_password;
 
-// Advanced setting)s
-DEF_VALUE(String, esp_hostname, "");
-DEF_VALUE(String, esp_hostname_default, "openevse-"+HAL.getShortId());
-DEF_VALUE(String, sntp_hostname, "");
-
-// Time
-DEF_VALUE(String, time_zone, "";);
+// Advanced settings
+String esp_hostname;
+String sntp_hostname;
 
 // EMONCMS SERVER strings
-DEF_VALUE(String, emoncms_server, "");
-DEF_VALUE(String, emoncms_node, "");
-DEF_VALUE(String, emoncms_apikey, "");
-DEF_VALUE(String, emoncms_fingerprint, "");
+String emoncms_server;
+String emoncms_node;
+String emoncms_apikey;
+String emoncms_fingerprint;
 
 // MQTT Settings
-DEF_VALUE(String, mqtt_server, "");
-DEF_VALUE(uint32_t, mqtt_port, 1883);
-DEF_VALUE(String, mqtt_topic, "");
-DEF_VALUE(String, mqtt_user, "");
-DEF_VALUE(String, mqtt_pass, "");
-DEF_VALUE(String, mqtt_solar, "");
-DEF_VALUE(String, mqtt_grid_ie, "");
-DEF_VALUE(String, mqtt_announce_topic, "openevse/announce/"+HAL.getShortId());
+String mqtt_server;
+uint32_t mqtt_port;
+String mqtt_topic;
+String mqtt_user;
+String mqtt_pass;
+String mqtt_solar;
+String mqtt_grid_ie;
+String mqtt_announce_topic;
+
+// Time
+String time_zone;
+
+// 24-bits of Flags
+uint32_t flags;
 
 // Ohm Connect Settings
-DEF_VALUE(String, ohm, "");
+String ohm;
+
+String esp_hostname_default = "openevse-"+HAL.getShortId();
+
+class ConfigOpt;
+template<class T> class ConfigOptDefenition;
+
+class ConfigOpt
+{
+protected:
+  const char *_long;
+  const char *_short;
+public:
+  ConfigOpt(const char *l, const char *s) :
+    _long(l),
+    _short(s)
+  {
+  }
+
+  const char *name(bool longName = true) {
+    return longName ? _long : _short;
+  }
+
+  virtual void serialize(DynamicJsonDocument &doc, bool longNames) = 0;
+  virtual void deserialize(DynamicJsonDocument &doc) = 0;
+  virtual void setDefault() = 0;
+
+  template <typename T> void set(T val) {
+    ConfigOptDefenition<T> *opt = (ConfigOptDefenition<T> *)this;
+    opt->set(val);
+  }
+};
+
+template<class T>
+class ConfigOptDefenition : public ConfigOpt
+{
+private:
+  T &_val;
+  T _default;
+
+public:
+  ConfigOptDefenition(T &v, T d, const char *l, const char *s) :
+    ConfigOpt(l, s),
+    _val(v),
+    _default(d)
+  {
+  }
+
+  T get() {
+    return _val;
+  }
+
+  void set(T value) {
+    if(_val != value) {
+      DBUG(_long);
+      DBUG(" set to ");
+      DBUGLN(value);
+      _val = value;
+      modified = true;
+    }
+  }
+
+  void serialize(DynamicJsonDocument &doc, bool longNames) {
+    if(longNames || _val != _default) {
+      doc[name(longNames)] = _val;
+    }
+  }
+
+  void deserialize(DynamicJsonDocument &doc) {
+    if(doc.containsKey(_long)) {
+      T val = doc[_long].as<T>();
+      set(val);
+    } else if(doc.containsKey(_short)) { \
+      T val = doc[_short].as<T>();
+      set(val);
+    }
+  }
+
+  virtual void setDefault() {
+    _val = _default;
+  }
+};
+
+ConfigOpt *opts[] = 
+{
+// Wifi Network Strings
+  new ConfigOptDefenition<String>(esid, "", "ssid", "ws"),
+  new ConfigOptDefenition<String>(epass, "", "pass", "wp"),
+
+// Web server authentication (leave blank for none)
+  new ConfigOptDefenition<String>(www_username, "", "www_username", "au"),
+  new ConfigOptDefenition<String>(www_password, "", "www_password", "ap"),
+
+// Advanced settings
+  new ConfigOptDefenition<String>(esp_hostname, esp_hostname_default, "esp_hostname", "hn"),
+  new ConfigOptDefenition<String>(sntp_hostname, SNTP_DEFAULT_HOST, "sntp_hostname", "sh"),
+
+// Time
+  new ConfigOptDefenition<String>(time_zone, "", "time_zone", "tz"),
+
+// EMONCMS SERVER strings
+  new ConfigOptDefenition<String>(emoncms_server, "https://data.openevse.com/emoncms", "emoncms_server", "es"),
+  new ConfigOptDefenition<String>(emoncms_node, esp_hostname_default, "emoncms_node", "en"),
+  new ConfigOptDefenition<String>(emoncms_apikey, "", "emoncms_apikey", "ea"),
+  new ConfigOptDefenition<String>(emoncms_fingerprint, "", "emoncms_fingerprint", "ef"),
+
+// MQTT Settings
+  new ConfigOptDefenition<String>(mqtt_server, "emonpi", "mqtt_server", "ms"),
+  new ConfigOptDefenition<uint32_t>(mqtt_port, 1883, "mqtt_port", "mpt"),
+  new ConfigOptDefenition<String>(mqtt_topic, "", "mqtt_topic", "mt"),
+  new ConfigOptDefenition<String>(mqtt_user, "emonpi", "mqtt_user", "mu"),
+  new ConfigOptDefenition<String>(mqtt_pass, "emonpimqtt2016", "mqtt_pass", "mp"),
+  new ConfigOptDefenition<String>(mqtt_solar, "", "mqtt_solar", "ms"),
+  new ConfigOptDefenition<String>(mqtt_grid_ie, "emon/emonpi/power1", "mqtt_grid_ie", "mg"),
+  new ConfigOptDefenition<String>(mqtt_announce_topic, "openevse/announce/"+HAL.getShortId(), "mqtt_announce_topic", "ma"),
+
+// Ohm Connect Settings
+  new ConfigOptDefenition<String>(ohm, "", "ohm", "o"),
 
 // Flags
-DEF_VALUE(uint32_t, flags, 0);
+  new ConfigOptDefenition<uint32_t>(flags, CONFIG_SERVICE_SNTP, "flags", "f")
+};
 
-#define esp_hostname_LONG_NAME          "esp_hostname"
-#define esid_LONG_NAME                  "ssid"
-#define epass_LONG_NAME                 "pass"
-#define emoncms_apikey_LONG_NAME        "emoncms_apikey"
-#define emoncms_server_LONG_NAME        "emoncms_server"
-#define emoncms_node_LONG_NAME          "emoncms_node"
-#define emoncms_fingerprint_LONG_NAME   "emoncms_fingerprint"
-#define mqtt_server_LONG_NAME           "mqtt_server"
-#define mqtt_topic_LONG_NAME            "mqtt_topic"
-#define mqtt_user_LONG_NAME             "mqtt_user"
-#define mqtt_pass_LONG_NAME             "mqtt_pass"
-#define mqtt_solar_LONG_NAME            "mqtt_solar"
-#define mqtt_grid_ie_LONG_NAME          "mqtt_grid_ie"
-#define mqtt_port_LONG_NAME             "mqtt_port"
-#define www_username_LONG_NAME          "www_username"
-#define www_password_LONG_NAME          "www_password"
-#define ohm_LONG_NAME                   "ohm"
-#define flags_LONG_NAME                 "flags"
-#define sntp_hostname_LONG_NAME         "sntp_hostname"
-#define time_zone_LONG_NAME             "time_zone"
-
-#define esp_hostname_SHORT_NAME         "hn"
-#define esid_SHORT_NAME                 "ws"
-#define epass_SHORT_NAME                "wp"
-#define emoncms_apikey_SHORT_NAME       "ea"
-#define emoncms_server_SHORT_NAME       "es"
-#define emoncms_node_SHORT_NAME         "en"
-#define emoncms_fingerprint_SHORT_NAME  "ef"
-#define mqtt_server_SHORT_NAME          "ms"
-#define mqtt_topic_SHORT_NAME           "mt"
-#define mqtt_user_SHORT_NAME            "mu"
-#define mqtt_pass_SHORT_NAME            "mp"
-#define mqtt_solar_SHORT_NAME           "ms"
-#define mqtt_grid_ie_SHORT_NAME         "mg"
-#define mqtt_port_SHORT_NAME            "mpt"
-#define www_username_SHORT_NAME         "au"
-#define www_password_SHORT_NAME         "ap"
-#define ohm_SHORT_NAME                  "o"
-#define flags_SHORT_NAME                "f"
-#define sntp_hostname_SHORT_NAME        "sh"
-#define time_zone_SHORT_NAME            "tz"
+const size_t opts_length = sizeof(opts) / sizeof(opts[0]);
 
 bool config_deserialize(String& json);
 bool config_deserialize(const char *json);
 
 bool config_serialize(String& json, bool longNames = true);
 
-#define EEPROM_SIZE                   4096
+void config_set_defaults();
 
-#define CHECKSUM_SEED 128
+template <typename T> void config_set(const char *name, T val);
+
+#define EEPROM_SIZE     4096
+#define CHECKSUM_SEED    128
 
 // -------------------------------------------------------------------
 // Reset EEPROM, wipes all settings
@@ -128,6 +201,8 @@ ResetEEPROM() {
 void
 config_load_settings() 
 {
+  config_set_defaults();
+
   EEPROM.begin(EEPROM_SIZE);
 
   char start = 0;
@@ -157,6 +232,8 @@ config_load_settings()
   }
 
   EEPROM.end();
+
+  modified = false;
 }
 
 void config_commit()
@@ -191,24 +268,6 @@ void config_commit()
   }
 }
 
-#define GET_VALUE(val, def) do { \
-  if(doc.containsKey(val ## _LONG_NAME)) { \
-    val = (doc[val ## _LONG_NAME]); \
-  } else if(doc.containsKey(val ## _SHORT_NAME)) { \
-    val = (doc[val ## _SHORT_NAME]); \
-  } else { \
-    val = def; \
-  }} while(false)
-
-#define GET_VALUE_AS(type, val, def) do { \
-  if(doc.containsKey(val ## _LONG_NAME)) { \
-    val = (doc[val ## _LONG_NAME].as<type>()); \
-  } else if(doc.containsKey(val ## _SHORT_NAME)) { \
-    val = (doc[val ## _SHORT_NAME].as<type>()); \
-  } else { \
-    val = def; \
-  }} while(false)
-
 bool config_deserialize(String& json) {
   return config_deserialize(json.c_str());
 }
@@ -221,44 +280,11 @@ bool config_deserialize(const char *json)
   DeserializationError err = deserializeJson(doc, json);
   if(DeserializationError::Code::Ok == err)
   {
-    // Device Hostname, needs to be read first as other config defaults depend on it
-    GET_VALUE_AS(String, esp_hostname, esp_hostname_default);
+    for(size_t i = 0; i < opts_length; i++) {
+      opts[i]->deserialize(doc);
+    }
 
-    // Load WiFi values
-    GET_VALUE_AS(String, esid, "");
-    GET_VALUE_AS(String, epass, "");
-
-    // EmonCMS settings
-    GET_VALUE_AS(String, emoncms_apikey, "");
-    GET_VALUE_AS(String, emoncms_server, "https://data.openevse.com/emoncms");
-    GET_VALUE_AS(String, emoncms_node, esp_hostname);
-    GET_VALUE_AS(String, emoncms_fingerprint, "");
-
-    // MQTT settings
-    GET_VALUE_AS(String, mqtt_server, "emonpi");
-    GET_VALUE_AS(String, mqtt_topic, esp_hostname);
-    GET_VALUE_AS(String, mqtt_user, "emonpi");
-    GET_VALUE_AS(String, mqtt_pass, "emonpimqtt2016");
-    GET_VALUE_AS(String, mqtt_solar, "");
-    GET_VALUE_AS(String, mqtt_grid_ie, "emon/emonpi/power1");
-    GET_VALUE(mqtt_port, 1883);
-
-    // Web server credentials
-    GET_VALUE_AS(String, www_username, "");
-    GET_VALUE_AS(String, www_password, "");
-
-    // Ohm Connect Settings
-    GET_VALUE_AS(String, ohm, "");
-
-    // Flags
-    GET_VALUE(flags, CONFIG_SERVICE_SNTP);
-
-    // Advanced
-    GET_VALUE_AS(String, sntp_hostname, SNTP_DEFAULT_HOST);
-
-    // Timezone
-    GET_VALUE_AS(String, time_zone, DEFAULT_TIME_ZONE);
-    config_set_timezone(time_zone);
+    config_set<String>("timezone", time_zone);
 
     return true;
   }
@@ -266,60 +292,35 @@ bool config_deserialize(const char *json)
   return false;
 }
 
-#undef GET_VALUE
-#undef GET_VALUE_AS
-
-#define SET_VALUE(val) \
-  doc[(longNames ? val ## _LONG_NAME : val ## _SHORT_NAME)] = val
-
 bool config_serialize(String& json, bool longNames)
 {
   const size_t capacity = JSON_OBJECT_SIZE(30) + EEPROM_SIZE;
   DynamicJsonDocument doc(capacity);
 
-  SET_VALUE(esp_hostname);
-
-  // Load WiFi values
-  SET_VALUE(esid);
-  SET_VALUE(epass);
-
-  // EmonCMS settings
-  SET_VALUE(emoncms_apikey);
-  SET_VALUE(emoncms_server);
-  SET_VALUE(emoncms_node);
-  SET_VALUE(emoncms_fingerprint);
-
-  // MQTT settings
-  SET_VALUE(mqtt_server);
-  SET_VALUE(mqtt_topic);
-  SET_VALUE(mqtt_user);
-  SET_VALUE(mqtt_pass);
-  SET_VALUE(mqtt_solar);
-  SET_VALUE(mqtt_grid_ie);
-  SET_VALUE(mqtt_port);
-
-  // Web server credentials
-  SET_VALUE(www_username);
-  SET_VALUE(www_password);
-
-  // Ohm Connect Settings
-  SET_VALUE(ohm);
-
-  // Flags
-  SET_VALUE(flags);
-
-  // Advanced
-  SET_VALUE(sntp_hostname);
-
-  // Timezone
-  SET_VALUE(time_zone);
+  for(size_t i = 0; i < opts_length; i++) {
+    opts[i]->serialize(doc, longNames);
+  }
 
   serializeJson(doc, json);
 
   return true;
 }
 
-#undef SET_VALUE
+void config_set_defaults()
+{
+  for(size_t i = 0; i < opts_length; i++) {
+    opts[i]->setDefault();
+  }
+}
+
+template <typename T> void config_set(const char *name, T val)
+{
+  for(size_t i = 0; i < opts_length; i++) {
+    if(0 == strcmp(name, opts[i]->name())) {
+      opts[i]->set<T>(val);
+    }
+  }
+}
 
 void config_save_emoncms(bool enable, String server, String node, String apikey,
                     String fingerprint)
@@ -329,11 +330,11 @@ void config_save_emoncms(bool enable, String server, String node, String apikey,
     newflags |= CONFIG_SERVICE_EMONCMS;
   }
 
-  config_set_emoncms_server(server);
-  config_set_emoncms_node(node);
-  config_set_emoncms_apikey(apikey);
-  config_set_emoncms_fingerprint(fingerprint);
-  config_set_flags(newflags);
+  config_set<String>("emoncms_server", server);
+  config_set<String>("emoncms_node", node);
+  config_set<String>("emoncms_apikey", apikey);
+  config_set<String>("emoncms_fingerprint", fingerprint);
+  config_set<uint32_t>("flags", newflags);
   config_commit();
 }
 
@@ -349,21 +350,21 @@ config_save_mqtt(bool enable, int protocol, String server, uint16_t port, String
   }
   newflags |= protocol << 4;  
 
-  config_set_mqtt_server(server);
-  config_set_mqtt_port(port);
-  config_set_mqtt_topic(topic);
-  config_set_mqtt_user(user);
-  config_set_mqtt_pass(pass);
-  config_set_mqtt_solar(solar);
-  config_set_mqtt_grid_ie(grid_ie);
-  config_set_flags(newflags);
+  config_set<String>("mqtt_server", server);
+  config_set<uint32_t>("mqtt_port", port);
+  config_set<String>("mqtt_topic", topic);
+  config_set<String>("mqtt_user", user);
+  config_set<String>("mqtt_pass", pass);
+  config_set<String>("mqtt_solar", solar);
+  config_set<String>("mqtt_grid_ie", grid_ie);
+  config_set<uint32_t>("flags", newflags);
   config_commit();
 }
 
 void
 config_save_admin(String user, String pass) {
-  config_set_www_username(user);
-  config_set_www_password(pass);
+  config_set<String>("www_username", user);
+  config_set<String>("www_password", pass);
   config_commit();
 }
 
@@ -375,8 +376,8 @@ config_save_sntp(bool sntp_enable, String tz)
     newflags |= CONFIG_SERVICE_SNTP;
   }
 
-  config_set_time_zone(tz);
-  config_set_flags(newflags);
+  config_set<String>("time_zone", tz);
+  config_set<uint32_t>("flags", newflags);
   config_commit();
 
   config_set_timezone(tz);
@@ -396,16 +397,16 @@ void config_set_timezone(String tz)
 
 void
 config_save_advanced(String hostname, String sntp_host) {
-  config_set_esp_hostname(hostname);
-  config_set_sntp_hostname(sntp_host);
+  config_set<String>("esp_hostname", hostname);
+  config_set<String>("sntp_hostname", sntp_host);
   config_commit();
 }
 
 void
 config_save_wifi(String qsid, String qpass)
 {
-  config_set_esid(qsid);
-  config_set_epass(qpass);
+  config_set<String>("esid", qsid);
+  config_set<String>("epass", qpass);
   config_commit();
 }
 
@@ -417,14 +418,14 @@ config_save_ohm(bool enable, String qohm)
     newflags |= CONFIG_SERVICE_OHM;
   }
 
-  config_set_ohm(qohm);
-  config_set_flags(newflags);
+  config_set<String>("ohm", qohm);
+  config_set<uint32_t>("flags", newflags);
   config_commit();
 }
 
 void
 config_save_flags(uint32_t newFlags) {
-  config_set_flags(newFlags);
+  config_set<uint32_t>("flags", newFlags);
   config_commit();
 }
 
