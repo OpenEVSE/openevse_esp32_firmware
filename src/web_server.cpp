@@ -587,12 +587,8 @@ handleStatus(MongooseHttpServerRequest *request) {
 // url: /config
 // -------------------------------------------------------------------
 void
-handleConfig(MongooseHttpServerRequest *request) {
-  MongooseHttpServerResponseStream *response;
-  if(false == requestPreProcess(request, response)) {
-    return;
-  }
-  
+handleConfigGet(MongooseHttpServerRequest *request, MongooseHttpServerResponseStream *response)
+{
   const size_t capacity = JSON_OBJECT_SIZE(40) + 1024;
   DynamicJsonDocument doc(capacity);
 
@@ -621,14 +617,34 @@ handleConfig(MongooseHttpServerRequest *request) {
   http_supported_protocols.add("https");
   
   config_serialize(doc, true, false, true);
-  doc["emoncms_enabled"]= config_emoncms_enabled();
-  doc["mqtt_enabled"] = config_mqtt_enabled();
-  doc["mqtt_reject_unauthorized"] = config_mqtt_reject_unauthorized();
-  doc["sntp_enabled"]= config_sntp_enabled();
-  doc["ohm_enabled"]= config_ohm_enabled();
 
   response->setCode(200);
   serializeJson(doc, *response);
+}
+
+void
+handleConfigPost(MongooseHttpServerRequest *request, MongooseHttpServerResponseStream *response)
+{
+  
+}
+
+void
+handleConfig(MongooseHttpServerRequest *request) 
+{
+  MongooseHttpServerResponseStream *response;
+  if(false == requestPreProcess(request, response)) {
+    return;
+  }
+
+  if(HTTP_GET == request->method()) {
+    handleConfigGet(request, response);
+  } else if(HTTP_POST == request->method()) {
+    handleConfigPost(request, response); 
+  } else {
+    response->setCode(405);
+
+  }
+
   request->send(response);
 }
 

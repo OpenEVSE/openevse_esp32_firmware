@@ -139,7 +139,7 @@ bool config_deserialize(String& json);
 bool config_deserialize(const char *json);
 
 // Write config settings to JSON object
-bool config_serialize(String& json, bool longNames = true, bool skipDefaults = false, bool hideSecrets = false);
-bool config_serialize(DynamicJsonDocument &doc, bool longNames = true, bool skipDefaults = false, bool hideSecrets = false);
+bool config_serialize(String& json, bool longNames = true, bool compactOutput = false, bool hideSecrets = false);
+bool config_serialize(DynamicJsonDocument &doc, bool longNames = true, bool compactOutput = false, bool hideSecrets = false);
 
 #endif // _EMONESP_CONFIG_H

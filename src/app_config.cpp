@@ -71,7 +71,7 @@ public:
     return longName ? _long : _short;
   }
 
-  virtual void serialize(DynamicJsonDocument &doc, bool longNames, bool skipDefaults, bool hideSecrets) = 0;
+  virtual void serialize(DynamicJsonDocument &doc, bool longNames, bool compactOutput, bool hideSecrets) = 0;
   virtual void deserialize(DynamicJsonDocument &doc) = 0;
   virtual void setDefault() = 0;
 
@@ -111,8 +111,8 @@ public:
     }
   }
 
-  virtual void serialize(DynamicJsonDocument &doc, bool longNames, bool skipDefaults, bool hideSecrets) {
-    if(!skipDefaults || !_isDefault) {
+  virtual void serialize(DynamicJsonDocument &doc, bool longNames, bool compactOutput, bool hideSecrets) {
+    if(!compactOutput || !_isDefault) {
       doc[name(longNames)] = _val;
     }
   }
@@ -149,8 +149,8 @@ public:
     ConfigOptDefenition<String>::set(value);
   }
 
-  virtual void serialize(DynamicJsonDocument &doc, bool longNames, bool skipDefaults, bool hideSecrets) {
-    if(!skipDefaults || !_isDefault) {
+  virtual void serialize(DynamicJsonDocument &doc, bool longNames, bool compactOutput, bool hideSecrets) {
+    if(!compactOutput || !_isDefault) {
       if(hideSecrets) {
         doc[name(longNames)] = (_val != 0) ? String(DUMMY_PASSWORD) : "";
       } else {
@@ -159,6 +159,97 @@ public:
     }
   }
 };
+
+class ConfigOptVirtualBool : public ConfigOpt
+{
+protected:
+  ConfigOptDefenition<uint32_t> &_base;
+  uint32_t _mask;
+  uint32_t _expected;
+
+public:
+  ConfigOptVirtualBool(ConfigOptDefenition<uint32_t> &b, uint32_t m, uint32_t e, const char *l, const char *s) :
+    ConfigOpt(l, s),
+    _base(b),
+    _mask(m),
+    _expected(e)
+  {
+  }
+
+  bool get() {
+    return _expected == (_base.get() & _mask);
+  }
+
+  virtual void set(bool value) {
+    uint32_t newVal = _base.get() & ~(_mask);
+    if(value == (_mask == _expected)) {
+      newVal |= _mask;
+    }
+    _base.set(newVal);
+  }
+
+  virtual void serialize(DynamicJsonDocument &doc, bool longNames, bool compactOutput, bool hideSecrets) {
+    if(!compactOutput) {
+      doc[name(longNames)] = get();
+    }
+  }
+
+  virtual void deserialize(DynamicJsonDocument &doc) {
+    if(doc.containsKey(_long)) {
+      set(doc[_long].as<bool>());
+    } else if(doc.containsKey(_short)) { \
+      set(doc[_short].as<bool>());
+    }
+  }
+
+  virtual void setDefault() {
+  }
+};
+
+class ConfigOptVirtualMqttProtocol : public ConfigOpt
+{
+protected:
+  ConfigOptDefenition<uint32_t> &_base;
+
+public:
+  ConfigOptVirtualMqttProtocol(ConfigOptDefenition<uint32_t> &b, const char *l, const char *s) :
+    ConfigOpt(l, s),
+    _base(b)
+  {
+  }
+
+  String get() {
+    int protocol = (_base.get() & CONFIG_MQTT_PROTOCOL) >> 4;
+    return 0 == protocol ? "mqtt" : "mqtts";
+  }
+
+  virtual void set(String value) {
+    uint32_t newVal = _base.get() & ~CONFIG_MQTT_PROTOCOL;
+    if(value == "mqtts") {
+      newVal |= 1;
+    }
+    _base.set(newVal);
+  }
+
+  virtual void serialize(DynamicJsonDocument &doc, bool longNames, bool compactOutput, bool hideSecrets) {
+    if(!compactOutput) {
+      doc[name(longNames)] = get();
+    }
+  }
+
+  virtual void deserialize(DynamicJsonDocument &doc) {
+    if(doc.containsKey(_long)) {
+      set(doc[_long].as<String>());
+    } else if(doc.containsKey(_short)) { \
+      set(doc[_short].as<String>());
+    }
+  }
+
+  virtual void setDefault() {
+  }
+};
+
+ConfigOptDefenition<uint32_t> flagsOpt = ConfigOptDefenition<uint32_t>(flags, CONFIG_SERVICE_SNTP, "flags", "f");
 
 ConfigOpt *opts[] = 
 {
@@ -197,7 +288,15 @@ ConfigOpt *opts[] =
   new ConfigOptDefenition<String>(ohm, "", "ohm", "o"),
 
 // Flags
-  new ConfigOptDefenition<uint32_t>(flags, CONFIG_SERVICE_SNTP, "flags", "f")
+  &flagsOpt,
+
+// Virtual Options
+  new ConfigOptVirtualBool(flagsOpt, CONFIG_SERVICE_EMONCMS, CONFIG_SERVICE_EMONCMS, "emoncms_enabled", "ee"),
+  new ConfigOptVirtualBool(flagsOpt, CONFIG_SERVICE_MQTT, CONFIG_SERVICE_MQTT, "mqtt_enabled", "me"),
+  new ConfigOptVirtualBool(flagsOpt, CONFIG_MQTT_ALLOW_ANY_CERT, 0, "mqtt_reject_unauthorized", "mru"),
+  new ConfigOptVirtualBool(flagsOpt, CONFIG_SERVICE_OHM, CONFIG_SERVICE_OHM, "ohm_enabled", "oe"),
+  new ConfigOptVirtualBool(flagsOpt, CONFIG_SERVICE_SNTP, CONFIG_SERVICE_SNTP, "sntp_enabled", "se"),
+  new ConfigOptVirtualMqttProtocol(flagsOpt, "mqtt_protocol", "mprt")
 };
 
 const size_t opts_length = sizeof(opts) / sizeof(opts[0]);
@@ -321,22 +420,22 @@ bool config_deserialize(const char *json)
   return false;
 }
 
-bool config_serialize(String& json, bool longNames, bool skipDefaults, bool hideSecrets)
+bool config_serialize(String& json, bool longNames, bool compactOutput, bool hideSecrets)
 {
   const size_t capacity = JSON_OBJECT_SIZE(30) + EEPROM_SIZE;
   DynamicJsonDocument doc(capacity);
 
-  config_serialize(doc, longNames, skipDefaults, hideSecrets);
+  config_serialize(doc, longNames, compactOutput, hideSecrets);
 
   serializeJson(doc, json);
 
   return true;
 }
 
-bool config_serialize(DynamicJsonDocument &doc, bool longNames, bool skipDefaults, bool hideSecrets)
+bool config_serialize(DynamicJsonDocument &doc, bool longNames, bool compactOutput, bool hideSecrets)
 {
   for(size_t i = 0; i < opts_length; i++) {
-    opts[i]->serialize(doc, longNames, skipDefaults, hideSecrets);
+    opts[i]->serialize(doc, longNames, compactOutput, hideSecrets);
   }
 
   return true;
