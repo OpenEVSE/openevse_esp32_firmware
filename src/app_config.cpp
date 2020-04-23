@@ -47,6 +47,9 @@ String ohm;
 
 String esp_hostname_default = "openevse-"+HAL.getShortId();
 
+static const char _DUMMY_PASSWORD[] PROGMEM = "_DUMMY_PASSWORD";
+#define DUMMY_PASSWORD FPSTR(_DUMMY_PASSWORD)
+
 class ConfigOpt;
 template<class T> class ConfigOptDefenition;
 
@@ -55,10 +58,12 @@ class ConfigOpt
 protected:
   const char *_long;
   const char *_short;
+  bool _isDefault;
 public:
   ConfigOpt(const char *l, const char *s) :
     _long(l),
-    _short(s)
+    _short(s),
+    _isDefault(true)
   {
   }
 
@@ -66,7 +71,7 @@ public:
     return longName ? _long : _short;
   }
 
-  virtual void serialize(DynamicJsonDocument &doc, bool longNames) = 0;
+  virtual void serialize(DynamicJsonDocument &doc, bool longNames, bool skipDefaults, bool hideSecrets) = 0;
   virtual void deserialize(DynamicJsonDocument &doc) = 0;
   virtual void setDefault() = 0;
 
@@ -79,7 +84,7 @@ public:
 template<class T>
 class ConfigOptDefenition : public ConfigOpt
 {
-private:
+protected:
   T &_val;
   T _default;
 
@@ -95,23 +100,24 @@ public:
     return _val;
   }
 
-  void set(T value) {
+  virtual void set(T value) {    
     if(_val != value) {
       DBUG(_long);
       DBUG(" set to ");
       DBUGLN(value);
       _val = value;
       modified = true;
+      _isDefault = 0;
     }
   }
 
-  void serialize(DynamicJsonDocument &doc, bool longNames) {
-    if(longNames || _val != _default) {
+  virtual void serialize(DynamicJsonDocument &doc, bool longNames, bool skipDefaults, bool hideSecrets) {
+    if(!skipDefaults || !_isDefault) {
       doc[name(longNames)] = _val;
     }
   }
 
-  void deserialize(DynamicJsonDocument &doc) {
+  virtual void deserialize(DynamicJsonDocument &doc) {
     if(doc.containsKey(_long)) {
       T val = doc[_long].as<T>();
       set(val);
@@ -123,6 +129,34 @@ public:
 
   virtual void setDefault() {
     _val = _default;
+    _isDefault = 1;
+  }
+};
+
+class ConfigOptSecret : public ConfigOptDefenition<String>
+{
+public:
+  ConfigOptSecret(String &v, String d, const char *l, const char *s) :
+    ConfigOptDefenition<String>(v, d, l, s)
+  {
+  }
+
+  void set(String value) {
+    if(value.equals(DUMMY_PASSWORD)) {
+      return;
+    }
+
+    ConfigOptDefenition<String>::set(value);
+  }
+
+  virtual void serialize(DynamicJsonDocument &doc, bool longNames, bool skipDefaults, bool hideSecrets) {
+    if(!skipDefaults || !_isDefault) {
+      if(hideSecrets) {
+        doc[name(longNames)] = (_val != 0) ? String(DUMMY_PASSWORD) : "";
+      } else {
+        doc[name(longNames)] = _val;
+      }
+    }
   }
 };
 
@@ -130,11 +164,11 @@ ConfigOpt *opts[] =
 {
 // Wifi Network Strings
   new ConfigOptDefenition<String>(esid, "", "ssid", "ws"),
-  new ConfigOptDefenition<String>(epass, "", "pass", "wp"),
+  new ConfigOptSecret(epass, "", "pass", "wp"),
 
 // Web server authentication (leave blank for none)
   new ConfigOptDefenition<String>(www_username, "", "www_username", "au"),
-  new ConfigOptDefenition<String>(www_password, "", "www_password", "ap"),
+  new ConfigOptSecret(www_password, "", "www_password", "ap"),
 
 // Advanced settings
   new ConfigOptDefenition<String>(esp_hostname, esp_hostname_default, "esp_hostname", "hn"),
@@ -146,7 +180,7 @@ ConfigOpt *opts[] =
 // EMONCMS SERVER strings
   new ConfigOptDefenition<String>(emoncms_server, "https://data.openevse.com/emoncms", "emoncms_server", "es"),
   new ConfigOptDefenition<String>(emoncms_node, esp_hostname_default, "emoncms_node", "en"),
-  new ConfigOptDefenition<String>(emoncms_apikey, "", "emoncms_apikey", "ea"),
+  new ConfigOptSecret(emoncms_apikey, "", "emoncms_apikey", "ea"),
   new ConfigOptDefenition<String>(emoncms_fingerprint, "", "emoncms_fingerprint", "ef"),
 
 // MQTT Settings
@@ -154,7 +188,7 @@ ConfigOpt *opts[] =
   new ConfigOptDefenition<uint32_t>(mqtt_port, 1883, "mqtt_port", "mpt"),
   new ConfigOptDefenition<String>(mqtt_topic, "", "mqtt_topic", "mt"),
   new ConfigOptDefenition<String>(mqtt_user, "emonpi", "mqtt_user", "mu"),
-  new ConfigOptDefenition<String>(mqtt_pass, "emonpimqtt2016", "mqtt_pass", "mp"),
+  new ConfigOptSecret(mqtt_pass, "emonpimqtt2016", "mqtt_pass", "mp"),
   new ConfigOptDefenition<String>(mqtt_solar, "", "mqtt_solar", "ms"),
   new ConfigOptDefenition<String>(mqtt_grid_ie, "emon/emonpi/power1", "mqtt_grid_ie", "mg"),
   new ConfigOptDefenition<String>(mqtt_announce_topic, "openevse/announce/"+HAL.getShortId(), "mqtt_announce_topic", "ma"),
@@ -167,11 +201,6 @@ ConfigOpt *opts[] =
 };
 
 const size_t opts_length = sizeof(opts) / sizeof(opts[0]);
-
-bool config_deserialize(String& json);
-bool config_deserialize(const char *json);
-
-bool config_serialize(String& json, bool longNames = true);
 
 void config_set_defaults();
 
@@ -292,16 +321,23 @@ bool config_deserialize(const char *json)
   return false;
 }
 
-bool config_serialize(String& json, bool longNames)
+bool config_serialize(String& json, bool longNames, bool skipDefaults, bool hideSecrets)
 {
   const size_t capacity = JSON_OBJECT_SIZE(30) + EEPROM_SIZE;
   DynamicJsonDocument doc(capacity);
 
-  for(size_t i = 0; i < opts_length; i++) {
-    opts[i]->serialize(doc, longNames);
-  }
+  config_serialize(doc, longNames, skipDefaults, hideSecrets);
 
   serializeJson(doc, json);
+
+  return true;
+}
+
+bool config_serialize(DynamicJsonDocument &doc, bool longNames, bool skipDefaults, bool hideSecrets)
+{
+  for(size_t i = 0; i < opts_length; i++) {
+    opts[i]->serialize(doc, longNames, skipDefaults, hideSecrets);
+  }
 
   return true;
 }
@@ -432,4 +468,5 @@ config_save_flags(uint32_t newFlags) {
 void
 config_reset() {
   ResetEEPROM();
+  config_set_defaults();
 }

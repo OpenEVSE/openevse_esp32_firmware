@@ -54,9 +54,6 @@ const char _CONTENT_TYPE_JPEG[] PROGMEM = "image/jpeg";
 const char _CONTENT_TYPE_PNG[] PROGMEM = "image/png";
 const char _CONTENT_TYPE_SVG[] PROGMEM = "image/svg+xml";
 
-static const char _DUMMY_PASSWORD[] PROGMEM = "_DUMMY_PASSWORD";
-#define DUMMY_PASSWORD FPSTR(_DUMMY_PASSWORD)
-
 // Get running firmware version from build tag environment variable
 #define TEXTIFY(A) #A
 #define ESCAPEQUOTE(A) TEXTIFY(A)
@@ -264,10 +261,6 @@ handleSaveNetwork(MongooseHttpServerRequest *request) {
 
   String qsid = request->getParam("ssid");
   String qpass = request->getParam("pass");
-  if(qpass.equals(DUMMY_PASSWORD)) {
-    qpass = epass;
-  }
-
   if (qsid != 0) {
     config_save_wifi(qsid, qpass);
 
@@ -293,15 +286,10 @@ handleSaveEmoncms(MongooseHttpServerRequest *request) {
     return;
   }
 
-  String apikey = request->getParam("apikey");
-  if(apikey.equals(DUMMY_PASSWORD)) {
-    apikey = emoncms_apikey;
-  }
-
   config_save_emoncms(isPositive(request->getParam("enable")),
                       request->getParam("server"),
                       request->getParam("node"),
-                      apikey,
+                      request->getParam("apikey"),
                       request->getParam("fingerprint"));
 
   char tmpStr[200];
@@ -329,9 +317,6 @@ handleSaveMqtt(MongooseHttpServerRequest *request) {
   }
 
   String pass = request->getParam("pass");
-  if(pass.equals(DUMMY_PASSWORD)) {
-    pass = mqtt_pass;
-  }
 
   int protocol = MQTT_PROTOCOL_MQTT;
   char proto[6];
@@ -408,9 +393,6 @@ handleSaveAdmin(MongooseHttpServerRequest *request) {
 
   String quser = request->getParam("user");
   String qpass = request->getParam("pass");
-  if(qpass.equals(DUMMY_PASSWORD)) {
-    qpass = www_password;
-  }
 
   config_save_admin(quser, qpass);
 
@@ -538,83 +520,65 @@ handleStatus(MongooseHttpServerRequest *request) {
   strftime(time, sizeof(time), "%FT%TZ", timeinfo);
   strftime(offset, sizeof(offset), "%z", timeinfo);
 
-  String s = "{";
+  const size_t capacity = JSON_OBJECT_SIZE(40) + 1024;
+  DynamicJsonDocument doc(capacity);
+
   if (net_eth_connected()) {
-    s += "\"mode\":\"Wired\",";
+    doc["mode"] = "Wired";
   } else if (net_wifi_mode_is_sta_only()) {
-    s += "\"mode\":\"STA\",";
+    doc["mode"] = "STA";
   } else if (net_wifi_mode_is_ap_only()) {
-    s += "\"mode\":\"AP\",";
+    doc["mode"] = "AP";
   } else if (net_wifi_mode_is_ap() && net_wifi_mode_is_sta()) {
-    s += "\"mode\":\"STA+AP\",";
+    doc["mode"] = "STA+AP";
   }
 
-  s += "\"wifi_client_connected\":" + String(net_wifi_client_connected()) + ",";
-  s += "\"eth_connected\":" + String(net_eth_connected()) + ",";
-  s += "\"net_connected\":" + String(net_is_connected()) + ",";
-  s += "\"srssi\":" + String(WiFi.RSSI()) + ",";
-  s += "\"ipaddress\":\"" + ipaddress + "\",";
+  doc["wifi_client_connected"] = net_wifi_client_connected();
+  doc["eth_connected"] = net_eth_connected();
+  doc["net_connected"] = net_is_connected();
+  doc["srssi"] = WiFi.RSSI();
+  doc["ipaddress"] = ipaddress;
 
-  s += "\"emoncms_connected\":" + String(emoncms_connected) + ",";
-  s += "\"packets_sent\":" + String(packets_sent) + ",";
-  s += "\"packets_success\":" + String(packets_success) + ",";
+  doc["emoncms_connected"] = emoncms_connected;
+  doc["packets_sent"] = packets_sent;
+  doc["packets_success"] = packets_success;
 
-  s += "\"mqtt_connected\":" + String(mqtt_connected()) + ",";
+  doc["mqtt_connected"] = mqtt_connected();
 
-  s += "\"ohm_hour\":\"" + ohm_hour + "\",";
+  doc["ohm_hour"] = ohm_hour;
 
-  s += "\"free_heap\":" + String(HAL.getFreeHeap()) + ",";
+  doc["free_heap"] = HAL.getFreeHeap();
 
-  s += "\"comm_sent\":" + String(rapiSender.getSent()) + ",";
-  s += "\"comm_success\":" + String(rapiSender.getSuccess()) + ",";
-  s += "\"rapi_connected\":" + String(rapiSender.isConnected()) + ",";
+  doc["comm_sent"] = rapiSender.getSent();
+  doc["comm_success"] = rapiSender.getSuccess();
+  doc["rapi_connected"] = rapiSender.isConnected();
 
-  s += "\"amp\":" + String(amp) + ",";
-  s += "\"pilot\":" + String(pilot) + ",";
-  s += "\"temp1\":" + String(temp1) + ",";
-  s += "\"temp2\":" + String(temp2) + ",";
-  s += "\"temp3\":" + String(temp3) + ",";
-  s += "\"state\":" + String(state) + ",";
-  s += "\"elapsed\":" + String(elapsed) + ",";
-  s += "\"wattsec\":" + String(wattsec) + ",";
-  s += "\"watthour\":" + String(watthour_total) + ",";
+  doc["amp"] = amp;
+  doc["pilot"] = pilot;
+  doc["temp1"] = temp1;
+  doc["temp2"] = temp2;
+  doc["temp3"] = temp3;
+  doc["state"] = state;
+  doc["elapsed"] = elapsed;
+  doc["wattsec"] = wattsec;
+  doc["watthour"] = watthour_total;
 
-  s += "\"gfcicount\":" + String(gfci_count) + ",";
-  s += "\"nogndcount\":" + String(nognd_count) + ",";
-  s += "\"stuckcount\":" + String(stuck_count) + ",";
+  doc["gfcicount"] = gfci_count;
+  doc["nogndcount"] = nognd_count;
+  doc["stuckcount"] = stuck_count;
 
-  s += "\"divertmode\":" + String(divertmode) + ",";
-  s += "\"solar\":" + String(solar) + ",";
-  s += "\"grid_ie\":" + String(grid_ie) + ",";
-  s += "\"charge_rate\":" + String(charge_rate) + ",";
-  s += "\"divert_update\":" + String((millis() - lastUpdate) / 1000) + ",";
+  doc["divertmode"] = divertmode;
+  doc["solar"] = solar;
+  doc["grid_ie"] = grid_ie;
+  doc["charge_rate"] = charge_rate;
+  doc["divert_update"] = (millis() - lastUpdate) / 1000;
 
-  s += "\"ota_update\":" + String(Update.isRunning()) + ",";
-  s += "\"time\":\"" + String(time) + "\",";
-  s += "\"offset\":\"" + String(offset) + "\"";
-
-#ifdef ENABLE_LEGACY_API
-  s += ",\"networks\":[" + st + "]";
-  s += ",\"rssi\":[" + rssi + "]";
-  s += ",\"version\":\"" + currentfirmware + "\"";
-  s += ",\"ssid\":\"" + esid + "\"";
-  //s += ",\"pass\":\""+epass+"\""; security risk: DONT RETURN PASSWORDS
-  s += ",\"emoncms_server\":\"" + emoncms_server + "\"";
-  s += ",\"emoncms_node\":\"" + emoncms_node + "\"";
-  //s += ",\"emoncms_apikey\":\""+emoncms_apikey+"\""; security risk: DONT RETURN APIKEY
-  s += ",\"emoncms_fingerprint\":\"" + emoncms_fingerprint + "\"";
-  s += ",\"mqtt_server\":\"" + mqtt_server + "\"";
-  s += ",\"mqtt_topic\":\"" + mqtt_topic + "\"";
-  s += ",\"mqtt_user\":\"" + mqtt_user + "\"";
-  //s += ",\"mqtt_pass\":\""+mqtt_pass+"\""; security risk: DONT RETURN PASSWORDS
-  s += ",\"www_username\":\"" + www_username + "\"";
-  //s += ",\"www_password\":\""+www_password+"\""; security risk: DONT RETURN PASSWORDS
-  s += ",\"ohmkey\":\"" + ohm + "\"";
-#endif
-  s += "}";
+  doc["ota_update"] = Update.isRunning();
+  doc["time"] = String(time);
+  doc["offset"] = String(offset) + "\"";
 
   response->setCode(200);
-  response->print(s);
+  serializeJson(doc, *response);
   request->send(response);
 }
 
@@ -628,80 +592,43 @@ handleConfig(MongooseHttpServerRequest *request) {
   if(false == requestPreProcess(request, response)) {
     return;
   }
+  
+  const size_t capacity = JSON_OBJECT_SIZE(40) + 1024;
+  DynamicJsonDocument doc(capacity);
 
-  String dummyPassword = String(DUMMY_PASSWORD);
+  // EVSE Config
+  doc["firmware"] = firmware;
+  doc["protocol"] = protocol;
+  doc["espflash"] = HAL.getFlashChipSize();
+  doc["version"] = currentfirmware;
+  doc["diodet"] = diode_ck;
+  doc["gfcit"] = gfci_test;
+  doc["groundt"] = ground_ck;
+  doc["relayt"] = stuck_relay;
+  doc["ventt"] = vent_ck;
+  doc["tempt"] = temp_ck;
+  doc["service"] = service;
+  doc["scale"] = current_scale;
+  doc["offset"] = current_offset;
 
-  String s = "{";
-  s += "\"firmware\":\"" + firmware + "\",";
-  s += "\"protocol\":\"" + protocol + "\",";
-  s += "\"espflash\":" + String(HAL.getFlashChipSize()) + ",";
-  s += "\"version\":\"" + currentfirmware + "\",";
-  s += "\"diodet\":" + String(diode_ck) + ",";
-  s += "\"gfcit\":" + String(gfci_test) + ",";
-  s += "\"groundt\":" + String(ground_ck) + ",";
-  s += "\"relayt\":" + String(stuck_relay) + ",";
-  s += "\"ventt\":" + String(vent_ck) + ",";
-  s += "\"tempt\":" + String(temp_ck) + ",";
-  s += "\"service\":" + String(service) + ",";
-#ifdef ENABLE_LEGACY_API
-  s += "\"l1min\":\"" + current_l1min + "\",";
-  s += "\"l1max\":\"" + current_l1max + "\",";
-  s += "\"l2min\":\"" + current_l2min + "\",";
-  s += "\"l2max\":\"" + current_l2max + "\",";
-  s += "\"kwhlimit\":\"" + kwh_limit + "\",";
-  s += "\"timelimit\":\"" + time_limit + "\",";
-  s += "\"gfcicount\":" + String(gfci_count) + ",";
-  s += "\"nogndcount\":" + String(nognd_count) + ",";
-  s += "\"stuckcount\":" + String(stuck_count) + ",";
-#endif
-  s += "\"scale\":" + String(current_scale) + ",";
-  s += "\"offset\":" + String(current_offset) + ",";
-  s += "\"ssid\":\"" + esid + "\",";
-  s += "\"pass\":\"";
-  if(epass != 0) {
-    s += dummyPassword;
-  }
-  s += "\",";
-  s += "\"emoncms_enabled\":" + String(config_emoncms_enabled() ? "true" : "false") + ",";
-  s += "\"emoncms_server\":\"" + emoncms_server + "\",";
-  s += "\"emoncms_node\":\"" + emoncms_node + "\",";
-  s += "\"emoncms_apikey\":\"";
-  if(emoncms_apikey != 0) {
-    s += dummyPassword;
-  }
-  s += "\",";
-  s += "\"emoncms_fingerprint\":\"" + emoncms_fingerprint + "\",";
-  s += "\"mqtt_enabled\":" + String(config_mqtt_enabled() ? "true" : "false") + ",";
-  s += "\"mqtt_protocol\":\"" + String(0 == config_mqtt_protocol() ? "mqtt" : "mqtts") + "\",";
-  s += "\"mqtt_server\":\"" + mqtt_server + "\",";
-  s += "\"mqtt_port\":" + String(mqtt_port) + ",";
-  s += "\"mqtt_reject_unauthorized\":" + String(config_mqtt_reject_unauthorized() ? "true" : "false") + ",";
-  s += "\"mqtt_topic\":\"" + mqtt_topic + "\",";
-  s += "\"mqtt_user\":\"" + mqtt_user + "\",";
-  s += "\"mqtt_pass\":\"";
-  if(mqtt_pass != 0) {
-    s += dummyPassword;
-  }
-  s += "\",";
-  s += "\"mqtt_solar\":\""+mqtt_solar+"\",";
-  s += "\"mqtt_grid_ie\":\""+mqtt_grid_ie+"\",";
-  s += "\"mqtt_supported_protocols\":[\"mqtt\",\"mqtts\"],";
-  s += "\"http_supported_protocols\":[\"http\",\"https\"],";
-  s += "\"www_username\":\"" + www_username + "\",";
-  s += "\"www_password\":\"";
-  if(www_password != 0) {
-    s += dummyPassword;
-  }
-  s += "\",";
-  s += "\"hostname\":\"" + esp_hostname + "\",";
-  s += "\"time_zone\":\"" + time_zone + "\",";
-  s += "\"sntp_enabled\":" + String(config_sntp_enabled() ? "true" : "false") + ",";
-  s += "\"sntp_host\":\"" + sntp_hostname + "\",";
-  s += "\"ohm_enabled\":" + String(config_ohm_enabled() ? "true" : "false");
-  s += "}";
+  // Static supported protocols
+  JsonArray mqtt_supported_protocols = doc.createNestedArray("mqtt_supported_protocols");
+  mqtt_supported_protocols.add("mqtt");
+  mqtt_supported_protocols.add("mqtts");
+
+  JsonArray http_supported_protocols = doc.createNestedArray("http_supported_protocols");
+  http_supported_protocols.add("http");
+  http_supported_protocols.add("https");
+  
+  config_serialize(doc, true, false, true);
+  doc["emoncms_enabled"]= config_emoncms_enabled();
+  doc["mqtt_enabled"] = config_mqtt_enabled();
+  doc["mqtt_reject_unauthorized"] = config_mqtt_reject_unauthorized();
+  doc["sntp_enabled"]= config_sntp_enabled();
+  doc["ohm_enabled"]= config_ohm_enabled();
 
   response->setCode(200);
-  response->print(s);
+  serializeJson(doc, *response);
   request->send(response);
 }
 
