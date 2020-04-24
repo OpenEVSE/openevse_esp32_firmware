@@ -217,7 +217,6 @@ void TeslaClient::requestVehicles()
 
   String uri = TESLA_BASE_URI;
   uri += "/api/1/vehicles/";
-  _accessToken = "Bearer f5b1e0239feb331db1fa5eb4969fc9c53a292124d797a740485dc375fc3dab50";
 
   MongooseHttpClientRequest *req = _client.beginRequest(uri.c_str());
   req->setMethod(HTTP_GET);
