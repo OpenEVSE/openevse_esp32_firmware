@@ -7,37 +7,17 @@
 #ifndef _TESLA_CLIENT_H_
 #define _TESLA_CLIENT_H_
 
-//#define USE_WFCS // use WiFiClientSecure instead of Mongoose
-
 #include <Arduino.h>
 
-#ifdef USE_WFCS
-#include <WiFiClientSecure.h>
-#else
 #include <MongooseString.h>
 #include <MongooseHttpClient.h>
-#endif // USE_WFCS
 
-
-#ifdef USE_WFCS
-typedef struct whr {
-  int retCode;
-  String respStr;
-} WfcsHttpResponse;
-
-typedef std::function<void(WfcsHttpResponse *rsp)> WfcsHttpResponseHandler;
-#endif // USE_WFCS
 
 //TAR = Tesla_Active_Request
 #define TAR_NONE      0
 #define TAR_ACC_TOKEN 1
 #define TAR_VEHICLES  2
 #define TAR_CHG_STATE 3
-
-#define WFCS_HTTP_RC_UNKNOWN -1
-#define WFCS_HTTP_RC_OK 0
-#define WFCS_HTTP_RC_DISCONNECTED 1
-#define WFCS_HTTP_RC_TIMEOUT 2
 
 typedef struct telsa_charge_info {
   bool isValid;
@@ -51,9 +31,6 @@ typedef struct telsa_charge_info {
 } TESLA_CHARGE_INFO;
 
 class TeslaClient {
-#ifdef USE_WFCS
-  static const char *_httpHost;
-#endif // USE_WFCS
   static const int _httpPort;
   static const char *_userAgent;
   static const char *_teslaClientId;
@@ -74,24 +51,7 @@ class TeslaClient {
 
   TESLA_CHARGE_INFO _chargeInfo;
 
-#ifdef USE_WFCS
-  WiFiClientSecure _client;
-  WfcsHttpResponseHandler _responseHandler;
-  WfcsHttpResponse _resp;
-  int _respPhase;
-  unsigned long _waitStart;
-
-  void _onHttpResponse(WfcsHttpResponseHandler handler) {
-    _responseHandler = handler;
-    _respPhase = 0;
-    _waitStart = millis();
-    _resp.retCode = WFCS_HTTP_RC_UNKNOWN;
-    _resp.respStr = "";
-  }
-  void _handleResponse();
-#else
   MongooseHttpClient _client;
-#endif
 
   bool _isBusy() { return _activeRequest == TAR_NONE ? false : true; }
   void _cleanVehicles();
