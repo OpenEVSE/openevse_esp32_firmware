@@ -199,14 +199,14 @@ loop() {
         if(config_ohm_enabled()) {
           ohm_loop();
         }
-	
+        
         if (config_mqtt_enabled()) {
-	  data = "";
-	  teslaClient.getChargeInfoJson(data);
-	  if (data.length() > 0) {
-	    mqtt_publish(data);
-	  }
-	}
+          data = "";
+          teslaClient.getChargeInfoJson(data);
+          if (data.length() > 0) {
+            mqtt_publish(data);
+          }
+        }
       }
 
       Timer1 = millis();
