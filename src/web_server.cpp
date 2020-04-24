@@ -625,7 +625,15 @@ handleConfigGet(MongooseHttpServerRequest *request, MongooseHttpServerResponseSt
 void
 handleConfigPost(MongooseHttpServerRequest *request, MongooseHttpServerResponseStream *response)
 {
-  
+  String body = request->body().toString();
+  if(config_deserialize(body)) {
+    config_commit();
+    response->setCode(200);
+    response->print("{\"msg\":\"done\"}");
+  } else {
+    response->setCode(400);
+    response->print("{\"msg\":\"Could not parse JSON\"}");
+  }
 }
 
 void

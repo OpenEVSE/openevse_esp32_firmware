@@ -137,6 +137,7 @@ void config_set_timezone(String tz);
 // Read config settings from JSON object
 bool config_deserialize(String& json);
 bool config_deserialize(const char *json);
+void config_commit();
 
 // Write config settings to JSON object
 bool config_serialize(String& json, bool longNames = true, bool compactOutput = false, bool hideSecrets = false);
