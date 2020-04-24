@@ -58,12 +58,10 @@ class ConfigOpt
 protected:
   const char *_long;
   const char *_short;
-  bool _isDefault;
 public:
   ConfigOpt(const char *l, const char *s) :
     _long(l),
-    _short(s),
-    _isDefault(true)
+    _short(s)
   {
   }
 
@@ -107,12 +105,11 @@ public:
       DBUGLN(value);
       _val = value;
       modified = true;
-      _isDefault = 0;
     }
   }
 
   virtual void serialize(DynamicJsonDocument &doc, bool longNames, bool compactOutput, bool hideSecrets) {
-    if(!compactOutput || !_isDefault) {
+    if(!compactOutput || _val != _default) {
       doc[name(longNames)] = _val;
     }
   }
@@ -129,7 +126,6 @@ public:
 
   virtual void setDefault() {
     _val = _default;
-    _isDefault = 1;
   }
 };
 
@@ -150,7 +146,7 @@ public:
   }
 
   virtual void serialize(DynamicJsonDocument &doc, bool longNames, bool compactOutput, bool hideSecrets) {
-    if(!compactOutput || !_isDefault) {
+    if(!compactOutput || _val != _default) {
       if(hideSecrets) {
         doc[name(longNames)] = (_val != 0) ? String(DUMMY_PASSWORD) : "";
       } else {
@@ -375,7 +371,7 @@ void config_commit()
   EEPROM.begin(EEPROM_SIZE);
 
   String jsonStr;
-  config_serialize(jsonStr, false);
+  config_serialize(jsonStr, false, true, false);
   const char *json = jsonStr.c_str();
   DBUGF("Writing %s to EEPROM", json);
   int length = jsonStr.length();
