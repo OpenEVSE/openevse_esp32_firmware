@@ -28,6 +28,46 @@ GET {{baseUrl}}/config HTTP/1.1
 
 ###
 
+POST {{baseUrl}}/config HTTP/1.1
+Content-Type: application/json
+
+{
+  "emoncms_enabled": true,
+  "emoncms_server": "http://emoncms.org",
+  "emoncms_node": "openevse-a7d4",
+  "emoncms_apikey": "_DUMMY_PASSWORD",
+  "emoncms_fingerprint": ""
+}
+
+###
+
+POST {{baseUrl}}/config HTTP/1.1
+Content-Type: application/json
+
+{
+  "emoncms_enabled": false
+}
+
+###
+
+POST {{baseUrl}}/config HTTP/1.1
+Content-Type: application/json
+
+{
+  "mqtt_enabled": true,
+  "mqtt_protocol": "mqtt",
+  "mqtt_server": "home.lan",
+  "mqtt_port": 1883,
+  "mqtt_topic": "openevse",
+  "mqtt_user": "emonpi",
+  "mqtt_pass": "_DUMMY_PASSWORD",
+  "mqtt_solar": "",
+  "mqtt_grid_ie": "emon/test/grid_ie",
+  "mqtt_announce_topic": "openevse/announce/a7d4"
+}
+
+###
+
 GET {{baseUrl}}/home.js HTTP/1.1
 
 ###
