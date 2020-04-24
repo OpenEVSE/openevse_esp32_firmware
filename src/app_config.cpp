@@ -280,7 +280,7 @@ ConfigOpt *opts[] =
   new ConfigOptDefenition<String>(mqtt_topic, "", "mqtt_topic", "mt"),
   new ConfigOptDefenition<String>(mqtt_user, "emonpi", "mqtt_user", "mu"),
   new ConfigOptSecret(mqtt_pass, "emonpimqtt2016", "mqtt_pass", "mp"),
-  new ConfigOptDefenition<String>(mqtt_solar, "", "mqtt_solar", "ms"),
+  new ConfigOptDefenition<String>(mqtt_solar, "", "mqtt_solar", "mo"),
   new ConfigOptDefenition<String>(mqtt_grid_ie, "emon/emonpi/power1", "mqtt_grid_ie", "mg"),
   new ConfigOptDefenition<String>(mqtt_announce_topic, "openevse/announce/"+HAL.getShortId(), "mqtt_announce_topic", "ma"),
 
