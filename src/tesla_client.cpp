@@ -180,10 +180,9 @@ void TeslaClient::requestAccessToken()
       else if (response->respCode() == 200) { 
 	const char *cjson = (const char *)response->body();
 	if (cjson) {
-	  String json = cjson;
 	  const size_t capacity = JSON_OBJECT_SIZE(5) + 220;
 	  DynamicJsonDocument doc(capacity);
-	  deserializeJson(doc, json);
+	  deserializeJson(doc, cjson);
 	  const char *token = (const char *)doc["access_token"];;
 	  if (token) {
 	    _accessToken = "Bearer ";
