@@ -121,16 +121,16 @@ void TeslaClient::loop()
 
 void printResponse(MongooseHttpClientResponse *response)
 {
-  DEBUG.printf("%d %.*s\n", response->respCode(), response->respStatusMsg().length(), (const char *)response->respStatusMsg());
+  DBUGF("%d %.*s\n", response->respCode(), response->respStatusMsg().length(), (const char *)response->respStatusMsg());
   int headers = response->headers();
   int i;
   for(i=0; i<headers; i++) {
-    DEBUG.printf("_HEADER[%.*s]: %.*s\n", 
+    DBUGF("_HEADER[%.*s]: %.*s\n", 
       response->headerNames(i).length(), (const char *)response->headerNames(i), 
       response->headerValues(i).length(), (const char *)response->headerValues(i));
   }
 
-  DEBUG.printf("\n%.*s\n", response->body().length(), (const char *)response->body());
+  DBUGF("\n%.*s\n", response->body().length(), (const char *)response->body());
 }
 
 void TeslaClient::requestAccessToken()
@@ -188,7 +188,7 @@ void TeslaClient::requestAccessToken()
 	  if (token) {
 	    _accessToken = "Bearer ";
 	    _accessToken += token;
-	    DEBUG.print("token: ");DBUGLN(_accessToken);
+	    DBUG("token: ");DBUGLN(_accessToken);
 	    _lastRequestStart = 0; // allow requestVehicles to happen immediately
 	  }
 	  else {
@@ -249,7 +249,7 @@ void TeslaClient::requestVehicles()
 	  _cleanVehicles();
 	  sc += 8;
 	  sscanf(sc,"%d",&_vehicleCnt);
-	  DEBUG.print("vcnt: ");DBUGLN(_vehicleCnt);
+	  DBUG("vcnt: ");DBUGLN(_vehicleCnt);
 	  
 	  _id = new String[_vehicleCnt];
 	  _vin = new String[_vehicleCnt];
@@ -278,9 +278,9 @@ void TeslaClient::requestVehicles()
 	    _vin[i] = responsei["vin"].as<String>();
 	    // doesn't work.. returns converted float _id[i] = responsei["id"].as<String>();
 	    _displayName[i] = responsei["display_name"].as<String>();
-	    DEBUG.print("id: ");DEBUG.print(_id[i]);
-	    DEBUG.print("vin: ");DEBUG.print(_vin[i]);
-	    DEBUG.print(" name: ");DBUGLN(_displayName[i]);
+	    DBUG("id: ");DBUG(_id[i]);
+	    DBUG("vin: ");DBUG(_vin[i]);
+	    DBUG(" name: ");DBUGLN(_displayName[i]);
 	  }
 	}
       }
@@ -293,7 +293,7 @@ void TeslaClient::requestVehicles()
 void TeslaClient::requestChargeState()
 {
   _chargeInfo.isValid = false;
-  DEBUG.print("getChargeState() vehidx=");DBUGLN(_curVehIdx);
+  DBUG("getChargeState() vehidx=");DBUGLN(_curVehIdx);
   _lastRequestStart = millis();
 
   if ((_vehicleCnt <= 0) ||
