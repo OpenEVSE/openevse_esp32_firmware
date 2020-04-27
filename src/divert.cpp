@@ -39,13 +39,10 @@ int charge_rate = 0;
 int last_state = OPENEVSE_STATE_INVALID;
 uint32_t lastUpdate = 0;
 
-double attack_smoothing_factor = 0.4;
-double decay_smoothing_factor = 0.05;
+
 double avalible_current = 0;
 double smothed_avalible_current = 0;
 
-uint32_t min_charge_time = (10 * 60);
-//uint32_t min_charge_time = 0;
 time_t min_charge_end = 0;
 
 bool divert_active = false;
@@ -168,7 +165,7 @@ void divert_update_state()
     }
     DBUGVAR(avalible_current);
 
-    double scale = avalible_current > smothed_avalible_current ? attack_smoothing_factor : decay_smoothing_factor;
+    double scale = avalible_current > smothed_avalible_current ? divert_attack_smoothing_factor : divert_decay_smoothing_factor;
     smothed_avalible_current = (avalible_current * scale) + (smothed_avalible_current * (1 - scale));
     DBUGVAR(smothed_avalible_current);
 
@@ -237,7 +234,7 @@ void divert_update_state()
         }
 
         if(chargeStarted) {
-          min_charge_end = divertmode_get_time() + min_charge_time;
+          min_charge_end = divertmode_get_time() + divert_min_charge_time;
         }
       }
     }

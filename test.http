@@ -54,6 +54,27 @@ POST {{baseUrl}}/config HTTP/1.1
 Content-Type: application/json
 
 {
+  "divert_enabled": true,
+  "divert_attack_smoothing_factor": 0.4,
+  "divert_decay_smoothing_factor": 0.05,
+  "divert_min_charge_time": 60
+}
+
+###
+
+POST {{baseUrl}}/config HTTP/1.1
+Content-Type: application/json
+
+{
+  "divert_enabled": false
+}
+
+###
+
+POST {{baseUrl}}/config HTTP/1.1
+Content-Type: application/json
+
+{
   "mqtt_enabled": true,
   "mqtt_protocol": "mqtt",
   "mqtt_server": "home.lan",

@@ -1,6 +1,7 @@
 #include "emonesp.h"
 #include "app_config.h"
 #include "hal.h"
+#include "divert.h"
 
 #include <Arduino.h>
 #include <EEPROM.h>             // Save config settings
@@ -45,10 +46,17 @@ uint32_t flags;
 // Ohm Connect Settings
 String ohm;
 
+// Divert settings
+double divert_attack_smoothing_factor;
+double divert_decay_smoothing_factor;
+uint32_t divert_min_charge_time;
+
 String esp_hostname_default = "openevse-"+HAL.getShortId();
 
 static const char _DUMMY_PASSWORD[] PROGMEM = "_DUMMY_PASSWORD";
 #define DUMMY_PASSWORD FPSTR(_DUMMY_PASSWORD)
+
+void config_changed(const char *name);
 
 class ConfigOpt;
 template<class T> class ConfigOptDefenition;
@@ -105,6 +113,7 @@ public:
       DBUGLN(value);
       _val = value;
       modified = true;
+      config_changed(_long);
     }
   }
 
@@ -283,6 +292,11 @@ ConfigOpt *opts[] =
 // Ohm Connect Settings
   new ConfigOptDefenition<String>(ohm, "", "ohm", "o"),
 
+// Divert settings
+  new ConfigOptDefenition<double>(divert_attack_smoothing_factor, 0.4, "divert_attack_smoothing_factor", "da"),
+  new ConfigOptDefenition<double>(divert_decay_smoothing_factor, 0.05, "divert_decay_smoothing_factor", "dd"),
+  new ConfigOptDefenition<uint32_t>(divert_min_charge_time, (10 * 60), "divert_min_charge_time", "dt"),
+
 // Flags
   &flagsOpt,
 
@@ -292,6 +306,7 @@ ConfigOpt *opts[] =
   new ConfigOptVirtualBool(flagsOpt, CONFIG_MQTT_ALLOW_ANY_CERT, 0, "mqtt_reject_unauthorized", "mru"),
   new ConfigOptVirtualBool(flagsOpt, CONFIG_SERVICE_OHM, CONFIG_SERVICE_OHM, "ohm_enabled", "oe"),
   new ConfigOptVirtualBool(flagsOpt, CONFIG_SERVICE_SNTP, CONFIG_SERVICE_SNTP, "sntp_enabled", "se"),
+  new ConfigOptVirtualBool(flagsOpt, CONFIG_SERVICE_DIVERT, CONFIG_SERVICE_DIVERT, "divert_enabled", "de"),
   new ConfigOptVirtualMqttProtocol(flagsOpt, "mqtt_protocol", "mprt")
 };
 
@@ -358,6 +373,15 @@ config_load_settings()
   EEPROM.end();
 
   modified = false;
+}
+
+void config_changed(const char *name)
+{
+  if(0 == strcmp(name, "time_zone")) {
+    config_set_timezone(time_zone);
+  } else if(0 == strcmp(name, "flags")) {
+    divertmode_update(config_divert_enabled() ? DIVERT_MODE_ECO : DIVERT_MODE_NORMAL);
+  }
 }
 
 void config_commit()

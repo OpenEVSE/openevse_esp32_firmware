@@ -34,8 +34,8 @@ time_t simulated_time = 0;
 bool kw = false;
 
 extern double smothed_avalible_current;
-extern double attack_smoothing_factor;
-extern double decay_smoothing_factor;
+extern double divert_attack_smoothing_factor;
+extern double divert_decay_smoothing_factor;
 
 time_t parse_date(const char *dateStr)
 {
@@ -107,8 +107,8 @@ int main(int argc, char** argv)
     ("d,date", "The date column", cxxopts::value<int>(date_col), "N")
     ("s,solar", "The solar column", cxxopts::value<int>(solar_col), "N")
     ("g,gridie", "The Grid IE column", cxxopts::value<int>(grid_ie_col), "N")
-    ("attack", "The attack factor for the smoothing", cxxopts::value<double>(attack_smoothing_factor))
-    ("decay", "The decay factor for the smoothing", cxxopts::value<double>(decay_smoothing_factor))
+    ("attack", "The attack factor for the smoothing", cxxopts::value<double>(divert_attack_smoothing_factor))
+    ("decay", "The decay factor for the smoothing", cxxopts::value<double>(divert_decay_smoothing_factor))
     ("v,voltage", "The Voltage column if < 50, else the fixed voltage", cxxopts::value<int>(voltage_arg), "N")
     ("kw", "values are KW")
     ("sep", "Field separator", cxxopts::value<std::string>(sep));

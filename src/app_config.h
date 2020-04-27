@@ -44,6 +44,11 @@ extern String mqtt_announce_topic;
 // Time
 extern String time_zone;
 
+// Divert settings
+extern double divert_attack_smoothing_factor;
+extern double divert_decay_smoothing_factor;
+extern uint32_t divert_min_charge_time;
+
 // 24-bits of Flags
 extern uint32_t flags;
 
@@ -53,6 +58,7 @@ extern uint32_t flags;
 #define CONFIG_SERVICE_SNTP     (1 << 3)
 #define CONFIG_MQTT_PROTOCOL    (7 << 4) // Maybe leave a bit of space after for additional protocols
 #define CONFIG_MQTT_ALLOW_ANY_CERT (1 << 7)
+#define CONFIG_SERVICE_DIVERT   (1 << 9)
 
 inline bool config_emoncms_enabled() {
   return CONFIG_SERVICE_EMONCMS == (flags & CONFIG_SERVICE_EMONCMS);
@@ -76,6 +82,10 @@ inline uint8_t config_mqtt_protocol() {
 
 inline bool config_mqtt_reject_unauthorized() {
   return 0 == (flags & CONFIG_MQTT_ALLOW_ANY_CERT);
+}
+
+inline bool config_divert_enabled() {
+  return CONFIG_SERVICE_DIVERT == (flags & CONFIG_SERVICE_DIVERT);
 }
 
 // Ohm Connect Settings
