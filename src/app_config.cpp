@@ -118,7 +118,7 @@ public:
     if(doc.containsKey(_long)) {
       T val = doc[_long].as<T>();
       set(val);
-    } else if(doc.containsKey(_short)) { \
+    } else if(doc.containsKey(_short)) {
       T val = doc[_short].as<T>();
       set(val);
     }
