@@ -428,16 +428,21 @@ bool config_deserialize(const char *json)
   DeserializationError err = deserializeJson(doc, json);
   if(DeserializationError::Code::Ok == err)
   {
-    for(size_t i = 0; i < opts_length; i++) {
-      opts[i]->deserialize(doc);
-    }
-
-    config_set<String>("timezone", time_zone);
+    config_deserialize(doc);
 
     return true;
   }
 
   return false;
+}
+
+bool config_deserialize(DynamicJsonDocument &doc) 
+{
+  for(size_t i = 0; i < opts_length; i++) {
+    opts[i]->deserialize(doc);
+  }
+
+  return true;
 }
 
 bool config_serialize(String& json, bool longNames, bool compactOutput, bool hideSecrets)
@@ -470,12 +475,29 @@ void config_set_defaults()
 
 template <typename T> void config_set(const char *name, T val)
 {
-  for(size_t i = 0; i < opts_length; i++) {
-    if(0 == strcmp(name, opts[i]->name())) {
-      opts[i]->set<T>(val);
-    }
-  }
+  DBUG("Attempt set ");
+  DBUG(name);
+  DBUG(" to ");
+  DBUGLN(val);
+
+  const size_t capacity = JSON_OBJECT_SIZE(1) + 256;
+  DynamicJsonDocument doc(capacity);
+  doc[name] = val;
+  config_deserialize(doc);
 }
+
+void config_set(const char *name, uint32_t val) {
+  config_set<uint32_t>(name, val);
+} 
+void config_set(const char *name, String val) {
+  config_set<String>(name, val);
+} 
+void config_set(const char *name, bool val) {
+  config_set<bool>(name, val);
+} 
+void config_set(const char *name, double val) {
+  config_set<double>(name, val);
+} 
 
 void config_save_emoncms(bool enable, String server, String node, String apikey,
                     String fingerprint)

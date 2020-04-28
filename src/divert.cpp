@@ -95,6 +95,8 @@ void divertmode_update(byte newmode)
     event += String(divertmode);
     event += F("}");
     event_send(event);
+    
+    config_set("divert_enabled", DIVERT_MODE_ECO == divertmode);
   }
 }
 

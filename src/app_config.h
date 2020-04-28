@@ -144,9 +144,15 @@ extern void config_reset();
 
 void config_set_timezone(String tz);
 
+void config_set(const char *name, uint32_t val);
+void config_set(const char *name, String val);
+void config_set(const char *name, bool val);
+void config_set(const char *name, double val);
+
 // Read config settings from JSON object
 bool config_deserialize(String& json);
 bool config_deserialize(const char *json);
+bool config_deserialize(DynamicJsonDocument &doc);
 void config_commit();
 
 // Write config settings to JSON object
