@@ -67,6 +67,9 @@ void
 startAP() {
   DBUGLN("Starting AP");
 
+  DBUGVAR(net_wifi_mode_is_ap());
+  DBUGVAR(net_wifi_mode_is_sta());
+
   if (net_wifi_mode_is_sta()) {
     WiFi.disconnect(true);
   }
@@ -110,8 +113,6 @@ startClient()
   // DEBUG.print(" epass:");
   // DEBUG.println(epass.c_str());
 
-  client_disconnects = 0;
-
 #ifndef ESP32
   WiFi.hostname(esp_hostname.c_str());
 #endif // !ESP32
@@ -121,6 +122,7 @@ startClient()
 
 static void net_wifi_start()
 {
+  client_disconnects = 0;
   // 1) If no network configured start up access point
   if (esid == 0 || esid == "")
   {
@@ -212,6 +214,10 @@ static void net_wifi_onStationModeDisconnected(const WiFiEventStationModeDisconn
   "UNKNOWN");
 
   client_disconnects++;
+
+  if(net_wifi_mode_is_sta()) {
+    startClient();
+  }
 }
 
 static void net_wifi_onAPModeStationConnected(const WiFiEventSoftAPModeStationConnected &event) {
@@ -499,11 +505,7 @@ net_loop()
   if(isApOnly && 0 == apClients && client_retry && millis() > client_retry_time) {
     DEBUG.println("client re-try, resetting");
     delay(50);
-    #ifdef ESP32
-    esp_restart();
-    #else
     HAL.reset();
-    #endif
   }
 
   if(dnsServerStarted) {
@@ -515,12 +517,14 @@ net_loop()
 
 void
 net_wifi_restart() {
+  DBUGF("net_wifi_restart %d", WiFi.getMode());
   net_wifi_disconnect();
   net_wifi_start();
 }
 
 void
 net_wifi_disconnect() {
+  DBUGF("net_wifi_disconnect %d", WiFi.getMode());
   net_wifi_turn_off_ap();
   if (net_wifi_mode_is_sta()) {
     WiFi.disconnect(true);
@@ -529,6 +533,7 @@ net_wifi_disconnect() {
 
 void net_wifi_turn_off_ap()
 {
+  DBUGF("net_wifi_turn_off_ap %d", WiFi.getMode());
   if(net_wifi_mode_is_ap())
   {
     WiFi.softAPdisconnect(true);
