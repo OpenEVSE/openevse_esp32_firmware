@@ -533,9 +533,9 @@ handleStatus(MongooseHttpServerRequest *request) {
     doc["mode"] = "STA+AP";
   }
 
-  doc["wifi_client_connected"] = net_wifi_client_connected();
-  doc["eth_connected"] = net_eth_connected();
-  doc["net_connected"] = net_is_connected();
+  doc["wifi_client_connected"] = (int)net_wifi_client_connected();
+  doc["eth_connected"] = (int)net_eth_connected();
+  doc["net_connected"] = (int)net_is_connected();
   doc["srssi"] = WiFi.RSSI();
   doc["ipaddress"] = ipaddress;
 
@@ -543,7 +543,7 @@ handleStatus(MongooseHttpServerRequest *request) {
   doc["packets_sent"] = packets_sent;
   doc["packets_success"] = packets_success;
 
-  doc["mqtt_connected"] = mqtt_connected();
+  doc["mqtt_connected"] = (int)mqtt_connected();
 
   doc["ohm_hour"] = ohm_hour;
 
@@ -551,7 +551,7 @@ handleStatus(MongooseHttpServerRequest *request) {
 
   doc["comm_sent"] = rapiSender.getSent();
   doc["comm_success"] = rapiSender.getSuccess();
-  doc["rapi_connected"] = rapiSender.isConnected();
+  doc["rapi_connected"] = (int)rapiSender.isConnected();
 
   doc["amp"] = amp;
   doc["pilot"] = pilot;
@@ -573,7 +573,7 @@ handleStatus(MongooseHttpServerRequest *request) {
   doc["charge_rate"] = charge_rate;
   doc["divert_update"] = (millis() - lastUpdate) / 1000;
 
-  doc["ota_update"] = Update.isRunning();
+  doc["ota_update"] = (int)Update.isRunning();
   doc["time"] = String(time);
   doc["offset"] = String(offset) + "\"";
 
