@@ -131,6 +131,7 @@ void divert_update_state()
       // grid_ie is negative when exporting
       // If grid feeds is available and exporting (negative)
 
+      DBUGVAR(voltage);
       double Igrid_ie = (double)grid_ie / (double)voltage;
       DBUGVAR(Igrid_ie);
 

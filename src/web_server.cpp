@@ -39,10 +39,9 @@ MongooseHttpServer server;          // Create class for Web server
 bool enableCors = true;
 
 // Event timeouts
-unsigned long wifiRestartTime = 0;
-unsigned long mqttRestartTime = 0;
-unsigned long systemRebootTime = 0;
-unsigned long apOffTime = 0;
+static unsigned long wifiRestartTime = 0;
+static unsigned long systemRebootTime = 0;
+static unsigned long apOffTime = 0;
 
 // Content Types
 const char _CONTENT_TYPE_HTML[] PROGMEM = "text/html";
@@ -357,7 +356,7 @@ handleSaveMqtt(MongooseHttpServerRequest *request) {
   request->send(response);
 
   // If connected disconnect MQTT to trigger re-connect with new details
-  mqttRestartTime = millis();
+  mqtt_restart();
 }
 
 // -------------------------------------------------------------------
@@ -1080,12 +1079,6 @@ web_server_loop() {
   if(wifiRestartTime > 0 && millis() > wifiRestartTime) {
     wifiRestartTime = 0;
     net_wifi_restart();
-  }
-
-  // Do we need to restart MQTT?
-  if(mqttRestartTime > 0 && millis() > mqttRestartTime) {
-    mqttRestartTime = 0;
-    mqtt_restart();
   }
 
   // Do we need to turn off the access point?

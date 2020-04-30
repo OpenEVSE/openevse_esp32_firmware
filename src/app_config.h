@@ -39,6 +39,7 @@ extern String mqtt_user;
 extern String mqtt_pass;
 extern String mqtt_solar;
 extern String mqtt_grid_ie;
+extern String mqtt_vrms;
 extern String mqtt_announce_topic;
 
 // Time

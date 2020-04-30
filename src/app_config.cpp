@@ -2,6 +2,7 @@
 #include "app_config.h"
 #include "hal.h"
 #include "divert.h"
+#include "mqtt.h"
 
 #include <Arduino.h>
 #include <EEPROM.h>             // Save config settings
@@ -35,6 +36,7 @@ String mqtt_user;
 String mqtt_pass;
 String mqtt_solar;
 String mqtt_grid_ie;
+String mqtt_vrms;
 String mqtt_announce_topic;
 
 // Time
@@ -56,7 +58,7 @@ String esp_hostname_default = "openevse-"+HAL.getShortId();
 static const char _DUMMY_PASSWORD[] PROGMEM = "_DUMMY_PASSWORD";
 #define DUMMY_PASSWORD FPSTR(_DUMMY_PASSWORD)
 
-void config_changed(const char *name);
+void config_changed(String name);
 
 class ConfigOpt;
 template<class T> class ConfigOptDefenition;
@@ -275,18 +277,19 @@ ConfigOpt *opts[] =
 
 // EMONCMS SERVER strings
   new ConfigOptDefenition<String>(emoncms_server, "https://data.openevse.com/emoncms", "emoncms_server", "es"),
-  new ConfigOptDefenition<String>(emoncms_node, esp_hostname_default, "emoncms_node", "en"),
+  new ConfigOptDefenition<String>(emoncms_node, esp_hostname, "emoncms_node", "en"),
   new ConfigOptSecret(emoncms_apikey, "", "emoncms_apikey", "ea"),
   new ConfigOptDefenition<String>(emoncms_fingerprint, "", "emoncms_fingerprint", "ef"),
 
 // MQTT Settings
   new ConfigOptDefenition<String>(mqtt_server, "emonpi", "mqtt_server", "ms"),
   new ConfigOptDefenition<uint32_t>(mqtt_port, 1883, "mqtt_port", "mpt"),
-  new ConfigOptDefenition<String>(mqtt_topic, "", "mqtt_topic", "mt"),
+  new ConfigOptDefenition<String>(mqtt_topic, esp_hostname, "mqtt_topic", "mt"),
   new ConfigOptDefenition<String>(mqtt_user, "emonpi", "mqtt_user", "mu"),
   new ConfigOptSecret(mqtt_pass, "emonpimqtt2016", "mqtt_pass", "mp"),
   new ConfigOptDefenition<String>(mqtt_solar, "", "mqtt_solar", "mo"),
   new ConfigOptDefenition<String>(mqtt_grid_ie, "emon/emonpi/power1", "mqtt_grid_ie", "mg"),
+  new ConfigOptDefenition<String>(mqtt_vrms, "emon/emonpi/vrms", "mqtt_vrms", "mv"),
   new ConfigOptDefenition<String>(mqtt_announce_topic, "openevse/announce/"+HAL.getShortId(), "mqtt_announce_topic", "ma"),
 
 // Ohm Connect Settings
@@ -375,12 +378,19 @@ config_load_settings()
   modified = false;
 }
 
-void config_changed(const char *name)
+void config_changed(String name)
 {
-  if(0 == strcmp(name, "time_zone")) {
+  DBUGF("%s changed", name.c_str());
+
+  if(name == "time_zone") {
     config_set_timezone(time_zone);
-  } else if(0 == strcmp(name, "flags")) {
+  } else if(name == "flags") {
     divertmode_update(config_divert_enabled() ? DIVERT_MODE_ECO : DIVERT_MODE_NORMAL);
+    if(mqtt_connected() != config_mqtt_enabled()) {
+      mqtt_restart();
+    }
+  } else if(name.startsWith("mqtt_")) {
+    mqtt_restart();
   }
 }
 

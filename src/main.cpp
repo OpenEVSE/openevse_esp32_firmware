@@ -171,9 +171,7 @@ loop() {
 
   if(net_is_connected())
   {
-    if (config_mqtt_enabled()) {
-      mqtt_loop();
-    }
+    mqtt_loop();
 
     // -------------------------------------------------------------------
     // Do these things once every 30 seconds
@@ -207,8 +205,5 @@ loop() {
 void event_send(String event)
 {
   web_server_event(event);
-
-  if (config_mqtt_enabled()) {
-    mqtt_publish(event);
-  }
+  mqtt_publish(event);
 }

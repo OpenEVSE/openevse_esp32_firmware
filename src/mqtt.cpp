@@ -16,10 +16,9 @@
 
 MongooseMqttClient mqttclient;
 
-long nextMqttReconnectAttempt = 0;
-int clientTimeout = 0;
-int i = 0;
-bool connecting = false;
+static long nextMqttReconnectAttempt = 0;
+static unsigned long mqttRestartTime = 0;
+static bool connecting = false;
 
 String lastWill = "";
 
@@ -54,6 +53,10 @@ void mqttmsg_callback(MongooseString topic, MongooseString payload) {
     grid_ie = payload_str.toInt();
     DBUGF("grid:%dW", grid_ie);
     divert_update_state();
+  }
+  else if (topic_string == mqtt_vrms){
+    voltage = payload_str.toInt();
+    DBUGF("voltage:%d", voltage);
   }
   // If MQTT message to set divert mode is received
   else if (topic_string == mqtt_topic + "/divertmode/set"){
@@ -158,12 +161,19 @@ mqtt_connect()
     mqttclient.subscribe(mqtt_sub_topic);
 
     // subscribe to solar PV / grid_ie MQTT feeds
-    if (mqtt_solar!="") {
-      mqttclient.subscribe(mqtt_solar);
+    if(config_divert_enabled())
+    {
+      if (mqtt_solar!="") {
+        mqttclient.subscribe(mqtt_solar);
+      }
+      if (mqtt_grid_ie!="") {
+        mqttclient.subscribe(mqtt_grid_ie);
+      }
     }
-    if (mqtt_grid_ie!="") {
-      mqttclient.subscribe(mqtt_grid_ie);
+    if (mqtt_vrms!="") {
+      mqttclient.subscribe(mqtt_vrms);
     }
+
     mqtt_sub_topic = mqtt_topic + "/divertmode/set";      // MQTT Topic to change divert mode
     mqttclient.subscribe(mqtt_sub_topic);
 
@@ -182,7 +192,7 @@ void
 mqtt_publish(String data) {
   Profile_Start(mqtt_publish);
 
-  if(!mqttclient.connected()) {
+  if(!config_mqtt_enabled() || !mqttclient.connected()) {
     return;
   }
 
@@ -238,7 +248,18 @@ void
 mqtt_loop() {
   Profile_Start(mqtt_loop);
 
-  if (!mqttclient.connected()) {
+  // Do we need to restart MQTT?
+  if(mqttRestartTime > 0 && millis() > mqttRestartTime) 
+  {
+    mqttRestartTime = 0;
+    if (mqttclient.connected()) {
+      DBUGF("Disconnecting MQTT");
+      mqttclient.disconnect();
+    }
+    nextMqttReconnectAttempt = 0;
+  }
+
+  if (config_mqtt_enabled() && !mqttclient.connected()) {
     long now = millis();
     // try and reconnect every x seconds
     if (now > nextMqttReconnectAttempt) {
@@ -252,10 +273,8 @@ mqtt_loop() {
 
 void
 mqtt_restart() {
-  if (mqttclient.connected()) {
-    mqttclient.disconnect();
-  }
-  nextMqttReconnectAttempt = 0;
+  // If connected disconnect MQTT to trigger re-connect with new details
+  mqttRestartTime = millis();
 }
 
 boolean
