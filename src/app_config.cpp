@@ -269,7 +269,7 @@ ConfigOpt *opts[] =
   new ConfigOptSecret(www_password, "", "www_password", "ap"),
 
 // Advanced settings
-  new ConfigOptDefenition<String>(esp_hostname, esp_hostname_default, "esp_hostname", "hn"),
+  new ConfigOptDefenition<String>(esp_hostname, esp_hostname_default, "hostname", "hn"),
   new ConfigOptDefenition<String>(sntp_hostname, SNTP_DEFAULT_HOST, "sntp_hostname", "sh"),
 
 // Time
