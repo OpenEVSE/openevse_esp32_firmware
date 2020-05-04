@@ -33,6 +33,7 @@ typedef const __FlashStringHelper *fstr_t;
 #include "lcd.h"
 #include "hal.h"
 #include "time_man.h"
+#include "tesla_client.h"
 
 MongooseHttpServer server;          // Create class for Web server
 
@@ -496,6 +497,94 @@ handleSaveAdvanced(MongooseHttpServerRequest *request) {
 }
 
 // -------------------------------------------------------------------
+// Save Tesla
+// url: /savetesla
+// -------------------------------------------------------------------
+void
+handleSaveTesla(MongooseHttpServerRequest *request) {
+  MongooseHttpServerResponseStream *response;
+  if(false == requestPreProcess(request, response, CONTENT_TYPE_TEXT)) {
+    return;
+  }
+
+  String user = request->getParam("user");
+  String pass = request->getParam("pass");
+  bool enable = isPositive(request->getParam("enable"));
+  config_save_tesla(enable, user, pass);
+
+  teslaClient.setUser(user.c_str());
+  teslaClient.setPass(pass.c_str());
+
+  if (enable) {
+    teslaClient.requestAccessToken();
+  }
+
+  char tmpStr[200];
+  snprintf(tmpStr, sizeof(tmpStr), "Saved: %s %s",
+           teslaClient.getUser(),
+           teslaClient.getPass());
+  DBUGLN(tmpStr);
+
+  response->setCode(200);
+  response->print(tmpStr);
+  request->send(response);
+}
+
+// -------------------------------------------------------------------
+// Save Tesla Vehicle Idx
+// url: /saveteslavi
+// -------------------------------------------------------------------
+void
+handleSaveTeslaVI(MongooseHttpServerRequest *request) {
+  MongooseHttpServerResponseStream *response;
+  if(false == requestPreProcess(request, response, CONTENT_TYPE_TEXT)) {
+    return;
+  }
+
+  String svi = request->getParam("vi");
+  int vehidx = atoi(svi.c_str());
+  teslaClient.setVehicleIdx(vehidx);
+  config_save_tesla_vehidx(vehidx);
+
+  char tmpStr[200];
+  snprintf(tmpStr, sizeof(tmpStr), "Saved: %s",svi.c_str());
+  DBUGLN(tmpStr);
+
+  response->setCode(200);
+  response->print(tmpStr);
+  request->send(response);
+}
+
+// -------------------------------------------------------------------
+// Get Tesla Vehicle Info
+// url: /teslaveh
+// -------------------------------------------------------------------
+void
+handleTeslaVeh(MongooseHttpServerRequest *request) {
+  MongooseHttpServerResponseStream *response;
+  if(false == requestPreProcess(request, response)) {
+    return;
+  }
+
+  String s = "{";
+  int vc = teslaClient.getVehicleCnt();
+  s += "\"count:\"" + String(vc);
+  if (vc) {
+    s += ",[";
+    for (int i=0;i < vc;i++) {
+      s += "{\"id\":\"" + teslaClient.getVehicleId(i) + "\",";
+      s += "\"name\":\"" + teslaClient.getVehicleDisplayName(i) + "\"}";
+      if (i < vc-1) s += ",";
+    }
+    s += "]";
+  }
+  s += "}";
+
+  response->setCode(200);
+  response->print(s);
+  request->send(response);
+}
+// -------------------------------------------------------------------
 // Save the Ohm keyto EEPROM
 // url: /handleSaveOhmkey
 // -------------------------------------------------------------------
@@ -592,6 +681,18 @@ handleStatus(MongooseHttpServerRequest *request) {
   s += "\"ota_update\":" + String(Update.isRunning()) + ",";
   s += "\"time\":\"" + String(time) + "\",";
   s += "\"offset\":\"" + String(offset) + "\"";
+  {
+    const TESLA_CHARGE_INFO *tci = teslaClient.getChargeInfo();
+    if (tci->isValid) {
+      s += "\"batteryRange\":" + String(tci->batteryRange) + ",";
+      s += "\"chargeEnergyAdded\":" + String(tci->chargeEnergyAdded) + ",";
+      s += "\"chargeMilesAddedRated\":" + String(tci->chargeMilesAddedRated) + ",";
+      s += "\"batteryLevel\":" + String(tci->batteryLevel) + ",";
+      s += "\"chargeLimitSOC\":" + String(tci->chargeLimitSOC) + ",";
+      s += "\"timeToFullCharge\":" + String(tci->timeToFullCharge) + ",";
+      s += "\"chargerVoltage\":" + String(tci->chargerVoltage) + ",";
+    }
+  }
 
 #ifdef ENABLE_LEGACY_API
   s += ",\"networks\":[" + st + "]";
@@ -697,6 +798,8 @@ handleConfig(MongooseHttpServerRequest *request) {
   s += "\"time_zone\":\"" + time_zone + "\",";
   s += "\"sntp_enabled\":" + String(config_sntp_enabled() ? "true" : "false") + ",";
   s += "\"sntp_host\":\"" + sntp_hostname + "\",";
+  s += "\"tesla_user\":\"" + String(teslaClient.getUser()) + "\",";
+  s += "\"tesla_vehidx\":" + String(teslaClient.getCurVehicleIdx()) + ",";
   s += "\"ohm_enabled\":" + String(config_ohm_enabled() ? "true" : "false");
   s += "}";
 
@@ -1090,6 +1193,9 @@ web_server_setup() {
   server.on("/saveemoncms$", handleSaveEmoncms);
   server.on("/savemqtt$", handleSaveMqtt);
   server.on("/saveadmin$", handleSaveAdmin);
+  server.on("/savetesla$", handleSaveTesla);
+  server.on("/saveteslavi$", handleSaveTeslaVI);
+  server.on("/teslaveh$", handleTeslaVeh);
   server.on("/saveadvanced$", handleSaveAdvanced);
   server.on("/saveohmkey$", handleSaveOhmkey);
   server.on("/settime$", handleSetTime);
