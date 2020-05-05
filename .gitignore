@@ -84,3 +84,4 @@ ubuntu-xenial-16.04-cloudimg-console.log
 # Dev Libraries links
 lib/ArduinoMongoose
 lib/ConfigJson
+lib/OpenEVSE
