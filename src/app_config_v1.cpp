@@ -128,6 +128,8 @@ void
 config_load_v1_settings() {
   DBUGLN("Loading config");
 
+  EEPROM.begin(EEPROM_SIZE);
+
   // Device Hostname, needs to be read first as other config defaults depend on it
   EEPROM_read_string(EEPROM_HOSTNAME_START, EEPROM_HOSTNAME_SIZE,
                      esp_hostname);
@@ -182,4 +184,6 @@ config_load_v1_settings() {
   // Timezone
   EEPROM_read_string(EEPROM_TIME_ZONE_START, EEPROM_TIME_ZONE_SIZE, time_zone);
   config_set_timezone(time_zone);
+
+  EEPROM.end();
 }

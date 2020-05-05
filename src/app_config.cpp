@@ -6,9 +6,10 @@
 
 #include <Arduino.h>
 #include <EEPROM.h>             // Save config settings
-#include <ArduinoJson.h>
+#include <ConfigJson.h>
 
-bool modified = false;
+#define EEPROM_SIZE     4096
+#define CHECKSUM_SEED    128
 
 // Wifi Network Strings
 String esid;
@@ -55,163 +56,7 @@ uint32_t divert_min_charge_time;
 
 String esp_hostname_default = "openevse-"+HAL.getShortId();
 
-static const char _DUMMY_PASSWORD[] PROGMEM = "_DUMMY_PASSWORD";
-#define DUMMY_PASSWORD FPSTR(_DUMMY_PASSWORD)
-
 void config_changed(String name);
-
-class ConfigOpt;
-template<class T> class ConfigOptDefenition;
-
-class ConfigOpt
-{
-protected:
-  const char *_long;
-  const char *_short;
-public:
-  ConfigOpt(const char *l, const char *s) :
-    _long(l),
-    _short(s)
-  {
-  }
-
-  const char *name(bool longName = true) {
-    return longName ? _long : _short;
-  }
-
-  virtual void serialize(DynamicJsonDocument &doc, bool longNames, bool compactOutput, bool hideSecrets) = 0;
-  virtual void deserialize(DynamicJsonDocument &doc) = 0;
-  virtual void setDefault() = 0;
-
-  template <typename T> void set(T val) {
-    ConfigOptDefenition<T> *opt = (ConfigOptDefenition<T> *)this;
-    opt->set(val);
-  }
-};
-
-template<class T>
-class ConfigOptDefenition : public ConfigOpt
-{
-protected:
-  T &_val;
-  T _default;
-
-public:
-  ConfigOptDefenition(T &v, T d, const char *l, const char *s) :
-    ConfigOpt(l, s),
-    _val(v),
-    _default(d)
-  {
-  }
-
-  T get() {
-    return _val;
-  }
-
-  virtual void set(T value) {    
-    if(_val != value) {
-      DBUG(_long);
-      DBUG(" set to ");
-      DBUGLN(value);
-      _val = value;
-      modified = true;
-      config_changed(_long);
-    }
-  }
-
-  virtual void serialize(DynamicJsonDocument &doc, bool longNames, bool compactOutput, bool hideSecrets) {
-    if(!compactOutput || _val != _default) {
-      doc[name(longNames)] = _val;
-    }
-  }
-
-  virtual void deserialize(DynamicJsonDocument &doc) {
-    if(doc.containsKey(_long)) {
-      T val = doc[_long].as<T>();
-      set(val);
-    } else if(doc.containsKey(_short)) {
-      T val = doc[_short].as<T>();
-      set(val);
-    }
-  }
-
-  virtual void setDefault() {
-    _val = _default;
-  }
-};
-
-class ConfigOptSecret : public ConfigOptDefenition<String>
-{
-public:
-  ConfigOptSecret(String &v, String d, const char *l, const char *s) :
-    ConfigOptDefenition<String>(v, d, l, s)
-  {
-  }
-
-  void set(String value) {
-    if(value.equals(DUMMY_PASSWORD)) {
-      return;
-    }
-
-    ConfigOptDefenition<String>::set(value);
-  }
-
-  virtual void serialize(DynamicJsonDocument &doc, bool longNames, bool compactOutput, bool hideSecrets) {
-    if(!compactOutput || _val != _default) {
-      if(hideSecrets) {
-        doc[name(longNames)] = (_val != 0) ? String(DUMMY_PASSWORD) : "";
-      } else {
-        doc[name(longNames)] = _val;
-      }
-    }
-  }
-};
-
-class ConfigOptVirtualBool : public ConfigOpt
-{
-protected:
-  ConfigOptDefenition<uint32_t> &_base;
-  uint32_t _mask;
-  uint32_t _expected;
-
-public:
-  ConfigOptVirtualBool(ConfigOptDefenition<uint32_t> &b, uint32_t m, uint32_t e, const char *l, const char *s) :
-    ConfigOpt(l, s),
-    _base(b),
-    _mask(m),
-    _expected(e)
-  {
-  }
-
-  bool get() {
-    return _expected == (_base.get() & _mask);
-  }
-
-  virtual void set(bool value) {
-    uint32_t newVal = _base.get() & ~(_mask);
-    if(value == (_mask == _expected)) {
-      newVal |= _mask;
-    }
-    _base.set(newVal);
-  }
-
-  virtual void serialize(DynamicJsonDocument &doc, bool longNames, bool compactOutput, bool hideSecrets) {
-    if(!compactOutput) {
-      doc[name(longNames)] = get();
-    }
-  }
-
-  virtual void deserialize(DynamicJsonDocument &doc) {
-    if(doc.containsKey(_long)) {
-      set(doc[_long].as<bool>());
-    } else if(doc.containsKey(_short)) { \
-      set(doc[_short].as<bool>());
-    }
-  }
-
-  virtual void setDefault() {
-  }
-};
 
 class ConfigOptVirtualMqttProtocol : public ConfigOpt
 {
@@ -230,26 +75,31 @@ public:
     return 0 == protocol ? "mqtt" : "mqtts";
   }
 
-  virtual void set(String value) {
+  virtual bool set(String value) {
     uint32_t newVal = _base.get() & ~CONFIG_MQTT_PROTOCOL;
     if(value == "mqtts") {
       newVal |= 1;
     }
-    _base.set(newVal);
+    return _base.set(newVal);
   }
 
-  virtual void serialize(DynamicJsonDocument &doc, bool longNames, bool compactOutput, bool hideSecrets) {
+  virtual bool serialize(DynamicJsonDocument &doc, bool longNames, bool compactOutput, bool hideSecrets) {
     if(!compactOutput) {
       doc[name(longNames)] = get();
+      return true;
     }
+    
+    return false;
   }
 
-  virtual void deserialize(DynamicJsonDocument &doc) {
+  virtual bool deserialize(DynamicJsonDocument &doc) {
     if(doc.containsKey(_long)) {
-      set(doc[_long].as<String>());
+      return set(doc[_long].as<String>());
     } else if(doc.containsKey(_short)) { \
-      set(doc[_short].as<String>());
+      return set(doc[_short].as<String>());
     }
+
+    return false;
   }
 
   virtual void setDefault() {
@@ -313,14 +163,7 @@ ConfigOpt *opts[] =
   new ConfigOptVirtualMqttProtocol(flagsOpt, "mqtt_protocol", "mprt")
 };
 
-const size_t opts_length = sizeof(opts) / sizeof(opts[0]);
-
-void config_set_defaults();
-
-template <typename T> void config_set(const char *name, T val);
-
-#define EEPROM_SIZE     4096
-#define CHECKSUM_SEED    128
+ConfigJson config(opts, sizeof(opts) / sizeof(opts[0]), EEPROM_SIZE);
 
 // -------------------------------------------------------------------
 // Reset EEPROM, wipes all settings
@@ -343,39 +186,10 @@ ResetEEPROM() {
 void
 config_load_settings() 
 {
-  config_set_defaults();
-
-  EEPROM.begin(EEPROM_SIZE);
-
-  char start = 0;
-  uint8_t a = 0, b = 0;
-  EEPROM.get(0, a);
-  EEPROM.get(1, b);
-  int length = a | (b << 8);
-
-  EEPROM.get(2, start);
-
-  DBUGF("Got %d %c from EEPROM", length, start);
-
-  if(2 <= length && length < EEPROM_SIZE &&
-    '{' == start)
-  {
-    char json[length + 1];
-    for(int i = 0; i < length; i++) {
-      json[i] = EEPROM.read(2+i);
-    }
-    json[length] = '\0';
-    DBUGF("Found stored JSON %s", json);
-    config_deserialize(json);
-    modified = false;
-  } else {
+  if(!config.load()) {
     DBUGF("No JSON config found, trying v1 settings");
     config_load_v1_settings();
   }
-
-  EEPROM.end();
-
-  modified = false;
 }
 
 void config_changed(String name)
@@ -396,117 +210,44 @@ void config_changed(String name)
 
 void config_commit()
 {
-  if(false == modified) {
-    return;
-  }
-
-  DBUGF("Saving config");
-  
-  EEPROM.begin(EEPROM_SIZE);
-
-  String jsonStr;
-  config_serialize(jsonStr, false, true, false);
-  const char *json = jsonStr.c_str();
-  DBUGF("Writing %s to EEPROM", json);
-  int length = jsonStr.length();
-  EEPROM.put(0, length & 0xff);
-  EEPROM.put(1, (length >> 8) & 0xff);
-  for(int i = 0; i < length; i++) {
-    EEPROM.write(2+i, json[i]);
-  }
-
-  DBUGF("%d bytes written to EEPROM, committing", length + 2);
-
-  if(EEPROM.commit())
-  {
-    DBUGF("Done");
-    modified = false;
-  } else {
-    DBUGF("Writting EEPROM failed");
-  }
+  config.commit();
 }
 
 bool config_deserialize(String& json) {
-  return config_deserialize(json.c_str());
+  return config.deserialize(json.c_str());
 }
 
-bool config_deserialize(const char *json) 
+bool config_deserialize(const char *json)
 {
-  const size_t capacity = JSON_OBJECT_SIZE(30) + EEPROM_SIZE;
-  DynamicJsonDocument doc(capacity);
-  
-  DeserializationError err = deserializeJson(doc, json);
-  if(DeserializationError::Code::Ok == err)
-  {
-    config_deserialize(doc);
-
-    return true;
-  }
-
-  return false;
+  return config.deserialize(json);
 }
 
 bool config_deserialize(DynamicJsonDocument &doc) 
 {
-  for(size_t i = 0; i < opts_length; i++) {
-    opts[i]->deserialize(doc);
-  }
-
-  return true;
+  return config.deserialize(doc);
 }
 
 bool config_serialize(String& json, bool longNames, bool compactOutput, bool hideSecrets)
 {
-  const size_t capacity = JSON_OBJECT_SIZE(30) + EEPROM_SIZE;
-  DynamicJsonDocument doc(capacity);
-
-  config_serialize(doc, longNames, compactOutput, hideSecrets);
-
-  serializeJson(doc, json);
-
-  return true;
+  return config.serialize(json, longNames, compactOutput, hideSecrets);
 }
 
 bool config_serialize(DynamicJsonDocument &doc, bool longNames, bool compactOutput, bool hideSecrets)
 {
-  for(size_t i = 0; i < opts_length; i++) {
-    opts[i]->serialize(doc, longNames, compactOutput, hideSecrets);
-  }
-
-  return true;
-}
-
-void config_set_defaults()
-{
-  for(size_t i = 0; i < opts_length; i++) {
-    opts[i]->setDefault();
-  }
-}
-
-template <typename T> void config_set(const char *name, T val)
-{
-  DBUG("Attempt set ");
-  DBUG(name);
-  DBUG(" to ");
-  DBUGLN(val);
-
-  const size_t capacity = JSON_OBJECT_SIZE(1) + 256;
-  DynamicJsonDocument doc(capacity);
-  doc[name] = val;
-  config_deserialize(doc);
+  return config.serialize(doc, longNames, compactOutput, hideSecrets);
 }
 
 void config_set(const char *name, uint32_t val) {
-  config_set<uint32_t>(name, val);
+  config.set(name, val);
 } 
 void config_set(const char *name, String val) {
-  config_set<String>(name, val);
+  config.set(name, val);
 } 
 void config_set(const char *name, bool val) {
-  config_set<bool>(name, val);
+  config.set(name, val);
 } 
 void config_set(const char *name, double val) {
-  config_set<double>(name, val);
+  config.set(name, val);
 } 
 
 void config_save_emoncms(bool enable, String server, String node, String apikey,
@@ -517,12 +258,12 @@ void config_save_emoncms(bool enable, String server, String node, String apikey,
     newflags |= CONFIG_SERVICE_EMONCMS;
   }
 
-  config_set<String>("emoncms_server", server);
-  config_set<String>("emoncms_node", node);
-  config_set<String>("emoncms_apikey", apikey);
-  config_set<String>("emoncms_fingerprint", fingerprint);
-  config_set<uint32_t>("flags", newflags);
-  config_commit();
+  config.set("emoncms_server", server);
+  config.set("emoncms_node", node);
+  config.set("emoncms_apikey", apikey);
+  config.set("emoncms_fingerprint", fingerprint);
+  config.set("flags", newflags);
+  config.commit();
 }
 
 void
@@ -537,22 +278,22 @@ config_save_mqtt(bool enable, int protocol, String server, uint16_t port, String
   }
   newflags |= protocol << 4;  
 
-  config_set<String>("mqtt_server", server);
-  config_set<uint32_t>("mqtt_port", port);
-  config_set<String>("mqtt_topic", topic);
-  config_set<String>("mqtt_user", user);
-  config_set<String>("mqtt_pass", pass);
-  config_set<String>("mqtt_solar", solar);
-  config_set<String>("mqtt_grid_ie", grid_ie);
-  config_set<uint32_t>("flags", newflags);
-  config_commit();
+  config.set("mqtt_server", server);
+  config.set("mqtt_port", port);
+  config.set("mqtt_topic", topic);
+  config.set("mqtt_user", user);
+  config.set("mqtt_pass", pass);
+  config.set("mqtt_solar", solar);
+  config.set("mqtt_grid_ie", grid_ie);
+  config.set("flags", newflags);
+  config.commit();
 }
 
 void
 config_save_admin(String user, String pass) {
-  config_set<String>("www_username", user);
-  config_set<String>("www_password", pass);
-  config_commit();
+  config.set("www_username", user);
+  config.set("www_password", pass);
+  config.commit();
 }
 
 void
@@ -563,9 +304,9 @@ config_save_sntp(bool sntp_enable, String tz)
     newflags |= CONFIG_SERVICE_SNTP;
   }
 
-  config_set<String>("time_zone", tz);
-  config_set<uint32_t>("flags", newflags);
-  config_commit();
+  config.set("time_zone", tz);
+  config.set("flags", newflags);
+  config.commit();
 
   config_set_timezone(tz);
 }
@@ -584,17 +325,17 @@ void config_set_timezone(String tz)
 
 void
 config_save_advanced(String hostname, String sntp_host) {
-  config_set<String>("esp_hostname", hostname);
-  config_set<String>("sntp_hostname", sntp_host);
-  config_commit();
+  config.set("esp_hostname", hostname);
+  config.set("sntp_hostname", sntp_host);
+  config.commit();
 }
 
 void
 config_save_wifi(String qsid, String qpass)
 {
-  config_set<String>("esid", qsid);
-  config_set<String>("epass", qpass);
-  config_commit();
+  config.set("esid", qsid);
+  config.set("epass", qpass);
+  config.commit();
 }
 
 void
@@ -605,19 +346,19 @@ config_save_ohm(bool enable, String qohm)
     newflags |= CONFIG_SERVICE_OHM;
   }
 
-  config_set<String>("ohm", qohm);
-  config_set<uint32_t>("flags", newflags);
-  config_commit();
+  config.set("ohm", qohm);
+  config.set("flags", newflags);
+  config.commit();
 }
 
 void
 config_save_flags(uint32_t newFlags) {
-  config_set<uint32_t>("flags", newFlags);
-  config_commit();
+  config.set("flags", newFlags);
+  config.commit();
 }
 
 void
 config_reset() {
   ResetEEPROM();
-  config_set_defaults();
+  config.reset();
 }
