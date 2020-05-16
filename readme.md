@@ -6,6 +6,8 @@
 
 The WiFi gateway uses an **ESP32** which communicates with the OpenEVSE controller via serial utilizing the existing RAPI API serial interface. The web interface UI is served directly from the ESP32 web server and can be controlled via a connected device over the network.
 
+Wired Ethernet connection is possible using [ESP32 Gateway](docs/wired-ethernet.md)
+
 [**See this repo for the older V2.x ESP8266 version**](https://github.com/openevse/ESP8266_WiFi_v2.x/)
 
 Live demo: https://openevse.openenergymonitor.org
@@ -83,6 +85,13 @@ Comming soon....
 ***
 
 # User Guide
+
+# Hardware 
+
+Most ESP32 boards can be used (see platfromio.ini for full list of supported boards), however the two boards which are best supported and easiest to use are:
+
+- Adafruit Huzzah 32 
+- [Olimex ESP32 Gateway (Wired Ethernet)](docs/wired-ethernet.md)
 
 ## WiFi Setup
 
@@ -314,7 +323,7 @@ If flashing a new ESP32 flashing bootloader and partitions file is required:
 
 `esptool.py --baud 921600 --before default_reset --after hard_reset write_flash -z --flash_mode dio --flash_freq 40m --flash_size detect 0x1000 bootloader.bin 0x8000 partitions.bin 0x10000 firmware.bin`
 
-Then succesive uploads can just upload the firmware 
+Then successive uploads can just upload the firmware 
 
 `esptool.py --baud 921600 --before default_reset --after hard_reset write_flash -z --flash_mode dio --flash_freq 40m --flash_size detect 0x10000 firmware.bin`
 
@@ -376,7 +385,7 @@ pio run -t upload
 If you are using a different development board, you can specify one of the envs setup in `platformio.ini`, for example:
 
 ```
-pio run -e openevse_huzzah32 -t upload
+pio run -e openevse_huzzah32_idf -t upload
 ```
 
 *To enable OTA updates, first upload via serial using the dev environment. This enables OTA enable build flag*
@@ -387,7 +396,7 @@ pio run -e openevse_huzzah32 -t upload
 
 ### Uploading issues
 
-- Double check device is in bootloder mode
+- Double check device is in bootloader mode
 - Try reducing the upload ESP baudrate
 - Erase flash: If you are experiencing ESP hanging in a reboot loop after upload it may be that the ESP flash has remnants of previous code (which may have the used the ESP memory in a different way). The ESP flash can be fully erased using [esptool](https://github.com/espressif/esptool). With the unit in bootloader mode run:
 
