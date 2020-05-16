@@ -63,7 +63,7 @@ The web UI will notify that connection is via Wired Etherent
 ![esp32-gateway-connected](esp32-gateway-connected.png)
 ## Feedback
 
-The ESP32 Gatway is a new addition and is currently considered in 'Beta' since the ESP32 firmware is still under active developmet. However, it has been extensively tested and proven reliable for many months of operation. Please report your experience to the [OpenEnergyMonitor Community Forums](https://community.openenergymonitor.org/).
+The ESP32 Gatway is a new addition and is currently considered in 'Beta' since the ESP32 firmware is still under active development. However, it has been extensively tested and proven reliable for many months of operation. Please report your experience to the [OpenEnergyMonitor Community Forums](https://community.openenergymonitor.org/).
 ***
 
 ## Older Hardware Revisions
