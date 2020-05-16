@@ -3,6 +3,7 @@
 #include "espal.h"
 #include "divert.h"
 #include "mqtt.h"
+#include "tesla_client.h"
 
 #include <Arduino.h>
 #include <EEPROM.h>             // Save config settings
@@ -53,6 +54,11 @@ String ohm;
 double divert_attack_smoothing_factor;
 double divert_decay_smoothing_factor;
 uint32_t divert_min_charge_time;
+
+// Tesla Client settings
+String tesla_username;
+String tesla_password;
+int tesla_vehidx;
 
 String esp_hostname_default = "openevse-"+ESPAL.getShortId();
 
@@ -150,6 +156,11 @@ ConfigOpt *opts[] =
   new ConfigOptDefenition<double>(divert_decay_smoothing_factor, 0.05, "divert_decay_smoothing_factor", "dd"),
   new ConfigOptDefenition<uint32_t>(divert_min_charge_time, (10 * 60), "divert_min_charge_time", "dt"),
 
+// Tesla client settings
+  new ConfigOptDefenition<String>(tesla_username, "", "tesla_username", "tu"),
+  new ConfigOptSecret(tesla_password, "", "tesla_password", "tp"),
+  new ConfigOptDefenition<int>(tesla_vehidx, -1, "tesla_vehidx", "ti"),
+
 // Flags
   &flagsOpt,
 
@@ -159,6 +170,7 @@ ConfigOpt *opts[] =
   new ConfigOptVirtualBool(flagsOpt, CONFIG_MQTT_ALLOW_ANY_CERT, 0, "mqtt_reject_unauthorized", "mru"),
   new ConfigOptVirtualBool(flagsOpt, CONFIG_SERVICE_OHM, CONFIG_SERVICE_OHM, "ohm_enabled", "oe"),
   new ConfigOptVirtualBool(flagsOpt, CONFIG_SERVICE_SNTP, CONFIG_SERVICE_SNTP, "sntp_enabled", "se"),
+  new ConfigOptVirtualBool(flagsOpt,CONFIG_SERVICE_TESLA,CONFIG_SERVICE_TESLA, "tesla_enabled", "te"),
   new ConfigOptVirtualBool(flagsOpt, CONFIG_SERVICE_DIVERT, CONFIG_SERVICE_DIVERT, "divert_enabled", "de"),
   new ConfigOptVirtualMqttProtocol(flagsOpt, "mqtt_protocol", "mprt")
 };
@@ -190,6 +202,7 @@ config_load_settings()
     DBUGF("No JSON config found, trying v1 settings");
     config_load_v1_settings();
   }
+
   config.onChanged(config_changed);
 }
 
@@ -206,6 +219,12 @@ void config_changed(String name)
     }
   } else if(name.startsWith("mqtt_")) {
     mqtt_restart();
+  } else if(name == "tesla_username") {
+    teslaClient.setUser(tesla_username.c_str());
+  } else if(name == "tesla_password") {
+    teslaClient.setPass(tesla_password.c_str());
+  } else if(name == "tesla_vehidx") {
+    teslaClient.setVehicleIdx(tesla_vehidx);
   }
 }
 

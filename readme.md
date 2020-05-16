@@ -6,6 +6,8 @@
 
 The WiFi gateway uses an **ESP32** which communicates with the OpenEVSE controller via serial utilizing the existing RAPI API serial interface. The web interface UI is served directly from the ESP32 web server and can be controlled via a connected device over the network.
 
+Wired Ethernet connection is possible using [ESP32 Gateway](docs/wired-ethernet.md)
+
 [**See this repo for the older V2.x ESP8266 version**](https://github.com/openevse/ESP8266_WiFi_v2.x/)
 
 Live demo: https://openevse.openenergymonitor.org
@@ -34,9 +36,8 @@ Live demo: https://openevse.openenergymonitor.org
 ### WiFi Module
 
 - ESP32
-Comming soon....
-- Purchase via: [OpenEVSE Store (USA/Canda)](https://store.openevse.com/collections/frontpage/products/openevse-wifi-kit) | [OpenEnergyMonitor (UK / EU)](http://shop.openenergymonitor.com/openevse-wifi-kit/)
-- See [OpenEVSE WiFi setup guide](https://openevse.dozuki.com/Guide/OpenEVSE+WiFi+%28Beta%29/14) for WiFi module connection instructions
+- Purchase via: [OpenEVSE Store (USA/Canda)](https://store.openevse.com/collections/frontpage/products/openevse-wifi-kit) | [OpenEnergyMonitor (UK / EU)](https://shop.openenergymonitor.com/evse/)
+- See [OpenEVSE WiFi setup guide](https://openevse.dozuki.com/Guide/OpenEVSE+WiFi+%28Beta%29/14) for WiFi module hardware connection instructions
 
 ***
 
@@ -83,6 +84,13 @@ Comming soon....
 ***
 
 # User Guide
+
+# Hardware 
+
+Most ESP32 boards can be used (see platfromio.ini for full list of supported boards), however the two boards which are best supported and easiest to use are:
+
+- Adafruit Huzzah 32 
+- [Olimex ESP32 Gateway (Wired Ethernet)](docs/wired-ethernet.md)
 
 ## WiFi Setup
 
@@ -146,7 +154,7 @@ An [OpenEnergyMonitor solar PV energy monitor](https://guide.openenergymonitor.o
 - Integration with an OpenEnergyMonitor emonPi is straightforward:
   - Connect to emonPi MQTT server, [emonPi MQTT credentials](https://guide.openenergymonitor.org/technical/credentials/#mqtt) should be pre-populated
   - Enter solar PV generation / Grid (+I/-E) MQTT topic e.g. if solar PV is being monitored by emonPi CT channel 1 enter `emon/emonpi/power1`
-  - [MQTT lens Chrome extension](https://chrome.google.com/webstore/detail/mqttlens/hemojaaeigabkbcookmlgmdigohjobjm?hl=en) can be used to view MQTT data e.g. subscribe to `emon/#` for all OpenEnergyMonitor MQTT data. To lean more about MQTT see [MQTT section of OpenEnergyMonitor user guide](https://guide.openenergymonitor.org/technical/mqtt/)
+  - [MQTT lens Chrome extension](https://chrome.google.com/webstore/detail/mqttlens/hemojaaeigabkbcookmlgmdigohjobjm?hl=en) or [MQTT Explorer](http://mqtt-explorer.com/) tools can be used to view MQTT data e.g. subscribe to `emon/#` for all OpenEnergyMonitor MQTT data. To lean more about MQTT see [MQTT section of OpenEnergyMonitor user guide](https://guide.openenergymonitor.org/technical/mqtt/).
   - If using Grid +I/-E (positive import / negative export) MQTT feed ensure the notation positive import / negative export is correct, CT sensor can be physically reversed on the cable to invert the reading.
 
 ### Operation
@@ -184,9 +192,24 @@ Data can be posted using HTTP or HTTPS. For HTTPS the Emoncms server must suppor
 
 ### MQTT
 
+MQTT and MQTTS (secure) connections are supported for status and control. 
+
+At startup the following message is published with a retain flag to `openevse/announce/xxx` where `xxx` is the last 4 characters of the device ID. This message is useful for device discovery and contans the device hostname and IP address. 
+```
+{"state":"connected","id":"c44f330dxxad","name":"openevse-55ad","mqtt":"emon/openevse-55ad","http":"http://192.168.1.43/"}
+```
+
+For device descovery you should subscribe with a wild card to `openevse/announce/#`
+
+When the device disconnects from MQTT the same message is posted with `state":"disconnected"` (Last Will and Testament).
+
+All subsequent MQTT status updates will by default be be posted to `openevse-xxxx` where `xxxx` is the last 4 characters of the device ID. This base-topic can be changed via the MQTT service page. 
+
 #### OpenEVSE Status via MQTT
 
 OpenEVSE can post its status values (e.g. amp, wh, temp1, temp2, temp3, pilot, status) to an MQTT server. Data will be published as a sub-topic of base topic.E.g `<base-topic>/amp`. Data is published to MQTT every 30s.
+
+**The default `<base-topic>` is `openevse-xxxx` where `xxxx` is the last 4 characters of the device ID**
 
 MQTT setup is pre-populated with OpenEnergyMonitor [emonPi default MQTT server credentials](https://guide.openenergymonitor.org/technical/credentials/#mqtt).
 
@@ -234,6 +257,46 @@ The response from the RAPI command is published by the OpenEVSE back to the same
 e.g. `$OK`
 
 [See video demo of RAPI over MQTT](https://www.youtube.com/watch?v=tjCmPpNl-sA&t=101s)
+
+
+### HTTP API 
+
+Current status of the OpenEVSE in JSON format is available via: `http://openevse-xxx/status` e.g
+
+```
+{"mode":"STA","wifi_client_connected":1,"eth_connected":0,"net_connected":1,"srssi":-73,"ipaddress":"192.168.1.43","emoncms_connected":1,"packets_sent":22307,"packets_success":22290,"mqtt_connected":1,"ohm_hour":"NotConnected","free_heap":203268,"comm_sent":335139,"comm_success":335139,"rapi_connected":1,"amp":0,"pilot":32,"temp1":282,"temp2":-2560,"temp3":-2560,"state":254,"elapsed":3473,"wattsec":22493407,"watthour":51536,"gfcicount":0,"nogndcount":0,"stuckcount":0,"divertmode":1,"solar":390,"grid_ie":0,"charge_rate":7,"divert_update":0,"ota_update":0,"time":"2020-05-12T17:53:48Z","offset":"+0000"}
+``` 
+
+Current config of the OpenEVSE in JSON format is available via `http://openevse-xxx/config` e.g
+
+```
+{"firmware":"6.2.1.EU","protocol":"5.1.0","espflash":4194304,"version":"3.1.0.dev","diodet":0,"gfcit":0,"groundt":0,"relayt":0,"ventt":0,"tempt":0,"service":2,"scale":220,"offset":0,"ssid":"<SSID>","pass":"_DUMMY_PASSWORD","emoncms_enabled":true,"emoncms_server":"https://emoncms.org","emoncms_node":"emonevse","emoncms_apikey":"_DUMMY_PASSWORD","emoncms_fingerprint":"","mqtt_enabled":true,"mqtt_protocol":"mqtt","mqtt_server":"emonpi","mqtt_port":1883,"mqtt_reject_unauthorized":true,"mqtt_topic":"emon/openevse-55ad","mqtt_user":"emonpi","mqtt_pass":"_DUMMY_PASSWORD","mqtt_solar":"emon/solarpv/test","mqtt_grid_ie":"","mqtt_supported_protocols":["mqtt","mqtts"],"http_supported_protocols":["http","https"],"www_username":"open","www_password":"_DUMMY_PASSWORD","hostname":"openevse-55ad","time_zone":"Europe/Lisbon|WET0WEST,M3.5.0/1,M10.5.0","sntp_enabled":true,"sntp_host":"pool.ntp.org","ohm_enabled":false}
+```
+
+### HTTP Tesla API
+
+**IN DEVELOPMENT**
+
+V3.2 onwards includes a basic Tesla API integration. The HTTP API for this is as follows:
+
+Enter Tesla credentials and enable the feature: 
+
+`http://openevse-xxx/savetesla?user=TESLAUSER&pass=TESLAPASS&enable=true`
+
+Return a list of vehicles associated with the Tesla account e.g
+
+`http://openevse-xxx/teslaveh`
+
+e.g
+`
+{"count:"2,[{"id":"xxxx","name":"tesla1"},{"id":"xxxxx","name":"tesla2"}]}`
+
+Set the vehicle index to choose which vehicle to retrieve status.
+Note: The ID starts at zero so the first car will have vi=0
+
+`http://openevse-xxx/saveteslavi?vi=VEHICLEINDEX`
+
+The SoC and rated range of the Tesa vehicle is now displayed in JSON format via `/status`. 
 
 #### RAPI over HTTP
 
@@ -314,7 +377,7 @@ If flashing a new ESP32 flashing bootloader and partitions file is required:
 
 `esptool.py --baud 921600 --before default_reset --after hard_reset write_flash -z --flash_mode dio --flash_freq 40m --flash_size detect 0x1000 bootloader.bin 0x8000 partitions.bin 0x10000 firmware.bin`
 
-Then succesive uploads can just upload the firmware 
+Then successive uploads can just upload the firmware 
 
 `esptool.py --baud 921600 --before default_reset --after hard_reset write_flash -z --flash_mode dio --flash_freq 40m --flash_size detect 0x10000 firmware.bin`
 
@@ -376,7 +439,7 @@ pio run -t upload
 If you are using a different development board, you can specify one of the envs setup in `platformio.ini`, for example:
 
 ```
-pio run -e openevse_huzzah32 -t upload
+pio run -e openevse_huzzah32_idf -t upload
 ```
 
 *To enable OTA updates, first upload via serial using the dev environment. This enables OTA enable build flag*
@@ -387,7 +450,7 @@ pio run -e openevse_huzzah32 -t upload
 
 ### Uploading issues
 
-- Double check device is in bootloder mode
+- Double check device is in bootloader mode
 - Try reducing the upload ESP baudrate
 - Erase flash: If you are experiencing ESP hanging in a reboot loop after upload it may be that the ESP flash has remnants of previous code (which may have the used the ESP memory in a different way). The ESP flash can be fully erased using [esptool](https://github.com/espressif/esptool). With the unit in bootloader mode run:
 

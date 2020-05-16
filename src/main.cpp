@@ -44,6 +44,7 @@
 #include "root_ca.h"
 #include "espal.h"
 #include "time_man.h"
+#include "tesla_client.h"
 
 #include "RapiSender.h"
 
@@ -174,6 +175,10 @@ loop() {
 
   if(net_is_connected())
   {
+    if (config_tesla_enabled()) {
+      teslaClient.loop();
+    }
+
     mqtt_loop();
 
     // -------------------------------------------------------------------
@@ -194,6 +199,14 @@ loop() {
         }
         if(config_ohm_enabled()) {
           ohm_loop();
+        }
+        
+        if (config_mqtt_enabled()) {
+          data = "";
+          teslaClient.getChargeInfoJson(data);
+          if (data.length() > 0) {
+            mqtt_publish(data);
+          }
         }
       }
 

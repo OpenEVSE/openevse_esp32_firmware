@@ -33,6 +33,7 @@ typedef const __FlashStringHelper *fstr_t;
 #include "lcd.h"
 #include "espal.h"
 #include "time_man.h"
+#include "tesla_client.h"
 
 MongooseHttpServer server;          // Create class for Web server
 
@@ -477,6 +478,35 @@ handleSaveAdvanced(MongooseHttpServerRequest *request) {
 }
 
 // -------------------------------------------------------------------
+// Get Tesla Vehicle Info
+// url: /teslaveh
+// -------------------------------------------------------------------
+void
+handleTeslaVeh(MongooseHttpServerRequest *request) {
+  MongooseHttpServerResponseStream *response;
+  if(false == requestPreProcess(request, response)) {
+    return;
+  }
+
+  String s = "{";
+  int vc = teslaClient.getVehicleCnt();
+  s += "\"count:\"" + String(vc);
+  if (vc) {
+    s += ",[";
+    for (int i=0;i < vc;i++) {
+      s += "{\"id\":\"" + teslaClient.getVehicleId(i) + "\",";
+      s += "\"name\":\"" + teslaClient.getVehicleDisplayName(i) + "\"}";
+      if (i < vc-1) s += ",";
+    }
+    s += "]";
+  }
+  s += "}";
+
+  response->setCode(200);
+  response->print(s);
+  request->send(response);
+}
+// -------------------------------------------------------------------
 // Save the Ohm keyto EEPROM
 // url: /handleSaveOhmkey
 // -------------------------------------------------------------------
@@ -575,6 +605,19 @@ handleStatus(MongooseHttpServerRequest *request) {
   doc["ota_update"] = (int)Update.isRunning();
   doc["time"] = String(time);
   doc["offset"] = String(offset) + "\"";
+
+  {
+    const TESLA_CHARGE_INFO *tci = teslaClient.getChargeInfo();
+    if (tci->isValid) {
+      doc["batteryRange"] = tci->batteryRange;
+      doc["chargeEnergyAdded"] = tci->chargeEnergyAdded;
+      doc["chargeMilesAddedRated"] = tci->chargeMilesAddedRated;
+      doc["batteryLevel"] = tci->batteryLevel;
+      doc["chargeLimitSOC"] = tci->chargeLimitSOC;
+      doc["timeToFullCharge"] = tci->timeToFullCharge;
+      doc["chargerVoltage"] = tci->chargerVoltage;
+    }
+  }
 
   response->setCode(200);
   serializeJson(doc, *response);
@@ -1040,6 +1083,7 @@ web_server_setup() {
   server.on("/saveemoncms$", handleSaveEmoncms);
   server.on("/savemqtt$", handleSaveMqtt);
   server.on("/saveadmin$", handleSaveAdmin);
+  server.on("/teslaveh$", handleTeslaVeh);
   server.on("/saveadvanced$", handleSaveAdvanced);
   server.on("/saveohmkey$", handleSaveOhmkey);
   server.on("/settime$", handleSetTime);
