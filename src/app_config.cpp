@@ -1,6 +1,6 @@
 #include "emonesp.h"
 #include "app_config.h"
-#include "hal.h"
+#include "espal.h"
 #include "divert.h"
 #include "mqtt.h"
 
@@ -54,7 +54,7 @@ double divert_attack_smoothing_factor;
 double divert_decay_smoothing_factor;
 uint32_t divert_min_charge_time;
 
-String esp_hostname_default = "openevse-"+HAL.getShortId();
+String esp_hostname_default = "openevse-"+ESPAL.getShortId();
 
 void config_changed(String name);
 
@@ -140,7 +140,7 @@ ConfigOpt *opts[] =
   new ConfigOptDefenition<String>(mqtt_solar, "", "mqtt_solar", "mo"),
   new ConfigOptDefenition<String>(mqtt_grid_ie, "emon/emonpi/power1", "mqtt_grid_ie", "mg"),
   new ConfigOptDefenition<String>(mqtt_vrms, "emon/emonpi/vrms", "mqtt_vrms", "mv"),
-  new ConfigOptDefenition<String>(mqtt_announce_topic, "openevse/announce/"+HAL.getShortId(), "mqtt_announce_topic", "ma"),
+  new ConfigOptDefenition<String>(mqtt_announce_topic, "openevse/announce/"+ESPAL.getShortId(), "mqtt_announce_topic", "ma"),
 
 // Ohm Connect Settings
   new ConfigOptDefenition<String>(ohm, "", "ohm", "o"),
@@ -190,6 +190,7 @@ config_load_settings()
     DBUGF("No JSON config found, trying v1 settings");
     config_load_v1_settings();
   }
+  config.onChanged(config_changed);
 }
 
 void config_changed(String name)

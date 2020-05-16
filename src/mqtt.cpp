@@ -7,7 +7,7 @@
 #include "app_config.h"
 #include "divert.h"
 #include "input.h"
-#include "hal.h"
+#include "espal.h"
 #include "net_manager.h"
 
 #include <Arduino.h>
@@ -122,7 +122,7 @@ mqtt_connect()
   DynamicJsonDocument willDoc(JSON_OBJECT_SIZE(3) + 60);
 
   willDoc["state"] = "disconnected";
-  willDoc["id"] = HAL.getLongId();
+  willDoc["id"] = ESPAL.getLongId();
   willDoc["name"] = esp_hostname;
 
   lastWill = "";
@@ -143,7 +143,7 @@ mqtt_connect()
     DynamicJsonDocument doc(JSON_OBJECT_SIZE(5) + 200);
 
     doc["state"] = "connected";
-    doc["id"] = HAL.getLongId();
+    doc["id"] = ESPAL.getLongId();
     doc["name"] = esp_hostname;
     doc["mqtt"] = mqtt_topic;
     doc["http"] = "http://"+ipaddress+"/";

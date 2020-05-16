@@ -13,7 +13,7 @@
 #include "web_server.h"
 #include "net_manager.h"
 #include "openevse.h"
-#include "hal.h"
+#include "espal.h"
 
 #include "RapiSender.h"
 
@@ -91,7 +91,7 @@ void create_rapi_json(String &data)
   doc["temp2"] = temp2;
   doc["temp3"] = temp3;
   doc["state"] = state;
-  doc["freeram"] = HAL.getFreeHeap();
+  doc["freeram"] = ESPAL.getFreeHeap();
   doc["divertmode"] = divertmode;
 
   serializeJson(doc, data);

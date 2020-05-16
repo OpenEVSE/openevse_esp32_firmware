@@ -263,3 +263,17 @@ Content-Type: application/x-www-form-urlencoded
 time=20180810T143000Z
 
 ###
+
+GET /update
+
+###
+
+POST /update
+Content-Type: multipart/form-data; boundary=----WebKitFormBoundary7MA4YWxkTrZu0gW
+
+----WebKitFormBoundary7MA4YWxkTrZu0gW
+Content-Disposition: form-data; name="image"; filename="firmware.bin"
+Content-Type: application/octet-stream
+
+< ./.pio/build/openevse_esp-wrover-kit_idf/firmware.bin
+----WebKitFormBoundary7MA4YWxkTrZu0gW

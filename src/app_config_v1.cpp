@@ -1,6 +1,5 @@
 #include "emonesp.h"
 #include "app_config.h"
-#include "hal.h"
 
 #include <Arduino.h>
 #include <EEPROM.h>             // Save config settings

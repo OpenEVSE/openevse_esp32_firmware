@@ -2,7 +2,7 @@
 #include "net_manager.h"
 #include "app_config.h"
 #include "lcd.h"
-#include "hal.h"
+#include "espal.h"
 #include "time_man.h"
 
 #ifdef ESP32
@@ -80,7 +80,7 @@ startAP() {
 
   // Create Unique SSID e.g "emonESP_XXXXXX"
   String softAP_ssid_ID =
-    String(softAP_ssid) + "_" + HAL.getShortId();
+    String(softAP_ssid) + "_" + ESPAL.getShortId();
 
   // Pick a random channel out of 1, 6 or 11
   int channel = (random(3) * 5) + 1;
@@ -387,7 +387,7 @@ net_setup() {
   if(net_wifi_is_client_configured()) {
     WiFi.persistent(true);
     WiFi.disconnect();
-    HAL.eraseConfig();
+    ESPAL.eraseConfig();
   }
 
   // Stop the WiFi module
@@ -478,10 +478,10 @@ net_loop()
     delay(1000);
 
     config_reset();
-    HAL.eraseConfig();
+    ESPAL.eraseConfig();
 
     delay(50);
-    HAL.reset();
+    ESPAL.reset();
   }
   else if(false == apMessage && LOW == wifiButtonState && millis() > wifiButtonTimeOut + WIFI_BUTTON_AP_TIMEOUT)
   {
@@ -505,7 +505,7 @@ net_loop()
   if(isApOnly && 0 == apClients && client_retry && millis() > client_retry_time) {
     DEBUG.println("client re-try, resetting");
     delay(50);
-    HAL.reset();
+    ESPAL.reset();
   }
 
   if(dnsServerStarted) {

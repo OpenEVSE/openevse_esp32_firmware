@@ -31,7 +31,7 @@ typedef const __FlashStringHelper *fstr_t;
 #include "emoncms.h"
 #include "divert.h"
 #include "lcd.h"
-#include "hal.h"
+#include "espal.h"
 #include "time_man.h"
 
 MongooseHttpServer server;          // Create class for Web server
@@ -546,7 +546,7 @@ handleStatus(MongooseHttpServerRequest *request) {
 
   doc["ohm_hour"] = ohm_hour;
 
-  doc["free_heap"] = HAL.getFreeHeap();
+  doc["free_heap"] = ESPAL.getFreeHeap();
 
   doc["comm_sent"] = rapiSender.getSent();
   doc["comm_success"] = rapiSender.getSuccess();
@@ -594,7 +594,7 @@ handleConfigGet(MongooseHttpServerRequest *request, MongooseHttpServerResponseSt
   // EVSE Config
   doc["firmware"] = firmware;
   doc["protocol"] = protocol;
-  doc["espflash"] = HAL.getFlashChipSize();
+  doc["espflash"] = ESPAL.getFlashChipSize();
   doc["version"] = currentfirmware;
   doc["diodet"] = diode_ck;
   doc["gfcit"] = gfci_test;
@@ -705,7 +705,7 @@ handleRst(MongooseHttpServerRequest *request) {
   }
 
   config_reset();
-  HAL.eraseConfig();
+  ESPAL.eraseConfig();
 
   response->setCode(200);
   response->print("1");
@@ -1091,7 +1091,7 @@ web_server_loop() {
   if(systemRebootTime > 0 && millis() > systemRebootTime) {
     systemRebootTime = 0;
     net_wifi_disconnect();
-    HAL.reset();
+    ESPAL.reset();
   }
 
   Profile_End(web_server_loop, 5);

@@ -85,3 +85,4 @@ ubuntu-xenial-16.04-cloudimg-console.log
 lib/ArduinoMongoose
 lib/ConfigJson
 lib/OpenEVSE
+lib/ESPAL
