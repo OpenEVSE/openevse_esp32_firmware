@@ -45,7 +45,7 @@ ESP32-gateway can be connected by micro USB and firmware can be uploaded using e
 
 ## Compile and Upload 
 
-Firmware can be compiled and uploade using PlatformIO with the `openevse_esp32-gateway-e` environment selected. The `e` environment has been tested to work on hardware Rev.E and Rev.F. See note below for older revisions. 
+Firmware can be compiled and upload using PlatformIO with the `openevse_esp32-gateway-e` environment selected. The `e` environment has been tested to work on hardware Rev.E and Rev.F. See note below for older revisions. 
 
 The ESP32-gateway can be connected via micro USB and firmware compiled and uploaded with
 `$ pio run -e openevse_esp32-gateway-e -t upload`
@@ -54,16 +54,16 @@ The ESP32-gateway can be connected via micro USB and firmware compiled and uploa
 
 The ESP32-gateway supports both WiFi and Ethernet, if an Ethernet cable is not connected the ESP32-gateway will broadcast a WiFi AP `OpenEVSE_xxx`, connect with PSK `openevse`.
 
-When an Ethernt cable is connected WiFi will be disabled and the local network IP address and hostname displayed on the LCD. 
+When an Ethernet cable is connected WiFi will be disabled and the local network IP address and hostname displayed on the LCD. 
 
 Note: Static IP or custom gateway IP address settings are currently not supported. 
 
-The web UI will notify that connection is via Wired Etherent
+The web UI will notify that connection is via Wired Ethernet.
 
 ![esp32-gateway-connected](esp32-gateway-connected.png)
 ## Feedback
 
-The ESP32 Gatway is a new addition and is currently considered in 'Beta' since the ESP32 firmware is still under active development. However, it has been extensively tested and proven reliable for many months of operation. Please report your experience to the [OpenEnergyMonitor Community Forums](https://community.openenergymonitor.org/).
+The ESP32 Gateway is a new addition and is currently considered in 'Beta' since the ESP32 firmware is still under active development. However, it has been extensively tested and proven reliable for many months of operation. Please report your experience to the [OpenEnergyMonitor Community Forums](https://community.openenergymonitor.org/).
 ***
 
 ## Older Hardware Revisions
@@ -81,4 +81,4 @@ Firmware for older hardware revisions can be compiled and uploading using:
 
 `$ pio run -e openevse_esp32-gateway -t upload`
 
-See [this git issue](https://github.com/OpenEVSE/ESP32_WiFi_V3.x/issues/12) for discussion of hardware revision chages. 
+See [this git issue](https://github.com/OpenEVSE/ESP32_WiFi_V3.x/issues/12) for discussion of hardware revision changes. 
