@@ -353,8 +353,8 @@ config_save_advanced(String hostname, String sntp_host) {
 void
 config_save_wifi(String qsid, String qpass)
 {
-  config.set("esid", qsid);
-  config.set("epass", qpass);
+  config.set("ssid", qsid);
+  config.set("pass", qpass);
   config.commit();
 }
 
