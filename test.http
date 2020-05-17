@@ -35,7 +35,7 @@ Content-Type: application/json
   "emoncms_enabled": true,
   "emoncms_server": "http://emoncms.org",
   "emoncms_node": "openevse-a7d4",
-  "emoncms_apikey": "_DUMMY_PASSWORD",
+  "emoncms_apikey": "{{apikey_emoncms}}",
   "emoncms_fingerprint": ""
 }
 
@@ -81,7 +81,7 @@ Content-Type: application/json
   "mqtt_port": 1883,
   "mqtt_topic": "openevse",
   "mqtt_user": "emonpi",
-  "mqtt_pass": "_DUMMY_PASSWORD",
+  "mqtt_pass": "emonpimqtt2016",
   "mqtt_solar": "",
   "mqtt_grid_ie": "emon/test/grid_ie",
   "mqtt_announce_topic": "openevse/announce/a7d4"
@@ -264,11 +264,11 @@ time=20180810T143000Z
 
 ###
 
-GET /update
+GET {{baseUrl}}/update
 
 ###
 
-POST /update
+POST {{baseUrl}}/update
 Content-Type: multipart/form-data; boundary=----WebKitFormBoundary7MA4YWxkTrZu0gW
 
 ----WebKitFormBoundary7MA4YWxkTrZu0gW
