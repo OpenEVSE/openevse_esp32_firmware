@@ -684,13 +684,14 @@ handleStatus(MongooseHttpServerRequest *request) {
   {
     const TESLA_CHARGE_INFO *tci = teslaClient.getChargeInfo();
     if (tci->isValid) {
+      s += ",";
       s += "\"batteryRange\":" + String(tci->batteryRange) + ",";
       s += "\"chargeEnergyAdded\":" + String(tci->chargeEnergyAdded) + ",";
       s += "\"chargeMilesAddedRated\":" + String(tci->chargeMilesAddedRated) + ",";
       s += "\"batteryLevel\":" + String(tci->batteryLevel) + ",";
       s += "\"chargeLimitSOC\":" + String(tci->chargeLimitSOC) + ",";
       s += "\"timeToFullCharge\":" + String(tci->timeToFullCharge) + ",";
-      s += "\"chargerVoltage\":" + String(tci->chargerVoltage) + ",";
+      s += "\"chargerVoltage\":" + String(tci->chargerVoltage);
     }
   }
 
