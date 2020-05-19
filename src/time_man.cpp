@@ -101,7 +101,7 @@ void time_loop()
 
           String event = F("{\"time\":\"");
           event += time;
-          event += F(",\"offset\":\"");
+          event += F("\",\"offset\":\"");
           event += offset;
           event += F("\"}");
           event_send(event);
