@@ -345,7 +345,7 @@ void config_set_timezone(String tz)
 
 void
 config_save_advanced(String hostname, String sntp_host) {
-  config.set("esp_hostname", hostname);
+  config.set("hostname", hostname);
   config.set("sntp_hostname", sntp_host);
   config.commit();
 }
