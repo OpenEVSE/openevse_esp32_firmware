@@ -1,6 +1,7 @@
 #ifndef _EMONESP_WEB_SERVER_H
 #define _EMONESP_WEB_SERVER_H
 
+#include <ArduinoJson.h>
 #include <MongooseHttpServer.h>
 
 // Content Types
@@ -34,7 +35,7 @@ extern String currentfirmware;
 extern void web_server_setup();
 extern void web_server_loop();
 
-extern void web_server_event(String &event);
+extern void web_server_event(JsonDocument &event);
 
 void dumpRequest(MongooseHttpServerRequest *request);
 

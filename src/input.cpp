@@ -9,8 +9,7 @@
 #include "input.h"
 #include "app_config.h"
 #include "divert.h"
-#include "mqtt.h"
-#include "web_server.h"
+#include "event.h"
 #include "net_manager.h"
 #include "openevse.h"
 #include "espal.h"
@@ -23,7 +22,7 @@ int espfree = 0;
 int rapi_command = 1;
 
 long amp = 0;                         // OpenEVSE Current Sensor
-long volt = 0;                        // Not currently in used
+double voltage = DEFAULT_VOLTAGE;     // Voltage from OpenEVSE or MQTT
 long temp1 = 0;                       // Sensor DS3232 Ambient
 long temp2 = 0;                       // Sensor MCP9808 Ambient
 long temp3 = 0;                       // Sensor TMP007 Infared
@@ -76,15 +75,10 @@ long time_limit = 0;
 long wattsec = 0;
 long watthour_total = 0;
 
-void create_rapi_json(String &data)
+void create_rapi_json(JsonDocument &doc)
 {
-  const size_t capacity = JSON_OBJECT_SIZE(10);
-  DynamicJsonDocument doc(capacity);
-
   doc["amp"] = amp;
-  if (volt > 0) {
-    doc["volt"] = volt;
-  }
+  doc["voltage"] = voltage;
   doc["pilot"] = pilot;
   doc["wh"] = watthour_total;
   doc["temp1"] = temp1;
@@ -93,10 +87,6 @@ void create_rapi_json(String &data)
   doc["state"] = state;
   doc["freeram"] = ESPAL.getFreeHeap();
   doc["divertmode"] = divertmode;
-
-  serializeJson(doc, data);
-
-  //DEBUG.print(emoncms_server.c_str() + String(url));
 }
 
 // -------------------------------------------------------------------
@@ -193,7 +183,10 @@ update_rapi_values() {
             val = rapiSender.getToken(1);
             amp = strtol(val, NULL, 10);
             val = rapiSender.getToken(2);
-            volt = strtol(val, NULL, 10);
+            long volt = strtol(val, NULL, 10);
+            if(volt >= 0) {
+              voltage = (double)volt;
+            }
           }
         }
       });
@@ -383,16 +376,9 @@ void input_setup()
     state = evse_state;
 
     // Send to all clients
-    String event = F("{\"state\":");
-    event += state;
-    event += F("}");
-    web_server_event(event);
-
-    if (config_mqtt_enabled()) {
-      event = F("state:");
-      event += String(state);
-      mqtt_publish(event);
-    }
+    StaticJsonDocument<32> event;
+    event["state"] = state;
+    event_send(event);
   });
 
   OpenEVSE.onWiFi([](uint8_t wifiMode)

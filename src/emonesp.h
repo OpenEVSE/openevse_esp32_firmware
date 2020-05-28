@@ -97,4 +97,8 @@
 #define DEFAULT_TIME_ZONE "Europe/London|GMT0BST,M3.5.0/1,M10.5.0"
 #endif
 
+#ifndef DEFAULT_VOLTAGE
+#define DEFAULT_VOLTAGE  240
+#endif
+
 #endif // _EMONESP_H

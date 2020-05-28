@@ -1,9 +1,12 @@
 #include "emonesp.h"
-#include "app_config.h"
 #include "espal.h"
 #include "divert.h"
 #include "mqtt.h"
 #include "tesla_client.h"
+
+#include "app_config.h"
+#include "app_config_mqtt.h"
+#include "app_config_mode.h"
 
 #include <Arduino.h>
 #include <EEPROM.h>             // Save config settings
@@ -63,54 +66,6 @@ int tesla_vehidx;
 String esp_hostname_default = "openevse-"+ESPAL.getShortId();
 
 void config_changed(String name);
-
-class ConfigOptVirtualMqttProtocol : public ConfigOpt
-{
-protected:
-  ConfigOptDefenition<uint32_t> &_base;
-
-public:
-  ConfigOptVirtualMqttProtocol(ConfigOptDefenition<uint32_t> &b, const char *l, const char *s) :
-    ConfigOpt(l, s),
-    _base(b)
-  {
-  }
-
-  String get() {
-    int protocol = (_base.get() & CONFIG_MQTT_PROTOCOL) >> 4;
-    return 0 == protocol ? "mqtt" : "mqtts";
-  }
-
-  virtual bool set(String value) {
-    uint32_t newVal = _base.get() & ~CONFIG_MQTT_PROTOCOL;
-    if(value == "mqtts") {
-      newVal |= 1;
-    }
-    return _base.set(newVal);
-  }
-
-  virtual bool serialize(DynamicJsonDocument &doc, bool longNames, bool compactOutput, bool hideSecrets) {
-    if(!compactOutput) {
-      doc[name(longNames)] = get();
-      return true;
-    }
-    
-    return false;
-  }
-
-  virtual bool deserialize(DynamicJsonDocument &doc) {
-    if(doc.containsKey(_long)) {
-      return set(doc[_long].as<String>());
-    } else if(doc.containsKey(_short)) { \
-      return set(doc[_short].as<String>());
-    }
-
-    return false;
-  }
-
-  virtual void setDefault() {
-  }
-};
 
 ConfigOptDefenition<uint32_t> flagsOpt = ConfigOptDefenition<uint32_t>(flags, CONFIG_SERVICE_SNTP, "flags", "f");
 
@@ -172,7 +127,8 @@ ConfigOpt *opts[] =
   new ConfigOptVirtualBool(flagsOpt, CONFIG_SERVICE_SNTP, CONFIG_SERVICE_SNTP, "sntp_enabled", "se"),
   new ConfigOptVirtualBool(flagsOpt,CONFIG_SERVICE_TESLA,CONFIG_SERVICE_TESLA, "tesla_enabled", "te"),
   new ConfigOptVirtualBool(flagsOpt, CONFIG_SERVICE_DIVERT, CONFIG_SERVICE_DIVERT, "divert_enabled", "de"),
-  new ConfigOptVirtualMqttProtocol(flagsOpt, "mqtt_protocol", "mprt")
+  new ConfigOptVirtualMqttProtocol(flagsOpt, "mqtt_protocol", "mprt"),
+  new ConfigOptVirtualChargeMode(flagsOpt, "charge_mode", "chmd")
 };
 
 ConfigJson config(opts, sizeof(opts) / sizeof(opts[0]), EEPROM_SIZE);
@@ -198,12 +154,12 @@ ResetEEPROM() {
 void
 config_load_settings() 
 {
+  config.onChanged(config_changed);
+
   if(!config.load()) {
     DBUGF("No JSON config found, trying v1 settings");
     config_load_v1_settings();
   }
-
-  config.onChanged(config_changed);
 }
 
 void config_changed(String name)
@@ -213,12 +169,16 @@ void config_changed(String name)
   if(name == "time_zone") {
     config_set_timezone(time_zone);
   } else if(name == "flags") {
-    divertmode_update(config_divert_enabled() ? DIVERT_MODE_ECO : DIVERT_MODE_NORMAL);
+    divertmode_update((config_divert_enabled() && 1 == config_charge_mode()) ? DIVERT_MODE_ECO : DIVERT_MODE_NORMAL);
     if(mqtt_connected() != config_mqtt_enabled()) {
       mqtt_restart();
     }
   } else if(name.startsWith("mqtt_")) {
     mqtt_restart();
+  } else if(name == "divert_enabled" || name == "charge_mode") {
+    DBUGVAR(config_divert_enabled());
+    DBUGVAR(config_charge_mode());
+    divertmode_update((config_divert_enabled() && 1 == config_charge_mode()) ? DIVERT_MODE_ECO : DIVERT_MODE_NORMAL);
   } else if(name == "tesla_username") {
     teslaClient.setUser(tesla_username.c_str());
   } else if(name == "tesla_password") {

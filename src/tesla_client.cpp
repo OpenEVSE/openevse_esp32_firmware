@@ -376,10 +376,8 @@ void TeslaClient::requestChargeState()
   _client.send(req);
 }
 
-void TeslaClient::getChargeInfoJson(String &sjson)
+void TeslaClient::getChargeInfoJson(JsonDocument &doc)
 {
-  DynamicJsonDocument doc(JSON_OBJECT_SIZE(7));
-
   if (_chargeInfo.isValid) {
     doc["tesla/batteryRange"] = _chargeInfo.batteryRange;
     doc["tesla/chargeEnergyAdded"] = _chargeInfo.chargeEnergyAdded;
@@ -388,9 +386,5 @@ void TeslaClient::getChargeInfoJson(String &sjson)
     doc["tesla/chargeLimitSOC"] = _chargeInfo.chargeLimitSOC;
     doc["tesla/timeToFullCharge"] = _chargeInfo.timeToFullCharge;
     doc["tesla/chargerVoltage"] = _chargeInfo.chargerVoltage;
-    serializeJson(doc,sjson);
-  }
-  else {
-    sjson = "";
   }
 }

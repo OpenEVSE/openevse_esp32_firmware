@@ -33,7 +33,7 @@ time_t simulated_time = 0;
 
 bool kw = false;
 
-extern double smothed_avalible_current;
+extern double smoothed_avalible_current;
 extern double divert_attack_smoothing_factor;
 extern double divert_decay_smoothing_factor;
 
@@ -143,7 +143,7 @@ int main(int argc, char** argv)
   parser.delimiter(sep.c_str()[0]);
   int row_number = 0;
   
-  std::cout << "Date,Solar,Grid IE,Pilot,Charge Power,Min Charge Power,State,Smothed Avalible" << std::endl;
+  std::cout << "Date,Solar,Grid IE,Pilot,Charge Power,Min Charge Power,State,Smoothed Avalible" << std::endl;
   for (auto& row : parser)
   {
     try
@@ -179,9 +179,9 @@ int main(int argc, char** argv)
       int ev_watt = ev_pilot * voltage;
       int min_ev_watt = 6 * voltage;
 
-      double smothed = smothed_avalible_current * voltage;
+      double smoothed = smoothed_avalible_current * voltage;
 
-      std::cout << buffer << "," << solar << "," << grid_ie << "," << ev_pilot << "," << ev_watt << "," << min_ev_watt << "," << state << "," << smothed << std::endl;
+      std::cout << buffer << "," << solar << "," << grid_ie << "," << ev_pilot << "," << ev_watt << "," << min_ev_watt << "," << state << "," << smoothed << std::endl;
     }
     catch(const std::invalid_argument& e)
     {

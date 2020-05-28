@@ -583,6 +583,7 @@ handleStatus(MongooseHttpServerRequest *request) {
   doc["rapi_connected"] = (int)rapiSender.isConnected();
 
   doc["amp"] = amp;
+  doc["voltage"] = voltage;
   doc["pilot"] = pilot;
   doc["temp1"] = temp1;
   doc["temp2"] = temp2;
@@ -604,7 +605,7 @@ handleStatus(MongooseHttpServerRequest *request) {
 
   doc["ota_update"] = (int)Update.isRunning();
   doc["time"] = String(time);
-  doc["offset"] = String(offset) + "\"";
+  doc["offset"] = String(offset);
 
   {
     const TESLA_CHARGE_INFO *tci = teslaClient.getChargeInfo();
@@ -1141,7 +1142,9 @@ web_server_loop() {
   Profile_End(web_server_loop, 5);
 }
 
-void web_server_event(String &event)
+void web_server_event(JsonDocument &event)
 {
-  server.sendAll(event);
+  String json;
+  serializeJson(event, json);
+  server.sendAll(json);
 }

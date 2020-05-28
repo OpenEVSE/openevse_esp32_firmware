@@ -55,7 +55,7 @@ void mqttmsg_callback(MongooseString topic, MongooseString payload) {
     divert_update_state();
   }
   else if (topic_string == mqtt_vrms){
-    voltage = payload_str.toInt();
+    voltage = payload_str.toFloat();
     DBUGF("voltage:%d", voltage);
   }
   // If MQTT message to set divert mode is received
@@ -189,51 +189,20 @@ mqtt_connect()
 // Publish status to MQTT
 // -------------------------------------------------------------------
 void
-mqtt_publish(String data) {
+mqtt_publish(JsonDocument &data) {
   Profile_Start(mqtt_publish);
 
   if(!config_mqtt_enabled() || !mqttclient.connected()) {
     return;
   }
 
-  String mqtt_data = "";
-  String topic = mqtt_topic + "/";
-
-  int i = 0;
-  if(data[i] == '{') {
-    i++;
-  }
-  while (int (data[i]) != 0) {
-    // Construct MQTT topic e.g. <base_topic>/<status> data
-    while (data[i] != ':') {
-      if(data[i] != '"') {
-        topic += data[i];
-      }
-      i++;
-      if (int (data[i]) == 0) {
-        break;
-      }
-    }
-    i++;
-    // Construct data string to publish to above topic
-    while (data[i] != ',') {
-      if(data[i] != '}') {
-        mqtt_data += data[i];
-      }
-      i++;
-      if (int (data[i]) == 0) {
-        break;
-      }
-    }
-    // send data via mqtt
-    //delay(100);
-    DBUGF("%s = %s", topic.c_str(), mqtt_data.c_str());
-    mqttclient.publish(topic, mqtt_data);
+  JsonObject root = data.as<JsonObject>();
+  for (JsonPair kv : root) {
+    String topic = mqtt_topic + "/";
+    topic += kv.key().c_str();
+    String val = kv.value().as<String>();
+    mqttclient.publish(topic, val);
     topic = mqtt_topic + "/";
-    mqtt_data = "";
-    i++;
-    if (int (data[i]) == 0)
-      break;
   }
 
   Profile_End(mqtt_publish, 5);

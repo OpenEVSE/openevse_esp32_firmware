@@ -8,6 +8,7 @@
 #define _TESLA_CLIENT_H_
 
 #include <Arduino.h>
+#include <ArduinoJson.h>
 
 #include <MongooseString.h>
 #include <MongooseHttpClient.h>
@@ -75,7 +76,7 @@ class TeslaClient {
   String getVehicleDisplayName(int vehidx);
   const char *getUser() { return _teslaUser.c_str(); }
   const char *getPass() { return _teslaPass.c_str(); }
-  void getChargeInfoJson(String &sjson);
+  void getChargeInfoJson(JsonDocument &sjson);
   const TESLA_CHARGE_INFO *getChargeInfo() { return &_chargeInfo; }
 
   void loop();

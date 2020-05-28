@@ -21,15 +21,17 @@ const char *post_path = "/input/post?";
 
 static MongooseHttpClient client;
 
-void emoncms_publish(String data)
+void emoncms_publish(JsonDocument &data)
 {
   Profile_Start(emoncms_publish);
 
   if (emoncms_apikey != 0)
   {
     String url = emoncms_server + post_path;
+    String json;
+    serializeJson(data, json);
     url += "fulljson=";
-    MongooseString encodedJson = mg_url_encode(MongooseString(data));
+    MongooseString encodedJson = mg_url_encode(MongooseString(json));
     url += (const char *)encodedJson;
     mg_strfree(encodedJson);
     url += "&node=";

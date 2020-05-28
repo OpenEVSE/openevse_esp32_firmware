@@ -2,6 +2,7 @@
 #define _EMONESP_INPUT_H
 
 #include <Arduino.h>
+#include <ArduinoJson.h>
 #include "RapiSender.h"
 
 extern RapiSender rapiSender;
@@ -10,7 +11,7 @@ extern String url;
 extern String data;
 
 extern long amp;    // OpenEVSE Current Sensor
-extern long volt;   // Not currently in used
+extern double voltage; // voltage from OpenEVSE or MQTT
 extern long temp1;  // Sensor DS3232 Ambient
 extern long temp2;  // Sensor MCP9808 Ambient
 extern long temp3;  // Sensor TMP007 Infared
@@ -66,7 +67,7 @@ extern String ohm_hour;
 
 extern void handleRapiRead();
 extern void update_rapi_values();
-extern void create_rapi_json(String &data);
+extern void create_rapi_json(JsonDocument &data);
 
 extern void input_setup();
 

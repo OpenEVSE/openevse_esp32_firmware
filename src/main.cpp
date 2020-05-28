@@ -45,6 +45,7 @@
 #include "espal.h"
 #include "time_man.h"
 #include "tesla_client.h"
+#include "event.h"
 
 #include "RapiSender.h"
 
@@ -189,24 +190,18 @@ loop() {
 
       if(!Update.isRunning())
       {
-        String data;
+        DynamicJsonDocument data(4096);
         create_rapi_json(data); // create JSON Strings for EmonCMS and MQTT
+
         if (config_emoncms_enabled()) {
           emoncms_publish(data);
         }
-        if (config_mqtt_enabled()) {
-          mqtt_publish(data);
-        }
+
+        teslaClient.getChargeInfoJson(data);
+        event_send(data);
+
         if(config_ohm_enabled()) {
           ohm_loop();
-        }
-        
-        if (config_mqtt_enabled()) {
-          data = "";
-          teslaClient.getChargeInfoJson(data);
-          if (data.length() > 0) {
-            mqtt_publish(data);
-          }
         }
       }
 
@@ -218,15 +213,26 @@ loop() {
 } // end loop
 
 
-void event_send(String event)
+void event_send(String &json)
 {
+  StaticJsonDocument<512> event;
+  deserializeJson(event, json);
+  event_send(event);
+}
+
+void event_send(JsonDocument &event)
+{
+  #ifdef ENABLE_DEBUG
+  serializeJson(event, DEBUG_PORT);
+  DBUGLN("");
+  #endif
   web_server_event(event);
   mqtt_publish(event);
 }
 
 void hardware_setup()
 {
-    RAPI_PORT.begin(115200);
+  RAPI_PORT.begin(115200);
   DEBUG_BEGIN(115200);
 
 #ifdef SERIAL_RX_PULLUP_PIN

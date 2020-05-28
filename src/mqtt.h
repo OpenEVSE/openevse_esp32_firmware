@@ -6,6 +6,7 @@
 // -------------------------------------------------------------------
 
 #include <Arduino.h>
+#include <ArduinoJson.h>
 
 #define MQTT_PROTOCOL_MQTT          0
 #define MQTT_PROTOCOL_MQTT_SSL      1
@@ -25,7 +26,7 @@ extern void mqtt_loop();
 //
 // data: a comma seperated list of name:value pairs to send
 // -------------------------------------------------------------------
-extern void mqtt_publish(String data);
+extern void mqtt_publish(JsonDocument &data);
 
 // -------------------------------------------------------------------
 // Restart the MQTT connection

@@ -61,6 +61,7 @@ extern uint32_t flags;
 #define CONFIG_MQTT_ALLOW_ANY_CERT (1 << 7)
 #define CONFIG_SERVICE_TESLA    (1 << 8)
 #define CONFIG_SERVICE_DIVERT   (1 << 9)
+#define CONFIG_CHARGE_MODE      (7 << 10) // 3 bits for mode
 
 inline bool config_emoncms_enabled() {
   return CONFIG_SERVICE_EMONCMS == (flags & CONFIG_SERVICE_EMONCMS);
@@ -92,6 +93,10 @@ inline bool config_tesla_enabled() {
 
 inline bool config_divert_enabled() {
   return CONFIG_SERVICE_DIVERT == (flags & CONFIG_SERVICE_DIVERT);
+}
+
+inline uint8_t config_charge_mode() {
+  return (flags & CONFIG_CHARGE_MODE) >> 10;
 }
 
 // Ohm Connect Settings

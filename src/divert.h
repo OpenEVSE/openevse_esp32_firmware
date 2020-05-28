@@ -14,9 +14,9 @@
 extern byte divertmode;
 extern int solar;
 extern int grid_ie;
-extern int voltage;
 extern int charge_rate;
 extern uint32_t lastUpdate;
+extern bool divert_active;
 
 // Change mode
 void divertmode_update(byte divertmode);
