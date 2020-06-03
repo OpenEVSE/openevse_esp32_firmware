@@ -10,6 +10,8 @@
 #include "espal.h"
 #include "net_manager.h"
 
+#include "openevse.h"
+
 #include <Arduino.h>
 #include <ArduinoJson.h>
 #include <MongooseMqttClient.h>
@@ -57,6 +59,9 @@ void mqttmsg_callback(MongooseString topic, MongooseString payload) {
   else if (topic_string == mqtt_vrms){
     voltage = payload_str.toFloat();
     DBUGF("voltage:%d", voltage);
+    OpenEVSE.setVoltage(voltage, [](int ret) {
+      // Only gives better power calculations so not critical if this fails
+    });
   }
   // If MQTT message to set divert mode is received
   else if (topic_string == mqtt_topic + "/divertmode/set"){

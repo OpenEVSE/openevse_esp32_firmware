@@ -582,12 +582,24 @@ handleStatus(MongooseHttpServerRequest *request) {
   doc["comm_success"] = rapiSender.getSuccess();
   doc["rapi_connected"] = (int)rapiSender.isConnected();
 
-  doc["amp"] = amp;
-  doc["voltage"] = voltage;
+  doc["amp"] = amp * AMPS_SCALE_FACTOR;
+  doc["voltage"] = voltage * VOLTS_SCALE_FACTOR;
   doc["pilot"] = pilot;
-  doc["temp1"] = temp1;
-  doc["temp2"] = temp2;
-  doc["temp3"] = temp3;
+  if(temp1_valid) {
+    doc["temp1"] = temp1 * TEMP_SCALE_FACTOR;
+  } else {
+    doc["temp1"] = false;
+  }
+  if(temp2_valid) {
+    doc["temp2"] = temp2 * TEMP_SCALE_FACTOR;
+  } else {
+    doc["temp2"] = false;
+  }
+  if(temp3_valid) {
+    doc["temp3"] = temp3 * TEMP_SCALE_FACTOR;
+  } else {
+    doc["temp3"] = false;
+  }
   doc["state"] = state;
   doc["elapsed"] = elapsed;
   doc["wattsec"] = wattsec;

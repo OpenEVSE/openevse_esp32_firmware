@@ -21,11 +21,14 @@ int espfree = 0;
 
 int rapi_command = 1;
 
-long amp = 0;                         // OpenEVSE Current Sensor
+double amp = 0;                         // OpenEVSE Current Sensor
 double voltage = DEFAULT_VOLTAGE;     // Voltage from OpenEVSE or MQTT
-long temp1 = 0;                       // Sensor DS3232 Ambient
-long temp2 = 0;                       // Sensor MCP9808 Ambient
-long temp3 = 0;                       // Sensor TMP007 Infared
+double temp1 = 0;                       // Sensor DS3232 Ambient
+bool temp1_valid = false;
+double temp2 = 0;                       // Sensor MCP9808 Ambiet
+bool temp2_valid = false;
+double temp3 = 0;                       // Sensor TMP007 Infared
+bool temp3_valid = false;
 long pilot = 0;                       // OpenEVSE Pilot Setting
 long state = OPENEVSE_STATE_STARTING; // OpenEVSE State
 long elapsed = 0;                     // Elapsed time (only valid if charging)
@@ -77,13 +80,25 @@ long watthour_total = 0;
 
 void create_rapi_json(JsonDocument &doc)
 {
-  doc["amp"] = amp;
-  doc["voltage"] = voltage;
+  doc["amp"] = amp * AMPS_SCALE_FACTOR;
+  doc["voltage"] = voltage * VOLTS_SCALE_FACTOR;
   doc["pilot"] = pilot;
   doc["wh"] = watthour_total;
-  doc["temp1"] = temp1;
-  doc["temp2"] = temp2;
-  doc["temp3"] = temp3;
+  if(temp1_valid) {
+    doc["temp1"] = temp1 * TEMP_SCALE_FACTOR;
+  } else {
+    doc["temp1"] = false;
+  }
+  if(temp2_valid) {
+    doc["temp2"] = temp2 * TEMP_SCALE_FACTOR;
+  } else {
+    doc["temp2"] = false;
+  }
+  if(temp3_valid) {
+    doc["temp3"] = temp3 * TEMP_SCALE_FACTOR;
+  } else {
+    doc["temp3"] = false;
+  }
   doc["state"] = state;
   doc["freeram"] = ESPAL.getFreeHeap();
   doc["divertmode"] = divertmode;
@@ -125,87 +140,32 @@ update_rapi_values() {
 
           state = evse_state;
           elapsed = session_time;
-
-#ifdef ENABLE_LEGACY_API
-          switch (state) {
-            case 1:
-              estate = "Not Connected";
-              break;
-            case 2:
-              estate = "EV Connected";
-              break;
-            case 3:
-              estate = "Charging";
-              break;
-            case 4:
-              estate = "Vent Required";
-              break;
-            case 5:
-              estate = "Diode Check Failed";
-              break;
-            case 6:
-              estate = "GFCI Fault";
-              break;
-            case 7:
-              estate = "No Earth Ground";
-              break;
-            case 8:
-              estate = "Stuck Relay";
-              break;
-            case 9:
-              estate = "GFCI Self Test Failed";
-              break;
-            case 10:
-              estate = "Over Temperature";
-              break;
-            case 254:
-              estate = "Sleeping";
-              break;
-            case 255:
-              estate = "Disabled";
-              break;
-            default:
-              estate = "Invalid";
-              break;
-          }
-#endif
         }
       });
       break;
     case 3:
-      rapiSender.sendCmd("$GG", [](int ret)
+      OpenEVSE.getChargeCurrentAndVoltage([](int ret, double a, double volts)
       {
         if(RAPI_RESPONSE_OK == ret)
         {
-          if(rapiSender.getTokenCnt() >= 3)
-          {
-            const char *val;
-            val = rapiSender.getToken(1);
-            amp = strtol(val, NULL, 10);
-            val = rapiSender.getToken(2);
-            long volt = strtol(val, NULL, 10);
-            if(volt >= 0) {
-              voltage = (double)volt;
-            }
+          amp = a;
+          if(volts >= 0) {
+            voltage = volts;
           }
         }
       });
       break;
     case 4:
-      rapiSender.sendCmd("$GP", [](int ret)
+      OpenEVSE.getTemperature([](int ret, double t1, bool t1_valid, double t2, bool t2_valid, double t3, bool t3_valid)
       {
         if(RAPI_RESPONSE_OK == ret)
         {
-          if(rapiSender.getTokenCnt() >= 4)
-          {
-            const char *val;
-            val = rapiSender.getToken(1);
-            temp1 = strtol(val, NULL, 10);
-            val = rapiSender.getToken(2);
-            temp2 = strtol(val, NULL, 10);
-            val = rapiSender.getToken(3);
-            temp3 = strtol(val, NULL, 10);
-          }
+          temp1 = t1;
+          temp1_valid = t1_valid;
+          temp2 = t2;
+          temp2_valid = t2_valid;
+          temp3 = t3;
+          temp3_valid = t3_valid;
         }
       });
       break;
