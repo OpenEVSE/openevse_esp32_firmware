@@ -1,130 +1,137 @@
 #include "emonesp.h"
-#include "app_config.h"
-#include "hal.h"
+#include "espal.h"
+#include "divert.h"
+#include "mqtt.h"
 #include "tesla_client.h"
+
+#include "app_config.h"
+#include "app_config_mqtt.h"
+#include "app_config_mode.h"
 
 #include <Arduino.h>
 #include <EEPROM.h>             // Save config settings
+#include <ConfigJson.h>
+
+#define EEPROM_SIZE     4096
+#define CHECKSUM_SEED    128
 
 // Wifi Network Strings
-String esid = "";
-String epass = "";
+String esid;
+String epass;
 
 // Web server authentication (leave blank for none)
-String www_username = "";
-String www_password = "";
+String www_username;
+String www_password;
 
 // Advanced settings
-String esp_hostname = "";
-String esp_hostname_default = "openevse-"+HAL.getShortId();
-String sntp_hostname = "";
+String esp_hostname;
+String sntp_hostname;
+
+// EMONCMS SERVER strings
+String emoncms_server;
+String emoncms_node;
+String emoncms_apikey;
+String emoncms_fingerprint;
+
+// MQTT Settings
+String mqtt_server;
+uint32_t mqtt_port;
+String mqtt_topic;
+String mqtt_user;
+String mqtt_pass;
+String mqtt_solar;
+String mqtt_grid_ie;
+String mqtt_vrms;
+String mqtt_announce_topic;
 
 // Time
 String time_zone;
 
-// EMONCMS SERVER strings
-String emoncms_server = "";
-String emoncms_node = "";
-String emoncms_apikey = "";
-String emoncms_fingerprint = "";
-
-// MQTT Settings
-String mqtt_server = "";
-uint32_t mqtt_port = 1883;
-String mqtt_topic = "";
-String mqtt_user = "";
-String mqtt_pass = "";
-String mqtt_solar = "";
-String mqtt_grid_ie = "";
-String mqtt_announce_topic = "openevse/announce/"+HAL.getShortId();
-
-// Ohm Connect Settings
-String ohm = "";
-
-// Flags
+// 24-bits of Flags
 uint32_t flags;
 
-#define EEPROM_ESID_SIZE              32
-#define EEPROM_EPASS_SIZE             64
-#define EEPROM_EMON_API_KEY_SIZE      33
-#define EEPROM_EMON_SERVER_SIZE       45
-#define EEPROM_EMON_NODE_SIZE         32
-#define EEPROM_MQTT_SERVER_V1_SIZE    45
-#define EEPROM_MQTT_SERVER_SIZE       96
-#define EEPROM_MQTT_TOPIC_SIZE        32
-#define EEPROM_MQTT_USER_SIZE         32
-#define EEPROM_MQTT_PASS_SIZE         64
-#define EEPROM_MQTT_SOLAR_SIZE        30
-#define EEPROM_MQTT_GRID_IE_SIZE      30
-#define EEPROM_EMON_FINGERPRINT_SIZE  60
-#define EEPROM_WWW_USER_SIZE          15
-#define EEPROM_WWW_PASS_SIZE          15
-#define EEPROM_OHM_KEY_SIZE           10
-#define EEPROM_FLAGS_SIZE             4
-#define EEPROM_HOSTNAME_SIZE          32
-#define EEPROM_MQTT_PORT_SIZE         4
-#define EEPROM_SNTP_HOST_SIZE         45
-#define EEPROM_TIME_ZONE_SIZE         80
-#define EEPROM_TESLA_USER_SIZE        32
-#define EEPROM_TESLA_PASS_SIZE        32
-#define EEPROM_TESLA_VEHIDX_SIZE      1
-#define EEPROM_SIZE                   1024
+// Ohm Connect Settings
+String ohm;
 
-#define EEPROM_ESID_START             0
-#define EEPROM_ESID_END               (EEPROM_ESID_START + EEPROM_ESID_SIZE)
-#define EEPROM_EPASS_START            EEPROM_ESID_END
-#define EEPROM_EPASS_END              (EEPROM_EPASS_START + EEPROM_EPASS_SIZE)
-#define EEPROM_EMON_SERVER_START      EEPROM_EPASS_END + 32 /* EEPROM_EMON_API_KEY used to be stored before this */
-#define EEPROM_EMON_SERVER_END        (EEPROM_EMON_SERVER_START + EEPROM_EMON_SERVER_SIZE)
-#define EEPROM_EMON_NODE_START        EEPROM_EMON_SERVER_END
-#define EEPROM_EMON_NODE_END          (EEPROM_EMON_NODE_START + EEPROM_EMON_NODE_SIZE)
-#define EEPROM_MQTT_SERVER_V1_START   EEPROM_EMON_NODE_END
-#define EEPROM_MQTT_SERVER_V1_END     (EEPROM_MQTT_SERVER_V1_START + EEPROM_MQTT_SERVER_V1_SIZE)
-#define EEPROM_MQTT_TOPIC_START       EEPROM_MQTT_SERVER_V1_END
-#define EEPROM_MQTT_TOPIC_END         (EEPROM_MQTT_TOPIC_START + EEPROM_MQTT_TOPIC_SIZE)
-#define EEPROM_MQTT_USER_START        EEPROM_MQTT_TOPIC_END
-#define EEPROM_MQTT_USER_END          (EEPROM_MQTT_USER_START + EEPROM_MQTT_USER_SIZE)
-#define EEPROM_MQTT_PASS_START        EEPROM_MQTT_USER_END
-#define EEPROM_MQTT_PASS_END          (EEPROM_MQTT_PASS_START + EEPROM_MQTT_PASS_SIZE)
-#define EEPROM_MQTT_SOLAR_START       EEPROM_MQTT_PASS_END
-#define EEPROM_MQTT_SOLAR_END         (EEPROM_MQTT_SOLAR_START + EEPROM_MQTT_SOLAR_SIZE)
-#define EEPROM_MQTT_GRID_IE_START     EEPROM_MQTT_SOLAR_END
-#define EEPROM_MQTT_GRID_IE_END       (EEPROM_MQTT_GRID_IE_START + EEPROM_MQTT_GRID_IE_SIZE)
-#define EEPROM_EMON_FINGERPRINT_START EEPROM_MQTT_GRID_IE_END
-#define EEPROM_EMON_FINGERPRINT_END   (EEPROM_EMON_FINGERPRINT_START + EEPROM_EMON_FINGERPRINT_SIZE)
-#define EEPROM_WWW_USER_START         EEPROM_EMON_FINGERPRINT_END
-#define EEPROM_WWW_USER_END           (EEPROM_WWW_USER_START + EEPROM_WWW_USER_SIZE)
-#define EEPROM_WWW_PASS_START         EEPROM_WWW_USER_END
-#define EEPROM_WWW_PASS_END           (EEPROM_WWW_PASS_START + EEPROM_WWW_PASS_SIZE)
-#define EEPROM_OHM_KEY_START          EEPROM_WWW_PASS_END
-#define EEPROM_OHM_KEY_END            (EEPROM_OHM_KEY_START + EEPROM_OHM_KEY_SIZE)
-#define EEPROM_FLAGS_START            EEPROM_OHM_KEY_END
-#define EEPROM_FLAGS_END              (EEPROM_FLAGS_START + EEPROM_FLAGS_SIZE)
-#define EEPROM_EMON_API_KEY_START     EEPROM_FLAGS_END
-#define EEPROM_EMON_API_KEY_END       (EEPROM_EMON_API_KEY_START + EEPROM_EMON_API_KEY_SIZE)
-#define EEPROM_HOSTNAME_START         EEPROM_EMON_API_KEY_END
-#define EEPROM_HOSTNAME_END           (EEPROM_HOSTNAME_START + EEPROM_HOSTNAME_SIZE)
-#define EEPROM_SNTP_HOST_START        EEPROM_HOSTNAME_END
-#define EEPROM_SNTP_HOST_END          (EEPROM_SNTP_HOST_START + EEPROM_SNTP_HOST_SIZE)
-#define EEPROM_TIME_ZONE_START        EEPROM_SNTP_HOST_END
-#define EEPROM_TIME_ZONE_END          (EEPROM_TIME_ZONE_START + EEPROM_TIME_ZONE_SIZE)
-#define EEPROM_MQTT_SERVER_START      EEPROM_TIME_ZONE_END
-#define EEPROM_MQTT_SERVER_END        (EEPROM_MQTT_SERVER_START + EEPROM_MQTT_SERVER_SIZE)
-#define EEPROM_MQTT_PORT_START        EEPROM_MQTT_SERVER_END
-#define EEPROM_MQTT_PORT_END          (EEPROM_MQTT_PORT_START + EEPROM_MQTT_PORT_SIZE)
-#define EEPROM_TESLA_USER_START       EEPROM_MQTT_PORT_END
-#define EEPROM_TESLA_USER_END         (EEPROM_TESLA_USER_START + EEPROM_TESLA_USER_SIZE)
-#define EEPROM_TESLA_PASS_START       EEPROM_TESLA_USER_END
-#define EEPROM_TESLA_PASS_END         (EEPROM_TESLA_PASS_START + EEPROM_TESLA_PASS_SIZE)
-#define EEPROM_TESLA_VEHIDX_START       EEPROM_TESLA_PASS_END
-#define EEPROM_TESLA_VEHIDX_END         (EEPROM_TESLA_VEHIDX_START + EEPROM_TESLA_VEHIDX_SIZE)
-#define EEPROM_CONFIG_END             EEPROM_TESLA_VEHIDX_END
+// Divert settings
+double divert_attack_smoothing_factor;
+double divert_decay_smoothing_factor;
+uint32_t divert_min_charge_time;
 
-#if EEPROM_CONFIG_END > EEPROM_SIZE
-#error EEPROM_SIZE too small
-#endif
+// Tesla Client settings
+String tesla_username;
+String tesla_password;
+int tesla_vehidx;
 
-#define CHECKSUM_SEED 128
+String esp_hostname_default = "openevse-"+ESPAL.getShortId();
+
+void config_changed(String name);
+
+ConfigOptDefenition<uint32_t> flagsOpt = ConfigOptDefenition<uint32_t>(flags, CONFIG_SERVICE_SNTP, "flags", "f");
+
+ConfigOpt *opts[] = 
+{
+// Wifi Network Strings
+  new ConfigOptDefenition<String>(esid, "", "ssid", "ws"),
+  new ConfigOptSecret(epass, "", "pass", "wp"),
+
+// Web server authentication (leave blank for none)
+  new ConfigOptDefenition<String>(www_username, "", "www_username", "au"),
+  new ConfigOptSecret(www_password, "", "www_password", "ap"),
+
+// Advanced settings
+  new ConfigOptDefenition<String>(esp_hostname, esp_hostname_default, "hostname", "hn"),
+  new ConfigOptDefenition<String>(sntp_hostname, SNTP_DEFAULT_HOST, "sntp_hostname", "sh"),
+
+// Time
+  new ConfigOptDefenition<String>(time_zone, "", "time_zone", "tz"),
+
+// EMONCMS SERVER strings
+  new ConfigOptDefenition<String>(emoncms_server, "https://data.openevse.com/emoncms", "emoncms_server", "es"),
+  new ConfigOptDefenition<String>(emoncms_node, esp_hostname, "emoncms_node", "en"),
+  new ConfigOptSecret(emoncms_apikey, "", "emoncms_apikey", "ea"),
+  new ConfigOptDefenition<String>(emoncms_fingerprint, "", "emoncms_fingerprint", "ef"),
+
+// MQTT Settings
+  new ConfigOptDefenition<String>(mqtt_server, "emonpi", "mqtt_server", "ms"),
+  new ConfigOptDefenition<uint32_t>(mqtt_port, 1883, "mqtt_port", "mpt"),
+  new ConfigOptDefenition<String>(mqtt_topic, esp_hostname, "mqtt_topic", "mt"),
+  new ConfigOptDefenition<String>(mqtt_user, "emonpi", "mqtt_user", "mu"),
+  new ConfigOptSecret(mqtt_pass, "emonpimqtt2016", "mqtt_pass", "mp"),
+  new ConfigOptDefenition<String>(mqtt_solar, "", "mqtt_solar", "mo"),
+  new ConfigOptDefenition<String>(mqtt_grid_ie, "emon/emonpi/power1", "mqtt_grid_ie", "mg"),
+  new ConfigOptDefenition<String>(mqtt_vrms, "emon/emonpi/vrms", "mqtt_vrms", "mv"),
+  new ConfigOptDefenition<String>(mqtt_announce_topic, "openevse/announce/"+ESPAL.getShortId(), "mqtt_announce_topic", "ma"),
+
+// Ohm Connect Settings
+  new ConfigOptDefenition<String>(ohm, "", "ohm", "o"),
+
+// Divert settings
+  new ConfigOptDefenition<double>(divert_attack_smoothing_factor, 0.4, "divert_attack_smoothing_factor", "da"),
+  new ConfigOptDefenition<double>(divert_decay_smoothing_factor, 0.05, "divert_decay_smoothing_factor", "dd"),
+  new ConfigOptDefenition<uint32_t>(divert_min_charge_time, (10 * 60), "divert_min_charge_time", "dt"),
+
+// Tesla client settings
+  new ConfigOptDefenition<String>(tesla_username, "", "tesla_username", "tu"),
+  new ConfigOptSecret(tesla_password, "", "tesla_password", "tp"),
+  new ConfigOptDefenition<int>(tesla_vehidx, -1, "tesla_vehidx", "ti"),
+
+// Flags
+  &flagsOpt,
+
+// Virtual Options
+  new ConfigOptVirtualBool(flagsOpt, CONFIG_SERVICE_EMONCMS, CONFIG_SERVICE_EMONCMS, "emoncms_enabled", "ee"),
+  new ConfigOptVirtualBool(flagsOpt, CONFIG_SERVICE_MQTT, CONFIG_SERVICE_MQTT, "mqtt_enabled", "me"),
+  new ConfigOptVirtualBool(flagsOpt, CONFIG_MQTT_ALLOW_ANY_CERT, 0, "mqtt_reject_unauthorized", "mru"),
+  new ConfigOptVirtualBool(flagsOpt, CONFIG_SERVICE_OHM, CONFIG_SERVICE_OHM, "ohm_enabled", "oe"),
+  new ConfigOptVirtualBool(flagsOpt, CONFIG_SERVICE_SNTP, CONFIG_SERVICE_SNTP, "sntp_enabled", "se"),
+  new ConfigOptVirtualBool(flagsOpt,CONFIG_SERVICE_TESLA,CONFIG_SERVICE_TESLA, "tesla_enabled", "te"),
+  new ConfigOptVirtualBool(flagsOpt, CONFIG_SERVICE_DIVERT, CONFIG_SERVICE_DIVERT, "divert_enabled", "de"),
+  new ConfigOptVirtualMqttProtocol(flagsOpt, "mqtt_protocol", "mprt"),
+  new ConfigOptVirtualChargeMode(flagsOpt, "charge_mode", "chmd")
+};
+
+ConfigJson config(opts, sizeof(opts) / sizeof(opts[0]), EEPROM_SIZE);
 
 // -------------------------------------------------------------------
 // Reset EEPROM, wipes all settings
@@ -141,275 +148,150 @@ ResetEEPROM() {
   EEPROM.end();
 }
 
-bool
-EEPROM_read_string(int start, int count, String & val, String defaultVal = "") {
-  byte checksum = CHECKSUM_SEED;
-  for (int i = 0; i < count - 1; ++i) {
-    byte c = EEPROM.read(start + i);
-    if (c != 0 && c != 255) {
-      checksum ^= c;
-      val += (char) c;
-    } else {
-      break;
-    }
-  }
-
-  // Check the checksum
-  byte c = EEPROM.read(start + (count - 1));
-  DBUGF("Got '%s' %d == %d @ %d:%d", val.c_str(), c, checksum, start, count);
-  if(c != checksum) {
-    DBUGF("Using default '%s'", defaultVal.c_str());
-    val = defaultVal;
-    return false;
-  }
-
-  return true;
-}
-
-void
-EEPROM_write_string(int start, int count, String val) {
-  byte checksum = CHECKSUM_SEED;
-  for (int i = 0; i < count - 1; ++i) {
-    if (i < val.length()) {
-      checksum ^= val[i];
-      EEPROM.write(start + i, val[i]);
-    } else {
-      EEPROM.write(start + i, 0);
-    }
-  }
-  EEPROM.write(start + (count - 1), checksum);
-  DBUGF("Saved '%s' %d @ %d:%d", val.c_str(), checksum, start, count);
-}
-
-void
-EEPROM_read_uint24(int start, uint32_t & val, uint32_t defaultVal = 0) {
-  byte checksum = CHECKSUM_SEED;
-  val = 0;
-  for (int i = 0; i < 3; ++i) {
-    byte c = EEPROM.read(start + i);
-    checksum ^= c;
-    val = (val << 8) | c;
-  }
-
-  // Check the checksum
-  byte c = EEPROM.read(start + 3);
-  DBUGF("Got '%06x'  %d == %d @ %d:4", val, c, checksum, start);
-  if(c != checksum) {
-    DBUGF("Using default '%06x'", defaultVal);
-    val = defaultVal;
-  }
-}
-
-void
-EEPROM_write_uint24(int start, uint32_t value) {
-  byte checksum = CHECKSUM_SEED;
-  uint32_t val = value;
-  for (int i = 2; i >= 0; --i) {
-    byte c = val & 0xff;
-    val = val >> 8;
-    checksum ^= c;
-    EEPROM.write(start + i, c);
-  }
-  EEPROM.write(start + 3, checksum);
-  DBUGF("Saved '%06x' %d @ %d:4", value, checksum, start);
-}
-
-void setTimezone(String tz);
-
 // -------------------------------------------------------------------
 // Load saved settings from EEPROM
 // -------------------------------------------------------------------
 void
-config_load_settings() {
-  DBUGLN("Loading config");
-  EEPROM.begin(EEPROM_SIZE);
+config_load_settings() 
+{
+  config.onChanged(config_changed);
 
-  // Device Hostname, needs to be read first as other config defaults depend on it
-  EEPROM_read_string(EEPROM_HOSTNAME_START, EEPROM_HOSTNAME_SIZE,
-                     esp_hostname, esp_hostname_default);
-
-  // Load WiFi values
-  EEPROM_read_string(EEPROM_ESID_START, EEPROM_ESID_SIZE, esid);
-  EEPROM_read_string(EEPROM_EPASS_START, EEPROM_EPASS_SIZE, epass);
-
-  // EmonCMS settings
-  EEPROM_read_string(EEPROM_EMON_API_KEY_START, EEPROM_EMON_API_KEY_SIZE,
-                     emoncms_apikey);
-  EEPROM_read_string(EEPROM_EMON_SERVER_START, EEPROM_EMON_SERVER_SIZE,
-                     emoncms_server, "https://data.openevse.com/emoncms");
-  EEPROM_read_string(EEPROM_EMON_NODE_START, EEPROM_EMON_NODE_SIZE,
-                     emoncms_node, esp_hostname);
-  EEPROM_read_string(EEPROM_EMON_FINGERPRINT_START, EEPROM_EMON_FINGERPRINT_SIZE,
-                     emoncms_fingerprint,"");
-
-  // MQTT settings
-  if(false == EEPROM_read_string(EEPROM_MQTT_SERVER_START, EEPROM_MQTT_SERVER_SIZE,
-                                 mqtt_server, "emonpi")) {
-    EEPROM_read_string(EEPROM_MQTT_SERVER_V1_START, EEPROM_MQTT_SERVER_V1_SIZE,
-                       mqtt_server, "emonpi");
+  if(!config.load()) {
+    DBUGF("No JSON config found, trying v1 settings");
+    config_load_v1_settings();
   }
-  EEPROM_read_string(EEPROM_MQTT_TOPIC_START, EEPROM_MQTT_TOPIC_SIZE,
-                     mqtt_topic, esp_hostname);
-  EEPROM_read_string(EEPROM_MQTT_USER_START, EEPROM_MQTT_USER_SIZE,
-                     mqtt_user, "emonpi");
-  EEPROM_read_string(EEPROM_MQTT_PASS_START, EEPROM_MQTT_PASS_SIZE,
-                     mqtt_pass, "emonpimqtt2016");
-  EEPROM_read_string(EEPROM_MQTT_SOLAR_START, EEPROM_MQTT_SOLAR_SIZE,
-                     mqtt_solar);
-  EEPROM_read_string(EEPROM_MQTT_GRID_IE_START, EEPROM_MQTT_GRID_IE_SIZE,
-                     mqtt_grid_ie, "emon/emonpi/power1");
-  EEPROM_read_uint24(EEPROM_MQTT_PORT_START, mqtt_port, 1883);
-
-  // Web server credentials
-  EEPROM_read_string(EEPROM_WWW_USER_START, EEPROM_WWW_USER_SIZE,
-                     www_username, "");
-  EEPROM_read_string(EEPROM_WWW_PASS_START, EEPROM_WWW_PASS_SIZE,
-                     www_password, "");
-
-  // Ohm Connect Settings
-  EEPROM_read_string(EEPROM_OHM_KEY_START, EEPROM_OHM_KEY_SIZE, ohm);
-
-  // Flags
-  EEPROM_read_uint24(EEPROM_FLAGS_START, flags, CONFIG_SERVICE_SNTP);
-
-  // Advanced
-  EEPROM_read_string(EEPROM_SNTP_HOST_START, EEPROM_SNTP_HOST_SIZE, sntp_hostname, SNTP_DEFAULT_HOST);
-
-  // Timezone
-  EEPROM_read_string(EEPROM_TIME_ZONE_START, EEPROM_TIME_ZONE_SIZE, time_zone, DEFAULT_TIME_ZONE);
-  setTimezone(time_zone);
-
-  // Tesla Settings
-  {
-    String str = "";
-    EEPROM_read_string(EEPROM_TESLA_USER_START, EEPROM_TESLA_USER_SIZE,
-		       str, "");
-    teslaClient.setUser(str.c_str());
-    str = "";
-    EEPROM_read_string(EEPROM_TESLA_PASS_START, EEPROM_TESLA_PASS_SIZE,
-		       str, "");
-    teslaClient.setPass(str.c_str());
-    uint8_t uvehidx = EEPROM.read(EEPROM_TESLA_VEHIDX_START);
-    int vehidx;
-    if (uvehidx == ((uint8_t)0xff)) vehidx = -1;
-    else vehidx = (int)uvehidx;
-    teslaClient.setVehicleIdx(vehidx);
-  }
-
-  EEPROM.end();
 }
 
-void
-config_save_emoncms(bool enable, String server, String node, String apikey,
+void config_changed(String name)
+{
+  DBUGF("%s changed", name.c_str());
+
+  if(name == "time_zone") {
+    config_set_timezone(time_zone);
+  } else if(name == "flags") {
+    divertmode_update((config_divert_enabled() && 1 == config_charge_mode()) ? DIVERT_MODE_ECO : DIVERT_MODE_NORMAL);
+    if(mqtt_connected() != config_mqtt_enabled()) {
+      mqtt_restart();
+    }
+  } else if(name.startsWith("mqtt_")) {
+    mqtt_restart();
+  } else if(name == "divert_enabled" || name == "charge_mode") {
+    DBUGVAR(config_divert_enabled());
+    DBUGVAR(config_charge_mode());
+    divertmode_update((config_divert_enabled() && 1 == config_charge_mode()) ? DIVERT_MODE_ECO : DIVERT_MODE_NORMAL);
+  } else if(name == "tesla_username") {
+    teslaClient.setUser(tesla_username.c_str());
+  } else if(name == "tesla_password") {
+    teslaClient.setPass(tesla_password.c_str());
+  } else if(name == "tesla_vehidx") {
+    teslaClient.setVehicleIdx(tesla_vehidx);
+  }
+}
+
+void config_commit()
+{
+  config.commit();
+}
+
+bool config_deserialize(String& json) {
+  return config.deserialize(json.c_str());
+}
+
+bool config_deserialize(const char *json)
+{
+  return config.deserialize(json);
+}
+
+bool config_deserialize(DynamicJsonDocument &doc) 
+{
+  return config.deserialize(doc);
+}
+
+bool config_serialize(String& json, bool longNames, bool compactOutput, bool hideSecrets)
+{
+  return config.serialize(json, longNames, compactOutput, hideSecrets);
+}
+
+bool config_serialize(DynamicJsonDocument &doc, bool longNames, bool compactOutput, bool hideSecrets)
+{
+  return config.serialize(doc, longNames, compactOutput, hideSecrets);
+}
+
+void config_set(const char *name, uint32_t val) {
+  config.set(name, val);
+} 
+void config_set(const char *name, String val) {
+  config.set(name, val);
+} 
+void config_set(const char *name, bool val) {
+  config.set(name, val);
+} 
+void config_set(const char *name, double val) {
+  config.set(name, val);
+} 
+
+void config_save_emoncms(bool enable, String server, String node, String apikey,
                     String fingerprint)
 {
-  EEPROM.begin(EEPROM_SIZE);
-
-  flags = flags & ~CONFIG_SERVICE_EMONCMS;
+  uint32_t newflags = flags & ~CONFIG_SERVICE_EMONCMS;
   if(enable) {
-    flags |= CONFIG_SERVICE_EMONCMS;
+    newflags |= CONFIG_SERVICE_EMONCMS;
   }
 
-  emoncms_server = server;
-  emoncms_node = node;
-  emoncms_apikey = apikey;
-  emoncms_fingerprint = fingerprint;
-
-  // save apikey to EEPROM
-  EEPROM_write_string(EEPROM_EMON_API_KEY_START, EEPROM_EMON_API_KEY_SIZE,
-                      emoncms_apikey);
-
-  // save emoncms server to EEPROM max 45 characters
-  EEPROM_write_string(EEPROM_EMON_SERVER_START, EEPROM_EMON_SERVER_SIZE,
-                      emoncms_server);
-
-  // save emoncms node to EEPROM max 32 characters
-  EEPROM_write_string(EEPROM_EMON_NODE_START, EEPROM_EMON_NODE_SIZE,
-                      emoncms_node);
-
-  // save emoncms HTTPS fingerprint to EEPROM max 60 characters
-  EEPROM_write_string(EEPROM_EMON_FINGERPRINT_START,
-                      EEPROM_EMON_FINGERPRINT_SIZE, emoncms_fingerprint);
-
-  EEPROM_write_uint24(EEPROM_FLAGS_START, flags);
-
-  EEPROM.end();
+  config.set("emoncms_server", server);
+  config.set("emoncms_node", node);
+  config.set("emoncms_apikey", apikey);
+  config.set("emoncms_fingerprint", fingerprint);
+  config.set("flags", newflags);
+  config.commit();
 }
 
 void
 config_save_mqtt(bool enable, int protocol, String server, uint16_t port, String topic, String user, String pass, String solar, String grid_ie, bool reject_unauthorized)
 {
-  EEPROM.begin(EEPROM_SIZE);
-
-  flags = flags & ~(CONFIG_SERVICE_MQTT | CONFIG_MQTT_PROTOCOL | CONFIG_MQTT_ALLOW_ANY_CERT);
+  uint32_t newflags = flags & ~(CONFIG_SERVICE_MQTT | CONFIG_MQTT_PROTOCOL | CONFIG_MQTT_ALLOW_ANY_CERT);
   if(enable) {
-    flags |= CONFIG_SERVICE_MQTT;
+    newflags |= CONFIG_SERVICE_MQTT;
   }
   if(!reject_unauthorized) {
-    flags |= CONFIG_MQTT_ALLOW_ANY_CERT;
+    newflags |= CONFIG_MQTT_ALLOW_ANY_CERT;
   }
-  flags |= protocol << 4;  
+  newflags |= protocol << 4;  
 
-  mqtt_server = server;
-  mqtt_port = port;
-  mqtt_topic = topic;
-  mqtt_user = user;
-  mqtt_pass = pass;
-  mqtt_solar = solar;
-  mqtt_grid_ie = grid_ie;
-
-  EEPROM_write_string(EEPROM_MQTT_SERVER_START, EEPROM_MQTT_SERVER_SIZE,
-                      mqtt_server);
-  EEPROM_write_string(EEPROM_MQTT_TOPIC_START, EEPROM_MQTT_TOPIC_SIZE,
-                      mqtt_topic);
-  EEPROM_write_string(EEPROM_MQTT_USER_START, EEPROM_MQTT_USER_SIZE,
-                      mqtt_user);
-  EEPROM_write_string(EEPROM_MQTT_PASS_START, EEPROM_MQTT_PASS_SIZE,
-                      mqtt_pass);
-  EEPROM_write_string(EEPROM_MQTT_SOLAR_START, EEPROM_MQTT_SOLAR_SIZE, mqtt_solar);
-  EEPROM_write_string(EEPROM_MQTT_GRID_IE_START, EEPROM_MQTT_GRID_IE_SIZE, mqtt_grid_ie);
-
-  EEPROM_write_uint24(EEPROM_FLAGS_START, flags);
-  EEPROM_write_uint24(EEPROM_MQTT_PORT_START, port);
-
-  EEPROM.end();
+  config.set("mqtt_server", server);
+  config.set("mqtt_port", port);
+  config.set("mqtt_topic", topic);
+  config.set("mqtt_user", user);
+  config.set("mqtt_pass", pass);
+  config.set("mqtt_solar", solar);
+  config.set("mqtt_grid_ie", grid_ie);
+  config.set("flags", newflags);
+  config.commit();
 }
 
 void
 config_save_admin(String user, String pass) {
-  EEPROM.begin(EEPROM_SIZE);
-
-  www_username = user;
-  www_password = pass;
-
-  EEPROM_write_string(EEPROM_WWW_USER_START, EEPROM_WWW_USER_SIZE, user);
-  EEPROM_write_string(EEPROM_WWW_PASS_START, EEPROM_WWW_PASS_SIZE, pass);
-
-  EEPROM.end();
+  config.set("www_username", user);
+  config.set("www_password", pass);
+  config.commit();
 }
 
 void
 config_save_sntp(bool sntp_enable, String tz) 
 {
-  if(sntp_enable != config_sntp_enabled() || 
-     time_zone != tz)
-  {
-    flags = flags & ~CONFIG_SERVICE_SNTP;
-    if(sntp_enable) {
-      flags |= CONFIG_SERVICE_SNTP;
-    }
-
-    time_zone = tz;
-    setTimezone(tz);
-
-    EEPROM.begin(EEPROM_SIZE);
-    EEPROM_write_uint24(EEPROM_FLAGS_START, flags);
-    EEPROM_write_string(EEPROM_TIME_ZONE_START, EEPROM_TIME_ZONE_SIZE, time_zone);
-    EEPROM.end();
+  uint32_t newflags = flags & ~CONFIG_SERVICE_SNTP;
+  if(sntp_enable) {
+    newflags |= CONFIG_SERVICE_SNTP;
   }
+
+  config.set("time_zone", tz);
+  config.set("flags", newflags);
+  config.commit();
+
+  config_set_timezone(tz);
 }
 
-void setTimezone(String tz)
+void config_set_timezone(String tz)
 {
   const char *set_tz = tz.c_str();
   const char *split_pos = strchr(set_tz, '|');
@@ -422,95 +304,41 @@ void setTimezone(String tz)
 }
 
 void
-config_save_tesla(bool enable,String user, String pass) {
-  EEPROM.begin(EEPROM_SIZE);
-
-  flags = flags & ~CONFIG_SERVICE_TESLA;
-  if(enable) {
-    flags |= CONFIG_SERVICE_TESLA;
-  }
-
-  teslaClient.setUser(user.c_str());
-  teslaClient.setPass(pass.c_str());
-
-  EEPROM_write_string(EEPROM_TESLA_USER_START, EEPROM_TESLA_USER_SIZE, user);
-  EEPROM_write_string(EEPROM_TESLA_PASS_START, EEPROM_TESLA_PASS_SIZE, pass);
-
-  EEPROM_write_uint24(EEPROM_FLAGS_START, flags);
-
-  EEPROM.end();
-}
-
-void
-config_save_tesla_vehidx(int vehidx) {
-  EEPROM.begin(EEPROM_SIZE);
-
-  EEPROM.write(EEPROM_TESLA_VEHIDX_START,(uint8_t)vehidx);
-
-  EEPROM.end();
-}
-
-void
 config_save_advanced(String hostname, String sntp_host) {
-  EEPROM.begin(EEPROM_SIZE);
-
-  esp_hostname = hostname;
-  sntp_hostname = sntp_host;
-
-  EEPROM_write_string(EEPROM_HOSTNAME_START, EEPROM_HOSTNAME_SIZE, hostname);
-  EEPROM_write_string(EEPROM_SNTP_HOST_START, EEPROM_SNTP_HOST_SIZE, sntp_host);
-
-  EEPROM.end();
+  config.set("hostname", hostname);
+  config.set("sntp_hostname", sntp_host);
+  config.commit();
 }
 
 void
 config_save_wifi(String qsid, String qpass)
 {
-  EEPROM.begin(EEPROM_SIZE);
-
-  esid = qsid;
-  epass = qpass;
-
-  EEPROM_write_string(EEPROM_ESID_START, EEPROM_ESID_SIZE, qsid);
-  EEPROM_write_string(EEPROM_EPASS_START, EEPROM_EPASS_SIZE, qpass);
-
-  EEPROM.end();
+  config.set("ssid", qsid);
+  config.set("pass", qpass);
+  config.commit();
 }
 
 void
 config_save_ohm(bool enable, String qohm)
 {
-  EEPROM.begin(EEPROM_SIZE);
-
-  flags = flags & ~CONFIG_SERVICE_OHM;
+  uint32_t newflags = flags & ~CONFIG_SERVICE_OHM;
   if(enable) {
-    flags |= CONFIG_SERVICE_OHM;
+    newflags |= CONFIG_SERVICE_OHM;
   }
 
-  ohm = qohm;
-
-  EEPROM_write_string(EEPROM_OHM_KEY_START, EEPROM_OHM_KEY_SIZE, qohm);
-
-  EEPROM_write_uint24(EEPROM_FLAGS_START, flags);
-
-  EEPROM.end();
+  config.set("ohm", qohm);
+  config.set("flags", newflags);
+  config.commit();
 }
 
 void
 config_save_flags(uint32_t newFlags) {
-  if(flags != newFlags)
-  {
-    EEPROM.begin(EEPROM_SIZE);
-
-    flags = newFlags;
-
-    EEPROM_write_uint24(EEPROM_FLAGS_START, flags);
-
-    EEPROM.end();
-  }
+  config.set("flags", newFlags);
+  config.commit();
 }
 
 void
 config_reset() {
   ResetEEPROM();
+  config.reset();
 }

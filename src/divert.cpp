@@ -10,6 +10,9 @@
 #include "mqtt.h"
 #include "event.h"
 #include "openevse.h"
+#include "divert.h"
+
+#include <sys/time.h>
 
 // 1: Normal / Fast Charge (default):
 // Charging at maximum rate irrespective of solar PV / grid_ie output
@@ -23,11 +26,6 @@
 // If EVSE is sleeping charging will not start until solar PV / excess power > min chanrge rate
 // Once charging begins it will not pause even if solaer PV / excess power drops less then minimm charge rate. This avoids wear on the relay and the car
 
-#define SERVICE_LEVEL2_VOLTAGE  240
-
-#define DIVERT_MODE_NORMAL      1
-#define DIVERT_MODE_ECO         2
-
 #define GRID_IE_RESERVE_POWER   100.0
 
 // Default to normal charging unless set. Divert mode always defaults back to 1 if unit is reset (divertmode not saved in EEPROM)
@@ -40,7 +38,23 @@ int charge_rate = 0;
 int last_state = OPENEVSE_STATE_INVALID;
 uint32_t lastUpdate = 0;
 
+
+double avalible_current = 0;
+double smoothed_avalible_current = 0;
+
+time_t min_charge_end = 0;
+
+bool divert_active = false;
+
 extern RapiSender rapiSender;
+
+// define as 'weak' so the simulator can override
+time_t __attribute__((weak)) divertmode_get_time()
+{
+  struct timeval now;
+  gettimeofday(&now, NULL);
+  return now.tv_sec;
+}
 
 // Update divert mode e.g. Normal / Eco
 // function called when divert mode is changed
@@ -62,10 +76,22 @@ void divertmode_update(byte newmode)
 
       case DIVERT_MODE_ECO:
         charge_rate = 0;
+        avalible_current = 0;
+        smoothed_avalible_current = 0;
+        min_charge_end = 0;
+        
         // Read the current charge current, assume this is the max set by the user
         if(0 == rapiSender.sendCmdSync(F("$GE"))) {
           max_charge_current = String(rapiSender.getToken(1)).toInt();
           DBUGF("Read max I: %d", max_charge_current);
+        }
+        if(OPENEVSE_STATE_SLEEPING != state)
+        {
+          if(0 == rapiSender.sendCmdSync(F("$FS"))) 
+          {
+            DBUGLN(F("Divert activated, entered sleep mode"));
+            divert_active = false;
+          }
         }
         break;
 
@@ -73,9 +99,9 @@ void divertmode_update(byte newmode)
         return;
     }
 
-    String event = F("{\"divertmode\":");
-    event += String(divertmode);
-    event += F("}");
+    StaticJsonDocument<128> event;
+    event["divertmode"] = divertmode;
+    event["divert_active"] = divert_active;
     event_send(event);
   }
 }
@@ -84,19 +110,6 @@ void divert_current_loop()
 {
   Profile_Start(divert_current_loop);
 
-  if(last_state != state)
-  {
-    DBUGVAR(last_state);
-    DBUGVAR(state);
-    DBUGVAR(divertmode);
-
-    // Revert to normal mode on disconnecting the car
-    if(OPENEVSE_STATE_NOT_CONNECTED == state && DIVERT_MODE_ECO == divertmode) {
-      divertmode_update(DIVERT_MODE_NORMAL);
-    }
-    last_state = state;
-  }
-
   Profile_End(divert_current_loop, 5);
 } //end divert_current_loop
 
@@ -104,6 +117,15 @@ void divert_current_loop()
 void divert_update_state()
 {
   Profile_Start(divert_update_state);
+
+  StaticJsonDocument<128> event;
+  event["divert_update"] = 0;
+
+  if(mqtt_grid_ie != "") {
+    event["grid_ie"] = grid_ie;
+  } else {
+    event["solar"] = solar;
+  }
 
   // If divert mode = Eco (2)
   if (divertmode == DIVERT_MODE_ECO)
@@ -116,9 +138,6 @@ void divert_update_state()
       DBUGVAR(current_charge_rate);
     }
 
-    // IMPROVE: Read from OpenEVSE or emonTX (MQTT)
-    int voltage = SERVICE_LEVEL2_VOLTAGE;
-
     // Calculate current
     if (mqtt_grid_ie != "")
     {
@@ -127,7 +146,8 @@ void divert_update_state()
       // grid_ie is negative when exporting
       // If grid feeds is available and exporting (negative)
 
-      double Igrid_ie = (double)grid_ie / (double)voltage;
+      DBUGVAR(voltage);
+      double Igrid_ie = (double)grid_ie / voltage;
       DBUGVAR(Igrid_ie);
 
       // Subtract the current charge the EV is using from the Grid IE
@@ -142,24 +162,33 @@ void divert_update_state()
       if (Igrid_ie < 0)
       {
         // If excess power
-        double reserve = GRID_IE_RESERVE_POWER / (double)voltage;
+        double reserve = GRID_IE_RESERVE_POWER / voltage;
         DBUGVAR(reserve);
-        charge_rate = (int)floor(-Igrid_ie - reserve);
+        avalible_current = (-Igrid_ie - reserve);
       }
       else
       {
         // no excess, so use the min charge
-        charge_rate = 0;
+        avalible_current = 0;
       }
     }
     else if (mqtt_solar!="")
     {
       // if grid feed is not available: charge rate = solar generation
-
-      double Isolar = (double)solar / (double)voltage;
-      DBUGVAR(Isolar);
-      charge_rate = (int)floor(Isolar);
+      DBUGVAR(voltage);
+      avalible_current = (double)solar / voltage;
     }
+
+    if(avalible_current < 0) {
+      avalible_current = 0;
+    }
+    DBUGVAR(avalible_current);
+
+    double scale = avalible_current > smoothed_avalible_current ? divert_attack_smoothing_factor : divert_decay_smoothing_factor;
+    smoothed_avalible_current = (avalible_current * scale) + (smoothed_avalible_current * (1 - scale));
+    DBUGVAR(smoothed_avalible_current);
+
+    charge_rate = (int)floor(avalible_current);
 
     if(OPENEVSE_STATE_SLEEPING != state) {
       // If we are not sleeping, make sure we are the minimum current
@@ -168,7 +197,7 @@ void divert_update_state()
 
     DBUGVAR(charge_rate);
 
-    if(charge_rate >= min_charge_current)
+    if(smoothed_avalible_current >= min_charge_current)
     {
       // Cap the charge rate at the configured maximum
       charge_rate = min(charge_rate, static_cast<int>(max_charge_current));
@@ -185,7 +214,9 @@ void divert_update_state()
           // Fallback to old API
           chargeRateSet = true;
         }
-        if(true == chargeRateSet) {
+
+        if(true == chargeRateSet) 
+        {
           DBUGF("Charge rate set to %d", charge_rate);
           pilot = charge_rate;
         }
@@ -217,22 +248,41 @@ void divert_update_state()
 
         if(false == chargeStarted && 0 == rapiSender.sendCmdSync(F("$FE"))) {
           DBUGLN(F("Starting charge"));
+          chargeStarted = true;
+        }
+
+        if(chargeStarted) 
+        {
+          min_charge_end = divertmode_get_time() + divert_min_charge_time;
+          event["divert_active"] = divert_active = true;
         }
       }
     }
+    else
+    {
+      if(OPENEVSE_STATE_SLEEPING != state)
+      {
+        if(divert_active && divertmode_get_time() >= min_charge_end) 
+        {
+          if(0 == rapiSender.sendCmdSync(F("$FS"))) 
+          {
+            DBUGLN(F("Charge Stopped"));
+            event["divert_active"] = divert_active = false;
+
+            if(0 == rapiSender.sendCmdSync(String(F("$SC ")) + String(max_charge_current))) {
+              DBUGF("Restore max I: %d", max_charge_current);
+            }
+          }
+        }
+      }
+    }
+
+    event["charge_rate"] = charge_rate;
+    event["voltage"] = voltage;
+    event["avalible_current"] = avalible_current;
+    event["smoothed_avalible_current"] = smoothed_avalible_current;
   } // end ecomode
 
-  DBUGVAR(charge_rate);
-
-  String event = mqtt_grid_ie != "" ? F("{\"grid_ie\":") : F("{\"solar\":");
-  event += mqtt_grid_ie != "" ? String(grid_ie) : String(solar);
-  if (divertmode == DIVERT_MODE_ECO)
-  {
-    event += F(",\"charge_rate\":");
-    event += String(charge_rate);
-  }
-  event += F(",\"divert_update\":0}");
-  DBUGVAR(event);
   event_send(event);
 
   lastUpdate = millis();

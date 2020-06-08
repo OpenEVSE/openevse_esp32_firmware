@@ -31,7 +31,7 @@ typedef const __FlashStringHelper *fstr_t;
 #include "emoncms.h"
 #include "divert.h"
 #include "lcd.h"
-#include "hal.h"
+#include "espal.h"
 #include "time_man.h"
 #include "tesla_client.h"
 
@@ -40,10 +40,9 @@ MongooseHttpServer server;          // Create class for Web server
 bool enableCors = true;
 
 // Event timeouts
-unsigned long wifiRestartTime = 0;
-unsigned long mqttRestartTime = 0;
-unsigned long systemRebootTime = 0;
-unsigned long apOffTime = 0;
+static unsigned long wifiRestartTime = 0;
+static unsigned long systemRebootTime = 0;
+static unsigned long apOffTime = 0;
 
 // Content Types
 const char _CONTENT_TYPE_HTML[] PROGMEM = "text/html";
@@ -54,9 +53,6 @@ const char _CONTENT_TYPE_JS[] PROGMEM = "application/javascript";
 const char _CONTENT_TYPE_JPEG[] PROGMEM = "image/jpeg";
 const char _CONTENT_TYPE_PNG[] PROGMEM = "image/png";
 const char _CONTENT_TYPE_SVG[] PROGMEM = "image/svg+xml";
-
-static const char _DUMMY_PASSWORD[] PROGMEM = "_DUMMY_PASSWORD";
-#define DUMMY_PASSWORD FPSTR(_DUMMY_PASSWORD)
 
 // Get running firmware version from build tag environment variable
 #define TEXTIFY(A) #A
@@ -265,10 +261,6 @@ handleSaveNetwork(MongooseHttpServerRequest *request) {
 
   String qsid = request->getParam("ssid");
   String qpass = request->getParam("pass");
-  if(qpass.equals(DUMMY_PASSWORD)) {
-    qpass = epass;
-  }
-
   if (qsid != 0) {
     config_save_wifi(qsid, qpass);
 
@@ -294,15 +286,10 @@ handleSaveEmoncms(MongooseHttpServerRequest *request) {
     return;
   }
 
-  String apikey = request->getParam("apikey");
-  if(apikey.equals(DUMMY_PASSWORD)) {
-    apikey = emoncms_apikey;
-  }
-
   config_save_emoncms(isPositive(request->getParam("enable")),
                       request->getParam("server"),
                       request->getParam("node"),
-                      apikey,
+                      request->getParam("apikey"),
                       request->getParam("fingerprint"));
 
   char tmpStr[200];
@@ -330,9 +317,6 @@ handleSaveMqtt(MongooseHttpServerRequest *request) {
   }
 
   String pass = request->getParam("pass");
-  if(pass.equals(DUMMY_PASSWORD)) {
-    pass = mqtt_pass;
-  }
 
   int protocol = MQTT_PROTOCOL_MQTT;
   char proto[6];
@@ -373,7 +357,7 @@ handleSaveMqtt(MongooseHttpServerRequest *request) {
   request->send(response);
 
   // If connected disconnect MQTT to trigger re-connect with new details
-  mqttRestartTime = millis();
+  mqtt_restart();
 }
 
 // -------------------------------------------------------------------
@@ -409,9 +393,6 @@ handleSaveAdmin(MongooseHttpServerRequest *request) {
 
   String quser = request->getParam("user");
   String qpass = request->getParam("pass");
-  if(qpass.equals(DUMMY_PASSWORD)) {
-    qpass = www_password;
-  }
 
   config_save_admin(quser, qpass);
 
@@ -497,65 +478,6 @@ handleSaveAdvanced(MongooseHttpServerRequest *request) {
 }
 
 // -------------------------------------------------------------------
-// Save Tesla
-// url: /savetesla
-// -------------------------------------------------------------------
-void
-handleSaveTesla(MongooseHttpServerRequest *request) {
-  MongooseHttpServerResponseStream *response;
-  if(false == requestPreProcess(request, response, CONTENT_TYPE_TEXT)) {
-    return;
-  }
-
-  String user = request->getParam("user");
-  String pass = request->getParam("pass");
-  bool enable = isPositive(request->getParam("enable"));
-  config_save_tesla(enable, user, pass);
-
-  teslaClient.setUser(user.c_str());
-  teslaClient.setPass(pass.c_str());
-
-  if (enable) {
-    teslaClient.requestAccessToken();
-  }
-
-  char tmpStr[200];
-  snprintf(tmpStr, sizeof(tmpStr), "Saved: %s %s",
-           teslaClient.getUser(),
-           teslaClient.getPass());
-  DBUGLN(tmpStr);
-
-  response->setCode(200);
-  response->print(tmpStr);
-  request->send(response);
-}
-
-// -------------------------------------------------------------------
-// Save Tesla Vehicle Idx
-// url: /saveteslavi
-// -------------------------------------------------------------------
-void
-handleSaveTeslaVI(MongooseHttpServerRequest *request) {
-  MongooseHttpServerResponseStream *response;
-  if(false == requestPreProcess(request, response, CONTENT_TYPE_TEXT)) {
-    return;
-  }
-
-  String svi = request->getParam("vi");
-  int vehidx = atoi(svi.c_str());
-  teslaClient.setVehicleIdx(vehidx);
-  config_save_tesla_vehidx(vehidx);
-
-  char tmpStr[200];
-  snprintf(tmpStr, sizeof(tmpStr), "Saved: %s",svi.c_str());
-  DBUGLN(tmpStr);
-
-  response->setCode(200);
-  response->print(tmpStr);
-  request->send(response);
-}
-
-// -------------------------------------------------------------------
 // Get Tesla Vehicle Info
 // url: /teslaveh
 // -------------------------------------------------------------------
@@ -627,96 +549,91 @@ handleStatus(MongooseHttpServerRequest *request) {
   strftime(time, sizeof(time), "%FT%TZ", timeinfo);
   strftime(offset, sizeof(offset), "%z", timeinfo);
 
-  String s = "{";
+  const size_t capacity = JSON_OBJECT_SIZE(40) + 1024;
+  DynamicJsonDocument doc(capacity);
+
   if (net_eth_connected()) {
-    s += "\"mode\":\"Wired\",";
+    doc["mode"] = "Wired";
   } else if (net_wifi_mode_is_sta_only()) {
-    s += "\"mode\":\"STA\",";
+    doc["mode"] = "STA";
   } else if (net_wifi_mode_is_ap_only()) {
-    s += "\"mode\":\"AP\",";
+    doc["mode"] = "AP";
   } else if (net_wifi_mode_is_ap() && net_wifi_mode_is_sta()) {
-    s += "\"mode\":\"STA+AP\",";
+    doc["mode"] = "STA+AP";
   }
 
-  s += "\"wifi_client_connected\":" + String(net_wifi_client_connected()) + ",";
-  s += "\"eth_connected\":" + String(net_eth_connected()) + ",";
-  s += "\"net_connected\":" + String(net_is_connected()) + ",";
-  s += "\"srssi\":" + String(WiFi.RSSI()) + ",";
-  s += "\"ipaddress\":\"" + ipaddress + "\",";
+  doc["wifi_client_connected"] = (int)net_wifi_client_connected();
+  doc["eth_connected"] = (int)net_eth_connected();
+  doc["net_connected"] = (int)net_is_connected();
+  doc["srssi"] = WiFi.RSSI();
+  doc["ipaddress"] = ipaddress;
 
-  s += "\"emoncms_connected\":" + String(emoncms_connected) + ",";
-  s += "\"packets_sent\":" + String(packets_sent) + ",";
-  s += "\"packets_success\":" + String(packets_success) + ",";
+  doc["emoncms_connected"] = emoncms_connected;
+  doc["packets_sent"] = packets_sent;
+  doc["packets_success"] = packets_success;
 
-  s += "\"mqtt_connected\":" + String(mqtt_connected()) + ",";
+  doc["mqtt_connected"] = (int)mqtt_connected();
 
-  s += "\"ohm_hour\":\"" + ohm_hour + "\",";
+  doc["ohm_hour"] = ohm_hour;
 
-  s += "\"free_heap\":" + String(HAL.getFreeHeap()) + ",";
+  doc["free_heap"] = ESPAL.getFreeHeap();
 
-  s += "\"comm_sent\":" + String(rapiSender.getSent()) + ",";
-  s += "\"comm_success\":" + String(rapiSender.getSuccess()) + ",";
-  s += "\"rapi_connected\":" + String(rapiSender.isConnected()) + ",";
+  doc["comm_sent"] = rapiSender.getSent();
+  doc["comm_success"] = rapiSender.getSuccess();
+  doc["rapi_connected"] = (int)rapiSender.isConnected();
 
-  s += "\"amp\":" + String(amp) + ",";
-  s += "\"pilot\":" + String(pilot) + ",";
-  s += "\"temp1\":" + String(temp1) + ",";
-  s += "\"temp2\":" + String(temp2) + ",";
-  s += "\"temp3\":" + String(temp3) + ",";
-  s += "\"state\":" + String(state) + ",";
-  s += "\"elapsed\":" + String(elapsed) + ",";
-  s += "\"wattsec\":" + String(wattsec) + ",";
-  s += "\"watthour\":" + String(watthour_total) + ",";
+  doc["amp"] = amp * AMPS_SCALE_FACTOR;
+  doc["voltage"] = voltage * VOLTS_SCALE_FACTOR;
+  doc["pilot"] = pilot;
+  if(temp1_valid) {
+    doc["temp1"] = temp1 * TEMP_SCALE_FACTOR;
+  } else {
+    doc["temp1"] = false;
+  }
+  if(temp2_valid) {
+    doc["temp2"] = temp2 * TEMP_SCALE_FACTOR;
+  } else {
+    doc["temp2"] = false;
+  }
+  if(temp3_valid) {
+    doc["temp3"] = temp3 * TEMP_SCALE_FACTOR;
+  } else {
+    doc["temp3"] = false;
+  }
+  doc["state"] = state;
+  doc["elapsed"] = elapsed;
+  doc["wattsec"] = wattsec;
+  doc["watthour"] = watthour_total;
 
-  s += "\"gfcicount\":" + String(gfci_count) + ",";
-  s += "\"nogndcount\":" + String(nognd_count) + ",";
-  s += "\"stuckcount\":" + String(stuck_count) + ",";
+  doc["gfcicount"] = gfci_count;
+  doc["nogndcount"] = nognd_count;
+  doc["stuckcount"] = stuck_count;
 
-  s += "\"divertmode\":" + String(divertmode) + ",";
-  s += "\"solar\":" + String(solar) + ",";
-  s += "\"grid_ie\":" + String(grid_ie) + ",";
-  s += "\"charge_rate\":" + String(charge_rate) + ",";
-  s += "\"divert_update\":" + String((millis() - lastUpdate) / 1000) + ",";
+  doc["divertmode"] = divertmode;
+  doc["solar"] = solar;
+  doc["grid_ie"] = grid_ie;
+  doc["charge_rate"] = charge_rate;
+  doc["divert_update"] = (millis() - lastUpdate) / 1000;
 
-  s += "\"ota_update\":" + String(Update.isRunning()) + ",";
-  s += "\"time\":\"" + String(time) + "\",";
-  s += "\"offset\":\"" + String(offset) + "\"";
+  doc["ota_update"] = (int)Update.isRunning();
+  doc["time"] = String(time);
+  doc["offset"] = String(offset);
+
   {
     const TESLA_CHARGE_INFO *tci = teslaClient.getChargeInfo();
     if (tci->isValid) {
-      s += ",";
-      s += "\"batteryRange\":" + String(tci->batteryRange) + ",";
-      s += "\"chargeEnergyAdded\":" + String(tci->chargeEnergyAdded) + ",";
-      s += "\"chargeMilesAddedRated\":" + String(tci->chargeMilesAddedRated) + ",";
-      s += "\"batteryLevel\":" + String(tci->batteryLevel) + ",";
-      s += "\"chargeLimitSOC\":" + String(tci->chargeLimitSOC) + ",";
-      s += "\"timeToFullCharge\":" + String(tci->timeToFullCharge) + ",";
-      s += "\"chargerVoltage\":" + String(tci->chargerVoltage);
+      doc["batteryRange"] = String(tci->batteryRange) + ",";
+      doc["chargeEnergyAdded"] = String(tci->chargeEnergyAdded) + ",";
+      doc["chargeMilesAddedRated"] = String(tci->chargeMilesAddedRated) + ",";
+      doc["batteryLevel"] = String(tci->batteryLevel) + ",";
+      doc["chargeLimitSOC"] = String(tci->chargeLimitSOC) + ",";
+      doc["timeToFullCharge"] = String(tci->timeToFullCharge) + ",";
+      doc["chargerVoltage"] = String(tci->chargerVoltage);
     }
   }
 
-#ifdef ENABLE_LEGACY_API
-  s += ",\"networks\":[" + st + "]";
-  s += ",\"rssi\":[" + rssi + "]";
-  s += ",\"version\":\"" + currentfirmware + "\"";
-  s += ",\"ssid\":\"" + esid + "\"";
-  //s += ",\"pass\":\""+epass+"\""; security risk: DONT RETURN PASSWORDS
-  s += ",\"emoncms_server\":\"" + emoncms_server + "\"";
-  s += ",\"emoncms_node\":\"" + emoncms_node + "\"";
-  //s += ",\"emoncms_apikey\":\""+emoncms_apikey+"\""; security risk: DONT RETURN APIKEY
-  s += ",\"emoncms_fingerprint\":\"" + emoncms_fingerprint + "\"";
-  s += ",\"mqtt_server\":\"" + mqtt_server + "\"";
-  s += ",\"mqtt_topic\":\"" + mqtt_topic + "\"";
-  s += ",\"mqtt_user\":\"" + mqtt_user + "\"";
-  //s += ",\"mqtt_pass\":\""+mqtt_pass+"\""; security risk: DONT RETURN PASSWORDS
-  s += ",\"www_username\":\"" + www_username + "\"";
-  //s += ",\"www_password\":\""+www_password+"\""; security risk: DONT RETURN PASSWORDS
-  s += ",\"ohmkey\":\"" + ohm + "\"";
-#endif
-  s += "}";
-
   response->setCode(200);
-  response->print(s);
+  serializeJson(doc, *response);
   request->send(response);
 }
 
@@ -725,87 +642,72 @@ handleStatus(MongooseHttpServerRequest *request) {
 // url: /config
 // -------------------------------------------------------------------
 void
-handleConfig(MongooseHttpServerRequest *request) {
+handleConfigGet(MongooseHttpServerRequest *request, MongooseHttpServerResponseStream *response)
+{
+  const size_t capacity = JSON_OBJECT_SIZE(40) + 1024;
+  DynamicJsonDocument doc(capacity);
+
+  // EVSE Config
+  doc["firmware"] = firmware;
+  doc["protocol"] = protocol;
+  doc["espflash"] = ESPAL.getFlashChipSize();
+  doc["version"] = currentfirmware;
+  doc["diodet"] = diode_ck;
+  doc["gfcit"] = gfci_test;
+  doc["groundt"] = ground_ck;
+  doc["relayt"] = stuck_relay;
+  doc["ventt"] = vent_ck;
+  doc["tempt"] = temp_ck;
+  doc["service"] = service;
+  doc["scale"] = current_scale;
+  doc["offset"] = current_offset;
+
+  // Static supported protocols
+  JsonArray mqtt_supported_protocols = doc.createNestedArray("mqtt_supported_protocols");
+  mqtt_supported_protocols.add("mqtt");
+  mqtt_supported_protocols.add("mqtts");
+
+  JsonArray http_supported_protocols = doc.createNestedArray("http_supported_protocols");
+  http_supported_protocols.add("http");
+  http_supported_protocols.add("https");
+  
+  config_serialize(doc, true, false, true);
+
+  response->setCode(200);
+  serializeJson(doc, *response);
+}
+
+void
+handleConfigPost(MongooseHttpServerRequest *request, MongooseHttpServerResponseStream *response)
+{
+  String body = request->body().toString();
+  if(config_deserialize(body)) {
+    config_commit();
+    response->setCode(200);
+    response->print("{\"msg\":\"done\"}");
+  } else {
+    response->setCode(400);
+    response->print("{\"msg\":\"Could not parse JSON\"}");
+  }
+}
+
+void
+handleConfig(MongooseHttpServerRequest *request) 
+{
   MongooseHttpServerResponseStream *response;
   if(false == requestPreProcess(request, response)) {
     return;
   }
 
-  String dummyPassword = String(DUMMY_PASSWORD);
+  if(HTTP_GET == request->method()) {
+    handleConfigGet(request, response);
+  } else if(HTTP_POST == request->method()) {
+    handleConfigPost(request, response); 
+  } else {
+    response->setCode(405);
 
-  String s = "{";
-  s += "\"firmware\":\"" + firmware + "\",";
-  s += "\"protocol\":\"" + protocol + "\",";
-  s += "\"espflash\":" + String(HAL.getFlashChipSize()) + ",";
-  s += "\"version\":\"" + currentfirmware + "\",";
-  s += "\"diodet\":" + String(diode_ck) + ",";
-  s += "\"gfcit\":" + String(gfci_test) + ",";
-  s += "\"groundt\":" + String(ground_ck) + ",";
-  s += "\"relayt\":" + String(stuck_relay) + ",";
-  s += "\"ventt\":" + String(vent_ck) + ",";
-  s += "\"tempt\":" + String(temp_ck) + ",";
-  s += "\"service\":" + String(service) + ",";
-#ifdef ENABLE_LEGACY_API
-  s += "\"l1min\":\"" + current_l1min + "\",";
-  s += "\"l1max\":\"" + current_l1max + "\",";
-  s += "\"l2min\":\"" + current_l2min + "\",";
-  s += "\"l2max\":\"" + current_l2max + "\",";
-  s += "\"kwhlimit\":\"" + kwh_limit + "\",";
-  s += "\"timelimit\":\"" + time_limit + "\",";
-  s += "\"gfcicount\":" + String(gfci_count) + ",";
-  s += "\"nogndcount\":" + String(nognd_count) + ",";
-  s += "\"stuckcount\":" + String(stuck_count) + ",";
-#endif
-  s += "\"scale\":" + String(current_scale) + ",";
-  s += "\"offset\":" + String(current_offset) + ",";
-  s += "\"ssid\":\"" + esid + "\",";
-  s += "\"pass\":\"";
-  if(epass != 0) {
-    s += dummyPassword;
   }
-  s += "\",";
-  s += "\"emoncms_enabled\":" + String(config_emoncms_enabled() ? "true" : "false") + ",";
-  s += "\"emoncms_server\":\"" + emoncms_server + "\",";
-  s += "\"emoncms_node\":\"" + emoncms_node + "\",";
-  s += "\"emoncms_apikey\":\"";
-  if(emoncms_apikey != 0) {
-    s += dummyPassword;
-  }
-  s += "\",";
-  s += "\"emoncms_fingerprint\":\"" + emoncms_fingerprint + "\",";
-  s += "\"mqtt_enabled\":" + String(config_mqtt_enabled() ? "true" : "false") + ",";
-  s += "\"mqtt_protocol\":\"" + String(0 == config_mqtt_protocol() ? "mqtt" : "mqtts") + "\",";
-  s += "\"mqtt_server\":\"" + mqtt_server + "\",";
-  s += "\"mqtt_port\":" + String(mqtt_port) + ",";
-  s += "\"mqtt_reject_unauthorized\":" + String(config_mqtt_reject_unauthorized() ? "true" : "false") + ",";
-  s += "\"mqtt_topic\":\"" + mqtt_topic + "\",";
-  s += "\"mqtt_user\":\"" + mqtt_user + "\",";
-  s += "\"mqtt_pass\":\"";
-  if(mqtt_pass != 0) {
-    s += dummyPassword;
-  }
-  s += "\",";
-  s += "\"mqtt_solar\":\""+mqtt_solar+"\",";
-  s += "\"mqtt_grid_ie\":\""+mqtt_grid_ie+"\",";
-  s += "\"mqtt_supported_protocols\":[\"mqtt\",\"mqtts\"],";
-  s += "\"http_supported_protocols\":[\"http\",\"https\"],";
-  s += "\"www_username\":\"" + www_username + "\",";
-  s += "\"www_password\":\"";
-  if(www_password != 0) {
-    s += dummyPassword;
-  }
-  s += "\",";
-  s += "\"hostname\":\"" + esp_hostname + "\",";
-  s += "\"time_zone\":\"" + time_zone + "\",";
-  s += "\"sntp_enabled\":" + String(config_sntp_enabled() ? "true" : "false") + ",";
-  s += "\"sntp_host\":\"" + sntp_hostname + "\",";
-  s += "\"tesla_user\":\"" + String(teslaClient.getUser()) + "\",";
-  s += "\"tesla_vehidx\":" + String(teslaClient.getCurVehicleIdx()) + ",";
-  s += "\"ohm_enabled\":" + String(config_ohm_enabled() ? "true" : "false");
-  s += "}";
 
-  response->setCode(200);
-  response->print(s);
   request->send(response);
 }
 
@@ -859,7 +761,7 @@ handleRst(MongooseHttpServerRequest *request) {
   }
 
   config_reset();
-  HAL.eraseConfig();
+  ESPAL.eraseConfig();
 
   response->setCode(200);
   response->print("1");
@@ -1194,8 +1096,6 @@ web_server_setup() {
   server.on("/saveemoncms$", handleSaveEmoncms);
   server.on("/savemqtt$", handleSaveMqtt);
   server.on("/saveadmin$", handleSaveAdmin);
-  server.on("/savetesla$", handleSaveTesla);
-  server.on("/saveteslavi$", handleSaveTeslaVI);
   server.on("/teslaveh$", handleTeslaVeh);
   server.on("/saveadvanced$", handleSaveAdvanced);
   server.on("/saveohmkey$", handleSaveOhmkey);
@@ -1238,12 +1138,6 @@ web_server_loop() {
     net_wifi_restart();
   }
 
-  // Do we need to restart MQTT?
-  if(mqttRestartTime > 0 && millis() > mqttRestartTime) {
-    mqttRestartTime = 0;
-    mqtt_restart();
-  }
-
   // Do we need to turn off the access point?
   if(apOffTime > 0 && millis() > apOffTime) {
     apOffTime = 0;
@@ -1254,13 +1148,15 @@ web_server_loop() {
   if(systemRebootTime > 0 && millis() > systemRebootTime) {
     systemRebootTime = 0;
     net_wifi_disconnect();
-    HAL.reset();
+    ESPAL.reset();
   }
 
   Profile_End(web_server_loop, 5);
 }
 
-void web_server_event(String &event)
+void web_server_event(JsonDocument &event)
 {
-  server.sendAll(event);
+  String json;
+  serializeJson(event, json);
+  server.sendAll(json);
 }

@@ -42,9 +42,10 @@
 #include "lcd.h"
 #include "openevse.h"
 #include "root_ca.h"
-#include "hal.h"
+#include "espal.h"
 #include "time_man.h"
 #include "tesla_client.h"
+#include "event.h"
 
 #include "RapiSender.h"
 
@@ -58,26 +59,29 @@ boolean rapi_read = 0; //flag to indicate first read of RAPI status
 static uint32_t start_mem = 0;
 static uint32_t last_mem = 0;
 
+static void hardware_setup();
+
 // -------------------------------------------------------------------
 // SETUP
 // -------------------------------------------------------------------
 void setup()
 {
-  HAL.begin();
+  hardware_setup();
+  ESPAL.begin();
 
   DEBUG.println();
-  DEBUG.printf("OpenEVSE WiFI %s\n", HAL.getShortId().c_str());
+  DEBUG.printf("OpenEVSE WiFI %s\n", ESPAL.getShortId().c_str());
   DEBUG.printf("Firmware: %s\n", currentfirmware.c_str());
   DEBUG.printf("IDF version: %s\n", ESP.getSdkVersion());
-  DEBUG.printf("Free: %d\n", HAL.getFreeHeap());
+  DEBUG.printf("Free: %d\n", ESPAL.getFreeHeap());
 
   // Read saved settings from the config
   config_load_settings();
-  DBUGF("After config_load_settings: %d", HAL.getFreeHeap());
+  DBUGF("After config_load_settings: %d", ESPAL.getFreeHeap());
 
   // Initialise the WiFi
   net_setup();
-  DBUGF("After net_setup: %d", HAL.getFreeHeap());
+  DBUGF("After net_setup: %d", ESPAL.getFreeHeap());
 
   // Initialise Mongoose networking library
   Mongoose.begin();
@@ -85,11 +89,11 @@ void setup()
 
   // Bring up the web server
   web_server_setup();
-  DBUGF("After web_server_setup: %d", HAL.getFreeHeap());
+  DBUGF("After web_server_setup: %d", ESPAL.getFreeHeap());
 
 #ifdef ENABLE_OTA
   ota_setup();
-  DBUGF("After ota_setup: %d", HAL.getFreeHeap());
+  DBUGF("After ota_setup: %d", ESPAL.getFreeHeap());
 #endif
 
   input_setup();
@@ -97,7 +101,7 @@ void setup()
   lcd_display(F("OpenEVSE WiFI"), 0, 0, 0, LCD_CLEAR_LINE);
   lcd_display(currentfirmware, 0, 1, 5 * 1000, LCD_CLEAR_LINE);
 
-  start_mem = last_mem = HAL.getFreeHeap();
+  start_mem = last_mem = ESPAL.getFreeHeap();
 } // end setup
 
 // -------------------------------------------------------------------
@@ -138,7 +142,7 @@ loop() {
       // Do these things once every 2s
       // -------------------------------------------------------------------
       if ((millis() - Timer3) >= 2000) {
-        uint32_t current = HAL.getFreeHeap();
+        uint32_t current = ESPAL.getFreeHeap();
         int32_t diff = (int32_t)(last_mem - current);
         if(diff != 0) {
           DEBUG.printf("%s: Free memory %u - diff %d %d\n", time_format_time(time(NULL)).c_str(), current, diff, start_mem - current);
@@ -176,9 +180,7 @@ loop() {
       teslaClient.loop();
     }
 
-    if (config_mqtt_enabled()) {
-      mqtt_loop();
-    }
+    mqtt_loop();
 
     // -------------------------------------------------------------------
     // Do these things once every 30 seconds
@@ -188,24 +190,18 @@ loop() {
 
       if(!Update.isRunning())
       {
-        String data;
+        DynamicJsonDocument data(4096);
         create_rapi_json(data); // create JSON Strings for EmonCMS and MQTT
+
         if (config_emoncms_enabled()) {
           emoncms_publish(data);
         }
-        if (config_mqtt_enabled()) {
-          mqtt_publish(data);
-        }
+
+        teslaClient.getChargeInfoJson(data);
+        event_send(data);
+
         if(config_ohm_enabled()) {
           ohm_loop();
-        }
-        
-        if (config_mqtt_enabled()) {
-          data = "";
-          teslaClient.getChargeInfoJson(data);
-          if (data.length() > 0) {
-            mqtt_publish(data);
-          }
         }
       }
 
@@ -217,11 +213,40 @@ loop() {
 } // end loop
 
 
-void event_send(String event)
+void event_send(String &json)
 {
-  web_server_event(event);
+  StaticJsonDocument<512> event;
+  deserializeJson(event, json);
+  event_send(event);
+}
 
-  if (config_mqtt_enabled()) {
-    mqtt_publish(event);
+void event_send(JsonDocument &event)
+{
+  #ifdef ENABLE_DEBUG
+  serializeJson(event, DEBUG_PORT);
+  DBUGLN("");
+  #endif
+  web_server_event(event);
+  mqtt_publish(event);
+}
+
+void hardware_setup()
+{
+  RAPI_PORT.begin(115200);
+  DEBUG_BEGIN(115200);
+
+#ifdef SERIAL_RX_PULLUP_PIN
+  // https://forums.adafruit.com/viewtopic.php?f=57&t=153553&p=759890&hilit=esp32+serial+pullup#p769168
+  pinMode(SERIAL_RX_PULLUP_PIN, INPUT_PULLUP);
+#endif
+
+#ifdef ONBOARD_LEDS
+  uint8_t ledPins[] = {ONBOARD_LEDS};
+  for (uint8_t pin = 0; pin < sizeof(ledPins); pin++) {
+    pinMode(pin, OUTPUT);
+    digitalWrite(pin, !ONBOARD_LED_ON_STATE);
   }
+#endif
+
+  enableLoopWDT();
 }

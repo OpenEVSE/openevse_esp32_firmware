@@ -7,8 +7,10 @@
 #include "app_config.h"
 #include "divert.h"
 #include "input.h"
-#include "hal.h"
+#include "espal.h"
 #include "net_manager.h"
+
+#include "openevse.h"
 
 #include <Arduino.h>
 #include <ArduinoJson.h>
@@ -16,10 +18,9 @@
 
 MongooseMqttClient mqttclient;
 
-long nextMqttReconnectAttempt = 0;
-int clientTimeout = 0;
-int i = 0;
-bool connecting = false;
+static long nextMqttReconnectAttempt = 0;
+static unsigned long mqttRestartTime = 0;
+static bool connecting = false;
 
 String lastWill = "";
 
@@ -52,8 +53,15 @@ void mqttmsg_callback(MongooseString topic, MongooseString payload) {
   }
   else if (topic_string == mqtt_grid_ie){
     grid_ie = payload_str.toInt();
-    DBUGF("grid:%dW", solar);
+    DBUGF("grid:%dW", grid_ie);
     divert_update_state();
+  }
+  else if (topic_string == mqtt_vrms){
+    voltage = payload_str.toFloat();
+    DBUGF("voltage:%d", voltage);
+    OpenEVSE.setVoltage(voltage, [](int ret) {
+      // Only gives better power calculations so not critical if this fails
+    });
   }
   // If MQTT message to set divert mode is received
   else if (topic_string == mqtt_topic + "/divertmode/set"){
@@ -119,7 +127,7 @@ mqtt_connect()
   DynamicJsonDocument willDoc(JSON_OBJECT_SIZE(3) + 60);
 
   willDoc["state"] = "disconnected";
-  willDoc["id"] = HAL.getLongId();
+  willDoc["id"] = ESPAL.getLongId();
   willDoc["name"] = esp_hostname;
 
   lastWill = "";
@@ -140,7 +148,7 @@ mqtt_connect()
     DynamicJsonDocument doc(JSON_OBJECT_SIZE(5) + 200);
 
     doc["state"] = "connected";
-    doc["id"] = HAL.getLongId();
+    doc["id"] = ESPAL.getLongId();
     doc["name"] = esp_hostname;
     doc["mqtt"] = mqtt_topic;
     doc["http"] = "http://"+ipaddress+"/";
@@ -158,12 +166,19 @@ mqtt_connect()
     mqttclient.subscribe(mqtt_sub_topic);
 
     // subscribe to solar PV / grid_ie MQTT feeds
-    if (mqtt_solar!="") {
-      mqttclient.subscribe(mqtt_solar);
+    if(config_divert_enabled())
+    {
+      if (mqtt_solar!="") {
+        mqttclient.subscribe(mqtt_solar);
+      }
+      if (mqtt_grid_ie!="") {
+        mqttclient.subscribe(mqtt_grid_ie);
+      }
     }
-    if (mqtt_grid_ie!="") {
-      mqttclient.subscribe(mqtt_grid_ie);
+    if (mqtt_vrms!="") {
+      mqttclient.subscribe(mqtt_vrms);
     }
+
     mqtt_sub_topic = mqtt_topic + "/divertmode/set";      // MQTT Topic to change divert mode
     mqttclient.subscribe(mqtt_sub_topic);
 
@@ -179,51 +194,20 @@ mqtt_connect()
 // Publish status to MQTT
 // -------------------------------------------------------------------
 void
-mqtt_publish(String data) {
+mqtt_publish(JsonDocument &data) {
   Profile_Start(mqtt_publish);
 
-  if(!mqttclient.connected()) {
+  if(!config_mqtt_enabled() || !mqttclient.connected()) {
     return;
   }
 
-  String mqtt_data = "";
-  String topic = mqtt_topic + "/";
-
-  int i = 0;
-  if(data[i] == '{') {
-    i++;
-  }
-  while (int (data[i]) != 0) {
-    // Construct MQTT topic e.g. <base_topic>/<status> data
-    while (data[i] != ':') {
-      if(data[i] != '"') {
-        topic += data[i];
-      }
-      i++;
-      if (int (data[i]) == 0) {
-        break;
-      }
-    }
-    i++;
-    // Construct data string to publish to above topic
-    while (data[i] != ',') {
-      if(data[i] != '}') {
-        mqtt_data += data[i];
-      }
-      i++;
-      if (int (data[i]) == 0) {
-        break;
-      }
-    }
-    // send data via mqtt
-    //delay(100);
-    DBUGF("%s = %s", topic.c_str(), mqtt_data.c_str());
-    mqttclient.publish(topic, mqtt_data);
+  JsonObject root = data.as<JsonObject>();
+  for (JsonPair kv : root) {
+    String topic = mqtt_topic + "/";
+    topic += kv.key().c_str();
+    String val = kv.value().as<String>();
+    mqttclient.publish(topic, val);
     topic = mqtt_topic + "/";
-    mqtt_data = "";
-    i++;
-    if (int (data[i]) == 0)
-      break;
   }
 
   Profile_End(mqtt_publish, 5);
@@ -238,7 +222,18 @@ void
 mqtt_loop() {
   Profile_Start(mqtt_loop);
 
-  if (!mqttclient.connected()) {
+  // Do we need to restart MQTT?
+  if(mqttRestartTime > 0 && millis() > mqttRestartTime) 
+  {
+    mqttRestartTime = 0;
+    if (mqttclient.connected()) {
+      DBUGF("Disconnecting MQTT");
+      mqttclient.disconnect();
+    }
+    nextMqttReconnectAttempt = 0;
+  }
+
+  if (config_mqtt_enabled() && !mqttclient.connected()) {
     long now = millis();
     // try and reconnect every x seconds
     if (now > nextMqttReconnectAttempt) {
@@ -252,10 +247,8 @@ mqtt_loop() {
 
 void
 mqtt_restart() {
-  if (mqttclient.connected()) {
-    mqttclient.disconnect();
-  }
-  nextMqttReconnectAttempt = 0;
+  // If connected disconnect MQTT to trigger re-connect with new details
+  mqttRestartTime = millis();
 }
 
 boolean
