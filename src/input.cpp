@@ -102,6 +102,7 @@ void create_rapi_json(JsonDocument &doc)
   doc["state"] = state;
   doc["freeram"] = ESPAL.getFreeHeap();
   doc["divertmode"] = divertmode;
+  doc["srssi"] = WiFi.RSSI();
 }
 
 // -------------------------------------------------------------------
