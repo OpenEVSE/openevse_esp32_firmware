@@ -9,6 +9,8 @@
 // -------------------------------------------------------------------
 
 extern boolean emoncms_connected;
+extern boolean emoncms_updated;
+
 extern unsigned long packets_sent;
 extern unsigned long packets_success;
 

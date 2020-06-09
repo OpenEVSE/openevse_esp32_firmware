@@ -193,9 +193,7 @@ loop() {
         DynamicJsonDocument data(4096);
         create_rapi_json(data); // create JSON Strings for EmonCMS and MQTT
 
-        if (config_emoncms_enabled()) {
-          emoncms_publish(data);
-        }
+        emoncms_publish(data);
 
         teslaClient.getChargeInfoJson(data);
         event_send(data);
@@ -206,6 +204,15 @@ loop() {
       }
 
       Timer1 = millis();
+    }
+
+    if(emoncms_updated)
+    {
+      // Send the current state to check the config
+      DynamicJsonDocument data(4096);
+      create_rapi_json(data);
+      emoncms_publish(data);
+      emoncms_updated = false;
     }
   } // end WiFi connected
 
