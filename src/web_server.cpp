@@ -568,7 +568,7 @@ handleStatus(MongooseHttpServerRequest *request) {
   doc["srssi"] = WiFi.RSSI();
   doc["ipaddress"] = ipaddress;
 
-  doc["emoncms_connected"] = emoncms_connected;
+  doc["emoncms_connected"] = (int)emoncms_connected;
   doc["packets_sent"] = packets_sent;
   doc["packets_success"] = packets_success;
 

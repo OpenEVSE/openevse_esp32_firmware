@@ -3,6 +3,8 @@
 #include "divert.h"
 #include "mqtt.h"
 #include "tesla_client.h"
+#include "emoncms.h"
+#include "input.h"
 
 #include "app_config.h"
 #include "app_config_mqtt.h"
@@ -173,8 +175,13 @@ void config_changed(String name)
     if(mqtt_connected() != config_mqtt_enabled()) {
       mqtt_restart();
     }
+    if(emoncms_connected != config_emoncms_enabled()) {
+      emoncms_updated = true;
+    }
   } else if(name.startsWith("mqtt_")) {
     mqtt_restart();
+  } else if(name.startsWith("emoncms_")) {
+    emoncms_updated = true;
   } else if(name == "divert_enabled" || name == "charge_mode") {
     DBUGVAR(config_divert_enabled());
     DBUGVAR(config_charge_mode());
