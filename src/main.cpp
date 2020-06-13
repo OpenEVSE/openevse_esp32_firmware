@@ -85,7 +85,10 @@ void setup()
 
   // Initialise Mongoose networking library
   Mongoose.begin();
+
+#if MG_ENABLE_SSL
   Mongoose.setRootCa(root_ca);
+#endif // MG_ENABLE_SSL
 
   // Bring up the web server
   web_server_setup();
@@ -255,5 +258,7 @@ void hardware_setup()
   }
 #endif
 
+#ifdef ESP32
   enableLoopWDT();
+#endif // ESP32
 }

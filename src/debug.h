@@ -20,12 +20,12 @@
 
 #define DEBUG_BEGIN(speed)  DEBUG_PORT.begin(speed)
 
-#ifdef ARDUINO_ESP8266_RELEASE_2_4_0
-// Serial.printf_P needs Git version of Arduino Core
-#define DBUGF(format, ...)  DEBUG_PORT.printf_P(PSTR(format "\n"), ##__VA_ARGS__)
-#else
+//#ifdef ARDUINO_ESP8266_RELEASE_2_4_0
+//// Serial.printf_P needs Git version of Arduino Core
+//#define DBUGF(format, ...)  DEBUG_PORT.printf_P(PSTR(format "\n"), ##__VA_ARGS__)
+//#else
 #define DBUGF(format, ...)  DEBUG_PORT.printf(format "\n", ##__VA_ARGS__)
-#endif
+//#endif
 
 #define DBUG(...)           DEBUG_PORT.print(__VA_ARGS__)
 #define DBUGLN(...)         DEBUG_PORT.println(__VA_ARGS__)
