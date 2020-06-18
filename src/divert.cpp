@@ -39,8 +39,8 @@ int last_state = OPENEVSE_STATE_INVALID;
 uint32_t lastUpdate = 0;
 
 
-double avalible_current = 0;
-double smoothed_avalible_current = 0;
+double available_current = 0;
+double smoothed_available_current = 0;
 
 time_t min_charge_end = 0;
 
@@ -76,8 +76,8 @@ void divertmode_update(byte newmode)
 
       case DIVERT_MODE_ECO:
         charge_rate = 0;
-        avalible_current = 0;
-        smoothed_avalible_current = 0;
+        available_current = 0;
+        smoothed_available_current = 0;
         min_charge_end = 0;
         
         // Read the current charge current, assume this is the max set by the user
@@ -87,7 +87,7 @@ void divertmode_update(byte newmode)
         }
         if(OPENEVSE_STATE_SLEEPING != state)
         {
-          if(0 == rapiSender.sendCmdSync(F("$FS"))) 
+          if(0 == rapiSender.sendCmdSync(F("$FS")))
           {
             DBUGLN(F("Divert activated, entered sleep mode"));
             divert_active = false;
@@ -164,31 +164,31 @@ void divert_update_state()
         // If excess power
         double reserve = GRID_IE_RESERVE_POWER / voltage;
         DBUGVAR(reserve);
-        avalible_current = (-Igrid_ie - reserve);
+        available_current = (-Igrid_ie - reserve);
       }
       else
       {
         // no excess, so use the min charge
-        avalible_current = 0;
+        available_current = 0;
       }
     }
     else if (mqtt_solar!="")
     {
       // if grid feed is not available: charge rate = solar generation
       DBUGVAR(voltage);
-      avalible_current = (double)solar / voltage;
+      available_current = (double)solar / voltage;
     }
 
-    if(avalible_current < 0) {
-      avalible_current = 0;
+    if(available_current < 0) {
+      available_current = 0;
     }
-    DBUGVAR(avalible_current);
+    DBUGVAR(available_current);
 
-    double scale = avalible_current > smoothed_avalible_current ? divert_attack_smoothing_factor : divert_decay_smoothing_factor;
-    smoothed_avalible_current = (avalible_current * scale) + (smoothed_avalible_current * (1 - scale));
-    DBUGVAR(smoothed_avalible_current);
+    double scale = available_current > smoothed_available_current ? divert_attack_smoothing_factor : divert_decay_smoothing_factor;
+    smoothed_available_current = (available_current * scale) + (smoothed_available_current * (1 - scale));
+    DBUGVAR(smoothed_available_current);
 
-    charge_rate = (int)floor(avalible_current);
+    charge_rate = (int)floor(available_current);
 
     if(OPENEVSE_STATE_SLEEPING != state) {
       // If we are not sleeping, make sure we are the minimum current
@@ -197,7 +197,7 @@ void divert_update_state()
 
     DBUGVAR(charge_rate);
 
-    if(smoothed_avalible_current >= min_charge_current)
+    if(smoothed_available_current >= min_charge_current)
     {
       // Cap the charge rate at the configured maximum
       charge_rate = min(charge_rate, static_cast<int>(max_charge_current));
@@ -279,8 +279,8 @@ void divert_update_state()
 
     event["charge_rate"] = charge_rate;
     event["voltage"] = voltage;
-    event["avalible_current"] = avalible_current;
-    event["smoothed_avalible_current"] = smoothed_avalible_current;
+    event["available_current"] = available_current;
+    event["smoothed_available_current"] = smoothed_available_current;
   } // end ecomode
 
   event_send(event);
