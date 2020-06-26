@@ -4,13 +4,13 @@
 
 ![main](docs/main2.png)
 
-The WiFi gateway uses an **ESP32** which communicates with the OpenEVSE controller via serial utilizing the existing RAPI API serial interface. The web interface UI is served directly from the ESP32 web server and can be controlled via a connected device over the network.
+The WiFi gateway uses an **ESP32** which communicates with the OpenEVSE controller via serial RAPI API. The web interface UI is served directly from the ESP32 web server and can be controlled via a connected device on the local network.
 
 Wired Ethernet connection is possible using [ESP32 Gateway](docs/wired-ethernet.md)
 
-[**See this repo for the older V2.x ESP8266 version**](https://github.com/openevse/ESP8266_WiFi_v2.x/)
+[**See this repo for the older V2.x ESP8266 version (pre June 2020)**](https://github.com/openevse/ESP8266_WiFi_v2.x/)
 
-Live demo: https://openevse.openenergymonitor.org
+**[Live UI demo](https://openevse.openenergymonitor.org)**
 
 ## Features
 
@@ -27,15 +27,15 @@ Live demo: https://openevse.openenergymonitor.org
 
 ## Requirements
 
-### OpenEVSE charging station
-  - Purchase via: [OpenEVSE Store (USA/Canda)](https://store.openevse.com) | [OpenEnergyMonitor (UK / EU)](https://shop.openenergymonitor.com/openevse-deluxe-ev-charge-controller-kit/)
+### OpenEVSE / EmonEVSE charging station
+  - Purchase via: [OpenEVSE Store (USA/Canda)](https://store.openevse.com) | [OpenEnergyMonitor (UK / EU)](https://shop.openenergymonitor.com/evse/)
   - OpenEVSE FW [V4.8.0+ recommended](https://github.com/OpenEVSE/open_evse/releases)
   - All new OpenEVSE units are shipped with V4.8.0 pre-loaded (October 2017 onwards)
   - OpenEVSE FW V3.10.4 will work with latest WiFi FW with some minor issues e.g. LCD text corruption
 
-### WiFi Module
+### ESP32 WiFi Module
 
-- ESP32
+- **Note: WiFi module is included as standard in most OpenEVSE units**
 - Purchase via: [OpenEVSE Store (USA/Canda)](https://store.openevse.com/collections/frontpage/products/openevse-wifi-kit) | [OpenEnergyMonitor (UK / EU)](https://shop.openenergymonitor.com/evse/)
 - See [OpenEVSE WiFi setup guide](https://openevse.dozuki.com/Guide/OpenEVSE+WiFi+%28Beta%29/14) for WiFi module hardware connection instructions
 
@@ -46,12 +46,10 @@ Live demo: https://openevse.openenergymonitor.org
 <!-- toc -->
 
 - [User Guide](#user-guide)
+- [Hardware](#hardware)
   * [WiFi Setup](#wifi-setup)
-  * [OpenEVSE Web Interface](#openevse-web-interface)
   * [Charging Mode: Eco](#charging-mode-eco)
-    + [Solar PV Divert Example](#solar-pv-divert-example)
-    + [Setup](#setup)
-    + [Operation](#operation)
+    + [Eco Mode Setup](#eco-mode-setup)
   * [Services](#services)
     + [Emoncms data logging](#emoncms-data-logging)
     + [MQTT](#mqtt)
@@ -59,15 +57,20 @@ Live demo: https://openevse.openenergymonitor.org
     + [RAPI](#rapi)
       - [RAPI via web interface](#rapi-via-web-interface)
       - [RAPI over MQTT](#rapi-over-mqtt)
+    + [HTTP API](#http-api)
+    + [Tesla API](#tesla-api)
       - [RAPI over HTTP](#rapi-over-http)
     + [OhmConnect](#ohmconnect)
   * [System](#system)
     + [Authentication](#authentication)
     + [Hardware reset](#hardware-reset)
     + [Firmware update](#firmware-update)
-- [Development Guide](#development-guide)
+      - [Via Web Interface](#via-web-interface)
+      - [Via Network OTA](#via-network-ota)
+      - [Via USB Serial Programmer](#via-usb-serial-programmer)
+- [Development guide](#development-guide)
   * [Compiling and uploading firmware](#compiling-and-uploading-firmware)
-    + [Building GUI static assets](#building-the-gui-static-assets)
+    + [Building the GUI static assets](#building-the-gui-static-assets)
     + [Compile and upload using PlatformIO](#compile-and-upload-using-platformio)
       - [1. Install PlatformIO](#1-install-platformio)
       - [2. Clone this repo](#2-clone-this-repo)
@@ -89,7 +92,7 @@ Live demo: https://openevse.openenergymonitor.org
 
 Most ESP32 boards can be used (see platfromio.ini for full list of supported boards), however the two boards which are best supported and easiest to use are:
 
-- Adafruit Huzzah 32 
+- Adafruit Huzzah32 
 - [Olimex ESP32 Gateway (Wired Ethernet)](docs/wired-ethernet.md)
 
 ## WiFi Setup
@@ -115,65 +118,33 @@ On first boot, OpenEVSE should broadcast a WiFI access point (AP) `OpenEVSE_XXX`
 
 ***
 
-## OpenEVSE Web Interface
-
-All functions of the OpenEVSE can be viewed and controlled via the web interface. Here is a screen grab showing the 'advanced' display mode:
-
-![advanced](docs/adv.png)
-
-The interface has been optimised to work well for both desktop and mobile. Here is an example setting a charging delay timer using an Android device:
-
-![android-clock](docs/mobile-clock.png)
-
 ## Charging Mode: Eco
 
-'Eco' charge mode allows the OpenEVSE to adjust the charging current automatically based on an MQTT feed. This feed could be the amount of solar PV generation or the amount of excess power (grid export). 'Normal' charge mode charges the EV at the maximum rate set.
-
-### Solar PV Divert Example
-
-This is best illustrated using an Emoncms MySolar graph. The solar generation is shown in yellow and OpenEVSE power consumption in blue:
-
-![divert](docs/divert.png)
-
-- OpenEVSE is initially sleeping with an EV connected
-- Once solar PV generation reaches 6A (1.5kW @ 240V) the OpenEVSE initiates charging
-- Charging current is adjusted based on available solar PV generation
-- Once charging has begun, even if generation drops below 6A, the EV will continue to charge*
-
-**The decision was made not to pause charging if generation current drops below 6A since repeatedly starting / stopping a charge causes excess wear to the OpenEVSE relay contactor.*
-
-If a Grid +I/-E (positive import / negative export) feed was used the OpenEVSE would adjust its charging rate based on *excess* power that would be exported to the grid; for example, if solar PV was producing 4kW and 1kW was being used on-site, the OpenEVSE would charge at 3kW and the amount exported to the grid would be 0kW. If on-site consumption increases to 2kW the OpenEVSE would reduce its charging rate to 2kW.
-
-An [OpenEnergyMonitor solar PV energy monitor](https://guide.openenergymonitor.org/applications/solar-pv/) with an AC-AC voltage sensor adaptor is required to monitor direction of current flow.
-
-### Setup
+'Eco' charge mode allows the OpenEVSE to start/stop and adjust the charging current automatically based on an MQTT. This feed could be the amount of solar PV generation or the amount of excess power (grid export). 'Normal' charge mode charges the EV at the maximum rate set.
 
 ![eco](docs/eco.png)
 
-- To use 'Eco' charging mode MQTT must be enabled and 'Solar PV divert' MQTT topics must be entered.
-- Integration with an OpenEnergyMonitor emonPi is straightforward:
-  - Connect to emonPi MQTT server, [emonPi MQTT credentials](https://guide.openenergymonitor.org/technical/credentials/#mqtt) should be pre-populated
-  - Enter solar PV generation / Grid (+I/-E) MQTT topic e.g. if solar PV is being monitored by emonPi CT channel 1 enter `emon/emonpi/power1`
-  - [MQTT lens Chrome extension](https://chrome.google.com/webstore/detail/mqttlens/hemojaaeigabkbcookmlgmdigohjobjm?hl=en) or [MQTT Explorer](http://mqtt-explorer.com/) tools can be used to view MQTT data e.g. subscribe to `emon/#` for all OpenEnergyMonitor MQTT data. To lean more about MQTT see [MQTT section of OpenEnergyMonitor user guide](https://guide.openenergymonitor.org/technical/mqtt/).
-  - If using Grid +I/-E (positive import / negative export) MQTT feed ensure the notation positive import / negative export is correct, CT sensor can be physically reversed on the cable to invert the reading.
+When Eco Mode is enabled:
 
-### Operation
+- Charging will begin when solar PB gen / grid excess > 1.4kW (6A) 
+- Charging will pause when solar PV gen / grid excess < 1.4kW (6A)
+- Smoothing algorithm is used to avoid rapid state transitions
+- Eco Mode is persistent between charging sessions
+- Eco Mode can be enabled / disabled via MQTT  
 
-To enable 'Eco' mode charging:
+A [OpenEnergyMonitor Solar PV Energy Monitor](https://guide.openenergymonitor.org/applications/solar-pv/) can be used to monitor solar PV system and provide an MQTT feed to the OpenEVSE for 'Eco' mode charging.
 
-- Connect EV and ensure EV's internal charging timer is switched off
-- Pause charge; OpenEVSE should display 'sleeping'
-- Enable 'Eco' mode using web interface or via MQTT
-- EV will not begin charging when generation / excess current reaches 6A (1.4kW @ 240V)
+### Eco Mode Setup
 
-- During 'Eco' charging changes to charging current are temporary (not saved to EEPROM)
-- After an 'Eco mode' charge the OpenEVSE will revert to 'Normal' when EV is disconnected and previous 'Normal' charging current will be reinstated.
-- Current is adjusted in 1A increments between 6A* (1.5kW @ 240V) > max charging current (as set in OpenEVSE setup)
-- 6A is the lowest supported charging current that SAE J1772 EV charging protocol supports
-- The OpenEVSE does not adjust the current itself but rather request that the EV adjusts its charging current by varying the duty cycle of the pilot signal, see [theory of operation](https://openev.freshdesk.com/support/solutions/articles/6000052070-theory-of-operation) and [Basics of SAE J1772](https://openev.freshdesk.com/support/solutions/articles/6000052074-basics-of-sae-j1772).
-- Charging mode can be viewed and set via MQTT: `{base-topic}/divertmode/set` (1 = normal, 2 = eco).
+- Enable MQTT Service 
+- [emonPi MQTT credentials](https://guide.openenergymonitor.org/technical/credentials/#mqtt) should be pre-populated
+- Enter solar PV generation or Grid (+I/-E) MQTT topic e.g. Assuming [standard emonPi Solar PV setup](https://guide.openenergymonitor.org/applications/solar-pv/), the default MQTT feeds are:
+  - Grid Import (positive Import / Negative export*): `emon/emonpi/power1`
+  - Solar PV generation (alwys postive): `emon/emonpi/power2` 
 
-\* *OpenEVSE controller firmware [V4.8.0](https://github.com/OpenEVSE/open_evse/releases/tag/v4.8.0) has a bug which restricts the lowest charging current to 10A. The J1772 protocol can go down to 6A. This ~~will~~ has be fixed with a firmware update. See [OpenEnergyMonitor OpenEVSE FW releases](https://github.com/openenergymonitor/open_evse/releases/). A ISP programmer is required to update openevse controler FW.*
+[MQTT Explorer](http://mqtt-explorer.com/) can be used to view MQTT data. To lean more about MQTT see [MQTT section of OpenEnergyMonitor user guide](https://guide.openenergymonitor.org/technical/mqtt/).
+  
+**CT sensor can be physically reversed on the cable to invert the reading.*
 
 ***
 
@@ -183,11 +154,9 @@ To enable 'Eco' mode charging:
 
 ### Emoncms data logging
 
-OpenEVSE can post its status values (e.g amp, temp1, temp2, temp3, pilot, status) to [emoncms.org](https://emoncms.org) or any other  Emoncms server (e.g. emonPi) using [Emoncms API](https://emoncms.org/site/api#input). Data will be posted every 30s.
+OpenEVSE can post its status values to [emoncms.org](https://emoncms.org) or any other  Emoncms server (e.g. emonPi) using [Emoncms API](https://emoncms.org/site/api#input). Data will be posted every 30s.
 
-Data can be posted using HTTP or HTTPS. For HTTPS the Emoncms server must support HTTPS (emoncms.org does, the emonPi does not).Due to the limited resources on the ESP the SSL SHA-1 fingerprint for the Emoncms server must be manually entered and regularly updated.
-
-*Note: the emoncms.org fingerprint will change every 90 days when the SSL certificate is renewed.*
+Data can be posted using HTTP or HTTPS.
 
 
 ### MQTT
@@ -199,7 +168,7 @@ At startup the following message is published with a retain flag to `openevse/an
 {"state":"connected","id":"c44f330dxxad","name":"openevse-55ad","mqtt":"emon/openevse-55ad","http":"http://192.168.1.43/"}
 ```
 
-For device descovery you should subscribe with a wild card to `openevse/announce/#`
+For device discovery you should subscribe with a wild card to `openevse/announce/#`
 
 When the device disconnects from MQTT the same message is posted with `state":"disconnected"` (Last Will and Testament).
 
@@ -273,34 +242,61 @@ Current config of the OpenEVSE in JSON format is available via `http://openevse-
 {"firmware":"6.2.1.EU","protocol":"5.1.0","espflash":4194304,"version":"3.1.0.dev","diodet":0,"gfcit":0,"groundt":0,"relayt":0,"ventt":0,"tempt":0,"service":2,"scale":220,"offset":0,"ssid":"<SSID>","pass":"_DUMMY_PASSWORD","emoncms_enabled":true,"emoncms_server":"https://emoncms.org","emoncms_node":"emonevse","emoncms_apikey":"_DUMMY_PASSWORD","emoncms_fingerprint":"","mqtt_enabled":true,"mqtt_protocol":"mqtt","mqtt_server":"emonpi","mqtt_port":1883,"mqtt_reject_unauthorized":true,"mqtt_topic":"emon/openevse-55ad","mqtt_user":"emonpi","mqtt_pass":"_DUMMY_PASSWORD","mqtt_solar":"emon/solarpv/test","mqtt_grid_ie":"","mqtt_supported_protocols":["mqtt","mqtts"],"http_supported_protocols":["http","https"],"www_username":"open","www_password":"_DUMMY_PASSWORD","hostname":"openevse-55ad","time_zone":"Europe/Lisbon|WET0WEST,M3.5.0/1,M10.5.0","sntp_enabled":true,"sntp_host":"pool.ntp.org","ohm_enabled":false}
 ```
 
-### HTTP Tesla API
+### Tesla API
 
-**IN DEVELOPMENT**
+**BETA**
 
-V3.2 onwards includes a basic Tesla API integration. The HTTP API for this is as follows:
+WiFi firmware V3.2 includes basic Tesla API integration. The HTTP API for this is as follows:
 
-Enter Tesla credentials and enable the feature: 
+```
 
-`http://openevse-xxx/savetesla?user=TESLAUSER&pass=TESLAPASS&enable=true`
+POST {{baseUrl}}/config HTTP/1.1
+Content-Type: application/json
+
+{
+  "tesla_enabled": true,
+  "tesla_username": "username",
+  "tesla_password": "password"
+}
+
+```
+```
+
+
+POST {{baseUrl}}/config HTTP/1.1
+Content-Type: application/json
+
+{
+  "tesla_vehidx": 0
+}
+```
+
+Example using cURL:
+
+```
+curl --request POST \
+  --url http://openevse-xxxx/config \
+  --header 'content-type: application/json' \
+  --header 'user-agent: vscode-restclient' \
+  --data '{"tesla_enabled": true,"tesla_username": "username","tesla_password": "password"}'
+```
 
 Return a list of vehicles associated with the Tesla account e.g
 
 `http://openevse-xxx/teslaveh`
 
 e.g
-`
-{"count:"2,[{"id":"xxxx","name":"tesla1"},{"id":"xxxxx","name":"tesla2"}]}`
+`{"count:"2,[{"id":"xxxx","name":"tesla1"},{"id":"xxxxx","name":"tesla2"}]}`
 
-Set the vehicle index to choose which vehicle to retrieve status.
-Note: The ID starts at zero so the first car will have vi=0
+*Note: The vehicle ID starts at zero so the first car will have vi=0*
 
-`http://openevse-xxx/saveteslavi?vi=VEHICLEINDEX`
-
-The SoC and rated range of the Tesa vehicle is now displayed in JSON format via `/status`. 
+The SoC and rated range of the Tesla vehicle is now displayed in JSON format via `/status` and posted to MQTT. 
 
 #### RAPI over HTTP
 
-RAPI (rapid API) commands can also be issued directly via a single HTTP request.
+RAPI (rapid API) commands can also be issued directly via a single HTTP request. 
+
+Using RAPI commands should be avoided if possible. WiFi server API is preferable. If RAPI must be used, avoid fast polling. 
 
 *Assuming `192.168.0.108` is the local IP address of the OpenEVSE ESP.*
 
