@@ -57,9 +57,9 @@ Wired Ethernet connection is possible using [ESP32 Gateway](docs/wired-ethernet.
     + [RAPI](#rapi)
       - [RAPI via web interface](#rapi-via-web-interface)
       - [RAPI over MQTT](#rapi-over-mqtt)
+      - [RAPI over HTTP](#rapi-over-http)
     + [HTTP API](#http-api)
     + [Tesla API](#tesla-api)
-      - [RAPI over HTTP](#rapi-over-http)
     + [OhmConnect](#ohmconnect)
   * [System](#system)
     + [Authentication](#authentication)
@@ -227,6 +227,28 @@ e.g. `$OK`
 
 [See video demo of RAPI over MQTT](https://www.youtube.com/watch?v=tjCmPpNl-sA&t=101s)
 
+#### RAPI over HTTP
+
+RAPI (rapid API) commands can also be issued directly via a single HTTP request. 
+
+Using RAPI commands should be avoided if possible. WiFi server API is preferable. If RAPI must be used, avoid fast polling. 
+
+*Assuming `192.168.0.108` is the local IP address of the OpenEVSE ESP.*
+
+Eg.the RAPI command to set charging rate to 13A:
+
+[http://192.168.0.108/r?rapi=%24SC+13](http://192.168.0.108/r?rapi=%24SC+13)
+
+To sleep (pause a charge) issue RAPI command `$FS`
+
+[http://192.168.0.108/r?rapi=%24FS](http://192.168.0.108/r?rapi=%24FS)
+
+To enable (start / resume a charge) issue RAPI command `$FE`
+
+[http://192.168.0.108/r?rapi=%24FE](http://192.168.0.108/r?rapi=%24FE)
+
+
+There is also an [OpenEVSE RAPI command python library](https://github.com/tiramiseb/python-openevse).
 
 ### HTTP API 
 
@@ -291,29 +313,6 @@ e.g
 *Note: The vehicle ID starts at zero so the first car will have vi=0*
 
 The SoC and rated range of the Tesla vehicle is now displayed in JSON format via `/status` and posted to MQTT. 
-
-#### RAPI over HTTP
-
-RAPI (rapid API) commands can also be issued directly via a single HTTP request. 
-
-Using RAPI commands should be avoided if possible. WiFi server API is preferable. If RAPI must be used, avoid fast polling. 
-
-*Assuming `192.168.0.108` is the local IP address of the OpenEVSE ESP.*
-
-Eg.the RAPI command to set charging rate to 13A:
-
-[http://192.168.0.108/r?rapi=%24SC+13](http://192.168.0.108/r?rapi=%24SC+13)
-
-To sleep (pause a charge) issue RAPI command `$FS`
-
-[http://192.168.0.108/r?rapi=%24FS](http://192.168.0.108/r?rapi=%24FS)
-
-To enable (start / resume a charge) issue RAPI command `$FE`
-
-[http://192.168.0.108/r?rapi=%24FE](http://192.168.0.108/r?rapi=%24FE)
-
-
-There is also an [OpenEVSE RAPI command python library](https://github.com/tiramiseb/python-openevse).
 
 ### OhmConnect
 
