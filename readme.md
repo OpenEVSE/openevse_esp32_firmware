@@ -268,6 +268,8 @@ Current config of the OpenEVSE in JSON format is available via `http://openevse-
 
 **BETA**
 
+**Polling the Tesla API will keep the car awake which will increase vampire drain, see [Issue #96](https://github.com/OpenEVSE/ESP32_WiFi_V3.x/issues/96)**
+
 WiFi firmware V3.2 includes basic Tesla API integration. The HTTP API for this is as follows:
 
 ```
