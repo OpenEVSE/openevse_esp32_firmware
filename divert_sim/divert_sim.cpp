@@ -11,6 +11,8 @@
 #include "RapiSender.h"
 #include "openevse.h"
 #include "divert.h"
+#include "emonesp.h"
+#include "event.h"
 
 #include "parser.hpp"
 #include "cxxopts.hpp"
@@ -34,8 +36,10 @@ time_t simulated_time = 0;
 bool kw = false;
 
 extern double smoothed_available_current;
-extern double divert_attack_smoothing_factor;
-extern double divert_decay_smoothing_factor;
+double divert_attack_smoothing_factor = 0.4;
+double divert_decay_smoothing_factor = 0.05;
+uint32_t divert_min_charge_time = (10 * 60);
+double voltage = DEFAULT_VOLTAGE;     // Voltage from OpenEVSE or MQTT
 
 time_t parse_date(const char *dateStr)
 {
@@ -89,7 +93,7 @@ int get_watt(const char *val)
 time_t divertmode_get_time()
 {
   return simulated_time;
-} 
+}
 
 int main(int argc, char** argv)
 {
@@ -142,12 +146,12 @@ int main(int argc, char** argv)
   CsvParser parser(std::cin);
   parser.delimiter(sep.c_str()[0]);
   int row_number = 0;
-  
+
   std::cout << "Date,Solar,Grid IE,Pilot,Charge Power,Min Charge Power,State,Smoothed Available" << std::endl;
   for (auto& row : parser)
   {
     try
-    {    
+    {
       int col = 0;
       std::string val;
 
@@ -190,5 +194,9 @@ int main(int argc, char** argv)
 }
 
 void event_send(String event)
+{
+}
+
+void event_send(JsonDocument &event)
 {
 }
