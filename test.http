@@ -110,8 +110,36 @@ Content-Type: application/json
   "mqtt_user": "emonpi",
   "mqtt_pass": "emonpimqtt2016",
   "mqtt_solar": "",
-  "mqtt_grid_ie": "emon/test/grid_ie",
-  "mqtt_announce_topic": "openevse/announce/a7d4"
+  "mqtt_grid_ie": "emon/test/grid_ie"
+}
+
+###
+
+POST {{baseUrl}}/config HTTP/1.1
+Content-Type: application/json
+
+{
+  "tesla_enabled": false
+}
+
+###
+
+POST {{baseUrl}}/config HTTP/1.1
+Content-Type: application/json
+
+{
+  "tesla_enabled": true,
+  "tesla_username": "username",
+  "tesla_password": "password"
+}
+
+###
+
+POST {{baseUrl}}/config HTTP/1.1
+Content-Type: application/json
+
+{
+  "tesla_vehidx": 0
 }
 
 ###
@@ -142,6 +170,7 @@ ssid={{ssid}}&pass={{pass}}
 POST {{baseUrl}}/saveemoncms HTTP/1.1
 Content-Type: application/x-www-form-urlencoded
 
+enable=true&server=home.lan&apikey=_DUMMY_PASSWORD&node=openevse-esp8266&fingerprint=
 
 ###
 
@@ -304,3 +333,13 @@ Content-Type: application/octet-stream
 
 < ./.pio/build/openevse_esp-wrover-kit_idf/firmware.bin
 ----WebKitFormBoundary7MA4YWxkTrZu0gW
+
+###
+
+GET {{baseUrl}}/debug HTTP/1.1
+
+###
+
+GET {{baseUrl}}/evse HTTP/1.1
+
+###
