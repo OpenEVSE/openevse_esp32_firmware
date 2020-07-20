@@ -38,6 +38,7 @@ typedef const __FlashStringHelper *fstr_t;
 MongooseHttpServer server;          // Create class for Web server
 
 bool enableCors = true;
+bool streamDebug = false;
 
 // Event timeouts
 static unsigned long wifiRestartTime = 0;
@@ -46,7 +47,7 @@ static unsigned long apOffTime = 0;
 
 // Content Types
 const char _CONTENT_TYPE_HTML[] PROGMEM = "text/html";
-const char _CONTENT_TYPE_TEXT[] PROGMEM = "text/text";
+const char _CONTENT_TYPE_TEXT[] PROGMEM = "text/plain";
 const char _CONTENT_TYPE_CSS[] PROGMEM = "text/css";
 const char _CONTENT_TYPE_JSON[] PROGMEM = "application/json";
 const char _CONTENT_TYPE_JS[] PROGMEM = "application/javascript";
@@ -1121,6 +1122,50 @@ web_server_setup() {
     onUpload(handleUpdateUpload)->
     onClose(handleUpdateClose);
 
+  server.on("/debug$", [](MongooseHttpServerRequest *request) {
+    MongooseHttpServerResponseStream *response;
+    if(false == requestPreProcess(request, response, CONTENT_TYPE_TEXT)) {
+      return;
+    }
+
+    response->setCode(200);
+    response->setContentType(CONTENT_TYPE_TEXT);
+    response->addHeader("Access-Control-Allow-Origin", "*");
+    SerialDebug.printBuffer(*response);
+    request->send(response);
+  });
+
+  server.on("/debug/console$")->onFrame([](MongooseHttpWebSocketConnection *connection, int flags, uint8_t *data, size_t len) {
+  });
+
+  SerialDebug.onWrite([](const uint8_t *buffer, size_t size)
+  {
+    server.sendAll("/debug/console", WEBSOCKET_OP_TEXT, buffer, size);
+  });
+
+  server.on("/evse$", [](MongooseHttpServerRequest *request) {
+    MongooseHttpServerResponseStream *response;
+    if(false == requestPreProcess(request, response, CONTENT_TYPE_TEXT)) {
+      return;
+    }
+
+    response->setCode(200);
+    response->setContentType(CONTENT_TYPE_TEXT);
+    response->addHeader("Access-Control-Allow-Origin", "*");
+    SerialEvse.printBuffer(*response);
+    request->send(response);
+  });
+
+  server.on("/evse/console$")->onFrame([](MongooseHttpWebSocketConnection *connection, int flags, uint8_t *data, size_t len) {
+  });
+
+  SerialEvse.onWrite([](const uint8_t *buffer, size_t size) {
+    server.sendAll("/evse/console", WEBSOCKET_OP_TEXT, buffer, size);
+  });
+  SerialEvse.onRead([](const uint8_t *buffer, size_t size) {
+    server.sendAll("/evse/console", WEBSOCKET_OP_TEXT, buffer, size);
+  });
+
   server.on("/ws$")->onFrame(onWsFrame);
 
   server.onNotFound(handleNotFound);
@@ -1158,5 +1203,5 @@ void web_server_event(JsonDocument &event)
 {
   String json;
   serializeJson(event, json);
-  server.sendAll(json);
+  server.sendAll("/ws", json);
 }
