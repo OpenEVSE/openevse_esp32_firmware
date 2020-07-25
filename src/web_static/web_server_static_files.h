@@ -7,6 +7,8 @@
 #include "web_server.lib.js.h"
 #include "web_server.ohm.jpg.h"
 #include "web_server.style.css.h"
+#include "web_server.term.html.h"
+#include "web_server.term.js.h"
 #include "web_server.wifi_portal.html.h"
 #include "web_server.wifi_portal.js.h"
 #include "web_server.wifi_signal_1.svg.h"
@@ -25,6 +27,8 @@ StaticFile staticFiles[] = {
   { "/lib.js", CONTENT_LIB_JS, sizeof(CONTENT_LIB_JS) - 1, _CONTENT_TYPE_JS },
   { "/ohm.jpg", CONTENT_OHM_JPG, sizeof(CONTENT_OHM_JPG) - 1, _CONTENT_TYPE_JPEG },
   { "/style.css", CONTENT_STYLE_CSS, sizeof(CONTENT_STYLE_CSS) - 1, _CONTENT_TYPE_CSS },
+  { "/term.html", CONTENT_TERM_HTML, sizeof(CONTENT_TERM_HTML) - 1, _CONTENT_TYPE_HTML },
+  { "/term.js", CONTENT_TERM_JS, sizeof(CONTENT_TERM_JS) - 1, _CONTENT_TYPE_JS },
   { "/wifi_portal.html", CONTENT_WIFI_PORTAL_HTML, sizeof(CONTENT_WIFI_PORTAL_HTML) - 1, _CONTENT_TYPE_HTML },
   { "/wifi_portal.js", CONTENT_WIFI_PORTAL_JS, sizeof(CONTENT_WIFI_PORTAL_JS) - 1, _CONTENT_TYPE_JS },
   { "/wifi_signal_1.svg", CONTENT_WIFI_SIGNAL_1_SVG, sizeof(CONTENT_WIFI_SIGNAL_1_SVG) - 1, _CONTENT_TYPE_SVG },
