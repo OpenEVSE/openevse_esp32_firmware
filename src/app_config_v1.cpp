@@ -181,8 +181,8 @@ config_load_v1_settings() {
   EEPROM_read_string(EEPROM_SNTP_HOST_START, EEPROM_SNTP_HOST_SIZE, sntp_hostname);
 
   // Timezone
-  EEPROM_read_string(EEPROM_TIME_ZONE_START, EEPROM_TIME_ZONE_SIZE, timezone);
-  config_set_timezone(timezone);
+  EEPROM_read_string(EEPROM_TIME_ZONE_START, EEPROM_TIME_ZONE_SIZE, time_zone);
+  config_set_timezone(time_zone);
 
   EEPROM.end();
 }

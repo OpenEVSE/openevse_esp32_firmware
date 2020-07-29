@@ -5,9 +5,6 @@
 #include <Arduino.h>
 #include <ArduinoJson.h>
 
-#include <time.h>
-#include <sys/time.h>
-
 #include "emonesp.h"
 #include "input.h"
 #include "app_config.h"
@@ -249,6 +246,34 @@ handleRapiRead()
       }
     }
   });
+
+#ifdef ENABLE_LEGACY_API
+  rapiSender.sendCmd("$GH", [](int ret)
+  {
+    if(RAPI_RESPONSE_OK == ret)
+    {
+      if(rapiSender.getTokenCnt() >= 2)
+      {
+        const char *val;
+        val = rapiSender.getToken(1);
+        kwh_limit = strtol(val, NULL, 10);
+      }
+    }
+  });
+
+  rapiSender.sendCmd("$G3", [](int ret)
+  {
+    if(RAPI_RESPONSE_OK == ret)
+    {
+      if(rapiSender.getTokenCnt() >= 2)
+      {
+        const char *val;
+        val = rapiSender.getToken(1);
+        time_limit = strtol(val, NULL, 10);
+      }
+    }
+  });
+#endif
 
   rapiSender.sendCmd("$GE", [](int ret)
   {

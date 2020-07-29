@@ -47,7 +47,7 @@ String mqtt_vrms;
 String mqtt_announce_topic;
 
 // Time
-String timezone;
+String time_zone;
 
 // 24-bits of Flags
 uint32_t flags;
@@ -86,7 +86,7 @@ ConfigOpt *opts[] =
   new ConfigOptDefenition<String>(sntp_hostname, SNTP_DEFAULT_HOST, "sntp_hostname", "sh"),
 
 // Time
-  new ConfigOptDefenition<String>(timezone, "", "time_zone", "tz"),
+  new ConfigOptDefenition<String>(time_zone, "", "time_zone", "tz"),
 
 // EMONCMS SERVER strings
   new ConfigOptDefenition<String>(emoncms_server, "https://data.openevse.com/emoncms", "emoncms_server", "es"),
@@ -169,7 +169,7 @@ void config_changed(String name)
   DBUGF("%s changed", name.c_str());
 
   if(name == "time_zone") {
-    config_set_timezone(timezone);
+    config_set_timezone(time_zone);
   } else if(name == "flags") {
     divertmode_update((config_divert_enabled() && 1 == config_charge_mode()) ? DIVERT_MODE_ECO : DIVERT_MODE_NORMAL);
     if(mqtt_connected() != config_mqtt_enabled()) {

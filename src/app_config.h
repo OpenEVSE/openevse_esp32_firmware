@@ -43,7 +43,7 @@ extern String mqtt_vrms;
 extern String mqtt_announce_topic;
 
 // Time
-extern String timezone;
+extern String time_zone;
 
 // Divert settings
 extern double divert_attack_smoothing_factor;
