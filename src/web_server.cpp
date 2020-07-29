@@ -3,17 +3,18 @@
 #endif
 
 #include <Arduino.h>
-#include <Update.h>
 
 typedef const __FlashStringHelper *fstr_t;
 
 #ifdef ESP32
 
 #include <WiFi.h>
+#include <Update.h>
 
 #elif defined(ESP8266)
 
 #include <ESP8266WiFi.h>
+#include <Updater.h>
 
 #else
 #error Platform not supported
@@ -868,7 +869,7 @@ handleUpdateUpload(MongooseHttpServerRequest *request, int ev, MongooseString fi
     lcd_display(F(""), 0, 1, 10 * 1000, LCD_CLEAR_LINE);
     lcd_loop();
 
-    if(!Update.begin()) {
+    if(!Update.begin(ESPAL.getUpdateSize())) {
       handleUpdateError(request);
     }
   }

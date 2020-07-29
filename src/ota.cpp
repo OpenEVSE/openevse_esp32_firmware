@@ -17,8 +17,6 @@ void ota_setup()
   ArduinoOTA.begin();
 
   ArduinoOTA.onStart([]() {
-    // Clean SPIFFS
-    //SPIFFS.end();
     DBUGF("Starting ArduinoOTA update");
     lcd_display(F("Updating WiFi"), 0, 0, 0, LCD_CLEAR_LINE);
     lcd_display(F(""), 0, 1, 10 * 1000, LCD_CLEAR_LINE);
