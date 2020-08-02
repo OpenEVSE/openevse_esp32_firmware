@@ -86,3 +86,5 @@ lib/ArduinoMongoose
 lib/ConfigJson
 lib/OpenEVSE
 lib/ESPAL
+lib/MicroDebug
+lib/StreamSpy

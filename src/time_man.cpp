@@ -1,8 +1,8 @@
 #include <Arduino.h>
-#include <MicroDebug.h>
 #include <MongooseCore.h>
 #include <MongooseSntpClient.h>
 
+#include "debug.h"
 #include "time_man.h"
 #include "net_manager.h"
 #include "openevse.h"
