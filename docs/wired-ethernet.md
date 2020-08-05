@@ -2,14 +2,14 @@
 
 Sometimes getting a WiFi connection to an OpenEVSE / EmonEVSE install location can be troublesome.
 
-It's now possible to connect the OpenEVSE / EmonEVSE via wired Ethernet using an ESP32-Gateway module. This module is a drop in replacement for ESP8266 / ESP32 WiFi modules and is compatibly with all models of OpenEVSE / EmonEVSE. 
+It's now possible to connect the OpenEVSE / EmonEVSE via wired Ethernet using an ESP32-Gateway module. This module is a drop in replacement for ESP8266 / ESP32 WiFi modules and is compatible with all models of OpenEVSE / EmonEVSE. 
 
-See [OpenEnergyMonitor web-store to purchase a pre-wired ESP32-Gateway module](https://shop.openenergymonitor.com/openevse-etherent-gateway-esp32/). The Ethernet gateway in our web-store will come with pre-wired power supply, serial connections and pre-loaded with firmware for drop in replacement. 
+See [OpenEnergyMonitor web-store to purchase a pre-wired ESP32-Gateway module](https://shop.openenergymonitor.com/openevse-etherent-gateway-esp32/). The Ethernet gateway in our web-store will come with pre-wired power supply, serial connections, and pre-loaded with firmware for drop in replacement. 
 
 ![esp32-gateway-prewired](esp32-gateway-prewired.jpg)
 
 
-Network connection can be made with a standard Ethernet cable. For new installations it may be worth considering a power cable with integrated data connections such as the [Doncaster EV-ultra cable](http://www.doncastercables.com/cables/17/77/EV-Ultra/Power-and-data-connectivity-combined-in-one-cable/). If using such a cable extra work will be required to attach RJ45 connector or socket at each end. 
+Network connection can be made with a standard Ethernet cable. For new installations it may be worth considering a power cable with integrated data connections such as the [Doncaster EV-ultra cable](http://www.doncastercables.com/cables/17/77/EV-Ultra/Power-and-data-connectivity-combined-in-one-cable/). If using such a cable, extra work will be required to attach RJ45 connector or socket at each end. 
 
 ## Hardware Connections 
 
@@ -52,7 +52,7 @@ The ESP32-gateway can be connected via micro USB and firmware compiled and uploa
 
 ## Operation 
 
-The ESP32-gateway supports both WiFi and Ethernet, if an Ethernet cable is not connected the ESP32-gateway will broadcast a WiFi AP `OpenEVSE_xxx`, connect with PSK `openevse`.
+The ESP32-gateway supports both WiFi and Ethernet, if an Ethernet cable is not connected the ESP32-gateway will broadcast a WiFi AP `OpenEVSE_xxx`, connect with Passkey `openevse`.
 
 When an Ethernet cable is connected WiFi will be disabled and the local network IP address and hostname displayed on the LCD. 
 
@@ -63,7 +63,7 @@ The web UI will notify that connection is via Wired Ethernet.
 ![esp32-gateway-connected](esp32-gateway-connected.png)
 ## Feedback
 
-The ESP32 Gateway is a new addition and is currently considered in 'Beta' since the ESP32 firmware is still under active development. However, it has been extensively tested and proven reliable for many months of operation. Please report your experience to the [OpenEnergyMonitor Community Forums](https://community.openenergymonitor.org/).
+The ESP32-Gateway is a new addition and is currently considered in 'Beta' since the ESP32 firmware is still under active development. However, it has been extensively tested and proven reliable for many months of operation. Please report your experience to the [OpenEnergyMonitor Community Forums](https://community.openenergymonitor.org/).
 ***
 
 ## Older Hardware Revisions
