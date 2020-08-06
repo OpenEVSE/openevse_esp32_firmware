@@ -368,6 +368,8 @@ The firmware can also be updated via OTA over a local WiFi network using Platfor
 
 #### Via USB Serial Programmer
 
+[Compatiable USB to Serial Programmer](https://shop.openenergymonitor.com/programmer-usb-to-serial-uart/)
+
 On the command line using the [esptool.py utility](https://github.com/espressif/esptool):
 
 If flashing a new ESP32 flashing bootloader and partitions file is required: 
