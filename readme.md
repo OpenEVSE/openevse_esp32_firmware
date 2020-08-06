@@ -103,7 +103,7 @@ Most ESP32 boards can be used (see platfromio.ini for full list of supported boa
 
 ## WiFi Setup
 
-On first boot, OpenEVSE should broadcast a WiFi access point (AP) `OpenEVSE_XXX`. Connect your browser device to this AP (default password: `openevse`) and the [captive portal](https://en.wikipedia.org/wiki/Captive_portal) should forward you to the log-in page. If this does not happen, navigate to [http://openevse](http://openevse), [http://openevse.local](http://openevse.local) or [http://192.168.4.1](http://192.168.4.1)
+On first boot, OpenEVSE should broadcast a WiFi access point (AP) `OpenEVSE_XXXX`. Connect your browser device to this AP (default password: `openevse`) and the [captive portal](https://en.wikipedia.org/wiki/Captive_portal) should forward you to the log-in page. If this does not happen, navigate to [http://openevse](http://openevse), [http://openevse.local](http://openevse.local) or [http://192.168.4.1](http://192.168.4.1)
 
 *Note: You may need to disable mobile data if connecting via a mobile*
 
@@ -169,7 +169,7 @@ Data can be posted using HTTP or HTTPS.
 
 MQTT and MQTTS (secure) connections are supported for status and control. 
 
-At startup the following message is published with a retain flag to `openevse/announce/xxx` where `xxx` is the last 4 characters of the device ID. This message is useful for device discovery and contans the device hostname and IP address. 
+At startup the following message is published with a retain flag to `openevse/announce/xxxx` where `xxxx` is the last 4 characters of the device ID. This message is useful for device discovery and contans the device hostname and IP address. 
 ```
 {"state":"connected","id":"c44f330dxxad","name":"openevse-55ad","mqtt":"emon/openevse-55ad","http":"http://192.168.1.43/"}
 ```
@@ -258,13 +258,13 @@ There is also an [OpenEVSE RAPI command python library](https://github.com/tiram
 
 ### HTTP API 
 
-Current status of the OpenEVSE in JSON format is available via: `http://openevse-xxx/status` e.g
+Current status of the OpenEVSE in JSON format is available via: `http://openevse-xxxx/status` e.g
 
 ```
 {"mode":"STA","wifi_client_connected":1,"eth_connected":0,"net_connected":1,"srssi":-73,"ipaddress":"192.168.1.43","emoncms_connected":1,"packets_sent":22307,"packets_success":22290,"mqtt_connected":1,"ohm_hour":"NotConnected","free_heap":203268,"comm_sent":335139,"comm_success":335139,"rapi_connected":1,"amp":0,"pilot":32,"temp1":282,"temp2":-2560,"temp3":-2560,"state":254,"elapsed":3473,"wattsec":22493407,"watthour":51536,"gfcicount":0,"nogndcount":0,"stuckcount":0,"divertmode":1,"solar":390,"grid_ie":0,"charge_rate":7,"divert_update":0,"ota_update":0,"time":"2020-05-12T17:53:48Z","offset":"+0000"}
 ``` 
 
-Current config of the OpenEVSE in JSON format is available via `http://openevse-xxx/config` e.g
+Current config of the OpenEVSE in JSON format is available via `http://openevse-xxxx/config` e.g
 
 ```
 {"firmware":"6.2.1.EU","protocol":"5.1.0","espflash":4194304,"version":"3.1.0.dev","diodet":0,"gfcit":0,"groundt":0,"relayt":0,"ventt":0,"tempt":0,"service":2,"scale":220,"offset":0,"ssid":"<SSID>","pass":"_DUMMY_PASSWORD","emoncms_enabled":true,"emoncms_server":"https://emoncms.org","emoncms_node":"emonevse","emoncms_apikey":"_DUMMY_PASSWORD","emoncms_fingerprint":"","mqtt_enabled":true,"mqtt_protocol":"mqtt","mqtt_server":"emonpi","mqtt_port":1883,"mqtt_reject_unauthorized":true,"mqtt_topic":"emon/openevse-55ad","mqtt_user":"emonpi","mqtt_pass":"_DUMMY_PASSWORD","mqtt_solar":"emon/solarpv/test","mqtt_grid_ie":"","mqtt_supported_protocols":["mqtt","mqtts"],"http_supported_protocols":["http","https"],"www_username":"open","www_password":"_DUMMY_PASSWORD","hostname":"openevse-55ad","time_zone":"Europe/Lisbon|WET0WEST,M3.5.0/1,M10.5.0","sntp_enabled":true,"sntp_host":"pool.ntp.org","ohm_enabled":false}
@@ -313,7 +313,7 @@ curl --request POST \
 
 Return a list of vehicles associated with the Tesla account e.g
 
-`http://openevse-xxx/teslaveh`
+`http://openevse-xxxx/teslaveh`
 
 e.g
 `{"count:"2,[{"id":"xxxx","name":"tesla1"},{"id":"xxxxx","name":"tesla2"}]}`
@@ -473,7 +473,7 @@ Erase took 8.0 seconds
 
 ### Fully erase ESP
 
-To fully erase all memory locations on an ESP-12 (4Mb) we need to upload a blank file to each memory location:
+To fully erase all memory locations we need to upload a blank file to each memory location:
 
 `esptool.py write_flash 0x000000 blank_1MB.bin 0x100000 blank_1MB.bin 0x200000 blank_1MB.bin 0x300000 blank_1MB.bin`
 
