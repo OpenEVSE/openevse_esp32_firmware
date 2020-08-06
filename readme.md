@@ -4,7 +4,7 @@
 
 ![main](docs/main2.png)
 
-The WiFi gateway uses an **ESP32** which communicates with the OpenEVSE controller via serial RAPI API. The web interface UI is served directly from the ESP32 web server and can be controlled via a connected device on the local network.
+The WiFi gateway uses an **ESP32** which communicates with the OpenEVSE controller via serial RAPI API. The web UI is served directly from the ESP32 web server and can be controlled via a connected device on the local network.
 
 Wired Ethernet connection is possible using [ESP32 Gateway](docs/wired-ethernet.md)
 
@@ -38,6 +38,12 @@ Wired Ethernet connection is possible using [ESP32 Gateway](docs/wired-ethernet.
 - **Note: WiFi module is included as standard in most OpenEVSE units**
 - Purchase via: [OpenEVSE Store (USA/Canda)](https://store.openevse.com/collections/frontpage/products/openevse-wifi-kit) | [OpenEnergyMonitor (UK / EU)](https://shop.openenergymonitor.com/evse/)
 - See [OpenEVSE WiFi setup guide](https://openevse.dozuki.com/Guide/OpenEVSE+WiFi+%28Beta%29/14) for WiFi module hardware connection instructions
+
+### Web browsing device
+
+- Mobile phone, tablet, desktop computer, etc.: any device that can display web pages and can network via WiFi.
+*Note: Use of Internet Explorer 11 or earlier is not recommended*
+
 
 ***
 
@@ -97,7 +103,7 @@ Most ESP32 boards can be used (see platfromio.ini for full list of supported boa
 
 ## WiFi Setup
 
-On first boot, OpenEVSE should broadcast a WiFI access point (AP) `OpenEVSE_XXX`. Connect to this AP (default password: `openevse`) and the [captive portal](https://en.wikipedia.org/wiki/Captive_portal) should forward you to the log-in page. If this does not happen navigate to [http://openevse](http://openevse), [http://openevse.local](http://openevse.local) or [http://192.168.4.1](http://192.168.4.1)
+On first boot, OpenEVSE should broadcast a WiFi access point (AP) `OpenEVSE_XXX`. Connect your browser device to this AP (default password: `openevse`) and the [captive portal](https://en.wikipedia.org/wiki/Captive_portal) should forward you to the log-in page. If this does not happen, navigate to [http://openevse](http://openevse), [http://openevse.local](http://openevse.local) or [http://192.168.4.1](http://192.168.4.1)
 
 *Note: You may need to disable mobile data if connecting via a mobile*
 
@@ -107,14 +113,14 @@ On first boot, OpenEVSE should broadcast a WiFI access point (AP) `OpenEVSE_XXX`
 
 
 - Select your WiFi network from list of available networks
-- Enter WiFi PSK key then click `Connect`
+- Enter WiFi Passkey, then click `Connect`
 
 - OpenEVSE should now connect to local WiFi network
-- Re-connect device to local WiFi network and connect to OpenEVSE using [http://openevse.local](http://openevse.local), [http://openevse](http://openevse) or local IP address.
+- Re-connect your browsing device to local WiFi network and connect to OpenEVSE using [http://openevse.local](http://openevse.local), [http://openevse](http://openevse) or local IP address.
 
 **If connection / re-connection fails (e.g. network cannot be found or password is incorrect) the OpenEVSE will automatically revert back to WiFi access point (AP) mode after a short while to allow a new network to be re-configured if required. Re-connection to existing network will be attempted every 5 minutes.**
 
-*Holding the `boot / GPIO0` button on the ESP8266 module for about 5s will force WiFi access point mode. This is useful when trying to connect the unit to a new WiFi network. If the unit cannot connect t0 a WiFi network it will resturn to AP more before retrying to connect*
+*Holding the `boot / GPIO0` button on the ESP8266 module for about 5s will force WiFi access point mode. This is useful when trying to connect the unit to a new WiFi network. If the unit cannot connect to a WiFi network it will return to AP mode before retrying to connect*
 
 ***
 
@@ -126,7 +132,7 @@ On first boot, OpenEVSE should broadcast a WiFI access point (AP) `OpenEVSE_XXX`
 
 When Eco Mode is enabled:
 
-- Charging will begin when solar PB gen / grid excess > 1.4kW (6A) 
+- Charging will begin when solar PV gen / grid excess > 1.4kW (6A) 
 - Charging will pause when solar PV gen / grid excess < 1.4kW (6A)
 - Smoothing algorithm is used to avoid rapid state transitions
 - Eco Mode is persistent between charging sessions
@@ -140,9 +146,9 @@ A [OpenEnergyMonitor Solar PV Energy Monitor](https://guide.openenergymonitor.or
 - [emonPi MQTT credentials](https://guide.openenergymonitor.org/technical/credentials/#mqtt) should be pre-populated
 - Enter solar PV generation or Grid (+I/-E) MQTT topic e.g. Assuming [standard emonPi Solar PV setup](https://guide.openenergymonitor.org/applications/solar-pv/), the default MQTT feeds are:
   - Grid Import (positive Import / Negative export*): `emon/emonpi/power1`
-  - Solar PV generation (alwys postive): `emon/emonpi/power2` 
+  - Solar PV generation (always postive): `emon/emonpi/power2` 
 
-[MQTT Explorer](http://mqtt-explorer.com/) can be used to view MQTT data. To lean more about MQTT see [MQTT section of OpenEnergyMonitor user guide](https://guide.openenergymonitor.org/technical/mqtt/).
+[MQTT Explorer](http://mqtt-explorer.com/) can be used to view MQTT data. To learn more about MQTT see [MQTT section of OpenEnergyMonitor user guide](https://guide.openenergymonitor.org/technical/mqtt/).
   
 **CT sensor can be physically reversed on the cable to invert the reading.*
 
@@ -176,7 +182,7 @@ All subsequent MQTT status updates will by default be be posted to `openevse-xxx
 
 #### OpenEVSE Status via MQTT
 
-OpenEVSE can post its status values (e.g. amp, wh, temp1, temp2, temp3, pilot, status) to an MQTT server. Data will be published as a sub-topic of base topic.E.g `<base-topic>/amp`. Data is published to MQTT every 30s.
+OpenEVSE can post its status values (e.g. amp, wh, temp1, temp2, temp3, pilot, status) to an MQTT server. Data will be published as a sub-topic of base topic, e.g `<base-topic>/amp`. Data is published to MQTT every 30s.
 
 **The default `<base-topic>` is `openevse-xxxx` where `xxxx` is the last 4 characters of the device ID**
 
@@ -268,7 +274,7 @@ Current config of the OpenEVSE in JSON format is available via `http://openevse-
 
 **BETA**
 
-**Polling the Tesla API will keep the car awake which will increase vampire drain, see [Issue #96](https://github.com/OpenEVSE/ESP32_WiFi_V3.x/issues/96)**
+**Polling the Tesla API will keep the car awake which will increase vampire drain, see [Issue #96](https://github.com/OpenEVSE/ESP32_WiFi_V3.x/issues/96).**
 
 WiFi firmware V3.2 includes basic Tesla API integration. The HTTP API for this is as follows:
 
@@ -346,7 +352,7 @@ Admin HTTP Authentication (highly recommended) can be enabled by saving admin co
 
 A Hardware reset can be made (all WiFi and services config lost) by pressing and holding GPIO0 hardware button (on the Huzzah WiFi module) for 10s.
 
-*Note: Holding the GPIO0 button for 5s will but the WiFi unit into AP (access point) mode to allow the WiFi network to be changed without loosing all the service config*
+*Note: Holding the GPIO0 button for 5s will put the WiFi unit into AP (access point) mode to allow the WiFi network to be changed without losing all the service config*
 
 ### Firmware update
 
@@ -356,7 +362,7 @@ See [OpenEVSE Wifi releases](https://github.com/OpenEVSE/ESP32_WiFi_v3.x/release
 
 This is the easiest way to update. Pre-compiled firmware `.bin` files can be uploaded via the web interface: System > Update.
 
-If for whatever reason the web-interface won't load it's possible to update the firmware via CURL:
+If for whatever reason the web-interface won't load it's possible to update the firmware via cURL:
 
 `curl -F 'file=@firmware.bin'  http://<IP-ADDRESS>/update && echo`
 
@@ -372,7 +378,7 @@ The firmware can also be updated via OTA over a local WiFi network using Platfor
 
 On the command line using the [esptool.py utility](https://github.com/espressif/esptool):
 
-If flashing a new ESP32 flashing bootloader and partitions file is required: 
+If flashing a new ESP32, flashing bootloader and partitions file is required: 
 
 `esptool.py --baud 921600 --before default_reset --after hard_reset write_flash -z --flash_mode dio --flash_freq 40m --flash_size detect 0x1000 bootloader.bin 0x8000 partitions.bin 0x10000 firmware.bin`
 
@@ -380,7 +386,7 @@ Then successive uploads can just upload the firmware
 
 `esptool.py --baud 921600 --before default_reset --after hard_reset write_flash -z --flash_mode dio --flash_freq 40m --flash_size detect 0x10000 firmware.bin`
 
-Or with the [NodeMCU PyFlasher](https://github.com/marcelstoer/nodemcu-pyflasher) GUI, available with pre-built executable files for windows/mac.
+Or with the [NodeMCU PyFlasher](https://github.com/marcelstoer/nodemcu-pyflasher) GUI, available with pre-built executable files for Windows/Mac.
 
 # Development guide
 
@@ -411,7 +417,7 @@ npm run build
 ```
 
 Now you are ready to compile and upload to the ESP32.
-
+https://github.com/OpenEVSE/ESP32_WiFi_V3.x/blob/master/readme.md
 ### Compile and upload using PlatformIO
 
 For info on the Arduino core for the ESP32 using PlatformIO, see: https://github.com/espressif/arduino-esp32/blob/master/docs/platformio.md
@@ -467,13 +473,13 @@ Erase took 8.0 seconds
 
 ### Fully erase ESP
 
-To fully erase all memory locations on an ESP-12 (4Mb) we need to upload a blank file to each memory location
+To fully erase all memory locations on an ESP-12 (4Mb) we need to upload a blank file to each memory location:
 
 `esptool.py write_flash 0x000000 blank_1MB.bin 0x100000 blank_1MB.bin 0x200000 blank_1MB.bin 0x300000 blank_1MB.bin`
 
 ### View serial debug
 
-To help debug it may be useful to enable serial debug output. To do this upload using `openevse_dev` environment e.g.
+To help debug, it may be useful to enable serial debug output. To do this upload using `openevse_dev` environment e.g.
 
 `pio run -t upload -eopenevse_dev`
 
