@@ -148,9 +148,18 @@ A [OpenEnergyMonitor Solar PV Energy Monitor](https://guide.openenergymonitor.or
   - Grid Import (positive Import / Negative export*): `emon/emonpi/power1`
   - Solar PV generation (always postive): `emon/emonpi/power2` 
 
-[MQTT Explorer](http://mqtt-explorer.com/) can be used to view MQTT data. To learn more about MQTT see [MQTT section of OpenEnergyMonitor user guide](https://guide.openenergymonitor.org/technical/mqtt/).
-  
+**NoteL 'Grid' feed should include the power consumed by the EVSEE**
+
 **CT sensor can be physically reversed on the cable to invert the reading.*
+
+[MQTT Explorer](http://mqtt-explorer.com/) can be used to view MQTT data. To learn more about MQTT see [MQTT section of OpenEnergyMonitor user guide](https://guide.openenergymonitor.org/technical/mqtt/).
+
+Divertmode can be controlled via mqtt
+
+Topic: `<base-topic>/divertmode/set` 
+Value: `1` = Normal or `2` = Eco
+  
+
 
 ***
 
