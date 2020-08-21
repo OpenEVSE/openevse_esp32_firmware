@@ -87,7 +87,7 @@ void divertmode_update(byte newmode)
         }
         if(OPENEVSE_STATE_SLEEPING != state)
         {
-          if(0 == rapiSender.sendCmdSync(F("$FS")))
+          if(0 == rapiSender.sendCmdSync(config_pause_uses_disabled() ? F("$FD") : F("$FS"))) 
           {
             DBUGLN(F("Divert activated, entered sleep mode"));
             divert_active = false;
@@ -264,7 +264,7 @@ void divert_update_state()
       {
         if(divert_active && divertmode_get_time() >= min_charge_end) 
         {
-          if(0 == rapiSender.sendCmdSync(F("$FS"))) 
+          if(0 == rapiSender.sendCmdSync(config_pause_uses_disabled() ? F("$FD") : F("$FS"))) 
           {
             DBUGLN(F("Charge Stopped"));
             event["divert_active"] = divert_active = false;
