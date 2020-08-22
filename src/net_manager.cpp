@@ -96,8 +96,8 @@ startAP() {
   ipaddress = tmpStr;
   DEBUG.print("AP IP Address: ");
   DEBUG.println(tmpStr);
-  lcd_display(F("SSID: OpenEVSE"), 0, 0, 0, LCD_CLEAR_LINE);
-  lcd_display(F("Pass: openevse"), 0, 1, 15 * 1000, LCD_CLEAR_LINE);
+  lcd_display(softAP_ssid_ID, 0, 0, 0, LCD_CLEAR_LINE);
+  lcd_display(String(F("Pass: ")) + softAP_password, 0, 1, 15 * 1000, LCD_CLEAR_LINE);
 
   apClients = 0;
 }
