@@ -53,15 +53,16 @@ extern uint32_t divert_min_charge_time;
 // 24-bits of Flags
 extern uint32_t flags;
 
-#define CONFIG_SERVICE_EMONCMS  (1 << 0)
-#define CONFIG_SERVICE_MQTT     (1 << 1)
-#define CONFIG_SERVICE_OHM      (1 << 2)
-#define CONFIG_SERVICE_SNTP     (1 << 3)
-#define CONFIG_MQTT_PROTOCOL    (7 << 4) // Maybe leave a bit of space after for additional protocols
-#define CONFIG_MQTT_ALLOW_ANY_CERT (1 << 7)
-#define CONFIG_SERVICE_TESLA    (1 << 8)
-#define CONFIG_SERVICE_DIVERT   (1 << 9)
-#define CONFIG_CHARGE_MODE      (7 << 10) // 3 bits for mode
+#define CONFIG_SERVICE_EMONCMS      (1 << 0)
+#define CONFIG_SERVICE_MQTT         (1 << 1)
+#define CONFIG_SERVICE_OHM          (1 << 2)
+#define CONFIG_SERVICE_SNTP         (1 << 3)
+#define CONFIG_MQTT_PROTOCOL        (7 << 4) // Maybe leave a bit of space after for additional protocols
+#define CONFIG_MQTT_ALLOW_ANY_CERT  (1 << 7)
+#define CONFIG_SERVICE_TESLA        (1 << 8)
+#define CONFIG_SERVICE_DIVERT       (1 << 9)
+#define CONFIG_CHARGE_MODE          (7 << 10) // 3 bits for mode
+#define CONFIG_PAUSE_USES_DISABLED   (1 << 13)
 
 inline bool config_emoncms_enabled() {
   return CONFIG_SERVICE_EMONCMS == (flags & CONFIG_SERVICE_EMONCMS);
@@ -97,6 +98,10 @@ inline bool config_divert_enabled() {
 
 inline uint8_t config_charge_mode() {
   return (flags & CONFIG_CHARGE_MODE) >> 10;
+}
+
+inline bool config_pause_uses_disabled() {
+  return CONFIG_PAUSE_USES_DISABLED == (flags & CONFIG_PAUSE_USES_DISABLED);
 }
 
 // Ohm Connect Settings
