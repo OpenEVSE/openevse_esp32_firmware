@@ -36,7 +36,7 @@ Wired Ethernet connection is possible using [ESP32 Gateway](docs/wired-ethernet.
 ### ESP32 WiFi Module
 
 - **Note: WiFi module is included as standard in most OpenEVSE units**
-- Purchase via: [OpenEVSE Store (USA/Canda)](https://store.openevse.com/collections/frontpage/products/openevse-wifi-kit) | [OpenEnergyMonitor (UK / EU)](https://shop.openenergymonitor.com/evse/)
+- Purchase via: [OpenEVSE Store (USA/Canda)](https://store.openevse.com/collections/frontpage/products/openevse-wifi-kit) | [OpenEnergyMonitor (UK / EU)](https://shop.openenergymonitor.com/openevse-etherent-gateway-esp32/)
 - See [OpenEVSE WiFi setup guide](https://openevse.dozuki.com/Guide/OpenEVSE+WiFi+%28Beta%29/14) for WiFi module hardware connection instructions
 
 ### Web browsing device
