@@ -23,10 +23,16 @@
 // Or modulate charge rate based on on excess power (if grid feed (positive import / negative export) is available) i.e. power that would otherwise be exported to the grid is diverted to EVSE.
 // Note: it's Assumed EVSE power is included in grid feed e.g. (charge rate = gen - use - EVSE).
 
-// If EVSE is sleeping charging will not start until solar PV / excess power > min chanrge rate
-// Once charging begins it will not pause even if solaer PV / excess power drops less then minimm charge rate. This avoids wear on the relay and the car
+// It's better to never import current from the grid but because of charging current quantification (min value of 6A and change in steps of 1A),
+// it may be better to import a fraction of the charge current and use the next charging level sooner, depending on electricity buying/selling prices.
+// The marginal fraction of current that is required to come from PV is the divert_PV_ratio. The default behavior of requiring a pure PV charge is obtained by
+// setting divert_PV_ratio to 1.0. This is the best choice when the kWh selling price is the same as the kWh night buying price.  If instead the night tarif
+// is the same as the day tarif, any available current is good to take and divert_PV_ratio optimal setting is close to 0.0.
 
-#define GRID_IE_RESERVE_POWER   100.0
+// If EVSE is sleeping, charging will start as soon as solar PV / excess power exceeds the divert_PV_ratio fraction of the minimum charging power.
+// Once charging begins it will not pause before a minimum amount of time has passed and this even if solar PV / excess power drops less then minimum charge rate.
+// This avoids wear on the relay and the car.
+#define GRID_IE_RESERVE_POWER (0.0)
 
 // Default to normal charging unless set. Divert mode always defaults back to 1 if unit is reset (divertmode not saved in EEPROM)
 byte divertmode = DIVERT_MODE_NORMAL;     // default normal mode
@@ -184,11 +190,16 @@ void divert_update_state()
     }
     DBUGVAR(available_current);
 
-    double scale = available_current > smoothed_available_current ? divert_attack_smoothing_factor : divert_decay_smoothing_factor;
+    double scale = (available_current > smoothed_available_current ? divert_attack_smoothing_factor : divert_decay_smoothing_factor);
     smoothed_available_current = (available_current * scale) + (smoothed_available_current * (1 - scale));
     DBUGVAR(smoothed_available_current);
 
     charge_rate = (int)floor(available_current);
+    // if the remaining current can be used with a sufficient ratio of PV current in it, use it
+    if ((available_current - charge_rate) > divert_PV_ratio)
+    {
+      charge_rate += 1;
+    }
 
     if(OPENEVSE_STATE_SLEEPING != state) {
       // If we are not sleeping, make sure we are the minimum current
@@ -197,12 +208,13 @@ void divert_update_state()
 
     DBUGVAR(charge_rate);
 
-    if(smoothed_available_current >= min_charge_current)
+    // the smoothed current suffices to ensure a sufficient ratio of PV power
+    if (smoothed_available_current >= (min_charge_current * divert_PV_ratio))
     {
       // Cap the charge rate at the configured maximum
       charge_rate = min(charge_rate, static_cast<int>(max_charge_current));
 
-      // Change the charge rate is needed
+      // Change the charge rate if needed
       if(current_charge_rate != charge_rate)
       {
         // Set charge rate via RAPI
