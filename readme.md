@@ -414,7 +414,7 @@ In addition, the GUI is now maintained in a [separate repository](https://nodejs
 If the `gui` directory is empty, use the following to retrieve the GUI source and fetch the dependencies:
 
 ```shell
-git submodule update --init
+git submodule update --init --recursive
 cd gui
 npm install
 ```
