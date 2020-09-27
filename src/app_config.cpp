@@ -110,7 +110,7 @@ ConfigOpt *opts[] =
   new ConfigOptDefenition<String>(ohm, "", "ohm", "o"),
 
 // Divert settings
-  new ConfigOptDefenition<double>(divert_PV_ratio, 1.0, "divert_PV_ratio", "dpr"),
+  new ConfigOptDefenition<double>(divert_PV_ratio, 1.1, "divert_PV_ratio", "dpr"),
   new ConfigOptDefenition<double>(divert_attack_smoothing_factor, 0.4, "divert_attack_smoothing_factor", "da"),
   new ConfigOptDefenition<double>(divert_decay_smoothing_factor, 0.05, "divert_decay_smoothing_factor", "dd"),
   new ConfigOptDefenition<uint32_t>(divert_min_charge_time, (10 * 60), "divert_min_charge_time", "dt"),
