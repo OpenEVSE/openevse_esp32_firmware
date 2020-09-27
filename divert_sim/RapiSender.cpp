@@ -1,6 +1,5 @@
 #include <Arduino.h>
 #include "RapiSender.h"
-#include "debug.h"
 #include "openevse.h"
 #include "input.h"
 
@@ -9,6 +8,7 @@
 #ifdef ENABLE_DEBUG
 #define DBG
 #endif
+#define DBUGF
 
 static CommandItem commandQueueItems[RAPI_MAX_COMMANDS];
 

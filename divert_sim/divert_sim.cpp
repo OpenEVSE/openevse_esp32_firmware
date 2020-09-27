@@ -7,11 +7,10 @@
 #endif
 
 #include "Console.h"
-#include "emonesp.h"
+//#include "emonesp.h"
 #include "RapiSender.h"
 #include "openevse.h"
 #include "divert.h"
-#include "emonesp.h"
 #include "event.h"
 
 #include "parser.hpp"
@@ -25,6 +24,7 @@ long pilot = 32;                      // OpenEVSE Pilot Setting
 long state = OPENEVSE_STATE_SLEEPING; // OpenEVSE State
 String mqtt_solar = "";
 String mqtt_grid_ie = "";
+uint32_t flags;
 
 int date_col = 0;
 int grid_ie_col = -1;
@@ -38,26 +38,39 @@ bool kw = false;
 extern double smoothed_available_current;
 double divert_attack_smoothing_factor = 0.4;
 double divert_decay_smoothing_factor = 0.05;
+double divert_PV_ratio = 0.5;
 uint32_t divert_min_charge_time = (10 * 60);
-double voltage = DEFAULT_VOLTAGE;     // Voltage from OpenEVSE or MQTT
+double voltage = 240; // Voltage from OpenEVSE or MQTT
 
 time_t parse_date(const char *dateStr)
 {
   int y = 2020, M = 1, d = 1, h = 0, m = 0, s = 0;
   char ampm[5];
-  if(6 != sscanf(dateStr, "%d-%d-%dT%d:%d:%dZ", &y, &M, &d, &h, &m, &s)) {
-    if(6 != sscanf(dateStr, "%d-%d-%dT%d:%d:%d+00:00", &y, &M, &d, &h, &m, &s)) {
-      if(6 != sscanf(dateStr, "%d-%d-%d %d:%d:%d", &y, &M, &d, &h, &m, &s)) {
-        if(3 != sscanf(dateStr, "%d:%d %s", &h, &m, ampm)) {
-          if(1 == sscanf(dateStr, "%d", &s)) {
+  if (6 != sscanf(dateStr, "%d-%d-%dT%d:%d:%dZ", &y, &M, &d, &h, &m, &s))
+  {
+    if (6 != sscanf(dateStr, "%d-%d-%dT%d:%d:%d+00:00", &y, &M, &d, &h, &m, &s))
+    {
+      if (6 != sscanf(dateStr, "%d-%d-%d %d:%d:%d", &y, &M, &d, &h, &m, &s))
+      {
+        if (3 != sscanf(dateStr, "%d:%d %s", &h, &m, ampm))
+        {
+          if (1 == sscanf(dateStr, "%d", &s))
+          {
             return s;
           }
-        } else {
-          y = 2020; M = 1; d = 1; s = 0;
-          if(12 == h) {
+        }
+        else
+        {
+          y = 2020;
+          M = 1;
+          d = 1;
+          s = 0;
+          if (12 == h)
+          {
             h -= 12;
           }
-          if('P' == ampm[0]) {
+          if ('P' == ampm[0])
+          {
             h += 12;
           }
         }
@@ -79,11 +92,13 @@ time_t parse_date(const char *dateStr)
 int get_watt(const char *val)
 {
   float number = 0.0;
-  if(1 != sscanf(val, "%f", &number)) {
+  if (1 != sscanf(val, "%f", &number))
+  {
     throw std::invalid_argument("Not a number");
   }
 
-  if(kw) {
+  if (kw)
+  {
     number *= 1000;
   }
 
@@ -95,27 +110,18 @@ time_t divertmode_get_time()
   return simulated_time;
 }
 
-int main(int argc, char** argv)
+int main(int argc, char **argv)
 {
   int voltage_arg = -1;
   std::string sep = ",";
 
   cxxopts::Options options(argv[0], " - example command line options");
   options
-    .positional_help("[optional args]")
-    .show_positional_help();
+      .positional_help("[optional args]")
+      .show_positional_help();
 
   options
-    .add_options()
-    ("help", "Print help")
-    ("d,date", "The date column", cxxopts::value<int>(date_col), "N")
-    ("s,solar", "The solar column", cxxopts::value<int>(solar_col), "N")
-    ("g,gridie", "The Grid IE column", cxxopts::value<int>(grid_ie_col), "N")
-    ("attack", "The attack factor for the smoothing", cxxopts::value<double>(divert_attack_smoothing_factor))
-    ("decay", "The decay factor for the smoothing", cxxopts::value<double>(divert_decay_smoothing_factor))
-    ("v,voltage", "The Voltage column if < 50, else the fixed voltage", cxxopts::value<int>(voltage_arg), "N")
-    ("kw", "values are KW")
-    ("sep", "Field separator", cxxopts::value<std::string>(sep));
+      .add_options()("help", "Print help")("d,date", "The date column", cxxopts::value<int>(date_col), "N")("s,solar", "The solar column", cxxopts::value<int>(solar_col), "N")("g,gridie", "The Grid IE column", cxxopts::value<int>(grid_ie_col), "N")("attack", "The attack factor for the smoothing", cxxopts::value<double>(divert_attack_smoothing_factor))("decay", "The decay factor for the smoothing", cxxopts::value<double>(divert_decay_smoothing_factor))("v,voltage", "The Voltage column if < 50, else the fixed voltage", cxxopts::value<int>(voltage_arg), "N")("kw", "values are KW")("sep", "Field separator", cxxopts::value<std::string>(sep));
 
   auto result = options.parse(argc, argv);
 
@@ -130,10 +136,14 @@ int main(int argc, char** argv)
   mqtt_solar = grid_ie_col >= 0 ? "" : "yes";
   mqtt_grid_ie = grid_ie_col >= 0 ? "yes" : "";
 
-  if(voltage_arg >= 0) {
-    if(voltage_arg < 50) {
+  if (voltage_arg >= 0)
+  {
+    if (voltage_arg < 50)
+    {
       voltage_col = voltage_arg;
-    } else {
+    }
+    else
+    {
       voltage = voltage_arg;
     }
   }
@@ -148,23 +158,30 @@ int main(int argc, char** argv)
   int row_number = 0;
 
   std::cout << "Date,Solar,Grid IE,Pilot,Charge Power,Min Charge Power,State,Smoothed Available" << std::endl;
-  for (auto& row : parser)
+  for (auto &row : parser)
   {
     try
     {
       int col = 0;
       std::string val;
 
-      for (auto& field : row)
+      for (auto &field : row)
       {
         val = field;
-        if(date_col == col) {
+        if (date_col == col)
+        {
           simulated_time = parse_date(val.c_str());
-        } else if (grid_ie_col == col) {
+        }
+        else if (grid_ie_col == col)
+        {
           grid_ie = get_watt(val.c_str());
-        } else if (solar_col == col) {
+        }
+        else if (solar_col == col)
+        {
           solar = get_watt(val.c_str());
-        } else if (voltage_col == col) {
+        }
+        else if (voltage_col == col)
+        {
           voltage = stoi(field);
         }
 
@@ -187,7 +204,7 @@ int main(int argc, char** argv)
 
       std::cout << buffer << "," << solar << "," << grid_ie << "," << ev_pilot << "," << ev_watt << "," << min_ev_watt << "," << state << "," << smoothed << std::endl;
     }
-    catch(const std::invalid_argument& e)
+    catch (const std::invalid_argument &e)
     {
     }
   }
