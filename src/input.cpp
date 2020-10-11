@@ -14,6 +14,8 @@
 #include "openevse.h"
 #include "espal.h"
 
+#include "LedManagerTask.h"
+
 #include "RapiSender.h"
 
 int espflash = 0;
@@ -140,6 +142,7 @@ update_rapi_values() {
           DBUGF("evse_state = %02x, session_time = %d, pilot_state = %02x, vflags = %08x", evse_state, session_time, pilot_state, vflags);
 
           state = evse_state;
+          ledManager.setEvseState(evse_state);
           elapsed = session_time;
         }
       });
@@ -335,6 +338,7 @@ void input_setup()
     // Update our global state
     DBUGVAR(evse_state);
     state = evse_state;
+    ledManager.setEvseState(evse_state);
 
     // Send to all clients
     StaticJsonDocument<32> event;

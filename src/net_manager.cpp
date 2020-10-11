@@ -45,6 +45,10 @@ unsigned long client_retry_time = 0;
 #ifdef WIFI_LED
 int wifiLedState = !WIFI_LED_ON_STATE;
 unsigned long wifiLedTimeOut = millis();
+
+#if !defined(WIFI_BUTTON_SHARE_LED) && defined(WIFI_BUTTON) &&  WIFI_LED == WIFI_BUTTON
+#define WIFI_BUTTON_SHARE_LED WIFI_LED
+#endif
 #endif
 
 int wifiButtonState = !WIFI_BUTTON_PRESSED_STATE;
@@ -375,7 +379,7 @@ net_setup() {
   digitalWrite(WIFI_LED, wifiLedState);
 #endif
 
-#if defined(WIFI_BUTTON) && WIFI_BUTTON != WIFI_LED
+#if defined(WIFI_BUTTON) && !defined(WIFI_BUTTON_SHARE_LED)
   DBUGF("Configuring pin %d for Button", WIFI_BUTTON);
   pinMode(WIFI_BUTTON, WIFI_BUTTON_PRESSED_PIN_MODE);
 #endif
@@ -437,18 +441,19 @@ net_loop()
   }
 #endif
 
-#if defined(WIFI_LED) && WIFI_BUTTON == WIFI_LED
-  digitalWrite(WIFI_BUTTON, HIGH);
-  pinMode(WIFI_BUTTON, WIFI_BUTTON_PRESSED_PIN_MODE);
-#endif
-
-  // Pressing the boot button for 5 seconds will turn on AP mode, 10 seconds will factory reset
-  int button = digitalRead(WIFI_BUTTON);
-
-#if defined(WIFI_LED) && WIFI_BUTTON == WIFI_LED
-  pinMode(WIFI_BUTTON, OUTPUT);
-  digitalWrite(WIFI_LED, wifiLedState);
-#endif
+//#if defined(WIFI_BUTTON_SHARE_LED)
+//  digitalWrite(WIFI_BUTTON_SHARE_LED, HIGH);
+//  pinMode(WIFI_BUTTON, WIFI_BUTTON_PRESSED_PIN_MODE);
+//#endif
+//
+//  // Pressing the boot button for 5 seconds will turn on AP mode, 10 seconds will factory reset
+//  int button = digitalRead(WIFI_BUTTON);
+int button = !WIFI_BUTTON_PRESSED_STATE;
+//
+//#if defined(WIFI_BUTTON_SHARE_LED)
+//  pinMode(WIFI_BUTTON, OUTPUT);
+//  digitalWrite(WIFI_BUTTON_SHARE_LED, wifiLedState);
+//#endif
 
   //DBUGF("%lu %d %d", millis() - wifiButtonTimeOut, button, wifiButtonState);
   if(wifiButtonState != button)

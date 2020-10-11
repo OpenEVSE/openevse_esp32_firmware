@@ -74,12 +74,6 @@
 #endif
 #endif
 
-#ifdef ONBOARD_LEDS
-#ifndef ONBOARD_LED_ON_STATE
-#define ONBOARD_LED_ON_STATE  WIFI_LED_ON_STATE
-#endif
-#endif
-
 #ifndef HAL_ID_ENCODING_BASE
 #define HAL_ID_ENCODING_BASE 16
 #endif
