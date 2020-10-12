@@ -82,6 +82,8 @@ void setup()
   config_load_settings();
   DBUGF("After config_load_settings: %d", ESPAL.getFreeHeap());
 
+  MicroTask.startTask(ledManager);
+
   // Initialise the WiFi
   net_setup();
   DBUGF("After net_setup: %d", ESPAL.getFreeHeap());
@@ -103,8 +105,6 @@ void setup()
 
   lcd_display(F("OpenEVSE WiFI"), 0, 0, 0, LCD_CLEAR_LINE);
   lcd_display(currentfirmware, 0, 1, 5 * 1000, LCD_CLEAR_LINE);
-
-  MicroTask.startTask(ledManager);
 
   start_mem = last_mem = ESPAL.getFreeHeap();
 } // end setup

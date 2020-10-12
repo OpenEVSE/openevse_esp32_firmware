@@ -14,10 +14,10 @@
 
 enum LedState
 {
-  LedState_Off,
   LedState_Test_Red,
   LedState_Test_Green,
   LedState_Test_Blue,
+  LedState_Off,
   LedState_Unknown,
   LedState_Ready,
   LedState_Connected,
@@ -26,7 +26,9 @@ enum LedState
   LedState_Warning,
   LedState_Error,
   LedState_WiFi_Access_Point_Waiting,
-  LedState_WiFi_Access_Point_Connected
+  LedState_WiFi_Access_Point_Connected,
+  LedState_WiFi_Client_Connecting,
+  LedState_WiFi_Client_Connected
 };
 
 class LedManagerTask : public MicroTasks::Task
@@ -34,12 +36,21 @@ class LedManagerTask : public MicroTasks::Task
   private:
     LedState state;
     uint8_t evseState;
+    bool wifiClient;
+    bool wifiConnected;
+
+    bool flashState;
 
 #if RGB_LED
     void setAllRGB(uint8_t red, uint8_t green, uint8_t blue);
 #endif
 
+#ifdef WIFI_LED
+    void setWiFiLed(uint8_t state);
+#endif
+
     LedState ledStateFromEvseState(uint8_t);
+    void setNewState(bool wake = true);
     int getPriority(LedState state);
 
   public:
@@ -49,9 +60,12 @@ class LedManagerTask : public MicroTasks::Task
     unsigned long loop(MicroTasks::WakeReason reason);
 
     void setEvseState(uint8_t state);
+    void setWifiMode(bool client, bool connected);
 
     void test();
     void clear();
+
+    int getButtonPressed();
 };
 
 extern LedManagerTask ledManager;

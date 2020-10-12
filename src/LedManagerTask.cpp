@@ -5,7 +5,12 @@
 #include <Arduino.h>
 #include <openevse.h>
 
+#ifdef ESP32
+#include <analogWrite.h>
+#endif
+
 #include "debug.h"
+#include "emonesp.h"
 #include "LedManagerTask.h"
 
 #if defined(NEO_PIXEL_PIN) && defined(NEO_PIXEL_LENGTH)
@@ -18,16 +23,12 @@ Adafruit_NeoPixel strip = Adafruit_NeoPixel(NEO_PIXEL_LENGTH, NEO_PIXEL_PIN, NEO
 #define FADE_STEP         16
 #define FADE_DELAY        50
 
-#define FLASH_TIME        150
-#define FLASH_COUNT       5 // Number of steps, on, off, on, off, on, will back to off/charging after
+#define CONNECTING_FLASH_TIME 450
+#define CONNECTED_FLASH_TIME  250
 
 #define TEST_LED_TIME     500
 
 #if defined(RED_LED) && defined(GREEN_LED) && defined(BLUE_LED)
-
-#ifdef ESP32
-#include <analogWrite.h>
-#endif
 
 // https://learn.adafruit.com/led-tricks-gamma-correction/the-quick-fix
 const uint8_t PROGMEM gamma8[] = {
@@ -50,6 +51,24 @@ const uint8_t PROGMEM gamma8[] = {
 
 #endif
 
+#ifdef WIFI_BUTTON
+
+#if defined(WIFI_LED) && WIFI_LED == WIFI_BUTTON
+#define WIFI_BUTTON_SHARE_LED WIFI_LED
+#elif defined(RED_LED) && RED_LED == WIFI_BUTTON
+#define WIFI_BUTTON_SHARE_LED RED_LED
+#elif defined(GREEN_LED) && GREEN_LED == WIFI_BUTTON
+#define WIFI_BUTTON_SHARE_LED GREEN_LED
+#elif defined(BLUE_LED) && BLUE_LED == WIFI_BUTTON
+#define WIFI_BUTTON_SHARE_LED BLUE_LED
+#endif
+
+#endif
+
+#ifdef WIFI_BUTTON_SHARE_LED
+uint8_t buttonShareState = 0;
+#endif
+
 LedManagerTask::LedManagerTask() :
   MicroTasks::Task(),
   state(LedState_Test_Red),
@@ -66,13 +85,24 @@ void LedManagerTask::setup()
 #endif
 
 #if defined(RED_LED) && defined(GREEN_LED) && defined(BLUE_LED)
-  DBUGF("Initialising RGB LEDs");
+  DBUGF("Initialising RGB LEDs, %d, %d, %d", RED_LED, GREEN_LED, BLUE_LED);
   pinMode(RED_LED, OUTPUT);
   digitalWrite(RED_LED, LOW);
   pinMode(GREEN_LED, OUTPUT);
   digitalWrite(GREEN_LED, LOW);
   pinMode(BLUE_LED, OUTPUT);
   digitalWrite(BLUE_LED, LOW);
+#endif
+
+#ifdef WIFI_LED
+  DBUGF("Configuring pin %d for LED", WIFI_LED);
+  pinMode(WIFI_LED, OUTPUT);
+  digitalWrite(WIFI_LED, !WIFI_LED_ON_STATE);
+#endif
+
+#if defined(WIFI_BUTTON) && !defined(WIFI_BUTTON_SHARE_LED)
+  DBUGF("Configuring pin %d for Button", WIFI_BUTTON);
+  pinMode(WIFI_BUTTON, WIFI_BUTTON_PRESSED_PIN_MODE);
 #endif
 }
 
@@ -98,6 +128,7 @@ unsigned long LedManagerTask::loop(MicroTasks::WakeReason reason)
          LedState_Error == state ? "LedState_Error" :
          LedState_WiFi_Access_Point_Waiting == state ? "LedState_WiFi_Access_Point_Waiting" :
          LedState_WiFi_Access_Point_Connected == state ? "LedState_WiFi_Access_Point_Connected" :
+         LedState_WiFi_Client_Connected == state ? "LedState_WiFi_Client_Connected" :
          "UNKNOWN");
 
 #if RGB_LED    
@@ -119,7 +150,8 @@ unsigned long LedManagerTask::loop(MicroTasks::WakeReason reason)
 
     case LedState_Test_Blue:
       setAllRGB(0, 0, 255);
-      state = ledStateFromEvseState(evseState);
+      state = LedState_Off;
+      setNewState(false);
       return TEST_LED_TIME;
 
     case LedState_Unknown:
@@ -151,13 +183,67 @@ unsigned long LedManagerTask::loop(MicroTasks::WakeReason reason)
       return MicroTask.Infinate;
 
     case LedState_WiFi_Access_Point_Waiting:
-      setAllRGB(0, 0, 255);
-      return MicroTask.Infinate;
+      setAllRGB(flashState ? 255 : 0, 
+                flashState ? 255 : 0,
+                0);
+      flashState = !flashState;
+      return CONNECTING_FLASH_TIME;
 
     case LedState_WiFi_Access_Point_Connected:
+      setAllRGB(0, flashState ? 255 : 0, 0);
+      flashState = !flashState;
+      return CONNECTED_FLASH_TIME;
+
+    case LedState_WiFi_Client_Connecting:
+      setAllRGB(flashState ? 255 : 0, 
+                flashState ? 255 : 0,
+                0);
+      flashState = !flashState;
+      return CONNECTING_FLASH_TIME;
+
+    case LedState_WiFi_Client_Connected:
       setAllRGB(0, 255, 0);
       return MicroTask.Infinate;
 
+  }
+#endif
+
+#ifdef WIFI_LED
+  switch(state)
+  {
+    case LedState_Test_Red:
+    case LedState_Test_Green:
+    case LedState_Test_Blue:
+      setWiFiLed(WIFI_LED_ON_STATE);
+      state = LedState_Off;
+      setNewState(false);
+      return TEST_LED_TIME;
+
+    case LedState_Off:
+      setWiFiLed(!WIFI_LED_ON_STATE);
+      return MicroTask.Infinate;
+
+    case LedState_WiFi_Access_Point_Waiting:
+      setWiFiLed(flashState ? WIFI_LED_ON_STATE : !WIFI_LED_ON_STATE);
+      flashState = !flashState;
+      return CONNECTING_FLASH_TIME;
+
+    case LedState_WiFi_Access_Point_Connected:
+      setWiFiLed(flashState ? WIFI_LED_ON_STATE : !WIFI_LED_ON_STATE);
+      flashState = !flashState;
+      return CONNECTED_FLASH_TIME;
+
+    case LedState_WiFi_Client_Connecting:
+      setWiFiLed(flashState ? WIFI_LED_ON_STATE : !WIFI_LED_ON_STATE);
+      flashState = !flashState;
+      return CONNECTING_FLASH_TIME;
+
+    case LedState_WiFi_Client_Connected:
+      setWiFiLed(WIFI_LED_ON_STATE);
+      return MicroTask.Infinate;
+
+    default:
+      break;
   }
 #endif
 
@@ -202,12 +288,34 @@ void LedManagerTask::setAllRGB(uint8_t red, uint8_t green, uint8_t blue)
   analogWrite(RED_LED, pgm_read_byte(&gamma8[red]));
   analogWrite(GREEN_LED, pgm_read_byte(&gamma8[green]));
   analogWrite(BLUE_LED, pgm_read_byte(&gamma8[blue]));
+
+#ifdef WIFI_BUTTON_SHARE_LED
+  #if RED_LED == WIFI_BUTTON_SHARE_LED
+    buttonShareState = red;
+  #elif GREEN_LED == WIFI_BUTTON_SHARE_LED
+    buttonShareState = green;
+  #elif BLUE_LED == WIFI_BUTTON_SHARE_LED
+    buttonShareState = blue;
+  #endif
+#endif
+#endif
+}
+#endif
+
+#ifdef WIFI_LED
+void LedManagerTask::setWiFiLed(uint8_t state)
+{
+  DBUGVAR(state);
+  digitalWrite(WIFI_LED, state);
+#ifdef WIFI_BUTTON_SHARE_LED
+  buttonShareState = state ? 0 : 255;
 #endif
 }
 #endif
 
 LedState LedManagerTask::ledStateFromEvseState(uint8_t state) 
 {
+#if RGB_LED
   switch(state)
   {
     case OPENEVSE_STATE_STARTING:
@@ -236,21 +344,21 @@ LedState LedManagerTask::ledStateFromEvseState(uint8_t state)
     case OPENEVSE_STATE_DISABLED:
       return LedState_Sleeping;
   }
+#endif
 
-  return LedState_Unknown;
+  return LedState_Off;
 }
 
 
-int getPriority(LedState priorityState)
+int LedManagerTask::getPriority(LedState priorityState)
 {
   switch (priorityState)
   {
     case LedState_Off:
       return 0;
-    case LedState_Test_Red:
-    case LedState_Test_Green:
-    case LedState_Test_Blue:
-      return 1000;
+
+    case LedState_WiFi_Client_Connected:
+      return 10;
 
     case LedState_Unknown:
     case LedState_Ready:
@@ -258,17 +366,53 @@ int getPriority(LedState priorityState)
     case LedState_Charging:
     case LedState_Sleeping:
     case LedState_Warning:
-      return 10;
+      return 50;
 
-    case LedState_Error:
-      return 900;
-      
     case LedState_WiFi_Access_Point_Waiting:
     case LedState_WiFi_Access_Point_Connected:
+    case LedState_WiFi_Client_Connecting:
       return 100;
+
+    case LedState_Error:
+      return 1000;
+      
+    case LedState_Test_Red:
+    case LedState_Test_Green:
+    case LedState_Test_Blue:
+      return 2000;
   }
 
   return 0;
+}
+
+void LedManagerTask::setNewState(bool wake)
+{
+  LedState newState = state < LedState_Off ? state : LedState_Off;
+  int priority = getPriority(newState);
+
+  LedState evseState = ledStateFromEvseState(this->evseState);
+  int evsePriority = getPriority(evseState);
+  if(evsePriority > priority) {
+    newState = evseState;
+    priority = evsePriority;
+  }
+
+  LedState wifiState = wifiClient ? 
+    (wifiConnected ? LedState_WiFi_Client_Connected : LedState_WiFi_Client_Connecting) :
+    (wifiConnected ? LedState_WiFi_Access_Point_Connected : LedState_WiFi_Access_Point_Waiting);
+  int wifiPriority = getPriority(wifiState);
+  if(wifiPriority > priority) {
+    newState = wifiState;
+    priority = wifiPriority;
+  }
+
+  if(newState != state)
+  {
+    state = newState;
+    if(wake) {
+      MicroTask.wakeTask(this);
+    }
+  }
 }
 
 void LedManagerTask::clear()
@@ -285,15 +429,53 @@ void LedManagerTask::test()
 
 void LedManagerTask::setEvseState(uint8_t newState)
 {
-  if(evseState != newState) 
-  {
-    evseState = newState;
-    if(getPriority(ledStateFromEvseState(newState)) >= getPriority(state)) 
-    {
-      state = ledStateFromEvseState(newState);
-      MicroTask.wakeTask(this);
-    }
+  DBUGVAR(newState);
+  evseState = newState;
+  setNewState();
+}
+
+void LedManagerTask::setWifiMode(bool client, bool connected)
+{
+  DBUGF("WiFi mode %d %d", client, connected);
+  wifiClient = client;
+  wifiConnected = connected;
+  setNewState();
+}
+
+int LedManagerTask::getButtonPressed()
+{
+#if defined(WIFI_BUTTON_SHARE_LED)
+  #ifdef ESP32
+  int channel = analogWriteChannel(WIFI_BUTTON_SHARE_LED);
+  if(-1 != channel) {
+    ledcDetachPin(WIFI_BUTTON_SHARE_LED);
   }
+  #endif
+
+  digitalWrite(WIFI_BUTTON_SHARE_LED, HIGH);
+  pinMode(WIFI_BUTTON_SHARE_LED, WIFI_BUTTON_PRESSED_PIN_MODE);
+#endif
+
+  // Pressing the boot button for 5 seconds will turn on AP mode, 10 seconds will factory reset
+  int button = digitalRead(WIFI_BUTTON);
+
+#if defined(WIFI_BUTTON_SHARE_LED)
+  pinMode(WIFI_BUTTON, OUTPUT);
+
+  #ifdef ESP32
+  if(-1 != channel) {
+    ledcAttachPin(WIFI_BUTTON_SHARE_LED, channel);
+  }
+  #endif
+
+  if(0 == buttonShareState || 255 == buttonShareState) {
+    digitalWrite(WIFI_BUTTON_SHARE_LED, buttonShareState ? HIGH : LOW);
+  } else {
+    analogWrite(WIFI_BUTTON_SHARE_LED, buttonShareState);
+  }
+#endif
+
+  return button;
 }
 
 LedManagerTask ledManager;
