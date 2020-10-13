@@ -5,6 +5,7 @@
 #include <Arduino.h>
 #include <ArduinoJson.h>
 
+
 #include "emonesp.h"
 #include "input.h"
 #include "app_config.h"
@@ -17,6 +18,12 @@
 #include "LedManagerTask.h"
 
 #include "RapiSender.h"
+
+#ifdef ENABLE_MCP9808
+#include <Wire.h>
+#include <Adafruit_MCP9808.h>
+Adafruit_MCP9808 tempsensor = Adafruit_MCP9808();
+#endif
 
 int espflash = 0;
 int espfree = 0;
@@ -101,6 +108,15 @@ void create_rapi_json(JsonDocument &doc)
   } else {
     doc["temp3"] = false;
   }
+#ifdef ENABLE_MCP9808
+  float temp4 = tempsensor.readTempC();
+  DBUGVAR(temp4);
+  if(!isnan(temp4)) {
+    doc["temp4"] = temp4 * TEMP_SCALE_FACTOR;
+  } else {
+    doc["temp4"] = false;
+  }
+#endif
   doc["state"] = state;
   doc["freeram"] = ESPAL.getFreeHeap();
   doc["divertmode"] = divertmode;
@@ -333,6 +349,40 @@ handleRapiRead()
 
 void input_setup()
 {
+#ifdef ENABLE_MCP9808
+//  DBUGLN(">> I2C scan <<");
+//
+//  Wire.begin();
+//  for(int address = 1; address < 127; address++ )
+//  {
+//    Wire.beginTransmission(address);
+//    uint8_t error = Wire.endTransmission();
+//    if (error == 0)
+//    {
+//      DBUG("I2C device found at address 0x");
+//      if (address<16) {
+//        DBUG("0");
+//      }
+//      DBUG(address,HEX);
+//      DBUGLN("  !");
+//    }
+//  }
+
+  if(tempsensor.begin())
+  {
+    DBUGLN("Found MCP9808!");
+    tempsensor.setResolution(1); // sets the resolution mode of reading, the modes are defined in the table bellow:
+    // Mode Resolution SampleTime
+    //  0    0.5°C       30 ms
+    //  1    0.25°C      65 ms
+    //  2    0.125°C     130 ms
+    //  3    0.0625°C    250 ms
+    tempsensor.wake();   // wake up, ready to read!
+  } else {
+    DBUGLN("Couldn't find MCP9808!");
+  }
+#endif
+
   OpenEVSE.onState([](uint8_t evse_state, uint8_t pilot_state, uint32_t current_capacity, uint32_t vflags)
   {
     // Update our global state

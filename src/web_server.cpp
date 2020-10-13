@@ -566,7 +566,6 @@ handleStatus(MongooseHttpServerRequest *request) {
   doc["wifi_client_connected"] = (int)net_wifi_client_connected();
   doc["eth_connected"] = (int)net_eth_connected();
   doc["net_connected"] = (int)net_is_connected();
-  doc["srssi"] = WiFi.RSSI();
   doc["ipaddress"] = ipaddress;
 
   doc["emoncms_connected"] = (int)emoncms_connected;
@@ -583,25 +582,8 @@ handleStatus(MongooseHttpServerRequest *request) {
   doc["comm_success"] = rapiSender.getSuccess();
   doc["rapi_connected"] = (int)rapiSender.isConnected();
 
-  doc["amp"] = amp * AMPS_SCALE_FACTOR;
-  doc["voltage"] = voltage * VOLTS_SCALE_FACTOR;
-  doc["pilot"] = pilot;
-  if(temp1_valid) {
-    doc["temp1"] = temp1 * TEMP_SCALE_FACTOR;
-  } else {
-    doc["temp1"] = false;
-  }
-  if(temp2_valid) {
-    doc["temp2"] = temp2 * TEMP_SCALE_FACTOR;
-  } else {
-    doc["temp2"] = false;
-  }
-  if(temp3_valid) {
-    doc["temp3"] = temp3 * TEMP_SCALE_FACTOR;
-  } else {
-    doc["temp3"] = false;
-  }
-  doc["state"] = state;
+  create_rapi_json(doc);
+
   doc["elapsed"] = elapsed;
   doc["wattsec"] = wattsec;
   doc["watthour"] = watthour_total;
@@ -610,7 +592,6 @@ handleStatus(MongooseHttpServerRequest *request) {
   doc["nogndcount"] = nognd_count;
   doc["stuckcount"] = stuck_count;
 
-  doc["divertmode"] = divertmode;
   doc["solar"] = solar;
   doc["grid_ie"] = grid_ie;
   doc["charge_rate"] = charge_rate;
