@@ -1,6 +1,9 @@
 #include "web_server.assets.js.h"
 #include "web_server.emoncms.jpg.h"
+#include "web_server.favicon-152.png.h"
+#include "web_server.favicon-167.png.h"
 #include "web_server.favicon-16x16.png.h"
+#include "web_server.favicon-180.png.h"
 #include "web_server.favicon-32x32.png.h"
 #include "web_server.home.html.h"
 #include "web_server.home.js.h"
@@ -20,7 +23,10 @@
 StaticFile staticFiles[] = {
   { "/assets.js", CONTENT_ASSETS_JS, sizeof(CONTENT_ASSETS_JS) - 1, _CONTENT_TYPE_JS },
   { "/emoncms.jpg", CONTENT_EMONCMS_JPG, sizeof(CONTENT_EMONCMS_JPG) - 1, _CONTENT_TYPE_JPEG },
+  { "/favicon-152.png", CONTENT_FAVICON_152_PNG, sizeof(CONTENT_FAVICON_152_PNG) - 1, _CONTENT_TYPE_PNG },
+  { "/favicon-167.png", CONTENT_FAVICON_167_PNG, sizeof(CONTENT_FAVICON_167_PNG) - 1, _CONTENT_TYPE_PNG },
   { "/favicon-16x16.png", CONTENT_FAVICON_16X16_PNG, sizeof(CONTENT_FAVICON_16X16_PNG) - 1, _CONTENT_TYPE_PNG },
+  { "/favicon-180.png", CONTENT_FAVICON_180_PNG, sizeof(CONTENT_FAVICON_180_PNG) - 1, _CONTENT_TYPE_PNG },
   { "/favicon-32x32.png", CONTENT_FAVICON_32X32_PNG, sizeof(CONTENT_FAVICON_32X32_PNG) - 1, _CONTENT_TYPE_PNG },
   { "/home.html", CONTENT_HOME_HTML, sizeof(CONTENT_HOME_HTML) - 1, _CONTENT_TYPE_HTML },
   { "/home.js", CONTENT_HOME_JS, sizeof(CONTENT_HOME_JS) - 1, _CONTENT_TYPE_JS },
