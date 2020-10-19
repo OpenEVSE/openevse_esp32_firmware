@@ -7,11 +7,9 @@
 #endif
 
 #include "Console.h"
-#include "emonesp.h"
 #include "RapiSender.h"
 #include "openevse.h"
 #include "divert.h"
-#include "emonesp.h"
 #include "event.h"
 
 #include "parser.hpp"
@@ -25,6 +23,7 @@ long pilot = 32;                      // OpenEVSE Pilot Setting
 long state = OPENEVSE_STATE_SLEEPING; // OpenEVSE State
 String mqtt_solar = "";
 String mqtt_grid_ie = "";
+uint32_t flags;
 
 int date_col = 0;
 int grid_ie_col = -1;
@@ -38,8 +37,9 @@ bool kw = false;
 extern double smoothed_available_current;
 double divert_attack_smoothing_factor = 0.4;
 double divert_decay_smoothing_factor = 0.05;
+double divert_PV_ratio = 0.5;
 uint32_t divert_min_charge_time = (10 * 60);
-double voltage = DEFAULT_VOLTAGE;     // Voltage from OpenEVSE or MQTT
+double voltage = 240; // Voltage from OpenEVSE or MQTT
 
 time_t parse_date(const char *dateStr)
 {
