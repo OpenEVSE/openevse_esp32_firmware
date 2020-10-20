@@ -23,6 +23,14 @@
 #include <Wire.h>
 #include <Adafruit_MCP9808.h>
 Adafruit_MCP9808 tempsensor = Adafruit_MCP9808();
+
+#ifndef I2C_SDA
+#define I2C_SDA -1
+#endif
+
+#ifndef I2C_SCL
+#define I2C_SCL -1
+#endif
 #endif
 
 int espflash = 0;
@@ -350,33 +358,17 @@ handleRapiRead()
 void input_setup()
 {
 #ifdef ENABLE_MCP9808
-//  DBUGLN(">> I2C scan <<");
-//
-//  Wire.begin();
-//  for(int address = 1; address < 127; address++ )
-//  {
-//    Wire.beginTransmission(address);
-//    uint8_t error = Wire.endTransmission();
-//    if (error == 0)
-//    {
-//      DBUG("I2C device found at address 0x");
-//      if (address<16) {
-//        DBUG("0");
-//      }
-//      DBUG(address,HEX);
-//      DBUGLN("  !");
-//    }
-//  }
+  Wire.begin(I2C_SDA, I2C_SCL);
 
   if(tempsensor.begin())
   {
     DBUGLN("Found MCP9808!");
-    tempsensor.setResolution(1); // sets the resolution mode of reading, the modes are defined in the table bellow:
     // Mode Resolution SampleTime
     //  0    0.5°C       30 ms
     //  1    0.25°C      65 ms
     //  2    0.125°C     130 ms
     //  3    0.0625°C    250 ms
+    tempsensor.setResolution(1); // sets the resolution mode of reading, the modes are defined in the table bellow:
     tempsensor.wake();   // wake up, ready to read!
   } else {
     DBUGLN("Couldn't find MCP9808!");
