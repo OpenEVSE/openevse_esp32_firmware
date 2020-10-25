@@ -28,8 +28,7 @@ static bool dnsServerStarted = false;
 const byte DNS_PORT = 53;
 
 // Access Point SSID, password & IP address. SSID will be softAP_ssid + chipID to make SSID unique
-const char *softAP_ssid = "OpenEVSE";
-const char *softAP_password = "openevse";
+const char softAP_ssid[] = "OpenEVSE";
 IPAddress apIP(192, 168, 4, 1);
 IPAddress netMsk(255, 255, 255, 0);
 int apClients = 0;
@@ -84,20 +83,18 @@ startAP() {
 
   // Pick a random channel out of 1, 6 or 11
   int channel = (random(3) * 5) + 1;
-  WiFi.softAP(softAP_ssid_ID.c_str(), softAP_password, channel);
+  WiFi.softAP(softAP_ssid_ID.c_str(), apass.c_str(), channel);
 
   // Setup the DNS server redirecting all the domains to the apIP
   dnsServer.setErrorReplyCode(DNSReplyCode::NoError);
   dnsServerStarted = dnsServer.start(DNS_PORT, "*", apIP);
 
   IPAddress myIP = WiFi.softAPIP();
-  char tmpStr[40];
-  sprintf(tmpStr, "%d.%d.%d.%d", myIP[0], myIP[1], myIP[2], myIP[3]);
-  ipaddress = tmpStr;
-  DEBUG.print("AP IP Address: ");
-  DEBUG.println(tmpStr);
+  DEBUG.printf("AP SSID: %s\n", softAP_ssid_ID.c_str());
+  DEBUG.printf("AP password: %s\n", apass.c_str());
+  DEBUG.printf("AP IP Address: %d.%d.%d.%d\n", myIP[0], myIP[1], myIP[2], myIP[3]);
   lcd_display(softAP_ssid_ID, 0, 0, 0, LCD_CLEAR_LINE);
-  lcd_display(String(F("Pass: ")) + softAP_password, 0, 1, 15 * 1000, LCD_CLEAR_LINE);
+  lcd_display(String(F("Pass: ")) + apass.c_str(), 0, 1, 15 * 1000, LCD_CLEAR_LINE);
 
   apClients = 0;
 }

@@ -19,7 +19,12 @@
 
 // Wifi Network Strings
 String esid;
+
+// passphrase for Client mode
 String epass;
+
+// passphrase for Access Point mode
+String apass;
 
 // Web server authentication (leave blank for none)
 String www_username;
@@ -77,6 +82,7 @@ ConfigOpt *opts[] =
 // Wifi Network Strings
   new ConfigOptDefenition<String>(esid, "", "ssid", "ws"),
   new ConfigOptSecret(epass, "", "pass", "wp"),
+  new ConfigOptDefenition<String>(apass, "openevse", "apass", "apass"),
 
 // Web server authentication (leave blank for none)
   new ConfigOptDefenition<String>(www_username, "", "www_username", "au"),

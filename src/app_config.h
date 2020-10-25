@@ -15,6 +15,7 @@
 // Wifi Network Strings
 extern String esid;
 extern String epass;
+extern String apass;
 
 // Web server authentication (leave blank for none)
 extern String www_username;
