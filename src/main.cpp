@@ -167,7 +167,11 @@ loop() {
             state = evse_state;
           });
         } else {
-          DBUGLN("OpenEVSE not responding or not connected");
+          static bool warnedonce = false;
+          if(!warnedonce) {
+            DBUGLN("OpenEVSE not responding or not connected");
+            warnedonce = true;
+          }
         }
       });
       Timer3 = millis();
