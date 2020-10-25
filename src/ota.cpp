@@ -34,6 +34,7 @@ void ota_setup()
       lcd_display(text, 0, 1, 10 * 1000, LCD_DISPLAY_NOW);
       lastPercent = percent;
       feedLoopWDT();
+      yield();
     }
   });
 
