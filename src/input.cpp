@@ -5,6 +5,7 @@
 #include <Arduino.h>
 #include <ArduinoJson.h>
 
+
 #include "emonesp.h"
 #include "input.h"
 #include "app_config.h"
@@ -14,7 +15,23 @@
 #include "openevse.h"
 #include "espal.h"
 
+#include "LedManagerTask.h"
+
 #include "RapiSender.h"
+
+#ifdef ENABLE_MCP9808
+#include <Wire.h>
+#include <Adafruit_MCP9808.h>
+Adafruit_MCP9808 tempsensor = Adafruit_MCP9808();
+
+#ifndef I2C_SDA
+#define I2C_SDA -1
+#endif
+
+#ifndef I2C_SCL
+#define I2C_SCL -1
+#endif
+#endif
 
 int espflash = 0;
 int espfree = 0;
@@ -99,6 +116,15 @@ void create_rapi_json(JsonDocument &doc)
   } else {
     doc["temp3"] = false;
   }
+#ifdef ENABLE_MCP9808
+  float temp4 = tempsensor.readTempC();
+  DBUGVAR(temp4);
+  if(!isnan(temp4)) {
+    doc["temp4"] = temp4 * TEMP_SCALE_FACTOR;
+  } else {
+    doc["temp4"] = false;
+  }
+#endif
   doc["state"] = state;
   doc["freeram"] = ESPAL.getFreeHeap();
   doc["divertmode"] = divertmode;
@@ -140,6 +166,7 @@ update_rapi_values() {
           DBUGF("evse_state = %02x, session_time = %d, pilot_state = %02x, vflags = %08x", evse_state, session_time, pilot_state, vflags);
 
           state = evse_state;
+          ledManager.setEvseState(evse_state);
           elapsed = session_time;
         }
       });
@@ -330,11 +357,30 @@ handleRapiRead()
 
 void input_setup()
 {
+#ifdef ENABLE_MCP9808
+  Wire.begin(I2C_SDA, I2C_SCL);
+
+  if(tempsensor.begin())
+  {
+    DBUGLN("Found MCP9808!");
+    // Mode Resolution SampleTime
+    //  0    0.5°C       30 ms
+    //  1    0.25°C      65 ms
+    //  2    0.125°C     130 ms
+    //  3    0.0625°C    250 ms
+    tempsensor.setResolution(1); // sets the resolution mode of reading, the modes are defined in the table bellow:
+    tempsensor.wake();   // wake up, ready to read!
+  } else {
+    DBUGLN("Couldn't find MCP9808!");
+  }
+#endif
+
   OpenEVSE.onState([](uint8_t evse_state, uint8_t pilot_state, uint32_t current_capacity, uint32_t vflags)
   {
     // Update our global state
     DBUGVAR(evse_state);
     state = evse_state;
+    ledManager.setEvseState(evse_state);
 
     // Send to all clients
     StaticJsonDocument<32> event;
