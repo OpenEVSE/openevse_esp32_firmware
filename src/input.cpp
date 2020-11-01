@@ -60,7 +60,7 @@ byte stuck_relay = 1;
 byte vent_ck = 1;
 byte temp_ck = 1;
 byte auto_start = 1;
-String firmware = "-";
+String firmware = "0.0.0"; // TODO: change back to "-"
 String protocol = "-";
 
 // Default OpenEVSE Fault Counters

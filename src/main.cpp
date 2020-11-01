@@ -46,6 +46,7 @@
 #include "time_man.h"
 #include "tesla_client.h"
 #include "event.h"
+#include "update_controller.h"
 
 #include "RapiSender.h"
 
@@ -115,107 +116,109 @@ loop() {
   Mongoose.poll(0);
   Profile_End(Mongoose, 10);
 
-  lcd_loop();
   web_server_loop();
-  net_loop();
-#ifdef ENABLE_OTA
-  ota_loop();
-#endif
-  rapiSender.loop();
-  divert_current_loop();
-  time_loop();
-
-  if(OpenEVSE.isConnected())
+  if (!UpdateController.isRunning())
   {
-    if(OPENEVSE_STATE_STARTING != state &&
-       OPENEVSE_STATE_INVALID != state)
-    {
-      // Read initial state from OpenEVSE
-      if (rapi_read == 0)
-      {
-        DBUGLN("first read RAPI values");
-        handleRapiRead(); //Read all RAPI values
-        rapi_read=1;
-      }
+    lcd_loop();
+    net_loop();
+  #ifdef ENABLE_OTA
+    ota_loop();
+  #endif
+    rapiSender.loop();
+    divert_current_loop();
+    time_loop();
 
-      // -------------------------------------------------------------------
-      // Do these things once every 2s
-      // -------------------------------------------------------------------
-      if ((millis() - Timer3) >= 2000) {
-        uint32_t current = ESPAL.getFreeHeap();
-        int32_t diff = (int32_t)(last_mem - current);
-        if(diff != 0) {
-          DEBUG.printf("%s: Free memory %u - diff %d %d\n", time_format_time(time(NULL)).c_str(), current, diff, start_mem - current);
-          last_mem = current;
+    if(OpenEVSE.isConnected())
+    {
+      if(OPENEVSE_STATE_STARTING != state &&
+        OPENEVSE_STATE_INVALID != state)
+      {
+        // Read initial state from OpenEVSE
+        if (rapi_read == 0)
+        {
+          DBUGLN("first read RAPI values");
+          handleRapiRead(); //Read all RAPI values
+          rapi_read=1;
         }
-        update_rapi_values();
+
+        // -------------------------------------------------------------------
+        // Do these things once every 2s
+        // -------------------------------------------------------------------
+        if ((millis() - Timer3) >= 2000) {
+          uint32_t current = ESPAL.getFreeHeap();
+          int32_t diff = (int32_t)(last_mem - current);
+          if(diff != 0) {
+            DEBUG.printf("%s: Free memory %u - diff %d %d\n", time_format_time(time(NULL)).c_str(), current, diff, start_mem - current);
+            last_mem = current;
+          }
+          update_rapi_values();
+          Timer3 = millis();
+        }
+      }
+    }
+    else
+    {
+      // Check if we can talk to OpenEVSE
+      if ((millis() - Timer3) >= 1000) 
+      {
+        // Check state the OpenEVSE is in.
+        OpenEVSE.begin(rapiSender, [](bool connected)
+        {
+          if(connected)
+          {
+            OpenEVSE.getStatus([](int ret, uint8_t evse_state, uint32_t session_time, uint8_t pilot_state, uint32_t vflags) {
+              state = evse_state;
+            });
+          } else {
+            DBUGLN("OpenEVSE not responding or not connected");
+          }
+        });
         Timer3 = millis();
       }
     }
-  }
-  else
-  {
-    // Check if we can talk to OpenEVSE
-    if ((millis() - Timer3) >= 1000)
+
+    if(net_is_connected())
     {
-      // Check state the OpenEVSE is in.
-      OpenEVSE.begin(rapiSender, [](bool connected)
-      {
-        if(connected)
-        {
-          OpenEVSE.getStatus([](int ret, uint8_t evse_state, uint32_t session_time, uint8_t pilot_state, uint32_t vflags) {
-            state = evse_state;
-          });
-        } else {
-          DBUGLN("OpenEVSE not responding or not connected");
-        }
-      });
-      Timer3 = millis();
-    }
-  }
-
-  if(net_is_connected())
-  {
-    if (config_tesla_enabled()) {
-      teslaClient.loop();
-    }
-
-    mqtt_loop();
-
-    // -------------------------------------------------------------------
-    // Do these things once every 30 seconds
-    // -------------------------------------------------------------------
-    if ((millis() - Timer1) >= 30000) {
-      DBUGLN("Time1");
-
-      if(!Update.isRunning())
-      {
-        DynamicJsonDocument data(4096);
-        create_rapi_json(data); // create JSON Strings for EmonCMS and MQTT
-
-        emoncms_publish(data);
-
-        teslaClient.getChargeInfoJson(data);
-        event_send(data);
-
-        if(config_ohm_enabled()) {
-          ohm_loop();
-        }
+      if (config_tesla_enabled()) {
+        teslaClient.loop();
       }
 
-      Timer1 = millis();
-    }
+      mqtt_loop();
 
-    if(emoncms_updated)
-    {
-      // Send the current state to check the config
-      DynamicJsonDocument data(4096);
-      create_rapi_json(data);
-      emoncms_publish(data);
-      emoncms_updated = false;
-    }
-  } // end WiFi connected
+      // -------------------------------------------------------------------
+      // Do these things once every 30 seconds
+      // -------------------------------------------------------------------
+      if ((millis() - Timer1) >= 30000) {
+        DBUGLN("Time1");
 
+        if(!Update.isRunning())
+        {
+          DynamicJsonDocument data(4096);
+          create_rapi_json(data); // create JSON Strings for EmonCMS and MQTT
+
+          emoncms_publish(data);
+
+          teslaClient.getChargeInfoJson(data);
+          event_send(data);
+
+          if(config_ohm_enabled()) {
+            ohm_loop();
+          }
+        }
+
+        Timer1 = millis();
+      }
+
+      if(emoncms_updated)
+      {
+        // Send the current state to check the config
+        DynamicJsonDocument data(4096);
+        create_rapi_json(data);
+        emoncms_publish(data);
+        emoncms_updated = false;
+      }
+    } // end WiFi connected
+  } // !UpdateController.isRunning()
   Profile_End(loop, 10);
 } // end loop
 
@@ -241,13 +244,18 @@ void hardware_setup()
 {
   debug_setup();
 
-#ifdef SERIAL_RX_PULLUP_PIN
-  // https://forums.adafruit.com/viewtopic.php?f=57&t=153553&p=759890&hilit=esp32+serial+pullup#p769168
-  pinMode(SERIAL_RX_PULLUP_PIN, INPUT_PULLUP);
+#if defined(RAPI_PORT_RESET) && RAPI_PORT_RESET != -1
+  #ifdef RAPI_PORT_RESET_ACTIVELOW
+    digitalWrite(RAPI_PORT_RESET, HIGH);
+  #else
+    digitalWrite(RAPI_PORT_RESET, LOW);
+  #endif
+  pinMatrixOutDetach(RAPI_PORT_RESET, false, false);
+  pinMode(RAPI_PORT_RESET, OUTPUT);
 #endif
 
 #ifdef ONBOARD_LEDS
-  uint8_t ledPins[] = {ONBOARD_LEDS};
+        uint8_t ledPins[] = {ONBOARD_LEDS};
   for (uint8_t pin = 0; pin < sizeof(ledPins); pin++) {
     pinMode(pin, OUTPUT);
     digitalWrite(pin, !ONBOARD_LED_ON_STATE);
