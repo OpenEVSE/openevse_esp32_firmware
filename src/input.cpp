@@ -32,22 +32,12 @@ bool temp3_valid = false;
 long pilot = 0;                       // OpenEVSE Pilot Setting
 long state = OPENEVSE_STATE_STARTING; // OpenEVSE State
 long elapsed = 0;                     // Elapsed time (only valid if charging)
-#ifdef ENABLE_LEGACY_API
-String estate = "Unknown"; // Common name for State
-#endif
 
 // Defaults OpenEVSE Settings
 byte rgb_lcd = 1;
 byte serial_dbg = 0;
 byte auto_service = 1;
 int service = 1;
-
-#ifdef ENABLE_LEGACY_API
-long current_l1min = 0;
-long current_l2min = 0;
-long current_l1max = 0;
-long current_l2max = 0;
-#endif
 
 long current_scale = 0;
 long current_offset = 0;
@@ -67,12 +57,6 @@ String protocol = "-";
 long gfci_count = 0;
 long nognd_count = 0;
 long stuck_count = 0;
-
-// OpenEVSE Session options
-#ifdef ENABLE_LEGACY_API
-long kwh_limit = 0;
-long time_limit = 0;
-#endif
 
 // OpenEVSE Usage Statistics
 long wattsec = 0;
@@ -247,34 +231,6 @@ handleRapiRead()
     }
   });
 
-#ifdef ENABLE_LEGACY_API
-  rapiSender.sendCmd("$GH", [](int ret)
-  {
-    if(RAPI_RESPONSE_OK == ret)
-    {
-      if(rapiSender.getTokenCnt() >= 2)
-      {
-        const char *val;
-        val = rapiSender.getToken(1);
-        kwh_limit = strtol(val, NULL, 10);
-      }
-    }
-  });
-
-  rapiSender.sendCmd("$G3", [](int ret)
-  {
-    if(RAPI_RESPONSE_OK == ret)
-    {
-      if(rapiSender.getTokenCnt() >= 2)
-      {
-        const char *val;
-        val = rapiSender.getToken(1);
-        time_limit = strtol(val, NULL, 10);
-      }
-    }
-  });
-#endif
-
   rapiSender.sendCmd("$GE", [](int ret)
   {
     if(RAPI_RESPONSE_OK == ret)
@@ -300,30 +256,6 @@ handleRapiRead()
       temp_ck = bitRead(flags, 10);
     }
   });
-
-#ifdef ENABLE_LEGACY_API
-  rapiSender.sendCmd("$GC", [](int ret)
-  {
-    if(RAPI_RESPONSE_OK == ret)
-    {
-      if(rapiSender.getTokenCnt() >= 3)
-      {
-        const char *val;
-        if (service == 1) {
-          val = rapiSender.getToken(1);
-          current_l1min = strtol(val, NULL, 10);
-          val = rapiSender.getToken(2);
-          current_l1max = strtol(val, NULL, 10);
-        } else {
-          val = rapiSender.getToken(1);
-          current_l2min = strtol(val, NULL, 10);
-          val = rapiSender.getToken(2);
-          current_l2max = strtol(val, NULL, 10);
-        }
-      }
-    }
-  });
-#endif
 
   Profile_End(handleRapiRead, 10);
 }
