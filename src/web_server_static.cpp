@@ -10,6 +10,8 @@
 #include "app_config.h"
 #include "net_manager.h"
 
+extern bool enableCors; // defined in web_server.cpp
+
 // Static files
 struct StaticFile
 {
@@ -84,6 +86,12 @@ bool web_static_handle(MongooseHttpServerRequest *request)
     response->setCode(200);
     response->setContentType(file->type);
     response->setContentLength(file->length);
+
+    if (enableCors)
+    {
+      response->addHeader(F("Access-Control-Allow-Origin"), F("*"));
+    }
+
     response->setContent((const uint8_t *)file->data, file->length);
 
     request->send(response);
