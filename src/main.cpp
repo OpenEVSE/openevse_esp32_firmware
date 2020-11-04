@@ -28,6 +28,7 @@
 #include <WiFiUdp.h>
 #include <ArduinoOTA.h>               // local OTA update from Arduino IDE
 #include <MongooseCore.h>
+#include <MicroTasks.h>
 
 #include "emonesp.h"
 #include "app_config.h"
@@ -46,6 +47,8 @@
 #include "time_man.h"
 #include "tesla_client.h"
 #include "event.h"
+
+#include "LedManagerTask.h"
 
 #include "RapiSender.h"
 
@@ -78,6 +81,8 @@ void setup()
   // Read saved settings from the config
   config_load_settings();
   DBUGF("After config_load_settings: %d", ESPAL.getFreeHeap());
+
+  MicroTask.startTask(ledManager);
 
   // Initialise the WiFi
   net_setup();
@@ -124,6 +129,7 @@ loop() {
   rapiSender.loop();
   divert_current_loop();
   time_loop();
+  MicroTask.update();
 
   if(OpenEVSE.isConnected())
   {
@@ -165,6 +171,7 @@ loop() {
         {
           OpenEVSE.getStatus([](int ret, uint8_t evse_state, uint32_t session_time, uint8_t pilot_state, uint32_t vflags) {
             state = evse_state;
+            ledManager.setEvseState(evse_state);
           });
         } else {
           DBUGLN("OpenEVSE not responding or not connected");
@@ -244,14 +251,6 @@ void hardware_setup()
 #ifdef SERIAL_RX_PULLUP_PIN
   // https://forums.adafruit.com/viewtopic.php?f=57&t=153553&p=759890&hilit=esp32+serial+pullup#p769168
   pinMode(SERIAL_RX_PULLUP_PIN, INPUT_PULLUP);
-#endif
-
-#ifdef ONBOARD_LEDS
-  uint8_t ledPins[] = {ONBOARD_LEDS};
-  for (uint8_t pin = 0; pin < sizeof(ledPins); pin++) {
-    pinMode(pin, OUTPUT);
-    digitalWrite(pin, !ONBOARD_LED_ON_STATE);
-  }
 #endif
 
   enableLoopWDT();
