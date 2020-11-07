@@ -693,44 +693,6 @@ handleConfig(MongooseHttpServerRequest *request)
   request->send(response);
 }
 
-#ifdef ENABLE_LEGACY_API
-// -------------------------------------------------------------------
-// Returns Updates JSON
-// url: /rapiupdate
-// -------------------------------------------------------------------
-void
-handleUpdate(MongooseHttpServerRequest *request) {
-
-  MongooseHttpServerResponseStream *response;
-  if(false == requestPreProcess(request, response)) {
-    return;
-  }
-
-  String s = "{";
-  s += "\"comm_sent\":" + String(rapiSender.getSent()) + ",";
-  s += "\"comm_success\":" + String(rapiSender.getSuccess()) + ",";
-  s += "\"ohmhour\":\"" + ohm_hour + "\",";
-  s += "\"espfree\":\"" + String(espfree) + "\",";
-  s += "\"packets_sent\":\"" + String(packets_sent) + "\",";
-  s += "\"packets_success\":\"" + String(packets_success) + "\",";
-  s += "\"amp\":" + amp + ",";
-  s += "\"pilot\":" + pilot + ",";
-  s += "\"temp1\":" + temp1 + ",";
-  s += "\"temp2\":" + temp2 + ",";
-  s += "\"temp3\":" + temp3 + ",";
-  s += "\"state\":" + String(state) + ",";
-  s += "\"elapsed\":" + String(elapsed) + ",";
-  s += "\"estate\":\"" + estate + "\",";
-  s += "\"wattsec\":" + wattsec + ",";
-  s += "\"watthour\":" + watthour_total;
-  s += "}";
-
-  response->setCode(200);
-  response->print(s);
-  request->send(response);
-}
-#endif
-
 // -------------------------------------------------------------------
 // Reset config and reboot
 // url: /reset

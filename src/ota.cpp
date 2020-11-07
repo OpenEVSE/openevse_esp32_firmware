@@ -2,7 +2,7 @@
 #include "ota.h"
 
 #include <WiFiUdp.h>
-#include <ArduinoOTA.h>               // local OTA update from Arduino IDE
+#include <ArduinoOTA.h> // local OTA update from Arduino IDE
 #include <FS.h>
 
 #include "lcd.h"
@@ -27,11 +27,13 @@ void ota_setup()
 
   ArduinoOTA.onProgress([](unsigned int progress, unsigned int total) {
     int percent = progress / (total / 100);
-    if(percent != lastPercent) {
+    if (percent != lastPercent)
+    {
       DBUGF("ArduinoOTA progress %d%%", percent);
       String text = String(percent) + F("%");
       lcd_display(text, 0, 1, 10 * 1000, LCD_DISPLAY_NOW);
       lastPercent = percent;
+      feedLoopWDT();
     }
   });
 
