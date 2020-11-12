@@ -391,11 +391,13 @@ int UpdateControllerClass::_flashBlock()
         }
         else if ((_flashStartAddress >= 0x200000 && _flashStartAddress < 0x300000))
         {
-            SEND_PACKET_DATA(_flashData, FLASH_BLOCK_SIZE, WRITE_EEPROM, (char)((_flashStartAddress - 0x200000) & 0xff), (char)(((_flashStartAddress - 0x200000) >> 8) & 0xff), (char)(((_flashStartAddress - 0x200000) >> 16) & 0xff), 0x00, FLASH_BLOCK_SIZE, 0x00);
+            // Skip EEPROM: keep existing values
+            //   SEND_PACKET_DATA(_flashData, FLASH_BLOCK_SIZE, WRITE_EEPROM, (char)((_flashStartAddress - 0x200000) & 0xff), (char)(((_flashStartAddress - 0x200000) >> 8) & 0xff), (char)(((_flashStartAddress - 0x200000) >> 16) & 0xff), 0x00, FLASH_BLOCK_SIZE, 0x00);
         }
         else if ((_flashStartAddress >= 0x300000 && _flashStartAddress < 0x400000))
         {
-            SEND_PACKET_DATA(_flashData, FLASH_BLOCK_SIZE, WRITE_CONFIG, (char)((_flashStartAddress - 0x300000) & 0xff), (char)(((_flashStartAddress - 0x300000) >> 8) & 0xff), (char)(((_flashStartAddress - 0x300000) >> 16) & 0xff), 0x00, FLASH_BLOCK_SIZE);
+            // SkipCOnfig: keep existing values
+            // SEND_PACKET_DATA(_flashData, FLASH_BLOCK_SIZE, WRITE_CONFIG, (char)((_flashStartAddress - 0x300000) & 0xff), (char)(((_flashStartAddress - 0x300000) >> 8) & 0xff), (char)(((_flashStartAddress - 0x300000) >> 16) & 0xff), 0x00, FLASH_BLOCK_SIZE);
         }
         _flashBlocksWritten++;
     }
