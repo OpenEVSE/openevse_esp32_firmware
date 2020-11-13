@@ -137,6 +137,8 @@ bool requestPreProcess(MongooseHttpServerRequest *request, MongooseHttpServerRes
 
   if(enableCors) {
     response->addHeader(F("Access-Control-Allow-Origin"), F("*"));
+    response->addHeader(F("Access-Control-Allow-Headers"), F("*"));
+    response->addHeader(F("Access-Control-Allow-Methods"), F("*"));
   }
 
   response->addHeader(F("Cache-Control"), F("no-cache, private, no-store, must-revalidate, max-stale=0, post-check=0, pre-check=0"));
@@ -706,6 +708,8 @@ handleConfig(MongooseHttpServerRequest *request)
     handleConfigGet(request, response);
   } else if(HTTP_POST == request->method()) {
     handleConfigPost(request, response); 
+  } else if(HTTP_OPTIONS == request->method()) {
+    response->setCode(200);
   } else {
     response->setCode(405);
 
