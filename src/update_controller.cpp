@@ -4,7 +4,6 @@ HardwareSerial &RAW_RAPI_PORT = RAPI_PORT;
 
 #include <update_controller.h>
 #include "debug.h"
-#include "uCRC16BPBLib.h"
 #include <Arduino.h>
 
 enum ControlCharacters
