@@ -84,6 +84,8 @@ void create_rapi_json(JsonDocument &doc)
   doc["voltage"] = voltage * VOLTS_SCALE_FACTOR;
   doc["pilot"] = pilot;
   doc["wh"] = watthour_total;
+  doc["wh_current"] = wattsec / 3600;
+  doc["elapsed"] = elapsed;
   if(temp1_valid) {
     doc["temp1"] = temp1 * TEMP_SCALE_FACTOR;
   } else {
