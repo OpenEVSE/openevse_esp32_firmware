@@ -5,6 +5,10 @@
 #include <ArduinoJson.h>
 #include "RapiSender.h"
 
+#define SMARTEVSE_MODE_NORMAL               0
+#define SMARTEVSE_MODE_SMART                1
+#define SMARTEVSE_MODE_SOLAR                2
+
 extern RapiSender rapiSender;
 
 extern String url;
