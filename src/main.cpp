@@ -142,15 +142,17 @@ loop() {
         }
 
         // -------------------------------------------------------------------
-        // Do these things once every 2s
+        // Do these things once every 1000ms
         // -------------------------------------------------------------------
-        if ((millis() - Timer3) >= 2000) {
+        if ((millis() - Timer3) >= 1000) {
+          /*
           uint32_t current = ESPAL.getFreeHeap();
           int32_t diff = (int32_t)(last_mem - current);
           if(diff != 0) {
             DEBUG.printf("%s: Free memory %u - diff %d %d\n", time_format_time(time(NULL)).c_str(), current, diff, start_mem - current);
             last_mem = current;
           }
+          */
           update_rapi_values();
           Timer3 = millis();
         }
@@ -189,7 +191,7 @@ loop() {
       // Do these things once every 30 seconds
       // -------------------------------------------------------------------
       if ((millis() - Timer1) >= 30000) {
-        DBUGLN("Time1");
+        // DBUGLN("Time1");
 
         if(!Update.isRunning())
         {

@@ -46,6 +46,7 @@ extern String mqtt_announce_topic;
 extern String time_zone;
 
 // Divert settings
+extern String divert_feed_type;
 extern double divert_PV_ratio;
 extern double divert_attack_smoothing_factor;
 extern double divert_decay_smoothing_factor;

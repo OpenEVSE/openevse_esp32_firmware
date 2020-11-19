@@ -67,10 +67,14 @@ time_t __attribute__((weak)) divertmode_get_time()
 // function called when divert mode is changed
 void divertmode_update(byte newmode)
 {
-  DBUGF("Set divertmode: %d", newmode);
+  DBUGF("Set divertmode: %d %s", newmode, divert_feed_type.c_str());
   if(divertmode != newmode)
   {
     divertmode = newmode;
+
+    if (divert_feed_type == "internal") {
+      rapiSender.sendCmdSync(String(F("$SX ")) + String((divertmode==DIVERT_MODE_NORMAL)?1:2));
+    }
 
     // restore max charge current if normal mode or zero if eco mode
     switch(divertmode)
@@ -135,7 +139,7 @@ void divert_update_state()
   }
 
   // If divert mode = Eco (2)
-  if (divertmode == DIVERT_MODE_ECO)
+  if (divertmode == DIVERT_MODE_ECO && divert_feed_type != "internal")
   {
     int current_charge_rate = charge_rate;
 

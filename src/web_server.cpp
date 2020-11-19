@@ -614,6 +614,7 @@ handleStatus(MongooseHttpServerRequest *request) {
   doc["stuckcount"] = stuck_count;
 
   doc["divertmode"] = divertmode;
+  doc["smartevse_mode"] = smartevse_mode;
   doc["solar"] = solar;
   doc["grid_ie"] = grid_ie;
   doc["charge_rate"] = charge_rate;

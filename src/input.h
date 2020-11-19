@@ -22,6 +22,7 @@ extern long pilot;  // OpenEVSE Pilot Setting
 extern long state;    // OpenEVSE State
 extern long elapsed;  // Elapsed time (only valid if charging)
 extern String estate; // Common name for State
+extern int smartevse_mode; // SmartEVSE charge mode (NORMAL, SMART, SOLAR)
 
 //Defaults OpenEVSE Settings
 extern byte rgb_lcd;
