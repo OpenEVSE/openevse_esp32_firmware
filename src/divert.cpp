@@ -67,45 +67,51 @@ time_t __attribute__((weak)) divertmode_get_time()
 // function called when divert mode is changed
 void divertmode_update(byte newmode)
 {
-  DBUGF("Set divertmode: %d", newmode);
+  DBUGF("Set divertmode: %d %s", newmode, divert_feed_type.c_str());
   if(divertmode != newmode)
   {
     divertmode = newmode;
 
-    // restore max charge current if normal mode or zero if eco mode
-    switch(divertmode)
-    {
-      case DIVERT_MODE_NORMAL:
-        // Restore the max charge current
-        rapiSender.sendCmdSync(String(F("$SC ")) + String(max_charge_current));
-        DBUGF("Restore max I: %d", max_charge_current);
-        break;
-
-      case DIVERT_MODE_ECO:
-        charge_rate = 0;
-        available_current = 0;
-        smoothed_available_current = 0;
-        min_charge_end = 0;
-        
-        // Read the current charge current, assume this is the max set by the user
-        if(0 == rapiSender.sendCmdSync(F("$GE"))) {
-          max_charge_current = String(rapiSender.getToken(1)).toInt();
-          DBUGF("Read max I: %d", max_charge_current);
-        }
-        if(OPENEVSE_STATE_SLEEPING != state)
-        {
-          if(0 == rapiSender.sendCmdSync(config_pause_uses_disabled() ? F("$FD") : F("$FS"))) 
-          {
-            DBUGLN(F("Divert activated, entered sleep mode"));
-            divert_active = false;
-          }
-        }
-        break;
-
-      default:
-        return;
+    if (divert_feed_type == "internal") {
+      rapiSender.sendCmdSync(String(F("$SX ")) + String((divertmode==DIVERT_MODE_NORMAL)?1:2));
     }
+    else {
 
+      // restore max charge current if normal mode or zero if eco mode
+      switch(divertmode)
+      {
+        case DIVERT_MODE_NORMAL:
+          // Restore the max charge current
+          rapiSender.sendCmdSync(String(F("$SC ")) + String(max_charge_current));
+          DBUGF("Restore max I: %d", max_charge_current);
+          break;
+
+        case DIVERT_MODE_ECO:
+          charge_rate = 0;
+          available_current = 0;
+          smoothed_available_current = 0;
+          min_charge_end = 0;
+          
+          // Read the current charge current, assume this is the max set by the user
+          if(0 == rapiSender.sendCmdSync(F("$GE"))) {
+            max_charge_current = String(rapiSender.getToken(1)).toInt();
+            DBUGF("Read max I: %d", max_charge_current);
+          }
+          if(OPENEVSE_STATE_SLEEPING != state)
+          {
+            if(0 == rapiSender.sendCmdSync(config_pause_uses_disabled() ? F("$FD") : F("$FS"))) 
+            {
+              DBUGLN(F("Divert activated, entered sleep mode"));
+              divert_active = false;
+            }
+          }
+          break;
+
+        default:
+          return;
+      }
+    }
+    
     StaticJsonDocument<128> event;
     event["divertmode"] = divertmode;
     event["divert_active"] = divert_active;
@@ -135,7 +141,7 @@ void divert_update_state()
   }
 
   // If divert mode = Eco (2)
-  if (divertmode == DIVERT_MODE_ECO)
+  if (divertmode == DIVERT_MODE_ECO && divert_feed_type != "internal")
   {
     int current_charge_rate = charge_rate;
 

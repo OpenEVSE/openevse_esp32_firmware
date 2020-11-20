@@ -56,6 +56,7 @@ uint32_t flags;
 String ohm;
 
 // Divert settings
+String divert_feed_type;
 double divert_PV_ratio;
 double divert_attack_smoothing_factor;
 double divert_decay_smoothing_factor;
@@ -110,6 +111,7 @@ ConfigOpt *opts[] =
   new ConfigOptDefenition<String>(ohm, "", "ohm", "o"),
 
 // Divert settings
+  new ConfigOptDefenition<String>(divert_feed_type, "grid_ie", "divert_feed_type", "dft"),
   new ConfigOptDefenition<double>(divert_PV_ratio, 1.1, "divert_PV_ratio", "dpr"),
   new ConfigOptDefenition<double>(divert_attack_smoothing_factor, 0.4, "divert_attack_smoothing_factor", "da"),
   new ConfigOptDefenition<double>(divert_decay_smoothing_factor, 0.05, "divert_decay_smoothing_factor", "dd"),
@@ -185,7 +187,7 @@ void config_changed(String name)
     mqtt_restart();
   } else if(name.startsWith("emoncms_")) {
     emoncms_updated = true;
-  } else if(name == "divert_enabled" || name == "charge_mode") {
+  } else if(name == "divert_enabled" || name == "charge_mode" || name == "divert_feed_type") {
     DBUGVAR(config_divert_enabled());
     DBUGVAR(config_charge_mode());
     divertmode_update((config_divert_enabled() && 1 == config_charge_mode()) ? DIVERT_MODE_ECO : DIVERT_MODE_NORMAL);

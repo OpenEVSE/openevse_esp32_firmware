@@ -38,8 +38,14 @@ int espfree = 0;
 
 int rapi_command = 1;
 
-double amp = 0;                         // OpenEVSE Current Sensor
+double amp = 0;                       // OpenEVSE Current Sensor
 double voltage = DEFAULT_VOLTAGE;     // Voltage from OpenEVSE or MQTT
+
+double amp_phase_sys[3] = {0,0,0};      // SmartEVSE system current per phase
+double amp_phase[3] = {0,0,0};          // SmartEVSE EV current per phase
+double volt_phase[3] = {0,0,0};         // SmartEVSE voltage per phase
+
+
 double temp1 = 0;                       // Sensor DS3232 Ambient
 bool temp1_valid = false;
 double temp2 = 0;                       // Sensor MCP9808 Ambiet
@@ -49,6 +55,12 @@ bool temp3_valid = false;
 long pilot = 0;                       // OpenEVSE Pilot Setting
 long state = OPENEVSE_STATE_STARTING; // OpenEVSE State
 long elapsed = 0;                     // Elapsed time (only valid if charging)
+
+int smartevse_mode = SMARTEVSE_MODE_NORMAL;   // SmartEVSE charge mode (NORMAL, SMART, SOLAR)
+
+#ifdef ENABLE_LEGACY_API
+String estate = "Unknown"; // Common name for State
+#endif
 
 // Defaults OpenEVSE Settings
 byte rgb_lcd = 1;
@@ -67,7 +79,7 @@ byte stuck_relay = 1;
 byte vent_ck = 1;
 byte temp_ck = 1;
 byte auto_start = 1;
-String firmware = "-";
+String firmware = "0.0.0"; // TODO: change back to "-"
 String protocol = "-";
 
 // Default OpenEVSE Fault Counters
@@ -82,9 +94,24 @@ long watthour_total = 0;
 void create_rapi_json(JsonDocument &doc)
 {
   doc["amp"] = amp * AMPS_SCALE_FACTOR;
+  doc["amp/L1"] = amp_phase[0] * AMPS_SCALE_FACTOR;
+  doc["amp/L2"] = amp_phase[1] * AMPS_SCALE_FACTOR;
+  doc["amp/L3"] = amp_phase[2] * AMPS_SCALE_FACTOR;
+
   doc["voltage"] = voltage * VOLTS_SCALE_FACTOR;
+  doc["voltage/L1"] = volt_phase[0] * VOLTS_SCALE_FACTOR;
+  doc["voltage/L2"] = volt_phase[1] * VOLTS_SCALE_FACTOR;
+  doc["voltage/L3"] = volt_phase[2] * VOLTS_SCALE_FACTOR;
+
+  doc["main_amp/L1"] = amp_phase_sys[0] * AMPS_SCALE_FACTOR;
+  doc["main_amp/L2"] = amp_phase_sys[1] * AMPS_SCALE_FACTOR;
+  doc["main_amp/L3"] = amp_phase_sys[2] * AMPS_SCALE_FACTOR;
+
+
   doc["pilot"] = pilot;
   doc["wh"] = watthour_total;
+  doc["wh_current"] = wattsec / 3600;
+  doc["elapsed"] = elapsed;
   if(temp1_valid) {
     doc["temp1"] = temp1 * TEMP_SCALE_FACTOR;
   } else {
@@ -112,6 +139,7 @@ void create_rapi_json(JsonDocument &doc)
   doc["state"] = state;
   doc["freeram"] = ESPAL.getFreeHeap();
   doc["divertmode"] = divertmode;
+  doc["smartevse_mode"] = smartevse_mode;
   doc["srssi"] = WiFi.RSSI();
 }
 
@@ -213,6 +241,48 @@ update_rapi_values() {
           }
         }
       });
+    case 7:
+      rapiSender.sendCmd("$GX", [](int ret)
+      {
+        if(RAPI_RESPONSE_OK == ret) {
+          if(rapiSender.getTokenCnt() >= 2)
+          {
+            smartevse_mode = strtol(rapiSender.getToken(1), NULL, 16);
+            if (smartevse_mode==2) {
+              if (config_charge_mode()!=1 || divert_feed_type!="internal" || divertmode!=DIVERT_MODE_ECO) {
+                config_set("charge_mode",String("eco"));
+                config_set("divert_feed_type", String("internal"));
+                divertmode_update(DIVERT_MODE_ECO);
+              }
+            } else {
+              if (config_charge_mode()==1 && (!config_divert_enabled() || divert_feed_type=="internal") )
+                config_set("charge_mode",String("fast"));
+            }
+          }
+        } else {
+              if (config_charge_mode()==1 && (!config_divert_enabled() || divert_feed_type=="internal") )
+              config_set("charge_mode",String("fast"));
+        }
+      });
+    case 8:
+      rapiSender.sendCmd("$GY", [](int ret)
+      {
+        if(RAPI_RESPONSE_OK == ret) {
+          if(rapiSender.getTokenCnt() >= 10)
+          {
+            amp_phase_sys[0] = strtol(rapiSender.getToken(1), NULL, 10) / 1000.0;
+            amp_phase_sys[1] = strtol(rapiSender.getToken(2), NULL, 10) / 1000.0;
+            amp_phase_sys[2] = strtol(rapiSender.getToken(3), NULL, 10) / 1000.0;
+            amp_phase[0] = strtol(rapiSender.getToken(4), NULL, 10) / 1000.0;
+            amp_phase[1] = strtol(rapiSender.getToken(5), NULL, 10) / 1000.0;
+            amp_phase[2] = strtol(rapiSender.getToken(6), NULL, 10) / 1000.0;
+            volt_phase[0] = strtol(rapiSender.getToken(7), NULL, 10) / 1000.0;
+            volt_phase[1] = strtol(rapiSender.getToken(8), NULL, 10) / 1000.0;
+            volt_phase[2] = strtol(rapiSender.getToken(9), NULL, 10) / 1000.0;
+          }
+        }
+      });
+    default:
       rapi_command = 0;         //Last RAPI command
       break;
   }

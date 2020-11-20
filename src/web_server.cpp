@@ -4,6 +4,7 @@
 
 #include <Arduino.h>
 #include <Update.h>
+#include <update_controller.h>
 
 typedef const __FlashStringHelper *fstr_t;
 
@@ -136,6 +137,8 @@ bool requestPreProcess(MongooseHttpServerRequest *request, MongooseHttpServerRes
 
   if(enableCors) {
     response->addHeader(F("Access-Control-Allow-Origin"), F("*"));
+    response->addHeader(F("Access-Control-Allow-Headers"), F("*"));
+    response->addHeader(F("Access-Control-Allow-Methods"), F("*"));
   }
 
   response->addHeader(F("Cache-Control"), F("no-cache, private, no-store, must-revalidate, max-stale=0, post-check=0, pre-check=0"));
@@ -592,12 +595,15 @@ handleStatus(MongooseHttpServerRequest *request) {
   doc["nogndcount"] = nognd_count;
   doc["stuckcount"] = stuck_count;
 
+  doc["divertmode"] = divertmode;
+  doc["smartevse_mode"] = smartevse_mode;
   doc["solar"] = solar;
   doc["grid_ie"] = grid_ie;
   doc["charge_rate"] = charge_rate;
   doc["divert_update"] = (millis() - lastUpdate) / 1000;
 
   doc["ota_update"] = (int)Update.isRunning();
+  doc["controller_update"] = (int)UpdateController.isRunning();
   doc["time"] = String(time);
   doc["offset"] = String(offset);
 
@@ -652,7 +658,7 @@ handleConfigGet(MongooseHttpServerRequest *request, MongooseHttpServerResponseSt
   JsonArray http_supported_protocols = doc.createNestedArray("http_supported_protocols");
   http_supported_protocols.add("http");
   http_supported_protocols.add("https");
-  
+
   config_serialize(doc, true, false, true);
 
   response->setCode(200);
@@ -685,6 +691,8 @@ handleConfig(MongooseHttpServerRequest *request)
     handleConfigGet(request, response);
   } else if(HTTP_POST == request->method()) {
     handleConfigPost(request, response); 
+  } else if(HTTP_OPTIONS == request->method()) {
+    response->setCode(200);
   } else {
     response->setCode(405);
 
@@ -869,7 +877,145 @@ static void handleUpdateClose(MongooseHttpServerRequest *request)
     upgradeResponse = NULL;
   }
 
-  if(Update.isFinished() && !Update.hasError()) {
+  if (Update.isFinished() && !Update.hasError())
+  {
+    systemRebootTime = millis() + 1000;
+  }
+}
+
+// -------------------------------------------------------------------
+// Update Controller firmware
+// url: /updateController
+// -------------------------------------------------------------------
+void handleUpdateControllerGet(MongooseHttpServerRequest *request)
+{
+  MongooseHttpServerResponseStream *response;
+  if (false == requestPreProcess(request, response, CONTENT_TYPE_HTML))
+  {
+    return;
+  }
+
+  response->setCode(200);
+  response->print(
+      F("<html><form method='POST' action='/updateController' enctype='multipart/form-data'>"
+        "<input type='file' name='firmware'> "
+        "<input type='submit' value='Update'>"
+        "</form></html>"));
+  request->send(response);
+}
+
+static MongooseHttpServerResponseStream *upgradeResponseController = NULL;
+
+void handleUpdateControllerPost(MongooseHttpServerRequest *request)
+{
+  if (NULL != upgradeResponseController)
+  {
+    request->send(500, CONTENT_TYPE_TEXT, "Error: Upgrade in progress");
+    return;
+  }
+
+  if (false == requestPreProcess(request, upgradeResponseController, CONTENT_TYPE_TEXT))
+  {
+    return;
+  }
+
+  // TODO: Add support for returning 100: Continue
+}
+
+static int lastPercentController = -1;
+
+static void handleUpdateControllerError(MongooseHttpServerRequest *request)
+{
+  upgradeResponseController->setCode(500);
+  upgradeResponseController->printf("Error: %d", Update.getError());
+  request->send(upgradeResponseController);
+  upgradeResponseController = NULL;
+
+  // Anoyingly this uses Stream rather than Print...
+#ifdef ENABLE_DEBUG
+  UpdateController.printError(DEBUG_PORT);
+#endif
+}
+
+size_t
+handleUpdateControllerUpload(MongooseHttpServerRequest *request, int ev, MongooseString filename, uint64_t index, uint8_t *data, size_t len)
+{
+  if (MG_EV_HTTP_PART_BEGIN == ev)
+  {
+    //    dumpRequest(request);
+
+    DEBUG_PORT.printf("Update Start: %s\n", filename.c_str());
+
+    lcd_display(F("Updating Controller"), 0, 0, 0, LCD_CLEAR_LINE);
+    lcd_display(F(""), 0, 1, 10 * 1000, LCD_CLEAR_LINE);
+    lcd_loop();
+
+    if (!UpdateController.begin())
+    {
+      handleUpdateControllerError(request);
+    }
+  }
+
+  if (!UpdateController.hasError())
+  {
+    DBUGF("Update Writing %llu", index);
+
+    size_t contentLength = request->contentLength();
+    DBUGVAR(contentLength);
+    if (contentLength > 0)
+    {
+      int percent = index / (contentLength / 100);
+      DBUGVAR(percent);
+      DBUGVAR(lastPercentController);
+      if (percent != lastPercentController)
+      {
+        String text = String(percent) + F("%");
+        lcd_display(text, 0, 1, 10 * 1000, LCD_DISPLAY_NOW);
+        DEBUG_PORT.printf("Update: %d%%\n", percent);
+        lastPercentController = percent;
+      }
+    }
+    if (UpdateController.write(data, len) != len)
+    {
+      handleUpdateControllerError(request);
+    }
+  }
+
+  if (MG_EV_HTTP_PART_END == ev)
+  {
+    DBUGLN("Upload finished");
+    if (UpdateController.end(true))
+    {
+      DBUGF("Update Success: %lluB", index + len);
+      lcd_display(F("Complete"), 0, 1, 10 * 1000, LCD_CLEAR_LINE | LCD_DISPLAY_NOW);
+      upgradeResponseController->setCode(200);
+      upgradeResponseController->print("OK");
+      request->send(upgradeResponseController);
+      upgradeResponseController = NULL;
+    }
+    else
+    {
+      DBUGF("Update failed: %d", UpdateController.getError());
+      lcd_display(F("Error"), 0, 1, 10 * 1000, LCD_CLEAR_LINE | LCD_DISPLAY_NOW);
+      handleUpdateControllerError(request);
+    }
+  }
+
+  return len;
+}
+
+static void handleUpdateControllerClose(MongooseHttpServerRequest *request)
+{
+  DBUGLN("Update close");
+
+  if (upgradeResponseController)
+  {
+    delete upgradeResponseController;
+    upgradeResponseController = NULL;
+  }
+
+  if (UpdateController.isFinished() && !UpdateController.hasError())
+  {
     systemRebootTime = millis() + 1000;
   }
 }
@@ -1065,9 +1211,21 @@ web_server_setup() {
     onUpload(handleUpdateUpload)->
     onClose(handleUpdateClose);
 
+  // Simple Firmware Update Form
+  server.on("/updateController$")->onRequest([](MongooseHttpServerRequest *request) {
+        if (HTTP_GET == request->method()) {
+          handleUpdateControllerGet(request);
+        } else if (HTTP_POST == request->method()) {
+          handleUpdateControllerPost(request);
+        }
+      })->
+      onUpload(handleUpdateControllerUpload)->
+      onClose(handleUpdateControllerClose);
+
   server.on("/debug$", [](MongooseHttpServerRequest *request) {
     MongooseHttpServerResponseStream *response;
-    if(false == requestPreProcess(request, response, CONTENT_TYPE_TEXT)) {
+    if(false == requestPreProcess(request, response, CONTENT_TYPE_TEXT))
+    {
       return;
     }
 

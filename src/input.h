@@ -5,6 +5,10 @@
 #include <ArduinoJson.h>
 #include "RapiSender.h"
 
+#define SMARTEVSE_MODE_NORMAL               0
+#define SMARTEVSE_MODE_SMART                1
+#define SMARTEVSE_MODE_SOLAR                2
+
 extern RapiSender rapiSender;
 
 extern String url;
@@ -21,6 +25,8 @@ extern bool temp3_valid;
 extern long pilot;  // OpenEVSE Pilot Setting
 extern long state;    // OpenEVSE State
 extern long elapsed;  // Elapsed time (only valid if charging)
+extern String estate; // Common name for State
+extern int smartevse_mode; // SmartEVSE charge mode (NORMAL, SMART, SOLAR)
 
 //Defaults OpenEVSE Settings
 extern byte rgb_lcd;
