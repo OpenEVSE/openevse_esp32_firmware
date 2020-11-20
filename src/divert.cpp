@@ -75,41 +75,43 @@ void divertmode_update(byte newmode)
     if (divert_feed_type == "internal") {
       rapiSender.sendCmdSync(String(F("$SX ")) + String((divertmode==DIVERT_MODE_NORMAL)?1:2));
     }
+    else {
 
-    // restore max charge current if normal mode or zero if eco mode
-    switch(divertmode)
-    {
-      case DIVERT_MODE_NORMAL:
-        // Restore the max charge current
-        rapiSender.sendCmdSync(String(F("$SC ")) + String(max_charge_current));
-        DBUGF("Restore max I: %d", max_charge_current);
-        break;
+      // restore max charge current if normal mode or zero if eco mode
+      switch(divertmode)
+      {
+        case DIVERT_MODE_NORMAL:
+          // Restore the max charge current
+          rapiSender.sendCmdSync(String(F("$SC ")) + String(max_charge_current));
+          DBUGF("Restore max I: %d", max_charge_current);
+          break;
 
-      case DIVERT_MODE_ECO:
-        charge_rate = 0;
-        available_current = 0;
-        smoothed_available_current = 0;
-        min_charge_end = 0;
-        
-        // Read the current charge current, assume this is the max set by the user
-        if(0 == rapiSender.sendCmdSync(F("$GE"))) {
-          max_charge_current = String(rapiSender.getToken(1)).toInt();
-          DBUGF("Read max I: %d", max_charge_current);
-        }
-        if(OPENEVSE_STATE_SLEEPING != state)
-        {
-          if(0 == rapiSender.sendCmdSync(config_pause_uses_disabled() ? F("$FD") : F("$FS"))) 
-          {
-            DBUGLN(F("Divert activated, entered sleep mode"));
-            divert_active = false;
+        case DIVERT_MODE_ECO:
+          charge_rate = 0;
+          available_current = 0;
+          smoothed_available_current = 0;
+          min_charge_end = 0;
+          
+          // Read the current charge current, assume this is the max set by the user
+          if(0 == rapiSender.sendCmdSync(F("$GE"))) {
+            max_charge_current = String(rapiSender.getToken(1)).toInt();
+            DBUGF("Read max I: %d", max_charge_current);
           }
-        }
-        break;
+          if(OPENEVSE_STATE_SLEEPING != state)
+          {
+            if(0 == rapiSender.sendCmdSync(config_pause_uses_disabled() ? F("$FD") : F("$FS"))) 
+            {
+              DBUGLN(F("Divert activated, entered sleep mode"));
+              divert_active = false;
+            }
+          }
+          break;
 
-      default:
-        return;
+        default:
+          return;
+      }
     }
-
+    
     StaticJsonDocument<128> event;
     event["divertmode"] = divertmode;
     event["divert_active"] = divert_active;

@@ -241,12 +241,12 @@ update_rapi_values() {
                 divertmode_update(DIVERT_MODE_ECO);
               }
             } else {
-              if (!(config_divert_enabled() && config_charge_mode()==1) || divert_feed_type=="internal" )
+              if (config_charge_mode()==1 && (!config_divert_enabled() || divert_feed_type=="internal") )
                 config_set("charge_mode",String("fast"));
             }
           }
         } else {
-            if (!(config_divert_enabled() && config_charge_mode()==1) || divert_feed_type=="internal" )
+              if (config_charge_mode()==1 && (!config_divert_enabled() || divert_feed_type=="internal") )
               config_set("charge_mode",String("fast"));
         }
       });
