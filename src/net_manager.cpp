@@ -5,6 +5,8 @@
 #include "espal.h"
 #include "time_man.h"
 
+#include "LedManagerTask.h"
+
 #ifdef ESP32
 #include <WiFi.h>
 #include <ESPmDNS.h>              // Resolve URL for update server etc.
@@ -42,10 +44,6 @@ int client_disconnects = 0;
 bool client_retry = false;
 unsigned long client_retry_time = 0;
 
-#ifdef WIFI_LED
-int wifiLedState = !WIFI_LED_ON_STATE;
-unsigned long wifiLedTimeOut = millis();
-#endif
 
 int wifiButtonState = !WIFI_BUTTON_PRESSED_STATE;
 unsigned long wifiButtonTimeOut = millis();
@@ -99,6 +97,8 @@ startAP() {
   lcd_display(softAP_ssid_ID, 0, 0, 0, LCD_CLEAR_LINE);
   lcd_display(String(F("Pass: ")) + softAP_password, 0, 1, 15 * 1000, LCD_CLEAR_LINE);
 
+  ledManager.setWifiMode(false, false);
+
   apClients = 0;
 }
 
@@ -118,6 +118,8 @@ startClient()
 #endif // !ESP32
 
   WiFi.begin(esid.c_str(), epass.c_str());
+
+  ledManager.setWifiMode(true, false);
 }
 
 static void net_wifi_start()
@@ -146,11 +148,6 @@ static void display_state()
 
 static void net_connected(IPAddress myAddress)
 {
-#ifdef WIFI_LED
-  wifiLedState = WIFI_LED_ON_STATE;
-  digitalWrite(WIFI_LED, wifiLedState);
-#endif
-
   char tmpStr[40];
   sprintf(tmpStr, "%d.%d.%d.%d", myAddress[0], myAddress[1], myAddress[2], myAddress[3]);
   ipaddress = tmpStr;
@@ -160,6 +157,8 @@ static void net_connected(IPAddress myAddress)
   display_state();
 
   Mongoose.ipConfigChanged();
+
+  ledManager.setWifiMode(true, true);
 
   time_begin(sntp_hostname.c_str());
 }
@@ -223,11 +222,18 @@ static void net_wifi_onStationModeDisconnected(const WiFiEventStationModeDisconn
 static void net_wifi_onAPModeStationConnected(const WiFiEventSoftAPModeStationConnected &event) {
   lcd_display(F("IP Address"), 0, 0, 0, LCD_CLEAR_LINE);
   lcd_display(ipaddress, 0, 1, (0 == apClients ? 15 : 5) * 1000, LCD_CLEAR_LINE);
+
+  ledManager.setWifiMode(false, true);
+
   apClients++;
 };
 
 static void net_wifi_onAPModeStationDisconnected(const WiFiEventSoftAPModeStationDisconnected &event) {
   apClients--;
+
+  if(0 == apClients) {
+    ledManager.setWifiMode(false, false);
+  }
 };
 
 #ifdef ESP32
@@ -368,18 +374,8 @@ void net_event(WiFiEvent_t event, system_event_info_t info)
 #endif
 
 void
-net_setup() {
-#ifdef WIFI_LED
-  DBUGF("Configuring pin %d for LED", WIFI_LED);
-  pinMode(WIFI_LED, OUTPUT);
-  digitalWrite(WIFI_LED, wifiLedState);
-#endif
-
-#if defined(WIFI_BUTTON) && WIFI_BUTTON != WIFI_LED
-  DBUGF("Configuring pin %d for Button", WIFI_BUTTON);
-  pinMode(WIFI_BUTTON, WIFI_BUTTON_PRESSED_PIN_MODE);
-#endif
-
+net_setup() 
+{
   randomSeed(analogRead(RANDOM_SEED_CHANNEL));
 
   // If we have an SSID configured at this point we have likely
@@ -425,30 +421,8 @@ net_loop()
   //bool isAp = net_wifi_mode_is_ap();
   bool isApOnly = net_wifi_mode_is_ap_only();
 
-#ifdef WIFI_LED
-  if ((isApOnly || !net_is_connected()) &&
-      millis() > wifiLedTimeOut)
-  {
-    wifiLedState = !wifiLedState;
-    digitalWrite(WIFI_LED, wifiLedState);
 
-    int ledTime = isApOnly ? (0 == apClients ? WIFI_LED_AP_TIME : WIFI_LED_AP_CONNECTED_TIME) : WIFI_LED_STA_CONNECTING_TIME;
-    wifiLedTimeOut = millis() + ledTime;
-  }
-#endif
-
-#if defined(WIFI_LED) && WIFI_BUTTON == WIFI_LED
-  digitalWrite(WIFI_BUTTON, HIGH);
-  pinMode(WIFI_BUTTON, WIFI_BUTTON_PRESSED_PIN_MODE);
-#endif
-
-  // Pressing the boot button for 5 seconds will turn on AP mode, 10 seconds will factory reset
-  int button = digitalRead(WIFI_BUTTON);
-
-#if defined(WIFI_LED) && WIFI_BUTTON == WIFI_LED
-  pinMode(WIFI_BUTTON, OUTPUT);
-  digitalWrite(WIFI_LED, wifiLedState);
-#endif
+  int button = ledManager.getButtonPressed();
 
   //DBUGF("%lu %d %d", millis() - wifiButtonTimeOut, button, wifiButtonState);
   if(wifiButtonState != button)

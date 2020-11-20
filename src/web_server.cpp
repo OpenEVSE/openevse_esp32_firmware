@@ -569,7 +569,6 @@ handleStatus(MongooseHttpServerRequest *request) {
   doc["wifi_client_connected"] = (int)net_wifi_client_connected();
   doc["eth_connected"] = (int)net_eth_connected();
   doc["net_connected"] = (int)net_is_connected();
-  doc["srssi"] = WiFi.RSSI();
   doc["ipaddress"] = ipaddress;
 
   doc["emoncms_connected"] = (int)emoncms_connected;
@@ -586,25 +585,8 @@ handleStatus(MongooseHttpServerRequest *request) {
   doc["comm_success"] = rapiSender.getSuccess();
   doc["rapi_connected"] = (int)rapiSender.isConnected();
 
-  doc["amp"] = amp * AMPS_SCALE_FACTOR;
-  doc["voltage"] = voltage * VOLTS_SCALE_FACTOR;
-  doc["pilot"] = pilot;
-  if(temp1_valid) {
-    doc["temp1"] = temp1 * TEMP_SCALE_FACTOR;
-  } else {
-    doc["temp1"] = false;
-  }
-  if(temp2_valid) {
-    doc["temp2"] = temp2 * TEMP_SCALE_FACTOR;
-  } else {
-    doc["temp2"] = false;
-  }
-  if(temp3_valid) {
-    doc["temp3"] = temp3 * TEMP_SCALE_FACTOR;
-  } else {
-    doc["temp3"] = false;
-  }
-  doc["state"] = state;
+  create_rapi_json(doc);
+
   doc["elapsed"] = elapsed;
   doc["wattsec"] = wattsec;
   doc["watthour"] = watthour_total;
@@ -718,44 +700,6 @@ handleConfig(MongooseHttpServerRequest *request)
 
   request->send(response);
 }
-
-#ifdef ENABLE_LEGACY_API
-// -------------------------------------------------------------------
-// Returns Updates JSON
-// url: /rapiupdate
-// -------------------------------------------------------------------
-void
-handleUpdate(MongooseHttpServerRequest *request) {
-
-  MongooseHttpServerResponseStream *response;
-  if(false == requestPreProcess(request, response)) {
-    return;
-  }
-
-  String s = "{";
-  s += "\"comm_sent\":" + String(rapiSender.getSent()) + ",";
-  s += "\"comm_success\":" + String(rapiSender.getSuccess()) + ",";
-  s += "\"ohmhour\":\"" + ohm_hour + "\",";
-  s += "\"espfree\":\"" + String(espfree) + "\",";
-  s += "\"packets_sent\":\"" + String(packets_sent) + "\",";
-  s += "\"packets_success\":\"" + String(packets_success) + "\",";
-  s += "\"amp\":" + amp + ",";
-  s += "\"pilot\":" + pilot + ",";
-  s += "\"temp1\":" + temp1 + ",";
-  s += "\"temp2\":" + temp2 + ",";
-  s += "\"temp3\":" + temp3 + ",";
-  s += "\"state\":" + String(state) + ",";
-  s += "\"elapsed\":" + String(elapsed) + ",";
-  s += "\"estate\":\"" + estate + "\",";
-  s += "\"wattsec\":" + wattsec + ",";
-  s += "\"watthour\":" + watthour_total;
-  s += "}";
-
-  response->setCode(200);
-  response->print(s);
-  request->send(response);
-}
-#endif
 
 // -------------------------------------------------------------------
 // Reset config and reboot

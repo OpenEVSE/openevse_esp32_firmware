@@ -5,6 +5,7 @@
 #include <Arduino.h>
 #include <ArduinoJson.h>
 
+
 #include "emonesp.h"
 #include "input.h"
 #include "app_config.h"
@@ -14,7 +15,23 @@
 #include "openevse.h"
 #include "espal.h"
 
+#include "LedManagerTask.h"
+
 #include "RapiSender.h"
+
+#ifdef ENABLE_MCP9808
+#include <Wire.h>
+#include <Adafruit_MCP9808.h>
+Adafruit_MCP9808 tempsensor = Adafruit_MCP9808();
+
+#ifndef I2C_SDA
+#define I2C_SDA -1
+#endif
+
+#ifndef I2C_SCL
+#define I2C_SCL -1
+#endif
+#endif
 
 int espflash = 0;
 int espfree = 0;
@@ -51,13 +68,6 @@ byte serial_dbg = 0;
 byte auto_service = 1;
 int service = 1;
 
-#ifdef ENABLE_LEGACY_API
-long current_l1min = 0;
-long current_l2min = 0;
-long current_l1max = 0;
-long current_l2max = 0;
-#endif
-
 long current_scale = 0;
 long current_offset = 0;
 
@@ -76,12 +86,6 @@ String protocol = "-";
 long gfci_count = 0;
 long nognd_count = 0;
 long stuck_count = 0;
-
-// OpenEVSE Session options
-#ifdef ENABLE_LEGACY_API
-long kwh_limit = 0;
-long time_limit = 0;
-#endif
 
 // OpenEVSE Usage Statistics
 long wattsec = 0;
@@ -123,6 +127,15 @@ void create_rapi_json(JsonDocument &doc)
   } else {
     doc["temp3"] = false;
   }
+#ifdef ENABLE_MCP9808
+  float temp4 = tempsensor.readTempC();
+  DBUGVAR(temp4);
+  if(!isnan(temp4)) {
+    doc["temp4"] = temp4 * TEMP_SCALE_FACTOR;
+  } else {
+    doc["temp4"] = false;
+  }
+#endif
   doc["state"] = state;
   doc["freeram"] = ESPAL.getFreeHeap();
   doc["divertmode"] = divertmode;
@@ -165,6 +178,7 @@ update_rapi_values() {
           DBUGF("evse_state = %02x, session_time = %d, pilot_state = %02x, vflags = %08x", evse_state, session_time, pilot_state, vflags);
 
           state = evse_state;
+          ledManager.setEvseState(evse_state);
           elapsed = session_time;
         }
       });
@@ -314,34 +328,6 @@ handleRapiRead()
     }
   });
 
-#ifdef ENABLE_LEGACY_API
-  rapiSender.sendCmd("$GH", [](int ret)
-  {
-    if(RAPI_RESPONSE_OK == ret)
-    {
-      if(rapiSender.getTokenCnt() >= 2)
-      {
-        const char *val;
-        val = rapiSender.getToken(1);
-        kwh_limit = strtol(val, NULL, 10);
-      }
-    }
-  });
-
-  rapiSender.sendCmd("$G3", [](int ret)
-  {
-    if(RAPI_RESPONSE_OK == ret)
-    {
-      if(rapiSender.getTokenCnt() >= 2)
-      {
-        const char *val;
-        val = rapiSender.getToken(1);
-        time_limit = strtol(val, NULL, 10);
-      }
-    }
-  });
-#endif
-
   rapiSender.sendCmd("$GE", [](int ret)
   {
     if(RAPI_RESPONSE_OK == ret)
@@ -368,40 +354,35 @@ handleRapiRead()
     }
   });
 
-#ifdef ENABLE_LEGACY_API
-  rapiSender.sendCmd("$GC", [](int ret)
-  {
-    if(RAPI_RESPONSE_OK == ret)
-    {
-      if(rapiSender.getTokenCnt() >= 3)
-      {
-        const char *val;
-        if (service == 1) {
-          val = rapiSender.getToken(1);
-          current_l1min = strtol(val, NULL, 10);
-          val = rapiSender.getToken(2);
-          current_l1max = strtol(val, NULL, 10);
-        } else {
-          val = rapiSender.getToken(1);
-          current_l2min = strtol(val, NULL, 10);
-          val = rapiSender.getToken(2);
-          current_l2max = strtol(val, NULL, 10);
-        }
-      }
-    }
-  });
-#endif
-
   Profile_End(handleRapiRead, 10);
 }
 
 void input_setup()
 {
+#ifdef ENABLE_MCP9808
+  Wire.begin(I2C_SDA, I2C_SCL);
+
+  if(tempsensor.begin())
+  {
+    DBUGLN("Found MCP9808!");
+    // Mode Resolution SampleTime
+    //  0    0.5°C       30 ms
+    //  1    0.25°C      65 ms
+    //  2    0.125°C     130 ms
+    //  3    0.0625°C    250 ms
+    tempsensor.setResolution(1); // sets the resolution mode of reading, the modes are defined in the table bellow:
+    tempsensor.wake();   // wake up, ready to read!
+  } else {
+    DBUGLN("Couldn't find MCP9808!");
+  }
+#endif
+
   OpenEVSE.onState([](uint8_t evse_state, uint8_t pilot_state, uint32_t current_capacity, uint32_t vflags)
   {
     // Update our global state
     DBUGVAR(evse_state);
     state = evse_state;
+    ledManager.setEvseState(evse_state);
 
     // Send to all clients
     StaticJsonDocument<32> event;

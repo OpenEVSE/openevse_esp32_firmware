@@ -28,6 +28,7 @@
 #include <WiFiUdp.h>
 #include <ArduinoOTA.h>               // local OTA update from Arduino IDE
 #include <MongooseCore.h>
+#include <MicroTasks.h>
 
 #include "emonesp.h"
 #include "app_config.h"
@@ -47,6 +48,8 @@
 #include "tesla_client.h"
 #include "event.h"
 #include "update_controller.h"
+
+#include "LedManagerTask.h"
 
 #include "RapiSender.h"
 
@@ -79,6 +82,8 @@ void setup()
   // Read saved settings from the config
   config_load_settings();
   DBUGF("After config_load_settings: %d", ESPAL.getFreeHeap());
+
+  MicroTask.startTask(ledManager);
 
   // Initialise the WiFi
   net_setup();
@@ -254,14 +259,6 @@ void hardware_setup()
   #endif
   pinMatrixOutDetach(RAPI_PORT_RESET, false, false);
   pinMode(RAPI_PORT_RESET, OUTPUT);
-#endif
-
-#ifdef ONBOARD_LEDS
-        uint8_t ledPins[] = {ONBOARD_LEDS};
-  for (uint8_t pin = 0; pin < sizeof(ledPins); pin++) {
-    pinMode(pin, OUTPUT);
-    digitalWrite(pin, !ONBOARD_LED_ON_STATE);
-  }
 #endif
 
   enableLoopWDT();

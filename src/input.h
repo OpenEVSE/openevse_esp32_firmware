@@ -34,13 +34,6 @@ extern byte serial_dbg;
 extern byte auto_service;
 extern int service;
 
-#ifdef ENABLE_LEGACY_API
-extern long current_l1min;
-extern long current_l2min;
-extern long current_l1max;
-extern long current_l2max;
-#endif
-
 extern long current_scale;
 extern long current_offset;
 
@@ -60,12 +53,6 @@ extern String protocol;
 extern long gfci_count;
 extern long nognd_count;
 extern long stuck_count;
-
-//OpenEVSE Session
-#ifdef ENABLE_LEGACY_API
-extern long kwh_limit;
-extern long time_limit;
-#endif
 
 //OpenEVSE Usage Statistics
 extern long wattsec;

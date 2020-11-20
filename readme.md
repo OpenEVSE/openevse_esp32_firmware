@@ -1,7 +1,5 @@
 # OpenEVSE WiFi Gateway
 
-[![Build Status](https://travis-ci.org/OpenEVSE/ESP32_WiFi_V3.x.svg?branch=master)](https://travis-ci.org/OpenEVSE/ESP32_WiFi_V3.x)
-
 ![main](docs/main2.png)
 
 The WiFi gateway uses an **ESP32** which communicates with the OpenEVSE controller via serial RAPI API. The web UI is served directly from the ESP32 web server and can be controlled via a connected device on the local network.
@@ -394,6 +392,8 @@ If flashing a new ESP32, flashing bootloader and partitions file is required:
 Then successive uploads can just upload the firmware 
 
 `esptool.py --baud 921600 --before default_reset --after hard_reset write_flash -z --flash_mode dio --flash_freq 40m --flash_size detect 0x10000 firmware.bin`
+
+**If uploading to ESP32 Etherent gateway, use slower baudrate of `115200`**
 
 Or with the [NodeMCU PyFlasher](https://github.com/marcelstoer/nodemcu-pyflasher) GUI, available with pre-built executable files for Windows/Mac.
 
