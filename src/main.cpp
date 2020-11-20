@@ -142,9 +142,9 @@ loop() {
         }
 
         // -------------------------------------------------------------------
-        // Do these things once every 1000ms
+        // Do these things once every 500ms
         // -------------------------------------------------------------------
-        if ((millis() - Timer3) >= 1000) {
+        if ((millis() - Timer3) >= 500) {
           /*
           uint32_t current = ESPAL.getFreeHeap();
           int32_t diff = (int32_t)(last_mem - current);
@@ -188,9 +188,9 @@ loop() {
       mqtt_loop();
 
       // -------------------------------------------------------------------
-      // Do these things once every 30 seconds
+      // Do these things once every 10 seconds
       // -------------------------------------------------------------------
-      if ((millis() - Timer1) >= 30000) {
+      if ((millis() - Timer1) >= 10000) {
         // DBUGLN("Time1");
 
         if(!Update.isRunning())
