@@ -34,6 +34,7 @@ typedef const __FlashStringHelper *fstr_t;
 #include "espal.h"
 #include "time_man.h"
 #include "tesla_client.h"
+#include "scheduler.h"
 
 MongooseHttpServer server;          // Create class for Web server
 
@@ -652,7 +653,7 @@ handleConfigGet(MongooseHttpServerRequest *request, MongooseHttpServerResponseSt
   JsonArray http_supported_protocols = doc.createNestedArray("http_supported_protocols");
   http_supported_protocols.add("http");
   http_supported_protocols.add("https");
-  
+
   config_serialize(doc, true, false, true);
 
   response->setCode(200);
@@ -674,7 +675,7 @@ handleConfigPost(MongooseHttpServerRequest *request, MongooseHttpServerResponseS
 }
 
 void
-handleConfig(MongooseHttpServerRequest *request) 
+handleConfig(MongooseHttpServerRequest *request)
 {
   MongooseHttpServerResponseStream *response;
   if(false == requestPreProcess(request, response)) {
@@ -684,10 +685,68 @@ handleConfig(MongooseHttpServerRequest *request)
   if(HTTP_GET == request->method()) {
     handleConfigGet(request, response);
   } else if(HTTP_POST == request->method()) {
-    handleConfigPost(request, response); 
+    handleConfigPost(request, response);
   } else {
     response->setCode(405);
 
+  }
+
+  request->send(response);
+}
+
+// -------------------------------------------------------------------
+//
+// url: /schedule
+// -------------------------------------------------------------------
+void
+handleScheduleGet(MongooseHttpServerRequest *request, MongooseHttpServerResponseStream *response, uint16_t event)
+{
+  const size_t capacity = JSON_OBJECT_SIZE(40) + 1024;
+  DynamicJsonDocument doc(capacity);
+
+  if(SCHEDULER_EVENT_NULL == event) {
+    scheduler.serialize(doc);
+  } else {
+    scheduler.serialize(doc, event);
+  }
+
+  response->setCode(200);
+  serializeJson(doc, *response);
+}
+
+void
+handleSchedulePost(MongooseHttpServerRequest *request, MongooseHttpServerResponseStream *response, uint16_t event)
+{
+  String body = request->body().toString();
+
+  bool success = (SCHEDULER_EVENT_NULL == event) ?
+    scheduler.deserialize(body) :
+    scheduler.deserialize(body, event);
+
+  if(success) {
+    response->setCode(200);
+    response->print("{\"msg\":\"done\"}");
+  } else {
+    response->setCode(400);
+    response->print("{\"msg\":\"Could not parse JSON\"}");
+  }
+}
+
+void
+handleSchedule(MongooseHttpServerRequest *request)
+{
+  MongooseHttpServerResponseStream *response;
+  if(false == requestPreProcess(request, response)) {
+    return;
+  }
+
+  if(HTTP_GET == request->method()) {
+    handleScheduleGet(request, response, SCHEDULER_EVENT_NULL);
+  } else if(HTTP_POST == request->method()) {
+    handleSchedulePost(request, response, SCHEDULER_EVENT_NULL);
+  } else if(HTTP_DELETE == request->method()) {
+  } else {
+    response->setCode(405);
   }
 
   request->send(response);
@@ -1052,6 +1111,8 @@ web_server_setup() {
   server.on("/apoff$", handleAPOff);
   server.on("/divertmode$", handleDivertMode);
   server.on("/emoncms/describe$", handleDescribe);
+
+  server.on("/schedule", handleSchedule);
 
   // Simple Firmware Update Form
   server.on("/update$")->

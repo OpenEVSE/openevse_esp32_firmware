@@ -49,10 +49,13 @@
 #include "event.h"
 
 #include "LedManagerTask.h"
+#include "evse_man.h"
+#include "scheduler.h"
 
-#include "RapiSender.h"
+EvseManager evse(RAPI_PORT);
+Scheduler scheduler(evse);
 
-RapiSender rapiSender(&RAPI_PORT);
+RapiSender rapiSender = evse.getSender();
 
 unsigned long Timer1; // Timer for events once every 30 seconds
 unsigned long Timer3; // Timer for events once every 2 seconds
@@ -81,6 +84,9 @@ void setup()
   // Read saved settings from the config
   config_load_settings();
   DBUGF("After config_load_settings: %d", ESPAL.getFreeHeap());
+
+  evse.begin();
+  scheduler.begin();
 
   MicroTask.startTask(ledManager);
 

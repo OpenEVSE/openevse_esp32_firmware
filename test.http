@@ -352,3 +352,87 @@ GET {{baseUrl}}/debug HTTP/1.1
 GET {{baseUrl}}/evse HTTP/1.1
 
 ###
+
+# Get all events
+GET {{baseUrl}}/schedule HTTP/1.1
+
+###
+
+# Get event '1'
+GET {{baseUrl}}/schedule/1 HTTP/1.1
+
+###
+
+# Remove event '1'
+DELETE {{baseUrl}}/schedule/1 HTTP/1.1
+
+###
+
+# Create a new event to start the charge
+POST {{baseUrl}}/schedule HTTP/1.1
+Content-Type: application/json
+
+{
+  "state": "active",
+  "time": "10:00:00",
+  "days": [
+    "monday"
+  ]
+}
+
+###
+
+# Create multiple new events
+POST {{baseUrl}}/schedule HTTP/1.1
+Content-Type: application/json
+
+[
+  {
+    "state": "active",
+    "time": "10:00:00",
+    "days": [
+      "monday"
+    ]
+  },
+  {
+    "state": "disabled",
+    "time": "10:30:00",
+    "days": [
+      "monday"
+    ]
+  }
+]
+
+###
+
+# missing state
+POST {{baseUrl}}/schedule HTTP/1.1
+Content-Type: application/json
+
+{
+  "time": "10:00:00",
+  "days": [
+    "monday"
+  ]
+}
+
+###
+
+# bad JSON
+POST {{baseUrl}}/schedule HTTP/1.1
+Content-Type: application/json
+
+sdfafsdfsadfsdafsda
+
+###
+
+POST {{baseUrl}}/schedule HTTP/1.1
+Content-Type: application/json
+
+{
+  "state": "disabled",
+  "time": "10:30:00",
+  "days": [
+    "monday"
+  ]
+}
