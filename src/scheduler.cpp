@@ -151,6 +151,16 @@ bool Scheduler::addEvent(DynamicJsonDocument &doc)
 
 bool Scheduler::removeEvent(uint16_t id)
 {
+  Scheduler::Event *event = NULL;
+
+  DBUGVAR(id);
+  if(findEvent(id, &event) && NULL != event)
+  {
+    DBUGF("event = %p", event);
+    event->invalidate();
+    return true;
+  }
+
   return false;
 }
 
@@ -351,8 +361,10 @@ bool Scheduler::serialize(JsonObject &object, uint16_t id)
 {
   Scheduler::Event *event = NULL;
 
+  DBUGVAR(id);
   if(findEvent(id, &event) && NULL != event)
   {
+    DBUGF("event = %p", event);
     if(Scheduler::serialize(object, event)) {
       return true;
     }
@@ -389,5 +401,5 @@ bool Scheduler::serialize(JsonObject &object, Scheduler::Event *event)
     days.add("sunday");
   }
 
-  return false;
+  return true;
 }

@@ -60,19 +60,19 @@ class Scheduler : public MicroTasks::Task
           return _seconds % 60;
         };
         void setSeconds(uint16_t seconds) {
-          _seconds = (_seconds - getSeconds()) + seconds;
+          _seconds = (getHours() * 3600) + (getMinutes() * 60) + seconds;
         }
         uint16_t getMinutes() {
           return (_seconds / 60) % 60;
         };
         void setMinutes(uint16_t minutes) {
-          _seconds = (_seconds - getMinutes()) + (minutes * 60);
+          _seconds = (getHours() * 3600) + (minutes * 60) + getSeconds();
         }
         uint16_t getHours() {
           return _seconds / 3600;
         };
         void setHours(uint16_t hours) {
-          _seconds = (_seconds - getHours()) + (hours * 3600);
+          _seconds = (hours * 3600) + (getMinutes() * 60) + getSeconds();
         }
 
         String getTime();
@@ -90,6 +90,10 @@ class Scheduler : public MicroTasks::Task
 
         bool isValid() {
           return SCHEDULER_EVENT_NULL != _id;
+        }
+
+        void invalidate() {
+          _id = SCHEDULER_EVENT_NULL;
         }
     };
 
