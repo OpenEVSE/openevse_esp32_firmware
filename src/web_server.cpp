@@ -704,14 +704,17 @@ handleScheduleGet(MongooseHttpServerRequest *request, MongooseHttpServerResponse
   const size_t capacity = JSON_OBJECT_SIZE(40) + 1024;
   DynamicJsonDocument doc(capacity);
 
-  if(SCHEDULER_EVENT_NULL == event) {
-    scheduler.serialize(doc);
-  } else {
+  bool success = (SCHEDULER_EVENT_NULL == event) ?
+    scheduler.serialize(doc) :
     scheduler.serialize(doc, event);
-  }
 
-  response->setCode(200);
-  serializeJson(doc, *response);
+  if(success) {
+    response->setCode(200);
+    serializeJson(doc, *response);
+  } else {
+    response->setCode(404);
+    response->print("{\"msg\":\"Not found\"}");
+  }
 }
 
 void
@@ -733,6 +736,28 @@ handleSchedulePost(MongooseHttpServerRequest *request, MongooseHttpServerRespons
 }
 
 void
+handleScheduleDelete(MongooseHttpServerRequest *request, MongooseHttpServerResponseStream *response, uint16_t event)
+{
+  const size_t capacity = JSON_OBJECT_SIZE(40) + 1024;
+  DynamicJsonDocument doc(capacity);
+
+  if(SCHEDULER_EVENT_NULL != event) {
+    if(scheduler.removeEvent(event)) {
+      response->setCode(200);
+      response->print("{\"msg\":\"done\"}");
+    } else {
+      response->setCode(404);
+      response->print("{\"msg\":\"Not found\"}");
+    }
+  } else {
+    response->setCode(405);
+    response->print("{\"msg\":\"Method not allowed\"}");
+  }
+}
+
+#define SCHEDULE_PATH_LEN (sizeof("/schedule/") - 1)
+
+void
 handleSchedule(MongooseHttpServerRequest *request)
 {
   MongooseHttpServerResponseStream *response;
@@ -740,13 +765,26 @@ handleSchedule(MongooseHttpServerRequest *request)
     return;
   }
 
+  uint16_t event = SCHEDULER_EVENT_NULL;
+
+  String path = request->uri();
+  if(path.length() > SCHEDULE_PATH_LEN) {
+    String eventStr = path.substring(SCHEDULE_PATH_LEN);
+    DBUGVAR(eventStr);
+    event = eventStr.toInt();
+  }
+
+  DBUGVAR(event);
+
   if(HTTP_GET == request->method()) {
-    handleScheduleGet(request, response, SCHEDULER_EVENT_NULL);
+    handleScheduleGet(request, response, event);
   } else if(HTTP_POST == request->method()) {
-    handleSchedulePost(request, response, SCHEDULER_EVENT_NULL);
+    handleSchedulePost(request, response, event);
   } else if(HTTP_DELETE == request->method()) {
+    handleScheduleDelete(request, response, event);
   } else {
     response->setCode(405);
+    response->print("{\"msg\":\"Method not allowed\"}");
   }
 
   request->send(response);
