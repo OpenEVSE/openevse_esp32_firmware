@@ -110,7 +110,13 @@ uint32_t Scheduler::EventInstance::getDuration()
     lengthInDays += SCHEDULER_DAYS_IN_A_WEEK;
   }
 
-  return (lengthInDays * 24 * 60 * 60) + (getNext().getStartOffset() - getStartOffset());
+  uint32_t duration = (lengthInDays * 24 * 60 * 60) + (getNext().getStartOffset() - getStartOffset());
+  // Handle special case where the duration is 0 (IE only single event so the next event is this event)
+  if(0 == duration) {
+    // Event duration is a week
+    duration = 7 * 24 * 60 * 60;
+  }
+  return duration;
 }
 
 int32_t Scheduler::EventInstance::getStartOffset(int fromDay, int dayOffset) {
@@ -247,8 +253,9 @@ Scheduler::EventInstance &Scheduler::getCurrentEvent()
   DBUGVAR(currentDay);
   DBUGVAR(currentOffset);
 
+  // This is very much a brute force method of resolving the event
   Scheduler::EventInstance *e = &_firstEvent;
-  int dayOffset = 0;
+  int dayOffset = -7;
   do
   {
     if(!e->isValid()) {
