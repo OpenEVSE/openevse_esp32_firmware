@@ -1,8 +1,22 @@
 
 #include "debug.h"
 #include "scheduler.h"
+#include "time_man.h"
 
-uint16_t Scheduler::Event::_next_id = 1;
+#include <algorithm>
+#include <vector>
+
+uint32_t Scheduler::Event::_next_id = 1;
+
+const char * days_of_the_week_strings[] = {
+  "sunday",
+  "monday",
+  "tuesday",
+  "wednesday",
+  "thursday",
+  "friday",
+  "saturday"
+};
 
 Scheduler::Event::Event() :
   Event(SCHEDULER_EVENT_NULL, 0, 0, EvseState_NULL)
@@ -19,7 +33,7 @@ Scheduler::Event::Event(uint8_t hour, uint8_t minute, uint8_t second, uint8_t da
 
 }
 
-Scheduler::Event::Event(uint16_t id, uint8_t hour, uint8_t minute, uint8_t second, uint8_t days, bool repeat, EvseState state) :
+Scheduler::Event::Event(uint32_t id, uint8_t hour, uint8_t minute, uint8_t second, uint8_t days, bool repeat, EvseState state) :
   Event(id,
         (hour * 3600) + (minute * 60) + second,
         days | (repeat ? SCHEDULER_REPEAT : 0),
@@ -27,14 +41,14 @@ Scheduler::Event::Event(uint16_t id, uint8_t hour, uint8_t minute, uint8_t secon
 {
 }
 
-Scheduler::Event::Event(uint16_t id, uint16_t second, uint8_t days, EvseState state)
+Scheduler::Event::Event(uint32_t id, uint32_t second, uint8_t days, EvseState state)
 {
   if(id >= _next_id) {
     _next_id = id + 1;
   }
 }
 
-void Scheduler::Event::setId(uint16_t id) {
+void Scheduler::Event::setId(uint32_t id) {
   _id = SCHEDULER_EVENT_NULL == id ? _next_id++ : id;
 }
 
@@ -48,10 +62,10 @@ String Scheduler::Event::getTime()
 
 bool Scheduler::Event::setTime(const char *time)
 {
-  uint16_t hours, minutes, seconds;
+  uint32_t hours, minutes, seconds;
 
   DBUGVAR(time);
-  if(3 == sscanf(time, "%hu:%02hu:%02hu", &hours, &minutes, &seconds))
+  if(3 == sscanf(time, "%u:%02u:%02u", &hours, &minutes, &seconds))
   {
     DBUGVAR(hours);
     DBUGVAR(minutes);
@@ -65,7 +79,7 @@ bool Scheduler::Event::setTime(const char *time)
   return false;
 }
 
-void Scheduler::Event::setTime(uint16_t hours, uint16_t seconds, uint16_t minutes)
+void Scheduler::Event::setTime(uint32_t hours, uint32_t seconds, uint32_t minutes)
 {
   setHours(hours);
   setMinutes(minutes);
@@ -89,6 +103,21 @@ bool Scheduler::Event::setState(const char *state)
   return false;
 }
 
+uint32_t Scheduler::EventInstance::getDuration()
+{
+  int lengthInDays = getNext()._day - _day;
+  if(lengthInDays < 0) {
+    lengthInDays += SCHEDULER_DAYS_IN_A_WEEK;
+  }
+
+  return (lengthInDays * 24 * 60 * 60) + (getNext().getStartOffset() - getStartOffset());
+}
+
+int32_t Scheduler::EventInstance::getStartOffset(int fromDay, int dayOffset) {
+  int offsetInDays = (_day + dayOffset) - fromDay;
+  return (offsetInDays * 24 * 60 * 60) + getStartOffset();
+}
+
 Scheduler::Scheduler(EvseManager &evse) :
   _evse(&evse)
 {
@@ -102,6 +131,13 @@ void Scheduler::setup()
 
 unsigned long Scheduler::loop(MicroTasks::WakeReason reason)
 {
+  EventInstance currentEvent = getCurrentEvent();
+
+  if(currentEvent != _activeEvent)
+  {
+
+  }
+
   return MicroTask.Infinate;
 }
 
@@ -112,11 +148,139 @@ bool Scheduler::begin()
   return true;
 }
 
-bool Scheduler::getNextEvent(Scheduler::Event **event) {
-  return false;
+void Scheduler::buildSchedule()
+{
+  std::vector<Event *>by_week[SCHEDULER_DAYS_IN_A_WEEK];
+
+  // Sort out which events happen on which days
+  for(int i = 0; i < SCHEDULER_MAX_EVENTS; i++)
+  {
+    Event *event = &_events[i];
+    if(event->isValid())
+    {
+      uint8_t days = event->getDays();
+      for(int day = 0; day < SCHEDULER_DAYS_IN_A_WEEK; day++)
+      {
+        if(days & 1 << day) {
+          by_week[day].push_back(event);
+        }
+      }
+    }
+  }
+
+  // Sort each day
+  for(int day = 0; day < SCHEDULER_DAYS_IN_A_WEEK; day++) {
+    sort(by_week[day].begin(), by_week[day].end(), [](Event *a, Event *b)->bool {
+      return a->getOffset() < b->getOffset();
+    });
+  }
+
+  // Create linked list of ordered events
+  _firstEvent.invalidate();
+  EventInstance last_event;
+  for(int day = 0; day < SCHEDULER_DAYS_IN_A_WEEK; day++)
+  {
+    for(auto event : by_week[day])
+    {
+      DBUGF("Event %d: %s %s %s", event->getId(), days_of_the_week_strings[day], event->getTime().c_str(), event->getStateText());
+      if(!_firstEvent.isValid()) {
+        _firstEvent.setEvent(event, day);
+      }
+
+      if(last_event.isValid()) {
+        last_event.setNext(event, day);
+      }
+
+      last_event.setEvent(event, day);
+    }
+  }
+
+  if(_firstEvent.isValid())
+  {
+    DBUGF("first event: %s %s %d", days_of_the_week_strings[_firstEvent.getDay()],
+      _firstEvent.getEvent()->getTime().c_str(),
+      _firstEvent.getEvent()->getId());
+    DBUGF("last event: %s %s %d", days_of_the_week_strings[last_event.getDay()],
+      last_event.getEvent()->getTime().c_str(),
+      last_event.getEvent()->getId());
+
+    last_event.setNext(_firstEvent);
+
+    #ifdef ENABLE_DEBUG
+    EventInstance e = _firstEvent;
+    do
+    {
+      if(!e.isValid()) {
+        DBUGLN("*** NULL ***");
+        break;
+      }
+
+      Event *event = e.getEvent();
+      int day = e.getDay();
+      DBUGF("Event %d: %s %s %s", event->getId(), days_of_the_week_strings[day], event->getTime().c_str(), event->getStateText());
+
+      e.moveToNext();
+    } while(e != _firstEvent);
+    #endif // ENABLE_DEBUG
+  }
+
+  // wake the main task to see if we actually need to do something
+  MicroTask.wakeTask(this);
 }
 
-bool Scheduler::findEvent(uint16_t id, Scheduler::Event **event) {
+Scheduler::EventInstance &Scheduler::getCurrentEvent()
+{
+  timeval utc_time;
+  gettimeofday(&utc_time, NULL);
+
+  tm local_time;
+  localtime_r(&utc_time.tv_sec, &local_time);
+
+  DBUGF("Local time: %s", time_format_time(local_time).c_str());
+
+  int currentDay = local_time.tm_wday;
+  int32_t currentOffset =
+    (local_time.tm_hour * 3600) +
+    (local_time.tm_min * 60) +
+    local_time.tm_sec;
+
+  DBUGVAR(currentDay);
+  DBUGVAR(currentOffset);
+
+  Scheduler::EventInstance *e = &_firstEvent;
+  int dayOffset = 0;
+  do
+  {
+    if(!e->isValid()) {
+      DBUGLN("No events");
+      break;
+    }
+
+    int32_t startOffset = e->getStartOffset(currentDay, dayOffset);
+    int32_t endOffset = e->getEndOffset(currentDay, dayOffset);
+    DBUGVAR(startOffset);
+    DBUGVAR(endOffset);
+
+    if(startOffset <= currentOffset && currentOffset < endOffset)
+    {
+      DBUGF("Found event %d: %s %s %s",
+        e->getEvent()->getId(),
+        days_of_the_week_strings[e->getDay()],
+        e->getEvent()->getTime().c_str(),
+        e->getEvent()->getStateText());
+      break;
+    }
+
+    e = &e->getNext();
+    if(_firstEvent == e) {
+      dayOffset += SCHEDULER_DAYS_IN_A_WEEK;
+    }
+  } while(dayOffset <= SCHEDULER_DAYS_IN_A_WEEK);
+  return *e;
+}
+
+bool Scheduler::findEvent(uint32_t id, Scheduler::Event **event)
+{
   for(int i = 0; i < SCHEDULER_MAX_EVENTS; i++)
   {
     if(id == _events[i].getId())
@@ -129,14 +293,31 @@ bool Scheduler::findEvent(uint16_t id, Scheduler::Event **event) {
   return false;
 }
 
-bool Scheduler::addEvent(uint8_t hour, uint8_t minute, uint8_t second, uint8_t days, bool repeat, EvseState state, uint16_t &id)
+bool Scheduler::addEvent(uint32_t event_id, const char *time, uint8_t days, const char *state)
 {
+  Event *event;
+  if(findEvent(event_id, &event))
+  {
+    event->setId(event_id);
+    event->setTime(time);
+    DBUGVAR(event->getHours());
+    DBUGVAR(event->getMinutes());
+    DBUGVAR(event->getSeconds());
+    event->setState(state);
+
+    event->setDays(days);
+
+    buildSchedule();
+
+    return true;
+  }
+
   return false;
 }
 
 bool Scheduler::addEvent(String& json)
 {
-  return false;
+  return deserialize(json, SCHEDULER_EVENT_NULL);
 }
 
 bool Scheduler::addEvent(const char *json)
@@ -149,7 +330,7 @@ bool Scheduler::addEvent(DynamicJsonDocument &doc)
   return deserialize(doc, SCHEDULER_EVENT_NULL);
 }
 
-bool Scheduler::removeEvent(uint16_t id)
+bool Scheduler::removeEvent(uint32_t id)
 {
   Scheduler::Event *event = NULL;
 
@@ -158,6 +339,9 @@ bool Scheduler::removeEvent(uint16_t id)
   {
     DBUGF("event = %p", event);
     event->invalidate();
+
+    MicroTask.wakeTask(this);
+
     return true;
   }
 
@@ -208,12 +392,12 @@ bool Scheduler::deserialize(DynamicJsonDocument &doc)
   return false;
 }
 
-bool Scheduler::deserialize(String& json, uint16_t event)
+bool Scheduler::deserialize(String& json, uint32_t event)
 {
   return Scheduler::deserialize(json.c_str(), event);
 }
 
-bool Scheduler::deserialize(const char *json, uint16_t event)
+bool Scheduler::deserialize(const char *json, uint32_t event)
 {
   // IMPROVE: work out a better value
   const size_t capacity = 1024;
@@ -229,14 +413,14 @@ bool Scheduler::deserialize(const char *json, uint16_t event)
   return false;
 }
 
-bool Scheduler::deserialize(DynamicJsonDocument &doc, uint16_t event)
+bool Scheduler::deserialize(DynamicJsonDocument &doc, uint32_t event)
 {
   JsonObject object = doc.as<JsonObject>();
 
   return Scheduler::deserialize(object, event);
 }
 
-bool Scheduler::deserialize(JsonObject &obj, uint16_t event_id)
+bool Scheduler::deserialize(JsonObject &obj, uint32_t event_id)
 {
   if(SCHEDULER_EVENT_NULL == event_id)
   {
@@ -258,46 +442,25 @@ bool Scheduler::deserialize(JsonObject &obj, uint16_t event_id)
      obj.containsKey("time") &&
      obj.containsKey("days"))
   {
-    Event *event;
-    if(findEvent(event_id, &event))
+    const char *time = obj["time"].as<const char *>();
+    const char *state = obj["state"].as<const char *>();
+
+    uint8_t days = SCHEDULER_REPEAT;
+
+    for (JsonVariant value : obj["days"].as<JsonArray>())
     {
-      event->setId(event_id);
-      event->setTime(obj["time"].as<const char *>());
-      DBUGVAR(event->getHours());
-      DBUGVAR(event->getMinutes());
-      DBUGVAR(event->getSeconds());
-      event->setState(obj["state"].as<const char *>());
-
-      uint8_t days = SCHEDULER_REPEAT;
-
-      for (JsonVariant value : obj["days"].as<JsonArray>())
-      {
-        const char *day = value.as<const char *>();
-        DBUGVAR(day);
-        // Cheat and just check the min chars we need
-        switch(day[0])
-        {
-          case 'm':
-            days |= SCHEDULER_DAY_MONDAY;
-            break;
-          case 't':
-            days |= 'u' == day[1] ? SCHEDULER_DAY_TUESDAY : SCHEDULER_DAY_THURSDAY;
-            break;
-          case 'w':
-            days |= SCHEDULER_DAY_WEDNESDAY;
-            break;
-          case 'f':
-            days |= SCHEDULER_DAY_FRIDAY;
-            break;
-          case 's':
-            days |= 'a' == day[1] ? SCHEDULER_DAY_SATURDAY : SCHEDULER_DAY_SUNDAY;
-            break;
+      String day = value.as<String>();
+      DBUGVAR(day);
+      for(int i = 0; i < SCHEDULER_DAYS_IN_A_WEEK; i++) {
+        if(day == days_of_the_week_strings[i]) {
+          days |= 1 << i;
         }
       }
+    }
 
-      DBUGVAR(days);
-      event->setDays(days);
+    DBUGVAR(days);
 
+    if(addEvent(event_id, time, days, state)) {
       return true;
     }
   }
@@ -336,7 +499,7 @@ bool Scheduler::serialize(DynamicJsonDocument &doc)
   return true;
 }
 
-bool Scheduler::serialize(String& json, uint16_t event)
+bool Scheduler::serialize(String& json, uint32_t event)
 {
   // IMPROVE: do a better calculation of required space
   const size_t capacity = 4096;
@@ -351,13 +514,13 @@ bool Scheduler::serialize(String& json, uint16_t event)
   return false;
 }
 
-bool Scheduler::serialize(DynamicJsonDocument &doc, uint16_t event)
+bool Scheduler::serialize(DynamicJsonDocument &doc, uint32_t event)
 {
   JsonObject object = doc.to<JsonObject>();
   return serialize(object, event);
 }
 
-bool Scheduler::serialize(JsonObject &object, uint16_t id)
+bool Scheduler::serialize(JsonObject &object, uint32_t id)
 {
   Scheduler::Event *event = NULL;
 
@@ -379,26 +542,10 @@ bool Scheduler::serialize(JsonObject &object, Scheduler::Event *event)
   object["state"] = event->getStateText();
   object["time"] = event->getTime();
   JsonArray days = object.createNestedArray("days");
-  if(event->getDays() & SCHEDULER_DAY_MONDAY) {
-    days.add("monday");
-  }
-  if(event->getDays() & SCHEDULER_DAY_TUESDAY) {
-    days.add("tuesday");
-  }
-  if(event->getDays() & SCHEDULER_DAY_WEDNESDAY) {
-    days.add("wednesday");
-  }
-  if(event->getDays() & SCHEDULER_DAY_THURSDAY) {
-    days.add("thursday");
-  }
-  if(event->getDays() & SCHEDULER_DAY_FRIDAY) {
-    days.add("friday");
-  }
-  if(event->getDays() & SCHEDULER_DAY_SATURDAY) {
-    days.add("saturday");
-  }
-  if(event->getDays() & SCHEDULER_DAY_SUNDAY) {
-    days.add("sunday");
+  for(int day = 0; day < SCHEDULER_DAYS_IN_A_WEEK; day++) {
+    if(event->getDays() & 1<<day) {
+      days.add(days_of_the_week_strings[day]);
+    }
   }
 
   return true;

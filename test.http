@@ -388,17 +388,29 @@ Content-Type: application/json
 
 [
   {
-    "state": "active",
-    "time": "10:00:00",
+    "state": "disable",
+    "time": "20:00:00",
     "days": [
-      "monday"
+      "monday",
+      "tuesday",
+      "wednesday",
+      "thursday",
+      "friday",
+      "saturday",
+      "sunday"
     ]
   },
   {
-    "state": "disabled",
-    "time": "10:30:00",
+    "state": "active",
+    "time": "19:30:00",
     "days": [
-      "monday"
+      "monday",
+      "tuesday",
+      "wednesday",
+      "thursday",
+      "friday",
+      "saturday",
+      "sunday"
     ]
   }
 ]
@@ -434,5 +446,32 @@ Content-Type: application/json
   "time": "10:30:00",
   "days": [
     "monday"
+  ]
+}
+
+###
+
+# Create a new event to start the charge
+POST {{baseUrl}}/schedule/3 HTTP/1.1
+Content-Type: application/json
+
+{
+  "state": "active",
+  "time": "10:00:00",
+  "days": [
+    "tuesday"
+  ]
+}
+
+###
+
+POST {{baseUrl}}/schedule HTTP/1.1
+Content-Type: application/json
+
+{
+  "state": "disabled",
+  "time": "10:30:00",
+  "days": [
+    "tuesday"
   ]
 }

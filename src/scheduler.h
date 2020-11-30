@@ -10,39 +10,141 @@
 #define SCHEDULER_MAX_EVENTS 50
 #endif // !SCHEDULER_MAX_EVENTS
 
-#define SCHEDULER_DAY_MONDAY      (1 << 0)
-#define SCHEDULER_DAY_TUESDAY     (1 << 1)
-#define SCHEDULER_DAY_WEDNESDAY   (1 << 2)
-#define SCHEDULER_DAY_THURSDAY    (1 << 3)
-#define SCHEDULER_DAY_FRIDAY      (1 << 4)
-#define SCHEDULER_DAY_SATURDAY    (1 << 5)
-#define SCHEDULER_DAY_SUNDAY      (1 << 6)
+#define SCHEDULER_DAYS_IN_A_WEEK 7 // 7 days a week
+
+#define SCHEDULER_DAY_SUNDAY      (1 << 0)
+#define SCHEDULER_DAY_MONDAY      (1 << 1)
+#define SCHEDULER_DAY_TUESDAY     (1 << 2)
+#define SCHEDULER_DAY_WEDNESDAY   (1 << 3)
+#define SCHEDULER_DAY_THURSDAY    (1 << 4)
+#define SCHEDULER_DAY_FRIDAY      (1 << 5)
+#define SCHEDULER_DAY_SATURDAY    (1 << 6)
 #define SCHEDULER_REPEAT          (1 << 7)
 
-#define SCHEDULER_EVENT_NULL      ((uint16_t)0)
+#define SCHEDULER_EVENT_NULL      ((uint32_t)0)
 
 class Scheduler : public MicroTasks::Task
 {
   public:
+    class Event;
+    class EventInstance
+    {
+      private:
+        Event *_event;
+        int _day;
+      public:
+        EventInstance() :
+          _event(NULL), _day(0) { }
+        EventInstance(Event &event, int day) :
+          _event(&event), _day(day) { }
+        EventInstance(Event *event, int day) :
+          _event(event), _day(day) { }
+
+        EventInstance &operator=(const EventInstance &rhs) {
+          _event = rhs._event;
+          _day = rhs._day;
+          return *this;
+        };
+
+        void moveToNext() {
+          if(isValid()) {
+            *this = getNext();
+          }
+        }
+
+        EventInstance& operator++() {
+          moveToNext();
+          return *this;
+        }
+
+        bool operator==(const EventInstance &rhs) const {
+          return _event == rhs._event && _day == rhs._day;
+        };
+
+        bool operator!=(const EventInstance &rhs) const {
+          return !(*this == rhs);
+        };
+
+        bool operator==(const EventInstance *rhs) const {
+          return _event == rhs->_event && _day == rhs->_day;
+        };
+
+        bool operator!=(const EventInstance *rhs) const {
+          return !(*this == rhs);
+        };
+
+        Event *getEvent() {
+          return _event;
+        }
+
+        int getDay() {
+          return _day;
+        }
+
+        uint32_t getStartOffset() {
+          return _event->getOffset();
+        }
+
+        int32_t getStartOffset(int fromDay, int dayOffset = 0);
+
+        uint32_t getEndOffset() {
+          return getStartOffset() + getDuration();
+        }
+
+        int32_t getEndOffset(int fromDay, int dayOffset = 0) {
+          return getStartOffset(fromDay, dayOffset) + getDuration();
+        }
+
+        uint32_t getDuration();
+
+        bool isValid() {
+          return NULL != _event;
+        };
+
+        void invalidate() {
+          _event = NULL;
+        }
+
+        void setEvent(Event *event, int day) {
+          _event = event;
+          _day = day;
+        };
+
+        void setNext(Event *event, int day) {
+          EventInstance e(event, day);
+          setNext(e);
+        };
+
+        void setNext(EventInstance &e) {
+          _event->setNext(_day, e);
+        };
+
+        EventInstance &getNext() {
+          return _event->getNext(_day);
+        }
+    };
+
     class Event
     {
       private:
-        static uint16_t _next_id;
-        uint16_t _id;
-        uint16_t _seconds;
+        static uint32_t _next_id;
+        uint32_t _id;
+        uint32_t _seconds;
         uint8_t _days;
         uint8_t _state;
         time_t _next;
+
+        EventInstance _nextEvents[SCHEDULER_DAYS_IN_A_WEEK];
       public:
         Event();
-        Event(uint16_t id, uint16_t second, uint8_t days, EvseState state);
+        Event(uint32_t id, uint32_t second, uint8_t days, EvseState state);
         Event(uint8_t hour, uint8_t minute, uint8_t second, uint8_t days, bool repeat, EvseState state);
-        Event(uint16_t id, uint8_t hour, uint8_t minute, uint8_t second, uint8_t days, bool repeat, EvseState state);
+        Event(uint32_t id, uint8_t hour, uint8_t minute, uint8_t second, uint8_t days, bool repeat, EvseState state);
 
-        uint16_t getId() {
+        uint32_t getId() {
           return _id;
         };
-        void setId(uint16_t id);
+        void setId(uint32_t id);
 
         uint8_t getDays() {
           return _days;
@@ -56,23 +158,26 @@ class Scheduler : public MicroTasks::Task
         void setState(EvseState state) {
           _state = state;
         }
-        uint16_t getSeconds() {
+        uint32_t getSeconds() {
           return _seconds % 60;
         };
-        void setSeconds(uint16_t seconds) {
+        void setSeconds(uint32_t seconds) {
           _seconds = (getHours() * 3600) + (getMinutes() * 60) + seconds;
         }
-        uint16_t getMinutes() {
+        uint32_t getMinutes() {
           return (_seconds / 60) % 60;
         };
-        void setMinutes(uint16_t minutes) {
+        void setMinutes(uint32_t minutes) {
           _seconds = (getHours() * 3600) + (minutes * 60) + getSeconds();
         }
-        uint16_t getHours() {
+        uint32_t getHours() {
           return _seconds / 3600;
         };
-        void setHours(uint16_t hours) {
+        void setHours(uint32_t hours) {
           _seconds = (hours * 3600) + (getMinutes() * 60) + getSeconds();
+        }
+        uint32_t getOffset() {
+          return _seconds;
         }
 
         String getTime();
@@ -80,7 +185,7 @@ class Scheduler : public MicroTasks::Task
           return setTime(time.c_str());
         }
         bool setTime(const char *time);
-        void setTime(uint16_t hours, uint16_t seconds, uint16_t minutes);
+        void setTime(uint32_t hours, uint32_t seconds, uint32_t minutes);
 
         const char *getStateText();
         bool setState(String &state) {
@@ -95,14 +200,27 @@ class Scheduler : public MicroTasks::Task
         void invalidate() {
           _id = SCHEDULER_EVENT_NULL;
         }
+
+        // List management
+        void setNext(int day, EventInstance &event) {
+          _nextEvents[day] = event;
+        }
+
+        EventInstance &getNext(int day) {
+          return _nextEvents[day];
+        }
     };
 
   private:
     EvseManager *_evse;
     Event _events[SCHEDULER_MAX_EVENTS];
 
-    bool getNextEvent(Event **event);
-    bool findEvent(uint16_t id, Event **event);
+    EventInstance _firstEvent;
+    EventInstance _activeEvent;
+
+    void buildSchedule();
+    EventInstance &getCurrentEvent();
+    bool findEvent(uint32_t id, Event **event);
     bool serialize(JsonObject &obj, Event *event);
 
   protected:
@@ -113,28 +231,28 @@ class Scheduler : public MicroTasks::Task
 
     bool begin();
 
-    bool addEvent(uint8_t hour, uint8_t minute, uint8_t second, uint8_t days, bool repeat, EvseState state, uint16_t &id);
+    bool addEvent(uint32_t id, const char *time, uint8_t days, const char *state);
     bool addEvent(String& json);
     bool addEvent(const char *json);
     bool addEvent(DynamicJsonDocument &doc);
 
-    bool removeEvent(uint16_t id);
+    bool removeEvent(uint32_t id);
 
     bool deserialize(String& json);
     bool deserialize(const char *json);
     bool deserialize(DynamicJsonDocument &doc);
 
-    bool deserialize(String& json, uint16_t event);
-    bool deserialize(const char *json, uint16_t event);
-    bool deserialize(DynamicJsonDocument &doc, uint16_t event);
-    bool deserialize(JsonObject &obj, uint16_t event);
+    bool deserialize(String& json, uint32_t event);
+    bool deserialize(const char *json, uint32_t event);
+    bool deserialize(DynamicJsonDocument &doc, uint32_t event);
+    bool deserialize(JsonObject &obj, uint32_t event);
 
     bool serialize(String& json);
     bool serialize(DynamicJsonDocument &doc);
 
-    bool serialize(String& json, uint16_t event);
-    bool serialize(DynamicJsonDocument &doc, uint16_t event);
-    bool serialize(JsonObject &obj, uint16_t event);
+    bool serialize(String& json, uint32_t event);
+    bool serialize(DynamicJsonDocument &doc, uint32_t event);
+    bool serialize(JsonObject &obj, uint32_t event);
 };
 
 extern Scheduler scheduler;
