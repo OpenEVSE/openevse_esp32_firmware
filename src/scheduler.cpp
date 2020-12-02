@@ -124,6 +124,17 @@ int32_t Scheduler::EventInstance::getStartOffset(int fromDay, int dayOffset) {
   return (offsetInDays * 24 * 60 * 60) + getStartOffset();
 }
 
+uint32_t Scheduler::EventInstance::getDelay(int fromDay, uint32_t fromOffset)
+{
+  int delayDays = _day - fromDay;
+  if(delayDays < 0) {
+    delayDays += SCHEDULER_DAYS_IN_A_WEEK;
+  }
+
+  uint32_t delay = (delayDays * 24 * 60 * 60) + (getStartOffset() - fromOffset);
+  return delay;
+}
+
 Scheduler::Scheduler(EvseManager &evse) :
   _evse(&evse)
 {
@@ -141,10 +152,29 @@ unsigned long Scheduler::loop(MicroTasks::WakeReason reason)
 
   if(currentEvent != _activeEvent)
   {
+    // We need to change state
+    if(currentEvent.isValid())
+    {
+      EvseProperties properties(currentEvent.getState());
+      _evse->claim(EvseClient_OpenEVSE_Schedule, EvseManager_Priority_Timer, properties);
+    } else {
+      // No scheduled events, release any claims
+      _evse->release(EvseClient_OpenEVSE_Schedule);
+    }
 
+    _activeEvent = currentEvent;
   }
 
-  return MicroTask.Infinate;
+  int currentDay;
+  int32_t currentOffset;
+
+  uint32_t delay = MicroTask.Infinate;
+  if(_activeEvent.isValid())
+  {
+    Scheduler::getCurrentTime(currentDay, currentOffset);
+    delay = _activeEvent.getNext().getDelay(currentDay, currentOffset) * 1000;
+  }
+  return delay;
 }
 
 bool Scheduler::begin()
@@ -236,19 +266,10 @@ void Scheduler::buildSchedule()
 
 Scheduler::EventInstance &Scheduler::getCurrentEvent()
 {
-  timeval utc_time;
-  gettimeofday(&utc_time, NULL);
+  int currentDay;
+  int32_t currentOffset;
 
-  tm local_time;
-  localtime_r(&utc_time.tv_sec, &local_time);
-
-  DBUGF("Local time: %s", time_format_time(local_time).c_str());
-
-  int currentDay = local_time.tm_wday;
-  int32_t currentOffset =
-    (local_time.tm_hour * 3600) +
-    (local_time.tm_min * 60) +
-    local_time.tm_sec;
+  Scheduler::getCurrentTime(currentDay, currentOffset);
 
   DBUGVAR(currentDay);
   DBUGVAR(currentOffset);
@@ -556,4 +577,21 @@ bool Scheduler::serialize(JsonObject &object, Scheduler::Event *event)
   }
 
   return true;
+}
+
+void Scheduler::getCurrentTime(int &day, int32_t &offset)
+{
+  timeval utc_time;
+  gettimeofday(&utc_time, NULL);
+
+  tm local_time;
+  localtime_r(&utc_time.tv_sec, &local_time);
+
+  DBUGF("Local time: %s", time_format_time(local_time).c_str());
+
+  day = local_time.tm_wday;
+  offset =
+    (local_time.tm_hour * 3600) +
+    (local_time.tm_min * 60) +
+    local_time.tm_sec;
 }

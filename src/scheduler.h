@@ -96,6 +96,11 @@ class Scheduler : public MicroTasks::Task
         }
 
         uint32_t getDuration();
+        uint32_t getDelay(int fromDay, uint32_t fromOffset);
+
+        EvseState getState() {
+          return isValid() ? EvseState_NULL : _event->getState();
+        }
 
         bool isValid() {
           return NULL != _event;
@@ -253,6 +258,8 @@ class Scheduler : public MicroTasks::Task
     bool serialize(String& json, uint32_t event);
     bool serialize(DynamicJsonDocument &doc, uint32_t event);
     bool serialize(JsonObject &obj, uint32_t event);
+
+    static void getCurrentTime(int &day, int32_t &offset);
 };
 
 extern Scheduler scheduler;

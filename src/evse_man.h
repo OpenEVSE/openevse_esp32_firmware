@@ -22,8 +22,7 @@ typedef uint32_t EvseClient;
 #define EvseClient_OpenEVSE_Manual            EVC(EvseClient_Vendor_OpenEVSE, 0x0001)
 #define EvseClient_OpenEVSE_Divert            EVC(EvseClient_Vendor_OpenEVSE, 0x0002)
 #define EvseClient_OpenEVSE_Boost             EVC(EvseClient_Vendor_OpenEVSE, 0x0003)
-#define EvseClient_OpenEVSE_Schedule_On       EVC(EvseClient_Vendor_OpenEVSE, 0x0004)
-#define EvseClient_OpenEVSE_Schedule_Off      EVC(EvseClient_Vendor_OpenEVSE, 0x0005)
+#define EvseClient_OpenEVSE_Schedule          EVC(EvseClient_Vendor_OpenEVSE, 0x0004)
 #define EvseClient_OpenEVSE_Limit             EVC(EvseClient_Vendor_OpenEVSE, 0x0006)
 #define EvseClient_OpenEVSE_Error             EVC(EvseClient_Vendor_OpenEVSE, 0x0007)
 #define EvseClient_OpenEVSE_Ohm               EVC(EvseClient_Vendor_OpenEVSE, 0x0008)
@@ -72,7 +71,7 @@ class EvseProperties
       _state = state;
     }
 
-    // Get/set charge current, 
+    // Get/set charge current,
     uint32_t getChargeCurrent() {
       return _charge_current;
     }
@@ -81,7 +80,7 @@ class EvseProperties
     }
 
     // Get/set the max current, overides limits the charge current (irrespective of priority) but
-    // does not override the configured max charge current of the hardware. 
+    // does not override the configured max charge current of the hardware.
     uint32_t getMaxCurrent() {
       return _max_current;
     }
@@ -89,7 +88,7 @@ class EvseProperties
       _max_current = max_current;
     }
 
-    // Get/set the energy max to transfer for this charge session/client, after which the default 
+    // Get/set the energy max to transfer for this charge session/client, after which the default
     // session state will be set to EvseState_Disabled and the client automatically released.
     uint32_t getEnergyLimit() {
       return _energy_limit;
@@ -137,7 +136,7 @@ class EvseManager : public MicroTasks::Task
   protected:
     void setup();
     unsigned long loop(MicroTasks::WakeReason reason);
-    
+
   public:
     EvseManager(Stream &port);
     ~EvseManager();
