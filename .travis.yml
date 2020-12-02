@@ -34,7 +34,10 @@ env:
   - PIO_ENV=openevse_esp-wrover-kit_idf
   - PIO_ENV=openevse_huzzah32
   - PIO_ENV=openevse_huzzah32_idf
+  - PIO_ENV=openevse_huzzah32_dev
+  - PIO_ENV=openevse_huzzah32_idf_dev
   - PIO_ENV=openevse_featheresp32
+  - PIO_ENV=openevse_wifi_v1
   - PIO_ENV=openevse_esp32-gateway
   - PIO_ENV=openevse_esp32-gateway-e
   - PIO_ENV=openevse_esp32-heltec-wifi-lora-v2

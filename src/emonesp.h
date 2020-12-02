@@ -8,16 +8,6 @@
 #include "debug.h"
 #include "profile.h"
 
-#ifndef RAPI_PORT
-#ifdef ESP32
-#define RAPI_PORT Serial1
-#elif defined(ESP8266)
-#define RAPI_PORT Serial
-#else
-#error Platform not supported
-#endif
-#endif
-
 #ifdef WIFI_LED
 #ifndef WIFI_LED_ON_STATE
 #define WIFI_LED_ON_STATE LOW
