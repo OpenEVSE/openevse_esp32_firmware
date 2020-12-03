@@ -127,12 +127,47 @@ class EvseManager : public MicroTasks::Task
   private:
     RapiSender _sender;
 
-    class Claims {
+    class Claims
+    {
+      private:
+        EvseClient _client;
+        int _priority;
+        EvseProperties _properties;
+
+      public:
+        Claims();
+
+        void claim(EvseClient client, int priority, EvseProperties &target);
+        void release();
+
+        bool isValid() {
+          return _client == EvseClient_NULL;
+        }
+
+        bool operator==(EvseClient rhs) const {
+          return _client == rhs;
+        };
 
     };
 
     Claims _clients[EVSE_MANAGER_MAX_CLIENT_CLAIMS];
 
+    class EvseStateEvent : public MicroTasks::Event
+    {
+      private:
+        uint8_t _state;
+      public:
+        EvseStateEvent();
+        void setState(uint8_t state) {
+          _state = state;
+          Trigger();
+        }
+        uint8_t getState() {
+          return _state;
+        }
+    } _state;
+
+    MicroTasks::EventListener _evseStateListener;
   protected:
     void setup();
     unsigned long loop(MicroTasks::WakeReason reason);
@@ -153,9 +188,19 @@ class EvseManager : public MicroTasks::Task
     uint32_t getEnergyLimit(EvseClient client = EvseClient_NULL);
     uint32_t getTimeLimit(EvseClient client = EvseClient_NULL);
 
+    // Evse Status
+    uint8_t getEvseState() {
+      return _state.getState();
+    }
+
     // Temp until everything uses EvseManager
     RapiSender &getSender() {
       return _sender;
+    }
+
+    // Register for events
+    void onStateChange(MicroTasks::EventListener *listner) {
+      _state.Register(listner);
     }
 };
 

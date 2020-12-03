@@ -165,27 +165,6 @@ loop() {
       }
     }
   }
-  else
-  {
-    // Check if we can talk to OpenEVSE
-    if ((millis() - Timer3) >= 1000)
-    {
-      // Check state the OpenEVSE is in.
-      OpenEVSE.begin(rapiSender, [](bool connected)
-      {
-        if(connected)
-        {
-          OpenEVSE.getStatus([](int ret, uint8_t evse_state, uint32_t session_time, uint8_t pilot_state, uint32_t vflags) {
-            state = evse_state;
-            ledManager.setEvseState(evse_state);
-          });
-        } else {
-          DBUGLN("OpenEVSE not responding or not connected");
-        }
-      });
-      Timer3 = millis();
-    }
-  }
 
   if(net_is_connected())
   {

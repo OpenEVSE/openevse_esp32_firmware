@@ -5,7 +5,6 @@
 #include <Arduino.h>
 #include <ArduinoJson.h>
 
-
 #include "emonesp.h"
 #include "input.h"
 #include "app_config.h"
@@ -78,6 +77,39 @@ long stuck_count = 0;
 // OpenEVSE Usage Statistics
 long wattsec = 0;
 long watthour_total = 0;
+
+class InputTask : public MicroTasks::Task
+{
+  private:
+    MicroTasks::EventListener _evseState;
+  protected:
+    void setup() 
+    {
+      evse.onStateChange(&_evseState);
+    }
+
+    unsigned long loop(MicroTasks::WakeReason reason)
+    {
+      if(_evseState.IsTriggered())
+      {
+        state = evse.getEvseState();
+        ledManager.setEvseState(state);
+
+        // Send to all clients
+        StaticJsonDocument<32> event;
+        event["state"] = state;
+        event_send(event);
+      }
+
+      return MicroTask.Infinate;
+    }
+  public:
+    InputTask() :
+      _evseState(this)
+    {
+
+    }
+} input;
 
 void create_rapi_json(JsonDocument &doc)
 {
@@ -307,18 +339,7 @@ void input_setup()
   }
 #endif
 
-  OpenEVSE.onState([](uint8_t evse_state, uint8_t pilot_state, uint32_t current_capacity, uint32_t vflags)
-  {
-    // Update our global state
-    DBUGVAR(evse_state);
-    state = evse_state;
-    ledManager.setEvseState(evse_state);
-
-    // Send to all clients
-    StaticJsonDocument<32> event;
-    event["state"] = state;
-    event_send(event);
-  });
+  MicroTask.startTask(input);
 
   OpenEVSE.onWiFi([](uint8_t wifiMode)
   {
