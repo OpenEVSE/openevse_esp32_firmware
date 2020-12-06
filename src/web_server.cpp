@@ -584,6 +584,7 @@ handleStatus(MongooseHttpServerRequest *request) {
   doc["comm_sent"] = rapiSender.getSent();
   doc["comm_success"] = rapiSender.getSuccess();
   doc["rapi_connected"] = (int)rapiSender.isConnected();
+  doc["evse_connected"] = (int)evse.isConnected();
 
   create_rapi_json(doc);
 
