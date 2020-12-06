@@ -6,8 +6,6 @@
 
 #define LCD_MAX_LEN 16
 
-extern RapiSender rapiSender;
-
 typedef struct Message_s Message;
 
 struct Message_s

@@ -53,8 +53,6 @@ time_t min_charge_end = 0;
 
 bool divert_active = false;
 
-extern RapiSender rapiSender;
-
 // define as 'weak' so the simulator can override
 time_t __attribute__((weak)) divertmode_get_time()
 {

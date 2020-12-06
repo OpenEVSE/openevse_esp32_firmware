@@ -189,6 +189,9 @@ class EvseManager : public MicroTasks::Task
     uint32_t getTimeLimit(EvseClient client = EvseClient_NULL);
 
     // Evse Status
+    bool isConnected() {
+      return OpenEVSE.isConnected();
+    }
     uint8_t getEvseState() {
       return _state.getState();
     }

@@ -90,6 +90,13 @@ class InputTask : public MicroTasks::Task
 
     unsigned long loop(MicroTasks::WakeReason reason)
     {
+      DBUG("InputTask woke: ");
+      DBUGLN(WakeReason_Scheduled == reason ? "WakeReason_Scheduled" :
+            WakeReason_Event == reason ? "WakeReason_Event" :
+            WakeReason_Message == reason ? "WakeReason_Message" :
+            WakeReason_Manual == reason ? "WakeReason_Manual" :
+            "UNKNOWN");
+
       if(_evseState.IsTriggered())
       {
         state = evse.getEvseState();

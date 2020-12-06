@@ -80,6 +80,15 @@ void EvseManager::setup()
 
 unsigned long EvseManager::loop(MicroTasks::WakeReason reason)
 {
+  DBUG("EVSE manager woke: ");
+  DBUG(WakeReason_Scheduled == reason ? "WakeReason_Scheduled" :
+       WakeReason_Event == reason ? "WakeReason_Event" :
+       WakeReason_Message == reason ? "WakeReason_Message" :
+       WakeReason_Manual == reason ? "WakeReason_Manual" :
+       "UNKNOWN");
+  DBUG(" connected: ");
+  DBUGLN(OpenEVSE.isConnected());
+
   if(!OpenEVSE.isConnected())
   {
     // Check state the OpenEVSE is in.
@@ -88,6 +97,7 @@ unsigned long EvseManager::loop(MicroTasks::WakeReason reason)
       if(connected)
       {
         OpenEVSE.getStatus([this](int ret, uint8_t evse_state, uint32_t session_time, uint8_t pilot_state, uint32_t vflags) {
+          DBUGVAR(evse_state);
           _state.setState(evse_state);
         });
       } else {

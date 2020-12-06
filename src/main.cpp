@@ -55,7 +55,7 @@
 EvseManager evse(RAPI_PORT);
 Scheduler scheduler(evse);
 
-RapiSender rapiSender = evse.getSender();
+RapiSender &rapiSender = evse.getSender();
 
 unsigned long Timer1; // Timer for events once every 30 seconds
 unsigned long Timer3; // Timer for events once every 2 seconds
