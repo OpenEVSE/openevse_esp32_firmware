@@ -125,9 +125,7 @@ class EvseProperties
 class EvseManager : public MicroTasks::Task
 {
   private:
-    RapiSender _sender;
-
-    class Claims
+    class Claim
     {
       private:
         EvseClient _client;
@@ -135,7 +133,7 @@ class EvseManager : public MicroTasks::Task
         EvseProperties _properties;
 
       public:
-        Claims();
+        Claim();
 
         void claim(EvseClient client, int priority, EvseProperties &target);
         void release();
@@ -148,26 +146,80 @@ class EvseManager : public MicroTasks::Task
           return _client == rhs;
         };
 
-    };
+        int getPriority() {
+          return _priority;
+        }
 
-    Claims _clients[EVSE_MANAGER_MAX_CLIENT_CLAIMS];
+        EvseState getState() {
+          return _properties.getState();
+        }
+
+        uint32_t getChargeCurrent() {
+          return _properties.getChargeCurrent();
+        }
+
+        uint32_t getMaxCurrent() {
+          return _properties.getMaxCurrent();
+        }
+
+        uint32_t getEnergyLimit() {
+          return _properties.getEnergyLimit();
+        }
+
+        uint32_t getTimeLimit() {
+          return _properties.getTimeLimit();
+        }
+
+        bool getAutoRelease() {
+          return _properties.getAutoRelease();
+        }
+    };
 
     class EvseStateEvent : public MicroTasks::Event
     {
       private:
-        uint8_t _state;
+        uint8_t _evse_state;
+        uint8_t _pilot_state;
       public:
         EvseStateEvent();
-        void setState(uint8_t state) {
-          _state = state;
+        void setState(uint8_t evse_state, uint8_t pilot_state)
+        {
+          _evse_state = evse_state;
+          _pilot_state = pilot_state;
           Trigger();
         }
         uint8_t getState() {
-          return _state;
+          return _evse_state;
         }
-    } _state;
 
+        EvseState getEvseState() {
+          return isDisabled() ? EvseState_Disabled : EvseState_Active;
+        }
+        bool isActive() {
+          return OPENEVSE_STATE_NOT_CONNECTED <= _evse_state && _evse_state <= OPENEVSE_STATE_CHARGING;
+        }
+        bool isDisabled() {
+          return OPENEVSE_STATE_SLEEPING <= _evse_state;
+        }
+        bool isError() {
+          return OPENEVSE_STATE_VENT_REQUIRED <= _evse_state && _evse_state <= OPENEVSE_STATE_OVER_CURRENT;
+        }
+    };
+
+    RapiSender _sender;
+
+    Claim _clients[EVSE_MANAGER_MAX_CLIENT_CLAIMS];
+
+    EvseStateEvent _state;
     MicroTasks::EventListener _evseStateListener;
+
+    bool _sleepForDisable;
+
+    void initialiseEvse();
+    bool findClaim(EvseClient client, Claim **claim = NULL);
+    bool evaluateClaims(EvseProperties &properties);
+
+    void setEvseState(EvseState state);
   protected:
     void setup();
     unsigned long loop(MicroTasks::WakeReason reason);
