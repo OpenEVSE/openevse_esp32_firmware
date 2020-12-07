@@ -136,7 +136,10 @@ uint32_t Scheduler::EventInstance::getDelay(int fromDay, uint32_t fromOffset)
 }
 
 Scheduler::Scheduler(EvseManager &evse) :
-  _evse(&evse)
+  _evse(&evse),
+  _events(),
+  _firstEvent(),
+  _activeEvent()
 {
 
 }
@@ -148,17 +151,35 @@ void Scheduler::setup()
 
 unsigned long Scheduler::loop(MicroTasks::WakeReason reason)
 {
-  EventInstance currentEvent = getCurrentEvent();
+  EventInstance &currentEvent = getCurrentEvent();
+
+  DBUGF("Current event %d: %s %s %s",
+    currentEvent.isValid() ? currentEvent.getEvent()->getId() : -1,
+    currentEvent.isValid() ? days_of_the_week_strings[currentEvent.getDay()] : "none",
+    currentEvent.isValid() ? currentEvent.getEvent()->getTime().c_str() : "none",
+    currentEvent.isValid() ? currentEvent.getEvent()->getStateText() : "none");
+
+  DBUGF("Active event %d: %s %s %s",
+    _activeEvent.isValid() ? _activeEvent.getEvent()->getId() : -1,
+    _activeEvent.isValid() ? days_of_the_week_strings[_activeEvent.getDay()] : "none",
+    _activeEvent.isValid() ? _activeEvent.getEvent()->getTime().c_str() : "none",
+    _activeEvent.isValid() ? _activeEvent.getEvent()->getStateText() : "none");
 
   if(currentEvent != _activeEvent)
   {
+    DBUG("New event: ");
+
     // We need to change state
     if(currentEvent.isValid())
     {
+      DBUGF("Starting %s (%d) claim",
+        currentEvent.getEvent()->getStateText(),
+        currentEvent.getState());
       EvseProperties properties(currentEvent.getState());
       _evse->claim(EvseClient_OpenEVSE_Schedule, EvseManager_Priority_Timer, properties);
     } else {
       // No scheduled events, release any claims
+      DBUGLN("releasing claims");
       _evse->release(EvseClient_OpenEVSE_Schedule);
     }
 

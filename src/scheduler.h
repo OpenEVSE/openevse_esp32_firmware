@@ -99,7 +99,7 @@ class Scheduler : public MicroTasks::Task
         uint32_t getDelay(int fromDay, uint32_t fromOffset);
 
         EvseState getState() {
-          return isValid() ? EvseState_NULL : _event->getState();
+          return isValid() ? _event->getState() : EvseState_NULL;
         }
 
         bool isValid() {
