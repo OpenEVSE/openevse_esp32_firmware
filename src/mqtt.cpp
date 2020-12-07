@@ -57,11 +57,16 @@ void mqttmsg_callback(MongooseString topic, MongooseString payload) {
     divert_update_state();
   }
   else if (topic_string == mqtt_vrms){
-    voltage = payload_str.toFloat();
-    DBUGF("voltage:%.1f", voltage);
-    OpenEVSE.setVoltage(voltage, [](int ret) {
-      // Only gives better power calculations so not critical if this fails
-    });
+    double volts = payload_str.toFloat();
+    if (volts > 0.0) {
+      voltage = volts;
+      DBUGF("voltage:%.1f", voltage);
+      OpenEVSE.setVoltage(voltage, [](int ret) {
+        // Only gives better power calculations so not critical if this fails
+      });
+    } else {
+      DBUGLN("Ignoring voltage (was <= 0.0)")
+    }
   }
   // If MQTT message to set divert mode is received
   else if (topic_string == mqtt_topic + "/divertmode/set"){
