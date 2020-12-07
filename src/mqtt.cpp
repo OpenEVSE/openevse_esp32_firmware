@@ -57,17 +57,15 @@ void mqttmsg_callback(MongooseString topic, MongooseString payload) {
     divert_update_state();
   }
   else if (topic_string == mqtt_vrms){
-    // TODO: The voltage is no longer a global, need to do something so we don't have 
-    //       to read back from the EVSE
     double volts = payload_str.toFloat();
-    if (volts >= 60.0 && volts <= 300.0) {
-      // voltage = volts;
-      DBUGF("voltage:%.1f", volts);
-      OpenEVSE.setVoltage(volts, [](int ret) {
+    if (volts > 0.0) {
+      voltage = volts;
+      DBUGF("voltage:%.1f", voltage);
+      OpenEVSE.setVoltage(voltage, [](int ret) {
         // Only gives better power calculations so not critical if this fails
       });
     } else {
-      DBUGF("voltage:%.1f (ignoring, out of range)", volts);
+      DBUGLN("Ignoring voltage (was <= 0.0)")
     }
   }
   // If MQTT message to set divert mode is received
