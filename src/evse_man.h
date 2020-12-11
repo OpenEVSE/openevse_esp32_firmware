@@ -44,11 +44,46 @@ typedef uint32_t EvseClient;
 #define EVSE_MANAGER_MAX_CLIENT_CLAIMS 10
 #endif // !EVSE_MANAGER_MAX_CLIENT_CLAIMS
 
-typedef enum {
-  EvseState_Active,
-  EvseState_Disabled,
-  EvseState_NULL
-} EvseState;
+class EvseState
+{
+  public:
+    enum Value : uint8_t {
+      None,
+      Active,
+      Disabled
+    };
+
+  EvseState() = default;
+  constexpr EvseState(Value value) : _value(value) { }
+
+  bool fromString(const char *value)
+  {
+    // Cheat a bit and just check the first char
+    if('a' == value[0] || 'd' == value[0]) {
+      _value = 'a' == value[0] ? EvseState::Active : EvseState::Disabled;
+      return true;
+    }
+    return false;
+  }
+
+  const char *toString()
+  {
+    return EvseState::Active == _value ? "active" :
+           EvseState::Disabled == _value ? "disabled" :
+           EvseState::None == _value ? "none" :
+           "unknown";
+  }
+
+  operator Value() const { return _value; }
+  explicit operator bool() = delete;        // Prevent usage: if(state)
+  EvseState operator= (const Value val) {
+    _value = val;
+    return *this;
+  }
+
+  private:
+    Value _value;
+};
 
 class EvseProperties
 {
@@ -62,6 +97,8 @@ class EvseProperties
   public:
     EvseProperties();
     EvseProperties(EvseState state);
+
+    void clear();
 
     // Get/set the EVSE state, either active or disabled
     EvseState getState() {
@@ -89,7 +126,7 @@ class EvseProperties
     }
 
     // Get/set the energy max to transfer for this charge session/client, after which the default
-    // session state will be set to EvseState_Disabled and the client automatically released.
+    // session state will be set to EvseState::Disabled and the client automatically released.
     uint32_t getEnergyLimit() {
       return _energy_limit;
     }
@@ -98,7 +135,7 @@ class EvseProperties
     }
 
     // Get/set the time to stop the charge session/client, after which the default session state
-    // will be set to EvseState_Disabled and the client automatically released.
+    // will be set to EvseState::Disabled and the client automatically released.
     uint32_t getTimeLimit() {
       return _time_limit;
     }
@@ -139,7 +176,7 @@ class EvseManager : public MicroTasks::Task
         void release();
 
         bool isValid() {
-          return _client == EvseClient_NULL;
+          return _client != EvseClient_NULL;
         }
 
         bool operator==(EvseClient rhs) const {
@@ -188,12 +225,15 @@ class EvseManager : public MicroTasks::Task
           _pilot_state = pilot_state;
           Trigger();
         }
-        uint8_t getState() {
+        uint8_t getEvseState() {
           return _evse_state;
         }
+        uint8_t getPilotState() {
+          return _pilot_state;
+        }
 
-        EvseState getEvseState() {
-          return isDisabled() ? EvseState_Disabled : EvseState_Active;
+        EvseState getState() {
+          return isDisabled() ? EvseState::Disabled : EvseState::Active;
         }
         bool isActive() {
           return OPENEVSE_STATE_NOT_CONNECTED <= _evse_state && _evse_state <= OPENEVSE_STATE_CHARGING;
@@ -213,13 +253,20 @@ class EvseManager : public MicroTasks::Task
     EvseStateEvent _state;
     MicroTasks::EventListener _evseStateListener;
 
+    EvseProperties _targetProperties;
+    bool _hasClaims;
+
     bool _sleepForDisable;
+
+    bool _evaluateClaims;
+    bool _evaluateTargetState;
+    int _waitingForEvent;
 
     void initialiseEvse();
     bool findClaim(EvseClient client, Claim **claim = NULL);
     bool evaluateClaims(EvseProperties &properties);
 
-    void setEvseState(EvseState state);
+    bool setTargetState(EvseProperties &properties);
   protected:
     void setup();
     unsigned long loop(MicroTasks::WakeReason reason);
@@ -245,7 +292,7 @@ class EvseManager : public MicroTasks::Task
       return OpenEVSE.isConnected();
     }
     uint8_t getEvseState() {
-      return _state.getState();
+      return _state.getEvseState();
     }
 
     // Temp until everything uses EvseManager

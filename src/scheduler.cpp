@@ -1,3 +1,6 @@
+#if defined(ENABLE_DEBUG) && !defined(ENABLE_DEBUG_SCHEDULER)
+#undef ENABLE_DEBUG
+#endif
 
 #include "debug.h"
 #include "scheduler.h"
@@ -19,7 +22,7 @@ const char * days_of_the_week_strings[] = {
 };
 
 Scheduler::Event::Event() :
-  Event(SCHEDULER_EVENT_NULL, 0, 0, EvseState_NULL)
+  Event(SCHEDULER_EVENT_NULL, 0, 0, EvseState::None)
 {
 
 }
@@ -88,19 +91,12 @@ void Scheduler::Event::setTime(uint32_t hours, uint32_t seconds, uint32_t minute
 
 const char *Scheduler::Event::getStateText()
 {
-  return EvseState_Active == _state ? "active" :
-         EvseState_Disabled == _state ? "disabled" :
-         "unknown";
+  return _state.toString();
 }
 
 bool Scheduler::Event::setState(const char *state)
 {
-  // Cheat a bit and just check the first char
-  if('a' == state[0] || 'd' == state[0]) {
-    _state = 'a' == state[0] ? EvseState_Active : EvseState_Disabled;
-    return true;
-  }
-  return false;
+  return _state.fromString(state);
 }
 
 uint32_t Scheduler::EventInstance::getDuration()
