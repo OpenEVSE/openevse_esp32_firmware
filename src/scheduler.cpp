@@ -338,7 +338,7 @@ bool Scheduler::findEvent(uint32_t id, Scheduler::Event **event)
   return false;
 }
 
-bool Scheduler::addEvent(uint32_t event_id, const char *time, uint8_t days, const char *state)
+bool Scheduler::addEventInternal(uint32_t event_id, const char *time, uint8_t days, const char *state)
 {
   Event *event;
   if(findEvent(event_id, &event))
@@ -352,8 +352,17 @@ bool Scheduler::addEvent(uint32_t event_id, const char *time, uint8_t days, cons
 
     event->setDays(days);
 
-    buildSchedule();
+    return true;
+  }
 
+  return false;
+}
+
+bool Scheduler::addEvent(uint32_t event_id, const char *time, uint8_t days, const char *state)
+{
+  if(addEventInternal(event_id, time, days, state))
+  {
+    buildSchedule();
     return true;
   }
 
@@ -414,11 +423,15 @@ bool Scheduler::deserialize(const char *json)
 
 bool Scheduler::deserialize(DynamicJsonDocument &doc)
 {
-  if (doc.is<JsonObject>()) {
-    return Scheduler::deserialize(doc, SCHEDULER_EVENT_NULL);
+  if (doc.is<JsonObject>())
+  {
+    JsonObject obj = doc.as<JsonObject>();
+    if(Scheduler::deserializeInternal(obj, SCHEDULER_EVENT_NULL)) {
+      buildSchedule();
+      return true;
+    }
   }
-
-  if(doc.is<JsonArray>())
+  else if(doc.is<JsonArray>())
   {
     JsonArray arr = doc.as<JsonArray>();
     for (JsonVariant value : arr)
@@ -426,11 +439,13 @@ bool Scheduler::deserialize(DynamicJsonDocument &doc)
       if (value.is<JsonObject>())
       {
         JsonObject obj = value.as<JsonObject>();
-        if(false == Scheduler::deserialize(obj, SCHEDULER_EVENT_NULL)) {
+        if(false == Scheduler::deserializeInternal(obj, SCHEDULER_EVENT_NULL)) {
           return false;
         }
       }
     }
+
+    buildSchedule();
     return true;
   }
 
@@ -466,6 +481,16 @@ bool Scheduler::deserialize(DynamicJsonDocument &doc, uint32_t event)
 }
 
 bool Scheduler::deserialize(JsonObject &obj, uint32_t event_id)
+{
+  if(deserializeInternal(obj, event_id)) {
+    buildSchedule();
+    return true;
+  }
+
+  return false;
+}
+
+bool Scheduler::deserializeInternal(JsonObject &obj, uint32_t event_id)
 {
   if(SCHEDULER_EVENT_NULL == event_id)
   {
