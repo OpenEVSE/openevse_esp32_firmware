@@ -1,3 +1,7 @@
+#if defined(ENABLE_DEBUG) && !defined(ENABLE_DEBUG_EVSE_MAN)
+#undef ENABLE_DEBUG
+#endif
+
 #include <openevse.h>
 
 #include "evse_man.h"

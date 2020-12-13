@@ -5,9 +5,11 @@
 #include "debug.h"
 #include "scheduler.h"
 #include "time_man.h"
+#include "emonesp.h"
 
 #include <algorithm>
 #include <vector>
+#include <LITTLEFS.h>
 
 uint32_t Scheduler::Event::_next_id = 1;
 
@@ -135,14 +137,25 @@ Scheduler::Scheduler(EvseManager &evse) :
   _evse(&evse),
   _events(),
   _firstEvent(),
-  _activeEvent()
+  _activeEvent(),
+  _loading(false)
 {
 
 }
 
 void Scheduler::setup()
 {
+  _loading = true;
 
+  // Load the schedule from storage
+  File file = LittleFS.open(SCHEDULE_PATH);
+  if(file)
+  {
+    deserialize(file);
+    file.close();
+  }
+
+  _loading = false;
 }
 
 unsigned long Scheduler::loop(MicroTasks::WakeReason reason)
@@ -168,9 +181,8 @@ unsigned long Scheduler::loop(MicroTasks::WakeReason reason)
     // We need to change state
     if(currentEvent.isValid())
     {
-      DBUGF("Starting %s (%d) claim",
-        currentEvent.getEvent()->getStateText(),
-        currentEvent.getState());
+      DBUGF("Starting %s claim",
+        currentEvent.getState().toString());
       EvseProperties properties(currentEvent.getState());
       _evse->claim(EvseClient_OpenEVSE_Schedule, EvseManager_Priority_Timer, properties);
     } else {
@@ -199,6 +211,27 @@ bool Scheduler::begin()
   MicroTask.startTask(this);
 
   return true;
+}
+
+bool Scheduler::commit()
+{
+  bool ret = false;
+
+  buildSchedule();
+
+  if(_loading) {
+    return true;
+  }
+
+  // Save the schedule to storage
+  File file = LittleFS.open(SCHEDULE_PATH, FILE_WRITE);
+  if(file)
+  {
+    ret = serialize(file);
+    file.close();
+  }
+
+  return ret;
 }
 
 void Scheduler::buildSchedule()
@@ -340,14 +373,16 @@ bool Scheduler::findEvent(uint32_t id, Scheduler::Event **event)
 
 bool Scheduler::addEventInternal(uint32_t event_id, const char *time, uint8_t days, const char *state)
 {
-  Event *event;
-  if(findEvent(event_id, &event))
+  Event *event = NULL;
+  bool foundEvent = findEvent(event_id, &event);
+  if(!foundEvent && SCHEDULER_EVENT_NULL != event_id) {
+    foundEvent = findEvent(SCHEDULER_EVENT_NULL, &event);
+  }
+
+  if(foundEvent)
   {
     event->setId(event_id);
     event->setTime(time);
-    DBUGVAR(event->getHours());
-    DBUGVAR(event->getMinutes());
-    DBUGVAR(event->getSeconds());
     event->setState(state);
 
     event->setDays(days);
@@ -362,7 +397,7 @@ bool Scheduler::addEvent(uint32_t event_id, const char *time, uint8_t days, cons
 {
   if(addEventInternal(event_id, time, days, state))
   {
-    buildSchedule();
+    commit();
     return true;
   }
 
@@ -421,14 +456,31 @@ bool Scheduler::deserialize(const char *json)
   return false;
 }
 
+bool Scheduler::deserialize(Stream &stream)
+{
+  // IMPROVE: work out a better value
+  const size_t capacity = 1024;
+  DynamicJsonDocument doc(capacity);
+
+  DeserializationError err = deserializeJson(doc, stream);
+  if(DeserializationError::Code::Ok == err) {
+    serializeJsonPretty(doc, DEBUG_PORT);
+    DBUGLN("");
+    return Scheduler::deserialize(doc);
+  }
+
+  DBUGLN("Failed to load schedule");
+
+  return false;
+}
+
 bool Scheduler::deserialize(DynamicJsonDocument &doc)
 {
   if (doc.is<JsonObject>())
   {
     JsonObject obj = doc.as<JsonObject>();
     if(Scheduler::deserializeInternal(obj, SCHEDULER_EVENT_NULL)) {
-      buildSchedule();
-      return true;
+      return commit();
     }
   }
   else if(doc.is<JsonArray>())
@@ -445,8 +497,7 @@ bool Scheduler::deserialize(DynamicJsonDocument &doc)
       }
     }
 
-    buildSchedule();
-    return true;
+    return commit();
   }
 
   return false;
@@ -530,7 +581,7 @@ bool Scheduler::deserializeInternal(JsonObject &obj, uint32_t event_id)
 
     DBUGVAR(days);
 
-    if(addEvent(event_id, time, days, state)) {
+    if(addEventInternal(event_id, time, days, state)) {
       return true;
     }
   }
@@ -547,6 +598,21 @@ bool Scheduler::serialize(String& json)
   if(Scheduler::serialize(doc))
   {
     serializeJson(doc, json);
+    return true;
+  }
+
+  return false;
+}
+
+bool Scheduler::serialize(Stream &stream)
+{
+  // IMPROVE: do a better calculation of required space
+  const size_t capacity = 4096;
+  DynamicJsonDocument doc(capacity);
+
+  if(Scheduler::serialize(doc))
+  {
+    serializeJson(doc, stream);
     return true;
   }
 

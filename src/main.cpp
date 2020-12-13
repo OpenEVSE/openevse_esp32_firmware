@@ -29,6 +29,7 @@
 #include <ArduinoOTA.h>               // local OTA update from Arduino IDE
 #include <MongooseCore.h>
 #include <MicroTasks.h>
+#include <LITTLEFS.h>
 
 #include "emonesp.h"
 #include "app_config.h"
@@ -80,6 +81,11 @@ void setup()
   DEBUG.printf("Firmware: %s\n", currentfirmware.c_str());
   DEBUG.printf("IDF version: %s\n", ESP.getSdkVersion());
   DEBUG.printf("Free: %d\n", ESPAL.getFreeHeap());
+
+  if(!LittleFS.begin(FORMAT_LITTLEFS_IF_FAILED)){
+    DEBUG.println("LittleFS Mount Failed");
+    return;
+  }
 
   // Read saved settings from the config
   config_load_settings();

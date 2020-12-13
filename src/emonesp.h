@@ -115,4 +115,15 @@
 
 #endif
 
+#ifndef FORMAT_LITTLEFS_IF_FAILED
+#define FORMAT_LITTLEFS_IF_FAILED true
+#endif // !FORMAT_LITTLEFS_IF_FAILED
+
+// Just because it is irritating to be all caps....
+#define LittleFS LITTLEFS
+
+#ifndef SCHEDULE_PATH
+#define SCHEDULE_PATH "/schedule.json"
+#endif // !SCHEDULE_PATH
+
 #endif // _EMONESP_H

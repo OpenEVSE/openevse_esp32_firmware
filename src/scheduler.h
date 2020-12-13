@@ -223,7 +223,10 @@ class Scheduler : public MicroTasks::Task
     EventInstance _firstEvent;
     EventInstance _activeEvent;
 
+    bool _loading;
+
     void buildSchedule();
+    bool commit();
     EventInstance &getCurrentEvent();
     bool findEvent(uint32_t id, Event **event);
     bool serialize(JsonObject &obj, Event *event);
@@ -249,6 +252,7 @@ class Scheduler : public MicroTasks::Task
     bool deserialize(String& json);
     bool deserialize(const char *json);
     bool deserialize(DynamicJsonDocument &doc);
+    bool deserialize(Stream &stream);
 
     bool deserialize(String& json, uint32_t event);
     bool deserialize(const char *json, uint32_t event);
@@ -257,6 +261,7 @@ class Scheduler : public MicroTasks::Task
 
     bool serialize(String& json);
     bool serialize(DynamicJsonDocument &doc);
+    bool serialize(Stream &stream);
 
     bool serialize(String& json, uint32_t event);
     bool serialize(DynamicJsonDocument &doc, uint32_t event);
