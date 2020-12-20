@@ -148,7 +148,8 @@ Scheduler::Scheduler(EvseManager &evse) :
   _events(),
   _firstEvent(),
   _activeEvent(),
-  _loading(false)
+  _loading(false),
+  _timeChangeListener(this)
 {
 
 }
@@ -165,11 +166,20 @@ void Scheduler::setup()
     file.close();
   }
 
+  timeManager.onTimeChange(&_timeChangeListener);
+
   _loading = false;
 }
 
 unsigned long Scheduler::loop(MicroTasks::WakeReason reason)
 {
+  DBUG("Scheduler woke: ");
+  DBUGLN(WakeReason_Scheduled == reason ? "WakeReason_Scheduled" :
+         WakeReason_Event == reason ? "WakeReason_Event" :
+         WakeReason_Message == reason ? "WakeReason_Message" :
+         WakeReason_Manual == reason ? "WakeReason_Manual" :
+         "UNKNOWN");
+
   EventInstance &currentEvent = getCurrentEvent();
 
   DBUGF("Current event %d: %s %s %s",

@@ -91,6 +91,7 @@ void setup()
   config_load_settings();
   DBUGF("After config_load_settings: %d", ESPAL.getFreeHeap());
 
+  timeManager.begin();
   evse.begin();
   scheduler.begin();
 
@@ -140,7 +141,6 @@ loop() {
 #endif
   rapiSender.loop();
   divert_current_loop();
-  time_loop();
   MicroTask.update();
 
   if(OpenEVSE.isConnected())

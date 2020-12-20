@@ -160,7 +160,7 @@ static void net_connected(IPAddress myAddress)
 
   ledManager.setWifiMode(true, true);
 
-  time_begin(sntp_hostname.c_str());
+  timeManager.setHost(sntp_hostname.c_str());
 }
 
 static void net_wifi_onStationModeConnected(const WiFiEventStationModeConnected &event) {
@@ -374,7 +374,7 @@ void net_event(WiFiEvent_t event, system_event_info_t info)
 #endif
 
 void
-net_setup() 
+net_setup()
 {
   randomSeed(analogRead(RANDOM_SEED_CHANNEL));
 

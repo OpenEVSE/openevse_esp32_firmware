@@ -225,6 +225,8 @@ class Scheduler : public MicroTasks::Task
 
     bool _loading;
 
+    MicroTasks::EventListener _timeChangeListener;
+
     void buildSchedule();
     bool commit();
     EventInstance &getCurrentEvent();
