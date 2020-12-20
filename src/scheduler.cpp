@@ -60,7 +60,7 @@ void Scheduler::Event::setId(uint32_t id) {
 String Scheduler::Event::getTime()
 {
   char time[9];
-  snprintf(time, sizeof(time), "%d:%02d:%02d", getHours(), getMinutes(), getSeconds());
+  snprintf(time, sizeof(time), "%02d:%02d:%02d", getHours(), getMinutes(), getSeconds());
   String timeString(time);
   return timeString;
 }
@@ -78,6 +78,16 @@ bool Scheduler::Event::setTime(const char *time)
     setHours(hours);
     setMinutes(minutes);
     setSeconds(seconds);
+    return true;
+  }
+
+  if(2 == sscanf(time, "%u:%02u", &hours, &minutes))
+  {
+    DBUGVAR(hours);
+    DBUGVAR(minutes);
+    setHours(hours);
+    setMinutes(minutes);
+    setSeconds(0);
     return true;
   }
 
