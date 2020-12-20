@@ -83,7 +83,7 @@ class InputTask : public MicroTasks::Task
   private:
     MicroTasks::EventListener _evseState;
   protected:
-    void setup() 
+    void setup()
     {
       evse.onStateChange(&_evseState);
     }
@@ -112,6 +112,7 @@ class InputTask : public MicroTasks::Task
     }
   public:
     InputTask() :
+      MicroTasks::Task(),
       _evseState(this)
     {
 
