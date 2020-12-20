@@ -358,8 +358,8 @@ bool EvseManager::release(EvseClient client)
   if(findClaim(client, &claim))
   {
     claim->release();
-    MicroTask.wakeTask(this);
     _evaluateClaims = true;
+    MicroTask.wakeTask(this);
     return true;
   }
 

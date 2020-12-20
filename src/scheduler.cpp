@@ -449,6 +449,7 @@ bool Scheduler::removeEvent(uint32_t id)
     DBUGF("event = %p", event);
     event->invalidate();
 
+    commit();
     MicroTask.wakeTask(this);
 
     return true;
