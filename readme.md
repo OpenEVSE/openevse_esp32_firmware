@@ -364,12 +364,19 @@ Admin HTTP Authentication (highly recommended) can be enabled by saving admin co
 - Connect to the AP mode WiFi
 - Connect to new Wifi network
 
-### HTTP Auth Password reset
+### HTTP Auth Password reset 
 
 - Hold external button for 10 secs
 - Connect to the AP mode WiFi
-- click the “WiFi Standalone” button
+- click the “WiFi Standalone” button 
 - Set the HTTP auth details again
+
+### Hardware Factory Reset
+
+A Hardware Factory reset (all WiFi and services config lost) can de done via:
+
+- The WiFi interface (press and hold external button for 10's to enable AP mode if required)
+- By pressing and holding GPIO0 hardware button (on the WiFi module inside enclosure) for 10s.
 
 ### Hardware Factory Reset
 
