@@ -354,15 +354,31 @@ Admin HTTP Authentication (highly recommended) can be enabled by saving admin co
 
 **HTTP authentication is required for all HTTP requests including input API**
 
+### WiFi Reset 
 
-### Hardware reset
+- Hold external button for 10 secs
+- Connect to the AP mode WiFi
+- Connect to new Wifi network
 
-A Hardware reset can be made (all WiFi and services config lost) by pressing and holding GPIO0 hardware button (on the Huzzah WiFi module) for 10s.
+### HTTP Auth Password reset 
+
+- Hold external button for 10 secs
+- Connect to the AP mode WiFi
+- click the “WiFi Standalone” button 
+- Set the HTTP auth details again
+
+### Hardware Factory Reset
+
+A Hardware Factory reset (all WiFi and services config lost) can de done via:
+
+- The WiFi interface (press and hold external button for 10's to enable AP mode if required)
+- By pressing and holding GPIO0 hardware button (on the WiFi module inside enclosure) for 10s.
 
 *Note: Holding the GPIO0 button for 5s will put the WiFi unit into AP (access point) mode to allow the WiFi network to be changed without losing all the service config*
 
 ### Firmware update
 
+Firmware can be updated via the Web UI
 See [OpenEVSE Wifi releases](https://github.com/OpenEVSE/ESP32_WiFi_v3.x/releases) for latest stable pre-compiled update releases.
 
 #### Via Web Interface
