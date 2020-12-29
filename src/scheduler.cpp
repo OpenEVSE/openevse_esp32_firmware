@@ -424,6 +424,33 @@ bool Scheduler::addEvent(uint32_t event_id, const char *time, uint8_t days, cons
   return false;
 }
 
+bool Scheduler::addEvent(uint32_t event_id, int hour, int minute, int second, uint8_t days, EvseState state)
+{
+  Event *event = NULL;
+  bool foundEvent = findEvent(event_id, &event);
+  if(!foundEvent && SCHEDULER_EVENT_NULL != event_id) {
+    foundEvent = findEvent(SCHEDULER_EVENT_NULL, &event);
+  }
+
+  if(foundEvent)
+  {
+    event->setId(event_id);
+    event->setHours(hour);
+    event->setMinutes(minute);
+    event->setSeconds(second);
+    event->setState(state);
+
+    event->setDays(days);
+
+    commit();
+
+    return true;
+  }
+
+  return false;
+}
+
+
 bool Scheduler::addEvent(String& json)
 {
   return deserialize(json, SCHEDULER_EVENT_NULL);

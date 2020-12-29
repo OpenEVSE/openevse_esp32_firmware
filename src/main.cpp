@@ -53,6 +53,8 @@
 #include "evse_man.h"
 #include "scheduler.h"
 
+#include "legacy_support.h"
+
 EvseManager evse(RAPI_PORT);
 Scheduler scheduler(evse);
 
@@ -154,6 +156,8 @@ loop() {
         DBUGLN("first read RAPI values");
         handleRapiRead(); //Read all RAPI values
         rapi_read=1;
+
+        import_timers(&scheduler);
       }
 
       // -------------------------------------------------------------------

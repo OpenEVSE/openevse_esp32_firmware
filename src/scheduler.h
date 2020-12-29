@@ -244,6 +244,7 @@ class Scheduler : public MicroTasks::Task
 
     bool begin();
 
+    bool addEvent(uint32_t id, int hour, int minute, int second, uint8_t days, EvseState state);
     bool addEvent(uint32_t id, const char *time, uint8_t days, const char *state);
     bool addEvent(String& json);
     bool addEvent(const char *json);
