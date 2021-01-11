@@ -68,6 +68,11 @@ boolean rapi_read = 0; //flag to indicate first read of RAPI status
 static uint32_t start_mem = 0;
 static uint32_t last_mem = 0;
 
+// Get running firmware version from build tag environment variable
+#define TEXTIFY(A) #A
+#define ESCAPEQUOTE(A) TEXTIFY(A)
+String currentfirmware = ESCAPEQUOTE(BUILD_TAG);
+
 static void hardware_setup();
 
 // -------------------------------------------------------------------
@@ -97,6 +102,7 @@ void setup()
   evse.begin();
   scheduler.begin();
 
+  lcd.begin(evse, scheduler);
   MicroTask.startTask(ledManager);
 
   // Initialise the WiFi
@@ -118,8 +124,8 @@ void setup()
 
   input_setup();
 
-  lcd_display(F("OpenEVSE WiFI"), 0, 0, 0, LCD_CLEAR_LINE);
-  lcd_display(currentfirmware, 0, 1, 5 * 1000, LCD_CLEAR_LINE);
+  lcd.display(F("OpenEVSE WiFI"), 0, 0, 0, LCD_CLEAR_LINE);
+  lcd.display(currentfirmware, 0, 1, 5 * 1000, LCD_CLEAR_LINE);
 
   start_mem = last_mem = ESPAL.getFreeHeap();
 } // end setup
@@ -135,7 +141,6 @@ loop() {
   Mongoose.poll(0);
   Profile_End(Mongoose, 10);
 
-  lcd_loop();
   web_server_loop();
   net_loop();
 #ifdef ENABLE_OTA

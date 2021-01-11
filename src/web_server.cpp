@@ -56,11 +56,6 @@ const char _CONTENT_TYPE_JPEG[] PROGMEM = "image/jpeg";
 const char _CONTENT_TYPE_PNG[] PROGMEM = "image/png";
 const char _CONTENT_TYPE_SVG[] PROGMEM = "image/svg+xml";
 
-// Get running firmware version from build tag environment variable
-#define TEXTIFY(A) #A
-#define ESCAPEQUOTE(A) TEXTIFY(A)
-String currentfirmware = ESCAPEQUOTE(BUILD_TAG);
-
 void dumpRequest(MongooseHttpServerRequest *request)
 {
 #ifdef ENABLE_DEBUG_WEB_REQUEST
@@ -910,9 +905,8 @@ handleUpdateUpload(MongooseHttpServerRequest *request, int ev, MongooseString fi
 
     DEBUG_PORT.printf("Update Start: %s\n", filename.c_str());
 
-    lcd_display(F("Updating WiFi"), 0, 0, 0, LCD_CLEAR_LINE);
-    lcd_display(F(""), 0, 1, 10 * 1000, LCD_CLEAR_LINE);
-    lcd_loop();
+    lcd.display(F("Updating WiFi"), 0, 0, 0, LCD_CLEAR_LINE);
+    lcd.display(F(""), 0, 1, 10 * 1000, LCD_CLEAR_LINE);
 
     if(!Update.begin()) {
       handleUpdateError(request);
@@ -932,7 +926,7 @@ handleUpdateUpload(MongooseHttpServerRequest *request, int ev, MongooseString fi
       DBUGVAR(lastPercent);
       if(percent != lastPercent) {
         String text = String(percent) + F("%");
-        lcd_display(text, 0, 1, 10 * 1000, LCD_DISPLAY_NOW);
+        lcd.display(text, 0, 1, 10 * 1000, LCD_DISPLAY_NOW);
         DEBUG_PORT.printf("Update: %d%%\n", percent);
         lastPercent = percent;
       }
@@ -947,14 +941,14 @@ handleUpdateUpload(MongooseHttpServerRequest *request, int ev, MongooseString fi
     DBUGLN("Upload finished");
     if(Update.end(true)) {
       DBUGF("Update Success: %lluB", index+len);
-      lcd_display(F("Complete"), 0, 1, 10 * 1000, LCD_CLEAR_LINE | LCD_DISPLAY_NOW);
+      lcd.display(F("Complete"), 0, 1, 10 * 1000, LCD_CLEAR_LINE | LCD_DISPLAY_NOW);
       upgradeResponse->setCode(200);
       upgradeResponse->print("OK");
       request->send(upgradeResponse);
       upgradeResponse = NULL;
     } else {
       DBUGF("Update failed: %d", Update.getError());
-      lcd_display(F("Error"), 0, 1, 10 * 1000, LCD_CLEAR_LINE | LCD_DISPLAY_NOW);
+      lcd.display(F("Error"), 0, 1, 10 * 1000, LCD_CLEAR_LINE | LCD_DISPLAY_NOW);
       handleUpdateError(request);
     }
   }

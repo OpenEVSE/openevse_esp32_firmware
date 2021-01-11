@@ -126,4 +126,6 @@
 #define SCHEDULE_PATH "/schedule.json"
 #endif // !SCHEDULE_PATH
 
+extern String currentfirmware;
+
 #endif // _EMONESP_H

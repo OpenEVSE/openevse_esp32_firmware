@@ -101,7 +101,7 @@ void EvseManager::initialiseEvse()
       OpenEVSE.getStatus([this](int ret, uint8_t evse_state, uint32_t session_time, uint8_t pilot_state, uint32_t vflags)
       {
         DBUGVAR(evse_state);
-        _state.setState(evse_state, pilot_state);
+        _state.setState(evse_state, pilot_state, vflags);
       });
     } else {
       DBUGLN("OpenEVSE not responding or not connected");
@@ -200,12 +200,15 @@ void EvseManager::setup()
   OpenEVSE.onState([this](uint8_t evse_state, uint8_t pilot_state, uint32_t current_capacity, uint32_t vflags)
   {
     DBUGVAR(evse_state);
+    DBUGVAR(pilot_state);
+    DBUGVAR(current_capacity);
+    DBUGVAR(vflags);
     DBUGVAR(_waitingForEvent);
     if(_waitingForEvent > 0) {
       _evaluateTargetState = true;
       _waitingForEvent--;
     }
-    _state.setState(evse_state, pilot_state);
+    _state.setState(evse_state, pilot_state, vflags);
   });
 }
 

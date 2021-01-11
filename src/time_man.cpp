@@ -1,3 +1,7 @@
+#if defined(ENABLE_DEBUG) && !defined(ENABLE_DEBUG_TIME)
+#undef ENABLE_DEBUG
+#endif
+
 #include <Arduino.h>
 #include <MongooseCore.h>
 

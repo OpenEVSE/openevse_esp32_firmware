@@ -217,12 +217,14 @@ class EvseManager : public MicroTasks::Task
       private:
         uint8_t _evse_state;
         uint8_t _pilot_state;
+        uint32_t _vflags;
       public:
         EvseStateEvent();
-        void setState(uint8_t evse_state, uint8_t pilot_state)
+        void setState(uint8_t evse_state, uint8_t pilot_state, uint32_t vflags)
         {
           _evse_state = evse_state;
           _pilot_state = pilot_state;
+          _vflags = vflags;
           Trigger();
         }
         uint8_t getEvseState() {
@@ -230,6 +232,9 @@ class EvseManager : public MicroTasks::Task
         }
         uint8_t getPilotState() {
           return _pilot_state;
+        }
+        uint32_t getFlags() {
+          return _vflags;
         }
 
         EvseState getState() {
@@ -294,10 +299,24 @@ class EvseManager : public MicroTasks::Task
     uint8_t getEvseState() {
       return _state.getEvseState();
     }
+    uint8_t getPilotState() {
+      return _state.getPilotState();
+    }
+    uint32_t getFlags() {
+      return _state.getFlags();
+    }
+    bool isVehicleConnected() {
+      return OPENEVSE_VFLAG_EV_CONNECTED == (_state.getFlags() & OPENEVSE_VFLAG_EV_CONNECTED);
+    }
 
     // Temp until everything uses EvseManager
     RapiSender &getSender() {
       return _sender;
+    }
+
+    // Get the OpenEVSE API
+    OpenEVSEClass &getOpenEVSE() {
+      return OpenEVSE;
     }
 
     // Register for events
