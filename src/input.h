@@ -14,6 +14,8 @@ extern String data;
 
 extern double amp;    // OpenEVSE Current Sensor
 extern double voltage; // voltage from OpenEVSE or MQTT
+extern double temp_monitor;   // Temp from the sensor with highest priority
+extern bool temp_monitor_valid;
 extern double temp1;  // Sensor DS3232 Ambient
 extern bool temp1_valid;
 extern double temp2;  // Sensor MCP9808 Ambient

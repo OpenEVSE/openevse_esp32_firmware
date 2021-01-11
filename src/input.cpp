@@ -45,6 +45,10 @@ double temp2 = 0;                       // Sensor MCP9808 Ambiet
 bool temp2_valid = false;
 double temp3 = 0;                       // Sensor TMP007 Infared
 bool temp3_valid = false;
+double temp4 = 0;                       // ESP32 WiFi board sensor
+bool temp4_valid = false;
+double temp_monitor = 0;                        // Derived temp value
+bool temp_monitor_valid = false;
 long pilot = 0;                       // OpenEVSE Pilot Setting
 long state = OPENEVSE_STATE_STARTING; // OpenEVSE State
 long elapsed = 0;                     // Elapsed time (only valid if charging)
@@ -125,6 +129,11 @@ void create_rapi_json(JsonDocument &doc)
   doc["voltage"] = voltage * VOLTS_SCALE_FACTOR;
   doc["pilot"] = pilot;
   doc["wh"] = watthour_total;
+  if(temp_monitor_valid) {
+    doc["temp"] = temp_monitor * TEMP_SCALE_FACTOR;
+  } else {
+    doc["temp"] = false;
+  }
   if(temp1_valid) {
     doc["temp1"] = temp1 * TEMP_SCALE_FACTOR;
   } else {
@@ -141,9 +150,7 @@ void create_rapi_json(JsonDocument &doc)
     doc["temp3"] = false;
   }
 #ifdef ENABLE_MCP9808
-  float temp4 = tempsensor.readTempC();
-  DBUGVAR(temp4);
-  if(!isnan(temp4)) {
+  if(temp4_valid) {
     doc["temp4"] = temp4 * TEMP_SCALE_FACTOR;
   } else {
     doc["temp4"] = false;
@@ -212,12 +219,30 @@ update_rapi_values() {
       {
         if(RAPI_RESPONSE_OK == ret)
         {
+          temp_monitor_valid = false;
           temp1 = t1;
           temp1_valid = t1_valid;
+          if(!temp_monitor_valid && temp1_valid) {
+            temp_monitor = temp1;
+            temp_monitor_valid = true;
+          }
           temp2 = t2;
           temp2_valid = t2_valid;
+          if(!temp_monitor_valid && temp2_valid) {
+            temp_monitor = temp2;
+            temp_monitor_valid = true;
+          }
           temp3 = t3;
           temp3_valid = t3_valid;
+          #ifdef ENABLE_MCP9808
+          temp4 = tempsensor.readTempC();
+          DBUGVAR(temp4);
+          temp4_valid = !isnan(temp4);
+          if(!temp_monitor_valid && temp4_valid) {
+            temp_monitor = temp4;
+            temp_monitor_valid = true;
+          }
+          #endif
         }
       });
       break;
