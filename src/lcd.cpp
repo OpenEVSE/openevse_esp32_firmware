@@ -289,6 +289,9 @@ unsigned long LcdTask::loop(MicroTasks::WakeReason reason)
           case LcdInfoLine_EnergySession:
             setInfoLine(LcdInfoLine_EnergyTotal);
             break;
+          case LcdInfoLine_EnergyTotal:
+            setInfoLine(LcdInfoLine_Tempurature);
+            break;
           default:
             setInfoLine(LcdInfoLine_EnergySession);
             break;
@@ -310,6 +313,9 @@ unsigned long LcdTask::loop(MicroTasks::WakeReason reason)
         {
           case LcdInfoLine_EnergySession:
             setInfoLine(LcdInfoLine_EnergyTotal);
+            break;
+          case LcdInfoLine_EnergyTotal:
+            setInfoLine(LcdInfoLine_Tempurature);
             break;
           default:
             setInfoLine(LcdInfoLine_EnergySession);
@@ -456,6 +462,9 @@ unsigned long LcdTask::loop(MicroTasks::WakeReason reason)
 
       case LcdInfoLine_Tempurature:
         // EVSE Temp 30.5C
+        sprintf(temp, "EVSE Temp %.1fC", temp_monitor);
+        showText(0, 1, temp, true);
+        _updateInfoLine = false;
         break;
 
       case LcdInfoLine_Time:
