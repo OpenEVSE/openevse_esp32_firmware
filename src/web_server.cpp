@@ -790,6 +790,24 @@ handleSchedule(MongooseHttpServerRequest *request)
   request->send(response);
 }
 
+void
+handleSchedulePlan(MongooseHttpServerRequest *request)
+{
+  MongooseHttpServerResponseStream *response;
+  if(false == requestPreProcess(request, response)) {
+    return;
+  }
+
+  const size_t capacity = JSON_OBJECT_SIZE(40) + 2048;
+  DynamicJsonDocument doc(capacity);
+
+  scheduler.serializePlan(doc);
+  response->setCode(200);
+  serializeJson(doc, *response);
+
+  request->send(response);
+}
+
 // -------------------------------------------------------------------
 // Reset config and reboot
 // url: /reset
@@ -1149,6 +1167,7 @@ web_server_setup() {
   server.on("/divertmode$", handleDivertMode);
   server.on("/emoncms/describe$", handleDescribe);
 
+  server.on("/schedule/plan$", handleSchedulePlan);
   server.on("/schedule", handleSchedule);
 
   // Simple Firmware Update Form

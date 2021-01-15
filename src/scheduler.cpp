@@ -377,6 +377,23 @@ Scheduler::EventInstance &Scheduler::getCurrentEvent()
   return *e;
 }
 
+Scheduler::EventInstance &Scheduler::getNextEvent(EvseState type)
+{
+  EventInstance &event = _activeEvent; // Assume active event is correct
+  if(event.isValid())
+  {
+    event = event.getNext();
+    if(EvseState::None != type)
+    {
+      while(event.getState() != type) {
+        event = event.getNext();
+      }
+    }
+  }
+
+  return event;
+}
+
 bool Scheduler::findEvent(uint32_t id, Scheduler::Event **event)
 {
   for(int i = 0; i < SCHEDULER_MAX_EVENTS; i++)
@@ -730,6 +747,39 @@ bool Scheduler::serialize(JsonObject &object, Scheduler::Event *event)
     if(event->getDays() & 1<<day) {
       days.add(days_of_the_week_strings[day]);
     }
+  }
+
+  return true;
+}
+
+bool Scheduler::serializePlan(DynamicJsonDocument &doc)
+{
+  JsonObject root = doc.to<JsonObject>();
+
+  Scheduler::EventInstance *e = &_firstEvent;
+
+  if(e->isValid())
+  {
+    int day = e->getDay();
+    JsonArray currentDay = root.createNestedArray(days_of_the_week_strings[day]);
+
+    do
+    {
+
+      if(e->getDay() != day)
+      {
+        day = e->getDay();
+        currentDay = root.createNestedArray(days_of_the_week_strings[day]);
+      }
+
+      JsonObject object = currentDay.createNestedObject();
+      object["id"] = e->getEvent()->getId();
+      object["state"] = e->getEvent()->getStateText();
+      object["time"] = e->getEvent()->getTime();
+      object["duration"] = e->getDuration();
+
+      e = &e->getNext();
+    } while(_firstEvent != e);
   }
 
   return true;
