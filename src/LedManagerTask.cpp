@@ -17,7 +17,6 @@
 
 #include <Adafruit_NeoPixel.h>
 Adafruit_NeoPixel strip = Adafruit_NeoPixel(NEO_PIXEL_LENGTH, NEO_PIXEL_PIN, NEO_GRB + NEO_KHZ800);
-
 #endif
 
 #define FADE_STEP         16
@@ -72,7 +71,8 @@ uint8_t buttonShareState = 0;
 LedManagerTask::LedManagerTask() :
   MicroTasks::Task(),
   state(LedState_Test_Red),
-  evseState(OPENEVSE_STATE_STARTING)
+  evseState(OPENEVSE_STATE_STARTING),
+  brightness(LED_DEFAULT_BRIGHTNESS)
 {
 }
 
@@ -81,6 +81,7 @@ void LedManagerTask::setup()
 #if defined(NEO_PIXEL_PIN) && defined(NEO_PIXEL_LENGTH)
   DBUGF("Initialising NeoPixels");
   strip.begin();
+  strip.setBrightness(LED_DEFAULT_BRIGHTNESS);
   setAllRGB(0, 0, 0);
 #endif
 
@@ -131,7 +132,7 @@ unsigned long LedManagerTask::loop(MicroTasks::WakeReason reason)
          LedState_WiFi_Client_Connected == state ? "LedState_WiFi_Client_Connected" :
          "UNKNOWN");
 
-#if RGB_LED    
+#if RGB_LED
   switch(state)
   {
     case LedState_Off:
@@ -183,7 +184,7 @@ unsigned long LedManagerTask::loop(MicroTasks::WakeReason reason)
       return MicroTask.Infinate;
 
     case LedState_WiFi_Access_Point_Waiting:
-      setAllRGB(flashState ? 255 : 0, 
+      setAllRGB(flashState ? 255 : 0,
                 flashState ? 255 : 0,
                 0);
       flashState = !flashState;
@@ -195,7 +196,7 @@ unsigned long LedManagerTask::loop(MicroTasks::WakeReason reason)
       return CONNECTED_FLASH_TIME;
 
     case LedState_WiFi_Client_Connecting:
-      setAllRGB(flashState ? 255 : 0, 
+      setAllRGB(flashState ? 255 : 0,
                 flashState ? 255 : 0,
                 0);
       flashState = !flashState;
@@ -254,12 +255,12 @@ unsigned long LedManagerTask::loop(MicroTasks::WakeReason reason)
 int LedManagerTask::fadeLed(int fadeValue, int FadeDir)
 {
   fadeValue += FadeDir;
-  if(fadeValue >= MAX_BM_FADE_LED) 
+  if(fadeValue >= MAX_BM_FADE_LED)
   {
     fadeValue = MAX_BM_FADE_LED;
-    FadeDir = -FADE_STEP; 
+    FadeDir = -FADE_STEP;
   } else if(fadeValue <= 0) {
-    fadeValue = 0; 
+    fadeValue = 0;
     FadeDir = FADE_STEP;
   }
   return fadeValue;
@@ -285,6 +286,13 @@ void LedManagerTask::setAllRGB(uint8_t red, uint8_t green, uint8_t blue)
 #endif
 
 #if defined(RED_LED) && defined(GREEN_LED) && defined(BLUE_LED)
+
+  if(brightness) { // See notes in setBrightness()
+    red = (red * brightness) >> 8;
+    green = (green * brightness) >> 8;
+    blue = (blue * brightness) >> 8;
+  }
+
   analogWrite(RED_LED, pgm_read_byte(&gamma8[red]));
   analogWrite(GREEN_LED, pgm_read_byte(&gamma8[green]));
   analogWrite(BLUE_LED, pgm_read_byte(&gamma8[blue]));
@@ -306,14 +314,20 @@ void LedManagerTask::setAllRGB(uint8_t red, uint8_t green, uint8_t blue)
 void LedManagerTask::setWiFiLed(uint8_t state)
 {
   DBUGVAR(state);
-  digitalWrite(WIFI_LED, state);
+  digitalWrite(WIFI_LED, state);  // Stored brightness value is different than what's passed.
+  // This simplifies the actual scaling math later, allowing a fast
+  // 8x8-bit multiply and taking the MSB. 'brightness' is a uint8_t,
+  // adding 1 here may (intentionally) roll over...so 0 = max brightness
+  // (color values are interpreted ltimingiterally; no scaling), 1 = min
+  // brightness (off), 255 = just below max brightness.
+
 #ifdef WIFI_BUTTON_SHARE_LED
   buttonShareState = state ? 0 : 255;
 #endif
 }
 #endif
 
-LedState LedManagerTask::ledStateFromEvseState(uint8_t state) 
+LedState LedManagerTask::ledStateFromEvseState(uint8_t state)
 {
 #if RGB_LED
   switch(state)
@@ -375,7 +389,7 @@ int LedManagerTask::getPriority(LedState priorityState)
 
     case LedState_Error:
       return 1000;
-      
+
     case LedState_Test_Red:
     case LedState_Test_Green:
     case LedState_Test_Blue:
@@ -397,7 +411,7 @@ void LedManagerTask::setNewState(bool wake)
     priority = evsePriority;
   }
 
-  LedState wifiState = wifiClient ? 
+  LedState wifiState = wifiClient ?
     (wifiConnected ? LedState_WiFi_Client_Connected : LedState_WiFi_Client_Connecting) :
     (wifiConnected ? LedState_WiFi_Access_Point_Connected : LedState_WiFi_Access_Point_Waiting);
   int wifiPriority = getPriority(wifiState);
@@ -476,6 +490,24 @@ int LedManagerTask::getButtonPressed()
 #endif
 
   return button;
+}
+
+void LedManagerTask::setBrightness(uint8_t brightness)
+{
+  // Stored brightness value is different than what's passed.
+  // This simplifies the actual scaling math later, allowing a fast
+  // 8x8-bit multiply and taking the MSB. 'brightness' is a uint8_t,
+  // adding 1 here may (intentionally) roll over...so 0 = max brightness
+  // (color values are interpreted ltimingiterally; no scaling), 1 = min
+  // brightness (off), 255 = just below max brightness.
+  this->brightness = brightness - 1;
+
+#if defined(NEO_PIXEL_PIN) && defined(NEO_PIXEL_LENGTH)
+  strip.setBrightness(LED_DEFAULT_BRIGHTNESS);
+#endif
+
+  // Wake the task to refresh the state
+  MicroTask.wakeTask(this);
 }
 
 LedManagerTask ledManager;
