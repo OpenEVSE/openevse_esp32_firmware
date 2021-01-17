@@ -81,7 +81,7 @@ void LedManagerTask::setup()
 #if defined(NEO_PIXEL_PIN) && defined(NEO_PIXEL_LENGTH)
   DBUGF("Initialising NeoPixels");
   strip.begin();
-  strip.setBrightness(LED_DEFAULT_BRIGHTNESS);
+  //strip.setBrightness(brightness);
   setAllRGB(0, 0, 0);
 #endif
 
@@ -277,22 +277,20 @@ void LedManagerTask::setAllRGB(uint8_t red, uint8_t green, uint8_t blue)
   DBUG(" B:");
   DBUGLN(blue);
 
-#if defined(NEO_PIXEL_PIN) && defined(NEO_PIXEL_LENGTH)
-  for(int pix=0; pix < strip.numPixels(); pix++) {
-    DBUGVAR(pix);
-    strip.setPixelColor(pix, strip.gamma32(strip.Color(red, green, blue)));
-  }
-  strip.show();
-#endif
-
-#if defined(RED_LED) && defined(GREEN_LED) && defined(BLUE_LED)
-
   if(brightness) { // See notes in setBrightness()
     red = (red * brightness) >> 8;
     green = (green * brightness) >> 8;
     blue = (blue * brightness) >> 8;
   }
 
+#if defined(NEO_PIXEL_PIN) && defined(NEO_PIXEL_LENGTH)
+  uint32_t col = strip.gamma32(strip.Color(red, green, blue));
+  DBUGVAR(col, HEX);
+  strip.fill(0, strip.numPixels(), col);
+  strip.show();
+#endif
+
+#if defined(RED_LED) && defined(GREEN_LED) && defined(BLUE_LED)
   analogWrite(RED_LED, pgm_read_byte(&gamma8[red]));
   analogWrite(GREEN_LED, pgm_read_byte(&gamma8[green]));
   analogWrite(BLUE_LED, pgm_read_byte(&gamma8[blue]));
@@ -502,9 +500,11 @@ void LedManagerTask::setBrightness(uint8_t brightness)
   // brightness (off), 255 = just below max brightness.
   this->brightness = brightness - 1;
 
-#if defined(NEO_PIXEL_PIN) && defined(NEO_PIXEL_LENGTH)
-  strip.setBrightness(LED_DEFAULT_BRIGHTNESS);
-#endif
+//#if defined(NEO_PIXEL_PIN) && defined(NEO_PIXEL_LENGTH)
+//  strip.setBrightness(LED_DEFAULT_BRIGHTNESS);
+//#endif
+
+  DBUGVAR(this->brightness);
 
   // Wake the task to refresh the state
   MicroTask.wakeTask(this);
