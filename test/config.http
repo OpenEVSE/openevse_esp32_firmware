@@ -144,3 +144,30 @@ Content-Type: application/json
 }
 
 ###
+
+POST {{baseUrl}}/config HTTP/1.1
+Content-Type: application/json
+
+{
+  "led_brightness": 255
+}
+
+###
+
+POST {{baseUrl}}/config HTTP/1.1
+Content-Type: application/json
+
+{
+  "led_brightness": 128
+}
+
+###
+
+POST {{baseUrl}}/config HTTP/1.1
+Content-Type: application/json
+
+{
+  "led_brightness": 32
+}
+
+###
