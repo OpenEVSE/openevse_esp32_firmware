@@ -379,19 +379,19 @@ Scheduler::EventInstance &Scheduler::getCurrentEvent()
 
 Scheduler::EventInstance &Scheduler::getNextEvent(EvseState type)
 {
-  EventInstance &event = _activeEvent; // Assume active event is correct
-  if(event.isValid())
+  EventInstance *event = &_activeEvent; // Assume active event is correct
+  if(event->isValid())
   {
-    event = event.getNext();
+    event = &event->getNext();
     if(EvseState::None != type)
     {
-      while(event.getState() != type) {
-        event = event.getNext();
+      while(event->getState() != type) {
+        event = &event->getNext();
       }
     }
   }
 
-  return event;
+  return *event;
 }
 
 bool Scheduler::findEvent(uint32_t id, Scheduler::Event **event)
