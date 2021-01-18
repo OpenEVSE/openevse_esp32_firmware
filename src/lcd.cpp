@@ -184,6 +184,24 @@ unsigned long LcdTask::loop(MicroTasks::WakeReason reason)
     flagsChanged = true;
   }
 
+  DBUG("EVSE state: ");
+  DBUG(OPENEVSE_STATE_STARTING == _evseState ? "OPENEVSE_STATE_STARTING" :
+       OPENEVSE_STATE_NOT_CONNECTED == _evseState ? "OPENEVSE_STATE_NOT_CONNECTED" :
+       OPENEVSE_STATE_CONNECTED == _evseState ? "OPENEVSE_STATE_CONNECTED" :
+       OPENEVSE_STATE_CHARGING == _evseState ? "OPENEVSE_STATE_CHARGING" :
+       OPENEVSE_STATE_VENT_REQUIRED == _evseState ? "OPENEVSE_STATE_VENT_REQUIRED" :
+       OPENEVSE_STATE_DIODE_CHECK_FAILED == _evseState ? "OPENEVSE_STATE_DIODE_CHECK_FAILED" :
+       OPENEVSE_STATE_GFI_FAULT == _evseState ? "OPENEVSE_STATE_GFI_FAULT" :
+       OPENEVSE_STATE_NO_EARTH_GROUND == _evseState ? "OPENEVSE_STATE_NO_EARTH_GROUND" :
+       OPENEVSE_STATE_STUCK_RELAY == _evseState ? "OPENEVSE_STATE_STUCK_RELAY" :
+       OPENEVSE_STATE_GFI_SELF_TEST_FAILED == _evseState ? "OPENEVSE_STATE_GFI_SELF_TEST_FAILED" :
+       OPENEVSE_STATE_OVER_TEMPERATURE == _evseState ? "OPENEVSE_STATE_OVER_TEMPERATURE" :
+       OPENEVSE_STATE_OVER_CURRENT == _evseState ? "OPENEVSE_STATE_OVER_CURRENT" :
+       OPENEVSE_STATE_SLEEPING == _evseState ? "OPENEVSE_STATE_SLEEPING" :
+       OPENEVSE_STATE_DISABLED == _evseState ? "OPENEVSE_STATE_DISABLED" :
+       "UNKNOWN");
+  DBUGF(", flags: %08x", _flags);
+
   // If the OpenEVSE has not started don't do anything
   if(OPENEVSE_STATE_STARTING == _evseState) {
     return MicroTask.Infinate;
@@ -369,6 +387,7 @@ unsigned long LcdTask::loop(MicroTasks::WakeReason reason)
             setInfoLine(_scheduler->getNextEvent().isValid() ?
                         LcdInfoLine_TimerStop :
                         LcdInfoLine_Time);
+            break;
           default:
             setInfoLine(LcdInfoLine_Time);
             break;
@@ -382,6 +401,8 @@ unsigned long LcdTask::loop(MicroTasks::WakeReason reason)
 
   if(_updateStateDisplay)
   {
+    _updateStateDisplay = false;
+
     switch(_evseState)
     {
       case OPENEVSE_STATE_NOT_CONNECTED:
@@ -467,8 +488,6 @@ unsigned long LcdTask::loop(MicroTasks::WakeReason reason)
       default:
         break;
     }
-
-    _updateStateDisplay = false;
   }
 
   if(_updateInfoLine)
@@ -556,17 +575,44 @@ unsigned long LcdTask::loop(MicroTasks::WakeReason reason)
       {
         // Start 10:00PM
         Scheduler::EventInstance &event = _scheduler->getNextEvent(EvseState::Active);
-        sprintf(temp, "Start %s", event.isValid() ? event.getEvent()->getTime().c_str() : "--:--");
-        showText(0, 1, temp, true);
-        _updateInfoLine = false;
+        if(event.isValid())
+        {
+          int hour = event.getEvent()->getHours();
+          int min = event.getEvent()->getMinutes();
+
+          bool pm = hour >= 12;
+          hour = hour % 12;
+          if(0 == hour) {
+            hour = 12;
+          }
+
+          sprintf(temp, "Start %d:%02d %s", hour, min, pm ? "AM" : "PM");
+          showText(0, 1, temp, true);
+        } else {
+          showText(0, 1, "Start --:--", true);
+        }
       } break;
 
       case LcdInfoLine_TimerStop:
       {
         // Stop 06:00AM
         Scheduler::EventInstance &event = _scheduler->getNextEvent(EvseState::Disabled);
-        sprintf(temp, "Stop %s", event.isValid() ? event.getEvent()->getTime().c_str() : "--:--");
-        showText(0, 1, temp, true);
+        if(event.isValid())
+        {
+          int hour = event.getEvent()->getHours();
+          int min = event.getEvent()->getMinutes();
+
+          bool pm = hour >= 12;
+          hour = hour % 12;
+          if(0 == hour) {
+            hour = 12;
+          }
+
+          sprintf(temp, "Stop %d:%02d %s", hour, min, pm ? "AM" : "PM");
+          showText(0, 1, temp, true);
+        } else {
+          showText(0, 1, "Stop --:--", true);
+        }
         _updateInfoLine = false;
       } break;
 
