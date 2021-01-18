@@ -144,6 +144,7 @@ unsigned long LcdTask::loop(MicroTasks::WakeReason reason)
          LcdInfoLine_Voltage == _infoLine ? "LcdInfoLine_Voltage" :
          LcdInfoLine_TimerStart == _infoLine ? "LcdInfoLine_TimerStart" :
          LcdInfoLine_TimerStop == _infoLine ? "LcdInfoLine_TimerStop" :
+         LcdInfoLine_TimerRemaining == _infoLine ? "LcdInfoLine_TimerRemaining" :
          "UNKNOWN");
 
   bool evseStateChanged = false;
@@ -292,6 +293,21 @@ unsigned long LcdTask::loop(MicroTasks::WakeReason reason)
           case LcdInfoLine_EnergyTotal:
             setInfoLine(LcdInfoLine_Tempurature);
             break;
+          case LcdInfoLine_Tempurature:
+            setInfoLine(LcdInfoLine_Time);
+            break;
+          case LcdInfoLine_Time:
+            setInfoLine(LcdInfoLine_Date);
+            break;
+          case LcdInfoLine_Date:
+            setInfoLine(_scheduler->getNextEvent().isValid() ?
+                        LcdInfoLine_TimerStart :
+                        LcdInfoLine_EnergySession);
+            break;
+          case LcdInfoLine_TimerStart:
+            setInfoLine(_scheduler->getNextEvent().isValid() ?
+                        LcdInfoLine_TimerStop :
+                        LcdInfoLine_EnergySession);
           default:
             setInfoLine(LcdInfoLine_EnergySession);
             break;
@@ -317,6 +333,16 @@ unsigned long LcdTask::loop(MicroTasks::WakeReason reason)
           case LcdInfoLine_EnergyTotal:
             setInfoLine(LcdInfoLine_Tempurature);
             break;
+          case LcdInfoLine_Tempurature:
+            setInfoLine(_scheduler->getNextEvent().isValid() ?
+                        LcdInfoLine_TimerStop :
+                        LcdInfoLine_EnergySession);
+            break;
+          case LcdInfoLine_TimerStop:
+            setInfoLine(_scheduler->getNextEvent().isValid() ?
+                        LcdInfoLine_TimerRemaining :
+                        LcdInfoLine_EnergySession);
+            break;
           default:
             setInfoLine(LcdInfoLine_EnergySession);
             break;
@@ -334,6 +360,15 @@ unsigned long LcdTask::loop(MicroTasks::WakeReason reason)
           case LcdInfoLine_Time:
             setInfoLine(LcdInfoLine_Date);
             break;
+          case LcdInfoLine_Date:
+            setInfoLine(_scheduler->getNextEvent().isValid() ?
+                        LcdInfoLine_TimerStart :
+                        LcdInfoLine_Time);
+            break;
+          case LcdInfoLine_TimerStart:
+            setInfoLine(_scheduler->getNextEvent().isValid() ?
+                        LcdInfoLine_TimerStop :
+                        LcdInfoLine_Time);
           default:
             setInfoLine(LcdInfoLine_Time);
             break;
@@ -481,6 +516,7 @@ unsigned long LcdTask::loop(MicroTasks::WakeReason reason)
       } break;
 
       case LcdInfoLine_Date:
+      {
         // Date 08/25/2020
         timeval local_time;
         gettimeofday(&local_time, NULL);
@@ -489,7 +525,7 @@ unsigned long LcdTask::loop(MicroTasks::WakeReason reason)
         strftime(temp, sizeof(temp), "Date %d/%m/%Y", &timeinfo);
         showText(0, 1, temp, true);
         _updateInfoLine = false;
-        break;
+       } break;
 
       case LcdInfoLine_ElapsedTime:
         break;
@@ -517,12 +553,46 @@ unsigned long LcdTask::loop(MicroTasks::WakeReason reason)
         break;
 
       case LcdInfoLine_TimerStart:
+      {
         // Start 10:00PM
-        break;
+        Scheduler::EventInstance &event = _scheduler->getNextEvent(EvseState::Active);
+        sprintf(temp, "Start %s", event.isValid() ? event.getEvent()->getTime().c_str() : "--:--");
+        showText(0, 1, temp, true);
+        _updateInfoLine = false;
+      } break;
 
       case LcdInfoLine_TimerStop:
+      {
         // Stop 06:00AM
+        Scheduler::EventInstance &event = _scheduler->getNextEvent(EvseState::Disabled);
+        sprintf(temp, "Stop %s", event.isValid() ? event.getEvent()->getTime().c_str() : "--:--");
+        showText(0, 1, temp, true);
+        _updateInfoLine = false;
+      } break;
+
+      case LcdInfoLine_TimerRemaining:
+      {
+        // Remaining 6:23
+        Scheduler::EventInstance &event = _scheduler->getNextEvent();
+        if(event.isValid())
+        {
+          int currentDay;
+          int32_t currentOffset;
+          Scheduler::getCurrentTime(currentDay, currentOffset);
+          uint32_t delay = event.getDelay(currentDay, currentOffset);
+          int hour = delay / 3600;
+          int min = (delay / 60) % 60;
+          int sec = delay % 60;
+          sprintf(temp, "Left %d:%02d:%02d", hour, min, sec);
+          showText(0, 1, temp, true);
+          nextUpdate = 1000;
+        } else {
+          showText(0, 1, "Left --:--:--", true);
+          _updateInfoLine = false;
+        }
+      } break;
         break;
+
 
       default:
         break;
@@ -540,14 +610,14 @@ unsigned long LcdTask::loop(MicroTasks::WakeReason reason)
 void LcdTask::showText(int x, int y, const char *msg, bool clear)
 {
   DBUGF("LCD: %d %d %s", x, y, msg);
-  _evse->getOpenEVSE().lcdDisplayText(x, y, msg, [] (int ret) { });
+  _evse->getOpenEVSE().lcdDisplayText(x, y, msg, IGNORE);
   if(clear)
   {
     for(int i = x + strlen(msg); i < LCD_MAX_LEN; i += 6)
     {
       // Older versions of the firmware crash if sending more than 6 spaces so clear the rest
       // of the line using blocks of 6 spaces
-      _evse->getOpenEVSE().lcdDisplayText(i, y, "      ", [] (int ret) { });
+      _evse->getOpenEVSE().lcdDisplayText(i, y, "      ", IGNORE);
     }
   }
 }

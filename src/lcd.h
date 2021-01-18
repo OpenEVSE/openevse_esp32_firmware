@@ -33,20 +33,21 @@
 enum LcdInfoLine
 {
   LcdInfoLine_Off,
-  LcdInfoLine_EnergySession,       // Energy 1,018Wh
-  LcdInfoLine_EnergyTotal,       // Lifetime 2313kWh
-  LcdInfoLine_Tempurature, // EVSE Temp 30.5C
-  LcdInfoLine_Time,        // Time 03:14PM
-  LcdInfoLine_Date,        // Date 08/25/2020
+  LcdInfoLine_EnergySession,  // Energy 1,018Wh
+  LcdInfoLine_EnergyTotal,    // Lifetime 2313kWh
+  LcdInfoLine_Tempurature,    // EVSE Temp 30.5C
+  LcdInfoLine_Time,           // Time 03:14PM
+  LcdInfoLine_Date,           // Date 08/25/2020
   LcdInfoLine_ElapsedTime,
-  LcdInfoLine_BatterySOC,  // Charge level 79%
-  LcdInfoLine_ChargeLimit, // Charge limit 85%
+  LcdInfoLine_BatterySOC,     // Charge level 79%
+  LcdInfoLine_ChargeLimit,    // Charge limit 85%
   LcdInfoLine_Range,
-  LcdInfoLine_RangeAdded,  // Added 127 miles
+  LcdInfoLine_RangeAdded,     // Added 127 miles
   LcdInfoLine_TimeLeft,
-  LcdInfoLine_Voltage,     // Voltage 243v AC
-  LcdInfoLine_TimerStart,  // Start 10:00PM
-  LcdInfoLine_TimerStop,   // Stop 06:00AM
+  LcdInfoLine_Voltage,        // Voltage 243v AC
+  LcdInfoLine_TimerStart,     // Start 10:00PM
+  LcdInfoLine_TimerStop,      // Stop 06:00AM
+  LcdInfoLine_TimerRemaining  // Remaining 6:23
 };
 
 class LcdTask : public MicroTasks::Task
