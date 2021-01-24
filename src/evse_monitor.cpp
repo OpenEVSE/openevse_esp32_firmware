@@ -36,13 +36,19 @@
 #define EVSE_MONITOR_TEMP_TIME              30
 #endif // !EVSE_MONITOR_TEMP_TIME
 
+#ifndef EVSE_MONITOR_ENERGY_TIME
+#define EVSE_MONITOR_ENERGY_TIME            2
+#endif // !EVSE_MONITOR_ENERGY_TIME
+
 #define EVSE_MONITOR_STATE_DATA_READY         (1 << 0)
 #define EVSE_MONITOR_AMP_AND_VOLT_DATA_READY  (1 << 1)
 #define EVSE_MONITOR_TEMP_DATA_READY          (1 << 2)
+#define EVSE_MONITOR_ENERGY_DATA_READY        (1 << 3)
 
 #define EVSE_MONITOR_DATA_READY (\
         EVSE_MONITOR_AMP_AND_VOLT_DATA_READY | \
-        EVSE_MONITOR_TEMP_DATA_READY \
+        EVSE_MONITOR_TEMP_DATA_READY | \
+        EVSE_MONITOR_ENERGY_DATA_READY \
 )
 
 EvseMonitor::EvseStateEvent::EvseStateEvent() :
@@ -51,7 +57,7 @@ EvseMonitor::EvseStateEvent::EvseStateEvent() :
 {
 }
 
-void EvseMonitor::EvseStateEvent::setState(uint8_t evse_state, uint8_t pilot_state, uint32_t vflags)
+bool EvseMonitor::EvseStateEvent::setState(uint8_t evse_state, uint8_t pilot_state, uint32_t vflags)
 {
   if(_evse_state != evse_state ||
      _pilot_state != pilot_state ||
@@ -60,8 +66,13 @@ void EvseMonitor::EvseStateEvent::setState(uint8_t evse_state, uint8_t pilot_sta
     _evse_state = evse_state;
     _pilot_state = pilot_state;
     _vflags = vflags;
+
     Trigger();
+
+    return true;
   }
+
+  return false;
 }
 
 EvseMonitor::DataReady::DataReady() :
@@ -131,12 +142,14 @@ void EvseMonitor::setup()
 
   _openevse.onState([this](uint8_t evse_state, uint8_t pilot_state, uint32_t current_capacity, uint32_t vflags)
   {
-    DBUGVAR(evse_state);
-    DBUGVAR(pilot_state);
-    DBUGVAR(current_capacity);
-    DBUGVAR(vflags);
-    _state.setState(evse_state, pilot_state, vflags);
+    DBUGF("evse_state = %02x, pilot_state = %02x, current_capacity = %d, vflags = %08x", evse_state, pilot_state, current_capacity, vflags);
+    if(_state.setState(evse_state, pilot_state, vflags) && isError()) {
+      _openevse.getFaultCounters([this](int ret, long gfci_count, long nognd_count, long stuck_count) { updateFaultCounters(ret, gfci_count, nognd_count, stuck_count); });
+    }
   });
+
+  // Get the initial fault count
+  _openevse.getFaultCounters([this](int ret, long gfci_count, long nognd_count, long stuck_count) { updateFaultCounters(ret, gfci_count, nognd_count, stuck_count); });
 }
 
 unsigned long EvseMonitor::loop(MicroTasks::WakeReason reason)
@@ -147,7 +160,8 @@ unsigned long EvseMonitor::loop(MicroTasks::WakeReason reason)
        WakeReason_Message == reason ? "WakeReason_Message" :
        WakeReason_Manual == reason ? "WakeReason_Manual" :
        "UNKNOWN");
-  DBUGLN();
+  DBUG(", _count = ");
+  DBUGLN(_count);
 
   // Get the EVSE state
   if(0 == _count % EVSE_MONITOR_STATE_TIME)
@@ -158,9 +172,13 @@ unsigned long EvseMonitor::loop(MicroTasks::WakeReason reason)
       if(RAPI_RESPONSE_OK == ret)
       {
         DBUGF("evse_state = %02x, session_time = %d, pilot_state = %02x, vflags = %08x", evse_state, session_time, pilot_state, vflags);
-        _state.setState(evse_state, pilot_state, vflags);
+        if(_state.setState(evse_state, pilot_state, vflags) && isError()) {
+          _openevse.getFaultCounters([this](int ret, long gfci_count, long nognd_count, long stuck_count) { updateFaultCounters(ret, gfci_count, nognd_count, stuck_count); });
+        }
+
         _elapsed = session_time;
         _elapsed_set_time = millis();
+
         _data_ready.ready(EVSE_MONITOR_STATE_DATA_READY);
       }
     });
@@ -220,6 +238,20 @@ unsigned long EvseMonitor::loop(MicroTasks::WakeReason reason)
     });
   }
 
+  if(_state.isCharging() && 0 == _count % EVSE_MONITOR_ENERGY_TIME)
+  {
+    DBUGLN("Get charge energy usage");
+    OpenEVSE.getEnergy([this](int ret, double session_wh, double total_kwh)
+    {
+      if(RAPI_RESPONSE_OK == ret)
+      {
+        DBUGF("session_wh = %.2f, total_kwh = %.2f", session_wh, total_kwh);
+
+        _data_ready.ready(EVSE_MONITOR_ENERGY_DATA_READY);
+      }
+    });
+  }
+
   _count ++;
 
   return EVSE_MONITOR_POLL_TIME;
@@ -231,4 +263,18 @@ bool EvseMonitor::begin()
 
 
   return true;
+}
+
+void EvseMonitor::updateFaultCounters(int ret, long gfci_count, long nognd_count, long stuck_count)
+{
+  if(RAPI_RESPONSE_OK == ret)
+  {
+    DBUGF("gfci_count = %ld, nognd_count = %ld, stuck_count = %ld", gfci_count, nognd_count, stuck_count);
+
+    _gfci_count = gfci_count;
+    _nognd_count = nognd_count;
+    _stuck_count = stuck_count;
+
+    _data_ready.ready(EVSE_MONITOR_ENERGY_DATA_READY);
+  }
 }

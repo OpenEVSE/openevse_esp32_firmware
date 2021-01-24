@@ -22,7 +22,8 @@ class EvseMonitor : public MicroTasks::Task
         uint32_t _vflags;
       public:
         EvseStateEvent();
-        void setState(uint8_t evse_state, uint8_t pilot_state, uint32_t vflags);
+
+        bool setState(uint8_t evse_state, uint8_t pilot_state, uint32_t vflags);
 
         uint8_t getEvseState() {
           return _evse_state;
@@ -50,6 +51,7 @@ class EvseMonitor : public MicroTasks::Task
           return OPENEVSE_VFLAG_EV_CONNECTED == (getFlags() & OPENEVSE_VFLAG_EV_CONNECTED);
         }
     };
+
     class DataReady : public MicroTasks::Event
     {
       private:
@@ -65,7 +67,7 @@ class EvseMonitor : public MicroTasks::Task
     EvseStateEvent _state;            // OpenEVSE State
     double _amp;                      // OpenEVSE Current Sensor
     double _voltage;                  // Voltage from OpenEVSE or MQTT
-    double _temp1;                    // Sensor DS3232 Ambient
+    double  _temp1;                    // Sensor DS3232 Ambient
     bool _temp1_valid;
     double _temp2;                    // Sensor MCP9808 Ambiet
     bool _temp2_valid;
@@ -79,6 +81,14 @@ class EvseMonitor : public MicroTasks::Task
     long _elapsed;                    // Elapsed time (only valid if charging)
     uint32_t _elapsed_set_time;
 
+    double _session_wh;
+    double _total_kwh;
+
+    // Default OpenEVSE Fault Counters
+    long _gfci_count;
+    long _nognd_count;
+    long _stuck_count;
+
     DataReady _data_ready;
 
     uint8_t _count;
@@ -87,6 +97,7 @@ class EvseMonitor : public MicroTasks::Task
     Adafruit_MCP9808 _mcp9808;
 #endif
 
+    void updateFaultCounters(int ret, long gfci_count, long nognd_count, long stuck_count);
   protected:
     void setup();
     unsigned long loop(MicroTasks::WakeReason reason);
