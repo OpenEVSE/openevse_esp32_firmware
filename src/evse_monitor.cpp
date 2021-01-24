@@ -97,18 +97,16 @@ EvseMonitor::EvseMonitor(OpenEVSEClass &openevse) :
   _state(),
   _amp(0),
   _voltage(DEFAULT_VOLTAGE),
-  _temp1(0),
-  _temp1_valid(false),
-  _temp2(0),
-  _temp2_valid(false),
-  _temp3(0),
-  _temp3_valid(false),
-  _temp4(0),
-  _temp4_valid(false),
-  _temp_monitor(0),
-  _temp_monitor_valid(false),
   _pilot(0),
   _elapsed(0),
+  _elapsed_set_time(0),
+  _temps(),
+  _session_wh(0),
+  _total_kwh(0),
+  _gfci_count(0),
+  _nognd_count(0),
+  _stuck_count(0),
+  _data_ready(),
   _count(0)
 #ifdef ENABLE_MCP9808
   , _mcp9808()
@@ -209,30 +207,25 @@ unsigned long EvseMonitor::loop(MicroTasks::WakeReason reason)
       if(RAPI_RESPONSE_OK == ret)
       {
         DBUGF("t1 = %.1f%s, t2 = %.1f%s, t3 = %.1f%s", t1, t1_valid ? "" : "*", t2, t2_valid ? "" : "*", t3, t3_valid ? "" : "*");
-        _temp_monitor_valid = false;
-        _temp1 = t1;
-        _temp1_valid = t1_valid;
-        if(!_temp_monitor_valid && _temp1_valid) {
-          _temp_monitor = _temp1;
-          _temp_monitor_valid = true;
-        }
-        _temp2 = t2;
-        _temp2_valid = t2_valid;
-        if(!_temp_monitor_valid && _temp2_valid) {
-          _temp_monitor = _temp2;
-          _temp_monitor_valid = true;
-        }
-        _temp3 = t3;
-        _temp3_valid = t3_valid;
+        _temps[EVSE_MONITOR_TEMP_EVSE_DS3232].set(t1, t1_valid);
+        _temps[EVSE_MONITOR_TEMP_EVSE_MCP9808].set(t2, t2_valid);
+        _temps[EVSE_MONITOR_TEMP_EVSE_TMP007].set(t3, t3_valid);
         #ifdef ENABLE_MCP9808
-        _temp4 = _mcp9808.readTempC();
-        DBUGVAR(_temp4);
-        _temp4_valid = !isnan(_temp4);
-        if(!_temp_monitor_valid && _temp4_valid) {
-          _temp_monitor = _temp4;
-          _temp_monitor_valid = true;
+        {
+          double mcp9808_temp = _mcp9808.readTempC();
+          DBUGVAR(mcp9808_temp);
+          _temps[EVSE_MONITOR_TEMP_ESP_MCP9808].set(mcp9808_temp, !isnan(mcp9808_temp));
         }
         #endif
+
+        _temps[EVSE_MONITOR_TEMP_MONITOR].invalidate();
+        for(int i = 1; i < EVSE_MONITOR_TEMP_COUNT; i++)
+        {
+          if(_temps[i].isValid()) {
+            _temps[EVSE_MONITOR_TEMP_MONITOR].set(_temps[i].get(), _temps[i].isValid());
+            break;
+          }
+        }
         _data_ready.ready(EVSE_MONITOR_TEMP_DATA_READY);
       }
     });

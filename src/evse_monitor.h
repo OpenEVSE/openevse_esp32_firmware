@@ -10,6 +10,14 @@
 #include <Adafruit_MCP9808.h>
 #endif
 
+#define EVSE_MONITOR_TEMP_MONITOR       0
+#define EVSE_MONITOR_TEMP_EVSE_DS3232   1
+#define EVSE_MONITOR_TEMP_EVSE_MCP9808  2
+#define EVSE_MONITOR_TEMP_EVSE_TMP007   3
+#define EVSE_MONITOR_TEMP_ESP_MCP9808   4
+
+#define EVSE_MONITOR_TEMP_COUNT         5
+
 class EvseMonitor : public MicroTasks::Task
 {
   private:
@@ -62,24 +70,43 @@ class EvseMonitor : public MicroTasks::Task
         void ready(uint32_t data);
     };
 
+    class Tempurature
+    {
+      private:
+        bool _valid;
+        double _value;
+
+      public:
+        Tempurature() : _valid(false), _value(0) { }
+
+        void set(double value, bool valid) {
+          _value = value;
+          _valid = valid;
+        }
+
+        double get() {
+          return _value;
+        }
+
+        bool isValid() {
+          return _valid;
+        }
+
+        void invalidate() {
+          _valid = false;
+        }
+    };
+
     OpenEVSEClass &_openevse;
 
     EvseStateEvent _state;            // OpenEVSE State
     double _amp;                      // OpenEVSE Current Sensor
     double _voltage;                  // Voltage from OpenEVSE or MQTT
-    double  _temp1;                    // Sensor DS3232 Ambient
-    bool _temp1_valid;
-    double _temp2;                    // Sensor MCP9808 Ambiet
-    bool _temp2_valid;
-    double _temp3;                    // Sensor TMP007 Infared
-    bool _temp3_valid;
-    double _temp4;                    // ESP32 WiFi board sensor
-    bool _temp4_valid;
-    double _temp_monitor;             // Derived temp value
-    bool _temp_monitor_valid;
     long _pilot;                      // OpenEVSE Pilot Setting
     long _elapsed;                    // Elapsed time (only valid if charging)
     uint32_t _elapsed_set_time;
+
+    Tempurature _temps[EVSE_MONITOR_TEMP_COUNT];
 
     double _session_wh;
     double _total_kwh;
@@ -128,6 +155,36 @@ class EvseMonitor : public MicroTasks::Task
     }
     bool isVehicleConnected() {
       return _state.isVehicleConnected();
+    }
+    double getAmps() {
+      return _amp;
+    }
+    double getVoltage() {
+      return _voltage;
+    }
+    uint32_t getSessionElapsed() {
+      return _elapsed + (_state.isCharging() ? ((millis() - _elapsed_set_time) / 1000) : 0);
+    }
+    double getSessionEnergy() {
+      return _session_wh;
+    }
+    double getTotalEnergy() {
+      return _total_kwh;
+    }
+    long getFaultCountGFCI() {
+      return _gfci_count;
+    }
+    long getFaultCountNoGround() {
+      return _nognd_count;
+    }
+    long getFaultCountStuckRelay() {
+      return _stuck_count;
+    }
+    double getTempurature(uint8_t sensor) {
+      return _temps[sensor].get();
+    }
+    double isTempuratureValid(uint8_t sensor) {
+      return _temps[sensor].isValid();
     }
 
     // Register for events
