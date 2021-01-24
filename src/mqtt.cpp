@@ -57,7 +57,9 @@ void mqttmsg_callback(MongooseString topic, MongooseString payload) {
     divert_update_state();
   }
   else if (topic_string == mqtt_vrms){
-    voltage = payload_str.toFloat();
+    // TODO: The voltage is no longer a global, need to do something so we don't have 
+    //       to read back from the EVSE
+    float voltage = payload_str.toFloat();
     DBUGF("voltage:%.1f", voltage);
     OpenEVSE.setVoltage(voltage, [](int ret) {
       // Only gives better power calculations so not critical if this fails

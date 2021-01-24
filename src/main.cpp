@@ -152,8 +152,7 @@ loop() {
 
   if(OpenEVSE.isConnected())
   {
-    if(OPENEVSE_STATE_STARTING != state &&
-       OPENEVSE_STATE_INVALID != state)
+    if(OPENEVSE_STATE_STARTING != evse.getEvseState())
     {
       // Read initial state from OpenEVSE
       if (rapi_read == 0)
@@ -175,7 +174,6 @@ loop() {
           DEBUG.printf("%s: Free memory %u - diff %d %d\n", time_format_time(time(NULL)).c_str(), current, diff, start_mem - current);
           last_mem = current;
         }
-        update_rapi_values();
         Timer3 = millis();
       }
     }
@@ -197,14 +195,6 @@ loop() {
 
       if(!Update.isRunning())
       {
-        DynamicJsonDocument data(4096);
-        create_rapi_json(data); // create JSON Strings for EmonCMS and MQTT
-
-        emoncms_publish(data);
-
-        teslaClient.getChargeInfoJson(data);
-        event_send(data);
-
         if(config_ohm_enabled()) {
           ohm_loop();
         }

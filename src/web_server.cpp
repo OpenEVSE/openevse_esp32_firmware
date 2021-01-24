@@ -583,13 +583,13 @@ handleStatus(MongooseHttpServerRequest *request) {
 
   create_rapi_json(doc);
 
-  doc["elapsed"] = elapsed;
-  doc["wattsec"] = wattsec;
-  doc["watthour"] = watthour_total;
+  doc["elapsed"] = evse.getSessionElapsed();
+  doc["wattsec"] = evse.getSessionEnergy() * SESSION_ENERGY_SCALE_FACTOR;
+  doc["watthour"] = evse.getTotalEnergy() * TOTAL_ENERGY_SCALE_FACTOR;
 
-  doc["gfcicount"] = gfci_count;
-  doc["nogndcount"] = nognd_count;
-  doc["stuckcount"] = stuck_count;
+  doc["gfcicount"] = evse.getFaultCountGFCI();
+  doc["nogndcount"] = evse.getFaultCountNoGround();
+  doc["stuckcount"] = evse.getFaultCountStuckRelay();
 
   doc["solar"] = solar;
   doc["grid_ie"] = grid_ie;

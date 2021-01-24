@@ -423,7 +423,7 @@ unsigned long LcdTask::loop(MicroTasks::WakeReason reason)
 
       case OPENEVSE_STATE_CHARGING:
         // Line 0 "Charging 47.8A"
-        sprintf(temp, "Charging %dA", _evse->getChargeCurrent());
+        sprintf(temp, "Charging %.2fA", _evse->getAmps());
         showText(0, 0, temp, true);
         break;
 
@@ -500,27 +500,21 @@ unsigned long LcdTask::loop(MicroTasks::WakeReason reason)
     {
       case LcdInfoLine_EnergySession:
         // Energy 1,018Wh
-        _evse->getOpenEVSE().getEnergy([this](int ret, double session_wh, double total_kwh) {
-          char temp[20];
-          sprintf(temp, "Energy %.2fWh", session_wh);
-          showText(0, 1, temp, true);
-        });
+        sprintf(temp, "Energy %.2fWh", _evse->getSessionEnergy());
+        showText(0, 1, temp, true);
         _updateInfoLine = false;
         break;
 
       case LcdInfoLine_EnergyTotal:
         // Lifetime 2313kWh
-        _evse->getOpenEVSE().getEnergy([this](int ret, double session_wh, double total_kwh) {
-          char temp[20];
-          sprintf(temp, "Lifetime %.0fkWh", total_kwh);
-          showText(0, 1, temp, true);
-        });
+        sprintf(temp, "Lifetime %.0fkWh", _evse->getTotalEnergy());
+        showText(0, 1, temp, true);
         _updateInfoLine = false;
         break;
 
       case LcdInfoLine_Tempurature:
         // EVSE Temp 30.5C
-        sprintf(temp, "EVSE Temp %.1fC", temp_monitor);
+        sprintf(temp, "EVSE Temp %.1fC", _evse->getTempurature(EVSE_MONITOR_TEMP_MONITOR));
         showText(0, 1, temp, true);
         _updateInfoLine = false;
         break;

@@ -90,7 +90,7 @@ void divertmode_update(byte newmode)
           max_charge_current = String(rapiSender.getToken(1)).toInt();
           DBUGF("Read max I: %d", max_charge_current);
         }
-        if(OPENEVSE_STATE_SLEEPING != state)
+        if(OPENEVSE_STATE_SLEEPING != evse.getEvseState())
         {
           if(0 == rapiSender.sendCmdSync(config_pause_uses_disabled() ? F("$FD") : F("$FS"))) 
           {
@@ -135,6 +135,9 @@ void divert_update_state()
   // If divert mode = Eco (2)
   if (divertmode == DIVERT_MODE_ECO)
   {
+    double voltage = evse.getVoltage();
+    uint8_t state = evse.getEvseState();
+
     int current_charge_rate = charge_rate;
 
     // Read the current charge rate

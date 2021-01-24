@@ -276,6 +276,36 @@ class EvseManager : public MicroTasks::Task
     bool isVehicleConnected() {
       return _monitor.isVehicleConnected();
     }
+    double getAmps() {
+      return _monitor.getAmps();
+    }
+    double getVoltage() {
+      return _monitor.getVoltage();
+    }
+    uint32_t getSessionElapsed() {
+      return _monitor.getSessionElapsed();
+    }
+    double getSessionEnergy() {
+      return _monitor.getSessionEnergy();
+    }
+    double getTotalEnergy() {
+      return _monitor.getTotalEnergy();
+    }
+    long getFaultCountGFCI() {
+      return _monitor.getFaultCountGFCI();
+    }
+    long getFaultCountNoGround() {
+      return _monitor.getFaultCountNoGround();
+    }
+    long getFaultCountStuckRelay() {
+      return _monitor.getFaultCountStuckRelay();
+    }
+    double getTempurature(uint8_t sensor) {
+      return _monitor.getTempurature(sensor);
+    }
+    double isTempuratureValid(uint8_t sensor) {
+      return _monitor.isTempuratureValid(sensor);
+    }
 
     // Temp until everything uses EvseManager
     RapiSender &getSender() {
@@ -290,6 +320,9 @@ class EvseManager : public MicroTasks::Task
     // Register for events
     void onStateChange(MicroTasks::EventListener *listner) {
       _monitor.onStateChange(listner);
+    }
+    void onDataReady(MicroTasks::EventListener *listner) {
+      _monitor.onDataReady(listner);
     }
 };
 
