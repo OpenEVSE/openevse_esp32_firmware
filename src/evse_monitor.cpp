@@ -239,6 +239,8 @@ unsigned long EvseMonitor::loop(MicroTasks::WakeReason reason)
       if(RAPI_RESPONSE_OK == ret)
       {
         DBUGF("session_wh = %.2f, total_kwh = %.2f", session_wh, total_kwh);
+        _session_wh = session_wh;
+        _total_kwh = total_kwh;
 
         _data_ready.ready(EVSE_MONITOR_ENERGY_DATA_READY);
       }
