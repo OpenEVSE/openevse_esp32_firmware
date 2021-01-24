@@ -1,4 +1,4 @@
-#ifndef ENABLE_DEBUG_LED
+#if defined(ENABLE_DEBUG) && !defined(ENABLE_DEBUG_LED)
 #undef ENABLE_DEBUG
 #endif
 

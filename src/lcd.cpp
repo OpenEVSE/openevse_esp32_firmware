@@ -1,3 +1,7 @@
+#if defined(ENABLE_DEBUG) && !defined(ENABLE_DEBUG_LCD)
+#undef ENABLE_DEBUG
+#endif
+
 #include "emonesp.h"
 #include "lcd.h"
 #include "RapiSender.h"
