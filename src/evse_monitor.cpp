@@ -84,7 +84,7 @@ EvseMonitor::DataReady::DataReady() :
 void EvseMonitor::DataReady::ready(uint32_t data)
 {
   _ready |= data;
-  if(EVSE_MONITOR_DATA_READY == _ready)
+  if(EVSE_MONITOR_DATA_READY == (_ready & EVSE_MONITOR_DATA_READY))
   {
     Trigger();
     _ready = 0;
