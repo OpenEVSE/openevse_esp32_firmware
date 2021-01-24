@@ -6,6 +6,8 @@
 #include <openevse.h>
 #include <MicroTasks.h>
 
+#include "evse_monitor.h"
+
 typedef uint32_t EvseClient;
 
 #define EvseClient_Vendor_SHIFT               16
@@ -212,50 +214,11 @@ class EvseManager : public MicroTasks::Task
         }
     };
 
-    class EvseStateEvent : public MicroTasks::Event
-    {
-      private:
-        uint8_t _evse_state;
-        uint8_t _pilot_state;
-        uint32_t _vflags;
-      public:
-        EvseStateEvent();
-        void setState(uint8_t evse_state, uint8_t pilot_state, uint32_t vflags)
-        {
-          _evse_state = evse_state;
-          _pilot_state = pilot_state;
-          _vflags = vflags;
-          Trigger();
-        }
-        uint8_t getEvseState() {
-          return _evse_state;
-        }
-        uint8_t getPilotState() {
-          return _pilot_state;
-        }
-        uint32_t getFlags() {
-          return _vflags;
-        }
-
-        EvseState getState() {
-          return isDisabled() ? EvseState::Disabled : EvseState::Active;
-        }
-        bool isActive() {
-          return OPENEVSE_STATE_NOT_CONNECTED <= _evse_state && _evse_state <= OPENEVSE_STATE_CHARGING;
-        }
-        bool isDisabled() {
-          return OPENEVSE_STATE_SLEEPING <= _evse_state;
-        }
-        bool isError() {
-          return OPENEVSE_STATE_VENT_REQUIRED <= _evse_state && _evse_state <= OPENEVSE_STATE_OVER_CURRENT;
-        }
-    };
-
     RapiSender _sender;
+    EvseMonitor _monitor;
 
     Claim _clients[EVSE_MANAGER_MAX_CLIENT_CLAIMS];
 
-    EvseStateEvent _state;
     MicroTasks::EventListener _evseStateListener;
 
     EvseProperties _targetProperties;
@@ -272,6 +235,11 @@ class EvseManager : public MicroTasks::Task
     bool evaluateClaims(EvseProperties &properties);
 
     bool setTargetState(EvseProperties &properties);
+
+    EvseState getActiveState() {
+      return _monitor.isDisabled() ? EvseState::Disabled : EvseState::Active;
+    }
+
   protected:
     void setup();
     unsigned long loop(MicroTasks::WakeReason reason);
@@ -297,16 +265,16 @@ class EvseManager : public MicroTasks::Task
       return OpenEVSE.isConnected();
     }
     uint8_t getEvseState() {
-      return _state.getEvseState();
+      return _monitor.getEvseState();
     }
     uint8_t getPilotState() {
-      return _state.getPilotState();
+      return _monitor.getPilotState();
     }
     uint32_t getFlags() {
-      return _state.getFlags();
+      return _monitor.getFlags();
     }
     bool isVehicleConnected() {
-      return OPENEVSE_VFLAG_EV_CONNECTED == (_state.getFlags() & OPENEVSE_VFLAG_EV_CONNECTED);
+      return _monitor.isVehicleConnected();
     }
 
     // Temp until everything uses EvseManager
@@ -321,7 +289,7 @@ class EvseManager : public MicroTasks::Task
 
     // Register for events
     void onStateChange(MicroTasks::EventListener *listner) {
-      _state.Register(listner);
+      _monitor.onStateChange(listner);
     }
 };
 

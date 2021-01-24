@@ -67,16 +67,11 @@ void EvseManager::Claim::release()
   _client = EvseClient_NULL;
 }
 
-EvseManager::EvseStateEvent::EvseStateEvent() :
-  MicroTasks::Event(),
-  _evse_state(OPENEVSE_STATE_STARTING)
-{
-}
-
 EvseManager::EvseManager(Stream &port) :
+  MicroTasks::Task(),
   _sender(&port),
+  _monitor(OpenEVSE),
   _clients(),
-  _state(),
   _evseStateListener(this),
   _targetProperties(),
   _hasClaims(false),
@@ -96,13 +91,8 @@ void EvseManager::initialiseEvse()
   // Check state the OpenEVSE is in.
   OpenEVSE.begin(_sender, [this](bool connected)
   {
-    if(connected)
-    {
-      OpenEVSE.getStatus([this](int ret, uint8_t evse_state, uint32_t session_time, uint8_t pilot_state, uint32_t vflags)
-      {
-        DBUGVAR(evse_state);
-        _state.setState(evse_state, pilot_state, vflags);
-      });
+    if(connected) {
+      _monitor.begin();
     } else {
       DBUGLN("OpenEVSE not responding or not connected");
     }
@@ -195,31 +185,17 @@ bool EvseManager::evaluateClaims(EvseProperties &properties)
 
 void EvseManager::setup()
 {
-  _state.Register(&_evseStateListener);
-
-  OpenEVSE.onState([this](uint8_t evse_state, uint8_t pilot_state, uint32_t current_capacity, uint32_t vflags)
-  {
-    DBUGVAR(evse_state);
-    DBUGVAR(pilot_state);
-    DBUGVAR(current_capacity);
-    DBUGVAR(vflags);
-    DBUGVAR(_waitingForEvent);
-    if(_waitingForEvent > 0) {
-      _evaluateTargetState = true;
-      _waitingForEvent--;
-    }
-    _state.setState(evse_state, pilot_state, vflags);
-  });
+  _monitor.onStateChange(&_evseStateListener);
 }
 
 bool EvseManager::setTargetState(EvseProperties &target)
 {
   bool changeMade = false;
   DBUGVAR(target.getState().toString());
-  DBUGVAR(_state.getState().toString());
+  DBUGVAR(getActiveState().toString());
 
   EvseState state = target.getState();
-  if(EvseState::None != state && state != _state.getState())
+  if(EvseState::None != state && state != getActiveState())
   {
     _waitingForEvent++;
     if(EvseState::Active == state)
@@ -261,15 +237,24 @@ unsigned long EvseManager::loop(MicroTasks::WakeReason reason)
   DBUG(" connected: ");
   DBUGLN(OpenEVSE.isConnected());
 
-  DBUGVAR(_state.getState().toString());
-  DBUGVAR(_state.getEvseState());
-  DBUGVAR(_state.getPilotState());
+  DBUGVAR(getActiveState().toString());
+  DBUGVAR(_monitor.getEvseState());
+  DBUGVAR(_monitor.getPilotState());
 
   // If we are not connected yet try and connect to the EVSE module
   if(!OpenEVSE.isConnected())
   {
     initialiseEvse();
     return 10 * 1000;
+  }
+
+  if(_evseStateListener.IsTriggered())
+  {
+    DBUGVAR(_waitingForEvent);
+    if(_waitingForEvent > 0) {
+      _evaluateTargetState = true;
+      _waitingForEvent--;
+    }
   }
 
   DBUGVAR(_evaluateClaims);
@@ -303,7 +288,7 @@ unsigned long EvseManager::loop(MicroTasks::WakeReason reason)
     else
     {
       // No clients, make sure the EVSE module is enabled
-      if(_state.isDisabled())
+      if(_monitor.isDisabled())
       {
         _waitingForEvent++;
         DBUGLN("EVSE: enable");
