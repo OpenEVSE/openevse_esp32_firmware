@@ -21,20 +21,6 @@
 
 #include "RapiSender.h"
 
-#ifdef ENABLE_MCP9808
-#include <Wire.h>
-#include <Adafruit_MCP9808.h>
-Adafruit_MCP9808 tempsensor = Adafruit_MCP9808();
-
-#ifndef I2C_SDA
-#define I2C_SDA -1
-#endif
-
-#ifndef I2C_SCL
-#define I2C_SCL -1
-#endif
-#endif
-
 int espflash = 0;
 int espfree = 0;
 
@@ -227,24 +213,6 @@ handleRapiRead()
 
 void input_setup()
 {
-#ifdef ENABLE_MCP9808
-  Wire.begin(I2C_SDA, I2C_SCL);
-
-  if(tempsensor.begin())
-  {
-    DBUGLN("Found MCP9808!");
-    // Mode Resolution SampleTime
-    //  0    0.5°C       30 ms
-    //  1    0.25°C      65 ms
-    //  2    0.125°C     130 ms
-    //  3    0.0625°C    250 ms
-    tempsensor.setResolution(1); // sets the resolution mode of reading, the modes are defined in the table bellow:
-    tempsensor.wake();   // wake up, ready to read!
-  } else {
-    DBUGLN("Couldn't find MCP9808!");
-  }
-#endif
-
   MicroTask.startTask(input);
 
   OpenEVSE.onWiFi([](uint8_t wifiMode)
