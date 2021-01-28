@@ -51,6 +51,21 @@ jobs:
         python -m pip install --upgrade pip
         pip install --upgrade platformio
 
+    - name: Set up Node JS
+      uses: actions/setup-node@v2
+      with:
+        node-version: '12'
+
+    - name: Install dependencies
+      run: |
+        cd gui
+        npm install
+
+    - name: Build GUI
+      run: |
+        cd gui
+        npm run build
+
     - name: Run PlatformIO
       run: pio run -e ${{ matrix.env }}
 
