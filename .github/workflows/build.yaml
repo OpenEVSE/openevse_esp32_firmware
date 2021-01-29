@@ -27,6 +27,13 @@ jobs:
       with:
         submodules: recursive
 
+    - name: Temp checkout latest OpenEVSE lib
+      uses: actions/checkout@v2
+      with:
+        repository: jeremypoulter/OpenEVSE_Lib
+        ref: openevse_wifi_timer_apis
+        path: lib/OpenEVSE
+
     - name: Cache pip
       uses: actions/cache@v2
       with:
