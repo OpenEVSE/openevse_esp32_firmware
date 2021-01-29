@@ -8,22 +8,9 @@ on:
     types: [opened, reopened, synchronize]
 
 jobs:
-  build:
+  setup:
+    name: Setup Environment
     runs-on: ubuntu-latest
-
-    strategy:
-      fail-fast: false
-      matrix:
-        env:
-          - openevse_nodemcu-32s
-          - openevse_esp-wrover-kit
-          - openevse_huzzah32_dev
-          - openevse_huzzah32
-          - openevse_featheresp32
-          - openevse_wifi_v1
-          - openevse_esp32-gateway
-          - openevse_esp32-gateway-e
-          - openevse_esp32-heltec-wifi-lora-v2
 
     steps:
     - uses: actions/checkout@v2
@@ -66,6 +53,40 @@ jobs:
       with:
         node-version: '12'
 
+  build_gui:
+    name: Build GUI
+    runs-on: ubuntu-latest
+    needs: setup
+    steps:
+    - name: Install dependencies
+      run: |
+        cd gui
+        npm install
+
+    - name: Build GUI
+      run: |
+        cd gui
+        npm run build
+
+  build_firmware:
+    name: Build Firmware(s)
+    runs-on: ubuntu-latest
+    needs: build_gui
+    strategy:
+      fail-fast: false
+      matrix:
+        env:
+          - openevse_nodemcu-32s
+          - openevse_esp-wrover-kit
+          - openevse_huzzah32_dev
+          - openevse_huzzah32
+          - openevse_featheresp32
+          - openevse_wifi_v1
+          - openevse_esp32-gateway
+          - openevse_esp32-gateway-e
+          - openevse_esp32-heltec-wifi-lora-v2
+
+    steps:
     - name: Install dependencies
       run: |
         cd gui
