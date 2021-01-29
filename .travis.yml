@@ -23,26 +23,15 @@ python:
 sudo: required
 
 env:
-  #- PIO_ENV=openevse
-  #- PIO_ENV=openevse_slow
-  #- PIO_ENV=openevse_ota
-  #- PIO_ENV=openevse_dev
-  #- PIO_ENV=openevse_staging
-  #- PIO_ENV=openevse_staging_libs
   - PIO_ENV=openevse_nodemcu-32s
   - PIO_ENV=openevse_esp-wrover-kit
-  - PIO_ENV=openevse_esp-wrover-kit_idf
   - PIO_ENV=openevse_huzzah32
-  - PIO_ENV=openevse_huzzah32_idf
   - PIO_ENV=openevse_huzzah32_dev
-  - PIO_ENV=openevse_huzzah32_idf_dev
   - PIO_ENV=openevse_featheresp32
   - PIO_ENV=openevse_wifi_v1
   - PIO_ENV=openevse_esp32-gateway
   - PIO_ENV=openevse_esp32-gateway-e
   - PIO_ENV=openevse_esp32-heltec-wifi-lora-v2
-  # - SCRIPT=ci_arduino.sh
-  #   BUILD_TARGET=esp8266:esp8266:huzzah:FlashSize=4M1M
 
 cache:
   directories:
@@ -57,36 +46,7 @@ install:
 
   # Use dev version
   - pip install -U https://github.com/platformio/platformio-core/archive/develop.zip
-  # - pio lib install https://github.com/jeremypoulter/ArduinoMongoose.git
-
-  # - platformio platform install espressif8266 --with-package tool-mkspiffs
-  # - platformio platform install https://github.com/platformio/platform-espressif8266.git#feature/stage --with-package tool-mkspiffs
-
-  # Make sure our cached copy is up-to-date
-  # - platformio upgrade
-  # - platformio update
-
-  # # Install Arduino IDE
-  # - "/sbin/start-stop-daemon --start --quiet --pidfile /tmp/custom_xvfb_1.pid --make-pidfile --background --exec /usr/bin/Xvfb -- :1 -ac -screen 0 1280x1024x16 -extension RANDR"
-  # - sleep 3
-  # - export DISPLAY=:1.0
-  # - ARDUINO_VERSION=1.8.4
-  # - wget http://downloads.arduino.cc/arduino-${ARDUINO_VERSION}-linux64.tar.xz
-  # - tar xf arduino-${ARDUINO_VERSION}-linux64.tar.xz
-  # - sudo mv arduino-${ARDUINO_VERSION} /usr/local/share/arduino
-  # - sudo ln -s /usr/local/share/arduino/arduino /usr/local/bin/arduino
-
-  # # Setup Arduino IDE
-  # - arduino --pref "boardsmanager.additional.urls=http://arduino.esp8266.com/stable/package_esp8266com_index.json" --save-prefs
-  # - arduino --install-boards "esp8266:esp8266"
-  # - arduino --install-library "PubSubClient"
-  # - mkdir -p ~/Arduino/libraries
-  # - cd ~/Arduino/libraries
-  # - wget https://github.com/me-no-dev/ESPAsyncWebServer/archive/master.zip -O ESPAsyncWebServer.zip
-  # - unzip ESPAsyncWebServer.zip
-  # - wget https://github.com/me-no-dev/ESPAsyncTCP/archive/master.zip -O ESPAsyncTCP.zip
-  # - unzip ESPAsyncTCP.zip
-  # - cd -
+  - pio lib install https://github.com/jeremypoulter/OpenEVSE_Lib.git
 
 script:
   - bash -e scripts/${SCRIPT:-ci_platformio.sh}
