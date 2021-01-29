@@ -212,6 +212,10 @@ class EvseManager : public MicroTasks::Task
         bool getAutoRelease() {
           return _properties.getAutoRelease();
         }
+
+        EvseProperties &getProperties() {
+          return _properties;
+        }
     };
 
     RapiSender _sender;
@@ -239,6 +243,8 @@ class EvseManager : public MicroTasks::Task
     EvseState getActiveState() {
       return _monitor.isDisabled() ? EvseState::Disabled : EvseState::Active;
     }
+
+    EvseProperties &getClaimProperties(EvseClient client);
 
   protected:
     void setup();

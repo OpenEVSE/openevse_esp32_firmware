@@ -120,11 +120,15 @@ class EvseMonitor : public MicroTasks::Task
 
     uint8_t _count;
 
+    char _firmware_version[32];
+
 #ifdef ENABLE_MCP9808
     Adafruit_MCP9808 _mcp9808;
 #endif
 
     void updateFaultCounters(int ret, long gfci_count, long nognd_count, long stuck_count);
+
+    void evseBoot(const char *firmware_version);
   protected:
     void setup();
     unsigned long loop(MicroTasks::WakeReason reason);
@@ -133,7 +137,7 @@ class EvseMonitor : public MicroTasks::Task
     EvseMonitor(OpenEVSEClass &openevse);
     ~EvseMonitor();
 
-    bool begin();
+    bool begin(RapiSender &sender);
 
     uint8_t getEvseState() {
       return _state.getEvseState();

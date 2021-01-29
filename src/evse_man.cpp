@@ -7,6 +7,8 @@
 #include "evse_man.h"
 #include "debug.h"
 
+static EvseProperties nullProperties;
+
 EvseProperties::EvseProperties() :
   _state(EvseState::None),
   _charge_current(UINT32_MAX),
@@ -89,14 +91,7 @@ EvseManager::~EvseManager()
 void EvseManager::initialiseEvse()
 {
   // Check state the OpenEVSE is in.
-  OpenEVSE.begin(_sender, [this](bool connected)
-  {
-    if(connected) {
-      _monitor.begin();
-    } else {
-      DBUGLN("OpenEVSE not responding or not connected");
-    }
-  });
+  _monitor.begin(_sender);
 }
 
 bool EvseManager::findClaim(EvseClient client, Claim **claim)
@@ -358,27 +353,41 @@ bool EvseManager::clientHasClaim(EvseClient client) {
   return findClaim(client);
 }
 
+EvseProperties &EvseManager::getClaimProperties(EvseClient client)
+{
+  if(EvseClient_NULL == client) {
+    return _targetProperties;
+  }
+
+  Claim *claim;
+  if(findClaim(client, &claim)) {
+    return claim->getProperties();
+  }
+
+  return nullProperties;
+}
+
 EvseState EvseManager::getState(EvseClient client)
 {
-  return EvseState::None;
+  return getClaimProperties(client).getState();
 }
 
 uint32_t EvseManager::getChargeCurrent(EvseClient client)
 {
-  return 0;
+  return getClaimProperties(client).getChargeCurrent();
 }
 
 uint32_t EvseManager::getMaxCurrent(EvseClient client)
 {
-  return 0;
+  return getClaimProperties(client).getMaxCurrent();
 }
 
 uint32_t EvseManager::getEnergyLimit(EvseClient client)
 {
-  return 0;
+  return getClaimProperties(client).getEnergyLimit();
 }
 
 uint32_t EvseManager::getTimeLimit(EvseClient client)
 {
-  return 0;
+  return getClaimProperties(client).getTimeLimit();
 }

@@ -137,14 +137,11 @@ void EvseMonitor::setup()
     DBUGLN("Couldn't find MCP9808!");
   }
   #endif
+}
 
-  _openevse.onState([this](uint8_t evse_state, uint8_t pilot_state, uint32_t current_capacity, uint32_t vflags)
-  {
-    DBUGF("evse_state = %02x, pilot_state = %02x, current_capacity = %d, vflags = %08x", evse_state, pilot_state, current_capacity, vflags);
-    if(_state.setState(evse_state, pilot_state, vflags) && isError()) {
-      _openevse.getFaultCounters([this](int ret, long gfci_count, long nognd_count, long stuck_count) { updateFaultCounters(ret, gfci_count, nognd_count, stuck_count); });
-    }
-  });
+void EvseMonitor::evseBoot(const char *firmware)
+{
+  snprintf(_firmware_version, sizeof(_firmware_version), "%s", firmware);
 
   // Get the initial fault count
   _openevse.getFaultCounters([this](int ret, long gfci_count, long nognd_count, long stuck_count) { updateFaultCounters(ret, gfci_count, nognd_count, stuck_count); });
@@ -252,10 +249,29 @@ unsigned long EvseMonitor::loop(MicroTasks::WakeReason reason)
   return EVSE_MONITOR_POLL_TIME;
 }
 
-bool EvseMonitor::begin()
+bool EvseMonitor::begin(RapiSender &sender)
 {
-  MicroTask.startTask(this);
+  OpenEVSE.begin(sender, [this](bool connected, const char *firmware, const char *protocol)
+  {
+    if(connected)
+    {
+      _openevse.onState([this](uint8_t evse_state, uint8_t pilot_state, uint32_t current_capacity, uint32_t vflags)
+      {
+        DBUGF("evse_state = %02x, pilot_state = %02x, current_capacity = %d, vflags = %08x", evse_state, pilot_state, current_capacity, vflags);
+        if(_state.setState(evse_state, pilot_state, vflags) && isError()) {
+          _openevse.getFaultCounters([this](int ret, long gfci_count, long nognd_count, long stuck_count) { updateFaultCounters(ret, gfci_count, nognd_count, stuck_count); });
+        }
+      });
 
+      _openevse.onBoot([this](uint8_t post_code, const char *firmware) { evseBoot(firmware); });
+
+      evseBoot(firmware);
+
+      MicroTask.startTask(this);
+    } else {
+      DEBUG_PORT.println("OpenEVSE not responding or not connected");
+    }
+  });
 
   return true;
 }
