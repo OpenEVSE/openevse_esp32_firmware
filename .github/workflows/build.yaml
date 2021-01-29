@@ -23,7 +23,6 @@ jobs:
           - openevse_wifi_v1
           - openevse_esp32-gateway
           - openevse_esp32-gateway-e
-          - openevse_esp32-gatewa
           - openevse_esp32-heltec-wifi-lora-v2
 
     steps:
