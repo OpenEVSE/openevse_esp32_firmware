@@ -529,8 +529,6 @@ bool Scheduler::deserialize(Stream &stream)
 
   DeserializationError err = deserializeJson(doc, stream);
   if(DeserializationError::Code::Ok == err) {
-    serializeJsonPretty(doc, DEBUG_PORT);
-    DBUGLN("");
     return Scheduler::deserialize(doc);
   }
 
