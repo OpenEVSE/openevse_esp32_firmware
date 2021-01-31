@@ -51,6 +51,16 @@
         EVSE_MONITOR_ENERGY_DATA_READY \
 )
 
+#define EVSE_MONITOR_FAULT_COUNT_BOOT_READY   (1 << 0)
+#define EVSE_MONITOR_FLAGS_BOOT_READY         (1 << 1)
+#define EVSE_MONITOR_CURRENT_BOOT_READY       (1 << 2)
+
+#define EVSE_MONITOR_BOOT_READY (\
+        EVSE_MONITOR_FAULT_COUNT_BOOT_READY | \
+        EVSE_MONITOR_FLAGS_BOOT_READY | \
+        EVSE_MONITOR_CURRENT_BOOT_READY \
+)
+
 EvseMonitor::EvseStateEvent::EvseStateEvent() :
   MicroTasks::Event(),
   _evse_state(OPENEVSE_STATE_STARTING)
@@ -75,19 +85,20 @@ bool EvseMonitor::EvseStateEvent::setState(uint8_t evse_state, uint8_t pilot_sta
   return false;
 }
 
-EvseMonitor::DataReady::DataReady() :
+EvseMonitor::DataReady::DataReady(uint32_t ready) :
   MicroTasks::Event(),
-  _ready(0)
+  _state(0),
+  _ready(ready)
 {
 }
 
 void EvseMonitor::DataReady::ready(uint32_t data)
 {
-  _ready |= data;
-  if(EVSE_MONITOR_DATA_READY == (_ready & EVSE_MONITOR_DATA_READY))
+  _state |= data;
+  if(_ready == (_state & _ready))
   {
     Trigger();
-    _ready = 0;
+    _state = 0;
   }
 }
 
@@ -97,7 +108,6 @@ EvseMonitor::EvseMonitor(OpenEVSEClass &openevse) :
   _state(),
   _amp(0),
   _voltage(DEFAULT_VOLTAGE),
-  _pilot(0),
   _elapsed(0),
   _elapsed_set_time(0),
   _temps(),
@@ -106,7 +116,12 @@ EvseMonitor::EvseMonitor(OpenEVSEClass &openevse) :
   _gfci_count(0),
   _nognd_count(0),
   _stuck_count(0),
-  _data_ready(),
+  _min_current(0),
+  _pilot(0),
+  _max_configured_current(0),
+  _max_hardware_current(0),
+  _data_ready(EVSE_MONITOR_DATA_READY),
+  _boot_ready(EVSE_MONITOR_BOOT_READY),
   _count(0)
 #ifdef ENABLE_MCP9808
   , _mcp9808()
@@ -141,10 +156,41 @@ void EvseMonitor::setup()
 
 void EvseMonitor::evseBoot(const char *firmware)
 {
+  DBUGF("EVSE boot v%s", firmware);
+
   snprintf(_firmware_version, sizeof(_firmware_version), "%s", firmware);
 
-  // Get the initial fault count
-  _openevse.getFaultCounters([this](int ret, long gfci_count, long nognd_count, long stuck_count) { updateFaultCounters(ret, gfci_count, nognd_count, stuck_count); });
+  _openevse.getFaultCounters([this](int ret, long gfci_count, long nognd_count, long stuck_count)
+  {
+    if(RAPI_RESPONSE_OK == ret)
+    {
+      updateFaultCounters(ret, gfci_count, nognd_count, stuck_count);
+      _boot_ready.ready(EVSE_MONITOR_FAULT_COUNT_BOOT_READY);
+    }
+  });
+
+  _openevse.getSettings([this](int ret, long pilot, uint32_t flags)
+  {
+    if(RAPI_RESPONSE_OK == ret)
+    {
+      DBUGF("pilot = %ld, flags = %x", pilot, flags);
+      _settings_flags = flags;
+      _boot_ready.ready(EVSE_MONITOR_FLAGS_BOOT_READY);
+    }
+  });
+
+  _openevse.getCurrentCapacity([this](int ret, long min_current, long max_hardware_current, long pilot, long max_configured_current)
+  {
+    if(RAPI_RESPONSE_OK == ret)
+    {
+      DBUGF("min_current = %ld, pilot = %ld, max_configured_current = %ld, max_hardware_current = %ld", min_current, pilot, max_configured_current, max_hardware_current);
+      _min_current = min_current;
+      _max_hardware_current = max_hardware_current;
+      _pilot = pilot;
+      _max_configured_current = max_configured_current;
+      _boot_ready.ready(EVSE_MONITOR_CURRENT_BOOT_READY);
+    }
+  });
 }
 
 unsigned long EvseMonitor::loop(MicroTasks::WakeReason reason)
@@ -285,7 +331,5 @@ void EvseMonitor::updateFaultCounters(int ret, long gfci_count, long nognd_count
     _gfci_count = gfci_count;
     _nognd_count = nognd_count;
     _stuck_count = stuck_count;
-
-    _data_ready.ready(EVSE_MONITOR_ENERGY_DATA_READY);
   }
 }

@@ -330,6 +330,9 @@ class EvseManager : public MicroTasks::Task
     void onDataReady(MicroTasks::EventListener *listner) {
       _monitor.onDataReady(listner);
     }
+    void onBootReady(MicroTasks::EventListener *listner) {
+      _monitor.onBootReady(listner);
+    }
 };
 
 #endif // !_OPENEVSE_EVSE_MAN_H

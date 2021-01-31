@@ -63,9 +63,10 @@ class EvseMonitor : public MicroTasks::Task
     class DataReady : public MicroTasks::Event
     {
       private:
+        uint32_t _state;
         uint32_t _ready;
       public:
-        DataReady();
+        DataReady(uint32_t ready);
 
         void ready(uint32_t data);
     };
@@ -102,7 +103,6 @@ class EvseMonitor : public MicroTasks::Task
     EvseStateEvent _state;            // OpenEVSE State
     double _amp;                      // OpenEVSE Current Sensor
     double _voltage;                  // Voltage from OpenEVSE or MQTT
-    long _pilot;                      // OpenEVSE Pilot Setting
     long _elapsed;                    // Elapsed time (only valid if charging)
     uint32_t _elapsed_set_time;
 
@@ -116,9 +116,19 @@ class EvseMonitor : public MicroTasks::Task
     long _nognd_count;
     long _stuck_count;
 
-    DataReady _data_ready;
+    // Current settings
+    long _min_current;
+    long _pilot;                      // OpenEVSE Pilot Setting
+    long _max_configured_current;
+    long _max_hardware_current;
 
-    uint8_t _count;
+    // Settings
+    uint32_t _settings_flags;
+
+    DataReady _data_ready;
+    DataReady _boot_ready;
+
+    uint32_t _count;
 
     char _firmware_version[32];
 
@@ -134,6 +144,12 @@ class EvseMonitor : public MicroTasks::Task
     unsigned long loop(MicroTasks::WakeReason reason);
 
   public:
+    enum class ServiceLevel:uint8_t {
+      L1,
+      L2,
+      Auto
+    };
+
     EvseMonitor(OpenEVSEClass &openevse);
     ~EvseMonitor();
 
@@ -190,6 +206,18 @@ class EvseMonitor : public MicroTasks::Task
     double isTempuratureValid(uint8_t sensor) {
       return _temps[sensor].isValid();
     }
+    long getMinCurrent() {
+      return _min_current;
+    }
+    long getPilot() {
+      return _pilot;
+    }
+    long getMaxConfiguredCurrent() {
+      return _max_configured_current;
+    }
+    long getMaxHardwareCurrent() {
+      return _max_hardware_current;
+    }
 
     // Register for events
     void onStateChange(MicroTasks::EventListener *listner) {
@@ -197,6 +225,9 @@ class EvseMonitor : public MicroTasks::Task
     }
     void onDataReady(MicroTasks::EventListener *listner) {
       _data_ready.Register(listner);
+    }
+    void onBootReady(MicroTasks::EventListener *listner) {
+      _boot_ready.Register(listner);
     }
 };
 

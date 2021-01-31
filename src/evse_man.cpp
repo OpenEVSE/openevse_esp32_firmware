@@ -243,6 +243,7 @@ unsigned long EvseManager::loop(MicroTasks::WakeReason reason)
     return 10 * 1000;
   }
 
+  DBUGVAR(_evseStateListener.IsTriggered());
   if(_evseStateListener.IsTriggered())
   {
     DBUGVAR(_waitingForEvent);
@@ -374,11 +375,19 @@ EvseState EvseManager::getState(EvseClient client)
 
 uint32_t EvseManager::getChargeCurrent(EvseClient client)
 {
+  if(EvseClient_NULL == client) {
+    return _monitor.getPilot();
+  }
+
   return getClaimProperties(client).getChargeCurrent();
 }
 
 uint32_t EvseManager::getMaxCurrent(EvseClient client)
 {
+  if(EvseClient_NULL == client) {
+    return _monitor.getMaxConfiguredCurrent();
+  }
+
   return getClaimProperties(client).getMaxCurrent();
 }
 
