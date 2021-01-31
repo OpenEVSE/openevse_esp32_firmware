@@ -411,13 +411,13 @@ unsigned long LcdTask::loop(MicroTasks::WakeReason reason)
     {
       case OPENEVSE_STATE_NOT_CONNECTED:
         // Line 0 "Ready L2:48A"
-        sprintf(temp, "Ready %dA", _evse->getMaxCurrent());
+        sprintf(temp, "Ready %dA", _evse->getChargeCurrent());
         showText(0, 0, temp, true);
         break;
 
       case OPENEVSE_STATE_CONNECTED:
         // Line 0 "Connected L2:48A"
-        sprintf(temp, "Connected %dA", _evse->getMaxCurrent());
+        sprintf(temp, "Connected %dA", _evse->getChargeCurrent());
         showText(0, 0, temp, true);
         break;
 
