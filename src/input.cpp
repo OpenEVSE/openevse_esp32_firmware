@@ -24,27 +24,8 @@
 int espflash = 0;
 int espfree = 0;
 
-long pilot = 0;                       // OpenEVSE Pilot Setting
-
-// Defaults OpenEVSE Settings
-byte rgb_lcd = 1;
-byte serial_dbg = 0;
-byte auto_service = 1;
-int service = 1;
-
 long current_scale = 0;
 long current_offset = 0;
-
-// Default OpenEVSE Safety Configuration
-byte diode_ck = 1;
-byte gfci_test = 1;
-byte ground_ck = 1;
-byte stuck_relay = 1;
-byte vent_ck = 1;
-byte temp_ck = 1;
-byte auto_start = 1;
-String firmware = "-";
-String protocol = "-";
 
 class InputTask : public MicroTasks::Task
 {
@@ -109,7 +90,7 @@ void create_rapi_json(JsonDocument &doc)
 {
   doc["amp"] = evse.getAmps() * AMPS_SCALE_FACTOR;
   doc["voltage"] = evse.getVoltage() * VOLTS_SCALE_FACTOR;
-  doc["pilot"] = pilot;
+  doc["pilot"] = evse.getChargeCurrent();
   doc["wh"] = evse.getTotalEnergy() * TOTAL_ENERGY_SCALE_FACTOR;
   if(evse.isTempuratureValid(EVSE_MONITOR_TEMP_MONITOR)) {
     doc["temp"] = evse.getTempurature(EVSE_MONITOR_TEMP_MONITOR) * TEMP_SCALE_FACTOR;
@@ -150,14 +131,6 @@ handleRapiRead()
 {
   Profile_Start(handleRapiRead);
 
-  OpenEVSE.getVersion([](int ret, const char *returned_firmware, const char *returned_protocol) {
-    if(RAPI_RESPONSE_OK == ret)
-    {
-      firmware = returned_firmware;
-      protocol = returned_protocol;
-    }
-  });
-
   OpenEVSE.getTime([](int ret, time_t evse_time)
   {
     if(RAPI_RESPONSE_OK == ret)
@@ -179,32 +152,6 @@ handleRapiRead()
         val = rapiSender.getToken(2);
         current_offset = strtol(val, NULL, 10);
       }
-    }
-  });
-
-  rapiSender.sendCmd("$GE", [](int ret)
-  {
-    if(RAPI_RESPONSE_OK == ret)
-    {
-      const char *val;
-      val = rapiSender.getToken(1);
-      DBUGVAR(val);
-      pilot = strtol(val, NULL, 10);
-
-      val = rapiSender.getToken(2);
-      DBUGVAR(val);
-      long flags = strtol(val, NULL, 16);
-      service = bitRead(flags, 0) + 1;
-      diode_ck = bitRead(flags, 1);
-      vent_ck = bitRead(flags, 2);
-      ground_ck = bitRead(flags, 3);
-      stuck_relay = bitRead(flags, 4);
-      auto_service = bitRead(flags, 5);
-      auto_start = bitRead(flags, 6);
-      serial_dbg = bitRead(flags, 7);
-      rgb_lcd = bitRead(flags, 8);
-      gfci_test = bitRead(flags, 9);
-      temp_ck = bitRead(flags, 10);
     }
   });
 

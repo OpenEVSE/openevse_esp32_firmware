@@ -145,9 +145,14 @@ class EvseMonitor : public MicroTasks::Task
 
   public:
     enum class ServiceLevel:uint8_t {
-      L1,
-      L2,
-      Auto
+      L1=1,
+      L2=2,
+      Auto=0
+    };
+
+    enum class LcdType:uint8_t {
+      Mono,
+      RGB
     };
 
     EvseMonitor(OpenEVSEClass &openevse);
@@ -217,6 +222,45 @@ class EvseMonitor : public MicroTasks::Task
     }
     long getMaxHardwareCurrent() {
       return _max_hardware_current;
+    }
+    uint32_t getSettingsFlags() {
+      return _settings_flags;
+    }
+    ServiceLevel getServiceLevel();
+    bool getDiodeCheckDisabled() {
+      return OPENEVSE_ECF_DIODE_CHK_DISABLED == (getSettingsFlags() & OPENEVSE_ECF_DIODE_CHK_DISABLED);
+    }
+    bool getVentRequiredDisabled() {
+      return OPENEVSE_ECF_VENT_REQ_DISABLED == (getSettingsFlags() & OPENEVSE_ECF_VENT_REQ_DISABLED);
+    }
+    bool getGroundCheckDisabled() {
+      return OPENEVSE_ECF_GND_CHK_DISABLED == (getSettingsFlags() & OPENEVSE_ECF_GND_CHK_DISABLED);
+    }
+    bool getStuckRelayCheckDisabled() {
+      return OPENEVSE_ECF_STUCK_RELAY_CHK_DISABLED == (getSettingsFlags() & OPENEVSE_ECF_STUCK_RELAY_CHK_DISABLED);
+    }
+    bool getGfiTestDisabled() {
+      return OPENEVSE_ECF_GFI_TEST_DISABLED == (getSettingsFlags() & OPENEVSE_ECF_GFI_TEST_DISABLED);
+    }
+    bool getTemperatureCheckDisabled() {
+      return OPENEVSE_ECF_TEMP_CHK_DISABLED == (getSettingsFlags() & OPENEVSE_ECF_TEMP_CHK_DISABLED);
+    }
+    bool getButtonDisabled() {
+      return OPENEVSE_ECF_BUTTON_DISABLED == (getSettingsFlags() & OPENEVSE_ECF_BUTTON_DISABLED);
+    }
+    bool getAutoStartDisabled() {
+      return OPENEVSE_ECF_AUTO_START_DISABLED == (getSettingsFlags() & OPENEVSE_ECF_AUTO_START_DISABLED);
+    }
+    bool getSerialDebugEnabled() {
+      return OPENEVSE_ECF_SERIAL_DBG == (getSettingsFlags() & OPENEVSE_ECF_SERIAL_DBG);
+    }
+    LcdType getLcdType() {
+      return (OPENEVSE_ECF_MONO_LCD == (getSettingsFlags() & OPENEVSE_ECF_MONO_LCD)) ?
+        LcdType::Mono :
+        LcdType::RGB;
+    }
+    const char *getFirmwareVersion() {
+      return _firmware_version;
     }
 
     // Register for events

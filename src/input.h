@@ -12,28 +12,8 @@ extern EvseManager evse;
 extern String url;
 extern String data;
 
-extern long pilot;  // OpenEVSE Pilot Setting
-
-//Defaults OpenEVSE Settings
-extern byte rgb_lcd;
-extern byte serial_dbg;
-extern byte auto_service;
-extern int service;
-
 extern long current_scale;
 extern long current_offset;
-
-//Default OpenEVSE Safety Configuration
-extern byte diode_ck;
-extern byte gfci_test;
-extern byte ground_ck;
-extern byte stuck_relay;
-extern byte vent_ck;
-extern byte temp_ck;
-extern byte auto_start;
-
-extern String firmware;
-extern String protocol;
 
 extern String ohm_hour;
 

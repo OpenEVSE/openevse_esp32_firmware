@@ -312,6 +312,42 @@ class EvseManager : public MicroTasks::Task
     double isTempuratureValid(uint8_t sensor) {
       return _monitor.isTempuratureValid(sensor);
     }
+    bool getDiodeCheckDisabled() {
+      return _monitor.getDiodeCheckDisabled();
+    }
+    bool getVentRequiredDisabled() {
+      return _monitor.getVentRequiredDisabled();
+    }
+    bool getGroundCheckDisabled() {
+      return _monitor.getGroundCheckDisabled();
+    }
+    bool getStuckRelayCheckDisabled() {
+      return _monitor.getStuckRelayCheckDisabled();
+    }
+    bool getGfiTestDisabled() {
+      return _monitor.getGfiTestDisabled();
+    }
+    bool getTemperatureCheckDisabled() {
+      return _monitor.getTemperatureCheckDisabled();
+    }
+    bool getButtonDisabled() {
+      return _monitor.getButtonDisabled();
+    }
+    bool getAutoStartDisabled() {
+      return _monitor.getAutoStartDisabled();
+    }
+    bool getSerialDebugEnabled() {
+      return _monitor.getSerialDebugEnabled();
+    }
+    EvseMonitor::ServiceLevel getServiceLevel() {
+      return _monitor.getServiceLevel();
+    }
+    EvseMonitor::LcdType getLcdType() {
+      return _monitor.getLcdType();
+    }
+    const char *getFirmwareVersion() {
+      return _monitor.getFirmwareVersion();
+    }
 
     // Temp until everything uses EvseManager
     RapiSender &getSender() {

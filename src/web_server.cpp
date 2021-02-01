@@ -629,17 +629,17 @@ handleConfigGet(MongooseHttpServerRequest *request, MongooseHttpServerResponseSt
   DynamicJsonDocument doc(capacity);
 
   // EVSE Config
-  doc["firmware"] = firmware;
-  doc["protocol"] = protocol;
+  doc["firmware"] = evse.getFirmwareVersion();
+  doc["protocol"] = "-";
   doc["espflash"] = ESPAL.getFlashChipSize();
   doc["version"] = currentfirmware;
-  doc["diodet"] = diode_ck;
-  doc["gfcit"] = gfci_test;
-  doc["groundt"] = ground_ck;
-  doc["relayt"] = stuck_relay;
-  doc["ventt"] = vent_ck;
-  doc["tempt"] = temp_ck;
-  doc["service"] = service;
+  doc["diodet"] = evse.getDiodeCheckDisabled() ? 1 : 0;
+  doc["gfcit"] = evse.getGfiTestDisabled() ? 1 : 0;
+  doc["groundt"] = evse.getGroundCheckDisabled() ? 1 : 0;
+  doc["relayt"] = evse.getStuckRelayCheckDisabled() ? 1 : 0;
+  doc["ventt"] = evse.getVentRequiredDisabled() ? 1 : 0;
+  doc["tempt"] = evse.getTemperatureCheckDisabled() ? 1 : 0;
+  doc["service"] = static_cast<uint8_t>(evse.getServiceLevel());
   doc["scale"] = current_scale;
   doc["offset"] = current_offset;
 

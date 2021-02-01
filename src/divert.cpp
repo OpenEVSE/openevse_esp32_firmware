@@ -232,7 +232,8 @@ void divert_update_state()
         if(true == chargeRateSet) 
         {
           DBUGF("Charge rate set to %d", charge_rate);
-          pilot = charge_rate;
+          //TODO
+          //pilot = charge_rate;
         }
       }
 

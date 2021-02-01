@@ -333,3 +333,14 @@ void EvseMonitor::updateFaultCounters(int ret, long gfci_count, long nognd_count
     _stuck_count = stuck_count;
   }
 }
+
+EvseMonitor::ServiceLevel EvseMonitor::getServiceLevel()
+{
+  if(OPENEVSE_ECF_AUTO_SVC_LEVEL_DISABLED == (getSettingsFlags() & OPENEVSE_ECF_AUTO_SVC_LEVEL_DISABLED)) {
+    return ServiceLevel::Auto;
+  }
+
+  return (OPENEVSE_ECF_L2 == (getSettingsFlags() & OPENEVSE_ECF_L2)) ?
+    ServiceLevel::L2 :
+    ServiceLevel::L1;
+}
