@@ -129,6 +129,7 @@ class EvseMonitor : public MicroTasks::Task
     DataReady _boot_ready;
 
     uint32_t _count;
+    bool _heartbeat;
 
     char _firmware_version[32];
 

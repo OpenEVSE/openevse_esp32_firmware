@@ -40,6 +40,13 @@
 #define EVSE_MONITOR_ENERGY_TIME            2
 #endif // !EVSE_MONITOR_ENERGY_TIME
 
+#ifndef EVSE_HEATBEAT_INTERVAL
+#define EVSE_HEATBEAT_INTERVAL              5
+#endif
+#ifndef EVSE_HEARTBEAT_CURRENT
+#define EVSE_HEARTBEAT_CURRENT              6
+#endif
+
 #define EVSE_MONITOR_STATE_DATA_READY         (1 << 0)
 #define EVSE_MONITOR_AMP_AND_VOLT_DATA_READY  (1 << 1)
 #define EVSE_MONITOR_TEMP_DATA_READY          (1 << 2)
@@ -122,7 +129,8 @@ EvseMonitor::EvseMonitor(OpenEVSEClass &openevse) :
   _max_hardware_current(0),
   _data_ready(EVSE_MONITOR_DATA_READY),
   _boot_ready(EVSE_MONITOR_BOOT_READY),
-  _count(0)
+  _count(0),
+  _heartbeat(false)
 #ifdef ENABLE_MCP9808
   , _mcp9808()
 #endif
@@ -191,6 +199,10 @@ void EvseMonitor::evseBoot(const char *firmware)
       _boot_ready.ready(EVSE_MONITOR_CURRENT_BOOT_READY);
     }
   });
+
+  _openevse.heartbeatEnable(EVSE_HEATBEAT_INTERVAL, EVSE_HEARTBEAT_CURRENT, [this](int ret, int interval, int current, int triggered) {
+    _heartbeat = RAPI_RESPONSE_OK == ret;
+  });
 }
 
 unsigned long EvseMonitor::loop(MicroTasks::WakeReason reason)
@@ -203,6 +215,16 @@ unsigned long EvseMonitor::loop(MicroTasks::WakeReason reason)
        "UNKNOWN");
   DBUG(", _count = ");
   DBUGLN(_count);
+
+  if(_heartbeat)
+  {
+    _openevse.heartbeatPulse([] (int ret)
+    {
+      if(RAPI_RESPONSE_OK != ret) {
+        DEBUG_PORT.println("Heartbeat failed");
+      }
+    });
+  }
 
   // Get the EVSE state
   if(0 == _count % EVSE_MONITOR_STATE_TIME)
