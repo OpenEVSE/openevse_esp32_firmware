@@ -584,7 +584,7 @@ unsigned long LcdTask::loop(MicroTasks::WakeReason reason)
             hour = 12;
           }
 
-          sprintf(temp, "Start %d:%02d %s", hour, min, pm ? "AM" : "PM");
+          sprintf(temp, "Start %d:%02d %s", hour, min, pm ? "PM" : "AM");
           showText(0, 1, temp, true);
         } else {
           showText(0, 1, "Start --:--", true);
@@ -606,7 +606,7 @@ unsigned long LcdTask::loop(MicroTasks::WakeReason reason)
             hour = 12;
           }
 
-          sprintf(temp, "Stop %d:%02d %s", hour, min, pm ? "AM" : "PM");
+          sprintf(temp, "Stop %d:%02d %s", hour, min, pm ? "PM" : "AM");
           showText(0, 1, temp, true);
         } else {
           showText(0, 1, "Stop --:--", true);
