@@ -228,31 +228,31 @@ class EvseMonitor : public MicroTasks::Task
       return _settings_flags;
     }
     ServiceLevel getServiceLevel();
-    bool getDiodeCheckDisabled() {
+    bool isDiodeCheckDisabled() {
       return OPENEVSE_ECF_DIODE_CHK_DISABLED == (getSettingsFlags() & OPENEVSE_ECF_DIODE_CHK_DISABLED);
     }
-    bool getVentRequiredDisabled() {
+    bool isVentRequiredDisabled() {
       return OPENEVSE_ECF_VENT_REQ_DISABLED == (getSettingsFlags() & OPENEVSE_ECF_VENT_REQ_DISABLED);
     }
-    bool getGroundCheckDisabled() {
+    bool isGroundCheckDisabled() {
       return OPENEVSE_ECF_GND_CHK_DISABLED == (getSettingsFlags() & OPENEVSE_ECF_GND_CHK_DISABLED);
     }
-    bool getStuckRelayCheckDisabled() {
+    bool isStuckRelayCheckDisabled() {
       return OPENEVSE_ECF_STUCK_RELAY_CHK_DISABLED == (getSettingsFlags() & OPENEVSE_ECF_STUCK_RELAY_CHK_DISABLED);
     }
-    bool getGfiTestDisabled() {
+    bool isGfiTestDisabled() {
       return OPENEVSE_ECF_GFI_TEST_DISABLED == (getSettingsFlags() & OPENEVSE_ECF_GFI_TEST_DISABLED);
     }
-    bool getTemperatureCheckDisabled() {
+    bool isTemperatureCheckDisabled() {
       return OPENEVSE_ECF_TEMP_CHK_DISABLED == (getSettingsFlags() & OPENEVSE_ECF_TEMP_CHK_DISABLED);
     }
-    bool getButtonDisabled() {
+    bool isButtonDisabled() {
       return OPENEVSE_ECF_BUTTON_DISABLED == (getSettingsFlags() & OPENEVSE_ECF_BUTTON_DISABLED);
     }
-    bool getAutoStartDisabled() {
+    bool isAutoStartDisabled() {
       return OPENEVSE_ECF_AUTO_START_DISABLED == (getSettingsFlags() & OPENEVSE_ECF_AUTO_START_DISABLED);
     }
-    bool getSerialDebugEnabled() {
+    bool isSerialDebugEnabled() {
       return OPENEVSE_ECF_SERIAL_DBG == (getSettingsFlags() & OPENEVSE_ECF_SERIAL_DBG);
     }
     LcdType getLcdType() {

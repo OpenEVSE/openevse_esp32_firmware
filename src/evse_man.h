@@ -147,7 +147,7 @@ class EvseProperties
 
     // Get/set the client auto release state. With the client auto release enabled the client claim
     // will automatically be released at the end of the charging session.
-    bool getAutoRelease() {
+    bool isAutoRelease() {
       return _auto_release;
     }
     void setAutoRelease(bool auto_release) {
@@ -209,8 +209,8 @@ class EvseManager : public MicroTasks::Task
           return _properties.getTimeLimit();
         }
 
-        bool getAutoRelease() {
-          return _properties.getAutoRelease();
+        bool isAutoRelease() {
+          return _properties.isAutoRelease();
         }
 
         EvseProperties &getProperties() {
@@ -312,32 +312,32 @@ class EvseManager : public MicroTasks::Task
     double isTempuratureValid(uint8_t sensor) {
       return _monitor.isTempuratureValid(sensor);
     }
-    bool getDiodeCheckDisabled() {
-      return _monitor.getDiodeCheckDisabled();
+    bool isDiodeCheckDisabled() {
+      return _monitor.isDiodeCheckDisabled();
     }
-    bool getVentRequiredDisabled() {
-      return _monitor.getVentRequiredDisabled();
+    bool isVentRequiredDisabled() {
+      return _monitor.isVentRequiredDisabled();
     }
-    bool getGroundCheckDisabled() {
-      return _monitor.getGroundCheckDisabled();
+    bool isGroundCheckDisabled() {
+      return _monitor.isGroundCheckDisabled();
     }
-    bool getStuckRelayCheckDisabled() {
-      return _monitor.getStuckRelayCheckDisabled();
+    bool isStuckRelayCheckDisabled() {
+      return _monitor.isStuckRelayCheckDisabled();
     }
-    bool getGfiTestDisabled() {
-      return _monitor.getGfiTestDisabled();
+    bool isGfiTestDisabled() {
+      return _monitor.isGfiTestDisabled();
     }
-    bool getTemperatureCheckDisabled() {
-      return _monitor.getTemperatureCheckDisabled();
+    bool isTemperatureCheckDisabled() {
+      return _monitor.isTemperatureCheckDisabled();
     }
-    bool getButtonDisabled() {
-      return _monitor.getButtonDisabled();
+    bool isButtonDisabled() {
+      return _monitor.isButtonDisabled();
     }
-    bool getAutoStartDisabled() {
-      return _monitor.getAutoStartDisabled();
+    bool isAutoStartDisabled() {
+      return _monitor.isAutoStartDisabled();
     }
-    bool getSerialDebugEnabled() {
-      return _monitor.getSerialDebugEnabled();
+    bool isSerialDebugEnabled() {
+      return _monitor.isSerialDebugEnabled();
     }
     EvseMonitor::ServiceLevel getServiceLevel() {
       return _monitor.getServiceLevel();
