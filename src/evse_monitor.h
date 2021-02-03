@@ -140,6 +140,7 @@ class EvseMonitor : public MicroTasks::Task
     void updateFaultCounters(int ret, long gfci_count, long nognd_count, long stuck_count);
 
     void evseBoot(const char *firmware_version);
+    void evseStateChanged();
   protected:
     void setup();
     unsigned long loop(MicroTasks::WakeReason reason);
@@ -178,6 +179,9 @@ class EvseMonitor : public MicroTasks::Task
     }
     bool isError() {
       return _state.isError();
+    }
+    bool isCharging() {
+      return _state.isCharging();
     }
     bool isVehicleConnected() {
       return _state.isVehicleConnected();

@@ -205,6 +205,16 @@ void EvseMonitor::evseBoot(const char *firmware)
   });
 }
 
+void EvseMonitor::evseStateChanged()
+{
+  if(isError()) {
+    _openevse.getFaultCounters([this](int ret, long gfci_count, long nognd_count, long stuck_count) { updateFaultCounters(ret, gfci_count, nognd_count, stuck_count); });
+  }
+  if(!isCharging()) {
+    _amp = 0;
+  }
+}
+
 unsigned long EvseMonitor::loop(MicroTasks::WakeReason reason)
 {
   DBUG("EVSE monitor woke: ");
@@ -235,8 +245,8 @@ unsigned long EvseMonitor::loop(MicroTasks::WakeReason reason)
       if(RAPI_RESPONSE_OK == ret)
       {
         DBUGF("evse_state = %02x, session_time = %d, pilot_state = %02x, vflags = %08x", evse_state, session_time, pilot_state, vflags);
-        if(_state.setState(evse_state, pilot_state, vflags) && isError()) {
-          _openevse.getFaultCounters([this](int ret, long gfci_count, long nognd_count, long stuck_count) { updateFaultCounters(ret, gfci_count, nognd_count, stuck_count); });
+        if(_state.setState(evse_state, pilot_state, vflags)) {
+          evseStateChanged();
         }
 
         _elapsed = session_time;
@@ -326,8 +336,8 @@ bool EvseMonitor::begin(RapiSender &sender)
       _openevse.onState([this](uint8_t evse_state, uint8_t pilot_state, uint32_t current_capacity, uint32_t vflags)
       {
         DBUGF("evse_state = %02x, pilot_state = %02x, current_capacity = %d, vflags = %08x", evse_state, pilot_state, current_capacity, vflags);
-        if(_state.setState(evse_state, pilot_state, vflags) && isError()) {
-          _openevse.getFaultCounters([this](int ret, long gfci_count, long nognd_count, long stuck_count) { updateFaultCounters(ret, gfci_count, nognd_count, stuck_count); });
+        if(_state.setState(evse_state, pilot_state, vflags)) {
+          evseStateChanged();
         }
       });
 
