@@ -37,9 +37,9 @@ typedef uint32_t EvseClient;
 #define EvseManager_Priority_Divert     50
 #define EvseManager_Priority_Timer     100
 #define EvseManager_Priority_Boost     200
+#define EvseManager_Priority_Ohm       500
 #define EvseManager_Priority_Manual   1000
 #define EvseManager_Priority_Limit    1100
-#define EvseManager_Priority_Ohm      1500
 #define EvseManager_Priority_Error   10000
 
 #ifndef EVSE_MANAGER_MAX_CLIENT_CLAIMS
@@ -347,6 +347,9 @@ class EvseManager : public MicroTasks::Task
     }
     const char *getFirmwareVersion() {
       return _monitor.getFirmwareVersion();
+    }
+    long getMinCurrent() {
+      return _monitor.getMinCurrent();
     }
 
     // Temp until everything uses EvseManager

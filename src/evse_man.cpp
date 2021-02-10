@@ -205,16 +205,42 @@ bool EvseManager::setTargetState(EvseProperties &target)
       if(_sleepForDisable) {
         DBUGLN("EVSE: sleep");
         OpenEVSE.sleep([this](int ret) {
-          DBUGF("EVSE: enable - complete %d", ret);
+          DBUGF("EVSE: sleep - complete %d", ret);
         });
       } else {
         DBUGLN("EVSE: disable");
         OpenEVSE.disable([this](int ret) {
-          DBUGF("EVSE: enable - complete %d", ret);
+          DBUGF("EVSE: disable - complete %d", ret);
         });
       }
     }
 
+    changeMade = true;
+  }
+
+  // Work out what the max current should be
+  uint32_t charge_current = _monitor.getMaxConfiguredCurrent();
+  DBUGVAR(charge_current);
+  if(UINT32_MAX != target.getMaxCurrent() && target.getMaxCurrent() < charge_current) {
+    charge_current = target.getMaxCurrent();
+  }
+  DBUGVAR(charge_current);
+
+  // Work out the charge current
+  if(UINT32_MAX != target.getChargeCurrent() && target.getChargeCurrent() < charge_current) {
+    charge_current = target.getChargeCurrent();
+  }
+  DBUGVAR(charge_current);
+
+  if(charge_current < _monitor.getMinCurrent()) {
+    charge_current = _monitor.getMinCurrent();
+  }
+  DBUGVAR(charge_current);
+
+  if(charge_current != _monitor.getPilot())
+  {
+    DBUGF("Set pilot to %d", charge_current);
+    _monitor.setPilot(charge_current);
     changeMade = true;
   }
 
@@ -278,21 +304,14 @@ unsigned long EvseManager::loop(MicroTasks::WakeReason reason)
   DBUGVAR(_evaluateTargetState);
   if(_evaluateTargetState)
   {
-    if(_hasClaims) {
-      setTargetState(_targetProperties);
-    }
-    else
+    
+    if(!_hasClaims)
     {
-      // No clients, make sure the EVSE module is enabled
-      if(_monitor.isDisabled())
-      {
-        _waitingForEvent++;
-        DBUGLN("EVSE: enable");
-        OpenEVSE.enable([this](int ret) {
-          DBUGF("EVSE: enable - complete %d", ret);
-        });
-      }
+      // No claims, make sure the targetProperties are the defaults with charger active
+      _targetProperties.clear();
+      _targetProperties.setState(EvseState::Active);
     }
+    setTargetState(_targetProperties);
     _evaluateTargetState = false;
   }
 

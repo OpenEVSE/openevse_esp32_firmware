@@ -376,3 +376,14 @@ EvseMonitor::ServiceLevel EvseMonitor::getServiceLevel()
     ServiceLevel::L2 :
     ServiceLevel::L1;
 }
+
+void EvseMonitor::setPilot(long amps)
+{
+  _openevse.setCurrentCapacity(amps, false, [this](int ret, long pilot)
+  {
+    if(RAPI_RESPONSE_OK == ret || RAPI_RESPONSE_NK == ret) {
+      _pilot = pilot;
+    }
+  });
+}
+

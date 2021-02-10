@@ -162,6 +162,8 @@ class EvseMonitor : public MicroTasks::Task
 
     bool begin(RapiSender &sender);
 
+    void setPilot(long amps);
+
     uint8_t getEvseState() {
       return _state.getEvseState();
     }
