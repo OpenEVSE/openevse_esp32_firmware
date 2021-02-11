@@ -14,6 +14,7 @@
 #include "net_manager.h"
 #include "openevse.h"
 #include "espal.h"
+#include "sleep_timer.h"
 
 #include "LedManagerTask.h"
 
@@ -309,6 +310,17 @@ void input_setup()
 
   OpenEVSE.onState([](uint8_t evse_state, uint8_t pilot_state, uint32_t current_capacity, uint32_t vflags)
   {
+
+    if(state >= OPENEVSE_STATE_SLEEPING && evse_state == OPENEVSE_STATE_NOT_CONNECTED && config_rfid_enabled){
+      on_wake_up();
+    }
+    else if(evse_state == OPENEVSE_STATE_CONNECTED){
+      on_vehicle_connected();
+    }
+    else if(state >= OPENEVSE_STATE_CONNECTED ||  evse_state == OPENEVSE_STATE_NOT_CONNECTED){
+      on_vehicle_disconnected();
+    }
+
     // Update our global state
     DBUGVAR(evse_state);
     state = evse_state;
