@@ -1,3 +1,6 @@
 [submodule "gui"]
 	path = gui
 	url = https://github.com/openevse/openevse_wifi_gui
+[submodule "lib/DFRobot_PN532"]
+	path = lib/DFRobot_PN532
+	url = https://github.com/notima/DFRobot_PN532.git

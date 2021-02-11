@@ -39,7 +39,6 @@ void RfidTask::setup(){
     }
 
     Wire.begin(I2C_SDA, I2C_SCL);
-    
     if(nfc.begin()){
         status = RFID_STATUS_ACTIVE;
     }else{
