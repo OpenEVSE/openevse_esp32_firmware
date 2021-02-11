@@ -42,6 +42,15 @@ extern String mqtt_grid_ie;
 extern String mqtt_vrms;
 extern String mqtt_announce_topic;
 
+// RFID storage
+extern String rfid_storage;
+
+// Sleep timer
+extern uint8_t sleep_timer_enabled_flags;
+extern uint16_t sleep_timer_not_connected;
+extern uint16_t sleep_timer_connected;
+extern uint16_t sleep_timer_disconnected;
+
 // Time
 extern String time_zone;
 
@@ -64,6 +73,7 @@ extern uint32_t flags;
 #define CONFIG_SERVICE_DIVERT       (1 << 9)
 #define CONFIG_CHARGE_MODE          (7 << 10) // 3 bits for mode
 #define CONFIG_PAUSE_USES_DISABLED   (1 << 13)
+#define CONFIG_RFID                 (1 << 14)
 
 inline bool config_emoncms_enabled() {
   return CONFIG_SERVICE_EMONCMS == (flags & CONFIG_SERVICE_EMONCMS);
@@ -103,6 +113,10 @@ inline uint8_t config_charge_mode() {
 
 inline bool config_pause_uses_disabled() {
   return CONFIG_PAUSE_USES_DISABLED == (flags & CONFIG_PAUSE_USES_DISABLED);
+}
+
+inline bool config_rfid_enabled() {
+  return CONFIG_RFID == (flags & CONFIG_RFID);
 }
 
 // Ohm Connect Settings
@@ -148,6 +162,11 @@ extern void config_save_wifi(String qsid, String qpass);
 // Save the Ohm settings
 // -------------------------------------------------------------------
 extern void config_save_ohm(bool enable, String qohm);
+
+// -------------------------------------------------------------------
+// Save RFID settings
+// -------------------------------------------------------------------
+extern void config_save_rfid(bool enable, String storage);
 
 // -------------------------------------------------------------------
 // Save the flags

@@ -47,6 +47,12 @@ String mqtt_grid_ie;
 String mqtt_vrms;
 String mqtt_announce_topic;
 
+// Sleep timer
+uint8_t sleep_timer_enabled_flags;
+uint16_t sleep_timer_not_connected;
+uint16_t sleep_timer_connected;
+uint16_t sleep_timer_disconnected;
+
 // Time
 String time_zone;
 
@@ -70,6 +76,8 @@ int tesla_vehidx;
 #if RGB_LED
 uint8_t led_brightness;
 #endif
+// RFID storage
+String rfid_storage;
 
 String esp_hostname_default = "openevse-"+ESPAL.getShortId();
 
@@ -129,6 +137,14 @@ ConfigOpt *opts[] =
 // LED brightness
   new ConfigOptDefenition<uint8_t>(led_brightness, LED_DEFAULT_BRIGHTNESS, "led_brightness", "lb"),
 #endif
+// RFID storage
+  new ConfigOptDefenition<String>(rfid_storage, "", "rfid_storage", "rs"),
+
+//Sleep timer
+  new ConfigOptDefenition<uint8_t>(sleep_timer_enabled_flags, 0, "sleep_timer_enabled_flags", "st"),
+  new ConfigOptDefenition<uint16_t>(sleep_timer_not_connected, 0, "sleep_timer_not_connected", "tn"),
+  new ConfigOptDefenition<uint16_t>(sleep_timer_connected, 0, "sleep_timer_connected", "tc"),
+  new ConfigOptDefenition<uint16_t>(sleep_timer_disconnected, 0, "sleep_timer_disconnected", "td"),
 
 // Flags
   &flagsOpt,
@@ -142,6 +158,7 @@ ConfigOpt *opts[] =
   new ConfigOptVirtualBool(flagsOpt,CONFIG_SERVICE_TESLA,CONFIG_SERVICE_TESLA, "tesla_enabled", "te"),
   new ConfigOptVirtualBool(flagsOpt, CONFIG_SERVICE_DIVERT, CONFIG_SERVICE_DIVERT, "divert_enabled", "de"),
   new ConfigOptVirtualBool(flagsOpt, CONFIG_PAUSE_USES_DISABLED, CONFIG_PAUSE_USES_DISABLED, "pause_uses_disabled", "pd"),
+  new ConfigOptVirtualBool(flagsOpt, CONFIG_RFID, CONFIG_RFID, "rfid_enabled", "rf"),
   new ConfigOptVirtualMqttProtocol(flagsOpt, "mqtt_protocol", "mprt"),
   new ConfigOptVirtualChargeMode(flagsOpt, "charge_mode", "chmd")
 };
@@ -352,6 +369,17 @@ config_save_ohm(bool enable, String qohm)
 
   config.set("ohm", qohm);
   config.set("flags", newflags);
+  config.commit();
+}
+
+void
+config_save_rfid(bool enable, String storage){
+  uint32_t newflags = flags & ~CONFIG_RFID;
+  if(enable) {
+    newflags |= CONFIG_RFID;
+  }
+  config.set("flags", newflags);
+  config.set("rfid_storage", rfid_storage);
   config.commit();
 }
 
