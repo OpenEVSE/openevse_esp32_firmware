@@ -48,6 +48,7 @@
 #include "time_man.h"
 #include "tesla_client.h"
 #include "event.h"
+#include "rfid.h"
 
 #include "LedManagerTask.h"
 #include "evse_man.h"
@@ -123,6 +124,7 @@ void setup()
 #endif
 
   input_setup();
+  rfid_setup();
 
   lcd.display(F("OpenEVSE WiFI"), 0, 0, 0, LCD_CLEAR_LINE);
   lcd.display(currentfirmware, 0, 1, 5 * 1000, LCD_CLEAR_LINE);
@@ -148,6 +150,7 @@ loop() {
 #endif
   rapiSender.loop();
   divert_current_loop();
+  rfid_loop();
   MicroTask.update();
 
   if(OpenEVSE.isConnected())
