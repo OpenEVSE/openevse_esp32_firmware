@@ -1,7 +1,3 @@
-#define STATUS_NOT_ENABLED 0
-#define STATUS_NOT_FOUND 1
-#define STATUS_ACTIVE 2
-
 #include "rfid.h"
 
 #include "debug.h"
@@ -21,42 +17,43 @@
 #define I2C_SCL 22
 #endif
 
-DFRobot_PN532_IIC  nfc(PN532_IRQ, PN532_POLLING); 
-struct card NFCcard;
+RfidTask::RfidTask() :
+  MicroTasks::Task(),
+  _evse(NULL),
+  _scheduler(NULL),
+  _evseStateEvent(this),
+  nfc(PN532_IRQ, PN532_POLLING)
+{
+}
 
-uint8_t status = STATUS_NOT_ENABLED;
-boolean hasContact = false;
+void RfidTask::begin(EvseManager &evse, Scheduler &scheduler){
+    _evse = &evse;
+    _scheduler = &scheduler;
+    MicroTask.startTask(this);
+}
 
-unsigned long nextScan = 0;
-
-// How many more seconds to wait for tag
-uint8_t waitingForTag = 0;
-unsigned long stopWaiting = 0;
-boolean cardFound = false;
-
-
-
-void rfid_setup(){
+void RfidTask::setup(){
     if(!config_rfid_enabled()){
-        status = STATUS_NOT_ENABLED;
+        status = RFID_STATUS_NOT_ENABLED;
         return;
     }
 
     Wire.begin(I2C_SDA, I2C_SCL);
+    
     if(nfc.begin()){
-        status = STATUS_ACTIVE;
+        status = RFID_STATUS_ACTIVE;
     }else{
-        if(status == STATUS_NOT_FOUND){
+        if(status == RFID_STATUS_NOT_FOUND){
             config_save_rfid(false, rfid_storage);
             DEBUG.println("RFID still not responding and has been disabled.");
         }else{
             DEBUG.println("RFID module did not respond!");
-            status = STATUS_NOT_FOUND;
+            status = RFID_STATUS_NOT_FOUND;
         }
     }
 }
 
-String getUidHex(card NFCcard){
+String RfidTask::getUidHex(card NFCcard){
     String uidHex = "";
     for(int i = 0; i < NFCcard.uidlenght; i++){
         char hex[NFCcard.uidlenght * 3];
@@ -86,7 +83,7 @@ String getUidBytes(card NFCcard){
     return bytes;
 }
 
-void scanCard(){
+void RfidTask::scanCard(){
     NFCcard = nfc.getInformation();
     String uidHex = getUidHex(NFCcard);
 
@@ -106,7 +103,7 @@ void scanCard(){
             storedTagStr.trim();
             uidHex.trim();
             if(storedTagStr.compareTo(uidHex) == 0){
-                    rapiSender.sendCmd(F("$FE"));
+                rapiSender.sendCmd(F("$FE"));
                 break;
             }
             storedTag = strtok(NULL, ",");
@@ -119,20 +116,18 @@ void scanCard(){
     }
 }
 
-void rfid_loop(){
+unsigned long RfidTask::loop(MicroTasks::WakeReason reason){
+    unsigned long nextScan = SCAN_FREQ;
+
     if(!config_rfid_enabled()){
-        if(status != STATUS_NOT_FOUND)
-            status = STATUS_NOT_ENABLED;
-        return;
+        if(status != RFID_STATUS_NOT_FOUND)
+            status = RFID_STATUS_NOT_ENABLED;
+        return MicroTask.WaitForMask;
     }
 
-    if(millis() < nextScan){
-        return;
-    }
-
-    if(status != STATUS_ACTIVE){
-        rfid_setup();
-        return;
+    if(status != RFID_STATUS_ACTIVE){
+        this->setup();
+        return nextScan;
     }
 
     if(waitingForTag > 0){
@@ -143,37 +138,35 @@ void rfid_loop(){
         lcd.display(msg, 0, 1, 1000, LCD_CLEAR_LINE);
     }
 
-    nextScan = millis() + SCAN_FREQ;
-
     boolean foundCard = (state >= OPENEVSE_STATE_SLEEPING || waitingForTag) && nfc.scan();
 
     if(foundCard && !hasContact){
         scanCard();
         hasContact = true;
-        return;
+        return nextScan;
     }
 
     if(!foundCard && hasContact){
         hasContact = false;
     }
+
+    return nextScan;
 }
 
-uint8_t rfid_status(){
+uint8_t RfidTask::getStatus(){
     return status;
 }
 
-void rfid_wait_for_tag(uint8_t seconds){
+void RfidTask::waitForTag(uint8_t seconds){
     if(!config_rfid_enabled())
-        return;/*
-    sleep_timer_display_updates(false);
-    lcd_release();*/
+        return;
     waitingForTag = seconds;
     stopWaiting = millis() + seconds * 1000;
     cardFound = false;
     lcd.display("Waiting for RFID", 0, 0, seconds * 1000, LCD_CLEAR_LINE);
 }
 
-DynamicJsonDocument rfid_poll() {
+DynamicJsonDocument RfidTask::rfidPoll() {
     const size_t capacity = JSON_ARRAY_SIZE(3);
     DynamicJsonDocument doc(capacity);
     if(waitingForTag > 0){
@@ -192,3 +185,5 @@ DynamicJsonDocument rfid_poll() {
     }
     return doc;
 }
+
+RfidTask rfid;
