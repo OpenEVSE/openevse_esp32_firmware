@@ -104,6 +104,7 @@ void setup()
   evse.begin();
   scheduler.begin();
 
+  rfid.begin(evse, scheduler);
   lcd.begin(evse, scheduler);
   ledManager.begin(evse);
 
@@ -125,7 +126,6 @@ void setup()
 #endif
 
   input_setup();
-  rfid_setup();
 
   lcd.display(F("OpenEVSE WiFI"), 0, 0, 0, LCD_CLEAR_LINE);
   lcd.display(currentfirmware, 0, 1, 5 * 1000, LCD_CLEAR_LINE);
@@ -151,7 +151,6 @@ loop() {
 #endif
   rapiSender.loop();
   divert_current_loop();
-  rfid_loop();
   MicroTask.update();
 
   if(OpenEVSE.isConnected())

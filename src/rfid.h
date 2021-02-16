@@ -1,5 +1,9 @@
 #include <DFRobot_PN532.h>
 #include <ArduinoJson.h>
+#include <MicroTasks.h>
+
+#include "evse_man.h"
+#include "scheduler.h"
 
 #define  SCAN_FREQ            200
 #define  RFID_BLOCK_SIZE      16
@@ -7,11 +11,36 @@
 #define  PN532_INTERRUPT      (1)
 #define  PN532_POLLING        (0)
 
-void rfid_setup();
-void rfid_loop();
-uint8_t rfid_status();
+#define RFID_STATUS_NOT_ENABLED 0
+#define RFID_STATUS_NOT_FOUND 1
+#define RFID_STATUS_ACTIVE 2
 
-void rfid_store_tag(String uid);
-DynamicJsonDocument rfid_get_stored_tags();
-void rfid_wait_for_tag(uint8_t seconds);
-DynamicJsonDocument rfid_poll();
+class RfidTask : public MicroTasks::Task {
+    private:
+        EvseManager *_evse;
+        Scheduler *_scheduler;
+        MicroTasks::EventListener _evseStateEvent;
+        DFRobot_PN532_IIC nfc; 
+        uint8_t status = RFID_STATUS_NOT_ENABLED;
+        boolean hasContact = false;
+        uint8_t waitingForTag = 0;
+        unsigned long stopWaiting = 0;
+        boolean cardFound = false;
+
+    protected:
+        void setup();
+        unsigned long loop(MicroTasks::WakeReason reason);
+        struct card NFCcard;
+        String getUidHex(card NFCcard);
+        void scanCard();
+
+    public:
+        RfidTask();
+        void begin(EvseManager &evse, Scheduler &scheduler);
+        uint8_t getStatus();
+        void waitForTag(uint8_t seconds);
+        DynamicJsonDocument rfidPoll();
+};
+
+
+extern RfidTask rfid;
