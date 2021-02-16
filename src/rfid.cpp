@@ -1,3 +1,10 @@
+<<<<<<< HEAD
+=======
+#define STATUS_NOT_ENABLED 0
+#define STATUS_NOT_FOUND 1
+#define STATUS_ACTIVE 2
+
+>>>>>>> 0585bacc6463211a5b0375976134f9f9aecb5db9
 #include "rfid.h"
 
 #include "debug.h"
@@ -7,6 +14,10 @@
 #include "RapiSender.h"
 #include "input.h"
 #include "openevse.h"
+<<<<<<< HEAD
+=======
+#include "sleep_timer.h"
+>>>>>>> 0585bacc6463211a5b0375976134f9f9aecb5db9
 #include "Wire.h"
 
 #ifndef I2C_SDA
@@ -62,25 +73,6 @@ String RfidTask::getUidHex(card NFCcard){
     }
     uidHex.trim();
     return uidHex;
-}
-
-String getUidBytes(card NFCcard){
-    String bytes = "";
-    bytes.concat((char)NFCcard.uidlenght);
-    for(int i = 0; i < NFCcard.uidlenght; i+= 1){
-        bytes.concat((char)NFCcard.uid[i]);
-    }
-
-    Serial.println();
-    Serial.println(bytes);
-    Serial.println();
-
-    const char* ptr = bytes.c_str();
-    for(int i = 0; i < 4; i++){
-        Serial.print((int)ptr[i], HEX);
-    }
-
-    return bytes;
 }
 
 void RfidTask::scanCard(){
