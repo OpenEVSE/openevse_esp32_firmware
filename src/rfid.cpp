@@ -1,10 +1,3 @@
-<<<<<<< HEAD
-=======
-#define STATUS_NOT_ENABLED 0
-#define STATUS_NOT_FOUND 1
-#define STATUS_ACTIVE 2
-
->>>>>>> 0585bacc6463211a5b0375976134f9f9aecb5db9
 #include "rfid.h"
 
 #include "debug.h"
@@ -14,10 +7,6 @@
 #include "RapiSender.h"
 #include "input.h"
 #include "openevse.h"
-<<<<<<< HEAD
-=======
-#include "sleep_timer.h"
->>>>>>> 0585bacc6463211a5b0375976134f9f9aecb5db9
 #include "Wire.h"
 
 #ifndef I2C_SDA
