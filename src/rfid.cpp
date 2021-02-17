@@ -40,17 +40,18 @@ void RfidTask::setup(){
 
     Wire.begin(I2C_SDA, I2C_SCL);
     
-    if(nfc.begin()){
+    wakeup();
+}
+
+boolean RfidTask::wakeup(){
+    boolean awake = nfc.begin();
+    if(awake){
         status = RFID_STATUS_ACTIVE;
     }else{
-        if(status == RFID_STATUS_NOT_FOUND){
-            config_save_rfid(false, rfid_storage);
-            DEBUG.println("RFID still not responding and has been disabled.");
-        }else{
-            DEBUG.println("RFID module did not respond!");
-            status = RFID_STATUS_NOT_FOUND;
-        }
+        DEBUG.println("RFID module did not respond!");
+        status = RFID_STATUS_NOT_FOUND;
     }
+    return awake;
 }
 
 String RfidTask::getUidHex(card NFCcard){
@@ -104,11 +105,6 @@ unsigned long RfidTask::loop(MicroTasks::WakeReason reason){
         if(status != RFID_STATUS_NOT_FOUND)
             status = RFID_STATUS_NOT_ENABLED;
         return MicroTask.WaitForMask;
-    }
-
-    if(status != RFID_STATUS_ACTIVE){
-        this->setup();
-        return nextScan;
     }
 
     if(waitingForTag > 0){
