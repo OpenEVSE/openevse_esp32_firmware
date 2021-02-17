@@ -30,9 +30,14 @@ void RfidTask::begin(EvseManager &evse, Scheduler &scheduler){
     _evse = &evse;
     _scheduler = &scheduler;
     MicroTask.startTask(this);
+    // HACK
+    // Schedulers do not work unless this one exists
+    _scheduler->addEvent(100, 0, 0, 0, ~0, EvseState(EvseState::Disabled));
 }
 
 void RfidTask::setup(){
+    _evse->onStateChange(&_evseStateEvent);
+
     if(!config_rfid_enabled()){
         status = RFID_STATUS_NOT_ENABLED;
         return;
@@ -54,39 +59,9 @@ boolean RfidTask::wakeup(){
     return awake;
 }
 
-String RfidTask::getUidHex(card NFCcard){
-    String uidHex = "";
-    for(int i = 0; i < NFCcard.uidlenght; i++){
-        char hex[NFCcard.uidlenght * 3];
-        sprintf(hex,"%x",NFCcard.uid[i]);
-        uidHex = uidHex + hex + " ";
-    }
-    uidHex.trim();
-    return uidHex;
-}
-
-String getUidBytes(card NFCcard){
-    String bytes = "";
-    bytes.concat((char)NFCcard.uidlenght);
-    for(int i = 0; i < NFCcard.uidlenght; i+= 1){
-        bytes.concat((char)NFCcard.uid[i]);
-    }
-
-    Serial.println();
-    Serial.println(bytes);
-    Serial.println();
-
-    const char* ptr = bytes.c_str();
-    for(int i = 0; i < 4; i++){
-        Serial.print((int)ptr[i], HEX);
-    }
-
-    return bytes;
-}
-
 void RfidTask::scanCard(){
     NFCcard = nfc.getInformation();
-    String uidHex = getUidHex(NFCcard);
+    String uidHex = nfc.readUid();
 
     if(waitingForTag > 0){
         waitingForTag = 0;
@@ -117,6 +92,22 @@ void RfidTask::scanCard(){
     }
 }
 
+void RfidTask::startTimer(uint8_t seconds){
+    static int day = 0;
+    static int32_t offset = 0;
+    _scheduler->getCurrentTime(day, offset);
+    offset += seconds;
+    int schedulerDay = 1 << day;
+    int hour = offset / 3600;
+    int minute = (offset % 3600) / 60;
+    int second = offset % 60;
+    _scheduler->addEvent(0xFFFFFFFF, hour, minute, second, schedulerDay, EvseState(EvseState::Disabled));
+}
+
+void RfidTask::abortTimer(){
+    _scheduler->removeEvent(0xFFFFFFFF);
+}
+
 unsigned long RfidTask::loop(MicroTasks::WakeReason reason){
     unsigned long nextScan = SCAN_FREQ;
 
@@ -126,6 +117,21 @@ unsigned long RfidTask::loop(MicroTasks::WakeReason reason){
         return MicroTask.WaitForMask;
     }
 
+    if(_evseStateEvent.IsTriggered()){
+        abortTimer();
+        uint8_t _state = evse.getEvseState();
+        if(_state == OPENEVSE_STATE_NOT_CONNECTED && lastState >= OPENEVSE_STATE_SLEEPING){
+            startTimer(sleep_timer_not_connected);
+        }
+        else if(_state == OPENEVSE_STATE_NOT_CONNECTED){
+            startTimer(sleep_timer_disconnected);
+        }
+        else if(_state == OPENEVSE_STATE_CONNECTED){
+            startTimer(sleep_timer_connected);
+        }
+        lastState = _state;
+    }
+
     if(waitingForTag > 0){
         waitingForTag = (stopWaiting - millis()) / 1000;
         String msg = "tag... ";
@@ -133,7 +139,7 @@ unsigned long RfidTask::loop(MicroTasks::WakeReason reason){
         lcd.display("Waiting for RFID", 0, 0, 0, LCD_CLEAR_LINE);
         lcd.display(msg, 0, 1, 1000, LCD_CLEAR_LINE);
     }
-
+    
     boolean foundCard = (state >= OPENEVSE_STATE_SLEEPING || waitingForTag) && nfc.scan();
 
     if(foundCard && !hasContact){
@@ -173,7 +179,7 @@ DynamicJsonDocument RfidTask::rfidPoll() {
     else if(cardFound){
         // respond with the scanned tags uid and reset
         doc["status"] = "done";
-        doc["scanned"] = getUidHex(NFCcard);
+        doc["scanned"] = nfc.readUid();
         cardFound = false;
     }
     else  {
