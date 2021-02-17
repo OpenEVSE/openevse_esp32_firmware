@@ -205,6 +205,11 @@ loop() {
         }
       }
 
+      if(config_rfid_enabled()){
+        // Make sure the RFID module is working
+        rfid.wakeup();
+      }
+
       Timer1 = millis();
     }
 

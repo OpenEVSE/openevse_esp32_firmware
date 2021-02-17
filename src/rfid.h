@@ -40,6 +40,7 @@ class RfidTask : public MicroTasks::Task {
         uint8_t getStatus();
         void waitForTag(uint8_t seconds);
         DynamicJsonDocument rfidPoll();
+        boolean wakeup();
 };
 
 
