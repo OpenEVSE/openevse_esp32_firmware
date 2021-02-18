@@ -30,6 +30,7 @@
 #include <MongooseCore.h>
 #include <MicroTasks.h>
 #include <LITTLEFS.h>
+#include <Wire.h>
 
 #include "emonesp.h"
 #include "app_config.h"
@@ -55,6 +56,14 @@
 #include "scheduler.h"
 
 #include "legacy_support.h"
+
+#ifndef I2C_SDA
+#define I2C_SDA 21
+#endif
+
+#ifndef I2C_SCL
+#define I2C_SCL 22
+#endif
 
 EvseManager evse(RAPI_PORT);
 Scheduler scheduler(evse);
@@ -99,6 +108,8 @@ void setup()
   // Read saved settings from the config
   config_load_settings();
   DBUGF("After config_load_settings: %d", ESPAL.getFreeHeap());
+
+  Wire.begin(I2C_SDA, I2C_SCL);
 
   timeManager.begin();
   evse.begin();

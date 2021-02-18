@@ -21,6 +21,11 @@
 
 #include "RapiSender.h"
 
+#ifdef ENABLE_MCP9808
+#include <Adafruit_MCP9808.h>
+Adafruit_MCP9808 tempsensor = Adafruit_MCP9808();
+#endif
+
 int espflash = 0;
 int espfree = 0;
 

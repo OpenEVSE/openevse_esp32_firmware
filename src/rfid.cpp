@@ -7,15 +7,6 @@
 #include "RapiSender.h"
 #include "input.h"
 #include "openevse.h"
-#include "Wire.h"
-
-#ifndef I2C_SDA
-#define I2C_SDA 21
-#endif
-
-#ifndef I2C_SCL
-#define I2C_SCL 22
-#endif
 
 RfidTask::RfidTask() :
   MicroTasks::Task(),
@@ -42,8 +33,6 @@ void RfidTask::setup(){
         status = RFID_STATUS_NOT_ENABLED;
         return;
     }
-
-    Wire.begin(I2C_SDA, I2C_SCL);
     
     wakeup();
 }
