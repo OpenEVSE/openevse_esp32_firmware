@@ -20,7 +20,7 @@ class RfidTask : public MicroTasks::Task {
         EvseManager *_evse;
         Scheduler *_scheduler;
         MicroTasks::EventListener _evseStateEvent;
-        long lastState;
+        long state;
         DFRobot_PN532_IIC nfc; 
         uint8_t status = RFID_STATUS_NOT_ENABLED;
         boolean hasContact = false;

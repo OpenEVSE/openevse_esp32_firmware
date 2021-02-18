@@ -21,9 +21,6 @@ void RfidTask::begin(EvseManager &evse, Scheduler &scheduler){
     _evse = &evse;
     _scheduler = &scheduler;
     MicroTask.startTask(this);
-    // HACK
-    // Schedulers do not work unless this one exists
-    _scheduler->addEvent(100, 0, 0, 0, ~0, EvseState(EvseState::Disabled));
 }
 
 void RfidTask::setup(){
@@ -108,17 +105,17 @@ unsigned long RfidTask::loop(MicroTasks::WakeReason reason){
 
     if(_evseStateEvent.IsTriggered()){
         abortTimer();
-        uint8_t _state = evse.getEvseState();
-        if(_state == OPENEVSE_STATE_NOT_CONNECTED && lastState >= OPENEVSE_STATE_SLEEPING){
+        uint8_t newState = evse.getEvseState();
+        if(newState == OPENEVSE_STATE_NOT_CONNECTED && state >= OPENEVSE_STATE_SLEEPING){
             startTimer(sleep_timer_not_connected);
         }
-        else if(_state == OPENEVSE_STATE_NOT_CONNECTED){
+        else if(newState == OPENEVSE_STATE_NOT_CONNECTED){
             startTimer(sleep_timer_disconnected);
         }
-        else if(_state == OPENEVSE_STATE_CONNECTED){
+        else if(newState == OPENEVSE_STATE_CONNECTED){
             startTimer(sleep_timer_connected);
         }
-        lastState = _state;
+        state = newState;
     }
 
     if(waitingForTag > 0){
