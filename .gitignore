@@ -88,3 +88,6 @@ lib/OpenEVSE
 lib/ESPAL
 lib/MicroDebug
 lib/StreamSpy
+
+# Compiled artifacts
+.bin
