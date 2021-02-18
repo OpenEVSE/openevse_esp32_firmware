@@ -4,7 +4,6 @@
 #include "mqtt.h"
 #include "lcd.h"
 #include "app_config.h"
-#include "RapiSender.h"
 #include "input.h"
 #include "openevse.h"
 
@@ -65,7 +64,7 @@ void RfidTask::scanCard(){
             storedTagStr.trim();
             uidHex.trim();
             if(storedTagStr.compareTo(uidHex) == 0){
-                rapiSender.sendCmd(F("$FE"));
+                _evse->getOpenEVSE().enable([](int ret){});
                 break;
             }
             storedTag = strtok(NULL, ",");
