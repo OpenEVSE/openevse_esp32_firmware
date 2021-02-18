@@ -30,24 +30,6 @@
 #include "evse_man.h"
 #include "scheduler.h"
 
-enum LcdInfoLine
-{
-  LcdInfoLine_Off,
-  LcdInfoLine_EnergySession,       // Energy 1,018Wh
-  LcdInfoLine_EnergyTotal,       // Lifetime 2313kWh
-  LcdInfoLine_Tempurature, // EVSE Temp 30.5C
-  LcdInfoLine_Time,        // Time 03:14PM
-  LcdInfoLine_Date,        // Date 08/25/2020
-  LcdInfoLine_ElapsedTime,
-  LcdInfoLine_BatterySOC,  // Charge level 79%
-  LcdInfoLine_ChargeLimit, // Charge limit 85%
-  LcdInfoLine_Range,
-  LcdInfoLine_RangeAdded,  // Added 127 miles
-  LcdInfoLine_TimeLeft,
-  LcdInfoLine_Voltage,     // Voltage 243v AC
-  LcdInfoLine_TimerStart,  // Start 10:00PM
-  LcdInfoLine_TimerStop,   // Stop 06:00AM
-};
 
 class LcdTask : public MicroTasks::Task
 {
@@ -98,6 +80,27 @@ class LcdTask : public MicroTasks::Task
         }
     };
 
+    enum class LcdInfoLine
+    {
+      Off,
+      EnergySession,  // Energy 1,018Wh
+      EnergyTotal,    // Lifetime 2313kWh
+      Tempurature,    // EVSE Temp 30.5C
+      Time,           // Time 03:14PM
+      Date,           // Date 08/25/2020
+      ElapsedTime,
+      BatterySOC,     // Charge level 79%
+      ChargeLimit,    // Charge limit 85%
+      Range,
+      RangeAdded,     // Added 127 miles
+      TimeLeft,
+      Voltage,        // Voltage 243v AC
+      TimerStart,     // Start 10:00PM
+      TimerStop,      // Stop 06:00AM
+      TimerRemaining, // Remaining 6:23
+      ManualOverride
+    };
+
     Message *_head;
     Message *_tail;
 
@@ -122,13 +125,23 @@ class LcdTask : public MicroTasks::Task
     void setNewState(bool wake = true);
     int getPriority(LcdInfoLine state);
 
-    void display(Message *msg, uint32_t flags);
 
     void showText(int x, int y, const char *msg, bool clear);
 
-    void setEvseState(uint8_t lcdColour, LcdInfoLine info);
+    void setEvseState(uint8_t lcdColour);
     void setInfoLine(LcdInfoLine info);
 
+    void onButton(int event);
+
+    LcdInfoLine getNextInfoLine(LcdInfoLine info);
+
+    void display(Message *msg, uint32_t flags);
+    unsigned long displayNextMessage();
+
+    void displayStateLine(uint8_t EvseState, unsigned long &nextUpdate);
+    void displayInfoLine(LcdInfoLine info, unsigned long &nextUpdate);
+    void displayNumberValue(int line, const char *name, double value, int precision, const char *unit);
+    void displayInfoEventTime(const char *name, Scheduler::EventInstance &event);
   protected:
     void setup();
     unsigned long loop(MicroTasks::WakeReason reason);

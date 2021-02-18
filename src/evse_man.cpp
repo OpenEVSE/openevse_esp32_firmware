@@ -7,6 +7,8 @@
 #include "evse_man.h"
 #include "debug.h"
 
+static EvseProperties nullProperties;
+
 EvseProperties::EvseProperties() :
   _state(EvseState::None),
   _charge_current(UINT32_MAX),
@@ -67,16 +69,11 @@ void EvseManager::Claim::release()
   _client = EvseClient_NULL;
 }
 
-EvseManager::EvseStateEvent::EvseStateEvent() :
-  MicroTasks::Event(),
-  _evse_state(OPENEVSE_STATE_STARTING)
-{
-}
-
 EvseManager::EvseManager(Stream &port) :
+  MicroTasks::Task(),
   _sender(&port),
+  _monitor(OpenEVSE),
   _clients(),
-  _state(),
   _evseStateListener(this),
   _targetProperties(),
   _hasClaims(false),
@@ -94,19 +91,7 @@ EvseManager::~EvseManager()
 void EvseManager::initialiseEvse()
 {
   // Check state the OpenEVSE is in.
-  OpenEVSE.begin(_sender, [this](bool connected)
-  {
-    if(connected)
-    {
-      OpenEVSE.getStatus([this](int ret, uint8_t evse_state, uint32_t session_time, uint8_t pilot_state, uint32_t vflags)
-      {
-        DBUGVAR(evse_state);
-        _state.setState(evse_state, pilot_state, vflags);
-      });
-    } else {
-      DBUGLN("OpenEVSE not responding or not connected");
-    }
-  });
+  _monitor.begin(_sender);
 }
 
 bool EvseManager::findClaim(EvseClient client, Claim **claim)
@@ -195,31 +180,17 @@ bool EvseManager::evaluateClaims(EvseProperties &properties)
 
 void EvseManager::setup()
 {
-  _state.Register(&_evseStateListener);
-
-  OpenEVSE.onState([this](uint8_t evse_state, uint8_t pilot_state, uint32_t current_capacity, uint32_t vflags)
-  {
-    DBUGVAR(evse_state);
-    DBUGVAR(pilot_state);
-    DBUGVAR(current_capacity);
-    DBUGVAR(vflags);
-    DBUGVAR(_waitingForEvent);
-    if(_waitingForEvent > 0) {
-      _evaluateTargetState = true;
-      _waitingForEvent--;
-    }
-    _state.setState(evse_state, pilot_state, vflags);
-  });
+  _monitor.onStateChange(&_evseStateListener);
 }
 
 bool EvseManager::setTargetState(EvseProperties &target)
 {
   bool changeMade = false;
   DBUGVAR(target.getState().toString());
-  DBUGVAR(_state.getState().toString());
+  DBUGVAR(getActiveState().toString());
 
   EvseState state = target.getState();
-  if(EvseState::None != state && state != _state.getState())
+  if(EvseState::None != state && state != getActiveState())
   {
     _waitingForEvent++;
     if(EvseState::Active == state)
@@ -234,16 +205,42 @@ bool EvseManager::setTargetState(EvseProperties &target)
       if(_sleepForDisable) {
         DBUGLN("EVSE: sleep");
         OpenEVSE.sleep([this](int ret) {
-          DBUGF("EVSE: enable - complete %d", ret);
+          DBUGF("EVSE: sleep - complete %d", ret);
         });
       } else {
         DBUGLN("EVSE: disable");
         OpenEVSE.disable([this](int ret) {
-          DBUGF("EVSE: enable - complete %d", ret);
+          DBUGF("EVSE: disable - complete %d", ret);
         });
       }
     }
 
+    changeMade = true;
+  }
+
+  // Work out what the max current should be
+  uint32_t charge_current = _monitor.getMaxConfiguredCurrent();
+  DBUGVAR(charge_current);
+  if(UINT32_MAX != target.getMaxCurrent() && target.getMaxCurrent() < charge_current) {
+    charge_current = target.getMaxCurrent();
+  }
+  DBUGVAR(charge_current);
+
+  // Work out the charge current
+  if(UINT32_MAX != target.getChargeCurrent() && target.getChargeCurrent() < charge_current) {
+    charge_current = target.getChargeCurrent();
+  }
+  DBUGVAR(charge_current);
+
+  if(charge_current < _monitor.getMinCurrent()) {
+    charge_current = _monitor.getMinCurrent();
+  }
+  DBUGVAR(charge_current);
+
+  if(charge_current != _monitor.getPilot())
+  {
+    DBUGF("Set pilot to %d", charge_current);
+    _monitor.setPilot(charge_current);
     changeMade = true;
   }
 
@@ -261,15 +258,25 @@ unsigned long EvseManager::loop(MicroTasks::WakeReason reason)
   DBUG(" connected: ");
   DBUGLN(OpenEVSE.isConnected());
 
-  DBUGVAR(_state.getState().toString());
-  DBUGVAR(_state.getEvseState());
-  DBUGVAR(_state.getPilotState());
+  DBUGVAR(getActiveState().toString());
+  DBUGVAR(_monitor.getEvseState());
+  DBUGVAR(_monitor.getPilotState());
 
   // If we are not connected yet try and connect to the EVSE module
   if(!OpenEVSE.isConnected())
   {
     initialiseEvse();
     return 10 * 1000;
+  }
+
+  DBUGVAR(_evseStateListener.IsTriggered());
+  if(_evseStateListener.IsTriggered())
+  {
+    DBUGVAR(_waitingForEvent);
+    if(_waitingForEvent > 0) {
+      _evaluateTargetState = true;
+      _waitingForEvent--;
+    }
   }
 
   DBUGVAR(_evaluateClaims);
@@ -297,21 +304,14 @@ unsigned long EvseManager::loop(MicroTasks::WakeReason reason)
   DBUGVAR(_evaluateTargetState);
   if(_evaluateTargetState)
   {
-    if(_hasClaims) {
-      setTargetState(_targetProperties);
-    }
-    else
+    
+    if(!_hasClaims)
     {
-      // No clients, make sure the EVSE module is enabled
-      if(_state.isDisabled())
-      {
-        _waitingForEvent++;
-        DBUGLN("EVSE: enable");
-        OpenEVSE.enable([this](int ret) {
-          DBUGF("EVSE: enable - complete %d", ret);
-        });
-      }
+      // No claims, make sure the targetProperties are the defaults with charger active
+      _targetProperties.clear();
+      _targetProperties.setState(EvseState::Active);
     }
+    setTargetState(_targetProperties);
     _evaluateTargetState = false;
   }
 
@@ -373,27 +373,49 @@ bool EvseManager::clientHasClaim(EvseClient client) {
   return findClaim(client);
 }
 
+EvseProperties &EvseManager::getClaimProperties(EvseClient client)
+{
+  if(EvseClient_NULL == client) {
+    return _targetProperties;
+  }
+
+  Claim *claim;
+  if(findClaim(client, &claim)) {
+    return claim->getProperties();
+  }
+
+  return nullProperties;
+}
+
 EvseState EvseManager::getState(EvseClient client)
 {
-  return EvseState::None;
+  return getClaimProperties(client).getState();
 }
 
 uint32_t EvseManager::getChargeCurrent(EvseClient client)
 {
-  return 0;
+  if(EvseClient_NULL == client) {
+    return _monitor.getPilot();
+  }
+
+  return getClaimProperties(client).getChargeCurrent();
 }
 
 uint32_t EvseManager::getMaxCurrent(EvseClient client)
 {
-  return 0;
+  if(EvseClient_NULL == client) {
+    return _monitor.getMaxConfiguredCurrent();
+  }
+
+  return getClaimProperties(client).getMaxCurrent();
 }
 
 uint32_t EvseManager::getEnergyLimit(EvseClient client)
 {
-  return 0;
+  return getClaimProperties(client).getEnergyLimit();
 }
 
 uint32_t EvseManager::getTimeLimit(EvseClient client)
 {
-  return 0;
+  return getClaimProperties(client).getTimeLimit();
 }

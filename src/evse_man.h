@@ -6,6 +6,8 @@
 #include <openevse.h>
 #include <MicroTasks.h>
 
+#include "evse_monitor.h"
+
 typedef uint32_t EvseClient;
 
 #define EvseClient_Vendor_SHIFT               16
@@ -35,9 +37,9 @@ typedef uint32_t EvseClient;
 #define EvseManager_Priority_Divert     50
 #define EvseManager_Priority_Timer     100
 #define EvseManager_Priority_Boost     200
+#define EvseManager_Priority_Ohm       500
 #define EvseManager_Priority_Manual   1000
 #define EvseManager_Priority_Limit    1100
-#define EvseManager_Priority_Ohm      1500
 #define EvseManager_Priority_Error   10000
 
 #ifndef EVSE_MANAGER_MAX_CLIENT_CLAIMS
@@ -145,7 +147,7 @@ class EvseProperties
 
     // Get/set the client auto release state. With the client auto release enabled the client claim
     // will automatically be released at the end of the charging session.
-    bool getAutoRelease() {
+    bool isAutoRelease() {
       return _auto_release;
     }
     void setAutoRelease(bool auto_release) {
@@ -207,55 +209,20 @@ class EvseManager : public MicroTasks::Task
           return _properties.getTimeLimit();
         }
 
-        bool getAutoRelease() {
-          return _properties.getAutoRelease();
-        }
-    };
-
-    class EvseStateEvent : public MicroTasks::Event
-    {
-      private:
-        uint8_t _evse_state;
-        uint8_t _pilot_state;
-        uint32_t _vflags;
-      public:
-        EvseStateEvent();
-        void setState(uint8_t evse_state, uint8_t pilot_state, uint32_t vflags)
-        {
-          _evse_state = evse_state;
-          _pilot_state = pilot_state;
-          _vflags = vflags;
-          Trigger();
-        }
-        uint8_t getEvseState() {
-          return _evse_state;
-        }
-        uint8_t getPilotState() {
-          return _pilot_state;
-        }
-        uint32_t getFlags() {
-          return _vflags;
+        bool isAutoRelease() {
+          return _properties.isAutoRelease();
         }
 
-        EvseState getState() {
-          return isDisabled() ? EvseState::Disabled : EvseState::Active;
-        }
-        bool isActive() {
-          return OPENEVSE_STATE_NOT_CONNECTED <= _evse_state && _evse_state <= OPENEVSE_STATE_CHARGING;
-        }
-        bool isDisabled() {
-          return OPENEVSE_STATE_SLEEPING <= _evse_state;
-        }
-        bool isError() {
-          return OPENEVSE_STATE_VENT_REQUIRED <= _evse_state && _evse_state <= OPENEVSE_STATE_OVER_CURRENT;
+        EvseProperties &getProperties() {
+          return _properties;
         }
     };
 
     RapiSender _sender;
+    EvseMonitor _monitor;
 
     Claim _clients[EVSE_MANAGER_MAX_CLIENT_CLAIMS];
 
-    EvseStateEvent _state;
     MicroTasks::EventListener _evseStateListener;
 
     EvseProperties _targetProperties;
@@ -272,6 +239,13 @@ class EvseManager : public MicroTasks::Task
     bool evaluateClaims(EvseProperties &properties);
 
     bool setTargetState(EvseProperties &properties);
+
+    EvseState getActiveState() {
+      return _monitor.isDisabled() ? EvseState::Disabled : EvseState::Active;
+    }
+
+    EvseProperties &getClaimProperties(EvseClient client);
+
   protected:
     void setup();
     unsigned long loop(MicroTasks::WakeReason reason);
@@ -297,16 +271,85 @@ class EvseManager : public MicroTasks::Task
       return OpenEVSE.isConnected();
     }
     uint8_t getEvseState() {
-      return _state.getEvseState();
+      return _monitor.getEvseState();
     }
     uint8_t getPilotState() {
-      return _state.getPilotState();
+      return _monitor.getPilotState();
     }
     uint32_t getFlags() {
-      return _state.getFlags();
+      return _monitor.getFlags();
     }
     bool isVehicleConnected() {
-      return OPENEVSE_VFLAG_EV_CONNECTED == (_state.getFlags() & OPENEVSE_VFLAG_EV_CONNECTED);
+      return _monitor.isVehicleConnected();
+    }
+    double getAmps() {
+      return _monitor.getAmps();
+    }
+    double getVoltage() {
+      return _monitor.getVoltage();
+    }
+    uint32_t getSessionElapsed() {
+      return _monitor.getSessionElapsed();
+    }
+    double getSessionEnergy() {
+      return _monitor.getSessionEnergy();
+    }
+    double getTotalEnergy() {
+      return _monitor.getTotalEnergy();
+    }
+    long getFaultCountGFCI() {
+      return _monitor.getFaultCountGFCI();
+    }
+    long getFaultCountNoGround() {
+      return _monitor.getFaultCountNoGround();
+    }
+    long getFaultCountStuckRelay() {
+      return _monitor.getFaultCountStuckRelay();
+    }
+    double getTempurature(uint8_t sensor) {
+      return _monitor.getTempurature(sensor);
+    }
+    double isTempuratureValid(uint8_t sensor) {
+      return _monitor.isTempuratureValid(sensor);
+    }
+    bool isDiodeCheckDisabled() {
+      return _monitor.isDiodeCheckDisabled();
+    }
+    bool isVentRequiredDisabled() {
+      return _monitor.isVentRequiredDisabled();
+    }
+    bool isGroundCheckDisabled() {
+      return _monitor.isGroundCheckDisabled();
+    }
+    bool isStuckRelayCheckDisabled() {
+      return _monitor.isStuckRelayCheckDisabled();
+    }
+    bool isGfiTestDisabled() {
+      return _monitor.isGfiTestDisabled();
+    }
+    bool isTemperatureCheckDisabled() {
+      return _monitor.isTemperatureCheckDisabled();
+    }
+    bool isButtonDisabled() {
+      return _monitor.isButtonDisabled();
+    }
+    bool isAutoStartDisabled() {
+      return _monitor.isAutoStartDisabled();
+    }
+    bool isSerialDebugEnabled() {
+      return _monitor.isSerialDebugEnabled();
+    }
+    EvseMonitor::ServiceLevel getServiceLevel() {
+      return _monitor.getServiceLevel();
+    }
+    EvseMonitor::LcdType getLcdType() {
+      return _monitor.getLcdType();
+    }
+    const char *getFirmwareVersion() {
+      return _monitor.getFirmwareVersion();
+    }
+    long getMinCurrent() {
+      return _monitor.getMinCurrent();
     }
 
     // Temp until everything uses EvseManager
@@ -321,7 +364,13 @@ class EvseManager : public MicroTasks::Task
 
     // Register for events
     void onStateChange(MicroTasks::EventListener *listner) {
-      _state.Register(listner);
+      _monitor.onStateChange(listner);
+    }
+    void onDataReady(MicroTasks::EventListener *listner) {
+      _monitor.onDataReady(listner);
+    }
+    void onBootReady(MicroTasks::EventListener *listner) {
+      _monitor.onBootReady(listner);
     }
 };
 

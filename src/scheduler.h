@@ -252,6 +252,8 @@ class Scheduler : public MicroTasks::Task
 
     bool removeEvent(uint32_t id);
 
+    EventInstance &getNextEvent(EvseState type = EvseState::Value::None);
+
     bool deserialize(String& json);
     bool deserialize(const char *json);
     bool deserialize(DynamicJsonDocument &doc);
@@ -269,6 +271,8 @@ class Scheduler : public MicroTasks::Task
     bool serialize(String& json, uint32_t event);
     bool serialize(DynamicJsonDocument &doc, uint32_t event);
     bool serialize(JsonObject &obj, uint32_t event);
+
+    bool serializePlan(DynamicJsonDocument &doc);
 
     static void getCurrentTime(int &day, int32_t &offset);
 };
