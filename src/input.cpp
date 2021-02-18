@@ -19,17 +19,8 @@
 #include "RapiSender.h"
 
 #ifdef ENABLE_MCP9808
-#include <Wire.h>
 #include <Adafruit_MCP9808.h>
 Adafruit_MCP9808 tempsensor = Adafruit_MCP9808();
-
-#ifndef I2C_SDA
-#define I2C_SDA -1
-#endif
-
-#ifndef I2C_SCL
-#define I2C_SCL -1
-#endif
 #endif
 
 int espflash = 0;
@@ -355,7 +346,6 @@ handleRapiRead()
 void input_setup()
 {
 #ifdef ENABLE_MCP9808
-  Wire.begin(I2C_SDA, I2C_SCL);
 
   if(tempsensor.begin())
   {
