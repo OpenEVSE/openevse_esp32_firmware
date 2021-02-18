@@ -584,13 +584,13 @@ handleStatus(MongooseHttpServerRequest *request) {
 
   create_rapi_json(doc);
 
-  doc["elapsed"] = elapsed;
-  doc["wattsec"] = wattsec;
-  doc["watthour"] = watthour_total;
+  doc["elapsed"] = evse.getSessionElapsed();
+  doc["wattsec"] = evse.getSessionEnergy() * SESSION_ENERGY_SCALE_FACTOR;
+  doc["watthour"] = evse.getTotalEnergy() * TOTAL_ENERGY_SCALE_FACTOR;
 
-  doc["gfcicount"] = gfci_count;
-  doc["nogndcount"] = nognd_count;
-  doc["stuckcount"] = stuck_count;
+  doc["gfcicount"] = evse.getFaultCountGFCI();
+  doc["nogndcount"] = evse.getFaultCountNoGround();
+  doc["stuckcount"] = evse.getFaultCountStuckRelay();
 
   doc["solar"] = solar;
   doc["grid_ie"] = grid_ie;
@@ -630,17 +630,17 @@ handleConfigGet(MongooseHttpServerRequest *request, MongooseHttpServerResponseSt
   DynamicJsonDocument doc(capacity);
 
   // EVSE Config
-  doc["firmware"] = firmware;
-  doc["protocol"] = protocol;
+  doc["firmware"] = evse.getFirmwareVersion();
+  doc["protocol"] = "-";
   doc["espflash"] = ESPAL.getFlashChipSize();
   doc["version"] = currentfirmware;
-  doc["diodet"] = diode_ck;
-  doc["gfcit"] = gfci_test;
-  doc["groundt"] = ground_ck;
-  doc["relayt"] = stuck_relay;
-  doc["ventt"] = vent_ck;
-  doc["tempt"] = temp_ck;
-  doc["service"] = service;
+  doc["diodet"] = evse.isDiodeCheckDisabled() ? 1 : 0;
+  doc["gfcit"] = evse.isGfiTestDisabled() ? 1 : 0;
+  doc["groundt"] = evse.isGroundCheckDisabled() ? 1 : 0;
+  doc["relayt"] = evse.isStuckRelayCheckDisabled() ? 1 : 0;
+  doc["ventt"] = evse.isVentRequiredDisabled() ? 1 : 0;
+  doc["tempt"] = evse.isTemperatureCheckDisabled() ? 1 : 0;
+  doc["service"] = static_cast<uint8_t>(evse.getServiceLevel());
   doc["scale"] = current_scale;
   doc["offset"] = current_offset;
 
@@ -787,6 +787,24 @@ handleSchedule(MongooseHttpServerRequest *request)
     response->setCode(405);
     response->print("{\"msg\":\"Method not allowed\"}");
   }
+
+  request->send(response);
+}
+
+void
+handleSchedulePlan(MongooseHttpServerRequest *request)
+{
+  MongooseHttpServerResponseStream *response;
+  if(false == requestPreProcess(request, response)) {
+    return;
+  }
+
+  const size_t capacity = JSON_OBJECT_SIZE(40) + 2048;
+  DynamicJsonDocument doc(capacity);
+
+  scheduler.serializePlan(doc);
+  response->setCode(200);
+  serializeJson(doc, *response);
 
   request->send(response);
 }
@@ -1178,6 +1196,7 @@ web_server_setup() {
   // Check status of RFID scan
   server.on("/rfid/poll$", handlePollRFID);
 
+  server.on("/schedule/plan$", handleSchedulePlan);
   server.on("/schedule", handleSchedule);
 
   // Simple Firmware Update Form

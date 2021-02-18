@@ -70,3 +70,27 @@ GET {{baseUrl}}/r?json&rapi=$ST+10+30+11+00 HTTP/1.1
 GET {{baseUrl}}/r?json&rapi=$GD HTTP/1.1
 
 ###
+
+# Enable the front button
+
+GET {{baseUrl}}/r?json&rapi=$FF+B+1 HTTP/1.1
+
+###
+
+# Disable the front button
+
+GET {{baseUrl}}/r?json&rapi=$FF+B+0 HTTP/1.1
+
+###
+
+# Enable LCD update
+
+GET {{baseUrl}}/r?json&rapi=$F0+1 HTTP/1.1
+
+###
+
+# Disable LCD update
+
+GET {{baseUrl}}/r?json&rapi=$F0+0 HTTP/1.1
+
+###

@@ -41,6 +41,8 @@ class LedManagerTask : public MicroTasks::Task
 
     bool flashState;
 
+    uint8_t brightness;
+
 #if RGB_LED
     void setAllRGB(uint8_t red, uint8_t green, uint8_t blue);
 #endif
@@ -66,6 +68,8 @@ class LedManagerTask : public MicroTasks::Task
     void clear();
 
     int getButtonPressed();
+
+    void setBrightness(uint8_t brightness);
 };
 
 extern LedManagerTask ledManager;
