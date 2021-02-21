@@ -18,15 +18,6 @@
 #define LCD_CHAR_LOCK       4
 #define LCD_CHAR_CLOCK      5
 
-#define LCD_COLOUR_OFF      0
-#define LCD_COLOUR_RED      1
-#define LCD_COLOUR_YELLOW   3
-#define LCD_COLOUR_GREEN    2
-#define LCD_COLOUR_TEAL     6
-#define LCD_COLOUR_BLUE     4
-#define LCD_COLOUR_VIOLET   5
-#define LCD_COLOUR_WHITE    7
-
 #include "evse_man.h"
 #include "scheduler.h"
 

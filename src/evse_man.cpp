@@ -304,7 +304,7 @@ unsigned long EvseManager::loop(MicroTasks::WakeReason reason)
   DBUGVAR(_evaluateTargetState);
   if(_evaluateTargetState)
   {
-    
+
     if(!_hasClaims)
     {
       // No claims, make sure the targetProperties are the defaults with charger active
@@ -390,6 +390,42 @@ EvseProperties &EvseManager::getClaimProperties(EvseClient client)
 EvseState EvseManager::getState(EvseClient client)
 {
   return getClaimProperties(client).getState();
+}
+
+uint8_t EvseManager::getStateColour()
+{
+  switch(getEvseState())
+  {
+    case OPENEVSE_STATE_STARTING:
+      // Do nothing
+      break;
+    case OPENEVSE_STATE_NOT_CONNECTED:
+      return OPENEVSE_LCD_GREEN;
+
+    case OPENEVSE_STATE_CONNECTED:
+      return OPENEVSE_LCD_YELLOW;
+
+    case OPENEVSE_STATE_CHARGING:
+      // TODO: Colour should also take into account the tempurature, >60 YELLOW
+      return OPENEVSE_LCD_TEAL;
+
+    case OPENEVSE_STATE_VENT_REQUIRED:
+    case OPENEVSE_STATE_DIODE_CHECK_FAILED:
+    case OPENEVSE_STATE_GFI_FAULT:
+    case OPENEVSE_STATE_NO_EARTH_GROUND:
+    case OPENEVSE_STATE_STUCK_RELAY:
+    case OPENEVSE_STATE_GFI_SELF_TEST_FAILED:
+    case OPENEVSE_STATE_OVER_TEMPERATURE:
+    case OPENEVSE_STATE_OVER_CURRENT:
+      return OPENEVSE_LCD_RED;
+
+    case OPENEVSE_STATE_SLEEPING:
+    case OPENEVSE_STATE_DISABLED:
+      return isVehicleConnected() ? OPENEVSE_LCD_TEAL : OPENEVSE_LCD_VIOLET;
+      break;
+  }
+
+  return OPENEVSE_LCD_OFF;
 }
 
 uint32_t EvseManager::getChargeCurrent(EvseClient client)

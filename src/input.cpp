@@ -64,13 +64,11 @@ class InputTask : public MicroTasks::Task
 
       if(_evseState.IsTriggered())
       {
-        uint8_t state = evse.getEvseState();
-        ledManager.setEvseState(state);
-
         // Send to all clients
         StaticJsonDocument<32> event;
-        event["state"] = state;
+        event["state"] = evse.getEvseState();
         event["vehicle"] = evse.isVehicleConnected();
+        event["colour"] = evse.getStateColour();
         event_send(event);
       }
 

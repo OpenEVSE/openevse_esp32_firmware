@@ -279,8 +279,15 @@ class EvseManager : public MicroTasks::Task
     uint32_t getFlags() {
       return _monitor.getFlags();
     }
+    uint8_t getStateColour();
     bool isVehicleConnected() {
       return _monitor.isVehicleConnected();
+    }
+    bool isError() {
+      return _monitor.isError();
+    }
+    bool isCharging() {
+      return _monitor.isCharging();
     }
     double getAmps() {
       return _monitor.getAmps();

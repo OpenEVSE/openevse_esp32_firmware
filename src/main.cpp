@@ -104,7 +104,7 @@ void setup()
   scheduler.begin();
 
   lcd.begin(evse, scheduler);
-  MicroTask.startTask(ledManager);
+  ledManager.begin(evse);
 
   // Initialise the WiFi
   net_setup();
@@ -168,6 +168,7 @@ loop() {
       // -------------------------------------------------------------------
       // Do these things once every 2s
       // -------------------------------------------------------------------
+#ifdef ENABLE_DEBUG_MEMORY_MONITOR
       if ((millis() - Timer3) >= 2000) {
         uint32_t current = ESPAL.getFreeHeap();
         int32_t diff = (int32_t)(last_mem - current);
@@ -177,6 +178,7 @@ loop() {
         }
         Timer3 = millis();
       }
+#endif
     }
   }
 

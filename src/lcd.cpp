@@ -218,55 +218,14 @@ unsigned long LcdTask::loop(MicroTasks::WakeReason reason)
     return MicroTask.Infinate;
   }
 
-  if(evseStateChanged)
+  if(evseStateChanged || flagsChanged)
   {
     // Set the LCD background colour based on the EVSE state and deal with any
     // resulting state changes
-    switch(_evseState)
-    {
-      case OPENEVSE_STATE_STARTING:
-        // Do nothing
-        break;
-      case OPENEVSE_STATE_NOT_CONNECTED:
-        setEvseState(LCD_COLOUR_GREEN);
-        break;
-      case OPENEVSE_STATE_CONNECTED:
-        setEvseState(LCD_COLOUR_YELLOW);
-        break;
-      case OPENEVSE_STATE_CHARGING:
-        // TODO: Colour should also take into account the tempurature, >60 YELLOW
-        setEvseState(LCD_COLOUR_TEAL);
-        break;
-      case OPENEVSE_STATE_VENT_REQUIRED:
-      case OPENEVSE_STATE_DIODE_CHECK_FAILED:
-      case OPENEVSE_STATE_GFI_FAULT:
-      case OPENEVSE_STATE_NO_EARTH_GROUND:
-      case OPENEVSE_STATE_STUCK_RELAY:
-      case OPENEVSE_STATE_GFI_SELF_TEST_FAILED:
-      case OPENEVSE_STATE_OVER_TEMPERATURE:
-      case OPENEVSE_STATE_OVER_CURRENT:
-        setEvseState(LCD_COLOUR_RED);
-        break;
-      case OPENEVSE_STATE_SLEEPING:
-      case OPENEVSE_STATE_DISABLED:
-        setEvseState(_evse->isVehicleConnected() ? LCD_COLOUR_WHITE : LCD_COLOUR_VIOLET);
-        break;
-      default:
-        break;
-    }
-
-    _updateStateDisplay = true;
-  }
-  else if(flagsChanged)
-  {
-    switch(_evseState)
-    {
-      case OPENEVSE_STATE_SLEEPING:
-      case OPENEVSE_STATE_DISABLED:
-        _evse->getOpenEVSE().lcdSetColour(_evse->isVehicleConnected() ? LCD_COLOUR_WHITE : LCD_COLOUR_VIOLET, IGNORE);
-        break;
-      default:
-        break;
+    _evse->getOpenEVSE().lcdSetColour(_evse->getStateColour(), IGNORE);
+    if(evseStateChanged) {
+      setInfoLine(getNextInfoLine(LcdInfoLine::Off));
+      _updateStateDisplay = true;
     }
   }
 
