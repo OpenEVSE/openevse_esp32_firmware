@@ -923,8 +923,8 @@ handleUpdateUpload(MongooseHttpServerRequest *request, int ev, MongooseString fi
 
     DEBUG_PORT.printf("Update Start: %s\n", filename.c_str());
 
-    lcd.display(F("Updating WiFi"), 0, 0, 0, LCD_CLEAR_LINE);
-    lcd.display(F(""), 0, 1, 10 * 1000, LCD_CLEAR_LINE);
+    lcd.display(F("Updating WiFi"), 0, 0, 10 * 1000, LCD_CLEAR_LINE | LCD_DISPLAY_NOW);
+    lcd.display(F(""), 0, 1, 10 * 1000, LCD_CLEAR_LINE | LCD_DISPLAY_NOW);
 
     if(!Update.begin()) {
       handleUpdateError(request);
