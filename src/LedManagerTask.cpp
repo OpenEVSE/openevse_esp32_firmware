@@ -75,11 +75,11 @@ static uint32_t status_colour_map[] =
 {
   rgb(0, 0, 0),       // OPENEVSE_LCD_OFF
   rgb(255, 0, 0),     // OPENEVSE_LCD_RED
-  rgb(1, 196, 14),    // OPENEVSE_LCD_GREEN
-  rgb(213, 255, 112), // OPENEVSE_LCD_YELLOW
-  rgb(0, 0, 247),     // OPENEVSE_LCD_BLUE
-  rgb(146, 0, 247),   // OPENEVSE_LCD_VIOLET
-  rgb(0, 146, 247),   // OPENEVSE_LCD_TEAL
+  rgb(0, 255, 0),     // OPENEVSE_LCD_GREEN
+  rgb(255, 255, 0),   // OPENEVSE_LCD_YELLOW
+  rgb(0, 0, 255),     // OPENEVSE_LCD_BLUE
+  rgb(255, 0, 255),   // OPENEVSE_LCD_VIOLET
+  rgb(0, 255, 255),   // OPENEVSE_LCD_TEAL
   rgb(255, 255, 255), // OPENEVSE_LCD_WHITE
 };
 #endif
