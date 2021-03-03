@@ -1,0 +1,88 @@
+name: PlatformIO CI
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - master
+  pull_request:
+    types: [opened, reopened, synchronize]
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+
+    strategy:
+      fail-fast: false
+      matrix:
+        env:
+          - openevse_nodemcu-32s
+          - openevse_esp-wrover-kit
+          - openevse_huzzah32_dev
+          - openevse_huzzah32
+          - openevse_featheresp32
+          - openevse_wifi_v1
+          - openevse_esp32-gateway
+          - openevse_esp32-gateway-e
+          - openevse_esp32-heltec-wifi-lora-v2
+
+    steps:
+    - uses: actions/checkout@v2
+      with:
+        submodules: recursive
+
+    - name: Temp checkout latest OpenEVSE lib
+      uses: actions/checkout@v2
+      with:
+        repository: jeremypoulter/OpenEVSE_Lib
+        ref: openevse_wifi_timer_apis
+        path: lib/OpenEVSE
+
+    - name: Cache pip
+      uses: actions/cache@v2
+      with:
+        path: ~/.cache/pip
+        key: ${{ runner.os }}-pip-${{ hashFiles('**/requirements.txt') }}
+        restore-keys: |
+          ${{ runner.os }}-pip-
+
+    - name: Cache PlatformIO
+      uses: actions/cache@v2
+      with:
+        path: ~/.platformio
+        key: ${{ runner.os }}-${{ hashFiles('**/lockfiles') }}
+
+    - name: Set up Python
+      uses: actions/setup-python@v2
+      with:
+        python-version: '3.x'
+
+    - name: Install PlatformIO
+      run: |
+        python -m pip install --upgrade pip
+        pip install --upgrade platformio
+
+    - name: Set up Node JS
+      uses: actions/setup-node@v2
+      with:
+        node-version: '12'
+
+    - name: Install dependencies
+      run: |
+        cd gui
+        npm install
+
+    - name: Build GUI
+      run: |
+        cd gui
+        npm run build
+
+    - name: Run PlatformIO
+      run: pio run -e ${{ matrix.env }}
+
+    - name: Upload output to GitHub
+      uses: actions/upload-artifact@v2
+      with:
+        name: ${{ matrix.env }}.bin
+        path: .pio/build/${{ matrix.env }}/firmware.bin
+
