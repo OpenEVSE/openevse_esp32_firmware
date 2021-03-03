@@ -1,4 +1,6 @@
-# OpenEVSE WiFi Gateway
+# OpenEVSE WiFi Gateway v4
+
+> **_NOTE:_**  Breaking change! This release requires a minimum of 7.1.2 of the OpenEVSE firmware, features may not behave as expected on older firmware.
 
 ![main](docs/main2.png)
 
