@@ -3,10 +3,7 @@ name: PlatformIO CI
 on:
   workflow_dispatch:
   push:
-    branches:
-      - master
   pull_request:
-    types: [opened, reopened, synchronize]
 
 jobs:
   build:
