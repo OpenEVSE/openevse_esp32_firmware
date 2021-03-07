@@ -89,3 +89,5 @@ lib/ESPAL
 lib/MicroDebug
 lib/StreamSpy
 lib/MicroTasks
+
+.bin
