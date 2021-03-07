@@ -15,8 +15,6 @@ The WiFi gateway uses an **ESP32** which communicates with the OpenEVSE controll
 
 Wired Ethernet connection is possible using [ESP32 Gateway](docs/wired-ethernet.md)
 
-[**See this repo for the older V2.x ESP8266 version (pre June 2020)**](https://github.com/openevse/ESP8266_WiFi_v2.x/)
-
 **[Live UI demo](https://openevse.openenergymonitor.org)**
 
 ## Features
@@ -37,9 +35,8 @@ Wired Ethernet connection is possible using [ESP32 Gateway](docs/wired-ethernet.
 ### OpenEVSE / EmonEVSE charging station
 
 - Purchase via: [OpenEVSE Store (USA/Canda)](https://store.openevse.com) | [OpenEnergyMonitor (UK / EU)](https://shop.openenergymonitor.com/evse/)
-- OpenEVSE FW [V4.8.0+ recommended](https://github.com/OpenEVSE/open_evse/releases)
-- All new OpenEVSE units are shipped with V4.8.0 pre-loaded (October 2017 onwards)
-- OpenEVSE FW V3.10.4 will work with latest WiFi FW with some minor issues e.g. LCD text corruption
+- OpenEVSE FW [v7.1.2+ required](https://github.com/OpenEVSE/open_evse/releases)
+- All new OpenEVSE units are shipped with ... *TBD*
 
 ### ESP32 WiFi Module
 
