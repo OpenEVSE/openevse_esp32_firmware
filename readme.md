@@ -194,7 +194,7 @@ All subsequent MQTT status updates will by default be be posted to `openevse-xxx
 
 OpenEVSE can post its status values (e.g. amp, wh, temp1, temp2, temp3, pilot, status) to an MQTT server. Data will be published as a sub-topic of base topic, e.g `<base-topic>/amp`. Data is published to MQTT every 30s.
 
-**The default `<base-topic>` is `openevse-xxxx` where `xxxx` is the last 4 characters of the device ID**
+> **_NOTE:_** The default `<base-topic>` is `openevse-xxxx` where `xxxx` is the last 4 characters of the device ID
 
 MQTT setup is pre-populated with OpenEnergyMonitor [emonPi default MQTT server credentials](https://guide.openenergymonitor.org/technical/credentials/#mqtt).
 
@@ -203,11 +203,13 @@ MQTT setup is pre-populated with OpenEnergyMonitor [emonPi default MQTT server c
 - Click connect
 - After a few seconds `Connected: No` should change to `Connected: Yes` if connection is successful. Re-connection will be attempted every 10s. A refresh of the page may be needed.
 
-*Note: `emon/xxxx` should be used as the base-topic if posting to emonPi MQTT server if you want the data to appear in emonPi Emoncms. See [emonPi MQTT docs](https://guide.openenergymonitor.org/technical/mqtt/).*
+> **_NOTE:_**  `emon/xxxx` should be used as the base-topic if posting to emonPi MQTT server if you want the data to appear in emonPi Emoncms. See [emonPi MQTT docs](https://guide.openenergymonitor.org/technical/mqtt/).
 
 MQTT can also be used to control the OpenEVSE, see RAPI MQTT below.
 
 ### RAPI
+
+> **WARNING:_** Directly comunicating with the OpenEVSE is depricated and may be removed from future versions of the firmware
 
 RAPI commands can be used to control and check the status of all OpenEVSE functions. RAPI commands can be issued via the direct serial, web-interface, HTTP and MQTT. We recommend using RAPI over MQTT.
 
