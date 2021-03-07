@@ -17,8 +17,6 @@
 String ohm_hour = "NotConnected";
 int evse_sleep = 0;
 
-extern RapiSender rapiSender;
-
 static MongooseHttpClient client;
 
 // -------------------------------------------------------------------

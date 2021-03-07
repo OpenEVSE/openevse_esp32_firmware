@@ -94,8 +94,8 @@ startAP() {
   ipaddress = tmpStr;
   DEBUG.print("AP IP Address: ");
   DEBUG.println(tmpStr);
-  lcd_display(softAP_ssid_ID, 0, 0, 0, LCD_CLEAR_LINE);
-  lcd_display(String(F("Pass: ")) + softAP_password, 0, 1, 15 * 1000, LCD_CLEAR_LINE);
+  lcd.display(softAP_ssid_ID, 0, 0, 0, LCD_CLEAR_LINE);
+  lcd.display(String(F("Pass: ")) + softAP_password, 0, 1, 15 * 1000, LCD_CLEAR_LINE);
 
   ledManager.setWifiMode(false, false);
 
@@ -139,11 +139,11 @@ static void net_wifi_start()
 
 static void display_state()
 {
-  lcd_display(F("Hostname:"), 0, 0, 0, LCD_CLEAR_LINE);
-  lcd_display(esp_hostname.c_str(), 0, 1, 5000, LCD_CLEAR_LINE);
+  lcd.display(F("Hostname:"), 0, 0, 0, LCD_CLEAR_LINE);
+  lcd.display(esp_hostname.c_str(), 0, 1, 5000, LCD_CLEAR_LINE);
 
-  lcd_display(F("IP Address:"), 0, 0, 0, LCD_CLEAR_LINE);
-  lcd_display(ipaddress.c_str(), 0, 1, 5000, LCD_CLEAR_LINE);
+  lcd.display(F("IP Address:"), 0, 0, 0, LCD_CLEAR_LINE);
+  lcd.display(ipaddress.c_str(), 0, 1, 5000, LCD_CLEAR_LINE);
 }
 
 static void net_connected(IPAddress myAddress)
@@ -160,7 +160,7 @@ static void net_connected(IPAddress myAddress)
 
   ledManager.setWifiMode(true, true);
 
-  time_begin(sntp_hostname.c_str());
+  timeManager.setHost(sntp_hostname.c_str());
 }
 
 static void net_wifi_onStationModeConnected(const WiFiEventStationModeConnected &event) {
@@ -220,8 +220,8 @@ static void net_wifi_onStationModeDisconnected(const WiFiEventStationModeDisconn
 }
 
 static void net_wifi_onAPModeStationConnected(const WiFiEventSoftAPModeStationConnected &event) {
-  lcd_display(F("IP Address"), 0, 0, 0, LCD_CLEAR_LINE);
-  lcd_display(ipaddress, 0, 1, (0 == apClients ? 15 : 5) * 1000, LCD_CLEAR_LINE);
+  lcd.display(F("IP Address"), 0, 0, 0, LCD_CLEAR_LINE);
+  lcd.display(ipaddress, 0, 1, (0 == apClients ? 15 : 5) * 1000, LCD_CLEAR_LINE);
 
   ledManager.setWifiMode(false, true);
 
@@ -374,7 +374,7 @@ void net_event(WiFiEvent_t event, system_event_info_t info)
 #endif
 
 void
-net_setup() 
+net_setup()
 {
   randomSeed(analogRead(RANDOM_SEED_CHANNEL));
 
@@ -446,8 +446,8 @@ net_loop()
   {
     DBUGLN("*** Factory Reset ***");
 
-    lcd_display(F("Factory Reset"), 0, 0, 0, LCD_CLEAR_LINE | LCD_DISPLAY_NOW);
-    lcd_display(F(""), 0, 1, 10 * 1000, LCD_CLEAR_LINE | LCD_DISPLAY_NOW);
+    lcd.display(F("Factory Reset"), 0, 0, 0, LCD_CLEAR_LINE | LCD_DISPLAY_NOW);
+    lcd.display(F(""), 0, 1, 10 * 1000, LCD_CLEAR_LINE | LCD_DISPLAY_NOW);
 
     delay(1000);
 
@@ -459,8 +459,8 @@ net_loop()
   }
   else if(false == apMessage && LOW == wifiButtonState && millis() > wifiButtonTimeOut + WIFI_BUTTON_AP_TIMEOUT)
   {
-    lcd_display(F("Access Point"), 0, 0, 0, LCD_CLEAR_LINE | LCD_DISPLAY_NOW);
-    lcd_display(F(""), 0, 1, 10 * 1000, LCD_CLEAR_LINE | LCD_DISPLAY_NOW);
+    lcd.display(F("Access Point"), 0, 0, 0, LCD_CLEAR_LINE | LCD_DISPLAY_NOW);
+    lcd.display(F(""), 0, 1, 10 * 1000, LCD_CLEAR_LINE | LCD_DISPLAY_NOW);
     apMessage = true;
   }
 

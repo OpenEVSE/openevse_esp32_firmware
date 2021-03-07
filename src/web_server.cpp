@@ -34,6 +34,7 @@ typedef const __FlashStringHelper *fstr_t;
 #include "espal.h"
 #include "time_man.h"
 #include "tesla_client.h"
+#include "scheduler.h"
 
 MongooseHttpServer server;          // Create class for Web server
 
@@ -54,11 +55,6 @@ const char _CONTENT_TYPE_JS[] PROGMEM = "application/javascript";
 const char _CONTENT_TYPE_JPEG[] PROGMEM = "image/jpeg";
 const char _CONTENT_TYPE_PNG[] PROGMEM = "image/png";
 const char _CONTENT_TYPE_SVG[] PROGMEM = "image/svg+xml";
-
-// Get running firmware version from build tag environment variable
-#define TEXTIFY(A) #A
-#define ESCAPEQUOTE(A) TEXTIFY(A)
-String currentfirmware = ESCAPEQUOTE(BUILD_TAG);
 
 void dumpRequest(MongooseHttpServerRequest *request)
 {
@@ -583,16 +579,17 @@ handleStatus(MongooseHttpServerRequest *request) {
   doc["comm_sent"] = rapiSender.getSent();
   doc["comm_success"] = rapiSender.getSuccess();
   doc["rapi_connected"] = (int)rapiSender.isConnected();
+  doc["evse_connected"] = (int)evse.isConnected();
 
   create_rapi_json(doc);
 
-  doc["elapsed"] = elapsed;
-  doc["wattsec"] = wattsec;
-  doc["watthour"] = watthour_total;
+  doc["elapsed"] = evse.getSessionElapsed();
+  doc["wattsec"] = evse.getSessionEnergy() * SESSION_ENERGY_SCALE_FACTOR;
+  doc["watthour"] = evse.getTotalEnergy() * TOTAL_ENERGY_SCALE_FACTOR;
 
-  doc["gfcicount"] = gfci_count;
-  doc["nogndcount"] = nognd_count;
-  doc["stuckcount"] = stuck_count;
+  doc["gfcicount"] = evse.getFaultCountGFCI();
+  doc["nogndcount"] = evse.getFaultCountNoGround();
+  doc["stuckcount"] = evse.getFaultCountStuckRelay();
 
   doc["solar"] = solar;
   doc["grid_ie"] = grid_ie;
@@ -632,17 +629,17 @@ handleConfigGet(MongooseHttpServerRequest *request, MongooseHttpServerResponseSt
   DynamicJsonDocument doc(capacity);
 
   // EVSE Config
-  doc["firmware"] = firmware;
-  doc["protocol"] = protocol;
+  doc["firmware"] = evse.getFirmwareVersion();
+  doc["protocol"] = "-";
   doc["espflash"] = ESPAL.getFlashChipSize();
   doc["version"] = currentfirmware;
-  doc["diodet"] = diode_ck;
-  doc["gfcit"] = gfci_test;
-  doc["groundt"] = ground_ck;
-  doc["relayt"] = stuck_relay;
-  doc["ventt"] = vent_ck;
-  doc["tempt"] = temp_ck;
-  doc["service"] = service;
+  doc["diodet"] = evse.isDiodeCheckDisabled() ? 1 : 0;
+  doc["gfcit"] = evse.isGfiTestDisabled() ? 1 : 0;
+  doc["groundt"] = evse.isGroundCheckDisabled() ? 1 : 0;
+  doc["relayt"] = evse.isStuckRelayCheckDisabled() ? 1 : 0;
+  doc["ventt"] = evse.isVentRequiredDisabled() ? 1 : 0;
+  doc["tempt"] = evse.isTemperatureCheckDisabled() ? 1 : 0;
+  doc["service"] = static_cast<uint8_t>(evse.getServiceLevel());
   doc["scale"] = current_scale;
   doc["offset"] = current_offset;
 
@@ -654,7 +651,7 @@ handleConfigGet(MongooseHttpServerRequest *request, MongooseHttpServerResponseSt
   JsonArray http_supported_protocols = doc.createNestedArray("http_supported_protocols");
   http_supported_protocols.add("http");
   http_supported_protocols.add("https");
-  
+
   config_serialize(doc, true, false, true);
 
   response->setCode(200);
@@ -676,7 +673,7 @@ handleConfigPost(MongooseHttpServerRequest *request, MongooseHttpServerResponseS
 }
 
 void
-handleConfig(MongooseHttpServerRequest *request) 
+handleConfig(MongooseHttpServerRequest *request)
 {
   MongooseHttpServerResponseStream *response;
   if(false == requestPreProcess(request, response)) {
@@ -686,13 +683,127 @@ handleConfig(MongooseHttpServerRequest *request)
   if(HTTP_GET == request->method()) {
     handleConfigGet(request, response);
   } else if(HTTP_POST == request->method()) {
-    handleConfigPost(request, response); 
+    handleConfigPost(request, response);
   } else if(HTTP_OPTIONS == request->method()) {
     response->setCode(200);
   } else {
     response->setCode(405);
 
   }
+
+  request->send(response);
+}
+
+// -------------------------------------------------------------------
+//
+// url: /schedule
+// -------------------------------------------------------------------
+void
+handleScheduleGet(MongooseHttpServerRequest *request, MongooseHttpServerResponseStream *response, uint16_t event)
+{
+  const size_t capacity = JSON_OBJECT_SIZE(40) + 1024;
+  DynamicJsonDocument doc(capacity);
+
+  bool success = (SCHEDULER_EVENT_NULL == event) ?
+    scheduler.serialize(doc) :
+    scheduler.serialize(doc, event);
+
+  if(success) {
+    response->setCode(200);
+    serializeJson(doc, *response);
+  } else {
+    response->setCode(404);
+    response->print("{\"msg\":\"Not found\"}");
+  }
+}
+
+void
+handleSchedulePost(MongooseHttpServerRequest *request, MongooseHttpServerResponseStream *response, uint16_t event)
+{
+  String body = request->body().toString();
+
+  bool success = (SCHEDULER_EVENT_NULL == event) ?
+    scheduler.deserialize(body) :
+    scheduler.deserialize(body, event);
+
+  if(success) {
+    response->setCode(200);
+    response->print("{\"msg\":\"done\"}");
+  } else {
+    response->setCode(400);
+    response->print("{\"msg\":\"Could not parse JSON\"}");
+  }
+}
+
+void
+handleScheduleDelete(MongooseHttpServerRequest *request, MongooseHttpServerResponseStream *response, uint16_t event)
+{
+  const size_t capacity = JSON_OBJECT_SIZE(40) + 1024;
+  DynamicJsonDocument doc(capacity);
+
+  if(SCHEDULER_EVENT_NULL != event) {
+    if(scheduler.removeEvent(event)) {
+      response->setCode(200);
+      response->print("{\"msg\":\"done\"}");
+    } else {
+      response->setCode(404);
+      response->print("{\"msg\":\"Not found\"}");
+    }
+  } else {
+    response->setCode(405);
+    response->print("{\"msg\":\"Method not allowed\"}");
+  }
+}
+
+#define SCHEDULE_PATH_LEN (sizeof("/schedule/") - 1)
+
+void
+handleSchedule(MongooseHttpServerRequest *request)
+{
+  MongooseHttpServerResponseStream *response;
+  if(false == requestPreProcess(request, response)) {
+    return;
+  }
+
+  uint16_t event = SCHEDULER_EVENT_NULL;
+
+  String path = request->uri();
+  if(path.length() > SCHEDULE_PATH_LEN) {
+    String eventStr = path.substring(SCHEDULE_PATH_LEN);
+    DBUGVAR(eventStr);
+    event = eventStr.toInt();
+  }
+
+  DBUGVAR(event);
+
+  if(HTTP_GET == request->method()) {
+    handleScheduleGet(request, response, event);
+  } else if(HTTP_POST == request->method()) {
+    handleSchedulePost(request, response, event);
+  } else if(HTTP_DELETE == request->method()) {
+    handleScheduleDelete(request, response, event);
+  } else {
+    response->setCode(405);
+    response->print("{\"msg\":\"Method not allowed\"}");
+  }
+
+  request->send(response);
+}
+
+void
+handleSchedulePlan(MongooseHttpServerRequest *request)
+{
+  MongooseHttpServerResponseStream *response;
+  if(false == requestPreProcess(request, response)) {
+    return;
+  }
+
+  const size_t capacity = JSON_OBJECT_SIZE(40) + 2048;
+  DynamicJsonDocument doc(capacity);
+
+  scheduler.serializePlan(doc);
+  response->setCode(200);
+  serializeJson(doc, *response);
 
   request->send(response);
 }
@@ -812,9 +923,8 @@ handleUpdateUpload(MongooseHttpServerRequest *request, int ev, MongooseString fi
 
     DEBUG_PORT.printf("Update Start: %s\n", filename.c_str());
 
-    lcd_display(F("Updating WiFi"), 0, 0, 0, LCD_CLEAR_LINE);
-    lcd_display(F(""), 0, 1, 10 * 1000, LCD_CLEAR_LINE);
-    lcd_loop();
+    lcd.display(F("Updating WiFi"), 0, 0, 10 * 1000, LCD_CLEAR_LINE | LCD_DISPLAY_NOW);
+    lcd.display(F(""), 0, 1, 10 * 1000, LCD_CLEAR_LINE | LCD_DISPLAY_NOW);
 
     if(!Update.begin()) {
       handleUpdateError(request);
@@ -834,7 +944,7 @@ handleUpdateUpload(MongooseHttpServerRequest *request, int ev, MongooseString fi
       DBUGVAR(lastPercent);
       if(percent != lastPercent) {
         String text = String(percent) + F("%");
-        lcd_display(text, 0, 1, 10 * 1000, LCD_DISPLAY_NOW);
+        lcd.display(text, 0, 1, 10 * 1000, LCD_DISPLAY_NOW);
         DEBUG_PORT.printf("Update: %d%%\n", percent);
         lastPercent = percent;
       }
@@ -849,14 +959,14 @@ handleUpdateUpload(MongooseHttpServerRequest *request, int ev, MongooseString fi
     DBUGLN("Upload finished");
     if(Update.end(true)) {
       DBUGF("Update Success: %lluB", index+len);
-      lcd_display(F("Complete"), 0, 1, 10 * 1000, LCD_CLEAR_LINE | LCD_DISPLAY_NOW);
+      lcd.display(F("Complete"), 0, 1, 10 * 1000, LCD_CLEAR_LINE | LCD_DISPLAY_NOW);
       upgradeResponse->setCode(200);
       upgradeResponse->print("OK");
       request->send(upgradeResponse);
       upgradeResponse = NULL;
     } else {
       DBUGF("Update failed: %d", Update.getError());
-      lcd_display(F("Error"), 0, 1, 10 * 1000, LCD_CLEAR_LINE | LCD_DISPLAY_NOW);
+      lcd.display(F("Error"), 0, 1, 10 * 1000, LCD_CLEAR_LINE | LCD_DISPLAY_NOW);
       handleUpdateError(request);
     }
   }
@@ -1056,6 +1166,9 @@ web_server_setup() {
   server.on("/apoff$", handleAPOff);
   server.on("/divertmode$", handleDivertMode);
   server.on("/emoncms/describe$", handleDescribe);
+
+  server.on("/schedule/plan$", handleSchedulePlan);
+  server.on("/schedule", handleSchedule);
 
   // Simple Firmware Update Form
   server.on("/update$")->

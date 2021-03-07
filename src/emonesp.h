@@ -99,6 +99,14 @@
 #define TEMP_SCALE_FACTOR   1.0
 #endif
 
+#ifndef TOTAL_ENERGY_SCALE_FACTOR
+#define TOTAL_ENERGY_SCALE_FACTOR   1.0
+#endif
+
+#ifndef SESSION_ENERGY_SCALE_FACTOR
+#define SESSION_ENERGY_SCALE_FACTOR 1.0
+#endif
+
 #else
 
 #ifndef VOLTS_SCALE_FACTOR
@@ -113,6 +121,31 @@
 #define TEMP_SCALE_FACTOR   10.0
 #endif
 
+#ifndef TOTAL_ENERGY_SCALE_FACTOR
+#define TOTAL_ENERGY_SCALE_FACTOR   1000.0
 #endif
+
+#ifndef SESSION_ENERGY_SCALE_FACTOR
+#define SESSION_ENERGY_SCALE_FACTOR 3600.0
+#endif
+
+#endif
+
+#ifndef LED_DEFAULT_BRIGHTNESS
+#define LED_DEFAULT_BRIGHTNESS 128
+#endif
+
+#ifndef FORMAT_LITTLEFS_IF_FAILED
+#define FORMAT_LITTLEFS_IF_FAILED true
+#endif // !FORMAT_LITTLEFS_IF_FAILED
+
+// Just because it is irritating to be all caps....
+#define LittleFS LITTLEFS
+
+#ifndef SCHEDULE_PATH
+#define SCHEDULE_PATH "/schedule.json"
+#endif // !SCHEDULE_PATH
+
+extern String currentfirmware;
 
 #endif // _EMONESP_H

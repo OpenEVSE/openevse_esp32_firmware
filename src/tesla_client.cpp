@@ -4,6 +4,10 @@
  * Author: Sam C. Lin
  */
 
+#if defined(ENABLE_DEBUG) && !defined(ENABLE_DEBUG_TESLA_CLIENT)
+#undef ENABLE_DEBUG
+#endif
+
 #include <ArduinoJson.h>
 #include "tesla_client.h"
 #include "debug.h"
@@ -121,16 +125,16 @@ void TeslaClient::loop()
 
 void printResponse(MongooseHttpClientResponse *response)
 {
-  DBUGF("%d %.*s\n", response->respCode(), response->respStatusMsg().length(), (const char *)response->respStatusMsg());
+  DBUGF("%d %.*s", response->respCode(), response->respStatusMsg().length(), (const char *)response->respStatusMsg());
   int headers = response->headers();
   int i;
   for(i=0; i<headers; i++) {
-    DBUGF("_HEADER[%.*s]: %.*s\n", 
+    DBUGF("_HEADER[%.*s]: %.*s", 
       response->headerNames(i).length(), (const char *)response->headerNames(i), 
       response->headerValues(i).length(), (const char *)response->headerValues(i));
   }
 
-  DBUGF("\n%.*s\n", response->body().length(), (const char *)response->body());
+  DBUGF("%.*s", response->body().length(), (const char *)response->body());
 }
 
 void TeslaClient::requestAccessToken()

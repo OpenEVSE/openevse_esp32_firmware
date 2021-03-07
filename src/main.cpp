@@ -29,6 +29,7 @@
 #include <ArduinoOTA.h>               // local OTA update from Arduino IDE
 #include <MongooseCore.h>
 #include <MicroTasks.h>
+#include <LITTLEFS.h>
 
 #include "emonesp.h"
 #include "app_config.h"
@@ -49,10 +50,15 @@
 #include "event.h"
 
 #include "LedManagerTask.h"
+#include "evse_man.h"
+#include "scheduler.h"
 
-#include "RapiSender.h"
+#include "legacy_support.h"
 
-RapiSender rapiSender(&RAPI_PORT);
+EvseManager evse(RAPI_PORT);
+Scheduler scheduler(evse);
+
+RapiSender &rapiSender = evse.getSender();
 
 unsigned long Timer1; // Timer for events once every 30 seconds
 unsigned long Timer3; // Timer for events once every 2 seconds
@@ -61,6 +67,11 @@ boolean rapi_read = 0; //flag to indicate first read of RAPI status
 
 static uint32_t start_mem = 0;
 static uint32_t last_mem = 0;
+
+// Get running firmware version from build tag environment variable
+#define TEXTIFY(A) #A
+#define ESCAPEQUOTE(A) TEXTIFY(A)
+String currentfirmware = ESCAPEQUOTE(BUILD_TAG);
 
 static void hardware_setup();
 
@@ -75,14 +86,25 @@ void setup()
   DEBUG.println();
   DEBUG.printf("OpenEVSE WiFI %s\n", ESPAL.getShortId().c_str());
   DEBUG.printf("Firmware: %s\n", currentfirmware.c_str());
+  DEBUG.printf("Build date: " __DATE__ " " __TIME__ "\n");
   DEBUG.printf("IDF version: %s\n", ESP.getSdkVersion());
   DEBUG.printf("Free: %d\n", ESPAL.getFreeHeap());
+
+  if(!LittleFS.begin(FORMAT_LITTLEFS_IF_FAILED)){
+    DEBUG.println("LittleFS Mount Failed");
+    return;
+  }
 
   // Read saved settings from the config
   config_load_settings();
   DBUGF("After config_load_settings: %d", ESPAL.getFreeHeap());
 
-  MicroTask.startTask(ledManager);
+  timeManager.begin();
+  evse.begin();
+  scheduler.begin();
+
+  lcd.begin(evse, scheduler);
+  ledManager.begin(evse);
 
   // Initialise the WiFi
   net_setup();
@@ -103,8 +125,8 @@ void setup()
 
   input_setup();
 
-  lcd_display(F("OpenEVSE WiFI"), 0, 0, 0, LCD_CLEAR_LINE);
-  lcd_display(currentfirmware, 0, 1, 5 * 1000, LCD_CLEAR_LINE);
+  lcd.display(F("OpenEVSE WiFI"), 0, 0, 0, LCD_CLEAR_LINE);
+  lcd.display(currentfirmware, 0, 1, 5 * 1000, LCD_CLEAR_LINE);
 
   start_mem = last_mem = ESPAL.getFreeHeap();
 } // end setup
@@ -120,7 +142,6 @@ loop() {
   Mongoose.poll(0);
   Profile_End(Mongoose, 10);
 
-  lcd_loop();
   web_server_loop();
   net_loop();
 #ifdef ENABLE_OTA
@@ -128,13 +149,11 @@ loop() {
 #endif
   rapiSender.loop();
   divert_current_loop();
-  time_loop();
   MicroTask.update();
 
   if(OpenEVSE.isConnected())
   {
-    if(OPENEVSE_STATE_STARTING != state &&
-       OPENEVSE_STATE_INVALID != state)
+    if(OPENEVSE_STATE_STARTING != evse.getEvseState())
     {
       // Read initial state from OpenEVSE
       if (rapi_read == 0)
@@ -142,11 +161,14 @@ loop() {
         DBUGLN("first read RAPI values");
         handleRapiRead(); //Read all RAPI values
         rapi_read=1;
+
+        import_timers(&scheduler);
       }
 
       // -------------------------------------------------------------------
       // Do these things once every 2s
       // -------------------------------------------------------------------
+#ifdef ENABLE_DEBUG_MEMORY_MONITOR
       if ((millis() - Timer3) >= 2000) {
         uint32_t current = ESPAL.getFreeHeap();
         int32_t diff = (int32_t)(last_mem - current);
@@ -154,30 +176,9 @@ loop() {
           DEBUG.printf("%s: Free memory %u - diff %d %d\n", time_format_time(time(NULL)).c_str(), current, diff, start_mem - current);
           last_mem = current;
         }
-        update_rapi_values();
         Timer3 = millis();
       }
-    }
-  }
-  else
-  {
-    // Check if we can talk to OpenEVSE
-    if ((millis() - Timer3) >= 1000)
-    {
-      // Check state the OpenEVSE is in.
-      OpenEVSE.begin(rapiSender, [](bool connected)
-      {
-        if(connected)
-        {
-          OpenEVSE.getStatus([](int ret, uint8_t evse_state, uint32_t session_time, uint8_t pilot_state, uint32_t vflags) {
-            state = evse_state;
-            ledManager.setEvseState(evse_state);
-          });
-        } else {
-          DBUGLN("OpenEVSE not responding or not connected");
-        }
-      });
-      Timer3 = millis();
+#endif
     }
   }
 
@@ -197,14 +198,6 @@ loop() {
 
       if(!Update.isRunning())
       {
-        DynamicJsonDocument data(4096);
-        create_rapi_json(data); // create JSON Strings for EmonCMS and MQTT
-
-        emoncms_publish(data);
-
-        teslaClient.getChargeInfoJson(data);
-        event_send(data);
-
         if(config_ohm_enabled()) {
           ohm_loop();
         }

@@ -4,6 +4,8 @@
 #include <Arduino.h>
 #include <MicroTasks.h>
 
+#include "evse_man.h"
+
 #if defined(NEO_PIXEL_PIN) && defined(NEO_PIXEL_LENGTH)
 #define RGB_LED 1
 #elif defined(RED_LED) && defined(GREEN_LED) && defined(BLUE_LED)
@@ -18,13 +20,7 @@ enum LedState
   LedState_Test_Green,
   LedState_Test_Blue,
   LedState_Off,
-  LedState_Unknown,
-  LedState_Ready,
-  LedState_Connected,
-  LedState_Charging,
-  LedState_Sleeping,
-  LedState_Warning,
-  LedState_Error,
+  LedState_Evse_State,
   LedState_WiFi_Access_Point_Waiting,
   LedState_WiFi_Access_Point_Connected,
   LedState_WiFi_Client_Connecting,
@@ -34,12 +30,18 @@ enum LedState
 class LedManagerTask : public MicroTasks::Task
 {
   private:
+    EvseManager *_evse;
+
     LedState state;
-    uint8_t evseState;
+
     bool wifiClient;
     bool wifiConnected;
 
     bool flashState;
+
+    uint8_t brightness;
+
+    MicroTasks::EventListener onStateChange;
 
 #if RGB_LED
     void setAllRGB(uint8_t red, uint8_t green, uint8_t blue);
@@ -53,19 +55,23 @@ class LedManagerTask : public MicroTasks::Task
     void setNewState(bool wake = true);
     int getPriority(LedState state);
 
-  public:
-    LedManagerTask();
-
+  protected:
     void setup();
     unsigned long loop(MicroTasks::WakeReason reason);
 
-    void setEvseState(uint8_t state);
+  public:
+    LedManagerTask();
+
+    void begin(EvseManager &evse);
+
     void setWifiMode(bool client, bool connected);
 
     void test();
     void clear();
 
     int getButtonPressed();
+
+    void setBrightness(uint8_t brightness);
 };
 
 extern LedManagerTask ledManager;

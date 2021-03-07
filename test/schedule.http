@@ -1,0 +1,182 @@
+# Name: REST Client
+# Id: humao.rest-client
+# Description: REST Client for Visual Studio Code
+# Version: 0.21.3
+# Publisher: Huachao Mao
+# VS Marketplace Link: https://marketplace.visualstudio.com/items?itemName=humao.rest-client
+
+# You should use environment vars (https://marketplace.visualstudio.com/items?itemName=humao.rest-client#environment-variables) for these
+# but you can also set here if needed (just don't check in!)
+
+#@baseUrl = http://openevse.local
+
+#@ssid = your_ssid
+#@pass = your_password
+#@apikey = your_key
+
+###
+
+# Get all events
+GET {{baseUrl}}/schedule HTTP/1.1
+
+###
+
+# Get event plan
+GET {{baseUrl}}/schedule/plan HTTP/1.1
+
+###
+
+# Get event '1'
+GET {{baseUrl}}/schedule/1 HTTP/1.1
+
+###
+
+# Remove event '1'
+DELETE {{baseUrl}}/schedule/1 HTTP/1.1
+
+###
+
+# Create a new event to start the charge
+POST {{baseUrl}}/schedule HTTP/1.1
+Content-Type: application/json
+
+{
+  "state": "active",
+  "time": "10:00:00",
+  "days": [
+    "monday"
+  ]
+}
+
+###
+
+# Create multiple new events
+POST {{baseUrl}}/schedule HTTP/1.1
+Content-Type: application/json
+
+[
+  {
+    "state": "disable",
+    "time": "21:13:00",
+    "days": [
+      "monday",
+      "tuesday",
+      "wednesday",
+      "thursday",
+      "friday",
+      "saturday",
+      "sunday"
+    ]
+  },
+  {
+    "state": "active",
+    "time": "21:12:00",
+    "days": [
+      "monday",
+      "tuesday",
+      "wednesday",
+      "thursday",
+      "friday",
+      "saturday",
+      "sunday"
+    ]
+  }
+]
+
+###
+
+# Create multiple new events, with IDs
+POST {{baseUrl}}/schedule HTTP/1.1
+Content-Type: application/json
+
+[
+  {
+    "id": 1,
+    "state": "active",
+    "time": "22:00",
+    "days": [
+      "monday",
+      "tuesday",
+      "wednesday",
+      "thursday",
+      "friday",
+      "saturday",
+      "sunday"
+    ]
+  },
+  {
+    "id": 2,
+    "state": "disable",
+    "time": "22:20",
+    "days": [
+      "monday",
+      "tuesday",
+      "wednesday",
+      "thursday",
+      "friday",
+      "saturday",
+      "sunday"
+    ]
+  }
+]
+
+###
+
+# missing state
+POST {{baseUrl}}/schedule HTTP/1.1
+Content-Type: application/json
+
+{
+  "time": "10:00:00",
+  "days": [
+    "monday"
+  ]
+}
+
+###
+
+# bad JSON
+POST {{baseUrl}}/schedule HTTP/1.1
+Content-Type: application/json
+
+sdfafsdfsadfsdafsda
+
+###
+
+POST {{baseUrl}}/schedule HTTP/1.1
+Content-Type: application/json
+
+{
+  "state": "disabled",
+  "time": "10:30:00",
+  "days": [
+    "monday"
+  ]
+}
+
+###
+
+# Create a new event to start the charge
+POST {{baseUrl}}/schedule/3 HTTP/1.1
+Content-Type: application/json
+
+{
+  "state": "active",
+  "time": "10:00:00",
+  "days": [
+    "tuesday"
+  ]
+}
+
+###
+
+POST {{baseUrl}}/schedule HTTP/1.1
+Content-Type: application/json
+
+{
+  "state": "disabled",
+  "time": "10:30:00",
+  "days": [
+    "tuesday"
+  ]
+}
