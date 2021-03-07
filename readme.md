@@ -1,6 +1,13 @@
 # OpenEVSE WiFi Gateway v4
 
-> **_NOTE:_**  Breaking change! This release requires a minimum of 7.1.2 of the OpenEVSE firmware, features may not behave as expected on older firmware.
+> **_NOTE:_**  Breaking change! This release requires a minimum of [7.1.2](https://github.com/lincomatic/open_evse) of the OpenEVSE firmware, features may not behave as expected on older firmware.
+
+For the v3 that is compatible with previous EVSE firmwares, see the [v3 branch](https://github.com/OpenEVSE/ESP32_WiFi_V3.x/tree/v3)
+
+Instructions on updating the OpenEVSE firmware see [How to Load OpenEVSE Firmware (WinAVR)
+](https://openevse.dozuki.com/Guide/How+to+Load+OpenEVSE+Firmware+(WinAVR)/7?lang=en)
+
+---
 
 ![main](docs/main2.png)
 
