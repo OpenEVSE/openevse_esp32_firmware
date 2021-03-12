@@ -46,13 +46,13 @@ boolean RfidTask::wakeup(){
 
 void RfidTask::scanCard(){
     NFCcard = nfc.getInformation();
-    String uidHex = nfc.readUid();
+    String uid = nfc.readUid();
 
     if(waitingForTag > 0){
         waitingForTag = 0;
         cardFound = true;
         lcd.display("Tag detected!", 0, 0, 0, LCD_CLEAR_LINE);
-        lcd.display(uidHex, 0, 1, 3000, LCD_CLEAR_LINE);
+        lcd.display(uid, 0, 1, 3000, LCD_CLEAR_LINE);
     }else{
         // Check if tag is stored locally
         char storedTags[rfid_storage.length() + 1];
@@ -61,10 +61,14 @@ void RfidTask::scanCard(){
         while(storedTag)
         {
             String storedTagStr = storedTag;
-            storedTagStr.trim();
-            uidHex.trim();
-            if(storedTagStr.compareTo(uidHex) == 0){
-                _evse->getOpenEVSE().enable([](int ret){});
+            storedTagStr.replace(" ", "");
+            uid.trim();
+            if(storedTagStr.compareTo(uid) == 0){
+                if(!isAuthenticated()){
+                    authenticatedTag = uid;
+                }else if(uid == authenticatedTag){
+                    resetAuthentication();
+                }
                 break;
             }
             storedTag = strtok(NULL, ",");
@@ -72,7 +76,7 @@ void RfidTask::scanCard(){
 
         // Send to MQTT broker
         DynamicJsonDocument data(4096);
-        data["rfid"] = uidHex;
+        data["rfid"] = uid;
         mqtt_publish(data);
     }
 }
@@ -100,6 +104,10 @@ unsigned long RfidTask::loop(MicroTasks::WakeReason reason){
         if(status != RFID_STATUS_NOT_FOUND)
             status = RFID_STATUS_NOT_ENABLED;
         return MicroTask.WaitForMask;
+    }
+    if(isAuthenticated() && state >= OPENEVSE_STATE_SLEEPING){
+        // TODO: allow station to wake up
+        //_evse->getOpenEVSE().enable([](int ret){});
     }
 
     if(_evseStateEvent.IsTriggered()){
@@ -144,6 +152,18 @@ uint8_t RfidTask::getStatus(){
     return status;
 }
 
+bool RfidTask::isAuthenticated(){
+    return !authenticatedTag.isEmpty();
+}
+
+String RfidTask::getAuthenticatedTag(){
+    return authenticatedTag;
+}
+
+void RfidTask::resetAuthentication(){
+    authenticatedTag = emptyString;
+}
+
 void RfidTask::waitForTag(uint8_t seconds){
     if(!config_rfid_enabled())
         return;
@@ -154,7 +174,7 @@ void RfidTask::waitForTag(uint8_t seconds){
 }
 
 DynamicJsonDocument RfidTask::rfidPoll() {
-    const size_t capacity = JSON_ARRAY_SIZE(3);
+    const size_t capacity = JSON_ARRAY_SIZE(4);
     DynamicJsonDocument doc(capacity);
     if(waitingForTag > 0){
         // respond with remainding time

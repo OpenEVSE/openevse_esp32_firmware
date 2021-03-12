@@ -27,6 +27,7 @@ class RfidTask : public MicroTasks::Task {
         uint8_t waitingForTag = 0;
         unsigned long stopWaiting = 0;
         boolean cardFound = false;
+        String authenticatedTag = "";
 
     protected:
         void setup();
@@ -44,6 +45,9 @@ class RfidTask : public MicroTasks::Task {
         void waitForTag(uint8_t seconds);
         DynamicJsonDocument rfidPoll();
         boolean wakeup();
+        boolean isAuthenticated();
+        String getAuthenticatedTag();
+        void resetAuthentication();
 };
 
 
