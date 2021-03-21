@@ -688,7 +688,6 @@ handleConfig(MongooseHttpServerRequest *request)
     response->setCode(200);
   } else {
     response->setCode(405);
-
   }
 
   request->send(response);
@@ -738,10 +737,8 @@ handleSchedulePost(MongooseHttpServerRequest *request, MongooseHttpServerRespons
 void
 handleScheduleDelete(MongooseHttpServerRequest *request, MongooseHttpServerResponseStream *response, uint16_t event)
 {
-  const size_t capacity = JSON_OBJECT_SIZE(40) + 1024;
-  DynamicJsonDocument doc(capacity);
-
-  if(SCHEDULER_EVENT_NULL != event) {
+  if(SCHEDULER_EVENT_NULL != event)
+  {
     if(scheduler.removeEvent(event)) {
       response->setCode(200);
       response->print("{\"msg\":\"done\"}");
@@ -804,6 +801,89 @@ handleSchedulePlan(MongooseHttpServerRequest *request)
   scheduler.serializePlan(doc);
   response->setCode(200);
   serializeJson(doc, *response);
+
+  request->send(response);
+}
+
+void handleOverrideGet(MongooseHttpServerRequest *request, MongooseHttpServerResponseStream *response)
+{
+  if(manual.isActive())
+  {
+    EvseProperties props;
+    manual.getProperties(props);
+    props.serialize(response);
+  } else {
+    response->setCode(404);
+    response->print("{\"msg\":\"No manual override\"}");
+  }
+}
+
+void handleOverridePost(MongooseHttpServerRequest *request, MongooseHttpServerResponseStream *response)
+{
+  String body = request->body().toString();
+
+  EvseProperties props;
+  if(props.deserialize(body))
+  {
+    if(manual.claim(props)) {
+      response->setCode(200);
+    } else {
+      response->print("{\"msg\":\"Failed to claim manual overide\"}");
+      response->setCode(500);
+    }
+  } else {
+    response->print("{\"msg\":\"Failed to parse JSON\"}");
+    response->setCode(500);
+  }
+}
+
+void handleOverrideDelete(MongooseHttpServerRequest *request, MongooseHttpServerResponseStream *response)
+{
+  if(manual.release()) {
+    response->setCode(200);
+  } else {
+    response->print("{\"msg\":\"Failed to release manual overide\"}");
+    response->setCode(500);
+  }
+}
+
+void handleOverridePatch(MongooseHttpServerRequest *request, MongooseHttpServerResponseStream *response)
+{
+  if(manual.toggle())
+  {
+    response->setCode(200);
+    if(manual.isActive())
+    {
+      EvseProperties props;
+      manual.getProperties(props);
+      props.serialize(response);
+    }
+  } else {
+    response->print("{\"msg\":\"Failed to toggle manual overide\"}");
+    response->setCode(500);
+  }
+}
+
+void
+handleOverride(MongooseHttpServerRequest *request)
+{
+  MongooseHttpServerResponseStream *response;
+  if(false == requestPreProcess(request, response)) {
+    return;
+  }
+
+  if(HTTP_GET == request->method()) {
+    handleOverrideGet(request, response);
+  } else if(HTTP_POST == request->method()) {
+    handleOverridePost(request, response);
+  } else if(HTTP_DELETE == request->method()) {
+    handleOverrideDelete(request, response);
+  } else if(HTTP_PATCH == request->method()) {
+    handleOverridePatch(request, response);
+  } else {
+    response->setCode(405);
+    response->print("{\"msg\":\"Method not allowed\"}");
+  }
 
   request->send(response);
 }
@@ -1169,6 +1249,8 @@ web_server_setup() {
 
   server.on("/schedule/plan$", handleSchedulePlan);
   server.on("/schedule", handleSchedule);
+
+  server.on("/override$", handleOverride);
 
   // Simple Firmware Update Form
   server.on("/update$")->

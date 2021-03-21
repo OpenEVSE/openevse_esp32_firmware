@@ -57,6 +57,7 @@
 
 EvseManager evse(RAPI_PORT);
 Scheduler scheduler(evse);
+ManualOverride manual(evse);
 
 RapiSender &rapiSender = evse.getSender();
 
@@ -103,7 +104,7 @@ void setup()
   evse.begin();
   scheduler.begin();
 
-  lcd.begin(evse, scheduler);
+  lcd.begin(evse, scheduler, manual);
   ledManager.begin(evse);
 
   // Initialise the WiFi
@@ -144,9 +145,7 @@ loop() {
 
   web_server_loop();
   net_loop();
-#ifdef ENABLE_OTA
   ota_loop();
-#endif
   rapiSender.loop();
   divert_current_loop();
   MicroTask.update();

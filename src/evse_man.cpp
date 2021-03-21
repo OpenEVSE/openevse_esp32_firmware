@@ -50,6 +50,58 @@ EvseProperties & EvseProperties::operator = (EvseProperties &rhs)
   return *this;
 }
 
+bool EvseProperties::deserialize(JsonObject &obj)
+{
+  if(obj.containsKey("state")) {
+    _state.fromString(obj["state"]);
+  }
+
+  if(obj.containsKey("charge_current")) {
+    _charge_current = obj["charge_current"];
+  }
+
+  if(obj.containsKey("max_current")) {
+    _max_current = obj["max_current"];
+  }
+
+  if(obj.containsKey("energy_limit")) {
+    _energy_limit = obj["energy_limit"];
+  }
+
+  if(obj.containsKey("time_limit")) {
+    _time_limit = obj["time_limit"];
+  }
+
+  if(obj.containsKey("auto_release")) {
+    _auto_release = obj["auto_release"];
+  }
+
+  return true;
+}
+
+bool EvseProperties::serialize(JsonObject &obj)
+{
+  if(EvseState::None != _state) {
+    obj["state"] = _state.toString();
+  }
+  if(UINT32_MAX != _charge_current) {
+    obj["charge_current"] = _charge_current;
+  }
+  if(UINT32_MAX != _max_current) {
+    obj["max_current"] = _max_current;
+  }
+  if(UINT32_MAX != _energy_limit) {
+    obj["energy_limit"] = _energy_limit;
+  }
+  if(UINT32_MAX != _time_limit) {
+    obj["time_limit"] = _time_limit;
+  }
+
+  obj["auto_release"] = _auto_release;
+
+  return true;
+}
+
 EvseManager::Claim::Claim() :
   _client(EvseClient_NULL),
   _priority(0),

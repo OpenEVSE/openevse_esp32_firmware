@@ -115,10 +115,11 @@ void LcdTask::setInfoLine(LcdInfoLine info)
   }
 }
 
-void LcdTask::begin(EvseManager &evse, Scheduler &scheduler)
+void LcdTask::begin(EvseManager &evse, Scheduler &scheduler, ManualOverride &manual)
 {
   _evse = &evse;
   _scheduler = &scheduler;
+  _manual = &manual;
   MicroTask.startTask(this);
 }
 
@@ -175,14 +176,14 @@ unsigned long LcdTask::loop(MicroTasks::WakeReason reason)
     evseStateChanged = true;
   }
 
-  bool pilotStateChanged = false;
+  //bool pilotStateChanged = false;
   uint8_t newPilotState = _evse->getPilotState();
   if(newPilotState != _pilotState)
   {
     _pilotState = newPilotState;
     DBUGVAR(_pilotState);
 
-    pilotStateChanged = true;
+    //pilotStateChanged = true;
   }
 
   bool flagsChanged = false;
@@ -286,7 +287,7 @@ unsigned long LcdTask::displayNextMessage()
 
 LcdTask::LcdInfoLine LcdTask::getNextInfoLine(LcdInfoLine info)
 {
-  if(_evse->clientHasClaim(EvseClient_OpenEVSE_Manual)) {
+  if(_manual->isActive()) {
     return LcdInfoLine::ManualOverride;
   }
 
@@ -645,14 +646,7 @@ void LcdTask::onButton(int long_press)
   }
   else
   {
-    if(!_evse->clientHasClaim(EvseClient_OpenEVSE_Manual))
-    {
-      EvseProperties props(EvseState::Active == _evse->getState() ?  EvseState::Disabled : EvseState::Active);
-      props.setAutoRelease(true);
-      _evse->claim(EvseClient_OpenEVSE_Manual, EvseManager_Priority_Manual, props);
-    } else {
-      _evse->release(EvseClient_OpenEVSE_Manual);
-    }
+    _manual->toggle();
   }
 }
 

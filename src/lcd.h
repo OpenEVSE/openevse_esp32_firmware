@@ -20,7 +20,7 @@
 
 #include "evse_man.h"
 #include "scheduler.h"
-
+#include "manual.h"
 
 class LcdTask : public MicroTasks::Task
 {
@@ -103,6 +103,7 @@ class LcdTask : public MicroTasks::Task
 
     EvseManager *_evse;
     Scheduler *_scheduler;
+    ManualOverride *_manual;
 
     uint32_t _nextMessageTime;
     uint32_t _infoLineChageTime;
@@ -140,7 +141,7 @@ class LcdTask : public MicroTasks::Task
   public:
     LcdTask();
 
-    void begin(EvseManager &evse, Scheduler &scheduler);
+    void begin(EvseManager &evse, Scheduler &scheduler, ManualOverride &manual);
 
     void display(const __FlashStringHelper *msg, int x, int y, int time, uint32_t flags);
     void display(String &msg, int x, int y, int time, uint32_t flags);

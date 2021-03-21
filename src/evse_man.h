@@ -7,6 +7,7 @@
 #include <MicroTasks.h>
 
 #include "evse_monitor.h"
+#include "json_serialize.h"
 
 typedef uint32_t EvseClient;
 
@@ -87,7 +88,7 @@ class EvseState
     Value _value;
 };
 
-class EvseProperties
+class EvseProperties : virtual public JsonSerialize<512>
 {
   private:
     EvseState _state;
@@ -159,6 +160,11 @@ class EvseProperties
       _state = rhs;
       return *this;
     }
+
+    using JsonSerialize::deserialize;
+    virtual bool deserialize(JsonObject &obj);
+    using JsonSerialize::serialize;
+    virtual bool serialize(JsonObject &obj);
 };
 
 class EvseManager : public MicroTasks::Task
@@ -244,8 +250,6 @@ class EvseManager : public MicroTasks::Task
       return _monitor.isDisabled() ? EvseState::Disabled : EvseState::Active;
     }
 
-    EvseProperties &getClaimProperties(EvseClient client);
-
   protected:
     void setup();
     unsigned long loop(MicroTasks::WakeReason reason);
@@ -260,6 +264,7 @@ class EvseManager : public MicroTasks::Task
     bool release(EvseClient client);
     bool clientHasClaim(EvseClient client);
 
+    EvseProperties &getClaimProperties(EvseClient client);
     EvseState getState(EvseClient client = EvseClient_NULL);
     uint32_t getChargeCurrent(EvseClient client = EvseClient_NULL);
     uint32_t getMaxCurrent(EvseClient client = EvseClient_NULL);
