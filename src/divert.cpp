@@ -128,9 +128,6 @@ void divert_update_state()
   {
     double voltage = evse.getVoltage();
 
-    int current_charge_rate = evse.getChargeCurrent(EvseClient_OpenEVSE_Divert);
-    DBUGVAR(current_charge_rate);
-
     // Calculate current
     if (mqtt_grid_ie != "")
     {
