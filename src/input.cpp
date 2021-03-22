@@ -16,6 +16,7 @@
 #include "espal.h"
 #include "emoncms.h"
 #include "tesla_client.h"
+#include "manual.h"
 
 #include "LedManagerTask.h"
 
@@ -65,10 +66,11 @@ class InputTask : public MicroTasks::Task
       if(_evseState.IsTriggered())
       {
         // Send to all clients
-        StaticJsonDocument<32> event;
+        StaticJsonDocument<64> event;
         event["state"] = evse.getEvseState();
         event["vehicle"] = evse.isVehicleConnected() ? 1 : 0;
         event["colour"] = evse.getStateColour();
+        event["manual_override"] = manual.isActive() ? 1 : 0;
         event_send(event);
       }
 
@@ -120,6 +122,7 @@ void create_rapi_json(JsonDocument &doc)
   doc["state"] = evse.getEvseState();
   doc["vehicle"] = evse.isVehicleConnected() ? 1 : 0;
   doc["colour"] = evse.getStateColour();
+  doc["manual_override"] = manual.isActive() ? 1 : 0;
   doc["freeram"] = ESPAL.getFreeHeap();
   doc["divertmode"] = divertmode;
   doc["srssi"] = WiFi.RSSI();
