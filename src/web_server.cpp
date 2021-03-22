@@ -826,14 +826,15 @@ void handleOverridePost(MongooseHttpServerRequest *request, MongooseHttpServerRe
   if(props.deserialize(body))
   {
     if(manual.claim(props)) {
-      response->setCode(200);
+      response->setCode(201);
+      response->print("{\"msg\":\"Created\"}");
     } else {
-      response->print("{\"msg\":\"Failed to claim manual overide\"}");
       response->setCode(500);
+      response->print("{\"msg\":\"Failed to claim manual overide\"}");
     }
   } else {
-    response->print("{\"msg\":\"Failed to parse JSON\"}");
     response->setCode(500);
+    response->print("{\"msg\":\"Failed to parse JSON\"}");
   }
 }
 
@@ -841,9 +842,10 @@ void handleOverrideDelete(MongooseHttpServerRequest *request, MongooseHttpServer
 {
   if(manual.release()) {
     response->setCode(200);
+    response->print("{\"msg\":\"Deleted\"}");
   } else {
-    response->print("{\"msg\":\"Failed to release manual overide\"}");
     response->setCode(500);
+    response->print("{\"msg\":\"Failed to release manual overide\"}");
   }
 }
 
@@ -852,15 +854,10 @@ void handleOverridePatch(MongooseHttpServerRequest *request, MongooseHttpServerR
   if(manual.toggle())
   {
     response->setCode(200);
-    if(manual.isActive())
-    {
-      EvseProperties props;
-      manual.getProperties(props);
-      props.serialize(response);
-    }
+    response->print("{\"msg\":\"Updated\"}");
   } else {
-    response->print("{\"msg\":\"Failed to toggle manual overide\"}");
     response->setCode(500);
+    response->print("{\"msg\":\"Failed to toggle manual overide\"}");
   }
 }
 
