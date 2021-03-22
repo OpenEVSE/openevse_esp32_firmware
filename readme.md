@@ -540,7 +540,7 @@ To change to use serial0 (the main ESP's serial port) change `-DDEBUG_PORT=Seria
 
 # About
 
-Collaboration of [OpenEnegyMonitor](http://openenergymonitor.org) and [OpenEVSE](https://openevse.com).
+Collaboration of [OpenEnergyMonitor](http://openenergymonitor.org) and [OpenEVSE](https://openevse.com).
 
 Contributions by:
 
