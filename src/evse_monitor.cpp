@@ -283,99 +283,20 @@ unsigned long EvseMonitor::loop(MicroTasks::WakeReason reason)
   }
 
   // Get the EVSE state
-  if(0 == _count % EVSE_MONITOR_STATE_TIME)
-  {
-    DBUGLN("Get EVSE status");
-    _openevse.getStatus([this](int ret, uint8_t evse_state, uint32_t session_time, uint8_t pilot_state, uint32_t vflags)
-    {
-      if(RAPI_RESPONSE_OK == ret)
-      {
-        DBUGF("evse_state = %02x, session_time = %d, pilot_state = %02x, vflags = %08x", evse_state, session_time, pilot_state, vflags);
-        if(_state.setState(evse_state, pilot_state, vflags)) {
-          evseStateChanged();
-        }
-
-        _elapsed = session_time;
-        _elapsed_set_time = millis();
-
-        _data_ready.ready(EVSE_MONITOR_STATE_DATA_READY);
-      }
-    });
+  if(0 == _count % EVSE_MONITOR_STATE_TIME) {
+    getStatusFromEvse();
   }
 
-  if(0 == _count % EVSE_MONITOR_AMP_AND_VOLT_TIME)
-  {
-    if(_state.isCharging())
-    {
-      DBUGLN("Get charge current/voltage status");
-      _openevse.getChargeCurrentAndVoltage([this](int ret, double a, double volts)
-      {
-        if(RAPI_RESPONSE_OK == ret)
-        {
-          DBUGF("amps = %.2f, volts = %.2f", a, volts);
-          _amp = a;
-          if(volts >= 0) {
-            _voltage = volts;
-          }
-          _data_ready.ready(EVSE_MONITOR_AMP_AND_VOLT_DATA_READY);
-        }
-      });
-    } else {
-      _data_ready.ready(EVSE_MONITOR_AMP_AND_VOLT_DATA_READY);
-    }
+  if(0 == _count % EVSE_MONITOR_AMP_AND_VOLT_TIME) {
+    getChargeCurrentAndVoltageFromEvse();
   }
 
-  if(0 == _count % EVSE_MONITOR_TEMP_TIME)
-  {
-    DBUGLN("Get tempurature status");
-    _openevse.getTemperature([this](int ret, double t1, bool t1_valid, double t2, bool t2_valid, double t3, bool t3_valid)
-    {
-      if(RAPI_RESPONSE_OK == ret)
-      {
-        DBUGF("t1 = %.1f%s, t2 = %.1f%s, t3 = %.1f%s", t1, t1_valid ? "" : "*", t2, t2_valid ? "" : "*", t3, t3_valid ? "" : "*");
-        _temps[EVSE_MONITOR_TEMP_EVSE_DS3232].set(t1, t1_valid);
-        _temps[EVSE_MONITOR_TEMP_EVSE_MCP9808].set(t2, t2_valid);
-        _temps[EVSE_MONITOR_TEMP_EVSE_TMP007].set(t3, t3_valid);
-        #ifdef ENABLE_MCP9808
-        {
-          double mcp9808_temp = _mcp9808.readTempC();
-          DBUGVAR(mcp9808_temp);
-          _temps[EVSE_MONITOR_TEMP_ESP_MCP9808].set(mcp9808_temp, !isnan(mcp9808_temp));
-        }
-        #endif
-
-        _temps[EVSE_MONITOR_TEMP_MONITOR].invalidate();
-        for(int i = 1; i < EVSE_MONITOR_TEMP_COUNT; i++)
-        {
-          if(_temps[i].isValid()) {
-            _temps[EVSE_MONITOR_TEMP_MONITOR].set(_temps[i].get(), _temps[i].isValid());
-            break;
-          }
-        }
-        _data_ready.ready(EVSE_MONITOR_TEMP_DATA_READY);
-      }
-    });
+  if(0 == _count % EVSE_MONITOR_TEMP_TIME) {
+    getTemperatureFromEvse();
   }
 
-  if(0 == _count % EVSE_MONITOR_ENERGY_TIME)
-  {
-    if(_state.isCharging())
-    {
-      DBUGLN("Get charge energy usage");
-      _openevse.getEnergy([this](int ret, double session_wh, double total_kwh)
-      {
-        if(RAPI_RESPONSE_OK == ret)
-        {
-          DBUGF("session_wh = %.2f, total_kwh = %.2f", session_wh, total_kwh);
-          _session_wh = session_wh;
-          _total_kwh = total_kwh;
-
-          _data_ready.ready(EVSE_MONITOR_ENERGY_DATA_READY);
-        }
-      });
-    } else {
-      _data_ready.ready(EVSE_MONITOR_ENERGY_DATA_READY);
-    }
+  if(0 == _count % EVSE_MONITOR_ENERGY_TIME) {
+    getEnergyFromEvse();
   }
 
   _count ++;
@@ -433,6 +354,39 @@ EvseMonitor::ServiceLevel EvseMonitor::getServiceLevel()
     ServiceLevel::L1;
 }
 
+void EvseMonitor::enable()
+{
+  OpenEVSE.enable([this](int ret)
+  {
+    DBUGF("EVSE: enable - complete %d", ret);
+    if(RAPI_RESPONSE_OK == ret) {
+      getStatusFromEvse();
+    }
+  });
+}
+
+void EvseMonitor::sleep()
+{
+  OpenEVSE.sleep([this](int ret)
+  {
+    DBUGF("EVSE: sleep - complete %d", ret);
+    if(RAPI_RESPONSE_OK == ret) {
+      getStatusFromEvse();
+    }
+  });
+}
+
+void EvseMonitor::disable()
+{
+  OpenEVSE.disable([this](int ret)
+  {
+    DBUGF("EVSE: disable - complete %d", ret);
+    if(RAPI_RESPONSE_OK == ret) {
+      getStatusFromEvse();
+    }
+  });
+}
+
 void EvseMonitor::setPilot(long amps)
 {
   _openevse.setCurrentCapacity(amps, false, [this](int ret, long pilot)
@@ -441,5 +395,100 @@ void EvseMonitor::setPilot(long amps)
       _pilot = pilot;
     }
   });
+}
+
+void EvseMonitor::getStatusFromEvse()
+{
+  DBUGLN("Get EVSE status");
+  _openevse.getStatus([this](int ret, uint8_t evse_state, uint32_t session_time, uint8_t pilot_state, uint32_t vflags)
+  {
+    if(RAPI_RESPONSE_OK == ret)
+    {
+      DBUGF("evse_state = %02x, session_time = %d, pilot_state = %02x, vflags = %08x", evse_state, session_time, pilot_state, vflags);
+      if(_state.setState(evse_state, pilot_state, vflags)) {
+        evseStateChanged();
+      }
+
+      _elapsed = session_time;
+      _elapsed_set_time = millis();
+
+      _data_ready.ready(EVSE_MONITOR_STATE_DATA_READY);
+    }
+  });
+}
+
+void EvseMonitor::getChargeCurrentAndVoltageFromEvse()
+{
+  if(_state.isCharging())
+  {
+    DBUGLN("Get charge current/voltage status");
+    _openevse.getChargeCurrentAndVoltage([this](int ret, double a, double volts)
+    {
+      if(RAPI_RESPONSE_OK == ret)
+      {
+        DBUGF("amps = %.2f, volts = %.2f", a, volts);
+        _amp = a;
+        if(volts >= 0) {
+          _voltage = volts;
+        }
+        _data_ready.ready(EVSE_MONITOR_AMP_AND_VOLT_DATA_READY);
+      }
+    });
+  } else {
+    _data_ready.ready(EVSE_MONITOR_AMP_AND_VOLT_DATA_READY);
+  }
+}
+
+void EvseMonitor::getTemperatureFromEvse()
+{
+  DBUGLN("Get tempurature status");
+  _openevse.getTemperature([this](int ret, double t1, bool t1_valid, double t2, bool t2_valid, double t3, bool t3_valid)
+  {
+    if(RAPI_RESPONSE_OK == ret)
+    {
+      DBUGF("t1 = %.1f%s, t2 = %.1f%s, t3 = %.1f%s", t1, t1_valid ? "" : "*", t2, t2_valid ? "" : "*", t3, t3_valid ? "" : "*");
+      _temps[EVSE_MONITOR_TEMP_EVSE_DS3232].set(t1, t1_valid);
+      _temps[EVSE_MONITOR_TEMP_EVSE_MCP9808].set(t2, t2_valid);
+      _temps[EVSE_MONITOR_TEMP_EVSE_TMP007].set(t3, t3_valid);
+      #ifdef ENABLE_MCP9808
+      {
+        double mcp9808_temp = _mcp9808.readTempC();
+        DBUGVAR(mcp9808_temp);
+        _temps[EVSE_MONITOR_TEMP_ESP_MCP9808].set(mcp9808_temp, !isnan(mcp9808_temp));
+      }
+      #endif
+
+      _temps[EVSE_MONITOR_TEMP_MONITOR].invalidate();
+      for(int i = 1; i < EVSE_MONITOR_TEMP_COUNT; i++)
+      {
+        if(_temps[i].isValid()) {
+          _temps[EVSE_MONITOR_TEMP_MONITOR].set(_temps[i].get(), _temps[i].isValid());
+          break;
+        }
+      }
+      _data_ready.ready(EVSE_MONITOR_TEMP_DATA_READY);
+    }
+  });
+}
+
+void EvseMonitor::getEnergyFromEvse()
+{
+  if(_state.isCharging())
+  {
+    DBUGLN("Get charge energy usage");
+    _openevse.getEnergy([this](int ret, double session_wh, double total_kwh)
+    {
+      if(RAPI_RESPONSE_OK == ret)
+      {
+        DBUGF("session_wh = %.2f, total_kwh = %.2f", session_wh, total_kwh);
+        _session_wh = session_wh;
+        _total_kwh = total_kwh;
+
+        _data_ready.ready(EVSE_MONITOR_ENERGY_DATA_READY);
+      }
+    });
+  } else {
+    _data_ready.ready(EVSE_MONITOR_ENERGY_DATA_READY);
+  }
 }
 

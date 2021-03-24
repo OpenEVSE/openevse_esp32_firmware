@@ -154,6 +154,11 @@ class EvseMonitor : public MicroTasks::Task
 
     void evseBoot(const char *firmware_version);
     void evseStateChanged();
+
+    void getStatusFromEvse();
+    void getChargeCurrentAndVoltageFromEvse();
+    void getTemperatureFromEvse();
+    void getEnergyFromEvse();
   protected:
     void setup();
     unsigned long loop(MicroTasks::WakeReason reason);
@@ -174,6 +179,10 @@ class EvseMonitor : public MicroTasks::Task
     ~EvseMonitor();
 
     bool begin(RapiSender &sender);
+
+    void enable();
+    void sleep();
+    void disable();
 
     void setPilot(long amps);
 

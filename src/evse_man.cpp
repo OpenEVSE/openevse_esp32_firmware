@@ -250,22 +250,16 @@ bool EvseManager::setTargetState(EvseProperties &target)
     if(EvseState::Active == state)
     {
       DBUGLN("EVSE: enable");
-      OpenEVSE.enable([this](int ret) {
-        DBUGF("EVSE: enable - complete %d", ret);
-      });
+      _monitor.enable();
     }
     else
     {
       if(_sleepForDisable) {
         DBUGLN("EVSE: sleep");
-        OpenEVSE.sleep([this](int ret) {
-          DBUGF("EVSE: sleep - complete %d", ret);
-        });
+        _monitor.sleep();
       } else {
         DBUGLN("EVSE: disable");
-        OpenEVSE.disable([this](int ret) {
-          DBUGF("EVSE: disable - complete %d", ret);
-        });
+        _monitor.disable();
       }
     }
 
