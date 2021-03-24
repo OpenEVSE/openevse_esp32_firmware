@@ -68,7 +68,19 @@ class EvseMonitor : public MicroTasks::Task
       public:
         DataReady(uint32_t ready);
 
-        void ready(uint32_t data);
+        bool ready(uint32_t data);
+    };
+
+    class StateChangeEvent : public MicroTasks::Event
+    {
+      private:
+        uint32_t _state;
+        uint32_t _mask;
+        uint32_t _trigger;
+      public:
+        StateChangeEvent(uint32_t mask, uint32_t trigger);
+
+        bool update(uint32_t state);
     };
 
     class Tempurature
@@ -127,6 +139,7 @@ class EvseMonitor : public MicroTasks::Task
 
     DataReady _data_ready;
     DataReady _boot_ready;
+    StateChangeEvent _session_complete;
 
     uint32_t _count;
     bool _heartbeat;
@@ -279,6 +292,9 @@ class EvseMonitor : public MicroTasks::Task
     }
     void onBootReady(MicroTasks::EventListener *listner) {
       _boot_ready.Register(listner);
+    }
+    void onSessionComplete(MicroTasks::EventListener *listner) {
+      _session_complete.Register(listner);
     }
 };
 

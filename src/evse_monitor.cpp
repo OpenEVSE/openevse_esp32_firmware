@@ -70,6 +70,9 @@
         EVSE_MONITOR_ENERGY_BOOT_READY \
 )
 
+#define EVSE_MONITOR_SESSION_COMPLETE_MASK      OPENEVSE_VFLAG_EV_CONNECTED
+#define EVSE_MONITOR_SESSION_COMPLETE_TRIGGER   0
+
 EvseMonitor::EvseStateEvent::EvseStateEvent() :
   MicroTasks::Event(),
   _evse_state(OPENEVSE_STATE_STARTING)
@@ -101,14 +104,42 @@ EvseMonitor::DataReady::DataReady(uint32_t ready) :
 {
 }
 
-void EvseMonitor::DataReady::ready(uint32_t data)
+bool EvseMonitor::DataReady::ready(uint32_t data)
 {
   _state |= data;
   if(_ready == (_state & _ready))
   {
     Trigger();
     _state = 0;
+    return true;
   }
+
+  return false;
+}
+
+EvseMonitor::StateChangeEvent::StateChangeEvent(uint32_t mask, uint32_t trigger) :
+  MicroTasks::Event(),
+  _state(0),
+  _mask(mask),
+  _trigger(trigger)
+{
+}
+
+bool EvseMonitor::StateChangeEvent::update(uint32_t data)
+{
+  // Only interested in the mask bits changing
+  data &= _mask;
+  if(_state != data)
+  {
+    _state = data;
+    if(_trigger == _state)
+    {
+      Trigger();
+      return true;
+    }
+  }
+
+  return false;
 }
 
 EvseMonitor::EvseMonitor(OpenEVSEClass &openevse) :
@@ -131,6 +162,7 @@ EvseMonitor::EvseMonitor(OpenEVSEClass &openevse) :
   _max_hardware_current(0),
   _data_ready(EVSE_MONITOR_DATA_READY),
   _boot_ready(EVSE_MONITOR_BOOT_READY),
+  _session_complete(EVSE_MONITOR_SESSION_COMPLETE_MASK, EVSE_MONITOR_SESSION_COMPLETE_TRIGGER),
   _count(0),
   _heartbeat(false)
 #ifdef ENABLE_MCP9808
@@ -226,6 +258,7 @@ void EvseMonitor::evseStateChanged()
   if(!isCharging()) {
     _amp = 0;
   }
+  _session_complete.update(getFlags());
 }
 
 unsigned long EvseMonitor::loop(MicroTasks::WakeReason reason)
