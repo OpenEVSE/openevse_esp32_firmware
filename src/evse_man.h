@@ -189,7 +189,11 @@ class EvseManager : public MicroTasks::Task
 
         bool operator==(EvseClient rhs) const {
           return _client == rhs;
-        };
+        }
+
+        EvseClient getClient() {
+          return _client;
+        }
 
         int getPriority() {
           return _priority;
@@ -230,6 +234,7 @@ class EvseManager : public MicroTasks::Task
     Claim _clients[EVSE_MANAGER_MAX_CLIENT_CLAIMS];
 
     MicroTasks::EventListener _evseStateListener;
+    MicroTasks::EventListener _sessionCompleteListener;
 
     EvseProperties _targetProperties;
     bool _hasClaims;
@@ -243,6 +248,7 @@ class EvseManager : public MicroTasks::Task
     void initialiseEvse();
     bool findClaim(EvseClient client, Claim **claim = NULL);
     bool evaluateClaims(EvseProperties &properties);
+    void releaseAutoReleaseClaims();
 
     bool setTargetState(EvseProperties &properties);
 
@@ -383,6 +389,9 @@ class EvseManager : public MicroTasks::Task
     }
     void onBootReady(MicroTasks::EventListener *listner) {
       _monitor.onBootReady(listner);
+    }
+    void onSessionComplete(MicroTasks::EventListener *listner) {
+      _monitor.onSessionComplete(listner);
     }
 };
 

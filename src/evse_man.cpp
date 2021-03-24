@@ -127,6 +127,7 @@ EvseManager::EvseManager(Stream &port) :
   _monitor(OpenEVSE),
   _clients(),
   _evseStateListener(this),
+  _sessionCompleteListener(this),
   _targetProperties(),
   _hasClaims(false),
   _sleepForDisable(true),
@@ -233,6 +234,7 @@ bool EvseManager::evaluateClaims(EvseProperties &properties)
 void EvseManager::setup()
 {
   _monitor.onStateChange(&_evseStateListener);
+  _monitor.onSessionComplete(&_sessionCompleteListener);
 }
 
 bool EvseManager::setTargetState(EvseProperties &target)
@@ -331,9 +333,18 @@ unsigned long EvseManager::loop(MicroTasks::WakeReason reason)
     }
   }
 
+  DBUGVAR(_sessionCompleteListener.IsTriggered());
+  if(_sessionCompleteListener.IsTriggered())
+  {
+    // Session complete, clear any auto release claims
+    releaseAutoReleaseClaims();
+  }
+
   DBUGVAR(_evaluateClaims);
   if(_evaluateClaims)
   {
+    _evaluateClaims = false;
+
     // Work out the state we should try and get in too
     _hasClaims = evaluateClaims(_targetProperties);
 
@@ -349,13 +360,13 @@ unsigned long EvseManager::loop(MicroTasks::WakeReason reason)
       DBUGLN("No claims");
     }
 
-    _evaluateClaims = false;
     _evaluateTargetState = true;
   }
 
   DBUGVAR(_evaluateTargetState);
   if(_evaluateTargetState)
   {
+    _evaluateTargetState = false;
 
     if(!_hasClaims)
     {
@@ -364,7 +375,6 @@ unsigned long EvseManager::loop(MicroTasks::WakeReason reason)
       _targetProperties.setState(EvseState::Active);
     }
     setTargetState(_targetProperties);
-    _evaluateTargetState = false;
   }
 
   return MicroTask.Infinate;
@@ -419,6 +429,19 @@ bool EvseManager::release(EvseClient client)
   }
 
   return false;
+}
+
+void EvseManager::releaseAutoReleaseClaims()
+{
+  for (size_t i = 0; i < EVSE_MANAGER_MAX_CLIENT_CLAIMS; i++)
+  {
+    if(_clients[i].isValid() && _clients[i].isAutoRelease())
+    {
+      DBUGF("Release claim from 0x%08x, priority %d, %s", _clients[i].getClient(), _clients[i].getPriority(), _clients[i].getState().toString());
+      _clients[i].release();
+      _evaluateClaims = true;
+    }
+  }
 }
 
 bool EvseManager::clientHasClaim(EvseClient client) {
