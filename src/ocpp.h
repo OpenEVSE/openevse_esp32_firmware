@@ -8,9 +8,11 @@
 
 #include <MicroTasks.h>
 
+#include "MongooseOcppSocketClient.h"
+
 class ArduinoOcppTask: public MicroTasks::Task {
 private:
-
+    
 protected:
 
     //hook method of Task
