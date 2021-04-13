@@ -30,6 +30,9 @@
 #include <MongooseCore.h>
 #include <MicroTasks.h>
 #include <LITTLEFS.h>
+#include <ArduinoOcpp.h>
+#include <ArduinoOcpp/Core/OcppSocket.h>
+#include <WebSocketsClient.h> //remove when migrated to Mongoose
 
 #include "emonesp.h"
 #include "app_config.h"
@@ -48,6 +51,7 @@
 #include "time_man.h"
 #include "tesla_client.h"
 #include "event.h"
+#include "ocpp.h"
 
 #include "LedManagerTask.h"
 #include "evse_man.h"
@@ -73,6 +77,11 @@ static uint32_t last_mem = 0;
 #define TEXTIFY(A) #A
 #define ESCAPEQUOTE(A) TEXTIFY(A)
 String currentfirmware = ESCAPEQUOTE(BUILD_TAG);
+
+// begin ArduinoOcpp
+//WebSocketsClient links2004WS; //remove when migrated to Mongoose
+ArduinoOcppTask ocpp;
+// end ArduinoOcpp
 
 static void hardware_setup();
 
@@ -126,10 +135,28 @@ void setup()
 
   input_setup();
 
-  lcd.display(F("OpenEVSE WiFI"), 0, 0, 0, LCD_CLEAR_LINE);
+  //lcd.display(F("OpenEVSE WiFI"), 0, 0, 0, LCD_CLEAR_LINE);
+  lcd.display(F("Let's rock OCPP!"), 0, 0, 0, LCD_CLEAR_LINE);
   lcd.display(currentfirmware, 0, 1, 5 * 1000, LCD_CLEAR_LINE);
 
   start_mem = last_mem = ESPAL.getFreeHeap();
+
+  // begin ArduinoOcpp
+  OCPP_initialize("wss://echo.websocket.org", 80, "wss://echo.websocket.org/");
+
+  // server address, port and URL
+  //links2004WS.begin("wss://echo.websocket.org", 80, "wss://echo.websocket.org/", "ocpp1.6");
+  //links2004WS.setReconnectInterval(5000);
+  //links2004WS.enableHeartbeat(15000, 3000, 2);
+
+  //std::shared_ptr<ArduinoOcpp::EspWiFi::OcppClientSocket> oSock = std::make_shared<ArduinoOcpp::EspWiFi::OcppClientSocket>(&links2004WS);
+
+  bootNotification("Advanced Series", "OpenEVSE", [](JsonObject payload) {
+    Serial.print("[main] BootNotification successful!\n");
+  });
+
+  // end ArduinoOcpp
+
 } // end setup
 
 // -------------------------------------------------------------------
@@ -142,6 +169,8 @@ loop() {
   Profile_Start(Mongoose);
   Mongoose.poll(0);
   Profile_End(Mongoose, 10);
+
+  OCPP_loop();
 
   web_server_loop();
   net_loop();

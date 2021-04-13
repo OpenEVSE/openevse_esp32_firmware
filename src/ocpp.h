@@ -12,7 +12,7 @@
 
 class ArduinoOcppTask: public MicroTasks::Task {
 private:
-    
+    std::shared_ptr<ArduinoOcpp::OcppSocket> ocppSocket;
 protected:
 
     //hook method of Task
@@ -25,6 +25,7 @@ public:
     ArduinoOcppTask();
     ~ArduinoOcppTask() = default;
 
+    void begin(String CS_hostname, uint16_t CS_port, String CS_url);
 };
 
 #endif
