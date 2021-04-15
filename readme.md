@@ -36,7 +36,7 @@ Wired Ethernet connection is possible using [ESP32 Gateway](docs/wired-ethernet.
 ### OpenEVSE / EmonEVSE charging station
   - Purchase via: [OpenEVSE Store (USA/Canda)](https://store.openevse.com) | [OpenEnergyMonitor (UK / EU)](https://shop.openenergymonitor.com/evse/)
   - OpenEVSE FW [V7.1.3+ recommended](https://github.com/OpenEVSE/open_evse/releases)
-  - All new OpenEVSE units are shipped with V4.8.0 pre-loaded (October 2017 onwards)
+  - All new OpenEVSE units are shipped with V7.1.3 pre-loaded (April 2021 onwards)
 
 
 ### ESP32 WiFi Module
