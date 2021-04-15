@@ -35,6 +35,8 @@ class ArduinoOcppTask: public MicroTasks::Task {
 private:
     //std::shared_ptr<ArduinoOcpp::OcppSocket> ocppSocket;
     EvseManager *evse;
+
+    MicroTasksCallback bootReadyCallback; //called whenever OpenEVSE runs its boot procedure
 protected:
 
     //hook method of Task
@@ -47,7 +49,7 @@ public:
     ArduinoOcppTask();
     ~ArduinoOcppTask() = default;
 
-    void begin(String CS_hostname, uint16_t CS_port, String CS_url, EvseManager *evse);
+    void begin(String CS_hostname, uint16_t CS_port, String CS_url, EvseManager &evse);
 };
 
 #endif

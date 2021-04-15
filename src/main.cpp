@@ -142,50 +142,9 @@ void setup()
   start_mem = last_mem = ESPAL.getFreeHeap();
 
   // begin ArduinoOcpp
-  OCPP_initialize("wss://echo.websocket.org", 80, "wss://echo.websocket.org/");
+
+  ocpp.begin("wss://echo.websocket.org", 80, "wss://echo.websocket.org/", evse);
   
-  ocpp.begin("", 0, "", &evse);
-
-  // server address, port and URL
-  //links2004WS.begin("wss://echo.websocket.org", 80, "wss://echo.websocket.org/", "ocpp1.6");
-  //links2004WS.setReconnectInterval(5000);
-  //links2004WS.enableHeartbeat(15000, 3000, 2);
-
-  //std::shared_ptr<ArduinoOcpp::EspWiFi::OcppClientSocket> oSock = std::make_shared<ArduinoOcpp::EspWiFi::OcppClientSocket>(&links2004WS);
-
-/*
-  struct BootReady : MicroTasks::Task {
-    virtual void setup() { Serial.print("[BootReady] Listener: setup\n");}
-    virtual unsigned long loop(MicroTasks::WakeReason reason) {
-      Serial.print("[BootReady] Listener: loop\n");
-//      bootNotification("Advanced Series", "OpenEVSE", [](JsonObject payload) {
-//        Serial.print("[main] BootNotification successful!\n");
-//      });
-      return MicroTask.Infinate;
-    }
-  };
-
-  BootReady bootReadyTask; */
-  MicroTasksCallback bootReadyCallback([] () {
-    Serial.print("[BootReady] Callback: loop\n");
-  });
-
-  MicroTasks::EventListener bootReadyEvent = &bootReadyCallback;
-  evse.onBootReady(&bootReadyEvent);
-
-//  bootNotification(evse.getFirmwareVersion(), "OpenEVSE", [](JsonObject payload) { //alternative to listener approach above for development
-//    Serial.print("[main] BootNotification successful!\n");
-//  });
-
-  setPowerActiveImportSampler([]() {
-    return (float) (evse.getAmps() * evse.getVoltage());
-  });
-
-  setEnergyActiveImportSampler([] () {
-    return (float) evse.getTotalEnergy();
-  });
-
-
 
   // end ArduinoOcpp
 
