@@ -1,6 +1,6 @@
 # OpenEVSE WiFi Gateway v4
 
-> **_NOTE:_** Breaking change! This release requires a minimum of [7.1.2](https://github.com/lincomatic/open_evse) of the OpenEVSE firmware, features may not behave as expected on older firmware.
+> **_NOTE:_** Breaking change! This release reccomends a minimum of [7.1.2]https://github.com/OpenEVSE/open_evse/releases of the OpenEVSE firmware, features including Solar Divert and push button menus may not behave as expected on older firmware.
 -
 -For the v3 that is compatible with previous EVSE firmwares, see the [v3 branch](https://github.com/OpenEVSE/ESP32_WiFi_V3.x/tree/v3). For the older v2 ESP8266 version (pre June 2020), see the [v2 firmware repository](https://github.com/openevse/ESP8266_WiFi_v2.x/)
 -
