@@ -41,8 +41,9 @@ class TeslaClient {
   int _activeRequest; // TAR_xxx
   unsigned long _lastRequestStart;
   String _accessToken;
-  String _teslaUser;
-  String _teslaPass;
+  String _refreshToken;
+  uint64_t _created;
+  uint64_t _expires;
 
   int _vehicleCnt;
   int _curVehIdx;
@@ -61,10 +62,9 @@ class TeslaClient {
   TeslaClient();
   ~TeslaClient();
 
-  void setUser(const char *user) { _teslaUser = user; }
-  void setPass(const char *pass) { _teslaPass = pass; }
+  void setCredentials(String &accessToken, String &refreshToken, uint64_t created, uint64_t expires);
 
-  void requestAccessToken();
+//  void requestAccessToken();
   void requestVehicles();
   void requestChargeState();
 
@@ -74,8 +74,8 @@ class TeslaClient {
   String getVehicleId(int vehidx);
   String getVIN(int vehidx);
   String getVehicleDisplayName(int vehidx);
-  const char *getUser() { return _teslaUser.c_str(); }
-  const char *getPass() { return _teslaPass.c_str(); }
+//  const char *getUser() { return _teslaUser.c_str(); }
+//  const char *getPass() { return _teslaPass.c_str(); }
   void getChargeInfoJson(JsonDocument &sjson);
   const TESLA_CHARGE_INFO *getChargeInfo() { return &_chargeInfo; }
 

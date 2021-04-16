@@ -63,8 +63,11 @@ double divert_decay_smoothing_factor;
 uint32_t divert_min_charge_time;
 
 // Tesla Client settings
-String tesla_username;
-String tesla_password;
+String tesla_access_token;
+String tesla_refresh_token;
+uint64_t tesla_created_at;
+uint64_t tesla_expires_in;
+
 int tesla_vehidx;
 
 #if RGB_LED
@@ -121,8 +124,10 @@ ConfigOpt *opts[] =
   new ConfigOptDefenition<uint32_t>(divert_min_charge_time, (10 * 60), "divert_min_charge_time", "dt"),
 
 // Tesla client settings
-  new ConfigOptDefenition<String>(tesla_username, "", "tesla_username", "tu"),
-  new ConfigOptSecret(tesla_password, "", "tesla_password", "tp"),
+  new ConfigOptSecret(tesla_access_token, "", "tesla_access_token", "tat"),
+  new ConfigOptSecret(tesla_refresh_token, "", "tesla_refresh_token", "trt"),
+  new ConfigOptDefenition<uint64_t>(tesla_created_at, -1, "tesla_created_at", "tc"),
+  new ConfigOptDefenition<uint64_t>(tesla_expires_in, -1, "tesla_expires_in", "tx"),
   new ConfigOptDefenition<int>(tesla_vehidx, -1, "tesla_vehidx", "ti"),
 
 #if RGB_LED
@@ -139,7 +144,7 @@ ConfigOpt *opts[] =
   new ConfigOptVirtualBool(flagsOpt, CONFIG_MQTT_ALLOW_ANY_CERT, 0, "mqtt_reject_unauthorized", "mru"),
   new ConfigOptVirtualBool(flagsOpt, CONFIG_SERVICE_OHM, CONFIG_SERVICE_OHM, "ohm_enabled", "oe"),
   new ConfigOptVirtualBool(flagsOpt, CONFIG_SERVICE_SNTP, CONFIG_SERVICE_SNTP, "sntp_enabled", "se"),
-  new ConfigOptVirtualBool(flagsOpt,CONFIG_SERVICE_TESLA,CONFIG_SERVICE_TESLA, "tesla_enabled", "te"),
+  new ConfigOptVirtualBool(flagsOpt, CONFIG_SERVICE_TESLA, CONFIG_SERVICE_TESLA, "tesla_enabled", "te"),
   new ConfigOptVirtualBool(flagsOpt, CONFIG_SERVICE_DIVERT, CONFIG_SERVICE_DIVERT, "divert_enabled", "de"),
   new ConfigOptVirtualBool(flagsOpt, CONFIG_PAUSE_USES_DISABLED, CONFIG_PAUSE_USES_DISABLED, "pause_uses_disabled", "pd"),
   new ConfigOptVirtualMqttProtocol(flagsOpt, "mqtt_protocol", "mprt"),
@@ -199,11 +204,8 @@ void config_changed(String name)
     DBUGVAR(config_divert_enabled());
     DBUGVAR(config_charge_mode());
     divertmode_update((config_divert_enabled() && 1 == config_charge_mode()) ? DIVERT_MODE_ECO : DIVERT_MODE_NORMAL);
-  } else if(name == "tesla_username") {
-    teslaClient.setUser(tesla_username.c_str());
-  } else if(name == "tesla_password") {
-    teslaClient.setPass(tesla_password.c_str());
-  } else if(name == "tesla_vehidx") {
+  } else if(name.startsWith("tesla_")) {
+    teslaClient.setCredentials(tesla_access_token, tesla_refresh_token, tesla_created_at, tesla_expires_in);
     teslaClient.setVehicleIdx(tesla_vehidx);
 #if RGB_LED
   } else if(name == "led_brightness") {
