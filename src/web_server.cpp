@@ -481,30 +481,30 @@ handleSaveAdvanced(MongooseHttpServerRequest *request) {
 // url: /teslaveh
 // -------------------------------------------------------------------
 void
-handleTeslaVeh(MongooseHttpServerRequest *request) {
+handleTeslaVeh(MongooseHttpServerRequest *request)
+{
   MongooseHttpServerResponseStream *response;
   if(false == requestPreProcess(request, response)) {
     return;
   }
 
-  String s = "{";
-  int vc = teslaClient.getVehicleCnt();
-  s += "\"count:\"" + String(vc);
-  if (vc) {
-    s += ",[";
-    for (int i=0;i < vc;i++) {
-      s += "{\"id\":\"" + teslaClient.getVehicleId(i) + "\",";
-      s += "\"name\":\"" + teslaClient.getVehicleDisplayName(i) + "\"}";
-      if (i < vc-1) s += ",";
-    }
-    s += "]";
+  StaticJsonDocument<1024> doc;
+  int count = teslaClient.getVehicleCnt();
+  doc["count"] = count;
+  JsonArray vehicles = doc.createNestedArray("vehicles");
+
+  for (int i = 0; i < count; i++)
+  {
+    JsonObject vehicle = vehicles.createNestedObject();
+    vehicle["id"] = teslaClient.getVehicleId(i);
+    vehicle["name"] = teslaClient.getVehicleDisplayName(i);
   }
-  s += "}";
 
   response->setCode(200);
-  response->print(s);
+  serializeJson(doc, *response);
   request->send(response);
 }
+
 // -------------------------------------------------------------------
 // Save the Ohm keyto EEPROM
 // url: /handleSaveOhmkey
@@ -599,19 +599,6 @@ handleStatus(MongooseHttpServerRequest *request) {
   doc["ota_update"] = (int)Update.isRunning();
   doc["time"] = String(time);
   doc["offset"] = String(offset);
-
-  {
-    const TESLA_CHARGE_INFO *tci = teslaClient.getChargeInfo();
-    if (tci->isValid) {
-      doc["batteryRange"] = String(tci->batteryRange) + ",";
-      doc["chargeEnergyAdded"] = String(tci->chargeEnergyAdded) + ",";
-      doc["chargeMilesAddedRated"] = String(tci->chargeMilesAddedRated) + ",";
-      doc["batteryLevel"] = String(tci->batteryLevel) + ",";
-      doc["chargeLimitSOC"] = String(tci->chargeLimitSOC) + ",";
-      doc["timeToFullCharge"] = String(tci->timeToFullCharge) + ",";
-      doc["chargerVoltage"] = String(tci->chargerVoltage);
-    }
-  }
 
   response->setCode(200);
   serializeJson(doc, *response);
