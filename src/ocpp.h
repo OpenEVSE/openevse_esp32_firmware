@@ -42,15 +42,22 @@ private:
      * OCPP state
      */
     float charging_limit = -1.f; //in Watts. chargingLimit < 0 means that there is no Smart Charging (and no restrictions )
-    int transactionId = -1; //ID of OCPP-transaction. transactionId <= 0 means that no transaction runs on the EVSE at the moment
-                            //                        transactionId >  0 means that the EVSE is in a charging transaction right now
-                            //                        transactionId == 0 is invalid
 
     /*
      * SAE J1772 state
      */
     bool vehicleConnected = false;
     bool vehicleCharging = false;
+
+    std::function<void()> onVehicleConnect = [] () {};
+    std::function<void()> onVehicleDisconnect = [] () {};
+
+    /*
+     * OpenEVSE connector claiming rules
+     */
+    std::function<void(EvseState&, EvseProperties&)> inferClaimTransactionActive = [] (EvseState&, EvseProperties&) {};
+    std::function<void(EvseState&, EvseProperties&)> inferClaimTransactionInactive = [] (EvseState&, EvseProperties&) {};
+    std::function<void(EvseState&, EvseProperties&, float charging_limit)> inferClaimSmartCharging = [] (EvseState&, EvseProperties&, float) {};
     
     //helper functions
     static bool operationIsAccepted(JsonObject payload);
@@ -69,6 +76,14 @@ public:
     void begin(String CS_hostname, uint16_t CS_port, String CS_url, EvseManager &evse);
     
     void updateEvseClaim();
+
+    void setOnVehicleConnected(std::function<void()> onVehicleConnect) {
+        this->onVehicleConnect = onVehicleConnect;
+    }
+
+    void setOnVehicleDisconnect (std::function<void()> onVehicleDisconnect) {
+        this->onVehicleDisconnect = onVehicleDisconnect;
+    }
 };
 
 #endif

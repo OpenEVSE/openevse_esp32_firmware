@@ -57,36 +57,36 @@ void ArduinoOcppTask::setup() {
         return (bool) evse->isCharging();
     });
 
-//    setOnRemoteStartTransactionReceiveRequest([this, &transactionId = transactionId] (JsonObject payload) {
-//
-//        String idTag = payload["idTag"].as<String>(); 
-//        if (!idTag.isEmpty()) {
-//            ArduinoOcpp::getChargePointStatusService()->authorize(idTag); //TODO maybe ArduinoOcpp should already have done that here
-//        }
-//    });
+    onVehicleConnect = [this] () {
+        startTransaction([this] (JsonObject payload) {
+            this->updateEvseClaim();
+        });
+    };
 
-    setOnRemoteStartTransactionSendConf([this, &transactionId = transactionId] (JsonObject payload) {
+    onVehicleDisconnect = [this] () {
+        stopTransaction();
+        this->updateEvseClaim();
+    };
+
+    setOnRemoteStartTransactionSendConf([this] (JsonObject payload) {
 
         if (!operationIsAccepted(payload)){
             if (DEBUG_OUT) Serial.print(F("RemoteStartTransaction rejected! Do nothing\n"));
             return;
         }
 
-        startTransaction([this, &transactionId = transactionId] (JsonObject payload) {
-            transactionId = getTransactionId();
+        startTransaction([this] (JsonObject payload) {
             this->updateEvseClaim();
         });
     });
 
-    setOnRemoteStopTransactionSendConf([this, &transactionId = transactionId](JsonObject payload) {
+    setOnRemoteStopTransactionSendConf([this](JsonObject payload) {
         if (!operationIsAccepted(payload)){
             if (DEBUG_OUT) Serial.print(F("RemoteStopTransaction rejected! There is no transaction with given ID. Do nothing\n"));
             return;
         }
 
         stopTransaction();
-
-        transactionId = getTransactionId();
         this->updateEvseClaim();
     });
 
@@ -122,28 +122,56 @@ unsigned long ArduinoOcppTask::loop(MicroTasks::WakeReason reason) {
 
         //transition: no EV plugged -> EV plugged
 
-        startTransaction([this, &transactionId = transactionId] (JsonObject payload) {
-            transactionId = getTransactionId();
-            this->updateEvseClaim();
-        });
-    };
+        onVehicleConnect();
+    }
 
     if (!evse->isVehicleConnected() && vehicleConnected) {
         vehicleConnected = evse->isVehicleConnected();
 
         //transition: EV plugged -> no EV plugged
 
-        stopTransaction();
-        transactionId = getTransactionId();
-        this->updateEvseClaim();
+        onVehicleDisconnect();
     }
 
-    return 10000;
+    inferClaimTransactionActive = [] (EvseState& evseState, EvseProperties& evseProperties) {
+        evseState = EvseState::Active;
+        evseProperties.setState(evseState);
+    };
+
+    inferClaimTransactionInactive = [] (EvseState& evseState, EvseProperties& evseProperties) {
+        evseState = EvseState::Disabled;
+        evseProperties.setState(evseState);
+    };
+
+    inferClaimSmartCharging = [evse = evse] (EvseState& evseState, EvseProperties& evseProperties, float charging_limit) {
+        if (charging_limit < 0.f) {
+            //OCPP Smart Charging is off. Nothing to do
+        } else if (charging_limit >= 0.f && charging_limit < 50.f) {
+            //allowed charge rate is "equal or almost equal" to 0W
+            evseState = EvseState::Disabled; //override state
+            evseProperties.setState(evseState); //renew properties
+        } else {
+            //charge rate is valid. Set charge rate
+            float volts = evse->getVoltage(); // convert Watts to Amps. TODO Maybe use "smoothed" voltage value?
+            if (volts > 0) {
+                float amps = charging_limit / volts;
+                evseProperties.setChargeCurrent(amps);
+            }
+        }
+    };
+
+    //return 1;
+    return 10000; //increase for debugging
 }
 
 void ArduinoOcppTask::updateEvseClaim() {
+#if 0 // old approach. Equivalent algorithm with strategy pattern in else clause
     EvseState evseState;
     EvseProperties evseProperties;
+
+    int transactionId = getTransactionId(); //ID of OCPP-transaction. transactionId <= 0 means that no transaction runs on the EVSE at the moment
+                                            //                        transactionId >  0 means that the EVSE is in a charging transaction right now
+                                            //                        transactionId == 0 is invalid
 
     //EVSE is in an OCPP-transaction?
     if (transactionId < 0) {
@@ -173,6 +201,37 @@ void ArduinoOcppTask::updateEvseClaim() {
     }
 
     evse->claim(EvseClient_OpenEVSE_Ocpp, EvseManager_Priority_Ocpp, evseProperties);
+#else
+
+    EvseState evseState = EvseState::None;
+    EvseProperties evseProperties = evseState;
+    
+    int transactionId = getTransactionId(); //ID of OCPP-transaction. transactionId <= 0 means that no transaction runs on the EVSE at the moment
+                                            //                        transactionId >  0 means that the EVSE is in a charging transaction right now
+                                            //                        transactionId == 0 is invalid
+
+    //EVSE is in an OCPP-transaction?
+    if (transactionId < 0) {
+        //no transaction running. Forbid charging
+        inferClaimTransactionInactive(evseState, evseProperties);
+    } else {
+        //transaction running or transactionId invalid. Allow charging
+        inferClaimTransactionActive(evseState, evseProperties);
+    }
+
+    //OCPP Smart Charging?
+    inferClaimSmartCharging(evseState, evseProperties, charging_limit);
+
+    //Apply inferred claim
+    if (evseState == EvseState::None) {
+        //the claiming rules don't specify the EVSE state
+        evse->release(EvseClient_OpenEVSE_Ocpp);
+    } else {
+        //the claiming rules specify that the EVSE is either active or inactive
+        evse->claim(EvseClient_OpenEVSE_Ocpp, EvseManager_Priority_Ocpp, evseProperties);
+    }
+
+#endif
 }
 
 bool ArduinoOcppTask::operationIsAccepted(JsonObject payload) {
