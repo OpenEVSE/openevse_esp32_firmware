@@ -64,8 +64,11 @@ void ArduinoOcppTask::setup() {
     };
 
     onVehicleDisconnect = [this] () {
-        stopTransaction();
-        this->updateEvseClaim();
+        stopTransaction([this] (JsonObject payload) {
+            this->updateEvseClaim();
+        }, [this] () {
+            this->updateEvseClaim();
+        });
     };
 
     setOnRemoteStartTransactionSendConf([this] (JsonObject payload) {
@@ -89,6 +92,33 @@ void ArduinoOcppTask::setup() {
         stopTransaction();
         this->updateEvseClaim();
     });
+
+    inferClaimTransactionActive = [] (EvseState& evseState, EvseProperties& evseProperties) {
+        evseState = EvseState::Active;
+        evseProperties.setState(evseState);
+    };
+
+    inferClaimTransactionInactive = [] (EvseState& evseState, EvseProperties& evseProperties) {
+        evseState = EvseState::Disabled;
+        evseProperties.setState(evseState);
+    };
+
+    inferClaimSmartCharging = [evse = evse] (EvseState& evseState, EvseProperties& evseProperties, float charging_limit) {
+        if (charging_limit < 0.f) {
+            //OCPP Smart Charging is off. Nothing to do
+        } else if (charging_limit >= 0.f && charging_limit < 5.f) {
+            //allowed charge rate is "equal or almost equal" to 0W
+            evseState = EvseState::Disabled; //override state
+            evseProperties.setState(evseState); //renew properties
+        } else {
+            //charge rate is valid. Set charge rate
+            float volts = evse->getVoltage(); // convert Watts to Amps. TODO Maybe use "smoothed" voltage value?
+            if (volts > 0) {
+                float amps = charging_limit / volts;
+                evseProperties.setChargeCurrent(amps);
+            }
+        }
+    };
 
     updateEvseClaim();
 }
@@ -133,39 +163,12 @@ unsigned long ArduinoOcppTask::loop(MicroTasks::WakeReason reason) {
         onVehicleDisconnect();
     }
 
-    inferClaimTransactionActive = [] (EvseState& evseState, EvseProperties& evseProperties) {
-        evseState = EvseState::Active;
-        evseProperties.setState(evseState);
-    };
-
-    inferClaimTransactionInactive = [] (EvseState& evseState, EvseProperties& evseProperties) {
-        evseState = EvseState::Disabled;
-        evseProperties.setState(evseState);
-    };
-
-    inferClaimSmartCharging = [evse = evse] (EvseState& evseState, EvseProperties& evseProperties, float charging_limit) {
-        if (charging_limit < 0.f) {
-            //OCPP Smart Charging is off. Nothing to do
-        } else if (charging_limit >= 0.f && charging_limit < 50.f) {
-            //allowed charge rate is "equal or almost equal" to 0W
-            evseState = EvseState::Disabled; //override state
-            evseProperties.setState(evseState); //renew properties
-        } else {
-            //charge rate is valid. Set charge rate
-            float volts = evse->getVoltage(); // convert Watts to Amps. TODO Maybe use "smoothed" voltage value?
-            if (volts > 0) {
-                float amps = charging_limit / volts;
-                evseProperties.setChargeCurrent(amps);
-            }
-        }
-    };
-
     //return 1;
     return 10000; //increase for debugging
 }
 
 void ArduinoOcppTask::updateEvseClaim() {
-#if 0 // old approach. Equivalent algorithm with strategy pattern in else clause
+#if 0 // Simpler approach. Equivalent algorithm with strategy pattern in else clause (preferred)
     EvseState evseState;
     EvseProperties evseProperties;
 
