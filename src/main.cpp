@@ -32,7 +32,6 @@
 #include <LITTLEFS.h>
 #include <ArduinoOcpp.h>
 #include <ArduinoOcpp/Core/OcppSocket.h>
-#include <WebSocketsClient.h> //remove when migrated to Mongoose
 
 #include "emonesp.h"
 #include "app_config.h"
@@ -79,8 +78,8 @@ static uint32_t last_mem = 0;
 String currentfirmware = ESCAPEQUOTE(BUILD_TAG);
 
 // begin ArduinoOcpp
-//WebSocketsClient links2004WS; //remove when migrated to Mongoose
-ArduinoOcppTask ocpp;
+bool OCPP_started = false; // OCPP will be started in loop() when net is configured
+ArduinoOcppTask ocpp = ArduinoOcppTask();
 // end ArduinoOcpp
 
 static void hardware_setup();
@@ -135,18 +134,10 @@ void setup()
 
   input_setup();
 
-  //lcd.display(F("OpenEVSE WiFI"), 0, 0, 0, LCD_CLEAR_LINE);
-  lcd.display(F("Let's rock OCPP!"), 0, 0, 0, LCD_CLEAR_LINE);
+  lcd.display(F("OpenEVSE WiFI"), 0, 0, 0, LCD_CLEAR_LINE);
   lcd.display(currentfirmware, 0, 1, 5 * 1000, LCD_CLEAR_LINE);
 
   start_mem = last_mem = ESPAL.getFreeHeap();
-
-  // begin ArduinoOcpp
-
-  ocpp.begin("wss://echo.websocket.org", 80, "wss://echo.websocket.org/", evse);
-  
-
-  // end ArduinoOcpp
 
 } // end setup
 
@@ -160,8 +151,6 @@ loop() {
   Profile_Start(Mongoose);
   Mongoose.poll(0);
   Profile_End(Mongoose, 10);
-
-  OCPP_loop();
 
   web_server_loop();
   net_loop();
@@ -233,6 +222,17 @@ loop() {
       emoncms_publish(data);
       emoncms_updated = false;
     }
+
+    //begin ArduinoOcpp
+    if (!OCPP_started) {
+      OCPP_started = true;
+
+      ocpp.begin("steve.extall.de", 8080, "ws://steve.extall.de:8080/steve/websocket/CentralSystemService/openevse-001", evse);
+    }
+
+    OCPP_loop();
+    //end ArduinoOcpp
+
   } // end WiFi connected
 
   Profile_End(loop, 10);

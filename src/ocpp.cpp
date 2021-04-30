@@ -19,7 +19,15 @@ ArduinoOcppTask::ArduinoOcppTask() : MicroTasks::Task(), bootReadyCallback(Micro
 
 void ArduinoOcppTask::begin(String CS_hostname, uint16_t CS_port, String CS_url, EvseManager &evse) {
     Serial.println("[ArduinoOcppTask] begin!");
-    OCPP_initialize(CS_hostname, CS_port, CS_url);
+    //OCPP_initialize(CS_hostname, CS_port, CS_url);
+
+    if (ocppSocket) {
+        //called begin twice? Prevent memory leak
+        delete ocppSocket;
+    }
+
+    ocppSocket = new MongooseOcppSocketClient(CS_url);
+    OCPP_initialize(ocppSocket);
 
     this->evse = &evse;
 
@@ -125,9 +133,9 @@ void ArduinoOcppTask::setup() {
 
 unsigned long ArduinoOcppTask::loop(MicroTasks::WakeReason reason) {
     
-#if DEBUG_OUT
     Serial.println("[ArduinoOcppTask] loop!");
-#endif
+
+#if 0
 
     String dbg_msg = String('\0');
     dbg_msg += "EVSE state. getEvseState: ";
@@ -145,7 +153,9 @@ unsigned long ArduinoOcppTask::loop(MicroTasks::WakeReason reason) {
     dbg_msg += " end";
 
     ArduinoOcpp::OcppOperation *debug_msg = ArduinoOcpp::makeOcppOperation(new ArduinoOcpp::Ocpp16::DataTransfer(dbg_msg));
+    debug_msg->setTimeout(new ArduinoOcpp::FixedTimeout(10000));
     ArduinoOcpp::initiateOcppOperation(debug_msg);
+#endif
 
     if (evse->isVehicleConnected() && !vehicleConnected) {
         vehicleConnected = evse->isVehicleConnected();

@@ -13,22 +13,34 @@
 
 class MongooseOcppSocketClient : public ArduinoOcpp::OcppSocket {
 private:
-    //std::function<bool(const char*, size_t)> ReceiveTXTcallback;
-    //ArduinoOcpp::ReceiveTXTcallback receiveTXT;
+    ArduinoOcpp::ReceiveTXTcallback receiveTXTcallback = [] (const char *, size_t) {return false;};
 
     String ws_url = String('\0');
 
-    struct mg_mgr mgr;        // Event manager
-    struct mg_connection *c;  // Client connection
+    struct mg_connection *nc;  // Client connection
+
+    bool connection_alive = false;
+
+    void printUrl();
+
+    const char *mongoose_error_string = NULL;
 public:
+
     MongooseOcppSocketClient(String &ws_url);
     
-    ~MongooseOcppSocketClient() {mg_mgr_free(&mgr);}
+    ~MongooseOcppSocketClient();
+
+    void loop() { }
 
     bool sendTXT(String &out);
+    
+    bool receiveTXT(const char* msg, size_t len);
 
-    void setReceiveTXTcallback(ArduinoOcpp::ReceiveTXTcallback &receiveTXT); //ReceiveTXTcallback is defined in OcppServer.h
+    void setReceiveTXTcallback(ArduinoOcpp::ReceiveTXTcallback &receiveTXT) {
+        this->receiveTXTcallback = receiveTXT;
+    }; //ReceiveTXTcallback is defined in OcppServer.h
 
+    static void mg_event_callback(struct mg_connection *nc, int ev, void *ev_data, void *user_data);
 };
 
 #endif
