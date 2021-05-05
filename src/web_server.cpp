@@ -37,6 +37,7 @@ typedef const __FlashStringHelper *fstr_t;
 #include "scheduler.h"
 
 MongooseHttpServer server;          // Create class for Web server
+static MongooseHttpClient teslaProxy;
 
 bool enableCors = true;
 bool streamDebug = false;
@@ -478,7 +479,7 @@ handleSaveAdvanced(MongooseHttpServerRequest *request) {
 
 // -------------------------------------------------------------------
 // Get Tesla Vehicle Info
-// url: /teslaveh
+// url: /tesla/vehicles
 // -------------------------------------------------------------------
 void
 handleTeslaVeh(MongooseHttpServerRequest *request)
@@ -504,6 +505,49 @@ handleTeslaVeh(MongooseHttpServerRequest *request)
   serializeJson(doc, *response);
   request->send(response);
 }
+
+
+// -------------------------------------------------------------------
+// Proxy Tesla authentication requests
+// url: /tesla/auth
+// -------------------------------------------------------------------
+void
+handleTeslaAuth(MongooseHttpServerRequest *request)
+{
+  MongooseHttpServerResponseStream *response;
+  if(false == requestPreProcess(request, response)) {
+    return;
+  }
+
+  String url = "https://auth.tesla.com/oauth2/v3/authorize?";
+  url += request->queryString().toString();
+  DBUGVAR(url);
+  MongooseHttpClientRequest *teslaRequest = teslaProxy.beginRequest(url.c_str());
+  teslaRequest->setMethod(HTTP_GET);
+  teslaRequest->addHeader("sec-fetch-site", "none");
+  teslaRequest->addHeader("sec-fetch-mode", "navigate");
+  teslaRequest->addHeader("sec-fetch-user", "?1");
+  teslaRequest->addHeader("sec-fetch-dest", "document");
+  teslaRequest->onResponse([request, response](MongooseHttpClientResponse *teslaResponse) 
+  {
+    DBUGF("Got response: \n%.*s", teslaResponse->message().length(), teslaResponse->message().c_str());
+    response->setCode(teslaResponse->respCode());
+
+    StaticJsonDocument<1024> doc;
+    if(200 == teslaResponse->respCode())
+    {
+      MongooseString body = teslaResponse->body();
+    } else {
+      doc["msg"] = "Error fetching from Tesla API";
+    }
+
+    serializeJson(doc, *response);
+    request->send(response);
+  });
+
+  teslaProxy.send(teslaRequest);
+}
+
 
 // -------------------------------------------------------------------
 // Save the Ohm keyto EEPROM
@@ -997,7 +1041,7 @@ handleUpdateUpload(MongooseHttpServerRequest *request, int ev, MongooseString fi
 
   if(!Update.hasError())
   {
-    DBUGF("Update Writing %llu", index);
+    //DBUGF("Update Writing %llu", index);
 
     size_t contentLength = request->contentLength();
     DBUGVAR(contentLength);
@@ -1218,17 +1262,26 @@ web_server_setup() {
   server.on("/saveemoncms$", handleSaveEmoncms);
   server.on("/savemqtt$", handleSaveMqtt);
   server.on("/saveadmin$", handleSaveAdmin);
-  server.on("/teslaveh$", handleTeslaVeh);
   server.on("/saveadvanced$", handleSaveAdvanced);
   server.on("/saveohmkey$", handleSaveOhmkey);
+
   server.on("/settime$", handleSetTime);
+
+  server.on("/tesla/vehicles$", handleTeslaVeh);
+  server.on("/tesla/auth", handleTeslaAuth);
+
   server.on("/reset$", handleRst);
   server.on("/restart$", handleRestart);
+
   server.on("/rapi$", handleRapi);
   server.on("/r$", handleRapi);
+
   server.on("/scan$", handleScan);
+
   server.on("/apoff$", handleAPOff);
+
   server.on("/divertmode$", handleDivertMode);
+
   server.on("/emoncms/describe$", handleDescribe);
 
   server.on("/schedule/plan$", handleSchedulePlan);

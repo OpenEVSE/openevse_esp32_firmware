@@ -40,7 +40,7 @@ Content-Type: application/json
 
 ###
 
-GET {{baseUrl}}/teslaveh
+GET {{baseUrl}}/tesla/vehicles
 
 ###
 
@@ -59,7 +59,8 @@ GET {{baseUrl}}/status
 
 @tesla_api = https://owner-api.teslamotors.com
 @tesla_x_tesla_user_agent = TeslaApp/3.4.4-350/fad4a582e/android/8.1.0"
-@tesla_user_agent = Mozilla/5.0 (Linux; Android 8.1.0; Pixel XL Build/OPM4.171019.021.D1; wv) AppleWebKit/537.36 (KHTML, like Gecko) Version/4.0 Chrome/68.0.3440.91 Mobile Safari/537.36
+@tesla_user_agent = 007
+#@tesla_user_agent = Mozilla/5.0 (Linux; Android 8.1.0; Pixel XL Build/OPM4.171019.021.D1; wv) AppleWebKit/537.36 (KHTML, like Gecko) Version/4.0 Chrome/68.0.3440.91 Mobile Safari/537.36
 
 ###
 # @name vehicles
@@ -71,8 +72,17 @@ Authorization: Bearer {{tesla_access_token}}
 
 ###
 
-GET {{tesla_api}}/api/1/vehicles/{{vehicles.response.body.response[0].id}}/data_request/charge_state
+@tesla_vehicle_id = {{vehicles.response.body.response[0].id}}
+
+GET {{tesla_api}}/api/1/vehicles/{{tesla_vehicle_id}}/data_request/charge_state
 User-Agent: {{tesla_user_agent}}
 Content-Type: application/json; charset=utf-8
 Authorization: Bearer {{tesla_access_token}}
 
+###
+
+GET {{baseUrl}}/tesla/auth?audience=&client_id=ownerapi&code_challenge=mafhvws7RhZNymdsropfiCgr7AbAzQJdhq54H2Y2UyA&type=S256&locale=en&prompt=login&redirect_uri=https%3A%2F%2Fauth.tesla.com%2Fvoid%2Fcallback&response_type=code&scope=openid%20email%20offline_access&state=UvpZ45nF8UD1op1cpciMX1md8ZqxtjBDk6_T6D6iy8A
+
+#####
+
+GET https://auth.tesla.com/oauth2/v3/authorize?audience=&client_id=ownerapi&code_challenge=mafhvws7RhZNymdsropfiCgr7AbAzQJdhq54H2Y2UyA&type=S256&locale=en&prompt=login&redirect_uri=https%3A%2F%2Fauth.tesla.com%2Fvoid%2Fcallback&response_type=code&scope=openid%20email%20offline_access&state=UvpZ45nF8UD1op1cpciMX1md8ZqxtjBDk6_T6D6iy8A
