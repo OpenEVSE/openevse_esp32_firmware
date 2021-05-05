@@ -11,6 +11,8 @@
 #include <ArduinoOcpp/Core/OcppSocket.h>
 #include <ArduinoOcpp/Core/OcppServer.h> //for typedef ReceiveTXTcallback
 
+#define WS_UNRESPONSIVE_THRESHOLD_MS 4000
+
 class MongooseOcppSocketClient : public ArduinoOcpp::OcppSocket {
 private:
     ArduinoOcpp::ReceiveTXTcallback receiveTXTcallback = [] (const char *, size_t) {return false;};
@@ -18,8 +20,14 @@ private:
     String ws_url = String('\0');
 
     struct mg_connection *nc;  // Client connection
+    
+    bool connection_established = false;
+    ulong last_reconnection_attempt = 0;
 
-    bool connection_alive = false;
+    //is connection responsive?
+    ulong last_recv = 0; // Any input from remote peer is seen as indication for responsivitiy
+
+    ulong last_debug_message = 0; 
 
     void printUrl();
 
@@ -30,7 +38,9 @@ public:
     
     ~MongooseOcppSocketClient();
 
-    void loop() { }
+    void loop();
+
+    void maintainWsConn();
 
     bool sendTXT(String &out);
     

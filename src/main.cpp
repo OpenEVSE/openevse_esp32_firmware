@@ -227,7 +227,7 @@ loop() {
     if (!OCPP_started) {
       OCPP_started = true;
 
-      ocpp.begin("steve.extall.de", 8080, "ws://steve.extall.de:8080/steve/websocket/CentralSystemService/openevse-001", evse);
+      ocpp.begin("wss://echo.websocket.org", 80, "wss://echo.websocket.org/", evse);
     }
 
     OCPP_loop();
