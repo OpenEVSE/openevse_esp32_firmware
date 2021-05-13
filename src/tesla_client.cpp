@@ -11,6 +11,7 @@
 #include <ArduinoJson.h>
 #include "tesla_client.h"
 #include "debug.h"
+#include "input.h"
 
 #define TESLA_USER_AGENT "007"
 #define TESLA_CLIENT_ID "81527cff06843c8634fdc09e8ac0abefb46ac849f38fe1e431c2ef2106796384"
@@ -74,9 +75,9 @@ void TeslaClient::_cleanVehicles()
 }
 
 void TeslaClient::setCredentials(
-  String &accessToken, 
-  String &refreshToken, 
-  uint64_t created, 
+  String &accessToken,
+  String &refreshToken,
+  uint64_t created,
   uint64_t expires)
 {
   _accessToken = "Bearer ";
@@ -132,7 +133,7 @@ void TeslaClient::loop()
       else {
         requestChargeState();
       }
-    } 
+    }
   } // !busy
 }
 
@@ -143,8 +144,8 @@ void printResponse(MongooseHttpClientResponse *response)
   int headers = response->headers();
   int i;
   for(i=0; i<headers; i++) {
-    DBUGF("_HEADER[%.*s]: %.*s", 
-      response->headerNames(i).length(), (const char *)response->headerNames(i), 
+    DBUGF("_HEADER[%.*s]: %.*s",
+      response->headerNames(i).length(), (const char *)response->headerNames(i),
       response->headerValues(i).length(), (const char *)response->headerValues(i));
   }
 
@@ -177,7 +178,7 @@ void TeslaClient::requestAccessToken()
 
   DBUGLN(s);
   DBUGLN(uri);
-    
+
   MongooseHttpClientRequest *req = _client.beginRequest(uri.c_str());
   req->setMethod(HTTP_POST);
   req->addHeader("Connection","keep-alive");
@@ -196,7 +197,7 @@ void TeslaClient::requestAccessToken()
         _teslaPass = "";
         DBUGLN("bad user/pass");
       }
-      else if (response->respCode() == 200) { 
+      else if (response->respCode() == 200) {
         const char *cjson = (const char *)response->body();
         if (cjson) {
           const size_t capacity = JSON_OBJECT_SIZE(5) + 220;
@@ -213,7 +214,7 @@ void TeslaClient::requestAccessToken()
             _accessToken = "";
             DBUGLN("token error");
           }
-          
+
           //const char* token_type = doc["token_type"];
           //long expires_in = doc["expires_in"];
           //const char* refresh_token = doc["refresh_token"];
@@ -245,7 +246,7 @@ void TeslaClient::requestVehicles()
   req->onResponse([&](MongooseHttpClientResponse *response) {
       DBUGLN("resp");
       printResponse(response);
-      
+
       if (response->respCode() == 401) {
           _accessToken = "";
           _activeRequest = TAR_NONE;
@@ -253,25 +254,25 @@ void TeslaClient::requestVehicles()
       }
       else if (response->respCode() == 200) {
         const char *json = (const char *)response->body();
-        
+
         if (strstr(json,_badAuthStr)) {
           _accessToken = "";
           _activeRequest = TAR_NONE;
           return;
         }
-        
-        
+
+
         char *sc = strstr(json,"\"count\":");
         if (sc) {
           _cleanVehicles();
           sc += 8;
           sscanf(sc,"%d",&_vehicleCnt);
           DBUG("vcnt: ");DBUGLN(_vehicleCnt);
-          
+
           _id = new String[_vehicleCnt];
           _vin = new String[_vehicleCnt];
           _displayName = new String[_vehicleCnt];
-          
+
           // ArduinoJson has a bug, and parses the id as a float.
           // use this ugly workaround.
           const char *sj = json;
@@ -289,7 +290,7 @@ void TeslaClient::requestVehicles()
           DynamicJsonDocument doc(capacity);
           deserializeJson(doc, json);
           JsonArray jresponse = doc["response"];
-          
+
           for (int i=0;i < _vehicleCnt;i++) {
             JsonObject responsei = jresponse[i];
             _vin[i] = responsei["vin"].as<String>();
@@ -341,9 +342,9 @@ void TeslaClient::requestChargeState()
         const size_t capacity = JSON_OBJECT_SIZE(1) + JSON_OBJECT_SIZE(43) + 1500;
         DynamicJsonDocument doc(capacity);
         deserializeJson(doc, json);
-      
+
         JsonObject jresponse = doc["response"];
-      
+
         _chargeInfo.batteryRange = jresponse["battery_range"];
         _chargeInfo.chargeEnergyAdded = jresponse["charge_energy_added"];
         _chargeInfo.chargeMilesAddedRated = jresponse["charge_miles_added_rated"];
@@ -352,13 +353,13 @@ void TeslaClient::requestChargeState()
         _chargeInfo.timeToFullCharge = jresponse["time_to_full_charge"];
         _chargeInfo.chargerVoltage = jresponse["charger_voltage"];
         _chargeInfo.isValid = true;
-      
+
 #ifdef notyet
         bool response_battery_heater_on = jresponse["battery_heater_on"]; // false
         int response_charge_current_request = jresponse["charge_current_request"]; // 24
         int response_charge_current_request_max = jresponse["charge_current_request_max"]; // 48
         bool response_charge_enable_request = jresponse["charge_enable_request"]; // true
-      
+
         int response_charge_limit_soc_max = jresponse["charge_limit_soc_max"]; // 100
         int response_charge_limit_soc_min = jresponse["charge_limit_soc_min"]; // 50
         int response_charge_limit_soc_std = jresponse["charge_limit_soc_std"]; // 90
@@ -370,7 +371,7 @@ void TeslaClient::requestChargeState()
         int response_charger_actual_current = jresponse["charger_actual_current"]; // 0
         int response_charger_pilot_current = jresponse["charger_pilot_current"]; // 48
         int response_charger_power = jresponse["charger_power"]; // 0
-      
+
         const char* response_charging_state = jresponse["charging_state"]; // "Complete"
         const char* response_conn_charge_cable = jresponse["conn_charge_cable"]; // "IEC"
         float response_est_battery_range = jresponse["est_battery_range"]; // 187.27
@@ -384,11 +385,15 @@ void TeslaClient::requestChargeState()
         int response_minutes_to_full_charge = jresponse["minutes_to_full_charge"]; // 0
         bool response_not_enough_power_to_heat = jresponse["not_enough_power_to_heat"]; // false
         bool response_scheduled_charging_pending = jresponse["scheduled_charging_pending"]; // false
-      
+
         long response_timestamp = jresponse["timestamp"]; // 1583079530271
         bool response_trip_charging = jresponse["trip_charging"]; // false
         int response_usable_battery_level = jresponse["usable_battery_level"]; // 83
 #endif // notyet
+
+        evse.setVehicleStateOfCharge(_chargeInfo.batteryLevel);
+        evse.setVehicleRange(_chargeInfo.batteryRange);
+        evse.setVehicleEta(_chargeInfo.timeToFullCharge);
       }
       _activeRequest = TAR_NONE;
     });
@@ -397,7 +402,7 @@ void TeslaClient::requestChargeState()
 
 void TeslaClient::getChargeInfoJson(JsonDocument &doc)
 {
-  if (_chargeInfo.isValid) 
+  if (_chargeInfo.isValid)
   {
     doc["battery_range"] = _chargeInfo.batteryRange;
     doc["battery_level"] = _chargeInfo.batteryLevel;
