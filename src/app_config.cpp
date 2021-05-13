@@ -45,6 +45,9 @@ String mqtt_pass;
 String mqtt_solar;
 String mqtt_grid_ie;
 String mqtt_vrms;
+String mqtt_vehicle_soc;
+String mqtt_vehicle_range;
+String mqtt_vehicle_eta;
 String mqtt_announce_topic;
 
 // Time
@@ -112,6 +115,9 @@ ConfigOpt *opts[] =
   new ConfigOptDefenition<String>(mqtt_solar, "", "mqtt_solar", "mo"),
   new ConfigOptDefenition<String>(mqtt_grid_ie, "emon/emonpi/power1", "mqtt_grid_ie", "mg"),
   new ConfigOptDefenition<String>(mqtt_vrms, "emon/emonpi/vrms", "mqtt_vrms", "mv"),
+  new ConfigOptDefenition<String>(mqtt_vehicle_soc, "", "mqtt_vehicle_soc", "mc"),
+  new ConfigOptDefenition<String>(mqtt_vehicle_range, "", "mqtt_vehicle_range", "mr"),
+  new ConfigOptDefenition<String>(mqtt_vehicle_eta, "", "mqtt_vehicle_eta", "met"),
   new ConfigOptDefenition<String>(mqtt_announce_topic, "openevse/announce/"+ESPAL.getShortId(), "mqtt_announce_topic", "ma"),
 
 // Ohm Connect Settings

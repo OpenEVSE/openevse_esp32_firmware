@@ -43,6 +43,10 @@ typedef uint32_t EvseClient;
 #define EvseManager_Priority_Limit    1100
 #define EvseManager_Priority_Error   10000
 
+#define EVSE_VEHICLE_SOC    (1 << 0)
+#define EVSE_VEHICLE_RANGE  (1 << 1)
+#define EVSE_VEHICLE_ETA    (1 << 2)
+
 #ifndef EVSE_MANAGER_MAX_CLIENT_CLAIMS
 #define EVSE_MANAGER_MAX_CLIENT_CLAIMS 10
 #endif // !EVSE_MANAGER_MAX_CLIENT_CLAIMS
@@ -245,6 +249,12 @@ class EvseManager : public MicroTasks::Task
     bool _evaluateTargetState;
     int _waitingForEvent;
 
+    uint32_t _vehicleValid;
+    uint32_t _vehicleUpdated;
+    int _vehicleStateOfCharge;
+    int _vehicleRange;
+    int _vehicleEta;
+
     void initialiseEvse();
     bool findClaim(EvseClient client, Claim **claim = NULL);
     bool evaluateClaims(EvseProperties &properties);
@@ -369,6 +379,29 @@ class EvseManager : public MicroTasks::Task
     long getMinCurrent() {
       return _monitor.getMinCurrent();
     }
+
+    // Get/set the vehicle state
+    int getVehicleStateOfCharge() {
+      return _vehicleStateOfCharge;
+    }
+    int getVehicleRange() {
+      return _vehicleRange;
+    }
+    int getVehicleEta() {
+      return _vehicleEta;
+    }
+    int isVehicleStateOfChargeValid() {
+      return 0 != (_vehicleValid & EVSE_VEHICLE_SOC);
+    }
+    int isVehicleRangeValid() {
+      return 0 != (_vehicleValid & EVSE_VEHICLE_RANGE);
+    }
+    int isVehicleEtaValid() {
+      return 0 != (_vehicleValid & EVSE_VEHICLE_ETA);
+    }
+    void setVehicleStateOfCharge(int vehicleStateOfCharge);
+    void setVehicleRange(int vehicleRange);
+    void setVehicleEta(int vehicleEta);
 
     // Temp until everything uses EvseManager
     RapiSender &getSender() {

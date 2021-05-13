@@ -102,6 +102,17 @@ POST {{baseUrl}}/config HTTP/1.1
 Content-Type: application/json
 
 {
+  "mqtt_vehicle_soc": "vehicle/soc",
+  "mqtt_vehicle_range": "vehicle/range",
+  "mqtt_vehicle_eta": "vehicle/eta"
+}
+
+###
+
+POST {{baseUrl}}/config HTTP/1.1
+Content-Type: application/json
+
+{
   "tesla_enabled": false
 }
 
