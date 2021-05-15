@@ -341,13 +341,25 @@ LcdTask::LcdInfoLine LcdTask::getNextInfoLine(LcdInfoLine info)
         case LcdInfoLine::EnergyTotal:
           return LcdInfoLine::Tempurature;
         case LcdInfoLine::Tempurature:
-          return _scheduler->getNextEvent().isValid() ?
-                      LcdInfoLine::TimerStop :
-                      LcdInfoLine::EnergySession;
+          if(_scheduler->getNextEvent().isValid()) {
+            return LcdInfoLine::TimerStop;
+          }
         case LcdInfoLine::TimerStop:
-          return _scheduler->getNextEvent().isValid() ?
-                      LcdInfoLine::TimerRemaining :
-                      LcdInfoLine::EnergySession;
+          if(_scheduler->getNextEvent().isValid()) {
+            return LcdInfoLine::TimerRemaining;
+          }
+        case LcdInfoLine::TimerRemaining:
+          if(_evse->isVehicleStateOfChargeValid()) {
+            return LcdInfoLine::BatterySOC;
+          }
+        case LcdInfoLine::BatterySOC:
+          if(_evse->isVehicleRangeValid()) {
+            return LcdInfoLine::Range;
+          }
+        case LcdInfoLine::Range:
+          if(_evse->isVehicleEtaValid()) {
+            return LcdInfoLine::TimeLeft;
+          }
         default:
           return LcdInfoLine::EnergySession;
       }
@@ -531,6 +543,8 @@ void LcdTask::displayInfoLine(LcdInfoLine line, unsigned long &nextUpdate)
 
     case LcdInfoLine::BatterySOC:
       // Charge level 79%
+      displayNumberValue(1, "Charge level", _evse->getVehicleStateOfCharge(), 0, "%");
+      _updateInfoLine = false;
       break;
 
     case LcdInfoLine::ChargeLimit:
@@ -538,6 +552,7 @@ void LcdTask::displayInfoLine(LcdInfoLine line, unsigned long &nextUpdate)
       break;
 
     case LcdInfoLine::Range:
+      displayNumberValue(1, "Range", _evse->getVehicleRange(), 0, "KM");
       break;
 
     case LcdInfoLine::RangeAdded:
@@ -545,6 +560,7 @@ void LcdTask::displayInfoLine(LcdInfoLine line, unsigned long &nextUpdate)
       break;
 
     case LcdInfoLine::TimeLeft:
+      displayStopWatchTime("ETA", _evse->getVehicleEta());
       break;
 
     case LcdInfoLine::Voltage:
@@ -573,11 +589,7 @@ void LcdTask::displayInfoLine(LcdInfoLine line, unsigned long &nextUpdate)
         int32_t currentOffset;
         Scheduler::getCurrentTime(currentDay, currentOffset);
         uint32_t delay = event.getDelay(currentDay, currentOffset);
-        int hour = delay / 3600;
-        int min = (delay / 60) % 60;
-        int sec = delay % 60;
-        sprintf(temp, "Left %d:%02d:%02d", hour, min, sec);
-        showText(0, 1, temp, true);
+        displayStopWatchTime("Left", delay);
         nextUpdate = 1000;
       } else {
         showText(0, 1, "Left --:--:--", true);
@@ -619,6 +631,16 @@ void LcdTask::displayInfoEventTime(const char *name, Scheduler::EventInstance &e
   } else {
     sprintf(temp, "%s --:--", name);
   }
+  showText(0, 1, temp, true);
+}
+
+void LcdTask::displayStopWatchTime(const char *name, uint32_t time)
+{
+  char temp[20];
+  int hour = time / 3600;
+  int min = (time / 60) % 60;
+  int sec = time % 60;
+  sprintf(temp, "%s %d:%02d:%02d", name, hour, min, sec);
   showText(0, 1, temp, true);
 }
 
