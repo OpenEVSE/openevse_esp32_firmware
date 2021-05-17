@@ -158,7 +158,7 @@ A [OpenEnergyMonitor Solar PV Energy Monitor](https://guide.openenergymonitor.or
   - Grid Import (positive Import / Negative export*): `emon/emonpi/power1`
   - Solar PV generation (always postive): `emon/emonpi/power2` 
 
-**NoteL 'Grid' feed should include the power consumed by the EVSEE**
+**Note: 'Grid' feed should include the power consumed by the EVSE**
 
 **CT sensor can be physically reversed on the cable to invert the reading.*
 
@@ -168,7 +168,20 @@ Divertmode can be controlled via mqtt
 
 Topic: `<base-topic>/divertmode/set` 
 Value: `1` = Normal or `2` = Eco
-  
+
+### Eco Mode Advanced Settings 
+
+If 'advanced' mode is toggled on the UI more solar PV divert settings will become available: 
+
+![eco](docs/divert-advanced.png)
+
+- Divert smoothing attack: controls how quickly the EVSE responds to an increase in solar PV / grid excess. Default value 40% (0.4)
+- Divert Smoothing decay: controls how quickly the EVSE responds to a decrease in solar PV / grid excess. Default value 5% (0.05)
+- Minimum charge time: the amount of time in seconds the EVSE should run for when triggered by solar PV / grid excess
+
+See this [interactive spreadsheet](https://docs.google.com/spreadsheets/d/1GQEAQ5QNvNuShEsUdcrNsFC12U3pQfcD_NetoIfDoko/edit?usp=sharing) to explore how these values effect the smoothing algorithm.
+
+**Caution: adjust these values at your own risk, the default values have been set to minimise wear on the EVSE contactor and the EVs chraging system. Rapid switching of the EVSE will result in increased wear on these components**
 
 
 ***
