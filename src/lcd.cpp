@@ -7,6 +7,7 @@
 #include "RapiSender.h"
 #include "openevse.h"
 #include "input.h"
+#include "app_config.h"
 #include <time.h>
 
 static void IGNORE(int ret) {
@@ -552,7 +553,7 @@ void LcdTask::displayInfoLine(LcdInfoLine line, unsigned long &nextUpdate)
       break;
 
     case LcdInfoLine::Range:
-      displayNumberValue(1, "Range", _evse->getVehicleRange(), 0, "KM");
+      displayNumberValue(1, "Range", _evse->getVehicleRange(), 0, config_vehicle_range_miles() ? " miles" : " km");
       break;
 
     case LcdInfoLine::RangeAdded:
