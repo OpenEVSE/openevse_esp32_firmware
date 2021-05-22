@@ -61,6 +61,8 @@ GET {{baseUrl}}/status
 @tesla_x_tesla_user_agent = TeslaApp/3.4.4-350/fad4a582e/android/8.1.0"
 @tesla_user_agent = Mozilla/5.0 (Linux; Android 8.1.0; Pixel XL Build/OPM4.171019.021.D1; wv) AppleWebKit/537.36 (KHTML, like Gecko) Version/4.0 Chrome/68.0.3440.91 Mobile Safari/537.36
 
+@tesla_vehicle_id = {{vehicles.response.body.response[0].id}}
+
 ###
 # @name vehicles
 
@@ -71,8 +73,38 @@ Authorization: Bearer {{tesla_access_token}}
 
 ###
 
-GET {{tesla_api}}/api/1/vehicles/{{vehicles.response.body.response[0].id}}/data_request/charge_state
+GET {{tesla_api}}/api/1/vehicles/{{tesla_vehicle_id}}/data_request/charge_state
 User-Agent: {{tesla_user_agent}}
 Content-Type: application/json; charset=utf-8
 Authorization: Bearer {{tesla_access_token}}
 
+###
+
+POST {{tesla_api}}/api/1/vehicles/{{tesla_vehicle_id}}/wake_up
+User-Agent: {{tesla_user_agent}}
+Content-Type: application/json; charset=utf-8
+Authorization: Bearer {{tesla_access_token}}
+
+###############################
+
+@tesla_login = http://localhost:3000
+
+###
+
+POST {{tesla_login}}/login
+Content-Type: application/json; charset=utf-8
+
+{
+  "username":"{{tesla_username}}",
+  "password":"{{tesla_password}}"
+}
+
+###
+
+POST {{tesla_login}}/login
+Content-Type: application/json; charset=utf-8
+
+{
+  "username":"invalid",
+  "password":"user"
+}
