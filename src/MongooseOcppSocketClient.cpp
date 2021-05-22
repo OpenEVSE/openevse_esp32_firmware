@@ -15,8 +15,7 @@
 
 MongooseOcppSocketClient::MongooseOcppSocketClient(String &ws_url) {
     this->ws_url = String(ws_url);
-
-    maintainWsConn(); //initialize remaining variables here
+    
 }
 
 MongooseOcppSocketClient::~MongooseOcppSocketClient() {
@@ -108,7 +107,7 @@ void MongooseOcppSocketClient::loop() {
 
 void MongooseOcppSocketClient::maintainWsConn() {
 
-    const uint DEBUG_MSG_INTERVAL = 5000;
+    const ulong DEBUG_MSG_INTERVAL = 5000;
     if (DEBUG_OUT && millis() - last_debug_message >= DEBUG_MSG_INTERVAL) {
         last_debug_message = millis();
 
@@ -129,7 +128,7 @@ void MongooseOcppSocketClient::maintainWsConn() {
         return;
     }
 
-    const uint RECONNECT_AFTER = 5000; //in ms
+    const ulong RECONNECT_AFTER = 5000; //in ms
     if (millis() - last_reconnection_attempt < RECONNECT_AFTER) {
         return;
     }

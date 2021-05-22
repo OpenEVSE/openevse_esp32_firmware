@@ -19,7 +19,7 @@ private:
 
     String ws_url = String('\0');
 
-    struct mg_connection *nc;  // Client connection
+    struct mg_connection *nc = NULL;  // Client connection
     
     bool connection_established = false;
     ulong last_reconnection_attempt = 0;

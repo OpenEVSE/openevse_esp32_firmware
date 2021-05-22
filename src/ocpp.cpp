@@ -27,7 +27,7 @@ void ArduinoOcppTask::begin(String CS_hostname, uint16_t CS_port, String CS_url,
     }
 
     ocppSocket = new MongooseOcppSocketClient(CS_url);
-    OCPP_initialize(ocppSocket);
+    OCPP_initialize(ocppSocket, ArduinoOcpp::FilesystemOpt::Use);
 
     this->evse = &evse;
 

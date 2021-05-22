@@ -78,7 +78,6 @@ static uint32_t last_mem = 0;
 String currentfirmware = ESCAPEQUOTE(BUILD_TAG);
 
 // begin ArduinoOcpp
-bool OCPP_started = false; // OCPP will be started in loop() when net is configured
 ArduinoOcppTask ocpp = ArduinoOcppTask();
 // end ArduinoOcpp
 
@@ -133,6 +132,10 @@ void setup()
 #endif
 
   input_setup();
+
+  // begin ArduinoOcpp
+  ocpp.begin("wss://steve", 80, "wss://echo.websocket.org/", evse);
+  // end ArduinoOcpp
 
   lcd.display(F("OpenEVSE WiFI"), 0, 0, 0, LCD_CLEAR_LINE);
   lcd.display(currentfirmware, 0, 1, 5 * 1000, LCD_CLEAR_LINE);
@@ -224,12 +227,6 @@ loop() {
     }
 
     //begin ArduinoOcpp
-    if (!OCPP_started) {
-      OCPP_started = true;
-
-      ocpp.begin("wss://echo.websocket.org", 80, "wss://echo.websocket.org/", evse);
-    }
-
     OCPP_loop();
     //end ArduinoOcpp
 
