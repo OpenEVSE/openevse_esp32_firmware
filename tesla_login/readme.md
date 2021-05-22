@@ -4,14 +4,13 @@ Node web app to wrap logging in to the Tesla API to support OpenEVSE.
 
 ## Requirements
 
-```
+```bash
 sudo apt-get intall node nodejs npm
 ```
 
 Tested with `npm V5.6.0` and nodejs `v9.5.0`.
 
 If a new version of nodejs is not available for your distribution you may need to update, [see nodejs install page](https://nodejs.org/en/download/package-manager/#debian-and-ubuntu-based-linux-distributions).
-
 
 ## Setup
 
@@ -21,7 +20,7 @@ npm install
 node app.js --port 3000
 ```
 
-Then point your browser at http://localhost:3000/
+Then point your browser at <http://localhost:3000/>
 
 Depending on your npm setup you may need to install the following:
 
@@ -50,7 +49,7 @@ sudo systemctl enable tesla_login.service
 
 ### Using PM2
 
-```
+```bash
 sudo npm install -g pm2
 pm2 start app.js
 ```
