@@ -9,6 +9,7 @@
 #include "input.h"
 #include "espal.h"
 #include "net_manager.h"
+#include "web_server.h"
 
 #include "openevse.h"
 
@@ -78,18 +79,33 @@ void mqttmsg_callback(MongooseString topic, MongooseString payload) {
     int vehicle_soc = payload_str.toInt();
     DBUGF("vehicle_soc:%d%%", vehicle_soc);
     evse.setVehicleStateOfCharge(vehicle_soc);
+
+    StaticJsonDocument<128> event;
+    event["battery_level"] = vehicle_soc;
+    event["vehicle_state_update"] = 0;
+    web_server_event(event);
   }
   else if (topic_string == mqtt_vehicle_range)
   {
     int vehicle_range = payload_str.toInt();
     DBUGF("vehicle_range:%dKM", vehicle_range);
     evse.setVehicleRange(vehicle_range);
+
+    StaticJsonDocument<128> event;
+    event["battery_range"] = vehicle_range;
+    event["vehicle_state_update"] = 0;
+    web_server_event(event);
   }
   else if (topic_string == mqtt_vehicle_eta)
   {
     int vehicle_eta = payload_str.toInt();
     DBUGF("vehicle_eta:%d", vehicle_eta);
     evse.setVehicleEta(vehicle_eta);
+
+    StaticJsonDocument<128> event;
+    event["time_to_full_charge"] = vehicle_eta;
+    event["vehicle_state_update"] = 0;
+    web_server_event(event);
   }
   // If MQTT message to set divert mode is received
   else if (topic_string == mqtt_topic + "/divertmode/set")

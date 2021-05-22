@@ -136,6 +136,7 @@ EvseManager::EvseManager(Stream &port) :
   _waitingForEvent(0),
   _vehicleValid(0),
   _vehicleUpdated(0),
+  _vehicleLastUpdated(0),
   _vehicleStateOfCharge(0),
   _vehicleRange(0),
   _vehicleEta(0)
@@ -535,6 +536,7 @@ void EvseManager::setVehicleStateOfCharge(int vehicleStateOfCharge)
   _vehicleStateOfCharge = vehicleStateOfCharge;
   _vehicleValid |= EVSE_VEHICLE_SOC;
   _vehicleUpdated |= EVSE_VEHICLE_SOC;
+  _vehicleLastUpdated = millis();
   MicroTask.wakeTask(this);
 }
 
@@ -543,6 +545,7 @@ void EvseManager::setVehicleRange(int vehicleRange)
   _vehicleRange = vehicleRange;
   _vehicleValid |= EVSE_VEHICLE_RANGE;
   _vehicleUpdated |= EVSE_VEHICLE_RANGE;
+  _vehicleLastUpdated = millis();
   MicroTask.wakeTask(this);
 }
 
@@ -551,5 +554,6 @@ void EvseManager::setVehicleEta(int vehicleEta)
   _vehicleEta = vehicleEta;
   _vehicleValid |= EVSE_VEHICLE_ETA;
   _vehicleUpdated |= EVSE_VEHICLE_ETA;
+  _vehicleLastUpdated = millis();
   MicroTask.wakeTask(this);
 }

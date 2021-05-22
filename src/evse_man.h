@@ -251,6 +251,7 @@ class EvseManager : public MicroTasks::Task
 
     uint32_t _vehicleValid;
     uint32_t _vehicleUpdated;
+    uint32_t _vehicleLastUpdated;
     int _vehicleStateOfCharge;
     int _vehicleRange;
     int _vehicleEta;
@@ -389,6 +390,9 @@ class EvseManager : public MicroTasks::Task
     }
     int getVehicleEta() {
       return _vehicleEta;
+    }
+    uint32_t getVehicleLastUpdated() {
+      return _vehicleLastUpdated;
     }
     int isVehicleStateOfChargeValid() {
       return 0 != (_vehicleValid & EVSE_VEHICLE_SOC);

@@ -600,13 +600,25 @@ handleStatus(MongooseHttpServerRequest *request) {
   doc["time"] = String(time);
   doc["offset"] = String(offset);
 
+  doc["vehicle_state_update"] = (millis() - evse.getVehicleLastUpdated()) / 1000;
   if(teslaClient.getVehicleCnt() > 0) {
     doc["tesla_vehicle_id"] = teslaClient.getVehicleId(teslaClient.getCurVehicleIdx());
     doc["tesla_vehicle_name"] = teslaClient.getVehicleDisplayName(teslaClient.getCurVehicleIdx());
+    teslaClient.getChargeInfoJson(doc);
   } else {
     doc["tesla_vehicle_id"] = false;
     doc["tesla_vehicle_name"] = false;
+    if(evse.isVehicleStateOfChargeValid()) {
+      doc["battery_level"] = evse.getVehicleStateOfCharge();
+    }
+    if(evse.isVehicleRangeValid()) {
+      doc["battery_range"] = evse.getVehicleRange();
+    }
+    if(evse.isVehicleEtaValid()) {
+      doc["time_to_full_charge"] = evse.getVehicleEta();
+    }
   }
+
 
   response->setCode(200);
   serializeJson(doc, *response);
