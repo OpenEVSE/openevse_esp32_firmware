@@ -12,6 +12,7 @@
 #include "tesla_client.h"
 #include "debug.h"
 #include "input.h"
+#include "event.h"
 
 #define TESLA_USER_AGENT "007"
 #define TESLA_CLIENT_ID "81527cff06843c8634fdc09e8ac0abefb46ac849f38fe1e431c2ef2106796384"
@@ -112,8 +113,6 @@ String TeslaClient::getVehicleDisplayName(int vehidx)
   else return String("");
 }
 
-
-
 void TeslaClient::loop()
 {
   if ((_activeRequest != TAR_NONE) &&
@@ -136,7 +135,6 @@ void TeslaClient::loop()
     }
   } // !busy
 }
-
 
 void printResponse(MongooseHttpClientResponse *response)
 {
@@ -300,6 +298,15 @@ void TeslaClient::requestVehicles()
             DBUG("vin: ");DBUG(_vin[i]);
             DBUG(" name: ");DBUGLN(_displayName[i]);
           }
+
+          if((_curVehIdx < 0) || (_curVehIdx >= _vehicleCnt)) {
+            _curVehIdx = 0;
+          }
+
+          DynamicJsonDocument data(128);
+          data["tesla_vehicle_id"] = _id[_curVehIdx];
+          data["tesla_vehicle_name"] = _displayName[_curVehIdx];
+          event_send(data);
         }
       }
       _activeRequest = TAR_NONE;
@@ -394,6 +401,10 @@ void TeslaClient::requestChargeState()
         evse.setVehicleStateOfCharge(_chargeInfo.batteryLevel);
         evse.setVehicleRange(_chargeInfo.batteryRange);
         evse.setVehicleEta(_chargeInfo.timeToFullCharge);
+
+        DynamicJsonDocument data(4096);
+        getChargeInfoJson(data);
+        event_send(data);
       }
       _activeRequest = TAR_NONE;
     });

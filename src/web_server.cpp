@@ -600,6 +600,14 @@ handleStatus(MongooseHttpServerRequest *request) {
   doc["time"] = String(time);
   doc["offset"] = String(offset);
 
+  if(teslaClient.getVehicleCnt() > 0) {
+    doc["tesla_vehicle_id"] = teslaClient.getVehicleId(teslaClient.getCurVehicleIdx());
+    doc["tesla_vehicle_name"] = teslaClient.getVehicleDisplayName(teslaClient.getCurVehicleIdx());
+  } else {
+    doc["tesla_vehicle_id"] = false;
+    doc["tesla_vehicle_name"] = false;
+  }
+
   response->setCode(200);
   serializeJson(doc, *response);
   request->send(response);
