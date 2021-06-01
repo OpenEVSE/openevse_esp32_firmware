@@ -27,6 +27,7 @@ typedef const __FlashStringHelper *fstr_t;
 #include "app_config.h"
 #include "net_manager.h"
 #include "mqtt.h"
+#include "MongooseOcppSocketClient.h"
 #include "input.h"
 #include "emoncms.h"
 #include "divert.h"
@@ -360,6 +361,61 @@ handleSaveMqtt(MongooseHttpServerRequest *request) {
 }
 
 // -------------------------------------------------------------------
+// Save OCPP V1.6 Config
+// url: /saveocpp
+// -------------------------------------------------------------------
+void
+handleSaveOcpp(MongooseHttpServerRequest *request) {
+  MongooseHttpServerResponseStream *response;
+  if(false == requestPreProcess(request, response, CONTENT_TYPE_TEXT)) {
+    return;
+  }
+
+  String pass = request->getParam("pass");
+
+  int protocol = MQTT_PROTOCOL_MQTT;
+  char proto[6];
+  if(request->getParam("protocol", proto, sizeof(proto)) > 0) {
+    // Cheap and chearful check, obviously not checking for invalid input
+    protocol = 's' == proto[4] ? MQTT_PROTOCOL_MQTT_SSL : MQTT_PROTOCOL_MQTT;
+  }
+
+  int port = 1883;
+  char portStr[8];
+  if(request->getParam("port", portStr, sizeof(portStr)) > 0) {
+    port = atoi(portStr);
+  }
+
+  char unauthString[8];
+  int unauthFound = request->getParam("reject_unauthorized", unauthString, sizeof(unauthString));
+  bool reject_unauthorized = unauthFound < 0 || 0 == unauthFound || isPositive(String(unauthString));
+
+  config_save_mqtt(isPositive(request->getParam("enable")),
+                   protocol,
+                   request->getParam("server"),
+                   port,
+                   request->getParam("topic"),
+                   request->getParam("user"),
+                   pass,
+                   request->getParam("solar"),
+                   request->getParam("grid_ie"),
+                   reject_unauthorized);
+
+  char tmpStr[200];
+  snprintf(tmpStr, sizeof(tmpStr), "Saved: %s %s %s %s %s %s", mqtt_server.c_str(),
+          mqtt_topic.c_str(), mqtt_user.c_str(), mqtt_pass.c_str(),
+          mqtt_solar.c_str(), mqtt_grid_ie.c_str());
+  DBUGLN(tmpStr);
+
+  response->setCode(200);
+  response->print(tmpStr);
+  request->send(response);
+
+  // If connected disconnect MQTT to trigger re-connect with new details
+  mqtt_restart();
+}
+
+// -------------------------------------------------------------------
 // Change divert mode (solar PV divert mode) e.g 1:Normal (default), 2:Eco
 // url: /divertmode
 // -------------------------------------------------------------------
@@ -572,6 +628,8 @@ handleStatus(MongooseHttpServerRequest *request) {
 
   doc["mqtt_connected"] = (int)mqtt_connected();
 
+  doc["ocpp_connected"] = (int)ocppConnected();
+
   doc["ohm_hour"] = ohm_hour;
 
   doc["free_heap"] = ESPAL.getFreeHeap();
@@ -625,7 +683,7 @@ handleStatus(MongooseHttpServerRequest *request) {
 void
 handleConfigGet(MongooseHttpServerRequest *request, MongooseHttpServerResponseStream *response)
 {
-  const size_t capacity = JSON_OBJECT_SIZE(40) + 1024;
+  const size_t capacity = JSON_OBJECT_SIZE(43) + 1024;
   DynamicJsonDocument doc(capacity);
 
   // EVSE Config
@@ -647,6 +705,10 @@ handleConfigGet(MongooseHttpServerRequest *request, MongooseHttpServerResponseSt
   JsonArray mqtt_supported_protocols = doc.createNestedArray("mqtt_supported_protocols");
   mqtt_supported_protocols.add("mqtt");
   mqtt_supported_protocols.add("mqtts");
+
+  JsonArray ocpp_supported_protocols = doc.createNestedArray("ocpp_supported_protocols");
+  ocpp_supported_protocols.add("ws");
+  ocpp_supported_protocols.add("wss");
 
   JsonArray http_supported_protocols = doc.createNestedArray("http_supported_protocols");
   http_supported_protocols.add("http");
@@ -1230,6 +1292,7 @@ web_server_setup() {
   server.on("/savenetwork$", handleSaveNetwork);
   server.on("/saveemoncms$", handleSaveEmoncms);
   server.on("/savemqtt$", handleSaveMqtt);
+  server.on("/saveocpp$", handleSaveOcpp);
   server.on("/saveadmin$", handleSaveAdmin);
   server.on("/teslaveh$", handleTeslaVeh);
   server.on("/saveadvanced$", handleSaveAdvanced);

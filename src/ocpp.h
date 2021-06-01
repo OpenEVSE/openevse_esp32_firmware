@@ -9,6 +9,7 @@
 #include <MicroTasks.h>
 
 #include "evse_man.h"
+#include "lcd.h"
 
 #include "MongooseOcppSocketClient.h"
 
@@ -25,6 +26,7 @@ public:
     void setup(){ }
 
     unsigned long loop(MicroTasks::WakeReason reason) {
+        Serial.print(F("[MicroTasksCallback] Execute MicroTasksCallback\n"));
         if (reason == WakeReason_Event)
             callback();
         return MicroTask.WaitForEvent;
@@ -35,8 +37,13 @@ class ArduinoOcppTask: public MicroTasks::Task {
 private:
     ArduinoOcpp::OcppSocket *ocppSocket = NULL;
     EvseManager *evse;
+    LcdTask *lcd;
 
-    MicroTasksCallback bootReadyCallback; //called whenever OpenEVSE runs its boot procedure
+    //MicroTasksCallback bootReadyCallback; //called whenever OpenEVSE runs its boot procedure
+
+    bool bootInitiated, booted = false;
+    ulong lastBootTrial;
+    ulong bootWaitInterval = 5 * 60 * 1000;
 
     /*
      * OCPP state
@@ -55,8 +62,9 @@ private:
     /*
      * OpenEVSE connector claiming rules
      */
-    std::function<void(EvseState&, EvseProperties&)> inferClaimTransactionActive = [] (EvseState&, EvseProperties&) {};
-    std::function<void(EvseState&, EvseProperties&)> inferClaimTransactionInactive = [] (EvseState&, EvseProperties&) {};
+    std::function<void(EvseState&, EvseProperties&)> inferClaimTransactionActive = [] (EvseState&, EvseProperties&) {};        //Transaction engaged and accepted by the CS
+    std::function<void(EvseState&, EvseProperties&)> inferClaimTransactionActiveOffline = [] (EvseState&, EvseProperties&) {}; //Transaction request pending. EVSE may choose to start charging
+    std::function<void(EvseState&, EvseProperties&)> inferClaimTransactionInactive = [] (EvseState&, EvseProperties&) {};      //No transaction
     std::function<void(EvseState&, EvseProperties&, float charging_limit)> inferClaimSmartCharging = [] (EvseState&, EvseProperties&, float) {};
     
     //helper functions
@@ -75,7 +83,7 @@ public:
         if (ocppSocket != NULL) delete ocppSocket;
     }
 
-    void begin(String CS_hostname, uint16_t CS_port, String CS_url, EvseManager &evse);
+    void begin(String CS_hostname, uint16_t CS_port, String CS_url, EvseManager &evse, LcdTask &lcd);
     
     void updateEvseClaim();
 

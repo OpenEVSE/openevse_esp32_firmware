@@ -13,11 +13,15 @@
 #include <ArduinoOcpp/Core/OcppEngine.h> //only for outputting debug messages to SteVe
 #include <ArduinoOcpp/MessagesV16/DataTransfer.h> //only for outputting debug messages to SteVe
 
-ArduinoOcppTask::ArduinoOcppTask() : MicroTasks::Task(), bootReadyCallback(MicroTasksCallback([](){})) {
+#include "emonesp.h" //for DEFAULT_VOLTAGE
 
+
+
+ArduinoOcppTask::ArduinoOcppTask() : MicroTasks::Task() /*, bootReadyCallback(MicroTasksCallback([](){})) */ {
+    
 }
 
-void ArduinoOcppTask::begin(String CS_hostname, uint16_t CS_port, String CS_url, EvseManager &evse) {
+void ArduinoOcppTask::begin(String CS_hostname, uint16_t CS_port, String CS_url, EvseManager &evse, LcdTask &lcd) {
     Serial.println("[ArduinoOcppTask] begin!");
     //OCPP_initialize(CS_hostname, CS_port, CS_url);
 
@@ -27,25 +31,36 @@ void ArduinoOcppTask::begin(String CS_hostname, uint16_t CS_port, String CS_url,
     }
 
     ocppSocket = new MongooseOcppSocketClient(CS_url);
-    OCPP_initialize(ocppSocket, ArduinoOcpp::FilesystemOpt::Use);
+
+    ArduinoOcpp::OcppClock clockAdapter = [] () {
+        timeval time_now;
+        gettimeofday(&time_now, NULL);
+        return (ArduinoOcpp::otime_t) time_now.tv_sec;
+    };
+
+    OCPP_initialize(ocppSocket, (float) DEFAULT_VOLTAGE, ArduinoOcpp::FilesystemOpt::Use, clockAdapter);
 
     this->evse = &evse;
+    this->lcd = &lcd;
+
+    lastBootTrial = millis() - 2 * bootWaitInterval;
 
     MicroTask.startTask(this);
 }
 
 void ArduinoOcppTask::setup() {
-/*    bootReadyCallback = MicroTasksCallback([evse = evse] () {
-        Serial.print("[BootReadyCallback] Listener. Ignore until run on real EVSE\n");
-//      bootNotification(evse->getFirmwareVersion(), "OpenEVSE", [](JsonObject payload) {
-//        Serial.print("[main] BootNotification successful!\n");
-//      });
-    });
+//    bootReadyCallback = MicroTasksCallback([evse = evse] () {
+//        Serial.print("[BootReadyCallback] Listener. Ignore until run on real EVSE\n");
+        //bootNotification(evse->getFirmwareVersion(), "OpenEVSE", [](JsonObject payload) {
+        //    Serial.print("[main] BootNotification successful!\n");
+        //});
+//    });
 
-    evse->onBootReady((MicroTasks::EventListener*) &bootReadyCallback);*/
+    //evse->onBootReady((MicroTasks::EventListener*) &bootReadyCallback);
 
-    bootNotification("Advanced Series", "OpenEVSE", [](JsonObject payload) { //alternative to listener approach above for development
+    bootNotification("Advanced Series", "OpenEVSE", [lcd = lcd](JsonObject payload) { //alternative to listener approach above for development
         Serial.print("[ArduinoOcppTask] BootNotification initiated manually. Remove when run on real EVSE\n");
+        lcd->display("OCPP connected", 0, 1, 5 * 1000, LCD_CLEAR_LINE);
     });
 
     setPowerActiveImportSampler([evse = evse]() {
@@ -65,18 +80,24 @@ void ArduinoOcppTask::setup() {
         return (bool) evse->isCharging();
     });
 
+    setConnectorEnergizedSampler([evse = evse] () {
+        return evse->isActive();
+    });
+
     onVehicleConnect = [this] () {
-        startTransaction([this] (JsonObject payload) {
-            this->updateEvseClaim();
-        });
+        if (getTransactionId() < 0) {
+            startTransaction([this] (JsonObject payload) {
+                this->updateEvseClaim();
+            });
+        }
+        this->updateEvseClaim();
     };
 
     onVehicleDisconnect = [this] () {
-        stopTransaction([this] (JsonObject payload) {
-            this->updateEvseClaim();
-        }, [this] () {
-            this->updateEvseClaim();
-        });
+        if (getTransactionId() >= 0) {
+            stopTransaction();
+        }
+        this->updateEvseClaim();
     };
 
     setOnRemoteStartTransactionSendConf([this] (JsonObject payload) {
@@ -87,8 +108,9 @@ void ArduinoOcppTask::setup() {
         }
 
         startTransaction([this] (JsonObject payload) {
-            this->updateEvseClaim();
+            this->updateEvseClaim(); //the transaction was either accepted or denied
         });
+        this->updateEvseClaim(); //after startTransaction(), the transaction is immedialetly set ActiveOffline
     });
 
     setOnRemoteStopTransactionSendConf([this](JsonObject payload) {
@@ -105,6 +127,8 @@ void ArduinoOcppTask::setup() {
         evseState = EvseState::Active;
         evseProperties.setState(evseState);
     };
+
+    inferClaimTransactionActiveOffline = inferClaimTransactionActive;
 
     inferClaimTransactionInactive = [] (EvseState& evseState, EvseProperties& evseProperties) {
         evseState = EvseState::Disabled;
@@ -135,7 +159,18 @@ unsigned long ArduinoOcppTask::loop(MicroTasks::WakeReason reason) {
     
     Serial.println("[ArduinoOcppTask] loop!");
 
-#if 0
+    //if (reason == MicroTasks::Event::)
+
+    //if (!bootInitiated) {
+    //    bootInitiated = true;
+    //    bootNotification("Advanced Series", "OpenEVSE", [](JsonObject payload) { //alternative to listener approach above for development
+    //        if (DEBUG_OUT) Serial.print("[ArduinoOcppTask] BootNotification initiated manually. Remove when run on real EVSE\n");
+    //    }, [] (JsonObject payload) {
+//
+//        });
+//    }
+
+#if 1
 
     String dbg_msg = String('\0');
     dbg_msg += "EVSE state. getEvseState: ";
@@ -221,14 +256,17 @@ void ArduinoOcppTask::updateEvseClaim() {
     
     int transactionId = getTransactionId(); //ID of OCPP-transaction. transactionId <= 0 means that no transaction runs on the EVSE at the moment
                                             //                        transactionId >  0 means that the EVSE is in a charging transaction right now
-                                            //                        transactionId == 0 is invalid
+                                            //                        transactionId == 0 means that the initiation is pending
 
     //EVSE is in an OCPP-transaction?
     if (transactionId < 0) {
         //no transaction running. Forbid charging
         inferClaimTransactionInactive(evseState, evseProperties);
+    } else if (transactionId == 0) {
+        //transaction initiated but neither accepted nor rejected
+        inferClaimTransactionActiveOffline(evseState, evseProperties);
     } else {
-        //transaction running or transactionId invalid. Allow charging
+        //transaction running. Allow charging
         inferClaimTransactionActive(evseState, evseProperties);
     }
 

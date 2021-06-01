@@ -7,11 +7,14 @@
 #define MONGOOSE_OCPP_SOCKET_CLIENT_H
 
 #include <MongooseCore.h>
+#define MG_F_IS_MongooseOcppSocketClient MG_F_USER_2
 
 #include <ArduinoOcpp/Core/OcppSocket.h>
 #include <ArduinoOcpp/Core/OcppServer.h> //for typedef ReceiveTXTcallback
 
 #define WS_UNRESPONSIVE_THRESHOLD_MS 4000
+
+extern boolean ocppConnected(); //for dashboard
 
 class MongooseOcppSocketClient : public ArduinoOcpp::OcppSocket {
 private:

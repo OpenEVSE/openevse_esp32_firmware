@@ -18,6 +18,8 @@
 #define EEPROM_SIZE     4096
 #define CHECKSUM_SEED    128
 
+bool ocppConnected();
+
 // Wifi Network Strings
 String esid;
 String epass;
@@ -46,6 +48,14 @@ String mqtt_solar;
 String mqtt_grid_ie;
 String mqtt_vrms;
 String mqtt_announce_topic;
+
+// OCPP 1.6 Settings
+String ocpp_server;
+uint32_t ocpp_port;
+String ocpp_protocol;
+String ocpp_chargeBoxId;
+String ocpp_idTag;
+String tx_start_point;
 
 // Time
 String time_zone;
@@ -111,6 +121,14 @@ ConfigOpt *opts[] =
   new ConfigOptDefenition<String>(mqtt_vrms, "emon/emonpi/vrms", "mqtt_vrms", "mv"),
   new ConfigOptDefenition<String>(mqtt_announce_topic, "openevse/announce/"+ESPAL.getShortId(), "mqtt_announce_topic", "ma"),
 
+// OCPP 1.6 Settings
+  new ConfigOptDefenition<String>(ocpp_server, "", "ocpp_server", "ows"),
+  new ConfigOptDefenition<uint32_t>(ocpp_port, 8080, "ocpp_port", "owpt"),
+  new ConfigOptDefenition<String>(ocpp_protocol, "ws", "ocpp_protocol", "opr"),
+  new ConfigOptDefenition<String>(ocpp_chargeBoxId, "", "ocpp_chargeBoxId", "cid"),
+  new ConfigOptDefenition<String>(ocpp_idTag, "", "ocpp_idTag", "idt"),
+  new ConfigOptDefenition<String>(tx_start_point, "tx_pending", "tx_start_point", "otx"),
+
 // Ohm Connect Settings
   new ConfigOptDefenition<String>(ohm, "", "ohm", "o"),
 
@@ -142,6 +160,9 @@ ConfigOpt *opts[] =
   new ConfigOptVirtualBool(flagsOpt,CONFIG_SERVICE_TESLA,CONFIG_SERVICE_TESLA, "tesla_enabled", "te"),
   new ConfigOptVirtualBool(flagsOpt, CONFIG_SERVICE_DIVERT, CONFIG_SERVICE_DIVERT, "divert_enabled", "de"),
   new ConfigOptVirtualBool(flagsOpt, CONFIG_PAUSE_USES_DISABLED, CONFIG_PAUSE_USES_DISABLED, "pause_uses_disabled", "pd"),
+  new ConfigOptVirtualBool(flagsOpt, CONFIG_SERVICE_OCPP, CONFIG_SERVICE_OCPP, "ocpp_enabled", "ope"),
+  new ConfigOptVirtualBool(flagsOpt, CONFIG_OCPP_ACCESS_SUSPEND, CONFIG_OCPP_ACCESS_SUSPEND, "ocpp_access_can_suspend", "ops"),
+  new ConfigOptVirtualBool(flagsOpt, CONFIG_OCPP_ACCESS_ENERGIZE, CONFIG_OCPP_ACCESS_ENERGIZE, "ocpp_access_can_energize", "opn"),
   new ConfigOptVirtualMqttProtocol(flagsOpt, "mqtt_protocol", "mprt"),
   new ConfigOptVirtualChargeMode(flagsOpt, "charge_mode", "chmd")
 };

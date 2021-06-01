@@ -13,6 +13,11 @@
 
 #define MG_WEBSOCKET_PING_INTERVAL_MS (MG_WEBSOCKET_PING_INTERVAL_SECONDS * 1000)
 
+bool ocppIsConnected = false;
+bool ocppConnected() {
+    return ocppIsConnected;
+}
+
 MongooseOcppSocketClient::MongooseOcppSocketClient(String &ws_url) {
     this->ws_url = String(ws_url);
     
@@ -30,7 +35,13 @@ MongooseOcppSocketClient::~MongooseOcppSocketClient() {
 
 void MongooseOcppSocketClient::mg_event_callback(struct mg_connection *nc, int ev, void *ev_data, void *user_data) {
 
-    MongooseOcppSocketClient *instance = static_cast<MongooseOcppSocketClient*>(user_data);
+    MongooseOcppSocketClient *instance = NULL;
+    
+    if (nc->flags & MG_F_IS_WEBSOCKET && nc->flags & MG_F_IS_MongooseOcppSocketClient) {
+        instance = static_cast<MongooseOcppSocketClient*>(user_data);
+    } else {
+        return;
+    }
 
     if (DEBUG_OUT && ev != 0) {
         Serial.print(F("[MongooseOcppSocketClient] Opcode: "));
@@ -62,6 +73,7 @@ void MongooseOcppSocketClient::mg_event_callback(struct mg_connection *nc, int e
             if (hm->resp_code == 101) {
                 if (DEBUG_OUT) Serial.print(F(" -- Connected\n"));
                 instance->connection_established = true;
+                ocppIsConnected = instance->connection_established; //need it static for Wi-Fi dashboard
             } else {
                 if (DEBUG_OUT) Serial.print(F(" -- Connection failed! HTTP code "));
                 if (DEBUG_OUT) Serial.println(hm->resp_code);
@@ -90,6 +102,7 @@ void MongooseOcppSocketClient::mg_event_callback(struct mg_connection *nc, int e
         }
         case MG_EV_CLOSE: {
             instance->connection_established = false;
+            ocppIsConnected = instance->connection_established; //need it static for Wi-Fi dashboard
             instance->nc = NULL; //resources will be free'd by Mongoose
             if (DEBUG_OUT) {
                 Serial.print(F("[MongooseOcppSocketClient] Connection to "));
@@ -148,6 +161,8 @@ void MongooseOcppSocketClient::maintainWsConn() {
         Serial.print(F("[MongooseOcppSocketClient] Failed to connect to URL: "));
         Serial.println(this->ws_url);
     }
+
+    nc->flags |= MG_F_IS_MongooseOcppSocketClient;
 
     last_reconnection_attempt = millis();
 }
