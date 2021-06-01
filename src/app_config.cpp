@@ -18,8 +18,6 @@
 #define EEPROM_SIZE     4096
 #define CHECKSUM_SEED    128
 
-bool ocppConnected();
-
 // Wifi Network Strings
 String esid;
 String epass;
@@ -51,8 +49,6 @@ String mqtt_announce_topic;
 
 // OCPP 1.6 Settings
 String ocpp_server;
-uint32_t ocpp_port;
-String ocpp_protocol;
 String ocpp_chargeBoxId;
 String ocpp_idTag;
 String tx_start_point;
@@ -123,8 +119,6 @@ ConfigOpt *opts[] =
 
 // OCPP 1.6 Settings
   new ConfigOptDefenition<String>(ocpp_server, "", "ocpp_server", "ows"),
-  new ConfigOptDefenition<uint32_t>(ocpp_port, 8080, "ocpp_port", "owpt"),
-  new ConfigOptDefenition<String>(ocpp_protocol, "ws", "ocpp_protocol", "opr"),
   new ConfigOptDefenition<String>(ocpp_chargeBoxId, "", "ocpp_chargeBoxId", "cid"),
   new ConfigOptDefenition<String>(ocpp_idTag, "", "ocpp_idTag", "idt"),
   new ConfigOptDefenition<String>(tx_start_point, "tx_pending", "tx_start_point", "otx"),
@@ -313,6 +307,28 @@ config_save_mqtt(bool enable, int protocol, String server, uint16_t port, String
   config.set("flags", newflags);
   config.commit();
 }
+
+void
+config_save_ocpp(bool enable, String server, String ocpp_chargeBoxId, String ocpp_idTag, String tx_start_point, bool ocpp_suspend_evse, bool ocpp_energize_plug) {
+  uint32_t newflags = flags & ~(CONFIG_SERVICE_OCPP | CONFIG_OCPP_ACCESS_SUSPEND | CONFIG_OCPP_ACCESS_ENERGIZE);
+  if(enable) {
+    newflags |= CONFIG_SERVICE_OCPP;
+  }
+  if(ocpp_suspend_evse) {
+    newflags |= CONFIG_OCPP_ACCESS_SUSPEND;
+  }
+  if(ocpp_energize_plug) {
+    newflags |= CONFIG_OCPP_ACCESS_ENERGIZE;
+  }
+
+  config.set("ocpp_server", server);
+  config.set("ocpp_chargeBoxId", ocpp_chargeBoxId);
+  config.set("ocpp_idTag", ocpp_idTag);
+  config.set("tx_start_point", tx_start_point);
+  config.set("flags", newflags);
+  config.commit();
+}
+
 
 void
 config_save_admin(String user, String pass) {

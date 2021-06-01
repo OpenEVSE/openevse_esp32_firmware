@@ -135,7 +135,7 @@ void setup()
 
   // begin ArduinoOcpp
   //ocpp.begin("wss://steve", 80, "wss://echo.websocket.org/", evse);
-  ocpp.begin("steve.extall.de", 8080, "ws://steve.extall.de:8080/steve/websocket/CentralSystemService/openevse-001", evse, lcd);
+  ocpp.begin(evse, lcd);
   // end ArduinoOcpp
 
   lcd.display(F("OpenEVSE WiFI"), 0, 0, 0, LCD_CLEAR_LINE);
@@ -228,7 +228,7 @@ loop() {
     }
 
     //begin ArduinoOcpp
-    OCPP_loop();
+    ocpp.OcppLibrary_loop();
     //end ArduinoOcpp
 
   } // end WiFi connected

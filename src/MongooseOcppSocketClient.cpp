@@ -18,6 +18,12 @@ bool ocppConnected() {
     return ocppIsConnected;
 }
 
+int checkUrl(const char *url) {
+    unsigned int port_i = 0;
+    struct mg_str scheme, query, fragment;
+    return mg_parse_uri(mg_mk_str(url), &scheme, NULL, NULL, &port_i, NULL, &query, &fragment); //returns 0 on success, false otherwise
+}
+
 MongooseOcppSocketClient::MongooseOcppSocketClient(String &ws_url) {
     this->ws_url = String(ws_url);
     
@@ -27,6 +33,8 @@ MongooseOcppSocketClient::~MongooseOcppSocketClient() {
     if (DEBUG_OUT) Serial.print(F("[MongooseOcppSocketClient] Close and destroy connection to "));
     if (DEBUG_OUT) Serial.println(this->ws_url);
     if (nc) {
+        connection_established = false;
+        ocppIsConnected = connection_established; //need it static for Wi-Fi dashboard
         const char *msg = "socket closed by client";
         mg_send_websocket_frame(nc, WEBSOCKET_OP_CLOSE, msg, strlen(msg));
         nc = NULL;
@@ -141,6 +149,10 @@ void MongooseOcppSocketClient::maintainWsConn() {
         return;
     }
 
+    if (ws_url.isEmpty()) {
+        return;
+    }
+
     const ulong RECONNECT_AFTER = 5000; //in ms
     if (millis() - last_reconnection_attempt < RECONNECT_AFTER) {
         return;
@@ -165,6 +177,18 @@ void MongooseOcppSocketClient::maintainWsConn() {
     nc->flags |= MG_F_IS_MongooseOcppSocketClient;
 
     last_reconnection_attempt = millis();
+}
+
+void MongooseOcppSocketClient::reconnect(String &ws_url) {
+    this->ws_url = String(ws_url);
+
+    connection_established = false;
+    ocppIsConnected = connection_established; //need it static for Wi-Fi dashboard
+    const char *msg = "socket closed by client";
+    mg_send_websocket_frame(nc, WEBSOCKET_OP_CLOSE, msg, strlen(msg));
+    nc = NULL;
+
+    maintainWsConn();
 }
 
 bool MongooseOcppSocketClient::sendTXT(String &out) {
@@ -195,6 +219,7 @@ bool MongooseOcppSocketClient::sendTXT(String &out) {
 bool MongooseOcppSocketClient::receiveTXT(const char* msg, size_t len) {
     return receiveTXTcallback(msg, len);
 }
+
 
 void MongooseOcppSocketClient::printUrl() {
     Serial.print(ws_url);

@@ -15,6 +15,7 @@
 #define WS_UNRESPONSIVE_THRESHOLD_MS 4000
 
 extern boolean ocppConnected(); //for dashboard
+int checkUrl(const char *url);
 
 class MongooseOcppSocketClient : public ArduinoOcpp::OcppSocket {
 private:
@@ -54,6 +55,8 @@ public:
     }; //ReceiveTXTcallback is defined in OcppServer.h
 
     static void mg_event_callback(struct mg_connection *nc, int ev, void *ev_data, void *user_data);
+
+    void reconnect(String &ws_url);
 };
 
 #endif

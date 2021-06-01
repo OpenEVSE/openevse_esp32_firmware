@@ -27,6 +27,7 @@ typedef const __FlashStringHelper *fstr_t;
 #include "app_config.h"
 #include "net_manager.h"
 #include "mqtt.h"
+#include "ocpp.h"
 #include "MongooseOcppSocketClient.h"
 #include "input.h"
 #include "emoncms.h"
@@ -371,48 +372,40 @@ handleSaveOcpp(MongooseHttpServerRequest *request) {
     return;
   }
 
-  String pass = request->getParam("pass");
+  String url = request->getParam("ocpp_server");
 
-  int protocol = MQTT_PROTOCOL_MQTT;
-  char proto[6];
-  if(request->getParam("protocol", proto, sizeof(proto)) > 0) {
-    // Cheap and chearful check, obviously not checking for invalid input
-    protocol = 's' == proto[4] ? MQTT_PROTOCOL_MQTT_SSL : MQTT_PROTOCOL_MQTT;
+  if (checkUrl(url.c_str())) {
+    response->setCode(400);
+    response->print("invalid URL");
+    request->send(response);
+    return;
   }
 
-  int port = 1883;
-  char portStr[8];
-  if(request->getParam("port", portStr, sizeof(portStr)) > 0) {
-    port = atoi(portStr);
-  }
+//  String enabledStr = request->getParam("ocpp_enabled");
+//  enabledStr.trim();
+//  enabledStr.toLowerCase();
+//  bool ocppEnabled = false;
+//  ocppEnabled |= !strcmp(enabledStr.c_str(), "true");
+//  ocppEnabled |= enabledStr.charAt(0) > '0' && enabledStr.charAt(0) <= '9';
 
-  char unauthString[8];
-  int unauthFound = request->getParam("reject_unauthorized", unauthString, sizeof(unauthString));
-  bool reject_unauthorized = unauthFound < 0 || 0 == unauthFound || isPositive(String(unauthString));
-
-  config_save_mqtt(isPositive(request->getParam("enable")),
-                   protocol,
-                   request->getParam("server"),
-                   port,
-                   request->getParam("topic"),
-                   request->getParam("user"),
-                   pass,
-                   request->getParam("solar"),
-                   request->getParam("grid_ie"),
-                   reject_unauthorized);
+  config_save_ocpp(isPositive(request->getParam("ocpp_enabled")),
+                   url, 
+                   request->getParam("ocpp_chargeBoxId"), 
+                   request->getParam("ocpp_idTag"), 
+                   request->getParam("tx_start_point"), 
+                   isPositive(request->getParam("ocpp_suspend_evse")),
+                   isPositive(request->getParam("ocpp_energize_plug")));
 
   char tmpStr[200];
-  snprintf(tmpStr, sizeof(tmpStr), "Saved: %s %s %s %s %s %s", mqtt_server.c_str(),
-          mqtt_topic.c_str(), mqtt_user.c_str(), mqtt_pass.c_str(),
-          mqtt_solar.c_str(), mqtt_grid_ie.c_str());
+  snprintf(tmpStr, sizeof(tmpStr), "Saved: %s %s %s",
+          ocpp_server.c_str(), ocpp_chargeBoxId.c_str(), ocpp_idTag.c_str());
   DBUGLN(tmpStr);
 
   response->setCode(200);
   response->print(tmpStr);
   request->send(response);
 
-  // If connected disconnect MQTT to trigger re-connect with new details
-  mqtt_restart();
+  ArduinoOcppTask::notifyReconfigured();
 }
 
 // -------------------------------------------------------------------
@@ -705,10 +698,6 @@ handleConfigGet(MongooseHttpServerRequest *request, MongooseHttpServerResponseSt
   JsonArray mqtt_supported_protocols = doc.createNestedArray("mqtt_supported_protocols");
   mqtt_supported_protocols.add("mqtt");
   mqtt_supported_protocols.add("mqtts");
-
-  JsonArray ocpp_supported_protocols = doc.createNestedArray("ocpp_supported_protocols");
-  ocpp_supported_protocols.add("ws");
-  ocpp_supported_protocols.add("wss");
 
   JsonArray http_supported_protocols = doc.createNestedArray("http_supported_protocols");
   http_supported_protocols.add("http");

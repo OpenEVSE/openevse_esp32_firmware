@@ -13,6 +13,10 @@
 
 #include "MongooseOcppSocketClient.h"
 
+enum class TransactionStartPoint {tx_pending, tx_accepted, tx_only_remote};
+
+bool readTxStartPoint(const char *input, TransactionStartPoint &out);
+
 
 class MicroTasksCallback : public MicroTasks::Task {
 private:
@@ -35,15 +39,9 @@ public:
 
 class ArduinoOcppTask: public MicroTasks::Task {
 private:
-    ArduinoOcpp::OcppSocket *ocppSocket = NULL;
+    MongooseOcppSocketClient *ocppSocket = NULL;
     EvseManager *evse;
     LcdTask *lcd;
-
-    //MicroTasksCallback bootReadyCallback; //called whenever OpenEVSE runs its boot procedure
-
-    bool bootInitiated, booted = false;
-    ulong lastBootTrial;
-    ulong bootWaitInterval = 5 * 60 * 1000;
 
     /*
      * OCPP state
@@ -67,8 +65,18 @@ private:
     std::function<void(EvseState&, EvseProperties&)> inferClaimTransactionInactive = [] (EvseState&, EvseProperties&) {};      //No transaction
     std::function<void(EvseState&, EvseProperties&, float charging_limit)> inferClaimSmartCharging = [] (EvseState&, EvseProperties&, float) {};
     
+    void loadOcppLibrary();
+    bool ocppLibraryLoaded = false;
+    void loadEvseBehavior();
+
+    String getCentralSystemUrl();
+
+    static ArduinoOcppTask *instance;
+
     //helper functions
     static bool operationIsAccepted(JsonObject payload);
+    static bool idTagIsAccepted(JsonObject payload);
+    static bool idTagIsRejected(JsonObject payload);
 protected:
 
     //hook method of Task
@@ -79,21 +87,17 @@ protected:
 
 public:
     ArduinoOcppTask();
-    ~ArduinoOcppTask() {
-        if (ocppSocket != NULL) delete ocppSocket;
-    }
+    ~ArduinoOcppTask();
 
-    void begin(String CS_hostname, uint16_t CS_port, String CS_url, EvseManager &evse, LcdTask &lcd);
+    void begin(EvseManager &evse, LcdTask &lcd);
+
+    void OcppLibrary_loop();
     
     void updateEvseClaim();
 
-    void setOnVehicleConnected(std::function<void()> onVehicleConnect) {
-        this->onVehicleConnect = onVehicleConnect;
-    }
+    static void notifyReconfigured();
+    void reconfigure();
 
-    void setOnVehicleDisconnect (std::function<void()> onVehicleDisconnect) {
-        this->onVehicleDisconnect = onVehicleDisconnect;
-    }
 };
 
 #endif

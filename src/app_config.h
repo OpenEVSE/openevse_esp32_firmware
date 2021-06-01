@@ -44,8 +44,6 @@ extern String mqtt_announce_topic;
 
 // OCPP 1.6 Settings
 extern String ocpp_server;
-extern uint32_t ocpp_port;
-extern String ocpp_protocol;
 extern String ocpp_chargeBoxId;
 extern String ocpp_idTag;
 extern String tx_start_point;
@@ -100,6 +98,18 @@ inline bool config_mqtt_reject_unauthorized() {
   return 0 == (flags & CONFIG_MQTT_ALLOW_ANY_CERT);
 }
 
+inline bool config_ocpp_enabled() {
+  return CONFIG_SERVICE_OCPP == (flags & CONFIG_SERVICE_OCPP);
+}
+
+inline bool config_ocpp_access_can_suspend() {
+  return CONFIG_OCPP_ACCESS_SUSPEND == (flags & CONFIG_OCPP_ACCESS_SUSPEND);
+}
+
+inline bool config_ocpp_access_can_energize() {
+  return CONFIG_OCPP_ACCESS_ENERGIZE == (flags & CONFIG_OCPP_ACCESS_ENERGIZE);
+}
+
 inline bool config_tesla_enabled() {
   return CONFIG_SERVICE_TESLA == (flags & CONFIG_SERVICE_TESLA);
 }
@@ -134,6 +144,11 @@ extern void config_save_emoncms(bool enable, String server, String node, String 
 // Save the MQTT broker details
 // -------------------------------------------------------------------
 extern void config_save_mqtt(bool enable, int protocol, String server, uint16_t port, String topic, String user, String pass, String solar, String grid_ie, bool reject_unauthorized);
+
+// -------------------------------------------------------------------
+// Save the OCPP connection details
+// -------------------------------------------------------------------
+extern void config_save_ocpp(bool enable, String server, String ocpp_chargeBoxId, String ocpp_idTag, String tx_start_point, bool ocpp_suspend_evse, bool ocpp_energize_plug);
 
 // -------------------------------------------------------------------
 // Save the admin/web interface details
