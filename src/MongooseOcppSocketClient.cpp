@@ -104,7 +104,7 @@ void MongooseOcppSocketClient::mg_event_callback(struct mg_connection *nc, int e
             }
 
             if (!instance->receiveTXT((const char *) wm->data, wm->size)) { //forward message to OcppEngine
-                Serial.print(F("[MongooseOcppSocketClient] Processing WebSocket input event failed!\n"));
+                if (DEBUG_OUT) Serial.print(F("[MongooseOcppSocketClient] Processing WebSocket input event failed!\n"));
             }
             break;
         }
@@ -134,10 +134,10 @@ void MongooseOcppSocketClient::maintainWsConn() {
 
         //WS successfully connected?
         if (!connection_established) {
-            Serial.print(F("[MongooseOcppSocketClient] WS unconnected\n"));
+            if (DEBUG_OUT) Serial.print(F("[MongooseOcppSocketClient] WS unconnected\n"));
         } else if (millis() - last_recv >= MG_WEBSOCKET_PING_INTERVAL_MS + WS_UNRESPONSIVE_THRESHOLD_MS) {
             //WS connected but unresponsive
-            Serial.print(F("[MongooseOcppSocketClient] WS unresponsive\n"));
+            if (DEBUG_OUT) Serial.print(F("[MongooseOcppSocketClient] WS unresponsive\n"));
         }
     }
 
@@ -170,8 +170,8 @@ void MongooseOcppSocketClient::maintainWsConn() {
     nc = mg_connect_ws_opt(Mongoose.getMgr(), mg_event_callback, this, opts, this->ws_url.c_str(), "ocpp1.6", NULL);
 
     if (!nc) {
-        Serial.print(F("[MongooseOcppSocketClient] Failed to connect to URL: "));
-        Serial.println(this->ws_url);
+        if (DEBUG_OUT) Serial.print(F("[MongooseOcppSocketClient] Failed to connect to URL: "));
+        if (DEBUG_OUT) Serial.println(this->ws_url);
     }
 
     nc->flags |= MG_F_IS_MongooseOcppSocketClient;
@@ -184,9 +184,11 @@ void MongooseOcppSocketClient::reconnect(String &ws_url) {
 
     connection_established = false;
     ocppIsConnected = connection_established; //need it static for Wi-Fi dashboard
-    const char *msg = "socket closed by client";
-    mg_send_websocket_frame(nc, WEBSOCKET_OP_CLOSE, msg, strlen(msg));
-    nc = NULL;
+    if (nc) {
+        const char *msg = "socket closed by client";
+        mg_send_websocket_frame(nc, WEBSOCKET_OP_CLOSE, msg, strlen(msg));
+        nc = NULL;
+    }
 
     maintainWsConn();
 }

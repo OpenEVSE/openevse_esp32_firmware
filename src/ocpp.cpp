@@ -18,24 +18,11 @@
 
 #define LCD_DISPLAY(X) if (lcd) lcd->display((X), 0, 1, 5 * 1000, LCD_CLEAR_LINE);
 
-bool readTxStartPoint(const char *input, TransactionStartPoint &out) {
-    if (!strcmp(input, "tx_pending")) {
-        out = TransactionStartPoint::tx_pending;
-        return true;
-    } else if (!strcmp(input, "tx_accepted")) {
-        out = TransactionStartPoint::tx_accepted;
-        return true;
-    } else if (!strcmp(input, "tx_only_remote")) {
-        out = TransactionStartPoint::tx_only_remote;
-        return true;
-    }
-    return false;
-}
 
 ArduinoOcppTask *ArduinoOcppTask::instance = NULL;
 
 ArduinoOcppTask::ArduinoOcppTask() : MicroTasks::Task() /*, bootReadyCallback(MicroTasksCallback([](){})) */ {
-    instance = this;
+    
 }
 
 ArduinoOcppTask::~ArduinoOcppTask() {
@@ -52,6 +39,7 @@ void ArduinoOcppTask::begin(EvseManager &evse, LcdTask &lcd) {
     loadOcppLibrary();
     loadEvseBehavior();
 
+    instance = this; //cannot be in constructer because object is invalid before .begin()
     MicroTask.startTask(this);
 }
 
@@ -76,7 +64,7 @@ void ArduinoOcppTask::loadOcppLibrary() {
         OCPP_initialize(ocppSocket, (float) DEFAULT_VOLTAGE, ArduinoOcpp::FilesystemOpt::Use, clockAdapter);
 
         bootNotification("Advanced Series", "OpenEVSE", [lcd = lcd](JsonObject payload) {
-            LCD_DISPLAY("OCPP connected");
+            LCD_DISPLAY("OCPP connected!");
         });
 
         ocppLibraryLoaded = true;
@@ -246,41 +234,9 @@ unsigned long ArduinoOcppTask::loop(MicroTasks::WakeReason reason) {
     if (!ocppLibraryLoaded) {
         loadOcppLibrary();
         loadEvseBehavior();
-        return 1;
+
+        return 50;
     }
-
-    //if (reason == MicroTasks::Event::)
-
-    //if (!bootInitiated) {
-    //    bootInitiated = true;
-    //    bootNotification("Advanced Series", "OpenEVSE", [](JsonObject payload) { //alternative to listener approach above for development
-    //        if (DEBUG_OUT) Serial.print("[ArduinoOcppTask] BootNotification initiated manually. Remove when run on real EVSE\n");
-    //    }, [] (JsonObject payload) {
-//
-//        });
-//    }
-
-#if 0
-
-    String dbg_msg = String('\0');
-    dbg_msg += "EVSE state. getEvseState: ";
-    dbg_msg += String(evse->getEvseState(), DEC);
-    dbg_msg += ", isVehicleConnected: ";
-    dbg_msg += evse->isVehicleConnected();
-    dbg_msg += ", isCharging: ";
-    dbg_msg += evse->isCharging();
-    dbg_msg += ", isConnected: ";
-    dbg_msg += evse->isConnected();
-    dbg_msg += ", getState: ";
-    dbg_msg += evse->getState();
-    dbg_msg += ", getPilotState: ";
-    dbg_msg += String(evse->getPilotState(), DEC);
-    dbg_msg += " end";
-
-    ArduinoOcpp::OcppOperation *debug_msg = ArduinoOcpp::makeOcppOperation(new ArduinoOcpp::Ocpp16::DataTransfer(dbg_msg));
-    debug_msg->setTimeout(new ArduinoOcpp::FixedTimeout(10000));
-    ArduinoOcpp::initiateOcppOperation(debug_msg);
-#endif
 
     if (evse->isVehicleConnected() && !vehicleConnected) {
         vehicleConnected = evse->isVehicleConnected();
@@ -298,8 +254,7 @@ unsigned long ArduinoOcppTask::loop(MicroTasks::WakeReason reason) {
         onVehicleDisconnect();
     }
 
-    //return 1;
-    return 1; //increase for debugging
+    return 50;
 }
 
 void ArduinoOcppTask::OcppLibrary_loop() {
@@ -405,7 +360,8 @@ void ArduinoOcppTask::notifyReconfigured() {
 void ArduinoOcppTask::reconfigure() {
     if (ocppLibraryLoaded) {
         if (config_ocpp_enabled()) {
-            ocppSocket->reconnect(ocpp_server);
+            String mUrl = getCentralSystemUrl();
+            ocppSocket->reconnect(mUrl);
         } else {
             String emptyUrl = String("");
             ocppSocket->reconnect(emptyUrl);

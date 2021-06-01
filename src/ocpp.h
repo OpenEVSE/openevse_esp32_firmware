@@ -13,30 +13,6 @@
 
 #include "MongooseOcppSocketClient.h"
 
-enum class TransactionStartPoint {tx_pending, tx_accepted, tx_only_remote};
-
-bool readTxStartPoint(const char *input, TransactionStartPoint &out);
-
-
-class MicroTasksCallback : public MicroTasks::Task {
-private:
-    std::function<void()> callback;
-public:
-    MicroTasksCallback(std::function<void()> callback) {
-        this->callback = callback;
-        MicroTask.startTask(this);
-    }
-
-    void setup(){ }
-
-    unsigned long loop(MicroTasks::WakeReason reason) {
-        Serial.print(F("[MicroTasksCallback] Execute MicroTasksCallback\n"));
-        if (reason == WakeReason_Event)
-            callback();
-        return MicroTask.WaitForEvent;
-    }
-};
-
 class ArduinoOcppTask: public MicroTasks::Task {
 private:
     MongooseOcppSocketClient *ocppSocket = NULL;

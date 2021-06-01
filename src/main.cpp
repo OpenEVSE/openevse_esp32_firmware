@@ -77,9 +77,7 @@ static uint32_t last_mem = 0;
 #define ESCAPEQUOTE(A) TEXTIFY(A)
 String currentfirmware = ESCAPEQUOTE(BUILD_TAG);
 
-// begin ArduinoOcpp
 ArduinoOcppTask ocpp = ArduinoOcppTask();
-// end ArduinoOcpp
 
 static void hardware_setup();
 
@@ -133,10 +131,7 @@ void setup()
 
   input_setup();
 
-  // begin ArduinoOcpp
-  //ocpp.begin("wss://steve", 80, "wss://echo.websocket.org/", evse);
   ocpp.begin(evse, lcd);
-  // end ArduinoOcpp
 
   lcd.display(F("OpenEVSE WiFI"), 0, 0, 0, LCD_CLEAR_LINE);
   lcd.display(currentfirmware, 0, 1, 5 * 1000, LCD_CLEAR_LINE);
@@ -227,9 +222,7 @@ loop() {
       emoncms_updated = false;
     }
 
-    //begin ArduinoOcpp
     ocpp.OcppLibrary_loop();
-    //end ArduinoOcpp
 
   } // end WiFi connected
 
