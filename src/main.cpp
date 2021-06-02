@@ -220,7 +220,7 @@ loop() {
       emoncms_updated = false;
     }
 
-    ocpp.OcppLibrary_loop();
+    ocpp.poll();
   } // end WiFi connected
 
   Profile_End(loop, 10);

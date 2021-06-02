@@ -41,8 +41,8 @@ private:
     std::function<void(EvseState&, EvseProperties&)> inferClaimTransactionInactive = [] (EvseState&, EvseProperties&) {};      //No transaction
     std::function<void(EvseState&, EvseProperties&, float charging_limit)> inferClaimSmartCharging = [] (EvseState&, EvseProperties&, float) {};
     
-    void loadOcppLibrary();
-    bool ocppLibraryLoaded = false;
+    void initializeArduinoOcpp();
+    bool arduinoOcppInitialized = false;
     void loadEvseBehavior();
 
     String getCentralSystemUrl();
@@ -55,10 +55,10 @@ private:
     static bool idTagIsRejected(JsonObject payload);
 protected:
 
-    //hook method of Task
+    //hook method of MicroTask::Task
     void setup();
 
-    //hook method of Task
+    //hook method of MicroTask::Task
     unsigned long loop(MicroTasks::WakeReason reason);
 
 public:
@@ -67,11 +67,11 @@ public:
 
     void begin(EvseManager &evse, LcdTask &lcd);
 
-    void OcppLibrary_loop();
+    void poll();
     
     void updateEvseClaim();
 
-    static void notifyReconfigured();
+    static void notifyConfigChanged();
     void reconfigure();
 
 };

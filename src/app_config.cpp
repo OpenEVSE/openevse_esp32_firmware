@@ -207,11 +207,11 @@ void config_changed(String name)
     if(emoncms_connected != config_emoncms_enabled()) {
       emoncms_updated = true;
     }
-    ArduinoOcppTask::notifyReconfigured();
+    ArduinoOcppTask::notifyConfigChanged();
   } else if(name.startsWith("mqtt_")) {
     mqtt_restart();
   } else if(name.startsWith("ocpp_") || name.startsWith("tx_start_point")) {
-    ArduinoOcppTask::notifyReconfigured();
+    ArduinoOcppTask::notifyConfigChanged();
   } else if(name.startsWith("emoncms_")) {
     emoncms_updated = true;
   } else if(name == "divert_enabled" || name == "charge_mode") {

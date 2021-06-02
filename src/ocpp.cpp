@@ -5,14 +5,12 @@
 
 #include "ocpp.h"
 
-#include "debug.h"
 #include "app_config.h"
 
 #include <ArduinoOcpp.h> // Facade for ArduinoOcpp
 #include <ArduinoOcpp/SimpleOcppOperationFactory.h> // define behavior for incoming req messages
 
-#include <ArduinoOcpp/Core/OcppEngine.h> //only for outputting debug messages to SteVe
-#include <ArduinoOcpp/MessagesV16/DataTransfer.h> //only for outputting debug messages to SteVe
+#include <ArduinoOcpp/Core/OcppEngine.h>
 
 #include "emonesp.h" //for DEFAULT_VOLTAGE
 
@@ -31,21 +29,20 @@ ArduinoOcppTask::~ArduinoOcppTask() {
 }
 
 void ArduinoOcppTask::begin(EvseManager &evse, LcdTask &lcd) {
-    Serial.println("[ArduinoOcppTask] begin!");
     
     this->evse = &evse;
     this->lcd = &lcd;
 
-    loadOcppLibrary();
+    initializeArduinoOcpp();
     loadEvseBehavior();
 
     instance = this; //cannot be in constructer because object is invalid before .begin()
     MicroTask.startTask(this);
 }
 
-void ArduinoOcppTask::loadOcppLibrary() {
+void ArduinoOcppTask::initializeArduinoOcpp() {
 
-    if (config_ocpp_enabled() && !ocppLibraryLoaded) {
+    if (config_ocpp_enabled() && !arduinoOcppInitialized) {
 
         String url = getCentralSystemUrl();
 
@@ -67,7 +64,7 @@ void ArduinoOcppTask::loadOcppLibrary() {
             LCD_DISPLAY("OCPP connected!");
         });
 
-        ocppLibraryLoaded = true;
+        arduinoOcppInitialized = true;
     }
 }
 
@@ -77,7 +74,7 @@ void ArduinoOcppTask::setup() {
 
 void ArduinoOcppTask::loadEvseBehavior() {
 
-    if (!ocppLibraryLoaded) {
+    if (!arduinoOcppInitialized) {
         return;
     }
 
@@ -109,18 +106,6 @@ void ArduinoOcppTask::loadEvseBehavior() {
     /*
      * CP behavior definition: How will plugging and unplugging the EV start or stop OCPP transactions
      */
-
-    if (!config_ocpp_enabled()) {
-        //ocpp off
-        onVehicleConnect = [] () {};
-        onVehicleDisconnect = [] () {};
-        inferClaimTransactionActive = [] (EvseState& evseState, EvseProperties& evseProperties) {};
-        inferClaimTransactionActiveOffline = [] (EvseState& evseState, EvseProperties& evseProperties) {};
-        inferClaimTransactionInactive = [] (EvseState& evseState, EvseProperties& evseProperties) {};
-        inferClaimSmartCharging = [evse = evse] (EvseState& evseState, EvseProperties& evseProperties, float charging_limit) {};
-        updateEvseClaim();
-        return;
-    }
 
     onVehicleConnect = [this] () {
         if (getTransactionId() < 0) {
@@ -157,7 +142,7 @@ void ArduinoOcppTask::loadEvseBehavior() {
 
     setOnRemoteStartTransactionSendConf([this, onVehicleConnect = onVehicleConnect] (JsonObject payload) {
         if (!operationIsAccepted(payload)){
-            if (DEBUG_OUT) Serial.print(F("RemoteStartTransaction rejected! Do nothing\n"));
+            //RemoteStartTransaction rejected! Do nothing
             return;
         }
 
@@ -177,7 +162,7 @@ void ArduinoOcppTask::loadEvseBehavior() {
 
     setOnRemoteStopTransactionSendConf([this](JsonObject payload) {
         if (!operationIsAccepted(payload)){
-            if (DEBUG_OUT) Serial.print(F("RemoteStopTransaction rejected! There is no transaction with given ID. Do nothing\n"));
+            //RemoteStopTransaction rejected! There is no transaction with given ID. Do nothing
             return;
         }
 
@@ -194,8 +179,8 @@ unsigned long ArduinoOcppTask::loop(MicroTasks::WakeReason reason) {
         return 5000;
     }
 
-    if (!ocppLibraryLoaded) {
-        loadOcppLibrary();
+    if (!arduinoOcppInitialized) {
+        initializeArduinoOcpp();
         loadEvseBehavior();
 
         return 50;
@@ -219,8 +204,8 @@ unsigned long ArduinoOcppTask::loop(MicroTasks::WakeReason reason) {
     return 50;
 }
 
-void ArduinoOcppTask::OcppLibrary_loop() {
-    if (ocppLibraryLoaded) {
+void ArduinoOcppTask::poll() {
+    if (arduinoOcppInitialized) {
         if (config_ocpp_enabled()) {
             OCPP_loop();
         } else {
@@ -306,14 +291,14 @@ String ArduinoOcppTask::getCentralSystemUrl() {
     return url;
 }
 
-void ArduinoOcppTask::notifyReconfigured() {
+void ArduinoOcppTask::notifyConfigChanged() {
     if (instance) {
         instance->reconfigure();
     }
 }
 
 void ArduinoOcppTask::reconfigure() {
-    if (ocppLibraryLoaded) {
+    if (arduinoOcppInitialized) {
         if (config_ocpp_enabled()) {
             String mUrl = getCentralSystemUrl();
             ocppSocket->reconnect(mUrl);
@@ -322,7 +307,7 @@ void ArduinoOcppTask::reconfigure() {
             ocppSocket->reconnect(emptyUrl);
         }
     } else {
-        loadOcppLibrary();
+        initializeArduinoOcpp();
     }
     loadEvseBehavior();
 }

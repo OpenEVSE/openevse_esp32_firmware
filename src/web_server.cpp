@@ -374,19 +374,12 @@ handleSaveOcpp(MongooseHttpServerRequest *request) {
 
   String url = request->getParam("ocpp_server");
 
-  if (checkUrl(url.c_str())) {
+  if (!MongooseOcppSocketClient::isValidUrl(url.c_str())) {
     response->setCode(400);
     response->print("invalid URL");
     request->send(response);
     return;
   }
-
-//  String enabledStr = request->getParam("ocpp_enabled");
-//  enabledStr.trim();
-//  enabledStr.toLowerCase();
-//  bool ocppEnabled = false;
-//  ocppEnabled |= !strcmp(enabledStr.c_str(), "true");
-//  ocppEnabled |= enabledStr.charAt(0) > '0' && enabledStr.charAt(0) <= '9';
 
   config_save_ocpp(isPositive(request->getParam("ocpp_enabled")),
                    url, 
@@ -397,15 +390,16 @@ handleSaveOcpp(MongooseHttpServerRequest *request) {
                    isPositive(request->getParam("ocpp_energize_plug")));
 
   char tmpStr[200];
-  snprintf(tmpStr, sizeof(tmpStr), "Saved: %s %s %s",
-          ocpp_server.c_str(), ocpp_chargeBoxId.c_str(), ocpp_idTag.c_str());
+  snprintf(tmpStr, sizeof(tmpStr), "Saved: %s %s %s %s %d %d %d",
+          ocpp_server.c_str(), ocpp_chargeBoxId.c_str(), ocpp_idTag.c_str(), tx_start_point.c_str(),
+          config_ocpp_enabled(), config_ocpp_access_can_energize, config_ocpp_access_can_suspend());
   DBUGLN(tmpStr);
 
   response->setCode(200);
   response->print(tmpStr);
   request->send(response);
 
-  ArduinoOcppTask::notifyReconfigured();
+  ArduinoOcppTask::notifyConfigChanged();
 }
 
 // -------------------------------------------------------------------
@@ -621,7 +615,7 @@ handleStatus(MongooseHttpServerRequest *request) {
 
   doc["mqtt_connected"] = (int)mqtt_connected();
 
-  doc["ocpp_connected"] = (int)ocppConnected();
+  doc["ocpp_connected"] = (int)MongooseOcppSocketClient::ocppConnected();
 
   doc["ohm_hour"] = ohm_hour;
 

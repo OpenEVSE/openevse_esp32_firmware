@@ -42,15 +42,6 @@ const char *ocpp_ca = "-----BEGIN CERTIFICATE-----\r\n"
 #define MG_WEBSOCKET_PING_INTERVAL_MS (MG_WEBSOCKET_PING_INTERVAL_SECONDS * 1000)
 
 bool ocppIsConnected = false;
-bool ocppConnected() {
-    return ocppIsConnected;
-}
-
-int checkUrl(const char *url) {
-    unsigned int port_i = 0;
-    struct mg_str scheme, query, fragment;
-    return mg_parse_uri(mg_mk_str(url), &scheme, NULL, NULL, &port_i, NULL, &query, &fragment); //returns 0 on success, false otherwise
-}
 
 MongooseOcppSocketClient::MongooseOcppSocketClient(String &ws_url) {
     this->ws_url = String(ws_url);
@@ -253,6 +244,15 @@ bool MongooseOcppSocketClient::receiveTXT(const char* msg, size_t len) {
     return receiveTXTcallback(msg, len);
 }
 
+bool MongooseOcppSocketClient::ocppConnected() {
+    return ocppIsConnected;
+}
+
+bool MongooseOcppSocketClient::isValidUrl(const char *url) {
+    unsigned int port_i = 0;
+    struct mg_str scheme, query, fragment;
+    return mg_parse_uri(mg_mk_str(url), &scheme, NULL, NULL, &port_i, NULL, &query, &fragment) == 0; //mg_parse_uri returns 0 on success, false otherwise
+}
 
 void MongooseOcppSocketClient::printUrl() {
     Serial.print(ws_url);
