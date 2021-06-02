@@ -156,8 +156,8 @@ ConfigOpt *opts[] =
   new ConfigOptVirtualBool(flagsOpt, CONFIG_SERVICE_DIVERT, CONFIG_SERVICE_DIVERT, "divert_enabled", "de"),
   new ConfigOptVirtualBool(flagsOpt, CONFIG_PAUSE_USES_DISABLED, CONFIG_PAUSE_USES_DISABLED, "pause_uses_disabled", "pd"),
   new ConfigOptVirtualBool(flagsOpt, CONFIG_SERVICE_OCPP, CONFIG_SERVICE_OCPP, "ocpp_enabled", "ope"),
-  new ConfigOptVirtualBool(flagsOpt, CONFIG_OCPP_ACCESS_SUSPEND, CONFIG_OCPP_ACCESS_SUSPEND, "ocpp_access_can_suspend", "ops"),
-  new ConfigOptVirtualBool(flagsOpt, CONFIG_OCPP_ACCESS_ENERGIZE, CONFIG_OCPP_ACCESS_ENERGIZE, "ocpp_access_can_energize", "opn"),
+  new ConfigOptVirtualBool(flagsOpt, CONFIG_OCPP_ACCESS_SUSPEND, CONFIG_OCPP_ACCESS_SUSPEND, "ocpp_suspend_evse", "ops"),
+  new ConfigOptVirtualBool(flagsOpt, CONFIG_OCPP_ACCESS_ENERGIZE, CONFIG_OCPP_ACCESS_ENERGIZE, "ocpp_energize_plug", "opn"),
   new ConfigOptVirtualMqttProtocol(flagsOpt, "mqtt_protocol", "mprt"),
   new ConfigOptVirtualChargeMode(flagsOpt, "charge_mode", "chmd")
 };
