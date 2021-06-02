@@ -257,7 +257,7 @@ class EvseManager : public MicroTasks::Task
     EvseState getActiveState() {
       return _monitor.isDisabled() ? EvseState::Disabled : EvseState::Active;
     }
-    
+
   protected:
     void setup();
     unsigned long loop(MicroTasks::WakeReason reason);

@@ -9,6 +9,10 @@
 #include <MongooseCore.h>
 #define MG_F_IS_MongooseOcppSocketClient MG_F_USER_2
 
+#ifndef DEBUG_OUT
+#define DEBUG_OUT false
+#endif
+
 #include <ArduinoOcpp/Core/OcppSocket.h>
 #include <ArduinoOcpp/Core/OcppServer.h> //for typedef ReceiveTXTcallback
 

@@ -31,7 +31,6 @@
 #include <MicroTasks.h>
 #include <LITTLEFS.h>
 #include <ArduinoOcpp.h>
-#include <ArduinoOcpp/Core/OcppSocket.h>
 
 #include "emonesp.h"
 #include "app_config.h"
@@ -137,7 +136,6 @@ void setup()
   lcd.display(currentfirmware, 0, 1, 5 * 1000, LCD_CLEAR_LINE);
 
   start_mem = last_mem = ESPAL.getFreeHeap();
-
 } // end setup
 
 // -------------------------------------------------------------------
@@ -223,7 +221,6 @@ loop() {
     }
 
     ocpp.OcppLibrary_loop();
-
   } // end WiFi connected
 
   Profile_End(loop, 10);
