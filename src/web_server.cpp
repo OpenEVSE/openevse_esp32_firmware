@@ -392,7 +392,7 @@ handleSaveOcpp(MongooseHttpServerRequest *request) {
   char tmpStr[200];
   snprintf(tmpStr, sizeof(tmpStr), "Saved: %s %s %s %s %d %d %d",
           ocpp_server.c_str(), ocpp_chargeBoxId.c_str(), ocpp_idTag.c_str(), tx_start_point.c_str(),
-          config_ocpp_enabled(), config_ocpp_access_can_energize, config_ocpp_access_can_suspend());
+          (int) config_ocpp_enabled(), (int) config_ocpp_access_can_energize, (int) config_ocpp_access_can_suspend());
   DBUGLN(tmpStr);
 
   response->setCode(200);
