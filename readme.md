@@ -158,7 +158,8 @@ A [OpenEnergyMonitor Solar PV Energy Monitor](https://guide.openenergymonitor.or
   - Grid Import (positive Import / Negative export*): `emon/emonpi/power1`
   - Solar PV generation (always postive): `emon/emonpi/power2` 
 
-**Note: 'Grid' feed should include the power consumed by the EVSE**
+**Note#1: 'Grid' feed should include the power consumed by the EVSE**
+**Note#2: The EVSE expects the MQTT data to update every 5-10s, perforamce will be degraded if the update interval is much faster or slower than this**
 
 **CT sensor can be physically reversed on the cable to invert the reading.*
 
