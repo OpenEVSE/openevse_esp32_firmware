@@ -602,10 +602,12 @@ handleStatus(MongooseHttpServerRequest *request) {
 
   doc["vehicle_state_update"] = (millis() - evse.getVehicleLastUpdated()) / 1000;
   if(teslaClient.getVehicleCnt() > 0) {
+    doc["tesla_vehicle_count"] = teslaClient.getVehicleCnt();
     doc["tesla_vehicle_id"] = teslaClient.getVehicleId(teslaClient.getCurVehicleIdx());
     doc["tesla_vehicle_name"] = teslaClient.getVehicleDisplayName(teslaClient.getCurVehicleIdx());
     teslaClient.getChargeInfoJson(doc);
   } else {
+    doc["tesla_vehicle_count"] = false;
     doc["tesla_vehicle_id"] = false;
     doc["tesla_vehicle_name"] = false;
     if(evse.isVehicleStateOfChargeValid()) {
@@ -1239,6 +1241,7 @@ web_server_setup() {
   server.on("/savemqtt$", handleSaveMqtt);
   server.on("/saveadmin$", handleSaveAdmin);
   server.on("/teslaveh$", handleTeslaVeh);
+  server.on("/tesla/vehicles$", handleTeslaVeh);
   server.on("/saveadvanced$", handleSaveAdvanced);
   server.on("/saveohmkey$", handleSaveOhmkey);
   server.on("/settime$", handleSetTime);
