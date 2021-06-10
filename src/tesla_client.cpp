@@ -86,6 +86,21 @@ void TeslaClient::setCredentials(
   _refreshToken = refreshToken;
   _created = created;
   _expires = expires;
+  _cleanVehicles();
+}
+
+
+void TeslaClient::setVehicleId(String vehid)
+{
+  DBUGVAR(vehid);
+  _curVehId = vehid;
+  for(int i = 0; i < _vehicleCnt; i++) {
+    if(_id[i] == vehid) {
+      _curVehIdx = i;
+      DBUGVAR(_curVehIdx);
+      return;
+    }
+  }
 }
 
 
@@ -295,15 +310,21 @@ void TeslaClient::requestVehicles()
             // doesn't work.. returns converted float _id[i] = responsei["id"].as<String>();
             _displayName[i] = responsei["display_name"].as<String>();
             DBUG("id: ");DBUG(_id[i]);
-            DBUG("vin: ");DBUG(_vin[i]);
+            DBUG(" vin: ");DBUG(_vin[i]);
             DBUG(" name: ");DBUGLN(_displayName[i]);
+            if(_id[i] == _curVehId) {
+              _curVehIdx = i;
+            }
           }
 
           if((_curVehIdx < 0) || (_curVehIdx >= _vehicleCnt)) {
             _curVehIdx = 0;
           }
 
+          _curVehId = _id[_curVehIdx];
+
           DynamicJsonDocument data(128);
+          data["tesla_vehicle_count"] = _vehicleCnt;
           data["tesla_vehicle_id"] = _id[_curVehIdx];
           data["tesla_vehicle_name"] = _displayName[_curVehIdx];
           event_send(data);

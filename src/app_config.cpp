@@ -71,7 +71,7 @@ String tesla_refresh_token;
 uint64_t tesla_created_at;
 uint64_t tesla_expires_in;
 
-int tesla_vehidx;
+String tesla_vehicle_id;
 
 #if RGB_LED
 uint8_t led_brightness;
@@ -134,7 +134,7 @@ ConfigOpt *opts[] =
   new ConfigOptSecret(tesla_refresh_token, "", "tesla_refresh_token", "trt"),
   new ConfigOptDefenition<uint64_t>(tesla_created_at, -1, "tesla_created_at", "tc"),
   new ConfigOptDefenition<uint64_t>(tesla_expires_in, -1, "tesla_expires_in", "tx"),
-  new ConfigOptDefenition<int>(tesla_vehidx, -1, "tesla_vehidx", "ti"),
+  new ConfigOptDefenition<String>(tesla_vehicle_id, "", "tesla_vehicle_id", "ti"),
 
 #if RGB_LED
 // LED brightness
@@ -211,9 +211,10 @@ void config_changed(String name)
     DBUGVAR(config_divert_enabled());
     DBUGVAR(config_charge_mode());
     divertmode_update((config_divert_enabled() && 1 == config_charge_mode()) ? DIVERT_MODE_ECO : DIVERT_MODE_NORMAL);
+  } else if(name == "tesla_vehicle_id") {
+    teslaClient.setVehicleId(tesla_vehicle_id);
   } else if(name.startsWith("tesla_")) {
     teslaClient.setCredentials(tesla_access_token, tesla_refresh_token, tesla_created_at, tesla_expires_in);
-    teslaClient.setVehicleIdx(tesla_vehidx);
 #if RGB_LED
   } else if(name == "led_brightness") {
     ledManager.setBrightness(led_brightness);

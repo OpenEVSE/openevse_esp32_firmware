@@ -47,6 +47,7 @@ class TeslaClient {
 
   int _vehicleCnt;
   int _curVehIdx;
+  String _curVehId;
   String *_id;
   String *_vin;
   String *_displayName;
@@ -69,7 +70,7 @@ class TeslaClient {
   void requestChargeState();
 
   int getVehicleCnt() { return _vehicleCnt; }
-  void setVehicleIdx(int vehidx) { _curVehIdx = vehidx; }
+  void setVehicleId(String vehid);
   int getCurVehicleIdx() { return _curVehIdx; }
   String getVehicleId(int vehidx);
   String getVIN(int vehidx);
