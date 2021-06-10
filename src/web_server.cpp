@@ -362,47 +362,6 @@ handleSaveMqtt(MongooseHttpServerRequest *request) {
 }
 
 // -------------------------------------------------------------------
-// Save OCPP V1.6 Config
-// url: /saveocpp
-// -------------------------------------------------------------------
-void
-handleSaveOcpp(MongooseHttpServerRequest *request) {
-  MongooseHttpServerResponseStream *response;
-  if(false == requestPreProcess(request, response, CONTENT_TYPE_TEXT)) {
-    return;
-  }
-
-  String url = request->getParam("ocpp_server");
-
-  if (!MongooseOcppSocketClient::isValidUrl(url.c_str())) {
-    response->setCode(400);
-    response->print("invalid URL");
-    request->send(response);
-    return;
-  }
-
-  config_save_ocpp(isPositive(request->getParam("ocpp_enabled")),
-                   url, 
-                   request->getParam("ocpp_chargeBoxId"), 
-                   request->getParam("ocpp_idTag"), 
-                   request->getParam("tx_start_point"), 
-                   isPositive(request->getParam("ocpp_suspend_evse")),
-                   isPositive(request->getParam("ocpp_energize_plug")));
-
-  char tmpStr[200];
-  snprintf(tmpStr, sizeof(tmpStr), "Saved: %s %s %s %s %d %d %d",
-          ocpp_server.c_str(), ocpp_chargeBoxId.c_str(), ocpp_idTag.c_str(), tx_start_point.c_str(),
-          (int) config_ocpp_enabled(), (int) config_ocpp_access_can_energize, (int) config_ocpp_access_can_suspend());
-  DBUGLN(tmpStr);
-
-  response->setCode(200);
-  response->print(tmpStr);
-  request->send(response);
-
-  ArduinoOcppTask::notifyConfigChanged();
-}
-
-// -------------------------------------------------------------------
 // Change divert mode (solar PV divert mode) e.g 1:Normal (default), 2:Eco
 // url: /divertmode
 // -------------------------------------------------------------------
@@ -1275,7 +1234,6 @@ web_server_setup() {
   server.on("/savenetwork$", handleSaveNetwork);
   server.on("/saveemoncms$", handleSaveEmoncms);
   server.on("/savemqtt$", handleSaveMqtt);
-  server.on("/saveocpp$", handleSaveOcpp);
   server.on("/saveadmin$", handleSaveAdmin);
   server.on("/teslaveh$", handleTeslaVeh);
   server.on("/saveadvanced$", handleSaveAdvanced);

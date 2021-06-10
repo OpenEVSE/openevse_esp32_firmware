@@ -146,11 +146,6 @@ extern void config_save_emoncms(bool enable, String server, String node, String 
 extern void config_save_mqtt(bool enable, int protocol, String server, uint16_t port, String topic, String user, String pass, String solar, String grid_ie, bool reject_unauthorized);
 
 // -------------------------------------------------------------------
-// Save the OCPP connection details
-// -------------------------------------------------------------------
-extern void config_save_ocpp(bool enable, String server, String ocpp_chargeBoxId, String ocpp_idTag, String tx_start_point, bool ocpp_suspend_evse, bool ocpp_energize_plug);
-
-// -------------------------------------------------------------------
 // Save the admin/web interface details
 // -------------------------------------------------------------------
 extern void config_save_admin(String user, String pass);

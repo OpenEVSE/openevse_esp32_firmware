@@ -219,8 +219,6 @@ loop() {
       emoncms_publish(data);
       emoncms_updated = false;
     }
-
-    ocpp.poll();
   } // end WiFi connected
 
   Profile_End(loop, 10);

@@ -313,28 +313,6 @@ config_save_mqtt(bool enable, int protocol, String server, uint16_t port, String
 }
 
 void
-config_save_ocpp(bool enable, String server, String ocpp_chargeBoxId, String ocpp_idTag, String tx_start_point, bool ocpp_suspend_evse, bool ocpp_energize_plug) {
-  uint32_t newflags = flags & ~(CONFIG_SERVICE_OCPP | CONFIG_OCPP_ACCESS_SUSPEND | CONFIG_OCPP_ACCESS_ENERGIZE);
-  if(enable) {
-    newflags |= CONFIG_SERVICE_OCPP;
-  }
-  if(ocpp_suspend_evse) {
-    newflags |= CONFIG_OCPP_ACCESS_SUSPEND;
-  }
-  if(ocpp_energize_plug) {
-    newflags |= CONFIG_OCPP_ACCESS_ENERGIZE;
-  }
-
-  config.set("ocpp_server", server);
-  config.set("ocpp_chargeBoxId", ocpp_chargeBoxId);
-  config.set("ocpp_idTag", ocpp_idTag);
-  config.set("tx_start_point", tx_start_point);
-  config.set("flags", newflags);
-  config.commit();
-}
-
-
-void
 config_save_admin(String user, String pass) {
   config.set("www_username", user);
   config.set("www_password", pass);

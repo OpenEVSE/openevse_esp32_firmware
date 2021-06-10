@@ -33,14 +33,6 @@ private:
     std::function<void()> onVehicleConnect = [] () {};
     std::function<void()> onVehicleDisconnect = [] () {};
 
-    /*
-     * OpenEVSE connector claiming rules
-     */
-    std::function<void(EvseState&, EvseProperties&)> inferClaimTransactionActive = [] (EvseState&, EvseProperties&) {};        //Transaction engaged and accepted by the CS
-    std::function<void(EvseState&, EvseProperties&)> inferClaimTransactionActiveOffline = [] (EvseState&, EvseProperties&) {}; //Transaction request pending. EVSE may choose to start charging
-    std::function<void(EvseState&, EvseProperties&)> inferClaimTransactionInactive = [] (EvseState&, EvseProperties&) {};      //No transaction
-    std::function<void(EvseState&, EvseProperties&, float charging_limit)> inferClaimSmartCharging = [] (EvseState&, EvseProperties&, float) {};
-    
     void initializeArduinoOcpp();
     bool arduinoOcppInitialized = false;
     void loadEvseBehavior();
@@ -66,8 +58,6 @@ public:
     ~ArduinoOcppTask();
 
     void begin(EvseManager &evse, LcdTask &lcd);
-
-    void poll();
     
     void updateEvseClaim();
 

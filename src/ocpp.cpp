@@ -175,14 +175,20 @@ void ArduinoOcppTask::loadEvseBehavior() {
 
 unsigned long ArduinoOcppTask::loop(MicroTasks::WakeReason reason) {
 
-    if (!config_ocpp_enabled()) {
-        return 5000;
-    }
+    if (arduinoOcppInitialized) {
+        if (config_ocpp_enabled()) {
+            OCPP_loop();
+        } else {
+            //The OCPP function has been activated and then deactivated again.
 
-    if (!arduinoOcppInitialized) {
-        initializeArduinoOcpp();
-        loadEvseBehavior();
-
+            ArduinoOcpp::ocppEngine_loop(); //There could be remaining operations in the OCPP-queue. I will add the OCPP_unitialize() soon as a better solution to this
+            return 0;
+        }
+    } else {
+        if (config_ocpp_enabled()) {
+            initializeArduinoOcpp();
+            loadEvseBehavior();
+        }
         return 50;
     }
 
@@ -201,17 +207,7 @@ unsigned long ArduinoOcppTask::loop(MicroTasks::WakeReason reason) {
         onVehicleDisconnect();
     }
 
-    return 50;
-}
-
-void ArduinoOcppTask::poll() {
-    if (arduinoOcppInitialized) {
-        if (config_ocpp_enabled()) {
-            OCPP_loop();
-        } else {
-            ArduinoOcpp::ocppEngine_loop(); //better continue looping. Leftover pending messages could interfere with the networking stack 
-        }
-    }
+    return 0;
 }
 
 void ArduinoOcppTask::updateEvseClaim() {
@@ -281,14 +277,24 @@ void ArduinoOcppTask::updateEvseClaim() {
 }
 
 String ArduinoOcppTask::getCentralSystemUrl() {
-    ocpp_server.trim();
     String url = ocpp_server;
+    url.trim();
+    if (url.isEmpty()) {
+        return url; //return empty String
+    }
     if (!url.endsWith("/")) {
         url += '/';
     }
-    ocpp_chargeBoxId.trim();
-    url += ocpp_chargeBoxId;
-    return url;
+    String chargeBoxId = ocpp_chargeBoxId;
+    chargeBoxId.trim();
+    url += chargeBoxId;
+
+    if (MongooseOcppSocketClient::isValidUrl(url.c_str())) {
+        return url;
+    } else {
+        DBUGLN(F("[ArduinoOcppTask] OCPP server URL or chargeBoxId invalid"));
+        return String("");
+    }
 }
 
 void ArduinoOcppTask::notifyConfigChanged() {
