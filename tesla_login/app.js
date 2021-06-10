@@ -22,7 +22,7 @@ let args = minimist(process.argv.slice(2), {
 });
 
 if(args.help) {
-  console.log("OpenEVSE WiFi Simulator");
+  console.log("Tesla JS login");
   return 0;
 }
 
