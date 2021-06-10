@@ -9,14 +9,8 @@
 #include <MongooseCore.h>
 #define MG_F_IS_MongooseOcppSocketClient MG_F_USER_2
 
-#ifndef DEBUG_OUT
-#define DEBUG_OUT false
-#endif
-
 #include <ArduinoOcpp/Core/OcppSocket.h>
 #include <ArduinoOcpp/Core/OcppServer.h> //for typedef ReceiveTXTcallback
-
-#define WS_UNRESPONSIVE_THRESHOLD_MS 4000
 
 class MongooseOcppSocketClient : public ArduinoOcpp::OcppSocket {
 private:
@@ -31,15 +25,12 @@ private:
 
     //is connection responsive?
     ulong last_recv = 0; // Any input from remote peer is seen as indication for responsivitiy
-
-    ulong last_debug_message = 0; 
-
-    void printUrl();
+    ulong last_status_dbg_msg = 0; //print status info to debug output periodically
 
     const char *mongoose_error_string = NULL;
 public:
 
-    MongooseOcppSocketClient(String &ws_url);
+    MongooseOcppSocketClient(const String &ws_url);
     
     ~MongooseOcppSocketClient();
 
@@ -57,7 +48,7 @@ public:
 
     static void mg_event_callback(struct mg_connection *nc, int ev, void *ev_data, void *user_data);
 
-    void reconnect(String &ws_url);
+    void reconnect(const String &ws_url);
 
     static boolean ocppConnected(); //for dashboard
 

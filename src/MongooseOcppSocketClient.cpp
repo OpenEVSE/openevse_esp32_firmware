@@ -5,6 +5,7 @@
 
 #include "MongooseOcppSocketClient.h"
 #include "net_manager.h"
+#include "debug.h"
 
 /*** To define a custom CA for OCPP please define the flag OCPP_CUSTOM_CA and set define const char *ocpp_ca with the certificate
  * 
@@ -34,23 +35,29 @@ const char *ocpp_ca = "-----BEGIN CERTIFICATE-----\r\n"
 
  ***/
 
+#define WS_UNRESPONSIVE_THRESHOLD_MS 4000UL
+
+#define DEBUG_MSG_INTERVAL 5000UL 
+
+#define RECONNECT_AFTER 5000UL  //pause interval between two reconnection attempts
+
 //see ArduinoMongoose/src/mongoose.c
 #ifndef MG_WEBSOCKET_PING_INTERVAL_SECONDS
 #define MG_WEBSOCKET_PING_INTERVAL_SECONDS 5
 #endif
 
-#define MG_WEBSOCKET_PING_INTERVAL_MS (MG_WEBSOCKET_PING_INTERVAL_SECONDS * 1000)
+#define MG_WEBSOCKET_PING_INTERVAL_MS (MG_WEBSOCKET_PING_INTERVAL_SECONDS * 1000UL)
 
 bool ocppIsConnected = false;
 
-MongooseOcppSocketClient::MongooseOcppSocketClient(String &ws_url) {
+MongooseOcppSocketClient::MongooseOcppSocketClient(const String &ws_url) {
     this->ws_url = String(ws_url);
     
 }
 
 MongooseOcppSocketClient::~MongooseOcppSocketClient() {
-    if (DEBUG_OUT) Serial.print(F("[MongooseOcppSocketClient] Close and destroy connection to "));
-    if (DEBUG_OUT) Serial.println(this->ws_url);
+    DBUG(F("[MongooseOcppSocketClient] Close and destroy connection to "));
+    DBUGLN(this->ws_url);
     if (nc) {
         connection_established = false;
         ocppIsConnected = connection_established; //need it static for Wi-Fi dashboard
@@ -70,14 +77,6 @@ void MongooseOcppSocketClient::mg_event_callback(struct mg_connection *nc, int e
         return;
     }
 
-    if (DEBUG_OUT && ev != 0) {
-        Serial.print(F("[MongooseOcppSocketClient] Opcode: "));
-        Serial.print(ev);
-        Serial.print(F(", flags "));
-        Serial.print(nc->flags);
-        Serial.println();
-    }
-
     if (ev != MG_EV_POLL && ev != MG_EV_SEND) {
         instance->last_recv = millis();
     }
@@ -85,25 +84,25 @@ void MongooseOcppSocketClient::mg_event_callback(struct mg_connection *nc, int e
     switch (ev) {
         case MG_EV_CONNECT: {
             int status = *((int *) ev_data);
-            if (DEBUG_OUT && status != 0) {
-                Serial.print(F("[MongooseOcppSocketClient] Connection to "));
-                instance->printUrl();
-                Serial.print(F(" -- Error: "));
-                Serial.println(status);
+            if (status != 0) {
+                DBUG(F("[MongooseOcppSocketClient] Connection to "));
+                DBUG(instance->ws_url);
+                DBUG(F(" -- Error: "));
+                DBUGLN(status);
             }
             break;
         }
         case MG_EV_WEBSOCKET_HANDSHAKE_DONE: {
             struct http_message *hm = (struct http_message *) ev_data;
-            if (DEBUG_OUT) Serial.print(F("[MongooseOcppSocketClient] Connection to "));
-            if (DEBUG_OUT) instance->printUrl();
+            DBUG(F("[MongooseOcppSocketClient] Connection to "));
+            DBUG(instance->ws_url);
             if (hm->resp_code == 101) {
-                if (DEBUG_OUT) Serial.print(F(" -- Connected\n"));
+                DBUGLN(F(" -- Connected"));
                 instance->connection_established = true;
                 ocppIsConnected = instance->connection_established; //need it static for Wi-Fi dashboard
             } else {
-                if (DEBUG_OUT) Serial.print(F(" -- Connection failed! HTTP code "));
-                if (DEBUG_OUT) Serial.println(hm->resp_code);
+                DBUG(F(" -- Connection failed! HTTP code "));
+                DBUGLN(hm->resp_code);
                 /* Connection will be closed after this. */
             }
             break;
@@ -115,15 +114,8 @@ void MongooseOcppSocketClient::mg_event_callback(struct mg_connection *nc, int e
         case MG_EV_WEBSOCKET_FRAME: {
             struct websocket_message *wm = (struct websocket_message *) ev_data;
 
-            if (DEBUG_OUT) {
-                Serial.print(F("[MongooseOcppSocketClient] WS get text: "));
-                for (int i = 0; i < wm->size; i++)
-                    Serial.print((char) wm->data[i]);
-                Serial.println();
-            }
-
             if (!instance->receiveTXT((const char *) wm->data, wm->size)) { //forward message to OcppEngine
-                if (DEBUG_OUT) Serial.print(F("[MongooseOcppSocketClient] Processing WebSocket input event failed!\n"));
+                DBUGLN(F("[MongooseOcppSocketClient] Processing WebSocket input event failed!"));
             }
             break;
         }
@@ -131,11 +123,9 @@ void MongooseOcppSocketClient::mg_event_callback(struct mg_connection *nc, int e
             instance->connection_established = false;
             ocppIsConnected = instance->connection_established; //need it static for Wi-Fi dashboard
             instance->nc = NULL; //resources will be free'd by Mongoose
-            if (DEBUG_OUT) {
-                Serial.print(F("[MongooseOcppSocketClient] Connection to "));
-                instance->printUrl();
-                Serial.print(F(" -- Closed\n"));
-            }
+            DBUG(F("[MongooseOcppSocketClient] Connection to "));
+            DBUG(instance->ws_url);
+            DBUGLN(F(" -- Closed"));
             break;
         }
     }
@@ -147,16 +137,15 @@ void MongooseOcppSocketClient::loop() {
 
 void MongooseOcppSocketClient::maintainWsConn() {
 
-    const ulong DEBUG_MSG_INTERVAL = 5000;
-    if (DEBUG_OUT && millis() - last_debug_message >= DEBUG_MSG_INTERVAL) {
-        last_debug_message = millis();
+    if (millis() - last_status_dbg_msg >= DEBUG_MSG_INTERVAL) {
+        last_status_dbg_msg = millis();
 
         //WS successfully connected?
         if (!connection_established) {
-            if (DEBUG_OUT) Serial.print(F("[MongooseOcppSocketClient] WS unconnected\n"));
+            DBUGLN(F("[MongooseOcppSocketClient] WS unconnected"));
         } else if (millis() - last_recv >= MG_WEBSOCKET_PING_INTERVAL_MS + WS_UNRESPONSIVE_THRESHOLD_MS) {
             //WS connected but unresponsive
-            if (DEBUG_OUT) Serial.print(F("[MongooseOcppSocketClient] WS unresponsive\n"));
+            DBUGLN(F("[MongooseOcppSocketClient] WS unresponsive"));
         }
     }
 
@@ -172,13 +161,12 @@ void MongooseOcppSocketClient::maintainWsConn() {
         return;
     }
 
-    const ulong RECONNECT_AFTER = 5000; //in ms
     if (millis() - last_reconnection_attempt < RECONNECT_AFTER) {
         return;
     }
 
-    if (DEBUG_OUT) Serial.print(F("[MongooseOcppSocketClient] (re-)connect to "));
-    if (DEBUG_OUT) Serial.println(this->ws_url);
+    DBUG(F("[MongooseOcppSocketClient] (re-)connect to "));
+    DBUGLN(this->ws_url);
 
     struct mg_connect_opts opts;
     Mongoose.getDefaultOpts(&opts);
@@ -192,8 +180,8 @@ void MongooseOcppSocketClient::maintainWsConn() {
     nc = mg_connect_ws_opt(Mongoose.getMgr(), mg_event_callback, this, opts, this->ws_url.c_str(), "ocpp1.6", NULL);
 
     if (!nc) {
-        if (DEBUG_OUT) Serial.print(F("[MongooseOcppSocketClient] Failed to connect to URL: "));
-        if (DEBUG_OUT) Serial.println(this->ws_url);
+        DBUG(F("[MongooseOcppSocketClient] Failed to connect to URL: "));
+        DBUGLN(this->ws_url);
     }
 
     nc->flags |= MG_F_IS_MongooseOcppSocketClient;
@@ -201,7 +189,7 @@ void MongooseOcppSocketClient::maintainWsConn() {
     last_reconnection_attempt = millis();
 }
 
-void MongooseOcppSocketClient::reconnect(String &ws_url) {
+void MongooseOcppSocketClient::reconnect(const String &ws_url) {
     this->ws_url = String(ws_url);
 
     connection_established = false;
@@ -249,11 +237,22 @@ bool MongooseOcppSocketClient::ocppConnected() {
 }
 
 bool MongooseOcppSocketClient::isValidUrl(const char *url) {
+    //URL must start with ws: or wss:
+    if (url[0] != 'W' && url[0] != 'w')
+        return false;
+    if (url[1] != 'S' && url[1] != 's')
+        return false;
+
+    if (url[2] == 'S' && url[2] == 's') {
+        if (url[3] != ':')
+            return false;
+        //else: passed
+    } else if (url[2] != ':') {
+        return false;
+    }
+    //passed
+
     unsigned int port_i = 0;
     struct mg_str scheme, query, fragment;
     return mg_parse_uri(mg_mk_str(url), &scheme, NULL, NULL, &port_i, NULL, &query, &fragment) == 0; //mg_parse_uri returns 0 on success, false otherwise
-}
-
-void MongooseOcppSocketClient::printUrl() {
-    Serial.print(ws_url);
 }
