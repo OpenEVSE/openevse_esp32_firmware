@@ -27,7 +27,7 @@ typedef struct telsa_charge_info {
   float chargeMilesAddedRated;
   int batteryLevel;
   int chargeLimitSOC;
-  int timeToFullCharge;
+  float timeToFullCharge;
   int chargerVoltage;
 } TESLA_CHARGE_INFO;
 
@@ -58,6 +58,7 @@ class TeslaClient {
 
   bool _isBusy() { return _activeRequest == TAR_NONE ? false : true; }
   void _cleanVehicles();
+  int _hoursToSeconds(float hours);
 
  public:
   TeslaClient();

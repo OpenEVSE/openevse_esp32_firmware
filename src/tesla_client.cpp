@@ -423,7 +423,7 @@ void TeslaClient::requestChargeState()
 
       evse.setVehicleStateOfCharge(_chargeInfo.batteryLevel);
       evse.setVehicleRange(_chargeInfo.batteryRange);
-      evse.setVehicleEta(_chargeInfo.timeToFullCharge);
+      evse.setVehicleEta(_hoursToSeconds(_chargeInfo.timeToFullCharge));
 
       DynamicJsonDocument data(4096);
       getChargeInfoJson(data);
@@ -455,8 +455,16 @@ void TeslaClient::getChargeInfoJson(JsonDocument &doc)
     doc["charge_energy_added"] = _chargeInfo.chargeEnergyAdded;
     doc["charge_miles_added_rated"] = _chargeInfo.chargeMilesAddedRated;
     doc["charge_limit_soc"] = _chargeInfo.chargeLimitSOC;
-    doc["time_to_full_charge"] = _chargeInfo.timeToFullCharge;
+    doc["time_to_full_charge"] = _hoursToSeconds(_chargeInfo.timeToFullCharge);
     doc["charger_voltage"] = _chargeInfo.chargerVoltage;
     doc["tesla_error"] = false;
   }
+}
+
+int TeslaClient::_hoursToSeconds(float hours)
+{
+  // time_to_full_charge is in hours (float) with ~5min intervals, needs to be seconds for
+  // our internal representation
+  int minutes = (int)round(60.0 * hours);
+  return minutes * 60;
 }
