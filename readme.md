@@ -176,7 +176,7 @@ If 'advanced' mode is toggled on the UI more solar PV divert settings will becom
 
 ![eco](docs/divert-advanced.png)
 
-- Required PV power ratio: specifies which fraction of the EV charging current should come from PV excess. Default value 100% (1)
+- Required PV power ratio: specifies which fraction of the EV charging current should come from PV excess. Default value 110% (1.1)
 - Divert smoothing attack: controls how quickly the EVSE responds to an increase in solar PV / grid excess. Default value 40% (0.4)
 - Divert Smoothing decay: controls how quickly the EVSE responds to a decrease in solar PV / grid excess. Default value 5% (0.05)
 - Minimum charge time: the amount of time in seconds the EVSE should run for when triggered by solar PV / grid excess
