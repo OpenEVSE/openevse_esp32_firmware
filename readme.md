@@ -1,4 +1,4 @@
-# OpenEVSE WiFi Gateway v4
+# OpenEVSE WiFi ESP32 Gateway v4
 
 > **_NOTE:_** Breaking change! This release reccomends a minimum of [7.1.3](https://github.com/OpenEVSE/open_evse/releases) of the OpenEVSE firmware, features including Solar Divert and push button menus may not behave as expected on older firmware.
 
@@ -9,9 +9,7 @@
 
 The WiFi gateway uses an **ESP32** which communicates with the OpenEVSE controller via serial RAPI API. The web UI is served directly from the ESP32 web server and can be controlled via a connected device on the local network.
 
-Wired Ethernet connection is possible using [ESP32 Gateway](docs/wired-ethernet.md)
-
-[**See this repo for the older V2.x ESP8266 version (pre June 2020)**](https://github.com/openevse/ESP8266_WiFi_v2.x/)
+**This FW also supports wired Ethernet connection using [ESP32 Gateway](docs/wired-ethernet.md)**
 
 **[Live UI demo](https://openevse.openenergymonitor.org)**
 
