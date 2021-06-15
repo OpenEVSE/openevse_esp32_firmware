@@ -317,6 +317,9 @@ class EvseManager : public MicroTasks::Task
     double getVoltage() {
       return _monitor.getVoltage();
     }
+    void setVoltage(double volts) {
+      _monitor.setVoltage(volts);
+    }
     uint32_t getSessionElapsed() {
       return _monitor.getSessionElapsed();
     }

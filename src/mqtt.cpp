@@ -67,9 +67,8 @@ void mqttmsg_callback(MongooseString topic, MongooseString payload) {
     {
       // voltage = volts;
       DBUGF("voltage:%.1f", volts);
-      OpenEVSE.setVoltage(volts, [](int ret) {
-        // Only gives better power calculations so not critical if this fails
-      });
+      evse.setVoltage(volts);
+
     } else {
       DBUGF("voltage:%.1f (ignoring, out of range)", volts);
     }

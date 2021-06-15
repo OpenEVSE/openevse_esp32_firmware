@@ -424,6 +424,7 @@ void TeslaClient::requestChargeState()
       evse.setVehicleStateOfCharge(_chargeInfo.batteryLevel);
       evse.setVehicleRange(_chargeInfo.batteryRange);
       evse.setVehicleEta(_hoursToSeconds(_chargeInfo.timeToFullCharge));
+      evse.setVoltage(_chargeInfo.chargerVoltage);
 
       DynamicJsonDocument data(4096);
       getChargeInfoJson(data);
