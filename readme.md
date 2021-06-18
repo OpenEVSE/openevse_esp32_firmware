@@ -226,9 +226,11 @@ MQTT setup is pre-populated with OpenEnergyMonitor [emonPi default MQTT server c
 
 MQTT can also be used to control the OpenEVSE, see RAPI MQTT below.
 
-### RAPI
+### RAPI API (Not Recommended)
 
 RAPI commands can be used to control and check the status of all OpenEVSE functions. RAPI commands can be issued via the direct serial, web-interface, HTTP and MQTT. We recommend using RAPI over MQTT.
+
+**IMPORTANT: It is no longer recommended to use RAPI API if EVSE also had a WiFi module fitted, since use of the RAPI API will conflict with the WiFi module, instead the HTTP API should be used to control the WiFi module instead of the controller via RAPI. User RAPI API will be disabled in future releases**  
 
 **A full list of RAPI commands can be found in the [OpenEVSE plus source code](https://github.com/OpenEVSE/open_evse/blob/stable/firmware/open_evse/src/rapi_proc.h).**
 
@@ -241,6 +243,8 @@ Enter RAPI commands directly into to web interface (dev mode must be enabled), R
 ![rapi-web](docs/rapi-web.png)
 
 #### RAPI over MQTT
+
+**IMPORTANT: It is no longer recommended to use RAPI API if EVSE also had a WiFi module fitted, since use of the RAPI API will conflict with the WiFi module, instead the HTTP API should be used to control the WiFi module instead of the controller via RAPI. User RAPI API will be disabled in future releases**  
 
 RAPI commands can be issued via MQTT messages. The RAPI command should be published to the following MQTT:
 
@@ -264,6 +268,8 @@ e.g. `$OK`
 
 #### RAPI over HTTP
 
+**IMPORTANT: It is no longer recommended to use RAPI API if EVSE also had a WiFi module fitted, since use of the RAPI API will conflict with the WiFi module, instead the HTTP API should be used to control the WiFi module instead of the controller via RAPI. User RAPI API will be disabled in future releases**  
+
 RAPI (rapid API) commands can also be issued directly via a single HTTP request. 
 
 Using RAPI commands should be avoided if possible. WiFi server API is preferable. If RAPI must be used, avoid fast polling. 
@@ -285,13 +291,54 @@ To enable (start / resume a charge) issue RAPI command `$FE`
 
 There is also an [OpenEVSE RAPI command python library](https://github.com/tiramiseb/python-openevse).
 
-### HTTP API 
+### HTTP API (Recommended)
+
+#### Manual Override API
+
+Manual override can be used to override a charging timer or to immediately start a charge if the EVSE is in sleeping state.
+
+Enable Manual Override:
+
+`curl 'http://openevse-xxx/override' --data-raw '{"state":"disabled"}' `
+
+Disable Manual Override: 
+
+`curl 'http://openevse-xxx/override' -X 'DELETE'`
+
+View Manual Override status:
+
+http://openevse-xxx/override
+
+#### Schedule timers API
+
+Example 
+
+```
+curl 'http://openevse-xxx/schedule' \
+  --data-raw '[{"id":1,"state":"active","days":["monday","tuesday","wednesday","thursday","friday","saturday","sunday"],"time":"07:00"},{"id":2,"state":"disable","days":["monday","tuesday","wednesday","thursday","friday","saturday","sunday"],"time":"10:00"}]' 
+```
+
+View schedule timers:
+
+http://openevse-xxx/schedule
+
+Remove shedule timers:
+
+` curl 'http://192.168.0.104/schedule/1' -X 'DELETE'`
+` curl 'http://192.168.0.104/schedule/2' -X 'DELETE'`
+
+
+#### Status API
+
+
 
 Current status of the OpenEVSE in JSON format is available via: `http://openevse-xxxx/status` e.g
 
 ```
 {"mode":"STA","wifi_client_connected":1,"eth_connected":0,"net_connected":1,"srssi":-73,"ipaddress":"192.168.1.43","emoncms_connected":1,"packets_sent":22307,"packets_success":22290,"mqtt_connected":1,"ohm_hour":"NotConnected","free_heap":203268,"comm_sent":335139,"comm_success":335139,"rapi_connected":1,"amp":0,"pilot":32,"temp1":282,"temp2":-2560,"temp3":-2560,"state":254,"elapsed":3473,"wattsec":22493407,"watthour":51536,"gfcicount":0,"nogndcount":0,"stuckcount":0,"divertmode":1,"solar":390,"grid_ie":0,"charge_rate":7,"divert_update":0,"ota_update":0,"time":"2020-05-12T17:53:48Z","offset":"+0000"}
 ``` 
+
+#### Config API
 
 Current config of the OpenEVSE in JSON format is available via `http://openevse-xxxx/config` e.g
 
