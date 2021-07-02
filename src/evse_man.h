@@ -38,6 +38,7 @@ typedef uint32_t EvseClient;
 #define EvseManager_Priority_Divert     50
 #define EvseManager_Priority_Timer     100
 #define EvseManager_Priority_Boost     200
+#define EvseManager_Priority_API       500
 #define EvseManager_Priority_Ohm       500
 #define EvseManager_Priority_Manual   1000
 #define EvseManager_Priority_Limit    1100
@@ -276,6 +277,9 @@ class EvseManager : public MicroTasks::Task
     uint32_t getMaxCurrent(EvseClient client = EvseClient_NULL);
     uint32_t getEnergyLimit(EvseClient client = EvseClient_NULL);
     uint32_t getTimeLimit(EvseClient client = EvseClient_NULL);
+
+    bool serializeClaims(DynamicJsonDocument &doc);
+    bool serializeClaim(DynamicJsonDocument &doc, EvseClient client);
 
     // Evse Status
     bool isConnected() {
