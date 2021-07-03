@@ -59,7 +59,7 @@ void Scheduler::Event::setId(uint32_t id) {
 
 String Scheduler::Event::getTime()
 {
-  char time[9];
+  char time[14];
   snprintf(time, sizeof(time), "%02d:%02d:%02d", getHours(), getMinutes(), getSeconds());
   String timeString(time);
   return timeString;
