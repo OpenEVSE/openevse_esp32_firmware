@@ -486,7 +486,7 @@ net_loop()
     dnsServer.processNextRequest(); // Captive portal DNS re-dierct
   }
 
-  Profile_End(net_wifi_loop, 5);
+  Profile_End(net_loop, 5);
 }
 
 void

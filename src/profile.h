@@ -1,10 +1,9 @@
 #ifndef __PROFILE_H
 #define __PROFILE_H
 
-#if defined(ENABLE_PROFILE) && defined(ENABLE_DEBUG)
+#if defined(ENABLE_PROFILE)
 
 #if defined(ENABLE_NOISY_PROFILE)
-
 #define Profile_Start(x) \
   unsigned long profile ## x = millis(); \
   DBUGLN(">> Start " #x)

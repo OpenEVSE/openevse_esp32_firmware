@@ -148,7 +148,10 @@ loop() {
   ota_loop();
   rapiSender.loop();
   divert_current_loop();
+
+  Profile_Start(MicroTask);
   MicroTask.update();
+  Profile_End(MicroTask, 10);
 
   if(OpenEVSE.isConnected())
   {
