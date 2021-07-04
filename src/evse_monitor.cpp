@@ -164,7 +164,8 @@ EvseMonitor::EvseMonitor(OpenEVSEClass &openevse) :
   _boot_ready(EVSE_MONITOR_BOOT_READY),
   _session_complete(EVSE_MONITOR_SESSION_COMPLETE_MASK, EVSE_MONITOR_SESSION_COMPLETE_TRIGGER),
   _count(0),
-  _heartbeat(false)
+  _heartbeat(false),
+  _firmware_version("")
 #ifdef ENABLE_MCP9808
   , _mcp9808()
 #endif
