@@ -467,11 +467,16 @@ net_loop()
   // Manage state while connecting
   if(isClientOnly && !WiFi.isConnected())
   {
-    // If we have failed to connect turn on the AP
-    if(client_disconnects > 2) {
-      startAP();
-      client_retry = true;
-      client_retry_time = millis() + WIFI_CLIENT_RETRY_TIMEOUT;
+    // Reset WiFi and try again
+    if (client_disconnects > 2) {
+      WiFi.persistent(false);
+      WiFi.disconnect();
+      WiFi.mode(WIFI_OFF);
+      WiFi.mode(WIFI_STA);
+
+      DEBUG.println("Had 3 disconnects - resetting WiFi");
+      client_disconnects = 0;
+      startClient();
     }
   }
 
