@@ -524,3 +524,8 @@ uint32_t EvseManager::getTimeLimit(EvseClient client)
 {
   return getClaimProperties(client).getTimeLimit();
 }
+
+bool EvseManager::isRapiCommandBlocked(String rapi)
+{
+  return rapi.startsWith("$ST");
+}

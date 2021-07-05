@@ -393,6 +393,8 @@ class EvseManager : public MicroTasks::Task
     void onSessionComplete(MicroTasks::EventListener *listner) {
       _monitor.onSessionComplete(listner);
     }
+
+    bool isRapiCommandBlocked(String rapi);
 };
 
 #endif // !_OPENEVSE_EVSE_MAN_H
