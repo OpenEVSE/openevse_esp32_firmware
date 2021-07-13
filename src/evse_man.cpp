@@ -529,3 +529,36 @@ bool EvseManager::isRapiCommandBlocked(String rapi)
 {
   return rapi.startsWith("$ST");
 }
+
+bool EvseManager::serializeClaims(DynamicJsonDocument &doc)
+{
+  doc.to<JsonArray>();
+
+  for(size_t i = 0; i < EVSE_MANAGER_MAX_CLIENT_CLAIMS; i++)
+  {
+    Claim &claim = _clients[i];
+    if(claim.isValid())
+    {
+      JsonObject obj = doc.createNestedObject();
+      obj["client"] = claim.getClient();
+      obj["priority"] = claim.getPriority();
+      claim.getProperties().serialize(obj);
+    }
+  }
+
+  return true;
+}
+
+bool EvseManager::serializeClaim(DynamicJsonDocument &doc, EvseClient client)
+{
+  Claim *claim;
+
+  if(findClaim(client, &claim))
+  {
+    doc["priority"] = claim->getPriority();
+    claim->getProperties().serialize(doc);
+    return true;
+  }
+
+  return false;
+}

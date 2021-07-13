@@ -58,6 +58,8 @@ const char _CONTENT_TYPE_SVG[] PROGMEM = "image/svg+xml";
 
 #define RAPI_RESPONSE_BLOCKED             -300
 
+void handleEvseClaims(MongooseHttpServerRequest *request);
+
 void dumpRequest(MongooseHttpServerRequest *request)
 {
 #ifdef ENABLE_DEBUG_WEB_REQUEST
@@ -119,7 +121,7 @@ void dumpRequest(MongooseHttpServerRequest *request)
 // -------------------------------------------------------------------
 // Helper function to perform the standard operations on a request
 // -------------------------------------------------------------------
-bool requestPreProcess(MongooseHttpServerRequest *request, MongooseHttpServerResponseStream *&response, fstr_t contentType = CONTENT_TYPE_JSON)
+bool requestPreProcess(MongooseHttpServerRequest *request, MongooseHttpServerResponseStream *&response, fstr_t contentType)
 {
   dumpRequest(request);
 
@@ -584,6 +586,8 @@ handleStatus(MongooseHttpServerRequest *request) {
   doc["evse_connected"] = (int)evse.isConnected();
 
   create_rapi_json(doc);
+
+  doc["status"] = evse.getState().toString();
 
   doc["elapsed"] = evse.getSessionElapsed();
   doc["wattsec"] = evse.getSessionEnergy() * SESSION_ENERGY_SCALE_FACTOR;
@@ -1255,6 +1259,8 @@ web_server_setup() {
 
   server.on("/schedule/plan$", handleSchedulePlan);
   server.on("/schedule", handleSchedule);
+
+  server.on("/claims", handleEvseClaims);
 
   server.on("/override$", handleOverride);
 
