@@ -27,6 +27,8 @@ typedef const __FlashStringHelper *fstr_t;
 #include "app_config.h"
 #include "net_manager.h"
 #include "mqtt.h"
+#include "ocpp.h"
+#include "MongooseOcppSocketClient.h"
 #include "input.h"
 #include "emoncms.h"
 #include "divert.h"
@@ -572,6 +574,8 @@ handleStatus(MongooseHttpServerRequest *request) {
 
   doc["mqtt_connected"] = (int)mqtt_connected();
 
+  doc["ocpp_connected"] = (int)MongooseOcppSocketClient::ocppConnected();
+
   doc["ohm_hour"] = ohm_hour;
 
   doc["free_heap"] = ESPAL.getFreeHeap();
@@ -625,7 +629,7 @@ handleStatus(MongooseHttpServerRequest *request) {
 void
 handleConfigGet(MongooseHttpServerRequest *request, MongooseHttpServerResponseStream *response)
 {
-  const size_t capacity = JSON_OBJECT_SIZE(40) + 1024;
+  const size_t capacity = JSON_OBJECT_SIZE(43) + 1024;
   DynamicJsonDocument doc(capacity);
 
   // EVSE Config
