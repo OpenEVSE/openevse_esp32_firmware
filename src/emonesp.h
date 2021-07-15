@@ -54,6 +54,10 @@
 #define WIFI_CLIENT_RETRY_TIMEOUT (5 * 60 * 1000)
 #endif
 
+#ifndef WIFI_CLIENT_DISCONNECTS_BEFORE_AP
+#define WIFI_CLIENT_DISCONNECTS_BEFORE_AP 2
+#endif
+
 // Used to change the ADC channel used for seeding the rndom number generator
 // Should be set to an unconnected pin
 #ifndef RANDOM_SEED_CHANNEL
