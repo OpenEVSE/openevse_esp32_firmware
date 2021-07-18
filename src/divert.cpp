@@ -15,6 +15,7 @@
 #include "event.h"
 #include "openevse.h"
 #include "divert.h"
+#include "emoncms.h"
 
 #include <sys/time.h>
 
@@ -227,6 +228,7 @@ void divert_update_state()
   } // end ecomode
 
   event_send(event);
+  emoncms_publish(event);
 
   lastUpdate = millis();
 
