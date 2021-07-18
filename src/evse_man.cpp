@@ -128,10 +128,10 @@ EvseManager::EvseManager(Stream &port) :
   _clients(),
   _evseStateListener(this),
   _sessionCompleteListener(this),
-  _targetProperties(),
+  _targetProperties(EvseState::Active),
   _hasClaims(false),
   _sleepForDisable(true),
-  _evaluateClaims(false),
+  _evaluateClaims(true),
   _evaluateTargetState(false),
   _waitingForEvent(0)
 {
