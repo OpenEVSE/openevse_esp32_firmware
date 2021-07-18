@@ -109,11 +109,19 @@ EvseManager::Claim::Claim() :
 {
 }
 
-void EvseManager::Claim::claim(EvseClient client, int priority, EvseProperties &target)
+bool EvseManager::Claim::claim(EvseClient client, int priority, EvseProperties &target)
 {
-  _client = client;
-  _priority = priority;
-  _properties = target;
+  if(_client != client ||
+     _priority != priority ||
+     _properties != target)
+  {
+    _client = client;
+    _priority = priority;
+    _properties = target;
+    return true;
+  }
+
+  return false;
 }
 
 void EvseManager::Claim::release()
@@ -385,7 +393,7 @@ bool EvseManager::claim(EvseClient client, int priority, EvseProperties &target)
 {
   Claim *slot = NULL;
 
-  DBUGF("New claim from 0x%08x, priority %d, %s", client, priority, target.getState().toString());
+  DBUGF("Claim from 0x%08x, priority %d, %s", client, priority, target.getState().toString());
 
   for (size_t i = 0; i < EVSE_MANAGER_MAX_CLIENT_CLAIMS; i++)
   {
@@ -400,10 +408,13 @@ bool EvseManager::claim(EvseClient client, int priority, EvseProperties &target)
 
   if(slot)
   {
-    DBUGF("Found slot, waking task");
-    slot->claim(client, priority, target);
-    _evaluateClaims = true;
-    MicroTask.wakeTask(this);
+    DBUGF("Found slot");
+    if(slot->claim(client, priority, target))
+    {
+      DBUGF("Claim added/updated, waking task");
+      _evaluateClaims = true;
+      MicroTask.wakeTask(this);
+    }
     return true;
   }
 
