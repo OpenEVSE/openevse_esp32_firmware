@@ -2,6 +2,7 @@
 #include "espal.h"
 #include "divert.h"
 #include "mqtt.h"
+#include "ocpp.h"
 #include "tesla_client.h"
 #include "emoncms.h"
 #include "input.h"
@@ -49,6 +50,12 @@ String mqtt_vehicle_soc;
 String mqtt_vehicle_range;
 String mqtt_vehicle_eta;
 String mqtt_announce_topic;
+
+// OCPP 1.6 Settings
+String ocpp_server;
+String ocpp_chargeBoxId;
+String ocpp_idTag;
+String tx_start_point;
 
 // Time
 String time_zone;
@@ -120,6 +127,12 @@ ConfigOpt *opts[] =
   new ConfigOptDefenition<String>(mqtt_vehicle_eta, "", "mqtt_vehicle_eta", "met"),
   new ConfigOptDefenition<String>(mqtt_announce_topic, "openevse/announce/"+ESPAL.getShortId(), "mqtt_announce_topic", "ma"),
 
+// OCPP 1.6 Settings
+  new ConfigOptDefenition<String>(ocpp_server, "", "ocpp_server", "ows"),
+  new ConfigOptDefenition<String>(ocpp_chargeBoxId, "", "ocpp_chargeBoxId", "cid"),
+  new ConfigOptDefenition<String>(ocpp_idTag, "", "ocpp_idTag", "idt"),
+  new ConfigOptDefenition<String>(tx_start_point, "tx_pending", "tx_start_point", "otx"),
+
 // Ohm Connect Settings
   new ConfigOptDefenition<String>(ohm, "", "ohm", "o"),
 
@@ -154,6 +167,9 @@ ConfigOpt *opts[] =
   new ConfigOptVirtualBool(flagsOpt, CONFIG_SERVICE_DIVERT, CONFIG_SERVICE_DIVERT, "divert_enabled", "de"),
   new ConfigOptVirtualBool(flagsOpt, CONFIG_PAUSE_USES_DISABLED, CONFIG_PAUSE_USES_DISABLED, "pause_uses_disabled", "pd"),
   new ConfigOptVirtualBool(flagsOpt, CONFIG_VEHICLE_RANGE_MILES, CONFIG_VEHICLE_RANGE_MILES, "mqtt_vehicle_range_miles", "mvru"),
+  new ConfigOptVirtualBool(flagsOpt, CONFIG_SERVICE_OCPP, CONFIG_SERVICE_OCPP, "ocpp_enabled", "ope"),
+  new ConfigOptVirtualBool(flagsOpt, CONFIG_OCPP_ACCESS_SUSPEND, CONFIG_OCPP_ACCESS_SUSPEND, "ocpp_suspend_evse", "ops"),
+  new ConfigOptVirtualBool(flagsOpt, CONFIG_OCPP_ACCESS_ENERGIZE, CONFIG_OCPP_ACCESS_ENERGIZE, "ocpp_energize_plug", "opn"),
   new ConfigOptVirtualMqttProtocol(flagsOpt, "mqtt_protocol", "mprt"),
   new ConfigOptVirtualChargeMode(flagsOpt, "charge_mode", "chmd")
 };
@@ -203,8 +219,11 @@ void config_changed(String name)
     if(emoncms_connected != config_emoncms_enabled()) {
       emoncms_updated = true;
     }
+    ArduinoOcppTask::notifyConfigChanged();
   } else if(name.startsWith("mqtt_")) {
     mqtt_restart();
+  } else if(name.startsWith("ocpp_") || name.startsWith("tx_start_point")) {
+    ArduinoOcppTask::notifyConfigChanged();
   } else if(name.startsWith("emoncms_")) {
     emoncms_updated = true;
   } else if(name == "divert_enabled" || name == "charge_mode") {

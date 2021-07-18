@@ -45,6 +45,12 @@ extern String mqtt_vehicle_range;
 extern String mqtt_vehicle_eta;
 extern String mqtt_announce_topic;
 
+// OCPP 1.6 Settings
+extern String ocpp_server;
+extern String ocpp_chargeBoxId;
+extern String ocpp_idTag;
+extern String tx_start_point;
+
 // Time
 extern String time_zone;
 
@@ -67,7 +73,10 @@ extern uint32_t flags;
 #define CONFIG_SERVICE_DIVERT       (1 << 9)
 #define CONFIG_CHARGE_MODE          (7 << 10) // 3 bits for mode
 #define CONFIG_PAUSE_USES_DISABLED  (1 << 13)
-#define CONFIG_VEHICLE_RANGE_MILES  (1 << 14)
+#define CONFIG_SERVICE_OCPP         (1 << 14)
+#define CONFIG_OCPP_ACCESS_SUSPEND  (1 << 15)
+#define CONFIG_OCPP_ACCESS_ENERGIZE (1 << 16)
+#define CONFIG_VEHICLE_RANGE_MILES  (1 << 17)
 
 inline bool config_emoncms_enabled() {
   return CONFIG_SERVICE_EMONCMS == (flags & CONFIG_SERVICE_EMONCMS);
@@ -91,6 +100,18 @@ inline uint8_t config_mqtt_protocol() {
 
 inline bool config_mqtt_reject_unauthorized() {
   return 0 == (flags & CONFIG_MQTT_ALLOW_ANY_CERT);
+}
+
+inline bool config_ocpp_enabled() {
+  return CONFIG_SERVICE_OCPP == (flags & CONFIG_SERVICE_OCPP);
+}
+
+inline bool config_ocpp_access_can_suspend() {
+  return CONFIG_OCPP_ACCESS_SUSPEND == (flags & CONFIG_OCPP_ACCESS_SUSPEND);
+}
+
+inline bool config_ocpp_access_can_energize() {
+  return CONFIG_OCPP_ACCESS_ENERGIZE == (flags & CONFIG_OCPP_ACCESS_ENERGIZE);
 }
 
 inline bool config_tesla_enabled() {

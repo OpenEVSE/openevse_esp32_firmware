@@ -1,20 +1,15 @@
-# OpenEVSE WiFi Gateway v4
+# OpenEVSE WiFi ESP32 Gateway v4
 
-> **_NOTE:_** Breaking change! This release requires a minimum of [7.1.2](https://github.com/lincomatic/open_evse) of the OpenEVSE firmware, features may not behave as expected on older firmware.
--
--For the v3 that is compatible with previous EVSE firmwares, see the [v3 branch](https://github.com/OpenEVSE/ESP32_WiFi_V3.x/tree/v3). For the older v2 ESP8266 version (pre June 2020), see the [v2 firmware repository](https://github.com/openevse/ESP8266_WiFi_v2.x/)
--
--Instructions on updating the OpenEVSE firmware see [How to Load OpenEVSE Firmware (WinAVR)
--](https://openevse.dozuki.com/Guide/How+to+Load+OpenEVSE+Firmware+(WinAVR)/7?lang=en)
+> **_NOTE:_** Breaking change! This release reccomends a minimum of [7.1.3](https://github.com/OpenEVSE/open_evse/releases) of the OpenEVSE firmware, features including Solar Divert and push button menus may not behave as expected on older firmware.
+
+- *For the older WiFi V2.x ESP8266 version (pre June 2020), see the [v2 firmware repository](https://github.com/openevse/ESP8266_WiFi_v2.x/)*
 
 
 ![main](docs/main2.png)
 
 The WiFi gateway uses an **ESP32** which communicates with the OpenEVSE controller via serial RAPI API. The web UI is served directly from the ESP32 web server and can be controlled via a connected device on the local network.
 
-Wired Ethernet connection is possible using [ESP32 Gateway](docs/wired-ethernet.md)
-
-[**See this repo for the older V2.x ESP8266 version (pre June 2020)**](https://github.com/openevse/ESP8266_WiFi_v2.x/)
+**This FW also supports wired Ethernet connection using [ESP32 Gateway](docs/wired-ethernet.md)**
 
 **[Live UI demo](https://openevse.openenergymonitor.org)**
 
@@ -36,7 +31,7 @@ Wired Ethernet connection is possible using [ESP32 Gateway](docs/wired-ethernet.
 ### OpenEVSE / EmonEVSE charging station
   - Purchase via: [OpenEVSE Store (USA/Canda)](https://store.openevse.com) | [OpenEnergyMonitor (UK / EU)](https://shop.openenergymonitor.com/evse/)
   - OpenEVSE FW [V7.1.3+ recommended](https://github.com/OpenEVSE/open_evse/releases)
-  - All new OpenEVSE units are shipped with V4.8.0 pre-loaded (October 2017 onwards)
+  - All new OpenEVSE units are shipped with V7.1.3 pre-loaded (April 2021 onwards)
 
 
 ### ESP32 WiFi Module
@@ -62,20 +57,27 @@ Wired Ethernet connection is possible using [ESP32 Gateway](docs/wired-ethernet.
   * [WiFi Setup](#wifi-setup)
   * [Charging Mode: Eco](#charging-mode-eco)
     + [Eco Mode Setup](#eco-mode-setup)
+    + [Eco Mode Advanced Settings](#eco-mode-advanced-settings)
   * [Services](#services)
     + [Emoncms data logging](#emoncms-data-logging)
     + [MQTT](#mqtt)
       - [OpenEVSE Status via MQTT](#openevse-status-via-mqtt)
-    + [RAPI](#rapi)
+    + [RAPI API (Not Recommended)](#rapi-api-not-recommended)
       - [RAPI via web interface](#rapi-via-web-interface)
       - [RAPI over MQTT](#rapi-over-mqtt)
       - [RAPI over HTTP](#rapi-over-http)
-    + [HTTP API](#http-api)
+    + [HTTP API (Recommended)](#http-api-recommended)
+      - [Manual Override API](#manual-override-api)
+      - [Schedule timers API](#schedule-timers-api)
+      - [Status API](#status-api)
+      - [Config API](#config-api)
     + [Tesla API](#tesla-api)
     + [OhmConnect](#ohmconnect)
   * [System](#system)
     + [Authentication](#authentication)
-    + [Hardware reset](#hardware-reset)
+    + [WiFi Reset](#wifi-reset)
+    + [HTTP Auth Password reset](#http-auth-password-reset)
+    + [Hardware Factory Reset](#hardware-factory-reset)
     + [Firmware update](#firmware-update)
       - [Via Web Interface](#via-web-interface)
       - [Via Network OTA](#via-network-ota)
@@ -158,7 +160,8 @@ A [OpenEnergyMonitor Solar PV Energy Monitor](https://guide.openenergymonitor.or
   - Grid Import (positive Import / Negative export*): `emon/emonpi/power1`
   - Solar PV generation (always postive): `emon/emonpi/power2` 
 
-**NoteL 'Grid' feed should include the power consumed by the EVSEE**
+**Note#1: 'Grid' feed should include the power consumed by the EVSE**
+**Note#2: The EVSE expects the MQTT data to update every 5-10s, perforamce will be degraded if the update interval is much faster or slower than this**
 
 **CT sensor can be physically reversed on the cable to invert the reading.*
 
@@ -168,7 +171,21 @@ Divertmode can be controlled via mqtt
 
 Topic: `<base-topic>/divertmode/set` 
 Value: `1` = Normal or `2` = Eco
-  
+
+### Eco Mode Advanced Settings 
+
+If 'advanced' mode is toggled on the UI more solar PV divert settings will become available: 
+
+![eco](docs/divert-advanced.png)
+
+- Required PV power ratio: specifies which fraction of the EV charging current should come from PV excess. Default value 110% (1.1)
+- Divert smoothing attack: controls how quickly the EVSE responds to an increase in solar PV / grid excess. Default value 40% (0.4)
+- Divert Smoothing decay: controls how quickly the EVSE responds to a decrease in solar PV / grid excess. Default value 5% (0.05)
+- Minimum charge time: the amount of time in seconds the EVSE should run for when triggered by solar PV / grid excess
+
+See this [interactive spreadsheet](https://docs.google.com/spreadsheets/d/1GQEAQ5QNvNuShEsUdcrNsFC12U3pQfcD_NetoIfDoko/edit?usp=sharing) to explore how these values effect the smoothing algorithm.
+
+**Caution: adjust these values at your own risk, the default values have been set to minimise wear on the EVSE contactor and the EVs chraging system. Rapid switching of the EVSE will result in increased wear on these components**
 
 
 ***
@@ -216,9 +233,11 @@ MQTT setup is pre-populated with OpenEnergyMonitor [emonPi default MQTT server c
 
 MQTT can also be used to control the OpenEVSE, see RAPI MQTT below.
 
-### RAPI
+### RAPI API (Not Recommended)
 
 RAPI commands can be used to control and check the status of all OpenEVSE functions. RAPI commands can be issued via the direct serial, web-interface, HTTP and MQTT. We recommend using RAPI over MQTT.
+
+**IMPORTANT: It is no longer recommended to use RAPI API if EVSE also had a WiFi module fitted, since use of the RAPI API will conflict with the WiFi module, instead the HTTP API should be used to control the WiFi module instead of the controller via RAPI. User RAPI API will be disabled in future releases**  
 
 **A full list of RAPI commands can be found in the [OpenEVSE plus source code](https://github.com/OpenEVSE/open_evse/blob/stable/firmware/open_evse/src/rapi_proc.h).**
 
@@ -231,6 +250,8 @@ Enter RAPI commands directly into to web interface (dev mode must be enabled), R
 ![rapi-web](docs/rapi-web.png)
 
 #### RAPI over MQTT
+
+**IMPORTANT: It is no longer recommended to use RAPI API if EVSE also had a WiFi module fitted, since use of the RAPI API will conflict with the WiFi module, instead the HTTP API should be used to control the WiFi module instead of the controller via RAPI. User RAPI API will be disabled in future releases**  
 
 RAPI commands can be issued via MQTT messages. The RAPI command should be published to the following MQTT:
 
@@ -254,6 +275,8 @@ e.g. `$OK`
 
 #### RAPI over HTTP
 
+**IMPORTANT: It is no longer recommended to use RAPI API if EVSE also had a WiFi module fitted, since use of the RAPI API will conflict with the WiFi module, instead the HTTP API should be used to control the WiFi module instead of the controller via RAPI. User RAPI API will be disabled in future releases**  
+
 RAPI (rapid API) commands can also be issued directly via a single HTTP request. 
 
 Using RAPI commands should be avoided if possible. WiFi server API is preferable. If RAPI must be used, avoid fast polling. 
@@ -275,13 +298,54 @@ To enable (start / resume a charge) issue RAPI command `$FE`
 
 There is also an [OpenEVSE RAPI command python library](https://github.com/tiramiseb/python-openevse).
 
-### HTTP API 
+### HTTP API (Recommended)
+
+#### Manual Override API
+
+Manual override can be used to override a charging timer or to immediately start a charge if the EVSE is in sleeping state.
+
+Enable Manual Override:
+
+`curl 'http://openevse-xxx/override' --data-raw '{"state":"disabled"}' `
+
+Disable Manual Override: 
+
+`curl 'http://openevse-xxx/override' -X 'DELETE'`
+
+View Manual Override status:
+
+http://openevse-xxx/override
+
+#### Schedule timers API
+
+Example 
+
+```
+curl 'http://openevse-xxx/schedule' \
+  --data-raw '[{"id":1,"state":"active","days":["monday","tuesday","wednesday","thursday","friday","saturday","sunday"],"time":"07:00"},{"id":2,"state":"disable","days":["monday","tuesday","wednesday","thursday","friday","saturday","sunday"],"time":"10:00"}]' 
+```
+
+View schedule timers:
+
+http://openevse-xxx/schedule
+
+Remove shedule timers:
+
+` curl 'http://192.168.0.104/schedule/1' -X 'DELETE'`
+` curl 'http://192.168.0.104/schedule/2' -X 'DELETE'`
+
+
+#### Status API
+
+
 
 Current status of the OpenEVSE in JSON format is available via: `http://openevse-xxxx/status` e.g
 
 ```
 {"mode":"STA","wifi_client_connected":1,"eth_connected":0,"net_connected":1,"srssi":-73,"ipaddress":"192.168.1.43","emoncms_connected":1,"packets_sent":22307,"packets_success":22290,"mqtt_connected":1,"ohm_hour":"NotConnected","free_heap":203268,"comm_sent":335139,"comm_success":335139,"rapi_connected":1,"amp":0,"pilot":32,"temp1":282,"temp2":-2560,"temp3":-2560,"state":254,"elapsed":3473,"wattsec":22493407,"watthour":51536,"gfcicount":0,"nogndcount":0,"stuckcount":0,"divertmode":1,"solar":390,"grid_ie":0,"charge_rate":7,"divert_update":0,"ota_update":0,"time":"2020-05-12T17:53:48Z","offset":"+0000"}
 ``` 
+
+#### Config API
 
 Current config of the OpenEVSE in JSON format is available via `http://openevse-xxxx/config` e.g
 

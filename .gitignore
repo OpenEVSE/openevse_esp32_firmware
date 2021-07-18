@@ -90,4 +90,5 @@ lib/MicroDebug
 lib/StreamSpy
 lib/MicroTasks
 
-.bin
+*.bin
+

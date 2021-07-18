@@ -29,6 +29,7 @@ typedef uint32_t EvseClient;
 #define EvseClient_OpenEVSE_Limit             EVC(EvseClient_Vendor_OpenEVSE, 0x0006)
 #define EvseClient_OpenEVSE_Error             EVC(EvseClient_Vendor_OpenEVSE, 0x0007)
 #define EvseClient_OpenEVSE_Ohm               EVC(EvseClient_Vendor_OpenEVSE, 0x0008)
+#define EvseClient_OpenEVSE_Ocpp              EVC(EvseClient_Vendor_OpenEVSE, 0x0009)
 
 #define EvseClient_OpenEnergyMonitor_DemandShaper EVC(EvseClient_Vendor_OpenEnergyMonitor, 0x0001)
 
@@ -40,6 +41,7 @@ typedef uint32_t EvseClient;
 #define EvseManager_Priority_Boost     200
 #define EvseManager_Priority_Ohm       500
 #define EvseManager_Priority_Manual   1000
+#define EvseManager_Priority_Ocpp     1050
 #define EvseManager_Priority_Limit    1100
 #define EvseManager_Priority_Error   10000
 
@@ -291,6 +293,9 @@ class EvseManager : public MicroTasks::Task
     // Evse Status
     bool isConnected() {
       return OpenEVSE.isConnected();
+    }
+    bool isActive() {
+      return getActiveState() == EvseState::Active;
     }
     uint8_t getEvseState() {
       return _monitor.getEvseState();
