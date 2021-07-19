@@ -13,6 +13,8 @@ Network connection can be made with a standard Ethernet cable. For new installat
 
 ## Hardware Connections 
 
+See [photos ](https://photos.google.com/share/AF1QipNvANgeR_NRmLrq0lhKnA0BR7ieD8DGRoaJFoilMIwQ8c7QpxR4X7hSfGj3XiTTUw) of hardware connectors for new OpenEVSE V5.5 controller.
+
 *Note: The these hardware connections apply to the current Rev.E & Rev.F ESP32-gateway hardware revisions. See section below for older units.*
 
 

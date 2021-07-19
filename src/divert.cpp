@@ -92,7 +92,7 @@ void divertmode_update(byte newmode)
         event["smoothed_available_current"] = smoothed_available_current = 0;
 
         EvseProperties props(EvseState::Disabled);
-        evse.claim(EvseClient_OpenEVSE_Divert, EvseManager_Priority_Divert, props);
+        evse.claim(EvseClient_OpenEVSE_Divert, EvseManager_Priority_Default, props);
       } break;
 
       default:
@@ -208,7 +208,7 @@ void divert_update_state()
         if(divert_active && divertmode_get_time() >= min_charge_end)
         {
           EvseProperties props(EvseState::Disabled);
-          evse.claim(EvseClient_OpenEVSE_Divert, EvseManager_Priority_Divert, props);
+          evse.claim(EvseClient_OpenEVSE_Divert, EvseManager_Priority_Default, props);
 
           if(previousState != evse.getState())
           {

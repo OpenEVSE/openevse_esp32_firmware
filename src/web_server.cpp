@@ -58,6 +58,8 @@ const char _CONTENT_TYPE_JPEG[] PROGMEM = "image/jpeg";
 const char _CONTENT_TYPE_PNG[] PROGMEM = "image/png";
 const char _CONTENT_TYPE_SVG[] PROGMEM = "image/svg+xml";
 
+#define RAPI_RESPONSE_BLOCKED             -300
+
 void handleEvseClaims(MongooseHttpServerRequest *request);
 
 void dumpRequest(MongooseHttpServerRequest *request)
@@ -1101,12 +1103,18 @@ handleRapi(MongooseHttpServerRequest *request) {
   if (request->hasParam("rapi"))
   {
     String rapi = request->getParam("rapi");
+    int ret = RAPI_RESPONSE_NK;
 
-    // BUG: Really we should do this in the main loop not here...
-    RAPI_PORT.flush();
-    DBUGVAR(rapi);
-    int ret = rapiSender.sendCmdSync(rapi);
-    DBUGVAR(ret);
+    if(!evse.isRapiCommandBlocked(rapi))
+    {
+      // BUG: Really we should do this in the main loop not here...
+      RAPI_PORT.flush();
+      DBUGVAR(rapi);
+      ret = rapiSender.sendCmdSync(rapi);
+      DBUGVAR(ret);
+    } else {
+      ret = RAPI_RESPONSE_BLOCKED;
+    }
 
     if(RAPI_RESPONSE_OK == ret ||
        RAPI_RESPONSE_NK == ret)
@@ -1162,6 +1170,7 @@ handleRapi(MongooseHttpServerRequest *request) {
         RAPI_RESPONSE_BAD_CHECKSUM == ret ? F("RAPI_RESPONSE_BAD_CHECKSUM") :
         RAPI_RESPONSE_BAD_SEQUENCE_ID == ret ? F("RAPI_RESPONSE_BAD_SEQUENCE_ID") :
         RAPI_RESPONSE_ASYNC_EVENT == ret ? F("RAPI_RESPONSE_ASYNC_EVENT") :
+        RAPI_RESPONSE_BLOCKED == ret ? F("RAPI_RESPONSE_BLOCKED") :
         F("UNKNOWN");
 
       if (json) {
@@ -1172,7 +1181,7 @@ handleRapi(MongooseHttpServerRequest *request) {
         s += errorString;
       }
 
-      code = 500;
+      code = RAPI_RESPONSE_BLOCKED == ret ? 400 : 500;
     }
   }
   if (false == json) {
