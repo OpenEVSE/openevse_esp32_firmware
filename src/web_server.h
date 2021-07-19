@@ -36,6 +36,9 @@ extern void web_server_loop();
 
 extern void web_server_event(JsonDocument &event);
 
+typedef const __FlashStringHelper *fstr_t;
+
+bool requestPreProcess(MongooseHttpServerRequest *request, MongooseHttpServerResponseStream *&response, fstr_t contentType = CONTENT_TYPE_JSON);
 void dumpRequest(MongooseHttpServerRequest *request);
 
 #endif // _EMONESP_WEB_SERVER_H

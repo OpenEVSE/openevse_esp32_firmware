@@ -204,7 +204,9 @@ unsigned long Scheduler::loop(MicroTasks::WakeReason reason)
       DBUGF("Starting %s claim",
         currentEvent.getState().toString());
       EvseProperties properties(currentEvent.getState());
-      _evse->claim(EvseClient_OpenEVSE_Schedule, EvseManager_Priority_Timer, properties);
+      _evse->claim(EvseClient_OpenEVSE_Schedule,
+        EvseState::Active == currentEvent.getState() ? EvseManager_Priority_Timer : EvseManager_Priority_Default,
+        properties);
     } else {
       // No scheduled events, release any claims
       DBUGLN("releasing claims");

@@ -198,9 +198,8 @@ loop() {
     // -------------------------------------------------------------------
     // Do these things once every 30 seconds
     // -------------------------------------------------------------------
-    if ((millis() - Timer1) >= 30000) {
-      DBUGLN("Time1");
-
+    if ((millis() - Timer1) >= 30000)
+    {
       if(!Update.isRunning())
       {
         if(config_ohm_enabled()) {
