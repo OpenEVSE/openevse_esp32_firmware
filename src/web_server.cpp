@@ -487,30 +487,30 @@ handleSaveAdvanced(MongooseHttpServerRequest *request) {
 // url: /teslaveh
 // -------------------------------------------------------------------
 void
-handleTeslaVeh(MongooseHttpServerRequest *request) {
+handleTeslaVeh(MongooseHttpServerRequest *request)
+{
   MongooseHttpServerResponseStream *response;
   if(false == requestPreProcess(request, response)) {
     return;
   }
 
-  String s = "{";
-  int vc = teslaClient.getVehicleCnt();
-  s += "\"count:\"" + String(vc);
-  if (vc) {
-    s += ",[";
-    for (int i=0;i < vc;i++) {
-      s += "{\"id\":\"" + teslaClient.getVehicleId(i) + "\",";
-      s += "\"name\":\"" + teslaClient.getVehicleDisplayName(i) + "\"}";
-      if (i < vc-1) s += ",";
-    }
-    s += "]";
+  StaticJsonDocument<1024> doc;
+  int count = teslaClient.getVehicleCnt();
+  doc["count"] = count;
+  JsonArray vehicles = doc.createNestedArray("vehicles");
+
+  for (int i = 0; i < count; i++)
+  {
+    JsonObject vehicle = vehicles.createNestedObject();
+    vehicle["id"] = teslaClient.getVehicleId(i);
+    vehicle["name"] = teslaClient.getVehicleDisplayName(i);
   }
-  s += "}";
 
   response->setCode(200);
-  response->print(s);
+  serializeJson(doc, *response);
   request->send(response);
 }
+
 // -------------------------------------------------------------------
 // Save the Ohm keyto EEPROM
 // url: /handleSaveOhmkey
@@ -610,18 +610,27 @@ handleStatus(MongooseHttpServerRequest *request) {
   doc["time"] = String(time);
   doc["offset"] = String(offset);
 
-  {
-    const TESLA_CHARGE_INFO *tci = teslaClient.getChargeInfo();
-    if (tci->isValid) {
-      doc["batteryRange"] = String(tci->batteryRange) + ",";
-      doc["chargeEnergyAdded"] = String(tci->chargeEnergyAdded) + ",";
-      doc["chargeMilesAddedRated"] = String(tci->chargeMilesAddedRated) + ",";
-      doc["batteryLevel"] = String(tci->batteryLevel) + ",";
-      doc["chargeLimitSOC"] = String(tci->chargeLimitSOC) + ",";
-      doc["timeToFullCharge"] = String(tci->timeToFullCharge) + ",";
-      doc["chargerVoltage"] = String(tci->chargerVoltage);
+  doc["vehicle_state_update"] = (millis() - evse.getVehicleLastUpdated()) / 1000;
+  if(teslaClient.getVehicleCnt() > 0) {
+    doc["tesla_vehicle_count"] = teslaClient.getVehicleCnt();
+    doc["tesla_vehicle_id"] = teslaClient.getVehicleId(teslaClient.getCurVehicleIdx());
+    doc["tesla_vehicle_name"] = teslaClient.getVehicleDisplayName(teslaClient.getCurVehicleIdx());
+    teslaClient.getChargeInfoJson(doc);
+  } else {
+    doc["tesla_vehicle_count"] = false;
+    doc["tesla_vehicle_id"] = false;
+    doc["tesla_vehicle_name"] = false;
+    if(evse.isVehicleStateOfChargeValid()) {
+      doc["battery_level"] = evse.getVehicleStateOfCharge();
+    }
+    if(evse.isVehicleRangeValid()) {
+      doc["battery_range"] = evse.getVehicleRange();
+    }
+    if(evse.isVehicleEtaValid()) {
+      doc["time_to_full_charge"] = evse.getVehicleEta();
     }
   }
+
 
   response->setCode(200);
   serializeJson(doc, *response);
@@ -1249,6 +1258,7 @@ web_server_setup() {
   server.on("/savemqtt$", handleSaveMqtt);
   server.on("/saveadmin$", handleSaveAdmin);
   server.on("/teslaveh$", handleTeslaVeh);
+  server.on("/tesla/vehicles$", handleTeslaVeh);
   server.on("/saveadvanced$", handleSaveAdvanced);
   server.on("/saveohmkey$", handleSaveOhmkey);
   server.on("/settime$", handleSetTime);

@@ -40,6 +40,9 @@ extern String mqtt_pass;
 extern String mqtt_solar;
 extern String mqtt_grid_ie;
 extern String mqtt_vrms;
+extern String mqtt_vehicle_soc;
+extern String mqtt_vehicle_range;
+extern String mqtt_vehicle_eta;
 extern String mqtt_announce_topic;
 
 // OCPP 1.6 Settings
@@ -69,10 +72,11 @@ extern uint32_t flags;
 #define CONFIG_SERVICE_TESLA        (1 << 8)
 #define CONFIG_SERVICE_DIVERT       (1 << 9)
 #define CONFIG_CHARGE_MODE          (7 << 10) // 3 bits for mode
-#define CONFIG_PAUSE_USES_DISABLED   (1 << 13)
+#define CONFIG_PAUSE_USES_DISABLED  (1 << 13)
 #define CONFIG_SERVICE_OCPP         (1 << 14)
 #define CONFIG_OCPP_ACCESS_SUSPEND  (1 << 15)
 #define CONFIG_OCPP_ACCESS_ENERGIZE (1 << 16)
+#define CONFIG_VEHICLE_RANGE_MILES  (1 << 17)
 
 inline bool config_emoncms_enabled() {
   return CONFIG_SERVICE_EMONCMS == (flags & CONFIG_SERVICE_EMONCMS);
@@ -124,6 +128,10 @@ inline uint8_t config_charge_mode() {
 
 inline bool config_pause_uses_disabled() {
   return CONFIG_PAUSE_USES_DISABLED == (flags & CONFIG_PAUSE_USES_DISABLED);
+}
+
+inline bool config_vehicle_range_miles() {
+  return CONFIG_VEHICLE_RANGE_MILES == (flags & CONFIG_VEHICLE_RANGE_MILES);
 }
 
 // Ohm Connect Settings

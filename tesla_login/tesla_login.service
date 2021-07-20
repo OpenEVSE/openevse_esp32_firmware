@@ -1,0 +1,14 @@
+[Unit]
+Description=OpenEVSE WiFi Tesla Login
+Documentation=https://github.com/OpenEVSE/ESP32_WiFi_v4.x
+After=network.target
+
+[Service]
+Environment=NODE_PORT=3000
+Type=simple
+User=ubuntu
+ExecStart=/usr/bin/node /vagrant/tesla_login/app.js --port $NODE_PORT
+Restart=on-failure
+
+[Install]
+WantedBy=multi-user.target

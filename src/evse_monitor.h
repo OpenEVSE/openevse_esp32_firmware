@@ -186,6 +186,8 @@ class EvseMonitor : public MicroTasks::Task
 
     void setPilot(long amps);
 
+    void setVoltage(double volts);
+
     uint8_t getEvseState() {
       return _state.getEvseState();
     }
