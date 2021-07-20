@@ -39,6 +39,7 @@ typedef uint32_t EvseClient;
 #define EvseManager_Priority_Divert     50
 #define EvseManager_Priority_Timer     100
 #define EvseManager_Priority_Boost     200
+#define EvseManager_Priority_API       500
 #define EvseManager_Priority_Ohm       500
 #define EvseManager_Priority_Manual   1000
 #define EvseManager_Priority_Ocpp     1050
@@ -167,6 +168,34 @@ class EvseProperties : virtual public JsonSerialize<512>
       return *this;
     }
 
+    bool equals(EvseProperties &rhs) {
+      return this->_state == rhs._state &&
+             this->_charge_current == rhs._charge_current &&
+             this->_max_current == rhs._max_current &&
+             this->_energy_limit == rhs._energy_limit &&
+             this->_time_limit == rhs._time_limit &&
+             this->_auto_release == rhs._auto_release;
+
+    }
+    bool equals(EvseState &rhs) {
+      return this->_state == rhs;
+    }
+
+    bool operator == (EvseProperties &rhs) {
+      return this->equals(rhs);
+    }
+    bool operator == (EvseState &rhs) {
+      return this->equals(rhs);
+    }
+
+    bool operator != (EvseProperties &rhs) {
+      return !equals(rhs);
+    }
+    bool operator != (EvseState &rhs) {
+      return !equals(rhs);
+    }
+
+
     using JsonSerialize::deserialize;
     virtual bool deserialize(JsonObject &obj);
     using JsonSerialize::serialize;
@@ -186,7 +215,7 @@ class EvseManager : public MicroTasks::Task
       public:
         Claim();
 
-        void claim(EvseClient client, int priority, EvseProperties &target);
+        bool claim(EvseClient client, int priority, EvseProperties &target);
         void release();
 
         bool isValid() {
@@ -289,6 +318,9 @@ class EvseManager : public MicroTasks::Task
     uint32_t getMaxCurrent(EvseClient client = EvseClient_NULL);
     uint32_t getEnergyLimit(EvseClient client = EvseClient_NULL);
     uint32_t getTimeLimit(EvseClient client = EvseClient_NULL);
+
+    bool serializeClaims(DynamicJsonDocument &doc);
+    bool serializeClaim(DynamicJsonDocument &doc, EvseClient client);
 
     // Evse Status
     bool isConnected() {
@@ -438,6 +470,8 @@ class EvseManager : public MicroTasks::Task
     void onSessionComplete(MicroTasks::EventListener *listner) {
       _monitor.onSessionComplete(listner);
     }
+
+    bool isRapiCommandBlocked(String rapi);
 };
 
 #endif // !_OPENEVSE_EVSE_MAN_H
