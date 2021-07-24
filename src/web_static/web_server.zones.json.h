@@ -462,3 +462,4 @@ static const char CONTENT_ZONES_JSON[] PROGMEM =
   "\"Pacific/Wake\":\"<+12>-12\",\n"
   "\"Pacific/Wallis\":\"<+12>-12\"\n"
   "}\n";
+static const char CONTENT_ZONES_JSON_ETAG[] PROGMEM = "7641cf7331c8ae6124b008c962061938c20f26ae538e30e0484afc06adb88af9";

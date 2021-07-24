@@ -19,6 +19,7 @@ struct StaticFile
   const char *data;
   size_t length;
   const char *type;
+  const char *etag;
 };
 
 #include "web_static/web_server_static_files.h"
@@ -33,9 +34,6 @@ static const char _HOME_PAGE[] PROGMEM = "/home.html";
 
 static const char _WIFI_PAGE[] PROGMEM = "/wifi_portal.html";
 #define WIFI_PAGE FPSTR(_WIFI_PAGE)
-
-static const char _BUILD_TIME[] PROGMEM = __DATE__ " " __TIME__ " GMT";
-#define BUILD_TIME FPSTR(_BUILD_TIME)
 
 class StaticFileResponse: public MongooseHttpServerResponse
 {
@@ -87,8 +85,10 @@ bool web_static_handle(MongooseHttpServerRequest *request)
   {
     MongooseHttpServerResponseBasic *response = request->beginResponse();
 
-    MongooseString ifModified = request->headers("If-Modified-Since");
-    if(ifModified.equals(BUILD_TIME)) {
+    response->addHeader(F("Cache-Control"), F("public, max-age=30, must-revalidate"));
+
+    MongooseString ifNoneMatch = request->headers("If-None-Match");
+    if(ifNoneMatch.equals(file->etag)) {
       request->send(304);
       return true;
     }
@@ -101,7 +101,7 @@ bool web_static_handle(MongooseHttpServerRequest *request)
       response->addHeader(F("Access-Control-Allow-Origin"), F("*"));
     }
 
-    response->addHeader("Last-Modified", BUILD_TIME);
+    response->addHeader("Etag", file->etag);
     response->setContent((const uint8_t *)file->data, file->length);
 
     request->send(response);
