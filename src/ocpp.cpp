@@ -98,6 +98,10 @@ void ArduinoOcppTask::loadEvseBehavior() {
         this->updateEvseClaim();
     });
 
+    setConnectorPluggedSampler([evse = evse] () {
+        return (bool) evse->isConnected();
+    });
+
     setEvRequestsEnergySampler([evse = evse] () {
         return (bool) evse->isCharging();
     });
