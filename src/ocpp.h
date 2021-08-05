@@ -33,6 +33,10 @@ private:
     std::function<void()> onVehicleConnect = [] () {};
     std::function<void()> onVehicleDisconnect = [] () {};
 
+    bool resetTriggered = false;
+    bool resetHard = false; //default to soft reset
+    ulong resetTime;
+
     void initializeArduinoOcpp();
     bool arduinoOcppInitialized = false;
     void loadEvseBehavior();

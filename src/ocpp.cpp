@@ -14,6 +14,9 @@
 
 #include "emonesp.h" //for DEFAULT_VOLTAGE
 
+#include "net_manager.h" //shut down network connection before reset
+#include "espal.h"
+
 #define LCD_DISPLAY(X) if (lcd) lcd->display((X), 0, 1, 5 * 1000, LCD_CLEAR_LINE);
 
 
@@ -111,6 +114,41 @@ void ArduinoOcppTask::loadEvseBehavior() {
     });
 
     /*
+     * Report failures to central system. Note that the error codes are standardized
+     */
+
+    addConnectorErrorCodeSampler([evse = evse] () {
+        if (evse->getEvseState() == OPENEVSE_STATE_GFI_FAULT ||
+                evse->getEvseState() == OPENEVSE_STATE_NO_EARTH_GROUND ||
+                evse->getEvseState() == OPENEVSE_STATE_GFI_SELF_TEST_FAILED) {
+            return "GroundFailure";
+        }
+        return (const char *) NULL;
+    });
+
+    addConnectorErrorCodeSampler([evse = evse] () {
+        if (evse->getEvseState() == OPENEVSE_STATE_OVER_TEMPERATURE) {
+            return "HighTemperature";
+        }
+        return (const char *) NULL;
+    });
+
+    addConnectorErrorCodeSampler([evse = evse] () {
+        if (evse->getEvseState() == OPENEVSE_STATE_OVER_CURRENT) {
+            return "OverCurrentFailure";
+        }
+        return (const char *) NULL;
+    });
+
+    addConnectorErrorCodeSampler([evse = evse] () {
+        if (evse->getEvseState() == OPENEVSE_STATE_STUCK_RELAY ||
+                evse->getEvseState() == OPENEVSE_STATE_DIODE_CHECK_FAILED) {
+            return "InternalError";
+        }
+        return (const char *) NULL;
+    });
+
+    /*
      * CP behavior definition: How will plugging and unplugging the EV start or stop OCPP transactions
      */
 
@@ -177,6 +215,21 @@ void ArduinoOcppTask::loadEvseBehavior() {
         this->updateEvseClaim();
     });
 
+    setOnResetReceiveReq([this] (JsonObject payload) {
+        const char *type = payload["type"] | "Soft";
+        if (!strcmp(type, "Hard")) {
+            resetHard = true;
+        }
+
+        resetTime = millis();
+        resetTriggered = true;
+    });
+
+    setOnUnlockConnector([] () {
+        //TODO Send unlock command to peripherals. If successful, return true, otherwise false
+        return false;
+    });
+
     updateEvseClaim();
 }
 
@@ -212,6 +265,16 @@ unsigned long ArduinoOcppTask::loop(MicroTasks::WakeReason reason) {
         vehicleConnected = evse->isVehicleConnected();
 
         onVehicleDisconnect();
+    }
+
+    if (resetTriggered) {
+        if (millis() - resetTime >= 10000UL) { //wait for 10 seconds after reset command to send the conf msg
+            if (resetHard) {
+                //TODO send reset command to all peripherals
+            }
+            net_wifi_disconnect();
+            ESPAL.reset();
+        }
     }
 
     return 0;
