@@ -87,7 +87,10 @@ void ArduinoOcppTask::loadEvseBehavior() {
     });
 
     setEnergyActiveImportSampler([evse = evse] () {
-        return (float) evse->getTotalEnergy();
+        float activeImport = 0.f;
+        activeImport += (float) evse->getTotalEnergy();
+        activeImport += (float) evse->getSessionEnergy();
+        return activeImport;
     });
 
     setOnChargingRateLimitChange([&charging_limit = charging_limit, this] (float limit) { //limit = maximum charge rate in Watts
