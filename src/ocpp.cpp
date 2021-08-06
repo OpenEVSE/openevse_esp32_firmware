@@ -63,7 +63,16 @@ void ArduinoOcppTask::initializeArduinoOcpp() {
 
         OCPP_initialize(ocppSocket, (float) DEFAULT_VOLTAGE, ArduinoOcpp::FilesystemOpt::Use, clockAdapter);
 
-        bootNotification("Advanced Series", "OpenEVSE", [lcd = lcd](JsonObject payload) {
+        DynamicJsonDocument *evseDetailsDoc = new DynamicJsonDocument(JSON_OBJECT_SIZE(6));
+        JsonObject evseDetails = evseDetailsDoc->to<JsonObject>();
+        evseDetails["chargePointModel"] = "Advanced Series";
+        //evseDetails["chargePointSerialNumber"] = "TODO";
+        evseDetails["chargePointVendor"] = "OpenEVSE";
+        evseDetails["firmwareVersion"] = evse->getFirmwareVersion();
+        //evseDetails["meterSerialNumber"] = "TODO";
+        //evseDetails["meterType"] = "TODO";
+
+        bootNotification(evseDetailsDoc, [lcd = lcd](JsonObject payload) { //ArduinoOcpp will delete evseDetailsDoc
             LCD_DISPLAY("OCPP connected!");
         });
 
