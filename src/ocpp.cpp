@@ -361,11 +361,11 @@ String ArduinoOcppTask::getCentralSystemUrl() {
     if (url.isEmpty()) {
         return url; //return empty String
     }
-    if (!url.endsWith("/")) {
-        url += '/';
-    }
     String chargeBoxId = ocpp_chargeBoxId;
     chargeBoxId.trim();
+    if (!url.endsWith("/") && !chargeBoxId.isEmpty()) {
+        url += '/';
+    }
     url += chargeBoxId;
 
     if (MongooseOcppSocketClient::isValidUrl(url.c_str())) {
