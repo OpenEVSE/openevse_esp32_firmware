@@ -123,13 +123,13 @@ void ArduinoOcppTask::loadEvseBehavior() {
     });
 
     /*
-     * Report failures to central system. Note that the error codes are standardized
+     * Report failures to central system. Note that the error codes are standardized in OCPP
      */
 
     addConnectorErrorCodeSampler([evse = evse] () {
         if (evse->getEvseState() == OPENEVSE_STATE_GFI_FAULT ||
                 evse->getEvseState() == OPENEVSE_STATE_NO_EARTH_GROUND ||
-                evse->getEvseState() == OPENEVSE_STATE_GFI_SELF_TEST_FAILED) {
+                evse->getEvseState() == OPENEVSE_STATE_DIODE_CHECK_FAILED) {
             return "GroundFailure";
         }
         return (const char *) NULL;
@@ -151,7 +151,7 @@ void ArduinoOcppTask::loadEvseBehavior() {
 
     addConnectorErrorCodeSampler([evse = evse] () {
         if (evse->getEvseState() == OPENEVSE_STATE_STUCK_RELAY ||
-                evse->getEvseState() == OPENEVSE_STATE_DIODE_CHECK_FAILED) {
+                evse->getEvseState() == OPENEVSE_STATE_GFI_SELF_TEST_FAILED) {
             return "InternalError";
         }
         return (const char *) NULL;
@@ -232,6 +232,8 @@ void ArduinoOcppTask::loadEvseBehavior() {
 
         resetTime = millis();
         resetTriggered = true;
+
+        LCD_DISPLAY("Reboot EVSE");
     });
 
     setOnUnlockConnector([] () {
