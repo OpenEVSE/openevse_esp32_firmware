@@ -6,7 +6,9 @@
 #include <openevse.h>
 #include <MicroTasks.h>
 
+#include "evse_state.h"
 #include "evse_monitor.h"
+#include "event_log.h"
 #include "json_serialize.h"
 
 typedef uint32_t EvseClient;
@@ -53,47 +55,6 @@ typedef uint32_t EvseClient;
 #ifndef EVSE_MANAGER_MAX_CLIENT_CLAIMS
 #define EVSE_MANAGER_MAX_CLIENT_CLAIMS 10
 #endif // !EVSE_MANAGER_MAX_CLIENT_CLAIMS
-
-class EvseState
-{
-  public:
-    enum Value : uint8_t {
-      None,
-      Active,
-      Disabled
-    };
-
-  EvseState() = default;
-  constexpr EvseState(Value value) : _value(value) { }
-
-  bool fromString(const char *value)
-  {
-    // Cheat a bit and just check the first char
-    if('a' == value[0] || 'd' == value[0]) {
-      _value = 'a' == value[0] ? EvseState::Active : EvseState::Disabled;
-      return true;
-    }
-    return false;
-  }
-
-  const char *toString()
-  {
-    return EvseState::Active == _value ? "active" :
-           EvseState::Disabled == _value ? "disabled" :
-           EvseState::None == _value ? "none" :
-           "unknown";
-  }
-
-  operator Value() const { return _value; }
-  explicit operator bool() = delete;        // Prevent usage: if(state)
-  EvseState operator= (const Value val) {
-    _value = val;
-    return *this;
-  }
-
-  private:
-    Value _value;
-};
 
 class EvseProperties : virtual public JsonSerialize<512>
 {
@@ -265,6 +226,7 @@ class EvseManager : public MicroTasks::Task
 
     RapiSender _sender;
     EvseMonitor _monitor;
+    EventLog &_eventLog;
 
     Claim _clients[EVSE_MANAGER_MAX_CLIENT_CLAIMS];
 
@@ -303,7 +265,7 @@ class EvseManager : public MicroTasks::Task
     unsigned long loop(MicroTasks::WakeReason reason);
 
   public:
-    EvseManager(Stream &port);
+    EvseManager(Stream &port, EventLog &eventLog);
     ~EvseManager();
 
     bool begin();

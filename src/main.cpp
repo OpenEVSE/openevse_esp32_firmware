@@ -52,12 +52,14 @@
 #include "ocpp.h"
 
 #include "LedManagerTask.h"
+#include "event_log.h"
 #include "evse_man.h"
 #include "scheduler.h"
 
 #include "legacy_support.h"
 
-EvseManager evse(RAPI_PORT);
+EventLog eventLog;
+EvseManager evse(RAPI_PORT, eventLog);
 Scheduler scheduler(evse);
 ManualOverride manual(evse);
 
@@ -104,6 +106,7 @@ void setup()
   config_load_settings();
   DBUGF("After config_load_settings: %d", ESPAL.getFreeHeap());
 
+  eventLog.begin();
   timeManager.begin();
   evse.begin();
   scheduler.begin();
