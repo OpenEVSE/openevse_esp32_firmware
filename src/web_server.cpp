@@ -40,7 +40,7 @@ typedef const __FlashStringHelper *fstr_t;
 
 MongooseHttpServer server;          // Create class for Web server
 
-bool enableCors = true;
+bool enableCors = false;
 bool streamDebug = false;
 
 // Event timeouts
