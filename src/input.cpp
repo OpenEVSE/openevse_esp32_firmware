@@ -139,8 +139,11 @@ handleRapiRead()
   {
     if(RAPI_RESPONSE_OK == ret)
     {
-      struct timeval set_time = { evse_time, 0 };
-      settimeofday(&set_time, NULL);
+      time_t local_time = time(NULL);
+      if(evse_time > local_time) {
+        struct timeval set_time = { evse_time, 0 };
+        settimeofday(&set_time, NULL);
+      }
     }
   });
 

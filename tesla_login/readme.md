@@ -5,7 +5,7 @@ Node web app to wrap logging in to the Tesla API to support OpenEVSE.
 ## Requirements
 
 ```bash
-sudo apt-get intall node nodejs npm
+sudo apt-get install nodejs npm
 ```
 
 Tested with `npm V5.6.0` and nodejs `v9.5.0`.
@@ -34,11 +34,15 @@ npm install
 
 ### Using systemd
 
-`sudo cp tesla_login.service /etc/systemd/system/tesla_login.service`
+```bash
+sudo cp tesla_login.service /etc/systemd/system/tesla_login.service
+```
 
 Edit service file to specify correct path to match installation location
 
-`sudo nano /etc/systemd/system/tesla_login.service`
+```bash
+sudo nano /etc/systemd/system/tesla_login.service
+```
 
 Run at startup:
 

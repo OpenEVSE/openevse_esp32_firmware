@@ -17,7 +17,8 @@ let args = minimist(process.argv.slice(2), {
   default: {
     help: false,
     version: false,
-    port: 3000
+    port: 3000,
+    log: 0
   },
 });
 
@@ -31,7 +32,8 @@ if(args.version) {
   return 0;
 }
 
-var port = args.port;
+const port = args.port;
+const log = args.log;
 
 const app = express();
 
@@ -44,6 +46,8 @@ app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 app.use(cors());
 
+teslajs.setLogLevel(log);
+
 app.post("/login", function (req, res) {
   teslajs.login({
     username: req.body.username,
@@ -53,7 +57,7 @@ app.post("/login", function (req, res) {
   }, (err, result) => {
     if(err) {
       res.status(403).send({
-        error: err
+        error: err.message
       });
       return;
     }

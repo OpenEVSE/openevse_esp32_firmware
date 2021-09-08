@@ -77,6 +77,7 @@ static uint32_t last_mem = 0;
 #define TEXTIFY(A) #A
 #define ESCAPEQUOTE(A) TEXTIFY(A)
 String currentfirmware = ESCAPEQUOTE(BUILD_TAG);
+String buildenv = ESCAPEQUOTE(BUILD_ENV_NAME);
 
 ArduinoOcppTask ocpp = ArduinoOcppTask();
 
