@@ -29,6 +29,8 @@ paths:
             application/json:
               schema:
                 $ref: ./models/Status.yaml
+      tags:
+        - status
   /ws:
     get:
       operationId: statusUpdates
@@ -43,6 +45,8 @@ paths:
             application/json:
               schema:
                 $ref: ./models/Status.yaml
+      tags:
+        - status
   /config:
     get:
       operationId: getConfig
@@ -71,6 +75,8 @@ paths:
             schema:
               $ref: ./models/Config.yaml
       summary: Update the EVSE configuration
+      tags:
+        - config
   /override:
     get:
       responses:
@@ -319,3 +325,6 @@ components:
         - friday
         - saturday
         - sunday
+tags:
+  - name: config
+  - name: status
