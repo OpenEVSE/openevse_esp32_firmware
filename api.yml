@@ -30,7 +30,7 @@ paths:
               schema:
                 $ref: ./models/Status.yaml
       tags:
-        - status
+        - Status
   /ws:
     get:
       operationId: statusUpdates
@@ -46,7 +46,7 @@ paths:
               schema:
                 $ref: ./models/Status.yaml
       tags:
-        - status
+        - Status
   /config:
     get:
       operationId: getConfig
@@ -61,7 +61,7 @@ paths:
       summary: Get the EVSE configuration
       description: ''
       tags:
-        - config
+        - Config
     post:
       operationId: updateConfig
       responses:
@@ -78,7 +78,7 @@ paths:
               $ref: ./models/Config.yaml
       summary: Update the EVSE configuration
       tags:
-        - config
+        - Config
   /override:
     get:
       responses:
@@ -96,7 +96,7 @@ paths:
                 $ref: '#/components/schemas/Message'
       operationId: getManualOverride
       tags:
-        - override
+        - Manual Override
     post:
       requestBody:
         content:
@@ -112,7 +112,7 @@ paths:
                 $ref: '#/components/schemas/Message'
       operationId: setManualOverride
       tags:
-        - override
+        - Manual Override
     patch:
       description: Toggle the manual override
       responses:
@@ -120,7 +120,7 @@ paths:
           description: OK
       operationId: toggleManualOverride
       tags:
-        - override
+        - Manual Override
     delete:
       description: Clears the manual override
       responses:
@@ -128,7 +128,7 @@ paths:
           description: OK
       operationId: clearManualOverride
       tags:
-        - override
+        - Manual Override
   /claims:
     get:
       responses:
@@ -140,7 +140,7 @@ paths:
                 $ref: '#/components/schemas/Claims'
       operationId: listClaims
       tags:
-        - claims
+        - Claims
   '/claims/{client}':
     get:
       responses:
@@ -153,7 +153,7 @@ paths:
       parameters: []
       operationId: getClaim
       tags:
-        - claims
+        - Claims
     post:
       description: Make/Update a claim
       requestBody:
@@ -171,7 +171,7 @@ paths:
       operationId: setClaim
       summary: Make/Update a claim
       tags:
-        - claims
+        - Claims
     delete:
       description: Release a claim
       responses:
@@ -184,7 +184,7 @@ paths:
       operationId: releaseClaim
       summary: Release a claim
       tags:
-        - claims
+        - Claims
     parameters:
       - schema:
           type: integer
@@ -209,7 +209,7 @@ paths:
           description: bad input parameter
       operationId: listSchedule
       tags:
-        - schedule
+        - Schedule
     post:
       operationId: addInventory
       description: Perform multiple event updates
@@ -227,7 +227,7 @@ paths:
               $ref: '#/components/schemas/ScheduleEvent'
         description: Inventory item to add
       tags:
-        - schedule
+        - Schedule
       summary: Batch update schedule
   '/schedule/{id}':
     parameters:
@@ -248,7 +248,7 @@ paths:
                 $ref: '#/components/schemas/ScheduleEvent'
       operationId: getScheduleEvent
       tags:
-        - schedule
+        - Schedule
     post:
       responses:
         '200':
@@ -265,7 +265,7 @@ paths:
         description: ''
       operationId: setScheduleEvent
       tags:
-        - schedule
+        - Schedule
     delete:
       responses:
         '200':
@@ -277,7 +277,7 @@ paths:
               examples: {}
       operationId: removeScheduleEvent
       tags:
-        - schedule
+        - Schedule
 components:
   schemas:
     Properties:
@@ -355,9 +355,8 @@ components:
         - saturday
         - sunday
 tags:
-  - name: claims
-  - name: config
-  - name: evse
-  - name: override
-  - name: schedule
-  - name: status
+  - name: Claims
+  - name: Config
+  - name: Manual Override
+  - name: Schedule
+  - name: Status
