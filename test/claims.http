@@ -18,3 +18,23 @@
 
 # Get the EVSE claims
 GET {{baseUrl}}/claims HTTP/1.1
+
+
+###
+
+GET {{baseUrl}}/claims/1234 HTTP/1.1
+
+
+###
+
+POST {{baseUrl}}/claims/1234 HTTP/1.1
+Content-Type: application/json
+
+{
+  "state": "active",
+  "auto_release": true
+}
+
+###
+
+DELETE {{baseUrl}}/claims/1234 HTTP/1.1
