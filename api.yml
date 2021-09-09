@@ -60,6 +60,8 @@ paths:
               examples: {}
       summary: Get the EVSE configuration
       description: ''
+      tags:
+        - config
     post:
       operationId: updateConfig
       responses:
@@ -93,6 +95,8 @@ paths:
               schema:
                 $ref: '#/components/schemas/Message'
       operationId: getManualOverride
+      tags:
+        - override
     post:
       requestBody:
         content:
@@ -107,18 +111,24 @@ paths:
               schema:
                 $ref: '#/components/schemas/Message'
       operationId: setManualOverride
+      tags:
+        - override
     patch:
       description: Toggle the manual override
       responses:
         '200':
           description: OK
       operationId: toggleManualOverride
+      tags:
+        - override
     delete:
       description: Clears the manual override
       responses:
         '200':
           description: OK
       operationId: clearManualOverride
+      tags:
+        - override
   /claims:
     get:
       responses:
@@ -129,6 +139,8 @@ paths:
               schema:
                 $ref: '#/components/schemas/Claims'
       operationId: listClaims
+      tags:
+        - claims
   '/claims/{client}':
     get:
       responses:
@@ -140,6 +152,8 @@ paths:
                 $ref: '#/components/schemas/Properties'
       parameters: []
       operationId: getClaim
+      tags:
+        - claims
     post:
       description: Make/Update a claim
       requestBody:
@@ -156,6 +170,8 @@ paths:
                 $ref: '#/components/schemas/Message'
       operationId: setClaim
       summary: Make/Update a claim
+      tags:
+        - claims
     delete:
       description: Release a claim
       responses:
@@ -167,6 +183,8 @@ paths:
                 $ref: '#/components/schemas/Message'
       operationId: releaseClaim
       summary: Release a claim
+      tags:
+        - claims
     parameters:
       - schema:
           type: integer
@@ -190,9 +208,11 @@ paths:
         '400':
           description: bad input parameter
       operationId: listSchedule
+      tags:
+        - schedule
     post:
       operationId: addInventory
-      description: Adds an item to the system
+      description: Perform multiple event updates
       responses:
         '201':
           description: item created
@@ -206,6 +226,9 @@ paths:
             schema:
               $ref: '#/components/schemas/ScheduleEvent'
         description: Inventory item to add
+      tags:
+        - schedule
+      summary: Batch update schedule
   '/schedule/{id}':
     parameters:
       - in: path
@@ -224,6 +247,8 @@ paths:
               schema:
                 $ref: '#/components/schemas/ScheduleEvent'
       operationId: getScheduleEvent
+      tags:
+        - schedule
     post:
       responses:
         '200':
@@ -239,6 +264,8 @@ paths:
               $ref: '#/components/schemas/ScheduleEvent'
         description: ''
       operationId: setScheduleEvent
+      tags:
+        - schedule
     delete:
       responses:
         '200':
@@ -249,6 +276,8 @@ paths:
                 $ref: '#/components/schemas/Message'
               examples: {}
       operationId: removeScheduleEvent
+      tags:
+        - schedule
 components:
   schemas:
     Properties:
@@ -326,5 +355,9 @@ components:
         - saturday
         - sunday
 tags:
+  - name: claims
   - name: config
+  - name: evse
+  - name: override
+  - name: schedule
   - name: status
