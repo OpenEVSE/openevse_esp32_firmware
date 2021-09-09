@@ -111,3 +111,43 @@ void EventLog::log(EventType type, EvseState managerState, uint8_t evseState, ui
     eventFile.close();
   }
 }
+
+void EventLog::enumerate(uint32_t index, std::function<void(String time, EventType type, EvseState managerState, uint8_t evseState, uint32_t evseFlags, uint32_t pilot, double energy, uint32_t elapsed, double tempurature, double tempuratureMax, uint8_t divertMode)> callback)
+{
+  String filename = filenameFromIndex(index);
+  File eventFile = LittleFS.open(filename);
+  if(eventFile)
+  {
+    while(eventFile.available())
+    {
+      String line = eventFile.readStringUntil('\n');
+      if(line.length() > 0)
+      {
+        StaticJsonDocument<256> json;
+        DeserializationError error = deserializeJson(json, line);
+        if(error)
+        {
+          DBUGF("Error parsing line: %s", error.c_str());
+          break;
+        }
+
+        String time = json["t"];
+        EventType type = EventType::Information;
+        type.fromInt(json["ty"]);
+        EvseState managerState = EvseState::None;
+        managerState.fromString(json["ms"]);
+        uint8_t evseState = json["es"];
+        uint32_t evseFlags = json["ef"];
+        uint32_t pilot = json["p"];
+        double energy = json["e"];
+        uint32_t elapsed = json["el"];
+        double tempurature = json["tp"];
+        double tempuratureMax = json["tm"];
+        uint8_t divertMode = json["dm"];
+
+        callback(time, type, managerState, evseState, evseFlags, pilot, energy, elapsed, tempurature, tempuratureMax, divertMode);
+      }
+    }
+    eventFile.close();
+  }
+}

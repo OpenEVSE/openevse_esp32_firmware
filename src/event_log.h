@@ -40,6 +40,15 @@ class EventType
     uint8_t toInt() {
       return _value;
     }
+    bool fromInt(uint8_t value)
+    {
+      if (value <= Value::Warning) {
+        _value = (EventType::Value)value;
+        return true;
+      }
+
+      return false;
+    }
 
     operator Value() const { return _value; }
     explicit operator bool() = delete;        // Prevent usage: if(state)
@@ -67,7 +76,16 @@ public:
 
   void begin();
 
+  uint32_t getMinIndex() {
+    return _min_log_index;
+  }
+
+  uint32_t getMaxIndex() {
+    return _max_log_index;
+  }
+
   void log(EventType type, EvseState managerState, uint8_t evseState, uint32_t evseFlags, uint32_t pilot, double energy, uint32_t elapsed, double tempurature, double tempuratureMax, uint8_t divertMode);
+  void enumerate(uint32_t index, std::function<void(String time, EventType type, EvseState managerState, uint8_t evseState, uint32_t evseFlags, uint32_t pilot, double energy, uint32_t elapsed, double tempurature, double tempuratureMax, uint8_t divertMode)> callback);
 };
 
 
