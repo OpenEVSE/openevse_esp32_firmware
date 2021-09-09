@@ -1,16 +1,17 @@
-openapi: '3.0.2'
+openapi: 3.0.2
 info:
   title: OpenEVSE WiFi API
   description: The API for the OpenEVSE WiFi module
   version: '1.0'
   contact:
     email: jeremy@bigjungle.net
+    name: Jeremy Poulter
   license:
     name: Apache 2.0
     url: 'http://www.apache.org/licenses/LICENSE-2.0.html'
 servers:
-  - url: http://openevse.local/
-  - url: http://localhost:8080/
+  - url: 'http://openevse.local/'
+  - url: 'http://localhost:8080/'
 paths:
   /status:
     get:
@@ -20,17 +21,21 @@ paths:
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/Status"
+                $ref: ./models/Status.yaml
   /config:
     get:
       responses:
         '200':
           description: OK
+          content:
+            application/json:
+              schema:
+                $ref: ./models/Config.yaml
+              examples: {}
     post:
       responses:
         '200':
           description: OK
-
   /override:
     get:
       responses:
@@ -39,26 +44,26 @@ paths:
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/Properties"
+                $ref: '#/components/schemas/Properties'
         '404':
           description: Manual overide is not active
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/Message"
+                $ref: '#/components/schemas/Message'
     post:
       requestBody:
         content:
           application/json:
             schema:
-              $ref: "#/components/schemas/Properties"
+              $ref: '#/components/schemas/Properties'
       responses:
         '200':
           description: OK
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/Message"
+                $ref: '#/components/schemas/Message'
     patch:
       description: Toggle the manual override
       responses:
@@ -69,7 +74,6 @@ paths:
       responses:
         '200':
           description: OK
-
   /claims:
     get:
       responses:
@@ -78,8 +82,8 @@ paths:
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/Claims"
-  /claims/{client}:
+                $ref: '#/components/schemas/Claims'
+  '/claims/{client}':
     get:
       responses:
         '200':
@@ -87,21 +91,21 @@ paths:
           content:
             application/json:
               schema:
-                $ref:  "#/components/schemas/Properties"
+                $ref: '#/components/schemas/Properties'
     post:
       description: Make/Update a claim
       requestBody:
         content:
           application/json:
             schema:
-              $ref: "#/components/schemas/Properties"
+              $ref: '#/components/schemas/Properties'
       responses:
         '200':
           description: OK
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/Message"
+                $ref: '#/components/schemas/Message'
     delete:
       description: Release a claim
       responses:
@@ -110,8 +114,7 @@ paths:
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/Message"
-
+                $ref: '#/components/schemas/Message'
   /schedule:
     get:
       summary: Get the current list of events
@@ -143,7 +146,7 @@ paths:
             schema:
               $ref: '#/components/schemas/ScheduleEvent'
         description: Inventory item to add
-  /schedule/{id}:
+  '/schedule/{id}':
     parameters:
       - in: path
         name: id
@@ -151,174 +154,27 @@ paths:
         schema:
           type: integer
         description: Numeric ID of the event
-
     get:
       summary: Get a specific event details
-    post:
-    delete:
-
+    post: null
+    delete: null
 components:
   schemas:
     Empty:
       title: Empty Schema
       type: object
-
-    Status:
-      title: EVSE status
-      type: object
-      properties:
-        mode:
-          type: string
-          description: The current mode of the EVSE
-        wifi_client_connected:
-          type: integer
-          description: "`1`, WiFi is connected, `0` no WiFi connection"
-        eth_connected:
-          type: integer
-          description: "`1`, Wired ethernet is connected, `0` no wired ethernet connection"
-        net_connected:
-          type: integer
-          description: "`1`, network is connected, either wired or WiFi, `0` no network connection"
-        srssi:
-          type: integer
-          description: WiFi RSSI signal strength
-        ipaddress:
-          type: string
-          description: The current IP address of the WiFi module
-        packets_sent:
-          type: integer
-          description: The number of posts sent to the EmonCMS server
-        packets_success:
-          type: integer
-          description: The number of successful posts to the EmonCMS server
-        emoncms_connected:
-          type: integer
-          description: "`1`, if connected to an EmonCMS server, `0` not connected"
-        emoncms_message:
-          type: string
-          description: Last response message from the EmonCMS server
-        mqtt_connected:
-          type: integer
-          description: "`1`, if connected to an EmonCMS server, `0` not connected"
-        ohm_hour:
-          type: integer
-          description: Last status message from the OhmHour connection
-        free_heap:
-          type: integer
-          description: Number of bytes free in the ESP memory heap
-        comm_sent:
-          type: integer
-          description: Number of RAPI messages sent
-        comm_success:
-          type: integer
-          description: Number of successful RAPI messages
-        rapi_connected:
-          type: integer
-          description: "`1`, if RAPI messages have successfully been sent to the OpenEVSE module, `0` not connected"
-        evse_connected:
-          type: integer
-          description: "`1`, if the WiFi module has negociated a connection to the OpenEVSE module, `0` not connected"
-        amp:
-          type: number
-          description: the value of the charge current in mA
-        voltage:
-          type: number
-          description: the charge voltage, read form the EVSE if supported, or supplied via MQTT or other external source
-        pilot:
-          type: integer
-          description: the pilot value, in amps
-        temp:
-          type: number
-          description: the derived temperature, in 1/10th °C
-        temp1:
-          type: number
-          description: the DS3232 temperature, in 1/10th °C, if fitted or `false` if not
-        temp2:
-          type: number
-          description: the MCP9808 (on the LCD) temperature, in 1/10th °C, if fitted or `false` if not
-        temp3:
-          type: number
-          description: the TMP007 temperature, in 1/10th °C, if fitted or `false` if not
-        temp4:
-          type: number
-          description: the MCP9808 (on the WiFi module) temperature, in 1/10th °C, if fitted or `false` if not
-        state:
-          type: integer
-          description: The EVSE status
-        vehicle:
-          type: integer
-          description: "`1`, if a vehicle id connected to the EVSE, `0` not connected"
-        colour:
-          type: integer
-          description: The LCD colour
-        manual_override:
-          type: integer
-          description: "`1`, if the manual override is active, `0` default behaviour"
-        elapsed:
-          type: number
-          description: The duration of the current charge session, in seconds
-        wattsec:
-          type: integer
-          description: The amount of energy transfered in this charge session, in W/sec
-        watthour:
-          type: integer
-          description: The total amount of energy transfered, in W/hour
-        gfcicount:
-          type: integer
-          description: Number of GFCI errors
-        nogndcount:
-          type: integer
-          description: Number of no ground errors
-        stuckcount:
-          type: integer
-          description: Number of stuck relay errors
-        divertmode:
-          type: integer
-          description: The PV divert mode, `1` normal, `2` Eco
-        solar:
-          type: integer
-          description: The latest solar feed value received
-        grid_ie:
-          type: integer
-          description: The latest grid +I/-E feed value received
-        charge_rate:
-          type: integer
-          description: The divert charge rate
-        available_current:
-          type: integer
-          description: The computed avalible current for divert
-        smoothed_available_current:
-          type: integer
-          description: The computed smoothed available current for divert
-        divert_update:
-          type: number
-          description: The time since the last update of the divert feed
-        divert_active:
-          type: boolean
-          description: "`true` if divert is active, `false` if not"
-        ota_update:
-          type: integer
-          description: "`1`, if there is an OTA update active, `0` if normal operation"
-        time:
-          type: string
-          description: The current time on the WiFi module
-        offset:
-          type: string
-          description: The current timezone
-
     Properties:
       title: EVSE properties
       type: object
       properties:
         state:
-          $ref: "#/components/schemas/EvseState"
+          $ref: '#/components/schemas/EvseState'
         auto_release:
           type: boolean
           description: |
             `true` if the manual override is auto-released when the vehicle is
             disconnected, `false` if manual override will persist after vehicle
             disconnection.
-
     Message:
       title: Informational message
       type: object
@@ -326,7 +182,6 @@ components:
         msg:
           type: string
           description: The message
-
     Claim:
       title: EVSE claim
       allOf:
@@ -334,25 +189,22 @@ components:
           properties:
             client:
               type: integer
-              description: The client ID, defined by [OpenEVSE](https://github.com/OpenEVSE/ESP32_WiFi_V4.x/blob/master/src/evse_man.h#L25)
+              description: 'The client ID, defined by [OpenEVSE](https://github.com/OpenEVSE/ESP32_WiFi_V4.x/blob/master/src/evse_man.h#L25)'
             priority:
               type: integer
-              description: The priority of the claim, the higher the number the higher the priority
-        - $ref: "#/components/schemas/Properties"
-
+              description: 'The priority of the claim, the higher the number the higher the priority'
+        - $ref: '#/components/schemas/Properties'
     Claims:
       title: List of EVSE claims
       type: array
       items:
-        $ref: "#/components/schemas/Claim"
-
+        $ref: '#/components/schemas/Claim'
     EvseState:
       title: EVSE state
       type: string
       enum:
         - active
         - disabled
-
     ScheduleEvent:
       type: object
       required:
@@ -364,14 +216,14 @@ components:
           type: integer
           example: 1
         state:
-          $ref: "#/components/schemas/EvseState"
+          $ref: '#/components/schemas/EvseState'
         time:
           type: string
           format: time
         days:
           type: array
           items:
-            $ref: "#/components/schemas/Day"
+            $ref: '#/components/schemas/Day'
     Day:
       type: string
       enum:
@@ -382,4 +234,3 @@ components:
         - friday
         - saturday
         - sunday
-
