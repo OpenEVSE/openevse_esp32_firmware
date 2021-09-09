@@ -10,11 +10,32 @@ info:
     name: Apache 2.0
     url: 'http://www.apache.org/licenses/LICENSE-2.0.html'
 servers:
-  - url: 'http://openevse.local/'
-  - url: 'http://localhost:8080/'
+  - url: 'http://openevse.local'
+  - url: 'http://localhost:8080'
 paths:
   /status:
     get:
+      operationId: getStatus
+      summary: Get the status of the EVSE
+      description: |
+        The status endpoint can be called to get the status of the EVSE.
+
+        While it is posible to poll this endpoint, the recomendatoin is to retrieve the initial 
+        state then use the [/ws](#statusUpdates) 
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: ./models/Status.yaml
+  /ws:
+    get:
+      operationId: statusUpdates
+      summary: WebSocket endpoint that streams updates to the EVSE status
+      description: |
+        As the state changes on the EVSE a websocket frame will be sent over the socket. 
+        The frame will contain a JSON document conntaining only the updated state.
       responses:
         '200':
           description: OK
@@ -24,6 +45,7 @@ paths:
                 $ref: ./models/Status.yaml
   /config:
     get:
+      operationId: getConfig
       responses:
         '200':
           description: OK
@@ -32,10 +54,23 @@ paths:
               schema:
                 $ref: ./models/Config.yaml
               examples: {}
+      summary: Get the EVSE configuration
+      description: ''
     post:
+      operationId: updateConfig
       responses:
         '200':
           description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Message'
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: ./models/Config.yaml
+      summary: Update the EVSE configuration
   /override:
     get:
       responses:
@@ -51,6 +86,7 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/Message'
+      operationId: getManualOverride
     post:
       requestBody:
         content:
@@ -64,16 +100,19 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/Message'
+      operationId: setManualOverride
     patch:
       description: Toggle the manual override
       responses:
         '200':
           description: OK
+      operationId: toggleManualOverride
     delete:
       description: Clears the manual override
       responses:
         '200':
           description: OK
+      operationId: clearManualOverride
   /claims:
     get:
       responses:
@@ -83,6 +122,7 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/Claims'
+      operationId: listClaims
   '/claims/{client}':
     get:
       responses:
@@ -92,6 +132,8 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/Properties'
+      parameters: []
+      operationId: getClaim
     post:
       description: Make/Update a claim
       requestBody:
@@ -106,6 +148,8 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/Message'
+      operationId: setClaim
+      summary: Make/Update a claim
     delete:
       description: Release a claim
       responses:
@@ -115,6 +159,15 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/Message'
+      operationId: releaseClaim
+      summary: Release a claim
+    parameters:
+      - schema:
+          type: integer
+        name: client
+        in: path
+        required: true
+        description: 'The client ID, defined by [OpenEVSE](https://github.com/OpenEVSE/ESP32_WiFi_V4.x/blob/master/src/evse_man.h#L25)'
   /schedule:
     get:
       summary: Get the current list of events
@@ -130,6 +183,7 @@ paths:
                   $ref: '#/components/schemas/ScheduleEvent'
         '400':
           description: bad input parameter
+      operationId: listSchedule
     post:
       operationId: addInventory
       description: Adds an item to the system
@@ -156,13 +210,41 @@ paths:
         description: Numeric ID of the event
     get:
       summary: Get a specific event details
-    post: null
-    delete: null
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ScheduleEvent'
+      operationId: getScheduleEvent
+    post:
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Message'
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ScheduleEvent'
+        description: ''
+      operationId: setScheduleEvent
+    delete:
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Message'
+              examples: {}
+      operationId: removeScheduleEvent
 components:
   schemas:
-    Empty:
-      title: Empty Schema
-      type: object
     Properties:
       title: EVSE properties
       type: object
@@ -182,14 +264,17 @@ components:
         msg:
           type: string
           description: The message
+    ClientId:
+      title: EVSE Client ID
+      type: integer
+      description: 'The client ID, defined by [OpenEVSE](https://github.com/OpenEVSE/ESP32_WiFi_V4.x/blob/master/src/evse_man.h#L25)'
     Claim:
       title: EVSE claim
       allOf:
         - type: object
           properties:
             client:
-              type: integer
-              description: 'The client ID, defined by [OpenEVSE](https://github.com/OpenEVSE/ESP32_WiFi_V4.x/blob/master/src/evse_man.h#L25)'
+              $ref: '#/components/schemas/ClientId'
             priority:
               type: integer
               description: 'The priority of the claim, the higher the number the higher the priority'
