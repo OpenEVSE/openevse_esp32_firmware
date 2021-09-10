@@ -13,8 +13,7 @@ servers:
   - url: '{server}'
     variables:
       server:
-        default:
-          http://openevse.local
+        default: 'http://openevse.local'
   - url: 'http://localhost:8080'
 paths:
   /status:
@@ -56,12 +55,9 @@ paths:
       operationId: getConfig
       responses:
         '200':
-          description: OK
-          content:
-            application/json:
-              schema:
-                $ref: ./models/Config.yaml
-              examples: {}
+          $ref: '#/components/responses/UpdateSuccessful'
+        '400':
+          description: Bad Request
       summary: Get the EVSE configuration
       description: ''
       tags:
@@ -93,11 +89,7 @@ paths:
               schema:
                 $ref: '#/components/schemas/Properties'
         '404':
-          description: Manual overide is not active
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/Message'
+          $ref: '#/components/responses/NotFound'
       operationId: getManualOverride
       tags:
         - Manual Override
@@ -141,7 +133,9 @@ paths:
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/Claims'
+                type: array
+                items:
+                  $ref: '#/components/schemas/Claim'
       operationId: listClaims
       tags:
         - Claims
@@ -154,6 +148,8 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/Properties'
+        '404':
+          $ref: '#/components/responses/NotFound'
       parameters: []
       operationId: getClaim
       tags:
@@ -172,6 +168,8 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/Message'
+        '400':
+          $ref: '#/components/responses/BadRequest'
       operationId: setClaim
       summary: Make/Update a claim
       tags:
@@ -185,6 +183,8 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/Message'
+        '404':
+          $ref: '#/components/responses/NotFound'
       operationId: releaseClaim
       summary: Release a claim
       tags:
@@ -210,12 +210,12 @@ paths:
                 items:
                   $ref: '#/components/schemas/ScheduleEvent'
         '400':
-          description: bad input parameter
+          $ref: '#/components/responses/BadRequest'
       operationId: listSchedule
       tags:
         - Schedule
     post:
-      operationId: addInventory
+      operationId: updateSchedule
       description: Perform multiple event updates
       responses:
         '201':
@@ -228,7 +228,17 @@ paths:
         content:
           application/json:
             schema:
-              $ref: '#/components/schemas/ScheduleEvent'
+              type: array
+              items:
+                $ref: '#/components/schemas/ScheduleEvent'
+            examples:
+              example-1:
+                value:
+                  - id: 1
+                    state: active
+                    time: '14:15:22Z'
+                    days:
+                      - monday
         description: Inventory item to add
       tags:
         - Schedule
@@ -256,11 +266,7 @@ paths:
     post:
       responses:
         '200':
-          description: OK
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/Message'
+          $ref: '#/components/responses/UpdateSuccessful'
       requestBody:
         content:
           application/json:
@@ -318,11 +324,6 @@ components:
               type: integer
               description: 'The priority of the claim, the higher the number the higher the priority'
         - $ref: '#/components/schemas/Properties'
-    Claims:
-      title: List of EVSE claims
-      type: array
-      items:
-        $ref: '#/components/schemas/Claim'
     EvseState:
       title: EVSE state
       type: string
@@ -331,10 +332,6 @@ components:
         - disabled
     ScheduleEvent:
       type: object
-      required:
-        - state
-        - time
-        - days
       properties:
         id:
           type: integer
@@ -346,18 +343,53 @@ components:
           format: time
         days:
           type: array
+          uniqueItems: true
           items:
-            $ref: '#/components/schemas/Day'
-    Day:
-      type: string
-      enum:
-        - monday
-        - tuesday
-        - wednesday
-        - thursday
-        - friday
-        - saturday
-        - sunday
+            type: string
+            enum:
+              - monday
+              - tuesday
+              - wednesday
+              - thursday
+              - friday
+              - saturday
+              - sunday
+      required:
+        - state
+        - time
+        - days
+      title: ''
+  responses:
+    UpdateSuccessful:
+      description: Update successful
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Message'
+          examples:
+            Success message:
+              value:
+                msg: done
+    NotFound:
+      description: Example response
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Message'
+          examples:
+            Not found:
+              value:
+                msg: Not found
+    BadRequest:
+      description: Example response
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Message'
+          examples:
+            Bad JSON:
+              value:
+                msg: Could not parse JSON
 tags:
   - name: Claims
   - name: Config
