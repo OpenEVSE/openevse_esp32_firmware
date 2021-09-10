@@ -71,6 +71,8 @@ paths:
       responses:
         '200':
           $ref: '#/components/responses/UpdateSuccessful'
+        '400':
+          $ref: '#/components/responses/BadRequest'
       requestBody:
         content:
           application/json:
