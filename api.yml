@@ -10,7 +10,11 @@ info:
     name: Apache 2.0
     url: 'http://www.apache.org/licenses/LICENSE-2.0.html'
 servers:
-  - url: 'http://openevse.local'
+  - url: '{server}'
+    variables:
+      server:
+        default:
+          http://openevse.local
   - url: 'http://localhost:8080'
 paths:
   /status:

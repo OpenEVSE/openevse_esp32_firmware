@@ -21,7 +21,11 @@
       ]
     },
     "image": {
-      "rootDir": "assets/images"
+      "rootDir": "docs",
+      "include": [
+        "docs/**"
+      ]
+
     }
   }
 }
