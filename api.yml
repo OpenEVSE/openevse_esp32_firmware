@@ -93,6 +93,7 @@ paths:
       operationId: getManualOverride
       tags:
         - Manual Override
+      summary: Get the Manual Override status
     post:
       requestBody:
         content:
