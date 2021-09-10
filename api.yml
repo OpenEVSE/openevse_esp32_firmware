@@ -1,7 +1,9 @@
 openapi: 3.0.2
 info:
   title: OpenEVSE WiFi API
-  description: The API for the OpenEVSE WiFi module
+  description: |+
+    The API for the OpenEVSE WiFi module
+
   version: '1.0'
   contact:
     email: jeremy@bigjungle.net
@@ -313,7 +315,7 @@ paths:
                     type: integer
                   max:
                     type: integer
-      operationId: get-events
+      operationId: getEventBlockInfo
       description: 'Retrieve the start and end indexes of the log event blocks. Each log event block contains '
       parameters: []
     parameters: []
@@ -333,7 +335,7 @@ paths:
                   $ref: '#/components/schemas/LogEvent'
         '404':
           $ref: '#/components/responses/NotFound'
-      operationId: get-events
+      operationId: getEventBlock
       description: ''
     parameters:
       - schema:
