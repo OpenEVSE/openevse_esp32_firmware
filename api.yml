@@ -19,7 +19,7 @@ paths:
   /status:
     get:
       operationId: getStatus
-      summary: Get the status of the EVSE
+      summary: Get the EVSE status
       description: |
         The status endpoint can be called to get the status of the EVSE.
 
@@ -37,7 +37,7 @@ paths:
   /ws:
     get:
       operationId: statusUpdates
-      summary: WebSocket endpoint that streams updates to the EVSE status
+      summary: EVSE status updates
       description: |
         As the state changes on the EVSE a websocket frame will be sent over the socket. 
         The frame will contain a JSON document conntaining only the updated state.
@@ -110,6 +110,7 @@ paths:
       operationId: setManualOverride
       tags:
         - Manual Override
+      summary: Set the manual override
     patch:
       description: Toggle the manual override
       responses:
@@ -118,6 +119,7 @@ paths:
       operationId: toggleManualOverride
       tags:
         - Manual Override
+      summary: Toggle the manual Override
     delete:
       description: Clears the manual override
       responses:
@@ -126,6 +128,7 @@ paths:
       operationId: clearManualOverride
       tags:
         - Manual Override
+      summary: Clear the manual override
   /claims:
     get:
       responses:
@@ -140,6 +143,7 @@ paths:
       operationId: listClaims
       tags:
         - Claims
+      summary: List EVSE claims
   '/claims/{client}':
     get:
       responses:
@@ -155,6 +159,7 @@ paths:
       operationId: getClaim
       tags:
         - Claims
+      summary: Get EVSE claim information
     post:
       description: Make/Update a claim
       requestBody:
@@ -172,7 +177,7 @@ paths:
         '400':
           $ref: '#/components/responses/BadRequest'
       operationId: setClaim
-      summary: Make/Update a claim
+      summary: Make/Update an EVSE claim
       tags:
         - Claims
     delete:
@@ -187,7 +192,7 @@ paths:
         '404':
           $ref: '#/components/responses/NotFound'
       operationId: releaseClaim
-      summary: Release a claim
+      summary: Release an EVSE claim
       tags:
         - Claims
     parameters:
@@ -199,7 +204,7 @@ paths:
         description: 'The client ID, defined by [OpenEVSE](https://github.com/OpenEVSE/ESP32_WiFi_V4.x/blob/master/src/evse_man.h#L25)'
   /schedule:
     get:
-      summary: Get the current list of events
+      summary: List schedule events
       description: This will get a complete list of events in the schedule
       responses:
         '200':
@@ -253,7 +258,7 @@ paths:
           type: integer
         description: Numeric ID of the event
     get:
-      summary: Get a specific event details
+      summary: Get event details
       responses:
         '200':
           description: OK
@@ -277,6 +282,7 @@ paths:
       operationId: setScheduleEvent
       tags:
         - Schedule
+      summary: Update event details
     delete:
       responses:
         '200':
@@ -289,6 +295,52 @@ paths:
       operationId: removeScheduleEvent
       tags:
         - Schedule
+      summary: Remove event
+  /logs:
+    get:
+      summary: Get event block information
+      tags:
+        - Event Log
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  min:
+                    type: integer
+                  max:
+                    type: integer
+      operationId: get-events
+      description: 'Retrieve the start and end indexes of the log event blocks. Each log event block contains '
+      parameters: []
+    parameters: []
+  '/logs/{index}':
+    get:
+      summary: Get log block events
+      tags:
+        - Event Log
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/LogEvent'
+        '404':
+          $ref: '#/components/responses/NotFound'
+      operationId: get-events
+      description: ''
+    parameters:
+      - schema:
+          type: integer
+        name: index
+        in: path
+        required: true
 components:
   schemas:
     Properties:
@@ -360,6 +412,67 @@ components:
         - time
         - days
       title: ''
+    LogEvent:
+      title: LogEvent
+      type: object
+      x-examples:
+        example-1:
+          value:
+            time: '2021-08-24T14:15:22Z'
+            type: information
+            managerState: active
+            evseState: 1
+            evseFlags: 123
+            pilot: 32
+            energy: 1234.5
+            elapsed: 123456
+            temperature: 35.4
+            tempuratureMax: 50.4
+            divertMode: 1
+      properties:
+        time:
+          type: string
+          format: date-time
+          readOnly: true
+        type:
+          type: string
+          enum:
+            - information
+            - notification
+            - warning
+        managerState:
+          $ref: '#/components/schemas/EvseState'
+        evseState:
+          type: integer
+          minimum: 0
+          maximum: 255
+        evseFlags:
+          type: integer
+          format: int32
+        pilot:
+          type: integer
+          format: int32
+          minimum: 0
+        energy:
+          type: number
+          format: double
+          minimum: 0
+        elapsed:
+          type: integer
+          format: int32
+          minimum: 0
+        temperature:
+          type: number
+          format: double
+        tempuratureMax:
+          type: number
+          format: double
+        divertMode:
+          type: integer
+          format: int32
+          minimum: 1
+          maximum: 2
+          exclusiveMaximum: false
   responses:
     UpdateSuccessful:
       description: Update successful
@@ -391,9 +504,11 @@ components:
             Bad JSON:
               value:
                 msg: Could not parse JSON
+  parameters: {}
 tags:
   - name: Claims
   - name: Config
+  - name: Event Log
   - name: Manual Override
   - name: Schedule
   - name: Status
