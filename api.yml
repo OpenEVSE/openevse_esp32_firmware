@@ -1,9 +1,8 @@
 openapi: 3.0.2
 info:
   title: OpenEVSE WiFi API
-  description: |+
+  description: |
     The API for the OpenEVSE WiFi module
-
   version: '1.0'
   contact:
     email: jeremy@bigjungle.net
@@ -55,29 +54,48 @@ paths:
   /config:
     get:
       operationId: getConfig
-      responses:
-        '200':
-          $ref: '#/components/responses/UpdateSuccessful'
-        '400':
-          description: Bad Request
       summary: Get the EVSE configuration
       description: ''
       tags:
         - Config
-    post:
-      operationId: updateConfig
       responses:
         '200':
           description: OK
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/Message'
+                $ref: ./models/Config.yaml
+              examples: {}
+    post:
+      operationId: updateConfig
+      responses:
+        '200':
+          $ref: '#/components/responses/UpdateSuccessful'
       requestBody:
         content:
           application/json:
             schema:
               $ref: ./models/Config.yaml
+            examples:
+              Update EmonCMS setting:
+                value:
+                  emoncms_enabled: true
+                  emoncms_server: 'http://emoncms.org'
+                  emoncms_node: openevse-a7d4
+                  emoncms_apikey: emoncmskey
+                  emoncms_fingerprint: ''
+              Configure Solar divert:
+                value:
+                  divert_enabled: true
+                  divert_attack_smoothing_factor: 0.4
+                  divert_decay_smoothing_factor: 0.05
+                  divert_min_charge_time: 60
+              Set normal charging mode:
+                value:
+                  charge_mode: fast
+              Set Eco mode:
+                value:
+                  charge_mode: eco
       summary: Update the EVSE configuration
       tags:
         - Config
