@@ -1,0 +1,14 @@
+title: Properties
+type: object
+x-tags:
+  - Claims
+properties:
+  state:
+    $ref: ./EvseState.yaml
+  auto_release:
+    type: boolean
+    description: |
+      `true` if the manual override is auto-released when the vehicle is
+      disconnected, `false` if manual override will persist after vehicle
+      disconnection.
+description: ''

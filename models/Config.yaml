@@ -347,3 +347,5 @@ properties:
   charge_mode:
     type: string
     minLength: 1
+x-tags:
+  - Config

@@ -109,7 +109,7 @@ paths:
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/Properties'
+                $ref: ./models/Properties.yaml
         '404':
           $ref: '#/components/responses/NotFound'
       operationId: getManualOverride
@@ -121,7 +121,7 @@ paths:
         content:
           application/json:
             schema:
-              $ref: '#/components/schemas/Properties'
+              $ref: ./models/Properties.yaml
       responses:
         '200':
           description: OK
@@ -161,7 +161,7 @@ paths:
               schema:
                 type: array
                 items:
-                  $ref: '#/components/schemas/Claim'
+                  $ref: ./models/Claim.yaml
       operationId: listClaims
       tags:
         - Claims
@@ -174,7 +174,7 @@ paths:
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/Properties'
+                $ref: ./models/Properties.yaml
         '404':
           $ref: '#/components/responses/NotFound'
       parameters: []
@@ -188,7 +188,7 @@ paths:
         content:
           application/json:
             schema:
-              $ref: '#/components/schemas/Properties'
+              $ref: ./models/Properties.yaml
       responses:
         '200':
           description: OK
@@ -236,7 +236,7 @@ paths:
               schema:
                 type: array
                 items:
-                  $ref: '#/components/schemas/ScheduleEvent'
+                  $ref: ./models/EvseState.yaml
         '400':
           $ref: '#/components/responses/BadRequest'
       operationId: listSchedule
@@ -258,7 +258,7 @@ paths:
             schema:
               type: array
               items:
-                $ref: '#/components/schemas/ScheduleEvent'
+                $ref: ./models/EvseState.yaml
             examples:
               example-1:
                 value:
@@ -287,7 +287,7 @@ paths:
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/ScheduleEvent'
+                $ref: ./models/EvseState.yaml
       operationId: getScheduleEvent
       tags:
         - Schedule
@@ -299,7 +299,7 @@ paths:
         content:
           application/json:
             schema:
-              $ref: '#/components/schemas/ScheduleEvent'
+              $ref: ./models/EvseState.yaml
         description: ''
       operationId: setScheduleEvent
       tags:
@@ -365,18 +365,6 @@ paths:
         required: true
 components:
   schemas:
-    Properties:
-      title: EVSE properties
-      type: object
-      properties:
-        state:
-          $ref: '#/components/schemas/EvseState'
-        auto_release:
-          type: boolean
-          description: |
-            `true` if the manual override is auto-released when the vehicle is
-            disconnected, `false` if manual override will persist after vehicle
-            disconnection.
     Message:
       title: Informational message
       type: object
@@ -384,27 +372,6 @@ components:
         msg:
           type: string
           description: The message
-    ClientId:
-      title: EVSE Client ID
-      type: integer
-      description: 'The client ID, defined by [OpenEVSE](https://github.com/OpenEVSE/ESP32_WiFi_V4.x/blob/master/src/evse_man.h#L25)'
-    Claim:
-      title: EVSE claim
-      allOf:
-        - type: object
-          properties:
-            client:
-              $ref: '#/components/schemas/ClientId'
-            priority:
-              type: integer
-              description: 'The priority of the claim, the higher the number the higher the priority'
-        - $ref: '#/components/schemas/Properties'
-    EvseState:
-      title: EVSE state
-      type: string
-      enum:
-        - active
-        - disabled
     ScheduleEvent:
       type: object
       properties:
@@ -412,7 +379,7 @@ components:
           type: integer
           example: 1
         state:
-          $ref: '#/components/schemas/EvseState'
+          $ref: './models/EvseState.yaml'
         time:
           type: string
           format: time
@@ -463,7 +430,7 @@ components:
             - notification
             - warning
         managerState:
-          $ref: '#/components/schemas/EvseState'
+          $ref: './models/EvseState.yaml'
         evseState:
           type: integer
           minimum: 0
