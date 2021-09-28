@@ -36,7 +36,7 @@ void handleEventLogs(MongooseHttpServerRequest *request)
       block = blockStr.toInt();
       DBUGVAR(block);
 
-      if(eventLog.getMinIndex() <= block && block < eventLog.getMaxIndex())
+      if(eventLog.getMinIndex() <= block && block <= eventLog.getMaxIndex())
       {
         response->setCode(200);
         int count = 0;
