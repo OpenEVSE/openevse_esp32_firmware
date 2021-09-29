@@ -153,7 +153,7 @@ class EvseMonitor : public MicroTasks::Task
     void updateFaultCounters(int ret, long gfci_count, long nognd_count, long stuck_count);
 
     void evseBoot(const char *firmware_version);
-    void evseStateChanged();
+    void updateEvseState(uint8_t evse_state, uint8_t pilot_state, uint32_t vflags);
 
     void getStatusFromEvse();
     void getChargeCurrentAndVoltageFromEvse();

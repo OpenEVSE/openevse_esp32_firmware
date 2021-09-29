@@ -250,15 +250,33 @@ void EvseMonitor::evseBoot(const char *firmware)
   });
 }
 
-void EvseMonitor::evseStateChanged()
+void EvseMonitor::updateEvseState(uint8_t evse_state, uint8_t pilot_state, uint32_t vflags)
 {
-  if(isError()) {
-    _openevse.getFaultCounters([this](int ret, long gfci_count, long nognd_count, long stuck_count) { updateFaultCounters(ret, gfci_count, nognd_count, stuck_count); });
+  if(_state.getEvseState() != evse_state ||
+     _state.getPilotState() != pilot_state ||
+     _state.getFlags() != vflags)
+  {
+    _openevse.getEnergy([this, evse_state, pilot_state, vflags](int ret, double session_wh, double total_kwh)
+    {
+      if(RAPI_RESPONSE_OK == ret)
+      {
+        _session_wh = session_wh;
+        _total_kwh = total_kwh;
+
+        _data_ready.ready(EVSE_MONITOR_ENERGY_DATA_READY);
+      }
+
+      _state.setState(evse_state, pilot_state, vflags);
+
+      if(isError()) {
+        _openevse.getFaultCounters([this](int ret, long gfci_count, long nognd_count, long stuck_count) { updateFaultCounters(ret, gfci_count, nognd_count, stuck_count); });
+      }
+      if(!isCharging()) {
+        _amp = 0;
+      }
+      _session_complete.update(getFlags());
+    });
   }
-  if(!isCharging()) {
-    _amp = 0;
-  }
-  _session_complete.update(getFlags());
 }
 
 unsigned long EvseMonitor::loop(MicroTasks::WakeReason reason)
@@ -313,9 +331,7 @@ bool EvseMonitor::begin(RapiSender &sender)
       _openevse.onState([this](uint8_t evse_state, uint8_t pilot_state, uint32_t current_capacity, uint32_t vflags)
       {
         DBUGF("evse_state = %02x, pilot_state = %02x, current_capacity = %d, vflags = %08x", evse_state, pilot_state, current_capacity, vflags);
-        if(_state.setState(evse_state, pilot_state, vflags)) {
-          evseStateChanged();
-        }
+        updateEvseState(evse_state, pilot_state, vflags);
       });
 
       _openevse.onBoot([this](uint8_t post_code, const char *firmware) { evseBoot(firmware); });
@@ -416,9 +432,7 @@ void EvseMonitor::getStatusFromEvse()
     if(RAPI_RESPONSE_OK == ret)
     {
       DBUGF("evse_state = %02x, session_time = %d, pilot_state = %02x, vflags = %08x", evse_state, session_time, pilot_state, vflags);
-      if(_state.setState(evse_state, pilot_state, vflags)) {
-        evseStateChanged();
-      }
+      updateEvseState(evse_state, pilot_state, vflags);
 
       _elapsed = session_time;
       _elapsed_set_time = millis();
