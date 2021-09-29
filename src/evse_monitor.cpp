@@ -147,7 +147,7 @@ EvseMonitor::EvseMonitor(OpenEVSEClass &openevse) :
   _openevse(openevse),
   _state(),
   _amp(0),
-  _voltage(DEFAULT_VOLTAGE),
+  _voltage(VOLTAGE_DEFAULT),
   _elapsed(0),
   _elapsed_set_time(0),
   _temps(),
@@ -266,7 +266,14 @@ void EvseMonitor::updateEvseState(uint8_t evse_state, uint8_t pilot_state, uint3
         _data_ready.ready(EVSE_MONITOR_ENERGY_DATA_READY);
       }
 
+      bool originalVehicleConnected = _state.isVehicleConnected();
+
       _state.setState(evse_state, pilot_state, vflags);
+
+      if(false == originalVehicleConnected && _state.isVehicleConnected()) {
+        // Vehicle connected, reset the max temp
+        _temps[EVSE_MONITOR_TEMP_MAX].set(_temps[EVSE_MONITOR_TEMP_MONITOR].get());
+      }
 
       if(isError()) {
         _openevse.getFaultCounters([this](int ret, long gfci_count, long nognd_count, long stuck_count) { updateFaultCounters(ret, gfci_count, nognd_count, stuck_count); });
@@ -415,14 +422,16 @@ void EvseMonitor::setPilot(long amps)
 
 void EvseMonitor::setVoltage(double volts)
 {
-  _openevse.setVoltage(volts, [this, volts](int ret)
+  if(VOLTAGE_MINIMUM <= volts && volts <= VOLTAGE_MAXIMUM)
   {
-    if(RAPI_RESPONSE_OK == ret || RAPI_RESPONSE_NK == ret) {
-      _voltage = volts;
-    }
-  });
+    _openevse.setVoltage(volts, [this, volts](int ret)
+    {
+      if(RAPI_RESPONSE_OK == ret || RAPI_RESPONSE_NK == ret) {
+        _voltage = volts;
+      }
+    });
+  }
 }
-
 
 void EvseMonitor::getStatusFromEvse()
 {
@@ -453,7 +462,7 @@ void EvseMonitor::getChargeCurrentAndVoltageFromEvse()
       {
         DBUGF("amps = %.2f, volts = %.2f", a, volts);
         _amp = a;
-        if(volts >= 0) {
+        if(VOLTAGE_MINIMUM <= volts && volts <= VOLTAGE_MAXIMUM) {
           _voltage = volts;
         }
         _data_ready.ready(EVSE_MONITOR_AMP_AND_VOLT_DATA_READY);
@@ -484,10 +493,15 @@ void EvseMonitor::getTemperatureFromEvse()
       #endif
 
       _temps[EVSE_MONITOR_TEMP_MONITOR].invalidate();
-      for(int i = 1; i < EVSE_MONITOR_TEMP_COUNT; i++)
+      for(int i = EVSE_MONITOR_TEMP_EVSE_DS3232; i < EVSE_MONITOR_TEMP_COUNT; i++)
       {
-        if(_temps[i].isValid()) {
-          _temps[EVSE_MONITOR_TEMP_MONITOR].set(_temps[i].get(), _temps[i].isValid());
+        if(_temps[i].isValid())
+        {
+          double temp = _temps[i].get();
+          _temps[EVSE_MONITOR_TEMP_MONITOR].set(temp);
+          if(temp > _temps[EVSE_MONITOR_TEMP_MAX].get()) {
+            _temps[EVSE_MONITOR_TEMP_MAX].set(temp);
+          }
           break;
         }
       }

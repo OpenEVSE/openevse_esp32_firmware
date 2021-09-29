@@ -11,12 +11,13 @@
 #endif
 
 #define EVSE_MONITOR_TEMP_MONITOR       0
-#define EVSE_MONITOR_TEMP_EVSE_DS3232   1
-#define EVSE_MONITOR_TEMP_EVSE_MCP9808  2
-#define EVSE_MONITOR_TEMP_EVSE_TMP007   3
-#define EVSE_MONITOR_TEMP_ESP_MCP9808   4
+#define EVSE_MONITOR_TEMP_MAX           1
+#define EVSE_MONITOR_TEMP_EVSE_DS3232   2
+#define EVSE_MONITOR_TEMP_EVSE_MCP9808  3
+#define EVSE_MONITOR_TEMP_EVSE_TMP007   4
+#define EVSE_MONITOR_TEMP_ESP_MCP9808   5
 
-#define EVSE_MONITOR_TEMP_COUNT         5
+#define EVSE_MONITOR_TEMP_COUNT         6
 
 class EvseMonitor : public MicroTasks::Task
 {
@@ -92,7 +93,7 @@ class EvseMonitor : public MicroTasks::Task
       public:
         Tempurature() : _valid(false), _value(0) { }
 
-        void set(double value, bool valid) {
+        void set(double value, bool valid = true) {
           _value = value;
           _valid = valid;
         }

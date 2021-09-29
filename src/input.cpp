@@ -92,10 +92,17 @@ void create_rapi_json(JsonDocument &doc)
   doc["voltage"] = evse.getVoltage() * VOLTS_SCALE_FACTOR;
   doc["pilot"] = evse.getChargeCurrent();
   doc["wh"] = evse.getTotalEnergy() * TOTAL_ENERGY_SCALE_FACTOR;
+  doc["session_energy"] = evse.getSessionEnergy() * TOTAL_ENERGY_SCALE_FACTOR;
+  doc["total_energy"] = evse.getTotalEnergy() * TOTAL_ENERGY_SCALE_FACTOR;
   if(evse.isTempuratureValid(EVSE_MONITOR_TEMP_MONITOR)) {
     doc["temp"] = evse.getTempurature(EVSE_MONITOR_TEMP_MONITOR) * TEMP_SCALE_FACTOR;
   } else {
     doc["temp"] = false;
+  }
+  if(evse.isTempuratureValid(EVSE_MONITOR_TEMP_MAX)) {
+    doc["temp_max"] = evse.getTempurature(EVSE_MONITOR_TEMP_MAX) * TEMP_SCALE_FACTOR;
+  } else {
+    doc["temp_max"] = false;
   }
   if(evse.isTempuratureValid(EVSE_MONITOR_TEMP_EVSE_DS3232)) {
     doc["temp1"] = evse.getTempurature(EVSE_MONITOR_TEMP_EVSE_DS3232) * TEMP_SCALE_FACTOR;
@@ -126,8 +133,6 @@ void create_rapi_json(JsonDocument &doc)
   doc["freeram"] = ESPAL.getFreeHeap();
   doc["divertmode"] = divertmode;
   doc["srssi"] = WiFi.RSSI();
-
-  //teslaClient.getChargeInfoJson(doc);
 }
 
 void

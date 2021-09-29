@@ -12,7 +12,7 @@
 
 #include <ArduinoOcpp/Core/OcppEngine.h>
 
-#include "emonesp.h" //for DEFAULT_VOLTAGE
+#include "emonesp.h" //for VOLTAGE_DEFAULT
 
 #define LCD_DISPLAY(X) if (lcd) lcd->display((X), 0, 1, 5 * 1000, LCD_CLEAR_LINE);
 
@@ -58,7 +58,7 @@ void ArduinoOcppTask::initializeArduinoOcpp() {
             return (ArduinoOcpp::otime_t) time_now.tv_sec;
         };
 
-        OCPP_initialize(ocppSocket, (float) DEFAULT_VOLTAGE, ArduinoOcpp::FilesystemOpt::Use, clockAdapter);
+        OCPP_initialize(ocppSocket, (float) VOLTAGE_DEFAULT, ArduinoOcpp::FilesystemOpt::Use, clockAdapter);
 
         bootNotification("Advanced Series", "OpenEVSE", [lcd = lcd](JsonObject payload) {
             LCD_DISPLAY("OCPP connected!");
