@@ -22,9 +22,15 @@ String EventLog::filenameFromIndex(uint32_t index)
   return filename;
 }
 
-uint32_t EventLog::indexFromFilename(String &filename)
+uint32_t EventLog::indexFromFilename(String &path)
 {
-  return atol(filename.c_str());
+  DBUGVAR(path);
+
+  int lastSeparator = path.lastIndexOf('/');
+  String name = lastSeparator >= 0 ? path.substring(lastSeparator + 1) : path;
+  DBUGVAR(name);
+
+  return atol(name.c_str());
 }
 
 // Scan our base directory for existing log files and workout the min/max index files
@@ -43,11 +49,14 @@ void EventLog::begin()
       {
         String name = file.name();
         long chunk = indexFromFilename(name);
+        DBUGVAR(chunk);
         if(chunk > _max_log_index) {
           _max_log_index = chunk;
+          DBUGVAR(_max_log_index);
         }
         if(chunk < _min_log_index) {
           _min_log_index = chunk;
+          DBUGVAR(_min_log_index);
         }
       }
 
@@ -101,6 +110,7 @@ void EventLog::log(EventType type, EvseState managerState, uint8_t evseState, ui
 
     if(eventFile.size() > EVENTLOG_ROTATE_SIZE)
     {
+      DBUGLN("Rotating log file");
       _max_log_index ++;
       if(_max_log_index - _min_log_index > EVENTLOG_MAX_ROTATE_COUNT) {
         LittleFS.remove(filenameFromIndex(_min_log_index));
