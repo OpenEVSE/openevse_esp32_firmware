@@ -76,8 +76,23 @@ void EventLog::begin()
 void EventLog::log(EventType type, EvseState managerState, uint8_t evseState, uint32_t evseFlags, uint32_t pilot, double energy, uint32_t elapsed, double tempurature, double tempuratureMax, uint8_t divertMode)
 {
   String eventFilename = filenameFromIndex(_max_log_index);
-
   File eventFile = LittleFS.open(eventFilename, FILE_APPEND);
+  if(eventFile && eventFile.size() > EVENTLOG_ROTATE_SIZE)
+  {
+    DBUGLN("Rotating log file");
+    eventFile.close();
+
+    _max_log_index ++;
+    eventFilename = filenameFromIndex(_max_log_index);
+    eventFile = LittleFS.open(eventFilename, FILE_APPEND);
+
+    // _max_log_index is inclusive, so we need to increment it here
+    while((_max_log_index + 1) - _min_log_index > EVENTLOG_MAX_ROTATE_COUNT) {
+      LittleFS.remove(filenameFromIndex(_min_log_index));
+      _min_log_index++;
+    }
+  }
+
   if(eventFile)
   {
     StaticJsonDocument<256> line;
@@ -107,16 +122,6 @@ void EventLog::log(EventType type, EvseState managerState, uint8_t evseState, ui
     serializeJson(line, DEBUG_PORT);
     DBUGLN("");
     #endif
-
-    if(eventFile.size() > EVENTLOG_ROTATE_SIZE)
-    {
-      DBUGLN("Rotating log file");
-      _max_log_index ++;
-      if(_max_log_index - _min_log_index > EVENTLOG_MAX_ROTATE_COUNT) {
-        LittleFS.remove(filenameFromIndex(_min_log_index));
-        _min_log_index++;
-      }
-    }
 
     eventFile.close();
   }
