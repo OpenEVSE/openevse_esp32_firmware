@@ -5,7 +5,7 @@
 #include "evse_state.h"
 
 #ifndef EVENTLOG_ROTATE_SIZE
-#define EVENTLOG_ROTATE_SIZE        512
+#define EVENTLOG_ROTATE_SIZE        1024
 #endif
 
 #ifndef EVENTLOG_MAX_ROTATE_COUNT
