@@ -351,8 +351,8 @@ unsigned long EvseManager::loop(MicroTasks::WakeReason reason)
                   _monitor.getPilot(),
                   _monitor.getSessionEnergy(),
                   _monitor.getSessionElapsed(),
-                  _monitor.getTempurature(EVSE_MONITOR_TEMP_MONITOR),
-                  _monitor.getTempurature(EVSE_MONITOR_TEMP_MAX),
+                  _monitor.getTemperature(EVSE_MONITOR_TEMP_MONITOR),
+                  _monitor.getTemperature(EVSE_MONITOR_TEMP_MAX),
                   divertmode);
   }
 
@@ -507,7 +507,7 @@ uint8_t EvseManager::getStateColour()
       return OPENEVSE_LCD_YELLOW;
 
     case OPENEVSE_STATE_CHARGING:
-      // TODO: Colour should also take into account the tempurature, >60 YELLOW
+      // TODO: Colour should also take into account the temperature, >60 YELLOW
       return OPENEVSE_LCD_TEAL;
 
     case OPENEVSE_STATE_VENT_REQUIRED:

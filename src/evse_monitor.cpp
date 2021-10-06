@@ -475,7 +475,7 @@ void EvseMonitor::getChargeCurrentAndVoltageFromEvse()
 
 void EvseMonitor::getTemperatureFromEvse()
 {
-  DBUGLN("Get tempurature status");
+  DBUGLN("Get temperature status");
   _openevse.getTemperature([this](int ret, double t1, bool t1_valid, double t2, bool t2_valid, double t3, bool t3_valid)
   {
     if(RAPI_RESPONSE_OK == ret)

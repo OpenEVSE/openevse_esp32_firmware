@@ -337,11 +337,11 @@ class EvseManager : public MicroTasks::Task
     long getFaultCountStuckRelay() {
       return _monitor.getFaultCountStuckRelay();
     }
-    double getTempurature(uint8_t sensor) {
-      return _monitor.getTempurature(sensor);
+    double getTemperature(uint8_t sensor) {
+      return _monitor.getTemperature(sensor);
     }
-    double isTempuratureValid(uint8_t sensor) {
-      return _monitor.isTempuratureValid(sensor);
+    double isTemperatureValid(uint8_t sensor) {
+      return _monitor.isTemperatureValid(sensor);
     }
     bool isDiodeCheckDisabled() {
       return _monitor.isDiodeCheckDisabled();

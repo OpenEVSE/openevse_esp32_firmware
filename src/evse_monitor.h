@@ -84,14 +84,14 @@ class EvseMonitor : public MicroTasks::Task
         bool update(uint32_t state);
     };
 
-    class Tempurature
+    class Temperature
     {
       private:
         bool _valid;
         double _value;
 
       public:
-        Tempurature() : _valid(false), _value(0) { }
+        Temperature() : _valid(false), _value(0) { }
 
         void set(double value, bool valid = true) {
           _value = value;
@@ -119,7 +119,7 @@ class EvseMonitor : public MicroTasks::Task
     long _elapsed;                    // Elapsed time (only valid if charging)
     uint32_t _elapsed_set_time;
 
-    Tempurature _temps[EVSE_MONITOR_TEMP_COUNT];
+    Temperature _temps[EVSE_MONITOR_TEMP_COUNT];
 
     double _session_wh;
     double _total_kwh;
@@ -237,10 +237,10 @@ class EvseMonitor : public MicroTasks::Task
     long getFaultCountStuckRelay() {
       return _stuck_count;
     }
-    double getTempurature(uint8_t sensor) {
+    double getTemperature(uint8_t sensor) {
       return _temps[sensor].get();
     }
-    double isTempuratureValid(uint8_t sensor) {
+    double isTemperatureValid(uint8_t sensor) {
       return _temps[sensor].isValid();
     }
     long getMinCurrent() {

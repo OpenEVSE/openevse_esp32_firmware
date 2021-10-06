@@ -77,7 +77,7 @@ void EventLog::begin()
   }
 }
 
-void EventLog::log(EventType type, EvseState managerState, uint8_t evseState, uint32_t evseFlags, uint32_t pilot, double energy, uint32_t elapsed, double tempurature, double tempuratureMax, uint8_t divertMode)
+void EventLog::log(EventType type, EvseState managerState, uint8_t evseState, uint32_t evseFlags, uint32_t pilot, double energy, uint32_t elapsed, double temperature, double temperatureMax, uint8_t divertMode)
 {
   String eventFilename = filenameFromIndex(_max_log_index);
   File eventFile = LittleFS.open(eventFilename, FILE_APPEND);
@@ -115,8 +115,8 @@ void EventLog::log(EventType type, EvseState managerState, uint8_t evseState, ui
     line["p"] = pilot;
     line["e"] = energy;
     line["el"] = elapsed;
-    line["tp"] = tempurature;
-    line["tm"] = tempuratureMax;
+    line["tp"] = temperature;
+    line["tm"] = temperatureMax;
     line["dm"] = divertMode;
 
     serializeJson(line, eventFile);
@@ -131,7 +131,7 @@ void EventLog::log(EventType type, EvseState managerState, uint8_t evseState, ui
   }
 }
 
-void EventLog::enumerate(uint32_t index, std::function<void(String time, EventType type, EvseState managerState, uint8_t evseState, uint32_t evseFlags, uint32_t pilot, double energy, uint32_t elapsed, double tempurature, double tempuratureMax, uint8_t divertMode)> callback)
+void EventLog::enumerate(uint32_t index, std::function<void(String time, EventType type, EvseState managerState, uint8_t evseState, uint32_t evseFlags, uint32_t pilot, double energy, uint32_t elapsed, double temperature, double temperatureMax, uint8_t divertMode)> callback)
 {
   String filename = filenameFromIndex(index);
   File eventFile = LittleFS.open(filename);
@@ -160,11 +160,11 @@ void EventLog::enumerate(uint32_t index, std::function<void(String time, EventTy
         uint32_t pilot = json["p"];
         double energy = json["e"];
         uint32_t elapsed = json["el"];
-        double tempurature = json["tp"];
-        double tempuratureMax = json["tm"];
+        double temperature = json["tp"];
+        double temperatureMax = json["tm"];
         uint8_t divertMode = json["dm"];
 
-        callback(time, type, managerState, evseState, evseFlags, pilot, energy, elapsed, tempurature, tempuratureMax, divertMode);
+        callback(time, type, managerState, evseState, evseFlags, pilot, energy, elapsed, temperature, temperatureMax, divertMode);
       }
     }
     eventFile.close();
