@@ -79,6 +79,15 @@ void EventLog::begin()
 
 void EventLog::log(EventType type, EvseState managerState, uint8_t evseState, uint32_t evseFlags, uint32_t pilot, double energy, uint32_t elapsed, double temperature, double temperatureMax, uint8_t divertMode)
 {
+  time_t now = time(NULL);
+  struct tm timeinfo;
+  gmtime_r(&now, &timeinfo);
+
+  // Check if we have a reasonable time, don't want to be logging events from 1970
+  if(timeinfo.tm_year < (2021 - 1900)) {
+    return;
+  }
+
   String eventFilename = filenameFromIndex(_max_log_index);
   File eventFile = LittleFS.open(eventFilename, FILE_APPEND);
   if(eventFile && eventFile.size() > EVENTLOG_ROTATE_SIZE)
@@ -100,10 +109,6 @@ void EventLog::log(EventType type, EvseState managerState, uint8_t evseState, ui
   if(eventFile)
   {
     StaticJsonDocument<256> line;
-
-    time_t now = time(NULL);
-    struct tm timeinfo;
-    gmtime_r(&now, &timeinfo);
     char output[80];
     strftime(output, 80, "%FT%TZ", &timeinfo);
 
