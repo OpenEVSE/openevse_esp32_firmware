@@ -383,7 +383,9 @@ void EvseMonitor::enable()
   {
     DBUGF("EVSE: enable - complete %d", ret);
     if(RAPI_RESPONSE_OK == ret) {
-      getStatusFromEvse();
+      // When enabling the OpenEVSE controler it goes into the starting state, this is
+      // not overley helpful, so we will ignore it
+      getStatusFromEvse(false);
     }
   });
 }
@@ -433,14 +435,18 @@ void EvseMonitor::setVoltage(double volts)
   }
 }
 
-void EvseMonitor::getStatusFromEvse()
+void EvseMonitor::getStatusFromEvse(bool allowStart)
 {
   DBUGLN("Get EVSE status");
-  _openevse.getStatus([this](int ret, uint8_t evse_state, uint32_t session_time, uint8_t pilot_state, uint32_t vflags)
+  _openevse.getStatus([this, allowStart](int ret, uint8_t evse_state, uint32_t session_time, uint8_t pilot_state, uint32_t vflags)
   {
     if(RAPI_RESPONSE_OK == ret)
     {
       DBUGF("evse_state = %02x, session_time = %d, pilot_state = %02x, vflags = %08x", evse_state, session_time, pilot_state, vflags);
+      if(OPENEVSE_STATE_STARTING == evse_state && false == allowStart) {
+        DBUGLN("Ignoring OPENEVSE_STATE_STARTING state");
+        return;
+      }
       updateEvseState(evse_state, pilot_state, vflags);
 
       _elapsed = session_time;

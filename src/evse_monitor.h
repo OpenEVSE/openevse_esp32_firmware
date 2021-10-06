@@ -156,7 +156,7 @@ class EvseMonitor : public MicroTasks::Task
     void evseBoot(const char *firmware_version);
     void updateEvseState(uint8_t evse_state, uint8_t pilot_state, uint32_t vflags);
 
-    void getStatusFromEvse();
+    void getStatusFromEvse(bool allowStart = true);
     void getChargeCurrentAndVoltageFromEvse();
     void getTemperatureFromEvse();
     void getEnergyFromEvse();
