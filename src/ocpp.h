@@ -37,6 +37,8 @@ private:
     bool resetHard = false; //default to soft reset
     ulong resetTime;
 
+    bool updateUserNotified = false;
+
     void initializeArduinoOcpp();
     bool arduinoOcppInitialized = false;
     void loadEvseBehavior();

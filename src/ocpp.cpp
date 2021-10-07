@@ -9,6 +9,7 @@
 
 #include <ArduinoOcpp.h> // Facade for ArduinoOcpp
 #include <ArduinoOcpp/SimpleOcppOperationFactory.h> // define behavior for incoming req messages
+#include <HTTPUpdate.h>
 
 #include <ArduinoOcpp/Core/OcppEngine.h>
 
@@ -62,6 +63,38 @@ void ArduinoOcppTask::initializeArduinoOcpp() {
         };
 
         OCPP_initialize(ocppSocket, (float) DEFAULT_VOLTAGE, ArduinoOcpp::FilesystemOpt::Use, clockAdapter);
+
+        ArduinoOcpp::FirmwareService *fwService = ArduinoOcpp::getFirmwareService();
+        if (fwService) {
+            
+        }
+
+        //TODO HTTPUpdate has added the onProgress cb to its own class definition in Jun '21. Replace when available (https://github.com/espressif/arduino-esp32/commit/db4e7667afe0e169c5f00567f4b59ab8e0fc1532)
+        Update.onProgress([lcd = lcd, &updateUserNotified = updateUserNotified](size_t index, size_t total) {
+            if (!updateUserNotified && index > 0) {
+                updateUserNotified = true;
+
+                DEBUG_PORT.printf("Update via OCPP start\n");
+
+                lcd->display(F("Updating WiFi"), 0, 0, 10 * 1000, LCD_CLEAR_LINE | LCD_DISPLAY_NOW);
+                lcd->display(F(""), 0, 1, 10 * 1000, LCD_CLEAR_LINE | LCD_DISPLAY_NOW);
+            }
+            
+            if (index < total) {
+                unsigned int percent = 0;
+                if (total / 100U != 0) {
+                    percent = index / (total / 100U);
+                } else {
+                    percent = 99;
+                }
+                DBUGVAR(percent);
+                String text = String(percent) + F("%");
+                if (lcd) lcd->display(text, 0, 1, 10 * 1000, LCD_DISPLAY_NOW);
+                DEBUG_PORT.printf("Update: %d%%\n", percent);
+            } else {
+                lcd->display(F("Complete"), 0, 1, 10 * 1000, LCD_CLEAR_LINE | LCD_DISPLAY_NOW);
+            }
+        });
 
         DynamicJsonDocument *evseDetailsDoc = new DynamicJsonDocument(JSON_OBJECT_SIZE(6));
         JsonObject evseDetails = evseDetailsDoc->to<JsonObject>();
