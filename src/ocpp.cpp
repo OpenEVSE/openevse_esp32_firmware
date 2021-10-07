@@ -162,7 +162,7 @@ void ArduinoOcppTask::loadEvseBehavior() {
      */
 
     onVehicleConnect = [this] () {
-        if (getTransactionId() < 0) {
+        if (getTransactionId() < 0 && isAvailable()) {
             if (!ocpp_idTag.isEmpty()) {
                 authorize(ocpp_idTag, [this] (JsonObject payload) {
                     if (idTagIsAccepted(payload)) {
