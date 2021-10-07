@@ -89,7 +89,8 @@ Authorization: Bearer {{tesla_access_token}}
 ###############################
 
 #@tesla_login = http://localhost:3000
-@tesla_login = https://tesla.bigjungle.net
+#@tesla_login = https://tesla.bigjungle.net
+@tesla_login = https://auth.openevse.com
 
 ###
 # @name tesla_credentials

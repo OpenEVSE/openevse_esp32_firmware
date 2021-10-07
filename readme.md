@@ -300,6 +300,8 @@ There is also an [OpenEVSE RAPI command python library](https://github.com/tiram
 
 ### HTTP API (Recommended)
 
+See here for detailed HTTP API documentation [new WiFi V4.x HTTP API](https://openevse.stoplight.io/docs/openevse-wifi-v4)
+
 #### Manual Override API
 
 Manual override can be used to override a charging timer or to immediately start a charge if the EVSE is in sleeping state.

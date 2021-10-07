@@ -151,5 +151,6 @@
 #endif // !SCHEDULE_PATH
 
 extern String currentfirmware;
+extern String buildenv;
 
 #endif // _EMONESP_H
