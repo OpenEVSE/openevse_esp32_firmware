@@ -1,11 +1,7 @@
 from os.path import join, isfile, isdir, basename
 from os import listdir, system
-import json
 from pprint import pprint
-import re
-import requests
-import subprocess
-import sys
+import hashlib
 
 Import("env")
 
@@ -29,6 +25,7 @@ def text_to_header(source_file):
     for line in original.splitlines():
         output += u"\n  \"{}\\n\"".format(line.replace('\\', '\\\\').replace('"', '\\"'))
     output += ";\n"
+    output += "static const char CONTENT_{}_ETAG[] PROGMEM = \"{}\";\n".format(filename, hashlib.sha256(original.encode('utf-8')).hexdigest())
     return output
 
 def binary_to_header(source_file):
@@ -36,10 +33,13 @@ def binary_to_header(source_file):
     output = "static const char CONTENT_"+filename+"[] PROGMEM = {\n  "
     count = 0
 
+    etag = hashlib.sha256()
+
     with open(source_file, "rb") as source_fh:
         byte = source_fh.read(1)
         while byte != b"":
             output += "0x{:02x}, ".format(ord(byte))
+            etag.update(byte)
             count += 1
             if 16 == count:
                 output += "\n  "
@@ -48,6 +48,7 @@ def binary_to_header(source_file):
             byte = source_fh.read(1)
 
     output += "0x00 };\n"
+    output += "static const char CONTENT_{}_ETAG[] PROGMEM = \"{}\";\n".format(filename, etag.hexdigest())
     return output
 
 def data_to_header(env, target, source):
@@ -100,7 +101,7 @@ def make_static(env, target, source):
             filetype = "JSON"
 
         c_name = get_c_name(out_file)
-        output += "  { \"/"+out_file+"\", CONTENT_"+c_name+", sizeof(CONTENT_"+c_name+") - 1, _CONTENT_TYPE_"+filetype+" },\n"
+        output += "  { \"/"+out_file+"\", CONTENT_"+c_name+", sizeof(CONTENT_"+c_name+") - 1, _CONTENT_TYPE_"+filetype+", CONTENT_"+c_name+"_ETAG },\n"
 
     output += "};\n"
 

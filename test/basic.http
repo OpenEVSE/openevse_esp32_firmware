@@ -21,10 +21,10 @@ GET {{baseUrl}}/ HTTP/1.1
 
 ###
 
-@lastModified = {{index.response.headers.Last-Modified}}
+@etag = {{index.response.headers.etag}}
 
 GET {{baseUrl}}/ HTTP/1.1
-If-Modified-Since: {{lastModified}}
+If-None-Match: {{etag}}
 
 ###
 

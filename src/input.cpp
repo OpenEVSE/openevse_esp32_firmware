@@ -56,10 +56,10 @@ class InputTask : public MicroTasks::Task
           DynamicJsonDocument data(4096);
 
           create_rapi_json(data); // create JSON Strings for EmonCMS and MQTT
-          emoncms_publish(data);
-
-          teslaClient.getChargeInfoJson(data);
           event_send(data);
+          // Already evented to MQTT etc
+          teslaClient.getChargeInfoJson(data);
+          emoncms_publish(data);
         }
       }
 
@@ -126,6 +126,8 @@ void create_rapi_json(JsonDocument &doc)
   doc["freeram"] = ESPAL.getFreeHeap();
   doc["divertmode"] = divertmode;
   doc["srssi"] = WiFi.RSSI();
+
+  //teslaClient.getChargeInfoJson(doc);
 }
 
 void
@@ -137,8 +139,11 @@ handleRapiRead()
   {
     if(RAPI_RESPONSE_OK == ret)
     {
-      struct timeval set_time = { evse_time, 0 };
-      settimeofday(&set_time, NULL);
+      time_t local_time = time(NULL);
+      if(evse_time > local_time) {
+        struct timeval set_time = { evse_time, 0 };
+        settimeofday(&set_time, NULL);
+      }
     }
   });
 

@@ -27,6 +27,8 @@ typedef const __FlashStringHelper *fstr_t;
 #include "app_config.h"
 #include "net_manager.h"
 #include "mqtt.h"
+#include "ocpp.h"
+#include "MongooseOcppSocketClient.h"
 #include "input.h"
 #include "emoncms.h"
 #include "divert.h"
@@ -38,7 +40,7 @@ typedef const __FlashStringHelper *fstr_t;
 
 MongooseHttpServer server;          // Create class for Web server
 
-bool enableCors = true;
+bool enableCors = false;
 bool streamDebug = false;
 
 // Event timeouts
@@ -55,6 +57,11 @@ const char _CONTENT_TYPE_JS[] PROGMEM = "application/javascript";
 const char _CONTENT_TYPE_JPEG[] PROGMEM = "image/jpeg";
 const char _CONTENT_TYPE_PNG[] PROGMEM = "image/png";
 const char _CONTENT_TYPE_SVG[] PROGMEM = "image/svg+xml";
+
+#define RAPI_RESPONSE_BLOCKED             -300
+
+void handleConfig(MongooseHttpServerRequest *request);
+void handleEvseClaims(MongooseHttpServerRequest *request);
 
 void dumpRequest(MongooseHttpServerRequest *request)
 {
@@ -117,7 +124,7 @@ void dumpRequest(MongooseHttpServerRequest *request)
 // -------------------------------------------------------------------
 // Helper function to perform the standard operations on a request
 // -------------------------------------------------------------------
-bool requestPreProcess(MongooseHttpServerRequest *request, MongooseHttpServerResponseStream *&response, fstr_t contentType = CONTENT_TYPE_JSON)
+bool requestPreProcess(MongooseHttpServerRequest *request, MongooseHttpServerResponseStream *&response, fstr_t contentType)
 {
   dumpRequest(request);
 
@@ -481,30 +488,30 @@ handleSaveAdvanced(MongooseHttpServerRequest *request) {
 // url: /teslaveh
 // -------------------------------------------------------------------
 void
-handleTeslaVeh(MongooseHttpServerRequest *request) {
+handleTeslaVeh(MongooseHttpServerRequest *request)
+{
   MongooseHttpServerResponseStream *response;
   if(false == requestPreProcess(request, response)) {
     return;
   }
 
-  String s = "{";
-  int vc = teslaClient.getVehicleCnt();
-  s += "\"count:\"" + String(vc);
-  if (vc) {
-    s += ",[";
-    for (int i=0;i < vc;i++) {
-      s += "{\"id\":\"" + teslaClient.getVehicleId(i) + "\",";
-      s += "\"name\":\"" + teslaClient.getVehicleDisplayName(i) + "\"}";
-      if (i < vc-1) s += ",";
-    }
-    s += "]";
+  StaticJsonDocument<1024> doc;
+  int count = teslaClient.getVehicleCnt();
+  doc["count"] = count;
+  JsonArray vehicles = doc.createNestedArray("vehicles");
+
+  for (int i = 0; i < count; i++)
+  {
+    JsonObject vehicle = vehicles.createNestedObject();
+    vehicle["id"] = teslaClient.getVehicleId(i);
+    vehicle["name"] = teslaClient.getVehicleDisplayName(i);
   }
-  s += "}";
 
   response->setCode(200);
-  response->print(s);
+  serializeJson(doc, *response);
   request->send(response);
 }
+
 // -------------------------------------------------------------------
 // Save the Ohm keyto EEPROM
 // url: /handleSaveOhmkey
@@ -572,6 +579,8 @@ handleStatus(MongooseHttpServerRequest *request) {
 
   doc["mqtt_connected"] = (int)mqtt_connected();
 
+  doc["ocpp_connected"] = (int)MongooseOcppSocketClient::ocppConnected();
+
   doc["ohm_hour"] = ohm_hour;
 
   doc["free_heap"] = ESPAL.getFreeHeap();
@@ -582,6 +591,8 @@ handleStatus(MongooseHttpServerRequest *request) {
   doc["evse_connected"] = (int)evse.isConnected();
 
   create_rapi_json(doc);
+
+  doc["status"] = evse.getState().toString();
 
   doc["elapsed"] = evse.getSessionElapsed();
   doc["wattsec"] = evse.getSessionEnergy() * SESSION_ENERGY_SCALE_FACTOR;
@@ -600,96 +611,30 @@ handleStatus(MongooseHttpServerRequest *request) {
   doc["time"] = String(time);
   doc["offset"] = String(offset);
 
-  {
-    const TESLA_CHARGE_INFO *tci = teslaClient.getChargeInfo();
-    if (tci->isValid) {
-      doc["batteryRange"] = String(tci->batteryRange) + ",";
-      doc["chargeEnergyAdded"] = String(tci->chargeEnergyAdded) + ",";
-      doc["chargeMilesAddedRated"] = String(tci->chargeMilesAddedRated) + ",";
-      doc["batteryLevel"] = String(tci->batteryLevel) + ",";
-      doc["chargeLimitSOC"] = String(tci->chargeLimitSOC) + ",";
-      doc["timeToFullCharge"] = String(tci->timeToFullCharge) + ",";
-      doc["chargerVoltage"] = String(tci->chargerVoltage);
+  doc["vehicle_state_update"] = (millis() - evse.getVehicleLastUpdated()) / 1000;
+  if(teslaClient.getVehicleCnt() > 0) {
+    doc["tesla_vehicle_count"] = teslaClient.getVehicleCnt();
+    doc["tesla_vehicle_id"] = teslaClient.getVehicleId(teslaClient.getCurVehicleIdx());
+    doc["tesla_vehicle_name"] = teslaClient.getVehicleDisplayName(teslaClient.getCurVehicleIdx());
+    teslaClient.getChargeInfoJson(doc);
+  } else {
+    doc["tesla_vehicle_count"] = false;
+    doc["tesla_vehicle_id"] = false;
+    doc["tesla_vehicle_name"] = false;
+    if(evse.isVehicleStateOfChargeValid()) {
+      doc["battery_level"] = evse.getVehicleStateOfCharge();
+    }
+    if(evse.isVehicleRangeValid()) {
+      doc["battery_range"] = evse.getVehicleRange();
+    }
+    if(evse.isVehicleEtaValid()) {
+      doc["time_to_full_charge"] = evse.getVehicleEta();
     }
   }
 
-  response->setCode(200);
-  serializeJson(doc, *response);
-  request->send(response);
-}
-
-// -------------------------------------------------------------------
-// Returns OpenEVSE Config json
-// url: /config
-// -------------------------------------------------------------------
-void
-handleConfigGet(MongooseHttpServerRequest *request, MongooseHttpServerResponseStream *response)
-{
-  const size_t capacity = JSON_OBJECT_SIZE(40) + 1024;
-  DynamicJsonDocument doc(capacity);
-
-  // EVSE Config
-  doc["firmware"] = evse.getFirmwareVersion();
-  doc["protocol"] = "-";
-  doc["espflash"] = ESPAL.getFlashChipSize();
-  doc["version"] = currentfirmware;
-  doc["diodet"] = evse.isDiodeCheckDisabled() ? 1 : 0;
-  doc["gfcit"] = evse.isGfiTestDisabled() ? 1 : 0;
-  doc["groundt"] = evse.isGroundCheckDisabled() ? 1 : 0;
-  doc["relayt"] = evse.isStuckRelayCheckDisabled() ? 1 : 0;
-  doc["ventt"] = evse.isVentRequiredDisabled() ? 1 : 0;
-  doc["tempt"] = evse.isTemperatureCheckDisabled() ? 1 : 0;
-  doc["service"] = static_cast<uint8_t>(evse.getServiceLevel());
-  doc["scale"] = current_scale;
-  doc["offset"] = current_offset;
-
-  // Static supported protocols
-  JsonArray mqtt_supported_protocols = doc.createNestedArray("mqtt_supported_protocols");
-  mqtt_supported_protocols.add("mqtt");
-  mqtt_supported_protocols.add("mqtts");
-
-  JsonArray http_supported_protocols = doc.createNestedArray("http_supported_protocols");
-  http_supported_protocols.add("http");
-  http_supported_protocols.add("https");
-
-  config_serialize(doc, true, false, true);
 
   response->setCode(200);
   serializeJson(doc, *response);
-}
-
-void
-handleConfigPost(MongooseHttpServerRequest *request, MongooseHttpServerResponseStream *response)
-{
-  String body = request->body().toString();
-  if(config_deserialize(body)) {
-    config_commit();
-    response->setCode(200);
-    response->print("{\"msg\":\"done\"}");
-  } else {
-    response->setCode(400);
-    response->print("{\"msg\":\"Could not parse JSON\"}");
-  }
-}
-
-void
-handleConfig(MongooseHttpServerRequest *request)
-{
-  MongooseHttpServerResponseStream *response;
-  if(false == requestPreProcess(request, response)) {
-    return;
-  }
-
-  if(HTTP_GET == request->method()) {
-    handleConfigGet(request, response);
-  } else if(HTTP_POST == request->method()) {
-    handleConfigPost(request, response);
-  } else if(HTTP_OPTIONS == request->method()) {
-    response->setCode(200);
-  } else {
-    response->setCode(405);
-  }
-
   request->send(response);
 }
 
@@ -1093,12 +1038,18 @@ handleRapi(MongooseHttpServerRequest *request) {
   if (request->hasParam("rapi"))
   {
     String rapi = request->getParam("rapi");
+    int ret = RAPI_RESPONSE_NK;
 
-    // BUG: Really we should do this in the main loop not here...
-    RAPI_PORT.flush();
-    DBUGVAR(rapi);
-    int ret = rapiSender.sendCmdSync(rapi);
-    DBUGVAR(ret);
+    if(!evse.isRapiCommandBlocked(rapi))
+    {
+      // BUG: Really we should do this in the main loop not here...
+      RAPI_PORT.flush();
+      DBUGVAR(rapi);
+      ret = rapiSender.sendCmdSync(rapi);
+      DBUGVAR(ret);
+    } else {
+      ret = RAPI_RESPONSE_BLOCKED;
+    }
 
     if(RAPI_RESPONSE_OK == ret ||
        RAPI_RESPONSE_NK == ret)
@@ -1154,6 +1105,7 @@ handleRapi(MongooseHttpServerRequest *request) {
         RAPI_RESPONSE_BAD_CHECKSUM == ret ? F("RAPI_RESPONSE_BAD_CHECKSUM") :
         RAPI_RESPONSE_BAD_SEQUENCE_ID == ret ? F("RAPI_RESPONSE_BAD_SEQUENCE_ID") :
         RAPI_RESPONSE_ASYNC_EVENT == ret ? F("RAPI_RESPONSE_ASYNC_EVENT") :
+        RAPI_RESPONSE_BLOCKED == ret ? F("RAPI_RESPONSE_BLOCKED") :
         F("UNKNOWN");
 
       if (json) {
@@ -1164,7 +1116,7 @@ handleRapi(MongooseHttpServerRequest *request) {
         s += errorString;
       }
 
-      code = 500;
+      code = RAPI_RESPONSE_BLOCKED == ret ? 400 : 500;
     }
   }
   if (false == json) {
@@ -1232,6 +1184,7 @@ web_server_setup() {
   server.on("/savemqtt$", handleSaveMqtt);
   server.on("/saveadmin$", handleSaveAdmin);
   server.on("/teslaveh$", handleTeslaVeh);
+  server.on("/tesla/vehicles$", handleTeslaVeh);
   server.on("/saveadvanced$", handleSaveAdvanced);
   server.on("/saveohmkey$", handleSaveOhmkey);
   server.on("/settime$", handleSetTime);
@@ -1246,6 +1199,8 @@ web_server_setup() {
 
   server.on("/schedule/plan$", handleSchedulePlan);
   server.on("/schedule", handleSchedule);
+
+  server.on("/claims", handleEvseClaims);
 
   server.on("/override$", handleOverride);
 

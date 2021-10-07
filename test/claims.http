@@ -1,0 +1,20 @@
+# Name: REST Client
+# Id: humao.rest-client
+# Description: REST Client for Visual Studio Code
+# Version: 0.21.3
+# Publisher: Huachao Mao
+# VS Marketplace Link: https://marketplace.visualstudio.com/items?itemName=humao.rest-client
+
+# You should use environment vars (https://marketplace.visualstudio.com/items?itemName=humao.rest-client#environment-variables) for these
+# but you can also set here if needed (just don't check in!)
+
+#@baseUrl = http://openevse.local
+
+#@ssid = your_ssid
+#@pass = your_password
+#@apikey = your_key
+
+###
+
+# Get the EVSE claims
+GET {{baseUrl}}/claims HTTP/1.1

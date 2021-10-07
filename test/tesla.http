@@ -1,0 +1,114 @@
+# Name: REST Client
+# Id: humao.rest-client
+# Description: REST Client for Visual Studio Code
+# Version: 0.21.3
+# Publisher: Huachao Mao
+# VS Marketplace Link: https://marketplace.visualstudio.com/items?itemName=humao.rest-client
+
+# You should use environment vars (https://marketplace.visualstudio.com/items?itemName=humao.rest-client#environment-variables) for these
+# but you can also set here if needed (just don't check in!)
+
+#@baseUrl = http://openevse.local
+#@tesla_username = username
+#@tesla_password = password
+
+###
+
+GET {{baseUrl}}/config
+
+###
+
+POST {{baseUrl}}/config HTTP/1.1
+Content-Type: application/json
+
+{
+  "tesla_enabled": false
+}
+
+###
+
+POST {{baseUrl}}/config HTTP/1.1
+Content-Type: application/json
+
+{
+  "tesla_enabled": true,
+  "tesla_access_token": "{{tesla_access_token}}",
+  "tesla_refresh_token": "{{tesla_refresh_token}}",
+  "tesla_created_at": "{{tesla_created_at}}",
+  "tesla_expires_in": "{{tesla_expires_in}}"
+}
+
+###
+# @name tesla_vehicles
+
+GET {{baseUrl}}/tesla/vehicles
+
+###
+
+POST {{baseUrl}}/config HTTP/1.1
+Content-Type: application/json
+
+{
+  "tesla_vehicle_id": "{{tesla_vehicles.response.body.vehicles[0].id}}"
+}
+
+###
+
+GET {{baseUrl}}/status
+
+##############################
+
+@tesla_api = https://owner-api.teslamotors.com
+@tesla_x_tesla_user_agent = TeslaApp/3.4.4-350/fad4a582e/android/8.1.0"
+@tesla_user_agent = Mozilla/5.0 (Linux; Android 8.1.0; Pixel XL Build/OPM4.171019.021.D1; wv) AppleWebKit/537.36 (KHTML, like Gecko) Version/4.0 Chrome/68.0.3440.91 Mobile Safari/537.36
+
+@tesla_vehicle_id = {{vehicles.response.body.response[0].id}}
+
+###
+# @name vehicles
+
+GET {{tesla_api}}/api/1/vehicles
+User-Agent: {{tesla_user_agent}}
+Content-Type: application/json; charset=utf-8
+Authorization: Bearer {{tesla_access_token}}
+
+###
+
+GET {{tesla_api}}/api/1/vehicles/{{tesla_vehicle_id}}/data_request/charge_state
+User-Agent: {{tesla_user_agent}}
+Content-Type: application/json; charset=utf-8
+Authorization: Bearer {{tesla_access_token}}
+
+###
+
+POST {{tesla_api}}/api/1/vehicles/{{tesla_vehicle_id}}/wake_up
+User-Agent: {{tesla_user_agent}}
+Content-Type: application/json; charset=utf-8
+Authorization: Bearer {{tesla_access_token}}
+
+###############################
+
+#@tesla_login = http://localhost:3000
+#@tesla_login = https://tesla.bigjungle.net
+@tesla_login = https://auth.openevse.com
+
+###
+# @name tesla_credentials
+
+POST {{tesla_login}}/login
+Content-Type: application/json; charset=utf-8
+
+{
+  "username":"{{tesla_username}}",
+  "password":"{{tesla_password}}"
+}
+
+###
+
+POST {{tesla_login}}/login
+Content-Type: application/json; charset=utf-8
+
+{
+  "username":"invalid",
+  "password":"user"
+}

@@ -2,6 +2,7 @@
 #include "espal.h"
 #include "divert.h"
 #include "mqtt.h"
+#include "ocpp.h"
 #include "tesla_client.h"
 #include "emoncms.h"
 #include "input.h"
@@ -45,7 +46,16 @@ String mqtt_pass;
 String mqtt_solar;
 String mqtt_grid_ie;
 String mqtt_vrms;
+String mqtt_vehicle_soc;
+String mqtt_vehicle_range;
+String mqtt_vehicle_eta;
 String mqtt_announce_topic;
+
+// OCPP 1.6 Settings
+String ocpp_server;
+String ocpp_chargeBoxId;
+String ocpp_idTag;
+String tx_start_point;
 
 // Time
 String time_zone;
@@ -63,9 +73,12 @@ double divert_decay_smoothing_factor;
 uint32_t divert_min_charge_time;
 
 // Tesla Client settings
-String tesla_username;
-String tesla_password;
-int tesla_vehidx;
+String tesla_access_token;
+String tesla_refresh_token;
+uint64_t tesla_created_at;
+uint64_t tesla_expires_in;
+
+String tesla_vehicle_id;
 
 #if RGB_LED
 uint8_t led_brightness;
@@ -109,7 +122,16 @@ ConfigOpt *opts[] =
   new ConfigOptDefenition<String>(mqtt_solar, "", "mqtt_solar", "mo"),
   new ConfigOptDefenition<String>(mqtt_grid_ie, "emon/emonpi/power1", "mqtt_grid_ie", "mg"),
   new ConfigOptDefenition<String>(mqtt_vrms, "emon/emonpi/vrms", "mqtt_vrms", "mv"),
+  new ConfigOptDefenition<String>(mqtt_vehicle_soc, "", "mqtt_vehicle_soc", "mc"),
+  new ConfigOptDefenition<String>(mqtt_vehicle_range, "", "mqtt_vehicle_range", "mr"),
+  new ConfigOptDefenition<String>(mqtt_vehicle_eta, "", "mqtt_vehicle_eta", "met"),
   new ConfigOptDefenition<String>(mqtt_announce_topic, "openevse/announce/"+ESPAL.getShortId(), "mqtt_announce_topic", "ma"),
+
+// OCPP 1.6 Settings
+  new ConfigOptDefenition<String>(ocpp_server, "", "ocpp_server", "ows"),
+  new ConfigOptDefenition<String>(ocpp_chargeBoxId, "", "ocpp_chargeBoxId", "cid"),
+  new ConfigOptDefenition<String>(ocpp_idTag, "", "ocpp_idTag", "idt"),
+  new ConfigOptDefenition<String>(tx_start_point, "tx_pending", "tx_start_point", "otx"),
 
 // Ohm Connect Settings
   new ConfigOptDefenition<String>(ohm, "", "ohm", "o"),
@@ -121,9 +143,11 @@ ConfigOpt *opts[] =
   new ConfigOptDefenition<uint32_t>(divert_min_charge_time, (10 * 60), "divert_min_charge_time", "dt"),
 
 // Tesla client settings
-  new ConfigOptDefenition<String>(tesla_username, "", "tesla_username", "tu"),
-  new ConfigOptSecret(tesla_password, "", "tesla_password", "tp"),
-  new ConfigOptDefenition<int>(tesla_vehidx, -1, "tesla_vehidx", "ti"),
+  new ConfigOptSecret(tesla_access_token, "", "tesla_access_token", "tat"),
+  new ConfigOptSecret(tesla_refresh_token, "", "tesla_refresh_token", "trt"),
+  new ConfigOptDefenition<uint64_t>(tesla_created_at, -1, "tesla_created_at", "tc"),
+  new ConfigOptDefenition<uint64_t>(tesla_expires_in, -1, "tesla_expires_in", "tx"),
+  new ConfigOptDefenition<String>(tesla_vehicle_id, "", "tesla_vehicle_id", "ti"),
 
 #if RGB_LED
 // LED brightness
@@ -139,9 +163,13 @@ ConfigOpt *opts[] =
   new ConfigOptVirtualBool(flagsOpt, CONFIG_MQTT_ALLOW_ANY_CERT, 0, "mqtt_reject_unauthorized", "mru"),
   new ConfigOptVirtualBool(flagsOpt, CONFIG_SERVICE_OHM, CONFIG_SERVICE_OHM, "ohm_enabled", "oe"),
   new ConfigOptVirtualBool(flagsOpt, CONFIG_SERVICE_SNTP, CONFIG_SERVICE_SNTP, "sntp_enabled", "se"),
-  new ConfigOptVirtualBool(flagsOpt,CONFIG_SERVICE_TESLA,CONFIG_SERVICE_TESLA, "tesla_enabled", "te"),
+  new ConfigOptVirtualBool(flagsOpt, CONFIG_SERVICE_TESLA, CONFIG_SERVICE_TESLA, "tesla_enabled", "te"),
   new ConfigOptVirtualBool(flagsOpt, CONFIG_SERVICE_DIVERT, CONFIG_SERVICE_DIVERT, "divert_enabled", "de"),
   new ConfigOptVirtualBool(flagsOpt, CONFIG_PAUSE_USES_DISABLED, CONFIG_PAUSE_USES_DISABLED, "pause_uses_disabled", "pd"),
+  new ConfigOptVirtualBool(flagsOpt, CONFIG_VEHICLE_RANGE_MILES, CONFIG_VEHICLE_RANGE_MILES, "mqtt_vehicle_range_miles", "mvru"),
+  new ConfigOptVirtualBool(flagsOpt, CONFIG_SERVICE_OCPP, CONFIG_SERVICE_OCPP, "ocpp_enabled", "ope"),
+  new ConfigOptVirtualBool(flagsOpt, CONFIG_OCPP_ACCESS_SUSPEND, CONFIG_OCPP_ACCESS_SUSPEND, "ocpp_suspend_evse", "ops"),
+  new ConfigOptVirtualBool(flagsOpt, CONFIG_OCPP_ACCESS_ENERGIZE, CONFIG_OCPP_ACCESS_ENERGIZE, "ocpp_energize_plug", "opn"),
   new ConfigOptVirtualMqttProtocol(flagsOpt, "mqtt_protocol", "mprt"),
   new ConfigOptVirtualChargeMode(flagsOpt, "charge_mode", "chmd")
 };
@@ -191,20 +219,21 @@ void config_changed(String name)
     if(emoncms_connected != config_emoncms_enabled()) {
       emoncms_updated = true;
     }
+    ArduinoOcppTask::notifyConfigChanged();
   } else if(name.startsWith("mqtt_")) {
     mqtt_restart();
+  } else if(name.startsWith("ocpp_") || name.startsWith("tx_start_point")) {
+    ArduinoOcppTask::notifyConfigChanged();
   } else if(name.startsWith("emoncms_")) {
     emoncms_updated = true;
   } else if(name == "divert_enabled" || name == "charge_mode") {
     DBUGVAR(config_divert_enabled());
     DBUGVAR(config_charge_mode());
     divertmode_update((config_divert_enabled() && 1 == config_charge_mode()) ? DIVERT_MODE_ECO : DIVERT_MODE_NORMAL);
-  } else if(name == "tesla_username") {
-    teslaClient.setUser(tesla_username.c_str());
-  } else if(name == "tesla_password") {
-    teslaClient.setPass(tesla_password.c_str());
-  } else if(name == "tesla_vehidx") {
-    teslaClient.setVehicleIdx(tesla_vehidx);
+  } else if(name == "tesla_vehicle_id") {
+    teslaClient.setVehicleId(tesla_vehicle_id);
+  } else if(name.startsWith("tesla_")) {
+    teslaClient.setCredentials(tesla_access_token, tesla_refresh_token, tesla_created_at, tesla_expires_in);
 #if RGB_LED
   } else if(name == "led_brightness") {
     ledManager.setBrightness(led_brightness);

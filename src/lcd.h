@@ -134,6 +134,7 @@ class LcdTask : public MicroTasks::Task
     void displayInfoLine(LcdInfoLine info, unsigned long &nextUpdate);
     void displayNumberValue(int line, const char *name, double value, int precision, const char *unit);
     void displayInfoEventTime(const char *name, Scheduler::EventInstance &event);
+    void displayStopWatchTime(const char *name, uint32_t time);
   protected:
     void setup();
     unsigned long loop(MicroTasks::WakeReason reason);

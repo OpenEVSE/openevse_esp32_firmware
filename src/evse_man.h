@@ -29,6 +29,7 @@ typedef uint32_t EvseClient;
 #define EvseClient_OpenEVSE_Limit             EVC(EvseClient_Vendor_OpenEVSE, 0x0006)
 #define EvseClient_OpenEVSE_Error             EVC(EvseClient_Vendor_OpenEVSE, 0x0007)
 #define EvseClient_OpenEVSE_Ohm               EVC(EvseClient_Vendor_OpenEVSE, 0x0008)
+#define EvseClient_OpenEVSE_Ocpp              EVC(EvseClient_Vendor_OpenEVSE, 0x0009)
 
 #define EvseClient_OpenEnergyMonitor_DemandShaper EVC(EvseClient_Vendor_OpenEnergyMonitor, 0x0001)
 
@@ -38,10 +39,16 @@ typedef uint32_t EvseClient;
 #define EvseManager_Priority_Divert     50
 #define EvseManager_Priority_Timer     100
 #define EvseManager_Priority_Boost     200
+#define EvseManager_Priority_API       500
 #define EvseManager_Priority_Ohm       500
 #define EvseManager_Priority_Manual   1000
+#define EvseManager_Priority_Ocpp     1050
 #define EvseManager_Priority_Limit    1100
 #define EvseManager_Priority_Error   10000
+
+#define EVSE_VEHICLE_SOC    (1 << 0)
+#define EVSE_VEHICLE_RANGE  (1 << 1)
+#define EVSE_VEHICLE_ETA    (1 << 2)
 
 #ifndef EVSE_MANAGER_MAX_CLIENT_CLAIMS
 #define EVSE_MANAGER_MAX_CLIENT_CLAIMS 10
@@ -161,6 +168,34 @@ class EvseProperties : virtual public JsonSerialize<512>
       return *this;
     }
 
+    bool equals(EvseProperties &rhs) {
+      return this->_state == rhs._state &&
+             this->_charge_current == rhs._charge_current &&
+             this->_max_current == rhs._max_current &&
+             this->_energy_limit == rhs._energy_limit &&
+             this->_time_limit == rhs._time_limit &&
+             this->_auto_release == rhs._auto_release;
+
+    }
+    bool equals(EvseState &rhs) {
+      return this->_state == rhs;
+    }
+
+    bool operator == (EvseProperties &rhs) {
+      return this->equals(rhs);
+    }
+    bool operator == (EvseState &rhs) {
+      return this->equals(rhs);
+    }
+
+    bool operator != (EvseProperties &rhs) {
+      return !equals(rhs);
+    }
+    bool operator != (EvseState &rhs) {
+      return !equals(rhs);
+    }
+
+
     using JsonSerialize::deserialize;
     virtual bool deserialize(JsonObject &obj);
     using JsonSerialize::serialize;
@@ -180,7 +215,7 @@ class EvseManager : public MicroTasks::Task
       public:
         Claim();
 
-        void claim(EvseClient client, int priority, EvseProperties &target);
+        bool claim(EvseClient client, int priority, EvseProperties &target);
         void release();
 
         bool isValid() {
@@ -245,6 +280,13 @@ class EvseManager : public MicroTasks::Task
     bool _evaluateTargetState;
     int _waitingForEvent;
 
+    uint32_t _vehicleValid;
+    uint32_t _vehicleUpdated;
+    uint32_t _vehicleLastUpdated;
+    int _vehicleStateOfCharge;
+    int _vehicleRange;
+    int _vehicleEta;
+
     void initialiseEvse();
     bool findClaim(EvseClient client, Claim **claim = NULL);
     bool evaluateClaims(EvseProperties &properties);
@@ -277,9 +319,15 @@ class EvseManager : public MicroTasks::Task
     uint32_t getEnergyLimit(EvseClient client = EvseClient_NULL);
     uint32_t getTimeLimit(EvseClient client = EvseClient_NULL);
 
+    bool serializeClaims(DynamicJsonDocument &doc);
+    bool serializeClaim(DynamicJsonDocument &doc, EvseClient client);
+
     // Evse Status
     bool isConnected() {
       return OpenEVSE.isConnected();
+    }
+    bool isActive() {
+      return getActiveState() == EvseState::Active;
     }
     uint8_t getEvseState() {
       return _monitor.getEvseState();
@@ -305,6 +353,9 @@ class EvseManager : public MicroTasks::Task
     }
     double getVoltage() {
       return _monitor.getVoltage();
+    }
+    void setVoltage(double volts) {
+      _monitor.setVoltage(volts);
     }
     uint32_t getSessionElapsed() {
       return _monitor.getSessionElapsed();
@@ -370,6 +421,32 @@ class EvseManager : public MicroTasks::Task
       return _monitor.getMinCurrent();
     }
 
+    // Get/set the vehicle state
+    int getVehicleStateOfCharge() {
+      return _vehicleStateOfCharge;
+    }
+    int getVehicleRange() {
+      return _vehicleRange;
+    }
+    int getVehicleEta() {
+      return _vehicleEta;
+    }
+    uint32_t getVehicleLastUpdated() {
+      return _vehicleLastUpdated;
+    }
+    int isVehicleStateOfChargeValid() {
+      return 0 != (_vehicleValid & EVSE_VEHICLE_SOC);
+    }
+    int isVehicleRangeValid() {
+      return 0 != (_vehicleValid & EVSE_VEHICLE_RANGE);
+    }
+    int isVehicleEtaValid() {
+      return 0 != (_vehicleValid & EVSE_VEHICLE_ETA);
+    }
+    void setVehicleStateOfCharge(int vehicleStateOfCharge);
+    void setVehicleRange(int vehicleRange);
+    void setVehicleEta(int vehicleEta);
+
     // Temp until everything uses EvseManager
     RapiSender &getSender() {
       return _sender;
@@ -393,6 +470,8 @@ class EvseManager : public MicroTasks::Task
     void onSessionComplete(MicroTasks::EventListener *listner) {
       _monitor.onSessionComplete(listner);
     }
+
+    bool isRapiCommandBlocked(String rapi);
 };
 
 #endif // !_OPENEVSE_EVSE_MAN_H

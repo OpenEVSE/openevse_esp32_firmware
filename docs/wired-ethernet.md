@@ -13,6 +13,8 @@ Network connection can be made with a standard Ethernet cable. For new installat
 
 ## Hardware Connections 
 
+See [photos ](https://photos.google.com/share/AF1QipNvANgeR_NRmLrq0lhKnA0BR7ieD8DGRoaJFoilMIwQ8c7QpxR4X7hSfGj3XiTTUw) of hardware connectors for new OpenEVSE V5.5 controller.
+
 *Note: The these hardware connections apply to the current Rev.E & Rev.F ESP32-gateway hardware revisions. See section below for older units.*
 
 
@@ -40,14 +42,25 @@ Pre-compiled FW can be downloaded from the [repo releases page](https://github.c
 
 ESP32-gateway can be connected by micro USB and firmware can be uploaded using esptool:
 
-**For rev G**
-
-`esptool.py --before default_reset --after hard_reset write_flash  0x1000 bootloader.bin 0x8000 partitions.bin 0x10000 esp32-gateway-e.bin`
-
 **For rev E**
+
+First upload:
 
 `esptool esptool.py --baud 921600 --before default_reset --after hard_reset write_flash -z --flash_mode dio --flash_freq 40m --flash_size detect 0x1000 bootloader.bin 0x8000  partitions.bin 0x10000  esp32-gateway-e.bin`
 
+Subsequent upgrades:
+
+`esptool esptool.py --baud 921600 --before default_reset --after hard_reset write_flash -z --flash_mode dio --flash_freq 40m --flash_size detect 0x1000 0x10000  esp32-gateway-e.bin`
+
+**For rev G**
+
+First upload:
+
+`esptool.py --before default_reset --after hard_reset write_flash  0x1000 bootloader.bin 0x8000 partitions.bin 0x10000 esp32-gateway-e.bin`
+
+Subsequent upgrades:
+
+`esptool.py --before default_reset --after hard_reset write_flash 0x10000 esp32-gateway-e.bin`
 
 ## Compile and Upload 
 

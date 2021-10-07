@@ -9,6 +9,7 @@
 #include "input.h"
 #include "espal.h"
 #include "net_manager.h"
+#include "web_server.h"
 
 #include "openevse.h"
 
@@ -51,29 +52,65 @@ void mqttmsg_callback(MongooseString topic, MongooseString payload) {
     DBUGF("solar:%dW", solar);
     divert_update_state();
   }
-  else if (topic_string == mqtt_grid_ie){
+  else if (topic_string == mqtt_grid_ie)
+  {
     grid_ie = payload_str.toInt();
     DBUGF("grid:%dW", grid_ie);
     divert_update_state();
   }
-  else if (topic_string == mqtt_vrms){
-    // TODO: The voltage is no longer a global, need to do something so we don't have 
+  else if (topic_string == mqtt_vrms)
+  {
+    // TODO: The voltage is no longer a global, need to do something so we don't have
     //       to read back from the EVSE
     double volts = payload_str.toFloat();
-    if (volts >= 60.0 && volts <= 300.0) {
+    if (volts >= 60.0 && volts <= 300.0)
+    {
       // voltage = volts;
       DBUGF("voltage:%.1f", volts);
-      OpenEVSE.setVoltage(volts, [](int ret) {
-        // Only gives better power calculations so not critical if this fails
-      });
+      evse.setVoltage(volts);
+
     } else {
       DBUGF("voltage:%.1f (ignoring, out of range)", volts);
     }
   }
+  else if (topic_string == mqtt_vehicle_soc)
+  {
+    int vehicle_soc = payload_str.toInt();
+    DBUGF("vehicle_soc:%d%%", vehicle_soc);
+    evse.setVehicleStateOfCharge(vehicle_soc);
+
+    StaticJsonDocument<128> event;
+    event["battery_level"] = vehicle_soc;
+    event["vehicle_state_update"] = 0;
+    web_server_event(event);
+  }
+  else if (topic_string == mqtt_vehicle_range)
+  {
+    int vehicle_range = payload_str.toInt();
+    DBUGF("vehicle_range:%dKM", vehicle_range);
+    evse.setVehicleRange(vehicle_range);
+
+    StaticJsonDocument<128> event;
+    event["battery_range"] = vehicle_range;
+    event["vehicle_state_update"] = 0;
+    web_server_event(event);
+  }
+  else if (topic_string == mqtt_vehicle_eta)
+  {
+    int vehicle_eta = payload_str.toInt();
+    DBUGF("vehicle_eta:%d", vehicle_eta);
+    evse.setVehicleEta(vehicle_eta);
+
+    StaticJsonDocument<128> event;
+    event["time_to_full_charge"] = vehicle_eta;
+    event["vehicle_state_update"] = 0;
+    web_server_event(event);
+  }
   // If MQTT message to set divert mode is received
-  else if (topic_string == mqtt_topic + "/divertmode/set"){
+  else if (topic_string == mqtt_topic + "/divertmode/set")
+  {
     byte newdivert = payload_str.toInt();
-    if ((newdivert==1) || (newdivert==2)){
+    if ((newdivert==1) || (newdivert==2)) {
       divertmode_update(newdivert);
     }
   }
@@ -95,16 +132,19 @@ void mqttmsg_callback(MongooseString topic, MongooseString payload) {
         cmd += " "+payload_str;
       }
 
-      rapiSender.sendCmd(cmd, [](int ret)
+      if(!evse.isRapiCommandBlocked(cmd))
       {
-        if (RAPI_RESPONSE_OK == ret || RAPI_RESPONSE_NK == ret)
+        rapiSender.sendCmd(cmd, [](int ret)
         {
-          String rapiString = rapiSender.getResponse();
-          String mqtt_data = rapiString;
-          String mqtt_sub_topic = mqtt_topic + "/rapi/out";
-          mqttclient.publish(mqtt_sub_topic, mqtt_data);
-        }
-      });
+          if (RAPI_RESPONSE_OK == ret || RAPI_RESPONSE_NK == ret)
+          {
+            String rapiString = rapiSender.getResponse();
+            String mqtt_data = rapiString;
+            String mqtt_sub_topic = mqtt_topic + "/rapi/out";
+            mqttclient.publish(mqtt_sub_topic, mqtt_data);
+          }
+        });
+      }
     }
   }
 } //end call back
@@ -175,11 +215,20 @@ mqtt_connect()
     // subscribe to solar PV / grid_ie MQTT feeds
     if(config_divert_enabled())
     {
-      if (mqtt_solar!="") {
+      if (mqtt_solar != "") {
         mqttclient.subscribe(mqtt_solar);
       }
-      if (mqtt_grid_ie!="") {
+      if (mqtt_grid_ie != "") {
         mqttclient.subscribe(mqtt_grid_ie);
+      }
+      if (mqtt_vehicle_soc != "") {
+        mqttclient.subscribe(mqtt_vehicle_soc);
+      }
+      if (mqtt_vehicle_range != "") {
+        mqttclient.subscribe(mqtt_vehicle_range);
+      }
+      if (mqtt_vehicle_eta != "") {
+        mqttclient.subscribe(mqtt_vehicle_eta);
       }
     }
     if (mqtt_vrms!="") {
@@ -230,7 +279,7 @@ mqtt_loop() {
   Profile_Start(mqtt_loop);
 
   // Do we need to restart MQTT?
-  if(mqttRestartTime > 0 && millis() > mqttRestartTime) 
+  if(mqttRestartTime > 0 && millis() > mqttRestartTime)
   {
     mqttRestartTime = 0;
     if (mqttclient.connected()) {

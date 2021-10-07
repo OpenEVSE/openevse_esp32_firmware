@@ -60,6 +60,10 @@ unsigned long TimeManager::loop(MicroTasks::WakeReason reason)
          WakeReason_Manual == reason ? "WakeReason_Manual" :
          "UNKNOWN");
 
+  timeval local_time;
+  gettimeofday(&local_time, NULL);
+  DBUGF("Local time: %s", time_format_time(local_time.tv_sec).c_str());
+
   DBUGVAR(_nextCheckTime);
   DBUGVAR(_setTheTime);
 
@@ -155,6 +159,8 @@ void TimeManager::setTime(struct timeval setTime, const char *source)
         _setTheTime = true;
         MicroTask.wakeTask(this);
       }
+    } else {
+      DBUGF("Failed to get the EVSE time: %d", ret);
     }
   });
 

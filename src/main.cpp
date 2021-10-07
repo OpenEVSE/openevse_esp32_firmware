@@ -30,6 +30,7 @@
 #include <MongooseCore.h>
 #include <MicroTasks.h>
 #include <LITTLEFS.h>
+#include <ArduinoOcpp.h>
 
 #include "emonesp.h"
 #include "app_config.h"
@@ -48,6 +49,7 @@
 #include "time_man.h"
 #include "tesla_client.h"
 #include "event.h"
+#include "ocpp.h"
 
 #include "LedManagerTask.h"
 #include "evse_man.h"
@@ -73,6 +75,9 @@ static uint32_t last_mem = 0;
 #define TEXTIFY(A) #A
 #define ESCAPEQUOTE(A) TEXTIFY(A)
 String currentfirmware = ESCAPEQUOTE(BUILD_TAG);
+String buildenv = ESCAPEQUOTE(BUILD_ENV_NAME);
+
+ArduinoOcppTask ocpp = ArduinoOcppTask();
 
 static void hardware_setup();
 
@@ -125,6 +130,8 @@ void setup()
 #endif
 
   input_setup();
+
+  ocpp.begin(evse, lcd);
 
   lcd.display(F("OpenEVSE WiFI"), 0, 0, 0, LCD_CLEAR_LINE);
   lcd.display(currentfirmware, 0, 1, 5 * 1000, LCD_CLEAR_LINE);
@@ -195,9 +202,8 @@ loop() {
     // -------------------------------------------------------------------
     // Do these things once every 30 seconds
     // -------------------------------------------------------------------
-    if ((millis() - Timer1) >= 30000) {
-      DBUGLN("Time1");
-
+    if ((millis() - Timer1) >= 30000)
+    {
       if(!Update.isRunning())
       {
         if(config_ohm_enabled()) {

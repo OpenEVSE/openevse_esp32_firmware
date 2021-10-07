@@ -27,7 +27,7 @@ typedef struct telsa_charge_info {
   float chargeMilesAddedRated;
   int batteryLevel;
   int chargeLimitSOC;
-  int timeToFullCharge;
+  float timeToFullCharge;
   int chargerVoltage;
 } TESLA_CHARGE_INFO;
 
@@ -41,11 +41,13 @@ class TeslaClient {
   int _activeRequest; // TAR_xxx
   unsigned long _lastRequestStart;
   String _accessToken;
-  String _teslaUser;
-  String _teslaPass;
+  String _refreshToken;
+  uint64_t _created;
+  uint64_t _expires;
 
   int _vehicleCnt;
   int _curVehIdx;
+  String _curVehId;
   String *_id;
   String *_vin;
   String *_displayName;
@@ -56,26 +58,26 @@ class TeslaClient {
 
   bool _isBusy() { return _activeRequest == TAR_NONE ? false : true; }
   void _cleanVehicles();
+  int _hoursToSeconds(float hours);
 
  public:
   TeslaClient();
   ~TeslaClient();
 
-  void setUser(const char *user) { _teslaUser = user; }
-  void setPass(const char *pass) { _teslaPass = pass; }
+  void setCredentials(String &accessToken, String &refreshToken, uint64_t created, uint64_t expires);
 
-  void requestAccessToken();
+//  void requestAccessToken();
   void requestVehicles();
   void requestChargeState();
 
   int getVehicleCnt() { return _vehicleCnt; }
-  void setVehicleIdx(int vehidx) { _curVehIdx = vehidx; }
+  void setVehicleId(String vehid);
   int getCurVehicleIdx() { return _curVehIdx; }
   String getVehicleId(int vehidx);
   String getVIN(int vehidx);
   String getVehicleDisplayName(int vehidx);
-  const char *getUser() { return _teslaUser.c_str(); }
-  const char *getPass() { return _teslaPass.c_str(); }
+//  const char *getUser() { return _teslaUser.c_str(); }
+//  const char *getPass() { return _teslaPass.c_str(); }
   void getChargeInfoJson(JsonDocument &sjson);
   const TESLA_CHARGE_INFO *getChargeInfo() { return &_chargeInfo; }
 

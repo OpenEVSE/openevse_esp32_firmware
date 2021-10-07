@@ -214,9 +214,11 @@ static void net_wifi_onStationModeDisconnected(const WiFiEventStationModeDisconn
 
   client_disconnects++;
 
-  if(net_wifi_mode_is_sta()) {
-    startClient();
-  }
+  // Clear the WiFi state and tru to connect again
+  WiFi.disconnect();
+  WiFi.mode(WIFI_OFF);
+
+  startClient();
 }
 
 static void net_wifi_onAPModeStationConnected(const WiFiEventSoftAPModeStationConnected &event) {
@@ -468,7 +470,7 @@ net_loop()
   if(isClientOnly && !WiFi.isConnected())
   {
     // If we have failed to connect turn on the AP
-    if(client_disconnects > 2) {
+    if(client_disconnects > WIFI_CLIENT_DISCONNECTS_BEFORE_AP) {
       startAP();
       client_retry = true;
       client_retry_time = millis() + WIFI_CLIENT_RETRY_TIMEOUT;
@@ -478,8 +480,7 @@ net_loop()
   // Remain in AP mode for 5 Minutes before resetting
   if(isApOnly && 0 == apClients && client_retry && millis() > client_retry_time) {
     DEBUG.println("client re-try, resetting");
-    delay(50);
-    ESPAL.reset();
+    net_wifi_restart();
   }
 
   if(dnsServerStarted) {
