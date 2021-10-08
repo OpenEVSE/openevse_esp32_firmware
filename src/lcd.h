@@ -76,7 +76,7 @@ class LcdTask : public MicroTasks::Task
       Off,
       EnergySession,  // Energy 1,018Wh
       EnergyTotal,    // Lifetime 2313kWh
-      Tempurature,    // EVSE Temp 30.5C
+      Temperature,    // EVSE Temp 30.5C
       Time,           // Time 03:14PM
       Date,           // Date 08/25/2020
       ElapsedTime,

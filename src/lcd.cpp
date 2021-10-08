@@ -141,7 +141,7 @@ unsigned long LcdTask::loop(MicroTasks::WakeReason reason)
   DBUGLN(LcdInfoLine::Off == _infoLine ? "LcdInfoLine::Off" :
          LcdInfoLine::EnergySession == _infoLine ? "LcdInfoLine::EnergySession" :
          LcdInfoLine::EnergyTotal == _infoLine ? "LcdInfoLine::EnergyTotal" :
-         LcdInfoLine::Tempurature == _infoLine ? "LcdInfoLine::Tempurature" :
+         LcdInfoLine::Temperature == _infoLine ? "LcdInfoLine::Temperature" :
          LcdInfoLine::Time == _infoLine ? "LcdInfoLine::Time" :
          LcdInfoLine::Date == _infoLine ? "LcdInfoLine::Date" :
          LcdInfoLine::ElapsedTime == _infoLine ? "LcdInfoLine::ElapsedTime" :
@@ -307,8 +307,8 @@ LcdTask::LcdInfoLine LcdTask::getNextInfoLine(LcdInfoLine info)
         case LcdInfoLine::EnergySession:
           return LcdInfoLine::EnergyTotal;
         case LcdInfoLine::EnergyTotal:
-          return LcdInfoLine::Tempurature;
-        case LcdInfoLine::Tempurature:
+          return LcdInfoLine::Temperature;
+        case LcdInfoLine::Temperature:
           return LcdInfoLine::Time;
         case LcdInfoLine::Time:
           return LcdInfoLine::Date;
@@ -340,8 +340,8 @@ LcdTask::LcdInfoLine LcdTask::getNextInfoLine(LcdInfoLine info)
         case LcdInfoLine::EnergySession:
           return LcdInfoLine::EnergyTotal;
         case LcdInfoLine::EnergyTotal:
-          return LcdInfoLine::Tempurature;
-        case LcdInfoLine::Tempurature:
+          return LcdInfoLine::Temperature;
+        case LcdInfoLine::Temperature:
           if(_scheduler->getNextEvent().isValid()) {
             return LcdInfoLine::TimerStop;
           }
@@ -508,9 +508,9 @@ void LcdTask::displayInfoLine(LcdInfoLine line, unsigned long &nextUpdate)
       _updateInfoLine = false;
       break;
 
-    case LcdInfoLine::Tempurature:
+    case LcdInfoLine::Temperature:
       // EVSE Temp 30.5C
-      displayNumberValue(1, "EVSE Temp", _evse->getTempurature(EVSE_MONITOR_TEMP_MONITOR), 1, "C");
+      displayNumberValue(1, "EVSE Temp", _evse->getTemperature(EVSE_MONITOR_TEMP_MONITOR), 1, "C");
       _updateInfoLine = false;
       break;
 
