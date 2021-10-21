@@ -136,7 +136,7 @@ void EventLog::log(EventType type, EvseState managerState, uint8_t evseState, ui
   }
 }
 
-void EventLog::enumerate(uint32_t index, std::function<void(String time, EventType type, EvseState managerState, uint8_t evseState, uint32_t evseFlags, uint32_t pilot, double energy, uint32_t elapsed, double temperature, double temperatureMax, uint8_t divertMode)> callback)
+void EventLog::enumerate(uint32_t index, std::function<void(String time, EventType type, const String &logEntry, EvseState managerState, uint8_t evseState, uint32_t evseFlags, uint32_t pilot, double energy, uint32_t elapsed, double temperature, double temperatureMax, uint8_t divertMode)> callback)
 {
   String filename = filenameFromIndex(index);
   File eventFile = LittleFS.open(filename);
@@ -169,7 +169,7 @@ void EventLog::enumerate(uint32_t index, std::function<void(String time, EventTy
         double temperatureMax = json["tm"];
         uint8_t divertMode = json["dm"];
 
-        callback(time, type, managerState, evseState, evseFlags, pilot, energy, elapsed, temperature, temperatureMax, divertMode);
+        callback(time, type, line, managerState, evseState, evseFlags, pilot, energy, elapsed, temperature, temperatureMax, divertMode);
       }
     }
     eventFile.close();
