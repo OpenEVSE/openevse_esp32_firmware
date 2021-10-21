@@ -19,6 +19,7 @@ private:
     MongooseOcppSocketClient *ocppSocket = NULL;
     EvseManager *evse;
     LcdTask *lcd;
+    EventLog *eventLog;
 
     /*
      * OCPP state
@@ -68,7 +69,7 @@ public:
     ArduinoOcppTask();
     ~ArduinoOcppTask();
 
-    void begin(EvseManager &evse, LcdTask &lcd);
+    void begin(EvseManager &evse, LcdTask &lcd, EventLog &eventLog);
     
     void updateEvseClaim();
 
