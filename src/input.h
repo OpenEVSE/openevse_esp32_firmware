@@ -4,10 +4,12 @@
 #include <Arduino.h>
 #include <ArduinoJson.h>
 #include "RapiSender.h"
+#include "event_log.h"
 #include "evse_man.h"
 
 extern RapiSender &rapiSender;
 extern EvseManager evse;
+extern EventLog eventLog;
 
 extern String url;
 extern String data;

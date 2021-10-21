@@ -147,7 +147,7 @@ EvseMonitor::EvseMonitor(OpenEVSEClass &openevse) :
   _openevse(openevse),
   _state(),
   _amp(0),
-  _voltage(DEFAULT_VOLTAGE),
+  _voltage(VOLTAGE_DEFAULT),
   _elapsed(0),
   _elapsed_set_time(0),
   _temps(),
@@ -250,15 +250,40 @@ void EvseMonitor::evseBoot(const char *firmware)
   });
 }
 
-void EvseMonitor::evseStateChanged()
+void EvseMonitor::updateEvseState(uint8_t evse_state, uint8_t pilot_state, uint32_t vflags)
 {
-  if(isError()) {
-    _openevse.getFaultCounters([this](int ret, long gfci_count, long nognd_count, long stuck_count) { updateFaultCounters(ret, gfci_count, nognd_count, stuck_count); });
+  if(_state.getEvseState() != evse_state ||
+     _state.getPilotState() != pilot_state ||
+     _state.getFlags() != vflags)
+  {
+    _openevse.getEnergy([this, evse_state, pilot_state, vflags](int ret, double session_wh, double total_kwh)
+    {
+      if(RAPI_RESPONSE_OK == ret)
+      {
+        _session_wh = session_wh;
+        _total_kwh = total_kwh;
+
+        _data_ready.ready(EVSE_MONITOR_ENERGY_DATA_READY);
+      }
+
+      bool originalVehicleConnected = _state.isVehicleConnected();
+
+      _state.setState(evse_state, pilot_state, vflags);
+
+      if(false == originalVehicleConnected && _state.isVehicleConnected()) {
+        // Vehicle connected, reset the max temp
+        _temps[EVSE_MONITOR_TEMP_MAX].set(_temps[EVSE_MONITOR_TEMP_MONITOR].get());
+      }
+
+      if(isError()) {
+        _openevse.getFaultCounters([this](int ret, long gfci_count, long nognd_count, long stuck_count) { updateFaultCounters(ret, gfci_count, nognd_count, stuck_count); });
+      }
+      if(!isCharging()) {
+        _amp = 0;
+      }
+      _session_complete.update(getFlags());
+    });
   }
-  if(!isCharging()) {
-    _amp = 0;
-  }
-  _session_complete.update(getFlags());
 }
 
 unsigned long EvseMonitor::loop(MicroTasks::WakeReason reason)
@@ -313,9 +338,7 @@ bool EvseMonitor::begin(RapiSender &sender)
       _openevse.onState([this](uint8_t evse_state, uint8_t pilot_state, uint32_t current_capacity, uint32_t vflags)
       {
         DBUGF("evse_state = %02x, pilot_state = %02x, current_capacity = %d, vflags = %08x", evse_state, pilot_state, current_capacity, vflags);
-        if(_state.setState(evse_state, pilot_state, vflags)) {
-          evseStateChanged();
-        }
+        updateEvseState(evse_state, pilot_state, vflags);
       });
 
       _openevse.onBoot([this](uint8_t post_code, const char *firmware) { evseBoot(firmware); });
@@ -360,7 +383,9 @@ void EvseMonitor::enable()
   {
     DBUGF("EVSE: enable - complete %d", ret);
     if(RAPI_RESPONSE_OK == ret) {
-      getStatusFromEvse();
+      // When enabling the OpenEVSE controler it goes into the starting state, this is
+      // not overley helpful, so we will ignore it
+      getStatusFromEvse(false);
     }
   });
 }
@@ -399,26 +424,30 @@ void EvseMonitor::setPilot(long amps)
 
 void EvseMonitor::setVoltage(double volts)
 {
-  _openevse.setVoltage(volts, [this, volts](int ret)
+  if(VOLTAGE_MINIMUM <= volts && volts <= VOLTAGE_MAXIMUM)
   {
-    if(RAPI_RESPONSE_OK == ret || RAPI_RESPONSE_NK == ret) {
-      _voltage = volts;
-    }
-  });
+    _openevse.setVoltage(volts, [this, volts](int ret)
+    {
+      if(RAPI_RESPONSE_OK == ret || RAPI_RESPONSE_NK == ret) {
+        _voltage = volts;
+      }
+    });
+  }
 }
 
-
-void EvseMonitor::getStatusFromEvse()
+void EvseMonitor::getStatusFromEvse(bool allowStart)
 {
   DBUGLN("Get EVSE status");
-  _openevse.getStatus([this](int ret, uint8_t evse_state, uint32_t session_time, uint8_t pilot_state, uint32_t vflags)
+  _openevse.getStatus([this, allowStart](int ret, uint8_t evse_state, uint32_t session_time, uint8_t pilot_state, uint32_t vflags)
   {
     if(RAPI_RESPONSE_OK == ret)
     {
       DBUGF("evse_state = %02x, session_time = %d, pilot_state = %02x, vflags = %08x", evse_state, session_time, pilot_state, vflags);
-      if(_state.setState(evse_state, pilot_state, vflags)) {
-        evseStateChanged();
+      if(OPENEVSE_STATE_STARTING == evse_state && false == allowStart) {
+        DBUGLN("Ignoring OPENEVSE_STATE_STARTING state");
+        return;
       }
+      updateEvseState(evse_state, pilot_state, vflags);
 
       _elapsed = session_time;
       _elapsed_set_time = millis();
@@ -439,7 +468,7 @@ void EvseMonitor::getChargeCurrentAndVoltageFromEvse()
       {
         DBUGF("amps = %.2f, volts = %.2f", a, volts);
         _amp = a;
-        if(volts >= 0) {
+        if(VOLTAGE_MINIMUM <= volts && volts <= VOLTAGE_MAXIMUM) {
           _voltage = volts;
         }
         _data_ready.ready(EVSE_MONITOR_AMP_AND_VOLT_DATA_READY);
@@ -452,7 +481,7 @@ void EvseMonitor::getChargeCurrentAndVoltageFromEvse()
 
 void EvseMonitor::getTemperatureFromEvse()
 {
-  DBUGLN("Get tempurature status");
+  DBUGLN("Get temperature status");
   _openevse.getTemperature([this](int ret, double t1, bool t1_valid, double t2, bool t2_valid, double t3, bool t3_valid)
   {
     if(RAPI_RESPONSE_OK == ret)
@@ -470,10 +499,15 @@ void EvseMonitor::getTemperatureFromEvse()
       #endif
 
       _temps[EVSE_MONITOR_TEMP_MONITOR].invalidate();
-      for(int i = 1; i < EVSE_MONITOR_TEMP_COUNT; i++)
+      for(int i = EVSE_MONITOR_TEMP_EVSE_DS3232; i < EVSE_MONITOR_TEMP_COUNT; i++)
       {
-        if(_temps[i].isValid()) {
-          _temps[EVSE_MONITOR_TEMP_MONITOR].set(_temps[i].get(), _temps[i].isValid());
+        if(_temps[i].isValid())
+        {
+          double temp = _temps[i].get();
+          _temps[EVSE_MONITOR_TEMP_MONITOR].set(temp);
+          if(temp > _temps[EVSE_MONITOR_TEMP_MAX].get()) {
+            _temps[EVSE_MONITOR_TEMP_MAX].set(temp);
+          }
           break;
         }
       }

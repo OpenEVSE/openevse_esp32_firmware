@@ -15,7 +15,7 @@
 
 #include <ArduinoOcpp/Core/OcppEngine.h>
 
-#include "emonesp.h" //for DEFAULT_VOLTAGE
+#include "emonesp.h" //for VOLTAGE_DEFAULT
 
 #include "net_manager.h" //shut down network connection before reset
 #include "espal.h"
@@ -26,7 +26,7 @@
 ArduinoOcppTask *ArduinoOcppTask::instance = NULL;
 
 ArduinoOcppTask::ArduinoOcppTask() : MicroTasks::Task() /*, bootReadyCallback(MicroTasksCallback([](){})) */ {
-    
+
 }
 
 ArduinoOcppTask::~ArduinoOcppTask() {
@@ -35,7 +35,7 @@ ArduinoOcppTask::~ArduinoOcppTask() {
 }
 
 void ArduinoOcppTask::begin(EvseManager &evse, LcdTask &lcd) {
-    
+
     this->evse = &evse;
     this->lcd = &lcd;
 
@@ -64,7 +64,7 @@ void ArduinoOcppTask::initializeArduinoOcpp() {
             return (ArduinoOcpp::otime_t) time_now.tv_sec;
         };
 
-        OCPP_initialize(ocppSocket, (float) DEFAULT_VOLTAGE, ArduinoOcpp::FilesystemOpt::Use, clockAdapter);
+        OCPP_initialize(ocppSocket, (float) VOLTAGE_DEFAULT, ArduinoOcpp::FilesystemOpt::Use, clockAdapter);
 
         ArduinoOcpp::FirmwareService *fwService = ArduinoOcpp::getFirmwareService();
         if (fwService) {
@@ -163,7 +163,7 @@ void ArduinoOcppTask::initializeArduinoOcpp() {
         //evseDetails["meterSerialNumber"] = "TODO";
         //evseDetails["meterType"] = "TODO";
 
-        bootNotification(evseDetailsDoc, [lcd = lcd](JsonObject payload) { //ArduinoOcpp will delete evseDetailsDoc
+        bootNotification(evseDetailsDoc, [this](JsonObject payload) { //ArduinoOcpp will delete evseDetailsDoc
             LCD_DISPLAY("OCPP connected!");
         });
 
@@ -185,31 +185,31 @@ void ArduinoOcppTask::loadEvseBehavior() {
      * Synchronize OpenEVSE data with OCPP-library data
      */
 
-    setPowerActiveImportSampler([evse = evse]() {
+    setPowerActiveImportSampler([this]() {
         return (float) (evse->getAmps() * evse->getVoltage());
     });
 
-    setEnergyActiveImportSampler([evse = evse] () {
+    setEnergyActiveImportSampler([this] () {
         float activeImport = 0.f;
         activeImport += (float) evse->getTotalEnergy();
         activeImport += (float) evse->getSessionEnergy();
         return activeImport;
     });
 
-    setOnChargingRateLimitChange([&charging_limit = charging_limit, this] (float limit) { //limit = maximum charge rate in Watts
+    setOnChargingRateLimitChange([this] (float limit) { //limit = maximum charge rate in Watts
         charging_limit = limit;
         this->updateEvseClaim();
     });
 
-    setConnectorPluggedSampler([evse = evse] () {
+    setConnectorPluggedSampler([this] () {
         return (bool) evse->isConnected();
     });
 
-    setEvRequestsEnergySampler([evse = evse] () {
+    setEvRequestsEnergySampler([this] () {
         return (bool) evse->isCharging();
     });
 
-    setConnectorEnergizedSampler([evse = evse] () {
+    setConnectorEnergizedSampler([this] () {
         return evse->isActive();
     });
 
@@ -259,13 +259,13 @@ void ArduinoOcppTask::loadEvseBehavior() {
                     if (idTagIsAccepted(payload)) {
                         startTransaction([this] (JsonObject payload) {
                             this->updateEvseClaim();
-                        }, [lcd = lcd] () {
+                        }, [this] () {
                             LCD_DISPLAY("Central system error");
                         });
                     } else {
                         LCD_DISPLAY("ID card not recognized");
                     }
-                }, [lcd = lcd] () {
+                }, [this] () {
                     LCD_DISPLAY("OCPP timeout");
                 });
             } else {
@@ -276,16 +276,16 @@ void ArduinoOcppTask::loadEvseBehavior() {
                         LCD_DISPLAY("ID tag required");
                     }
                     this->updateEvseClaim();
-                }, [lcd = lcd] () {
+                }, [this] () {
                     LCD_DISPLAY("Central system error");
                 });
             }
-            
+
         }
         this->updateEvseClaim();
     };
 
-    setOnRemoteStartTransactionSendConf([this, onVehicleConnect = onVehicleConnect] (JsonObject payload) {
+    setOnRemoteStartTransactionSendConf([this] (JsonObject payload) {
         if (!operationIsAccepted(payload)){
             //RemoteStartTransaction rejected! Do nothing
             return;
@@ -293,7 +293,7 @@ void ArduinoOcppTask::loadEvseBehavior() {
 
         startTransaction([this] (JsonObject payload) {
             this->updateEvseClaim();
-        }, [lcd = lcd] () {
+        }, [this] () {
             LCD_DISPLAY("Central system error");
         });
     });

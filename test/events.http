@@ -15,26 +15,18 @@
 #@apikey = your_key
 
 ###
+# @name logs
 
-# Get the EVSE claims
-GET {{baseUrl}}/claims HTTP/1.1
-
-
-###
-
-GET {{baseUrl}}/claims/1234 HTTP/1.1
-
+GET {{baseUrl}}/logs HTTP/1.1
 
 ###
 
-POST {{baseUrl}}/claims/1234 HTTP/1.1
-Content-Type: application/json
-
-{
-  "state": "active",
-  "auto_release": true
-}
+GET {{baseUrl}}/logs/{{logs.response.body.min}} HTTP/1.1
 
 ###
 
-DELETE {{baseUrl}}/claims/1234 HTTP/1.1
+GET {{baseUrl}}/logs/{{logs.response.body.max}} HTTP/1.1
+
+###
+
+GET {{baseUrl}}/logs/0 HTTP/1.1

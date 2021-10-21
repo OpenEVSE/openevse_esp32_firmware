@@ -62,6 +62,7 @@ const char _CONTENT_TYPE_SVG[] PROGMEM = "image/svg+xml";
 
 void handleConfig(MongooseHttpServerRequest *request);
 void handleEvseClaims(MongooseHttpServerRequest *request);
+void handleEventLogs(MongooseHttpServerRequest *request);
 
 void dumpRequest(MongooseHttpServerRequest *request)
 {
@@ -1203,6 +1204,8 @@ web_server_setup() {
   server.on("/claims", handleEvseClaims);
 
   server.on("/override$", handleOverride);
+
+  server.on("/logs", handleEventLogs);
 
   // Simple Firmware Update Form
   server.on("/update$")->

@@ -4,6 +4,7 @@
 
 - *For the older WiFi V2.x ESP8266 version (pre June 2020), see the [v2 firmware repository](https://github.com/openevse/ESP8266_WiFi_v2.x/)*
 
+- **For latest API documentation see the new [Spotlight.io OpenEVSE WiFi documentation page](https://openevse.stoplight.io/docs/openevse-wifi-v4/ZG9jOjQyMjE5ODI-open-evse-wi-fi-esp-32-gateway-v4)**
 
 ![main](docs/main2.png)
 
@@ -104,6 +105,8 @@ The WiFi gateway uses an **ESP32** which communicates with the OpenEVSE controll
 
 # Hardware 
 
+## WiFi Hardware
+
 Most ESP32 boards can be used (see platfromio.ini for full list of supported boards), however the boards which is best supported is the OpenEVSE WiFi V1. 
 
 **Be sure to correctly identify your WiFi hardware before updating the firmware**
@@ -114,6 +117,13 @@ Most ESP32 boards can be used (see platfromio.ini for full list of supported boa
 - Huzzah ESP32 - can run V3.x and V4.x firmware
 - OpenEVSE V1 - designed for V4.x firmware
 - [Olimex ESP32 Gateway (Wired Ethernet)](docs/wired-ethernet.md) - can run V3.x and V4.x firmware
+
+### Temperature sensors 
+
+- Temp 1 RTC temperature sensor (old LCD module with RTC)
+- Temp 2 MCP9808 temperature sensor (new LCD module )
+- Temp 3 IR sensor (not used)
+- Temp 4 is the sensor on the OpenEVSE V1 module (not currently used for throttling)
 
 ## WiFi Setup
 
@@ -234,6 +244,8 @@ MQTT setup is pre-populated with OpenEnergyMonitor [emonPi default MQTT server c
 MQTT can also be used to control the OpenEVSE, see RAPI MQTT below.
 
 ### RAPI API (Not Recommended)
+
+**For latest API documentation see the new [Spotlight.io OpenEVSE WiFi documentation page](https://openevse.stoplight.io/docs/openevse-wifi-v4/ZG9jOjQyMjE5ODI-open-evse-wi-fi-esp-32-gateway-v4)**
 
 RAPI commands can be used to control and check the status of all OpenEVSE functions. RAPI commands can be issued via the direct serial, web-interface, HTTP and MQTT. We recommend using RAPI over MQTT.
 
