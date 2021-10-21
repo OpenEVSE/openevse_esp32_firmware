@@ -12,6 +12,7 @@
 #include "lcd.h"
 
 #include "MongooseOcppSocketClient.h"
+#include <MongooseHttpClient.h>
 
 class ArduinoOcppTask: public MicroTasks::Task {
 private:
