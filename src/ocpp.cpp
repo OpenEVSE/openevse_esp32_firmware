@@ -68,14 +68,14 @@ void ArduinoOcppTask::initializeArduinoOcpp() {
 
         ArduinoOcpp::FirmwareService *fwService = ArduinoOcpp::getFirmwareService();
         if (fwService) {
-            fwService->setOnInstall([lcd = lcd, &updateUserNotified = updateUserNotified, &updateUrl = updateUrl](String location) {
+            fwService->setOnInstall([this](String location) {
 
                 updateUrl = location;
 
 #if 0 //TODO finish when HTTP FW download will be available in the OpenEVSE core
 
                 //TODO HTTPUpdate has added the onProgress cb to its own class definition in Jun '21. Replace when available (https://github.com/espressif/arduino-esp32/commit/db4e7667afe0e169c5f00567f4b59ab8e0fc1532)
-                Update.onProgress([lcd = lcd, &updateUserNotified = updateUserNotified](size_t index, size_t total) {
+                Update.onProgress([this](size_t index, size_t total) {
                     if (!updateUserNotified && index > 0) {
                         updateUserNotified = true;
 
@@ -217,7 +217,7 @@ void ArduinoOcppTask::loadEvseBehavior() {
      * Report failures to central system. Note that the error codes are standardized in OCPP
      */
 
-    addConnectorErrorCodeSampler([evse = evse] () {
+    addConnectorErrorCodeSampler([this] () {
         if (evse->getEvseState() == OPENEVSE_STATE_GFI_FAULT ||
                 evse->getEvseState() == OPENEVSE_STATE_NO_EARTH_GROUND ||
                 evse->getEvseState() == OPENEVSE_STATE_DIODE_CHECK_FAILED) {
@@ -226,21 +226,21 @@ void ArduinoOcppTask::loadEvseBehavior() {
         return (const char *) NULL;
     });
 
-    addConnectorErrorCodeSampler([evse = evse] () {
+    addConnectorErrorCodeSampler([this] () {
         if (evse->getEvseState() == OPENEVSE_STATE_OVER_TEMPERATURE) {
             return "HighTemperature";
         }
         return (const char *) NULL;
     });
 
-    addConnectorErrorCodeSampler([evse = evse] () {
+    addConnectorErrorCodeSampler([this] () {
         if (evse->getEvseState() == OPENEVSE_STATE_OVER_CURRENT) {
             return "OverCurrentFailure";
         }
         return (const char *) NULL;
     });
 
-    addConnectorErrorCodeSampler([evse = evse] () {
+    addConnectorErrorCodeSampler([this] () {
         if (evse->getEvseState() == OPENEVSE_STATE_STUCK_RELAY ||
                 evse->getEvseState() == OPENEVSE_STATE_GFI_SELF_TEST_FAILED) {
             return "InternalError";
