@@ -9,7 +9,9 @@
 
 #include <ArduinoOcpp.h> // Facade for ArduinoOcpp
 #include <ArduinoOcpp/SimpleOcppOperationFactory.h> // define behavior for incoming req messages
+
 #include <HTTPUpdate.h>
+#include <MongooseHttpClient.h> //for HTTP update
 
 #include <ArduinoOcpp/Core/OcppEngine.h>
 
@@ -66,35 +68,91 @@ void ArduinoOcppTask::initializeArduinoOcpp() {
 
         ArduinoOcpp::FirmwareService *fwService = ArduinoOcpp::getFirmwareService();
         if (fwService) {
-            
+            fwService->setOnInstall([lcd = lcd, &updateUserNotified = updateUserNotified, &updateUrl = updateUrl](String location) {
+
+                updateUrl = location;
+
+#if 0 //TODO finish when HTTP FW download will be available in the OpenEVSE core
+
+                //TODO HTTPUpdate has added the onProgress cb to its own class definition in Jun '21. Replace when available (https://github.com/espressif/arduino-esp32/commit/db4e7667afe0e169c5f00567f4b59ab8e0fc1532)
+                Update.onProgress([lcd = lcd, &updateUserNotified = updateUserNotified](size_t index, size_t total) {
+                    if (!updateUserNotified && index > 0) {
+                        updateUserNotified = true;
+
+                        DEBUG_PORT.printf("Update via OCPP start\n");
+
+                        lcd->display(F("Updating WiFi"), 0, 0, 10 * 1000, LCD_CLEAR_LINE | LCD_DISPLAY_NOW);
+                        lcd->display(F(""), 0, 1, 10 * 1000, LCD_CLEAR_LINE | LCD_DISPLAY_NOW);
+                    }
+                    
+                    if (index < total) {
+                        unsigned int percent = 0;
+                        if (total / 100U != 0) {
+                            percent = index / (total / 100U);
+                        } else {
+                            percent = 99;
+                        }
+                        DBUGVAR(percent);
+                        String text = String(percent) + F("%");
+                        if (lcd) lcd->display(text, 0, 1, 10 * 1000, LCD_DISPLAY_NOW);
+                        DEBUG_PORT.printf("Update: %d%%\n", percent);
+                    } else {
+                        lcd->display(F("Complete"), 0, 1, 10 * 1000, LCD_CLEAR_LINE | LCD_DISPLAY_NOW);
+                    }
+                });
+
+//                MongooseHttpClient client = MongooseHttpClient();
+//
+//                client.get(updateUrl.c_str(), [](MongooseHttpClientResponse *response) {
+//                    //if (response->contentLength() < 
+//                    //Update.begin
+//                });
+
+#endif
+                DEBUG_PORT.println(F("[ocpp] FW download not implemented yet! Ignore request"));
+                
+                return true;
+            });
         }
 
-        //TODO HTTPUpdate has added the onProgress cb to its own class definition in Jun '21. Replace when available (https://github.com/espressif/arduino-esp32/commit/db4e7667afe0e169c5f00567f4b59ab8e0fc1532)
-        Update.onProgress([lcd = lcd, &updateUserNotified = updateUserNotified](size_t index, size_t total) {
-            if (!updateUserNotified && index > 0) {
-                updateUserNotified = true;
-
-                DEBUG_PORT.printf("Update via OCPP start\n");
-
-                lcd->display(F("Updating WiFi"), 0, 0, 10 * 1000, LCD_CLEAR_LINE | LCD_DISPLAY_NOW);
-                lcd->display(F(""), 0, 1, 10 * 1000, LCD_CLEAR_LINE | LCD_DISPLAY_NOW);
-            }
-            
-            if (index < total) {
-                unsigned int percent = 0;
-                if (total / 100U != 0) {
-                    percent = index / (total / 100U);
+        ArduinoOcpp::DiagnosticsService *diagService = ArduinoOcpp::getDiagnosticsService();
+        if (diagService) {
+            diagService->setOnUploadStatusSampler([this] () {
+                if (diagFailure) {
+                    return ArduinoOcpp::UploadStatus::UploadFailed;
+                } else if (diagSuccess) {
+                    return ArduinoOcpp::UploadStatus::Uploaded;
                 } else {
-                    percent = 99;
+                    return ArduinoOcpp::UploadStatus::NotUploaded;
                 }
-                DBUGVAR(percent);
-                String text = String(percent) + F("%");
-                if (lcd) lcd->display(text, 0, 1, 10 * 1000, LCD_DISPLAY_NOW);
-                DEBUG_PORT.printf("Update: %d%%\n", percent);
-            } else {
-                lcd->display(F("Complete"), 0, 1, 10 * 1000, LCD_CLEAR_LINE | LCD_DISPLAY_NOW);
-            }
-        });
+            });
+
+            diagService->setOnUpload([this] (String &location, ArduinoOcpp::OcppTimestamp &startTime, ArduinoOcpp::OcppTimestamp &stopTime) {
+                
+                //reset reported state
+                diagSuccess = false;
+                diagFailure = false;
+
+                //check if input URL is valid (maybe add Same-origin policy?)
+                unsigned int port_i = 0;
+                struct mg_str scheme, query, fragment;
+                if (mg_parse_uri(mg_mk_str(location.c_str()), &scheme, NULL, NULL, &port_i, NULL, &query, &fragment)) {
+                    DEBUG_PORT.print(F("[ocpp] Diagnostics upload, invalid URL: "));
+                    DEBUG_PORT.print(location);
+                    diagFailure = true;
+                    return false;
+                }
+
+                //create file to upload
+                
+
+
+                diagClient.post("abc", "def", "ghj");
+                
+                
+                return true;
+            });
+        }
 
         DynamicJsonDocument *evseDetailsDoc = new DynamicJsonDocument(JSON_OBJECT_SIZE(6));
         JsonObject evseDetails = evseDetailsDoc->to<JsonObject>();

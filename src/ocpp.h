@@ -38,6 +38,10 @@ private:
     ulong resetTime;
 
     bool updateUserNotified = false;
+    String updateUrl = String('\0');
+
+    MongooseHttpClient diagClient = MongooseHttpClient();
+    bool diagSuccess, diagFailure = false;
 
     void initializeArduinoOcpp();
     bool arduinoOcppInitialized = false;
