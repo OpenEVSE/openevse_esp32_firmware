@@ -67,173 +67,8 @@ void ArduinoOcppTask::initializeArduinoOcpp() {
 
         OCPP_initialize(ocppSocket, (float) VOLTAGE_DEFAULT, ArduinoOcpp::FilesystemOpt::Use, clockAdapter);
 
-        ArduinoOcpp::FirmwareService *fwService = ArduinoOcpp::getFirmwareService();
-        if (fwService) {
-            fwService->setOnInstall([this](String location) {
-
-                updateUrl = location;
-
-#if 0 //TODO finish when HTTP FW download will be available in the OpenEVSE core
-
-                //TODO HTTPUpdate has added the onProgress cb to its own class definition in Jun '21. Replace when available (https://github.com/espressif/arduino-esp32/commit/db4e7667afe0e169c5f00567f4b59ab8e0fc1532)
-                Update.onProgress([this](size_t index, size_t total) {
-                    if (!updateUserNotified && index > 0) {
-                        updateUserNotified = true;
-
-                        DBUG("Update via OCPP start\n");
-
-                        lcd->display(F("Updating WiFi"), 0, 0, 10 * 1000, LCD_CLEAR_LINE | LCD_DISPLAY_NOW);
-                        lcd->display(F(""), 0, 1, 10 * 1000, LCD_CLEAR_LINE | LCD_DISPLAY_NOW);
-                    }
-                    
-                    if (index < total) {
-                        unsigned int percent = 0;
-                        if (total / 100U != 0) {
-                            percent = index / (total / 100U);
-                        } else {
-                            percent = 99;
-                        }
-                        DBUGVAR(percent);
-                        String text = String(percent) + F("%");
-                        if (lcd) lcd->display(text, 0, 1, 10 * 1000, LCD_DISPLAY_NOW);
-                        DBUGF("Update: %d%%\n", percent);
-                    } else {
-                        lcd->display(F("Complete"), 0, 1, 10 * 1000, LCD_CLEAR_LINE | LCD_DISPLAY_NOW);
-                    }
-                });
-
-//                MongooseHttpClient client = MongooseHttpClient();
-//
-//                client.get(updateUrl.c_str(), [](MongooseHttpClientResponse *response) {
-//                    //if (response->contentLength() < 
-//                    //Update.begin
-//                });
-
-#endif
-                DBUGLN(F("[ocpp] FW download not implemented yet! Ignore request"));
-                
-                return true;
-            });
-        }
-
-        ArduinoOcpp::DiagnosticsService *diagService = ArduinoOcpp::getDiagnosticsService();
-        if (diagService) {
-            diagService->setOnUploadStatusSampler([this] () {
-                if (diagFailure) {
-                    return ArduinoOcpp::UploadStatus::UploadFailed;
-                } else if (diagSuccess) {
-                    return ArduinoOcpp::UploadStatus::Uploaded;
-                } else {
-                    return ArduinoOcpp::UploadStatus::NotUploaded;
-                }
-            });
-
-            diagService->setOnUpload([this] (String &location, ArduinoOcpp::OcppTimestamp &startTime, ArduinoOcpp::OcppTimestamp &stopTime) {
-                
-                //reset reported state
-                diagSuccess = false;
-                diagFailure = false;
-
-                //check if input URL is valid (maybe add Same-origin policy?)
-                unsigned int port_i = 0;
-                struct mg_str scheme, query, fragment;
-                if (mg_parse_uri(mg_mk_str(location.c_str()), &scheme, NULL, NULL, &port_i, NULL, &query, &fragment)) {
-                    DBUG(F("[ocpp] Diagnostics upload, invalid URL: "));
-                    DBUGLN(location);
-                    diagFailure = true;
-                    return false;
-                }
-
-                if (eventLog == NULL) {
-                    diagFailure = true;
-                    return false;
-                }
-
-                //create file to upload
-                #define BOUNDARY_STRING "-----------------------------WebKitFormBoundary7MA4YWxkTrZu0gW025636501"
-                const char *bodyPrefix PROGMEM = BOUNDARY_STRING "\r\n"
-                        "Content-Disposition: form-data; name=\"file\"; filename=\"diagnostics.log\"\r\n"
-                        "Content-Type: application/octet-stream\r\n\r\n";
-                const char *bodySuffix PROGMEM = "\r\n\r\n" BOUNDARY_STRING "--\r\n";
-                const char *overflowMsg PROGMEM = "{\"diagnosticsMsg\":\"requested search period exceeds maximum diagnostics upload size\"}";
-
-                const size_t MAX_BODY_SIZE = 10000; //limit length of message
-                String body = String('\0');
-                body.reserve(MAX_BODY_SIZE);
-                body += bodyPrefix;
-                body += "[";
-                const size_t SUFFIX_RESERVED_AREA = MAX_BODY_SIZE - strlen(bodySuffix) - strlen(overflowMsg) - 2;
-
-                bool firstEntry = true;
-                bool overflow = false;
-                for (uint32_t i = 0; i <= (eventLog->getMaxIndex() - eventLog->getMinIndex()) && !overflow; i++) {
-                    uint32_t index = eventLog->getMinIndex() + i;
-
-                    eventLog->enumerate(index, [this, startTime, stopTime, &body, SUFFIX_RESERVED_AREA, &firstEntry, &overflow] (String time, EventType type, const String &logEntry, EvseState managerState, uint8_t evseState, uint32_t evseFlags, uint32_t pilot, double energy, uint32_t elapsed, double temperature, double temperatureMax, uint8_t divertMode) {
-                        if (overflow) return;
-                        ArduinoOcpp::OcppTimestamp timestamp = ArduinoOcpp::OcppTimestamp();
-                        if (!timestamp.setTime(time.c_str())) {
-                            DBUG(F("[ocpp] Diagnostics upload, cannot parse timestamp format: "));
-                            DBUGLN(time);
-                            return;
-                        }
-
-                        if (timestamp < startTime || timestamp > stopTime) {
-                            return;
-                        }
-
-                        if (body.length() + logEntry.length() + 10 < SUFFIX_RESERVED_AREA) {
-                            if (firstEntry)
-                                firstEntry = false;
-                            else
-                                body += ",";
-                            
-                            body += logEntry;
-                            body += "\n";
-                        } else {
-                            overflow = true;
-                            return;
-                        }
-                    });
-
-                }
-
-                if (overflow) {
-                    if (!firstEntry)
-                        body += ",\r\n";
-                    body += overflowMsg;
-                }
-
-                body += "]";
-
-                body += bodySuffix;
-
-                DBUG(F("[ocpp] POST diagnostics file to "));
-                DBUGLN(location);
-
-                MongooseHttpClientRequest *request =
-                        diagClient.beginRequest(location.c_str());
-                request->setMethod(HTTP_POST);
-                request->addHeader("Content-Type", "multipart/form-data; boundary=" BOUNDARY_STRING);
-                request->setContent(body.c_str());
-                request->onResponse([this] (MongooseHttpClientResponse *response) {
-                    if (response->respCode() == 200) {
-                        diagSuccess = true;
-                    } else {
-                        diagFailure = true;
-                    }
-                });
-                request->onClose([this] (MongooseHttpClientResponse *response) {
-                    if (!diagSuccess) {
-                        //triggered onClose before onResponse
-                        diagFailure = true;
-                    }
-                });
-                diagClient.send(request);
-                
-                return true;
-            });
-        }
+        initializeDiagnosticsService();
+        initializeFwService();
 
         DynamicJsonDocument *evseDetailsDoc = new DynamicJsonDocument(JSON_OBJECT_SIZE(6));
         JsonObject evseDetails = evseDetailsDoc->to<JsonObject>();
@@ -569,6 +404,137 @@ void ArduinoOcppTask::reconfigure() {
         initializeArduinoOcpp();
     }
     loadEvseBehavior();
+}
+
+void ArduinoOcppTask::initializeDiagnosticsService() {
+    ArduinoOcpp::DiagnosticsService *diagService = ArduinoOcpp::getDiagnosticsService();
+    if (diagService) {
+        diagService->setOnUploadStatusSampler([this] () {
+            if (diagFailure) {
+                return ArduinoOcpp::UploadStatus::UploadFailed;
+            } else if (diagSuccess) {
+                return ArduinoOcpp::UploadStatus::Uploaded;
+            } else {
+                return ArduinoOcpp::UploadStatus::NotUploaded;
+            }
+        });
+
+        diagService->setOnUpload([this] (String &location, ArduinoOcpp::OcppTimestamp &startTime, ArduinoOcpp::OcppTimestamp &stopTime) {
+            
+            //reset reported state
+            diagSuccess = false;
+            diagFailure = false;
+
+            //check if input URL is valid
+            unsigned int port_i = 0;
+            struct mg_str scheme, query, fragment;
+            if (mg_parse_uri(mg_mk_str(location.c_str()), &scheme, NULL, NULL, &port_i, NULL, &query, &fragment)) {
+                DBUG(F("[ocpp] Diagnostics upload, invalid URL: "));
+                DBUGLN(location);
+                diagFailure = true;
+                return false;
+            }
+
+            if (eventLog == NULL) {
+                diagFailure = true;
+                return false;
+            }
+
+            //create file to upload
+            #define BOUNDARY_STRING "-----------------------------WebKitFormBoundary7MA4YWxkTrZu0gW025636501"
+            const char *bodyPrefix PROGMEM = BOUNDARY_STRING "\r\n"
+                    "Content-Disposition: form-data; name=\"file\"; filename=\"diagnostics.log\"\r\n"
+                    "Content-Type: application/octet-stream\r\n\r\n";
+            const char *bodySuffix PROGMEM = "\r\n\r\n" BOUNDARY_STRING "--\r\n";
+            const char *overflowMsg PROGMEM = "{\"diagnosticsMsg\":\"requested search period exceeds maximum diagnostics upload size\"}";
+
+            const size_t MAX_BODY_SIZE = 10000; //limit length of message
+            String body = String('\0');
+            body.reserve(MAX_BODY_SIZE);
+            body += bodyPrefix;
+            body += "[";
+            const size_t SUFFIX_RESERVED_AREA = MAX_BODY_SIZE - strlen(bodySuffix) - strlen(overflowMsg) - 2;
+
+            bool firstEntry = true;
+            bool overflow = false;
+            for (uint32_t i = 0; i <= (eventLog->getMaxIndex() - eventLog->getMinIndex()) && !overflow; i++) {
+                uint32_t index = eventLog->getMinIndex() + i;
+
+                eventLog->enumerate(index, [this, startTime, stopTime, &body, SUFFIX_RESERVED_AREA, &firstEntry, &overflow] (String time, EventType type, const String &logEntry, EvseState managerState, uint8_t evseState, uint32_t evseFlags, uint32_t pilot, double energy, uint32_t elapsed, double temperature, double temperatureMax, uint8_t divertMode) {
+                    if (overflow) return;
+                    ArduinoOcpp::OcppTimestamp timestamp = ArduinoOcpp::OcppTimestamp();
+                    if (!timestamp.setTime(time.c_str())) {
+                        DBUG(F("[ocpp] Diagnostics upload, cannot parse timestamp format: "));
+                        DBUGLN(time);
+                        return;
+                    }
+
+                    if (timestamp < startTime || timestamp > stopTime) {
+                        return;
+                    }
+
+                    if (body.length() + logEntry.length() + 10 < SUFFIX_RESERVED_AREA) {
+                        if (firstEntry)
+                            firstEntry = false;
+                        else
+                            body += ",";
+                        
+                        body += logEntry;
+                        body += "\n";
+                    } else {
+                        overflow = true;
+                        return;
+                    }
+                });
+            }
+
+            if (overflow) {
+                if (!firstEntry)
+                    body += ",\r\n";
+                body += overflowMsg;
+            }
+
+            body += "]";
+
+            body += bodySuffix;
+
+            DBUG(F("[ocpp] POST diagnostics file to "));
+            DBUGLN(location);
+
+            MongooseHttpClientRequest *request =
+                    diagClient.beginRequest(location.c_str());
+            request->setMethod(HTTP_POST);
+            request->addHeader("Content-Type", "multipart/form-data; boundary=" BOUNDARY_STRING);
+            request->setContent(body.c_str());
+            request->onResponse([this] (MongooseHttpClientResponse *response) {
+                if (response->respCode() == 200) {
+                    diagSuccess = true;
+                } else {
+                    diagFailure = true;
+                }
+            });
+            request->onClose([this] (MongooseHttpClientResponse *response) {
+                if (!diagSuccess) {
+                    //triggered onClose before onResponse
+                    diagFailure = true;
+                }
+            });
+            diagClient.send(request);
+            
+            return true;
+        });
+    }
+}
+
+void ArduinoOcppTask::initializeFwService() {
+    //TODO finish when HTTP FW download will be available in the OpenEVSE core
+    //ArduinoOcpp::FirmwareService *fwService = ArduinoOcpp::getFirmwareService();
+    //if (fwService) {
+    //    fwService->setOnInstall([this](String location) {
+    //        ...
+    //        return true;
+    //    });
+    //}
 }
 
 bool ArduinoOcppTask::operationIsAccepted(JsonObject payload) {

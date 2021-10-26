@@ -39,11 +39,11 @@ private:
     bool resetHard = false; //default to soft reset
     ulong resetTime;
 
-    bool updateUserNotified = false;
-    String updateUrl = String('\0');
-
     MongooseHttpClient diagClient = MongooseHttpClient();
     bool diagSuccess, diagFailure = false;
+    void initializeDiagnosticsService();
+
+    void initializeFwService();
 
     void initializeArduinoOcpp();
     bool arduinoOcppInitialized = false;
