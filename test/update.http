@@ -53,3 +53,12 @@ Content-Type: application/javascript
 {
   "url": "{{latest.response.body.assets[1].browser_download_url}}"
 }
+
+###
+
+POST {{baseUrl}}/update
+Content-Type: application/javascript
+
+{
+  "url": "http://frenzy.lan:8000/.pio/build/{{config.response.body.buildenv}}/firmware.bin"
+}

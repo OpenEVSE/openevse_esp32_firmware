@@ -26,7 +26,7 @@ static MongooseHttpClient client;
 static void emoncms_result(bool success, String message)
 {
   StaticJsonDocument<128> event;
-  
+
   emoncms_connected = success;
   event["emoncms_connected"] = (int)emoncms_connected;
   event["emoncms_message"] = message.substring(0, 64);
@@ -77,12 +77,12 @@ void emoncms_publish(JsonDocument &data)
         DEBUG.printf("%.*s\n", result.length(), (const char *)result);
         emoncms_result(false, result.toString());
       }
-    }, [](MongooseHttpClientResponse *response)
+    }, []()
     {
-      DBUGF("onClose %p", response);
-      if(NULL == response) {
-        emoncms_result(false, String("Failed to connect"));
-      }
+      //DBUGF("onClose %p", response);
+      //if(NULL == response) {
+      //  emoncms_result(false, String("Failed to connect"));
+      //}
     });
   } else {
     if(false != emoncms_connected) {
