@@ -256,3 +256,19 @@ void hardware_setup()
 
   enableLoopWDT();
 }
+
+class SystemRestart : public MicroTasks::Alarm
+{
+  public:
+    void Trigger()
+    {
+      DBUGLN("Restarting...");
+      net_wifi_disconnect();
+      ESPAL.reset();
+    }
+} systemRestartAlarm;
+
+void restart_system()
+{
+  systemRestartAlarm.Set(1000, false);
+}

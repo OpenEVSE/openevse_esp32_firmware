@@ -23,10 +23,19 @@ const char *post_path = "/input/post?";
 
 static MongooseHttpClient client;
 
+struct EmonCmsClientState {
+  bool connected;
+};
+
 static void emoncms_result(bool success, String message)
 {
   StaticJsonDocument<128> event;
-  
+
+  if(emoncms_connected && success) {
+    // Don't send events if we have already reported success
+    return;
+  }
+
   emoncms_connected = success;
   event["emoncms_connected"] = (int)emoncms_connected;
   event["emoncms_message"] = message.substring(0, 64);
@@ -54,10 +63,16 @@ void emoncms_publish(JsonDocument &data)
     DBUGVAR(url);
     packets_sent++;
 
-    client.get(url, [](MongooseHttpClientResponse *response)
+    auto state = new EmonCmsClientState;
+
+    state->connected = false;
+
+    client.get(url, [state](MongooseHttpClientResponse *response)
     {
       MongooseString result = response->body();
       DBUGF("result = %.*s", result.length(), result.c_str());
+
+      state->connected = true;
 
       const size_t capacity = JSON_OBJECT_SIZE(2) + result.length();
       DynamicJsonDocument doc(capacity);
@@ -77,12 +92,13 @@ void emoncms_publish(JsonDocument &data)
         DEBUG.printf("%.*s\n", result.length(), (const char *)result);
         emoncms_result(false, result.toString());
       }
-    }, [](MongooseHttpClientResponse *response)
+    }, [state]()
     {
-      DBUGF("onClose %p", response);
-      if(NULL == response) {
+      DBUGF("onClose");
+      if(false == state->connected) {
         emoncms_result(false, String("Failed to connect"));
       }
+      delete state;
     });
   } else {
     if(false != emoncms_connected) {
