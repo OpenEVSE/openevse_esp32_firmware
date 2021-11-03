@@ -99,11 +99,11 @@ jobs:
 
     - name: Rename images to something more sensible
       run: |
-        cd artifacts
-        find . -name '*.bin' | while read -r image; do
+        find artifacts -name 'firmware.bin' | while read -r image; do
           dir=$(dirname "${image}")
           board=$(basename "${dir}")
-          mv "$image" "$board.bin"
+          echo mv "$image" "$board"
+          mv "$image" "$board"
         done
 
     - name: Upload assets to latest release
