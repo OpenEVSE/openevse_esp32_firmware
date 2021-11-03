@@ -1,4 +1,4 @@
-name: PlatformIO CI
+name: Build/Release OpenEVSE
 
 on:
   workflow_dispatch:
