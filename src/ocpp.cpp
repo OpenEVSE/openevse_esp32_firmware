@@ -17,9 +17,6 @@
 
 #include "emonesp.h" //for VOLTAGE_DEFAULT
 
-#include "net_manager.h" //shut down network connection before reset
-#include "espal.h"
-
 #define LCD_DISPLAY(X) if (lcd) lcd->display((X), 0, 1, 5 * 1000, LCD_CLEAR_LINE);
 
 
@@ -287,11 +284,13 @@ unsigned long ArduinoOcppTask::loop(MicroTasks::WakeReason reason) {
 
     if (resetTriggered) {
         if (millis() - resetTime >= 10000UL) { //wait for 10 seconds after reset command to send the conf msg
+            resetTriggered = false; //execute only once
+
             if (resetHard) {
                 //TODO send reset command to all peripherals
             }
-            net_wifi_disconnect();
-            ESPAL.reset();
+            
+            restart_system();
         }
     }
 
