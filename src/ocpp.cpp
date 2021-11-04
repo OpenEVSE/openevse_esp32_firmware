@@ -289,6 +289,7 @@ unsigned long ArduinoOcppTask::loop(MicroTasks::WakeReason reason) {
 
             if (resetHard) {
                 //TODO send reset command to all peripherals
+                //see https://github.com/OpenEVSE/ESP32_WiFi_V4.x/issues/228
             }
             
             restart_system();
