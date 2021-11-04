@@ -43,6 +43,7 @@ private:
     bool diagSuccess, diagFailure = false;
     void initializeDiagnosticsService();
 
+    bool updateSuccess, updateFailure = false;
     void initializeFwService();
 
     void initializeArduinoOcpp();

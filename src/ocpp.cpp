@@ -10,8 +10,7 @@
 #include <ArduinoOcpp.h> // Facade for ArduinoOcpp
 #include <ArduinoOcpp/SimpleOcppOperationFactory.h> // define behavior for incoming req messages
 
-#include <HTTPUpdate.h>
-#include <MongooseHttpClient.h> //for HTTP update
+#include "http_update.h"
 
 #include <ArduinoOcpp/Core/OcppEngine.h>
 
@@ -70,11 +69,12 @@ void ArduinoOcppTask::initializeArduinoOcpp() {
         DynamicJsonDocument *evseDetailsDoc = new DynamicJsonDocument(JSON_OBJECT_SIZE(6));
         JsonObject evseDetails = evseDetailsDoc->to<JsonObject>();
         evseDetails["chargePointModel"] = "Advanced Series";
-        //evseDetails["chargePointSerialNumber"] = "TODO";
+        //evseDetails["chargePointSerialNumber"] = "TODO"; //see https://github.com/OpenEVSE/ESP32_WiFi_V4.x/issues/218
         evseDetails["chargePointVendor"] = "OpenEVSE";
         evseDetails["firmwareVersion"] = evse->getFirmwareVersion();
         //evseDetails["meterSerialNumber"] = "TODO";
         //evseDetails["meterType"] = "TODO";
+        //see https://github.com/OpenEVSE/ESP32_WiFi_V4.x/issues/219
 
         bootNotification(evseDetailsDoc, [this](JsonObject payload) { //ArduinoOcpp will delete evseDetailsDoc
             LCD_DISPLAY("OCPP connected!");
@@ -242,6 +242,7 @@ void ArduinoOcppTask::loadEvseBehavior() {
 
     setOnUnlockConnector([] () {
         //TODO Send unlock command to peripherals. If successful, return true, otherwise false
+        //see https://github.com/OpenEVSE/ESP32_WiFi_V4.x/issues/230
         return false;
     });
 
@@ -526,14 +527,41 @@ void ArduinoOcppTask::initializeDiagnosticsService() {
 }
 
 void ArduinoOcppTask::initializeFwService() {
-    //TODO finish when HTTP FW download will be available in the OpenEVSE core
-    //ArduinoOcpp::FirmwareService *fwService = ArduinoOcpp::getFirmwareService();
-    //if (fwService) {
-    //    fwService->setOnInstall([this](String location) {
-    //        ...
-    //        return true;
-    //    });
-    //}
+    ArduinoOcpp::FirmwareService *fwService = ArduinoOcpp::getFirmwareService();
+    if (fwService) {
+        fwService->setBuildNumber(evse->getFirmwareVersion());
+
+        fwService->setInstallationStatusSampler([this] () {
+            if (updateFailure) {
+                return ArduinoOcpp::InstallationStatus::InstallationFailed;
+            } else if (updateSuccess) {
+                return ArduinoOcpp::InstallationStatus::Installed;
+            } else {
+                return ArduinoOcpp::InstallationStatus::NotInstalled;
+            }
+        });
+
+        fwService->setOnInstall([this](String &location) {
+
+            DBUGLN(F("[ocpp] Starting installation routine"));
+            
+            //reset reported state
+            updateFailure = false;
+            updateSuccess = false;
+
+            return http_update_from_url(location, [] (size_t complete, size_t total) { },
+                [this] (int status_code) {
+                    //onSuccess
+                    updateSuccess = true;
+
+                    resetTime = millis();
+                    resetTriggered = true;
+                }, [this] (int error_code) {
+                    //onFailure
+                    updateFailure = true;
+                });
+        });
+    }
 }
 
 bool ArduinoOcppTask::operationIsAccepted(JsonObject payload) {
