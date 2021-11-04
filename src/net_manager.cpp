@@ -408,8 +408,13 @@ net_setup()
   ETH.begin();
 #endif
 
-  if (MDNS.begin(esp_hostname.c_str())) {
+  if (MDNS.begin(esp_hostname.c_str())) 
+  {
     MDNS.addService("http", "tcp", 80);
+    MDNS.addService("openevse", "tcp", 80);
+    MDNS.addServiceTxt("openevse", "tcp", "type", buildenv.c_str());
+    MDNS.addServiceTxt("openevse", "tcp", "version", currentfirmware.c_str());
+    MDNS.addServiceTxt("openevse", "tcp", "id", ESPAL.getLongId());
   }
 }
 

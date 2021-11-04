@@ -161,4 +161,6 @@
 extern String currentfirmware;
 extern String buildenv;
 
+void restart_system();
+
 #endif // _EMONESP_H
