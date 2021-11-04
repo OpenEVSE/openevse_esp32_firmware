@@ -512,7 +512,7 @@ void ArduinoOcppTask::initializeDiagnosticsService() {
                     diagFailure = true;
                 }
             });
-            request->onClose([this] (MongooseHttpClientResponse *response) {
+            request->onClose([this] () {
                 if (!diagSuccess) {
                     //triggered onClose before onResponse
                     diagFailure = true;
