@@ -25,8 +25,11 @@ bool http_update_from_url(String url,
   {
     request->setMethod(HTTP_GET);
 
+    DBUGF("Trying to fetch firmware from %s", url.c_str());
+
     request->onBody([url,progress,error,request](MongooseHttpClientResponse *response)
     {
+      DBUGVAR(response->respCode());
       if(response->respCode() == 200)
       {
         size_t total = response->contentLength();
