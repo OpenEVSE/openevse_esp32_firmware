@@ -408,7 +408,7 @@ net_setup()
   ETH.begin();
 #endif
 
-  if (MDNS.begin(esp_hostname.c_str())) 
+  if (MDNS.begin(esp_hostname.c_str()))
   {
     MDNS.addService("http", "tcp", 80);
     MDNS.addService("openevse", "tcp", 80);
@@ -466,6 +466,8 @@ net_loop()
   }
   else if(false == apMessage && LOW == wifiButtonState && millis() > wifiButtonTimeOut + WIFI_BUTTON_AP_TIMEOUT)
   {
+    DBUGLN("*** Enable Access Point ***");
+
     lcd.display(F("Access Point"), 0, 0, 0, LCD_CLEAR_LINE | LCD_DISPLAY_NOW);
     lcd.display(F(""), 0, 1, 10 * 1000, LCD_CLEAR_LINE | LCD_DISPLAY_NOW);
     apMessage = true;
