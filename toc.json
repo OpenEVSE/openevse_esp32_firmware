@@ -1,0 +1,67 @@
+{
+  "items": [
+    {
+      "type": "item",
+      "title": "OpenEVSE WiFi ESP32 Gateway v4",
+      "uri": "readme.md"
+    },
+    {
+      "type": "item",
+      "title": "OpenEVSE User Guide",
+      "uri": "docs/user-guide.md"
+    },
+    {
+      "type": "item",
+      "title": "OpenEVSE Wired Ethernet using ESP32-Gateway",
+      "uri": "docs/wired-ethernet.md"
+    },
+    {
+      "type": "item",
+      "title": "Development Guide",
+      "uri": "docs/developer-guide.md"
+    },
+    {
+      "type": "divider",
+      "title": "APIS"
+    },
+    {
+      "type": "item",
+      "title": "OpenEVSE WiFi API",
+      "uri": "api.yml"
+    },
+    {
+      "type": "item",
+      "title": "RAPI API",
+      "uri": "docs/rapi.md"
+    },
+    {
+      "type": "divider",
+      "title": "Schemas"
+    },
+    {
+      "type": "item",
+      "title": "Config.yaml",
+      "uri": "models/Config.yaml"
+    },
+    {
+      "type": "item",
+      "title": "EVSE claim",
+      "uri": "models/Claim.yaml"
+    },
+    {
+      "type": "item",
+      "title": "EVSE status",
+      "uri": "models/Status.yaml"
+    },
+    {
+      "type": "item",
+      "title": "EvseState",
+      "uri": "models/EvseState.yaml"
+    },
+    {
+      "type": "item",
+      "title": "Properties",
+      "uri": "models/Properties.yaml"
+    }
+  ]
+}
