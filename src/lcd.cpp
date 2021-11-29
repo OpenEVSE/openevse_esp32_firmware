@@ -256,15 +256,17 @@ unsigned long LcdTask::loop(MicroTasks::WakeReason reason)
     nextUpdate = nextInfoDelay;
   }
 
+  DBUGVAR(nextUpdate);
   return nextUpdate;
 }
 
 unsigned long LcdTask::displayNextMessage()
 {
-  while(millis() >= _nextMessageTime)
+  while(_head && millis() >= _nextMessageTime)
   {
     // Pop a message from the queue
     Message *msg = _head;
+    DBUGF("msg = %p", msg);
     _head = _head->getNext();
     if(NULL == _head) {
       _tail = NULL;
@@ -282,7 +284,9 @@ unsigned long LcdTask::displayNextMessage()
     _updateInfoLine = true;
   }
 
-  return _nextMessageTime - millis();
+  unsigned long nextUpdate = _nextMessageTime - millis();
+  DBUGVAR(nextUpdate);
+  return nextUpdate;
 }
 
 
