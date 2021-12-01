@@ -1,5 +1,7 @@
 title: EVSE status
 type: object
+x-tags:
+  - Status
 properties:
   mode:
     type: string
@@ -35,8 +37,13 @@ properties:
     type: integer
     description: '`1`, if connected to an EmonCMS server, `0` not connected'
   ohm_hour:
-    type: integer
+    type: string
     description: Last status message from the OhmHour connection
+    enum:
+      - NotConnected
+      - 'True'
+      - 'False'
+      - None
   free_heap:
     type: integer
     description: Number of bytes free in the ESP memory heap
@@ -139,5 +146,3 @@ properties:
   offset:
     type: string
     description: The current timezone
-x-tags:
-  - Status

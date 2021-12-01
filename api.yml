@@ -46,7 +46,7 @@ paths:
                     packets_sent: 22307
                     packets_success: 22290
                     mqtt_connected: 1
-                    ohm_hour: NotConnected
+                    ohm_hour: "NotConnected"
                     free_heap: 203268
                     comm_sent: 335139
                     comm_success: 335139
@@ -322,27 +322,27 @@ paths:
               Daily Timer:
                 value:
                   - id: 1
-                    state: active
+                    state: "active"
                     days:
-                      - monday
-                      - tuesday
-                      - wednesday
-                      - thursday
-                      - friday
-                      - saturday
-                      - sunday
-                    time: '07:00'
+                      - "monday"
+                      - "tuesday"
+                      - "wednesday"
+                      - "thursday"
+                      - "friday"
+                      - "saturday"
+                      - "sunday"
+                    time: "07:00:00"
                   - id: 2
-                    state: disable
+                    state: "disabled"
                     days:
-                      - monday
-                      - tuesday
-                      - wednesday
-                      - thursday
-                      - friday
-                      - saturday
-                      - sunday
-                    time: '10:00'
+                      - "monday"
+                      - "tuesday"
+                      - "wednesday"
+                      - "thursday"
+                      - "friday"
+                      - "saturday"
+                      - "sunday"
+                    time: "10:00:00"
         description: Inventory item to add
       tags:
         - Schedule
