@@ -33,6 +33,44 @@ paths:
             application/json:
               schema:
                 $ref: ./models/Status.yaml
+              examples:
+                EVSE Status:
+                  value:
+                    mode: STA
+                    wifi_client_connected: 1
+                    eth_connected: 0
+                    net_connected: 1
+                    srssi: -73
+                    ipaddress: 192.168.1.43
+                    emoncms_connected: 1
+                    packets_sent: 22307
+                    packets_success: 22290
+                    mqtt_connected: 1
+                    ohm_hour: NotConnected
+                    free_heap: 203268
+                    comm_sent: 335139
+                    comm_success: 335139
+                    rapi_connected: 1
+                    amp: 0
+                    pilot: 32
+                    temp1: 282
+                    temp2: -2560
+                    temp3: -2560
+                    state: 254
+                    elapsed: 3473
+                    wattsec: 22493407
+                    watthour: 51536
+                    gfcicount: 0
+                    nogndcount: 0
+                    stuckcount: 0
+                    divertmode: 1
+                    solar: 390
+                    grid_ie: 0
+                    charge_rate: 7
+                    divert_update: 0
+                    ota_update: 0
+                    time: '2020-05-12T17:53:48Z'
+                    offset: '+0000'
       tags:
         - Status
   /ws:
@@ -102,6 +140,7 @@ paths:
       tags:
         - Config
   /override:
+    description: Manual override can be used to override a charging timer or to immediately start a charge if the EVSE is in sleeping state.
     get:
       responses:
         '200':
@@ -116,12 +155,25 @@ paths:
       tags:
         - Manual Override
       summary: Get the Manual Override status
+      description: Returns the current state of the manual override.
     post:
       requestBody:
         content:
           application/json:
             schema:
               $ref: ./models/Properties.yaml
+            examples:
+              Force stop of charging:
+                value:
+                  state: disabled
+              example-1:
+                value:
+                  state: active
+                  charge_current: 0
+                  max_current: 0
+                  energy_limit: 0
+                  time_limit: 0
+                  auto_release: true
       responses:
         '200':
           description: OK
@@ -236,7 +288,7 @@ paths:
               schema:
                 type: array
                 items:
-                  $ref: ./models/EvseState.yaml
+                  $ref: '#/components/schemas/ScheduleEvent'
         '400':
           $ref: '#/components/responses/BadRequest'
       operationId: listSchedule
@@ -258,15 +310,39 @@ paths:
             schema:
               type: array
               items:
-                $ref: ./models/EvseState.yaml
+                $ref: '#/components/schemas/ScheduleEvent'
             examples:
-              example-1:
+              Single event:
                 value:
                   - id: 1
                     state: active
                     time: '14:15:22Z'
                     days:
                       - monday
+              Daily Timer:
+                value:
+                  - id: 1
+                    state: active
+                    days:
+                      - monday
+                      - tuesday
+                      - wednesday
+                      - thursday
+                      - friday
+                      - saturday
+                      - sunday
+                    time: '07:00'
+                  - id: 2
+                    state: disable
+                    days:
+                      - monday
+                      - tuesday
+                      - wednesday
+                      - thursday
+                      - friday
+                      - saturday
+                      - sunday
+                    time: '10:00'
         description: Inventory item to add
       tags:
         - Schedule
@@ -379,7 +455,7 @@ components:
           type: integer
           example: 1
         state:
-          $ref: './models/EvseState.yaml'
+          $ref: ./models/EvseState.yaml
         time:
           type: string
           format: time
@@ -430,7 +506,7 @@ components:
             - notification
             - warning
         managerState:
-          $ref: './models/EvseState.yaml'
+          $ref: ./models/EvseState.yaml
         evseState:
           type: integer
           minimum: 0

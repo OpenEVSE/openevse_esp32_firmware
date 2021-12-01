@@ -1,4 +1,4 @@
-# OpenEVSE User Guide
+# User Guide
 
 ## Contents
 

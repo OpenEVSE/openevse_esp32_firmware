@@ -65,5 +65,10 @@ To enable (start / resume a charge) issue RAPI command `$FE`
 
 [http://192.168.0.108/r?rapi=%24FE](http://192.168.0.108/r?rapi=%24FE)
 
+## Libraries
 
-There is also an [OpenEVSE RAPI command python library](https://github.com/tiramiseb/python-openevse).
+Libraries are avalible in a few different languages to provide easy access to RAPI:
+
+- [Python](https://github.com/tiramiseb/python-openevse)
+- [Node](https://github.com/OpenEVSE/node-openevse)
+- [Arduino](https://github.com/jeremypoulter/OpenEVSE_Lib)

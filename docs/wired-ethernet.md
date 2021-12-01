@@ -1,4 +1,4 @@
-# OpenEVSE Wired Ethernet using ESP32-Gateway
+# Wired Ethernet using ESP32-Gateway
 
 Sometimes getting a WiFi connection to an OpenEVSE / EmonEVSE install location can be troublesome.
 
