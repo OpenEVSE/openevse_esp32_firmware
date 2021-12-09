@@ -1,6 +1,6 @@
 # RAPI API
 
-> **IMPORTANT**: It is no longer recommended to use RAPI API if EVSE also had a WiFi module fitted, since use of the RAPI API will conflict with the WiFi module, instead the HTTP API should be used to control the WiFi module instead of the controller via RAPI. 
+> **IMPORTANT**: It is no longer recommended to use RAPI API if EVSE also had a WiFi module fitted, since use of the RAPI API will conflict with the WiFi module, instead the HTTP API should be used to control the WiFi module instead of the controller via RAPI.
 >
 > User RAPI will be removed in a future version of the firmware or at least limited to `$Gx` commands
 
@@ -41,15 +41,16 @@ The response from the RAPI command is published by the OpenEVSE back to the same
 ```text
 <base-topic>/rapi/out/#`
 ```
+
 e.g. `$OK`
 
 [See video demo of RAPI over MQTT](https://www.youtube.com/watch?v=tjCmPpNl-sA&t=101s)
 
 ## RAPI over HTTP
 
-RAPI (rapid API) commands can also be issued directly via a single HTTP request. 
+RAPI (rapid API) commands can also be issued directly via a single HTTP request.
 
-Using RAPI commands should be avoided if possible. WiFi server API is preferable. If RAPI must be used, avoid fast polling. 
+Using RAPI commands should be avoided if possible. WiFi server API is preferable. If RAPI must be used, avoid fast polling.
 
 *Assuming `192.168.0.108` is the local IP address of the OpenEVSE ESP.*
 

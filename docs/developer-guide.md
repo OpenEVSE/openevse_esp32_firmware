@@ -8,13 +8,13 @@ It is necessary to download and build the static web assets for the GUI before c
 
 The GUI static web assets are minified and compiled into the firmware using a combination of Webpack and a [custom python build script](scripts/extra_script.py).
 
-You will need Node.js and npm installed: https://nodejs.org/en/download/
+You will need Node.js and npm installed: <https://nodejs.org/en/download/>
 
 In addition, the GUI is now maintained in a [separate repository](https://nodejs.org/en/download/package-manager/) and is included as a Git submodule.
 
 If the `gui` directory is empty, use the following to retrieve the GUI source and fetch the dependencies:
 
-```shell
+```bash
 git submodule update --init --recursive
 cd gui
 npm install
@@ -22,15 +22,15 @@ npm install
 
 To 'build' the GUI static assets, run the following from the `gui` directory:
 
-```shell
+```bash
 npm run build
 ```
 
 Now you are ready to compile and upload to the ESP32.
-https://github.com/OpenEVSE/ESP32_WiFi_V3.x/blob/master/readme.md
+
 ### Compile and upload using PlatformIO
 
-For info on the Arduino core for the ESP32 using PlatformIO, see: https://github.com/espressif/arduino-esp32/blob/master/docs/platformio.md
+For info on the Arduino core for the ESP32 using PlatformIO, see: <https://docs.platformio.org/en/latest/platforms/espressif32.html>
 
 #### 1. Install PlatformIO
 
@@ -38,7 +38,9 @@ PlatformIO can be installed as a command line utility (PlatformIO Core), a stand
 
 #### 2. Clone this repo
 
-`$ git clone https://github.com/OpenEVSE/ESP32_WiFi_v3.x`
+```bash
+git clone https://github.com/OpenEVSE/ESP32_WiFi_v3.x
+```
 
 #### 3. Compile & upload
 
@@ -53,11 +55,11 @@ pio run -t upload
 
 If you are using a different development board, you can specify one of the envs setup in `platformio.ini`, for example:
 
-```
+```bash
 pio run -e openevse_huzzah32_idf -t upload
 ```
 
-*To enable OTA updates, first upload via serial using the dev environment. This enables OTA enable build flag*
+> To enable OTA updates, first upload via serial using the dev environment. This enables OTA enable build flag
 
 ***
 
@@ -98,4 +100,3 @@ To help debug, it may be useful to enable serial debug output. To do this upload
 The default is to enable serial debug on serial1 the ESP's 2nd serial port. You will need to connect a debugger to the ESP serial1 Tx pin (GPIO2).
 
 To change to use serial0 (the main ESP's serial port) change `-DDEBUG_PORT=Serial1` to `-DDEBUG_PORT=Serial` in `platformio.ini`. Note that using serial 0 will adversely effect RAPI communication with the openevse controller.
-
