@@ -134,6 +134,8 @@ class EvseMonitor : public MicroTasks::Task
     long _pilot;                      // OpenEVSE Pilot Setting
     long _max_configured_current;
     long _max_hardware_current;
+    long _current_sensor_scale;
+    long _current_sensor_offset;
 
     // Settings
     uint32_t _settings_flags;
@@ -185,9 +187,18 @@ class EvseMonitor : public MicroTasks::Task
     void sleep();
     void disable();
 
-    void setPilot(long amps);
-
-    void setVoltage(double volts);
+    void setPilot(long amps, std::function<void(int ret)> callback = NULL);
+    void setVoltage(double volts, std::function<void(int ret)> callback = NULL);
+    void setMaxConfiguredCurrent(long amps, std::function<void(int ret)> callback = NULL);
+    void setServiceLevel(ServiceLevel level, std::function<void(int ret)> callback = NULL);
+    void configureCurrentSensorScale(long scale, long offset, std::function<void(int ret)> callback = NULL);
+    void enableFeature(uint8_t feature, bool enabled, std::function<void(int ret)> callback = NULL);
+    void enableDiodeCheck(bool enabled, std::function<void(int ret)> callback = NULL);
+    void enableGfiTestCheck(bool enabled, std::function<void(int ret)> callback = NULL);
+    void enableGroundCheck(bool enabled, std::function<void(int ret)> callback = NULL);
+    void enableStuckRelayCheck(bool enabled, std::function<void(int ret)> callback = NULL);
+    void enableVentRequired(bool enabled, std::function<void(int ret)> callback = NULL);
+    void enableTemperatureCheck(bool enabled, std::function<void(int ret)> callback = NULL);
 
     uint8_t getEvseState() {
       return _state.getEvseState();
@@ -254,6 +265,12 @@ class EvseMonitor : public MicroTasks::Task
     }
     long getMaxHardwareCurrent() {
       return _max_hardware_current;
+    }
+    long getCurrentSensorScale() {
+      return _current_sensor_scale;
+    }
+    long getCurrentSensorOffset() {
+      return _current_sensor_offset;
     }
     uint32_t getSettingsFlags() {
       return _settings_flags;

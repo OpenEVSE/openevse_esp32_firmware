@@ -58,16 +58,18 @@
         EVSE_MONITOR_ENERGY_DATA_READY \
 )
 
-#define EVSE_MONITOR_FAULT_COUNT_BOOT_READY   (1 << 0)
-#define EVSE_MONITOR_FLAGS_BOOT_READY         (1 << 1)
-#define EVSE_MONITOR_CURRENT_BOOT_READY       (1 << 2)
-#define EVSE_MONITOR_ENERGY_BOOT_READY        (1 << 3)
+#define EVSE_MONITOR_FAULT_COUNT_BOOT_READY     (1 << 0)
+#define EVSE_MONITOR_FLAGS_BOOT_READY           (1 << 1)
+#define EVSE_MONITOR_CURRENT_BOOT_READY         (1 << 2)
+#define EVSE_MONITOR_ENERGY_BOOT_READY          (1 << 3)
+#define EVSE_MONITOR_CURRENT_SENSOR_BOOT_READY  (1 << 4)
 
 #define EVSE_MONITOR_BOOT_READY ( \
         EVSE_MONITOR_FAULT_COUNT_BOOT_READY | \
         EVSE_MONITOR_FLAGS_BOOT_READY | \
         EVSE_MONITOR_CURRENT_BOOT_READY | \
-        EVSE_MONITOR_ENERGY_BOOT_READY \
+        EVSE_MONITOR_ENERGY_BOOT_READY | \
+        EVSE_MONITOR_CURRENT_SENSOR_BOOT_READY\
 )
 
 #define EVSE_MONITOR_SESSION_COMPLETE_MASK      OPENEVSE_VFLAG_EV_CONNECTED
@@ -245,6 +247,18 @@ void EvseMonitor::evseBoot(const char *firmware)
     }
   });
 
+  _openevse.getAmmeterSettings([this](int ret, long scale, long offset)
+  {
+    if(RAPI_RESPONSE_OK == ret)
+    {
+      DBUGF("scale = %ld, offset = %ld", scale, offset);
+      _current_sensor_scale = scale;
+      _current_sensor_offset = offset;
+
+      _boot_ready.ready(EVSE_MONITOR_CURRENT_SENSOR_BOOT_READY);
+    }
+  });
+
   _openevse.heartbeatEnable(EVSE_HEATBEAT_INTERVAL, EVSE_HEARTBEAT_CURRENT, [this](int ret, int interval, int current, int triggered) {
     _heartbeat = RAPI_RESPONSE_OK == ret;
   });
@@ -368,7 +382,7 @@ void EvseMonitor::updateFaultCounters(int ret, long gfci_count, long nognd_count
 
 EvseMonitor::ServiceLevel EvseMonitor::getServiceLevel()
 {
-  if(OPENEVSE_ECF_AUTO_SVC_LEVEL_DISABLED == (getSettingsFlags() & OPENEVSE_ECF_AUTO_SVC_LEVEL_DISABLED)) {
+  if(0 == (getSettingsFlags() & OPENEVSE_ECF_AUTO_SVC_LEVEL_DISABLED)) {
     return ServiceLevel::Auto;
   }
 
@@ -412,27 +426,200 @@ void EvseMonitor::disable()
   });
 }
 
-void EvseMonitor::setPilot(long amps)
+void EvseMonitor::setPilot(long amps, std::function<void(int ret)> callback)
 {
-  _openevse.setCurrentCapacity(amps, false, [this](int ret, long pilot)
+  // limit `amps` to the software limit
+  if(amps > _max_configured_current) {
+    amps = _max_configured_current;
+  }
+  if(amps < _min_current) {
+    amps = _min_current;
+  }
+
+  if(amps == _pilot)
   {
-    if(RAPI_RESPONSE_OK == ret || RAPI_RESPONSE_NK == ret) {
+    if(callback) {
+      callback(RAPI_RESPONSE_OK);
+    }
+    return;
+  }
+
+  _openevse.setCurrentCapacity(amps, false, [this, callback](int ret, long pilot)
+  {
+    if(RAPI_RESPONSE_OK == ret) {
       _pilot = pilot;
+    }
+
+    if(callback) {
+      callback(ret);
     }
   });
 }
 
-void EvseMonitor::setVoltage(double volts)
+void EvseMonitor::setVoltage(double volts, std::function<void(int ret)> callback)
 {
+  if(volts == _voltage)
+  {
+    if(callback) {
+      callback(RAPI_RESPONSE_OK);
+    }
+    return;
+  }
+
   if(VOLTAGE_MINIMUM <= volts && volts <= VOLTAGE_MAXIMUM)
   {
-    _openevse.setVoltage(volts, [this, volts](int ret)
+    _openevse.setVoltage(volts, [this, volts, callback](int ret)
     {
-      if(RAPI_RESPONSE_OK == ret || RAPI_RESPONSE_NK == ret) {
+      if(RAPI_RESPONSE_OK == ret) {
         _voltage = volts;
+      }
+
+      if(callback) {
+        callback(ret);
       }
     });
   }
+}
+
+void EvseMonitor::setServiceLevel(ServiceLevel level, std::function<void(int ret)> callback)
+{
+  if(level == getServiceLevel())
+  {
+    if(callback) {
+      callback(RAPI_RESPONSE_OK);
+    }
+    return;
+  }
+
+  static char levels[] = {
+    OPENEVSE_SERVICE_LEVEL_AUTO,
+    OPENEVSE_SERVICE_LEVEL_L1,
+    OPENEVSE_SERVICE_LEVEL_L2
+  };
+
+  _openevse.setServiceLevel(levels[static_cast<uint8_t>(level)], [this, callback](int ret)
+  {
+    if(RAPI_RESPONSE_OK == ret)
+    {
+      // Refresh the flags
+      _openevse.getSettings([this, callback](int ret, long pilot, uint32_t flags)
+      {
+        if(RAPI_RESPONSE_OK == ret) {
+          DBUGF("pilot = %ld, flags = %x", pilot, flags);
+          _settings_flags = flags;
+        }
+
+        if(callback){
+          callback(ret);
+        }
+      });
+    } else if(callback){
+      callback(ret);
+    }
+  });
+}
+
+void EvseMonitor::enableFeature(uint8_t feature, bool enabled, std::function<void(int ret)> callback)
+{
+  _openevse.feature(feature, enabled, [this, callback](int ret)
+  {
+    if(RAPI_RESPONSE_OK == ret)
+    {
+      // Refresh the flags
+      _openevse.getSettings([this, callback](int ret, long pilot, uint32_t flags)
+      {
+        if(RAPI_RESPONSE_OK == ret) {
+          DBUGF("pilot = %ld, flags = %x", pilot, flags);
+          _settings_flags = flags;
+        }
+
+        if(callback){
+          callback(ret);
+        }
+      });
+    } else if(callback){
+      callback(ret);
+    }
+  });
+}
+
+void EvseMonitor::enableDiodeCheck(bool enabled, std::function<void(int ret)> callback)
+{
+  if(isDiodeCheckDisabled() == enabled) {
+    enableFeature(OPENEVSE_FEATURE_DIODE_CKECK, enabled, callback);
+  }
+}
+
+void EvseMonitor::enableGfiTestCheck(bool enabled, std::function<void(int ret)> callback)
+{
+  if(isGfiTestDisabled() == enabled) {
+    enableFeature(OPENEVSE_FEATURE_GFI_SELF_TEST, enabled, callback);
+  }
+}
+
+void EvseMonitor::enableGroundCheck(bool enabled, std::function<void(int ret)> callback)
+{
+  if(isGroundCheckDisabled() == enabled) {
+    enableFeature(OPENEVSE_FEATURE_GROUND_CHECK, enabled, callback);
+  }
+}
+
+void EvseMonitor::enableStuckRelayCheck(bool enabled, std::function<void(int ret)> callback)
+{
+  if(isStuckRelayCheckDisabled() == enabled) {
+    enableFeature(OPENEVSE_FEATURE_RELAY_CKECK, enabled, callback);
+  }
+}
+
+void EvseMonitor::enableVentRequired(bool enabled, std::function<void(int ret)> callback)
+{
+  if(isVentRequiredDisabled() == enabled) {
+    enableFeature(OPENEVSE_FEATURE_VENT_CHECK, enabled, callback);
+  }
+}
+
+void EvseMonitor::enableTemperatureCheck(bool enabled, std::function<void(int ret)> callback)
+{
+  if(isTemperatureCheckDisabled() == enabled) {
+    enableFeature(OPENEVSE_FEATURE_TEMPURATURE_CHECK, enabled, callback);
+  }
+}
+
+void EvseMonitor::configureCurrentSensorScale(long scale, long offset, std::function<void(int ret)> callback)
+{
+  _openevse.setAmmeterSettings(scale, offset, [this, scale, offset, callback](int ret)
+  {
+    if(RAPI_RESPONSE_OK == ret) {
+      _current_sensor_scale = scale;
+      _current_sensor_offset = offset;
+    }
+
+    if(callback) {
+      callback(ret);
+    }
+  });
+}
+
+void EvseMonitor::setMaxConfiguredCurrent(long amps, std::function<void(int ret)> callback)
+{
+  // limit `amps` to the hardware limit
+  if(amps > _max_hardware_current) {
+    amps = _max_hardware_current;
+  }
+  if(amps < _min_current) {
+    amps = _min_current;
+  }
+
+  _openevse.setCurrentCapacity(amps, true, [this, callback](int ret, long pilot)
+  {
+    if(RAPI_RESPONSE_OK == ret) {
+      _max_configured_current = pilot;
+    }
+
+    if(callback) {
+      callback(ret);
+    }
+  });
 }
 
 void EvseMonitor::getStatusFromEvse(bool allowStart)

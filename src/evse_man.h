@@ -373,6 +373,9 @@ class EvseManager : public MicroTasks::Task
     EvseMonitor::ServiceLevel getServiceLevel() {
       return _monitor.getServiceLevel();
     }
+    void setServiceLevel(EvseMonitor::ServiceLevel level) {
+      _monitor.setServiceLevel(level);
+    }
     EvseMonitor::LcdType getLcdType() {
       return _monitor.getLcdType();
     }
@@ -381,6 +384,44 @@ class EvseManager : public MicroTasks::Task
     }
     long getMinCurrent() {
       return _monitor.getMinCurrent();
+    }
+    void setMaxConfiguredCurrent(long amps);
+    long getMaxConfiguredCurrent() {
+      return _monitor.getMaxConfiguredCurrent();
+    }
+    long getMaxHardwareCurrent() {
+      return _monitor.getMaxHardwareCurrent();
+    }
+    void configureCurrentSensorScale(long scale, long offset) {
+      _monitor.configureCurrentSensorScale(scale, offset);
+    }
+    long getCurrentSensorScale() {
+      return _monitor.getCurrentSensorScale();
+    }
+    long getCurrentSensorOffset() {
+      return _monitor.getCurrentSensorOffset();
+    }
+
+    void enableFeature(uint8_t feature, bool enabled, std::function<void(int ret)> callback = NULL) {
+      _monitor.enableFeature(feature, enabled, callback);
+    }
+    void enableDiodeCheck(bool enabled, std::function<void(int ret)> callback = NULL) {
+      _monitor.enableDiodeCheck(enabled, callback);
+    }
+    void enableGfiTestCheck(bool enabled, std::function<void(int ret)> callback = NULL) {
+      _monitor.enableGfiTestCheck(enabled, callback);
+    }
+    void enableGroundCheck(bool enabled, std::function<void(int ret)> callback = NULL) {
+      _monitor.enableGroundCheck(enabled, callback);
+    }
+    void enableStuckRelayCheck(bool enabled, std::function<void(int ret)> callback = NULL) {
+      _monitor.enableStuckRelayCheck(enabled, callback);
+    }
+    void enableVentRequired(bool enabled, std::function<void(int ret)> callback = NULL) {
+      _monitor.enableVentRequired(enabled, callback);
+    }
+    void enableTemperatureCheck(bool enabled, std::function<void(int ret)> callback = NULL) {
+      _monitor.enableTemperatureCheck(enabled, callback);
     }
 
     // Get/set the vehicle state

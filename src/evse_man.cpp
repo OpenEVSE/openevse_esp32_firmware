@@ -584,6 +584,21 @@ void EvseManager::setVehicleEta(int vehicleEta)
   MicroTask.wakeTask(this);
 }
 
+void EvseManager::setMaxConfiguredCurrent(long amps)
+{
+  _monitor.setMaxConfiguredCurrent(amps, [this](int ret)
+  {
+    if(RAPI_RESPONSE_OK == ret)
+    {
+      DBUGF("Max configured current set to %ld", _monitor.getMaxConfiguredCurrent());
+      // Setting the Max Current will update the pilot as well, but in any case we may
+      // need to change the level so re-evaluate the claims
+      _evaluateClaims = true;
+      MicroTask.wakeTask(this);
+    }
+  });
+}
+
 bool EvseManager::isRapiCommandBlocked(String rapi)
 {
   return rapi.startsWith("$ST");

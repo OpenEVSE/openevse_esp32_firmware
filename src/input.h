@@ -13,10 +13,6 @@ extern EventLog eventLog;
 
 extern String url;
 extern String data;
-
-extern long current_scale;
-extern long current_offset;
-
 extern String ohm_hour;
 
 extern void handleRapiRead();
