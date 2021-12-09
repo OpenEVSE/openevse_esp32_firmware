@@ -46,7 +46,7 @@ paths:
                     packets_sent: 22307
                     packets_success: 22290
                     mqtt_connected: 1
-                    ohm_hour: "NotConnected"
+                    ohm_hour: NotConnected
                     free_heap: 203268
                     comm_sent: 335139
                     comm_success: 335139
@@ -136,6 +136,16 @@ paths:
               Set Eco mode:
                 value:
                   charge_mode: eco
+              Configure Tesla credentials:
+                value:
+                  tesla_enabled: true
+                  tesla_access_token: qts-1234.......
+                  tesla_refresh_token: abcd.......
+                  tesla_created_at: 1623358948
+                  tesla_expires_in: 3888000
+              Select Tesla vehicle:
+                value:
+                  tesla_vehicle_id: '2238974987235987'
       summary: Update the EVSE configuration
       tags:
         - Config
@@ -322,27 +332,27 @@ paths:
               Daily Timer:
                 value:
                   - id: 1
-                    state: "active"
+                    state: active
                     days:
-                      - "monday"
-                      - "tuesday"
-                      - "wednesday"
-                      - "thursday"
-                      - "friday"
-                      - "saturday"
-                      - "sunday"
-                    time: "07:00:00"
+                      - monday
+                      - tuesday
+                      - wednesday
+                      - thursday
+                      - friday
+                      - saturday
+                      - sunday
+                    time: '07:00:00'
                   - id: 2
-                    state: "disabled"
+                    state: disabled
                     days:
-                      - "monday"
-                      - "tuesday"
-                      - "wednesday"
-                      - "thursday"
-                      - "friday"
-                      - "saturday"
-                      - "sunday"
-                    time: "10:00:00"
+                      - monday
+                      - tuesday
+                      - wednesday
+                      - thursday
+                      - friday
+                      - saturday
+                      - sunday
+                    time: '10:00:00'
         description: Inventory item to add
       tags:
         - Schedule
@@ -439,6 +449,60 @@ paths:
         name: index
         in: path
         required: true
+  /tesla/vehicles:
+    get:
+      summary: Get Tesla vehicle list
+      tags:
+        - Tesla
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                description: ''
+                type: object
+                x-examples:
+                  example-1:
+                    count: 3
+                    vehicles:
+                      - id: '1492932278133304'
+                        name: AwesomeSAUCE
+                      - id: '1492931610165415'
+                        name: Herbie
+                      - id: '1492930973960452'
+                        name: 'Life, the Universe, and Everything'
+                properties:
+                  count:
+                    type: number
+                  vehicles:
+                    type: array
+                    uniqueItems: true
+                    items:
+                      type: object
+                      additionalProperties: false
+                      properties:
+                        id:
+                          type: string
+                          minLength: 1
+                        name:
+                          type: string
+                          minLength: 1
+                      required:
+                        - id
+                        - name
+                required:
+                  - count
+                  - vehicles
+              examples:
+                example-1:
+                  value:
+                    count: 1
+                    vehicles:
+                      - id: '2238974987235987'
+                        name: My Tesla
+      operationId: get-tesla-vehicles
+      description: Once the Tesla account credentials have been configured via the `/config` API this endpoint will return a list of vehicles associated with the account. The ID of the vehicle to use for SoC/Range can then be set using `tesla_vehicle_id` on the `/config` endpoint.
 components:
   schemas:
     Message:

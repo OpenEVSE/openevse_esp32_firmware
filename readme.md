@@ -63,60 +63,6 @@ The WiFi gateway uses an **ESP32** which communicates with the OpenEVSE controll
 
 ***
 
-### HTTP API (Recommended)
-
-### Tesla API
-
-**BETA**
-
-**Polling the Tesla API will keep the car awake which will increase vampire drain, see [Issue #96](https://github.com/OpenEVSE/ESP32_WiFi_V3.x/issues/96).**
-
-WiFi firmware V3.2 includes basic Tesla API integration. The HTTP API for this is as follows:
-
-```http
-POST {{baseUrl}}/config HTTP/1.1
-Content-Type: application/json
-
-{
-  "tesla_enabled": true,
-  "tesla_username": "username",
-  "tesla_password": "password"
-}
-
-```
-
-```http
-POST {{baseUrl}}/config HTTP/1.1
-Content-Type: application/json
-
-{
-  "tesla_vehidx": 0
-}
-```
-
-Example using cURL:
-
-```
-curl --request POST \
-  --url http://openevse-xxxx/config \
-  --header 'content-type: application/json' \
-  --header 'user-agent: vscode-restclient' \
-  --data '{"tesla_enabled": true,"tesla_username": "username","tesla_password": "password"}'
-```
-
-Return a list of vehicles associated with the Tesla account e.g
-
-`http://openevse-xxxx/teslaveh`
-
-e.g
-`{"count:"2,[{"id":"xxxx","name":"tesla1"},{"id":"xxxxx","name":"tesla2"}]}`
-
-*Note: The vehicle ID starts at zero so the first car will have vi=0*
-
-The SoC and rated range of the Tesla vehicle is now displayed in JSON format via `/status` and posted to MQTT. 
-
-***
-
 # About
 
 Collaboration of [OpenEnegyMonitor](http://openenergymonitor.org) and [OpenEVSE](https://openevse.com).

@@ -7,12 +7,12 @@
     },
     {
       "type": "item",
-      "title": "OpenEVSE User Guide",
+      "title": "User Guide",
       "uri": "docs/user-guide.md"
     },
     {
       "type": "item",
-      "title": "OpenEVSE Wired Ethernet using ESP32-Gateway",
+      "title": "Wired Ethernet using ESP32-Gateway",
       "uri": "docs/wired-ethernet.md"
     },
     {
@@ -40,7 +40,7 @@
     },
     {
       "type": "item",
-      "title": "Config.yaml",
+      "title": "Config",
       "uri": "models/Config.yaml"
     },
     {
