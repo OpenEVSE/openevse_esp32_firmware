@@ -28,6 +28,8 @@
 
 ## Hardware
 
+## WiFi Hardware
+
 Most ESP32 boards can be used (see platfromio.ini for full list of supported boards), however the boards which is best supported is the OpenEVSE WiFi V1. 
 
 **Be sure to correctly identify your WiFi hardware before updating the firmware**
@@ -38,6 +40,13 @@ Most ESP32 boards can be used (see platfromio.ini for full list of supported boa
 - Huzzah ESP32 - can run V3.x and V4.x firmware
 - OpenEVSE V1 - designed for V4.x firmware
 - [Olimex ESP32 Gateway (Wired Ethernet)](wired-ethernet.md) - can run V3.x and V4.x firmware
+
+### Temperature sensors
+
+- Temp 1 RTC temperature sensor (old LCD module with RTC)
+- Temp 2 MCP9808 temperature sensor (new LCD module )
+- Temp 3 IR sensor (not used)
+- Temp 4 is the sensor on the OpenEVSE V1 module (not currently used for throttling)
 
 ## WiFi Setup
 

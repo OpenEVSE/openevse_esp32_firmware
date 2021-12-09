@@ -11,12 +11,13 @@
 #endif
 
 #define EVSE_MONITOR_TEMP_MONITOR       0
-#define EVSE_MONITOR_TEMP_EVSE_DS3232   1
-#define EVSE_MONITOR_TEMP_EVSE_MCP9808  2
-#define EVSE_MONITOR_TEMP_EVSE_TMP007   3
-#define EVSE_MONITOR_TEMP_ESP_MCP9808   4
+#define EVSE_MONITOR_TEMP_MAX           1
+#define EVSE_MONITOR_TEMP_EVSE_DS3232   2
+#define EVSE_MONITOR_TEMP_EVSE_MCP9808  3
+#define EVSE_MONITOR_TEMP_EVSE_TMP007   4
+#define EVSE_MONITOR_TEMP_ESP_MCP9808   5
 
-#define EVSE_MONITOR_TEMP_COUNT         5
+#define EVSE_MONITOR_TEMP_COUNT         6
 
 class EvseMonitor : public MicroTasks::Task
 {
@@ -83,16 +84,16 @@ class EvseMonitor : public MicroTasks::Task
         bool update(uint32_t state);
     };
 
-    class Tempurature
+    class Temperature
     {
       private:
         bool _valid;
         double _value;
 
       public:
-        Tempurature() : _valid(false), _value(0) { }
+        Temperature() : _valid(false), _value(0) { }
 
-        void set(double value, bool valid) {
+        void set(double value, bool valid = true) {
           _value = value;
           _valid = valid;
         }
@@ -118,7 +119,7 @@ class EvseMonitor : public MicroTasks::Task
     long _elapsed;                    // Elapsed time (only valid if charging)
     uint32_t _elapsed_set_time;
 
-    Tempurature _temps[EVSE_MONITOR_TEMP_COUNT];
+    Temperature _temps[EVSE_MONITOR_TEMP_COUNT];
 
     double _session_wh;
     double _total_kwh;
@@ -153,9 +154,9 @@ class EvseMonitor : public MicroTasks::Task
     void updateFaultCounters(int ret, long gfci_count, long nognd_count, long stuck_count);
 
     void evseBoot(const char *firmware_version);
-    void evseStateChanged();
+    void updateEvseState(uint8_t evse_state, uint8_t pilot_state, uint32_t vflags);
 
-    void getStatusFromEvse();
+    void getStatusFromEvse(bool allowStart = true);
     void getChargeCurrentAndVoltageFromEvse();
     void getTemperatureFromEvse();
     void getEnergyFromEvse();
@@ -236,10 +237,10 @@ class EvseMonitor : public MicroTasks::Task
     long getFaultCountStuckRelay() {
       return _stuck_count;
     }
-    double getTempurature(uint8_t sensor) {
+    double getTemperature(uint8_t sensor) {
       return _temps[sensor].get();
     }
-    double isTempuratureValid(uint8_t sensor) {
+    double isTemperatureValid(uint8_t sensor) {
       return _temps[sensor].isValid();
     }
     long getMinCurrent() {

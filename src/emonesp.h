@@ -85,8 +85,16 @@
 #define DEFAULT_TIME_ZONE "Europe/London|GMT0BST,M3.5.0/1,M10.5.0"
 #endif
 
-#ifndef DEFAULT_VOLTAGE
-#define DEFAULT_VOLTAGE  240
+#ifndef VOLTAGE_DEFAULT
+#define VOLTAGE_DEFAULT  240
+#endif
+
+#ifndef VOLTAGE_MINIMUM
+#define VOLTAGE_MINIMUM  60.0
+#endif
+
+#ifndef VOLTAGE_MAXIMUM
+#define VOLTAGE_MAXIMUM  300.0
 #endif
 
 #ifdef NO_SENSOR_SCALING
@@ -152,5 +160,7 @@
 
 extern String currentfirmware;
 extern String buildenv;
+
+void restart_system();
 
 #endif // _EMONESP_H

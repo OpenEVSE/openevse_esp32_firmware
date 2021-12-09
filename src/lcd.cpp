@@ -141,7 +141,7 @@ unsigned long LcdTask::loop(MicroTasks::WakeReason reason)
   DBUGLN(LcdInfoLine::Off == _infoLine ? "LcdInfoLine::Off" :
          LcdInfoLine::EnergySession == _infoLine ? "LcdInfoLine::EnergySession" :
          LcdInfoLine::EnergyTotal == _infoLine ? "LcdInfoLine::EnergyTotal" :
-         LcdInfoLine::Tempurature == _infoLine ? "LcdInfoLine::Tempurature" :
+         LcdInfoLine::Temperature == _infoLine ? "LcdInfoLine::Temperature" :
          LcdInfoLine::Time == _infoLine ? "LcdInfoLine::Time" :
          LcdInfoLine::Date == _infoLine ? "LcdInfoLine::Date" :
          LcdInfoLine::ElapsedTime == _infoLine ? "LcdInfoLine::ElapsedTime" :
@@ -256,15 +256,17 @@ unsigned long LcdTask::loop(MicroTasks::WakeReason reason)
     nextUpdate = nextInfoDelay;
   }
 
+  DBUGVAR(nextUpdate);
   return nextUpdate;
 }
 
 unsigned long LcdTask::displayNextMessage()
 {
-  while(millis() >= _nextMessageTime)
+  while(_head && millis() >= _nextMessageTime)
   {
     // Pop a message from the queue
     Message *msg = _head;
+    DBUGF("msg = %p", msg);
     _head = _head->getNext();
     if(NULL == _head) {
       _tail = NULL;
@@ -282,7 +284,9 @@ unsigned long LcdTask::displayNextMessage()
     _updateInfoLine = true;
   }
 
-  return _nextMessageTime - millis();
+  unsigned long nextUpdate = _nextMessageTime - millis();
+  DBUGVAR(nextUpdate);
+  return nextUpdate;
 }
 
 
@@ -307,8 +311,8 @@ LcdTask::LcdInfoLine LcdTask::getNextInfoLine(LcdInfoLine info)
         case LcdInfoLine::EnergySession:
           return LcdInfoLine::EnergyTotal;
         case LcdInfoLine::EnergyTotal:
-          return LcdInfoLine::Tempurature;
-        case LcdInfoLine::Tempurature:
+          return LcdInfoLine::Temperature;
+        case LcdInfoLine::Temperature:
           return LcdInfoLine::Time;
         case LcdInfoLine::Time:
           return LcdInfoLine::Date;
@@ -340,8 +344,8 @@ LcdTask::LcdInfoLine LcdTask::getNextInfoLine(LcdInfoLine info)
         case LcdInfoLine::EnergySession:
           return LcdInfoLine::EnergyTotal;
         case LcdInfoLine::EnergyTotal:
-          return LcdInfoLine::Tempurature;
-        case LcdInfoLine::Tempurature:
+          return LcdInfoLine::Temperature;
+        case LcdInfoLine::Temperature:
           if(_scheduler->getNextEvent().isValid()) {
             return LcdInfoLine::TimerStop;
           }
@@ -498,19 +502,20 @@ void LcdTask::displayInfoLine(LcdInfoLine line, unsigned long &nextUpdate)
   {
     case LcdInfoLine::EnergySession:
       // Energy 1,018Wh
-      displayNumberValue(1, "Energy", _evse->getSessionEnergy(), 2, "Wh");
+      displayScaledNumberValue(1, "Energy", _evse->getSessionEnergy(), 1, "Wh");
       _updateInfoLine = false;
       break;
 
-    case LcdInfoLine::EnergyTotal:
+    case LcdInfoLine::EnergyTotal: {
       // Lifetime 2313kWh
-      displayNumberValue(1, "Lifetime", _evse->getTotalEnergy(), 0, "kWh");
+      double totalEnergy = _evse->getTotalEnergy() * 1000;
+      displayScaledNumberValue(1, "Lifetime", totalEnergy, 0, "Wh");
       _updateInfoLine = false;
-      break;
+    } break;
 
-    case LcdInfoLine::Tempurature:
+    case LcdInfoLine::Temperature:
       // EVSE Temp 30.5C
-      displayNumberValue(1, "EVSE Temp", _evse->getTempurature(EVSE_MONITOR_TEMP_MONITOR), 1, "C");
+      displayNumberValue(1, "EVSE Temp", _evse->getTemperature(EVSE_MONITOR_TEMP_MONITOR), 1, "C");
       _updateInfoLine = false;
       break;
 
@@ -534,8 +539,8 @@ void LcdTask::displayInfoLine(LcdInfoLine line, unsigned long &nextUpdate)
       gettimeofday(&local_time, NULL);
       struct tm timeinfo;
       localtime_r(&local_time.tv_sec, &timeinfo);
-      strftime(temp, sizeof(temp), "Date %d/%m/%Y", &timeinfo);
-      showText(0, 1, temp, true);
+      strftime(temp, sizeof(temp), "%d/%m/%Y", &timeinfo);
+      displayNameValue(1, "Date", temp);
       _updateInfoLine = false;
       } break;
 
@@ -593,7 +598,7 @@ void LcdTask::displayInfoLine(LcdInfoLine line, unsigned long &nextUpdate)
         displayStopWatchTime("Left", delay);
         nextUpdate = 1000;
       } else {
-        showText(0, 1, "Left --:--:--", true);
+        displayNameValue(1, "Left", "--:--:--");
         _updateInfoLine = false;
       }
     } break;
@@ -607,11 +612,36 @@ void LcdTask::displayInfoLine(LcdInfoLine line, unsigned long &nextUpdate)
   }
 }
 
+void LcdTask::displayScaledNumberValue(int line, const char *name, double value, int precision, const char *unit)
+{
+  static const char *mod[] = {
+    "",
+    "k",
+    "m",
+    "g",
+    "t",
+    "p"
+  };
+
+  int index = 0;
+  while (value > 1000 && index < ARRAY_ITEMS(mod))
+  {
+    value /= 1000;
+    index++;
+  }
+
+  char newUnit[20];
+  sprintf(newUnit, "%s%s", mod[index], unit);
+
+  displayNumberValue(line, name, value, precision, newUnit);
+}
+
 void LcdTask::displayNumberValue(int line, const char *name, double value, int precision, const char *unit)
 {
-  char temp[20];
-  sprintf(temp, "%s %.*f%s", name, precision, value, unit);
-  showText(0, line, temp, true);
+  char number[20];
+  snprintf(number, sizeof(number), "%.*f%s", precision, value, unit);
+
+  displayNameValue(line, name, number);
 }
 
 void LcdTask::displayInfoEventTime(const char *name, Scheduler::EventInstance &event)
@@ -632,7 +662,7 @@ void LcdTask::displayInfoEventTime(const char *name, Scheduler::EventInstance &e
   } else {
     sprintf(temp, "%s --:--", name);
   }
-  showText(0, 1, temp, true);
+  displayNameValue(1, name, temp);
 }
 
 void LcdTask::displayStopWatchTime(const char *name, uint32_t time)
@@ -641,8 +671,28 @@ void LcdTask::displayStopWatchTime(const char *name, uint32_t time)
   int hour = time / 3600;
   int min = (time / 60) % 60;
   int sec = time % 60;
-  sprintf(temp, "%s %d:%02d:%02d", name, hour, min, sec);
-  showText(0, 1, temp, true);
+  sprintf(temp, "%d:%02d:%02d", hour, min, sec);
+  displayNameValue(1, name, temp);
+}
+
+void LcdTask::displayNameValue(int line, const char *name, const char *value)
+{
+  int nameLen = strlen(name);
+  int valueLen = strlen(value) + 1;
+  if(nameLen + valueLen > LCD_MAX_LEN) {
+    nameLen = LCD_MAX_LEN - valueLen;
+  } else {
+    valueLen = LCD_MAX_LEN - nameLen;
+  }
+
+  DBUGVAR(nameLen);
+  DBUGVAR(name);
+  DBUGVAR(valueLen);
+  DBUGVAR(value);
+
+  char temp[20];
+  snprintf(temp, sizeof(temp), "%.*s%*s", nameLen, name, valueLen, value);
+  showText(0, line, temp, true);
 }
 
 void LcdTask::showText(int x, int y, const char *msg, bool clear)

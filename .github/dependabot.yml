@@ -1,0 +1,12 @@
+version: 2
+updates:
+  - package-ecosystem: gitsubmodule
+    directory: /
+    pull-request-branch-name:
+      separator: "-"
+    schedule:
+      interval: daily
+    reviewers:
+      - "jeremypoulter"
+      - "glynhudson"
+      - "chris1howell"

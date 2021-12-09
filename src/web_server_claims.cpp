@@ -44,8 +44,8 @@ handleEvseClaimsPost(MongooseHttpServerRequest *request, MongooseHttpServerRespo
     EvseProperties properties;
     if(properties.deserialize(body))
     {
-      int priority = 500;
-      if(evse.claim(client, EvseManager_Priority_API, properties)) {
+      int priority = EvseManager_Priority_API;
+      if(evse.claim(client, priority, properties)) {
         response->setCode(200);
         response->print("{\"msg\":\"done\"}");
       } else {

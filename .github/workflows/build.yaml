@@ -1,4 +1,4 @@
-name: PlatformIO CI
+name: Build/Release OpenEVSE
 
 on:
   workflow_dispatch:
@@ -85,3 +85,33 @@ jobs:
         name: ${{ matrix.env }}.bin
         path: .pio/build/${{ matrix.env }}/firmware.bin
 
+  release:
+    runs-on: ubuntu-latest
+    needs: build
+    if: github.ref == 'refs/heads/master'
+
+    steps:
+    - name: Download the built assets
+      uses: actions/download-artifact@v2
+      with:
+        path: artifacts
+
+    - name: Rename images to something more sensible
+      run: |
+        find artifacts -name 'firmware.bin' | while read -r image; do
+          dir=$(dirname "${image}")
+          board=$(basename "${dir}")
+          echo mv "$image" "$board"
+          mv "$image" "$board"
+        done
+
+    - name: Upload assets to latest release
+      uses: "marvinpinto/action-automatic-releases@latest"
+      with:
+        repo_token: "${{ secrets.GITHUB_TOKEN }}"
+        automatic_release_tag: "latest"
+        prerelease: true
+        title: "Development Build"
+        files: |
+          *.bin
+ 

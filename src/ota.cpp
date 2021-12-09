@@ -8,7 +8,7 @@
 #include "lcd.h"
 #include "app_config.h"
 
-static int lastPercent = -1;
+static int last_percent = -1;
 
 void ota_setup()
 {
@@ -26,12 +26,12 @@ void ota_setup()
 
   ArduinoOTA.onProgress([](unsigned int progress, unsigned int total) {
     int percent = progress / (total / 100);
-    if (percent != lastPercent)
+    if (percent != last_percent)
     {
       DBUGF("ArduinoOTA progress %d%%", percent);
       String text = String(percent) + F("%");
       lcd.display(text, 0, 1, 10 * 1000, LCD_DISPLAY_NOW);
-      lastPercent = percent;
+      last_percent = percent;
       feedLoopWDT();
     }
   });

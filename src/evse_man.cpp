@@ -7,6 +7,9 @@
 #include "evse_man.h"
 #include "debug.h"
 
+#include "event_log.h"
+#include "divert.h"
+
 static EvseProperties nullProperties;
 
 EvseProperties::EvseProperties() :
@@ -129,10 +132,11 @@ void EvseManager::Claim::release()
   _client = EvseClient_NULL;
 }
 
-EvseManager::EvseManager(Stream &port) :
+EvseManager::EvseManager(Stream &port, EventLog &eventLog) :
   MicroTasks::Task(),
   _sender(&port),
   _monitor(OpenEVSE),
+  _eventLog(eventLog),
   _clients(),
   _evseStateListener(this),
   _sessionCompleteListener(this),
@@ -339,6 +343,17 @@ unsigned long EvseManager::loop(MicroTasks::WakeReason reason)
       _evaluateTargetState = true;
       _waitingForEvent--;
     }
+
+    _eventLog.log(_monitor.isError() ? EventType::Warning : EventType::Information,
+                  getState(),
+                  _monitor.getEvseState(),
+                  _monitor.getFlags(),
+                  _monitor.getPilot(),
+                  _monitor.getSessionEnergy(),
+                  _monitor.getSessionElapsed(),
+                  _monitor.getTemperature(EVSE_MONITOR_TEMP_MONITOR),
+                  _monitor.getTemperature(EVSE_MONITOR_TEMP_MAX),
+                  divertmode);
   }
 
   DBUGVAR(_sessionCompleteListener.IsTriggered());
@@ -492,7 +507,7 @@ uint8_t EvseManager::getStateColour()
       return OPENEVSE_LCD_YELLOW;
 
     case OPENEVSE_STATE_CHARGING:
-      // TODO: Colour should also take into account the tempurature, >60 YELLOW
+      // TODO: Colour should also take into account the temperature, >60 YELLOW
       return OPENEVSE_LCD_TEAL;
 
     case OPENEVSE_STATE_VENT_REQUIRED:
