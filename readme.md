@@ -41,7 +41,7 @@ The WiFi gateway uses an **ESP32** which communicates with the OpenEVSE controll
 - MQTT status & control
 - Log to Emoncms server e.g [data.openevse.org](http://data.openevse.org) or [emoncms.org](https://emoncms.org)
 - 'Eco' mode: automatically adjust charging current based on availability of power from solar PV or grid export
-- OhmConnect integration (California USA only)
+- OCPP V1.6 (beta)
 
 ## Requirements
 
@@ -56,11 +56,6 @@ The WiFi gateway uses an **ESP32** which communicates with the OpenEVSE controll
 - **Note: WiFi module is included as standard in most OpenEVSE units**
 - Purchase via: [OpenEVSE Store (USA/Canda)](https://store.openevse.com/collections/frontpage/products/openevse-wifi-kit) | [OpenEnergyMonitor (UK / EU)](https://shop.openenergymonitor.com/openevse-wifi-gateway/)
 - See [OpenEVSE WiFi setup guide](https://openevse.dozuki.com/Guide/WiFi+-+Join+Network/29) for basic instructions
-
-### Web browsing device
-
-- Mobile phone, tablet, desktop computer, etc.: any device that can display web pages and can network via WiFi.
-*Note: Use of Internet Explorer 11 or earlier is not recommended*
 
 ***
 
@@ -77,6 +72,7 @@ Contributions by:
 - @sandeen
 - @lincomatic
 - @joverbee
+- @matth-x (OCPP)
 
 ## Licence
 
