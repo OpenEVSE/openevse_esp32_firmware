@@ -23,7 +23,7 @@ The WiFi gateway uses an **ESP32** which communicates with the OpenEVSE controll
 - [Features](#features)
 - [Requirements](#requirements)
 - [User Guide](docs/user-guide.md)
-- [Firmware Development Guide](docs/development-guide.md)
+- [Firmware Development Guide](docs/developer-guide.md)
 - [API](https://openevse.stoplight.io/studio/openevse-wifi-v4)
 - [About](#about)
 - [Licence](#licence)
