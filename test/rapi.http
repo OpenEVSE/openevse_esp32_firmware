@@ -94,3 +94,24 @@ GET {{baseUrl}}/r?json&rapi=$F0+1 HTTP/1.1
 GET {{baseUrl}}/r?json&rapi=$F0+0 HTTP/1.1
 
 ###
+
+# Disable LCD update
+
+GET {{baseUrl}}/r?json&rapi=$GG HTTP/1.1
+
+###
+
+# Enable ammeter calibration
+GET {{baseUrl}}/r?json&rapi=$S2+0 HTTP/1.1
+
+###
+
+# Calibration offset
+GET {{baseUrl}}/r?json&rapi=$SA+1+0 HTTP/1.1
+
+###
+
+# Set ammeter calibration for wave generator
+# 2.5v offset
+# 100mV per amp(ish)
+GET {{baseUrl}}/r?json&rapi=$SA+130+0 HTTP/1.1
