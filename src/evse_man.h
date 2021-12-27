@@ -343,23 +343,23 @@ class EvseManager : public MicroTasks::Task
     double isTemperatureValid(uint8_t sensor) {
       return _monitor.isTemperatureValid(sensor);
     }
-    bool isDiodeCheckDisabled() {
-      return _monitor.isDiodeCheckDisabled();
+    bool isDiodeCheckEnabled() {
+      return _monitor.isDiodeCheckEnabled();
     }
-    bool isVentRequiredDisabled() {
-      return _monitor.isVentRequiredDisabled();
+    bool isVentRequiredEnabled() {
+      return _monitor.isVentRequiredEnabled();
     }
-    bool isGroundCheckDisabled() {
-      return _monitor.isGroundCheckDisabled();
+    bool isGroundCheckEnabled() {
+      return _monitor.isGroundCheckEnabled();
     }
-    bool isStuckRelayCheckDisabled() {
-      return _monitor.isStuckRelayCheckDisabled();
+    bool isStuckRelayCheckEnabled() {
+      return _monitor.isStuckRelayCheckEnabled();
     }
-    bool isGfiTestDisabled() {
-      return _monitor.isGfiTestDisabled();
+    bool isGfiTestEnabled() {
+      return _monitor.isGfiTestEnabled();
     }
-    bool isTemperatureCheckDisabled() {
-      return _monitor.isTemperatureCheckDisabled();
+    bool isTemperatureCheckEnabled() {
+      return _monitor.isTemperatureCheckEnabled();
     }
     bool isButtonDisabled() {
       return _monitor.isButtonDisabled();
@@ -369,6 +369,9 @@ class EvseManager : public MicroTasks::Task
     }
     bool isSerialDebugEnabled() {
       return _monitor.isSerialDebugEnabled();
+    }
+    EvseMonitor::ServiceLevel getActualServiceLevel() {
+      return _monitor.getActualServiceLevel();
     }
     EvseMonitor::ServiceLevel getServiceLevel() {
       return _monitor.getServiceLevel();

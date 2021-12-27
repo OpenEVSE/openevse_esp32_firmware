@@ -276,23 +276,24 @@ class EvseMonitor : public MicroTasks::Task
       return _settings_flags;
     }
     ServiceLevel getServiceLevel();
-    bool isDiodeCheckDisabled() {
-      return OPENEVSE_ECF_DIODE_CHK_DISABLED == (getSettingsFlags() & OPENEVSE_ECF_DIODE_CHK_DISABLED);
+    ServiceLevel getActualServiceLevel();
+    bool isDiodeCheckEnabled() {
+      return 0 == (getSettingsFlags() & OPENEVSE_ECF_DIODE_CHK_DISABLED);
     }
-    bool isVentRequiredDisabled() {
-      return OPENEVSE_ECF_VENT_REQ_DISABLED == (getSettingsFlags() & OPENEVSE_ECF_VENT_REQ_DISABLED);
+    bool isVentRequiredEnabled() {
+      return 0 == (getSettingsFlags() & OPENEVSE_ECF_VENT_REQ_DISABLED);
     }
-    bool isGroundCheckDisabled() {
-      return OPENEVSE_ECF_GND_CHK_DISABLED == (getSettingsFlags() & OPENEVSE_ECF_GND_CHK_DISABLED);
+    bool isGroundCheckEnabled() {
+      return 0 == (getSettingsFlags() & OPENEVSE_ECF_GND_CHK_DISABLED);
     }
-    bool isStuckRelayCheckDisabled() {
-      return OPENEVSE_ECF_STUCK_RELAY_CHK_DISABLED == (getSettingsFlags() & OPENEVSE_ECF_STUCK_RELAY_CHK_DISABLED);
+    bool isStuckRelayCheckEnabled() {
+      return 0 == (getSettingsFlags() & OPENEVSE_ECF_STUCK_RELAY_CHK_DISABLED);
     }
-    bool isGfiTestDisabled() {
-      return OPENEVSE_ECF_GFI_TEST_DISABLED == (getSettingsFlags() & OPENEVSE_ECF_GFI_TEST_DISABLED);
+    bool isGfiTestEnabled() {
+      return 0 == (getSettingsFlags() & OPENEVSE_ECF_GFI_TEST_DISABLED);
     }
-    bool isTemperatureCheckDisabled() {
-      return OPENEVSE_ECF_TEMP_CHK_DISABLED == (getSettingsFlags() & OPENEVSE_ECF_TEMP_CHK_DISABLED);
+    bool isTemperatureCheckEnabled() {
+      return 0 == (getSettingsFlags() & OPENEVSE_ECF_TEMP_CHK_DISABLED);
     }
     bool isButtonDisabled() {
       return OPENEVSE_ECF_BUTTON_DISABLED == (getSettingsFlags() & OPENEVSE_ECF_BUTTON_DISABLED);

@@ -391,6 +391,13 @@ EvseMonitor::ServiceLevel EvseMonitor::getServiceLevel()
     ServiceLevel::L1;
 }
 
+EvseMonitor::ServiceLevel EvseMonitor::getActualServiceLevel()
+{
+  return (OPENEVSE_ECF_L2 == (getSettingsFlags() & OPENEVSE_ECF_L2)) ?
+    ServiceLevel::L2 :
+    ServiceLevel::L1;
+}
+
 void EvseMonitor::enable()
 {
   OpenEVSE.enable([this](int ret)
@@ -545,42 +552,42 @@ void EvseMonitor::enableFeature(uint8_t feature, bool enabled, std::function<voi
 
 void EvseMonitor::enableDiodeCheck(bool enabled, std::function<void(int ret)> callback)
 {
-  if(isDiodeCheckDisabled() == enabled) {
+  if(isDiodeCheckEnabled() != enabled) {
     enableFeature(OPENEVSE_FEATURE_DIODE_CKECK, enabled, callback);
   }
 }
 
 void EvseMonitor::enableGfiTestCheck(bool enabled, std::function<void(int ret)> callback)
 {
-  if(isGfiTestDisabled() == enabled) {
+  if(isGfiTestEnabled() != enabled) {
     enableFeature(OPENEVSE_FEATURE_GFI_SELF_TEST, enabled, callback);
   }
 }
 
 void EvseMonitor::enableGroundCheck(bool enabled, std::function<void(int ret)> callback)
 {
-  if(isGroundCheckDisabled() == enabled) {
+  if(isGroundCheckEnabled() != enabled) {
     enableFeature(OPENEVSE_FEATURE_GROUND_CHECK, enabled, callback);
   }
 }
 
 void EvseMonitor::enableStuckRelayCheck(bool enabled, std::function<void(int ret)> callback)
 {
-  if(isStuckRelayCheckDisabled() == enabled) {
+  if(isStuckRelayCheckEnabled() != enabled) {
     enableFeature(OPENEVSE_FEATURE_RELAY_CKECK, enabled, callback);
   }
 }
 
 void EvseMonitor::enableVentRequired(bool enabled, std::function<void(int ret)> callback)
 {
-  if(isVentRequiredDisabled() == enabled) {
+  if(isVentRequiredEnabled() != enabled) {
     enableFeature(OPENEVSE_FEATURE_VENT_CHECK, enabled, callback);
   }
 }
 
 void EvseMonitor::enableTemperatureCheck(bool enabled, std::function<void(int ret)> callback)
 {
-  if(isTemperatureCheckDisabled() == enabled) {
+  if(isTemperatureCheckEnabled() != enabled) {
     enableFeature(OPENEVSE_FEATURE_TEMPURATURE_CHECK, enabled, callback);
   }
 }

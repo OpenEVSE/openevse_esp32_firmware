@@ -40,12 +40,12 @@ handleConfigGet(MongooseHttpServerRequest *request, MongooseHttpServerResponseSt
   http_supported_protocols.add("https");
 
   // OpenEVSE module config
-  doc["diode_check_disabled"] = evse.isDiodeCheckDisabled();
-  doc["gfci_check_disabled"] = evse.isGfiTestDisabled();
-  doc["ground_check_disabled"] = evse.isGroundCheckDisabled();
-  doc["relay_check_disabled"] = evse.isStuckRelayCheckDisabled();
-  doc["vent_check_disabled"] = evse.isVentRequiredDisabled();
-  doc["temp_check_disabled"] = evse.isTemperatureCheckDisabled();
+  doc["diode_check"] = evse.isDiodeCheckEnabled();
+  doc["gfci_check"] = evse.isGfiTestEnabled();
+  doc["ground_check"] = evse.isGroundCheckEnabled();
+  doc["relay_check"] = evse.isStuckRelayCheckEnabled();
+  doc["vent_check"] = evse.isVentRequiredEnabled();
+  doc["temp_check"] = evse.isTemperatureCheckEnabled();
   doc["service"] = static_cast<uint8_t>(evse.getServiceLevel());
   doc["scale"] = evse.getCurrentSensorScale();
   doc["offset"] = evse.getCurrentSensorOffset();
@@ -79,23 +79,23 @@ handleConfigPost(MongooseHttpServerRequest *request, MongooseHttpServerResponseS
 
     // Update EVSE config
     // Update the EVSE setting flags, a little low level, may move later
-    if(doc.containsKey("diode_check_disabled")) {
-      evse.enableDiodeCheck(doc["diode_check_disabled"]);
+    if(doc.containsKey("diode_check")) {
+      evse.enableDiodeCheck(doc["diode_check"]);
     }
-    if(doc.containsKey("gfci_check_disabled")) {
-      evse.enableGfiTestCheck(doc["gfci_check_disabled"]);
+    if(doc.containsKey("gfci_check")) {
+      evse.enableGfiTestCheck(doc["gfci_check"]);
     }
-    if(doc.containsKey("ground_check_disabled")) {
-      evse.enableGroundCheck(doc["ground_check_disabled"]);
+    if(doc.containsKey("ground_check")) {
+      evse.enableGroundCheck(doc["ground_check"]);
     }
-    if(doc.containsKey("relay_check_disabled")) {
-      evse.enableStuckRelayCheck(doc["relay_check_disabled"]);
+    if(doc.containsKey("relay_check")) {
+      evse.enableStuckRelayCheck(doc["relay_check"]);
     }
-    if(doc.containsKey("vent_check_disabled")) {
-      evse.enableVentRequired(doc["vent_check_disabled"]);
+    if(doc.containsKey("vent_check")) {
+      evse.enableVentRequired(doc["vent_check"]);
     }
-    if(doc.containsKey("temp_check_disabled")) {
-      evse.enableTemperatureCheck(doc["temp_check_disabled"]);
+    if(doc.containsKey("temp_check")) {
+      evse.enableTemperatureCheck(doc["temp_check"]);
     }
     if(doc.containsKey("service"))
     {

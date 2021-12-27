@@ -611,6 +611,8 @@ handleStatus(MongooseHttpServerRequest *request) {
   doc["charge_rate"] = charge_rate;
   doc["divert_update"] = (millis() - lastUpdate) / 1000;
 
+  doc["service_level"] = static_cast<uint8_t>(evse.getActualServiceLevel());
+
   doc["ota_update"] = (int)Update.isRunning();
   doc["time"] = String(time);
   doc["offset"] = String(offset);
