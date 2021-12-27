@@ -122,26 +122,6 @@ POST {{baseUrl}}/config HTTP/1.1
 Content-Type: application/json
 
 {
-  "tesla_enabled": true,
-  "tesla_username": "username",
-  "tesla_password": "password"
-}
-
-###
-
-POST {{baseUrl}}/config HTTP/1.1
-Content-Type: application/json
-
-{
-  "tesla_vehidx": 0
-}
-
-###
-
-POST {{baseUrl}}/config HTTP/1.1
-Content-Type: application/json
-
-{
   "pause_uses_disabled": true
 }
 
@@ -189,7 +169,7 @@ POST {{baseUrl}}/config HTTP/1.1
 Content-Type: application/json
 
 {
-  "max_current_soft": 32
+  "max_current_soft": 16
 }
 
 ###
@@ -200,12 +180,12 @@ POST {{baseUrl}}/config HTTP/1.1
 Content-Type: application/json
 
 {
-  "diode_check_disabled": false,
-  "gfci_check_disabled": false,
-  "ground_check_disabled": true,
-  "relay_check_disabled": false,
-  "vent_check_disabled": false,
-  "temp_check_disabled": false
+  "diode_check": false,
+  "gfci_check": false,
+  "ground_check": true,
+  "relay_check": false,
+  "vent_check": false,
+  "temp_check": false
 }
 
 ###
