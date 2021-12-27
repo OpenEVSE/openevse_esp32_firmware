@@ -10,6 +10,8 @@
 #include <ArduinoOcpp.h> // Facade for ArduinoOcpp
 #include <ArduinoOcpp/SimpleOcppOperationFactory.h> // define behavior for incoming req messages
 
+#include "http_update.h"
+
 #include <ArduinoOcpp/Core/OcppEngine.h>
 
 #include "emonesp.h" //for VOLTAGE_DEFAULT
@@ -28,10 +30,11 @@ ArduinoOcppTask::~ArduinoOcppTask() {
     instance = NULL;
 }
 
-void ArduinoOcppTask::begin(EvseManager &evse, LcdTask &lcd) {
+void ArduinoOcppTask::begin(EvseManager &evse, LcdTask &lcd, EventLog &eventLog) {
 
     this->evse = &evse;
     this->lcd = &lcd;
+    this->eventLog = &eventLog;
 
     initializeArduinoOcpp();
     loadEvseBehavior();
@@ -60,7 +63,20 @@ void ArduinoOcppTask::initializeArduinoOcpp() {
 
         OCPP_initialize(ocppSocket, (float) VOLTAGE_DEFAULT, ArduinoOcpp::FilesystemOpt::Use, clockAdapter);
 
-        bootNotification("Advanced Series", "OpenEVSE", [this](JsonObject payload) {
+        initializeDiagnosticsService();
+        initializeFwService();
+
+        DynamicJsonDocument *evseDetailsDoc = new DynamicJsonDocument(JSON_OBJECT_SIZE(6));
+        JsonObject evseDetails = evseDetailsDoc->to<JsonObject>();
+        evseDetails["chargePointModel"] = "Advanced Series";
+        //evseDetails["chargePointSerialNumber"] = "TODO"; //see https://github.com/OpenEVSE/ESP32_WiFi_V4.x/issues/218
+        evseDetails["chargePointVendor"] = "OpenEVSE";
+        evseDetails["firmwareVersion"] = evse->getFirmwareVersion();
+        //evseDetails["meterSerialNumber"] = "TODO";
+        //evseDetails["meterType"] = "TODO";
+        //see https://github.com/OpenEVSE/ESP32_WiFi_V4.x/issues/219
+
+        bootNotification(evseDetailsDoc, [this](JsonObject payload) { //ArduinoOcpp will delete evseDetailsDoc
             LCD_DISPLAY("OCPP connected!");
         });
 
@@ -87,12 +103,19 @@ void ArduinoOcppTask::loadEvseBehavior() {
     });
 
     setEnergyActiveImportSampler([this] () {
-        return (float) evse->getTotalEnergy();
+        float activeImport = 0.f;
+        activeImport += (float) evse->getTotalEnergy();
+        activeImport += (float) evse->getSessionEnergy();
+        return activeImport;
     });
 
     setOnChargingRateLimitChange([this] (float limit) { //limit = maximum charge rate in Watts
         charging_limit = limit;
         this->updateEvseClaim();
+    });
+
+    setConnectorPluggedSampler([this] () {
+        return (bool) evse->isConnected();
     });
 
     setEvRequestsEnergySampler([this] () {
@@ -104,11 +127,46 @@ void ArduinoOcppTask::loadEvseBehavior() {
     });
 
     /*
+     * Report failures to central system. Note that the error codes are standardized in OCPP
+     */
+
+    addConnectorErrorCodeSampler([this] () {
+        if (evse->getEvseState() == OPENEVSE_STATE_GFI_FAULT ||
+                evse->getEvseState() == OPENEVSE_STATE_NO_EARTH_GROUND ||
+                evse->getEvseState() == OPENEVSE_STATE_DIODE_CHECK_FAILED) {
+            return "GroundFailure";
+        }
+        return (const char *) NULL;
+    });
+
+    addConnectorErrorCodeSampler([this] () {
+        if (evse->getEvseState() == OPENEVSE_STATE_OVER_TEMPERATURE) {
+            return "HighTemperature";
+        }
+        return (const char *) NULL;
+    });
+
+    addConnectorErrorCodeSampler([this] () {
+        if (evse->getEvseState() == OPENEVSE_STATE_OVER_CURRENT) {
+            return "OverCurrentFailure";
+        }
+        return (const char *) NULL;
+    });
+
+    addConnectorErrorCodeSampler([this] () {
+        if (evse->getEvseState() == OPENEVSE_STATE_STUCK_RELAY ||
+                evse->getEvseState() == OPENEVSE_STATE_GFI_SELF_TEST_FAILED) {
+            return "InternalError";
+        }
+        return (const char *) NULL;
+    });
+
+    /*
      * CP behavior definition: How will plugging and unplugging the EV start or stop OCPP transactions
      */
 
     onVehicleConnect = [this] () {
-        if (getTransactionId() < 0) {
+        if (getTransactionId() < 0 && isAvailable()) {
             if (!ocpp_idTag.isEmpty()) {
                 authorize(ocpp_idTag, [this] (JsonObject payload) {
                     if (idTagIsAccepted(payload)) {
@@ -170,6 +228,24 @@ void ArduinoOcppTask::loadEvseBehavior() {
         this->updateEvseClaim();
     });
 
+    setOnResetReceiveReq([this] (JsonObject payload) {
+        const char *type = payload["type"] | "Soft";
+        if (!strcmp(type, "Hard")) {
+            resetHard = true;
+        }
+
+        resetTime = millis();
+        resetTriggered = true;
+
+        LCD_DISPLAY("Reboot EVSE");
+    });
+
+    setOnUnlockConnector([] () {
+        //TODO Send unlock command to peripherals. If successful, return true, otherwise false
+        //see https://github.com/OpenEVSE/ESP32_WiFi_V4.x/issues/230
+        return false;
+    });
+
     updateEvseClaim();
 }
 
@@ -205,6 +281,19 @@ unsigned long ArduinoOcppTask::loop(MicroTasks::WakeReason reason) {
         vehicleConnected = evse->isVehicleConnected();
 
         onVehicleDisconnect();
+    }
+
+    if (resetTriggered) {
+        if (millis() - resetTime >= 10000UL) { //wait for 10 seconds after reset command to send the conf msg
+            resetTriggered = false; //execute only once
+
+            if (resetHard) {
+                //TODO send reset command to all peripherals
+                //see https://github.com/OpenEVSE/ESP32_WiFi_V4.x/issues/228
+            }
+            
+            restart_system();
+        }
     }
 
     return 0;
@@ -282,11 +371,11 @@ String ArduinoOcppTask::getCentralSystemUrl() {
     if (url.isEmpty()) {
         return url; //return empty String
     }
-    if (!url.endsWith("/")) {
-        url += '/';
-    }
     String chargeBoxId = ocpp_chargeBoxId;
     chargeBoxId.trim();
+    if (!url.endsWith("/") && !chargeBoxId.isEmpty()) {
+        url += '/';
+    }
     url += chargeBoxId;
 
     if (MongooseOcppSocketClient::isValidUrl(url.c_str())) {
@@ -316,6 +405,164 @@ void ArduinoOcppTask::reconfigure() {
         initializeArduinoOcpp();
     }
     loadEvseBehavior();
+}
+
+void ArduinoOcppTask::initializeDiagnosticsService() {
+    ArduinoOcpp::DiagnosticsService *diagService = ArduinoOcpp::getDiagnosticsService();
+    if (diagService) {
+        diagService->setOnUploadStatusSampler([this] () {
+            if (diagFailure) {
+                return ArduinoOcpp::UploadStatus::UploadFailed;
+            } else if (diagSuccess) {
+                return ArduinoOcpp::UploadStatus::Uploaded;
+            } else {
+                return ArduinoOcpp::UploadStatus::NotUploaded;
+            }
+        });
+
+        diagService->setOnUpload([this] (String &location, ArduinoOcpp::OcppTimestamp &startTime, ArduinoOcpp::OcppTimestamp &stopTime) {
+            
+            //reset reported state
+            diagSuccess = false;
+            diagFailure = false;
+
+            //check if input URL is valid
+            unsigned int port_i = 0;
+            struct mg_str scheme, query, fragment;
+            if (mg_parse_uri(mg_mk_str(location.c_str()), &scheme, NULL, NULL, &port_i, NULL, &query, &fragment)) {
+                DBUG(F("[ocpp] Diagnostics upload, invalid URL: "));
+                DBUGLN(location);
+                diagFailure = true;
+                return false;
+            }
+
+            if (eventLog == NULL) {
+                diagFailure = true;
+                return false;
+            }
+
+            //create file to upload
+            #define BOUNDARY_STRING "-----------------------------WebKitFormBoundary7MA4YWxkTrZu0gW025636501"
+            const char *bodyPrefix PROGMEM = BOUNDARY_STRING "\r\n"
+                    "Content-Disposition: form-data; name=\"file\"; filename=\"diagnostics.log\"\r\n"
+                    "Content-Type: application/octet-stream\r\n\r\n";
+            const char *bodySuffix PROGMEM = "\r\n\r\n" BOUNDARY_STRING "--\r\n";
+            const char *overflowMsg PROGMEM = "{\"diagnosticsMsg\":\"requested search period exceeds maximum diagnostics upload size\"}";
+
+            const size_t MAX_BODY_SIZE = 10000; //limit length of message
+            String body = String('\0');
+            body.reserve(MAX_BODY_SIZE);
+            body += bodyPrefix;
+            body += "[";
+            const size_t SUFFIX_RESERVED_AREA = MAX_BODY_SIZE - strlen(bodySuffix) - strlen(overflowMsg) - 2;
+
+            bool firstEntry = true;
+            bool overflow = false;
+            for (uint32_t i = 0; i <= (eventLog->getMaxIndex() - eventLog->getMinIndex()) && !overflow; i++) {
+                uint32_t index = eventLog->getMinIndex() + i;
+
+                eventLog->enumerate(index, [this, startTime, stopTime, &body, SUFFIX_RESERVED_AREA, &firstEntry, &overflow] (String time, EventType type, const String &logEntry, EvseState managerState, uint8_t evseState, uint32_t evseFlags, uint32_t pilot, double energy, uint32_t elapsed, double temperature, double temperatureMax, uint8_t divertMode) {
+                    if (overflow) return;
+                    ArduinoOcpp::OcppTimestamp timestamp = ArduinoOcpp::OcppTimestamp();
+                    if (!timestamp.setTime(time.c_str())) {
+                        DBUG(F("[ocpp] Diagnostics upload, cannot parse timestamp format: "));
+                        DBUGLN(time);
+                        return;
+                    }
+
+                    if (timestamp < startTime || timestamp > stopTime) {
+                        return;
+                    }
+
+                    if (body.length() + logEntry.length() + 10 < SUFFIX_RESERVED_AREA) {
+                        if (firstEntry)
+                            firstEntry = false;
+                        else
+                            body += ",";
+                        
+                        body += logEntry;
+                        body += "\n";
+                    } else {
+                        overflow = true;
+                        return;
+                    }
+                });
+            }
+
+            if (overflow) {
+                if (!firstEntry)
+                    body += ",\r\n";
+                body += overflowMsg;
+            }
+
+            body += "]";
+
+            body += bodySuffix;
+
+            DBUG(F("[ocpp] POST diagnostics file to "));
+            DBUGLN(location);
+
+            MongooseHttpClientRequest *request =
+                    diagClient.beginRequest(location.c_str());
+            request->setMethod(HTTP_POST);
+            request->addHeader("Content-Type", "multipart/form-data; boundary=" BOUNDARY_STRING);
+            request->setContent(body.c_str());
+            request->onResponse([this] (MongooseHttpClientResponse *response) {
+                if (response->respCode() == 200) {
+                    diagSuccess = true;
+                } else {
+                    diagFailure = true;
+                }
+            });
+            request->onClose([this] () {
+                if (!diagSuccess) {
+                    //triggered onClose before onResponse
+                    diagFailure = true;
+                }
+            });
+            diagClient.send(request);
+            
+            return true;
+        });
+    }
+}
+
+void ArduinoOcppTask::initializeFwService() {
+    ArduinoOcpp::FirmwareService *fwService = ArduinoOcpp::getFirmwareService();
+    if (fwService) {
+        fwService->setBuildNumber(evse->getFirmwareVersion());
+
+        fwService->setInstallationStatusSampler([this] () {
+            if (updateFailure) {
+                return ArduinoOcpp::InstallationStatus::InstallationFailed;
+            } else if (updateSuccess) {
+                return ArduinoOcpp::InstallationStatus::Installed;
+            } else {
+                return ArduinoOcpp::InstallationStatus::NotInstalled;
+            }
+        });
+
+        fwService->setOnInstall([this](String &location) {
+
+            DBUGLN(F("[ocpp] Starting installation routine"));
+            
+            //reset reported state
+            updateFailure = false;
+            updateSuccess = false;
+
+            return http_update_from_url(location, [] (size_t complete, size_t total) { },
+                [this] (int status_code) {
+                    //onSuccess
+                    updateSuccess = true;
+
+                    resetTime = millis();
+                    resetTriggered = true;
+                }, [this] (int error_code) {
+                    //onFailure
+                    updateFailure = true;
+                });
+        });
+    }
 }
 
 bool ArduinoOcppTask::operationIsAccepted(JsonObject payload) {

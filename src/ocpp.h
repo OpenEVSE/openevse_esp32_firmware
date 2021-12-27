@@ -12,12 +12,14 @@
 #include "lcd.h"
 
 #include "MongooseOcppSocketClient.h"
+#include <MongooseHttpClient.h>
 
 class ArduinoOcppTask: public MicroTasks::Task {
 private:
     MongooseOcppSocketClient *ocppSocket = NULL;
     EvseManager *evse;
     LcdTask *lcd;
+    EventLog *eventLog;
 
     /*
      * OCPP state
@@ -32,6 +34,17 @@ private:
 
     std::function<void()> onVehicleConnect = [] () {};
     std::function<void()> onVehicleDisconnect = [] () {};
+
+    bool resetTriggered = false;
+    bool resetHard = false; //default to soft reset
+    ulong resetTime;
+
+    MongooseHttpClient diagClient = MongooseHttpClient();
+    bool diagSuccess, diagFailure = false;
+    void initializeDiagnosticsService();
+
+    bool updateSuccess, updateFailure = false;
+    void initializeFwService();
 
     void initializeArduinoOcpp();
     bool arduinoOcppInitialized = false;
@@ -57,7 +70,7 @@ public:
     ArduinoOcppTask();
     ~ArduinoOcppTask();
 
-    void begin(EvseManager &evse, LcdTask &lcd);
+    void begin(EvseManager &evse, LcdTask &lcd, EventLog &eventLog);
     
     void updateEvseClaim();
 

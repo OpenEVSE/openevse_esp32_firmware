@@ -6,7 +6,7 @@ To update do the following:
 
 1. Make sure the content of `gui` is up-to-date
 
-    ```shell
+    ```bash
     cd gui
     git checkout master
     git pull
@@ -14,7 +14,7 @@ To update do the following:
 
 2. 'Build' the UI
 
-    ```shell
+    ```bash
     npm install
     npm run build
     ```

@@ -1,0 +1,27 @@
+title: Properties
+type: object
+x-tags:
+  - Claims
+description: ''
+properties:
+  state:
+    $ref: ./EvseState.yaml
+  charge_current:
+    type: integer
+    minimum: 0
+  max_current:
+    type: integer
+    minimum: 0
+  energy_limit:
+    type: integer
+    minimum: 0
+  time_limit:
+    type: integer
+    minimum: 0
+  auto_release:
+    type: boolean
+    description: |
+      `true` if the manual override is auto-released when the vehicle is
+      disconnected, `false` if manual override will persist after vehicle
+      disconnection.
+examples: []
