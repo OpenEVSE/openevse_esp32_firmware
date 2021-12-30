@@ -11,6 +11,9 @@ typedef const __FlashStringHelper *fstr_t;
 #include "app_config.h"
 #include "espal.h"
 #include "input.h"
+#include "event.h"
+
+uint32_t config_version = 0;
 
 // -------------------------------------------------------------------
 // Returns OpenEVSE Config json
@@ -72,45 +75,116 @@ handleConfigPost(MongooseHttpServerRequest *request, MongooseHttpServerResponseS
   DeserializationError error = deserializeJson(doc, body);
   if(!error)
   {
+    bool config_modified = false;
+
     // Update WiFi module config
-    if(config_deserialize(body)) {
+    if(config_deserialize(doc)) {
       config_commit();
+      config_modified = true;
+      DBUGLN("Config updated");
     }
 
     // Update EVSE config
     // Update the EVSE setting flags, a little low level, may move later
-    if(doc.containsKey("diode_check")) {
-      evse.enableDiodeCheck(doc["diode_check"]);
+    if(doc.containsKey("diode_check"))
+    {
+      bool enable = doc["diode_check"];
+      if(enable != evse.isDiodeCheckEnabled()) {
+        evse.enableDiodeCheck(enable);
+        config_modified = true;
+        DBUGLN("diode_check changed");
+      }
     }
-    if(doc.containsKey("gfci_check")) {
-      evse.enableGfiTestCheck(doc["gfci_check"]);
+    if(doc.containsKey("gfci_check"))
+    {
+      bool enable = doc["gfci_check"];
+      if(enable != evse.isGfiTestEnabled()) {
+        evse.enableGfiTestCheck(enable);
+        config_modified = true;
+        DBUGLN("gfci_check changed");
+      }
     }
-    if(doc.containsKey("ground_check")) {
-      evse.enableGroundCheck(doc["ground_check"]);
+    if(doc.containsKey("ground_check"))
+    {
+      bool enable = doc["ground_check"];
+      if(enable != evse.isGroundCheckEnabled()) {
+        evse.enableGroundCheck(enable);
+        config_modified = true;
+        DBUGLN("ground_check changed");
+      }
     }
-    if(doc.containsKey("relay_check")) {
-      evse.enableStuckRelayCheck(doc["relay_check"]);
+    if(doc.containsKey("relay_check"))
+    {
+      bool enable = doc["relay_check"];
+      if(enable != evse.isStuckRelayCheckEnabled()) {
+        evse.enableStuckRelayCheck(enable);
+        config_modified = true;
+        DBUGLN("relay_check changed");
+      }
     }
-    if(doc.containsKey("vent_check")) {
-      evse.enableVentRequired(doc["vent_check"]);
+    if(doc.containsKey("vent_check"))
+    {
+      bool enable = doc["vent_check"];
+      if(enable != evse.isVentRequiredEnabled()) {
+        evse.enableVentRequired(enable);
+        config_modified = true;
+        DBUGLN("vent_check changed");
+      }
     }
-    if(doc.containsKey("temp_check")) {
-      evse.enableTemperatureCheck(doc["temp_check"]);
+    if(doc.containsKey("temp_check"))
+    {
+      bool enable = doc["temp_check"];
+      if(enable != evse.isTemperatureCheckEnabled()) {
+        evse.enableTemperatureCheck(enable);
+        config_modified = true;
+        DBUGLN("temp_check changed");
+      }
     }
     if(doc.containsKey("service"))
     {
-      int service = doc["service"];
-      evse.setServiceLevel(static_cast<EvseMonitor::ServiceLevel>(service));
+      EvseMonitor::ServiceLevel service = static_cast<EvseMonitor::ServiceLevel>(doc["service"].as<uint8_t>());
+      if(service != evse.getServiceLevel()) {
+        evse.setServiceLevel(service);
+        config_modified = true;
+        DBUGLN("service changed");
+      }
     }
-    if(doc.containsKey("scale") && doc.containsKey("offset")) {
-      evse.configureCurrentSensorScale(doc["scale"], doc["offset"]);
+    if(doc.containsKey("scale") && doc.containsKey("offset"))
+    {
+      long scale = doc["scale"];
+      long offset = doc["offset"];
+      if(scale != evse.getCurrentSensorScale() || offset != evse.getCurrentSensorOffset()) {
+        evse.configureCurrentSensorScale(doc["scale"], doc["offset"]);
+        config_modified = true;
+        DBUGLN("scale changed");
+      }
     }
-    if(doc.containsKey("max_current_soft")) {
-      evse.setMaxConfiguredCurrent(doc["max_current_soft"]);
+    if(doc.containsKey("max_current_soft"))
+    {
+      long max_current = doc["max_current_soft"];
+      if(max_current != evse.getMaxConfiguredCurrent()) {
+        evse.setMaxConfiguredCurrent(max_current);
+        config_modified = true;
+        DBUGLN("max_current_soft changed");
+      }
     }
 
+    StaticJsonDocument<128> doc;
+
+    if(config_modified) {
+      config_version++;
+    }
+
+    doc["config_version"] = config_version;
+
+    if(config_modified) {
+      event_send(doc);
+    }
+
+    doc["msg"] = config_modified ? "done" : "no change";
+
     response->setCode(200);
-    response->print("{\"msg\":\"done\"}");
+    serializeJson(doc, *response);
   } else {
     response->setCode(400);
     response->print("{\"msg\":\"Could not parse JSON\"}");
