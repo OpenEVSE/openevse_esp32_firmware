@@ -229,9 +229,12 @@ void EvseMonitor::evseBoot(const char *firmware)
     {
       DBUGF("min_current = %ld, pilot = %ld, max_configured_current = %ld, max_hardware_current = %ld", min_current, pilot, max_configured_current, max_hardware_current);
       _min_current = min_current;
-      _max_hardware_current = max_hardware_current;
+      // The max_configured_current is a write once value, so as fare as we are concerned that is the 'hardware' max. We manage the acrual soft limit in the WiFi code.
+      _max_hardware_current = max_configured_current;
       _pilot = pilot;
-      _max_configured_current = max_configured_current;
+      if(_max_configured_current > _max_hardware_current || _max_configured_current < _min_current) {
+        _max_configured_current = _max_hardware_current;
+      }
       _boot_ready.ready(EVSE_MONITOR_CURRENT_BOOT_READY);
     }
   });
@@ -607,26 +610,18 @@ void EvseMonitor::configureCurrentSensorScale(long scale, long offset, std::func
   });
 }
 
-void EvseMonitor::setMaxConfiguredCurrent(long amps, std::function<void(int ret)> callback)
+void EvseMonitor::setMaxConfiguredCurrent(long amps)
 {
   // limit `amps` to the hardware limit
-  if(amps > _max_hardware_current) {
+  if(amps > _max_hardware_current && _max_hardware_current != 0) {
     amps = _max_hardware_current;
   }
-  if(amps < _min_current) {
+  if(amps < _min_current && _min_current != 0) {
     amps = _min_current;
   }
 
-  _openevse.setCurrentCapacity(amps, true, [this, callback](int ret, long pilot)
-  {
-    if(RAPI_RESPONSE_OK == ret) {
-      _max_configured_current = pilot;
-    }
-
-    if(callback) {
-      callback(ret);
-    }
-  });
+  _max_configured_current = amps;
+  DBUGVAR(_max_configured_current);
 }
 
 void EvseMonitor::getStatusFromEvse(bool allowStart)

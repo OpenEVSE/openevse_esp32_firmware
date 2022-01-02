@@ -231,6 +231,7 @@ class EvseManager : public MicroTasks::Task
     Claim _clients[EVSE_MANAGER_MAX_CLIENT_CLAIMS];
 
     MicroTasks::EventListener _evseStateListener;
+    MicroTasks::EventListener _evseBootListener;
     MicroTasks::EventListener _sessionCompleteListener;
 
     EvseProperties _targetProperties;

@@ -159,15 +159,6 @@ handleConfigPost(MongooseHttpServerRequest *request, MongooseHttpServerResponseS
         DBUGLN("scale changed");
       }
     }
-    if(doc.containsKey("max_current_soft"))
-    {
-      long max_current = doc["max_current_soft"];
-      if(max_current != evse.getMaxConfiguredCurrent()) {
-        evse.setMaxConfiguredCurrent(max_current);
-        config_modified = true;
-        DBUGLN("max_current_soft changed");
-      }
-    }
 
     StaticJsonDocument<128> doc;
 
