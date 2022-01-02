@@ -139,6 +139,7 @@ EvseManager::EvseManager(Stream &port, EventLog &eventLog) :
   _eventLog(eventLog),
   _clients(),
   _evseStateListener(this),
+  _evseBootListener(this),
   _sessionCompleteListener(this),
   _targetProperties(EvseState::Active),
   _hasClaims(false),
@@ -251,6 +252,7 @@ bool EvseManager::evaluateClaims(EvseProperties &properties)
 
 void EvseManager::setup()
 {
+  _monitor.onBootReady(&_evseBootListener);
   _monitor.onStateChange(&_evseStateListener);
   _monitor.onSessionComplete(&_sessionCompleteListener);
 }
@@ -333,6 +335,11 @@ unsigned long EvseManager::loop(MicroTasks::WakeReason reason)
   {
     initialiseEvse();
     return 10 * 1000;
+  }
+
+  DBUGVAR(_evseBootListener.IsTriggered());
+  if(_evseBootListener.IsTriggered()) {
+    _evaluateTargetState = true;
   }
 
   DBUGVAR(_evseStateListener.IsTriggered());
@@ -586,17 +593,12 @@ void EvseManager::setVehicleEta(int vehicleEta)
 
 void EvseManager::setMaxConfiguredCurrent(long amps)
 {
-  _monitor.setMaxConfiguredCurrent(amps, [this](int ret)
-  {
-    if(RAPI_RESPONSE_OK == ret)
-    {
-      DBUGF("Max configured current set to %ld", _monitor.getMaxConfiguredCurrent());
-      // Setting the Max Current will update the pilot as well, but in any case we may
-      // need to change the level so re-evaluate the claims
-      _evaluateClaims = true;
-      MicroTask.wakeTask(this);
-    }
-  });
+  _monitor.setMaxConfiguredCurrent(amps);
+  DBUGF("Max configured current set to %ld", _monitor.getMaxConfiguredCurrent());
+  // Setting the Max Current will update the pilot as well, but in any case we may
+  // need to change the level so re-evaluate the claims
+  _evaluateClaims = true;
+  MicroTask.wakeTask(this);
 }
 
 bool EvseManager::isRapiCommandBlocked(String rapi)

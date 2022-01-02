@@ -187,9 +187,10 @@ class EvseMonitor : public MicroTasks::Task
     void sleep();
     void disable();
 
+    void setMaxConfiguredCurrent(long amps);
+
     void setPilot(long amps, std::function<void(int ret)> callback = NULL);
     void setVoltage(double volts, std::function<void(int ret)> callback = NULL);
-    void setMaxConfiguredCurrent(long amps, std::function<void(int ret)> callback = NULL);
     void setServiceLevel(ServiceLevel level, std::function<void(int ret)> callback = NULL);
     void configureCurrentSensorScale(long scale, long offset, std::function<void(int ret)> callback = NULL);
     void enableFeature(uint8_t feature, bool enabled, std::function<void(int ret)> callback = NULL);
