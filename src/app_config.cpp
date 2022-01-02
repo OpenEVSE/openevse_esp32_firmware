@@ -57,6 +57,12 @@ String ocpp_chargeBoxId;
 String ocpp_idTag;
 String tx_start_point;
 
+// Sleep timer
+uint8_t sleep_timer_enabled_flags;
+uint16_t sleep_timer_not_connected;
+uint16_t sleep_timer_connected;
+uint16_t sleep_timer_disconnected;
+
 // Time
 String time_zone;
 
@@ -83,6 +89,9 @@ String tesla_vehicle_id;
 #if RGB_LED
 uint8_t led_brightness;
 #endif
+
+// RFID storage
+String rfid_storage;
 
 String esp_hostname_default = "openevse-"+ESPAL.getShortId();
 
@@ -149,10 +158,26 @@ ConfigOpt *opts[] =
   new ConfigOptDefenition<uint64_t>(tesla_expires_in, -1, "tesla_expires_in", "tx"),
   new ConfigOptDefenition<String>(tesla_vehicle_id, "", "tesla_vehicle_id", "ti"),
 
+// RFID storage
+  new ConfigOptDefenition<String>(rfid_storage, "", "rfid_storage", "rs"),
+
+//Sleep timer
+  new ConfigOptDefenition<uint8_t>(sleep_timer_enabled_flags, 0, "sleep_timer_enabled_flags", "st"),
+  new ConfigOptDefenition<uint16_t>(sleep_timer_not_connected, 0, "sleep_timer_not_connected", "tn"),
+  new ConfigOptDefenition<uint16_t>(sleep_timer_connected, 0, "sleep_timer_connected", "tc"),
+  new ConfigOptDefenition<uint16_t>(sleep_timer_disconnected, 0, "sleep_timer_disconnected", "td"),
 #if RGB_LED
 // LED brightness
   new ConfigOptDefenition<uint8_t>(led_brightness, LED_DEFAULT_BRIGHTNESS, "led_brightness", "lb"),
 #endif
+// RFID storage
+  new ConfigOptDefenition<String>(rfid_storage, "", "rfid_storage", "rs"),
+
+//Sleep timer
+  new ConfigOptDefenition<uint8_t>(sleep_timer_enabled_flags, 0, "sleep_timer_enabled_flags", "st"),
+  new ConfigOptDefenition<uint16_t>(sleep_timer_not_connected, 0, "sleep_timer_not_connected", "tn"),
+  new ConfigOptDefenition<uint16_t>(sleep_timer_connected, 0, "sleep_timer_connected", "tc"),
+  new ConfigOptDefenition<uint16_t>(sleep_timer_disconnected, 0, "sleep_timer_disconnected", "td"),
 
 // Flags
   &flagsOpt,
@@ -170,6 +195,7 @@ ConfigOpt *opts[] =
   new ConfigOptVirtualBool(flagsOpt, CONFIG_SERVICE_OCPP, CONFIG_SERVICE_OCPP, "ocpp_enabled", "ope"),
   new ConfigOptVirtualBool(flagsOpt, CONFIG_OCPP_ACCESS_SUSPEND, CONFIG_OCPP_ACCESS_SUSPEND, "ocpp_suspend_evse", "ops"),
   new ConfigOptVirtualBool(flagsOpt, CONFIG_OCPP_ACCESS_ENERGIZE, CONFIG_OCPP_ACCESS_ENERGIZE, "ocpp_energize_plug", "opn"),
+  new ConfigOptVirtualBool(flagsOpt, CONFIG_RFID, CONFIG_RFID, "rfid_enabled", "rf"),
   new ConfigOptVirtualMqttProtocol(flagsOpt, "mqtt_protocol", "mprt"),
   new ConfigOptVirtualChargeMode(flagsOpt, "charge_mode", "chmd")
 };
@@ -381,6 +407,17 @@ config_save_ohm(bool enable, String qohm)
 
   config.set("ohm", qohm);
   config.set("flags", newflags);
+  config.commit();
+}
+
+void
+config_save_rfid(bool enable, String storage){
+  uint32_t newflags = flags & ~CONFIG_RFID;
+  if(enable) {
+    newflags |= CONFIG_RFID;
+  }
+  config.set("flags", newflags);
+  config.set("rfid_storage", rfid_storage);
   config.commit();
 }
 

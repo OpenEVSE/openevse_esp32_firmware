@@ -31,6 +31,7 @@
 #include <MicroTasks.h>
 #include <LITTLEFS.h>
 #include <ArduinoOcpp.h>
+#include <Wire.h>
 
 #include "emonesp.h"
 #include "app_config.h"
@@ -50,6 +51,7 @@
 #include "tesla_client.h"
 #include "event.h"
 #include "ocpp.h"
+#include "rfid.h"
 
 #include "LedManagerTask.h"
 #include "event_log.h"
@@ -57,6 +59,14 @@
 #include "scheduler.h"
 
 #include "legacy_support.h"
+
+#ifndef I2C_SDA
+#define I2C_SDA 21
+#endif
+
+#ifndef I2C_SCL
+#define I2C_SCL 22
+#endif
 
 EventLog eventLog;
 EvseManager evse(RAPI_PORT, eventLog);
@@ -108,11 +118,14 @@ void setup()
   DBUGF("After config_load_settings: %d", ESPAL.getFreeHeap());
 
   eventLog.begin();
+  Wire.begin(I2C_SDA, I2C_SCL);
+
   timeManager.begin();
   evse.begin();
   scheduler.begin();
 
   lcd.begin(evse, scheduler, manual);
+  rfid.begin(evse, scheduler);
   ledManager.begin(evse);
 
   // Initialise the WiFi
@@ -209,6 +222,11 @@ loop() {
         if(config_ohm_enabled()) {
           ohm_loop();
         }
+      }
+
+      if(config_rfid_enabled()){
+        // Make sure the RFID module is working
+        rfid.wakeup();
       }
 
       Timer1 = millis();

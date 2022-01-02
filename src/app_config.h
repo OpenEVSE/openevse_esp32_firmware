@@ -51,6 +51,15 @@ extern String ocpp_chargeBoxId;
 extern String ocpp_idTag;
 extern String tx_start_point;
 
+// RFID storage
+extern String rfid_storage;
+
+// Sleep timer
+extern uint8_t sleep_timer_enabled_flags;
+extern uint16_t sleep_timer_not_connected;
+extern uint16_t sleep_timer_connected;
+extern uint16_t sleep_timer_disconnected;
+
 // Time
 extern String time_zone;
 
@@ -77,6 +86,7 @@ extern uint32_t flags;
 #define CONFIG_OCPP_ACCESS_SUSPEND  (1 << 15)
 #define CONFIG_OCPP_ACCESS_ENERGIZE (1 << 16)
 #define CONFIG_VEHICLE_RANGE_MILES  (1 << 17)
+#define CONFIG_RFID                 (1 << 18)
 
 inline bool config_emoncms_enabled() {
   return CONFIG_SERVICE_EMONCMS == (flags & CONFIG_SERVICE_EMONCMS);
@@ -133,6 +143,10 @@ inline bool config_pause_uses_disabled() {
 inline bool config_vehicle_range_miles() {
   return CONFIG_VEHICLE_RANGE_MILES == (flags & CONFIG_VEHICLE_RANGE_MILES);
 }
+  
+inline bool config_rfid_enabled() {
+  return CONFIG_RFID == (flags & CONFIG_RFID);
+}
 
 // Ohm Connect Settings
 extern String ohm;
@@ -177,6 +191,11 @@ extern void config_save_wifi(String qsid, String qpass);
 // Save the Ohm settings
 // -------------------------------------------------------------------
 extern void config_save_ohm(bool enable, String qohm);
+
+// -------------------------------------------------------------------
+// Save RFID settings
+// -------------------------------------------------------------------
+extern void config_save_rfid(bool enable, String storage);
 
 // -------------------------------------------------------------------
 // Save the flags
