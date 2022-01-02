@@ -166,10 +166,11 @@ EvseMonitor::EvseMonitor(OpenEVSEClass &openevse) :
   _boot_ready(EVSE_MONITOR_BOOT_READY),
   _session_complete(EVSE_MONITOR_SESSION_COMPLETE_MASK, EVSE_MONITOR_SESSION_COMPLETE_TRIGGER),
   _count(0),
-  _heartbeat(false)
+  _heartbeat(false),
 #ifdef ENABLE_MCP9808
-  , _mcp9808()
+  _mcp9808(),
 #endif
+  _settings_changed()
 {
 }
 
@@ -458,6 +459,7 @@ void EvseMonitor::setPilot(long amps, std::function<void(int ret)> callback)
   {
     if(RAPI_RESPONSE_OK == ret) {
       _pilot = pilot;
+      _settings_changed.Trigger();
     }
 
     if(callback) {
@@ -511,6 +513,8 @@ void EvseMonitor::setServiceLevel(ServiceLevel level, std::function<void(int ret
   {
     if(RAPI_RESPONSE_OK == ret)
     {
+      _settings_changed.Trigger();
+
       // Refresh the flags
       _openevse.getSettings([this, callback](int ret, long pilot, uint32_t flags)
       {
@@ -535,6 +539,8 @@ void EvseMonitor::enableFeature(uint8_t feature, bool enabled, std::function<voi
   {
     if(RAPI_RESPONSE_OK == ret)
     {
+      _settings_changed.Trigger();
+
       // Refresh the flags
       _openevse.getSettings([this, callback](int ret, long pilot, uint32_t flags)
       {
@@ -622,6 +628,8 @@ void EvseMonitor::setMaxConfiguredCurrent(long amps)
 
   _max_configured_current = amps;
   DBUGVAR(_max_configured_current);
+
+  _settings_changed.Trigger();
 }
 
 void EvseMonitor::getStatusFromEvse(bool allowStart)
@@ -725,4 +733,3 @@ void EvseMonitor::getEnergyFromEvse()
     _data_ready.ready(EVSE_MONITOR_ENERGY_DATA_READY);
   }
 }
-

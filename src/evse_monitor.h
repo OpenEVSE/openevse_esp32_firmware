@@ -84,6 +84,11 @@ class EvseMonitor : public MicroTasks::Task
         bool update(uint32_t state);
     };
 
+    class SettingsChangedEvent : public MicroTasks::Event
+    {
+      friend class EvseMonitor;
+    };
+
     class Temperature
     {
       private:
@@ -152,6 +157,8 @@ class EvseMonitor : public MicroTasks::Task
 #ifdef ENABLE_MCP9808
     Adafruit_MCP9808 _mcp9808;
 #endif
+
+    SettingsChangedEvent _settings_changed; // Settings changed
 
     void updateFaultCounters(int ret, long gfci_count, long nognd_count, long stuck_count);
 
@@ -317,6 +324,9 @@ class EvseMonitor : public MicroTasks::Task
     // Register for events
     void onStateChange(MicroTasks::EventListener *listner) {
       _state.Register(listner);
+    }
+    void onSettingsChanged(MicroTasks::EventListener *listner) {
+      _settings_changed.Register(listner);
     }
     void onDataReady(MicroTasks::EventListener *listner) {
       _data_ready.Register(listner);

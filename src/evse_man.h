@@ -468,6 +468,9 @@ class EvseManager : public MicroTasks::Task
     void onStateChange(MicroTasks::EventListener *listner) {
       _monitor.onStateChange(listner);
     }
+    void onSettingsChanged(MicroTasks::EventListener *listner) {
+      _monitor.onSettingsChanged(listner);
+    }
     void onDataReady(MicroTasks::EventListener *listner) {
       _monitor.onDataReady(listner);
     }
