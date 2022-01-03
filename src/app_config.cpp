@@ -57,12 +57,6 @@ String ocpp_chargeBoxId;
 String ocpp_idTag;
 String tx_start_point;
 
-// Sleep timer
-uint8_t sleep_timer_enabled_flags;
-uint16_t sleep_timer_not_connected;
-uint16_t sleep_timer_connected;
-uint16_t sleep_timer_disconnected;
-
 // Time
 String time_zone;
 
@@ -161,23 +155,12 @@ ConfigOpt *opts[] =
 // RFID storage
   new ConfigOptDefenition<String>(rfid_storage, "", "rfid_storage", "rs"),
 
-//Sleep timer
-  new ConfigOptDefenition<uint8_t>(sleep_timer_enabled_flags, 0, "sleep_timer_enabled_flags", "st"),
-  new ConfigOptDefenition<uint16_t>(sleep_timer_not_connected, 0, "sleep_timer_not_connected", "tn"),
-  new ConfigOptDefenition<uint16_t>(sleep_timer_connected, 0, "sleep_timer_connected", "tc"),
-  new ConfigOptDefenition<uint16_t>(sleep_timer_disconnected, 0, "sleep_timer_disconnected", "td"),
 #if RGB_LED
 // LED brightness
   new ConfigOptDefenition<uint8_t>(led_brightness, LED_DEFAULT_BRIGHTNESS, "led_brightness", "lb"),
 #endif
 // RFID storage
   new ConfigOptDefenition<String>(rfid_storage, "", "rfid_storage", "rs"),
-
-//Sleep timer
-  new ConfigOptDefenition<uint8_t>(sleep_timer_enabled_flags, 0, "sleep_timer_enabled_flags", "st"),
-  new ConfigOptDefenition<uint16_t>(sleep_timer_not_connected, 0, "sleep_timer_not_connected", "tn"),
-  new ConfigOptDefenition<uint16_t>(sleep_timer_connected, 0, "sleep_timer_connected", "tc"),
-  new ConfigOptDefenition<uint16_t>(sleep_timer_disconnected, 0, "sleep_timer_disconnected", "td"),
 
 // Flags
   &flagsOpt,

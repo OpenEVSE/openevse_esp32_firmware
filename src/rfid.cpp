@@ -110,20 +110,20 @@ unsigned long RfidTask::loop(MicroTasks::WakeReason reason){
         //_evse->getOpenEVSE().enable([](int ret){});
     }
 
-    if(_evseStateEvent.IsTriggered()){
-        abortTimer();
-        uint8_t newState = evse.getEvseState();
-        if(newState == OPENEVSE_STATE_NOT_CONNECTED && state >= OPENEVSE_STATE_SLEEPING){
-            startTimer(sleep_timer_not_connected);
-        }
-        else if(newState == OPENEVSE_STATE_NOT_CONNECTED){
-            startTimer(sleep_timer_disconnected);
-        }
-        else if(newState == OPENEVSE_STATE_CONNECTED){
-            startTimer(sleep_timer_connected);
-        }
-        state = newState;
-    }
+//    if(_evseStateEvent.IsTriggered()){
+//        abortTimer();
+//        uint8_t newState = evse.getEvseState();
+//        if(newState == OPENEVSE_STATE_NOT_CONNECTED && state >= OPENEVSE_STATE_SLEEPING){
+//            startTimer(sleep_timer_not_connected);
+//        }
+//        else if(newState == OPENEVSE_STATE_NOT_CONNECTED){
+//            startTimer(sleep_timer_disconnected);
+//        }
+//        else if(newState == OPENEVSE_STATE_CONNECTED){
+//            startTimer(sleep_timer_connected);
+//        }
+//        state = newState;
+//    }
 
     if(waitingForTag > 0){
         waitingForTag = (stopWaiting - millis()) / 1000;
