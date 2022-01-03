@@ -125,7 +125,7 @@ void setup()
   scheduler.begin();
 
   lcd.begin(evse, scheduler, manual);
-  rfid.begin(evse, scheduler);
+  rfid.begin(evse);
   ledManager.begin(evse);
 
   // Initialise the WiFi
@@ -222,11 +222,6 @@ loop() {
         if(config_ohm_enabled()) {
           ohm_loop();
         }
-      }
-
-      if(config_rfid_enabled()){
-        // Make sure the RFID module is working
-        rfid.wakeup();
       }
 
       Timer1 = millis();

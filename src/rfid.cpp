@@ -1,3 +1,8 @@
+/*
+ * Author: Oliver Norin
+ *         Matthias Akstaller
+ */
+
 #include "rfid.h"
 
 #include "debug.h"
@@ -9,37 +14,28 @@
 
 RfidTask::RfidTask() :
   MicroTasks::Task(),
-  _evse(NULL),
-  _scheduler(NULL),
-  _evseStateEvent(this),
   nfc(PN532_IRQ, PN532_POLLING)
 {
 }
 
-void RfidTask::begin(EvseManager &evse, Scheduler &scheduler){
+void RfidTask::begin(EvseManager &evse){
     _evse = &evse;
-    _scheduler = &scheduler;
     MicroTask.startTask(this);
 }
 
 void RfidTask::setup(){
-    _evse->onStateChange(&_evseStateEvent);
-
-    if(!config_rfid_enabled()){
-        status = RFID_STATUS_NOT_ENABLED;
-        return;
+    if (config_rfid_enabled()) {
+        wakeup();
     }
-    
-    wakeup();
 }
 
 boolean RfidTask::wakeup(){
-    boolean awake = nfc.begin();
+    bool awake = nfc.begin();
     if(awake){
-        status = RFID_STATUS_ACTIVE;
-    }else{
+        status = NfcDeviceStatus::ACTIVE;
+    } else {
+        status = NfcDeviceStatus::NOT_ACTIVE;
         DEBUG.println("RFID module did not respond!");
-        status = RFID_STATUS_NOT_FOUND;
     }
     return awake;
 }
@@ -47,83 +43,87 @@ boolean RfidTask::wakeup(){
 void RfidTask::scanCard(){
     NFCcard = nfc.getInformation();
     String uid = nfc.readUid();
+    uid.trim();
 
     if(waitingForTag > 0){
         waitingForTag = 0;
         cardFound = true;
         lcd.display("Tag detected!", 0, 0, 0, LCD_CLEAR_LINE);
         lcd.display(uid, 0, 1, 3000, LCD_CLEAR_LINE);
+        DBUG(F("[rfid] Tag detected! "));
+        DBUGLN(uid);
     }else{
         // Check if tag is stored locally
         char storedTags[rfid_storage.length() + 1];
         rfid_storage.toCharArray(storedTags, rfid_storage.length()+1);
         char* storedTag = strtok(storedTags, ",");
+        bool foundCard = false;
         while(storedTag)
         {
             String storedTagStr = storedTag;
             storedTagStr.replace(" ", "");
-            uid.trim();
-            if(storedTagStr.compareTo(uid) == 0){
-                if(!isAuthenticated()){
-                    authenticatedTag = uid;
-                }else if(uid == authenticatedTag){
+            if(storedTagStr.equals(uid)){
+                foundCard = true;
+                if (!isAuthenticated()){
+                    setAuthentication(uid);
+                    lcd.display("RFID: authenticated", 0, 1, 5 * 1000, LCD_CLEAR_LINE);
+                    DBUGLN(F("[rfid] found card"));
+                } else if (uid == authenticatedTag) {
                     resetAuthentication();
+                    lcd.display("RFID: finished. See you next time!", 0, 1, 5 * 1000, LCD_CLEAR_LINE);
+                    DBUGLN(F("[rfid] finished by presenting card"));
+                } else {
+                    lcd.display("RFID: card does not match", 0, 1, 5 * 1000, LCD_CLEAR_LINE);
+                    DBUGLN(F("[rfid] card does not match"));
                 }
                 break;
             }
             storedTag = strtok(NULL, ",");
         }
 
+        if (!foundCard) {
+            lcd.display("RFID: did not recognize card", 0, 1, 5 * 1000, LCD_CLEAR_LINE);
+            DBUGLN(F("[rfid] did not recognize card"));
+        }
+
         // Send to MQTT broker
-        DynamicJsonDocument data(4096);
+        const size_t UID_MAXLEN = 8; //hardcoded in DFRobot_PN532.h
+        DynamicJsonDocument data{JSON_OBJECT_SIZE(1) + UID_MAXLEN + 1};
         data["rfid"] = uid;
         mqtt_publish(data);
     }
 }
 
-void RfidTask::startTimer(uint8_t seconds){
-    static int day = 0;
-    static int32_t offset = 0;
-    _scheduler->getCurrentTime(day, offset);
-    offset += seconds;
-    int schedulerDay = 1 << day;
-    int hour = offset / 3600;
-    int minute = (offset % 3600) / 60;
-    int second = offset % 60;
-    _scheduler->addEvent(0xFFFFFFFF, hour, minute, second, schedulerDay, EvseState(EvseState::Disabled));
-}
-
-void RfidTask::abortTimer(){
-    _scheduler->removeEvent(0xFFFFFFFF);
-}
-
 unsigned long RfidTask::loop(MicroTasks::WakeReason reason){
-    unsigned long nextScan = SCAN_FREQ;
 
-    if(!config_rfid_enabled()){
-        if(status != RFID_STATUS_NOT_FOUND)
-            status = RFID_STATUS_NOT_ENABLED;
-        return MicroTask.WaitForMask;
-    }
-    if(isAuthenticated() && state >= OPENEVSE_STATE_SLEEPING){
-        // TODO: allow station to wake up
-        //_evse->getOpenEVSE().enable([](int ret){});
+    if (_evse->isVehicleConnected() && !vehicleConnected) {
+        vehicleConnected = _evse->isVehicleConnected();
     }
 
-//    if(_evseStateEvent.IsTriggered()){
-//        abortTimer();
-//        uint8_t newState = evse.getEvseState();
-//        if(newState == OPENEVSE_STATE_NOT_CONNECTED && state >= OPENEVSE_STATE_SLEEPING){
-//            startTimer(sleep_timer_not_connected);
-//        }
-//        else if(newState == OPENEVSE_STATE_NOT_CONNECTED){
-//            startTimer(sleep_timer_disconnected);
-//        }
-//        else if(newState == OPENEVSE_STATE_CONNECTED){
-//            startTimer(sleep_timer_connected);
-//        }
-//        state = newState;
-//    }
+    if (!_evse->isVehicleConnected() && vehicleConnected) {
+        vehicleConnected = _evse->isVehicleConnected();
+
+        if (isAuthenticated()) {
+            lcd.display("RFID: finished. See you next time!", 0, 1, 5 * 1000, LCD_CLEAR_LINE);
+            DBUGLN(F("[rfid] finished by unplugging"));
+        }
+        resetAuthentication();
+    }
+
+    if (authenticationTimeoutExpired()) {
+        resetAuthentication();
+        lcd.display("RFID: please present again", 0, 1, 20 * 1000, LCD_CLEAR_LINE);
+    }
+
+    updateEvseClaim();
+
+    if (!config_rfid_enabled()) {
+        resetAuthentication();
+        return SCAN_FREQ;
+    } else if (status != NfcDeviceStatus::ACTIVE) {
+        wakeup();
+        return SCAN_FREQ;
+    }
 
     if(waitingForTag > 0){
         waitingForTag = (stopWaiting - millis()) / 1000;
@@ -133,35 +133,48 @@ unsigned long RfidTask::loop(MicroTasks::WakeReason reason){
         lcd.display(msg, 0, 1, 1000, LCD_CLEAR_LINE);
     }
     
-    boolean foundCard = (state >= OPENEVSE_STATE_SLEEPING || waitingForTag) && nfc.scan();
+    //boolean foundCard = (evse.getEvseState() >= OPENEVSE_STATE_SLEEPING || waitingForTag) && nfc.scan();
+    boolean foundCard = nfc.scan();
 
     if(foundCard && !hasContact){
         scanCard();
         hasContact = true;
-        return nextScan;
+        return SCAN_FREQ;
     }
 
     if(!foundCard && hasContact){
         hasContact = false;
     }
 
-    return nextScan;
+    return SCAN_FREQ;
 }
 
-uint8_t RfidTask::getStatus(){
-    return status;
+bool RfidTask::authenticationTimeoutExpired(){
+    return !authenticatedTag.isEmpty() && millis() - authentication_timestamp > AUTHENTICATION_TIMEOUT && !vehicleConnected;
 }
 
 bool RfidTask::isAuthenticated(){
-    return !authenticatedTag.isEmpty();
+    if (authenticatedTag.isEmpty()) {
+        return false;
+    } else {
+        return vehicleConnected || millis() - authentication_timestamp <= AUTHENTICATION_TIMEOUT;
+    }
 }
 
 String RfidTask::getAuthenticatedTag(){
-    return authenticatedTag;
+    if (isAuthenticated())
+        return authenticatedTag;
+    else
+        return String('\0');
 }
 
 void RfidTask::resetAuthentication(){
-    authenticatedTag = emptyString;
+    authenticatedTag = String('\0');
+}
+
+void RfidTask::setAuthentication(String &idTag){
+    authenticatedTag = idTag;
+    authentication_timestamp = millis();
 }
 
 void RfidTask::waitForTag(uint8_t seconds){
@@ -173,8 +186,23 @@ void RfidTask::waitForTag(uint8_t seconds){
     lcd.display("Waiting for RFID", 0, 0, seconds * 1000, LCD_CLEAR_LINE);
 }
 
+void RfidTask::updateEvseClaim() {
+
+    if (!config_rfid_enabled()) {
+        _evse->release(EvseClient_OpenEVSE_RFID);
+        return;
+    }
+    
+    EvseState evseState = isAuthenticated() ? (EvseState::Active) : (EvseState::Disabled);
+
+    EvseProperties evseProperties {evseState};
+
+    _evse->claim(EvseClient_OpenEVSE_RFID, EvseManager_Priority_RFID, evseProperties);
+}
+
 DynamicJsonDocument RfidTask::rfidPoll() {
-    const size_t capacity = JSON_ARRAY_SIZE(4);
+    const size_t UID_MAXLEN = 8; //hardcoded in DFRobot_PN532.h
+    const size_t capacity = JSON_OBJECT_SIZE(2) + UID_MAXLEN + 1;
     DynamicJsonDocument doc(capacity);
     if(waitingForTag > 0){
         // respond with remainding time
