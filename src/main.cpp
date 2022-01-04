@@ -126,6 +126,7 @@ void setup()
 
   lcd.begin(evse, scheduler, manual);
   rfid.begin(evse);
+  rfid.setOnCardScanned(ocpp.getOnIdTagInput());
   ledManager.begin(evse);
 
   // Initialise the WiFi

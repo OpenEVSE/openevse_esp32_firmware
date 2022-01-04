@@ -36,6 +36,8 @@ class RfidTask : public MicroTasks::Task {
         
         void updateEvseClaim();
 
+        std::function<bool(const String& idTag)> *onCardScanned {nullptr};
+
     protected:
         void setup();
         unsigned long loop(MicroTasks::WakeReason reason);
@@ -55,6 +57,8 @@ class RfidTask : public MicroTasks::Task {
         String getAuthenticatedTag();
         void resetAuthentication();
         void setAuthentication(String& tag);
+
+        void setOnCardScanned(std::function<bool(const String& idTag)> *onCardScanned);
 };
 
 extern RfidTask rfid;

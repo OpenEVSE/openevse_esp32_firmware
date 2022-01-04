@@ -14,6 +14,8 @@
 #include "MongooseOcppSocketClient.h"
 #include <MongooseHttpClient.h>
 
+#define IDTAG_TIMEOUT 30000UL
+
 class ArduinoOcppTask: public MicroTasks::Task {
 private:
     MongooseOcppSocketClient *ocppSocket = NULL;
@@ -34,6 +36,11 @@ private:
 
     std::function<void()> onVehicleConnect = [] () {};
     std::function<void()> onVehicleDisconnect = [] () {};
+    std::function<bool(const String& idTag)> onIdTagInput {nullptr};
+
+    String idTag {'\0'};
+    ulong idTag_timestamp = 0;
+    bool idTag_accepted = false;
 
     bool resetTriggered = false;
     bool resetHard = false; //default to soft reset
@@ -77,6 +84,7 @@ public:
     static void notifyConfigChanged();
     void reconfigure();
 
+    std::function<bool(const String& idTag)> *getOnIdTagInput();
 };
 
 #endif

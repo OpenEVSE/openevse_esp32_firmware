@@ -52,6 +52,8 @@ void RfidTask::scanCard(){
         lcd.display(uid, 0, 1, 3000, LCD_CLEAR_LINE);
         DBUG(F("[rfid] Tag detected! "));
         DBUGLN(uid);
+    } else if (onCardScanned && (*onCardScanned) && (*onCardScanned)(uid)){
+        //OCPP will process the card
     }else{
         // Check if tag is stored locally
         char storedTags[rfid_storage.length() + 1];
@@ -219,6 +221,10 @@ DynamicJsonDocument RfidTask::rfidPoll() {
         doc["status"] = "notStarted";
     }
     return doc;
+}
+
+void RfidTask::setOnCardScanned(std::function<bool(const String& idTag)> *onCardScanned) {
+    this->onCardScanned = onCardScanned;
 }
 
 RfidTask rfid;

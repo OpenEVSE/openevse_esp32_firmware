@@ -165,9 +165,76 @@ void ArduinoOcppTask::loadEvseBehavior() {
      * CP behavior definition: How will plugging and unplugging the EV start or stop OCPP transactions
      */
 
+    onIdTagInput = [this] (const String& idInput) {
+        if (!config_ocpp_enabled()) {
+            return false;
+        }
+        if (getTransactionId() >= 0) {
+            if (this->idTag.isEmpty() || this->idTag.equals(idInput)) {
+                //end of session
+                this->idTag.clear();
+                this->idTag_accepted = false;
+                stopTransaction();
+                LCD_DISPLAY("Finished. See you next time!");
+                DBUGLN(F("[ocpp] finished by presenting card"));
+                this->updateEvseClaim();
+            } else {
+                LCD_DISPLAY("Cards do not match");
+                DBUGLN(F("[ocpp] cards do not match"));
+            }
+
+            return true;
+        }
+
+        if (!isAvailable()) {
+            LCD_DISPLAY("OCPP inoperative");
+            DBUGLN(F("[ocpp] present card but inoperative"));
+            return true;
+        }
+
+        LCD_DISPLAY("Card authorization");
+        
+        this->idTag = idInput;
+        authorize(idTag, [this, idInput] (JsonObject payload) {
+            if (!idTagIsAccepted(payload)) {
+                LCD_DISPLAY("Please check card");
+                DBUGLN(F("[ocpp] not authorized"));
+                return;
+            }
+            if (!this->idTag.equals(idInput)) {
+                //this Authorize message is obsolete
+                return;
+            }
+            this->idTag_accepted = true;
+            this->idTag_timestamp = millis();
+            LCD_DISPLAY("Welcome");
+            DBUGLN(F("[ocpp] authorized"));
+
+            if (this->vehicleConnected && getTransactionId() < 0 && isAvailable()) {
+                startTransaction([this] (JsonObject payload) {
+                    if (idTagIsRejected(payload)) {
+                        LCD_DISPLAY("Please check card");
+                        DBUGLN(F("[ocpp] startTransaction denied"));
+                    }
+                    this->updateEvseClaim();
+                });
+            }
+        }, [this] () {
+            LCD_DISPLAY("Please try card again");
+            DBUGLN(F("[ocpp] authorize abort"));
+        });
+        return true;
+    };
+
     onVehicleConnect = [this] () {
         if (getTransactionId() < 0 && isAvailable()) {
-            if (!ocpp_idTag.isEmpty()) {
+            if (this->idTag_accepted && millis() - this->idTag_timestamp <= IDTAG_TIMEOUT) {
+                startTransaction([this] (JsonObject payload) {
+                    this->updateEvseClaim();
+                }, [this] () {
+                    LCD_DISPLAY("Please unplug and plug again");
+                });
+            } else if (!ocpp_idTag.isEmpty()) {
                 authorize(ocpp_idTag, [this] (JsonObject payload) {
                     if (idTagIsAccepted(payload)) {
                         startTransaction([this] (JsonObject payload) {
@@ -176,22 +243,25 @@ void ArduinoOcppTask::loadEvseBehavior() {
                             LCD_DISPLAY("Central system error");
                         });
                     } else {
-                        LCD_DISPLAY("ID card not recognized");
+                        LCD_DISPLAY("Preset ID tag not recognized");
                     }
                 }, [this] () {
                     LCD_DISPLAY("OCPP timeout");
                 });
+//            } else {
+//                startTransaction([this] (JsonObject payload) {
+//                    if (!idTagIsRejected(payload)) {
+//                        this->updateEvseClaim();
+//                    } else {
+//                        LCD_DISPLAY("ID tag required");
+//                    }
+//                    this->updateEvseClaim();
+//                }, [this] () {
+//                    LCD_DISPLAY("Central system error");
+//                });
             } else {
-                startTransaction([this] (JsonObject payload) {
-                    if (!idTagIsRejected(payload)) {
-                        this->updateEvseClaim();
-                    } else {
-                        LCD_DISPLAY("ID tag required");
-                    }
-                    this->updateEvseClaim();
-                }, [this] () {
-                    LCD_DISPLAY("Central system error");
-                });
+                LCD_DISPLAY("Need authorization");
+                DBUGLN(F("[ocpp] plugged, but not authorized yet"));
             }
 
         }
@@ -203,6 +273,8 @@ void ArduinoOcppTask::loadEvseBehavior() {
             //RemoteStartTransaction rejected! Do nothing
             return;
         }
+
+        this->idTag.clear();
 
         startTransaction([this] (JsonObject payload) {
             this->updateEvseClaim();
@@ -216,6 +288,8 @@ void ArduinoOcppTask::loadEvseBehavior() {
             stopTransaction();
         }
         this->updateEvseClaim();
+        this->idTag.clear();
+        this->idTag_accepted = false;
     };
 
     setOnRemoteStopTransactionSendConf([this](JsonObject payload) {
@@ -226,6 +300,8 @@ void ArduinoOcppTask::loadEvseBehavior() {
 
         stopTransaction();
         this->updateEvseClaim();
+        this->idTag.clear();
+        this->idTag_accepted = false;
     });
 
     setOnResetReceiveReq([this] (JsonObject payload) {
@@ -294,6 +370,13 @@ unsigned long ArduinoOcppTask::loop(MicroTasks::WakeReason reason) {
             
             restart_system();
         }
+    }
+
+    if (idTag_accepted && millis() - idTag_timestamp > IDTAG_TIMEOUT) {
+        idTag_accepted = false;
+
+        LCD_DISPLAY("Aborted. Please present card again");
+        DBUGLN(F("[ocpp] RFID auth timeout"));
     }
 
     return 0;
@@ -578,4 +661,11 @@ bool ArduinoOcppTask::idTagIsAccepted(JsonObject payload) {
 bool ArduinoOcppTask::idTagIsRejected(JsonObject payload) {
     const char *status = payload["idTagInfo"]["status"] | "Accepted";
     return strcmp(status, "Accepted");
+}
+
+std::function<bool(const String& idTag)> *ArduinoOcppTask::getOnIdTagInput() {
+    if (!onIdTagInput) {
+        DBUGLN(F("[ocpp] called ArduinoOcppTask::getOnIdTagInput() before initialization!"));
+    }
+    return &onIdTagInput;
 }
