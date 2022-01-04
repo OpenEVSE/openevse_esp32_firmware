@@ -228,14 +228,7 @@ void EvseMonitor::evseBoot(const char *firmware)
   {
     if(RAPI_RESPONSE_OK == ret)
     {
-      DBUGF("min_current = %ld, pilot = %ld, max_configured_current = %ld, max_hardware_current = %ld", min_current, pilot, max_configured_current, max_hardware_current);
-      _min_current = min_current;
-      // The max_configured_current is a write once value, so as fare as we are concerned that is the 'hardware' max. We manage the acrual soft limit in the WiFi code.
-      _max_hardware_current = max_configured_current;
-      _pilot = pilot;
-      if(_max_configured_current > _max_hardware_current || _max_configured_current < _min_current) {
-        _max_configured_current = _max_hardware_current;
-      }
+      updateCurrentSettings(min_current, max_hardware_current, pilot, max_configured_current);
       _boot_ready.ready(EVSE_MONITOR_CURRENT_BOOT_READY);
     }
   });
@@ -303,6 +296,19 @@ void EvseMonitor::updateEvseState(uint8_t evse_state, uint8_t pilot_state, uint3
     });
   }
 }
+
+void EvseMonitor::updateCurrentSettings(long min_current, long max_hardware_current, long pilot, long max_configured_current)
+{
+  DBUGF("min_current = %ld, pilot = %ld, max_configured_current = %ld, max_hardware_current = %ld", min_current, pilot, max_configured_current, max_hardware_current);
+  _min_current = min_current;
+  // The max_configured_current is a write once value, so as fare as we are concerned that is the 'hardware' max. We manage the acrual soft limit in the WiFi code.
+  _max_hardware_current = max_configured_current;
+  _pilot = pilot;
+  if(_max_configured_current > _max_hardware_current || _max_configured_current < _min_current) {
+    _max_configured_current = _max_hardware_current;
+  }
+}
+
 
 unsigned long EvseMonitor::loop(MicroTasks::WakeReason reason)
 {
@@ -513,17 +519,27 @@ void EvseMonitor::setServiceLevel(ServiceLevel level, std::function<void(int ret
   {
     if(RAPI_RESPONSE_OK == ret)
     {
-      _settings_changed.Trigger();
-
       // Refresh the flags
       _openevse.getSettings([this, callback](int ret, long pilot, uint32_t flags)
       {
-        if(RAPI_RESPONSE_OK == ret) {
+        if(RAPI_RESPONSE_OK == ret)
+        {
           DBUGF("pilot = %ld, flags = %x", pilot, flags);
           _settings_flags = flags;
-        }
 
-        if(callback){
+          _openevse.getCurrentCapacity([this, callback](int ret, long min_current, long max_hardware_current, long pilot, long max_configured_current)
+          {
+            if(RAPI_RESPONSE_OK == ret)
+            {
+              updateCurrentSettings(min_current, max_hardware_current, pilot, max_configured_current);
+              _settings_changed.Trigger();
+
+              if(callback){
+                callback(ret);
+              }
+            }
+          });
+        } else if(callback){
           callback(ret);
         }
       });
@@ -539,8 +555,6 @@ void EvseMonitor::enableFeature(uint8_t feature, bool enabled, std::function<voi
   {
     if(RAPI_RESPONSE_OK == ret)
     {
-      _settings_changed.Trigger();
-
       // Refresh the flags
       _openevse.getSettings([this, callback](int ret, long pilot, uint32_t flags)
       {
@@ -548,6 +562,8 @@ void EvseMonitor::enableFeature(uint8_t feature, bool enabled, std::function<voi
           DBUGF("pilot = %ld, flags = %x", pilot, flags);
           _settings_flags = flags;
         }
+
+        _settings_changed.Trigger();
 
         if(callback){
           callback(ret);
