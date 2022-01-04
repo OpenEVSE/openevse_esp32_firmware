@@ -162,8 +162,15 @@ handleConfigPost(MongooseHttpServerRequest *request, MongooseHttpServerResponseS
 
     StaticJsonDocument<128> doc;
 
-    if(config_modified) {
+    if(config_modified)
+    {
+      // HACK: force a flush of the RAPI command queue to make sure the config
+      //       is updated before we send the response
+      DBUG("Flushing RAPI command queue ...");
+      rapiSender.flush();
+      DBUGLN(" Done");
       config_version++;
+      DBUGVAR(config_version);
     }
 
     doc["config_version"] = config_version;
