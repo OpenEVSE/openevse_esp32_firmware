@@ -151,6 +151,8 @@ examples:
     ocpp_energize_plug: true
     mqtt_protocol: mqtt
     charge_mode: fast
+x-tags:
+  - Config
 properties:
   firmware:
     type: string
@@ -175,32 +177,33 @@ properties:
     type: string
     minLength: 1
     readOnly: true
-  diodet:
-    type: number
-    readOnly: true
-  gfcit:
-    type: number
-    readOnly: true
-  groundt:
-    type: number
-    readOnly: true
-  relayt:
-    type: number
-    readOnly: true
-  ventt:
-    type: number
-    readOnly: true
-  tempt:
-    type: number
-    readOnly: true
+  diode_check_disabled:
+    type: boolean
+  gfci_check_disabled:
+    type: boolean
+  ground_check_disabled:
+    type: boolean
+  relay_check_disabled:
+    type: boolean
+  vent_check_disabled:
+    type: boolean
+  temp_check_disabled:
+    type: boolean
   service:
-    type: number
-    readOnly: true
+    type: integer
+    minimum: 0
+    maximum: 2
   scale:
-    type: number
-    readOnly: true
+    type: integer
   offset:
-    type: number
+    type: integer
+  max_current_soft:
+    type: integer
+  min_current_hard:
+    type: integer
+    readOnly: true
+  max_current_hard:
+    type: integer
     readOnly: true
   mqtt_supported_protocols:
     type: array
@@ -254,7 +257,7 @@ properties:
     type: string
     minLength: 1
   mqtt_port:
-    type: number
+    type: integer
   mqtt_topic:
     type: string
     minLength: 1
@@ -347,5 +350,3 @@ properties:
   charge_mode:
     type: string
     minLength: 1
-x-tags:
-  - Config
