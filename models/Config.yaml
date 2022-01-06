@@ -8,15 +8,18 @@ x-examples:
     espinfo: ESP32r1 2 core WiFi BLE BT
     buildenv: openevse_esp-wrover-kit
     version: 4.1.0.dev
-    diodet: 0
-    gfcit: 0
-    groundt: 1
-    relayt: 0
-    ventt: 0
-    tempt: 1
+    diode_check: true
+    gfci_check: true
+    ground_check: true
+    relay_check: true
+    vent_check: true
+    temp_check: true
     service: 0
     scale: 220
     offset: 0
+    max_current_soft: 32
+    min_current_hard: 6
+    max_current_hard: 32
     mqtt_supported_protocols:
       - mqtt
       - mqtts
@@ -83,15 +86,18 @@ examples:
     espinfo: ESP32r1 2 core WiFi BLE BT
     buildenv: openevse_esp-wrover-kit
     version: 4.1.0.dev
-    diodet: 0
-    gfcit: 0
-    groundt: 1
-    relayt: 0
-    ventt: 0
-    tempt: 1
+    diode_check: true
+    gfci_check: true
+    ground_check: true
+    relay_check: true
+    vent_check: true
+    temp_check: true
     service: 0
     scale: 220
     offset: 0
+    max_current_soft: 32
+    min_current_hard: 6
+    max_current_hard: 32
     mqtt_supported_protocols:
       - mqtt
       - mqtts
@@ -177,17 +183,17 @@ properties:
     type: string
     minLength: 1
     readOnly: true
-  diode_check_disabled:
+  diode_check:
     type: boolean
-  gfci_check_disabled:
+  gfci_check:
     type: boolean
-  ground_check_disabled:
+  ground_check:
     type: boolean
-  relay_check_disabled:
+  relay_check:
     type: boolean
-  vent_check_disabled:
+  vent_check:
     type: boolean
-  temp_check_disabled:
+  temp_check:
     type: boolean
   service:
     type: integer
