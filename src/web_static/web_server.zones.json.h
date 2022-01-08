@@ -25,7 +25,7 @@ static const char CONTENT_ZONES_JSON[] PROGMEM =
   "\"Africa/Gaborone\":\"CAT-2\",\n"
   "\"Africa/Harare\":\"CAT-2\",\n"
   "\"Africa/Johannesburg\":\"SAST-2\",\n"
-  "\"Africa/Juba\":\"EAT-3\",\n"
+  "\"Africa/Juba\":\"CAT-2\",\n"
   "\"Africa/Kampala\":\"EAT-3\",\n"
   "\"Africa/Khartoum\":\"CAT-2\",\n"
   "\"Africa/Kigali\":\"CAT-2\",\n"
@@ -215,7 +215,7 @@ static const char CONTENT_ZONES_JSON[] PROGMEM =
   "\"Arctic/Longyearbyen\":\"CET-1CEST,M3.5.0,M10.5.0/3\",\n"
   "\"Asia/Aden\":\"<+03>-3\",\n"
   "\"Asia/Almaty\":\"<+06>-6\",\n"
-  "\"Asia/Amman\":\"EET-2EEST,M3.5.4/24,M10.5.5/1\",\n"
+  "\"Asia/Amman\":\"EET-2EEST,M2.5.4/24,M10.5.5/1\",\n"
   "\"Asia/Anadyr\":\"<+12>-12\",\n"
   "\"Asia/Aqtau\":\"<+05>-5\",\n"
   "\"Asia/Aqtobe\":\"<+05>-5\",\n"
@@ -238,8 +238,8 @@ static const char CONTENT_ZONES_JSON[] PROGMEM =
   "\"Asia/Dubai\":\"<+04>-4\",\n"
   "\"Asia/Dushanbe\":\"<+05>-5\",\n"
   "\"Asia/Famagusta\":\"EET-2EEST,M3.5.0/3,M10.5.0/4\",\n"
-  "\"Asia/Gaza\":\"EET-2EEST,M3.4.4/48,M10.4.4/49\",\n"
-  "\"Asia/Hebron\":\"EET-2EEST,M3.4.4/48,M10.4.4/49\",\n"
+  "\"Asia/Gaza\":\"EET-2EEST,M3.4.4/48,M10.5.5/1\",\n"
+  "\"Asia/Hebron\":\"EET-2EEST,M3.4.4/48,M10.5.5/1\",\n"
   "\"Asia/Ho_Chi_Minh\":\"<+07>-7\",\n"
   "\"Asia/Hong_Kong\":\"HKT-8\",\n"
   "\"Asia/Hovd\":\"<+07>-7\",\n"
@@ -423,7 +423,7 @@ static const char CONTENT_ZONES_JSON[] PROGMEM =
   "\"Indian/Mauritius\":\"<+04>-4\",\n"
   "\"Indian/Mayotte\":\"EAT-3\",\n"
   "\"Indian/Reunion\":\"<+04>-4\",\n"
-  "\"Pacific/Apia\":\"<+13>-13<+14>,M9.5.0/3,M4.1.0/4\",\n"
+  "\"Pacific/Apia\":\"<+13>-13\",\n"
   "\"Pacific/Auckland\":\"NZST-12NZDT,M9.5.0,M4.1.0/3\",\n"
   "\"Pacific/Bougainville\":\"<+11>-11\",\n"
   "\"Pacific/Chatham\":\"<+1245>-12:45<+1345>,M9.5.0/2:45,M4.1.0/3:45\",\n"
@@ -462,4 +462,4 @@ static const char CONTENT_ZONES_JSON[] PROGMEM =
   "\"Pacific/Wake\":\"<+12>-12\",\n"
   "\"Pacific/Wallis\":\"<+12>-12\"\n"
   "}\n";
-static const char CONTENT_ZONES_JSON_ETAG[] PROGMEM = "7641cf7331c8ae6124b008c962061938c20f26ae538e30e0484afc06adb88af9";
+static const char CONTENT_ZONES_JSON_ETAG[] PROGMEM = "d11c22c036ed3ee40406009e0f69f2a96903bd4261eb4e16b07bea3f3cf4a65e";

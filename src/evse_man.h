@@ -379,6 +379,9 @@ class EvseManager : public MicroTasks::Task
     const char *getFirmwareVersion() {
       return _monitor.getFirmwareVersion();
     }
+    const char *getSerial() {
+      return _monitor.getSerial();
+    }
     long getMinCurrent() {
       return _monitor.getMinCurrent();
     }

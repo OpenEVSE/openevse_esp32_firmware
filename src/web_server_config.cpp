@@ -29,6 +29,8 @@ handleConfigGet(MongooseHttpServerRequest *request, MongooseHttpServerResponseSt
   doc["espinfo"] = ESPAL.getChipInfo();
   doc["buildenv"] = buildenv;
   doc["version"] = currentfirmware;
+  doc["evse_serial"] = evse.getSerial();
+  doc["wifi_serial"] = serial;
   doc["diodet"] = evse.isDiodeCheckDisabled() ? 1 : 0;
   doc["gfcit"] = evse.isGfiTestDisabled() ? 1 : 0;
   doc["groundt"] = evse.isGroundCheckDisabled() ? 1 : 0;
