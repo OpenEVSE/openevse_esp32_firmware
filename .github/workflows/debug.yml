@@ -1,0 +1,17 @@
+# yaml-language-server: $schema=https://json.schemastore.org/github-workflow.json
+
+name: debug
+
+on:
+  push:
+  pull_request:
+
+jobs:
+  debug:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Dump the environment
+        run: echo "Environment variables:" && env | sort
+
+      - name: Dump the event
+        run: cat $GITHUB_EVENT_PATH
