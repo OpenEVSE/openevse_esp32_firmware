@@ -1,0 +1,50 @@
+name: Release Validation
+
+on:
+  release:
+    types: [published]
+
+jobs:
+  debug:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Dump the environment
+        run: echo "Environment variables:" && env | sort
+
+      - name: Dump the event
+        run: cat $GITHUB_EVENT_PATH
+
+  release_validation:
+    name: Release Validation
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v2
+        with:
+          submodules: recursive
+
+      ### Check the pre-built GUI files are up-to-date
+
+      - name: Set up Node JS
+        uses: actions/setup-node@v2
+        with:
+          node-version: '12'
+
+      - name: Install dependencies
+        run: |
+          cd gui
+          npm install
+
+      - name: Build GUI
+        run: |
+          cd gui
+          npm run build
+
+      - name: Check the pre-built GUI files are up-to-date
+        run: |
+          git status -s | grep " M "
+          if [ $? -eq 0 ]; then
+            echo "ERROR: The pre-built GUI files are not up-to-date"
+            exit 1
+          fi
+
+      ### Check the version number in the code matches the release number and tag number
