@@ -5,6 +5,7 @@ name: debug
 on:
   push:
   pull_request:
+  release:
 
 jobs:
   debug:
