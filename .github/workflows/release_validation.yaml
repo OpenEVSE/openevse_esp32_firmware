@@ -33,7 +33,7 @@ jobs:
 
       - name: Check the pre-built GUI files are up-to-date
         run: |
-          set -e
+          set +e
           git status -s | grep " M "
           if [ $? -eq 0 ]; then
             echo "ERROR: The pre-built GUI files are not up-to-date"
