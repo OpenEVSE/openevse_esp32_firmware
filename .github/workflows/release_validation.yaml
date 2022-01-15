@@ -5,15 +5,6 @@ on:
     types: [published]
 
 jobs:
-  debug:
-    runs-on: ubuntu-latest
-    steps:
-      - name: Dump the environment
-        run: echo "Environment variables:" && env | sort
-
-      - name: Dump the event
-        run: cat $GITHUB_EVENT_PATH
-
   release_validation:
     name: Release Validation
     runs-on: ubuntu-latest
