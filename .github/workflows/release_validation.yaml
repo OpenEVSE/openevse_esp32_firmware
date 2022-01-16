@@ -4,10 +4,11 @@ on:
   release:
     types:
       - released
+      - prereleased
 
 jobs:
-  release_validation:
-    name: Release Validation
+  gui_validation:
+    name: Pre-built GUI Validation
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v2
@@ -40,6 +41,12 @@ jobs:
             exit 1
           fi
 
+  release_number:
+    name: Release Number Validation
+    runs-on: ubuntu-latest
+    if: github.ref_name != 'latest'
+
+    steps:
       ### Check the version number in the code matches the tag number
       - name: Retrieve the version number(s)
         run: |
