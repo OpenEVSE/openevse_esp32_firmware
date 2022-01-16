@@ -41,7 +41,7 @@ jobs:
           fi
 
       ### Check the version number in the code matches the tag number
-      - name: Check the version number in the code matches the tag number
+      - name: Retrieve the version number(s)
         run: |
           TAG_VERSION=$(sed "s/^v//" <<< $GITHUB_REF_NAME)
           CODE_VERSION=$(grep BUILD_TAG platformio.ini | awk -F= '{print $NF}')
@@ -50,7 +50,6 @@ jobs:
 
       - name: Check the version numberis semver compliant
         run: |
-          set -e
           if ! [[ $TAG_VERSION =~ ^[0-9]+\.[0-9]+\.[0-9]+(-[a-z]*[0-9]+)?$ ]]; then
             echo "ERROR: The version number is not semver compliant"
             exit 1
