@@ -5,6 +5,7 @@ on:
     types:
       - released
       - prereleased
+      - edited
 
 jobs:
   gui_validation:
