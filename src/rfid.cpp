@@ -12,46 +12,45 @@
 #include "input.h"
 #include "openevse.h"
 
+/*
+ * Documentation of the I2C messages:
+ * NXP PN532 manual, https://www.nxp.com/docs/en/user-guide/141520.pdf
+ * (accessed: 2022-01-14)
+ */
+
+#define PN532_I2C_ADDRESS  (0x48 >> 1)
+#define PN532_RDY 0x01
+#define PN532_FRAME_HEADER_LEN 4
+#define PN532_FRAME_IDENTIFIER_LEN 1
+#define PN532_CMD_SAMCONFIGURATION_RESPONSE 0x15
+#define PN532_CMD_INAUTOPOLL_RESPONSE 0x61
+
+#define I2C_READ_BUFFSIZE 35 //might increase later
+
 RfidTask::RfidTask() :
-  MicroTasks::Task(),
-  nfc(PN532_IRQ, PN532_POLLING)
+  MicroTasks::Task()
 {
 }
 
-void RfidTask::begin(EvseManager &evse){
+void RfidTask::begin(EvseManager &evse, TwoWire& wire){
     _evse = &evse;
+    i2c = &wire;
     MicroTask.startTask(this);
 }
 
 void RfidTask::setup(){
     if (config_rfid_enabled()) {
-        wakeup();
+        pn532_initialize();
     }
 }
 
-boolean RfidTask::wakeup(){
-    bool awake = nfc.begin();
-    if(awake){
-        status = NfcDeviceStatus::ACTIVE;
-    } else {
-        status = NfcDeviceStatus::NOT_ACTIVE;
-        DEBUG.println("RFID module did not respond!");
-    }
-    return awake;
-}
-
-void RfidTask::scanCard(){
-    NFCcard = nfc.getInformation();
-    String uid = nfc.readUid();
-    uid.trim();
-
+void RfidTask::scanCard(String& uid){
     if(waitingForTag > 0){
         waitingForTag = 0;
         cardFound = true;
+        waitingForTagResult = uid;
         lcd.display("Tag detected!", 0, 0, 0, LCD_CLEAR_LINE);
         lcd.display(uid, 0, 1, 3000, LCD_CLEAR_LINE);
-        DBUG(F("[rfid] Tag detected! "));
-        DBUGLN(uid);
     } else if (onCardScanned && (*onCardScanned) && (*onCardScanned)(uid)){
         //OCPP will process the card
     }else{
@@ -89,8 +88,7 @@ void RfidTask::scanCard(){
         }
 
         // Send to MQTT broker
-        const size_t UID_MAXLEN = 8; //hardcoded in DFRobot_PN532.h
-        DynamicJsonDocument data{JSON_OBJECT_SIZE(1) + UID_MAXLEN + 1};
+        DynamicJsonDocument data{JSON_OBJECT_SIZE(1) + uid.length() + 1};
         data["rfid"] = uid;
         mqtt_publish(data);
     }
@@ -119,11 +117,21 @@ unsigned long RfidTask::loop(MicroTasks::WakeReason reason){
 
     updateEvseClaim();
 
+    pn532_read();
+
     if (!config_rfid_enabled()) {
+        pn532_status = PN532_DeviceStatus::NOT_ACTIVE;
         resetAuthentication();
         return SCAN_FREQ;
-    } else if (status != NfcDeviceStatus::ACTIVE) {
-        wakeup();
+    }
+
+    if (pn532_status == PN532_DeviceStatus::ACTIVE && millis() - pn532_lastResponse > MAXIMUM_UNRESPONSIVE_TIME) {
+        DBUGLN(F("[rfid] connection with PN532 lost"));
+        pn532_status = PN532_DeviceStatus::FAILED;
+    }
+    
+    if (pn532_status != PN532_DeviceStatus::ACTIVE) {
+        pn532_initialize();
         return SCAN_FREQ;
     }
 
@@ -134,18 +142,13 @@ unsigned long RfidTask::loop(MicroTasks::WakeReason reason){
         lcd.display("Waiting for RFID", 0, 0, 0, LCD_CLEAR_LINE);
         lcd.display(msg, 0, 1, 1000, LCD_CLEAR_LINE);
     }
-    
-    //boolean foundCard = (evse.getEvseState() >= OPENEVSE_STATE_SLEEPING || waitingForTag) && nfc.scan();
-    boolean foundCard = nfc.scan();
 
-    if(foundCard && !hasContact){
-        scanCard();
-        hasContact = true;
-        return SCAN_FREQ;
-    }
-
-    if(!foundCard && hasContact){
-        hasContact = false;
+    if (pn532_pollCount >= AUTO_REFRESH_CONNECTION) {
+        pn532_initialize();
+        pn532_pollCount = 0;
+    } else {
+        pn532_poll();
+        pn532_pollCount++;
     }
 
     return SCAN_FREQ;
@@ -203,8 +206,7 @@ void RfidTask::updateEvseClaim() {
 }
 
 DynamicJsonDocument RfidTask::rfidPoll() {
-    const size_t UID_MAXLEN = 8; //hardcoded in DFRobot_PN532.h
-    const size_t capacity = JSON_OBJECT_SIZE(2) + UID_MAXLEN + 1;
+    const size_t capacity = JSON_OBJECT_SIZE(2) + waitingForTagResult.length() + 1;
     DynamicJsonDocument doc(capacity);
     if(waitingForTag > 0){
         // respond with remainding time
@@ -214,8 +216,9 @@ DynamicJsonDocument RfidTask::rfidPoll() {
     else if(cardFound){
         // respond with the scanned tags uid and reset
         doc["status"] = "done";
-        doc["scanned"] = nfc.readUid();
+        doc["scanned"] = waitingForTagResult;
         cardFound = false;
+        waitingForTagResult.clear();
     }
     else  {
         doc["status"] = "notStarted";
@@ -225,6 +228,217 @@ DynamicJsonDocument RfidTask::rfidPoll() {
 
 void RfidTask::setOnCardScanned(std::function<bool(const String& idTag)> *onCardScanned) {
     this->onCardScanned = onCardScanned;
+}
+
+bool RfidTask::communicationFails() {
+    return config_rfid_enabled() && pn532_status == PN532_DeviceStatus::FAILED;
+}
+
+void RfidTask::pn532_initialize() {
+
+    /*
+     * Command hardcoded according to NXP manual, page 89
+     */
+    uint8_t SAMConfiguration [] = {0x00, 0xFF, 0x05, 0xFB, 
+                                   0xD4, 0x14, 0x01, 0x00, 0x00,
+                                   0x17};
+    i2c->beginTransmission(PN532_I2C_ADDRESS);
+    i2c->write(SAMConfiguration, sizeof(SAMConfiguration) / sizeof(*SAMConfiguration));
+    i2c->endTransmission();
+
+    pn532_listen = true;
+    //"flush" ACK
+    delay(30);
+    pn532_read();
+}
+
+void RfidTask::pn532_poll() {
+    /*
+     * Command hardcoded according to NXP manual, page 144
+     */
+    uint8_t InAutoPoll [] = {0x00, 0xFF, 0x06, 0xFA, 
+                             0xD4, 0x60, 0x01, 0x01, 0x10, 0x20,
+                             0x9A};
+    i2c->beginTransmission(PN532_I2C_ADDRESS);
+    i2c->write(InAutoPoll, sizeof(InAutoPoll) / sizeof(*InAutoPoll));
+    i2c->endTransmission();
+
+    pn532_listen = true;
+    //"flush" ACK
+    delay(30);
+    pn532_read();
+}
+
+void RfidTask::pn532_read() {
+    if (!pn532_listen)
+        return;
+
+    i2c->requestFrom(PN532_I2C_ADDRESS, I2C_READ_BUFFSIZE + 1, 1);
+    if (i2c->read() != PN532_RDY) {
+        //no msg available
+        return;
+    }
+
+    uint8_t response [I2C_READ_BUFFSIZE] = {0};
+    uint8_t frame_len = 0;
+    while (i2c->available() && frame_len < I2C_READ_BUFFSIZE) {
+        response[frame_len] = i2c->read();
+        frame_len++;
+    }
+    i2c->flush();
+
+    /*
+     * For frame layout, see NXP manual, page 28
+     */
+
+    if (frame_len < PN532_FRAME_HEADER_LEN) {
+        //frame corrupt
+        pn532_listen = false;
+        return;
+    }
+
+    uint8_t *header = nullptr;
+    uint8_t header_offs = 0;
+    while (header_offs < frame_len - PN532_FRAME_HEADER_LEN) {
+        if (response[header_offs] == 0x00 && response[header_offs + 1] == 0xFF) { //find frame preamble
+            header = response + header_offs; //header preamble found
+            break;
+        }
+        header_offs++;
+    }
+
+    if (!header) {
+        //invalid packet
+        pn532_listen = false;
+        return;
+    }
+
+    //check for ack frame
+    if (header[2] == 0x00 && header[3] == 0xFF) {
+        //ack detected
+        return;
+    }
+
+    if (header[2] == 0x00 || header[2] == 0xFF) {
+        //ignore frame type
+        pn532_listen = false;
+        return;
+    }
+
+    uint8_t data_len = header[2];
+    uint8_t data_lcs = header[3];
+    data_lcs += data_len;
+
+    if (data_lcs) {
+        //checksum wrong
+        pn532_listen = false;
+        return;
+    }
+
+    if (data_len <= PN532_FRAME_IDENTIFIER_LEN) {
+        //ingore frame type
+        pn532_listen = false;
+        return;
+    }
+
+    //frame layout: <header><frame_identifier><data><data_checksum>
+    uint8_t *frame_identifier = header + PN532_FRAME_HEADER_LEN;
+    uint8_t *data = frame_identifier + PN532_FRAME_IDENTIFIER_LEN;
+    uint8_t *data_dcs = frame_identifier + data_len;
+
+    if (data_dcs - response >= frame_len) {
+        DBUGLN(F("[rfid] Did not read sufficient bytes. Abort"));
+        pn532_listen = false;
+        return;
+    }
+
+    uint8_t data_checksum = *data_dcs;
+    for (uint8_t *i = frame_identifier; i != data_dcs; i++) {
+        data_checksum += *i;
+    }
+
+    if (data_checksum) {
+        //wrong checksum
+        pn532_listen = false;
+        return;
+    }
+
+    if (frame_identifier[0] != 0xD5) {
+        //ignore frame type
+        pn532_listen = false;
+        return;
+    }
+
+    uint8_t cmd_code = data[0];
+
+    if (cmd_code == PN532_CMD_SAMCONFIGURATION_RESPONSE) {
+        //success
+        DBUGLN(F("[rfid] connection with PN532 active"));
+        pn532_status = PN532_DeviceStatus::ACTIVE;
+        pn532_lastResponse = millis();
+
+    } else if (cmd_code == PN532_CMD_INAUTOPOLL_RESPONSE) {
+
+        /*
+         * see NXP manual, page 145
+         */
+
+        if (data_len < 3 || data[1] == 0) {
+            pn532_hasContact = false;
+            pn532_listen = false;
+            return;
+        }
+
+        if (data_len < 10) {
+            pn532_listen = false;
+            return;
+        }
+
+        uint8_t card_type = data[2];
+        uint8_t targetDataLen = data[3];
+        uint8_t uidLen = data[8];
+
+        if (data_len - 5 < targetDataLen || targetDataLen - 5 < uidLen) {
+            DBUGLN(F("[rfid] INAUTOPOLL format err"));
+            pn532_listen = false;
+            return;
+        }
+
+        pn532_lastResponse = millis(); //successfully read
+
+        if (pn532_hasContact) {
+            //valid card already scanned the last time; nothing to do
+            pn532_listen = false;
+            return;
+        }
+
+        String uid = String('\0');
+        uid.reserve(2*uidLen);
+
+        for (uint8_t i = 0; i < uidLen; i++) {
+            uint8_t uid_i = data[9 + i];
+            uint8_t lhw = uid_i / 0x10;
+            uint8_t rhw = uid_i % 0x10;
+            uid += (char) (lhw <= 9 ? lhw + '0' : lhw%10 + 'a');
+            uid += (char) (rhw <= 9 ? rhw + '0' : rhw%10 + 'a');
+        }
+
+        DBUG(F("[rfid] found card! type = "));
+        DBUG(card_type);
+        DBUG(F(", uid = "));
+        DBUG(uid);
+        DBUGLN(F(" end"));
+
+        scanCard(uid);
+        pn532_hasContact = true;
+
+    } else {
+        DBUG(F("[rfid] unknown response; cmd_code = "));
+        DBUGLN(cmd_code);
+    }
+
+    pn532_listen = false;
+    return;
 }
 
 RfidTask rfid;

@@ -125,7 +125,7 @@ void setup()
   scheduler.begin();
 
   lcd.begin(evse, scheduler, manual);
-  rfid.begin(evse);
+  rfid.begin(evse, Wire);
   rfid.setOnCardScanned(ocpp.getOnIdTagInput());
   ledManager.begin(evse);
 
