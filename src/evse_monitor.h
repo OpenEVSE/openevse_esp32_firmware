@@ -146,6 +146,7 @@ class EvseMonitor : public MicroTasks::Task
     bool _heartbeat;
 
     char _firmware_version[32];
+    char _serial[16];
 
 #ifdef ENABLE_MCP9808
     Adafruit_MCP9808 _mcp9808;
@@ -293,6 +294,9 @@ class EvseMonitor : public MicroTasks::Task
     }
     const char *getFirmwareVersion() {
       return _firmware_version;
+    }
+    const char *getSerial() {
+      return _serial;
     }
 
     // Register for events
