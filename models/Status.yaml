@@ -116,6 +116,11 @@ properties:
   divertmode:
     type: integer
     description: 'The PV divert mode, `1` normal, `2` Eco'
+  service_level:
+    type: integer
+    description: The current service level
+    minimum: 1
+    maximum: 2
   solar:
     type: integer
     description: The latest solar feed value received

@@ -155,21 +155,6 @@ handleRapiRead()
     }
   });
 
-  rapiSender.sendCmd("$GA", [](int ret)
-  {
-    if(RAPI_RESPONSE_OK == ret)
-    {
-      if(rapiSender.getTokenCnt() >= 3)
-      {
-        const char *val;
-        val = rapiSender.getToken(1);
-        current_scale = strtol(val, NULL, 10);
-        val = rapiSender.getToken(2);
-        current_offset = strtol(val, NULL, 10);
-      }
-    }
-  });
-
   Profile_End(handleRapiRead, 10);
 }
 
