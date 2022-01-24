@@ -160,6 +160,7 @@
 
 extern String currentfirmware;
 extern String buildenv;
+extern String serial;
 
 void restart_system();
 

@@ -131,26 +131,6 @@ POST {{baseUrl}}/config HTTP/1.1
 Content-Type: application/json
 
 {
-  "tesla_enabled": true,
-  "tesla_username": "username",
-  "tesla_password": "password"
-}
-
-###
-
-POST {{baseUrl}}/config HTTP/1.1
-Content-Type: application/json
-
-{
-  "tesla_vehidx": 0
-}
-
-###
-
-POST {{baseUrl}}/config HTTP/1.1
-Content-Type: application/json
-
-{
   "pause_uses_disabled": true
 }
 
@@ -191,3 +171,74 @@ Content-Type: application/json
 }
 
 ###
+
+# Set the soft current limit
+
+POST {{baseUrl}}/config HTTP/1.1
+Content-Type: application/json
+
+{
+  "max_current_soft": 16
+}
+
+###
+
+# Configure the OpenEVSE checks
+
+POST {{baseUrl}}/config HTTP/1.1
+Content-Type: application/json
+
+{
+  "diode_check": true,
+  "gfci_check": true,
+  "ground_check": false,
+  "relay_check": true,
+  "vent_check": true,
+  "temp_check": true
+}
+
+###
+
+# Set the service level to auto
+
+POST {{baseUrl}}/config HTTP/1.1
+Content-Type: application/json
+
+{
+  "service": 0
+}
+
+###
+
+# Set the service level to L1
+
+POST {{baseUrl}}/config HTTP/1.1
+Content-Type: application/json
+
+{
+  "service": 1
+}
+
+###
+
+# Set the service level to L2
+
+POST {{baseUrl}}/config HTTP/1.1
+Content-Type: application/json
+
+{
+  "service": 2
+}
+
+###
+
+# Set the ammeter settings
+
+POST {{baseUrl}}/config HTTP/1.1
+Content-Type: application/json
+
+{
+  "scale": 220,
+  "offset": 0
+}
+

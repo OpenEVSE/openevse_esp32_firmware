@@ -231,6 +231,7 @@ class EvseManager : public MicroTasks::Task
     Claim _clients[EVSE_MANAGER_MAX_CLIENT_CLAIMS];
 
     MicroTasks::EventListener _evseStateListener;
+    MicroTasks::EventListener _evseBootListener;
     MicroTasks::EventListener _sessionCompleteListener;
 
     EvseProperties _targetProperties;
@@ -343,23 +344,23 @@ class EvseManager : public MicroTasks::Task
     double isTemperatureValid(uint8_t sensor) {
       return _monitor.isTemperatureValid(sensor);
     }
-    bool isDiodeCheckDisabled() {
-      return _monitor.isDiodeCheckDisabled();
+    bool isDiodeCheckEnabled() {
+      return _monitor.isDiodeCheckEnabled();
     }
-    bool isVentRequiredDisabled() {
-      return _monitor.isVentRequiredDisabled();
+    bool isVentRequiredEnabled() {
+      return _monitor.isVentRequiredEnabled();
     }
-    bool isGroundCheckDisabled() {
-      return _monitor.isGroundCheckDisabled();
+    bool isGroundCheckEnabled() {
+      return _monitor.isGroundCheckEnabled();
     }
-    bool isStuckRelayCheckDisabled() {
-      return _monitor.isStuckRelayCheckDisabled();
+    bool isStuckRelayCheckEnabled() {
+      return _monitor.isStuckRelayCheckEnabled();
     }
-    bool isGfiTestDisabled() {
-      return _monitor.isGfiTestDisabled();
+    bool isGfiTestEnabled() {
+      return _monitor.isGfiTestEnabled();
     }
-    bool isTemperatureCheckDisabled() {
-      return _monitor.isTemperatureCheckDisabled();
+    bool isTemperatureCheckEnabled() {
+      return _monitor.isTemperatureCheckEnabled();
     }
     bool isButtonDisabled() {
       return _monitor.isButtonDisabled();
@@ -370,8 +371,14 @@ class EvseManager : public MicroTasks::Task
     bool isSerialDebugEnabled() {
       return _monitor.isSerialDebugEnabled();
     }
+    EvseMonitor::ServiceLevel getActualServiceLevel() {
+      return _monitor.getActualServiceLevel();
+    }
     EvseMonitor::ServiceLevel getServiceLevel() {
       return _monitor.getServiceLevel();
+    }
+    void setServiceLevel(EvseMonitor::ServiceLevel level) {
+      _monitor.setServiceLevel(level);
     }
     EvseMonitor::LcdType getLcdType() {
       return _monitor.getLcdType();
@@ -379,8 +386,49 @@ class EvseManager : public MicroTasks::Task
     const char *getFirmwareVersion() {
       return _monitor.getFirmwareVersion();
     }
+    const char *getSerial() {
+      return _monitor.getSerial();
+    }
     long getMinCurrent() {
       return _monitor.getMinCurrent();
+    }
+    void setMaxConfiguredCurrent(long amps);
+    long getMaxConfiguredCurrent() {
+      return _monitor.getMaxConfiguredCurrent();
+    }
+    long getMaxHardwareCurrent() {
+      return _monitor.getMaxHardwareCurrent();
+    }
+    void configureCurrentSensorScale(long scale, long offset) {
+      _monitor.configureCurrentSensorScale(scale, offset);
+    }
+    long getCurrentSensorScale() {
+      return _monitor.getCurrentSensorScale();
+    }
+    long getCurrentSensorOffset() {
+      return _monitor.getCurrentSensorOffset();
+    }
+
+    void enableFeature(uint8_t feature, bool enabled, std::function<void(int ret)> callback = NULL) {
+      _monitor.enableFeature(feature, enabled, callback);
+    }
+    void enableDiodeCheck(bool enabled, std::function<void(int ret)> callback = NULL) {
+      _monitor.enableDiodeCheck(enabled, callback);
+    }
+    void enableGfiTestCheck(bool enabled, std::function<void(int ret)> callback = NULL) {
+      _monitor.enableGfiTestCheck(enabled, callback);
+    }
+    void enableGroundCheck(bool enabled, std::function<void(int ret)> callback = NULL) {
+      _monitor.enableGroundCheck(enabled, callback);
+    }
+    void enableStuckRelayCheck(bool enabled, std::function<void(int ret)> callback = NULL) {
+      _monitor.enableStuckRelayCheck(enabled, callback);
+    }
+    void enableVentRequired(bool enabled, std::function<void(int ret)> callback = NULL) {
+      _monitor.enableVentRequired(enabled, callback);
+    }
+    void enableTemperatureCheck(bool enabled, std::function<void(int ret)> callback = NULL) {
+      _monitor.enableTemperatureCheck(enabled, callback);
     }
 
     // Get/set the vehicle state
@@ -422,6 +470,9 @@ class EvseManager : public MicroTasks::Task
     // Register for events
     void onStateChange(MicroTasks::EventListener *listner) {
       _monitor.onStateChange(listner);
+    }
+    void onSettingsChanged(MicroTasks::EventListener *listner) {
+      _monitor.onSettingsChanged(listner);
     }
     void onDataReady(MicroTasks::EventListener *listner) {
       _monitor.onDataReady(listner);

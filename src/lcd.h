@@ -112,11 +112,11 @@ class LcdTask : public MicroTasks::Task
     bool _updateInfoLine;
 
     MicroTasks::EventListener _evseStateEvent;
+    MicroTasks::EventListener _evseSettingsEvent;
 
     LcdInfoLine ledStateFromEvseState(uint8_t);
     void setNewState(bool wake = true);
     int getPriority(LcdInfoLine state);
-
 
     void showText(int x, int y, const char *msg, bool clear);
 
