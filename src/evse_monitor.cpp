@@ -63,13 +63,15 @@
 #define EVSE_MONITOR_CURRENT_BOOT_READY         (1 << 2)
 #define EVSE_MONITOR_ENERGY_BOOT_READY          (1 << 3)
 #define EVSE_MONITOR_CURRENT_SENSOR_BOOT_READY  (1 << 4)
+#define EVSE_MONITOR_SERIAL_BOOT_READY          (1 << 5)
 
 #define EVSE_MONITOR_BOOT_READY ( \
         EVSE_MONITOR_FAULT_COUNT_BOOT_READY | \
         EVSE_MONITOR_FLAGS_BOOT_READY | \
         EVSE_MONITOR_CURRENT_BOOT_READY | \
         EVSE_MONITOR_ENERGY_BOOT_READY | \
-        EVSE_MONITOR_CURRENT_SENSOR_BOOT_READY\
+        EVSE_MONITOR_CURRENT_SENSOR_BOOT_READY | \
+        EVSE_MONITOR_SERIAL_BOOT_READY \
 )
 
 #define EVSE_MONITOR_SESSION_COMPLETE_MASK      OPENEVSE_VFLAG_EV_CONNECTED
@@ -253,6 +255,16 @@ void EvseMonitor::evseBoot(const char *firmware)
       _current_sensor_offset = offset;
 
       _boot_ready.ready(EVSE_MONITOR_CURRENT_SENSOR_BOOT_READY);
+    }
+  });
+
+  _openevse.getSerial([this](int ret, const char *serial)
+  {
+    if(RAPI_RESPONSE_OK == ret)
+    {
+      DBUGF("serial = %s", serial);
+      snprintf(_serial, sizeof(_serial), "%s", serial);
+      _boot_ready.ready(EVSE_MONITOR_SERIAL_BOOT_READY);
     }
   });
 

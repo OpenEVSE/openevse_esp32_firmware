@@ -32,6 +32,8 @@ handleConfigGet(MongooseHttpServerRequest *request, MongooseHttpServerResponseSt
   doc["espinfo"] = ESPAL.getChipInfo();
   doc["buildenv"] = buildenv;
   doc["version"] = currentfirmware;
+  doc["evse_serial"] = evse.getSerial();
+  doc["wifi_serial"] = serial;
 
   // Static supported protocols
   JsonArray mqtt_supported_protocols = doc.createNestedArray("mqtt_supported_protocols");
@@ -40,7 +42,6 @@ handleConfigGet(MongooseHttpServerRequest *request, MongooseHttpServerResponseSt
 
   JsonArray http_supported_protocols = doc.createNestedArray("http_supported_protocols");
   http_supported_protocols.add("http");
-  http_supported_protocols.add("https");
 
   // OpenEVSE module config
   doc["diode_check"] = evse.isDiodeCheckEnabled();
