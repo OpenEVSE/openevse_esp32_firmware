@@ -66,6 +66,10 @@ void ArduinoOcppTask::initializeArduinoOcpp() {
         initializeDiagnosticsService();
         initializeFwService();
 
+        /*
+         * BootNotification: provide the OCPP backend with relevant data about the OpenEVSE
+         * see https://github.com/OpenEVSE/ESP32_WiFi_V4.x/issues/219
+         */
         DynamicJsonDocument *evseDetailsDoc = new DynamicJsonDocument(JSON_OBJECT_SIZE(6));
         JsonObject evseDetails = evseDetailsDoc->to<JsonObject>();
         evseDetails["chargePointModel"] = "Advanced Series";
