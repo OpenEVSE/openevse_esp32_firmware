@@ -665,9 +665,9 @@ void LcdTask::displayInfoEventTime(const char *name, Scheduler::EventInstance &e
       hour = 12;
     }
 
-    sprintf(temp, "%s %d:%02d %s", name, hour, min, pm ? "PM" : "AM");
+    sprintf(temp, "%d:%02d %s", hour, min, pm ? "PM" : "AM");
   } else {
-    sprintf(temp, "%s --:--", name);
+    sprintf(temp, "--:--");
   }
   displayNameValue(1, name, temp);
 }
