@@ -70,15 +70,19 @@ void ArduinoOcppTask::initializeArduinoOcpp() {
          * BootNotification: provide the OCPP backend with relevant data about the OpenEVSE
          * see https://github.com/OpenEVSE/ESP32_WiFi_V4.x/issues/219
          */
-        DynamicJsonDocument *evseDetailsDoc = new DynamicJsonDocument(JSON_OBJECT_SIZE(6));
+        String evseFirmwareVersion = String(evse->getFirmwareVersion());
+
+        DynamicJsonDocument *evseDetailsDoc = new DynamicJsonDocument(
+            JSON_OBJECT_SIZE(5)
+            + serial.length() + 1
+            + currentfirmware.length() + 1
+            + evseFirmwareVersion.length() + 1);
         JsonObject evseDetails = evseDetailsDoc->to<JsonObject>();
         evseDetails["chargePointModel"] = "Advanced Series";
-        //evseDetails["chargePointSerialNumber"] = "TODO"; //see https://github.com/OpenEVSE/ESP32_WiFi_V4.x/issues/218
+        evseDetails["chargePointSerialNumber"] = serial; //see https://github.com/OpenEVSE/ESP32_WiFi_V4.x/issues/218
         evseDetails["chargePointVendor"] = "OpenEVSE";
-        evseDetails["firmwareVersion"] = evse->getFirmwareVersion();
-        //evseDetails["meterSerialNumber"] = "TODO";
-        //evseDetails["meterType"] = "TODO";
-        //see https://github.com/OpenEVSE/ESP32_WiFi_V4.x/issues/219
+        evseDetails["firmwareVersion"] = currentfirmware;
+        evseDetails["meterSerialNumber"] = evseFirmwareVersion;
 
         bootNotification(evseDetailsDoc, [this](JsonObject payload) { //ArduinoOcpp will delete evseDetailsDoc
             LCD_DISPLAY("OCPP connected!");
