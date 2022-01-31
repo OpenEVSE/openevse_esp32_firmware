@@ -26,6 +26,8 @@ jobs:
           - openevse_esp32-heltec-wifi-lora-v2
 
     steps:
+    - uses: ammaraskar/gcc-problem-matcher@master
+
     - uses: actions/checkout@v2
       with:
         submodules: recursive
@@ -114,4 +116,3 @@ jobs:
         title: "Development Build"
         files: |
           *.bin
- 

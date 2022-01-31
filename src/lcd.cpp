@@ -51,7 +51,8 @@ LcdTask::LcdTask() :
   _evse(NULL),
   _scheduler(NULL),
   _nextMessageTime(0),
-  _evseStateEvent(this)
+  _evseStateEvent(this),
+  _evseSettingsEvent(this)
 {
 }
 
@@ -127,6 +128,7 @@ void LcdTask::begin(EvseManager &evse, Scheduler &scheduler, ManualOverride &man
 void LcdTask::setup()
 {
   _evse->onStateChange(&_evseStateEvent);
+  _evse->onSettingsChanged(&_evseSettingsEvent);
 }
 
 unsigned long LcdTask::loop(MicroTasks::WakeReason reason)
@@ -234,6 +236,11 @@ unsigned long LcdTask::loop(MicroTasks::WakeReason reason)
   // If we have messages to display, do it
   if(_head) {
     return displayNextMessage();
+  }
+
+  if(_evseSettingsEvent.IsTriggered()) {
+    _updateStateDisplay = true;
+    _updateInfoLine = true;
   }
 
   // Else display the status screen

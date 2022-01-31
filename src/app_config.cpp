@@ -87,6 +87,8 @@ uint8_t led_brightness;
 // RFID storage
 String rfid_storage;
 
+long max_current_soft;
+
 String esp_hostname_default = "openevse-"+ESPAL.getShortId();
 
 void config_changed(String name);
@@ -161,6 +163,9 @@ ConfigOpt *opts[] =
 #endif
 // RFID storage
   new ConfigOptDefenition<String>(rfid_storage, "", "rfid_storage", "rs"),
+
+// EVSE settings
+  new ConfigOptDefenition<long>(max_current_soft, LONG_MAX, "max_current_soft", "mcs"),
 
 // Flags
   &flagsOpt,
@@ -247,6 +252,8 @@ void config_changed(String name)
   } else if(name == "led_brightness") {
     ledManager.setBrightness(led_brightness);
 #endif
+  } else if(name == "max_current_soft") {
+    evse.setMaxConfiguredCurrent(max_current_soft);
   }
 }
 

@@ -68,6 +68,8 @@ void handleUpdateRequest(MongooseHttpServerRequest *request);
 size_t handleUpdateUpload(MongooseHttpServerRequest *request, int ev, MongooseString filename, uint64_t index, uint8_t *data, size_t len);
 void handleUpdateClose(MongooseHttpServerRequest *request);
 
+extern uint32_t config_version;
+
 void dumpRequest(MongooseHttpServerRequest *request)
 {
 #ifdef ENABLE_DEBUG_WEB_REQUEST
@@ -612,9 +614,13 @@ handleStatus(MongooseHttpServerRequest *request) {
   doc["charge_rate"] = charge_rate;
   doc["divert_update"] = (millis() - lastUpdate) / 1000;
 
+  doc["service_level"] = static_cast<uint8_t>(evse.getActualServiceLevel());
+
   doc["ota_update"] = (int)Update.isRunning();
   doc["time"] = String(time);
   doc["offset"] = String(offset);
+
+  doc["config_version"] = String(config_version);
 
   doc["vehicle_state_update"] = (millis() - evse.getVehicleLastUpdated()) / 1000;
   if(teslaClient.getVehicleCnt() > 0) {
@@ -636,7 +642,6 @@ handleStatus(MongooseHttpServerRequest *request) {
       doc["time_to_full_charge"] = evse.getVehicleEta();
     }
   }
-
 
   response->setCode(200);
   serializeJson(doc, *response);

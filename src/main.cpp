@@ -88,6 +88,7 @@ static uint32_t last_mem = 0;
 #define ESCAPEQUOTE(A) TEXTIFY(A)
 String currentfirmware = ESCAPEQUOTE(BUILD_TAG);
 String buildenv = ESCAPEQUOTE(BUILD_ENV_NAME);
+String serial;
 
 ArduinoOcppTask ocpp = ArduinoOcppTask();
 
@@ -107,6 +108,9 @@ void setup()
   DEBUG.printf("Build date: " __DATE__ " " __TIME__ "\n");
   DEBUG.printf("IDF version: %s\n", ESP.getSdkVersion());
   DEBUG.printf("Free: %d\n", ESPAL.getFreeHeap());
+
+  serial = ESPAL.getLongId();
+  serial.toUpperCase();
 
   if(!LittleFS.begin(FORMAT_LITTLEFS_IF_FAILED)){
     DEBUG.println("LittleFS Mount Failed");
