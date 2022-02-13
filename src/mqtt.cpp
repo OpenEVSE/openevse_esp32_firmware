@@ -214,16 +214,19 @@ mqtt_connect()
       if (mqtt_grid_ie != "") {
         mqttclient.subscribe(mqtt_grid_ie);
       }
-      if (mqtt_vehicle_soc != "") {
-        mqttclient.subscribe(mqtt_vehicle_soc);
-      }
-      if (mqtt_vehicle_range != "") {
-        mqttclient.subscribe(mqtt_vehicle_range);
-      }
-      if (mqtt_vehicle_eta != "") {
-        mqttclient.subscribe(mqtt_vehicle_eta);
-      }
     }
+
+    // subscribe to vehicle information from MQTT if we are configured for it
+    if (mqtt_vehicle_soc != "") {
+        mqttclient.subscribe(mqtt_vehicle_soc);
+    }
+    if (mqtt_vehicle_range != "") {
+        mqttclient.subscribe(mqtt_vehicle_range);
+    }
+    if (mqtt_vehicle_eta != "") {
+        mqttclient.subscribe(mqtt_vehicle_eta);
+    }
+
     if (mqtt_vrms!="") {
       mqttclient.subscribe(mqtt_vrms);
     }
