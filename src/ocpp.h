@@ -57,6 +57,8 @@ private:
     bool arduinoOcppInitialized = false;
     void loadEvseBehavior();
 
+    ulong updateEvseClaimLast {0};
+
     String getCentralSystemUrl();
 
     static ArduinoOcppTask *instance;

@@ -61,7 +61,7 @@ void ArduinoOcppTask::initializeArduinoOcpp() {
             return (ArduinoOcpp::otime_t) time_now.tv_sec;
         };
 
-        OCPP_initialize(ocppSocket, (float) VOLTAGE_DEFAULT, ArduinoOcpp::FilesystemOpt::Use, clockAdapter);
+        OCPP_initialize(*ocppSocket, (float) VOLTAGE_DEFAULT, ArduinoOcpp::FilesystemOpt::Use, clockAdapter);
 
         initializeDiagnosticsService();
         initializeFwService();
@@ -119,11 +119,10 @@ void ArduinoOcppTask::loadEvseBehavior() {
 
     setOnChargingRateLimitChange([this] (float limit) { //limit = maximum charge rate in Watts
         charging_limit = limit;
-        this->updateEvseClaim();
     });
 
     setConnectorPluggedSampler([this] () {
-        return (bool) evse->isConnected();
+        return (bool) evse->isVehicleConnected();
     });
 
     setEvRequestsEnergySampler([this] () {
@@ -177,140 +176,31 @@ void ArduinoOcppTask::loadEvseBehavior() {
         if (!config_ocpp_enabled()) {
             return false;
         }
-        if (getTransactionId() >= 0) {
-            if (this->idTag.isEmpty() || this->idTag.equals(idInput)) {
-                //end of session
-                this->idTag.clear();
-                this->idTag_accepted = false;
-                stopTransaction();
-                LCD_DISPLAY("Finished. See you next time!");
-                DBUGLN(F("[ocpp] finished by presenting card"));
-                this->updateEvseClaim();
-            } else {
-                LCD_DISPLAY("Cards do not match");
-                DBUGLN(F("[ocpp] cards do not match"));
-            }
-
+        if (idInput.isEmpty()) {
+            DBUGLN("[ocpp] empty idTag");
             return true;
         }
-
-        if (!isAvailable()) {
+        if (!isAvailable() || !arduinoOcppInitialized) {
             LCD_DISPLAY("OCPP inoperative");
             DBUGLN(F("[ocpp] present card but inoperative"));
             return true;
         }
+        const char *sessionIdTag = getSessionIdTag();
+        if (sessionIdTag) {
+            //currently in an authorized session
+            if (idInput.equals(sessionIdTag)) {
+                //NFC card matches
+                endSession();
+            } else {
+                LCD_DISPLAY("87|Card not recognized");
+            }
+        } else {
+            //idle mode
+            beginSession(idInput.c_str());
+        }
 
-        LCD_DISPLAY("Card authorization");
-        
-        this->idTag = idInput;
-        authorize(idTag, [this, idInput] (JsonObject payload) {
-            if (!idTagIsAccepted(payload)) {
-                LCD_DISPLAY("Please check card");
-                DBUGLN(F("[ocpp] not authorized"));
-                return;
-            }
-            if (!this->idTag.equals(idInput)) {
-                //this Authorize message is obsolete
-                return;
-            }
-            this->idTag_accepted = true;
-            this->idTag_timestamp = millis();
-            LCD_DISPLAY("Welcome");
-            DBUGLN(F("[ocpp] authorized"));
-
-            if (this->vehicleConnected && getTransactionId() < 0 && isAvailable()) {
-                startTransaction([this] (JsonObject payload) {
-                    if (idTagIsRejected(payload)) {
-                        LCD_DISPLAY("Please check card");
-                        DBUGLN(F("[ocpp] startTransaction denied"));
-                    }
-                    this->updateEvseClaim();
-                });
-            }
-        }, [this] () {
-            LCD_DISPLAY("Please try card again");
-            DBUGLN(F("[ocpp] authorize abort"));
-        });
         return true;
     };
-
-    onVehicleConnect = [this] () {
-        if (getTransactionId() < 0 && isAvailable()) {
-            if (this->idTag_accepted && millis() - this->idTag_timestamp <= IDTAG_TIMEOUT) {
-                startTransaction([this] (JsonObject payload) {
-                    this->updateEvseClaim();
-                }, [this] () {
-                    LCD_DISPLAY("Please unplug and plug again");
-                });
-            } else if (!ocpp_idTag.isEmpty()) {
-                authorize(ocpp_idTag, [this] (JsonObject payload) {
-                    if (idTagIsAccepted(payload)) {
-                        startTransaction([this] (JsonObject payload) {
-                            this->updateEvseClaim();
-                        }, [this] () {
-                            LCD_DISPLAY("Central system error");
-                        });
-                    } else {
-                        LCD_DISPLAY("Preset ID tag not recognized");
-                    }
-                }, [this] () {
-                    LCD_DISPLAY("OCPP timeout");
-                });
-//            } else {
-//                startTransaction([this] (JsonObject payload) {
-//                    if (!idTagIsRejected(payload)) {
-//                        this->updateEvseClaim();
-//                    } else {
-//                        LCD_DISPLAY("ID tag required");
-//                    }
-//                    this->updateEvseClaim();
-//                }, [this] () {
-//                    LCD_DISPLAY("Central system error");
-//                });
-            } else {
-                LCD_DISPLAY("Need authorization");
-                DBUGLN(F("[ocpp] plugged, but not authorized yet"));
-            }
-
-        }
-        this->updateEvseClaim();
-    };
-
-    setOnRemoteStartTransactionSendConf([this] (JsonObject payload) {
-        if (!operationIsAccepted(payload)){
-            //RemoteStartTransaction rejected! Do nothing
-            return;
-        }
-
-        this->idTag.clear();
-
-        startTransaction([this] (JsonObject payload) {
-            this->updateEvseClaim();
-        }, [this] () {
-            LCD_DISPLAY("Central system error");
-        });
-    });
-
-    onVehicleDisconnect = [this] () {
-        if (getTransactionId() >= 0) {
-            stopTransaction();
-        }
-        this->updateEvseClaim();
-        this->idTag.clear();
-        this->idTag_accepted = false;
-    };
-
-    setOnRemoteStopTransactionSendConf([this](JsonObject payload) {
-        if (!operationIsAccepted(payload)){
-            //RemoteStopTransaction rejected! There is no transaction with given ID. Do nothing
-            return;
-        }
-
-        stopTransaction();
-        this->updateEvseClaim();
-        this->idTag.clear();
-        this->idTag_accepted = false;
-    });
 
     setOnResetReceiveReq([this] (JsonObject payload) {
         const char *type = payload["type"] | "Soft";
@@ -330,7 +220,7 @@ void ArduinoOcppTask::loadEvseBehavior() {
         return false;
     });
 
-    updateEvseClaim();
+    //updateEvseClaim();
 }
 
 unsigned long ArduinoOcppTask::loop(MicroTasks::WakeReason reason) {
@@ -338,11 +228,6 @@ unsigned long ArduinoOcppTask::loop(MicroTasks::WakeReason reason) {
     if (arduinoOcppInitialized) {
         if (config_ocpp_enabled()) {
             OCPP_loop();
-        } else {
-            //The OCPP function has been activated and then deactivated again.
-
-            ArduinoOcpp::ocppEngine_loop(); //There could be remaining operations in the OCPP-queue. I will add the OCPP_unitialize() soon as a better solution to this
-            return 0;
         }
     } else {
         if (config_ocpp_enabled()) {
@@ -355,16 +240,19 @@ unsigned long ArduinoOcppTask::loop(MicroTasks::WakeReason reason) {
     if (evse->isVehicleConnected() && !vehicleConnected) {
         vehicleConnected = evse->isVehicleConnected();
 
-        if (strcmp(tx_start_point.c_str(), "tx_only_remote")) {
-            //tx_start_point is different from tx_only_remote. Plugging an EV starts a transaction
-            onVehicleConnect();
+        if (!config_rfid_enabled()) {
+            //no rfid reader --> sessions will be started by plugging the EV or by RemoteStartTransaction
+            if (strcmp(tx_start_point.c_str(), "tx_only_remote")) {
+                //tx_start_point is different from tx_only_remote. Plugging an EV begins a session
+                if (!getSessionIdTag()) { //check if session has already begun
+                    beginSession(ocpp_idTag.isEmpty() ? "A0-00-00-00" : ocpp_idTag.c_str());
+                }
+            }
         }
     }
 
     if (!evse->isVehicleConnected() && vehicleConnected) {
         vehicleConnected = evse->isVehicleConnected();
-
-        onVehicleDisconnect();
     }
 
     if (resetTriggered) {
@@ -380,11 +268,9 @@ unsigned long ArduinoOcppTask::loop(MicroTasks::WakeReason reason) {
         }
     }
 
-    if (idTag_accepted && millis() - idTag_timestamp > IDTAG_TIMEOUT) {
-        idTag_accepted = false;
-
-        LCD_DISPLAY("Aborted. Please present card again");
-        DBUGLN(F("[ocpp] RFID auth timeout"));
+    if (millis() - updateEvseClaimLast >= 1009) {
+        updateEvseClaimLast = millis();
+        updateEvseClaim();
     }
 
     return 0;
@@ -395,24 +281,13 @@ void ArduinoOcppTask::updateEvseClaim() {
     EvseState evseState;
     EvseProperties evseProperties;
 
-    int transactionId = getTransactionId(); //ID of OCPP-transaction. transactionId <  0 means that no transaction runs on the EVSE at the moment
-                                            //                        transactionId >  0 means that the EVSE is in a charging transaction right now
-                                            //                        transactionId == 0 means that the initiation is pending
-
-    //EVSE is in an OCPP-transaction?
-    if (transactionId < 0) {
-        //no transaction running. Forbid charging
-        evseState = EvseState::Disabled;
-    } else if (transactionId == 0) {
+    if (getTransactionId() == 0 && !strcmp(tx_start_point.c_str(), "tx_pending")) {
         //transaction initiated but neither accepted nor rejected
-        if (!strcmp(tx_start_point.c_str(), "tx_pending")) {
-            evseState = EvseState::Active;
-        } else {
-            evseState = EvseState::Disabled;
-        }
-    } else {
-        //transaction running. Allow charging
         evseState = EvseState::Active;
+    } else if (ocppPermitsCharge()) {
+        evseState = EvseState::Active;
+    } else {
+        evseState = EvseState::Disabled;
     }
 
     evseProperties = evseState;
@@ -489,8 +364,10 @@ void ArduinoOcppTask::reconfigure() {
             String mUrl = getCentralSystemUrl();
             ocppSocket->reconnect(mUrl);
         } else {
+            OCPP_deinitialize();
             String emptyUrl = String("");
             ocppSocket->reconnect(emptyUrl);
+            arduinoOcppInitialized = false;
         }
     } else {
         initializeArduinoOcpp();
@@ -499,7 +376,7 @@ void ArduinoOcppTask::reconfigure() {
 }
 
 void ArduinoOcppTask::initializeDiagnosticsService() {
-    ArduinoOcpp::DiagnosticsService *diagService = ArduinoOcpp::getDiagnosticsService();
+    ArduinoOcpp::DiagnosticsService *diagService = getDiagnosticsService();
     if (diagService) {
         diagService->setOnUploadStatusSampler([this] () {
             if (diagFailure) {
@@ -619,7 +496,7 @@ void ArduinoOcppTask::initializeDiagnosticsService() {
 }
 
 void ArduinoOcppTask::initializeFwService() {
-    ArduinoOcpp::FirmwareService *fwService = ArduinoOcpp::getFirmwareService();
+    ArduinoOcpp::FirmwareService *fwService = getFirmwareService();
     if (fwService) {
         fwService->setBuildNumber(evse->getFirmwareVersion());
 
