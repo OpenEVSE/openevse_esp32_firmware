@@ -15,8 +15,6 @@
 #include "MongooseOcppSocketClient.h"
 #include <MongooseHttpClient.h>
 
-#define IDTAG_TIMEOUT 30000UL
-
 class ArduinoOcppTask: public MicroTasks::Task {
 private:
     MongooseOcppSocketClient *ocppSocket = NULL;

@@ -37,60 +37,82 @@ void ArduinoOcppTask::begin(EvseManager &evse, LcdTask &lcd, EventLog &eventLog,
     this->eventLog = &eventLog;
     this->rfid = &rfid;
 
-    initializeArduinoOcpp();
-    loadEvseBehavior();
+    reconfigure();
 
     instance = this; //cannot be in constructer because object is invalid before .begin()
     MicroTask.startTask(this);
 }
 
-void ArduinoOcppTask::initializeArduinoOcpp() {
+void ArduinoOcppTask::reconfigure() {
 
-    if (config_ocpp_enabled() && !arduinoOcppInitialized) {
+    if (arduinoOcppInitialized) {
+        arduinoOcppInitialized = false;
 
+        if (!config_ocpp_enabled() && ocppSocket) {
+            String emptyUrl = String("");
+            ocppSocket->reconnect(emptyUrl);
+        }
+        OCPP_deinitialize();
+    }
+
+    if (config_ocpp_enabled()) {
         String url = getCentralSystemUrl();
 
-        if (url.isEmpty()) {
-            return;
+        if (ocppSocket) {
+            ocppSocket->reconnect(url);
+        } else {
+            ocppSocket = new MongooseOcppSocketClient(url);
         }
 
-        ocppSocket = new MongooseOcppSocketClient(url);
-
-        ArduinoOcpp::OcppClock clockAdapter = [] () {
-            timeval time_now;
-            gettimeofday(&time_now, NULL);
-            return (ArduinoOcpp::otime_t) time_now.tv_sec;
-        };
-
-        OCPP_initialize(*ocppSocket, (float) VOLTAGE_DEFAULT, ArduinoOcpp::FilesystemOpt::Use, clockAdapter);
-
-        initializeDiagnosticsService();
-        initializeFwService();
-
-        /*
-         * BootNotification: provide the OCPP backend with relevant data about the OpenEVSE
-         * see https://github.com/OpenEVSE/ESP32_WiFi_V4.x/issues/219
-         */
-        String evseFirmwareVersion = String(evse->getFirmwareVersion());
-
-        DynamicJsonDocument *evseDetailsDoc = new DynamicJsonDocument(
-            JSON_OBJECT_SIZE(5)
-            + serial.length() + 1
-            + currentfirmware.length() + 1
-            + evseFirmwareVersion.length() + 1);
-        JsonObject evseDetails = evseDetailsDoc->to<JsonObject>();
-        evseDetails["chargePointModel"] = "Advanced Series";
-        evseDetails["chargePointSerialNumber"] = serial; //see https://github.com/OpenEVSE/ESP32_WiFi_V4.x/issues/218
-        evseDetails["chargePointVendor"] = "OpenEVSE";
-        evseDetails["firmwareVersion"] = currentfirmware;
-        evseDetails["meterSerialNumber"] = evseFirmwareVersion;
-
-        bootNotification(evseDetailsDoc, [this](JsonObject payload) { //ArduinoOcpp will delete evseDetailsDoc
-            LCD_DISPLAY("OCPP connected!");
-        });
+        initializeArduinoOcpp();
 
         arduinoOcppInitialized = true;
     }
+}
+
+void ArduinoOcppTask::initializeArduinoOcpp() {
+
+    String url = getCentralSystemUrl();
+
+    if (url.isEmpty()) {
+        return;
+    }
+
+    ocppSocket = new MongooseOcppSocketClient(url);
+
+    ArduinoOcpp::OcppClock clockAdapter = [] () {
+        timeval time_now;
+        gettimeofday(&time_now, NULL);
+        return (ArduinoOcpp::otime_t) time_now.tv_sec;
+    };
+
+    OCPP_initialize(*ocppSocket, (float) VOLTAGE_DEFAULT, ArduinoOcpp::FilesystemOpt::Use, clockAdapter);
+
+    loadEvseBehavior();
+    initializeDiagnosticsService();
+    initializeFwService();
+
+    /*
+     * BootNotification: provide the OCPP backend with relevant data about the OpenEVSE
+     * see https://github.com/OpenEVSE/ESP32_WiFi_V4.x/issues/219
+     */
+    String evseFirmwareVersion = String(evse->getFirmwareVersion());
+
+    DynamicJsonDocument *evseDetailsDoc = new DynamicJsonDocument(
+        JSON_OBJECT_SIZE(5)
+        + serial.length() + 1
+        + currentfirmware.length() + 1
+        + evseFirmwareVersion.length() + 1);
+    JsonObject evseDetails = evseDetailsDoc->to<JsonObject>();
+    evseDetails["chargePointModel"] = "Advanced Series";
+    evseDetails["chargePointSerialNumber"] = serial; //see https://github.com/OpenEVSE/ESP32_WiFi_V4.x/issues/218
+    evseDetails["chargePointVendor"] = "OpenEVSE";
+    evseDetails["firmwareVersion"] = currentfirmware;
+    evseDetails["meterSerialNumber"] = evseFirmwareVersion;
+
+    bootNotification(evseDetailsDoc, [this](JsonObject payload) { //ArduinoOcpp will delete evseDetailsDoc
+        LCD_DISPLAY("OCPP connected!");
+    });
 }
 
 void ArduinoOcppTask::setup() {
@@ -98,10 +120,6 @@ void ArduinoOcppTask::setup() {
 }
 
 void ArduinoOcppTask::loadEvseBehavior() {
-
-    if (!arduinoOcppInitialized) {
-        return;
-    }
 
     /*
      * Synchronize OpenEVSE data with OCPP-library data
@@ -244,21 +262,17 @@ void ArduinoOcppTask::loadEvseBehavior() {
 unsigned long ArduinoOcppTask::loop(MicroTasks::WakeReason reason) {
 
     if (arduinoOcppInitialized) {
-        if (config_ocpp_enabled()) {
-            OCPP_loop();
-        }
-    } else {
-        if (config_ocpp_enabled()) {
-            initializeArduinoOcpp();
-            loadEvseBehavior();
-        }
+        OCPP_loop();
+    }
+    if (arduinoOcppInitialized != config_ocpp_enabled()) {
+        reconfigure();
         return 50;
     }
 
     if (evse->isVehicleConnected() && !vehicleConnected) {
         vehicleConnected = evse->isVehicleConnected();
 
-        if (!config_rfid_enabled()) {
+        if (arduinoOcppInitialized && !config_rfid_enabled()) {
             //no rfid reader --> sessions will be started by plugging the EV or by RemoteStartTransaction
             if (strcmp(tx_start_point.c_str(), "tx_only_remote")) {
                 //tx_start_point is different from tx_only_remote. Plugging an EV begins a session
@@ -291,7 +305,7 @@ unsigned long ArduinoOcppTask::loop(MicroTasks::WakeReason reason) {
         updateEvseClaim();
     }
 
-    return 0;
+    return arduinoOcppInitialized ? 0 : 1000;
 }
 
 void ArduinoOcppTask::updateEvseClaim() {
@@ -374,23 +388,6 @@ void ArduinoOcppTask::notifyConfigChanged() {
     if (instance) {
         instance->reconfigure();
     }
-}
-
-void ArduinoOcppTask::reconfigure() {
-    if (arduinoOcppInitialized) {
-        if (config_ocpp_enabled()) {
-            String mUrl = getCentralSystemUrl();
-            ocppSocket->reconnect(mUrl);
-        } else {
-            OCPP_deinitialize();
-            String emptyUrl = String("");
-            ocppSocket->reconnect(emptyUrl);
-            arduinoOcppInitialized = false;
-        }
-    } else {
-        initializeArduinoOcpp();
-    }
-    loadEvseBehavior();
 }
 
 void ArduinoOcppTask::initializeDiagnosticsService() {
