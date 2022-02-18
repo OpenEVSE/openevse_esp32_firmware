@@ -21,7 +21,7 @@
 
 ArduinoOcppTask *ArduinoOcppTask::instance = NULL;
 
-ArduinoOcppTask::ArduinoOcppTask() : MicroTasks::Task() /*, bootReadyCallback(MicroTasksCallback([](){})) */ {
+ArduinoOcppTask::ArduinoOcppTask() : MicroTasks::Task() {
 
 }
 
@@ -30,11 +30,12 @@ ArduinoOcppTask::~ArduinoOcppTask() {
     instance = NULL;
 }
 
-void ArduinoOcppTask::begin(EvseManager &evse, LcdTask &lcd, EventLog &eventLog) {
+void ArduinoOcppTask::begin(EvseManager &evse, LcdTask &lcd, EventLog &eventLog, RfidTask &rfid) {
 
     this->evse = &evse;
     this->lcd = &lcd;
     this->eventLog = &eventLog;
+    this->rfid = &rfid;
 
     initializeArduinoOcpp();
     loadEvseBehavior();
@@ -139,6 +140,7 @@ void ArduinoOcppTask::loadEvseBehavior() {
 
     addConnectorErrorCodeSampler([this] () {
         if (evse->getEvseState() == OPENEVSE_STATE_GFI_FAULT ||
+                evse->getEvseState() == OPENEVSE_STATE_GFI_SELF_TEST_FAILED ||
                 evse->getEvseState() == OPENEVSE_STATE_NO_EARTH_GROUND ||
                 evse->getEvseState() == OPENEVSE_STATE_DIODE_CHECK_FAILED) {
             return "GroundFailure";
@@ -161,11 +163,17 @@ void ArduinoOcppTask::loadEvseBehavior() {
     });
 
     addConnectorErrorCodeSampler([this] () {
-        if (evse->getEvseState() == OPENEVSE_STATE_STUCK_RELAY ||
-                evse->getEvseState() == OPENEVSE_STATE_GFI_SELF_TEST_FAILED) {
-            return "InternalError";
+        if (evse->getEvseState() == OPENEVSE_STATE_STUCK_RELAY) {
+            return "PowerSwitchFailure";
         }
         return (const char *) NULL;
+    });
+
+    addConnectorErrorCodeSampler([this] () {
+        if (rfid->communicationFails()) {
+            return "ReaderFailure";
+        }
+        return (const char *) nullptr;
     });
 
     /*
@@ -181,7 +189,7 @@ void ArduinoOcppTask::loadEvseBehavior() {
             return true;
         }
         if (!isAvailable() || !arduinoOcppInitialized) {
-            LCD_DISPLAY("OCPP inoperative");
+            LCD_DISPLAY("4|OCPP inoperative");
             DBUGLN(F("[ocpp] present card but inoperative"));
             return true;
         }
@@ -192,15 +200,27 @@ void ArduinoOcppTask::loadEvseBehavior() {
                 //NFC card matches
                 endSession();
             } else {
-                LCD_DISPLAY("87|Card not recognized");
+                LCD_DISPLAY("1|Card not recognized");
             }
         } else {
             //idle mode
-            beginSession(idInput.c_str());
+            String idInputCapture = idInput;
+            authorize(idInput.c_str(), [this, idInputCapture] (JsonObject payload) {
+                if (idTagIsAccepted(payload)) {
+                    beginSession(idInputCapture.c_str());
+                    LCD_DISPLAY("2|Card accepted");
+                } else {
+                    LCD_DISPLAY("3|Card not recognized");
+                }
+            }, [this] () {
+                LCD_DISPLAY("4|Card timeout");
+            });
         }
 
         return true;
     };
+
+    rfid->setOnCardScanned(&onIdTagInput);
 
     setOnResetReceiveReq([this] (JsonObject payload) {
         const char *type = payload["type"] | "Soft";
@@ -219,8 +239,6 @@ void ArduinoOcppTask::loadEvseBehavior() {
         //see https://github.com/OpenEVSE/ESP32_WiFi_V4.x/issues/230
         return false;
     });
-
-    //updateEvseClaim();
 }
 
 unsigned long ArduinoOcppTask::loop(MicroTasks::WakeReason reason) {
@@ -533,24 +551,7 @@ void ArduinoOcppTask::initializeFwService() {
     }
 }
 
-bool ArduinoOcppTask::operationIsAccepted(JsonObject payload) {
-    const char *status = payload["status"] | "Invalid";
-    return !strcmp(status, "Accepted");
-}
-
 bool ArduinoOcppTask::idTagIsAccepted(JsonObject payload) {
     const char *status = payload["idTagInfo"]["status"] | "Invalid";
     return !strcmp(status, "Accepted");
-}
-
-bool ArduinoOcppTask::idTagIsRejected(JsonObject payload) {
-    const char *status = payload["idTagInfo"]["status"] | "Accepted";
-    return strcmp(status, "Accepted");
-}
-
-std::function<bool(const String& idTag)> *ArduinoOcppTask::getOnIdTagInput() {
-    if (!onIdTagInput) {
-        DBUGLN(F("[ocpp] called ArduinoOcppTask::getOnIdTagInput() before initialization!"));
-    }
-    return &onIdTagInput;
 }

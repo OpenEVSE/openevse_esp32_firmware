@@ -3,6 +3,9 @@
  *         Matthias Akstaller
  */
 
+#ifndef RFIDTASK_H
+#define RFIDTASK_H
+
 #include <ArduinoJson.h>
 #include <MicroTasks.h>
 #include <Wire.h>
@@ -78,3 +81,5 @@ class RfidTask : public MicroTasks::Task {
 };
 
 extern RfidTask rfid;
+
+#endif
