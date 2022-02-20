@@ -46,6 +46,9 @@ class LedManagerTask : public MicroTasks::Task
 #if RGB_LED
     void setAllRGB(uint8_t red, uint8_t green, uint8_t blue);
 #endif
+#if RGB_LED
+    void setEvseAndWifiRGB(uint8_t evseRed, uint8_t evseGreen, uint8_t evseBlue, uint8_t wifiRed, uint8_t wifiGreen, uint8_t wifiBlue);
+#endif
 
 #ifdef WIFI_LED
     void setWiFiLed(uint8_t state);
