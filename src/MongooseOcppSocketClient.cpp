@@ -243,7 +243,7 @@ bool MongooseOcppSocketClient::isValidUrl(const char *url) {
     if (url[1] != 'S' && url[1] != 's')
         return false;
 
-    if (url[2] == 'S' && url[2] == 's') {
+    if (url[2] == 'S' || url[2] == 's') {
         if (url[3] != ':')
             return false;
         //else: passed
