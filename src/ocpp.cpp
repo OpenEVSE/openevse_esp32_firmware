@@ -403,7 +403,7 @@ void ArduinoOcppTask::initializeDiagnosticsService() {
             }
         });
 
-        diagService->setOnUpload([this] (String &location, ArduinoOcpp::OcppTimestamp &startTime, ArduinoOcpp::OcppTimestamp &stopTime) {
+        diagService->setOnUpload([this] (const std::string &location, ArduinoOcpp::OcppTimestamp &startTime, ArduinoOcpp::OcppTimestamp &stopTime) {
             
             //reset reported state
             diagSuccess = false;
@@ -414,7 +414,7 @@ void ArduinoOcppTask::initializeDiagnosticsService() {
             struct mg_str scheme, query, fragment;
             if (mg_parse_uri(mg_mk_str(location.c_str()), &scheme, NULL, NULL, &port_i, NULL, &query, &fragment)) {
                 DBUG(F("[ocpp] Diagnostics upload, invalid URL: "));
-                DBUGLN(location);
+                DBUGLN(location.c_str());
                 diagFailure = true;
                 return false;
             }
@@ -483,7 +483,7 @@ void ArduinoOcppTask::initializeDiagnosticsService() {
             body += bodySuffix;
 
             DBUG(F("[ocpp] POST diagnostics file to "));
-            DBUGLN(location);
+            DBUGLN(location.c_str());
 
             MongooseHttpClientRequest *request =
                     diagClient.beginRequest(location.c_str());
@@ -525,7 +525,7 @@ void ArduinoOcppTask::initializeFwService() {
             }
         });
 
-        fwService->setOnInstall([this](String &location) {
+        fwService->setOnInstall([this](const std::string &location) {
 
             DBUGLN(F("[ocpp] Starting installation routine"));
             
@@ -533,7 +533,7 @@ void ArduinoOcppTask::initializeFwService() {
             updateFailure = false;
             updateSuccess = false;
 
-            return http_update_from_url(location, [] (size_t complete, size_t total) { },
+            return http_update_from_url(String(location.c_str()), [] (size_t complete, size_t total) { },
                 [this] (int status_code) {
                     //onSuccess
                     updateSuccess = true;

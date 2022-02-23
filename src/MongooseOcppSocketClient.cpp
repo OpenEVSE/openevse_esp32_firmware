@@ -203,7 +203,7 @@ void MongooseOcppSocketClient::reconnect(const String &ws_url) {
     maintainWsConn();
 }
 
-bool MongooseOcppSocketClient::sendTXT(String &out) {
+bool MongooseOcppSocketClient::sendTXT(std::string &out) {
     /*
      * Check if the EVSE is able to send the data at the moment. This fuzzy check can be useful to
      * to diagnose connection problems at upper layers. It gives no guarantee that packages will
