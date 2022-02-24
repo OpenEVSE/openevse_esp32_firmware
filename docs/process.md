@@ -21,12 +21,12 @@ For releases and PR approval the builds are built using the [Build/Release OpenE
 1. Ensure GitHub actions are complete and green
     [![Build/Release OpenEVSE](https://github.com/OpenEVSE/ESP32_WiFi_V4.x/actions/workflows/build.yaml/badge.svg)](https://github.com/OpenEVSE/ESP32_WiFi_V4.x/actions/workflows/build.yaml)
 1. Check the [version number](https://semver.org/) is correct
-1. Go to the latest [Development Build](https://github.com/jeremypoulter/ESP32_WiFi_V4.x/releases/tag/latest) release
+1. Go to the latest [Development Build](https://github.com/OpenEVSE/ESP32_WiFi_V4.x/releases/tag/latest) release
 1. Edit the release
 1. Change the tag from latest to the [version number](https://semver.org/), for example: `v1.0.0`
 1. Change the branch to `latest`, is not automatically filled in so have to type the name in. Will show the appropriate commit hash on pressing enter
 1. Enter the version number as the release name, for example: `v1.0.0`
-1. Add the release notes, a goot start is to use the `Auto-Generated Release Notes` and edit as needed
+1. Add the release notes, a good start is to use the `Auto-Generated Release Notes` and edit as needed
 1. Remove any unwanted binaries, need at least:
     - `openevse_esp32-gateway-e.bin`
     - `openevse_huzzah32.bin`
