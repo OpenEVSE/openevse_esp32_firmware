@@ -127,6 +127,7 @@ unsigned long RfidTask::loop(MicroTasks::WakeReason reason){
 
     if (pn532_status == PN532_DeviceStatus::ACTIVE && millis() - pn532_lastResponse > MAXIMUM_UNRESPONSIVE_TIME) {
         DBUGLN(F("[rfid] connection with PN532 lost"));
+        lcd.display("RFID chip not found", 0, 1, 5 * 1000, LCD_CLEAR_LINE);
         pn532_status = PN532_DeviceStatus::FAILED;
     }
     

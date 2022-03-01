@@ -113,6 +113,9 @@ void ArduinoOcppTask::initializeArduinoOcpp() {
     bootNotification(evseDetailsDoc, [this](JsonObject payload) { //ArduinoOcpp will delete evseDetailsDoc
         LCD_DISPLAY("OCPP connected!");
     });
+
+    ocppTxIdDisplay = getTransactionId();
+    ocppSessionDisplay = getSessionIdTag();
 }
 
 void ArduinoOcppTask::setup() {
@@ -207,7 +210,7 @@ void ArduinoOcppTask::loadEvseBehavior() {
             return true;
         }
         if (!isAvailable() || !arduinoOcppInitialized) {
-            LCD_DISPLAY("4|OCPP inoperative");
+            LCD_DISPLAY("OCPP inoperative");
             DBUGLN(F("[ocpp] present card but inoperative"));
             return true;
         }
@@ -217,21 +220,26 @@ void ArduinoOcppTask::loadEvseBehavior() {
             if (idInput.equals(sessionIdTag)) {
                 //NFC card matches
                 endSession();
+                LCD_DISPLAY("Card accepted");
             } else {
-                LCD_DISPLAY("1|Card not recognized");
+                LCD_DISPLAY("Card not recognized");
             }
         } else {
             //idle mode
+            LCD_DISPLAY("Card read");
             String idInputCapture = idInput;
             authorize(idInput.c_str(), [this, idInputCapture] (JsonObject payload) {
                 if (idTagIsAccepted(payload)) {
                     beginSession(idInputCapture.c_str());
-                    LCD_DISPLAY("2|Card accepted");
+                    LCD_DISPLAY("Card accepted");
+                    if (!evse->isVehicleConnected()) {
+                        LCD_DISPLAY("Plug in cable");
+                    }
                 } else {
-                    LCD_DISPLAY("3|Card not recognized");
+                    LCD_DISPLAY("Card not recognized");
                 }
             }, [this] () {
-                LCD_DISPLAY("4|Card timeout");
+                LCD_DISPLAY("OCPP timeout");
             });
         }
 
@@ -281,11 +289,42 @@ unsigned long ArduinoOcppTask::loop(MicroTasks::WakeReason reason) {
                 }
             }
         }
+
+        if (!getSessionIdTag()) {
+            if (config_rfid_enabled()) {
+                LCD_DISPLAY("Need card");
+            } else {
+                LCD_DISPLAY("Please authorize session");
+            }
+        }
     }
 
     if (!evse->isVehicleConnected() && vehicleConnected) {
         vehicleConnected = evse->isVehicleConnected();
     }
+
+    if (ocppSessionDisplay && !getSessionIdTag()) {
+        //Session unauthorized. Show if StartTransaction didn't succeed
+        if (ocppTxIdDisplay < 0) {
+            LCD_DISPLAY("Card timeout");
+            LCD_DISPLAY("Present card again");
+        }
+    }
+    ocppSessionDisplay = getSessionIdTag();
+
+    if (ocppTxIdDisplay <= 0 && getTransactionId() > 0) {
+        LCD_DISPLAY("OCPP start tx");
+        String txIdMsg = "TxID ";
+        txIdMsg += String(getTransactionId());
+        LCD_DISPLAY(txIdMsg);
+    } else if (ocppTxIdDisplay > 0 && getTransactionId() < 0) {
+        LCD_DISPLAY("OCPP Good bye!");
+        String txIdMsg = "TxID ";
+        txIdMsg += String(ocppTxIdDisplay);
+        txIdMsg += " finished";
+        LCD_DISPLAY(txIdMsg);
+    }
+    ocppTxIdDisplay = getTransactionId();
 
     if (resetTriggered) {
         if (millis() - resetTime >= 10000UL) { //wait for 10 seconds after reset command to send the conf msg

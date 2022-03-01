@@ -492,7 +492,7 @@ void LcdTask::displayStateLine(uint8_t evseState, unsigned long &nextUpdate)
     case OPENEVSE_STATE_SLEEPING:
     case OPENEVSE_STATE_DISABLED:
       // Line 0 "zzZ Sleeping Zzz"
-      showText(0, 0, config_rfid_enabled ? "Scan RFID tag":"zzZ Sleeping Zzz", true);
+      showText(0, 0, "zzZ Sleeping Zzz", true);
       _updateStateDisplay = false;
       break;
 

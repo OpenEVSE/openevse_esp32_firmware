@@ -24,6 +24,8 @@ private:
     RfidTask *rfid;
 
     float charging_limit = -1.f; //in Watts. chargingLimit < 0 means that there is no Smart Charging (and no restrictions )
+    int ocppTxIdDisplay {-1};
+    bool ocppSessionDisplay {false};
 
     bool vehicleConnected = false;
 
