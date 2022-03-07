@@ -3,6 +3,10 @@
  *         Matthias Akstaller
  */
 
+#if defined(ENABLE_DEBUG) && !defined(ENABLE_DEBUG_NFCREADER)
+#undef ENABLE_DEBUG
+#endif
+
 #include "rfid.h"
 
 #include "debug.h"
@@ -126,7 +130,7 @@ unsigned long RfidTask::loop(MicroTasks::WakeReason reason){
     }
 
     if (pn532_status == PN532_DeviceStatus::ACTIVE && millis() - pn532_lastResponse > MAXIMUM_UNRESPONSIVE_TIME) {
-        DBUGLN(F("[rfid] connection with PN532 lost"));
+        DBUGLN(F("[rfid] connection to PN532 lost"));
         lcd.display("RFID chip not found", 0, 1, 5 * 1000, LCD_CLEAR_LINE);
         pn532_status = PN532_DeviceStatus::FAILED;
     }
@@ -374,7 +378,7 @@ void RfidTask::pn532_read() {
 
     if (cmd_code == PN532_CMD_SAMCONFIGURATION_RESPONSE) {
         //success
-        DBUGLN(F("[rfid] connection with PN532 active"));
+        DBUGLN(F("[rfid] connection to PN532 active"));
         pn532_status = PN532_DeviceStatus::ACTIVE;
         pn532_lastResponse = millis();
 

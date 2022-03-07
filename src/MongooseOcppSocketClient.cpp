@@ -3,6 +3,10 @@
  * Created: 2021-04-10
  */
 
+#if defined(ENABLE_DEBUG) && !defined(ENABLE_DEBUG_OCPPSOCKET)
+#undef ENABLE_DEBUG
+#endif
+
 #include "MongooseOcppSocketClient.h"
 #include "net_manager.h"
 #include "debug.h"

@@ -5,21 +5,23 @@
 
 #include "ocpp.h"
 
-#include "app_config.h"
-
-#include <ArduinoOcpp.h> // Facade for ArduinoOcpp
-#include <ArduinoOcpp/SimpleOcppOperationFactory.h> // define behavior for incoming req messages
-
-#include "http_update.h"
-
+#include <ArduinoOcpp.h>
+#include <ArduinoOcpp/SimpleOcppOperationFactory.h>
 #include <ArduinoOcpp/Core/OcppEngine.h>
+#include <ArduinoOcpp/Platform.h>
 
-#include "emonesp.h" //for VOLTAGE_DEFAULT
+#include "app_config.h"
+#include "http_update.h"
+#include "emonesp.h"
 
 #define LCD_DISPLAY(X) if (lcd) lcd->display((X), 0, 1, 5 * 1000, LCD_CLEAR_LINE);
 
 
 ArduinoOcppTask *ArduinoOcppTask::instance = NULL;
+
+void dbug_wrapper(const char *msg) {
+    DBUG(msg);
+}
 
 ArduinoOcppTask::ArduinoOcppTask() : MicroTasks::Task() {
 
@@ -36,6 +38,8 @@ void ArduinoOcppTask::begin(EvseManager &evse, LcdTask &lcd, EventLog &eventLog,
     this->lcd = &lcd;
     this->eventLog = &eventLog;
     this->rfid = &rfid;
+
+    ao_set_console_out(dbug_wrapper);
 
     reconfigure();
 
