@@ -236,9 +236,6 @@ void ArduinoOcppTask::loadEvseBehavior() {
                 if (idTagIsAccepted(payload)) {
                     beginSession(idInputCapture.c_str());
                     LCD_DISPLAY("Card accepted");
-                    if (!evse->isVehicleConnected()) {
-                        LCD_DISPLAY("Plug in cable");
-                    }
                 } else {
                     LCD_DISPLAY("Card not recognized");
                 }
@@ -281,54 +278,69 @@ unsigned long ArduinoOcppTask::loop(MicroTasks::WakeReason reason) {
         return 50;
     }
 
-    if (evse->isVehicleConnected() && !vehicleConnected) {
-        vehicleConnected = evse->isVehicleConnected();
-
-        if (arduinoOcppInitialized && !config_rfid_enabled()) {
-            //no rfid reader --> sessions will be started by plugging the EV or by RemoteStartTransaction
-            if (strcmp(tx_start_point.c_str(), "tx_only_remote")) {
-                //tx_start_point is different from tx_only_remote. Plugging an EV begins a session
-                if (!getSessionIdTag()) { //check if session has already begun
-                    beginSession(ocpp_idTag.isEmpty() ? "A0-00-00-00" : ocpp_idTag.c_str());
+    if (arduinoOcppInitialized) {
+        
+        if (evse->isVehicleConnected() && !vehicleConnected) {
+            //vehicle plugged
+            if (!getSessionIdTag()) {
+                //vehicle plugged before authorization
+                if (config_rfid_enabled()) {
+                    LCD_DISPLAY("Need card");
+                } else {
+                    //no RFID reader --> Auto-Authorize or RemoteStartTransaction
+                    if (!ocpp_idTag.isEmpty() && strcmp(tx_start_point.c_str(), "tx_only_remote")) {
+                        //ID tag given in OpenEVSE dashboard & Auto-Authorize not disabled
+                        String idTagCapture = ocpp_idTag;
+                        authorize(idTagCapture.c_str(), [this, idTagCapture] (JsonObject payload) {
+                            if (idTagIsAccepted(payload)) {
+                                beginSession(idTagCapture.c_str());
+                            } else {
+                                LCD_DISPLAY("ID tag not recognized");
+                            }
+                        }, [this] () {
+                            LCD_DISPLAY("OCPP timeout");
+                        });
+                    } else {
+                        //OpenEVSE cannot authorize this session -> wait for RemoteStartTransaction
+                        LCD_DISPLAY("Please authorize session");
+                    }
                 }
             }
         }
+        vehicleConnected = evse->isVehicleConnected();
 
-        if (!getSessionIdTag()) {
-            if (config_rfid_enabled()) {
-                LCD_DISPLAY("Need card");
-            } else {
-                LCD_DISPLAY("Please authorize session");
+        if (ocppSessionDisplay && !getSessionIdTag()) {
+            //Session unauthorized. Show if StartTransaction didn't succeed
+            if (ocppTxIdDisplay < 0) {
+                if (config_rfid_enabled()) {
+                    LCD_DISPLAY("Card timeout");
+                    LCD_DISPLAY("Present card again");
+                } else {
+                    LCD_DISPLAY("Auth timeout");
+                }
+            }
+        } else if (!ocppSessionDisplay && getSessionIdTag()) {
+            //Session recently authorized
+            if (!evse->isVehicleConnected()) {
+                LCD_DISPLAY("Plug in cable");
             }
         }
-    }
+        ocppSessionDisplay = getSessionIdTag();
 
-    if (!evse->isVehicleConnected() && vehicleConnected) {
-        vehicleConnected = evse->isVehicleConnected();
-    }
-
-    if (ocppSessionDisplay && !getSessionIdTag()) {
-        //Session unauthorized. Show if StartTransaction didn't succeed
-        if (ocppTxIdDisplay < 0) {
-            LCD_DISPLAY("Card timeout");
-            LCD_DISPLAY("Present card again");
+        if (ocppTxIdDisplay <= 0 && getTransactionId() > 0) {
+            LCD_DISPLAY("OCPP start tx");
+            String txIdMsg = "TxID ";
+            txIdMsg += String(getTransactionId());
+            LCD_DISPLAY(txIdMsg);
+        } else if (ocppTxIdDisplay > 0 && getTransactionId() < 0) {
+            LCD_DISPLAY("OCPP Good bye!");
+            String txIdMsg = "TxID ";
+            txIdMsg += String(ocppTxIdDisplay);
+            txIdMsg += " finished";
+            LCD_DISPLAY(txIdMsg);
         }
+        ocppTxIdDisplay = getTransactionId();
     }
-    ocppSessionDisplay = getSessionIdTag();
-
-    if (ocppTxIdDisplay <= 0 && getTransactionId() > 0) {
-        LCD_DISPLAY("OCPP start tx");
-        String txIdMsg = "TxID ";
-        txIdMsg += String(getTransactionId());
-        LCD_DISPLAY(txIdMsg);
-    } else if (ocppTxIdDisplay > 0 && getTransactionId() < 0) {
-        LCD_DISPLAY("OCPP Good bye!");
-        String txIdMsg = "TxID ";
-        txIdMsg += String(ocppTxIdDisplay);
-        txIdMsg += " finished";
-        LCD_DISPLAY(txIdMsg);
-    }
-    ocppTxIdDisplay = getTransactionId();
 
     if (resetTriggered) {
         if (millis() - resetTime >= 10000UL) { //wait for 10 seconds after reset command to send the conf msg
@@ -355,6 +367,11 @@ void ArduinoOcppTask::updateEvseClaim() {
 
     EvseState evseState;
     EvseProperties evseProperties;
+
+    if (!arduinoOcppInitialized || !config_ocpp_enabled()) {
+        evse->release(EvseClient_OpenEVSE_Ocpp);
+        return;
+    }
 
     if (getTransactionId() == 0 && !strcmp(tx_start_point.c_str(), "tx_pending")) {
         //transaction initiated but neither accepted nor rejected
@@ -396,7 +413,7 @@ void ArduinoOcppTask::updateEvseClaim() {
     }
 
     //Apply inferred claim
-    if (evseState == EvseState::None || !config_ocpp_enabled()) {
+    if (evseState == EvseState::None) {
         //the claiming rules don't specify the EVSE state
         evse->release(EvseClient_OpenEVSE_Ocpp);
     } else {
