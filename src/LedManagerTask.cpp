@@ -180,6 +180,51 @@ unsigned long LedManagerTask::loop(MicroTasks::WakeReason reason)
       setNewState(false);
       return TEST_LED_TIME;
 
+#ifdef WIFI_PIXEL_NUMBER
+    case LedState_Evse_State:
+    case LedState_WiFi_Access_Point_Waiting:
+    case LedState_WiFi_Access_Point_Connected:
+    case LedState_WiFi_Client_Connecting:
+    case LedState_WiFi_Client_Connected:
+    {
+      uint8_t lcdCol = _evse->getStateColour();
+      DBUGVAR(lcdCol);
+      uint32_t col = status_colour_map[lcdCol];
+      DBUGVAR(col, HEX);
+      uint8_t evseR = (col >> 16) & 0xff;
+      uint8_t evseG = (col >> 8) & 0xff;
+      uint8_t evseB = col & 0xff;
+
+      switch(state)
+      {
+        case LedState_Evse_State:
+          setAllRGB(evseR, evseG, evseB);
+          return MicroTask.Infinate;
+
+        case LedState_WiFi_Access_Point_Waiting:
+          setEvseAndWifiRGB(evseR, evseG, evseB, flashState ? 255 : 0, flashState ? 255 : 0, 0);
+          flashState = !flashState;
+          return CONNECTING_FLASH_TIME;
+
+        case LedState_WiFi_Access_Point_Connected:
+          setEvseAndWifiRGB(evseR, evseG, evseB, flashState ? 255 : 0, 0, flashState ? 255 : 0);
+          flashState = !flashState;
+          return CONNECTED_FLASH_TIME;
+
+        case LedState_WiFi_Client_Connecting:
+          setEvseAndWifiRGB(evseR, evseG, evseB, 0, flashState ? 255 : 0, flashState ? 255 : 0);
+          flashState = !flashState;
+          return CONNECTING_FLASH_TIME;
+
+        case LedState_WiFi_Client_Connected:
+          setEvseAndWifiRGB(evseR, evseG, evseB, 0, 255, 0);
+          return MicroTask.Infinate;
+
+        default:
+          break;
+      }
+    }
+#else
     case LedState_Evse_State:
     {
       uint8_t lcdCol = _evse->getStateColour();
@@ -193,28 +238,24 @@ unsigned long LedManagerTask::loop(MicroTasks::WakeReason reason)
     } return MicroTask.Infinate;
 
     case LedState_WiFi_Access_Point_Waiting:
-      setAllRGB(flashState ? 255 : 0,
-                flashState ? 255 : 0,
-                0);
+      setAllRGB(flashState ? 255 : 0, flashState ? 255 : 0, 0);
       flashState = !flashState;
       return CONNECTING_FLASH_TIME;
 
     case LedState_WiFi_Access_Point_Connected:
-      setAllRGB(0, flashState ? 255 : 0, 0);
+      setAllRGB(flashState ? 255 : 0, 0, flashState ? 255 : 0);
       flashState = !flashState;
       return CONNECTED_FLASH_TIME;
 
     case LedState_WiFi_Client_Connecting:
-      setAllRGB(flashState ? 255 : 0,
-                flashState ? 255 : 0,
-                0);
+      setAllRGB(0, flashState ? 255 : 0, flashState ? 255 : 0);
       flashState = !flashState;
       return CONNECTING_FLASH_TIME;
 
     case LedState_WiFi_Client_Connected:
       setAllRGB(0, 255, 0);
       return MicroTask.Infinate;
-
+#endif
   }
 #endif
 
@@ -311,6 +352,58 @@ void LedManagerTask::setAllRGB(uint8_t red, uint8_t green, uint8_t blue)
     buttonShareState = green;
   #elif BLUE_LED == WIFI_BUTTON_SHARE_LED
     buttonShareState = blue;
+  #endif
+#endif
+#endif
+}
+#endif
+
+#if WIFI_PIXEL_NUMBER
+void LedManagerTask::setEvseAndWifiRGB(uint8_t evseRed, uint8_t evseGreen, uint8_t evseBlue, uint8_t wifiRed, uint8_t wifiGreen, uint8_t wifiBlue)
+{
+  DBUG("EVSE LED R:");
+  DBUG(evseRed);
+  DBUG(" G:");
+  DBUG(evseGreen);
+  DBUG(" B:");
+  DBUGLN(evseBlue);
+
+  DBUG("WiFi LED R:");
+  DBUG(wifiRed);
+  DBUG(" G:");
+  DBUG(wifiGreen);
+  DBUG(" B:");
+  DBUGLN(wifiBlue);
+
+  if(brightness) { // See notes in setBrightness()
+    evseRed = (evseRed * brightness) >> 8;
+    evseGreen = (evseGreen * brightness) >> 8;
+    evseBlue = (evseBlue * brightness) >> 8;
+    wifiRed = (wifiRed * brightness) >> 8;
+    wifiGreen = (wifiGreen * brightness) >> 8;
+    wifiBlue = (wifiBlue * brightness) >> 8;
+  }
+
+#if defined(NEO_PIXEL_PIN) && defined(NEO_PIXEL_LENGTH)
+  uint32_t col = strip.gamma32(strip.Color(evseRed, evseGreen, evseBlue));
+  DBUGVAR(col, HEX);
+  strip.fill(col);
+  strip.setPixelColor(WIFI_PIXEL_NUMBER, wifiRed, wifiGreen, wifiBlue);
+  strip.show();
+#endif
+
+#if defined(RED_LED) && defined(GREEN_LED) && defined(BLUE_LED)
+  analogWrite(RED_LED, pgm_read_byte(&gamma8[wifiRed]));
+  analogWrite(GREEN_LED, pgm_read_byte(&gamma8[wifiGreen]));
+  analogWrite(BLUE_LED, pgm_read_byte(&gamma8[wifiBlue]));
+
+#ifdef WIFI_BUTTON_SHARE_LED
+  #if RED_LED == WIFI_BUTTON_SHARE_LED
+    buttonShareState = wifiRed;
+  #elif GREEN_LED == WIFI_BUTTON_SHARE_LED
+    buttonShareState = wifiGreen;
+  #elif BLUE_LED == WIFI_BUTTON_SHARE_LED
+    buttonShareState = wifiBlue;
   #endif
 #endif
 #endif
