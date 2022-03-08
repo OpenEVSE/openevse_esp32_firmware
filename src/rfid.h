@@ -8,7 +8,6 @@
 
 #include <ArduinoJson.h>
 #include <MicroTasks.h>
-#include <Wire.h>
 
 #include "evse_man.h"
 
@@ -43,11 +42,6 @@ class RfidTask : public MicroTasks::Task {
 
         std::function<bool(const String& idTag)> *onCardScanned {nullptr};
 
-        /*
-         * NXP PN532
-         */
-        TwoWire *i2c;
-
         enum class PN532_DeviceStatus {
             ACTIVE,
             NOT_ACTIVE,
@@ -70,7 +64,7 @@ class RfidTask : public MicroTasks::Task {
 
     public:
         RfidTask();
-        void begin(EvseManager &evse, TwoWire& wire);
+        void begin(EvseManager &evse);
         void waitForTag(uint8_t seconds);
         DynamicJsonDocument rfidPoll();
 

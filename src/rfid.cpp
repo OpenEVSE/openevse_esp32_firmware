@@ -31,14 +31,22 @@
 
 #define I2C_READ_BUFFSIZE 35 //might increase later
 
+#ifndef I2C_SDA
+#define I2C_SDA 21
+#endif
+
+#ifndef I2C_SCL
+#define I2C_SCL 22
+#endif
+
 RfidTask::RfidTask() :
   MicroTasks::Task()
 {
 }
 
-void RfidTask::begin(EvseManager &evse, TwoWire& wire){
+void RfidTask::begin(EvseManager &evse){
     _evse = &evse;
-    i2c = &wire;
+    Wire.begin(I2C_SDA, I2C_SCL);
     MicroTask.startTask(this);
 }
 
@@ -247,9 +255,9 @@ void RfidTask::pn532_initialize() {
     uint8_t SAMConfiguration [] = {0x00, 0xFF, 0x05, 0xFB, 
                                    0xD4, 0x14, 0x01, 0x00, 0x00,
                                    0x17};
-    i2c->beginTransmission(PN532_I2C_ADDRESS);
-    i2c->write(SAMConfiguration, sizeof(SAMConfiguration) / sizeof(*SAMConfiguration));
-    i2c->endTransmission();
+    Wire.beginTransmission(PN532_I2C_ADDRESS);
+    Wire.write(SAMConfiguration, sizeof(SAMConfiguration) / sizeof(*SAMConfiguration));
+    Wire.endTransmission();
 
     pn532_listen = true;
     //"flush" ACK
@@ -264,9 +272,9 @@ void RfidTask::pn532_poll() {
     uint8_t InAutoPoll [] = {0x00, 0xFF, 0x06, 0xFA, 
                              0xD4, 0x60, 0x01, 0x01, 0x10, 0x20,
                              0x9A};
-    i2c->beginTransmission(PN532_I2C_ADDRESS);
-    i2c->write(InAutoPoll, sizeof(InAutoPoll) / sizeof(*InAutoPoll));
-    i2c->endTransmission();
+    Wire.beginTransmission(PN532_I2C_ADDRESS);
+    Wire.write(InAutoPoll, sizeof(InAutoPoll) / sizeof(*InAutoPoll));
+    Wire.endTransmission();
 
     pn532_listen = true;
     //"flush" ACK
@@ -278,19 +286,19 @@ void RfidTask::pn532_read() {
     if (!pn532_listen)
         return;
 
-    i2c->requestFrom(PN532_I2C_ADDRESS, I2C_READ_BUFFSIZE + 1, 1);
-    if (i2c->read() != PN532_RDY) {
+    Wire.requestFrom(PN532_I2C_ADDRESS, I2C_READ_BUFFSIZE + 1, 1);
+    if (Wire.read() != PN532_RDY) {
         //no msg available
         return;
     }
 
     uint8_t response [I2C_READ_BUFFSIZE] = {0};
     uint8_t frame_len = 0;
-    while (i2c->available() && frame_len < I2C_READ_BUFFSIZE) {
-        response[frame_len] = i2c->read();
+    while (Wire.available() && frame_len < I2C_READ_BUFFSIZE) {
+        response[frame_len] = Wire.read();
         frame_len++;
     }
-    i2c->flush();
+    Wire.flush();
 
     /*
      * For frame layout, see NXP manual, page 28
@@ -433,6 +441,7 @@ void RfidTask::pn532_read() {
         DBUG(F(", uid = "));
         DBUG(uid);
         DBUGLN(F(" end"));
+        (void) card_type;
 
         scanCard(uid);
         pn532_hasContact = true;
