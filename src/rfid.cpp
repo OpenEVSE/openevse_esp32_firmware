@@ -16,6 +16,16 @@
 #include "input.h"
 #include "openevse.h"
 
+#include <Wire.h>
+
+#ifndef I2C_SDA
+#define I2C_SDA 21
+#endif
+
+#ifndef I2C_SCL
+#define I2C_SCL 22
+#endif
+
 /*
  * Documentation of the I2C messages:
  * NXP PN532 manual, https://www.nxp.com/docs/en/user-guide/141520.pdf
@@ -30,14 +40,6 @@
 #define PN532_CMD_INAUTOPOLL_RESPONSE 0x61
 
 #define I2C_READ_BUFFSIZE 35 //might increase later
-
-#ifndef I2C_SDA
-#define I2C_SDA 21
-#endif
-
-#ifndef I2C_SCL
-#define I2C_SCL 22
-#endif
 
 RfidTask::RfidTask() :
   MicroTasks::Task()
