@@ -112,7 +112,6 @@ void setup()
   DBUGF("After config_load_settings: %d", ESPAL.getFreeHeap());
 
   eventLog.begin();
-
   timeManager.begin();
   evse.begin();
   scheduler.begin();
