@@ -32,7 +32,8 @@ Content-Type: application/json
 
 {
   "state": "active",
-  "auto_release": true
+  "auto_release": true,
+  "charge_current": 20
 }
 
 ###
