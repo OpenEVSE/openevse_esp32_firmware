@@ -45,7 +45,6 @@ bool streamDebug = false;
 
 // Event timeouts
 static unsigned long wifiRestartTime = 0;
-static unsigned long systemRebootTime = 0;
 static unsigned long apOffTime = 0;
 
 // Content Types
@@ -62,6 +61,13 @@ const char _CONTENT_TYPE_SVG[] PROGMEM = "image/svg+xml";
 
 void handleConfig(MongooseHttpServerRequest *request);
 void handleEvseClaims(MongooseHttpServerRequest *request);
+void handleEventLogs(MongooseHttpServerRequest *request);
+
+void handleUpdateRequest(MongooseHttpServerRequest *request);
+size_t handleUpdateUpload(MongooseHttpServerRequest *request, int ev, MongooseString filename, uint64_t index, uint8_t *data, size_t len);
+void handleUpdateClose(MongooseHttpServerRequest *request);
+
+extern uint32_t config_version;
 
 void dumpRequest(MongooseHttpServerRequest *request)
 {
@@ -607,9 +613,13 @@ handleStatus(MongooseHttpServerRequest *request) {
   doc["charge_rate"] = charge_rate;
   doc["divert_update"] = (millis() - lastUpdate) / 1000;
 
+  doc["service_level"] = static_cast<uint8_t>(evse.getActualServiceLevel());
+
   doc["ota_update"] = (int)Update.isRunning();
   doc["time"] = String(time);
   doc["offset"] = String(offset);
+
+  doc["config_version"] = String(config_version);
 
   doc["vehicle_state_update"] = (millis() - evse.getVehicleLastUpdated()) / 1000;
   if(teslaClient.getVehicleCnt() > 0) {
@@ -631,7 +641,6 @@ handleStatus(MongooseHttpServerRequest *request) {
       doc["time_to_full_charge"] = evse.getVehicleEta();
     }
   }
-
 
   response->setCode(200);
   serializeJson(doc, *response);
@@ -848,7 +857,7 @@ handleRst(MongooseHttpServerRequest *request) {
   response->print("1");
   request->send(response);
 
-  systemRebootTime = millis() + 1000;
+  restart_system();
 }
 
 
@@ -867,7 +876,7 @@ handleRestart(MongooseHttpServerRequest *request) {
   response->print("1");
   request->send(response);
 
-  systemRebootTime = millis() + 1000;
+  restart_system();
 }
 
 
@@ -883,131 +892,6 @@ void handleDescribe(MongooseHttpServerRequest *request) {
   response->addHeader("Access-Control-Allow-Origin", "*");
   response->setContent("openevse");
   request->send(response);
-}
-
-// -------------------------------------------------------------------
-// Update firmware
-// url: /update
-// -------------------------------------------------------------------
-void
-handleUpdateGet(MongooseHttpServerRequest *request) {
-  MongooseHttpServerResponseStream *response;
-  if(false == requestPreProcess(request, response, CONTENT_TYPE_HTML)) {
-    return;
-  }
-
-  response->setCode(200);
-  response->print(
-    F("<html><form method='POST' action='/update' enctype='multipart/form-data'>"
-        "<input type='file' name='firmware'> "
-        "<input type='submit' value='Update'>"
-      "</form></html>"));
-  request->send(response);
-}
-
-static MongooseHttpServerResponseStream *upgradeResponse = NULL;
-
-void
-handleUpdatePost(MongooseHttpServerRequest *request) {
-  if(NULL != upgradeResponse) {
-    request->send(500, CONTENT_TYPE_TEXT, "Error: Upgrade in progress");
-    return;
-  }
-
-  if(false == requestPreProcess(request, upgradeResponse, CONTENT_TYPE_TEXT)) {
-    return;
-  }
-
-  // TODO: Add support for returning 100: Continue
-}
-
-static int lastPercent = -1;
-
-static void handleUpdateError(MongooseHttpServerRequest *request)
-{
-  upgradeResponse->setCode(500);
-  upgradeResponse->printf("Error: %d", Update.getError());
-  request->send(upgradeResponse);
-  upgradeResponse = NULL;
-
-  // Anoyingly this uses Stream rather than Print...
-#ifdef ENABLE_DEBUG
-  Update.printError(DEBUG_PORT);
-#endif
-}
-
-size_t
-handleUpdateUpload(MongooseHttpServerRequest *request, int ev, MongooseString filename, uint64_t index, uint8_t *data, size_t len)
-{
-  if(MG_EV_HTTP_PART_BEGIN == ev)
-  {
-//    dumpRequest(request);
-
-    DEBUG_PORT.printf("Update Start: %s\n", filename.c_str());
-
-    lcd.display(F("Updating WiFi"), 0, 0, 10 * 1000, LCD_CLEAR_LINE | LCD_DISPLAY_NOW);
-    lcd.display(F(""), 0, 1, 10 * 1000, LCD_CLEAR_LINE | LCD_DISPLAY_NOW);
-
-    if(!Update.begin()) {
-      handleUpdateError(request);
-    }
-  }
-
-  if(!Update.hasError())
-  {
-    DBUGF("Update Writing %llu", index);
-
-    size_t contentLength = request->contentLength();
-    DBUGVAR(contentLength);
-    if(contentLength > 0)
-    {
-      int percent = index / (contentLength / 100);
-      DBUGVAR(percent);
-      DBUGVAR(lastPercent);
-      if(percent != lastPercent) {
-        String text = String(percent) + F("%");
-        lcd.display(text, 0, 1, 10 * 1000, LCD_DISPLAY_NOW);
-        DEBUG_PORT.printf("Update: %d%%\n", percent);
-        lastPercent = percent;
-      }
-    }
-    if(Update.write(data, len) != len) {
-      handleUpdateError(request);
-    }
-  }
-
-  if(MG_EV_HTTP_PART_END == ev)
-  {
-    DBUGLN("Upload finished");
-    if(Update.end(true)) {
-      DBUGF("Update Success: %lluB", index+len);
-      lcd.display(F("Complete"), 0, 1, 10 * 1000, LCD_CLEAR_LINE | LCD_DISPLAY_NOW);
-      upgradeResponse->setCode(200);
-      upgradeResponse->print("OK");
-      request->send(upgradeResponse);
-      upgradeResponse = NULL;
-    } else {
-      DBUGF("Update failed: %d", Update.getError());
-      lcd.display(F("Error"), 0, 1, 10 * 1000, LCD_CLEAR_LINE | LCD_DISPLAY_NOW);
-      handleUpdateError(request);
-    }
-  }
-
-  return len;
-}
-
-static void handleUpdateClose(MongooseHttpServerRequest *request)
-{
-  DBUGLN("Update close");
-
-  if(upgradeResponse) {
-    delete upgradeResponse;
-    upgradeResponse = NULL;
-  }
-
-  if(Update.isFinished() && !Update.hasError()) {
-    systemRebootTime = millis() + 1000;
-  }
 }
 
 String delayTimer = "0 0 0 0";
@@ -1204,15 +1088,11 @@ web_server_setup() {
 
   server.on("/override$", handleOverride);
 
+  server.on("/logs", handleEventLogs);
+
   // Simple Firmware Update Form
   server.on("/update$")->
-    onRequest([](MongooseHttpServerRequest *request) {
-      if(HTTP_GET == request->method()) {
-        handleUpdateGet(request);
-      } else if(HTTP_POST == request->method()) {
-        handleUpdatePost(request);
-      }
-    })->
+    onRequest(handleUpdateRequest)->
     onUpload(handleUpdateUpload)->
     onClose(handleUpdateClose);
 
@@ -1281,13 +1161,6 @@ web_server_loop() {
   if(apOffTime > 0 && millis() > apOffTime) {
     apOffTime = 0;
     net_wifi_turn_off_ap();
-  }
-
-  // Do we need to reboot the system?
-  if(systemRebootTime > 0 && millis() > systemRebootTime) {
-    systemRebootTime = 0;
-    net_wifi_disconnect();
-    ESPAL.reset();
   }
 
   Profile_End(web_server_loop, 5);

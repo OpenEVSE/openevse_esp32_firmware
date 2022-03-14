@@ -1,0 +1,74 @@
+name: Release Validation
+
+on:
+  release:
+    types:
+      - released
+      - prereleased
+      - edited
+
+jobs:
+  gui_validation:
+    name: Pre-built GUI Validation
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v2
+        with:
+          submodules: recursive
+
+      ### Check the pre-built GUI files are up-to-date
+
+      - name: Set up Node JS
+        uses: actions/setup-node@v2
+        with:
+          node-version: '12'
+
+      - name: Install dependencies
+        run: |
+          cd gui
+          npm install
+
+      - name: Build GUI
+        run: |
+          cd gui
+          npm run build
+
+      - name: Check the pre-built GUI files are up-to-date
+        run: |
+          set +e
+          git status -s | grep " M "
+          if [ $? -eq 0 ]; then
+            echo "ERROR: The pre-built GUI files are not up-to-date"
+            exit 1
+          fi
+
+  release_number:
+    name: Release Number Validation
+    runs-on: ubuntu-latest
+    if: github.ref_name != 'latest'
+
+    steps:
+      ### Check the version number in the code matches the tag number
+      - uses: actions/checkout@v2
+
+      - name: Retrieve the version number(s)
+        run: |
+          TAG_VERSION=$(sed "s/^v//" <<< $GITHUB_REF_NAME)
+          CODE_VERSION=$(grep BUILD_TAG platformio.ini | awk -F= '{print $NF}')
+          echo TAG_VERSION=$TAG_VERSION >> $GITHUB_ENV
+          echo CODE_VERSION=$CODE_VERSION >> $GITHUB_ENV
+
+      - name: Check the version numberis semver compliant
+        run: |
+          if ! [[ $TAG_VERSION =~ ^[0-9]+\.[0-9]+\.[0-9]+(-[a-z]*[0-9]+)?$ ]]; then
+            echo "ERROR: The version number is not semver compliant"
+            exit 1
+          fi
+
+      - name: Check the version number in the code matches the tag number
+        run: |
+          if [ "$TAG_VERSION" != "$CODE_VERSION" ]; then
+            echo "ERROR: The version number in the code ($CODE_VERSION) does not match the tag number ($TAG_VERSION)"
+            exit 1
+          fi
+

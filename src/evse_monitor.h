@@ -11,12 +11,13 @@
 #endif
 
 #define EVSE_MONITOR_TEMP_MONITOR       0
-#define EVSE_MONITOR_TEMP_EVSE_DS3232   1
-#define EVSE_MONITOR_TEMP_EVSE_MCP9808  2
-#define EVSE_MONITOR_TEMP_EVSE_TMP007   3
-#define EVSE_MONITOR_TEMP_ESP_MCP9808   4
+#define EVSE_MONITOR_TEMP_MAX           1
+#define EVSE_MONITOR_TEMP_EVSE_DS3232   2
+#define EVSE_MONITOR_TEMP_EVSE_MCP9808  3
+#define EVSE_MONITOR_TEMP_EVSE_TMP007   4
+#define EVSE_MONITOR_TEMP_ESP_MCP9808   5
 
-#define EVSE_MONITOR_TEMP_COUNT         5
+#define EVSE_MONITOR_TEMP_COUNT         6
 
 class EvseMonitor : public MicroTasks::Task
 {
@@ -83,16 +84,21 @@ class EvseMonitor : public MicroTasks::Task
         bool update(uint32_t state);
     };
 
-    class Tempurature
+    class SettingsChangedEvent : public MicroTasks::Event
+    {
+      friend class EvseMonitor;
+    };
+
+    class Temperature
     {
       private:
         bool _valid;
         double _value;
 
       public:
-        Tempurature() : _valid(false), _value(0) { }
+        Temperature() : _valid(false), _value(0) { }
 
-        void set(double value, bool valid) {
+        void set(double value, bool valid = true) {
           _value = value;
           _valid = valid;
         }
@@ -118,7 +124,7 @@ class EvseMonitor : public MicroTasks::Task
     long _elapsed;                    // Elapsed time (only valid if charging)
     uint32_t _elapsed_set_time;
 
-    Tempurature _temps[EVSE_MONITOR_TEMP_COUNT];
+    Temperature _temps[EVSE_MONITOR_TEMP_COUNT];
 
     double _session_wh;
     double _total_kwh;
@@ -133,6 +139,8 @@ class EvseMonitor : public MicroTasks::Task
     long _pilot;                      // OpenEVSE Pilot Setting
     long _max_configured_current;
     long _max_hardware_current;
+    long _current_sensor_scale;
+    long _current_sensor_offset;
 
     // Settings
     uint32_t _settings_flags;
@@ -145,17 +153,21 @@ class EvseMonitor : public MicroTasks::Task
     bool _heartbeat;
 
     char _firmware_version[32];
+    char _serial[16];
 
 #ifdef ENABLE_MCP9808
     Adafruit_MCP9808 _mcp9808;
 #endif
 
+    SettingsChangedEvent _settings_changed; // Settings changed
+
     void updateFaultCounters(int ret, long gfci_count, long nognd_count, long stuck_count);
 
     void evseBoot(const char *firmware_version);
-    void evseStateChanged();
+    void updateEvseState(uint8_t evse_state, uint8_t pilot_state, uint32_t vflags);
+    void updateCurrentSettings(long min_current, long max_hardware_current, long pilot, long max_configured_current);
 
-    void getStatusFromEvse();
+    void getStatusFromEvse(bool allowStart = true);
     void getChargeCurrentAndVoltageFromEvse();
     void getTemperatureFromEvse();
     void getEnergyFromEvse();
@@ -184,9 +196,19 @@ class EvseMonitor : public MicroTasks::Task
     void sleep();
     void disable();
 
-    void setPilot(long amps);
+    void setMaxConfiguredCurrent(long amps);
 
-    void setVoltage(double volts);
+    void setPilot(long amps, std::function<void(int ret)> callback = NULL);
+    void setVoltage(double volts, std::function<void(int ret)> callback = NULL);
+    void setServiceLevel(ServiceLevel level, std::function<void(int ret)> callback = NULL);
+    void configureCurrentSensorScale(long scale, long offset, std::function<void(int ret)> callback = NULL);
+    void enableFeature(uint8_t feature, bool enabled, std::function<void(int ret)> callback = NULL);
+    void enableDiodeCheck(bool enabled, std::function<void(int ret)> callback = NULL);
+    void enableGfiTestCheck(bool enabled, std::function<void(int ret)> callback = NULL);
+    void enableGroundCheck(bool enabled, std::function<void(int ret)> callback = NULL);
+    void enableStuckRelayCheck(bool enabled, std::function<void(int ret)> callback = NULL);
+    void enableVentRequired(bool enabled, std::function<void(int ret)> callback = NULL);
+    void enableTemperatureCheck(bool enabled, std::function<void(int ret)> callback = NULL);
 
     uint8_t getEvseState() {
       return _state.getEvseState();
@@ -236,10 +258,10 @@ class EvseMonitor : public MicroTasks::Task
     long getFaultCountStuckRelay() {
       return _stuck_count;
     }
-    double getTempurature(uint8_t sensor) {
+    double getTemperature(uint8_t sensor) {
       return _temps[sensor].get();
     }
-    double isTempuratureValid(uint8_t sensor) {
+    double isTemperatureValid(uint8_t sensor) {
       return _temps[sensor].isValid();
     }
     long getMinCurrent() {
@@ -254,27 +276,34 @@ class EvseMonitor : public MicroTasks::Task
     long getMaxHardwareCurrent() {
       return _max_hardware_current;
     }
+    long getCurrentSensorScale() {
+      return _current_sensor_scale;
+    }
+    long getCurrentSensorOffset() {
+      return _current_sensor_offset;
+    }
     uint32_t getSettingsFlags() {
       return _settings_flags;
     }
     ServiceLevel getServiceLevel();
-    bool isDiodeCheckDisabled() {
-      return OPENEVSE_ECF_DIODE_CHK_DISABLED == (getSettingsFlags() & OPENEVSE_ECF_DIODE_CHK_DISABLED);
+    ServiceLevel getActualServiceLevel();
+    bool isDiodeCheckEnabled() {
+      return 0 == (getSettingsFlags() & OPENEVSE_ECF_DIODE_CHK_DISABLED);
     }
-    bool isVentRequiredDisabled() {
-      return OPENEVSE_ECF_VENT_REQ_DISABLED == (getSettingsFlags() & OPENEVSE_ECF_VENT_REQ_DISABLED);
+    bool isVentRequiredEnabled() {
+      return 0 == (getSettingsFlags() & OPENEVSE_ECF_VENT_REQ_DISABLED);
     }
-    bool isGroundCheckDisabled() {
-      return OPENEVSE_ECF_GND_CHK_DISABLED == (getSettingsFlags() & OPENEVSE_ECF_GND_CHK_DISABLED);
+    bool isGroundCheckEnabled() {
+      return 0 == (getSettingsFlags() & OPENEVSE_ECF_GND_CHK_DISABLED);
     }
-    bool isStuckRelayCheckDisabled() {
-      return OPENEVSE_ECF_STUCK_RELAY_CHK_DISABLED == (getSettingsFlags() & OPENEVSE_ECF_STUCK_RELAY_CHK_DISABLED);
+    bool isStuckRelayCheckEnabled() {
+      return 0 == (getSettingsFlags() & OPENEVSE_ECF_STUCK_RELAY_CHK_DISABLED);
     }
-    bool isGfiTestDisabled() {
-      return OPENEVSE_ECF_GFI_TEST_DISABLED == (getSettingsFlags() & OPENEVSE_ECF_GFI_TEST_DISABLED);
+    bool isGfiTestEnabled() {
+      return 0 == (getSettingsFlags() & OPENEVSE_ECF_GFI_TEST_DISABLED);
     }
-    bool isTemperatureCheckDisabled() {
-      return OPENEVSE_ECF_TEMP_CHK_DISABLED == (getSettingsFlags() & OPENEVSE_ECF_TEMP_CHK_DISABLED);
+    bool isTemperatureCheckEnabled() {
+      return 0 == (getSettingsFlags() & OPENEVSE_ECF_TEMP_CHK_DISABLED);
     }
     bool isButtonDisabled() {
       return OPENEVSE_ECF_BUTTON_DISABLED == (getSettingsFlags() & OPENEVSE_ECF_BUTTON_DISABLED);
@@ -293,10 +322,16 @@ class EvseMonitor : public MicroTasks::Task
     const char *getFirmwareVersion() {
       return _firmware_version;
     }
+    const char *getSerial() {
+      return _serial;
+    }
 
     // Register for events
     void onStateChange(MicroTasks::EventListener *listner) {
       _state.Register(listner);
+    }
+    void onSettingsChanged(MicroTasks::EventListener *listner) {
+      _settings_changed.Register(listner);
     }
     void onDataReady(MicroTasks::EventListener *listner) {
       _data_ready.Register(listner);

@@ -52,12 +52,14 @@
 #include "ocpp.h"
 
 #include "LedManagerTask.h"
+#include "event_log.h"
 #include "evse_man.h"
 #include "scheduler.h"
 
 #include "legacy_support.h"
 
-EvseManager evse(RAPI_PORT);
+EventLog eventLog;
+EvseManager evse(RAPI_PORT, eventLog);
 Scheduler scheduler(evse);
 ManualOverride manual(evse);
 
@@ -76,6 +78,7 @@ static uint32_t last_mem = 0;
 #define ESCAPEQUOTE(A) TEXTIFY(A)
 String currentfirmware = ESCAPEQUOTE(BUILD_TAG);
 String buildenv = ESCAPEQUOTE(BUILD_ENV_NAME);
+String serial;
 
 ArduinoOcppTask ocpp = ArduinoOcppTask();
 
@@ -96,6 +99,9 @@ void setup()
   DEBUG.printf("IDF version: %s\n", ESP.getSdkVersion());
   DEBUG.printf("Free: %d\n", ESPAL.getFreeHeap());
 
+  serial = ESPAL.getLongId();
+  serial.toUpperCase();
+
   if(!LittleFS.begin(FORMAT_LITTLEFS_IF_FAILED)){
     DEBUG.println("LittleFS Mount Failed");
     return;
@@ -105,6 +111,7 @@ void setup()
   config_load_settings();
   DBUGF("After config_load_settings: %d", ESPAL.getFreeHeap());
 
+  eventLog.begin();
   timeManager.begin();
   evse.begin();
   scheduler.begin();
@@ -131,7 +138,7 @@ void setup()
 
   input_setup();
 
-  ocpp.begin(evse, lcd);
+  ocpp.begin(evse, lcd, eventLog);
 
   lcd.display(F("OpenEVSE WiFI"), 0, 0, 0, LCD_CLEAR_LINE);
   lcd.display(currentfirmware, 0, 1, 5 * 1000, LCD_CLEAR_LINE);
@@ -255,4 +262,20 @@ void hardware_setup()
 #endif
 
   enableLoopWDT();
+}
+
+class SystemRestart : public MicroTasks::Alarm
+{
+  public:
+    void Trigger()
+    {
+      DBUGLN("Restarting...");
+      net_wifi_disconnect();
+      ESPAL.reset();
+    }
+} systemRestartAlarm;
+
+void restart_system()
+{
+  systemRestartAlarm.Set(1000, false);
 }

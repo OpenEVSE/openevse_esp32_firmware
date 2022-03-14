@@ -68,9 +68,11 @@ class InputTask : public MicroTasks::Task
         // Send to all clients
         StaticJsonDocument<64> event;
         event["state"] = evse.getEvseState();
+        event["flags"] = evse.getFlags();
         event["vehicle"] = evse.isVehicleConnected() ? 1 : 0;
         event["colour"] = evse.getStateColour();
         event["manual_override"] = manual.isActive() ? 1 : 0;
+        event["session_energy"] = evse.getSessionEnergy();
         event_send(event);
       }
 
@@ -92,42 +94,48 @@ void create_rapi_json(JsonDocument &doc)
   doc["voltage"] = evse.getVoltage() * VOLTS_SCALE_FACTOR;
   doc["pilot"] = evse.getChargeCurrent();
   doc["wh"] = evse.getTotalEnergy() * TOTAL_ENERGY_SCALE_FACTOR;
-  if(evse.isTempuratureValid(EVSE_MONITOR_TEMP_MONITOR)) {
-    doc["temp"] = evse.getTempurature(EVSE_MONITOR_TEMP_MONITOR) * TEMP_SCALE_FACTOR;
+  doc["session_energy"] = evse.getSessionEnergy();
+  doc["total_energy"] = evse.getTotalEnergy();
+  if(evse.isTemperatureValid(EVSE_MONITOR_TEMP_MONITOR)) {
+    doc["temp"] = evse.getTemperature(EVSE_MONITOR_TEMP_MONITOR) * TEMP_SCALE_FACTOR;
   } else {
     doc["temp"] = false;
   }
-  if(evse.isTempuratureValid(EVSE_MONITOR_TEMP_EVSE_DS3232)) {
-    doc["temp1"] = evse.getTempurature(EVSE_MONITOR_TEMP_EVSE_DS3232) * TEMP_SCALE_FACTOR;
+  if(evse.isTemperatureValid(EVSE_MONITOR_TEMP_MAX)) {
+    doc["temp_max"] = evse.getTemperature(EVSE_MONITOR_TEMP_MAX) * TEMP_SCALE_FACTOR;
+  } else {
+    doc["temp_max"] = false;
+  }
+  if(evse.isTemperatureValid(EVSE_MONITOR_TEMP_EVSE_DS3232)) {
+    doc["temp1"] = evse.getTemperature(EVSE_MONITOR_TEMP_EVSE_DS3232) * TEMP_SCALE_FACTOR;
   } else {
     doc["temp1"] = false;
   }
-  if(evse.isTempuratureValid(EVSE_MONITOR_TEMP_EVSE_MCP9808)) {
-    doc["temp2"] = evse.getTempurature(EVSE_MONITOR_TEMP_EVSE_MCP9808) * TEMP_SCALE_FACTOR;
+  if(evse.isTemperatureValid(EVSE_MONITOR_TEMP_EVSE_MCP9808)) {
+    doc["temp2"] = evse.getTemperature(EVSE_MONITOR_TEMP_EVSE_MCP9808) * TEMP_SCALE_FACTOR;
   } else {
     doc["temp2"] = false;
   }
-  if(evse.isTempuratureValid(EVSE_MONITOR_TEMP_EVSE_TMP007)) {
-    doc["temp3"] = evse.getTempurature(EVSE_MONITOR_TEMP_EVSE_TMP007) * TEMP_SCALE_FACTOR;
+  if(evse.isTemperatureValid(EVSE_MONITOR_TEMP_EVSE_TMP007)) {
+    doc["temp3"] = evse.getTemperature(EVSE_MONITOR_TEMP_EVSE_TMP007) * TEMP_SCALE_FACTOR;
   } else {
     doc["temp3"] = false;
   }
 #ifdef ENABLE_MCP9808
-  if(evse.isTempuratureValid(EVSE_MONITOR_TEMP_ESP_MCP9808)) {
-    doc["temp4"] = evse.getTempurature(EVSE_MONITOR_TEMP_ESP_MCP9808) * TEMP_SCALE_FACTOR;
+  if(evse.isTemperatureValid(EVSE_MONITOR_TEMP_ESP_MCP9808)) {
+    doc["temp4"] = evse.getTemperature(EVSE_MONITOR_TEMP_ESP_MCP9808) * TEMP_SCALE_FACTOR;
   } else {
     doc["temp4"] = false;
   }
 #endif
   doc["state"] = evse.getEvseState();
+  doc["flags"] = evse.getFlags();
   doc["vehicle"] = evse.isVehicleConnected() ? 1 : 0;
   doc["colour"] = evse.getStateColour();
   doc["manual_override"] = manual.isActive() ? 1 : 0;
   doc["freeram"] = ESPAL.getFreeHeap();
   doc["divertmode"] = divertmode;
   doc["srssi"] = WiFi.RSSI();
-
-  //teslaClient.getChargeInfoJson(doc);
 }
 
 void
@@ -143,21 +151,6 @@ handleRapiRead()
       if(evse_time > local_time) {
         struct timeval set_time = { evse_time, 0 };
         settimeofday(&set_time, NULL);
-      }
-    }
-  });
-
-  rapiSender.sendCmd("$GA", [](int ret)
-  {
-    if(RAPI_RESPONSE_OK == ret)
-    {
-      if(rapiSender.getTokenCnt() >= 3)
-      {
-        const char *val;
-        val = rapiSender.getToken(1);
-        current_scale = strtol(val, NULL, 10);
-        val = rapiSender.getToken(2);
-        current_offset = strtol(val, NULL, 10);
       }
     }
   });

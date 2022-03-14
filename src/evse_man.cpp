@@ -7,6 +7,9 @@
 #include "evse_man.h"
 #include "debug.h"
 
+#include "event_log.h"
+#include "divert.h"
+
 static EvseProperties nullProperties;
 
 EvseProperties::EvseProperties() :
@@ -129,12 +132,14 @@ void EvseManager::Claim::release()
   _client = EvseClient_NULL;
 }
 
-EvseManager::EvseManager(Stream &port) :
+EvseManager::EvseManager(Stream &port, EventLog &eventLog) :
   MicroTasks::Task(),
   _sender(&port),
   _monitor(OpenEVSE),
+  _eventLog(eventLog),
   _clients(),
   _evseStateListener(this),
+  _evseBootListener(this),
   _sessionCompleteListener(this),
   _targetProperties(EvseState::Active),
   _hasClaims(false),
@@ -247,6 +252,7 @@ bool EvseManager::evaluateClaims(EvseProperties &properties)
 
 void EvseManager::setup()
 {
+  _monitor.onBootReady(&_evseBootListener);
   _monitor.onStateChange(&_evseStateListener);
   _monitor.onSessionComplete(&_sessionCompleteListener);
 }
@@ -331,6 +337,11 @@ unsigned long EvseManager::loop(MicroTasks::WakeReason reason)
     return 10 * 1000;
   }
 
+  DBUGVAR(_evseBootListener.IsTriggered());
+  if(_evseBootListener.IsTriggered()) {
+    _evaluateTargetState = true;
+  }
+
   DBUGVAR(_evseStateListener.IsTriggered());
   if(_evseStateListener.IsTriggered())
   {
@@ -339,6 +350,17 @@ unsigned long EvseManager::loop(MicroTasks::WakeReason reason)
       _evaluateTargetState = true;
       _waitingForEvent--;
     }
+
+    _eventLog.log(_monitor.isError() ? EventType::Warning : EventType::Information,
+                  getState(),
+                  _monitor.getEvseState(),
+                  _monitor.getFlags(),
+                  _monitor.getPilot(),
+                  _monitor.getSessionEnergy(),
+                  _monitor.getSessionElapsed(),
+                  _monitor.getTemperature(EVSE_MONITOR_TEMP_MONITOR),
+                  _monitor.getTemperature(EVSE_MONITOR_TEMP_MAX),
+                  divertmode);
   }
 
   DBUGVAR(_sessionCompleteListener.IsTriggered());
@@ -492,7 +514,7 @@ uint8_t EvseManager::getStateColour()
       return OPENEVSE_LCD_YELLOW;
 
     case OPENEVSE_STATE_CHARGING:
-      // TODO: Colour should also take into account the tempurature, >60 YELLOW
+      // TODO: Colour should also take into account the temperature, >60 YELLOW
       return OPENEVSE_LCD_TEAL;
 
     case OPENEVSE_STATE_VENT_REQUIRED:
@@ -566,6 +588,16 @@ void EvseManager::setVehicleEta(int vehicleEta)
   _vehicleValid |= EVSE_VEHICLE_ETA;
   _vehicleUpdated |= EVSE_VEHICLE_ETA;
   _vehicleLastUpdated = millis();
+  MicroTask.wakeTask(this);
+}
+
+void EvseManager::setMaxConfiguredCurrent(long amps)
+{
+  _monitor.setMaxConfiguredCurrent(amps);
+  DBUGF("Max configured current set to %ld", _monitor.getMaxConfiguredCurrent());
+  // Setting the Max Current will update the pilot as well, but in any case we may
+  // need to change the level so re-evaluate the claims
+  _evaluateClaims = true;
   MicroTask.wakeTask(this);
 }
 

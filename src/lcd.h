@@ -76,7 +76,7 @@ class LcdTask : public MicroTasks::Task
       Off,
       EnergySession,  // Energy 1,018Wh
       EnergyTotal,    // Lifetime 2313kWh
-      Tempurature,    // EVSE Temp 30.5C
+      Temperature,    // EVSE Temp 30.5C
       Time,           // Time 03:14PM
       Date,           // Date 08/25/2020
       ElapsedTime,
@@ -112,11 +112,11 @@ class LcdTask : public MicroTasks::Task
     bool _updateInfoLine;
 
     MicroTasks::EventListener _evseStateEvent;
+    MicroTasks::EventListener _evseSettingsEvent;
 
     LcdInfoLine ledStateFromEvseState(uint8_t);
     void setNewState(bool wake = true);
     int getPriority(LcdInfoLine state);
-
 
     void showText(int x, int y, const char *msg, bool clear);
 
@@ -133,7 +133,9 @@ class LcdTask : public MicroTasks::Task
     void displayStateLine(uint8_t EvseState, unsigned long &nextUpdate);
     void displayInfoLine(LcdInfoLine info, unsigned long &nextUpdate);
     void displayNumberValue(int line, const char *name, double value, int precision, const char *unit);
+    void displayScaledNumberValue(int line, const char *name, double value, int precision, const char *unit);
     void displayInfoEventTime(const char *name, Scheduler::EventInstance &event);
+    void displayNameValue(int line, const char *name, const char *value);
     void displayStopWatchTime(const char *name, uint32_t time);
   protected:
     void setup();
