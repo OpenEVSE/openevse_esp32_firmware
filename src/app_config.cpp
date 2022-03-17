@@ -84,8 +84,6 @@ String tesla_vehicle_id;
 uint8_t led_brightness;
 #endif
 
-long max_current_soft;
-
 String esp_hostname_default = "openevse-"+ESPAL.getShortId();
 
 void config_changed(String name);
@@ -155,9 +153,6 @@ ConfigOpt *opts[] =
 // LED brightness
   new ConfigOptDefenition<uint8_t>(led_brightness, LED_DEFAULT_BRIGHTNESS, "led_brightness", "lb"),
 #endif
-
-// EVSE settings
-  new ConfigOptDefenition<long>(max_current_soft, LONG_MAX, "max_current_soft", "mcs"),
 
 // Flags
   &flagsOpt,
@@ -243,8 +238,6 @@ void config_changed(String name)
   } else if(name == "led_brightness") {
     ledManager.setBrightness(led_brightness);
 #endif
-  } else if(name == "max_current_soft") {
-    evse.setMaxConfiguredCurrent(max_current_soft);
   }
 }
 
