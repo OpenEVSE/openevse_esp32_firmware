@@ -37,6 +37,7 @@ typedef const __FlashStringHelper *fstr_t;
 #include "time_man.h"
 #include "tesla_client.h"
 #include "scheduler.h"
+#include "rfid.h"
 
 MongooseHttpServer server;          // Create class for Web server
 
@@ -894,6 +895,30 @@ void handleDescribe(MongooseHttpServerRequest *request) {
   request->send(response);
 }
 
+void handleAddRFID(MongooseHttpServerRequest *request) {
+  MongooseHttpServerResponseStream *response;
+  if(false == requestPreProcess(request, response, CONTENT_TYPE_TEXT)) {
+    return;
+  }
+  response->setCode(200);
+  response->setContentType(CONTENT_TYPE_TEXT);
+  response->addHeader("Access-Control-Allow-Origin", "*");
+  request->send(response);
+  rfid.waitForTag(60);
+}
+
+void handlePollRFID(MongooseHttpServerRequest *request) {
+  MongooseHttpServerResponseStream *response;
+  if(false == requestPreProcess(request, response, CONTENT_TYPE_JSON)) {
+    return;
+  }
+  response->setCode(200);
+  response->setContentType(CONTENT_TYPE_JSON);
+  response->addHeader("Access-Control-Allow-Origin", "*");
+  serializeJson(rfid.rfidPoll(), *response);
+  request->send(response);
+}
+
 String delayTimer = "0 0 0 0";
 
 void
@@ -1080,6 +1105,10 @@ web_server_setup() {
   server.on("/apoff$", handleAPOff);
   server.on("/divertmode$", handleDivertMode);
   server.on("/emoncms/describe$", handleDescribe);
+  server.on("/rfid/add$", handleAddRFID);
+
+  // Check status of RFID scan
+  server.on("/rfid/poll$", handlePollRFID);
 
   server.on("/schedule/plan$", handleSchedulePlan);
   server.on("/schedule", handleSchedule);

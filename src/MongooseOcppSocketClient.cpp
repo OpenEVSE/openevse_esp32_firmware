@@ -3,6 +3,10 @@
  * Created: 2021-04-10
  */
 
+#if defined(ENABLE_DEBUG) && !defined(ENABLE_DEBUG_OCPPSOCKET)
+#undef ENABLE_DEBUG
+#endif
+
 #include "MongooseOcppSocketClient.h"
 #include "net_manager.h"
 #include "debug.h"
@@ -203,7 +207,7 @@ void MongooseOcppSocketClient::reconnect(const String &ws_url) {
     maintainWsConn();
 }
 
-bool MongooseOcppSocketClient::sendTXT(String &out) {
+bool MongooseOcppSocketClient::sendTXT(std::string &out) {
     /*
      * Check if the EVSE is able to send the data at the moment. This fuzzy check can be useful to
      * to diagnose connection problems at upper layers. It gives no guarantee that packages will
@@ -243,7 +247,7 @@ bool MongooseOcppSocketClient::isValidUrl(const char *url) {
     if (url[1] != 'S' && url[1] != 's')
         return false;
 
-    if (url[2] == 'S' && url[2] == 's') {
+    if (url[2] == 'S' || url[2] == 's') {
         if (url[3] != ':')
             return false;
         //else: passed

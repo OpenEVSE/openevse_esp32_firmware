@@ -5,23 +5,25 @@
 
 #include "ocpp.h"
 
-#include "app_config.h"
-
-#include <ArduinoOcpp.h> // Facade for ArduinoOcpp
-#include <ArduinoOcpp/SimpleOcppOperationFactory.h> // define behavior for incoming req messages
-
-#include "http_update.h"
-
+#include <ArduinoOcpp.h>
+#include <ArduinoOcpp/SimpleOcppOperationFactory.h>
 #include <ArduinoOcpp/Core/OcppEngine.h>
+#include <ArduinoOcpp/Platform.h>
 
-#include "emonesp.h" //for VOLTAGE_DEFAULT
+#include "app_config.h"
+#include "http_update.h"
+#include "emonesp.h"
 
 #define LCD_DISPLAY(X) if (lcd) lcd->display((X), 0, 1, 5 * 1000, LCD_CLEAR_LINE);
 
 
 ArduinoOcppTask *ArduinoOcppTask::instance = NULL;
 
-ArduinoOcppTask::ArduinoOcppTask() : MicroTasks::Task() /*, bootReadyCallback(MicroTasksCallback([](){})) */ {
+void dbug_wrapper(const char *msg) {
+    DBUG(msg);
+}
+
+ArduinoOcppTask::ArduinoOcppTask() : MicroTasks::Task() {
 
 }
 
@@ -30,58 +32,94 @@ ArduinoOcppTask::~ArduinoOcppTask() {
     instance = NULL;
 }
 
-void ArduinoOcppTask::begin(EvseManager &evse, LcdTask &lcd, EventLog &eventLog) {
+void ArduinoOcppTask::begin(EvseManager &evse, LcdTask &lcd, EventLog &eventLog, RfidTask &rfid) {
 
     this->evse = &evse;
     this->lcd = &lcd;
     this->eventLog = &eventLog;
+    this->rfid = &rfid;
 
-    initializeArduinoOcpp();
-    loadEvseBehavior();
+    ao_set_console_out(dbug_wrapper);
+
+    reconfigure();
 
     instance = this; //cannot be in constructer because object is invalid before .begin()
     MicroTask.startTask(this);
 }
 
-void ArduinoOcppTask::initializeArduinoOcpp() {
+void ArduinoOcppTask::reconfigure() {
 
-    if (config_ocpp_enabled() && !arduinoOcppInitialized) {
+    if (arduinoOcppInitialized) {
+        arduinoOcppInitialized = false;
 
+        if (!config_ocpp_enabled() && ocppSocket) {
+            String emptyUrl = String("");
+            ocppSocket->reconnect(emptyUrl);
+        }
+        OCPP_deinitialize();
+    }
+
+    if (config_ocpp_enabled()) {
         String url = getCentralSystemUrl();
 
-        if (url.isEmpty()) {
-            return;
+        if (ocppSocket) {
+            ocppSocket->reconnect(url);
+        } else {
+            ocppSocket = new MongooseOcppSocketClient(url);
         }
 
-        ocppSocket = new MongooseOcppSocketClient(url);
-
-        ArduinoOcpp::OcppClock clockAdapter = [] () {
-            timeval time_now;
-            gettimeofday(&time_now, NULL);
-            return (ArduinoOcpp::otime_t) time_now.tv_sec;
-        };
-
-        OCPP_initialize(ocppSocket, (float) VOLTAGE_DEFAULT, ArduinoOcpp::FilesystemOpt::Use, clockAdapter);
-
-        initializeDiagnosticsService();
-        initializeFwService();
-
-        DynamicJsonDocument *evseDetailsDoc = new DynamicJsonDocument(JSON_OBJECT_SIZE(6));
-        JsonObject evseDetails = evseDetailsDoc->to<JsonObject>();
-        evseDetails["chargePointModel"] = "Advanced Series";
-        //evseDetails["chargePointSerialNumber"] = "TODO"; //see https://github.com/OpenEVSE/ESP32_WiFi_V4.x/issues/218
-        evseDetails["chargePointVendor"] = "OpenEVSE";
-        evseDetails["firmwareVersion"] = evse->getFirmwareVersion();
-        //evseDetails["meterSerialNumber"] = "TODO";
-        //evseDetails["meterType"] = "TODO";
-        //see https://github.com/OpenEVSE/ESP32_WiFi_V4.x/issues/219
-
-        bootNotification(evseDetailsDoc, [this](JsonObject payload) { //ArduinoOcpp will delete evseDetailsDoc
-            LCD_DISPLAY("OCPP connected!");
-        });
+        initializeArduinoOcpp();
 
         arduinoOcppInitialized = true;
     }
+}
+
+void ArduinoOcppTask::initializeArduinoOcpp() {
+
+    String url = getCentralSystemUrl();
+
+    if (url.isEmpty()) {
+        return;
+    }
+
+    ocppSocket = new MongooseOcppSocketClient(url);
+
+    ArduinoOcpp::OcppClock clockAdapter = [] () {
+        timeval time_now;
+        gettimeofday(&time_now, NULL);
+        return (ArduinoOcpp::otime_t) time_now.tv_sec;
+    };
+
+    OCPP_initialize(*ocppSocket, (float) VOLTAGE_DEFAULT, ArduinoOcpp::FilesystemOpt::Use, clockAdapter);
+
+    loadEvseBehavior();
+    initializeDiagnosticsService();
+    initializeFwService();
+
+    /*
+     * BootNotification: provide the OCPP backend with relevant data about the OpenEVSE
+     * see https://github.com/OpenEVSE/ESP32_WiFi_V4.x/issues/219
+     */
+    String evseFirmwareVersion = String(evse->getFirmwareVersion());
+
+    DynamicJsonDocument *evseDetailsDoc = new DynamicJsonDocument(
+        JSON_OBJECT_SIZE(5)
+        + serial.length() + 1
+        + currentfirmware.length() + 1
+        + evseFirmwareVersion.length() + 1);
+    JsonObject evseDetails = evseDetailsDoc->to<JsonObject>();
+    evseDetails["chargePointModel"] = "Advanced Series";
+    evseDetails["chargePointSerialNumber"] = serial; //see https://github.com/OpenEVSE/ESP32_WiFi_V4.x/issues/218
+    evseDetails["chargePointVendor"] = "OpenEVSE";
+    evseDetails["firmwareVersion"] = currentfirmware;
+    evseDetails["meterSerialNumber"] = evseFirmwareVersion;
+
+    bootNotification(evseDetailsDoc, [this](JsonObject payload) { //ArduinoOcpp will delete evseDetailsDoc
+        LCD_DISPLAY("OCPP connected!");
+    });
+
+    ocppTxIdDisplay = getTransactionId();
+    ocppSessionDisplay = getSessionIdTag();
 }
 
 void ArduinoOcppTask::setup() {
@@ -89,10 +127,6 @@ void ArduinoOcppTask::setup() {
 }
 
 void ArduinoOcppTask::loadEvseBehavior() {
-
-    if (!arduinoOcppInitialized) {
-        return;
-    }
 
     /*
      * Synchronize OpenEVSE data with OCPP-library data
@@ -111,11 +145,10 @@ void ArduinoOcppTask::loadEvseBehavior() {
 
     setOnChargingRateLimitChange([this] (float limit) { //limit = maximum charge rate in Watts
         charging_limit = limit;
-        this->updateEvseClaim();
     });
 
     setConnectorPluggedSampler([this] () {
-        return (bool) evse->isConnected();
+        return (bool) evse->isVehicleConnected();
     });
 
     setEvRequestsEnergySampler([this] () {
@@ -132,6 +165,7 @@ void ArduinoOcppTask::loadEvseBehavior() {
 
     addConnectorErrorCodeSampler([this] () {
         if (evse->getEvseState() == OPENEVSE_STATE_GFI_FAULT ||
+                evse->getEvseState() == OPENEVSE_STATE_GFI_SELF_TEST_FAILED ||
                 evse->getEvseState() == OPENEVSE_STATE_NO_EARTH_GROUND ||
                 evse->getEvseState() == OPENEVSE_STATE_DIODE_CHECK_FAILED) {
             return "GroundFailure";
@@ -154,79 +188,66 @@ void ArduinoOcppTask::loadEvseBehavior() {
     });
 
     addConnectorErrorCodeSampler([this] () {
-        if (evse->getEvseState() == OPENEVSE_STATE_STUCK_RELAY ||
-                evse->getEvseState() == OPENEVSE_STATE_GFI_SELF_TEST_FAILED) {
-            return "InternalError";
+        if (evse->getEvseState() == OPENEVSE_STATE_STUCK_RELAY) {
+            return "PowerSwitchFailure";
         }
         return (const char *) NULL;
+    });
+
+    addConnectorErrorCodeSampler([this] () {
+        if (rfid->communicationFails()) {
+            return "ReaderFailure";
+        }
+        return (const char *) nullptr;
     });
 
     /*
      * CP behavior definition: How will plugging and unplugging the EV start or stop OCPP transactions
      */
 
-    onVehicleConnect = [this] () {
-        if (getTransactionId() < 0 && isAvailable()) {
-            if (!ocpp_idTag.isEmpty()) {
-                authorize(ocpp_idTag, [this] (JsonObject payload) {
-                    if (idTagIsAccepted(payload)) {
-                        startTransaction([this] (JsonObject payload) {
-                            this->updateEvseClaim();
-                        }, [this] () {
-                            LCD_DISPLAY("Central system error");
-                        });
-                    } else {
-                        LCD_DISPLAY("ID card not recognized");
-                    }
-                }, [this] () {
-                    LCD_DISPLAY("OCPP timeout");
-                });
+    onIdTagInput = [this] (const String& idInput) {
+        if (!config_ocpp_enabled()) {
+            return false;
+        }
+        if (idInput.isEmpty()) {
+            DBUGLN("[ocpp] empty idTag");
+            return true;
+        }
+        if (!isAvailable() || !arduinoOcppInitialized) {
+            LCD_DISPLAY("OCPP inoperative");
+            DBUGLN(F("[ocpp] present card but inoperative"));
+            return true;
+        }
+        const char *sessionIdTag = getSessionIdTag();
+        if (sessionIdTag) {
+            //currently in an authorized session
+            if (idInput.equals(sessionIdTag)) {
+                //NFC card matches
+                endSession();
+                LCD_DISPLAY("Card accepted");
             } else {
-                startTransaction([this] (JsonObject payload) {
-                    if (!idTagIsRejected(payload)) {
-                        this->updateEvseClaim();
-                    } else {
-                        LCD_DISPLAY("ID tag required");
-                    }
-                    this->updateEvseClaim();
-                }, [this] () {
-                    LCD_DISPLAY("Central system error");
-                });
+                LCD_DISPLAY("Card not recognized");
             }
-
+        } else {
+            //idle mode
+            LCD_DISPLAY("Card read");
+            String idInputCapture = idInput;
+            authorize(idInput.c_str(), [this, idInputCapture] (JsonObject payload) {
+                if (idTagIsAccepted(payload)) {
+                    beginSession(idInputCapture.c_str());
+                    LCD_DISPLAY("Card accepted");
+                } else {
+                    LCD_DISPLAY("Card not recognized");
+                }
+            }, [this] () {
+                LCD_DISPLAY("OCPP timeout");
+            });
         }
-        this->updateEvseClaim();
+
+        return true;
     };
 
-    setOnRemoteStartTransactionSendConf([this] (JsonObject payload) {
-        if (!operationIsAccepted(payload)){
-            //RemoteStartTransaction rejected! Do nothing
-            return;
-        }
-
-        startTransaction([this] (JsonObject payload) {
-            this->updateEvseClaim();
-        }, [this] () {
-            LCD_DISPLAY("Central system error");
-        });
-    });
-
-    onVehicleDisconnect = [this] () {
-        if (getTransactionId() >= 0) {
-            stopTransaction();
-        }
-        this->updateEvseClaim();
-    };
-
-    setOnRemoteStopTransactionSendConf([this](JsonObject payload) {
-        if (!operationIsAccepted(payload)){
-            //RemoteStopTransaction rejected! There is no transaction with given ID. Do nothing
-            return;
-        }
-
-        stopTransaction();
-        this->updateEvseClaim();
-    });
+    rfid->setOnCardScanned(&onIdTagInput);
 
     setOnResetReceiveReq([this] (JsonObject payload) {
         const char *type = payload["type"] | "Soft";
@@ -245,42 +266,80 @@ void ArduinoOcppTask::loadEvseBehavior() {
         //see https://github.com/OpenEVSE/ESP32_WiFi_V4.x/issues/230
         return false;
     });
-
-    updateEvseClaim();
 }
 
 unsigned long ArduinoOcppTask::loop(MicroTasks::WakeReason reason) {
 
     if (arduinoOcppInitialized) {
-        if (config_ocpp_enabled()) {
-            OCPP_loop();
-        } else {
-            //The OCPP function has been activated and then deactivated again.
-
-            ArduinoOcpp::ocppEngine_loop(); //There could be remaining operations in the OCPP-queue. I will add the OCPP_unitialize() soon as a better solution to this
-            return 0;
-        }
-    } else {
-        if (config_ocpp_enabled()) {
-            initializeArduinoOcpp();
-            loadEvseBehavior();
-        }
+        OCPP_loop();
+    }
+    if (arduinoOcppInitialized != config_ocpp_enabled()) {
+        reconfigure();
         return 50;
     }
 
-    if (evse->isVehicleConnected() && !vehicleConnected) {
-        vehicleConnected = evse->isVehicleConnected();
-
-        if (strcmp(tx_start_point.c_str(), "tx_only_remote")) {
-            //tx_start_point is different from tx_only_remote. Plugging an EV starts a transaction
-            onVehicleConnect();
+    if (arduinoOcppInitialized) {
+        
+        if (evse->isVehicleConnected() && !vehicleConnected) {
+            //vehicle plugged
+            if (!getSessionIdTag()) {
+                //vehicle plugged before authorization
+                if (config_rfid_enabled()) {
+                    LCD_DISPLAY("Need card");
+                } else {
+                    //no RFID reader --> Auto-Authorize or RemoteStartTransaction
+                    if (!ocpp_idTag.isEmpty() && strcmp(tx_start_point.c_str(), "tx_only_remote")) {
+                        //ID tag given in OpenEVSE dashboard & Auto-Authorize not disabled
+                        String idTagCapture = ocpp_idTag;
+                        authorize(idTagCapture.c_str(), [this, idTagCapture] (JsonObject payload) {
+                            if (idTagIsAccepted(payload)) {
+                                beginSession(idTagCapture.c_str());
+                            } else {
+                                LCD_DISPLAY("ID tag not recognized");
+                            }
+                        }, [this] () {
+                            LCD_DISPLAY("OCPP timeout");
+                        });
+                    } else {
+                        //OpenEVSE cannot authorize this session -> wait for RemoteStartTransaction
+                        LCD_DISPLAY("Please authorize session");
+                    }
+                }
+            }
         }
-    }
-
-    if (!evse->isVehicleConnected() && vehicleConnected) {
         vehicleConnected = evse->isVehicleConnected();
 
-        onVehicleDisconnect();
+        if (ocppSessionDisplay && !getSessionIdTag()) {
+            //Session unauthorized. Show if StartTransaction didn't succeed
+            if (ocppTxIdDisplay < 0) {
+                if (config_rfid_enabled()) {
+                    LCD_DISPLAY("Card timeout");
+                    LCD_DISPLAY("Present card again");
+                } else {
+                    LCD_DISPLAY("Auth timeout");
+                }
+            }
+        } else if (!ocppSessionDisplay && getSessionIdTag()) {
+            //Session recently authorized
+            if (!evse->isVehicleConnected()) {
+                LCD_DISPLAY("Plug in cable");
+            }
+        }
+        ocppSessionDisplay = getSessionIdTag();
+
+        if (ocppTxIdDisplay <= 0 && getTransactionId() > 0) {
+            LCD_DISPLAY("OCPP start tx");
+            String txIdMsg = "TxID ";
+            txIdMsg += String(getTransactionId());
+            LCD_DISPLAY(txIdMsg);
+        } else if (ocppTxIdDisplay > 0 && getTransactionId() < 0) {
+            LCD_DISPLAY("OCPP Good bye!");
+            String txIdMsg = "TxID ";
+            txIdMsg += String(ocppTxIdDisplay);
+            txIdMsg += " finished";
+            LCD_DISPLAY(txIdMsg);
+        }
+        ocppTxIdDisplay = getTransactionId();
     }
 
     if (resetTriggered) {
@@ -296,7 +355,12 @@ unsigned long ArduinoOcppTask::loop(MicroTasks::WakeReason reason) {
         }
     }
 
-    return 0;
+    if (millis() - updateEvseClaimLast >= 1009) {
+        updateEvseClaimLast = millis();
+        updateEvseClaim();
+    }
+
+    return arduinoOcppInitialized ? 0 : 1000;
 }
 
 void ArduinoOcppTask::updateEvseClaim() {
@@ -304,24 +368,18 @@ void ArduinoOcppTask::updateEvseClaim() {
     EvseState evseState;
     EvseProperties evseProperties;
 
-    int transactionId = getTransactionId(); //ID of OCPP-transaction. transactionId <  0 means that no transaction runs on the EVSE at the moment
-                                            //                        transactionId >  0 means that the EVSE is in a charging transaction right now
-                                            //                        transactionId == 0 means that the initiation is pending
+    if (!arduinoOcppInitialized || !config_ocpp_enabled()) {
+        evse->release(EvseClient_OpenEVSE_Ocpp);
+        return;
+    }
 
-    //EVSE is in an OCPP-transaction?
-    if (transactionId < 0) {
-        //no transaction running. Forbid charging
-        evseState = EvseState::Disabled;
-    } else if (transactionId == 0) {
+    if (getTransactionId() == 0 && !strcmp(tx_start_point.c_str(), "tx_pending")) {
         //transaction initiated but neither accepted nor rejected
-        if (!strcmp(tx_start_point.c_str(), "tx_pending")) {
-            evseState = EvseState::Active;
-        } else {
-            evseState = EvseState::Disabled;
-        }
-    } else {
-        //transaction running. Allow charging
         evseState = EvseState::Active;
+    } else if (ocppPermitsCharge()) {
+        evseState = EvseState::Active;
+    } else {
+        evseState = EvseState::Disabled;
     }
 
     evseProperties = evseState;
@@ -355,7 +413,7 @@ void ArduinoOcppTask::updateEvseClaim() {
     }
 
     //Apply inferred claim
-    if (evseState == EvseState::None || !config_ocpp_enabled()) {
+    if (evseState == EvseState::None) {
         //the claiming rules don't specify the EVSE state
         evse->release(EvseClient_OpenEVSE_Ocpp);
     } else {
@@ -392,23 +450,8 @@ void ArduinoOcppTask::notifyConfigChanged() {
     }
 }
 
-void ArduinoOcppTask::reconfigure() {
-    if (arduinoOcppInitialized) {
-        if (config_ocpp_enabled()) {
-            String mUrl = getCentralSystemUrl();
-            ocppSocket->reconnect(mUrl);
-        } else {
-            String emptyUrl = String("");
-            ocppSocket->reconnect(emptyUrl);
-        }
-    } else {
-        initializeArduinoOcpp();
-    }
-    loadEvseBehavior();
-}
-
 void ArduinoOcppTask::initializeDiagnosticsService() {
-    ArduinoOcpp::DiagnosticsService *diagService = ArduinoOcpp::getDiagnosticsService();
+    ArduinoOcpp::DiagnosticsService *diagService = getDiagnosticsService();
     if (diagService) {
         diagService->setOnUploadStatusSampler([this] () {
             if (diagFailure) {
@@ -420,7 +463,7 @@ void ArduinoOcppTask::initializeDiagnosticsService() {
             }
         });
 
-        diagService->setOnUpload([this] (String &location, ArduinoOcpp::OcppTimestamp &startTime, ArduinoOcpp::OcppTimestamp &stopTime) {
+        diagService->setOnUpload([this] (const std::string &location, ArduinoOcpp::OcppTimestamp &startTime, ArduinoOcpp::OcppTimestamp &stopTime) {
             
             //reset reported state
             diagSuccess = false;
@@ -431,7 +474,7 @@ void ArduinoOcppTask::initializeDiagnosticsService() {
             struct mg_str scheme, query, fragment;
             if (mg_parse_uri(mg_mk_str(location.c_str()), &scheme, NULL, NULL, &port_i, NULL, &query, &fragment)) {
                 DBUG(F("[ocpp] Diagnostics upload, invalid URL: "));
-                DBUGLN(location);
+                DBUGLN(location.c_str());
                 diagFailure = true;
                 return false;
             }
@@ -500,7 +543,7 @@ void ArduinoOcppTask::initializeDiagnosticsService() {
             body += bodySuffix;
 
             DBUG(F("[ocpp] POST diagnostics file to "));
-            DBUGLN(location);
+            DBUGLN(location.c_str());
 
             MongooseHttpClientRequest *request =
                     diagClient.beginRequest(location.c_str());
@@ -528,7 +571,7 @@ void ArduinoOcppTask::initializeDiagnosticsService() {
 }
 
 void ArduinoOcppTask::initializeFwService() {
-    ArduinoOcpp::FirmwareService *fwService = ArduinoOcpp::getFirmwareService();
+    ArduinoOcpp::FirmwareService *fwService = getFirmwareService();
     if (fwService) {
         fwService->setBuildNumber(evse->getFirmwareVersion());
 
@@ -542,7 +585,7 @@ void ArduinoOcppTask::initializeFwService() {
             }
         });
 
-        fwService->setOnInstall([this](String &location) {
+        fwService->setOnInstall([this](const std::string &location) {
 
             DBUGLN(F("[ocpp] Starting installation routine"));
             
@@ -550,7 +593,7 @@ void ArduinoOcppTask::initializeFwService() {
             updateFailure = false;
             updateSuccess = false;
 
-            return http_update_from_url(location, [] (size_t complete, size_t total) { },
+            return http_update_from_url(String(location.c_str()), [] (size_t complete, size_t total) { },
                 [this] (int status_code) {
                     //onSuccess
                     updateSuccess = true;
@@ -565,17 +608,7 @@ void ArduinoOcppTask::initializeFwService() {
     }
 }
 
-bool ArduinoOcppTask::operationIsAccepted(JsonObject payload) {
-    const char *status = payload["status"] | "Invalid";
-    return !strcmp(status, "Accepted");
-}
-
 bool ArduinoOcppTask::idTagIsAccepted(JsonObject payload) {
     const char *status = payload["idTagInfo"]["status"] | "Invalid";
     return !strcmp(status, "Accepted");
-}
-
-bool ArduinoOcppTask::idTagIsRejected(JsonObject payload) {
-    const char *status = payload["idTagInfo"]["status"] | "Accepted";
-    return strcmp(status, "Accepted");
 }

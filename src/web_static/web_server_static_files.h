@@ -1,3 +1,4 @@
+#include "web_server.arduinoocpp.png.h"
 #include "web_server.assets.js.h"
 #include "web_server.emoncms.jpg.h"
 #include "web_server.favicon-152.png.h"
@@ -21,6 +22,7 @@
 #include "web_server.wifi_signal_5.svg.h"
 #include "web_server.zones.json.h"
 StaticFile staticFiles[] = {
+  { "/arduinoocpp.png", CONTENT_ARDUINOOCPP_PNG, sizeof(CONTENT_ARDUINOOCPP_PNG) - 1, _CONTENT_TYPE_PNG, CONTENT_ARDUINOOCPP_PNG_ETAG },
   { "/assets.js", CONTENT_ASSETS_JS, sizeof(CONTENT_ASSETS_JS) - 1, _CONTENT_TYPE_JS, CONTENT_ASSETS_JS_ETAG },
   { "/emoncms.jpg", CONTENT_EMONCMS_JPG, sizeof(CONTENT_EMONCMS_JPG) - 1, _CONTENT_TYPE_JPEG, CONTENT_EMONCMS_JPG_ETAG },
   { "/favicon-152.png", CONTENT_FAVICON_152_PNG, sizeof(CONTENT_FAVICON_152_PNG) - 1, _CONTENT_TYPE_PNG, CONTENT_FAVICON_152_PNG_ETAG },
