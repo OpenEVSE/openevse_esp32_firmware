@@ -314,12 +314,9 @@ void EvseMonitor::updateCurrentSettings(long min_current, long max_hardware_curr
 {
   DBUGF("min_current = %ld, pilot = %ld, max_configured_current = %ld, max_hardware_current = %ld", min_current, pilot, max_configured_current, max_hardware_current);
   _min_current = min_current;
-  // The max_configured_current is a write once value, so as fare as we are concerned that is the 'hardware' max. We manage the acrual soft limit in the WiFi code.
-  _max_hardware_current = max_configured_current;
+  _max_hardware_current = max_hardware_current;
   _pilot = pilot;
-  if(_max_configured_current > _max_hardware_current || _max_configured_current < _min_current) {
-    _max_configured_current = _max_hardware_current;
-  }
+  _max_configured_current = max_configured_current;
 }
 
 
@@ -655,10 +652,19 @@ void EvseMonitor::setMaxConfiguredCurrent(long amps)
     amps = _min_current;
   }
 
-  _max_configured_current = amps;
-  DBUGVAR(_max_configured_current);
+  _openevse.setCurrentCapacity(amps, true, [this, amps](int ret, long pilot)
+  {
+    if(RAPI_RESPONSE_OK == ret)
+    {
+      _max_configured_current = amps;
+      DBUGVAR(_max_configured_current);
 
-  _settings_changed.Trigger();
+      _pilot = pilot;
+      DBUGVAR(_pilot);
+
+      _settings_changed.Trigger();
+    }
+  });
 }
 
 void EvseMonitor::getStatusFromEvse(bool allowStart)
