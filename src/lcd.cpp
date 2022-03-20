@@ -8,7 +8,7 @@
 #include "openevse.h"
 #include "input.h"
 #include "app_config.h"
-#include <time.h>
+#include <sys/time.h>
 
 static void IGNORE(int ret) {
 }

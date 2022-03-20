@@ -90,5 +90,3 @@ lib/StreamSpy
 lib/MicroTasks
 
 *.bin
-
-sdkconfig
