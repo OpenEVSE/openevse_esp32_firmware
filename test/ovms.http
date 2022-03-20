@@ -1,0 +1,49 @@
+# Name: REST Client
+# Id: humao.rest-client
+# Description: REST Client for Visual Studio Code
+# Version: 0.21.3
+# Publisher: Huachao Mao
+# VS Marketplace Link: https://marketplace.visualstudio.com/items?itemName=humao.rest-client
+
+# You should use environment vars (https://marketplace.visualstudio.com/items?itemName=humao.rest-client#environment-variables) for these
+# but you can also set here if needed (just don't check in!)
+
+#@baseUrl = http://openevse.local
+#@ovms_username = username
+#@ovms_password = password
+
+@ovms_endpoint = https://api.openvehicles.com:6869
+
+###
+
+GET {{ovms_endpoint}}/api/cookie?username={{ovms_username}}&password={{ovms_password}}
+
+###
+# @name token
+
+GET {{ovms_endpoint}}/api/token
+
+###
+# @name token
+
+POST {{ovms_endpoint}}/api/token
+Content-Type: application/x-www-form-urlencoded
+
+username={{ovms_username}}&
+password={{ovms_password}}&
+application=OpenEVSE&
+purpose=Smart Charging&
+permit=read
+
+###
+# @name vehicles
+
+GET {{ovms_endpoint}}/api/vehicles
+
+###
+
+GET {{ovms_endpoint}}/api/vehicles?username={{ovms_username}}&password={{token.response.body.0.token}}
+
+###
+
+GET {{ovms_endpoint}}/api/status/{{vehicles.response.body.0.id}}
