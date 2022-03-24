@@ -161,8 +161,6 @@ ConfigOpt *opts[] =
 // LED brightness
   new ConfigOptDefenition<uint8_t>(led_brightness, LED_DEFAULT_BRIGHTNESS, "led_brightness", "lb"),
 #endif
-// RFID storage
-  new ConfigOptDefenition<String>(rfid_storage, "", "rfid_storage", "rs"),
 
 // EVSE settings
   new ConfigOptDefenition<long>(max_current_soft, LONG_MAX, "max_current_soft", "mcs"),
