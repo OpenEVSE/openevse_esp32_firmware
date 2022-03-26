@@ -20,7 +20,8 @@
 #define I2C_SCL 22
 #endif
 
-#define  SCAN_FREQ            1000
+#define  SCAN_DELAY            1000
+#define  ACK_DELAY              30
 
 #define MAXIMUM_UNRESPONSIVE_TIME  60000UL //after this period the pn532 is considered offline
 #define AUTO_REFRESH_CONNECTION         30 //after this number of polls, the connection to the PN532 will be refreshed
@@ -54,9 +55,14 @@ unsigned long PN532::loop(MicroTasks::WakeReason reason){
 
     read();
 
+    if (listenAck) {
+        listenAck = false; //ack has been read, now wait for the RFID-scanning period to end
+        return SCAN_DELAY;
+    }
+
     if (!config_rfid_enabled()) {
         status = DeviceStatus::NOT_ACTIVE;
-        return SCAN_FREQ;
+        return SCAN_DELAY;
     }
 
     if (status == DeviceStatus::ACTIVE && millis() - lastResponse > MAXIMUM_UNRESPONSIVE_TIME) {
@@ -67,18 +73,21 @@ unsigned long PN532::loop(MicroTasks::WakeReason reason){
     
     if (status != DeviceStatus::ACTIVE) {
         initialize();
-        return SCAN_FREQ;
+        listenAck = true;
+        return ACK_DELAY;
     }
 
     if (pollCount >= AUTO_REFRESH_CONNECTION) {
-        initialize();
         pollCount = 0;
+        initialize();
+        listenAck = true;
     } else {
-        poll();
         pollCount++;
+        poll();
+        listenAck = true;
     }
 
-    return SCAN_FREQ;
+    return ACK_DELAY;
 }
 
 bool PN532::readerFailure() {
@@ -98,9 +107,6 @@ void PN532::initialize() {
     Wire.endTransmission();
 
     listen = true;
-    //"flush" ACK
-    delay(30);
-    read();
 }
 
 void PN532::poll() {
@@ -115,9 +121,6 @@ void PN532::poll() {
     Wire.endTransmission();
 
     listen = true;
-    //"flush" ACK
-    delay(30);
-    read();
 }
 
 void PN532::read() {

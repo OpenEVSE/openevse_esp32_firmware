@@ -20,6 +20,7 @@ private:
 
     DeviceStatus status = DeviceStatus::NOT_ACTIVE;
     boolean hasContact = false;
+    bool listenAck = false;
     bool listen = false;
 
     void initialize();
