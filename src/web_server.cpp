@@ -588,6 +588,8 @@ handleStatus(MongooseHttpServerRequest *request) {
 
   doc["ocpp_connected"] = (int)MongooseOcppSocketClient::ocppConnected();
 
+  doc["rfid_failure"] = (int) rfid.communicationFails();
+
   doc["ohm_hour"] = ohm_hour;
 
   doc["free_heap"] = ESPAL.getFreeHeap();
