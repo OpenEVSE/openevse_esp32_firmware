@@ -84,11 +84,6 @@ void RfidTask::scanCard(String& uid){
             lcd.display("RFID: did not recognize card", 0, 1, 5 * 1000, LCD_CLEAR_LINE);
             DBUGLN(F("[rfid] did not recognize card"));
         }
-
-        // Send to MQTT broker
-        DynamicJsonDocument data{JSON_OBJECT_SIZE(1) + uid.length() + 1};
-        data["rfid"] = uid;
-        mqtt_publish(data);
     }
 }
 
@@ -159,11 +154,19 @@ String RfidTask::getAuthenticatedTag(){
 
 void RfidTask::resetAuthentication(){
     authenticatedTag = String('\0');
+
+    DynamicJsonDocument data{JSON_OBJECT_SIZE(1) + authenticatedTag.length() + 1};
+    data["rfid_auth"] = authenticatedTag;
+    event_send(data);
 }
 
 void RfidTask::setAuthentication(String &idTag){
     authenticatedTag = idTag;
     authentication_timestamp = millis();
+
+    DynamicJsonDocument data{JSON_OBJECT_SIZE(1) + authenticatedTag.length() + 1};
+    data["rfid_auth"] = authenticatedTag;
+    event_send(data);
 }
 
 void RfidTask::waitForTag(){
