@@ -202,4 +202,10 @@ bool RfidTask::communicationFails() {
     return _rfid->readerFailure();
 }
 
+bool RfidReaderNullDevice::readerFailure() {
+    return config_rfid_enabled();
+}
+
+RfidReaderNullDevice rfidNullDevice;
+
 RfidTask rfid;

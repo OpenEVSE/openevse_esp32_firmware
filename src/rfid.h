@@ -18,6 +18,12 @@ public:
     virtual bool readerFailure() = 0;
 };
 
+class RfidReaderNullDevice : public RfidReader {
+public:
+    void setOnCardDetected(std::function<void(String&)> onCardDet) override {}
+    bool readerFailure() override;
+};
+
 class RfidTask : public MicroTasks::Task {
     private:
         EvseManager *_evse;
@@ -55,6 +61,8 @@ class RfidTask : public MicroTasks::Task {
 
         void setOnCardScanned(std::function<bool(const String& idTag)> *onCardScanned);
 };
+
+extern RfidReaderNullDevice rfidNullDevice;
 
 extern RfidTask rfid;
 

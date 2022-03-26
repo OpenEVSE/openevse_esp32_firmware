@@ -118,8 +118,12 @@ void setup()
   scheduler.begin();
 
   lcd.begin(evse, scheduler, manual);
+#if defined(ENABLE_PN532)
   pn532.begin();
   rfid.begin(evse, pn532);
+#else
+  rfid.begin(evse, rfidNullDevice);
+#endif
   ledManager.begin(evse);
 
   // Initialise the WiFi
