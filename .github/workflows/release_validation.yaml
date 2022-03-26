@@ -49,6 +49,8 @@ jobs:
 
     steps:
       ### Check the version number in the code matches the tag number
+      - uses: actions/checkout@v2
+
       - name: Retrieve the version number(s)
         run: |
           TAG_VERSION=$(sed "s/^v//" <<< $GITHUB_REF_NAME)

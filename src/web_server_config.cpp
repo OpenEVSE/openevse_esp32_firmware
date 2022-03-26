@@ -150,6 +150,15 @@ handleConfigPost(MongooseHttpServerRequest *request, MongooseHttpServerResponseS
         DBUGLN("service changed");
       }
     }
+    if(doc.containsKey("max_current_soft"))
+    {
+      long current = doc["max_current_soft"];
+      if(current != evse.getMaxConfiguredCurrent()) {
+        evse.setMaxConfiguredCurrent(current);
+        config_modified = true;
+        DBUGLN("max_current_soft changed");
+      }
+    }
     if(doc.containsKey("scale") && doc.containsKey("offset"))
     {
       long scale = doc["scale"];
