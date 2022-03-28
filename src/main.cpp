@@ -49,6 +49,7 @@
 #include "tesla_client.h"
 #include "event.h"
 #include "ocpp.h"
+#include "pn532.h"
 #include "rfid.h"
 
 #include "LedManagerTask.h"
@@ -117,7 +118,12 @@ void setup()
   scheduler.begin();
 
   lcd.begin(evse, scheduler, manual);
-  rfid.begin(evse);
+#if defined(ENABLE_PN532)
+  pn532.begin();
+  rfid.begin(evse, pn532);
+#else
+  rfid.begin(evse, rfidNullDevice);
+#endif
   ledManager.begin(evse);
 
   // Initialise the WiFi

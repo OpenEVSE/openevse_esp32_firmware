@@ -588,6 +588,8 @@ handleStatus(MongooseHttpServerRequest *request) {
 
   doc["ocpp_connected"] = (int)MongooseOcppSocketClient::ocppConnected();
 
+  doc["rfid_failure"] = (int) rfid.communicationFails();
+
   doc["ohm_hour"] = ohm_hour;
 
   doc["free_heap"] = ESPAL.getFreeHeap();
@@ -904,19 +906,7 @@ void handleAddRFID(MongooseHttpServerRequest *request) {
   response->setContentType(CONTENT_TYPE_TEXT);
   response->addHeader("Access-Control-Allow-Origin", "*");
   request->send(response);
-  rfid.waitForTag(60);
-}
-
-void handlePollRFID(MongooseHttpServerRequest *request) {
-  MongooseHttpServerResponseStream *response;
-  if(false == requestPreProcess(request, response, CONTENT_TYPE_JSON)) {
-    return;
-  }
-  response->setCode(200);
-  response->setContentType(CONTENT_TYPE_JSON);
-  response->addHeader("Access-Control-Allow-Origin", "*");
-  serializeJson(rfid.rfidPoll(), *response);
-  request->send(response);
+  rfid.waitForTag();
 }
 
 String delayTimer = "0 0 0 0";
@@ -1106,9 +1096,6 @@ web_server_setup() {
   server.on("/divertmode$", handleDivertMode);
   server.on("/emoncms/describe$", handleDescribe);
   server.on("/rfid/add$", handleAddRFID);
-
-  // Check status of RFID scan
-  server.on("/rfid/poll$", handlePollRFID);
 
   server.on("/schedule/plan$", handleSchedulePlan);
   server.on("/schedule", handleSchedule);
