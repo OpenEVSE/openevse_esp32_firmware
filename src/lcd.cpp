@@ -619,26 +619,36 @@ void LcdTask::displayInfoLine(LcdInfoLine line, unsigned long &nextUpdate)
   }
 }
 
+// Adjust the value down until its in the range 0-1000,
+// and return the SI prefix for the scaled number. 
+const char *LcdTask::ScaleNumberSI(double *value) {
+  {
+    static const char *mod[] = {
+      "",
+      "k",
+      "m",
+      "g",
+      "t",
+      "p"
+    };
+
+    int index = 0;
+    while (*value > 1000 && index < ARRAY_ITEMS(mod))
+    {
+      *value /= 1000;
+      index++;
+    }
+
+    return(mod[index]);
+  }
+}
+
+
 void LcdTask::displayScaledNumberValue(int line, const char *name, double value, int precision, const char *unit)
 {
-  static const char *mod[] = {
-    "",
-    "k",
-    "m",
-    "g",
-    "t",
-    "p"
-  };
-
-  int index = 0;
-  while (value > 1000 && index < ARRAY_ITEMS(mod))
-  {
-    value /= 1000;
-    index++;
-  }
-
+  
   char newUnit[20];
-  sprintf(newUnit, "%s%s", mod[index], unit);
+  sprintf(newUnit, "%s%s", ScaleNumberSI(&value), unit);
 
   displayNumberValue(line, name, value, precision, newUnit);
 }
