@@ -137,6 +137,7 @@ class LcdTask : public MicroTasks::Task
     const char *ScaleNumberSI(double *value);
     char *formatDoubleSigFigures(char *buffer, int buflen, double value, int figures);
     void displayScaledNumberValue(int line, const char *name, double value, int precision, const char *unit);
+    void displayScaledNumberValue(int line, const char *name, double value, const char *unit);
     void displayInfoEventTime(const char *name, Scheduler::EventInstance &event);
     void displayNameValue(int line, const char *name, const char *value);
     void displayStopWatchTime(const char *name, uint32_t time);

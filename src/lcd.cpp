@@ -675,6 +675,20 @@ void LcdTask::displayScaledNumberValue(int line, const char *name, double value,
   displayNumberValue(line, name, value, precision, newUnit);
 }
 
+// Display a scaled number and adjust output such that the user gets some number 
+// of significant figures eg, for 4: 1.00598kWh appears as 1.005 rather than 1.0
+// Overloaded on displayScaledNumberValue
+void LcdTask::displayScaledNumberValue(int line, const char *name, double value, const char *unit)
+{
+  
+  char newUnit[20];
+  sprintf(newUnit, "%s%s", ScaleNumberSI(&value), unit);
+
+  displayNumberValueSigFigures(line, name, value, 4, newUnit);
+}
+
+// Display a numeric value preceded by the quantity name, scaled for SI notation, 
+// and with a specific number of digits after the decimal point.
 void LcdTask::displayNumberValue(int line, const char *name, double value, int precision, const char *unit)
 {
   char number[20];
