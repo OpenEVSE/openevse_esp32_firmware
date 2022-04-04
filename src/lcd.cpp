@@ -509,7 +509,7 @@ void LcdTask::displayInfoLine(LcdInfoLine line, unsigned long &nextUpdate)
   {
     case LcdInfoLine::EnergySession:
       // Energy 1,018Wh
-      displayScaledNumberValue(1, "Energy", _evse->getSessionEnergy(), 1, "Wh");
+      displayScaledNumberValue(1, "Energy", _evse->getSessionEnergy(), "Wh");
       _updateInfoLine = false;
       break;
 
@@ -666,6 +666,7 @@ char *LcdTask::formatDoubleSigFigures(char *buffer, int buflen, double value, in
 }
 
 
+// Display a scaled number with a specific number of digits after the decimal point.
 void LcdTask::displayScaledNumberValue(int line, const char *name, double value, int precision, const char *unit)
 {
   
