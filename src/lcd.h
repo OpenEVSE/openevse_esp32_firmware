@@ -134,6 +134,7 @@ class LcdTask : public MicroTasks::Task
     void displayInfoLine(LcdInfoLine info, unsigned long &nextUpdate);
     void displayNumberValue(int line, const char *name, double value, int precision, const char *unit);
     const char *ScaleNumberSI(double *value);
+    char *formatDoubleSigFigures(char *buffer, int buflen, double value, int figures);
     void displayScaledNumberValue(int line, const char *name, double value, int precision, const char *unit);
     void displayInfoEventTime(const char *name, Scheduler::EventInstance &event);
     void displayNameValue(int line, const char *name, const char *value);

@@ -643,6 +643,28 @@ const char *LcdTask::ScaleNumberSI(double *value) {
   }
 }
 
+// Format a number to a specif number of signficant figures. 
+// Requires a a number that that has already been adjusted for SI notation.
+//
+// Arguments: buffer, buffer length, 
+// value in question, number of significant figures.
+// returns a pointer to the formatted buffer.
+char *LcdTask::formatDoubleSigFigures(char *buffer, int buflen, double value, int figures)
+{
+  
+  // There is no way to get less than three.
+  int integer_figures;
+  if      ( value >= 100.0 ) integer_figures = 3; 
+  else if ( value >=  10.0 ) integer_figures = 2;
+  else if ( value >=   1.0 ) integer_figures = 1;
+  else                       integer_figures = 0;
+
+  int precision = figures - integer_figures; 
+
+  snprintf(buffer, buflen, "%.*f", precision, value);
+  return(buffer);
+}
+
 
 void LcdTask::displayScaledNumberValue(int line, const char *name, double value, int precision, const char *unit)
 {
