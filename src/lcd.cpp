@@ -683,6 +683,22 @@ void LcdTask::displayNumberValue(int line, const char *name, double value, int p
   displayNameValue(line, name, number);
 }
 
+
+// Display a numeric value that has already been SI adjusted,  
+// adjusted to a specifed number of significant figures, and appended with units
+void LcdTask::displayNumberValueSigFigures(int line, const char *name, double value, int figures, const char *unit)
+{
+  
+  char number[20];
+  
+  formatDoubleSigFigures(number, sizeof(number), value, figures);
+  
+  char with_unit[20];
+  sprintf(with_unit,"%s%s",number,unit);
+  
+  displayNameValue(line, name, with_unit);
+}
+
 void LcdTask::displayInfoEventTime(const char *name, Scheduler::EventInstance &event)
 {
   char temp[20];
