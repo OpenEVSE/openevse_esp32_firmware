@@ -624,10 +624,10 @@ void LcdTask::displayScaledNumberValue(int line, const char *name, double value,
   static const char *mod[] = {
     "",
     "k",
-    "m",
-    "g",
-    "t",
-    "p"
+    "M",
+    "G",
+    "T",
+    "P"
   };
 
   int index = 0;
