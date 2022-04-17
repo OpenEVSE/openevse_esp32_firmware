@@ -546,7 +546,7 @@ void LcdTask::displayInfoLine(LcdInfoLine line, unsigned long &nextUpdate)
       gettimeofday(&local_time, NULL);
       struct tm timeinfo;
       localtime_r(&local_time.tv_sec, &timeinfo);
-      strftime(temp, sizeof(temp), "%d/%m/%Y", &timeinfo);
+      strftime(temp, sizeof(temp), "%Y-%m-%d", &timeinfo);
       displayNameValue(1, "Date", temp);
       _updateInfoLine = false;
       } break;
