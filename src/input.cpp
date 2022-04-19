@@ -22,12 +22,6 @@
 
 #include "RapiSender.h"
 
-int espflash = 0;
-int espfree = 0;
-
-long current_scale = 0;
-long current_offset = 0;
-
 class InputTask : public MicroTasks::Task
 {
   private:
