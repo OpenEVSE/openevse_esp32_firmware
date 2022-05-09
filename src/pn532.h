@@ -2,6 +2,8 @@
  * Author: Matthias Akstaller
  */
 
+#if defined(ENABLE_PN532)
+
 #ifndef PN532_H
 #define PN532_H
 
@@ -43,4 +45,5 @@ public:
 
 extern PN532 pn532;
 
+#endif
 #endif

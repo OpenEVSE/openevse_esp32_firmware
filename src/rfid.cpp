@@ -111,7 +111,9 @@ unsigned long RfidTask::loop(MicroTasks::WakeReason reason){
     updateEvseClaim();
 
     if (!config_rfid_enabled()) {
-        resetAuthentication();
+        if (!authenticatedTag.isEmpty()) {
+            resetAuthentication();
+        }
         return 1000;
     }
 
@@ -153,7 +155,7 @@ String RfidTask::getAuthenticatedTag(){
 }
 
 void RfidTask::resetAuthentication(){
-    authenticatedTag = String('\0');
+    authenticatedTag.clear();
 
     DynamicJsonDocument data{JSON_OBJECT_SIZE(1) + authenticatedTag.length() + 1};
     data["rfid_auth"] = authenticatedTag;

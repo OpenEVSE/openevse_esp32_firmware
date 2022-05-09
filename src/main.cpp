@@ -49,8 +49,11 @@
 #include "tesla_client.h"
 #include "event.h"
 #include "ocpp.h"
-#include "pn532.h"
 #include "rfid.h"
+
+#if defined(ENABLE_PN532)
+#include "pn532.h"
+#endif
 
 #include "LedManagerTask.h"
 #include "event_log.h"
