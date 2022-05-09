@@ -61,7 +61,7 @@ static bool eth_connected = false;
 // Start Access Point
 // Access point is used for wifi network selection
 // -------------------------------------------------------------------
-void
+static void
 startAP() {
   DBUGLN("Starting AP");
 
@@ -105,7 +105,7 @@ startAP() {
 // -------------------------------------------------------------------
 // Start Client, attempt to connect to Wifi network
 // -------------------------------------------------------------------
-void
+static void
 startClient()
 {
   DEBUG.print("Connecting to SSID: ");

@@ -15,7 +15,7 @@
 #endif
 
 String ohm_hour = "NotConnected";
-int evse_sleep = 0;
+static int evse_sleep = 0;
 
 static MongooseHttpClient client;
 
