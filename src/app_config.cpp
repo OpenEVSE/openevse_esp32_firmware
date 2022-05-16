@@ -161,8 +161,6 @@ ConfigOpt *opts[] =
 // LED brightness
   new ConfigOptDefenition<uint8_t>(led_brightness, LED_DEFAULT_BRIGHTNESS, "led_brightness", "lb"),
 #endif
-// RFID storage
-  new ConfigOptDefenition<String>(rfid_storage, "", "rfid_storage", "rs"),
 
 // Flags
   &flagsOpt,
