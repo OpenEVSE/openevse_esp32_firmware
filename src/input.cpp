@@ -17,6 +17,7 @@
 #include "emoncms.h"
 #include "tesla_client.h"
 #include "manual.h"
+#include "rfid.h"
 
 #include "LedManagerTask.h"
 
@@ -84,6 +85,9 @@ class InputTask : public MicroTasks::Task
 
 void create_rapi_json(JsonDocument &doc)
 {
+  if(config_rfid_enabled()) {
+    doc["rfid_auth"] = rfid.getAuthenticatedTag();
+  }
   doc["amp"] = evse.getAmps() * AMPS_SCALE_FACTOR;
   doc["voltage"] = evse.getVoltage() * VOLTS_SCALE_FACTOR;
   doc["pilot"] = evse.getChargeCurrent();

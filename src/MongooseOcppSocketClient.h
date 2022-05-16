@@ -32,17 +32,17 @@ public:
 
     MongooseOcppSocketClient(const String &ws_url);
     
-    ~MongooseOcppSocketClient();
+    ~MongooseOcppSocketClient() override;
 
-    void loop();
+    void loop() override;
 
     void maintainWsConn();
 
-    bool sendTXT(String &out);
+    bool sendTXT(std::string &out) override;
     
     bool receiveTXT(const char* msg, size_t len);
 
-    void setReceiveTXTcallback(ArduinoOcpp::ReceiveTXTcallback &receiveTXT) {
+    void setReceiveTXTcallback(ArduinoOcpp::ReceiveTXTcallback &receiveTXT) override {
         this->receiveTXTcallback = receiveTXT;
     }; //ReceiveTXTcallback is defined in OcppServer.h
 
