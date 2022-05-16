@@ -2,6 +2,8 @@
  * Author: Matthias Akstaller
  */
 
+#if defined(ENABLE_PN532)
+
 #if defined(ENABLE_DEBUG) && !defined(ENABLE_DEBUG_NFCREADER)
 #undef ENABLE_DEBUG
 #endif
@@ -297,3 +299,5 @@ void PN532::read() {
 }
 
 PN532 pn532;
+
+#endif

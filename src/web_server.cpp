@@ -588,7 +588,9 @@ handleStatus(MongooseHttpServerRequest *request) {
 
   doc["ocpp_connected"] = (int)MongooseOcppSocketClient::ocppConnected();
 
+#if defined(ENABLE_PN532) || defined(ENABLE_RFID)
   doc["rfid_failure"] = (int) rfid.communicationFails();
+#endif
 
   doc["ohm_hour"] = ohm_hour;
 
