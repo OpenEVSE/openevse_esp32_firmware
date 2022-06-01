@@ -259,6 +259,8 @@ Then successive uploads can just upload the firmware
 esptool.py --baud 921600 --before default_reset --after hard_reset write_flash -z --flash_mode dio --flash_freq 40m --flash_size detect 0x10000 firmware.bin
 ```
 
+**If uploading to a Huzzah ESP32 board, it may be necessary to hold down the GPIO0 button while pressing the Reset button to trigger a download request on the board.  Both buttons can be released after the Reset button has been pressed.**
+
 **If uploading to ESP32 Etherent gateway, use slower baudrate of `115200`**
 
 Or with the [NodeMCU PyFlasher](https://github.com/marcelstoer/nodemcu-pyflasher) GUI, available with pre-built executable files for Windows/Mac.
