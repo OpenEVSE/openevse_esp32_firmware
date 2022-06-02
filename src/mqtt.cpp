@@ -10,6 +10,7 @@
 #include "espal.h"
 #include "net_manager.h"
 #include "web_server.h"
+#include "event.h"
 
 #include "openevse.h"
 
@@ -106,6 +107,43 @@ void mqttmsg_callback(MongooseString topic, MongooseString payload) {
     if ((newdivert==1) || (newdivert==2)) {
       divertmode_update(newdivert);
     }
+  }
+  else if (topic_string == mqtt_topic + "/charge_current/set")
+  {
+    int newchargecurrent = payload_str.toInt();
+    DBUGF("Set charge_current: %d", newmode);
+    //using override, the only interest of this is having priority above everything else.
+    //We have a confusion in web interface to solve as details of the override are not displayed
+    EvseProperties props(EvseState::Active);
+    props.setChargeCurrent(newchargecurrent);
+    evse.claim(EvseClient_OpenEVSE_Manual, EvseManager_Priority_Manual, props);
+  }
+  else if (topic_string == mqtt_topic + "/max_current/set")
+  {
+    //not using override here, this is a main config change.
+    int newmaxcurrent = payload_str.toInt();
+    DBUGF("Set max_current: %d", newmode);
+    evse.setMaxConfiguredCurrent(newmaxcurrent);
+  }
+  else if (topic_string == mqtt_topic + "/manual_override/set") 
+  {
+      DBUGF("Set evse state: %d", newmode);     
+      if (payload_str.equals("stop")) {
+        // stop/pause using override like web interface 
+        EvseProperties props;
+        props.setState(EvseState::Disabled);
+        evse.claim(EvseClient_OpenEVSE_Manual, EvseManager_Priority_Manual, props);
+      }     
+      else if (payload_str.equals("start")) {
+        // start/unpause using override like web interface 
+        EvseProperties props;
+        props.setState(EvseState::Active);
+        evse.claim(EvseClient_OpenEVSE_Manual, EvseManager_Priority_Manual, props);
+      }
+      else if (payload_str.equals("delete")) {
+        // remove override
+        evse.release(EvseClient_OpenEVSE_Manual);
+      }      
   }
   else
   {
@@ -232,6 +270,15 @@ mqtt_connect()
     }
 
     mqtt_sub_topic = mqtt_topic + "/divertmode/set";      // MQTT Topic to change divert mode
+    mqttclient.subscribe(mqtt_sub_topic);
+
+    mqtt_sub_topic = mqtt_topic + "/pilot/set";           // MQTT Topic to set the charge current  
+    mqttclient.subscribe(mqtt_sub_topic);
+
+    mqtt_sub_topic = mqtt_topic + "/max_current/set";     // MQTT Topic to set the max current    
+    mqttclient.subscribe(mqtt_sub_topic);
+
+    mqtt_sub_topic = mqtt_topic + "/manual_override/set"; // MQTT Topic to set manual_override (start/stop/delete)
     mqttclient.subscribe(mqtt_sub_topic);
 
     connecting = false;
