@@ -178,9 +178,14 @@ void divert_update_state()
     DBUGVAR(smoothed_available_current);
 
     charge_rate = (int)floor(available_current);
+    
     // if the remaining current can be used with a sufficient ratio of PV current in it, use it
     if ((available_current - charge_rate) > min(1.0, divert_PV_ratio)) {
       charge_rate += 1;
+    }
+    int max_current = evse.getMaxCurrent();
+    if (charge_rate > max_current) {
+      charge_rate = max_current;
     }
 
     DBUGVAR(charge_rate);
