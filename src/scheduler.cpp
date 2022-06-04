@@ -6,6 +6,7 @@
 #include "scheduler.h"
 #include "time_man.h"
 #include "emonesp.h"
+#include "app_config.h"
 
 #include <algorithm>
 #include <vector>
@@ -143,6 +144,15 @@ uint32_t Scheduler::EventInstance::getDelay(int fromDay, uint32_t fromOffset)
   return delay;
 }
 
+uint32_t Scheduler::EventInstance::randomiseStartOffset()
+{
+  int32_t offset = _event->getOffset();
+  if(_event->getState() == EvseState::Active) {
+    offset += random(-min((int32_t)scheduler_start_window, offset), scheduler_start_window);
+  }
+  return offset;
+}
+
 Scheduler::Scheduler(EvseManager &evse) :
   _evse(&evse),
   _events(),
@@ -222,8 +232,15 @@ unsigned long Scheduler::loop(MicroTasks::WakeReason reason)
   uint32_t delay = MicroTask.Infinate;
   if(_activeEvent.isValid())
   {
+    DBUGF("Next event %d: %s %s %s",
+      _activeEvent.getNext().getEvent()->getId(),
+      days_of_the_week_strings[_activeEvent.getNext().getDay()],
+      _activeEvent.getNext().getEvent()->getTime().c_str(),
+      _activeEvent.getNext().getEvent()->getStateText());
+
     Scheduler::getCurrentTime(currentDay, currentOffset);
     delay = _activeEvent.getNext().getDelay(currentDay, currentOffset) * 1000;
+    DBUGVAR(delay);
   }
   return delay;
 }
@@ -269,7 +286,7 @@ void Scheduler::buildSchedule()
       uint8_t days = event->getDays();
       for(int day = 0; day < SCHEDULER_DAYS_IN_A_WEEK; day++)
       {
-        if(days & 1 << day) {
+        if(days & (1 << day)) {
           by_week[day].push_back(event);
         }
       }
@@ -776,6 +793,9 @@ bool Scheduler::serializePlan(DynamicJsonDocument &doc)
       object["id"] = e->getEvent()->getId();
       object["state"] = e->getEvent()->getStateText();
       object["time"] = e->getEvent()->getTime();
+      object["offset"] = e->getEvent()->getOffset();
+      object["start_offset"] = e->getStartOffset();
+      object["diff"] = (int32_t)(e->getEvent()->getOffset()) - (int32_t)(e->getStartOffset());
       object["duration"] = e->getDuration();
 
       e = &e->getNext();

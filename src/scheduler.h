@@ -32,17 +32,21 @@ class Scheduler : public MicroTasks::Task
       private:
         Event *_event;
         int _day;
+        uint32_t _startOffset;
+
+        uint32_t randomiseStartOffset();
       public:
         EventInstance() :
-          _event(NULL), _day(0) { }
+          _event(NULL), _day(0), _startOffset(0) { }
         EventInstance(Event &event, int day) :
-          _event(&event), _day(day) { }
+          _event(&event), _day(day), _startOffset(randomiseStartOffset()) { }
         EventInstance(Event *event, int day) :
-          _event(event), _day(day) { }
+          _event(event), _day(day), _startOffset(randomiseStartOffset()) { }
 
         EventInstance &operator=(const EventInstance &rhs) {
           _event = rhs._event;
           _day = rhs._day;
+          _startOffset = randomiseStartOffset();
           return *this;
         };
 
@@ -82,7 +86,7 @@ class Scheduler : public MicroTasks::Task
         }
 
         uint32_t getStartOffset() {
-          return _event->getOffset();
+          return _startOffset;
         }
 
         int32_t getStartOffset(int fromDay, int dayOffset = 0);
@@ -113,6 +117,7 @@ class Scheduler : public MicroTasks::Task
         void setEvent(Event *event, int day) {
           _event = event;
           _day = day;
+          _startOffset = randomiseStartOffset();
         };
 
         void setNext(Event *event, int day) {

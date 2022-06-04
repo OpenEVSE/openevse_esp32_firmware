@@ -63,6 +63,9 @@ extern double divert_attack_smoothing_factor;
 extern double divert_decay_smoothing_factor;
 extern uint32_t divert_min_charge_time;
 
+// Scheduler settings
+extern uint32_t scheduler_start_window;
+
 // 24-bits of Flags
 extern uint32_t flags;
 
@@ -137,7 +140,7 @@ inline bool config_pause_uses_disabled() {
 inline bool config_vehicle_range_miles() {
   return CONFIG_VEHICLE_RANGE_MILES == (flags & CONFIG_VEHICLE_RANGE_MILES);
 }
-  
+
 inline bool config_rfid_enabled() {
   return CONFIG_RFID == (flags & CONFIG_RFID);
 }

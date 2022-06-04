@@ -89,6 +89,9 @@ String rfid_storage;
 
 long max_current_soft;
 
+// Scheduler settings
+uint32_t scheduler_start_window;
+
 String esp_hostname_default = "openevse-"+ESPAL.getShortId();
 
 void config_changed(String name);
@@ -161,6 +164,9 @@ ConfigOpt *opts[] =
 // LED brightness
   new ConfigOptDefenition<uint8_t>(led_brightness, LED_DEFAULT_BRIGHTNESS, "led_brightness", "lb"),
 #endif
+
+// Scheduler options
+  new ConfigOptDefenition<uint32_t>(scheduler_start_window, SCHEDULER_DEFAULT_START_WINDOW, "scheduler_start_window", "ssw"),
 
 // Flags
   &flagsOpt,
