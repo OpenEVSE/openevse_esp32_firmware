@@ -113,10 +113,7 @@ startClient()
   // DEBUG.print(" epass:");
   // DEBUG.println(epass.c_str());
 
-#ifndef ESP32
   WiFi.hostname(esp_hostname.c_str());
-#endif // !ESP32
-
   WiFi.begin(esid.c_str(), epass.c_str());
 
   ledManager.setWifiMode(true, false);
@@ -421,6 +418,7 @@ net_setup()
   net_wifi_start();
 
 #ifdef ENABLE_WIRED_ETHERNET
+  //ETH.setHostname(esp_hostname.c_str());
   ETH.begin();
 #endif
 
