@@ -459,6 +459,12 @@ class EvseManager : public MicroTasks::Task
     void setVehicleRange(int vehicleRange);
     void setVehicleEta(int vehicleEta);
 
+    // Get/set the 'disabled' mode
+    bool isSleepForDisable() {
+      return _sleepForDisable;
+    }
+    void setSleepForDisable(bool sleepForDisable);
+
     // Temp until everything uses EvseManager
     RapiSender &getSender() {
       return _sender;
