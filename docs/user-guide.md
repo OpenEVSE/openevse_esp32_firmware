@@ -162,6 +162,14 @@ OpenEVSE can post its status values (e.g. amp, wh, temp1, temp2, temp3, pilot, s
 
 **The default `<base-topic>` is `openevse-xxxx` where `xxxx` is the last 4 characters of the device ID**
 
+Controls:
+
+ `<base-topic>/divertmode/set`     : [1 (disable) | 2 (enable)] divert mode
+`<base-topic>/max_current/set`     : [int in A] set max software current value
+`<base-topic>/charge_current/set`  : [in in A] override charge current. Use `<base-topic>/manual_override/set delete` to remove claims.
+`<base-topic>/manual_override/set` : [start / stop / delete] Manually enable / disable charge. Using delete remove the override.
+
+
 MQTT setup is pre-populated with OpenEnergyMonitor [emonPi default MQTT server credentials](https://guide.openenergymonitor.org/technical/credentials/#mqtt).
 
 * Enter MQTT server host and base-topic
