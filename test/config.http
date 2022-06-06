@@ -242,3 +242,13 @@ Content-Type: application/json
   "offset": 0
 }
 
+###
+
+POST {{baseUrl}}/config HTTP/1.1
+Content-Type: application/json
+
+{
+  "ssid": "{{ssid}}",
+  "pass": "{{pass}}"
+}
+
