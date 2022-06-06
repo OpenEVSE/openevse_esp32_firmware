@@ -116,7 +116,7 @@ void mqttmsg_callback(MongooseString topic, MongooseString payload) {
     //We have a confusion in web interface to solve as details of the override are not displayed
     EvseProperties props(EvseState::Active);
     props.setChargeCurrent(newchargecurrent);
-    evse.claim(EvseClient_OpenEVSE_Manual, EvseManager_Priority_Manual, props);
+    evse.claim(EvseClient_OpenEVSE_MQTT, EvseManager_Priority_MQTT, props);
   }
   else if (topic_string == mqtt_topic + "/max_current/set")
   {
@@ -132,17 +132,17 @@ void mqttmsg_callback(MongooseString topic, MongooseString payload) {
         // stop/pause using override
         EvseProperties props;
         props.setState(EvseState::Disabled);
-        evse.claim(EvseClient_OpenEVSE_Manual, EvseManager_Priority_Manual, props);
+        evse.claim(EvseClient_OpenEVSE_MQTT, EvseManager_Priority_MQTT, props);
       }     
       else if (payload_str.equals("start")) {
         // start/unpause using override
         EvseProperties props;
         props.setState(EvseState::Active);
-        evse.claim(EvseClient_OpenEVSE_Manual, EvseManager_Priority_Manual, props);
+        evse.claim(EvseClient_OpenEVSE_MQTT, EvseManager_Priority_MQTT, props);
       }
       else if (payload_str.equals("delete")) {
         // remove override
-        evse.release(EvseClient_OpenEVSE_Manual);
+        evse.release(EvseClient_OpenEVSE_MQTT);
       }      
   }
   else
