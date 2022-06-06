@@ -136,6 +136,8 @@ Data can be posted using HTTP or HTTPS.
 
 ### MQTT
 
+Refer to MQTT.md documentation
+
 MQTT and MQTTS (secure) connections are supported for status and control.
 
 At startup the following message is published with a retain flag to `openevse/announce/xxxx` where `xxxx` is the last 4 characters of the device ID. This message is useful for device discovery and contans the device hostname and IP address.
@@ -164,9 +166,9 @@ OpenEVSE can post its status values (e.g. amp, wh, temp1, temp2, temp3, pilot, s
 
 Controls:
 
- `<base-topic>/divertmode/set`     : [1 (disable) | 2 (enable)] divert mode
+`<base-topic>/divertmode/set`      : [1 (disable) | 2 (enable)] divert mode
 `<base-topic>/max_current/set`     : [int in A] set max software current value
-`<base-topic>/pilot/set`           : [in in A] override charge current/pilot. Use `<base-topic>/manual_override/set delete` to remove claims.
+`<base-topic>/pilot/set`           : [in in A] override charge current/pilot. Use `<base-topic>/manual_override/set delete` to remove overrides.
 `<base-topic>/manual_override/set` : [start / stop / delete] Manually enable / disable charge. Using delete remove the override.
 
 
