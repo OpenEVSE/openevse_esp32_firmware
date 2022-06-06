@@ -129,13 +129,13 @@ void mqttmsg_callback(MongooseString topic, MongooseString payload) {
   {
       DBUGF("Set evse state: %d", newmode);     
       if (payload_str.equals("stop")) {
-        // stop/pause using override like web interface 
+        // stop/pause using override
         EvseProperties props;
         props.setState(EvseState::Disabled);
         evse.claim(EvseClient_OpenEVSE_Manual, EvseManager_Priority_Manual, props);
       }     
       else if (payload_str.equals("start")) {
-        // start/unpause using override like web interface 
+        // start/unpause using override
         EvseProperties props;
         props.setState(EvseState::Active);
         evse.claim(EvseClient_OpenEVSE_Manual, EvseManager_Priority_Manual, props);
