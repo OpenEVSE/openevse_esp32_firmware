@@ -166,7 +166,7 @@ Controls:
 
  `<base-topic>/divertmode/set`     : [1 (disable) | 2 (enable)] divert mode
 `<base-topic>/max_current/set`     : [int in A] set max software current value
-`<base-topic>/charge_current/set`  : [in in A] override charge current. Use `<base-topic>/manual_override/set delete` to remove claims.
+`<base-topic>/pilot/set`           : [in in A] override charge current/pilot. Use `<base-topic>/manual_override/set delete` to remove claims.
 `<base-topic>/manual_override/set` : [start / stop / delete] Manually enable / disable charge. Using delete remove the override.
 
 

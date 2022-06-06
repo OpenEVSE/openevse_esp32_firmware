@@ -108,7 +108,7 @@ void mqttmsg_callback(MongooseString topic, MongooseString payload) {
       divertmode_update(newdivert);
     }
   }
-  else if (topic_string == mqtt_topic + "/charge_current/set")
+  else if (topic_string == mqtt_topic + "/pilot/set")
   {
     int newchargecurrent = payload_str.toInt();
     DBUGF("Set charge_current: %d", newmode);
