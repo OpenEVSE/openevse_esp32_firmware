@@ -27,7 +27,9 @@ extern void mqtt_loop();
 // data: a comma seperated list of name:value pairs to send
 // -------------------------------------------------------------------
 extern void mqtt_publish(JsonDocument &data);
-
+extern void mqtt_publish_claim();
+extern void mqtt_publish_override();
+extern void mqtt_publish_json(JsonDocument &data, const char* topic);
 // -------------------------------------------------------------------
 // Restart the MQTT connection
 // -------------------------------------------------------------------
