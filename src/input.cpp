@@ -144,12 +144,14 @@ void create_rapi_json(JsonDocument &doc)
 
 String getOverride() {
   String override = "";
+  const size_t capacity = JSON_OBJECT_SIZE(10) + 1024;
+  DynamicJsonDocument doc(capacity);
   if(manual.isActive()) {
-    const size_t capacity = JSON_OBJECT_SIZE(10) + 1024; 
-    DynamicJsonDocument doc_override(capacity);
-    evse.serializeClaim(doc_override, EvseClient_OpenEVSE_Manual);
-    serializeJson(doc_override, override);
-  } else override = "0";
+    evse.serializeClaim(doc, EvseClient_OpenEVSE_Manual);   
+  } else {
+    doc["status"] = "null";
+  }
+  serializeJson(doc, override);
   return override;
 }
 
