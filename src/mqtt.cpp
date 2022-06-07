@@ -340,7 +340,7 @@ mqtt_publish_claim() {
     
   } 
   else {
-    claimdata["status"] = "null";
+    claimdata["state"] = "null";
   }
   mqtt_publish_json(claimdata, "/claim");
 }
@@ -360,7 +360,7 @@ mqtt_publish_override() {
     
   }
   else {
-    override_data["status"] = "null";
+    override_data["state"] = "null";
   }
 
   mqtt_publish_json(override_data, "/override");
