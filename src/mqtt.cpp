@@ -337,13 +337,12 @@ mqtt_publish_claim() {
   DynamicJsonDocument claimdata(capacity);
   if(hasclaim) {  
     evse.serializeClaim(claimdata, EvseClient_OpenEVSE_MQTT);
-    mqtt_publish_json(claimdata, "/claim");
+    
   } 
   else {
-    claimdata["claim"] = 0;
-    mqtt_publish(claimdata);
+    claimdata["status"] = "null";
   }
-
+  mqtt_publish_json(claimdata, "/claim");
 }
 
 void
@@ -355,15 +354,16 @@ mqtt_publish_override() {
   DynamicJsonDocument override_data(capacity);
   EvseProperties props;
   bool hasoverride = manual.getProperties(props);
-  props.serialize(override_data);
-
+  
   if(hasoverride) {
-    mqtt_publish_json(override_data, "/override");
+    props.serialize(override_data);
+    
   }
   else {
-    override_data["override"] = 0;
-    mqtt_publish(override_data);
+    override_data["status"] = "null";
   }
+
+  mqtt_publish_json(override_data, "/override");
 }
 
 void 
