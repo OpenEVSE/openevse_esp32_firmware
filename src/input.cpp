@@ -149,7 +149,7 @@ String getOverride() {
   if(manual.isActive()) {
     evse.serializeClaim(doc, EvseClient_OpenEVSE_Manual);   
   } else {
-    doc["status"] = "null";
+    doc["state"] = "null";
   }
   serializeJson(doc, override);
   return override;
