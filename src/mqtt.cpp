@@ -6,11 +6,14 @@
 #include "mqtt.h"
 #include "app_config.h"
 #include "divert.h"
+#include "evse_man.h"
 #include "input.h"
 #include "espal.h"
 #include "net_manager.h"
 #include "web_server.h"
 #include "event.h"
+#include "manual.h"
+
 
 #include "openevse.h"
 
@@ -108,42 +111,44 @@ void mqttmsg_callback(MongooseString topic, MongooseString payload) {
       divertmode_update(newdivert);
     }
   }
-  else if (topic_string == mqtt_topic + "/pilot/set")
-  {
-    int newchargecurrent = payload_str.toInt();
-    DBUGF("Set charge_current: %d", newmode);
-    //using override, the only interest of this is having priority above everything else.
-    //We have a confusion in web interface to solve as details of the override are not displayed
-    EvseProperties props(EvseState::Active);
-    props.setChargeCurrent(newchargecurrent);
-    evse.claim(EvseClient_OpenEVSE_MQTT, EvseManager_Priority_MQTT, props);
-  }
   else if (topic_string == mqtt_topic + "/max_current/set")
   {
-    //not using override here, this is a main config change.
     int newmaxcurrent = payload_str.toInt();
     DBUGF("Set max_current: %d", newmode);
     evse.setMaxConfiguredCurrent(newmaxcurrent);
   }
-  else if (topic_string == mqtt_topic + "/manual_override/set") 
-  {
-      DBUGF("Set evse state: %d", newmode);     
-      if (payload_str.equals("stop")) {
-        // stop/pause using override
-        EvseProperties props;
-        props.setState(EvseState::Disabled);
-        evse.claim(EvseClient_OpenEVSE_MQTT, EvseManager_Priority_MQTT, props);
-      }     
-      else if (payload_str.equals("start")) {
-        // start/unpause using override
-        EvseProperties props;
-        props.setState(EvseState::Active);
-        evse.claim(EvseClient_OpenEVSE_MQTT, EvseManager_Priority_MQTT, props);
+  else if (topic_string == mqtt_topic + "/override/set") {
+    EvseProperties props;
+    if (payload_str.equals("delete")) {
+      if (manual.release()) {
+        mqtt_publish_override();
       }
-      else if (payload_str.equals("delete")) {
-        // remove override
-        evse.release(EvseClient_OpenEVSE_MQTT);
-      }      
+    }
+    else if (payload_str.equals("toggle")) {
+      if (manual.toggle()) {
+        mqtt_publish_override();
+      }
+    }
+    else if(props.deserialize(payload_str)) {
+      if (manual.claim(props)) {
+        mqtt_publish_override();
+      }
+
+    }
+  }
+  else if (topic_string == mqtt_topic + "/claim/set") {
+    EvseProperties props;
+    if (payload_str.equals("delete")) {
+      if(evse.release(EvseClient_OpenEVSE_MQTT)) {
+        mqtt_publish_claim();
+
+      }
+    }
+    else if (props.deserialize(payload_str)) {
+      if (evse.claim(EvseClient_OpenEVSE_MQTT, EvseManager_Priority_MQTT, props)) {
+        mqtt_publish_claim();
+      }
+    }
   }
   else
   {
@@ -237,6 +242,10 @@ mqtt_connect()
     DBUGVAR(announce);
     mqttclient.publish(mqtt_announce_topic, announce, true);
 
+    // Publish MQTT override/claim
+    mqtt_publish_override();
+    mqtt_publish_claim();
+
     // MQTT Topic to subscribe to receive RAPI commands via MQTT
     String mqtt_sub_topic = mqtt_topic + "/rapi/in/#";
 
@@ -281,6 +290,12 @@ mqtt_connect()
     mqtt_sub_topic = mqtt_topic + "/manual_override/set"; // MQTT Topic to set manual_override (start/stop/delete)
     mqttclient.subscribe(mqtt_sub_topic);
 
+    mqtt_sub_topic = mqtt_topic + "/override/set";        
+    mqttclient.subscribe(mqtt_sub_topic);
+
+    mqtt_sub_topic = mqtt_topic + "/claim/set";        
+    mqttclient.subscribe(mqtt_sub_topic);
+
     connecting = false;
   });
 
@@ -305,13 +320,66 @@ mqtt_publish(JsonDocument &data) {
     String topic = mqtt_topic + "/";
     topic += kv.key().c_str();
     String val = kv.value().as<String>();
-    mqttclient.publish(topic, val);
+    mqttclient.publish(topic, val, true);
     topic = mqtt_topic + "/";
   }
 
   Profile_End(mqtt_publish, 5);
 }
 
+void
+mqtt_publish_claim() {
+  if(!config_mqtt_enabled() || !mqttclient.connected()) {
+    return;
+  }
+  bool hasclaim = evse.clientHasClaim(EvseClient_OpenEVSE_MQTT);
+  const size_t capacity = JSON_OBJECT_SIZE(40) + 1024;
+  DynamicJsonDocument claimdata(capacity);
+  if(hasclaim) {  
+    evse.serializeClaim(claimdata, EvseClient_OpenEVSE_MQTT);
+    mqtt_publish_json(claimdata, "/claim");
+  } 
+  else {
+    claimdata["claim"] = 0;
+    mqtt_publish(claimdata);
+  }
+
+}
+
+void
+mqtt_publish_override() {
+  if(!config_mqtt_enabled() || !mqttclient.connected()) {
+    return;
+  }
+  const size_t capacity = JSON_OBJECT_SIZE(40) + 1024;
+  DynamicJsonDocument override_data(capacity);
+  EvseProperties props;
+  bool hasoverride = manual.getProperties(props);
+  props.serialize(override_data);
+
+  if(hasoverride) {
+    mqtt_publish_json(override_data, "/override");
+  }
+  else {
+    override_data["override"] = 0;
+    mqtt_publish(override_data);
+  }
+}
+
+void 
+mqtt_publish_json(JsonDocument &data, const char* topic) {
+  Profile_Start(mqtt_publish_json);
+  if(!config_mqtt_enabled() || !mqttclient.connected()) {
+      return;
+      }
+  
+  String fulltopic = mqtt_topic + topic;
+  String doc;
+  serializeJson(data, doc);
+  mqttclient.publish(fulltopic,doc, true);
+  Profile_End(mqtt_publish_json, 5);
+  
+}
 // -------------------------------------------------------------------
 // MQTT state management
 //
