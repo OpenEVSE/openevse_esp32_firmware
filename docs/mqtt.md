@@ -26,12 +26,21 @@ OpenEVSE can post its status values (e.g. amp, wh, temp1, temp2, temp3, pilot, s
 
 **The default `<base-topic>` is `openevse-xxxx` where `xxxx` is the last 4 characters of the device ID**
 
+Claims & manual override are read accessible here:
+`<base-topic>/override/`                    : get manual override ([json data], {"state": "null"} when there's no override)
+`<base-topic>/override/set [json data] `    : set/update manual override ( data as refered from API : https://openevse.stoplight.io/docs/openevse-wifi-v4/e0ab0a4ad5e1e-set-the-manual-override )
+`<base-topic>/override/set toggle`          : toggle manual override
+`<base-topic>/override/set clear`           : clear manual override
+
+`<base-topic>/claim/`                       : get mqtt service claim ([json data], {"state": "null"} when there's no claim )
+`<base-topic>/claim/set [json data]`        : set/update claim from MQTT service. Has same priority as HTTP service. ( data as refered from API : https://openevse.stoplight.io/docs/openevse-wifi-v4/ebc578ffa7ca7-make-update-an-evse-claim )
+`<base-topic>/claim/set release`            : release claim
+
+
 Controls:
 
-`<base-topic>/divertmode/set`      : [1 (disable) | 2 (enable)] divert mode
-`<base-topic>/max_current/set`     : [int in A] set max software current value
-`<base-topic>/pilot/set`           : [int in A] override charge current/pilot. Use `<base-topic>/manual_override/set delete` to remove overrides.
-`<base-topic>/manual_override/set` : [start / stop / delete] Manually enable / disable charge. Using delete remove the override.
+`<base-topic>/divertmode/set [1 | 2]`       : enable (1)/ disable (2) divert mode
+`<base-topic>/max_current/set [value]`      : set max software current value (in A)
 
 
 MQTT setup is pre-populated with OpenEnergyMonitor [emonPi default MQTT server credentials](https://guide.openenergymonitor.org/technical/credentials/#mqtt).
