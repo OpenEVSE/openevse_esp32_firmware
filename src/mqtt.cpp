@@ -119,7 +119,7 @@ void mqttmsg_callback(MongooseString topic, MongooseString payload) {
   }
   else if (topic_string == mqtt_topic + "/override/set") {
     EvseProperties props;
-    if (payload_str.equals("delete")) {
+    if (payload_str.equals("clear")) {
       if (manual.release()) {
         mqtt_publish_override();
       }
@@ -138,7 +138,7 @@ void mqttmsg_callback(MongooseString topic, MongooseString payload) {
   }
   else if (topic_string == mqtt_topic + "/claim/set") {
     EvseProperties props;
-    if (payload_str.equals("delete")) {
+    if (payload_str.equals("release")) {
       if(evse.release(EvseClient_OpenEVSE_MQTT)) {
         mqtt_publish_claim();
 
