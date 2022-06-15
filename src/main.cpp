@@ -265,12 +265,6 @@ void event_send(JsonDocument &event)
 void hardware_setup()
 {
   debug_setup();
-
-#ifdef SERIAL_RX_PULLUP_PIN
-  // https://forums.adafruit.com/viewtopic.php?f=57&t=153553&p=759890&hilit=esp32+serial+pullup#p769168
-  pinMode(SERIAL_RX_PULLUP_PIN, INPUT_PULLUP);
-#endif
-
   enableLoopWDT();
 }
 
