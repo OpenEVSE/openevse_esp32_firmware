@@ -28,16 +28,23 @@ OpenEVSE can post its status values (e.g. amp, wh, temp1, temp2, temp3, pilot, s
 
 Claims & manual override are read accessible here:
 `<base-topic>/override/`                    : get manual override ([json data], {"state": "null"} when there's no override)
-`<base-topic>/override/set [json data] `    : set/update manual override ( data as refered from API : https://openevse.stoplight.io/docs/openevse-wifi-v4/e0ab0a4ad5e1e-set-the-manual-override )
+`<base-topic>/override/set <json data> `    : set/update manual override ( data as refered from API : https://openevse.stoplight.io/docs/openevse-wifi-v4/e0ab0a4ad5e1e-set-the-manual-override )
 `<base-topic>/override/set toggle`          : toggle manual override
 `<base-topic>/override/set clear`           : clear manual override
 
 `<base-topic>/claim/`                       : get mqtt service claim ([json data], {"state": "null"} when there's no claim )
-`<base-topic>/claim/set [json data]`        : set/update claim from MQTT service. Has same priority as HTTP service. ( data as refered from API : https://openevse.stoplight.io/docs/openevse-wifi-v4/ebc578ffa7ca7-make-update-an-evse-claim )
+`<base-topic>/claim/set <json data>`        : set/update claim from MQTT service. Has same priority as HTTP service. ( data as refered from API : https://openevse.stoplight.io/docs/openevse-wifi-v4/ebc578ffa7ca7-make-update-an-evse-claim )
 `<base-topic>/claim/set release`            : release claim
 
+Claim & override properties are also available independantly:
+`<base-topic>/{claim|override}/set/state <active|disabled>`  
+`<base-topic>/{claim|override}/set/charge_current <value>`
+`<base-topic>/{claim|override}/set/max_current <value>`
+`<base-topic>/{claim|override}/set/energy_limit <value>`
+`<base-topic>/{claim|override}/set/time_limit <value>`
+`<base-topic>/{claim|override}/set/auto_release <true|false>`
 
-Controls:
+Main settings:
 
 `<base-topic>/divertmode/set [1 | 2]`       : enable (1)/ disable (2) divert mode
 `<base-topic>/max_current/set [value]`      : set max software current value (in A)
