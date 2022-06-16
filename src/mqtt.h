@@ -7,6 +7,7 @@
 
 #include <Arduino.h>
 #include <ArduinoJson.h>
+#include "evse_man.h"
 
 #define MQTT_PROTOCOL_MQTT          0
 #define MQTT_PROTOCOL_MQTT_SSL      1
@@ -28,6 +29,7 @@ extern void mqtt_loop();
 // -------------------------------------------------------------------
 extern void mqtt_publish(JsonDocument &data);
 extern void mqtt_publish_claim();
+extern void mqtt_set_claim(bool override, EvseProperties &props);
 extern void mqtt_publish_override();
 extern void mqtt_publish_json(JsonDocument &data, const char* topic);
 // -------------------------------------------------------------------

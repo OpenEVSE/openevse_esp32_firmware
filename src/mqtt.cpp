@@ -6,7 +6,6 @@
 #include "mqtt.h"
 #include "app_config.h"
 #include "divert.h"
-#include "evse_man.h"
 #include "input.h"
 #include "espal.h"
 #include "net_manager.h"
@@ -22,10 +21,12 @@
 #include <MongooseMqttClient.h>
 
 MongooseMqttClient mqttclient;
+EvseProperties claim_props;
+EvseProperties override_props;
 
 static long nextMqttReconnectAttempt = 0;
-static unsigned long mqttRestartTime = 0;
-static bool connecting = false;
+(static unsigned long mqttRestartTime = 0;
+)static bool connecting = false;
 
 String lastWill = "";
 
@@ -103,7 +104,7 @@ void mqttmsg_callback(MongooseString topic, MongooseString payload) {
     event["vehicle_state_update"] = 0;
     web_server_event(event);
   }
-  // If MQTT message to set divert mode is received
+  // Divert Mode
   else if (topic_string == mqtt_topic + "/divertmode/set")
   {
     byte newdivert = payload_str.toInt();
@@ -111,14 +112,15 @@ void mqttmsg_callback(MongooseString topic, MongooseString payload) {
       divertmode_update(newdivert);
     }
   }
+  // Config: main Max current
   else if (topic_string == mqtt_topic + "/max_current/set")
   {
     int newmaxcurrent = payload_str.toInt();
     DBUGF("Set max_current: %d", newmode);
     evse.setMaxConfiguredCurrent(newmaxcurrent);
   }
+    // Manual Override
   else if (topic_string == mqtt_topic + "/override/set") {
-    EvseProperties props;
     if (payload_str.equals("clear")) {
       if (manual.release()) {
         mqtt_publish_override();
@@ -129,26 +131,71 @@ void mqttmsg_callback(MongooseString topic, MongooseString payload) {
         mqtt_publish_override();
       }
     }
-    else if(props.deserialize(payload_str)) {
-      if (manual.claim(props)) {
-        mqtt_publish_override();
+    else if (override_props.deserialize(payload_str)) {
+      mqtt_set_claim(true, override_props);
       }
-
-    }
   }
+  else if (topic_string == mqtt_topic + "/override/set/state") {
+    if (payload_str == "active") override_props.setState(EvseState::Active);
+    else if (payload_str == "disabled") override_props.setState(EvseState::Disabled);
+    mqtt_set_claim(true, override_props);
+  }
+  else if (topic_string == mqtt_topic + "/override/set/max_current") {
+    override_props.setMaxCurrent(payload_str.toInt());
+    mqtt_set_claim(true, override_props);
+  }
+  else if (topic_string == mqtt_topic + "/override/set/charge_current") {
+    override_props.setChargeCurrent(payload_str.toInt());
+    mqtt_set_claim(true, override_props);
+  }
+  else if (topic_string == mqtt_topic + "/override/set/energy_limit") {
+    override_props.setEnergyLimit(payload_str.toInt());
+    mqtt_set_claim(true, override_props);
+  }
+  else if (topic_string == mqtt_topic + "/override/set/time_limit") {
+    override_props.setTimeLimit(payload_str.toInt());
+    mqtt_set_claim(true, override_props);
+  }
+  else if (topic_string == mqtt_topic + "/override/set/auto_release") {
+    override_props.setAutoRelease(payload_str.equals("true") ? true : false);
+  }
+  
+  // Claim
   else if (topic_string == mqtt_topic + "/claim/set") {
-    EvseProperties props;
     if (payload_str.equals("release")) {
       if(evse.release(EvseClient_OpenEVSE_MQTT)) {
         mqtt_publish_claim();
 
       }
     }
-    else if (props.deserialize(payload_str)) {
-      if (evse.claim(EvseClient_OpenEVSE_MQTT, EvseManager_Priority_MQTT, props)) {
-        mqtt_publish_claim();
-      }
+    else if (claim_props.deserialize(payload_str)) {
+      mqtt_set_claim(false, claim_props);
     }
+  }
+   else if (topic_string == mqtt_topic + "/claim/set/state") {
+    if (payload_str == "active") claim_props.setState(EvseState::Active);
+    else if (payload_str == "disabled") claim_props.setState(EvseState::Disabled);
+    mqtt_set_claim(false, claim_props);
+  }
+  else if (topic_string == mqtt_topic + "/claim/set/max_current") {
+    claim_props.setMaxCurrent(payload_str.toInt());
+    mqtt_set_claim(false, claim_props);
+  }
+  else if (topic_string == mqtt_topic + "/claim/set/charge_current") {
+    claim_props.setChargeCurrent(payload_str.toInt());
+    mqtt_set_claim(false, claim_props);
+  }
+  else if (topic_string == mqtt_topic + "/claim/set/energy_limit") {
+    claim_props.setEnergyLimit(payload_str.toInt());
+    mqtt_set_claim(false, claim_props);
+  }
+  else if (topic_string == mqtt_topic + "/claim/set/time_limit") {
+    claim_props.setTimeLimit(payload_str.toInt());
+    mqtt_set_claim(false, claim_props);
+  }
+  else if (topic_string == mqtt_topic + "/claim/set/auto_release") {
+    claim_props.setAutoRelease(payload_str.equals("true") ? true : false);
+    mqtt_set_claim(false, claim_props);
   }
   else
   {
@@ -287,13 +334,14 @@ mqtt_connect()
     mqtt_sub_topic = mqtt_topic + "/max_current/set";     // MQTT Topic to set the max current    
     mqttclient.subscribe(mqtt_sub_topic);
 
-    mqtt_sub_topic = mqtt_topic + "/manual_override/set"; // MQTT Topic to set manual_override (start/stop/delete)
-    mqttclient.subscribe(mqtt_sub_topic);
-
     mqtt_sub_topic = mqtt_topic + "/override/set";        
+    mqttclient.subscribe(mqtt_sub_topic);
+    mqtt_sub_topic = mqtt_topic + "/override/set/#";        
     mqttclient.subscribe(mqtt_sub_topic);
 
     mqtt_sub_topic = mqtt_topic + "/claim/set";        
+    mqttclient.subscribe(mqtt_sub_topic);
+    mqtt_sub_topic = mqtt_topic + "/claim/set/#";        
     mqttclient.subscribe(mqtt_sub_topic);
 
     connecting = false;
@@ -325,6 +373,21 @@ mqtt_publish(JsonDocument &data) {
   }
 
   Profile_End(mqtt_publish, 5);
+}
+
+void
+mqtt_set_claim(bool override, EvseProperties &props) {
+  //0: claim , 1: manual override
+  if (override) {
+    if (manual.claim(props)) {
+      mqtt_publish_override();
+    }
+  }
+  else {
+    if (evse.claim(EvseClient_OpenEVSE_MQTT, EvseManager_Priority_MQTT, props)) {
+      mqtt_publish_claim();
+    }
+  }
 }
 
 void
