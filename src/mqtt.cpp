@@ -25,8 +25,8 @@ EvseProperties claim_props;
 EvseProperties override_props;
 
 static long nextMqttReconnectAttempt = 0;
-(static unsigned long mqttRestartTime = 0;
-)static bool connecting = false;
+static unsigned long mqttRestartTime = 0;
+static bool connecting = false;
 
 String lastWill = "";
 
@@ -123,6 +123,7 @@ void mqttmsg_callback(MongooseString topic, MongooseString payload) {
   else if (topic_string == mqtt_topic + "/override/set") {
     if (payload_str.equals("clear")) {
       if (manual.release()) {
+        override_props.clear();
         mqtt_publish_override();
       }
     }
@@ -164,6 +165,7 @@ void mqttmsg_callback(MongooseString topic, MongooseString payload) {
   else if (topic_string == mqtt_topic + "/claim/set") {
     if (payload_str.equals("release")) {
       if(evse.release(EvseClient_OpenEVSE_MQTT)) {
+        claim_props.clear();
         mqtt_publish_claim();
 
       }
