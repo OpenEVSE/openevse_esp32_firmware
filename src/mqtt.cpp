@@ -277,24 +277,17 @@ mqtt_connect()
     if (mqtt_vrms!="") {
       mqttclient.subscribe(mqtt_vrms);
     }
-
-    mqtt_sub_topic = mqtt_topic + "/divertmode/set";      // MQTT Topic to change divert mode
+    // settable mqtt topics
+    mqtt_sub_topic = mqtt_topic + "/divertmode/set";
     mqttclient.subscribe(mqtt_sub_topic);
 
-    mqtt_sub_topic = mqtt_topic + "/pilot/set";           // MQTT Topic to set the charge current  
-    mqttclient.subscribe(mqtt_sub_topic);
-
-    mqtt_sub_topic = mqtt_topic + "/max_current/set";     // MQTT Topic to set the max current    
+    mqtt_sub_topic = mqtt_topic + "/max_current/set";     
     mqttclient.subscribe(mqtt_sub_topic);
 
     mqtt_sub_topic = mqtt_topic + "/override/set";        
     mqttclient.subscribe(mqtt_sub_topic);
-    mqtt_sub_topic = mqtt_topic + "/override/set/#";        
-    mqttclient.subscribe(mqtt_sub_topic);
 
     mqtt_sub_topic = mqtt_topic + "/claim/set";        
-    mqttclient.subscribe(mqtt_sub_topic);
-    mqtt_sub_topic = mqtt_topic + "/claim/set/#";        
     mqttclient.subscribe(mqtt_sub_topic);
 
     connecting = false;
@@ -330,6 +323,7 @@ mqtt_publish(JsonDocument &data) {
 
 void
 mqtt_set_claim(bool override, EvseProperties &props) {
+  Profile_Start(mqtt_set_claim);
   //0: claim , 1: manual override
   if (override) {
     if (manual.claim(props)) {
@@ -341,6 +335,8 @@ mqtt_set_claim(bool override, EvseProperties &props) {
       mqtt_publish_claim();
     }
   }
+  
+  Profile_End(mqtt_set_claim, 5);
 }
 
 void

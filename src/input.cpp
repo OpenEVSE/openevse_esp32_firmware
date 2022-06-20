@@ -67,8 +67,8 @@ class InputTask : public MicroTasks::Task
         event["flags"] = evse.getFlags();
         event["vehicle"] = evse.isVehicleConnected() ? 1 : 0;
         event["colour"] = evse.getStateColour();
+        event["pilot"] = evse.getPilotState();
         event["manual_override"] = manual.isActive() ? 1 : 0; //TODO: remove this
-        //replace "manual_override", should be either 0 or json override claim.
         event["override"] = getOverride(); 
         event["session_energy"] = evse.getSessionEnergy();
         event_send(event);
