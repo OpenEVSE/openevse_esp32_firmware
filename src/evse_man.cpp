@@ -56,23 +56,24 @@ EvseProperties & EvseProperties::operator = (EvseProperties &rhs)
 bool EvseProperties::deserialize(JsonObject &obj)
 {
   if(obj.containsKey("state")) {
-    _state.fromString(obj["state"]);
+    obj["state"] == "clear" ? _state.None : _state.fromString(obj["state"]);
   }
 
   if(obj.containsKey("charge_current")) {
-    _charge_current = obj["charge_current"];
+    obj["charge_current"] == "clear" ? _charge_current = UINT32_MAX :_charge_current = obj["charge_current"];
   }
 
   if(obj.containsKey("max_current")) {
-    _max_current = obj["max_current"];
-  }
+    obj["max_current"] == "clear" ? _max_current = UINT32_MAX : _max_current = obj["max_current"];
+  } 
+   
 
   if(obj.containsKey("energy_limit")) {
-    _energy_limit = obj["energy_limit"];
+    obj["energy_limit"] == "clear" ? _energy_limit = UINT32_MAX : _energy_limit = obj["energy_limit"];
   }
 
   if(obj.containsKey("time_limit")) {
-    _time_limit = obj["time_limit"];
+    obj["time_limit"] == "clear" ? _time_limit = UINT32_MAX : _time_limit = obj["time_limit"]; 
   }
 
   if(obj.containsKey("auto_release")) {
