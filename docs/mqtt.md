@@ -36,13 +36,8 @@ Claims & manual override are read accessible here:
 `<base-topic>/claim/set <json data>`        : set/update claim from MQTT service. Has same priority as HTTP service. ( data as refered from API : https://openevse.stoplight.io/docs/openevse-wifi-v4/ebc578ffa7ca7-make-update-an-evse-claim )
 `<base-topic>/claim/set release`            : release claim
 
-Claim & override properties are also available independantly:
-`<base-topic>/{claim|override}/set/state <active|disabled>`  
-`<base-topic>/{claim|override}/set/charge_current <value>`
-`<base-topic>/{claim|override}/set/max_current <value>`
-`<base-topic>/{claim|override}/set/energy_limit <value>`
-`<base-topic>/{claim|override}/set/time_limit <value>`
-`<base-topic>/{claim|override}/set/auto_release <true|false>`
+Claim & override properties can be set independantly. Sending json with only some fields will update the current claim properties only. 
+To remove a selected claim/override property, just send "clear" as property parameter  ( i.e. `<base-topic>/claim/set {"charge_current": "clear"}` )
 
 Main settings:
 
