@@ -43,7 +43,7 @@ String ipaddress = "";
 int client_disconnects = 0;
 bool client_retry = false;
 unsigned long client_retry_time = 0;
-
+bool client_connecting = false;
 
 int wifiButtonState = !WIFI_BUTTON_PRESSED_STATE;
 unsigned long wifiButtonTimeOut = millis();
@@ -117,6 +117,7 @@ startClient()
   WiFi.begin(esid.c_str(), epass.c_str());
 
   ledManager.setWifiMode(true, false);
+  client_connecting = true;
 }
 
 static void net_wifi_start()
@@ -158,6 +159,8 @@ static void net_connected(IPAddress myAddress)
   ledManager.setWifiMode(true, true);
 
   timeManager.setHost(sntp_hostname.c_str());
+
+  client_connecting = false;
 }
 
 static void net_wifi_onStationModeConnected(const WiFiEventStationModeConnected &event) {
@@ -215,7 +218,7 @@ static void net_wifi_onStationModeDisconnected(const WiFiEventStationModeDisconn
   WiFi.disconnect();
   WiFi.mode(WIFI_OFF);
 
-  startClient();
+  //startClient();
 }
 
 static void net_wifi_onAPModeStationConnected(const WiFiEventSoftAPModeStationConnected &event) {
@@ -309,6 +312,10 @@ void net_event(WiFiEvent_t event, arduino_event_info_t info)
       memcpy(dst.bssid, src.bssid, 6);
       dst.channel = src.channel;
       net_wifi_onStationModeConnected(dst);
+    } break;
+    case ARDUINO_EVENT_WIFI_STA_STOP:
+    {
+      client_connecting = false;
     } break;
     case ARDUINO_EVENT_WIFI_STA_DISCONNECTED:
     {
@@ -495,6 +502,8 @@ net_loop()
       startAP();
       client_retry = true;
       client_retry_time = millis() + WIFI_CLIENT_RETRY_TIMEOUT;
+    } else if(!client_connecting) {
+      startClient();
     }
   }
 
