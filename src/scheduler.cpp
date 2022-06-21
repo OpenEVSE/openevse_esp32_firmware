@@ -795,7 +795,7 @@ bool Scheduler::serializePlan(DynamicJsonDocument &doc)
       object["time"] = e->getEvent()->getTime();
       object["offset"] = e->getEvent()->getOffset();
       object["start_offset"] = e->getStartOffset();
-      object["diff"] = (int32_t)(e->getEvent()->getOffset()) - (int32_t)(e->getStartOffset());
+      object["diff"] = (int32_t)(e->getStartOffset()) - (int32_t)(e->getEvent()->getOffset());
       object["duration"] = e->getDuration();
 
       e = &e->getNext();
