@@ -315,6 +315,24 @@ bool EvseManager::setTargetState(EvseProperties &target)
   return changeMade;
 }
 
+void EvseManager::setSleepForDisable(bool sleepForDisable)
+{
+  if(_sleepForDisable != sleepForDisable)
+  {
+    _sleepForDisable = sleepForDisable;
+    if(EvseState::Disabled == getActiveState())
+    {
+      if(_sleepForDisable) {
+        DBUGLN("EVSE: sleep");
+        _monitor.sleep();
+      } else {
+        DBUGLN("EVSE: disable");
+        _monitor.disable();
+      }
+    }
+  }
+}
+
 unsigned long EvseManager::loop(MicroTasks::WakeReason reason)
 {
   DBUG("EVSE manager woke: ");
