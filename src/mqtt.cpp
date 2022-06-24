@@ -274,9 +274,6 @@ mqtt_connect()
     mqtt_sub_topic = mqtt_topic + "/divertmode/set";
     mqttclient.subscribe(mqtt_sub_topic);
 
-    mqtt_sub_topic = mqtt_topic + "/max_current/set";     
-    mqttclient.subscribe(mqtt_sub_topic);
-
     mqtt_sub_topic = mqtt_topic + "/override/set";        
     mqttclient.subscribe(mqtt_sub_topic);
 
