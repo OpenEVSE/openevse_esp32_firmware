@@ -42,7 +42,6 @@ To remove a selected claim/override property, just send "clear" as property para
 Main settings:
 
 `<base-topic>/divertmode/set [1 | 2]`       : enable (1)/ disable (2) divert mode
-`<base-topic>/max_current/set [value]`      : set max software current value (in A)
 
 
 MQTT setup is pre-populated with OpenEnergyMonitor [emonPi default MQTT server credentials](https://guide.openenergymonitor.org/technical/credentials/#mqtt).

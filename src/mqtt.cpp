@@ -113,14 +113,7 @@ void mqttmsg_callback(MongooseString topic, MongooseString payload) {
       divertmode_update(newdivert);
     }
   }
-  // Config: main Max current
-  else if (topic_string == mqtt_topic + "/max_current/set")
-  {
-    int newmaxcurrent = payload_str.toInt();
-    DBUGF("Set max_current: %d", newmode);
-    evse.setMaxConfiguredCurrent(newmaxcurrent);
-  }
-    // Manual Override
+  // Manual Override
   else if (topic_string == mqtt_topic + "/override/set") {
     if (payload_str.equals("clear")) {
       if (manual.release()) {
