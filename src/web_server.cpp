@@ -353,6 +353,7 @@ handleSaveMqtt(MongooseHttpServerRequest *request) {
                    request->getParam("server"),
                    port,
                    request->getParam("topic"),
+                   isPositive(request->getParam("retained")),
                    request->getParam("user"),
                    pass,
                    request->getParam("solar"),
@@ -360,8 +361,8 @@ handleSaveMqtt(MongooseHttpServerRequest *request) {
                    reject_unauthorized);
 
   char tmpStr[200];
-  snprintf(tmpStr, sizeof(tmpStr), "Saved: %s %s %s %s %s %s", mqtt_server.c_str(),
-          mqtt_topic.c_str(), mqtt_user.c_str(), mqtt_pass.c_str(),
+  snprintf(tmpStr, sizeof(tmpStr), "Saved: %s %s %d %s %s %s %s", mqtt_server.c_str(),
+          mqtt_topic.c_str(), mqtt_retained, mqtt_user.c_str(), mqtt_pass.c_str(),
           mqtt_solar.c_str(), mqtt_grid_ie.c_str());
   DBUGLN(tmpStr);
 

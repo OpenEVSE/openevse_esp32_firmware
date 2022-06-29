@@ -10,6 +10,7 @@
 #include "web_server.home.js.h"
 #include "web_server.lib.js.h"
 #include "web_server.ohm.jpg.h"
+#include "web_server.shaper.png.h"
 #include "web_server.style.css.h"
 #include "web_server.term.html.h"
 #include "web_server.term.js.h"
@@ -34,6 +35,7 @@ StaticFile staticFiles[] = {
   { "/home.js", CONTENT_HOME_JS, sizeof(CONTENT_HOME_JS) - 1, _CONTENT_TYPE_JS, CONTENT_HOME_JS_ETAG },
   { "/lib.js", CONTENT_LIB_JS, sizeof(CONTENT_LIB_JS) - 1, _CONTENT_TYPE_JS, CONTENT_LIB_JS_ETAG },
   { "/ohm.jpg", CONTENT_OHM_JPG, sizeof(CONTENT_OHM_JPG) - 1, _CONTENT_TYPE_JPEG, CONTENT_OHM_JPG_ETAG },
+  { "/shaper.png", CONTENT_SHAPER_PNG, sizeof(CONTENT_SHAPER_PNG) - 1, _CONTENT_TYPE_PNG, CONTENT_SHAPER_PNG_ETAG },
   { "/style.css", CONTENT_STYLE_CSS, sizeof(CONTENT_STYLE_CSS) - 1, _CONTENT_TYPE_CSS, CONTENT_STYLE_CSS_ETAG },
   { "/term.html", CONTENT_TERM_HTML, sizeof(CONTENT_TERM_HTML) - 1, _CONTENT_TYPE_HTML, CONTENT_TERM_HTML_ETAG },
   { "/term.js", CONTENT_TERM_JS, sizeof(CONTENT_TERM_JS) - 1, _CONTENT_TYPE_JS, CONTENT_TERM_JS_ETAG },

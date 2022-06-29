@@ -28,6 +28,7 @@ DynamicJsonDocument mqtt_doc(4096);
 static long nextMqttReconnectAttempt = 0;
 static unsigned long mqttRestartTime = 0;
 static bool connecting = false;
+static bool mqttRetained = false;
 
 String lastWill = "";
 
@@ -304,7 +305,7 @@ mqtt_publish(JsonDocument &data) {
     String topic = mqtt_topic + "/";
     topic += kv.key().c_str();
     String val = kv.value().as<String>();
-    mqttclient.publish(topic, val, true);
+    mqttclient.publish(topic, val, mqtt_retained);
     topic = mqtt_topic + "/";
   }
 
@@ -378,7 +379,7 @@ mqtt_publish_json(JsonDocument &data, const char* topic) {
   String fulltopic = mqtt_topic + topic;
   String doc;
   serializeJson(data, doc);
-  mqttclient.publish(fulltopic,doc, true);
+  mqttclient.publish(fulltopic,doc, true); // claims are always published as retained as they are not updated regularly
   Profile_End(mqtt_publish_json, 5);
   
 }
