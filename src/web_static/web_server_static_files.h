@@ -10,6 +10,8 @@
 #include "web_server.lib.js.gz.h"
 #include "web_server.ohm.jpg.h"
 #include "web_server.style.css.gz.h"
+#include "web_server.term.html.gz.h"
+#include "web_server.term.js.gz.h"
 #include "web_server.wifi_portal.html.gz.h"
 #include "web_server.wifi_portal.js.gz.h"
 #include "web_server.wifi_signal_1.svg.gz.h"
@@ -31,6 +33,8 @@ StaticFile staticFiles[] = {
   { "/lib.js", CONTENT_LIB_JS_GZ, sizeof(CONTENT_LIB_JS_GZ) - 1, _CONTENT_TYPE_JS, CONTENT_LIB_JS_GZ_ETAG, true },
   { "/ohm.jpg", CONTENT_OHM_JPG, sizeof(CONTENT_OHM_JPG) - 1, _CONTENT_TYPE_JPEG, CONTENT_OHM_JPG_ETAG, false },
   { "/style.css", CONTENT_STYLE_CSS_GZ, sizeof(CONTENT_STYLE_CSS_GZ) - 1, _CONTENT_TYPE_CSS, CONTENT_STYLE_CSS_GZ_ETAG, true },
+  { "/term.html", CONTENT_TERM_HTML_GZ, sizeof(CONTENT_TERM_HTML_GZ) - 1, _CONTENT_TYPE_HTML, CONTENT_TERM_HTML_GZ_ETAG, true },
+  { "/term.js", CONTENT_TERM_JS_GZ, sizeof(CONTENT_TERM_JS_GZ) - 1, _CONTENT_TYPE_JS, CONTENT_TERM_JS_GZ_ETAG, true },
   { "/wifi_portal.html", CONTENT_WIFI_PORTAL_HTML_GZ, sizeof(CONTENT_WIFI_PORTAL_HTML_GZ) - 1, _CONTENT_TYPE_HTML, CONTENT_WIFI_PORTAL_HTML_GZ_ETAG, true },
   { "/wifi_portal.js", CONTENT_WIFI_PORTAL_JS_GZ, sizeof(CONTENT_WIFI_PORTAL_JS_GZ) - 1, _CONTENT_TYPE_JS, CONTENT_WIFI_PORTAL_JS_GZ_ETAG, true },
   { "/wifi_signal_1.svg", CONTENT_WIFI_SIGNAL_1_SVG_GZ, sizeof(CONTENT_WIFI_SIGNAL_1_SVG_GZ) - 1, _CONTENT_TYPE_SVG, CONTENT_WIFI_SIGNAL_1_SVG_GZ_ETAG, true },
