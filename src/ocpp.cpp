@@ -16,7 +16,6 @@
 
 #define LCD_DISPLAY(X) if (lcd) lcd->display((X), 0, 1, 5 * 1000, LCD_CLEAR_LINE);
 
-
 ArduinoOcppTask *ArduinoOcppTask::instance = NULL;
 
 void dbug_wrapper(const char *msg) {
@@ -102,11 +101,11 @@ void ArduinoOcppTask::initializeArduinoOcpp() {
      */
     String evseFirmwareVersion = String(evse->getFirmwareVersion());
 
-    DynamicJsonDocument *evseDetailsDoc = new DynamicJsonDocument(
+    auto evseDetailsDoc = std::unique_ptr<DynamicJsonDocument>(new DynamicJsonDocument(
         JSON_OBJECT_SIZE(5)
         + serial.length() + 1
         + currentfirmware.length() + 1
-        + evseFirmwareVersion.length() + 1);
+        + evseFirmwareVersion.length() + 1));
     JsonObject evseDetails = evseDetailsDoc->to<JsonObject>();
     evseDetails["chargePointModel"] = "Advanced Series";
     evseDetails["chargePointSerialNumber"] = serial; //see https://github.com/OpenEVSE/ESP32_WiFi_V4.x/issues/218
@@ -114,7 +113,7 @@ void ArduinoOcppTask::initializeArduinoOcpp() {
     evseDetails["firmwareVersion"] = currentfirmware;
     evseDetails["meterSerialNumber"] = evseFirmwareVersion;
 
-    bootNotification(evseDetailsDoc, [this](JsonObject payload) { //ArduinoOcpp will delete evseDetailsDoc
+    bootNotification(std::move(evseDetailsDoc), [this](JsonObject payload) { //ArduinoOcpp will delete evseDetailsDoc
         LCD_DISPLAY("OCPP connected!");
     });
 
@@ -132,19 +131,51 @@ void ArduinoOcppTask::loadEvseBehavior() {
      * Synchronize OpenEVSE data with OCPP-library data
      */
 
-    setPowerActiveImportSampler([this]() {
-        return (float) (evse->getAmps() * evse->getVoltage());
-    });
+    addMeterValueSampler([this] () {
+            return (int32_t) (evse->getAmps() * evse->getVoltage());
+        }, 
+        "Power.Active.Import",
+        "W",
+        "Outlet");
+    
+    addMeterValueSampler([this] () {
+            float activeImport = 0.f;
+            activeImport += (float) evse->getTotalEnergy();
+            activeImport += (float) evse->getSessionEnergy();
+            return (int32_t) activeImport;
+        }, 
+        "Energy.Active.Import.Register",
+        "Wh",
+        "Outlet");
 
-    setEnergyActiveImportSampler([this] () {
-        float activeImport = 0.f;
-        activeImport += (float) evse->getTotalEnergy();
-        activeImport += (float) evse->getSessionEnergy();
-        return activeImport;
-    });
+    addMeterValueSampler([this] () {
+            return (int32_t) evse->getAmps();
+        }, 
+        "Current.Import",
+        "A",
+        "Outlet");
+    
+    addMeterValueSampler([this] () {
+            return (int32_t) evse->getVoltage();
+        }, 
+        "Voltage",
+        "V");
+    
+    addMeterValueSampler([this] () {
+            return (int32_t) evse->getTemperature(EVSE_MONITOR_TEMP_MONITOR);
+        }, 
+        "Temperature",
+        "C");
 
-    setOnChargingRateLimitChange([this] (float limit) { //limit = maximum charge rate in Watts
-        charging_limit = limit;
+    auto patchChargingProfileUnit = ArduinoOcpp::declareConfiguration<const char*>("OE_CSProfileUnitMode", "W", CONFIGURATION_FN, false, false);
+
+    setOnChargingRateLimitChange([this, patchChargingProfileUnit] (float limit) { //limit = maximum charge rate in Watts
+        if (patchChargingProfileUnit && *patchChargingProfileUnit &&
+                ((*patchChargingProfileUnit)[0] == 'a' || (*patchChargingProfileUnit)[0] == 'A')) {
+            charging_limit = limit; //already A
+        } else {
+            charging_limit = limit / VOLTAGE_DEFAULT; //convert W to A
+        }
     });
 
     setConnectorPluggedSampler([this] () {
@@ -266,6 +297,20 @@ void ArduinoOcppTask::loadEvseBehavior() {
         //see https://github.com/OpenEVSE/ESP32_WiFi_V4.x/issues/230
         return false;
     });
+
+    setOnSetChargingProfileRequest([this, patchChargingProfileUnit] (JsonObject request) {
+        const char *unit = request["csChargingProfiles"]["chargingSchedule"]["chargingRateUnit"] | "W";
+        if (unit && (unit[0] == 'A' || unit[0] == 'a')) {
+            *patchChargingProfileUnit = "A";
+            DBUGLN("[ocpp] ChargingRateUnit from now on A");
+        } else {
+            *patchChargingProfileUnit = "W";
+            DBUGLN("[ocpp] ChargingRateUnit from now on W");
+        }
+    });
+
+    OE_FreeVendActive = ArduinoOcpp::declareConfiguration<const char*>("OE_FreeVendActive", "false", CONFIGURATION_FN);
+    OE_FreeVendIdTag = ArduinoOcpp::declareConfiguration<const char*>("OE_FreeVendIdTag", "false", CONFIGURATION_FN);
 }
 
 unsigned long ArduinoOcppTask::loop(MicroTasks::WakeReason reason) {
@@ -284,7 +329,16 @@ unsigned long ArduinoOcppTask::loop(MicroTasks::WakeReason reason) {
             //vehicle plugged
             if (!getSessionIdTag()) {
                 //vehicle plugged before authorization
-                if (config_rfid_enabled()) {
+                bool freeVendActive = false;
+                if (OE_FreeVendActive && *OE_FreeVendActive) {
+                    String freeVendString = String(*OE_FreeVendActive);
+                    freeVendString.toLowerCase();
+                    freeVendActive = freeVendString.equals("true") && OE_FreeVendIdTag && *OE_FreeVendIdTag;
+                }
+
+                if (freeVendActive) {
+                    beginSession(*OE_FreeVendIdTag);
+                } else if (config_rfid_enabled()) {
                     LCD_DISPLAY("Need card");
                 } else {
                     //no RFID reader --> Auto-Authorize or RemoteStartTransaction
@@ -387,17 +441,13 @@ void ArduinoOcppTask::updateEvseClaim() {
     //OCPP Smart Charging?
     if (charging_limit < 0.f) {
         //OCPP Smart Charging is off. Nothing to do
-    } else if (charging_limit >= -0.001f && charging_limit < 5.f) {
+    } else if (charging_limit < evse->getMinCurrent()) {
         //allowed charge rate is "equal or almost equal" to 0W
         evseState = EvseState::Disabled; //override state
         evseProperties = evseState; //renew properties
     } else {
         //charge rate is valid. Set charge rate
-        float volts = evse->getVoltage(); // convert Watts to Amps. TODO Maybe use "smoothed" voltage value?
-        if (volts > 0) {
-            float amps = charging_limit / volts;
-            evseProperties.setChargeCurrent(amps);
-        }
+        evseProperties.setChargeCurrent(charging_limit);
     }
 
     if (evseState == EvseState::Disabled && !config_ocpp_access_can_suspend()) {

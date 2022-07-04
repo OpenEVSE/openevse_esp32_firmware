@@ -15,6 +15,8 @@
 #include "MongooseOcppSocketClient.h"
 #include <MongooseHttpClient.h>
 
+#include <ArduinoOcpp/Core/Configuration.h>
+
 class ArduinoOcppTask: public MicroTasks::Task {
 private:
     MongooseOcppSocketClient *ocppSocket = NULL;
@@ -51,6 +53,9 @@ private:
     String getCentralSystemUrl();
 
     static ArduinoOcppTask *instance;
+
+    std::shared_ptr<ArduinoOcpp::Configuration<const char*>> OE_FreeVendActive; //if to autostart transaction when vehicle plugged
+    std::shared_ptr<ArduinoOcpp::Configuration<const char*>> OE_FreeVendIdTag;  //idTag for autostart transaction
 
     //helper functions
     static bool idTagIsAccepted(JsonObject payload);
