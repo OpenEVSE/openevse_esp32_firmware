@@ -235,6 +235,7 @@ void config_changed(String name)
       emoncms_updated = true;
     }
     ArduinoOcppTask::notifyConfigChanged();
+    evse.setSleepForDisable(!config_pause_uses_disabled());
   } else if(name.startsWith("mqtt_")) {
     mqtt_restart();
   } else if(name.startsWith("ocpp_") || name.startsWith("tx_start_point")) {
