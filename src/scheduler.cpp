@@ -769,12 +769,42 @@ bool Scheduler::serialize(JsonObject &object, Scheduler::Event *event)
   return true;
 }
 
+void Scheduler::serializeEventInstance(JsonObject &object, Scheduler::EventInstance *e, bool includeDay)
+{
+  object["id"] = e->getEvent()->getId();
+  object["state"] = e->getEvent()->getStateText();
+  object["time"] = e->getEvent()->getTime();
+  object["day"] = days_of_the_week_strings[e->getDay()];
+  object["offset"] = e->getEvent()->getOffset();
+  object["start_offset"] = e->getStartOffset();
+  object["diff"] = (int32_t)(e->getStartOffset()) - (int32_t)(e->getEvent()->getOffset());
+  object["duration"] = e->getDuration();
+}
+
 bool Scheduler::serializePlan(DynamicJsonDocument &doc)
 {
   JsonObject root = doc.to<JsonObject>();
 
-  Scheduler::EventInstance *e = &_firstEvent;
+  int currentDay;
+  int32_t currentOffset;
+  Scheduler::getCurrentTime(currentDay, currentOffset);
 
+  root["current_day"] = days_of_the_week_strings[currentDay];
+  root["current_offset"] = currentOffset;
+
+  Scheduler::EventInstance *e = &_activeEvent;
+  if(e->isValid())
+  {
+    root["next_event_delay"] = e->getNext().getDelay(currentDay, currentOffset);
+
+    JsonObject object = root.createNestedObject("current_event");
+    serializeEventInstance(object, e, true);
+    e = &e->getNext();
+    object = root.createNestedObject("next_event");
+    serializeEventInstance(object, e, true);
+  }
+
+  e = &_firstEvent;
   if(e->isValid())
   {
     int day = e->getDay();
@@ -790,19 +820,18 @@ bool Scheduler::serializePlan(DynamicJsonDocument &doc)
       }
 
       JsonObject object = currentDay.createNestedObject();
-      object["id"] = e->getEvent()->getId();
-      object["state"] = e->getEvent()->getStateText();
-      object["time"] = e->getEvent()->getTime();
-      object["offset"] = e->getEvent()->getOffset();
-      object["start_offset"] = e->getStartOffset();
-      object["diff"] = (int32_t)(e->getStartOffset()) - (int32_t)(e->getEvent()->getOffset());
-      object["duration"] = e->getDuration();
+      serializeEventInstance(object, e);
 
       e = &e->getNext();
     } while(_firstEvent != e);
   }
 
   return true;
+}
+
+void Scheduler::notifyConfigChanged()
+{
+  buildSchedule();
 }
 
 void Scheduler::getCurrentTime(int &day, int32_t &offset)

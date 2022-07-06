@@ -237,9 +237,11 @@ class Scheduler : public MicroTasks::Task
     EventInstance &getCurrentEvent();
     bool findEvent(uint32_t id, Event **event);
     bool serialize(JsonObject &obj, Event *event);
+    void serializeEventInstance(JsonObject &object, Scheduler::EventInstance *e, bool includeDay = false);
 
     bool addEventInternal(uint32_t id, const char *time, uint8_t days, const char *state);
     bool deserializeInternal(JsonObject &obj, uint32_t event);
+
 
   protected:
     void setup();
@@ -278,6 +280,8 @@ class Scheduler : public MicroTasks::Task
     bool serialize(JsonObject &obj, uint32_t event);
 
     bool serializePlan(DynamicJsonDocument &doc);
+
+    void notifyConfigChanged();
 
     static void getCurrentTime(int &day, int32_t &offset);
 };
