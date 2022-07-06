@@ -242,6 +242,8 @@ void config_changed(String name)
     ArduinoOcppTask::notifyConfigChanged();
   } else if(name.startsWith("emoncms_")) {
     emoncms_updated = true;
+  } else if(name.startsWith("scheduler_")) {
+    scheduler.notifyConfigChanged();
   } else if(name == "divert_enabled" || name == "charge_mode") {
     DBUGVAR(config_divert_enabled());
     DBUGVAR(config_charge_mode());
