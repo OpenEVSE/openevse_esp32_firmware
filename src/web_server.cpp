@@ -624,7 +624,9 @@ handleStatus(MongooseHttpServerRequest *request) {
   doc["time"] = String(time);
   doc["offset"] = String(offset);
 
-  doc["config_version"] = String(config_version);
+  doc["config_version"] = config_version;
+  doc["schedule_version"] = scheduler.getVersion();
+  doc["schedule_plan_version"] = scheduler.getPlanVersion();
 
   doc["vehicle_state_update"] = (millis() - evse.getVehicleLastUpdated()) / 1000;
   if(teslaClient.getVehicleCnt() > 0) {

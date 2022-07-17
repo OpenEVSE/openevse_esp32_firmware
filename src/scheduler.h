@@ -232,6 +232,9 @@ class Scheduler : public MicroTasks::Task
 
     MicroTasks::EventListener _timeChangeListener;
 
+    uint32_t _version;
+    uint32_t _plan_version;
+
     void buildSchedule();
     bool commit();
     EventInstance &getCurrentEvent();
@@ -282,6 +285,13 @@ class Scheduler : public MicroTasks::Task
     bool serializePlan(DynamicJsonDocument &doc);
 
     void notifyConfigChanged();
+
+    uint32_t getVersion() {
+      return _version;
+    };
+    uint32_t getPlanVersion() {
+      return _plan_version;
+    };
 
     static void getCurrentTime(int &day, int32_t &offset);
 };

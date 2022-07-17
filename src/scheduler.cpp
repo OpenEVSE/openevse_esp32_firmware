@@ -7,6 +7,7 @@
 #include "time_man.h"
 #include "emonesp.h"
 #include "app_config.h"
+#include "event.h"
 
 #include <algorithm>
 #include <vector>
@@ -159,7 +160,9 @@ Scheduler::Scheduler(EvseManager &evse) :
   _firstEvent(),
   _activeEvent(),
   _loading(false),
-  _timeChangeListener(this)
+  _timeChangeListener(this),
+  _version(0),
+  _plan_version(0)
 {
 
 }
@@ -224,6 +227,10 @@ unsigned long Scheduler::loop(MicroTasks::WakeReason reason)
     }
 
     _activeEvent = currentEvent;
+
+    StaticJsonDocument<128> doc;
+    doc["schedule_plan_version"] = ++_plan_version;
+    event_send(doc);
   }
 
   int currentDay;
@@ -348,6 +355,10 @@ void Scheduler::buildSchedule()
     } while(e != _firstEvent);
     #endif // ENABLE_DEBUG
   }
+
+  StaticJsonDocument<128> doc;
+  doc["schedule_version"] = ++_version;
+  event_send(doc);
 
   // wake the main task to see if we actually need to do something
   MicroTask.wakeTask(this);
@@ -802,6 +813,10 @@ bool Scheduler::serializePlan(DynamicJsonDocument &doc)
     e = &e->getNext();
     object = root.createNestedObject("next_event");
     serializeEventInstance(object, e, true);
+  } else {
+    root["next_event_delay"] = false;
+    root["current_event"] = false;
+    root["next_event"] = false;
   }
 
   e = &_firstEvent;
