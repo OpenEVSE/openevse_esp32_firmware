@@ -436,8 +436,10 @@ mqtt_pub_status() {
 
   const size_t capacity = JSON_OBJECT_SIZE(40) + 1024;
   DynamicJsonDocument doc(capacity);
-  create_rapi_json(doc);
   doc["time"] = String(time);
+  doc["amp"] = evse.getAmps() * AMPS_SCALE_FACTOR;
+  doc["pilot"] = evse.getChargeCurrent();
+  doc["state"] = evse.getEvseState();
   mqtt_publish(doc);
 }
 
