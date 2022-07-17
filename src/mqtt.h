@@ -14,6 +14,8 @@
 #define MQTT_PROTOCOL_WEBSOCKET     2
 #define MQTT_PROTOCOL_WEBSOCKET_SSL 3
 
+#define MQTT_STATUS_LOOP_TIME		2000  // loop each 2 sec
+
 extern void mqtt_msg_callback();
 
 // -------------------------------------------------------------------
@@ -32,6 +34,7 @@ extern void mqtt_publish_claim();
 extern void mqtt_set_claim(bool override, EvseProperties &props);
 extern void mqtt_publish_override();
 extern void mqtt_publish_json(JsonDocument &data, const char* topic);
+extern void mqtt_pub_status();
 // -------------------------------------------------------------------
 // Restart the MQTT connection
 // -------------------------------------------------------------------
