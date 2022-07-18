@@ -617,6 +617,7 @@ handleStatus(MongooseHttpServerRequest *request) {
   doc["grid_ie"] = grid_ie;
   doc["charge_rate"] = charge_rate;
   doc["divert_update"] = (millis() - lastUpdate) / 1000;
+  doc["divert_active"] = divert_active;
 
   doc["service_level"] = static_cast<uint8_t>(evse.getActualServiceLevel());
 
