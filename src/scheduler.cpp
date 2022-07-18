@@ -147,6 +147,10 @@ uint32_t Scheduler::EventInstance::getDelay(int fromDay, uint32_t fromOffset)
 
 uint32_t Scheduler::EventInstance::randomiseStartOffset()
 {
+  if(!_event) {
+    return 0;
+  }
+
   int32_t offset = _event->getOffset();
   if(_event->getState() == EvseState::Active) {
     offset += random(-min((int32_t)scheduler_start_window, offset), scheduler_start_window);
