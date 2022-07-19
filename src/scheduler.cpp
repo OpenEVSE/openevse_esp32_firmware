@@ -353,7 +353,7 @@ void Scheduler::buildSchedule()
 
       Event *event = e.getEvent();
       int day = e.getDay();
-      DBUGF("Event %d: %s %s %s", event->getId(), days_of_the_week_strings[day], event->getTime().c_str(), event->getStateText());
+      DBUGF("Event %d: %s %s %s %d %d", event->getId(), days_of_the_week_strings[day], event->getTime().c_str(), event->getStateText(), event->getOffset(), e.getStartOffset());
 
       e.moveToNext();
     } while(e != _firstEvent);
@@ -362,6 +362,7 @@ void Scheduler::buildSchedule()
 
   StaticJsonDocument<128> doc;
   doc["schedule_version"] = ++_version;
+  doc["schedule_plan_version"] = ++_plan_version;
   event_send(doc);
 
   // wake the main task to see if we actually need to do something
