@@ -46,7 +46,7 @@ class Scheduler : public MicroTasks::Task
         EventInstance &operator=(const EventInstance &rhs) {
           _event = rhs._event;
           _day = rhs._day;
-          _startOffset = randomiseStartOffset();
+          _startOffset = rhs._startOffset;
           return *this;
         };
 
@@ -62,7 +62,7 @@ class Scheduler : public MicroTasks::Task
         }
 
         bool operator==(const EventInstance &rhs) const {
-          return _event == rhs._event && _day == rhs._day;
+          return _event == rhs._event && _day == rhs._day && _startOffset == rhs._startOffset;
         };
 
         bool operator!=(const EventInstance &rhs) const {
@@ -70,7 +70,7 @@ class Scheduler : public MicroTasks::Task
         };
 
         bool operator==(const EventInstance *rhs) const {
-          return _event == rhs->_event && _day == rhs->_day;
+          return _event == rhs->_event && _day == rhs->_day && _startOffset == rhs->_startOffset;
         };
 
         bool operator!=(const EventInstance *rhs) const {
