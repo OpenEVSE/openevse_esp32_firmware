@@ -24,8 +24,8 @@ paths:
       description: |
         The status endpoint can be called to get the status of the EVSE.
 
-        While it is posible to poll this endpoint, the recomendatoin is to retrieve the initial 
-        state then use the [/ws](#statusUpdates) 
+        While it is posible to poll this endpoint, the recomendatoin is to retrieve the initial
+        state then use the [/ws](#statusUpdates)
       responses:
         '200':
           description: OK
@@ -78,7 +78,7 @@ paths:
       operationId: statusUpdates
       summary: EVSE status updates
       description: |
-        As the state changes on the EVSE a websocket frame will be sent over the socket. 
+        As the state changes on the EVSE a websocket frame will be sent over the socket.
         The frame will contain a JSON document conntaining only the updated state.
       responses:
         '200':
@@ -404,6 +404,24 @@ paths:
       tags:
         - Schedule
       summary: Remove event
+  /schedule/plan:
+    get:
+      summary: Get planned events and state
+      description: This will return the planned events by day and also the current state of the scheduler
+      responses:
+        '200':
+          description: List of planed events
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  current_day:
+                    $ref: '#/components/schemas/Day'
+
+      operationId: getSchedulePlan
+      tags:
+        - Schedule
   /logs:
     get:
       summary: Get event block information
@@ -512,6 +530,16 @@ components:
         msg:
           type: string
           description: The message
+    Day:
+      type: string
+      enum:
+        - monday
+        - tuesday
+        - wednesday
+        - thursday
+        - friday
+        - saturday
+        - sunday
     ScheduleEvent:
       type: object
       properties:
@@ -527,15 +555,7 @@ components:
           type: array
           uniqueItems: true
           items:
-            type: string
-            enum:
-              - monday
-              - tuesday
-              - wednesday
-              - thursday
-              - friday
-              - saturday
-              - sunday
+            $ref: '#/components/schemas/Day'
       required:
         - state
         - time

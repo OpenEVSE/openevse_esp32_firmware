@@ -110,7 +110,7 @@ unsigned long TimeManager::loop(MicroTasks::WakeReason reason)
       DBUGF("Setting the time on the EVSE, Local: %s, UTC, %s",
         time_format_time(local_time).c_str(),
         time_format_time(gm_time).c_str());
-      OpenEVSE.setTime(local_time, [this](int ret)
+      OpenEVSE.setTime(gm_time, [this](int ret)
       {
         DBUGF("EVSE time %sset", RAPI_RESPONSE_OK == ret ? "" : "not ");
       });
