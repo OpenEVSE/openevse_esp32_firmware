@@ -360,3 +360,10 @@ properties:
   charge_mode:
     type: string
     minLength: 1
+  scheduler_start_window:
+    type: number
+    default: 600
+    description: >
+      The maximum number of seconds to randomly add/subtract from the a scheduled charge start time,
+      eg a value of 600 will adjust the start time my +/- 10 minutes. This is to help prevent large
+      syncrinised loads when multiple verchiles start charging at the same time.

@@ -419,6 +419,14 @@ net_setup()
 
 #ifdef ENABLE_WIRED_ETHERNET
   //ETH.setHostname(esp_hostname.c_str());
+
+#ifdef PHY_PWR
+  pinMode(PHY_PWR, OUTPUT);
+  digitalWrite(PHY_PWR, LOW);
+  delay(1000);
+  digitalWrite(PHY_PWR, HIGH);
+#endif
+
   ETH.begin();
 #endif
 
