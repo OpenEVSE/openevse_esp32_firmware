@@ -7,6 +7,7 @@
 #include "web_server.favicon-32x32.png.h"
 #include "web_server.home.html.gz.h"
 #include "web_server.home.js.gz.h"
+#include "web_server.jquery.js.gz.h"
 #include "web_server.lib.js.gz.h"
 #include "web_server.ohm.jpg.h"
 #include "web_server.style.css.gz.h"
@@ -30,6 +31,7 @@ StaticFile staticFiles[] = {
   { "/favicon-32x32.png", CONTENT_FAVICON_32X32_PNG, sizeof(CONTENT_FAVICON_32X32_PNG) - 1, _CONTENT_TYPE_PNG, CONTENT_FAVICON_32X32_PNG_ETAG, false },
   { "/home.html", CONTENT_HOME_HTML_GZ, sizeof(CONTENT_HOME_HTML_GZ) - 1, _CONTENT_TYPE_HTML, CONTENT_HOME_HTML_GZ_ETAG, true },
   { "/home.js", CONTENT_HOME_JS_GZ, sizeof(CONTENT_HOME_JS_GZ) - 1, _CONTENT_TYPE_JS, CONTENT_HOME_JS_GZ_ETAG, true },
+  { "/jquery.js", CONTENT_JQUERY_JS_GZ, sizeof(CONTENT_JQUERY_JS_GZ) - 1, _CONTENT_TYPE_JS, CONTENT_JQUERY_JS_GZ_ETAG, true },
   { "/lib.js", CONTENT_LIB_JS_GZ, sizeof(CONTENT_LIB_JS_GZ) - 1, _CONTENT_TYPE_JS, CONTENT_LIB_JS_GZ_ETAG, true },
   { "/ohm.jpg", CONTENT_OHM_JPG, sizeof(CONTENT_OHM_JPG) - 1, _CONTENT_TYPE_JPEG, CONTENT_OHM_JPG_ETAG, false },
   { "/style.css", CONTENT_STYLE_CSS_GZ, sizeof(CONTENT_STYLE_CSS_GZ) - 1, _CONTENT_TYPE_CSS, CONTENT_STYLE_CSS_GZ_ETAG, true },
