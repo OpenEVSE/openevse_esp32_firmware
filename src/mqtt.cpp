@@ -27,7 +27,6 @@ DynamicJsonDocument mqtt_doc(4096);
 
 static long nextMqttReconnectAttempt = 0;
 static unsigned long mqttRestartTime = 0;
-static unsigned long mqttStatusLoopTime = 0;
 static bool connecting = false;
 static bool mqttRetained = false;
 
@@ -413,34 +412,7 @@ mqtt_loop() {
     }
   }
 
-  if((millis() - mqttStatusLoopTime > MQTT_STATUS_LOOP_TIME) || !mqttStatusLoopTime ) {
-    mqttStatusLoopTime = millis(); // reset
-    mqtt_pub_status();
-  }
-
   Profile_End(mqtt_loop, 5);
-}
-
-void 
-mqtt_pub_status() {
-  // Get the current time
-  struct timeval local_time;
-  gettimeofday(&local_time, NULL);
-
-  struct tm * timeinfo = gmtime(&local_time.tv_sec);
-
-  char time[64];
-  char offset[8];
-  strftime(time, sizeof(time), "%FT%TZ", timeinfo);
-  strftime(offset, sizeof(offset), "%z", timeinfo);
-
-  const size_t capacity = JSON_OBJECT_SIZE(40) + 1024;
-  DynamicJsonDocument doc(capacity);
-  doc["time"] = String(time);
-  doc["amp"] = evse.getAmps() * AMPS_SCALE_FACTOR;
-  doc["pilot"] = evse.getChargeCurrent();
-  doc["state"] = evse.getEvseState();
-  mqtt_publish(doc);
 }
 
 void
