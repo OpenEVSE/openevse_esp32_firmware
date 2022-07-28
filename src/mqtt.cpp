@@ -82,7 +82,7 @@ void mqttmsg_callback(MongooseString topic, MongooseString payload) {
     StaticJsonDocument<128> event;
     event["battery_level"] = vehicle_soc;
     event["vehicle_state_update"] = 0;
-    web_server_event(event);
+    event_send(event);
   }
   else if (topic_string == mqtt_vehicle_range)
   {
@@ -93,7 +93,7 @@ void mqttmsg_callback(MongooseString topic, MongooseString payload) {
     StaticJsonDocument<128> event;
     event["battery_range"] = vehicle_range;
     event["vehicle_state_update"] = 0;
-    web_server_event(event);
+    event_send(event);
   }
   else if (topic_string == mqtt_vehicle_eta)
   {
@@ -104,7 +104,7 @@ void mqttmsg_callback(MongooseString topic, MongooseString payload) {
     StaticJsonDocument<128> event;
     event["time_to_full_charge"] = vehicle_eta;
     event["vehicle_state_update"] = 0;
-    web_server_event(event);
+    event_send(event);
   }
   // Divert Mode
   else if (topic_string == mqtt_topic + "/divertmode/set")

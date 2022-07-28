@@ -476,6 +476,7 @@ void EvseMonitor::setPilot(long amps, std::function<void(int ret)> callback)
     if(RAPI_RESPONSE_OK == ret) {
       _pilot = pilot;
       _settings_changed.Trigger();
+      
     }
 
     if(callback) {
