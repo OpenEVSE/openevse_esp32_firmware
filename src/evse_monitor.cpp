@@ -505,9 +505,8 @@ void EvseMonitor::setVoltage(double volts, std::function<void(int ret)> callback
       if(RAPI_RESPONSE_OK == ret) {
         _voltage = volts;
         StaticJsonDocument<128> event;
-        event["pilot"] = _pilot;
+        event["voltage"] = _voltage;
         event_send(event);
-        
       }
 
       if(callback) {
