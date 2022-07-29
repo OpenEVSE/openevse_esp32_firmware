@@ -41,6 +41,7 @@ String emoncms_fingerprint;
 String mqtt_server;
 uint32_t mqtt_port;
 String mqtt_topic;
+bool   mqtt_retained;
 String mqtt_user;
 String mqtt_pass;
 String mqtt_solar;
@@ -175,6 +176,7 @@ ConfigOpt *opts[] =
   new ConfigOptVirtualBool(flagsOpt, CONFIG_SERVICE_EMONCMS, CONFIG_SERVICE_EMONCMS, "emoncms_enabled", "ee"),
   new ConfigOptVirtualBool(flagsOpt, CONFIG_SERVICE_MQTT, CONFIG_SERVICE_MQTT, "mqtt_enabled", "me"),
   new ConfigOptVirtualBool(flagsOpt, CONFIG_MQTT_ALLOW_ANY_CERT, 0, "mqtt_reject_unauthorized", "mru"),
+  new ConfigOptVirtualBool(flagsOpt, CONFIG_MQTT_RETAINED, 0, "mqtt_retained", "mrt"),
   new ConfigOptVirtualBool(flagsOpt, CONFIG_SERVICE_OHM, CONFIG_SERVICE_OHM, "ohm_enabled", "oe"),
   new ConfigOptVirtualBool(flagsOpt, CONFIG_SERVICE_SNTP, CONFIG_SERVICE_SNTP, "sntp_enabled", "se"),
   new ConfigOptVirtualBool(flagsOpt, CONFIG_SERVICE_TESLA, CONFIG_SERVICE_TESLA, "tesla_enabled", "te"),
@@ -318,7 +320,7 @@ void config_save_emoncms(bool enable, String server, String node, String apikey,
 }
 
 void
-config_save_mqtt(bool enable, int protocol, String server, uint16_t port, String topic, String user, String pass, String solar, String grid_ie, bool reject_unauthorized)
+config_save_mqtt(bool enable, int protocol, String server, uint16_t port, String topic, bool retained, String user, String pass, String solar, String grid_ie, bool reject_unauthorized)
 {
   uint32_t newflags = flags & ~(CONFIG_SERVICE_MQTT | CONFIG_MQTT_PROTOCOL | CONFIG_MQTT_ALLOW_ANY_CERT);
   if(enable) {
@@ -332,6 +334,7 @@ config_save_mqtt(bool enable, int protocol, String server, uint16_t port, String
   config.set("mqtt_server", server);
   config.set("mqtt_port", port);
   config.set("mqtt_topic", topic);
+  config.set("mqtt_retained", retained);
   config.set("mqtt_user", user);
   config.set("mqtt_pass", pass);
   config.set("mqtt_solar", solar);
