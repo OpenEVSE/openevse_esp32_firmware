@@ -9,6 +9,7 @@
 
 #include "event_log.h"
 #include "divert.h"
+#include "current_shaper.h"
 
 static EvseProperties nullProperties;
 
@@ -379,7 +380,9 @@ unsigned long EvseManager::loop(MicroTasks::WakeReason reason)
                   _monitor.getSessionElapsed(),
                   _monitor.getTemperature(EVSE_MONITOR_TEMP_MONITOR),
                   _monitor.getTemperature(EVSE_MONITOR_TEMP_MAX),
-                  divertmode);
+                  divertmode,
+                  shaper.getState()
+                  );
   }
 
   DBUGVAR(_sessionCompleteListener.IsTriggered());

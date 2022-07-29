@@ -134,6 +134,16 @@ OpenEVSE can post its status values to [emoncms.org](https://emoncms.org) or any
 
 Data can be posted using HTTP or HTTPS.
 
+### Current Shaper
+
+OpenEVSE can shape charge current according to your real time house load, preventing to exceed the maximum power your energy plan can handle.
+Once the module is toggled on, it will have highest priority to other claims.
+However it's possible to temporary disable it if needed with HTTP or MQTT
+
+**Note #1**: this service is dependant to MQTT, it needs a topic with the whole household live power in watts ( 'Live power load MQTT Topic' )
+**Note #2**: set 'Max Power Allowed' according to your energy plan.
+
+
 ### MQTT
 
 Refer to [MQTT API documentation](mqtt.md)

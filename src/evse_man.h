@@ -34,6 +34,7 @@ typedef uint32_t EvseClient;
 #define EvseClient_OpenEVSE_Ocpp              EVC(EvseClient_Vendor_OpenEVSE, 0x0009)
 #define EvseClient_OpenEVSE_RFID              EVC(EvseClient_Vendor_OpenEVSE, 0x000A)
 #define EvseClient_OpenEVSE_MQTT              EVC(EvseClient_Vendor_OpenEVSE, 0x000B)
+#define EvseClient_OpenEVSE_Shaper            EVC(EvseClient_Vendor_OpenEVSE, 0x000C)
 
 #define EvseClient_OpenEnergyMonitor_DemandShaper EVC(EvseClient_Vendor_OpenEnergyMonitor, 0x0001)
 
@@ -48,7 +49,7 @@ typedef uint32_t EvseClient;
 #define EvseManager_Priority_Ohm       500
 #define EvseManager_Priority_Manual   1000
 #define EvseManager_Priority_RFID     1030
-#define EvseManager_Priority_Ocpp     1050
+#define EvseManager_Priority_Ocpp     1050   
 #define EvseManager_Priority_Limit    1100
 #define EvseManager_Priority_Error   10000
 

@@ -10,6 +10,7 @@ typedef const __FlashStringHelper *fstr_t;
 #include "web_server.h"
 #include "evse_man.h"
 #include "input.h"
+#include "current_shaper.h"
 
 // /events
 #define LOG_BASE_LEN 6
@@ -43,7 +44,7 @@ void handleEventLogs(MongooseHttpServerRequest *request)
 
         response->print("[");
 
-        eventLog.enumerate(block, [&count, response](String time, EventType type, const String &logEntry, EvseState managerState, uint8_t evseState, uint32_t evseFlags, uint32_t pilot, double energy, uint32_t elapsed, double temperature, double temperatureMax, uint8_t divertMode)
+        eventLog.enumerate(block, [&count, response](String time, EventType type, const String &logEntry, EvseState managerState, uint8_t evseState, uint32_t evseFlags, uint32_t pilot, double energy, uint32_t elapsed, double temperature, double temperatureMax, uint8_t divertMode, uint8_t shaper)
         {
           StaticJsonDocument<1024> event;
 
@@ -62,6 +63,7 @@ void handleEventLogs(MongooseHttpServerRequest *request)
           event["temperature"] = temperature;
           event["temperatureMax"] = temperatureMax;
           event["divertMode"] = divertMode;
+          event["shaper"] = shaper;
           serializeJson(event, *response);
         });
 

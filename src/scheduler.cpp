@@ -222,7 +222,7 @@ unsigned long Scheduler::loop(MicroTasks::WakeReason reason)
         currentEvent.getState().toString());
       EvseProperties properties(currentEvent.getState());
       _evse->claim(EvseClient_OpenEVSE_Schedule,
-        EvseManager_Priority_Timer,
+        EvseState::Active == currentEvent.getState() ? EvseManager_Priority_Timer : EvseManager_Priority_Default,
         properties);
     } else {
       // No scheduled events, release any claims
