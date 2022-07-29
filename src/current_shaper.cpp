@@ -31,7 +31,7 @@ unsigned long CurrentShaperTask::loop(MicroTasks::WakeReason reason) {
 				}
 				_changed = false;
 				_timer = millis();
-				evse.claim(EvseClient_OpenEVSE_Shaper,EvseManager_Priority_Limit, props);
+				evse.claim(EvseClient_OpenEVSE_Shaper,EvseManager_Priority_Safety, props);
 				StaticJsonDocument<128> event;
 				event["shaper"]  = 1;
 				event["shaper_live_pwr"] = _live_pwr;
