@@ -353,6 +353,7 @@ handleSaveMqtt(MongooseHttpServerRequest *request) {
                    request->getParam("server"),
                    port,
                    request->getParam("topic"),
+                   isPositive(request->getParam("retained")),
                    request->getParam("user"),
                    pass,
                    request->getParam("solar"),
@@ -360,8 +361,8 @@ handleSaveMqtt(MongooseHttpServerRequest *request) {
                    reject_unauthorized);
 
   char tmpStr[200];
-  snprintf(tmpStr, sizeof(tmpStr), "Saved: %s %s %s %s %s %s", mqtt_server.c_str(),
-          mqtt_topic.c_str(), mqtt_user.c_str(), mqtt_pass.c_str(),
+  snprintf(tmpStr, sizeof(tmpStr), "Saved: %s %s %d %s %s %s %s", mqtt_server.c_str(),
+          mqtt_topic.c_str(), mqtt_retained, mqtt_user.c_str(), mqtt_pass.c_str(),
           mqtt_solar.c_str(), mqtt_grid_ie.c_str());
   DBUGLN(tmpStr);
 
@@ -617,6 +618,7 @@ handleStatus(MongooseHttpServerRequest *request) {
   doc["grid_ie"] = grid_ie;
   doc["charge_rate"] = charge_rate;
   doc["divert_update"] = (millis() - lastUpdate) / 1000;
+  doc["divert_active"] = divert_active;
 
   doc["service_level"] = static_cast<uint8_t>(evse.getActualServiceLevel());
 
@@ -624,7 +626,9 @@ handleStatus(MongooseHttpServerRequest *request) {
   doc["time"] = String(time);
   doc["offset"] = String(offset);
 
-  doc["config_version"] = String(config_version);
+  doc["config_version"] = config_version;
+  doc["schedule_version"] = scheduler.getVersion();
+  doc["schedule_plan_version"] = scheduler.getPlanVersion();
 
   doc["vehicle_state_update"] = (millis() - evse.getVehicleLastUpdated()) / 1000;
   if(teslaClient.getVehicleCnt() > 0) {

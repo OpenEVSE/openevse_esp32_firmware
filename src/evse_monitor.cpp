@@ -6,6 +6,7 @@
 
 #include "emonesp.h"
 #include "evse_monitor.h"
+#include "event.h"
 #include "debug.h"
 
 #ifdef ENABLE_MCP9808
@@ -476,6 +477,9 @@ void EvseMonitor::setPilot(long amps, std::function<void(int ret)> callback)
     if(RAPI_RESPONSE_OK == ret) {
       _pilot = pilot;
       _settings_changed.Trigger();
+      StaticJsonDocument<128> event;
+      event["pilot"] = _pilot;
+      event_send(event);
     }
 
     if(callback) {
@@ -500,6 +504,9 @@ void EvseMonitor::setVoltage(double volts, std::function<void(int ret)> callback
     {
       if(RAPI_RESPONSE_OK == ret) {
         _voltage = volts;
+        StaticJsonDocument<128> event;
+        event["voltage"] = _voltage;
+        event_send(event);
       }
 
       if(callback) {

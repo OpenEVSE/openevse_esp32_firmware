@@ -32,17 +32,21 @@ class Scheduler : public MicroTasks::Task
       private:
         Event *_event;
         int _day;
+        uint32_t _startOffset;
+
+        uint32_t randomiseStartOffset();
       public:
         EventInstance() :
-          _event(NULL), _day(0) { }
+          _event(NULL), _day(0), _startOffset(0) { }
         EventInstance(Event &event, int day) :
-          _event(&event), _day(day) { }
+          _event(&event), _day(day), _startOffset(randomiseStartOffset()) { }
         EventInstance(Event *event, int day) :
-          _event(event), _day(day) { }
+          _event(event), _day(day), _startOffset(randomiseStartOffset()) { }
 
         EventInstance &operator=(const EventInstance &rhs) {
           _event = rhs._event;
           _day = rhs._day;
+          _startOffset = rhs._startOffset;
           return *this;
         };
 
@@ -58,7 +62,7 @@ class Scheduler : public MicroTasks::Task
         }
 
         bool operator==(const EventInstance &rhs) const {
-          return _event == rhs._event && _day == rhs._day;
+          return _event == rhs._event && _day == rhs._day && _startOffset == rhs._startOffset;
         };
 
         bool operator!=(const EventInstance &rhs) const {
@@ -66,7 +70,7 @@ class Scheduler : public MicroTasks::Task
         };
 
         bool operator==(const EventInstance *rhs) const {
-          return _event == rhs->_event && _day == rhs->_day;
+          return _event == rhs->_event && _day == rhs->_day && _startOffset == rhs->_startOffset;
         };
 
         bool operator!=(const EventInstance *rhs) const {
@@ -82,7 +86,7 @@ class Scheduler : public MicroTasks::Task
         }
 
         uint32_t getStartOffset() {
-          return _event->getOffset();
+          return _startOffset;
         }
 
         int32_t getStartOffset(int fromDay, int dayOffset = 0);
@@ -113,6 +117,7 @@ class Scheduler : public MicroTasks::Task
         void setEvent(Event *event, int day) {
           _event = event;
           _day = day;
+          _startOffset = randomiseStartOffset();
         };
 
         void setNext(Event *event, int day) {
@@ -227,14 +232,19 @@ class Scheduler : public MicroTasks::Task
 
     MicroTasks::EventListener _timeChangeListener;
 
+    uint32_t _version;
+    uint32_t _plan_version;
+
     void buildSchedule();
     bool commit();
     EventInstance &getCurrentEvent();
     bool findEvent(uint32_t id, Event **event);
     bool serialize(JsonObject &obj, Event *event);
+    void serializeEventInstance(JsonObject &object, Scheduler::EventInstance *e, bool includeDay = false);
 
     bool addEventInternal(uint32_t id, const char *time, uint8_t days, const char *state);
     bool deserializeInternal(JsonObject &obj, uint32_t event);
+
 
   protected:
     void setup();
@@ -273,6 +283,15 @@ class Scheduler : public MicroTasks::Task
     bool serialize(JsonObject &obj, uint32_t event);
 
     bool serializePlan(DynamicJsonDocument &doc);
+
+    void notifyConfigChanged();
+
+    uint32_t getVersion() {
+      return _version;
+    };
+    uint32_t getPlanVersion() {
+      return _plan_version;
+    };
 
     static void getCurrentTime(int &day, int32_t &offset);
 };

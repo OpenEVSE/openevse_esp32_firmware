@@ -70,7 +70,7 @@ def make_static(env, target, source):
 
     out_files = []
     for file in listdir(dist_dir):
-        if isfile(join(dist_dir, file)):
+        if isfile(join(dist_dir, file)) and (file.endswith(".gz") or file.endswith(".png") or file.endswith(".jpg")):
           out_files.append(file)
 
     # Sort files to make sure the order is constant
@@ -84,24 +84,27 @@ def make_static(env, target, source):
     output += "StaticFile staticFiles[] = {\n"
 
     for out_file in out_files:
-        filetype = "TEXT"
-        if out_file.endswith(".css"):
+        filetype = None
+        compress = True
+        if out_file.endswith(".css.gz"):
             filetype = "CSS"
-        elif out_file.endswith(".js"):
+        elif out_file.endswith(".js.gz"):
             filetype = "JS"
-        elif out_file.endswith(".htm") or out_file.endswith(".html"):
+        elif out_file.endswith(".htm.gz") or out_file.endswith(".html.gz"):
             filetype = "HTML"
         elif out_file.endswith(".jpg"):
             filetype = "JPEG"
+            compress = False
         elif out_file.endswith(".png"):
             filetype = "PNG"
-        elif out_file.endswith(".svg"):
+            compress = False
+        elif out_file.endswith(".svg.gz"):
             filetype = "SVG"
-        elif out_file.endswith(".json"):
+        elif out_file.endswith(".json.gz"):
             filetype = "JSON"
 
         c_name = get_c_name(out_file)
-        output += "  { \"/"+out_file+"\", CONTENT_"+c_name+", sizeof(CONTENT_"+c_name+") - 1, _CONTENT_TYPE_"+filetype+", CONTENT_"+c_name+"_ETAG },\n"
+        output += "  { \"/"+out_file.replace(".gz","")+"\", CONTENT_"+c_name+", sizeof(CONTENT_"+c_name+") - 1, _CONTENT_TYPE_"+filetype+", CONTENT_"+c_name+"_ETAG, "+("true" if compress else "false")+" },\n"
 
     output += "};\n"
 
@@ -115,7 +118,7 @@ def process_html_app(source, dest, env):
     web_server_static = join("$BUILDSRC_DIR", "web_server_static.cpp.o")
 
     for file in sorted(listdir(source)):
-        if isfile(join(source, file)):
+        if isfile(join(source, file)) and (file.endswith(".gz") or file.endswith(".png") or file.endswith(".jpg")):
             data_file = join(source, file)
             header_file = join(dest, "web_server."+file+".h")
             env.Command(header_file, data_file, data_to_header)

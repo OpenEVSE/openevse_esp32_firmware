@@ -10,6 +10,9 @@
 #include "espal.h"
 #include "net_manager.h"
 #include "web_server.h"
+#include "event.h"
+#include "manual.h"
+
 
 #include "openevse.h"
 
@@ -18,10 +21,14 @@
 #include <MongooseMqttClient.h>
 
 MongooseMqttClient mqttclient;
+EvseProperties claim_props;
+EvseProperties override_props;
+DynamicJsonDocument mqtt_doc(4096);
 
 static long nextMqttReconnectAttempt = 0;
 static unsigned long mqttRestartTime = 0;
 static bool connecting = false;
+static bool mqttRetained = false;
 
 String lastWill = "";
 
@@ -75,7 +82,7 @@ void mqttmsg_callback(MongooseString topic, MongooseString payload) {
     StaticJsonDocument<128> event;
     event["battery_level"] = vehicle_soc;
     event["vehicle_state_update"] = 0;
-    web_server_event(event);
+    event_send(event);
   }
   else if (topic_string == mqtt_vehicle_range)
   {
@@ -86,7 +93,7 @@ void mqttmsg_callback(MongooseString topic, MongooseString payload) {
     StaticJsonDocument<128> event;
     event["battery_range"] = vehicle_range;
     event["vehicle_state_update"] = 0;
-    web_server_event(event);
+    event_send(event);
   }
   else if (topic_string == mqtt_vehicle_eta)
   {
@@ -97,14 +104,44 @@ void mqttmsg_callback(MongooseString topic, MongooseString payload) {
     StaticJsonDocument<128> event;
     event["time_to_full_charge"] = vehicle_eta;
     event["vehicle_state_update"] = 0;
-    web_server_event(event);
+    event_send(event);
   }
-  // If MQTT message to set divert mode is received
+  // Divert Mode
   else if (topic_string == mqtt_topic + "/divertmode/set")
   {
     byte newdivert = payload_str.toInt();
     if ((newdivert==1) || (newdivert==2)) {
       divertmode_update(newdivert);
+    }
+  }
+  // Manual Override
+  else if (topic_string == mqtt_topic + "/override/set") {
+    if (payload_str.equals("clear")) {
+      if (manual.release()) {
+        override_props.clear();
+        mqtt_publish_override();
+      }
+    }
+    else if (payload_str.equals("toggle")) {
+      if (manual.toggle()) {
+        mqtt_publish_override();
+      }
+    }
+    else if (override_props.deserialize(payload_str)) {
+      mqtt_set_claim(true, override_props);
+      }
+  }
+  
+  // Claim
+  else if (topic_string == mqtt_topic + "/claim/set") {
+    if (payload_str.equals("release")) {
+      if(evse.release(EvseClient_OpenEVSE_MQTT)) {
+        claim_props.clear();
+        mqtt_publish_claim();
+      }
+    }
+    else if (claim_props.deserialize(payload_str)) {
+      mqtt_set_claim(false, claim_props);
     }
   }
   else
@@ -199,6 +236,10 @@ mqtt_connect()
     DBUGVAR(announce);
     mqttclient.publish(mqtt_announce_topic, announce, true);
 
+    // Publish MQTT override/claim
+    mqtt_publish_override();
+    mqtt_publish_claim();
+
     // MQTT Topic to subscribe to receive RAPI commands via MQTT
     String mqtt_sub_topic = mqtt_topic + "/rapi/in/#";
 
@@ -230,8 +271,14 @@ mqtt_connect()
     if (mqtt_vrms!="") {
       mqttclient.subscribe(mqtt_vrms);
     }
+    // settable mqtt topics
+    mqtt_sub_topic = mqtt_topic + "/divertmode/set";
+    mqttclient.subscribe(mqtt_sub_topic);
 
-    mqtt_sub_topic = mqtt_topic + "/divertmode/set";      // MQTT Topic to change divert mode
+    mqtt_sub_topic = mqtt_topic + "/override/set";        
+    mqttclient.subscribe(mqtt_sub_topic);
+
+    mqtt_sub_topic = mqtt_topic + "/claim/set";        
     mqttclient.subscribe(mqtt_sub_topic);
 
     connecting = false;
@@ -258,13 +305,84 @@ mqtt_publish(JsonDocument &data) {
     String topic = mqtt_topic + "/";
     topic += kv.key().c_str();
     String val = kv.value().as<String>();
-    mqttclient.publish(topic, val);
+    mqttclient.publish(topic, val, mqtt_retained);
     topic = mqtt_topic + "/";
   }
 
   Profile_End(mqtt_publish, 5);
 }
 
+void
+mqtt_set_claim(bool override, EvseProperties &props) {
+  Profile_Start(mqtt_set_claim);
+  //0: claim , 1: manual override
+  if (override) {
+    if (manual.claim(props)) {
+      mqtt_publish_override();
+    }
+  }
+  else {
+    if (evse.claim(EvseClient_OpenEVSE_MQTT, EvseManager_Priority_MQTT, props)) {
+      mqtt_publish_claim();
+    }
+  }
+  
+  Profile_End(mqtt_set_claim, 5);
+}
+
+void
+mqtt_publish_claim() {
+  if(!config_mqtt_enabled() || !mqttclient.connected()) {
+    return;
+  }
+  bool hasclaim = evse.clientHasClaim(EvseClient_OpenEVSE_MQTT);
+  const size_t capacity = JSON_OBJECT_SIZE(40) + 1024;
+  DynamicJsonDocument claimdata(capacity);
+  if(hasclaim) {  
+    evse.serializeClaim(claimdata, EvseClient_OpenEVSE_MQTT);
+    
+  } 
+  else {
+    claimdata["state"] = "null";
+  }
+  mqtt_publish_json(claimdata, "/claim");
+}
+
+void
+mqtt_publish_override() {
+  if(!config_mqtt_enabled() || !mqttclient.connected()) {
+    return;
+  }
+  const size_t capacity = JSON_OBJECT_SIZE(40) + 1024;
+  DynamicJsonDocument override_data(capacity);
+  EvseProperties props;
+  bool hasoverride = manual.getProperties(props);
+  
+  if(hasoverride) {
+    props.serialize(override_data);
+    
+  }
+  else {
+    override_data["state"] = "null";
+  }
+
+  mqtt_publish_json(override_data, "/override");
+}
+
+void 
+mqtt_publish_json(JsonDocument &data, const char* topic) {
+  Profile_Start(mqtt_publish_json);
+  if(!config_mqtt_enabled() || !mqttclient.connected()) {
+      return;
+      }
+  
+  String fulltopic = mqtt_topic + topic;
+  String doc;
+  serializeJson(data, doc);
+  mqttclient.publish(fulltopic,doc, true); // claims are always published as retained as they are not updated regularly
+  Profile_End(mqtt_publish_json, 5);
+  
+}
 // -------------------------------------------------------------------
 // MQTT state management
 //

@@ -225,6 +225,9 @@ void divert_update_state()
     event["available_current"] = available_current;
     event["smoothed_available_current"] = smoothed_available_current;
     event["pilot"] = evse.getChargeCurrent();
+    event["min_charge_end"] = (divert_active && divertmode_get_time() < min_charge_end) ?
+      min_charge_end - divertmode_get_time() :
+      0;
   } // end ecomode
 
   event_send(event);
