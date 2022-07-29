@@ -49,8 +49,9 @@ typedef uint32_t EvseClient;
 #define EvseManager_Priority_Ohm       500
 #define EvseManager_Priority_Manual   1000
 #define EvseManager_Priority_RFID     1030
-#define EvseManager_Priority_Ocpp     1050   
+#define EvseManager_Priority_Ocpp     1050
 #define EvseManager_Priority_Limit    1100
+#define EvseManager_Priority_Safety   5000
 #define EvseManager_Priority_Error   10000
 
 #define EVSE_VEHICLE_SOC    (1 << 0)
