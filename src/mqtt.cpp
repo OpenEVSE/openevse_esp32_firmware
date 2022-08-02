@@ -12,7 +12,7 @@
 #include "web_server.h"
 #include "event.h"
 #include "manual.h"
-
+#include "scheduler.h"
 
 #include "openevse.h"
 
@@ -144,6 +144,15 @@ void mqttmsg_callback(MongooseString topic, MongooseString payload) {
       mqtt_set_claim(false, claim_props);
     }
   }
+  
+  //Schedule
+  else if (topic_string == mqtt_topic + "/schedule/set") {
+    mqtt_set_schedule(payload_str);
+  }
+  else if (topic_string == mqtt_topic + "/schedule/clear") {
+    mqtt_clear_schedule(payload_str.toInt());
+  }
+
   else
   {
     // If MQTT message is RAPI command
@@ -161,6 +170,7 @@ void mqttmsg_callback(MongooseString topic, MongooseString payload) {
         // If MQTT msg contains a payload e.g $SC 13. Not all rapi commands have a payload e.g. $GC
         cmd += " "+payload_str;
       }
+      
 
       if(!evse.isRapiCommandBlocked(cmd))
       {
@@ -239,6 +249,7 @@ mqtt_connect()
     // Publish MQTT override/claim
     mqtt_publish_override();
     mqtt_publish_claim();
+    mqtt_publish_schedule();
 
     // MQTT Topic to subscribe to receive RAPI commands via MQTT
     String mqtt_sub_topic = mqtt_topic + "/rapi/in/#";
@@ -281,6 +292,11 @@ mqtt_connect()
     mqtt_sub_topic = mqtt_topic + "/claim/set";        
     mqttclient.subscribe(mqtt_sub_topic);
 
+    mqtt_sub_topic = mqtt_topic + "/schedule/set";        
+    mqttclient.subscribe(mqtt_sub_topic);
+    mqtt_sub_topic = mqtt_topic + "/schedule/clear";        
+    mqttclient.subscribe(mqtt_sub_topic);
+    
     connecting = false;
   });
 
@@ -368,6 +384,36 @@ mqtt_publish_override() {
 
   mqtt_publish_json(override_data, "/override");
 }
+
+void mqtt_set_schedule(String schedule) {
+  Profile_Start(mqtt_set_schedule);
+  scheduler.deserialize(schedule);
+  mqtt_publish_schedule();
+  Profile_End(mqtt_set_schedule, 5); 
+}
+
+void
+mqtt_clear_schedule(uint32_t event) {
+  Profile_Start(mqtt_clear_schedule);
+  scheduler.removeEvent(event);
+  Profile_End(mqtt_clear_schedule, 5); 
+  mqtt_publish_schedule();
+}
+
+void
+mqtt_publish_schedule() {
+  if(!config_mqtt_enabled() || !mqttclient.connected()) {
+    return;
+  }
+  const size_t capacity = JSON_OBJECT_SIZE(40) + 2048;
+  DynamicJsonDocument schedule_data(capacity);
+  EvseProperties props;
+  bool success = scheduler.serialize(schedule_data);
+  if (success) {
+    mqtt_publish_json(schedule_data, "/schedule");
+  }
+}
+
 
 void 
 mqtt_publish_json(JsonDocument &data, const char* topic) {

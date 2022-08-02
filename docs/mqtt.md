@@ -39,6 +39,12 @@ Claims & manual override are read accessible here:
 Claim & override properties can be set independantly. Sending json with only some fields will update the current claim properties only. 
 To remove a selected claim/override property, just send "clear" as property parameter  ( i.e. `<base-topic>/claim/set {"charge_current": "clear"}` )
 
+Scheduler data:
+`<base-topic>/scheduler/`    				: get scheduler data ([json data]
+`<base-topic>/scheduler/set <json data>`	: set/update schedules ( data as refered from API :
+https://openevse.stoplight.io/docs/openevse-wifi-v4/e87e6f3f90787-batch-update-schedule )
+`<base-topic>/scheduler/clear <id>          :`remove related event
+
 Main settings:
 
 `<base-topic>/divertmode/set [1 | 2]`       : enable (1)/ disable (2) divert mode
