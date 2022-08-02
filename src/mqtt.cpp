@@ -382,7 +382,7 @@ mqtt_publish_override() {
 
 void mqtt_set_schedule(String schedule) {
   Profile_Start(mqtt_set_schedule);
-  scheduler.deserialize(payload_str);
+  scheduler.deserialize(schedule);
   mqtt_publish_schedule();
   Profile_End(mqtt_set_schedule, 5); 
 }
