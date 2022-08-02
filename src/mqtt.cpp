@@ -397,6 +397,11 @@ mqtt_publish_schedule() {
   EvseProperties props;
   bool success = scheduler.serialize(schedule_data);
   if (success) {
+    bool hasschedule = schedule_data.containsKey("id");
+    if ( !hasschedule ) {
+      schedule_data.clear();
+      schedule_data["state"] = "null";
+    }
     mqtt_publish_json(schedule_data, "/schedule");
   }
 }
