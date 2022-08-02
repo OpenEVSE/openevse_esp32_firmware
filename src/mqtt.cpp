@@ -147,8 +147,7 @@ void mqttmsg_callback(MongooseString topic, MongooseString payload) {
   
   //Schedule
   else if (topic_string == mqtt_topic + "/schedule/set") {
-      scheduler.deserialize(payload_str);
-      mqtt_publish_schedule();
+    mqtt_set_schedule(schedule);
   }
 
   else
@@ -383,7 +382,8 @@ mqtt_publish_override() {
 
 void mqtt_set_schedule(String schedule) {
   Profile_Start(mqtt_set_schedule);
-
+  scheduler.deserialize(payload_str);
+  mqtt_publish_schedule();
   Profile_End(mqtt_set_schedule, 5); 
 }
 
@@ -397,12 +397,10 @@ mqtt_publish_schedule() {
   EvseProperties props;
   bool success = scheduler.serialize(schedule_data);
   if (success) {
-    bool hasschedule = schedule_data.containsKey("id");
-    if ( !hasschedule ) {
-      schedule_data.clear();
+    if (schedule_data.isNull) {
       schedule_data["state"] = "null";
     }
-    mqtt_publish_json(schedule_data, "/schedule");
+    else mqtt_publish_json(schedule_data, "/schedule");
   }
 }
 
