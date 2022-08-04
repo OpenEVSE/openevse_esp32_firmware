@@ -42,6 +42,7 @@ The WiFi gateway uses an **ESP32** which communicates with the OpenEVSE controll
 - Log to Emoncms server e.g [data.openevse.com](https://data.openevse.com) or [emoncms.org](https://emoncms.org)
 - 'Eco' mode: automatically adjust charging current based on availability of power from solar PV or grid export
 - OCPP V1.6 (beta)
+- [Home Assistant Integration (beta)](https://github.com/firstof9/openevse)
 
 ## Requirements
 
