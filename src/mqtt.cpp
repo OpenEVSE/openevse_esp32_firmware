@@ -321,7 +321,7 @@ mqtt_publish(JsonDocument &data) {
     String topic = mqtt_topic + "/";
     topic += kv.key().c_str();
     String val = kv.value().as<String>();
-    mqttclient.publish(topic, val, mqtt_retained);
+    mqttclient.publish(topic, val, config_mqtt_retained());
     topic = mqtt_topic + "/";
   }
 

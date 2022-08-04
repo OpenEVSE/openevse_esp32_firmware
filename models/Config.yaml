@@ -40,7 +40,6 @@ x-examples:
     mqtt_server: homeassistant.lan
     mqtt_port: 1883
     mqtt_topic: openevse
-    mqtt_retained: false
     mqtt_user: emonpi
     mqtt_pass: _DUMMY_PASSWORD
     mqtt_solar: ''
@@ -119,7 +118,6 @@ examples:
     mqtt_server: homeassistant.lan
     mqtt_port: 1883
     mqtt_topic: openevse
-    mqtt_retained: false
     mqtt_user: emonpi
     mqtt_pass: _DUMMY_PASSWORD
     mqtt_solar: ''
@@ -269,8 +267,6 @@ properties:
   mqtt_topic:
     type: string
     minLength: 1
-  mqtt_retained:
-    type: bool
   mqtt_user:
     type: string
     minLength: 1
