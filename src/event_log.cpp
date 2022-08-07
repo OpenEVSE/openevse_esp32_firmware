@@ -77,7 +77,7 @@ void EventLog::begin()
   }
 }
 
-void EventLog::log(EventType type, EvseState managerState, uint8_t evseState, uint32_t evseFlags, uint32_t pilot, double energy, uint32_t elapsed, double temperature, double temperatureMax, uint8_t divertMode)
+void EventLog::log(EventType type, EvseState managerState, uint8_t evseState, uint32_t evseFlags, uint32_t pilot, double energy, uint32_t elapsed, double temperature, double temperatureMax, uint8_t divertMode, uint8_t shaper)
 {
   time_t now = time(NULL);
   struct tm timeinfo;
@@ -123,6 +123,7 @@ void EventLog::log(EventType type, EvseState managerState, uint8_t evseState, ui
     line["tp"] = temperature;
     line["tm"] = temperatureMax;
     line["dm"] = divertMode;
+    line["sh"] = shaper;
 
     serializeJson(line, eventFile);
     eventFile.println("");
@@ -136,7 +137,7 @@ void EventLog::log(EventType type, EvseState managerState, uint8_t evseState, ui
   }
 }
 
-void EventLog::enumerate(uint32_t index, std::function<void(String time, EventType type, const String &logEntry, EvseState managerState, uint8_t evseState, uint32_t evseFlags, uint32_t pilot, double energy, uint32_t elapsed, double temperature, double temperatureMax, uint8_t divertMode)> callback)
+void EventLog::enumerate(uint32_t index, std::function<void(String time, EventType type, const String &logEntry, EvseState managerState, uint8_t evseState, uint32_t evseFlags, uint32_t pilot, double energy, uint32_t elapsed, double temperature, double temperatureMax, uint8_t divertMode, uint8_t shaper)> callback)
 {
   String filename = filenameFromIndex(index);
   File eventFile = LittleFS.open(filename);
@@ -168,8 +169,9 @@ void EventLog::enumerate(uint32_t index, std::function<void(String time, EventTy
         double temperature = json["tp"];
         double temperatureMax = json["tm"];
         uint8_t divertMode = json["dm"];
+        uint8_t shaper = json["sh"];
 
-        callback(time, type, line, managerState, evseState, evseFlags, pilot, energy, elapsed, temperature, temperatureMax, divertMode);
+        callback(time, type, line, managerState, evseState, evseFlags, pilot, energy, elapsed, temperature, temperatureMax, divertMode, shaper);
       }
     }
     eventFile.close();

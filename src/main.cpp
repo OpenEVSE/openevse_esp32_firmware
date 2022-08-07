@@ -50,6 +50,7 @@
 #include "event.h"
 #include "ocpp.h"
 #include "rfid.h"
+#include "current_shaper.h"
 
 #if defined(ENABLE_PN532)
 #include "pn532.h"
@@ -86,6 +87,7 @@ String serial;
 
 ArduinoOcppTask ocpp = ArduinoOcppTask();
 
+
 static void hardware_setup();
 
 // -------------------------------------------------------------------
@@ -113,6 +115,7 @@ void setup()
 
   // Read saved settings from the config
   config_load_settings();
+  
   DBUGF("After config_load_settings: %d", ESPAL.getFreeHeap());
 
   eventLog.begin();
@@ -149,6 +152,8 @@ void setup()
   input_setup();
 
   ocpp.begin(evse, lcd, eventLog, rfid);
+
+  shaper.begin(evse);
 
   lcd.display(F("OpenEVSE WiFI"), 0, 0, 0, LCD_CLEAR_LINE);
   lcd.display(currentfirmware, 0, 1, 5 * 1000, LCD_CLEAR_LINE);
