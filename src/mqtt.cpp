@@ -15,6 +15,7 @@
 
 
 #include "openevse.h"
+#include "current_shaper.h"
 
 #include <Arduino.h>
 #include <ArduinoJson.h>
@@ -65,6 +66,11 @@ void mqttmsg_callback(MongooseString topic, MongooseString payload) {
     DBUGF("grid:%dW", grid_ie);
     divert_update_state();
   }
+  else if (topic_string == mqtt_live_pwr)
+  {
+      shaper.setLivePwr(payload_str.toInt());
+      DBUGF("shaper: available power:%dW", shaper.getAvlPwr());
+  }
   else if (topic_string == mqtt_vrms)
   {
     // TODO: The voltage is no longer a global, need to do something so we don't have
@@ -112,6 +118,15 @@ void mqttmsg_callback(MongooseString topic, MongooseString payload) {
     byte newdivert = payload_str.toInt();
     if ((newdivert==1) || (newdivert==2)) {
       divertmode_update(newdivert);
+    }
+  }
+  else if (topic_string == mqtt_topic + "/shaper/set")
+  {
+    byte newshaper = payload_str.toInt();
+    if (newshaper==0) {
+      shaper.setState(0);
+    } else if (newshaper==1) {
+      shaper.setState(1);
     }
   }
   // Manual Override
@@ -256,7 +271,13 @@ mqtt_connect()
         mqttclient.subscribe(mqtt_grid_ie);
       }
     }
-
+    // subscribe to current shaper MQTT feeds
+    if(config_current_shaper_enabled())
+    {
+      if (mqtt_live_pwr != "") {
+        mqttclient.subscribe(mqtt_live_pwr);
+      }
+    }
     // subscribe to vehicle information from MQTT if we are configured for it
     if (mqtt_vehicle_soc != "") {
         mqttclient.subscribe(mqtt_vehicle_soc);
@@ -273,6 +294,9 @@ mqtt_connect()
     }
     // settable mqtt topics
     mqtt_sub_topic = mqtt_topic + "/divertmode/set";
+    mqttclient.subscribe(mqtt_sub_topic);
+
+    mqtt_sub_topic = mqtt_topic + "/shaper/set";
     mqttclient.subscribe(mqtt_sub_topic);
 
     mqtt_sub_topic = mqtt_topic + "/override/set";        

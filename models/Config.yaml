@@ -46,6 +46,7 @@ x-examples:
     mqtt_solar: ''
     mqtt_grid_ie: emon/test/grid_ie
     mqtt_vrms: emon/rightbar/voltage
+    mqtt_live_pwr: /live/power/topic
     mqtt_vehicle_soc: ''
     mqtt_vehicle_range: ''
     mqtt_vehicle_eta: ''
@@ -59,6 +60,7 @@ x-examples:
     divert_attack_smoothing_factor: 0.4
     divert_decay_smoothing_factor: 0.05
     divert_min_charge_time: 10
+    current_shaper_max_pwr: 9000
     tesla_access_token: _DUMMY_PASSWORD
     tesla_refresh_token: _DUMMY_PASSWORD
     tesla_created_at: 2479357952
@@ -73,6 +75,7 @@ x-examples:
     sntp_enabled: true
     tesla_enabled: true
     divert_enabled: true
+    current_shaper_enabled: true
     pause_uses_disabled: false
     mqtt_vehicle_range_miles: false
     ocpp_enabled: true
