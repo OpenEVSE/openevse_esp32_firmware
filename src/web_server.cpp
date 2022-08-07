@@ -38,6 +38,7 @@ typedef const __FlashStringHelper *fstr_t;
 #include "tesla_client.h"
 #include "scheduler.h"
 #include "rfid.h"
+#include "current_shaper.h"
 
 MongooseHttpServer server;          // Create class for Web server
 
@@ -353,15 +354,17 @@ handleSaveMqtt(MongooseHttpServerRequest *request) {
                    request->getParam("server"),
                    port,
                    request->getParam("topic"),
+                   isPositive(request->getParam("retained")),
                    request->getParam("user"),
                    pass,
                    request->getParam("solar"),
                    request->getParam("grid_ie"),
+                   request->getParam("live_pwr"), 
                    reject_unauthorized);
 
   char tmpStr[200];
-  snprintf(tmpStr, sizeof(tmpStr), "Saved: %s %s %s %s %s %s", mqtt_server.c_str(),
-          mqtt_topic.c_str(), mqtt_user.c_str(), mqtt_pass.c_str(),
+  snprintf(tmpStr, sizeof(tmpStr), "Saved: %s %s %d %s %s %s %s", mqtt_server.c_str(),
+          mqtt_topic.c_str(), mqtt_retained, mqtt_user.c_str(), mqtt_pass.c_str(),
           mqtt_solar.c_str(), mqtt_grid_ie.c_str());
   DBUGLN(tmpStr);
 
@@ -391,6 +394,25 @@ handleDivertMode(MongooseHttpServerRequest *request){
   request->send(response);
 
   DBUGF("Divert Mode: %d", divertmode);
+}
+
+// -------------------------------------------------------------------
+// Change current shaper mode 0:disable (default), 1:Enable
+// url: /shaper
+// -------------------------------------------------------------------
+void
+handleCurrentShaper(MongooseHttpServerRequest *request) {
+  MongooseHttpServerResponseStream *response;
+  if(false == requestPreProcess(request, response, CONTENT_TYPE_TEXT)) {
+    return;
+  }
+  shaper.setState(request->getParam("shaper").toInt() == 1? true: false);
+
+  response->setCode(200);
+  response->print("Current Shaper state changed");
+  request->send(response);
+
+  DBUGF("CurrentShaper: %d", shaper.getState());
 }
 
 // -------------------------------------------------------------------
@@ -618,6 +640,10 @@ handleStatus(MongooseHttpServerRequest *request) {
   doc["charge_rate"] = charge_rate;
   doc["divert_update"] = (millis() - lastUpdate) / 1000;
   doc["divert_active"] = divert_active;
+
+  doc["shaper"] = shaper.isActive();
+  doc["shaper_live_pwr"] = shaper.getLivePwr();
+  doc["shaper_chg_cur"] = shaper.getChgCur();
 
   doc["service_level"] = static_cast<uint8_t>(evse.getActualServiceLevel());
 
@@ -1099,6 +1125,7 @@ web_server_setup() {
   server.on("/scan$", handleScan);
   server.on("/apoff$", handleAPOff);
   server.on("/divertmode$", handleDivertMode);
+  server.on("/shaper$", handleCurrentShaper);
   server.on("/emoncms/describe$", handleDescribe);
   server.on("/rfid/add$", handleAddRFID);
 

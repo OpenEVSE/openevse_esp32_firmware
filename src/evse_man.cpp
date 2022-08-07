@@ -9,6 +9,7 @@
 
 #include "event_log.h"
 #include "divert.h"
+#include "current_shaper.h"
 
 static EvseProperties nullProperties;
 
@@ -56,23 +57,24 @@ EvseProperties & EvseProperties::operator = (EvseProperties &rhs)
 bool EvseProperties::deserialize(JsonObject &obj)
 {
   if(obj.containsKey("state")) {
-    _state.fromString(obj["state"]);
+    obj["state"] == "clear" ? _state.None : _state.fromString(obj["state"]);
   }
 
   if(obj.containsKey("charge_current")) {
-    _charge_current = obj["charge_current"];
+    obj["charge_current"] == "clear" ? _charge_current = UINT32_MAX :_charge_current = obj["charge_current"];
   }
 
   if(obj.containsKey("max_current")) {
-    _max_current = obj["max_current"];
+    obj["max_current"] == "clear" ? _max_current = UINT32_MAX : _max_current = obj["max_current"];
   }
 
+
   if(obj.containsKey("energy_limit")) {
-    _energy_limit = obj["energy_limit"];
+    obj["energy_limit"] == "clear" ? _energy_limit = UINT32_MAX : _energy_limit = obj["energy_limit"];
   }
 
   if(obj.containsKey("time_limit")) {
-    _time_limit = obj["time_limit"];
+    obj["time_limit"] == "clear" ? _time_limit = UINT32_MAX : _time_limit = obj["time_limit"];
   }
 
   if(obj.containsKey("auto_release")) {
@@ -184,7 +186,9 @@ bool EvseManager::findClaim(EvseClient client, Claim **claim)
 
 bool EvseManager::evaluateClaims(EvseProperties &properties)
 {
+  // Clear the target state and set to active by default
   properties.clear();
+  properties.setState(EvseState::Active);
 
   bool foundClaim = false;
 
@@ -378,7 +382,9 @@ unsigned long EvseManager::loop(MicroTasks::WakeReason reason)
                   _monitor.getSessionElapsed(),
                   _monitor.getTemperature(EVSE_MONITOR_TEMP_MONITOR),
                   _monitor.getTemperature(EVSE_MONITOR_TEMP_MAX),
-                  divertmode);
+                  divertmode,
+                  shaper.getState()
+                  );
   }
 
   DBUGVAR(_sessionCompleteListener.IsTriggered());
@@ -397,16 +403,11 @@ unsigned long EvseManager::loop(MicroTasks::WakeReason reason)
     _hasClaims = evaluateClaims(_targetProperties);
 
     DBUGVAR(_hasClaims);
-    if(_hasClaims)
-    {
-      DBUGVAR(_targetProperties.getState().toString());
-      DBUGVAR(_targetProperties.getChargeCurrent());
-      DBUGVAR(_targetProperties.getMaxCurrent());
-      DBUGVAR(_targetProperties.getEnergyLimit());
-      DBUGVAR(_targetProperties.getTimeLimit());
-    } else {
-      DBUGLN("No claims");
-    }
+    DBUGVAR(_targetProperties.getState().toString());
+    DBUGVAR(_targetProperties.getChargeCurrent());
+    DBUGVAR(_targetProperties.getMaxCurrent());
+    DBUGVAR(_targetProperties.getEnergyLimit());
+    DBUGVAR(_targetProperties.getTimeLimit());
 
     _evaluateTargetState = true;
   }
@@ -415,13 +416,6 @@ unsigned long EvseManager::loop(MicroTasks::WakeReason reason)
   if(_evaluateTargetState)
   {
     _evaluateTargetState = false;
-
-    if(!_hasClaims)
-    {
-      // No claims, make sure the targetProperties are the defaults with charger active
-      _targetProperties.clear();
-      _targetProperties.setState(EvseState::Active);
-    }
     setTargetState(_targetProperties);
   }
 
