@@ -35,7 +35,6 @@ extern String emoncms_fingerprint;
 extern String mqtt_server;
 extern uint32_t mqtt_port;
 extern String mqtt_topic;
-extern bool   mqtt_retained;
 extern String mqtt_user;
 extern String mqtt_pass;
 extern String mqtt_solar;
@@ -114,7 +113,7 @@ inline uint8_t config_mqtt_protocol() {
 }
 
 inline bool config_mqtt_retained() {
-  return (flags & CONFIG_MQTT_RETAINED);
+  return CONFIG_MQTT_RETAINED == (flags & CONFIG_MQTT_RETAINED);
 }
 
 inline bool config_mqtt_reject_unauthorized() {

@@ -273,7 +273,7 @@ properties:
     type: string
     minLength: 1
   mqtt_retained:
-    type: bool
+    type: boolean
   mqtt_user:
     type: string
     minLength: 1
