@@ -42,6 +42,7 @@ handleConfigGet(MongooseHttpServerRequest *request, MongooseHttpServerResponseSt
 
   JsonArray http_supported_protocols = doc.createNestedArray("http_supported_protocols");
   http_supported_protocols.add("http");
+  http_supported_protocols.add("https");
 
   // OpenEVSE module config
   doc["diode_check"] = evse.isDiodeCheckEnabled();
