@@ -32,6 +32,10 @@ extern void mqtt_publish_claim();
 extern void mqtt_set_claim(bool override, EvseProperties &props);
 extern void mqtt_publish_override();
 extern void mqtt_publish_json(JsonDocument &data, const char* topic);
+extern void mqtt_publish_schedule();
+extern void mqtt_set_schedule(String schedule);
+extern void mqtt_clear_schedule(uint32_t event);
+
 // -------------------------------------------------------------------
 // Restart the MQTT connection
 // -------------------------------------------------------------------
