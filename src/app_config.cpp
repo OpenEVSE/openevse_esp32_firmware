@@ -341,8 +341,10 @@ config_save_mqtt(bool enable, int protocol, String server, uint16_t port, String
   if(!reject_unauthorized) {
     newflags |= CONFIG_MQTT_ALLOW_ANY_CERT;
   }
-  newflags |= protocol << 4;
+  if (retained) {
   newflags |= CONFIG_MQTT_RETAINED;
+  }
+  newflags |= protocol << 4;
 
   config.set("mqtt_server", server);
   config.set("mqtt_port", port);
