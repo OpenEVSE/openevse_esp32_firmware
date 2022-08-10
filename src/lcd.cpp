@@ -509,7 +509,7 @@ void LcdTask::displayInfoLine(LcdInfoLine line, unsigned long &nextUpdate)
   {
     case LcdInfoLine::EnergySession:
       // Energy 1,018Wh
-      displayScaledNumberValue(1, "Energy", _evse->getSessionEnergy(), 1, "Wh");
+      displayScaledNumberValue(1, "Energy", _evse->getSessionEnergy(), "Wh");
       _updateInfoLine = false;
       break;
 
@@ -619,36 +619,99 @@ void LcdTask::displayInfoLine(LcdInfoLine line, unsigned long &nextUpdate)
   }
 }
 
+// Adjust the value down until its in the range 0-1000,
+// and return the SI prefix for the scaled number. 
+const char *LcdTask::ScaleNumberSI(double *value) {
+  {
+    static const char *mod[] = {
+      "",
+      "k",
+      "m",
+      "g",
+      "t",
+      "p"
+    };
+
+    int index = 0;
+    while (*value > 1000 && index < ARRAY_ITEMS(mod))
+    {
+      *value /= 1000;
+      index++;
+    }
+
+    return(mod[index]);
+  }
+}
+
+// Format a number to a specif number of signficant figures. 
+// Requires a a number that that has already been adjusted for SI notation.
+//
+// Arguments: buffer, buffer length, 
+// value in question, number of significant figures.
+// returns a pointer to the formatted buffer.
+char *LcdTask::formatDoubleSigFigures(char *buffer, int buflen, double value, int figures)
+{
+  
+  // There is no way to get less than three.
+  int integer_figures;
+  if      ( value >= 100.0 ) integer_figures = 3; 
+  else if ( value >=  10.0 ) integer_figures = 2;
+  else if ( value >=   1.0 ) integer_figures = 1;
+  else                       integer_figures = 0;
+
+  int precision = figures - integer_figures; 
+
+  snprintf(buffer, buflen, "%.*f", precision, value);
+  return(buffer);
+}
+
+
+// Display a scaled number with a specific number of digits after the decimal point.
 void LcdTask::displayScaledNumberValue(int line, const char *name, double value, int precision, const char *unit)
 {
-  static const char *mod[] = {
-    "",
-    "k",
-    "m",
-    "g",
-    "t",
-    "p"
-  };
-
-  int index = 0;
-  while (value > 1000 && index < ARRAY_ITEMS(mod))
-  {
-    value /= 1000;
-    index++;
-  }
-
+  
   char newUnit[20];
-  sprintf(newUnit, "%s%s", mod[index], unit);
+  sprintf(newUnit, "%s%s", ScaleNumberSI(&value), unit);
 
   displayNumberValue(line, name, value, precision, newUnit);
 }
 
+// Display a scaled number and adjust output such that the user gets some number 
+// of significant figures eg, for 4: 1.00598kWh appears as 1.005 rather than 1.0
+// Overloaded on displayScaledNumberValue
+void LcdTask::displayScaledNumberValue(int line, const char *name, double value, const char *unit)
+{
+  
+  char newUnit[20];
+  sprintf(newUnit, "%s%s", ScaleNumberSI(&value), unit);
+
+  displayNumberValueSigFigures(line, name, value, 4, newUnit);
+}
+
+// Display a numeric value preceded by the quantity name, scaled for SI notation, 
+// and with a specific number of digits after the decimal point.
 void LcdTask::displayNumberValue(int line, const char *name, double value, int precision, const char *unit)
 {
   char number[20];
   snprintf(number, sizeof(number), "%.*f%s", precision, value, unit);
 
   displayNameValue(line, name, number);
+}
+
+
+// Display a numeric value that has already been SI adjusted,  
+// adjusted to a specifed number of significant figures, and appended with units
+void LcdTask::displayNumberValueSigFigures(int line, const char *name, double value, int figures, const char *unit)
+{
+  
+  char number[20];
+  
+  formatDoubleSigFigures(number, sizeof(number), value, figures);
+  
+  char with_unit[20];
+  sprintf(with_unit,"%s%s",number,unit);
+  
+  displayNameValue(line, name, with_unit);
 }
 
 void LcdTask::displayInfoEventTime(const char *name, Scheduler::EventInstance &event)
