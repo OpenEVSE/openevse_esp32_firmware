@@ -31,6 +31,11 @@
     },
     {
       "type": "item",
+      "title": "MQTT API",
+      "uri": "docs/mqtt.md"
+    },
+    {
+      "type": "item",
       "title": "RAPI API",
       "uri": "docs/rapi.md"
     },
