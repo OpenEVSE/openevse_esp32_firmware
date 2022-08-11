@@ -15,7 +15,6 @@ extern String url;
 extern String data;
 extern String ohm_hour;
 
-extern String getOverride();
 extern void handleRapiRead();
 extern void create_rapi_json(JsonDocument &data);
 
