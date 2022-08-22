@@ -334,19 +334,21 @@ void config_save_emoncms(bool enable, String server, String node, String apikey,
 void
 config_save_mqtt(bool enable, int protocol, String server, uint16_t port, String topic, bool retained, String user, String pass, String solar, String grid_ie, String live_pwr, bool reject_unauthorized)
 {
-  uint32_t newflags = flags & ~(CONFIG_SERVICE_MQTT | CONFIG_MQTT_PROTOCOL | CONFIG_MQTT_ALLOW_ANY_CERT);
+  uint32_t newflags = flags & ~(CONFIG_SERVICE_MQTT | CONFIG_MQTT_PROTOCOL | CONFIG_MQTT_ALLOW_ANY_CERT | CONFIG_MQTT_RETAINED);
   if(enable) {
     newflags |= CONFIG_SERVICE_MQTT;
   }
   if(!reject_unauthorized) {
     newflags |= CONFIG_MQTT_ALLOW_ANY_CERT;
   }
+  if (retained) {
+  newflags |= CONFIG_MQTT_RETAINED;
+  }
   newflags |= protocol << 4;
 
   config.set("mqtt_server", server);
   config.set("mqtt_port", port);
   config.set("mqtt_topic", topic);
-  config.set("mqtt_retained", retained);
   config.set("mqtt_user", user);
   config.set("mqtt_pass", pass);
   config.set("mqtt_solar", solar);

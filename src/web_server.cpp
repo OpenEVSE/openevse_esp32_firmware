@@ -364,7 +364,7 @@ handleSaveMqtt(MongooseHttpServerRequest *request) {
 
   char tmpStr[200];
   snprintf(tmpStr, sizeof(tmpStr), "Saved: %s %s %d %s %s %s %s", mqtt_server.c_str(),
-          mqtt_topic.c_str(), mqtt_retained, mqtt_user.c_str(), mqtt_pass.c_str(),
+          mqtt_topic.c_str(), config_mqtt_retained(), mqtt_user.c_str(), mqtt_pass.c_str(),
           mqtt_solar.c_str(), mqtt_grid_ie.c_str());
   DBUGLN(tmpStr);
 
