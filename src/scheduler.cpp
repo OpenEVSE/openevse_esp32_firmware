@@ -373,8 +373,6 @@ void Scheduler::buildSchedule()
   MicroTask.wakeTask(this);
 }
 
-
-
 Scheduler::EventInstance &Scheduler::getCurrentEvent()
 {
   int currentDay;
