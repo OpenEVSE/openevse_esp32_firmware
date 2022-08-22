@@ -816,6 +816,7 @@ void handleOverridePost(MongooseHttpServerRequest *request, MongooseHttpServerRe
     if(manual.claim(props)) {
       response->setCode(201);
       response->print("{\"msg\":\"Created\"}");
+      mqtt_publish_override();  // update override state to mqtt
     } else {
       response->setCode(500);
       response->print("{\"msg\":\"Failed to claim manual overide\"}");
