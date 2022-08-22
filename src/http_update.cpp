@@ -88,6 +88,11 @@ bool http_update_start(String source, size_t total)
 
 bool http_update_write(uint8_t *data, size_t len)
 {
+  // Issue #187 "HTTP update fails on ESP32 ethernet gateway" was caused by the
+  // loop watchdog timing out, presumably because updating wasn't bottlenecked
+  // by network and execution stayed in the Mongoose poll() method.
+  feedLoopWDT();
+
   DBUGF("Update Writing %u, %u", update_position, len);
   size_t written = Update.write(data, len);
   DBUGVAR(written);

@@ -420,15 +420,14 @@ net_setup()
 #ifdef ENABLE_WIRED_ETHERNET
   //ETH.setHostname(esp_hostname.c_str());
 
-#ifdef PHY_PWR
-  pinMode(PHY_PWR, OUTPUT);
-  digitalWrite(PHY_PWR, LOW);
+  pinMode(ETH_PHY_POWER, OUTPUT);
+#ifdef RESET_ETH_PHY_ON_BOOT
+  digitalWrite(ETH_PHY_POWER, LOW);
   delay(1000);
-  digitalWrite(PHY_PWR, HIGH);
-#endif
-
+#endif // #ifdef RESET_ETH_PHY_ON_BOOT
+  digitalWrite(ETH_PHY_POWER, HIGH);
   ETH.begin();
-#endif
+#endif // #ifdef ENABLE_WIRED_ETHERNET
 
   if (MDNS.begin(esp_hostname.c_str()))
   {
