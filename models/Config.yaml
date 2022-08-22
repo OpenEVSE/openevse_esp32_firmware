@@ -28,6 +28,7 @@ x-examples:
       - https
     ssid: wibble_ext
     pass: _DUMMY_PASSWORD
+    lang: en
     www_username: ''
     www_password: ''
     hostname: openevse-a7d4

@@ -24,6 +24,9 @@
 String esid;
 String epass;
 
+// Language
+String lang;
+
 // Web server authentication (leave blank for none)
 String www_username;
 String www_password;
@@ -110,6 +113,9 @@ ConfigOpt *opts[] =
   new ConfigOptDefenition<String>(esid, "", "ssid", "ws"),
   new ConfigOptSecret(epass, "", "pass", "wp"),
 
+// Language String
+  new ConfigOptDefenition<String>(lang, "", "lang", "lan"),
+  
 // Web server authentication (leave blank for none)
   new ConfigOptDefenition<String>(www_username, "", "www_username", "au"),
   new ConfigOptSecret(www_password, "", "www_password", "ap"),
