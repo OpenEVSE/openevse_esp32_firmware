@@ -26,23 +26,25 @@ OpenEVSE can post its status values (e.g. amp, wh, temp1, temp2, temp3, pilot, s
 
 **The default `<base-topic>` is `openevse-xxxx` where `xxxx` is the last 4 characters of the device ID**
 
-Claims & manual override are read accessible here:
-`<base-topic>/override/`                    : get manual override ([json data], {"state": "null"} when there's no override)
-`<base-topic>/override/set <json data> `    : set/update manual override ( data as refered from API : https://openevse.stoplight.io/docs/openevse-wifi-v4/e0ab0a4ad5e1e-set-the-manual-override )
-`<base-topic>/override/set toggle`          : toggle manual override
-`<base-topic>/override/set clear`           : clear manual override
+**Claims & manual override:**
 
-`<base-topic>/claim/`                       : get mqtt service claim ([json data], {"state": "null"} when there's no claim )
-`<base-topic>/claim/set <json data>`        : set/update claim from MQTT service. Has same priority as HTTP service. ( data as refered from API : https://openevse.stoplight.io/docs/openevse-wifi-v4/ebc578ffa7ca7-make-update-an-evse-claim )
-`<base-topic>/claim/set release`            : release claim
+* `<base-topic>/override/`                    : get manual override ([json data], {"state": "null"} when there's no override)  
+* `<base-topic>/override/set <json data> `    : set/update manual override ( data as refered from API : https://openevse.stoplight.io/docs/openevse-wifi-v4/e0ab0a4ad5e1e-set-the-manual-override )  
+* `<base-topic>/override/set toggle`          : toggle manual override  
+* `<base-topic>/override/set clear`           : clear manual override  
+
+* `<base-topic>/claim/`                       : get mqtt service claim ([json data], {"state": "null"} when there's no claim )  
+* `<base-topic>/claim/set <json data>`        : set/update claim from MQTT service. Has same priority as HTTP service. ( data as refered from API : https://openevse.stoplight.io/docs/openevse-wifi-v4/ebc578ffa7ca7-make-update-an-evse-claim )  
+* `<base-topic>/claim/set release`            : release claim  
 
 Claim & override properties can be set independantly. Sending json with only some fields will update the current claim properties only. 
+
 To remove a selected claim/override property, just send "clear" as property parameter  ( i.e. `<base-topic>/claim/set {"charge_current": "clear"}` )
 
 Main settings:
 
-`<base-topic>/divertmode/set [1 | 2]`       : enable (1)/ disable (2) divert mode
-
+* `<base-topic>/divertmode/set [1 | 2]`   : enable (1)/ disable (2) divert mode  
+* `<base-topic>/shaper/set [1 | 0]`       : enable (1)/ disable (0) current shaper  
 
 MQTT setup is pre-populated with OpenEnergyMonitor [emonPi default MQTT server credentials](https://guide.openenergymonitor.org/technical/credentials/#mqtt).
 
