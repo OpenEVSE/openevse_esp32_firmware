@@ -9,6 +9,7 @@
 #include "web_server.home.js.gz.h"
 #include "web_server.jquery.js.gz.h"
 #include "web_server.lib.js.gz.h"
+#include "web_server.localisation.js.gz.h"
 #include "web_server.mqtt.png.h"
 #include "web_server.ohm.jpg.h"
 #include "web_server.shaper.png.h"
@@ -36,6 +37,7 @@ StaticFile staticFiles[] = {
   { "/home.js", CONTENT_HOME_JS_GZ, sizeof(CONTENT_HOME_JS_GZ) - 1, _CONTENT_TYPE_JS, CONTENT_HOME_JS_GZ_ETAG, true },
   { "/jquery.js", CONTENT_JQUERY_JS_GZ, sizeof(CONTENT_JQUERY_JS_GZ) - 1, _CONTENT_TYPE_JS, CONTENT_JQUERY_JS_GZ_ETAG, true },
   { "/lib.js", CONTENT_LIB_JS_GZ, sizeof(CONTENT_LIB_JS_GZ) - 1, _CONTENT_TYPE_JS, CONTENT_LIB_JS_GZ_ETAG, true },
+  { "/localisation.js", CONTENT_LOCALISATION_JS_GZ, sizeof(CONTENT_LOCALISATION_JS_GZ) - 1, _CONTENT_TYPE_JS, CONTENT_LOCALISATION_JS_GZ_ETAG, true },
   { "/mqtt.png", CONTENT_MQTT_PNG, sizeof(CONTENT_MQTT_PNG) - 1, _CONTENT_TYPE_PNG, CONTENT_MQTT_PNG_ETAG, false },
   { "/ohm.jpg", CONTENT_OHM_JPG, sizeof(CONTENT_OHM_JPG) - 1, _CONTENT_TYPE_JPEG, CONTENT_OHM_JPG_ETAG, false },
   { "/shaper.png", CONTENT_SHAPER_PNG, sizeof(CONTENT_SHAPER_PNG) - 1, _CONTENT_TYPE_PNG, CONTENT_SHAPER_PNG_ETAG, false },

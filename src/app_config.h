@@ -16,6 +16,9 @@
 extern String esid;
 extern String epass;
 
+// Language 
+extern String lang;
+
 // Web server authentication (leave blank for none)
 extern String www_username;
 extern String www_password;
