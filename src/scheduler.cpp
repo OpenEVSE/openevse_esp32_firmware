@@ -8,6 +8,7 @@
 #include "emonesp.h"
 #include "app_config.h"
 #include "event.h"
+#include "mqtt.h"
 
 #include <algorithm>
 #include <vector>
@@ -364,6 +365,9 @@ void Scheduler::buildSchedule()
   doc["schedule_version"] = ++_version;
   doc["schedule_plan_version"] = ++_plan_version;
   event_send(doc);
+
+  // publish updated schedule to mqtt
+  mqtt_publish_schedule();
 
   // wake the main task to see if we actually need to do something
   MicroTask.wakeTask(this);
