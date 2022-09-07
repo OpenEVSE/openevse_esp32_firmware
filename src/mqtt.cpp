@@ -271,15 +271,18 @@ mqtt_connect()
 
     // e.g to set current to 13A: <base-topic>/rapi/in/$SC 13
     mqttclient.subscribe(mqtt_sub_topic);
+    yield();
 
     // subscribe to solar PV / grid_ie MQTT feeds
     if(config_divert_enabled())
     {
       if (mqtt_solar != "") {
         mqttclient.subscribe(mqtt_solar);
+        yield();
       }
       if (mqtt_grid_ie != "") {
         mqttclient.subscribe(mqtt_grid_ie);
+        yield();
       }
     }
     // subscribe to current shaper MQTT feeds
@@ -287,34 +290,43 @@ mqtt_connect()
     {
       if (mqtt_live_pwr != "") {
         mqttclient.subscribe(mqtt_live_pwr);
+        yield();
       }
     }
     // subscribe to vehicle information from MQTT if we are configured for it
     if (mqtt_vehicle_soc != "") {
         mqttclient.subscribe(mqtt_vehicle_soc);
+        yield();
     }
     if (mqtt_vehicle_range != "") {
         mqttclient.subscribe(mqtt_vehicle_range);
+        yield();
     }
     if (mqtt_vehicle_eta != "") {
         mqttclient.subscribe(mqtt_vehicle_eta);
+        yield();
     }
 
     if (mqtt_vrms!="") {
       mqttclient.subscribe(mqtt_vrms);
+      yield();
     }
     // settable mqtt topics
     mqtt_sub_topic = mqtt_topic + "/divertmode/set";
     mqttclient.subscribe(mqtt_sub_topic);
+    yield();
 
     mqtt_sub_topic = mqtt_topic + "/shaper/set";
     mqttclient.subscribe(mqtt_sub_topic);
+    yield();
 
     mqtt_sub_topic = mqtt_topic + "/override/set";        
     mqttclient.subscribe(mqtt_sub_topic);
+    yield();
 
     mqtt_sub_topic = mqtt_topic + "/claim/set";        
     mqttclient.subscribe(mqtt_sub_topic);
+    yield();
 
     mqtt_sub_topic = mqtt_topic + "/schedule/set";        
     mqttclient.subscribe(mqtt_sub_topic);
