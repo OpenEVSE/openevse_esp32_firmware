@@ -382,7 +382,7 @@ unsigned long EvseManager::loop(MicroTasks::WakeReason reason)
                   _monitor.getSessionElapsed(),
                   _monitor.getTemperature(EVSE_MONITOR_TEMP_MONITOR),
                   _monitor.getTemperature(EVSE_MONITOR_TEMP_MAX),
-                  divertmode,
+                  divert.isActive(),
                   shaper.getState()
                   );
   }

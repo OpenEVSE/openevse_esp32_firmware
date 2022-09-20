@@ -115,7 +115,7 @@ ConfigOpt *opts[] =
 
 // Language String
   new ConfigOptDefenition<String>(lang, "", "lang", "lan"),
-  
+
 // Web server authentication (leave blank for none)
   new ConfigOptDefenition<String>(www_username, "", "www_username", "au"),
   new ConfigOptSecret(www_password, "", "www_password", "ap"),
@@ -245,7 +245,7 @@ void config_changed(String name)
   if(name == "time_zone") {
     config_set_timezone(time_zone);
   } else if(name == "flags") {
-    divertmode_update((config_divert_enabled() && 1 == config_charge_mode()) ? DIVERT_MODE_ECO : DIVERT_MODE_NORMAL);
+    divert.setMode((config_divert_enabled() && 1 == config_charge_mode()) ? DivertMode::Eco : DivertMode::Normal);
     if(mqtt_connected() != config_mqtt_enabled()) {
       mqtt_restart();
     }
@@ -265,7 +265,7 @@ void config_changed(String name)
   } else if(name == "divert_enabled" || name == "charge_mode") {
     DBUGVAR(config_divert_enabled());
     DBUGVAR(config_charge_mode());
-    divertmode_update((config_divert_enabled() && 1 == config_charge_mode()) ? DIVERT_MODE_ECO : DIVERT_MODE_NORMAL);
+    divert.setMode((config_divert_enabled() && 1 == config_charge_mode()) ? DivertMode::Eco : DivertMode::Normal);
   } else if(name.startsWith("current_shaper_")) {
     shaper.notifyConfigChanged(config_current_shaper_enabled()?1:0,current_shaper_max_pwr);
   } else if(name == "tesla_vehicle_id") {
