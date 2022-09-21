@@ -127,5 +127,7 @@ void handleEvseClaimsTarget(MongooseHttpServerRequest *request)
 
   evse.serializeTarget(doc);
 
+  response->setCode(200);
+  serializeJson(doc, *response);
   request->send(response);
 }
