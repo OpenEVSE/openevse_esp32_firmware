@@ -243,6 +243,12 @@ class EvseManager : public MicroTasks::Task
     EvseProperties _targetProperties;
     bool _hasClaims;
 
+    EvseClient _state_client;
+    EvseClient _charge_current_client;
+    EvseClient _max_current_client;
+    EvseClient _energy_limit_client;
+    EvseClient _time_limit_client;
+
     bool _sleepForDisable;
 
     bool _evaluateClaims;
@@ -290,6 +296,7 @@ class EvseManager : public MicroTasks::Task
 
     bool serializeClaims(DynamicJsonDocument &doc);
     bool serializeClaim(DynamicJsonDocument &doc, EvseClient client);
+    bool serializeTarget(DynamicJsonDocument &doc);
 
     // Evse Status
     bool isConnected() {

@@ -198,6 +198,12 @@ bool EvseManager::evaluateClaims(EvseProperties &properties)
   int energyLimitPriority = 0;
   int timeLimitPriority = 0;
 
+  _state_client = EvseClient_NULL;
+  _charge_current_client = EvseClient_NULL;
+  _max_current_client = EvseClient_NULL;
+  _energy_limit_client = EvseClient_NULL;
+  _time_limit_client = EvseClient_NULL;
+
   for(size_t i = 0; i < EVSE_MANAGER_MAX_CLIENT_CLAIMS; i++)
   {
     if(_clients[i].isValid())
@@ -219,6 +225,7 @@ bool EvseManager::evaluateClaims(EvseProperties &properties)
       {
         properties.setState(claim.getState());
         statePriority = claim.getPriority();
+        _state_client = claim.getClient();
       }
 
       if(claim.getPriority() > chargeCurrentPriority &&
@@ -226,6 +233,7 @@ bool EvseManager::evaluateClaims(EvseProperties &properties)
       {
         properties.setChargeCurrent(claim.getChargeCurrent());
         chargeCurrentPriority = claim.getPriority();
+        _charge_current_client = claim.getClient();
       }
 
       if(claim.getPriority() > maxCurrentPriority &&
@@ -233,6 +241,7 @@ bool EvseManager::evaluateClaims(EvseProperties &properties)
       {
         properties.setMaxCurrent(claim.getMaxCurrent());
         maxCurrentPriority = claim.getPriority();
+        _max_current_client = claim.getClient();
       }
 
       if(claim.getPriority() > energyLimitPriority &&
@@ -240,6 +249,7 @@ bool EvseManager::evaluateClaims(EvseProperties &properties)
       {
         properties.setEnergyLimit(claim.getEnergyLimit());
         energyLimitPriority = claim.getPriority();
+        _energy_limit_client = claim.getClient();
       }
 
       if(claim.getPriority() > timeLimitPriority &&
@@ -247,6 +257,7 @@ bool EvseManager::evaluateClaims(EvseProperties &properties)
       {
         properties.setTimeLimit(claim.getTimeLimit());
         timeLimitPriority = claim.getPriority();
+        _time_limit_client = claim.getClient();
       }
     }
   }
@@ -649,4 +660,29 @@ bool EvseManager::serializeClaim(DynamicJsonDocument &doc, EvseClient client)
   }
 
   return false;
+}
+
+bool EvseManager::serializeTarget(DynamicJsonDocument &doc)
+{
+  JsonObject properties = doc.createNestedObject("properties");
+  _targetProperties.serialize(properties);
+
+  JsonObject claims = doc.createNestedObject("claims");
+  if(EvseClient_NULL != _state_client) {
+    claims["state"] = _state_client;
+  }
+  if(EvseClient_NULL != _charge_current_client) {
+    claims["charge_current"] = _charge_current_client;
+  }
+  if(EvseClient_NULL != _max_current_client) {
+    claims["max_current"] = _max_current_client;
+  }
+  if(EvseClient_NULL != _energy_limit_client) {
+    claims["energy_limit"] = _energy_limit_client;
+  }
+  if(EvseClient_NULL != _time_limit_client) {
+    claims["time_limit"] = _time_limit_client;
+  }
+
+  return true;
 }

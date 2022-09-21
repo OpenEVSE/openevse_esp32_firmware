@@ -62,6 +62,7 @@ const char _CONTENT_TYPE_SVG[] PROGMEM = "image/svg+xml";
 #define RAPI_RESPONSE_BLOCKED             -300
 
 void handleConfig(MongooseHttpServerRequest *request);
+void handleEvseClaimsTarget(MongooseHttpServerRequest *request);
 void handleEvseClaims(MongooseHttpServerRequest *request);
 void handleEventLogs(MongooseHttpServerRequest *request);
 
@@ -1133,6 +1134,7 @@ web_server_setup() {
   server.on("/schedule/plan$", handleSchedulePlan);
   server.on("/schedule", handleSchedule);
 
+  server.on("/claims/target$", handleEvseClaimsTarget);
   server.on("/claims", handleEvseClaims);
 
   server.on("/override$", handleOverride);
