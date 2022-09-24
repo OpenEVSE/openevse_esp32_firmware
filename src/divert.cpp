@@ -25,7 +25,7 @@
 // 2: Eco :
 // Either modulate charge rate based solar PV generation (if only solar PV feed is available)
 
-// Or modulate charge rate based on on excess power (if grid feed (positive import / negative export) is available) i.e. power that would otherwise be exported to the grid is diverted to _EVSE->
+// Or modulate charge rate based on on excess power (if grid feed (positive import / negative export) is available) i.e. power that would otherwise be exported to the grid is diverted to EVSE
 // Note: it's Assumed EVSE power is included in grid feed e.g. (charge rate = gen - use - EVSE).
 
 // It's better to never import current from the grid but because of charging current quantification (min value of 6A and change in steps of 1A),
@@ -41,6 +41,7 @@
 // This avoids wear on the relay and the car.
 
 // Default to normal charging unless set. Divert mode always defaults back to 1 if unit is reset (_mode not saved in EEPROM)
+
 int solar = 0;
 int grid_ie = 0;
 
