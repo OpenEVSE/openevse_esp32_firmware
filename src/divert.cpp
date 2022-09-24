@@ -204,7 +204,9 @@ void DivertTask::update_state()
     }
     DBUGVAR(_available_current);
 
-    double scale = (_available_current > _smoothed_available_current ? divert_attack_smoothing_factor : divert_decay_smoothing_factor);
+    double scale = (_available_current > _smoothed_available_current ?
+                      divert_attack_smoothing_factor :
+                      divert_decay_smoothing_factor);
     _smoothed_available_current = (_available_current * scale) + (_smoothed_available_current * (1 - scale));
     DBUGVAR(_smoothed_available_current);
 
@@ -216,7 +218,8 @@ void DivertTask::update_state()
 
     DBUGVAR(_charge_rate);
 
-    EvseState previousState = _evse->getState();
+    time_t min_charge_time_remaining = getMinChargeTimeRemaining();
+    DBUGVAR(min_charge_time_remaining);
 
     // the smoothed current suffices to ensure a sufficient ratio of PV power
     if (_smoothed_available_current >= (_evse->getMinCurrent() * min(1.0, divert_PV_ratio)))
@@ -227,7 +230,7 @@ void DivertTask::update_state()
     }
     else
     {
-      if(EvseState::Active == _evse->getState(EvseClient_OpenEVSE_Divert) && divertmode_get_time() >= _min_charge_end)
+      if( EvseState::Active == _evse->getState(EvseClient_OpenEVSE_Divert) && 0 == min_charge_time_remaining)
       {
         EvseProperties props(EvseState::Disabled);
         _evse->claim(EvseClient_OpenEVSE_Divert, EvseManager_Priority_Default, props);
@@ -250,9 +253,7 @@ void DivertTask::update_state()
     event["available_current"] = _available_current;
     event["smoothed_available_current"] = _smoothed_available_current;
     event["pilot"] = _evse->getChargeCurrent();
-    event["min_charge_end"] = (isActive() && _evse->isCharging() && divertmode_get_time() < _min_charge_end) ?
-      _min_charge_end - divertmode_get_time() :
-      0;
+    event["min_charge_end"] = min_charge_time_remaining;
   } // end ecomode
 
   event_send(event);
@@ -266,4 +267,13 @@ void DivertTask::update_state()
 bool DivertTask::isActive()
 {
   return EvseState::Active == _state;
+}
+
+time_t DivertTask::getMinChargeTimeRemaining()
+{
+  return (isActive() &&
+          _evse->isCharging() &&
+          divertmode_get_time() < _min_charge_end) ?
+            _min_charge_end - divertmode_get_time() :
+            0;
 }

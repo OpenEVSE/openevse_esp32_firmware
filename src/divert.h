@@ -94,6 +94,8 @@ class DivertTask : public MicroTasks::Task
       return _charge_rate;
     }
 
+    time_t getMinChargeTimeRemaining();
+
     bool isActive();
 };
 
