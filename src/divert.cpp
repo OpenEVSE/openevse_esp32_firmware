@@ -222,8 +222,10 @@ void DivertTask::update_state()
     time_t min_charge_time_remaining = getMinChargeTimeRemaining();
     DBUGVAR(min_charge_time_remaining);
 
+    double trigger_current = _evse->getMinCurrent() * min(1.0, divert_PV_ratio);
+
     // the smoothed current suffices to ensure a sufficient ratio of PV power
-    if (_smoothed_available_current >= (_evse->getMinCurrent() * min(1.0, divert_PV_ratio)))
+    if (_smoothed_available_current >= trigger_current)
     {
       EvseProperties props(EvseState::Active);
       props.setChargeCurrent(_charge_rate);
@@ -250,6 +252,7 @@ void DivertTask::update_state()
     }
 
     event["charge_rate"] = _charge_rate;
+    event["trigger_current"] = trigger_current;
     event["voltage"] = voltage;
     event["available_current"] = _available_current;
     event["smoothed_available_current"] = _smoothed_available_current;
