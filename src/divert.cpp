@@ -147,7 +147,7 @@ void DivertTask::update_state()
 {
   Profile_Start(DivertTask::update_state);
 
-  StaticJsonDocument<128> event;
+  StaticJsonDocument<256> event;
   event["divert_update"] = 0;
 
   if(mqtt_grid_ie != "") {
