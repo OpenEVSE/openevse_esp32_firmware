@@ -16,7 +16,7 @@
 extern String esid;
 extern String epass;
 
-// Language 
+// Language
 extern String lang;
 
 // Web server authentication (leave blank for none)
@@ -93,7 +93,7 @@ extern uint32_t flags;
 #define CONFIG_RFID                 (1 << 18)
 #define CONFIG_SERVICE_CUR_SHAPER   (1 << 19)
 #define CONFIG_MQTT_RETAINED        (1 << 20)
-
+#define CONFIG_FACTORY_WRITE_LOCK   (1 << 21)
 
 inline bool config_emoncms_enabled() {
   return CONFIG_SERVICE_EMONCMS == (flags & CONFIG_SERVICE_EMONCMS);
@@ -161,6 +161,10 @@ inline bool config_vehicle_range_miles() {
 
 inline bool config_rfid_enabled() {
   return CONFIG_RFID == (flags & CONFIG_RFID);
+}
+
+inline bool config_factory_write_lock() {
+  return CONFIG_FACTORY_WRITE_LOCK == (flags & CONFIG_FACTORY_WRITE_LOCK);
 }
 
 // Ohm Connect Settings
@@ -233,7 +237,7 @@ void config_set(const char *name, double val);
 bool config_deserialize(String& json);
 bool config_deserialize(const char *json);
 bool config_deserialize(DynamicJsonDocument &doc);
-void config_commit();
+void config_commit(bool factory = false);
 
 // Write config settings to JSON object
 bool config_serialize(String& json, bool longNames = true, bool compactOutput = false, bool hideSecrets = false);
