@@ -134,7 +134,7 @@ void create_rapi_json(JsonDocument &doc)
   doc["colour"] = evse.getStateColour();
   doc["manual_override"] = manual.isActive() ? 1 : 0;
   doc["freeram"] = ESPAL.getFreeHeap();
-  doc["divertmode"] = divertmode;
+  doc["divertmode"] = (uint8_t)divert.getMode();
   doc["srssi"] = WiFi.RSSI();
 }
 

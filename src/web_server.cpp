@@ -62,6 +62,7 @@ const char _CONTENT_TYPE_SVG[] PROGMEM = "image/svg+xml";
 #define RAPI_RESPONSE_BLOCKED             -300
 
 void handleConfig(MongooseHttpServerRequest *request);
+void handleEvseClaimsTarget(MongooseHttpServerRequest *request);
 void handleEvseClaims(MongooseHttpServerRequest *request);
 void handleEventLogs(MongooseHttpServerRequest *request);
 
@@ -359,7 +360,7 @@ handleSaveMqtt(MongooseHttpServerRequest *request) {
                    pass,
                    request->getParam("solar"),
                    request->getParam("grid_ie"),
-                   request->getParam("live_pwr"), 
+                   request->getParam("live_pwr"),
                    reject_unauthorized);
 
   char tmpStr[200];
@@ -387,7 +388,7 @@ handleDivertMode(MongooseHttpServerRequest *request){
     return;
   }
 
-  divertmode_update(request->getParam("divertmode").toInt());
+  divert.setMode((DivertMode)(request->getParam("divertmode").toInt()));
 
   response->setCode(200);
   response->print("Divert Mode changed");
@@ -637,9 +638,9 @@ handleStatus(MongooseHttpServerRequest *request) {
 
   doc["solar"] = solar;
   doc["grid_ie"] = grid_ie;
-  doc["charge_rate"] = charge_rate;
-  doc["divert_update"] = (millis() - lastUpdate) / 1000;
-  doc["divert_active"] = divert_active;
+  doc["charge_rate"] = divert.getChargeRate();
+  doc["divert_update"] = (millis() - divert.getLastUpdate()) / 1000;
+  doc["divert_active"] = divert.isActive();
 
   doc["shaper"] = shaper.isActive();
   doc["shaper_live_pwr"] = shaper.getLivePwr();
@@ -1133,6 +1134,7 @@ web_server_setup() {
   server.on("/schedule/plan$", handleSchedulePlan);
   server.on("/schedule", handleSchedule);
 
+  server.on("/claims/target$", handleEvseClaimsTarget);
   server.on("/claims", handleEvseClaims);
 
   server.on("/override$", handleOverride);

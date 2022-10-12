@@ -67,6 +67,7 @@ EventLog eventLog;
 EvseManager evse(RAPI_PORT, eventLog);
 Scheduler scheduler(evse);
 ManualOverride manual(evse);
+DivertTask divert(evse);
 
 RapiSender &rapiSender = evse.getSender();
 
@@ -115,13 +116,14 @@ void setup()
 
   // Read saved settings from the config
   config_load_settings();
-  
+
   DBUGF("After config_load_settings: %d", ESPAL.getFreeHeap());
 
   eventLog.begin();
   timeManager.begin();
   evse.begin();
   scheduler.begin();
+  divert.begin();
 
   lcd.begin(evse, scheduler, manual);
 #if defined(ENABLE_PN532)
@@ -176,7 +178,6 @@ loop() {
   net_loop();
   ota_loop();
   rapiSender.loop();
-  divert_current_loop();
 
   Profile_Start(MicroTask);
   MicroTask.update();
