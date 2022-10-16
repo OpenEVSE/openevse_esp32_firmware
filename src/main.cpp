@@ -264,7 +264,9 @@ void event_send(JsonDocument &event)
   DBUGLN("");
   #endif
   web_server_event(event);
+  yield();
   mqtt_publish(event);
+  yield();
 }
 
 void hardware_setup()

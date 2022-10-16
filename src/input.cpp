@@ -62,14 +62,18 @@ class InputTask : public MicroTasks::Task
       if(_evseState.IsTriggered())
       {
         // Send to all clients
-        StaticJsonDocument<64> event;
+        StaticJsonDocument<512> event;
         event["state"] = evse.getEvseState();
         event["flags"] = evse.getFlags();
         event["vehicle"] = evse.isVehicleConnected() ? 1 : 0;
         event["colour"] = evse.getStateColour();
         event["pilot"] = evse.getPilotState();
         event["manual_override"] = manual.isActive() ? 1 : 0; //TODO: remove this
-        event["session_energy"] = evse.getSessionEnergy();
+        event["status"] = evse.getState().toString();
+        event["elapsed"] = evse.getSessionElapsed();
+        event["amp"] = evse.getAmps() * AMPS_SCALE_FACTOR;
+        event["voltage"] = evse.getVoltage() * VOLTS_SCALE_FACTOR;
+
         event_send(event);
       }
 
@@ -129,6 +133,7 @@ void create_rapi_json(JsonDocument &doc)
   }
 #endif
   doc["state"] = evse.getEvseState();
+  doc["status"] = evse.getState().toString();
   doc["flags"] = evse.getFlags();
   doc["vehicle"] = evse.isVehicleConnected() ? 1 : 0;
   doc["colour"] = evse.getStateColour();
@@ -136,6 +141,17 @@ void create_rapi_json(JsonDocument &doc)
   doc["freeram"] = ESPAL.getFreeHeap();
   doc["divertmode"] = divertmode;
   doc["srssi"] = WiFi.RSSI();
+  // get the current time
+  char time[64];
+  char offset[8];
+  struct timeval local_time;
+  gettimeofday(&local_time, NULL);
+  struct tm * timeinfo = gmtime(&local_time.tv_sec);
+  strftime(time, sizeof(time), "%FT%TZ", timeinfo);
+  strftime(offset, sizeof(offset), "%z", timeinfo);
+  doc["time"] = time;
+  doc["offset"] = offset;
+  doc["elapsed"] = evse.getSessionElapsed();
 }
 
 void

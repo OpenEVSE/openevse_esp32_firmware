@@ -710,6 +710,13 @@ void EvseMonitor::getChargeCurrentAndVoltageFromEvse()
         if(VOLTAGE_MINIMUM <= volts && volts <= VOLTAGE_MAXIMUM) {
           _voltage = volts;
         }
+
+        StaticJsonDocument<64> event;
+        event["amp"] = _amp * AMPS_SCALE_FACTOR;;
+        event["voltage"] = _voltage * VOLTS_SCALE_FACTOR;
+        event_send(event);
+
+
         _data_ready.ready(EVSE_MONITOR_AMP_AND_VOLT_DATA_READY);
       }
     });
@@ -769,6 +776,11 @@ void EvseMonitor::getEnergyFromEvse()
         _total_kwh = total_kwh;
 
         _data_ready.ready(EVSE_MONITOR_ENERGY_DATA_READY);
+        StaticJsonDocument<512> event;
+        event["session_energy"] = _session_wh;
+        event["total_energy"] = _total_kwh;
+        event["wh"] = _total_kwh * TOTAL_ENERGY_SCALE_FACTOR;
+        event_send(event);
       }
     });
   } else {
