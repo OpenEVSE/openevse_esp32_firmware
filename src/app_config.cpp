@@ -51,7 +51,6 @@ String emoncms_fingerprint;
 String mqtt_server;
 uint32_t mqtt_port;
 String mqtt_topic;
-bool   mqtt_retained;
 String mqtt_user;
 String mqtt_pass;
 String mqtt_solar;

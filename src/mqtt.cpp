@@ -330,9 +330,11 @@ mqtt_connect()
 
     mqtt_sub_topic = mqtt_topic + "/schedule/set";        
     mqttclient.subscribe(mqtt_sub_topic);
+    yield();
+
     mqtt_sub_topic = mqtt_topic + "/schedule/clear";        
     mqttclient.subscribe(mqtt_sub_topic);
-
+    yield();
     connecting = false;
   });
 
