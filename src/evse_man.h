@@ -70,7 +70,7 @@ class EvseProperties : virtual public JsonSerialize<512>
     uint32_t _max_current;
     uint32_t _energy_limit;
     uint32_t _time_limit;
-    bool _auto_release;
+    bool _auto_release = true;
   public:
     EvseProperties();
     EvseProperties(EvseState state);
