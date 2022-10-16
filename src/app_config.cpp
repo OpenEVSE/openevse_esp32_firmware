@@ -16,9 +16,15 @@
 #include <Arduino.h>
 #include <EEPROM.h>             // Save config settings
 #include <ConfigJson.h>
+#include <LITTLEFS.h>
 
-#define EEPROM_SIZE     4096
-#define CHECKSUM_SEED    128
+#define EEPROM_SIZE       4096
+
+#define CONFIG_OFFSET     0
+#define CONFIG_SIZE       3072
+
+#define FACTORY_OFFSET    CONFIG_SIZE
+#define FACTORY_SIZE      1024
 
 // Wifi Network Strings
 String esid;
@@ -114,7 +120,7 @@ ConfigOpt *opts[] =
 
 // Language String
   new ConfigOptDefenition<String>(lang, "", "lang", "lan"),
-  
+
 // Web server authentication (leave blank for none)
   new ConfigOptDefenition<String>(www_username, "", "www_username", "au"),
   new ConfigOptSecret(www_password, "", "www_password", "ap"),
@@ -202,11 +208,13 @@ ConfigOpt *opts[] =
   new ConfigOptVirtualBool(flagsOpt, CONFIG_OCPP_ACCESS_SUSPEND, CONFIG_OCPP_ACCESS_SUSPEND, "ocpp_suspend_evse", "ops"),
   new ConfigOptVirtualBool(flagsOpt, CONFIG_OCPP_ACCESS_ENERGIZE, CONFIG_OCPP_ACCESS_ENERGIZE, "ocpp_energize_plug", "opn"),
   new ConfigOptVirtualBool(flagsOpt, CONFIG_RFID, CONFIG_RFID, "rfid_enabled", "rf"),
+  new ConfigOptVirtualBool(flagsOpt, CONFIG_FACTORY_WRITE_LOCK, CONFIG_FACTORY_WRITE_LOCK, "factory_write_lock", "fwl"),
   new ConfigOptVirtualMqttProtocol(flagsOpt, "mqtt_protocol", "mprt"),
   new ConfigOptVirtualChargeMode(flagsOpt, "charge_mode", "chmd")
 };
 
-ConfigJson config(opts, sizeof(opts) / sizeof(opts[0]), EEPROM_SIZE);
+ConfigJson user_config(opts, sizeof(opts) / sizeof(opts[0]), EEPROM_SIZE, CONFIG_OFFSET);
+ConfigJson factory_config(opts, sizeof(opts) / sizeof(opts[0]), EEPROM_SIZE, FACTORY_OFFSET);
 
 // -------------------------------------------------------------------
 // Reset EEPROM, wipes all settings
@@ -216,7 +224,7 @@ ResetEEPROM() {
   EEPROM.begin(EEPROM_SIZE);
 
   //DEBUG.println("Erasing EEPROM");
-  for (int i = 0; i < EEPROM_SIZE; ++i) {
+  for (int i = CONFIG_OFFSET; i < (CONFIG_OFFSET + CONFIG_SIZE); ++i) {
     EEPROM.write(i, 0xff);
     //DEBUG.print("#");
   }
@@ -229,9 +237,10 @@ ResetEEPROM() {
 void
 config_load_settings()
 {
-  config.onChanged(config_changed);
+  user_config.onChanged(config_changed);
 
-  if(!config.load()) {
+  factory_config.load(false);
+  if(!user_config.load(true)) {
     DBUGF("No JSON config found, trying v1 settings");
     config_load_v1_settings();
   }
@@ -244,7 +253,7 @@ void config_changed(String name)
   if(name == "time_zone") {
     config_set_timezone(time_zone);
   } else if(name == "flags") {
-    divertmode_update((config_divert_enabled() && 1 == config_charge_mode()) ? DIVERT_MODE_ECO : DIVERT_MODE_NORMAL);
+    divert.setMode((config_divert_enabled() && 1 == config_charge_mode()) ? DivertMode::Eco : DivertMode::Normal);
     if(mqtt_connected() != config_mqtt_enabled()) {
       mqtt_restart();
     }
@@ -264,7 +273,7 @@ void config_changed(String name)
   } else if(name == "divert_enabled" || name == "charge_mode") {
     DBUGVAR(config_divert_enabled());
     DBUGVAR(config_charge_mode());
-    divertmode_update((config_divert_enabled() && 1 == config_charge_mode()) ? DIVERT_MODE_ECO : DIVERT_MODE_NORMAL);
+    divert.setMode((config_divert_enabled() && 1 == config_charge_mode()) ? DivertMode::Eco : DivertMode::Normal);
   } else if(name.startsWith("current_shaper_")) {
     shaper.notifyConfigChanged(config_current_shaper_enabled()?1:0,current_shaper_max_pwr);
   } else if(name == "tesla_vehicle_id") {
@@ -278,46 +287,48 @@ void config_changed(String name)
   }
 }
 
-void config_commit()
+void config_commit(bool factory)
 {
+  ConfigJson &config = factory ? factory_config : user_config;
+  config.set("factory_write_lock", true);
   config.commit();
 }
 
 bool config_deserialize(String& json) {
-  return config.deserialize(json.c_str());
+  return user_config.deserialize(json.c_str());
 }
 
 bool config_deserialize(const char *json)
 {
-  return config.deserialize(json);
+  return user_config.deserialize(json);
 }
 
 bool config_deserialize(DynamicJsonDocument &doc)
 {
-  return config.deserialize(doc);
+  return user_config.deserialize(doc);
 }
 
 bool config_serialize(String& json, bool longNames, bool compactOutput, bool hideSecrets)
 {
-  return config.serialize(json, longNames, compactOutput, hideSecrets);
+  return user_config.serialize(json, longNames, compactOutput, hideSecrets);
 }
 
 bool config_serialize(DynamicJsonDocument &doc, bool longNames, bool compactOutput, bool hideSecrets)
 {
-  return config.serialize(doc, longNames, compactOutput, hideSecrets);
+  return user_config.serialize(doc, longNames, compactOutput, hideSecrets);
 }
 
 void config_set(const char *name, uint32_t val) {
-  config.set(name, val);
+  user_config.set(name, val);
 }
 void config_set(const char *name, String val) {
-  config.set(name, val);
+  user_config.set(name, val);
 }
 void config_set(const char *name, bool val) {
-  config.set(name, val);
+  user_config.set(name, val);
 }
 void config_set(const char *name, double val) {
-  config.set(name, val);
+  user_config.set(name, val);
 }
 
 void config_save_emoncms(bool enable, String server, String node, String apikey,
@@ -328,12 +339,12 @@ void config_save_emoncms(bool enable, String server, String node, String apikey,
     newflags |= CONFIG_SERVICE_EMONCMS;
   }
 
-  config.set("emoncms_server", server);
-  config.set("emoncms_node", node);
-  config.set("emoncms_apikey", apikey);
-  config.set("emoncms_fingerprint", fingerprint);
-  config.set("flags", newflags);
-  config.commit();
+  user_config.set("emoncms_server", server);
+  user_config.set("emoncms_node", node);
+  user_config.set("emoncms_apikey", apikey);
+  user_config.set("emoncms_fingerprint", fingerprint);
+  user_config.set("flags", newflags);
+  user_config.commit();
 }
 
 void
@@ -351,23 +362,23 @@ config_save_mqtt(bool enable, int protocol, String server, uint16_t port, String
   }
   newflags |= protocol << 4;
 
-  config.set("mqtt_server", server);
-  config.set("mqtt_port", port);
-  config.set("mqtt_topic", topic);
-  config.set("mqtt_user", user);
-  config.set("mqtt_pass", pass);
-  config.set("mqtt_solar", solar);
-  config.set("mqtt_grid_ie", grid_ie);
-  config.set("mqtt_live_pwr", live_pwr);
-  config.set("flags", newflags);
-  config.commit();
+  user_config.set("mqtt_server", server);
+  user_config.set("mqtt_port", port);
+  user_config.set("mqtt_topic", topic);
+  user_config.set("mqtt_user", user);
+  user_config.set("mqtt_pass", pass);
+  user_config.set("mqtt_solar", solar);
+  user_config.set("mqtt_grid_ie", grid_ie);
+  user_config.set("mqtt_live_pwr", live_pwr);
+  user_config.set("flags", newflags);
+  user_config.commit();
 }
 
 void
 config_save_admin(String user, String pass) {
-  config.set("www_username", user);
-  config.set("www_password", pass);
-  config.commit();
+  user_config.set("www_username", user);
+  user_config.set("www_password", pass);
+  user_config.commit();
 }
 
 void
@@ -378,9 +389,9 @@ config_save_sntp(bool sntp_enable, String tz)
     newflags |= CONFIG_SERVICE_SNTP;
   }
 
-  config.set("time_zone", tz);
-  config.set("flags", newflags);
-  config.commit();
+  user_config.set("time_zone", tz);
+  user_config.set("flags", newflags);
+  user_config.commit();
 
   config_set_timezone(tz);
 }
@@ -399,17 +410,17 @@ void config_set_timezone(String tz)
 
 void
 config_save_advanced(String hostname, String sntp_host) {
-  config.set("hostname", hostname);
-  config.set("sntp_hostname", sntp_host);
-  config.commit();
+  user_config.set("hostname", hostname);
+  user_config.set("sntp_hostname", sntp_host);
+  user_config.commit();
 }
 
 void
 config_save_wifi(String qsid, String qpass)
 {
-  config.set("ssid", qsid);
-  config.set("pass", qpass);
-  config.commit();
+  user_config.set("ssid", qsid);
+  user_config.set("pass", qpass);
+  user_config.commit();
 }
 
 void
@@ -420,9 +431,9 @@ config_save_ohm(bool enable, String qohm)
     newflags |= CONFIG_SERVICE_OHM;
   }
 
-  config.set("ohm", qohm);
-  config.set("flags", newflags);
-  config.commit();
+  user_config.set("ohm", qohm);
+  user_config.set("flags", newflags);
+  user_config.commit();
 }
 
 void
@@ -431,19 +442,20 @@ config_save_rfid(bool enable, String storage){
   if(enable) {
     newflags |= CONFIG_RFID;
   }
-  config.set("flags", newflags);
-  config.set("rfid_storage", rfid_storage);
-  config.commit();
+  user_config.set("flags", newflags);
+  user_config.set("rfid_storage", rfid_storage);
+  user_config.commit();
 }
 
 void
 config_save_flags(uint32_t newFlags) {
-  config.set("flags", newFlags);
-  config.commit();
+  user_config.set("flags", newFlags);
+  user_config.commit();
 }
 
 void
 config_reset() {
   ResetEEPROM();
-  config.reset();
+  LittleFS.format();
+  config_load_settings();
 }

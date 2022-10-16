@@ -25,7 +25,7 @@
 #define EEPROM_MQTT_PORT_SIZE         4
 #define EEPROM_SNTP_HOST_SIZE         45
 #define EEPROM_TIME_ZONE_SIZE         80
-#define EEPROM_SIZE                   1024
+#define EEPROM_SIZE                   4096
 
 #define EEPROM_ESID_START             0
 #define EEPROM_ESID_END               (EEPROM_ESID_START + EEPROM_ESID_SIZE)
