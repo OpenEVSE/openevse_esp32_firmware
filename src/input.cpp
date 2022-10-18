@@ -17,6 +17,7 @@
 #include "emoncms.h"
 #include "tesla_client.h"
 #include "manual.h"
+#include "mqtt.h"
 #include "rfid.h"
 
 #include "LedManagerTask.h"
@@ -71,6 +72,8 @@ class InputTask : public MicroTasks::Task
         event["manual_override"] = manual.isActive() ? 1 : 0; //TODO: remove this
         event["session_energy"] = evse.getSessionEnergy();
         event_send(event);
+        // update /override topic to mqtt
+        mqtt_publish_override();
       }
 
       return MicroTask.Infinate;
