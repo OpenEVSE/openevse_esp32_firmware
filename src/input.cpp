@@ -68,12 +68,10 @@ class InputTask : public MicroTasks::Task
         event["flags"] = evse.getFlags();
         event["vehicle"] = evse.isVehicleConnected() ? 1 : 0;
         event["colour"] = evse.getStateColour();
-        event["pilot"] = evse.getPilotState();
+        event["pilot"] = evse.getChargeCurrent();
         event["manual_override"] = manual.isActive() ? 1 : 0; //TODO: remove this
         event["session_energy"] = evse.getSessionEnergy();
         event_send(event);
-        // update /override topic to mqtt
-        mqtt_publish_override();
       }
 
       return MicroTask.Infinate;
