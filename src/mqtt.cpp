@@ -410,17 +410,20 @@ mqtt_publish_override() {
   const size_t capacity = JSON_OBJECT_SIZE(40) + 1024;
   DynamicJsonDocument override_data(capacity);
   EvseProperties props;
-  bool hasoverride = manual.getProperties(props);
-  
-  if(hasoverride) {
-    props.serialize(override_data);
-    
-  }
-  else {
-    override_data["state"] = "null";
+  if (evse.clientHasClaim(EvseClient_OpenEVSE_Manual)) {
+   EvseState state = evse.getState(EvseClient_OpenEVSE_Manual);
+    if(state != EvseState::None) {
+      props.serialize(override_data);
+      
+    }
+    else {
+      override_data["state"] = "null";
+    }
+    mqtt_publish_json(override_data, "/override");
   }
 
-  mqtt_publish_json(override_data, "/override");
+  
+  
 }
 
 void mqtt_set_schedule(String schedule) {
