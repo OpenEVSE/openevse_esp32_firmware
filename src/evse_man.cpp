@@ -259,10 +259,28 @@ bool EvseManager::evaluateClaims(EvseProperties &properties)
         timeLimitPriority = claim.getPriority();
         _time_limit_client = claim.getClient();
       }
+
+      if(claim.getClient() == EvseClient_OpenEVSE_Manual) {
+        const size_t capacity = JSON_OBJECT_SIZE(40) + 1024;
+        // update manual_override event to socket & mqtt
+        DynamicJsonDocument event(capacity);
+        event["manual_override"] = 1;
+        event_send(event);
+        // update /override topic to mqtt
+        event.clear();
+        EvseState state = properties.getState();
+        if(state != EvseState::None) {
+          properties.serialize(event);         
+        }
+        else {
+          event["state"] = "null";
+        }
+        mqtt_publish_json(event, "/override");
+      }
     }
   }
 
-  return foundClaim;
+ return foundClaim;
 }
 
 void EvseManager::setup()
@@ -412,7 +430,6 @@ unsigned long EvseManager::loop(MicroTasks::WakeReason reason)
 
     // Work out the state we should try and get in too
     _hasClaims = evaluateClaims(_targetProperties);
-
     DBUGVAR(_hasClaims);
     DBUGVAR(_targetProperties.getState().toString());
     DBUGVAR(_targetProperties.getChargeCurrent());
@@ -429,7 +446,6 @@ unsigned long EvseManager::loop(MicroTasks::WakeReason reason)
     _evaluateTargetState = false;
     setTargetState(_targetProperties);
   }
-
   return MicroTask.Infinate;
 }
 
@@ -475,12 +491,24 @@ bool EvseManager::claim(EvseClient client, int priority, EvseProperties &target)
 bool EvseManager::release(EvseClient client)
 {
   Claim *claim;
-
+  
   if(findClaim(client, &claim))
   {
+    // if claim is manual override, publish data to socket & mqtt
+    if (claim->getClient() == EvseClient_OpenEVSE_Manual) {
+      const size_t capacity = JSON_OBJECT_SIZE(40) + 1024;
+      DynamicJsonDocument event(capacity);
+      event["manual_override"] = 0;
+      event_send(event);
+      event.clear();
+      // update /override topic to mqtt
+      event["state"] = "null";
+      mqtt_publish_json(event, "/override");
+    }
+
     claim->release();
     _evaluateClaims = true;
-    MicroTask.wakeTask(this);
+    MicroTask.wakeTask(this); 
     return true;
   }
 
