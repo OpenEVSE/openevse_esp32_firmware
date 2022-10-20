@@ -112,7 +112,7 @@ void DivertTask::setMode(DivertMode mode)
     _mode = mode;
 
     StaticJsonDocument<128> event;
-    event["_mode"] = (uint8_t)_mode;
+    event["divertmode"] = (uint8_t)_mode;
     _state = EvseState::None;
     event["divert_active"] = false;
 

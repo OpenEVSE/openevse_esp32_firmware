@@ -90,6 +90,7 @@ ArduinoOcppTask ocpp = ArduinoOcppTask();
 
 
 static void hardware_setup();
+static void handle_serial();
 
 // -------------------------------------------------------------------
 // SETUP
@@ -247,6 +248,10 @@ loop() {
     }
   } // end WiFi connected
 
+  if(DEBUG_PORT.available()) {
+    handle_serial();
+  }
+
   Profile_End(loop, 10);
 } // end loop
 
@@ -290,4 +295,44 @@ class SystemRestart : public MicroTasks::Alarm
 void restart_system()
 {
   systemRestartAlarm.Set(1000, false);
+}
+
+void handle_serial()
+{
+  String line = DEBUG_PORT.readStringUntil('\n');
+  int command_separator = line.indexOf(':');
+  if(command_separator > 0)
+  {
+    String command = line.substring(0, command_separator);
+    command.trim();
+    String json = line.substring(command_separator + 1);
+    json.trim();
+
+    DBUGVAR(command);
+    DBUGVAR(json);
+
+    const size_t capacity = JSON_OBJECT_SIZE(50) + 1024;
+    DynamicJsonDocument doc(capacity);
+    DeserializationError error = deserializeJson(doc, json);
+    if(error) {
+      DEBUG_PORT.println("{\"code\":400,\"msg\":\"Could not parse JSON\"}");
+      return;
+    }
+
+    if(command == "factory" || command == "config")
+    {
+      if(command.equals("factory") && config_factory_write_lock()) {
+        DEBUG_PORT.println("{\"code\":423,\"msg\":\"Factory settings locked\"}");
+        return;
+      }
+
+      bool config_modified = false;
+      if(config_deserialize(doc)) {
+        config_commit(command == "factory");
+        config_modified = true;
+        DBUGLN("Config updated");
+      }
+      DEBUG_PORT.printf("{\"code\":200,\"msg\":\"%s\"}\n", config_modified ? "done" : "no change");
+    }
+  }
 }
