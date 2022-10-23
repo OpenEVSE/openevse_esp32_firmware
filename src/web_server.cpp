@@ -170,6 +170,113 @@ bool isPositive(MongooseHttpServerRequest *request, const char *param) {
   return paramFound >= 0 && (0 == paramFound || isPositive(String(paramValue)));
 }
 
+//---------------------------------------------------------------------
+// Build status data
+// --------------------------------------------------------------------
+
+void buildStatus(DynamicJsonDocument &doc) {
+
+  // Get the current time
+  struct timeval local_time;
+  gettimeofday(&local_time, NULL);
+
+  struct tm * timeinfo = gmtime(&local_time.tv_sec);
+
+  char time[64];
+  char offset[8];
+  strftime(time, sizeof(time), "%FT%TZ", timeinfo);
+  strftime(offset, sizeof(offset), "%z", timeinfo);
+
+  if (net_eth_connected()) {
+    doc["mode"] = "Wired";
+  } else if (net_wifi_mode_is_sta_only()) {
+    doc["mode"] = "STA";
+  } else if (net_wifi_mode_is_ap_only()) {
+    doc["mode"] = "AP";
+  } else if (net_wifi_mode_is_ap() && net_wifi_mode_is_sta()) {
+    doc["mode"] = "STA+AP";
+  }
+
+  doc["wifi_client_connected"] = (int)net_wifi_client_connected();
+  doc["eth_connected"] = (int)net_eth_connected();
+  doc["net_connected"] = (int)net_is_connected();
+  doc["ipaddress"] = ipaddress;
+
+  doc["emoncms_connected"] = (int)emoncms_connected;
+  doc["packets_sent"] = packets_sent;
+  doc["packets_success"] = packets_success;
+
+  doc["mqtt_connected"] = (int)mqtt_connected();
+
+  doc["ocpp_connected"] = (int)MongooseOcppSocketClient::ocppConnected();
+
+#if defined(ENABLE_PN532) || defined(ENABLE_RFID)
+  doc["rfid_failure"] = (int) rfid.communicationFails();
+#endif
+
+  doc["ohm_hour"] = ohm_hour;
+
+  doc["free_heap"] = ESPAL.getFreeHeap();
+
+  doc["comm_sent"] = rapiSender.getSent();
+  doc["comm_success"] = rapiSender.getSuccess();
+  doc["rapi_connected"] = (int)rapiSender.isConnected();
+  doc["evse_connected"] = (int)evse.isConnected();
+
+  create_rapi_json(doc);
+
+  doc["status"] = evse.getState().toString();
+
+  doc["elapsed"] = evse.getSessionElapsed();
+  doc["wattsec"] = evse.getSessionEnergy() * SESSION_ENERGY_SCALE_FACTOR;
+  doc["watthour"] = evse.getTotalEnergy() * TOTAL_ENERGY_SCALE_FACTOR;
+
+  doc["gfcicount"] = evse.getFaultCountGFCI();
+  doc["nogndcount"] = evse.getFaultCountNoGround();
+  doc["stuckcount"] = evse.getFaultCountStuckRelay();
+
+  doc["solar"] = solar;
+  doc["grid_ie"] = grid_ie;
+  doc["charge_rate"] = divert.getChargeRate();
+  doc["divert_update"] = (millis() - divert.getLastUpdate()) / 1000;
+  doc["divert_active"] = divert.isActive();
+
+  doc["shaper"] = shaper.isActive();
+  doc["shaper_live_pwr"] = shaper.getLivePwr();
+  doc["shaper_chg_cur"] = shaper.getChgCur();
+
+  doc["service_level"] = static_cast<uint8_t>(evse.getActualServiceLevel());
+
+  doc["ota_update"] = (int)Update.isRunning();
+  doc["time"] = String(time);
+  doc["offset"] = String(offset);
+
+  doc["config_version"] = config_version;
+  doc["schedule_version"] = scheduler.getVersion();
+  doc["schedule_plan_version"] = scheduler.getPlanVersion();
+
+  doc["vehicle_state_update"] = (millis() - evse.getVehicleLastUpdated()) / 1000;
+  if(teslaClient.getVehicleCnt() > 0) {
+    doc["tesla_vehicle_count"] = teslaClient.getVehicleCnt();
+    doc["tesla_vehicle_id"] = teslaClient.getVehicleId(teslaClient.getCurVehicleIdx());
+    doc["tesla_vehicle_name"] = teslaClient.getVehicleDisplayName(teslaClient.getCurVehicleIdx());
+    teslaClient.getChargeInfoJson(doc);
+  } else {
+    doc["tesla_vehicle_count"] = false;
+    doc["tesla_vehicle_id"] = false;
+    doc["tesla_vehicle_name"] = false;
+    if(evse.isVehicleStateOfChargeValid()) {
+      doc["battery_level"] = evse.getVehicleStateOfCharge();
+    }
+    if(evse.isVehicleRangeValid()) {
+      doc["battery_range"] = evse.getVehicleRange();
+    }
+    if(evse.isVehicleEtaValid()) {
+      doc["time_to_full_charge"] = evse.getVehicleEta();
+    }
+  }
+}
+
 // -------------------------------------------------------------------
 // Wifi scan /scan not currently used
 // url: /scan
@@ -574,108 +681,10 @@ handleStatus(MongooseHttpServerRequest *request) {
     return;
   }
 
-  // Get the current time
-  struct timeval local_time;
-  gettimeofday(&local_time, NULL);
-
-  struct tm * timeinfo = gmtime(&local_time.tv_sec);
-
-  char time[64];
-  char offset[8];
-  strftime(time, sizeof(time), "%FT%TZ", timeinfo);
-  strftime(offset, sizeof(offset), "%z", timeinfo);
-
   const size_t capacity = JSON_OBJECT_SIZE(40) + 1024;
   DynamicJsonDocument doc(capacity);
 
-  if (net_eth_connected()) {
-    doc["mode"] = "Wired";
-  } else if (net_wifi_mode_is_sta_only()) {
-    doc["mode"] = "STA";
-  } else if (net_wifi_mode_is_ap_only()) {
-    doc["mode"] = "AP";
-  } else if (net_wifi_mode_is_ap() && net_wifi_mode_is_sta()) {
-    doc["mode"] = "STA+AP";
-  }
-
-  doc["wifi_client_connected"] = (int)net_wifi_client_connected();
-  doc["eth_connected"] = (int)net_eth_connected();
-  doc["net_connected"] = (int)net_is_connected();
-  doc["ipaddress"] = ipaddress;
-
-  doc["emoncms_connected"] = (int)emoncms_connected;
-  doc["packets_sent"] = packets_sent;
-  doc["packets_success"] = packets_success;
-
-  doc["mqtt_connected"] = (int)mqtt_connected();
-
-  doc["ocpp_connected"] = (int)MongooseOcppSocketClient::ocppConnected();
-
-#if defined(ENABLE_PN532) || defined(ENABLE_RFID)
-  doc["rfid_failure"] = (int) rfid.communicationFails();
-#endif
-
-  doc["ohm_hour"] = ohm_hour;
-
-  doc["free_heap"] = ESPAL.getFreeHeap();
-
-  doc["comm_sent"] = rapiSender.getSent();
-  doc["comm_success"] = rapiSender.getSuccess();
-  doc["rapi_connected"] = (int)rapiSender.isConnected();
-  doc["evse_connected"] = (int)evse.isConnected();
-
-  create_rapi_json(doc);
-
-  doc["status"] = evse.getState().toString();
-
-  doc["elapsed"] = evse.getSessionElapsed();
-  doc["wattsec"] = evse.getSessionEnergy() * SESSION_ENERGY_SCALE_FACTOR;
-  doc["watthour"] = evse.getTotalEnergy() * TOTAL_ENERGY_SCALE_FACTOR;
-
-  doc["gfcicount"] = evse.getFaultCountGFCI();
-  doc["nogndcount"] = evse.getFaultCountNoGround();
-  doc["stuckcount"] = evse.getFaultCountStuckRelay();
-
-  doc["solar"] = solar;
-  doc["grid_ie"] = grid_ie;
-  doc["charge_rate"] = divert.getChargeRate();
-  doc["divert_update"] = (millis() - divert.getLastUpdate()) / 1000;
-  doc["divert_active"] = divert.isActive();
-
-  doc["shaper"] = shaper.isActive();
-  doc["shaper_live_pwr"] = shaper.getLivePwr();
-  doc["shaper_chg_cur"] = shaper.getChgCur();
-
-  doc["service_level"] = static_cast<uint8_t>(evse.getActualServiceLevel());
-
-  doc["ota_update"] = (int)Update.isRunning();
-  doc["time"] = String(time);
-  doc["offset"] = String(offset);
-
-  doc["config_version"] = config_version;
-  doc["schedule_version"] = scheduler.getVersion();
-  doc["schedule_plan_version"] = scheduler.getPlanVersion();
-
-  doc["vehicle_state_update"] = (millis() - evse.getVehicleLastUpdated()) / 1000;
-  if(teslaClient.getVehicleCnt() > 0) {
-    doc["tesla_vehicle_count"] = teslaClient.getVehicleCnt();
-    doc["tesla_vehicle_id"] = teslaClient.getVehicleId(teslaClient.getCurVehicleIdx());
-    doc["tesla_vehicle_name"] = teslaClient.getVehicleDisplayName(teslaClient.getCurVehicleIdx());
-    teslaClient.getChargeInfoJson(doc);
-  } else {
-    doc["tesla_vehicle_count"] = false;
-    doc["tesla_vehicle_id"] = false;
-    doc["tesla_vehicle_name"] = false;
-    if(evse.isVehicleStateOfChargeValid()) {
-      doc["battery_level"] = evse.getVehicleStateOfCharge();
-    }
-    if(evse.isVehicleRangeValid()) {
-      doc["battery_range"] = evse.getVehicleRange();
-    }
-    if(evse.isVehicleEtaValid()) {
-      doc["time_to_full_charge"] = evse.getVehicleEta();
-    }
-  }
+  buildStatus(doc);
 
   response->setCode(200);
   serializeJson(doc, *response);
@@ -1100,6 +1109,16 @@ void onWsFrame(MongooseHttpWebSocketConnection *connection, int flags, uint8_t *
   DBUGF("Got message %.*s", len, (const char *)data);
 }
 
+void onWsConnect(MongooseHttpWebSocketConnection *connection)
+{
+  DBUGF("New client connected over ws");
+  // pushing states to client
+  const size_t capacity = JSON_OBJECT_SIZE(40) + 1024;
+  DynamicJsonDocument doc(capacity);
+  buildStatus(doc);
+  web_server_event(doc);
+}
+
 void
 web_server_setup() {
 //  SPIFFS.begin(); // mount the fs
@@ -1191,7 +1210,10 @@ web_server_setup() {
     server.sendAll("/evse/console", WEBSOCKET_OP_TEXT, buffer, size);
   });
 
-  server.on("/ws$")->onFrame(onWsFrame);
+  server.on("/ws$")->
+    onFrame(onWsFrame)
+    ->
+    onConnect(onWsConnect);
 
   server.onNotFound(handleNotFound);
 
