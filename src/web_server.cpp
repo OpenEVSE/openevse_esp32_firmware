@@ -709,7 +709,7 @@ handleScheduleGet(MongooseHttpServerRequest *request, MongooseHttpServerResponse
     response->setCode(200);
     serializeJson(doc, *response);
   } else {
-    response->setCode(404);
+    response->setCode(200);
     response->print("{\"msg\":\"Not found\"}");
   }
 }
@@ -811,7 +811,7 @@ void handleOverrideGet(MongooseHttpServerRequest *request, MongooseHttpServerRes
     manual.getProperties(props);
     props.serialize(response);
   } else {
-    response->setCode(404);
+    response->setCode(200);
     response->print("{\"msg\":\"No manual override\"}");
   }
 }
