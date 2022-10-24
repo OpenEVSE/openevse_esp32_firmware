@@ -151,14 +151,14 @@ Data can be posted using HTTP or HTTPS.
 
 OpenEVSE can shape charge current according to your real time house load, preventing to exceed the maximum power your energy plan can handle.
 Once the module is toggled on, it will have highest priority to other claims.
-However it's possible to temporary disable it if needed with HTTP or MQTT
+However it's possible to temporary disable it if needed with HTTP or MQTT. For HTTP, send a text/plain HTTP POST request to /shaper with body containing shaper=value
 
 **Note #1**: this service is dependant of an external feed containing the  household live power in watt.
 It can come from an MQTT topic or an HTTP POST request.
  *** MQTT ***
  Set the topic in the shaper configuration page ( 'Live power load MQTT Topic' )
  *** HTTP ***
- Send periodically an HTTP POST request to http://{openevse_host}/status containing JSON formatted as /status GET endpoint.
+ Send periodically an HTTP POST request to http://{openevse_host}/status containing TEXT formatted like in /status GET endpoint.
 Body should contain {"shaper_live_pwr": value} in watt. Can be combined with other settable values.
   
 **Note #2**: set 'Max Power Allowed' according to your energy plan.
