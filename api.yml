@@ -1,4 +1,4 @@
-openapi: 3.0.2
+openapi: 3.0.3
 info:
   title: OpenEVSE WiFi API
   description: |
@@ -73,6 +73,42 @@ paths:
                     offset: '+0000'
       tags:
         - Status
+    post:
+      operationId: postStatus
+      summary: Update external data to EVSE status
+      description: |
+        The status endpoint can be called to post external data that should be updated by MQTT
+        If MQTT is not an option, all external data needed can be updated from an HTTP POST request to /status endpoint.
+
+        Accepted parameters:
+        {
+          "voltage": int,          // live voltage in V
+          "shaper_live_pwr": int,  // total household live power in W
+          "solar": int,            // divert solar production in W
+          "grid_ie": int,          // divert grid -import/+export in W
+          "battery_level": int,    // vehicle soc in %
+          "battery_range": int,    // vehicle range
+          "time_to_full_charge"    // vehicle charge ETA
+        }
+        
+      responses:
+      '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: ./models/Status.yaml
+              examples:
+                EVSE Status:
+                  "voltage": 220
+                  "shaper_live_pwr": 3400
+                  "solar": 3000
+                  "grid_ie": 3000
+                  "battery_level": 85
+                  "battery_range": 230
+                  "time_to_full_charge" 1590
+      tags:
+        - Status
   /ws:
     get:
       operationId: statusUpdates
@@ -87,6 +123,8 @@ paths:
             application/json:
               schema:
                 $ref: ./models/Status.yaml
+        '400':
+          descritpion: Error
       tags:
         - Status
   /config:
