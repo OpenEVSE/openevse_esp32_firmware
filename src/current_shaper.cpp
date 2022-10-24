@@ -76,7 +76,7 @@ void CurrentShaperTask::notifyConfigChanged( bool enabled, uint32_t max_pwr) {
 	_max_pwr = max_pwr;
 	if (!enabled) evse.release(EvseClient_OpenEVSE_Shaper);
 	StaticJsonDocument<128> event;
-	event["shaper"] = enabled;
+	event["shaper"] = enabled == true ? 1 : 0;
 	event["shaper_max_pwr"] = max_pwr;
 	event_send(event);
 }

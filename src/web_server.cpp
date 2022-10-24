@@ -241,7 +241,7 @@ void buildStatus(DynamicJsonDocument &doc) {
   doc["divert_update"] = (millis() - divert.getLastUpdate()) / 1000;
   doc["divert_active"] = divert.isActive();
 
-  doc["shaper"] = shaper.isActive();
+  doc["shaper"] = shaper.isActive()?1:0;
   doc["shaper_live_pwr"] = shaper.getLivePwr();
   doc["shaper_chg_cur"] = shaper.getChgCur();
 
