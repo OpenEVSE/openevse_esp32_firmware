@@ -41,7 +41,7 @@ unsigned long CurrentShaperTask::loop(MicroTasks::WakeReason reason) {
 			}
 			if (millis() - _timer > EVSE_SHAPER_FAILSAFE_TIME) {
 				//available power has not been updated since EVSE_SHAPER_FAILSAFE_TIME, pause charge
-				DBUGF("MQTT avl_pwr has not been updated in time, pausing charge");
+				DBUGF("shaper_live_pwr has not been updated in time, pausing charge");
 				props.setState(EvseState::Disabled);
 				evse.claim(EvseClient_OpenEVSE_Shaper,EvseManager_Priority_Limit, props);
 				StaticJsonDocument<128> event;
