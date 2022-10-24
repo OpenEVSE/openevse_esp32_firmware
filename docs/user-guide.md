@@ -4,25 +4,32 @@
 
 <!-- toc -->
 
-* [Hardware](#hardware)
-* [WiFi Setup](#wifi-setup)
-* [Charging Mode: Eco](#charging-mode--eco)
-  * [Eco Mode Setup](#eco-mode-setup)
-  * [Eco Mode Advanced Settings](#eco-mode-advanced-settings)
-* [Services](#services)
-  * [Emoncms data logging](#emoncms-data-logging)
-  * [MQTT](#mqtt)
-    * [OpenEVSE Status via MQTT](#openevse-status-via-mqtt)
-  * [OhmConnect](#ohmconnect)
-* [System](#system)
-  * [Authentication](#authentication)
-  * [WiFi Reset](#wifi-reset)
-  * [HTTP Auth Password reset](#http-auth-password-reset)
-  * [Hardware Factory Reset](#hardware-factory-reset)
-* [Firmware update](#firmware-update)
-  * [Via Web Interface](#via-web-interface)
-  * [Via Network OTA](#via-network-ota)
-  * [Via USB Serial Programmer](#via-usb-serial-programmer)
+- [User Guide](#user-guide)
+  - [Contents](#contents)
+  - [Hardware](#hardware)
+  - [WiFi Hardware](#wifi-hardware)
+    - [Temperature sensors](#temperature-sensors)
+  - [WiFi Setup](#wifi-setup)
+  - [Charging Mode: Eco](#charging-mode-eco)
+    - [Eco Mode Setup](#eco-mode-setup)
+      - [using MQTT](#using-mqtt)
+      - [using HTTP](#using-http)
+    - [Eco Mode Advanced Settings](#eco-mode-advanced-settings)
+  - [Services](#services)
+    - [Emoncms data logging](#emoncms-data-logging)
+    - [Current Shaper](#current-shaper)
+    - [External values settable from HTTP POST](#external-values-settable-from-http-post)
+    - [MQTT](#mqtt)
+    - [OhmConnect](#ohmconnect)
+  - [System](#system)
+    - [Authentication](#authentication)
+    - [WiFi Reset](#wifi-reset)
+    - [HTTP Auth Password reset](#http-auth-password-reset)
+    - [Hardware Factory Reset](#hardware-factory-reset)
+  - [Firmware update](#firmware-update)
+    - [Via Web Interface](#via-web-interface)
+    - [Via Network OTA](#via-network-ota)
+    - [Via USB Serial Programmer](#via-usb-serial-programmer)
 
 <!-- tocstop -->
 
@@ -72,7 +79,8 @@ On first boot, OpenEVSE should broadcast a WiFi access point (AP) `OpenEVSE_XXXX
 
 ## Charging Mode: Eco
 
-'Eco' charge mode allows the OpenEVSE to start/stop and adjust the charging current automatically based on an MQTT. This feed could be the amount of solar PV generation or the amount of excess power (grid export). 'Normal' charge mode charges the EV at the maximum rate set.
+'Eco' charge mode allows the OpenEVSE to start/stop and adjust the charging current automatically based on an MQTT feed or received by HTTP POST request ( see below ). This feed could be the amount of solar PV generation or the amount of excess power (grid export). 'Normal' charge mode charges the EV at the maximum rate set.
+
 
 ![eco](eco.png)
 
@@ -88,15 +96,20 @@ A [OpenEnergyMonitor Solar PV Energy Monitor](https://guide.openenergymonitor.or
 
 ### Eco Mode Setup
 
+#### using MQTT
 * Enable MQTT Service
 * [emonPi MQTT credentials](https://guide.openenergymonitor.org/technical/credentials/#mqtt) should be pre-populated
 * Enter solar PV generation or Grid (+I/-E) MQTT topic e.g. Assuming [standard emonPi Solar PV setup](https://guide.openenergymonitor.org/applications/solar-pv/), the default MQTT feeds are:
   * Grid Import (positive Import / Negative export*): `emon/emonpi/power1`
   * Solar PV generation (always postive): `emon/emonpi/power2`
 
+#### using HTTP
+  * send HTTP POST to http://{openevse_host}/status containing JSON formatted as /status GET endpoint
+  * body can contain {"solar": value} or {"grid_ie": value}  in watt.
+  
 > **Note #1**: 'Grid' feed should include the power consumed by the EVSE
 >
-> **Note #2**: The EVSE expects the MQTT data to update every 5-10s, perforamce will be degraded if the update interval is much faster or slower than this
+> **Note #2**: The EVSE expects the MQTT/HTTP data to update every 5-10s, perforamce will be degraded if the update interval is much faster or slower than this
 
 CT sensor can be physically reversed on the cable to invert the reading.
 
@@ -140,9 +153,30 @@ OpenEVSE can shape charge current according to your real time house load, preven
 Once the module is toggled on, it will have highest priority to other claims.
 However it's possible to temporary disable it if needed with HTTP or MQTT
 
-**Note #1**: this service is dependant to MQTT, it needs a topic with the whole household live power in watts ( 'Live power load MQTT Topic' )
+**Note #1**: this service is dependant of an external feed containing the  household live power in watt.
+It can come from an MQTT topic or an HTTP POST request.
+ *** MQTT ***
+ Set the topic in the shaper configuration page ( 'Live power load MQTT Topic' )
+ *** HTTP ***
+ Send periodically an HTTP POST request to http://{openevse_host}/status containing JSON formatted as /status GET endpoint.
+Body should contain {"shaper_live_pwr": value} in watt. Can be combined with other settable values.
+  
 **Note #2**: set 'Max Power Allowed' according to your energy plan.
 
+### External values settable from HTTP POST
+
+If MQTT is not an option, all external data needed can be updated from an HTTP POST request to /status endpoint.
+
+Accepted data:
+{
+  "voltage": int,          // live voltage in V
+  "shaper_live_pwr": int,  // total household live power in W
+  "solar": int,            // divert solar production in W
+  "grid_ie": int,          // divert grid -import/+export in W
+  "battery_level": int,    // vehicle soc in %
+  "battery_range": int,    // vehicle range
+  "time_to_full_charge"    // vehicle charge ETA
+}
 
 ### MQTT
 
