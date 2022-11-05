@@ -38,6 +38,7 @@ typedef const __FlashStringHelper *fstr_t;
 #include "tesla_client.h"
 #include "scheduler.h"
 #include "rfid.h"
+#include "current_shaper.h"
 
 MongooseHttpServer server;          // Create class for Web server
 
@@ -61,6 +62,7 @@ const char _CONTENT_TYPE_SVG[] PROGMEM = "image/svg+xml";
 #define RAPI_RESPONSE_BLOCKED             -300
 
 void handleConfig(MongooseHttpServerRequest *request);
+void handleEvseClaimsTarget(MongooseHttpServerRequest *request);
 void handleEvseClaims(MongooseHttpServerRequest *request);
 void handleEventLogs(MongooseHttpServerRequest *request);
 
@@ -166,6 +168,113 @@ bool isPositive(MongooseHttpServerRequest *request, const char *param) {
   char paramValue[8];
   int paramFound = request->getParam(param, paramValue, sizeof(paramValue));
   return paramFound >= 0 && (0 == paramFound || isPositive(String(paramValue)));
+}
+
+//---------------------------------------------------------------------
+// Build status data
+// --------------------------------------------------------------------
+
+void buildStatus(DynamicJsonDocument &doc) {
+
+  // Get the current time
+  struct timeval local_time;
+  gettimeofday(&local_time, NULL);
+
+  struct tm * timeinfo = gmtime(&local_time.tv_sec);
+
+  char time[64];
+  char offset[8];
+  strftime(time, sizeof(time), "%FT%TZ", timeinfo);
+  strftime(offset, sizeof(offset), "%z", timeinfo);
+
+  if (net_eth_connected()) {
+    doc["mode"] = "Wired";
+  } else if (net_wifi_mode_is_sta_only()) {
+    doc["mode"] = "STA";
+  } else if (net_wifi_mode_is_ap_only()) {
+    doc["mode"] = "AP";
+  } else if (net_wifi_mode_is_ap() && net_wifi_mode_is_sta()) {
+    doc["mode"] = "STA+AP";
+  }
+
+  doc["wifi_client_connected"] = (int)net_wifi_client_connected();
+  doc["eth_connected"] = (int)net_eth_connected();
+  doc["net_connected"] = (int)net_is_connected();
+  doc["ipaddress"] = ipaddress;
+
+  doc["emoncms_connected"] = (int)emoncms_connected;
+  doc["packets_sent"] = packets_sent;
+  doc["packets_success"] = packets_success;
+
+  doc["mqtt_connected"] = (int)mqtt_connected();
+
+  doc["ocpp_connected"] = (int)MongooseOcppSocketClient::ocppConnected();
+
+#if defined(ENABLE_PN532) || defined(ENABLE_RFID)
+  doc["rfid_failure"] = (int) rfid.communicationFails();
+#endif
+
+  doc["ohm_hour"] = ohm_hour;
+
+  doc["free_heap"] = ESPAL.getFreeHeap();
+
+  doc["comm_sent"] = rapiSender.getSent();
+  doc["comm_success"] = rapiSender.getSuccess();
+  doc["rapi_connected"] = (int)rapiSender.isConnected();
+  doc["evse_connected"] = (int)evse.isConnected();
+
+  create_rapi_json(doc);
+
+  doc["status"] = evse.getState().toString();
+
+  doc["elapsed"] = evse.getSessionElapsed();
+  doc["wattsec"] = evse.getSessionEnergy() * SESSION_ENERGY_SCALE_FACTOR;
+  doc["watthour"] = evse.getTotalEnergy() * TOTAL_ENERGY_SCALE_FACTOR;
+
+  doc["gfcicount"] = evse.getFaultCountGFCI();
+  doc["nogndcount"] = evse.getFaultCountNoGround();
+  doc["stuckcount"] = evse.getFaultCountStuckRelay();
+
+  doc["solar"] = solar;
+  doc["grid_ie"] = grid_ie;
+  doc["charge_rate"] = divert.getChargeRate();
+  doc["divert_update"] = (millis() - divert.getLastUpdate()) / 1000;
+  doc["divert_active"] = divert.isActive();
+
+  doc["shaper"] = shaper.isActive()?1:0;
+  doc["shaper_live_pwr"] = shaper.getLivePwr();
+  doc["shaper_chg_cur"] = shaper.getChgCur();
+
+  doc["service_level"] = static_cast<uint8_t>(evse.getActualServiceLevel());
+
+  doc["ota_update"] = (int)Update.isRunning();
+  doc["time"] = String(time);
+  doc["offset"] = String(offset);
+
+  doc["config_version"] = config_version;
+  doc["schedule_version"] = scheduler.getVersion();
+  doc["schedule_plan_version"] = scheduler.getPlanVersion();
+
+  doc["vehicle_state_update"] = (millis() - evse.getVehicleLastUpdated()) / 1000;
+  if(teslaClient.getVehicleCnt() > 0) {
+    doc["tesla_vehicle_count"] = teslaClient.getVehicleCnt();
+    doc["tesla_vehicle_id"] = teslaClient.getVehicleId(teslaClient.getCurVehicleIdx());
+    doc["tesla_vehicle_name"] = teslaClient.getVehicleDisplayName(teslaClient.getCurVehicleIdx());
+    teslaClient.getChargeInfoJson(doc);
+  } else {
+    doc["tesla_vehicle_count"] = false;
+    doc["tesla_vehicle_id"] = false;
+    doc["tesla_vehicle_name"] = false;
+    if(evse.isVehicleStateOfChargeValid()) {
+      doc["battery_level"] = evse.getVehicleStateOfCharge();
+    }
+    if(evse.isVehicleRangeValid()) {
+      doc["battery_range"] = evse.getVehicleRange();
+    }
+    if(evse.isVehicleEtaValid()) {
+      doc["time_to_full_charge"] = evse.getVehicleEta();
+    }
+  }
 }
 
 // -------------------------------------------------------------------
@@ -353,15 +462,17 @@ handleSaveMqtt(MongooseHttpServerRequest *request) {
                    request->getParam("server"),
                    port,
                    request->getParam("topic"),
+                   isPositive(request->getParam("retained")),
                    request->getParam("user"),
                    pass,
                    request->getParam("solar"),
                    request->getParam("grid_ie"),
+                   request->getParam("live_pwr"),
                    reject_unauthorized);
 
   char tmpStr[200];
-  snprintf(tmpStr, sizeof(tmpStr), "Saved: %s %s %s %s %s %s", mqtt_server.c_str(),
-          mqtt_topic.c_str(), mqtt_user.c_str(), mqtt_pass.c_str(),
+  snprintf(tmpStr, sizeof(tmpStr), "Saved: %s %s %d %s %s %s %s", mqtt_server.c_str(),
+          mqtt_topic.c_str(), config_mqtt_retained(), mqtt_user.c_str(), mqtt_pass.c_str(),
           mqtt_solar.c_str(), mqtt_grid_ie.c_str());
   DBUGLN(tmpStr);
 
@@ -384,13 +495,32 @@ handleDivertMode(MongooseHttpServerRequest *request){
     return;
   }
 
-  divertmode_update(request->getParam("divertmode").toInt());
+  divert.setMode((DivertMode)(request->getParam("divertmode").toInt()));
 
   response->setCode(200);
   response->print("Divert Mode changed");
   request->send(response);
 
   DBUGF("Divert Mode: %d", divertmode);
+}
+
+// -------------------------------------------------------------------
+// Change current shaper mode 0:disable (default), 1:Enable
+// url: /shaper
+// -------------------------------------------------------------------
+void
+handleCurrentShaper(MongooseHttpServerRequest *request) {
+  MongooseHttpServerResponseStream *response;
+  if(false == requestPreProcess(request, response, CONTENT_TYPE_TEXT)) {
+    return;
+  }
+  shaper.setState(request->getParam("shaper").toInt() == 1? true: false);
+
+  response->setCode(200);
+  response->print("Current Shaper state changed");
+  request->send(response);
+
+  DBUGF("CurrentShaper: %d", shaper.getState());
 }
 
 // -------------------------------------------------------------------
@@ -544,111 +674,97 @@ handleSaveOhmkey(MongooseHttpServerRequest *request) {
 // Returns status json
 // url: /status
 // -------------------------------------------------------------------
+void handleStatusPost(MongooseHttpServerRequest *request, MongooseHttpServerResponseStream *response)
+{
+  String body = request->body().toString();
+  // Deserialize the JSON document
+  const size_t capacity = JSON_OBJECT_SIZE(50) + 1024;
+  DynamicJsonDocument doc(capacity);
+  DeserializationError error = deserializeJson(doc, body);
+  if(!error)
+  {
+    bool send_event = true;
+
+    if(doc.containsKey("voltage"))
+    {
+      double volts = doc["voltage"];
+      DBUGF("voltage:%.1f", volts);
+      evse.setVoltage(volts);
+    }
+    if(doc.containsKey("shaper_live_pwr"))
+    {
+      double shaper_live_pwr = doc["shaper_live_pwr"];
+      shaper.setLivePwr(shaper_live_pwr);
+      DBUGF("shaper: available power:%dW", shaper.getAvlPwr());
+    }
+    if(doc.containsKey("solar")) {
+      solar = doc["solar"];
+      DBUGF("solar:%dW", solar);
+      divert.update_state();
+      send_event = false; // Divert sends the event so no need to send here
+    }
+    else if(doc.containsKey("grid_ie")) {
+      grid_ie = doc["grid_ie"];
+      DBUGF("grid:%dW", grid_ie);
+      divert.update_state();
+      send_event = false; // Divert sends the event so no need to send here
+    }
+    if(doc.containsKey("battery_level")) {
+      double vehicle_soc = doc["battery_level"];
+      DBUGF("vehicle_soc:%d%%", vehicle_soc);
+      evse.setVehicleStateOfCharge(vehicle_soc);
+      doc["vehicle_state_update"] = 0;
+    }
+    if(doc.containsKey("battery_range")) {
+      double vehicle_range = doc["battery_range"];
+      DBUGF("vehicle_range:%dKM", vehicle_range);
+      evse.setVehicleRange(vehicle_range);
+      doc["vehicle_state_update"] = 0;
+    }
+    if(doc.containsKey("time_to_full_charge")){
+      double vehicle_eta = doc["time_to_full_charge"];
+      DBUGF("vehicle_eta:%d", vehicle_eta);
+      evse.setVehicleEta(vehicle_eta);
+      doc["vehicle_state_update"] = 0;
+    }
+    // send back new value to clients
+    if(send_event) {
+      event_send(doc);
+    }
+
+    response->setCode(200);
+    serializeJson(doc, *response);
+  } else {
+    response->setCode(400);
+    response->print("{\"msg\":\"Could not parse JSON\"}");
+  }
+}
+
+
 void
-handleStatus(MongooseHttpServerRequest *request) {
+handleStatus(MongooseHttpServerRequest *request)
+{
+
   MongooseHttpServerResponseStream *response;
   if(false == requestPreProcess(request, response)) {
     return;
   }
 
-  // Get the current time
-  struct timeval local_time;
-  gettimeofday(&local_time, NULL);
+  if(HTTP_GET == request->method()) {
 
-  struct tm * timeinfo = gmtime(&local_time.tv_sec);
+    const size_t capacity = JSON_OBJECT_SIZE(40) + 1024;
+    DynamicJsonDocument doc(capacity);
+    buildStatus(doc);
+    response->setCode(200);
+    serializeJson(doc, *response);
 
-  char time[64];
-  char offset[8];
-  strftime(time, sizeof(time), "%FT%TZ", timeinfo);
-  strftime(offset, sizeof(offset), "%z", timeinfo);
-
-  const size_t capacity = JSON_OBJECT_SIZE(40) + 1024;
-  DynamicJsonDocument doc(capacity);
-
-  if (net_eth_connected()) {
-    doc["mode"] = "Wired";
-  } else if (net_wifi_mode_is_sta_only()) {
-    doc["mode"] = "STA";
-  } else if (net_wifi_mode_is_ap_only()) {
-    doc["mode"] = "AP";
-  } else if (net_wifi_mode_is_ap() && net_wifi_mode_is_sta()) {
-    doc["mode"] = "STA+AP";
-  }
-
-  doc["wifi_client_connected"] = (int)net_wifi_client_connected();
-  doc["eth_connected"] = (int)net_eth_connected();
-  doc["net_connected"] = (int)net_is_connected();
-  doc["ipaddress"] = ipaddress;
-
-  doc["emoncms_connected"] = (int)emoncms_connected;
-  doc["packets_sent"] = packets_sent;
-  doc["packets_success"] = packets_success;
-
-  doc["mqtt_connected"] = (int)mqtt_connected();
-
-  doc["ocpp_connected"] = (int)MongooseOcppSocketClient::ocppConnected();
-
-#if defined(ENABLE_PN532) || defined(ENABLE_RFID)
-  doc["rfid_failure"] = (int) rfid.communicationFails();
-#endif
-
-  doc["ohm_hour"] = ohm_hour;
-
-  doc["free_heap"] = ESPAL.getFreeHeap();
-
-  doc["comm_sent"] = rapiSender.getSent();
-  doc["comm_success"] = rapiSender.getSuccess();
-  doc["rapi_connected"] = (int)rapiSender.isConnected();
-  doc["evse_connected"] = (int)evse.isConnected();
-
-  create_rapi_json(doc);
-
-  doc["status"] = evse.getState().toString();
-
-  doc["elapsed"] = evse.getSessionElapsed();
-  doc["wattsec"] = evse.getSessionEnergy() * SESSION_ENERGY_SCALE_FACTOR;
-  doc["watthour"] = evse.getTotalEnergy() * TOTAL_ENERGY_SCALE_FACTOR;
-
-  doc["gfcicount"] = evse.getFaultCountGFCI();
-  doc["nogndcount"] = evse.getFaultCountNoGround();
-  doc["stuckcount"] = evse.getFaultCountStuckRelay();
-
-  doc["solar"] = solar;
-  doc["grid_ie"] = grid_ie;
-  doc["charge_rate"] = charge_rate;
-  doc["divert_update"] = (millis() - lastUpdate) / 1000;
-
-  doc["service_level"] = static_cast<uint8_t>(evse.getActualServiceLevel());
-
-  doc["ota_update"] = (int)Update.isRunning();
-  doc["time"] = String(time);
-  doc["offset"] = String(offset);
-
-  doc["config_version"] = String(config_version);
-
-  doc["vehicle_state_update"] = (millis() - evse.getVehicleLastUpdated()) / 1000;
-  if(teslaClient.getVehicleCnt() > 0) {
-    doc["tesla_vehicle_count"] = teslaClient.getVehicleCnt();
-    doc["tesla_vehicle_id"] = teslaClient.getVehicleId(teslaClient.getCurVehicleIdx());
-    doc["tesla_vehicle_name"] = teslaClient.getVehicleDisplayName(teslaClient.getCurVehicleIdx());
-    teslaClient.getChargeInfoJson(doc);
+  } else if(HTTP_POST == request->method()) {
+    handleStatusPost(request, response);
   } else {
-    doc["tesla_vehicle_count"] = false;
-    doc["tesla_vehicle_id"] = false;
-    doc["tesla_vehicle_name"] = false;
-    if(evse.isVehicleStateOfChargeValid()) {
-      doc["battery_level"] = evse.getVehicleStateOfCharge();
-    }
-    if(evse.isVehicleRangeValid()) {
-      doc["battery_range"] = evse.getVehicleRange();
-    }
-    if(evse.isVehicleEtaValid()) {
-      doc["time_to_full_charge"] = evse.getVehicleEta();
-    }
+    response->setCode(405);
+    response->print("{\"msg\":\"Method not allowed\"}");
   }
 
-  response->setCode(200);
-  serializeJson(doc, *response);
   request->send(response);
 }
 
@@ -787,6 +903,7 @@ void handleOverridePost(MongooseHttpServerRequest *request, MongooseHttpServerRe
     if(manual.claim(props)) {
       response->setCode(201);
       response->print("{\"msg\":\"Created\"}");
+      mqtt_publish_override();  // update override state to mqtt
     } else {
       response->setCode(500);
       response->print("{\"msg\":\"Failed to claim manual overide\"}");
@@ -1069,6 +1186,16 @@ void onWsFrame(MongooseHttpWebSocketConnection *connection, int flags, uint8_t *
   DBUGF("Got message %.*s", len, (const char *)data);
 }
 
+void onWsConnect(MongooseHttpWebSocketConnection *connection)
+{
+  DBUGF("New client connected over ws");
+  // pushing states to client
+  const size_t capacity = JSON_OBJECT_SIZE(40) + 1024;
+  DynamicJsonDocument doc(capacity);
+  buildStatus(doc);
+  web_server_event(doc);
+}
+
 void
 web_server_setup() {
 //  SPIFFS.begin(); // mount the fs
@@ -1096,12 +1223,14 @@ web_server_setup() {
   server.on("/scan$", handleScan);
   server.on("/apoff$", handleAPOff);
   server.on("/divertmode$", handleDivertMode);
+  server.on("/shaper$", handleCurrentShaper);
   server.on("/emoncms/describe$", handleDescribe);
   server.on("/rfid/add$", handleAddRFID);
 
   server.on("/schedule/plan$", handleSchedulePlan);
   server.on("/schedule", handleSchedule);
 
+  server.on("/claims/target$", handleEvseClaimsTarget);
   server.on("/claims", handleEvseClaims);
 
   server.on("/override$", handleOverride);
@@ -1158,7 +1287,10 @@ web_server_setup() {
     server.sendAll("/evse/console", WEBSOCKET_OP_TEXT, buffer, size);
   });
 
-  server.on("/ws$")->onFrame(onWsFrame);
+  server.on("/ws$")->
+    onFrame(onWsFrame)
+    ->
+    onConnect(onWsConnect);
 
   server.onNotFound(handleNotFound);
 

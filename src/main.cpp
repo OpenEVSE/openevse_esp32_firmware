@@ -50,6 +50,7 @@
 #include "event.h"
 #include "ocpp.h"
 #include "rfid.h"
+#include "current_shaper.h"
 
 #if defined(ENABLE_PN532)
 #include "pn532.h"
@@ -66,6 +67,7 @@ EventLog eventLog;
 EvseManager evse(RAPI_PORT, eventLog);
 Scheduler scheduler(evse);
 ManualOverride manual(evse);
+DivertTask divert(evse);
 
 RapiSender &rapiSender = evse.getSender();
 
@@ -86,7 +88,9 @@ String serial;
 
 ArduinoOcppTask ocpp = ArduinoOcppTask();
 
+
 static void hardware_setup();
+static void handle_serial();
 
 // -------------------------------------------------------------------
 // SETUP
@@ -113,12 +117,14 @@ void setup()
 
   // Read saved settings from the config
   config_load_settings();
+
   DBUGF("After config_load_settings: %d", ESPAL.getFreeHeap());
 
   eventLog.begin();
   timeManager.begin();
   evse.begin();
   scheduler.begin();
+  divert.begin();
 
   lcd.begin(evse, scheduler, manual);
 #if defined(ENABLE_PN532)
@@ -150,6 +156,8 @@ void setup()
 
   ocpp.begin(evse, lcd, eventLog, rfid);
 
+  shaper.begin(evse);
+
   lcd.display(F("OpenEVSE WiFI"), 0, 0, 0, LCD_CLEAR_LINE);
   lcd.display(currentfirmware, 0, 1, 5 * 1000, LCD_CLEAR_LINE);
 
@@ -171,7 +179,6 @@ loop() {
   net_loop();
   ota_loop();
   rapiSender.loop();
-  divert_current_loop();
 
   Profile_Start(MicroTask);
   MicroTask.update();
@@ -241,6 +248,10 @@ loop() {
     }
   } // end WiFi connected
 
+  if(DEBUG_PORT.available()) {
+    handle_serial();
+  }
+
   Profile_End(loop, 10);
 } // end loop
 
@@ -259,18 +270,14 @@ void event_send(JsonDocument &event)
   DBUGLN("");
   #endif
   web_server_event(event);
+  yield();
   mqtt_publish(event);
+  yield();
 }
 
 void hardware_setup()
 {
   debug_setup();
-
-#ifdef SERIAL_RX_PULLUP_PIN
-  // https://forums.adafruit.com/viewtopic.php?f=57&t=153553&p=759890&hilit=esp32+serial+pullup#p769168
-  pinMode(SERIAL_RX_PULLUP_PIN, INPUT_PULLUP);
-#endif
-
   enableLoopWDT();
 }
 
@@ -288,4 +295,44 @@ class SystemRestart : public MicroTasks::Alarm
 void restart_system()
 {
   systemRestartAlarm.Set(1000, false);
+}
+
+void handle_serial()
+{
+  String line = DEBUG_PORT.readStringUntil('\n');
+  int command_separator = line.indexOf(':');
+  if(command_separator > 0)
+  {
+    String command = line.substring(0, command_separator);
+    command.trim();
+    String json = line.substring(command_separator + 1);
+    json.trim();
+
+    DBUGVAR(command);
+    DBUGVAR(json);
+
+    const size_t capacity = JSON_OBJECT_SIZE(50) + 1024;
+    DynamicJsonDocument doc(capacity);
+    DeserializationError error = deserializeJson(doc, json);
+    if(error) {
+      DEBUG_PORT.println("{\"code\":400,\"msg\":\"Could not parse JSON\"}");
+      return;
+    }
+
+    if(command == "factory" || command == "config")
+    {
+      if(command.equals("factory") && config_factory_write_lock()) {
+        DEBUG_PORT.println("{\"code\":423,\"msg\":\"Factory settings locked\"}");
+        return;
+      }
+
+      bool config_modified = false;
+      if(config_deserialize(doc)) {
+        config_commit(command == "factory");
+        config_modified = true;
+        DBUGLN("Config updated");
+      }
+      DEBUG_PORT.printf("{\"code\":200,\"msg\":\"%s\"}\n", config_modified ? "done" : "no change");
+    }
+  }
 }

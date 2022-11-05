@@ -28,6 +28,7 @@ x-examples:
       - https
     ssid: wibble_ext
     pass: _DUMMY_PASSWORD
+    lang: en
     www_username: ''
     www_password: ''
     hostname: openevse-a7d4
@@ -40,11 +41,13 @@ x-examples:
     mqtt_server: homeassistant.lan
     mqtt_port: 1883
     mqtt_topic: openevse
+    mqtt_retained: false
     mqtt_user: emonpi
     mqtt_pass: _DUMMY_PASSWORD
     mqtt_solar: ''
     mqtt_grid_ie: emon/test/grid_ie
     mqtt_vrms: emon/rightbar/voltage
+    mqtt_live_pwr: /live/power/topic
     mqtt_vehicle_soc: ''
     mqtt_vehicle_range: ''
     mqtt_vehicle_eta: ''
@@ -58,6 +61,7 @@ x-examples:
     divert_attack_smoothing_factor: 0.4
     divert_decay_smoothing_factor: 0.05
     divert_min_charge_time: 10
+    current_shaper_max_pwr: 9000
     tesla_access_token: _DUMMY_PASSWORD
     tesla_refresh_token: _DUMMY_PASSWORD
     tesla_created_at: 2479357952
@@ -72,6 +76,7 @@ x-examples:
     sntp_enabled: true
     tesla_enabled: true
     divert_enabled: true
+    current_shaper_enabled: true
     pause_uses_disabled: false
     mqtt_vehicle_range_miles: false
     ocpp_enabled: true
@@ -118,6 +123,7 @@ examples:
     mqtt_server: homeassistant.lan
     mqtt_port: 1883
     mqtt_topic: openevse
+    mqtt_retained: false
     mqtt_user: emonpi
     mqtt_pass: _DUMMY_PASSWORD
     mqtt_solar: ''
@@ -267,6 +273,8 @@ properties:
   mqtt_topic:
     type: string
     minLength: 1
+  mqtt_retained:
+    type: boolean
   mqtt_user:
     type: string
     minLength: 1
@@ -356,3 +364,10 @@ properties:
   charge_mode:
     type: string
     minLength: 1
+  scheduler_start_window:
+    type: number
+    default: 600
+    description: >
+      The maximum number of seconds to randomly add/subtract from the a scheduled charge start time,
+      eg a value of 600 will adjust the start time my +/- 10 minutes. This is to help prevent large
+      syncrinised loads when multiple verchiles start charging at the same time.

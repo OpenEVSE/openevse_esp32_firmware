@@ -39,7 +39,7 @@ PlatformIO can be installed as a command line utility (PlatformIO Core), a stand
 #### 2. Clone this repo
 
 ```bash
-git clone https://github.com/OpenEVSE/ESP32_WiFi_v3.x
+git clone https://github.com/OpenEVSE/ESP32_WiFi_V4.x.git
 ```
 
 #### 3. Compile & upload
@@ -58,6 +58,10 @@ If you are using a different development board, you can specify one of the envs 
 ```bash
 pio run -e openevse_huzzah32_idf -t upload
 ```
+
+Build artifacts will be in `.pio/build/your_openevse_env`
+
+To clean an existing build, `pio run -e your_openevse_board -t`
 
 > To enable OTA updates, first upload via serial using the dev environment. This enables OTA enable build flag
 

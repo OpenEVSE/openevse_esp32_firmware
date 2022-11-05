@@ -1,8 +1,7 @@
-# Wired Ethernet using ESP32-Gateway
+# Wired Ethernet
 
-Sometimes getting a WiFi connection to an OpenEVSE / EmonEVSE install location can be troublesome.
+Several boards are available with ethernet hardware, which can be used as drop-in replacements for ESP8266 / ESP32 WiFi modules and are compatible with all models of OpenEVSE / EmonEVSE.
 
-It's now possible to connect the OpenEVSE / EmonEVSE via wired Ethernet using an ESP32-Gateway module. This module is a drop in replacement for ESP8266 / ESP32 WiFi modules and is compatible with all models of OpenEVSE / EmonEVSE.
 
 See [OpenEnergyMonitor web-store to purchase a pre-wired ESP32-Gateway module](https://shop.openenergymonitor.com/openevse-etherent-gateway-esp32/). The Ethernet gateway in our web-store will come with pre-wired power supply, serial connections, and pre-loaded with firmware for drop in replacement.
 
@@ -12,16 +11,19 @@ Network connection can be made with a standard Ethernet cable. For new installat
 
 ## Hardware Connections
 
+Wiring varies depending on the board in use, in particular [this git issue](https://github.com/OpenEVSE/ESP32_WiFi_V3.x/issues/12) discusses a wiring change between revisions of the ESP32-GATEWAY board.
+
+
+| Signal     | EVSE wire   | ESP32-GATEWAY E & F | ESP32-GATEWAY pre-E | ESP32-PoE-ISO
+| :--------- | :---------- | :------------------ | :------------------ | :------------
+| 5V         | Red wire    | 20                  | 20                  | N/C (powered over Ethernet)
+| GND        | Black wire  | 19                  | 19                  | GND
+| Tx GPIO 32 | Yellow wire | **13**              | **12**              | 33
+| Rx GPIO 16 | Green wire  | 11                  | 11                  | 35
+
 See [photos](https://photos.google.com/share/AF1QipNvANgeR_NRmLrq0lhKnA0BR7ieD8DGRoaJFoilMIwQ8c7QpxR4X7hSfGj3XiTTUw) of hardware connectors for new OpenEVSE V5.5 controller.
 
-> **Note**: The these hardware connections apply to the current Rev.E & Rev.F ESP32-gateway hardware revisions. See section below for older units.
-
-|Signal        | Pin No.   | EVSE connector |
-| :---------- | :---------- | :------------------- |
-5V             | pin 20        | Red wire |
-GND            | pin 19        | Black wire |
-Tx GPIO 32     | pin 13       | Yellow wire |
-Rx GPIO 16     | pin 11       | Green wire |
+> **Note**: The these hardware connections apply to the current Rev.E & Rev.F ESP32-gateway hardware revisions. See table above for other units.
 
 ![esp32-gateway-connections](esp32-gateway-connections.jpg)
 
@@ -44,13 +46,13 @@ ESP32-gateway can be connected by micro USB and firmware can be uploaded using e
 First upload:
 
 ```bash
-esptool esptool.py --baud 921600 --before default_reset --after hard_reset write_flash -z --flash_mode dio --flash_freq 40m --flash_size detect 0x1000 bootloader.bin 0x8000  partitions.bin 0x10000  openevse_esp32-gateway-e.bin
+esptool.py --baud 921600 --before default_reset --after hard_reset write_flash -z --flash_mode dio --flash_freq 40m --flash_size detect 0x1000 bootloader.bin 0x8000  partitions.bin 0x10000  openevse_esp32-gateway-e.bin
 ```
 
 Subsequent upgrades:
 
 ```bash
-esptool esptool.py --baud 921600 --before default_reset --after hard_reset write_flash -z --flash_mode dio --flash_freq 40m --flash_size detect 0x1000 0x10000  openevse_esp32-gateway-e.bin
+esptool.py --baud 921600 --before default_reset --after hard_reset write_flash -z --flash_mode dio --flash_freq 40m --flash_size detect 0x1000 0x10000  openevse_esp32-gateway-e.bin
 ```
 
 ### For rev G
@@ -69,9 +71,14 @@ esptool.py --before default_reset --after hard_reset write_flash 0x10000 openevs
 
 ## Compile and Upload
 
-Firmware can be compiled and upload using PlatformIO with the `openevse_esp32-gateway-e` environment selected. The `e` environment has been tested to work on hardware Rev.E and Rev.F. See note below for older revisions.
+| Board                     | Environment              |
+| :------------------------ | :----------------------- |
+| ESP32-GATEWAY pre-E       | openevse_esp32-gateway   |
+| ESP32-GATEWAY E and later | openevse_esp32-gateway-e |
+| ESP32-PoE-ISO             | openevse_esp32-poe-iso   |
 
-The ESP32-gateway can be connected via micro USB and firmware compiled and uploaded with
+
+Firmware can be compiled using PlatformIO `pio run -e <Environment>`.  The `-t upload` option installs firmware over USB.
 
 ```bash
 pio run -e openevse_esp32-gateway-e -t upload
@@ -93,22 +100,3 @@ The web UI will notify that connection is via Wired Ethernet.
 
 The ESP32-Gateway is a new addition and is currently considered in 'Beta' since the ESP32 firmware is still under active development. However, it has been extensively tested and proven reliable for many months of operation. Please report your experience to the [OpenEnergyMonitor Community Forums](https://community.openenergymonitor.org/).
 ***
-
-## Older Hardware Revisions
-
-This guide focuses on using ESP-gateway hardware rev.E and above. If using a hardware rev older than rev.E the pin connections and firmware is different:
-
-|Signal        | Pin No.   | EVSE connector |
-| :---------- | :---------- | :------------------- |
-5V             | pin 20        | Red wire |
-GND            | pin 19        | Black wire |
-Tx GPIO 17     | pin 12       | Yellow wire |
-Rx GPIO 16     | pin 11       | Green wire |
-
-Firmware for older hardware revisions can be compiled and uploading using:
-
-```bash
-pio run -e openevse_esp32-gateway -t upload
-```
-
-See [this git issue](https://github.com/OpenEVSE/ESP32_WiFi_V3.x/issues/12) for discussion of hardware revision changes.

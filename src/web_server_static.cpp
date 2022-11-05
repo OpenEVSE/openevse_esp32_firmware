@@ -20,6 +20,7 @@ struct StaticFile
   size_t length;
   const char *type;
   const char *etag;
+  bool compressed;
 };
 
 #include "web_static/web_server_static_files.h"
@@ -99,6 +100,9 @@ bool web_static_handle(MongooseHttpServerRequest *request)
 
     if (enableCors) {
       response->addHeader(F("Access-Control-Allow-Origin"), F("*"));
+    }
+    if(file->compressed) {
+      response->addHeader(F("Content-Encoding"), F("gzip"));
     }
 
     response->addHeader("Etag", file->etag);

@@ -369,7 +369,7 @@ void ArduinoOcppTask::updateEvseClaim() {
     EvseProperties evseProperties;
 
     if (!arduinoOcppInitialized || !config_ocpp_enabled()) {
-        evse->release(EvseClient_OpenEVSE_Ocpp);
+        evse->release(EvseClient_OpenEVSE_OCPP);
         return;
     }
 
@@ -415,10 +415,10 @@ void ArduinoOcppTask::updateEvseClaim() {
     //Apply inferred claim
     if (evseState == EvseState::None) {
         //the claiming rules don't specify the EVSE state
-        evse->release(EvseClient_OpenEVSE_Ocpp);
+        evse->release(EvseClient_OpenEVSE_OCPP);
     } else {
         //the claiming rules specify that the EVSE is either active or inactive
-        evse->claim(EvseClient_OpenEVSE_Ocpp, EvseManager_Priority_Ocpp, evseProperties);
+        evse->claim(EvseClient_OpenEVSE_OCPP, EvseManager_Priority_OCPP, evseProperties);
     }
 
 }
@@ -504,7 +504,7 @@ void ArduinoOcppTask::initializeDiagnosticsService() {
             for (uint32_t i = 0; i <= (eventLog->getMaxIndex() - eventLog->getMinIndex()) && !overflow; i++) {
                 uint32_t index = eventLog->getMinIndex() + i;
 
-                eventLog->enumerate(index, [this, startTime, stopTime, &body, SUFFIX_RESERVED_AREA, &firstEntry, &overflow] (String time, EventType type, const String &logEntry, EvseState managerState, uint8_t evseState, uint32_t evseFlags, uint32_t pilot, double energy, uint32_t elapsed, double temperature, double temperatureMax, uint8_t divertMode) {
+                eventLog->enumerate(index, [this, startTime, stopTime, &body, SUFFIX_RESERVED_AREA, &firstEntry, &overflow] (String time, EventType type, const String &logEntry, EvseState managerState, uint8_t evseState, uint32_t evseFlags, uint32_t pilot, double energy, uint32_t elapsed, double temperature, double temperatureMax, uint8_t divertMode, uint8_t shaper) {
                     if (overflow) return;
                     ArduinoOcpp::OcppTimestamp timestamp = ArduinoOcpp::OcppTimestamp();
                     if (!timestamp.setTime(time.c_str())) {

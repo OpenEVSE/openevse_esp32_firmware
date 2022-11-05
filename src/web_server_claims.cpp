@@ -114,3 +114,20 @@ handleEvseClaims(MongooseHttpServerRequest *request)
 
   request->send(response);
 }
+
+void handleEvseClaimsTarget(MongooseHttpServerRequest *request)
+{
+  MongooseHttpServerResponseStream *response;
+  if(false == requestPreProcess(request, response)) {
+    return;
+  }
+
+  const size_t capacity = JSON_OBJECT_SIZE(40) + 1024;
+  DynamicJsonDocument doc(capacity);
+
+  evse.serializeTarget(doc);
+
+  response->setCode(200);
+  serializeJson(doc, *response);
+  request->send(response);
+}

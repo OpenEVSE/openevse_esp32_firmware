@@ -46,7 +46,7 @@ class Scheduler : public MicroTasks::Task
         EventInstance &operator=(const EventInstance &rhs) {
           _event = rhs._event;
           _day = rhs._day;
-          _startOffset = randomiseStartOffset();
+          _startOffset = rhs._startOffset;
           return *this;
         };
 
@@ -62,7 +62,7 @@ class Scheduler : public MicroTasks::Task
         }
 
         bool operator==(const EventInstance &rhs) const {
-          return _event == rhs._event && _day == rhs._day;
+          return _event == rhs._event && _day == rhs._day && _startOffset == rhs._startOffset;
         };
 
         bool operator!=(const EventInstance &rhs) const {
@@ -70,7 +70,7 @@ class Scheduler : public MicroTasks::Task
         };
 
         bool operator==(const EventInstance *rhs) const {
-          return _event == rhs->_event && _day == rhs->_day;
+          return _event == rhs->_event && _day == rhs->_day && _startOffset == rhs->_startOffset;
         };
 
         bool operator!=(const EventInstance *rhs) const {
@@ -232,14 +232,19 @@ class Scheduler : public MicroTasks::Task
 
     MicroTasks::EventListener _timeChangeListener;
 
+    uint32_t _version;
+    uint32_t _plan_version;
+
     void buildSchedule();
     bool commit();
     EventInstance &getCurrentEvent();
     bool findEvent(uint32_t id, Event **event);
     bool serialize(JsonObject &obj, Event *event);
+    void serializeEventInstance(JsonObject &object, Scheduler::EventInstance *e, bool includeDay = false);
 
     bool addEventInternal(uint32_t id, const char *time, uint8_t days, const char *state);
     bool deserializeInternal(JsonObject &obj, uint32_t event);
+
 
   protected:
     void setup();
@@ -278,6 +283,15 @@ class Scheduler : public MicroTasks::Task
     bool serialize(JsonObject &obj, uint32_t event);
 
     bool serializePlan(DynamicJsonDocument &doc);
+
+    void notifyConfigChanged();
+
+    uint32_t getVersion() {
+      return _version;
+    };
+    uint32_t getPlanVersion() {
+      return _plan_version;
+    };
 
     static void getCurrentTime(int &day, int32_t &offset);
 };
