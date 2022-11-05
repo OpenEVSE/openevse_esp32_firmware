@@ -20,6 +20,6 @@
     "teslajs": "^4.9.8"
   },
   "devDependencies": {
-    "eslint": "^4.16.0"
+    "eslint": "^8.26.0"
   }
 }
