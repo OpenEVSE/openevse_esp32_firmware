@@ -27,6 +27,9 @@ jobs:
           - openevse_esp32-gateway-old
           - openevse_esp32-gateway-e
           - openevse_esp32-gateway-f
+          - openevse_esp32-gateway-e_dev
+          - openevse_esp32-gateway-f_dev
+          - openevse_esp32-poe-iso
           - openevse_esp32-heltec-wifi-lora-v2
 
     steps:

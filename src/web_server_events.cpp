@@ -63,7 +63,7 @@ void handleEventLogs(MongooseHttpServerRequest *request)
           event["temperature"] = temperature;
           event["temperatureMax"] = temperatureMax;
           event["divertMode"] = divertMode;
-          event["shaper"] = shaper;
+          event["shaper"] = shaper == true?1:0;
           serializeJson(event, *response);
         });
 
