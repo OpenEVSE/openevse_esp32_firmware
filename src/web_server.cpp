@@ -683,6 +683,8 @@ void handleStatusPost(MongooseHttpServerRequest *request, MongooseHttpServerResp
   DeserializationError error = deserializeJson(doc, body);
   if(!error)
   {
+    bool send_event = true;
+
     if(doc.containsKey("voltage"))
     {
       double volts = doc["voltage"];
@@ -699,29 +701,36 @@ void handleStatusPost(MongooseHttpServerRequest *request, MongooseHttpServerResp
       solar = doc["solar"];
       DBUGF("solar:%dW", solar);
       divert.update_state();
+      send_event = false; // Divert sends the event so no need to send here
     }
     else if(doc.containsKey("grid_ie")) {
       grid_ie = doc["grid_ie"];
       DBUGF("grid:%dW", grid_ie);
       divert.update_state();
+      send_event = false; // Divert sends the event so no need to send here
     }
     if(doc.containsKey("battery_level")) {
       double vehicle_soc = doc["battery_level"];
       DBUGF("vehicle_soc:%d%%", vehicle_soc);
       evse.setVehicleStateOfCharge(vehicle_soc);
+      doc["vehicle_state_update"] = 0;
     }
     if(doc.containsKey("battery_range")) {
       double vehicle_range = doc["battery_range"];
       DBUGF("vehicle_range:%dKM", vehicle_range);
       evse.setVehicleRange(vehicle_range);
+      doc["vehicle_state_update"] = 0;
     }
     if(doc.containsKey("time_to_full_charge")){
       double vehicle_eta = doc["time_to_full_charge"];
       DBUGF("vehicle_eta:%d", vehicle_eta);
-      evse.setVehicleEta(vehicle_eta);   
+      evse.setVehicleEta(vehicle_eta);
+      doc["vehicle_state_update"] = 0;
     }
     // send back new value to clients
-    event_send(doc);
+    if(send_event) {
+      event_send(doc);
+    }
 
     response->setCode(200);
     serializeJson(doc, *response);
@@ -733,7 +742,7 @@ void handleStatusPost(MongooseHttpServerRequest *request, MongooseHttpServerResp
 
 
 void
-handleStatus(MongooseHttpServerRequest *request) 
+handleStatus(MongooseHttpServerRequest *request)
 {
 
   MongooseHttpServerResponseStream *response;
