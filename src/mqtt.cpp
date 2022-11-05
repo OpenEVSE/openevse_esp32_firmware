@@ -125,9 +125,9 @@ void mqttmsg_callback(MongooseString topic, MongooseString payload) {
   {
     byte newshaper = payload_str.toInt();
     if (newshaper==0) {
-      shaper.setState(0);
+      shaper.setState(false);
     } else if (newshaper==1) {
-      shaper.setState(1);
+      shaper.setState(true);
     }
   }
   // Manual Override
