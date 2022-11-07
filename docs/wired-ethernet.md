@@ -55,18 +55,18 @@ Subsequent upgrades:
 esptool.py --baud 921600 --before default_reset --after hard_reset write_flash -z --flash_mode dio --flash_freq 40m --flash_size detect 0x1000 0x10000  openevse_esp32-gateway-e.bin
 ```
 
-### For rev G
+### For rev F/G
 
 First upload:
 
 ```bash
-esptool.py --before default_reset --after hard_reset write_flash  0x1000 bootloader.bin 0x8000 partitions.bin 0x10000 openevse_esp32-gateway-e.bin
+esptool.py --before default_reset --after hard_reset write_flash  0x1000 bootloader.bin 0x8000 partitions.bin 0x10000 openevse_esp32-gateway-f.bin
 ```
 
 Subsequent upgrades:
 
 ```bash
-esptool.py --before default_reset --after hard_reset write_flash 0x10000 openevse_esp32-gateway-e.bin`
+esptool.py --before default_reset --after hard_reset write_flash 0x10000 openevse_esp32-gateway-f.bin`
 ```
 
 ## Compile and Upload
