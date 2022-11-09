@@ -6,7 +6,7 @@
 #include "lcd.h"
 #include "debug.h"
 #include "emonesp.h"
-
+#include "web_server.h"
 #include <MongooseHttpClient.h>
 #include <Update.h>
 
@@ -110,6 +110,11 @@ bool http_update_write(uint8_t *data, size_t len)
         lcd.display(text, 0, 1, 10 * 1000, LCD_DISPLAY_NOW);
 
         DEBUG_PORT.printf("Update: %d%%\n", percent);
+        
+        StaticJsonDocument<128> event;
+        event["upload_progress"] = percent;
+        web_server_event(event);
+
         lastPercent = percent;
       }
     }
