@@ -79,7 +79,9 @@ bool http_update_start(String source, size_t total)
 
     lcd.display(F("Updating WiFi"), 0, 0, 10 * 1000, LCD_CLEAR_LINE | LCD_DISPLAY_NOW);
     lcd.display(F(""), 0, 1, 10 * 1000, LCD_CLEAR_LINE | LCD_DISPLAY_NOW);
-
+    StaticJsonDocument<128> event;
+    event["ota"] = "started";
+    web_server_event(event);
     return true;
   }
 
@@ -112,9 +114,9 @@ bool http_update_write(uint8_t *data, size_t len)
         DEBUG_PORT.printf("Update: %d%%\n", percent);
         
         StaticJsonDocument<128> event;
-        event["upload_progress"] = percent;
+        event["ota_progress"] = percent;
         web_server_event(event);
-
+        yield();
         lastPercent = percent;
       }
     }
@@ -132,9 +134,17 @@ bool http_update_end()
   {
     DBUGF("Update Success: %u", update_position);
     lcd.display(F("Complete"), 0, 1, 10 * 1000, LCD_CLEAR_LINE | LCD_DISPLAY_NOW);
+    StaticJsonDocument<128> event;
+    event["ota"] = "completed";
+    web_server_event(event);
+    yield();
     return true;
   } else {
     DBUGF("Update failed: %d", Update.getError());
+    StaticJsonDocument<128> event;
+    event["ota"] = "failed";
+    web_server_event(event);
+    yield();
     lcd.display(F("Error"), 0, 1, 10 * 1000, LCD_CLEAR_LINE | LCD_DISPLAY_NOW);
   }
 
