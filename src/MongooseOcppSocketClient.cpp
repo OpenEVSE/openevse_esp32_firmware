@@ -157,7 +157,7 @@ void MongooseOcppSocketClient::maintainWsConn() {
         return;
     }
 
-    if (!net_is_connected()) {
+    if (!net.isConnected()) {
         return;
     }
 
@@ -213,7 +213,7 @@ bool MongooseOcppSocketClient::sendTXT(std::string &out) {
      * to diagnose connection problems at upper layers. It gives no guarantee that packages will
      * actually be sent successfully.
      */
-    if (!nc || !connection_established || !net_is_connected())
+    if (!nc || !connection_established || !net.isConnected())
         return false;
 
     if (millis() - last_recv >= MG_WEBSOCKET_PING_INTERVAL_MS + WS_UNRESPONSIVE_THRESHOLD_MS) {

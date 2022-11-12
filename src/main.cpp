@@ -69,6 +69,8 @@ Scheduler scheduler(evse);
 ManualOverride manual(evse);
 DivertTask divert(evse);
 
+NetManagerTask net(lcd, ledManager);
+
 RapiSender &rapiSender = evse.getSender();
 
 unsigned long Timer1; // Timer for events once every 30 seconds
@@ -136,7 +138,7 @@ void setup()
   ledManager.begin(evse);
 
   // Initialise the WiFi
-  net_setup();
+  net.begin();
   DBUGF("After net_setup: %d", ESPAL.getFreeHeap());
 
   // Initialise Mongoose networking library
@@ -176,7 +178,6 @@ loop() {
   Profile_End(Mongoose, 10);
 
   web_server_loop();
-  net_loop();
   ota_loop();
   rapiSender.loop();
 
@@ -215,7 +216,7 @@ loop() {
     }
   }
 
-  if(net_is_connected())
+  if(net.isConnected())
   {
     if (config_tesla_enabled()) {
       teslaClient.loop();
@@ -287,7 +288,7 @@ class SystemRestart : public MicroTasks::Alarm
     void Trigger()
     {
       DBUGLN("Restarting...");
-      net_wifi_disconnect();
+      net.wifiStop();
       ESPAL.reset();
     }
 } systemRestartAlarm;

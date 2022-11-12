@@ -2,48 +2,138 @@
 #define _EMONESP_WIFI_H
 
 #include <Arduino.h>
+#include <MicroTasks.h>
 
 #ifdef ESP32
 #include <WiFi.h>
+#include "wifi_esp32.h"
 #elif defined(ESP8266)
 #include <ESP8266WiFi.h>
 #else
 #error Platform not supported
 #endif
 
-// Last discovered WiFi access points
-extern String st;
-extern String rssi;
+#include "lcd.h"
+#include "LedManagerTask.h"
+#include <DNSServer.h>
 
-// Network state
-extern String ipaddress;
+class NetManagerTask;
 
-extern void net_setup();
-extern void net_loop();
-extern bool net_is_connected();
+class NetManagerTask : public MicroTasks::Task
+{
+  private:
+    // Last discovered WiFi access points
+    String _st;
+    String _rssi;
 
-extern void net_wifi_scan();
+    // Network state
+    String _ipaddress;
 
-extern void net_wifi_restart();
-extern void net_wifi_disconnect();
+    DNSServer _dnsServer;                  // Create class DNS server, captive portal re-direct
+    bool _dnsServerStarted;
+    const byte _dnsPort;
 
-extern void net_wifi_turn_off_ap();
-extern void net_wifi_turn_on_ap();
-extern bool net_wifi_client_connected();
+    // Access Point SSID, password & IP address. SSID will be softAP_ssid + chipID to make SSID unique
+    const char *_softAP_ssid;
+    const char *_softAP_password;
+    IPAddress _apIP;
+    IPAddress _apNetMask;
+    int _apClients;
 
-#define net_wifi_is_client_configured()   (WiFi.SSID() != "")
+    // Wifi Network Strings
+    int _clientDisconnects;
+    bool _clientRetry;
+    unsigned long _clientRetryTime;
+    bool _clientConnecting;
 
-// Wifi mode
-#define net_wifi_mode_is_sta()            (WIFI_STA == (WiFi.getMode() & WIFI_STA))
-#define net_wifi_mode_is_sta_only()       (WIFI_STA == WiFi.getMode())
-#define net_wifi_mode_is_ap()             (WIFI_AP == (WiFi.getMode() & WIFI_AP))
+    int _wifiButtonState;
+    unsigned long _wifiButtonTimeOut;
+    bool _apMessage;
 
-// Performing a scan enables STA so we end up in AP+STA mode so treat AP+STA with no
-// ssid set as AP only
-#define net_wifi_mode_is_ap_only()        ((WIFI_AP == WiFi.getMode()) || \
-                                       (WIFI_AP_STA == WiFi.getMode() && !net_wifi_is_client_configured()))
+    #ifdef ENABLE_WIRED_ETHERNET
+    bool _eth_connected;
+    #endif
 
+    LcdTask &_lcd;
+    LedManagerTask &_led;
 
-extern bool net_eth_connected();
+    static class NetManagerTask *_instance;
+
+  private:
+    void wifiStartAccessPoint();
+    void wifiStopAccessPoint();
+
+    void wifiStartClient();
+    void wifiStopClient();
+
+    #ifdef ENABLE_WIRED_ETHERNET
+    void wiredStart();
+    void wiredStop();
+    #endif
+
+    void displayState();
+    void haveNetworkConnection(IPAddress myAddress);
+
+    void wifiOnStationModeConnected(const WiFiEventStationModeConnected &event);
+    void wifiOnStationModeGotIP(const WiFiEventStationModeGotIP &event);
+    void wifiOnStationModeDisconnected(const WiFiEventStationModeDisconnected &event);
+    void wifiOnAPModeStationConnected(const WiFiEventSoftAPModeStationConnected &event);
+    void wifiOnAPModeStationDisconnected(const WiFiEventSoftAPModeStationDisconnected &event);
+#ifdef ESP32
+    static void onNetEventStatic(WiFiEvent_t event, arduino_event_info_t info);
+    void onNetEvent(WiFiEvent_t event, arduino_event_info_t info);
+#endif
+
+  protected:
+    void setup();
+    unsigned long loop(MicroTasks::WakeReason reason);
+
+  public:
+    NetManagerTask(LcdTask &lcd, LedManagerTask &led);
+
+    void begin();
+
+    void wifiScan();
+
+    void wifiStart();
+    void wifiStop();
+    void wifiRestart();
+
+    void wifiTurnOffAp();
+    void wifiTurnOnAp();
+
+    bool isConnected();
+    bool isWifiClientConnected();
+    bool isWiredConnected();
+
+    bool isWifiClientConfigured() {
+      return (WiFi.SSID() != "");
+    }
+
+    bool isWifiModeSta() {
+      return (WIFI_STA == (WiFi.getMode() & WIFI_STA));
+    }
+
+    bool isWifiModeStaOnly() {
+      return (WIFI_STA == WiFi.getMode());
+    }
+
+    bool isWifiModeAp() {
+      return (WIFI_AP == (WiFi.getMode() & WIFI_AP));
+    }
+
+    // Performing a scan enables STA so we end up in AP+STA mode so treat AP+STA with no
+    // ssid set as AP only
+    bool isWifiModeApOnly() {
+      return ((WIFI_AP == WiFi.getMode()) ||
+              (WIFI_AP_STA == WiFi.getMode() && !isWifiClientConfigured()));
+    }
+
+    String getIp() {
+      return _ipaddress;
+    }
+};
+
+extern NetManagerTask net;
 
 #endif // _EMONESP_WIFI_H

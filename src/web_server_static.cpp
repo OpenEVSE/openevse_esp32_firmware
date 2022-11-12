@@ -50,7 +50,7 @@ static bool web_static_get_file(MongooseHttpServerRequest *request, StaticFile *
   // Remove the found uri
   String path = request->uri();
   if(path == "/") {
-    path = String(net_wifi_mode_is_ap_only() ? WIFI_PAGE : HOME_PAGE);
+    path = String(net.isWifiModeApOnly() ? WIFI_PAGE : HOME_PAGE);
   }
 
   DBUGF("Looking for %s", path.c_str());
@@ -75,7 +75,7 @@ bool web_static_handle(MongooseHttpServerRequest *request)
   dumpRequest(request);
 
   // Are we authenticated
-  if(!net_wifi_mode_is_ap_only() && www_username!="" &&
+  if(!net.isWifiModeApOnly() && www_username!="" &&
      false == request->authenticate(www_username, www_password)) {
     request->requestAuthentication(esp_hostname);
     return false;

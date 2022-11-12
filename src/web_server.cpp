@@ -137,7 +137,7 @@ bool requestPreProcess(MongooseHttpServerRequest *request, MongooseHttpServerRes
 {
   dumpRequest(request);
 
-  if(!net_wifi_mode_is_ap_only() && www_username!="" &&
+  if(!net.isWifiModeApOnly() && www_username!="" &&
      false == request->authenticate(www_username, www_password)) {
     request->requestAuthentication(esp_hostname);
     return false;
@@ -187,20 +187,20 @@ void buildStatus(DynamicJsonDocument &doc) {
   strftime(time, sizeof(time), "%FT%TZ", timeinfo);
   strftime(offset, sizeof(offset), "%z", timeinfo);
 
-  if (net_eth_connected()) {
+  if (net.isWiredConnected()) {
     doc["mode"] = "Wired";
-  } else if (net_wifi_mode_is_sta_only()) {
+  } else if (net.isWifiModeStaOnly()) {
     doc["mode"] = "STA";
-  } else if (net_wifi_mode_is_ap_only()) {
+  } else if (net.isWifiModeApOnly()) {
     doc["mode"] = "AP";
-  } else if (net_wifi_mode_is_ap() && net_wifi_mode_is_sta()) {
+  } else if (net.isWifiModeAp() && net.isWifiModeSta()) {
     doc["mode"] = "STA+AP";
   }
 
-  doc["wifi_client_connected"] = (int)net_wifi_client_connected();
-  doc["eth_connected"] = (int)net_eth_connected();
-  doc["net_connected"] = (int)net_is_connected();
-  doc["ipaddress"] = ipaddress;
+  doc["wifi_client_connected"] = (int)net.isWifiClientConnected();
+  doc["eth_connected"] = (int)net.isWiredConnected();
+  doc["net_connected"] = (int)net.isWifiClientConnected();
+  doc["ipaddress"] = net.getIp();
 
   doc["emoncms_connected"] = (int)emoncms_connected;
   doc["packets_sent"] = packets_sent;
@@ -1157,13 +1157,13 @@ void handleNotFound(MongooseHttpServerRequest *request)
   DBUG("NOT_FOUND: ");
   dumpRequest(request);
 
-  if(net_wifi_mode_is_ap_only()) {
+  if(net.isWifiModeApOnly()) {
     // Redirect to the home page in AP mode (for the captive portal)
     MongooseHttpServerResponseStream *response = request->beginResponseStream();
     response->setContentType(CONTENT_TYPE_HTML);
 
     String url = F("http://");
-    url += ipaddress;
+    url += net.getIp();
 
     String s = F("<html>");
     s += F("<head><meta http-equiv=\"Refresh\" content=\"0; url=");
@@ -1304,13 +1304,13 @@ web_server_loop() {
   // Do we need to restart the WiFi?
   if(wifiRestartTime > 0 && millis() > wifiRestartTime) {
     wifiRestartTime = 0;
-    net_wifi_restart();
+    net.wifiRestart();
   }
 
   // Do we need to turn off the access point?
   if(apOffTime > 0 && millis() > apOffTime) {
     apOffTime = 0;
-    net_wifi_turn_off_ap();
+    net.wifiTurnOffAp();
   }
 
   Profile_End(web_server_loop, 5);
