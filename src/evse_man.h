@@ -242,6 +242,7 @@ class EvseManager : public MicroTasks::Task
 
     EvseProperties _targetProperties;
     bool _hasClaims;
+    uint8_t _version;
 
     EvseClient _state_client;
     EvseClient _charge_current_client;

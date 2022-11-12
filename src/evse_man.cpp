@@ -479,6 +479,9 @@ bool EvseManager::claim(EvseClient client, int priority, EvseProperties &target)
     if(slot->claim(client, priority, target))
     {
       DBUGF("Claim added/updated, waking task");
+      StaticJsonDocument<128> event;
+      event["claims_version"] = _version++;
+      event_send(event);
       _evaluateClaims = true;
       MicroTask.wakeTask(this);
     }
@@ -505,6 +508,10 @@ bool EvseManager::release(EvseClient client)
       event["state"] = "null";
       mqtt_publish_json(event, "/override");
     }
+
+    StaticJsonDocument<128> event;
+    event["claims_version"] = _version++;
+    event_send(event);
 
     claim->release();
     _evaluateClaims = true;
