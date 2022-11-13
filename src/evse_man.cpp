@@ -539,6 +539,11 @@ bool EvseManager::clientHasClaim(EvseClient client) {
   return findClaim(client);
 }
 
+uint8_t EvseManager::getClaimsVersion() {
+  return _version;
+}
+
+
 EvseProperties &EvseManager::getClaimProperties(EvseClient client)
 {
   if(EvseClient_NULL == client) {

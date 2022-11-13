@@ -39,6 +39,7 @@ typedef const __FlashStringHelper *fstr_t;
 #include "scheduler.h"
 #include "rfid.h"
 #include "current_shaper.h"
+#include "evse_man.h"
 
 MongooseHttpServer server;          // Create class for Web server
 
@@ -252,6 +253,7 @@ void buildStatus(DynamicJsonDocument &doc) {
   doc["offset"] = String(offset);
 
   doc["config_version"] = config_version;
+  doc["claims_version"] = evse.getClaimsVersion();
   doc["schedule_version"] = scheduler.getVersion();
   doc["schedule_plan_version"] = scheduler.getPlanVersion();
 
