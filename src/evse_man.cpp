@@ -478,12 +478,16 @@ bool EvseManager::claim(EvseClient client, int priority, EvseProperties &target)
     DBUGF("Found slot");
     if(slot->claim(client, priority, target))
     {
-      DBUGF("Claim added/updated, waking task");
-      StaticJsonDocument<128> event;
-      event["claims_version"] = _version++;
-      event_send(event);
-      _evaluateClaims = true;
-      MicroTask.wakeTask(this);
+      if (client != EvseClient_OpenEVSE_Divert || client != EvseClient_OpenEVSE_Shaper) {
+        // ignore shaper & divert claims as info are already published over status
+        DBUGF("Claim added/updated, waking task");
+        StaticJsonDocument<128> event;
+        event["claims_version"] = _version++;
+        event_send(event);
+        _evaluateClaims = true;
+        MicroTask.wakeTask(this);
+      }
+
     }
     return true;
   }
