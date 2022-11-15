@@ -17,7 +17,7 @@ bool ManualOverride::claim()
 
 bool ManualOverride::claim(EvseProperties &props)
 {
-  props.setAutoRelease(true);
+  if (!props.hasAutoRelease()) props.setAutoRelease(true);
   return _evse->claim(EvseClient_OpenEVSE_Manual, EvseManager_Priority_Manual, props);
 }
 
