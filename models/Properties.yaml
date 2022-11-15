@@ -3,7 +3,6 @@ type: object
 x-tags:
   - Claims
 description: ''
-examples: []
 properties:
   state:
     $ref: ./EvseState.yaml
