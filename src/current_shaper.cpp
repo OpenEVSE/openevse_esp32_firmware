@@ -97,7 +97,6 @@ void CurrentShaperTask::setState(bool state) {
 	if (!_enabled) {
 		//remove claim
 		evse.release(EvseClient_OpenEVSE_Shaper);
-
 	}
 	StaticJsonDocument<128> event;
 	event["shaper"]  = state?1:0;
@@ -105,8 +104,11 @@ void CurrentShaperTask::setState(bool state) {
 }
 
 void CurrentShaperTask::shapeCurrent() {
+	// only use Shaper if there's no Divert claim active ( means divert is active)
+	if (!_evse->clientHasClaim(EvseClient_OpenEVSE_Divert)) {
 	_chg_cur = round(((_max_pwr - _live_pwr) / evse.getVoltage()) + (evse.getAmps()));
-	_changed = true; // update claim in the loop
+	_changed = true; 
+	}
 }
 
 int CurrentShaperTask::getMaxPwr() {
