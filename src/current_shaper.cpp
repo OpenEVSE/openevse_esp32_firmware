@@ -18,7 +18,7 @@ void CurrentShaperTask::setup() {
 }
 
 unsigned long CurrentShaperTask::loop(MicroTasks::WakeReason reason) {
-	if (_enabled) {
+	if (_enabled && !_evse->clientHasClaim(EvseClient_OpenEVSE_Divert)) {
 			EvseProperties props;
 			if (_changed) {
 				props.setChargeCurrent(_chg_cur);
@@ -104,11 +104,8 @@ void CurrentShaperTask::setState(bool state) {
 }
 
 void CurrentShaperTask::shapeCurrent() {
-	// only use Shaper if there's no Divert claim active ( means divert is active)
-	if (!_evse->clientHasClaim(EvseClient_OpenEVSE_Divert)) {
 	_chg_cur = round(((_max_pwr - _live_pwr) / evse.getVoltage()) + (evse.getAmps()));
 	_changed = true; 
-	}
 }
 
 int CurrentShaperTask::getMaxPwr() {
