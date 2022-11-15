@@ -79,6 +79,7 @@ bool EvseProperties::deserialize(JsonObject &obj)
 
   if(obj.containsKey("auto_release")) {
     _auto_release = obj["auto_release"];
+    _has_auto_release = true;
   }
 
   return true;
