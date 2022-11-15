@@ -7,6 +7,7 @@ info:
   contact:
     email: jeremy@bigjungle.net
     name: Jeremy Poulter
+    url: https://github.com/jeremypoulter/
   license:
     name: Apache 2.0
     url: 'http://www.apache.org/licenses/LICENSE-2.0.html'
@@ -79,34 +80,54 @@ paths:
       description: |
         The status endpoint can be called to post external data that should be updated by MQTT
         If MQTT is not an option, all external data needed can be updated from an HTTP POST request to /status endpoint.
-
-        Accepted parameters:
-        {
-          "voltage": int,          // live voltage in V
-          "shaper_live_pwr": int,  // total household live power in W
-          "solar": int,            // divert solar production in W
-          "grid_ie": int,          // divert grid -import/+export in W
-          "battery_level": int,    // vehicle soc in %
-          "battery_range": int,    // vehicle range
-          "time_to_full_charge": int    // vehicle charge ETA
-        }
-        
       responses:
-      '200':
+        '200':
           description: OK
           content:
             application/json:
               schema:
-                $ref: ./models/Status.yaml
+                type: object
+                properties:
+                  voltage:
+                    type: integer
+                    description: live voltage in V
+                  shaper_live_pwr:
+                    type: integer
+                    description: total household live power in W
+                  solar:
+                    type: integer
+                    description: divert solar production in W
+                  grid_ie:
+                    type: integer
+                    description: divert grid -import/+export in W
+                  battery_level:
+                    type: integer
+                    description: vehicle soc in %
+                  battery_range:
+                    type: integer
+                    description: vehicle range
+                  time_to_full_charge:
+                    type: integer
+                    description: vehicle charge ETA
+                x-examples:
+                  EVSE Status:
+                    voltage: 220
+                    shaper_live_pwr: 3400
+                    solar: 3000
+                    grid_ie: 3000
+                    battery_level: 85
+                    battery_range: 230
+                    time_to_full_charge: 1590
               examples:
                 EVSE Status:
-                  "voltage": 220
-                  "shaper_live_pwr": 3400
-                  "solar": 3000
-                  "grid_ie": 3000
-                  "battery_level": 85
-                  "battery_range": 230
-                  "time_to_full_charge" 1590
+                  value:
+                    voltage: 220
+                    shaper_live_pwr: 3400
+                    solar: 3000
+                    grid_ie: 3000
+                    battery_level: 85
+                    battery_range: 230
+                    time_to_full_charge: 1590
       tags:
         - Status
   /ws:
@@ -124,7 +145,7 @@ paths:
               schema:
                 $ref: ./models/Status.yaml
         '400':
-          descritpion: Error
+          description: Error
       tags:
         - Status
   /config:
@@ -456,7 +477,6 @@ paths:
                 properties:
                   current_day:
                     $ref: '#/components/schemas/Day'
-
       operationId: getSchedulePlan
       tags:
         - Schedule
@@ -578,6 +598,7 @@ components:
         - friday
         - saturday
         - sunday
+      x-examples: {}
     ScheduleEvent:
       type: object
       properties:
