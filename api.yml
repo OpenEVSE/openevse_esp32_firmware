@@ -152,7 +152,8 @@ paths:
     get:
       operationId: getConfig
       summary: Get the EVSE configuration
-      description: ''
+      description: |
+        Retrieve the current WiFi and EVSE module configuration
       tags:
         - Config
       responses:
