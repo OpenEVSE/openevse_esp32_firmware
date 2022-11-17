@@ -486,9 +486,9 @@ bool EvseManager::claim(EvseClient client, int priority, EvseProperties &target)
         StaticJsonDocument<128> event;
         event["claims_version"] = ++_version;
         event_send(event);
+      }
         _evaluateClaims = true;
         MicroTask.wakeTask(this);
-      }
 
     }
     return true;
