@@ -17,6 +17,7 @@
 #include "http_update.h"
 #include "input.h"
 #include "event.h"
+#include "divert.h"
 
 class CurrentShaperTask: public MicroTasks::Task
 {

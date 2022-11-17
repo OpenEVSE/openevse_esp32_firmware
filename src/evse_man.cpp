@@ -221,8 +221,9 @@ bool EvseManager::evaluateClaims(EvseProperties &properties)
       DBUGVAR(claim.getEnergyLimit());
       DBUGVAR(claim.getTimeLimit());
 
-      if(claim.getPriority() > statePriority &&
-         claim.getState() != EvseState::None)
+      //if(claim.getPriority() > statePriority &&
+        // claim.getState() != EvseState::None)
+      if(claim.getPriority() > statePriority)
       {
         properties.setState(claim.getState());
         statePriority = claim.getPriority();
@@ -269,13 +270,13 @@ bool EvseManager::evaluateClaims(EvseProperties &properties)
         event_send(event);
         // update /override topic to mqtt
         event.clear();
-        EvseState state = properties.getState();
-        if(state != EvseState::None) {
+        //EvseState state = properties.getState();
+        // if(state != EvseState::None) {
           properties.serialize(event);         
-        }
-        else {
-          event["state"] = "null";
-        }
+        //}
+        // else {
+        //   event["state"] = "null";
+        // }
         mqtt_publish_json(event, "/override");
       }
     }
