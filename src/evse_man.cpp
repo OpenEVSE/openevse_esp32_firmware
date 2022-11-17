@@ -10,6 +10,7 @@
 #include "event_log.h"
 #include "divert.h"
 #include "current_shaper.h"
+#include "manual.h"
 
 static EvseProperties nullProperties;
 
@@ -267,7 +268,6 @@ bool EvseManager::evaluateClaims(EvseProperties &properties)
         DynamicJsonDocument event(capacity);
         event["manual_override"] = 1;
         event_send(event);
-        // update /override topic to mqtt
         event.clear();
         mqtt_publish_json(event, "/override");
       }
@@ -439,6 +439,12 @@ unsigned long EvseManager::loop(MicroTasks::WakeReason reason)
   {
     _evaluateTargetState = false;
     setTargetState(_targetProperties);
+
+    if ( manual.isActive() ) {
+      // update /override topic to mqtt
+      mqtt_publish_override();
+    }
+
   }
   return MicroTask.Infinate;
 }

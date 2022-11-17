@@ -404,6 +404,7 @@ mqtt_publish_claim() {
 
 void
 mqtt_publish_override() {
+  DBUGLN("MQTT publish_override()");
   if(!config_mqtt_enabled() || !mqttclient.connected()) {
     return;
   }
@@ -411,15 +412,10 @@ mqtt_publish_override() {
   DynamicJsonDocument override_data(capacity);
   EvseProperties props;
   //check if there an override claim
-  if (evse.clientHasClaim(EvseClient_OpenEVSE_Manual)) {
+  if (evse.clientHasClaim(EvseClient_OpenEVSE_Manual) || manual.isActive()) {
     props = evse.getClaimProperties(EvseClient_OpenEVSE_Manual);
     //check if there's state property in override
-    if(props.getState() != 0) {
-      props.serialize(override_data); 
-    }
-    else {
-      override_data["state"] = "null";
-    }
+    props.serialize(override_data); 
   }
   else override_data["state"] = "null";
   mqtt_publish_json(override_data, "/override");
