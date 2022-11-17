@@ -253,6 +253,7 @@ class EvseManager : public MicroTasks::Task
 
     EvseProperties _targetProperties;
     bool _hasClaims;
+    uint8_t _version;
 
     EvseClient _state_client;
     EvseClient _charge_current_client;
@@ -297,6 +298,7 @@ class EvseManager : public MicroTasks::Task
     bool claim(EvseClient client, int priority, EvseProperties &target);
     bool release(EvseClient client);
     bool clientHasClaim(EvseClient client);
+    uint8_t getClaimsVersion();
 
     EvseProperties &getClaimProperties(EvseClient client);
     EvseState getState(EvseClient client = EvseClient_NULL);
