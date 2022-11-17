@@ -919,6 +919,7 @@ void handleOverrideDelete(MongooseHttpServerRequest *request, MongooseHttpServer
   if(manual.release()) {
     response->setCode(200);
     response->print("{\"msg\":\"Deleted\"}");
+    mqtt_publish_override();  // update override state to mqtt
   } else {
     response->setCode(500);
     response->print("{\"msg\":\"Failed to release manual overide\"}");
@@ -931,6 +932,7 @@ void handleOverridePatch(MongooseHttpServerRequest *request, MongooseHttpServerR
   {
     response->setCode(200);
     response->print("{\"msg\":\"Updated\"}");
+    mqtt_publish_override();  // update override state to mqtt
   } else {
     response->setCode(500);
     response->print("{\"msg\":\"Failed to toggle manual overide\"}");

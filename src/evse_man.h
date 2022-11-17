@@ -71,6 +71,7 @@ class EvseProperties : virtual public JsonSerialize<512>
     uint32_t _energy_limit;
     uint32_t _time_limit;
     bool _auto_release;
+    bool _has_auto_release = false;
   public:
     EvseProperties();
     EvseProperties(EvseState state);
@@ -125,8 +126,14 @@ class EvseProperties : virtual public JsonSerialize<512>
     bool isAutoRelease() {
       return _auto_release;
     }
+
+    bool hasAutoRelease() {
+      return _has_auto_release;
+    }
+
     void setAutoRelease(bool auto_release) {
       _auto_release = auto_release;
+      _has_auto_release = true;
     }
 
     EvseProperties & operator = (EvseProperties &rhs);
@@ -223,6 +230,10 @@ class EvseManager : public MicroTasks::Task
 
         bool isAutoRelease() {
           return _properties.isAutoRelease();
+        }
+
+        bool hasAutoRelease() {
+          return _properties.hasAutoRelease();
         }
 
         EvseProperties &getProperties() {
