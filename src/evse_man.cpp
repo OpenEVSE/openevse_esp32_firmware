@@ -270,7 +270,7 @@ bool EvseManager::evaluateClaims(EvseProperties &properties)
         event.clear();
         EvseState state = properties.getState();
         if(state != EvseState::None) {
-          properties.serialize(event);         
+          properties.serialize(event);
         }
         else {
           event["state"] = "null";
@@ -481,15 +481,14 @@ bool EvseManager::claim(EvseClient client, int priority, EvseProperties &target)
       if (target.getState() != EvseState::None)
           // ignore incrementing claims_version if there's no state in the claim
       {
-        
         DBUGF("Claim added/updated, waking task");
         StaticJsonDocument<128> event;
         event["claims_version"] = ++_version;
         event_send(event);
       }
-        _evaluateClaims = true;
-        MicroTask.wakeTask(this);
 
+      _evaluateClaims = true;
+      MicroTask.wakeTask(this);
     }
     return true;
   }
@@ -500,7 +499,7 @@ bool EvseManager::claim(EvseClient client, int priority, EvseProperties &target)
 bool EvseManager::release(EvseClient client)
 {
   Claim *claim;
-  
+
   if(findClaim(client, &claim))
   {
     // if claim is manual override, publish data to socket & mqtt
@@ -521,7 +520,7 @@ bool EvseManager::release(EvseClient client)
 
     claim->release();
     _evaluateClaims = true;
-    MicroTask.wakeTask(this); 
+    MicroTask.wakeTask(this);
     return true;
   }
 
