@@ -221,8 +221,6 @@ bool EvseManager::evaluateClaims(EvseProperties &properties)
       DBUGVAR(claim.getEnergyLimit());
       DBUGVAR(claim.getTimeLimit());
 
-      //if(claim.getPriority() > statePriority &&
-        // claim.getState() != EvseState::None)
       if(claim.getPriority() > statePriority)
       {
         properties.setState(claim.getState());
@@ -270,9 +268,8 @@ bool EvseManager::evaluateClaims(EvseProperties &properties)
         event_send(event);
         // update /override topic to mqtt
         event.clear();
-        //EvseState state = properties.getState();
-        // if(state != EvseState::None) {
-          properties.serialize(event);         
+        EvseState state = properties.getState();
+        properties.serialize(event);         
         //}
         // else {
         //   event["state"] = "null";
@@ -480,9 +477,18 @@ bool EvseManager::claim(EvseClient client, int priority, EvseProperties &target)
     DBUGF("Found slot");
     if(slot->claim(client, priority, target))
     {
-      DBUGF("Claim added/updated, waking task");
-      _evaluateClaims = true;
-      MicroTask.wakeTask(this);
+      if (target.getState() != EvseState::None)
+          // ignore incrementing claims_version if there's no state in the claim
+      {
+        
+        DBUGF("Claim added/updated, waking task");
+        StaticJsonDocument<128> event;
+        event["claims_version"] = ++_version;
+        event_send(event);
+      }
+       _evaluateClaims = true;
+        MicroTask.wakeTask(this);
+
     }
     return true;
   }
