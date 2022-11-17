@@ -18,7 +18,7 @@ void CurrentShaperTask::setup() {
 }
 
 unsigned long CurrentShaperTask::loop(MicroTasks::WakeReason reason) {
-	if (_enabled) {
+	if (_enabled && !_evse->clientHasClaim(EvseClient_OpenEVSE_Divert)) {
 			EvseProperties props;
 			if (_changed) {
 				props.setChargeCurrent(_chg_cur);
@@ -97,7 +97,6 @@ void CurrentShaperTask::setState(bool state) {
 	if (!_enabled) {
 		//remove claim
 		evse.release(EvseClient_OpenEVSE_Shaper);
-
 	}
 	StaticJsonDocument<128> event;
 	event["shaper"]  = state?1:0;
@@ -106,7 +105,7 @@ void CurrentShaperTask::setState(bool state) {
 
 void CurrentShaperTask::shapeCurrent() {
 	_chg_cur = round(((_max_pwr - _live_pwr) / evse.getVoltage()) + (evse.getAmps()));
-	_changed = true; // update claim in the loop
+	_changed = true; 
 }
 
 int CurrentShaperTask::getMaxPwr() {
