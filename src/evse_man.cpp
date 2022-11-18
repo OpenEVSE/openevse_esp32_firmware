@@ -478,7 +478,8 @@ bool EvseManager::claim(EvseClient client, int priority, EvseProperties &target)
     DBUGF("Found slot");
     if(slot->claim(client, priority, target))
     {
-      if (target.getState() != EvseState::None)
+      // if (target.getState() != EvseState::None)
+      if (true)
           // ignore incrementing claims_version if there's no state in the claim
       {
         DBUGF("Claim added/updated, waking task");
