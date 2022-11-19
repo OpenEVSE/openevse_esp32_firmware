@@ -8,6 +8,7 @@ class ManualOverride
 {
   private:
     EvseManager *_evse;
+    uint8_t _version;
   public:
     ManualOverride(EvseManager &evse);
     ~ManualOverride();
@@ -21,6 +22,7 @@ class ManualOverride
       return _evse->clientHasClaim(EvseClient_OpenEVSE_Manual);
     }
     bool getProperties(EvseProperties &props);
+    uint8_t getVersion();
 };
 
 extern ManualOverride manual;

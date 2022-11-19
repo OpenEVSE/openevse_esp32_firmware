@@ -32,6 +32,7 @@ static unsigned long mqttRestartTime = 0;
 static bool connecting = false;
 static bool mqttRetained = false;
 uint8_t claimsVersion = 0;
+uint8_t overrideVersion = 0;
 
 String lastWill = "";
 
@@ -497,10 +498,16 @@ mqtt_loop() {
     }
   }
 
-  if (claimsVersion != evse.getClaimsVersion() || claimsVersion == 0) {
+  if (claimsVersion != evse.getClaimsVersion() || !claimsVersion) {
     mqtt_publish_claim();
     DBUGF("Claims has changed, publishing to MQTT");
     claimsVersion = evse.getClaimsVersion();
+  }
+
+  if (overrideVersion != manual.getVersion() || !overrideVersion ) {
+    mqtt_publish_override;
+    DBUGF("Claims has changed, publishing to MQTT");
+    overrideVersion = manual.getVersion();
   }
 
   Profile_End(mqtt_loop, 5);

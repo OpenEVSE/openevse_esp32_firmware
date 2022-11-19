@@ -268,8 +268,6 @@ bool EvseManager::evaluateClaims(EvseProperties &properties)
         DynamicJsonDocument event(capacity);
         event["manual_override"] = 1;
         event_send(event);
-        event.clear();
-        mqtt_publish_json(event, "/override");
       }
     }
   }
@@ -439,12 +437,6 @@ unsigned long EvseManager::loop(MicroTasks::WakeReason reason)
   {
     _evaluateTargetState = false;
     setTargetState(_targetProperties);
-
-    if ( manual.isActive() ) {
-      // update /override topic to mqtt
-      mqtt_publish_override();
-    }
-
   }
   return MicroTask.Infinate;
 }
@@ -503,10 +495,6 @@ bool EvseManager::release(EvseClient client)
       DynamicJsonDocument event(capacity);
       event["manual_override"] = 0;
       event_send(event);
-      event.clear();
-      // update /override topic to mqtt
-      event["state"] = "null";
-      mqtt_publish_json(event, "/override");
     }
     claim->release();
     _evaluateClaims = true;
