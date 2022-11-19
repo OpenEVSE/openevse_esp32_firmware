@@ -31,6 +31,7 @@ static long nextMqttReconnectAttempt = 0;
 static unsigned long mqttRestartTime = 0;
 static bool connecting = false;
 static bool mqttRetained = false;
+uint8_t claimsVersion = 0;
 
 String lastWill = "";
 
@@ -70,7 +71,7 @@ void mqttmsg_callback(MongooseString topic, MongooseString payload) {
   else if (topic_string == mqtt_live_pwr)
   {
       shaper.setLivePwr(payload_str.toInt());
-      DBUGF("shaper: available power:%dW", shaper.getAvlPwr());
+      DBUGF("shaper: available amps:%dW", shaper.getChgCur());
   }
   else if (topic_string == mqtt_vrms)
   {
@@ -494,6 +495,12 @@ mqtt_loop() {
       nextMqttReconnectAttempt = now + MQTT_CONNECT_TIMEOUT;
       mqtt_connect(); // Attempt to reconnect
     }
+  }
+
+  if (claimsVersion != evse.getClaimsVersion() || claimsVersion == 0) {
+    mqtt_publish_claim();
+    DBUGF("Claims has changed, publishing to MQTT");
+    claimsVersion = evse.getClaimsVersion();
   }
 
   Profile_End(mqtt_loop, 5);

@@ -477,19 +477,13 @@ bool EvseManager::claim(EvseClient client, int priority, EvseProperties &target)
   {
     DBUGF("Found slot");
     if(slot->claim(client, priority, target))
-    {
-      // if (target.getState() != EvseState::None)
-      if (true)
-          // ignore incrementing claims_version if there's no state in the claim
-      {
-        DBUGF("Claim added/updated, waking task");
-        StaticJsonDocument<128> event;
-        event["claims_version"] = ++_version;
-        event_send(event);
-      }
-
+    { 
+      DBUGF("Claim added/updated, waking task");
       _evaluateClaims = true;
       MicroTask.wakeTask(this);
+      StaticJsonDocument<128> event;
+      event["claims_version"] = ++_version;
+      event_send(event);
     }
     return true;
   }
@@ -514,14 +508,12 @@ bool EvseManager::release(EvseClient client)
       event["state"] = "null";
       mqtt_publish_json(event, "/override");
     }
-
-    StaticJsonDocument<128> event;
-    event["claims_version"] = ++_version;
-    event_send(event);
-
     claim->release();
     _evaluateClaims = true;
     MicroTask.wakeTask(this);
+    StaticJsonDocument<128> event;
+    event["claims_version"] = ++_version;
+    event_send(event);
     return true;
   }
 
