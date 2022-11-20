@@ -59,6 +59,7 @@ const char _CONTENT_TYPE_JS[] PROGMEM = "application/javascript";
 const char _CONTENT_TYPE_JPEG[] PROGMEM = "image/jpeg";
 const char _CONTENT_TYPE_PNG[] PROGMEM = "image/png";
 const char _CONTENT_TYPE_SVG[] PROGMEM = "image/svg+xml";
+const char _CONTENT_TYPE_ICO[] PROGMEM = "image/vnd.microsoft.icon";
 
 #define RAPI_RESPONSE_BLOCKED             -300
 
