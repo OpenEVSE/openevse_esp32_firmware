@@ -31,13 +31,16 @@ jobs:
           - openevse_esp32-gateway-f_dev
           - openevse_esp32-poe-iso
           - openevse_esp32-heltec-wifi-lora-v2
+        gui:
+          - name: openevse_wifi_gui
+            repo: OpenEVSE/openevse_wifi_gui
+          - name: openevse-gui-v2
+            repo: KipK/openevse-gui-v2
 
     steps:
     - uses: ammaraskar/gcc-problem-matcher@master
 
     - uses: actions/checkout@v2
-      with:
-        submodules: recursive
 
 #    - name: Temp checkout latest OpenEVSE lib
 #      uses: actions/checkout@v2
@@ -45,6 +48,13 @@ jobs:
 #        repository: jeremypoulter/OpenEVSE_Lib
 #        ref: openevse_wifi_timer_apis
 #        path: lib/OpenEVSE
+
+    - name: Checkout GUI
+      uses: actions/checkout@v2
+      with:
+        repository: ${{ matrix.gui.repo }}
+        path: ${{ matrix.gui.name }}
+        submodules: recursive
 
     - name: Cache pip
       uses: actions/cache@v2
@@ -73,25 +83,27 @@ jobs:
     - name: Set up Node JS
       uses: actions/setup-node@v2
       with:
-        node-version: '12'
+        node-version: '16'
 
     - name: Install dependencies
       run: |
-        cd gui
+        cd ${{ matrix.gui.name }}
         npm install
 
     - name: Build GUI
       run: |
-        cd gui
+        cd ${{ matrix.gui.name }}
         npm run build
 
     - name: Run PlatformIO
       run: pio run -e ${{ matrix.env }}
+      env:
+        GUI_NAME: ${{ matrix.gui.name }}
 
     - name: Upload output to GitHub
       uses: actions/upload-artifact@v2
       with:
-        name: ${{ matrix.env }}.bin
+        name: ${{ matrix.env }}_${{ matrix.gui.name }}.bin
         path: .pio/build/${{ matrix.env }}/firmware.bin
 
   release:
