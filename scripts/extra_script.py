@@ -26,8 +26,12 @@ def text_to_header(source_file):
         original = source_fh.read()
     filename = get_c_name(source_file)
     output = "static const char CONTENT_{}[] PROGMEM = ".format(filename)
-    for line in original.splitlines():
-        output += u"\n  \"{}\\n\"".format(line.replace('\\', '\\\\').replace('"', '\\"'))
+    lines = original.splitlines()
+    if len(lines) > 0:
+        for line in lines:
+            output += u"\n  \"{}\\n\"".format(line.replace('\\', '\\\\').replace('"', '\\"'))
+    else:
+        output += "\"\""
     output += ";\n"
     output += "static const char CONTENT_{}_ETAG[] PROGMEM = \"{}\";\n".format(filename, hashlib.sha256(original.encode('utf-8')).hexdigest())
     return output
