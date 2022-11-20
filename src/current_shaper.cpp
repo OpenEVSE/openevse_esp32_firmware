@@ -52,6 +52,12 @@ unsigned long CurrentShaperTask::loop(MicroTasks::WakeReason reason) {
 				event_send(event);
 			}
 	}
+	else {
+		//remove shaper claim
+		if (_evse->clientHasClaim(EvseClient_OpenEVSE_Shaper)) {
+			_evse->release(EvseClient_OpenEVSE_Shaper);
+		}
+	}
 	
 	
 	return EVSE_SHAPER_LOOP_TIME;
