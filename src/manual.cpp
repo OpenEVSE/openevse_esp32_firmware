@@ -28,9 +28,6 @@ bool ManualOverride::claim(EvseProperties &props)
 
 bool ManualOverride::release()
 {
-  StaticJsonDocument<128> event;
-  event["override_version"] = ++_version;
-  event_send(event);
   return _evse->release(EvseClient_OpenEVSE_Manual);
 }
 
