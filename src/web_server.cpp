@@ -254,6 +254,7 @@ void buildStatus(DynamicJsonDocument &doc) {
 
   doc["config_version"] = config_version;
   doc["claims_version"] = evse.getClaimsVersion();
+  doc["override_version"] = manual.getVersion();
   doc["schedule_version"] = scheduler.getVersion();
   doc["schedule_plan_version"] = scheduler.getPlanVersion();
 
