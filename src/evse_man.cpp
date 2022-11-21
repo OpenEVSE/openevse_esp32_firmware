@@ -476,6 +476,11 @@ bool EvseManager::claim(EvseClient client, int priority, EvseProperties &target)
       StaticJsonDocument<128> event;
       event["claims_version"] = ++_version;
       event_send(event);
+      event.clear();
+      if (client == EvseClient_OpenEVSE_Manual) {
+          event["override_version"] = manual.setVersion(manual.getVersion() + 1);
+          event_send(event);
+      }
     }
     return true;
   }

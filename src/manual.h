@@ -23,6 +23,7 @@ class ManualOverride
     }
     bool getProperties(EvseProperties &props);
     uint8_t getVersion();
+    uint8_t setVersion(uint8_t version);
 };
 
 extern ManualOverride manual;
