@@ -475,6 +475,9 @@ bool EvseManager::claim(EvseClient client, int priority, EvseProperties &target)
       MicroTask.wakeTask(this);
       StaticJsonDocument<128> event;
       event["claims_version"] = ++_version;
+      if (client == EvseClient_OpenEVSE_Manual) {
+          event["override_version"] = manual.setVersion(manual.getVersion() + 1);
+      }
       event_send(event);
     }
     return true;
@@ -501,6 +504,10 @@ bool EvseManager::release(EvseClient client)
     MicroTask.wakeTask(this);
     StaticJsonDocument<128> event;
     event["claims_version"] = ++_version;
+    if (client == EvseClient_OpenEVSE_Manual) {
+          event["override_version"] = manual.setVersion(manual.getVersion() + 1);
+          
+    }
     event_send(event);
     return true;
   }
