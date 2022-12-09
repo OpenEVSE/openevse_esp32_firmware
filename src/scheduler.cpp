@@ -9,7 +9,7 @@
 #include "app_config.h"
 #include "event.h"
 #include "mqtt.h"
-
+#include "divert.h"
 #include <algorithm>
 #include <vector>
 #include <LITTLEFS.h>
@@ -226,13 +226,24 @@ unsigned long Scheduler::loop(MicroTasks::WakeReason reason)
       if(EvseState::Active == currentEvent.getState())
       {
         priority = EvseManager_Priority_Timer;
-        properties.setChargeCurrent(_evse->getMaxHardwareCurrent());
+        //properties.setChargeCurrent(_evse->getMaxHardwareCurrent());
+        //disable divert mode
+        if (config_divert_enabled())
+          divert.setMode((DivertMode)(1));
+      }
+      else {
+        //enable divert mode
+        if (config_divert_enabled())
+        divert.setMode((DivertMode)(2));
       }
       _evse->claim(EvseClient_OpenEVSE_Schedule, priority, properties);
     } else {
       // No scheduled events, release any claims
       DBUGLN("releasing claims");
       _evse->release(EvseClient_OpenEVSE_Schedule);
+      //enable divert mode
+      if (config_divert_enabled())
+        divert.setMode((DivertMode)(2));
     }
 
     _activeEvent = currentEvent;
