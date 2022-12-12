@@ -9,6 +9,8 @@
 
 #include "event_log.h"
 #include "divert.h"
+#include "current_shaper.h"
+#include "manual.h"
 
 static EvseProperties nullProperties;
 
@@ -56,27 +58,29 @@ EvseProperties & EvseProperties::operator = (EvseProperties &rhs)
 bool EvseProperties::deserialize(JsonObject &obj)
 {
   if(obj.containsKey("state")) {
-    _state.fromString(obj["state"]);
+    obj["state"] == "clear" ? _state.None : _state.fromString(obj["state"]);
   }
 
   if(obj.containsKey("charge_current")) {
-    _charge_current = obj["charge_current"];
+    obj["charge_current"] == "clear" ? _charge_current = UINT32_MAX :_charge_current = obj["charge_current"];
   }
 
   if(obj.containsKey("max_current")) {
-    _max_current = obj["max_current"];
+    obj["max_current"] == "clear" ? _max_current = UINT32_MAX : _max_current = obj["max_current"];
   }
 
+
   if(obj.containsKey("energy_limit")) {
-    _energy_limit = obj["energy_limit"];
+    obj["energy_limit"] == "clear" ? _energy_limit = UINT32_MAX : _energy_limit = obj["energy_limit"];
   }
 
   if(obj.containsKey("time_limit")) {
-    _time_limit = obj["time_limit"];
+    obj["time_limit"] == "clear" ? _time_limit = UINT32_MAX : _time_limit = obj["time_limit"];
   }
 
   if(obj.containsKey("auto_release")) {
     _auto_release = obj["auto_release"];
+    _has_auto_release = true;
   }
 
   return true;
@@ -184,7 +188,9 @@ bool EvseManager::findClaim(EvseClient client, Claim **claim)
 
 bool EvseManager::evaluateClaims(EvseProperties &properties)
 {
+  // Clear the target state and set to active by default
   properties.clear();
+  properties.setState(EvseState::Active);
 
   bool foundClaim = false;
 
@@ -193,6 +199,12 @@ bool EvseManager::evaluateClaims(EvseProperties &properties)
   int maxCurrentPriority = 0;
   int energyLimitPriority = 0;
   int timeLimitPriority = 0;
+
+  _state_client = EvseClient_NULL;
+  _charge_current_client = EvseClient_NULL;
+  _max_current_client = EvseClient_NULL;
+  _energy_limit_client = EvseClient_NULL;
+  _time_limit_client = EvseClient_NULL;
 
   for(size_t i = 0; i < EVSE_MANAGER_MAX_CLIENT_CLAIMS; i++)
   {
@@ -215,6 +227,7 @@ bool EvseManager::evaluateClaims(EvseProperties &properties)
       {
         properties.setState(claim.getState());
         statePriority = claim.getPriority();
+        _state_client = claim.getClient();
       }
 
       if(claim.getPriority() > chargeCurrentPriority &&
@@ -222,6 +235,7 @@ bool EvseManager::evaluateClaims(EvseProperties &properties)
       {
         properties.setChargeCurrent(claim.getChargeCurrent());
         chargeCurrentPriority = claim.getPriority();
+        _charge_current_client = claim.getClient();
       }
 
       if(claim.getPriority() > maxCurrentPriority &&
@@ -229,6 +243,7 @@ bool EvseManager::evaluateClaims(EvseProperties &properties)
       {
         properties.setMaxCurrent(claim.getMaxCurrent());
         maxCurrentPriority = claim.getPriority();
+        _max_current_client = claim.getClient();
       }
 
       if(claim.getPriority() > energyLimitPriority &&
@@ -236,6 +251,7 @@ bool EvseManager::evaluateClaims(EvseProperties &properties)
       {
         properties.setEnergyLimit(claim.getEnergyLimit());
         energyLimitPriority = claim.getPriority();
+        _energy_limit_client = claim.getClient();
       }
 
       if(claim.getPriority() > timeLimitPriority &&
@@ -243,11 +259,20 @@ bool EvseManager::evaluateClaims(EvseProperties &properties)
       {
         properties.setTimeLimit(claim.getTimeLimit());
         timeLimitPriority = claim.getPriority();
+        _time_limit_client = claim.getClient();
+      }
+
+      if(claim.getClient() == EvseClient_OpenEVSE_Manual) {
+        const size_t capacity = JSON_OBJECT_SIZE(40) + 1024;
+        // update manual_override event to socket & mqtt
+        DynamicJsonDocument event(capacity);
+        event["manual_override"] = 1;
+        event_send(event);
       }
     }
   }
 
-  return foundClaim;
+ return foundClaim;
 }
 
 void EvseManager::setup()
@@ -315,6 +340,24 @@ bool EvseManager::setTargetState(EvseProperties &target)
   return changeMade;
 }
 
+void EvseManager::setSleepForDisable(bool sleepForDisable)
+{
+  if(_sleepForDisable != sleepForDisable)
+  {
+    _sleepForDisable = sleepForDisable;
+    if(EvseState::Disabled == getActiveState())
+    {
+      if(_sleepForDisable) {
+        DBUGLN("EVSE: sleep");
+        _monitor.sleep();
+      } else {
+        DBUGLN("EVSE: disable");
+        _monitor.disable();
+      }
+    }
+  }
+}
+
 unsigned long EvseManager::loop(MicroTasks::WakeReason reason)
 {
   DBUG("EVSE manager woke: ");
@@ -360,7 +403,9 @@ unsigned long EvseManager::loop(MicroTasks::WakeReason reason)
                   _monitor.getSessionElapsed(),
                   _monitor.getTemperature(EVSE_MONITOR_TEMP_MONITOR),
                   _monitor.getTemperature(EVSE_MONITOR_TEMP_MAX),
-                  divertmode);
+                  divert.isActive(),
+                  shaper.getState()
+                  );
   }
 
   DBUGVAR(_sessionCompleteListener.IsTriggered());
@@ -377,18 +422,12 @@ unsigned long EvseManager::loop(MicroTasks::WakeReason reason)
 
     // Work out the state we should try and get in too
     _hasClaims = evaluateClaims(_targetProperties);
-
     DBUGVAR(_hasClaims);
-    if(_hasClaims)
-    {
-      DBUGVAR(_targetProperties.getState().toString());
-      DBUGVAR(_targetProperties.getChargeCurrent());
-      DBUGVAR(_targetProperties.getMaxCurrent());
-      DBUGVAR(_targetProperties.getEnergyLimit());
-      DBUGVAR(_targetProperties.getTimeLimit());
-    } else {
-      DBUGLN("No claims");
-    }
+    DBUGVAR(_targetProperties.getState().toString());
+    DBUGVAR(_targetProperties.getChargeCurrent());
+    DBUGVAR(_targetProperties.getMaxCurrent());
+    DBUGVAR(_targetProperties.getEnergyLimit());
+    DBUGVAR(_targetProperties.getTimeLimit());
 
     _evaluateTargetState = true;
   }
@@ -397,16 +436,8 @@ unsigned long EvseManager::loop(MicroTasks::WakeReason reason)
   if(_evaluateTargetState)
   {
     _evaluateTargetState = false;
-
-    if(!_hasClaims)
-    {
-      // No claims, make sure the targetProperties are the defaults with charger active
-      _targetProperties.clear();
-      _targetProperties.setState(EvseState::Active);
-    }
     setTargetState(_targetProperties);
   }
-
   return MicroTask.Infinate;
 }
 
@@ -438,10 +469,16 @@ bool EvseManager::claim(EvseClient client, int priority, EvseProperties &target)
   {
     DBUGF("Found slot");
     if(slot->claim(client, priority, target))
-    {
+    { 
       DBUGF("Claim added/updated, waking task");
       _evaluateClaims = true;
       MicroTask.wakeTask(this);
+      StaticJsonDocument<128> event;
+      event["claims_version"] = ++_version;
+      if (client == EvseClient_OpenEVSE_Manual) {
+          event["override_version"] = manual.setVersion(manual.getVersion() + 1);
+      }
+      event_send(event);
     }
     return true;
   }
@@ -455,9 +492,23 @@ bool EvseManager::release(EvseClient client)
 
   if(findClaim(client, &claim))
   {
+    // if claim is manual override, publish data to socket & mqtt
+    if (claim->getClient() == EvseClient_OpenEVSE_Manual) {
+      const size_t capacity = JSON_OBJECT_SIZE(40) + 1024;
+      DynamicJsonDocument event(capacity);
+      event["manual_override"] = 0;
+      event_send(event);
+    }
     claim->release();
     _evaluateClaims = true;
     MicroTask.wakeTask(this);
+    StaticJsonDocument<128> event;
+    event["claims_version"] = ++_version;
+    if (client == EvseClient_OpenEVSE_Manual) {
+          event["override_version"] = manual.setVersion(manual.getVersion() + 1);
+          
+    }
+    event_send(event);
     return true;
   }
 
@@ -480,6 +531,11 @@ void EvseManager::releaseAutoReleaseClaims()
 bool EvseManager::clientHasClaim(EvseClient client) {
   return findClaim(client);
 }
+
+uint8_t EvseManager::getClaimsVersion() {
+  return _version;
+}
+
 
 EvseProperties &EvseManager::getClaimProperties(EvseClient client)
 {
@@ -637,4 +693,29 @@ bool EvseManager::serializeClaim(DynamicJsonDocument &doc, EvseClient client)
   }
 
   return false;
+}
+
+bool EvseManager::serializeTarget(DynamicJsonDocument &doc)
+{
+  JsonObject properties = doc.createNestedObject("properties");
+  _targetProperties.serialize(properties);
+
+  JsonObject claims = doc.createNestedObject("claims");
+  if(EvseClient_NULL != _state_client) {
+    claims["state"] = _state_client;
+  }
+  if(EvseClient_NULL != _charge_current_client) {
+    claims["charge_current"] = _charge_current_client;
+  }
+  if(EvseClient_NULL != _max_current_client) {
+    claims["max_current"] = _max_current_client;
+  }
+  if(EvseClient_NULL != _energy_limit_client) {
+    claims["energy_limit"] = _energy_limit_client;
+  }
+  if(EvseClient_NULL != _time_limit_client) {
+    claims["time_limit"] = _time_limit_client;
+  }
+
+  return true;
 }

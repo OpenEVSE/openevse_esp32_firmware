@@ -1,4 +1,4 @@
-openapi: 3.0.2
+openapi: 3.0.3
 info:
   title: OpenEVSE WiFi API
   description: |
@@ -7,6 +7,7 @@ info:
   contact:
     email: jeremy@bigjungle.net
     name: Jeremy Poulter
+    url: https://github.com/jeremypoulter/
   license:
     name: Apache 2.0
     url: 'http://www.apache.org/licenses/LICENSE-2.0.html'
@@ -24,8 +25,8 @@ paths:
       description: |
         The status endpoint can be called to get the status of the EVSE.
 
-        While it is posible to poll this endpoint, the recomendatoin is to retrieve the initial 
-        state then use the [/ws](#statusUpdates) 
+        While it is posible to poll this endpoint, the recomendatoin is to retrieve the initial
+        state then use the [/ws](#statusUpdates)
       responses:
         '200':
           description: OK
@@ -73,12 +74,68 @@ paths:
                     offset: '+0000'
       tags:
         - Status
+    post:
+      operationId: postStatus
+      summary: Update external data to EVSE status
+      description: |
+        The status endpoint can be called to post external data that should be updated by MQTT
+        If MQTT is not an option, all external data needed can be updated from an HTTP POST request to /status endpoint.
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  voltage:
+                    type: integer
+                    description: live voltage in V
+                  shaper_live_pwr:
+                    type: integer
+                    description: total household live power in W
+                  solar:
+                    type: integer
+                    description: divert solar production in W
+                  grid_ie:
+                    type: integer
+                    description: divert grid -import/+export in W
+                  battery_level:
+                    type: integer
+                    description: vehicle soc in %
+                  battery_range:
+                    type: integer
+                    description: vehicle range
+                  time_to_full_charge:
+                    type: integer
+                    description: vehicle charge ETA
+                x-examples:
+                  EVSE Status:
+                    voltage: 220
+                    shaper_live_pwr: 3400
+                    solar: 3000
+                    grid_ie: 3000
+                    battery_level: 85
+                    battery_range: 230
+                    time_to_full_charge: 1590
+              examples:
+                EVSE Status:
+                  value:
+                    voltage: 220
+                    shaper_live_pwr: 3400
+                    solar: 3000
+                    grid_ie: 3000
+                    battery_level: 85
+                    battery_range: 230
+                    time_to_full_charge: 1590
+      tags:
+        - Status
   /ws:
     get:
       operationId: statusUpdates
       summary: EVSE status updates
       description: |
-        As the state changes on the EVSE a websocket frame will be sent over the socket. 
+        As the state changes on the EVSE a websocket frame will be sent over the socket.
         The frame will contain a JSON document conntaining only the updated state.
       responses:
         '200':
@@ -87,13 +144,16 @@ paths:
             application/json:
               schema:
                 $ref: ./models/Status.yaml
+        '400':
+          description: Error
       tags:
         - Status
   /config:
     get:
       operationId: getConfig
       summary: Get the EVSE configuration
-      description: ''
+      description: |
+        Retrieve the current WiFi and EVSE module configuration
       tags:
         - Config
       responses:
@@ -404,6 +464,23 @@ paths:
       tags:
         - Schedule
       summary: Remove event
+  /schedule/plan:
+    get:
+      summary: Get planned events and state
+      description: This will return the planned events by day and also the current state of the scheduler
+      responses:
+        '200':
+          description: List of planed events
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  current_day:
+                    $ref: '#/components/schemas/Day'
+      operationId: getSchedulePlan
+      tags:
+        - Schedule
   /logs:
     get:
       summary: Get event block information
@@ -512,6 +589,17 @@ components:
         msg:
           type: string
           description: The message
+    Day:
+      type: string
+      enum:
+        - monday
+        - tuesday
+        - wednesday
+        - thursday
+        - friday
+        - saturday
+        - sunday
+      x-examples: {}
     ScheduleEvent:
       type: object
       properties:
@@ -527,15 +615,7 @@ components:
           type: array
           uniqueItems: true
           items:
-            type: string
-            enum:
-              - monday
-              - tuesday
-              - wednesday
-              - thursday
-              - friday
-              - saturday
-              - sunday
+            $ref: '#/components/schemas/Day'
       required:
         - state
         - time

@@ -6,6 +6,7 @@
 
 #include "emonesp.h"
 #include "evse_monitor.h"
+#include "event.h"
 #include "debug.h"
 
 #ifdef ENABLE_MCP9808
@@ -169,6 +170,7 @@ EvseMonitor::EvseMonitor(OpenEVSEClass &openevse) :
   _session_complete(EVSE_MONITOR_SESSION_COMPLETE_MASK, EVSE_MONITOR_SESSION_COMPLETE_TRIGGER),
   _count(0),
   _heartbeat(false),
+  _firmware_version(""),
 #ifdef ENABLE_MCP9808
   _mcp9808(),
 #endif
@@ -475,6 +477,9 @@ void EvseMonitor::setPilot(long amps, std::function<void(int ret)> callback)
     if(RAPI_RESPONSE_OK == ret) {
       _pilot = pilot;
       _settings_changed.Trigger();
+      StaticJsonDocument<128> event;
+      event["pilot"] = _pilot;
+      event_send(event);
     }
 
     if(callback) {
@@ -499,6 +504,9 @@ void EvseMonitor::setVoltage(double volts, std::function<void(int ret)> callback
     {
       if(RAPI_RESPONSE_OK == ret) {
         _voltage = volts;
+        StaticJsonDocument<128> event;
+        event["voltage"] = _voltage;
+        event_send(event);
       }
 
       if(callback) {
@@ -702,6 +710,13 @@ void EvseMonitor::getChargeCurrentAndVoltageFromEvse()
         if(VOLTAGE_MINIMUM <= volts && volts <= VOLTAGE_MAXIMUM) {
           _voltage = volts;
         }
+
+        StaticJsonDocument<64> event;
+        event["amp"] = _amp * AMPS_SCALE_FACTOR;;
+        event["voltage"] = _voltage * VOLTS_SCALE_FACTOR;
+        event_send(event);
+
+
         _data_ready.ready(EVSE_MONITOR_AMP_AND_VOLT_DATA_READY);
       }
     });
@@ -761,6 +776,11 @@ void EvseMonitor::getEnergyFromEvse()
         _total_kwh = total_kwh;
 
         _data_ready.ready(EVSE_MONITOR_ENERGY_DATA_READY);
+        StaticJsonDocument<512> event;
+        event["session_energy"] = _session_wh;
+        event["total_energy"] = _total_kwh;
+        event["wh"] = _total_kwh * TOTAL_ENERGY_SCALE_FACTOR;
+        event_send(event);
       }
     });
   } else {

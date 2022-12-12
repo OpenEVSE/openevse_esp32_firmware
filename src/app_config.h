@@ -16,6 +16,9 @@
 extern String esid;
 extern String epass;
 
+// Language
+extern String lang;
+
 // Web server authentication (leave blank for none)
 extern String www_username;
 extern String www_password;
@@ -40,6 +43,7 @@ extern String mqtt_pass;
 extern String mqtt_solar;
 extern String mqtt_grid_ie;
 extern String mqtt_vrms;
+extern String mqtt_live_pwr;
 extern String mqtt_vehicle_soc;
 extern String mqtt_vehicle_range;
 extern String mqtt_vehicle_eta;
@@ -63,6 +67,12 @@ extern double divert_attack_smoothing_factor;
 extern double divert_decay_smoothing_factor;
 extern uint32_t divert_min_charge_time;
 
+// Scheduler settings
+extern uint32_t scheduler_start_window;
+
+//Shaper settings
+extern uint32_t current_shaper_max_pwr;
+
 // 24-bits of Flags
 extern uint32_t flags;
 
@@ -81,6 +91,9 @@ extern uint32_t flags;
 #define CONFIG_OCPP_ACCESS_ENERGIZE (1 << 16)
 #define CONFIG_VEHICLE_RANGE_MILES  (1 << 17)
 #define CONFIG_RFID                 (1 << 18)
+#define CONFIG_SERVICE_CUR_SHAPER   (1 << 19)
+#define CONFIG_MQTT_RETAINED        (1 << 20)
+#define CONFIG_FACTORY_WRITE_LOCK   (1 << 21)
 
 inline bool config_emoncms_enabled() {
   return CONFIG_SERVICE_EMONCMS == (flags & CONFIG_SERVICE_EMONCMS);
@@ -100,6 +113,10 @@ inline bool config_sntp_enabled() {
 
 inline uint8_t config_mqtt_protocol() {
   return (flags & CONFIG_MQTT_PROTOCOL) >> 4;
+}
+
+inline bool config_mqtt_retained() {
+  return CONFIG_MQTT_RETAINED == (flags & CONFIG_MQTT_RETAINED);
 }
 
 inline bool config_mqtt_reject_unauthorized() {
@@ -126,6 +143,10 @@ inline bool config_divert_enabled() {
   return CONFIG_SERVICE_DIVERT == (flags & CONFIG_SERVICE_DIVERT);
 }
 
+inline bool config_current_shaper_enabled() {
+  return CONFIG_SERVICE_CUR_SHAPER == (flags & CONFIG_SERVICE_CUR_SHAPER);
+}
+
 inline uint8_t config_charge_mode() {
   return (flags & CONFIG_CHARGE_MODE) >> 10;
 }
@@ -137,9 +158,13 @@ inline bool config_pause_uses_disabled() {
 inline bool config_vehicle_range_miles() {
   return CONFIG_VEHICLE_RANGE_MILES == (flags & CONFIG_VEHICLE_RANGE_MILES);
 }
-  
+
 inline bool config_rfid_enabled() {
   return CONFIG_RFID == (flags & CONFIG_RFID);
+}
+
+inline bool config_factory_write_lock() {
+  return CONFIG_FACTORY_WRITE_LOCK == (flags & CONFIG_FACTORY_WRITE_LOCK);
 }
 
 // Ohm Connect Settings
@@ -159,7 +184,7 @@ extern void config_save_emoncms(bool enable, String server, String node, String 
 // -------------------------------------------------------------------
 // Save the MQTT broker details
 // -------------------------------------------------------------------
-extern void config_save_mqtt(bool enable, int protocol, String server, uint16_t port, String topic, String user, String pass, String solar, String grid_ie, bool reject_unauthorized);
+extern void config_save_mqtt(bool enable, int protocol, String server, uint16_t port, String topic, bool retained, String user, String pass, String solar, String grid_ie, String live_pwr, bool reject_unauthorized);
 
 // -------------------------------------------------------------------
 // Save the admin/web interface details
@@ -212,7 +237,7 @@ void config_set(const char *name, double val);
 bool config_deserialize(String& json);
 bool config_deserialize(const char *json);
 bool config_deserialize(DynamicJsonDocument &doc);
-void config_commit();
+void config_commit(bool factory = false);
 
 // Write config settings to JSON object
 bool config_serialize(String& json, bool longNames = true, bool compactOutput = false, bool hideSecrets = false);

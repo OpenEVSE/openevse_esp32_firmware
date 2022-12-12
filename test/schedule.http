@@ -180,3 +180,33 @@ Content-Type: application/json
     "tuesday"
   ]
 }
+
+###
+# Configure a 10 minute start window
+
+POST {{baseUrl}}/config HTTP/1.1
+Content-Type: application/json
+
+{
+  "scheduler_start_window": 600
+}
+
+###
+# Configure a 1 minute start window
+
+POST {{baseUrl}}/config HTTP/1.1
+Content-Type: application/json
+
+{
+  "scheduler_start_window": 60
+}
+
+###
+# Configure disable start window
+
+POST {{baseUrl}}/config HTTP/1.1
+Content-Type: application/json
+
+{
+  "scheduler_start_window": 0
+}

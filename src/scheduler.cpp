@@ -6,6 +6,9 @@
 #include "scheduler.h"
 #include "time_man.h"
 #include "emonesp.h"
+#include "app_config.h"
+#include "event.h"
+#include "mqtt.h"
 
 #include <algorithm>
 #include <vector>
@@ -59,7 +62,7 @@ void Scheduler::Event::setId(uint32_t id) {
 
 String Scheduler::Event::getTime()
 {
-  char time[9];
+  char time[14];
   snprintf(time, sizeof(time), "%02d:%02d:%02d", getHours(), getMinutes(), getSeconds());
   String timeString(time);
   return timeString;
@@ -143,13 +146,28 @@ uint32_t Scheduler::EventInstance::getDelay(int fromDay, uint32_t fromOffset)
   return delay;
 }
 
+uint32_t Scheduler::EventInstance::randomiseStartOffset()
+{
+  if(!_event) {
+    return 0;
+  }
+
+  int32_t offset = _event->getOffset();
+  if(_event->getState() == EvseState::Active) {
+    offset += random(-min((int32_t)scheduler_start_window, offset), scheduler_start_window);
+  }
+  return offset;
+}
+
 Scheduler::Scheduler(EvseManager &evse) :
   _evse(&evse),
   _events(),
   _firstEvent(),
   _activeEvent(),
   _loading(false),
-  _timeChangeListener(this)
+  _timeChangeListener(this),
+  _version(0),
+  _plan_version(0)
 {
 
 }
@@ -204,9 +222,13 @@ unsigned long Scheduler::loop(MicroTasks::WakeReason reason)
       DBUGF("Starting %s claim",
         currentEvent.getState().toString());
       EvseProperties properties(currentEvent.getState());
-      _evse->claim(EvseClient_OpenEVSE_Schedule,
-        EvseState::Active == currentEvent.getState() ? EvseManager_Priority_Timer : EvseManager_Priority_Default,
-        properties);
+      int priority = EvseManager_Priority_Default;
+      if(EvseState::Active == currentEvent.getState())
+      {
+        priority = EvseManager_Priority_Timer;
+        properties.setChargeCurrent(_evse->getMaxHardwareCurrent());
+      }
+      _evse->claim(EvseClient_OpenEVSE_Schedule, priority, properties);
     } else {
       // No scheduled events, release any claims
       DBUGLN("releasing claims");
@@ -214,6 +236,10 @@ unsigned long Scheduler::loop(MicroTasks::WakeReason reason)
     }
 
     _activeEvent = currentEvent;
+
+    StaticJsonDocument<128> doc;
+    doc["schedule_plan_version"] = ++_plan_version;
+    event_send(doc);
   }
 
   int currentDay;
@@ -222,8 +248,15 @@ unsigned long Scheduler::loop(MicroTasks::WakeReason reason)
   uint32_t delay = MicroTask.Infinate;
   if(_activeEvent.isValid())
   {
+    DBUGF("Next event %d: %s %s %s",
+      _activeEvent.getNext().getEvent()->getId(),
+      days_of_the_week_strings[_activeEvent.getNext().getDay()],
+      _activeEvent.getNext().getEvent()->getTime().c_str(),
+      _activeEvent.getNext().getEvent()->getStateText());
+
     Scheduler::getCurrentTime(currentDay, currentOffset);
     delay = _activeEvent.getNext().getDelay(currentDay, currentOffset) * 1000;
+    DBUGVAR(delay);
   }
   return delay;
 }
@@ -269,7 +302,7 @@ void Scheduler::buildSchedule()
       uint8_t days = event->getDays();
       for(int day = 0; day < SCHEDULER_DAYS_IN_A_WEEK; day++)
       {
-        if(days & 1 << day) {
+        if(days & (1 << day)) {
           by_week[day].push_back(event);
         }
       }
@@ -325,12 +358,20 @@ void Scheduler::buildSchedule()
 
       Event *event = e.getEvent();
       int day = e.getDay();
-      DBUGF("Event %d: %s %s %s", event->getId(), days_of_the_week_strings[day], event->getTime().c_str(), event->getStateText());
+      DBUGF("Event %d: %s %s %s %d %d", event->getId(), days_of_the_week_strings[day], event->getTime().c_str(), event->getStateText(), event->getOffset(), e.getStartOffset());
 
       e.moveToNext();
     } while(e != _firstEvent);
     #endif // ENABLE_DEBUG
   }
+
+  StaticJsonDocument<128> doc;
+  doc["schedule_version"] = ++_version;
+  doc["schedule_plan_version"] = ++_plan_version;
+  event_send(doc);
+
+  // publish updated schedule to mqtt
+  mqtt_publish_schedule();
 
   // wake the main task to see if we actually need to do something
   MicroTask.wakeTask(this);
@@ -752,12 +793,46 @@ bool Scheduler::serialize(JsonObject &object, Scheduler::Event *event)
   return true;
 }
 
+void Scheduler::serializeEventInstance(JsonObject &object, Scheduler::EventInstance *e, bool includeDay)
+{
+  object["id"] = e->getEvent()->getId();
+  object["state"] = e->getEvent()->getStateText();
+  object["time"] = e->getEvent()->getTime();
+  object["day"] = days_of_the_week_strings[e->getDay()];
+  object["offset"] = e->getEvent()->getOffset();
+  object["start_offset"] = e->getStartOffset();
+  object["diff"] = (int32_t)(e->getStartOffset()) - (int32_t)(e->getEvent()->getOffset());
+  object["duration"] = e->getDuration();
+}
+
 bool Scheduler::serializePlan(DynamicJsonDocument &doc)
 {
   JsonObject root = doc.to<JsonObject>();
 
-  Scheduler::EventInstance *e = &_firstEvent;
+  int currentDay;
+  int32_t currentOffset;
+  Scheduler::getCurrentTime(currentDay, currentOffset);
 
+  root["current_day"] = days_of_the_week_strings[currentDay];
+  root["current_offset"] = currentOffset;
+
+  Scheduler::EventInstance *e = &_activeEvent;
+  if(e->isValid())
+  {
+    root["next_event_delay"] = e->getNext().getDelay(currentDay, currentOffset);
+
+    JsonObject object = root.createNestedObject("current_event");
+    serializeEventInstance(object, e, true);
+    e = &e->getNext();
+    object = root.createNestedObject("next_event");
+    serializeEventInstance(object, e, true);
+  } else {
+    root["next_event_delay"] = false;
+    root["current_event"] = false;
+    root["next_event"] = false;
+  }
+
+  e = &_firstEvent;
   if(e->isValid())
   {
     int day = e->getDay();
@@ -773,16 +848,18 @@ bool Scheduler::serializePlan(DynamicJsonDocument &doc)
       }
 
       JsonObject object = currentDay.createNestedObject();
-      object["id"] = e->getEvent()->getId();
-      object["state"] = e->getEvent()->getStateText();
-      object["time"] = e->getEvent()->getTime();
-      object["duration"] = e->getDuration();
+      serializeEventInstance(object, e);
 
       e = &e->getNext();
     } while(_firstEvent != e);
   }
 
   return true;
+}
+
+void Scheduler::notifyConfigChanged()
+{
+  buildSchedule();
 }
 
 void Scheduler::getCurrentTime(int &day, int32_t &offset)

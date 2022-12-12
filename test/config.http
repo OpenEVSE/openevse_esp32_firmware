@@ -242,3 +242,27 @@ Content-Type: application/json
   "offset": 0
 }
 
+###
+
+POST {{baseUrl}}/config HTTP/1.1
+Content-Type: application/json
+
+{
+  "ssid": "{{ssid}}",
+  "pass": "{{pass}}"
+}
+
+###
+
+# Set a factory username/password
+
+POST {{baseUrl}}/config?factory=true HTTP/1.1
+Content-Type: application/json
+Authorization: Basic admin:admin
+X-Storage: factory
+
+{
+  "www_username": "admin",
+  "www_password": "admin"
+}
+

@@ -15,6 +15,8 @@ typedef const __FlashStringHelper *fstr_t;
 
 uint32_t config_version = 0;
 
+extern bool isPositive(MongooseHttpServerRequest *request, const char *param);
+
 // -------------------------------------------------------------------
 // Returns OpenEVSE Config json
 // url: /config
@@ -79,8 +81,17 @@ handleConfigPost(MongooseHttpServerRequest *request, MongooseHttpServerResponseS
     bool config_modified = false;
 
     // Update WiFi module config
-    if(config_deserialize(doc)) {
-      config_commit();
+    MongooseString storage = request->headers("X-Storage");
+    if(storage.equals("factory") && config_factory_write_lock())
+    {
+      response->setCode(423);
+      response->print("{\"msg\":\"Factory settings locked\"}");
+      return;
+    }
+
+    if(config_deserialize(doc))
+    {
+      config_commit(storage.equals("factory"));
       config_modified = true;
       DBUGLN("Config updated");
     }

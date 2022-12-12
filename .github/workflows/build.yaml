@@ -1,3 +1,5 @@
+# yaml-language-server: $schema=https://json.schemastore.org/github-workflow.json
+
 name: Build/Release OpenEVSE
 
 on:
@@ -17,12 +19,17 @@ jobs:
         env:
           - openevse_nodemcu-32s
           - openevse_esp-wrover-kit
+          - openevse_esp-wrover-kit_latest
           - openevse_huzzah32_dev
           - openevse_huzzah32
           - openevse_featheresp32
           - openevse_wifi_v1
-          - openevse_esp32-gateway
+          - openevse_esp32-gateway-old
           - openevse_esp32-gateway-e
+          - openevse_esp32-gateway-f
+          - openevse_esp32-gateway-e_dev
+          - openevse_esp32-gateway-f_dev
+          - openevse_esp32-poe-iso
           - openevse_esp32-heltec-wifi-lora-v2
 
     steps:

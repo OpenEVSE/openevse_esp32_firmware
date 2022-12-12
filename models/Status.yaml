@@ -130,6 +130,9 @@ properties:
   charge_rate:
     type: integer
     description: The divert charge rate
+  trigger_current:
+    type: integer
+    description: The current at which the divert module will start the charge
   available_current:
     type: integer
     description: The computed avalible current for divert
@@ -141,7 +144,7 @@ properties:
     description: The time since the last update of the divert feed
   divert_active:
     type: boolean
-    description: '`true` if divert is active, `false` if not'
+    description: '`true` if divert is actively enabling charging, `false` if not'
   ota_update:
     type: integer
     description: '`1`, if there is an OTA update active, `0` if normal operation'

@@ -113,10 +113,7 @@ startClient()
   // DEBUG.print(" epass:");
   // DEBUG.println(epass.c_str());
 
-#ifndef ESP32
   WiFi.hostname(esp_hostname.c_str());
-#endif // !ESP32
-
   WiFi.begin(esid.c_str(), epass.c_str());
 
   ledManager.setWifiMode(true, false);
@@ -239,40 +236,56 @@ static void net_wifi_onAPModeStationDisconnected(const WiFiEventSoftAPModeStatio
 };
 
 #ifdef ESP32
-void net_event(WiFiEvent_t event, system_event_info_t info)
+void net_event(WiFiEvent_t event, arduino_event_info_t info)
 {
   DBUGF("Got Network event %s",
-    SYSTEM_EVENT_WIFI_READY == event ? "SYSTEM_EVENT_WIFI_READY" :
-    SYSTEM_EVENT_SCAN_DONE == event ? "SYSTEM_EVENT_SCAN_DONE" :
-    SYSTEM_EVENT_STA_START == event ? "SYSTEM_EVENT_STA_START" :
-    SYSTEM_EVENT_STA_STOP == event ? "SYSTEM_EVENT_STA_STOP" :
-    SYSTEM_EVENT_STA_CONNECTED == event ? "SYSTEM_EVENT_STA_CONNECTED" :
-    SYSTEM_EVENT_STA_DISCONNECTED == event ? "SYSTEM_EVENT_STA_DISCONNECTED" :
-    SYSTEM_EVENT_STA_AUTHMODE_CHANGE == event ? "SYSTEM_EVENT_STA_AUTHMODE_CHANGE" :
-    SYSTEM_EVENT_STA_GOT_IP == event ? "SYSTEM_EVENT_STA_GOT_IP" :
-    SYSTEM_EVENT_STA_LOST_IP == event ? "SYSTEM_EVENT_STA_LOST_IP" :
-    SYSTEM_EVENT_STA_WPS_ER_SUCCESS == event ? "SYSTEM_EVENT_STA_WPS_ER_SUCCESS" :
-    SYSTEM_EVENT_STA_WPS_ER_FAILED == event ? "SYSTEM_EVENT_STA_WPS_ER_FAILED" :
-    SYSTEM_EVENT_STA_WPS_ER_TIMEOUT == event ? "SYSTEM_EVENT_STA_WPS_ER_TIMEOUT" :
-    SYSTEM_EVENT_STA_WPS_ER_PIN == event ? "SYSTEM_EVENT_STA_WPS_ER_PIN" :
-    SYSTEM_EVENT_AP_START == event ? "SYSTEM_EVENT_AP_START" :
-    SYSTEM_EVENT_AP_STOP == event ? "SYSTEM_EVENT_AP_STOP" :
-    SYSTEM_EVENT_AP_STACONNECTED == event ? "SYSTEM_EVENT_AP_STACONNECTED" :
-    SYSTEM_EVENT_AP_STADISCONNECTED == event ? "SYSTEM_EVENT_AP_STADISCONNECTED" :
-    SYSTEM_EVENT_AP_STAIPASSIGNED == event ? "SYSTEM_EVENT_AP_STAIPASSIGNED" :
-    SYSTEM_EVENT_AP_PROBEREQRECVED == event ? "SYSTEM_EVENT_AP_PROBEREQRECVED" :
-    SYSTEM_EVENT_GOT_IP6 == event ? "SYSTEM_EVENT_GOT_IP6" :
-    SYSTEM_EVENT_ETH_START == event ? "SYSTEM_EVENT_ETH_START" :
-    SYSTEM_EVENT_ETH_STOP == event ? "SYSTEM_EVENT_ETH_STOP" :
-    SYSTEM_EVENT_ETH_CONNECTED == event ? "SYSTEM_EVENT_ETH_CONNECTED" :
-    SYSTEM_EVENT_ETH_DISCONNECTED == event ? "SYSTEM_EVENT_ETH_DISCONNECTED" :
-    SYSTEM_EVENT_ETH_GOT_IP == event ? "SYSTEM_EVENT_ETH_GOT_IP" :
+
+    ARDUINO_EVENT_WIFI_READY == event ? "ARDUINO_EVENT_WIFI_READY" :
+    ARDUINO_EVENT_WIFI_SCAN_DONE == event ? "ARDUINO_EVENT_WIFI_SCAN_DONE" :
+    ARDUINO_EVENT_WIFI_STA_START == event ? "ARDUINO_EVENT_WIFI_STA_START" :
+    ARDUINO_EVENT_WIFI_STA_STOP == event ? "ARDUINO_EVENT_WIFI_STA_STOP" :
+    ARDUINO_EVENT_WIFI_STA_CONNECTED == event ? "ARDUINO_EVENT_WIFI_STA_CONNECTED" :
+    ARDUINO_EVENT_WIFI_STA_DISCONNECTED == event ? "ARDUINO_EVENT_WIFI_STA_DISCONNECTED" :
+    ARDUINO_EVENT_WIFI_STA_AUTHMODE_CHANGE == event ? "ARDUINO_EVENT_WIFI_STA_AUTHMODE_CHANGE" :
+    ARDUINO_EVENT_WIFI_STA_GOT_IP == event ? "ARDUINO_EVENT_WIFI_STA_GOT_IP" :
+    ARDUINO_EVENT_WIFI_STA_GOT_IP6 == event ? "ARDUINO_EVENT_WIFI_STA_GOT_IP6" :
+    ARDUINO_EVENT_WIFI_STA_LOST_IP == event ? "ARDUINO_EVENT_WIFI_STA_LOST_IP" :
+    ARDUINO_EVENT_WIFI_AP_START == event ? "ARDUINO_EVENT_WIFI_AP_START" :
+    ARDUINO_EVENT_WIFI_AP_STOP == event ? "ARDUINO_EVENT_WIFI_AP_STOP" :
+    ARDUINO_EVENT_WIFI_AP_STACONNECTED == event ? "ARDUINO_EVENT_WIFI_AP_STACONNECTED" :
+    ARDUINO_EVENT_WIFI_AP_STADISCONNECTED == event ? "ARDUINO_EVENT_WIFI_AP_STADISCONNECTED" :
+    ARDUINO_EVENT_WIFI_AP_STAIPASSIGNED == event ? "ARDUINO_EVENT_WIFI_AP_STAIPASSIGNED" :
+    ARDUINO_EVENT_WIFI_AP_PROBEREQRECVED == event ? "ARDUINO_EVENT_WIFI_AP_PROBEREQRECVED" :
+    ARDUINO_EVENT_WIFI_AP_GOT_IP6 == event ? "ARDUINO_EVENT_WIFI_AP_GOT_IP6" :
+    ARDUINO_EVENT_WIFI_FTM_REPORT == event ? "ARDUINO_EVENT_WIFI_FTM_REPORT" :
+    ARDUINO_EVENT_ETH_START == event ? "ARDUINO_EVENT_ETH_START" :
+    ARDUINO_EVENT_ETH_STOP == event ? "ARDUINO_EVENT_ETH_STOP" :
+    ARDUINO_EVENT_ETH_CONNECTED == event ? "ARDUINO_EVENT_ETH_CONNECTED" :
+    ARDUINO_EVENT_ETH_DISCONNECTED == event ? "ARDUINO_EVENT_ETH_DISCONNECTED" :
+    ARDUINO_EVENT_ETH_GOT_IP == event ? "ARDUINO_EVENT_ETH_GOT_IP" :
+    ARDUINO_EVENT_ETH_GOT_IP6 == event ? "ARDUINO_EVENT_ETH_GOT_IP6" :
+    ARDUINO_EVENT_WPS_ER_SUCCESS == event ? "ARDUINO_EVENT_WPS_ER_SUCCESS" :
+    ARDUINO_EVENT_WPS_ER_FAILED == event ? "ARDUINO_EVENT_WPS_ER_FAILED" :
+    ARDUINO_EVENT_WPS_ER_TIMEOUT == event ? "ARDUINO_EVENT_WPS_ER_TIMEOUT" :
+    ARDUINO_EVENT_WPS_ER_PIN == event ? "ARDUINO_EVENT_WPS_ER_PIN" :
+    ARDUINO_EVENT_WPS_ER_PBC_OVERLAP == event ? "ARDUINO_EVENT_WPS_ER_PBC_OVERLAP" :
+    ARDUINO_EVENT_SC_SCAN_DONE == event ? "ARDUINO_EVENT_SC_SCAN_DONE" :
+    ARDUINO_EVENT_SC_FOUND_CHANNEL == event ? "ARDUINO_EVENT_SC_FOUND_CHANNEL" :
+    ARDUINO_EVENT_SC_GOT_SSID_PSWD == event ? "ARDUINO_EVENT_SC_GOT_SSID_PSWD" :
+    ARDUINO_EVENT_SC_SEND_ACK_DONE == event ? "ARDUINO_EVENT_SC_SEND_ACK_DONE" :
+    ARDUINO_EVENT_PROV_INIT == event ? "ARDUINO_EVENT_PROV_INIT" :
+    ARDUINO_EVENT_PROV_DEINIT == event ? "ARDUINO_EVENT_PROV_DEINIT" :
+    ARDUINO_EVENT_PROV_START == event ? "ARDUINO_EVENT_PROV_START" :
+    ARDUINO_EVENT_PROV_END == event ? "ARDUINO_EVENT_PROV_END" :
+    ARDUINO_EVENT_PROV_CRED_RECV == event ? "ARDUINO_EVENT_PROV_CRED_RECV" :
+    ARDUINO_EVENT_PROV_CRED_FAIL == event ? "ARDUINO_EVENT_PROV_CRED_FAIL" :
+    ARDUINO_EVENT_PROV_CRED_SUCCESS == event ? "ARDUINO_EVENT_PROV_CRED_SUCCESS" :
     "UNKNOWN"
   );
 
   switch (event)
   {
-    case SYSTEM_EVENT_AP_START:
+    case ARDUINO_EVENT_WIFI_AP_START:
     {
       if(WiFi.softAPsetHostname(esp_hostname.c_str())) {
         DBUGF("Set host name to %s", WiFi.softAPgetHostname());
@@ -280,7 +293,7 @@ void net_event(WiFiEvent_t event, system_event_info_t info)
         DBUGF("Setting host name failed: %s", esp_hostname.c_str());
       }
     } break;
-    case SYSTEM_EVENT_STA_START:
+    case ARDUINO_EVENT_WIFI_STA_START:
     {
       if(WiFi.setHostname(esp_hostname.c_str())) {
         DBUGF("Set host name to %s", WiFi.getHostname());
@@ -288,25 +301,25 @@ void net_event(WiFiEvent_t event, system_event_info_t info)
         DBUGF("Setting host name failed: %s", esp_hostname.c_str());
       }
     } break;
-    case SYSTEM_EVENT_STA_CONNECTED:
+    case ARDUINO_EVENT_WIFI_STA_CONNECTED:
     {
-      auto& src = info.connected;
+      auto& src = info.wifi_sta_connected;
       WiFiEventStationModeConnected dst;
       dst.ssid = String(reinterpret_cast<char*>(src.ssid));
       memcpy(dst.bssid, src.bssid, 6);
       dst.channel = src.channel;
       net_wifi_onStationModeConnected(dst);
     } break;
-    case SYSTEM_EVENT_STA_DISCONNECTED:
+    case ARDUINO_EVENT_WIFI_STA_DISCONNECTED:
     {
-      auto& src = info.disconnected;
+      auto& src = info.wifi_sta_disconnected;
       WiFiEventStationModeDisconnected dst;
       dst.ssid = String(reinterpret_cast<char*>(src.ssid));
       memcpy(dst.bssid, src.bssid, 6);
       dst.reason = static_cast<WiFiDisconnectReason>(src.reason);
       net_wifi_onStationModeDisconnected(dst);
     } break;
-    case SYSTEM_EVENT_STA_GOT_IP:
+    case ARDUINO_EVENT_WIFI_STA_GOT_IP:
     {
       auto& src = info.got_ip.ip_info;
       WiFiEventStationModeGotIP dst;
@@ -315,24 +328,24 @@ void net_event(WiFiEvent_t event, system_event_info_t info)
       dst.gw = src.gw.addr;
       net_wifi_onStationModeGotIP(dst);
     } break;
-    case SYSTEM_EVENT_AP_STACONNECTED:
+    case ARDUINO_EVENT_WIFI_AP_STACONNECTED:
     {
-      auto& src = info.sta_connected;
+      auto& src = info.wifi_ap_staconnected;
       WiFiEventSoftAPModeStationConnected dst;
       memcpy(dst.mac, src.mac, 6);
       dst.aid = src.aid;
       net_wifi_onAPModeStationConnected(dst);
     } break;
-    case SYSTEM_EVENT_AP_STADISCONNECTED:
+    case ARDUINO_EVENT_WIFI_AP_STADISCONNECTED:
     {
-      auto& src = info.sta_disconnected;
+      auto& src = info.wifi_ap_stadisconnected;
       WiFiEventSoftAPModeStationDisconnected dst;
       memcpy(dst.mac, src.mac, 6);
       dst.aid = src.aid;
       net_wifi_onAPModeStationDisconnected(dst);
     } break;
 #ifdef ENABLE_WIRED_ETHERNET
-    case SYSTEM_EVENT_ETH_START:
+    case ARDUINO_EVENT_ETH_START:
       DBUGLN("ETH Started");
       //set eth hostname here
       if(ETH.setHostname(esp_hostname.c_str())) {
@@ -341,10 +354,10 @@ void net_event(WiFiEvent_t event, system_event_info_t info)
         DBUGF("Setting host name failed: %s", esp_hostname.c_str());
       }
       break;
-    case SYSTEM_EVENT_ETH_CONNECTED:
+    case ARDUINO_EVENT_ETH_CONNECTED:
       DBUGLN("ETH Connected");
       break;
-    case SYSTEM_EVENT_ETH_GOT_IP:
+    case ARDUINO_EVENT_ETH_GOT_IP:
       DBUG("ETH MAC: ");
       DBUG(ETH.macAddress());
       DBUG(", IPv4: ");
@@ -359,12 +372,12 @@ void net_event(WiFiEvent_t event, system_event_info_t info)
       eth_connected = true;
       net_wifi_disconnect();
       break;
-    case SYSTEM_EVENT_ETH_DISCONNECTED:
+    case ARDUINO_EVENT_ETH_DISCONNECTED:
       DBUGLN("ETH Disconnected");
       eth_connected = false;
       net_wifi_start();
       break;
-    case SYSTEM_EVENT_ETH_STOP:
+    case ARDUINO_EVENT_ETH_STOP:
       DBUGLN("ETH Stopped");
       eth_connected = false;
       break;
@@ -405,8 +418,16 @@ net_setup()
   net_wifi_start();
 
 #ifdef ENABLE_WIRED_ETHERNET
+  //ETH.setHostname(esp_hostname.c_str());
+
+  pinMode(ETH_PHY_POWER, OUTPUT);
+#ifdef RESET_ETH_PHY_ON_BOOT
+  digitalWrite(ETH_PHY_POWER, LOW);
+  delay(1000);
+#endif // #ifdef RESET_ETH_PHY_ON_BOOT
+  digitalWrite(ETH_PHY_POWER, HIGH);
   ETH.begin();
-#endif
+#endif // #ifdef ENABLE_WIRED_ETHERNET
 
   if (MDNS.begin(esp_hostname.c_str()))
   {
@@ -494,7 +515,7 @@ net_loop()
     dnsServer.processNextRequest(); // Captive portal DNS re-dierct
   }
 
-  Profile_End(net_wifi_loop, 5);
+  Profile_End(net_loop, 5);
 }
 
 void

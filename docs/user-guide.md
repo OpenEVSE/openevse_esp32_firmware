@@ -4,25 +4,32 @@
 
 <!-- toc -->
 
-* [Hardware](#hardware)
-* [WiFi Setup](#wifi-setup)
-* [Charging Mode: Eco](#charging-mode--eco)
-  * [Eco Mode Setup](#eco-mode-setup)
-  * [Eco Mode Advanced Settings](#eco-mode-advanced-settings)
-* [Services](#services)
-  * [Emoncms data logging](#emoncms-data-logging)
-  * [MQTT](#mqtt)
-    * [OpenEVSE Status via MQTT](#openevse-status-via-mqtt)
-  * [OhmConnect](#ohmconnect)
-* [System](#system)
-  * [Authentication](#authentication)
-  * [WiFi Reset](#wifi-reset)
-  * [HTTP Auth Password reset](#http-auth-password-reset)
-  * [Hardware Factory Reset](#hardware-factory-reset)
-* [Firmware update](#firmware-update)
-  * [Via Web Interface](#via-web-interface)
-  * [Via Network OTA](#via-network-ota)
-  * [Via USB Serial Programmer](#via-usb-serial-programmer)
+- [User Guide](#user-guide)
+  - [Contents](#contents)
+  - [Hardware](#hardware)
+  - [WiFi Hardware](#wifi-hardware)
+    - [Temperature sensors](#temperature-sensors)
+  - [WiFi Setup](#wifi-setup)
+  - [Charging Mode: Eco](#charging-mode-eco)
+    - [Eco Mode Setup](#eco-mode-setup)
+      - [using MQTT](#using-mqtt)
+      - [using HTTP](#using-http)
+    - [Eco Mode Advanced Settings](#eco-mode-advanced-settings)
+  - [Services](#services)
+    - [Emoncms data logging](#emoncms-data-logging)
+    - [Current Shaper](#current-shaper)
+    - [External values settable from HTTP POST](#external-values-settable-from-http-post)
+    - [MQTT](#mqtt)
+    - [OhmConnect](#ohmconnect)
+  - [System](#system)
+    - [Authentication](#authentication)
+    - [WiFi Reset](#wifi-reset)
+    - [HTTP Auth Password reset](#http-auth-password-reset)
+    - [Hardware Factory Reset](#hardware-factory-reset)
+  - [Firmware update](#firmware-update)
+    - [Via Web Interface](#via-web-interface)
+    - [Via Network OTA](#via-network-ota)
+    - [Via USB Serial Programmer](#via-usb-serial-programmer)
 
 <!-- tocstop -->
 
@@ -72,7 +79,8 @@ On first boot, OpenEVSE should broadcast a WiFi access point (AP) `OpenEVSE_XXXX
 
 ## Charging Mode: Eco
 
-'Eco' charge mode allows the OpenEVSE to start/stop and adjust the charging current automatically based on an MQTT. This feed could be the amount of solar PV generation or the amount of excess power (grid export). 'Normal' charge mode charges the EV at the maximum rate set.
+'Eco' charge mode allows the OpenEVSE to start/stop and adjust the charging current automatically based on an MQTT feed or received by HTTP POST request ( see below ). This feed could be the amount of solar PV generation or the amount of excess power (grid export). 'Normal' charge mode charges the EV at the maximum rate set.
+
 
 ![eco](eco.png)
 
@@ -88,15 +96,20 @@ A [OpenEnergyMonitor Solar PV Energy Monitor](https://guide.openenergymonitor.or
 
 ### Eco Mode Setup
 
+#### using MQTT
 * Enable MQTT Service
 * [emonPi MQTT credentials](https://guide.openenergymonitor.org/technical/credentials/#mqtt) should be pre-populated
 * Enter solar PV generation or Grid (+I/-E) MQTT topic e.g. Assuming [standard emonPi Solar PV setup](https://guide.openenergymonitor.org/applications/solar-pv/), the default MQTT feeds are:
   * Grid Import (positive Import / Negative export*): `emon/emonpi/power1`
   * Solar PV generation (always postive): `emon/emonpi/power2`
 
+#### using HTTP
+  * send HTTP POST to http://{openevse_host}/status containing JSON formatted as /status GET endpoint
+  * body can contain {"solar": value} or {"grid_ie": value}  in watt.
+  
 > **Note #1**: 'Grid' feed should include the power consumed by the EVSE
 >
-> **Note #2**: The EVSE expects the MQTT data to update every 5-10s, perforamce will be degraded if the update interval is much faster or slower than this
+> **Note #2**: The EVSE expects the MQTT/HTTP data to update every 5-10s, perforamce will be degraded if the update interval is much faster or slower than this
 
 CT sensor can be physically reversed on the cable to invert the reading.
 
@@ -134,42 +147,40 @@ OpenEVSE can post its status values to [emoncms.org](https://emoncms.org) or any
 
 Data can be posted using HTTP or HTTPS.
 
+### Current Shaper
+
+OpenEVSE can shape charge current according to your real time house load, preventing to exceed the maximum power your energy plan can handle.
+Once the module is toggled on, it will have highest priority to other claims.
+However it's possible to temporary disable it if needed with HTTP or MQTT. For HTTP, send a text/plain HTTP POST request to /shaper with body containing shaper=value
+
+**Note #1**: this service is dependant of an external feed containing the  household live power in watt.
+It can come from an MQTT topic or an HTTP POST request.
+ *** MQTT ***
+ Set the topic in the shaper configuration page ( 'Live power load MQTT Topic' )
+ *** HTTP ***
+ Send periodically an HTTP POST request to http://{openevse_host}/status containing TEXT formatted like in /status GET endpoint.
+Body should contain {"shaper_live_pwr": value} in watt. Can be combined with other settable values.
+  
+**Note #2**: set 'Max Power Allowed' according to your energy plan.
+
+### External values settable from HTTP POST
+
+If MQTT is not an option, all external data needed can be updated from an HTTP POST request to /status endpoint.
+
+Accepted data:
+{
+  "voltage": int,          // live voltage in V
+  "shaper_live_pwr": int,  // total household live power in W
+  "solar": int,            // divert solar production in W
+  "grid_ie": int,          // divert grid -import/+export in W
+  "battery_level": int,    // vehicle soc in %
+  "battery_range": int,    // vehicle range
+  "time_to_full_charge"    // vehicle charge ETA
+}
+
 ### MQTT
 
-MQTT and MQTTS (secure) connections are supported for status and control.
-
-At startup the following message is published with a retain flag to `openevse/announce/xxxx` where `xxxx` is the last 4 characters of the device ID. This message is useful for device discovery and contans the device hostname and IP address.
-
-```json
-{
-  "state":"connected",
-  "id":"c44f330dxxad",
-  "name":"openevse-55ad",
-  "mqtt":"emon/openevse-55ad",
-  "http":"http://192.168.1.43/"
-}
-```
-
-For device discovery you should subscribe with a wild card to `openevse/announce/#`
-
-When the device disconnects from MQTT the same message is posted with `state":"disconnected"` (Last Will and Testament).
-
-All subsequent MQTT status updates will by default be be posted to `openevse-xxxx` where `xxxx` is the last 4 characters of the device ID. This base-topic can be changed via the MQTT service page.
-
-#### OpenEVSE Status via MQTT
-
-OpenEVSE can post its status values (e.g. amp, wh, temp1, temp2, temp3, pilot, status) to an MQTT server. Data will be published as a sub-topic of base topic, e.g `<base-topic>/amp`. Data is published to MQTT every 30s.
-
-**The default `<base-topic>` is `openevse-xxxx` where `xxxx` is the last 4 characters of the device ID**
-
-MQTT setup is pre-populated with OpenEnergyMonitor [emonPi default MQTT server credentials](https://guide.openenergymonitor.org/technical/credentials/#mqtt).
-
-* Enter MQTT server host and base-topic
-* (Optional) Enter server authentication details if required
-* Click connect
-* After a few seconds `Connected: No` should change to `Connected: Yes` if connection is successful. Re-connection will be attempted every 10s. A refresh of the page may be needed.
-
-*Note: `emon/xxxx` should be used as the base-topic if posting to emonPi MQTT server if you want the data to appear in emonPi Emoncms. See [emonPi MQTT docs](https://guide.openenergymonitor.org/technical/mqtt/).*
+Refer to [MQTT API documentation](mqtt.md)
 
 ### OhmConnect
 
@@ -258,6 +269,8 @@ Then successive uploads can just upload the firmware
 ```bash
 esptool.py --baud 921600 --before default_reset --after hard_reset write_flash -z --flash_mode dio --flash_freq 40m --flash_size detect 0x10000 firmware.bin
 ```
+
+**If uploading to a Huzzah ESP32 board, it may be necessary to hold down the GPIO0 button while pressing the Reset button to trigger a download request on the board.  Both buttons can be released after the Reset button has been pressed.**
 
 **If uploading to ESP32 Etherent gateway, use slower baudrate of `115200`**
 
