@@ -12,14 +12,14 @@
 #include "lcd.h"
 #include "rfid.h"
 
-#include "MongooseOcppSocketClient.h"
+#include <AOcppMongooseClient.h>
 #include <MongooseHttpClient.h>
 
 #include <ArduinoOcpp/Core/Configuration.h>
 
 class ArduinoOcppTask: public MicroTasks::Task {
 private:
-    MongooseOcppSocketClient *ocppSocket = NULL;
+    ArduinoOcpp::AOcppMongooseClient *ocppSocket = NULL;
     EvseManager *evse;
     LcdTask *lcd;
     EventLog *eventLog;
@@ -77,6 +77,8 @@ public:
 
     static void notifyConfigChanged();
     void reconfigure();
+
+    static bool isConnected();
 };
 
 #endif
