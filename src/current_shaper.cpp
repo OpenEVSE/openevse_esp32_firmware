@@ -21,8 +21,8 @@ unsigned long CurrentShaperTask::loop(MicroTasks::WakeReason reason) {
 	if (_enabled && !_evse->clientHasClaim(EvseClient_OpenEVSE_Divert)) {
 			EvseProperties props;
 			if (_changed) {
-				props.setChargeCurrent(_chg_cur);
-				if (_chg_cur < evse.getMinCurrent() ) {
+				props.setMaxCurrent(_max_cur);
+				if (_max_cur < evse.getMinCurrent() ) {
 					// pause temporary, not enough amps available
 					props.setState(EvseState::Disabled);
 				}
@@ -36,7 +36,8 @@ unsigned long CurrentShaperTask::loop(MicroTasks::WakeReason reason) {
 				event["shaper"]  = 1;
 				event["shaper_live_pwr"] = _live_pwr;
 				event["shaper_max_pwr"] = _max_pwr;
-				event["shaper_cur"]	     = _chg_cur;
+				event["shaper_cur"]	     = _max_cur;
+				event["shaper_updated"] = true;
 				event_send(event);
 			}
 			if (millis() - _timer > EVSE_SHAPER_FAILSAFE_TIME) {
@@ -48,7 +49,8 @@ unsigned long CurrentShaperTask::loop(MicroTasks::WakeReason reason) {
 				event["shaper"]  = 1;
 				event["shaper_live_pwr"] = _live_pwr;
 				event["shaper_max_pwr"] = _max_pwr;
-				event["shaper_cur"]	     = _chg_cur;
+				event["shaper_cur"]	     = _max_cur;
+				event["shaper_updated"] = false;
 				event_send(event);
 			}
 	}
@@ -69,7 +71,7 @@ void CurrentShaperTask::begin(EvseManager &evse) {
 	this -> _evse    = &evse;
 	this -> _max_pwr = current_shaper_max_pwr; 
 	this -> _live_pwr = 0;
-	this -> _chg_cur = 0; 
+	this -> _max_cur = 0; 
 	MicroTask.startTask(this);
 	StaticJsonDocument<128> event;
 	event["shaper"]  = 1;
@@ -110,7 +112,7 @@ void CurrentShaperTask::setState(bool state) {
 }
 
 void CurrentShaperTask::shapeCurrent() {
-	_chg_cur = round(((_max_pwr - _live_pwr) / evse.getVoltage()) + (evse.getAmps()));
+	_max_cur = round(((_max_pwr - _live_pwr) / evse.getVoltage()) + (evse.getAmps()));
 	_changed = true; 
 }
 
@@ -120,8 +122,9 @@ int CurrentShaperTask::getMaxPwr() {
 int CurrentShaperTask::getLivePwr() {
 	return _live_pwr;
 }
-uint8_t CurrentShaperTask::getChgCur() {
-	return _chg_cur;
+
+uint8_t CurrentShaperTask::getMaxCur() {
+	return _max_cur;
 }
 bool CurrentShaperTask::getState() {
 	return _enabled;

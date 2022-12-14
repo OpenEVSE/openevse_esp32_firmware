@@ -244,7 +244,8 @@ void buildStatus(DynamicJsonDocument &doc) {
 
   doc["shaper"] = shaper.getState()?1:0;
   doc["shaper_live_pwr"] = shaper.getLivePwr();
-  doc["shaper_chg_cur"] = shaper.getChgCur();
+  // doc["shaper_cur"] = shaper.getChgCur();
+  doc["shaper_cur"] = shaper.getMaxCur();
 
   doc["service_level"] = static_cast<uint8_t>(evse.getActualServiceLevel());
 
