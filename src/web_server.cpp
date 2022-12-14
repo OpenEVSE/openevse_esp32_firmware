@@ -681,7 +681,7 @@ void handleStatusPost(MongooseHttpServerRequest *request, MongooseHttpServerResp
 {
   String body = request->body().toString();
   // Deserialize the JSON document
-  const size_t capacity = JSON_OBJECT_SIZE(50) + 1024;
+  const size_t capacity = JSON_OBJECT_SIZE(128) + 1024;
   DynamicJsonDocument doc(capacity);
   DeserializationError error = deserializeJson(doc, body);
   if(!error)
