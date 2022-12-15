@@ -29,6 +29,7 @@ class CurrentShaperTask: public MicroTasks::Task
     uint8_t      _chg_cur;   // calculated charge current to claim
     uint8_t      _max_cur;   // shaper calculated max current
     uint32_t     _timer;
+    bool         _updated;
   
   protected:
     void setup();
@@ -49,6 +50,7 @@ class CurrentShaperTask: public MicroTasks::Task
     int getLivePwr();
     uint8_t getMaxCur();
     bool isActive();
+    bool isUpdated();
 
     void notifyConfigChanged(bool enabled, uint32_t max_pwr);
 };

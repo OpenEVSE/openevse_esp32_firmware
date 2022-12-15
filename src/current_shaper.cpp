@@ -30,6 +30,7 @@ unsigned long CurrentShaperTask::loop(MicroTasks::WakeReason reason) {
 					props.setState(EvseState::None);
 				}
 				_changed = false;
+				_updated = true;
 				_timer = millis();
 				evse.claim(EvseClient_OpenEVSE_Shaper,EvseManager_Priority_Safety, props);
 				StaticJsonDocument<128> event;
@@ -37,12 +38,13 @@ unsigned long CurrentShaperTask::loop(MicroTasks::WakeReason reason) {
 				event["shaper_live_pwr"] = _live_pwr;
 				event["shaper_max_pwr"] = _max_pwr;
 				event["shaper_cur"]	     = _max_cur;
-				event["shaper_updated"] = true;
+				event["shaper_updated"] = _updated;
 				event_send(event);
 			}
 			if (millis() - _timer > EVSE_SHAPER_FAILSAFE_TIME) {
 				//available power has not been updated since EVSE_SHAPER_FAILSAFE_TIME, pause charge
 				DBUGF("shaper_live_pwr has not been updated in time, pausing charge");
+				_updated = false;
 				props.setState(EvseState::Disabled);
 				evse.claim(EvseClient_OpenEVSE_Shaper,EvseManager_Priority_Limit, props);
 				StaticJsonDocument<128> event;
@@ -50,7 +52,7 @@ unsigned long CurrentShaperTask::loop(MicroTasks::WakeReason reason) {
 				event["shaper_live_pwr"] = _live_pwr;
 				event["shaper_max_pwr"] = _max_pwr;
 				event["shaper_cur"]	     = _max_cur;
-				event["shaper_updated"] = false;
+				event["shaper_updated"] = _updated;
 				event_send(event);
 			}
 	}
@@ -71,7 +73,8 @@ void CurrentShaperTask::begin(EvseManager &evse) {
 	this -> _evse    = &evse;
 	this -> _max_pwr = current_shaper_max_pwr; 
 	this -> _live_pwr = 0;
-	this -> _max_cur = 0; 
+	this -> _max_cur = 0;
+	this -> _updated = false; 
 	MicroTask.startTask(this);
 	StaticJsonDocument<128> event;
 	event["shaper"]  = 1;
@@ -112,6 +115,7 @@ void CurrentShaperTask::setState(bool state) {
 }
 
 void CurrentShaperTask::shapeCurrent() {
+	_updated = true;
 	_max_cur = round(((_max_pwr - _live_pwr) / evse.getVoltage()) + (evse.getAmps()));
 	_changed = true; 
 }
@@ -132,4 +136,8 @@ bool CurrentShaperTask::getState() {
 
 bool CurrentShaperTask::isActive() {
 	return _evse->clientHasClaim(EvseClient_OpenEVSE_Shaper);
+}
+
+bool CurrentShaperTask::isUpdated() {
+	return _updated;
 }
