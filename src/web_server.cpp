@@ -245,8 +245,9 @@ void buildStatus(DynamicJsonDocument &doc) {
 
   doc["shaper"] = shaper.getState()?1:0;
   doc["shaper_live_pwr"] = shaper.getLivePwr();
-  doc["shaper_chg_cur"] = shaper.getChgCur();
-
+  // doc["shaper_cur"] = shaper.getChgCur();
+  doc["shaper_cur"] = shaper.getMaxCur();
+  doc["shaper_updated"] = shaper.isUpdated();
   doc["service_level"] = static_cast<uint8_t>(evse.getActualServiceLevel());
 
   doc["ota_update"] = (int)Update.isRunning();
@@ -255,6 +256,7 @@ void buildStatus(DynamicJsonDocument &doc) {
 
   doc["config_version"] = config_version;
   doc["claims_version"] = evse.getClaimsVersion();
+  doc["override_version"] = manual.getVersion();
   doc["schedule_version"] = scheduler.getVersion();
   doc["schedule_plan_version"] = scheduler.getPlanVersion();
 
@@ -681,7 +683,7 @@ void handleStatusPost(MongooseHttpServerRequest *request, MongooseHttpServerResp
 {
   String body = request->body().toString();
   // Deserialize the JSON document
-  const size_t capacity = JSON_OBJECT_SIZE(50) + 1024;
+  const size_t capacity = JSON_OBJECT_SIZE(128) + 1024;
   DynamicJsonDocument doc(capacity);
   DeserializationError error = deserializeJson(doc, body);
   if(!error)

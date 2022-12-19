@@ -268,8 +268,6 @@ bool EvseManager::evaluateClaims(EvseProperties &properties)
         DynamicJsonDocument event(capacity);
         event["manual_override"] = 1;
         event_send(event);
-        event.clear();
-        mqtt_publish_json(event, "/override");
       }
     }
   }
@@ -439,12 +437,6 @@ unsigned long EvseManager::loop(MicroTasks::WakeReason reason)
   {
     _evaluateTargetState = false;
     setTargetState(_targetProperties);
-
-    if ( manual.isActive() ) {
-      // update /override topic to mqtt
-      mqtt_publish_override();
-    }
-
   }
   return MicroTask.Infinate;
 }
@@ -477,18 +469,16 @@ bool EvseManager::claim(EvseClient client, int priority, EvseProperties &target)
   {
     DBUGF("Found slot");
     if(slot->claim(client, priority, target))
-    {
-      if (target.getState() != EvseState::None)
-          // ignore incrementing claims_version if there's no state in the claim
-      {
-        DBUGF("Claim added/updated, waking task");
-        StaticJsonDocument<128> event;
-        event["claims_version"] = ++_version;
-        event_send(event);
-      }
-
+    { 
+      DBUGF("Claim added/updated, waking task");
       _evaluateClaims = true;
       MicroTask.wakeTask(this);
+      StaticJsonDocument<128> event;
+      event["claims_version"] = ++_version;
+      if (client == EvseClient_OpenEVSE_Manual) {
+          event["override_version"] = manual.setVersion(manual.getVersion() + 1);
+      }
+      event_send(event);
     }
     return true;
   }
@@ -508,19 +498,17 @@ bool EvseManager::release(EvseClient client)
       DynamicJsonDocument event(capacity);
       event["manual_override"] = 0;
       event_send(event);
-      event.clear();
-      // update /override topic to mqtt
-      event["state"] = "null";
-      mqtt_publish_json(event, "/override");
     }
-
-    StaticJsonDocument<128> event;
-    event["claims_version"] = ++_version;
-    event_send(event);
-
     claim->release();
     _evaluateClaims = true;
     MicroTask.wakeTask(this);
+    StaticJsonDocument<128> event;
+    event["claims_version"] = ++_version;
+    if (client == EvseClient_OpenEVSE_Manual) {
+          event["override_version"] = manual.setVersion(manual.getVersion() + 1);
+          
+    }
+    event_send(event);
     return true;
   }
 
