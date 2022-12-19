@@ -34,8 +34,10 @@ jobs:
         gui:
           - name: openevse_wifi_gui
             repo: OpenEVSE/openevse_wifi_gui
+            build_flags: ""
           - name: openevse-gui-v2
             repo: KipK/openevse-gui-v2
+            build_flags: "-D DISABLE_WIFI_PORTAL -D WEB_SERVER_ROOT_PAGE_INDEX"
 
     steps:
     - uses: ammaraskar/gcc-problem-matcher@master
@@ -99,6 +101,7 @@ jobs:
       run: pio run -e ${{ matrix.env }}
       env:
         GUI_NAME: ${{ matrix.gui.name }}
+        PLATFORMIO_BUILD_FLAGS: ${{ matrix.gui.build_flags }}
 
     - name: Upload output to GitHub
       uses: actions/upload-artifact@v2
