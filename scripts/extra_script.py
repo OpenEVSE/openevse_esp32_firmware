@@ -64,8 +64,7 @@ def data_to_header(env, target, source):
     for source_file in source:
         #print("Reading {}".format(source_file))
         file = source_file.get_abspath()
-        if file.endswith(".css") or file.endswith(".js") or file.endswith(".htm") or file.endswith(".html") or file.endswith(".svg") or file.endswith(".json"):
-            output += text_to_header(file)
+        if file.endswith(".css") or file.endswith(".js") or file.endswith(".htm") or file.endswith(".html") or file.endswith(".svg") or file.endswith(".json") or file.endswith(".webmanifest"):            output += text_to_header(file)
         else:
             output += binary_to_header(file)
     target_file = target[0].get_abspath()
@@ -77,8 +76,7 @@ def filtered_listdir_scan(dir):
     out_files = []
     for file in listdir(dir):
         path = join(dir, file)
-        if isfile(path) and (pathlib.Path(file).suffix in (".html", ".js", ".css", ".json", ".gz", ".png", ".jpg", ".ico")):
-            out_files.append(path)
+        if isfile(path) and (pathlib.Path(file).suffix in (".html", ".js", ".css", ".json", ".gz", ".png", ".jpg", ".ico", ".woff", ".woff2", ".webmanifest")):            out_files.append(path)
         elif isdir(path):
             out_files.extend(filtered_listdir_scan(path))
 
@@ -138,6 +136,12 @@ def make_static(env, target, source):
             filetype = "SVG"
         elif out_file.endswith(".json") or out_file.endswith(".json.gz"):
             filetype = "JSON"
+        elif out_file.endswith(".woff"):
+            filetype = "WOFF"
+        elif out_file.endswith(".woff2"):
+            filetype = "WOFF2"
+        elif out_file.endswith(".webmanifest"):
+            filetype = "MANIFEST"
 
         if filetype is not None:
             c_name = get_c_name(out_file)
