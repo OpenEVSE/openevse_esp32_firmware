@@ -51,15 +51,18 @@ static unsigned long wifiRestartTime = 0;
 static unsigned long apOffTime = 0;
 
 // Content Types
-const char _CONTENT_TYPE_HTML[] PROGMEM = "text/html";
-const char _CONTENT_TYPE_TEXT[] PROGMEM = "text/plain";
-const char _CONTENT_TYPE_CSS[] PROGMEM = "text/css";
-const char _CONTENT_TYPE_JSON[] PROGMEM = "application/json";
-const char _CONTENT_TYPE_JS[] PROGMEM = "application/javascript";
-const char _CONTENT_TYPE_JPEG[] PROGMEM = "image/jpeg";
-const char _CONTENT_TYPE_PNG[] PROGMEM = "image/png";
-const char _CONTENT_TYPE_SVG[] PROGMEM = "image/svg+xml";
-const char _CONTENT_TYPE_ICO[] PROGMEM = "image/vnd.microsoft.icon";
+const char _CONTENT_TYPE_HTML[]     PROGMEM = "text/html";
+const char _CONTENT_TYPE_TEXT[]     PROGMEM = "text/plain";
+const char _CONTENT_TYPE_CSS[]      PROGMEM = "text/css";
+const char _CONTENT_TYPE_JSON[]     PROGMEM = "application/json";
+const char _CONTENT_TYPE_JS[]       PROGMEM = "text/javascript";
+const char _CONTENT_TYPE_JPEG[]     PROGMEM = "image/jpeg";
+const char _CONTENT_TYPE_PNG[]      PROGMEM = "image/png";
+const char _CONTENT_TYPE_SVG[]      PROGMEM = "image/svg+xml";
+const char _CONTENT_TYPE_ICO[]      PROGMEM = "image/vnd.microsoft.icon";
+const char _CONTENT_TYPE_WOFF[]     PROGMEM = "font/woff";
+const char _CONTENT_TYPE_WOFF2[]    PROGMEM = "font/woff2";
+const char _CONTENT_TYPE_MANIFEST[] PROGMEM = "application/manifest+json";
 
 #define RAPI_RESPONSE_BLOCKED             -300
 
