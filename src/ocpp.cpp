@@ -304,9 +304,6 @@ void ArduinoOcppTask::loadEvseBehavior() {
             DBUGLN("[ocpp] ChargingRateUnit from now on W");
         }
     });
-
-    OE_FreeVendActive = ArduinoOcpp::declareConfiguration<const char*>("OE_FreeVendActive", "false", CONFIGURATION_FN);
-    OE_FreeVendIdTag = ArduinoOcpp::declareConfiguration<const char*>("OE_FreeVendIdTag", "false", CONFIGURATION_FN);
 }
 
 unsigned long ArduinoOcppTask::loop(MicroTasks::WakeReason reason) {
@@ -325,16 +322,8 @@ unsigned long ArduinoOcppTask::loop(MicroTasks::WakeReason reason) {
             //vehicle plugged
             if (!getTransactionIdTag()) {
                 //vehicle plugged before authorization
-                bool freeVendActive = false;
-                if (OE_FreeVendActive && *OE_FreeVendActive) {
-                    String freeVendString = String(*OE_FreeVendActive);
-                    freeVendString.toLowerCase();
-                    freeVendActive = freeVendString.equals("true") && OE_FreeVendIdTag && *OE_FreeVendIdTag;
-                }
-
-                if (freeVendActive) {
-                    beginTransaction(*OE_FreeVendIdTag);
-                } else if (config_rfid_enabled()) {
+                
+                if (config_rfid_enabled()) {
                     LCD_DISPLAY("Need card");
                 } else {
                     //no RFID reader --> Auto-Authorize or RemoteStartTransaction
