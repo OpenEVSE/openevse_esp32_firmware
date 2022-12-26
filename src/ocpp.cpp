@@ -250,7 +250,7 @@ void ArduinoOcppTask::loadEvseBehavior() {
             //currently in an authorized session
             if (idInput.equals(sessionIdTag)) {
                 //NFC card matches
-                endTransaction();
+                endTransaction("Local");
                 LCD_DISPLAY("Card accepted");
             } else {
                 LCD_DISPLAY("Card not recognized");
@@ -276,16 +276,13 @@ void ArduinoOcppTask::loadEvseBehavior() {
 
     rfid->setOnCardScanned(&onIdTagInput);
 
-    setOnResetRequest([this] (JsonObject payload) {
-        const char *type = payload["type"] | "Soft";
-        if (!strcmp(type, "Hard")) {
-            resetHard = true;
+    setOnResetExecute([this] (bool resetHard) {
+        if (resetHard) {
+            //TODO send reset command to all peripherals
+            //see https://github.com/OpenEVSE/ESP32_WiFi_V4.x/issues/228
         }
 
-        resetTime = millis();
-        resetTriggered = true;
-
-        LCD_DISPLAY("Reboot EVSE");
+        restart_system();
     });
 
     setOnUnlockConnectorInOut([] () {
@@ -379,19 +376,6 @@ unsigned long ArduinoOcppTask::loop(MicroTasks::WakeReason reason) {
             LCD_DISPLAY(txIdMsg);
         }
         ocppTxIdDisplay = getTransactionId();
-    }
-
-    if (resetTriggered) {
-        if (millis() - resetTime >= 10000UL) { //wait for 10 seconds after reset command to send the conf msg
-            resetTriggered = false; //execute only once
-
-            if (resetHard) {
-                //TODO send reset command to all peripherals
-                //see https://github.com/OpenEVSE/ESP32_WiFi_V4.x/issues/228
-            }
-            
-            restart_system();
-        }
     }
 
     if (millis() - updateEvseClaimLast >= 1009) {
@@ -628,8 +612,7 @@ void ArduinoOcppTask::initializeFwService() {
                     //onSuccess
                     updateSuccess = true;
 
-                    resetTime = millis();
-                    resetTriggered = true;
+                    restart_system();
                 }, [this] (int error_code) {
                     //onFailure
                     updateFailure = true;

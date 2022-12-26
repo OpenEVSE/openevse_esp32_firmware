@@ -33,10 +33,6 @@ private:
 
     std::function<bool(const String& idTag)> onIdTagInput {nullptr};
 
-    bool resetTriggered = false;
-    bool resetHard = false; //default to soft reset
-    ulong resetTime;
-
     MongooseHttpClient diagClient = MongooseHttpClient();
     bool diagSuccess = false, diagFailure = false;
     void initializeDiagnosticsService();
