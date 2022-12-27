@@ -50,8 +50,7 @@ private:
 
     static ArduinoOcppTask *instance;
 
-    std::shared_ptr<ArduinoOcpp::Configuration<const char*>> OE_FreeVendActive; //if to autostart transaction when vehicle plugged
-    std::shared_ptr<ArduinoOcpp::Configuration<const char*>> OE_FreeVendIdTag;  //idTag for autostart transaction
+    std::shared_ptr<ArduinoOcpp::Configuration<const char*>> allowOfflineTxForUnknownId; //temporarily accept all NFC-cards while offline
 
     //helper functions
     static bool idTagIsAccepted(JsonObject payload);

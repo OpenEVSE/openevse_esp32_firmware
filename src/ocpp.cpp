@@ -232,6 +232,8 @@ void ArduinoOcppTask::loadEvseBehavior() {
      * CP behavior definition: How will plugging and unplugging the EV start or stop OCPP transactions
      */
 
+    allowOfflineTxForUnknownId = ArduinoOcpp::declareConfiguration<const char*>("AllowOfflineTxForUnknownId", "false", CONFIGURATION_FN);
+
     onIdTagInput = [this] (const String& idInput) {
         if (!config_ocpp_enabled()) {
             return false;
@@ -266,8 +268,13 @@ void ArduinoOcppTask::loadEvseBehavior() {
                 } else {
                     LCD_DISPLAY("Card not recognized");
                 }
-            }, [this] () {
-                LCD_DISPLAY("OCPP timeout");
+            }, nullptr, [this, idInputCapture] () {
+                if (allowOfflineTxForUnknownId && !strcmp(*allowOfflineTxForUnknownId, "true")) {
+                    LCD_DISPLAY("Offline Tx");
+                    beginTransaction(idInputCapture.c_str());
+                } else {
+                    LCD_DISPLAY("OCPP timeout");
+                }
             });
         }
 
