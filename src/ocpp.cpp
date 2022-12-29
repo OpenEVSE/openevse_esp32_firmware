@@ -54,8 +54,8 @@ void ArduinoOcppTask::reconfigure() {
         arduinoOcppInitialized = false;
 
         if (!config_ocpp_enabled() && ocppSocket) {
-            ocppSocket->setBackendUrl("");
-            ocppSocket->reconnect();
+            delete ocppSocket;
+            ocppSocket = nullptr;
         }
         OCPP_deinitialize();
     }
@@ -70,11 +70,26 @@ void ArduinoOcppTask::reconfigure() {
             ocppSocket->reconnect();
         } else {
             ocppSocket = new ArduinoOcpp::AOcppMongooseClient(Mongoose.getMgr(),
-                    ocpp_server.c_str(),
+                    ocpp_server.c_str(), //fallback URL. Normally, OcppSocket loads URL from own store
                     ocpp_chargeBoxId.c_str(),
                     ocpp_idTag.c_str(),
                     root_ca, //defined in root_ca.cpp
                     ArduinoOcpp::makeDefaultFilesystemAdapter(ArduinoOcpp::FilesystemOpt::Use));
+            
+            //override values in UI with URL storage. Unfortunately, editing URL in UI and enabling OCPP at the same time
+            //is not possible
+            bool updated = !ocpp_server.equals(ocppSocket->getBackendUrl()) ||
+                    !ocpp_chargeBoxId.equals(ocppSocket->getChargeBoxId()) ||
+                    !ocpp_idTag.equals(ocppSocket->getAuthKey());
+            
+            if (updated) {
+                DynamicJsonDocument updateQuery (JSON_OBJECT_SIZE(3)); //use JSON in no-copy mode
+                updateQuery["ocpp_server"] = ocppSocket->getBackendUrl();
+                updateQuery["ocpp_chargeBoxId"] = ocppSocket->getChargeBoxId();
+                updateQuery["ocpp_idTag"] = ocppSocket->getAuthKey();
+                config_deserialize(updateQuery);
+                config_commit();
+            }
         }
 
         initializeArduinoOcpp();
