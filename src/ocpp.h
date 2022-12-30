@@ -12,7 +12,7 @@
 #include "lcd.h"
 #include "rfid.h"
 
-#include <AOcppMongooseClient.h>
+#include <ArduinoOcppMongooseClient.h>
 #include <MongooseHttpClient.h>
 
 #include <ArduinoOcpp/Core/Configuration.h>
