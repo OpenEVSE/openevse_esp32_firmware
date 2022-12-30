@@ -65,8 +65,8 @@ String mqtt_announce_topic;
 // OCPP 1.6 Settings
 String ocpp_server;
 String ocpp_chargeBoxId;
-String ocpp_idTag;
-String tx_start_point;
+String ocpp_authkey;
+String ocpp_idtag;
 
 // Time
 String time_zone;
@@ -156,8 +156,8 @@ ConfigOpt *opts[] =
 // OCPP 1.6 Settings
   new ConfigOptDefenition<String>(ocpp_server, "", "ocpp_server", "ows"),
   new ConfigOptDefenition<String>(ocpp_chargeBoxId, "", "ocpp_chargeBoxId", "cid"),
-  new ConfigOptDefenition<String>(ocpp_idTag, "", "ocpp_idTag", "idt"),
-  new ConfigOptDefenition<String>(tx_start_point, "tx_pending", "tx_start_point", "otx"),
+  new ConfigOptDefenition<String>(ocpp_authkey, "", "ocpp_authkey", "oky"),
+  new ConfigOptDefenition<String>(ocpp_idtag, "", "ocpp_idtag", "oid"),
 
 // Ohm Connect Settings
   new ConfigOptDefenition<String>(ohm, "", "ohm", "o"),
@@ -205,6 +205,8 @@ ConfigOpt *opts[] =
   new ConfigOptVirtualBool(flagsOpt, CONFIG_PAUSE_USES_DISABLED, CONFIG_PAUSE_USES_DISABLED, "pause_uses_disabled", "pd"),
   new ConfigOptVirtualBool(flagsOpt, CONFIG_VEHICLE_RANGE_MILES, CONFIG_VEHICLE_RANGE_MILES, "mqtt_vehicle_range_miles", "mvru"),
   new ConfigOptVirtualBool(flagsOpt, CONFIG_SERVICE_OCPP, CONFIG_SERVICE_OCPP, "ocpp_enabled", "ope"),
+  new ConfigOptVirtualBool(flagsOpt, CONFIG_OCPP_AUTO_AUTH, CONFIG_OCPP_AUTO_AUTH, "ocpp_auth_auto", "oaa"),
+  new ConfigOptVirtualBool(flagsOpt, CONFIG_OCPP_OFFLINE_AUTH, CONFIG_OCPP_OFFLINE_AUTH, "ocpp_auth_offline", "ooa"),
   new ConfigOptVirtualBool(flagsOpt, CONFIG_OCPP_ACCESS_SUSPEND, CONFIG_OCPP_ACCESS_SUSPEND, "ocpp_suspend_evse", "ops"),
   new ConfigOptVirtualBool(flagsOpt, CONFIG_OCPP_ACCESS_ENERGIZE, CONFIG_OCPP_ACCESS_ENERGIZE, "ocpp_energize_plug", "opn"),
   new ConfigOptVirtualBool(flagsOpt, CONFIG_RFID, CONFIG_RFID, "rfid_enabled", "rf"),
@@ -264,7 +266,7 @@ void config_changed(String name)
     evse.setSleepForDisable(!config_pause_uses_disabled());
   } else if(name.startsWith("mqtt_")) {
     mqtt_restart();
-  } else if(name.startsWith("ocpp_") || name.startsWith("tx_start_point")) {
+  } else if(name.startsWith("ocpp_")) {
     ArduinoOcppTask::notifyConfigChanged();
   } else if(name.startsWith("emoncms_")) {
     emoncms_updated = true;

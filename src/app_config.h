@@ -52,8 +52,8 @@ extern String mqtt_announce_topic;
 // OCPP 1.6 Settings
 extern String ocpp_server;
 extern String ocpp_chargeBoxId;
-extern String ocpp_idTag;
-extern String tx_start_point;
+extern String ocpp_authkey;
+extern String ocpp_idtag;
 
 // RFID storage
 extern String rfid_storage;
@@ -94,6 +94,8 @@ extern uint32_t flags;
 #define CONFIG_SERVICE_CUR_SHAPER   (1 << 19)
 #define CONFIG_MQTT_RETAINED        (1 << 20)
 #define CONFIG_FACTORY_WRITE_LOCK   (1 << 21)
+#define CONFIG_OCPP_AUTO_AUTH       (1 << 22)
+#define CONFIG_OCPP_OFFLINE_AUTH    (1 << 23)
 
 inline bool config_emoncms_enabled() {
   return CONFIG_SERVICE_EMONCMS == (flags & CONFIG_SERVICE_EMONCMS);
@@ -133,6 +135,14 @@ inline bool config_ocpp_access_can_suspend() {
 
 inline bool config_ocpp_access_can_energize() {
   return CONFIG_OCPP_ACCESS_ENERGIZE == (flags & CONFIG_OCPP_ACCESS_ENERGIZE);
+}
+
+inline bool config_ocpp_auto_authorization() {
+  return CONFIG_OCPP_AUTO_AUTH == (flags & CONFIG_OCPP_AUTO_AUTH);
+}
+
+inline bool config_ocpp_offline_authorization() {
+  return CONFIG_OCPP_OFFLINE_AUTH == (flags & CONFIG_OCPP_OFFLINE_AUTH);
 }
 
 inline bool config_tesla_enabled() {
