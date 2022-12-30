@@ -72,7 +72,7 @@ void mqttmsg_callback(MongooseString topic, MongooseString payload) {
   else if (topic_string == mqtt_live_pwr)
   {
       shaper.setLivePwr(payload_str.toInt());
-      DBUGF("shaper: available amps:%dA", shaper.getChgCur());
+      DBUGF("shaper: Live Pwr:%dW", shaper.getLivePwr());
   }
   else if (topic_string == mqtt_vrms)
   {
