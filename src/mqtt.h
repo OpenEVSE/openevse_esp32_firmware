@@ -14,6 +14,8 @@
 #define MQTT_PROTOCOL_WEBSOCKET     2
 #define MQTT_PROTOCOL_WEBSOCKET_SSL 3
 
+#define MQTT_LOOP	500
+
 extern void mqtt_msg_callback();
 
 // -------------------------------------------------------------------
