@@ -443,6 +443,7 @@ unsigned long EvseManager::loop(MicroTasks::WakeReason reason)
 
 bool EvseManager::begin()
 {
+  _version = 0;
   MicroTask.startTask(this);
 
   return true;
