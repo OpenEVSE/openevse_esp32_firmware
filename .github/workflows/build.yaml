@@ -4,6 +4,16 @@ name: Build/Release OpenEVSE
 
 on:
   workflow_dispatch:
+    inputs:
+      v1_ref:
+        required: true
+        description: The branch/tag for the v1 UI
+        default: master
+      v2_ref:
+        required: true
+        description: The branch/tag for the v2 UI
+        default: master
+      
   push:
     branches:
       - master
@@ -35,27 +45,30 @@ jobs:
           - name: openevse_wifi_gui
             repo: OpenEVSE/openevse_wifi_gui
             build_flags: ""
+            ref: ${{ inputs.v1_ref }}
           - name: openevse-gui-v2
             repo: KipK/openevse-gui-v2
             build_flags: "-D DISABLE_WIFI_PORTAL -D WEB_SERVER_ROOT_PAGE_INDEX"
+            ref: ${{ inputs.v2_ref }}
 
     steps:
     - uses: ammaraskar/gcc-problem-matcher@master
 
-    - uses: actions/checkout@v2
+    - uses: actions/checkout@v3
 
 #    - name: Temp checkout latest OpenEVSE lib
-#      uses: actions/checkout@v2
+#      uses: actions/checkout@v3
 #      with:
 #        repository: jeremypoulter/OpenEVSE_Lib
 #        ref: openevse_wifi_timer_apis
 #        path: lib/OpenEVSE
 
     - name: Checkout GUI
-      uses: actions/checkout@v2
+      uses: actions/checkout@v3
       with:
         repository: ${{ matrix.gui.repo }}
         path: ${{ matrix.gui.name }}
+        ref: ${{ matrix.gui.ref }}
         submodules: recursive
 
     - name: Cache pip
