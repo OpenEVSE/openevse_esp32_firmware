@@ -498,15 +498,15 @@ mqtt_loop() {
     }
   }
 
-  if (claimsVersion != evse.getClaimsVersion() || !claimsVersion) {
+if (claimsVersion != evse.getClaimsVersion()) {
     mqtt_publish_claim();
     DBUGF("Claims has changed, publishing to MQTT");
     claimsVersion = evse.getClaimsVersion();
   }
 
-  if (overrideVersion != manual.getVersion() || !overrideVersion ) {
+  if (overrideVersion != manual.getVersion()) {
     mqtt_publish_override;
-    DBUGF("Claims has changed, publishing to MQTT");
+    DBUGF("Override has changed, publishing to MQTT");
     overrideVersion = manual.getVersion();
   }
 
