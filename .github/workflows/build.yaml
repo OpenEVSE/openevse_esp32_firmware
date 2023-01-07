@@ -20,6 +20,18 @@ on:
   pull_request:
 
 jobs:
+  debug:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Dump the environment
+        run: echo "Environment variables:" && env | sort
+
+      - name: Dump the event
+        run: cat $GITHUB_EVENT_PATH
+      
+      - name: Dump github.ref
+        run: echo "github.ref = '${{ github.ref }}'"
+
   build:
     runs-on: ubuntu-latest
 
