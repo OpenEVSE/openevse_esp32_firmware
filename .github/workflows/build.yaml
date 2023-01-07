@@ -29,8 +29,8 @@ jobs:
       - name: Dump the event
         run: cat $GITHUB_EVENT_PATH
       
-      - name: Dump github.ref
-        run: echo "github.ref = '${{ github.ref }}'"
+      - name: Dump github.ref_name
+        run: echo "github.ref_name = '${{ github.ref_name }}'"
 
   build:
     runs-on: ubuntu-latest
@@ -137,7 +137,7 @@ jobs:
   release:
     runs-on: ubuntu-latest
     needs: build
-    if: github.ref == 'refs/heads/master' || github.ref == 'refs/heads/build_v2_gui'
+    if: github.ref_name == 'master' || github.ref_name == 'build_v2_gui'
 
     steps:
     - name: Download the built assets
@@ -158,8 +158,8 @@ jobs:
       uses: "marvinpinto/action-automatic-releases@latest"
       with:
         repo_token: "${{ secrets.GITHUB_TOKEN }}"
-        automatic_release_tag: "${{ github.ref == 'refs/heads/master' && 'latest' || 'v2_gui' }}"
+        automatic_release_tag: "${{ github.ref_name == 'master' && 'latest' || 'v2_gui' }}"
         prerelease: true
-        title: "${{ github.ref == 'refs/heads/master' && 'Development Build' || 'V2 GUI pre-release' }}"
+        title: "${{ github.ref_name == 'master' && 'Development Build' || 'V2 GUI pre-release' }}"
         files: |
           *.bin
