@@ -290,7 +290,7 @@ void ArduinoOcppTask::loadEvseBehavior() {
                 endTransaction("Local");
                 LCD_DISPLAY("Card accepted");
             } else {
-                LCD_DISPLAY("Card not recognized");
+                LCD_DISPLAY("Card unknown");
             }
         } else {
             //idle mode
@@ -301,7 +301,7 @@ void ArduinoOcppTask::loadEvseBehavior() {
                     beginTransaction(idInputCapture.c_str());
                     LCD_DISPLAY("Card accepted");
                 } else {
-                    LCD_DISPLAY("Card not recognized");
+                    LCD_DISPLAY("Card unknown");
                 }
             }, nullptr, [this, idInputCapture] () {
                 if (*allowOfflineTxForUnknownId) {
@@ -405,7 +405,7 @@ unsigned long ArduinoOcppTask::loop(MicroTasks::WakeReason reason) {
         if (ocppTxIdDisplay > 0 && getTransactionId() < 0) { //stopped Tx had txId (not offline-only)
             String txIdMsg = "TxID ";
             txIdMsg += String(ocppTxIdDisplay);
-            txIdMsg += " finished";
+            txIdMsg += " end";
             LCD_DISPLAY(txIdMsg);
         }
         ocppTxIdDisplay = getTransactionId();
