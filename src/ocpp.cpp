@@ -52,6 +52,7 @@ void ArduinoOcppTask::reconfigure() {
 
     if (arduinoOcppInitialized) {
         arduinoOcppInitialized = false;
+        bootNotificationAccepted = false;
 
         if (!config_ocpp_enabled() && ocppSocket) {
             delete ocppSocket;
@@ -123,8 +124,13 @@ void ArduinoOcppTask::initializeArduinoOcpp() {
     evseDetails["firmwareVersion"] = currentfirmware;
     evseDetails["meterSerialNumber"] = evseFirmwareVersion;
 
-    bootNotification(std::move(evseDetailsDoc), [this](JsonObject payload) { //ArduinoOcpp will delete evseDetailsDoc
-        LCD_DISPLAY("OCPP connected!");
+    bootNotification(std::move(evseDetailsDoc), [this](JsonObject response) { //ArduinoOcpp will delete evseDetailsDoc
+        if (response["status"].as<String>().equals("Accepted")) {
+            LCD_DISPLAY("OCPP connected!");
+            bootNotificationAccepted = true;
+        } else {
+            LCD_DISPLAY("OCPP refused EVSE");
+        }
     });
 
     ocppTxIdDisplay = getTransactionId();
@@ -466,6 +472,11 @@ void ArduinoOcppTask::updateEvseClaim() {
     } else {
         //charge rate is valid. Set charge rate
         evseProperties.setChargeCurrent(charging_limit);
+    }
+
+    if (!bootNotificationAccepted) {
+        evseState = EvseState::Disabled; //override state
+        evseProperties = evseState; //renew properties
     }
 
     if (evseState == EvseState::Disabled && !config_ocpp_access_can_suspend()) {

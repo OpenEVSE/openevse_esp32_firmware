@@ -44,6 +44,8 @@ private:
     bool arduinoOcppInitialized = false;
     void loadEvseBehavior();
 
+    bool bootNotificationAccepted = false;
+
     ulong updateEvseClaimLast {0};
 
     static ArduinoOcppTask *instance;
