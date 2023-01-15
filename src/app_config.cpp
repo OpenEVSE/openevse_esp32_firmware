@@ -157,7 +157,7 @@ ConfigOpt *opts[] =
   new ConfigOptDefenition<String>(ocpp_server, "", "ocpp_server", "ows"),
   new ConfigOptDefenition<String>(ocpp_chargeBoxId, "", "ocpp_chargeBoxId", "cid"),
   new ConfigOptDefenition<String>(ocpp_authkey, "", "ocpp_authkey", "oky"),
-  new ConfigOptDefenition<String>(ocpp_idtag, "", "ocpp_idtag", "oid"),
+  new ConfigOptDefenition<String>(ocpp_idtag, "", "ocpp_idtag", "idt"),
 
 // Ohm Connect Settings
   new ConfigOptDefenition<String>(ohm, "", "ohm", "o"),
