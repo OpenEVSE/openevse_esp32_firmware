@@ -36,6 +36,8 @@ uint8_t overrideVersion = 0;
 
 String lastWill = "";
 
+int loop_timer = 0;
+
 #ifndef MQTT_CONNECT_TIMEOUT
 #define MQTT_CONNECT_TIMEOUT (5 * 1000)
 #endif // !MQTT_CONNECT_TIMEOUT
@@ -221,6 +223,9 @@ mqtt_connect()
   mqttclient.onError([](int err) {
     DBUGF("MQTT error %d", err);
     connecting = false;
+    DynamicJsonDocument doc(JSON_OBJECT_SIZE(1) + 60);
+    doc["mqtt_connected"] = 0;
+    event_send(doc);
   });
 
   String mqtt_host = mqtt_server + ":" + String(mqtt_port);
@@ -262,6 +267,11 @@ mqtt_connect()
     serializeJson(doc, announce);
     DBUGVAR(announce);
     mqttclient.publish(mqtt_announce_topic, announce, true);
+
+    doc.clear();
+    
+    doc["mqtt_connected"] = 1;
+    event_send(doc);
 
     // Publish MQTT override/claim
     mqtt_publish_override();
@@ -392,7 +402,7 @@ mqtt_publish_claim() {
     return;
   }
   bool hasclaim = evse.clientHasClaim(EvseClient_OpenEVSE_MQTT);
-  const size_t capacity = JSON_OBJECT_SIZE(40) + 1024;
+  const size_t capacity = JSON_OBJECT_SIZE(7) + 1024;
   DynamicJsonDocument claimdata(capacity);
   if(hasclaim) {  
     evse.serializeClaim(claimdata, EvseClient_OpenEVSE_MQTT);
@@ -410,7 +420,7 @@ mqtt_publish_override() {
   if(!config_mqtt_enabled() || !mqttclient.connected()) {
     return;
   }
-  const size_t capacity = JSON_OBJECT_SIZE(40) + 1024;
+  const size_t capacity = JSON_OBJECT_SIZE(7) + 1024;
   DynamicJsonDocument override_data(capacity);
   EvseProperties props;
   //check if there an override claim
@@ -477,39 +487,44 @@ mqtt_publish_json(JsonDocument &data, const char* topic) {
 void
 mqtt_loop() {
   Profile_Start(mqtt_loop);
-
-  // Do we need to restart MQTT?
-  if(mqttRestartTime > 0 && millis() > mqttRestartTime)
-  {
-    mqttRestartTime = 0;
-    if (mqttclient.connected()) {
-      DBUGF("Disconnecting MQTT");
-      mqttclient.disconnect();
+    // Do we need to restart MQTT?
+    if(mqttRestartTime > 0 && millis() > mqttRestartTime)
+    {
+      mqttRestartTime = 0;
+      if (mqttclient.connected()) {
+        DBUGF("Disconnecting MQTT");
+        mqttclient.disconnect();
+        DynamicJsonDocument doc(JSON_OBJECT_SIZE(1) + 60);
+        doc["mqtt_connected"] = 0;
+        event_send(doc);
+      }
+      nextMqttReconnectAttempt = 0;
     }
-    nextMqttReconnectAttempt = 0;
-  }
 
-  if (config_mqtt_enabled() && !mqttclient.connected()) {
-    long now = millis();
-    // try and reconnect every x seconds
-    if (now > nextMqttReconnectAttempt) {
-      nextMqttReconnectAttempt = now + MQTT_CONNECT_TIMEOUT;
-      mqtt_connect(); // Attempt to reconnect
+    if (config_mqtt_enabled() && !mqttclient.connected()) {
+      long now = millis();
+      // try and reconnect every x seconds
+      if (now > nextMqttReconnectAttempt) {
+        nextMqttReconnectAttempt = now + MQTT_CONNECT_TIMEOUT;
+        mqtt_connect(); // Attempt to reconnect
+      }
+    }
+
+  // Temporise loop
+  if (millis() - loop_timer > MQTT_LOOP) { 
+    loop_timer = millis();
+    if (claimsVersion != evse.getClaimsVersion()) {
+      mqtt_publish_claim();
+      DBUGF("Claims has changed, publishing to MQTT");
+      claimsVersion = evse.getClaimsVersion();
+    }
+
+    if (overrideVersion != manual.getVersion()) {
+      mqtt_publish_override;
+      DBUGF("Override has changed, publishing to MQTT");
+      overrideVersion = manual.getVersion();
     }
   }
-
-if (claimsVersion != evse.getClaimsVersion()) {
-    mqtt_publish_claim();
-    DBUGF("Claims has changed, publishing to MQTT");
-    claimsVersion = evse.getClaimsVersion();
-  }
-
-  if (overrideVersion != manual.getVersion()) {
-    mqtt_publish_override;
-    DBUGF("Override has changed, publishing to MQTT");
-    overrideVersion = manual.getVersion();
-  }
-
   Profile_End(mqtt_loop, 5);
 }
 
