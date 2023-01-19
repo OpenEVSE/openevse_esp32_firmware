@@ -3,6 +3,7 @@
 
 #include <Arduino.h>
 #include <MicroTasks.h>
+#include <MicroTasksMessage.h>
 
 #ifdef ESP32
 #include <WiFi.h>
@@ -22,11 +23,71 @@ class NetManagerTask;
 class NetManagerTask : public MicroTasks::Task
 {
   private:
+    class NetState
+    {
+      public:
+        enum Value : uint8_t {
+          Starting,
+          WiredConnecting,
+          AccessPointConnecting,
+          StationClientConnecting,
+          StationClientReconnecting,
+          Connected
+        };
+
+      NetState() = default;
+      constexpr NetState(Value value) : _value(value) { }
+
+      operator Value() const { return _value; }
+      explicit operator bool() = delete;        // Prevent usage: if(state)
+      NetState operator= (const Value val) {
+        _value = val;
+        return *this;
+      }
+
+      private:
+        Value _value;
+    };
+
+    class NetMessage : public MicroTasks::Message
+    {
+      public:
+        enum Value : uint32_t {
+          WiFiStart,
+          WiFiStop,
+          WiFiRestart,
+          WiFiAccessPointEnable,
+          WiFiAccessPointDisable,
+          NetworkEvent
+        };
+
+      NetMessage(Value value) : MicroTasks::Message(static_cast<uint32_t>(value)) { }
+
+      operator Value() { return static_cast<Value>(id()); }
+      explicit operator bool() = delete;        // Prevent usage: if(state)
+    };
+
+    class NetworkEventMessage : public NetMessage
+    {
+      private:
+        WiFiEvent_t _event;
+        arduino_event_info_t _info;
+      public:
+        NetworkEventMessage(WiFiEvent_t event, arduino_event_info_t info) :
+          _event(event),
+          _info(info),
+          NetMessage(NetMessage::NetworkEvent)
+        { }
+        WiFiEvent_t event() { return _event; };
+        arduino_event_info_t &info() { return _info; };
+    };
+
     // Last discovered WiFi access points
     String _st;
     String _rssi;
 
     // Network state
+    NetState _state;
     String _ipaddress;
 
     DNSServer _dnsServer;                  // Create class DNS server, captive portal re-direct
@@ -39,19 +100,20 @@ class NetManagerTask : public MicroTasks::Task
     IPAddress _apIP;
     IPAddress _apNetMask;
     int _apClients;
+    uint32_t _apAutoApStopTime;
 
     // Wifi Network Strings
     int _clientDisconnects;
     bool _clientRetry;
     unsigned long _clientRetryTime;
-    bool _clientConnecting;
 
     int _wifiButtonState;
     unsigned long _wifiButtonTimeOut;
     bool _apMessage;
 
     #ifdef ENABLE_WIRED_ETHERNET
-    bool _eth_connected;
+    bool _ethConnected;
+    uint32_t _wiredTimeout;
     #endif
 
     LcdTask &_lcd;
@@ -60,11 +122,15 @@ class NetManagerTask : public MicroTasks::Task
     static class NetManagerTask *_instance;
 
   private:
+    void wifiStartInternal();
+    void wifiStopInternal();
+
     void wifiStartAccessPoint();
     void wifiStopAccessPoint();
 
     void wifiStartClient();
     void wifiStopClient();
+    void wifiClientConnect();
 
     #ifdef ENABLE_WIRED_ETHERNET
     void wiredStart();
@@ -81,8 +147,12 @@ class NetManagerTask : public MicroTasks::Task
     void wifiOnAPModeStationDisconnected(const WiFiEventSoftAPModeStationDisconnected &event);
 #ifdef ESP32
     static void onNetEventStatic(WiFiEvent_t event, arduino_event_info_t info);
-    void onNetEvent(WiFiEvent_t event, arduino_event_info_t info);
+    void onNetEvent(WiFiEvent_t event, arduino_event_info_t &info);
 #endif
+
+    unsigned long handleMessage();
+    unsigned long serviceButton();
+    unsigned long manageState();
 
   protected:
     void setup();

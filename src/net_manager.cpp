@@ -29,6 +29,14 @@
 #include "wifi_esp32.h"
 #endif
 
+#ifndef WIRED_CONNECT_TIMEOUT
+#define WIRED_CONNECT_TIMEOUT (15 * 1000)
+#endif
+
+#ifndef ACCESS_POINT_AUTO_STOP_TIMEOUT
+#define ACCESS_POINT_AUTO_STOP_TIMEOUT (10 * 1000)
+#endif
+
 NetManagerTask *NetManagerTask::_instance = NULL;
 
 NetManagerTask::NetManagerTask(LcdTask &lcd, LedManagerTask &led) :
@@ -39,16 +47,16 @@ NetManagerTask::NetManagerTask(LcdTask &lcd, LedManagerTask &led) :
   _apIP(192, 168, 4, 1),
   _apNetMask(255, 255, 255, 0),
   _apClients(0),
+  _state(NetState::Starting),
   _ipaddress(""),
   _clientDisconnects(0),
   _clientRetry(false),
   _clientRetryTime(0),
-  _clientConnecting(false),
   _wifiButtonState(!WIFI_BUTTON_PRESSED_STATE),
   _wifiButtonTimeOut(millis()),
   _apMessage(false),
   #ifdef ENABLE_WIRED_ETHERNET
-  _eth_connected(false),
+  _ethConnected(false),
   #endif
   _lcd(lcd),
   _led(led)
@@ -75,7 +83,7 @@ void NetManagerTask::wifiStartAccessPoint()
   DBUGVAR(isWifiModeAp());
   DBUGVAR(isWifiModeSta());
 
-  if (isWifiModeSta()) {
+  if((esid == 0 || esid == "") && isWifiModeSta()) {
     WiFi.disconnect(true);
   }
 
@@ -110,6 +118,7 @@ void NetManagerTask::wifiStartAccessPoint()
   _led.setWifiMode(false, false);
 
   _apClients = 0;
+  _state = NetState::AccessPointConnecting;
 }
 
 void NetManagerTask::wifiStopAccessPoint()
@@ -124,6 +133,14 @@ void NetManagerTask::wifiStopAccessPoint()
 // -------------------------------------------------------------------
 void NetManagerTask::wifiStartClient()
 {
+  wifiClientConnect();
+
+  _led.setWifiMode(true, false);
+  _state = NetState::StationClientConnecting;
+}
+
+void NetManagerTask::wifiClientConnect()
+{
   DEBUG.print("Connecting to SSID: ");
   DEBUG.println(esid.c_str());
   // DEBUG.print(" epass:");
@@ -132,25 +149,7 @@ void NetManagerTask::wifiStartClient()
   WiFi.hostname(esp_hostname.c_str());
   WiFi.begin(esid.c_str(), epass.c_str());
 
-  _led.setWifiMode(true, false);
-  _clientConnecting = true;
-}
-
-void NetManagerTask::wifiStart()
-{
-  _clientConnecting = 0;
-  _clientDisconnects = 0;
-
-  // 1) If no network configured start up access point
-  if (esid == 0 || esid == "")
-  {
-    wifiStartAccessPoint();
-  }
-  // 2) else try and connect to the configured network
-  else
-  {
-    wifiStartClient();
-  }
+  _clientRetryTime = millis() + WIFI_CLIENT_RETRY_TIMEOUT;
 }
 
 void NetManagerTask::displayState()
@@ -180,7 +179,9 @@ void NetManagerTask::haveNetworkConnection(IPAddress myAddress)
   // TODO: Event??
   //_time.setHost(sntp_hostname.c_str());
 
-  _clientConnecting = false;
+  _apAutoApStopTime = millis() + ACCESS_POINT_AUTO_STOP_TIMEOUT;
+
+  _state = NetState::Connected;
 }
 
 void NetManagerTask::wifiOnStationModeConnected(const WiFiEventStationModeConnected &event) {
@@ -193,7 +194,6 @@ void NetManagerTask::wifiOnStationModeGotIP(const WiFiEventStationModeGotIP &eve
 
   // Clear any error state
   _clientDisconnects = 0;
-  _clientRetry = false;
 }
 
 void NetManagerTask::wifiOnStationModeDisconnected(const WiFiEventStationModeDisconnected &event)
@@ -231,11 +231,13 @@ void NetManagerTask::wifiOnStationModeDisconnected(const WiFiEventStationModeDis
 
   _clientDisconnects++;
 
-  // Clear the WiFi state and tru to connect again
+  // Clear the WiFi state and try to connect again
   WiFi.disconnect();
   WiFi.mode(WIFI_OFF);
 
-  //startClient();
+  if(NetState::Connected) {
+    wifiStart();
+  }
 }
 
 void NetManagerTask::wifiOnAPModeStationConnected(const WiFiEventSoftAPModeStationConnected &event)
@@ -259,13 +261,14 @@ void NetManagerTask::wifiOnAPModeStationDisconnected(const WiFiEventSoftAPModeSt
 
 #ifdef ESP32
 
-void NetManagerTask::onNetEventStatic(WiFiEvent_t event, arduino_event_info_t info) {
+void NetManagerTask::onNetEventStatic(WiFiEvent_t event, arduino_event_info_t info)
+{
   if(_instance) {
-    _instance->onNetEvent(event, info);
+    _instance->send(new NetworkEventMessage(event, info));
   }
 }
 
-void NetManagerTask::onNetEvent(WiFiEvent_t event, arduino_event_info_t info)
+void NetManagerTask::onNetEvent(WiFiEvent_t event, arduino_event_info_t &info)
 {
   DBUGF("Got Network event %s",
     ARDUINO_EVENT_WIFI_READY == event ? "ARDUINO_EVENT_WIFI_READY" :
@@ -340,7 +343,6 @@ void NetManagerTask::onNetEvent(WiFiEvent_t event, arduino_event_info_t info)
     } break;
     case ARDUINO_EVENT_WIFI_STA_STOP:
     {
-      _clientConnecting = false;
     } break;
     case ARDUINO_EVENT_WIFI_STA_DISCONNECTED:
     {
@@ -378,7 +380,9 @@ void NetManagerTask::onNetEvent(WiFiEvent_t event, arduino_event_info_t info)
     } break;
 #ifdef ENABLE_WIRED_ETHERNET
     case ARDUINO_EVENT_ETH_START:
-      DBUGLN("ETH Started");
+      DBUGF("ETH Started, link %s", ETH.linkUp() ? "up" : "down");
+      // https://github.com/espressif/arduino-esp32/issues/6105
+
       //set eth hostname here
       if(ETH.setHostname(esp_hostname.c_str())) {
         DBUGF("Set host name to %s", ETH.getHostname());
@@ -401,17 +405,17 @@ void NetManagerTask::onNetEvent(WiFiEvent_t event, arduino_event_info_t info)
       DBUG(ETH.linkSpeed());
       DBUGLN("Mbps");
       haveNetworkConnection(ETH.localIP());
-      _eth_connected = true;
+      _ethConnected = true;
       wifiStop();
       break;
     case ARDUINO_EVENT_ETH_DISCONNECTED:
       DBUGLN("ETH Disconnected");
-      _eth_connected = false;
+      _ethConnected = false;
       wifiStart();
       break;
     case ARDUINO_EVENT_ETH_STOP:
       DBUGLN("ETH Stopped");
-      _eth_connected = false;
+      _ethConnected = false;
       break;
 #endif
     default:
@@ -439,26 +443,13 @@ void NetManagerTask::setup()
 #ifdef ESP32
   WiFi.onEvent(onNetEventStatic);
 #else
-  static auto _onStationModeConnected = WiFi.onStationModeConnected(net_wifi_onStationModeConnected);
-  static auto _onStationModeGotIP = WiFi.onStationModeGotIP(net_wifi_onStationModeGotIP);
-  static auto _onStationModeDisconnected = WiFi.onStationModeDisconnected(net_wifi_onStationModeDisconnected);
-  static auto _onSoftAPModeStationConnected = WiFi.onSoftAPModeStationConnected(net_wifi_onAPModeStationConnected);
-  static auto _onSoftAPModeStationDisconnected = WiFi.onSoftAPModeStationDisconnected(net_wifi_onAPModeStationDisconnected);
+// TODO: Needs fixing if we ever support ESP8622
+//  static auto _onStationModeConnected = WiFi.onStationModeConnected(net_wifi_onStationModeConnected);
+//  static auto _onStationModeGotIP = WiFi.onStationModeGotIP(net_wifi_onStationModeGotIP);
+//  static auto _onStationModeDisconnected = WiFi.onStationModeDisconnected(net_wifi_onStationModeDisconnected);
+//  static auto _onSoftAPModeStationConnected = WiFi.onSoftAPModeStationConnected(net_wifi_onAPModeStationConnected);
+//  static auto _onSoftAPModeStationDisconnected = WiFi.onSoftAPModeStationDisconnected(net_wifi_onAPModeStationDisconnected);
 #endif
-
-  wifiStart();
-
-#ifdef ENABLE_WIRED_ETHERNET
-  //ETH.setHostname(esp_hostname.c_str());
-
-  pinMode(ETH_PHY_POWER, OUTPUT);
-#ifdef RESET_ETH_PHY_ON_BOOT
-  digitalWrite(ETH_PHY_POWER, LOW);
-  delay(1000);
-#endif // #ifdef RESET_ETH_PHY_ON_BOOT
-  digitalWrite(ETH_PHY_POWER, HIGH);
-  ETH.begin();
-#endif // #ifdef ENABLE_WIRED_ETHERNET
 
   if (MDNS.begin(esp_hostname.c_str()))
   {
@@ -470,15 +461,49 @@ void NetManagerTask::setup()
   }
 }
 
-unsigned long NetManagerTask::loop(MicroTasks::WakeReason reason)
+unsigned long NetManagerTask::handleMessage()
 {
-  Profile_Start(NetManagerTask::loop);
+  MicroTasks::Message *msg;
+  if(this->receive(msg))
+  {
+    switch (msg->id())
+    {
+      case NetMessage::WiFiRestart:
+      case NetMessage::WiFiStop:
+        wifiStopInternal();
+        if(msg->id() == NetMessage::WiFiStop) { break; };
 
-  //bool isClient = isWifiModeSta();
-  bool isClientOnly = isWifiModeStaOnly();
-  //bool isAp = isWifiModeAp();
-  bool isApOnly = isWifiModeApOnly();
+      case NetMessage::WiFiStart:
+        wifiStartInternal();
+        break;
 
+      case NetMessage::WiFiAccessPointEnable:
+        wifiStartAccessPoint();
+        break;
+
+      case NetMessage::WiFiAccessPointDisable:
+        wifiStopAccessPoint();
+        break;
+
+      case NetMessage::NetworkEvent:
+      {
+        NetworkEventMessage *netEvent = static_cast<NetworkEventMessage *>(msg);
+        onNetEvent(netEvent->event(), netEvent->info());
+      }break;
+
+      default:
+        break;
+    }
+
+    delete msg;
+  }
+
+  return MicroTask.Infinate;
+}
+
+
+unsigned long NetManagerTask::serviceButton()
+{
   int button = _led.getButtonPressed();
 
   //DBUGF("%lu %d %d", millis() - _wifiButtonTimeOut, button, _wifiButtonState);
@@ -523,24 +548,80 @@ unsigned long NetManagerTask::loop(MicroTasks::WakeReason reason)
     _apMessage = true;
   }
 
-  // Manage state while connecting
-  if(isClientOnly && !WiFi.isConnected())
+  return 0;
+}
+
+unsigned long NetManagerTask::manageState()
+{
+  unsigned long delayTime = MicroTask.Infinate;
+
+  switch (_state)
   {
-    // If we have failed to connect turn on the AP
-    if(_clientDisconnects > WIFI_CLIENT_DISCONNECTS_BEFORE_AP) {
-      wifiStartAccessPoint();
-      _clientRetry = true;
-      _clientRetryTime = millis() + WIFI_CLIENT_RETRY_TIMEOUT;
-    } else if(!_clientConnecting) {
-      wifiStartClient();
-    }
+    case NetState::Starting:
+      #ifdef ENABLE_WIRED_ETHERNET
+      wiredStart();
+      #else
+      wifiStartInternal();
+      #endif
+      break;
+#ifdef ENABLE_WIRED_ETHERNET
+    case NetState::WiredConnecting:
+      if(millis() > _wiredTimeout) {
+        wifiStartInternal();
+      } else {
+        delayTime = _wiredTimeout - millis();
+      }
+      break;
+#endif
+    case NetState::StationClientConnecting:
+      if(_clientDisconnects > WIFI_CLIENT_DISCONNECTS_BEFORE_AP) {
+        wifiStartAccessPoint();
+      }
+      // Intentionally fall through to AP State for the same client reconnect logic
+    case NetState::AccessPointConnecting:
+      if(esid != 0 && esid != "" && millis() > _clientRetryTime) {
+        wifiClientConnect();
+      }
+
+      delayTime = _clientRetryTime - millis();
+      break;
+    case NetState::StationClientReconnecting:
+      break;
+    case NetState::Connected:
+      if(millis() > _apAutoApStopTime)
+      {
+        if(isWifiModeAp()) {
+          wifiStopAccessPoint();
+        }
+      } else {
+        delayTime = _apAutoApStopTime - millis();
+      }
+      break;
   }
 
-  // Remain in AP mode for 5 Minutes before resetting
-  if(isApOnly && 0 == _apClients && _clientRetry && millis() > _clientRetryTime) {
-    DEBUG.println("client re-try, resetting");
-    wifiRestart();
+  return delayTime;
+}
+
+unsigned long NetManagerTask::loop(MicroTasks::WakeReason reason)
+{
+  unsigned long nextLoopDelay = MicroTask.Infinate;
+
+  Profile_Start(NetManagerTask::loop);
+
+//  DBUG("NetManagerTask woke: ");
+//  DBUGLN(WakeReason_Scheduled == reason ? "WakeReason_Scheduled" :
+//         WakeReason_Event == reason ? "WakeReason_Event" :
+//         WakeReason_Message == reason ? "WakeReason_Message" :
+//         WakeReason_Manual == reason ? "WakeReason_Manual" :
+//         "UNKNOWN");
+
+  if(WakeReason_Message == reason) {
+    nextLoopDelay = min(handleMessage(), nextLoopDelay);
   }
+
+  nextLoopDelay = min(serviceButton(), nextLoopDelay);
+
+  nextLoopDelay = min(manageState(), nextLoopDelay);
 
   if(_dnsServerStarted) {
     _dnsServer.processNextRequest(); // Captive portal DNS re-dierct
@@ -548,29 +629,74 @@ unsigned long NetManagerTask::loop(MicroTasks::WakeReason reason)
 
   Profile_End(NetManagerTask::loop, 5);
 
-  return 10;
+  return nextLoopDelay;
 }
 
-void NetManagerTask::wifiRestart() 
+#ifdef ENABLE_WIRED_ETHERNET
+void NetManagerTask::wiredStart()
 {
-  DBUGF("NetManagerTask::wifiRestart %d", WiFi.getMode());
-  wifiStop();
-  wifiStart();
+  //ETH.setHostname(esp_hostname.c_str());
+  // https://github.com/espressif/arduino-esp32/pull/6188/files
+  pinMode(ETH_PHY_POWER, OUTPUT);
+#ifdef RESET_ETH_PHY_ON_BOOT
+  digitalWrite(ETH_PHY_POWER, LOW);
+  delay(1000);
+#endif // #ifdef RESET_ETH_PHY_ON_BOOT
+  digitalWrite(ETH_PHY_POWER, HIGH);
+  ETH.begin();
+
+  _state = NetState::WiredConnecting;
+  _wiredTimeout = micros() + WIRED_CONNECT_TIMEOUT;
+}
+#endif
+
+void NetManagerTask::wifiStartInternal()
+{
+  _clientDisconnects = 0;
+
+  // 1) If no network configured start up access point
+  if (esid == 0 || esid == "")
+  {
+    wifiStartAccessPoint();
+  }
+  // 2) else try and connect to the configured network
+  else
+  {
+    wifiStartClient();
+  }
 }
 
-void NetManagerTask::wifiStop() {
-  DBUGF("NetManagerTask::wifiStop %d", WiFi.getMode());
+void NetManagerTask::wifiStopInternal()
+{
   wifiTurnOffAp();
   if (isWifiModeSta()) {
     WiFi.disconnect(true);
   }
 }
 
+void NetManagerTask::wifiStart()
+{
+  DBUGF("NetManagerTask::wifiStart %d", WiFi.getMode());
+  send(new NetMessage(NetMessage::WiFiStart));
+}
+
+void NetManagerTask::wifiStop()
+{
+  DBUGF("NetManagerTask::wifiStop %d", WiFi.getMode());
+  send(new NetMessage(NetMessage::WiFiStop));
+}
+
+void NetManagerTask::wifiRestart()
+{
+  DBUGF("NetManagerTask::wifiRestart %d", WiFi.getMode());
+  send(new NetMessage(NetMessage::WiFiRestart));
+}
+
 void NetManagerTask::wifiTurnOffAp()
 {
   DBUGF("NetManagerTask::wifiTurnOffAp %d", WiFi.getMode());
   if(isWifiModeAp()) {
-    wifiStopAccessPoint();
+    send(new NetMessage(NetMessage::WiFiAccessPointDisable));
   }
 }
 
@@ -578,7 +704,7 @@ void NetManagerTask::wifiTurnOnAp()
 {
   DBUGF("NetManagerTask::wifiTurnOnAp %d", WiFi.getMode());
   if(!isWifiModeAp()) {
-    wifiStartAccessPoint();
+    send(new NetMessage(NetMessage::WiFiAccessPointEnable));
   }
 }
 
@@ -595,7 +721,7 @@ bool NetManagerTask::isWifiClientConnected()
 bool NetManagerTask::isWiredConnected()
 {
 #ifdef ENABLE_WIRED_ETHERNET
-  return _eth_connected;
+  return _ethConnected;
 #else
   return false;
 #endif
