@@ -164,7 +164,7 @@ EvseMonitor::EvseMonitor(OpenEVSEClass &openevse) :
   _min_current(0),
   _pilot(0),
   _max_configured_current(0),
-  _max_hardware_current(0),
+  _max_hardware_current(80),
   _data_ready(EVSE_MONITOR_DATA_READY),
   _boot_ready(EVSE_MONITOR_BOOT_READY),
   _session_complete(EVSE_MONITOR_SESSION_COMPLETE_MASK, EVSE_MONITOR_SESSION_COMPLETE_TRIGGER),
