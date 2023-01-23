@@ -235,7 +235,7 @@ void NetManagerTask::wifiOnStationModeDisconnected(const WiFiEventStationModeDis
   WiFi.disconnect();
   WiFi.mode(WIFI_OFF);
 
-  if(NetState::Connected) {
+  if(!isWiredConnected() && NetState::Connected == _state) {
     wifiStart();
   }
 }
@@ -426,7 +426,9 @@ void NetManagerTask::onNetEvent(WiFiEvent_t event, arduino_event_info_t &info)
 
 void NetManagerTask::setup()
 {
-  randomSeed(analogRead(RANDOM_SEED_CHANNEL));
+  // This is not really needed for our usecase on the ESP32, because random(n) uses theESP32 hardware random number
+  // generator, but random() does not so safest to add some entropy here
+  randomSeed(millis() | analogRead(RANDOM_SEED_CHANNEL));
 
   // If we have an SSID configured at this point we have likely
   // been running another firmware, clear the results
@@ -450,6 +452,9 @@ void NetManagerTask::setup()
 //  static auto _onSoftAPModeStationConnected = WiFi.onSoftAPModeStationConnected(net_wifi_onAPModeStationConnected);
 //  static auto _onSoftAPModeStationDisconnected = WiFi.onSoftAPModeStationDisconnected(net_wifi_onAPModeStationDisconnected);
 #endif
+
+  // Initially startup the netwrok to kick things off
+  manageState();
 
   if (MDNS.begin(esp_hostname.c_str()))
   {
@@ -609,6 +614,14 @@ unsigned long NetManagerTask::loop(MicroTasks::WakeReason reason)
   Profile_Start(NetManagerTask::loop);
 
 //  DBUG("NetManagerTask woke: ");
+//  DBUG(NetState::Starting == _state ? "Starting" :
+//       NetState::WiredConnecting == _state ? "WiredConnecting" :
+//       NetState::AccessPointConnecting == _state ? "AccessPointConnecting" :
+//       NetState::StationClientConnecting == _state ? "StationClientConnecting" :
+//       NetState::StationClientReconnecting == _state ? "StationClientReconnecting" :
+//       NetState::Connected == _state ? "Connected" :
+//       "UNKNOWN");
+//  DBUG(", ");
 //  DBUGLN(WakeReason_Scheduled == reason ? "WakeReason_Scheduled" :
 //         WakeReason_Event == reason ? "WakeReason_Event" :
 //         WakeReason_Message == reason ? "WakeReason_Message" :
