@@ -1202,6 +1202,19 @@ void onWsConnect(MongooseHttpWebSocketConnection *connection)
   web_server_event(doc);
 }
 
+/*
+ * Really simple 'conversion' of ASCII to UTF-8, basically only a few places send >127 chars
+ * so just filter those to be acceptable as UTF-8
+ */
+void web_server_send_ascii_utf8(const char *endpoint, const uint8_t *buffer, size_t size)
+{
+  char temp[size];
+  for(int i = 0; i < size; i++) {
+    temp[i] = buffer[i] & 0x7f;
+  }
+  server.sendAll(endpoint, WEBSOCKET_OP_TEXT, temp, size);
+}
+
 void
 web_server_setup() {
 //  SPIFFS.begin(); // mount the fs
@@ -1287,10 +1300,10 @@ web_server_setup() {
   });
 
   SerialEvse.onWrite([](const uint8_t *buffer, size_t size) {
-    server.sendAll("/evse/console", WEBSOCKET_OP_TEXT, buffer, size);
+    web_server_send_ascii_utf8("/evse/console", buffer, size);
   });
   SerialEvse.onRead([](const uint8_t *buffer, size_t size) {
-    server.sendAll("/evse/console", WEBSOCKET_OP_TEXT, buffer, size);
+    web_server_send_ascii_utf8("/evse/console", buffer, size);
   });
 
   server.on("/ws$")->
