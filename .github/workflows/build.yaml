@@ -108,7 +108,7 @@ jobs:
         pip install --upgrade platformio
 
     - name: Set up Node JS
-      uses: actions/setup-node@v2
+      uses: actions/setup-node@v3
       with:
         node-version: '16'
 
