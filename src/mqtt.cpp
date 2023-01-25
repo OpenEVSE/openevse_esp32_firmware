@@ -151,7 +151,7 @@ void mqttmsg_callback(MongooseString topic, MongooseString payload) {
       mqtt_set_claim(true, override_props);
       }
   }
-  
+
   // Claim
   else if (topic_string == mqtt_topic + "/claim/set") {
     if (payload_str.equals("release")) {
@@ -164,7 +164,7 @@ void mqttmsg_callback(MongooseString topic, MongooseString payload) {
       mqtt_set_claim(false, claim_props);
     }
   }
-  
+
   //Schedule
   else if (topic_string == mqtt_topic + "/schedule/set") {
     mqtt_set_schedule(payload_str);
@@ -269,7 +269,7 @@ mqtt_connect()
     mqttclient.publish(mqtt_announce_topic, announce, true);
 
     doc.clear();
-    
+
     doc["mqtt_connected"] = 1;
     event_send(doc);
 
@@ -332,19 +332,19 @@ mqtt_connect()
     mqttclient.subscribe(mqtt_sub_topic);
     yield();
 
-    mqtt_sub_topic = mqtt_topic + "/override/set";        
+    mqtt_sub_topic = mqtt_topic + "/override/set";
     mqttclient.subscribe(mqtt_sub_topic);
     yield();
 
-    mqtt_sub_topic = mqtt_topic + "/claim/set";        
+    mqtt_sub_topic = mqtt_topic + "/claim/set";
     mqttclient.subscribe(mqtt_sub_topic);
     yield();
 
-    mqtt_sub_topic = mqtt_topic + "/schedule/set";        
+    mqtt_sub_topic = mqtt_topic + "/schedule/set";
     mqttclient.subscribe(mqtt_sub_topic);
     yield();
 
-    mqtt_sub_topic = mqtt_topic + "/schedule/clear";        
+    mqtt_sub_topic = mqtt_topic + "/schedule/clear";
     mqttclient.subscribe(mqtt_sub_topic);
     yield();
     connecting = false;
@@ -392,7 +392,7 @@ mqtt_set_claim(bool override, EvseProperties &props) {
       mqtt_publish_claim();
     }
   }
-  
+
   Profile_End(mqtt_set_claim, 5);
 }
 
@@ -404,10 +404,10 @@ mqtt_publish_claim() {
   bool hasclaim = evse.clientHasClaim(EvseClient_OpenEVSE_MQTT);
   const size_t capacity = JSON_OBJECT_SIZE(7) + 1024;
   DynamicJsonDocument claimdata(capacity);
-  if(hasclaim) {  
+  if(hasclaim) {
     evse.serializeClaim(claimdata, EvseClient_OpenEVSE_MQTT);
-    
-  } 
+
+  }
   else {
     claimdata["state"] = "null";
   }
@@ -427,27 +427,27 @@ mqtt_publish_override() {
   if (evse.clientHasClaim(EvseClient_OpenEVSE_Manual) || manual.isActive()) {
     props = evse.getClaimProperties(EvseClient_OpenEVSE_Manual);
     //check if there's state property in override
-    props.serialize(override_data); 
+    props.serialize(override_data);
   }
   else override_data["state"] = "null";
   mqtt_publish_json(override_data, "/override");
 
-  
-  
+
+
 }
 
 void mqtt_set_schedule(String schedule) {
   Profile_Start(mqtt_set_schedule);
   scheduler.deserialize(schedule);
   mqtt_publish_schedule();
-  Profile_End(mqtt_set_schedule, 5); 
+  Profile_End(mqtt_set_schedule, 5);
 }
 
 void
 mqtt_clear_schedule(uint32_t event) {
   Profile_Start(mqtt_clear_schedule);
   scheduler.removeEvent(event);
-  Profile_End(mqtt_clear_schedule, 5); 
+  Profile_End(mqtt_clear_schedule, 5);
   mqtt_publish_schedule();
 }
 
@@ -465,19 +465,19 @@ mqtt_publish_schedule() {
   }
 }
 
-void 
+void
 mqtt_publish_json(JsonDocument &data, const char* topic) {
   Profile_Start(mqtt_publish_json);
   if(!config_mqtt_enabled() || !mqttclient.connected()) {
       return;
       }
-  
+
   String fulltopic = mqtt_topic + topic;
   String doc;
   serializeJson(data, doc);
   mqttclient.publish(fulltopic,doc, true); // claims are always published as retained as they are not updated regularly
   Profile_End(mqtt_publish_json, 5);
-  
+
 }
 // -------------------------------------------------------------------
 // MQTT state management
@@ -487,31 +487,32 @@ mqtt_publish_json(JsonDocument &data, const char* topic) {
 void
 mqtt_loop() {
   Profile_Start(mqtt_loop);
-    // Do we need to restart MQTT?
-    if(mqttRestartTime > 0 && millis() > mqttRestartTime)
-    {
-      mqttRestartTime = 0;
-      if (mqttclient.connected()) {
-        DBUGF("Disconnecting MQTT");
-        mqttclient.disconnect();
-        DynamicJsonDocument doc(JSON_OBJECT_SIZE(1) + 60);
-        doc["mqtt_connected"] = 0;
-        event_send(doc);
-      }
-      nextMqttReconnectAttempt = 0;
-    }
 
-    if (config_mqtt_enabled() && !mqttclient.connected()) {
-      long now = millis();
-      // try and reconnect every x seconds
-      if (now > nextMqttReconnectAttempt) {
-        nextMqttReconnectAttempt = now + MQTT_CONNECT_TIMEOUT;
-        mqtt_connect(); // Attempt to reconnect
-      }
+  // Do we need to restart MQTT?
+  if(mqttRestartTime > 0 && millis() > mqttRestartTime)
+  {
+    mqttRestartTime = 0;
+    if (mqttclient.connected()) {
+      DBUGF("Disconnecting MQTT");
+      mqttclient.disconnect();
+      DynamicJsonDocument doc(JSON_OBJECT_SIZE(1) + 60);
+      doc["mqtt_connected"] = 0;
+      event_send(doc);
     }
+    nextMqttReconnectAttempt = 0;
+  }
+
+  if (config_mqtt_enabled() && !mqttclient.connected()) {
+    long now = millis();
+    // try and reconnect every x seconds
+    if (now > nextMqttReconnectAttempt) {
+      nextMqttReconnectAttempt = now + MQTT_CONNECT_TIMEOUT;
+      mqtt_connect(); // Attempt to reconnect
+    }
+  }
 
   // Temporise loop
-  if (millis() - loop_timer > MQTT_LOOP) { 
+  if (millis() - loop_timer > MQTT_LOOP) {
     loop_timer = millis();
     if (claimsVersion != evse.getClaimsVersion()) {
       mqtt_publish_claim();

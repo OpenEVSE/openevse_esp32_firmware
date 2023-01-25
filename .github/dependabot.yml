@@ -10,3 +10,12 @@ updates:
       - "jeremypoulter"
       - "glynhudson"
       - "chris1howell"
+
+  - package-ecosystem: "github-actions"
+    directory: "/"
+    schedule:
+      interval: "daily"
+    reviewers:
+      - "jeremypoulter"
+      - "glynhudson"
+      - "chris1howell"

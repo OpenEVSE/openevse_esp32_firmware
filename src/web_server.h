@@ -29,6 +29,18 @@ extern const char _CONTENT_TYPE_PNG[];
 extern const char _CONTENT_TYPE_SVG[];
 #define CONTENT_TYPE_SVG FPSTR(_CONTENT_TYPE_SVG)
 
+extern const char _CONTENT_TYPE_ICO[];
+#define CONTENT_TYPE_ICO FPSTR(_CONTENT_TYPE_ICO)
+
+extern const char _CONTENT_TYPE_WOFF[];
+#define CONTENT_TYPE_WOFF FPSTR(_CONTENT_TYPE_WOFF)
+
+extern const char _CONTENT_TYPE_WOFF2[];
+#define CONTENT_TYPE_WOFF2 FPSTR(_CONTENT_TYPE_WOFF2)
+
+extern const char _CONTENT_TYPE_MANIFEST[];
+#define CONTENT_TYPE_MANIFEST FPSTR(_CONTENT_TYPE_MANIFEST)
+
 extern MongooseHttpServer server;
 
 extern void web_server_setup();
