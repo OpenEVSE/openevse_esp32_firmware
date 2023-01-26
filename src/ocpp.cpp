@@ -450,7 +450,9 @@ void ArduinoOcppTask::updateEvseClaim() {
     EvseProperties evseProperties;
 
     if (!arduinoOcppInitialized || !config_ocpp_enabled()) {
-        evse->release(EvseClient_OpenEVSE_OCPP);
+        if (evse->clientHasClaim(EvseClient_OpenEVSE_OCPP)) {
+            evse->release(EvseClient_OpenEVSE_OCPP);
+        }
         return;
     }
 
@@ -494,10 +496,21 @@ void ArduinoOcppTask::updateEvseClaim() {
     //Apply inferred claim
     if (evseState == EvseState::None) {
         //the claiming rules don't specify the EVSE state
-        evse->release(EvseClient_OpenEVSE_OCPP);
+
+        //release claim if still set
+        if (evse->clientHasClaim(EvseClient_OpenEVSE_OCPP)) {
+            evse->release(EvseClient_OpenEVSE_OCPP);
+        }
     } else {
         //the claiming rules specify that the EVSE is either active or inactive
-        evse->claim(EvseClient_OpenEVSE_OCPP, EvseManager_Priority_OCPP, evseProperties);
+
+        //set claim if updated
+        if (!evse->clientHasClaim(EvseClient_OpenEVSE_OCPP) ||
+                    evse->getState(EvseClient_OpenEVSE_OCPP) != evseProperties.getState() ||
+                    evse->getChargeCurrent(EvseClient_OpenEVSE_OCPP) != evseProperties.getChargeCurrent()) {
+            
+            evse->claim(EvseClient_OpenEVSE_OCPP, EvseManager_Priority_OCPP, evseProperties);
+        }
     }
 
 }
