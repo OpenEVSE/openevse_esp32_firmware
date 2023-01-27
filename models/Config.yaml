@@ -54,8 +54,7 @@ x-examples:
     mqtt_announce_topic: openevse/announce/a7d4
     ocpp_server: ''
     ocpp_chargeBoxId: ''
-    ocpp_idTag: ''
-    tx_start_point: tx_pending
+    ocpp_authkey: ''
     ohm: ''
     divert_PV_ratio: 1.1
     divert_attack_smoothing_factor: 0.4
@@ -82,6 +81,9 @@ x-examples:
     ocpp_enabled: true
     ocpp_suspend_evse: true
     ocpp_energize_plug: true
+    ocpp_auth_auto: true
+    ocpp_idtag: '0E000000'
+    ocpp_auth_offline: true
     mqtt_protocol: mqtt
     charge_mode: fast
 x-tags:
@@ -223,11 +225,14 @@ properties:
     type: string
   ocpp_chargeBoxId:
     type: string
-  ocpp_idTag:
+  ocpp_authkey:
     type: string
-  tx_start_point:
+  ocpp_auth_auto:
+    type: boolean
+  ocpp_idtag:
     type: string
-    minLength: 1
+  ocpp_auth_offline:
+    type: boolean
   ohm:
     type: string
   divert_PV_ratio:

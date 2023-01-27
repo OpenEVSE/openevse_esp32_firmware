@@ -28,7 +28,6 @@ typedef const __FlashStringHelper *fstr_t;
 #include "net_manager.h"
 #include "mqtt.h"
 #include "ocpp.h"
-#include "MongooseOcppSocketClient.h"
 #include "input.h"
 #include "emoncms.h"
 #include "divert.h"
@@ -213,7 +212,7 @@ void buildStatus(DynamicJsonDocument &doc) {
 
   doc["mqtt_connected"] = (int)mqtt_connected();
 
-  doc["ocpp_connected"] = (int)MongooseOcppSocketClient::ocppConnected();
+  doc["ocpp_connected"] = (int)ArduinoOcppTask::isConnected();
 
 #if defined(ENABLE_PN532) || defined(ENABLE_RFID)
   doc["rfid_failure"] = (int) rfid.communicationFails();
