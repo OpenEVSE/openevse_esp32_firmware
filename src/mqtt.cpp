@@ -33,6 +33,7 @@ static bool connecting = false;
 static bool mqttRetained = false;
 uint8_t claimsVersion = 0;
 uint8_t overrideVersion = 0;
+uint8_t scheduleVersion = 0;
 
 String lastWill = "";
 
@@ -521,9 +522,15 @@ mqtt_loop() {
     }
 
     if (overrideVersion != manual.getVersion()) {
-      mqtt_publish_override;
+      mqtt_publish_override();
       DBUGF("Override has changed, publishing to MQTT");
       overrideVersion = manual.getVersion();
+    }
+
+    if (scheduleVersion != scheduler.getVersion()) {
+      mqtt_publish_schedule();
+      DBUGF("Schedule has changed, publishing to MQTT");
+      scheduleVersion = scheduler.getVersion();
     }
   }
   Profile_End(mqtt_loop, 5);
