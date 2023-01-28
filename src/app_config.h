@@ -96,6 +96,8 @@ extern uint32_t flags;
 #define CONFIG_FACTORY_WRITE_LOCK   (1 << 21)
 #define CONFIG_OCPP_AUTO_AUTH       (1 << 22)
 #define CONFIG_OCPP_OFFLINE_AUTH    (1 << 23)
+#define CONFIG_THREEPHASE           (1 << 24)
+
 
 inline bool config_emoncms_enabled() {
   return CONFIG_SERVICE_EMONCMS == (flags & CONFIG_SERVICE_EMONCMS);
@@ -175,6 +177,10 @@ inline bool config_rfid_enabled() {
 
 inline bool config_factory_write_lock() {
   return CONFIG_FACTORY_WRITE_LOCK == (flags & CONFIG_FACTORY_WRITE_LOCK);
+}
+
+inline bool config_threephase_enabled() {
+  return CONFIG_THREEPHASE == (flags & CONFIG_THREEPHASE);
 }
 
 // Ohm Connect Settings
