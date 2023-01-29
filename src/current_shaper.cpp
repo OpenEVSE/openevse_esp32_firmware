@@ -18,7 +18,7 @@ void CurrentShaperTask::setup() {
 }
 
 unsigned long CurrentShaperTask::loop(MicroTasks::WakeReason reason) {
-	if (_enabled && !_evse->clientHasClaim(EvseClient_OpenEVSE_Divert)) {
+	if (_enabled) {
 			EvseProperties props;
 			if (_changed) {
 				props.setMaxCurrent(_max_cur);
@@ -116,7 +116,19 @@ void CurrentShaperTask::setState(bool state) {
 
 void CurrentShaperTask::shapeCurrent() {
 	_updated = true;
-	_max_cur = round(((_max_pwr - _live_pwr) / evse.getVoltage()) + (evse.getAmps()));
+	// adding self produced energy to total
+	int max_pwr = _max_pwr;
+	if (config_divert_enabled()) {
+		if (mqtt_solar != "") {
+			max_pwr += solar;
+		}		
+		else if (mqtt_grid_ie != "" && (grid_ie <= 0)) {
+			max_pwr -= grid_ie;
+		}
+	}
+	_max_cur = round(((max_pwr - _live_pwr) / evse.getVoltage()) + (evse.getAmps()));
+
+
 	_changed = true; 
 }
 

@@ -244,6 +244,7 @@ void buildStatus(DynamicJsonDocument &doc) {
   doc["charge_rate"] = divert.getChargeRate();
   doc["divert_update"] = (millis() - divert.getLastUpdate()) / 1000;
   doc["divert_active"] = divert.isActive();
+  doc["divertmode"] = (uint8_t)divert.getMode();
 
   doc["shaper"] = shaper.getState()?1:0;
   doc["shaper_live_pwr"] = shaper.getLivePwr();
@@ -708,12 +709,20 @@ void handleStatusPost(MongooseHttpServerRequest *request, MongooseHttpServerResp
       solar = doc["solar"];
       DBUGF("solar:%dW", solar);
       divert.update_state();
+      // recalculate shaper
+      if (shaper.getState()) {
+        shaper.shapeCurrent();
+      }
       send_event = false; // Divert sends the event so no need to send here
     }
     else if(doc.containsKey("grid_ie")) {
       grid_ie = doc["grid_ie"];
       DBUGF("grid:%dW", grid_ie);
       divert.update_state();
+      // recalculate shaper
+      if (shaper.getState()) {
+        shaper.shapeCurrent();
+      }
       send_event = false; // Divert sends the event so no need to send here
     }
     if(doc.containsKey("battery_level")) {

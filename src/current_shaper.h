@@ -17,6 +17,7 @@
 #include "http_update.h"
 #include "input.h"
 #include "event.h"
+#include "divert.h"
 
 class CurrentShaperTask: public MicroTasks::Task
 {
@@ -34,14 +35,12 @@ class CurrentShaperTask: public MicroTasks::Task
   protected:
     void setup();
     unsigned long loop(MicroTasks::WakeReason reason);
-    void shapeCurrent();
-
 
   public:
     CurrentShaperTask();
     ~CurrentShaperTask();
     void begin(EvseManager &evse);
-
+    void shapeCurrent();
     void setMaxPwr(int max_pwr);
     void setLivePwr(int live_pwr);
     void setState(bool state);
