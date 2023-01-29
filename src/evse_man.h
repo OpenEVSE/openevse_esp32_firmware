@@ -10,6 +10,7 @@
 #include "evse_monitor.h"
 #include "event_log.h"
 #include "json_serialize.h"
+#include "app_config.h"
 
 typedef uint32_t EvseClient;
 
@@ -338,7 +339,12 @@ class EvseManager : public MicroTasks::Task
       return _monitor.isCharging();
     }
     double getAmps() {
-      return _monitor.getAmps();
+      if (!config_threephase_enabled()) {
+        return _monitor.getAmps();
+      }
+      else {
+        return _monitor.getAmps() * 3;
+      }
     }
     double getVoltage() {
       return _monitor.getVoltage();

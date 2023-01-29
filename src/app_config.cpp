@@ -211,6 +211,7 @@ ConfigOpt *opts[] =
   new ConfigOptVirtualBool(flagsOpt, CONFIG_OCPP_ACCESS_ENERGIZE, CONFIG_OCPP_ACCESS_ENERGIZE, "ocpp_energize_plug", "opn"),
   new ConfigOptVirtualBool(flagsOpt, CONFIG_RFID, CONFIG_RFID, "rfid_enabled", "rf"),
   new ConfigOptVirtualBool(flagsOpt, CONFIG_FACTORY_WRITE_LOCK, CONFIG_FACTORY_WRITE_LOCK, "factory_write_lock", "fwl"),
+  new ConfigOptVirtualBool(flagsOpt, CONFIG_THREEPHASE, CONFIG_THREEPHASE, "is_threephase", "itp"),
   new ConfigOptVirtualMqttProtocol(flagsOpt, "mqtt_protocol", "mprt"),
   new ConfigOptVirtualChargeMode(flagsOpt, "charge_mode", "chmd")
 };
