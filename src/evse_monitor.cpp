@@ -163,6 +163,7 @@ EvseMonitor::EvseMonitor(OpenEVSEClass &openevse) :
   _stuck_count(0),
   _min_current(0),
   _pilot(0),
+  _pilot_is_wrong(false),
   _max_configured_current(0),
   _max_hardware_current(80),
   _data_ready(EVSE_MONITOR_DATA_READY),
@@ -308,7 +309,26 @@ void EvseMonitor::updateEvseState(uint8_t evse_state, uint8_t pilot_state, uint3
       }
       _session_complete.update(getFlags());
     });
+  verifyPilot();
   }
+}
+
+void EvseMonitor::verifyPilot() {
+    // After some state changes the OpenEVSE module compiled with PP_AUTO_AMPACITY will reset to the maximum pilot level, so reset to what we expect
+    _openevse.getCurrentCapacity([this](int ret, long min_current, long max_hardware_current, long pilot, long max_configured_current)
+    {
+      DBUGLN("Check pilot is ok");
+      DBUGVAR(pilot);
+      DBUGVAR(getPilot());
+
+      if(RAPI_RESPONSE_OK == ret && pilot != getPilot())
+      {
+        DBUGLN("####  Pilot is wrong set again");
+        _pilot_is_wrong = true;
+        setPilot(getPilot());
+        _pilot_is_wrong = false;
+      }
+    });
 }
 
 void EvseMonitor::updateCurrentSettings(long min_current, long max_hardware_current, long pilot, long max_configured_current)
@@ -319,7 +339,6 @@ void EvseMonitor::updateCurrentSettings(long min_current, long max_hardware_curr
   _pilot = pilot;
   _max_configured_current = max_configured_current;
 }
-
 
 unsigned long EvseMonitor::loop(MicroTasks::WakeReason reason)
 {
@@ -358,6 +377,10 @@ unsigned long EvseMonitor::loop(MicroTasks::WakeReason reason)
   if(0 == _count % EVSE_MONITOR_ENERGY_TIME) {
     getEnergyFromEvse();
   }
+
+  // Check if pilot is wrong ( solve OpenEvse fw compiled with -D PP_AUTO_AMPACITY)
+  if (isCharging())
+    verifyPilot();
 
   _count ++;
 
@@ -464,7 +487,7 @@ void EvseMonitor::setPilot(long amps, std::function<void(int ret)> callback)
     amps = _min_current;
   }
 
-  if(amps == _pilot)
+  if(amps == _pilot && !_pilot_is_wrong)
   {
     if(callback) {
       callback(RAPI_RESPONSE_OK);

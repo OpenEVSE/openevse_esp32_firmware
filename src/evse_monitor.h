@@ -155,6 +155,8 @@ class EvseMonitor : public MicroTasks::Task
     char _firmware_version[32];
     char _serial[16];
 
+    bool _pilot_is_wrong;
+
 #ifdef ENABLE_MCP9808
     Adafruit_MCP9808 _mcp9808;
 #endif
@@ -209,6 +211,7 @@ class EvseMonitor : public MicroTasks::Task
     void enableStuckRelayCheck(bool enabled, std::function<void(int ret)> callback = NULL);
     void enableVentRequired(bool enabled, std::function<void(int ret)> callback = NULL);
     void enableTemperatureCheck(bool enabled, std::function<void(int ret)> callback = NULL);
+    void verifyPilot();
 
     uint8_t getEvseState() {
       return _state.getEvseState();
