@@ -65,12 +65,21 @@ void mqttmsg_callback(MongooseString topic, MongooseString payload) {
     solar = payload_str.toInt();
     DBUGF("solar:%dW", solar);
     divert.update_state();
+    //recalculate shaper
+    if (shaper.getState()) {
+      shaper.shapeCurrent();
+    }
+      
   }
   else if (topic_string == mqtt_grid_ie)
   {
     grid_ie = payload_str.toInt();
     DBUGF("grid:%dW", grid_ie);
     divert.update_state();
+    //recalculate shaper
+    if (shaper.getState()) {
+      shaper.shapeCurrent();
+    }
   }
   else if (topic_string == mqtt_live_pwr)
   {

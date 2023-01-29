@@ -710,12 +710,20 @@ void handleStatusPost(MongooseHttpServerRequest *request, MongooseHttpServerResp
       solar = doc["solar"];
       DBUGF("solar:%dW", solar);
       divert.update_state();
+      // recalculate shaper
+      if (shaper.getState()) {
+        shaper.shapeCurrent();
+      }
       send_event = false; // Divert sends the event so no need to send here
     }
     else if(doc.containsKey("grid_ie")) {
       grid_ie = doc["grid_ie"];
       DBUGF("grid:%dW", grid_ie);
       divert.update_state();
+      // recalculate shaper
+      if (shaper.getState()) {
+        shaper.shapeCurrent();
+      }
       send_event = false; // Divert sends the event so no need to send here
     }
     if(doc.containsKey("battery_level")) {
