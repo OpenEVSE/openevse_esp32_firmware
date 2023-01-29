@@ -16,6 +16,7 @@
 
 #include "lcd.h"
 #include "LedManagerTask.h"
+#include "time_man.h"
 #include <DNSServer.h>
 
 class NetManagerTask;
@@ -118,6 +119,7 @@ class NetManagerTask : public MicroTasks::Task
 
     LcdTask &_lcd;
     LedManagerTask &_led;
+    TimeManager &_time;
 
     static class NetManagerTask *_instance;
 
@@ -159,7 +161,7 @@ class NetManagerTask : public MicroTasks::Task
     unsigned long loop(MicroTasks::WakeReason reason);
 
   public:
-    NetManagerTask(LcdTask &lcd, LedManagerTask &led);
+    NetManagerTask(LcdTask &lcd, LedManagerTask &led, TimeManager &time);
 
     void begin();
 

@@ -39,7 +39,7 @@
 
 NetManagerTask *NetManagerTask::_instance = NULL;
 
-NetManagerTask::NetManagerTask(LcdTask &lcd, LedManagerTask &led) :
+NetManagerTask::NetManagerTask(LcdTask &lcd, LedManagerTask &led, TimeManager &time) :
   _dnsServerStarted(false),
   _dnsPort(53),
   _softAP_ssid("OpenEVSE"),
@@ -59,7 +59,8 @@ NetManagerTask::NetManagerTask(LcdTask &lcd, LedManagerTask &led) :
   _ethConnected(false),
   #endif
   _lcd(lcd),
-  _led(led)
+  _led(led),
+  _time(time)
 {
 }
 
@@ -175,9 +176,7 @@ void NetManagerTask::haveNetworkConnection(IPAddress myAddress)
   Mongoose.ipConfigChanged();
 
   _led.setWifiMode(true, true);
-
-  // TODO: Event??
-  //_time.setHost(sntp_hostname.c_str());
+  _time.setHost(sntp_hostname.c_str());
 
   _apAutoApStopTime = millis() + ACCESS_POINT_AUTO_STOP_TIMEOUT;
 
@@ -232,11 +231,14 @@ void NetManagerTask::wifiOnStationModeDisconnected(const WiFiEventStationModeDis
   _clientDisconnects++;
 
   // Clear the WiFi state and try to connect again
-  WiFi.disconnect();
-  WiFi.mode(WIFI_OFF);
+  if(NetState::AccessPointConnecting != _state)
+  {
+    WiFi.disconnect();
+    WiFi.mode(WIFI_OFF);
 
-  if(!isWiredConnected() && NetState::Connected == _state) {
-    wifiStart();
+    if(!isWiredConnected() && NetState::Connected == _state) {
+      wifiStart();
+    }
   }
 }
 
@@ -313,6 +315,15 @@ void NetManagerTask::onNetEvent(WiFiEvent_t event, arduino_event_info_t &info)
     ARDUINO_EVENT_PROV_CRED_SUCCESS == event ? "ARDUINO_EVENT_PROV_CRED_SUCCESS" :
     "UNKNOWN"
   );
+
+  DBUGF("WiFi State %s",
+        NetState::Starting == _state ? "Starting" :
+        NetState::WiredConnecting == _state ? "WiredConnecting" :
+        NetState::AccessPointConnecting == _state ? "AccessPointConnecting" :
+        NetState::StationClientConnecting == _state ? "StationClientConnecting" :
+        NetState::StationClientReconnecting == _state ? "StationClientReconnecting" :
+        NetState::Connected == _state ? "Connected" :
+        "UNKNOWN");
 
   switch (event)
   {
@@ -426,6 +437,8 @@ void NetManagerTask::onNetEvent(WiFiEvent_t event, arduino_event_info_t &info)
 
 void NetManagerTask::setup()
 {
+  DBUGLN("Starting Network Manager");
+
   // This is not really needed for our usecase on the ESP32, because random(n) uses theESP32 hardware random number
   // generator, but random() does not so safest to add some entropy here
   randomSeed(millis() | analogRead(RANDOM_SEED_CHANNEL));
@@ -505,7 +518,6 @@ unsigned long NetManagerTask::handleMessage()
 
   return MicroTask.Infinate;
 }
-
 
 unsigned long NetManagerTask::serviceButton()
 {
