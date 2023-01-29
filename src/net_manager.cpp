@@ -148,6 +148,7 @@ void NetManagerTask::wifiClientConnect()
   // DEBUG.println(epass.c_str());
 
   WiFi.hostname(esp_hostname.c_str());
+  WiFi.setSleep(WIFI_PS_NONE);
   WiFi.begin(esid.c_str(), epass.c_str());
 
   _clientRetryTime = millis() + WIFI_CLIENT_RETRY_TIMEOUT;
