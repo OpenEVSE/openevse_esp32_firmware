@@ -231,14 +231,10 @@ void NetManagerTask::wifiOnStationModeDisconnected(const WiFiEventStationModeDis
   _clientDisconnects++;
 
   // Clear the WiFi state and try to connect again
-  if(NetState::AccessPointConnecting != _state)
-  {
-    WiFi.disconnect();
-    WiFi.mode(WIFI_OFF);
+  WiFi.disconnect(true);
 
-    if(!isWiredConnected() && NetState::Connected == _state) {
-      wifiStart();
-    }
+  if(!isWiredConnected() && NetState::Connected == _state) {
+    wifiStart();
   }
 }
 
@@ -256,7 +252,7 @@ void NetManagerTask::wifiOnAPModeStationDisconnected(const WiFiEventSoftAPModeSt
 {
   _apClients--;
 
-  if(0 == _apClients) {
+  if(0 == _apClients && NetState::AccessPointConnecting == _state) {
     _led.setWifiMode(false, false);
   }
 }
@@ -323,6 +319,15 @@ void NetManagerTask::onNetEvent(WiFiEvent_t event, arduino_event_info_t &info)
         NetState::StationClientConnecting == _state ? "StationClientConnecting" :
         NetState::StationClientReconnecting == _state ? "StationClientReconnecting" :
         NetState::Connected == _state ? "Connected" :
+        "UNKNOWN");
+
+  //WiFi.printDiag(DEBUG_PORT);
+  wifi_mode_t mode = WiFi.getMode();
+  DBUGF("WiFi Mode %s",
+        WIFI_OFF == mode ? "OFF" :
+        WIFI_STA == mode ? "STA" :
+        WIFI_AP == mode ? "AP" :
+        WIFI_AP_STA == mode ? "AP+STA" :
         "UNKNOWN");
 
   switch (event)
