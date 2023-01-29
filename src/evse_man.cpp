@@ -10,6 +10,7 @@
 #include "event_log.h"
 #include "divert.h"
 #include "current_shaper.h"
+#include "manual.h"
 
 static EvseProperties nullProperties;
 
@@ -79,6 +80,7 @@ bool EvseProperties::deserialize(JsonObject &obj)
 
   if(obj.containsKey("auto_release")) {
     _auto_release = obj["auto_release"];
+    _has_auto_release = true;
   }
 
   return true;
@@ -266,16 +268,6 @@ bool EvseManager::evaluateClaims(EvseProperties &properties)
         DynamicJsonDocument event(capacity);
         event["manual_override"] = 1;
         event_send(event);
-        // update /override topic to mqtt
-        event.clear();
-        EvseState state = properties.getState();
-        if(state != EvseState::None) {
-          properties.serialize(event);         
-        }
-        else {
-          event["state"] = "null";
-        }
-        mqtt_publish_json(event, "/override");
       }
     }
   }
@@ -451,6 +443,7 @@ unsigned long EvseManager::loop(MicroTasks::WakeReason reason)
 
 bool EvseManager::begin()
 {
+  _version = 0;
   MicroTask.startTask(this);
 
   return true;
@@ -477,10 +470,16 @@ bool EvseManager::claim(EvseClient client, int priority, EvseProperties &target)
   {
     DBUGF("Found slot");
     if(slot->claim(client, priority, target))
-    {
+    { 
       DBUGF("Claim added/updated, waking task");
       _evaluateClaims = true;
       MicroTask.wakeTask(this);
+      StaticJsonDocument<128> event;
+      event["claims_version"] = ++_version;
+      if (client == EvseClient_OpenEVSE_Manual) {
+          event["override_version"] = manual.setVersion(manual.getVersion() + 1);
+      }
+      event_send(event);
     }
     return true;
   }
@@ -491,7 +490,7 @@ bool EvseManager::claim(EvseClient client, int priority, EvseProperties &target)
 bool EvseManager::release(EvseClient client)
 {
   Claim *claim;
-  
+
   if(findClaim(client, &claim))
   {
     // if claim is manual override, publish data to socket & mqtt
@@ -500,15 +499,17 @@ bool EvseManager::release(EvseClient client)
       DynamicJsonDocument event(capacity);
       event["manual_override"] = 0;
       event_send(event);
-      event.clear();
-      // update /override topic to mqtt
-      event["state"] = "null";
-      mqtt_publish_json(event, "/override");
     }
-
     claim->release();
     _evaluateClaims = true;
-    MicroTask.wakeTask(this); 
+    MicroTask.wakeTask(this);
+    StaticJsonDocument<128> event;
+    event["claims_version"] = ++_version;
+    if (client == EvseClient_OpenEVSE_Manual) {
+          event["override_version"] = manual.setVersion(manual.getVersion() + 1);
+          
+    }
+    event_send(event);
     return true;
   }
 
@@ -531,6 +532,11 @@ void EvseManager::releaseAutoReleaseClaims()
 bool EvseManager::clientHasClaim(EvseClient client) {
   return findClaim(client);
 }
+
+uint8_t EvseManager::getClaimsVersion() {
+  return _version;
+}
+
 
 EvseProperties &EvseManager::getClaimProperties(EvseClient client)
 {

@@ -12,28 +12,26 @@
 #include "lcd.h"
 #include "rfid.h"
 
-#include "MongooseOcppSocketClient.h"
+#include <ArduinoOcppMongooseClient.h>
 #include <MongooseHttpClient.h>
+
+#include <ArduinoOcpp/Core/Configuration.h>
 
 class ArduinoOcppTask: public MicroTasks::Task {
 private:
-    MongooseOcppSocketClient *ocppSocket = NULL;
+    ArduinoOcpp::AOcppMongooseClient *ocppSocket = NULL;
     EvseManager *evse;
     LcdTask *lcd;
     EventLog *eventLog;
     RfidTask *rfid;
 
-    float charging_limit = -1.f; //in Watts. chargingLimit < 0 means that there is no Smart Charging (and no restrictions )
+    float charging_limit = -1.f; //in Amps. chargingLimit < 0 means that there is no Smart Charging (and no restrictions )
     int ocppTxIdDisplay {-1};
     bool ocppSessionDisplay {false};
 
     bool vehicleConnected = false;
 
     std::function<bool(const String& idTag)> onIdTagInput {nullptr};
-
-    bool resetTriggered = false;
-    bool resetHard = false; //default to soft reset
-    ulong resetTime;
 
     MongooseHttpClient diagClient = MongooseHttpClient();
     bool diagSuccess = false, diagFailure = false;
@@ -46,11 +44,16 @@ private:
     bool arduinoOcppInitialized = false;
     void loadEvseBehavior();
 
+    bool bootNotificationAccepted = false;
+
     ulong updateEvseClaimLast {0};
 
-    String getCentralSystemUrl();
-
     static ArduinoOcppTask *instance;
+
+    std::shared_ptr<ArduinoOcpp::Configuration<bool>> freevendActive; //Authorize automatically
+    std::shared_ptr<ArduinoOcpp::Configuration<const char*>> freevendIdTag; //idTag for auto-authorization
+    std::shared_ptr<ArduinoOcpp::Configuration<bool>> allowOfflineTxForUnknownId; //temporarily accept all NFC-cards while offline
+    uint16_t trackConfigRevision = 0; //track if OCPP configs have been updated
 
     //helper functions
     static bool idTagIsAccepted(JsonObject payload);
@@ -72,6 +75,8 @@ public:
 
     static void notifyConfigChanged();
     void reconfigure();
+
+    static bool isConnected();
 };
 
 #endif

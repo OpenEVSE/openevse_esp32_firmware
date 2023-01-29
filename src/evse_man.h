@@ -10,6 +10,7 @@
 #include "evse_monitor.h"
 #include "event_log.h"
 #include "json_serialize.h"
+#include "app_config.h"
 
 typedef uint32_t EvseClient;
 
@@ -71,6 +72,7 @@ class EvseProperties : virtual public JsonSerialize<512>
     uint32_t _energy_limit;
     uint32_t _time_limit;
     bool _auto_release;
+    bool _has_auto_release = false;
   public:
     EvseProperties();
     EvseProperties(EvseState state);
@@ -125,8 +127,14 @@ class EvseProperties : virtual public JsonSerialize<512>
     bool isAutoRelease() {
       return _auto_release;
     }
+
+    bool hasAutoRelease() {
+      return _has_auto_release;
+    }
+
     void setAutoRelease(bool auto_release) {
       _auto_release = auto_release;
+      _has_auto_release = true;
     }
 
     EvseProperties & operator = (EvseProperties &rhs);
@@ -225,6 +233,10 @@ class EvseManager : public MicroTasks::Task
           return _properties.isAutoRelease();
         }
 
+        bool hasAutoRelease() {
+          return _properties.hasAutoRelease();
+        }
+
         EvseProperties &getProperties() {
           return _properties;
         }
@@ -242,6 +254,7 @@ class EvseManager : public MicroTasks::Task
 
     EvseProperties _targetProperties;
     bool _hasClaims;
+    uint8_t _version;
 
     EvseClient _state_client;
     EvseClient _charge_current_client;
@@ -286,6 +299,7 @@ class EvseManager : public MicroTasks::Task
     bool claim(EvseClient client, int priority, EvseProperties &target);
     bool release(EvseClient client);
     bool clientHasClaim(EvseClient client);
+    uint8_t getClaimsVersion();
 
     EvseProperties &getClaimProperties(EvseClient client);
     EvseState getState(EvseClient client = EvseClient_NULL);
@@ -325,7 +339,12 @@ class EvseManager : public MicroTasks::Task
       return _monitor.isCharging();
     }
     double getAmps() {
-      return _monitor.getAmps();
+      if (!config_threephase_enabled()) {
+        return _monitor.getAmps();
+      }
+      else {
+        return _monitor.getAmps() * 3;
+      }
     }
     double getVoltage() {
       return _monitor.getVoltage();

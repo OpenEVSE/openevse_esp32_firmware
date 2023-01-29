@@ -31,8 +31,12 @@ static long nextMqttReconnectAttempt = 0;
 static unsigned long mqttRestartTime = 0;
 static bool connecting = false;
 static bool mqttRetained = false;
+uint8_t claimsVersion = 0;
+uint8_t overrideVersion = 0;
 
 String lastWill = "";
+
+int loop_timer = 0;
 
 #ifndef MQTT_CONNECT_TIMEOUT
 #define MQTT_CONNECT_TIMEOUT (5 * 1000)
@@ -70,7 +74,7 @@ void mqttmsg_callback(MongooseString topic, MongooseString payload) {
   else if (topic_string == mqtt_live_pwr)
   {
       shaper.setLivePwr(payload_str.toInt());
-      DBUGF("shaper: available power:%dW", shaper.getAvlPwr());
+      DBUGF("shaper: Live Pwr:%dW", shaper.getLivePwr());
   }
   else if (topic_string == mqtt_vrms)
   {
@@ -147,7 +151,7 @@ void mqttmsg_callback(MongooseString topic, MongooseString payload) {
       mqtt_set_claim(true, override_props);
       }
   }
-  
+
   // Claim
   else if (topic_string == mqtt_topic + "/claim/set") {
     if (payload_str.equals("release")) {
@@ -160,7 +164,7 @@ void mqttmsg_callback(MongooseString topic, MongooseString payload) {
       mqtt_set_claim(false, claim_props);
     }
   }
-  
+
   //Schedule
   else if (topic_string == mqtt_topic + "/schedule/set") {
     mqtt_set_schedule(payload_str);
@@ -219,6 +223,9 @@ mqtt_connect()
   mqttclient.onError([](int err) {
     DBUGF("MQTT error %d", err);
     connecting = false;
+    DynamicJsonDocument doc(JSON_OBJECT_SIZE(1) + 60);
+    doc["mqtt_connected"] = 0;
+    event_send(doc);
   });
 
   String mqtt_host = mqtt_server + ":" + String(mqtt_port);
@@ -260,6 +267,11 @@ mqtt_connect()
     serializeJson(doc, announce);
     DBUGVAR(announce);
     mqttclient.publish(mqtt_announce_topic, announce, true);
+
+    doc.clear();
+
+    doc["mqtt_connected"] = 1;
+    event_send(doc);
 
     // Publish MQTT override/claim
     mqtt_publish_override();
@@ -320,19 +332,19 @@ mqtt_connect()
     mqttclient.subscribe(mqtt_sub_topic);
     yield();
 
-    mqtt_sub_topic = mqtt_topic + "/override/set";        
+    mqtt_sub_topic = mqtt_topic + "/override/set";
     mqttclient.subscribe(mqtt_sub_topic);
     yield();
 
-    mqtt_sub_topic = mqtt_topic + "/claim/set";        
+    mqtt_sub_topic = mqtt_topic + "/claim/set";
     mqttclient.subscribe(mqtt_sub_topic);
     yield();
 
-    mqtt_sub_topic = mqtt_topic + "/schedule/set";        
+    mqtt_sub_topic = mqtt_topic + "/schedule/set";
     mqttclient.subscribe(mqtt_sub_topic);
     yield();
 
-    mqtt_sub_topic = mqtt_topic + "/schedule/clear";        
+    mqtt_sub_topic = mqtt_topic + "/schedule/clear";
     mqttclient.subscribe(mqtt_sub_topic);
     yield();
     connecting = false;
@@ -380,7 +392,7 @@ mqtt_set_claim(bool override, EvseProperties &props) {
       mqtt_publish_claim();
     }
   }
-  
+
   Profile_End(mqtt_set_claim, 5);
 }
 
@@ -390,12 +402,12 @@ mqtt_publish_claim() {
     return;
   }
   bool hasclaim = evse.clientHasClaim(EvseClient_OpenEVSE_MQTT);
-  const size_t capacity = JSON_OBJECT_SIZE(40) + 1024;
+  const size_t capacity = JSON_OBJECT_SIZE(7) + 1024;
   DynamicJsonDocument claimdata(capacity);
-  if(hasclaim) {  
+  if(hasclaim) {
     evse.serializeClaim(claimdata, EvseClient_OpenEVSE_MQTT);
-    
-  } 
+
+  }
   else {
     claimdata["state"] = "null";
   }
@@ -404,42 +416,38 @@ mqtt_publish_claim() {
 
 void
 mqtt_publish_override() {
+  DBUGLN("MQTT publish_override()");
   if(!config_mqtt_enabled() || !mqttclient.connected()) {
     return;
   }
-  const size_t capacity = JSON_OBJECT_SIZE(40) + 1024;
+  const size_t capacity = JSON_OBJECT_SIZE(7) + 1024;
   DynamicJsonDocument override_data(capacity);
   EvseProperties props;
   //check if there an override claim
-  if (evse.clientHasClaim(EvseClient_OpenEVSE_Manual)) {
+  if (evse.clientHasClaim(EvseClient_OpenEVSE_Manual) || manual.isActive()) {
     props = evse.getClaimProperties(EvseClient_OpenEVSE_Manual);
     //check if there's state property in override
-    if(props.getState() != 0) {
-      props.serialize(override_data); 
-    }
-    else {
-      override_data["state"] = "null";
-    }
+    props.serialize(override_data);
   }
   else override_data["state"] = "null";
   mqtt_publish_json(override_data, "/override");
 
-  
-  
+
+
 }
 
 void mqtt_set_schedule(String schedule) {
   Profile_Start(mqtt_set_schedule);
   scheduler.deserialize(schedule);
   mqtt_publish_schedule();
-  Profile_End(mqtt_set_schedule, 5); 
+  Profile_End(mqtt_set_schedule, 5);
 }
 
 void
 mqtt_clear_schedule(uint32_t event) {
   Profile_Start(mqtt_clear_schedule);
   scheduler.removeEvent(event);
-  Profile_End(mqtt_clear_schedule, 5); 
+  Profile_End(mqtt_clear_schedule, 5);
   mqtt_publish_schedule();
 }
 
@@ -457,19 +465,19 @@ mqtt_publish_schedule() {
   }
 }
 
-void 
+void
 mqtt_publish_json(JsonDocument &data, const char* topic) {
   Profile_Start(mqtt_publish_json);
   if(!config_mqtt_enabled() || !mqttclient.connected()) {
       return;
       }
-  
+
   String fulltopic = mqtt_topic + topic;
   String doc;
   serializeJson(data, doc);
   mqttclient.publish(fulltopic,doc, true); // claims are always published as retained as they are not updated regularly
   Profile_End(mqtt_publish_json, 5);
-  
+
 }
 // -------------------------------------------------------------------
 // MQTT state management
@@ -487,6 +495,9 @@ mqtt_loop() {
     if (mqttclient.connected()) {
       DBUGF("Disconnecting MQTT");
       mqttclient.disconnect();
+      DynamicJsonDocument doc(JSON_OBJECT_SIZE(1) + 60);
+      doc["mqtt_connected"] = 0;
+      event_send(doc);
     }
     nextMqttReconnectAttempt = 0;
   }
@@ -500,6 +511,21 @@ mqtt_loop() {
     }
   }
 
+  // Temporise loop
+  if (millis() - loop_timer > MQTT_LOOP) {
+    loop_timer = millis();
+    if (claimsVersion != evse.getClaimsVersion()) {
+      mqtt_publish_claim();
+      DBUGF("Claims has changed, publishing to MQTT");
+      claimsVersion = evse.getClaimsVersion();
+    }
+
+    if (overrideVersion != manual.getVersion()) {
+      mqtt_publish_override;
+      DBUGF("Override has changed, publishing to MQTT");
+      overrideVersion = manual.getVersion();
+    }
+  }
   Profile_End(mqtt_loop, 5);
 }
 

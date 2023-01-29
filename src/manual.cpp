@@ -1,8 +1,10 @@
 #include "manual.h"
+#include "event.h"
 
 ManualOverride::ManualOverride(EvseManager &evse) :
   _evse((&evse))
 {
+  _version = 0;
 }
 
 ManualOverride::~ManualOverride()
@@ -17,7 +19,7 @@ bool ManualOverride::claim()
 
 bool ManualOverride::claim(EvseProperties &props)
 {
-  props.setAutoRelease(true);
+  if (!props.hasAutoRelease()) props.setAutoRelease(true);
   return _evse->claim(EvseClient_OpenEVSE_Manual, EvseManager_Priority_Manual, props);
 }
 
@@ -45,3 +47,13 @@ bool ManualOverride::getProperties(EvseProperties &props)
 
   return false;
 }
+
+uint8_t ManualOverride::getVersion() {
+   return _version;
+}
+
+uint8_t ManualOverride::setVersion(uint8_t version) {
+  _version = version;
+  return _version;
+}
+ 

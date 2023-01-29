@@ -28,7 +28,6 @@ typedef const __FlashStringHelper *fstr_t;
 #include "net_manager.h"
 #include "mqtt.h"
 #include "ocpp.h"
-#include "MongooseOcppSocketClient.h"
 #include "input.h"
 #include "emoncms.h"
 #include "divert.h"
@@ -39,6 +38,7 @@ typedef const __FlashStringHelper *fstr_t;
 #include "scheduler.h"
 #include "rfid.h"
 #include "current_shaper.h"
+#include "evse_man.h"
 
 MongooseHttpServer server;          // Create class for Web server
 
@@ -50,14 +50,18 @@ static unsigned long wifiRestartTime = 0;
 static unsigned long apOffTime = 0;
 
 // Content Types
-const char _CONTENT_TYPE_HTML[] PROGMEM = "text/html";
-const char _CONTENT_TYPE_TEXT[] PROGMEM = "text/plain";
-const char _CONTENT_TYPE_CSS[] PROGMEM = "text/css";
-const char _CONTENT_TYPE_JSON[] PROGMEM = "application/json";
-const char _CONTENT_TYPE_JS[] PROGMEM = "application/javascript";
-const char _CONTENT_TYPE_JPEG[] PROGMEM = "image/jpeg";
-const char _CONTENT_TYPE_PNG[] PROGMEM = "image/png";
-const char _CONTENT_TYPE_SVG[] PROGMEM = "image/svg+xml";
+const char _CONTENT_TYPE_HTML[]     PROGMEM = "text/html";
+const char _CONTENT_TYPE_TEXT[]     PROGMEM = "text/plain";
+const char _CONTENT_TYPE_CSS[]      PROGMEM = "text/css";
+const char _CONTENT_TYPE_JSON[]     PROGMEM = "application/json";
+const char _CONTENT_TYPE_JS[]       PROGMEM = "text/javascript";
+const char _CONTENT_TYPE_JPEG[]     PROGMEM = "image/jpeg";
+const char _CONTENT_TYPE_PNG[]      PROGMEM = "image/png";
+const char _CONTENT_TYPE_SVG[]      PROGMEM = "image/svg+xml";
+const char _CONTENT_TYPE_ICO[]      PROGMEM = "image/vnd.microsoft.icon";
+const char _CONTENT_TYPE_WOFF[]     PROGMEM = "font/woff";
+const char _CONTENT_TYPE_WOFF2[]    PROGMEM = "font/woff2";
+const char _CONTENT_TYPE_MANIFEST[] PROGMEM = "application/manifest+json";
 
 #define RAPI_RESPONSE_BLOCKED             -300
 
@@ -208,7 +212,7 @@ void buildStatus(DynamicJsonDocument &doc) {
 
   doc["mqtt_connected"] = (int)mqtt_connected();
 
-  doc["ocpp_connected"] = (int)MongooseOcppSocketClient::ocppConnected();
+  doc["ocpp_connected"] = (int)ArduinoOcppTask::isConnected();
 
 #if defined(ENABLE_PN532) || defined(ENABLE_RFID)
   doc["rfid_failure"] = (int) rfid.communicationFails();
@@ -241,10 +245,11 @@ void buildStatus(DynamicJsonDocument &doc) {
   doc["divert_update"] = (millis() - divert.getLastUpdate()) / 1000;
   doc["divert_active"] = divert.isActive();
 
-  doc["shaper"] = shaper.isActive()?1:0;
+  doc["shaper"] = shaper.getState()?1:0;
   doc["shaper_live_pwr"] = shaper.getLivePwr();
-  doc["shaper_chg_cur"] = shaper.getChgCur();
-
+  // doc["shaper_cur"] = shaper.getChgCur();
+  doc["shaper_cur"] = shaper.getMaxCur();
+  doc["shaper_updated"] = shaper.isUpdated();
   doc["service_level"] = static_cast<uint8_t>(evse.getActualServiceLevel());
 
   doc["ota_update"] = (int)Update.isRunning();
@@ -252,6 +257,8 @@ void buildStatus(DynamicJsonDocument &doc) {
   doc["offset"] = String(offset);
 
   doc["config_version"] = config_version;
+  doc["claims_version"] = evse.getClaimsVersion();
+  doc["override_version"] = manual.getVersion();
   doc["schedule_version"] = scheduler.getVersion();
   doc["schedule_plan_version"] = scheduler.getPlanVersion();
 
@@ -678,7 +685,7 @@ void handleStatusPost(MongooseHttpServerRequest *request, MongooseHttpServerResp
 {
   String body = request->body().toString();
   // Deserialize the JSON document
-  const size_t capacity = JSON_OBJECT_SIZE(50) + 1024;
+  const size_t capacity = JSON_OBJECT_SIZE(128) + 1024;
   DynamicJsonDocument doc(capacity);
   DeserializationError error = deserializeJson(doc, body);
   if(!error)
@@ -919,6 +926,7 @@ void handleOverrideDelete(MongooseHttpServerRequest *request, MongooseHttpServer
   if(manual.release()) {
     response->setCode(200);
     response->print("{\"msg\":\"Deleted\"}");
+    mqtt_publish_override();  // update override state to mqtt
   } else {
     response->setCode(500);
     response->print("{\"msg\":\"Failed to release manual overide\"}");
@@ -931,6 +939,7 @@ void handleOverridePatch(MongooseHttpServerRequest *request, MongooseHttpServerR
   {
     response->setCode(200);
     response->print("{\"msg\":\"Updated\"}");
+    mqtt_publish_override();  // update override state to mqtt
   } else {
     response->setCode(500);
     response->print("{\"msg\":\"Failed to toggle manual overide\"}");
@@ -1196,6 +1205,19 @@ void onWsConnect(MongooseHttpWebSocketConnection *connection)
   web_server_event(doc);
 }
 
+/*
+ * Really simple 'conversion' of ASCII to UTF-8, basically only a few places send >127 chars
+ * so just filter those to be acceptable as UTF-8
+ */
+void web_server_send_ascii_utf8(const char *endpoint, const uint8_t *buffer, size_t size)
+{
+  char temp[size];
+  for(int i = 0; i < size; i++) {
+    temp[i] = buffer[i] & 0x7f;
+  }
+  server.sendAll(endpoint, WEBSOCKET_OP_TEXT, temp, size);
+}
+
 void
 web_server_setup() {
 //  SPIFFS.begin(); // mount the fs
@@ -1281,10 +1303,10 @@ web_server_setup() {
   });
 
   SerialEvse.onWrite([](const uint8_t *buffer, size_t size) {
-    server.sendAll("/evse/console", WEBSOCKET_OP_TEXT, buffer, size);
+    web_server_send_ascii_utf8("/evse/console", buffer, size);
   });
   SerialEvse.onRead([](const uint8_t *buffer, size_t size) {
-    server.sendAll("/evse/console", WEBSOCKET_OP_TEXT, buffer, size);
+    web_server_send_ascii_utf8("/evse/console", buffer, size);
   });
 
   server.on("/ws$")->
