@@ -39,6 +39,7 @@ typedef const __FlashStringHelper *fstr_t;
 #include "rfid.h"
 #include "current_shaper.h"
 #include "evse_man.h"
+#include "limit.h"
 
 MongooseHttpServer server;          // Create class for Web server
 
@@ -887,6 +888,78 @@ handleSchedulePlan(MongooseHttpServerRequest *request)
   request->send(response);
 }
 
+//----------------------------------------------------------
+//
+//            Limit
+//
+//----------------------------------------------------------
+
+void handleLimitGet(MongooseHttpServerRequest *request, MongooseHttpServerResponseStream *response)
+{
+  if(limit.hasLimit())
+  {
+    limit.getLimitProperties().serialize(response);
+  } else {
+    response->setCode(404);
+    response->print("{\"msg\":\"No limit\"}");
+  }
+}
+
+void handleLimitPost(MongooseHttpServerRequest *request, MongooseHttpServerResponseStream *response)
+{
+  String body = request->body().toString();
+
+    if (limit.set(body)) {
+      response->setCode(201);
+      response->print("{\"msg\":\"Created\"}");
+      // todo: mqtt_publish_limit();  // update limit props to mqtt
+    } else {
+      // unused for now
+      response->setCode(500);
+      response->print("{\"msg\":\"Failed to parse JSON\"}");
+    }
+}
+
+void handleLimitDelete(MongooseHttpServerRequest *request, MongooseHttpServerResponseStream *response)
+{
+  if(limit.hasLimit()) {
+    if (limit.clear()) {
+      response->setCode(200);
+      response->print("{\"msg\":\"Deleted\"}");
+      mqtt_publish_override();  // update override state to mqtt
+    } else {
+      response->setCode(500);
+      response->print("{\"msg\":\"Failed to clear Limit\"}");
+    }
+  } else {
+    response->setCode(404);
+    response->print("{\"msg\":\"No limit to clear\"}");
+  }
+}
+
+void handleLimit(MongooseHttpServerRequest *request)
+{
+  MongooseHttpServerResponseStream *response;
+  if(false == requestPreProcess(request, response)) {
+    return;
+  }
+
+  if(HTTP_GET == request->method()) {
+    handleLimitGet(request, response);
+  } else if(HTTP_POST == request->method()) {
+    handleLimitPost(request, response);
+  } else if(HTTP_DELETE == request->method()) {
+    handleLimitDelete(request, response);
+  } else {
+    response->setCode(405);
+    response->print("{\"msg\":\"Method not allowed\"}");
+  }
+
+  request->send(response);
+}
+
+//----------------------------------------------------------
+
 void handleOverrideGet(MongooseHttpServerRequest *request, MongooseHttpServerResponseStream *response)
 {
   if(manual.isActive())
@@ -1258,6 +1331,8 @@ web_server_setup() {
   server.on("/override$", handleOverride);
 
   server.on("/logs", handleEventLogs);
+
+  server.on("/limit", handleLimit);
 
   // Simple Firmware Update Form
   server.on("/update$")->
