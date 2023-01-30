@@ -339,12 +339,7 @@ class EvseManager : public MicroTasks::Task
       return _monitor.isCharging();
     }
     double getAmps() {
-      if (!config_threephase_enabled()) {
-        return _monitor.getAmps();
-      }
-      else {
-        return _monitor.getAmps() * 3;
-      }
+      return _monitor.getAmps();
     }
     double getVoltage() {
       return _monitor.getVoltage();
