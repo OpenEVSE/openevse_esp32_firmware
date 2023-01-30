@@ -118,7 +118,7 @@ void CurrentShaperTask::shapeCurrent() {
 	_updated = true;
 	// adding self produced energy to total
 	int max_pwr = _max_pwr;
-	if (config_divert_enabled()) {
+	if (config_divert_enabled() == true) {
 		if (mqtt_solar != "") {
 			max_pwr += solar;
 		}		
@@ -126,7 +126,10 @@ void CurrentShaperTask::shapeCurrent() {
 			max_pwr -= grid_ie;
 		}
 	}
-	_max_cur = round(((max_pwr - _live_pwr) / evse.getVoltage()) + (evse.getAmps()));
+	 if(!config_threephase_enabled())
+		_max_cur = round(((max_pwr - _live_pwr) / evse.getVoltage()) + (evse.getAmps()));
+	else
+		_max_cur = round(((max_pwr - _live_pwr) / evse.getVoltage() / 3) + (evse.getAmps()));
 
 
 	_changed = true; 
