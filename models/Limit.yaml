@@ -1,0 +1,12 @@
+title: EVSE limit
+allOf:
+  - type: object
+    properties:
+      type:
+        type: string
+        description: 'Limit type: time, energy, soc, range'
+      value:
+        type: integer
+        description: 'The limit value'
+x-tags:
+  - Limit

@@ -926,10 +926,10 @@ void handleLimitDelete(MongooseHttpServerRequest *request, MongooseHttpServerRes
     if (limit.clear()) {
       response->setCode(200);
       response->print("{\"msg\":\"Deleted\"}");
-      mqtt_publish_override();  // update override state to mqtt
+      // todo: mqtt_publish_limit();  // update limit props to mqtt
     } else {
       response->setCode(500);
-      response->print("{\"msg\":\"Failed to clear Limit\"}");
+      response->print("{\"msg\":\"Failed to clear limit\"}");
     }
   } else {
     response->setCode(404);
