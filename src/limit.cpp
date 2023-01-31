@@ -187,8 +187,8 @@ unsigned long Limit::loop(MicroTasks::WakeReason reason) {
 					_evse->claim(EvseClient_OpenEVSE_Limit, EvseManager_Priority_Limit, props);
 				}
 			}
-			
 		}
+
 		else if ( _has_vehicle && !_evse->isVehicleConnected()) {
 			_has_vehicle = false;
 			// if auto release is set, reset Limit properties
@@ -196,9 +196,14 @@ unsigned long Limit::loop(MicroTasks::WakeReason reason) {
 				_limit_properties.init();
 			}
 		}
-
 	}
 	
+	else {
+		if (_evse->clientHasClaim(EvseClient_OpenEVSE_Limit)) {
+			//remove claim if limit as been deleted
+			_evse->release(EvseClient_OpenEVSE_Limit);
+		}
+	}
 	return EVSE_LIMIT_LOOP_TIME;
 };
 
