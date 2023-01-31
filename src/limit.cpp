@@ -205,17 +205,17 @@ unsigned long Limit::loop(MicroTasks::WakeReason reason) {
 bool Limit::limitTime(uint32_t val) {
 	if ( val != 0 && _evse->getSessionElapsed() > 0 && _evse->getSessionElapsed()/60 >= val ) {
 		// Time limit done
-		return false;
+		return true;
 	}
-	else return true;
+	else return false;
 };
 
 bool Limit::limitEnergy(uint32_t val) {
 	if ( val != 0 && _evse->getSessionEnergy() > 0 && (uint32_t)_evse->getSessionEnergy() >= val ) {
 		// Time limit done
-		return false;
+		return true;
 	}
-	else return true;
+	else return false;
 };
 
 bool Limit::hasLimit() {
