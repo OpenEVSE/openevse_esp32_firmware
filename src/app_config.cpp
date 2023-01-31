@@ -8,6 +8,7 @@
 #include "input.h"
 #include "LedManagerTask.h"
 #include "current_shaper.h"
+#include "limit.h"
 
 #include "app_config.h"
 #include "app_config_mqtt.h"
@@ -40,6 +41,10 @@ String www_password;
 // Advanced settings
 String esp_hostname;
 String sntp_hostname;
+
+// LIMIT Settings
+String limit_default_type;
+uint32_t limit_default_value;
 
 // EMONCMS SERVER strings
 String emoncms_server;
@@ -131,6 +136,10 @@ ConfigOpt *opts[] =
 
 // Time
   new ConfigOptDefenition<String>(time_zone, "", "time_zone", "tz"),
+
+// Limit
+  new ConfigOptDefenition<String>(limit_default_type, {}, "limit_default_type", "ldt"),
+  new ConfigOptDefenition<uint32_t>(limit_default_value, {}, "limit_default_value", "ldv"),
 
 // EMONCMS SERVER strings
   new ConfigOptDefenition<String>(emoncms_server, "https://data.openevse.com/emoncms", "emoncms_server", "es"),
@@ -287,6 +296,17 @@ void config_changed(String name)
   } else if(name == "led_brightness") {
     ledManager.setBrightness(led_brightness);
 #endif
+  } else if(name.startsWith("limit_default_")) {
+    LimitProperties limitprops;
+    LimitType limitType;
+    limitType.fromString(limit_default_type.c_str());
+    limitprops.setType(limitType);
+    limitprops.setValue(limit_default_value);
+    limitprops.setAutoRelease(false);
+    if (limit.hasLimit()) {
+      limit.clear();
+    }
+    limit.set(limitprops);
   }
 }
 

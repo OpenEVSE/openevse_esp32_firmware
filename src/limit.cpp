@@ -4,11 +4,7 @@
 
 #include "limit.h"
 #include "debug.h"
-#include <Arduino.h>
-#include <ArduinoJson.h>
-#include <MicroTasks.h>
-#include "evse_man.h"
-
+#include "event.h"
 // ---------------------------------------------
 //
 //            LimitType Class
@@ -71,8 +67,6 @@ LimitProperties::LimitProperties()
 
 LimitProperties::~LimitProperties()
 {
-	DBUGLN("LimitProperties Destructor");
-
 };
 
 void LimitProperties::init() 
@@ -101,6 +95,11 @@ bool LimitProperties::setValue(uint32_t value)
 	_value = value;
 	return true;
 };
+
+bool LimitProperties::setAutoRelease(bool val) {
+	_auto_release = val;
+	return true;
+}
 
 bool LimitProperties::getAutoRelease() {
 	return _auto_release;
@@ -139,9 +138,14 @@ bool LimitProperties::serialize(JsonObject &obj)
 //global instance
 Limit limit;
 
-Limit::Limit() : Limit::Task() {
-	_limit_properties.init();
-};
+Limit::Limit() :
+  MicroTasks::Task(),
+  _version(0),
+  _sessionCompleteListener(this)
+{
+  _limit_properties.init();
+}
+
 
 Limit::~Limit() {
 	_evse -> release(EvseClient_OpenEVSE_Limit);
@@ -154,8 +158,17 @@ void Limit::setup() {
 void Limit::begin(EvseManager &evse) {
 	// todo get saved default limit
 	DBUGLN("Starting Limit task");
-	this -> _evse    = &evse;
+	this -> _evse = &evse;
+	// retrieve default limit from config
+	LimitProperties limitprops;
+	LimitType limittype;
+    limittype.fromString(limit_default_type.c_str());
+    limitprops.setValue(limit_default_value);
+	// default limits have auto_release set to false
+    limitprops.setAutoRelease(false);
+    limit.set(limitprops);
 	MicroTask.startTask(this);
+ 	onSessionComplete(&_sessionCompleteListener);
 };
 
 unsigned long Limit::loop(MicroTasks::WakeReason reason) {
@@ -167,7 +180,6 @@ unsigned long Limit::loop(MicroTasks::WakeReason reason) {
 		bool auto_release = _limit_properties.getAutoRelease();
 
 		if (_evse->isCharging() ) {
-			_has_vehicle = true;
 			bool limit_reached = false;
 			switch (type) {
 				case LimitType::Time:
@@ -194,19 +206,10 @@ unsigned long Limit::loop(MicroTasks::WakeReason reason) {
 				}
 			}
 		}
-
-		else if ( _has_vehicle && !_evse->isVehicleConnected()) {
-			_has_vehicle = false;
-			// if auto release is set, reset Limit properties
-			if (auto_release) {
-				_limit_properties.init();
-			}
-		}
 	}
-	
 	else {
 		if (_evse->clientHasClaim(EvseClient_OpenEVSE_Limit)) {
-			//remove claim if limit as been deleted
+			//remove claim if limit has been deleted
 			_evse->release(EvseClient_OpenEVSE_Limit);
 		}
 	}
@@ -277,14 +280,38 @@ bool Limit::set(String json) {
 
 bool Limit::set(LimitProperties props) {
 	_limit_properties = props;
+	StaticJsonDocument<32> doc;
+	doc["limit"] = hasLimit();
+	doc["limit_version"] = ++_version;
+	event_send(doc);
 	return true;
+};
+
+LimitProperties Limit::get() { 
+	return _limit_properties;
 };
 
 bool Limit::clear() {
 	_limit_properties.init();
+	StaticJsonDocument<32> doc;
+	doc["limit"] = false;
+	doc["limit_version"] = ++_version;
+	event_send(doc);
 	return true;
 };
 
-LimitProperties Limit::getLimitProperties() {
-	return _limit_properties;
-};
+uint8_t Limit::getVersion() {
+	return _version;
+}
+
+void Limit::onSessionComplete(MicroTasks::EventListener *listner) {
+    _evse -> onSessionComplete(listner);
+    // disable claim if it has not been deleted already
+		if (_evse->clientHasClaim(EvseClient_OpenEVSE_Limit)) {
+			_evse->release(EvseClient_OpenEVSE_Limit);
+		}
+    if (_limit_properties.getAutoRelease()){
+      clear();
+    }
+  }
+  

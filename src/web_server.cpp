@@ -252,7 +252,8 @@ void buildStatus(DynamicJsonDocument &doc) {
   doc["shaper_cur"] = shaper.getMaxCur();
   doc["shaper_updated"] = shaper.isUpdated();
   doc["service_level"] = static_cast<uint8_t>(evse.getActualServiceLevel());
-
+  doc["limit"] = limit.hasLimit();
+  
   doc["ota_update"] = (int)Update.isRunning();
   doc["time"] = String(time);
   doc["offset"] = String(offset);
@@ -262,6 +263,7 @@ void buildStatus(DynamicJsonDocument &doc) {
   doc["override_version"] = manual.getVersion();
   doc["schedule_version"] = scheduler.getVersion();
   doc["schedule_plan_version"] = scheduler.getPlanVersion();
+  doc["limit_version"] = limit.getVersion();
 
   doc["vehicle_state_update"] = (millis() - evse.getVehicleLastUpdated()) / 1000;
   if(teslaClient.getVehicleCnt() > 0) {
@@ -898,7 +900,7 @@ void handleLimitGet(MongooseHttpServerRequest *request, MongooseHttpServerRespon
 {
   if(limit.hasLimit())
   {
-    limit.getLimitProperties().serialize(response);
+    limit.get().serialize(response);
   } else {
     response->setCode(404);
     response->print("{\"msg\":\"no limit\"}");

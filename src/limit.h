@@ -45,6 +45,7 @@ class LimitProperties : virtual public JsonSerialize<512> {
 		void init();
 		bool setType(LimitType type);
 		bool setValue(uint32_t value);
+		bool setAutoRelease(bool val);
 		LimitType getType();
 		uint32_t  getValue();
 		bool getAutoRelease();
@@ -61,16 +62,17 @@ class Limit: public MicroTasks::Task
 	private:
 		EvseManager *_evse;
 		LimitProperties _limit_properties;
-		bool _has_vehicle;
+		uint8_t   _version;
+    MicroTasks::EventListener _sessionCompleteListener;
 		bool limitTime(uint32_t val);
 		bool limitEnergy(uint32_t val);
 		bool limitSoc(uint32_t val);
 		bool limitRange(uint32_t val);
+    void onSessionComplete(MicroTasks::EventListener *listner);
 
 	protected:
 		void setup();
 		unsigned long loop(MicroTasks::WakeReason reason);
-		
 
 	public:
 		Limit();
@@ -79,8 +81,9 @@ class Limit: public MicroTasks::Task
 		bool hasLimit();
 		bool set(String json);
 		bool set(LimitProperties props);
+		LimitProperties get();
 		bool clear();
-		LimitProperties getLimitProperties();
+		uint8_t getVersion();
 };
 
 extern Limit limit;

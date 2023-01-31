@@ -28,6 +28,10 @@ extern String esp_hostname;
 extern String esp_hostname_default;
 extern String sntp_hostname;
 
+// LIMIT Settings
+extern String limit_default_type;
+extern uint32_t limit_default_value;
+
 // EMONCMS SERVER strings
 extern String emoncms_server;
 extern String emoncms_node;
