@@ -4,11 +4,7 @@
 
 #include "limit.h"
 #include "debug.h"
-#include <Arduino.h>
-#include <ArduinoJson.h>
-#include <MicroTasks.h>
-#include "evse_man.h"
-
+#include "event.h"
 // ---------------------------------------------
 //
 //            LimitType Class
@@ -71,8 +67,6 @@ LimitProperties::LimitProperties()
 
 LimitProperties::~LimitProperties()
 {
-	DBUGLN("LimitProperties Destructor");
-
 };
 
 void LimitProperties::init() 
@@ -140,7 +134,11 @@ bool LimitProperties::serialize(JsonObject &obj)
 Limit limit;
 
 Limit::Limit() : Limit::Task() {
+	_version = 0;
 	_limit_properties.init();
+	StaticJsonDocument<32> doc;
+	doc["limit_version"] = ++_version;
+	event_send(doc);
 };
 
 Limit::~Limit() {
@@ -277,6 +275,9 @@ bool Limit::set(String json) {
 
 bool Limit::set(LimitProperties props) {
 	_limit_properties = props;
+	StaticJsonDocument<32> doc;
+	doc["limit_version"] = ++_version;
+	event_send(doc);
 	return true;
 };
 
@@ -284,6 +285,10 @@ bool Limit::clear() {
 	_limit_properties.init();
 	return true;
 };
+
+uint8_t Limit::getVersion() {
+	return _version;
+}
 
 LimitProperties Limit::getLimitProperties() {
 	return _limit_properties;

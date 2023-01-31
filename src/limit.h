@@ -61,6 +61,7 @@ class Limit: public MicroTasks::Task
 	private:
 		EvseManager *_evse;
 		LimitProperties _limit_properties;
+		uint8_t   _version;
 		bool _has_vehicle;
 		bool limitTime(uint32_t val);
 		bool limitEnergy(uint32_t val);
@@ -81,6 +82,7 @@ class Limit: public MicroTasks::Task
 		bool set(LimitProperties props);
 		bool clear();
 		LimitProperties getLimitProperties();
+		uint8_t getVersion();
 };
 
 extern Limit limit;

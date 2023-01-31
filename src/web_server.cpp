@@ -262,6 +262,7 @@ void buildStatus(DynamicJsonDocument &doc) {
   doc["override_version"] = manual.getVersion();
   doc["schedule_version"] = scheduler.getVersion();
   doc["schedule_plan_version"] = scheduler.getPlanVersion();
+  doc["limit_version"] = limit.getVersion();
 
   doc["vehicle_state_update"] = (millis() - evse.getVehicleLastUpdated()) / 1000;
   if(teslaClient.getVehicleCnt() > 0) {
