@@ -176,6 +176,12 @@ unsigned long Limit::loop(MicroTasks::WakeReason reason) {
 				case LimitType::Energy:
 					limit_reached = limitEnergy(value);
 					break;
+				case LimitType::Soc:
+					limit_reached = limitSoc(value);
+					break;
+				case LimitType::Range:
+					limit_reached = limitRange(value);
+					break;
 			}
 			if (limit_reached) {
 				// Limit reached, disabling EVSE
@@ -209,7 +215,7 @@ unsigned long Limit::loop(MicroTasks::WakeReason reason) {
 
 bool Limit::limitTime(uint32_t val) {
 	uint32_t elapsed = (uint32_t)_evse->getSessionElapsed()/60;
-	if ( val > 0 && _evse->getSessionElapsed() > 0 && _evse->getSessionElapsed()/60 >= val ) {
+	if ( val > 0 && elapsed >= val ) {
 		// Time limit done
 		DBUGLN("Time limit reached");
 		DBUGVAR(val);
@@ -221,7 +227,7 @@ bool Limit::limitTime(uint32_t val) {
 
 bool Limit::limitEnergy(uint32_t val) {
 	uint32_t elapsed = _evse->getSessionEnergy();
-	if ( val > 0 && _evse->getSessionEnergy() > 0 && (uint32_t)_evse->getSessionEnergy() >= val ) {
+	if ( val > 0 && elapsed >= val ) {
 		// Energy limit done
 		DBUGLN("Energy limit reached");
 		DBUGVAR(val);
@@ -230,6 +236,31 @@ bool Limit::limitEnergy(uint32_t val) {
 	}
 	else return false;
 };
+
+bool Limit::limitSoc(uint32_t val) {
+	uint32_t soc = _evse->getVehicleStateOfCharge();
+	if ( val > 0  && soc >= val ) {
+		// SOC limit done
+		DBUGLN("SOC limit reached");
+		DBUGVAR(val);
+		DBUGVAR(soc);
+		return true;
+	}
+	else return false;
+};
+
+bool Limit::limitRange(uint32_t val) {
+	uint32_t rng = _evse->getVehicleRange();
+	if ( val > 0  && rng >= val ) {
+		// Range limit done
+		DBUGLN("Range limit reached");
+		DBUGVAR(val);
+		DBUGVAR(rng);
+		return true;
+	}
+	else return false;
+};
+
 
 bool Limit::hasLimit() {
 	return _limit_properties.getType() != LimitType::None;
