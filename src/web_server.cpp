@@ -901,7 +901,7 @@ void handleLimitGet(MongooseHttpServerRequest *request, MongooseHttpServerRespon
     limit.getLimitProperties().serialize(response);
   } else {
     response->setCode(404);
-    response->print("{\"msg\":\"No limit\"}");
+    response->print("{\"msg\":\"no limit\"}");
   }
 }
 
@@ -911,12 +911,12 @@ void handleLimitPost(MongooseHttpServerRequest *request, MongooseHttpServerRespo
 
     if (limit.set(body)) {
       response->setCode(201);
-      response->print("{\"msg\":\"Created\"}");
+      response->print("{\"msg\":\"done\"}");
       // todo: mqtt_publish_limit();  // update limit props to mqtt
     } else {
       // unused for now
       response->setCode(500);
-      response->print("{\"msg\":\"Failed to parse JSON\"}");
+      response->print("{\"msg\":\"failed to parse JSON\"}");
     }
 }
 
@@ -925,15 +925,15 @@ void handleLimitDelete(MongooseHttpServerRequest *request, MongooseHttpServerRes
   if(limit.hasLimit()) {
     if (limit.clear()) {
       response->setCode(200);
-      response->print("{\"msg\":\"Deleted\"}");
+      response->print("{\"msg\":\"done\"}");
       // todo: mqtt_publish_limit();  // update limit props to mqtt
     } else {
       response->setCode(500);
-      response->print("{\"msg\":\"Failed to clear limit\"}");
+      response->print("{\"msg\":\"failed\"}");
     }
   } else {
     response->setCode(404);
-    response->print("{\"msg\":\"No limit to clear\"}");
+    response->print("{\"msg\":\"no limit\"}");
   }
 }
 
