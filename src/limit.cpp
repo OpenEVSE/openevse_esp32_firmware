@@ -136,9 +136,6 @@ Limit limit;
 Limit::Limit() : Limit::Task() {
 	_version = 0;
 	_limit_properties.init();
-	StaticJsonDocument<32> doc;
-	doc["limit_version"] = ++_version;
-	event_send(doc);
 };
 
 Limit::~Limit() {
@@ -154,6 +151,9 @@ void Limit::begin(EvseManager &evse) {
 	DBUGLN("Starting Limit task");
 	this -> _evse    = &evse;
 	MicroTask.startTask(this);
+	StaticJsonDocument<16> doc;
+	doc["limit_version"] = _version;
+	event_send(doc);
 };
 
 unsigned long Limit::loop(MicroTasks::WakeReason reason) {
@@ -275,7 +275,7 @@ bool Limit::set(String json) {
 
 bool Limit::set(LimitProperties props) {
 	_limit_properties = props;
-	StaticJsonDocument<32> doc;
+	StaticJsonDocument<16> doc;
 	doc["limit_version"] = ++_version;
 	event_send(doc);
 	return true;
@@ -283,6 +283,9 @@ bool Limit::set(LimitProperties props) {
 
 bool Limit::clear() {
 	_limit_properties.init();
+	StaticJsonDocument<16> doc;
+	doc["limit_version"] = ++_version;
+	event_send(doc);
 	return true;
 };
 
