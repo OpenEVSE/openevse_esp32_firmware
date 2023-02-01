@@ -62,16 +62,16 @@ class Limit: public MicroTasks::Task
 		EvseManager *_evse;
 		LimitProperties _limit_properties;
 		uint8_t   _version;
-		bool _has_vehicle;
+    MicroTasks::EventListener _sessionCompleteListener;
 		bool limitTime(uint32_t val);
 		bool limitEnergy(uint32_t val);
 		bool limitSoc(uint32_t val);
 		bool limitRange(uint32_t val);
+    void onSessionComplete(MicroTasks::EventListener *listner);
 
 	protected:
 		void setup();
 		unsigned long loop(MicroTasks::WakeReason reason);
-		
 
 	public:
 		Limit();

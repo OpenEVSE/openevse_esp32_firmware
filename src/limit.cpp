@@ -133,10 +133,14 @@ bool LimitProperties::serialize(JsonObject &obj)
 //global instance
 Limit limit;
 
-Limit::Limit() : Limit::Task() {
-	_version = 0;
-	_limit_properties.init();
-};
+Limit::Limit() :
+  MicroTasks::Task(),
+  _version(0),
+  _sessionCompleteListener(this)
+{
+  _limit_properties.init();
+}
+
 
 Limit::~Limit() {
 	_evse -> release(EvseClient_OpenEVSE_Limit);
@@ -149,8 +153,9 @@ void Limit::setup() {
 void Limit::begin(EvseManager &evse) {
 	// todo get saved default limit
 	DBUGLN("Starting Limit task");
-	this -> _evse    = &evse;
+	this -> _evse = &evse;
 	MicroTask.startTask(this);
+  onSessionComplete(&_sessionCompleteListener);
 	StaticJsonDocument<16> doc;
 	doc["limit_version"] = _version;
 	event_send(doc);
@@ -165,7 +170,6 @@ unsigned long Limit::loop(MicroTasks::WakeReason reason) {
 		bool auto_release = _limit_properties.getAutoRelease();
 
 		if (_evse->isCharging() ) {
-			_has_vehicle = true;
 			bool limit_reached = false;
 			switch (type) {
 				case LimitType::Time:
@@ -192,19 +196,10 @@ unsigned long Limit::loop(MicroTasks::WakeReason reason) {
 				}
 			}
 		}
-
-		else if ( _has_vehicle && !_evse->isVehicleConnected()) {
-			_has_vehicle = false;
-			// if auto release is set, reset Limit properties
-			if (auto_release) {
-				_limit_properties.init();
-			}
-		}
 	}
-	
 	else {
 		if (_evse->clientHasClaim(EvseClient_OpenEVSE_Limit)) {
-			//remove claim if limit as been deleted
+			//remove claim if limit has been deleted
 			_evse->release(EvseClient_OpenEVSE_Limit);
 		}
 	}
@@ -292,6 +287,21 @@ bool Limit::clear() {
 uint8_t Limit::getVersion() {
 	return _version;
 }
+
+void Limit::onSessionComplete(MicroTasks::EventListener *listner) {
+    _evse -> onSessionComplete(listner);
+    // disable claim if it has not been deleted already
+		if (_evse->clientHasClaim(EvseClient_OpenEVSE_Limit)) {
+			_evse->release(EvseClient_OpenEVSE_Limit);
+		}
+    if (_limit_properties.getAutoRelease()){
+      _limit_properties.init();
+      ++_version;
+      StaticJsonDocument<16> doc;
+	    doc["limit_version"] = ++_version;
+	    event_send(doc);
+    }
+  }
 
 LimitProperties Limit::getLimitProperties() {
 	return _limit_properties;

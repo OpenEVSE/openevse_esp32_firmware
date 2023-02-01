@@ -5,8 +5,12 @@ allOf:
       type:
         type: string
         description: 'Limit type: time, energy, soc, range'
+        extern: 
       value:
         type: integer
         description: 'The limit value'
+      auto_release:
+        type: bool
+        description: 'release current limit when car is disconnected. (default: true)'
 x-tags:
   - Limit
