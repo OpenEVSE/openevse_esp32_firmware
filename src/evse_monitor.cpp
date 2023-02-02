@@ -309,7 +309,6 @@ void EvseMonitor::updateEvseState(uint8_t evse_state, uint8_t pilot_state, uint3
       }
       _session_complete.update(getFlags());
     });
-  verifyPilot();
   }
 }
 
