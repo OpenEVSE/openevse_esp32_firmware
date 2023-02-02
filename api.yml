@@ -524,7 +524,7 @@ paths:
         name: index
         in: path
         required: true
-/limit:
+  /limit:
     get:
       summary: Get charge limit
       description: This will return the limit type, value and auto_release (true|false) defined if there's one
@@ -534,12 +534,7 @@ paths:
           content:
             application/json:
               schema:
-                type: object
-                properties:
-                  type:
-                    $ref: '#/components/schemas/Limit'
-                  value: int
-                  auto_release: bool
+                $ref: ./models/Limit.yaml
         '404':
           description: No limit
           content:
@@ -547,38 +542,44 @@ paths:
               schema:
                 type: object
                 properties:
-                  msg: No limit
+                  msg:
+                    type: string
+                    description: No limit
       operationId: limit_get
       tags:
         - Limit
     post:
       summary: Set charge limit
-        description: This will set the limit type, value and auto_release (true|false) 
-        responses:
-          '200':
-            description: Limit set
+      description: This will set the limit type, value and auto_release (true|false)
+      responses:
+        '200':
+          description: Limit set
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  msg:
+                    type: string
+                    description: created
+        '500':
+            description: Failed to parse data
             content:
               application/json:
                 schema:
                   type: object
                   properties:
-                    msg: created
-          '500':
-              description: Failed to parse data
-              content:
-                application/json:
-                  schema:
-                    type: object
-                    properties:
-                      msg: Failed to parse JSON
-        requestBody:
-          content:
-            application/json:
-              schema:
-                $ref: ./models/Limit.yaml
-        operationId: limit_set
-        tags:
-          - Limit
+                    msg:
+                      type: string
+                      description: Failed to parse JSON
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: ./models/Limit.yaml
+      operationId: limit_set
+      tags:
+        - Limit
     delete:
         summary: Get charge limit
         description: This will clear current limit
@@ -590,7 +591,9 @@ paths:
                 schema:
                   type: object
                   properties:
-                    msg: Deleted
+                    msg:
+                      type: string
+                      description: Deleted
           '404':
             description: No limit
             content:
@@ -598,7 +601,9 @@ paths:
                 schema:
                   type: object
                   properties:
-                    msg: No limit to clear
+                    msg:
+                      type: string
+                      description: No limit to clear
           '500':
             description: Failed to clear limit
             content:
@@ -606,7 +611,9 @@ paths:
                 schema:
                   type: object
                   properties:
-                    msg: Failed to clear limit
+                    msg:
+                      type: string
+                      description: Failed to clear limit
         operationId: limit_clear
         tags:
           - Limit
