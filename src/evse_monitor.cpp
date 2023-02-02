@@ -317,13 +317,11 @@ void EvseMonitor::verifyPilot() {
     // After some state changes the OpenEVSE module compiled with PP_AUTO_AMPACITY will reset to the maximum pilot level, so reset to what we expect
     _openevse.getCurrentCapacity([this](int ret, long min_current, long max_hardware_current, long pilot, long max_configured_current)
     {
-      DBUGLN("Check pilot is ok");
-      DBUGVAR(pilot);
-      DBUGVAR(getPilot());
-
       if(RAPI_RESPONSE_OK == ret && pilot != getPilot())
       {
         DBUGLN("####  Pilot is wrong set again");
+        DBUGVAR(pilot);
+        DBUGVAR(getPilot());
         _pilot_is_wrong = true;
         setPilot(getPilot());
         _pilot_is_wrong = false;
