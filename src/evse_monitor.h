@@ -155,8 +155,6 @@ class EvseMonitor : public MicroTasks::Task
     char _firmware_version[32];
     char _serial[16];
 
-    bool _pilot_is_wrong;
-
 #ifdef ENABLE_MCP9808
     Adafruit_MCP9808 _mcp9808;
 #endif
@@ -200,7 +198,7 @@ class EvseMonitor : public MicroTasks::Task
 
     void setMaxConfiguredCurrent(long amps);
 
-    void setPilot(long amps, std::function<void(int ret)> callback = NULL);
+    void setPilot(long amps, bool force=false, std::function<void(int ret)> callback = NULL);
     void setVoltage(double volts, std::function<void(int ret)> callback = NULL);
     void setServiceLevel(ServiceLevel level, std::function<void(int ret)> callback = NULL);
     void configureCurrentSensorScale(long scale, long offset, std::function<void(int ret)> callback = NULL);
