@@ -45,6 +45,7 @@ class LimitProperties : virtual public JsonSerialize<512> {
 		void init();
 		bool setType(LimitType type);
 		bool setValue(uint32_t value);
+		bool setAutoRelease(bool val);
 		LimitType getType();
 		uint32_t  getValue();
 		bool getAutoRelease();
@@ -80,8 +81,8 @@ class Limit: public MicroTasks::Task
 		bool hasLimit();
 		bool set(String json);
 		bool set(LimitProperties props);
+		LimitProperties get();
 		bool clear();
-		LimitProperties getLimitProperties();
 		uint8_t getVersion();
 };
 

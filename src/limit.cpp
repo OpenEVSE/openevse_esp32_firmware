@@ -96,6 +96,11 @@ bool LimitProperties::setValue(uint32_t value)
 	return true;
 };
 
+bool LimitProperties::setAutoRelease(bool val) {
+	_auto_release = val;
+	return true;
+}
+
 bool LimitProperties::getAutoRelease() {
 	return _auto_release;
 };
@@ -154,11 +159,16 @@ void Limit::begin(EvseManager &evse) {
 	// todo get saved default limit
 	DBUGLN("Starting Limit task");
 	this -> _evse = &evse;
+	// retrieve default limit from config
+	LimitProperties limitprops;
+	LimitType limittype;
+    limittype.fromString(limit_default_type.c_str());
+    limitprops.setValue(limit_default_value);
+	// default limits have auto_release set to false
+    limitprops.setAutoRelease(false);
+    limit.set(limitprops);
 	MicroTask.startTask(this);
-  onSessionComplete(&_sessionCompleteListener);
-	StaticJsonDocument<16> doc;
-	doc["limit_version"] = _version;
-	event_send(doc);
+ 	onSessionComplete(&_sessionCompleteListener);
 };
 
 unsigned long Limit::loop(MicroTasks::WakeReason reason) {
@@ -270,15 +280,21 @@ bool Limit::set(String json) {
 
 bool Limit::set(LimitProperties props) {
 	_limit_properties = props;
-	StaticJsonDocument<16> doc;
+	StaticJsonDocument<32> doc;
+	doc["limit"] = hasLimit();
 	doc["limit_version"] = ++_version;
 	event_send(doc);
 	return true;
 };
 
+LimitProperties Limit::get() { 
+	return _limit_properties;
+};
+
 bool Limit::clear() {
 	_limit_properties.init();
-	StaticJsonDocument<16> doc;
+	StaticJsonDocument<32> doc;
+	doc["limit"] = false;
 	doc["limit_version"] = ++_version;
 	event_send(doc);
 	return true;
@@ -295,14 +311,7 @@ void Limit::onSessionComplete(MicroTasks::EventListener *listner) {
 			_evse->release(EvseClient_OpenEVSE_Limit);
 		}
     if (_limit_properties.getAutoRelease()){
-      _limit_properties.init();
-      ++_version;
-      StaticJsonDocument<16> doc;
-	    doc["limit_version"] = ++_version;
-	    event_send(doc);
+      clear();
     }
   }
-
-LimitProperties Limit::getLimitProperties() {
-	return _limit_properties;
-};
+  

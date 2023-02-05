@@ -154,3 +154,9 @@ properties:
   offset:
     type: string
     description: The current timezone
+  has_limit:
+    type: boolean
+    description: A limit has been set
+  limit_version:
+    type: integer
+    description: /limit endpoint current version
