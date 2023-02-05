@@ -473,7 +473,7 @@ void EvseMonitor::disable()
   });
 }
 
-void EvseMonitor::setPilot(long amps, bool force=false, std::function<void(int ret)> callback)
+void EvseMonitor::setPilot(long amps, bool force, std::function<void(int ret)> callback)
 {
   // limit `amps` to the software limit
   if(amps > _max_configured_current) {
