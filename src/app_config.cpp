@@ -303,10 +303,14 @@ void config_changed(String name)
     limitprops.setType(limitType);
     limitprops.setValue(limit_default_value);
     limitprops.setAutoRelease(false);
-    if (limit.hasLimit()) {
+    if (limitType == LimitType::None) {
+      uint32_t val = 0;
+      config_set("limit_default_value", val);
+      config_commit();
       limit.clear();
     }
-    limit.set(limitprops);
+    else 
+      limit.set(limitprops);
   }
 }
 
