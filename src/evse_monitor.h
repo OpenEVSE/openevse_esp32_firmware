@@ -198,7 +198,7 @@ class EvseMonitor : public MicroTasks::Task
 
     void setMaxConfiguredCurrent(long amps);
 
-    void setPilot(long amps, std::function<void(int ret)> callback = NULL);
+    void setPilot(long amps, bool force=false, std::function<void(int ret)> callback = NULL);
     void setVoltage(double volts, std::function<void(int ret)> callback = NULL);
     void setServiceLevel(ServiceLevel level, std::function<void(int ret)> callback = NULL);
     void configureCurrentSensorScale(long scale, long offset, std::function<void(int ret)> callback = NULL);
@@ -209,6 +209,7 @@ class EvseMonitor : public MicroTasks::Task
     void enableStuckRelayCheck(bool enabled, std::function<void(int ret)> callback = NULL);
     void enableVentRequired(bool enabled, std::function<void(int ret)> callback = NULL);
     void enableTemperatureCheck(bool enabled, std::function<void(int ret)> callback = NULL);
+    void verifyPilot();
 
     uint8_t getEvseState() {
       return _state.getEvseState();

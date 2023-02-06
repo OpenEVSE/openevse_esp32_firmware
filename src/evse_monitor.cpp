@@ -311,6 +311,20 @@ void EvseMonitor::updateEvseState(uint8_t evse_state, uint8_t pilot_state, uint3
   }
 }
 
+void EvseMonitor::verifyPilot() {
+    // After some state changes the OpenEVSE module compiled with PP_AUTO_AMPACITY will reset to the maximum pilot level, so reset to what we expect
+    _openevse.getCurrentCapacity([this](int ret, long min_current, long max_hardware_current, long pilot, long max_configured_current)
+    {
+      if(RAPI_RESPONSE_OK == ret && pilot > getPilot())
+      {
+        DBUGLN("####  Pilot is wrong set again");
+        DBUGVAR(pilot);
+        DBUGVAR(getPilot());
+        setPilot(getPilot(), true);
+      }
+    });
+}
+
 void EvseMonitor::updateCurrentSettings(long min_current, long max_hardware_current, long pilot, long max_configured_current)
 {
   DBUGF("min_current = %ld, pilot = %ld, max_configured_current = %ld, max_hardware_current = %ld", min_current, pilot, max_configured_current, max_hardware_current);
@@ -319,7 +333,6 @@ void EvseMonitor::updateCurrentSettings(long min_current, long max_hardware_curr
   _pilot = pilot;
   _max_configured_current = max_configured_current;
 }
-
 
 unsigned long EvseMonitor::loop(MicroTasks::WakeReason reason)
 {
@@ -358,6 +371,12 @@ unsigned long EvseMonitor::loop(MicroTasks::WakeReason reason)
   if(0 == _count % EVSE_MONITOR_ENERGY_TIME) {
     getEnergyFromEvse();
   }
+
+  // Check if pilot is wrong ( solve OpenEvse fw compiled with -D PP_AUTO_AMPACITY)
+  if (isCharging()){
+    verifyPilot();
+  }
+    
 
   _count ++;
 
@@ -454,7 +473,7 @@ void EvseMonitor::disable()
   });
 }
 
-void EvseMonitor::setPilot(long amps, std::function<void(int ret)> callback)
+void EvseMonitor::setPilot(long amps, bool force, std::function<void(int ret)> callback)
 {
   // limit `amps` to the software limit
   if(amps > _max_configured_current) {
@@ -464,7 +483,7 @@ void EvseMonitor::setPilot(long amps, std::function<void(int ret)> callback)
     amps = _min_current;
   }
 
-  if(amps == _pilot)
+  if(amps == _pilot && !force)
   {
     if(callback) {
       callback(RAPI_RESPONSE_OK);
