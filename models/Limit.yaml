@@ -9,7 +9,7 @@ allOf:
         type: integer
         description: 'The limit value'
       auto_release:
-        type: bool
+        type: boolean
         description: 'Release current limit when car is disconnected. (default: true)'
 x-tags:
   - Limit
