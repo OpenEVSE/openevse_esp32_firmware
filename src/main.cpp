@@ -51,6 +51,7 @@
 #include "ocpp.h"
 #include "rfid.h"
 #include "current_shaper.h"
+#include "limit.h"
 
 #if defined(ENABLE_PN532)
 #include "pn532.h"
@@ -125,7 +126,7 @@ void setup()
   evse.begin();
   scheduler.begin();
   divert.begin();
-
+  limit.begin(evse);
   lcd.begin(evse, scheduler, manual);
 #if defined(ENABLE_PN532)
   pn532.begin();
