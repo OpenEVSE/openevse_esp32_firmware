@@ -197,49 +197,9 @@ extern void config_load_settings();
 extern void config_load_v1_settings();
 
 // -------------------------------------------------------------------
-// Save the EmonCMS server details
-// -------------------------------------------------------------------
-extern void config_save_emoncms(bool enable, String server, String node, String apikey, String fingerprint);
-
-// -------------------------------------------------------------------
-// Save the MQTT broker details
-// -------------------------------------------------------------------
-extern void config_save_mqtt(bool enable, int protocol, String server, uint16_t port, String topic, bool retained, String user, String pass, String solar, String grid_ie, String live_pwr, bool reject_unauthorized);
-
-// -------------------------------------------------------------------
-// Save the admin/web interface details
-// -------------------------------------------------------------------
-extern void config_save_admin(String user, String pass);
-
-// -------------------------------------------------------------------
 // Save the SNTP settings
 // -------------------------------------------------------------------
 extern void config_save_sntp(bool enable, String tz);
-
-// -------------------------------------------------------------------
-// Save advanced settings
-// -------------------------------------------------------------------
-extern void config_save_advanced(String hostname, String sntp_host);
-
-// -------------------------------------------------------------------
-// Save the Wifi details
-// -------------------------------------------------------------------
-extern void config_save_wifi(String qsid, String qpass);
-
-// -------------------------------------------------------------------
-// Save the Ohm settings
-// -------------------------------------------------------------------
-extern void config_save_ohm(bool enable, String qohm);
-
-// -------------------------------------------------------------------
-// Save RFID settings
-// -------------------------------------------------------------------
-extern void config_save_rfid(bool enable, String storage);
-
-// -------------------------------------------------------------------
-// Save the flags
-// -------------------------------------------------------------------
-extern void config_save_flags(uint32_t flags);
 
 // -------------------------------------------------------------------
 // Reset the config back to defaults
