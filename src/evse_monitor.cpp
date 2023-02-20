@@ -273,6 +273,19 @@ void EvseMonitor::evseBoot(const char *firmware)
   _openevse.heartbeatEnable(EVSE_HEATBEAT_INTERVAL, EVSE_HEARTBEAT_CURRENT, [this](int ret, int interval, int current, int triggered) {
     _heartbeat = RAPI_RESPONSE_OK == ret;
   });
+
+  // Unlock OpenEVSE if compiled with BOOTLOCK
+  _openevse.clearBootLock([this](int ret) 
+  {
+    if(RAPI_RESPONSE_OK == ret)
+    {
+      DBUGF("Unlocked OpenEVSE");
+    }
+    else {
+      DBUGF("Unlock OpenEVSE failed")
+    }
+
+  });
 }
 
 void EvseMonitor::updateEvseState(uint8_t evse_state, uint8_t pilot_state, uint32_t vflags)
@@ -312,7 +325,7 @@ void EvseMonitor::updateEvseState(uint8_t evse_state, uint8_t pilot_state, uint3
 }
 
 void EvseMonitor::verifyPilot() {
-    // After some state changes the OpenEVSE module compiled with PP_AUTO_AMPACITY will reset to the maximum pilot level, so reset to what we expect
+    // OpenEVSE module compiled with PP_AUTO_AMPACITY  will reset to the maximum pilot level, so reset to what we expect
     _openevse.getCurrentCapacity([this](int ret, long min_current, long max_hardware_current, long pilot, long max_configured_current)
     {
       if(RAPI_RESPONSE_OK == ret && pilot > getPilot())
