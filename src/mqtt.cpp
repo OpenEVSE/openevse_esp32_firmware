@@ -33,6 +33,7 @@ static bool connecting = false;
 static bool mqttRetained = false;
 uint8_t claimsVersion = 0;
 uint8_t overrideVersion = 0;
+uint8_t scheduleVersion = 0;
 
 String lastWill = "";
 
@@ -64,12 +65,21 @@ void mqttmsg_callback(MongooseString topic, MongooseString payload) {
     solar = payload_str.toInt();
     DBUGF("solar:%dW", solar);
     divert.update_state();
+    //recalculate shaper
+    if (shaper.getState()) {
+      shaper.shapeCurrent();
+    }
+      
   }
   else if (topic_string == mqtt_grid_ie)
   {
     grid_ie = payload_str.toInt();
     DBUGF("grid:%dW", grid_ie);
     divert.update_state();
+    //recalculate shaper
+    if (shaper.getState()) {
+      shaper.shapeCurrent();
+    }
   }
   else if (topic_string == mqtt_live_pwr)
   {
@@ -521,9 +531,15 @@ mqtt_loop() {
     }
 
     if (overrideVersion != manual.getVersion()) {
-      mqtt_publish_override;
+      mqtt_publish_override();
       DBUGF("Override has changed, publishing to MQTT");
       overrideVersion = manual.getVersion();
+    }
+
+    if (scheduleVersion != scheduler.getVersion()) {
+      mqtt_publish_schedule();
+      DBUGF("Schedule has changed, publishing to MQTT");
+      scheduleVersion = scheduler.getVersion();
     }
   }
   Profile_End(mqtt_loop, 5);

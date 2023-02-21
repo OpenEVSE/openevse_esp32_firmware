@@ -2,6 +2,9 @@
   "name": "OpenEVSE WiFi v4",
   "description": "",
   "spectralExtends": [],
+  "extends": [
+    "cHJqOjEyMzU4Ng@33"
+  ],
   "formats": [
     "oas2",
     "oas3",
@@ -10,9 +13,6 @@
   ],
   "aliases": {},
   "rules": {},
-  "extends": [
-    "cHJqOjEyMzU4Ng@33"
-  ],
   "extendedStyleguides": [
     {
       "id": "cHJqOjEyMzU4Ng",

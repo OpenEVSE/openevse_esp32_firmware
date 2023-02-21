@@ -34,6 +34,8 @@ x-examples:
     hostname: openevse-a7d4
     sntp_hostname: pool.ntp.org
     time_zone: 'Europe/London|GMT0BST,M3.5.0/1,M10.5.0'
+    limit_default_type: none
+    limit_default_value": 0
     emoncms_server: 'https://emoncms.org'
     emoncms_node: openevse-a7d4
     emoncms_apikey: _DUMMY_PASSWORD
@@ -86,6 +88,7 @@ x-examples:
     ocpp_auth_offline: true
     mqtt_protocol: mqtt
     charge_mode: fast
+    is_threephase: false
 x-tags:
   - Config
 properties:
@@ -176,6 +179,12 @@ properties:
     minLength: 1
   time_zone:
     type: string
+    minLength: 1
+  limit_default_type:
+    type: string
+    minLength: 1
+  limit_default_value:
+    type: integer
     minLength: 1
   emoncms_server:
     type: string
@@ -295,3 +304,5 @@ properties:
     default: 600
     description: |
       The maximum number of seconds to randomly add/subtract from the a scheduled charge start time, eg a value of 600 will adjust the start time my +/- 10 minutes. This is to help prevent large syncrinised loads when multiple verchiles start charging at the same time.
+  is_threephase: 
+    type: boolean

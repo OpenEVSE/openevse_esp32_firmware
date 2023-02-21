@@ -39,6 +39,7 @@ typedef const __FlashStringHelper *fstr_t;
 #include "rfid.h"
 #include "current_shaper.h"
 #include "evse_man.h"
+#include "limit.h"
 
 MongooseHttpServer server;          // Create class for Web server
 
@@ -244,6 +245,7 @@ void buildStatus(DynamicJsonDocument &doc) {
   doc["charge_rate"] = divert.getChargeRate();
   doc["divert_update"] = (millis() - divert.getLastUpdate()) / 1000;
   doc["divert_active"] = divert.isActive();
+  doc["divertmode"] = (uint8_t)divert.getMode();
 
   doc["shaper"] = shaper.getState()?1:0;
   doc["shaper_live_pwr"] = shaper.getLivePwr();
@@ -251,7 +253,8 @@ void buildStatus(DynamicJsonDocument &doc) {
   doc["shaper_cur"] = shaper.getMaxCur();
   doc["shaper_updated"] = shaper.isUpdated();
   doc["service_level"] = static_cast<uint8_t>(evse.getActualServiceLevel());
-
+  doc["limit"] = limit.hasLimit();
+  
   doc["ota_update"] = (int)Update.isRunning();
   doc["time"] = String(time);
   doc["offset"] = String(offset);
@@ -261,6 +264,7 @@ void buildStatus(DynamicJsonDocument &doc) {
   doc["override_version"] = manual.getVersion();
   doc["schedule_version"] = scheduler.getVersion();
   doc["schedule_plan_version"] = scheduler.getPlanVersion();
+  doc["limit_version"] = limit.getVersion();
 
   doc["vehicle_state_update"] = (millis() - evse.getVehicleLastUpdated()) / 1000;
   if(teslaClient.getVehicleCnt() > 0) {
@@ -708,12 +712,20 @@ void handleStatusPost(MongooseHttpServerRequest *request, MongooseHttpServerResp
       solar = doc["solar"];
       DBUGF("solar:%dW", solar);
       divert.update_state();
+      // recalculate shaper
+      if (shaper.getState()) {
+        shaper.shapeCurrent();
+      }
       send_event = false; // Divert sends the event so no need to send here
     }
     else if(doc.containsKey("grid_ie")) {
       grid_ie = doc["grid_ie"];
       DBUGF("grid:%dW", grid_ie);
       divert.update_state();
+      // recalculate shaper
+      if (shaper.getState()) {
+        shaper.shapeCurrent();
+      }
       send_event = false; // Divert sends the event so no need to send here
     }
     if(doc.containsKey("battery_level")) {
@@ -886,6 +898,78 @@ handleSchedulePlan(MongooseHttpServerRequest *request)
 
   request->send(response);
 }
+
+//----------------------------------------------------------
+//
+//            Limit
+//
+//----------------------------------------------------------
+
+void handleLimitGet(MongooseHttpServerRequest *request, MongooseHttpServerResponseStream *response)
+{
+  if(limit.hasLimit())
+  {
+    limit.get().serialize(response);
+  } else {
+    response->setCode(404);
+    response->print("{\"msg\":\"no limit\"}");
+  }
+}
+
+void handleLimitPost(MongooseHttpServerRequest *request, MongooseHttpServerResponseStream *response)
+{
+  String body = request->body().toString();
+
+    if (limit.set(body)) {
+      response->setCode(201);
+      response->print("{\"msg\":\"done\"}");
+      // todo: mqtt_publish_limit();  // update limit props to mqtt
+    } else {
+      // unused for now
+      response->setCode(500);
+      response->print("{\"msg\":\"failed to parse JSON\"}");
+    }
+}
+
+void handleLimitDelete(MongooseHttpServerRequest *request, MongooseHttpServerResponseStream *response)
+{
+  if(limit.hasLimit()) {
+    if (limit.clear()) {
+      response->setCode(200);
+      response->print("{\"msg\":\"done\"}");
+      // todo: mqtt_publish_limit();  // update limit props to mqtt
+    } else {
+      response->setCode(500);
+      response->print("{\"msg\":\"failed\"}");
+    }
+  } else {
+    response->setCode(404);
+    response->print("{\"msg\":\"no limit\"}");
+  }
+}
+
+void handleLimit(MongooseHttpServerRequest *request)
+{
+  MongooseHttpServerResponseStream *response;
+  if(false == requestPreProcess(request, response)) {
+    return;
+  }
+
+  if(HTTP_GET == request->method()) {
+    handleLimitGet(request, response);
+  } else if(HTTP_POST == request->method()) {
+    handleLimitPost(request, response);
+  } else if(HTTP_DELETE == request->method()) {
+    handleLimitDelete(request, response);
+  } else {
+    response->setCode(405);
+    response->print("{\"msg\":\"Method not allowed\"}");
+  }
+
+  request->send(response);
+}
+
+//----------------------------------------------------------
 
 void handleOverrideGet(MongooseHttpServerRequest *request, MongooseHttpServerResponseStream *response)
 {
@@ -1258,6 +1342,8 @@ web_server_setup() {
   server.on("/override$", handleOverride);
 
   server.on("/logs", handleEventLogs);
+
+  server.on("/limit", handleLimit);
 
   // Simple Firmware Update Form
   server.on("/update$")->
