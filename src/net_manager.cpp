@@ -96,8 +96,14 @@ void NetManagerTask::wifiStartAccessPoint()
   String softAP_ssid_ID =
     String(_softAP_ssid) + "_" + ESPAL.getShortId();
 
-  // Pick a random channel out of 1, 6 or 11
-  int channel = (random(3) * 5) + 1;
+  // Use the existing channel if set
+  int channel = WiFi.channel();
+  DBUGVAR(channel);
+  if(0 == channel || esid == 0 || esid == "") {
+    // Pick a random channel out of 1, 6 or 11
+    channel = (random(3) * 5) + 1;
+  }
+  DBUGVAR(channel);
   WiFi.softAP(softAP_ssid_ID.c_str(), _softAP_password, channel);
 
   // Setup the DNS server redirecting all the domains to the apIP
@@ -110,8 +116,8 @@ void NetManagerTask::wifiStartAccessPoint()
   sprintf(tmpStr, "%d.%d.%d.%d", myIP[0], myIP[1], myIP[2], myIP[3]);
   _ipaddress = tmpStr;
 
-  DEBUG.print("AP IP Address: ");
-  DEBUG.println(tmpStr);
+  DEBUG.printf("AP IP Address: %s\n", tmpStr);
+  DEBUG.printf("Channel: %d\n", WiFi.channel());
 
   _lcd.display(softAP_ssid_ID, 0, 0, 0, LCD_CLEAR_LINE);
   _lcd.display(String(F("Pass: ")) + _softAP_password, 0, 1, 15 * 1000, LCD_CLEAR_LINE);
@@ -602,7 +608,7 @@ unsigned long NetManagerTask::manageState()
       }
       // Intentionally fall through to AP State for the same client reconnect logic
     case NetState::AccessPointConnecting:
-      if(esid != 0 && esid != "" && millis() > _clientRetryTime) {
+      if(!isWifiClientConnected() && esid != 0 && esid != "" && millis() > _clientRetryTime) {
         wifiClientConnect();
       }
 
