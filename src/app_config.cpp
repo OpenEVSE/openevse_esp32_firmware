@@ -1,6 +1,7 @@
 #include "emonesp.h"
 #include "espal.h"
 #include "divert.h"
+#include "net_manager.h"
 #include "mqtt.h"
 #include "ocpp.h"
 #include "tesla_client.h"
@@ -264,6 +265,9 @@ void config_changed(String name)
 
   if(name == "time_zone") {
     config_set_timezone(time_zone);
+  } else if(name == "hostname") {
+    NetManagerTask::mDNSStop();
+    NetManagerTask::mDNSStart();
   } else if(name == "flags") {
     divert.setMode((config_divert_enabled() && 1 == config_charge_mode()) ? DivertMode::Eco : DivertMode::Normal);
     if(mqtt_connected() != config_mqtt_enabled()) {
@@ -486,3 +490,6 @@ config_reset() {
   LittleFS.format();
   config_load_settings();
 }
+
+
+

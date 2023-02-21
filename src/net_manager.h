@@ -174,6 +174,9 @@ class NetManagerTask : public MicroTasks::Task
     void wifiTurnOffAp();
     void wifiTurnOnAp();
 
+    static void mDNSStart();
+    static void mDNSStop();
+
     bool isConnected();
     bool isWifiClientConnected();
     bool isWiredConnected();

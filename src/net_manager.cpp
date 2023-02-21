@@ -4,6 +4,7 @@
 #include "lcd.h"
 #include "espal.h"
 #include "time_man.h"
+#include "event.h"
 
 #include "LedManagerTask.h"
 
@@ -197,6 +198,12 @@ void NetManagerTask::wifiOnStationModeConnected(const WiFiEventStationModeConnec
 void NetManagerTask::wifiOnStationModeGotIP(const WiFiEventStationModeGotIP &event)
 {
   haveNetworkConnection(WiFi.localIP());
+  StaticJsonDocument<128> doc;
+  doc["wifi_client_connected"] = (int)net.isWifiClientConnected();
+  doc["eth_connected"] = (int)net.isWiredConnected();
+  doc["net_connected"] = (int)net.isWifiClientConnected();
+  doc["ipaddress"] = net.getIp();
+  event_send(doc);
 
   // Clear any error state
   _clientDisconnects = 0;
@@ -481,14 +488,7 @@ void NetManagerTask::setup()
   // Initially startup the netwrok to kick things off
   manageState();
 
-  if (MDNS.begin(esp_hostname.c_str()))
-  {
-    MDNS.addService("http", "tcp", 80);
-    MDNS.addService("openevse", "tcp", 80);
-    MDNS.addServiceTxt("openevse", "tcp", "type", buildenv.c_str());
-    MDNS.addServiceTxt("openevse", "tcp", "version", currentfirmware.c_str());
-    MDNS.addServiceTxt("openevse", "tcp", "id", ESPAL.getLongId());
-  }
+  mDNSStart();
 }
 
 unsigned long NetManagerTask::handleMessage()
@@ -762,4 +762,19 @@ bool NetManagerTask::isWiredConnected()
 #else
   return false;
 #endif
+}
+
+void NetManagerTask::mDNSStart() {
+  if (MDNS.begin(esp_hostname.c_str()))
+  {
+    MDNS.addService("http", "tcp", 80);
+    MDNS.addService("openevse", "tcp", 80);
+    MDNS.addServiceTxt("openevse", "tcp", "type", buildenv.c_str());
+    MDNS.addServiceTxt("openevse", "tcp", "version", currentfirmware.c_str());
+    MDNS.addServiceTxt("openevse", "tcp", "id", ESPAL.getLongId());
+  }
+}
+
+void NetManagerTask::mDNSStop() {
+  MDNS.end();
 }
