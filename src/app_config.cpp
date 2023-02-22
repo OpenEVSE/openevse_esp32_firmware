@@ -358,55 +358,7 @@ void config_set(const char *name, double val) {
   user_config.set(name, val);
 }
 
-void config_save_emoncms(bool enable, String server, String node, String apikey,
-                    String fingerprint)
-{
-  uint32_t newflags = flags & ~CONFIG_SERVICE_EMONCMS;
-  if(enable) {
-    newflags |= CONFIG_SERVICE_EMONCMS;
-  }
 
-  user_config.set("emoncms_server", server);
-  user_config.set("emoncms_node", node);
-  user_config.set("emoncms_apikey", apikey);
-  user_config.set("emoncms_fingerprint", fingerprint);
-  user_config.set("flags", newflags);
-  user_config.commit();
-}
-
-void
-config_save_mqtt(bool enable, int protocol, String server, uint16_t port, String topic, bool retained, String user, String pass, String solar, String grid_ie, String live_pwr, bool reject_unauthorized)
-{
-  uint32_t newflags = flags & ~(CONFIG_SERVICE_MQTT | CONFIG_MQTT_PROTOCOL | CONFIG_MQTT_ALLOW_ANY_CERT | CONFIG_MQTT_RETAINED);
-  if(enable) {
-    newflags |= CONFIG_SERVICE_MQTT;
-  }
-  if(!reject_unauthorized) {
-    newflags |= CONFIG_MQTT_ALLOW_ANY_CERT;
-  }
-  if (retained) {
-  newflags |= CONFIG_MQTT_RETAINED;
-  }
-  newflags |= protocol << 4;
-
-  user_config.set("mqtt_server", server);
-  user_config.set("mqtt_port", port);
-  user_config.set("mqtt_topic", topic);
-  user_config.set("mqtt_user", user);
-  user_config.set("mqtt_pass", pass);
-  user_config.set("mqtt_solar", solar);
-  user_config.set("mqtt_grid_ie", grid_ie);
-  user_config.set("mqtt_live_pwr", live_pwr);
-  user_config.set("flags", newflags);
-  user_config.commit();
-}
-
-void
-config_save_admin(String user, String pass) {
-  user_config.set("www_username", user);
-  user_config.set("www_password", pass);
-  user_config.commit();
-}
 
 void
 config_save_sntp(bool sntp_enable, String tz)
@@ -433,51 +385,6 @@ void config_set_timezone(String tz)
 
   setenv("TZ", set_tz, 1);
   tzset();
-}
-
-void
-config_save_advanced(String hostname, String sntp_host) {
-  user_config.set("hostname", hostname);
-  user_config.set("sntp_hostname", sntp_host);
-  user_config.commit();
-}
-
-void
-config_save_wifi(String qsid, String qpass)
-{
-  user_config.set("ssid", qsid);
-  user_config.set("pass", qpass);
-  user_config.commit();
-}
-
-void
-config_save_ohm(bool enable, String qohm)
-{
-  uint32_t newflags = flags & ~CONFIG_SERVICE_OHM;
-  if(enable) {
-    newflags |= CONFIG_SERVICE_OHM;
-  }
-
-  user_config.set("ohm", qohm);
-  user_config.set("flags", newflags);
-  user_config.commit();
-}
-
-void
-config_save_rfid(bool enable, String storage){
-  uint32_t newflags = flags & ~CONFIG_RFID;
-  if(enable) {
-    newflags |= CONFIG_RFID;
-  }
-  user_config.set("flags", newflags);
-  user_config.set("rfid_storage", rfid_storage);
-  user_config.commit();
-}
-
-void
-config_save_flags(uint32_t newFlags) {
-  user_config.set("flags", newFlags);
-  user_config.commit();
 }
 
 void
