@@ -89,6 +89,7 @@ void NetManagerTask::wifiStartAccessPoint()
   }
 
   WiFi.enableAP(true);
+  WiFi.enableSTA(true); // Needed for scanning
 
   WiFi.softAPConfig(_apIP, _apIP, _apNetMask);
 
@@ -158,6 +159,14 @@ void NetManagerTask::wifiClientConnect()
   WiFi.begin(esid.c_str(), epass.c_str());
 
   _clientRetryTime = millis() + WIFI_CLIENT_RETRY_TIMEOUT;
+}
+
+void NetManagerTask::wifiScanNetworks(WiFiScanCompleteCallback callback)
+{
+  if(WiFi.scanComplete() != WIFI_SCAN_RUNNING) {
+    WiFi.scanNetworks(true, false, true);
+  }
+  _scanCompleteCallbacks.push_back(callback);
 }
 
 void NetManagerTask::displayState()
@@ -347,6 +356,7 @@ void NetManagerTask::onNetEvent(WiFiEvent_t event, arduino_event_info_t &info)
         DBUGF("Setting host name failed: %s", esp_hostname.c_str());
       }
     } break;
+
     case ARDUINO_EVENT_WIFI_STA_START:
     {
       if(WiFi.setHostname(esp_hostname.c_str())) {
@@ -355,6 +365,7 @@ void NetManagerTask::onNetEvent(WiFiEvent_t event, arduino_event_info_t &info)
         DBUGF("Setting host name failed: %s", esp_hostname.c_str());
       }
     } break;
+
     case ARDUINO_EVENT_WIFI_STA_CONNECTED:
     {
       auto& src = info.wifi_sta_connected;
@@ -364,9 +375,11 @@ void NetManagerTask::onNetEvent(WiFiEvent_t event, arduino_event_info_t &info)
       dst.channel = src.channel;
       wifiOnStationModeConnected(dst);
     } break;
+
     case ARDUINO_EVENT_WIFI_STA_STOP:
     {
     } break;
+
     case ARDUINO_EVENT_WIFI_STA_DISCONNECTED:
     {
       auto& src = info.wifi_sta_disconnected;
@@ -376,6 +389,7 @@ void NetManagerTask::onNetEvent(WiFiEvent_t event, arduino_event_info_t &info)
       dst.reason = static_cast<WiFiDisconnectReason>(src.reason);
       wifiOnStationModeDisconnected(dst);
     } break;
+
     case ARDUINO_EVENT_WIFI_STA_GOT_IP:
     {
       auto& src = info.got_ip.ip_info;
@@ -385,6 +399,7 @@ void NetManagerTask::onNetEvent(WiFiEvent_t event, arduino_event_info_t &info)
       dst.gw = src.gw.addr;
       wifiOnStationModeGotIP(dst);
     } break;
+
     case ARDUINO_EVENT_WIFI_AP_STACONNECTED:
     {
       auto& src = info.wifi_ap_staconnected;
@@ -393,6 +408,7 @@ void NetManagerTask::onNetEvent(WiFiEvent_t event, arduino_event_info_t &info)
       dst.aid = src.aid;
       wifiOnAPModeStationConnected(dst);
     } break;
+
     case ARDUINO_EVENT_WIFI_AP_STADISCONNECTED:
     {
       auto& src = info.wifi_ap_stadisconnected;
@@ -400,6 +416,16 @@ void NetManagerTask::onNetEvent(WiFiEvent_t event, arduino_event_info_t &info)
       memcpy(dst.mac, src.mac, 6);
       dst.aid = src.aid;
       wifiOnAPModeStationDisconnected(dst);
+    } break;
+
+    case ARDUINO_EVENT_WIFI_SCAN_DONE:
+    {
+      for(WiFiScanCompleteCallback callback : _scanCompleteCallbacks) {
+        callback(info.wifi_scan_done.number);
+      }
+
+      _scanCompleteCallbacks.clear();
+      WiFi.scanDelete();
     } break;
 #ifdef ENABLE_WIRED_ETHERNET
     case ARDUINO_EVENT_ETH_START:
@@ -672,12 +698,13 @@ unsigned long NetManagerTask::loop(MicroTasks::WakeReason reason)
 #ifdef ENABLE_WIRED_ETHERNET
 void NetManagerTask::wiredStart()
 {
+  DBUGLN("Starting wired connection");
   //ETH.setHostname(esp_hostname.c_str());
   // https://github.com/espressif/arduino-esp32/pull/6188/files
   pinMode(ETH_PHY_POWER, OUTPUT);
 #ifdef RESET_ETH_PHY_ON_BOOT
   digitalWrite(ETH_PHY_POWER, LOW);
-  delay(1000);
+  delay(350);
 #endif // #ifdef RESET_ETH_PHY_ON_BOOT
   digitalWrite(ETH_PHY_POWER, HIGH);
   ETH.begin();

@@ -254,7 +254,7 @@ void buildStatus(DynamicJsonDocument &doc) {
   doc["shaper_updated"] = shaper.isUpdated();
   doc["service_level"] = static_cast<uint8_t>(evse.getActualServiceLevel());
   doc["limit"] = limit.hasLimit();
-  
+
   doc["ota_update"] = (int)Update.isRunning();
   doc["time"] = String(time);
   doc["offset"] = String(offset);
@@ -302,45 +302,8 @@ handleScan(MongooseHttpServerRequest *request) {
     return;
   }
 
-#ifndef ENABLE_ASYNC_WIFI_SCAN
-  String json = "[";
-  int n = WiFi.scanComplete();
-  if(n == -2) {
-    WiFi.scanNetworks(true, false);
-  } else if(n) {
-    for (int i = 0; i < n; ++i) {
-      if(i) json += ",";
-      json += "{";
-      json += "\"rssi\":"+String(WiFi.RSSI(i));
-      json += ",\"ssid\":\""+WiFi.SSID(i)+"\"";
-      json += ",\"bssid\":\""+WiFi.BSSIDstr(i)+"\"";
-      json += ",\"channel\":"+String(WiFi.channel(i));
-      json += ",\"secure\":"+String(WiFi.encryptionType(i));
-#ifndef ESP32
-      json += ",\"hidden\":"+String(WiFi.isHidden(i)?"true":"false");
-#endif // !ESP32
-      json += "}";
-    }
-    WiFi.scanDelete();
-    if(WiFi.scanComplete() == -2){
-      WiFi.scanNetworks(true);
-    }
-  }
-  json += "]";
-  response->print(json);
-  request->send(response);
-#else // ENABLE_ASYNC_WIFI_SCAN
-  // Async WiFi scan need the Git version of the ESP8266 core
-  if(WIFI_SCAN_RUNNING == WiFi.scanComplete()) {
-    response->setCode(500);
-    response->setContentType(CONTENT_TYPE_TEXT);
-    response->print("Busy");
-    request->send(response);
-    return;
-  }
-
   DBUGF("Starting WiFi scan");
-  WiFi.scanNetworksAsync([request, response](int networksFound) {
+  net.wifiScanNetworks([request, response](int networksFound) {
     DBUGF("%d networks found", networksFound);
     String json = "[";
     for (int i = 0; i < networksFound; ++i) {
@@ -351,15 +314,12 @@ handleScan(MongooseHttpServerRequest *request) {
       json += ",\"bssid\":\""+WiFi.BSSIDstr(i)+"\"";
       json += ",\"channel\":"+String(WiFi.channel(i));
       json += ",\"secure\":"+String(WiFi.encryptionType(i));
-      json += ",\"hidden\":"+String(WiFi.isHidden(i)?"true":"false");
       json += "}";
     }
-    WiFi.scanDelete();
     json += "]";
     response->print(json);
     request->send(response);
-  }, false);
-#endif
+  });
 }
 
 // -------------------------------------------------------------------
