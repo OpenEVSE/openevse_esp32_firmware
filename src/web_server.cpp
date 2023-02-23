@@ -342,120 +342,6 @@ handleAPOff(MongooseHttpServerRequest *request) {
 }
 
 // -------------------------------------------------------------------
-// Save selected network to EEPROM and attempt connection
-// url: /savenetwork
-// -------------------------------------------------------------------
-void
-handleSaveNetwork(MongooseHttpServerRequest *request) {
-  MongooseHttpServerResponseStream *response;
-  if(false == requestPreProcess(request, response, CONTENT_TYPE_TEXT)) {
-    return;
-  }
-
-  String qsid = request->getParam("ssid");
-  String qpass = request->getParam("pass");
-  if (qsid != 0) {
-    config_save_wifi(qsid, qpass);
-
-    response->setCode(200);
-    response->print("saved");
-    wifiRestartTime = millis() + 2000;
-  } else {
-    response->setCode(400);
-    response->print("No SSID");
-  }
-
-  request->send(response);
-}
-
-// -------------------------------------------------------------------
-// Save Emoncms
-// url: /saveemoncms
-// -------------------------------------------------------------------
-void
-handleSaveEmoncms(MongooseHttpServerRequest *request) {
-  MongooseHttpServerResponseStream *response;
-  if(false == requestPreProcess(request, response, CONTENT_TYPE_TEXT)) {
-    return;
-  }
-
-  config_save_emoncms(isPositive(request->getParam("enable")),
-                      request->getParam("server"),
-                      request->getParam("node"),
-                      request->getParam("apikey"),
-                      request->getParam("fingerprint"));
-
-  char tmpStr[200];
-  snprintf(tmpStr, sizeof(tmpStr), "Saved: %s %s %s %s",
-           emoncms_server.c_str(),
-           emoncms_node.c_str(),
-           emoncms_apikey.c_str(),
-           emoncms_fingerprint.c_str());
-  DBUGLN(tmpStr);
-
-  response->setCode(200);
-  response->print(tmpStr);
-  request->send(response);
-}
-
-// -------------------------------------------------------------------
-// Save MQTT Config
-// url: /savemqtt
-// -------------------------------------------------------------------
-void
-handleSaveMqtt(MongooseHttpServerRequest *request) {
-  MongooseHttpServerResponseStream *response;
-  if(false == requestPreProcess(request, response, CONTENT_TYPE_TEXT)) {
-    return;
-  }
-
-  String pass = request->getParam("pass");
-
-  int protocol = MQTT_PROTOCOL_MQTT;
-  char proto[6];
-  if(request->getParam("protocol", proto, sizeof(proto)) > 0) {
-    // Cheap and chearful check, obviously not checking for invalid input
-    protocol = 's' == proto[4] ? MQTT_PROTOCOL_MQTT_SSL : MQTT_PROTOCOL_MQTT;
-  }
-
-  int port = 1883;
-  char portStr[8];
-  if(request->getParam("port", portStr, sizeof(portStr)) > 0) {
-    port = atoi(portStr);
-  }
-
-  char unauthString[8];
-  int unauthFound = request->getParam("reject_unauthorized", unauthString, sizeof(unauthString));
-  bool reject_unauthorized = unauthFound < 0 || 0 == unauthFound || isPositive(String(unauthString));
-
-  config_save_mqtt(isPositive(request->getParam("enable")),
-                   protocol,
-                   request->getParam("server"),
-                   port,
-                   request->getParam("topic"),
-                   isPositive(request->getParam("retained")),
-                   request->getParam("user"),
-                   pass,
-                   request->getParam("solar"),
-                   request->getParam("grid_ie"),
-                   request->getParam("live_pwr"),
-                   reject_unauthorized);
-
-  char tmpStr[200];
-  snprintf(tmpStr, sizeof(tmpStr), "Saved: %s %s %d %s %s %s %s", mqtt_server.c_str(),
-          mqtt_topic.c_str(), config_mqtt_retained(), mqtt_user.c_str(), mqtt_pass.c_str(),
-          mqtt_solar.c_str(), mqtt_grid_ie.c_str());
-  DBUGLN(tmpStr);
-
-  response->setCode(200);
-  response->print(tmpStr);
-  request->send(response);
-
-  // If connected disconnect MQTT to trigger re-connect with new details
-  mqtt_restart();
-}
-
-// -------------------------------------------------------------------
 // Change divert mode (solar PV divert mode) e.g 1:Normal (default), 2:Eco
 // url: /divertmode
 // -------------------------------------------------------------------
@@ -495,27 +381,6 @@ handleCurrentShaper(MongooseHttpServerRequest *request) {
 }
 
 // -------------------------------------------------------------------
-// Save the web site user/pass
-// url: /saveadmin
-// -------------------------------------------------------------------
-void
-handleSaveAdmin(MongooseHttpServerRequest *request) {
-  MongooseHttpServerResponseStream *response;
-  if(false == requestPreProcess(request, response, CONTENT_TYPE_TEXT)) {
-    return;
-  }
-
-  String quser = request->getParam("user");
-  String qpass = request->getParam("pass");
-
-  config_save_admin(quser, qpass);
-
-  response->setCode(200);
-  response->print("saved");
-  request->send(response);
-}
-
-// -------------------------------------------------------------------
 // Manually set the time
 // url: /settime
 // -------------------------------------------------------------------
@@ -527,15 +392,15 @@ handleSetTime(MongooseHttpServerRequest *request) {
   }
 
   bool qsntp_enable = isPositive(request, "ntp");
-  String qtz = request->getParam("tz");
-
-  config_save_sntp(qsntp_enable, qtz);
-  if(config_sntp_enabled()) {
+  if(qsntp_enable)
+  {
+    String qtz = request->getParam("tz");
+    config_save_sntp(true, qtz);
     time_check_now();
   }
-
-  if(false == qsntp_enable)
+  else
   {
+    config_save_sntp(false, "UTC0");
     String time = request->getParam("time");
 
     struct tm tm;
@@ -571,27 +436,6 @@ handleSetTime(MongooseHttpServerRequest *request) {
 }
 
 // -------------------------------------------------------------------
-// Save advanced settings
-// url: /saveadvanced
-// -------------------------------------------------------------------
-void
-handleSaveAdvanced(MongooseHttpServerRequest *request) {
-  MongooseHttpServerResponseStream *response;
-  if(false == requestPreProcess(request, response, CONTENT_TYPE_TEXT)) {
-    return;
-  }
-
-  String qhostname = request->getParam("hostname");
-  String qsntp_host = request->getParam("sntp_host");
-
-  config_save_advanced(qhostname, qsntp_host);
-
-  response->setCode(200);
-  response->print("saved");
-  request->send(response);
-}
-
-// -------------------------------------------------------------------
 // Get Tesla Vehicle Info
 // url: /teslaveh
 // -------------------------------------------------------------------
@@ -617,27 +461,6 @@ handleTeslaVeh(MongooseHttpServerRequest *request)
 
   response->setCode(200);
   serializeJson(doc, *response);
-  request->send(response);
-}
-
-// -------------------------------------------------------------------
-// Save the Ohm keyto EEPROM
-// url: /handleSaveOhmkey
-// -------------------------------------------------------------------
-void
-handleSaveOhmkey(MongooseHttpServerRequest *request) {
-  MongooseHttpServerResponseStream *response;
-  if(false == requestPreProcess(request, response, CONTENT_TYPE_TEXT)) {
-    return;
-  }
-
-  bool enabled = isPositive(request->getParam("enable"));
-  String qohm = request->getParam("ohm");
-
-  config_save_ohm(enabled, qohm);
-
-  response->setCode(200);
-  response->print("saved");
   request->send(response);
 }
 
@@ -1273,14 +1096,8 @@ web_server_setup() {
   server.on("/config$", handleConfig);
 
   // Handle HTTP web interface button presses
-  server.on("/savenetwork$", handleSaveNetwork);
-  server.on("/saveemoncms$", handleSaveEmoncms);
-  server.on("/savemqtt$", handleSaveMqtt);
-  server.on("/saveadmin$", handleSaveAdmin);
   server.on("/teslaveh$", handleTeslaVeh);
   server.on("/tesla/vehicles$", handleTeslaVeh);
-  server.on("/saveadvanced$", handleSaveAdvanced);
-  server.on("/saveohmkey$", handleSaveOhmkey);
   server.on("/settime$", handleSetTime);
   server.on("/reset$", handleRst);
   server.on("/restart$", handleRestart);
