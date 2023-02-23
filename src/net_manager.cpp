@@ -799,9 +799,11 @@ void NetManagerTask::mDNSStart() {
     MDNS.addServiceTxt("openevse", "tcp", "type", buildenv.c_str());
     MDNS.addServiceTxt("openevse", "tcp", "version", currentfirmware.c_str());
     MDNS.addServiceTxt("openevse", "tcp", "id", ESPAL.getLongId());
+    _dnsServer.start(_dnsPort, "*", _apIP);
   }
 }
 
 void NetManagerTask::mDNSStop() {
   MDNS.end();
+  _dnsServer.stop();
 }

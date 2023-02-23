@@ -183,8 +183,8 @@ class NetManagerTask : public MicroTasks::Task
     void wifiTurnOnAp();
 
     void wifiScanNetworks(WiFiScanCompleteCallback callback);
-    static void mDNSStart();
-    static void mDNSStop();
+    void mDNSStart();
+    void mDNSStop();
     bool isConnected();
     bool isWifiClientConnected();
     bool isWiredConnected();
