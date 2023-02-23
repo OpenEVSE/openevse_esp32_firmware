@@ -1,6 +1,9 @@
 #ifndef _EMONESP_WIFI_H
 #define _EMONESP_WIFI_H
 
+#include <functional>
+#include <list>
+
 #include <Arduino.h>
 #include <MicroTasks.h>
 #include <MicroTasksMessage.h>
@@ -19,10 +22,13 @@
 #include "time_man.h"
 #include <DNSServer.h>
 
+
 class NetManagerTask;
 
 class NetManagerTask : public MicroTasks::Task
 {
+  typedef std::function<void(int networksFound)> WiFiScanCompleteCallback;
+
   private:
     class NetState
     {
@@ -121,6 +127,8 @@ class NetManagerTask : public MicroTasks::Task
     LedManagerTask &_led;
     TimeManager &_time;
 
+    std::list<WiFiScanCompleteCallback> _scanCompleteCallbacks;
+
     static class NetManagerTask *_instance;
 
   private:
@@ -174,9 +182,9 @@ class NetManagerTask : public MicroTasks::Task
     void wifiTurnOffAp();
     void wifiTurnOnAp();
 
+    void wifiScanNetworks(WiFiScanCompleteCallback callback);
     static void mDNSStart();
     static void mDNSStop();
-
     bool isConnected();
     bool isWifiClientConnected();
     bool isWiredConnected();
