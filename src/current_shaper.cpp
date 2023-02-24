@@ -122,9 +122,6 @@ void CurrentShaperTask::shapeCurrent() {
 		if (mqtt_solar != "") {
 			max_pwr += solar;
 		}		
-		else if (mqtt_grid_ie != "" && (grid_ie <= 0)) {
-			max_pwr -= grid_ie;
-		}
 	}
 	 if(!config_threephase_enabled())
 		_max_cur = round(((max_pwr - _live_pwr) / evse.getVoltage()) + (evse.getAmps()));

@@ -76,9 +76,10 @@ void mqttmsg_callback(MongooseString topic, MongooseString payload) {
     grid_ie = payload_str.toInt();
     DBUGF("grid:%dW", grid_ie);
     divert.update_state();
-    //recalculate shaper
-    if (shaper.getState()) {
-      shaper.shapeCurrent();
+    
+    // if shaper use the same topic as grid_ie
+    if (mqtt_live_pwr == mqtt_grid_ie) {
+      shaper.setLivePwr(grid_ie);
     }
   }
   else if (topic_string == mqtt_live_pwr)
@@ -311,8 +312,11 @@ mqtt_connect()
     if(config_current_shaper_enabled())
     {
       if (mqtt_live_pwr != "") {
-        mqttclient.subscribe(mqtt_live_pwr);
-        yield();
+        if ( mqtt_live_pwr != mqtt_grid_ie ) {
+          // only subscribe once
+          mqttclient.subscribe(mqtt_live_pwr);
+          yield();
+        }
       }
     }
     // subscribe to vehicle information from MQTT if we are configured for it
