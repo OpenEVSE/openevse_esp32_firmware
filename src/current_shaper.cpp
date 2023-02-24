@@ -123,10 +123,14 @@ void CurrentShaperTask::shapeCurrent() {
 			max_pwr += solar;
 		}		
 	}
-	 if(!config_threephase_enabled())
+	 if(!config_threephase_enabled()) {
 		_max_cur = round(((max_pwr - _live_pwr) / evse.getVoltage()) + (evse.getAmps()));
-	else
+	 }
+		
+	else {
 		_max_cur = round(((max_pwr - _live_pwr) / evse.getVoltage() / 3) + (evse.getAmps()));
+	}
+		
 
 
 	_changed = true; 
