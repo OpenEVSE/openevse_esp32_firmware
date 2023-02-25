@@ -1210,7 +1210,7 @@ void handleNotFound(MongooseHttpServerRequest *request)
   DBUG("NOT_FOUND: ");
   dumpRequest(request);
 
-  if((WIFI_AP_STA == WiFi.getMode()) || (WIFI_AP == WiFi.getMode())) {
+  if((net.isWifiModeAp()) {
     // Redirect to the home page in AP mode (for the captive portal)
     MongooseHttpServerResponseStream *response = request->beginResponseStream();
     response->setContentType(CONTENT_TYPE_HTML);
