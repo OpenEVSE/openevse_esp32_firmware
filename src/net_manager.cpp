@@ -74,14 +74,6 @@ void NetManagerTask::begin()
   }
 }
 
-void NetManagerTask::end()
-{
-  if(NULL != _instance)
-  {
-    MicroTask.stopTask(_instance);
-  }
-}
-
 // -------------------------------------------------------------------
 // Start Access Point
 // Access point is used for wifi network selection

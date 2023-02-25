@@ -265,12 +265,6 @@ void config_changed(String name)
 
   if(name == "time_zone") {
     config_set_timezone(time_zone);
-  } else if(name == "hostname") {
-    // restart network if not in ap mode
-    if (!net.isWifiModeApOnly()) {
-      net.end();
-      net.begin();
-    }
   } else if(name == "flags") {
     divert.setMode((config_divert_enabled() && 1 == config_charge_mode()) ? DivertMode::Eco : DivertMode::Normal);
     if(mqtt_connected() != config_mqtt_enabled()) {
