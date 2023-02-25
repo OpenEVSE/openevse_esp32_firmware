@@ -91,7 +91,8 @@ void NetManagerTask::wifiStartAccessPoint()
 
   WiFi.enableAP(true);
   WiFi.enableSTA(true); // Needed for scanning
-
+  WiFi.setScanMethod(WIFI_ALL_CHANNEL_SCAN);
+  WiFi.setSortMethod(WIFI_CONNECT_AP_BY_SIGNAL);
   WiFi.softAPConfig(_apIP, _apIP, _apNetMask);
 
   // Create Unique SSID e.g "emonESP_XXXXXX"
@@ -165,7 +166,7 @@ void NetManagerTask::wifiClientConnect()
 void NetManagerTask::wifiScanNetworks(WiFiScanCompleteCallback callback)
 {
   if(WiFi.scanComplete() != WIFI_SCAN_RUNNING) {
-    WiFi.scanNetworks(true, false, true);
+    WiFi.scanNetworks(true, false, false);
   }
   _scanCompleteCallbacks.push_back(callback);
 }
