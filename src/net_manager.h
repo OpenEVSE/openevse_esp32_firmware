@@ -172,7 +172,8 @@ class NetManagerTask : public MicroTasks::Task
     NetManagerTask(LcdTask &lcd, LedManagerTask &led, TimeManager &time);
 
     void begin();
-
+    void end();
+    
     void wifiScan();
 
     void wifiStart();
@@ -183,8 +184,7 @@ class NetManagerTask : public MicroTasks::Task
     void wifiTurnOnAp();
 
     void wifiScanNetworks(WiFiScanCompleteCallback callback);
-    void mDNSStart();
-    void mDNSStop();
+  
     bool isConnected();
     bool isWifiClientConnected();
     bool isWiredConnected();

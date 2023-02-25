@@ -74,6 +74,14 @@ void NetManagerTask::begin()
   }
 }
 
+void NetManagerTask::end()
+{
+  if(NULL != _instance)
+  {
+    MicroTask.stopTask(_instance);
+  }
+}
+
 // -------------------------------------------------------------------
 // Start Access Point
 // Access point is used for wifi network selection
@@ -515,7 +523,15 @@ void NetManagerTask::setup()
   // Initially startup the netwrok to kick things off
   manageState();
 
-  mDNSStart();
+  if (MDNS.begin(esp_hostname.c_str()))
+  {
+    MDNS.addService("http", "tcp", 80);
+    MDNS.addService("openevse", "tcp", 80);
+    MDNS.addServiceTxt("openevse", "tcp", "type", buildenv.c_str());
+    MDNS.addServiceTxt("openevse", "tcp", "version", currentfirmware.c_str());
+    MDNS.addServiceTxt("openevse", "tcp", "id", ESPAL.getLongId());
+    
+  }
 }
 
 unsigned long NetManagerTask::handleMessage()
@@ -790,20 +806,4 @@ bool NetManagerTask::isWiredConnected()
 #else
   return false;
 #endif
-}
-
-void NetManagerTask::mDNSStart() {
-  if (MDNS.begin(esp_hostname.c_str()))
-  {
-    MDNS.addService("http", "tcp", 80);
-    MDNS.addService("openevse", "tcp", 80);
-    MDNS.addServiceTxt("openevse", "tcp", "type", buildenv.c_str());
-    MDNS.addServiceTxt("openevse", "tcp", "version", currentfirmware.c_str());
-    MDNS.addServiceTxt("openevse", "tcp", "id", ESPAL.getLongId());
-    
-  }
-}
-
-void NetManagerTask::mDNSStop() {
-  MDNS.end();
 }
