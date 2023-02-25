@@ -91,8 +91,6 @@ void NetManagerTask::wifiStartAccessPoint()
 
   WiFi.enableAP(true);
   WiFi.enableSTA(true); // Needed for scanning
-  WiFi.setScanMethod(WIFI_ALL_CHANNEL_SCAN);
-  WiFi.setSortMethod(WIFI_CONNECT_AP_BY_SIGNAL);
   WiFi.softAPConfig(_apIP, _apIP, _apNetMask);
 
   // Create Unique SSID e.g "emonESP_XXXXXX"
@@ -158,6 +156,8 @@ void NetManagerTask::wifiClientConnect()
 
   WiFi.hostname(esp_hostname.c_str());
   WiFi.setSleep(WIFI_PS_NONE);
+  WiFi.setScanMethod(WIFI_ALL_CHANNEL_SCAN);
+  WiFi.setSortMethod(WIFI_CONNECT_AP_BY_SIGNAL);
   WiFi.begin(esid.c_str(), epass.c_str());
 
   _clientRetryTime = millis() + WIFI_CLIENT_RETRY_TIMEOUT;
