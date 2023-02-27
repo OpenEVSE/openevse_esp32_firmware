@@ -59,8 +59,12 @@ paths:
                     temp3: -2560
                     state: 254
                     elapsed: 3473
-                    wattsec: 22493407
-                    watthour: 51536
+                    session_energy: 25034
+                    total_energy: 998
+                    total_day: 23
+                    total_week: 68
+                    total_month: 126
+                    total_year: 998
                     gfcicount: 0
                     nogndcount: 0
                     stuckcount: 0
@@ -617,6 +621,46 @@ paths:
         operationId: limit_clear
         tags:
           - Limit
+  /emeter:
+    delete:
+      summary: Reset Energy Meter
+      description: This will clear the Energy Meter
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                hard:
+                  type: int
+                  description: 0|1 Enable hard reset ( reset total_counter & total_switches)
+                import:
+                  type: int
+                  description: 0|1 Import OpenEvse module total kwh.
+      responses:
+        '200':
+          description: Reset counter ok
+          content:
+              application/json:
+              schema:
+                type: object
+                properties:
+                  msg:
+                    type: string
+                    description: Reset done
+        '500':
+          description: Failed to reset counter
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  msg:
+                    type: string
+                    description: Reset failed
+      operationId: energymeter-reset
+      tags:
+        - Energy Meter
 
   /tesla/vehicles:
     get:

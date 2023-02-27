@@ -368,6 +368,8 @@ unsigned long EvseManager::loop(MicroTasks::WakeReason reason)
   {
     // Session complete, clear any auto release claims
     releaseAutoReleaseClaims();
+    // clear Session counter
+    _monitor.clearEnergyMeterSession();
   }
 
   DBUGVAR(_evaluateClaims);
