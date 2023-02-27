@@ -1,6 +1,7 @@
 #include "emonesp.h"
 #include "espal.h"
 #include "divert.h"
+#include "net_manager.h"
 #include "mqtt.h"
 #include "ocpp.h"
 #include "tesla_client.h"
@@ -393,3 +394,6 @@ config_reset() {
   LittleFS.format();
   config_load_settings();
 }
+
+
+

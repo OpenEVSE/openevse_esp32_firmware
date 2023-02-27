@@ -4,6 +4,7 @@
 #include "lcd.h"
 #include "espal.h"
 #include "time_man.h"
+#include "event.h"
 
 #include "LedManagerTask.h"
 
@@ -90,7 +91,6 @@ void NetManagerTask::wifiStartAccessPoint()
 
   WiFi.enableAP(true);
   WiFi.enableSTA(true); // Needed for scanning
-
   WiFi.softAPConfig(_apIP, _apIP, _apNetMask);
 
   // Create Unique SSID e.g "emonESP_XXXXXX"
@@ -156,6 +156,8 @@ void NetManagerTask::wifiClientConnect()
 
   WiFi.hostname(esp_hostname.c_str());
   WiFi.setSleep(WIFI_PS_NONE);
+  WiFi.setScanMethod(WIFI_ALL_CHANNEL_SCAN);
+  WiFi.setSortMethod(WIFI_CONNECT_AP_BY_SIGNAL);
   WiFi.begin(esid.c_str(), epass.c_str());
 
   _clientRetryTime = millis() + WIFI_CLIENT_RETRY_TIMEOUT;
@@ -164,7 +166,7 @@ void NetManagerTask::wifiClientConnect()
 void NetManagerTask::wifiScanNetworks(WiFiScanCompleteCallback callback)
 {
   if(WiFi.scanComplete() != WIFI_SCAN_RUNNING) {
-    WiFi.scanNetworks(true, false, true);
+    WiFi.scanNetworks(true, false, false);
   }
   _scanCompleteCallbacks.push_back(callback);
 }
@@ -206,6 +208,12 @@ void NetManagerTask::wifiOnStationModeConnected(const WiFiEventStationModeConnec
 void NetManagerTask::wifiOnStationModeGotIP(const WiFiEventStationModeGotIP &event)
 {
   haveNetworkConnection(WiFi.localIP());
+  StaticJsonDocument<128> doc;
+  doc["wifi_client_connected"] = (int)net.isWifiClientConnected();
+  doc["eth_connected"] = (int)net.isWiredConnected();
+  doc["net_connected"] = (int)net.isWifiClientConnected();
+  doc["ipaddress"] = net.getIp();
+  event_send(doc);
 
   // Clear any error state
   _clientDisconnects = 0;
@@ -517,6 +525,7 @@ void NetManagerTask::setup()
     MDNS.addServiceTxt("openevse", "tcp", "type", buildenv.c_str());
     MDNS.addServiceTxt("openevse", "tcp", "version", currentfirmware.c_str());
     MDNS.addServiceTxt("openevse", "tcp", "id", ESPAL.getLongId());
+    
   }
 }
 
