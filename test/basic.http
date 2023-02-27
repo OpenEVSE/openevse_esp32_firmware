@@ -44,46 +44,6 @@ GET {{baseUrl}}/zones.json HTTP/1.1
 
 ###
 
-POST {{baseUrl}}/savenetwork HTTP/1.1
-Content-Type: application/x-www-form-urlencoded
-
-ssid={{ssid}}&pass={{pass}}
-
-###
-
-POST {{baseUrl}}/saveemoncms HTTP/1.1
-Content-Type: application/x-www-form-urlencoded
-
-enable=true&server=home.lan&apikey=_DUMMY_PASSWORD&node=openevse-esp8266&fingerprint=
-
-###
-
-POST {{baseUrl}}/savemqtt HTTP/1.1
-Content-Type: application/x-www-form-urlencoded
-
-
-###
-
-POST {{baseUrl}}/saveadmin HTTP/1.1
-Content-Type: application/x-www-form-urlencoded
-
-
-###
-
-POST {{baseUrl}}/saveohmkey HTTP/1.1
-Content-Type: application/x-www-form-urlencoded
-
-
-
-###
-
-POST {{baseUrl}}/savesntp HTTP/1.1
-Content-Type: application/x-www-form-urlencoded
-
-enable=false
-
-###
-
 GET {{baseUrl}}/reset HTTP/1.1
 
 ###

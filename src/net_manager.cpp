@@ -438,13 +438,16 @@ void NetManagerTask::onNetEvent(WiFiEvent_t event, arduino_event_info_t &info)
 #ifdef ENABLE_WIRED_ETHERNET
     case ARDUINO_EVENT_ETH_START:
       DBUGF("ETH Started, link %s", ETH.linkUp() ? "up" : "down");
-      // https://github.com/espressif/arduino-esp32/issues/6105
-
-      //set eth hostname here
-      if(ETH.setHostname(esp_hostname.c_str())) {
-        DBUGF("Set host name to %s", ETH.getHostname());
+      if(ETH.linkUp())
+      {
+        //set eth hostname here
+        if(ETH.setHostname(esp_hostname.c_str())) {
+          DBUGF("Set host name to %s", ETH.getHostname());
+        } else {
+          DBUGF("Setting host name failed: %s", esp_hostname.c_str());
+        }
       } else {
-        DBUGF("Setting host name failed: %s", esp_hostname.c_str());
+        wifiStartInternal();
       }
       break;
     case ARDUINO_EVENT_ETH_CONNECTED:
@@ -631,6 +634,7 @@ unsigned long NetManagerTask::manageState()
 #ifdef ENABLE_WIRED_ETHERNET
     case NetState::WiredConnecting:
       if(millis() > _wiredTimeout) {
+        DBUGF("Wired connection timed out");
         wifiStartInternal();
       } else {
         delayTime = _wiredTimeout - millis();
@@ -719,7 +723,7 @@ void NetManagerTask::wiredStart()
   ETH.begin();
 
   _state = NetState::WiredConnecting;
-  _wiredTimeout = micros() + WIRED_CONNECT_TIMEOUT;
+  _wiredTimeout = millis() + WIRED_CONNECT_TIMEOUT;
 }
 #endif
 
