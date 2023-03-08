@@ -271,7 +271,7 @@ mqtt_connect()
     doc["id"] = ESPAL.getLongId();
     doc["name"] = esp_hostname;
     doc["mqtt"] = mqtt_topic;
-    doc["http"] = "http://"+ipaddress+"/";
+    doc["http"] = "http://"+net.getIp()+"/";
 
     // Once connected, publish an announcement..
     String announce = "";

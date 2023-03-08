@@ -51,7 +51,7 @@
 #endif
 
 #ifndef WIFI_CLIENT_RETRY_TIMEOUT
-#define WIFI_CLIENT_RETRY_TIMEOUT (5 * 60 * 1000)
+#define WIFI_CLIENT_RETRY_TIMEOUT           (10 * 1000)
 #endif
 
 #ifndef WIFI_CLIENT_DISCONNECTS_BEFORE_AP
@@ -61,11 +61,15 @@
 // Used to change the ADC channel used for seeding the rndom number generator
 // Should be set to an unconnected pin
 #ifndef RANDOM_SEED_CHANNEL
-#if WIFI_BUTTON != 0 && (!defined(WIFI_LED) || WIFI_LED != 0)
-#define RANDOM_SEED_CHANNEL 0
-#else
-#define RANDOM_SEED_CHANNEL 1
-#endif
+  #ifdef ESP32
+    #define RANDOM_SEED_CHANNEL 14
+  #else
+    #if WIFI_BUTTON != 0 && (!defined(WIFI_LED) || WIFI_LED != 0)
+      #define RANDOM_SEED_CHANNEL 0
+    #else
+      #define RANDOM_SEED_CHANNEL 1
+    #endif
+  #endif
 #endif
 
 #ifndef HAL_ID_ENCODING_BASE
