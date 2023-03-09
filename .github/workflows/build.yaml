@@ -54,11 +54,11 @@ jobs:
           - openevse_esp32-poe-iso
           - openevse_esp32-heltec-wifi-lora-v2
         gui:
-          - name: openevse_wifi_gui
+          - name: dev_gui-v1
             repo: OpenEVSE/openevse_wifi_gui
             build_flags: ""
             ref: ${{ inputs.v1_ref }}
-          - name: openevse-gui-v2
+          - name: dev_gui-v2
             repo: KipK/openevse-gui-v2
             build_flags: "-D DISABLE_WIFI_PORTAL -D WEB_SERVER_ROOT_PAGE_INDEX"
             ref: ${{ inputs.v2_ref }}
