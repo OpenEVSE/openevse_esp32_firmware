@@ -1060,6 +1060,16 @@ void handleNotFound(MongooseHttpServerRequest *request)
 void onWsFrame(MongooseHttpWebSocketConnection *connection, int flags, uint8_t *data, size_t len)
 {
   DBUGF("Got message %.*s", len, (const char *)data);
+  const size_t capacity = JSON_OBJECT_SIZE(1) + 16;
+  DynamicJsonDocument doc(capacity);
+  DeserializationError error = deserializeJson(doc, data, len);
+  if (!error) {
+    if (doc.containsKey("ping") && doc["ping"].is<int8_t>())
+      {
+        // answer pong
+        server.sendAll("/ws", "{\"pong\": 1}");
+      }
+  }
 }
 
 void onWsConnect(MongooseHttpWebSocketConnection *connection)
