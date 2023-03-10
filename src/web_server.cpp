@@ -1067,7 +1067,8 @@ void onWsFrame(MongooseHttpWebSocketConnection *connection, int flags, uint8_t *
     if (doc.containsKey("ping") && doc["ping"].is<int8_t>())
       {
         // answer pong
-        server.sendAll("/ws", "{\"pong\": 1}");
+        connection->send("{\"pong\": 1}");
+        
       }
   }
 }
