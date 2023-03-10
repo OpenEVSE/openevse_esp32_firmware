@@ -10,6 +10,7 @@
 
 #ifdef ESP32
 #include <WiFi.h>
+#include <esp_wifi.h>
 #include <ESPmDNS.h>              // Resolve URL for update server etc.
 #elif defined(ESP8266)
 #include <ESP8266WiFi.h>
@@ -92,7 +93,8 @@ void NetManagerTask::wifiStartAccessPoint()
   WiFi.enableAP(true);
   WiFi.enableSTA(true); // Needed for scanning
   WiFi.softAPConfig(_apIP, _apIP, _apNetMask);
-
+  // set country code to "world safe mode"
+  esp_wifi_set_country_code("01", true);
   // Create Unique SSID e.g "emonESP_XXXXXX"
   String softAP_ssid_ID =
     String(_softAP_ssid) + "_" + ESPAL.getShortId();
