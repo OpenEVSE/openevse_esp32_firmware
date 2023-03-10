@@ -230,9 +230,6 @@ void buildStatus(DynamicJsonDocument &doc) {
 
   create_rapi_json(doc);
 
-  doc["status"] = evse.getState().toString();
-
-
   doc["gfcicount"] = evse.getFaultCountGFCI();
   doc["nogndcount"] = evse.getFaultCountNoGround();
   doc["stuckcount"] = evse.getFaultCountStuckRelay();
@@ -242,7 +239,6 @@ void buildStatus(DynamicJsonDocument &doc) {
   doc["charge_rate"] = divert.getChargeRate();
   doc["divert_update"] = (millis() - divert.getLastUpdate()) / 1000;
   doc["divert_active"] = divert.isActive();
-  doc["divertmode"] = (uint8_t)divert.getMode();
   doc["shaper"] = shaper.getState()?1:0;
   doc["shaper_live_pwr"] = shaper.getLivePwr();
   // doc["shaper_cur"] = shaper.getChgCur();
@@ -252,8 +248,6 @@ void buildStatus(DynamicJsonDocument &doc) {
   doc["limit"] = limit.hasLimit();
 
   doc["ota_update"] = (int)Update.isRunning();
-  doc["time"] = String(time);
-  doc["offset"] = String(offset);
 
   doc["config_version"] = config_version;
   doc["claims_version"] = evse.getClaimsVersion();
