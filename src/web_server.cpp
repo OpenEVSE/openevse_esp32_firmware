@@ -229,7 +229,8 @@ void buildStatus(DynamicJsonDocument &doc) {
   doc["evse_connected"] = (int)evse.isConnected();
 
   create_rapi_json(doc);
-
+  evse.createEnergyMeterJsonDoc(doc);
+  
   doc["gfcicount"] = evse.getFaultCountGFCI();
   doc["nogndcount"] = evse.getFaultCountNoGround();
   doc["stuckcount"] = evse.getFaultCountStuckRelay();
