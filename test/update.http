@@ -40,9 +40,15 @@ Content-Type: application/octet-stream
 curl -F firmware=@.pio/build/openevse_esp-wrover-kit/firmware.bin {{baseUrl}}/update
 
 ###
-
+# Get the latest published relese (not pre-release)
 # @name latest
 GET https://api.github.com/repos/OpenEVSE/ESP32_WiFi_V4.x/releases/latest
+Accept: application/vnd.github.v3+json
+
+###
+# Get the latest pre-release
+# @name latest
+GET https://api.github.com/repos/OpenEVSE/ESP32_WiFi_V4.x/releases/tags/latest
 Accept: application/vnd.github.v3+json
 
 ###
@@ -51,7 +57,7 @@ POST {{baseUrl}}/update
 Content-Type: application/javascript
 
 {
-  "url": "{{latest.response.body.assets[1].browser_download_url}}"
+  "url": "{{latest.response.body.assets[0].browser_download_url}}"
 }
 
 ###
