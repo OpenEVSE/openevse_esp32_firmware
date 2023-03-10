@@ -300,6 +300,8 @@ void config_changed(String name)
   } else if(name.startsWith("limit_default_")) {
     LimitProperties limitprops;
     LimitType limitType;
+    DBUGVAR(limit_default_type);
+    DBUGVAR((int)limit_default_value);
     limitType.fromString(limit_default_type.c_str());
     limitprops.setType(limitType);
     limitprops.setValue(limit_default_value);
@@ -309,9 +311,13 @@ void config_changed(String name)
       config_set("limit_default_value", val);
       config_commit();
       limit.clear();
+      DBUGLN("No limit to set");
     }
-    else 
+    else if (limitprops.getValue())
       limit.set(limitprops);
+    DBUGLN("Limit set");
+    DBUGVAR(limitprops.getType().toString());
+    DBUGVAR(limitprops.getValue());
   }
 }
 

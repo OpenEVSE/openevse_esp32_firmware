@@ -159,14 +159,6 @@ void Limit::begin(EvseManager &evse) {
 	// todo get saved default limit
 	DBUGLN("Starting Limit task");
 	this -> _evse = &evse;
-	// retrieve default limit from config
-	LimitProperties limitprops;
-	LimitType limittype;
-    limittype.fromString(limit_default_type.c_str());
-    limitprops.setValue(limit_default_value);
-	// default limits have auto_release set to false
-    limitprops.setAutoRelease(false);
-    limit.set(limitprops);
 	MicroTask.startTask(this);
  	onSessionComplete(&_sessionCompleteListener);
 };
