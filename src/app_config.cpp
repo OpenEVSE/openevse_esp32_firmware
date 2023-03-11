@@ -365,10 +365,7 @@ void config_set(const char *name, double val) {
   user_config.set(name, val);
 }
 
-
-
-void
-config_save_sntp(bool sntp_enable, String tz)
+bool config_save_sntp(bool sntp_enable, String tz)
 {
   uint32_t newflags = flags & ~CONFIG_SERVICE_SNTP;
   if(sntp_enable) {
@@ -379,10 +376,10 @@ config_save_sntp(bool sntp_enable, String tz)
   user_config.set("flags", newflags);
   user_config.commit();
 
-  config_set_timezone(tz);
+  return config_set_timezone(tz);
 }
 
-void config_set_timezone(String tz)
+bool config_set_timezone(String tz)
 {
   const char *set_tz = tz.c_str();
   const char *split_pos = strchr(set_tz, '|');
@@ -390,8 +387,26 @@ void config_set_timezone(String tz)
     set_tz = split_pos + 1;
   }
 
+  DBUGVAR(set_tz);
+
   setenv("TZ", set_tz, 1);
   tzset();
+
+  DBUGVAR(tzname[0]);
+  DBUGVAR(tzname[1]);
+
+  if(set_tz[0] == '<') {
+    set_tz++;
+  }
+
+  if(strncmp(set_tz, tzname[0], strlen(tzname[0])) != 0) {
+    DBUGF("Timezone not set");
+    return false;
+  }
+
+  DBUGLN("Timezone set");
+
+  return true;
 }
 
 void

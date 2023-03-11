@@ -199,14 +199,14 @@ extern void config_load_v1_settings();
 // -------------------------------------------------------------------
 // Save the SNTP settings
 // -------------------------------------------------------------------
-extern void config_save_sntp(bool enable, String tz);
+extern bool config_save_sntp(bool enable, String tz);
 
 // -------------------------------------------------------------------
 // Reset the config back to defaults
 // -------------------------------------------------------------------
 extern void config_reset();
 
-void config_set_timezone(String tz);
+bool config_set_timezone(String tz);
 
 void config_set(const char *name, uint32_t val);
 void config_set(const char *name, String val);

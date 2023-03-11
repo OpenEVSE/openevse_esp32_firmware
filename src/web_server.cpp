@@ -381,8 +381,10 @@ handleCurrentShaper(MongooseHttpServerRequest *request) {
 // Manually set the time
 // url: /settime
 // -------------------------------------------------------------------
-void
-handleSetTime(MongooseHttpServerRequest *request) {
+void handleSetTime(MongooseHttpServerRequest *request)
+{
+  bool success = false;
+
   MongooseHttpServerResponseStream *response;
   if(false == requestPreProcess(request, response, CONTENT_TYPE_TEXT)) {
     return;
@@ -392,7 +394,13 @@ handleSetTime(MongooseHttpServerRequest *request) {
   if(qsntp_enable)
   {
     String qtz = request->getParam("tz");
-    config_save_sntp(true, qtz);
+    if(false == config_save_sntp(true, qtz))
+    {
+      response->setCode(400);
+      response->print("could not save sntp config");
+      request->send(response);
+      return;
+    }
     time_check_now();
   }
   else
@@ -416,7 +424,6 @@ handleSetTime(MongooseHttpServerRequest *request) {
       set_time.tv_sec = mktime(&tm);
 
       time_set_time(set_time, "manual");
-
     }
     else
     {
