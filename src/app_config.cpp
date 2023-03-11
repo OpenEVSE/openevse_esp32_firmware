@@ -136,7 +136,7 @@ ConfigOpt *opts[] =
   new ConfigOptDefenition<String>(sntp_hostname, SNTP_DEFAULT_HOST, "sntp_hostname", "sh"),
 
 // Time
-  new ConfigOptDefenition<String>(time_zone, "", "time_zone", "tz"),
+  new ConfigOptDefenition<String>(time_zone, DEFAULT_TIME_ZONE, "time_zone", "tz"),
 
 // Limit
   new ConfigOptDefenition<String>(limit_default_type, {}, "limit_default_type", "ldt"),
@@ -387,7 +387,7 @@ void config_set_timezone(String tz)
   const char *set_tz = tz.c_str();
   const char *split_pos = strchr(set_tz, '|');
   if(split_pos) {
-    set_tz = split_pos;
+    set_tz = split_pos + 1;
   }
 
   setenv("TZ", set_tz, 1);
