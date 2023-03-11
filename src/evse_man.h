@@ -310,6 +310,9 @@ class EvseManager : public MicroTasks::Task
     double getVoltage() {
       return _monitor.getVoltage();
     }
+    double getPower() {
+      return _monitor.getPower();
+    }
     void setVoltage(double volts) {
       _monitor.setVoltage(volts);
     }
@@ -321,6 +324,30 @@ class EvseManager : public MicroTasks::Task
     }
     double getTotalEnergy() {
       return _monitor.getTotalEnergy();
+    }
+    double getTotalDay() {
+      return _monitor.getTotalDay();
+    }
+    double getTotalWeek() {
+      return _monitor.getTotalWeek();
+    }
+    double getTotalMonth() {
+      return _monitor.getTotalMonth();
+    }
+    double getTotalYear() {
+      return _monitor.getTotalYear();
+    }
+    bool saveEnergyMeter() {
+      return _monitor.saveEnergyMeter();
+    }
+    bool resetEnergyMeter(bool full, bool import) {
+      return _monitor.resetEnergyMeter(full, import);
+    }
+    bool publishEnergyMeter() {
+      return _monitor.publishEnergyMeter();
+    }
+		void createEnergyMeterJsonDoc(JsonDocument &doc) {
+      _monitor.createEnergyMeterJsonDoc(doc);
     }
     long getFaultCountGFCI() {
       return _monitor.getFaultCountGFCI();

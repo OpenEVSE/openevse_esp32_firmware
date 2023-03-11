@@ -155,9 +155,7 @@ void ArduinoOcppTask::loadEvseBehavior() {
     
     addMeterValueInput([this] () {
             float activeImport = 0.f;
-            activeImport += (float) evse->getTotalEnergy();
-            activeImport += (float) evse->getSessionEnergy();
-            return (int32_t) activeImport;
+            return (int32_t) evse->getTotalEnergy();
         }, 
         "Energy.Active.Import.Register",
         "Wh");

@@ -289,6 +289,7 @@ class SystemRestart : public MicroTasks::Alarm
     void Trigger()
     {
       DBUGLN("Restarting...");
+      evse.saveEnergyMeter();
       net.wifiStop();
       ESPAL.reset();
     }
