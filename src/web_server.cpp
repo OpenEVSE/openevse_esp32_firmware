@@ -230,7 +230,7 @@ void buildStatus(DynamicJsonDocument &doc) {
 
   create_rapi_json(doc);
   evse.createEnergyMeterJsonDoc(doc);
-  
+
   doc["gfcicount"] = evse.getFaultCountGFCI();
   doc["nogndcount"] = evse.getFaultCountNoGround();
   doc["stuckcount"] = evse.getFaultCountStuckRelay();
@@ -277,6 +277,11 @@ void buildStatus(DynamicJsonDocument &doc) {
       doc["time_to_full_charge"] = evse.getVehicleEta();
     }
   }
+  // Deprecated properties, will be removed soon
+  doc["elapsed"] = evse.getSessionElapsed();
+  doc["wattsec"] = evse.getSessionEnergy() * SESSION_ENERGY_SCALE_FACTOR;
+  doc["watthour"] = evse.getTotalEnergy() * TOTAL_ENERGY_SCALE_FACTOR;
+
   DBUGF("/status ArduinoJson size: %dbytes", doc.size());
 }
 
