@@ -497,9 +497,12 @@ EnergyMeterDate EnergyMeter::getCurrentDate()
 
 void EnergyMeter::increment_switch_counter()
 {
-  if (_switch_state && _switch_state != _monitor->isActive())
+  if (_switch_state != _monitor->isActive())
   {
     _data.switches++;
+    DynamicJsonDocument doc(JSON_OBJECT_SIZE(1)+16);
+    doc["total_switches"] = _data.switches;
+    event_send(doc);
   }
   _switch_state = _monitor->isActive();
 };
