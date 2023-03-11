@@ -43,6 +43,8 @@ void TimeManager::setHost(const char *host)
 
 void TimeManager::setup()
 {
+  config_set_timezone(time_zone);
+
   _sntp.onError([this](uint8_t err) {
     DBUGF("Got error %u", err);
     _fetchingTime = false;
@@ -53,6 +55,7 @@ void TimeManager::setup()
 
 unsigned long TimeManager::loop(MicroTasks::WakeReason reason)
 {
+#ifdef ENABLE_DEBUG
   DBUG("Time manager woke: ");
   DBUGLN(WakeReason_Scheduled == reason ? "WakeReason_Scheduled" :
          WakeReason_Event == reason ? "WakeReason_Event" :
@@ -60,21 +63,57 @@ unsigned long TimeManager::loop(MicroTasks::WakeReason reason)
          WakeReason_Manual == reason ? "WakeReason_Manual" :
          "UNKNOWN");
 
-  timeval utc_time;
-  gettimeofday(&utc_time, NULL);
-  tm local_time, gm_time;
-  localtime_r(&utc_time.tv_sec, &local_time);
-  gmtime_r(&utc_time.tv_sec, &gm_time);
-  DBUGF("Time now, Local: %s, UTC: %s, %s",
-    time_format_time(local_time).c_str(),
-    time_format_time(gm_time).c_str(),
-    getenv("TZ"));
+  if(!_setTheTime)
+  {
+    timeval utc_time;
+    gettimeofday(&utc_time, NULL);
+    tm local_time, gm_time;
+    localtime_r(&utc_time.tv_sec, &local_time);
+    gmtime_r(&utc_time.tv_sec, &gm_time);
+    const char *tz = getenv("TZ");
+    DBUGF("Time now, Local: %s, UTC: %s, %s",
+      time_format_time(local_time).c_str(),
+      time_format_time(gm_time).c_str(),
+      tz ? tz : "TZ not set");
+  }
 
-  DBUGVAR(_nextCheckTime);
-  DBUGVAR(_setTheTime);
+#endif
 
   unsigned long ret = MicroTask.Infinate;
 
+  DBUGVAR(_setTheTime);
+  if(_setTheTime)
+  {
+    struct timeval utc_time;
+    gettimeofday(&utc_time, NULL);
+
+    DBUGVAR(utc_time.tv_usec);
+    if(utc_time.tv_usec >= 999000)
+    {
+      _setTheTime = false;
+
+      tm local_time, gm_time;
+      localtime_r(&utc_time.tv_sec, &local_time);
+      gmtime_r(&utc_time.tv_sec, &gm_time);
+      DBUGF("Setting the time on the EVSE, Local: %s, UTC, %s",
+        time_format_time(local_time).c_str(),
+        time_format_time(gm_time).c_str());
+      OpenEVSE.setTime(gm_time, [this](int ret)
+      {
+        DBUGF("EVSE time %sset", RAPI_RESPONSE_OK == ret ? "" : "not ");
+      });
+    }
+    else
+    {
+      unsigned long msec = utc_time.tv_usec / 1000;
+      DBUGVAR(msec);
+      unsigned long delay = msec < 998 ? 998 - msec : 0;
+      DBUGVAR(delay);
+      return delay;
+    }
+  }
+
+  DBUGVAR(_nextCheckTime);
   if(config_sntp_enabled() &&
     NULL != _timeHost &&
     _nextCheckTime > 0)
@@ -99,38 +138,6 @@ unsigned long TimeManager::loop(MicroTasks::WakeReason reason)
       });
     } else {
       ret = delay > 0 ? (unsigned long)delay : 0;
-    }
-  }
-
-  if(_setTheTime)
-  {
-    struct timeval utc_time;
-    gettimeofday(&utc_time, NULL);
-
-    if(utc_time.tv_usec >= 999000)
-    {
-      _setTheTime = false;
-
-      tm local_time, gm_time;
-      localtime_r(&utc_time.tv_sec, &local_time);
-      gmtime_r(&utc_time.tv_sec, &gm_time);
-      DBUGF("Setting the time on the EVSE, Local: %s, UTC, %s",
-        time_format_time(local_time).c_str(),
-        time_format_time(gm_time).c_str());
-      OpenEVSE.setTime(gm_time, [this](int ret)
-      {
-        DBUGF("EVSE time %sset", RAPI_RESPONSE_OK == ret ? "" : "not ");
-      });
-    }
-    else
-    {
-      unsigned long msec = utc_time.tv_usec / 1000;
-      DBUGVAR(msec);
-      unsigned long delay = msec < 998 ? 998 - msec : 0;
-      DBUGVAR(delay);
-      if(delay < ret) {
-        ret = delay;
-      }
     }
   }
 
