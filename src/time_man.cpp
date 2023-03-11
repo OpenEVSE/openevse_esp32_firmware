@@ -60,9 +60,15 @@ unsigned long TimeManager::loop(MicroTasks::WakeReason reason)
          WakeReason_Manual == reason ? "WakeReason_Manual" :
          "UNKNOWN");
 
-  timeval local_time;
-  gettimeofday(&local_time, NULL);
-  DBUGF("Local time: %s", time_format_time(local_time.tv_sec).c_str());
+  timeval utc_time;
+  gettimeofday(&utc_time, NULL);
+  tm local_time, gm_time;
+  localtime_r(&utc_time.tv_sec, &local_time);
+  gmtime_r(&utc_time.tv_sec, &gm_time);
+  DBUGF("Time now, Local: %s, UTC: %s, %s",
+    time_format_time(local_time).c_str(),
+    time_format_time(gm_time).c_str(),
+    getenv("TZ"));
 
   DBUGVAR(_nextCheckTime);
   DBUGVAR(_setTheTime);
