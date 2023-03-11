@@ -75,7 +75,7 @@ unsigned long TimeManager::loop(MicroTasks::WakeReason reason)
   {
     int64_t delay = (int64_t)_nextCheckTime - (int64_t)millis();
 
-    if(net_is_connected() &&
+    if(net.isConnected() &&
       false == _fetchingTime &&
       delay <= 0)
     {

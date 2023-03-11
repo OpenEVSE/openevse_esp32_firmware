@@ -186,10 +186,10 @@ void input_setup()
     {
       case OPENEVSE_WIFI_MODE_AP:
       case OPENEVSE_WIFI_MODE_AP_DEFAULT:
-        net_wifi_turn_on_ap();
+        net.wifiTurnOnAp();
         break;
       case OPENEVSE_WIFI_MODE_CLIENT:
-        net_wifi_turn_off_ap();
+        net.wifiTurnOffAp();
         break;
     }
   });

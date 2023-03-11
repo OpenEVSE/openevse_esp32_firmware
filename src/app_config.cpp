@@ -1,6 +1,7 @@
 #include "emonesp.h"
 #include "espal.h"
 #include "divert.h"
+#include "net_manager.h"
 #include "mqtt.h"
 #include "ocpp.h"
 #include "tesla_client.h"
@@ -8,6 +9,7 @@
 #include "input.h"
 #include "LedManagerTask.h"
 #include "current_shaper.h"
+#include "limit.h"
 
 #include "app_config.h"
 #include "app_config_mqtt.h"
@@ -40,6 +42,10 @@ String www_password;
 // Advanced settings
 String esp_hostname;
 String sntp_hostname;
+
+// LIMIT Settings
+String limit_default_type;
+uint32_t limit_default_value;
 
 // EMONCMS SERVER strings
 String emoncms_server;
@@ -131,6 +137,10 @@ ConfigOpt *opts[] =
 
 // Time
   new ConfigOptDefenition<String>(time_zone, "", "time_zone", "tz"),
+
+// Limit
+  new ConfigOptDefenition<String>(limit_default_type, {}, "limit_default_type", "ldt"),
+  new ConfigOptDefenition<uint32_t>(limit_default_value, {}, "limit_default_value", "ldv"),
 
 // EMONCMS SERVER strings
   new ConfigOptDefenition<String>(emoncms_server, "https://data.openevse.com/emoncms", "emoncms_server", "es"),
@@ -287,6 +297,21 @@ void config_changed(String name)
   } else if(name == "led_brightness") {
     ledManager.setBrightness(led_brightness);
 #endif
+  } else if(name.startsWith("limit_default_")) {
+    LimitProperties limitprops;
+    LimitType limitType;
+    limitType.fromString(limit_default_type.c_str());
+    limitprops.setType(limitType);
+    limitprops.setValue(limit_default_value);
+    limitprops.setAutoRelease(false);
+    if (limitType == LimitType::None) {
+      uint32_t val = 0;
+      config_set("limit_default_value", val);
+      config_commit();
+      limit.clear();
+    }
+    else 
+      limit.set(limitprops);
   }
 }
 
@@ -334,55 +359,7 @@ void config_set(const char *name, double val) {
   user_config.set(name, val);
 }
 
-void config_save_emoncms(bool enable, String server, String node, String apikey,
-                    String fingerprint)
-{
-  uint32_t newflags = flags & ~CONFIG_SERVICE_EMONCMS;
-  if(enable) {
-    newflags |= CONFIG_SERVICE_EMONCMS;
-  }
 
-  user_config.set("emoncms_server", server);
-  user_config.set("emoncms_node", node);
-  user_config.set("emoncms_apikey", apikey);
-  user_config.set("emoncms_fingerprint", fingerprint);
-  user_config.set("flags", newflags);
-  user_config.commit();
-}
-
-void
-config_save_mqtt(bool enable, int protocol, String server, uint16_t port, String topic, bool retained, String user, String pass, String solar, String grid_ie, String live_pwr, bool reject_unauthorized)
-{
-  uint32_t newflags = flags & ~(CONFIG_SERVICE_MQTT | CONFIG_MQTT_PROTOCOL | CONFIG_MQTT_ALLOW_ANY_CERT | CONFIG_MQTT_RETAINED);
-  if(enable) {
-    newflags |= CONFIG_SERVICE_MQTT;
-  }
-  if(!reject_unauthorized) {
-    newflags |= CONFIG_MQTT_ALLOW_ANY_CERT;
-  }
-  if (retained) {
-  newflags |= CONFIG_MQTT_RETAINED;
-  }
-  newflags |= protocol << 4;
-
-  user_config.set("mqtt_server", server);
-  user_config.set("mqtt_port", port);
-  user_config.set("mqtt_topic", topic);
-  user_config.set("mqtt_user", user);
-  user_config.set("mqtt_pass", pass);
-  user_config.set("mqtt_solar", solar);
-  user_config.set("mqtt_grid_ie", grid_ie);
-  user_config.set("mqtt_live_pwr", live_pwr);
-  user_config.set("flags", newflags);
-  user_config.commit();
-}
-
-void
-config_save_admin(String user, String pass) {
-  user_config.set("www_username", user);
-  user_config.set("www_password", pass);
-  user_config.commit();
-}
 
 void
 config_save_sntp(bool sntp_enable, String tz)
@@ -412,53 +389,11 @@ void config_set_timezone(String tz)
 }
 
 void
-config_save_advanced(String hostname, String sntp_host) {
-  user_config.set("hostname", hostname);
-  user_config.set("sntp_hostname", sntp_host);
-  user_config.commit();
-}
-
-void
-config_save_wifi(String qsid, String qpass)
-{
-  user_config.set("ssid", qsid);
-  user_config.set("pass", qpass);
-  user_config.commit();
-}
-
-void
-config_save_ohm(bool enable, String qohm)
-{
-  uint32_t newflags = flags & ~CONFIG_SERVICE_OHM;
-  if(enable) {
-    newflags |= CONFIG_SERVICE_OHM;
-  }
-
-  user_config.set("ohm", qohm);
-  user_config.set("flags", newflags);
-  user_config.commit();
-}
-
-void
-config_save_rfid(bool enable, String storage){
-  uint32_t newflags = flags & ~CONFIG_RFID;
-  if(enable) {
-    newflags |= CONFIG_RFID;
-  }
-  user_config.set("flags", newflags);
-  user_config.set("rfid_storage", rfid_storage);
-  user_config.commit();
-}
-
-void
-config_save_flags(uint32_t newFlags) {
-  user_config.set("flags", newFlags);
-  user_config.commit();
-}
-
-void
 config_reset() {
   ResetEEPROM();
   LittleFS.format();
   config_load_settings();
 }
+
+
+

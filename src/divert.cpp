@@ -160,6 +160,9 @@ void DivertTask::update_state()
   if (_mode == DivertMode::Eco)
   {
     double voltage = _evse->getVoltage();
+    if (config_threephase_enabled()) {
+      voltage = voltage * 3;
+    }
 
     // Calculate current
     if (mqtt_grid_ie != "")

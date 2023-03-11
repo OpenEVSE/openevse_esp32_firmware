@@ -1,0 +1,15 @@
+title: EVSE limit
+allOf:
+  - type: object
+    properties:
+      type:
+        type: string
+        description: 'Limit type: time (minutes), energy (watts/h), soc (%), range (km or miles)'
+      value:
+        type: integer
+        description: 'The limit value'
+      auto_release:
+        type: boolean
+        description: 'Release current limit when car is disconnected. (default: true)'
+x-tags:
+  - Limit

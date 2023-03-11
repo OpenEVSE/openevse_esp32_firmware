@@ -16,6 +16,8 @@
 
 uint32_t Scheduler::Event::_next_id = 1;
 
+Scheduler::EventInstance nullEventInstance;
+
 const char * days_of_the_week_strings[] = {
   "sunday",
   "monday",
@@ -422,14 +424,23 @@ Scheduler::EventInstance &Scheduler::getCurrentEvent()
 
 Scheduler::EventInstance &Scheduler::getNextEvent(EvseState type)
 {
+  DBUGVAR(type);
   EventInstance *event = &_activeEvent; // Assume active event is correct
   if(event->isValid())
   {
     event = &event->getNext();
     if(EvseState::None != type)
     {
-      while(event->getState() != type) {
+      EventInstance *startEvent = event;
+
+      while(event->getState() != type)
+      {
         event = &event->getNext();
+        DBUGVAR((uint32_t)event, HEX);
+        DBUGVAR((uint32_t)startEvent, HEX);
+        if(startEvent == event) {
+          return nullEventInstance;
+        }
       }
     }
   }
