@@ -222,14 +222,19 @@ void TimeManager::serialise(JsonDocument &doc)
   // get the current time
   char time[64];
   char offset[8];
+  char local_time[64];
 
-  struct timeval local_time;
-  gettimeofday(&local_time, NULL);
+  struct timeval time_now;
+  gettimeofday(&time_now, NULL);
 
-  struct tm * timeinfo = gmtime(&local_time.tv_sec);
-  strftime(time, sizeof(time), "%FT%TZ", timeinfo);
-  strftime(offset, sizeof(offset), "%z", timeinfo);
+  struct tm timeinfo;
+  gmtime_r(&time_now.tv_sec, &timeinfo);
+  strftime(time, sizeof(time), "%FT%TZ", &timeinfo);
+  localtime_r(&time_now.tv_sec, &timeinfo);
+  strftime(local_time, sizeof(local_time), "%FT%T%z", &timeinfo);
+  strftime(offset, sizeof(offset), "%z", &timeinfo);
 
   doc["time"] = time;
+  doc["local_time"] = local_time;
   doc["offset"] = offset;
 }
