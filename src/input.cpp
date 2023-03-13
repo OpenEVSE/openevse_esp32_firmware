@@ -145,16 +145,8 @@ void create_rapi_json(JsonDocument &doc)
   doc["freeram"] = ESPAL.getFreeHeap();
   doc["divertmode"] = (uint8_t)divert.getMode();
   doc["srssi"] = WiFi.RSSI();
-  // get the current time
-  char time[64];
-  char offset[8];
-  struct timeval local_time;
-  gettimeofday(&local_time, NULL);
-  struct tm * timeinfo = gmtime(&local_time.tv_sec);
-  strftime(time, sizeof(time), "%FT%TZ", timeinfo);
-  strftime(offset, sizeof(offset), "%z", timeinfo);
-  doc["time"] = time;
-  doc["offset"] = offset;
+
+  timeManager.serialise(doc);
 }
 
 void

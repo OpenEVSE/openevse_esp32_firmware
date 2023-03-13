@@ -4,6 +4,7 @@
 #include <MongooseSntpClient.h>
 #include <MicroTasks.h>
 #include <MicroTasksTask.h>
+#include <ArduinoJson.h>
 
 class TimeManager : public MicroTasks::Task
 {
@@ -45,6 +46,8 @@ class TimeManager : public MicroTasks::Task
     void onTimeChange(MicroTasks::EventListener *listner) {
       _timeChange.Register(listner);
     }
+
+    void serialise(JsonDocument &doc);
 };
 
 extern TimeManager timeManager;

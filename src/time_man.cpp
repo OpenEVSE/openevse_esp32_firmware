@@ -179,23 +179,9 @@ void TimeManager::setTime(struct timeval setTime, const char *source)
   });
 
   // Event the time change
-  struct timeval esp_time;
-  gettimeofday(&esp_time, NULL);
-
-  struct tm timeinfo;
-  localtime_r(&esp_time.tv_sec, &timeinfo);
-
-  char time[64];
-  char offset[8];
-  strftime(time, sizeof(time), "%FT%TZ", &timeinfo);
-  strftime(offset, sizeof(offset), "%z", &timeinfo);
-
-  String event = F("{\"time\":\"");
-  event += time;
-  event += F("\",\"offset\":\"");
-  event += offset;
-  event += F("\"}");
-  event_send(event);
+  StaticJsonDocument<64> doc;
+  serialise(doc);
+  event_send(doc);
 
   _timeChange.Trigger();
 }
@@ -229,4 +215,21 @@ String time_format_time(tm &time)
   char output[80];
   strftime(output, 80, "%d-%b-%y, %H:%M:%S", &time);
   return String(output);
+}
+
+void TimeManager::serialise(JsonDocument &doc)
+{
+  // get the current time
+  char time[64];
+  char offset[8];
+
+  struct timeval local_time;
+  gettimeofday(&local_time, NULL);
+
+  struct tm * timeinfo = gmtime(&local_time.tv_sec);
+  strftime(time, sizeof(time), "%FT%TZ", timeinfo);
+  strftime(offset, sizeof(offset), "%z", timeinfo);
+
+  doc["time"] = time;
+  doc["offset"] = offset;
 }
