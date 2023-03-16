@@ -118,12 +118,12 @@ void EnergyMeterData::deserialize(StaticJsonDocument<capacity> &doc)
     }
     if (doc.containsKey("el") && doc["el"].is<uint32_t>())
     {
-        // old OpenEvse total_energy imported flag
+        // elapsed
         elapsed = doc["el"];
     }
     if (doc.containsKey("sw") && doc["sw"].is<uint32_t>())
     {
-        // old OpenEvse total_energy imported flag
+        // switches
         switches = doc["sw"];
     }
 };
@@ -165,6 +165,8 @@ void EnergyMeter::begin(EvseMonitor *monitor)
             else
             {
                 _data.elapsed = 0;
+                _elapsed = 0;
+                _data.session = 0;
                 save();
             }
         }
