@@ -632,22 +632,22 @@ paths:
               type: object
               properties:
                 hard:
-                  type: int
+                  type: integer
                   description: 0|1 Enable hard reset ( reset total_counter & total_switches)
                 import:
-                  type: int
+                  type: integer
                   description: 0|1 Import OpenEvse module total kwh.
       responses:
         '200':
           description: Reset counter ok
           content:
               application/json:
-              schema:
-                type: object
-                properties:
-                  msg:
-                    type: string
-                    description: Reset done
+                schema:
+                  type: object
+                  properties:
+                    msg:
+                      type: string
+                      description: Reset done
         '500':
           description: Failed to reset counter
           content:
@@ -859,3 +859,4 @@ tags:
   - name: Status
   - name: Tesla
   - name: Limit
+  - name: Energy Meter
