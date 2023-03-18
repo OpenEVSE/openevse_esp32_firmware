@@ -177,13 +177,14 @@ unsigned long TimeManager::loop(MicroTasks::WakeReason reason)
 void TimeManager::setTime(struct timeval setTime, const char *source)
 {
   timeval local_time;
+  timezone tz_utc = {0,0};
 
   // Set the local time
   gettimeofday(&local_time, NULL);
   DBUGF("Local time: %s", time_format_time(local_time.tv_sec).c_str());
   DBUGF("Time from %s: %s", source, time_format_time(setTime.tv_sec).c_str());
   DBUGF("Diff %.2f", diffTime(setTime, local_time));
-  settimeofday(&setTime, NULL);
+  settimeofday(&setTime, &tz_utc);
 
   // Set the time on the OpenEVSE, set from the local time as this could take several ms
   OpenEVSE.getTime([this](int ret, time_t evse_time)
@@ -239,10 +240,14 @@ void time_set_time(struct timeval setTime, const char *source) {
   timeManager.setTime(setTime, source);
 }
 
-String time_format_time(time_t time)
+String time_format_time(time_t time, bool local)
 {
   struct tm timeinfo;
-  localtime_r(&time, &timeinfo);
+  if(local) {
+    localtime_r(&time, &timeinfo);
+  } else {
+    gmtime_r(&time, &timeinfo);
+  }
   return time_format_time(timeinfo);
 }
 

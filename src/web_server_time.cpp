@@ -29,13 +29,10 @@ void handleTimePost(MongooseHttpServerRequest *request, MongooseHttpServerRespon
   {
     response->setContentType(CONTENT_TYPE_TEXT);
 
-    String time_zone = request->getParam("time_zone");
-    if(!time_zone.length())
-    {
-      time_zone = request->getParam("tz");
-      if(!time_zone.length()) {
-        time_zone = "UTC0";
-      }
+    time_zone = request->getParam("tz");
+    DBUGVAR(time_zone);
+    if(0 == time_zone.length()) {
+      time_zone = "UTC0";
     }
 
     sntp_enabled = isPositive(request, "ntp");
@@ -85,7 +82,10 @@ void handleTimePost(MongooseHttpServerRequest *request, MongooseHttpServerRespon
       tm.tm_sec = s;
 
       struct timeval set_time = {0,0};
+
+      timeManager.setTimeZone("UTC0"); // reset timezone to UTC so mktime() returns UTC time
       set_time.tv_sec = mktime(&tm);
+      timeManager.setTimeZone(time_zone);
 
       time_set_time(set_time, "manual");
     }
