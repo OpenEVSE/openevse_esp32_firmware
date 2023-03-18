@@ -17,7 +17,7 @@ extern bool web_server_config_deserialise(DynamicJsonDocument &doc, bool factory
 
 void handleTimePost(MongooseHttpServerRequest *request, MongooseHttpServerResponseStream *response)
 {
-  bool sntp_enable = false;
+  bool sntp_enabled = false;
   String time;
   String time_zone;
   bool is_json = false;
@@ -36,7 +36,7 @@ void handleTimePost(MongooseHttpServerRequest *request, MongooseHttpServerRespon
       }
     }
 
-    sntp_enable = isPositive(request, "ntp");
+    sntp_enabled = isPositive(request, "ntp");
     time = request->getParam("time");
   }
   else if(type.equalsIgnoreCase("application/json"))
@@ -49,30 +49,31 @@ void handleTimePost(MongooseHttpServerRequest *request, MongooseHttpServerRespon
     DeserializationError error = deserializeJson(doc, body.c_str(), body.length());
     if(!error)
     {
-      sntp_enable = doc["sntp_enable"];
+      sntp_enabled = doc["sntp_enabled"];
       time = doc["time"].as<String>();
       time_zone = doc["time_zone"].as<String>();
     } else {
       response->setCode(400);
       response->print("{\"msg\":\"Could not parse JSON\"}");
+      return;
     }
   }
 
-  DBUGF("sntp_enable: %d", sntp_enable);
+  DBUGF("sntp_enabled: %d", sntp_enabled);
   DBUGF("time: %s", time.c_str());
   DBUGF("time_zone: %s", time_zone.c_str());
 
   DynamicJsonDocument config(1024);
-  config["sntp_enable"] = sntp_enable;
+  config["sntp_enabled"] = sntp_enabled;
   config["time_zone"] = time_zone;
   web_server_config_deserialise(config, false);
 
-  if(false == sntp_enable)
+  if(false == sntp_enabled)
   {
     struct tm tm;
 
     int yr, mnth, d, h, m, s;
-    if(6 == sscanf( time.c_str(), "%4d-%2d-%2dT%2d:%2d:%2dZ", &yr, &mnth, &d, &h, &m, &s))
+    if(time.endsWith("Z") && 6 == sscanf( time.c_str(), "%4d-%2d-%2dT%2d:%2d:%2dZ", &yr, &mnth, &d, &h, &m, &s))
     {
       tm.tm_year = yr - 1900;
       tm.tm_mon = mnth - 1;
@@ -90,7 +91,6 @@ void handleTimePost(MongooseHttpServerRequest *request, MongooseHttpServerRespon
     {
       response->setCode(400);
       response->print(is_json ? "{\"msg\":\"Could not parse time\"}" : "could not parse time");
-      request->send(response);
       return;
     }
   }
