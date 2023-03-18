@@ -122,13 +122,9 @@ unsigned long TimeManager::loop(MicroTasks::WakeReason reason)
     {
       _setTheTime = false;
 
-      tm local_time, gm_time;
-      localtime_r(&utc_time.tv_sec, &local_time);
-      gmtime_r(&utc_time.tv_sec, &gm_time);
-      DBUGF("Setting the time on the EVSE, Local: %s, UTC, %s",
-        time_format_time(local_time).c_str(),
-        time_format_time(gm_time).c_str());
-      OpenEVSE.setTime(gm_time, [this](int ret)
+      DBUGF("Setting the time on the EVSE, %s",
+        time_format_time(utc_time.tv_sec).c_str());
+      OpenEVSE.setTime(utc_time.tv_sec, [this](int ret)
       {
         DBUGF("EVSE time %sset", RAPI_RESPONSE_OK == ret ? "" : "not ");
       });
