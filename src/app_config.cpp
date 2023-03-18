@@ -319,6 +319,8 @@ void config_changed(String name)
     DBUGLN("Limit set");
     DBUGVAR(limitprops.getType().toString());
     DBUGVAR(limitprops.getValue());
+  } else if(name == "sntp_enabled") {
+    timeManager.setSntpEnabled(config_sntp_enabled());
   }
 }
 
