@@ -22,7 +22,9 @@ void handleTimePost(MongooseHttpServerRequest *request, MongooseHttpServerRespon
   String time_zone;
   bool is_json = false;
 
-  MongooseString type = request->headers("Content-Type");
+  String typeHeader = request->headers("Content-Type").toString();
+  String type = typeHeader.substring(0, typeHeader.indexOf(';'));
+  type.trim();
   if(type.equalsIgnoreCase("application/x-www-form-urlencoded"))
   {
     response->setContentType(CONTENT_TYPE_TEXT);
