@@ -41,9 +41,39 @@ void TimeManager::setHost(const char *host)
   checkNow();
 }
 
+bool TimeManager::setTimeZone(String tz)
+{
+  const char *set_tz = tz.c_str();
+  const char *split_pos = strchr(set_tz, '|');
+  if(split_pos) {
+    set_tz = split_pos + 1;
+  }
+
+  DBUGVAR(set_tz);
+
+  setenv("TZ", set_tz, 1);
+  tzset();
+
+  DBUGVAR(tzname[0]);
+  DBUGVAR(tzname[1]);
+
+  if(set_tz[0] == '<') {
+    set_tz++;
+  }
+
+  if(strncmp(set_tz, tzname[0], strlen(tzname[0])) != 0) {
+    DBUGF("Timezone not set");
+    return false;
+  }
+
+  DBUGLN("Timezone set");
+
+  return true;
+}
+
 void TimeManager::setup()
 {
-  config_set_timezone(time_zone);
+  setTimeZone(time_zone);
 
   _sntp.onError([this](uint8_t err) {
     DBUGF("Got error %u", err);
@@ -114,7 +144,7 @@ unsigned long TimeManager::loop(MicroTasks::WakeReason reason)
   }
 
   DBUGVAR(_nextCheckTime);
-  if(config_sntp_enabled() &&
+  if(_sntpEnabled &&
     NULL != _timeHost &&
     _nextCheckTime > 0)
   {
@@ -179,7 +209,7 @@ void TimeManager::setTime(struct timeval setTime, const char *source)
   });
 
   // Event the time change
-  StaticJsonDocument<64> doc;
+  StaticJsonDocument<128> doc;
   serialise(doc);
   event_send(doc);
 
@@ -194,8 +224,15 @@ double TimeManager::diffTime(timeval tv1, timeval tv2)
     return t1-t2;
 }
 
-void time_check_now() {
-  timeManager.checkNow();
+void TimeManager::setSntpEnabled(bool enabled)
+{
+  if(enabled != _sntpEnabled)
+  {
+    _sntpEnabled = enabled;
+    if(enabled) {
+      checkNow();
+    }
+  }
 }
 
 void time_set_time(struct timeval setTime, const char *source) {

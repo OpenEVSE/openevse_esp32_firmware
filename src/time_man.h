@@ -14,6 +14,7 @@ class TimeManager : public MicroTasks::Task
     unsigned long _nextCheckTime;
     bool _fetchingTime;
     bool _setTheTime;
+    bool _sntpEnabled;
 
     class TimeChange : public MicroTasks::Event
     {
@@ -36,6 +37,12 @@ class TimeManager : public MicroTasks::Task
 
     void setHost(const char *host);
     void setTime(struct timeval setTime, const char *source);
+    bool setTimeZone(String tz);
+
+    bool isSntpEnabled() {
+      return _sntpEnabled;
+    }
+    void setSntpEnabled(bool enabled);
 
     void checkNow() {
       _nextCheckTime = millis();
@@ -52,7 +59,6 @@ class TimeManager : public MicroTasks::Task
 
 extern TimeManager timeManager;
 
-extern void time_check_now();
 extern void time_set_time(struct timeval set_time, const char *source);
 
 extern String time_format_time(time_t time);

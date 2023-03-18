@@ -76,6 +76,7 @@ size_t handleUpdateUpload(MongooseHttpServerRequest *request, int ev, MongooseSt
 void handleUpdateClose(MongooseHttpServerRequest *request);
 
 extern uint32_t config_version;
+extern bool web_server_config_deserialise(DynamicJsonDocument &doc, bool factory);
 
 void dumpRequest(MongooseHttpServerRequest *request)
 {
@@ -349,7 +350,8 @@ handleDivertMode(MongooseHttpServerRequest *request){
     return;
   }
 
-  divert.setMode((DivertMode)(request->getParam("divertmode").toInt()));
+  DivertMode divertmode = (DivertMode)(request->getParam("divertmode").toInt());
+  divert.setMode(divertmode);
 
   response->setCode(200);
   response->print("Divert Mode changed");
@@ -383,31 +385,61 @@ handleCurrentShaper(MongooseHttpServerRequest *request) {
 // -------------------------------------------------------------------
 void handleSetTime(MongooseHttpServerRequest *request)
 {
-  bool success = false;
-
   MongooseHttpServerResponseStream *response;
   if(false == requestPreProcess(request, response, CONTENT_TYPE_TEXT)) {
     return;
   }
 
-  bool qsntp_enable = isPositive(request, "ntp");
-  if(qsntp_enable)
-  {
-    String qtz = request->getParam("tz");
-    if(false == config_save_sntp(true, qtz))
-    {
-      response->setCode(400);
-      response->print("could not save sntp config");
-      request->send(response);
-      return;
-    }
-    time_check_now();
-  }
-  else
-  {
-    config_save_sntp(false, "UTC0");
-    String time = request->getParam("time");
+  bool sntp_enable = false;
+  String time;
+  String time_zone;
+  bool is_json = false;
 
+  MongooseString type = request->headers("Content-Type");
+  if(type.equalsIgnoreCase("application/x-www-form-urlencoded"))
+  {
+    String time_zone = request->getParam("time_zone");
+    if(!time_zone.length())
+    {
+      time_zone = request->getParam("tz");
+      if(!time_zone.length()) {
+        time_zone = "UTC0";
+      }
+    }
+
+    sntp_enable = isPositive(request, "ntp");
+    time = request->getParam("time");
+  }
+  else if(type.equalsIgnoreCase("application/json"))
+  {
+    is_json = true;
+    response->setContentType(CONTENT_TYPE_JSON);
+
+    DynamicJsonDocument doc(1024);
+    MongooseString body = request->body();
+    DeserializationError error = deserializeJson(doc, body.c_str(), body.length());
+    if(!error)
+    {
+      sntp_enable = doc["sntp_enable"];
+      time = doc["time"].as<String>();
+      time_zone = doc["time_zone"].as<String>();
+    } else {
+      response->setCode(400);
+      response->print("{\"msg\":\"Could not parse JSON\"}");
+    }
+  }
+
+  DBUGF("sntp_enable: %d", sntp_enable);
+  DBUGF("time: %s", time.c_str());
+  DBUGF("time_zone: %s", time_zone.c_str());
+
+  DynamicJsonDocument config(1024);
+  config["sntp_enable"] = sntp_enable;
+  config["time_zone"] = time_zone;
+  web_server_config_deserialise(config, false);
+
+  if(false == sntp_enable)
+  {
     struct tm tm;
 
     int yr, mnth, d, h, m, s;
@@ -428,14 +460,14 @@ void handleSetTime(MongooseHttpServerRequest *request)
     else
     {
       response->setCode(400);
-      response->print("could not parse time");
+      response->print(is_json ? "{\"msg\":\"Could not parse time\"}" : "could not parse time");
       request->send(response);
       return;
     }
   }
 
   response->setCode(200);
-  response->print("set");
+  response->print(is_json ? "{\"msg\":\"done\"}" : "set");
   request->send(response);
 }
 
@@ -493,7 +525,7 @@ void handleStatusPost(MongooseHttpServerRequest *request, MongooseHttpServerResp
     {
       double shaper_live_pwr = doc["shaper_live_pwr"];
       shaper.setLivePwr(shaper_live_pwr);
-      DBUGF("shaper: available power:%dW", shaper.getAvlPwr());
+      DBUGF("shaper: live power:%dW", shaper.getLivePwr());
     }
     if(doc.containsKey("solar")) {
       solar = doc["solar"];
@@ -777,7 +809,7 @@ void handleEmeterDelete(MongooseHttpServerRequest *request, MongooseHttpServerRe
         response->setCode(500);
         response->print("{\"msg\":\"Reset failed\"}");
       }
-      
+
     }
     else {
       response->setCode(500);
@@ -1129,7 +1161,7 @@ void onWsFrame(MongooseHttpWebSocketConnection *connection, int flags, uint8_t *
       {
         // answer pong
         connection->send("{\"pong\": 1}");
-        
+
       }
   }
 }

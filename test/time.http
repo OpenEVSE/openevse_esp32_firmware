@@ -34,6 +34,7 @@ POST {{baseUrl}}/settime HTTP/1.1
 Content-Type: application/x-www-form-urlencoded
 
 ntp=true&tz=<+06>-6
+
 ###
 
 POST {{baseUrl}}/settime HTTP/1.1
@@ -42,6 +43,7 @@ Content-Type: application/x-www-form-urlencoded
 ntp=true&tz=Europe/Paris|CET-1CEST,M3.5.0,M10.5.0/3
 
 ###
+# summer time
 
 POST {{baseUrl}}/settime HTTP/1.1
 Content-Type: application/x-www-form-urlencoded
@@ -49,11 +51,36 @@ Content-Type: application/x-www-form-urlencoded
 ntp=false&time=2018-08-10T14:30:00Z&tz=GMT0BST,M3.5.0/1,M10.5.0
 
 ###
+# summer time
 
 POST {{baseUrl}}/settime HTTP/1.1
 Content-Type: application/x-www-form-urlencoded
 
-time=2018-08-10T14:30:00Z&tz=GMT0BST,M3.5.0/1,M10.5.0
+time=2018-08-10T14:30:00Z&tz=Europe/London|GMT0BST,M3.5.0/1,M10.5.0
+
+###
+# summer time
+
+POST {{baseUrl}}/settime HTTP/1.1
+Content-Type: application/x-www-form-urlencoded
+
+ntp=false&time=2018-08-10T14:30:00Z&tz=Europe/Paris|CET-1CEST,M3.5.0,M10.5.0/3
+
+###
+# winter time
+
+POST {{baseUrl}}/settime HTTP/1.1
+Content-Type: application/x-www-form-urlencoded
+
+time=2018-12-10T14:30:00Z&tz=Europe/London|GMT0BST,M3.5.0/1,M10.5.0
+
+###
+# winter time
+
+POST {{baseUrl}}/settime HTTP/1.1
+Content-Type: application/x-www-form-urlencoded
+
+time=2018-12-10T14:30:00Z&tz=Europe/Paris|CET-1CEST,M3.5.0,M10.5.0/3
 
 ###
 # Invalid, should return error
@@ -64,3 +91,44 @@ Content-Type: application/x-www-form-urlencoded
 time=20180810T143000Z
 
 ###
+
+POST {{baseUrl}}/settime HTTP/1.1
+Content-Type: application/json
+
+{
+  "sntp_enabled": true,
+  "time_zone":"GMT0BST,M3.5.0/1,M10.5.0"
+}
+
+###
+
+POST {{baseUrl}}/settime HTTP/1.1
+Content-Type: application/json
+
+{
+  "sntp_enabled": false,
+  "time_zone":"GMT0BST,M3.5.0/1,M10.5.0",
+  "time":"2018-08-10T14:30:00Z"
+}
+
+###
+
+POST {{baseUrl}}/settime HTTP/1.1
+Content-Type: application/json
+
+{
+  "sntp_enabled": false,
+  "time_zone":"GMT0BST,M3.5.0/1,M10.5.0",
+  "time":"2018-08-10T14:30:00+01:00"
+}
+
+###
+
+POST {{baseUrl}}/settime HTTP/1.1
+Content-Type: application/json
+
+{
+  "sntp_enabled": false,
+  "time_zone":"GMT0BST,M3.5.0/1,M10.5.0",
+  "time":"2018-08-10T14:30:00+0100"
+}

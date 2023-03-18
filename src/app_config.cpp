@@ -264,7 +264,7 @@ void config_changed(String name)
   DBUGF("%s changed", name.c_str());
 
   if(name == "time_zone") {
-    config_set_timezone(time_zone);
+    timeManager.setTimeZone(time_zone);
   } else if(name == "flags") {
     divert.setMode((config_divert_enabled() && 1 == config_charge_mode()) ? DivertMode::Eco : DivertMode::Normal);
     if(mqtt_connected() != config_mqtt_enabled()) {
@@ -273,6 +273,7 @@ void config_changed(String name)
     if(emoncms_connected != config_emoncms_enabled()) {
       emoncms_updated = true;
     }
+    timeManager.setSntpEnabled(config_sntp_enabled());
     ArduinoOcppTask::notifyConfigChanged();
     evse.setSleepForDisable(!config_pause_uses_disabled());
   } else if(name.startsWith("mqtt_")) {
@@ -365,52 +366,8 @@ void config_set(const char *name, double val) {
   user_config.set(name, val);
 }
 
-bool config_save_sntp(bool sntp_enable, String tz)
+void config_reset()
 {
-  uint32_t newflags = flags & ~CONFIG_SERVICE_SNTP;
-  if(sntp_enable) {
-    newflags |= CONFIG_SERVICE_SNTP;
-  }
-
-  user_config.set("time_zone", tz);
-  user_config.set("flags", newflags);
-  user_config.commit();
-
-  return config_set_timezone(tz);
-}
-
-bool config_set_timezone(String tz)
-{
-  const char *set_tz = tz.c_str();
-  const char *split_pos = strchr(set_tz, '|');
-  if(split_pos) {
-    set_tz = split_pos + 1;
-  }
-
-  DBUGVAR(set_tz);
-
-  setenv("TZ", set_tz, 1);
-  tzset();
-
-  DBUGVAR(tzname[0]);
-  DBUGVAR(tzname[1]);
-
-  if(set_tz[0] == '<') {
-    set_tz++;
-  }
-
-  if(strncmp(set_tz, tzname[0], strlen(tzname[0])) != 0) {
-    DBUGF("Timezone not set");
-    return false;
-  }
-
-  DBUGLN("Timezone set");
-
-  return true;
-}
-
-void
-config_reset() {
   ResetEEPROM();
   LittleFS.format();
   config_load_settings();
