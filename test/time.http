@@ -113,7 +113,11 @@ Content-Type: application/json
 
 ###
 
-POST {{baseUrl}}/settime HTTP/1.1
+GET {{baseUrl}}/time HTTP/1.1
+
+###
+
+POST {{baseUrl}}/time HTTP/1.1
 Content-Type: application/json
 
 {
@@ -124,7 +128,7 @@ Content-Type: application/json
 
 ###
 
-POST {{baseUrl}}/settime HTTP/1.1
+POST {{baseUrl}}/time HTTP/1.1
 Content-Type: application/json
 
 {

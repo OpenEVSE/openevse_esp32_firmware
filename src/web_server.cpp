@@ -75,8 +75,10 @@ void handleUpdateRequest(MongooseHttpServerRequest *request);
 size_t handleUpdateUpload(MongooseHttpServerRequest *request, int ev, MongooseString filename, uint64_t index, uint8_t *data, size_t len);
 void handleUpdateClose(MongooseHttpServerRequest *request);
 
+void handleTime(MongooseHttpServerRequest *request);
+void handleTimePost(MongooseHttpServerRequest *request, MongooseHttpServerResponseStream *response);
+
 extern uint32_t config_version;
-extern bool web_server_config_deserialise(DynamicJsonDocument &doc, bool factory);
 
 void dumpRequest(MongooseHttpServerRequest *request)
 {
@@ -390,84 +392,8 @@ void handleSetTime(MongooseHttpServerRequest *request)
     return;
   }
 
-  bool sntp_enable = false;
-  String time;
-  String time_zone;
-  bool is_json = false;
+  handleTimePost(request, response);
 
-  MongooseString type = request->headers("Content-Type");
-  if(type.equalsIgnoreCase("application/x-www-form-urlencoded"))
-  {
-    String time_zone = request->getParam("time_zone");
-    if(!time_zone.length())
-    {
-      time_zone = request->getParam("tz");
-      if(!time_zone.length()) {
-        time_zone = "UTC0";
-      }
-    }
-
-    sntp_enable = isPositive(request, "ntp");
-    time = request->getParam("time");
-  }
-  else if(type.equalsIgnoreCase("application/json"))
-  {
-    is_json = true;
-    response->setContentType(CONTENT_TYPE_JSON);
-
-    DynamicJsonDocument doc(1024);
-    MongooseString body = request->body();
-    DeserializationError error = deserializeJson(doc, body.c_str(), body.length());
-    if(!error)
-    {
-      sntp_enable = doc["sntp_enable"];
-      time = doc["time"].as<String>();
-      time_zone = doc["time_zone"].as<String>();
-    } else {
-      response->setCode(400);
-      response->print("{\"msg\":\"Could not parse JSON\"}");
-    }
-  }
-
-  DBUGF("sntp_enable: %d", sntp_enable);
-  DBUGF("time: %s", time.c_str());
-  DBUGF("time_zone: %s", time_zone.c_str());
-
-  DynamicJsonDocument config(1024);
-  config["sntp_enable"] = sntp_enable;
-  config["time_zone"] = time_zone;
-  web_server_config_deserialise(config, false);
-
-  if(false == sntp_enable)
-  {
-    struct tm tm;
-
-    int yr, mnth, d, h, m, s;
-    if(6 == sscanf( time.c_str(), "%4d-%2d-%2dT%2d:%2d:%2dZ", &yr, &mnth, &d, &h, &m, &s))
-    {
-      tm.tm_year = yr - 1900;
-      tm.tm_mon = mnth - 1;
-      tm.tm_mday = d;
-      tm.tm_hour = h;
-      tm.tm_min = m;
-      tm.tm_sec = s;
-
-      struct timeval set_time = {0,0};
-      set_time.tv_sec = mktime(&tm);
-
-      time_set_time(set_time, "manual");
-    }
-    else
-    {
-      response->setCode(400);
-      response->print(is_json ? "{\"msg\":\"Could not parse time\"}" : "could not parse time");
-      request->send(response);
-      return;
-    }
-  }
-
-  response->setCode(200);
-  response->print(is_json ? "{\"msg\":\"done\"}" : "set");
   request->send(response);
 }
 
@@ -1226,6 +1152,7 @@ web_server_setup() {
 
   server.on("/limit", handleLimit);
   server.on("/emeter", handleEmeter);
+  server.on("/time", handleTime);
 
   // Simple Firmware Update Form
   server.on("/update$")->
