@@ -307,9 +307,6 @@ void config_changed(String name)
     limitprops.setValue(limit_default_value);
     limitprops.setAutoRelease(false);
     if (limitType == LimitType::None) {
-      uint32_t val = 0;
-      config_set("limit_default_value", val);
-      config_commit();
       limit.clear();
       DBUGLN("No limit to set");
     }
