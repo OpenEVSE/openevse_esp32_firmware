@@ -127,7 +127,6 @@ EvseManager::EvseManager(Stream &port, EventLog &eventLog) :
   _sleepForDisable(true),
   _evaluateClaims(true),
   _evaluateTargetState(false),
-  _waitingForEvent(0),
   _vehicleValid(0),
   _vehicleUpdated(0),
   _vehicleLastUpdated(0),
@@ -246,7 +245,6 @@ bool EvseManager::setTargetState(EvseProperties &target)
   EvseState state = target.getState();
   if(EvseState::None != state && state != getActiveState())
   {
-    _waitingForEvent++;
     if(EvseState::Active == state)
     {
       DBUGLN("EVSE: enable");
@@ -343,11 +341,7 @@ unsigned long EvseManager::loop(MicroTasks::WakeReason reason)
   DBUGVAR(_evseStateListener.IsTriggered());
   if(_evseStateListener.IsTriggered())
   {
-    DBUGVAR(_waitingForEvent);
-    if(_waitingForEvent > 0) {
       _evaluateTargetState = true;
-      _waitingForEvent--;
-    }
 
     _eventLog.log(_monitor.isError() ? EventType::Warning : EventType::Information,
                   getState(),
