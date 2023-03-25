@@ -30,7 +30,6 @@ DynamicJsonDocument mqtt_doc(4096);
 static long nextMqttReconnectAttempt = 0;
 static unsigned long mqttRestartTime = 0;
 static bool connecting = false;
-static bool mqttRetained = false;
 uint8_t claimsVersion = 0;
 uint8_t overrideVersion = 0;
 uint8_t scheduleVersion = 0;

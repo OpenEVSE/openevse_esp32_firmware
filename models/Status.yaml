@@ -98,12 +98,24 @@ properties:
   elapsed:
     type: number
     description: 'The duration of the current charge session, in seconds'
-  wattsec:
-    type: integer
-    description: 'The amount of energy transfered in this charge session, in W/sec'
-  watthour:
-    type: integer
-    description: 'The total amount of energy transfered, in W/hour'
+  session_energy: 
+    type: number
+    description: 'The total amount of energy accumulated for current session (in wh)'
+  total_energy:
+    type: number
+    description: 'The total amount of energy accumulated (in kwh)'
+  total_day:
+    type: number
+    description: 'The total amount of energy accumulated today (in kwh)'
+  total_week:
+    type: number
+    description: 'The total amount of energy accumulated this week (in kwh)'
+  total_month:
+    type: number
+    description: 'The total amount of energy accumulated this month (in kwh)'
+  total_yaer:
+    type: number
+    description: 'The total amount of energy accumulated the year (in kwh)'
   gfcicount:
     type: integer
     description: Number of GFCI errors

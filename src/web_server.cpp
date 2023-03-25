@@ -229,12 +229,7 @@ void buildStatus(DynamicJsonDocument &doc) {
   doc["evse_connected"] = (int)evse.isConnected();
 
   create_rapi_json(doc);
-
-  doc["status"] = evse.getState().toString();
-
-  doc["elapsed"] = evse.getSessionElapsed();
-  doc["wattsec"] = evse.getSessionEnergy() * SESSION_ENERGY_SCALE_FACTOR;
-  doc["watthour"] = evse.getTotalEnergy() * TOTAL_ENERGY_SCALE_FACTOR;
+  evse.createEnergyMeterJsonDoc(doc);
 
   doc["gfcicount"] = evse.getFaultCountGFCI();
   doc["nogndcount"] = evse.getFaultCountNoGround();
@@ -245,8 +240,6 @@ void buildStatus(DynamicJsonDocument &doc) {
   doc["charge_rate"] = divert.getChargeRate();
   doc["divert_update"] = (millis() - divert.getLastUpdate()) / 1000;
   doc["divert_active"] = divert.isActive();
-  doc["divertmode"] = (uint8_t)divert.getMode();
-
   doc["shaper"] = shaper.getState()?1:0;
   doc["shaper_live_pwr"] = shaper.getLivePwr();
   // doc["shaper_cur"] = shaper.getChgCur();
@@ -256,8 +249,6 @@ void buildStatus(DynamicJsonDocument &doc) {
   doc["limit"] = limit.hasLimit();
 
   doc["ota_update"] = (int)Update.isRunning();
-  doc["time"] = String(time);
-  doc["offset"] = String(offset);
 
   doc["config_version"] = config_version;
   doc["claims_version"] = evse.getClaimsVersion();
@@ -286,6 +277,12 @@ void buildStatus(DynamicJsonDocument &doc) {
       doc["time_to_full_charge"] = evse.getVehicleEta();
     }
   }
+  // Deprecated properties, will be removed soon
+  doc["elapsed"] = evse.getSessionElapsed();
+  doc["wattsec"] = evse.getSessionEnergy() * SESSION_ENERGY_SCALE_FACTOR;
+  doc["watthour"] = evse.getTotalEnergy() * TOTAL_ENERGY_SCALE_FACTOR;
+
+  DBUGF("/status ArduinoJson size: %dbytes", doc.size());
 }
 
 // -------------------------------------------------------------------
@@ -533,7 +530,6 @@ void handleStatusPost(MongooseHttpServerRequest *request, MongooseHttpServerResp
     if(send_event) {
       event_send(doc);
     }
-
     response->setCode(200);
     serializeJson(doc, *response);
   } else {
@@ -554,7 +550,7 @@ handleStatus(MongooseHttpServerRequest *request)
 
   if(HTTP_GET == request->method()) {
 
-    const size_t capacity = JSON_OBJECT_SIZE(40) + 1024;
+    const size_t capacity = JSON_OBJECT_SIZE(80) + 1280;
     DynamicJsonDocument doc(capacity);
     buildStatus(doc);
     response->setCode(200);
@@ -753,15 +749,73 @@ void handleLimit(MongooseHttpServerRequest *request)
 }
 
 //----------------------------------------------------------
-
-void handleOverrideGet(MongooseHttpServerRequest *request, MongooseHttpServerResponseStream *response)
+//
+//            Energy Meter
+//
+//----------------------------------------------------------
+void handleEmeterDelete(MongooseHttpServerRequest *request, MongooseHttpServerResponseStream *response)
 {
-  if(manual.isActive())
+  String body = request->body().toString();
+  DynamicJsonDocument doc(512);
+  DeserializationError err = deserializeJson(doc, body);
+  if (DeserializationError::Code::Ok == err) {
+    if (doc.containsKey("hard") && doc.containsKey("import")) {
+      bool hardreset = (bool)doc["hard"];
+      bool import = (bool)doc["import"];
+      if (evse.resetEnergyMeter(hardreset,import)) {
+        response->setCode(200);
+        response->print("{\"msg\":\"Reset done\"}");
+      }
+      else {
+        response->setCode(500);
+        response->print("{\"msg\":\"Reset failed\"}");
+      }
+      
+    }
+    else {
+      response->setCode(500);
+      response->print("{\"msg\":\"Reset Failed\"}");
+    }
+  }
+  else {
+    response->setCode(500);
+    response->print("{\"msg\":\"reset Failed\"}");
+  }
+}
+
+void handleEmeter(MongooseHttpServerRequest *request)
+{
+  MongooseHttpServerResponseStream *response;
+  if (false == requestPreProcess(request, response))
   {
-    EvseProperties props;
-    manual.getProperties(props);
-    props.serialize(response);
-  } else {
+    return;
+  }
+
+  if (HTTP_DELETE == request->method())
+  {
+    handleEmeterDelete(request, response);
+  }
+  else
+  {
+    response->setCode(405);
+    response->print("{\"msg\":\"Method not allowed\"}");
+  }
+
+  request->send(response);
+}
+
+
+
+  //----------------------------------------------------------
+
+  void handleOverrideGet(MongooseHttpServerRequest * request, MongooseHttpServerResponseStream * response)
+  {
+    if (manual.isActive())
+    {
+      EvseProperties props;
+      manual.getProperties(props);
+      props.serialize(response);
+    } else {
     response->setCode(404);
     response->print("{\"msg\":\"No manual override\"}");
   }
@@ -1060,6 +1114,17 @@ void handleNotFound(MongooseHttpServerRequest *request)
 void onWsFrame(MongooseHttpWebSocketConnection *connection, int flags, uint8_t *data, size_t len)
 {
   DBUGF("Got message %.*s", len, (const char *)data);
+  const size_t capacity = JSON_OBJECT_SIZE(1) + 16;
+  DynamicJsonDocument doc(capacity);
+  DeserializationError error = deserializeJson(doc, data, len);
+  if (!error) {
+    if (doc.containsKey("ping") && doc["ping"].is<int8_t>())
+      {
+        // answer pong
+        connection->send("{\"pong\": 1}");
+        
+      }
+  }
 }
 
 void onWsConnect(MongooseHttpWebSocketConnection *connection)
@@ -1121,6 +1186,7 @@ web_server_setup() {
   server.on("/logs", handleEventLogs);
 
   server.on("/limit", handleLimit);
+  server.on("/emeter", handleEmeter);
 
   // Simple Firmware Update Form
   server.on("/update$")->
