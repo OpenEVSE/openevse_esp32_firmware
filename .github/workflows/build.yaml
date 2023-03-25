@@ -13,10 +13,12 @@ on:
         required: true
         description: The branch/tag for the v2 UI
         default: master
-      
+
   push:
     branches:
       - master
+    tags:
+      - 'v*'
   pull_request:
 
 jobs:
@@ -28,7 +30,7 @@ jobs:
 
       - name: Dump the event
         run: cat $GITHUB_EVENT_PATH
-      
+
       - name: Dump github.ref_name
         run: echo "github.ref_name = '${{ github.ref_name }}'"
 
