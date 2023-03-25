@@ -2,6 +2,9 @@
 
 name: Build/Release OpenEVSE
 
+permissions:
+  contents: write
+
 on:
   workflow_dispatch:
     inputs:
@@ -173,7 +176,7 @@ jobs:
 
     - name: Upload assets to release
       if: startsWith(github.ref_name, 'v')
-      uses: "marvinpinto/action-automatic-releases@latest"
+      uses: "softprops/action-gh-release@v1"
       with:
         repo_token: "${{ secrets.GITHUB_TOKEN }}"
         prerelease: true
