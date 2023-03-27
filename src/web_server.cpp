@@ -232,7 +232,6 @@ void buildStatus(DynamicJsonDocument &doc) {
   doc["evse_connected"] = (int)evse.isConnected();
 
   create_rapi_json(doc);
-  evse.createEnergyMeterJsonDoc(doc);
 
   doc["gfcicount"] = evse.getFaultCountGFCI();
   doc["nogndcount"] = evse.getFaultCountNoGround();
@@ -280,10 +279,6 @@ void buildStatus(DynamicJsonDocument &doc) {
       doc["time_to_full_charge"] = evse.getVehicleEta();
     }
   }
-  // Deprecated properties, will be removed soon
-  doc["elapsed"] = evse.getSessionElapsed();
-  doc["wattsec"] = evse.getSessionEnergy() * SESSION_ENERGY_SCALE_FACTOR;
-  doc["watthour"] = evse.getTotalEnergy() * TOTAL_ENERGY_SCALE_FACTOR;
 
   DBUGF("/status ArduinoJson size: %dbytes", doc.size());
 }
@@ -434,7 +429,7 @@ void handleStatusPost(MongooseHttpServerRequest *request, MongooseHttpServerResp
 {
   String body = request->body().toString();
   // Deserialize the JSON document
-  const size_t capacity = JSON_OBJECT_SIZE(128) + 1024;
+  const size_t capacity = JSON_OBJECT_SIZE(32) + 1024;
   DynamicJsonDocument doc(capacity);
   DeserializationError error = deserializeJson(doc, body);
   if(!error)
@@ -515,7 +510,7 @@ handleStatus(MongooseHttpServerRequest *request)
 
   if(HTTP_GET == request->method()) {
 
-    const size_t capacity = JSON_OBJECT_SIZE(80) + 1280;
+    const size_t capacity = JSON_OBJECT_SIZE(128) + 2048;
     DynamicJsonDocument doc(capacity);
     buildStatus(doc);
     response->setCode(200);
