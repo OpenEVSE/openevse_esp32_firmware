@@ -243,7 +243,8 @@ loop() {
     if(emoncms_updated)
     {
       // Send the current state to check the config
-      DynamicJsonDocument data(4096);
+      const size_t capacity = JSON_OBJECT_SIZE(33) + 1024;
+      DynamicJsonDocument data(capacity);
       create_rapi_json(data);
       emoncms_publish(data);
       emoncms_updated = false;

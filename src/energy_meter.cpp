@@ -8,7 +8,6 @@
 #include "app_config.h"
 #include "event.h"
 
-
 EnergyMeterData::EnergyMeterData()
 {
     total = 0;
