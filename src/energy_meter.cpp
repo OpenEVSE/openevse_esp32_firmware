@@ -82,7 +82,7 @@ void EnergyMeterData::deserialize(StaticJsonDocument<capacity> &doc)
     if (doc.containsKey("we") && doc["we"].is<double>())
     {
         // weekly
-        daily = doc["we"];
+        weekly = doc["we"];
     }
     if (doc.containsKey("mo") && doc["mo"].is<double>())
     {
@@ -286,13 +286,13 @@ bool EnergyMeter::update()
     // convert to w/h
     double wh = mws / 3600000UL;
     _data.session += wh;
-    _data.total += wh / 1000;
+    double kwh = wh / 1000UL;
+    _data.total += kwh;
     DBUGVAR(_data.session);
-
-    _data.daily += wh / 1000;
-    _data.weekly += wh / 1000;
-    _data.monthly += wh / 1000;
-    _data.yearly += wh / 1000;
+    _data.daily += kwh;
+    _data.weekly += kwh;
+    _data.monthly += kwh;
+    _data.yearly += kwh;
 
     _last_upd = curms;
     DBUGF("session_wh = %.2f, total_kwh = %.2f", _data.session, _data.total);
