@@ -75,6 +75,9 @@ void handleUpdateRequest(MongooseHttpServerRequest *request);
 size_t handleUpdateUpload(MongooseHttpServerRequest *request, int ev, MongooseString filename, uint64_t index, uint8_t *data, size_t len);
 void handleUpdateClose(MongooseHttpServerRequest *request);
 
+void handleTime(MongooseHttpServerRequest *request);
+void handleTimePost(MongooseHttpServerRequest *request, MongooseHttpServerResponseStream *response);
+
 extern uint32_t config_version;
 
 void dumpRequest(MongooseHttpServerRequest *request)
@@ -349,7 +352,8 @@ handleDivertMode(MongooseHttpServerRequest *request){
     return;
   }
 
-  divert.setMode((DivertMode)(request->getParam("divertmode").toInt()));
+  DivertMode divertmode = (DivertMode)(request->getParam("divertmode").toInt());
+  divert.setMode(divertmode);
 
   response->setCode(200);
   response->print("Divert Mode changed");
@@ -381,54 +385,15 @@ handleCurrentShaper(MongooseHttpServerRequest *request) {
 // Manually set the time
 // url: /settime
 // -------------------------------------------------------------------
-void
-handleSetTime(MongooseHttpServerRequest *request) {
+void handleSetTime(MongooseHttpServerRequest *request)
+{
   MongooseHttpServerResponseStream *response;
   if(false == requestPreProcess(request, response, CONTENT_TYPE_TEXT)) {
     return;
   }
 
-  bool qsntp_enable = isPositive(request, "ntp");
-  if(qsntp_enable)
-  {
-    String qtz = request->getParam("tz");
-    config_save_sntp(true, qtz);
-    time_check_now();
-  }
-  else
-  {
-    config_save_sntp(false, "UTC0");
-    String time = request->getParam("time");
+  handleTimePost(request, response);
 
-    struct tm tm;
-
-    int yr, mnth, d, h, m, s;
-    if(6 == sscanf( time.c_str(), "%4d-%2d-%2dT%2d:%2d:%2dZ", &yr, &mnth, &d, &h, &m, &s))
-    {
-      tm.tm_year = yr - 1900;
-      tm.tm_mon = mnth - 1;
-      tm.tm_mday = d;
-      tm.tm_hour = h;
-      tm.tm_min = m;
-      tm.tm_sec = s;
-
-      struct timeval set_time = {0,0};
-      set_time.tv_sec = mktime(&tm);
-
-      time_set_time(set_time, "manual");
-
-    }
-    else
-    {
-      response->setCode(400);
-      response->print("could not parse time");
-      request->send(response);
-      return;
-    }
-  }
-
-  response->setCode(200);
-  response->print("set");
   request->send(response);
 }
 
@@ -486,7 +451,7 @@ void handleStatusPost(MongooseHttpServerRequest *request, MongooseHttpServerResp
     {
       double shaper_live_pwr = doc["shaper_live_pwr"];
       shaper.setLivePwr(shaper_live_pwr);
-      DBUGF("shaper: available power:%dW", shaper.getAvlPwr());
+      DBUGF("shaper: live power:%dW", shaper.getLivePwr());
     }
     if(doc.containsKey("solar")) {
       solar = doc["solar"];
@@ -770,7 +735,7 @@ void handleEmeterDelete(MongooseHttpServerRequest *request, MongooseHttpServerRe
         response->setCode(500);
         response->print("{\"msg\":\"Reset failed\"}");
       }
-      
+
     }
     else {
       response->setCode(500);
@@ -1122,7 +1087,7 @@ void onWsFrame(MongooseHttpWebSocketConnection *connection, int flags, uint8_t *
       {
         // answer pong
         connection->send("{\"pong\": 1}");
-        
+
       }
   }
 }
@@ -1187,6 +1152,7 @@ web_server_setup() {
 
   server.on("/limit", handleLimit);
   server.on("/emeter", handleEmeter);
+  server.on("/time", handleTime);
 
   // Simple Firmware Update Form
   server.on("/update$")->
