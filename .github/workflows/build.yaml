@@ -2,6 +2,9 @@
 
 name: Build/Release OpenEVSE
 
+permissions:
+  contents: write
+
 on:
   workflow_dispatch:
     inputs:
@@ -13,10 +16,12 @@ on:
         required: true
         description: The branch/tag for the v2 UI
         default: master
-      
+
   push:
     branches:
       - master
+    tags:
+      - 'v*'
   pull_request:
 
 jobs:
@@ -28,7 +33,7 @@ jobs:
 
       - name: Dump the event
         run: cat $GITHUB_EVENT_PATH
-      
+
       - name: Dump github.ref_name
         run: echo "github.ref_name = '${{ github.ref_name }}'"
 
@@ -54,11 +59,11 @@ jobs:
           - openevse_esp32-poe-iso
           - openevse_esp32-heltec-wifi-lora-v2
         gui:
-          - name: dev_gui-v1
+          - name: gui-v1
             repo: OpenEVSE/openevse_wifi_gui
             build_flags: ""
             ref: ${{ inputs.v1_ref }}
-          - name: dev_gui-v2
+          - name: gui-v2
             repo: KipK/openevse-gui-v2
             build_flags: "-D DISABLE_WIFI_PORTAL -D WEB_SERVER_ROOT_PAGE_INDEX"
             ref: ${{ inputs.v2_ref }}
@@ -67,13 +72,6 @@ jobs:
     - uses: ammaraskar/gcc-problem-matcher@master
 
     - uses: actions/checkout@v3
-
-#    - name: Temp checkout latest OpenEVSE lib
-#      uses: actions/checkout@v3
-#      with:
-#        repository: jeremypoulter/OpenEVSE_Lib
-#        ref: openevse_wifi_timer_apis
-#        path: lib/OpenEVSE
 
     - name: Checkout GUI
       uses: actions/checkout@v3
@@ -137,7 +135,7 @@ jobs:
   release:
     runs-on: ubuntu-latest
     needs: build
-    if: github.ref_name == 'master' || github.ref_name == 'build_v2_gui' || github.head_ref == 'build_v2_gui'
+    if: github.ref_name == 'master' || startsWith(github.ref_name, 'v')
 
     steps:
     - name: Download the built assets
@@ -155,11 +153,33 @@ jobs:
         done
 
     - name: Upload assets to latest release
+      if: github.ref_name == 'master'
       uses: "marvinpinto/action-automatic-releases@latest"
       with:
         repo_token: "${{ secrets.GITHUB_TOKEN }}"
-        automatic_release_tag: "${{ github.ref_name == 'master' && 'latest' || 'v2_gui' }}"
+        automatic_release_tag: latest
         prerelease: true
-        title: "${{ github.ref_name == 'master' && 'Development Build' || 'V2 GUI pre-release' }}"
+        title: Development Build
+        files: |
+          *gui-v1.bin
+
+    - name: Upload assets to the v2 GUI release
+      if: github.ref_name == 'master'
+      uses: "marvinpinto/action-automatic-releases@latest"
+      with:
+        repo_token: "${{ secrets.GITHUB_TOKEN }}"
+        automatic_release_tag: v2_gui
+        prerelease: true
+        title: V2 GUI pre-release
+        files: |
+          *gui-v2.bin
+
+    - name: Upload assets to release
+      if: startsWith(github.ref_name, 'v')
+      uses: "softprops/action-gh-release@v1"
+      with:
+        repo_token: "${{ secrets.GITHUB_TOKEN }}"
+        prerelease: true
+        title: "${{ github.ref_name }}"
         files: |
           *.bin
