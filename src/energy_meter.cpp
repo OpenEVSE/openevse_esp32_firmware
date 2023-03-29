@@ -289,7 +289,7 @@ bool EnergyMeter::update()
     double kwh = wh / 1000UL;
     _data.total += kwh;
     DBUGVAR(_data.session);
-    _data.daily += kwh;
+    _data.daily += kwh; 
     _data.weekly += kwh;
     _data.monthly += kwh;
     _data.yearly += kwh;
@@ -374,10 +374,6 @@ void EnergyMeter::rotate()
     {
         save();
         publish();
-    }
-    if (!_monitor->isVehicleConnected() && _data.elapsed)
-    {
-        _data.elapsed = 0;
     }
 };
 
