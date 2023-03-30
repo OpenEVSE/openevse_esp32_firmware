@@ -196,6 +196,7 @@ void EnergyMeter::end()
 bool EnergyMeter::reset(bool full = false, bool import = false)
 {
     if (createEnergyMeterStorage(full, import)) {
+        publish();
         return true;
     }
     else
