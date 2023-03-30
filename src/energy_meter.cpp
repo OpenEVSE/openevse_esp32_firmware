@@ -79,10 +79,10 @@ void EnergyMeterData::deserialize(StaticJsonDocument<capacity> &doc)
         // daily
         daily = doc["dy"];
     }
-    if (doc.containsKey("we") && doc["we"].is<double>())
+    if (doc.containsKey("wk") && doc["wk"].is<double>())
     {
         // weekly
-        weekly = doc["we"];
+        weekly = doc["wk"];
     }
     if (doc.containsKey("mo") && doc["mo"].is<double>())
     {
