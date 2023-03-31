@@ -79,10 +79,10 @@ void EnergyMeterData::deserialize(StaticJsonDocument<capacity> &doc)
         // daily
         daily = doc["dy"];
     }
-    if (doc.containsKey("we") && doc["we"].is<double>())
+    if (doc.containsKey("wk") && doc["wk"].is<double>())
     {
         // weekly
-        daily = doc["we"];
+        weekly = doc["wk"];
     }
     if (doc.containsKey("mo") && doc["mo"].is<double>())
     {
@@ -154,21 +154,6 @@ void EnergyMeter::begin(EvseMonitor *monitor)
         _write_upd = _last_upd;
         _event_upd = _last_upd;
         _rotate_upd = _last_upd;
-        if (_data.elapsed > 0)
-        {
-            if (_monitor->isVehicleConnected())
-            {
-                // restoring session, wifi module has probably rebooted
-                _elapsed = _data.elapsed * 1000;
-            }
-            else
-            {
-                _data.elapsed = 0;
-                _elapsed = 0;
-                _data.session = 0;
-                save();
-            }
-        }
 
         // if total is 0, try to load old OpenEvse module counter
         if (!_data.total && !_data.imported)
@@ -211,6 +196,7 @@ void EnergyMeter::end()
 bool EnergyMeter::reset(bool full = false, bool import = false)
 {
     if (createEnergyMeterStorage(full, import)) {
+        publish();
         return true;
     }
     else
@@ -221,7 +207,6 @@ void EnergyMeter::clearSession()
 {
     _data.session = 0;
     _data.elapsed = 0;
-    _elapsed = 0;
     save();
     DBUGLN("Energy Meter: clearing session");
     publish();
@@ -240,8 +225,7 @@ bool EnergyMeter::update()
     uint32_t dms = curms - _last_upd;
 
     // increment elapsed time
-    _elapsed += dms;
-    _data.elapsed = _elapsed / 1000U;
+    _data.elapsed += dms / 1000U;
 
     // if (dms >=  MAX_INTERVAL) {
     DBUGLN("Energy Meter: Incrementing");
@@ -286,13 +270,13 @@ bool EnergyMeter::update()
     // convert to w/h
     double wh = mws / 3600000UL;
     _data.session += wh;
-    _data.total += wh / 1000;
+    double kwh = wh / 1000UL;
+    _data.total += kwh;
     DBUGVAR(_data.session);
-
-    _data.daily += wh / 1000;
-    _data.weekly += wh / 1000;
-    _data.monthly += wh / 1000;
-    _data.yearly += wh / 1000;
+    _data.daily += kwh; 
+    _data.weekly += kwh;
+    _data.monthly += kwh;
+    _data.yearly += kwh;
 
     _last_upd = curms;
     DBUGF("session_wh = %.2f, total_kwh = %.2f", _data.session, _data.total);
@@ -374,10 +358,6 @@ void EnergyMeter::rotate()
     {
         save();
         publish();
-    }
-    if (!_monitor->isVehicleConnected() && _data.elapsed)
-    {
-        _data.elapsed = 0;
     }
 };
 
@@ -485,13 +465,21 @@ bool EnergyMeter::createEnergyMeterStorage(bool fullreset = false, bool forceimp
 EnergyMeterDate EnergyMeter::getCurrentDate()
 {
     EnergyMeterDate date;
-    struct timeval local_time;
-    gettimeofday(&local_time, NULL);
-    tm *timeinfo = gmtime(&local_time.tv_sec);
-    uint16_t yday = (uint16_t)timeinfo->tm_yday;
-    date.day = (uint8_t)timeinfo->tm_wday;
-    date.month = (uint8_t)timeinfo->tm_mon;
-    date.year = 1900 + (uint16_t)timeinfo->tm_year;
+
+    // get the current time
+    char offset[8];
+    char local_time[64];
+    struct timeval time_now;
+    gettimeofday(&time_now, NULL);
+
+    struct tm timeinfo;
+    localtime_r(&time_now.tv_sec, &timeinfo);
+    strftime(local_time, sizeof(local_time), "%FT%T%z", &timeinfo);
+
+    uint16_t yday = (uint16_t)timeinfo.tm_yday;
+    date.day = (uint8_t)timeinfo.tm_wday;
+    date.month = (uint8_t)timeinfo.tm_mon;
+    date.year = 1900 + (uint16_t)timeinfo.tm_year;
 
     return date;
 };
