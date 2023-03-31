@@ -4,7 +4,7 @@
 
 Change requests and bug reports are are submitted through the [GitHub issue tracker](https://github.com/OpenEVSE/ESP32_WiFi_V4.x/issues). There should be a single issue/bug/feature per ticket.
 
-All changes should be mage on a branch or fork of the `master` branch and the change should be submitted through a GitHub pull request. Pull requests will be reviewed by a repository administrator before being merged into the `master` branch. For changes by the repository administrator, the pull request should be reviewed by another administrator before being merging.
+All changes should be made on a branch or fork of the `master` branch and the change should be submitted through a GitHub pull request. Pull requests will be reviewed by a repository administrator before being merged into the `master` branch. For changes by a repository administrator, the pull request should be reviewed by another administrator before being merging.
 
 ## Building
 
