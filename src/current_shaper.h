@@ -5,9 +5,14 @@
 #ifndef EVSE_SHAPER_LOOP_TIME
 #define EVSE_SHAPER_LOOP_TIME 2000
 #endif 
-#ifndef EVSE_SHAPER_FAILSAFE_TIME
-#define EVSE_SHAPER_FAILSAFE_TIME 360000
-#endif 
+
+#ifndef EVSE_SHAPER_MIN_FILTER
+#define EVSE_SHAPER_MIN_FILTER 10 // sec 
+#endif
+
+#ifndef EVSE_SHAPER_HYSTERESIS
+#define EVSE_SHAPER_HYSTERESIS 0.5 // A
+#endif
 
 #include "emonesp.h"
 #include <MicroTasks.h>
@@ -18,6 +23,7 @@
 #include "input.h"
 #include "event.h"
 #include "divert.h"
+#include "input_filter.h"
 
 class CurrentShaperTask: public MicroTasks::Task
 {
@@ -27,11 +33,14 @@ class CurrentShaperTask: public MicroTasks::Task
     bool         _changed;
     int          _max_pwr;   // total current available from the grid
     int          _live_pwr;  // current available to EVSE
+    double       _smoothed_live_pwr; // filtered live power for getting out of pause only
     uint8_t      _chg_cur;   // calculated charge current to claim
-    uint8_t      _max_cur;   // shaper calculated max current
+    double       _max_cur;   // shaper calculated max current
     uint32_t     _timer;
+    uint32_t     _pause_timer;
     bool         _updated;
-  
+    InputFilter  _inputFilter;
+
   protected:
     void setup();
     unsigned long loop(MicroTasks::WakeReason reason);
@@ -47,7 +56,7 @@ class CurrentShaperTask: public MicroTasks::Task
     bool getState();
     int getMaxPwr();
     int getLivePwr();
-    uint8_t getMaxCur();
+    double getMaxCur();
     bool isActive();
     bool isUpdated();
 

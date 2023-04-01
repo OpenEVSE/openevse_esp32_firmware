@@ -59,10 +59,13 @@ x-examples:
     ocpp_authkey: ''
     ohm: ''
     divert_PV_ratio: 1.1
-    divert_attack_smoothing_factor: 0.4
-    divert_decay_smoothing_factor: 0.05
-    divert_min_charge_time: 10
+    divert_attack_smoothing_time: 8
+    divert_decay_smoothing_time: 300
+    divert_min_charge_time: 20
     current_shaper_max_pwr: 9000
+    current_shaper_min_pause_time: 300
+    current_shaper_data_maxinterval: 120
+    current_shaper_smoothing_time: 60
     tesla_access_token: _DUMMY_PASSWORD
     tesla_refresh_token: _DUMMY_PASSWORD
     tesla_created_at: 2479357952
@@ -246,9 +249,9 @@ properties:
     type: string
   divert_PV_ratio:
     type: number
-  divert_attack_smoothing_factor:
+  divert_attack_smoothing_time:
     type: number
-  divert_decay_smoothing_factor:
+  divert_decay_smoothing_time:
     type: number
   divert_min_charge_time:
     type: number
