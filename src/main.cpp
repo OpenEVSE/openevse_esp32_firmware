@@ -106,6 +106,7 @@ void setup()
   DEBUG.println();
   DEBUG.printf("OpenEVSE WiFI %s\n", ESPAL.getShortId().c_str());
   DEBUG.printf("Firmware: %s\n", currentfirmware.c_str());
+  DEBUG.printf("Git Hash: " ESCAPEQUOTE(BUILD_HASH) "\n");
   DEBUG.printf("Build date: " __DATE__ " " __TIME__ "\n");
   DEBUG.printf("IDF version: %s\n", ESP.getSdkVersion());
   DEBUG.printf("Free: %d\n", ESPAL.getFreeHeap());
