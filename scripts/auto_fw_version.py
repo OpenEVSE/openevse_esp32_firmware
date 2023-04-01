@@ -1,8 +1,6 @@
 import subprocess
 import os
 
-Import("env")
-
 def get_build_flag():
     ret = subprocess.run(["git", "rev-parse", "HEAD"], stdout=subprocess.PIPE, text=True) #Uses any tags
     full_hash = ret.stdout.strip()
@@ -27,15 +25,15 @@ def get_build_flag():
 
     build_flags = "-D BUILD_TAG=" + build_version + " " + "-D BUILD_HASH=" + short_hash + ""
 
-    print ("Firmware Revision: " + build_flags)
     return build_flags
 
-    ret = subprocess.run(["git", "describe", "--tags"], stdout=subprocess.PIPE, text=True) #Uses any tags
-    build_version = ret.stdout.strip()
-    build_flags = "-D BUILD_TAG=" + build_version
-    print ("Firmware Revision: " + build_flags)
-    return build_flags
+build_flags = get_build_flag()
 
-env.Append(
-    BUILD_FLAGS=[get_build_flag()]
-)
+if "SCons.Script" == __name__:
+    print ("Firmware Revision: " + build_flags)
+    Import("env")
+    env.Append(
+        BUILD_FLAGS=[get_build_flag()]
+    )
+elif "__main__" == __name__:
+    print(build_flags)
