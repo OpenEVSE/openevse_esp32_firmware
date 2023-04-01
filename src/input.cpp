@@ -147,6 +147,12 @@ void create_rapi_json(JsonDocument &doc)
   doc["srssi"] = WiFi.RSSI();
 
   timeManager.serialise(doc);
+  // get EnergyMeter data
+  evse.createEnergyMeterJsonDoc(doc);
+  // Deprecated properties, will be removed soon
+  doc["elapsed"] = evse.getSessionElapsed();
+  doc["wattsec"] = evse.getSessionEnergy() * SESSION_ENERGY_SCALE_FACTOR;
+  doc["watthour"] = evse.getTotalEnergy() * TOTAL_ENERGY_SCALE_FACTOR;
 }
 
 void
