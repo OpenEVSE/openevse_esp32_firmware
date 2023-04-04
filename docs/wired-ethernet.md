@@ -55,6 +55,11 @@ Subsequent upgrades:
 esptool.py --baud 921600 --before default_reset --after hard_reset write_flash -z --flash_mode dio --flash_freq 40m --flash_size detect 0x1000 openevse_esp32-gateway-e.bin
 ```
 
+*Note: On Ubuntu 22.04 if you notice the ESP gateway is continually disconnect from the USB serail port,check this using `dmesg` then`sudo apt remove brltty` will fix this. This is because there is an ebook reader which shares the same serial adaptor chip as the ESP gateway and the udev rules conflict.*
+
+
+For Ubuntu 22.04 the simplest solution is to remove the package brltty via sudo apt remove brltty
+
 ### For rev F/G
 
 First upload:
