@@ -69,6 +69,9 @@ DivertTask::~DivertTask()
 
 void DivertTask::begin()
 {
+  // remove this after few versions
+  initDivertType();
+  // 
   MicroTask.startTask(this);
 }
 
@@ -160,7 +163,7 @@ void DivertTask::update_state()
     }
 
     // Calculate current
-    if (mqtt_grid_ie != "")
+    if (divert_type == _DIVERT_TYPE_GRID)
     {
       // if grid feed is available and exporting increment the charge rate,
       // if importing drop the charge rate.
@@ -191,7 +194,7 @@ void DivertTask::update_state()
         _available_current = 0;
       }
     }
-    else if (mqtt_solar!="")
+    else if (divert_type == _DIVERT_TYPE_SOLAR)
     {
       // if grid feed is not available: charge rate = solar generation
       DBUGVAR(voltage);
@@ -279,3 +282,22 @@ time_t DivertTask::getMinChargeTimeRemaining()
             _min_charge_end - divertmode_get_time() :
             0;
 }
+
+// compatiblity trick, to remove after few version upgrade
+void DivertTask::initDivertType() {
+
+  if (divert_type == _DIVERT_TYPE_UNSET) {
+    // divert_type unset, guess previous version setup for smoother upgrade
+    if (mqtt_grid_ie) {
+      divert_type == _DIVERT_TYPE_GRID;
+    }
+    else {
+      divert_type == _DIVERT_TYPE_SOLAR;
+    }
+    DynamicJsonDocument doc(JSON_OBJECT_SIZE(1) + 1); // use JSON in no-copy mode
+    doc["divert_type"] = divert_type;
+    config_deserialize(doc);
+    config_commit();
+  }
+}
+//

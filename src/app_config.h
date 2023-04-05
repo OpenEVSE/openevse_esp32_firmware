@@ -74,6 +74,7 @@ extern String rfid_storage;
 extern String time_zone;
 
 // Divert settings
+extern int8_t divert_type;
 extern double divert_PV_ratio;
 extern double divert_attack_smoothing_factor;
 extern double divert_decay_smoothing_factor;
@@ -109,7 +110,7 @@ extern uint32_t flags;
 #define CONFIG_OCPP_AUTO_AUTH       (1 << 22)
 #define CONFIG_OCPP_OFFLINE_AUTH    (1 << 23)
 #define CONFIG_THREEPHASE           (1 << 24)
-
+#define CONFIG_WIZARD               (1 << 25)
 
 inline bool config_emoncms_enabled() {
   return CONFIG_SERVICE_EMONCMS == (flags & CONFIG_SERVICE_EMONCMS);
@@ -193,6 +194,11 @@ inline bool config_factory_write_lock() {
 
 inline bool config_threephase_enabled() {
   return CONFIG_THREEPHASE == (flags & CONFIG_THREEPHASE);
+}
+
+inline bool config_wizard_passed()
+{
+  return CONFIG_WIZARD == (flags & CONFIG_WIZARD);
 }
 
 // Ohm Connect Settings

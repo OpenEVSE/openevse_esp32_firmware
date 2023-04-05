@@ -87,6 +87,7 @@ uint32_t flags;
 String ohm;
 
 // Divert settings
+int8_t divert_type;
 double divert_PV_ratio;
 double divert_attack_smoothing_factor;
 double divert_decay_smoothing_factor;
@@ -176,13 +177,14 @@ ConfigOpt *opts[] =
   new ConfigOptDefenition<String>(ohm, "", "ohm", "o"),
 
 // Divert settings
+  new ConfigOptDefenition<int8_t>(divert_type, -1, "divert_type", "dm"),
   new ConfigOptDefenition<double>(divert_PV_ratio, 1.1, "divert_PV_ratio", "dpr"),
   new ConfigOptDefenition<double>(divert_attack_smoothing_factor, 0.4, "divert_attack_smoothing_factor", "da"),
   new ConfigOptDefenition<double>(divert_decay_smoothing_factor, 0.05, "divert_decay_smoothing_factor", "dd"),
   new ConfigOptDefenition<uint32_t>(divert_min_charge_time, (10 * 60), "divert_min_charge_time", "dt"),
 
 // Current Shaper settings
-  new ConfigOptDefenition<uint32_t>(current_shaper_max_pwr, 0 , "current_shaper_max_pwr", "smp"),
+  new ConfigOptDefenition<uint32_t>(current_shaper_max_pwr, 0, "current_shaper_max_pwr", "smp"),
 
 // Tesla client settings
   new ConfigOptSecret(tesla_access_token, "", "tesla_access_token", "tat"),
@@ -225,9 +227,10 @@ ConfigOpt *opts[] =
   new ConfigOptVirtualBool(flagsOpt, CONFIG_RFID, CONFIG_RFID, "rfid_enabled", "rf"),
   new ConfigOptVirtualBool(flagsOpt, CONFIG_FACTORY_WRITE_LOCK, CONFIG_FACTORY_WRITE_LOCK, "factory_write_lock", "fwl"),
   new ConfigOptVirtualBool(flagsOpt, CONFIG_THREEPHASE, CONFIG_THREEPHASE, "is_threephase", "itp"),
+  new ConfigOptVirtualBool(flagsOpt, CONFIG_WIZARD, CONFIG_WIZARD, "wizard_passed", "wzp"),
   new ConfigOptVirtualMqttProtocol(flagsOpt, "mqtt_protocol", "mprt"),
   new ConfigOptVirtualChargeMode(flagsOpt, "charge_mode", "chmd")
-};
+  };
 
 ConfigJson user_config(opts, sizeof(opts) / sizeof(opts[0]), EEPROM_SIZE, CONFIG_OFFSET);
 ConfigJson factory_config(opts, sizeof(opts) / sizeof(opts[0]), EEPROM_SIZE, FACTORY_OFFSET);

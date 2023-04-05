@@ -89,6 +89,7 @@ x-examples:
     mqtt_protocol: mqtt
     charge_mode: fast
     is_threephase: false
+    wizard_passed: false
 x-tags:
   - Config
 properties:
@@ -306,3 +307,8 @@ properties:
       The maximum number of seconds to randomly add/subtract from the a scheduled charge start time, eg a value of 600 will adjust the start time my +/- 10 minutes. This is to help prevent large syncrinised loads when multiple verchiles start charging at the same time.
   is_threephase: 
     type: boolean
+  wizard_passed:
+    type: boolean
+    description: |
+      define if wizard has been passed or not
+

@@ -5,6 +5,10 @@
 #ifndef _EMONESP_DIVERT_H
 #define _EMONESP_DIVERT_H
 
+#define _DIVERT_TYPE_UNSET -1
+#define _DIVERT_TYPE_SOLAR   0
+#define _DIVERT_TYPE_GRID  1
+
 #include <Arduino.h>
 #include <MicroTasks.h>
 
@@ -105,6 +109,7 @@ class DivertTask : public MicroTasks::Task
     time_t getMinChargeTimeRemaining();
 
     bool isActive();
+    void initDivertType();
 };
 
 extern class DivertTask divert;
