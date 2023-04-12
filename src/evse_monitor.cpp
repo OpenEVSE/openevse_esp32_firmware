@@ -720,16 +720,14 @@ void EvseMonitor::getChargeCurrentAndVoltageFromEvse()
         event["voltage"] = _voltage * VOLTS_SCALE_FACTOR;
         event["power"] = _power * POWER_SCALE_FACTOR;
         event_send(event);
-
-        // Feed _energyMeter with fresh data
-        _energyMeter.update();
-
         _data_ready.ready(EVSE_MONITOR_AMP_AND_VOLT_DATA_READY);
       }
     });
   } else {
     _data_ready.ready(EVSE_MONITOR_AMP_AND_VOLT_DATA_READY);
   }
+  // Update _energyMeter
+  _energyMeter.update();
 }
 
 void EvseMonitor::getTemperatureFromEvse()
