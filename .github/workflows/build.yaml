@@ -45,6 +45,7 @@ jobs:
       matrix:
         env:
           - openevse_nodemcu-32s
+          - openevse_wemos_d1_mini32
           - openevse_esp-wrover-kit
           - openevse_esp-wrover-kit_latest
           - openevse_huzzah32_dev
