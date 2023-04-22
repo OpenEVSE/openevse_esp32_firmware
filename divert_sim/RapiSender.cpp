@@ -8,7 +8,9 @@
 #ifdef ENABLE_DEBUG
 #define DBG
 #endif
-#define DBUGF
+
+extern long pilot;
+extern long state;
 
 static CommandItem commandQueueItems[RAPI_MAX_COMMANDS];
 
@@ -81,7 +83,7 @@ RapiSender::sendCmdSync(String &cmd, unsigned long timeout)
   static char zero[] = "0";
   static char buf1[16];
 
-  if(cmd == "$GE") 
+  if(cmd == "$GE")
   {
     sprintf(buf1, "%ld", pilot);
     _tokens[0] = ok;
@@ -89,13 +91,13 @@ RapiSender::sendCmdSync(String &cmd, unsigned long timeout)
     _tokens[2] = zero;
     _tokenCnt = 3;
   }
-  else if(cmd.startsWith("$SC")) 
+  else if(cmd.startsWith("$SC"))
   {
     sscanf(cmd.c_str(), "$SC %ld V", &pilot);
     _tokens[0] = ok;
     _tokenCnt = 1;
   }
-  else if(cmd == "$GD") 
+  else if(cmd == "$GD")
   {
     _tokens[0] = ok;
     _tokens[1] = zero;
@@ -104,25 +106,25 @@ RapiSender::sendCmdSync(String &cmd, unsigned long timeout)
     _tokens[4] = zero;
     _tokenCnt = 5;
   }
-  else if(cmd == "$FE") 
+  else if(cmd == "$FE")
   {
     state = OPENEVSE_STATE_CHARGING;
     _tokens[0] = ok;
     _tokenCnt = 1;
   }
-  else if(cmd == "$FD") 
+  else if(cmd == "$FD")
   {
     state = OPENEVSE_STATE_DISABLED;
     _tokens[0] = ok;
     _tokenCnt = 1;
   }
-  else if(cmd == "$FS") 
+  else if(cmd == "$FS")
   {
     state = OPENEVSE_STATE_SLEEPING;
     _tokens[0] = ok;
     _tokenCnt = 1;
   }
-  else if(cmd == "$GG") 
+  else if(cmd == "$GG")
   {
     _tokens[0] = ok;
     _tokens[1] = zero;

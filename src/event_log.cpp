@@ -2,7 +2,7 @@
 #undef ENABLE_DEBUG
 #endif
 
-#include <LITTLEFS.h>
+#include <LittleFS.h>
 #include <ArduinoJson.h>
 
 #include "debug.h"

@@ -18,7 +18,7 @@
 #include <Arduino.h>
 #include <EEPROM.h>             // Save config settings
 #include <ConfigJson.h>
-#include <LITTLEFS.h>
+#include <LittleFS.h>
 
 #define EEPROM_SIZE       4096
 

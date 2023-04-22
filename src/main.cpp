@@ -29,7 +29,7 @@
 #include <ArduinoOTA.h>               // local OTA update from Arduino IDE
 #include <MongooseCore.h>
 #include <MicroTasks.h>
-#include <LITTLEFS.h>
+#include <LittleFS.h>
 
 #include "emonesp.h"
 #include "app_config.h"

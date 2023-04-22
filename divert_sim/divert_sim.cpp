@@ -6,18 +6,23 @@
 #define RAPI_PORT Console
 #endif
 
-#include "Console.h"
+#include "StdioSerial.h"
 #include "RapiSender.h"
 #include "openevse.h"
 #include "divert.h"
 #include "event.h"
+#include "event_log.h"
+#include "manual.h"
 
 #include "parser.hpp"
 #include "cxxopts.hpp"
 
 using namespace aria::csv;
 
-RapiSender rapiSender(&RAPI_PORT);
+EventLog eventLog;
+EvseManager evse(RAPI_PORT, eventLog);
+DivertTask divert(evse);
+ManualOverride manual(evse);
 
 long pilot = 32;                      // OpenEVSE Pilot Setting
 long state = OPENEVSE_STATE_SLEEPING; // OpenEVSE State
@@ -40,6 +45,8 @@ double divert_decay_smoothing_factor = 0.05;
 double divert_PV_ratio = 0.5;
 uint32_t divert_min_charge_time = (10 * 60);
 double voltage = 240; // Voltage from OpenEVSE or MQTT
+
+uint32_t current_shaper_max_pwr = 0;
 
 time_t parse_date(const char *dateStr)
 {
@@ -95,6 +102,12 @@ time_t divertmode_get_time()
   return simulated_time;
 }
 
+void setup() {
+}
+
+void loop() {
+}
+
 int main(int argc, char** argv)
 {
   int voltage_arg = -1;
@@ -141,7 +154,7 @@ int main(int argc, char** argv)
   solar = 0;
   grid_ie = 0;
 
-  divertmode_update(DIVERT_MODE_ECO);
+  divert.setMode(DivertMode::Eco);
 
   CsvParser parser(std::cin);
   parser.delimiter(sep.c_str()[0]);
@@ -171,7 +184,7 @@ int main(int argc, char** argv)
         col++;
       }
 
-      divert_update_state();
+      divert.update_state();
 
       tm tm;
       gmtime_r(&simulated_time, &tm);
@@ -183,7 +196,7 @@ int main(int argc, char** argv)
       int ev_watt = ev_pilot * voltage;
       int min_ev_watt = 6 * voltage;
 
-      double smoothed = smoothed_available_current * voltage;
+      double smoothed = divert.smoothedAvailableCurrent() * voltage;
 
       std::cout << buffer << "," << solar << "," << grid_ie << "," << ev_pilot << "," << ev_watt << "," << min_ev_watt << "," << state << "," << smoothed << std::endl;
     }
@@ -198,5 +211,9 @@ void event_send(String event)
 }
 
 void event_send(JsonDocument &event)
+{
+}
+
+void emoncms_publish(JsonDocument &data)
 {
 }

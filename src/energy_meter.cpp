@@ -1,6 +1,9 @@
 #if defined(ENABLE_DEBUG) && !defined(ENABLE_DEBUG_ENERGY_METER)
 #undef ENABLE_DEBUG
 #endif
+
+#include <sys/time.h>
+
 #include "energy_meter.h"
 #include "evse_monitor.h"
 
@@ -127,7 +130,7 @@ void EnergyMeterData::deserialize(StaticJsonDocument<capacity> &doc)
     }
 };
 
-EnergyMeter::EnergyMeter() : 
+EnergyMeter::EnergyMeter() :
 _last_upd(0),
 _write_upd(0),
 _rotate_upd(0),
@@ -142,7 +145,7 @@ EnergyMeter::~EnergyMeter()
 };
 
 void EnergyMeter::begin(EvseMonitor *monitor)
-{ 
+{
   this->_monitor = monitor;
   // get current state
   _switch_state = _monitor->isActive();
@@ -273,7 +276,7 @@ bool EnergyMeter::update()
     double kwh = wh / 1000UL;
     _data.total += kwh;
     DBUGVAR(_data.session);
-    _data.daily += kwh; 
+    _data.daily += kwh;
     _data.weekly += kwh;
     _data.monthly += kwh;
     _data.yearly += kwh;
