@@ -31,7 +31,7 @@ class LimitType {
 		LimitType operator= (const Value val);
 
 	private:
-    	Value _value;
+    Value _value;
 };
 
 class LimitProperties : virtual public JsonSerialize<512> {
