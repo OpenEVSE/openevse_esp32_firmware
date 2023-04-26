@@ -148,9 +148,12 @@ void DivertTask::update_state()
   StaticJsonDocument<256> event;
   event["divert_update"] = 0;
 
-  if(mqtt_grid_ie != "") {
+  if (divert_type == _DIVERT_TYPE_GRID)
+  {
     event["grid_ie"] = grid_ie;
-  } else {
+  }
+  else if (divert_type == _DIVERT_TYPE_SOLAR)
+  {
     event["solar"] = solar;
   }
 

@@ -315,11 +315,13 @@ mqtt_connect()
     // subscribe to solar PV / grid_ie MQTT feeds
     if(config_divert_enabled())
     {
-      if (mqtt_solar != "") {
+      if (divert_type == _DIVERT_TYPE_SOLAR && mqtt_solar != "")
+      {
         mqttclient.subscribe(mqtt_solar);
         yield();
       }
-      if (mqtt_grid_ie != "") {
+      if (divert_type == _DIVERT_TYPE_GRID && mqtt_grid_ie != "")
+      {
         mqttclient.subscribe(mqtt_grid_ie);
         yield();
       }
