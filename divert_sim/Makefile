@@ -1,24 +1,25 @@
 CPP      := g++
 
-BASE_ENV = openevse_wifi_v1
 
 EPOXY_DUINO_DIR := ../../EpoxyDuino
 EPOXY_CORE_PATH ?= $(EPOXY_DUINO_DIR)/cores/epoxy
 EPOXY_LIB_DIR ?= $(EPOXY_DUINO_DIR)/libraries
 
-ARDUINO_LIB_DIR := ../.pio/libdeps/$(BASE_ENV)
+#BASE_ENV = openevse_wifi_v1
+#ARDUINO_LIB_DIR := ../.pio/libdeps/$(BASE_ENV)
+ARDUINO_LIB_DIR := ../..
 
 CPPFLAGS := \
   -I . \
   -I ../include \
   -I ../src \
   -I $(EPOXY_CORE_PATH) \
-  -I $(EPOXY_LIB_DIR)/MicroTasks/src \
-  -I "$(ARDUINO_LIB_DIR)/Micro Debug/src" \
+  -I $(ARDUINO_LIB_DIR)/MicroDebug/src \
   -I $(ARDUINO_LIB_DIR)/MicroTasks/include \
   -I $(ARDUINO_LIB_DIR)/StreamSpy/src \
+  -I $(ARDUINO_LIB_DIR)/ConfigJson/src \
   -I $(ARDUINO_LIB_DIR)/ArduinoJson/src \
-  -I $(ARDUINO_LIB_DIR)/OpenEVSE/src \
+  -I $(ARDUINO_LIB_DIR)/OpenEVSE_Lib/src \
   -I $(EPOXY_LIB_DIR)/EpoxyFS/src \
   -ggdb \
   -D DIVERT_SIM \
@@ -52,6 +53,9 @@ MICRO_TASKS_OBJ := \
 OPENEVSE_LIB_OBJ := \
   openevse.o \
   RapiSender.o
+
+#CONFIG_JSON_OBJ := \
+#  ConfigJson.o
 
 STREAM_SPY_OBJ := \
   StreamSpy.o \
@@ -87,6 +91,7 @@ EPOXY_FS_OBJ := \
 
 OBJ    := \
   $(MICRO_TASKS_OBJ) \
+  $(CONFIG_JSON_OBJ) \
   $(STREAM_SPY_OBJ) \
   $(OPENEVSE_LIB_OBJ) \
   $(OPENEVSE_WIFI_OBJ) \
@@ -98,8 +103,9 @@ VPATH 	:= \
   . \
   ../src \
   $(EPOXY_CORE_PATH) \
-  $(ARDUINO_LIB_DIR)/OpenEVSE/src \
+  $(ARDUINO_LIB_DIR)/OpenEVSE_Lib/src \
   $(ARDUINO_LIB_DIR)/MicroTasks/src \
+  $(ARDUINO_LIB_DIR)/ConfigJson/src \
   $(ARDUINO_LIB_DIR)/StreamSpy/src \
   $(EPOXY_LIB_DIR)/EpoxyFS/src
 
