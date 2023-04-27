@@ -16,44 +16,46 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-      - uses: actions/checkout@v2
+      - uses: actions/checkout@v3
         with:
           path: OpenEVSE_WiFi
 
-      - uses: actions/checkout@v2
+      - uses: actions/checkout@v3
         with:
           repository: JeremyPoulter/MicroDebug
           path: MicroDebug
 
-      - uses: actions/checkout@v2
+      - uses: actions/checkout@v3
         with:
           repository: JeremyPoulter/MicroTasks
           path: MicroTasks
 
-      - uses: actions/checkout@v2
+      - uses: actions/checkout@v3
         with:
           repository: JeremyPoulter/StreamSpy
           path: StreamSpy
 
-      - uses: actions/checkout@v2
+      - uses: actions/checkout@v3
         with:
           repository: JeremyPoulter/ConfigJson
           path: ConfigJson
 
-      - uses: actions/checkout@v2
+      - uses: actions/checkout@v3
         with:
           repository: bblanchon/ArduinoJson
           path: ArduinoJson
 
-      - uses: actions/checkout@v2
+      - uses: actions/checkout@v3
         with:
           repository: JeremyPoulter/OpenEVSE_Lib
           path: OpenEVSE_Lib
 
-      - uses: actions/checkout@v2
+      - uses: actions/checkout@v3
         with:
           repository: JeremyPoulter/EpoxyDuino
           path: EpoxyDuino
+
+      - uses: ammaraskar/gcc-problem-matcher@master
 
       - name: Build the simulator
         run: |
