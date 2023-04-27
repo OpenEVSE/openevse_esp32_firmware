@@ -75,7 +75,6 @@ ARDUINO_OBJ := \
   Arduino.o \
   Esp.o \
   IPAddress.o \
-  main.o \
   Print.o \
   SPI.o \
   StdioSerial.o \

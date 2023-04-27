@@ -101,12 +101,6 @@ time_t divertmode_get_time()
   return simulated_time;
 }
 
-void setup() {
-}
-
-void loop() {
-}
-
 int main(int argc, char** argv)
 {
   int voltage_arg = -1;
