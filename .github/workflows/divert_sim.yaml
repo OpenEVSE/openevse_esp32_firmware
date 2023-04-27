@@ -52,8 +52,8 @@ jobs:
 
       - uses: actions/checkout@v2
         with:
-          repository: JeremyPoulter/EpoxyFS
-          path: EpoxyFS
+          repository: JeremyPoulter/EpoxyDuino
+          path: EpoxyDuino
 
       - name: Build the simulator
         run: |
