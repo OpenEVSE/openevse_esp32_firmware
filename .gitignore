@@ -90,3 +90,4 @@ lib/StreamSpy
 lib/MicroTasks
 
 *.bin
+divert_sim/epoxyfsdata
