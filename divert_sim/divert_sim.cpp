@@ -2,10 +2,6 @@
 #include <sys/time.h>
 #include <string>
 
-#ifndef RAPI_PORT
-#define RAPI_PORT Console
-#endif
-
 #include "StdioSerial.h"
 #include "RapiSender.h"
 #include "openevse.h"
@@ -17,6 +13,9 @@
 #include "parser.hpp"
 #include "cxxopts.hpp"
 
+#include <MicroTasks.h>
+#include <EpoxyFS.h>
+
 using namespace aria::csv;
 
 EventLog eventLog;
@@ -25,7 +24,7 @@ DivertTask divert(evse);
 ManualOverride manual(evse);
 
 long pilot = 32;                      // OpenEVSE Pilot Setting
-long state = OPENEVSE_STATE_SLEEPING; // OpenEVSE State
+long state = OPENEVSE_STATE_CONNECTED; // OpenEVSE State
 String mqtt_solar = "";
 String mqtt_grid_ie = "";
 uint32_t flags;
@@ -154,6 +153,15 @@ int main(int argc, char** argv)
   solar = 0;
   grid_ie = 0;
 
+  fs::EpoxyFS.begin();
+  evse.begin();
+  divert.begin();
+
+  // Initialise the EVSE Manager
+  while (!evse.isConnected()) {
+    MicroTask.update();
+  }
+
   divert.setMode(DivertMode::Eco);
 
   CsvParser parser(std::cin);
@@ -185,6 +193,7 @@ int main(int argc, char** argv)
       }
 
       divert.update_state();
+      MicroTask.update();
 
       tm tm;
       gmtime_r(&simulated_time, &tm);

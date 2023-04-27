@@ -425,7 +425,7 @@ bool EnergyMeter::load()
 bool EnergyMeter::write(EnergyMeterData &data)
 {
     DBUGLN("Energy Meter: Saving data");
-    File file = LittleFS.open(ENERGY_METER_FILE, "w", true);
+    File file = LittleFS.open(ENERGY_METER_FILE, "w");
     if (!file)
     {
         file.close();
