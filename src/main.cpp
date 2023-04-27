@@ -220,7 +220,7 @@ loop() {
 
   if(net.isConnected())
   {
-    if (config_tesla_enabled()) {
+    if (vehicle_data_src == VEHICLE_DATA_SRC_TESLA) {
       teslaClient.loop();
     }
 

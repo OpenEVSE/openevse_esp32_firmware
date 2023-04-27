@@ -104,6 +104,9 @@ uint64_t tesla_expires_in;
 
 String tesla_vehicle_id;
 
+// Vehicle
+uint8_t vehicle_data_src;
+
 #if RGB_LED
 uint8_t led_brightness;
 #endif
@@ -185,6 +188,9 @@ ConfigOpt *opts[] =
 
 // Current Shaper settings
   new ConfigOptDefenition<uint32_t>(current_shaper_max_pwr, 0, "current_shaper_max_pwr", "smp"),
+
+// Vehicle settings
+  new ConfigOptDefenition<uint8_t>(vehicle_data_src, 0, "vehicle_data_src", "vds"),
 
 // Tesla client settings
   new ConfigOptSecret(tesla_access_token, "", "tesla_access_token", "tat"),

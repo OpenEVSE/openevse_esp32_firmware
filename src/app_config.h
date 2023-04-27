@@ -86,6 +86,14 @@ extern uint32_t scheduler_start_window;
 //Shaper settings
 extern uint32_t current_shaper_max_pwr;
 
+// Vehicle
+extern uint8_t vehicle_data_src;
+
+#define VEHICLE_DATA_SRC_NONE 0
+#define VEHICLE_DATA_SRC_TESLA 1
+#define VEHICLE_DATA_SRC_MQTT 2
+#define VEHICLE_DATA_SRC_HTTP 3
+
 // 24-bits of Flags
 extern uint32_t flags;
 
@@ -158,10 +166,6 @@ inline bool config_ocpp_auto_authorization() {
 
 inline bool config_ocpp_offline_authorization() {
   return CONFIG_OCPP_OFFLINE_AUTH == (flags & CONFIG_OCPP_OFFLINE_AUTH);
-}
-
-inline bool config_tesla_enabled() {
-  return CONFIG_SERVICE_TESLA == (flags & CONFIG_SERVICE_TESLA);
 }
 
 inline bool config_divert_enabled() {

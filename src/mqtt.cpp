@@ -95,7 +95,7 @@ void mqttmsg_callback(MongooseString topic, MongooseString payload) {
     DBUGF("voltage:%.1f", volts);
     evse.setVoltage(volts);
   }
-  else if (topic_string == mqtt_vehicle_soc)
+  else if (topic_string == mqtt_vehicle_soc && vehicle_data_src == VEHICLE_DATA_SRC_MQTT)
   {
     int vehicle_soc = payload_str.toInt();
     DBUGF("vehicle_soc:%d%%", vehicle_soc);
@@ -106,7 +106,7 @@ void mqttmsg_callback(MongooseString topic, MongooseString payload) {
     event["vehicle_state_update"] = 0;
     event_send(event);
   }
-  else if (topic_string == mqtt_vehicle_range)
+  else if (topic_string == mqtt_vehicle_range && vehicle_data_src == VEHICLE_DATA_SRC_MQTT)
   {
     int vehicle_range = payload_str.toInt();
     DBUGF("vehicle_range:%dKM", vehicle_range);
@@ -117,7 +117,7 @@ void mqttmsg_callback(MongooseString topic, MongooseString payload) {
     event["vehicle_state_update"] = 0;
     event_send(event);
   }
-  else if (topic_string == mqtt_vehicle_eta)
+  else if (topic_string == mqtt_vehicle_eta && vehicle_data_src == VEHICLE_DATA_SRC_MQTT)
   {
     int vehicle_eta = payload_str.toInt();
     DBUGF("vehicle_eta:%d", vehicle_eta);
