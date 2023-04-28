@@ -1,6 +1,15 @@
 #include "emonesp.h"
 #include "espal.h"
 
+#include <Arduino.h>
+#include <EEPROM.h>             // Save config settings
+#include <ConfigJson.h>
+#include <LittleFS.h>
+
+#include "app_config.h"
+#include "app_config_mqtt.h"
+#include "app_config_mode.h"
+
 #if ENABLE_CONFIG_CHANGE_NOTIFICATION
 #include "divert.h"
 #include "net_manager.h"
@@ -13,15 +22,6 @@
 #include "current_shaper.h"
 #include "limit.h"
 #endif
-
-#include "app_config.h"
-#include "app_config_mqtt.h"
-#include "app_config_mode.h"
-
-#include <Arduino.h>
-#include <EEPROM.h>             // Save config settings
-#include <ConfigJson.h>
-#include <LittleFS.h>
 
 #define EEPROM_SIZE       4096
 
