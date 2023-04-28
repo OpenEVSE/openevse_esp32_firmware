@@ -1,5 +1,7 @@
 #include "emonesp.h"
 #include "espal.h"
+
+#if ENABLE_CONFIG_CHANGE_NOTIFICATION
 #include "divert.h"
 #include "net_manager.h"
 #include "mqtt.h"
@@ -10,6 +12,7 @@
 #include "LedManagerTask.h"
 #include "current_shaper.h"
 #include "limit.h"
+#endif
 
 #include "app_config.h"
 #include "app_config_mqtt.h"
@@ -253,9 +256,14 @@ config_load_settings()
   user_config.onChanged(config_changed);
 
   factory_config.load(false);
-  if(!user_config.load(true)) {
+  if(!user_config.load(true))
+  {
+#if ENABLE_CONFIG_V1_IMPORT
     DBUGF("No JSON config found, trying v1 settings");
     config_load_v1_settings();
+#else
+    DBUGF("No JSON config found, using defaults");
+#endif
   }
 }
 
@@ -263,6 +271,7 @@ void config_changed(String name)
 {
   DBUGF("%s changed", name.c_str());
 
+#if ENABLE_CONFIG_CHANGE_NOTIFICATION
   if(name == "time_zone") {
     timeManager.setTimeZone(time_zone);
   } else if(name == "flags") {
@@ -319,6 +328,7 @@ void config_changed(String name)
   } else if(name == "sntp_enabled") {
     timeManager.setSntpEnabled(config_sntp_enabled());
   }
+#endif
 }
 
 void config_commit(bool factory)

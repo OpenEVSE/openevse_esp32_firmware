@@ -4,6 +4,14 @@
 #include <Arduino.h>
 #include <ArduinoJson.h>
 
+#ifndef ENABLE_CONFIG_V1_IMPORT
+#define ENABLE_CONFIG_V1_IMPORT 1
+#endif
+
+#ifndef ENABLE_CONFIG_CHANGE_NOTIFICATION
+#define ENABLE_CONFIG_CHANGE_NOTIFICATION 1
+#endif
+
 // -------------------------------------------------------------------
 // Load and save the OpenEVSE WiFi config.
 //
@@ -194,7 +202,9 @@ extern String ohm;
 // Load saved settings
 // -------------------------------------------------------------------
 extern void config_load_settings();
+#if ENABLE_CONFIG_V1_IMPORT
 extern void config_load_v1_settings();
+#endif
 
 // -------------------------------------------------------------------
 // Reset the config back to defaults

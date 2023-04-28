@@ -20,7 +20,9 @@ CPPFLAGS := \
   -I $(ARDUINO_LIB_DIR)/ConfigJson/src \
   -I $(ARDUINO_LIB_DIR)/ArduinoJson/src \
   -I $(ARDUINO_LIB_DIR)/OpenEVSE_Lib/src \
+  -I $(ARDUINO_LIB_DIR)/ESPAL/src \
   -I $(EPOXY_LIB_DIR)/EpoxyFS/src \
+  -I $(EPOXY_LIB_DIR)/EpoxyEepromEsp/src \
   -ggdb \
   -D DIVERT_SIM \
   -D ARDUINO=100 \
@@ -28,7 +30,9 @@ CPPFLAGS := \
   -D EPOXY_DUINO \
   -D EPOXY_CORE_ESP8266 \
   -D ENERGY_METER_STORE_STATE=0 \
-  -D ARDUINOJSON_ENABLE_PROGMEM=0
+  -D ARDUINOJSON_ENABLE_PROGMEM=0 \
+  -D ENABLE_CONFIG_V1_IMPORT=0 \
+  -D ENABLE_CONFIG_CHANGE_NOTIFICATION=0
 #  \
 #  -D ENABLE_DEBUG \
 #  -D ENABLE_DEBUG_DIVERT \
@@ -54,8 +58,8 @@ OPENEVSE_LIB_OBJ := \
   openevse.o \
   RapiSender.o
 
-#CONFIG_JSON_OBJ := \
-#  ConfigJson.o
+CONFIG_JSON_OBJ := \
+  ConfigJson.o
 
 STREAM_SPY_OBJ := \
   StreamSpy.o \
@@ -68,11 +72,13 @@ OPENEVSE_WIFI_OBJ := \
   energy_meter.o \
   event_log.o \
   debug.o \
-  manual.o
+  manual.o \
+  app_config.o
 
 ARDUINO_OBJ := \
   avr_stdlib.o \
   Arduino.o \
+  base64.o \
   Esp.o \
   IPAddress.o \
   Print.o \
@@ -88,13 +94,21 @@ EPOXY_FS_OBJ := \
   FS.o \
   FSImpl.o
 
+EPOXY_EEPROM_OBJ := \
+  EpoxyEepromEsp.o
+
+ESPAL_OBJ := \
+  espal.o
+
 OBJ    := \
   $(MICRO_TASKS_OBJ) \
   $(CONFIG_JSON_OBJ) \
   $(STREAM_SPY_OBJ) \
+  $(ESPAL_OBJ) \
   $(OPENEVSE_LIB_OBJ) \
   $(OPENEVSE_WIFI_OBJ) \
   $(EPOXY_FS_OBJ) \
+  $(EPOXY_EEPROM_OBJ) \
   $(ARDUINO_OBJ) \
   $(MAINS)
 DEPS   :=
@@ -106,7 +120,9 @@ VPATH 	:= \
   $(ARDUINO_LIB_DIR)/MicroTasks/src \
   $(ARDUINO_LIB_DIR)/ConfigJson/src \
   $(ARDUINO_LIB_DIR)/StreamSpy/src \
-  $(EPOXY_LIB_DIR)/EpoxyFS/src
+  $(ARDUINO_LIB_DIR)/ESPAL/src \
+  $(EPOXY_LIB_DIR)/EpoxyFS/src \
+  $(EPOXY_LIB_DIR)/EpoxyEepromEsp/src
 
 .PHONY: all clean
 
