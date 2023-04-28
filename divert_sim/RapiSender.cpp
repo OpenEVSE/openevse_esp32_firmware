@@ -182,6 +182,13 @@ RapiSender::sendCmdSync(String &cmd, unsigned long timeout)
           _tokens[3] = "-2560";
           _tokenCnt = 4;
         } break;
+        case 'U':
+        {
+          _tokens[0] = ok;
+          _tokens[1] = zero;
+          _tokens[2] = zero;
+          _tokenCnt = 3;
+        } break;
 
         default:
           DBUGF("Unhandled get command: %s", cmd.c_str());
