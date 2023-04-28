@@ -56,6 +56,11 @@ jobs:
           repository: JeremyPoulter/EpoxyDuino
           path: EpoxyDuino
 
+      - uses: actions/checkout@v3
+        with:
+          repository: JeremyPoulter/ESPAL
+          path: ESPAL
+
       - uses: ammaraskar/gcc-problem-matcher@master
 
       - name: Build the simulator
