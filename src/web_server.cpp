@@ -908,13 +908,14 @@ void handleDescribe(MongooseHttpServerRequest *request) {
 
 void handleAddRFID(MongooseHttpServerRequest *request) {
   MongooseHttpServerResponseStream *response;
-  if(false == requestPreProcess(request, response, CONTENT_TYPE_TEXT)) {
+  if(false == requestPreProcess(request, response)) {
     return;
   }
   response->setCode(200);
-  response->setContentType(CONTENT_TYPE_TEXT);
   response->addHeader("Access-Control-Allow-Origin", "*");
+  response->print("{\"msg\":\"Waiting for badge\"}");
   request->send(response);
+  yield();
   rfid.waitForTag();
 }
 

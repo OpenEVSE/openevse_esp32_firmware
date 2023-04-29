@@ -42,7 +42,7 @@ class RfidTask : public MicroTasks::Task {
          * SAE J1772 state
          */
         bool vehicleConnected = false;
-        
+
         void updateEvseClaim();
 
         std::function<bool(const String& idTag)> *onCardScanned {nullptr};
