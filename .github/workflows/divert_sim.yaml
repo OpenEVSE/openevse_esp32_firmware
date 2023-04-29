@@ -67,3 +67,22 @@ jobs:
         run: |
           cd OpenEVSE_WiFi/divert_sim
           make -j
+
+      - name: Upload artifacts
+        uses: actions/upload-artifact@v3
+        with:
+          name: divert_sim
+          path: OpenEVSE_WiFi/divert_sim/divert_sim
+      
+      - name: run tests
+        run: |
+          cd OpenEVSE_WiFi/divert_sim
+          bash runall.sh
+
+      - name : Upload test results
+        uses: actions/upload-artifact@v3
+        with:
+          name: test_results
+          path: |
+            OpenEVSE_WiFi/divert_sim/output
+            OpenEVSE_WiFi/divert_sim/view.html
