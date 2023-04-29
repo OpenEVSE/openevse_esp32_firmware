@@ -65,6 +65,7 @@ STREAM_SPY_OBJ := \
   StreamSpy.o \
 
 OPENEVSE_WIFI_OBJ := \
+  input_filter.o \
   divert.o \
   current_shaper.o \
   evse_man.o \
