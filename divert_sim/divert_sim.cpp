@@ -62,7 +62,7 @@ time_t parse_date(const char *dateStr)
     }
   }
 
-  tm time;
+  tm time = {0};
   time.tm_year = y - 1900; // Year since 1900
   time.tm_mon = M - 1;     // 0-11
   time.tm_mday = d;        // 1-31
