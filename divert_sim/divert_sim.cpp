@@ -2,28 +2,32 @@
 #include <sys/time.h>
 #include <string>
 
-#ifndef RAPI_PORT
-#define RAPI_PORT Console
-#endif
-
-#include "Console.h"
+#include "StdioSerial.h"
 #include "RapiSender.h"
 #include "openevse.h"
 #include "divert.h"
 #include "event.h"
+#include "event_log.h"
+#include "manual.h"
 
 #include "parser.hpp"
 #include "cxxopts.hpp"
 
+#include <MicroTasks.h>
+#include <EpoxyFS.h>
+
 using namespace aria::csv;
 
-RapiSender rapiSender(&RAPI_PORT);
+EventLog eventLog;
+EvseManager evse(RAPI_PORT, eventLog);
+DivertTask divert(evse);
+ManualOverride manual(evse);
 
 long pilot = 32;                      // OpenEVSE Pilot Setting
-long state = OPENEVSE_STATE_SLEEPING; // OpenEVSE State
-String mqtt_solar = "";
-String mqtt_grid_ie = "";
-uint32_t flags;
+long state = OPENEVSE_STATE_CONNECTED; // OpenEVSE State
+double voltage = 240; // Voltage from OpenEVSE or MQTT
+
+extern double smoothed_available_current;
 
 int date_col = 0;
 int grid_ie_col = -1;
@@ -33,13 +37,6 @@ int voltage_col = 1;
 time_t simulated_time = 0;
 
 bool kw = false;
-
-extern double smoothed_available_current;
-double divert_attack_smoothing_factor = 0.4;
-double divert_decay_smoothing_factor = 0.05;
-double divert_PV_ratio = 0.5;
-uint32_t divert_min_charge_time = (10 * 60);
-double voltage = 240; // Voltage from OpenEVSE or MQTT
 
 time_t parse_date(const char *dateStr)
 {
@@ -99,6 +96,7 @@ int main(int argc, char** argv)
 {
   int voltage_arg = -1;
   std::string sep = ",";
+  std::string config;
 
   cxxopts::Options options(argv[0], " - example command line options");
   options
@@ -111,8 +109,7 @@ int main(int argc, char** argv)
     ("d,date", "The date column", cxxopts::value<int>(date_col), "N")
     ("s,solar", "The solar column", cxxopts::value<int>(solar_col), "N")
     ("g,gridie", "The Grid IE column", cxxopts::value<int>(grid_ie_col), "N")
-    ("attack", "The attack factor for the smoothing", cxxopts::value<double>(divert_attack_smoothing_factor))
-    ("decay", "The decay factor for the smoothing", cxxopts::value<double>(divert_decay_smoothing_factor))
+    ("c,config", "Config options, either a file name or JSON", cxxopts::value<std::string>(config))
     ("v,voltage", "The Voltage column if < 50, else the fixed voltage", cxxopts::value<int>(voltage_arg), "N")
     ("kw", "values are KW")
     ("sep", "Field separator", cxxopts::value<std::string>(sep));
@@ -123,6 +120,22 @@ int main(int argc, char** argv)
   {
     std::cout << options.help({"", "Group"}) << std::endl;
     exit(0);
+  }
+
+  fs::EpoxyFS.begin();
+  config_reset();
+
+  // If config is set and not a JSON string, assume it is a file name
+  if(config.length() > 0 && config[0] != '{')
+  {
+    std::ifstream t(config);
+    std::stringstream buffer;
+    buffer << t.rdbuf();
+    config = buffer.str();
+  }
+  // If we have some JSON load it
+  if(config.length() > 0 && config[0] == '{') {
+    config_deserialize(config.c_str());
   }
 
   kw = result.count("kw") > 0;
@@ -141,7 +154,15 @@ int main(int argc, char** argv)
   solar = 0;
   grid_ie = 0;
 
-  divertmode_update(DIVERT_MODE_ECO);
+  evse.begin();
+  divert.begin();
+
+  // Initialise the EVSE Manager
+  while (!evse.isConnected()) {
+    MicroTask.update();
+  }
+
+  divert.setMode(DivertMode::Eco);
 
   CsvParser parser(std::cin);
   parser.delimiter(sep.c_str()[0]);
@@ -171,7 +192,8 @@ int main(int argc, char** argv)
         col++;
       }
 
-      divert_update_state();
+      divert.update_state();
+      MicroTask.update();
 
       tm tm;
       gmtime_r(&simulated_time, &tm);
@@ -183,7 +205,7 @@ int main(int argc, char** argv)
       int ev_watt = ev_pilot * voltage;
       int min_ev_watt = 6 * voltage;
 
-      double smoothed = smoothed_available_current * voltage;
+      double smoothed = divert.smoothedAvailableCurrent() * voltage;
 
       std::cout << buffer << "," << solar << "," << grid_ie << "," << ev_pilot << "," << ev_watt << "," << min_ev_watt << "," << state << "," << smoothed << std::endl;
     }
@@ -198,5 +220,9 @@ void event_send(String event)
 }
 
 void event_send(JsonDocument &event)
+{
+}
+
+void emoncms_publish(JsonDocument &data)
 {
 }

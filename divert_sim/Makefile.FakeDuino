@@ -1,0 +1,93 @@
+CPP      := g++
+
+BASE_ENV = openevse_wifi_v1
+
+CPPFLAGS := \
+  -I . \
+  -I ../include \
+  -I ../src \
+  -I FakeDuino \
+  -I "../.pio/libdeps/$(BASE_ENV)/Micro Debug/src" \
+  -I ../.pio/libdeps/$(BASE_ENV)/MicroTasks/include \
+  -I ../.pio/libdeps/$(BASE_ENV)/StreamSpy/src \
+  -I ../.pio/libdeps/$(BASE_ENV)/ArduinoJson/src \
+  -I ../.pio/libdeps/$(BASE_ENV)/OpenEVSE/src \
+  -ggdb \
+  -D DIVERT_SIM \
+  -D ARDUINO \
+  -D RAPI_PORT=Console \
+  -D ENERGY_METER_STORE_STATE=0 \
+  -D ARDUINOJSON_ENABLE_PROGMEM=0
+  # -D ENABLE_DEBUG
+  # -D DEBUG_PORT=Console
+LDFLAGS := -pthread
+
+TARGETS:= divert_sim
+MAINS  := $(addsuffix .o, $(TARGETS) )
+#OBJ    := kbd.o command.o display.o $(MAINS)
+#DEPS   := defs.h command.h
+
+MICRO_TASKS_OBJ := \
+  MicroTasks.o \
+  MicroTasksTask.o \
+  MicroTasksEvent.o \
+  MicroTasksEventListener.o \
+  MicroTasksAlarm.o \
+  MicroTasksNode.o \
+  MicroTasksList.o
+
+OPENEVSE_LIB_OBJ := \
+  openevse.o \
+  RapiSender.o
+
+STREAM_SPY_OBJ := \
+  StreamSpy.o \
+
+OPENEVSE_WIFI_OBJ := \
+  divert.o \
+  current_shaper.o \
+  evse_man.o \
+  evse_monitor.o \
+  energy_meter.o \
+  event_log.o \
+  debug.o \
+  manual.o
+
+ARDUINO_OBJ := \
+  WString.o \
+  Console.o \
+  Stream.o \
+  Print.o \
+  Core.o \
+  vfs_api.o \
+  FS.o \
+  LittleFS.o
+
+OBJ    := \
+  $(MICRO_TASKS_OBJ) \
+  $(STREAM_SPY_OBJ) \
+  $(OPENEVSE_LIB_OBJ) \
+  $(OPENEVSE_WIFI_OBJ) \
+  $(ARDUINO_OBJ) \
+  $(MAINS)
+DEPS   :=
+VPATH 	:= \
+  . \
+  ../src \
+  FakeDuino \
+  ../.pio/libdeps/$(BASE_ENV)/OpenEVSE/src \
+  ../.pio/libdeps/$(BASE_ENV)/MicroTasks/src \
+  ../.pio/libdeps/$(BASE_ENV)/StreamSpy/src
+
+.PHONY: all clean
+
+all: $(TARGETS)
+
+clean:
+	rm -f $(TARGETS) $(OBJ)
+
+$(OBJ): %.o : %.cpp $(DEPS)
+	$(CPP) -c -o $@ $< $(CPPFLAGS)
+
+$(TARGETS): % : $(filter-out $(MAINS), $(OBJ)) %.o
+	$(CPP) -o $@ $(LIBS) $^ $(CPPFLAGS) $(LDFLAGS)

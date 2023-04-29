@@ -1,6 +1,9 @@
 #if defined(ENABLE_DEBUG) && !defined(ENABLE_DEBUG_ENERGY_METER)
 #undef ENABLE_DEBUG
 #endif
+
+#include <sys/time.h>
+
 #include "energy_meter.h"
 #include "evse_monitor.h"
 
@@ -424,7 +427,7 @@ bool EnergyMeter::load()
 bool EnergyMeter::write(EnergyMeterData &data)
 {
   DBUGLN("Energy Meter: Saving data");
-  File file = LittleFS.open(ENERGY_METER_FILE, "w", true);
+  File file = LittleFS.open(ENERGY_METER_FILE, "w");
   if (!file)
   {
     file.close();
