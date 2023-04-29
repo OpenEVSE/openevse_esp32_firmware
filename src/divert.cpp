@@ -8,14 +8,9 @@
 
 #include <Arduino.h>
 #include "emonesp.h"
-#include "input.h"
-#include "app_config.h"
-#include "RapiSender.h"
-#include "mqtt.h"
-#include "event.h"
-#include "openevse.h"
 #include "divert.h"
 #include "emoncms.h"
+#include "event.h"
 
 #include <sys/time.h>
 

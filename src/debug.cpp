@@ -5,6 +5,8 @@
 #define DEBUG_PORT Serial
 #elif defined(ESP8266)
 #define DEBUG_PORT Serial1
+#elif defined(DIVERT_SIM)
+#define DEBUG_PORT Serial
 #else
 #error Platform not supported
 #endif
@@ -14,6 +16,8 @@
 #ifdef ESP32
 #define RAPI_PORT Serial1
 #elif defined(ESP8266)
+#define RAPI_PORT Serial
+#elif defined(DIVERT_SIM)
 #define RAPI_PORT Serial
 #else
 #error Platform not supported

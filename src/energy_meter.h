@@ -4,13 +4,14 @@
 #include <Arduino.h>
 #include <ArduinoJson.h>
 #include "emonesp.h"
-#include <LITTLEFS.h>
+#include <LittleFS.h>
 #include "app_config.h"
 
 #define MAX_INTERVAL 10000
 #define EVENT_INTERVAL 5000
 #define ROTATE_INTERVAL 6000
 #define SAVE_INTERVAL 5 * 60 * 1000 // save to flash each 5 minutes while charging
+
 #ifndef ENERGY_METER_FILE
 #define ENERGY_METER_FILE "/emeter.json"
 #endif

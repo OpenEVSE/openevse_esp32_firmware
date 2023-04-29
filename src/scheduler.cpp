@@ -12,7 +12,7 @@
 
 #include <algorithm>
 #include <vector>
-#include <LITTLEFS.h>
+#include <LittleFS.h>
 
 uint32_t Scheduler::Event::_next_id = 1;
 
