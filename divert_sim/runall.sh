@@ -30,8 +30,8 @@ test day1_grid_ie -g 2
 test day2_grid_ie -g 2
 test day3_grid_ie -g 2
 test solar-vrms -v 2
-test Energy_and_Power_Day_2020-03-22 --sep \; --kw --config '{"divert_decay_smoothing_factor":0.4}'
-test Energy_and_Power_Day_2020-03-31 --sep \; --kw --config '{"divert_decay_smoothing_factor":0.4}'
-test Energy_and_Power_Day_2020-04-01 --sep \; --kw --config '{"divert_decay_smoothing_factor":0.4}'
+test Energy_and_Power_Day_2020-03-22 --sep \; --kw --config '{"divert_decay_smoothing_time":120}'
+test Energy_and_Power_Day_2020-03-31 --sep \; --kw --config '{"divert_decay_smoothing_time":120}'
+test Energy_and_Power_Day_2020-04-01 --sep \; --kw --config '{"divert_decay_smoothing_time":120}'
 echo Passed $PASS tests, failed $FAIL tests
 exit $FAIL
