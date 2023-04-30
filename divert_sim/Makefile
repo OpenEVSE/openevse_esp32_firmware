@@ -131,6 +131,9 @@ all: $(TARGETS)
 clean:
 	rm -f $(TARGETS) $(OBJ)
 
+server:
+	python3 -m http.server
+
 $(OBJ): %.o : %.cpp $(DEPS)
 	$(CPP) -c -o $@ $< $(CPPFLAGS)
 
