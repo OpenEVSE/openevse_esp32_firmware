@@ -51,6 +51,7 @@ NetManagerTask::NetManagerTask(LcdTask &lcd, LedManagerTask &led, TimeManager &t
   _apClients(0),
   _state(NetState::Starting),
   _ipaddress(""),
+  _macaddress(""),
   _clientDisconnects(0),
   _clientRetry(false),
   _clientRetryTime(0),
@@ -118,6 +119,7 @@ void NetManagerTask::wifiStartAccessPoint()
   char tmpStr[40];
   sprintf(tmpStr, "%d.%d.%d.%d", myIP[0], myIP[1], myIP[2], myIP[3]);
   _ipaddress = tmpStr;
+  _macaddress = WiFi.macAddress();
 
   DEBUG.printf("AP IP Address: %s\n", tmpStr);
   DEBUG.printf("Channel: %d\n", WiFi.channel());
@@ -187,6 +189,7 @@ void NetManagerTask::haveNetworkConnection(IPAddress myAddress)
   char tmpStr[40];
   sprintf(tmpStr, "%d.%d.%d.%d", myAddress[0], myAddress[1], myAddress[2], myAddress[3]);
   _ipaddress = tmpStr;
+  _macaddress = WiFi.macAddress();
 
   DEBUG.print("Connected, IP: ");
   DEBUG.println(tmpStr);
@@ -210,11 +213,13 @@ void NetManagerTask::wifiOnStationModeConnected(const WiFiEventStationModeConnec
 void NetManagerTask::wifiOnStationModeGotIP(const WiFiEventStationModeGotIP &event)
 {
   haveNetworkConnection(WiFi.localIP());
+  _macaddress = WiFi.macAddress();
   StaticJsonDocument<128> doc;
   doc["wifi_client_connected"] = (int)net.isWifiClientConnected();
   doc["eth_connected"] = (int)net.isWiredConnected();
   doc["net_connected"] = (int)net.isWifiClientConnected();
   doc["ipaddress"] = net.getIp();
+  doc["macaddress"] = net.getMac();
   event_send(doc);
 
   // Clear any error state
@@ -467,6 +472,7 @@ void NetManagerTask::onNetEvent(WiFiEvent_t event, arduino_event_info_t &info)
       DBUG(ETH.linkSpeed());
       DBUGLN("Mbps");
       haveNetworkConnection(ETH.localIP());
+      _macaddress = ETH.macAddress();
       _ethConnected = true;
       wifiStop();
       break;
