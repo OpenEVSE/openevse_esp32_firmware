@@ -70,7 +70,7 @@ time_t parse_date(const char *dateStr)
   time.tm_min = m;         // 0-59
   time.tm_sec = s;         // 0-61 (0-60 in C++11)
 
-  return mktime(&time);
+  return timegm(&time);
 }
 
 int get_watt(const char *val)

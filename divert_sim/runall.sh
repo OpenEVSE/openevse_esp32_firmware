@@ -9,7 +9,7 @@ function test
   shift
   echo "Testing $file"
   ./divert_sim $@ < data/$file.csv > output/$file.csv
-  diff --side-by-side --suppress-common-lines snapshot/$file.csv output/$file.csv
+  diff -Z --side-by-side --suppress-common-lines snapshot/$file.csv output/$file.csv
   if [ $? -eq 0 ]; then
     echo "Test $file passed"
     ((PASS+=1))
