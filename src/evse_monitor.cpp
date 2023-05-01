@@ -254,6 +254,14 @@ void EvseMonitor::evseBoot(const char *firmware)
     _heartbeat = RAPI_RESPONSE_OK == ret;
   });
 
+  // ESP32_WiFi handle OpenEvse state, so let first put it to disabled before unlocking
+  if (config_pause_uses_disabled()) {
+    disable();
+  }
+  else {
+    sleep();
+  }
+
   // Unlock OpenEVSE if compiled with BOOTLOCK
   _openevse.clearBootLock([this](int ret)
   {
