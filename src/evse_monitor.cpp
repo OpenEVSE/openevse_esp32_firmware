@@ -255,7 +255,7 @@ void EvseMonitor::evseBoot(const char *firmware)
   });
 
   // Unlock OpenEVSE if compiled with BOOTLOCK
-  _openevse.clearBootLock([this](int ret) 
+  _openevse.clearBootLock([this](int ret)
   {
     if(RAPI_RESPONSE_OK == ret)
     {
