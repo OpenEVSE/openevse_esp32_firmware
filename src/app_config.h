@@ -4,6 +4,14 @@
 #include <Arduino.h>
 #include <ArduinoJson.h>
 
+#ifndef ENABLE_CONFIG_V1_IMPORT
+#define ENABLE_CONFIG_V1_IMPORT 1
+#endif
+
+#ifndef ENABLE_CONFIG_CHANGE_NOTIFICATION
+#define ENABLE_CONFIG_CHANGE_NOTIFICATION 1
+#endif
+
 // -------------------------------------------------------------------
 // Load and save the OpenEVSE WiFi config.
 //
@@ -194,19 +202,14 @@ extern String ohm;
 // Load saved settings
 // -------------------------------------------------------------------
 extern void config_load_settings();
+#if ENABLE_CONFIG_V1_IMPORT
 extern void config_load_v1_settings();
-
-// -------------------------------------------------------------------
-// Save the SNTP settings
-// -------------------------------------------------------------------
-extern void config_save_sntp(bool enable, String tz);
+#endif
 
 // -------------------------------------------------------------------
 // Reset the config back to defaults
 // -------------------------------------------------------------------
 extern void config_reset();
-
-void config_set_timezone(String tz);
 
 void config_set(const char *name, uint32_t val);
 void config_set(const char *name, String val);

@@ -37,10 +37,6 @@
 #define EVSE_MONITOR_TEMP_TIME              30
 #endif // !EVSE_MONITOR_TEMP_TIME
 
-#ifndef EVSE_MONITOR_ENERGY_TIME
-#define EVSE_MONITOR_ENERGY_TIME            2
-#endif // !EVSE_MONITOR_ENERGY_TIME
-
 #ifndef EVSE_HEATBEAT_INTERVAL
 #define EVSE_HEATBEAT_INTERVAL              5
 #endif
@@ -51,12 +47,10 @@
 #define EVSE_MONITOR_STATE_DATA_READY         (1 << 0)
 #define EVSE_MONITOR_AMP_AND_VOLT_DATA_READY  (1 << 1)
 #define EVSE_MONITOR_TEMP_DATA_READY          (1 << 2)
-#define EVSE_MONITOR_ENERGY_DATA_READY        (1 << 3)
 
 #define EVSE_MONITOR_DATA_READY (\
         EVSE_MONITOR_AMP_AND_VOLT_DATA_READY | \
-        EVSE_MONITOR_TEMP_DATA_READY | \
-        EVSE_MONITOR_ENERGY_DATA_READY \
+        EVSE_MONITOR_TEMP_DATA_READY \
 )
 
 #define EVSE_MONITOR_FAULT_COUNT_BOOT_READY     (1 << 0)
@@ -150,14 +144,11 @@ bool EvseMonitor::StateChangeEvent::update(uint32_t data)
 EvseMonitor::EvseMonitor(OpenEVSEClass &openevse) :
   MicroTasks::Task(),
   _openevse(openevse),
+  _energyMeter(),
   _state(),
   _amp(0),
   _voltage(VOLTAGE_DEFAULT),
-  _elapsed(0),
-  _elapsed_set_time(0),
   _temps(),
-  _session_wh(0),
-  _total_kwh(0),
   _gfci_count(0),
   _nognd_count(0),
   _stuck_count(0),
@@ -237,17 +228,6 @@ void EvseMonitor::evseBoot(const char *firmware)
     }
   });
 
-  _openevse.getEnergy([this](int ret, double session_wh, double total_kwh)
-  {
-    if(RAPI_RESPONSE_OK == ret)
-    {
-      DBUGF("session_wh = %.2f, total_kwh = %.2f", session_wh, total_kwh);
-      _total_kwh = total_kwh;
-
-      _boot_ready.ready(EVSE_MONITOR_ENERGY_BOOT_READY);
-    }
-  });
-
   _openevse.getAmmeterSettings([this](int ret, long scale, long offset)
   {
     if(RAPI_RESPONSE_OK == ret)
@@ -282,7 +262,7 @@ void EvseMonitor::evseBoot(const char *firmware)
       DBUGF("Unlocked OpenEVSE");
     }
     else {
-      DBUGF("Unlock OpenEVSE failed")
+      DBUGF("Unlock OpenEVSE failed");
     }
 
   });
@@ -294,33 +274,27 @@ void EvseMonitor::updateEvseState(uint8_t evse_state, uint8_t pilot_state, uint3
      _state.getPilotState() != pilot_state ||
      _state.getFlags() != vflags)
   {
-    _openevse.getEnergy([this, evse_state, pilot_state, vflags](int ret, double session_wh, double total_kwh)
+
+    bool originalVehicleConnected = _state.isVehicleConnected();
+
+    _state.setState(evse_state, pilot_state, vflags);
+    // check if we need to increment the relay counter
+    _energyMeter.increment_switch_counter();
+
+    if (false == originalVehicleConnected && _state.isVehicleConnected())
     {
-      if(RAPI_RESPONSE_OK == ret)
-      {
-        _session_wh = session_wh;
-        _total_kwh = total_kwh;
+      // Vehicle connected, reset the max temp
+      _temps[EVSE_MONITOR_TEMP_MAX].set(_temps[EVSE_MONITOR_TEMP_MONITOR].get());
+    }
 
-        _data_ready.ready(EVSE_MONITOR_ENERGY_DATA_READY);
-      }
-
-      bool originalVehicleConnected = _state.isVehicleConnected();
-
-      _state.setState(evse_state, pilot_state, vflags);
-
-      if(false == originalVehicleConnected && _state.isVehicleConnected()) {
-        // Vehicle connected, reset the max temp
-        _temps[EVSE_MONITOR_TEMP_MAX].set(_temps[EVSE_MONITOR_TEMP_MONITOR].get());
-      }
-
-      if(isError()) {
-        _openevse.getFaultCounters([this](int ret, long gfci_count, long nognd_count, long stuck_count) { updateFaultCounters(ret, gfci_count, nognd_count, stuck_count); });
-      }
-      if(!isCharging()) {
-        _amp = 0;
-      }
-      _session_complete.update(getFlags());
-    });
+    if(isError()) {
+      _openevse.getFaultCounters([this](int ret, long gfci_count, long nognd_count, long stuck_count) { updateFaultCounters(ret, gfci_count, nognd_count, stuck_count); });
+    }
+    if(!isCharging()) {
+      _amp = 0;
+      _power = 0;
+    }
+    _session_complete.update(getFlags());
   }
 }
 
@@ -381,16 +355,12 @@ unsigned long EvseMonitor::loop(MicroTasks::WakeReason reason)
     getTemperatureFromEvse();
   }
 
-  if(0 == _count % EVSE_MONITOR_ENERGY_TIME) {
-    getEnergyFromEvse();
-  }
-
   // Check if pilot is wrong ( solve OpenEvse fw compiled with -D PP_AUTO_AMPACITY)
+  // Fixed in latest OpenEvse firwmare
   if (isCharging()){
     verifyPilot();
   }
     
-
   _count ++;
 
   return EVSE_MONITOR_POLL_TIME;
@@ -413,6 +383,7 @@ bool EvseMonitor::begin(RapiSender &sender)
       evseBoot(firmware);
 
       MicroTask.startTask(this);
+      _energyMeter.begin(this);
     } else {
       DEBUG_PORT.println("OpenEVSE not responding or not connected");
     }
@@ -720,9 +691,6 @@ void EvseMonitor::getStatusFromEvse(bool allowStart)
       }
       updateEvseState(evse_state, pilot_state, vflags);
 
-      _elapsed = session_time;
-      _elapsed_set_time = millis();
-
       _data_ready.ready(EVSE_MONITOR_STATE_DATA_READY);
     }
   });
@@ -742,19 +710,24 @@ void EvseMonitor::getChargeCurrentAndVoltageFromEvse()
         if(VOLTAGE_MINIMUM <= volts && volts <= VOLTAGE_MAXIMUM) {
           _voltage = volts;
         }
+        _power = _amp * _voltage; 
+        if (config_threephase_enabled()) {
+          _power = _power * 3;
+        }
 
         StaticJsonDocument<64> event;
         event["amp"] = _amp * AMPS_SCALE_FACTOR;;
         event["voltage"] = _voltage * VOLTS_SCALE_FACTOR;
+        event["power"] = _power * POWER_SCALE_FACTOR;
         event_send(event);
-
-
         _data_ready.ready(EVSE_MONITOR_AMP_AND_VOLT_DATA_READY);
       }
     });
   } else {
     _data_ready.ready(EVSE_MONITOR_AMP_AND_VOLT_DATA_READY);
   }
+  // Update _energyMeter
+  _energyMeter.update();
 }
 
 void EvseMonitor::getTemperatureFromEvse()
@@ -794,28 +767,15 @@ void EvseMonitor::getTemperatureFromEvse()
   });
 }
 
-void EvseMonitor::getEnergyFromEvse()
+bool EvseMonitor::importTotalEnergy()
 {
-  if(_state.isCharging())
-  {
-    DBUGLN("Get charge energy usage");
-    _openevse.getEnergy([this](int ret, double session_wh, double total_kwh)
+  _openevse.getEnergy([this](int ret, double session_wh, double total_kwh)
     {
       if(RAPI_RESPONSE_OK == ret)
       {
-        DBUGF("session_wh = %.2f, total_kwh = %.2f", session_wh, total_kwh);
-        _session_wh = session_wh;
-        _total_kwh = total_kwh;
-
-        _data_ready.ready(EVSE_MONITOR_ENERGY_DATA_READY);
-        StaticJsonDocument<512> event;
-        event["session_energy"] = _session_wh;
-        event["total_energy"] = _total_kwh;
-        event["wh"] = _total_kwh * TOTAL_ENERGY_SCALE_FACTOR;
-        event_send(event);
+        DBUGF("Import total energy from OpenEvse %.2f", total_kwh);
+        _energyMeter.importTotalEnergy(total_kwh);
       }
     });
-  } else {
-    _data_ready.ready(EVSE_MONITOR_ENERGY_DATA_READY);
-  }
+  return true;
 }

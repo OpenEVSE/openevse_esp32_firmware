@@ -75,6 +75,9 @@ void handleUpdateRequest(MongooseHttpServerRequest *request);
 size_t handleUpdateUpload(MongooseHttpServerRequest *request, int ev, MongooseString filename, uint64_t index, uint8_t *data, size_t len);
 void handleUpdateClose(MongooseHttpServerRequest *request);
 
+void handleTime(MongooseHttpServerRequest *request);
+void handleTimePost(MongooseHttpServerRequest *request, MongooseHttpServerResponseStream *response);
+
 extern uint32_t config_version;
 
 void dumpRequest(MongooseHttpServerRequest *request)
@@ -206,6 +209,7 @@ void buildStatus(DynamicJsonDocument &doc) {
   doc["eth_connected"] = (int)net.isWiredConnected();
   doc["net_connected"] = (int)net.isWifiClientConnected();
   doc["ipaddress"] = net.getIp();
+  doc["macaddress"] = net.getMac();
 
   doc["emoncms_connected"] = (int)emoncms_connected;
   doc["packets_sent"] = packets_sent;
@@ -230,12 +234,6 @@ void buildStatus(DynamicJsonDocument &doc) {
 
   create_rapi_json(doc);
 
-  doc["status"] = evse.getState().toString();
-
-  doc["elapsed"] = evse.getSessionElapsed();
-  doc["wattsec"] = evse.getSessionEnergy() * SESSION_ENERGY_SCALE_FACTOR;
-  doc["watthour"] = evse.getTotalEnergy() * TOTAL_ENERGY_SCALE_FACTOR;
-
   doc["gfcicount"] = evse.getFaultCountGFCI();
   doc["nogndcount"] = evse.getFaultCountNoGround();
   doc["stuckcount"] = evse.getFaultCountStuckRelay();
@@ -245,8 +243,6 @@ void buildStatus(DynamicJsonDocument &doc) {
   doc["charge_rate"] = divert.getChargeRate();
   doc["divert_update"] = (millis() - divert.getLastUpdate()) / 1000;
   doc["divert_active"] = divert.isActive();
-  doc["divertmode"] = (uint8_t)divert.getMode();
-
   doc["shaper"] = shaper.getState()?1:0;
   doc["shaper_live_pwr"] = shaper.getLivePwr();
   // doc["shaper_cur"] = shaper.getChgCur();
@@ -256,8 +252,6 @@ void buildStatus(DynamicJsonDocument &doc) {
   doc["limit"] = limit.hasLimit();
 
   doc["ota_update"] = (int)Update.isRunning();
-  doc["time"] = String(time);
-  doc["offset"] = String(offset);
 
   doc["config_version"] = config_version;
   doc["claims_version"] = evse.getClaimsVersion();
@@ -286,6 +280,8 @@ void buildStatus(DynamicJsonDocument &doc) {
       doc["time_to_full_charge"] = evse.getVehicleEta();
     }
   }
+
+  DBUGF("/status ArduinoJson size: %dbytes", doc.size());
 }
 
 // -------------------------------------------------------------------
@@ -352,7 +348,8 @@ handleDivertMode(MongooseHttpServerRequest *request){
     return;
   }
 
-  divert.setMode((DivertMode)(request->getParam("divertmode").toInt()));
+  DivertMode divertmode = (DivertMode)(request->getParam("divertmode").toInt());
+  divert.setMode(divertmode);
 
   response->setCode(200);
   response->print("Divert Mode changed");
@@ -384,54 +381,15 @@ handleCurrentShaper(MongooseHttpServerRequest *request) {
 // Manually set the time
 // url: /settime
 // -------------------------------------------------------------------
-void
-handleSetTime(MongooseHttpServerRequest *request) {
+void handleSetTime(MongooseHttpServerRequest *request)
+{
   MongooseHttpServerResponseStream *response;
   if(false == requestPreProcess(request, response, CONTENT_TYPE_TEXT)) {
     return;
   }
 
-  bool qsntp_enable = isPositive(request, "ntp");
-  if(qsntp_enable)
-  {
-    String qtz = request->getParam("tz");
-    config_save_sntp(true, qtz);
-    time_check_now();
-  }
-  else
-  {
-    config_save_sntp(false, "UTC0");
-    String time = request->getParam("time");
+  handleTimePost(request, response);
 
-    struct tm tm;
-
-    int yr, mnth, d, h, m, s;
-    if(6 == sscanf( time.c_str(), "%4d-%2d-%2dT%2d:%2d:%2dZ", &yr, &mnth, &d, &h, &m, &s))
-    {
-      tm.tm_year = yr - 1900;
-      tm.tm_mon = mnth - 1;
-      tm.tm_mday = d;
-      tm.tm_hour = h;
-      tm.tm_min = m;
-      tm.tm_sec = s;
-
-      struct timeval set_time = {0,0};
-      set_time.tv_sec = mktime(&tm);
-
-      time_set_time(set_time, "manual");
-
-    }
-    else
-    {
-      response->setCode(400);
-      response->print("could not parse time");
-      request->send(response);
-      return;
-    }
-  }
-
-  response->setCode(200);
-  response->print("set");
   request->send(response);
 }
 
@@ -472,7 +430,7 @@ void handleStatusPost(MongooseHttpServerRequest *request, MongooseHttpServerResp
 {
   String body = request->body().toString();
   // Deserialize the JSON document
-  const size_t capacity = JSON_OBJECT_SIZE(128) + 1024;
+  const size_t capacity = JSON_OBJECT_SIZE(32) + 1024;
   DynamicJsonDocument doc(capacity);
   DeserializationError error = deserializeJson(doc, body);
   if(!error)
@@ -489,7 +447,7 @@ void handleStatusPost(MongooseHttpServerRequest *request, MongooseHttpServerResp
     {
       double shaper_live_pwr = doc["shaper_live_pwr"];
       shaper.setLivePwr(shaper_live_pwr);
-      DBUGF("shaper: available power:%dW", shaper.getAvlPwr());
+      DBUGF("shaper: live power:%dW", shaper.getLivePwr());
     }
     if(doc.containsKey("solar")) {
       solar = doc["solar"];
@@ -533,7 +491,6 @@ void handleStatusPost(MongooseHttpServerRequest *request, MongooseHttpServerResp
     if(send_event) {
       event_send(doc);
     }
-
     response->setCode(200);
     serializeJson(doc, *response);
   } else {
@@ -554,7 +511,7 @@ handleStatus(MongooseHttpServerRequest *request)
 
   if(HTTP_GET == request->method()) {
 
-    const size_t capacity = JSON_OBJECT_SIZE(40) + 1024;
+    const size_t capacity = JSON_OBJECT_SIZE(128) + 2048;
     DynamicJsonDocument doc(capacity);
     buildStatus(doc);
     response->setCode(200);
@@ -753,15 +710,73 @@ void handleLimit(MongooseHttpServerRequest *request)
 }
 
 //----------------------------------------------------------
-
-void handleOverrideGet(MongooseHttpServerRequest *request, MongooseHttpServerResponseStream *response)
+//
+//            Energy Meter
+//
+//----------------------------------------------------------
+void handleEmeterDelete(MongooseHttpServerRequest *request, MongooseHttpServerResponseStream *response)
 {
-  if(manual.isActive())
+  String body = request->body().toString();
+  DynamicJsonDocument doc(512);
+  DeserializationError err = deserializeJson(doc, body);
+  if (DeserializationError::Code::Ok == err) {
+    if (doc.containsKey("hard") && doc.containsKey("import")) {
+      bool hardreset = (bool)doc["hard"];
+      bool import = (bool)doc["import"];
+      if (evse.resetEnergyMeter(hardreset,import)) {
+        response->setCode(200);
+        response->print("{\"msg\":\"Reset done\"}");
+      }
+      else {
+        response->setCode(500);
+        response->print("{\"msg\":\"Reset failed\"}");
+      }
+
+    }
+    else {
+      response->setCode(500);
+      response->print("{\"msg\":\"Reset Failed\"}");
+    }
+  }
+  else {
+    response->setCode(500);
+    response->print("{\"msg\":\"reset Failed\"}");
+  }
+}
+
+void handleEmeter(MongooseHttpServerRequest *request)
+{
+  MongooseHttpServerResponseStream *response;
+  if (false == requestPreProcess(request, response))
   {
-    EvseProperties props;
-    manual.getProperties(props);
-    props.serialize(response);
-  } else {
+    return;
+  }
+
+  if (HTTP_DELETE == request->method())
+  {
+    handleEmeterDelete(request, response);
+  }
+  else
+  {
+    response->setCode(405);
+    response->print("{\"msg\":\"Method not allowed\"}");
+  }
+
+  request->send(response);
+}
+
+
+
+  //----------------------------------------------------------
+
+  void handleOverrideGet(MongooseHttpServerRequest * request, MongooseHttpServerResponseStream * response)
+  {
+    if (manual.isActive())
+    {
+      EvseProperties props;
+      manual.getProperties(props);
+      props.serialize(response);
+    } else {
     response->setCode(404);
     response->print("{\"msg\":\"No manual override\"}");
   }
@@ -894,13 +909,14 @@ void handleDescribe(MongooseHttpServerRequest *request) {
 
 void handleAddRFID(MongooseHttpServerRequest *request) {
   MongooseHttpServerResponseStream *response;
-  if(false == requestPreProcess(request, response, CONTENT_TYPE_TEXT)) {
+  if(false == requestPreProcess(request, response)) {
     return;
   }
   response->setCode(200);
-  response->setContentType(CONTENT_TYPE_TEXT);
   response->addHeader("Access-Control-Allow-Origin", "*");
+  response->print("{\"msg\":\"Waiting for badge\"}");
   request->send(response);
+  yield();
   rfid.waitForTag();
 }
 
@@ -1060,6 +1076,17 @@ void handleNotFound(MongooseHttpServerRequest *request)
 void onWsFrame(MongooseHttpWebSocketConnection *connection, int flags, uint8_t *data, size_t len)
 {
   DBUGF("Got message %.*s", len, (const char *)data);
+  const size_t capacity = JSON_OBJECT_SIZE(1) + 16;
+  DynamicJsonDocument doc(capacity);
+  DeserializationError error = deserializeJson(doc, data, len);
+  if (!error) {
+    if (doc.containsKey("ping") && doc["ping"].is<int8_t>())
+      {
+        // answer pong
+        connection->send("{\"pong\": 1}");
+
+      }
+  }
 }
 
 void onWsConnect(MongooseHttpWebSocketConnection *connection)
@@ -1121,6 +1148,8 @@ web_server_setup() {
   server.on("/logs", handleEventLogs);
 
   server.on("/limit", handleLimit);
+  server.on("/emeter", handleEmeter);
+  server.on("/time", handleTime);
 
   // Simple Firmware Update Form
   server.on("/update$")->

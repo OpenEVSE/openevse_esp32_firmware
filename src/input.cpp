@@ -57,6 +57,10 @@ class InputTask : public MicroTasks::Task
           // Already evented to MQTT etc
           teslaClient.getChargeInfoJson(data);
           emoncms_publish(data);
+          // Publish EnergyMeter data if not charging
+          if(!evse.isCharging()) {
+            evse.publishEnergyMeter();
+          }
         }
       }
 
@@ -74,6 +78,7 @@ class InputTask : public MicroTasks::Task
         event["elapsed"] = evse.getSessionElapsed();
         event["amp"] = evse.getAmps() * AMPS_SCALE_FACTOR;
         event["voltage"] = evse.getVoltage() * VOLTS_SCALE_FACTOR;
+        event["power"] = evse.getPower() * POWER_SCALE_FACTOR;
 
         event_send(event);
       }
@@ -97,10 +102,8 @@ void create_rapi_json(JsonDocument &doc)
   }
   doc["amp"] = evse.getAmps() * AMPS_SCALE_FACTOR;
   doc["voltage"] = evse.getVoltage() * VOLTS_SCALE_FACTOR;
+  doc["power"] = evse.getPower() * POWER_SCALE_FACTOR;
   doc["pilot"] = evse.getChargeCurrent();
-  doc["wh"] = evse.getTotalEnergy() * TOTAL_ENERGY_SCALE_FACTOR;
-  doc["session_energy"] = evse.getSessionEnergy();
-  doc["total_energy"] = evse.getTotalEnergy();
   if(evse.isTemperatureValid(EVSE_MONITOR_TEMP_MONITOR)) {
     doc["temp"] = evse.getTemperature(EVSE_MONITOR_TEMP_MONITOR) * TEMP_SCALE_FACTOR;
   } else {
@@ -142,17 +145,14 @@ void create_rapi_json(JsonDocument &doc)
   doc["freeram"] = ESPAL.getFreeHeap();
   doc["divertmode"] = (uint8_t)divert.getMode();
   doc["srssi"] = WiFi.RSSI();
-  // get the current time
-  char time[64];
-  char offset[8];
-  struct timeval local_time;
-  gettimeofday(&local_time, NULL);
-  struct tm * timeinfo = gmtime(&local_time.tv_sec);
-  strftime(time, sizeof(time), "%FT%TZ", timeinfo);
-  strftime(offset, sizeof(offset), "%z", timeinfo);
-  doc["time"] = time;
-  doc["offset"] = offset;
+
+  timeManager.serialise(doc);
+  // get EnergyMeter data
+  evse.createEnergyMeterJsonDoc(doc);
+  // Deprecated properties, will be removed soon
   doc["elapsed"] = evse.getSessionElapsed();
+  doc["wattsec"] = evse.getSessionEnergy() * SESSION_ENERGY_SCALE_FACTOR;
+  doc["watthour"] = evse.getTotalEnergy() * TOTAL_ENERGY_SCALE_FACTOR;
 }
 
 void

@@ -36,4 +36,7 @@
 extern void setup(void);
 extern void loop(void);
 
+#define interrupts()
+#define noInterrupts() 
+
 #endif

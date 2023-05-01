@@ -8,7 +8,9 @@
 #ifdef ENABLE_DEBUG
 #define DBG
 #endif
-#define DBUGF
+
+extern long pilot;
+extern long state;
 
 static CommandItem commandQueueItems[RAPI_MAX_COMMANDS];
 
@@ -57,15 +59,24 @@ void RapiSender::_commandComplete(int result)
 }
 
 void
-RapiSender::sendCmd(const char *cmdstr, RapiCommandCompleteHandler callback, unsigned long timeout) {
+RapiSender::sendCmd(const char *cmdstr, RapiCommandCompleteHandler callback, unsigned long timeout)
+{
+  String cmd = cmdstr;
+  return sendCmd(cmd, callback, timeout);
 }
 
 void
-RapiSender::sendCmd(String &cmdstr, RapiCommandCompleteHandler callback, unsigned long timeout) {
+RapiSender::sendCmd(String &cmdstr, RapiCommandCompleteHandler callback, unsigned long timeout)
+{
+  int ret = sendCmdSync(cmdstr, timeout);
+  callback(ret);
 }
 
 void
-RapiSender::sendCmd(const __FlashStringHelper *cmdstr, RapiCommandCompleteHandler callback, unsigned long timeout) {
+RapiSender::sendCmd(const __FlashStringHelper *cmdstr, RapiCommandCompleteHandler callback, unsigned long timeout)
+{
+  String cmd = cmdstr;
+  return sendCmd(cmd, callback, timeout);
 }
 
 int
@@ -77,61 +88,169 @@ RapiSender::sendCmdSync(const char *cmdstr, unsigned long timeout) {
 int
 RapiSender::sendCmdSync(String &cmd, unsigned long timeout)
 {
+  DBUGVAR(cmd);
+
   static char ok[] = "$OK";
   static char zero[] = "0";
-  static char buf1[16];
+  static char buf1[32];
 
-  if(cmd == "$GE") 
+  switch (cmd[1])
   {
-    sprintf(buf1, "%ld", pilot);
-    _tokens[0] = ok;
-    _tokens[1] = buf1;
-    _tokens[2] = zero;
-    _tokenCnt = 3;
+    case 'G':
+      switch(cmd[2])
+      {
+        case 'E':
+        {
+          sprintf(buf1, "%ld", pilot);
+          _tokens[0] = ok;
+          _tokens[1] = buf1;
+          _tokens[2] = zero;
+          _tokenCnt = 3;
+        } break;
+
+        case 'D':
+        {
+          _tokens[0] = ok;
+          _tokens[1] = zero;
+          _tokens[2] = zero;
+          _tokens[3] = zero;
+          _tokens[4] = zero;
+          _tokenCnt = 5;
+        } break;
+        case 'G':
+        {
+          _tokens[0] = ok;
+          _tokens[1] = zero;
+          _tokenCnt = 2;
+        } break;
+        case 'V':
+        {
+          _tokens[0] = ok;
+          _tokens[1] = "1.2.3";
+          _tokens[2] = "1.2.3";
+          _tokenCnt = 3;
+        } break;
+        case 'F':
+        {
+          _tokens[0] = ok;
+          _tokens[1] = zero;
+          _tokens[2] = zero;
+          _tokens[3] = zero;
+          _tokenCnt = 4;
+        } break;
+        case 'C':
+        {
+          sprintf(buf1, "%ld", pilot);
+          _tokens[0] = ok;
+          _tokens[1] = "6";
+          _tokens[2] = "32";
+          _tokens[3] = buf1;
+          _tokens[4] = "32";
+          _tokenCnt = 5;
+        } break;
+        case 'A':
+        {
+          _tokens[0] = ok;
+          _tokens[1] = "220";
+          _tokens[2] = zero;
+          _tokenCnt = 3;
+        } break;
+        case 'I':
+        {
+          _tokens[0] = ok;
+          _tokens[1] = "Y57414FF020F0C";
+          _tokenCnt = 2;
+        } break;
+        case 'S':
+        {
+          char *ptr = buf1;
+
+          _tokens[0] = ok;
+          _tokens[1] = ptr;
+          ptr += sprintf(ptr, "%ld", state) + 1;
+          _tokens[2] = zero;
+          _tokens[3] = ptr;
+          ptr += sprintf(ptr, "%ld", state) + 1; // Should not reflect the Sleep/Disabled state
+          _tokens[4] = zero;
+          _tokenCnt = 5;
+        } break;
+        case 'P':
+        {
+          _tokens[0] = ok;
+          _tokens[1] = "200";
+          _tokens[2] = "-2560";
+          _tokens[3] = "-2560";
+          _tokenCnt = 4;
+        } break;
+        case 'U':
+        {
+          _tokens[0] = ok;
+          _tokens[1] = zero;
+          _tokens[2] = zero;
+          _tokenCnt = 3;
+        } break;
+
+        default:
+          DBUGF("Unhandled get command: %s", cmd.c_str());
+          return RAPI_RESPONSE_NK;
+      } break;
+
+    case 'S':
+      switch(cmd[2])
+      {
+        case 'C':
+        {
+          sscanf(cmd.c_str(), "$SC %ld V", &pilot);
+          _tokens[0] = ok;
+          _tokenCnt = 1;
+        } break;
+        case 'Y':
+        {
+          _tokens[0] = ok;
+          _tokenCnt = 1;
+        } break;
+        case 'B':
+        {
+          _tokens[0] = ok;
+          _tokenCnt = 1;
+        } break;
+
+        default:
+          DBUGF("Unhandled set command: %s", cmd.c_str());
+          return RAPI_RESPONSE_NK;
+      } break;
+
+    case 'F':
+      switch(cmd[2])
+      {
+        case 'E':
+        {
+          state = OPENEVSE_STATE_CHARGING;
+          _tokens[0] = ok;
+          _tokenCnt = 1;
+        } break;
+        case 'D':
+        {
+          state = OPENEVSE_STATE_DISABLED;
+          _tokens[0] = ok;
+          _tokenCnt = 1;
+        } break;
+        case 'S':
+        {
+          state = OPENEVSE_STATE_SLEEPING;
+          _tokens[0] = ok;
+          _tokenCnt = 1;
+        } break;
+
+        default:
+          DBUGF("Unhandled function command: %s", cmd.c_str());
+          return RAPI_RESPONSE_NK;
+      } break;
+
+    default:
+      break;
   }
-  else if(cmd.startsWith("$SC")) 
-  {
-    sscanf(cmd.c_str(), "$SC %ld V", &pilot);
-    _tokens[0] = ok;
-    _tokenCnt = 1;
-  }
-  else if(cmd == "$GD") 
-  {
-    _tokens[0] = ok;
-    _tokens[1] = zero;
-    _tokens[2] = zero;
-    _tokens[3] = zero;
-    _tokens[4] = zero;
-    _tokenCnt = 5;
-  }
-  else if(cmd == "$FE") 
-  {
-    state = OPENEVSE_STATE_CHARGING;
-    _tokens[0] = ok;
-    _tokenCnt = 1;
-  }
-  else if(cmd == "$FD") 
-  {
-    state = OPENEVSE_STATE_DISABLED;
-    _tokens[0] = ok;
-    _tokenCnt = 1;
-  }
-  else if(cmd == "$FS") 
-  {
-    state = OPENEVSE_STATE_SLEEPING;
-    _tokens[0] = ok;
-    _tokenCnt = 1;
-  }
-  else if(cmd == "$GG") 
-  {
-    _tokens[0] = ok;
-    _tokens[1] = zero;
-    _tokenCnt = 2;
-  }
-  else
-  {
-    DBUGF("Unhandled command: %s", cmd.c_str());
-  }
+
 
   return RAPI_RESPONSE_OK;
 }

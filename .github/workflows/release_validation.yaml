@@ -21,7 +21,7 @@ jobs:
       - name: Set up Node JS
         uses: actions/setup-node@v3
         with:
-          node-version: '12'
+          node-version: '16'
 
       - name: Install dependencies
         run: |
@@ -51,16 +51,21 @@ jobs:
       ### Check the version number in the code matches the tag number
       - uses: actions/checkout@v3
 
+      - name: Set up Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.x'
+
       - name: Retrieve the version number(s)
         run: |
-          TAG_VERSION=$(sed "s/^v//" <<< $GITHUB_REF_NAME)
-          CODE_VERSION=$(grep BUILD_TAG platformio.ini | awk -F= '{print $NF}')
+          TAG_VERSION=$GITHUB_REF_NAME
+          CODE_VERSION=$(python3 scripts/auto_fw_version.py | grep -E 'BUILD_TAG=([^ ]+)' -o | cut -d= -f2)
           echo TAG_VERSION=$TAG_VERSION >> $GITHUB_ENV
           echo CODE_VERSION=$CODE_VERSION >> $GITHUB_ENV
 
-      - name: Check the version numberis semver compliant
+      - name: Check the version number is semver compliant
         run: |
-          if ! [[ $TAG_VERSION =~ ^[0-9]+\.[0-9]+\.[0-9]+(-[a-z]*[0-9]+)?$ ]]; then
+          if ! [[ $TAG_VERSION =~ ^v[0-9]+\.[0-9]+\.[0-9]+(-[a-z]*[0-9]+)?$ ]]; then
             echo "ERROR: The version number is not semver compliant"
             exit 1
           fi

@@ -1,5 +1,16 @@
 #include "emonesp.h"
 #include "espal.h"
+
+#include <Arduino.h>
+#include <EEPROM.h>             // Save config settings
+#include <ConfigJson.h>
+#include <LittleFS.h>
+
+#include "app_config.h"
+#include "app_config_mqtt.h"
+#include "app_config_mode.h"
+
+#if ENABLE_CONFIG_CHANGE_NOTIFICATION
 #include "divert.h"
 #include "net_manager.h"
 #include "mqtt.h"
@@ -10,15 +21,7 @@
 #include "LedManagerTask.h"
 #include "current_shaper.h"
 #include "limit.h"
-
-#include "app_config.h"
-#include "app_config_mqtt.h"
-#include "app_config_mode.h"
-
-#include <Arduino.h>
-#include <EEPROM.h>             // Save config settings
-#include <ConfigJson.h>
-#include <LITTLEFS.h>
+#endif
 
 #define EEPROM_SIZE       4096
 
@@ -136,7 +139,7 @@ ConfigOpt *opts[] =
   new ConfigOptDefenition<String>(sntp_hostname, SNTP_DEFAULT_HOST, "sntp_hostname", "sh"),
 
 // Time
-  new ConfigOptDefenition<String>(time_zone, "", "time_zone", "tz"),
+  new ConfigOptDefenition<String>(time_zone, DEFAULT_TIME_ZONE, "time_zone", "tz"),
 
 // Limit
   new ConfigOptDefenition<String>(limit_default_type, {}, "limit_default_type", "ldt"),
@@ -206,7 +209,7 @@ ConfigOpt *opts[] =
   new ConfigOptVirtualBool(flagsOpt, CONFIG_SERVICE_EMONCMS, CONFIG_SERVICE_EMONCMS, "emoncms_enabled", "ee"),
   new ConfigOptVirtualBool(flagsOpt, CONFIG_SERVICE_MQTT, CONFIG_SERVICE_MQTT, "mqtt_enabled", "me"),
   new ConfigOptVirtualBool(flagsOpt, CONFIG_MQTT_ALLOW_ANY_CERT, 0, "mqtt_reject_unauthorized", "mru"),
-  new ConfigOptVirtualBool(flagsOpt, CONFIG_MQTT_RETAINED, 0, "mqtt_retained", "mrt"),
+  new ConfigOptVirtualBool(flagsOpt, CONFIG_MQTT_RETAINED, CONFIG_MQTT_RETAINED, "mqtt_retained", "mrt"),
   new ConfigOptVirtualBool(flagsOpt, CONFIG_SERVICE_OHM, CONFIG_SERVICE_OHM, "ohm_enabled", "oe"),
   new ConfigOptVirtualBool(flagsOpt, CONFIG_SERVICE_SNTP, CONFIG_SERVICE_SNTP, "sntp_enabled", "se"),
   new ConfigOptVirtualBool(flagsOpt, CONFIG_SERVICE_TESLA, CONFIG_SERVICE_TESLA, "tesla_enabled", "te"),
@@ -253,9 +256,14 @@ config_load_settings()
   user_config.onChanged(config_changed);
 
   factory_config.load(false);
-  if(!user_config.load(true)) {
+  if(!user_config.load(true))
+  {
+#if ENABLE_CONFIG_V1_IMPORT
     DBUGF("No JSON config found, trying v1 settings");
     config_load_v1_settings();
+#else
+    DBUGF("No JSON config found, using defaults");
+#endif
   }
 }
 
@@ -263,8 +271,9 @@ void config_changed(String name)
 {
   DBUGF("%s changed", name.c_str());
 
+#if ENABLE_CONFIG_CHANGE_NOTIFICATION
   if(name == "time_zone") {
-    config_set_timezone(time_zone);
+    timeManager.setTimeZone(time_zone);
   } else if(name == "flags") {
     divert.setMode((config_divert_enabled() && 1 == config_charge_mode()) ? DivertMode::Eco : DivertMode::Normal);
     if(mqtt_connected() != config_mqtt_enabled()) {
@@ -273,6 +282,7 @@ void config_changed(String name)
     if(emoncms_connected != config_emoncms_enabled()) {
       emoncms_updated = true;
     }
+    timeManager.setSntpEnabled(config_sntp_enabled());
     ArduinoOcppTask::notifyConfigChanged();
     evse.setSleepForDisable(!config_pause_uses_disabled());
   } else if(name.startsWith("mqtt_")) {
@@ -300,19 +310,25 @@ void config_changed(String name)
   } else if(name.startsWith("limit_default_")) {
     LimitProperties limitprops;
     LimitType limitType;
+    DBUGVAR(limit_default_type);
+    DBUGVAR((int)limit_default_value);
     limitType.fromString(limit_default_type.c_str());
     limitprops.setType(limitType);
     limitprops.setValue(limit_default_value);
     limitprops.setAutoRelease(false);
     if (limitType == LimitType::None) {
-      uint32_t val = 0;
-      config_set("limit_default_value", val);
-      config_commit();
       limit.clear();
+      DBUGLN("No limit to set");
     }
-    else 
+    else if (limitprops.getValue())
       limit.set(limitprops);
+    DBUGLN("Limit set");
+    DBUGVAR(limitprops.getType().toString());
+    DBUGVAR(limitprops.getValue());
+  } else if(name == "sntp_enabled") {
+    timeManager.setSntpEnabled(config_sntp_enabled());
   }
+#endif
 }
 
 void config_commit(bool factory)
@@ -359,37 +375,8 @@ void config_set(const char *name, double val) {
   user_config.set(name, val);
 }
 
-
-
-void
-config_save_sntp(bool sntp_enable, String tz)
+void config_reset()
 {
-  uint32_t newflags = flags & ~CONFIG_SERVICE_SNTP;
-  if(sntp_enable) {
-    newflags |= CONFIG_SERVICE_SNTP;
-  }
-
-  user_config.set("time_zone", tz);
-  user_config.set("flags", newflags);
-  user_config.commit();
-
-  config_set_timezone(tz);
-}
-
-void config_set_timezone(String tz)
-{
-  const char *set_tz = tz.c_str();
-  const char *split_pos = strchr(set_tz, '|');
-  if(split_pos) {
-    set_tz = split_pos;
-  }
-
-  setenv("TZ", set_tz, 1);
-  tzset();
-}
-
-void
-config_reset() {
   ResetEEPROM();
   LittleFS.format();
   config_load_settings();

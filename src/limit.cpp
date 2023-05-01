@@ -159,14 +159,6 @@ void Limit::begin(EvseManager &evse) {
 	// todo get saved default limit
 	DBUGLN("Starting Limit task");
 	this -> _evse = &evse;
-	// retrieve default limit from config
-	LimitProperties limitprops;
-	LimitType limittype;
-    limittype.fromString(limit_default_type.c_str());
-    limitprops.setValue(limit_default_value);
-	// default limits have auto_release set to false
-    limitprops.setAutoRelease(false);
-    limit.set(limitprops);
 	MicroTask.startTask(this);
  	onSessionComplete(&_sessionCompleteListener);
 };
@@ -305,13 +297,13 @@ uint8_t Limit::getVersion() {
 }
 
 void Limit::onSessionComplete(MicroTasks::EventListener *listner) {
-    _evse -> onSessionComplete(listner);
-    // disable claim if it has not been deleted already
-		if (_evse->clientHasClaim(EvseClient_OpenEVSE_Limit)) {
-			_evse->release(EvseClient_OpenEVSE_Limit);
-		}
-    if (_limit_properties.getAutoRelease()){
-      clear();
-    }
+  _evse -> onSessionComplete(listner);
+  // disable claim if it has not been deleted already
+	if (_evse->clientHasClaim(EvseClient_OpenEVSE_Limit)) {
+		_evse->release(EvseClient_OpenEVSE_Limit);
+	}
+  if (_limit_properties.getAutoRelease()){
+    clear();
   }
+}
   

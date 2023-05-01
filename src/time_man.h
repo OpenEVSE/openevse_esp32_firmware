@@ -4,6 +4,7 @@
 #include <MongooseSntpClient.h>
 #include <MicroTasks.h>
 #include <MicroTasksTask.h>
+#include <ArduinoJson.h>
 
 class TimeManager : public MicroTasks::Task
 {
@@ -13,6 +14,7 @@ class TimeManager : public MicroTasks::Task
     unsigned long _nextCheckTime;
     bool _fetchingTime;
     bool _setTheTime;
+    bool _sntpEnabled;
 
     class TimeChange : public MicroTasks::Event
     {
@@ -35,6 +37,12 @@ class TimeManager : public MicroTasks::Task
 
     void setHost(const char *host);
     void setTime(struct timeval setTime, const char *source);
+    bool setTimeZone(String tz);
+
+    bool isSntpEnabled() {
+      return _sntpEnabled;
+    }
+    void setSntpEnabled(bool enabled);
 
     void checkNow() {
       _nextCheckTime = millis();
@@ -45,14 +53,15 @@ class TimeManager : public MicroTasks::Task
     void onTimeChange(MicroTasks::EventListener *listner) {
       _timeChange.Register(listner);
     }
+
+    void serialise(JsonDocument &doc);
 };
 
 extern TimeManager timeManager;
 
-extern void time_check_now();
 extern void time_set_time(struct timeval set_time, const char *source);
 
-extern String time_format_time(time_t time);
+extern String time_format_time(time_t time, bool local = true);
 extern String time_format_time(tm &time);
 
 #endif // _OPENEVSE_TIME_H

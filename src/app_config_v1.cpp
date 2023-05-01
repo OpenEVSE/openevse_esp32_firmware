@@ -1,5 +1,6 @@
 #include "emonesp.h"
 #include "app_config.h"
+#include "time_man.h"
 
 #include <Arduino.h>
 #include <EEPROM.h>             // Save config settings
@@ -182,7 +183,7 @@ config_load_v1_settings() {
 
   // Timezone
   EEPROM_read_string(EEPROM_TIME_ZONE_START, EEPROM_TIME_ZONE_SIZE, time_zone);
-  config_set_timezone(time_zone);
+  timeManager.setTimeZone(time_zone);
 
   EEPROM.end();
 }

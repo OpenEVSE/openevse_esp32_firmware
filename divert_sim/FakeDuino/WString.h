@@ -80,7 +80,7 @@ public:
 	inline unsigned int length(void) const {return len;}
 
 	// creates a copy of the assigned value.  if the value is null or
-	// invalid, or if the memory allocation fails, the string will be 
+	// invalid, or if the memory allocation fails, the string will be
 	// marked as invalid ("if (s)" will be false).
 	String & operator = (const String &rhs);
 	String & operator = (const char *cstr);
@@ -90,10 +90,10 @@ public:
 	#endif
 
 	// concatenate (works w/ built-in types)
-	
+
 	// returns true on success, false on failure (in which case, the string
-	// is left unchanged).  if the argument is null or invalid, the 
-	// concatenation is considered unsucessful.  
+	// is left unchanged).  if the argument is null or invalid, the
+	// concatenation is considered unsucessful.
 	unsigned char concat(const String &str);
 	unsigned char concat(const char *cstr);
 	unsigned char concat(char c);
@@ -105,7 +105,7 @@ public:
 	unsigned char concat(float num);
 	unsigned char concat(double num);
 	unsigned char concat(const __FlashStringHelper * str);
-	
+
 	// if there's not enough memory for the concatenated value, the string
 	// will be left unchanged (but this isn't signalled in any way)
 	String & operator += (const String &rhs)	{concat(rhs); return (*this);}
@@ -184,10 +184,16 @@ public:
 	long toInt(void) const;
 	float toFloat(void) const;
 
+  size_t write(unsigned char c);
+  size_t write(const unsigned char* s, size_t n);
+  int read();
+  size_t readBytes(char* buffer, size_t length);
+
 protected:
 	char *buffer;	        // the actual char array
 	unsigned int capacity;  // the array length minus one (for the '\0')
 	unsigned int len;       // the String length (not counting the '\0')
+  unsigned int pos;       // the current position for read/write
 protected:
 	void init(void);
 	void invalidate(void);
