@@ -324,13 +324,13 @@ LcdTask::LcdInfoLine LcdTask::getNextInfoLine(LcdInfoLine info)
         case LcdInfoLine::Time:
           return LcdInfoLine::Date;
         case LcdInfoLine::Date:
-          return _scheduler->getNextEvent().isValid() ?
-                      LcdInfoLine::TimerStart :
-                      LcdInfoLine::EnergySession;
+          if(_scheduler->getNextEvent(EvseState::Active).isValid()) {
+            return LcdInfoLine::TimerStart;
+          }
         case LcdInfoLine::TimerStart:
-          return _scheduler->getNextEvent().isValid() ?
-                      LcdInfoLine::TimerStop :
-                      LcdInfoLine::EnergySession;
+          if(_scheduler->getNextEvent(EvseState::Disabled).isValid()) {
+            return LcdInfoLine::TimerStop;
+          }
         default:
           return LcdInfoLine::EnergySession;
       }
@@ -353,7 +353,7 @@ LcdTask::LcdInfoLine LcdTask::getNextInfoLine(LcdInfoLine info)
         case LcdInfoLine::EnergyTotal:
           return LcdInfoLine::Temperature;
         case LcdInfoLine::Temperature:
-          if(_scheduler->getNextEvent().isValid()) {
+          if(_scheduler->getNextEvent(EvseState::Disabled).isValid()) {
             return LcdInfoLine::TimerStop;
           }
         case LcdInfoLine::TimerStop:
@@ -388,13 +388,13 @@ LcdTask::LcdInfoLine LcdTask::getNextInfoLine(LcdInfoLine info)
         case LcdInfoLine::Time:
           return LcdInfoLine::Date;
         case LcdInfoLine::Date:
-          return _scheduler->getNextEvent().isValid() ?
-                      LcdInfoLine::TimerStart :
-                      LcdInfoLine::Time;
+          if(_scheduler->getNextEvent(EvseState::Active).isValid()) {
+            return LcdInfoLine::TimerStart;
+          }
         case LcdInfoLine::TimerStart:
-          return _scheduler->getNextEvent().isValid() ?
-                      LcdInfoLine::TimerStop :
-                      LcdInfoLine::Time;
+          if(_scheduler->getNextEvent(EvseState::Disabled).isValid()) {
+            return LcdInfoLine::TimerStop;
+          }
         default:
           return LcdInfoLine::Time;
       }

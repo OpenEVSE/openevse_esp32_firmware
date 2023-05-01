@@ -79,6 +79,14 @@ class DivertTask : public MicroTasks::Task
       return _charge_rate;
     }
 
+    double availableCurrent() {
+      return _available_current;
+    }
+
+    double smoothedAvailableCurrent() {
+      return _smoothed_available_current;
+    }
+
     // Set charge rate depending on charge mode and solarPV output
     void update_state();
 

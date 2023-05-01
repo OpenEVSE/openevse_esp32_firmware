@@ -41,7 +41,7 @@ void RfidTask::setup(){
 void RfidTask::scanCard(String& uid){
     if(waitingForTag){
         waitingForTag = false;
-        lcd.display("Tag detected!", 0, 0, 0, LCD_CLEAR_LINE);
+        lcd.display("Tag detected", 0, 0, 0, LCD_CLEAR_LINE | LCD_DISPLAY_NOW);
         lcd.display(uid, 0, 1, 3000, LCD_CLEAR_LINE);
 
         StaticJsonDocument<128> event;
@@ -65,14 +65,16 @@ void RfidTask::scanCard(String& uid){
                 foundCard = true;
                 if (!isAuthenticated()){
                     setAuthentication(uid);
-                    lcd.display("RFID: authenticated", 0, 1, 5 * 1000, LCD_CLEAR_LINE);
+                    lcd.display("Activating", 0, 0, 0, LCD_CLEAR_LINE | LCD_DISPLAY_NOW);
+                    lcd.display("Tag Allowed", 0, 1, 5 * 1000, LCD_CLEAR_LINE);
                     DBUGLN(F("[rfid] found card"));
                 } else if (uid == authenticatedTag) {
                     resetAuthentication();
-                    lcd.display("RFID: finished. See you next time!", 0, 1, 5 * 1000, LCD_CLEAR_LINE);
+                    lcd.display("Disabling", 0, 0, 0, LCD_CLEAR_LINE | LCD_DISPLAY_NOW);
+                    lcd.display("Session Ended", 0, 1, 5 * 1000, LCD_CLEAR_LINE);
                     DBUGLN(F("[rfid] finished by presenting card"));
                 } else {
-                    lcd.display("RFID: card does not match", 0, 1, 5 * 1000, LCD_CLEAR_LINE);
+                    lcd.display("Wrong Tag", 0, 1, 5 * 1000, LCD_CLEAR_LINE | LCD_DISPLAY_NOW);
                     DBUGLN(F("[rfid] card does not match"));
                 }
                 break;
@@ -81,7 +83,7 @@ void RfidTask::scanCard(String& uid){
         }
 
         if (!foundCard) {
-            lcd.display("RFID: did not recognize card", 0, 1, 5 * 1000, LCD_CLEAR_LINE);
+            lcd.display("Unrecognized Tag", 0, 1, 5 * 1000, LCD_CLEAR_LINE | LCD_DISPLAY_NOW);
             DBUGLN(F("[rfid] did not recognize card"));
         }
     }
@@ -97,7 +99,7 @@ unsigned long RfidTask::loop(MicroTasks::WakeReason reason){
         vehicleConnected = _evse->isVehicleConnected();
 
         if (isAuthenticated()) {
-            lcd.display("RFID: finished. See you next time!", 0, 1, 5 * 1000, LCD_CLEAR_LINE);
+            lcd.display("EV Disconnected", 0, 1, 5 * 1000, LCD_CLEAR_LINE | LCD_DISPLAY_NOW);
             DBUGLN(F("[rfid] finished by unplugging"));
         }
         resetAuthentication();
@@ -105,7 +107,7 @@ unsigned long RfidTask::loop(MicroTasks::WakeReason reason){
 
     if (authenticationTimeoutExpired()) {
         resetAuthentication();
-        lcd.display("RFID: please present again", 0, 1, 20 * 1000, LCD_CLEAR_LINE);
+        lcd.display("Scan badge again", 0, 1, 20 * 1000, LCD_CLEAR_LINE | LCD_DISPLAY_NOW);
     }
 
     updateEvseClaim();
@@ -119,10 +121,8 @@ unsigned long RfidTask::loop(MicroTasks::WakeReason reason){
 
     if(waitingForTag){
         if (millis() - waitingBegin < RFID_ADD_WAITINGPERIOD) {
-            String msg = "tag... ";
-            msg += (waitingBegin + RFID_ADD_WAITINGPERIOD - millis()) / 1000;
-            msg += "s";
-            lcd.display("Waiting for RFID", 0, 0, 0, LCD_CLEAR_LINE);
+            String msg = (String)((waitingBegin + RFID_ADD_WAITINGPERIOD - millis()) / 1000) + "s";
+            lcd.display("Waiting for Tag", 0, 0, 0, LCD_CLEAR_LINE | LCD_DISPLAY_NOW);
             lcd.display(msg, 0, 1, 1000, LCD_CLEAR_LINE);
         } else {
             waitingForTag = false;
@@ -176,7 +176,7 @@ void RfidTask::waitForTag(){
         return;
     waitingForTag = true;
     waitingBegin = millis();
-    lcd.display("Waiting for RFID", 0, 0, RFID_ADD_WAITINGPERIOD, LCD_CLEAR_LINE);
+    //lcd.display("Waiting for Tag", 0, 0, RFID_ADD_WAITINGPERIOD, LCD_CLEAR_LINE);
 
     StaticJsonDocument<128> event;
     event["rfid_waiting"] = RFID_ADD_WAITINGPERIOD / 1000;
@@ -189,7 +189,7 @@ void RfidTask::updateEvseClaim() {
         _evse->release(EvseClient_OpenEVSE_RFID);
         return;
     }
-    
+
     if (isAuthenticated()) {
         _evse->release(EvseClient_OpenEVSE_RFID);
     } else {

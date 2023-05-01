@@ -30,7 +30,6 @@ DynamicJsonDocument mqtt_doc(4096);
 static long nextMqttReconnectAttempt = 0;
 static unsigned long mqttRestartTime = 0;
 static bool connecting = false;
-static bool mqttRetained = false;
 uint8_t claimsVersion = 0;
 uint8_t overrideVersion = 0;
 uint8_t scheduleVersion = 0;
@@ -76,9 +75,10 @@ void mqttmsg_callback(MongooseString topic, MongooseString payload) {
     grid_ie = payload_str.toInt();
     DBUGF("grid:%dW", grid_ie);
     divert.update_state();
-    //recalculate shaper
-    if (shaper.getState()) {
-      shaper.shapeCurrent();
+    
+    // if shaper use the same topic as grid_ie
+    if (mqtt_live_pwr == mqtt_grid_ie) {
+      shaper.setLivePwr(grid_ie);
     }
   }
   else if (topic_string == mqtt_live_pwr)
@@ -270,7 +270,7 @@ mqtt_connect()
     doc["id"] = ESPAL.getLongId();
     doc["name"] = esp_hostname;
     doc["mqtt"] = mqtt_topic;
-    doc["http"] = "http://"+ipaddress+"/";
+    doc["http"] = "http://"+net.getIp()+"/";
 
     // Once connected, publish an announcement..
     String announce = "";
@@ -311,8 +311,11 @@ mqtt_connect()
     if(config_current_shaper_enabled())
     {
       if (mqtt_live_pwr != "") {
-        mqttclient.subscribe(mqtt_live_pwr);
-        yield();
+        if ( mqtt_live_pwr != mqtt_grid_ie ) {
+          // only subscribe once
+          mqttclient.subscribe(mqtt_live_pwr);
+          yield();
+        }
       }
     }
     // subscribe to vehicle information from MQTT if we are configured for it

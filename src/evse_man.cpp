@@ -18,8 +18,6 @@ EvseProperties::EvseProperties() :
   _state(EvseState::None),
   _charge_current(UINT32_MAX),
   _max_current(UINT32_MAX),
-  _energy_limit(UINT32_MAX),
-  _time_limit(UINT32_MAX),
   _auto_release(false)
 {
 }
@@ -28,8 +26,6 @@ EvseProperties::EvseProperties(EvseState state) :
   _state(state),
   _charge_current(UINT32_MAX),
   _max_current(UINT32_MAX),
-  _energy_limit(UINT32_MAX),
-  _time_limit(UINT32_MAX),
   _auto_release(false)
 {
 }
@@ -39,8 +35,6 @@ void EvseProperties::clear()
   _state = EvseState::None;
   _charge_current = UINT32_MAX;
   _max_current = UINT32_MAX;
-  _energy_limit = UINT32_MAX;
-  _time_limit = UINT32_MAX;
   _auto_release = false;
 }
 
@@ -49,8 +43,6 @@ EvseProperties & EvseProperties::operator = (EvseProperties &rhs)
   _state = rhs._state;
   _charge_current = rhs._charge_current;
   _max_current = rhs._max_current;
-  _energy_limit = rhs._energy_limit;
-  _time_limit = rhs._time_limit;
   _auto_release = rhs._auto_release;
   return *this;
 }
@@ -67,15 +59,6 @@ bool EvseProperties::deserialize(JsonObject &obj)
 
   if(obj.containsKey("max_current")) {
     obj["max_current"] == "clear" ? _max_current = UINT32_MAX : _max_current = obj["max_current"];
-  }
-
-
-  if(obj.containsKey("energy_limit")) {
-    obj["energy_limit"] == "clear" ? _energy_limit = UINT32_MAX : _energy_limit = obj["energy_limit"];
-  }
-
-  if(obj.containsKey("time_limit")) {
-    obj["time_limit"] == "clear" ? _time_limit = UINT32_MAX : _time_limit = obj["time_limit"];
   }
 
   if(obj.containsKey("auto_release")) {
@@ -96,12 +79,6 @@ bool EvseProperties::serialize(JsonObject &obj)
   }
   if(UINT32_MAX != _max_current) {
     obj["max_current"] = _max_current;
-  }
-  if(UINT32_MAX != _energy_limit) {
-    obj["energy_limit"] = _energy_limit;
-  }
-  if(UINT32_MAX != _time_limit) {
-    obj["time_limit"] = _time_limit;
   }
 
   obj["auto_release"] = _auto_release;
@@ -150,7 +127,6 @@ EvseManager::EvseManager(Stream &port, EventLog &eventLog) :
   _sleepForDisable(true),
   _evaluateClaims(true),
   _evaluateTargetState(false),
-  _waitingForEvent(0),
   _vehicleValid(0),
   _vehicleUpdated(0),
   _vehicleLastUpdated(0),
@@ -197,14 +173,10 @@ bool EvseManager::evaluateClaims(EvseProperties &properties)
   int statePriority = 0;
   int chargeCurrentPriority = 0;
   int maxCurrentPriority = 0;
-  int energyLimitPriority = 0;
-  int timeLimitPriority = 0;
 
   _state_client = EvseClient_NULL;
   _charge_current_client = EvseClient_NULL;
   _max_current_client = EvseClient_NULL;
-  _energy_limit_client = EvseClient_NULL;
-  _time_limit_client = EvseClient_NULL;
 
   for(size_t i = 0; i < EVSE_MANAGER_MAX_CLIENT_CLAIMS; i++)
   {
@@ -219,8 +191,6 @@ bool EvseManager::evaluateClaims(EvseProperties &properties)
       DBUGVAR(claim.getState().toString());
       DBUGVAR(claim.getChargeCurrent());
       DBUGVAR(claim.getMaxCurrent());
-      DBUGVAR(claim.getEnergyLimit());
-      DBUGVAR(claim.getTimeLimit());
 
       if(claim.getPriority() > statePriority &&
          claim.getState() != EvseState::None)
@@ -244,22 +214,6 @@ bool EvseManager::evaluateClaims(EvseProperties &properties)
         properties.setMaxCurrent(claim.getMaxCurrent());
         maxCurrentPriority = claim.getPriority();
         _max_current_client = claim.getClient();
-      }
-
-      if(claim.getPriority() > energyLimitPriority &&
-         claim.getEnergyLimit() != UINT32_MAX)
-      {
-        properties.setEnergyLimit(claim.getEnergyLimit());
-        energyLimitPriority = claim.getPriority();
-        _energy_limit_client = claim.getClient();
-      }
-
-      if(claim.getPriority() > timeLimitPriority &&
-         claim.getTimeLimit() != UINT32_MAX)
-      {
-        properties.setTimeLimit(claim.getTimeLimit());
-        timeLimitPriority = claim.getPriority();
-        _time_limit_client = claim.getClient();
       }
 
       if(claim.getClient() == EvseClient_OpenEVSE_Manual) {
@@ -291,7 +245,6 @@ bool EvseManager::setTargetState(EvseProperties &target)
   EvseState state = target.getState();
   if(EvseState::None != state && state != getActiveState())
   {
-    _waitingForEvent++;
     if(EvseState::Active == state)
     {
       DBUGLN("EVSE: enable");
@@ -388,11 +341,7 @@ unsigned long EvseManager::loop(MicroTasks::WakeReason reason)
   DBUGVAR(_evseStateListener.IsTriggered());
   if(_evseStateListener.IsTriggered())
   {
-    DBUGVAR(_waitingForEvent);
-    if(_waitingForEvent > 0) {
       _evaluateTargetState = true;
-      _waitingForEvent--;
-    }
 
     _eventLog.log(_monitor.isError() ? EventType::Warning : EventType::Information,
                   getState(),
@@ -413,6 +362,8 @@ unsigned long EvseManager::loop(MicroTasks::WakeReason reason)
   {
     // Session complete, clear any auto release claims
     releaseAutoReleaseClaims();
+    // clear Session counter
+    _monitor.clearEnergyMeterSession();
   }
 
   DBUGVAR(_evaluateClaims);
@@ -426,8 +377,6 @@ unsigned long EvseManager::loop(MicroTasks::WakeReason reason)
     DBUGVAR(_targetProperties.getState().toString());
     DBUGVAR(_targetProperties.getChargeCurrent());
     DBUGVAR(_targetProperties.getMaxCurrent());
-    DBUGVAR(_targetProperties.getEnergyLimit());
-    DBUGVAR(_targetProperties.getTimeLimit());
 
     _evaluateTargetState = true;
   }
@@ -611,16 +560,6 @@ uint32_t EvseManager::getMaxCurrent(EvseClient client)
   return getClaimProperties(client).getMaxCurrent();
 }
 
-uint32_t EvseManager::getEnergyLimit(EvseClient client)
-{
-  return getClaimProperties(client).getEnergyLimit();
-}
-
-uint32_t EvseManager::getTimeLimit(EvseClient client)
-{
-  return getClaimProperties(client).getTimeLimit();
-}
-
 void EvseManager::setVehicleStateOfCharge(int vehicleStateOfCharge)
 {
   _vehicleStateOfCharge = vehicleStateOfCharge;
@@ -710,12 +649,6 @@ bool EvseManager::serializeTarget(DynamicJsonDocument &doc)
   }
   if(EvseClient_NULL != _max_current_client) {
     claims["max_current"] = _max_current_client;
-  }
-  if(EvseClient_NULL != _energy_limit_client) {
-    claims["energy_limit"] = _energy_limit_client;
-  }
-  if(EvseClient_NULL != _time_limit_client) {
-    claims["time_limit"] = _time_limit_client;
   }
 
   return true;

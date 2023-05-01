@@ -10,6 +10,7 @@
       "request": "launch",
       "program": "${workspaceFolder}/divert_sim",
       "args": [
+        "-c", "data/test_config.json",
         "<", "${workspaceFolder}/data/day1.csv"
       ],
       "stopAtEntry": false,

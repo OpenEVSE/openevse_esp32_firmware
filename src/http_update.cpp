@@ -20,13 +20,18 @@ bool http_update_from_url(String url,
   std::function<void(int)> success,
   std::function<void(int)> error)
 {
+  DBUGF("Update from URL: %s", url.c_str());
+
   MongooseHttpClientRequest *request = client.beginRequest(url.c_str());
   if(request)
   {
     request->setMethod(HTTP_GET);
 
+    DBUGF("Trying to fetch firmware from %s", url.c_str());
+
     request->onBody([url,progress,error,request](MongooseHttpClientResponse *response)
     {
+      DBUGF("Update onBody %d", response->respCode());
       if(response->respCode() == 200)
       {
         size_t total = response->contentLength();
@@ -45,20 +50,39 @@ bool http_update_from_url(String url,
         } else {
           error(HTTP_UPDATE_ERROR_FAILED_TO_START_UPDATE);
         }
+      } else if (300 <= response->respCode() && response->respCode() < 400) {
+        // handle 3xx redirects (later)
+        return;
       } else {
         error(response->respCode());
       }
       request->abort();
     });
 
+    request->onResponse([progress, error, success, request](MongooseHttpClientResponse *response)
+    {
+      DBUGF("Update onResponse %d", response->respCode());
+      if(301 == response->respCode() ||
+         302 == response->respCode())
+      {
+        MongooseString location = response->headers("Location");
+        DBUGVAR(location.toString());
+        http_update_from_url(location.toString(), progress, success, error);
+      }
+    });
+
     request->onClose([success, error]()
     {
-      if(http_update_end())
+      DBUGLN("Update onClose");
+      if(Update.isRunning())
       {
-        success(HTTP_UPDATE_OK);
-        restart_system();
-      } else {
-        error(HTTP_UPDATE_ERROR_FAILED_TO_END_UPDATE);
+        if(http_update_end())
+        {
+          success(HTTP_UPDATE_OK);
+          restart_system();
+        } else {
+          error(HTTP_UPDATE_ERROR_FAILED_TO_END_UPDATE);
+        }
       }
     });
     client.send(request);
@@ -112,7 +136,7 @@ bool http_update_write(uint8_t *data, size_t len)
         lcd.display(text, 0, 1, 10 * 1000, LCD_DISPLAY_NOW);
 
         DEBUG_PORT.printf("Update: %d%%\n", percent);
-        
+
         StaticJsonDocument<128> event;
         event["ota_progress"] = percent;
         web_server_event(event);

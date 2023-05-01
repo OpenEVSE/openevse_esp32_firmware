@@ -4,6 +4,14 @@
 #include <Arduino.h>
 #include <ArduinoJson.h>
 
+#ifndef ENABLE_CONFIG_V1_IMPORT
+#define ENABLE_CONFIG_V1_IMPORT 1
+#endif
+
+#ifndef ENABLE_CONFIG_CHANGE_NOTIFICATION
+#define ENABLE_CONFIG_CHANGE_NOTIFICATION 1
+#endif
+
 // -------------------------------------------------------------------
 // Load and save the OpenEVSE WiFi config.
 //
@@ -27,6 +35,10 @@ extern String www_password;
 extern String esp_hostname;
 extern String esp_hostname_default;
 extern String sntp_hostname;
+
+// LIMIT Settings
+extern String limit_default_type;
+extern uint32_t limit_default_value;
 
 // EMONCMS SERVER strings
 extern String emoncms_server;
@@ -200,64 +212,14 @@ extern String ohm;
 // Load saved settings
 // -------------------------------------------------------------------
 extern void config_load_settings();
+#if ENABLE_CONFIG_V1_IMPORT
 extern void config_load_v1_settings();
-
-// -------------------------------------------------------------------
-// Save the EmonCMS server details
-// -------------------------------------------------------------------
-extern void config_save_emoncms(bool enable, String server, String node, String apikey, String fingerprint);
-
-// -------------------------------------------------------------------
-// Save the MQTT broker details
-// -------------------------------------------------------------------
-extern void config_save_mqtt(bool enable, int protocol, String server, uint16_t port, String topic, bool retained, String user, String pass, String solar, String grid_ie, String live_pwr, bool reject_unauthorized);
-
-// -------------------------------------------------------------------
-// Save the admin/web interface details
-// -------------------------------------------------------------------
-extern void config_save_admin(String user, String pass);
-
-// -------------------------------------------------------------------
-// Save the SNTP settings
-// -------------------------------------------------------------------
-extern void config_save_sntp(bool enable, String tz);
-
-// -------------------------------------------------------------------
-// Save advanced settings
-// -------------------------------------------------------------------
-extern void config_save_advanced(String hostname, String sntp_host);
-
-// -------------------------------------------------------------------
-// Save the Wifi details
-// -------------------------------------------------------------------
-extern void config_save_wifi(String qsid, String qpass);
-
-// -------------------------------------------------------------------
-// Save the Ohm settings
-// -------------------------------------------------------------------
-extern void config_save_ohm(bool enable, String qohm);
-
-// -------------------------------------------------------------------
-// Save RFID settings
-// -------------------------------------------------------------------
-extern void config_save_rfid(bool enable, String storage);
-
-// -------------------------------------------------------------------
-// Save Lora settings
-// -------------------------------------------------------------------
-extern void config_save_lora(bool enable, String devEui, String appEui, String appKey);
-
-// -------------------------------------------------------------------
-// Save the flags
-// -------------------------------------------------------------------
-extern void config_save_flags(uint32_t flags);
+#endif
 
 // -------------------------------------------------------------------
 // Reset the config back to defaults
 // -------------------------------------------------------------------
 extern void config_reset();
-
-void config_set_timezone(String tz);
 
 void config_set(const char *name, uint32_t val);
 void config_set(const char *name, String val);

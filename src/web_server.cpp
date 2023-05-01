@@ -39,6 +39,7 @@ typedef const __FlashStringHelper *fstr_t;
 #include "rfid.h"
 #include "current_shaper.h"
 #include "evse_man.h"
+#include "limit.h"
 
 MongooseHttpServer server;          // Create class for Web server
 
@@ -73,6 +74,9 @@ void handleEventLogs(MongooseHttpServerRequest *request);
 void handleUpdateRequest(MongooseHttpServerRequest *request);
 size_t handleUpdateUpload(MongooseHttpServerRequest *request, int ev, MongooseString filename, uint64_t index, uint8_t *data, size_t len);
 void handleUpdateClose(MongooseHttpServerRequest *request);
+
+void handleTime(MongooseHttpServerRequest *request);
+void handleTimePost(MongooseHttpServerRequest *request, MongooseHttpServerResponseStream *response);
 
 extern uint32_t config_version;
 
@@ -141,7 +145,7 @@ bool requestPreProcess(MongooseHttpServerRequest *request, MongooseHttpServerRes
 {
   dumpRequest(request);
 
-  if(!net_wifi_mode_is_ap_only() && www_username!="" &&
+  if(!net.isWifiModeApOnly() && www_username!="" &&
      false == request->authenticate(www_username, www_password)) {
     request->requestAuthentication(esp_hostname);
     return false;
@@ -191,20 +195,21 @@ void buildStatus(DynamicJsonDocument &doc) {
   strftime(time, sizeof(time), "%FT%TZ", timeinfo);
   strftime(offset, sizeof(offset), "%z", timeinfo);
 
-  if (net_eth_connected()) {
+  if (net.isWiredConnected()) {
     doc["mode"] = "Wired";
-  } else if (net_wifi_mode_is_sta_only()) {
+  } else if (net.isWifiModeStaOnly()) {
     doc["mode"] = "STA";
-  } else if (net_wifi_mode_is_ap_only()) {
+  } else if (net.isWifiModeApOnly()) {
     doc["mode"] = "AP";
-  } else if (net_wifi_mode_is_ap() && net_wifi_mode_is_sta()) {
+  } else if (net.isWifiModeAp() && net.isWifiModeSta()) {
     doc["mode"] = "STA+AP";
   }
 
-  doc["wifi_client_connected"] = (int)net_wifi_client_connected();
-  doc["eth_connected"] = (int)net_eth_connected();
-  doc["net_connected"] = (int)net_is_connected();
-  doc["ipaddress"] = ipaddress;
+  doc["wifi_client_connected"] = (int)net.isWifiClientConnected();
+  doc["eth_connected"] = (int)net.isWiredConnected();
+  doc["net_connected"] = (int)net.isWifiClientConnected();
+  doc["ipaddress"] = net.getIp();
+  doc["macaddress"] = net.getMac();
 
   doc["emoncms_connected"] = (int)emoncms_connected;
   doc["packets_sent"] = packets_sent;
@@ -229,12 +234,6 @@ void buildStatus(DynamicJsonDocument &doc) {
 
   create_rapi_json(doc);
 
-  doc["status"] = evse.getState().toString();
-
-  doc["elapsed"] = evse.getSessionElapsed();
-  doc["wattsec"] = evse.getSessionEnergy() * SESSION_ENERGY_SCALE_FACTOR;
-  doc["watthour"] = evse.getTotalEnergy() * TOTAL_ENERGY_SCALE_FACTOR;
-
   doc["gfcicount"] = evse.getFaultCountGFCI();
   doc["nogndcount"] = evse.getFaultCountNoGround();
   doc["stuckcount"] = evse.getFaultCountStuckRelay();
@@ -244,24 +243,22 @@ void buildStatus(DynamicJsonDocument &doc) {
   doc["charge_rate"] = divert.getChargeRate();
   doc["divert_update"] = (millis() - divert.getLastUpdate()) / 1000;
   doc["divert_active"] = divert.isActive();
-  doc["divertmode"] = (uint8_t)divert.getMode();
-
   doc["shaper"] = shaper.getState()?1:0;
   doc["shaper_live_pwr"] = shaper.getLivePwr();
   // doc["shaper_cur"] = shaper.getChgCur();
   doc["shaper_cur"] = shaper.getMaxCur();
   doc["shaper_updated"] = shaper.isUpdated();
   doc["service_level"] = static_cast<uint8_t>(evse.getActualServiceLevel());
+  doc["limit"] = limit.hasLimit();
 
   doc["ota_update"] = (int)Update.isRunning();
-  doc["time"] = String(time);
-  doc["offset"] = String(offset);
 
   doc["config_version"] = config_version;
   doc["claims_version"] = evse.getClaimsVersion();
   doc["override_version"] = manual.getVersion();
   doc["schedule_version"] = scheduler.getVersion();
   doc["schedule_plan_version"] = scheduler.getPlanVersion();
+  doc["limit_version"] = limit.getVersion();
 
   doc["vehicle_state_update"] = (millis() - evse.getVehicleLastUpdated()) / 1000;
   if(teslaClient.getVehicleCnt() > 0) {
@@ -283,6 +280,8 @@ void buildStatus(DynamicJsonDocument &doc) {
       doc["time_to_full_charge"] = evse.getVehicleEta();
     }
   }
+
+  DBUGF("/status ArduinoJson size: %dbytes", doc.size());
 }
 
 // -------------------------------------------------------------------
@@ -299,45 +298,8 @@ handleScan(MongooseHttpServerRequest *request) {
     return;
   }
 
-#ifndef ENABLE_ASYNC_WIFI_SCAN
-  String json = "[";
-  int n = WiFi.scanComplete();
-  if(n == -2) {
-    WiFi.scanNetworks(true, false);
-  } else if(n) {
-    for (int i = 0; i < n; ++i) {
-      if(i) json += ",";
-      json += "{";
-      json += "\"rssi\":"+String(WiFi.RSSI(i));
-      json += ",\"ssid\":\""+WiFi.SSID(i)+"\"";
-      json += ",\"bssid\":\""+WiFi.BSSIDstr(i)+"\"";
-      json += ",\"channel\":"+String(WiFi.channel(i));
-      json += ",\"secure\":"+String(WiFi.encryptionType(i));
-#ifndef ESP32
-      json += ",\"hidden\":"+String(WiFi.isHidden(i)?"true":"false");
-#endif // !ESP32
-      json += "}";
-    }
-    WiFi.scanDelete();
-    if(WiFi.scanComplete() == -2){
-      WiFi.scanNetworks(true);
-    }
-  }
-  json += "]";
-  response->print(json);
-  request->send(response);
-#else // ENABLE_ASYNC_WIFI_SCAN
-  // Async WiFi scan need the Git version of the ESP8266 core
-  if(WIFI_SCAN_RUNNING == WiFi.scanComplete()) {
-    response->setCode(500);
-    response->setContentType(CONTENT_TYPE_TEXT);
-    response->print("Busy");
-    request->send(response);
-    return;
-  }
-
   DBUGF("Starting WiFi scan");
-  WiFi.scanNetworksAsync([request, response](int networksFound) {
+  net.wifiScanNetworks([request, response](int networksFound) {
     DBUGF("%d networks found", networksFound);
     String json = "[";
     for (int i = 0; i < networksFound; ++i) {
@@ -348,15 +310,12 @@ handleScan(MongooseHttpServerRequest *request) {
       json += ",\"bssid\":\""+WiFi.BSSIDstr(i)+"\"";
       json += ",\"channel\":"+String(WiFi.channel(i));
       json += ",\"secure\":"+String(WiFi.encryptionType(i));
-      json += ",\"hidden\":"+String(WiFi.isHidden(i)?"true":"false");
       json += "}";
     }
-    WiFi.scanDelete();
     json += "]";
     response->print(json);
     request->send(response);
-  }, false);
-#endif
+  });
 }
 
 // -------------------------------------------------------------------
@@ -379,120 +338,6 @@ handleAPOff(MongooseHttpServerRequest *request) {
 }
 
 // -------------------------------------------------------------------
-// Save selected network to EEPROM and attempt connection
-// url: /savenetwork
-// -------------------------------------------------------------------
-void
-handleSaveNetwork(MongooseHttpServerRequest *request) {
-  MongooseHttpServerResponseStream *response;
-  if(false == requestPreProcess(request, response, CONTENT_TYPE_TEXT)) {
-    return;
-  }
-
-  String qsid = request->getParam("ssid");
-  String qpass = request->getParam("pass");
-  if (qsid != 0) {
-    config_save_wifi(qsid, qpass);
-
-    response->setCode(200);
-    response->print("saved");
-    wifiRestartTime = millis() + 2000;
-  } else {
-    response->setCode(400);
-    response->print("No SSID");
-  }
-
-  request->send(response);
-}
-
-// -------------------------------------------------------------------
-// Save Emoncms
-// url: /saveemoncms
-// -------------------------------------------------------------------
-void
-handleSaveEmoncms(MongooseHttpServerRequest *request) {
-  MongooseHttpServerResponseStream *response;
-  if(false == requestPreProcess(request, response, CONTENT_TYPE_TEXT)) {
-    return;
-  }
-
-  config_save_emoncms(isPositive(request->getParam("enable")),
-                      request->getParam("server"),
-                      request->getParam("node"),
-                      request->getParam("apikey"),
-                      request->getParam("fingerprint"));
-
-  char tmpStr[200];
-  snprintf(tmpStr, sizeof(tmpStr), "Saved: %s %s %s %s",
-           emoncms_server.c_str(),
-           emoncms_node.c_str(),
-           emoncms_apikey.c_str(),
-           emoncms_fingerprint.c_str());
-  DBUGLN(tmpStr);
-
-  response->setCode(200);
-  response->print(tmpStr);
-  request->send(response);
-}
-
-// -------------------------------------------------------------------
-// Save MQTT Config
-// url: /savemqtt
-// -------------------------------------------------------------------
-void
-handleSaveMqtt(MongooseHttpServerRequest *request) {
-  MongooseHttpServerResponseStream *response;
-  if(false == requestPreProcess(request, response, CONTENT_TYPE_TEXT)) {
-    return;
-  }
-
-  String pass = request->getParam("pass");
-
-  int protocol = MQTT_PROTOCOL_MQTT;
-  char proto[6];
-  if(request->getParam("protocol", proto, sizeof(proto)) > 0) {
-    // Cheap and chearful check, obviously not checking for invalid input
-    protocol = 's' == proto[4] ? MQTT_PROTOCOL_MQTT_SSL : MQTT_PROTOCOL_MQTT;
-  }
-
-  int port = 1883;
-  char portStr[8];
-  if(request->getParam("port", portStr, sizeof(portStr)) > 0) {
-    port = atoi(portStr);
-  }
-
-  char unauthString[8];
-  int unauthFound = request->getParam("reject_unauthorized", unauthString, sizeof(unauthString));
-  bool reject_unauthorized = unauthFound < 0 || 0 == unauthFound || isPositive(String(unauthString));
-
-  config_save_mqtt(isPositive(request->getParam("enable")),
-                   protocol,
-                   request->getParam("server"),
-                   port,
-                   request->getParam("topic"),
-                   isPositive(request->getParam("retained")),
-                   request->getParam("user"),
-                   pass,
-                   request->getParam("solar"),
-                   request->getParam("grid_ie"),
-                   request->getParam("live_pwr"),
-                   reject_unauthorized);
-
-  char tmpStr[200];
-  snprintf(tmpStr, sizeof(tmpStr), "Saved: %s %s %d %s %s %s %s", mqtt_server.c_str(),
-          mqtt_topic.c_str(), config_mqtt_retained(), mqtt_user.c_str(), mqtt_pass.c_str(),
-          mqtt_solar.c_str(), mqtt_grid_ie.c_str());
-  DBUGLN(tmpStr);
-
-  response->setCode(200);
-  response->print(tmpStr);
-  request->send(response);
-
-  // If connected disconnect MQTT to trigger re-connect with new details
-  mqtt_restart();
-}
-
-// -------------------------------------------------------------------
 // Change divert mode (solar PV divert mode) e.g 1:Normal (default), 2:Eco
 // url: /divertmode
 // -------------------------------------------------------------------
@@ -503,7 +348,8 @@ handleDivertMode(MongooseHttpServerRequest *request){
     return;
   }
 
-  divert.setMode((DivertMode)(request->getParam("divertmode").toInt()));
+  DivertMode divertmode = (DivertMode)(request->getParam("divertmode").toInt());
+  divert.setMode(divertmode);
 
   response->setCode(200);
   response->print("Divert Mode changed");
@@ -532,99 +378,18 @@ handleCurrentShaper(MongooseHttpServerRequest *request) {
 }
 
 // -------------------------------------------------------------------
-// Save the web site user/pass
-// url: /saveadmin
-// -------------------------------------------------------------------
-void
-handleSaveAdmin(MongooseHttpServerRequest *request) {
-  MongooseHttpServerResponseStream *response;
-  if(false == requestPreProcess(request, response, CONTENT_TYPE_TEXT)) {
-    return;
-  }
-
-  String quser = request->getParam("user");
-  String qpass = request->getParam("pass");
-
-  config_save_admin(quser, qpass);
-
-  response->setCode(200);
-  response->print("saved");
-  request->send(response);
-}
-
-// -------------------------------------------------------------------
 // Manually set the time
 // url: /settime
 // -------------------------------------------------------------------
-void
-handleSetTime(MongooseHttpServerRequest *request) {
+void handleSetTime(MongooseHttpServerRequest *request)
+{
   MongooseHttpServerResponseStream *response;
   if(false == requestPreProcess(request, response, CONTENT_TYPE_TEXT)) {
     return;
   }
 
-  bool qsntp_enable = isPositive(request, "ntp");
-  String qtz = request->getParam("tz");
+  handleTimePost(request, response);
 
-  config_save_sntp(qsntp_enable, qtz);
-  if(config_sntp_enabled()) {
-    time_check_now();
-  }
-
-  if(false == qsntp_enable)
-  {
-    String time = request->getParam("time");
-
-    struct tm tm;
-
-    int yr, mnth, d, h, m, s;
-    if(6 == sscanf( time.c_str(), "%4d-%2d-%2dT%2d:%2d:%2dZ", &yr, &mnth, &d, &h, &m, &s))
-    {
-      tm.tm_year = yr - 1900;
-      tm.tm_mon = mnth - 1;
-      tm.tm_mday = d;
-      tm.tm_hour = h;
-      tm.tm_min = m;
-      tm.tm_sec = s;
-
-      struct timeval set_time = {0,0};
-      set_time.tv_sec = mktime(&tm);
-
-      time_set_time(set_time, "manual");
-
-    }
-    else
-    {
-      response->setCode(400);
-      response->print("could not parse time");
-      request->send(response);
-      return;
-    }
-  }
-
-  response->setCode(200);
-  response->print("set");
-  request->send(response);
-}
-
-// -------------------------------------------------------------------
-// Save advanced settings
-// url: /saveadvanced
-// -------------------------------------------------------------------
-void
-handleSaveAdvanced(MongooseHttpServerRequest *request) {
-  MongooseHttpServerResponseStream *response;
-  if(false == requestPreProcess(request, response, CONTENT_TYPE_TEXT)) {
-    return;
-  }
-
-  String qhostname = request->getParam("hostname");
-  String qsntp_host = request->getParam("sntp_host");
-
-  config_save_advanced(qhostname, qsntp_host);
-
-  response->setCode(200);
-  response->print("saved");
   request->send(response);
 }
 
@@ -658,27 +423,6 @@ handleTeslaVeh(MongooseHttpServerRequest *request)
 }
 
 // -------------------------------------------------------------------
-// Save the Ohm keyto EEPROM
-// url: /handleSaveOhmkey
-// -------------------------------------------------------------------
-void
-handleSaveOhmkey(MongooseHttpServerRequest *request) {
-  MongooseHttpServerResponseStream *response;
-  if(false == requestPreProcess(request, response, CONTENT_TYPE_TEXT)) {
-    return;
-  }
-
-  bool enabled = isPositive(request->getParam("enable"));
-  String qohm = request->getParam("ohm");
-
-  config_save_ohm(enabled, qohm);
-
-  response->setCode(200);
-  response->print("saved");
-  request->send(response);
-}
-
-// -------------------------------------------------------------------
 // Returns status json
 // url: /status
 // -------------------------------------------------------------------
@@ -686,7 +430,7 @@ void handleStatusPost(MongooseHttpServerRequest *request, MongooseHttpServerResp
 {
   String body = request->body().toString();
   // Deserialize the JSON document
-  const size_t capacity = JSON_OBJECT_SIZE(128) + 1024;
+  const size_t capacity = JSON_OBJECT_SIZE(32) + 1024;
   DynamicJsonDocument doc(capacity);
   DeserializationError error = deserializeJson(doc, body);
   if(!error)
@@ -703,7 +447,7 @@ void handleStatusPost(MongooseHttpServerRequest *request, MongooseHttpServerResp
     {
       double shaper_live_pwr = doc["shaper_live_pwr"];
       shaper.setLivePwr(shaper_live_pwr);
-      DBUGF("shaper: available power:%dW", shaper.getAvlPwr());
+      DBUGF("shaper: live power:%dW", shaper.getLivePwr());
     }
     if(doc.containsKey("solar")) {
       solar = doc["solar"];
@@ -747,7 +491,6 @@ void handleStatusPost(MongooseHttpServerRequest *request, MongooseHttpServerResp
     if(send_event) {
       event_send(doc);
     }
-
     response->setCode(200);
     serializeJson(doc, *response);
   } else {
@@ -768,7 +511,7 @@ handleStatus(MongooseHttpServerRequest *request)
 
   if(HTTP_GET == request->method()) {
 
-    const size_t capacity = JSON_OBJECT_SIZE(40) + 1024;
+    const size_t capacity = JSON_OBJECT_SIZE(128) + 2048;
     DynamicJsonDocument doc(capacity);
     buildStatus(doc);
     response->setCode(200);
@@ -896,14 +639,144 @@ handleSchedulePlan(MongooseHttpServerRequest *request)
   request->send(response);
 }
 
-void handleOverrideGet(MongooseHttpServerRequest *request, MongooseHttpServerResponseStream *response)
+//----------------------------------------------------------
+//
+//            Limit
+//
+//----------------------------------------------------------
+
+void handleLimitGet(MongooseHttpServerRequest *request, MongooseHttpServerResponseStream *response)
 {
-  if(manual.isActive())
+  if(limit.hasLimit())
   {
-    EvseProperties props;
-    manual.getProperties(props);
-    props.serialize(response);
+    limit.get().serialize(response);
   } else {
+    response->setCode(404);
+    response->print("{\"msg\":\"no limit\"}");
+  }
+}
+
+void handleLimitPost(MongooseHttpServerRequest *request, MongooseHttpServerResponseStream *response)
+{
+  String body = request->body().toString();
+
+    if (limit.set(body)) {
+      response->setCode(201);
+      response->print("{\"msg\":\"done\"}");
+      // todo: mqtt_publish_limit();  // update limit props to mqtt
+    } else {
+      // unused for now
+      response->setCode(500);
+      response->print("{\"msg\":\"failed to parse JSON\"}");
+    }
+}
+
+void handleLimitDelete(MongooseHttpServerRequest *request, MongooseHttpServerResponseStream *response)
+{
+  if(limit.hasLimit()) {
+    if (limit.clear()) {
+      response->setCode(200);
+      response->print("{\"msg\":\"done\"}");
+      // todo: mqtt_publish_limit();  // update limit props to mqtt
+    } else {
+      response->setCode(500);
+      response->print("{\"msg\":\"failed\"}");
+    }
+  } else {
+    response->setCode(404);
+    response->print("{\"msg\":\"no limit\"}");
+  }
+}
+
+void handleLimit(MongooseHttpServerRequest *request)
+{
+  MongooseHttpServerResponseStream *response;
+  if(false == requestPreProcess(request, response)) {
+    return;
+  }
+
+  if(HTTP_GET == request->method()) {
+    handleLimitGet(request, response);
+  } else if(HTTP_POST == request->method()) {
+    handleLimitPost(request, response);
+  } else if(HTTP_DELETE == request->method()) {
+    handleLimitDelete(request, response);
+  } else {
+    response->setCode(405);
+    response->print("{\"msg\":\"Method not allowed\"}");
+  }
+
+  request->send(response);
+}
+
+//----------------------------------------------------------
+//
+//            Energy Meter
+//
+//----------------------------------------------------------
+void handleEmeterDelete(MongooseHttpServerRequest *request, MongooseHttpServerResponseStream *response)
+{
+  String body = request->body().toString();
+  DynamicJsonDocument doc(512);
+  DeserializationError err = deserializeJson(doc, body);
+  if (DeserializationError::Code::Ok == err) {
+    if (doc.containsKey("hard") && doc.containsKey("import")) {
+      bool hardreset = (bool)doc["hard"];
+      bool import = (bool)doc["import"];
+      if (evse.resetEnergyMeter(hardreset,import)) {
+        response->setCode(200);
+        response->print("{\"msg\":\"Reset done\"}");
+      }
+      else {
+        response->setCode(500);
+        response->print("{\"msg\":\"Reset failed\"}");
+      }
+
+    }
+    else {
+      response->setCode(500);
+      response->print("{\"msg\":\"Reset Failed\"}");
+    }
+  }
+  else {
+    response->setCode(500);
+    response->print("{\"msg\":\"reset Failed\"}");
+  }
+}
+
+void handleEmeter(MongooseHttpServerRequest *request)
+{
+  MongooseHttpServerResponseStream *response;
+  if (false == requestPreProcess(request, response))
+  {
+    return;
+  }
+
+  if (HTTP_DELETE == request->method())
+  {
+    handleEmeterDelete(request, response);
+  }
+  else
+  {
+    response->setCode(405);
+    response->print("{\"msg\":\"Method not allowed\"}");
+  }
+
+  request->send(response);
+}
+
+
+
+  //----------------------------------------------------------
+
+  void handleOverrideGet(MongooseHttpServerRequest * request, MongooseHttpServerResponseStream * response)
+  {
+    if (manual.isActive())
+    {
+      EvseProperties props;
+      manual.getProperties(props);
+      props.serialize(response);
+    } else {
     response->setCode(404);
     response->print("{\"msg\":\"No manual override\"}");
   }
@@ -1036,13 +909,14 @@ void handleDescribe(MongooseHttpServerRequest *request) {
 
 void handleAddRFID(MongooseHttpServerRequest *request) {
   MongooseHttpServerResponseStream *response;
-  if(false == requestPreProcess(request, response, CONTENT_TYPE_TEXT)) {
+  if(false == requestPreProcess(request, response)) {
     return;
   }
   response->setCode(200);
-  response->setContentType(CONTENT_TYPE_TEXT);
   response->addHeader("Access-Control-Allow-Origin", "*");
+  response->print("{\"msg\":\"Waiting for badge\"}");
   request->send(response);
+  yield();
   rfid.waitForTag();
 }
 
@@ -1175,13 +1049,13 @@ void handleNotFound(MongooseHttpServerRequest *request)
   DBUG("NOT_FOUND: ");
   dumpRequest(request);
 
-  if(net_wifi_mode_is_ap_only()) {
+  if(net.isWifiModeAp()) {
     // Redirect to the home page in AP mode (for the captive portal)
     MongooseHttpServerResponseStream *response = request->beginResponseStream();
     response->setContentType(CONTENT_TYPE_HTML);
 
     String url = F("http://");
-    url += ipaddress;
+    url += net.getIp();
 
     String s = F("<html>");
     s += F("<head><meta http-equiv=\"Refresh\" content=\"0; url=");
@@ -1202,6 +1076,17 @@ void handleNotFound(MongooseHttpServerRequest *request)
 void onWsFrame(MongooseHttpWebSocketConnection *connection, int flags, uint8_t *data, size_t len)
 {
   DBUGF("Got message %.*s", len, (const char *)data);
+  const size_t capacity = JSON_OBJECT_SIZE(1) + 16;
+  DynamicJsonDocument doc(capacity);
+  DeserializationError error = deserializeJson(doc, data, len);
+  if (!error) {
+    if (doc.containsKey("ping") && doc["ping"].is<int8_t>())
+      {
+        // answer pong
+        connection->send("{\"pong\": 1}");
+
+      }
+  }
 }
 
 void onWsConnect(MongooseHttpWebSocketConnection *connection)
@@ -1238,14 +1123,8 @@ web_server_setup() {
   server.on("/config$", handleConfig);
 
   // Handle HTTP web interface button presses
-  server.on("/savenetwork$", handleSaveNetwork);
-  server.on("/saveemoncms$", handleSaveEmoncms);
-  server.on("/savemqtt$", handleSaveMqtt);
-  server.on("/saveadmin$", handleSaveAdmin);
   server.on("/teslaveh$", handleTeslaVeh);
   server.on("/tesla/vehicles$", handleTeslaVeh);
-  server.on("/saveadvanced$", handleSaveAdvanced);
-  server.on("/saveohmkey$", handleSaveOhmkey);
   server.on("/settime$", handleSetTime);
   server.on("/reset$", handleRst);
   server.on("/restart$", handleRestart);
@@ -1267,6 +1146,10 @@ web_server_setup() {
   server.on("/override$", handleOverride);
 
   server.on("/logs", handleEventLogs);
+
+  server.on("/limit", handleLimit);
+  server.on("/emeter", handleEmeter);
+  server.on("/time", handleTime);
 
   // Simple Firmware Update Form
   server.on("/update$")->
@@ -1335,13 +1218,13 @@ web_server_loop() {
   // Do we need to restart the WiFi?
   if(wifiRestartTime > 0 && millis() > wifiRestartTime) {
     wifiRestartTime = 0;
-    net_wifi_restart();
+    net.wifiRestart();
   }
 
   // Do we need to turn off the access point?
   if(apOffTime > 0 && millis() > apOffTime) {
     apOffTime = 0;
-    net_wifi_turn_off_ap();
+    net.wifiTurnOffAp();
   }
 
   Profile_End(web_server_loop, 5);

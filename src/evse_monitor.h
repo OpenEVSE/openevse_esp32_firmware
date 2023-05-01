@@ -4,6 +4,7 @@
 #include <Arduino.h>
 #include <openevse.h>
 #include <MicroTasks.h>
+#include "energy_meter.h"
 
 #ifdef ENABLE_MCP9808
 #include <Wire.h>
@@ -121,13 +122,9 @@ class EvseMonitor : public MicroTasks::Task
     EvseStateEvent _state;            // OpenEVSE State
     double _amp;                      // OpenEVSE Current Sensor
     double _voltage;                  // Voltage from OpenEVSE or MQTT
-    long _elapsed;                    // Elapsed time (only valid if charging)
-    uint32_t _elapsed_set_time;
-
+    double _power;                    // Calculated Power from _amp & _voltage & mono|threephase
     Temperature _temps[EVSE_MONITOR_TEMP_COUNT];
-
-    double _session_wh;
-    double _total_kwh;
+    EnergyMeter _energyMeter;
 
     // Default OpenEVSE Fault Counters
     long _gfci_count;
@@ -170,7 +167,7 @@ class EvseMonitor : public MicroTasks::Task
     void getStatusFromEvse(bool allowStart = true);
     void getChargeCurrentAndVoltageFromEvse();
     void getTemperatureFromEvse();
-    void getEnergyFromEvse();
+
   protected:
     void setup();
     unsigned long loop(MicroTasks::WakeReason reason);
@@ -198,7 +195,7 @@ class EvseMonitor : public MicroTasks::Task
 
     void setMaxConfiguredCurrent(long amps);
 
-    void setPilot(long amps, std::function<void(int ret)> callback = NULL);
+    void setPilot(long amps, bool force=false, std::function<void(int ret)> callback = NULL);
     void setVoltage(double volts, std::function<void(int ret)> callback = NULL);
     void setServiceLevel(ServiceLevel level, std::function<void(int ret)> callback = NULL);
     void configureCurrentSensorScale(long scale, long offset, std::function<void(int ret)> callback = NULL);
@@ -209,6 +206,7 @@ class EvseMonitor : public MicroTasks::Task
     void enableStuckRelayCheck(bool enabled, std::function<void(int ret)> callback = NULL);
     void enableVentRequired(bool enabled, std::function<void(int ret)> callback = NULL);
     void enableTemperatureCheck(bool enabled, std::function<void(int ret)> callback = NULL);
+    void verifyPilot();
 
     uint8_t getEvseState() {
       return _state.getEvseState();
@@ -240,14 +238,47 @@ class EvseMonitor : public MicroTasks::Task
     double getVoltage() {
       return _voltage;
     }
+    double getPower() {
+      return _power;
+    }
     uint32_t getSessionElapsed() {
-      return _elapsed + (_state.isCharging() ? ((millis() - _elapsed_set_time) / 1000) : 0);
+      return _energyMeter.getElapsed();
     }
     double getSessionEnergy() {
-      return _session_wh;
+      return _energyMeter.getSession();
     }
     double getTotalEnergy() {
-      return _total_kwh;
+      return _energyMeter.getTotal();
+    }
+    double getTotalDay() {
+      return _energyMeter.getDaily();
+    }
+    double getTotalWeek() {
+      return _energyMeter.getWeekly();
+    }
+    double getTotalMonth() {
+      return _energyMeter.getMonthly();
+    }
+    double getTotalYear() {
+      return _energyMeter.getYearly();
+    }
+    bool saveEnergyMeter() {
+      return _energyMeter.save();
+    }
+    bool resetEnergyMeter(bool full, bool import)
+    {
+      return _energyMeter.reset(full, import);
+    }
+    bool importTotalEnergy();
+
+    bool publishEnergyMeter() {
+      return _energyMeter.publish();
+    }
+    void clearEnergyMeterSession() {
+      _energyMeter.clearSession();
+    }
+    void createEnergyMeterJsonDoc(JsonDocument &doc) {
+      _energyMeter.createEnergyMeterJsonDoc(doc);
     }
     long getFaultCountGFCI() {
       return _gfci_count;
@@ -342,6 +373,6 @@ class EvseMonitor : public MicroTasks::Task
     void onSessionComplete(MicroTasks::EventListener *listner) {
       _session_complete.Register(listner);
     }
-};
+  };
 
 #endif // _OPENEVSE_EVSE_MONITOR_H

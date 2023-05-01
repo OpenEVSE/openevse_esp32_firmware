@@ -1,0 +1,88 @@
+# yaml-language-server: $schema=https://json.schemastore.org/github-workflow.json
+
+name: Build OpenEVSE divert simulator
+
+permissions:
+  contents: write
+
+on:
+  push:
+    branches:
+      - master
+  pull_request:
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v3
+        with:
+          path: OpenEVSE_WiFi
+
+      - uses: actions/checkout@v3
+        with:
+          repository: JeremyPoulter/MicroDebug
+          path: MicroDebug
+
+      - uses: actions/checkout@v3
+        with:
+          repository: JeremyPoulter/MicroTasks
+          path: MicroTasks
+
+      - uses: actions/checkout@v3
+        with:
+          repository: JeremyPoulter/StreamSpy
+          path: StreamSpy
+
+      - uses: actions/checkout@v3
+        with:
+          repository: JeremyPoulter/ConfigJson
+          path: ConfigJson
+
+      - uses: actions/checkout@v3
+        with:
+          repository: bblanchon/ArduinoJson
+          path: ArduinoJson
+          ref: v6.20.1
+
+      - uses: actions/checkout@v3
+        with:
+          repository: JeremyPoulter/OpenEVSE_Lib
+          path: OpenEVSE_Lib
+
+      - uses: actions/checkout@v3
+        with:
+          repository: JeremyPoulter/EpoxyDuino
+          path: EpoxyDuino
+
+      - uses: actions/checkout@v3
+        with:
+          repository: JeremyPoulter/ESPAL
+          path: ESPAL
+
+      - uses: ammaraskar/gcc-problem-matcher@master
+
+      - name: Build the simulator
+        run: |
+          cd OpenEVSE_WiFi/divert_sim
+          make -j
+
+      - name: Upload artifacts
+        uses: actions/upload-artifact@v3
+        with:
+          name: divert_sim
+          path: OpenEVSE_WiFi/divert_sim/divert_sim
+      
+      - name: run tests
+        run: |
+          cd OpenEVSE_WiFi/divert_sim
+          bash runall.sh
+
+      - name : Upload test results
+        uses: actions/upload-artifact@v3
+        with:
+          name: test_results
+          path: |
+            OpenEVSE_WiFi/divert_sim/output
+            OpenEVSE_WiFi/divert_sim/view.html

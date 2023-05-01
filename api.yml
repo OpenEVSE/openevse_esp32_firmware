@@ -7,7 +7,7 @@ info:
   contact:
     email: jeremy@bigjungle.net
     name: Jeremy Poulter
-    url: https://github.com/jeremypoulter/
+    url: 'https://github.com/jeremypoulter/'
   license:
     name: Apache 2.0
     url: 'http://www.apache.org/licenses/LICENSE-2.0.html'
@@ -59,8 +59,12 @@ paths:
                     temp3: -2560
                     state: 254
                     elapsed: 3473
-                    wattsec: 22493407
-                    watthour: 51536
+                    session_energy: 25034
+                    total_energy: 998
+                    total_day: 23
+                    total_week: 68
+                    total_month: 126
+                    total_year: 998
                     gfcicount: 0
                     nogndcount: 0
                     stuckcount: 0
@@ -241,8 +245,6 @@ paths:
                   state: active
                   charge_current: 0
                   max_current: 0
-                  energy_limit: 0
-                  time_limit: 0
                   auto_release: true
       responses:
         '200':
@@ -526,6 +528,139 @@ paths:
         name: index
         in: path
         required: true
+  /limit:
+    get:
+      summary: Get charge limit
+      description: 'This will return the limit type, value and auto_release (true|false) defined if there''s one'
+      responses:
+        '200':
+          description: Limit properties
+          content:
+            application/json:
+              schema:
+                $ref: ./models/Limit.yaml
+        '404':
+          description: No limit
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  msg:
+                    type: string
+                    description: No limit
+      operationId: limit_get
+      tags:
+        - Limit
+    post:
+      summary: Set charge limit
+      description: 'This will set the limit type, value and auto_release (true|false)'
+      responses:
+        '200':
+          description: Limit set
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  msg:
+                    type: string
+                    description: created
+        '500':
+          description: Failed to parse data
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  msg:
+                    type: string
+                    description: Failed to parse JSON
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: ./models/Limit.yaml
+      operationId: limit_set
+      tags:
+        - Limit
+    delete:
+      summary: Get charge limit
+      description: This will clear current limit
+      responses:
+        '200':
+          description: Clear Limit ok
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  msg:
+                    type: string
+                    description: Deleted
+        '404':
+          description: No limit
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  msg:
+                    type: string
+                    description: No limit to clear
+        '500':
+          description: Failed to clear limit
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  msg:
+                    type: string
+                    description: Failed to clear limit
+      operationId: limit_clear
+      tags:
+        - Limit
+  /emeter:
+    delete:
+      summary: Reset Energy Meter
+      description: This will clear the Energy Meter
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                hard:
+                  type: integer
+                  description: 0|1 Enable hard reset ( reset total_counter & total_switches)
+                import:
+                  type: integer
+                  description: 0|1 Import OpenEvse module total kwh.
+      responses:
+        '200':
+          description: Reset counter ok
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  msg:
+                    type: string
+                    description: Reset done
+        '500':
+          description: Failed to reset counter
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  msg:
+                    type: string
+                    description: Reset failed
+      operationId: energymeter-reset
+      tags:
+        - Energy Meter
   /tesla/vehicles:
     get:
       summary: Get Tesla vehicle list
@@ -580,6 +715,75 @@ paths:
                         name: My Tesla
       operationId: get-tesla-vehicles
       description: Once the Tesla account credentials have been configured via the `/config` API this endpoint will return a list of vehicles associated with the account. The ID of the vehicle to use for SoC/Range can then be set using `tesla_vehicle_id` on the `/config` endpoint.
+  /time:
+    get:
+      summary: Get the time
+      tags:
+        - Time
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  time:
+                    type: string
+                    x-stoplight:
+                      id: 6q0laeyxt5u85
+                    description: The time in UTC according to the OpenEVSE.
+                    format: date-time
+                  offset:
+                    type: string
+                    x-stoplight:
+                      id: u5zngl88caktf
+                    pattern: '^[+-][0-9]{4}$'
+                  local_time:
+                    type: string
+                    x-stoplight:
+                      id: 7h1cpgfjj5j9j
+                    format: date-time
+                required:
+                  - time
+                  - offset
+                  - local_time
+      operationId: get-time
+      description: Gets the time set on the OpenEVSE
+    post:
+      summary: Set the time
+      tags:
+        - Time
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                x-examples:
+                  Example 1:
+                    sntp_enabled: false
+                    time_zone: 'GMT0BST,M3.5.0/1,M10.5.0'
+                    time: '2018-08-10T14:30:00Z'
+                properties:
+                  sntp_enabled:
+                    type: boolean
+                    description: |
+                      Set to `true` to enable receiving time updates via NTP, `false` will disable NTP updates.
+                    default: false
+                  time_zone:
+                    type: string
+                    description: The time zone to use on the OpenEVSE. This has the format `<location name>|<POSIX timezone>`. The `location name` is not used by the EVSE and is largely to for the UI to provide a human readable version of the timezone and differentiate between locations that use the same time zone.
+                    default: UTC0
+                  time:
+                    type: string
+                    description: If `sntp_enabled` is false this is the time to set. Must be in UTC.
+                    format: date-time
+        '400':
+          $ref: '#/components/responses/BadRequest'
+      operationId: post-time
+      description: Set the time and associated config options. If not setting the time the `/config` endpoint can be used.
 components:
   schemas:
     Message:
@@ -722,3 +926,6 @@ tags:
   - name: Schedule
   - name: Status
   - name: Tesla
+  - name: Limit
+  - name: Energy Meter
+  - name: Time

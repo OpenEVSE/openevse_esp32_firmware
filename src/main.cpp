@@ -29,7 +29,7 @@
 #include <ArduinoOTA.h>               // local OTA update from Arduino IDE
 #include <MongooseCore.h>
 #include <MicroTasks.h>
-#include <LITTLEFS.h>
+#include <LittleFS.h>
 
 #include "emonesp.h"
 #include "app_config.h"
@@ -52,6 +52,7 @@
 #include "ocpp.h"
 #include "rfid.h"
 #include "current_shaper.h"
+#include "limit.h"
 
 #if defined(ENABLE_PN532)
 #include "pn532.h"
@@ -69,6 +70,8 @@ EvseManager evse(RAPI_PORT, eventLog);
 Scheduler scheduler(evse);
 ManualOverride manual(evse);
 DivertTask divert(evse);
+
+NetManagerTask net(lcd, ledManager, timeManager);
 
 RapiSender &rapiSender = evse.getSender();
 
@@ -104,6 +107,7 @@ void setup()
   DEBUG.println();
   DEBUG.printf("OpenEVSE WiFI %s\n", ESPAL.getShortId().c_str());
   DEBUG.printf("Firmware: %s\n", currentfirmware.c_str());
+  DEBUG.printf("Git Hash: " ESCAPEQUOTE(BUILD_HASH) "\n");
   DEBUG.printf("Build date: " __DATE__ " " __TIME__ "\n");
   DEBUG.printf("IDF version: %s\n", ESP.getSdkVersion());
   DEBUG.printf("Free: %d\n", ESPAL.getFreeHeap());
@@ -126,7 +130,7 @@ void setup()
   evse.begin();
   scheduler.begin();
   divert.begin();
-
+  limit.begin(evse);
   lcd.begin(evse, scheduler, manual);
 #if defined(ENABLE_PN532)
   pn532.begin();
@@ -137,7 +141,7 @@ void setup()
   ledManager.begin(evse);
 
   // Initialise the WiFi
-  net_setup();
+  net.begin();
   DBUGF("After net_setup: %d", ESPAL.getFreeHeap());
 
   // Initialise Mongoose networking library
@@ -182,7 +186,6 @@ loop() {
   Profile_End(Mongoose, 10);
 
   web_server_loop();
-  net_loop();
   ota_loop();
   rapiSender.loop();
 
@@ -221,7 +224,7 @@ loop() {
     }
   }
 
-  if(net_is_connected())
+  if(net.isConnected())
   {
     if (config_tesla_enabled()) {
       teslaClient.loop();
@@ -247,7 +250,8 @@ loop() {
     if(emoncms_updated)
     {
       // Send the current state to check the config
-      DynamicJsonDocument data(4096);
+      const size_t capacity = JSON_OBJECT_SIZE(33) + 1024;
+      DynamicJsonDocument data(capacity);
       create_rapi_json(data);
       emoncms_publish(data);
       emoncms_updated = false;
@@ -293,7 +297,8 @@ class SystemRestart : public MicroTasks::Alarm
     void Trigger()
     {
       DBUGLN("Restarting...");
-      net_wifi_disconnect();
+      evse.saveEnergyMeter();
+      net.wifiStop();
       ESPAL.reset();
     }
 } systemRestartAlarm;

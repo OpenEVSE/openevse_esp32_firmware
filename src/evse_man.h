@@ -69,8 +69,6 @@ class EvseProperties : virtual public JsonSerialize<512>
     EvseState _state;
     uint32_t _charge_current;
     uint32_t _max_current;
-    uint32_t _energy_limit;
-    uint32_t _time_limit;
     bool _auto_release;
     bool _has_auto_release = false;
   public:
@@ -104,24 +102,6 @@ class EvseProperties : virtual public JsonSerialize<512>
       _max_current = max_current;
     }
 
-    // Get/set the energy max to transfer for this charge session/client, after which the default
-    // session state will be set to EvseState::Disabled and the client automatically released.
-    uint32_t getEnergyLimit() {
-      return _energy_limit;
-    }
-    void setEnergyLimit(uint32_t energy_limit) {
-      _energy_limit = energy_limit;
-    }
-
-    // Get/set the time to stop the charge session/client, after which the default session state
-    // will be set to EvseState::Disabled and the client automatically released.
-    uint32_t getTimeLimit() {
-      return _time_limit;
-    }
-    void setTimeLimit(uint32_t time_limit) {
-      _time_limit = time_limit;
-    }
-
     // Get/set the client auto release state. With the client auto release enabled the client claim
     // will automatically be released at the end of the charging session.
     bool isAutoRelease() {
@@ -147,8 +127,6 @@ class EvseProperties : virtual public JsonSerialize<512>
       return this->_state == rhs._state &&
              this->_charge_current == rhs._charge_current &&
              this->_max_current == rhs._max_current &&
-             this->_energy_limit == rhs._energy_limit &&
-             this->_time_limit == rhs._time_limit &&
              this->_auto_release == rhs._auto_release;
 
     }
@@ -221,14 +199,6 @@ class EvseManager : public MicroTasks::Task
           return _properties.getMaxCurrent();
         }
 
-        uint32_t getEnergyLimit() {
-          return _properties.getEnergyLimit();
-        }
-
-        uint32_t getTimeLimit() {
-          return _properties.getTimeLimit();
-        }
-
         bool isAutoRelease() {
           return _properties.isAutoRelease();
         }
@@ -259,14 +229,11 @@ class EvseManager : public MicroTasks::Task
     EvseClient _state_client;
     EvseClient _charge_current_client;
     EvseClient _max_current_client;
-    EvseClient _energy_limit_client;
-    EvseClient _time_limit_client;
 
     bool _sleepForDisable;
 
     bool _evaluateClaims;
     bool _evaluateTargetState;
-    int _waitingForEvent;
 
     uint32_t _vehicleValid;
     uint32_t _vehicleUpdated;
@@ -305,8 +272,6 @@ class EvseManager : public MicroTasks::Task
     EvseState getState(EvseClient client = EvseClient_NULL);
     uint32_t getChargeCurrent(EvseClient client = EvseClient_NULL);
     uint32_t getMaxCurrent(EvseClient client = EvseClient_NULL);
-    uint32_t getEnergyLimit(EvseClient client = EvseClient_NULL);
-    uint32_t getTimeLimit(EvseClient client = EvseClient_NULL);
 
     bool serializeClaims(DynamicJsonDocument &doc);
     bool serializeClaim(DynamicJsonDocument &doc, EvseClient client);
@@ -344,6 +309,9 @@ class EvseManager : public MicroTasks::Task
     double getVoltage() {
       return _monitor.getVoltage();
     }
+    double getPower() {
+      return _monitor.getPower();
+    }
     void setVoltage(double volts) {
       _monitor.setVoltage(volts);
     }
@@ -355,6 +323,30 @@ class EvseManager : public MicroTasks::Task
     }
     double getTotalEnergy() {
       return _monitor.getTotalEnergy();
+    }
+    double getTotalDay() {
+      return _monitor.getTotalDay();
+    }
+    double getTotalWeek() {
+      return _monitor.getTotalWeek();
+    }
+    double getTotalMonth() {
+      return _monitor.getTotalMonth();
+    }
+    double getTotalYear() {
+      return _monitor.getTotalYear();
+    }
+    bool saveEnergyMeter() {
+      return _monitor.saveEnergyMeter();
+    }
+    bool resetEnergyMeter(bool full, bool import) {
+      return _monitor.resetEnergyMeter(full, import);
+    }
+    bool publishEnergyMeter() {
+      return _monitor.publishEnergyMeter();
+    }
+		void createEnergyMeterJsonDoc(JsonDocument &doc) {
+      _monitor.createEnergyMeterJsonDoc(doc);
     }
     long getFaultCountGFCI() {
       return _monitor.getFaultCountGFCI();

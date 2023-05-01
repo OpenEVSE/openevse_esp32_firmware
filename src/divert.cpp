@@ -8,14 +8,9 @@
 
 #include <Arduino.h>
 #include "emonesp.h"
-#include "input.h"
-#include "app_config.h"
-#include "RapiSender.h"
-#include "mqtt.h"
-#include "event.h"
-#include "openevse.h"
 #include "divert.h"
 #include "emoncms.h"
+#include "event.h"
 
 #include <sys/time.h>
 
@@ -160,6 +155,9 @@ void DivertTask::update_state()
   if (_mode == DivertMode::Eco)
   {
     double voltage = _evse->getVoltage();
+    if (config_threephase_enabled()) {
+      voltage = voltage * 3;
+    }
 
     // Calculate current
     if (mqtt_grid_ie != "")

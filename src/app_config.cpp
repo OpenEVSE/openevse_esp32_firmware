@@ -1,6 +1,18 @@
 #include "emonesp.h"
 #include "espal.h"
+
+#include <Arduino.h>
+#include <EEPROM.h>             // Save config settings
+#include <ConfigJson.h>
+#include <LittleFS.h>
+
+#include "app_config.h"
+#include "app_config_mqtt.h"
+#include "app_config_mode.h"
+
+#if ENABLE_CONFIG_CHANGE_NOTIFICATION
 #include "divert.h"
+#include "net_manager.h"
 #include "mqtt.h"
 #include "ocpp.h"
 #include "tesla_client.h"
@@ -8,15 +20,8 @@
 #include "input.h"
 #include "LedManagerTask.h"
 #include "current_shaper.h"
-
-#include "app_config.h"
-#include "app_config_mqtt.h"
-#include "app_config_mode.h"
-
-#include <Arduino.h>
-#include <EEPROM.h>             // Save config settings
-#include <ConfigJson.h>
-#include <LITTLEFS.h>
+#include "limit.h"
+#endif
 
 #define EEPROM_SIZE       4096
 
@@ -40,6 +45,10 @@ String www_password;
 // Advanced settings
 String esp_hostname;
 String sntp_hostname;
+
+// LIMIT Settings
+String limit_default_type;
+uint32_t limit_default_value;
 
 // EMONCMS SERVER strings
 String emoncms_server;
@@ -135,7 +144,11 @@ ConfigOpt *opts[] =
   new ConfigOptDefenition<String>(sntp_hostname, SNTP_DEFAULT_HOST, "sntp_hostname", "sh"),
 
 // Time
-  new ConfigOptDefenition<String>(time_zone, "", "time_zone", "tz"),
+  new ConfigOptDefenition<String>(time_zone, DEFAULT_TIME_ZONE, "time_zone", "tz"),
+
+// Limit
+  new ConfigOptDefenition<String>(limit_default_type, {}, "limit_default_type", "ldt"),
+  new ConfigOptDefenition<uint32_t>(limit_default_value, {}, "limit_default_value", "ldv"),
 
 // EMONCMS SERVER strings
   new ConfigOptDefenition<String>(emoncms_server, "https://data.openevse.com/emoncms", "emoncms_server", "es"),
@@ -206,7 +219,7 @@ ConfigOpt *opts[] =
   new ConfigOptVirtualBool(flagsOpt, CONFIG_SERVICE_EMONCMS, CONFIG_SERVICE_EMONCMS, "emoncms_enabled", "ee"),
   new ConfigOptVirtualBool(flagsOpt, CONFIG_SERVICE_MQTT, CONFIG_SERVICE_MQTT, "mqtt_enabled", "me"),
   new ConfigOptVirtualBool(flagsOpt, CONFIG_MQTT_ALLOW_ANY_CERT, 0, "mqtt_reject_unauthorized", "mru"),
-  new ConfigOptVirtualBool(flagsOpt, CONFIG_MQTT_RETAINED, 0, "mqtt_retained", "mrt"),
+  new ConfigOptVirtualBool(flagsOpt, CONFIG_MQTT_RETAINED, CONFIG_MQTT_RETAINED, "mqtt_retained", "mrt"),
   new ConfigOptVirtualBool(flagsOpt, CONFIG_SERVICE_OHM, CONFIG_SERVICE_OHM, "ohm_enabled", "oe"),
   new ConfigOptVirtualBool(flagsOpt, CONFIG_SERVICE_SNTP, CONFIG_SERVICE_SNTP, "sntp_enabled", "se"),
   new ConfigOptVirtualBool(flagsOpt, CONFIG_SERVICE_TESLA, CONFIG_SERVICE_TESLA, "tesla_enabled", "te"),
@@ -253,9 +266,14 @@ config_load_settings()
   user_config.onChanged(config_changed);
 
   factory_config.load(false);
-  if(!user_config.load(true)) {
+  if(!user_config.load(true))
+  {
+#if ENABLE_CONFIG_V1_IMPORT
     DBUGF("No JSON config found, trying v1 settings");
     config_load_v1_settings();
+#else
+    DBUGF("No JSON config found, using defaults");
+#endif
   }
 }
 
@@ -263,8 +281,9 @@ void config_changed(String name)
 {
   DBUGF("%s changed", name.c_str());
 
+#if ENABLE_CONFIG_CHANGE_NOTIFICATION
   if(name == "time_zone") {
-    config_set_timezone(time_zone);
+    timeManager.setTimeZone(time_zone);
   } else if(name == "flags") {
     divert.setMode((config_divert_enabled() && 1 == config_charge_mode()) ? DivertMode::Eco : DivertMode::Normal);
     if(mqtt_connected() != config_mqtt_enabled()) {
@@ -273,6 +292,7 @@ void config_changed(String name)
     if(emoncms_connected != config_emoncms_enabled()) {
       emoncms_updated = true;
     }
+    timeManager.setSntpEnabled(config_sntp_enabled());
     ArduinoOcppTask::notifyConfigChanged();
     evse.setSleepForDisable(!config_pause_uses_disabled());
   } else if(name.startsWith("mqtt_")) {
@@ -297,7 +317,28 @@ void config_changed(String name)
   } else if(name == "led_brightness") {
     ledManager.setBrightness(led_brightness);
 #endif
+  } else if(name.startsWith("limit_default_")) {
+    LimitProperties limitprops;
+    LimitType limitType;
+    DBUGVAR(limit_default_type);
+    DBUGVAR((int)limit_default_value);
+    limitType.fromString(limit_default_type.c_str());
+    limitprops.setType(limitType);
+    limitprops.setValue(limit_default_value);
+    limitprops.setAutoRelease(false);
+    if (limitType == LimitType::None) {
+      limit.clear();
+      DBUGLN("No limit to set");
+    }
+    else if (limitprops.getValue())
+      limit.set(limitprops);
+    DBUGLN("Limit set");
+    DBUGVAR(limitprops.getType().toString());
+    DBUGVAR(limitprops.getValue());
+  } else if(name == "sntp_enabled") {
+    timeManager.setSntpEnabled(config_sntp_enabled());
   }
+#endif
 }
 
 void config_commit(bool factory)
@@ -344,131 +385,12 @@ void config_set(const char *name, double val) {
   user_config.set(name, val);
 }
 
-void config_save_emoncms(bool enable, String server, String node, String apikey,
-                    String fingerprint)
+void config_reset()
 {
-  uint32_t newflags = flags & ~CONFIG_SERVICE_EMONCMS;
-  if(enable) {
-    newflags |= CONFIG_SERVICE_EMONCMS;
-  }
-
-  user_config.set("emoncms_server", server);
-  user_config.set("emoncms_node", node);
-  user_config.set("emoncms_apikey", apikey);
-  user_config.set("emoncms_fingerprint", fingerprint);
-  user_config.set("flags", newflags);
-  user_config.commit();
-}
-
-void
-config_save_mqtt(bool enable, int protocol, String server, uint16_t port, String topic, bool retained, String user, String pass, String solar, String grid_ie, String live_pwr, bool reject_unauthorized)
-{
-  uint32_t newflags = flags & ~(CONFIG_SERVICE_MQTT | CONFIG_MQTT_PROTOCOL | CONFIG_MQTT_ALLOW_ANY_CERT | CONFIG_MQTT_RETAINED);
-  if(enable) {
-    newflags |= CONFIG_SERVICE_MQTT;
-  }
-  if(!reject_unauthorized) {
-    newflags |= CONFIG_MQTT_ALLOW_ANY_CERT;
-  }
-  if (retained) {
-  newflags |= CONFIG_MQTT_RETAINED;
-  }
-  newflags |= protocol << 4;
-
-  user_config.set("mqtt_server", server);
-  user_config.set("mqtt_port", port);
-  user_config.set("mqtt_topic", topic);
-  user_config.set("mqtt_user", user);
-  user_config.set("mqtt_pass", pass);
-  user_config.set("mqtt_solar", solar);
-  user_config.set("mqtt_grid_ie", grid_ie);
-  user_config.set("mqtt_live_pwr", live_pwr);
-  user_config.set("flags", newflags);
-  user_config.commit();
-}
-
-void
-config_save_admin(String user, String pass) {
-  user_config.set("www_username", user);
-  user_config.set("www_password", pass);
-  user_config.commit();
-}
-
-void
-config_save_sntp(bool sntp_enable, String tz)
-{
-  uint32_t newflags = flags & ~CONFIG_SERVICE_SNTP;
-  if(sntp_enable) {
-    newflags |= CONFIG_SERVICE_SNTP;
-  }
-
-  user_config.set("time_zone", tz);
-  user_config.set("flags", newflags);
-  user_config.commit();
-
-  config_set_timezone(tz);
-}
-
-void config_set_timezone(String tz)
-{
-  const char *set_tz = tz.c_str();
-  const char *split_pos = strchr(set_tz, '|');
-  if(split_pos) {
-    set_tz = split_pos;
-  }
-
-  setenv("TZ", set_tz, 1);
-  tzset();
-}
-
-void
-config_save_advanced(String hostname, String sntp_host) {
-  user_config.set("hostname", hostname);
-  user_config.set("sntp_hostname", sntp_host);
-  user_config.commit();
-}
-
-void
-config_save_wifi(String qsid, String qpass)
-{
-  user_config.set("ssid", qsid);
-  user_config.set("pass", qpass);
-  user_config.commit();
-}
-
-void
-config_save_ohm(bool enable, String qohm)
-{
-  uint32_t newflags = flags & ~CONFIG_SERVICE_OHM;
-  if(enable) {
-    newflags |= CONFIG_SERVICE_OHM;
-  }
-
-  user_config.set("ohm", qohm);
-  user_config.set("flags", newflags);
-  user_config.commit();
-}
-
-void
-config_save_rfid(bool enable, String storage){
-  uint32_t newflags = flags & ~CONFIG_RFID;
-  if(enable) {
-    newflags |= CONFIG_RFID;
-  }
-  user_config.set("flags", newflags);
-  user_config.set("rfid_storage", rfid_storage);
-  user_config.commit();
-}
-
-void
-config_save_flags(uint32_t newFlags) {
-  user_config.set("flags", newFlags);
-  user_config.commit();
-}
-
-void
-config_reset() {
   ResetEEPROM();
   LittleFS.format();
   config_load_settings();
 }
+
+
+

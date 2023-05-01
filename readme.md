@@ -12,7 +12,6 @@ The WiFi gateway uses an **ESP32** which communicates with the OpenEVSE controll
 
 **This FW also supports wired Ethernet connection using [ESP32 Gateway](docs/wired-ethernet.md)**
 
-**[Live UI demo](https://openevse.openenergymonitor.org)**
 
 ***
 
@@ -34,13 +33,14 @@ The WiFi gateway uses an **ESP32** which communicates with the OpenEVSE controll
 
 - Web UI to view & control all OpenEVSE functions
   - Start / pause
-  - Delay timer
-  - Time limit
-  - Energy Limit
+  - Scheduler
+  - Session & system limits (time, energy, soc, range)
   - Adjust charging current
+
 - MQTT status & control
 - Log to Emoncms server e.g [data.openevse.com](https://data.openevse.com) or [emoncms.org](https://emoncms.org)
 - 'Eco' mode: automatically adjust charging current based on availability of power from solar PV or grid export
+- Shaper: throttle current to prevent overflowing main power capacity 
 - OCPP V1.6 (beta)
 - [Home Assistant Integration (beta)](https://github.com/firstof9/openevse)
 
@@ -49,7 +49,7 @@ The WiFi gateway uses an **ESP32** which communicates with the OpenEVSE controll
 ### OpenEVSE / EmonEVSE charging station
 
 - Purchase via: [OpenEVSE Store (USA/Canda)](https://store.openevse.com) | [OpenEnergyMonitor (UK / EU)](https://shop.openenergymonitor.com/evse/)
-- OpenEVSE FW [V7.1.3+ recommended](https://github.com/OpenEVSE/open_evse/releases)
+- OpenEVSE FW [V7.1.3 recommended](https://github.com/OpenEVSE/open_evse/releases)
 - All new OpenEVSE units are shipped with V7.1.3 pre-loaded (April 2021 onwards)
 
 ### ESP32 WiFi Module
@@ -74,6 +74,7 @@ Contributions by:
 - @lincomatic
 - @joverbee
 - @matth-x (OCPP)
+- @kipk
 
 ## Licence
 

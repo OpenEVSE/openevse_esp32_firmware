@@ -51,7 +51,7 @@
 #endif
 
 #ifndef WIFI_CLIENT_RETRY_TIMEOUT
-#define WIFI_CLIENT_RETRY_TIMEOUT (5 * 60 * 1000)
+#define WIFI_CLIENT_RETRY_TIMEOUT           (10 * 1000)
 #endif
 
 #ifndef WIFI_CLIENT_DISCONNECTS_BEFORE_AP
@@ -61,11 +61,15 @@
 // Used to change the ADC channel used for seeding the rndom number generator
 // Should be set to an unconnected pin
 #ifndef RANDOM_SEED_CHANNEL
-#if WIFI_BUTTON != 0 && (!defined(WIFI_LED) || WIFI_LED != 0)
-#define RANDOM_SEED_CHANNEL 0
-#else
-#define RANDOM_SEED_CHANNEL 1
-#endif
+  #ifdef ESP32
+    #define RANDOM_SEED_CHANNEL 14
+  #else
+    #if WIFI_BUTTON != 0 && (!defined(WIFI_LED) || WIFI_LED != 0)
+      #define RANDOM_SEED_CHANNEL 0
+    #else
+      #define RANDOM_SEED_CHANNEL 1
+    #endif
+  #endif
 #endif
 
 #ifndef HAL_ID_ENCODING_BASE
@@ -112,7 +116,7 @@
 #endif
 
 #ifndef TOTAL_ENERGY_SCALE_FACTOR
-#define TOTAL_ENERGY_SCALE_FACTOR   1.0
+#define TOTAL_ENERGY_SCALE_FACTOR 1.0
 #endif
 
 #ifndef SESSION_ENERGY_SCALE_FACTOR
@@ -130,15 +134,19 @@
 #endif
 
 #ifndef TEMP_SCALE_FACTOR
-#define TEMP_SCALE_FACTOR   10.0
+#define TEMP_SCALE_FACTOR 10.0
 #endif
 
 #ifndef TOTAL_ENERGY_SCALE_FACTOR
-#define TOTAL_ENERGY_SCALE_FACTOR   1000.0
+#define TOTAL_ENERGY_SCALE_FACTOR 1000.0
 #endif
 
 #ifndef SESSION_ENERGY_SCALE_FACTOR
 #define SESSION_ENERGY_SCALE_FACTOR 3600.0
+#endif
+
+#ifndef POWER_SCALE_FACTOR
+#define POWER_SCALE_FACTOR  1.0
 #endif
 
 #endif
@@ -154,9 +162,6 @@
 #ifndef FORMAT_LITTLEFS_IF_FAILED
 #define FORMAT_LITTLEFS_IF_FAILED true
 #endif // !FORMAT_LITTLEFS_IF_FAILED
-
-// Just because it is irritating to be all caps....
-#define LittleFS LITTLEFS
 
 #ifndef SCHEDULE_PATH
 #define SCHEDULE_PATH "/schedule.json"

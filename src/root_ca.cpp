@@ -29,7 +29,7 @@ const char *root_ca = ""
 #endif
 
 #ifndef CA_GITHUB
-#define CA_GITHUB 0
+#define CA_GITHUB 1
 #endif
 
 #ifndef CA_AMAZON_1

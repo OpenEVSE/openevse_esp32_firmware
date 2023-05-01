@@ -6,7 +6,24 @@
 #include <openevse.h>
 
 #ifdef ESP32
-#include <analogWrite.h>
+//#include <analogWrite.h>
+#if defined(RED_LED) && defined(GREEN_LED) && defined(BLUE_LED)
+#ifndef RED_LEDC_CHANNEL
+#define RED_LEDC_CHANNEL 1
+#endif
+#ifndef GREEN_LEDC_CHANNEL
+#define GREEN_LEDC_CHANNEL 2
+#endif
+#ifndef BLUE_LEDC_CHANNEL
+#define BLUE_LEDC_CHANNEL 3
+#endif
+#ifndef LEDC_FREQUENCY
+#define LEDC_FREQUENCY 5000
+#endif
+#ifndef LEDC_RESOLUTION
+#define LEDC_RESOLUTION 8
+#endif
+#endif
 #endif
 
 #include "debug.h"
@@ -29,7 +46,7 @@ Adafruit_NeoPixel strip = Adafruit_NeoPixel(NEO_PIXEL_LENGTH, NEO_PIXEL_PIN, NEO
 #if defined(RED_LED) && defined(GREEN_LED) && defined(BLUE_LED)
 
 // https://learn.adafruit.com/led-tricks-gamma-correction/the-quick-fix
-const uint8_t PROGMEM gamma8[] = {
+const uint8_t gamma8[] = {
   0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,
   0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  1,  1,  1,  1,
   1,  1,  1,  1,  1,  1,  1,  1,  1,  2,  2,  2,  2,  2,  2,  2,
@@ -55,10 +72,13 @@ const uint8_t PROGMEM gamma8[] = {
 #define WIFI_BUTTON_SHARE_LED WIFI_LED
 #elif defined(RED_LED) && RED_LED == WIFI_BUTTON
 #define WIFI_BUTTON_SHARE_LED RED_LED
+#define WIFI_BUTTON_SHARE_LEDC_CHANNEL RED_LEDC_CHANNEL
 #elif defined(GREEN_LED) && GREEN_LED == WIFI_BUTTON
 #define WIFI_BUTTON_SHARE_LED GREEN_LED
+#define WIFI_BUTTON_SHARE_LEDC_CHANNEL GREEN_LEDC_CHANNEL
 #elif defined(BLUE_LED) && BLUE_LED == WIFI_BUTTON
 #define WIFI_BUTTON_SHARE_LED BLUE_LED
+#define WIFI_BUTTON_SHARE_LLEDC_CHANNELBLUE_LEDC_CHANNEL
 #endif
 
 #endif
@@ -114,12 +134,13 @@ void LedManagerTask::setup()
 
 #if defined(RED_LED) && defined(GREEN_LED) && defined(BLUE_LED)
   DBUGF("Initialising RGB LEDs, %d, %d, %d", RED_LED, GREEN_LED, BLUE_LED);
-  pinMode(RED_LED, OUTPUT);
-  digitalWrite(RED_LED, LOW);
-  pinMode(GREEN_LED, OUTPUT);
-  digitalWrite(GREEN_LED, LOW);
-  pinMode(BLUE_LED, OUTPUT);
-  digitalWrite(BLUE_LED, LOW);
+  // configure LED PWM functionalitites
+  ledcSetup(RED_LEDC_CHANNEL, LEDC_FREQUENCY, LEDC_RESOLUTION);
+  ledcAttachPin(RED_LED, RED_LEDC_CHANNEL);
+  ledcSetup(GREEN_LEDC_CHANNEL, LEDC_FREQUENCY, LEDC_RESOLUTION);
+  ledcAttachPin(GREEN_LED, GREEN_LEDC_CHANNEL);
+  ledcSetup(BLUE_LEDC_CHANNEL, LEDC_FREQUENCY, LEDC_RESOLUTION);
+  ledcAttachPin(BLUE_LED, BLUE_LEDC_CHANNEL);
 #endif
 
 #ifdef WIFI_LED
@@ -320,41 +341,7 @@ int LedManagerTask::fadeLed(int fadeValue, int FadeDir)
 #if RGB_LED
 void LedManagerTask::setAllRGB(uint8_t red, uint8_t green, uint8_t blue)
 {
-  DBUG("LED R:");
-  DBUG(red);
-  DBUG(" G:");
-  DBUG(green);
-  DBUG(" B:");
-  DBUGLN(blue);
-
-  if(brightness) { // See notes in setBrightness()
-    red = (red * brightness) >> 8;
-    green = (green * brightness) >> 8;
-    blue = (blue * brightness) >> 8;
-  }
-
-#if defined(NEO_PIXEL_PIN) && defined(NEO_PIXEL_LENGTH)
-  uint32_t col = strip.gamma32(strip.Color(red, green, blue));
-  DBUGVAR(col, HEX);
-  strip.fill(col);
-  strip.show();
-#endif
-
-#if defined(RED_LED) && defined(GREEN_LED) && defined(BLUE_LED)
-  analogWrite(RED_LED, pgm_read_byte(&gamma8[red]));
-  analogWrite(GREEN_LED, pgm_read_byte(&gamma8[green]));
-  analogWrite(BLUE_LED, pgm_read_byte(&gamma8[blue]));
-
-#ifdef WIFI_BUTTON_SHARE_LED
-  #if RED_LED == WIFI_BUTTON_SHARE_LED
-    buttonShareState = red;
-  #elif GREEN_LED == WIFI_BUTTON_SHARE_LED
-    buttonShareState = green;
-  #elif BLUE_LED == WIFI_BUTTON_SHARE_LED
-    buttonShareState = blue;
-  #endif
-#endif
-#endif
+  setEvseAndWifiRGB(red, green, blue, red, green, blue);
 }
 #endif
 
@@ -384,6 +371,20 @@ void LedManagerTask::setEvseAndWifiRGB(uint8_t evseRed, uint8_t evseGreen, uint8
     wifiBlue = (wifiBlue * brightness) >> 8;
   }
 
+  DBUG("EVSE LED R:");
+  DBUG(evseRed);
+  DBUG(" G:");
+  DBUG(evseGreen);
+  DBUG(" B:");
+  DBUGLN(evseBlue);
+
+  DBUG("WiFi LED R:");
+  DBUG(wifiRed);
+  DBUG(" G:");
+  DBUG(wifiGreen);
+  DBUG(" B:");
+  DBUGLN(wifiBlue);
+
 #if defined(NEO_PIXEL_PIN) && defined(NEO_PIXEL_LENGTH)
   uint32_t col = strip.gamma32(strip.Color(evseRed, evseGreen, evseBlue));
   DBUGVAR(col, HEX);
@@ -393,18 +394,24 @@ void LedManagerTask::setEvseAndWifiRGB(uint8_t evseRed, uint8_t evseGreen, uint8
 #endif
 
 #if defined(RED_LED) && defined(GREEN_LED) && defined(BLUE_LED)
-  analogWrite(RED_LED, pgm_read_byte(&gamma8[wifiRed]));
-  analogWrite(GREEN_LED, pgm_read_byte(&gamma8[wifiGreen]));
-  analogWrite(BLUE_LED, pgm_read_byte(&gamma8[wifiBlue]));
+
+  DBUGVAR(gamma8[wifiRed]);
+  DBUGVAR(gamma8[wifiGreen]);
+  DBUGVAR(gamma8[wifiBlue]);
+
+  ledcWrite(RED_LEDC_CHANNEL, gamma8[wifiRed]);
+  ledcWrite(GREEN_LEDC_CHANNEL, gamma8[wifiGreen]);
+  ledcWrite(BLUE_LEDC_CHANNEL, gamma8[wifiBlue]);
 
 #ifdef WIFI_BUTTON_SHARE_LED
   #if RED_LED == WIFI_BUTTON_SHARE_LED
-    buttonShareState = wifiRed;
+    buttonShareState = gamma8[wifiRed];
   #elif GREEN_LED == WIFI_BUTTON_SHARE_LED
-    buttonShareState = wifiGreen;
+    buttonShareState = gamma8[wifiGreen];
   #elif BLUE_LED == WIFI_BUTTON_SHARE_LED
-    buttonShareState = wifiBlue;
+    buttonShareState = gamma8[wifiBlue];
   #endif
+  DBUGVAR(buttonShareState);
 #endif
 #endif
 }
@@ -507,14 +514,12 @@ void LedManagerTask::setWifiMode(bool client, bool connected)
 int LedManagerTask::getButtonPressed()
 {
 #if defined(WIFI_BUTTON_SHARE_LED)
-  #ifdef ESP32
-  int channel = analogWriteChannel(WIFI_BUTTON_SHARE_LED);
-  if(-1 != channel) {
-    ledcDetachPin(WIFI_BUTTON_SHARE_LED);
-  }
+  #ifdef RGB_LEDC_CHANNEL
+  ledcDetachPin(WIFI_BUTTON_SHARE_LED);
+  #else
+  digitalWrite(WIFI_BUTTON_SHARE_LED, HIGH);
   #endif
 
-  digitalWrite(WIFI_BUTTON_SHARE_LED, HIGH);
   pinMode(WIFI_BUTTON_SHARE_LED, WIFI_BUTTON_PRESSED_PIN_MODE);
 #endif
 
@@ -522,19 +527,13 @@ int LedManagerTask::getButtonPressed()
   int button = digitalRead(WIFI_BUTTON);
 
 #if defined(WIFI_BUTTON_SHARE_LED)
-  pinMode(WIFI_BUTTON, OUTPUT);
-
-  #ifdef ESP32
-  if(-1 != channel) {
-    ledcAttachPin(WIFI_BUTTON_SHARE_LED, channel);
-  }
+  #ifdef WIFI_BUTTON_SHARE_LEDC_CHANNEL
+  ledcAttachPin(WIFI_BUTTON_SHARE_LED, WIFI_BUTTON_SHARE_LEDC_CHANNEL);
+  ledcWrite(WIFI_BUTTON_SHARE_LED, buttonShareState);
+  #else
+  pinMode(WIFI_BUTTON_SHARE_LED, OUTPUT);
+  digitalWrite(WIFI_BUTTON_SHARE_LED, buttonShareState ? HIGH : LOW);
   #endif
-
-  if(0 == buttonShareState || 255 == buttonShareState) {
-    digitalWrite(WIFI_BUTTON_SHARE_LED, buttonShareState ? HIGH : LOW);
-  } else {
-    analogWrite(WIFI_BUTTON_SHARE_LED, buttonShareState);
-  }
 #endif
 
   return button;
@@ -548,11 +547,7 @@ void LedManagerTask::setBrightness(uint8_t brightness)
   // adding 1 here may (intentionally) roll over...so 0 = max brightness
   // (color values are interpreted ltimingiterally; no scaling), 1 = min
   // brightness (off), 255 = just below max brightness.
-  this->brightness = brightness - 1;
-
-//#if defined(NEO_PIXEL_PIN) && defined(NEO_PIXEL_LENGTH)
-//  strip.setBrightness(LED_DEFAULT_BRIGHTNESS);
-//#endif
+  this->brightness = brightness + 1;
 
   DBUGVAR(this->brightness);
 

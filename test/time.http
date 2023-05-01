@@ -34,6 +34,7 @@ POST {{baseUrl}}/settime HTTP/1.1
 Content-Type: application/x-www-form-urlencoded
 
 ntp=true&tz=<+06>-6
+
 ###
 
 POST {{baseUrl}}/settime HTTP/1.1
@@ -43,17 +44,60 @@ ntp=true&tz=Europe/Paris|CET-1CEST,M3.5.0,M10.5.0/3
 
 ###
 
+# Time with MS
+
+POST {{baseUrl}}/settime HTTP/1.1
+Content-Type: application/x-www-form-urlencoded; charset=UTF-8
+
+ntp=false&tz=Europe%2FLondon%7CGMT0BST%2CM3.5.0%2F1%2CM10.5.0&time=2023-03-18T14%3A02%3A08.427Z
+
+###
+# summer time
+
 POST {{baseUrl}}/settime HTTP/1.1
 Content-Type: application/x-www-form-urlencoded
 
 ntp=false&time=2018-08-10T14:30:00Z&tz=GMT0BST,M3.5.0/1,M10.5.0
 
 ###
+# summer time
 
 POST {{baseUrl}}/settime HTTP/1.1
 Content-Type: application/x-www-form-urlencoded
 
-time=2018-08-10T14:30:00Z&tz=GMT0BST,M3.5.0/1,M10.5.0
+time=2018-08-10T14:30:00Z&tz=Europe/London|GMT0BST,M3.5.0/1,M10.5.0
+
+###
+# summer time
+
+POST {{baseUrl}}/settime HTTP/1.1
+Content-Type: application/x-www-form-urlencoded
+
+ntp=false&time=2018-08-10T14:30:00Z&tz=Europe/Paris|CET-1CEST,M3.5.0,M10.5.0/3
+
+###
+# winter time
+
+POST {{baseUrl}}/settime HTTP/1.1
+Content-Type: application/x-www-form-urlencoded
+
+time=2018-12-10T14:30:00Z&tz=Europe/London|GMT0BST,M3.5.0/1,M10.5.0
+
+###
+# winter time
+
+POST {{baseUrl}}/settime HTTP/1.1
+Content-Type: application/x-www-form-urlencoded
+
+time=2018-12-10T14:30:00Z&tz=Europe/Paris|CET-1CEST,M3.5.0,M10.5.0/3
+
+###
+# only time
+
+POST {{baseUrl}}/settime HTTP/1.1
+Content-Type: application/x-www-form-urlencoded
+
+time=2018-12-10T14:30:00Z
 
 ###
 # Invalid, should return error
@@ -63,4 +107,58 @@ Content-Type: application/x-www-form-urlencoded
 
 time=20180810T143000Z
 
+####### RESTful API
+
 ###
+
+GET {{baseUrl}}/time HTTP/1.1
+
+
+###
+
+POST {{baseUrl}}/time HTTP/1.1
+Content-Type: application/json
+
+{
+  "sntp_enabled": true,
+  "time_zone":"GMT0BST,M3.5.0/1,M10.5.0"
+}
+
+###
+
+POST {{baseUrl}}/time HTTP/1.1
+Content-Type: application/json
+
+{
+  "sntp_enabled": false,
+  "time_zone":"GMT0BST,M3.5.0/1,M10.5.0",
+  "time":"2018-08-10T14:30:00Z"
+}
+
+###
+# send time in local time zone, currently should fail as we only support UTC time
+
+POST {{baseUrl}}/time HTTP/1.1
+Content-Type: application/json
+
+{
+  "sntp_enabled": false,
+  "time_zone":"GMT0BST,M3.5.0/1,M10.5.0",
+  "time":"2018-08-10T14:30:00+01:00"
+}
+
+###
+# send time in local time zone, currently should fail as we only support UTC time
+
+POST {{baseUrl}}/time HTTP/1.1
+Content-Type: application/json
+
+{
+  "sntp_enabled": false,
+  "time_zone":"GMT0BST,M3.5.0/1,M10.5.0",
+  "time":"2018-08-10T14:30:00+0100"
+}
+
+###
+
+GET {{baseUrl}}/r?json&rapi=$GT HTTP/1.1
