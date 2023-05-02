@@ -178,8 +178,7 @@ jobs:
       if: startsWith(github.ref_name, 'v')
       uses: "softprops/action-gh-release@v1"
       with:
-        repo_token: "${{ secrets.GITHUB_TOKEN }}"
         prerelease: true
-        title: "${{ github.ref_name }}"
+        name: "${{ github.ref_name }}"
         files: |
           *.bin
