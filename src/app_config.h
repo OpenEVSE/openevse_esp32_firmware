@@ -3,6 +3,7 @@
 
 #include <Arduino.h>
 #include <ArduinoJson.h>
+#include "evse_state.h"
 
 #ifndef ENABLE_CONFIG_V1_IMPORT
 #define ENABLE_CONFIG_V1_IMPORT 1
@@ -119,6 +120,7 @@ extern uint32_t flags;
 #define CONFIG_OCPP_OFFLINE_AUTH    (1 << 23)
 #define CONFIG_THREEPHASE           (1 << 24)
 #define CONFIG_WIZARD               (1 << 25)
+#define CONFIG_DEFAULT_STATE        (1 << 26)
 
 inline bool config_emoncms_enabled() {
   return CONFIG_SERVICE_EMONCMS == (flags & CONFIG_SERVICE_EMONCMS);
@@ -203,6 +205,11 @@ inline bool config_threephase_enabled() {
 inline bool config_wizard_passed()
 {
   return CONFIG_WIZARD == (flags & CONFIG_WIZARD);
+}
+
+inline EvseState config_default_state()
+{
+  return CONFIG_DEFAULT_STATE == (flags & CONFIG_DEFAULT_STATE) ? EvseState::Active : EvseState::Disabled;
 }
 
 // Ohm Connect Settings

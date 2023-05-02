@@ -234,6 +234,7 @@ ConfigOpt *opts[] =
   new ConfigOptVirtualBool(flagsOpt, CONFIG_FACTORY_WRITE_LOCK, CONFIG_FACTORY_WRITE_LOCK, "factory_write_lock", "fwl"),
   new ConfigOptVirtualBool(flagsOpt, CONFIG_THREEPHASE, CONFIG_THREEPHASE, "is_threephase", "itp"),
   new ConfigOptVirtualBool(flagsOpt, CONFIG_WIZARD, CONFIG_WIZARD, "wizard_passed", "wzp"),
+  new ConfigOptVirtualBool(flagsOpt, CONFIG_DEFAULT_STATE, CONFIG_DEFAULT_STATE, "default_state", "dfs"),
   new ConfigOptVirtualMqttProtocol(flagsOpt, "mqtt_protocol", "mprt"),
   new ConfigOptVirtualChargeMode(flagsOpt, "charge_mode", "chmd")
   };

@@ -166,7 +166,7 @@ bool EvseManager::evaluateClaims(EvseProperties &properties)
 {
   // Clear the target state and set to active by default
   properties.clear();
-  properties.setState(EvseState::Active);
+  properties.setState(config_default_state());
 
   bool foundClaim = false;
 
@@ -456,7 +456,7 @@ bool EvseManager::release(EvseClient client)
     event["claims_version"] = ++_version;
     if (client == EvseClient_OpenEVSE_Manual) {
           event["override_version"] = manual.setVersion(manual.getVersion() + 1);
-          
+
     }
     event_send(event);
     return true;
