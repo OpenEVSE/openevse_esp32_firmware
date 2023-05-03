@@ -4,10 +4,10 @@
 // Time between loop polls
 #ifndef EVSE_SHAPER_LOOP_TIME
 #define EVSE_SHAPER_LOOP_TIME 2000
-#endif 
+#endif
 
 #ifndef EVSE_SHAPER_MIN_FILTER
-#define EVSE_SHAPER_MIN_FILTER 10 // sec 
+#define EVSE_SHAPER_MIN_FILTER 10 // sec
 #endif
 
 #ifndef EVSE_SHAPER_HYSTERESIS

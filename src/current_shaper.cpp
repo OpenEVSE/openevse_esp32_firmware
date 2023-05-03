@@ -27,7 +27,7 @@ void CurrentShaperTask::setup() {
 }
 
 unsigned long CurrentShaperTask::loop(MicroTasks::WakeReason reason) {
-	
+
 	if (_enabled) {
 			EvseProperties props;
 			if (_changed) {
@@ -39,7 +39,7 @@ unsigned long CurrentShaperTask::loop(MicroTasks::WakeReason reason) {
 					{
 						_pause_timer = millis();
 					}
-						
+
 				}
 				else if (millis() - _pause_timer >= current_shaper_min_pause_time * 1000 && (_max_cur - evse.getMinCurrent() >= EVSE_SHAPER_HYSTERESIS))
 				{
@@ -66,7 +66,7 @@ unsigned long CurrentShaperTask::loop(MicroTasks::WakeReason reason) {
 			{
 				//available power has not been updated since EVSE_SHAPER_FAILSAFE_TIME, pause charge
 				DBUGF("shaper_live_pwr has not been updated in time, pausing charge");
-				
+
 				if (_updated)
 				{
 					_pause_timer = millis();
@@ -96,8 +96,8 @@ unsigned long CurrentShaperTask::loop(MicroTasks::WakeReason reason) {
 			_smoothed_live_pwr = 0;
 		}
 	}
-	
-	
+
+
 	return EVSE_SHAPER_LOOP_TIME;
 }
 
@@ -105,7 +105,7 @@ void CurrentShaperTask::begin(EvseManager &evse) {
 	this -> _timer   = millis();
 	this -> _enabled = config_current_shaper_enabled();
 	this -> _evse    = &evse;
-	this -> _max_pwr = current_shaper_max_pwr; 
+	this -> _max_pwr = current_shaper_max_pwr;
 	this -> _live_pwr = 0;
 	this -> _smoothed_live_pwr = 0;
 	this -> _max_cur = 0;
@@ -173,7 +173,7 @@ void CurrentShaperTask::shapeCurrent() {
 	if (config_divert_enabled() == true) {
 		if (mqtt_solar != "") {
 			max_pwr += solar;
-		}		
+		}
 	}
 	if (livepwr > max_pwr) {
 		livepwr = max_pwr;
@@ -181,12 +181,12 @@ void CurrentShaperTask::shapeCurrent() {
 	if(!config_threephase_enabled()) {
 		_max_cur = ((max_pwr - livepwr) / evse.getVoltage()) + evse.getAmps();
 	 }
-		
+
 	else {
 		_max_cur = ((max_pwr - livepwr) / evse.getVoltage() / 3.0) + evse.getAmps();
 	}
 
-	_changed = true; 
+	_changed = true;
 }
 
 int CurrentShaperTask::getMaxPwr() {
