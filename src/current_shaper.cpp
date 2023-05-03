@@ -62,8 +62,8 @@ unsigned long CurrentShaperTask::loop(MicroTasks::WakeReason reason) {
 			_evse->release(EvseClient_OpenEVSE_Shaper);
 		}
 	}
-	
-	
+
+
 	return EVSE_SHAPER_LOOP_TIME;
 }
 
@@ -71,10 +71,10 @@ void CurrentShaperTask::begin(EvseManager &evse) {
 	this -> _timer   = millis();
 	this -> _enabled = config_current_shaper_enabled();
 	this -> _evse    = &evse;
-	this -> _max_pwr = current_shaper_max_pwr; 
+	this -> _max_pwr = current_shaper_max_pwr;
 	this -> _live_pwr = 0;
 	this -> _max_cur = 0;
-	this -> _updated = false; 
+	this -> _updated = false;
 	MicroTask.startTask(this);
 	StaticJsonDocument<128> event;
 	event["shaper"]  = 1;
@@ -102,7 +102,7 @@ void CurrentShaperTask::setLivePwr(int live_pwr) {
 	shapeCurrent();
 }
 
-// temporary change Current Shaper state without changing configuration 
+// temporary change Current Shaper state without changing configuration
 void CurrentShaperTask::setState(bool state) {
 	_enabled = state;
 	if (!_enabled) {
@@ -119,21 +119,21 @@ void CurrentShaperTask::shapeCurrent() {
 	// adding self produced energy to total
 	int max_pwr = _max_pwr;
 	if (config_divert_enabled() == true) {
-		if (mqtt_solar != "") {
+		if ( divert_type == _DIVERT_TYPE_SOLAR ) {
 			max_pwr += solar;
-		}		
+		}
 	}
 	 if(!config_threephase_enabled()) {
 		_max_cur = round(((max_pwr - _live_pwr) / evse.getVoltage()) + (evse.getAmps()));
 	 }
-		
+
 	else {
 		_max_cur = round(((max_pwr - _live_pwr) / evse.getVoltage() / 3) + (evse.getAmps()));
 	}
-		
 
 
-	_changed = true; 
+
+	_changed = true;
 }
 
 int CurrentShaperTask::getMaxPwr() {
