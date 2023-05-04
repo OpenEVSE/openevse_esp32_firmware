@@ -43,23 +43,24 @@ Most ESP32 boards can be used (see platfromio.ini for full list of supported boa
 
 ![Wifi Modules](openevse-wifi-modules.png)
 
-* Huzzah ESP8266 - can only run V2.x firmware, see [archive V2.x repository](https://github.com/OpenEVSE/ESP8266_WiFi_v2.x)
-* Huzzah ESP32 - can run V3.x and V4.x firmware
-* OpenEVSE V1 - designed for V4.x firmware
-* [Olimex ESP32 Gateway (Wired Ethernet)](wired-ethernet.md) - can run V3.x and V4.x firmware
+
+* OpenEVSE V1 - designed for V4.x & V5.x firmware
+* [Olimex ESP32 Gateway (Wired Ethernet)](wired-ethernet.md) - can run V4.x and V5.x firmware
+* Huzzah ESP32 - can run V4.x and V5.x firmware
+* Deprecated: Huzzah ESP8266 - can only run V2.x firmware, see [archive V2.x repository](https://github.com/OpenEVSE/ESP8266_WiFi_v2.x)
 
 ### Temperature sensors
 
 * Temp 1 RTC temperature sensor (old LCD module with RTC)
 * Temp 2 MCP9808 temperature sensor (new LCD module )
 * Temp 3 IR sensor (not used)
-* Temp 4 is the sensor on the OpenEVSE V1 module (not currently used for throttling)
+* Temp 4 OpenEVSE V1 module 
 
 ## WiFi Setup
 
-On first boot, OpenEVSE should broadcast a WiFi access point (AP) `OpenEVSE_XXXX`. Connect your browser device to this AP (default password: `openevse`) and the [captive portal](https://en.wikipedia.org/wiki/Captive_portal) should forward you to the log-in page. If this does not happen, navigate to [http://openevse](http://openevse), [http://openevse.local](http://openevse.local) or [http://192.168.4.1](http://192.168.4.1)
+At setup OpenEVSE will broadcast a WiFi access point (AP) `OpenEVSE_XXXX`. Connect your browser device to this AP (default password: `openevse`) and the captive portal will forward you to the log-in page. 
 
-> **Note**: You may need to disable mobile data if connecting via a mobile
+Or navigate to [http://192.168.4.1](http://192.168.4.1)
 
 ![Wifi connect](wifi-connect.png)
 
@@ -69,7 +70,7 @@ On first boot, OpenEVSE should broadcast a WiFi access point (AP) `OpenEVSE_XXXX
 * Enter WiFi Passkey, then click `Connect`
 
 * OpenEVSE should now connect to local WiFi network
-* Re-connect your browsing device to local WiFi network and connect to OpenEVSE using [http://openevse.local](http://openevse.local), [http://openevse](http://openevse) or local IP address.
+* Re-connect your browsing device to local WiFi network and connect to OpenEVSE using the hostname http://openevse-XXXX.local where XXXX is the ID number of the unit or local IP address.
 
 **If connection / re-connection fails (e.g. network cannot be found or password is incorrect) the OpenEVSE will automatically revert back to WiFi access point (AP) mode after a short while to allow a new network to be re-configured if required. Re-connection to existing network will be attempted every 5 minutes.**
 
@@ -92,14 +93,14 @@ When Eco Mode is enabled:
 * Eco Mode is persistent between charging sessions
 * Eco Mode can be enabled / disabled via MQTT
 
-A [OpenEnergyMonitor Solar PV Energy Monitor](https://guide.openenergymonitor.org/applications/solar-pv/) can be used to monitor solar PV system and provide an MQTT feed to the OpenEVSE for 'Eco' mode charging.
+A [OpenEnergyMonitor Solar PV Energy Monitor](https://docs.openenergymonitor.org/applications/solar-pv.html) can be used to monitor solar PV system and provide an MQTT feed to the OpenEVSE for 'Eco' mode charging.
 
 ### Eco Mode Setup
 
 #### using MQTT
 * Enable MQTT Service
-* [emonPi MQTT credentials](https://guide.openenergymonitor.org/technical/credentials/#mqtt) should be pre-populated
-* Enter solar PV generation or Grid (+I/-E) MQTT topic e.g. Assuming [standard emonPi Solar PV setup](https://guide.openenergymonitor.org/applications/solar-pv/), the default MQTT feeds are:
+* [emonPi MQTT credentials](https://docs.openenergymonitor.org/emoncms/mqtt.html#mqtt) should be pre-populated
+* Enter solar PV generation or Grid (+I/-E) MQTT topic e.g. Assuming [standard emonPi Solar PV setup](https://docs.openenergymonitor.org/applications/solar-pv.html), the default MQTT feeds are:
   * Grid Import (positive Import / Negative export*): `emon/emonpi/power1`
   * Solar PV generation (always postive): `emon/emonpi/power2`
 
@@ -122,8 +123,6 @@ Value: `1` = Normal or `2` = Eco
 
 ### Eco Mode Advanced Settings
 
-If 'advanced' mode is toggled on the UI more solar PV divert settings will become available:
-
 ![eco](divert-advanced.png)
 
 * Required PV power ratio: specifies which fraction of the EV charging current should come from PV excess. Default value 110% (1.1)
@@ -133,7 +132,7 @@ If 'advanced' mode is toggled on the UI more solar PV divert settings will becom
 
 See this [interactive spreadsheet](https://docs.google.com/spreadsheets/d/1GQEAQ5QNvNuShEsUdcrNsFC12U3pQfcD_NetoIfDoko/edit?usp=sharing) to explore how these values effect the smoothing algorithm.
 
-> **Caution**: adjust these values at your own risk, the default values have been set to minimise wear on the EVSE contactor and the EVs chraging system. Rapid switching of the EVSE will result in increased wear on these components
+> **Caution**: adjust these values at your own risk, the default values have been set to minimise wear on the EVSE contactor and the EV chraging system. Rapid switching of the EVSE will result in increased wear on these components
 
 ***
 
@@ -182,24 +181,8 @@ Accepted data:
 
 Refer to [MQTT API documentation](mqtt.md)
 
-### OhmConnect
-
-**USA California only**
-[Join here](https://ohm.co/openevse)
-
-**Video - How does it Work**
-<https://player.vimeo.com/video/119419875>
-
-* Sign Up
-* Enter Ohm Key
-
-Ohm Key can be obtained by logging in to OhmConnect, enter Settings and locate the link in "Open Source Projects"
-Example: <https://login.ohmconnect.com/verify-ohm-hour/OpnEoVse>
-Key: OpnEoVse
 
 ## System
-
-![system](system.png)
 
 ### Authentication
 
@@ -231,8 +214,13 @@ A Hardware Factory reset (all WiFi and services config lost) can de done via:
 
 ## Firmware update
 
-Firmware can be updated via the Web UI
-See [OpenEVSE Wifi releases](https://github.com/OpenEVSE/ESP32_WiFi_v3.x/releases) for latest stable pre-compiled update releases.
+Recomended: Updated directly via the UI 
+
+Advanced: Uploading a firmware release file `.bin`
+
+See [OpenEVSE Wifi releases](https://github.com/OpenEVSE/ESP32_WiFi_v4.x/releases) for latest stable pre-compiled update releases.
+
+'Note: if updating via file upload, be sure to select the correct releas for your hardware.'
 
 ### Via Web Interface
 
