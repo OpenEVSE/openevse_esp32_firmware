@@ -87,7 +87,8 @@ ARDUINO_OBJ := \
   Stream.o \
   Wire.o \
   WMath.o \
-  WString.o
+  WString.o \
+  Injection.o
 
 EPOXY_FS_OBJ := \
   EpoxyFS.o \
@@ -116,6 +117,8 @@ VPATH 	:= \
   . \
   ../src \
   $(EPOXY_CORE_PATH) \
+  $(EPOXY_CORE_PATH)/epoxy_test/Injection \
+  $(EPOXY_CORE_PATH)/epoxy_test/Script \
   $(ARDUINO_LIB_DIR)/OpenEVSE_Lib/src \
   $(ARDUINO_LIB_DIR)/MicroTasks/src \
   $(ARDUINO_LIB_DIR)/ConfigJson/src \
