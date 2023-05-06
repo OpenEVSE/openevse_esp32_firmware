@@ -73,11 +73,20 @@ jobs:
         with:
           name: divert_sim
           path: OpenEVSE_WiFi/divert_sim/divert_sim
-      
+
+      - name: Set up Python 3.10
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.10'
+          cache: 'pip' # caching pip dependencies
+
+      - name: Install dependencies
+        run: pip install -r requirements.txt
+
       - name: run tests
         run: |
           cd OpenEVSE_WiFi/divert_sim
-          bash runall.sh
+          pytest -v --color=yes --junitxml=output/test_results.xml --html=output/test.html --self-contained-html
 
       - name : Upload test results
         uses: actions/upload-artifact@v3
