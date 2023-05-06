@@ -81,12 +81,12 @@ jobs:
           cache: 'pip' # caching pip dependencies
 
       - name: Install dependencies
-        run: pip install -r requirements.txt
+        run: pip install -r OpenEVSE_WiFi/divert_sim/requirements.txt
 
       - name: run tests
         run: |
           cd OpenEVSE_WiFi/divert_sim
-          pytest -v --color=yes --junitxml=output/test_results.xml --html=output/test.html --self-contained-html
+          pytest -v --color=yes --junitxml=output/test_results.xml
 
       - name : Upload test results
         uses: actions/upload-artifact@v3
