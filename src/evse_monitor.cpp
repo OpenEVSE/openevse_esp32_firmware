@@ -380,6 +380,7 @@ bool EvseMonitor::begin(RapiSender &sender)
   {
     if(connected)
     {
+      _energyMeter.begin(this);
       _openevse.onState([this](uint8_t evse_state, uint8_t pilot_state, uint32_t current_capacity, uint32_t vflags)
       {
         DBUGF("evse_state = %02x, pilot_state = %02x, current_capacity = %d, vflags = %08x", evse_state, pilot_state, current_capacity, vflags);
@@ -391,7 +392,7 @@ bool EvseMonitor::begin(RapiSender &sender)
       evseBoot(firmware);
 
       MicroTask.startTask(this);
-      _energyMeter.begin(this);
+      //_energyMeter.begin(this);
     } else {
       DEBUG_PORT.println("OpenEVSE not responding or not connected");
     }
