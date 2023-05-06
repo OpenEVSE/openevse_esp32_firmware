@@ -89,10 +89,34 @@ jobs:
           mkdir -p output
           pytest -v --color=yes --code-highlight yes --junitxml=output/test_results.xml
 
+
+      - name: Start server to view test results
+        uses: Eun/http-server-action@v1
+        with:
+          directory: ${{ github.workspace }}/OpenEVSE_WiFi/divert_sim
+          port: 8080
+          no-cache: false
+
+      - name: Generate a PDF for the test results
+        uses: misaelnieto/web_to_pdf_action@master
+        with:
+          webPageURL: http://localhost:8080/view.html
+          outputFile: OpenEVSE_WiFi/divert_sim/${{ github.ref_name }}_test_results.pdf
+          pdfOptions: '{"format": "A4", "margin": {"top": "10mm", "left": "10mm", "right": "10mm", "bottom": "10mm"}}'
+
+      - name: Screenshot the test results webpage
+        uses: swinton/screenshot-website@v1.x
+        with:
+          source: http://localhost:8080/view.html
+          destination: ${{ github.ref_name }}_test_results.png
+          full-page: true
+
       - name : Upload test results
         uses: actions/upload-artifact@v3
         with:
           name: test_results
           path: |
+            ${{ github.ref_name }}_test_results.pdf
+            ${{ github.ref_name }}_test_results.png
             OpenEVSE_WiFi/divert_sim/output
             OpenEVSE_WiFi/divert_sim/view.html
