@@ -86,7 +86,8 @@ jobs:
       - name: run tests
         run: |
           cd OpenEVSE_WiFi/divert_sim
-          pytest -v --color=yes --junitxml=output/test_results.xml
+          mkdir -p output
+          pytest -v --color=yes --code-highlight yes --junitxml=output/test_results.xml
 
       - name : Upload test results
         uses: actions/upload-artifact@v3
