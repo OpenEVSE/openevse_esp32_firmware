@@ -24,7 +24,8 @@
 // Wifi Network Strings
 extern String esid;
 extern String epass;
-
+extern String ap_ssid;
+extern String ap_pass;
 // Language
 extern String lang;
 
