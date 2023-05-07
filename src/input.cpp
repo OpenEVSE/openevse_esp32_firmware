@@ -73,6 +73,7 @@ class InputTask : public MicroTasks::Task
         event["vehicle"] = evse.isVehicleConnected() ? 1 : 0;
         event["colour"] = evse.getStateColour();
         event["pilot"] = evse.getChargeCurrent();
+        event["max_current"] = evse.getMaxCurrent();
         event["manual_override"] = manual.isActive() ? 1 : 0; //TODO: remove this
         event["status"] = evse.getState().toString();
         event["elapsed"] = evse.getSessionElapsed();
@@ -104,6 +105,7 @@ void create_rapi_json(JsonDocument &doc)
   doc["voltage"] = evse.getVoltage() * VOLTS_SCALE_FACTOR;
   doc["power"] = evse.getPower() * POWER_SCALE_FACTOR;
   doc["pilot"] = evse.getChargeCurrent();
+  doc["max_current"] = evse.getMaxCurrent();
   if(evse.isTemperatureValid(EVSE_MONITOR_TEMP_MONITOR)) {
     doc["temp"] = evse.getTemperature(EVSE_MONITOR_TEMP_MONITOR) * TEMP_SCALE_FACTOR;
   } else {

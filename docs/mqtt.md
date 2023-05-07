@@ -48,6 +48,8 @@ Main settings:
 
 `<base-topic>/divertmode/set [1 | 2]`       : enable (1)/ disable (2) divert mode  
 `<base-topic>/shaper/set [0 | 1]`       : temporary enable (1)/ disable (0) current shaper ( doesn't survive reboot )  
+`<base-topic>/restart`                  : restarts the gateway
+
 
 
 MQTT setup is pre-populated with OpenEnergyMonitor [emonPi default MQTT server credentials](https://guide.openenergymonitor.org/technical/credentials/#mqtt).
