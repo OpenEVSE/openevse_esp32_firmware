@@ -1,4 +1,4 @@
-[submodule "gui"]
-	path = gui
-	url = https://github.com/openevse/openevse_wifi_gui
+[submodule "gui_v2"]
+	path = gui_v2
+	url = https://github.com/openevse/openevse-gui-v2
 	branch = master
