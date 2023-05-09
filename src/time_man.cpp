@@ -67,7 +67,10 @@ bool TimeManager::setTimeZone(String tz)
   }
 
   DBUGLN("Timezone set");
-
+// publish new time
+ StaticJsonDocument<128> event;
+ serialise(event);
+ event_send(event);
   return true;
 }
 

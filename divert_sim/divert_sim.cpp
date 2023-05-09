@@ -16,6 +16,8 @@
 #include <MicroTasks.h>
 #include <EpoxyFS.h>
 
+#include <epoxy_test/ArduinoTest.h>
+
 using namespace aria::csv;
 
 EventLog eventLog;
@@ -35,6 +37,7 @@ int solar_col = 1;
 int voltage_col = 1;
 
 time_t simulated_time = 0;
+time_t last_time = 0;
 
 bool kw = false;
 
@@ -191,6 +194,15 @@ int main(int argc, char** argv)
 
         col++;
       }
+
+      if(last_time != 0)
+      {
+        int delta = simulated_time - last_time;
+        if(delta > 0) {
+          EpoxyTest::add_millis(delta * 1000);
+        }
+      }
+      last_time = simulated_time;
 
       divert.update_state();
       MicroTask.update();

@@ -4,9 +4,11 @@ import os
 def get_build_flag():
     ret = subprocess.run(["git", "rev-parse", "HEAD"], stdout=subprocess.PIPE, text=True) #Uses any tags
     full_hash = ret.stdout.strip()
+    ret = subprocess.run(["git", "symbolic-ref", "--short", "HEAD"], stdout=subprocess.PIPE, text=True) # retrieve branch name
+    branch = ret.stdout.strip()
     short_hash = full_hash[:8]
 
-    build_version = "local_" + short_hash
+    build_version = "local_" + branch + "_" + short_hash
 
     # get the GITHUB_REF_NAME
     ref_name = os.environ.get('GITHUB_REF_NAME')

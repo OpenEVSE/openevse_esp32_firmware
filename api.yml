@@ -54,6 +54,7 @@ paths:
                     rapi_connected: 1
                     amp: 0
                     pilot: 32
+                    max_current: 32
                     temp1: 282
                     temp2: -2560
                     temp3: -2560
