@@ -28,6 +28,8 @@ x-examples:
       - https
     ssid: wibble_ext
     pass: _DUMMY_PASSWORD
+    ap_ssid: openevse-2343
+    ap_pass: _DUMMY_PASSWORD
     lang: en
     www_username: ''
     www_password: ''
@@ -58,17 +60,20 @@ x-examples:
     ocpp_chargeBoxId: ''
     ocpp_authkey: ''
     ohm: ''
+    divert_type: -1
     divert_PV_ratio: 1.1
     divert_attack_smoothing_factor: 0.4
     divert_decay_smoothing_factor: 0.05
     divert_min_charge_time: 10
     current_shaper_max_pwr: 9000
+    vehicle_data_src: 0
     tesla_access_token: _DUMMY_PASSWORD
     tesla_refresh_token: _DUMMY_PASSWORD
     tesla_created_at: 2479357952
     tesla_expires_in: 3888000
     tesla_vehicle_id: '142960157278'
     led_brightness: 51
+    scheduler_start_window: 60
     flags: 115467
     emoncms_enabled: true
     mqtt_enabled: true
@@ -86,10 +91,12 @@ x-examples:
     ocpp_auth_auto: true
     ocpp_idtag: '0E000000'
     ocpp_auth_offline: true
+    rfid_enabled: false
     mqtt_protocol: mqtt
-    charge_mode: fast
     is_threephase: false
     wizard_passed: false
+    default_state: false
+    charge_mode: fast
 x-tags:
   - Config
 properties:
@@ -168,6 +175,12 @@ properties:
   pass:
     type: string
     minLength: 1
+  ap_ssid:
+    type: string
+    minLength: 1
+  ap_pass:
+    type: string
+    minLength: 1
   www_username:
     type: string
   www_password:
@@ -243,8 +256,12 @@ properties:
     type: string
   ocpp_auth_offline:
     type: boolean
+  rfid_enabled:
+    type: boolean
   ohm:
     type: string
+  divert_type:
+    type: number
   divert_PV_ratio:
     type: number
   divert_attack_smoothing_factor:
@@ -252,6 +269,10 @@ properties:
   divert_decay_smoothing_factor:
     type: number
   divert_min_charge_time:
+    type: number
+  current_shaper_max_pwr:
+    type: number
+  vehicle_data_src:
     type: number
   tesla_access_token:
     type: string
@@ -307,8 +328,14 @@ properties:
       The maximum number of seconds to randomly add/subtract from the a scheduled charge start time, eg a value of 600 will adjust the start time my +/- 10 minutes. This is to help prevent large syncrinised loads when multiple verchiles start charging at the same time.
   is_threephase: 
     type: boolean
+    description: |
+     Needs to be enabled if charging with 3 phases setup for proper calculations
   wizard_passed:
     type: boolean
     description: |
       define if wizard has been passed or not
+  default_state:
+    type: boolean
+    description: |
+      OpenEVSE default state when no claims are running ( 0: disabled | 1: active)
 
