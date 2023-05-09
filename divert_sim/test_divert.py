@@ -146,36 +146,36 @@ def test_divert() -> None:
     with open(path.join('output', 'summary.csv'), 'w', encoding="utf-8") as summary_file:
         summary_file.write('"Dataset","Total Solar (kWh)","Total EV Charge (kWh)","Charge from solar (kWh)","Charge from grid (kWh)","Number of charges","Min time charging","Max time charging","Total time charging"\n')
         run_test_with_dataset(summary_file, 'almostperfect',
-                    21.08, 17.24, 17.05, 0.19, 1, 30060, 30060, 30060)
+                    21.08, 16.67, 16.6, 0.06, 6, 180, 20700, 28620)
         run_test_with_dataset(summary_file, 'CloudyMorning',
-                    16.64, 13.03, 12.67, 0.36, 1, 22200, 22200, 22200)
+                    16.64, 12.28, 12.07, 0.22, 7, 300, 14520, 20340)
         run_test_with_dataset(summary_file, 'day1',
-                    10.12, 7.48, 6.71, 0.77, 5, 660, 10080, 13740)
+                    10.12, 7.11, 6.51, 0.59, 7, 660, 8400, 12840)
         run_test_with_dataset(summary_file, 'day2',
-                    12.35, 9.88, 9.86, 0.02, 1, 19920, 19920, 19920)
+                    12.35, 9.14, 9.14, 0.0, 1, 18060, 18060, 18060)
         run_test_with_dataset(summary_file, 'day3',
-                    5.09, 2.22, 1.60, 0.62, 5, 660, 2400, 5340)
+                    5.09, 1.66, 1.22, 0.44, 7, 60, 840, 3600)
         run_test_with_dataset(summary_file, 'day1_grid_ie',
-                    15.13, 8.83, 8.47, 0.36, 5, 660, 7800, 19860,
+                    15.13, 7.84, 7.66, 0.18, 10, 660, 6300, 17280,
                     grid_ie_col=2)
         run_test_with_dataset(summary_file, 'day2_grid_ie',
-                    10.85, 7.66, 6.16, 1.50, 10, 420, 7980, 16260,
+                    10.85, 7.00, 5.87, 1.13, 21, 60, 2640, 14460,
                     grid_ie_col=2)
         run_test_with_dataset(summary_file, 'day3_grid_ie',
-                    12.13, 6.32, 6.27, 0.05, 2, 3660, 9840, 13500,
+                    12.13, 5.39, 5.37, 0.02, 7, 60, 4320, 11160,
                     grid_ie_col=2)
         run_test_with_dataset(summary_file, 'solar-vrms',
-                    13.85, 12.26, 12.10, 0.17, 1, 22080, 22080, 22080,
+                    13.85, 11.18, 11.14, 0.04, 1, 19440, 19440, 19440,
                     voltage_col=2)
         run_test_with_dataset(summary_file, 'Energy_and_Power_Day_2020-03-22',
-                    41.87, 38.52, 38.41, 0.11, 1, 28800, 28800, 28800,
-                    separator=';', is_kw=True, config='{"divert_decay_smoothing_factor":0.4}')
+                    41.87, 38.16, 38.16, 0.0, 1, 27900, 27900, 27900,
+                    separator=';', is_kw=True, config='{"divert_decay_smoothing_time":200}')
         run_test_with_dataset(summary_file, 'Energy_and_Power_Day_2020-03-31',
-                    23.91, 18.78, 18.66, 0.12, 1, 22500, 22500, 22500,
-                    separator=';', is_kw=True, config='{"divert_decay_smoothing_factor":0.4}')
+                    23.91, 18.42, 18.42, 0.0, 2, 900, 20700, 21600,
+                    separator=';', is_kw=True, config='{"divert_decay_smoothing_time":200}')
         run_test_with_dataset(summary_file, 'Energy_and_Power_Day_2020-04-01',
-                    38.89, 36.72, 36.41, 0.32, 1, 27000, 27000, 27000,
-                    separator=';', is_kw=True, config='{"divert_decay_smoothing_factor":0.4}')
+                    38.89, 36.42, 36.42, 0.0, 1, 26100, 26100, 26100,
+                    separator=';', is_kw=True, config='{"divert_decay_smoothing_time":200<Q²    }')
 
 if __name__ == '__main__':
     # Run the script
