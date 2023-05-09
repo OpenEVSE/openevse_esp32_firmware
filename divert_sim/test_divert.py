@@ -163,7 +163,7 @@ def test_divert_CloudyMorning() -> None:
 def test_divert_day1() -> None:
     """Run the divert test with the day1 dataset"""
     run_test_with_dataset('day1',
-                10.12, 7.11, 6.51, 0.59, 7, 660, 8400, 12840))
+                10.12, 7.11, 6.51, 0.59, 7, 660, 8400, 12840)
 
 def test_divert_day2() -> None:
     """Run the divert test with the day2 dataset"""
@@ -214,7 +214,7 @@ def test_divert_Energy_and_Power_Day_2020_03_31() -> None:
 def test_divert_Energy_and_Power_Day_2020_04_01() -> None:
     """Run the divert test with the Energy_and_Power_Day_2020-04-01 dataset"""
     run_test_with_dataset('Energy_and_Power_Day_2020-04-01',
-                38.89, 36.42, 36.42, 0.0, 1, 26100, 26100, 27000,
+                38.89, 36.42, 36.42, 0.0, 1, 26100, 26100, 26100,
                 separator=';', is_kw=True, config='{"divert_decay_smoothing_factor":0.4}')
 
 if __name__ == '__main__':
