@@ -175,7 +175,7 @@ def test_divert() -> None:
                     separator=';', is_kw=True, config='{"divert_decay_smoothing_time":200}')
         run_test_with_dataset(summary_file, 'Energy_and_Power_Day_2020-04-01',
                     38.89, 36.42, 36.42, 0.0, 1, 26100, 26100, 26100,
-                    separator=';', is_kw=True, config='{"divert_decay_smoothing_time":200<Q²    }')
+                    separator=';', is_kw=True, config='{"divert_decay_smoothing_time":200]')
 
 if __name__ == '__main__':
     # Run the script
