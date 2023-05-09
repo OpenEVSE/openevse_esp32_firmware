@@ -203,19 +203,19 @@ def test_divert_Energy_and_Power_Day_2020_03_22() -> None:
     """Run the divert test with the Energy_and_Power_Day_2020-03-22 dataset"""
     run_test_with_dataset('Energy_and_Power_Day_2020-03-22',
                 41.87, 38.16, 38.16, 0.0, 1, 27900, 27900, 27900,
-                separator=';', is_kw=True, config='{"divert_decay_smoothing_factor":0.4}')
+                separator=';', is_kw=True, config='{"divert_decay_smoothing_time":200}')
 
 def test_divert_Energy_and_Power_Day_2020_03_31() -> None:
     """Run the divert test with the Energy_and_Power_Day_2020-03-31 dataset"""
     run_test_with_dataset('Energy_and_Power_Day_2020-03-31',
                 23.91, 18.42, 18.42, 0.0, 2, 900, 20700, 21600,
-                separator=';', is_kw=True, config='{"divert_decay_smoothing_factor":0.4}')
+                separator=';', is_kw=True, config='{"divert_decay_smoothing_time":200}')
 
 def test_divert_Energy_and_Power_Day_2020_04_01() -> None:
     """Run the divert test with the Energy_and_Power_Day_2020-04-01 dataset"""
     run_test_with_dataset('Energy_and_Power_Day_2020-04-01',
                 38.89, 36.42, 36.42, 0.0, 1, 26100, 26100, 26100,
-                separator=';', is_kw=True, config='{"divert_decay_smoothing_factor":0.4}')
+                separator=';', is_kw=True, config='{"divert_decay_smoothing_time":200}')
 
 if __name__ == '__main__':
     # Run the script
