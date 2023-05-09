@@ -5,14 +5,17 @@
 #ifndef _EMONESP_DIVERT_H
 #define _EMONESP_DIVERT_H
 
-#define _DIVERT_TYPE_UNSET -1
-#define _DIVERT_TYPE_SOLAR   0
-#define _DIVERT_TYPE_GRID  1
 
 #include <Arduino.h>
 #include <MicroTasks.h>
 
 #include "evse_man.h"
+
+enum divert_type {
+  _DIVERT_TYPE_UNSET = -1,
+  _DIVERT_TYPE_SOLAR = 0,
+  _DIVERT_TYPE_GRID = 1
+};
 
 extern int solar;
 extern int grid_ie;

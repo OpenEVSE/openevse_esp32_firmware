@@ -91,10 +91,12 @@ extern uint32_t current_shaper_max_pwr;
 // Vehicle
 extern uint8_t vehicle_data_src;
 
-#define VEHICLE_DATA_SRC_NONE 0
-#define VEHICLE_DATA_SRC_TESLA 1
-#define VEHICLE_DATA_SRC_MQTT 2
-#define VEHICLE_DATA_SRC_HTTP 3
+enum vehicle_data_src {
+  VEHICLE_DATA_SRC_NONE,
+  VEHICLE_DATA_SRC_TESLA,
+  VEHICLE_DATA_SRC_MQTT,
+  VEHICLE_DATA_SRC_HTTP
+};
 
 // 24-bits of Flags
 extern uint32_t flags;
