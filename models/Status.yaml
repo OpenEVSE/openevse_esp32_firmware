@@ -68,6 +68,9 @@ properties:
   pilot:
     type: integer
     description: 'the pilot value, in amps'
+  max_current:
+    type: integer
+    description: 'the actual max current value defined either by max_current_soft or a running claim'
   temp:
     type: number
     description: 'the derived temperature, in 1/10th °C'
