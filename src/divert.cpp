@@ -245,10 +245,10 @@ void DivertTask::update_state()
       if(_state != current_evse_state)
       {
         _state = current_evse_state;
-        event["divert_active"] = isActive();
       }
     }
 
+    event["divert_active"] = isActive();
     event["charge_rate"] = _charge_rate;
     event["trigger_current"] = trigger_current;
     event["voltage"] = voltage;

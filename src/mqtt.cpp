@@ -183,6 +183,11 @@ void mqttmsg_callback(MongooseString topic, MongooseString payload) {
     mqtt_clear_schedule(payload_str.toInt());
   }
 
+  // Restart
+  else if (topic_string == mqtt_topic + "/restart") {
+    restart_system();
+  }
+
   else
   {
     // If MQTT message is RAPI command
@@ -360,6 +365,12 @@ mqtt_connect()
     mqtt_sub_topic = mqtt_topic + "/schedule/clear";
     mqttclient.subscribe(mqtt_sub_topic);
     yield();
+
+    // ask for a system restart
+    mqtt_sub_topic = mqtt_topic + "/restart";
+    mqttclient.subscribe(mqtt_sub_topic);
+    yield();
+
     connecting = false;
   });
 
