@@ -2,8 +2,13 @@
 
 name: Build OpenEVSE divert simulator
 
+# Allow dependabot to update checks
 permissions:
+  checks: write
+  actions: write
   contents: write
+  issues: read
+  pull-requests: write
 
 on:
   push:
@@ -13,6 +18,7 @@ on:
 
 jobs:
   build:
+    name: Build and test divert_sim
     runs-on: ubuntu-latest
 
     steps:
@@ -87,14 +93,19 @@ jobs:
         run: |
           cd OpenEVSE_WiFi/divert_sim
           mkdir -p output
-          pytest -v --color=yes --code-highlight yes --junitxml=output/test_results.xml
+          pytest -v --color=yes --code-highlight yes --junit-xml=output/test_results.xml
 
       - name : Upload test results
         uses: actions/upload-artifact@v3
         with:
           name: test_results
           path: |
-            ${{ github.ref_name }}_test_results.pdf
-            ${{ github.ref_name }}_test_results.png
             OpenEVSE_WiFi/divert_sim/output
             OpenEVSE_WiFi/divert_sim/view.html
+
+      - name: Publish Unit Test Results
+        uses: EnricoMi/publish-unit-test-result-action/composite@v2
+        if: always()
+        with:
+          junit_files: OpenEVSE_WiFi/divert_sim/output/*.xml
+          check_name: Test Results
