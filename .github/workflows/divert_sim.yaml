@@ -94,7 +94,12 @@ jobs:
         with:
           name: test_results
           path: |
-            ${{ github.ref_name }}_test_results.pdf
-            ${{ github.ref_name }}_test_results.png
             OpenEVSE_WiFi/divert_sim/output
             OpenEVSE_WiFi/divert_sim/view.html
+
+      - name: Publish Unit Test Results
+        uses: EnricoMi/publish-unit-test-result-action/composite@v2
+        if: always()
+        with:
+          junit_files: output/*.xml
+          check_name: Test Results
