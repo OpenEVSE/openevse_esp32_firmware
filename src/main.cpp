@@ -200,6 +200,11 @@ loop() {
 
         import_timers(&scheduler);
       }
+      // unlock openevse fw compiled with BOOTLOCK
+      if (evse.isBootLocked()) {
+        evse.unlock();
+        DBUGLN("Unlocked BOOTLOCK");
+      }
 
       // -------------------------------------------------------------------
       // Do these things once every 2s

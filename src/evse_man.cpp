@@ -311,6 +311,10 @@ void EvseManager::setSleepForDisable(bool sleepForDisable)
   }
 }
 
+void EvseManager::unlock() {
+  _monitor.unlock();
+}
+
 unsigned long EvseManager::loop(MicroTasks::WakeReason reason)
 {
   DBUG("EVSE manager woke: ");

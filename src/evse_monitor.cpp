@@ -253,27 +253,6 @@ void EvseMonitor::evseBoot(const char *firmware)
   _openevse.heartbeatEnable(EVSE_HEATBEAT_INTERVAL, EVSE_HEARTBEAT_CURRENT, [this](int ret, int interval, int current, int triggered) {
     _heartbeat = RAPI_RESPONSE_OK == ret;
   });
-
-  // ESP32_WiFi handle OpenEvse state, so let first put it to disabled before unlocking
-  if (config_pause_uses_disabled()) {
-    disable();
-  }
-  else {
-    sleep();
-  }
-
-  // Unlock OpenEVSE if compiled with BOOTLOCK
-  _openevse.clearBootLock([this](int ret)
-  {
-    if(RAPI_RESPONSE_OK == ret)
-    {
-      DBUGF("Unlocked OpenEVSE");
-    }
-    else {
-      DBUGF("Unlock OpenEVSE failed");
-    }
-
-  });
 }
 
 void EvseMonitor::updateEvseState(uint8_t evse_state, uint8_t pilot_state, uint32_t vflags)
@@ -368,7 +347,7 @@ unsigned long EvseMonitor::loop(MicroTasks::WakeReason reason)
   if (isCharging()){
     verifyPilot();
   }
-    
+
   _count ++;
 
   return EVSE_MONITOR_POLL_TIME;
@@ -431,6 +410,20 @@ EvseMonitor::ServiceLevel EvseMonitor::getActualServiceLevel()
     ServiceLevel::L1;
 }
 
+void EvseMonitor::unlock() {
+  // Unlock OpenEVSE if compiled with BOOTLOCK
+  _openevse.clearBootLock([this](int ret)
+  {
+    if(RAPI_RESPONSE_OK == ret)
+    {
+      DBUGF("Unlocked OpenEVSE");
+    }
+    else {
+      DBUGF("Unlock OpenEVSE failed");
+    }
+
+  });
+}
 void EvseMonitor::enable()
 {
   OpenEVSE.enable([this](int ret)

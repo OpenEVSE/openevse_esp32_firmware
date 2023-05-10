@@ -297,6 +297,9 @@ class EvseManager : public MicroTasks::Task
     bool isVehicleConnected() {
       return _monitor.isVehicleConnected();
     }
+    bool isBootLocked() {
+      return _monitor.isBootLocked();
+    }
     bool isError() {
       return _monitor.isError();
     }
@@ -481,6 +484,9 @@ class EvseManager : public MicroTasks::Task
       return _sleepForDisable;
     }
     void setSleepForDisable(bool sleepForDisable);
+
+    // unlock openevse fw compiled with BOOTLOCK
+    void unlock();
 
     // Temp until everything uses EvseManager
     RapiSender &getSender() {
