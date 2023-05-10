@@ -2,8 +2,13 @@
 
 name: Build OpenEVSE divert simulator
 
+# Allow dependabot to update checks
 permissions:
+  checks: write
+  actions: write
   contents: write
+  issues: read
+  pull-requests: write
 
 on:
   push:
@@ -13,6 +18,7 @@ on:
 
 jobs:
   build:
+    name: Build and test divert_sim
     runs-on: ubuntu-latest
 
     steps:
@@ -73,11 +79,21 @@ jobs:
         with:
           name: divert_sim
           path: OpenEVSE_WiFi/divert_sim/divert_sim
-      
+
+      - name: Set up Python 3.10
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.10'
+          cache: 'pip' # caching pip dependencies
+
+      - name: Install dependencies
+        run: pip install -r OpenEVSE_WiFi/divert_sim/requirements.txt
+
       - name: run tests
         run: |
           cd OpenEVSE_WiFi/divert_sim
-          bash runall.sh
+          mkdir -p output
+          pytest -v --color=yes --code-highlight yes --junit-xml=output/test_results.xml
 
       - name : Upload test results
         uses: actions/upload-artifact@v3
@@ -86,3 +102,10 @@ jobs:
           path: |
             OpenEVSE_WiFi/divert_sim/output
             OpenEVSE_WiFi/divert_sim/view.html
+
+      - name: Publish Unit Test Results
+        uses: EnricoMi/publish-unit-test-result-action/composite@v2
+        if: always()
+        with:
+          junit_files: OpenEVSE_WiFi/divert_sim/output/*.xml
+          check_name: Test Results

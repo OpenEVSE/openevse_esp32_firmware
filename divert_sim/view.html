@@ -6,6 +6,7 @@
   <script type="text/javascript" src="https://canvasjs.com/assets/script/jquery-1.11.1.min.js"></script>
   <script type="text/javascript" src="https://canvasjs.com/assets/script/canvasjs.min.js"></script>
   <script type="text/javascript" src="https://cdnjs.cloudflare.com/ajax/libs/moment.js/2.24.0/moment.min.js"></script>
+  <link rel="stylesheet" href="https://maxcdn.bootstrapcdn.com/bootstrap/3.3.6/css/bootstrap.min.css" />
   <script type="text/javascript">
     window.onload = function () {
       var dataPoints = [];
@@ -43,7 +44,7 @@
             toolTip: {
               shared: true,
               contentFormatter: (e) => {
-                
+
                 var str = "<strong>"+moment(e.entries[0].dataPoint.x).format('h:mm a') + "</strong> <br/>";
                 for (var i = 0; i < e.entries.length; i++){
                   str += "<span style=\"color:"+e.entries[i].dataSeries.color+"\">" + e.entries[i].dataSeries.name + "</span> <strong>"+  e.entries[i].dataPoint.y + "</strong> <br/>";
@@ -114,6 +115,37 @@
         });
 
       });
+
+      $.ajax({
+        url: "output/summary.csv",
+        dataType: "text",
+        success: function (data) {
+          var summary_data = data.split(/\r?\n|\r/);
+          var table_data = '<table class="table table-bordered table-striped">';
+          for (var count = 0; count < summary_data.length; count++) {
+            var cell_data = summary_data[count].split(",");
+            table_data += '<tr>';
+            for (var cell_count = 0; cell_count < cell_data.length; cell_count++) {
+              var val = cell_data[cell_count].replaceAll("\"", "");
+              if (count === 0) {
+                table_data += '<th>' + val + '</th>';
+              } else if(0 == cell_count) {
+                table_data += '<td><a href="#' + val + '">' + val + '</a></td>';
+              } else if(1 <= cell_count && cell_count <= 4) {
+                table_data += '<td>' + parseFloat(val).toFixed(2) + '</td>';
+              } else if(6 <= cell_count && cell_count <= 8) {
+                table_data += '<td>' + (new Date(parseInt(val) * 1000).toISOString().slice(11, 19)) + '</td>';
+              } else {
+                table_data += '<td>' + val + '</td>';
+              }
+            }
+            table_data += '</tr>';
+          }
+          table_data += '</table>';
+          $('#summary_table').html(table_data);
+        }
+      });
+
     }
   </script>
   <style type="text/css" media="print">
@@ -126,21 +158,24 @@
 
 <body>
   <h1>OpenEVSE Solar Divert Simulations</h1>
+  <h2>Summary</h2>
+  <div id="summary_table">
+  </div>
   <h2>Solar only</h2>
-  <div id="solar1" style="width:100%; height:300px;" class="solar" csv="output/day1.csv" title="Day 1"></div>
-  <div id="solar2" style="width:100%; height:300px;" class="solar" csv="output/day2.csv" title="Day 2"></div>
-  <div id="solar3" style="width:100%; height:300px;" class="solar" csv="output/day3.csv" title="Day 3"></div>
-  <div id="solar4" style="width:100%; height:300px;" class="solar" csv="output/almostperfect.csv" title="Almost Perfect"></div>
-  <div id="solar5" style="width:100%; height:300px;" class="solar" csv="output/CloudyMorning.csv" title="Cloudy Morning"></div>
-  <div id="solar6" style="width:100%; height:300px;" class="solar" csv="output/solar-vrms.csv" title="Solar with Voltage feed"></div>
+  <div id="day1" style="width:100%; height:300px;" class="solar" csv="output/day1.csv" title="Day 1"></div>
+  <div id="day2" style="width:100%; height:300px;" class="solar" csv="output/day2.csv" title="Day 2"></div>
+  <div id="day3" style="width:100%; height:300px;" class="solar" csv="output/day3.csv" title="Day 3"></div>
+  <div id="almostperfect" style="width:100%; height:300px;" class="solar" csv="output/almostperfect.csv" title="Almost Perfect"></div>
+  <div id="CloudyMorning" style="width:100%; height:300px;" class="solar" csv="output/CloudyMorning.csv" title="Cloudy Morning"></div>
+  <div id="solar-vrms" style="width:100%; height:300px;" class="solar" csv="output/solar-vrms.csv" title="Solar with Voltage feed"></div>
   <h2>Grid IE</h2>
-  <div id="gridie1" style="width:100%; height:550px;" class="gridie" csv="output/day1_grid_ie.csv" title="Day 1"></div>
-  <div id="gridie2" style="width:100%; height:550px;" class="gridie" csv="output/day2_grid_ie.csv" title="Day 2"></div>
-  <div id="gridie3" style="width:100%; height:550px;" class="gridie" csv="output/day3_grid_ie.csv" title="Day 3"></div>
+  <div id="day1_grid_ie" style="width:100%; height:550px;" class="gridie" csv="output/day1_grid_ie.csv" title="Day 1"></div>
+  <div id="day2_grid_ie" style="width:100%; height:550px;" class="gridie" csv="output/day2_grid_ie.csv" title="Day 2"></div>
+  <div id="day3_grid_ie" style="width:100%; height:550px;" class="gridie" csv="output/day3_grid_ie.csv" title="Day 3"></div>
   <h2>Other</h2>
-  <div id="solar7" style="width:100%; height:300px;" class="solar" csv="output/Energy_and_Power_Day_2020-03-22.csv" title="Energy_and_Power_Day_2020-03-22.csv"></div>
-  <div id="solar8" style="width:100%; height:300px;" class="solar" csv="output/Energy_and_Power_Day_2020-03-31.csv" title="Energy_and_Power_Day_2020-03-31.csv"></div>
-  <div id="solar9" style="width:100%; height:300px;" class="solar" csv="output/Energy_and_Power_Day_2020-04-01.csv" title="Energy_and_Power_Day_2020-04-01.csv"></div>
+  <div id="Energy_and_Power_Day_2020-03-22" style="width:100%; height:300px;" class="solar" csv="output/Energy_and_Power_Day_2020-03-22.csv" title="Energy_and_Power_Day_2020-03-22.csv"></div>
+  <div id="Energy_and_Power_Day_2020-03-31" style="width:100%; height:300px;" class="solar" csv="output/Energy_and_Power_Day_2020-03-31.csv" title="Energy_and_Power_Day_2020-03-31.csv"></div>
+  <div id="Energy_and_Power_Day_2020-04-01" style="width:100%; height:300px;" class="solar" csv="output/Energy_and_Power_Day_2020-04-01.csv" title="Energy_and_Power_Day_2020-04-01.csv"></div>
 </body>
 
 </html>
