@@ -209,7 +209,7 @@ void DivertTask::update_state()
     _smoothed_available_current = (_available_current * scale) + (_smoothed_available_current * (1 - scale));
     DBUGVAR(_smoothed_available_current);
 
-    _charge_rate = (int)floor(_available_current);
+    _charge_rate = (int)floor(_smoothed_available_current);
     // if the remaining current can be used with a sufficient ratio of PV current in it, use it
     if ((_available_current - _charge_rate) > min(1.0, divert_PV_ratio)) {
       _charge_rate += 1;
