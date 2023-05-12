@@ -8,10 +8,6 @@ permissions:
 on:
   workflow_dispatch:
     inputs:
-      v1_ref:
-        required: true
-        description: The branch/tag for the v1 UI
-        default: master
       v2_ref:
         required: true
         description: The branch/tag for the v2 UI
@@ -60,13 +56,9 @@ jobs:
           - openevse_esp32-poe-iso
           - openevse_esp32-heltec-wifi-lora-v2
         gui:
-          - name: gui-v1
-            repo: OpenEVSE/openevse_wifi_gui
-            build_flags: ""
-            ref: ${{ inputs.v1_ref }}
           - name: gui-v2
-            repo: KipK/openevse-gui-v2
-            build_flags: "-D DISABLE_WIFI_PORTAL -D WEB_SERVER_ROOT_PAGE_INDEX"
+            repo: OpenEVSE/openevse-gui-v2
+            build_flags: ""
             ref: ${{ inputs.v2_ref }}
 
     steps:
@@ -130,7 +122,7 @@ jobs:
     - name: Upload output to GitHub
       uses: actions/upload-artifact@v3
       with:
-        name: ${{ matrix.env }}_${{ matrix.gui.name }}.bin
+        name: ${{ matrix.env }}.bin
         path: .pio/build/${{ matrix.env }}/firmware.bin
 
   release:
@@ -163,18 +155,7 @@ jobs:
         prerelease: true
         title: Development Build
         files: |
-          *gui-v1.bin
-
-    - name: Upload assets to the v2 GUI release
-      if: github.ref_name == 'master'
-      uses: "marvinpinto/action-automatic-releases@latest"
-      with:
-        repo_token: "${{ secrets.GITHUB_TOKEN }}"
-        automatic_release_tag: v2_gui
-        prerelease: true
-        title: V2 GUI pre-release
-        files: |
-          *gui-v2.bin
+          *.bin
 
     - name: Upload assets to release
       if: startsWith(github.ref_name, 'v')
