@@ -178,7 +178,7 @@ if npm_installed:
 
     gui_name = environ.get("GUI_NAME")
     if gui_name in (None, ""): 
-        gui_name = "gui"
+        gui_name = "gui-v2"
 
     gui_dir = join(env.subst("$PROJECT_DIR"), gui_name)
     dist_dir = join(gui_dir, "dist")
