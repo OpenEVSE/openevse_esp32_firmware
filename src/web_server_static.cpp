@@ -29,20 +29,11 @@ struct StaticFile
 
 #define IS_ALIGNED(x)   (0 == ((uint32_t)(x) & 0x3))
 
-#ifdef WEB_SERVER_ROOT_PAGE_INDEX
 #define WEB_SERVER_INDEX_PAGE "index.html"
-#else
-#define WEB_SERVER_INDEX_PAGE "home.html"
-#endif
 
 // Pages
 static const char _HOME_PAGE[] PROGMEM = "/" WEB_SERVER_INDEX_PAGE;
 #define HOME_PAGE FPSTR(_HOME_PAGE)
-
-#ifndef DISABLE_WIFI_PORTAL
-static const char _WIFI_PAGE[] PROGMEM = "/wifi_portal.html";
-#define WIFI_PAGE FPSTR(_WIFI_PAGE)
-#endif
 
 class StaticFileResponse: public MongooseHttpServerResponse
 {
@@ -59,9 +50,6 @@ static bool web_static_get_file(MongooseHttpServerRequest *request, StaticFile *
   String path = request->uri();
   if(path == "/") {
     path = String(
-      #ifndef DISABLE_WIFI_PORTAL
-        net.isWifiModeApOnly() ? WIFI_PAGE :
-      #endif
       HOME_PAGE);
 
   }
