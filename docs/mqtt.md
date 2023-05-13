@@ -45,9 +45,9 @@ Scheduler data:
 `<base-topic>/scheduler/clear <id>          :`remove related event  
 
 Limit:
-`<base-topic>/scheduler/`    				: get scheduler data ([json data]  
-`<base-topic>/scheduler/set <json data>`	: set/update schedules ( data as refered from API:https://openevse.stoplight.io/docs/openevse-wifi-v4/c410fb5e48294-set-charge-limit )
-`<base-topic>/scheduler/set clear`	: clear current limit
+`<base-topic>/limit/`    				: get limit data ([json data]  
+`<base-topic>/limit/set <json data>`	: set/update limit ( data as refered from API:https://openevse.stoplight.io/docs/openevse-wifi-v4/c410fb5e48294-set-charge-limit )
+`<base-topic>/limit/set clear`	: clear current limit
 
 Main settings:
 
