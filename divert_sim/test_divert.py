@@ -155,7 +155,7 @@ def test_divert_almostperfect() -> None:
     run_test_with_dataset('almostperfect',
                 21.08, 16.67, 16.6, 0.06, 6, 180, 20700, 28620)
 
-def test_divert_CloudyMorning() -> None:
+def test_divert_cloudymorning() -> None:
     """Run the divert test with the CloudyMorning dataset"""
     run_test_with_dataset('CloudyMorning',
                 16.64, 12.28, 12.07, 0.22, 7, 300, 14520, 20340)
@@ -199,19 +199,19 @@ def test_divert_solar_vrms() -> None:
                 13.85, 11.18, 11.14, 0.04, 1, 19440, 19440, 19440,
                 voltage_col=2)
 
-def test_divert_Energy_and_Power_Day_2020_03_22() -> None:
+def test_divert_energy_and_power_day_2020_03_22() -> None:
     """Run the divert test with the Energy_and_Power_Day_2020-03-22 dataset"""
     run_test_with_dataset('Energy_and_Power_Day_2020-03-22',
                 41.87, 38.16, 38.16, 0.0, 1, 27900, 27900, 27900,
                 separator=';', is_kw=True, config='{"divert_decay_smoothing_time":200}')
 
-def test_divert_Energy_and_Power_Day_2020_03_31() -> None:
+def test_divert_energy_and_power_day_2020_03_31() -> None:
     """Run the divert test with the Energy_and_Power_Day_2020-03-31 dataset"""
     run_test_with_dataset('Energy_and_Power_Day_2020-03-31',
                 23.91, 18.42, 18.42, 0.0, 2, 900, 20700, 21600,
                 separator=';', is_kw=True, config='{"divert_decay_smoothing_time":200}')
 
-def test_divert_Energy_and_Power_Day_2020_04_01() -> None:
+def test_divert_energy_and_power_day_2020_04_01() -> None:
     """Run the divert test with the Energy_and_Power_Day_2020-04-01 dataset"""
     run_test_with_dataset('Energy_and_Power_Day_2020-04-01',
                 38.89, 36.42, 36.42, 0.0, 1, 26100, 26100, 26100,
@@ -220,7 +220,7 @@ def test_divert_Energy_and_Power_Day_2020_04_01() -> None:
 if __name__ == '__main__':
     # Run the script
     test_divert_almostperfect()
-    test_divert_CloudyMorning()
+    test_divert_cloudymorning()
     test_divert_day1()
     test_divert_day2()
     test_divert_day3()
@@ -228,6 +228,6 @@ if __name__ == '__main__':
     test_divert_day2_grid_ie()
     test_divert_day3_grid_ie()
     test_divert_solar_vrms()
-    test_divert_Energy_and_Power_Day_2020_03_22()
-    test_divert_Energy_and_Power_Day_2020_03_31()
-    test_divert_Energy_and_Power_Day_2020_04_01()
+    test_divert_energy_and_power_day_2020_03_22()
+    test_divert_energy_and_power_day_2020_03_31()
+    test_divert_energy_and_power_day_2020_04_01()
