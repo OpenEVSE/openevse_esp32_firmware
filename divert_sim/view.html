@@ -124,16 +124,23 @@
           var table_data = '<table class="table table-bordered table-striped">';
           for (var count = 0; count < summary_data.length; count++) {
             var cell_data = summary_data[count].split(",");
+            if(cell_data.length < 2) {
+              continue;
+            }
             table_data += '<tr>';
+            var config = cell_data[1].replaceAll("\"", "").replaceAll("data/config-inputfilter-", "").replaceAll(".json", "");
+
             for (var cell_count = 0; cell_count < cell_data.length; cell_count++) {
               var val = cell_data[cell_count].replaceAll("\"", "");
               if (count === 0) {
                 table_data += '<th>' + val + '</th>';
               } else if(0 == cell_count) {
-                table_data += '<td><a href="#' + val + '">' + val + '</a></td>';
-              } else if(1 <= cell_count && cell_count <= 4) {
+                table_data += '<td><a href="#' + val + "_" + config.toLowerCase() + '">' + val + '</a></td>';
+              } else if(1 == cell_count) {
+                table_data += '<td>' + config + '</td>';
+              } else if(2 <= cell_count && cell_count <= 5) {
                 table_data += '<td>' + parseFloat(val).toFixed(2) + '</td>';
-              } else if(6 <= cell_count && cell_count <= 8) {
+              } else if(7 <= cell_count && cell_count <= 9) {
                 table_data += '<td>' + (new Date(parseInt(val) * 1000).toISOString().slice(11, 19)) + '</td>';
               } else {
                 table_data += '<td>' + val + '</td>';
@@ -161,21 +168,54 @@
   <h2>Summary</h2>
   <div id="summary_table">
   </div>
-  <h2>Solar only</h2>
-  <div id="day1" style="width:100%; height:300px;" class="solar" csv="output/day1.csv" title="Day 1"></div>
-  <div id="day2" style="width:100%; height:300px;" class="solar" csv="output/day2.csv" title="Day 2"></div>
-  <div id="day3" style="width:100%; height:300px;" class="solar" csv="output/day3.csv" title="Day 3"></div>
-  <div id="almostperfect" style="width:100%; height:300px;" class="solar" csv="output/almostperfect.csv" title="Almost Perfect"></div>
-  <div id="CloudyMorning" style="width:100%; height:300px;" class="solar" csv="output/CloudyMorning.csv" title="Cloudy Morning"></div>
-  <div id="solar-vrms" style="width:100%; height:300px;" class="solar" csv="output/solar-vrms.csv" title="Solar with Voltage feed"></div>
-  <h2>Grid IE</h2>
-  <div id="day1_grid_ie" style="width:100%; height:550px;" class="gridie" csv="output/day1_grid_ie.csv" title="Day 1"></div>
-  <div id="day2_grid_ie" style="width:100%; height:550px;" class="gridie" csv="output/day2_grid_ie.csv" title="Day 2"></div>
-  <div id="day3_grid_ie" style="width:100%; height:550px;" class="gridie" csv="output/day3_grid_ie.csv" title="Day 3"></div>
-  <h2>Other</h2>
-  <div id="Energy_and_Power_Day_2020-03-22" style="width:100%; height:300px;" class="solar" csv="output/Energy_and_Power_Day_2020-03-22.csv" title="Energy_and_Power_Day_2020-03-22.csv"></div>
-  <div id="Energy_and_Power_Day_2020-03-31" style="width:100%; height:300px;" class="solar" csv="output/Energy_and_Power_Day_2020-03-31.csv" title="Energy_and_Power_Day_2020-03-31.csv"></div>
-  <div id="Energy_and_Power_Day_2020-04-01" style="width:100%; height:300px;" class="solar" csv="output/Energy_and_Power_Day_2020-04-01.csv" title="Energy_and_Power_Day_2020-04-01.csv"></div>
+  <h2>Default</h2>
+  <h3>Solar only</h3>
+  <div id="day1_default" style="width:100%; height:300px;" class="solar" csv="output/day1_default.csv" title="Day 1"></div>
+  <div id="day2_default" style="width:100%; height:300px;" class="solar" csv="output/day2_default.csv" title="Day 2"></div>
+  <div id="day3_default" style="width:100%; height:300px;" class="solar" csv="output/day3_default.csv" title="Day 3"></div>
+  <div id="almostperfect_default" style="width:100%; height:300px;" class="solar" csv="output/almostperfect_default.csv" title="Almost Perfect"></div>
+  <div id="CloudyMorning_default" style="width:100%; height:300px;" class="solar" csv="output/CloudyMorning_default.csv" title="Cloudy Morning"></div>
+  <div id="solar-vrms_default" style="width:100%; height:300px;" class="solar" csv="output/solar-vrms_default.csv" title="Solar with Voltage feed"></div>
+  <h3>Grid IE</h3>
+  <div id="day1_grid_ie_default" style="width:100%; height:550px;" class="gridie" csv="output/day1_grid_ie_default.csv" title="Day 1"></div>
+  <div id="day2_grid_ie_default" style="width:100%; height:550px;" class="gridie" csv="output/day2_grid_ie_default.csv" title="Day 2"></div>
+  <div id="day3_grid_ie_default" style="width:100%; height:550px;" class="gridie" csv="output/day3_grid_ie_default.csv" title="Day 3"></div>
+  <h3>Other</h3>
+  <div id="Energy_and_Power_Day_2020-03-22_default" style="width:100%; height:300px;" class="solar" csv="output/Energy_and_Power_Day_2020-03-22_default.csv" title="Energy and Power Day 2020-03-22"></div>
+  <div id="Energy_and_Power_Day_2020-03-31_default" style="width:100%; height:300px;" class="solar" csv="output/Energy_and_Power_Day_2020-03-31_default.csv" title="Energy and Power Day 2020-03-31"></div>
+  <div id="Energy_and_Power_Day_2020-04-01_default" style="width:100%; height:300px;" class="solar" csv="output/Energy_and_Power_Day_2020-04-01_default.csv" title="Energy and Power Day 2020-04-01"></div>
+  <h2>No Import</h2>
+  <h3>Solar only</h3>
+  <div id="day1_noimport" style="width:100%; height:300px;" class="solar" csv="output/day1_noimport.csv" title="Day 1"></div>
+  <div id="day2_noimport" style="width:100%; height:300px;" class="solar" csv="output/day2_noimport.csv" title="Day 2"></div>
+  <div id="day3_noimport" style="width:100%; height:300px;" class="solar" csv="output/day3_noimport.csv" title="Day 3"></div>
+  <div id="almostperfect_noimport" style="width:100%; height:300px;" class="solar" csv="output/almostperfect_noimport.csv" title="Almost Perfect"></div>
+  <div id="CloudyMorning_noimport" style="width:100%; height:300px;" class="solar" csv="output/CloudyMorning_noimport.csv" title="Cloudy Morning"></div>
+  <div id="solar-vrms_noimport" style="width:100%; height:300px;" class="solar" csv="output/solar-vrms_noimport.csv" title="Solar with Voltage feed"></div>
+  <h3>Grid IE</h3>
+  <div id="day1_grid_ie_noimport" style="width:100%; height:550px;" class="gridie" csv="output/day1_grid_ie_noimport.csv" title="Day 1"></div>
+  <div id="day2_grid_ie_noimport" style="width:100%; height:550px;" class="gridie" csv="output/day2_grid_ie_noimport.csv" title="Day 2"></div>
+  <div id="day3_grid_ie_noimport" style="width:100%; height:550px;" class="gridie" csv="output/day3_grid_ie_noimport.csv" title="Day 3"></div>
+  <h3>Other</h3>
+  <div id="Energy_and_Power_Day_2020-03-22_noimport" style="width:100%; height:300px;" class="solar" csv="output/Energy_and_Power_Day_2020-03-22_noimport.csv" title="Energy and Power Day 2020-03-22"></div>
+  <div id="Energy_and_Power_Day_2020-03-31_noimport" style="width:100%; height:300px;" class="solar" csv="output/Energy_and_Power_Day_2020-03-31_noimport.csv" title="Energy and Power Day 2020-03-31"></div>
+  <div id="Energy_and_Power_Day_2020-04-01_noimport" style="width:100%; height:300px;" class="solar" csv="output/Energy_and_Power_Day_2020-04-01_noimport.csv" title="Energy and Power Day 2020-04-01"></div>
+  <h2>No Waste</h2>
+  <h3>Solar only</h3>
+  <div id="day1_nowaste" style="width:100%; height:300px;" class="solar" csv="output/day1_nowaste.csv" title="Day 1"></div>
+  <div id="day2_nowaste" style="width:100%; height:300px;" class="solar" csv="output/day2_nowaste.csv" title="Day 2"></div>
+  <div id="day3_nowaste" style="width:100%; height:300px;" class="solar" csv="output/day3_nowaste.csv" title="Day 3"></div>
+  <div id="almostperfect_nowaste" style="width:100%; height:300px;" class="solar" csv="output/almostperfect_nowaste.csv" title="Almost Perfect"></div>
+  <div id="CloudyMorning_nowaste" style="width:100%; height:300px;" class="solar" csv="output/CloudyMorning_nowaste.csv" title="Cloudy Morning"></div>
+  <div id="solar-vrms_nowaste" style="width:100%; height:300px;" class="solar" csv="output/solar-vrms_nowaste.csv" title="Solar with Voltage feed"></div>
+  <h3>Grid IE</h3>
+  <div id="day1_grid_ie_nowaste" style="width:100%; height:550px;" class="gridie" csv="output/day1_grid_ie_nowaste.csv" title="Day 1"></div>
+  <div id="day2_grid_ie_nowaste" style="width:100%; height:550px;" class="gridie" csv="output/day2_grid_ie_nowaste.csv" title="Day 2"></div>
+  <div id="day3_grid_ie_nowaste" style="width:100%; height:550px;" class="gridie" csv="output/day3_grid_ie_nowaste.csv" title="Day 3"></div>
+  <h3>Other</h3>
+  <div id="Energy_and_Power_Day_2020-03-22_nowaste" style="width:100%; height:300px;" class="solar" csv="output/Energy_and_Power_Day_2020-03-22_nowaste.csv" title="Energy and Power Day 2020-03-22"></div>
+  <div id="Energy_and_Power_Day_2020-03-31_nowaste" style="width:100%; height:300px;" class="solar" csv="output/Energy_and_Power_Day_2020-03-31_nowaste.csv" title="Energy and Power Day 2020-03-31"></div>
+  <div id="Energy_and_Power_Day_2020-04-01_nowaste" style="width:100%; height:300px;" class="solar" csv="output/Energy_and_Power_Day_2020-04-01_nowaste.csv" title="Energy and Power Day 2020-04-01"></div>
 </body>
 
 </html>
