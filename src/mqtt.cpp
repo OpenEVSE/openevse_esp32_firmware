@@ -25,6 +25,7 @@
 MongooseMqttClient mqttclient;
 EvseProperties claim_props;
 EvseProperties override_props;
+LimitProperties limit_props;
 DynamicJsonDocument mqtt_doc(4096);
 
 static long nextMqttReconnectAttempt = 0;
@@ -33,6 +34,7 @@ static bool connecting = false;
 uint8_t claimsVersion = 0;
 uint8_t overrideVersion = 0;
 uint8_t scheduleVersion = 0;
+uint8_t limitVersion = 0;
 
 String lastWill = "";
 
@@ -68,14 +70,13 @@ void mqttmsg_callback(MongooseString topic, MongooseString payload) {
     if (shaper.getState()) {
       shaper.shapeCurrent();
     }
-      
   }
   else if (topic_string == mqtt_grid_ie)
   {
     grid_ie = payload_str.toInt();
     DBUGF("grid:%dW", grid_ie);
     divert.update_state();
-    
+
     // if shaper use the same topic as grid_ie
     if (mqtt_live_pwr == mqtt_grid_ie) {
       shaper.setLivePwr(grid_ie);
@@ -181,6 +182,16 @@ void mqttmsg_callback(MongooseString topic, MongooseString payload) {
   }
   else if (topic_string == mqtt_topic + "/schedule/clear") {
     mqtt_clear_schedule(payload_str.toInt());
+  }
+
+  else if (topic_string == mqtt_topic + "/limit/set") {
+    if (payload_str.equals("clear")) {
+      DBUGLN("clearing limits");
+      limit.clear();
+    }
+    else if (limit_props.deserialize(payload_str)) {
+      mqtt_set_limit(limit_props);
+    }
   }
 
   // Restart
@@ -292,6 +303,7 @@ mqtt_connect()
     mqtt_publish_override();
     mqtt_publish_claim();
     mqtt_publish_schedule();
+    mqtt_publish_limit();
 
     // MQTT Topic to subscribe to receive RAPI commands via MQTT
     String mqtt_sub_topic = mqtt_topic + "/rapi/in/#";
@@ -363,6 +375,10 @@ mqtt_connect()
     yield();
 
     mqtt_sub_topic = mqtt_topic + "/schedule/clear";
+    mqttclient.subscribe(mqtt_sub_topic);
+    yield();
+
+    mqtt_sub_topic = mqtt_topic + "/limit/set";
     mqttclient.subscribe(mqtt_sub_topic);
     yield();
 
@@ -490,6 +506,24 @@ mqtt_publish_schedule() {
 }
 
 void
+mqtt_set_limit(LimitProperties &limitProps) {
+  Profile_Start(mqtt_set_limit);
+  limit.set(limitProps);
+  mqtt_publish_limit();
+  Profile_End(mqtt_set_limit, 5);
+}
+
+void
+mqtt_publish_limit() {
+  LimitProperties limitProps;
+  const size_t capacity = JSON_OBJECT_SIZE(3) + 512;
+  DynamicJsonDocument limit_data(capacity);
+  limitProps = limit.get();
+  bool success = limitProps.serialize(limit_data);
+  mqtt_publish_json(limit_data, "/limit");
+}
+
+void
 mqtt_publish_json(JsonDocument &data, const char* topic) {
   Profile_Start(mqtt_publish_json);
   if(!config_mqtt_enabled() || !mqttclient.connected()) {
@@ -554,6 +588,11 @@ mqtt_loop() {
       mqtt_publish_schedule();
       DBUGF("Schedule has changed, publishing to MQTT");
       scheduleVersion = scheduler.getVersion();
+    }
+    if (limitVersion != limit.getVersion()) {
+      mqtt_publish_limit();
+      DBUGF("Limit has changed, publishing to MQTT");
+      limitVersion = limit.getVersion();
     }
   }
   Profile_End(mqtt_loop, 5);
