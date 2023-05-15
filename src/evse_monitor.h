@@ -195,7 +195,7 @@ class EvseMonitor : public MicroTasks::Task
     void enable();
     void sleep();
     void disable();
-
+    void restart();
     void setMaxConfiguredCurrent(long amps);
 
     void setPilot(long amps, bool force=false, std::function<void(int ret)> callback = NULL);

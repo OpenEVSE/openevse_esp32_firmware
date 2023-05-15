@@ -196,7 +196,14 @@ void mqttmsg_callback(MongooseString topic, MongooseString payload) {
 
   // Restart
   else if (topic_string == mqtt_topic + "/restart") {
-    restart_system();
+    if (payload_str.equals("gateway")) {
+      //restart gateway
+      restart_system();
+    }
+    else if (payload_str.equals("evse")) {
+      //restart OpenEvse module
+      evse.restartEvse();
+    }
   }
 
   else

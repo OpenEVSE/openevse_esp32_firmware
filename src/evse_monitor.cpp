@@ -459,6 +459,20 @@ void EvseMonitor::disable()
   });
 }
 
+void EvseMonitor::restart()
+{
+  OpenEVSE.restart([this](int ret)
+  {
+    DBUGF("EVSE: reboot - complete %d", ret);
+    if(RAPI_RESPONSE_OK == ret) {
+      DBUGLN("Reboot response ok");
+    }
+    else {
+      DBUGVAR(ret);
+    }
+  });
+}
+
 void EvseMonitor::setPilot(long amps, bool force, std::function<void(int ret)> callback)
 {
   // limit `amps` to the software limit

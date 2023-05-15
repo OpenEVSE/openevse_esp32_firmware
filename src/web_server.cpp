@@ -892,6 +892,23 @@ handleRestart(MongooseHttpServerRequest *request) {
   restart_system();
 }
 
+// -------------------------------------------------------------------
+// Restart OpenEVSE module
+// url: /restartevse
+// -------------------------------------------------------------------
+void
+handleRestartEvse(MongooseHttpServerRequest *request) {
+  MongooseHttpServerResponseStream *response;
+  if(false == requestPreProcess(request, response, CONTENT_TYPE_TEXT)) {
+    return;
+  }
+
+  response->setCode(200);
+  response->print("1");
+  request->send(response);
+
+  evse.restartEvse();
+}
 
 // -------------------------------------------------------------------
 // Emoncms describe end point,
@@ -1128,6 +1145,7 @@ web_server_setup() {
   server.on("/settime$", handleSetTime);
   server.on("/reset$", handleRst);
   server.on("/restart$", handleRestart);
+  server.on("/restartevse$", handleRestartEvse);
   server.on("/rapi$", handleRapi);
   server.on("/r$", handleRapi);
   server.on("/scan$", handleScan);
