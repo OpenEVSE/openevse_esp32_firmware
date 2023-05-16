@@ -148,11 +148,11 @@ void DivertTask::update_state()
   StaticJsonDocument<256> event;
   event["divert_update"] = 0;
 
-  if (divert_type == _DIVERT_TYPE_GRID)
+  if (divert_type == DIVERT_TYPE_GRID)
   {
     event["grid_ie"] = grid_ie;
   }
-  else if (divert_type == _DIVERT_TYPE_SOLAR)
+  else if (divert_type == DIVERT_TYPE_SOLAR)
   {
     event["solar"] = solar;
   }
@@ -166,7 +166,7 @@ void DivertTask::update_state()
     }
 
     // Calculate current
-    if (divert_type == _DIVERT_TYPE_GRID)
+    if (divert_type == DIVERT_TYPE_GRID)
     {
       // if grid feed is available and exporting increment the charge rate,
       // if importing drop the charge rate.
@@ -197,7 +197,7 @@ void DivertTask::update_state()
         _available_current = 0;
       }
     }
-    else if (divert_type == _DIVERT_TYPE_SOLAR)
+    else if (divert_type == DIVERT_TYPE_SOLAR)
     {
       // if grid feed is not available: charge rate = solar generation
       DBUGVAR(voltage);
@@ -289,13 +289,13 @@ time_t DivertTask::getMinChargeTimeRemaining()
 // compatiblity trick, to remove after few version upgrade
 void DivertTask::initDivertType() {
 
-  if (divert_type == _DIVERT_TYPE_UNSET) {
+  if (divert_type == DIVERT_TYPE_UNSET) {
     // divert_type unset, guess previous version setup for smoother upgrade
     if (mqtt_grid_ie) {
-      divert_type == _DIVERT_TYPE_GRID;
+      divert_type == DIVERT_TYPE_GRID;
     }
     else {
-      divert_type == _DIVERT_TYPE_SOLAR;
+      divert_type == DIVERT_TYPE_SOLAR;
     }
     DynamicJsonDocument doc(JSON_OBJECT_SIZE(1) + 1); // use JSON in no-copy mode
     doc["divert_type"] = divert_type;

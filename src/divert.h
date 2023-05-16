@@ -12,9 +12,9 @@
 #include "evse_man.h"
 
 enum divert_type {
-  _DIVERT_TYPE_UNSET = -1,
-  _DIVERT_TYPE_SOLAR = 0,
-  _DIVERT_TYPE_GRID = 1
+  DIVERT_TYPE_UNSET = -1,
+  DIVERT_TYPE_SOLAR = 0,
+  DIVERT_TYPE_GRID = 1
 };
 
 extern int solar;

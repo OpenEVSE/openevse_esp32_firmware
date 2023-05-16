@@ -119,7 +119,7 @@ void CurrentShaperTask::shapeCurrent() {
 	// adding self produced energy to total
 	int max_pwr = _max_pwr;
 	if (config_divert_enabled() == true) {
-		if ( divert_type == _DIVERT_TYPE_SOLAR ) {
+		if ( divert_type == DIVERT_TYPE_SOLAR ) {
 			max_pwr += solar;
 		}
 	}
