@@ -491,6 +491,9 @@ class EvseManager : public MicroTasks::Task
     // unlock openevse fw compiled with BOOTLOCK
     void unlock();
 
+    // deserialize restart payloads
+    bool restart(String payload);
+
     // Temp until everything uses EvseManager
     RapiSender &getSender() {
       return _sender;

@@ -196,14 +196,7 @@ void mqttmsg_callback(MongooseString topic, MongooseString payload) {
 
   // Restart
   else if (topic_string == mqtt_topic + "/restart") {
-    if (payload_str.equals("gateway")) {
-      //restart gateway
-      restart_system();
-    }
-    else if (payload_str.equals("evse")) {
-      //restart OpenEvse module
-      evse.restartEvse();
-    }
+    mqtt_restart_device(payload_str);
   }
 
   else
@@ -545,6 +538,24 @@ mqtt_publish_json(JsonDocument &data, const char* topic) {
   mqttclient.publish(fulltopic,doc, true); // claims are always published as retained as they are not updated regularly
   Profile_End(mqtt_publish_json, 5);
 
+}
+
+void
+mqtt_restart_device(String payload_str) {
+  const size_t capacity = JSON_OBJECT_SIZE(1) + 16;
+  DynamicJsonDocument doc(capacity);
+  DeserializationError error = deserializeJson(doc, payload_str);
+  if(!error)
+  {
+    if(doc.containsKey("device")){
+      if (strcmp(doc["device"], "gateway") == 0 ) {
+        restart_system();
+      }
+      else if (strcmp(doc["device"], "evse") == 0) {
+        evse.restartEvse();
+      }
+    }
+  }
 }
 // -------------------------------------------------------------------
 // MQTT state management

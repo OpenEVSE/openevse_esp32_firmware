@@ -885,12 +885,57 @@ handleRestart(MongooseHttpServerRequest *request) {
     return;
   }
 
-  response->setCode(200);
-  response->print("1");
-  request->send(response);
-
-  restart_system();
+  if (HTTP_GET == request->method()) {
+    response->setCode(200);
+    response->print("1");
+    request->send(response);
+    restart_system();
+  }
+  else if (HTTP_POST == request->method()) {
+    String body = request->body().toString();
+    // Deserialize the JSON document
+    const size_t capacity = JSON_OBJECT_SIZE(1) + 16;
+    DynamicJsonDocument doc(capacity);
+    DeserializationError error = deserializeJson(doc, body);
+    if(!error)
+    {
+      if(doc.containsKey("device")){
+        if (strcmp(doc["device"], "gateway") == 0 ) {
+          response->setCode(200);
+          response->print("{\"msg\":\"restart gateway\"}");
+          request->send(response);
+          restart_system();
+        }
+        else if (strcmp(doc["device"], "evse") == 0) {
+          response->setCode(200);
+          response->print("{\"msg\":\"restart evse\"}");
+          request->send(response);
+          evse.restartEvse();
+        }
+        else {
+          response->setCode(200);
+          response->print("{\"msg\":\"unknown device\"}");
+          request->send(response);
+        }
+      }
+      else {
+        response->setCode(200);
+        response->print("{\"msg\":\"wrong payload\"}");
+        request->send(response);
+      }
+    } else {
+      response->setCode(405);
+      response->print("{\"msg\":\"Couldn't parse json\"}");
+      request->send(response);
+    }
+  } else {
+    response->setCode(405);
+    response->print("{\"msg\":\"Method not allowed\"}");
+    request->send(response);
+  }
 }
+
+
 
 // -------------------------------------------------------------------
 // Restart OpenEVSE module
