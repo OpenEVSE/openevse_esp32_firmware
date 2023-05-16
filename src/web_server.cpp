@@ -875,7 +875,7 @@ handleRst(MongooseHttpServerRequest *request) {
 
 
 // -------------------------------------------------------------------
-// Restart (Reboot)
+// Restart (Reboot gateway or evse)
 // url: /restart
 // -------------------------------------------------------------------
 void
@@ -913,13 +913,13 @@ handleRestart(MongooseHttpServerRequest *request) {
           evse.restartEvse();
         }
         else {
-          response->setCode(200);
+          response->setCode(404);
           response->print("{\"msg\":\"unknown device\"}");
           request->send(response);
         }
       }
       else {
-        response->setCode(200);
+        response->setCode(405);
         response->print("{\"msg\":\"wrong payload\"}");
         request->send(response);
       }
@@ -933,26 +933,6 @@ handleRestart(MongooseHttpServerRequest *request) {
     response->print("{\"msg\":\"Method not allowed\"}");
     request->send(response);
   }
-}
-
-
-
-// -------------------------------------------------------------------
-// Restart OpenEVSE module
-// url: /restartevse
-// -------------------------------------------------------------------
-void
-handleRestartEvse(MongooseHttpServerRequest *request) {
-  MongooseHttpServerResponseStream *response;
-  if(false == requestPreProcess(request, response, CONTENT_TYPE_TEXT)) {
-    return;
-  }
-
-  response->setCode(200);
-  response->print("1");
-  request->send(response);
-
-  evse.restartEvse();
 }
 
 // -------------------------------------------------------------------
@@ -1190,7 +1170,6 @@ web_server_setup() {
   server.on("/settime$", handleSetTime);
   server.on("/reset$", handleRst);
   server.on("/restart$", handleRestart);
-  server.on("/restartevse$", handleRestartEvse);
   server.on("/rapi$", handleRapi);
   server.on("/r$", handleRapi);
   server.on("/scan$", handleScan);

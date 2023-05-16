@@ -530,6 +530,28 @@ paths:
         name: index
         in: path
         required: true
+  /restart:
+    post:
+      summary: restart gateway or evse modules
+        requestBody:
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                device:
+                  type: string
+                  description: gateway|evse
+      responses:
+        200:
+        content:
+          application/json:
+            schema:
+              type: object
+                properties:
+                  msg:
+                    type: string
+                    description: restart gateway|evse
   /limit:
     get:
       summary: Get charge limit
