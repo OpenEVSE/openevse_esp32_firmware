@@ -61,6 +61,11 @@ extern String mqtt_vehicle_range;
 extern String mqtt_vehicle_eta;
 extern String mqtt_announce_topic;
 
+// LoraWAN Settings
+extern String lora_deveui;
+extern String lora_appeui;
+extern String lora_appkey;
+
 // OCPP 1.6 Settings
 extern String ocpp_server;
 extern String ocpp_chargeBoxId;
@@ -109,6 +114,7 @@ extern uint32_t flags;
 #define CONFIG_OCPP_AUTO_AUTH       (1 << 22)
 #define CONFIG_OCPP_OFFLINE_AUTH    (1 << 23)
 #define CONFIG_THREEPHASE           (1 << 24)
+#define CONFIG_LORA                 (1 << 25)
 
 
 inline bool config_emoncms_enabled() {
@@ -137,6 +143,10 @@ inline bool config_mqtt_retained() {
 
 inline bool config_mqtt_reject_unauthorized() {
   return 0 == (flags & CONFIG_MQTT_ALLOW_ANY_CERT);
+}
+
+inline bool config_lora_enabled() {
+  return CONFIG_LORA == (flags & CONFIG_LORA);
 }
 
 inline bool config_ocpp_enabled() {

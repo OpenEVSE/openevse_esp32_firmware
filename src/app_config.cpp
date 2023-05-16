@@ -71,6 +71,11 @@ String mqtt_vehicle_range;
 String mqtt_vehicle_eta;
 String mqtt_announce_topic;
 
+// LoraWAN network settings
+String lora_deveui;
+String lora_appeui;
+String lora_appkey;
+
 // OCPP 1.6 Settings
 String ocpp_server;
 String ocpp_chargeBoxId;
@@ -193,6 +198,11 @@ ConfigOpt *opts[] =
 
 // RFID storage
   new ConfigOptDefenition<String>(rfid_storage, "", "rfid_storage", "rs"),
+
+// Lora settings
+  new ConfigOptDefenition<String>(lora_deveui, "", "lora_deveui", "lde"),
+  new ConfigOptDefenition<String>(lora_appeui, "", "lora_appeui", "lae"),
+  new ConfigOptDefenition<String>(lora_appeui, "", "lora_appkey", "lak"),
 
 #if RGB_LED
 // LED brightness

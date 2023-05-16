@@ -42,6 +42,7 @@
 #include "divert.h"
 #include "ota.h"
 #include "lcd.h"
+#include "lora.h"
 #include "openevse.h"
 #include "root_ca.h"
 #include "espal.h"
@@ -159,6 +160,11 @@ void setup()
   input_setup();
 
   ocpp.begin(evse, lcd, eventLog, rfid);
+
+#ifdef ENABLE_LORA
+  // initialise LoRA if supported
+  lora.begin(evse);
+#endif
 
   shaper.begin(evse);
 
