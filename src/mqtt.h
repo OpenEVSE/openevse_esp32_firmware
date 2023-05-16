@@ -33,6 +33,7 @@ extern void mqtt_loop();
 // data: a comma seperated list of name:value pairs to send
 // -------------------------------------------------------------------
 extern void mqtt_publish(JsonDocument &data);
+extern bool mqtt_publish_config();
 extern void mqtt_publish_claim();
 extern void mqtt_set_claim(bool override, EvseProperties &props);
 extern void mqtt_publish_override();

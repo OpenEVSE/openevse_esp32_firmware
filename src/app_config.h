@@ -221,6 +221,8 @@ inline EvseState config_default_state()
 // Ohm Connect Settings
 extern String ohm;
 
+extern uint32_t config_version();
+
 // -------------------------------------------------------------------
 // Load saved settings
 // -------------------------------------------------------------------

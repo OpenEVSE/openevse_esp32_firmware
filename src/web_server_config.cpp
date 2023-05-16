@@ -13,8 +13,6 @@ typedef const __FlashStringHelper *fstr_t;
 #include "input.h"
 #include "event.h"
 
-uint32_t config_version = 0;
-
 extern bool isPositive(MongooseHttpServerRequest *request, const char *param);
 extern bool web_server_config_deserialise(DynamicJsonDocument &doc, bool factory);
 
@@ -28,40 +26,6 @@ handleConfigGet(MongooseHttpServerRequest *request, MongooseHttpServerResponseSt
   const size_t capacity = JSON_OBJECT_SIZE(128) + 1024;
   DynamicJsonDocument doc(capacity);
 
-  // Read only information
-  doc["firmware"] = evse.getFirmwareVersion();
-  doc["protocol"] = "-";
-  doc["espflash"] = ESPAL.getFlashChipSize();
-  doc["espinfo"] = ESPAL.getChipInfo();
-  doc["buildenv"] = buildenv;
-  doc["version"] = currentfirmware;
-  doc["evse_serial"] = evse.getSerial();
-  doc["wifi_serial"] = serial;
-
-  // Static supported protocols
-  JsonArray mqtt_supported_protocols = doc.createNestedArray("mqtt_supported_protocols");
-  mqtt_supported_protocols.add("mqtt");
-  mqtt_supported_protocols.add("mqtts");
-
-  JsonArray http_supported_protocols = doc.createNestedArray("http_supported_protocols");
-  http_supported_protocols.add("http");
-
-  // OpenEVSE module config
-  doc["diode_check"] = evse.isDiodeCheckEnabled();
-  doc["gfci_check"] = evse.isGfiTestEnabled();
-  doc["ground_check"] = evse.isGroundCheckEnabled();
-  doc["relay_check"] = evse.isStuckRelayCheckEnabled();
-  doc["vent_check"] = evse.isVentRequiredEnabled();
-  doc["temp_check"] = evse.isTemperatureCheckEnabled();
-  doc["service"] = static_cast<uint8_t>(evse.getServiceLevel());
-  doc["scale"] = evse.getCurrentSensorScale();
-  doc["offset"] = evse.getCurrentSensorOffset();
-  doc["max_current_soft"] = evse.getMaxConfiguredCurrent();
-
-  doc["min_current_hard"] = evse.getMinCurrent();
-  doc["max_current_hard"] = evse.getMaxHardwareCurrent();
-
-  // WiFi module config
   config_serialize(doc, true, false, true);
 
   response->setCode(200);
@@ -91,7 +55,7 @@ handleConfigPost(MongooseHttpServerRequest *request, MongooseHttpServerResponseS
     bool config_modified = web_server_config_deserialise(doc, storage.equals("factory"));
 
     StaticJsonDocument<128> reply;
-    reply["config_version"] = config_version;
+    reply["config_version"] = config_version();
     reply["msg"] = config_modified ? "done" : "no change";
 
     response->setCode(200);
@@ -122,125 +86,14 @@ void handleConfig(MongooseHttpServerRequest *request)
   request->send(response);
 }
 
-// TODO: move all this to app_config.cpp
 bool web_server_config_deserialise(DynamicJsonDocument &doc, bool factory)
 {
-  bool config_modified = false;
-
-  if(config_deserialize(doc))
-  {
-    config_commit(factory);
-    config_modified = true;
-    DBUGLN("Config updated");
-  }
-
-  // Update EVSE config
-  // Update the EVSE setting flags, a little low level, may move later
-  if(doc.containsKey("diode_check"))
-  {
-    bool enable = doc["diode_check"];
-    if(enable != evse.isDiodeCheckEnabled()) {
-      evse.enableDiodeCheck(enable);
-      config_modified = true;
-      DBUGLN("diode_check changed");
-    }
-  }
-
-  if(doc.containsKey("gfci_check"))
-  {
-    bool enable = doc["gfci_check"];
-    if(enable != evse.isGfiTestEnabled()) {
-      evse.enableGfiTestCheck(enable);
-      config_modified = true;
-      DBUGLN("gfci_check changed");
-    }
-  }
-
-  if(doc.containsKey("ground_check"))
-  {
-    bool enable = doc["ground_check"];
-    if(enable != evse.isGroundCheckEnabled()) {
-      evse.enableGroundCheck(enable);
-      config_modified = true;
-      DBUGLN("ground_check changed");
-    }
-  }
-
-  if(doc.containsKey("relay_check"))
-  {
-    bool enable = doc["relay_check"];
-    if(enable != evse.isStuckRelayCheckEnabled()) {
-      evse.enableStuckRelayCheck(enable);
-      config_modified = true;
-      DBUGLN("relay_check changed");
-    }
-  }
-
-  if(doc.containsKey("vent_check"))
-  {
-    bool enable = doc["vent_check"];
-    if(enable != evse.isVentRequiredEnabled()) {
-      evse.enableVentRequired(enable);
-      config_modified = true;
-      DBUGLN("vent_check changed");
-    }
-  }
-
-  if(doc.containsKey("temp_check"))
-  {
-    bool enable = doc["temp_check"];
-    if(enable != evse.isTemperatureCheckEnabled()) {
-      evse.enableTemperatureCheck(enable);
-      config_modified = true;
-      DBUGLN("temp_check changed");
-    }
-  }
-
-  if(doc.containsKey("service"))
-  {
-    EvseMonitor::ServiceLevel service = static_cast<EvseMonitor::ServiceLevel>(doc["service"].as<uint8_t>());
-    if(service != evse.getServiceLevel()) {
-      evse.setServiceLevel(service);
-      config_modified = true;
-      DBUGLN("service changed");
-    }
-  }
-
-  if(doc.containsKey("max_current_soft"))
-  {
-    long current = doc["max_current_soft"];
-    if(current != evse.getMaxConfiguredCurrent()) {
-      evse.setMaxConfiguredCurrent(current);
-      config_modified = true;
-      DBUGLN("max_current_soft changed");
-    }
-  }
-
-  if(doc.containsKey("scale") && doc.containsKey("offset"))
-  {
-    long scale = doc["scale"];
-    long offset = doc["offset"];
-    if(scale != evse.getCurrentSensorScale() || offset != evse.getCurrentSensorOffset()) {
-      evse.configureCurrentSensorScale(doc["scale"], doc["offset"]);
-      config_modified = true;
-      DBUGLN("scale changed");
-    }
-  }
+  bool config_modified = config_deserialize(doc);
 
   if(config_modified)
   {
-    // HACK: force a flush of the RAPI command queue to make sure the config
-    //       is updated before we send the response
-    DBUG("Flushing RAPI command queue ...");
-    rapiSender.flush();
-    DBUGLN(" Done");
-
-    config_version++;
-    DBUGVAR(config_version);
-
-    StaticJsonDocument<128> event;
-    event["config_version"] = config_version;
-    event_send(event);
+    config_commit(factory);
+    DBUGLN("Config updated");
   }
 
   return config_modified;
