@@ -8,144 +8,211 @@
   <script type="text/javascript" src="https://cdnjs.cloudflare.com/ajax/libs/moment.js/2.24.0/moment.min.js"></script>
   <link rel="stylesheet" href="https://maxcdn.bootstrapcdn.com/bootstrap/3.3.6/css/bootstrap.min.css" />
   <script type="text/javascript">
-    window.onload = function () {
-      var dataPoints = [];
+    var datasets = [
+      { id: "day1", class: "solar", title: "Day 1 (Solar)" },
+      { id: "day2", class: "solar", title: "Day 2 (Solar)" },
+      { id: "day3", class: "solar", title: "Day 3 (Solar)" },
+      { id: "almostperfect", class: "solar", title: "Almost Perfect" },
+      { id: "CloudyMorning", class: "solar", title: "Cloudy Morning" },
+      { id: "solar-vrms", class: "solar", title: "Solar with Voltage feed" },
+      { id: "day1_grid_ie", class: "gridie", title: "Day 1 (Grid I+/E-)" },
+      { id: "day2_grid_ie", class: "gridie", title: "Day 2 (Grid I+/E-)" },
+      { id: "day3_grid_ie", class: "gridie", title: "Day 3 (Grid I+/E-)" },
+      { id: "Energy_and_Power_Day_2020-03-22", class: "solar", title: "Energy and Power Day 2020-03-22" },
+      { id: "Energy_and_Power_Day_2020-03-31", class: "solar", title: "Energy and Power Day 2020-03-31" },
+      { id: "Energy_and_Power_Day_2020-04-01", class: "solar", title: "Energy and Power Day 2020-04-01" },
+    ];
 
-      function getDataPointsFromCSV(csv) {
-        var dataPoints = csvLines = points = [];
-        csvLines = csv.split(/[\r?\n|\r|\n]+/);
+    var profiles = [
+      "master",
+      "default",
+      "noimport",
+      "nowaste"
+    ];
 
-        for (var i = 1; i < csvLines.length; i++)
-          if (csvLines[i].length > 0) {
-            points = csvLines[i].split(",");
-
-            while (dataPoints.length < points.length - 1) {
-              dataPoints.push([]);
-            }
-
-            var date = moment(points[0], "DD/MM/YYYY HH:mm:ss").toDate();
-            for (var p = 1; p < points.length; p++) {
-              dataPoints[p - 1].push({
-                x: date,
-                y: parseFloat(points[p])
-              });
-            }
-          }
-        return dataPoints;
+    var summary = {};
+    for (const profile of profiles) {
+      summary[profile] = {};
+      for (const dataset of datasets) {
+        summary[profile][dataset.id] = {};
       }
+    }
 
-      $(".solar,.gridie").each(function() {
-        $.get(this.getAttribute("csv"), (data) => {
-          var type = this.getAttribute("class");
-          var points = getDataPointsFromCSV(data);
-          var opts = {
-            animationEnabled: true,
-            zoomEnabled: true,
-            toolTip: {
-              shared: true,
-              contentFormatter: (e) => {
+    function getDataPointsFromCSV(csv) {
+      var dataPoints = csvLines = points = [];
+      csvLines = csv.split(/[\r?\n|\r|\n]+/);
 
-                var str = "<strong>"+moment(e.entries[0].dataPoint.x).format('h:mm a') + "</strong> <br/>";
-                for (var i = 0; i < e.entries.length; i++){
-                  str += "<span style=\"color:"+e.entries[i].dataSeries.color+"\">" + e.entries[i].dataSeries.name + "</span> <strong>"+  e.entries[i].dataPoint.y + "</strong> <br/>";
-                }
-                return (str);
-              }
-            },
-            title: {
-              text: this.getAttribute("title"),
-              fontSize: 20
-            },
-            legend: {
-              fontSize: 16
-            },
-            axisY: {
-              labelFontSize: 14,
-              labelAngle: 0
-            },
-            axisX: {
-              labelFontSize: 14,
-              labelAngle: 0
-            },
-            data: []
+      for (var i = 1; i < csvLines.length; i++)
+        if (csvLines[i].length > 0) {
+          points = csvLines[i].split(",");
+
+          while (dataPoints.length < points.length - 1) {
+            dataPoints.push([]);
           }
-          opts.data.push({
-            name: "Charge Power",
-            type: "area",
-            color: "rgba(244,180,0,0.7)",
-            showInLegend: true,
-            dataPoints: points[3]
-          });
-          opts.data.push({
-            name: "Solar",
-            type: "line",
-            lineThickness: 1,
-            showInLegend: true,
-            dataPoints: points[0]
-          });
-          if("gridie" === type) {
-            opts.data.push({
-              name: "Grid IE",
-              type: "line",
-              lineThickness: 1,
-              showInLegend: true,
-              dataPoints: points[1]
+
+          var date = moment(points[0], "DD/MM/YYYY HH:mm:ss").toDate();
+          for (var p = 1; p < points.length; p++) {
+            dataPoints[p - 1].push({
+              x: date,
+              y: parseFloat(points[p])
             });
           }
+        }
+      return dataPoints;
+    }
+
+    function loadChart(id, csv, title, type) {
+      $.get(csv, (data) => {
+        var points = getDataPointsFromCSV(data);
+        var opts = {
+          animationEnabled: true,
+          zoomEnabled: true,
+          toolTip: {
+            shared: true,
+            contentFormatter: (e) => {
+
+              var str = "<strong>"+moment(e.entries[0].dataPoint.x).format('h:mm a') + "</strong> <br/>";
+              for (var i = 0; i < e.entries.length; i++){
+                str += "<span style=\"color:"+e.entries[i].dataSeries.color+"\">" + e.entries[i].dataSeries.name + "</span> <strong>"+  e.entries[i].dataPoint.y + "</strong> <br/>";
+              }
+              return (str);
+            }
+          },
+          title: {
+            text: title,
+            fontSize: 20
+          },
+          legend: {
+            fontSize: 16
+          },
+          axisY: {
+            labelFontSize: 14,
+            labelAngle: 0
+          },
+          axisX: {
+            labelFontSize: 14,
+            labelAngle: 0
+          },
+          data: []
+        }
+        opts.data.push({
+          name: "Charge Power",
+          type: "area",
+          color: "rgba(244,180,0,0.7)",
+          showInLegend: true,
+          dataPoints: points[3]
+        });
+        opts.data.push({
+          name: "Solar",
+          type: "line",
+          lineThickness: 1,
+          showInLegend: true,
+          dataPoints: points[0]
+        });
+        if("gridie" === type) {
           opts.data.push({
-            name: "Smoothed",
+            name: "Grid IE",
             type: "line",
             lineThickness: 1,
             showInLegend: true,
-            dataPoints: points[6]
+            dataPoints: points[1]
           });
-          opts.data.push({
-            name: "Min Charge",
-            type: "line",
-            lineThickness: 1,
-            lineDashType: "shortDash",
-            lineColor: "#38761d",
-            showInLegend: true,
-            dataPoints: points[4]
-          });
-
-          var chart = new CanvasJS.Chart(this.id, opts);
-
-          chart.render();
+        }
+        opts.data.push({
+          name: "Smoothed",
+          type: "line",
+          lineThickness: 1,
+          showInLegend: true,
+          dataPoints: points[6]
+        });
+        opts.data.push({
+          name: "Min Charge",
+          type: "line",
+          lineThickness: 1,
+          lineDashType: "shortDash",
+          lineColor: "#38761d",
+          showInLegend: true,
+          dataPoints: points[4]
         });
 
+        var chart = new CanvasJS.Chart(id, opts);
+
+        chart.render();
       });
 
+    };
+
+    function loadSummary(csv, success) {
       $.ajax({
-        url: "output/summary.csv",
+        url: csv,
         dataType: "text",
         success: function (data) {
           var summary_data = data.split(/\r?\n|\r/);
-          var table_data = '<table class="table table-bordered table-striped">';
-          for (var count = 0; count < summary_data.length; count++) {
+          for (var count = 1; count < summary_data.length; count++) {
             var cell_data = summary_data[count].split(",");
-            table_data += '<tr>';
-            for (var cell_count = 0; cell_count < cell_data.length; cell_count++) {
-              var val = cell_data[cell_count].replaceAll("\"", "");
-              if (count === 0) {
-                table_data += '<th>' + val + '</th>';
-              } else if(0 == cell_count) {
-                table_data += '<td><a href="#' + val + '">' + val + '</a></td>';
-              } else if(1 <= cell_count && cell_count <= 4) {
-                table_data += '<td>' + parseFloat(val).toFixed(2) + '</td>';
-              } else if(6 <= cell_count && cell_count <= 8) {
-                table_data += '<td>' + (new Date(parseInt(val) * 1000).toISOString().slice(11, 19)) + '</td>';
-              } else {
-                table_data += '<td>' + val + '</td>';
-              }
+            if(cell_data.length < 2) {
+              continue;
             }
-            table_data += '</tr>';
+
+            var dataset = cell_data[0].replaceAll("\"", "");
+            var config = cell_data[1].replaceAll("\"", "").replaceAll("data/config-inputfilter-", "").replaceAll(".json", "");
+
+            var data = {
+              total_solar: parseFloat(cell_data[2]).toFixed(2),
+              total_ev_charged: parseFloat(cell_data[3]).toFixed(2),
+              charge_from_solar: parseFloat(cell_data[4]).toFixed(2),
+              charge_from_grid: parseFloat(cell_data[5]).toFixed(2),
+              number_of_charges: parseInt(cell_data[6]),
+              min_time_charging: (new Date(parseInt(cell_data[7]) * 1000).toISOString().slice(11, 19)),
+              max_time_charging: (new Date(parseInt(cell_data[8]) * 1000).toISOString().slice(11, 19)),
+              total_time_charging: (new Date(parseInt(cell_data[9]) * 1000).toISOString().slice(11, 19))
+            }
+
+            summary[config.toLowerCase()][dataset] = data;
+          }
+
+          success();
+        }
+      });
+    }
+
+    window.onload = function () {
+      loadSummary("output/summary_master.csv", () => {
+        loadSummary("output/summary.csv", () => {
+          var table_data = '<table class="table table-bordered table-striped">';
+          table_data += '<tr>';
+          table_data += '<th>Dataset</th>';
+          table_data += '<th>Config</th>';
+          table_data += '<th>Total Solar</th>';
+          table_data += '<th>Total EV Charged</th>';
+          table_data += '<th>Charge from Solar</th>';
+          table_data += '<th>Charge from Grid</th>';
+          table_data += '<th>Number of Charges</th>';
+          table_data += '<th>Min Time Charging</th>';
+          table_data += '<th>Max Time Charging</th>';
+          table_data += '<th>Total Time Charging</th>';
+          table_data += '</tr>';
+          for (const dataset of datasets) {
+            for (const profile of profiles) {
+              var data = summary[profile][dataset.id];
+              table_data += '<tr>';
+              table_data += '<td><a href="#' + dataset.id + "_" + profile + '">' + dataset.title + '</a></td>';
+              table_data += '<td>' + profile + '</td>';
+              table_data += '<td>' + data.total_solar + '</td>';
+              table_data += '<td>' + data.total_ev_charged + '</td>';
+              table_data += '<td>' + data.charge_from_solar + '</td>';
+              table_data += '<td>' + data.charge_from_grid + '</td>';
+              table_data += '<td>' + data.number_of_charges + '</td>';
+              table_data += '<td>' + data.min_time_charging + '</td>';
+              table_data += '<td>' + data.max_time_charging + '</td>';
+              table_data += '<td>' + data.total_time_charging + '</td>';
+              table_data += '</tr>';
+            }
           }
           table_data += '</table>';
           $('#summary_table').html(table_data);
-        }
+        });
       });
-
     }
   </script>
   <style type="text/css" media="print">
@@ -161,21 +228,28 @@
   <h2>Summary</h2>
   <div id="summary_table">
   </div>
-  <h2>Solar only</h2>
-  <div id="day1" style="width:100%; height:300px;" class="solar" csv="output/day1.csv" title="Day 1"></div>
-  <div id="day2" style="width:100%; height:300px;" class="solar" csv="output/day2.csv" title="Day 2"></div>
-  <div id="day3" style="width:100%; height:300px;" class="solar" csv="output/day3.csv" title="Day 3"></div>
-  <div id="almostperfect" style="width:100%; height:300px;" class="solar" csv="output/almostperfect.csv" title="Almost Perfect"></div>
-  <div id="CloudyMorning" style="width:100%; height:300px;" class="solar" csv="output/CloudyMorning.csv" title="Cloudy Morning"></div>
-  <div id="solar-vrms" style="width:100%; height:300px;" class="solar" csv="output/solar-vrms.csv" title="Solar with Voltage feed"></div>
-  <h2>Grid IE</h2>
-  <div id="day1_grid_ie" style="width:100%; height:550px;" class="gridie" csv="output/day1_grid_ie.csv" title="Day 1"></div>
-  <div id="day2_grid_ie" style="width:100%; height:550px;" class="gridie" csv="output/day2_grid_ie.csv" title="Day 2"></div>
-  <div id="day3_grid_ie" style="width:100%; height:550px;" class="gridie" csv="output/day3_grid_ie.csv" title="Day 3"></div>
-  <h2>Other</h2>
-  <div id="Energy_and_Power_Day_2020-03-22" style="width:100%; height:300px;" class="solar" csv="output/Energy_and_Power_Day_2020-03-22.csv" title="Energy_and_Power_Day_2020-03-22.csv"></div>
-  <div id="Energy_and_Power_Day_2020-03-31" style="width:100%; height:300px;" class="solar" csv="output/Energy_and_Power_Day_2020-03-31.csv" title="Energy_and_Power_Day_2020-03-31.csv"></div>
-  <div id="Energy_and_Power_Day_2020-04-01" style="width:100%; height:300px;" class="solar" csv="output/Energy_and_Power_Day_2020-04-01.csv" title="Energy_and_Power_Day_2020-04-01.csv"></div>
+
+  <script type="text/javascript">
+
+    for (const dataset of datasets) {
+      for (const profile of profiles) {
+        var id = dataset.id + "_" + profile;
+        var csv = "output/"+dataset.id + "_" + profile + ".csv";
+        var title = dataset.title + " (" + profile + ")";
+        var div = document.createElement("div");
+        div.id = id;
+        div.className = dataset.class;
+        div.style = "height: 370px; width: 100%;";
+        div.title = title;
+        div.csv = csv;
+        document.body.appendChild(div);
+        loadChart(id, csv, title, dataset.class);
+      }
+    }
+    //<div id="day1_default" style="width:100%; height:300px;" class="solar" csv="output/day1_default.csv" title="Day 1"></div>
+
+  </script>
+
 </body>
 
 </html>
