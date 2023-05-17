@@ -1,0 +1,78 @@
+<!DOCTYPE html>
+<html>
+
+<head>
+  <title>OpenEVSE Solar Divert Simulations</title>
+  <script type="text/javascript" src="https://canvasjs.com/assets/script/jquery-1.11.1.min.js"></script>
+  <script type="text/javascript" src="https://canvasjs.com/assets/script/canvasjs.min.js"></script>
+  <script type="text/javascript" src="https://cdnjs.cloudflare.com/ajax/libs/moment.js/2.24.0/moment.min.js"></script>
+  <link rel="stylesheet" href="https://maxcdn.bootstrapcdn.com/bootstrap/3.3.6/css/bootstrap.min.css" />
+  <script type="text/javascript" src="simulations.js"></script>
+  <script type="text/javascript">
+    var profiles = [
+      "master",
+      "interactive"
+    ];
+
+    function run_simulation() {
+      $.post("simulation", JSON.stringify({
+        "divert_PV_ratio": parseFloat($("#divert_PV_ratio").val()),
+        "divert_attack_smoothing_time": parseInt($("#divert_attack_smoothing_time").val()),
+        "divert_decay_smoothing_time": parseInt($("#divert_decay_smoothing_time").val()),
+        "divert_min_charge_time": parseInt($("#divert_min_charge_time").val())
+      }), () => {
+        init_summary(profiles);
+        loadSummary("output/summary_master.csv", () => {
+          loadSummary("output/summary_interactive.csv", () => {
+            generate_summary_table(profiles);
+            for (const dataset of datasets) {
+              var id = dataset.id + "_interactive";
+              loadChart(id, "output/"+ id + ".csv", dataset.title + " (interactive)", dataset.class);
+            }
+          }, "interactive");
+        });
+      });
+    }
+  </script>
+  <style type="text/css" media="print">
+    .solar,.gridie
+    {
+      page-break-inside: avoid;
+    }
+  </style>
+</head>
+
+<body>
+  <h1>OpenEVSE Solar Divert Simulations</h1>
+
+  <a href="view.html">Test Results</a><br/>
+
+  <label for="divert_PV_ratio">divert_PV_ratio</label>
+  <input type="text" id="divert_PV_ratio" value="1.1"><br/>
+  <label for="divert_attack_smoothing_time">divert_attack_smoothing_time</label>
+  <input type="text" id="divert_attack_smoothing_time" value="20"><br/>
+  <label for="divert_decay_smoothing_time">divert_decay_smoothing_time</label>
+  <input type="text" id="divert_decay_smoothing_time" value="200"><br/>
+  <label for="divert_min_charge_time">divert_min_charge_time</label>
+  <input type="text" id="divert_min_charge_time" value="600"><br/>
+
+  <button onclick="run_simulation()">Run Simulation</button>
+
+  <h2>Summary</h2>
+  <div id="summary_table">
+  </div>
+
+  <script type="text/javascript">
+
+    for (const dataset of datasets) {
+      var id = generate_chart(dataset, "master");;
+      loadChart(id, "output/"+ id + ".csv", dataset.title + " (master)", dataset.class);
+      generate_chart(dataset, "interactive");
+    }
+    //<div id="day1_default" style="width:100%; height:300px;" class="solar" csv="output/day1_default.csv" title="Day 1"></div>
+
+  </script>
+
+</body>
+
+</html>
