@@ -229,7 +229,7 @@ void DivertTask::update_state()
       props.setChargeCurrent(_charge_rate);
       _evse->claim(EvseClient_OpenEVSE_Divert, EvseManager_Priority_Divert, props);
     }
-    else
+    else if (_smoothed_available_current <= trigger_current)
     {
       if( EvseState::Active == _evse->getState(EvseClient_OpenEVSE_Divert) && 0 == min_charge_time_remaining)
       {
