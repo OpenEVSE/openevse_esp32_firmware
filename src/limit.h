@@ -20,7 +20,7 @@ class LimitType {
 			Soc,
 			Range
 		};
-		
+
 		LimitType() = default;
   		constexpr LimitType(Value value) : _value(value) { }
 		uint8_t fromString(const char *value);

@@ -8,11 +8,14 @@
 #include <Arduino.h>
 #include <ArduinoJson.h>
 #include "evse_man.h"
+#include "limit.h"
 
-#define MQTT_PROTOCOL_MQTT          0
-#define MQTT_PROTOCOL_MQTT_SSL      1
-#define MQTT_PROTOCOL_WEBSOCKET     2
-#define MQTT_PROTOCOL_WEBSOCKET_SSL 3
+enum mqtt_protocol {
+	MQTT_PROTOCOL_MQTT,
+	MQTT_PROTOCOL_MQTT_SSL,
+	MQTT_PROTOCOL_WEBSOCKET,
+	MQTT_PROTOCOL_WEBSOCKET_SSL
+};
 
 #define MQTT_LOOP	500
 
@@ -37,6 +40,8 @@ extern void mqtt_publish_json(JsonDocument &data, const char* topic);
 extern void mqtt_publish_schedule();
 extern void mqtt_set_schedule(String schedule);
 extern void mqtt_clear_schedule(uint32_t event);
+extern void mqtt_publish_limit();
+extern void mqtt_set_limit(LimitProperties &limitProps);
 
 // -------------------------------------------------------------------
 // Restart the MQTT connection
