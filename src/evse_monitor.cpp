@@ -253,12 +253,6 @@ void EvseMonitor::evseBoot(const char *firmware)
   _openevse.heartbeatEnable(EVSE_HEATBEAT_INTERVAL, EVSE_HEARTBEAT_CURRENT, [this](int ret, int interval, int current, int triggered) {
     _heartbeat = RAPI_RESPONSE_OK == ret;
   });
-
-  // unlock openevse fw compiled with BOOTLOCK
-  if (isBootLocked()) {
-    unlock();
-    DBUGLN("Unlocked BOOTLOCK");
-  }
 }
 
 void EvseMonitor::updateEvseState(uint8_t evse_state, uint8_t pilot_state, uint32_t vflags)
@@ -352,6 +346,12 @@ unsigned long EvseMonitor::loop(MicroTasks::WakeReason reason)
   // Fixed in latest OpenEvse firwmare
   if (isCharging()){
     verifyPilot();
+  }
+
+   // unlock openevse fw compiled with BOOTLOCK
+  if (isBootLocked() && OPENEVSE_STATE_STARTING != getEvseState()) {
+    unlock();
+    DBUGLN("Unlocked BOOTLOCK");
   }
 
   _count ++;
