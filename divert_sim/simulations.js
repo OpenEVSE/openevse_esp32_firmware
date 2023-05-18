@@ -202,7 +202,6 @@ function generate_chart(dataset, profile)
   var div = document.createElement("div");
   div.id = id;
   div.className = dataset.class;
-  div.style = "height: 370px; width: 100%;";
   document.body.appendChild(div);
   return id;
 }

@@ -6,7 +6,6 @@
   <script type="text/javascript" src="https://canvasjs.com/assets/script/jquery-1.11.1.min.js"></script>
   <script type="text/javascript" src="https://canvasjs.com/assets/script/canvasjs.min.js"></script>
   <script type="text/javascript" src="https://cdnjs.cloudflare.com/ajax/libs/moment.js/2.24.0/moment.min.js"></script>
-  <link rel="stylesheet" href="https://maxcdn.bootstrapcdn.com/bootstrap/3.3.6/css/bootstrap.min.css" />
   <script type="text/javascript" src="simulations.js"></script>
   <script type="text/javascript">
     var profiles = [
@@ -25,12 +24,8 @@
       });
     }
   </script>
-  <style type="text/css" media="print">
-    .solar,.gridie
-    {
-      page-break-inside: avoid;
-    }
-  </style>
+  <link rel="stylesheet" href="https://maxcdn.bootstrapcdn.com/bootstrap/3.3.6/css/bootstrap.min.css" />
+  <link rel="stylesheet" href="simulations.css" />
 </head>
 
 <body>
@@ -47,7 +42,7 @@
     for (const dataset of datasets) {
       for (const profile of profiles) {
         var id = generate_chart(dataset, profile);
-        loadChart(id, "output/" + id + ".csv", dataset.title, dataset.class);
+        loadChart(id, "output/" + id + ".csv", dataset.title + " (" + profile + ")", dataset.class);
       }
     }
     //<div id="day1_default" style="width:100%; height:300px;" class="solar" csv="output/day1_default.csv" title="Day 1"></div>
