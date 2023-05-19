@@ -7,8 +7,6 @@ on:
       - master
   pull_request:
 
-permissions: write-all
-
 jobs:
   build:
     name: Run Spectral
