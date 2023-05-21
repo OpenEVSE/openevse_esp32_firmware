@@ -192,9 +192,9 @@ paths:
               Configure Solar divert:
                 value:
                   divert_enabled: true
-                  divert_attack_smoothing_factor: 0.4
-                  divert_decay_smoothing_factor: 0.05
-                  divert_min_charge_time: 60
+                  divert_attack_smoothing_time: 8
+                  divert_decay_smoothing_time: 300
+                  divert_min_charge_time: 20
               Set normal charging mode:
                 value:
                   charge_mode: fast

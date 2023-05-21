@@ -36,6 +36,7 @@ CPPFLAGS := \
 #  \
 #  -D ENABLE_DEBUG \
 #  -D ENABLE_DEBUG_DIVERT \
+#  -D ENABLE_DEBUG_INPUT_FILTER \
 #  -D ENABLE_DEBUG_EVSE_MAN \
 #  -D ENABLE_DEBUG_EVSE_MONITOR
 LDFLAGS := -pthread
@@ -65,6 +66,7 @@ STREAM_SPY_OBJ := \
   StreamSpy.o \
 
 OPENEVSE_WIFI_OBJ := \
+  input_filter.o \
   divert.o \
   current_shaper.o \
   evse_man.o \
@@ -135,7 +137,7 @@ clean:
 	rm -f $(TARGETS) $(OBJ)
 
 server:
-	python3 -m http.server
+	python3 server.py
 
 $(OBJ): %.o : %.cpp $(DEPS)
 	$(CPP) -c -o $@ $< $(CPPFLAGS)

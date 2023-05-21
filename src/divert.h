@@ -5,10 +5,15 @@
 #ifndef _EMONESP_DIVERT_H
 #define _EMONESP_DIVERT_H
 
+#ifndef EVSE_DIVERT_HYSTERESIS
+#define EVSE_DIVERT_HYSTERESIS 0.5 // A
+#endif
+
 #include <Arduino.h>
 #include <MicroTasks.h>
 
 #include "evse_man.h"
+#include "input_filter.h"
 
 extern int solar;
 extern int grid_ie;
@@ -54,6 +59,7 @@ class DivertTask : public MicroTasks::Task
     double _smoothed_available_current;
     time_t _min_charge_end;
     uint8_t _evse_last_state;
+    InputFilter _inputFilter;
 
   protected:
     void setup();

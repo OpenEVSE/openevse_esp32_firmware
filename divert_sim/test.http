@@ -1,0 +1,43 @@
+
+###
+
+GET http://localhost:8000/
+
+###
+# default
+
+POST http://localhost:8000/simulation
+Content-Type: application/json
+
+{
+  "divert_PV_ratio": 1.1,
+  "divert_attack_smoothing_time": 20,
+  "divert_decay_smoothing_time": 600,
+  "divert_min_charge_time": 600
+}
+
+###
+# no import
+
+POST http://localhost:8000/simulation
+Content-Type: application/json
+
+{
+  "divert_PV_ratio": 1.1,
+  "divert_attack_smoothing_time": 300,
+  "divert_decay_smoothing_time": 20,
+  "divert_min_charge_time": 600
+}
+
+###
+# no waste
+
+POST http://localhost:8000/simulation
+Content-Type: application/json
+
+{
+  "divert_PV_ratio": 0.5,
+  "divert_attack_smoothing_time": 20,
+  "divert_decay_smoothing_time": 600,
+  "divert_min_charge_time": 600
+}

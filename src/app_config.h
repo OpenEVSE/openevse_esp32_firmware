@@ -75,8 +75,8 @@ extern String time_zone;
 
 // Divert settings
 extern double divert_PV_ratio;
-extern double divert_attack_smoothing_factor;
-extern double divert_decay_smoothing_factor;
+extern uint32_t divert_attack_smoothing_time;
+extern uint32_t divert_decay_smoothing_time;
 extern uint32_t divert_min_charge_time;
 
 // Scheduler settings
@@ -84,6 +84,9 @@ extern uint32_t scheduler_start_window;
 
 //Shaper settings
 extern uint32_t current_shaper_max_pwr;
+extern uint32_t current_shaper_smoothing_time;
+extern uint32_t current_shaper_min_pause_time;
+extern uint32_t current_shaper_data_maxinterval;
 
 // 24-bits of Flags
 extern uint32_t flags;

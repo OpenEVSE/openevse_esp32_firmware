@@ -82,4 +82,7 @@ $RECYCLE.BIN/
 
 *.o
 divert_sim
-output
+
+*.csv
+test_results.xml
+!*_master.csv

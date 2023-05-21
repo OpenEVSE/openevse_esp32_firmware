@@ -204,9 +204,9 @@ void DivertTask::update_state()
     DBUGVAR(_available_current);
 
     double scale = (_available_current > _smoothed_available_current ?
-                      divert_attack_smoothing_factor :
-                      divert_decay_smoothing_factor);
-    _smoothed_available_current = (_available_current * scale) + (_smoothed_available_current * (1 - scale));
+                      divert_attack_smoothing_time :
+                      divert_decay_smoothing_time);
+    _smoothed_available_current = _inputFilter.filter(_available_current, _smoothed_available_current, scale);
     DBUGVAR(_smoothed_available_current);
 
     _charge_rate = (int)floor(_available_current);
@@ -223,13 +223,13 @@ void DivertTask::update_state()
     double trigger_current = _evse->getMinCurrent() * min(1.0, divert_PV_ratio);
 
     // the smoothed current suffices to ensure a sufficient ratio of PV power
-    if (_smoothed_available_current >= trigger_current)
+    if (_smoothed_available_current >= trigger_current + EVSE_DIVERT_HYSTERESIS)
     {
       EvseProperties props(EvseState::Active);
       props.setChargeCurrent(_charge_rate);
       _evse->claim(EvseClient_OpenEVSE_Divert, EvseManager_Priority_Divert, props);
     }
-    else
+    else if (_smoothed_available_current <= trigger_current)
     {
       if( EvseState::Active == _evse->getState(EvseClient_OpenEVSE_Divert) && 0 == min_charge_time_remaining)
       {

@@ -88,12 +88,15 @@ String ohm;
 
 // Divert settings
 double divert_PV_ratio;
-double divert_attack_smoothing_factor;
-double divert_decay_smoothing_factor;
+uint32_t divert_attack_smoothing_time;
+uint32_t divert_decay_smoothing_time;
 uint32_t divert_min_charge_time;
 
 // Current Shaper settings
 uint32_t current_shaper_max_pwr;
+uint32_t current_shaper_smoothing_time;
+uint32_t current_shaper_min_pause_time;   // in seconds
+uint32_t current_shaper_data_maxinterval; // in seconds
 
 // Tesla Client settings
 String tesla_access_token;
@@ -164,7 +167,7 @@ ConfigOpt *opts[] =
   new ConfigOptDefenition<String>(mqtt_vehicle_soc, "", "mqtt_vehicle_soc", "mc"),
   new ConfigOptDefenition<String>(mqtt_vehicle_range, "", "mqtt_vehicle_range", "mr"),
   new ConfigOptDefenition<String>(mqtt_vehicle_eta, "", "mqtt_vehicle_eta", "met"),
-  new ConfigOptDefenition<String>(mqtt_announce_topic, "openevse/announce/"+ESPAL.getShortId(), "mqtt_announce_topic", "ma"),
+  new ConfigOptDefenition<String>(mqtt_announce_topic, "openevse/announce/" + ESPAL.getShortId(), "mqtt_announce_topic", "ma"),
 
 // OCPP 1.6 Settings
   new ConfigOptDefenition<String>(ocpp_server, "", "ocpp_server", "ows"),
@@ -177,12 +180,15 @@ ConfigOpt *opts[] =
 
 // Divert settings
   new ConfigOptDefenition<double>(divert_PV_ratio, 1.1, "divert_PV_ratio", "dpr"),
-  new ConfigOptDefenition<double>(divert_attack_smoothing_factor, 0.4, "divert_attack_smoothing_factor", "da"),
-  new ConfigOptDefenition<double>(divert_decay_smoothing_factor, 0.05, "divert_decay_smoothing_factor", "dd"),
-  new ConfigOptDefenition<uint32_t>(divert_min_charge_time, (10 * 60), "divert_min_charge_time", "dt"),
+  new ConfigOptDefenition<uint32_t>(divert_attack_smoothing_time, 20, "divert_attack_smoothing_time", "das"),
+  new ConfigOptDefenition<uint32_t>(divert_decay_smoothing_time, 600, "divert_decay_smoothing_time", "dds"),
+  new ConfigOptDefenition<uint32_t>(divert_min_charge_time, 600, "divert_min_charge_time", "dt"),
 
 // Current Shaper settings
-  new ConfigOptDefenition<uint32_t>(current_shaper_max_pwr, 0 , "current_shaper_max_pwr", "smp"),
+  new ConfigOptDefenition<uint32_t>(current_shaper_max_pwr, 0, "current_shaper_max_pwr", "smp"),
+  new ConfigOptDefenition<uint32_t>(current_shaper_smoothing_time, 60, "current_shaper_smoothing_time", "sst"),
+  new ConfigOptDefenition<uint32_t>(current_shaper_min_pause_time, 300, "current_shaper_min_pause_time", "spt"),
+  new ConfigOptDefenition<uint32_t>(current_shaper_data_maxinterval, 120, "current_shaper_data_maxinterval", "sdm"),
 
 // Tesla client settings
   new ConfigOptSecret(tesla_access_token, "", "tesla_access_token", "tat"),
@@ -226,8 +232,7 @@ ConfigOpt *opts[] =
   new ConfigOptVirtualBool(flagsOpt, CONFIG_FACTORY_WRITE_LOCK, CONFIG_FACTORY_WRITE_LOCK, "factory_write_lock", "fwl"),
   new ConfigOptVirtualBool(flagsOpt, CONFIG_THREEPHASE, CONFIG_THREEPHASE, "is_threephase", "itp"),
   new ConfigOptVirtualMqttProtocol(flagsOpt, "mqtt_protocol", "mprt"),
-  new ConfigOptVirtualChargeMode(flagsOpt, "charge_mode", "chmd")
-};
+  new ConfigOptVirtualChargeMode(flagsOpt, "charge_mode", "chmd")};
 
 ConfigJson user_config(opts, sizeof(opts) / sizeof(opts[0]), EEPROM_SIZE, CONFIG_OFFSET);
 ConfigJson factory_config(opts, sizeof(opts) / sizeof(opts[0]), EEPROM_SIZE, FACTORY_OFFSET);
