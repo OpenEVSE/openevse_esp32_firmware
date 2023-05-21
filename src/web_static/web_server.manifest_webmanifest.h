@@ -1,0 +1,3 @@
+static const char CONTENT_MANIFEST_WEBMANIFEST[] PROGMEM = 
+  "{\"name\":\"OpenEVSE UI\",\"short_name\":\"OpenEVSE\",\"start_url\":\"./\",\"display\":\"standalone\",\"background_color\":\"hsl(189, 53%, 47%)\",\"lang\":\"en\",\"scope\":\"./\",\"description\":\"OpenEVSE User Interface\",\"categories\":\"car,energy,electric vehicle,ev,charger\",\"theme_color\":\"blue\",\"icons\":[{\"src\":\"pwa-maskable.png\",\"sizes\":\"96x96\",\"type\":\"image/png\",\"purpose\":\"any maskable\"},{\"src\":\"pwa-192x192.png\",\"sizes\":\"192x192\",\"type\":\"image/png\"}]}\n";
+static const char CONTENT_MANIFEST_WEBMANIFEST_ETAG[] PROGMEM = "3325a9503b2dd1d55674653ff146fdefef22386b4bb0e2c482cefb59df57910f";
