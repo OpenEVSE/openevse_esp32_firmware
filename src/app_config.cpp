@@ -31,7 +31,7 @@
 #define FACTORY_OFFSET    CONFIG_SIZE
 #define FACTORY_SIZE      1024
 
-uint32_t config_ver = 1;
+uint32_t config_ver = INITIAL_CONFIG_VERSION;
 
 // Wifi Network Strings
 String esid;

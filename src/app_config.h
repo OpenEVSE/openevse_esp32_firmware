@@ -128,6 +128,8 @@ extern uint32_t flags;
 #define CONFIG_WIZARD               (1 << 25)
 #define CONFIG_DEFAULT_STATE        (1 << 26)
 
+#define INITIAL_CONFIG_VERSION  1
+
 inline bool config_emoncms_enabled() {
   return CONFIG_SERVICE_EMONCMS == (flags & CONFIG_SERVICE_EMONCMS);
 }

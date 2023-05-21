@@ -519,9 +519,11 @@ mqtt_publish_config() {
   config_serialize(doc, true, false, true);
   mqtt_publish_json(doc, "/config");
 
-  String fulltopic = mqtt_topic + "/config_version";
-  String payload = String(config_version());
-  mqttclient.publish(fulltopic, payload, true);
+  if(config_version() == INITIAL_CONFIG_VERSION) {
+    String fulltopic = mqtt_topic + "/config_version";
+    String payload = String(config_version());
+    mqttclient.publish(fulltopic, payload, true);
+  }
 
   return true;
 }
