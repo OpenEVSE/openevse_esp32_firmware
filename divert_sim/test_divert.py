@@ -48,56 +48,56 @@ def run_test_with_dataset(dataset: str,
 def test_divert_almostperfect_default() -> None:
     """Run the divert test with the almostperfect dataset with the default values"""
     run_test_with_dataset('almostperfect', 'almostperfect_default',
-                21.08, 16.67, 16.6, 0.06, 6, 180, 20700, 28620)
+                21.08, 16.91, 16.73, 0.17, 1, 29220, 29220, 29220)
 
 def test_divert_cloudymorning_default() -> None:
     """Run the divert test with the CloudyMorning dataset with the default values"""
     run_test_with_dataset('CloudyMorning', 'CloudyMorning_default',
-                16.64, 12.28, 12.07, 0.22, 7, 300, 14520, 20340)
+                16.64, 12.93, 12.61, 0.32, 1, 21960, 21960, 21960)
 
 def test_divert_day1_default() -> None:
     """Run the divert test with the day1 dataset with the default values"""
     run_test_with_dataset('day1', 'day1_default',
-                10.12, 7.11, 6.51, 0.59, 7, 660, 8400, 12840)
+                10.12, 7.4, 6.72, 0.67, 5, 660, 9780, 13500)
 
 def test_divert_day2_default() -> None:
     """Run the divert test with the day2 dataset with the default values"""
     run_test_with_dataset('day2', 'day2_default',
-                12.35, 9.14, 9.14, 0.0, 1, 18060, 18060, 18060)
+                12.35, 9.69, 9.68, 0.01, 1, 19440, 19440, 19440)
 
 def test_divert_day3_default() -> None:
     """Run the divert test with the day3 dataset with the default values"""
     run_test_with_dataset('day3', 'day3_default',
-                5.09, 1.66, 1.22, 0.44, 7, 60, 840, 3600)
+                5.09, 1.83, 1.38, 0.45, 5, 660, 1140, 4320)
 
 def test_divert_day1_grid_ie_default() -> None:
     """Run the divert test with the day1_grid_ie dataset with the default values"""
     run_test_with_dataset('day1_grid_ie', 'day1_grid_ie_default',
-                15.13, 7.84, 7.66, 0.18, 10, 660, 6300, 17280,
+                15.13, 8.48, 8.22, 0.26, 7, 660, 7500, 18960,
                 grid_ie_col=2)
 
 def test_divert_day2_grid_ie_default() -> None:
     """Run the divert test with the day2_grid_ie dataset with the default values"""
     run_test_with_dataset('day2_grid_ie', 'day2_grid_ie_default',
-                10.85, 7.00, 5.87, 1.13, 21, 60, 2640, 14460,
+                10.85, 8.09, 6.43, 1.65, 12, 540, 7800, 17220,
                 grid_ie_col=2)
 
 def test_divert_day3_grid_ie_default() -> None:
     """Run the divert test with the day3_grid_ie dataset with the default values"""
     run_test_with_dataset('day3_grid_ie', 'day3_grid_ie_default',
-                12.13, 5.39, 5.37, 0.02, 7, 60, 4320, 11160,
+                12.13, 6.06, 6.01, 0.05, 2, 3000, 9840, 12840,
                 grid_ie_col=2)
 
 def test_divert_solar_vrms_default() -> None:
     """Run the divert test with the solar-vrms dataset with the default values"""
     run_test_with_dataset('solar-vrms', 'solar-vrms_default',
-                13.85, 11.18, 11.14, 0.04, 1, 19440, 19440, 19440,
+                13.85, 11.68, 11.62, 0.06, 1, 20640, 20640, 20640,
                 voltage_col=2)
 
 def test_divert_energy_and_power_day_2020_03_22_default() -> None:
     """Run the divert test with the Energy_and_Power_Day_2020-03-22 dataset with the default values"""
     run_test_with_dataset('Energy_and_Power_Day_2020-03-22', 'Energy_and_Power_Day_2020-03-22_default',
-                41.87, 38.16, 38.16, 0.0, 1, 27900, 27900, 27900,
+                41.87, 38.58, 38.51, 0.07, 1, 28800, 28800, 28800,
                 separator=';', is_kw=True)
 
 def test_divert_energy_and_power_day_2020_03_31_default() -> None:
@@ -123,7 +123,7 @@ def test_divert_almostperfect_noimport() -> None:
 def test_divert_cloudymorning_noimport() -> None:
     """Run the divert test with the CloudyMorning dataset with the noimport profile values"""
     run_test_with_dataset('CloudyMorning', 'CloudyMorning_noimport',
-                16.64, 10.52, 10.4, 0.12, 6, 660, 9060, 16440,
+                16.64, 10.76, 10.62, 0.14, 5, 660, 9060, 16980,
                 config='data/config-inputfilter-noimport.json')
 
 def test_divert_day1_noimport() -> None:
@@ -135,7 +135,7 @@ def test_divert_day1_noimport() -> None:
 def test_divert_day2_noimport() -> None:
     """Run the divert test with the day2 dataset with the noimport profile values"""
     run_test_with_dataset('day2', 'day2_noimport',
-                12.35, 8.85, 8.85, 0.0, 1, 17400, 17400, 17400,
+                12.35, 9.14, 9.14, 0.0, 1, 18120, 18120, 18120,
                 config='data/config-inputfilter-noimport.json')
 
 def test_divert_day3_noimport() -> None:
@@ -147,7 +147,7 @@ def test_divert_day3_noimport() -> None:
 def test_divert_day1_grid_ie_noimport() -> None:
     """Run the divert test with the day1_grid_ie dataset with the noimport profile values"""
     run_test_with_dataset('day1_grid_ie', 'day1_grid_ie_noimport',
-                15.13, 4.95, 4.91, 0.04, 9, 60, 2580, 10560,
+                15.13, 4.88, 4.86, 0.02, 7, 60, 2640, 10440,
                 grid_ie_col=2, config='data/config-inputfilter-noimport.json')
 
 def test_divert_day2_grid_ie_noimport() -> None:
@@ -159,13 +159,13 @@ def test_divert_day2_grid_ie_noimport() -> None:
 def test_divert_day3_grid_ie_noimport() -> None:
     """Run the divert test with the day3_grid_ie dataset with the noimport profile values"""
     run_test_with_dataset('day3_grid_ie', 'day3_grid_ie_noimport',
-                12.13, 3.9, 3.86, 0.04, 7, 660, 2700, 7620,
+                12.13, 3.97, 3.93, 0.04, 7, 660, 2700, 7800,
                 grid_ie_col=2, config='data/config-inputfilter-noimport.json')
 
 def test_divert_solar_vrms_noimport() -> None:
     """Run the divert test with the solar-vrms dataset with the noimport profile values"""
     run_test_with_dataset('solar-vrms', 'solar-vrms_noimport',
-                13.85, 10.94, 10.9, 0.04, 1, 18960, 18960, 18960,
+                13.85, 11.29, 11.25, 0.04, 1, 19800, 19800, 19800,
                 voltage_col=2, config='data/config-inputfilter-noimport.json')
 
 def test_divert_energy_and_power_day_2020_03_22_noimport() -> None:
@@ -191,73 +191,73 @@ def test_divert_energy_and_power_day_2020_04_01_noimport() -> None:
 def test_divert_almostperfect_nowaste() -> None:
     """Run the divert test with the almostperfect dataset with the nowaste profile values"""
     run_test_with_dataset('almostperfect', 'almostperfect_nowaste',
-                21.08, 16.67, 16.6, 0.06, 6, 180, 20700, 28620,
+                21.08, 21.32, 19.9, 1.42, 1, 37500, 37500, 37500,
                 config='data/config-inputfilter-nowaste.json')
 
 def test_divert_cloudymorning_nowaste() -> None:
     """Run the divert test with the CloudyMorning dataset with the nowaste profile values"""
     run_test_with_dataset('CloudyMorning', 'CloudyMorning_nowaste',
-                16.64, 12.28, 12.07, 0.22, 7, 300, 14520, 20340,
+                16.64, 15.44, 14.26, 1.18, 1, 26820, 26820, 26820,
                 config='data/config-inputfilter-nowaste.json')
 
 def test_divert_day1_nowaste() -> None:
     """Run the divert test with the day1 dataset with the nowaste profile values"""
     run_test_with_dataset('day1', 'day1_nowaste',
-                10.12, 7.11, 6.51, 0.59, 7, 660, 8400, 12840,
+                10.12, 11.65, 9.14, 2.51, 3, 720, 17280, 23340,
                 config='data/config-inputfilter-nowaste.json')
 
 def test_divert_day2_nowaste() -> None:
     """Run the divert test with the day2 dataset with the nowaste profile values"""
     run_test_with_dataset('day2', 'day2_nowaste',
-                12.35, 9.14, 9.14, 0.0, 1, 18060, 18060, 18060,
+                12.35, 12.45, 11.66, 0.78, 1, 24540, 24540, 24540,
                 config='data/config-inputfilter-nowaste.json')
 
 def test_divert_day3_nowaste() -> None:
     """Run the divert test with the day3 dataset with the nowaste profile values"""
     run_test_with_dataset('day3', 'day3_nowaste',
-                5.09, 1.66, 1.22, 0.44, 7, 60, 840, 3600,
+                5.09, 4.97, 3.24, 1.73, 3, 660, 8760, 12000,
                 config='data/config-inputfilter-nowaste.json')
 
 def test_divert_day1_grid_ie_nowaste() -> None:
     """Run the divert test with the day1_grid_ie dataset with the nowaste profile values"""
     run_test_with_dataset('day1_grid_ie', 'day1_grid_ie_nowaste',
-                15.13, 7.84, 7.66, 0.18, 10, 660, 6300, 17280,
+                15.13, 14.21, 13.01, 1.20, 4, 1860, 14880, 30900,
                 grid_ie_col=2, config='data/config-inputfilter-nowaste.json')
 
 def test_divert_day2_grid_ie_nowaste() -> None:
     """Run the divert test with the day2_grid_ie dataset with the nowaste profile values"""
     run_test_with_dataset('day2_grid_ie', 'day2_grid_ie_nowaste',
-                10.85, 7.00, 5.87, 1.13, 21, 60, 2640, 14460,
+                10.85, 11.53, 8.60, 2.93, 7, 540, 14700, 24600,
                 grid_ie_col=2, config='data/config-inputfilter-nowaste.json')
 
 def test_divert_day3_grid_ie_nowaste() -> None:
     """Run the divert test with the day3_grid_ie dataset with the nowaste profile values"""
     run_test_with_dataset('day3_grid_ie', 'day3_grid_ie_nowaste',
-                12.13, 5.39, 5.37, 0.02, 7, 60, 4320, 11160,
+                12.13, 8.65, 8.12, 0.53, 3, 1500, 14640, 17700,
                 grid_ie_col=2, config='data/config-inputfilter-nowaste.json')
 
 def test_divert_solar_vrms_nowaste() -> None:
     """Run the divert test with the solar-vrms dataset with the nowaste profile values"""
     run_test_with_dataset('solar-vrms', 'solar-vrms_nowaste',
-                13.85, 11.18, 11.14, 0.04, 1, 19440, 19440, 19440,
+                13.85, 14.22, 13.18, 1.04, 1, 24960, 24960, 24960,
                 voltage_col=2, config='data/config-inputfilter-nowaste.json')
 
 def test_divert_energy_and_power_day_2020_03_22_nowaste() -> None:
     """Run the divert test with the Energy_and_Power_Day_2020-03-22 dataset with the nowaste profile values"""
     run_test_with_dataset('Energy_and_Power_Day_2020-03-22', 'Energy_and_Power_Day_2020-03-22_nowaste',
-                41.87, 38.16, 38.16, 0.0, 1, 27900, 27900, 27900,
+                41.87, 41.34, 40.81, 0.53, 1, 33300, 33300, 33300,
                 separator=';', is_kw=True, config='data/config-inputfilter-nowaste.json')
 
 def test_divert_energy_and_power_day_2020_03_31_nowaste() -> None:
     """Run the divert test with the Energy_and_Power_Day_2020-03-31 dataset with the nowaste profile values"""
     run_test_with_dataset('Energy_and_Power_Day_2020-03-31', 'Energy_and_Power_Day_2020-03-31_nowaste',
-                23.91, 18.42, 18.42, 0.0, 2, 900, 20700, 21600,
+                23.91, 23.82, 22.38, 1.44, 2, 4500, 27900, 32400,
                 separator=';', is_kw=True, config='data/config-inputfilter-nowaste.json')
 
 def test_divert_energy_and_power_day_2020_04_01_nowaste() -> None:
     """Run the divert test with the Energy_and_Power_Day_2020-04-01 dataset with the nowaste profile values"""
     run_test_with_dataset('Energy_and_Power_Day_2020-04-01', 'Energy_and_Power_Day_2020-04-01_nowaste',
-                38.89, 36.42, 36.42, 0.0, 1, 26100, 26100, 26100,
+                38.89, 38.16, 37.61, 0.55, 1, 28800, 28800, 28800,
                 separator=';', is_kw=True, config='data/config-inputfilter-nowaste.json')
 
 if __name__ == '__main__':
