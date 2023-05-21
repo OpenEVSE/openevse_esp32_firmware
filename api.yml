@@ -539,9 +539,9 @@ paths:
               schema:
                 type: object
                 properties:
-                device:
-                  type: string
-                  description: gateway|evse
+                  device:
+                    type: string
+                    description: gateway|evse
       responses:
         200:
         content:
