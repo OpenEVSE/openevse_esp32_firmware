@@ -60,6 +60,9 @@ class EvseMonitor : public MicroTasks::Task
         bool isVehicleConnected() {
           return OPENEVSE_VFLAG_EV_CONNECTED == (getFlags() & OPENEVSE_VFLAG_EV_CONNECTED);
         }
+        bool isBootLocked() {
+          return OPENEVSE_VFLAG_BOOT_LOCK == (getFlags() & OPENEVSE_VFLAG_BOOT_LOCK);
+        }
     };
 
     class DataReady : public MicroTasks::Event
@@ -188,11 +191,11 @@ class EvseMonitor : public MicroTasks::Task
     ~EvseMonitor();
 
     bool begin(RapiSender &sender);
-
+    void unlock();
     void enable();
     void sleep();
     void disable();
-
+    void restart();
     void setMaxConfiguredCurrent(long amps);
 
     void setPilot(long amps, bool force=false, std::function<void(int ret)> callback = NULL);
@@ -231,6 +234,9 @@ class EvseMonitor : public MicroTasks::Task
     }
     bool isVehicleConnected() {
       return _state.isVehicleConnected();
+    }
+    bool isBootLocked() {
+      return _state.isBootLocked();
     }
     double getAmps() {
       return _amp;

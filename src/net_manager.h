@@ -102,7 +102,7 @@ class NetManagerTask : public MicroTasks::Task
     bool _dnsServerStarted;
     const byte _dnsPort;
 
-    // Access Point SSID, password & IP address. SSID will be softAP_ssid + chipID to make SSID unique
+    // Access point IP address. SSID will be softAP_ssid + chipID to make SSID unique
     const char *_softAP_ssid;
     const char *_softAP_password;
     IPAddress _apIP;
@@ -173,7 +173,7 @@ class NetManagerTask : public MicroTasks::Task
     NetManagerTask(LcdTask &lcd, LedManagerTask &led, TimeManager &time);
 
     void begin();
-    
+
     void wifiScan();
 
     void wifiStart();
@@ -184,7 +184,7 @@ class NetManagerTask : public MicroTasks::Task
     void wifiTurnOnAp();
 
     void wifiScanNetworks(WiFiScanCompleteCallback callback);
-  
+
     bool isConnected();
     bool isWifiClientConnected();
     bool isWiredConnected();

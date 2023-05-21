@@ -40,9 +40,9 @@ Claim & override properties can be set independantly. Sending json with only som
 To remove a selected claim/override property, just send "clear" as property parameter  ( i.e. `<base-topic>/claim/set {"charge_current": "clear"}` )
 
 Scheduler data:
-`<base-topic>/scheduler/`    				: get scheduler data ([json data]  
-`<base-topic>/scheduler/set <json data>`	: set/update schedules ( data as refered from API: https://openevse.stoplight.io/docs/openevse-wifi-v4/e87e6f3f90787-batch-update-schedule )  
-`<base-topic>/scheduler/clear <id>          :`remove related event  
+`<base-topic>/schedule/`    				: get scheduler data ([json data]  
+`<base-topic>/schedule/set <json data>`	: set/update schedules ( data as refered from API: https://openevse.stoplight.io/docs/openevse-wifi-v4/e87e6f3f90787-batch-update-schedule )  
+`<base-topic>/schedule/clear <id>          :`remove related event  
 
 Limit:
 `<base-topic>/limit/`    				: get limit data ([json data]  
@@ -51,9 +51,9 @@ Limit:
 
 Main settings:
 
-`<base-topic>/divertmode/set [1 | 2]`       : enable (1)/ disable (2) divert mode  
+`<base-topic>/divertmode/set [1 | 2]`   : enable (1)/ disable (2) divert mode  
 `<base-topic>/shaper/set [0 | 1]`       : temporary enable (1)/ disable (0) current shaper ( doesn't survive reboot )  
-`<base-topic>/restart`                  : restarts the gateway
+`<base-topic>/restart {"device": "gateway|evse"}` : restart the gateway or openevse module
 
 
 

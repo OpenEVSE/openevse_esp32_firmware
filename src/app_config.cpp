@@ -34,6 +34,8 @@
 // Wifi Network Strings
 String esid;
 String epass;
+String ap_ssid;
+String ap_pass;
 
 // Language
 String lang;
@@ -87,6 +89,7 @@ uint32_t flags;
 String ohm;
 
 // Divert settings
+int8_t divert_type;
 double divert_PV_ratio;
 uint32_t divert_attack_smoothing_time;
 uint32_t divert_decay_smoothing_time;
@@ -105,6 +108,9 @@ uint64_t tesla_created_at;
 uint64_t tesla_expires_in;
 
 String tesla_vehicle_id;
+
+// Vehicle
+uint8_t vehicle_data_src;
 
 #if RGB_LED
 uint8_t led_brightness;
@@ -129,6 +135,8 @@ ConfigOpt *opts[] =
 // Wifi Network Strings
   new ConfigOptDefenition<String>(esid, "", "ssid", "ws"),
   new ConfigOptSecret(epass, "", "pass", "wp"),
+  new ConfigOptDefenition<String>(ap_ssid, "", "ap_ssid", "as"),
+  new ConfigOptSecret(ap_pass, "", "ap_pass", "ap"),
 
 // Language String
   new ConfigOptDefenition<String>(lang, "", "lang", "lan"),
@@ -179,6 +187,7 @@ ConfigOpt *opts[] =
   new ConfigOptDefenition<String>(ohm, "", "ohm", "o"),
 
 // Divert settings
+  new ConfigOptDefenition<int8_t>(divert_type, -1, "divert_type", "dm"),
   new ConfigOptDefenition<double>(divert_PV_ratio, 1.1, "divert_PV_ratio", "dpr"),
   new ConfigOptDefenition<uint32_t>(divert_attack_smoothing_time, 20, "divert_attack_smoothing_time", "das"),
   new ConfigOptDefenition<uint32_t>(divert_decay_smoothing_time, 600, "divert_decay_smoothing_time", "dds"),
@@ -189,6 +198,9 @@ ConfigOpt *opts[] =
   new ConfigOptDefenition<uint32_t>(current_shaper_smoothing_time, 60, "current_shaper_smoothing_time", "sst"),
   new ConfigOptDefenition<uint32_t>(current_shaper_min_pause_time, 300, "current_shaper_min_pause_time", "spt"),
   new ConfigOptDefenition<uint32_t>(current_shaper_data_maxinterval, 120, "current_shaper_data_maxinterval", "sdm"),
+
+// Vehicle settings
+  new ConfigOptDefenition<uint8_t>(vehicle_data_src, 0, "vehicle_data_src", "vds"),
 
 // Tesla client settings
   new ConfigOptSecret(tesla_access_token, "", "tesla_access_token", "tat"),
@@ -231,6 +243,8 @@ ConfigOpt *opts[] =
   new ConfigOptVirtualBool(flagsOpt, CONFIG_RFID, CONFIG_RFID, "rfid_enabled", "rf"),
   new ConfigOptVirtualBool(flagsOpt, CONFIG_FACTORY_WRITE_LOCK, CONFIG_FACTORY_WRITE_LOCK, "factory_write_lock", "fwl"),
   new ConfigOptVirtualBool(flagsOpt, CONFIG_THREEPHASE, CONFIG_THREEPHASE, "is_threephase", "itp"),
+  new ConfigOptVirtualBool(flagsOpt, CONFIG_WIZARD, CONFIG_WIZARD, "wizard_passed", "wzp"),
+  new ConfigOptVirtualBool(flagsOpt, CONFIG_DEFAULT_STATE, CONFIG_DEFAULT_STATE, "default_state", "dfs"),
   new ConfigOptVirtualMqttProtocol(flagsOpt, "mqtt_protocol", "mprt"),
   new ConfigOptVirtualChargeMode(flagsOpt, "charge_mode", "chmd")};
 

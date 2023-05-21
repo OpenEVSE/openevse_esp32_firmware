@@ -15,6 +15,12 @@
 #include "evse_man.h"
 #include "input_filter.h"
 
+enum divert_type {
+  DIVERT_TYPE_UNSET = -1,
+  DIVERT_TYPE_SOLAR = 0,
+  DIVERT_TYPE_GRID = 1
+};
+
 extern int solar;
 extern int grid_ie;
 
@@ -111,6 +117,7 @@ class DivertTask : public MicroTasks::Task
     time_t getMinChargeTimeRemaining();
 
     bool isActive();
+    void initDivertType();
 };
 
 extern class DivertTask divert;

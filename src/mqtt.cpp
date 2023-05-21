@@ -95,7 +95,7 @@ void mqttmsg_callback(MongooseString topic, MongooseString payload) {
     DBUGF("voltage:%.1f", volts);
     evse.setVoltage(volts);
   }
-  else if (topic_string == mqtt_vehicle_soc)
+  else if (topic_string == mqtt_vehicle_soc && vehicle_data_src == VEHICLE_DATA_SRC_MQTT)
   {
     int vehicle_soc = payload_str.toInt();
     DBUGF("vehicle_soc:%d%%", vehicle_soc);
@@ -106,7 +106,7 @@ void mqttmsg_callback(MongooseString topic, MongooseString payload) {
     event["vehicle_state_update"] = 0;
     event_send(event);
   }
-  else if (topic_string == mqtt_vehicle_range)
+  else if (topic_string == mqtt_vehicle_range && vehicle_data_src == VEHICLE_DATA_SRC_MQTT)
   {
     int vehicle_range = payload_str.toInt();
     DBUGF("vehicle_range:%dKM", vehicle_range);
@@ -117,7 +117,7 @@ void mqttmsg_callback(MongooseString topic, MongooseString payload) {
     event["vehicle_state_update"] = 0;
     event_send(event);
   }
-  else if (topic_string == mqtt_vehicle_eta)
+  else if (topic_string == mqtt_vehicle_eta && vehicle_data_src == VEHICLE_DATA_SRC_MQTT)
   {
     int vehicle_eta = payload_str.toInt();
     DBUGF("vehicle_eta:%d", vehicle_eta);
@@ -196,7 +196,7 @@ void mqttmsg_callback(MongooseString topic, MongooseString payload) {
 
   // Restart
   else if (topic_string == mqtt_topic + "/restart") {
-    restart_system();
+    mqtt_restart_device(payload_str);
   }
 
   else
@@ -315,11 +315,13 @@ mqtt_connect()
     // subscribe to solar PV / grid_ie MQTT feeds
     if(config_divert_enabled())
     {
-      if (mqtt_solar != "") {
+      if (divert_type == DIVERT_TYPE_SOLAR && mqtt_solar != "")
+      {
         mqttclient.subscribe(mqtt_solar);
         yield();
       }
-      if (mqtt_grid_ie != "") {
+      if (divert_type == DIVERT_TYPE_GRID && mqtt_grid_ie != "")
+      {
         mqttclient.subscribe(mqtt_grid_ie);
         yield();
       }
@@ -536,6 +538,24 @@ mqtt_publish_json(JsonDocument &data, const char* topic) {
   mqttclient.publish(fulltopic,doc, true); // claims are always published as retained as they are not updated regularly
   Profile_End(mqtt_publish_json, 5);
 
+}
+
+void
+mqtt_restart_device(String payload_str) {
+  const size_t capacity = JSON_OBJECT_SIZE(1) + 16;
+  DynamicJsonDocument doc(capacity);
+  DeserializationError error = deserializeJson(doc, payload_str);
+  if(!error)
+  {
+    if(doc.containsKey("device")){
+      if (strcmp(doc["device"], "gateway") == 0 ) {
+        restart_system();
+      }
+      else if (strcmp(doc["device"], "evse") == 0) {
+        evse.restartEvse();
+      }
+    }
+  }
 }
 // -------------------------------------------------------------------
 // MQTT state management

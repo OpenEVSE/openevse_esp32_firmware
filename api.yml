@@ -191,6 +191,7 @@ paths:
                   emoncms_fingerprint: ''
               Configure Solar divert:
                 value:
+                  divert_type: 0
                   divert_enabled: true
                   divert_attack_smoothing_time: 8
                   divert_decay_smoothing_time: 300
@@ -529,6 +530,33 @@ paths:
         name: index
         in: path
         required: true
+  /restart:
+    post:
+      summary: restart gateway or evse modules
+      description: restart wifi gateway or openevse module
+      operationId: restart
+      tags:
+        - Restart
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                device:
+                  type: string
+                  description: gateway|evse
+      responses:
+        '200':
+          description: Restart successfull
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  msg:
+                    type: string
+                    description: restart gateway|evse
   /limit:
     get:
       summary: Get charge limit
@@ -930,3 +958,4 @@ tags:
   - name: Limit
   - name: Energy Meter
   - name: Time
+  - name: Restart

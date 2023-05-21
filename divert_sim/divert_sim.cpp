@@ -143,9 +143,8 @@ int main(int argc, char** argv)
 
   kw = result.count("kw") > 0;
 
-  mqtt_solar = grid_ie_col >= 0 ? "" : "yes";
-  mqtt_grid_ie = grid_ie_col >= 0 ? "yes" : "";
-
+  divert_type = grid_ie_col >= 0 ? 1 : 0;
+  
   if(voltage_arg >= 0) {
     if(voltage_arg < 50) {
       voltage_col = voltage_arg;

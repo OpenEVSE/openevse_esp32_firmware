@@ -469,19 +469,19 @@ void handleStatusPost(MongooseHttpServerRequest *request, MongooseHttpServerResp
       }
       send_event = false; // Divert sends the event so no need to send here
     }
-    if(doc.containsKey("battery_level")) {
+    if(doc.containsKey("battery_level") && vehicle_data_src == VEHICLE_DATA_SRC_HTTP) {
       double vehicle_soc = doc["battery_level"];
       DBUGF("vehicle_soc:%d%%", vehicle_soc);
       evse.setVehicleStateOfCharge(vehicle_soc);
       doc["vehicle_state_update"] = 0;
     }
-    if(doc.containsKey("battery_range")) {
+    if(doc.containsKey("battery_range") && vehicle_data_src == VEHICLE_DATA_SRC_HTTP) {
       double vehicle_range = doc["battery_range"];
       DBUGF("vehicle_range:%dKM", vehicle_range);
       evse.setVehicleRange(vehicle_range);
       doc["vehicle_state_update"] = 0;
     }
-    if(doc.containsKey("time_to_full_charge")){
+    if(doc.containsKey("time_to_full_charge") && vehicle_data_src == VEHICLE_DATA_SRC_HTTP){
       double vehicle_eta = doc["time_to_full_charge"];
       DBUGF("vehicle_eta:%d", vehicle_eta);
       evse.setVehicleEta(vehicle_eta);
@@ -875,7 +875,7 @@ handleRst(MongooseHttpServerRequest *request) {
 
 
 // -------------------------------------------------------------------
-// Restart (Reboot)
+// Restart (Reboot gateway or evse)
 // url: /restart
 // -------------------------------------------------------------------
 void
@@ -885,13 +885,55 @@ handleRestart(MongooseHttpServerRequest *request) {
     return;
   }
 
-  response->setCode(200);
-  response->print("1");
-  request->send(response);
-
-  restart_system();
+  if (HTTP_GET == request->method()) {
+    response->setCode(200);
+    response->print("1");
+    request->send(response);
+    restart_system();
+  }
+  else if (HTTP_POST == request->method()) {
+    String body = request->body().toString();
+    // Deserialize the JSON document
+    const size_t capacity = JSON_OBJECT_SIZE(1) + 16;
+    DynamicJsonDocument doc(capacity);
+    DeserializationError error = deserializeJson(doc, body);
+    if(!error)
+    {
+      if(doc.containsKey("device")){
+        if (strcmp(doc["device"], "gateway") == 0 ) {
+          response->setCode(200);
+          response->print("{\"msg\":\"restart gateway\"}");
+          request->send(response);
+          restart_system();
+        }
+        else if (strcmp(doc["device"], "evse") == 0) {
+          response->setCode(200);
+          response->print("{\"msg\":\"restart evse\"}");
+          request->send(response);
+          evse.restartEvse();
+        }
+        else {
+          response->setCode(404);
+          response->print("{\"msg\":\"unknown device\"}");
+          request->send(response);
+        }
+      }
+      else {
+        response->setCode(405);
+        response->print("{\"msg\":\"wrong payload\"}");
+        request->send(response);
+      }
+    } else {
+      response->setCode(405);
+      response->print("{\"msg\":\"Couldn't parse json\"}");
+      request->send(response);
+    }
+  } else {
+    response->setCode(405);
+    response->print("{\"msg\":\"Method not allowed\"}");
+    request->send(response);
+  }
 }
-
 
 // -------------------------------------------------------------------
 // Emoncms describe end point,

@@ -297,6 +297,9 @@ class EvseManager : public MicroTasks::Task
     bool isVehicleConnected() {
       return _monitor.isVehicleConnected();
     }
+    bool isBootLocked() {
+      return _monitor.isBootLocked();
+    }
     bool isError() {
       return _monitor.isError();
     }
@@ -449,6 +452,9 @@ class EvseManager : public MicroTasks::Task
     void enableTemperatureCheck(bool enabled, std::function<void(int ret)> callback = NULL) {
       _monitor.enableTemperatureCheck(enabled, callback);
     }
+    void restartEvse() {
+      _monitor.restart();
+    }
 
     // Get/set the vehicle state
     int getVehicleStateOfCharge() {
@@ -481,6 +487,12 @@ class EvseManager : public MicroTasks::Task
       return _sleepForDisable;
     }
     void setSleepForDisable(bool sleepForDisable);
+
+    // unlock openevse fw compiled with BOOTLOCK
+    void unlock();
+
+    // deserialize restart payloads
+    bool restart(String payload);
 
     // Temp until everything uses EvseManager
     RapiSender &getSender() {

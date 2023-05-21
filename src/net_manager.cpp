@@ -96,9 +96,16 @@ void NetManagerTask::wifiStartAccessPoint()
   WiFi.softAPConfig(_apIP, _apIP, _apNetMask);
   // set country code to "world safe mode"
   esp_wifi_set_country_code("01", true);
-  // Create Unique SSID e.g "emonESP_XXXXXX"
-  String softAP_ssid_ID =
-    String(_softAP_ssid) + "_" + ESPAL.getShortId();
+
+  String softAP_ssid;
+
+  if (!ap_ssid) {
+     // Create Unique SSID e.g "emonESP_XXXXXX"
+    softAP_ssid = String(_softAP_ssid) + "_" + ESPAL.getShortId();
+  }
+  else {
+    softAP_ssid = ap_pass;
+  }
 
   // Use the existing channel if set
   int channel = WiFi.channel();
@@ -108,7 +115,7 @@ void NetManagerTask::wifiStartAccessPoint()
     channel = (random(3) * 5) + 1;
   }
   DBUGVAR(channel);
-  WiFi.softAP(softAP_ssid_ID.c_str(), _softAP_password, channel);
+  WiFi.softAP(softAP_ssid.c_str(), ap_pass?ap_pass.c_str():_softAP_password, channel);
 
   // Setup the DNS server redirecting all the domains to the apIP
   _dnsServer.setErrorReplyCode(DNSReplyCode::NoError);
@@ -124,7 +131,7 @@ void NetManagerTask::wifiStartAccessPoint()
   DEBUG.printf("AP IP Address: %s\n", tmpStr);
   DEBUG.printf("Channel: %d\n", WiFi.channel());
 
-  _lcd.display(softAP_ssid_ID, 0, 0, 0, LCD_CLEAR_LINE);
+  _lcd.display(softAP_ssid, 0, 0, 0, LCD_CLEAR_LINE);
   _lcd.display(String(F("Pass: ")) + _softAP_password, 0, 1, 15 * 1000, LCD_CLEAR_LINE);
 
   _led.setWifiMode(false, false);

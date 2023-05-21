@@ -253,19 +253,6 @@ void EvseMonitor::evseBoot(const char *firmware)
   _openevse.heartbeatEnable(EVSE_HEATBEAT_INTERVAL, EVSE_HEARTBEAT_CURRENT, [this](int ret, int interval, int current, int triggered) {
     _heartbeat = RAPI_RESPONSE_OK == ret;
   });
-
-  // Unlock OpenEVSE if compiled with BOOTLOCK
-  _openevse.clearBootLock([this](int ret) 
-  {
-    if(RAPI_RESPONSE_OK == ret)
-    {
-      DBUGF("Unlocked OpenEVSE");
-    }
-    else {
-      DBUGF("Unlock OpenEVSE failed");
-    }
-
-  });
 }
 
 void EvseMonitor::updateEvseState(uint8_t evse_state, uint8_t pilot_state, uint32_t vflags)
@@ -360,7 +347,13 @@ unsigned long EvseMonitor::loop(MicroTasks::WakeReason reason)
   if (isCharging()){
     verifyPilot();
   }
-    
+
+   // unlock openevse fw compiled with BOOTLOCK
+  if (isBootLocked() && OPENEVSE_STATE_STARTING != getEvseState()) {
+    unlock();
+    DBUGLN("Unlocked BOOTLOCK");
+  }
+
   _count ++;
 
   return EVSE_MONITOR_POLL_TIME;
@@ -372,6 +365,7 @@ bool EvseMonitor::begin(RapiSender &sender)
   {
     if(connected)
     {
+      _energyMeter.begin(this);
       _openevse.onState([this](uint8_t evse_state, uint8_t pilot_state, uint32_t current_capacity, uint32_t vflags)
       {
         DBUGF("evse_state = %02x, pilot_state = %02x, current_capacity = %d, vflags = %08x", evse_state, pilot_state, current_capacity, vflags);
@@ -383,7 +377,7 @@ bool EvseMonitor::begin(RapiSender &sender)
       evseBoot(firmware);
 
       MicroTask.startTask(this);
-      _energyMeter.begin(this);
+      //_energyMeter.begin(this);
     } else {
       DEBUG_PORT.println("OpenEVSE not responding or not connected");
     }
@@ -422,6 +416,20 @@ EvseMonitor::ServiceLevel EvseMonitor::getActualServiceLevel()
     ServiceLevel::L1;
 }
 
+void EvseMonitor::unlock() {
+  // Unlock OpenEVSE if compiled with BOOTLOCK
+  _openevse.clearBootLock([this](int ret)
+  {
+    if(RAPI_RESPONSE_OK == ret)
+    {
+      DBUGF("Unlocked OpenEVSE");
+    }
+    else {
+      DBUGF("Unlock OpenEVSE failed");
+    }
+
+  });
+}
 void EvseMonitor::enable()
 {
   OpenEVSE.enable([this](int ret)
@@ -453,6 +461,20 @@ void EvseMonitor::disable()
     DBUGF("EVSE: disable - complete %d", ret);
     if(RAPI_RESPONSE_OK == ret) {
       getStatusFromEvse();
+    }
+  });
+}
+
+void EvseMonitor::restart()
+{
+  OpenEVSE.restart([this](int ret)
+  {
+    DBUGF("EVSE: reboot - complete %d", ret);
+    if(RAPI_RESPONSE_OK == ret) {
+      DBUGLN("Reboot response ok");
+    }
+    else {
+      DBUGVAR(ret);
     }
   });
 }

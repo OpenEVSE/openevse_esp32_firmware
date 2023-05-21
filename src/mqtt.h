@@ -42,6 +42,7 @@ extern void mqtt_set_schedule(String schedule);
 extern void mqtt_clear_schedule(uint32_t event);
 extern void mqtt_publish_limit();
 extern void mqtt_set_limit(LimitProperties &limitProps);
+extern void mqtt_restart_device(String payload_str);
 
 // -------------------------------------------------------------------
 // Restart the MQTT connection

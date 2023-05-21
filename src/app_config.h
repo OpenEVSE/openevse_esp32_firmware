@@ -3,6 +3,7 @@
 
 #include <Arduino.h>
 #include <ArduinoJson.h>
+#include "evse_state.h"
 
 #ifndef ENABLE_CONFIG_V1_IMPORT
 #define ENABLE_CONFIG_V1_IMPORT 1
@@ -23,7 +24,8 @@
 // Wifi Network Strings
 extern String esid;
 extern String epass;
-
+extern String ap_ssid;
+extern String ap_pass;
 // Language
 extern String lang;
 
@@ -74,6 +76,7 @@ extern String rfid_storage;
 extern String time_zone;
 
 // Divert settings
+extern int8_t divert_type;
 extern double divert_PV_ratio;
 extern uint32_t divert_attack_smoothing_time;
 extern uint32_t divert_decay_smoothing_time;
@@ -87,6 +90,16 @@ extern uint32_t current_shaper_max_pwr;
 extern uint32_t current_shaper_smoothing_time;
 extern uint32_t current_shaper_min_pause_time;
 extern uint32_t current_shaper_data_maxinterval;
+
+// Vehicle
+extern uint8_t vehicle_data_src;
+
+enum vehicle_data_src {
+  VEHICLE_DATA_SRC_NONE,
+  VEHICLE_DATA_SRC_TESLA,
+  VEHICLE_DATA_SRC_MQTT,
+  VEHICLE_DATA_SRC_HTTP
+};
 
 // 24-bits of Flags
 extern uint32_t flags;
@@ -112,7 +125,8 @@ extern uint32_t flags;
 #define CONFIG_OCPP_AUTO_AUTH       (1 << 22)
 #define CONFIG_OCPP_OFFLINE_AUTH    (1 << 23)
 #define CONFIG_THREEPHASE           (1 << 24)
-
+#define CONFIG_WIZARD               (1 << 25)
+#define CONFIG_DEFAULT_STATE        (1 << 26)
 
 inline bool config_emoncms_enabled() {
   return CONFIG_SERVICE_EMONCMS == (flags & CONFIG_SERVICE_EMONCMS);
@@ -162,10 +176,6 @@ inline bool config_ocpp_offline_authorization() {
   return CONFIG_OCPP_OFFLINE_AUTH == (flags & CONFIG_OCPP_OFFLINE_AUTH);
 }
 
-inline bool config_tesla_enabled() {
-  return CONFIG_SERVICE_TESLA == (flags & CONFIG_SERVICE_TESLA);
-}
-
 inline bool config_divert_enabled() {
   return CONFIG_SERVICE_DIVERT == (flags & CONFIG_SERVICE_DIVERT);
 }
@@ -196,6 +206,16 @@ inline bool config_factory_write_lock() {
 
 inline bool config_threephase_enabled() {
   return CONFIG_THREEPHASE == (flags & CONFIG_THREEPHASE);
+}
+
+inline bool config_wizard_passed()
+{
+  return CONFIG_WIZARD == (flags & CONFIG_WIZARD);
+}
+
+inline EvseState config_default_state()
+{
+  return CONFIG_DEFAULT_STATE == (flags & CONFIG_DEFAULT_STATE) ? EvseState::Active : EvseState::Disabled;
 }
 
 // Ohm Connect Settings

@@ -97,7 +97,6 @@ unsigned long CurrentShaperTask::loop(MicroTasks::WakeReason reason) {
 		}
 	}
 
-
 	return EVSE_SHAPER_LOOP_TIME;
 }
 
@@ -137,7 +136,7 @@ void CurrentShaperTask::setLivePwr(int live_pwr) {
 	shapeCurrent();
 }
 
-// temporary change Current Shaper state without changing configuration 
+// temporary change Current Shaper state without changing configuration
 void CurrentShaperTask::setState(bool state) {
 	_enabled = state;
 	if (!_enabled) {
@@ -171,7 +170,7 @@ void CurrentShaperTask::shapeCurrent() {
 	}
 
 	if (config_divert_enabled() == true) {
-		if (mqtt_solar != "") {
+		if ( divert_type == DIVERT_TYPE_SOLAR ) {
 			max_pwr += solar;
 		}
 	}
@@ -185,6 +184,8 @@ void CurrentShaperTask::shapeCurrent() {
 	else {
 		_max_cur = ((max_pwr - livepwr) / evse.getVoltage() / 3.0) + evse.getAmps();
 	}
+
+
 
 	_changed = true;
 }
