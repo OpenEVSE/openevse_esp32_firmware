@@ -533,21 +533,26 @@ paths:
   /restart:
     post:
       summary: restart gateway or evse modules
-        requestBody:
-          content:
-            application/json:
-              schema:
-                type: object
-                properties:
-                  device:
-                    type: string
-                    description: gateway|evse
-      responses:
-        200:
+      description: restart wifi gateway or openevse module
+      operationId: restart
+      tags:
+        - Restart
+      requestBody:
         content:
           application/json:
             schema:
               type: object
+              properties:
+                device:
+                  type: string
+                  description: gateway|evse
+      responses:
+        '200':
+          description: Restart successfull
+          content:
+            application/json:
+              schema:
+                type: object
                 properties:
                   msg:
                     type: string
@@ -953,3 +958,4 @@ tags:
   - name: Limit
   - name: Energy Meter
   - name: Time
+  - name: Restart
