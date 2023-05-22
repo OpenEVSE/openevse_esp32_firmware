@@ -1,5 +1,6 @@
 CPP      := g++
 
+OBJ_DIR := build
 
 EPOXY_DUINO_DIR := ../../EpoxyDuino
 EPOXY_CORE_PATH ?= $(EPOXY_DUINO_DIR)/cores/epoxy
@@ -10,7 +11,7 @@ EPOXY_LIB_DIR ?= $(EPOXY_DUINO_DIR)/libraries
 ARDUINO_LIB_DIR := ../..
 
 CPPFLAGS := \
-  -I . \
+  -I include \
   -I ../include \
   -I ../src \
   -I $(EPOXY_CORE_PATH) \
@@ -43,8 +44,6 @@ LDFLAGS := -pthread
 
 TARGETS:= divert_sim
 MAINS  := $(addsuffix .o, $(TARGETS) )
-#OBJ    := kbd.o command.o display.o $(MAINS)
-#DEPS   := defs.h command.h
 
 MICRO_TASKS_OBJ := \
   MicroTasks.o \
@@ -114,9 +113,9 @@ OBJ    := \
   $(EPOXY_EEPROM_OBJ) \
   $(ARDUINO_OBJ) \
   $(MAINS)
-DEPS   :=
+
 VPATH 	:= \
-  . \
+  src \
   ../src \
   $(EPOXY_CORE_PATH) \
   $(EPOXY_CORE_PATH)/epoxy_test/Injection \
@@ -134,13 +133,17 @@ VPATH 	:= \
 all: $(TARGETS)
 
 clean:
-	rm -f $(TARGETS) $(OBJ)
+	rm -fr $(TARGETS) $(OBJ_DIR)
 
 server:
 	python3 server.py
 
-$(OBJ): %.o : %.cpp $(DEPS)
+$(OBJ_DIR):
+	mkdir -p $(OBJ_DIR)
+
+#$(OBJ): %.o : %.cpp $(DEPS)
+$(OBJ_DIR)/%.o: %.cpp $(OBJ_DIR)
 	$(CPP) -c -o $@ $< $(CPPFLAGS)
 
-$(TARGETS): % : $(filter-out $(MAINS), $(OBJ)) %.o
+$(TARGETS): $(addprefix $(OBJ_DIR)/, $(MAINS) $(OBJ))
 	$(CPP) -o $@ $(LIBS) $^ $(CPPFLAGS) $(LDFLAGS)
