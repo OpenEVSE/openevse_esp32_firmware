@@ -35,6 +35,7 @@ uint8_t claimsVersion = 0;
 uint8_t overrideVersion = 0;
 uint8_t scheduleVersion = 0;
 uint8_t limitVersion = 0;
+uint32_t configVersion = 0;
 
 String lastWill = "";
 
@@ -300,6 +301,7 @@ mqtt_connect()
     event_send(doc);
 
     // Publish MQTT override/claim
+    mqtt_publish_config();
     mqtt_publish_override();
     mqtt_publish_claim();
     mqtt_publish_schedule();
@@ -507,6 +509,25 @@ mqtt_publish_schedule() {
   }
 }
 
+bool
+mqtt_publish_config() {
+  if(!config_mqtt_enabled() || !mqttclient.connected() || evse.getEvseState() == OPENEVSE_STATE_STARTING) {
+    return false;
+  }
+  const size_t capacity = JSON_OBJECT_SIZE(128) + 1024;
+  DynamicJsonDocument doc(capacity);
+  config_serialize(doc, true, false, true);
+  mqtt_publish_json(doc, "/config");
+
+  if(config_version() == INITIAL_CONFIG_VERSION) {
+    String fulltopic = mqtt_topic + "/config_version";
+    String payload = String(config_version());
+    mqttclient.publish(fulltopic, payload, true);
+  }
+
+  return true;
+}
+
 void
 mqtt_set_limit(LimitProperties &limitProps) {
   Profile_Start(mqtt_set_limit);
@@ -613,6 +634,11 @@ mqtt_loop() {
       mqtt_publish_limit();
       DBUGF("Limit has changed, publishing to MQTT");
       limitVersion = limit.getVersion();
+    }
+
+    if(configVersion != config_version() && mqtt_publish_config()) {
+      DBUGF("Config has changed, publishing to MQTT");
+      configVersion = config_version();
     }
   }
   Profile_End(mqtt_loop, 5);

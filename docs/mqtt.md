@@ -55,6 +55,10 @@ Main settings:
 `<base-topic>/shaper/set [0 | 1]`       : temporary enable (1)/ disable (0) current shaper ( doesn't survive reboot )  
 `<base-topic>/restart {"device": "gateway|evse"}` : restart the gateway or openevse module
 
+Config:
+
+`<base-topic>/config_version`           : a volatile counter incremented for each config change  
+`<base-topic>/config`                   : expose the configuration as a json object
 
 
 MQTT setup is pre-populated with OpenEnergyMonitor [emonPi default MQTT server credentials](https://guide.openenergymonitor.org/technical/credentials/#mqtt).

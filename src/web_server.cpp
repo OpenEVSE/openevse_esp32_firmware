@@ -78,8 +78,6 @@ void handleUpdateClose(MongooseHttpServerRequest *request);
 void handleTime(MongooseHttpServerRequest *request);
 void handleTimePost(MongooseHttpServerRequest *request, MongooseHttpServerResponseStream *response);
 
-extern uint32_t config_version;
-
 void dumpRequest(MongooseHttpServerRequest *request)
 {
 #ifdef ENABLE_DEBUG_WEB_REQUEST
@@ -253,7 +251,7 @@ void buildStatus(DynamicJsonDocument &doc) {
 
   doc["ota_update"] = (int)Update.isRunning();
 
-  doc["config_version"] = config_version;
+  doc["config_version"] = config_version();
   doc["claims_version"] = evse.getClaimsVersion();
   doc["override_version"] = manual.getVersion();
   doc["schedule_version"] = scheduler.getVersion();
