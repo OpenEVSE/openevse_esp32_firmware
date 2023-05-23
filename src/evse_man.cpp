@@ -215,14 +215,6 @@ bool EvseManager::evaluateClaims(EvseProperties &properties)
         maxCurrentPriority = claim.getPriority();
         _max_current_client = claim.getClient();
       }
-
-      if(claim.getClient() == EvseClient_OpenEVSE_Manual) {
-        const size_t capacity = JSON_OBJECT_SIZE(40) + 1024;
-        // update manual_override event to socket & mqtt
-        DynamicJsonDocument event(capacity);
-        event["manual_override"] = 1;
-        event_send(event);
-      }
     }
   }
 
@@ -446,13 +438,6 @@ bool EvseManager::release(EvseClient client)
 
   if(findClaim(client, &claim))
   {
-    // if claim is manual override, publish data to socket & mqtt
-    if (claim->getClient() == EvseClient_OpenEVSE_Manual) {
-      const size_t capacity = JSON_OBJECT_SIZE(40) + 1024;
-      DynamicJsonDocument event(capacity);
-      event["manual_override"] = 0;
-      event_send(event);
-    }
     claim->release();
     _evaluateClaims = true;
     MicroTask.wakeTask(this);

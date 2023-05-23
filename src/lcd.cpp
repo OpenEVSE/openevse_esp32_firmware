@@ -299,7 +299,8 @@ unsigned long LcdTask::displayNextMessage()
 
 LcdTask::LcdInfoLine LcdTask::getNextInfoLine(LcdInfoLine info)
 {
-  if(_manual->isActive()) {
+  // only dispklay Manual Override if there a state prop
+  if(_manual->isActive() && _evse->getClaimProperties(EvseClient_OpenEVSE_Manual).getState() != EvseState::None ) {
     return LcdInfoLine::ManualOverride;
   }
 

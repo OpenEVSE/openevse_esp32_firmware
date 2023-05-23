@@ -13,7 +13,17 @@ ManualOverride::~ManualOverride()
 
 bool ManualOverride::claim()
 {
-  EvseProperties props(EvseState::Active == _evse->getState() ?  EvseState::Disabled : EvseState::Active);
+  // Keep previous properties
+  EvseProperties props = _evse->getClaimProperties(EvseClient_OpenEVSE_Manual);
+  // toggle state
+  props.setState(EvseState::Active == _evse->getState() ?  EvseState::Disabled : EvseState::Active);
+  // set charge_current to prevent other service controlling it
+  if (props.getChargeCurrent() != UINT32_MAX) {
+    props.setChargeCurrent(props.getChargeCurrent());
+  }
+  else {
+    props.setChargeCurrent(_evse->getMaxConfiguredCurrent());
+  }
   return claim(props);
 }
 
@@ -34,7 +44,6 @@ bool ManualOverride::toggle()
   {
     return claim();
   }
-
   return release();
 }
 
@@ -56,4 +65,3 @@ uint8_t ManualOverride::setVersion(uint8_t version) {
   _version = version;
   return _version;
 }
- 
