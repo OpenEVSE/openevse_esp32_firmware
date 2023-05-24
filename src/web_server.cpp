@@ -543,7 +543,7 @@ handleScheduleGet(MongooseHttpServerRequest *request, MongooseHttpServerResponse
     response->setCode(200);
     serializeJson(doc, *response);
   } else {
-    response->setCode(404);
+    response->setCode(200);
     response->print("{\"msg\":\"Not found\"}");
   }
 }
@@ -575,7 +575,7 @@ handleScheduleDelete(MongooseHttpServerRequest *request, MongooseHttpServerRespo
       response->setCode(200);
       response->print("{\"msg\":\"done\"}");
     } else {
-      response->setCode(404);
+      response->setCode(200);
       response->print("{\"msg\":\"Not found\"}");
     }
   } else {
@@ -649,7 +649,7 @@ void handleLimitGet(MongooseHttpServerRequest *request, MongooseHttpServerRespon
   {
     limit.get().serialize(response);
   } else {
-    response->setCode(404);
+    response->setCode(200);
     response->print("{\"msg\":\"no limit\"}");
   }
 }
@@ -681,7 +681,7 @@ void handleLimitDelete(MongooseHttpServerRequest *request, MongooseHttpServerRes
       response->print("{\"msg\":\"failed\"}");
     }
   } else {
-    response->setCode(404);
+    response->setCode(200);
     response->print("{\"msg\":\"no limit\"}");
   }
 }
@@ -775,7 +775,7 @@ void handleEmeter(MongooseHttpServerRequest *request)
       manual.getProperties(props);
       props.serialize(response);
     } else {
-    response->setCode(404);
+    response->setCode(200);
     response->print("{\"msg\":\"No manual override\"}");
   }
 }
