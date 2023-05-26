@@ -18,10 +18,24 @@ class CsvSimulationEvents : public SimulationEvents
     bool _kw = false;
 
     bool _finished = false;
+    bool _valid_line = false;
     time_t _event_time = 0;
     int _grid_ie = 0;
     int _solar = 0;
     int _voltage = 0;
+
+    struct CsvLineData
+    {
+      bool event_time_set = false;
+      time_t event_time = 0;
+      bool grid_ie_set = false;
+      int grid_ie = 0;
+      bool solar_set = false;
+      int solar = 0;
+      bool voltage_set = false;
+      int voltage = 0;
+    };
+
 
   public:
     CsvSimulationEvents() {};
@@ -35,11 +49,12 @@ class CsvSimulationEvents : public SimulationEvents
     void setVoltageCol(int col) { _voltage_col = col; }
     void setKw(bool kw) { _kw = kw; }
 
-    virtual bool hasMoreEvents() { return !_finished; }
+    virtual bool hasMoreEvents() { return _valid_line; }
     virtual time_t getNextEventTime();
     virtual void processEvent(EvseEngine &engine);
 
   private:
+    CsvLineData readLine();
     void processLine();
 };
 
