@@ -1,4 +1,3 @@
-#include <iostream>
 #include <sys/time.h>
 #include <string>
 
@@ -10,7 +9,6 @@
 #include "event_log.h"
 #include "manual.h"
 
-#include "parser.hpp"
 #include "cxxopts.hpp"
 
 #include <MicroTasks.h>
@@ -18,7 +16,8 @@
 
 #include <epoxy_test/ArduinoTest.h>
 
-using namespace aria::csv;
+#include "CsvSimulationEvents.h"
+#include "utils.h"
 
 EventLog eventLog;
 EvseManager evse(RAPI_PORT, eventLog);
@@ -34,61 +33,10 @@ extern double smoothed_available_current;
 int date_col = 0;
 int grid_ie_col = -1;
 int solar_col = 1;
-int voltage_col = 1;
+int voltage_col = -1;
 
 time_t simulated_time = 0;
 time_t last_time = 0;
-
-bool kw = false;
-
-time_t parse_date(const char *dateStr)
-{
-  int y = 2020, M = 1, d = 1, h = 0, m = 0, s = 0;
-  char ampm[5];
-  if(6 != sscanf(dateStr, "%d-%d-%dT%d:%d:%dZ", &y, &M, &d, &h, &m, &s)) {
-    if(6 != sscanf(dateStr, "%d-%d-%dT%d:%d:%d+00:00", &y, &M, &d, &h, &m, &s)) {
-      if(6 != sscanf(dateStr, "%d-%d-%d %d:%d:%d", &y, &M, &d, &h, &m, &s)) {
-        if(3 != sscanf(dateStr, "%d:%d %s", &h, &m, ampm)) {
-          if(1 == sscanf(dateStr, "%d", &s)) {
-            return s;
-          }
-        } else {
-          y = 2020; M = 1; d = 1; s = 0;
-          if(12 == h) {
-            h -= 12;
-          }
-          if('P' == ampm[0]) {
-            h += 12;
-          }
-        }
-      }
-    }
-  }
-
-  tm time = {0};
-  time.tm_year = y - 1900; // Year since 1900
-  time.tm_mon = M - 1;     // 0-11
-  time.tm_mday = d;        // 1-31
-  time.tm_hour = h;        // 0-23
-  time.tm_min = m;         // 0-59
-  time.tm_sec = s;         // 0-61 (0-60 in C++11)
-
-  return timegm(&time);
-}
-
-int get_watt(const char *val)
-{
-  float number = 0.0;
-  if(1 != sscanf(val, "%f", &number)) {
-    throw std::invalid_argument("Not a number");
-  }
-
-  if(kw) {
-    number *= 1000;
-  }
-
-  return (int)round(number);
-}
 
 time_t divertmode_get_time()
 {
@@ -100,6 +48,11 @@ int main(int argc, char** argv)
   int voltage_arg = -1;
   std::string sep = ",";
   std::string config;
+  std::string time_start;
+  std::string time_end;
+  int time_increment;
+  std::string events;
+  std::string schedule;
 
   cxxopts::Options options(argv[0], " - example command line options");
   options
@@ -114,6 +67,11 @@ int main(int argc, char** argv)
     ("g,gridie", "The Grid IE column", cxxopts::value<int>(grid_ie_col), "N")
     ("c,config", "Config options, either a file name or JSON", cxxopts::value<std::string>(config))
     ("v,voltage", "The Voltage column if < 50, else the fixed voltage", cxxopts::value<int>(voltage_arg), "N")
+    ("e,events", "Vehicle events JSON file", cxxopts::value<std::string>(events), "N")
+    ("schedule", "Schedule JSON file", cxxopts::value<std::string>(schedule), "N")
+    ("time-start", "start of the simulated time", cxxopts::value<std::string>(time_start), "N")
+    ("time-end", "end of the simulated time", cxxopts::value<std::string>(time_end), "N")
+    ("time-increment", "Schedule JSON file", cxxopts::value<int>(time_increment), "N")
     ("kw", "values are KW")
     ("sep", "Field separator", cxxopts::value<std::string>(sep));
 
@@ -141,10 +99,10 @@ int main(int argc, char** argv)
     config_deserialize(config.c_str());
   }
 
-  kw = result.count("kw") > 0;
+  bool kw = result.count("kw") > 0;
 
   divert_type = grid_ie_col >= 0 ? 1 : 0;
-  
+
   if(voltage_arg >= 0) {
     if(voltage_arg < 50) {
       voltage_col = voltage_arg;
@@ -166,63 +124,50 @@ int main(int argc, char** argv)
 
   divert.setMode(DivertMode::Eco);
 
-  CsvParser parser(std::cin);
-  parser.delimiter(sep.c_str()[0]);
+  CsvSimulationEvents csvEvents;
+  csvEvents.setDateCol(date_col);
+  csvEvents.setSolarCol(solar_col);
+  csvEvents.setGridIeCol(grid_ie_col);
+  csvEvents.setVoltageCol(voltage_col);
+  csvEvents.setKw(kw);
+
+  csvEvents.open(nullptr, sep[0]);
+
   int row_number = 0;
 
+  EvseEngine engine(evse, solar, grid_ie, voltage);
+
   std::cout << "Date,Solar,Grid IE,Pilot,Charge Power,Min Charge Power,State,Smoothed Available" << std::endl;
-  for (auto& row : parser)
+  while(csvEvents.hasMoreEvents())
   {
-    try
+    simulated_time = csvEvents.getNextEventTime();
+    csvEvents.processEvent(engine);
+
+    if(last_time != 0)
     {
-      int col = 0;
-      std::string val;
-
-      for (auto& field : row)
-      {
-        val = field;
-        if(date_col == col) {
-          simulated_time = parse_date(val.c_str());
-        } else if (grid_ie_col == col) {
-          grid_ie = get_watt(val.c_str());
-        } else if (solar_col == col) {
-          solar = get_watt(val.c_str());
-        } else if (voltage_col == col) {
-          voltage = stoi(field);
-        }
-
-        col++;
+      int delta = simulated_time - last_time;
+      if(delta > 0) {
+        EpoxyTest::add_millis(delta * 1000);
       }
-
-      if(last_time != 0)
-      {
-        int delta = simulated_time - last_time;
-        if(delta > 0) {
-          EpoxyTest::add_millis(delta * 1000);
-        }
-      }
-      last_time = simulated_time;
-
-      divert.update_state();
-      MicroTask.update();
-
-      tm tm;
-      gmtime_r(&simulated_time, &tm);
-
-      char buffer[32];
-      std::strftime(buffer, 32, "%d/%m/%Y %H:%M:%S", &tm);
-
-      int ev_pilot = (OPENEVSE_STATE_CHARGING == state ? pilot : 0);
-      int ev_watt = ev_pilot * voltage;
-      int min_ev_watt = 6 * voltage;
-
-      double smoothed = divert.smoothedAvailableCurrent() * voltage;
-
-      std::cout << buffer << "," << solar << "," << grid_ie << "," << ev_pilot << "," << ev_watt << "," << min_ev_watt << "," << state << "," << smoothed << std::endl;
     }
-    catch(const std::invalid_argument& e)
-    {
-    }
+    last_time = simulated_time;
+
+    divert.update_state();
+    MicroTask.update();
+
+    tm tm;
+    gmtime_r(&simulated_time, &tm);
+
+    char buffer[32];
+    std::strftime(buffer, 32, "%d/%m/%Y %H:%M:%S", &tm);
+
+    int ev_pilot = (OPENEVSE_STATE_CHARGING == state ? pilot : 0);
+    int ev_watt = ev_pilot * voltage;
+    int min_ev_watt = 6 * voltage;
+
+    double smoothed = divert.smoothedAvailableCurrent() * voltage;
+
+    std::cout << buffer << "," << solar << "," << grid_ie << "," << ev_pilot << "," << ev_watt << "," << min_ev_watt << "," << state << "," << smoothed << std::endl;
   }
 }
 

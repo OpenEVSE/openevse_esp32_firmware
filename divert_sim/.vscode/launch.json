@@ -29,13 +29,13 @@
       "miDebuggerPath": "/usr/bin/gdb"
     },
     {
-      "name": "divert_sim: Day 1 Grid IE.csv",
+      "name": "divert_sim: day1_grid_ie.csv",
       "type": "cppdbg",
       "request": "launch",
       "program": "${workspaceFolder}/divert_sim",
       "args": [
         "-g", "2",
-        "<", "${workspaceFolder}/data/Day 1 Grid IE.csv"
+        "<", "${workspaceFolder}/data/day1_grid_ie.csv"
       ],
       "stopAtEntry": false,
       "cwd": "${workspaceFolder}",

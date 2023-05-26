@@ -1,6 +1,7 @@
 CPP      := g++
 
 OBJ_DIR := build
+DEP_DIR := build
 
 EPOXY_DUINO_DIR := ../../EpoxyDuino
 EPOXY_CORE_PATH ?= $(EPOXY_DUINO_DIR)/cores/epoxy
@@ -10,7 +11,10 @@ EPOXY_LIB_DIR ?= $(EPOXY_DUINO_DIR)/libraries
 #ARDUINO_LIB_DIR := ../.pio/libdeps/$(BASE_ENV)
 ARDUINO_LIB_DIR := ../..
 
+Q=@
+
 CPPFLAGS := \
+  -MT $@ -MM -MMD -MP -MF $(DEP_DIR)/$*.d \
   -I include \
   -I ../include \
   -I ../src \
@@ -102,6 +106,11 @@ EPOXY_EEPROM_OBJ := \
 ESPAL_OBJ := \
   espal.o
 
+SIMULATOR_OBJ := \
+  CsvSimulationEvents.o \
+  utils.o \
+  divert_sim.o
+
 OBJ    := \
   $(MICRO_TASKS_OBJ) \
   $(CONFIG_JSON_OBJ) \
@@ -112,7 +121,9 @@ OBJ    := \
   $(EPOXY_FS_OBJ) \
   $(EPOXY_EEPROM_OBJ) \
   $(ARDUINO_OBJ) \
-  $(MAINS)
+  $(SIMULATOR_OBJ) 
+
+OBJ_FULL := $(addprefix $(OBJ_DIR)/, $(OBJ))
 
 VPATH 	:= \
   src \
@@ -142,8 +153,15 @@ $(OBJ_DIR):
 	mkdir -p $(OBJ_DIR)
 
 #$(OBJ): %.o : %.cpp $(DEPS)
-$(OBJ_DIR)/%.o: %.cpp $(OBJ_DIR)
-	$(CPP) -c -o $@ $< $(CPPFLAGS)
+$(OBJ_DIR)/%.o: %.cpp | $(OBJ_DIR)
+	@echo "Compiling $<"
+	$(Q)$(CPP) -c -o $@ $< $(CPPFLAGS)
 
-$(TARGETS): $(addprefix $(OBJ_DIR)/, $(MAINS) $(OBJ))
-	$(CPP) -o $@ $(LIBS) $^ $(CPPFLAGS) $(LDFLAGS)
+$(TARGETS): $(OBJ_FULL)
+	@echo "Linking $@"
+	$(Q)$(CPP) -o $@ $(LIBS) $^ $(CPPFLAGS) $(LDFLAGS)
+
+DEP_FILES := $(OBJ:%.o=$(DEPDIR)/%.d)
+$(DEP_FILES):
+
+include $(wildcard $(DEP_FILES))
