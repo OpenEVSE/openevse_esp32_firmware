@@ -543,7 +543,7 @@ handleScheduleGet(MongooseHttpServerRequest *request, MongooseHttpServerResponse
     response->setCode(200);
     serializeJson(doc, *response);
   } else {
-    response->setCode(200);
+    response->setCode(404);
     response->print("{\"msg\":\"Not found\"}");
   }
 }
@@ -575,7 +575,7 @@ handleScheduleDelete(MongooseHttpServerRequest *request, MongooseHttpServerRespo
       response->setCode(200);
       response->print("{\"msg\":\"done\"}");
     } else {
-      response->setCode(200);
+      response->setCode(404);
       response->print("{\"msg\":\"Not found\"}");
     }
   } else {
@@ -650,7 +650,7 @@ void handleLimitGet(MongooseHttpServerRequest *request, MongooseHttpServerRespon
     limit.get().serialize(response);
   } else {
     response->setCode(200);
-    response->print("{\"msg\":\"no limit\"}");
+    response->print("{}");
   }
 }
 
@@ -664,7 +664,7 @@ void handleLimitPost(MongooseHttpServerRequest *request, MongooseHttpServerRespo
       // todo: mqtt_publish_limit();  // update limit props to mqtt
     } else {
       // unused for now
-      response->setCode(500);
+      response->setCode(400);
       response->print("{\"msg\":\"failed to parse JSON\"}");
     }
 }
@@ -675,7 +675,6 @@ void handleLimitDelete(MongooseHttpServerRequest *request, MongooseHttpServerRes
     if (limit.clear()) {
       response->setCode(200);
       response->print("{\"msg\":\"done\"}");
-      // todo: mqtt_publish_limit();  // update limit props to mqtt
     } else {
       response->setCode(500);
       response->print("{\"msg\":\"failed\"}");
@@ -776,7 +775,7 @@ void handleEmeter(MongooseHttpServerRequest *request)
       props.serialize(response);
     } else {
     response->setCode(200);
-    response->print("{\"msg\":\"No manual override\"}");
+    response->print("{}");
   }
 }
 
@@ -796,7 +795,7 @@ void handleOverridePost(MongooseHttpServerRequest *request, MongooseHttpServerRe
       response->print("{\"msg\":\"Failed to claim manual overide\"}");
     }
   } else {
-    response->setCode(500);
+    response->setCode(400);
     response->print("{\"msg\":\"Failed to parse JSON\"}");
   }
 }
@@ -917,12 +916,12 @@ handleRestart(MongooseHttpServerRequest *request) {
         }
       }
       else {
-        response->setCode(405);
+        response->setCode(400);
         response->print("{\"msg\":\"wrong payload\"}");
         request->send(response);
       }
     } else {
-      response->setCode(405);
+      response->setCode(400);
       response->print("{\"msg\":\"Couldn't parse json\"}");
       request->send(response);
     }
