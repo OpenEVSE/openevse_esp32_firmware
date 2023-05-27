@@ -13,8 +13,9 @@ ARDUINO_LIB_DIR := ../..
 
 Q=@
 
+DEPFLAGS = -MT $@ -MMD -MP -MF $(DEP_DIR)/$*.d
+
 CPPFLAGS := \
-  -MT $@ -MM -MMD -MP -MF $(DEP_DIR)/$*.d \
   -I include \
   -I ../include \
   -I ../src \
@@ -37,9 +38,9 @@ CPPFLAGS := \
   -D ENERGY_METER_STORE_STATE=0 \
   -D ARDUINOJSON_ENABLE_PROGMEM=0 \
   -D ENABLE_CONFIG_V1_IMPORT=0 \
-  -D ENABLE_CONFIG_CHANGE_NOTIFICATION=0
-#  \
-#  -D ENABLE_DEBUG \
+  -D ENABLE_CONFIG_CHANGE_NOTIFICATION=0 \
+  -D ENABLE_DEBUG
+#   \
 #  -D ENABLE_DEBUG_DIVERT \
 #  -D ENABLE_DEBUG_INPUT_FILTER \
 #  -D ENABLE_DEBUG_EVSE_MAN \
@@ -107,7 +108,9 @@ ESPAL_OBJ := \
   espal.o
 
 SIMULATOR_OBJ := \
+  OpenEvseSimulator.o \
   CsvSimulationEvents.o \
+  AllEvents.o \
   utils.o \
   divert_sim.o
 
@@ -121,7 +124,7 @@ OBJ    := \
   $(EPOXY_FS_OBJ) \
   $(EPOXY_EEPROM_OBJ) \
   $(ARDUINO_OBJ) \
-  $(SIMULATOR_OBJ) 
+  $(SIMULATOR_OBJ)
 
 OBJ_FULL := $(addprefix $(OBJ_DIR)/, $(OBJ))
 
@@ -155,13 +158,13 @@ $(OBJ_DIR):
 #$(OBJ): %.o : %.cpp $(DEPS)
 $(OBJ_DIR)/%.o: %.cpp | $(OBJ_DIR)
 	@echo "Compiling $<"
-	$(Q)$(CPP) -c -o $@ $< $(CPPFLAGS)
+	$(Q)$(CPP) -c -o $@ $< $(CPPFLAGS) $(DEPFLAGS)
 
 $(TARGETS): $(OBJ_FULL)
 	@echo "Linking $@"
 	$(Q)$(CPP) -o $@ $(LIBS) $^ $(CPPFLAGS) $(LDFLAGS)
 
-DEP_FILES := $(OBJ:%.o=$(DEPDIR)/%.d)
+DEP_FILES := $(OBJ:%.o=$(DEP_DIR)/%.d)
 $(DEP_FILES):
 
 include $(wildcard $(DEP_FILES))
