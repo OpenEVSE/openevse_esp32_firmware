@@ -57,8 +57,6 @@ def run_simulation(dataset: str,
     max_time_charging = 0
     total_time_charging = 0
 
-    print("Testing dataset: " + dataset)
-
     # Read in the dataset and pass to the divert_sim process
     with open(path.join('output', output+'.csv'), 'w', encoding="utf-8") as output_data:
         # open the divert_sim process
