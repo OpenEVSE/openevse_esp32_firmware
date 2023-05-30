@@ -212,7 +212,29 @@ class EvseManager : public MicroTasks::Task
         }
     };
 
+    class RapiServiceTask : public MicroTasks::Task
+    {
+      private:
+        RapiSender &_sender;
+
+      protected:
+        void setup() {
+        }
+
+        unsigned long loop(MicroTasks::WakeReason reason) {
+          _sender.loop();
+          return 0;
+        }
+
+      public:
+        RapiServiceTask(RapiSender &sender) :
+          _sender(sender)
+        {
+        }
+    };
+
     RapiSender _sender;
+    RapiServiceTask _rapiServiceTask;
     EvseMonitor _monitor;
     EventLog &_eventLog;
 

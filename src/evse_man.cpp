@@ -116,6 +116,7 @@ void EvseManager::Claim::release()
 EvseManager::EvseManager(Stream &port, EventLog &eventLog) :
   MicroTasks::Task(),
   _sender(&port),
+  _rapiServiceTask(_sender),
   _monitor(OpenEVSE),
   _eventLog(eventLog),
   _clients(),
@@ -231,6 +232,7 @@ bool EvseManager::evaluateClaims(EvseProperties &properties)
 
 void EvseManager::setup()
 {
+  MicroTask.startTask(_rapiServiceTask);
   _monitor.onBootReady(&_evseBootListener);
   _monitor.onStateChange(&_evseStateListener);
   _monitor.onSessionComplete(&_sessionCompleteListener);
@@ -423,7 +425,7 @@ bool EvseManager::claim(EvseClient client, int priority, EvseProperties &target)
   {
     DBUGF("Found slot");
     if(slot->claim(client, priority, target))
-    { 
+    {
       DBUGF("Claim added/updated, waking task");
       _evaluateClaims = true;
       MicroTask.wakeTask(this);

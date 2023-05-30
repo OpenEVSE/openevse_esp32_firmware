@@ -181,7 +181,6 @@ loop() {
 
   web_server_loop();
   ota_loop();
-  rapiSender.loop();
 
   Profile_Start(MicroTask);
   MicroTask.update();
