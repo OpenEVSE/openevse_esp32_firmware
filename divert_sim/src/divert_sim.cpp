@@ -17,9 +17,9 @@
 #include <epoxy_test/ArduinoTest.h>
 
 #include "OpenEvseSimulator.h"
-//#include "AllEvents.h"
+#include "AllEvents.h"
 #include "CsvSimulationEvents.h"
-//#include "ClockEvents.h"
+#include "ClockEvents.h"
 #include "utils.h"
 
 OpenEvseSimulator evse_simulator;
@@ -174,33 +174,33 @@ int main(int argc, char** argv)
     EpoxyTest::add_millis(10);
   }
 
-  divert.setMode(DivertMode::Eco);
 
-//  AllEvents eventSources;
-  CsvSimulationEvents csvEvents;
+  AllEvents eventSources;
 
   if(csv_file.length() > 0)
   {
-//    CsvSimulationEvents csvEvents;
-    csvEvents.setDateCol(date_col);
-    csvEvents.setSolarCol(solar_col);
-    csvEvents.setGridIeCol(grid_ie_col);
-    csvEvents.setVoltageCol(voltage_col);
-    csvEvents.setKw(kw);
+    divert.setMode(DivertMode::Eco);
 
-    if(csvEvents.open(csv_file, sep[0])) {
-//      eventSources.addEventSource(csvEvents);
+    CsvSimulationEvents *csvEvents = new CsvSimulationEvents();
+    csvEvents->setDateCol(date_col);
+    csvEvents->setSolarCol(solar_col);
+    csvEvents->setGridIeCol(grid_ie_col);
+    csvEvents->setVoltageCol(voltage_col);
+    csvEvents->setKw(kw);
+
+    if(csvEvents->open(csv_file, sep[0])) {
+      eventSources.addEventSource(csvEvents);
     }
   }
 
-//  if(time_start.length() > 0 && time_end.length() > 0 && time_increment > 0)
-//  {
-//    ClockEvents clockEvents(
-//      parse_date(time_start.c_str()),
-//      parse_date(time_end.c_str()),
-//      time_increment);
-//    eventSources.addEventSource(clockEvents);
-//  }
+  if(time_start.length() > 0 && time_end.length() > 0 && time_increment > 0)
+  {
+    ClockEvents *clockEvents = new ClockEvents(
+      parse_date(time_start.c_str()),
+      parse_date(time_end.c_str()),
+      time_increment);
+    eventSources.addEventSource(clockEvents);
+  }
 
   int row_number = 0;
 
@@ -209,13 +209,10 @@ int main(int argc, char** argv)
   last_millis = millis();
 
   std::cout << "Date,Solar,Grid IE,Pilot,Charge Power,Min Charge Power,State,Smoothed Available" << std::endl;
-  //while(eventSources.hasMoreEvents())
-  while(csvEvents.hasMoreEvents())
+  while(eventSources.hasMoreEvents())
   {
-    //simulated_time = eventSources.getNextEventTime();
-    //eventSources.processEvent(engine);
-    simulated_time = csvEvents.getNextEventTime();
-    csvEvents.processEvent(engine);
+    simulated_time = eventSources.getNextEventTime();
+    eventSources.processEvent(engine);
 
     if(last_time != 0)
     {
