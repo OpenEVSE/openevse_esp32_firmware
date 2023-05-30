@@ -11,7 +11,7 @@
       "program": "${workspaceFolder}/divert_sim",
       "args": [
         "-c", "data/test_config.json",
-        "<", "${workspaceFolder}/data/day1.csv"
+        "-i", "${workspaceFolder}/data/day1.csv"
       ],
       "stopAtEntry": false,
       "cwd": "${workspaceFolder}",
@@ -35,7 +35,7 @@
       "program": "${workspaceFolder}/divert_sim",
       "args": [
         "-g", "2",
-        "<", "${workspaceFolder}/data/day1_grid_ie.csv"
+        "-i", "${workspaceFolder}/data/day1_grid_ie.csv"
       ],
       "stopAtEntry": false,
       "cwd": "${workspaceFolder}",
@@ -59,7 +59,7 @@
       "program": "${workspaceFolder}/divert_sim",
       "args": [
         "-v", "2",
-        "<", "${workspaceFolder}/data/solar-vrms.csv"
+        "-i", "${workspaceFolder}/data/solar-vrms.csv"
       ],
       "stopAtEntry": false,
       "cwd": "${workspaceFolder}",
@@ -83,7 +83,32 @@
       "program": "${workspaceFolder}/divert_sim",
       "args": [
         "--sep", "\\;", "--kw",
-        "<", "${workspaceFolder}/data/Energy_and_Power_Day_2020-03-22.csv"
+        "-i", "${workspaceFolder}/data/Energy_and_Power_Day_2020-03-22.csv"
+      ],
+      "stopAtEntry": false,
+      "cwd": "${workspaceFolder}",
+      "environment": [],
+      "externalConsole": false,
+      "MIMode": "gdb",
+      "setupCommands": [
+        {
+          "description": "Enable pretty-printing for gdb",
+          "text": "-enable-pretty-printing",
+          "ignoreFailures": true
+        }
+      ],
+      "preLaunchTask": "build",
+      "miDebuggerPath": "/usr/bin/gdb"
+    },
+    {
+      "name": "divert_sim: Time series",
+      "type": "cppdbg",
+      "request": "launch",
+      "program": "${workspaceFolder}/divert_sim",
+      "args": [
+        "--time-start", "2023-05-01 00:00:00",
+        "--time-end", "2023-05-02 00:00:00",
+        "--time-increment", "10"
       ],
       "stopAtEntry": false,
       "cwd": "${workspaceFolder}",
