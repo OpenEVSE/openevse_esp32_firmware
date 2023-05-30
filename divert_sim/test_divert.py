@@ -58,7 +58,7 @@ def test_divert_cloudymorning_default() -> None:
 def test_divert_day1_default() -> None:
     """Run the divert test with the day1 dataset with the default values"""
     run_test_with_dataset('day1', 'day1_default',
-                10.12, 7.4, 6.72, 0.67, 5, 660, 9780, 13500)
+                10.12, 7.35, 6.69, 0.65, 5, 600, 9780, 13380)
 
 def test_divert_day2_default() -> None:
     """Run the divert test with the day2 dataset with the default values"""
@@ -73,13 +73,13 @@ def test_divert_day3_default() -> None:
 def test_divert_day1_grid_ie_default() -> None:
     """Run the divert test with the day1_grid_ie dataset with the default values"""
     run_test_with_dataset('day1_grid_ie', 'day1_grid_ie_default',
-                15.13, 8.48, 8.22, 0.26, 7, 660, 7500, 18960,
+                15.13, 8.46, 8.21, 0.25, 7, 600, 7500, 18900,
                 grid_ie_col=2)
 
 def test_divert_day2_grid_ie_default() -> None:
     """Run the divert test with the day2_grid_ie dataset with the default values"""
     run_test_with_dataset('day2_grid_ie', 'day2_grid_ie_default',
-                10.85, 8.09, 6.43, 1.65, 12, 540, 7800, 17220,
+                10.85, 7.97, 6.37, 1.6, 12, 600, 7800, 16920,
                 grid_ie_col=2)
 
 def test_divert_day3_grid_ie_default() -> None:
@@ -117,19 +117,19 @@ def test_divert_energy_and_power_day_2020_04_01_default() -> None:
 def test_divert_almostperfect_noimport() -> None:
     """Run the divert test with the almostperfect dataset with the noimport profile values"""
     run_test_with_dataset('almostperfect', 'almostperfect_noimport',
-                21.08, 15.66, 15.57, 0.09, 5, 660, 20400, 26400,
+                21.08, 15.62, 15.55, 0.06, 5, 600, 20400, 26280,
                 config='data/config-inputfilter-noimport.json')
 
 def test_divert_cloudymorning_noimport() -> None:
     """Run the divert test with the CloudyMorning dataset with the noimport profile values"""
     run_test_with_dataset('CloudyMorning', 'CloudyMorning_noimport',
-                16.64, 10.76, 10.62, 0.14, 5, 660, 9060, 16980,
+                16.64, 10.72, 10.58, 0.14, 5, 600, 9060, 16920,
                 config='data/config-inputfilter-noimport.json')
 
 def test_divert_day1_noimport() -> None:
     """Run the divert test with the day1 dataset with the noimport profile values"""
     run_test_with_dataset('day1', 'day1_noimport',
-                10.12, 4.96, 4.71, 0.25, 6, 660, 2460, 7800,
+                10.12, 4.92, 4.7, 0.22, 6, 600, 2460, 7740,
                 config='data/config-inputfilter-noimport.json')
 
 def test_divert_day2_noimport() -> None:
@@ -141,25 +141,25 @@ def test_divert_day2_noimport() -> None:
 def test_divert_day3_noimport() -> None:
     """Run the divert test with the day3 dataset with the noimport profile values"""
     run_test_with_dataset('day3', 'day3_noimport',
-                5.09, 0.04, 0.04, 0, 1, 120, 120, 120,
+                5.09, 0.04, 0.04, 0.0, 1, 120, 120, 120,
                 config='data/config-inputfilter-noimport.json')
 
 def test_divert_day1_grid_ie_noimport() -> None:
     """Run the divert test with the day1_grid_ie dataset with the noimport profile values"""
     run_test_with_dataset('day1_grid_ie', 'day1_grid_ie_noimport',
-                15.13, 4.88, 4.86, 0.02, 7, 60, 2640, 10440,
+                15.13, 4.83, 4.81, 0.02, 7, 60, 2640, 10320,
                 grid_ie_col=2, config='data/config-inputfilter-noimport.json')
 
 def test_divert_day2_grid_ie_noimport() -> None:
     """Run the divert test with the day2_grid_ie dataset with the noimport profile values"""
     run_test_with_dataset('day2_grid_ie', 'day2_grid_ie_noimport',
-                10.85, 1.74, 1.65, 0.09, 3, 660, 2040, 3360,
+                10.85, 1.67, 1.58, 0.09, 3, 600, 2040, 3240,
                 grid_ie_col=2, config='data/config-inputfilter-noimport.json')
 
 def test_divert_day3_grid_ie_noimport() -> None:
     """Run the divert test with the day3_grid_ie dataset with the noimport profile values"""
     run_test_with_dataset('day3_grid_ie', 'day3_grid_ie_noimport',
-                12.13, 3.97, 3.93, 0.04, 7, 660, 2700, 7800,
+                12.13, 3.88, 3.85, 0.03, 7, 600, 2700, 7620,
                 grid_ie_col=2, config='data/config-inputfilter-noimport.json')
 
 def test_divert_solar_vrms_noimport() -> None:
@@ -215,19 +215,19 @@ def test_divert_day2_nowaste() -> None:
 def test_divert_day3_nowaste() -> None:
     """Run the divert test with the day3 dataset with the nowaste profile values"""
     run_test_with_dataset('day3', 'day3_nowaste',
-                5.09, 4.97, 3.24, 1.73, 3, 660, 8760, 12000,
+                5.09, 4.94, 3.24, 1.71, 3, 600, 8760, 11940,
                 config='data/config-inputfilter-nowaste.json')
 
 def test_divert_day1_grid_ie_nowaste() -> None:
     """Run the divert test with the day1_grid_ie dataset with the nowaste profile values"""
     run_test_with_dataset('day1_grid_ie', 'day1_grid_ie_nowaste',
-                15.13, 14.21, 13.01, 1.20, 4, 1860, 14880, 30900,
+                15.13, 14.21, 13.01, 1.2, 4, 1860, 14880, 30900,
                 grid_ie_col=2, config='data/config-inputfilter-nowaste.json')
 
 def test_divert_day2_grid_ie_nowaste() -> None:
     """Run the divert test with the day2_grid_ie dataset with the nowaste profile values"""
     run_test_with_dataset('day2_grid_ie', 'day2_grid_ie_nowaste',
-                10.85, 11.53, 8.60, 2.93, 7, 540, 14700, 24600,
+                10.85, 11.5, 8.58, 2.93, 7, 600, 14700, 24480,
                 grid_ie_col=2, config='data/config-inputfilter-nowaste.json')
 
 def test_divert_day3_grid_ie_nowaste() -> None:
