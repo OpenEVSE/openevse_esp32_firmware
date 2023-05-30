@@ -9,10 +9,15 @@ using namespace aria::csv;
 
 bool CsvSimulationEvents::open(const char *filename, char sep)
 {
-  if(filename) {
-    _file.open(filename);
-    if(!_file.is_open()) {
-      return false;
+  if(filename)
+  {
+    if(filename[0] == '-' && filename[1] == '\0') {
+      filename = nullptr;
+    } else {
+      _file.open(filename);
+      if(!_file.is_open()) {
+        return false;
+      }
     }
   }
 

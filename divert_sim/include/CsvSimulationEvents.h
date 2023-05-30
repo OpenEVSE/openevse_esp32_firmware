@@ -36,11 +36,11 @@ class CsvSimulationEvents : public SimulationEvents
       int voltage = 0;
     };
 
-
   public:
     CsvSimulationEvents() {};
     ~CsvSimulationEvents() {};
 
+    bool open(std::string &filename, char sep = ',') { return open(filename.c_str(), sep); }
     bool open(const char *filename = nullptr, char sep = ',');
 
     void setDateCol(int col) { _date_col = col; }
