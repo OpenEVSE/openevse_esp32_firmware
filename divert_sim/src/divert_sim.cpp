@@ -39,6 +39,7 @@ int voltage_col = -1;
 
 time_t simulated_time = 0;
 time_t last_time = 0;
+unsigned long last_millis = 0;
 
 class EvseWatcherTask : public MicroTasks::Task
 {
@@ -205,6 +206,8 @@ int main(int argc, char** argv)
 
   EvseEngine engine(evse, solar, grid_ie, voltage);
 
+  last_millis = millis();
+
   std::cout << "Date,Solar,Grid IE,Pilot,Charge Power,Min Charge Power,State,Smoothed Available" << std::endl;
   //while(eventSources.hasMoreEvents())
   while(csvEvents.hasMoreEvents())
@@ -218,7 +221,8 @@ int main(int argc, char** argv)
     {
       int delta = simulated_time - last_time;
       if(delta > 0) {
-        EpoxyTest::add_millis(delta * 1000);
+        last_millis += delta * 1000;
+        EpoxyTest::set_millis(last_millis);
       }
     }
     last_time = simulated_time;
