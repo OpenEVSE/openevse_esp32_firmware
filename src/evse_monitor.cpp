@@ -64,7 +64,6 @@
         EVSE_MONITOR_FAULT_COUNT_BOOT_READY | \
         EVSE_MONITOR_FLAGS_BOOT_READY | \
         EVSE_MONITOR_CURRENT_BOOT_READY | \
-        EVSE_MONITOR_ENERGY_BOOT_READY | \
         EVSE_MONITOR_CURRENT_SENSOR_BOOT_READY | \
         EVSE_MONITOR_SERIAL_BOOT_READY \
 )
@@ -732,7 +731,7 @@ void EvseMonitor::getChargeCurrentAndVoltageFromEvse()
         if(VOLTAGE_MINIMUM <= volts && volts <= VOLTAGE_MAXIMUM) {
           _voltage = volts;
         }
-        _power = _amp * _voltage; 
+        _power = _amp * _voltage;
         if (config_threephase_enabled()) {
           _power = _power * 3;
         }
