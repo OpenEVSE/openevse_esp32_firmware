@@ -468,7 +468,7 @@ mqtt_publish_override() {
   DynamicJsonDocument override_data(capacity);
   EvseProperties props;
   //check if there an override claim
-  if (evse.clientHasClaim(EvseClient_OpenEVSE_Manual) || manual.isActive()) {
+  if (manual.isActive()) {
     props = evse.getClaimProperties(EvseClient_OpenEVSE_Manual);
     //check if there's state property in override
     props.serialize(override_data);

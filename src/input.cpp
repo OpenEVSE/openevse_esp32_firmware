@@ -74,7 +74,6 @@ class InputTask : public MicroTasks::Task
         event["colour"] = evse.getStateColour();
         event["pilot"] = evse.getChargeCurrent();
         event["max_current"] = evse.getMaxCurrent();
-        event["manual_override"] = manual.isActive() ? 1 : 0; //TODO: remove this
         event["status"] = evse.getState().toString();
         event["elapsed"] = evse.getSessionElapsed();
         event["amp"] = evse.getAmps() * AMPS_SCALE_FACTOR;
@@ -144,7 +143,6 @@ void create_rapi_json(JsonDocument &doc)
   doc["flags"] = evse.getFlags();
   doc["vehicle"] = evse.isVehicleConnected() ? 1 : 0;
   doc["colour"] = evse.getStateColour();
-  doc["manual_override"] = manual.isActive() ? 1 : 0;
   doc["freeram"] = ESPAL.getFreeHeap();
   doc["divertmode"] = (uint8_t)divert.getMode();
   doc["srssi"] = WiFi.RSSI();
