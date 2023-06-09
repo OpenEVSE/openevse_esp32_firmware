@@ -104,7 +104,7 @@ void NetManagerTask::wifiStartAccessPoint()
     softAP_ssid = String(_softAP_ssid) + "_" + ESPAL.getShortId();
   }
   else {
-    softAP_ssid = ap_pass;
+    softAP_ssid = ap_ssid;
   }
 
   // Use the existing channel if set
