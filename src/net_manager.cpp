@@ -99,8 +99,8 @@ void NetManagerTask::wifiStartAccessPoint()
 
   String softAP_ssid;
 
-  if (!ap_ssid) {
-     // Create Unique SSID e.g "emonESP_XXXXXX"
+  if (ap_ssid.length() < 2) {
+     // Create Unique SSID e.g "OpenEVSE_XXXXXX"
     softAP_ssid = String(_softAP_ssid) + "_" + ESPAL.getShortId();
   }
   else {
@@ -115,7 +115,7 @@ void NetManagerTask::wifiStartAccessPoint()
     channel = (random(3) * 5) + 1;
   }
   DBUGVAR(channel);
-  WiFi.softAP(softAP_ssid.c_str(), ap_pass?ap_pass.c_str():_softAP_password, channel);
+  WiFi.softAP(softAP_ssid.c_str(), ap_pass.length()>=8?ap_pass.c_str():_softAP_password, channel);
 
   // Setup the DNS server redirecting all the domains to the apIP
   _dnsServer.setErrorReplyCode(DNSReplyCode::NoError);
