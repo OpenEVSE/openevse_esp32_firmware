@@ -8,6 +8,7 @@
 #include "event.h"
 #include "event_log.h"
 #include "manual.h"
+#include "scheduler.h"
 
 #include "cxxopts.hpp"
 
@@ -27,6 +28,7 @@ EventLog eventLog;
 EvseManager evse(evse_simulator.stream(), eventLog);
 DivertTask divert(evse);
 ManualOverride manual(evse);
+Scheduler scheduler(evse);
 
 double voltage = 240; // Voltage from OpenEVSE or MQTT
 
@@ -166,14 +168,27 @@ int main(int argc, char** argv)
   MicroTask.startTask(&evse_watcher);
   evse_simulator.begin();
   evse.begin();
+  scheduler.begin();
   divert.begin();
+
+  // If schedule is set and not a JSON string, assume it is a file name
+  if(schedule.length() > 0 && schedule[0] != '{')
+  {
+    std::ifstream t(schedule);
+    std::stringstream buffer;
+    buffer << t.rdbuf();
+    schedule = buffer.str();
+  }
+  // If we have some JSON load it
+  if(schedule.length() > 0 && schedule[0] == '{') {
+    scheduler.deserialize(schedule.c_str());
+  }
 
   // Initialise the EVSE Manager
   while (!evse_watcher.booted()) {
     MicroTask.update();
     EpoxyTest::add_millis(10);
   }
-
 
   AllEvents eventSources;
 

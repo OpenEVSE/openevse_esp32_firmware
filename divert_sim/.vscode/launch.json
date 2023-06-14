@@ -124,6 +124,32 @@
       ],
       "preLaunchTask": "build",
       "miDebuggerPath": "/usr/bin/gdb"
+    },
+    {
+      "name": "divert_sim: Time series with 7 day schedule",
+      "type": "cppdbg",
+      "request": "launch",
+      "program": "${workspaceFolder}/divert_sim",
+      "args": [
+        "--time-start", "2023-05-01 00:00:00",
+        "--time-end", "2023-05-08 00:00:00",
+        "--time-increment", "10",
+        "--schedule", "data/schedule-overnight-charge.json"
+      ],
+      "stopAtEntry": false,
+      "cwd": "${workspaceFolder}",
+      "environment": [],
+      "externalConsole": false,
+      "MIMode": "gdb",
+      "setupCommands": [
+        {
+          "description": "Enable pretty-printing for gdb",
+          "text": "-enable-pretty-printing",
+          "ignoreFailures": true
+        }
+      ],
+      "preLaunchTask": "build",
+      "miDebuggerPath": "/usr/bin/gdb"
     }
   ]
 }

@@ -4,7 +4,7 @@
 
 #include "debug.h"
 #include "scheduler.h"
-#include "time_man.h"
+//#include "time_man.h"
 #include "emonesp.h"
 #include "app_config.h"
 #include "event.h"
@@ -186,7 +186,7 @@ void Scheduler::setup()
     file.close();
   }
 
-  timeManager.onTimeChange(&_timeChangeListener);
+  //timeManager.onTimeChange(&_timeChangeListener);
 
   _loading = false;
 }
@@ -373,7 +373,7 @@ void Scheduler::buildSchedule()
   event_send(doc);
 
   // publish updated schedule to mqtt
-  mqtt_publish_schedule();
+  //mqtt_publish_schedule();
 
   // wake the main task to see if we actually need to do something
   MicroTask.wakeTask(this);

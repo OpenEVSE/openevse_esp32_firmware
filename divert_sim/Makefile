@@ -80,7 +80,8 @@ OPENEVSE_WIFI_OBJ := \
   event_log.o \
   debug.o \
   manual.o \
-  app_config.o
+  app_config.o \
+  scheduler.o
 
 ARDUINO_OBJ := \
   avr_stdlib.o \

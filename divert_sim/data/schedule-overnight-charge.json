@@ -1,0 +1,28 @@
+[
+  {
+    "state": "disable",
+    "time": "05:30:00",
+    "days": [
+      "monday",
+      "tuesday",
+      "wednesday",
+      "thursday",
+      "friday",
+      "saturday",
+      "sunday"
+    ]
+  },
+  {
+    "state": "active",
+    "time": "00:30:00",
+    "days": [
+      "monday",
+      "tuesday",
+      "wednesday",
+      "thursday",
+      "friday",
+      "saturday",
+      "sunday"
+    ]
+  }
+]
