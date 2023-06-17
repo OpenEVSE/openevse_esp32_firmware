@@ -182,35 +182,18 @@ void DivertTask::update_state()
       // grid_ie is negative when exporting
       // If grid feeds is available and exporting (negative)
 
-      DBUGVAR(voltage);
       double Igrid_ie = power_w_to_current_a((double)grid_ie);
       DBUGVAR(Igrid_ie);
-
-      // Subtract the current charge the EV is using from the Grid IE
-      double amps = _evse->getAmps();
-      DBUGVAR(amps);
-
-      Igrid_ie -= amps;
-      DBUGVAR(Igrid_ie);
-
-      if (Igrid_ie < 0)
-      {
-        // If excess power
-        _available_current = (-Igrid_ie - divert_reserve_current);
-      }
-      else
-      {
-        // no excess, so use the min charge
+      if (Igrid_ie >= 0)
         _available_current = 0;
-      }
+      else
+        _available_current = (-Igrid_ie + _evse->getAmps() - divert_reserve_current);
     }
     else if (divert_type == DIVERT_TYPE_SOLAR)
     {
       // if grid feed is not available: charge rate = solar generation
-      DBUGVAR(voltage);
       _available_current = power_w_to_current_a((double)solar) - divert_reserve_current;
     }
-    _available_current = abs(_available_current);
     DBUGVAR(_available_current);
 
     double scale = (_available_current > _smoothed_available_current ?
