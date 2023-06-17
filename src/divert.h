@@ -5,10 +5,6 @@
 #ifndef _EMONESP_DIVERT_H
 #define _EMONESP_DIVERT_H
 
-#ifndef EVSE_DIVERT_HYSTERESIS
-#define EVSE_DIVERT_HYSTERESIS 0.5 // A
-#endif
-
 #include <Arduino.h>
 #include <MicroTasks.h>
 
@@ -59,7 +55,6 @@ class DivertTask : public MicroTasks::Task
     DivertMode _mode;
     EvseState _state;
     uint32_t _last_update;
-    int _charge_rate;
     MicroTasks::EventListener _evseState;
     double _available_current;
     double _smoothed_available_current;
@@ -70,6 +65,7 @@ class DivertTask : public MicroTasks::Task
   protected:
     void setup();
     unsigned long loop(MicroTasks::WakeReason reason);
+    double power_w_to_current_a(double p);
 
   public:
     DivertTask(EvseManager &evse);
@@ -87,9 +83,6 @@ class DivertTask : public MicroTasks::Task
       return _last_update;
     }
 
-    uint32_t chargeRate() {
-      return _charge_rate;
-    }
 
     double availableCurrent() {
       return _available_current;
@@ -108,10 +101,6 @@ class DivertTask : public MicroTasks::Task
 
     uint32_t getLastUpdate() {
       return _last_update;
-    }
-
-    int getChargeRate() {
-      return _charge_rate;
     }
 
     time_t getMinChargeTimeRemaining();

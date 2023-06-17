@@ -77,7 +77,8 @@ extern String time_zone;
 
 // Divert settings
 extern int8_t divert_type;
-extern double divert_PV_ratio;
+extern int32_t divert_reserve_power_w;
+extern int32_t divert_hysteresis_power_w;
 extern uint32_t divert_attack_smoothing_time;
 extern uint32_t divert_decay_smoothing_time;
 extern uint32_t divert_min_charge_time;
