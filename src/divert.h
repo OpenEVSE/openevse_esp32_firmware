@@ -67,6 +67,7 @@ class DivertTask : public MicroTasks::Task
     void setup();
     unsigned long loop(MicroTasks::WakeReason reason);
     double power_w_to_current_a(double p);
+    double voltage();
 
   public:
     DivertTask(EvseManager &evse);
@@ -110,6 +111,7 @@ class DivertTask : public MicroTasks::Task
     int32_t getChargeRate() {
       return _charge_rate;
     }
+
 
     time_t getMinChargeTimeRemaining();
 

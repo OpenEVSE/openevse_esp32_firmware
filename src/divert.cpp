@@ -83,11 +83,15 @@ void DivertTask::setup()
 }
 
 double DivertTask::power_w_to_current_a(double p) {
+  return p / voltage();
+}
+
+double DivertTask::voltage() {
   double voltage = _evse->getVoltage();
   if (config_threephase_enabled()) {
     voltage = voltage * 3;
   }
-  return p / voltage;
+  return voltage;
 }
 
 unsigned long DivertTask::loop(MicroTasks::WakeReason reason)
@@ -253,7 +257,7 @@ void DivertTask::update_state()
     event["divert_active"] = isActive();
     event["charge_rate"] = _charge_rate;
     event["trigger_current"] = trigger_current;
-    event["voltage"] = voltage;
+    event["voltage"] = voltage();
     event["available_current"] = _available_current;
     event["smoothed_available_current"] = _smoothed_available_current;
     event["pilot"] = _evse->getChargeCurrent();
