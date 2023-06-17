@@ -184,15 +184,12 @@ void DivertTask::update_state()
 
       double Igrid_ie = power_w_to_current_a((double)grid_ie);
       DBUGVAR(Igrid_ie);
-      if (Igrid_ie >= 0)
-        _available_current = 0;
-      else
-        _available_current = (-Igrid_ie + _evse->getAmps() - divert_reserve_current);
+      _available_current = (-Igrid_ie + _evse->getAmps() - divert_reserve_current);
     }
     else if (divert_type == DIVERT_TYPE_SOLAR)
     {
       // if grid feed is not available: charge rate = solar generation
-      _available_current = power_w_to_current_a((double)solar) - divert_reserve_current;
+      _available_current = max(0.0, power_w_to_current_a((double)solar) - divert_reserve_current);
     }
     DBUGVAR(_available_current);
 
