@@ -26,7 +26,7 @@
 // It's better to never import current from the grid but because of charging current quantification (min value of 6A and change in steps of 1A),
 // it may be better to import a fraction of the charge current and use the next charging level sooner, depending on electricity buying/selling prices.
 
-// If EVSE is sleeping, charging will start as soon as solar PV / excess power exceeds the divert_reserve_power.
+// If EVSE is sleeping, charging will start as soon as solar PV / excess power exceeds the divert_reserve_power + divert_hysteresis_power.
 // Once charging begins it will not pause before a minimum amount of time has passed and this even if solar PV / excess power drops less then minimum charge rate.
 /// This avoids wear on the relay and the car.
 
@@ -55,6 +55,7 @@ DivertTask::DivertTask(EvseManager &evse) :
   _mode(DivertMode::Normal),
   _state(EvseState::None),
   _last_update(0),
+  _charge_rate(0),
   _evseState(this),
   _available_current(0),
   _smoothed_available_current(0),
@@ -72,7 +73,7 @@ void DivertTask::begin()
 {
   // remove this after few versions
   initDivertType();
-  // 
+  //
   MicroTask.startTask(this);
 }
 
@@ -122,7 +123,6 @@ void DivertTask::setMode(DivertMode mode)
     event["divertmode"] = (uint8_t)_mode;
     _state = EvseState::None;
     event["divert_active"] = false;
-
     switch(_mode)
     {
       case DivertMode::Normal:
@@ -132,6 +132,7 @@ void DivertTask::setMode(DivertMode mode)
       case DivertMode::Eco:
       {
         _min_charge_end = 0;
+        event["charge_rate"] = _charge_rate = 0;
         event["available_current"] = _available_current = 0;
         event["smoothed_available_current"] = _smoothed_available_current = 0;
 
@@ -213,6 +214,8 @@ void DivertTask::update_state()
                       divert_decay_smoothing_time);
     _smoothed_available_current = _inputFilter.filter(_available_current, _smoothed_available_current, scale);
     DBUGVAR(_smoothed_available_current);
+    _charge_rate = current_to_int(_smoothed_available_current);
+    DBUGVAR(_charge_rate);
 
     time_t min_charge_time_remaining = getMinChargeTimeRemaining();
     DBUGVAR(min_charge_time_remaining);
@@ -224,12 +227,12 @@ void DivertTask::update_state()
         || (_evse->getState(EvseClient_OpenEVSE_Divert) == EvseState::Active && _smoothed_available_current >= trigger_current))
     {
       EvseProperties props(EvseState::Active);
-      props.setChargeCurrent(current_to_int(_smoothed_available_current));
+      props.setChargeCurrent(_charge_rate);
       _evse->claim(EvseClient_OpenEVSE_Divert, EvseManager_Priority_Divert, props);
-    } 
+    }
     else if (_smoothed_available_current < trigger_current)
     {
-      if( _evse->getState(EvseClient_OpenEVSE_Divert) == EvseState::Active  
+      if( _evse->getState(EvseClient_OpenEVSE_Divert) == EvseState::Active
           && min_charge_time_remaining == 0)
       {
         EvseProperties props(EvseState::Disabled);
@@ -248,6 +251,7 @@ void DivertTask::update_state()
     }
 
     event["divert_active"] = isActive();
+    event["charge_rate"] = _charge_rate;
     event["trigger_current"] = trigger_current;
     event["voltage"] = voltage;
     event["available_current"] = _available_current;
