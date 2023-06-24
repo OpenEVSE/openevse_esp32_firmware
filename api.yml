@@ -72,7 +72,7 @@ paths:
                     divertmode: 1
                     solar: 390
                     grid_ie: 0
-                    charge_rate: 7
+                    divert_charge_current: 7
                     divert_update: 0
                     ota_update: 0
                     time: '2020-05-12T17:53:48Z'

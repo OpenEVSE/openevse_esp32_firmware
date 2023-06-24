@@ -64,8 +64,8 @@ void mqttmsg_callback(MongooseString topic, MongooseString payload) {
 
   // If MQTT message is solar PV
   if (topic_string == mqtt_solar){
-    solar = payload_str.toInt();
-    DBUGF("solar:%dW", solar);
+    divert_solar_w = payload_str.toInt();
+    DBUGF("solar:%dW", divert_solar_w);
     divert.update_state();
     //recalculate shaper
     if (shaper.getState()) {
@@ -74,13 +74,13 @@ void mqttmsg_callback(MongooseString topic, MongooseString payload) {
   }
   else if (topic_string == mqtt_grid_ie)
   {
-    grid_ie = payload_str.toInt();
-    DBUGF("grid:%dW", grid_ie);
+    divert_grid_ie_w = payload_str.toInt();
+    DBUGF("divert_grid_ie_w: %d W", divert_grid_ie_w);
     divert.update_state();
 
     // if shaper use the same topic as grid_ie
     if (mqtt_live_pwr == mqtt_grid_ie) {
-      shaper.setLivePwr(grid_ie);
+      shaper.setLivePwr(divert_grid_ie_w);
     }
   }
   else if (topic_string == mqtt_live_pwr)

@@ -17,8 +17,8 @@ enum divert_type {
   DIVERT_TYPE_GRID = 1
 };
 
-extern int solar;
-extern int grid_ie;
+extern int divert_solar_w;
+extern int divert_grid_ie_w;
 
 class DivertMode
 {
@@ -55,7 +55,7 @@ class DivertTask : public MicroTasks::Task
     DivertMode _mode;
     EvseState _state;
     uint32_t _last_update;
-    int32_t _charge_rate;
+    int32_t _charge_current;
     MicroTasks::EventListener _evseState;
     double _available_current;
     double _smoothed_available_current;
@@ -85,10 +85,6 @@ class DivertTask : public MicroTasks::Task
       return _last_update;
     }
 
-    uint32_t chargeRate() {
-      return _charge_rate;
-    }
-
     double availableCurrent() {
       return _available_current;
     }
@@ -108,8 +104,8 @@ class DivertTask : public MicroTasks::Task
       return _last_update;
     }
 
-    int32_t getChargeRate() {
-      return _charge_rate;
+    int32_t getChargeCurrent() {
+      return _charge_current;
     }
 
 

@@ -191,8 +191,8 @@ ConfigOpt *opts[] =
 
 // Divert settings
   new ConfigOptDefenition<int8_t>(divert_type, -1, "divert_type", "dm"),
-  new ConfigOptDefenition<int32_t>(divert_reserve_power_w, 200, "divert_reserve_power", "drp"),
-  new ConfigOptDefenition<int32_t>(divert_hysteresis_power_w, 600, "divert_hysteresis_power", "dhp"),
+  new ConfigOptDefenition<int32_t>(divert_reserve_power_w, 100, "divert_reserve_power_w", "drp"),
+  new ConfigOptDefenition<int32_t>(divert_hysteresis_power_w, 300, "divert_hysteresis_power_w", "dhp"),
   new ConfigOptDefenition<uint32_t>(divert_attack_smoothing_time, 20, "divert_attack_smoothing_time", "das"),
   new ConfigOptDefenition<uint32_t>(divert_decay_smoothing_time, 600, "divert_decay_smoothing_time", "dds"),
   new ConfigOptDefenition<uint32_t>(divert_min_charge_time, 600, "divert_min_charge_time", "dt"),

@@ -236,9 +236,9 @@ void buildStatus(DynamicJsonDocument &doc) {
   doc["nogndcount"] = evse.getFaultCountNoGround();
   doc["stuckcount"] = evse.getFaultCountStuckRelay();
 
-  doc["solar"] = solar;
-  doc["grid_ie"] = grid_ie;
-  doc["charge_rate"] = divert.getChargeRate();
+  doc["divert_solar_w"] = divert_solar_w;
+  doc["divert_grid_ie_w"] = divert_grid_ie_w;
+  doc["divert_charge_current"] = divert.getChargeCurrent();
   doc["divert_update"] = (millis() - divert.getLastUpdate()) / 1000;
   doc["divert_active"] = divert.isActive();
   doc["shaper"] = shaper.getState()?1:0;
@@ -447,9 +447,9 @@ void handleStatusPost(MongooseHttpServerRequest *request, MongooseHttpServerResp
       shaper.setLivePwr(shaper_live_pwr);
       DBUGF("shaper: live power:%dW", shaper.getLivePwr());
     }
-    if(doc.containsKey("solar")) {
-      solar = doc["solar"];
-      DBUGF("solar:%dW", solar);
+    if(doc.containsKey("divert_solar_w")) {
+      divert_solar_w = doc["divert_solar_w"];
+      DBUGF("solar:%dW", divert_solar_w);
       divert.update_state();
       // recalculate shaper
       if (shaper.getState()) {
@@ -457,9 +457,9 @@ void handleStatusPost(MongooseHttpServerRequest *request, MongooseHttpServerResp
       }
       send_event = false; // Divert sends the event so no need to send here
     }
-    else if(doc.containsKey("grid_ie")) {
-      grid_ie = doc["grid_ie"];
-      DBUGF("grid:%dW", grid_ie);
+    else if(doc.containsKey("divert_grid_ie_w")) {
+      divert_grid_ie_w = doc["divert_grid_ie_w"];
+      DBUGF("grid:%dW", divert_grid_ie_w);
       divert.update_state();
       // recalculate shaper
       if (shaper.getState()) {
