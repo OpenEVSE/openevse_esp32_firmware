@@ -25,11 +25,9 @@ private:
     EventLog *eventLog;
     RfidTask *rfid;
 
-    float charging_limit = -1.f; //in Amps. chargingLimit < 0 means that there is no Smart Charging (and no restrictions )
-    int ocppTxIdDisplay {-1};
-    bool ocppSessionDisplay {false};
-
-    bool vehicleConnected = false;
+    float charging_limit = -1.f; //in Amps. charging_limit < 0 means that no charging limit is defined
+    bool trackOcppConnected = false;
+    bool trackVehicleConnected = false;
 
     std::function<bool(const String& idTag)> onIdTagInput {nullptr};
 
@@ -41,10 +39,8 @@ private:
     void initializeFwService();
 
     void initializeArduinoOcpp();
-    bool arduinoOcppInitialized = false;
+    void deinitializeArduinoOcpp();
     void loadEvseBehavior();
-
-    bool bootNotificationAccepted = false;
 
     ulong updateEvseClaimLast {0};
 
@@ -53,10 +49,8 @@ private:
     std::shared_ptr<ArduinoOcpp::Configuration<bool>> freevendActive; //Authorize automatically
     std::shared_ptr<ArduinoOcpp::Configuration<const char*>> freevendIdTag; //idTag for auto-authorization
     std::shared_ptr<ArduinoOcpp::Configuration<bool>> allowOfflineTxForUnknownId; //temporarily accept all NFC-cards while offline
-    uint16_t trackConfigRevision = 0; //track if OCPP configs have been updated
+    std::shared_ptr<ArduinoOcpp::Configuration<bool>> silentOfflineTx; //stop transaction journaling in long offline periods
 
-    //helper functions
-    static bool idTagIsAccepted(JsonObject payload);
 protected:
 
     //hook method of MicroTask::Task
