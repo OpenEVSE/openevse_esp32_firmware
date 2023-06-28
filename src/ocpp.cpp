@@ -61,6 +61,20 @@ void ArduinoOcppTask::reconfigure() {
 
     if (getOcppContext() && config_ocpp_enabled()) {
         //library already running. Apply changed settings
+        DBUGF("[ocpp] Receiving new configs:\n" \
+              "       ocpp_server.c_str(): %s \n" \
+              "       ocpp_chargeBoxId.c_str(): %s \n" \
+              "       ocpp_authkey.c_str(): %s \n" \
+              "       config_ocpp_auto_authorization(): %s \n" \
+              "       ocpp_idtag.c_str(): %s \n" \
+              "       config_ocpp_offline_authorization(): %s",
+              ocpp_server.c_str(),
+              ocpp_chargeBoxId.c_str(),
+              ocpp_authkey.c_str(),
+              config_ocpp_auto_authorization() ? "true" : "false",
+              ocpp_idtag.c_str(),
+              config_ocpp_offline_authorization() ? "true" : "false"
+              );
         ocppSocket->setBackendUrl(ocpp_server.c_str());
         ocppSocket->setChargeBoxId(ocpp_chargeBoxId.c_str());
         ocppSocket->setAuthKey(ocpp_authkey.c_str());
@@ -68,7 +82,7 @@ void ArduinoOcppTask::reconfigure() {
 
         *freevendActive = config_ocpp_auto_authorization();
         *freevendIdTag = ocpp_idtag.c_str();
-        *allowOfflineTxForUnknownId = config_ocpp_offline_authorization();
+    //    *allowOfflineTxForUnknownId = config_ocpp_offline_authorization();
         if (config_ocpp_auto_authorization()) {
             *silentOfflineTx = true; //recommended to disable transaction journaling when being offline in Freevend mode
         }
@@ -94,10 +108,10 @@ void ArduinoOcppTask::initializeArduinoOcpp() {
     ArduinoOcpp::configuration_init(filesystem);
     freevendActive = ArduinoOcpp::declareConfiguration<bool>("AO_FreeVendActive", true, CONFIGURATION_FN, true, true, true, true);
     freevendIdTag = ArduinoOcpp::declareConfiguration<const char*>("AO_FreeVendIdTag", "DefaultIdTag", CONFIGURATION_FN, true, true, true, true);
-    allowOfflineTxForUnknownId = ArduinoOcpp::declareConfiguration<bool>("AllowOfflineTxForUnknownId", false, CONFIGURATION_FN, true, true, true, true);
+    allowOfflineTxForUnknownId = ArduinoOcpp::declareConfiguration<bool>("AllowOfflineTxForUnknownId", true, CONFIGURATION_FN, true, true, true, true);
     silentOfflineTx = ArduinoOcpp::declareConfiguration<bool>("AO_SilentOfflineTransactions", true, CONFIGURATION_FN, true, true, true, true);
     ArduinoOcpp::declareConfiguration<const char*>("MeterValuesSampledData", "Power.Active.Import,Energy.Active.Import.Register,Current.Import,Current.Offered,Voltage,Temperature", CONFIGURATION_FN);
-    ArduinoOcpp::declareConfiguration<bool>("AO_PreBootTransactions", true, CONFIGURATION_FN, true, true, true, true);
+    ArduinoOcpp::declareConfiguration<bool>("AO_PreBootTransactions", true, CONFIGURATION_FN);
     /*
      * Initialize the OCPP library and provide it with the charger credentials
      */
@@ -117,6 +131,23 @@ void ArduinoOcppTask::initializeArduinoOcpp() {
     updateQuery["ocpp_auth_auto"] = *freevendActive ? 1 : 0;
     updateQuery["ocpp_idtag"] = (const char*) *freevendIdTag;
     updateQuery["ocpp_auth_offline"] = *allowOfflineTxForUnknownId ? 1 : 0;
+    DBUGF("[ocpp] Sending new configs:\n" \
+              "       ocppSocket->getBackendUrl(): %s \n" \
+              "       ocppSocket->getChargeBoxId(): %s \n" \
+              "       ocppSocket->getAuthKey(): %s \n" \
+              "       freevendActive: %s \n" \
+              "       freevendIdTag: %s \n" \
+              "       allowOfflineTxForUnknownId: %s",
+              ocppSocket->getBackendUrl(),
+              ocppSocket->getChargeBoxId(),
+              ocppSocket->getAuthKey(),
+              *freevendActive ? "true" : "false",
+              (const char*) *freevendIdTag,
+              *allowOfflineTxForUnknownId ? "true" : "false"
+              );
+    DBUG("[ocpp] resulting JSON: ");
+    serializeJson(updateQuery, DEBUG_PORT);
+    DBUGLN();
     config_deserialize(updateQuery);
     config_commit();
 
