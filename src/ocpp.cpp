@@ -14,7 +14,7 @@
 #include "app_config.h"
 #include "http_update.h"
 #include "emonesp.h"
-#include "root_ca.h"
+#include "certificates.h"
 
 #define LCD_DISPLAY(X) if (lcd) lcd->display((X), 0, 1, 5 * 1000, LCD_CLEAR_LINE);
 
@@ -73,7 +73,7 @@ void ArduinoOcppTask::reconfigure() {
                     ocpp_server.c_str(), //fallback URL. Normally, OcppSocket loads URL from own store
                     ocpp_chargeBoxId.c_str(),
                     ocpp_authkey.c_str(),
-                    root_ca, //defined in root_ca.cpp
+                    certs.getRootCa(),
                     ArduinoOcpp::makeDefaultFilesystemAdapter(ArduinoOcpp::FilesystemOpt::Use));
             
             //override values in UI with URL storage. Unfortunately, editing URL in UI and enabling OCPP at the same time

@@ -832,6 +832,95 @@ paths:
           $ref: '#/components/responses/BadRequest'
       operationId: post-time
       description: Set the time and associated config options. If not setting the time the `/config` endpoint can be used.
+  /certificates:
+    get:
+      summary: Get a list of certificates
+      description: |
+        Returns a list of certificates that have been uploaded to the OpenEVSE. The certificates are used to
+        authenticate the OpenEVSE to the MQTT broker, provide a secure web interface or as additional root CA
+        certificates.
+      operationId: listCertificates
+      tags:
+        - Certificates
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  certificates:
+                    type: array
+                    items:
+                      $ref: './models/Certificate.yaml'
+    post:
+      summary: Upload a certificate
+      description: |
+        Upload a certificate to the OpenEVSE. The certificate can be used to authenticate the OpenEVSE to the MQTT
+        broker, provide a secure web interface or as additional root CA certificates.
+      operationId: uploadCertificate
+      tags:
+        - Certificates
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: './models/Certificate.yaml'
+      responses:
+        '200':
+          $ref: '#/components/responses/UpdateSuccessful'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+  '/certificates/{id}':
+    get:
+      summary: Get a certificate
+      description: |
+        Returns a certificate that has been uploaded to the OpenEVSE. The certificate is used to
+        authenticate the OpenEVSE to the MQTT broker, provide a secure web interface or as additional root CA
+        certificates.
+      operationId: getCertificate
+      tags:
+        - Certificates
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: './models/Certificate.yaml'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '404':
+          $ref: '#/components/responses/NotFound'
+    delete:
+      summary: Delete a certificate
+      description: |
+        Delete a certificate that has been uploaded to the OpenEVSE. The certificate is used to
+        authenticate the OpenEVSE to the MQTT broker, provide a secure web interface or as additional root CA
+        certificates.
+      operationId: deleteCertificate
+      tags:
+        - Certificates
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          $ref: '#/components/responses/UpdateSuccessful'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '404':
+          $ref: '#/components/responses/NotFound'
 components:
   schemas:
     Message:
@@ -978,3 +1067,4 @@ tags:
   - name: Energy Meter
   - name: Time
   - name: Restart
+  - name: Certificates

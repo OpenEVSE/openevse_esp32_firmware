@@ -70,6 +70,7 @@ void handleConfig(MongooseHttpServerRequest *request);
 void handleEvseClaimsTarget(MongooseHttpServerRequest *request);
 void handleEvseClaims(MongooseHttpServerRequest *request);
 void handleEventLogs(MongooseHttpServerRequest *request);
+void handleCertificates(MongooseHttpServerRequest *request);
 
 void handleUpdateRequest(MongooseHttpServerRequest *request);
 size_t handleUpdateUpload(MongooseHttpServerRequest *request, int ev, MongooseString filename, uint64_t index, uint8_t *data, size_t len);
@@ -1185,7 +1186,7 @@ web_server_setup() {
   server.on("/override$", handleOverride);
 
   server.on("/logs", handleEventLogs);
-
+  server.on("/certificates", handleCertificates);
   server.on("/limit", handleLimit);
   server.on("/emeter", handleEmeter);
   server.on("/time", handleTime);
