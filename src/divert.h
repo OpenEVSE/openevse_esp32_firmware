@@ -49,6 +49,10 @@ class DivertMode
 
 class DivertTask : public MicroTasks::Task
 {
+  // If after DIVERT_TIMEOUT_MS we don't get an http or mqtt update, we stop charging.
+  // The mqtt publisher might have stopped running.
+  public:
+    static unsigned long const DIVERT_TIMEOUT_MS;
   private:
     // global variable
     EvseManager *_evse;
@@ -60,8 +64,9 @@ class DivertTask : public MicroTasks::Task
     double _available_current;
     double _smoothed_available_current;
     time_t _min_charge_end;
-    uint8_t _evse_last_state;
     InputFilter _inputFilter;
+    uint8_t _evse_last_state;
+    bool _was_updated;
 
   protected:
     void setup();
@@ -95,6 +100,9 @@ class DivertTask : public MicroTasks::Task
 
     // Set charge rate depending on charge mode and solarPV output
     void update_state();
+    void update_watchdog();
+    void charge_active_update_current();
+    void stop_charging();
 
     EvseState getState() {
       return _state;

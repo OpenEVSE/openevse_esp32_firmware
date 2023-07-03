@@ -95,6 +95,15 @@ ArduinoOcppTask ocpp = ArduinoOcppTask();
 static void hardware_setup();
 static void handle_serial();
 
+class DivertUpdateWatchdog : public MicroTasks::Alarm
+{
+  public:
+    void Trigger()
+    {
+      divert.update_watchdog();
+    }
+} divert_update_watchdog;
+
 // -------------------------------------------------------------------
 // SETUP
 // -------------------------------------------------------------------
@@ -166,7 +175,11 @@ void setup()
   lcd.display(currentfirmware, 0, 1, 5 * 1000, LCD_CLEAR_LINE);
 
   start_mem = last_mem = ESPAL.getFreeHeap();
+  divert_update_watchdog.Set(DivertTask::DIVERT_TIMEOUT_MS, true);
 } // end setup
+
+
+
 
 // -------------------------------------------------------------------
 // LOOP
@@ -300,6 +313,9 @@ void restart_system()
 {
   systemRestartAlarm.Set(1000, false);
 }
+
+
+
 
 void handle_serial()
 {

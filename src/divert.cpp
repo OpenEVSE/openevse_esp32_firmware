@@ -49,6 +49,7 @@ inline int current_to_int(double const current) {
   return static_cast<int>(floor(current));
 }
 
+const unsigned long DivertTask::DIVERT_TIMEOUT_MS = 300000;
 
 DivertTask::DivertTask(EvseManager &evse) :
   _evse(&evse),
@@ -59,7 +60,10 @@ DivertTask::DivertTask(EvseManager &evse) :
   _evseState(this),
   _available_current(0),
   _smoothed_available_current(0),
-  _min_charge_end(0)
+  _min_charge_end(0),
+  _inputFilter(),
+  _evse_last_state(),
+  _was_updated(false)
 {
 
 }
@@ -210,23 +214,16 @@ void DivertTask::update_state()
 
     double const trigger_current = static_cast<double>(_evse->getMinCurrent()) + power_w_to_current_a(divert_hysteresis_power_w);
 
-
-    // the smoothed current suffices to ensure sufficient PV power
-    if ((_smoothed_available_current >= trigger_current)
-        || (_evse->getState(EvseClient_OpenEVSE_Divert) == EvseState::Active && _smoothed_available_current >= trigger_current))
-    {
-      EvseProperties props(EvseState::Active);
-      props.setChargeCurrent(_charge_current);
-      _evse->claim(EvseClient_OpenEVSE_Divert, EvseManager_Priority_Divert, props);
-    }
-    else if (_smoothed_available_current < trigger_current)
-    {
-      if( _evse->getState(EvseClient_OpenEVSE_Divert) == EvseState::Active
-          && min_charge_time_remaining == 0)
-      {
-        EvseProperties props(EvseState::Disabled);
-        _evse->claim(EvseClient_OpenEVSE_Divert, EvseManager_Priority_Default, props);
-      }
+    switch(_state) {
+      case EvseState::Active:
+        if (_smoothed_available_current < _evse->getMinCurrent()) {
+          stop_charging();
+        }
+      case EvseState::Disabled:
+      case EvseState::None:
+        if (_smoothed_available_current >= trigger_current) {
+          charge_active_update_current();
+        }
     }
 
     EvseState current_evse_state = _evse->getState();
@@ -253,9 +250,37 @@ void DivertTask::update_state()
   emoncms_publish(event);
 
   _last_update = millis();
+  _was_updated = true;
 
   Profile_End(DivertTask::update_state, 5);
 } //end divert_update_state
+
+
+void DivertTask::update_watchdog()
+{
+  if (! _was_updated)
+    return;
+  unsigned long elapsed_since_update_ms = millis() - _last_update;
+  if (elapsed_since_update_ms > DIVERT_TIMEOUT_MS) {
+    stop_charging();
+  }
+}
+
+void DivertTask::charge_active_update_current()
+{
+  EvseProperties props(EvseState::Active);
+  props.setChargeCurrent(_charge_current);
+  _evse->claim(EvseClient_OpenEVSE_Divert, EvseManager_Priority_Divert, props);
+}
+
+void DivertTask::stop_charging()
+{
+  EvseProperties props(EvseState::Disabled);
+  props.setChargeCurrent(0);
+  _charge_current = 0;
+  _smoothed_available_current = 0;
+  _evse->claim(EvseClient_OpenEVSE_Divert, EvseManager_Priority_Default, props);
+}
 
 bool DivertTask::isActive()
 {
