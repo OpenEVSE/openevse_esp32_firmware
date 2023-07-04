@@ -47,20 +47,44 @@ void ArduinoOcppTask::begin(EvseManager &evse, LcdTask &lcd, EventLog &eventLog,
 
 void ArduinoOcppTask::reconfigure() {
 
-    if (getOcppContext() && !config_ocpp_enabled()) {
-        //library initialized but now disabled
-        deinitializeArduinoOcpp();
-        return;
-    }
+    if (config_ocpp_enabled()) {
+        //OCPP enabled via OpenEVSE config. Load library (if not done yet) and apply OpenEVSE configs
 
-    if (!getOcppContext() && config_ocpp_enabled()) {
-        //library not initialized yet but enabled via config (e.g. during system startup)
-        initializeArduinoOcpp();
-        return;
-    }
+        if (!getOcppContext()) {
+            //first time execution, library not initialized yet
+            initializeArduinoOcpp();
 
-    if (getOcppContext() && config_ocpp_enabled()) {
-        //library already running. Apply changed settings
+            //when the OCPP server updates the configs, the following callback will apply them to the OpenEVSE configs
+            setOnReceiveRequest("ChangeConfiguration", [this] (JsonObject) {
+                DynamicJsonDocument updateQuery (JSON_OBJECT_SIZE(6));
+                updateQuery["ocpp_server"] = (const char*) *backendUrl;
+                updateQuery["ocpp_chargeBoxId"] = (const char*) *chargeBoxId;
+                updateQuery["ocpp_authkey"] = (const char*) *authKey;
+                updateQuery["ocpp_auth_auto"] = *freevendActive ? 1 : 0;
+                updateQuery["ocpp_idtag"] = (const char*) *freevendIdTag;
+                updateQuery["ocpp_auth_offline"] = *allowOfflineTxForUnknownId ? 1 : 0;
+                DBUGF("[ocpp] Sending new configs:\n" \
+                        "       (const char*) *backendUrl: %s \n" \
+                        "       (const char*) *chargeBoxId: %s \n" \
+                        "       (const char*) *authKey: %s \n" \
+                        "       freevendActive: %s \n" \
+                        "       freevendIdTag: %s \n" \
+                        "       allowOfflineTxForUnknownId: %s",
+                        (const char*) *backendUrl,
+                        (const char*) *chargeBoxId,
+                        (const char*) *authKey,
+                        *freevendActive ? "true" : "false",
+                        (const char*) *freevendIdTag,
+                        *allowOfflineTxForUnknownId ? "true" : "false"
+                        );
+                DBUG("[ocpp] resulting JSON: ");
+                serializeJson(updateQuery, DEBUG_PORT);
+                DBUGLN();
+                config_deserialize(updateQuery);
+                config_commit();
+            });
+        }
+
         DBUGF("[ocpp] Receiving new configs:\n" \
               "       ocpp_server.c_str(): %s \n" \
               "       ocpp_chargeBoxId.c_str(): %s \n" \
@@ -75,47 +99,45 @@ void ArduinoOcppTask::reconfigure() {
               ocpp_idtag.c_str(),
               config_ocpp_offline_authorization() ? "true" : "false"
               );
-        ocppSocket->setBackendUrl(ocpp_server.c_str());
-        ocppSocket->setChargeBoxId(ocpp_chargeBoxId.c_str());
-        ocppSocket->setAuthKey(ocpp_authkey.c_str());
-        ocppSocket->reconnect();
+
+        //apply new backend credentials if they have been updated via OCPP configs
+        if (!ocpp_server.equals((const char*) *backendUrl)) {
+            ocppSocket->setBackendUrl(ocpp_server.c_str());
+        }
+        if (!ocpp_chargeBoxId.equals((const char*) *chargeBoxId)) {
+            ocppSocket->setChargeBoxId(ocpp_chargeBoxId.c_str());
+        }
+        if (!ocpp_authkey.equals((const char*) *authKey)) {
+            ocppSocket->setAuthKey(ocpp_authkey.c_str());
+        }
 
         *freevendActive = config_ocpp_auto_authorization();
         *freevendIdTag = ocpp_idtag.c_str();
-    //    *allowOfflineTxForUnknownId = config_ocpp_offline_authorization();
+        *allowOfflineTxForUnknownId = config_ocpp_offline_authorization();
         if (config_ocpp_auto_authorization()) {
             *silentOfflineTx = true; //recommended to disable transaction journaling when being offline in Freevend mode
         }
 
         ArduinoOcpp::configuration_save();
+    } else {
+        //OCPP disabled via OpenEVSE config
+
+        if (getOcppContext()) {
+            //library still running. Deinitialize
+            deinitializeArduinoOcpp();
+        }
     }
 }
 
 void ArduinoOcppTask::initializeArduinoOcpp() {
 
-    auto filesystem = ArduinoOcpp::makeDefaultFilesystemAdapter(ArduinoOcpp::FilesystemOpt::Use);
-
-    ocppSocket = new ArduinoOcpp::AOcppMongooseClient(Mongoose.getMgr(),
-                ocpp_server.c_str(), //factory default URL. Normally, OcppSocket loads URL from own store
-                ocpp_chargeBoxId.c_str(), //factory default
-                ocpp_authkey.c_str(), //factory default
-                root_ca, //defined in root_ca.cpp
-                filesystem);
+    ocppSocket = new ArduinoOcpp::AOcppMongooseClient(Mongoose.getMgr(), nullptr, nullptr, nullptr, nullptr,
+                ArduinoOcpp::makeDefaultFilesystemAdapter(ArduinoOcpp::FilesystemOpt::Use));
     
-    /*
-     * Load OCPP configs and apply factory defaults for OpenEVSE
-     */
-    ArduinoOcpp::configuration_init(filesystem);
-    freevendActive = ArduinoOcpp::declareConfiguration<bool>("AO_FreeVendActive", true, CONFIGURATION_FN, true, true, true, true);
-    freevendIdTag = ArduinoOcpp::declareConfiguration<const char*>("AO_FreeVendIdTag", "DefaultIdTag", CONFIGURATION_FN, true, true, true, true);
-    allowOfflineTxForUnknownId = ArduinoOcpp::declareConfiguration<bool>("AllowOfflineTxForUnknownId", true, CONFIGURATION_FN, true, true, true, true);
-    silentOfflineTx = ArduinoOcpp::declareConfiguration<bool>("AO_SilentOfflineTransactions", true, CONFIGURATION_FN, true, true, true, true);
-    ArduinoOcpp::declareConfiguration<const char*>("MeterValuesSampledData", "Power.Active.Import,Energy.Active.Import.Register,Current.Import,Current.Offered,Voltage,Temperature", CONFIGURATION_FN);
-    ArduinoOcpp::declareConfiguration<bool>("AO_PreBootTransactions", true, CONFIGURATION_FN);
     /*
      * Initialize the OCPP library and provide it with the charger credentials
      */
-    OCPP_initialize(*ocppSocket, ChargerCredentials(
+    ocpp_initialize(*ocppSocket, ChargerCredentials(
             "Advanced Series",         //chargePointModel
             "OpenEVSE",                //chargePointVendor
             currentfirmware.c_str(),   //firmwareVersion
@@ -123,33 +145,17 @@ void ArduinoOcppTask::initializeArduinoOcpp() {
             evse->getFirmwareVersion() //meterSerialNumber
         ), ArduinoOcpp::FilesystemOpt::Use);
     
-    //override values in UI with stored values
-    DynamicJsonDocument updateQuery (JSON_OBJECT_SIZE(6));
-    updateQuery["ocpp_server"] = ocppSocket->getBackendUrl();
-    updateQuery["ocpp_chargeBoxId"] = ocppSocket->getChargeBoxId();
-    updateQuery["ocpp_authkey"] = ocppSocket->getAuthKey();
-    updateQuery["ocpp_auth_auto"] = *freevendActive ? 1 : 0;
-    updateQuery["ocpp_idtag"] = (const char*) *freevendIdTag;
-    updateQuery["ocpp_auth_offline"] = *allowOfflineTxForUnknownId ? 1 : 0;
-    DBUGF("[ocpp] Sending new configs:\n" \
-              "       ocppSocket->getBackendUrl(): %s \n" \
-              "       ocppSocket->getChargeBoxId(): %s \n" \
-              "       ocppSocket->getAuthKey(): %s \n" \
-              "       freevendActive: %s \n" \
-              "       freevendIdTag: %s \n" \
-              "       allowOfflineTxForUnknownId: %s",
-              ocppSocket->getBackendUrl(),
-              ocppSocket->getChargeBoxId(),
-              ocppSocket->getAuthKey(),
-              *freevendActive ? "true" : "false",
-              (const char*) *freevendIdTag,
-              *allowOfflineTxForUnknownId ? "true" : "false"
-              );
-    DBUG("[ocpp] resulting JSON: ");
-    serializeJson(updateQuery, DEBUG_PORT);
-    DBUGLN();
-    config_deserialize(updateQuery);
-    config_commit();
+    /*
+     * Load OCPP configs. Default values will be overwritten by OpenEVSE configs. Mark configs
+     * to require reboot if changed via OCPP server
+     */
+    backendUrl = ArduinoOcpp::declareConfiguration<const char*>("AO_BackendUrl", "", AO_FILENAME_PREFIX "ocpp-creds.jsn");
+    chargeBoxId = ArduinoOcpp::declareConfiguration<const char*>("AO_ChargeBoxId", "", AO_FILENAME_PREFIX "ocpp-creds.jsn");
+    authKey = ArduinoOcpp::declareConfiguration<const char*>("AuthorizationKey", "", AO_FILENAME_PREFIX "ocpp-creds.jsn");
+    freevendActive = ArduinoOcpp::declareConfiguration<bool>("AO_FreeVendActive", true, CONFIGURATION_FN, true, true, true, true);
+    freevendIdTag = ArduinoOcpp::declareConfiguration<const char*>("AO_FreeVendIdTag", "DefaultIdTag", CONFIGURATION_FN, true, true, true, true);
+    allowOfflineTxForUnknownId = ArduinoOcpp::declareConfiguration<bool>("AllowOfflineTxForUnknownId", true, CONFIGURATION_FN, true, true, true, true);
+    silentOfflineTx = ArduinoOcpp::declareConfiguration<bool>("AO_SilentOfflineTransactions", true, CONFIGURATION_FN, true, true, true, true);
 
     loadEvseBehavior();
     initializeDiagnosticsService();
@@ -158,7 +164,7 @@ void ArduinoOcppTask::initializeArduinoOcpp() {
 
 void ArduinoOcppTask::deinitializeArduinoOcpp() {
     rfid->setOnCardScanned(nullptr);
-    OCPP_deinitialize();
+    ocpp_deinitialize();
     delete ocppSocket;
     ocppSocket = nullptr;
 }
@@ -242,32 +248,32 @@ void ArduinoOcppTask::loadEvseBehavior() {
      * Report failures to central system. Note that the error codes are standardized in OCPP
      */
 
-    addErrorCodeInput([this] () -> ChargePointErrorCode {
+    addErrorCodeInput([this] () -> const char* {
         if (evse->getEvseState() == OPENEVSE_STATE_OVER_TEMPERATURE) {
-            return ChargePointErrorCode::HighTemperature;
+            return "HighTemperature";
         }
-        return ChargePointErrorCode::NoError;
+        return nullptr;
     });
 
-    addErrorCodeInput([this] () -> ChargePointErrorCode {
+    addErrorCodeInput([this] () -> const char* {
         if (evse->getEvseState() == OPENEVSE_STATE_OVER_CURRENT) {
-            return ChargePointErrorCode::OverCurrentFailure;
+            return "OverCurrentFailure";
         }
-        return ChargePointErrorCode::NoError;
+        return nullptr;
     });
 
-    addErrorCodeInput([this] () -> ChargePointErrorCode {
+    addErrorCodeInput([this] () -> const char* {
         if (evse->getEvseState() == OPENEVSE_STATE_STUCK_RELAY) {
-            return ChargePointErrorCode::PowerSwitchFailure;
+            return "PowerSwitchFailure";
         }
-        return ChargePointErrorCode::NoError;
+        return nullptr;
     });
 
-    addErrorCodeInput([this] () -> ChargePointErrorCode {
+    addErrorCodeInput([this] () -> const char* {
         if (rfid->communicationFails()) {
-            return ChargePointErrorCode::ReaderFailure;
+            return "ReaderFailure";
         }
-        return ChargePointErrorCode::NoError;
+        return nullptr;
     });
 
     addErrorDataInput([this] () -> ArduinoOcpp::ErrorData {
@@ -276,7 +282,7 @@ void ArduinoOcppTask::loadEvseBehavior() {
                 evse->getEvseState() == OPENEVSE_STATE_NO_EARTH_GROUND ||
                 evse->getEvseState() == OPENEVSE_STATE_GFI_SELF_TEST_FAILED) {
             
-            ArduinoOcpp::ErrorData error = ChargePointErrorCode::GroundFailure;
+            ArduinoOcpp::ErrorData error = "GroundFailure";
 
             error.info = evse->getEvseState() == OPENEVSE_STATE_DIODE_CHECK_FAILED ? "diode check failed" :
                          evse->getEvseState() == OPENEVSE_STATE_GFI_FAULT ? "GFI fault" :
@@ -284,7 +290,7 @@ void ArduinoOcppTask::loadEvseBehavior() {
                          evse->getEvseState() == OPENEVSE_STATE_GFI_SELF_TEST_FAILED ? "GFI self test failed" : nullptr;
             return error;
         }
-        return ChargePointErrorCode::NoError;
+        return nullptr;
     });
 
     onIdTagInput = [this] (const String& idInput) {
@@ -371,7 +377,7 @@ unsigned long ArduinoOcppTask::loop(MicroTasks::WakeReason reason) {
     if (getOcppContext()) {
         //ArduinoOcpp is initialized
 
-        OCPP_loop();
+        ocpp_loop();
         
         /*
          * Generate messages for LCD

@@ -45,7 +45,9 @@ private:
     ulong updateEvseClaimLast {0};
 
     static ArduinoOcppTask *instance;
-
+    std::shared_ptr<ArduinoOcpp::Configuration<const char*>> backendUrl;
+    std::shared_ptr<ArduinoOcpp::Configuration<const char*>> chargeBoxId;
+    std::shared_ptr<ArduinoOcpp::Configuration<const char*>> authKey;
     std::shared_ptr<ArduinoOcpp::Configuration<bool>> freevendActive; //Authorize automatically
     std::shared_ptr<ArduinoOcpp::Configuration<const char*>> freevendIdTag; //idTag for auto-authorization
     std::shared_ptr<ArduinoOcpp::Configuration<bool>> allowOfflineTxForUnknownId; //temporarily accept all NFC-cards while offline
