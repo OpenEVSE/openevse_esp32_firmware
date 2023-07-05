@@ -120,14 +120,14 @@ void ArduinoOcppTask::initializeArduinoOcpp() {
             serial.c_str(),            //chargePointSerialNumber
             evse->getFirmwareVersion() //meterSerialNumber
         ), filesystem);
-    
+
     /*
      * Load OCPP configs. Default values will be overwritten by OpenEVSE configs. Mark configs
      * to require reboot if changed via OCPP server
      */
-    backendUrl = ArduinoOcpp::declareConfiguration<const char*>("AO_BackendUrl", "", AO_FILENAME_PREFIX "ocpp-creds.jsn");
-    chargeBoxId = ArduinoOcpp::declareConfiguration<const char*>("AO_ChargeBoxId", "", AO_FILENAME_PREFIX "ocpp-creds.jsn");
-    authKey = ArduinoOcpp::declareConfiguration<const char*>("AuthorizationKey", "", AO_FILENAME_PREFIX "ocpp-creds.jsn");
+    backendUrl = ArduinoOcpp::declareConfiguration<const char*>("AO_BackendUrl", "", AO_FILENAME_PREFIX "ocpp-creds.jsn", true, true, true, true);
+    chargeBoxId = ArduinoOcpp::declareConfiguration<const char*>("AO_ChargeBoxId", "", AO_FILENAME_PREFIX "ocpp-creds.jsn", true, true, true, true);
+    authKey = ArduinoOcpp::declareConfiguration<const char*>("AuthorizationKey", "", AO_FILENAME_PREFIX "ocpp-creds.jsn", true, true, true, true);
     freevendActive = ArduinoOcpp::declareConfiguration<bool>("AO_FreeVendActive", true, CONFIGURATION_FN, true, true, true, true);
     freevendIdTag = ArduinoOcpp::declareConfiguration<const char*>("AO_FreeVendIdTag", "DefaultIdTag", CONFIGURATION_FN, true, true, true, true);
     allowOfflineTxForUnknownId = ArduinoOcpp::declareConfiguration<bool>("AllowOfflineTxForUnknownId", true, CONFIGURATION_FN, true, true, true, true);
@@ -176,38 +176,38 @@ void ArduinoOcppTask::loadEvseBehavior() {
      */
 
     addMeterValueInput([this] () {
-            return (int32_t) (evse->getAmps() * evse->getVoltage());
+            return evse->getAmps() * evse->getVoltage();
         },
         "Power.Active.Import",
         "W");
     
     addMeterValueInput([this] () {
             float activeImport = 0.f;
-            return (int32_t) evse->getTotalEnergy();
+            return evse->getTotalEnergy();
         }, 
         "Energy.Active.Import.Register",
         "Wh");
 
     addMeterValueInput([this] () {
-            return (int32_t) evse->getAmps();
+            return evse->getAmps();
         }, 
         "Current.Import",
         "A");
 
     addMeterValueInput([this] () {
-            return (int32_t) evse->getChargeCurrent();
+            return (float) evse->getChargeCurrent();
         }, 
         "Current.Offered",
         "A");
     
     addMeterValueInput([this] () {
-            return (int32_t) evse->getVoltage();
+            return evse->getVoltage();
         }, 
         "Voltage",
         "V");
     
     addMeterValueInput([this] () {
-            return (int32_t) evse->getTemperature(EVSE_MONITOR_TEMP_MONITOR);
+            return evse->getTemperature(EVSE_MONITOR_TEMP_MONITOR);
         }, 
         "Temperature",
         "C");
@@ -403,7 +403,7 @@ unsigned long ArduinoOcppTask::loop(MicroTasks::WakeReason reason) {
         trackOcppConnected = isConnected();
     }
 
-        updateEvseClaim();
+    updateEvseClaim();
 
     return config_ocpp_enabled() ? OCPP_LOOP_TIME : MicroTask.Infinate;
 }
@@ -503,8 +503,7 @@ void ArduinoOcppTask::initializeDiagnosticsService() {
             unsigned int port_i = 0;
             struct mg_str scheme, query, fragment;
             if (mg_parse_uri(mg_mk_str(location.c_str()), &scheme, NULL, NULL, &port_i, NULL, &query, &fragment)) {
-                DBUG(F("[ocpp] Diagnostics upload, invalid URL: "));
-                DBUGLN(location.c_str());
+                DBUGF("[ocpp] Diagnostics upload, invalid URL: %s", location.c_str());
                 diagFailure = true;
                 return false;
             }
@@ -537,9 +536,8 @@ void ArduinoOcppTask::initializeDiagnosticsService() {
                 eventLog->enumerate(index, [this, startTime, stopTime, &body, SUFFIX_RESERVED_AREA, &firstEntry, &overflow] (String time, EventType type, const String &logEntry, EvseState managerState, uint8_t evseState, uint32_t evseFlags, uint32_t pilot, double energy, uint32_t elapsed, double temperature, double temperatureMax, uint8_t divertMode, uint8_t shaper) {
                     if (overflow) return;
                     ArduinoOcpp::Timestamp timestamp = ArduinoOcpp::Timestamp();
-                    if (!timestamp.setTime(time.c_str())) {
-                        DBUG(F("[ocpp] Diagnostics upload, cannot parse timestamp format: "));
-                        DBUGLN(time);
+                    if (time.isEmpty() || !timestamp.setTime(time.c_str())) {
+                        DBUGF("[ocpp] Diagnostics upload, cannot parse timestamp format: %s", time.c_str());
                         return;
                     }
 
@@ -572,8 +570,7 @@ void ArduinoOcppTask::initializeDiagnosticsService() {
 
             body += bodySuffix;
 
-            DBUG(F("[ocpp] POST diagnostics file to "));
-            DBUGLN(location.c_str());
+            DBUGF("[ocpp] POST diagnostics file to %s", location.c_str());
 
             MongooseHttpClientRequest *request =
                     diagClient.beginRequest(location.c_str());
