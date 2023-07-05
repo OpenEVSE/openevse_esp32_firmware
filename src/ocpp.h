@@ -45,6 +45,8 @@ private:
     ulong updateEvseClaimLast {0};
 
     static ArduinoOcppTask *instance;
+
+    //OCPP configs
     std::shared_ptr<ArduinoOcpp::Configuration<const char*>> backendUrl;
     std::shared_ptr<ArduinoOcpp::Configuration<const char*>> chargeBoxId;
     std::shared_ptr<ArduinoOcpp::Configuration<const char*>> authKey;
