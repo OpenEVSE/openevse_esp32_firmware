@@ -13,6 +13,11 @@
 #include "emonesp.h"
 #include "root_ca.h"
 
+// Time between loop polls
+#ifndef OCPP_LOOP_TIME
+#define OCPP_LOOP_TIME 200
+#endif
+
 #define LCD_DISPLAY(X) if (lcd) lcd->display((X), 0, 1, 5 * 1000, LCD_CLEAR_LINE);
 
 ArduinoOcppTask *ArduinoOcppTask::instance = NULL;
@@ -39,10 +44,11 @@ void ArduinoOcppTask::begin(EvseManager &evse, LcdTask &lcd, EventLog &eventLog,
 
     ao_set_console_out(dbug_wrapper);
 
+    MicroTask.startTask(this);
+    
     reconfigure();
 
-    instance = this; //cannot be in constructer because object is invalid before .begin()
-    MicroTask.startTask(this);
+    instance = this; //OcppTask is valid now
 }
 
 void ArduinoOcppTask::reconfigure() {
@@ -85,6 +91,8 @@ void ArduinoOcppTask::reconfigure() {
             deinitializeArduinoOcpp();
         }
     }
+
+    MicroTask.wakeTask(this);
 }
 
 void ArduinoOcppTask::initializeArduinoOcpp() {
@@ -395,12 +403,9 @@ unsigned long ArduinoOcppTask::loop(MicroTasks::WakeReason reason) {
         trackOcppConnected = isConnected();
     }
 
-    if (millis() - updateEvseClaimLast >= 1009) {
-        updateEvseClaimLast = millis();
         updateEvseClaim();
-    }
 
-    return getOcppContext() ? 0 : 1000;
+    return config_ocpp_enabled() ? OCPP_LOOP_TIME : MicroTask.Infinate;
 }
 
 void ArduinoOcppTask::updateEvseClaim() {

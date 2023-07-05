@@ -42,8 +42,6 @@ private:
     void deinitializeArduinoOcpp();
     void loadEvseBehavior();
 
-    ulong updateEvseClaimLast {0};
-
     static ArduinoOcppTask *instance;
 
     //OCPP configs
