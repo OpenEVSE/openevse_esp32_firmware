@@ -5,10 +5,6 @@
 #ifndef _EMONESP_DIVERT_H
 #define _EMONESP_DIVERT_H
 
-#ifndef EVSE_DIVERT_HYSTERESIS
-#define EVSE_DIVERT_HYSTERESIS 0.5 // A
-#endif
-
 #include <Arduino.h>
 #include <MicroTasks.h>
 
@@ -21,8 +17,8 @@ enum divert_type {
   DIVERT_TYPE_GRID = 1
 };
 
-extern int solar;
-extern int grid_ie;
+extern int divert_solar_w;
+extern int divert_grid_ie_w;
 
 class DivertMode
 {
@@ -53,23 +49,30 @@ class DivertMode
 
 class DivertTask : public MicroTasks::Task
 {
+  // If after DIVERT_TIMEOUT_MS we don't get an http or mqtt update, we stop charging.
+  // The mqtt publisher might have stopped running.
+  public:
+    static unsigned long const DIVERT_TIMEOUT_MS;
   private:
     // global variable
     EvseManager *_evse;
     DivertMode _mode;
     EvseState _state;
     uint32_t _last_update;
-    int _charge_rate;
+    int32_t _charge_current;
     MicroTasks::EventListener _evseState;
     double _available_current;
     double _smoothed_available_current;
     time_t _min_charge_end;
-    uint8_t _evse_last_state;
     InputFilter _inputFilter;
+    uint8_t _evse_last_state;
+    bool _was_updated;
 
   protected:
     void setup();
     unsigned long loop(MicroTasks::WakeReason reason);
+    double power_w_to_current_a(double p);
+    double voltage();
 
   public:
     DivertTask(EvseManager &evse);
@@ -87,10 +90,6 @@ class DivertTask : public MicroTasks::Task
       return _last_update;
     }
 
-    uint32_t chargeRate() {
-      return _charge_rate;
-    }
-
     double availableCurrent() {
       return _available_current;
     }
@@ -101,6 +100,9 @@ class DivertTask : public MicroTasks::Task
 
     // Set charge rate depending on charge mode and solarPV output
     void update_state();
+    void update_watchdog();
+    void charge_active_update_current();
+    void stop_charging();
 
     EvseState getState() {
       return _state;
@@ -110,9 +112,10 @@ class DivertTask : public MicroTasks::Task
       return _last_update;
     }
 
-    int getChargeRate() {
-      return _charge_rate;
+    int32_t getChargeCurrent() {
+      return _charge_current;
     }
+
 
     time_t getMinChargeTimeRemaining();
 

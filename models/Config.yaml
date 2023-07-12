@@ -61,7 +61,8 @@ x-examples:
     ocpp_authkey: ''
     ohm: ''
     divert_type: -1
-    divert_PV_ratio: 1.1
+    divert_reserve_power_w: 200
+    divert_hysteresis_power_w: 600
     divert_attack_smoothing_time: 20
     divert_decay_smoothing_time: 200
     divert_min_charge_time: 600
@@ -265,7 +266,9 @@ properties:
     type: string
   divert_type:
     type: number
-  divert_PV_ratio:
+  divert_reserve_power_w:
+    type: number
+  divert_hysteresis_power_w:
     type: number
   divert_attack_smoothing_time:
     type: number

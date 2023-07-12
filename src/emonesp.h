@@ -123,6 +123,10 @@
 #define SESSION_ENERGY_SCALE_FACTOR 1.0
 #endif
 
+#ifndef POWER_SCALE_FACTOR
+#define POWER_SCALE_FACTOR  1.0
+#endif
+
 #else
 
 #ifndef VOLTS_SCALE_FACTOR

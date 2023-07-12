@@ -136,24 +136,33 @@ properties:
     description: The current service level
     minimum: 1
     maximum: 2
-  solar:
+  divert_solar_w:
     type: integer
     description: The latest solar feed value received
-  grid_ie:
+  divert_solar_a:
+    type: integer
+    description: The latest solar feed value received in amps
+  divert_grid_ie_w:
     type: integer
     description: The latest grid +I/-E feed value received
-  charge_rate:
+  divert_grid_ie_a:
     type: integer
-    description: The divert charge rate
-  trigger_current:
+    description: The latest grid +I/-E feed value received in amps
+  divert_charge_current:
+    type: integer
+    description: The divert target charge current
+  divert_trigger_current:
     type: integer
     description: The current at which the divert module will start the charge
-  available_current:
+  divert_available_current:
     type: integer
     description: The computed avalible current for divert
-  smoothed_available_current:
+  divert_smoothed_available_current:
     type: integer
     description: The computed smoothed available current for divert
+  divert_min_charge_time_rem_s:
+    type: integer
+    description: Minimum charge time remaining in seconds
   divert_update:
     type: number
     description: The time since the last update of the divert feed

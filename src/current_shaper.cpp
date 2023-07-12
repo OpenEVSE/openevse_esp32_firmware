@@ -171,7 +171,7 @@ void CurrentShaperTask::shapeCurrent() {
 
 	if (config_divert_enabled() == true) {
 		if ( divert_type == DIVERT_TYPE_SOLAR ) {
-			max_pwr += solar;
+			max_pwr += divert_solar_w;
 		}
 	}
 	if (livepwr > max_pwr) {
