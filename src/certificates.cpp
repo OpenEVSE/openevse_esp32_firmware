@@ -33,14 +33,14 @@ bool CertificateStore::Certificate::deserialize(JsonObject &obj)
   return true;
 }
 
-bool CertificateStore::Certificate::serialize(JsonObject &doc)
+bool CertificateStore::Certificate::serialize(JsonObject &doc, uint32_t flags)
 {
   doc["id"] = _id;
   doc["type"] = _type.toString();
   doc["name"] = _name;
   doc["certificate"] = _cert;
   if(_type == Type::Client) {
-    doc["key"] = _key;
+    doc["key"] = flags & Flags::REDACT_PRIVATE_KEY ? "__REDACTED__" : _key;
   }
 
   return true;
@@ -114,7 +114,7 @@ const char *CertificateStore::getKey(uint32_t id)
   return nullptr;
 }
 
-bool CertificateStore::serializeCertificates(DynamicJsonDocument &doc)
+bool CertificateStore::serializeCertificates(DynamicJsonDocument &doc, uint32_t flags)
 {
   doc.to<JsonArray>();
   for(auto &c : _certs)
@@ -125,7 +125,7 @@ bool CertificateStore::serializeCertificates(DynamicJsonDocument &doc)
   return true;
 }
 
-bool CertificateStore::serializeCertificate(DynamicJsonDocument &doc, uint32_t id)
+bool CertificateStore::serializeCertificate(DynamicJsonDocument &doc, uint32_t id, uint32_t flags)
 {
   Certificate *cert = nullptr;
   if(findCertificate(id, cert)) {

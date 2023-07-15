@@ -44,6 +44,12 @@ class CertificateStore
             Value _value;
         };
 
+        class Flags
+        {
+          public:
+            static const uint32_t REDACT_PRIVATE_KEY = 1 << 0;
+        };
+
       private:
         Type _type;
         uint32_t _id;
@@ -86,7 +92,10 @@ class CertificateStore
         using JsonSerialize::deserialize;
         virtual bool deserialize(JsonObject &obj);
         using JsonSerialize::serialize;
-        virtual bool serialize(JsonObject &obj);
+        virtual bool serialize(JsonObject &obj) {
+          return serialize(obj, Flags::REDACT_PRIVATE_KEY);
+        }
+        bool serialize(JsonObject &obj, uint32_t flags);
     };
 
   private:
@@ -117,8 +126,8 @@ class CertificateStore
     const char *getCertificate(uint32_t id);
     const char *getKey(uint32_t id);
 
-    bool serializeCertificates(DynamicJsonDocument &doc);
-    bool serializeCertificate(DynamicJsonDocument &doc, uint32_t id);
+    bool serializeCertificates(DynamicJsonDocument &doc, uint32_t flags = Certificate::Flags::REDACT_PRIVATE_KEY);
+    bool serializeCertificate(DynamicJsonDocument &doc, uint32_t id, uint32_t flags = Certificate::Flags::REDACT_PRIVATE_KEY);
 
   private:
     bool loadCertificates();
