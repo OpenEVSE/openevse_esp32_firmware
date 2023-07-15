@@ -1,4 +1,4 @@
-#if defined(ENABLE_DEBUG) && !defined(ENABLE_DEBUG_WEB)
+#if defined(ENABLE_DEBUG) && !defined(ENABLE_DEBUG_WEB_CETRIFICATES)
 #undef ENABLE_DEBUG
 #endif
 
@@ -17,7 +17,7 @@ typedef const __FlashStringHelper *fstr_t;
 void
 handleCertificatesGet(MongooseHttpServerRequest *request, MongooseHttpServerResponseStream *response, uint32_t certificate)
 {
-  const size_t capacity = JSON_OBJECT_SIZE(40) + 1024;
+  const size_t capacity = 16 * 1024;
   DynamicJsonDocument doc(capacity);
 
   bool success = (UINT32_MAX == certificate) ?
@@ -37,19 +37,23 @@ void
 handleCertificatesPost(MongooseHttpServerRequest *request, MongooseHttpServerResponseStream *response, uint32_t certificate)
 {
   String body = request->body().toString();
+  DBUGVAR(body);
 
   if(UINT32_MAX == certificate)
   {
     DynamicJsonDocument doc(8 * 1024);
-    if(deserializeJson(doc, body))
+    DeserializationError jsonError = deserializeJson(doc, body);
+    if(DeserializationError::Ok == jsonError)
     {
-      const char *name = doc["name"];
-      const char *cert = doc["certificate"];
-      const char *key = doc["key"];
-
-      if(certs.addCertificate(name, cert, key)) {
+      uint32_t id = UINT32_MAX;
+      if(certs.addCertificate(doc, &id))
+      {
+        DBUGVAR(id);
+        doc.clear();
+        doc["id"] = id;
+        doc["msg"] = "done";
+        serializeJson(doc, *response);
         response->setCode(200);
-        response->print("{\"msg\":\"done\"}");
       } else {
         response->setCode(400);
         response->print("{\"msg\":\"Could not add certificate\"}");
