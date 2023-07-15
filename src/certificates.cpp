@@ -169,10 +169,14 @@ bool CertificateStore::removeCertificate(uint64_t id)
 {
   for(std::vector<Certificate *>::iterator it = _certs.begin(); it != _certs.end(); ++it)
   {
-    if((*it)->getId() == id)
+    Certificate *cert = *it;
+    if(cert->getId() == id)
     {
+      DBUGF("Removing certificate %p", cert);
+      DBUGVAR(cert->getId(), HEX);
+      delete cert;
+
       _certs.erase(it);
-      delete *it;
       return true;
     }
   }
@@ -205,6 +209,8 @@ bool CertificateStore::serializeCertificates(DynamicJsonDocument &doc, uint32_t 
   doc.to<JsonArray>();
   for(auto &c : _certs)
   {
+    DBUGF("c = %p", c);
+    DBUGVAR(c->getId(), HEX);
     JsonObject obj = doc.createNestedObject();
     c->serialize(obj);
   }
@@ -225,7 +231,7 @@ bool CertificateStore::findCertificate(uint64_t id, Certificate *&cert)
 {
   for(auto &c : _certs)
   {
-    if(c->getId() == id)
+    if(c && c->getId() == id)
     {
       cert = c;
       return true;
@@ -240,7 +246,7 @@ bool CertificateStore::findCertificate(uint64_t id, int &index)
   int i = 0;
   for(auto &c : _certs)
   {
-    if(c->getId() == id) {
+    if(c && c->getId() == id) {
       index = i;
       return true;
     }
