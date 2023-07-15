@@ -52,38 +52,37 @@ class CertificateStore
 
       private:
         Type _type;
-        uint32_t _id;
+        uint64_t _id;
         std::string _name;
         std::string _cert;
         std::string _key;
 
       public:
-        Certificate() = default;
-        Certificate(uint32_t id, const char *cert, const char *key) :
+        Certificate(const char *cert, const char *key) :
+          JsonSerialize(),
           _type(Type::Client),
-          _id(id),
           _name(""),
           _cert(cert),
           _key(key)
         { }
 
-        Certificate(uint32_t id, const char *cert) :
+        Certificate(const char *cert) :
+          JsonSerialize(),
           _type(Type::Root),
-          _id(id),
           _name(""),
           _cert(cert),
           _key("")
         { }
 
-        Certificate(uint32_t id) :
+        Certificate() :
+          JsonSerialize(),
           _type(Type::Invalid),
-          _id(id),
           _name(""),
           _cert(""),
           _key("")
         { }
 
-        uint32_t getId() const { return _id; }
+        uint64_t getId() const { return _id; }
         Type getType() const { return _type; }
         const char *getCert() const { return _cert.c_str(); };
         size_t getCertLen() const { return _cert.length(); };
@@ -99,7 +98,6 @@ class CertificateStore
     };
 
   private:
-    static uint32_t _next_cert_id;
     std::vector<Certificate *> _certs;
 
   public:
@@ -110,33 +108,26 @@ class CertificateStore
 
     const char *getRootCa();
 
-    bool addCertificate(const char *name, const char *cert, const char *key, uint32_t *id = nullptr) {
-      return addCertificate(new Certificate(_next_cert_id++, cert, key), id);
-    }
-    bool addCertificate(const char *name, const char *cert, uint32_t *id = nullptr) {
-      return addCertificate(new Certificate(_next_cert_id++, cert), id);
-    }
-    bool addCertificate(DynamicJsonDocument &doc, uint32_t *id = nullptr) {
-      Certificate *cert = new Certificate(_next_cert_id++);
-      cert->deserialize(doc);
-      return addCertificate(cert, id);
-    }
-    bool removeCertificate(uint32_t id);
+    bool addCertificate(const char *name, const char *cert, const char *key, uint64_t *id = nullptr);
+    bool addCertificate(const char *name, const char *cert, uint64_t *id = nullptr);
+    bool addCertificate(DynamicJsonDocument &doc, uint64_t *id = nullptr);
 
-    const char *getCertificate(uint32_t id);
-    const char *getKey(uint32_t id);
+    bool removeCertificate(uint64_t id);
+
+    const char *getCertificate(uint64_t id);
+    const char *getKey(uint64_t id);
 
     bool serializeCertificates(DynamicJsonDocument &doc, uint32_t flags = Certificate::Flags::REDACT_PRIVATE_KEY);
-    bool serializeCertificate(DynamicJsonDocument &doc, uint32_t id, uint32_t flags = Certificate::Flags::REDACT_PRIVATE_KEY);
+    bool serializeCertificate(DynamicJsonDocument &doc, uint64_t id, uint32_t flags = Certificate::Flags::REDACT_PRIVATE_KEY);
 
   private:
     bool loadCertificates();
     bool saveCertificates();
 
-    bool addCertificate(Certificate *cert, uint32_t *id);
+    bool addCertificate(Certificate *cert, uint64_t *id);
 
-    bool findCertificate(uint32_t id, Certificate *&cert);
-    bool findCertificate(uint32_t id, int &index);
+    bool findCertificate(uint64_t id, Certificate *&cert);
+    bool findCertificate(uint64_t id, int &index);
 };
 
 

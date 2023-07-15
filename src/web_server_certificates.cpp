@@ -15,12 +15,12 @@ typedef const __FlashStringHelper *fstr_t;
 // url: /certificates
 // -------------------------------------------------------------------
 void
-handleCertificatesGet(MongooseHttpServerRequest *request, MongooseHttpServerResponseStream *response, uint32_t certificate)
+handleCertificatesGet(MongooseHttpServerRequest *request, MongooseHttpServerResponseStream *response, uint64_t certificate)
 {
   const size_t capacity = 16 * 1024;
   DynamicJsonDocument doc(capacity);
 
-  bool success = (UINT32_MAX == certificate) ?
+  bool success = (UINT64_MAX == certificate) ?
     certs.serializeCertificates(doc) :
     certs.serializeCertificate(doc, certificate);
 
@@ -34,21 +34,21 @@ handleCertificatesGet(MongooseHttpServerRequest *request, MongooseHttpServerResp
 }
 
 void
-handleCertificatesPost(MongooseHttpServerRequest *request, MongooseHttpServerResponseStream *response, uint32_t certificate)
+handleCertificatesPost(MongooseHttpServerRequest *request, MongooseHttpServerResponseStream *response, uint64_t certificate)
 {
   String body = request->body().toString();
   DBUGVAR(body);
 
-  if(UINT32_MAX == certificate)
+  if(UINT64_MAX == certificate)
   {
     DynamicJsonDocument doc(8 * 1024);
     DeserializationError jsonError = deserializeJson(doc, body);
     if(DeserializationError::Ok == jsonError)
     {
-      uint32_t id = UINT32_MAX;
+      uint64_t id = UINT64_MAX;
       if(certs.addCertificate(doc, &id))
       {
-        DBUGVAR(id);
+        DBUGVAR(id, HEX);
         doc.clear();
         doc["id"] = id;
         doc["msg"] = "done";
@@ -68,9 +68,9 @@ handleCertificatesPost(MongooseHttpServerRequest *request, MongooseHttpServerRes
   }
 }
 
-void handleCertificatesDelete(MongooseHttpServerRequest *request, MongooseHttpServerResponseStream *response, uint32_t certificate)
+void handleCertificatesDelete(MongooseHttpServerRequest *request, MongooseHttpServerResponseStream *response, uint64_t certificate)
 {
-  if(UINT32_MAX != certificate)
+  if(UINT64_MAX != certificate)
   {
     if(certs.removeCertificate(certificate)) {
       response->setCode(200);
@@ -95,13 +95,13 @@ handleCertificates(MongooseHttpServerRequest *request)
     return;
   }
 
-  uint32_t certificate = UINT32_MAX;
+  uint64_t certificate = UINT64_MAX;
 
   String path = request->uri();
   if(path.length() > CERTIFICATES_PATH_LEN) {
     String clientStr = path.substring(CERTIFICATES_PATH_LEN);
     DBUGVAR(clientStr);
-    certificate = clientStr.toInt();
+    certificate = std::stoull(clientStr.c_str());
   }
 
   DBUGVAR(certificate, HEX);

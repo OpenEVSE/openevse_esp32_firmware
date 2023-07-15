@@ -40,11 +40,44 @@ Content-Type: application/json
 }
 
 ###
-# Get a specific certificate
+# Try to add a bad certificate
 
-GET {{baseUrl}}/certificates/1
+POST {{baseUrl}}/certificates
+Content-Type: application/json
+
+{
+  "name": "Bad certificate",
+  "certificate" : "-----BEGIN CERTIFICATE-----\nsdfjhsjkdfhskjadfhkjsadhfkjsahfkjasdhfkjsadhfkjshd\n-----END CERTIFICATE-----\n"
+}
 
 ###
-# Delete a specific certificate
+# Try to add a bad key
 
-DELETE {{baseUrl}}/certificates/1
+POST {{baseUrl}}/certificates
+Content-Type: application/json
+
+{
+  "name": "Bad key ",
+  "certificate" : "-----BEGIN CERTIFICATE-----\nMIIF7zCCA9egAwIBAgIUKumyKWqTiHGx/lfvEz5iJnoaXPgwDQYJKoZIhvcNAQEL\nBQAwgYYxCzAJBgNVBAYTAlhYMRIwEAYDVQQIDAlTdGF0ZU5hbWUxETAPBgNVBAcM\nCENpdHlOYW1lMRQwEgYDVQQKDAtDb21wYW55TmFtZTEbMBkGA1UECwwSQ29tcGFu\neVNlY3Rpb25OYW1lMR0wGwYDVQQDDBRDb21tb25OYW1lT3JIb3N0bmFtZTAeFw0y\nMzA3MDIxNjQwMjVaFw0zMzA2MjkxNjQwMjVaMIGGMQswCQYDVQQGEwJYWDESMBAG\nA1UECAwJU3RhdGVOYW1lMREwDwYDVQQHDAhDaXR5TmFtZTEUMBIGA1UECgwLQ29t\ncGFueU5hbWUxGzAZBgNVBAsMEkNvbXBhbnlTZWN0aW9uTmFtZTEdMBsGA1UEAwwU\nQ29tbW9uTmFtZU9ySG9zdG5hbWUwggIiMA0GCSqGSIb3DQEBAQUAA4ICDwAwggIK\nAoICAQDPP6ng7mb3jJlrAj1ShwR875iVmpD+UKkYdJQ+pwxVrMDCVBg0/0aJgnVj\nWEr0rAP8zvmArXINtFuZRNa15u2Xk+IUFodActuPmqi5Voailt1SYiZMs+f6W7p/\nhgLFBNtB5aRpyr/2kudrhMfUa9i6Zqc2wZFaSiD6cGfWpYzobIodKRkbsL44SM17\nfiBQSX37OBoGenbjsnR0EGu3Iq9hPMjBMb/i6Ipcvqhuj9wbncwVeaRYLgDQc79L\n++A3ZTw3msi7tFOv/vEG0Wgw1E2nH2wYv9GWey7Rh6FFMy16LFTyA5Vccw9ZuiZg\ngG7AzrjEsWAckaCvMUjBkS5ge96TxpExxI1dyXdhtGQniew2JBYYSVpgkdmSGMvn\ngRZZrgqMzAsdnWksakEyMRQKRk1dTu1E5Fi08QiEDwf7PMhOXJV7p5hYLrOGpfV6\nwYA5/T15mm2grq4Cl3PWxp2tVdM145kqEgvw28BQkz6eKoK8qO1yh6WrgI0jr3BM\nGXWOBKt2IDn/ebRhdgyIRYTAAuiIgHFecAdsLw2Ojeru+2wAHjm/sg9eCGZf3iNt\nOXjLJkjVRU6GG5El87OGUnOp95EkMUeUFsUD6JccaM3Z9ninTDoni3aTAzKXKOUs\nM+D3fReqEV8psnTrzipN5Nr3P+HT3eeQGv8mcbMmDyeYxYikEwIDAQABo1MwUTAd\nBgNVHQ4EFgQU9mDTiJGXtIgiyr+TWDgZhJM2YlcwHwYDVR0jBBgwFoAU9mDTiJGX\ntIgiyr+TWDgZhJM2YlcwDwYDVR0TAQH/BAUwAwEB/zANBgkqhkiG9w0BAQsFAAOC\nAgEABWKuFQNKWc6i+foiOofBTqa6CnvpFaAFGFZAFacWRVG7SvfN7DSqqDCzw3Xq\nUk+o74SfZFLIzyjDb44sYt01S27m0AvLwxhAgdjlazYLp1i/bglEsafUEWl5v3sx\n4A0cRo1Aibk5c3zii4zoXjoMvd0gTfFViD5eQVjS+47/d3Tm1CMpGqcJLlLVl1hb\nW8gY6nAw/SHDkagC6lyazqSJFGzSaK2drZbXm3EcNi7ntm0b7hnEbcrRrBBKh9yk\nPPR3LeHH7LNij4QZ7HzH06qlvJ7J70Y3onTy+vTpa9JtYrTLVB0LJhAViHSsarJW\nB3v0tfnivAFA7243XnDufOgeyIXZDWp1GmElqO97OrBr4BW4aJREiC1Gq5UO8dY2\nnQL5icUhc13O2zRKRNZYqrdbdgvnd19bHDKWb4EjvOxNZbzYqU4+dlHmOF2Rz3mF\nH2fVoVyu3Keh/vG/1V4Q1nBIFSpX+GuEuZtJ6r2gOoBj6mpsmeomC5nXZYXIpyP+\nJuMH8TAUWW+9rnlvWwdmRSpG7IQ5bfN+RR+8UFgWVnBuPQXK2Vp3vqNbOYI/xNZN\noNr9t2Jjtd8VNRF6DiJnbrsDZHgjyigcFZp2A/nbdqDygCo4y20ebJDsGJMK8X5h\ndFSnJ9h6TBT59SLl0N7eYPfSh6u0NJyj/BXODeMWqH4ARF8=\n-----END CERTIFICATE-----\n",
+  "key" : "-----BEGIN PRIVATE KEY-----\ndzfkgdklfgjlksdfgjlkdsfjglkdjflkgkljsdlfgjsdlfgjlskdfjglksdjfglkjsdfgljsdfg\n-----END PRIVATE KEY-----\n"
+}
+
+###
+# Get the Self Signed Test certificate
+
+GET {{baseUrl}}/certificates/388063923180034510
+
+###
+# Get the R1 GlobalSign Root Certificate
+
+GET {{baseUrl}}/certificates/15452949267533451405
+
+###
+# Delete the Self Signed Test certificate
+
+DELETE {{baseUrl}}/certificates/388063923180034510
+
+###
+# Delete the R1 GlobalSign Root Certificate
+
+DELETE {{baseUrl}}/certificates/15452949267533451405
