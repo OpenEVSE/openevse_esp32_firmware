@@ -84,9 +84,8 @@ class CertificateStore
 
         uint64_t getId() const { return _id; }
         Type getType() const { return _type; }
-        const char *getCert() const { return _cert.c_str(); };
-        size_t getCertLen() const { return _cert.length(); };
-        const char *getKey() const { return _key.c_str(); }
+        std::string &getCert() { return _cert; };
+        std::string &getKey() { return _key; }
 
         using JsonSerialize::deserialize;
         virtual bool deserialize(JsonObject &obj);
@@ -99,6 +98,7 @@ class CertificateStore
 
   private:
     std::vector<Certificate *> _certs;
+    const char *_root_ca;
 
   public:
     CertificateStore();
@@ -117,6 +117,9 @@ class CertificateStore
     const char *getCertificate(uint64_t id);
     const char *getKey(uint64_t id);
 
+    bool getCertificate(uint64_t id, std::string &certificate);
+    bool getKey(uint64_t id, std::string &key);
+
     bool serializeCertificates(DynamicJsonDocument &doc, uint32_t flags = Certificate::Flags::REDACT_PRIVATE_KEY);
     bool serializeCertificate(DynamicJsonDocument &doc, uint64_t id, uint32_t flags = Certificate::Flags::REDACT_PRIVATE_KEY);
 
@@ -128,6 +131,8 @@ class CertificateStore
 
     bool findCertificate(uint64_t id, Certificate *&cert);
     bool findCertificate(uint64_t id, int &index);
+
+    bool buildRootCa();
 };
 
 

@@ -86,12 +86,25 @@ bool CertificateStore::Certificate::serialize(JsonObject &doc, uint32_t flags)
 }
 
 CertificateStore::CertificateStore() :
-  _certs()
+  _certs(),
+  _root_ca(root_ca)
 {
 }
 
 CertificateStore::~CertificateStore()
 {
+  if(begin())
+  {
+    for(std::vector<Certificate *>::iterator it = _certs.begin(); it != _certs.end(); _certs.erase(it))
+    {
+      Certificate *cert = *it;
+      delete cert;
+    }
+  }
+
+  if(_root_ca != root_ca) {
+    delete _root_ca;
+  }
 }
 
 bool CertificateStore::begin()
@@ -101,7 +114,7 @@ bool CertificateStore::begin()
 
 const char *CertificateStore::getRootCa()
 {
-  return root_ca;
+  return _root_ca;
 }
 
 bool CertificateStore::addCertificate(const char *name, const char *certificate, const char *key, uint64_t *id)
@@ -162,6 +175,11 @@ bool CertificateStore::addCertificate(Certificate *cert, uint64_t *id)
   }
 
   _certs.push_back(cert);
+
+  if(cert->getType() == Certificate::Type::Root) {
+    buildRootCa();
+  }
+
   return true;
 }
 
@@ -174,9 +192,14 @@ bool CertificateStore::removeCertificate(uint64_t id)
     {
       DBUGF("Removing certificate %p", cert);
       DBUGVAR(cert->getId(), HEX);
-      delete cert;
 
       _certs.erase(it);
+      if(cert->getType() == Certificate::Type::Root) {
+        buildRootCa();
+      }
+
+      delete cert;
+
       return true;
     }
   }
@@ -188,7 +211,7 @@ const char *CertificateStore::getCertificate(uint64_t id)
 {
   Certificate *cert = nullptr;
   if(findCertificate(id, cert)) {
-    return cert->getCert();
+    return cert->getCert().c_str();
   }
 
   return nullptr;
@@ -198,10 +221,32 @@ const char *CertificateStore::getKey(uint64_t id)
 {
   Certificate *cert = nullptr;
   if(findCertificate(id, cert)) {
-    return cert->getKey();
+    return cert->getKey().c_str();
   }
 
   return nullptr;
+}
+
+bool CertificateStore::getCertificate(uint64_t id, std::string &certificate)
+{
+  Certificate *cert = nullptr;
+  if(findCertificate(id, cert)) {
+    certificate = cert->getCert();
+    return true;
+  }
+
+  return false;
+}
+
+bool CertificateStore::getKey(uint64_t id, std::string &key)
+{
+  Certificate *cert = nullptr;
+  if(findCertificate(id, cert)) {
+    key = cert->getKey();
+    return true;
+  }
+
+  return false;
 }
 
 bool CertificateStore::serializeCertificates(DynamicJsonDocument &doc, uint32_t flags)
@@ -254,4 +299,56 @@ bool CertificateStore::findCertificate(uint64_t id, int &index)
   }
 
   return false;
+}
+
+bool CertificateStore::buildRootCa()
+{
+  size_t len = 1;
+  for(auto &c : _certs)
+  {
+    if(c->getType() == Certificate::Type::Root) {
+      len += c->getCert().length();
+    }
+  }
+
+  DBUGVAR(len);
+  DBUGF("%p != %p", _root_ca, root_ca);
+
+  if(_root_ca != root_ca) {
+    delete _root_ca;
+  }
+
+  if(len <= 1)
+  {
+    DBUGLN("Using default root certificates");
+    _root_ca = root_ca;
+    return true;
+  }
+
+  len += root_ca_len;
+  DBUGVAR(len);
+
+  char *new_root_ca = new char[len];
+  if(new_root_ca == nullptr)
+  {
+    DBUGLN("Memmory allocation failed, using default root certificates");
+    _root_ca = root_ca;
+    return false;
+  }
+
+  char *ptr = new_root_ca;
+  memcpy(ptr, root_ca, root_ca_len);
+  ptr += root_ca_len;
+
+  for(auto &c : _certs)
+  {
+    if(c->getType() == Certificate::Type::Root) {
+      strcpy(ptr, c->getCert().c_str());
+      ptr += c->getCert().length();
+    }
+  }
+
+  DBUGLN("Using custom root certificates");
+  _root_ca = new_root_ca;
+  return true;
 }
