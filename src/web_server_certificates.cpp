@@ -12,10 +12,21 @@ typedef const __FlashStringHelper *fstr_t;
 
 // -------------------------------------------------------------------
 //
+// url: /certificates/root
+// -------------------------------------------------------------------
+void handleCertificatesGetRootCa(MongooseHttpServerRequest *request, MongooseHttpServerResponseStream *response)
+{
+  response->setCode(200);
+  response->setContentType(CONTENT_TYPE_TEXT);
+  response->print(certs.getRootCa());
+}
+
+
+// -------------------------------------------------------------------
+//
 // url: /certificates
 // -------------------------------------------------------------------
-void
-handleCertificatesGet(MongooseHttpServerRequest *request, MongooseHttpServerResponseStream *response, uint64_t certificate)
+void handleCertificatesGet(MongooseHttpServerRequest *request, MongooseHttpServerResponseStream *response, uint64_t certificate)
 {
   const size_t capacity = 16 * 1024;
   DynamicJsonDocument doc(capacity);
@@ -33,8 +44,7 @@ handleCertificatesGet(MongooseHttpServerRequest *request, MongooseHttpServerResp
   }
 }
 
-void
-handleCertificatesPost(MongooseHttpServerRequest *request, MongooseHttpServerResponseStream *response, uint64_t certificate)
+void handleCertificatesPost(MongooseHttpServerRequest *request, MongooseHttpServerResponseStream *response, uint64_t certificate)
 {
   String body = request->body().toString();
   DBUGVAR(body);
@@ -87,8 +97,7 @@ void handleCertificatesDelete(MongooseHttpServerRequest *request, MongooseHttpSe
 
 #define CERTIFICATES_PATH_LEN (sizeof("/certificates/") - 1)
 
-void
-handleCertificates(MongooseHttpServerRequest *request)
+void handleCertificates(MongooseHttpServerRequest *request)
 {
   MongooseHttpServerResponseStream *response;
   if(false == requestPreProcess(request, response)) {
@@ -101,7 +110,21 @@ handleCertificates(MongooseHttpServerRequest *request)
   if(path.length() > CERTIFICATES_PATH_LEN) {
     String clientStr = path.substring(CERTIFICATES_PATH_LEN);
     DBUGVAR(clientStr);
-    certificate = std::stoull(clientStr.c_str());
+
+    if(clientStr == "root")
+    {
+      if(HTTP_GET == request->method())
+      {
+        handleCertificatesGetRootCa(request, response);
+        request->send(response);
+        return;
+      } else {
+        response->setCode(405);
+        response->print("{\"msg\":\"Method not allowed\"}");
+      }
+    } else {
+      certificate = std::stoull(clientStr.c_str());
+    }
   }
 
   DBUGVAR(certificate, HEX);

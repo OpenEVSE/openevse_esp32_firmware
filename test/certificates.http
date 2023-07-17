@@ -81,3 +81,8 @@ DELETE {{baseUrl}}/certificates/388063923180034510
 # Delete the R1 GlobalSign Root Certificate
 
 DELETE {{baseUrl}}/certificates/15452949267533451405
+
+###
+# Get the full Root Certificate Chain
+
+GET {{baseUrl}}/certificates/root
