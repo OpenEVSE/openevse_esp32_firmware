@@ -167,6 +167,14 @@
 #define SCHEDULE_PATH "/schedule.json"
 #endif // !SCHEDULE_PATH
 
+#ifndef CERTIFICATE_BASE_DIRECTORY
+#define CERTIFICATE_BASE_DIRECTORY "/certificates"
+#endif // !CERTIFICATE_BASE_DIRECTORY
+
+#ifndef CERTIFICATE_JSON_BUFFER_SIZE
+#define CERTIFICATE_JSON_BUFFER_SIZE (8 * 1024)
+#endif
+
 extern String currentfirmware;
 extern String buildenv;
 extern String serial;

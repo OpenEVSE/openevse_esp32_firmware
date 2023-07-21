@@ -47,6 +47,7 @@ class CertificateStore
         class Flags
         {
           public:
+            static const uint32_t SHOW_PRIVATE_KEY = 0;
             static const uint32_t REDACT_PRIVATE_KEY = 1 << 0;
         };
 
@@ -110,7 +111,7 @@ class CertificateStore
 
     bool addCertificate(const char *name, const char *cert, const char *key, uint64_t *id = nullptr);
     bool addCertificate(const char *name, const char *cert, uint64_t *id = nullptr);
-    bool addCertificate(DynamicJsonDocument &doc, uint64_t *id = nullptr);
+    bool addCertificate(DynamicJsonDocument &doc, uint64_t *id = nullptr, bool save = true);
 
     bool removeCertificate(uint64_t id);
 
@@ -125,9 +126,12 @@ class CertificateStore
 
   private:
     bool loadCertificates();
-    bool saveCertificates();
 
-    bool addCertificate(Certificate *cert, uint64_t *id);
+    bool loadCertificate(String &name);
+    bool saveCertificate(Certificate *cert);
+    bool removeCertificate(Certificate *cert);
+
+    bool addCertificate(Certificate *cert, uint64_t *id, bool save = true);
 
     bool findCertificate(uint64_t id, Certificate *&cert);
     bool findCertificate(uint64_t id, int &index);

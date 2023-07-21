@@ -3,6 +3,8 @@
 #endif
 
 #include <Arduino.h>
+#include <LittleFS.h>
+
 #include "emonesp.h"
 #include "certificates.h"
 #include "root_ca.h"
@@ -79,7 +81,7 @@ bool CertificateStore::Certificate::serialize(JsonObject &doc, uint32_t flags)
   doc["name"] = _name;
   doc["certificate"] = _cert;
   if(_type == Type::Client) {
-    doc["key"] = flags & Flags::REDACT_PRIVATE_KEY ? "__REDACTED__" : _key;
+    doc["key"] = flags & Flags::REDACT_PRIVATE_KEY ? "__REDACTED__" : _key.c_str();
   }
 
   return true;
@@ -109,7 +111,11 @@ CertificateStore::~CertificateStore()
 
 bool CertificateStore::begin()
 {
-  return true;
+  if(loadCertificates()) {
+    return true;
+  }
+
+  return false;
 }
 
 const char *CertificateStore::getRootCa()
@@ -145,14 +151,14 @@ bool CertificateStore::addCertificate(const char *name, const char *certificate,
   return false;
 }
 
-bool CertificateStore::addCertificate(DynamicJsonDocument &doc, uint64_t *id)
+bool CertificateStore::addCertificate(DynamicJsonDocument &doc, uint64_t *id, bool save)
 {
   Certificate *cert = new Certificate();
   if(cert)
   {
     if(cert->deserialize(doc))
     {
-      if(addCertificate(cert, id)) {
+      if(addCertificate(cert, id, save)) {
         return true;
       }
     }
@@ -162,7 +168,7 @@ bool CertificateStore::addCertificate(DynamicJsonDocument &doc, uint64_t *id)
   return false;
 }
 
-bool CertificateStore::addCertificate(Certificate *cert, uint64_t *id)
+bool CertificateStore::addCertificate(Certificate *cert, uint64_t *id, bool save)
 {
   uint64_t certId = cert->getId();
   if(findCertificate(certId, cert)) {
@@ -178,6 +184,10 @@ bool CertificateStore::addCertificate(Certificate *cert, uint64_t *id)
 
   if(cert->getType() == Certificate::Type::Root) {
     buildRootCa();
+  }
+
+  if(save) {
+    return saveCertificate(cert);
   }
 
   return true;
@@ -198,6 +208,7 @@ bool CertificateStore::removeCertificate(uint64_t id)
         buildRootCa();
       }
 
+      removeCertificate(cert);
       delete cert;
 
       return true;
@@ -351,4 +362,88 @@ bool CertificateStore::buildRootCa()
   DBUGLN("Using custom root certificates");
   _root_ca = new_root_ca;
   return true;
+}
+
+bool CertificateStore::loadCertificates()
+{
+  bool loaded = true;
+
+  File certificateDir = LittleFS.open(CERTIFICATE_BASE_DIRECTORY);
+  if(certificateDir && certificateDir.isDirectory())
+  {
+    File file = certificateDir.openNextFile();
+    while(file)
+    {
+      if(!file.isDirectory())
+      {
+        String name = file.name();
+        DBUGVAR(name.c_str());
+        if(false == loadCertificate(name)) {
+          loaded = false;
+        }
+      }
+
+      file = certificateDir.openNextFile();
+    }
+  } else {
+    LittleFS.mkdir(CERTIFICATE_BASE_DIRECTORY);
+  }
+
+  return loaded;
+}
+
+bool CertificateStore::loadCertificate(String &name)
+{
+  bool loaded = false;
+
+  String path = String(CERTIFICATE_BASE_DIRECTORY) + "/" + name;
+  DBUGF("Loading certificate %s", path.c_str());
+
+  File file = LittleFS.open(path);
+  if(file)
+  {
+    DynamicJsonDocument doc(CERTIFICATE_JSON_BUFFER_SIZE);
+    DeserializationError err = deserializeJson(doc, file);
+    if(DeserializationError::Code::Ok == err)
+    {
+      #ifdef ENABLE_DEBUG
+      DBUG("Certificate loaded: ");
+      serializeJson(doc, DEBUG_PORT);
+      DBUGLN("");
+      #endif
+      loaded = addCertificate(doc, nullptr, false);
+    }
+
+    file.close();
+  }
+
+  return loaded;
+}
+
+bool CertificateStore::saveCertificate(Certificate *cert)
+{
+  String name = String(CERTIFICATE_BASE_DIRECTORY) + "/" + String(cert->getId(), HEX) + ".json";
+  File file = LittleFS.open(name, "w");
+  if(file)
+  {
+    DynamicJsonDocument doc(CERTIFICATE_JSON_BUFFER_SIZE);
+    JsonObject object = doc.to<JsonObject>();
+    cert->serialize(object, Certificate::Flags::SHOW_PRIVATE_KEY);
+    serializeJson(doc, file);
+    file.close();
+    return true;
+  }
+
+  return false;
+}
+
+bool CertificateStore::removeCertificate(Certificate *cert)
+{
+  String name = String(CERTIFICATE_BASE_DIRECTORY) + "/" + String(cert->getId(), HEX) + ".json";
+  if(LittleFS.remove(name))
+  {
+    return true;
+  }
+
+  return false;
 }
