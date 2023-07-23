@@ -32,6 +32,7 @@ extern String lang;
 // Web server authentication (leave blank for none)
 extern String www_username;
 extern String www_password;
+extern uint64_t www_certificate_id;
 
 // Advanced settings
 extern String esp_hostname;

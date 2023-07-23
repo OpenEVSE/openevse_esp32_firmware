@@ -45,6 +45,7 @@ String lang;
 // Web server authentication (leave blank for none)
 String www_username;
 String www_password;
+uint64_t www_certificate_id;
 
 // Advanced settings
 String esp_hostname;
@@ -146,6 +147,7 @@ ConfigOpt *opts[] =
 // Web server authentication (leave blank for none)
   new ConfigOptDefenition<String>(www_username, "", "www_username", "au"),
   new ConfigOptSecret(www_password, "", "www_password", "ap"),
+  new ConfigOptDefenition<uint64_t>(www_certificate_id, 0, "www_certificate_id", "wc"),
 
 // Advanced settings
   new ConfigOptDefenition<String>(esp_hostname, esp_hostname_default, "hostname", "hn"),
@@ -261,7 +263,7 @@ config_version() {
   return config_ver;
 }
 
-void 
+void
 increment_config() {
   config_ver++;
   DBUGVAR(config_ver);
@@ -523,7 +525,7 @@ bool config_serialize(DynamicJsonDocument &doc, bool longNames, bool compactOutp
   doc["wifi_serial"] = serial;
   doc["protocol"] = "-";
   doc["espinfo"] = ESPAL.getChipInfo();
-  doc["espflash"] = ESPAL.getFlashChipSize(); 
+  doc["espflash"] = ESPAL.getFlashChipSize();
 
   // EVSE information are only evailable when config_version is incremented
   if(config_ver > 0) {

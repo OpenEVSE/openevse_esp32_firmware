@@ -4,6 +4,7 @@
 
 #include <Arduino.h>
 #include <Update.h>
+#include "certificates.h"
 
 typedef const __FlashStringHelper *fstr_t;
 
@@ -42,6 +43,7 @@ typedef const __FlashStringHelper *fstr_t;
 #include "limit.h"
 
 MongooseHttpServer server;          // Create class for Web server
+MongooseHttpServer redirect;        // Server to redirect to HTTPS if enabled
 
 bool enableCors = false;
 bool streamDebug = false;
@@ -1113,6 +1115,28 @@ void handleNotFound(MongooseHttpServerRequest *request)
   }
 }
 
+void handleHttpsRedirect(MongooseHttpServerRequest *request)
+{
+  MongooseHttpServerResponseStream *response = request->beginResponseStream();
+  response->setContentType(CONTENT_TYPE_HTML);
+
+  String url = F("https://");
+  url += request->host().toString();
+  url += request->uri().toString();
+
+  String s = F("<html>");
+  s += F("<head><meta http-equiv=\"Refresh\" content=\"0; url=");
+  s += url;
+  s += F("\" /></head><body><a href=\"");
+  s += url;
+  s += F("\">OpenEVSE</a></body></html>");
+
+  response->setCode(301);
+  response->addHeader(F("Location"), url);
+  response->print(s);
+  request->send(response);
+}
+
 void onWsFrame(MongooseHttpWebSocketConnection *connection, int flags, uint8_t *data, size_t len)
 {
   DBUGF("Got message %.*s", len, (const char *)data);
@@ -1152,11 +1176,26 @@ void web_server_send_ascii_utf8(const char *endpoint, const uint8_t *buffer, siz
   server.sendAll(endpoint, WEBSOCKET_OP_TEXT, temp, size);
 }
 
-void
-web_server_setup() {
-//  SPIFFS.begin(); // mount the fs
+void web_server_setup()
+{
+  bool use_ssl = false;
+  if(0 != www_certificate_id)
+  {
+    const char *cert = certs.getCertificate(www_certificate_id);
+    const char *key = certs.getKey(www_certificate_id);
+    if(NULL != cert && NULL != key)
+    {
+      server.begin(443, cert, key);
+      use_ssl = true;
 
-  server.begin(80);
+      redirect.begin(80);
+      redirect.on("/", handleHttpsRedirect);
+    }
+  }
+
+  if(false == use_ssl) {
+    server.begin(80);
+  }
 
   // Handle status updates
   server.on("/status$", handleStatus);
