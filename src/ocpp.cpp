@@ -182,8 +182,7 @@ void ArduinoOcppTask::loadEvseBehavior() {
         "W");
     
     addMeterValueInput([this] () {
-            float activeImport = 0.f;
-            return evse->getTotalEnergy();
+            return evse->getTotalEnergy() * 1000.; //convert kWh into Wh
         }, 
         "Energy.Active.Import.Register",
         "Wh");
