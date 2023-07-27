@@ -77,7 +77,7 @@ void LcdTask::display(Message *msg, uint32_t flags)
   _tail = msg;
 
   if(flags & LCD_DISPLAY_NOW) {
-    MicroTask.wakeTask(this);
+    displayNextMessage();
   }
 }
 
@@ -704,7 +704,7 @@ void LcdTask::displayNameValue(int line, const char *name, const char *value)
 
 void LcdTask::showText(int x, int y, const char *msg, bool clear)
 {
-  DBUGF("LCD: %d %d %s", x, y, msg);
+  DBUGF("LCD: %d %d %s, clear=%s", x, y, msg, clear ? "true" : "false");
   _evse->getOpenEVSE().lcdDisplayText(x, y, msg, IGNORE);
   if(clear)
   {
@@ -715,6 +715,9 @@ void LcdTask::showText(int x, int y, const char *msg, bool clear)
       _evse->getOpenEVSE().lcdDisplayText(i, y, "      ", IGNORE);
     }
   }
+
+  // HACK: wait for the display to finish, fixes issues withupdating the display wile updating the firmware
+  _evse->getSender().flush();
 }
 
 void LcdTask::onButton(int long_press)
