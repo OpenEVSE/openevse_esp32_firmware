@@ -175,6 +175,8 @@ void
 loop() {
   Profile_Start(loop);
 
+  uptimeMillis();
+
   Profile_Start(Mongoose);
   Mongoose.poll(0);
   Profile_End(Mongoose, 10);
@@ -339,4 +341,14 @@ void handle_serial()
       DEBUG_PORT.printf("{\"code\":200,\"msg\":\"%s\"}\n", config_modified ? "done" : "no change");
     }
   }
+}
+
+// inspired from https://www.snad.cz/en/2018/12/21/uptime-and-esp8266/
+uint64_t uptimeMillis()
+{
+    static uint32_t low32, high32;
+    uint32_t new_low32 = millis();
+    if (new_low32 < low32) high32++;
+    low32 = new_low32;
+    return (uint64_t) high32 << 32 | low32;
 }
