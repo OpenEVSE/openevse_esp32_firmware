@@ -181,4 +181,6 @@ extern String serial;
 
 void restart_system();
 
+uint64_t uptimeMillis();
+
 #endif // _EMONESP_H

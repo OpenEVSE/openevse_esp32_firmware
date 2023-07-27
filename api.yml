@@ -792,10 +792,14 @@ paths:
                     x-stoplight:
                       id: 7h1cpgfjj5j9j
                     format: date-time
+                  uptime:
+                    type: integer
+                    description: EVSE gateway uptime, in seconds
                 required:
                   - time
                   - offset
                   - local_time
+                  - uptime
       operationId: get-time
       description: Gets the time set on the OpenEVSE
     post:
