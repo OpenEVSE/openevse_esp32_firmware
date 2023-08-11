@@ -6,7 +6,7 @@ x-examples:
     protocol: '-'
     espflash: 4194304
     espinfo: ESP32r1 2 core WiFi BLE BT
-    buildenv: openevse_esp-wrover-kit
+    buildenv: espressif_esp-wrover-kit
     version: 4.1.0.dev
     diode_check: true
     gfci_check: true
@@ -329,7 +329,7 @@ properties:
     default: 600
     description: |
       The maximum number of seconds to randomly add/subtract from the a scheduled charge start time, eg a value of 600 will adjust the start time my +/- 10 minutes. This is to help prevent large syncrinised loads when multiple verchiles start charging at the same time.
-  is_threephase: 
+  is_threephase:
     type: boolean
     description: |
      Needs to be enabled if charging with 3 phases setup for proper calculations
