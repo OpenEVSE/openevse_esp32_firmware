@@ -13,7 +13,7 @@
 #include "event.h"
 #include "manual.h"
 #include "scheduler.h"
-
+#include "certificates.h"
 
 #include "openevse.h"
 #include "current_shaper.h"
@@ -277,6 +277,16 @@ mqtt_connect()
   mqttclient.setCredentials(mqtt_user, mqtt_pass);
   mqttclient.setLastWillAndTestimment(mqtt_announce_topic, lastWill, true);
   mqttclient.setRejectUnauthorized(config_mqtt_reject_unauthorized());
+
+  if(0 != mqtt_certificate_id)
+  {
+    const char *cert = certs.getCertificate(mqtt_certificate_id);
+    const char *key = certs.getKey(mqtt_certificate_id);
+    if(NULL != cert && NULL != key) {
+      mqttclient.setCertificate(cert, key);
+    }
+  }
+
   connecting = mqttclient.connect((MongooseMqttProtocol)config_mqtt_protocol(), mqtt_host, esp_hostname, []()
   {
     DBUGLN("MQTT connected");

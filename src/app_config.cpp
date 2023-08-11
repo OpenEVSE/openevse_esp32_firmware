@@ -67,6 +67,7 @@ uint32_t mqtt_port;
 String mqtt_topic;
 String mqtt_user;
 String mqtt_pass;
+uint64_t mqtt_certificate_id;
 String mqtt_solar;
 String mqtt_grid_ie;
 String mqtt_vrms;
@@ -172,6 +173,7 @@ ConfigOpt *opts[] =
   new ConfigOptDefenition<String>(mqtt_topic, esp_hostname, "mqtt_topic", "mt"),
   new ConfigOptDefenition<String>(mqtt_user, "emonpi", "mqtt_user", "mu"),
   new ConfigOptSecret(mqtt_pass, "emonpimqtt2016", "mqtt_pass", "mp"),
+  new ConfigOptDefenition<uint64_t>(mqtt_certificate_id, 0, "mqtt_certificate_id", "mct"),
   new ConfigOptDefenition<String>(mqtt_solar, "", "mqtt_solar", "mo"),
   new ConfigOptDefenition<String>(mqtt_grid_ie, "emon/emonpi/power1", "mqtt_grid_ie", "mg"),
   new ConfigOptDefenition<String>(mqtt_vrms, "emon/emonpi/vrms", "mqtt_vrms", "mv"),

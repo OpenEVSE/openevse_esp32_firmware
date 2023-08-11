@@ -55,6 +55,7 @@ extern uint32_t mqtt_port;
 extern String mqtt_topic;
 extern String mqtt_user;
 extern String mqtt_pass;
+extern uint64_t mqtt_certificate_id;
 extern String mqtt_solar;
 extern String mqtt_grid_ie;
 extern String mqtt_vrms;

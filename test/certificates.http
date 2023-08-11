@@ -95,3 +95,13 @@ Content-Type: application/json
 {
   "www_certificate_id": 18446744072911794636
 }
+
+###
+# Configure the MQTT client with the self-signed certificate
+
+POST {{baseUrl}}/config HTTP/1.1
+Content-Type: application/json
+
+{
+  "mqtt_certificate_id": 18446744072911794636
+}
