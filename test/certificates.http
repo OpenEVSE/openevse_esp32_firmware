@@ -103,5 +103,22 @@ POST {{baseUrl}}/config HTTP/1.1
 Content-Type: application/json
 
 {
-  "mqtt_certificate_id": 18446744072911794636
+
+  "mqtt_certificate_id": 18446744071789350398
+}
+
+###
+# Configure the MQTT client with the AWS IoT Core certificate
+
+POST {{baseUrl}}/config HTTP/1.1
+Content-Type: application/json
+
+{
+  "mqtt_enabled": true,
+  "mqtt_protocol": "mqtts",
+  "mqtt_server":"ablb822kmtv7v-ats.iot.eu-west-2.amazonaws.com",
+  "mqtt_port":8883,
+  "mqtt_user":"",
+  "mqtt_pass":"",
+  "mqtt_certificate_id":18446744071789350398
 }

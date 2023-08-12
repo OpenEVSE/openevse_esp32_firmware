@@ -40,6 +40,7 @@ uint32_t configVersion = 0;
 String lastWill = "";
 
 int loop_timer = 0;
+unsigned long error_time = 0;
 
 #ifndef MQTT_CONNECT_TIMEOUT
 #define MQTT_CONNECT_TIMEOUT (5 * 1000)
@@ -235,24 +236,56 @@ void mqttmsg_callback(MongooseString topic, MongooseString payload) {
   }
 } //end call back
 
+static void mqtt_disconnected(int err, const char *reason)
+{
+  connecting = false;
+  DynamicJsonDocument doc(JSON_OBJECT_SIZE(1) + 60);
+  doc["mqtt_connected"] = 0;
+  doc["mqtt_close_code"] = err;
+  doc["mqtt_close_reason"] = reason;
+  event_send(doc);
+}
+
 // -------------------------------------------------------------------
 // MQTT Connect
 // -------------------------------------------------------------------
 boolean
 mqtt_connect()
 {
+  DBUGVAR(mqttclient.connected());
+  DBUGVAR(connecting);
   if(connecting) {
     return false;
   }
   connecting = true;
 
   mqttclient.onMessage(mqttmsg_callback); //function to be called when mqtt msg is received on subscribed topic
-  mqttclient.onError([](int err) {
+  mqttclient.onError([](int err)
+  {
     DBUGF("MQTT error %d", err);
-    connecting = false;
-    DynamicJsonDocument doc(JSON_OBJECT_SIZE(1) + 60);
-    doc["mqtt_connected"] = 0;
-    event_send(doc);
+    // This is a bit of a hack to get around the fact that the Mongoose MQTT client
+    // munges together two sets of error codes, one for the TCP connection and one
+    // for the MQTT protocol.
+    mqtt_disconnected(err,
+      MG_EV_MQTT_CONNACK_UNACCEPTABLE_VERSION == err ? "CONNACK_UNACCEPTABLE_VERSION" :
+      MG_EV_MQTT_CONNACK_IDENTIFIER_REJECTED == err ? "CONNACK_IDENTIFIER_REJECTED" :
+      MG_EV_MQTT_CONNACK_SERVER_UNAVAILABLE == err ? "CONNACK_SERVER_UNAVAILABLE" :
+      MG_EV_MQTT_CONNACK_BAD_AUTH == err ? "CONNACK_BAD_AUTH" :
+      MG_EV_MQTT_CONNACK_NOT_AUTHORIZED == err ? "CONNACK_NOT_AUTHORIZED" :
+      strerror(err)
+    );
+    error_time = millis();
+  });
+
+  mqttclient.onClose([]()
+  {
+    DBUGF("MQTT connection closed");
+    // Don't send a disconnect event if we just had an error, as we already
+    // sent one. This is a bit of a hack, but it's the easiest way to avoid
+    // sending two events for the same disconnect.
+    if(error_time + 100 < millis()) {
+      mqtt_disconnected(-1, "CLOSED");
+    }
   });
 
   String mqtt_host = mqtt_server + ":" + String(mqtt_port);
@@ -485,9 +518,6 @@ mqtt_publish_override() {
   }
   else override_data["state"] = "null";
   mqtt_publish_json(override_data, "/override");
-
-
-
 }
 
 void mqtt_set_schedule(String schedule) {
@@ -593,8 +623,8 @@ mqtt_restart_device(String payload_str) {
 //
 // Call every time around loop() if connected to the WiFi
 // -------------------------------------------------------------------
-void
-mqtt_loop() {
+void mqtt_loop()
+{
   Profile_Start(mqtt_loop);
 
   // Do we need to restart MQTT?
