@@ -68,3 +68,36 @@ MQTT setup is pre-populated with OpenEnergyMonitor [emonPi default MQTT server c
 * After a few seconds `Connected: No` should change to `Connected: Yes` if connection is successful. Re-connection will be attempted every 10s. A refresh of the page may be needed.
 
 *Note: `emon/xxxx` should be used as the base-topic if posting to emonPi MQTT server if you want the data to appear in emonPi Emoncms. See [emonPi MQTT docs](https://guide.openenergymonitor.org/technical/mqtt/).*
+
+## Connecting to Cloud IoT services
+
+### AWS IoT Core
+
+Policy for AWS IoT Core:
+
+```json
+{
+  "Version": "2012-10-17",
+  "Statement": [
+    {
+      "Effect": "Allow",
+      "Action": "iot:Connect",
+      "Resource": "arn:aws:iot:eu-west-2:489072314047:client/openevse-*"
+    },
+    {
+      "Effect": "Allow",
+      "Action": "iot:Subscribe",
+      "Resource": "arn:aws:iot:eu-west-2:489072314047:topicfilter/openevse/*"
+    },
+    {
+      "Effect": "Allow",
+      "Action": [
+        "iot:Receive",
+        "iot:Publish",
+        "iot:RetainPublish"
+      ],
+      "Resource": "arn:aws:iot:eu-west-2:489072314047:topic/openevse/*"
+    }
+  ]
+}
+```
