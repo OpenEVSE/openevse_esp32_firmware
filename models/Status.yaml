@@ -175,3 +175,6 @@ properties:
   limit_version:
     type: integer
     description: /limit endpoint current version
+  uptime:
+    type: integer
+    description: EVSE gateway uptime, in seconds

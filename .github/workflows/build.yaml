@@ -41,20 +41,20 @@ jobs:
       fail-fast: false
       matrix:
         env:
-          - openevse_nodemcu-32s
-          - openevse_esp-wrover-kit
-          - openevse_esp-wrover-kit_latest
-          - openevse_huzzah32_dev
-          - openevse_huzzah32
-          - openevse_featheresp32
+          - nodemcu-32s
+          - espressif_esp-wrover-kit
+          - espressif_esp-wrover-kit_latest
+          - adafruit_huzzah32_dev
+          - adafruit_huzzah32
+          - adafruit_featheresp32
           - openevse_wifi_v1
-          - openevse_esp32-gateway-old
-          - openevse_esp32-gateway-e
-          - openevse_esp32-gateway-f
-          - openevse_esp32-gateway-e_dev
-          - openevse_esp32-gateway-f_dev
-          - openevse_esp32-poe-iso
-          - openevse_esp32-heltec-wifi-lora-v2
+          - olimex_esp32-gateway-old
+          - olimex_esp32-gateway-e
+          - olimex_esp32-gateway-f
+          - olimex_esp32-gateway-e_dev
+          - olimex_esp32-gateway-f_dev
+          - olimex_esp32-poe-iso
+          - heltec_esp32-wifi-lora-v2
         gui:
           - name: gui-v2
             repo: OpenEVSE/openevse-gui-v2

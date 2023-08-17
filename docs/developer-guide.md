@@ -56,7 +56,7 @@ pio run -t upload
 If you are using a different development board, you can specify one of the envs setup in `platformio.ini`, for example:
 
 ```bash
-pio run -e openevse_huzzah32_idf -t upload
+pio run -e adafruit_huzzah32 -t upload
 ```
 
 Build artifacts will be in `.pio/build/your_openevse_env`
