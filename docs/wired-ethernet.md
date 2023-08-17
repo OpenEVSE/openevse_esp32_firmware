@@ -46,13 +46,13 @@ ESP32-gateway can be connected by micro USB and firmware can be uploaded using e
 First upload:
 
 ```bash
-esptool.py --baud 921600 --before default_reset --after hard_reset write_flash -z --flash_mode dio --flash_freq 40m --flash_size detect 0x1000 bootloader.bin 0x8000  partitions.bin 0x10000  openevse_esp32-gateway-e.bin
+esptool.py --baud 921600 --before default_reset --after hard_reset write_flash -z --flash_mode dio --flash_freq 40m --flash_size detect 0x1000 bootloader.bin 0x8000  partitions.bin 0x10000  olimex_esp32-gateway-e.bin
 ```
 
 Subsequent upgrades:
 
 ```bash
-esptool.py --baud 921600 --before default_reset --after hard_reset write_flash -z --flash_mode dio --flash_freq 40m --flash_size detect 0x1000 openevse_esp32-gateway-e.bin
+esptool.py --baud 921600 --before default_reset --after hard_reset write_flash -z --flash_mode dio --flash_freq 40m --flash_size detect 0x1000 olimex_esp32-gateway-e.bin
 ```
 
 *Note: On Ubuntu 22.04 if you notice the ESP gateway is continually disconnect from the USB serail port,check this using `dmesg` then`sudo apt remove brltty` will fix this. This is because there is an ebook reader which shares the same serial adaptor chip as the ESP gateway and the udev rules conflict.*
@@ -65,28 +65,28 @@ For Ubuntu 22.04 the simplest solution is to remove the package brltty via sudo 
 First upload:
 
 ```bash
-esptool.py --before default_reset --after hard_reset write_flash  0x1000 bootloader.bin 0x8000 partitions.bin 0x10000 openevse_esp32-gateway-f.bin
+esptool.py --before default_reset --after hard_reset write_flash  0x1000 bootloader.bin 0x8000 partitions.bin 0x10000 olimex_esp32-gateway-f.bin
 ```
 
 Subsequent upgrades:
 
 ```bash
-esptool.py --before default_reset --after hard_reset write_flash 0x10000 openevse_esp32-gateway-f.bin`
+esptool.py --before default_reset --after hard_reset write_flash 0x10000 olimex_esp32-gateway-f.bin`
 ```
 
 ## Compile and Upload
 
 | Board                     | Environment              |
 | :------------------------ | :----------------------- |
-| ESP32-GATEWAY pre-E       | openevse_esp32-gateway   |
-| ESP32-GATEWAY E and later | openevse_esp32-gateway-e |
-| ESP32-PoE-ISO             | openevse_esp32-poe-iso   |
+| ESP32-GATEWAY pre-E       | olimex_esp32-gateway   |
+| ESP32-GATEWAY E and later | olimex_esp32-gateway-e |
+| ESP32-PoE-ISO             | olimex_esp32-poe-iso   |
 
 
 Firmware can be compiled using PlatformIO `pio run -e <Environment>`.  The `-t upload` option installs firmware over USB.
 
 ```bash
-pio run -e openevse_esp32-gateway-e -t upload
+pio run -e olimex_esp32-gateway-e -t upload
 ```
 
 ## Operation

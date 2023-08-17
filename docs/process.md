@@ -26,11 +26,11 @@ For releases and PR approval the builds are built using the [Build/Release OpenE
 1. Click `Publish release`
 1. The GitHub build workflow will generate the binaries and upload them to the release
 1. Remove any unwanted binaries, need at least:
-    - `openevse_esp32-gateway-e.bin`
-    - `openevse_huzzah32.bin`
+    - `olimex_esp32-gateway-e.bin`
+    - `adafruit_huzzah32.bin`
     - `openevse_wifi_v1.bin`
-    - `openevse_esp-wrover-kit`
-    - `openevse_nodemcu-32s`
+    - `espressif_esp-wrover-kit`
+    - `nodemcu-32s`
 1. Test the uploaded binaries
 1. Unselect the `Pre-release` checkbox
 1. Click `Update release`
