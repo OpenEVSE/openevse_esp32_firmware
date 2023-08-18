@@ -119,7 +119,7 @@ void ArduinoOcppTask::initializeArduinoOcpp() {
             currentfirmware.c_str(),   //firmwareVersion
             serial.c_str(),            //chargePointSerialNumber
             evse->getFirmwareVersion() //meterSerialNumber
-        ), filesystem);
+        ), ArduinoOcpp::FilesystemOpt::Use);
 
     /*
      * Load OCPP configs. Default values will be overwritten by OpenEVSE configs. Mark configs
