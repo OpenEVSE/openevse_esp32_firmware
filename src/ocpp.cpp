@@ -135,14 +135,12 @@ void ArduinoOcppTask::initializeArduinoOcpp() {
 
     //when the OCPP server updates the configs, the following callback will apply them to the OpenEVSE configs
     setOnReceiveRequest("ChangeConfiguration", [this] (JsonObject) {
-        DynamicJsonDocument updateQuery (JSON_OBJECT_SIZE(6));
-        updateQuery["ocpp_server"] = (const char*) *backendUrl;
-        updateQuery["ocpp_chargeBoxId"] = (const char*) *chargeBoxId;
-        updateQuery["ocpp_authkey"] = (const char*) *authKey;
-        updateQuery["ocpp_auth_auto"] = *freevendActive ? 1 : 0;
-        updateQuery["ocpp_idtag"] = (const char*) *freevendIdTag;
-        updateQuery["ocpp_auth_offline"] = *allowOfflineTxForUnknownId ? 1 : 0;
-        config_deserialize(updateQuery);
+        config_set("ocpp_server", String((const char*) *backendUrl));
+        config_set("ocpp_chargeBoxId", String((const char*) *chargeBoxId));
+        config_set("ocpp_authkey", String((const char*) *authKey));
+        config_set("ocpp_auth_auto", (uint32_t) (*freevendActive ? 1 : 0));
+        config_set("ocpp_idtag", String((const char*) *freevendIdTag));
+        config_set("ocpp_auth_offline", (uint32_t) (*allowOfflineTxForUnknownId ? 1 : 0));
         config_commit();
     });
 
