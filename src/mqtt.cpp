@@ -195,6 +195,21 @@ void mqttmsg_callback(MongooseString topic, MongooseString payload) {
     }
   }
 
+  else if (topic_string == mqtt_topic + "/config/set") {
+    const size_t capacity = JSON_OBJECT_SIZE(128) + 1024;
+    DynamicJsonDocument doc(capacity);
+    DeserializationError error = deserializeJson(doc, payload_str);
+    if(!error)
+    {
+      bool config_modified = config_deserialize(doc);
+      if(config_modified)
+      {
+        config_commit(false);
+        DBUGLN("Config updated");
+      }
+    }
+  }
+
   // Restart
   else if (topic_string == mqtt_topic + "/restart") {
     mqtt_restart_device(payload_str);
@@ -383,6 +398,10 @@ mqtt_connect()
     yield();
 
     mqtt_sub_topic = mqtt_topic + "/limit/set";
+    mqttclient.subscribe(mqtt_sub_topic);
+    yield();
+
+    mqtt_sub_topic = mqtt_topic + "/config/set";
     mqttclient.subscribe(mqtt_sub_topic);
     yield();
 
