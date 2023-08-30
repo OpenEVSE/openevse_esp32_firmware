@@ -1,4 +1,4 @@
-# OpenEVSE WiFi ESP32 Gateway v4
+# OpenEVSE WiFi for ESP32
 
 > **_NOTE:_** Breaking change! This release reccomends a minimum of [7.1.3](https://github.com/OpenEVSE/open_evse/releases) of the OpenEVSE firmware, features including Solar Divert and push button menus may not behave as expected on older firmware.
 

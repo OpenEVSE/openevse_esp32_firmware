@@ -278,4 +278,5 @@ void TimeManager::serialise(JsonDocument &doc)
   doc["time"] = time;
   doc["local_time"] = local_time;
   doc["offset"] = offset;
+  doc["uptime"] = uptimeMillis() / 1000;
 }
