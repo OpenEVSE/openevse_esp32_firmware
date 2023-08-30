@@ -37,7 +37,7 @@ Content-Type: application/octet-stream
 
 ###
 
-curl -F firmware=@.pio/build/openevse_esp-wrover-kit/firmware.bin {{baseUrl}}/update
+curl -F firmware=@.pio/build/espressif_esp-wrover-kit/firmware.bin {{baseUrl}}/update
 
 ###
 # Get the latest published relese (not pre-release)
