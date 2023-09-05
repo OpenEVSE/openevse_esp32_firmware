@@ -22,47 +22,47 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-      - uses: actions/checkout@v3
+      - uses: actions/checkout@v4
         with:
           path: OpenEVSE_WiFi
 
-      - uses: actions/checkout@v3
+      - uses: actions/checkout@v4
         with:
           repository: JeremyPoulter/MicroDebug
           path: MicroDebug
 
-      - uses: actions/checkout@v3
+      - uses: actions/checkout@v4
         with:
           repository: JeremyPoulter/MicroTasks
           path: MicroTasks
 
-      - uses: actions/checkout@v3
+      - uses: actions/checkout@v4
         with:
           repository: JeremyPoulter/StreamSpy
           path: StreamSpy
 
-      - uses: actions/checkout@v3
+      - uses: actions/checkout@v4
         with:
           repository: JeremyPoulter/ConfigJson
           path: ConfigJson
 
-      - uses: actions/checkout@v3
+      - uses: actions/checkout@v4
         with:
           repository: bblanchon/ArduinoJson
           path: ArduinoJson
           ref: v6.20.1
 
-      - uses: actions/checkout@v3
+      - uses: actions/checkout@v4
         with:
           repository: JeremyPoulter/OpenEVSE_Lib
           path: OpenEVSE_Lib
 
-      - uses: actions/checkout@v3
+      - uses: actions/checkout@v4
         with:
           repository: JeremyPoulter/EpoxyDuino
           path: EpoxyDuino
 
-      - uses: actions/checkout@v3
+      - uses: actions/checkout@v4
         with:
           repository: JeremyPoulter/ESPAL
           path: ESPAL
