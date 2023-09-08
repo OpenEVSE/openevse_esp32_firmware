@@ -158,7 +158,7 @@ def make_static(env, target, source):
 
 def process_html_app(source, dest, env):
     web_server_static_files = join(dest, "web_server_static_files.h")
-    web_server_static = join("$BUILDSRC_DIR", "web_server_static.cpp.o")
+    web_server_static = join(env.subst("$BUILD_DIR"), "src/web_server_static.cpp.o")
 
     files = filtered_listdir(source)
 
