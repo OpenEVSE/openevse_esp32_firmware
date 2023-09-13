@@ -423,7 +423,7 @@ bool EvseManager::claim(EvseClient client, int priority, EvseProperties &target)
   {
     DBUGF("Found slot");
     if(slot->claim(client, priority, target))
-    { 
+    {
       DBUGF("Claim added/updated, waking task");
       _evaluateClaims = true;
       MicroTask.wakeTask(this);
@@ -603,7 +603,11 @@ void EvseManager::setMaxConfiguredCurrent(long amps)
 
 bool EvseManager::isRapiCommandBlocked(String rapi)
 {
-  return rapi.startsWith("$ST");
+#ifdef ENABLE_FULL_RAPI
+  return false;
+#else
+  return !rapi.startsWith("$G");
+#endif
 }
 
 bool EvseManager::serializeClaims(DynamicJsonDocument &doc)

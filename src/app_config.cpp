@@ -132,7 +132,11 @@ String esp_hostname_default = "openevse-"+ESPAL.getShortId();
 
 void config_changed(String name);
 
-ConfigOptDefenition<uint32_t> flagsOpt = ConfigOptDefenition<uint32_t>(flags, CONFIG_SERVICE_SNTP, "flags", "f");
+ConfigOptDefenition<uint32_t> flagsOpt = ConfigOptDefenition<uint32_t>(flags,
+    CONFIG_SERVICE_SNTP |
+    CONFIG_OCPP_AUTO_AUTH |
+    CONFIG_OCPP_OFFLINE_AUTH,
+    "flags", "f");
 
 ConfigOpt *opts[] =
 {
@@ -187,7 +191,7 @@ ConfigOpt *opts[] =
   new ConfigOptDefenition<String>(ocpp_server, "", "ocpp_server", "ows"),
   new ConfigOptDefenition<String>(ocpp_chargeBoxId, "", "ocpp_chargeBoxId", "cid"),
   new ConfigOptDefenition<String>(ocpp_authkey, "", "ocpp_authkey", "oky"),
-  new ConfigOptDefenition<String>(ocpp_idtag, "", "ocpp_idtag", "idt"),
+  new ConfigOptDefenition<String>(ocpp_idtag, "DefaultIdTag", "ocpp_idtag", "idt"),
 
 // Ohm Connect Settings
   new ConfigOptDefenition<String>(ohm, "", "ohm", "o"),

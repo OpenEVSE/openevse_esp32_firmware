@@ -79,7 +79,7 @@ Content-Type: multipart/form-data; boundary=----WebKitFormBoundary7MA4YWxkTrZu0g
 Content-Disposition: form-data; name="firmware"; filename="firmware.bin"
 Content-Type: application/octet-stream
 
-< ./.pio/build/openevse_esp-wrover-kit_idf/firmware.bin
+< ./.pio/build/espressif_esp-wrover-kit_idf/firmware.bin
 ----WebKitFormBoundary7MA4YWxkTrZu0gW
 ###
 

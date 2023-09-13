@@ -12,7 +12,7 @@ jobs:
     name: Pre-built GUI Validation
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v3
+      - uses: actions/checkout@v4
         with:
           submodules: recursive
 
@@ -49,7 +49,7 @@ jobs:
 
     steps:
       ### Check the version number in the code matches the tag number
-      - uses: actions/checkout@v3
+      - uses: actions/checkout@v4
 
       - name: Set up Python
         uses: actions/setup-python@v4
