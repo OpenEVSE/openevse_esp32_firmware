@@ -207,7 +207,7 @@ void ArduinoOcppTask::loadEvseBehavior() {
             return evse->getTemperature(EVSE_MONITOR_TEMP_MONITOR);
         }, 
         "Temperature",
-        "C");
+        "Celsius");
 
     setSmartChargingOutput([this] (float power, float current, int nphases) {
         if (power >= 0.f && current >= 0.f) {
