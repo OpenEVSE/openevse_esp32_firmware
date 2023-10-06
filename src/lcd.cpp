@@ -2,6 +2,8 @@
 #undef ENABLE_DEBUG
 #endif
 
+#ifndef ENABLE_SCREEN_LCD_TFT
+
 #include "emonesp.h"
 #include "lcd.h"
 #include "RapiSender.h"
@@ -734,3 +736,5 @@ void LcdTask::onButton(int long_press)
 }
 
 LcdTask lcd;
+
+#endif // ENABLE_SCREEN_LCD_TFT

@@ -6,11 +6,16 @@
 #define LCD_CLEAR_LINE    (1 << 0)
 #define LCD_DISPLAY_NOW   (1 << 1)
 
-#define LCD_MAX_LEN 16
-
 #ifndef LCD_DISPLAY_CHANGE_TIME
 #define LCD_DISPLAY_CHANGE_TIME (4 * 1000)
 #endif
+
+#if ENABLE_SCREEN_LCD_TFT
+// HACK: This should be done in a much more C++ way
+#include "lcd_tft.h"
+#else
+
+#define LCD_MAX_LEN 16
 
 #define LCD_CHAR_STOP       1
 #define LCD_CHAR_PLAY       2
@@ -151,6 +156,9 @@ class LcdTask : public MicroTasks::Task
     void display(const char *msg, int x, int y, int time, uint32_t flags);
 };
 
+#endif // ENABLE_SCREEN_LCD_TFT
+
 extern LcdTask lcd;
 
 #endif // __LCD_H
+
