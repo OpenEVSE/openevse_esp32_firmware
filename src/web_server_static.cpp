@@ -56,13 +56,13 @@ static bool web_static_get_file(MongooseHttpServerRequest *request, StaticFile *
 
   DBUGF("Looking for %s", path.c_str());
 
-  for(int i = 0; i < ARRAY_LENGTH(staticFiles); i++) {
-    if(path == staticFiles[i].filename)
+  for(int i = 0; i < ARRAY_LENGTH(web_server_static_files); i++) {
+    if(path == web_server_static_files[i].filename)
     {
-      DBUGF("Found %s %d@%p", staticFiles[i].filename, staticFiles[i].length, staticFiles[i].data);
+      DBUGF("Found %s %d@%p", web_server_static_files[i].filename, web_server_static_files[i].length, web_server_static_files[i].data);
 
       if(file) {
-        *file = &staticFiles[i];
+        *file = &web_server_static_files[i];
       }
       return true;
     }

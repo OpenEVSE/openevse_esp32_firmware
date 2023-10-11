@@ -16,18 +16,20 @@
 #include "app_config.h"
 #include <sys/time.h>
 
-void LcdTask::displayFlush( lv_disp_drv_t *disp, const lv_area_t *area, lv_color_t *color_p )
+#include "web_server.h"
+
+// Static files
+struct StaticFile
 {
-  uint32_t w = ( area->x2 - area->x1 + 1 );
-  uint32_t h = ( area->y2 - area->y1 + 1 );
+  const char *filename;
+  const char *data;
+  size_t length;
+  const char *type;
+  const char *etag;
+  bool compressed;
+};
 
-  lcd._lcd.startWrite();
-  lcd._lcd.setAddrWindow( area->x1, area->y1, w, h );
-  lcd._lcd.pushColors( ( uint16_t * )&color_p->full, w * h, true );
-  lcd._lcd.endWrite();
-
-  lv_disp_flush_ready( disp );
-}
+#include "lcd_static/lcd_gui_static_files.h"
 
 LcdTask::LcdTask() :
   MicroTasks::Task(),
@@ -56,8 +58,6 @@ void LcdTask::setup()
 {
   DBUGLN("LCD UI setup");
 
-  //lv_init();
-
   _lcd.begin();
   _lcd.setRotation(1);
   _lcd.fillScreen(TFT_BLACK);
@@ -66,26 +66,6 @@ void LcdTask::setup()
 
   pinMode(LCD_BACKLIGHT_PIN, OUTPUT);
   digitalWrite(LCD_BACKLIGHT_PIN, HIGH);
-
-  //size_t bufferSize = _screenWidth * _screenHeight / 13;
-  //_buf1 = ( lv_color_t * )malloc( bufferSize * sizeof( lv_color_t ) );
-  //lv_disp_draw_buf_init( &_draw_buf, _buf1, NULL, bufferSize );
-//
-  //static lv_disp_drv_t disp_drv;
-  //lv_disp_drv_init( &disp_drv );
-//
-  //disp_drv.hor_res = _screenWidth;
-  //disp_drv.ver_res = _screenHeight;
-  //disp_drv.flush_cb = displayFlush;
-  //disp_drv.draw_buf = &_draw_buf;
-  //lv_disp_drv_register( &disp_drv );
-
-//  static lv_indev_drv_t indev_drv;
-//  lv_indev_drv_init( &indev_drv );
-//  indev_drv.type = LV_INDEV_TYPE_POINTER;
-//  indev_drv.read_cb = my_touchpad_read;
-//  lv_indev_drv_register( &indev_drv );
-
 }
 
 unsigned long LcdTask::loop(MicroTasks::WakeReason reason)

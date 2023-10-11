@@ -11,7 +11,7 @@
 #include "scheduler.h"
 #include "manual.h"
 
-#include <lvgl.h>
+//#include <lvgl.h>
 #include <TFT_eSPI.h>
 
 
@@ -23,11 +23,6 @@ class LcdTask : public MicroTasks::Task
     // The TFT screen is portrate natively, so we need to rotate it
     const uint16_t _screenWidth  = TFT_HEIGHT;
     const uint16_t _screenHeight = TFT_WIDTH;
-
-    lv_disp_draw_buf_t _draw_buf;
-    lv_color_t *_buf1;
-
-    static void displayFlush(lv_disp_drv_t *disp, const lv_area_t *area, lv_color_t *color_p);
 
   protected:
     void setup();
