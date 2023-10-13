@@ -13,7 +13,7 @@
 
 //#include <lvgl.h>
 #include <TFT_eSPI.h>
-
+#include <PNGdec.h>
 
 class LcdTask : public MicroTasks::Task
 {
@@ -24,9 +24,19 @@ class LcdTask : public MicroTasks::Task
     const uint16_t _screenWidth  = TFT_HEIGHT;
     const uint16_t _screenHeight = TFT_WIDTH;
 
+    enum class State {
+      Boot,
+      Charge
+    };
+
+    State _state = State::Boot;
+
+    static void png_draw(PNGDRAW *pDraw);
   protected:
     void setup();
     unsigned long loop(MicroTasks::WakeReason reason);
+
+    void render_image(const char *filename, int16_t x, int16_t y);
 
   public:
     LcdTask();
@@ -36,6 +46,10 @@ class LcdTask : public MicroTasks::Task
     void display(const __FlashStringHelper *msg, int x, int y, int time, uint32_t flags);
     void display(String &msg, int x, int y, int time, uint32_t flags);
     void display(const char *msg, int x, int y, int time, uint32_t flags);
+
+    void fill_screen(uint16_t color) {
+      _lcd.fillScreen(color);
+    }
 };
 
 extern LcdTask lcd;

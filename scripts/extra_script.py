@@ -163,15 +163,12 @@ def make_static(env, target, source, prefix, files_dir):
         output_file.write(output)
 
 def process_html_app(source, dest, env, prefix, static_func):
-    print("Processing HTML app in {}".format(source))
-
     web_server_static_files = join(dest, prefix+"_static_files.h")
     web_server_static = join(env.subst("$BUILD_DIR"), "src/"+prefix+"_static.cpp.o")
 
     files = filtered_listdir(source)
 
     for file in files:
-        print("  {}".format(file))
         data_file = join(source, file)
         header_file = join(dest, prefix+"."+make_safe(file)+".h")
         env.Command(header_file, data_file, data_to_header)
