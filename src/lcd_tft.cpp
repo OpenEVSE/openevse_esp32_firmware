@@ -16,6 +16,10 @@
 #include "app_config.h"
 #include <sys/time.h>
 #include "embedded_files.h"
+//#include "fonts/DejaVu_Sans_72.h"
+
+#define TFT_OPENEVSE_BACK   0x2413
+#define TFT_OPENEVSE_GREEN  0x3E92
 
 #include "web_server.h"
 
@@ -77,7 +81,10 @@ unsigned long LcdTask::loop(MicroTasks::WakeReason reason)
       _lcd.begin();
       _lcd.setRotation(1);
 
-      render_image("/BootScreen.png", 0, 0);
+      _lcd.fillScreen(TFT_OPENEVSE_BACK);
+      _lcd.fillSmoothRoundRect(90, 90, 300, 110, 15, TFT_WHITE);
+      _lcd.fillSmoothRoundRect(90, 235, 300, 16, 8, TFT_OPENEVSE_GREEN);
+      render_image("/logo.png", 104, 115);
 
       pinMode(LCD_BACKLIGHT_PIN, OUTPUT);
       digitalWrite(LCD_BACKLIGHT_PIN, HIGH);
@@ -88,12 +95,16 @@ unsigned long LcdTask::loop(MicroTasks::WakeReason reason)
     case State::Charge:
       render_image("/ChargeScreen.png", 0, 0);
 
-      _lcd.setCursor(0, 0, 2);
-      _lcd.setTextColor(TFT_WHITE, TFT_BLACK);
-      _lcd.setTextSize(2);
-      _lcd.print("OpenEVSE");
-      _lcd.setCursor(0, 16);
-      _lcd.print("WiFi Connected");
+      _lcd.setCursor(120, 180);
+      _lcd.setTextColor(TFT_BLACK, TFT_WHITE);
+//      _lcd.setFreeFont(&DejaVu_Sans_72);
+//      _lcd.setTextSize(1);
+      _lcd.setFreeFont(&FreeSans24pt7b);
+      _lcd.setTextSize(3);
+      _lcd.print("16");
+      _lcd.setFreeFont(&FreeSans24pt7b);
+      _lcd.setTextSize(1);
+      _lcd.println("A");
 
       break;
 
@@ -126,6 +137,18 @@ void LcdTask::render_image(const char *filename, int16_t x, int16_t y)
     }
   }
 }
+
+#ifdef SMOOTH_FONT
+void LcdTask::load_font(const char *filename)
+{
+  StaticFile *file = NULL;
+  if(embedded_get_file(filename, lcd_gui_static_files, ARRAY_LENGTH(lcd_gui_static_files), &file))
+  {
+    DBUGF("Found %s (%d bytes)", filename, file->length);
+    _lcd.loadFont((uint8_t *)file->data);
+  }
+}
+#endif
 
 void LcdTask::png_draw(PNGDRAW *pDraw)
 {

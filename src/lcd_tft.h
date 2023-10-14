@@ -37,6 +37,7 @@ class LcdTask : public MicroTasks::Task
     unsigned long loop(MicroTasks::WakeReason reason);
 
     void render_image(const char *filename, int16_t x, int16_t y);
+    void load_font(const char *filename);
 
   public:
     LcdTask();
