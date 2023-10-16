@@ -55,6 +55,8 @@ jobs:
           - olimex_esp32-gateway-f_dev
           - olimex_esp32-poe-iso
           - heltec_esp32-wifi-lora-v2
+          - elecrow_esp32_hmi
+          - elecrow_esp32_hmi_dev
         gui:
           - name: gui-v2
             repo: OpenEVSE/openevse-gui-v2
