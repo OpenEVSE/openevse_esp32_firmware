@@ -25,27 +25,27 @@
  */
 class OcppConfigAdapter : public MicroOcpp::Configuration {
 private:
-    ArduinoOcppTask& ocppTask;
+    OcppTask& ocppTask;
     const char *keyOcpp = nullptr;
     const char *keyOpenEvse = nullptr;
     bool (*configGetBoolCb)() = nullptr;
     String *configString = nullptr;
     MicroOcpp::TConfig type;
 
-    OcppConfigAdapter(ArduinoOcppTask& ocppTask, const char *keyOcpp, const char *keyOpenEvse, MicroOcpp::TConfig type)
+    OcppConfigAdapter(OcppTask& ocppTask, const char *keyOcpp, const char *keyOpenEvse, MicroOcpp::TConfig type)
             : ocppTask(ocppTask), keyOcpp(keyOcpp), keyOpenEvse(keyOpenEvse), type(type) {
 
     }
 
 public:
 
-    static std::unique_ptr<OcppConfigAdapter> makeConfigBool(ArduinoOcppTask& ocppTask, const char *keyOcpp, const char *keyOpenEvse, bool (*configGetBoolCb)()) {
+    static std::unique_ptr<OcppConfigAdapter> makeConfigBool(OcppTask& ocppTask, const char *keyOcpp, const char *keyOpenEvse, bool (*configGetBoolCb)()) {
         auto res = std::unique_ptr<OcppConfigAdapter>(new OcppConfigAdapter(ocppTask, keyOcpp, keyOpenEvse, MicroOcpp::TConfig::Bool));
         res->configGetBoolCb = configGetBoolCb;
         return res;
     }
 
-    static std::unique_ptr<OcppConfigAdapter> makeConfigString(ArduinoOcppTask& ocppTask, const char *keyOcpp, const char *keyOpenEvse, String& value) {
+    static std::unique_ptr<OcppConfigAdapter> makeConfigString(OcppTask& ocppTask, const char *keyOcpp, const char *keyOpenEvse, String& value) {
         auto res = std::unique_ptr<OcppConfigAdapter>(new OcppConfigAdapter(ocppTask, keyOcpp, keyOpenEvse, MicroOcpp::TConfig::String));
         res->configString = &value;
         return res;
@@ -92,22 +92,22 @@ public:
  * Implementation of the OCPP task
  */
 
-ArduinoOcppTask *ArduinoOcppTask::instance = nullptr;
+OcppTask *OcppTask::instance = nullptr;
 
 void dbug_wrapper(const char *msg) {
     DBUG(msg);
 }
 
-ArduinoOcppTask::ArduinoOcppTask() : MicroTasks::Task() {
+OcppTask::OcppTask() : MicroTasks::Task() {
 
 }
 
-ArduinoOcppTask::~ArduinoOcppTask() {
+OcppTask::~OcppTask() {
     if (connection != nullptr) delete connection;
     instance = nullptr;
 }
 
-void ArduinoOcppTask::begin(EvseManager &evse, LcdTask &lcd, EventLog &eventLog, RfidTask &rfid) {
+void OcppTask::begin(EvseManager &evse, LcdTask &lcd, EventLog &eventLog, RfidTask &rfid) {
 
     this->evse = &evse;
     this->lcd = &lcd;
@@ -123,13 +123,13 @@ void ArduinoOcppTask::begin(EvseManager &evse, LcdTask &lcd, EventLog &eventLog,
     reconfigure();
 }
 
-void ArduinoOcppTask::notifyConfigChanged() {
+void OcppTask::notifyConfigChanged() {
     if (instance && !instance->synchronizationLock) {
         instance->reconfigure();
     }
 }
 
-void ArduinoOcppTask::reconfigure() {
+void OcppTask::reconfigure() {
 
     if (config_ocpp_enabled()) {
         //OCPP enabled via OpenEVSE config. Load library (if not done yet) and apply OpenEVSE configs
@@ -157,7 +157,7 @@ void ArduinoOcppTask::reconfigure() {
     MicroTask.wakeTask(this);
 }
 
-void ArduinoOcppTask::initializeMicroOcpp() {
+void OcppTask::initializeMicroOcpp() {
 
     auto filesystem = MicroOcpp::makeDefaultFilesystemAdapter(MicroOcpp::FilesystemOpt::Use);
 
@@ -228,18 +228,18 @@ void ArduinoOcppTask::initializeMicroOcpp() {
     initializeFwService();
 }
 
-void ArduinoOcppTask::deinitializeMicroOcpp() {
+void OcppTask::deinitializeMicroOcpp() {
     rfid->setOnCardScanned(nullptr);
     mocpp_deinitialize();
     delete connection;
     connection = nullptr;
 }
 
-void ArduinoOcppTask::setup() {
+void OcppTask::setup() {
 
 }
 
-void ArduinoOcppTask::loadEvseBehavior() {
+void OcppTask::loadEvseBehavior() {
 
     /*
      * Synchronize OpenEVSE data with OCPP-library data
@@ -438,7 +438,7 @@ void ArduinoOcppTask::loadEvseBehavior() {
     });
 }
 
-unsigned long ArduinoOcppTask::loop(MicroTasks::WakeReason reason) {
+unsigned long OcppTask::loop(MicroTasks::WakeReason reason) {
 
     if (getOcppContext()) {
         //MicroOcpp is initialized
@@ -478,7 +478,7 @@ unsigned long ArduinoOcppTask::loop(MicroTasks::WakeReason reason) {
     return config_ocpp_enabled() ? OCPP_LOOP_TIME : MicroTask.Infinate;
 }
 
-void ArduinoOcppTask::updateEvseClaim() {
+void OcppTask::updateEvseClaim() {
 
     EvseState evseState;
     EvseProperties evseProperties;
@@ -544,7 +544,7 @@ void ArduinoOcppTask::updateEvseClaim() {
 
 }
 
-void ArduinoOcppTask::initializeDiagnosticsService() {
+void OcppTask::initializeDiagnosticsService() {
     MicroOcpp::DiagnosticsService *diagService = getDiagnosticsService();
     if (diagService) {
         diagService->setOnUploadStatusInput([this] () {
@@ -661,7 +661,7 @@ void ArduinoOcppTask::initializeDiagnosticsService() {
     }
 }
 
-void ArduinoOcppTask::initializeFwService() {
+void OcppTask::initializeFwService() {
     MicroOcpp::FirmwareService *fwService = getFirmwareService();
     if (fwService) {
         
@@ -697,13 +697,13 @@ void ArduinoOcppTask::initializeFwService() {
     }
 }
 
-bool ArduinoOcppTask::isConnected() {
+bool OcppTask::isConnected() {
     if (instance && instance->connection) {
         return instance->connection->isConnectionOpen();
     }
     return false;
 }
 
-void ArduinoOcppTask::setSynchronizationLock(bool locked) {
+void OcppTask::setSynchronizationLock(bool locked) {
     synchronizationLock = locked;
 }

@@ -17,7 +17,7 @@
 
 #include <MicroOcpp/Core/Configuration.h>
 
-class ArduinoOcppTask: public MicroTasks::Task {
+class OcppTask: public MicroTasks::Task {
 private:
     MicroOcpp::MOcppMongooseClient *connection = nullptr;
     EvseManager *evse;
@@ -42,7 +42,7 @@ private:
     void deinitializeMicroOcpp();
     void loadEvseBehavior();
 
-    static ArduinoOcppTask *instance;
+    static OcppTask *instance;
 
     bool synchronizationLock = false;
 protected:
@@ -54,8 +54,8 @@ protected:
     unsigned long loop(MicroTasks::WakeReason reason);
 
 public:
-    ArduinoOcppTask();
-    ~ArduinoOcppTask();
+    OcppTask();
+    ~OcppTask();
 
     void begin(EvseManager &evse, LcdTask &lcd, EventLog &eventLog, RfidTask &rfid);
     

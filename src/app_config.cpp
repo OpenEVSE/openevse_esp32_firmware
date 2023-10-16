@@ -328,12 +328,12 @@ void config_changed(String name)
       emoncms_updated = true;
     }
     timeManager.setSntpEnabled(config_sntp_enabled());
-    ArduinoOcppTask::notifyConfigChanged();
+    OcppTask::notifyConfigChanged();
     evse.setSleepForDisable(!config_pause_uses_disabled());
   } else if(name.startsWith("mqtt_")) {
     mqtt_restart();
   } else if(name.startsWith("ocpp_")) {
-    ArduinoOcppTask::notifyConfigChanged();
+    OcppTask::notifyConfigChanged();
   } else if(name.startsWith("emoncms_")) {
     emoncms_updated = true;
   } else if(name.startsWith("scheduler_")) {
