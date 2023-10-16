@@ -5,7 +5,7 @@
 
 #include "ocpp.h"
 
-#include <ArduinoOcpp.h>
+#include <MicroOcpp.h>
 #include <MongooseCore.h>
 
 #include "app_config.h"
@@ -20,7 +20,79 @@
 
 #define LCD_DISPLAY(X) if (lcd) lcd->display((X), 0, 1, 5 * 1000, LCD_CLEAR_LINE);
 
-ArduinoOcppTask *ArduinoOcppTask::instance = NULL;
+/*
+ * adapter of OpenEVSE configs so that the OCPP library can work with them
+ */
+class OcppConfigAdapter : public MicroOcpp::Configuration {
+private:
+    ArduinoOcppTask& ocppTask;
+    const char *keyOcpp = nullptr;
+    const char *keyOpenEvse = nullptr;
+    bool (*configGetBoolCb)() = nullptr;
+    String *configString = nullptr;
+    MicroOcpp::TConfig type;
+
+    OcppConfigAdapter(ArduinoOcppTask& ocppTask, const char *keyOcpp, const char *keyOpenEvse, MicroOcpp::TConfig type)
+            : ocppTask(ocppTask), keyOcpp(keyOcpp), keyOpenEvse(keyOpenEvse), type(type) {
+
+    }
+
+public:
+
+    static std::unique_ptr<OcppConfigAdapter> makeConfigBool(ArduinoOcppTask& ocppTask, const char *keyOcpp, const char *keyOpenEvse, bool (*configGetBoolCb)()) {
+        auto res = std::unique_ptr<OcppConfigAdapter>(new OcppConfigAdapter(ocppTask, keyOcpp, keyOpenEvse, MicroOcpp::TConfig::Bool));
+        res->configGetBoolCb = configGetBoolCb;
+        return res;
+    }
+
+    static std::unique_ptr<OcppConfigAdapter> makeConfigString(ArduinoOcppTask& ocppTask, const char *keyOcpp, const char *keyOpenEvse, String& value) {
+        auto res = std::unique_ptr<OcppConfigAdapter>(new OcppConfigAdapter(ocppTask, keyOcpp, keyOpenEvse, MicroOcpp::TConfig::String));
+        res->configString = &value;
+        return res;
+    }
+
+    bool setKey(const char *key) override {
+        keyOcpp = key;
+        return true;
+    }
+
+    const char *getKey() override {
+        return keyOcpp;
+    }
+
+    void setBool(bool v) override { //OCPP lib calls this to change config
+        ocppTask.setSynchronizationLock(true); //avoid that `reconfigure()` will be called
+        config_set(keyOpenEvse, (uint32_t) (v ? 1 : 0));
+        config_commit();
+        ocppTask.setSynchronizationLock(false);
+    }
+
+    bool setString(const char *v) override { //OCPP lib calls this to change config
+        ocppTask.setSynchronizationLock(true); //avoid that `reconfigure()` will be called
+        config_set(keyOpenEvse, (String) (v ? v : ""));
+        config_commit();
+        ocppTask.setSynchronizationLock(false);
+        return true;
+    }
+
+    bool getBool() override {
+        return configGetBoolCb ? configGetBoolCb() : false;
+    }
+
+    const char *getString() override { //always returns c-string (empty if undefined)
+        return configString && configString->c_str() ? configString->c_str() : "";
+    }
+
+    MicroOcpp::TConfig getType() override {
+        return type;
+    }
+};
+
+/*
+ * Implementation of the OCPP task
+ */
+
+ArduinoOcppTask *ArduinoOcppTask::instance = nullptr;
 
 void dbug_wrapper(const char *msg) {
     DBUG(msg);
@@ -31,8 +103,8 @@ ArduinoOcppTask::ArduinoOcppTask() : MicroTasks::Task() {
 }
 
 ArduinoOcppTask::~ArduinoOcppTask() {
-    if (ocppSocket != NULL) delete ocppSocket;
-    instance = NULL;
+    if (connection != nullptr) delete connection;
+    instance = nullptr;
 }
 
 void ArduinoOcppTask::begin(EvseManager &evse, LcdTask &lcd, EventLog &eventLog, RfidTask &rfid) {
@@ -42,13 +114,19 @@ void ArduinoOcppTask::begin(EvseManager &evse, LcdTask &lcd, EventLog &eventLog,
     this->eventLog = &eventLog;
     this->rfid = &rfid;
 
-    ao_set_console_out(dbug_wrapper);
+    mo_set_console_out(dbug_wrapper);
+
+    instance = this; //cannot be in constructer because object is invalid before .begin()
 
     MicroTask.startTask(this);
-    
-    reconfigure();
 
-    instance = this; //OcppTask is valid now
+    reconfigure();
+}
+
+void ArduinoOcppTask::notifyConfigChanged() {
+    if (instance && !instance->synchronizationLock) {
+        instance->reconfigure();
+    }
 }
 
 void ArduinoOcppTask::reconfigure() {
@@ -58,109 +136,103 @@ void ArduinoOcppTask::reconfigure() {
 
         if (!getOcppContext()) {
             //first time execution, library not initialized yet
-            initializeArduinoOcpp();
+            initializeMicroOcpp();
         }
 
-        //apply new backend credentials if they have been updated via OpenEVSE GUI. Don't apply
-        //if the OCPP server updated them, because this closes the WS connection and can lead
-        //to the loss of the OCPP response
-        if (!ocpp_server.equals((const char*) *backendUrl)) {
-            ocppSocket->setBackendUrl(ocpp_server.c_str());
+        if (!ocpp_server.equals(connection->getBackendUrl()) ||
+                !ocpp_chargeBoxId.equals(connection->getChargeBoxId()) ||
+                !ocpp_authkey.equals(connection->getAuthKey())) {
+            //OpenEVSE WS URL configs have been updated - these must be applied manually
+            connection->reloadConfigs();
         }
-        if (!ocpp_chargeBoxId.equals((const char*) *chargeBoxId)) {
-            ocppSocket->setChargeBoxId(ocpp_chargeBoxId.c_str());
-        }
-        if (!ocpp_authkey.equals((const char*) *authKey)) {
-            ocppSocket->setAuthKey(ocpp_authkey.c_str());
-        }
-
-        //apply further configs each time. They don't have potentially negative side effects
-        *freevendActive = config_ocpp_auto_authorization();
-        *freevendIdTag = ocpp_idtag.c_str();
-        *allowOfflineTxForUnknownId = config_ocpp_offline_authorization();
-        if (config_ocpp_auto_authorization()) {
-            *silentOfflineTx = true; //recommended to disable transaction journaling when being offline in Freevend mode
-        }
-
-        ArduinoOcpp::configuration_save();
     } else {
         //OCPP disabled via OpenEVSE config
 
         if (getOcppContext()) {
             //library still running. Deinitialize
-            deinitializeArduinoOcpp();
+            deinitializeMicroOcpp();
         }
     }
 
     MicroTask.wakeTask(this);
 }
 
-void ArduinoOcppTask::initializeArduinoOcpp() {
+void ArduinoOcppTask::initializeMicroOcpp() {
 
-    auto filesystem = ArduinoOcpp::makeDefaultFilesystemAdapter(ArduinoOcpp::FilesystemOpt::Use);
+    auto filesystem = MicroOcpp::makeDefaultFilesystemAdapter(MicroOcpp::FilesystemOpt::Use);
 
-    ocppSocket = new ArduinoOcpp::AOcppMongooseClient(Mongoose.getMgr(), nullptr, nullptr, nullptr, nullptr, filesystem);
+    /*
+     * Create mapping of OCPP configs to OpenEVSE configs using config adapters.
+     *
+     * Add config adapters to a config container
+     */
+    MicroOcpp::configuration_init(filesystem);
+
+    std::shared_ptr<MicroOcpp::ConfigurationContainerVolatile> openEvseConfigs = 
+        MicroOcpp::makeConfigurationContainerVolatile(
+            CONFIGURATION_VOLATILE "/openevse", //container ID
+            true);                              //configs are visible to OCPP server
+
+    openEvseConfigs->addConfiguration(OcppConfigAdapter::makeConfigString(*this,
+            MOCPP_CONFIG_EXT_PREFIX "BackendUrl",                            //config key in OCPP lib
+            "ocpp_server",                                                   //config key in OpenEVSE configs
+            ocpp_server));                                                   //reference to OpenEVSE config value
+    openEvseConfigs->addConfiguration(OcppConfigAdapter::makeConfigString(*this,
+            MOCPP_CONFIG_EXT_PREFIX "ChargeBoxId",
+            "ocpp_chargeBoxId",
+            ocpp_chargeBoxId));
+    openEvseConfigs->addConfiguration(OcppConfigAdapter::makeConfigString(*this,
+            "AuthorizationKey",
+            "ocpp_authkey",
+            ocpp_authkey));
+    openEvseConfigs->addConfiguration(OcppConfigAdapter::makeConfigBool(*this,
+            MOCPP_CONFIG_EXT_PREFIX "FreeVendActive",
+            "ocpp_auth_auto",
+            config_ocpp_auto_authorization));                                //config value getter callback
+    openEvseConfigs->addConfiguration(OcppConfigAdapter::makeConfigString(*this,
+            MOCPP_CONFIG_EXT_PREFIX "FreeVendIdTag",
+            "ocpp_idtag",
+            ocpp_idtag));
+    openEvseConfigs->addConfiguration(OcppConfigAdapter::makeConfigBool(*this,
+            "AllowOfflineTxForUnknownId",
+            "ocpp_auth_offline",
+            config_ocpp_offline_authorization));
+
+    MicroOcpp::addConfigurationContainer(openEvseConfigs);
 
     /*
      * Set OCPP-only factory defaults
      */
-    ArduinoOcpp::configuration_init(filesystem);
-    ArduinoOcpp::declareConfiguration<const char*>(
-        "MeterValuesSampledData", "Power.Active.Import,Energy.Active.Import.Register,Current.Import,Current.Offered,Voltage,Temperature");
-    ArduinoOcpp::declareConfiguration<bool>(
-        "AO_PreBootTransactions", true);
+    MicroOcpp::declareConfiguration<const char*>(
+        "MeterValuesSampledData", "Power.Active.Import,Energy.Active.Import.Register,Current.Import,Current.Offered,Voltage,Temperature"); //read all sensors by default
+    MicroOcpp::declareConfiguration<bool>(
+        MOCPP_CONFIG_EXT_PREFIX "PreBootTransactions", true); //allow transactions before the OCPP connection has been established (can lead to data loss)
+    MicroOcpp::declareConfiguration<bool>(
+        MOCPP_CONFIG_EXT_PREFIX "SilentOfflineTransactions", true); //disable transaction journaling when being offline for a long time (can lead to data loss)
+
+    connection = new MicroOcpp::MOcppMongooseClient(Mongoose.getMgr(), nullptr, nullptr, nullptr, nullptr, filesystem);
     
     /*
      * Initialize the OCPP library and provide it with the charger credentials
      */
-    ocpp_initialize(*ocppSocket, ChargerCredentials(
+    mocpp_initialize(*connection, ChargerCredentials(
             "Advanced Series",         //chargePointModel
             "OpenEVSE",                //chargePointVendor
             currentfirmware.c_str(),   //firmwareVersion
             serial.c_str(),            //chargePointSerialNumber
             evse->getFirmwareVersion() //meterSerialNumber
-        ), ArduinoOcpp::FilesystemOpt::Use);
-
-    /*
-     * Load OCPP configs. Default values will be overwritten by OpenEVSE configs. Mark configs
-     * to require reboot if changed via OCPP server
-     */
-    backendUrl = ArduinoOcpp::declareConfiguration<const char*>("AO_BackendUrl", "", AO_FILENAME_PREFIX "ocpp-creds.jsn", true, true, true, true);
-    chargeBoxId = ArduinoOcpp::declareConfiguration<const char*>("AO_ChargeBoxId", "", AO_FILENAME_PREFIX "ocpp-creds.jsn", true, true, true, true);
-    authKey = ArduinoOcpp::declareConfiguration<const char*>("AuthorizationKey", "", AO_FILENAME_PREFIX "ocpp-creds.jsn", true, true, true, true);
-    freevendActive = ArduinoOcpp::declareConfiguration<bool>("AO_FreeVendActive", true, CONFIGURATION_FN, true, true, true, true);
-    freevendIdTag = ArduinoOcpp::declareConfiguration<const char*>("AO_FreeVendIdTag", "DefaultIdTag", CONFIGURATION_FN, true, true, true, true);
-    allowOfflineTxForUnknownId = ArduinoOcpp::declareConfiguration<bool>("AllowOfflineTxForUnknownId", true, CONFIGURATION_FN, true, true, true, true);
-    silentOfflineTx = ArduinoOcpp::declareConfiguration<bool>("AO_SilentOfflineTransactions", true, CONFIGURATION_FN, true, true, true, true);
-
-    //when the OCPP server updates the configs, the following callback will apply them to the OpenEVSE configs
-    setOnReceiveRequest("ChangeConfiguration", [this] (JsonObject) {
-        config_set("ocpp_server", String((const char*) *backendUrl));
-        config_set("ocpp_chargeBoxId", String((const char*) *chargeBoxId));
-        config_set("ocpp_authkey", String((const char*) *authKey));
-        config_set("ocpp_auth_auto", (uint32_t) (*freevendActive ? 1 : 0));
-        config_set("ocpp_idtag", String((const char*) *freevendIdTag));
-        config_set("ocpp_auth_offline", (uint32_t) (*allowOfflineTxForUnknownId ? 1 : 0));
-        config_commit();
-    });
+        ), filesystem);
 
     loadEvseBehavior();
     initializeDiagnosticsService();
     initializeFwService();
 }
 
-void ArduinoOcppTask::deinitializeArduinoOcpp() {
-    backendUrl.reset();
-    chargeBoxId.reset();
-    authKey.reset();
-    freevendActive.reset();
-    freevendIdTag.reset();
-    allowOfflineTxForUnknownId.reset();
-    silentOfflineTx.reset();
+void ArduinoOcppTask::deinitializeMicroOcpp() {
     rfid->setOnCardScanned(nullptr);
-    ocpp_deinitialize();
-    delete ocppSocket;
-    ocppSocket = nullptr;
+    mocpp_deinitialize();
+    delete connection;
+    connection = nullptr;
 }
 
 void ArduinoOcppTask::setup() {
@@ -269,14 +341,15 @@ void ArduinoOcppTask::loadEvseBehavior() {
         return nullptr;
     });
 
-    addErrorDataInput([this] () -> ArduinoOcpp::ErrorData {
+    addErrorDataInput([this] () -> MicroOcpp::ErrorData {
         if (evse->getEvseState() == OPENEVSE_STATE_DIODE_CHECK_FAILED ||
                 evse->getEvseState() == OPENEVSE_STATE_GFI_FAULT ||
                 evse->getEvseState() == OPENEVSE_STATE_NO_EARTH_GROUND ||
                 evse->getEvseState() == OPENEVSE_STATE_GFI_SELF_TEST_FAILED) {
             
-            ArduinoOcpp::ErrorData error = "GroundFailure";
+            MicroOcpp::ErrorData error = "GroundFailure";
 
+            //add free text error info
             error.info = evse->getEvseState() == OPENEVSE_STATE_DIODE_CHECK_FAILED ? "diode check failed" :
                          evse->getEvseState() == OPENEVSE_STATE_GFI_FAULT ? "GFI fault" :
                          evse->getEvseState() == OPENEVSE_STATE_NO_EARTH_GROUND ? "no earth / ground" :
@@ -328,35 +401,35 @@ void ArduinoOcppTask::loadEvseBehavior() {
     /*
      * Give the user feedback about the status of the OCPP transaction
      */
-    setTxNotificationOutput([this] (ArduinoOcpp::TxNotification notification, ArduinoOcpp::Transaction*) {
+    setTxNotificationOutput([this] (MicroOcpp::Transaction*, MicroOcpp::TxNotification notification) {
         switch (notification) {
-            case ArduinoOcpp::TxNotification::AuthorizationRejected:
+            case MicroOcpp::TxNotification::AuthorizationRejected:
                 LCD_DISPLAY("Card unkown");
                 break;
-            case ArduinoOcpp::TxNotification::AuthorizationTimeout:
+            case MicroOcpp::TxNotification::AuthorizationTimeout:
                 LCD_DISPLAY("Server timeout");
                 break;
-            case ArduinoOcpp::TxNotification::Authorized:
+            case MicroOcpp::TxNotification::Authorized:
                 LCD_DISPLAY("Card accepted");
                 break;
-            case ArduinoOcpp::TxNotification::ConnectionTimeout:
+            case MicroOcpp::TxNotification::ConnectionTimeout:
                 LCD_DISPLAY("Aborted / no EV");
                 break;
-            case ArduinoOcpp::TxNotification::DeAuthorized:
+            case MicroOcpp::TxNotification::DeAuthorized:
                 LCD_DISPLAY("Card unkown");
                 break;
-            case ArduinoOcpp::TxNotification::RemoteStart:
+            case MicroOcpp::TxNotification::RemoteStart:
                 if (!evse->isVehicleConnected()) {
                     LCD_DISPLAY("Plug in cable");
                 }
                 break;
-            case ArduinoOcpp::TxNotification::ReservationConflict:
+            case MicroOcpp::TxNotification::ReservationConflict:
                 LCD_DISPLAY("EVSE reserved");
                 break;
-            case ArduinoOcpp::TxNotification::StartTx:
+            case MicroOcpp::TxNotification::StartTx:
                 LCD_DISPLAY("Tx started");
                 break;
-            case ArduinoOcpp::TxNotification::StopTx:
+            case MicroOcpp::TxNotification::StopTx:
                 LCD_DISPLAY("Tx stopped");
                 break;
             default:
@@ -368,9 +441,9 @@ void ArduinoOcppTask::loadEvseBehavior() {
 unsigned long ArduinoOcppTask::loop(MicroTasks::WakeReason reason) {
 
     if (getOcppContext()) {
-        //ArduinoOcpp is initialized
+        //MicroOcpp is initialized
 
-        ocpp_loop();
+        mocpp_loop();
         
         /*
          * Generate messages for LCD
@@ -471,26 +544,20 @@ void ArduinoOcppTask::updateEvseClaim() {
 
 }
 
-void ArduinoOcppTask::notifyConfigChanged() {
-    if (instance) {
-        instance->reconfigure();
-    }
-}
-
 void ArduinoOcppTask::initializeDiagnosticsService() {
-    ArduinoOcpp::DiagnosticsService *diagService = getDiagnosticsService();
+    MicroOcpp::DiagnosticsService *diagService = getDiagnosticsService();
     if (diagService) {
         diagService->setOnUploadStatusInput([this] () {
             if (diagFailure) {
-                return ArduinoOcpp::UploadStatus::UploadFailed;
+                return MicroOcpp::UploadStatus::UploadFailed;
             } else if (diagSuccess) {
-                return ArduinoOcpp::UploadStatus::Uploaded;
+                return MicroOcpp::UploadStatus::Uploaded;
             } else {
-                return ArduinoOcpp::UploadStatus::NotUploaded;
+                return MicroOcpp::UploadStatus::NotUploaded;
             }
         });
 
-        diagService->setOnUpload([this] (const std::string &location, ArduinoOcpp::Timestamp &startTime, ArduinoOcpp::Timestamp &stopTime) {
+        diagService->setOnUpload([this] (const std::string &location, MicroOcpp::Timestamp &startTime, MicroOcpp::Timestamp &stopTime) {
             
             //reset reported state
             diagSuccess = false;
@@ -532,7 +599,7 @@ void ArduinoOcppTask::initializeDiagnosticsService() {
 
                 eventLog->enumerate(index, [this, startTime, stopTime, &body, SUFFIX_RESERVED_AREA, &firstEntry, &overflow] (String time, EventType type, const String &logEntry, EvseState managerState, uint8_t evseState, uint32_t evseFlags, uint32_t pilot, double energy, uint32_t elapsed, double temperature, double temperatureMax, uint8_t divertMode, uint8_t shaper) {
                     if (overflow) return;
-                    ArduinoOcpp::Timestamp timestamp = ArduinoOcpp::Timestamp();
+                    MicroOcpp::Timestamp timestamp = MicroOcpp::Timestamp();
                     if (time.isEmpty() || !timestamp.setTime(time.c_str())) {
                         DBUGF("[ocpp] Diagnostics upload, cannot parse timestamp format: %s", time.c_str());
                         return;
@@ -595,16 +662,16 @@ void ArduinoOcppTask::initializeDiagnosticsService() {
 }
 
 void ArduinoOcppTask::initializeFwService() {
-    ArduinoOcpp::FirmwareService *fwService = getFirmwareService();
+    MicroOcpp::FirmwareService *fwService = getFirmwareService();
     if (fwService) {
         
         fwService->setInstallationStatusInput([this] () {
             if (updateFailure) {
-                return ArduinoOcpp::InstallationStatus::InstallationFailed;
+                return MicroOcpp::InstallationStatus::InstallationFailed;
             } else if (updateSuccess) {
-                return ArduinoOcpp::InstallationStatus::Installed;
+                return MicroOcpp::InstallationStatus::Installed;
             } else {
-                return ArduinoOcpp::InstallationStatus::NotInstalled;
+                return MicroOcpp::InstallationStatus::NotInstalled;
             }
         });
 
@@ -631,8 +698,12 @@ void ArduinoOcppTask::initializeFwService() {
 }
 
 bool ArduinoOcppTask::isConnected() {
-    if (instance && instance->ocppSocket) {
-        return instance->ocppSocket->isConnectionOpen();
+    if (instance && instance->connection) {
+        return instance->connection->isConnectionOpen();
     }
     return false;
+}
+
+void ArduinoOcppTask::setSynchronizationLock(bool locked) {
+    synchronizationLock = locked;
 }
