@@ -56,6 +56,9 @@ void LcdTask::display(const char *msg, int x, int y, int time, uint32_t flags)
 
 void LcdTask::begin(EvseManager &evse, Scheduler &scheduler, ManualOverride &manual)
 {
+  _evse = &evse;
+  _scheduler = &scheduler;
+  _manual = &manual;
   MicroTask.startTask(this);
 }
 
@@ -96,22 +99,17 @@ unsigned long LcdTask::loop(MicroTasks::WakeReason reason)
     case State::Charge:
       render_image("/ChargeScreen.png", 0, 0);
 
-//      _lcd.setCursor(120, 180);
-//      _lcd.setTextColor(TFT_BLACK, TFT_WHITE);
-//      _lcd.setFreeFont(&DejaVu_Sans_72);
-//      _lcd.setTextSize(1);
-//      _lcd.setFreeFont(&FreeSans24pt7b);
-//      _lcd.setTextSize(3);
-//      _lcd.print("16");
-
       render_right_text("16", 266, 180, &FreeSans24pt7b, TFT_BLACK, 3);
       _lcd.setTextSize(1);
       _lcd.print("A");
 
+      char buffer[32];
+
       render_centered_text(esp_hostname.c_str(), 324, 72, 140, &FreeSans9pt7b, TFT_OPENEVSE_TEXT);
       render_centered_text("11/08/2023, 3:45 AM", 324, 92, 140, &FreeSans9pt7b, TFT_OPENEVSE_TEXT);
       render_centered_text("00:00:00", 324, 144, 140, &FreeSans9pt7b, TFT_WHITE);
-      render_centered_text("0 kWh", 324, 196, 140, &FreeSans9pt7b, TFT_WHITE);
+      get_scaled_number_value(_evse->getSessionEnergy(), 0, "Wh", buffer, sizeof(buffer));
+      render_centered_text(buffer, 324, 196, 140, &FreeSans9pt7b, TFT_WHITE);
       //nextUpdate = 1000;
       break;
 
@@ -122,6 +120,28 @@ unsigned long LcdTask::loop(MicroTasks::WakeReason reason)
   DBUGVAR(nextUpdate);
   return nextUpdate;
 }
+
+void LcdTask::get_scaled_number_value(double value, int precision, const char *unit, char *buffer, size_t size)
+{
+  static const char *mod[] = {
+    "",
+    "k",
+    "M",
+    "G",
+    "T",
+    "P"
+  };
+
+  int index = 0;
+  while (value > 1000 && index < ARRAY_ITEMS(mod))
+  {
+    value /= 1000;
+    index++;
+  }
+
+  snprintf(buffer, size, "%.*f %s%s", precision, value, mod[index], unit);
+}
+
 
 void LcdTask::render_centered_text(const char *text, int16_t x, int16_t y, int16_t width, const GFXfont *font, uint16_t color, uint8_t size)
 {

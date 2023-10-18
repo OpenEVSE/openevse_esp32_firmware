@@ -30,6 +30,9 @@ class LcdTask : public MicroTasks::Task
     };
 
     State _state = State::Boot;
+    EvseManager *_evse;
+    Scheduler *_scheduler;
+    ManualOverride *_manual;
 
     static void png_draw(PNGDRAW *pDraw);
   protected:
@@ -40,6 +43,8 @@ class LcdTask : public MicroTasks::Task
     void render_centered_text(const char *text, int16_t x, int16_t y, int16_t width, const GFXfont *font, uint16_t color, uint8_t size = 1);
     void render_right_text(const char *text, int16_t x, int16_t y, const GFXfont *font, uint16_t color, uint8_t size = 1);
     void load_font(const char *filename);
+
+    void get_scaled_number_value(double value, int precision, const char *unit, char *buffer, size_t size);
 
   public:
     LcdTask();
