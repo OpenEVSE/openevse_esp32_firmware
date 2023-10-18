@@ -17,6 +17,7 @@
 #include <sys/time.h>
 #include "embedded_files.h"
 //#include "fonts/DejaVu_Sans_72.h"
+#include <SvgParser.h>
 
 #define TFT_OPENEVSE_BACK   0x2413
 #define TFT_OPENEVSE_GREEN  0x3E92
@@ -37,7 +38,10 @@ struct image_render_state {
 
 LcdTask::LcdTask() :
   MicroTasks::Task(),
-  _lcd()
+  _lcd(),
+  _state(State::Boot),
+  _svgOutput(_lcd),
+  _svg(&_svgOutput)
 {
 }
 
@@ -93,18 +97,19 @@ unsigned long LcdTask::loop(MicroTasks::WakeReason reason)
       break;
 
     case State::Charge:
-      render_image("/ChargeScreen.png", 0, 0);
-
-      _lcd.setCursor(120, 180);
-      _lcd.setTextColor(TFT_BLACK, TFT_WHITE);
-//      _lcd.setFreeFont(&DejaVu_Sans_72);
+//      render_image("/ChargeScreen.png", 0, 0);
+//
+//      _lcd.setCursor(120, 180);
+//      _lcd.setTextColor(TFT_BLACK, TFT_WHITE);
+////      _lcd.setFreeFont(&DejaVu_Sans_72);
+////      _lcd.setTextSize(1);
+//      _lcd.setFreeFont(&FreeSans24pt7b);
+//      _lcd.setTextSize(3);
+//      _lcd.print("16");
+//      _lcd.setFreeFont(&FreeSans24pt7b);
 //      _lcd.setTextSize(1);
-      _lcd.setFreeFont(&FreeSans24pt7b);
-      _lcd.setTextSize(3);
-      _lcd.print("16");
-      _lcd.setFreeFont(&FreeSans24pt7b);
-      _lcd.setTextSize(1);
-      _lcd.println("A");
+//      _lcd.println("A");
+      render_svg("/charge.svg", 0, 0);
 
       break;
 
@@ -138,6 +143,18 @@ void LcdTask::render_image(const char *filename, int16_t x, int16_t y)
   }
 }
 
+void LcdTask::render_svg(const char *filename, int16_t x, int16_t y)
+{
+  StaticFile *file = NULL;
+  if(embedded_get_file(filename, lcd_gui_static_files, ARRAY_LENGTH(lcd_gui_static_files), &file))
+  {
+    DBUGF("Found %s (%d bytes)", filename, file->length);
+    DBUGF("SVG: %p %p\n", _svg, &_svg);
+    _svg.readFlash((const uint8_t *)file->data, file->length);
+    _svg.print(x, y);
+  }
+}
+
 #ifdef SMOOTH_FONT
 void LcdTask::load_font(const char *filename)
 {
@@ -157,6 +174,85 @@ void LcdTask::png_draw(PNGDRAW *pDraw)
   png.getLineAsRGB565(pDraw, lineBuffer, PNG_RGB565_BIG_ENDIAN, 0xffffffff);
   state->tft->pushImage(state->xpos, state->ypos + pDraw->y, pDraw->iWidth, 1, lineBuffer);
 }
+
+void LcdTask::SvgOutput_TFT_eSPI::circle(int16_t x, int16_t y, int16_t radius, struct svgStyle_t * style)
+{
+    DBUGF("CIRCLE: x %i y %i radiuss %i stroke width: %i\n",x,y,radius,style->stroke_width);
+    tft.drawCircle(x, y, radius, style->stroke_color);
+    int16_t start=0, end; // radius is in middle of stroke
+
+    if(style->stroke_color_set != UNSET && style->stroke_width) {
+        uint16_t stroke_color = convertColor(style->stroke_color);
+
+        start = style->stroke_width*style->x_scale/2;
+        end = start;
+        end += (style->stroke_width*style->x_scale -start -end);
+
+        // check if this can be done by printing to filled circles
+        if(style->fill_color_set == SET){
+            start = style->stroke_width*style->x_scale;
+            tft.fillCircle(x, y, radius+end, stroke_color);
+        } else {
+
+            DBUGF("start: %i end: %i\n",start,end);
+            for(uint16_t i=radius-start; i<radius+end; i++)
+              tft.drawCircle(x, y, i, stroke_color);
+        }
+    }
+
+    // filled circle?
+    if(style->fill_color_set == SET) {
+        tft.fillCircle(x, y, radius-start, convertColor(style->fill_color));
+    }
+
+}
+
+void LcdTask::SvgOutput_TFT_eSPI::rect(int16_t x, int16_t y, int16_t width, int16_t height, struct svgStyle_t * style)
+{
+    DBUGF("RECT: x %i y %i width %i height %i\n",x,y,width, height);
+
+    // filled rect?
+    if(style->fill_color_set == SET) {
+        tft.fillRect(x, y, width, height, convertColor(style->fill_color));
+    }
+
+    if(style->stroke_color_set != UNSET && style->stroke_width) {
+        uint16_t stroke_color = convertColor(style->stroke_color);
+        tft.drawRect(x, y, width, height, stroke_color);
+    }
+}
+void LcdTask::SvgOutput_TFT_eSPI::text(int16_t x, int16_t y, char * text, struct svgStyle_t * style)
+{
+    DBUGF("TEXT: x %i y %i size %i text \"%s\"\n", x, y, style->font_size, text);
+    if(style->stroke_color_set == UNSET && style->fill_color_set == UNSET) return;
+
+    tft.setTextColor(convertColor(style->stroke_color));
+            tft.setTextSize(1);
+
+    DBUGF("cur font height: %i\n",tft.fontHeight());
+    uint8_t newHeight = round(style->font_size*style->y_scale/ tft.fontHeight());
+    if(!newHeight) newHeight++;
+            DBUGF("height factor: %i\n",newHeight);
+
+    tft.setTextSize(newHeight);
+
+    tft.setTextDatum(BL_DATUM);
+    tft.drawString(text, x, y + (style->font_size*style->y_scale - tft.fontHeight())/2);
+
+}
+
+void LcdTask::SvgOutput_TFT_eSPI::path(uint16_t *data, uint16_t len, struct svgStyle_t * style)
+{
+    if(len<2) return;
+    if(style->stroke_color_set == UNSET) return;
+    uint16_t color = convertColor(style->stroke_color);
+
+    for(uint16_t i = 1; i<len; i++)
+        tft.drawLine(data[(i-1)*2], data[(i-1)*2+1], data[i*2], data[i*2 + 1], color);
+
+    DBUGF("PATH: len: %i \n",len);
+}
+
 
 LcdTask lcd;
 

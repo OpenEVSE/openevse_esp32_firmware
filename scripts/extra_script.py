@@ -76,7 +76,7 @@ def filtered_listdir_scan(dir):
     out_files = []
     for file in listdir(dir):
         path = join(dir, file)
-        if isfile(path) and (pathlib.Path(file).suffix in (".html", ".js", ".css", ".json", ".gz", ".png", ".jpg", ".ico", ".woff", ".woff2", ".webmanifest")):            out_files.append(path)
+        if isfile(path) and (pathlib.Path(file).suffix in (".html", ".js", ".css", ".json", ".gz", ".png", ".jpg", ".ico", ".woff", ".woff2", ".webmanifest", ".svg")):            out_files.append(path)
         elif isdir(path):
             out_files.extend(filtered_listdir_scan(path))
 

@@ -14,6 +14,7 @@
 //#include <lvgl.h>
 #include <TFT_eSPI.h>
 #include <PNGdec.h>
+#include <SvgParser.h>
 
 class LcdTask : public MicroTasks::Task
 {
@@ -29,7 +30,29 @@ class LcdTask : public MicroTasks::Task
       Charge
     };
 
-    State _state = State::Boot;
+    State _state;
+
+    class SvgOutput_TFT_eSPI : public SvgOutput
+    {
+      private :
+        TFT_eSPI &tft;
+
+      public:
+        SvgOutput_TFT_eSPI(TFT_eSPI &tft) :
+          tft(tft) {};
+
+        virtual void circle(int16_t x, int16_t y, int16_t radius, struct svgStyle_t * style);
+        virtual void rect(int16_t x, int16_t y, int16_t width, int16_t height, struct svgStyle_t * style);
+        virtual void text(int16_t x, int16_t y, char * text, struct svgStyle_t * style);
+        virtual void path(uint16_t *data, uint16_t len, struct svgStyle_t * style);
+
+      private:
+        uint16_t convertColor(uint32_t color){
+          return tft.color565((color & 0x00FF0000) >> 16, (color & 0x0000FF00) >> 8, color & 0x000000FF);
+        }
+    } _svgOutput;
+
+    SvgParser _svg;
 
     static void png_draw(PNGDRAW *pDraw);
   protected:
@@ -37,6 +60,7 @@ class LcdTask : public MicroTasks::Task
     unsigned long loop(MicroTasks::WakeReason reason);
 
     void render_image(const char *filename, int16_t x, int16_t y);
+    void render_svg(const char *filename, int16_t x, int16_t y);
     void load_font(const char *filename);
 
   public:
