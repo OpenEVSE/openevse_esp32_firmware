@@ -20,6 +20,7 @@
 
 #define TFT_OPENEVSE_BACK   0x2413
 #define TFT_OPENEVSE_GREEN  0x3E92
+#define TFT_OPENEVSE_TEXT   0x1BD1
 
 #include "web_server.h"
 
@@ -95,17 +96,23 @@ unsigned long LcdTask::loop(MicroTasks::WakeReason reason)
     case State::Charge:
       render_image("/ChargeScreen.png", 0, 0);
 
-      _lcd.setCursor(120, 180);
-      _lcd.setTextColor(TFT_BLACK, TFT_WHITE);
+//      _lcd.setCursor(120, 180);
+//      _lcd.setTextColor(TFT_BLACK, TFT_WHITE);
 //      _lcd.setFreeFont(&DejaVu_Sans_72);
 //      _lcd.setTextSize(1);
-      _lcd.setFreeFont(&FreeSans24pt7b);
-      _lcd.setTextSize(3);
-      _lcd.print("16");
-      _lcd.setFreeFont(&FreeSans24pt7b);
-      _lcd.setTextSize(1);
-      _lcd.println("A");
+//      _lcd.setFreeFont(&FreeSans24pt7b);
+//      _lcd.setTextSize(3);
+//      _lcd.print("16");
 
+      render_right_text("16", 266, 180, &FreeSans24pt7b, TFT_BLACK, 3);
+      _lcd.setTextSize(1);
+      _lcd.print("A");
+
+      render_centered_text(esp_hostname.c_str(), 324, 72, 140, &FreeSans9pt7b, TFT_OPENEVSE_TEXT);
+      render_centered_text("11/08/2023, 3:45 AM", 324, 92, 140, &FreeSans9pt7b, TFT_OPENEVSE_TEXT);
+      render_centered_text("00:00:00", 324, 144, 140, &FreeSans9pt7b, TFT_WHITE);
+      render_centered_text("0 kWh", 324, 196, 140, &FreeSans9pt7b, TFT_WHITE);
+      //nextUpdate = 1000;
       break;
 
     default:
@@ -114,6 +121,28 @@ unsigned long LcdTask::loop(MicroTasks::WakeReason reason)
 
   DBUGVAR(nextUpdate);
   return nextUpdate;
+}
+
+void LcdTask::render_centered_text(const char *text, int16_t x, int16_t y, int16_t width, const GFXfont *font, uint16_t color, uint8_t size)
+{
+  _lcd.setFreeFont(font);
+  _lcd.setTextSize(size);
+  int16_t text_width = _lcd.textWidth(text);
+  int16_t text_x = x + ((width - text_width) / 2);
+  _lcd.setTextColor(color);
+  _lcd.setCursor(text_x, y);
+  _lcd.print(text);
+}
+
+void LcdTask::render_right_text(const char *text, int16_t x, int16_t y, const GFXfont *font, uint16_t color, uint8_t size)
+{
+  _lcd.setFreeFont(font);
+  _lcd.setTextSize(size);
+  int16_t text_width = _lcd.textWidth(text);
+  int16_t text_x = x - text_width;
+  _lcd.setTextColor(color);
+  _lcd.setCursor(text_x, y);
+  _lcd.print(text);
 }
 
 void LcdTask::render_image(const char *filename, int16_t x, int16_t y)
