@@ -18,9 +18,36 @@
 #include "embedded_files.h"
 //#include "fonts/DejaVu_Sans_72.h"
 
-#define TFT_OPENEVSE_BACK   0x2413
-#define TFT_OPENEVSE_GREEN  0x3E92
-#define TFT_OPENEVSE_TEXT   0x1BD1
+#define TFT_OPENEVSE_BACK       0x2413
+#define TFT_OPENEVSE_GREEN      0x3E92
+#define TFT_OPENEVSE_TEXT       0x1BD1
+#define TFT_OPENEVSE_INFO_BACK  0x23d1
+
+// The TFT is natively portrait but we are rendering as landscape
+#define TFT_SCREEN_WIDTH        TFT_HEIGHT
+#define TFT_SCREEN_HEIGHT       TFT_WIDTH
+
+#define BUTTON_BAR_X            0
+#define BUTTON_BAR_Y            (TFT_SCREEN_HEIGHT - BUTTON_BAR_HEIGHT)
+#define BUTTON_BAR_HEIGHT       55
+#define BUTTON_BAR_WIDTH        TFT_SCREEN_WIDTH
+
+#define DISPLAY_AREA_X          0
+#define DISPLAY_AREA_Y          0
+#define DISPLAY_AREA_WIDTH      TFT_SCREEN_WIDTH
+#define DISPLAY_AREA_HEIGHT     (TFT_SCREEN_HEIGHT - BUTTON_BAR_HEIGHT)
+
+#define WHITE_AREA_BOARDER      8
+#define WHITE_AREA_X            WHITE_AREA_BOARDER
+#define WHITE_AREA_Y            45
+#define WHITE_AREA_WIDTH        (DISPLAY_AREA_WIDTH - (2 * 8))
+#define WHITE_AREA_HEIGHT       (DISPLAY_AREA_HEIGHT - (WHITE_AREA_Y + 20))
+
+
+#define INFO_BOX_BOARDER        8
+#define INFO_BOX_X              ((WHITE_AREA_X + WHITE_AREA_WIDTH) - (INFO_BOX_WIDTH + INFO_BOX_BOARDER))
+#define INFO_BOX_WIDTH          170
+#define INFO_BOX_HEIGHT         56
 
 #include "web_server.h"
 
@@ -97,19 +124,27 @@ unsigned long LcdTask::loop(MicroTasks::WakeReason reason)
       break;
 
     case State::Charge:
-      render_image("/ChargeScreen.png", 0, 0);
 
-      render_right_text("16", 266, 180, &FreeSans24pt7b, TFT_BLACK, 3);
-      _lcd.setTextSize(1);
-      _lcd.print("A");
+      _lcd.fillRect(DISPLAY_AREA_X, DISPLAY_AREA_Y, DISPLAY_AREA_WIDTH, DISPLAY_AREA_HEIGHT, TFT_OPENEVSE_BACK);
+      _lcd.fillSmoothRoundRect(WHITE_AREA_X, WHITE_AREA_Y, WHITE_AREA_WIDTH, WHITE_AREA_HEIGHT, 6, TFT_WHITE);
+      render_image("/button_bar.png", BUTTON_BAR_X, BUTTON_BAR_Y);
+      render_image("/not_connected.png", 16, 52);
 
       char buffer[32];
 
-      render_centered_text(esp_hostname.c_str(), 324, 72, 140, &FreeSans9pt7b, TFT_OPENEVSE_TEXT);
-      render_centered_text("11/08/2023, 3:45 AM", 324, 92, 140, &FreeSans9pt7b, TFT_OPENEVSE_TEXT);
-      render_centered_text("00:00:00", 324, 144, 140, &FreeSans9pt7b, TFT_WHITE);
+      snprintf(buffer, sizeof(buffer), "%d", _evse->getChargeCurrent());
+      render_right_text(buffer, 220, 200, &FreeSans24pt7b, TFT_BLACK, 3);
+      _lcd.setTextSize(1);
+      _lcd.print("A");
+
+      render_centered_text(esp_hostname.c_str(), INFO_BOX_X, 72, INFO_BOX_WIDTH, &FreeSans9pt7b, TFT_OPENEVSE_TEXT);
+      render_centered_text("11/08/2023, 3:45 AM", INFO_BOX_X, 94, INFO_BOX_WIDTH, &FreeSans9pt7b, TFT_OPENEVSE_TEXT);
+
+      render_info_box("ELAPSED", "00:00:00", INFO_BOX_X, 110, INFO_BOX_WIDTH, INFO_BOX_HEIGHT);
+
       get_scaled_number_value(_evse->getSessionEnergy(), 0, "Wh", buffer, sizeof(buffer));
-      render_centered_text(buffer, 324, 196, 140, &FreeSans9pt7b, TFT_WHITE);
+      render_info_box("DELIVERED", buffer, INFO_BOX_X, 175, INFO_BOX_WIDTH, INFO_BOX_HEIGHT);
+
       //nextUpdate = 1000;
       break;
 
@@ -142,6 +177,12 @@ void LcdTask::get_scaled_number_value(double value, int precision, const char *u
   snprintf(buffer, size, "%.*f %s%s", precision, value, mod[index], unit);
 }
 
+void LcdTask::render_info_box(const char *title, const char *text, int16_t x, int16_t y, int16_t width, int16_t height)
+{
+  _lcd.fillSmoothRoundRect(x, y, width, height, 6, TFT_OPENEVSE_INFO_BACK, TFT_WHITE);
+  render_centered_text(title, x, y+22, width, &FreeSans9pt7b, TFT_OPENEVSE_GREEN);
+  render_centered_text(text, x, y+(height-10), width, &FreeSans9pt7b, TFT_WHITE);
+}
 
 void LcdTask::render_centered_text(const char *text, int16_t x, int16_t y, int16_t width, const GFXfont *font, uint16_t color, uint8_t size)
 {

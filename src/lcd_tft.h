@@ -42,6 +42,7 @@ class LcdTask : public MicroTasks::Task
     void render_image(const char *filename, int16_t x, int16_t y);
     void render_centered_text(const char *text, int16_t x, int16_t y, int16_t width, const GFXfont *font, uint16_t color, uint8_t size = 1);
     void render_right_text(const char *text, int16_t x, int16_t y, const GFXfont *font, uint16_t color, uint8_t size = 1);
+    void render_info_box(const char *title, const char *text, int16_t x, int16_t y, int16_t width, int16_t height);
     void load_font(const char *filename);
 
     void get_scaled_number_value(double value, int precision, const char *unit, char *buffer, size_t size);
