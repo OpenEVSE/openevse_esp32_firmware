@@ -114,7 +114,7 @@ void OcppTask::begin(EvseManager &evse, LcdTask &lcd, EventLog &eventLog, RfidTa
     this->eventLog = &eventLog;
     this->rfid = &rfid;
 
-    mo_set_console_out(dbug_wrapper);
+    mocpp_set_console_out(dbug_wrapper);
 
     instance = this; //cannot be in constructer because object is invalid before .begin()
 
@@ -162,6 +162,34 @@ void OcppTask::initializeMicroOcpp() {
     auto filesystem = MicroOcpp::makeDefaultFilesystemAdapter(MicroOcpp::FilesystemOpt::Use);
 
     /*
+     * Clean local OCPP files when upgrading to MicroOcpp v1.0. Unfortunately, config changes made by
+     * the OCPP server will be lost. The WebSocket URL is stored in the OpenEVSE configs is not affected
+     */
+    MicroOcpp::configuration_init(filesystem);
+    auto configVersion = MicroOcpp::declareConfiguration<const char*>("MicroOcppVersion", "0.x", MO_KEYVALUE_FN, false, false, false);
+    MicroOcpp::configuration_load(MO_KEYVALUE_FN);
+    if (configVersion && !strcmp(configVersion->getString(), "0.x")) {
+        if (auto root = LittleFS.open("/")) {
+            while (auto file = root.openNextFile()) {
+                if (!strcmp(file.name(), "arduino-ocpp.cnf") ||
+                        !strcmp(file.name(), "ws-conn.jsn") ||
+                        !strncmp(file.name(), "sd", strlen("sd")) ||
+                        !strncmp(file.name(), "tx", strlen("tx")) ||
+                        !strncmp(file.name(), "op", strlen("op")) ||
+                        !strncmp(file.name(), "ocpp-", strlen("ocpp-")) ||
+                        !strncmp(file.name(), "client-state", strlen("client-state"))) {
+                    std::string path = file.path();
+                    file.close();
+                    auto success = LittleFS.remove(path.c_str());
+                    DBUGF("[ocpp] migration: remove file %s %s", path.c_str(), success ? "" : "failure");
+                }
+            }
+        }
+        DBUGF("[ocpp] migration done");
+    }
+    MicroOcpp::configuration_deinit(); //reinit to become fully effective
+
+    /*
      * Create mapping of OCPP configs to OpenEVSE configs using config adapters.
      *
      * Add config adapters to a config container
@@ -173,27 +201,27 @@ void OcppTask::initializeMicroOcpp() {
             CONFIGURATION_VOLATILE "/openevse", //container ID
             true);                              //configs are visible to OCPP server
 
-    openEvseConfigs->addConfiguration(OcppConfigAdapter::makeConfigString(*this,
-            MOCPP_CONFIG_EXT_PREFIX "BackendUrl",                            //config key in OCPP lib
-            "ocpp_server",                                                   //config key in OpenEVSE configs
-            ocpp_server));                                                   //reference to OpenEVSE config value
-    openEvseConfigs->addConfiguration(OcppConfigAdapter::makeConfigString(*this,
-            MOCPP_CONFIG_EXT_PREFIX "ChargeBoxId",
+    openEvseConfigs->add(OcppConfigAdapter::makeConfigString(*this,
+            MO_CONFIG_EXT_PREFIX "BackendUrl",                        //config key in OCPP lib
+            "ocpp_server",                                            //config key in OpenEVSE configs
+            ocpp_server));                                            //reference to OpenEVSE config value
+    openEvseConfigs->add(OcppConfigAdapter::makeConfigString(*this,
+            MO_CONFIG_EXT_PREFIX "ChargeBoxId",
             "ocpp_chargeBoxId",
             ocpp_chargeBoxId));
-    openEvseConfigs->addConfiguration(OcppConfigAdapter::makeConfigString(*this,
+    openEvseConfigs->add(OcppConfigAdapter::makeConfigString(*this,
             "AuthorizationKey",
             "ocpp_authkey",
             ocpp_authkey));
-    openEvseConfigs->addConfiguration(OcppConfigAdapter::makeConfigBool(*this,
-            MOCPP_CONFIG_EXT_PREFIX "FreeVendActive",
+    openEvseConfigs->add(OcppConfigAdapter::makeConfigBool(*this,
+            MO_CONFIG_EXT_PREFIX "FreeVendActive",
             "ocpp_auth_auto",
-            config_ocpp_auto_authorization));                                //config value getter callback
-    openEvseConfigs->addConfiguration(OcppConfigAdapter::makeConfigString(*this,
-            MOCPP_CONFIG_EXT_PREFIX "FreeVendIdTag",
+            config_ocpp_auto_authorization));                         //config value getter callback
+    openEvseConfigs->add(OcppConfigAdapter::makeConfigString(*this,
+            MO_CONFIG_EXT_PREFIX "FreeVendIdTag",
             "ocpp_idtag",
             ocpp_idtag));
-    openEvseConfigs->addConfiguration(OcppConfigAdapter::makeConfigBool(*this,
+    openEvseConfigs->add(OcppConfigAdapter::makeConfigBool(*this,
             "AllowOfflineTxForUnknownId",
             "ocpp_auth_offline",
             config_ocpp_offline_authorization));
@@ -206,9 +234,9 @@ void OcppTask::initializeMicroOcpp() {
     MicroOcpp::declareConfiguration<const char*>(
         "MeterValuesSampledData", "Power.Active.Import,Energy.Active.Import.Register,Current.Import,Current.Offered,Voltage,Temperature"); //read all sensors by default
     MicroOcpp::declareConfiguration<bool>(
-        MOCPP_CONFIG_EXT_PREFIX "PreBootTransactions", true); //allow transactions before the OCPP connection has been established (can lead to data loss)
+        MO_CONFIG_EXT_PREFIX "PreBootTransactions", true); //allow transactions before the OCPP connection has been established (can lead to data loss)
     MicroOcpp::declareConfiguration<bool>(
-        MOCPP_CONFIG_EXT_PREFIX "SilentOfflineTransactions", true); //disable transaction journaling when being offline for a long time (can lead to data loss)
+        MO_CONFIG_EXT_PREFIX "SilentOfflineTransactions", true); //disable transaction journaling when being offline for a long time (can lead to data loss)
 
     connection = new MicroOcpp::MOcppMongooseClient(Mongoose.getMgr(), nullptr, nullptr, nullptr, nullptr, filesystem);
     
@@ -221,7 +249,8 @@ void OcppTask::initializeMicroOcpp() {
             currentfirmware.c_str(),   //firmwareVersion
             serial.c_str(),            //chargePointSerialNumber
             evse->getFirmwareVersion() //meterSerialNumber
-        ), filesystem);
+        ), filesystem,
+        true); //enable auto recovery
 
     loadEvseBehavior();
     initializeDiagnosticsService();
