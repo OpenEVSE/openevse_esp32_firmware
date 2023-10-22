@@ -55,6 +55,7 @@ jobs:
           - olimex_esp32-gateway-f_dev
           - olimex_esp32-poe-iso
           - heltec_esp32-wifi-lora-v2
+          - wt32-eth01
         gui:
           - name: gui-v2
             repo: OpenEVSE/openevse-gui-v2
