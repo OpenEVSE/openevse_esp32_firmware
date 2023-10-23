@@ -107,6 +107,7 @@ unsigned long LcdTask::loop(MicroTasks::WakeReason reason)
   switch(_state)
   {
     case State::Boot:
+    {
       DBUGLN("LCD UI setup");
 
       _lcd.begin();
@@ -121,10 +122,10 @@ unsigned long LcdTask::loop(MicroTasks::WakeReason reason)
       digitalWrite(LCD_BACKLIGHT_PIN, HIGH);
       nextUpdate = 5000;
       _state = State::Charge;
-      break;
+    } break;
 
     case State::Charge:
-
+    {
       _lcd.fillRect(DISPLAY_AREA_X, DISPLAY_AREA_Y, DISPLAY_AREA_WIDTH, DISPLAY_AREA_HEIGHT, TFT_OPENEVSE_BACK);
       _lcd.fillSmoothRoundRect(WHITE_AREA_X, WHITE_AREA_Y, WHITE_AREA_WIDTH, WHITE_AREA_HEIGHT, 6, TFT_WHITE);
       render_image("/button_bar.png", BUTTON_BAR_X, BUTTON_BAR_Y);
@@ -138,15 +139,26 @@ unsigned long LcdTask::loop(MicroTasks::WakeReason reason)
       _lcd.print("A");
 
       render_centered_text(esp_hostname.c_str(), INFO_BOX_X, 72, INFO_BOX_WIDTH, &FreeSans9pt7b, TFT_OPENEVSE_TEXT);
-      render_centered_text("11/08/2023, 3:45 AM", INFO_BOX_X, 94, INFO_BOX_WIDTH, &FreeSans9pt7b, TFT_OPENEVSE_TEXT);
 
-      render_info_box("ELAPSED", "00:00:00", INFO_BOX_X, 110, INFO_BOX_WIDTH, INFO_BOX_HEIGHT);
+      timeval local_time;
+      gettimeofday(&local_time, NULL);
+      struct tm timeinfo;
+      localtime_r(&local_time.tv_sec, &timeinfo);
+      strftime(buffer, sizeof(buffer), "%d/%m/%Y, %l:%M %p", &timeinfo);
+      render_centered_text(buffer, INFO_BOX_X, 94, INFO_BOX_WIDTH, &FreeSans9pt7b, TFT_OPENEVSE_TEXT);
+
+      uint32_t elapsed = _evse->getSessionElapsed();
+      uint32_t hours = elapsed / 3600;
+      uint32_t minutes = (elapsed % 3600) / 60;
+      uint32_t seconds = elapsed % 60;
+      snprintf(buffer, sizeof(buffer), "%02d:%02d:%02d", hours, minutes, seconds);
+      render_info_box("ELAPSED", buffer, INFO_BOX_X, 110, INFO_BOX_WIDTH, INFO_BOX_HEIGHT);
 
       get_scaled_number_value(_evse->getSessionEnergy(), 0, "Wh", buffer, sizeof(buffer));
       render_info_box("DELIVERED", buffer, INFO_BOX_X, 175, INFO_BOX_WIDTH, INFO_BOX_HEIGHT);
 
       //nextUpdate = 1000;
-      break;
+    } break;
 
     default:
       break;
