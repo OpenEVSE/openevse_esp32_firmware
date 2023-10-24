@@ -65,7 +65,13 @@ struct image_render_state {
 
 LcdTask::LcdTask() :
   MicroTasks::Task(),
-  _lcd()
+  _tft(),
+#ifdef ENABLE_DOUBLE_BUFFER
+  _back_buffer(&_tft),
+  _screen(_back_buffer)
+#else
+  _screen(_tft)
+#endif
 {
 }
 
@@ -104,65 +110,105 @@ unsigned long LcdTask::loop(MicroTasks::WakeReason reason)
 
   unsigned long nextUpdate = MicroTask.Infinate;
 
+  if(_initialise)
+  {
+    // We need to initialise after the Networking as that brackes the display
+    DBUGVAR(ESP.getFreeHeap());
+    _tft.init();
+    _tft.setRotation(1);
+    DBUGF("Screen initialised, size: %dx%d", _screen_width, _screen_height);
+
+#ifdef ENABLE_DOUBLE_BUFFER
+    _back_buffer_pixels = (uint16_t *)_back_buffer.createSprite(_screen_width, _screen_height);
+    _back_buffer.setTextDatum(MC_DATUM);
+    DBUGF("Back buffer %p", _back_buffer_pixels);
+#endif
+
+    _initialise = false;
+  }
+
+#ifdef ENABLE_DOUBLE_BUFFER
+  _tft.startWrite();
+#endif
+
   switch(_state)
   {
     case State::Boot:
     {
       DBUGLN("LCD UI setup");
 
-      _lcd.begin();
-      _lcd.setRotation(1);
+      if(_full_update)
+      {
+        _screen.fillScreen(TFT_OPENEVSE_BACK);
+        _screen.fillSmoothRoundRect(90, 90, 300, 110, 15, TFT_WHITE);
+        render_image("/logo.png", 104, 115);
+        _full_update = false;
+      }
 
-      _lcd.fillScreen(TFT_OPENEVSE_BACK);
-      _lcd.fillSmoothRoundRect(90, 90, 300, 110, 15, TFT_WHITE);
-      _lcd.fillSmoothRoundRect(90, 235, 300, 16, 8, TFT_OPENEVSE_GREEN);
-      render_image("/logo.png", 104, 115);
+      _screen.fillRoundRect(90, 235, 300, 16, 8, TFT_WHITE);
+      if(_boot_progress > 0) {
+        _screen.fillRoundRect(90, 235, _boot_progress, 16, 8, TFT_OPENEVSE_GREEN);
+      }
+      _boot_progress += 10;
 
       pinMode(LCD_BACKLIGHT_PIN, OUTPUT);
       digitalWrite(LCD_BACKLIGHT_PIN, HIGH);
-      nextUpdate = 5000;
-      _state = State::Charge;
+      nextUpdate = 166;
+      if(_boot_progress >= 300) {
+        _state = State::Charge;
+        _full_update = true;
+      }
     } break;
 
     case State::Charge:
     {
-      _lcd.fillRect(DISPLAY_AREA_X, DISPLAY_AREA_Y, DISPLAY_AREA_WIDTH, DISPLAY_AREA_HEIGHT, TFT_OPENEVSE_BACK);
-      _lcd.fillSmoothRoundRect(WHITE_AREA_X, WHITE_AREA_Y, WHITE_AREA_WIDTH, WHITE_AREA_HEIGHT, 6, TFT_WHITE);
-      render_image("/button_bar.png", BUTTON_BAR_X, BUTTON_BAR_Y);
-      render_image("/not_connected.png", 16, 52);
+      if(_full_update)
+      {
+        _screen.fillRect(DISPLAY_AREA_X, DISPLAY_AREA_Y, DISPLAY_AREA_WIDTH, DISPLAY_AREA_HEIGHT, TFT_OPENEVSE_BACK);
+        _screen.fillSmoothRoundRect(WHITE_AREA_X, WHITE_AREA_Y, WHITE_AREA_WIDTH, WHITE_AREA_HEIGHT, 6, TFT_WHITE);
+        render_image("/button_bar.png", BUTTON_BAR_X, BUTTON_BAR_Y);
+        render_image("/not_connected.png", 16, 52);
+      }
 
       char buffer[32];
 
       snprintf(buffer, sizeof(buffer), "%d", _evse->getChargeCurrent());
-      render_right_text(buffer, 220, 200, &FreeSans24pt7b, TFT_BLACK, 3);
-      _lcd.setTextSize(1);
-      _lcd.print("A");
+      render_right_text_box(buffer, 70, 220, 150, &FreeSans24pt7b, TFT_BLACK, TFT_WHITE, !_full_update, 3);
+      if(_full_update) {
+        render_left_text_box("A", 224, 200, 20, &FreeSans24pt7b, TFT_BLACK, TFT_WHITE, false, 1);
+      }
 
-      render_centered_text(esp_hostname.c_str(), INFO_BOX_X, 72, INFO_BOX_WIDTH, &FreeSans9pt7b, TFT_OPENEVSE_TEXT);
+      render_centered_text_box(esp_hostname.c_str(), INFO_BOX_X, 74, INFO_BOX_WIDTH, &FreeSans9pt7b, TFT_OPENEVSE_TEXT, TFT_WHITE, !_full_update);
 
       timeval local_time;
       gettimeofday(&local_time, NULL);
       struct tm timeinfo;
       localtime_r(&local_time.tv_sec, &timeinfo);
       strftime(buffer, sizeof(buffer), "%d/%m/%Y, %l:%M %p", &timeinfo);
-      render_centered_text(buffer, INFO_BOX_X, 94, INFO_BOX_WIDTH, &FreeSans9pt7b, TFT_OPENEVSE_TEXT);
+      render_centered_text_box(buffer, INFO_BOX_X, 96, INFO_BOX_WIDTH, &FreeSans9pt7b, TFT_OPENEVSE_TEXT, TFT_WHITE, !_full_update);
 
       uint32_t elapsed = _evse->getSessionElapsed();
       uint32_t hours = elapsed / 3600;
       uint32_t minutes = (elapsed % 3600) / 60;
       uint32_t seconds = elapsed % 60;
       snprintf(buffer, sizeof(buffer), "%02d:%02d:%02d", hours, minutes, seconds);
-      render_info_box("ELAPSED", buffer, INFO_BOX_X, 110, INFO_BOX_WIDTH, INFO_BOX_HEIGHT);
+      render_info_box("ELAPSED", buffer, INFO_BOX_X, 110, INFO_BOX_WIDTH, INFO_BOX_HEIGHT, _full_update);
 
       get_scaled_number_value(_evse->getSessionEnergy(), 0, "Wh", buffer, sizeof(buffer));
-      render_info_box("DELIVERED", buffer, INFO_BOX_X, 175, INFO_BOX_WIDTH, INFO_BOX_HEIGHT);
+      render_info_box("DELIVERED", buffer, INFO_BOX_X, 175, INFO_BOX_WIDTH, INFO_BOX_HEIGHT, _full_update);
 
-      //nextUpdate = 1000;
+      nextUpdate = 1000;
+      _full_update = false;
     } break;
 
     default:
       break;
   }
+
+#ifdef ENABLE_DOUBLE_BUFFER
+  _tft.pushImage(0, 0, _screen_width, _screen_height, _back_buffer_pixels);
+  _tft.endWrite();
+#endif
 
   DBUGVAR(nextUpdate);
   return nextUpdate;
@@ -189,34 +235,41 @@ void LcdTask::get_scaled_number_value(double value, int precision, const char *u
   snprintf(buffer, size, "%.*f %s%s", precision, value, mod[index], unit);
 }
 
-void LcdTask::render_info_box(const char *title, const char *text, int16_t x, int16_t y, int16_t width, int16_t height)
+void LcdTask::render_info_box(const char *title, const char *text, int16_t x, int16_t y, int16_t width, int16_t height, bool full_update)
 {
-  _lcd.fillSmoothRoundRect(x, y, width, height, 6, TFT_OPENEVSE_INFO_BACK, TFT_WHITE);
-  render_centered_text(title, x, y+22, width, &FreeSans9pt7b, TFT_OPENEVSE_GREEN);
-  render_centered_text(text, x, y+(height-10), width, &FreeSans9pt7b, TFT_WHITE);
+  if(full_update)
+  {
+    _screen.fillSmoothRoundRect(x, y, width, height, 6, TFT_OPENEVSE_INFO_BACK, TFT_WHITE);
+    render_centered_text_box(title, x, y+24, width, &FreeSans9pt7b, TFT_OPENEVSE_GREEN, TFT_OPENEVSE_INFO_BACK, false);
+  }
+  render_centered_text_box(text, x, y+(height-4), width, &FreeSans9pt7b, TFT_WHITE, TFT_OPENEVSE_INFO_BACK, !full_update);
 }
 
-void LcdTask::render_centered_text(const char *text, int16_t x, int16_t y, int16_t width, const GFXfont *font, uint16_t color, uint8_t size)
+void LcdTask::render_centered_text_box(const char *text, int16_t x, int16_t y, int16_t width, const GFXfont *font, uint16_t text_colour, uint16_t back_colour, bool fill_back, uint8_t size)
 {
-  _lcd.setFreeFont(font);
-  _lcd.setTextSize(size);
-  int16_t text_width = _lcd.textWidth(text);
-  int16_t text_x = x + ((width - text_width) / 2);
-  _lcd.setTextColor(color);
-  _lcd.setCursor(text_x, y);
-  _lcd.print(text);
+  render_text_box(text, x + (width / 2), y, width, font, text_colour, back_colour, fill_back, BC_DATUM, size);
 }
 
-void LcdTask::render_right_text(const char *text, int16_t x, int16_t y, const GFXfont *font, uint16_t color, uint8_t size)
+void LcdTask::render_right_text_box(const char *text, int16_t x, int16_t y, int16_t width, const GFXfont *font, uint16_t text_colour, uint16_t back_colour, bool fill_back, uint8_t size)
 {
-  _lcd.setFreeFont(font);
-  _lcd.setTextSize(size);
-  int16_t text_width = _lcd.textWidth(text);
-  int16_t text_x = x - text_width;
-  _lcd.setTextColor(color);
-  _lcd.setCursor(text_x, y);
-  _lcd.print(text);
+  render_text_box(text, x + width, y, width, font, text_colour, back_colour, fill_back, BR_DATUM, size);
 }
+
+void LcdTask::render_left_text_box(const char *text, int16_t x, int16_t y, int16_t width, const GFXfont *font, uint16_t text_colour, uint16_t back_colour, bool fill_back, uint8_t size)
+{
+  render_text_box(text, x, y, width, font, text_colour, back_colour, fill_back, BL_DATUM, size);
+}
+
+void LcdTask::render_text_box(const char *text, int16_t x, int16_t y, int16_t width, const GFXfont *font, uint16_t text_colour, uint16_t back_colour, bool fill_back, uint8_t d, uint8_t size)
+{
+  _screen.setTextDatum(d);
+  _screen.setFreeFont(font);
+  _screen.setTextSize(size);
+  _screen.setTextPadding(width);
+  _screen.setTextColor(text_colour, back_colour, /*back_colour*/TFT_BLUE);
+  _screen.drawString(text, x, y);
+}
+
 
 void LcdTask::render_image(const char *filename, int16_t x, int16_t y)
 {
@@ -229,12 +282,12 @@ void LcdTask::render_image(const char *filename, int16_t x, int16_t y)
     {
       DBUGLN("Successfully opened png file");
       DBUGF("image specs: (%d x %d), %d bpp, pixel type: %d\n", png.getWidth(), png.getHeight(), png.getBpp(), png.getPixelType());
-      _lcd.startWrite();
+      _screen.startWrite();
       uint32_t dt = millis();
-      image_render_state state = {&_lcd, x, y};
+      image_render_state state = {&_screen, x, y};
       rc = png.decode(&state, 0);
       DBUG(millis() - dt); DBUGLN("ms");
-      _lcd.endWrite();
+      _screen.endWrite();
       // png.close(); // not needed for memory->memory decode
     }
   }

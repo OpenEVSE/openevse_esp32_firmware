@@ -18,11 +18,18 @@
 class LcdTask : public MicroTasks::Task
 {
   private:
-    TFT_eSPI _lcd;
+    TFT_eSPI _tft;                  // The TFT display
+
+#ifdef ENABLE_DOUBLE_BUFFER
+    TFT_eSprite _back_buffer;       // The back buffer
+    uint16_t *_back_buffer_pixels;
+#endif
+
+    TFT_eSPI &_screen;                 // What we are going to write to
 
     // The TFT screen is portrate natively, so we need to rotate it
-    const uint16_t _screenWidth  = TFT_HEIGHT;
-    const uint16_t _screenHeight = TFT_WIDTH;
+    const uint16_t _screen_width  = TFT_HEIGHT;
+    const uint16_t _screen_height = TFT_WIDTH;
 
     enum class State {
       Boot,
@@ -30,6 +37,9 @@ class LcdTask : public MicroTasks::Task
     };
 
     State _state = State::Boot;
+    bool _full_update = true;
+    bool _initialise = true;
+    uint16_t _boot_progress = 0;
     EvseManager *_evse;
     Scheduler *_scheduler;
     ManualOverride *_manual;
@@ -40,9 +50,11 @@ class LcdTask : public MicroTasks::Task
     unsigned long loop(MicroTasks::WakeReason reason);
 
     void render_image(const char *filename, int16_t x, int16_t y);
-    void render_centered_text(const char *text, int16_t x, int16_t y, int16_t width, const GFXfont *font, uint16_t color, uint8_t size = 1);
-    void render_right_text(const char *text, int16_t x, int16_t y, const GFXfont *font, uint16_t color, uint8_t size = 1);
-    void render_info_box(const char *title, const char *text, int16_t x, int16_t y, int16_t width, int16_t height);
+    void render_text_box(const char *text, int16_t x, int16_t y, int16_t width, const GFXfont *font, uint16_t text_colour, uint16_t back_colour, bool fill_back, uint8_t d, uint8_t size);
+    void render_centered_text_box(const char *text, int16_t x, int16_t y, int16_t width, const GFXfont *font, uint16_t text_colour, uint16_t back_colour, bool fill_back, uint8_t size = 1);
+    void render_right_text_box(const char *text, int16_t x, int16_t y, int16_t width, const GFXfont *font, uint16_t text_colour, uint16_t back_colour, bool fill_back, uint8_t size = 1);
+    void render_left_text_box(const char *text, int16_t x, int16_t y, int16_t width, const GFXfont *font, uint16_t text_colour, uint16_t back_colour, bool fill_back, uint8_t size = 1);
+    void render_info_box(const char *title, const char *text, int16_t x, int16_t y, int16_t width, int16_t height, bool full_update = true);
     void load_font(const char *filename);
 
     void get_scaled_number_value(double value, int precision, const char *unit, char *buffer, size_t size);
@@ -57,7 +69,7 @@ class LcdTask : public MicroTasks::Task
     void display(const char *msg, int x, int y, int time, uint32_t flags);
 
     void fill_screen(uint16_t color) {
-      _lcd.fillScreen(color);
+      _screen.fillScreen(color);
     }
 };
 
