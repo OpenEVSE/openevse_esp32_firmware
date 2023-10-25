@@ -43,11 +43,15 @@
 #define WHITE_AREA_WIDTH        (DISPLAY_AREA_WIDTH - (2 * 8))
 #define WHITE_AREA_HEIGHT       (DISPLAY_AREA_HEIGHT - (WHITE_AREA_Y + 20))
 
-
 #define INFO_BOX_BOARDER        8
 #define INFO_BOX_X              ((WHITE_AREA_X + WHITE_AREA_WIDTH) - (INFO_BOX_WIDTH + INFO_BOX_BOARDER))
 #define INFO_BOX_WIDTH          190
 #define INFO_BOX_HEIGHT         56
+
+#define BOOT_PROGRESS_WIDTH     300
+#define BOOT_PROGRESS_HEIGHT    16
+#define BOOT_PROGRESS_X         ((TFT_SCREEN_WIDTH - BOOT_PROGRESS_WIDTH) / 2)
+#define BOOT_PROGRESS_Y         235
 
 #include "web_server.h"
 
@@ -124,6 +128,9 @@ unsigned long LcdTask::loop(MicroTasks::WakeReason reason)
     DBUGF("Back buffer %p", _back_buffer_pixels);
 #endif
 
+    pinMode(LCD_BACKLIGHT_PIN, OUTPUT);
+    digitalWrite(LCD_BACKLIGHT_PIN, HIGH);
+
     _initialise = false;
   }
 
@@ -145,14 +152,19 @@ unsigned long LcdTask::loop(MicroTasks::WakeReason reason)
         _full_update = false;
       }
 
-      _screen.fillRoundRect(90, 235, 300, 16, 8, TFT_WHITE);
+      TFT_eSprite sprite(&_screen);
+      uint16_t *pixels = (uint16_t *)sprite.createSprite(BOOT_PROGRESS_WIDTH, BOOT_PROGRESS_HEIGHT);
+      sprite.fillScreen(TFT_OPENEVSE_BACK);
+      sprite.fillRoundRect(0, 0, BOOT_PROGRESS_WIDTH, BOOT_PROGRESS_HEIGHT, 8, TFT_WHITE);
       if(_boot_progress > 0) {
-        _screen.fillRoundRect(90, 235, _boot_progress, 16, 8, TFT_OPENEVSE_GREEN);
+        sprite.fillRoundRect(0, 0, _boot_progress, BOOT_PROGRESS_HEIGHT, 8, TFT_OPENEVSE_GREEN);
       }
+      _screen.startWrite();
+      _screen.pushImage(BOOT_PROGRESS_X, BOOT_PROGRESS_Y, BOOT_PROGRESS_WIDTH, BOOT_PROGRESS_HEIGHT, pixels);
+      _screen.endWrite();
+      sprite.deleteSprite();
       _boot_progress += 10;
 
-      pinMode(LCD_BACKLIGHT_PIN, OUTPUT);
-      digitalWrite(LCD_BACKLIGHT_PIN, HIGH);
       nextUpdate = 166;
       if(_boot_progress >= 300) {
         _state = State::Charge;
