@@ -154,7 +154,7 @@ unsigned long LcdTask::loop(MicroTasks::WakeReason reason)
 
       TFT_eSprite sprite(&_screen);
       uint16_t *pixels = (uint16_t *)sprite.createSprite(BOOT_PROGRESS_WIDTH, BOOT_PROGRESS_HEIGHT);
-      sprite.fillScreen(TFT_OPENEVSE_BACK);
+      sprite.fillSprite(TFT_OPENEVSE_BACK);
       sprite.fillRoundRect(0, 0, BOOT_PROGRESS_WIDTH, BOOT_PROGRESS_HEIGHT, 8, TFT_WHITE);
       if(_boot_progress > 0) {
         sprite.fillRoundRect(0, 0, _boot_progress, BOOT_PROGRESS_HEIGHT, 8, TFT_OPENEVSE_GREEN);
@@ -284,7 +284,7 @@ void LcdTask::render_text_box(const char *text, int16_t x, int16_t y, int16_t te
   int16_t height = sprite.fontHeight();
   uint16_t *pixels = (uint16_t *)sprite.createSprite(width, height);
 
-  sprite.fillScreen(back_colour);
+  sprite.fillSprite(back_colour);
   sprite.drawString(text, text_x, height);
 
   _screen.startWrite();
