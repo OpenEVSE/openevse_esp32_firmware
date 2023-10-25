@@ -4,7 +4,7 @@ allOf:
     properties:
       client:
         type: integer
-        description: 'The client ID, defined by [OpenEVSE](src/evse_man.h#L25)'
+        description: 'The client ID, defined by [OpenEVSE](https://github.com/OpenEVSE/openevse_esp32_firmware/blob/master/src/evse_man.h#L28)'
       priority:
         type: integer
         description: 'The priority of the claim, the higher the number the higher the priority'

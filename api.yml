@@ -349,7 +349,7 @@ paths:
         name: client
         in: path
         required: true
-        description: 'The client ID, defined by [OpenEVSE](https://github.com/OpenEVSE/openevse_esp32_firmware/blob/master/src/evse_man.h#L27)'
+        description: 'The client ID, defined by [OpenEVSE](https://github.com/OpenEVSE/openevse_esp32_firmware/blob/master/src/evse_man.h#L28)'
   /schedule:
     get:
       summary: List schedule events
