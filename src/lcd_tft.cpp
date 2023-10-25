@@ -46,7 +46,7 @@
 
 #define INFO_BOX_BOARDER        8
 #define INFO_BOX_X              ((WHITE_AREA_X + WHITE_AREA_WIDTH) - (INFO_BOX_WIDTH + INFO_BOX_BOARDER))
-#define INFO_BOX_WIDTH          170
+#define INFO_BOX_WIDTH          190
 #define INFO_BOX_HEIGHT         56
 
 #include "web_server.h"
@@ -173,9 +173,9 @@ unsigned long LcdTask::loop(MicroTasks::WakeReason reason)
       char buffer[32];
 
       snprintf(buffer, sizeof(buffer), "%d", _evse->getChargeCurrent());
-      render_right_text_box(buffer, 70, 220, 150, &FreeSans24pt7b, TFT_BLACK, TFT_WHITE, !_full_update, 3);
+      render_right_text_box(buffer, 66, 220, 154, &FreeSans24pt7b, TFT_BLACK, TFT_WHITE, !_full_update, 3);
       if(_full_update) {
-        render_left_text_box("A", 224, 200, 20, &FreeSans24pt7b, TFT_BLACK, TFT_WHITE, false, 1);
+        render_left_text_box("A", 224, 200, 34, &FreeSans24pt7b, TFT_BLACK, TFT_WHITE, false, 1);
       }
 
       render_centered_text_box(esp_hostname.c_str(), INFO_BOX_X, 74, INFO_BOX_WIDTH, &FreeSans9pt7b, TFT_OPENEVSE_TEXT, TFT_WHITE, !_full_update);
@@ -247,27 +247,39 @@ void LcdTask::render_info_box(const char *title, const char *text, int16_t x, in
 
 void LcdTask::render_centered_text_box(const char *text, int16_t x, int16_t y, int16_t width, const GFXfont *font, uint16_t text_colour, uint16_t back_colour, bool fill_back, uint8_t size)
 {
-  render_text_box(text, x + (width / 2), y, width, font, text_colour, back_colour, fill_back, BC_DATUM, size);
+  render_text_box(text, x, y, (width / 2), width, font, text_colour, back_colour, fill_back, BC_DATUM, size);
 }
 
 void LcdTask::render_right_text_box(const char *text, int16_t x, int16_t y, int16_t width, const GFXfont *font, uint16_t text_colour, uint16_t back_colour, bool fill_back, uint8_t size)
 {
-  render_text_box(text, x + width, y, width, font, text_colour, back_colour, fill_back, BR_DATUM, size);
+  render_text_box(text, x, y, width, width, font, text_colour, back_colour, fill_back, BR_DATUM, size);
 }
 
 void LcdTask::render_left_text_box(const char *text, int16_t x, int16_t y, int16_t width, const GFXfont *font, uint16_t text_colour, uint16_t back_colour, bool fill_back, uint8_t size)
 {
-  render_text_box(text, x, y, width, font, text_colour, back_colour, fill_back, BL_DATUM, size);
+  render_text_box(text, x, y, 0, width, font, text_colour, back_colour, fill_back, BL_DATUM, size);
 }
 
-void LcdTask::render_text_box(const char *text, int16_t x, int16_t y, int16_t width, const GFXfont *font, uint16_t text_colour, uint16_t back_colour, bool fill_back, uint8_t d, uint8_t size)
+void LcdTask::render_text_box(const char *text, int16_t x, int16_t y, int16_t text_x, int16_t width, const GFXfont *font, uint16_t text_colour, uint16_t back_colour, bool fill_back, uint8_t d, uint8_t size)
 {
-  _screen.setTextDatum(d);
-  _screen.setFreeFont(font);
-  _screen.setTextSize(size);
-  _screen.setTextPadding(width);
-  _screen.setTextColor(text_colour, back_colour, /*back_colour*/TFT_BLUE);
-  _screen.drawString(text, x, y);
+  TFT_eSprite sprite(&_screen);
+
+  sprite.setFreeFont(font);
+  sprite.setTextSize(size);
+  sprite.setTextDatum(d);
+  sprite.setTextColor(text_colour, back_colour);
+
+  int16_t height = sprite.fontHeight();
+  uint16_t *pixels = (uint16_t *)sprite.createSprite(width, height);
+
+  sprite.fillScreen(back_colour);
+  sprite.drawString(text, text_x, height);
+
+  _screen.startWrite();
+  _screen.pushImage(x, y - height, width, height, pixels);
+  _screen.endWrite();
+
+  sprite.deleteSprite();
 }
 
 
