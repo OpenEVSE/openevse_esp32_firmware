@@ -55,6 +55,7 @@ jobs:
           - olimex_esp32-gateway-f_dev
           - olimex_esp32-poe-iso
           - heltec_esp32-wifi-lora-v2
+          - wt32-eth01
           - elecrow_esp32_hmi
           - elecrow_esp32_hmi_dev
         gui:
@@ -101,7 +102,7 @@ jobs:
         pip install --upgrade platformio
 
     - name: Set up Node JS
-      uses: actions/setup-node@v3
+      uses: actions/setup-node@v4
       with:
         node-version: '16'
 
