@@ -25,12 +25,12 @@ jobs:
 
       - name: Install dependencies
         run: |
-          cd gui
+          cd gui-v2
           npm install
 
       - name: Build GUI
         run: |
-          cd gui
+          cd gui-v2
           npm run build
 
       - name: Check the pre-built GUI files are up-to-date
