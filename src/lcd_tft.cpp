@@ -179,8 +179,47 @@ unsigned long LcdTask::loop(MicroTasks::WakeReason reason)
         _screen.fillRect(DISPLAY_AREA_X, DISPLAY_AREA_Y, DISPLAY_AREA_WIDTH, DISPLAY_AREA_HEIGHT, TFT_OPENEVSE_BACK);
         _screen.fillSmoothRoundRect(WHITE_AREA_X, WHITE_AREA_Y, WHITE_AREA_WIDTH, WHITE_AREA_HEIGHT, 6, TFT_WHITE);
         render_image("/button_bar.png", BUTTON_BAR_X, BUTTON_BAR_Y);
-        render_image("/not_connected.png", 16, 52);
       }
+
+      String status_icon = "/car_disconnected.png";
+      if(_evse->isVehicleConnected())
+      {
+        switch (_evse->getEvseState())
+        {
+          case OPENEVSE_STATE_STARTING:
+            status_icon = "/start.png";
+            break;
+          case OPENEVSE_STATE_NOT_CONNECTED:
+            status_icon = "/not_connected.png";
+            break;
+          case OPENEVSE_STATE_CONNECTED:
+            status_icon = "/connected.png";
+            break;
+          case OPENEVSE_STATE_CHARGING:
+            status_icon = "/charging.png";
+            break;
+          case OPENEVSE_STATE_VENT_REQUIRED:
+          case OPENEVSE_STATE_DIODE_CHECK_FAILED:
+          case OPENEVSE_STATE_GFI_FAULT:
+          case OPENEVSE_STATE_NO_EARTH_GROUND:
+          case OPENEVSE_STATE_STUCK_RELAY:
+          case OPENEVSE_STATE_GFI_SELF_TEST_FAILED:
+          case OPENEVSE_STATE_OVER_TEMPERATURE:
+          case OPENEVSE_STATE_OVER_CURRENT:
+            status_icon = "/error.png";
+            break;
+          case OPENEVSE_STATE_SLEEPING:
+            status_icon = "/sleeping.png";
+            break;
+          case OPENEVSE_STATE_DISABLED:
+            status_icon = "/disabled.png";
+            break;
+          default:
+            break;
+        }
+      }
+
+      render_image(status_icon.c_str(), 16, 52);
 
       char buffer[32];
 
