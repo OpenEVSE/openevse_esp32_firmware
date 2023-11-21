@@ -19,18 +19,18 @@ jobs:
       ### Check the pre-built GUI files are up-to-date
 
       - name: Set up Node JS
-        uses: actions/setup-node@v3
+        uses: actions/setup-node@v4
         with:
           node-version: '16'
 
       - name: Install dependencies
         run: |
-          cd gui
+          cd gui-v2
           npm install
 
       - name: Build GUI
         run: |
-          cd gui
+          cd gui-v2
           npm run build
 
       - name: Check the pre-built GUI files are up-to-date
