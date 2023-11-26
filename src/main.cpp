@@ -70,7 +70,9 @@ Scheduler scheduler(evse);
 ManualOverride manual(evse);
 DivertTask divert(evse);
 
+
 NetManagerTask net(lcd, ledManager, timeManager);
+
 
 RapiSender &rapiSender = evse.getSender();
 
@@ -139,6 +141,7 @@ void setup()
 #endif
   ledManager.begin(evse);
 
+
   // Initialise the WiFi
   net.begin();
   DBUGF("After net_setup: %d", ESPAL.getFreeHeap());
@@ -171,8 +174,7 @@ void setup()
 // -------------------------------------------------------------------
 // LOOP
 // -------------------------------------------------------------------
-void
-loop() {
+void loop() {
   Profile_Start(loop);
 
   uptimeMillis();
@@ -188,6 +190,10 @@ loop() {
   Profile_Start(MicroTask);
   MicroTask.update();
   Profile_End(MicroTask, 10);
+
+#if defined(NEO_PIXEL_PIN) && defined(NEO_PIXEL_LENGTH) && defined(ENABLE_WS2812FX)
+  ledManager_loop();
+#endif
 
   if(OpenEVSE.isConnected())
   {
