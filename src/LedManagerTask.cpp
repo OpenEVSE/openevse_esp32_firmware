@@ -180,6 +180,7 @@ void LedManagerTask::setup()
   ws2812fx.setSpeed(DEFAULT_FX_SPEED);
   ws2812fx.setColor(BLACK);
   ws2812fx.setMode(FX_MODE_STATIC);
+  ws2812fx.setBrightness(this->brightness);
   ws2812fx.start();
 #endif
 
@@ -270,16 +271,22 @@ unsigned long LedManagerTask::loop(MicroTasks::WakeReason reason)
       DBUGVAR(col, HEX);
       //DEBUG.printf("Color: %x\n", col);
       bool isCharging;
+                  u_int16_t speed;
+            speed = 2000 - ((_evse->getChargeCurrent()/_evse->getMaxHardwareCurrent())*1000);
+            DEBUG.printf("Speed: %d",speed);
+            DEBUG.printf("Amps: %d", _evse->getAmps());
+            DEBUG.printf("ChargeCurrent: %d", _evse->getChargeCurrent());
+            DEBUG.printf("MaxHWCurrent: %d", _evse->getMaxHardwareCurrent());
 
       switch(state)
       {
         case LedState_Evse_State:
           isCharging = _evse->isCharging();
           if(isCharging){
-            setAllRGB(col, FX_MODE_COLOR_WIPE);
+            setAllRGB(col, FX_MODE_COLOR_WIPE, speed);
           }
           else {
-            setAllRGB(col, FX_MODE_STATIC);
+            setAllRGB(col, FX_MODE_STATIC, DEFAULT_FX_SPEED);
           }    
           //DEBUG.printf("MODO:  LedState_Evse_State\n");
           return MicroTask.Infinate;
@@ -476,9 +483,9 @@ int LedManagerTask::fadeLed(int fadeValue, int FadeDir)
 #if RGB_LED
 
 #if defined(NEO_PIXEL_PIN) && defined(NEO_PIXEL_LENGTH) && defined(ENABLE_WS2812FX)
-void LedManagerTask::setAllRGB(uint32_t color, u_int8_t mode)
+void LedManagerTask::setAllRGB(uint32_t color, u_int8_t mode, uint16_t speed)
 {
-  setEvseAndWifiRGB(color, mode, DEFAULT_FX_SPEED);
+  setEvseAndWifiRGB(color, mode, speed);
 }
 
 

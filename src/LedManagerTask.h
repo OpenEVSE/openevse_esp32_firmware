@@ -45,7 +45,7 @@ class LedManagerTask : public MicroTasks::Task
 
 #if RGB_LED
 #if defined(NEO_PIXEL_PIN) && defined(NEO_PIXEL_LENGTH) && defined(ENABLE_WS2812FX)
-    void setAllRGB(uint32_t color, u_int8_t mode);
+    void setAllRGB(uint32_t color, u_int8_t mode, u_int16_t speed);
     void setEvseAndWifiRGB(uint32_t evseColor, u_int8_t mode, u_int16_t speed);
 #else
     void setAllRGB(uint8_t red, uint8_t green, uint8_t blue);
