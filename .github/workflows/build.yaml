@@ -122,7 +122,7 @@ jobs:
         PLATFORMIO_BUILD_FLAGS: ${{ matrix.gui.build_flags }}
 
     - name: Upload output to GitHub
-      uses: actions/upload-artifact@v3
+      uses: actions/upload-artifact@v4
       with:
         name: ${{ matrix.env }}.bin
         path: .pio/build/${{ matrix.env }}/firmware.bin

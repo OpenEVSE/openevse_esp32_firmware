@@ -75,7 +75,7 @@ jobs:
           make -j
 
       - name: Upload artifacts
-        uses: actions/upload-artifact@v3
+        uses: actions/upload-artifact@v4
         with:
           name: divert_sim
           path: OpenEVSE_WiFi/divert_sim/divert_sim
@@ -96,7 +96,7 @@ jobs:
           pytest -v --color=yes --code-highlight yes --junit-xml=output/test_results.xml
 
       - name : Upload test results
-        uses: actions/upload-artifact@v3
+        uses: actions/upload-artifact@v4
         with:
           name: test_results
           path: |
