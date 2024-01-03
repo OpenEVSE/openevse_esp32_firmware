@@ -48,7 +48,7 @@ WS2812FX ws2812fx = WS2812FX(NEO_PIXEL_LENGTH, NEO_PIXEL_PIN, NEO_GRB + NEO_KHZ8
 #define CONNECTING_FX_SPEED 2000
 #define CONNECTED_FX_SPEED  1000
 
-#define TEST_LED_TIME     500
+#define TEST_LED_TIME     1000
 
 #if defined(RED_LED) && defined(GREEN_LED) && defined(BLUE_LED)
 
@@ -180,7 +180,9 @@ void LedManagerTask::setup()
   ws2812fx.setSpeed(DEFAULT_FX_SPEED);
   ws2812fx.setColor(BLACK);
   ws2812fx.setMode(FX_MODE_STATIC);
-  ws2812fx.setBrightness(this->brightness);
+  //ws2812fx.setBrightness(this->brightness);
+  DEBUG.printf("Brightness: %d ", this->brightness);
+  DEBUG.printf("Brightness: %d ", brightness);
   ws2812fx.start();
 #endif
 
@@ -271,13 +273,18 @@ unsigned long LedManagerTask::loop(MicroTasks::WakeReason reason)
       DBUGVAR(col, HEX);
       //DEBUG.printf("Color: %x\n", col);
       bool isCharging;
-                  u_int16_t speed;
-            speed = 2000 - ((_evse->getChargeCurrent()/_evse->getMaxHardwareCurrent())*1000);
-            DEBUG.printf("Speed: %d",speed);
-            DEBUG.printf("Amps: %d", _evse->getAmps());
-            DEBUG.printf("ChargeCurrent: %d", _evse->getChargeCurrent());
-            DEBUG.printf("MaxHWCurrent: %d", _evse->getMaxHardwareCurrent());
-
+      u_int16_t speed;
+      speed = 2000 - ((_evse->getChargeCurrent()/_evse->getMaxHardwareCurrent())*1000);
+      DEBUG.printf("Speed: %d ",speed);
+      DEBUG.printf("Amps: %d ", _evse->getAmps());
+      DEBUG.printf("ChargeCurrent: %d ", _evse->getChargeCurrent());
+      DEBUG.printf("MaxHWCurrent: %d ", _evse->getMaxHardwareCurrent());
+      if (this->brightness == 0){
+        ws2812fx.setBrightness(255);
+      }
+      else {
+        ws2812fx.setBrightness(this->brightness-1);
+      }
       switch(state)
       {
         case LedState_Evse_State:
@@ -719,10 +726,18 @@ void LedManagerTask::setBrightness(uint8_t brightness)
   this->brightness = brightness + 1;
 
 #if defined(NEO_PIXEL_PIN) && defined(NEO_PIXEL_LENGTH) && defined(ENABLE_WS2812FX)
-  ws2812fx.setBrightness(brightness);
+  if (this->brightness == 0){
+    ws2812fx.setBrightness(255);
+  }
+  else {
+    ws2812fx.setBrightness(this->brightness-1);
+  }
+  
 #endif
 
   DBUGVAR(this->brightness);
+  DEBUG.printf("Brightness: %d ", this->brightness);
+  DEBUG.printf("Brightness: %d ", brightness);
 
   // Wake the task to refresh the state
   MicroTask.wakeTask(this);
