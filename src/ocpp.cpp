@@ -11,7 +11,7 @@
 #include "app_config.h"
 #include "http_update.h"
 #include "emonesp.h"
-#include "root_ca.h"
+#include "certificates.h"
 
 // Time between loop polls
 #ifndef OCPP_LOOP_TIME
@@ -45,7 +45,7 @@ void ArduinoOcppTask::begin(EvseManager &evse, LcdTask &lcd, EventLog &eventLog,
     ao_set_console_out(dbug_wrapper);
 
     MicroTask.startTask(this);
-    
+
     reconfigure();
 
     instance = this; //OcppTask is valid now
@@ -109,7 +109,7 @@ void ArduinoOcppTask::initializeArduinoOcpp() {
         "MeterValuesSampledData", "Power.Active.Import,Energy.Active.Import.Register,Current.Import,Current.Offered,Voltage,Temperature");
     ArduinoOcpp::declareConfiguration<bool>(
         "AO_PreBootTransactions", true);
-    
+
     /*
      * Initialize the OCPP library and provide it with the charger credentials
      */
@@ -178,34 +178,34 @@ void ArduinoOcppTask::loadEvseBehavior() {
         },
         "Power.Active.Import",
         "W");
-    
+
     addMeterValueInput([this] () {
             return evse->getTotalEnergy() * 1000.; //convert kWh into Wh
-        }, 
+        },
         "Energy.Active.Import.Register",
         "Wh");
 
     addMeterValueInput([this] () {
             return evse->getAmps();
-        }, 
+        },
         "Current.Import",
         "A");
 
     addMeterValueInput([this] () {
             return (float) evse->getChargeCurrent();
-        }, 
+        },
         "Current.Offered",
         "A");
-    
+
     addMeterValueInput([this] () {
             return evse->getVoltage();
-        }, 
+        },
         "Voltage",
         "V");
-    
+
     addMeterValueInput([this] () {
             return evse->getTemperature(EVSE_MONITOR_TEMP_MONITOR);
-        }, 
+        },
         "Temperature",
         "Celsius");
 
@@ -274,7 +274,7 @@ void ArduinoOcppTask::loadEvseBehavior() {
                 evse->getEvseState() == OPENEVSE_STATE_GFI_FAULT ||
                 evse->getEvseState() == OPENEVSE_STATE_NO_EARTH_GROUND ||
                 evse->getEvseState() == OPENEVSE_STATE_GFI_SELF_TEST_FAILED) {
-            
+
             ArduinoOcpp::ErrorData error = "GroundFailure";
 
             error.info = evse->getEvseState() == OPENEVSE_STATE_DIODE_CHECK_FAILED ? "diode check failed" :
@@ -371,7 +371,7 @@ unsigned long ArduinoOcppTask::loop(MicroTasks::WakeReason reason) {
         //ArduinoOcpp is initialized
 
         ocpp_loop();
-        
+
         /*
          * Generate messages for LCD
          */
@@ -382,7 +382,7 @@ unsigned long ArduinoOcppTask::loop(MicroTasks::WakeReason reason) {
                 LCD_DISPLAY("No OCPP service");
             } else if (!isTransactionActive()) {
                 //vehicle plugged before authorization
-                
+
                 if (config_rfid_enabled()) {
                     LCD_DISPLAY("Need card");
                 } else if (!config_ocpp_auto_authorization()) {
@@ -464,7 +464,7 @@ void ArduinoOcppTask::updateEvseClaim() {
         if (!evse->clientHasClaim(EvseClient_OpenEVSE_OCPP) ||
                     evse->getState(EvseClient_OpenEVSE_OCPP) != evseProperties.getState() ||
                     evse->getChargeCurrent(EvseClient_OpenEVSE_OCPP) != evseProperties.getChargeCurrent()) {
-            
+
             evse->claim(EvseClient_OpenEVSE_OCPP, EvseManager_Priority_OCPP, evseProperties);
         }
     }
@@ -491,7 +491,7 @@ void ArduinoOcppTask::initializeDiagnosticsService() {
         });
 
         diagService->setOnUpload([this] (const std::string &location, ArduinoOcpp::Timestamp &startTime, ArduinoOcpp::Timestamp &stopTime) {
-            
+
             //reset reported state
             diagSuccess = false;
             diagFailure = false;
@@ -547,7 +547,7 @@ void ArduinoOcppTask::initializeDiagnosticsService() {
                             firstEntry = false;
                         else
                             body += ",";
-                        
+
                         body += logEntry;
                         body += "\n";
                     } else {
@@ -588,7 +588,7 @@ void ArduinoOcppTask::initializeDiagnosticsService() {
                 }
             });
             diagClient.send(request);
-            
+
             return true;
         });
     }
@@ -597,7 +597,7 @@ void ArduinoOcppTask::initializeDiagnosticsService() {
 void ArduinoOcppTask::initializeFwService() {
     ArduinoOcpp::FirmwareService *fwService = getFirmwareService();
     if (fwService) {
-        
+
         fwService->setInstallationStatusInput([this] () {
             if (updateFailure) {
                 return ArduinoOcpp::InstallationStatus::InstallationFailed;
@@ -611,7 +611,7 @@ void ArduinoOcppTask::initializeFwService() {
         fwService->setOnInstall([this](const std::string &location) {
 
             DBUGLN(F("[ocpp] Starting installation routine"));
-            
+
             //reset reported state
             updateFailure = false;
             updateSuccess = false;
