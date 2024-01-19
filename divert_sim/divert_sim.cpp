@@ -9,6 +9,7 @@
 #include "event.h"
 #include "event_log.h"
 #include "manual.h"
+#include "current_shaper.h"
 
 #include "parser.hpp"
 #include "cxxopts.hpp"
@@ -33,8 +34,9 @@ extern double smoothed_available_current;
 
 int date_col = 0;
 int grid_ie_col = -1;
-int solar_col = 1;
-int voltage_col = 1;
+int solar_col = -1;
+int voltage_col = -1;
+int live_pwr_col = -1;
 
 time_t simulated_time = 0;
 time_t last_time = 0;
@@ -48,17 +50,19 @@ time_t parse_date(const char *dateStr)
   if(6 != sscanf(dateStr, "%d-%d-%dT%d:%d:%dZ", &y, &M, &d, &h, &m, &s)) {
     if(6 != sscanf(dateStr, "%d-%d-%dT%d:%d:%d+00:00", &y, &M, &d, &h, &m, &s)) {
       if(6 != sscanf(dateStr, "%d-%d-%d %d:%d:%d", &y, &M, &d, &h, &m, &s)) {
-        if(3 != sscanf(dateStr, "%d:%d %s", &h, &m, ampm)) {
-          if(1 == sscanf(dateStr, "%d", &s)) {
-            return s;
-          }
-        } else {
-          y = 2020; M = 1; d = 1; s = 0;
-          if(12 == h) {
-            h -= 12;
-          }
-          if('P' == ampm[0]) {
-            h += 12;
+        if(6 != sscanf(dateStr, "%d/%d/%d %d:%d:%d", &d, &M, &y, &h, &m, &s)) {
+          if(3 != sscanf(dateStr, "%d:%d %s", &h, &m, ampm)) {
+            if(1 == sscanf(dateStr, "%d", &s)) {
+              return s;
+            }
+          } else {
+            y = 2020; M = 1; d = 1; s = 0;
+            if(12 == h) {
+              h -= 12;
+            }
+            if('P' == ampm[0]) {
+              h += 12;
+            }
           }
         }
       }
@@ -112,6 +116,7 @@ int main(int argc, char** argv)
     ("d,date", "The date column", cxxopts::value<int>(date_col), "N")
     ("s,solar", "The solar column", cxxopts::value<int>(solar_col), "N")
     ("g,gridie", "The Grid IE column", cxxopts::value<int>(grid_ie_col), "N")
+    ("l,livepwr", "The live power column", cxxopts::value<int>(live_pwr_col), "N")
     ("c,config", "Config options, either a file name or JSON", cxxopts::value<std::string>(config))
     ("v,voltage", "The Voltage column if < 50, else the fixed voltage", cxxopts::value<int>(voltage_arg), "N")
     ("kw", "values are KW")
@@ -124,6 +129,8 @@ int main(int argc, char** argv)
     std::cout << options.help({"", "Group"}) << std::endl;
     exit(0);
   }
+
+  EpoxyTest::set_millis(millis());
 
   fs::EpoxyFS.begin();
   config_reset();
@@ -158,19 +165,25 @@ int main(int argc, char** argv)
 
   evse.begin();
   divert.begin();
+  shaper.begin(evse);
 
   // Initialise the EVSE Manager
   while (!evse.isConnected()) {
     MicroTask.update();
   }
 
-  divert.setMode(DivertMode::Eco);
+  if(solar_col >= 0 || grid_ie_col >= 0) {
+    divert.setMode(DivertMode::Eco);
+  }
+  if(live_pwr_col >= 0) {
+    shaper.setState(true);
+  }
 
   CsvParser parser(std::cin);
   parser.delimiter(sep.c_str()[0]);
   int row_number = 0;
 
-  std::cout << "Date,Solar,Grid IE,Pilot,Charge Power,Min Charge Power,State,Smoothed Available" << std::endl;
+  std::cout << "Date,Solar,Grid IE,Pilot,Charge Power,Min Charge Power,State,Smoothed Available,Live Power" << std::endl;
   for (auto& row : parser)
   {
     try
@@ -187,6 +200,8 @@ int main(int argc, char** argv)
           grid_ie = get_watt(val.c_str());
         } else if (solar_col == col) {
           solar = get_watt(val.c_str());
+        } else if (live_pwr_col == col) {
+          shaper.setLivePwr(get_watt(val.c_str()));
         } else if (voltage_col == col) {
           voltage = stoi(field);
         }
@@ -199,6 +214,7 @@ int main(int argc, char** argv)
         int delta = simulated_time - last_time;
         if(delta > 0) {
           EpoxyTest::add_millis(delta * 1000);
+          DBUGVAR(millis());
         }
       }
       last_time = simulated_time;
@@ -218,7 +234,9 @@ int main(int argc, char** argv)
 
       double smoothed = divert.smoothedAvailableCurrent() * voltage;
 
-      std::cout << buffer << "," << solar << "," << grid_ie << "," << ev_pilot << "," << ev_watt << "," << min_ev_watt << "," << state << "," << smoothed << std::endl;
+      int live_power = shaper.getLivePwr();
+
+      std::cout << buffer << "," << solar << "," << grid_ie << "," << ev_pilot << "," << ev_watt << "," << min_ev_watt << "," << state << "," << smoothed << "," << live_power << std::endl;
     }
     catch(const std::invalid_argument& e)
     {
