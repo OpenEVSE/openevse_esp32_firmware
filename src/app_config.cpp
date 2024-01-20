@@ -141,8 +141,8 @@ ConfigOpt *opts[] =
 // Wifi Network Strings
   new ConfigOptDefenition<String>(esid, "", "ssid", "ws"),
   new ConfigOptSecret(epass, "", "pass", "wp"),
-  new ConfigOptDefenition<String>(ap_ssid, "", "ap_ssid", "as"),
-  new ConfigOptSecret(ap_pass, "", "ap_pass", "ap"),
+  new ConfigOptDefenition<String>(ap_ssid, "", "ap_ssid", "ss"),
+  new ConfigOptSecret(ap_pass, "", "ap_pass", "sp"),
 
 // Language String
   new ConfigOptDefenition<String>(lang, "", "lang", "lan"),
