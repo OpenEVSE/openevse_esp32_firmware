@@ -11,6 +11,7 @@ var datasets = [
   { id: "Energy_and_Power_Day_2020-03-22", class: "solar", title: "Energy and Power Day 2020-03-22" },
   { id: "Energy_and_Power_Day_2020-03-31", class: "solar", title: "Energy and Power Day 2020-03-31" },
   { id: "Energy_and_Power_Day_2020-04-01", class: "solar", title: "Energy and Power Day 2020-04-01" },
+  { id: "data_shaper", class: "shapper", title: "Shapper example 1" },
 ];
 
 var summary = {};
@@ -87,38 +88,72 @@ function loadChart(id, csv, title, type) {
       showInLegend: true,
       dataPoints: points[3]
     });
-    opts.data.push({
-      name: "Solar",
-      type: "line",
-      lineThickness: 1,
-      showInLegend: true,
-      dataPoints: points[0]
-    });
-    if("gridie" === type) {
+    if("gridie" === type || "solar" === type) {
       opts.data.push({
-        name: "Grid IE",
+        name: "Solar",
         type: "line",
         lineThickness: 1,
         showInLegend: true,
-        dataPoints: points[1]
+        dataPoints: points[0]
+      });
+      if("gridie" === type) {
+        opts.data.push({
+          name: "Grid IE",
+          type: "line",
+          lineThickness: 1,
+          showInLegend: true,
+          dataPoints: points[1]
+        });
+        opts.data.push({
+          name: "Smoothed",
+          type: "line",
+          lineThickness: 1,
+          showInLegend: true,
+          dataPoints: points[6]
+        });
+        opts.data.push({
+          name: "Min Charge",
+          type: "line",
+          lineThickness: 1,
+          lineDashType: "shortDash",
+          lineColor: "#38761d",
+          showInLegend: true,
+          dataPoints: points[4]
+        });
+        opts.data.push({
+          name: "Min Grid IE",
+          type: "line",
+          lineThickness: 1,
+          lineDashType: "shortDash",
+          lineColor: "#38761d",
+          showInLegend: true,
+          dataPoints: points[2]
+        });
+      }
+    }
+    if("shapper" == type) {
+      opts.data.push({
+        name: "Live Power",
+        type: "line",
+        lineThickness: 1,
+        showInLegend: true,
+        dataPoints: points[7]
+      });
+      opts.data.push({
+        name: "Live Power (Smoothed)",
+        type: "line",
+        lineThickness: 1,
+        showInLegend: true,
+        dataPoints: points[8]
+      });
+      opts.data.push({
+        name: "Max Power",
+        type: "line",
+        lineThickness: 1,
+        showInLegend: true,
+        dataPoints: points[9]
       });
     }
-    opts.data.push({
-      name: "Smoothed",
-      type: "line",
-      lineThickness: 1,
-      showInLegend: true,
-      dataPoints: points[6]
-    });
-    opts.data.push({
-      name: "Min Charge",
-      type: "line",
-      lineThickness: 1,
-      lineDashType: "shortDash",
-      lineColor: "#38761d",
-      showInLegend: true,
-      dataPoints: points[4]
-    });
 
     var chart = new CanvasJS.Chart(id, opts);
 

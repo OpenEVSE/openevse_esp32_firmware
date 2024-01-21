@@ -151,7 +151,7 @@ int main(int argc, char** argv)
   kw = result.count("kw") > 0;
 
   divert_type = grid_ie_col >= 0 ? 1 : 0;
-  
+
   if(voltage_arg >= 0) {
     if(voltage_arg < 50) {
       voltage_col = voltage_arg;
@@ -183,7 +183,7 @@ int main(int argc, char** argv)
   parser.delimiter(sep.c_str()[0]);
   int row_number = 0;
 
-  std::cout << "Date,Solar,Grid IE,Pilot,Charge Power,Min Charge Power,State,Smoothed Available,Live Power" << std::endl;
+  std::cout << "Date,Solar,Grid IE,Pilot,Charge Power,Min Charge Power,State,Smoothed Available,Live Power,Smoother Live Power,Shapper Max Power" << std::endl;
   for (auto& row : parser)
   {
     try
@@ -235,8 +235,10 @@ int main(int argc, char** argv)
       double smoothed = divert.smoothedAvailableCurrent() * voltage;
 
       int live_power = shaper.getLivePwr();
+      int smoothed_live_pwr = shaper.getLivePwr();
+      int shapper_max_power = shaper.getMaxPwr();
 
-      std::cout << buffer << "," << solar << "," << grid_ie << "," << ev_pilot << "," << ev_watt << "," << min_ev_watt << "," << state << "," << smoothed << "," << live_power << std::endl;
+      std::cout << buffer << "," << solar << "," << grid_ie << "," << ev_pilot << "," << ev_watt << "," << min_ev_watt << "," << state << "," << smoothed << "," << live_power << "," << smoothed_live_pwr << "," << shapper_max_power << std::endl;
     }
     catch(const std::invalid_argument& e)
     {
