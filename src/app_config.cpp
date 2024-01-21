@@ -86,6 +86,7 @@ String time_zone;
 
 // 24-bits of Flags
 uint32_t flags;
+uint32_t flags_changed;
 
 // Ohm Connect Settings
 String ohm;
@@ -130,11 +131,13 @@ String esp_hostname_default = "openevse-"+ESPAL.getShortId();
 
 void config_changed(String name);
 
-ConfigOptDefenition<uint32_t> flagsOpt = ConfigOptDefenition<uint32_t>(flags,
-    CONFIG_SERVICE_SNTP |
-    CONFIG_OCPP_AUTO_AUTH |
-    CONFIG_OCPP_OFFLINE_AUTH,
-    "flags", "f");
+#define CONFIG_DEFAULT_FLAGS (CONFIG_SERVICE_SNTP | \
+                              CONFIG_OCPP_AUTO_AUTH | \
+                              CONFIG_OCPP_OFFLINE_AUTH | \
+                              CONFIG_DEFAULT_STATE)
+
+ConfigOptDefenition<uint32_t> flagsOpt = ConfigOptDefenition<uint32_t>(flags, CONFIG_DEFAULT_FLAGS, "flags", "f");
+ConfigOptDefenition<uint32_t> flagsChanged = ConfigOptDefenition<uint32_t>(flags_changed, 0, "flags_changed", "c");
 
 ConfigOpt *opts[] =
 {
@@ -228,31 +231,33 @@ ConfigOpt *opts[] =
 
 // Flags
   &flagsOpt,
+  &flagsChanged,
 
 // Virtual Options
-  new ConfigOptVirtualBool(flagsOpt, CONFIG_SERVICE_EMONCMS, CONFIG_SERVICE_EMONCMS, "emoncms_enabled", "ee"),
-  new ConfigOptVirtualBool(flagsOpt, CONFIG_SERVICE_MQTT, CONFIG_SERVICE_MQTT, "mqtt_enabled", "me"),
-  new ConfigOptVirtualBool(flagsOpt, CONFIG_MQTT_ALLOW_ANY_CERT, 0, "mqtt_reject_unauthorized", "mru"),
-  new ConfigOptVirtualBool(flagsOpt, CONFIG_MQTT_RETAINED, CONFIG_MQTT_RETAINED, "mqtt_retained", "mrt"),
-  new ConfigOptVirtualBool(flagsOpt, CONFIG_SERVICE_OHM, CONFIG_SERVICE_OHM, "ohm_enabled", "oe"),
-  new ConfigOptVirtualBool(flagsOpt, CONFIG_SERVICE_SNTP, CONFIG_SERVICE_SNTP, "sntp_enabled", "se"),
-  new ConfigOptVirtualBool(flagsOpt, CONFIG_SERVICE_TESLA, CONFIG_SERVICE_TESLA, "tesla_enabled", "te"),
-  new ConfigOptVirtualBool(flagsOpt, CONFIG_SERVICE_DIVERT, CONFIG_SERVICE_DIVERT, "divert_enabled", "de"),
-  new ConfigOptVirtualBool(flagsOpt, CONFIG_SERVICE_CUR_SHAPER, CONFIG_SERVICE_CUR_SHAPER, "current_shaper_enabled", "cse"),
-  new ConfigOptVirtualBool(flagsOpt, CONFIG_PAUSE_USES_DISABLED, CONFIG_PAUSE_USES_DISABLED, "pause_uses_disabled", "pd"),
-  new ConfigOptVirtualBool(flagsOpt, CONFIG_VEHICLE_RANGE_MILES, CONFIG_VEHICLE_RANGE_MILES, "mqtt_vehicle_range_miles", "mvru"),
-  new ConfigOptVirtualBool(flagsOpt, CONFIG_SERVICE_OCPP, CONFIG_SERVICE_OCPP, "ocpp_enabled", "ope"),
-  new ConfigOptVirtualBool(flagsOpt, CONFIG_OCPP_AUTO_AUTH, CONFIG_OCPP_AUTO_AUTH, "ocpp_auth_auto", "oaa"),
-  new ConfigOptVirtualBool(flagsOpt, CONFIG_OCPP_OFFLINE_AUTH, CONFIG_OCPP_OFFLINE_AUTH, "ocpp_auth_offline", "ooa"),
-  new ConfigOptVirtualBool(flagsOpt, CONFIG_OCPP_ACCESS_SUSPEND, CONFIG_OCPP_ACCESS_SUSPEND, "ocpp_suspend_evse", "ops"),
-  new ConfigOptVirtualBool(flagsOpt, CONFIG_OCPP_ACCESS_ENERGIZE, CONFIG_OCPP_ACCESS_ENERGIZE, "ocpp_energize_plug", "opn"),
-  new ConfigOptVirtualBool(flagsOpt, CONFIG_RFID, CONFIG_RFID, "rfid_enabled", "rf"),
-  new ConfigOptVirtualBool(flagsOpt, CONFIG_FACTORY_WRITE_LOCK, CONFIG_FACTORY_WRITE_LOCK, "factory_write_lock", "fwl"),
-  new ConfigOptVirtualBool(flagsOpt, CONFIG_THREEPHASE, CONFIG_THREEPHASE, "is_threephase", "itp"),
-  new ConfigOptVirtualBool(flagsOpt, CONFIG_WIZARD, CONFIG_WIZARD, "wizard_passed", "wzp"),
-  new ConfigOptVirtualBool(flagsOpt, CONFIG_DEFAULT_STATE, CONFIG_DEFAULT_STATE, "default_state", "dfs"),
-  new ConfigOptVirtualMqttProtocol(flagsOpt, "mqtt_protocol", "mprt"),
-  new ConfigOptVirtualChargeMode(flagsOpt, "charge_mode", "chmd")};
+  new ConfigOptVirtualMaskedBool(flagsOpt, flagsChanged, CONFIG_SERVICE_EMONCMS, CONFIG_SERVICE_EMONCMS, "emoncms_enabled", "ee"),
+  new ConfigOptVirtualMaskedBool(flagsOpt, flagsChanged, CONFIG_SERVICE_MQTT, CONFIG_SERVICE_MQTT, "mqtt_enabled", "me"),
+  new ConfigOptVirtualMaskedBool(flagsOpt, flagsChanged, CONFIG_MQTT_ALLOW_ANY_CERT, 0, "mqtt_reject_unauthorized", "mru"),
+  new ConfigOptVirtualMaskedBool(flagsOpt, flagsChanged, CONFIG_MQTT_RETAINED, CONFIG_MQTT_RETAINED, "mqtt_retained", "mrt"),
+  new ConfigOptVirtualMaskedBool(flagsOpt, flagsChanged, CONFIG_SERVICE_OHM, CONFIG_SERVICE_OHM, "ohm_enabled", "oe"),
+  new ConfigOptVirtualMaskedBool(flagsOpt, flagsChanged, CONFIG_SERVICE_SNTP, CONFIG_SERVICE_SNTP, "sntp_enabled", "se"),
+  new ConfigOptVirtualMaskedBool(flagsOpt, flagsChanged, CONFIG_SERVICE_TESLA, CONFIG_SERVICE_TESLA, "tesla_enabled", "te"),
+  new ConfigOptVirtualMaskedBool(flagsOpt, flagsChanged, CONFIG_SERVICE_DIVERT, CONFIG_SERVICE_DIVERT, "divert_enabled", "de"),
+  new ConfigOptVirtualMaskedBool(flagsOpt, flagsChanged, CONFIG_SERVICE_CUR_SHAPER, CONFIG_SERVICE_CUR_SHAPER, "current_shaper_enabled", "cse"),
+  new ConfigOptVirtualMaskedBool(flagsOpt, flagsChanged, CONFIG_PAUSE_USES_DISABLED, CONFIG_PAUSE_USES_DISABLED, "pause_uses_disabled", "pd"),
+  new ConfigOptVirtualMaskedBool(flagsOpt, flagsChanged, CONFIG_VEHICLE_RANGE_MILES, CONFIG_VEHICLE_RANGE_MILES, "mqtt_vehicle_range_miles", "mvru"),
+  new ConfigOptVirtualMaskedBool(flagsOpt, flagsChanged, CONFIG_SERVICE_OCPP, CONFIG_SERVICE_OCPP, "ocpp_enabled", "ope"),
+  new ConfigOptVirtualMaskedBool(flagsOpt, flagsChanged, CONFIG_OCPP_AUTO_AUTH, CONFIG_OCPP_AUTO_AUTH, "ocpp_auth_auto", "oaa"),
+  new ConfigOptVirtualMaskedBool(flagsOpt, flagsChanged, CONFIG_OCPP_OFFLINE_AUTH, CONFIG_OCPP_OFFLINE_AUTH, "ocpp_auth_offline", "ooa"),
+  new ConfigOptVirtualMaskedBool(flagsOpt, flagsChanged, CONFIG_OCPP_ACCESS_SUSPEND, CONFIG_OCPP_ACCESS_SUSPEND, "ocpp_suspend_evse", "ops"),
+  new ConfigOptVirtualMaskedBool(flagsOpt, flagsChanged, CONFIG_OCPP_ACCESS_ENERGIZE, CONFIG_OCPP_ACCESS_ENERGIZE, "ocpp_energize_plug", "opn"),
+  new ConfigOptVirtualMaskedBool(flagsOpt, flagsChanged, CONFIG_RFID, CONFIG_RFID, "rfid_enabled", "rf"),
+  new ConfigOptVirtualMaskedBool(flagsOpt, flagsChanged, CONFIG_FACTORY_WRITE_LOCK, CONFIG_FACTORY_WRITE_LOCK, "factory_write_lock", "fwl"),
+  new ConfigOptVirtualMaskedBool(flagsOpt, flagsChanged, CONFIG_THREEPHASE, CONFIG_THREEPHASE, "is_threephase", "itp"),
+  new ConfigOptVirtualMaskedBool(flagsOpt, flagsChanged, CONFIG_WIZARD, CONFIG_WIZARD, "wizard_passed", "wzp"),
+  new ConfigOptVirtualMaskedBool(flagsOpt, flagsChanged, CONFIG_DEFAULT_STATE, CONFIG_DEFAULT_STATE, "default_state", "dfs"),
+  new ConfigOptVirtualMqttProtocol(flagsOpt, flagsChanged, "mqtt_protocol", "mprt"),
+  new ConfigOptVirtualChargeMode(flagsOpt, flagsChanged, "charge_mode", "chmd")
+};
 
 ConfigJson user_config(opts, sizeof(opts) / sizeof(opts[0]), EEPROM_SIZE, CONFIG_OFFSET);
 ConfigJson factory_config(opts, sizeof(opts) / sizeof(opts[0]), EEPROM_SIZE, FACTORY_OFFSET);
@@ -265,7 +270,7 @@ config_version() {
   return config_ver;
 }
 
-void 
+void
 increment_config() {
   config_ver++;
   DBUGVAR(config_ver);
@@ -310,6 +315,30 @@ config_load_settings()
     DBUGF("No JSON config found, using defaults");
 #endif
   }
+
+  // Handle setting the newly added flag changed bits
+  if(0 == flags_changed)
+  {
+    // Assume all flags that do not match the default value have changed
+    uint32_t new_changed = (flags ^ CONFIG_DEFAULT_FLAGS) & ~CONFIG_DEFAULT_STATE;
+
+    // Handle the default charge state differently as that was set as a default to 0 previously, but is now 1
+    // We will assume that if set to 1 it was intentional, but if 0 we will assume it was the just the default
+    // and not an intentinal change
+    if(flags != CONFIG_DEFAULT_FLAGS &&
+       CONFIG_DEFAULT_STATE == (flags & CONFIG_DEFAULT_STATE))
+    {
+      new_changed |= CONFIG_DEFAULT_STATE;
+    }
+
+    // Save any changes
+    if(flagsChanged.set(new_changed)) {
+      user_config.commit();
+    }
+  }
+
+  // now lets apply any default flags that have not explicitly been set by the user
+  flags |= CONFIG_DEFAULT_FLAGS & ~flags_changed;
 }
 
 void config_changed(String name)
@@ -527,7 +556,7 @@ bool config_serialize(DynamicJsonDocument &doc, bool longNames, bool compactOutp
   doc["wifi_serial"] = serial;
   doc["protocol"] = "-";
   doc["espinfo"] = ESPAL.getChipInfo();
-  doc["espflash"] = ESPAL.getFlashChipSize(); 
+  doc["espflash"] = ESPAL.getFlashChipSize();
 
   // EVSE information are only evailable when config_version is incremented
   if(config_ver > 0) {

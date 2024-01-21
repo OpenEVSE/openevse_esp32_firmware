@@ -11,11 +11,13 @@ class ConfigOptVirtualChargeMode : public ConfigOpt
 {
 protected:
   ConfigOptDefenition<uint32_t> &_base;
+  ConfigOptDefenition<uint32_t> &_change;
 
 public:
-  ConfigOptVirtualChargeMode(ConfigOptDefenition<uint32_t> &b, const char *l, const char *s) :
-    ConfigOpt(l, s),
-    _base(b)
+  ConfigOptVirtualChargeMode(ConfigOptDefenition<uint32_t> &base, ConfigOptDefenition<uint32_t> &change, const char *long_name, const char *short_name) :
+    ConfigOpt(long_name, short_name),
+    _base(base),
+    _change(change)
   {
   }
 
@@ -30,7 +32,14 @@ public:
     if(value == "eco") {
       newVal |= 1 << 10;
     }
-    return _base.set(newVal);
+
+    if(_base.set(newVal)) {
+      uint32_t new_change = _change.get() | CONFIG_CHARGE_MODE;
+      _change.set(new_change);
+      return true;
+    }
+
+    return false;
   }
 
   virtual bool serialize(DynamicJsonDocument &doc, bool longNames, bool compactOutput, bool hideSecrets) {
@@ -38,7 +47,7 @@ public:
       doc[name(longNames)] = get();
       return true;
     }
-    
+
     return false;
   }
 
