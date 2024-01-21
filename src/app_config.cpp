@@ -136,98 +136,98 @@ void config_changed(String name);
                               CONFIG_OCPP_OFFLINE_AUTH | \
                               CONFIG_DEFAULT_STATE)
 
-ConfigOptDefenition<uint32_t> flagsOpt = ConfigOptDefenition<uint32_t>(flags, CONFIG_DEFAULT_FLAGS, "flags", "f");
-ConfigOptDefenition<uint32_t> flagsChanged = ConfigOptDefenition<uint32_t>(flags_changed, 0, "flags_changed", "c");
+ConfigOptDefinition<uint32_t> flagsOpt = ConfigOptDefinition<uint32_t>(flags, CONFIG_DEFAULT_FLAGS, "flags", "f");
+ConfigOptDefinition<uint32_t> flagsChanged = ConfigOptDefinition<uint32_t>(flags_changed, 0, "flags_changed", "c");
 
 ConfigOpt *opts[] =
 {
 // Wifi Network Strings
-  new ConfigOptDefenition<String>(esid, "", "ssid", "ws"),
+  new ConfigOptDefinition<String>(esid, "", "ssid", "ws"),
   new ConfigOptSecret(epass, "", "pass", "wp"),
-  new ConfigOptDefenition<String>(ap_ssid, "", "ap_ssid", "as"),
+  new ConfigOptDefinition<String>(ap_ssid, "", "ap_ssid", "as"),
   new ConfigOptSecret(ap_pass, "", "ap_pass", "ap"),
 
 // Language String
-  new ConfigOptDefenition<String>(lang, "", "lang", "lan"),
+  new ConfigOptDefinition<String>(lang, "", "lang", "lan"),
 
 // Web server authentication (leave blank for none)
-  new ConfigOptDefenition<String>(www_username, "", "www_username", "au"),
+  new ConfigOptDefinition<String>(www_username, "", "www_username", "au"),
   new ConfigOptSecret(www_password, "", "www_password", "ap"),
 
 // Advanced settings
-  new ConfigOptDefenition<String>(esp_hostname, esp_hostname_default, "hostname", "hn"),
-  new ConfigOptDefenition<String>(sntp_hostname, SNTP_DEFAULT_HOST, "sntp_hostname", "sh"),
+  new ConfigOptDefinition<String>(esp_hostname, esp_hostname_default, "hostname", "hn"),
+  new ConfigOptDefinition<String>(sntp_hostname, SNTP_DEFAULT_HOST, "sntp_hostname", "sh"),
 
 // Time
-  new ConfigOptDefenition<String>(time_zone, DEFAULT_TIME_ZONE, "time_zone", "tz"),
+  new ConfigOptDefinition<String>(time_zone, DEFAULT_TIME_ZONE, "time_zone", "tz"),
 
 // Limit
-  new ConfigOptDefenition<String>(limit_default_type, {}, "limit_default_type", "ldt"),
-  new ConfigOptDefenition<uint32_t>(limit_default_value, {}, "limit_default_value", "ldv"),
+  new ConfigOptDefinition<String>(limit_default_type, {}, "limit_default_type", "ldt"),
+  new ConfigOptDefinition<uint32_t>(limit_default_value, {}, "limit_default_value", "ldv"),
 
 // EMONCMS SERVER strings
-  new ConfigOptDefenition<String>(emoncms_server, "https://data.openevse.com/emoncms", "emoncms_server", "es"),
-  new ConfigOptDefenition<String>(emoncms_node, esp_hostname, "emoncms_node", "en"),
+  new ConfigOptDefinition<String>(emoncms_server, "https://data.openevse.com/emoncms", "emoncms_server", "es"),
+  new ConfigOptDefinition<String>(emoncms_node, esp_hostname, "emoncms_node", "en"),
   new ConfigOptSecret(emoncms_apikey, "", "emoncms_apikey", "ea"),
-  new ConfigOptDefenition<String>(emoncms_fingerprint, "", "emoncms_fingerprint", "ef"),
+  new ConfigOptDefinition<String>(emoncms_fingerprint, "", "emoncms_fingerprint", "ef"),
 
 // MQTT Settings
-  new ConfigOptDefenition<String>(mqtt_server, "emonpi", "mqtt_server", "ms"),
-  new ConfigOptDefenition<uint32_t>(mqtt_port, 1883, "mqtt_port", "mpt"),
-  new ConfigOptDefenition<String>(mqtt_topic, esp_hostname, "mqtt_topic", "mt"),
-  new ConfigOptDefenition<String>(mqtt_user, "emonpi", "mqtt_user", "mu"),
+  new ConfigOptDefinition<String>(mqtt_server, "emonpi", "mqtt_server", "ms"),
+  new ConfigOptDefinition<uint32_t>(mqtt_port, 1883, "mqtt_port", "mpt"),
+  new ConfigOptDefinition<String>(mqtt_topic, esp_hostname, "mqtt_topic", "mt"),
+  new ConfigOptDefinition<String>(mqtt_user, "emonpi", "mqtt_user", "mu"),
   new ConfigOptSecret(mqtt_pass, "emonpimqtt2016", "mqtt_pass", "mp"),
-  new ConfigOptDefenition<String>(mqtt_solar, "", "mqtt_solar", "mo"),
-  new ConfigOptDefenition<String>(mqtt_grid_ie, "emon/emonpi/power1", "mqtt_grid_ie", "mg"),
-  new ConfigOptDefenition<String>(mqtt_vrms, "emon/emonpi/vrms", "mqtt_vrms", "mv"),
-  new ConfigOptDefenition<String>(mqtt_live_pwr, "", "mqtt_live_pwr", "map"),
-  new ConfigOptDefenition<String>(mqtt_vehicle_soc, "", "mqtt_vehicle_soc", "mc"),
-  new ConfigOptDefenition<String>(mqtt_vehicle_range, "", "mqtt_vehicle_range", "mr"),
-  new ConfigOptDefenition<String>(mqtt_vehicle_eta, "", "mqtt_vehicle_eta", "met"),
-  new ConfigOptDefenition<String>(mqtt_announce_topic, "openevse/announce/" + ESPAL.getShortId(), "mqtt_announce_topic", "ma"),
+  new ConfigOptDefinition<String>(mqtt_solar, "", "mqtt_solar", "mo"),
+  new ConfigOptDefinition<String>(mqtt_grid_ie, "emon/emonpi/power1", "mqtt_grid_ie", "mg"),
+  new ConfigOptDefinition<String>(mqtt_vrms, "emon/emonpi/vrms", "mqtt_vrms", "mv"),
+  new ConfigOptDefinition<String>(mqtt_live_pwr, "", "mqtt_live_pwr", "map"),
+  new ConfigOptDefinition<String>(mqtt_vehicle_soc, "", "mqtt_vehicle_soc", "mc"),
+  new ConfigOptDefinition<String>(mqtt_vehicle_range, "", "mqtt_vehicle_range", "mr"),
+  new ConfigOptDefinition<String>(mqtt_vehicle_eta, "", "mqtt_vehicle_eta", "met"),
+  new ConfigOptDefinition<String>(mqtt_announce_topic, "openevse/announce/" + ESPAL.getShortId(), "mqtt_announce_topic", "ma"),
 
 // OCPP 1.6 Settings
-  new ConfigOptDefenition<String>(ocpp_server, "", "ocpp_server", "ows"),
-  new ConfigOptDefenition<String>(ocpp_chargeBoxId, "", "ocpp_chargeBoxId", "cid"),
-  new ConfigOptDefenition<String>(ocpp_authkey, "", "ocpp_authkey", "oky"),
-  new ConfigOptDefenition<String>(ocpp_idtag, "DefaultIdTag", "ocpp_idtag", "idt"),
+  new ConfigOptDefinition<String>(ocpp_server, "", "ocpp_server", "ows"),
+  new ConfigOptDefinition<String>(ocpp_chargeBoxId, "", "ocpp_chargeBoxId", "cid"),
+  new ConfigOptDefinition<String>(ocpp_authkey, "", "ocpp_authkey", "oky"),
+  new ConfigOptDefinition<String>(ocpp_idtag, "DefaultIdTag", "ocpp_idtag", "idt"),
 
 // Ohm Connect Settings
-  new ConfigOptDefenition<String>(ohm, "", "ohm", "o"),
+  new ConfigOptDefinition<String>(ohm, "", "ohm", "o"),
 
 // Divert settings
-  new ConfigOptDefenition<int8_t>(divert_type, -1, "divert_type", "dm"),
-  new ConfigOptDefenition<double>(divert_PV_ratio, 1.1, "divert_PV_ratio", "dpr"),
-  new ConfigOptDefenition<uint32_t>(divert_attack_smoothing_time, 20, "divert_attack_smoothing_time", "das"),
-  new ConfigOptDefenition<uint32_t>(divert_decay_smoothing_time, 600, "divert_decay_smoothing_time", "dds"),
-  new ConfigOptDefenition<uint32_t>(divert_min_charge_time, 600, "divert_min_charge_time", "dt"),
+  new ConfigOptDefinition<int8_t>(divert_type, -1, "divert_type", "dm"),
+  new ConfigOptDefinition<double>(divert_PV_ratio, 1.1, "divert_PV_ratio", "dpr"),
+  new ConfigOptDefinition<uint32_t>(divert_attack_smoothing_time, 20, "divert_attack_smoothing_time", "das"),
+  new ConfigOptDefinition<uint32_t>(divert_decay_smoothing_time, 600, "divert_decay_smoothing_time", "dds"),
+  new ConfigOptDefinition<uint32_t>(divert_min_charge_time, 600, "divert_min_charge_time", "dt"),
 
 // Current Shaper settings
-  new ConfigOptDefenition<uint32_t>(current_shaper_max_pwr, 0, "current_shaper_max_pwr", "smp"),
-  new ConfigOptDefenition<uint32_t>(current_shaper_smoothing_time, 60, "current_shaper_smoothing_time", "sst"),
-  new ConfigOptDefenition<uint32_t>(current_shaper_min_pause_time, 300, "current_shaper_min_pause_time", "spt"),
-  new ConfigOptDefenition<uint32_t>(current_shaper_data_maxinterval, 120, "current_shaper_data_maxinterval", "sdm"),
+  new ConfigOptDefinition<uint32_t>(current_shaper_max_pwr, 0, "current_shaper_max_pwr", "smp"),
+  new ConfigOptDefinition<uint32_t>(current_shaper_smoothing_time, 60, "current_shaper_smoothing_time", "sst"),
+  new ConfigOptDefinition<uint32_t>(current_shaper_min_pause_time, 300, "current_shaper_min_pause_time", "spt"),
+  new ConfigOptDefinition<uint32_t>(current_shaper_data_maxinterval, 120, "current_shaper_data_maxinterval", "sdm"),
 
 // Vehicle settings
-  new ConfigOptDefenition<uint8_t>(vehicle_data_src, 0, "vehicle_data_src", "vds"),
+  new ConfigOptDefinition<uint8_t>(vehicle_data_src, 0, "vehicle_data_src", "vds"),
 
 // Tesla client settings
   new ConfigOptSecret(tesla_access_token, "", "tesla_access_token", "tat"),
   new ConfigOptSecret(tesla_refresh_token, "", "tesla_refresh_token", "trt"),
-  new ConfigOptDefenition<uint64_t>(tesla_created_at, -1, "tesla_created_at", "tc"),
-  new ConfigOptDefenition<uint64_t>(tesla_expires_in, -1, "tesla_expires_in", "tx"),
-  new ConfigOptDefenition<String>(tesla_vehicle_id, "", "tesla_vehicle_id", "ti"),
+  new ConfigOptDefinition<uint64_t>(tesla_created_at, -1, "tesla_created_at", "tc"),
+  new ConfigOptDefinition<uint64_t>(tesla_expires_in, -1, "tesla_expires_in", "tx"),
+  new ConfigOptDefinition<String>(tesla_vehicle_id, "", "tesla_vehicle_id", "ti"),
 
 // RFID storage
-  new ConfigOptDefenition<String>(rfid_storage, "", "rfid_storage", "rs"),
+  new ConfigOptDefinition<String>(rfid_storage, "", "rfid_storage", "rs"),
 
 #if RGB_LED
 // LED brightness
-  new ConfigOptDefenition<uint8_t>(led_brightness, LED_DEFAULT_BRIGHTNESS, "led_brightness", "lb"),
+  new ConfigOptDefinition<uint8_t>(led_brightness, LED_DEFAULT_BRIGHTNESS, "led_brightness", "lb"),
 #endif
 
 // Scheduler options
-  new ConfigOptDefenition<uint32_t>(scheduler_start_window, SCHEDULER_DEFAULT_START_WINDOW, "scheduler_start_window", "ssw"),
+  new ConfigOptDefinition<uint32_t>(scheduler_start_window, SCHEDULER_DEFAULT_START_WINDOW, "scheduler_start_window", "ssw"),
 
 // Flags
   &flagsOpt,
