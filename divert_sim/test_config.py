@@ -43,6 +43,9 @@ def check_config(config: bool = False, load: bool = False, commit: bool = False)
     divert_process = Popen(command, stdout=PIPE, stderr=PIPE, universal_newlines=True)
     output = divert_process.communicate()
 
+    if output[1]:
+        print(output[1])
+
     return json.loads(output[0])
 
 def test_config_defaults() -> None:
@@ -175,9 +178,45 @@ def test_default_charging_mode() -> None:
     config = check_config({
         "default_state": False
     }, commit=True)
+    assert config["default_state"] == False
+    assert config["flags_changed"] == CONFIG_FACTORY_WRITE_LOCK | CONFIG_DEFAULT_STATE
+
+    config = check_config(load=True)
+    assert config["default_state"] == False
+    assert config["flags_changed"] == CONFIG_FACTORY_WRITE_LOCK | CONFIG_DEFAULT_STATE
+
+    # Check setting the default state to true works
+    config = check_config({
+        "default_state": True
+    }, commit=True, load=True)
     assert config["default_state"] == True
     assert config["flags_changed"] == CONFIG_FACTORY_WRITE_LOCK | CONFIG_DEFAULT_STATE
 
     config = check_config(load=True)
     assert config["default_state"] == True
     assert config["flags_changed"] == CONFIG_FACTORY_WRITE_LOCK | CONFIG_DEFAULT_STATE
+
+
+def test_wizard_flag():
+    """Test the wizard flag is set correctly"""
+
+    config = check_config({
+        "wizard_passed": True
+    }, commit=True)
+    assert config["wizard_passed"] == True
+    assert config["flags_changed"] == CONFIG_FACTORY_WRITE_LOCK | CONFIG_WIZARD
+
+def test_three_phase_flag():
+    """Test the three phase flag is set correctly"""
+
+    config = check_config({
+        "is_threephase": True
+    })
+    assert config["is_threephase"] == True
+    assert config["flags_changed"] == CONFIG_THREEPHASE
+
+    config = check_config({
+        "is_threephase": True
+    }, commit=True)
+    assert config["is_threephase"] == True
+    assert config["flags_changed"] == CONFIG_FACTORY_WRITE_LOCK | CONFIG_THREEPHASE
