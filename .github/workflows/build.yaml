@@ -56,6 +56,7 @@ jobs:
           - olimex_esp32-poe-iso
           - heltec_esp32-wifi-lora-v2
           - wt32-eth01
+          - esp32-c3-devkitc-02
           - elecrow_esp32_hmi
           - elecrow_esp32_hmi_dev
           - openevse_wifi_tft_v1
@@ -80,7 +81,7 @@ jobs:
         submodules: recursive
 
     - name: Cache pip
-      uses: actions/cache@v3
+      uses: actions/cache@v4
       with:
         path: ~/.cache/pip
         key: ${{ runner.os }}-pip-${{ hashFiles('**/requirements.txt') }}
@@ -88,13 +89,13 @@ jobs:
           ${{ runner.os }}-pip-
 
     - name: Cache PlatformIO
-      uses: actions/cache@v3
+      uses: actions/cache@v4
       with:
         path: ~/.platformio
         key: ${{ runner.os }}-${{ hashFiles('**/lockfiles') }}
 
     - name: Set up Python
-      uses: actions/setup-python@v4
+      uses: actions/setup-python@v5
       with:
         python-version: '3.x'
 
@@ -125,7 +126,7 @@ jobs:
         PLATFORMIO_BUILD_FLAGS: ${{ matrix.gui.build_flags }}
 
     - name: Upload output to GitHub
-      uses: actions/upload-artifact@v3
+      uses: actions/upload-artifact@v4
       with:
         name: ${{ matrix.env }}.bin
         path: .pio/build/${{ matrix.env }}/firmware.bin
@@ -138,7 +139,7 @@ jobs:
 
     steps:
     - name: Download the built assets
-      uses: actions/download-artifact@v3
+      uses: actions/download-artifact@v4
       with:
         path: artifacts
 
