@@ -202,20 +202,6 @@ loop() {
 
         import_timers(&scheduler);
       }
-      // -------------------------------------------------------------------
-      // Do these things once every 2s
-      // -------------------------------------------------------------------
-#ifdef ENABLE_DEBUG_MEMORY_MONITOR
-      if ((millis() - Timer3) >= 2000) {
-        uint32_t current = ESPAL.getFreeHeap();
-        int32_t diff = (int32_t)(last_mem - current);
-        if(diff != 0) {
-          DEBUG.printf("%s: Free memory %u - diff %d %d\n", time_format_time(time(NULL)).c_str(), current, diff, start_mem - current);
-          last_mem = current;
-        }
-        Timer3 = millis();
-      }
-#endif
     }
   }
 
@@ -256,6 +242,18 @@ loop() {
   if(DEBUG_PORT.available()) {
     handle_serial();
   }
+
+#ifdef ENABLE_DEBUG_MEMORY_MONITOR
+  if ((millis() - Timer3) >= 2000) {
+    uint32_t current = ESPAL.getFreeHeap();
+    int32_t diff = (int32_t)(last_mem - current);
+    if(diff != 0) {
+      DEBUG.printf("%s: Free memory %u - diff %d %d\n", time_format_time(time(NULL)).c_str(), current, diff, start_mem - current);
+      last_mem = current;
+    }
+    Timer3 = millis();
+  }
+#endif
 
   Profile_End(loop, 10);
 } // end loop
