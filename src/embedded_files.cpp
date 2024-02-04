@@ -1,3 +1,6 @@
+#if defined(ENABLE_DEBUG) && !defined(ENABLE_DEBUG_EMBEDDED_FILES)
+#undef ENABLE_DEBUG
+#endif
 
 #include "embedded_files.h"
 #include "emonesp.h"
