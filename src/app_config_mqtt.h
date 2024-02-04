@@ -2,7 +2,7 @@
 #define app_config_mqtt_h
 
 #include <ConfigOpt.h>
-#include <ConfigOptDefenition.h>
+#include <ConfigOptDefinition.h>
 
 #include "mqtt.h"
 #include "app_config.h"
@@ -10,12 +10,14 @@
 class ConfigOptVirtualMqttProtocol : public ConfigOpt
 {
 protected:
-  ConfigOptDefenition<uint32_t> &_base;
+  ConfigOptDefinition<uint32_t> &_base;
+  ConfigOptDefinition<uint32_t> &_change;
 
 public:
-  ConfigOptVirtualMqttProtocol(ConfigOptDefenition<uint32_t> &b, const char *l, const char *s) :
-    ConfigOpt(l, s),
-    _base(b)
+  ConfigOptVirtualMqttProtocol(ConfigOptDefinition<uint32_t> &base, ConfigOptDefinition<uint32_t> &change, const char *long_name, const char *short_name) :
+    ConfigOpt(long_name, short_name),
+    _base(base),
+    _change(change)
   {
   }
 
@@ -29,7 +31,14 @@ public:
     if(value == "mqtts") {
       newVal |= 1 << 4;
     }
-    return _base.set(newVal);
+
+    if(_base.set(newVal)) {
+      uint32_t new_change = _change.get() | CONFIG_MQTT_PROTOCOL;
+      _change.set(new_change);
+      return true;
+    }
+
+    return false;
   }
 
   virtual bool serialize(DynamicJsonDocument &doc, bool longNames, bool compactOutput, bool hideSecrets) {
@@ -37,7 +46,7 @@ public:
       doc[name(longNames)] = get();
       return true;
     }
-    
+
     return false;
   }
 

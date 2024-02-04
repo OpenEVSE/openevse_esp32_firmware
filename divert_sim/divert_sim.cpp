@@ -115,7 +115,10 @@ int main(int argc, char** argv)
     ("c,config", "Config options, either a file name or JSON", cxxopts::value<std::string>(config))
     ("v,voltage", "The Voltage column if < 50, else the fixed voltage", cxxopts::value<int>(voltage_arg), "N")
     ("kw", "values are KW")
-    ("sep", "Field separator", cxxopts::value<std::string>(sep));
+    ("sep", "Field separator", cxxopts::value<std::string>(sep))
+    ("config-check", "Output the config and exit")
+    ("config-load", "Simulate loading config from EEPROM")
+    ("config-commit", "Simulate saving the config to EEPROM");
 
   auto result = options.parse(argc, argv);
 
@@ -126,7 +129,11 @@ int main(int argc, char** argv)
   }
 
   fs::EpoxyFS.begin();
-  config_reset();
+  if(result.count("config-load") > 0) {
+    config_load_settings();
+  } else {
+    config_reset();
+  }
 
   // If config is set and not a JSON string, assume it is a file name
   if(config.length() > 0 && config[0] != '{')
@@ -139,6 +146,18 @@ int main(int argc, char** argv)
   // If we have some JSON load it
   if(config.length() > 0 && config[0] == '{') {
     config_deserialize(config.c_str());
+  }
+
+  if(result.count("config-commit") > 0) {
+    config_commit();
+  }
+
+  if(result.count("config-check")) 
+  {
+    String config_out;
+    config_serialize(config_out, true, false, false);
+    std::cout << config_out.c_str() << std::endl;
+    return EXIT_SUCCESS;
   }
 
   kw = result.count("kw") > 0;
