@@ -125,19 +125,36 @@ void setup()
   DBUGF("After config_load_settings: %d", ESPAL.getFreeHeap());
 
   eventLog.begin();
+  DBUGF("After eventLog.begin: %d", ESPAL.getFreeHeap());
+
   timeManager.begin();
+  DBUGF("After timeManager.begin: %d", ESPAL.getFreeHeap());
+
   evse.begin();
+  DBUGF("After evse.begin: %d", ESPAL.getFreeHeap());
+
   scheduler.begin();
+  DBUGF("After scheduler.begin: %d", ESPAL.getFreeHeap());
+
   divert.begin();
+  DBUGF("After divert.begin: %d", ESPAL.getFreeHeap());
+
   limit.begin(evse);
+  DBUGF("After limit.begin: %d", ESPAL.getFreeHeap());
+
   lcd.begin(evse, scheduler, manual);
+  DBUGF("After lcd.begin: %d", ESPAL.getFreeHeap());
+
 #if defined(ENABLE_PN532)
   pn532.begin();
   rfid.begin(evse, pn532);
 #else
   rfid.begin(evse, rfidNullDevice);
 #endif
+  DBUGF("After rfid.begin: %d", ESPAL.getFreeHeap());
+
   ledManager.begin(evse);
+  DBUGF("After ledManager.begin: %d", ESPAL.getFreeHeap());
 
   // Initialise the WiFi
   net.begin();
@@ -146,6 +163,7 @@ void setup()
   // Initialise Mongoose networking library
   Mongoose.begin();
   Mongoose.setRootCa(root_ca);
+  DBUGF("After Mongoose.begin: %d", ESPAL.getFreeHeap());
 
   // Bring up the web server
   web_server_setup();
@@ -159,8 +177,10 @@ void setup()
   input_setup();
 
   ocpp.begin(evse, lcd, eventLog, rfid);
+  DBUGF("After ocpp.begin: %d", ESPAL.getFreeHeap());
 
   shaper.begin(evse);
+  DBUGF("After shaper.begin: %d", ESPAL.getFreeHeap());
 
   lcd.display(F("OpenEVSE WiFI"), 0, 0, 0, LCD_CLEAR_LINE);
   lcd.display(currentfirmware, 0, 1, 5 * 1000, LCD_CLEAR_LINE);
