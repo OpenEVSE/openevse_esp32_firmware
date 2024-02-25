@@ -89,7 +89,7 @@ String currentfirmware = ESCAPEQUOTE(BUILD_TAG);
 String buildenv = ESCAPEQUOTE(BUILD_ENV_NAME);
 String serial;
 
-ArduinoOcppTask ocpp = ArduinoOcppTask();
+OcppTask ocpp = OcppTask();
 
 
 static void hardware_setup();

@@ -12,14 +12,14 @@
 #include "lcd.h"
 #include "rfid.h"
 
-#include <ArduinoOcppMongooseClient.h>
+#include <MicroOcppMongooseClient.h>
 #include <MongooseHttpClient.h>
 
-#include <ArduinoOcpp/Core/Configuration.h>
+#include <MicroOcpp/Core/Configuration.h>
 
-class ArduinoOcppTask: public MicroTasks::Task {
+class OcppTask: public MicroTasks::Task {
 private:
-    ArduinoOcpp::AOcppMongooseClient *ocppSocket = NULL;
+    MicroOcpp::MOcppMongooseClient *connection = nullptr;
     EvseManager *evse;
     LcdTask *lcd;
     EventLog *eventLog;
@@ -29,7 +29,7 @@ private:
     bool trackOcppConnected = false;
     bool trackVehicleConnected = false;
 
-    std::function<bool(const String& idTag)> onIdTagInput {nullptr};
+    std::function<bool(const String& idTag)> onIdTagInput;
 
     MongooseHttpClient diagClient = MongooseHttpClient();
     bool diagSuccess = false, diagFailure = false;
@@ -38,21 +38,13 @@ private:
     bool updateSuccess = false, updateFailure = false;
     void initializeFwService();
 
-    void initializeArduinoOcpp();
-    void deinitializeArduinoOcpp();
+    void initializeMicroOcpp();
+    void deinitializeMicroOcpp();
     void loadEvseBehavior();
 
-    static ArduinoOcppTask *instance;
+    static OcppTask *instance;
 
-    //OCPP configs
-    std::shared_ptr<ArduinoOcpp::Configuration<const char*>> backendUrl;
-    std::shared_ptr<ArduinoOcpp::Configuration<const char*>> chargeBoxId;
-    std::shared_ptr<ArduinoOcpp::Configuration<const char*>> authKey;
-    std::shared_ptr<ArduinoOcpp::Configuration<bool>> freevendActive; //Authorize automatically
-    std::shared_ptr<ArduinoOcpp::Configuration<const char*>> freevendIdTag; //idTag for auto-authorization
-    std::shared_ptr<ArduinoOcpp::Configuration<bool>> allowOfflineTxForUnknownId; //temporarily accept all NFC-cards while offline
-    std::shared_ptr<ArduinoOcpp::Configuration<bool>> silentOfflineTx; //stop transaction journaling in long offline periods
-
+    bool synchronizationLock = false;
 protected:
 
     //hook method of MicroTask::Task
@@ -62,8 +54,8 @@ protected:
     unsigned long loop(MicroTasks::WakeReason reason);
 
 public:
-    ArduinoOcppTask();
-    ~ArduinoOcppTask();
+    OcppTask();
+    ~OcppTask();
 
     void begin(EvseManager &evse, LcdTask &lcd, EventLog &eventLog, RfidTask &rfid);
     
@@ -73,6 +65,8 @@ public:
     void reconfigure();
 
     static bool isConnected();
+
+    void setSynchronizationLock(bool locked);
 };
 
 #endif
