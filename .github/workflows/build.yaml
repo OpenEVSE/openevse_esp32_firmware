@@ -165,7 +165,7 @@ jobs:
 
     - name: Upload assets to release
       if: startsWith(github.ref_name, 'v')
-      uses: "softprops/action-gh-release@v1"
+      uses: "softprops/action-gh-release@v2"
       with:
         prerelease: true
         name: "${{ github.ref_name }}"
