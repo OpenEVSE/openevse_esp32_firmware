@@ -1,6 +1,6 @@
 # yaml-language-server: $schema=https://json.schemastore.org/github-workflow.json
 
-name: Build/Release OpenEVSE
+name: Build OpenEVSE GUI
 
 permissions:
   contents: write
