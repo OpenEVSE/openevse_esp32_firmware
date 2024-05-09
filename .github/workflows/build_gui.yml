@@ -10,6 +10,7 @@ on:
   pull_request:
     paths:
       - gui-v2
+      - gui-tft/*
 
 jobs:
   build:
