@@ -27,7 +27,7 @@ jobs:
         run: echo "github.ref_name = '${{ github.ref_name }}'"
 
   build:
-    name: Build ${{ matrix.env }} with ${{ matrix.gui.name }}
+    name: Build ${{ matrix.env }}
     runs-on: ubuntu-latest
 
     strategy:
@@ -86,9 +86,6 @@ jobs:
 
     - name: Run PlatformIO
       run: pio run -e ${{ matrix.env }}
-      env:
-        GUI_NAME: ${{ matrix.gui.name }}
-        PLATFORMIO_BUILD_FLAGS: ${{ matrix.gui.build_flags }}
 
     - name: Upload output to GitHub
       uses: actions/upload-artifact@v4
