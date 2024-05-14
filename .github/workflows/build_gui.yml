@@ -66,7 +66,7 @@ jobs:
 
       - name: Delete the existing pre-built GUI files
         run: |
-          rm -f src/lcd_static/*.h
+          rm -fr src/lcd_static
           rm -f src/web_static/*.h
 
       - name: Run PlatformIO
