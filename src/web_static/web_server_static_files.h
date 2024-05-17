@@ -18,7 +18,7 @@
 #include "web_server.pwa_masquable_png.h"
 #include "web_server.success_html.h"
 #include "web_server.sw_js.h"
-StaticFile staticFiles[] = {
+StaticFile web_server_static_files[] = {
   { "/assets/components-3194f1c3.js", CONTENT_COMPONENTS_3194F1C3_JS_GZ, sizeof(CONTENT_COMPONENTS_3194F1C3_JS_GZ) - 1, _CONTENT_TYPE_JS, CONTENT_COMPONENTS_3194F1C3_JS_GZ_ETAG, true },
   { "/assets/components-defab0d7.css", CONTENT_COMPONENTS_DEFAB0D7_CSS_GZ, sizeof(CONTENT_COMPONENTS_DEFAB0D7_CSS_GZ) - 1, _CONTENT_TYPE_CSS, CONTENT_COMPONENTS_DEFAB0D7_CSS_GZ_ETAG, true },
   { "/assets/config-0d87c607.css", CONTENT_CONFIG_0D87C607_CSS_GZ, sizeof(CONTENT_CONFIG_0D87C607_CSS_GZ) - 1, _CONTENT_TYPE_CSS, CONTENT_CONFIG_0D87C607_CSS_GZ_ETAG, true },

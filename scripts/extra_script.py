@@ -102,20 +102,26 @@ def make_safe(file):
     for c in chars:
         if c in file:
             file = file.replace(c, "_")
-    
+
     return file
 
-def make_static(env, target, source):
+def make_static_web(env, target, source):
+    return make_static(env, target, source, "web_server", dist_dir)
+
+def make_static_lcd(env, target, source):
+    return make_static(env, target, source, "lcd_gui", lcd_gui_dir)
+
+def make_static(env, target, source, prefix, files_dir):
     output = ""
 
-    out_files = filtered_listdir(dist_dir)
+    out_files = filtered_listdir(files_dir)
 
     # include the files
     for out_file in out_files:
-        filename = "web_server."+make_safe(out_file)+".h"
+        filename = prefix+"."+make_safe(out_file)+".h"
         output += "#include \"{}\"\n".format(filename)
 
-    output += "StaticFile staticFiles[] = {\n"
+    output += "StaticFile "+prefix+"_static_files[] = {\n"
 
     for out_file in out_files:
         filetype = None
@@ -156,19 +162,19 @@ def make_static(env, target, source):
     with open(target_file, "w") as output_file:
         output_file.write(output)
 
-def process_html_app(source, dest, env):
-    web_server_static_files = join(dest, "web_server_static_files.h")
-    web_server_static = join(env.subst("$BUILD_DIR"), "src/web_server_static.cpp.o")
+def process_html_app(source, dest, env, prefix, static_func):
+    web_server_static_files = join(dest, prefix+"_static_files.h")
+    web_server_static = join(env.subst("$BUILD_DIR"), "src/"+prefix+"_static.cpp.o")
 
     files = filtered_listdir(source)
 
     for file in files:
         data_file = join(source, file)
-        header_file = join(dest, "web_server."+make_safe(file)+".h")
+        header_file = join(dest, prefix+"."+make_safe(file)+".h")
         env.Command(header_file, data_file, data_to_header)
         env.Depends(web_server_static_files, header_file)
 
-    env.Depends(web_server_static, env.Command(web_server_static_files, source, make_static))
+    env.Depends(web_server_static, env.Command(web_server_static_files, source, static_func))
 
 #
 # Generate Web app resources
@@ -177,7 +183,7 @@ if npm_installed:
     headers_src = join(env.subst("$PROJECTSRC_DIR"), "web_static")
 
     gui_name = environ.get("GUI_NAME")
-    if gui_name in (None, ""): 
+    if gui_name in (None, ""):
         gui_name = "gui-v2"
 
     gui_dir = join(env.subst("$PROJECT_DIR"), gui_name)
@@ -189,7 +195,7 @@ if npm_installed:
         # Check to see if the Node modules have been downloaded
         if(isdir(node_modules)):
             if(isdir(dist_dir)):
-                process_html_app(dist_dir, headers_src, env)
+                process_html_app(dist_dir, headers_src, env, "web_server", make_static_web)
             else:
                 print("Warning: GUI not built, run 'cd %s; npm run build'" % (gui_dir))
         else:
@@ -198,5 +204,10 @@ if npm_installed:
         print("Warning: GUI files not found, run 'git submodule update --init' (%s)" % (gui_dir))
 else:
   print("Warning: Node.JS and NPM required to update the UI")
+
+# LCD GUI files
+lcd_gui_dir = join(env.subst("$PROJECT_DIR"), "gui-tft")
+headers_src = join(env.subst("$PROJECTSRC_DIR"), "lcd_static")
+process_html_app(lcd_gui_dir, headers_src, env, "lcd_gui", make_static_lcd)
 
 print("PATH="+env['ENV']['PATH'])

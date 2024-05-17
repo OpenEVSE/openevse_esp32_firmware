@@ -101,3 +101,4 @@ divert_sim/epoxyfsdata
 divert_sim/epoxyeepromdata
 
 *.pem
+*.pem
