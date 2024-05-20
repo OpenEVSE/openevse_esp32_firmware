@@ -6,6 +6,8 @@
 #include "ocpp.h"
 
 #include <MicroOcpp.h>
+#include <MicroOcpp/Model/Diagnostics/DiagnosticsService.h>
+#include <MicroOcpp/Model/FirmwareManagement/FirmwareService.h>
 #include <MongooseCore.h>
 
 #include "app_config.h"
@@ -274,17 +276,17 @@ void OcppTask::loadEvseBehavior() {
      * Synchronize OpenEVSE data with OCPP-library data
      */
 
-    addMeterValueInput([this] () {
-            return evse->getAmps() * evse->getVoltage();
-        },
-        "Power.Active.Import",
-        "W");
-    
-    addMeterValueInput([this] () {
-            return evse->getTotalEnergy() * 1000.; //convert kWh into Wh
-        }, 
-        "Energy.Active.Import.Register",
-        "Wh");
+    //basic meter readings
+
+    setEnergyMeterInput([this] () {
+        return evse->getTotalEnergy() * 1000.; //convert kWh into Wh
+    });
+
+    setPowerMeterInput([this] () {
+        return evse->getAmps() * evse->getVoltage();
+    });
+
+    //further meter readings
 
     addMeterValueInput([this] () {
             return evse->getAmps();
@@ -525,6 +527,11 @@ void OcppTask::updateEvseClaim() {
         evseState = EvseState::Disabled;
     }
 
+    //check further error condition not handled by Atmega
+    if (rfid->communicationFails()) {
+        evseState = EvseState::Disabled;
+    }
+
     evseProperties = evseState;
 
     //OCPP Smart Charging?
@@ -728,7 +735,7 @@ void OcppTask::initializeFwService() {
 
 bool OcppTask::isConnected() {
     if (instance && instance->connection) {
-        return instance->connection->isConnectionOpen();
+        return instance->connection->isConnected();
     }
     return false;
 }
