@@ -125,19 +125,36 @@ void setup()
   DBUGF("After config_load_settings: %d", ESPAL.getFreeHeap());
 
   eventLog.begin();
+  DBUGF("After eventLog.begin: %d", ESPAL.getFreeHeap());
+
   timeManager.begin();
+  DBUGF("After timeManager.begin: %d", ESPAL.getFreeHeap());
+
   evse.begin();
+  DBUGF("After evse.begin: %d", ESPAL.getFreeHeap());
+
   scheduler.begin();
+  DBUGF("After scheduler.begin: %d", ESPAL.getFreeHeap());
+
   divert.begin();
+  DBUGF("After divert.begin: %d", ESPAL.getFreeHeap());
+
   limit.begin(evse);
+  DBUGF("After limit.begin: %d", ESPAL.getFreeHeap());
+
   lcd.begin(evse, scheduler, manual);
+  DBUGF("After lcd.begin: %d", ESPAL.getFreeHeap());
+
 #if defined(ENABLE_PN532)
   pn532.begin();
   rfid.begin(evse, pn532);
 #else
   rfid.begin(evse, rfidNullDevice);
 #endif
+  DBUGF("After rfid.begin: %d", ESPAL.getFreeHeap());
+
   ledManager.begin(evse);
+  DBUGF("After ledManager.begin: %d", ESPAL.getFreeHeap());
 
   // Initialise the WiFi
   net.begin();
@@ -146,6 +163,7 @@ void setup()
   // Initialise Mongoose networking library
   Mongoose.begin();
   Mongoose.setRootCa(root_ca);
+  DBUGF("After Mongoose.begin: %d", ESPAL.getFreeHeap());
 
   // Bring up the web server
   web_server_setup();
@@ -159,8 +177,10 @@ void setup()
   input_setup();
 
   ocpp.begin(evse, lcd, eventLog, rfid);
+  DBUGF("After ocpp.begin: %d", ESPAL.getFreeHeap());
 
   shaper.begin(evse);
+  DBUGF("After shaper.begin: %d", ESPAL.getFreeHeap());
 
   lcd.display(F("OpenEVSE WiFI"), 0, 0, 0, LCD_CLEAR_LINE);
   lcd.display(currentfirmware, 0, 1, 5 * 1000, LCD_CLEAR_LINE);
@@ -202,20 +222,6 @@ loop() {
 
         import_timers(&scheduler);
       }
-      // -------------------------------------------------------------------
-      // Do these things once every 2s
-      // -------------------------------------------------------------------
-#ifdef ENABLE_DEBUG_MEMORY_MONITOR
-      if ((millis() - Timer3) >= 2000) {
-        uint32_t current = ESPAL.getFreeHeap();
-        int32_t diff = (int32_t)(last_mem - current);
-        if(diff != 0) {
-          DEBUG.printf("%s: Free memory %u - diff %d %d\n", time_format_time(time(NULL)).c_str(), current, diff, start_mem - current);
-          last_mem = current;
-        }
-        Timer3 = millis();
-      }
-#endif
     }
   }
 
@@ -256,6 +262,18 @@ loop() {
   if(DEBUG_PORT.available()) {
     handle_serial();
   }
+
+#ifdef ENABLE_DEBUG_MEMORY_MONITOR
+  if ((millis() - Timer3) >= 2000) {
+    uint32_t current = ESPAL.getFreeHeap();
+    int32_t diff = (int32_t)(last_mem - current);
+    if(diff != 0) {
+      DEBUG.printf("%s: Free memory %u - diff %d %d\n", time_format_time(time(NULL)).c_str(), current, diff, start_mem - current);
+      last_mem = current;
+    }
+    Timer3 = millis();
+  }
+#endif
 
   Profile_End(loop, 10);
 } // end loop

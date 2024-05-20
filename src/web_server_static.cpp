@@ -9,25 +9,11 @@
 #include "web_server_static.h"
 #include "app_config.h"
 #include "net_manager.h"
+#include "embedded_files.h"
 
 extern bool enableCors; // defined in web_server.cpp
 
-// Static files
-struct StaticFile
-{
-  const char *filename;
-  const char *data;
-  size_t length;
-  const char *type;
-  const char *etag;
-  bool compressed;
-};
-
 #include "web_static/web_server_static_files.h"
-
-#define ARRAY_LENGTH(x) (sizeof(x)/sizeof((x)[0]))
-
-#define IS_ALIGNED(x)   (0 == ((uint32_t)(x) & 0x3))
 
 #define WEB_SERVER_INDEX_PAGE "index.html"
 
@@ -51,24 +37,9 @@ static bool web_static_get_file(MongooseHttpServerRequest *request, StaticFile *
   if(path == "/") {
     path = String(
       HOME_PAGE);
-
   }
 
-  DBUGF("Looking for %s", path.c_str());
-
-  for(int i = 0; i < ARRAY_LENGTH(staticFiles); i++) {
-    if(path == staticFiles[i].filename)
-    {
-      DBUGF("Found %s %d@%p", staticFiles[i].filename, staticFiles[i].length, staticFiles[i].data);
-
-      if(file) {
-        *file = &staticFiles[i];
-      }
-      return true;
-    }
-  }
-
-  return false;
+  return embedded_get_file(path, web_server_static_files, ARRAY_LENGTH(web_server_static_files), file);
 }
 
 bool web_static_handle(MongooseHttpServerRequest *request)

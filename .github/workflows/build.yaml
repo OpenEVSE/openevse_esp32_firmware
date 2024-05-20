@@ -6,13 +6,6 @@ permissions:
   contents: write
 
 on:
-  workflow_dispatch:
-    inputs:
-      v2_ref:
-        required: true
-        description: The branch/tag for the v2 UI
-        default: master
-
   push:
     branches:
       - master
@@ -34,7 +27,7 @@ jobs:
         run: echo "github.ref_name = '${{ github.ref_name }}'"
 
   build:
-    name: Build ${{ matrix.env }} with ${{ matrix.gui.name }}
+    name: Build ${{ matrix.env }}
     runs-on: ubuntu-latest
 
     strategy:
@@ -57,24 +50,15 @@ jobs:
           - heltec_esp32-wifi-lora-v2
           - wt32-eth01
           - esp32-c3-devkitc-02
-        gui:
-          - name: gui-v2
-            repo: OpenEVSE/openevse-gui-v2
-            build_flags: ""
-            ref: ${{ inputs.v2_ref }}
+          - elecrow_esp32_hmi
+          - elecrow_esp32_hmi_dev
+          - openevse_wifi_tft_v1
+          - openevse_wifi_tft_v1_dev
 
     steps:
     - uses: ammaraskar/gcc-problem-matcher@master
 
     - uses: actions/checkout@v4
-
-    - name: Checkout GUI
-      uses: actions/checkout@v4
-      with:
-        repository: ${{ matrix.gui.repo }}
-        path: ${{ matrix.gui.name }}
-        ref: ${{ matrix.gui.ref }}
-        submodules: recursive
 
     - name: Cache pip
       uses: actions/cache@v4
@@ -100,26 +84,8 @@ jobs:
         python -m pip install --upgrade pip
         pip install --upgrade platformio
 
-    - name: Set up Node JS
-      uses: actions/setup-node@v4
-      with:
-        node-version: '16'
-
-    - name: Install dependencies
-      run: |
-        cd ${{ matrix.gui.name }}
-        npm install
-
-    - name: Build GUI
-      run: |
-        cd ${{ matrix.gui.name }}
-        npm run build
-
     - name: Run PlatformIO
       run: pio run -e ${{ matrix.env }}
-      env:
-        GUI_NAME: ${{ matrix.gui.name }}
-        PLATFORMIO_BUILD_FLAGS: ${{ matrix.gui.build_flags }}
 
     - name: Upload output to GitHub
       uses: actions/upload-artifact@v4
@@ -161,7 +127,7 @@ jobs:
 
     - name: Upload assets to release
       if: startsWith(github.ref_name, 'v')
-      uses: "softprops/action-gh-release@v1"
+      uses: "softprops/action-gh-release@v2"
       with:
         prerelease: true
         name: "${{ github.ref_name }}"

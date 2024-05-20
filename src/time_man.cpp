@@ -239,10 +239,10 @@ void time_set_time(struct timeval setTime, const char *source) {
   timeManager.setTime(setTime, source);
 }
 
-String time_format_time(time_t time, bool local)
+String time_format_time(time_t time, bool local_time)
 {
   struct tm timeinfo;
-  if(local) {
+  if(local_time) {
     localtime_r(&time, &timeinfo);
   } else {
     gmtime_r(&time, &timeinfo);
