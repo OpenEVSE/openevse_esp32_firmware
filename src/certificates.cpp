@@ -38,13 +38,13 @@ bool CertificateStore::Certificate::deserialize(JsonObject &obj)
 
   _cert = cert;
   if(obj.containsKey("id")) {
-    _id = obj["id"];
+    _id = std::stoull(obj["id"].as<std::string>(), nullptr, 16);
   } else {
-    uint64_t a =  x509.sig.p[0] << 24 | x509.sig.p[1] << 16 |
-                  x509.sig.p[2] << 8 | x509.sig.p[3];
-    uint64_t b =  x509.sig.p[4] << 24 | x509.sig.p[5] << 16 |
-                  x509.sig.p[6] << 8 | x509.sig.p[7];
-    _id = a << 32 | b;
+    uint64_t id = 0;
+    for(int i = 0; i < x509.serial.len; i++) {
+      id = id << 8 | x509.serial.p[i];
+    }
+    _id = id;
   }
   if(obj.containsKey("key"))
   {
@@ -76,7 +76,7 @@ bool CertificateStore::Certificate::deserialize(JsonObject &obj)
 
 bool CertificateStore::Certificate::serialize(JsonObject &doc, uint32_t flags)
 {
-  doc["id"] = _id;
+  doc["id"] = String(_id, HEX);
   doc["type"] = _type.toString();
   doc["name"] = _name;
   doc["certificate"] = _cert;

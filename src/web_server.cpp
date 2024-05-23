@@ -6,6 +6,8 @@
 #include <Update.h>
 #include "certificates.h"
 
+#include <string>
+
 typedef const __FlashStringHelper *fstr_t;
 
 #ifdef ESP32
@@ -1179,10 +1181,11 @@ void web_server_send_ascii_utf8(const char *endpoint, const uint8_t *buffer, siz
 void web_server_setup()
 {
   bool use_ssl = false;
-  if(0 != www_certificate_id)
+  if(www_certificate_id != "")
   {
-    const char *cert = certs.getCertificate(www_certificate_id);
-    const char *key = certs.getKey(www_certificate_id);
+    uint64_t cert_id = std::stoull(www_certificate_id.c_str(), nullptr, 16);
+    const char *cert = certs.getCertificate(cert_id);
+    const char *key = certs.getKey(cert_id);
     if(NULL != cert && NULL != key)
     {
       server.begin(443, cert, key);

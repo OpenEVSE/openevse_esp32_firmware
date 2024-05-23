@@ -3,8 +3,8 @@ allOf:
   - type: object
     properties:
       id:
-        type: integer
-        description: 'The certificate ID'
+        type: string
+        description: 'The certificate ID, 64 bit hex number as a string'
       name:
         type: string
         description: 'The human readable certificate name'

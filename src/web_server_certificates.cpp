@@ -59,7 +59,7 @@ void handleCertificatesPost(MongooseHttpServerRequest *request, MongooseHttpServ
       {
         DBUGVAR(id, HEX);
         doc.clear();
-        doc["id"] = id;
+        doc["id"] = String(id, HEX);
         doc["msg"] = "done";
         serializeJson(doc, *response);
         response->setCode(200);
@@ -122,7 +122,7 @@ void handleCertificates(MongooseHttpServerRequest *request)
         response->print("{\"msg\":\"Method not allowed\"}");
       }
     } else {
-      certificate = std::stoull(clientStr.c_str());
+      certificate = std::stoull(clientStr.c_str(), nullptr, 16);
     }
   }
 

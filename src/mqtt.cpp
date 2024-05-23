@@ -22,6 +22,8 @@
 #include <ArduinoJson.h>
 #include <MongooseMqttClient.h>
 
+#include <string>
+
 MongooseMqttClient mqttclient;
 EvseProperties claim_props;
 EvseProperties override_props;
@@ -326,10 +328,11 @@ mqtt_connect()
   mqttclient.setLastWillAndTestimment(mqtt_announce_topic, lastWill, true);
   mqttclient.setRejectUnauthorized(config_mqtt_reject_unauthorized());
 
-  if(0 != mqtt_certificate_id)
+  if(mqtt_certificate_id != "")
   {
-    const char *cert = certs.getCertificate(mqtt_certificate_id);
-    const char *key = certs.getKey(mqtt_certificate_id);
+    uint64_t cert_id = std::stoull(mqtt_certificate_id.c_str(), nullptr, 16);
+    const char *cert = certs.getCertificate(cert_id);
+    const char *key = certs.getKey(cert_id);
     if(NULL != cert && NULL != key) {
       mqttclient.setCertificate(cert, key);
     }

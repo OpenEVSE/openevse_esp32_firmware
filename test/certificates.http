@@ -64,22 +64,22 @@ Content-Type: application/json
 ###
 # Get the Self Signed Test certificate
 
-GET {{baseUrl}}/certificates/388063923180034510
+GET {{baseUrl}}/certificates/133e62267a1a5cf8
 
 ###
 # Get the R1 GlobalSign Root Certificate
 
-GET {{baseUrl}}/certificates/15452949267533451405
+GET {{baseUrl}}/certificates/1154b5ac394
 
 ###
 # Delete the Self Signed Test certificate
 
-DELETE {{baseUrl}}/certificates/388063923180034510
+DELETE {{baseUrl}}/certificates/133e62267a1a5cf8
 
 ###
 # Delete the R1 GlobalSign Root Certificate
 
-DELETE {{baseUrl}}/certificates/15452949267533451405
+DELETE {{baseUrl}}/certificates/1154b5ac394
 
 ###
 # Get the full Root Certificate Chain
@@ -93,7 +93,7 @@ POST {{baseUrl}}/config HTTP/1.1
 Content-Type: application/json
 
 {
-  "www_certificate_id": 18446744072911794636
+  "www_certificate_id": "133e62267a1a5cf8"
 }
 
 ###
@@ -103,8 +103,7 @@ POST {{baseUrl}}/config HTTP/1.1
 Content-Type: application/json
 
 {
-
-  "mqtt_certificate_id": 18446744071789350398
+  "mqtt_certificate_id": "133e62267a1a5cf8"
 }
 
 ###
@@ -120,5 +119,5 @@ Content-Type: application/json
   "mqtt_port":8883,
   "mqtt_user":"",
   "mqtt_pass":"",
-  "mqtt_certificate_id":18446744071789350398
+  "mqtt_certificate_id":"b63711b5ac4ce2e"
 }
