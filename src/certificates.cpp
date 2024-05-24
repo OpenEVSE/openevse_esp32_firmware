@@ -406,11 +406,11 @@ bool CertificateStore::loadCertificate(String &name)
     DeserializationError err = deserializeJson(doc, file);
     if(DeserializationError::Code::Ok == err)
     {
-      #ifdef ENABLE_DEBUG
-      DBUG("Certificate loaded: ");
-      serializeJson(doc, DEBUG_PORT);
-      DBUGLN("");
-      #endif
+      //#ifdef ENABLE_DEBUG
+      //DBUG("Certificate loaded: ");
+      //serializeJson(doc, DEBUG_PORT);
+      //DBUGLN("");
+      //#endif
       loaded = addCertificate(doc, nullptr, false);
     }
 
