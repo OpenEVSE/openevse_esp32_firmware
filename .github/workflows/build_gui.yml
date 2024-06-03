@@ -72,7 +72,7 @@ jobs:
           rm -f src/web_static/*.h
 
       - name: Run PlatformIO
-        run:
+        run: |
           pio run
           git status
 
