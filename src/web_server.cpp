@@ -215,7 +215,7 @@ void buildStatus(DynamicJsonDocument &doc) {
 
   doc["mqtt_connected"] = (int)mqtt_connected();
 
-  doc["ocpp_connected"] = (int)ArduinoOcppTask::isConnected();
+  doc["ocpp_connected"] = (int)OcppTask::isConnected();
 
 #if defined(ENABLE_PN532) || defined(ENABLE_RFID)
   doc["rfid_failure"] = (int) rfid.communicationFails();

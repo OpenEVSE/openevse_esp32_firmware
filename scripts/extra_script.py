@@ -126,6 +126,7 @@ def make_static(env, target, source, prefix, files_dir):
     for out_file in out_files:
         filetype = None
         compress = out_file.endswith(".gz")
+        out_file = out_file.replace("\\","/") # Windows: out_file generated with \ as directory separator
         if out_file.endswith(".css") or out_file.endswith(".css.gz"):
             filetype = "CSS"
         elif out_file.endswith(".js") or out_file.endswith(".js.gz"):
