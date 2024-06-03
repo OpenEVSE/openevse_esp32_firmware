@@ -435,7 +435,7 @@ void OcppTask::loadEvseBehavior() {
     setTxNotificationOutput([this] (MicroOcpp::Transaction*, MicroOcpp::TxNotification notification) {
         switch (notification) {
             case MicroOcpp::TxNotification::AuthorizationRejected:
-                LCD_DISPLAY("Card unkown");
+                LCD_DISPLAY("Card unknown");
                 break;
             case MicroOcpp::TxNotification::AuthorizationTimeout:
                 LCD_DISPLAY("Server timeout");
