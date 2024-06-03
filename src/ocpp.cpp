@@ -331,7 +331,7 @@ void ArduinoOcppTask::loadEvseBehavior() {
     setTxNotificationOutput([this] (ArduinoOcpp::TxNotification notification, ArduinoOcpp::Transaction*) {
         switch (notification) {
             case ArduinoOcpp::TxNotification::AuthorizationRejected:
-                LCD_DISPLAY("Card unkown");
+                LCD_DISPLAY("Card unknown");
                 break;
             case ArduinoOcpp::TxNotification::AuthorizationTimeout:
                 LCD_DISPLAY("Server timeout");
@@ -343,7 +343,7 @@ void ArduinoOcppTask::loadEvseBehavior() {
                 LCD_DISPLAY("Aborted / no EV");
                 break;
             case ArduinoOcpp::TxNotification::DeAuthorized:
-                LCD_DISPLAY("Card unkown");
+                LCD_DISPLAY("Card unknown");
                 break;
             case ArduinoOcpp::TxNotification::RemoteStart:
                 if (!evse->isVehicleConnected()) {
