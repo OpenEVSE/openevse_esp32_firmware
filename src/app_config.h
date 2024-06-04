@@ -32,6 +32,7 @@ extern String lang;
 // Web server authentication (leave blank for none)
 extern String www_username;
 extern String www_password;
+extern String www_certificate_id;
 
 // Advanced settings
 extern String esp_hostname;
@@ -54,6 +55,7 @@ extern uint32_t mqtt_port;
 extern String mqtt_topic;
 extern String mqtt_user;
 extern String mqtt_pass;
+extern String mqtt_certificate_id;
 extern String mqtt_solar;
 extern String mqtt_grid_ie;
 extern String mqtt_vrms;

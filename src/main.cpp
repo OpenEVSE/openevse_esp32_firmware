@@ -63,8 +63,11 @@
 #include "scheduler.h"
 
 #include "legacy_support.h"
+#include "certificates.h"
 
 EventLog eventLog;
+CertificateStore certs;
+
 EvseManager evse(RAPI_PORT, eventLog);
 Scheduler scheduler(evse);
 ManualOverride manual(evse);
@@ -158,11 +161,14 @@ void setup()
 
   // Initialise the WiFi
   net.begin();
+  certs.begin();
   DBUGF("After net_setup: %d", ESPAL.getFreeHeap());
 
   // Initialise Mongoose networking library
   Mongoose.begin();
-  Mongoose.setRootCa(root_ca);
+  Mongoose.setRootCaCallback([]() -> const char *{
+    return certs.getRootCa();
+  });
   DBUGF("After Mongoose.begin: %d", ESPAL.getFreeHeap());
 
   // Bring up the web server

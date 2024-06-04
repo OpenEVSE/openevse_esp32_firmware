@@ -1,0 +1,134 @@
+# Name: REST Client
+# Id: humao.rest-client
+# Description: REST Client for Visual Studio Code
+# Version: 0.21.3
+# Publisher: Huachao Mao
+# VS Marketplace Link: https://marketplace.visualstudio.com/items?itemName=humao.rest-client
+
+# You should use environment vars (https://marketplace.visualstudio.com/items?itemName=humao.rest-client#environment-variables) for these
+# but you can also set here if needed (just don't check in!)
+
+#@baseUrl = http://openevse.local
+
+###
+# Get a list of the installed Certificates
+
+GET {{baseUrl}}/certificates
+
+###
+# Add a self-signed certificate to the certificate manager
+
+POST {{baseUrl}}/certificates
+Content-Type: application/json
+
+{
+  "name": "Self Signed Test certificate",
+  "certificate" : "-----BEGIN CERTIFICATE-----\nMIIF7zCCA9egAwIBAgIUKumyKWqTiHGx/lfvEz5iJnoaXPgwDQYJKoZIhvcNAQEL\nBQAwgYYxCzAJBgNVBAYTAlhYMRIwEAYDVQQIDAlTdGF0ZU5hbWUxETAPBgNVBAcM\nCENpdHlOYW1lMRQwEgYDVQQKDAtDb21wYW55TmFtZTEbMBkGA1UECwwSQ29tcGFu\neVNlY3Rpb25OYW1lMR0wGwYDVQQDDBRDb21tb25OYW1lT3JIb3N0bmFtZTAeFw0y\nMzA3MDIxNjQwMjVaFw0zMzA2MjkxNjQwMjVaMIGGMQswCQYDVQQGEwJYWDESMBAG\nA1UECAwJU3RhdGVOYW1lMREwDwYDVQQHDAhDaXR5TmFtZTEUMBIGA1UECgwLQ29t\ncGFueU5hbWUxGzAZBgNVBAsMEkNvbXBhbnlTZWN0aW9uTmFtZTEdMBsGA1UEAwwU\nQ29tbW9uTmFtZU9ySG9zdG5hbWUwggIiMA0GCSqGSIb3DQEBAQUAA4ICDwAwggIK\nAoICAQDPP6ng7mb3jJlrAj1ShwR875iVmpD+UKkYdJQ+pwxVrMDCVBg0/0aJgnVj\nWEr0rAP8zvmArXINtFuZRNa15u2Xk+IUFodActuPmqi5Voailt1SYiZMs+f6W7p/\nhgLFBNtB5aRpyr/2kudrhMfUa9i6Zqc2wZFaSiD6cGfWpYzobIodKRkbsL44SM17\nfiBQSX37OBoGenbjsnR0EGu3Iq9hPMjBMb/i6Ipcvqhuj9wbncwVeaRYLgDQc79L\n++A3ZTw3msi7tFOv/vEG0Wgw1E2nH2wYv9GWey7Rh6FFMy16LFTyA5Vccw9ZuiZg\ngG7AzrjEsWAckaCvMUjBkS5ge96TxpExxI1dyXdhtGQniew2JBYYSVpgkdmSGMvn\ngRZZrgqMzAsdnWksakEyMRQKRk1dTu1E5Fi08QiEDwf7PMhOXJV7p5hYLrOGpfV6\nwYA5/T15mm2grq4Cl3PWxp2tVdM145kqEgvw28BQkz6eKoK8qO1yh6WrgI0jr3BM\nGXWOBKt2IDn/ebRhdgyIRYTAAuiIgHFecAdsLw2Ojeru+2wAHjm/sg9eCGZf3iNt\nOXjLJkjVRU6GG5El87OGUnOp95EkMUeUFsUD6JccaM3Z9ninTDoni3aTAzKXKOUs\nM+D3fReqEV8psnTrzipN5Nr3P+HT3eeQGv8mcbMmDyeYxYikEwIDAQABo1MwUTAd\nBgNVHQ4EFgQU9mDTiJGXtIgiyr+TWDgZhJM2YlcwHwYDVR0jBBgwFoAU9mDTiJGX\ntIgiyr+TWDgZhJM2YlcwDwYDVR0TAQH/BAUwAwEB/zANBgkqhkiG9w0BAQsFAAOC\nAgEABWKuFQNKWc6i+foiOofBTqa6CnvpFaAFGFZAFacWRVG7SvfN7DSqqDCzw3Xq\nUk+o74SfZFLIzyjDb44sYt01S27m0AvLwxhAgdjlazYLp1i/bglEsafUEWl5v3sx\n4A0cRo1Aibk5c3zii4zoXjoMvd0gTfFViD5eQVjS+47/d3Tm1CMpGqcJLlLVl1hb\nW8gY6nAw/SHDkagC6lyazqSJFGzSaK2drZbXm3EcNi7ntm0b7hnEbcrRrBBKh9yk\nPPR3LeHH7LNij4QZ7HzH06qlvJ7J70Y3onTy+vTpa9JtYrTLVB0LJhAViHSsarJW\nB3v0tfnivAFA7243XnDufOgeyIXZDWp1GmElqO97OrBr4BW4aJREiC1Gq5UO8dY2\nnQL5icUhc13O2zRKRNZYqrdbdgvnd19bHDKWb4EjvOxNZbzYqU4+dlHmOF2Rz3mF\nH2fVoVyu3Keh/vG/1V4Q1nBIFSpX+GuEuZtJ6r2gOoBj6mpsmeomC5nXZYXIpyP+\nJuMH8TAUWW+9rnlvWwdmRSpG7IQ5bfN+RR+8UFgWVnBuPQXK2Vp3vqNbOYI/xNZN\noNr9t2Jjtd8VNRF6DiJnbrsDZHgjyigcFZp2A/nbdqDygCo4y20ebJDsGJMK8X5h\ndFSnJ9h6TBT59SLl0N7eYPfSh6u0NJyj/BXODeMWqH4ARF8=\n-----END CERTIFICATE-----\n",
+  "key" : "-----BEGIN PRIVATE KEY-----\n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\nVLPFfftdoGmhNVN50MdGt8h2wmHERi3z\n-----END PRIVATE KEY-----\n"
+}
+
+###
+# Add the R1 GlobalSign Root Certificate root certificate to the certificate manager
+
+POST {{baseUrl}}/certificates
+Content-Type: application/json
+
+{
+  "name": "R1 GlobalSign Root Certificate",
+  "certificate" : "-----BEGIN CERTIFICATE-----\nMIIDdTCCAl2gAwIBAgILBAAAAAABFUtaw5QwDQYJKoZIhvcNAQEFBQAwVzELMAkG\nA1UEBhMCQkUxGTAXBgNVBAoTEEdsb2JhbFNpZ24gbnYtc2ExEDAOBgNVBAsTB1Jv\nb3QgQ0ExGzAZBgNVBAMTEkdsb2JhbFNpZ24gUm9vdCBDQTAeFw05ODA5MDExMjAw\nMDBaFw0yODAxMjgxMjAwMDBaMFcxCzAJBgNVBAYTAkJFMRkwFwYDVQQKExBHbG9i\nYWxTaWduIG52LXNhMRAwDgYDVQQLEwdSb290IENBMRswGQYDVQQDExJHbG9iYWxT\naWduIFJvb3QgQ0EwggEiMA0GCSqGSIb3DQEBAQUAA4IBDwAwggEKAoIBAQDaDuaZ\njc6j40+Kfvvxi4Mla+pIH/EqsLmVEQS98GPR4mdmzxzdzxtIK+6NiY6arymAZavp\nxy0Sy6scTHAHoT0KMM0VjU/43dSMUBUc71DuxC73/OlS8pF94G3VNTCOXkNz8kHp\n1Wrjsok6Vjk4bwY8iGlbKk3Fp1S4bInMm/k8yuX9ifUSPJJ4ltbcdG6TRGHRjcdG\nsnUOhugZitVtbNV4FpWi6cgKOOvyJBNPc1STE4U6G7weNLWLBYy5d4ux2x8gkasJ\nU26Qzns3dLlwR5EiUWMWea6xrkEmCMgZK9FGqkjWZCrXgzT/LCrBbBlDSgeF59N8\n9iFo7+ryUp9/k5DPAgMBAAGjQjBAMA4GA1UdDwEB/wQEAwIBBjAPBgNVHRMBAf8E\nBTADAQH/MB0GA1UdDgQWBBRge2YaRQ2XyolQL30EzTSo//z9SzANBgkqhkiG9w0B\nAQUFAAOCAQEA1nPnfE920I2/7LqivjTFKDK1fPxsnCwrvQmeU79rXqoRSLblCKOz\nyj1hTdNGCbM+w6DjY1Ub8rrvrTnhQ7k4o+YviiY776BQVvnGCv04zcQLcFGUl5gE\n38NflNUVyRRBnMRddWQVDf9VMOyGj/8N7yy5Y0b2qvzfvGn9LhJIZJrglfCm7ymP\nAbEVtQwdpf5pLGkkeB6zpxxxYu7KyJesF12KwvhHhm4qxFYxldBniYUr+WymXUad\nDKqC5JlR3XC321Y9YeRq4VzW9v493kHMB65jUr9TU/Qr6cf9tveCX4XSQRjbgbME\nHMUfpIBvFSDJ3gyICh3WZlXi/EjJKSZp4A==\n-----END CERTIFICATE-----\n"
+}
+
+###
+# Add the Amazon Root CA1 root certificate to the certificate manager
+
+POST {{baseUrl}}/certificates
+Content-Type: application/json
+
+{
+  "name": "Amazon Root CA1",
+  "certificate" : "-----BEGIN CERTIFICATE-----\nMIIDQTCCAimgAwIBAgITBmyfz5m/jAo54vB4ikPmljZbyjANBgkqhkiG9w0BAQsF\nADA5MQswCQYDVQQGEwJVUzEPMA0GA1UEChMGQW1hem9uMRkwFwYDVQQDExBBbWF6\nb24gUm9vdCBDQSAxMB4XDTE1MDUyNjAwMDAwMFoXDTM4MDExNzAwMDAwMFowOTEL\nMAkGA1UEBhMCVVMxDzANBgNVBAoTBkFtYXpvbjEZMBcGA1UEAxMQQW1hem9uIFJv\nb3QgQ0EgMTCCASIwDQYJKoZIhvcNAQEBBQADggEPADCCAQoCggEBALJ4gHHKeNXj\nca9HgFB0fW7Y14h29Jlo91ghYPl0hAEvrAIthtOgQ3pOsqTQNroBvo3bSMgHFzZM\n9O6II8c+6zf1tRn4SWiw3te5djgdYZ6k/oI2peVKVuRF4fn9tBb6dNqcmzU5L/qw\nIFAGbHrQgLKm+a/sRxmPUDgH3KKHOVj4utWp+UhnMJbulHheb4mjUcAwhmahRWa6\nVOujw5H5SNz/0egwLX0tdHA114gk957EWW67c4cX8jJGKLhD+rcdqsq08p8kDi1L\n93FcXmn/6pUCyziKrlA4b9v7LWIbxcceVOF34GfID5yHI9Y/QCB/IIDEgEw+OyQm\njgSubJrIqg0CAwEAAaNCMEAwDwYDVR0TAQH/BAUwAwEB/zAOBgNVHQ8BAf8EBAMC\nAYYwHQYDVR0OBBYEFIQYzIU07LwMlJQuCFmcx7IQTgoIMA0GCSqGSIb3DQEBCwUA\nA4IBAQCY8jdaQZChGsV2USggNiMOruYou6r4lK5IpDB/G/wkjUu0yKGX9rbxenDI\nU5PMCCjjmCXPI6T53iHTfIUJrU6adTrCC2qJeHZERxhlbI1Bjjt/msv0tadQ1wUs\nN+gDS63pYaACbvXy8MWy7Vu33PqUXHeeE6V/Uq2V8viTO96LXFvKWlJbYK8U90vv\no/ufQJVtMVT8QtPHRh8jrdkPSHCa2XV4cdFyQzR1bldZwgJcJmApzyMZFo6IQ6XU\n5MsI+yMRQ+hDKXJioaldXgjUkK642M4UwtBV8ob2xJNDd2ZhwLnoQdeXeGADbkpy\nrqXRfboQnoZsG4q5WTP468SQvvG5\n-----END CERTIFICATE-----\n"
+}
+
+###
+# Try to add a bad certificate
+
+POST {{baseUrl}}/certificates
+Content-Type: application/json
+
+{
+  "name": "Bad certificate",
+  "certificate" : "-----BEGIN CERTIFICATE-----\nsdfjhsjkdfhskjadfhkjsadhfkjsahfkjasdhfkjsadhfkjshd\n-----END CERTIFICATE-----\n"
+}
+
+###
+# Try to add a bad key
+
+POST {{baseUrl}}/certificates
+Content-Type: application/json
+
+{
+  "name": "Bad key ",
+  "certificate" : "-----BEGIN CERTIFICATE-----\nMIIF7zCCA9egAwIBAgIUKumyKWqTiHGx/lfvEz5iJnoaXPgwDQYJKoZIhvcNAQEL\nBQAwgYYxCzAJBgNVBAYTAlhYMRIwEAYDVQQIDAlTdGF0ZU5hbWUxETAPBgNVBAcM\nCENpdHlOYW1lMRQwEgYDVQQKDAtDb21wYW55TmFtZTEbMBkGA1UECwwSQ29tcGFu\neVNlY3Rpb25OYW1lMR0wGwYDVQQDDBRDb21tb25OYW1lT3JIb3N0bmFtZTAeFw0y\nMzA3MDIxNjQwMjVaFw0zMzA2MjkxNjQwMjVaMIGGMQswCQYDVQQGEwJYWDESMBAG\nA1UECAwJU3RhdGVOYW1lMREwDwYDVQQHDAhDaXR5TmFtZTEUMBIGA1UECgwLQ29t\ncGFueU5hbWUxGzAZBgNVBAsMEkNvbXBhbnlTZWN0aW9uTmFtZTEdMBsGA1UEAwwU\nQ29tbW9uTmFtZU9ySG9zdG5hbWUwggIiMA0GCSqGSIb3DQEBAQUAA4ICDwAwggIK\nAoICAQDPP6ng7mb3jJlrAj1ShwR875iVmpD+UKkYdJQ+pwxVrMDCVBg0/0aJgnVj\nWEr0rAP8zvmArXINtFuZRNa15u2Xk+IUFodActuPmqi5Voailt1SYiZMs+f6W7p/\nhgLFBNtB5aRpyr/2kudrhMfUa9i6Zqc2wZFaSiD6cGfWpYzobIodKRkbsL44SM17\nfiBQSX37OBoGenbjsnR0EGu3Iq9hPMjBMb/i6Ipcvqhuj9wbncwVeaRYLgDQc79L\n++A3ZTw3msi7tFOv/vEG0Wgw1E2nH2wYv9GWey7Rh6FFMy16LFTyA5Vccw9ZuiZg\ngG7AzrjEsWAckaCvMUjBkS5ge96TxpExxI1dyXdhtGQniew2JBYYSVpgkdmSGMvn\ngRZZrgqMzAsdnWksakEyMRQKRk1dTu1E5Fi08QiEDwf7PMhOXJV7p5hYLrOGpfV6\nwYA5/T15mm2grq4Cl3PWxp2tVdM145kqEgvw28BQkz6eKoK8qO1yh6WrgI0jr3BM\nGXWOBKt2IDn/ebRhdgyIRYTAAuiIgHFecAdsLw2Ojeru+2wAHjm/sg9eCGZf3iNt\nOXjLJkjVRU6GG5El87OGUnOp95EkMUeUFsUD6JccaM3Z9ninTDoni3aTAzKXKOUs\nM+D3fReqEV8psnTrzipN5Nr3P+HT3eeQGv8mcbMmDyeYxYikEwIDAQABo1MwUTAd\nBgNVHQ4EFgQU9mDTiJGXtIgiyr+TWDgZhJM2YlcwHwYDVR0jBBgwFoAU9mDTiJGX\ntIgiyr+TWDgZhJM2YlcwDwYDVR0TAQH/BAUwAwEB/zANBgkqhkiG9w0BAQsFAAOC\nAgEABWKuFQNKWc6i+foiOofBTqa6CnvpFaAFGFZAFacWRVG7SvfN7DSqqDCzw3Xq\nUk+o74SfZFLIzyjDb44sYt01S27m0AvLwxhAgdjlazYLp1i/bglEsafUEWl5v3sx\n4A0cRo1Aibk5c3zii4zoXjoMvd0gTfFViD5eQVjS+47/d3Tm1CMpGqcJLlLVl1hb\nW8gY6nAw/SHDkagC6lyazqSJFGzSaK2drZbXm3EcNi7ntm0b7hnEbcrRrBBKh9yk\nPPR3LeHH7LNij4QZ7HzH06qlvJ7J70Y3onTy+vTpa9JtYrTLVB0LJhAViHSsarJW\nB3v0tfnivAFA7243XnDufOgeyIXZDWp1GmElqO97OrBr4BW4aJREiC1Gq5UO8dY2\nnQL5icUhc13O2zRKRNZYqrdbdgvnd19bHDKWb4EjvOxNZbzYqU4+dlHmOF2Rz3mF\nH2fVoVyu3Keh/vG/1V4Q1nBIFSpX+GuEuZtJ6r2gOoBj6mpsmeomC5nXZYXIpyP+\nJuMH8TAUWW+9rnlvWwdmRSpG7IQ5bfN+RR+8UFgWVnBuPQXK2Vp3vqNbOYI/xNZN\noNr9t2Jjtd8VNRF6DiJnbrsDZHgjyigcFZp2A/nbdqDygCo4y20ebJDsGJMK8X5h\ndFSnJ9h6TBT59SLl0N7eYPfSh6u0NJyj/BXODeMWqH4ARF8=\n-----END CERTIFICATE-----\n",
+  "key" : "-----BEGIN PRIVATE KEY-----\ndzfkgdklfgjlksdfgjlkdsfjglkdjflkgkljsdlfgjsdlfgjlskdfjglksdjfglkjsdfgljsdfg\n-----END PRIVATE KEY-----\n"
+}
+
+###
+# Get the Self Signed Test certificate
+
+GET {{baseUrl}}/certificates/133e62267a1a5cf8
+
+###
+# Get the R1 GlobalSign Root Certificate
+
+GET {{baseUrl}}/certificates/1154b5ac394
+
+###
+# Delete the Self Signed Test certificate
+
+DELETE {{baseUrl}}/certificates/133e62267a1a5cf8
+
+###
+# Delete the R1 GlobalSign Root Certificate
+
+DELETE {{baseUrl}}/certificates/1154b5ac394
+
+###
+# Get the full Root Certificate Chain
+
+GET {{baseUrl}}/certificates/root
+
+###
+# Configure the web server with the self-signed certificate
+
+POST {{baseUrl}}/config HTTP/1.1
+Content-Type: application/json
+
+{
+  "www_certificate_id": "133e62267a1a5cf8"
+}
+
+###
+# Configure the MQTT client with the self-signed certificate
+
+POST {{baseUrl}}/config HTTP/1.1
+Content-Type: application/json
+
+{
+  "mqtt_certificate_id": "133e62267a1a5cf8"
+}
+
+###
+# Configure the MQTT client with the AWS IoT Core certificate
+
+POST {{baseUrl}}/config HTTP/1.1
+Content-Type: application/json
+
+{
+  "mqtt_enabled": true,
+  "mqtt_protocol": "mqtts",
+  "mqtt_server":"ablb822kmtv7v-ats.iot.eu-west-2.amazonaws.com",
+  "mqtt_port":8883,
+  "mqtt_user":"",
+  "mqtt_pass":"",
+  "mqtt_certificate_id":"b63711b5ac4ce2e"
+}

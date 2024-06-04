@@ -25,9 +25,6 @@
 #define TESLA_REQ_INTERVAL (30*1000UL)
 #define TESLA_REQ_TIMEOUT (10*1000UL)
 
-
-extern const char *root_ca;
-
 const char *TeslaClient::_userAgent = TESLA_USER_AGENT;
 const int TeslaClient::_httpPort = TESLA_PORT;
 const char *TeslaClient::_teslaClientId = TESLA_CLIENT_ID;

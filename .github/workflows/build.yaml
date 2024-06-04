@@ -51,7 +51,7 @@ jobs:
           - wt32-eth01
           - esp32-c3-devkitc-02
           - elecrow_esp32_hmi
-          - elecrow_esp32_hmi_dev
+#          - elecrow_esp32_hmi_dev
           - openevse_wifi_tft_v1
           - openevse_wifi_tft_v1_dev
 

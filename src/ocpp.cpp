@@ -13,7 +13,7 @@
 #include "app_config.h"
 #include "http_update.h"
 #include "emonesp.h"
-#include "root_ca.h"
+#include "certificates.h"
 
 // Time between loop polls
 #ifndef OCPP_LOOP_TIME
@@ -198,7 +198,7 @@ void OcppTask::initializeMicroOcpp() {
      */
     MicroOcpp::configuration_init(filesystem);
 
-    std::shared_ptr<MicroOcpp::ConfigurationContainerVolatile> openEvseConfigs = 
+    std::shared_ptr<MicroOcpp::ConfigurationContainerVolatile> openEvseConfigs =
         MicroOcpp::makeConfigurationContainerVolatile(
             CONFIGURATION_VOLATILE "/openevse", //container ID
             true);                              //configs are visible to OCPP server
@@ -241,7 +241,7 @@ void OcppTask::initializeMicroOcpp() {
         MO_CONFIG_EXT_PREFIX "SilentOfflineTransactions", true); //disable transaction journaling when being offline for a long time (can lead to data loss)
 
     connection = new MicroOcpp::MOcppMongooseClient(Mongoose.getMgr(), nullptr, nullptr, nullptr, nullptr, filesystem);
-    
+
     /*
      * Initialize the OCPP library and provide it with the charger credentials
      */
@@ -290,25 +290,25 @@ void OcppTask::loadEvseBehavior() {
 
     addMeterValueInput([this] () {
             return evse->getAmps();
-        }, 
+        },
         "Current.Import",
         "A");
 
     addMeterValueInput([this] () {
             return (float) evse->getChargeCurrent();
-        }, 
+        },
         "Current.Offered",
         "A");
-    
+
     addMeterValueInput([this] () {
             return evse->getVoltage();
-        }, 
+        },
         "Voltage",
         "V");
-    
+
     addMeterValueInput([this] () {
             return evse->getTemperature(EVSE_MONITOR_TEMP_MONITOR);
-        }, 
+        },
         "Temperature",
         "Celsius");
 
@@ -377,7 +377,7 @@ void OcppTask::loadEvseBehavior() {
                 evse->getEvseState() == OPENEVSE_STATE_GFI_FAULT ||
                 evse->getEvseState() == OPENEVSE_STATE_NO_EARTH_GROUND ||
                 evse->getEvseState() == OPENEVSE_STATE_GFI_SELF_TEST_FAILED) {
-            
+
             MicroOcpp::ErrorData error = "GroundFailure";
 
             //add free text error info
@@ -475,7 +475,7 @@ unsigned long OcppTask::loop(MicroTasks::WakeReason reason) {
         //MicroOcpp is initialized
 
         mocpp_loop();
-        
+
         /*
          * Generate messages for LCD
          */
@@ -486,7 +486,7 @@ unsigned long OcppTask::loop(MicroTasks::WakeReason reason) {
                 LCD_DISPLAY("No OCPP service");
             } else if (!isTransactionActive()) {
                 //vehicle plugged before authorization
-                
+
                 if (config_rfid_enabled()) {
                     LCD_DISPLAY("Need card");
                 } else if (!config_ocpp_auto_authorization()) {
@@ -573,7 +573,7 @@ void OcppTask::updateEvseClaim() {
         if (!evse->clientHasClaim(EvseClient_OpenEVSE_OCPP) ||
                     evse->getState(EvseClient_OpenEVSE_OCPP) != evseProperties.getState() ||
                     evse->getChargeCurrent(EvseClient_OpenEVSE_OCPP) != evseProperties.getChargeCurrent()) {
-            
+
             evse->claim(EvseClient_OpenEVSE_OCPP, EvseManager_Priority_OCPP, evseProperties);
         }
     }
@@ -594,7 +594,7 @@ void OcppTask::initializeDiagnosticsService() {
         });
 
         diagService->setOnUpload([this] (const std::string &location, MicroOcpp::Timestamp &startTime, MicroOcpp::Timestamp &stopTime) {
-            
+
             //reset reported state
             diagSuccess = false;
             diagFailure = false;
@@ -650,7 +650,7 @@ void OcppTask::initializeDiagnosticsService() {
                             firstEntry = false;
                         else
                             body += ",";
-                        
+
                         body += logEntry;
                         body += "\n";
                     } else {
@@ -691,7 +691,7 @@ void OcppTask::initializeDiagnosticsService() {
                 }
             });
             diagClient.send(request);
-            
+
             return true;
         });
     }
@@ -700,7 +700,7 @@ void OcppTask::initializeDiagnosticsService() {
 void OcppTask::initializeFwService() {
     MicroOcpp::FirmwareService *fwService = getFirmwareService();
     if (fwService) {
-        
+
         fwService->setInstallationStatusInput([this] () {
             if (updateFailure) {
                 return MicroOcpp::InstallationStatus::InstallationFailed;
@@ -714,7 +714,7 @@ void OcppTask::initializeFwService() {
         fwService->setOnInstall([this](const std::string &location) {
 
             DBUGLN(F("[ocpp] Starting installation routine"));
-            
+
             //reset reported state
             updateFailure = false;
             updateSuccess = false;
