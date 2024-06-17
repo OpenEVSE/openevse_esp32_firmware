@@ -348,7 +348,7 @@ class EvseManager : public MicroTasks::Task
     bool publishEnergyMeter() {
       return _monitor.publishEnergyMeter();
     }
-		void createEnergyMeterJsonDoc(JsonDocument &doc) {
+    void createEnergyMeterJsonDoc(JsonDocument &doc) {
       _monitor.createEnergyMeterJsonDoc(doc);
     }
     long getFaultCountGFCI() {
