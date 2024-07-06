@@ -718,7 +718,7 @@ void LcdTask::showText(int x, int y, const char *msg, bool clear)
     }
   }
 
-  // HACK: wait for the display to finish, fixes issues withupdating the display wile updating the firmware
+  // HACK: wait for the display to finish, fixes issues with updating the display while updating the firmware
   _evse->getSender().flush();
 }
 
