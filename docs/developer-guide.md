@@ -6,11 +6,11 @@ It is necessary to download and build the static web assets for the GUI before c
 
 ### Building the GUI static assets
 
-The GUI static web assets are minified and compiled into the firmware using a combination of Webpack and a [custom python build script](scripts/extra_script.py).
+The GUI static web assets are minified and compiled into the firmware using a combination of Webpack and a [custom python build script](../scripts/extra_script.py).
 
 You will need Node.js and npm installed: <https://nodejs.org/en/download/>
 
-In addition, the GUI is now maintained in a [separate repository](https://nodejs.org/en/download/package-manager/) and is included as a Git submodule.
+In addition, the GUI is now maintained in a [separate repository](https://github.com/OpenEVSE/openevse-gui-v2/) and is included as a Git submodule.
 
 If the `gui` directory is empty, use the following to retrieve the GUI source and fetch the dependencies:
 
@@ -65,7 +65,7 @@ To clean an existing build, `pio run -e your_openevse_board -t`
 
 > To enable OTA updates, first upload via serial using the dev environment. This enables OTA enable build flag
 
-***
+---
 
 ## Troubleshooting
 

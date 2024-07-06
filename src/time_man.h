@@ -61,7 +61,7 @@ extern TimeManager timeManager;
 
 extern void time_set_time(struct timeval set_time, const char *source);
 
-extern String time_format_time(time_t time, bool local = true);
+extern String time_format_time(time_t time, bool local_time = true);
 extern String time_format_time(tm &time);
 
 #endif // _OPENEVSE_TIME_H

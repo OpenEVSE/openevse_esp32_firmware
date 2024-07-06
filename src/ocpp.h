@@ -12,26 +12,24 @@
 #include "lcd.h"
 #include "rfid.h"
 
-#include <ArduinoOcppMongooseClient.h>
+#include <MicroOcppMongooseClient.h>
 #include <MongooseHttpClient.h>
 
-#include <ArduinoOcpp/Core/Configuration.h>
+#include <MicroOcpp/Core/Configuration.h>
 
-class ArduinoOcppTask: public MicroTasks::Task {
+class OcppTask: public MicroTasks::Task {
 private:
-    ArduinoOcpp::AOcppMongooseClient *ocppSocket = NULL;
+    MicroOcpp::MOcppMongooseClient *connection = nullptr;
     EvseManager *evse;
     LcdTask *lcd;
     EventLog *eventLog;
     RfidTask *rfid;
 
-    float charging_limit = -1.f; //in Amps. chargingLimit < 0 means that there is no Smart Charging (and no restrictions )
-    int ocppTxIdDisplay {-1};
-    bool ocppSessionDisplay {false};
+    float charging_limit = -1.f; //in Amps. charging_limit < 0 means that no charging limit is defined
+    bool trackOcppConnected = false;
+    bool trackVehicleConnected = false;
 
-    bool vehicleConnected = false;
-
-    std::function<bool(const String& idTag)> onIdTagInput {nullptr};
+    std::function<bool(const String& idTag)> onIdTagInput;
 
     MongooseHttpClient diagClient = MongooseHttpClient();
     bool diagSuccess = false, diagFailure = false;
@@ -40,23 +38,13 @@ private:
     bool updateSuccess = false, updateFailure = false;
     void initializeFwService();
 
-    void initializeArduinoOcpp();
-    bool arduinoOcppInitialized = false;
+    void initializeMicroOcpp();
+    void deinitializeMicroOcpp();
     void loadEvseBehavior();
 
-    bool bootNotificationAccepted = false;
+    static OcppTask *instance;
 
-    ulong updateEvseClaimLast {0};
-
-    static ArduinoOcppTask *instance;
-
-    std::shared_ptr<ArduinoOcpp::Configuration<bool>> freevendActive; //Authorize automatically
-    std::shared_ptr<ArduinoOcpp::Configuration<const char*>> freevendIdTag; //idTag for auto-authorization
-    std::shared_ptr<ArduinoOcpp::Configuration<bool>> allowOfflineTxForUnknownId; //temporarily accept all NFC-cards while offline
-    uint16_t trackConfigRevision = 0; //track if OCPP configs have been updated
-
-    //helper functions
-    static bool idTagIsAccepted(JsonObject payload);
+    bool synchronizationLock = false;
 protected:
 
     //hook method of MicroTask::Task
@@ -66,8 +54,8 @@ protected:
     unsigned long loop(MicroTasks::WakeReason reason);
 
 public:
-    ArduinoOcppTask();
-    ~ArduinoOcppTask();
+    OcppTask();
+    ~OcppTask();
 
     void begin(EvseManager &evse, LcdTask &lcd, EventLog &eventLog, RfidTask &rfid);
     
@@ -77,6 +65,8 @@ public:
     void reconfigure();
 
     static bool isConnected();
+
+    void setSynchronizationLock(bool locked);
 };
 
 #endif
