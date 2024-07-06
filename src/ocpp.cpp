@@ -447,7 +447,7 @@ void OcppTask::loadEvseBehavior() {
                 LCD_DISPLAY("Aborted / no EV");
                 break;
             case MicroOcpp::TxNotification::DeAuthorized:
-                LCD_DISPLAY("Card unkown");
+                LCD_DISPLAY("Card unknown");
                 break;
             case MicroOcpp::TxNotification::RemoteStart:
                 if (!evse->isVehicleConnected()) {
