@@ -119,7 +119,7 @@ void EnergyMeterData::deserialize(StaticJsonDocument<capacity> &doc)
     // old OpenEvse total_energy imported flag
     imported = doc["im"];
   }
-  if (doc.containsKey("el") && doc["el"].is<uint32_t>())
+  if (doc.containsKey("el") && doc["el"].is<double>())
   {
     // elapsed
     elapsed = doc["el"];
@@ -134,7 +134,6 @@ void EnergyMeterData::deserialize(StaticJsonDocument<capacity> &doc)
 EnergyMeter::EnergyMeter() : _last_upd(0),
                              _write_upd(0),
                              _rotate_upd(0),
-                             _elapsed(0),
                              _switch_state(0){};
 
 EnergyMeter::~EnergyMeter()
@@ -230,41 +229,13 @@ bool EnergyMeter::update()
   if (_monitor->isCharging())
   {
     // increment elapsed time
-    _data.elapsed += dms / 1000U;
+    _data.elapsed += dms / 1000.0;
 
     DBUGLN("Energy Meter: Incrementing");
     // accumulate data
-    uint32_t mv = _monitor->getVoltage() * 1000;
-    uint32_t ma = _monitor->getAmps() * 1000;
-
-    /*
-     * The straightforward formula to compute 'milliwatt-seconds' would be:
-     *     mws = (mv/1000) * (ma/1000) * dms;
-     *
-     * However, this has some serious drawbacks, namely, truncating values
-     * when using integer math. This can introduce a lot of error!
-     *     5900 milliamps -> 5.9 amps (float) -> 5 amps (integer)
-     *     0.9 amps difference / 5.9 amps -> 15.2% error
-     *
-     * The crazy equation below helps ensure our intermediate results always
-     * fit in a 32-bit unsigned integer, but retain as much precision as
-     * possible throughout the calculation. Here is how it was derived:
-     *     mws = (mv/1000) * (ma/1000) * dms;
-     *     mws = (mv/(2**3 * 5**3)) * (ma/(2**3 * 5**3)) * dms;
-     *     mws = (mv/2**3) * (ma/(2**3) / 5**6 * dms;
-     *     mws = (mv/2**4) * (ma/(2**2) / 5**6 * dms;
-     *
-     * By breaking 1000 into prime factors of 2 and 5, and shifting things
-     * around, we almost match the precision of floating-point math.
-     *
-     * Using 16 and 4 divisors, rather than 8 and 8, helps precision because
-     * mv is always greater than ~100000, but ma can be as low as ~6000.
-     *
-     * A final note- the divisions by factors of 2 are done with right shifts
-     * by the compiler, so the revised equation, although it looks quite
-     * complex, only requires one divide operation.
-     */
-    double mws = (mv / 16) * (ma / 4) / 15625 * dms;
+    double v = _monitor->getVoltage();
+    double a = _monitor->getAmps();
+    double mws = v * a * dms;
     if (config_threephase_enabled())
     {
       // Multiply calculation by 3 to get 3-phase energy.
@@ -272,9 +243,9 @@ bool EnergyMeter::update()
     }
 
     // convert to w/h
-    double wh = mws / 3600000UL;
+    double wh = mws / 3600000;
     _data.session += wh;
-    double kwh = wh / 1000UL;
+    double kwh = wh / 1000;
     _data.total += kwh;
     DBUGVAR(_data.session);
     _data.daily += kwh;
@@ -318,7 +289,7 @@ bool EnergyMeter::publish()
 
 void EnergyMeter::createEnergyMeterJsonDoc(JsonDocument &doc)
 {
-  doc["session_elapsed"] = _data.elapsed; // sec
+  doc["session_elapsed"] = (uint32_t)_data.elapsed; // sec
   doc["session_energy"] = _data.session;  // wh
   doc["total_energy"] = _data.total;      // kwh
   doc["total_day"] = _data.daily;         // kwh
