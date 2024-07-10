@@ -51,7 +51,7 @@
 #define BOOT_PROGRESS_WIDTH     300
 #define BOOT_PROGRESS_HEIGHT    16
 #define BOOT_PROGRESS_X         ((TFT_SCREEN_WIDTH - BOOT_PROGRESS_WIDTH) / 2)
-#define BOOT_PROGRESS_Y         235
+#define BOOT_PROGRESS_Y         195
 
 #include "web_server.h"
 
@@ -67,8 +67,39 @@ struct image_render_state {
   int16_t ypos;
 };
 
+LcdTask::Message::Message(const __FlashStringHelper *msg, int x, int y, int time, uint32_t flags) :
+  _next(NULL),
+  _msg(""),
+  _x(x),
+  _y(y),
+  _time(time),
+  _clear(flags & LCD_CLEAR_LINE ? 1 : 0)
+{
+  strncpy_P(_msg, reinterpret_cast<PGM_P>(msg), LCD_MAX_LEN);
+  _msg[LCD_MAX_LEN] = '\0';
+}
+
+LcdTask::Message::Message(String &msg, int x, int y, int time, uint32_t flags) :
+  Message(msg.c_str(), x, y, time, flags)
+{
+}
+
+LcdTask::Message::Message(const char *msg, int x, int y, int time, uint32_t flags) :
+  _next(NULL),
+  _msg(""),
+  _x(x),
+  _y(y),
+  _time(time),
+  _clear(flags & LCD_CLEAR_LINE ? 1 : 0)
+{
+  strncpy(_msg, msg, LCD_MAX_LEN);
+  _msg[LCD_MAX_LEN] = '\0';
+}
+
 LcdTask::LcdTask() :
   MicroTasks::Task(),
+  _head(NULL),
+  _tail(NULL),
   _tft(),
 #ifdef ENABLE_DOUBLE_BUFFER
   _back_buffer(&_tft),
@@ -77,18 +108,53 @@ LcdTask::LcdTask() :
   _screen(_tft)
 #endif
 {
+  for(int i = 0; i < LCD_MAX_LINES; i++) {
+    clearLine(i);
+  }
+  _msg_cleared = true;
+}
+
+void LcdTask::display(Message *msg, uint32_t flags)
+{
+  if(flags & LCD_DISPLAY_NOW)
+  {
+    for(Message *next, *node = _head; node; node = next) {
+      next = node->getNext();
+      delete node;
+    }
+    _head = NULL;
+    _tail = NULL;
+  }
+
+  if(_tail) {
+    _tail->setNext(msg);
+  } else {
+    _head = msg;
+    _nextMessageTime = millis();
+  }
+  _tail = msg;
+
+  if(flags & LCD_DISPLAY_NOW) {
+    displayNextMessage();
+  }
 }
 
 void LcdTask::display(const __FlashStringHelper *msg, int x, int y, int time, uint32_t flags)
 {
+  DBUGVAR(msg);
+  display(new Message(msg, x, y, time, flags), flags);
 }
 
 void LcdTask::display(String &msg, int x, int y, int time, uint32_t flags)
 {
+  DBUGVAR(msg);
+  display(new Message(msg, x, y, time, flags), flags);
 }
 
 void LcdTask::display(const char *msg, int x, int y, int time, uint32_t flags)
 {
+  DBUGVAR(msg);
+  display(new Message(msg, x, y, time, flags), flags);
 }
 
 void LcdTask::begin(EvseManager &evse, Scheduler &scheduler, ManualOverride &manual)
@@ -134,6 +200,20 @@ unsigned long LcdTask::loop(MicroTasks::WakeReason reason)
     _initialise = false;
   }
 
+  // If we have messages to display, do it
+  if(_head) {
+    nextUpdate = displayNextMessage();
+  }
+  DBUGVAR(_nextMessageTime);
+  if(!_msg_cleared && millis() >= _nextMessageTime)
+  {
+    DBUGLN("Clearing message lines");
+    for(int i = 0; i < LCD_MAX_LINES; i++) {
+      clearLine(i);
+    }
+    _msg_cleared = true;
+  }
+
 #ifdef ENABLE_DOUBLE_BUFFER
   _tft.startWrite();
 #endif
@@ -147,8 +227,8 @@ unsigned long LcdTask::loop(MicroTasks::WakeReason reason)
       if(_full_update)
       {
         _screen.fillScreen(TFT_OPENEVSE_BACK);
-        _screen.fillSmoothRoundRect(90, 90, 300, 110, 15, TFT_WHITE);
-        render_image("/logo.png", 104, 115);
+        _screen.fillSmoothRoundRect(90, 60, 300, 110, 15, TFT_WHITE);
+        render_image("/logo.png", 104, 85);
         _full_update = false;
       }
 
@@ -169,6 +249,15 @@ unsigned long LcdTask::loop(MicroTasks::WakeReason reason)
       _screen.endWrite();
       sprite.deleteSprite();
       _boot_progress += 10;
+
+      String line = getLine(0);
+      if(line.length() > 0) {
+        render_centered_text_box(line.c_str(), 0, 250, TFT_SCREEN_WIDTH, &FreeSans9pt7b, TFT_WHITE, TFT_OPENEVSE_BACK, !_full_update);
+      }
+      line = getLine(1);
+      if(line.length() > 0) {
+        render_centered_text_box(line.c_str(), 0, 270, TFT_SCREEN_WIDTH, &FreeSans9pt7b, TFT_WHITE, TFT_OPENEVSE_BACK, !_full_update);
+      }
 
       nextUpdate = 166;
       if(_boot_progress >= 300) {
@@ -234,14 +323,23 @@ unsigned long LcdTask::loop(MicroTasks::WakeReason reason)
         render_left_text_box("A", 224, 200, 34, &FreeSans24pt7b, TFT_BLACK, TFT_WHITE, false, 1);
       }
 
-      render_centered_text_box(esp_hostname.c_str(), INFO_BOX_X, 74, INFO_BOX_WIDTH, &FreeSans9pt7b, TFT_OPENEVSE_TEXT, TFT_WHITE, !_full_update);
+      String line = getLine(0);
+      if(line.length() == 0) {
+        line = esp_hostname;
+      }
+      render_centered_text_box(line.c_str(), INFO_BOX_X, 74, INFO_BOX_WIDTH, &FreeSans9pt7b, TFT_OPENEVSE_TEXT, TFT_WHITE, !_full_update);
 
-      timeval local_time;
-      gettimeofday(&local_time, NULL);
-      struct tm timeinfo;
-      localtime_r(&local_time.tv_sec, &timeinfo);
-      strftime(buffer, sizeof(buffer), "%d/%m/%Y, %l:%M %p", &timeinfo);
-      render_centered_text_box(buffer, INFO_BOX_X, 96, INFO_BOX_WIDTH, &FreeSans9pt7b, TFT_OPENEVSE_TEXT, TFT_WHITE, !_full_update);
+      line = getLine(1);
+      if(line.length() == 0)
+      {
+        timeval local_time;
+        gettimeofday(&local_time, NULL);
+        struct tm timeinfo;
+        localtime_r(&local_time.tv_sec, &timeinfo);
+        strftime(buffer, sizeof(buffer), "%d/%m/%Y, %l:%M %p", &timeinfo);
+        line = buffer;
+      }
+      render_centered_text_box(line.c_str(), INFO_BOX_X, 96, INFO_BOX_WIDTH, &FreeSans9pt7b, TFT_OPENEVSE_TEXT, TFT_WHITE, !_full_update);
 
       uint32_t elapsed = _evse->getSessionElapsed();
       uint32_t hours = elapsed / 3600;
@@ -349,17 +447,17 @@ void LcdTask::render_image(const char *filename, int16_t x, int16_t y)
   StaticFile *file = NULL;
   if(embedded_get_file(filename, lcd_gui_static_files, ARRAY_LENGTH(lcd_gui_static_files), &file))
   {
-    DBUGF("Found %s (%d bytes)", filename, file->length);
+    // DBUGF("Found %s (%d bytes)", filename, file->length);
     int16_t rc = png.openFLASH((uint8_t *)file->data, file->length, png_draw);
     if (rc == PNG_SUCCESS)
     {
-      DBUGLN("Successfully opened png file");
-      DBUGF("image specs: (%d x %d), %d bpp, pixel type: %d\n", png.getWidth(), png.getHeight(), png.getBpp(), png.getPixelType());
+      // DBUGLN("Successfully opened png file");
+      // DBUGF("image specs: (%d x %d), %d bpp, pixel type: %d", png.getWidth(), png.getHeight(), png.getBpp(), png.getPixelType());
       _screen.startWrite();
       uint32_t dt = millis();
       image_render_state state = {&_screen, x, y};
       rc = png.decode(&state, 0);
-      DBUG(millis() - dt); DBUGLN("ms");
+      // DBUG(millis() - dt); DBUGLN("ms");
       _screen.endWrite();
       // png.close(); // not needed for memory->memory decode
     }
@@ -385,6 +483,76 @@ void LcdTask::png_draw(PNGDRAW *pDraw)
   png.getLineAsRGB565(pDraw, lineBuffer, PNG_RGB565_BIG_ENDIAN, 0xffffffff);
   state->tft->pushImage(state->xpos, state->ypos + pDraw->y, pDraw->iWidth, 1, lineBuffer);
 }
+
+unsigned long LcdTask::displayNextMessage()
+{
+  while(_head && millis() >= _nextMessageTime)
+  {
+    // Pop a message from the queue
+    Message *msg = _head;
+    DBUGF("msg = %p", msg);
+    _head = _head->getNext();
+    if(NULL == _head) {
+      _tail = NULL;
+    }
+
+    // Display the message
+    showText(msg->getX(), msg->getY(), msg->getMsg(), msg->getClear());
+
+    _nextMessageTime = millis() + msg->getTime();
+
+    // delete the message
+    delete msg;
+  }
+
+  unsigned long nextUpdate = _nextMessageTime - millis();
+  DBUGVAR(nextUpdate);
+  return nextUpdate;
+}
+
+void LcdTask::showText(int x, int y, const char *msg, bool clear)
+{
+  DBUGF("LCD: %d %d %s, clear=%s", x, y, msg, clear ? "true" : "false");
+
+  if(clear) {
+    clearLine(y);
+  }
+
+  strncpy(_msg[y], msg + x, LCD_MAX_LEN - x);
+  _msg[y][LCD_MAX_LEN] = '\0';
+  _msg_cleared = false;
+}
+
+void LcdTask::clearLine(int line)
+{
+  if(line < 0 || line >= LCD_MAX_LINES) {
+    return;
+  }
+
+  memset(_msg[line], ' ', LCD_MAX_LEN);
+  _msg[line][LCD_MAX_LEN] = '\0';
+}
+
+String LcdTask::getLine(int line)
+{
+  if(line < 0 || line >= LCD_MAX_LINES) {
+    return "";
+  }
+
+  // trim leading and trailing spaces
+  int len = LCD_MAX_LEN;
+  while(len > 0 && _msg[line][len - 1] == ' ') {
+    len--;
+  }
+  char *start = _msg[line];
+  while(len > 0 && *start == ' ') {
+    start++;
+    len--;
+  }
+
+  return String(start, len);
+}
+
 
 LcdTask lcd;
 
