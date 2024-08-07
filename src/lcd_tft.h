@@ -15,9 +15,61 @@
 #include <TFT_eSPI.h>
 #include <PNGdec.h>
 
+#define LCD_MAX_LEN 16
+#define LCD_MAX_LINES 2
+
 class LcdTask : public MicroTasks::Task
 {
   private:
+    class Message;
+
+    class Message
+    {
+      private:
+        Message *_next;
+        char _msg[LCD_MAX_LEN + 1];
+        int _x;
+        int _y;
+        int _time;
+        uint32_t _clear:1;
+
+      public:
+        Message(const __FlashStringHelper *msg, int x, int y, int time, uint32_t flags);
+        Message(String &msg, int x, int y, int time, uint32_t flags);
+        Message(const char *msg, int x, int y, int time, uint32_t flags);
+
+        Message *getNext() {
+          return _next;
+        }
+        void setNext(Message *msg) {
+          _next = msg;
+        }
+
+        const char *getMsg() {
+          return _msg;
+        }
+
+        int getX() {
+          return _x;
+        }
+
+        int getY() {
+          return _y;
+        }
+
+        int getTime() {
+          return _time;
+        }
+
+        bool getClear() {
+          return _clear;
+        }
+    };
+
+    Message *_head;
+    Message *_tail;
+    uint32_t _nextMessageTime;
+
     TFT_eSPI _tft;                  // The TFT display
 
 #ifdef ENABLE_DOUBLE_BUFFER
@@ -44,7 +96,18 @@ class LcdTask : public MicroTasks::Task
     Scheduler *_scheduler;
     ManualOverride *_manual;
 
+    char _msg[LCD_MAX_LINES][LCD_MAX_LEN + 1];
+    bool _msg_cleared;
+
     static void png_draw(PNGDRAW *pDraw);
+
+    void display(Message *msg, uint32_t flags);
+    unsigned long displayNextMessage();
+    void clearLine(int line);
+    void showText(int x, int y, const char *msg, bool clear);
+
+    String getLine(int line);
+
   protected:
     void setup();
     unsigned long loop(MicroTasks::WakeReason reason);
