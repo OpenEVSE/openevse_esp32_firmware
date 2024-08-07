@@ -88,8 +88,17 @@ lib/ESPAL
 lib/MicroDebug
 lib/StreamSpy
 lib/MicroTasks
+lib/jeremypoulter/ArduinoMongoose
+lib/jeremypoulter/ConfigJson
+lib/jeremypoulter/OpenEVSE
+lib/jeremypoulter/ESPAL
+lib/jeremypoulter/Micro Debug
+lib/jeremypoulter/StreamSpy
+lib/jeremypoulter/MicroTasks
 
 *.bin
 divert_sim/epoxyfsdata
 divert_sim/epoxyeepromdata
+
+*.pem
 *.pem
