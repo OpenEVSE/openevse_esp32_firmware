@@ -116,9 +116,9 @@ jobs:
 
     - name: Get the bootloader and partition files
       run: |
-        for i in openevse_wifi_tft_v1:16mb openevse_wifi_v1:4mb do
-          env=${i%%:*}
-          name=${i#*:}
+        for i in openevse_wifi_tft_v1:16mb openevse_wifi_v1:4mb; do
+          env=$(cut -f1 -d: <<< $i)
+          name=$(cut -f2 -d: <<< $i)
           mv artifacts/$env.bin/bootloader.bin bootloader_$name.bin
           mv artifacts/$env.bin/partitions.bin partitions_$name.bin
         done
