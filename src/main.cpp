@@ -215,6 +215,10 @@ loop() {
   MicroTask.update();
   Profile_End(MicroTask, 10);
 
+#if defined(NEO_PIXEL_PIN) && defined(NEO_PIXEL_LENGTH) && defined(ENABLE_WS2812FX)
+  ledManager_loop();
+#endif
+
   if(OpenEVSE.isConnected())
   {
     if(OPENEVSE_STATE_STARTING != evse.getEvseState())
