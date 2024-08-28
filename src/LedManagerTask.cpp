@@ -125,22 +125,22 @@ static uint32_t status_colour_map(u_int8_t lcdcol)
   case OPENEVSE_LCD_RED:
     color = 0xFF0000;  // RED
     break;
-  case OPENEVSE_LCD_GREEN: 
+  case OPENEVSE_LCD_GREEN:
     color = 0x00FF00; // GREEN
     break;
-  case OPENEVSE_LCD_YELLOW: 
+  case OPENEVSE_LCD_YELLOW:
     color = 0xFFFF00; // YELLOW
     break;
-  case OPENEVSE_LCD_BLUE: 
+  case OPENEVSE_LCD_BLUE:
     color = 0x0000FF; // BLUE
     break;
-  case OPENEVSE_LCD_VIOLET: 
+  case OPENEVSE_LCD_VIOLET:
     color = 0xFF00FF; // VIOLET
     break;
-  case OPENEVSE_LCD_TEAL: 
+  case OPENEVSE_LCD_TEAL:
     color = 0x00FFFF; // TEAL
     break;
-  case OPENEVSE_LCD_WHITE: 
+  case OPENEVSE_LCD_WHITE:
     color = 0xFFFFFF; // WHITE
     break;
   }
@@ -288,7 +288,7 @@ unsigned long LedManagerTask::loop(MicroTasks::WakeReason reason)
       uint32_t col = status_colour_map(lcdCol);
       DBUGVAR(col, HEX);
       //DBUGF("Color: %x\n", col);
-      bool isCharging;
+      bool isCharging, isError;
       u_int16_t speed;
       speed = 2000 - ((_evse->getChargeCurrent()/_evse->getMaxHardwareCurrent())*1000);
       DBUGF("Speed: %d ",speed);
@@ -305,10 +305,12 @@ unsigned long LedManagerTask::loop(MicroTasks::WakeReason reason)
       {
         case LedState_Evse_State:
           isCharging = _evse->isCharging();
+          isError = _evse->isError();
           if(isCharging){
             setAllRGB(col, FX_MODE_COLOR_WIPE, speed);
-          }
-          else {
+          } else if(isError){
+            setAllRGB(col, FX_MODE_FADE, DEFAULT_FX_SPEED);
+          } else {
             setAllRGB(col, FX_MODE_STATIC, DEFAULT_FX_SPEED);
           }    
           //DBUGF("MODE:  LedState_Evse_State\n");
@@ -522,11 +524,11 @@ void LedManagerTask::setEvseAndWifiRGB(uint32_t evseColor, u_int8_t mode, u_int1
   if(speed != ws2812fx.getSpeed()){
     ws2812fx.setSpeed(speed);
   }
-  
+
   if (ws2812fx.getMode() != mode){
     ws2812fx.setMode(mode);
   }
-  
+
 }
 #else
 void LedManagerTask::setAllRGB(uint8_t red, uint8_t green, uint8_t blue)
@@ -749,7 +751,7 @@ void LedManagerTask::setBrightness(uint8_t brightness)
   else {
     ws2812fx.setBrightness(this->brightness-1);
   }
-  
+
 #endif
 
   DBUGVAR(this->brightness);
