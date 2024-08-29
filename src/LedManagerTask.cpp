@@ -184,8 +184,8 @@ void LedManagerTask::setup()
   ws2812fx.setColor(BLACK);
   ws2812fx.setMode(FX_MODE_STATIC);
   //ws2812fx.setBrightness(this->brightness);
-  DEBUG.printf("Brightness: %d ", this->brightness);
-  DEBUG.printf("Brightness: %d ", brightness);
+  DBUGF("Brightness: %d ", this->brightness);
+  DBUGF("Brightness: %d ", brightness);
   ws2812fx.start();
 #endif
 
