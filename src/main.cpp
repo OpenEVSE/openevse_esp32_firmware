@@ -216,7 +216,8 @@ loop() {
   Profile_End(MicroTask, 10);
 
 #if defined(NEO_PIXEL_PIN) && defined(NEO_PIXEL_LENGTH) && defined(ENABLE_WS2812FX)
-  ledManager_loop();
+  // Call ws2812fx service method to update ledbar effect
+  ledManager.service();
 #endif
 
   if(OpenEVSE.isConnected())

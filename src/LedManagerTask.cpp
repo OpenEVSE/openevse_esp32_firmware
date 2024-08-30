@@ -745,11 +745,11 @@ void LedManagerTask::setBrightness(uint8_t brightness)
   MicroTask.wakeTask(this);
 }
 
-LedManagerTask ledManager;
-
 #if defined(NEO_PIXEL_PIN) && defined(NEO_PIXEL_LENGTH) && defined(ENABLE_WS2812FX)
-extern void ledManager_loop()
+void LedManagerTask::service()
 {
   ws2812fx.service();
 }
 #endif
+
+LedManagerTask ledManager;
