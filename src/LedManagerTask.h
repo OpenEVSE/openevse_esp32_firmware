@@ -78,13 +78,6 @@ class LedManagerTask : public MicroTasks::Task
     int getButtonPressed();
 
     void setBrightness(uint8_t brightness);
-#if defined(NEO_PIXEL_PIN) && defined(NEO_PIXEL_LENGTH) && defined(ENABLE_WS2812FX)
-// -------------------------------------------------------------------
-// Perform the background status bar  operations. Must be called in the main
-// loop function
-// -------------------------------------------------------------------
-    void service();
-#endif
 };
 
 extern LedManagerTask ledManager;
