@@ -44,7 +44,7 @@ class LedAnimatorTask : public MicroTasks::Task
     }
     unsigned long loop(MicroTasks::WakeReason reason) {
       ws2812fx.service();
-      return 40;
+      return 10;
     }
 } animator;
 #endif
