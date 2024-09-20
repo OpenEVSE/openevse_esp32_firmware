@@ -7,8 +7,8 @@
 #include "web_server.assets_fr_76601f68_js_gz.h"
 #include "web_server.assets_hu_8280bea7_js_gz.h"
 #include "web_server.assets_icons_11ca588d_js_gz.h"
-#include "web_server.assets_index_479ce99b_js_gz.h"
-#include "web_server.assets_index_ad128439_css_gz.h"
+#include "web_server.assets_index_94e803a1_js_gz.h"
+#include "web_server.assets_index_e83393eb_css_gz.h"
 #include "web_server.assets_logo_mini_e4e21c4b_png.h"
 #include "web_server.assets_vendor_143d8acd_js_gz.h"
 #include "web_server.favicon_ico.h"
@@ -28,8 +28,8 @@ StaticFile web_server_static_files[] = {
   { "/assets/fr-76601f68.js", CONTENT_FR_76601F68_JS_GZ, sizeof(CONTENT_FR_76601F68_JS_GZ) - 1, _CONTENT_TYPE_JS, CONTENT_FR_76601F68_JS_GZ_ETAG, true },
   { "/assets/hu-8280bea7.js", CONTENT_HU_8280BEA7_JS_GZ, sizeof(CONTENT_HU_8280BEA7_JS_GZ) - 1, _CONTENT_TYPE_JS, CONTENT_HU_8280BEA7_JS_GZ_ETAG, true },
   { "/assets/icons-11ca588d.js", CONTENT_ICONS_11CA588D_JS_GZ, sizeof(CONTENT_ICONS_11CA588D_JS_GZ) - 1, _CONTENT_TYPE_JS, CONTENT_ICONS_11CA588D_JS_GZ_ETAG, true },
-  { "/assets/index-479ce99b.js", CONTENT_INDEX_479CE99B_JS_GZ, sizeof(CONTENT_INDEX_479CE99B_JS_GZ) - 1, _CONTENT_TYPE_JS, CONTENT_INDEX_479CE99B_JS_GZ_ETAG, true },
-  { "/assets/index-ad128439.css", CONTENT_INDEX_AD128439_CSS_GZ, sizeof(CONTENT_INDEX_AD128439_CSS_GZ) - 1, _CONTENT_TYPE_CSS, CONTENT_INDEX_AD128439_CSS_GZ_ETAG, true },
+  { "/assets/index-94e803a1.js", CONTENT_INDEX_94E803A1_JS_GZ, sizeof(CONTENT_INDEX_94E803A1_JS_GZ) - 1, _CONTENT_TYPE_JS, CONTENT_INDEX_94E803A1_JS_GZ_ETAG, true },
+  { "/assets/index-e83393eb.css", CONTENT_INDEX_E83393EB_CSS_GZ, sizeof(CONTENT_INDEX_E83393EB_CSS_GZ) - 1, _CONTENT_TYPE_CSS, CONTENT_INDEX_E83393EB_CSS_GZ_ETAG, true },
   { "/assets/logo-mini-e4e21c4b.png", CONTENT_LOGO_MINI_E4E21C4B_PNG, sizeof(CONTENT_LOGO_MINI_E4E21C4B_PNG) - 1, _CONTENT_TYPE_PNG, CONTENT_LOGO_MINI_E4E21C4B_PNG_ETAG, false },
   { "/assets/vendor-143d8acd.js", CONTENT_VENDOR_143D8ACD_JS_GZ, sizeof(CONTENT_VENDOR_143D8ACD_JS_GZ) - 1, _CONTENT_TYPE_JS, CONTENT_VENDOR_143D8ACD_JS_GZ_ETAG, true },
   { "/favicon.ico", CONTENT_FAVICON_ICO, sizeof(CONTENT_FAVICON_ICO) - 1, _CONTENT_TYPE_ICO, CONTENT_FAVICON_ICO_ETAG, false },
