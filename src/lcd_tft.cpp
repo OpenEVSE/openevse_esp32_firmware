@@ -316,12 +316,20 @@ unsigned long LcdTask::loop(MicroTasks::WakeReason reason)
       render_image(status_icon.c_str(), 16, 52);
 
       char buffer[32];
+      char buffer2[10];
 
       snprintf(buffer, sizeof(buffer), "%d", _evse->getChargeCurrent());
-      render_right_text_box(buffer, 66, 220, 154, &FreeSans24pt7b, TFT_BLACK, TFT_WHITE, !_full_update, 3);
+      render_right_text_box(buffer, 66, 175, 154, &FreeSans24pt7b, TFT_BLACK, TFT_WHITE, !_full_update, 2);
       if(_full_update) {
-        render_left_text_box("A", 224, 200, 34, &FreeSans24pt7b, TFT_BLACK, TFT_WHITE, false, 1);
+        render_left_text_box("A", 224, 165, 34, &FreeSans24pt7b, TFT_BLACK, TFT_WHITE, false, 1);
       }
+      if (_evse->isTemperatureValid(EVSE_MONITOR_TEMP_EVSE_MCP9808)) {
+        snprintf(buffer, sizeof(buffer), "%.0fC", _evse->getTemperature(EVSE_MONITOR_TEMP_EVSE_MCP9808));
+        render_right_text_box(buffer, WHITE_AREA_X, 230, 45, &FreeSans9pt7b, TFT_BLACK, TFT_WHITE, _full_update, 1);
+      }
+      snprintf(buffer, sizeof(buffer), "%.2f V  %.2f A", _evse->getVoltage(), _evse->getAmps());
+      get_scaled_number_value(_evse->getPower(), 2, "W", buffer2, sizeof(buffer2));
+      render_info_box(buffer2, buffer, 66, 175, INFO_BOX_WIDTH, INFO_BOX_HEIGHT, _full_update);
 
       String line = getLine(0);
       if(line.length() == 0) {
@@ -336,7 +344,7 @@ unsigned long LcdTask::loop(MicroTasks::WakeReason reason)
         gettimeofday(&local_time, NULL);
         struct tm timeinfo;
         localtime_r(&local_time.tv_sec, &timeinfo);
-        strftime(buffer, sizeof(buffer), "%d/%m/%Y, %l:%M %p", &timeinfo);
+        strftime(buffer, sizeof(buffer), "%Y-%m-%d %H:%M", &timeinfo);
         line = buffer;
       }
       render_centered_text_box(line.c_str(), INFO_BOX_X, 96, INFO_BOX_WIDTH, &FreeSans9pt7b, TFT_OPENEVSE_TEXT, TFT_WHITE, !_full_update);
