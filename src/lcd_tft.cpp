@@ -163,6 +163,11 @@ void LcdTask::display(const char *msg, int x, int y, int time, uint32_t flags)
 
 void LcdTask::setWifiMode(bool client, bool connected)
 {
+#ifdef TFT_BACKLIGHT_TIMEOUT_MS
+  if (client != wifi_client || connected != wifi_connected) {
+    wakeBacklight();
+  }
+#endif //TFT_BACKLIGHT_TIMEOUT_MS
   wifi_client = client;
   wifi_connected = connected;
 }
@@ -432,9 +437,14 @@ unsigned long LcdTask::loop(MicroTasks::WakeReason reason)
               timeout = true;
               break;
             case OPENEVSE_STATE_CHARGING:
+#ifdef TFT_BACKLIGHT_CHARGING_THRESHOLD
               if (_evse->getAmps() >= TFT_BACKLIGHT_CHARGING_THRESHOLD) {
                 timeout = false;
               }
+#else
+              timeout = false;
+#endif //TFT_BACKLIGHT_CHARGING_THRESHOLD
+              break;
             default:
               timeout = true;
               break;
