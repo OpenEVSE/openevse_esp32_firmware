@@ -190,18 +190,11 @@ void LedManagerTask::setup()
 #elif defined(NEO_PIXEL_PIN) && defined(NEO_PIXEL_LENGTH) && defined(ENABLE_WS2812FX)
   DEBUG.printf("Initialising NeoPixels WS2812FX MODE...\n");
   ws2812fx.init();
-  //ws2812fx.setBrightness(brightness);
+  ws2812fx.setBrightness(brightness);
   ws2812fx.setSpeed(DEFAULT_FX_SPEED);
   ws2812fx.setColor(BLACK);
   ws2812fx.setMode(FX_MODE_STATIC);
   //ws2812fx.setBrightness(this->brightness);
-  if (this->brightness == 0){
-    ws2812fx.setBrightness(255);
-  }
-  else {
-    ws2812fx.setBrightness(this->brightness-1);
-  }
-
   DBUGF("Brightness: %d ", this->brightness);
   DBUGF("Brightness: %d ", brightness);
 
