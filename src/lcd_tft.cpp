@@ -18,8 +18,8 @@
 #include "embedded_files.h"
 //#include "fonts/DejaVu_Sans_72.h"
 
-#define TFT_BACKLIGHT_TIMEOUT_MS 600000 // 5 mins
-#define TFT_BACKLIGHT_CHARGING_THRESHOLD 0.1  //stay awake if car is drawing more than this many amps
+//#define TFT_BACKLIGHT_TIMEOUT_MS 600000  //timeout backlight after 10 minutes
+//#define TFT_BACKLIGHT_CHARGING_THRESHOLD 0.1  //stay awake if car is drawing more than this many amps
 
 #define TFT_OPENEVSE_BACK       0x2413
 #define TFT_OPENEVSE_GREEN      0x3E92
@@ -205,8 +205,11 @@ unsigned long LcdTask::loop(MicroTasks::WakeReason reason)
 #endif
 
     pinMode(LCD_BACKLIGHT_PIN, OUTPUT);
-    //digitalWrite(LCD_BACKLIGHT_PIN, HIGH);
+#ifdef TFT_BACKLIGHT_TIMEOUT_MS    
     wakeBacklight();
+#else
+    digitalWrite(LCD_BACKLIGHT_PIN, HIGH);
+#endif //TFT_BACKLIGHT_TIMEOUT_MS 
     _initialise = false;
   }
 
@@ -353,7 +356,7 @@ unsigned long LcdTask::loop(MicroTasks::WakeReason reason)
       }
       if (_evse->isTemperatureValid(EVSE_MONITOR_TEMP_MONITOR)) {
         snprintf(buffer, sizeof(buffer), "%.0fC", _evse->getTemperature(EVSE_MONITOR_TEMP_MONITOR));
-        render_right_text_box(buffer, WHITE_AREA_X, 230, 45, &FreeSans9pt7b, TFT_BLACK, TFT_WHITE, _full_update, 1);
+        render_right_text_box(buffer, WHITE_AREA_X, 228, 45, &FreeSans9pt7b, TFT_BLACK, TFT_WHITE, _full_update, 1);
       }
       snprintf(buffer, sizeof(buffer), "%.1f V  %.2f A", _evse->getVoltage(), _evse->getAmps());
       get_scaled_number_value(_evse->getPower(), 2, "W", buffer2, sizeof(buffer2));
@@ -400,6 +403,7 @@ unsigned long LcdTask::loop(MicroTasks::WakeReason reason)
   _tft.endWrite();
 #endif
 
+#ifdef TFT_BACKLIGHT_TIMEOUT_MS
   uint8_t evse_state = _evse->getEvseState();
   bool vehicle_state = _evse->isVehicleConnected();
   if (evse_state != _previous_evse_state || vehicle_state != _previous_vehicle_state) {  //wake backlight on state change
@@ -440,6 +444,7 @@ unsigned long LcdTask::loop(MicroTasks::WakeReason reason)
       timeoutBacklight();
     }
   }
+#endif //TFT_BACKLIGHT_TIMEOUT_MS
 
   DBUGVAR(nextUpdate);
   return nextUpdate;
@@ -574,7 +579,9 @@ unsigned long LcdTask::displayNextMessage()
     }
 
     // Display the message
+#ifdef TFT_BACKLIGHT_TIMEOUT_MS
     wakeBacklight();
+#endif //TFT_BACKLIGHT_TIMEOUT_MS
     showText(msg->getX(), msg->getY(), msg->getMsg(), msg->getClear());
 
     _nextMessageTime = millis() + msg->getTime();
@@ -631,6 +638,7 @@ String LcdTask::getLine(int line)
   return String(start, len);
 }
 
+#ifdef TFT_BACKLIGHT_TIMEOUT_MS
 void LcdTask::wakeBacklight() {
   digitalWrite(LCD_BACKLIGHT_PIN, HIGH);
   _last_backlight_wakeup = millis();
@@ -641,6 +649,7 @@ void LcdTask::timeoutBacklight() {
     digitalWrite(LCD_BACKLIGHT_PIN, LOW);
   }
 }
+#endif //TFT_BACKLIGHT_TIMEOUT_MS
 
 LcdTask lcd;
 
