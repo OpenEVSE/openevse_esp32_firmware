@@ -98,6 +98,8 @@ class LcdTask : public MicroTasks::Task
     long _last_backlight_wakeup = 0;
     uint8_t _previous_evse_state;
     bool _previous_vehicle_state;
+    bool wifi_client;
+    bool wifi_connected;
 
     char _msg[LCD_MAX_LINES][LCD_MAX_LEN + 1];
     bool _msg_cleared;
@@ -136,6 +138,7 @@ class LcdTask : public MicroTasks::Task
     void display(const __FlashStringHelper *msg, int x, int y, int time, uint32_t flags);
     void display(String &msg, int x, int y, int time, uint32_t flags);
     void display(const char *msg, int x, int y, int time, uint32_t flags);
+    void setWifiMode(bool client, bool connected);
 
     void fill_screen(uint16_t color) {
       _screen.fillScreen(color);

@@ -18,7 +18,7 @@
 #include "embedded_files.h"
 //#include "fonts/DejaVu_Sans_72.h"
 
-#define TFT_BACKLIGHT_TIMEOUT_MS 300000 // 5 mins
+#define TFT_BACKLIGHT_TIMEOUT_MS 600000 // 5 mins
 #define TFT_BACKLIGHT_CHARGING_THRESHOLD 0.1  //stay awake if car is drawing more than this many amps
 
 #define TFT_OPENEVSE_BACK       0x2413
@@ -161,6 +161,12 @@ void LcdTask::display(const char *msg, int x, int y, int time, uint32_t flags)
   display(new Message(msg, x, y, time, flags), flags);
 }
 
+void LcdTask::setWifiMode(bool client, bool connected)
+{
+  wifi_client = client;
+  wifi_connected = connected;
+}
+
 void LcdTask::begin(EvseManager &evse, Scheduler &scheduler, ManualOverride &manual)
 {
   _evse = &evse;
@@ -281,6 +287,7 @@ unsigned long LcdTask::loop(MicroTasks::WakeReason reason)
 
       String status_icon = "/disabled.png";
       String car_icon = "/car_disconnected.png";
+      String wifi_icon = "/no_wifi.png";
 
       if(_evse->isVehicleConnected()) {
         car_icon = "/car_connected.png";
@@ -319,9 +326,22 @@ unsigned long LcdTask::loop(MicroTasks::WakeReason reason)
         default:
           break;
       }
+
+      if (wifi_client) {
+        if (wifi_connected) {
+          wifi_icon = "/wifi.png";
+        }
+      } else {
+        if (wifi_connected) {
+          wifi_icon = "/access_point_connected.png";
+        } else {
+          wifi_icon = "/access_point.png";
+        }
+      }
     
       render_image(status_icon.c_str(), 16, 52);
-      render_image(car_icon.c_str(), 16, 102);
+      render_image(car_icon.c_str(), 16, 92);
+      render_image(wifi_icon.c_str(), 16, 132);
 
       char buffer[32];
       char buffer2[10];
