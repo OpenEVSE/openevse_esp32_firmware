@@ -95,6 +95,9 @@ class LcdTask : public MicroTasks::Task
     EvseManager *_evse;
     Scheduler *_scheduler;
     ManualOverride *_manual;
+    long _last_backlight_wakeup = 0;
+    uint8_t _previous_evse_state;
+    bool _previous_vehicle_state;
 
     char _msg[LCD_MAX_LINES][LCD_MAX_LEN + 1];
     bool _msg_cleared;
@@ -107,6 +110,9 @@ class LcdTask : public MicroTasks::Task
     void showText(int x, int y, const char *msg, bool clear);
 
     String getLine(int line);
+
+    void wakeBacklight();
+    void timeoutBacklight();
 
   protected:
     void setup();
