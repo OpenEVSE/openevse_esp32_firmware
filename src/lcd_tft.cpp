@@ -365,7 +365,7 @@ unsigned long LcdTask::loop(MicroTasks::WakeReason reason)
       }
       snprintf(buffer, sizeof(buffer), "%.1f V  %.2f A", _evse->getVoltage(), _evse->getAmps());
       get_scaled_number_value(_evse->getPower(), 2, "W", buffer2, sizeof(buffer2));
-      render_info_box(buffer2, buffer, 66, 175, INFO_BOX_WIDTH, INFO_BOX_HEIGHT, _full_update);
+      render_data_box(buffer2, buffer, 66, 175, INFO_BOX_WIDTH, INFO_BOX_HEIGHT, _full_update);
 
       String line = getLine(0);
       if(line.length() == 0) {
@@ -479,6 +479,16 @@ void LcdTask::get_scaled_number_value(double value, int precision, const char *u
   }
 
   snprintf(buffer, size, "%.*f %s%s", precision, value, mod[index], unit);
+}
+
+void LcdTask::render_data_box(const char *title, const char *text, int16_t x, int16_t y, int16_t width, int16_t height, bool full_update)
+{
+  if(full_update)
+  {
+    _screen.fillSmoothRoundRect(x, y, width, height, 6, TFT_OPENEVSE_INFO_BACK, TFT_WHITE);
+  }
+  render_centered_text_box(title, x, y+24, width, &FreeSans9pt7b, TFT_WHITE, TFT_OPENEVSE_INFO_BACK, !full_update);
+  render_centered_text_box(text, x, y+(height-4), width, &FreeSans9pt7b, TFT_WHITE, TFT_OPENEVSE_INFO_BACK, !full_update);
 }
 
 void LcdTask::render_info_box(const char *title, const char *text, int16_t x, int16_t y, int16_t width, int16_t height, bool full_update)

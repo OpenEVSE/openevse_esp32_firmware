@@ -213,7 +213,7 @@ void NetManagerTask::haveNetworkConnection(IPAddress myAddress)
   _led.setWifiMode(true, true);
 #ifdef ENABLE_SCREEN_LCD_TFT
   _lcd.setWifiMode(true, true);
-#endif ENABLE_SCREEN_LCD_TFT
+#endif //ENABLE_SCREEN_LCD_TFT
   _time.setHost(sntp_hostname.c_str());
 
   _apAutoApStopTime = millis() + ACCESS_POINT_AUTO_STOP_TIMEOUT;
@@ -304,7 +304,7 @@ void NetManagerTask::wifiOnAPModeStationDisconnected(const WiFiEventSoftAPModeSt
     _led.setWifiMode(false, false);
 #ifdef ENABLE_SCREEN_LCD_TFT
     _lcd.setWifiMode(false, false);
-#endif ENABLE_SCREEN_LCD_TFT
+#endif //ENABLE_SCREEN_LCD_TFT
   }
 }
 
