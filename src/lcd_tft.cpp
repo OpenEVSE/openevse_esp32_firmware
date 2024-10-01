@@ -439,6 +439,9 @@ unsigned long LcdTask::loop(MicroTasks::WakeReason reason)
             case OPENEVSE_STATE_CHARGING:
 #ifdef TFT_BACKLIGHT_CHARGING_THRESHOLD
               if (_evse->getAmps() >= TFT_BACKLIGHT_CHARGING_THRESHOLD) {
+                //Reset the timer here, so we don't timeout as soon as charging stops.
+                //This will also wake the backlight if the vehicle starts drawing current again.
+                wakeBacklight();  
                 timeout = false;
               }
 #else
