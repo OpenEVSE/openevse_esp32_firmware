@@ -336,24 +336,23 @@ unsigned long LcdTask::loop(MicroTasks::WakeReason reason)
           break;
       }
 
-      char buffer[32];
+      char buffer[32] = "";
       char buffer2[10];
 
       if (wifi_client) {
         if (wifi_connected) {
           wifi_icon = "/wifi.png";
+          snprintf(buffer, sizeof(buffer), "%ddB", WiFi.RSSI());
         }
-        snprintf(buffer, sizeof(buffer), "%ddB", WiFi.RSSI());
-        render_right_text_box(buffer, WHITE_AREA_X, 200, 51, &FreeSans9pt7b, TFT_BLACK, TFT_WHITE, _full_update, 1);
       } else {
         if (wifi_connected) {
           wifi_icon = "/access_point_connected.png";
+          snprintf(buffer, sizeof(buffer), "%d", WiFi.softAPgetStationNum());
         } else {
           wifi_icon = "/access_point.png";
         }
-        snprintf(buffer, sizeof(buffer), "%d", WiFi.softAPgetStationNum());
-        render_right_text_box(buffer, WHITE_AREA_X, 200, 51, &FreeSans9pt7b, TFT_BLACK, TFT_WHITE, _full_update, 1);
       }
+      render_right_text_box(buffer, 350, 30, 50, &FreeSans9pt7b, TFT_WHITE, TFT_OPENEVSE_BACK, false, 1);
     
       render_image(status_icon.c_str(), 16, 52);
       render_image(car_icon.c_str(), 16, 92);
@@ -366,7 +365,7 @@ unsigned long LcdTask::loop(MicroTasks::WakeReason reason)
       }
       if (_evse->isTemperatureValid(EVSE_MONITOR_TEMP_MONITOR)) {
         snprintf(buffer, sizeof(buffer), "%.1fC", _evse->getTemperature(EVSE_MONITOR_TEMP_MONITOR));
-        render_right_text_box(buffer, WHITE_AREA_X, 228, 51, &FreeSans9pt7b, TFT_BLACK, TFT_WHITE, _full_update, 1);
+        render_right_text_box(buffer, 415, 30, 50, &FreeSans9pt7b, TFT_WHITE, TFT_OPENEVSE_BACK, false, 1);
       }
       snprintf(buffer, sizeof(buffer), "%.1f V  %.2f A", _evse->getVoltage(), _evse->getAmps());
       get_scaled_number_value(_evse->getPower(), 2, "W", buffer2, sizeof(buffer2));
@@ -379,15 +378,6 @@ unsigned long LcdTask::loop(MicroTasks::WakeReason reason)
       render_centered_text_box(line.c_str(), INFO_BOX_X, 74, INFO_BOX_WIDTH, &FreeSans9pt7b, TFT_OPENEVSE_TEXT, TFT_WHITE, !_full_update);
 
       line = getLine(1);
-      if(line.length() == 0)
-      {
-        timeval local_time;
-        gettimeofday(&local_time, NULL);
-        struct tm timeinfo;
-        localtime_r(&local_time.tv_sec, &timeinfo);
-        strftime(buffer, sizeof(buffer), "%Y-%m-%d %H:%M", &timeinfo);
-        line = buffer;
-      }
       render_centered_text_box(line.c_str(), INFO_BOX_X, 96, INFO_BOX_WIDTH, &FreeSans9pt7b, TFT_OPENEVSE_TEXT, TFT_WHITE, !_full_update);
 
       uint32_t elapsed = _evse->getSessionElapsed();
@@ -400,7 +390,16 @@ unsigned long LcdTask::loop(MicroTasks::WakeReason reason)
       get_scaled_number_value(_evse->getSessionEnergy(), 0, "Wh", buffer, sizeof(buffer));
       render_info_box("DELIVERED", buffer, INFO_BOX_X, 175, INFO_BOX_WIDTH, INFO_BOX_HEIGHT, _full_update);
 
-      nextUpdate = 1000;
+      timeval local_time;
+      gettimeofday(&local_time, NULL);
+      struct tm timeinfo;
+      localtime_r(&local_time.tv_sec, &timeinfo);
+      strftime(buffer, sizeof(buffer), "%Y-%m-%d  %H:%M:%S", &timeinfo);
+      render_left_text_box(buffer, 12, 30, 175, &FreeSans9pt7b, TFT_WHITE, TFT_OPENEVSE_BACK, false, 1);
+
+      //sleep until next whole second so clock doesn't skip
+      gettimeofday(&local_time, NULL);
+      nextUpdate = 1000 - local_time.tv_usec/1000;
       _full_update = false;
     } break;
 
