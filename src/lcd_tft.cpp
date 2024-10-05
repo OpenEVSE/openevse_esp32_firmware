@@ -8,6 +8,7 @@
 #define LCD_BACKLIGHT_PIN TFT_BL
 #endif
 
+#include <WiFi.h>
 #include "emonesp.h"
 #include "lcd.h"
 #include "RapiSender.h"
@@ -335,24 +336,28 @@ unsigned long LcdTask::loop(MicroTasks::WakeReason reason)
           break;
       }
 
+      char buffer[32];
+      char buffer2[10];
+
       if (wifi_client) {
         if (wifi_connected) {
           wifi_icon = "/wifi.png";
         }
+        snprintf(buffer, sizeof(buffer), "%ddB", WiFi.RSSI());
+        render_right_text_box(buffer, WHITE_AREA_X, 200, 51, &FreeSans9pt7b, TFT_BLACK, TFT_WHITE, _full_update, 1);
       } else {
         if (wifi_connected) {
           wifi_icon = "/access_point_connected.png";
         } else {
           wifi_icon = "/access_point.png";
         }
+        snprintf(buffer, sizeof(buffer), "%d", WiFi.softAPgetStationNum());
+        render_right_text_box(buffer, WHITE_AREA_X, 200, 51, &FreeSans9pt7b, TFT_BLACK, TFT_WHITE, _full_update, 1);
       }
     
       render_image(status_icon.c_str(), 16, 52);
       render_image(car_icon.c_str(), 16, 92);
       render_image(wifi_icon.c_str(), 16, 132);
-
-      char buffer[32];
-      char buffer2[10];
 
       snprintf(buffer, sizeof(buffer), "%d", _evse->getChargeCurrent());
       render_right_text_box(buffer, 66, 175, 154, &FreeSans24pt7b, TFT_BLACK, TFT_WHITE, !_full_update, 2);
@@ -360,8 +365,8 @@ unsigned long LcdTask::loop(MicroTasks::WakeReason reason)
         render_left_text_box("A", 224, 165, 34, &FreeSans24pt7b, TFT_BLACK, TFT_WHITE, false, 1);
       }
       if (_evse->isTemperatureValid(EVSE_MONITOR_TEMP_MONITOR)) {
-        snprintf(buffer, sizeof(buffer), "%.0fC", _evse->getTemperature(EVSE_MONITOR_TEMP_MONITOR));
-        render_right_text_box(buffer, WHITE_AREA_X, 228, 45, &FreeSans9pt7b, TFT_BLACK, TFT_WHITE, _full_update, 1);
+        snprintf(buffer, sizeof(buffer), "%.1fC", _evse->getTemperature(EVSE_MONITOR_TEMP_MONITOR));
+        render_right_text_box(buffer, WHITE_AREA_X, 228, 51, &FreeSans9pt7b, TFT_BLACK, TFT_WHITE, _full_update, 1);
       }
       snprintf(buffer, sizeof(buffer), "%.1f V  %.2f A", _evse->getVoltage(), _evse->getAmps());
       get_scaled_number_value(_evse->getPower(), 2, "W", buffer2, sizeof(buffer2));
