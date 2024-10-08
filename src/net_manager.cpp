@@ -135,9 +135,7 @@ void NetManagerTask::wifiStartAccessPoint()
   _lcd.display(String(F("Pass: ")) + _softAP_password, 0, 1, 15 * 1000, LCD_CLEAR_LINE);
 
   _led.setWifiMode(false, false);
-#ifdef ENABLE_SCREEN_LCD_TFT
   _lcd.setWifiMode(false, false);
-#endif //ENABLE_SCREEN_LCD_TFT
   _apClients = 0;
   _state = NetState::AccessPointConnecting;
 }
@@ -157,9 +155,7 @@ void NetManagerTask::wifiStartClient()
   wifiClientConnect();
 
   _led.setWifiMode(true, false);
-#ifdef ENABLE_SCREEN_LCD_TFT
   _lcd.setWifiMode(true, false);
-#endif //ENABLE_SCREEN_LCD_TFT
   _state = NetState::StationClientConnecting;
 }
 
@@ -211,9 +207,7 @@ void NetManagerTask::haveNetworkConnection(IPAddress myAddress)
   Mongoose.ipConfigChanged();
 
   _led.setWifiMode(true, true);
-#ifdef ENABLE_SCREEN_LCD_TFT
   _lcd.setWifiMode(true, true);
-#endif //ENABLE_SCREEN_LCD_TFT
   _time.setHost(sntp_hostname.c_str());
 
   _apAutoApStopTime = millis() + ACCESS_POINT_AUTO_STOP_TIMEOUT;
@@ -290,9 +284,7 @@ void NetManagerTask::wifiOnAPModeStationConnected(const WiFiEventSoftAPModeStati
   _lcd.display(_ipaddress, 0, 1, (0 == _apClients ? 15 : 5) * 1000, LCD_CLEAR_LINE);
 
   _led.setWifiMode(false, true);
-#ifdef ENABLE_SCREEN_LCD_TFT
   _lcd.setWifiMode(false, true);
-#endif //ENABLE_SCREEN_LCD_TFT
   _apClients++;
 }
 
@@ -302,9 +294,7 @@ void NetManagerTask::wifiOnAPModeStationDisconnected(const WiFiEventSoftAPModeSt
 
   if(0 == _apClients && NetState::AccessPointConnecting == _state) {
     _led.setWifiMode(false, false);
-#ifdef ENABLE_SCREEN_LCD_TFT
     _lcd.setWifiMode(false, false);
-#endif //ENABLE_SCREEN_LCD_TFT
   }
 }
 
