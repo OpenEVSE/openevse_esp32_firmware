@@ -8,6 +8,7 @@
 #define LCD_BACKLIGHT_PIN TFT_BL
 #endif
 
+#include <WiFi.h>
 #include "emonesp.h"
 #include "lcd.h"
 #include "RapiSender.h"
@@ -18,10 +19,14 @@
 #include "embedded_files.h"
 //#include "fonts/DejaVu_Sans_72.h"
 
+//#define TFT_BACKLIGHT_TIMEOUT_MS 600000  //timeout backlight after 10 minutes
+//#define TFT_BACKLIGHT_CHARGING_THRESHOLD 0.1  //stay awake if car is drawing more than this many amps
+
 #define TFT_OPENEVSE_BACK       0x2413
 #define TFT_OPENEVSE_GREEN      0x3E92
 #define TFT_OPENEVSE_TEXT       0x1BD1
 #define TFT_OPENEVSE_INFO_BACK  0x23d1
+
 
 // The TFT is natively portrait but we are rendering as landscape
 #define TFT_SCREEN_WIDTH        TFT_HEIGHT
@@ -157,6 +162,17 @@ void LcdTask::display(const char *msg, int x, int y, int time, uint32_t flags)
   display(new Message(msg, x, y, time, flags), flags);
 }
 
+void LcdTask::setWifiMode(bool client, bool connected)
+{
+#ifdef TFT_BACKLIGHT_TIMEOUT_MS
+  if (client != wifi_client || connected != wifi_connected) {
+    wakeBacklight();
+  }
+#endif //TFT_BACKLIGHT_TIMEOUT_MS
+  wifi_client = client;
+  wifi_connected = connected;
+}
+
 void LcdTask::begin(EvseManager &evse, Scheduler &scheduler, ManualOverride &manual)
 {
   _evse = &evse;
@@ -195,8 +211,11 @@ unsigned long LcdTask::loop(MicroTasks::WakeReason reason)
 #endif
 
     pinMode(LCD_BACKLIGHT_PIN, OUTPUT);
+#ifdef TFT_BACKLIGHT_TIMEOUT_MS    
+    wakeBacklight();
+#else
     digitalWrite(LCD_BACKLIGHT_PIN, HIGH);
-
+#endif //TFT_BACKLIGHT_TIMEOUT_MS 
     _initialise = false;
   }
 
@@ -275,53 +294,82 @@ unsigned long LcdTask::loop(MicroTasks::WakeReason reason)
         render_image("/button_bar.png", BUTTON_BAR_X, BUTTON_BAR_Y);
       }
 
-      String status_icon = "/car_disconnected.png";
-      if(_evse->isVehicleConnected())
+      String status_icon = "/disabled.png";
+      String car_icon = "/car_disconnected.png";
+      String wifi_icon = "/no_wifi.png";
+
+      if(_evse->isVehicleConnected()) {
+        car_icon = "/car_connected.png";
+      }
+      
+      switch (_evse->getEvseState())
       {
-        switch (_evse->getEvseState())
-        {
-          case OPENEVSE_STATE_STARTING:
-            status_icon = "/start.png";
-            break;
-          case OPENEVSE_STATE_NOT_CONNECTED:
-            status_icon = "/not_connected.png";
-            break;
-          case OPENEVSE_STATE_CONNECTED:
-            status_icon = "/connected.png";
-            break;
-          case OPENEVSE_STATE_CHARGING:
-            status_icon = "/charging.png";
-            break;
-          case OPENEVSE_STATE_VENT_REQUIRED:
-          case OPENEVSE_STATE_DIODE_CHECK_FAILED:
-          case OPENEVSE_STATE_GFI_FAULT:
-          case OPENEVSE_STATE_NO_EARTH_GROUND:
-          case OPENEVSE_STATE_STUCK_RELAY:
-          case OPENEVSE_STATE_GFI_SELF_TEST_FAILED:
-          case OPENEVSE_STATE_OVER_TEMPERATURE:
-          case OPENEVSE_STATE_OVER_CURRENT:
-            status_icon = "/error.png";
-            break;
-          case OPENEVSE_STATE_SLEEPING:
-            status_icon = "/sleeping.png";
-            break;
-          case OPENEVSE_STATE_DISABLED:
-            status_icon = "/disabled.png";
-            break;
-          default:
-            break;
+        case OPENEVSE_STATE_STARTING:
+          status_icon = "/start.png";
+          break;
+        case OPENEVSE_STATE_NOT_CONNECTED:
+          status_icon = "/not_connected.png";
+          break;
+        case OPENEVSE_STATE_CONNECTED:
+          status_icon = "/connected.png";
+          break;
+        case OPENEVSE_STATE_CHARGING:
+          status_icon = "/charging.png";
+          break;
+        case OPENEVSE_STATE_VENT_REQUIRED:
+        case OPENEVSE_STATE_DIODE_CHECK_FAILED:
+        case OPENEVSE_STATE_GFI_FAULT:
+        case OPENEVSE_STATE_NO_EARTH_GROUND:
+        case OPENEVSE_STATE_STUCK_RELAY:
+        case OPENEVSE_STATE_GFI_SELF_TEST_FAILED:
+        case OPENEVSE_STATE_OVER_TEMPERATURE:
+        case OPENEVSE_STATE_OVER_CURRENT:
+          status_icon = "/error.png";
+          break;
+        case OPENEVSE_STATE_SLEEPING:
+          status_icon = "/sleeping.png";
+          break;
+        case OPENEVSE_STATE_DISABLED:
+          status_icon = "/disabled.png";
+          break;
+        default:
+          break;
+      }
+
+      char buffer[32] = "";
+      char buffer2[10];
+
+      if (wifi_client) {
+        if (wifi_connected) {
+          wifi_icon = "/wifi.png";
+          snprintf(buffer, sizeof(buffer), "%ddB", WiFi.RSSI());
+        }
+      } else {
+        if (wifi_connected) {
+          wifi_icon = "/access_point_connected.png";
+          snprintf(buffer, sizeof(buffer), "%d", WiFi.softAPgetStationNum());
+        } else {
+          wifi_icon = "/access_point.png";
         }
       }
-
+      render_right_text_box(buffer, 350, 30, 50, &FreeSans9pt7b, TFT_WHITE, TFT_OPENEVSE_BACK, false, 1);
+    
       render_image(status_icon.c_str(), 16, 52);
-
-      char buffer[32];
+      render_image(car_icon.c_str(), 16, 92);
+      render_image(wifi_icon.c_str(), 16, 132);
 
       snprintf(buffer, sizeof(buffer), "%d", _evse->getChargeCurrent());
-      render_right_text_box(buffer, 66, 220, 154, &FreeSans24pt7b, TFT_BLACK, TFT_WHITE, !_full_update, 3);
+      render_right_text_box(buffer, 66, 175, 154, &FreeSans24pt7b, TFT_BLACK, TFT_WHITE, !_full_update, 2);
       if(_full_update) {
-        render_left_text_box("A", 224, 200, 34, &FreeSans24pt7b, TFT_BLACK, TFT_WHITE, false, 1);
+        render_left_text_box("A", 224, 165, 34, &FreeSans24pt7b, TFT_BLACK, TFT_WHITE, false, 1);
       }
+      if (_evse->isTemperatureValid(EVSE_MONITOR_TEMP_MONITOR)) {
+        snprintf(buffer, sizeof(buffer), "%.1fC", _evse->getTemperature(EVSE_MONITOR_TEMP_MONITOR));
+        render_right_text_box(buffer, 415, 30, 50, &FreeSans9pt7b, TFT_WHITE, TFT_OPENEVSE_BACK, false, 1);
+      }
+      snprintf(buffer, sizeof(buffer), "%.1f V  %.2f A", _evse->getVoltage(), _evse->getAmps());
+      get_scaled_number_value(_evse->getPower(), 2, "W", buffer2, sizeof(buffer2));
+      render_data_box(buffer2, buffer, 66, 175, INFO_BOX_WIDTH, INFO_BOX_HEIGHT, _full_update);
 
       String line = getLine(0);
       if(line.length() == 0) {
@@ -330,15 +378,6 @@ unsigned long LcdTask::loop(MicroTasks::WakeReason reason)
       render_centered_text_box(line.c_str(), INFO_BOX_X, 74, INFO_BOX_WIDTH, &FreeSans9pt7b, TFT_OPENEVSE_TEXT, TFT_WHITE, !_full_update);
 
       line = getLine(1);
-      if(line.length() == 0)
-      {
-        timeval local_time;
-        gettimeofday(&local_time, NULL);
-        struct tm timeinfo;
-        localtime_r(&local_time.tv_sec, &timeinfo);
-        strftime(buffer, sizeof(buffer), "%d/%m/%Y, %l:%M %p", &timeinfo);
-        line = buffer;
-      }
       render_centered_text_box(line.c_str(), INFO_BOX_X, 96, INFO_BOX_WIDTH, &FreeSans9pt7b, TFT_OPENEVSE_TEXT, TFT_WHITE, !_full_update);
 
       uint32_t elapsed = _evse->getSessionElapsed();
@@ -351,7 +390,16 @@ unsigned long LcdTask::loop(MicroTasks::WakeReason reason)
       get_scaled_number_value(_evse->getSessionEnergy(), 0, "Wh", buffer, sizeof(buffer));
       render_info_box("DELIVERED", buffer, INFO_BOX_X, 175, INFO_BOX_WIDTH, INFO_BOX_HEIGHT, _full_update);
 
-      nextUpdate = 1000;
+      timeval local_time;
+      gettimeofday(&local_time, NULL);
+      struct tm timeinfo;
+      localtime_r(&local_time.tv_sec, &timeinfo);
+      strftime(buffer, sizeof(buffer), "%Y-%m-%d  %H:%M:%S", &timeinfo);
+      render_left_text_box(buffer, 12, 30, 175, &FreeSans9pt7b, TFT_WHITE, TFT_OPENEVSE_BACK, false, 1);
+
+      //sleep until next whole second so clock doesn't skip
+      gettimeofday(&local_time, NULL);
+      nextUpdate = 1000 - local_time.tv_usec/1000;
       _full_update = false;
     } break;
 
@@ -363,6 +411,57 @@ unsigned long LcdTask::loop(MicroTasks::WakeReason reason)
   _tft.pushImage(0, 0, _screen_width, _screen_height, _back_buffer_pixels);
   _tft.endWrite();
 #endif
+
+#ifdef TFT_BACKLIGHT_TIMEOUT_MS
+  uint8_t evse_state = _evse->getEvseState();
+  bool vehicle_state = _evse->isVehicleConnected();
+  if (evse_state != _previous_evse_state || vehicle_state != _previous_vehicle_state) {  //wake backlight on state change
+    wakeBacklight();
+    _previous_evse_state = evse_state;
+    _previous_vehicle_state = vehicle_state;
+  } else {  //otherwise timeout backlight in appropriate states
+    bool timeout = true;
+    if (_evse->isVehicleConnected()) {
+          switch (_evse->getEvseState()) {
+            case OPENEVSE_STATE_STARTING:
+            case OPENEVSE_STATE_VENT_REQUIRED:
+            case OPENEVSE_STATE_DIODE_CHECK_FAILED:
+            case OPENEVSE_STATE_GFI_FAULT:
+            case OPENEVSE_STATE_NO_EARTH_GROUND:
+            case OPENEVSE_STATE_STUCK_RELAY:
+            case OPENEVSE_STATE_GFI_SELF_TEST_FAILED:
+            case OPENEVSE_STATE_OVER_TEMPERATURE:
+            case OPENEVSE_STATE_OVER_CURRENT:
+              timeout = false;
+              break;
+            case OPENEVSE_STATE_NOT_CONNECTED:
+            case OPENEVSE_STATE_CONNECTED:
+            case OPENEVSE_STATE_SLEEPING:
+            case OPENEVSE_STATE_DISABLED:
+              timeout = true;
+              break;
+            case OPENEVSE_STATE_CHARGING:
+#ifdef TFT_BACKLIGHT_CHARGING_THRESHOLD
+              if (_evse->getAmps() >= TFT_BACKLIGHT_CHARGING_THRESHOLD) {
+                //Reset the timer here, so we don't timeout as soon as charging stops.
+                //This will also wake the backlight if the vehicle starts drawing current again.
+                wakeBacklight();  
+                timeout = false;
+              }
+#else
+              timeout = false;
+#endif //TFT_BACKLIGHT_CHARGING_THRESHOLD
+              break;
+            default:
+              timeout = true;
+              break;
+          }
+        }
+    if (timeout) {
+      timeoutBacklight();
+    }
+  }
+#endif //TFT_BACKLIGHT_TIMEOUT_MS
 
   DBUGVAR(nextUpdate);
   return nextUpdate;
@@ -387,6 +486,16 @@ void LcdTask::get_scaled_number_value(double value, int precision, const char *u
   }
 
   snprintf(buffer, size, "%.*f %s%s", precision, value, mod[index], unit);
+}
+
+void LcdTask::render_data_box(const char *title, const char *text, int16_t x, int16_t y, int16_t width, int16_t height, bool full_update)
+{
+  if(full_update)
+  {
+    _screen.fillSmoothRoundRect(x, y, width, height, 6, TFT_OPENEVSE_INFO_BACK, TFT_WHITE);
+  }
+  render_centered_text_box(title, x, y+24, width, &FreeSans9pt7b, TFT_WHITE, TFT_OPENEVSE_INFO_BACK, !full_update);
+  render_centered_text_box(text, x, y+(height-4), width, &FreeSans9pt7b, TFT_WHITE, TFT_OPENEVSE_INFO_BACK, !full_update);
 }
 
 void LcdTask::render_info_box(const char *title, const char *text, int16_t x, int16_t y, int16_t width, int16_t height, bool full_update)
@@ -497,6 +606,9 @@ unsigned long LcdTask::displayNextMessage()
     }
 
     // Display the message
+#ifdef TFT_BACKLIGHT_TIMEOUT_MS
+    wakeBacklight();
+#endif //TFT_BACKLIGHT_TIMEOUT_MS
     showText(msg->getX(), msg->getY(), msg->getMsg(), msg->getClear());
 
     _nextMessageTime = millis() + msg->getTime();
@@ -553,6 +665,18 @@ String LcdTask::getLine(int line)
   return String(start, len);
 }
 
+#ifdef TFT_BACKLIGHT_TIMEOUT_MS
+void LcdTask::wakeBacklight() {
+  digitalWrite(LCD_BACKLIGHT_PIN, HIGH);
+  _last_backlight_wakeup = millis();
+}
+
+void LcdTask::timeoutBacklight() {
+  if (millis() - _last_backlight_wakeup >= TFT_BACKLIGHT_TIMEOUT_MS) {
+    digitalWrite(LCD_BACKLIGHT_PIN, LOW);
+  }
+}
+#endif //TFT_BACKLIGHT_TIMEOUT_MS
 
 LcdTask lcd;
 

@@ -95,6 +95,13 @@ class LcdTask : public MicroTasks::Task
     EvseManager *_evse;
     Scheduler *_scheduler;
     ManualOverride *_manual;
+#ifdef TFT_BACKLIGHT_TIMEOUT_MS
+    long _last_backlight_wakeup = 0;
+    uint8_t _previous_evse_state;
+    bool _previous_vehicle_state;
+#endif //TFT_BACKLIGHT_TIMEOUT_MS
+    bool wifi_client;
+    bool wifi_connected;
 
     char _msg[LCD_MAX_LINES][LCD_MAX_LEN + 1];
     bool _msg_cleared;
@@ -108,6 +115,11 @@ class LcdTask : public MicroTasks::Task
 
     String getLine(int line);
 
+#ifdef TFT_BACKLIGHT_TIMEOUT_MS
+    void wakeBacklight();
+    void timeoutBacklight();
+#endif //TFT_BACKLIGHT_TIMEOUT_MS
+
   protected:
     void setup();
     unsigned long loop(MicroTasks::WakeReason reason);
@@ -117,6 +129,7 @@ class LcdTask : public MicroTasks::Task
     void render_centered_text_box(const char *text, int16_t x, int16_t y, int16_t width, const GFXfont *font, uint16_t text_colour, uint16_t back_colour, bool fill_back, uint8_t size = 1);
     void render_right_text_box(const char *text, int16_t x, int16_t y, int16_t width, const GFXfont *font, uint16_t text_colour, uint16_t back_colour, bool fill_back, uint8_t size = 1);
     void render_left_text_box(const char *text, int16_t x, int16_t y, int16_t width, const GFXfont *font, uint16_t text_colour, uint16_t back_colour, bool fill_back, uint8_t size = 1);
+    void render_data_box(const char *title, const char *text, int16_t x, int16_t y, int16_t width, int16_t height, bool full_update = true);
     void render_info_box(const char *title, const char *text, int16_t x, int16_t y, int16_t width, int16_t height, bool full_update = true);
     void load_font(const char *filename);
 
@@ -130,6 +143,7 @@ class LcdTask : public MicroTasks::Task
     void display(const __FlashStringHelper *msg, int x, int y, int time, uint32_t flags);
     void display(String &msg, int x, int y, int time, uint32_t flags);
     void display(const char *msg, int x, int y, int time, uint32_t flags);
+    void setWifiMode(bool client, bool connected);
 
     void fill_screen(uint16_t color) {
       _screen.fillScreen(color);
