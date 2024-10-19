@@ -1,6 +1,5 @@
 #include "lcd_gui.access_point_png.h"
 #include "lcd_gui.access_point_connected_png.h"
-#include "lcd_gui.blank_png.h"
 #include "lcd_gui.button_bar_png.h"
 #include "lcd_gui.car_connected_png.h"
 #include "lcd_gui.car_disconnected_png.h"
@@ -17,7 +16,6 @@
 StaticFile lcd_gui_static_files[] = {
   { "/access_point.png", CONTENT_ACCESS_POINT_PNG, sizeof(CONTENT_ACCESS_POINT_PNG) - 1, _CONTENT_TYPE_PNG, CONTENT_ACCESS_POINT_PNG_ETAG, false },
   { "/access_point_connected.png", CONTENT_ACCESS_POINT_CONNECTED_PNG, sizeof(CONTENT_ACCESS_POINT_CONNECTED_PNG) - 1, _CONTENT_TYPE_PNG, CONTENT_ACCESS_POINT_CONNECTED_PNG_ETAG, false },
-  { "/blank.png", CONTENT_BLANK_PNG, sizeof(CONTENT_BLANK_PNG) - 1, _CONTENT_TYPE_PNG, CONTENT_BLANK_PNG_ETAG, false },
   { "/button_bar.png", CONTENT_BUTTON_BAR_PNG, sizeof(CONTENT_BUTTON_BAR_PNG) - 1, _CONTENT_TYPE_PNG, CONTENT_BUTTON_BAR_PNG_ETAG, false },
   { "/car_connected.png", CONTENT_CAR_CONNECTED_PNG, sizeof(CONTENT_CAR_CONNECTED_PNG) - 1, _CONTENT_TYPE_PNG, CONTENT_CAR_CONNECTED_PNG_ETAG, false },
   { "/car_disconnected.png", CONTENT_CAR_DISCONNECTED_PNG, sizeof(CONTENT_CAR_DISCONNECTED_PNG) - 1, _CONTENT_TYPE_PNG, CONTENT_CAR_DISCONNECTED_PNG_ETAG, false },
