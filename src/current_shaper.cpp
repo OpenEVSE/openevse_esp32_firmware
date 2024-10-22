@@ -177,15 +177,16 @@ void CurrentShaperTask::shapeCurrent() {
 //	if (livepwr > max_pwr) {
 //		livepwr = max_pwr;
 //	}
+        double max_cur;
 	if(!config_threephase_enabled()) {
-		_max_cur = ((max_pwr - livepwr) / evse.getVoltage()) + evse.getAmps();
+		max_cur = ((max_pwr - livepwr) / evse.getVoltage()) + evse.getAmps();
 	 }
 
 	else {
-		_max_cur = ((max_pwr - livepwr) / evse.getVoltage() / 3.0) + evse.getAmps();
+		max_cur = ((max_pwr - livepwr) / evse.getVoltage() / 3.0) + evse.getAmps();
 	}
-
-
+        // Smooth shaper output to avoid instability with delayed live power samples.
+        _max_cur = _outputFilter.filter(max_cur, _max_cur, current_shaper_smoothing_time);
 
 	_changed = true;
 }
