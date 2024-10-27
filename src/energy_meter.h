@@ -39,7 +39,7 @@ public:
   double weekly;	  // kwh
   double monthly;	  // kwh
   double yearly;	  // kwh
-  uint32_t elapsed; // sec
+  double elapsed; // sec
   uint32_t switches; // homw many switches the relay/contactor got
   bool imported;	  // has imported old counter already
   EnergyMeterDate date;
@@ -57,7 +57,6 @@ private:
   uint32_t _write_upd;
   uint32_t _event_upd;
   uint32_t _rotate_upd;
-  uint32_t _elapsed;
   uint8_t _switch_state; // 0: Undefined, 1: Enabled, 2: Disabled
 
   EvseMonitor *_monitor;

@@ -170,6 +170,8 @@ paths:
                 $ref: ./models/Config.yaml
               examples: {}
     post:
+      description: |
+        Update the EVSE configuration
       operationId: updateConfig
       responses:
         '200':
@@ -233,6 +235,8 @@ paths:
       summary: Get the Manual Override status
       description: Returns the current state of the manual override.
     post:
+      description: |
+        Set the manual override
       requestBody:
         content:
           application/json:
@@ -279,6 +283,9 @@ paths:
       summary: Clear the manual override
   /claims:
     get:
+      description: |
+        List all claims made by EVSE clients.
+        The response will be an array of EVSE claims.
       responses:
         '200':
           description: OK
@@ -294,6 +301,9 @@ paths:
       summary: List EVSE claims
   '/claims/{client}':
     get:
+      description: |
+        Get the claim information for a specific client.
+        The response will be an EVSE claim.
       responses:
         '200':
           description: OK
@@ -431,6 +441,9 @@ paths:
         description: Numeric ID of the event
     get:
       summary: Get event details
+      description: |
+        This will get the details of a specific event in the schedule.
+        The response will be the EVSE state to set for that event.
       responses:
         '200':
           description: OK
@@ -442,6 +455,8 @@ paths:
       tags:
         - Schedule
     post:
+      description: |
+        Update the details of a specific event in the schedule.
       responses:
         '200':
           $ref: '#/components/responses/UpdateSuccessful'
@@ -456,6 +471,8 @@ paths:
         - Schedule
       summary: Update event details
     delete:
+      description: |
+        Remove a specific event from the schedule.
       responses:
         '200':
           description: OK
@@ -523,7 +540,9 @@ paths:
         '404':
           $ref: '#/components/responses/NotFound'
       operationId: getEventBlock
-      description: ''
+      description: |
+        Retrieve the log events for a specific block.
+        The block index range is returned by the /logs endpoint.
     parameters:
       - schema:
           type: integer
@@ -817,6 +836,95 @@ paths:
           $ref: '#/components/responses/BadRequest'
       operationId: post-time
       description: Set the time and associated config options. If not setting the time the `/config` endpoint can be used.
+  /certificates:
+    get:
+      summary: Get a list of certificates
+      description: |
+        Returns a list of certificates that have been uploaded to the OpenEVSE. The certificates are used to
+        authenticate the OpenEVSE to the MQTT broker, provide a secure web interface or as additional root CA
+        certificates.
+      operationId: listCertificates
+      tags:
+        - Certificates
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  certificates:
+                    type: array
+                    items:
+                      $ref: './models/Certificate.yaml'
+    post:
+      summary: Upload a certificate
+      description: |
+        Upload a certificate to the OpenEVSE. The certificate can be used to authenticate the OpenEVSE to the MQTT
+        broker, provide a secure web interface or as additional root CA certificates.
+      operationId: uploadCertificate
+      tags:
+        - Certificates
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: './models/Certificate.yaml'
+      responses:
+        '200':
+          $ref: '#/components/responses/UpdateSuccessful'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+  '/certificates/{id}':
+    get:
+      summary: Get a certificate
+      description: |
+        Returns a certificate that has been uploaded to the OpenEVSE. The certificate is used to
+        authenticate the OpenEVSE to the MQTT broker, provide a secure web interface or as additional root CA
+        certificates.
+      operationId: getCertificate
+      tags:
+        - Certificates
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: './models/Certificate.yaml'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '404':
+          $ref: '#/components/responses/NotFound'
+    delete:
+      summary: Delete a certificate
+      description: |
+        Delete a certificate that has been uploaded to the OpenEVSE. The certificate is used to
+        authenticate the OpenEVSE to the MQTT broker, provide a secure web interface or as additional root CA
+        certificates.
+      operationId: deleteCertificate
+      tags:
+        - Certificates
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          $ref: '#/components/responses/UpdateSuccessful'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '404':
+          $ref: '#/components/responses/NotFound'
 components:
   schemas:
     Message:
@@ -963,3 +1071,4 @@ tags:
   - name: Energy Meter
   - name: Time
   - name: Restart
+  - name: Certificates

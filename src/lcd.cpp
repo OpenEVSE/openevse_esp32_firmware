@@ -2,6 +2,8 @@
 #undef ENABLE_DEBUG
 #endif
 
+#ifndef ENABLE_SCREEN_LCD_TFT
+
 #include "emonesp.h"
 #include "lcd.h"
 #include "RapiSender.h"
@@ -716,7 +718,7 @@ void LcdTask::showText(int x, int y, const char *msg, bool clear)
     }
   }
 
-  // HACK: wait for the display to finish, fixes issues withupdating the display wile updating the firmware
+  // HACK: wait for the display to finish, fixes issues with updating the display while updating the firmware
   _evse->getSender().flush();
 }
 
@@ -733,4 +735,11 @@ void LcdTask::onButton(int long_press)
   }
 }
 
+void LcdTask::setWifiMode(bool client, bool connected)
+{
+//only used by the TFT display
+}
+
 LcdTask lcd;
+
+#endif // ENABLE_SCREEN_LCD_TFT
