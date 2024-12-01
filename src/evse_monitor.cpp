@@ -235,7 +235,6 @@ void EvseMonitor::evseBoot(const char *firmware)
       DBUGF("scale = %ld, offset = %ld", scale, offset);
       _current_sensor_scale = scale;
       _current_sensor_offset = offset;
-
       _boot_ready.ready(EVSE_MONITOR_CURRENT_SENSOR_BOOT_READY);
     }
   });
@@ -801,4 +800,17 @@ bool EvseMonitor::importTotalEnergy()
       }
     });
   return true;
+}
+
+void EvseMonitor::getAmmeterSettings()
+{
+  _openevse.getAmmeterSettings([this](int ret, long scale, long offset)
+  {
+    if(RAPI_RESPONSE_OK == ret)
+    {
+      DBUGF("scale = %ld, offset = %ld", scale, offset);
+      _current_sensor_scale = scale;
+      _current_sensor_offset = offset;
+    }
+  });
 }

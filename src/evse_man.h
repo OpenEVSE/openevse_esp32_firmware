@@ -430,6 +430,9 @@ class EvseManager : public MicroTasks::Task
     long getCurrentSensorOffset() {
       return _monitor.getCurrentSensorOffset();
     }
+    void getAmmeterSettings() {
+      _monitor.getAmmeterSettings();
+    }
 
     void enableFeature(uint8_t feature, bool enabled, std::function<void(int ret)> callback = NULL) {
       _monitor.enableFeature(feature, enabled, callback);
