@@ -48,7 +48,7 @@ The WiFi gateway uses an **ESP32** which communicates with the OpenEVSE controll
 
 ### OpenEVSE / EmonEVSE charging station
 
-- Purchase via: [OpenEVSE Store (USA/Canda)](https://store.openevse.com) | [OpenEnergyMonitor (UK / EU)](https://shop.openenergymonitor.com/evse/)
+- Purchase via: [OpenEVSE Store](https://store.openevse.com)
 - OpenEVSE FW [V7.1.3 recommended](https://github.com/OpenEVSE/open_evse/releases)
 - All new OpenEVSE units are shipped with V7.1.3 pre-loaded (April 2021 onwards)
 
