@@ -173,12 +173,11 @@ void LcdTask::setWifiMode(bool client, bool connected)
   wifi_connected = connected;
 }
 
-void LcdTask::begin(EvseManager &evse, Scheduler &scheduler, ManualOverride &manual, unsigned long &last_knock)
+void LcdTask::begin(EvseManager &evse, Scheduler &scheduler, ManualOverride &manual)
 {
   _evse = &evse;
   _scheduler = &scheduler;
   _manual = &manual;
-  _last_knock = &last_knock;
   MicroTask.startTask(this);
 }
 
@@ -446,8 +445,6 @@ unsigned long LcdTask::loop(MicroTasks::WakeReason reason)
   if (evse_state != _previous_evse_state || vehicle_state != _previous_vehicle_state) {  //wake backlight on state change
     wakeBacklight();
     _previous_vehicle_state = vehicle_state;
-  } else if (millis() - *_last_knock <= 1000) {  //knock interrupt in last second
-    wakeBacklight();
   } else {  //otherwise timeout backlight in appropriate states
     bool timeout = true;
     if (_evse->isVehicleConnected()) {

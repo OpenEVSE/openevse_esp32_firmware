@@ -103,8 +103,6 @@ class LcdTask : public MicroTasks::Task
     bool wifi_client;
     bool wifi_connected;
 
-    unsigned long *_last_knock;
-
     char _msg[LCD_MAX_LINES][LCD_MAX_LEN + 1];
     bool _msg_cleared;
 
@@ -139,7 +137,7 @@ class LcdTask : public MicroTasks::Task
   public:
     LcdTask();
 
-    void begin(EvseManager &evse, Scheduler &scheduler, ManualOverride &manual, unsigned long &last_knock);
+    void begin(EvseManager &evse, Scheduler &scheduler, ManualOverride &manual);
 
     void display(const __FlashStringHelper *msg, int x, int y, int time, uint32_t flags);
     void display(String &msg, int x, int y, int time, uint32_t flags);
