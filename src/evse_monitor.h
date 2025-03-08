@@ -276,6 +276,7 @@ class EvseMonitor : public MicroTasks::Task
       return _energyMeter.reset(full, import);
     }
     bool importTotalEnergy();
+    void getAmmeterSettings();
 
     bool publishEnergyMeter() {
       return _energyMeter.publish();
