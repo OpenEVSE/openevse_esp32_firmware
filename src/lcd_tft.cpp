@@ -237,6 +237,8 @@ unsigned long LcdTask::loop(MicroTasks::WakeReason reason)
   _tft.startWrite();
 #endif
 
+  uint8_t evse_state = _evse->getEvseState();
+
   switch(_state)
   {
     case State::Boot:
@@ -286,7 +288,12 @@ unsigned long LcdTask::loop(MicroTasks::WakeReason reason)
     } break;
 
     case State::Charge:
-    {
+    { 
+      //redraw when going in or out of charging state to switch between pilot and power display
+      if ((evse_state == OPENEVSE_STATE_CHARGING || _previous_evse_state == OPENEVSE_STATE_CHARGING) && evse_state != _previous_evse_state) {  
+        _full_update = true;
+      }
+
       if(_full_update)
       {
         _screen.fillRect(DISPLAY_AREA_X, DISPLAY_AREA_Y, DISPLAY_AREA_WIDTH, DISPLAY_AREA_HEIGHT, TFT_OPENEVSE_BACK);
@@ -301,8 +308,8 @@ unsigned long LcdTask::loop(MicroTasks::WakeReason reason)
       if(_evse->isVehicleConnected()) {
         car_icon = "/car_connected.png";
       }
-      
-      switch (_evse->getEvseState())
+
+      switch (evse_state)
       {
         case OPENEVSE_STATE_STARTING:
           status_icon = "/start.png";
@@ -337,7 +344,7 @@ unsigned long LcdTask::loop(MicroTasks::WakeReason reason)
       }
 
       char buffer[32] = "";
-      char buffer2[10];
+      char buffer2[12];
 
       if (wifi_client) {
         if (wifi_connected) {
@@ -358,17 +365,36 @@ unsigned long LcdTask::loop(MicroTasks::WakeReason reason)
       render_image(car_icon.c_str(), 16, 92);
       render_image(wifi_icon.c_str(), 16, 132);
 
-      snprintf(buffer, sizeof(buffer), "%d", _evse->getChargeCurrent());
-      render_right_text_box(buffer, 66, 175, 154, &FreeSans24pt7b, TFT_BLACK, TFT_WHITE, !_full_update, 2);
-      if(_full_update) {
-        render_left_text_box("A", 224, 165, 34, &FreeSans24pt7b, TFT_BLACK, TFT_WHITE, false, 1);
+
+      if (evse_state == OPENEVSE_STATE_CHARGING) {
+        float power = _evse->getPower() / 1000.0;  //kW
+        if (power < 10) { 
+          snprintf(buffer, sizeof(buffer), "%.2f", power);
+        } else if (power < 100) {
+          snprintf(buffer, sizeof(buffer), "%.1f", power);
+        } else {
+          snprintf(buffer, sizeof(buffer), "%.0f", power);
+        }
+        render_left_text_box(buffer, 66, 157, 188, &FreeSans24pt7b, TFT_BLACK, TFT_WHITE, !_full_update, 2);
+        render_left_text_box("kW", 224, 165, 34, &FreeSans9pt7b, TFT_BLACK, TFT_WHITE, false, 1);
+      } else {
+        snprintf(buffer, sizeof(buffer), "%d", _evse->getChargeCurrent());
+        render_right_text_box(buffer, 66, 175, 154, &FreeSans24pt7b, TFT_BLACK, TFT_WHITE, !_full_update, 2);
+        if (_full_update) {
+          render_left_text_box("A", 224, 165, 34, &FreeSans24pt7b, TFT_BLACK, TFT_WHITE, false, 1);
+        }
       }
       if (_evse->isTemperatureValid(EVSE_MONITOR_TEMP_MONITOR)) {
         snprintf(buffer, sizeof(buffer), "%.1fC", _evse->getTemperature(EVSE_MONITOR_TEMP_MONITOR));
         render_right_text_box(buffer, 415, 30, 50, &FreeSans9pt7b, TFT_WHITE, TFT_OPENEVSE_BACK, false, 1);
       }
+
       snprintf(buffer, sizeof(buffer), "%.1f V  %.2f A", _evse->getVoltage(), _evse->getAmps());
-      get_scaled_number_value(_evse->getPower(), 2, "W", buffer2, sizeof(buffer2));
+      if (evse_state == OPENEVSE_STATE_CHARGING) {
+        snprintf(buffer2, sizeof(buffer2), "Pilot: %dA", _evse->getChargeCurrent());
+      } else {
+        get_scaled_number_value(_evse->getPower(), 2, "W", buffer2, sizeof(buffer2));
+      }
       render_data_box(buffer2, buffer, 66, 175, INFO_BOX_WIDTH, INFO_BOX_HEIGHT, _full_update);
 
       String line = getLine(0);
@@ -397,6 +423,8 @@ unsigned long LcdTask::loop(MicroTasks::WakeReason reason)
       strftime(buffer, sizeof(buffer), "%Y-%m-%d  %H:%M:%S", &timeinfo);
       render_left_text_box(buffer, 12, 30, 175, &FreeSans9pt7b, TFT_WHITE, TFT_OPENEVSE_BACK, false, 1);
 
+      _previous_evse_state = evse_state;
+
       //sleep until next whole second so clock doesn't skip
       gettimeofday(&local_time, NULL);
       nextUpdate = 1000 - local_time.tv_usec/1000;
@@ -413,11 +441,9 @@ unsigned long LcdTask::loop(MicroTasks::WakeReason reason)
 #endif
 
 #ifdef TFT_BACKLIGHT_TIMEOUT_MS
-  uint8_t evse_state = _evse->getEvseState();
   bool vehicle_state = _evse->isVehicleConnected();
   if (evse_state != _previous_evse_state || vehicle_state != _previous_vehicle_state) {  //wake backlight on state change
     wakeBacklight();
-    _previous_evse_state = evse_state;
     _previous_vehicle_state = vehicle_state;
   } else {  //otherwise timeout backlight in appropriate states
     bool timeout = true;
@@ -462,7 +488,7 @@ unsigned long LcdTask::loop(MicroTasks::WakeReason reason)
     }
   }
 #endif //TFT_BACKLIGHT_TIMEOUT_MS
-
+  _previous_evse_state = evse_state;
   DBUGVAR(nextUpdate);
   return nextUpdate;
 }
