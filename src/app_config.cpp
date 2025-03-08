@@ -520,6 +520,7 @@ bool config_deserialize(DynamicJsonDocument &doc)
       evse.configureCurrentSensorScale(doc["scale"], doc["offset"]);
       config_modified = true;
       DBUGLN("scale changed");
+      evse.getAmmeterSettings();
     }
   }
   #endif
