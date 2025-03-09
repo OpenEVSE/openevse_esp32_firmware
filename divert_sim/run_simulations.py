@@ -40,7 +40,8 @@ def run_simulation(dataset: str,
                 output: str,
                 config: bool = False, grid_ie_col: bool = False,
                 solar_col: bool = False, voltage_col: bool = False,
-                separator: str = ',', is_kw: bool = False) -> None:
+                separator: str = ',', is_kw: bool = False,
+                live_power_col: bool = False) -> None:
     """Run the divert_sim process on the given dataset and return the results"""
     line_number = 0
 
@@ -73,6 +74,9 @@ def run_simulation(dataset: str,
             if solar_col:
                 command.append("-s")
                 command.append(str(solar_col))
+            if live_power_col:
+                command.append("-l")
+                command.append(str(live_power_col))
             if voltage_col:
                 command.append("-v")
                 command.append(str(voltage_col))
@@ -81,6 +85,8 @@ def run_simulation(dataset: str,
                 command.append(separator)
             if is_kw:
                 command.append("--kw")
+
+            print(f"cat {input_data.name} | {' '.join(command)}")
 
             divert_process = Popen(command, stdin=input_data, stdout=PIPE,
                     stderr=PIPE, universal_newlines=True)
