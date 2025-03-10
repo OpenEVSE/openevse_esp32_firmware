@@ -777,11 +777,14 @@ void EvseMonitor::getTemperatureFromEvse()
         if(_temps[i].isValid())
         {
           double temp = _temps[i].get();
-          _temps[EVSE_MONITOR_TEMP_MONITOR].set(temp);
-          if(temp > _temps[EVSE_MONITOR_TEMP_MAX].get()) {
+          if(!_temps[EVSE_MONITOR_TEMP_MONITOR].isValid() || temp > _temps[EVSE_MONITOR_TEMP_MONITOR].get())
+          {
+            _temps[EVSE_MONITOR_TEMP_MONITOR].set(temp);
+          }
+          if(temp > _temps[EVSE_MONITOR_TEMP_MAX].get())
+          {
             _temps[EVSE_MONITOR_TEMP_MAX].set(temp);
           }
-          break;
         }
       }
       _data_ready.ready(EVSE_MONITOR_TEMP_DATA_READY);
