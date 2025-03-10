@@ -95,9 +95,9 @@ class LcdTask : public MicroTasks::Task
     EvseManager *_evse;
     Scheduler *_scheduler;
     ManualOverride *_manual;
+    uint8_t _previous_evse_state;
 #ifdef TFT_BACKLIGHT_TIMEOUT_MS
     long _last_backlight_wakeup = 0;
-    uint8_t _previous_evse_state;
     bool _previous_vehicle_state;
 #endif //TFT_BACKLIGHT_TIMEOUT_MS
     bool wifi_client;
@@ -116,7 +116,6 @@ class LcdTask : public MicroTasks::Task
     String getLine(int line);
 
 #ifdef TFT_BACKLIGHT_TIMEOUT_MS
-    void wakeBacklight();
     void timeoutBacklight();
 #endif //TFT_BACKLIGHT_TIMEOUT_MS
 
@@ -145,6 +144,10 @@ class LcdTask : public MicroTasks::Task
     void display(const char *msg, int x, int y, int time, uint32_t flags);
     void setWifiMode(bool client, bool connected);
 
+#ifdef TFT_BACKLIGHT_TIMEOUT_MS
+    void wakeBacklight();
+#endif //TFT_BACKLIGHT_TIMEOUT_MS
+    
     void fill_screen(uint16_t color) {
       _screen.fillScreen(color);
     }
