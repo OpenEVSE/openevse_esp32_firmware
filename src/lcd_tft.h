@@ -14,6 +14,7 @@
 
 #include <TFT_eSPI.h>
 #include <PNGdec.h>
+#include <lvgl.h>
 
 #define LCD_MAX_LEN 16
 #define LCD_MAX_LINES 2
@@ -70,8 +71,6 @@ class LcdTask : public MicroTasks::Task
     Message *_tail;
     uint32_t _nextMessageTime;
 
-    TFT_eSPI _tft;                  // The TFT display
-
 #ifdef ENABLE_DOUBLE_BUFFER
     TFT_eSprite _back_buffer;       // The back buffer
     uint16_t *_back_buffer_pixels;
@@ -84,6 +83,10 @@ class LcdTask : public MicroTasks::Task
     const uint16_t _screen_height = TFT_WIDTH;
 
     bool _initialise = true;
+    bool _lvgl_initialized = false;
+
+    // LVGL objects
+    lv_obj_t *_msg_label;
 
     // Screen management
     ScreenManager* _screenManager = nullptr;
