@@ -93,13 +93,8 @@ class LcdTask : public MicroTasks::Task
     bool _previous_vehicle_state;
 #endif //TFT_BACKLIGHT_TIMEOUT_MS
 
-    char _msg[LCD_MAX_LINES][LCD_MAX_LEN + 1];
-    bool _msg_cleared;
-
     void display(Message *msg, uint32_t flags);
     unsigned long displayNextMessage();
-    void clearLine(int line);
-    void showText(int x, int y, const char *msg, bool clear);
 
 #ifdef TFT_BACKLIGHT_TIMEOUT_MS
     void timeoutBacklight();

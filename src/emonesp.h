@@ -8,6 +8,18 @@
 #include "debug.h"
 #include "profile.h"
 
+// -------------------------------------------------------------------
+// Lock Screen Configuration
+// -------------------------------------------------------------------
+
+// Uncomment to enable lock screen when EVSE is disabled
+#define ENABLE_LOCK_SCREEN
+
+// Default lock screen message displayed when EVSE is disabled
+#ifndef LOCK_SCREEN_MESSAGE
+#define LOCK_SCREEN_MESSAGE "STATION LOCKED"
+#endif
+
 #ifdef WIFI_LED
 #ifndef WIFI_LED_ON_STATE
 #define WIFI_LED_ON_STATE LOW

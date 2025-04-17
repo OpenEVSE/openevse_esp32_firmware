@@ -13,6 +13,10 @@
 
 extern PNG png;
 
+// Global message buffer shared with renderers
+char _msg[LCD_MAX_LINES][LCD_MAX_LEN + 1];
+bool _msg_cleared = false;
+
 #define MAX_IMAGE_WIDTH TFT_HEIGHT // Adjust for your images
 
 struct image_render_state {
@@ -133,8 +137,30 @@ void get_scaled_number_value(double value, int precision, const char *unit, char
   snprintf(buffer, size, "%.*f %s%s", precision, value, mod[index], unit);
 }
 
-// Message line buffer management - will need to be moved from LcdTask to here or a separate file
-extern char _msg[LCD_MAX_LINES][LCD_MAX_LEN + 1]; // This should be defined in lcd_common.h
+void set_message_line(int x, int y, const char *msg, bool clear)
+{
+  DBUGF("LCD: %d %d %s, clear=%s", x, y, msg, clear ? "true" : "false");
+
+  if(clear) {
+    clear_message_line(y);
+  }
+
+  strncpy(_msg[y] + x, msg, LCD_MAX_LEN - x);
+  _msg[y][LCD_MAX_LEN] = '\0';
+  _msg_cleared = false;
+
+  DBUGF("LCD: %s (%p)", _msg[y], _msg[y]);
+}
+
+void clear_message_line(int line)
+{
+  if(line < 0 || line >= LCD_MAX_LINES) {
+    return;
+  }
+
+  memset(_msg[line], ' ', LCD_MAX_LEN);
+  _msg[line][LCD_MAX_LEN] = '\0';
+}
 
 String get_message_line(int line)
 {
@@ -152,6 +178,8 @@ String get_message_line(int line)
     start++;
     len--;
   }
+
+  DBUGF("get_message_line: %d, '%s' (%p) -> '%.*s'", line, _msg[line], _msg[line], len, start);
 
   return String(start, len);
 }
