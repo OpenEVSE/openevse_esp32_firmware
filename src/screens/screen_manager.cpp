@@ -2,6 +2,8 @@
 #undef ENABLE_DEBUG
 #endif
 
+#ifdef ENABLE_SCREEN_LCD_TFT
+
 #include "emonesp.h"
 #include "screens/screen_manager.h"
 #include "screens/screen_boot.h"
@@ -168,3 +170,5 @@ void ScreenManager::updateBacklight()
   }
 }
 #endif //TFT_BACKLIGHT_TIMEOUT_MS
+
+#endif // ENABLE_SCREEN_LCD_TFT

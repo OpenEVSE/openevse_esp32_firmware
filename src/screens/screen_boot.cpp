@@ -2,6 +2,8 @@
 #undef ENABLE_DEBUG
 #endif
 
+#ifdef ENABLE_SCREEN_LCD_TFT
+
 #include "emonesp.h"
 #include "screens/screen_boot.h"
 #include "lcd_common.h"
@@ -46,3 +48,5 @@ unsigned long BootScreen::update()
 
   return 166;
 }
+
+#endif // ENABLE_SCREEN_LCD_TFT

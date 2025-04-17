@@ -2,6 +2,8 @@
 #undef ENABLE_DEBUG
 #endif
 
+#ifdef ENABLE_SCREEN_LCD_TFT
+
 #include "emonesp.h"
 #include "screens/screen_charge.h"
 #include "lcd_common.h"
@@ -193,3 +195,5 @@ unsigned long ChargeScreen::update()
 
   return nextUpdate;
 }
+
+#endif // ENABLE_SCREEN_LCD_TFT

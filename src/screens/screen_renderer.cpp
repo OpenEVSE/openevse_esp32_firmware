@@ -2,6 +2,8 @@
 #undef ENABLE_DEBUG
 #endif
 
+#ifdef ENABLE_SCREEN_LCD_TFT
+
 #include "emonesp.h"
 #include "screens/screen_renderer.h"
 #include "lcd_common.h"
@@ -161,3 +163,5 @@ static void png_draw(PNGDRAW *pDraw)
   png.getLineAsRGB565(pDraw, lineBuffer, PNG_RGB565_BIG_ENDIAN, 0xffffffff);
   state->tft->pushImage(state->xpos, state->ypos + pDraw->y, pDraw->iWidth, 1, lineBuffer);
 }
+
+#endif // ENABLE_SCREEN_LCD_TFT
