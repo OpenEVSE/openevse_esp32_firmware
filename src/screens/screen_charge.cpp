@@ -6,7 +6,6 @@
 #include "screens/screen_charge.h"
 #include "lcd_common.h"
 #include <WiFi.h>
-#include "emonesp.h"
 #include <sys/time.h>
 
 #define BUTTON_BAR_X            0
