@@ -141,8 +141,16 @@ void set_message_line(int x, int y, const char *msg, bool clear)
 {
   DBUGF("LCD: %d %d %s, clear=%s", x, y, msg, clear ? "true" : "false");
 
+  if(y < 0 || y >= LCD_MAX_LINES) {
+    return;
+  }
+
   if(clear) {
     clear_message_line(y);
+  }
+
+  if(x < 0 || x >= LCD_MAX_LEN) {
+    return;
   }
 
   strncpy(_msg[y] + x, msg, LCD_MAX_LEN - x);
