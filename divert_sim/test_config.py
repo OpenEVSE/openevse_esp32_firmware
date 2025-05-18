@@ -91,7 +91,8 @@ def test_config_defaults() -> None:
     assert config["divert_decay_smoothing_time"] ==  600
     assert config["divert_min_charge_time"] ==  600
     assert config["current_shaper_max_pwr"] ==  0
-    assert config["current_shaper_smoothing_time"] ==  60
+    assert config["current_shaper_input_smoothing_time"] ==  60
+    assert config["current_shaper_output_smoothing_time"] ==  0
     assert config["current_shaper_min_pause_time"] ==  300
     assert config["current_shaper_data_maxinterval"] ==  120
     assert config["vehicle_data_src"] ==  0
