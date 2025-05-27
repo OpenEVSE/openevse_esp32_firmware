@@ -354,8 +354,8 @@ void config_changed(String name)
     timeManager.setTimeZone(time_zone);
   } else if(name == "flags") {
     divert.setMode((config_divert_enabled() && 1 == config_charge_mode()) ? DivertMode::Eco : DivertMode::Normal);
-    if(mqtt_connected() != config_mqtt_enabled()) {
-      mqtt_restart();
+    if(mqtt.isConnected() != config_mqtt_enabled()) {
+      mqtt.restartConnection();
     }
     if(emoncms_connected != config_emoncms_enabled()) {
       emoncms_updated = true;
@@ -364,7 +364,7 @@ void config_changed(String name)
     OcppTask::notifyConfigChanged();
     evse.setSleepForDisable(!config_pause_uses_disabled());
   } else if(name.startsWith("mqtt_")) {
-    mqtt_restart();
+    mqtt.restartConnection();
   } else if(name.startsWith("ocpp_")) {
     OcppTask::notifyConfigChanged();
   } else if(name.startsWith("emoncms_")) {

@@ -182,6 +182,8 @@ void setup()
 
   input_setup();
 
+  mqtt.begin();
+
   ocpp.begin(evse, lcd, eventLog, rfid);
   DBUGF("After ocpp.begin: %d", ESPAL.getFreeHeap());
 
@@ -236,8 +238,6 @@ loop() {
     if (vehicle_data_src == VEHICLE_DATA_SRC_TESLA) {
       teslaClient.loop();
     }
-
-    mqtt_loop();
 
     // -------------------------------------------------------------------
     // Do these things once every 30 seconds
@@ -300,7 +300,7 @@ void event_send(JsonDocument &event)
   #endif
   web_server_event(event);
   yield();
-  mqtt_publish(event);
+  mqtt.publishData(event);
   yield();
 }
 
