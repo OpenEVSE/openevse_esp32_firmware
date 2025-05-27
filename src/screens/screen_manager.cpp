@@ -8,6 +8,7 @@
 #include "screens/screen_manager.h"
 #include "screens/screen_boot.h"
 #include "screens/screen_charge.h"
+#include "screens/screen_lock.h"
 #include "lcd_common.h"
 
 ScreenManager::ScreenManager(TFT_eSPI &screen, EvseManager &evse, Scheduler &scheduler, ManualOverride &manual) :
@@ -46,6 +47,7 @@ void ScreenManager::initializeScreens()
 {
   _screens[SCREEN_BOOT] = new BootScreen(_screen, _evse, _scheduler, _manual);
   _screens[SCREEN_CHARGE] = new ChargeScreen(_screen, _evse, _scheduler, _manual);
+  _screens[SCREEN_LOCK] = new LockScreen(_screen, _evse, _scheduler, _manual);
   // Initialize additional screens as needed
 }
 
@@ -71,6 +73,22 @@ unsigned long ScreenManager::update()
       setScreen(SCREEN_CHARGE);
     }
   }
+
+
+#ifdef ENABLE_LOCK_SCREEN
+  // Check if EVSE has entered or exited the active state
+
+  // If EVSE is not active and we're not on the lock screen, switch to it
+  if (!_evse.isActive() && _current_screen != SCREEN_LOCK && _current_screen != SCREEN_BOOT) {
+    DBUGF("EVSE not active, switching to lock screen");
+    setScreen(SCREEN_LOCK);
+  }
+  // If EVSE is active again and we're on the lock screen, switch back to charge screen
+  else if (_evse.isActive() && _current_screen == SCREEN_LOCK) {
+    DBUGF("EVSE active, switching back to charge screen");
+    setScreen(SCREEN_CHARGE);
+  }
+#endif
 
   // Update the current screen
   if (_screens[_current_screen]) {
