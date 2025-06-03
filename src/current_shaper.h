@@ -17,7 +17,6 @@
 #include "emonesp.h"
 #include <MicroTasks.h>
 #include "evse_man.h"
-#include "mqtt.h"
 #include "app_config.h"
 #include "http_update.h"
 #include "input.h"
