@@ -40,6 +40,7 @@ class CurrentShaperTask: public MicroTasks::Task
     uint32_t     _pause_timer;
     bool         _updated;
     InputFilter  _inputFilter;
+    InputFilter  _outputFilter;
 
   protected:
     void setup();

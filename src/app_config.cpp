@@ -102,7 +102,8 @@ uint32_t divert_min_charge_time;
 
 // Current Shaper settings
 uint32_t current_shaper_max_pwr;
-uint32_t current_shaper_smoothing_time;
+uint32_t current_shaper_input_smoothing_time;
+uint32_t current_shaper_output_smoothing_time;
 uint32_t current_shaper_min_pause_time;   // in seconds
 uint32_t current_shaper_data_maxinterval; // in seconds
 
@@ -208,7 +209,8 @@ ConfigOpt *opts[] =
 
 // Current Shaper settings
   new ConfigOptDefinition<uint32_t>(current_shaper_max_pwr, 0, "current_shaper_max_pwr", "smp"),
-  new ConfigOptDefinition<uint32_t>(current_shaper_smoothing_time, 60, "current_shaper_smoothing_time", "sst"),
+  new ConfigOptDefinition<uint32_t>(current_shaper_input_smoothing_time, 60, "current_shaper_input_smoothing_time", "sit"),
+  new ConfigOptDefinition<uint32_t>(current_shaper_output_smoothing_time, 0, "current_shaper_output_smoothing_time", "sot"),
   new ConfigOptDefinition<uint32_t>(current_shaper_min_pause_time, 300, "current_shaper_min_pause_time", "spt"),
   new ConfigOptDefinition<uint32_t>(current_shaper_data_maxinterval, 120, "current_shaper_data_maxinterval", "sdm"),
 
