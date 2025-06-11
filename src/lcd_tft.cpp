@@ -8,6 +8,7 @@
 #include "emonesp.h"
 #include "lcd.h"
 #include "lcd_common.h"
+#include "screens/screen_renderer.h"
 #include "RapiSender.h"
 #include "openevse.h"
 #include "input.h"
@@ -19,9 +20,6 @@
 #include "screens/screen_manager.h"
 
 PNG png; // Global PNG decoder instance
-
-// Global message buffer shared with renderers
-char _msg[LCD_MAX_LINES][LCD_MAX_LEN + 1];
 
 LcdTask::Message::Message(const __FlashStringHelper *msg, int x, int y, int time, uint32_t flags) :
   _next(NULL),
@@ -65,9 +63,8 @@ LcdTask::LcdTask() :
 #endif
 {
   for(int i = 0; i < LCD_MAX_LINES; i++) {
-    clearLine(i);
+    clear_message_line(i);
   }
-  _msg_cleared = true;
 }
 
 LcdTask::~LcdTask()
@@ -194,7 +191,7 @@ unsigned long LcdTask::loop(MicroTasks::WakeReason reason)
   {
     DBUGLN("Clearing message lines");
     for(int i = 0; i < LCD_MAX_LINES; i++) {
-      clearLine(i);
+      clear_message_line(i);
     }
     _msg_cleared = true;
   }
@@ -238,7 +235,7 @@ unsigned long LcdTask::displayNextMessage()
       _screenManager->wakeBacklight();
     }
 #endif //TFT_BACKLIGHT_TIMEOUT_MS
-    showText(msg->getX(), msg->getY(), msg->getMsg(), msg->getClear());
+    set_message_line(msg->getX(), msg->getY(), msg->getMsg(), msg->getClear());
 
     _nextMessageTime = millis() + msg->getTime();
 
@@ -249,29 +246,6 @@ unsigned long LcdTask::displayNextMessage()
   unsigned long nextUpdate = _nextMessageTime - millis();
   DBUGVAR(nextUpdate);
   return nextUpdate;
-}
-
-void LcdTask::showText(int x, int y, const char *msg, bool clear)
-{
-  DBUGF("LCD: %d %d %s, clear=%s", x, y, msg, clear ? "true" : "false");
-
-  if(clear) {
-    clearLine(y);
-  }
-
-  strncpy(_msg[y], msg + x, LCD_MAX_LEN - x);
-  _msg[y][LCD_MAX_LEN] = '\0';
-  _msg_cleared = false;
-}
-
-void LcdTask::clearLine(int line)
-{
-  if(line < 0 || line >= LCD_MAX_LINES) {
-    return;
-  }
-
-  memset(_msg[line], ' ', LCD_MAX_LEN);
-  _msg[line][LCD_MAX_LEN] = '\0';
 }
 
 LcdTask lcd;
