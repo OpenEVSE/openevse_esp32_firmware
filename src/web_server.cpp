@@ -796,7 +796,7 @@ void handleOverridePost(MongooseHttpServerRequest *request, MongooseHttpServerRe
       mqtt.publishOverride();  // update override state to mqtt
     } else {
       response->setCode(500);
-      response->print("{\"msg\":\"Failed to claim manual overide\"}");
+      response->print("{\"msg\":\"Failed to claim manual override\"}");
     }
   } else {
     response->setCode(400);
@@ -812,7 +812,7 @@ void handleOverrideDelete(MongooseHttpServerRequest *request, MongooseHttpServer
     mqtt.publishOverride();  // update override state to mqtt
   } else {
     response->setCode(500);
-    response->print("{\"msg\":\"Failed to release manual overide\"}");
+    response->print("{\"msg\":\"Failed to release manual override\"}");
   }
 }
 
@@ -825,7 +825,7 @@ void handleOverridePatch(MongooseHttpServerRequest *request, MongooseHttpServerR
     mqtt.publishOverride();  // update override state to mqtt
   } else {
     response->setCode(500);
-    response->print("{\"msg\":\"Failed to toggle manual overide\"}");
+    response->print("{\"msg\":\"Failed to toggle manual override\"}");
   }
 }
 
