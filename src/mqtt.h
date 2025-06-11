@@ -21,7 +21,6 @@
 #include "current_shaper.h" // For shaper interaction, if any direct calls were made
 
 // Forward declarations
-class EvseManager;
 
 #define MQTT_LOOP_INTERVAL 50 // ms, replaces MQTT_LOOP define
 #define MQTT_CONNECT_TIMEOUT (5 * 1000) // ms
