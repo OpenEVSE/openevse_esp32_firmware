@@ -10,8 +10,8 @@
 #include "evse_man.h"
 #include "scheduler.h"
 #include "manual.h"
+#include "screens/screen_manager.h"
 
-//#include <lvgl.h>
 #include <TFT_eSPI.h>
 #include <PNGdec.h>
 
@@ -79,41 +79,22 @@ class LcdTask : public MicroTasks::Task
 
     TFT_eSPI &_screen;                 // What we are going to write to
 
-    // The TFT screen is portrate natively, so we need to rotate it
+    // The TFT screen is portrait natively, so we need to rotate it
     const uint16_t _screen_width  = TFT_HEIGHT;
     const uint16_t _screen_height = TFT_WIDTH;
 
-    enum class State {
-      Boot,
-      Charge
-    };
-
-    State _state = State::Boot;
-    bool _full_update = true;
     bool _initialise = true;
-    uint16_t _boot_progress = 0;
-    EvseManager *_evse;
-    Scheduler *_scheduler;
-    ManualOverride *_manual;
-    uint8_t _previous_evse_state;
+
+    // Screen management
+    ScreenManager* _screenManager = nullptr;
+
 #ifdef TFT_BACKLIGHT_TIMEOUT_MS
     long _last_backlight_wakeup = 0;
     bool _previous_vehicle_state;
 #endif //TFT_BACKLIGHT_TIMEOUT_MS
-    bool wifi_client;
-    bool wifi_connected;
-
-    char _msg[LCD_MAX_LINES][LCD_MAX_LEN + 1];
-    bool _msg_cleared;
-
-    static void png_draw(PNGDRAW *pDraw);
 
     void display(Message *msg, uint32_t flags);
     unsigned long displayNextMessage();
-    void clearLine(int line);
-    void showText(int x, int y, const char *msg, bool clear);
-
-    String getLine(int line);
 
 #ifdef TFT_BACKLIGHT_TIMEOUT_MS
     void timeoutBacklight();
@@ -123,19 +104,9 @@ class LcdTask : public MicroTasks::Task
     void setup();
     unsigned long loop(MicroTasks::WakeReason reason);
 
-    void render_image(const char *filename, int16_t x, int16_t y);
-    void render_text_box(const char *text, int16_t x, int16_t y, int16_t text_x, int16_t width, const GFXfont *font, uint16_t text_colour, uint16_t back_colour, bool fill_back, uint8_t d, uint8_t size);
-    void render_centered_text_box(const char *text, int16_t x, int16_t y, int16_t width, const GFXfont *font, uint16_t text_colour, uint16_t back_colour, bool fill_back, uint8_t size = 1);
-    void render_right_text_box(const char *text, int16_t x, int16_t y, int16_t width, const GFXfont *font, uint16_t text_colour, uint16_t back_colour, bool fill_back, uint8_t size = 1);
-    void render_left_text_box(const char *text, int16_t x, int16_t y, int16_t width, const GFXfont *font, uint16_t text_colour, uint16_t back_colour, bool fill_back, uint8_t size = 1);
-    void render_data_box(const char *title, const char *text, int16_t x, int16_t y, int16_t width, int16_t height, bool full_update = true);
-    void render_info_box(const char *title, const char *text, int16_t x, int16_t y, int16_t width, int16_t height, bool full_update = true);
-    void load_font(const char *filename);
-
-    void get_scaled_number_value(double value, int precision, const char *unit, char *buffer, size_t size);
-
   public:
     LcdTask();
+    ~LcdTask();
 
     void begin(EvseManager &evse, Scheduler &scheduler, ManualOverride &manual);
 
@@ -147,12 +118,13 @@ class LcdTask : public MicroTasks::Task
 #ifdef TFT_BACKLIGHT_TIMEOUT_MS
     void wakeBacklight();
 #endif //TFT_BACKLIGHT_TIMEOUT_MS
-    
+
     void fill_screen(uint16_t color) {
       _screen.fillScreen(color);
     }
 };
 
 extern LcdTask lcd;
+extern char _msg[LCD_MAX_LINES][LCD_MAX_LEN + 1]; // Message buffer shared with renderers
 
 #endif // __LCD_TFT_H
