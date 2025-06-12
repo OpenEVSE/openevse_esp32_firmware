@@ -27,7 +27,4 @@
 #define ARRAY_ITEMS(a) (sizeof(a) / sizeof(a[0]))
 #endif
 
-// Message line buffer - shared across screens
-extern char _msg[LCD_MAX_LINES][LCD_MAX_LEN + 1];
-
 #endif // __LCD_COMMON_H
