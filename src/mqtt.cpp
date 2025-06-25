@@ -16,7 +16,7 @@
 
 Mqtt mqtt(evse); // global instance
 
-Mqtt::Mqtt(EvseManager &evseManager) : 
+Mqtt::Mqtt(EvseManager &evseManager) :
   MicroTasks::Task(),
   _evse(&evseManager)
 {
@@ -84,7 +84,7 @@ unsigned long Mqtt::loop(MicroTasks::WakeReason reason) {
   }
 
   // Manage connection state
-  if (config_mqtt_enabled() && !_mqttclient.connected() && !_connecting) {
+  if (net.isConnected() && config_mqtt_enabled() && !_mqttclient.connected() && !_connecting) {
     long now = millis();
     if (now > _nextMqttReconnectAttempt) {
       _nextMqttReconnectAttempt = now + MQTT_CONNECT_TIMEOUT;
@@ -99,9 +99,9 @@ unsigned long Mqtt::loop(MicroTasks::WakeReason reason) {
       checkAndPublishUpdates();
     }
   }
-  
 
   Profile_End(Mqtt_loop, 5);
+  //return config_mqtt_enabled() ? MQTT_LOOP_INTERVAL : MicroTask.Infinate;
   return MQTT_LOOP_INTERVAL;
 }
 
@@ -110,7 +110,7 @@ void Mqtt::attemptConnection() {
     return;
   }
   _connecting = true;
-  DBUGLN("Mqtt attempting connection...");
+  DBUGF("MQTT attempting connection... (%s)\n", net.isConnected() ? "connected" : "not connected");
 
   String mqtt_host = mqtt_server + ":" + String(mqtt_port);
   DBUGF("MQTT Connecting to... %s://%s", MQTT_MQTT == config_mqtt_protocol() ? "mqtt" : "mqtts", mqtt_host.c_str());
@@ -211,7 +211,7 @@ void Mqtt::subscribeTopics() {
       _mqttclient.subscribe(mqtt_live_pwr); yield();
     }
   }
-  
+
   // Vehicle data
   if (mqtt_vehicle_soc != "") { _mqttclient.subscribe(mqtt_vehicle_soc); yield(); }
   if (mqtt_vehicle_range != "") { _mqttclient.subscribe(mqtt_vehicle_range); yield(); }
@@ -240,7 +240,7 @@ void Mqtt::publishInitialState() {
     _overrideVersion = manual.getVersion() == 0 ? 1 : manual.getVersion() -1;
     _scheduleVersion = scheduler.getVersion() == 0 ? 1 : scheduler.getVersion() -1;
     _limitVersion = limit.getVersion() == 0 ? 1 : limit.getVersion() -1;
-    
+
     checkAndPublishUpdates(); // This will now publish everything
 }
 
@@ -421,6 +421,7 @@ bool Mqtt::isConnected() {
 void Mqtt::restartConnection() {
   DBUGLN("MQTT restart requested");
   _mqttRestartTime = millis() + 50; // Schedule restart in the near future in loop
+  MicroTask.wakeTask(this); // Ensure loop runs to handle the restart
 }
 
 void Mqtt::publishData(JsonDocument &data) {
