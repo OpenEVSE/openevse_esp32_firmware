@@ -5,6 +5,7 @@
 #include "screen_base.h"
 #include "screen_boot.h"
 #include "screen_charge.h"
+#include "screen_lock.h"
 
 class ScreenFactory {
 public:
@@ -15,6 +16,8 @@ public:
         return new BootScreen(screen, evse, scheduler, manual);
       case SCREEN_CHARGE:
         return new ChargeScreen(screen, evse, scheduler, manual);
+      case SCREEN_LOCK:
+        return new LockScreen(screen, evse, scheduler, manual);
       // Add additional screen types here
       default:
         return nullptr;
