@@ -45,7 +45,7 @@ const char *LimitType::toString()
 			LimitType::Energy == _value ? "energy" :
 			LimitType::Soc == _value ? "soc" :
 			LimitType::Range == _value ? "range" :
-			"unknown";
+			"none";
 }
 
 LimitType LimitType::operator= (const Value val) {
@@ -69,7 +69,7 @@ LimitProperties::~LimitProperties()
 {
 };
 
-void LimitProperties::init() 
+void LimitProperties::init()
 {
 	_type = LimitType::None;
 	_value = 0;
@@ -279,7 +279,7 @@ bool Limit::set(LimitProperties props) {
 	return true;
 };
 
-LimitProperties Limit::get() { 
+LimitProperties Limit::get() {
 	return _limit_properties;
 };
 
@@ -306,4 +306,4 @@ void Limit::onSessionComplete(MicroTasks::EventListener *listner) {
     clear();
   }
 }
-  
+
