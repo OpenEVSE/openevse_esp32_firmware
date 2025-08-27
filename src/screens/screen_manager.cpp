@@ -137,8 +137,12 @@ void ScreenManager::updateBacklight()
   bool timeout = true;
   bool immediateTimeout = false;
   
-  if (_evse.isVehicleConnected()) {
-    switch (_evse.getEvseState()) {
+  // Check for immediate timeout states first, regardless of vehicle connection
+  uint8_t evse_state = _evse.getEvseState();
+  if (evse_state == OPENEVSE_STATE_SLEEPING || evse_state == OPENEVSE_STATE_DISABLED) {
+    immediateTimeout = true;
+  } else if (_evse.isVehicleConnected()) {
+    switch (evse_state) {
       case OPENEVSE_STATE_STARTING:
       case OPENEVSE_STATE_VENT_REQUIRED:
       case OPENEVSE_STATE_DIODE_CHECK_FAILED:
@@ -153,10 +157,6 @@ void ScreenManager::updateBacklight()
       case OPENEVSE_STATE_NOT_CONNECTED:
       case OPENEVSE_STATE_CONNECTED:
         timeout = true;
-        break;
-      case OPENEVSE_STATE_SLEEPING:
-      case OPENEVSE_STATE_DISABLED:
-        immediateTimeout = true;
         break;
       case OPENEVSE_STATE_CHARGING:
 #ifdef TFT_BACKLIGHT_CHARGING_THRESHOLD
