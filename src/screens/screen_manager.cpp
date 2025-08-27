@@ -131,40 +131,41 @@ void ScreenManager::timeoutBacklight() {
 void ScreenManager::updateBacklight()
 {
   bool timeout = true;
-  if (_evse.isVehicleConnected()) {
-    switch (_evse.getEvseState()) {
-      case OPENEVSE_STATE_STARTING:
-      case OPENEVSE_STATE_VENT_REQUIRED:
-      case OPENEVSE_STATE_DIODE_CHECK_FAILED:
-      case OPENEVSE_STATE_GFI_FAULT:
-      case OPENEVSE_STATE_NO_EARTH_GROUND:
-      case OPENEVSE_STATE_STUCK_RELAY:
-      case OPENEVSE_STATE_GFI_SELF_TEST_FAILED:
-      case OPENEVSE_STATE_OVER_TEMPERATURE:
-      case OPENEVSE_STATE_OVER_CURRENT:
-        timeout = false;
-        break;
-      case OPENEVSE_STATE_NOT_CONNECTED:
-      case OPENEVSE_STATE_CONNECTED:
-      case OPENEVSE_STATE_SLEEPING:
-      case OPENEVSE_STATE_DISABLED:
-        timeout = true;
-        break;
-      case OPENEVSE_STATE_CHARGING:
+  
+  // Handle state logic regardless of vehicle connection
+  switch (_evse.getEvseState()) {
+    case OPENEVSE_STATE_STARTING:
+    case OPENEVSE_STATE_VENT_REQUIRED:
+    case OPENEVSE_STATE_DIODE_CHECK_FAILED:
+    case OPENEVSE_STATE_GFI_FAULT:
+    case OPENEVSE_STATE_NO_EARTH_GROUND:
+    case OPENEVSE_STATE_STUCK_RELAY:
+    case OPENEVSE_STATE_GFI_SELF_TEST_FAILED:
+    case OPENEVSE_STATE_OVER_TEMPERATURE:
+    case OPENEVSE_STATE_OVER_CURRENT:
+      timeout = false;
+      break;
+    case OPENEVSE_STATE_NOT_CONNECTED:
+    case OPENEVSE_STATE_CONNECTED:
+    case OPENEVSE_STATE_SLEEPING:
+    case OPENEVSE_STATE_DISABLED:
+      timeout = true;
+      break;
+    case OPENEVSE_STATE_CHARGING:
 #ifdef TFT_BACKLIGHT_CHARGING_THRESHOLD
-        if (_evse.getAmps() >= TFT_BACKLIGHT_CHARGING_THRESHOLD) {
-          wakeBacklight();
-          timeout = false;
-        }
-#else
+      if (_evse.getAmps() >= TFT_BACKLIGHT_CHARGING_THRESHOLD) {
+        wakeBacklight();
         timeout = false;
+      }
+#else
+      timeout = false;
 #endif //TFT_BACKLIGHT_CHARGING_THRESHOLD
-        break;
-      default:
-        timeout = true;
-        break;
-    }
+      break;
+    default:
+      timeout = true;
+      break;
   }
+  
   if (timeout) {
     timeoutBacklight();
   }
