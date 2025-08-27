@@ -128,9 +128,15 @@ void ScreenManager::timeoutBacklight() {
   }
 }
 
+void ScreenManager::immediateTimeoutBacklight() {
+  digitalWrite(LCD_BACKLIGHT_PIN, LOW);
+}
+
 void ScreenManager::updateBacklight()
 {
   bool timeout = true;
+  bool immediateTimeout = false;
+  
   if (_evse.isVehicleConnected()) {
     switch (_evse.getEvseState()) {
       case OPENEVSE_STATE_STARTING:
@@ -146,9 +152,11 @@ void ScreenManager::updateBacklight()
         break;
       case OPENEVSE_STATE_NOT_CONNECTED:
       case OPENEVSE_STATE_CONNECTED:
+        timeout = true;
+        break;
       case OPENEVSE_STATE_SLEEPING:
       case OPENEVSE_STATE_DISABLED:
-        timeout = true;
+        immediateTimeout = true;
         break;
       case OPENEVSE_STATE_CHARGING:
 #ifdef TFT_BACKLIGHT_CHARGING_THRESHOLD
@@ -165,7 +173,10 @@ void ScreenManager::updateBacklight()
         break;
     }
   }
-  if (timeout) {
+  
+  if (immediateTimeout) {
+    immediateTimeoutBacklight();
+  } else if (timeout) {
     timeoutBacklight();
   }
 }

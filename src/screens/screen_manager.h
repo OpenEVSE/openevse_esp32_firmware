@@ -35,6 +35,7 @@ public:
 #ifdef TFT_BACKLIGHT_TIMEOUT_MS
   void wakeBacklight();
   void timeoutBacklight();
+  void immediateTimeoutBacklight();
   void updateBacklight();
 #endif //TFT_BACKLIGHT_TIMEOUT_MS
 
