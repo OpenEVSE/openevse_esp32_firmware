@@ -137,23 +137,27 @@ void ScreenManager::updateBacklight()
   bool timeout = true;
   bool immediateTimeout = false;
   
-  // Check for immediate timeout states first, regardless of vehicle connection
   uint8_t evse_state = _evse.getEvseState();
+  
+  // Check for states that require immediate timeout regardless of vehicle connection
   if (evse_state == OPENEVSE_STATE_SLEEPING || evse_state == OPENEVSE_STATE_DISABLED) {
     immediateTimeout = true;
-  } else if (_evse.isVehicleConnected()) {
+  }
+  // Check for error states that should keep screen on regardless of vehicle connection
+  else if (evse_state == OPENEVSE_STATE_STARTING ||
+           evse_state == OPENEVSE_STATE_VENT_REQUIRED ||
+           evse_state == OPENEVSE_STATE_DIODE_CHECK_FAILED ||
+           evse_state == OPENEVSE_STATE_GFI_FAULT ||
+           evse_state == OPENEVSE_STATE_NO_EARTH_GROUND ||
+           evse_state == OPENEVSE_STATE_STUCK_RELAY ||
+           evse_state == OPENEVSE_STATE_GFI_SELF_TEST_FAILED ||
+           evse_state == OPENEVSE_STATE_OVER_TEMPERATURE ||
+           evse_state == OPENEVSE_STATE_OVER_CURRENT) {
+    timeout = false;
+  }
+  // For other states, check vehicle connection and state
+  else if (_evse.isVehicleConnected()) {
     switch (evse_state) {
-      case OPENEVSE_STATE_STARTING:
-      case OPENEVSE_STATE_VENT_REQUIRED:
-      case OPENEVSE_STATE_DIODE_CHECK_FAILED:
-      case OPENEVSE_STATE_GFI_FAULT:
-      case OPENEVSE_STATE_NO_EARTH_GROUND:
-      case OPENEVSE_STATE_STUCK_RELAY:
-      case OPENEVSE_STATE_GFI_SELF_TEST_FAILED:
-      case OPENEVSE_STATE_OVER_TEMPERATURE:
-      case OPENEVSE_STATE_OVER_CURRENT:
-        timeout = false;
-        break;
       case OPENEVSE_STATE_NOT_CONNECTED:
       case OPENEVSE_STATE_CONNECTED:
         timeout = true;
@@ -172,6 +176,10 @@ void ScreenManager::updateBacklight()
         timeout = true;
         break;
     }
+  }
+  // When no vehicle connected and not in error/immediate timeout states, use timeout
+  else {
+    timeout = true;
   }
   
   if (immediateTimeout) {
