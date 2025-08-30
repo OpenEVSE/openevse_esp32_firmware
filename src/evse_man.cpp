@@ -603,11 +603,12 @@ void EvseManager::setMaxConfiguredCurrent(long amps)
 
 bool EvseManager::isRapiCommandBlocked(String rapi)
 {
-#ifdef ENABLE_FULL_RAPI
+  //#ifdef ENABLE_FULL_RAPI
+  //  return false;
+  //#else
+  //  return !rapi.startsWith("$G");
+  //#endif
   return false;
-#else
-  return !rapi.startsWith("$G");
-#endif
 }
 
 bool EvseManager::serializeClaims(DynamicJsonDocument &doc)
