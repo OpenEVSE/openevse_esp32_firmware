@@ -18,7 +18,11 @@
         "divert_PV_ratio": parseFloat($("#divert_PV_ratio").val()),
         "divert_attack_smoothing_time": parseInt($("#divert_attack_smoothing_time").val()),
         "divert_decay_smoothing_time": parseInt($("#divert_decay_smoothing_time").val()),
-        "divert_min_charge_time": parseInt($("#divert_min_charge_time").val())
+        "divert_min_charge_time": parseInt($("#divert_min_charge_time").val()),
+        "current_shaper_max_pwr": parseInt($("#current_shaper_max_pwr").val()),
+        "current_shaper_smoothing_time": parseInt($("#current_shaper_smoothing_time").val()),
+        "current_shaper_min_pause_time": parseInt($("#current_shaper_min_pause_time").val()),
+        "current_shaper_data_maxinterval": parseInt($("#current_shaper_data_maxinterval").val())
       }), () => {
         init_summary(profiles);
         loadSummary("output/summary_master.csv", () => {
@@ -50,6 +54,14 @@
   <input type="text" id="divert_decay_smoothing_time" value="200"><br/>
   <label for="divert_min_charge_time">divert_min_charge_time</label>
   <input type="text" id="divert_min_charge_time" value="600"><br/>
+  <label for="current_shaper_max_pwr">current_shaper_max_pwr</label>
+  <input type="text" id="current_shaper_max_pwr" value="6000"><br/>
+  <label for="current_shaper_smoothing_time">current_shaper_smoothing_time</label>
+  <input type="text" id="current_shaper_smoothing_time" value="60"><br/>
+  <label for="current_shaper_min_pause_time">current_shaper_min_pause_time</label>
+  <input type="text" id="current_shaper_min_pause_time" value="300"><br/>
+  <label for="current_shaper_data_maxinterval">current_shaper_data_maxinterval</label>
+  <input type="text" id="current_shaper_data_maxinterval" value="120"><br/>
 
   <button onclick="run_simulation()">Run Simulation</button>
 
