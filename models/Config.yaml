@@ -68,7 +68,8 @@ x-examples:
     current_shaper_max_pwr: 9000
     current_shaper_min_pause_time: 300
     current_shaper_data_maxinterval: 120
-    current_shaper_smoothing_time: 60
+    current_shaper_input_smoothing_time: 60
+    current_shaper_output_smoothing_time: 0
     vehicle_data_src: 0
     tesla_access_token: _DUMMY_PASSWORD
     tesla_refresh_token: _DUMMY_PASSWORD
