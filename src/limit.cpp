@@ -40,12 +40,12 @@ return _value;
 }
 const char *LimitType::toString()
 {
-  return  LimitType::None == _value ? "none" :
-      LimitType::Time == _value ? "time" :
-      LimitType::Energy == _value ? "energy" :
-      LimitType::Soc == _value ? "soc" :
-      LimitType::Range == _value ? "range" :
-      "unknown";
+	return  LimitType::None == _value ? "none" :
+			LimitType::Time == _value ? "time" :
+			LimitType::Energy == _value ? "energy" :
+			LimitType::Soc == _value ? "soc" :
+			LimitType::Range == _value ? "range" :
+			"none";
 }
 
 LimitType LimitType::operator= (const Value val) {
@@ -309,7 +309,7 @@ bool Limit::set(LimitProperties props) {
 };
 
 LimitProperties Limit::get() {
-  return _limit_properties;
+	return _limit_properties;
 };
 
 bool Limit::clear() {
