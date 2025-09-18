@@ -614,7 +614,7 @@ void EvseManager::setMaxConfiguredCurrent(long amps)
 void EvseManager::setMaxHardwareCurrent(long amps)
 {
   _monitor.setMaxHardwareCurrent(amps);
-  DBUGF("Max hardware current set to %ld (%ld)", _monitor.getMaxHardwareCurrent(), amps);
+  DBUGF("Max hardware current set to actual: %ld, requested: %ld", _monitor.getMaxHardwareCurrent(), amps);
 }
 
 bool EvseManager::isRapiCommandBlocked(String rapi)
