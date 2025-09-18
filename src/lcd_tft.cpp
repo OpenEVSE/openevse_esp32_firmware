@@ -166,20 +166,16 @@ unsigned long LcdTask::loop(MicroTasks::WakeReason reason)
     DBUGF("Back buffer %p", _back_buffer_pixels);
 #endif
 
+    // Create the screen manager with pointers to display and data sources
+    _screenManager = new ScreenManager(_screen, evse, scheduler, manual);
+
     pinMode(LCD_BACKLIGHT_PIN, OUTPUT);
 #ifdef TFT_BACKLIGHT_TIMEOUT_MS
-    if(_screenManager) {
-      _screenManager->wakeBacklight();
-    } else {
-      digitalWrite(LCD_BACKLIGHT_PIN, HIGH);
-    }
+    _screenManager->wakeBacklight();
 #else
     digitalWrite(LCD_BACKLIGHT_PIN, HIGH);
 #endif //TFT_BACKLIGHT_TIMEOUT_MS
     _initialise = false;
-
-    // Create the screen manager with pointers to display and data sources
-    _screenManager = new ScreenManager(_screen, evse, scheduler, manual);
   }
 
   // If we have messages to display, do it
