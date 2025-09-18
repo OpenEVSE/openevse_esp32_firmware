@@ -1,4 +1,4 @@
-#if defined(ENABLE_DEBUG) && !defined(ENABLE_DEBUG_LCD)
+#if defined(ENABLE_DEBUG) && !defined(ENABLE_DEBUG_SCREEN_MANAGER)
 #undef ENABLE_DEBUG
 #endif
 
@@ -64,6 +64,8 @@ void ScreenManager::setScreen(ScreenType screen)
 
 unsigned long ScreenManager::update()
 {
+  unsigned long nextUpdate = 1000; // Default to 1 second
+
   // Handle special case: automatic transition from boot to charge screen
   if (_current_screen == SCREEN_BOOT) {
     BootScreen* bootScreen = static_cast<BootScreen*>(_screens[SCREEN_BOOT]);
@@ -74,7 +76,7 @@ unsigned long ScreenManager::update()
 
   // Update the current screen
   if (_screens[_current_screen]) {
-    return _screens[_current_screen]->update();
+    nextUpdate = _screens[_current_screen]->update();
   }
 
 #ifdef TFT_BACKLIGHT_TIMEOUT_MS
@@ -83,15 +85,14 @@ unsigned long ScreenManager::update()
 
   if (_previous_evse_state != evse_state || _previous_vehicle_state != vehicle_state) {
     wakeBacklight();
-    _previous_vehicle_state = vehicle_state;
+    _previous_vehicle_state = vehicle_state;  
     _previous_evse_state = evse_state;
   } else {
     updateBacklight();
   }
 #endif //TFT_BACKLIGHT_TIMEOUT_MS
 
-
-  return 1000; // Default update interval if no screen is active
+  return nextUpdate; 
 }
 
 void ScreenManager::handleEvent(uint8_t event)
@@ -117,19 +118,26 @@ void ScreenManager::setWifiMode(bool client, bool connected)
 
 // Add backlight management implementations
 #ifdef TFT_BACKLIGHT_TIMEOUT_MS
-void ScreenManager::wakeBacklight() {
+void ScreenManager::wakeBacklight()
+{
+  DBUGLN("🔦 Waking backlight");
   digitalWrite(LCD_BACKLIGHT_PIN, HIGH);
-  _last_backlight_wakeup = millis();
+  _backlight_timeout = millis() + TFT_BACKLIGHT_TIMEOUT_MS;
 }
 
-void ScreenManager::timeoutBacklight() {
-  if (millis() - _last_backlight_wakeup >= TFT_BACKLIGHT_TIMEOUT_MS) {
+void ScreenManager::timeoutBacklight()
+{
+  if (millis() >= _backlight_timeout) 
+  {
+    DBUGLN("Timing out backlight");
     digitalWrite(LCD_BACKLIGHT_PIN, LOW);
   }
 }
 
 void ScreenManager::updateBacklight()
 {
+  DBUGF("Backlight timeout in %lu ms", _backlight_timeout - millis());
+
   bool timeout = true;
   if (_evse.isVehicleConnected()) {
     switch (_evse.getEvseState()) {
@@ -165,6 +173,7 @@ void ScreenManager::updateBacklight()
         break;
     }
   }
+  DBUGVAR(timeout);
   if (timeout) {
     timeoutBacklight();
   }
