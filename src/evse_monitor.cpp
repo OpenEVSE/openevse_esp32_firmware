@@ -700,7 +700,7 @@ void EvseMonitor::setMaxConfiguredCurrent(long amps)
 }
 
 // This method will attempt to set the hardware current limit. This
-// can only be set once. If called subsiquant times it will be ignored.
+// can only be set once. If called subsequent times it will be ignored.
 // We will need to read back the hardware limit to know what it is.
 void EvseMonitor::setMaxHardwareCurrent(long amps)
 {
