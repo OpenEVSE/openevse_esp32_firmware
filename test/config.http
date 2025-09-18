@@ -326,3 +326,12 @@ Content-Type: application/json
   "max_current_hard": "20"
 }
 
+###
+
+POST {{baseUrl}}/config HTTP/1.1
+Content-Type: application/json
+
+{
+  "wizard_passed": false
+}
+
