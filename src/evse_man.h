@@ -221,6 +221,7 @@ class EvseManager : public MicroTasks::Task
     MicroTasks::EventListener _evseStateListener;
     MicroTasks::EventListener _evseBootListener;
     MicroTasks::EventListener _sessionCompleteListener;
+    MicroTasks::EventListener _settingsChangedListener;
 
     EvseProperties _targetProperties;
     bool _hasClaims;
@@ -418,6 +419,7 @@ class EvseManager : public MicroTasks::Task
     long getMaxConfiguredCurrent() {
       return _monitor.getMaxConfiguredCurrent();
     }
+    void setMaxHardwareCurrent(long amps);
     long getMaxHardwareCurrent() {
       return _monitor.getMaxHardwareCurrent();
     }

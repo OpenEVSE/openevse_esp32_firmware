@@ -512,6 +512,17 @@ bool config_deserialize(DynamicJsonDocument &doc)
     }
   }
 
+  if(doc.containsKey("max_current_hard"))
+  {
+    // This value can only be written once so we need to check if the value has changed after setting
+    long current = doc["max_current_hard"];
+    if(current != evse.getMaxHardwareCurrent()) {
+      evse.setMaxHardwareCurrent(current);
+      config_modified = true;
+      DBUGLN("max_current_hard changed");
+    }
+  }
+
   if(doc.containsKey("scale") && doc.containsKey("offset"))
   {
     long scale = doc["scale"];
