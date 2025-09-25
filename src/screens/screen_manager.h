@@ -8,6 +8,7 @@
 enum ScreenType {
   SCREEN_BOOT,
   SCREEN_CHARGE,
+  SCREEN_LOCK,   // Lock screen when EVSE is disabled
   // Add other screen types here as needed
   SCREEN_COUNT
 };
