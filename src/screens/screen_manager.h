@@ -49,7 +49,7 @@ private:
   ScreenBase* _screens[SCREEN_COUNT];
 
 #ifdef TFT_BACKLIGHT_TIMEOUT_MS
-  unsigned long _last_backlight_wakeup = 0;
+  unsigned long _backlight_timeout = 0;
   bool _previous_vehicle_state = false;
   uint8_t _previous_evse_state = 0;
 #endif //TFT_BACKLIGHT_TIMEOUT_MS
