@@ -159,6 +159,7 @@ void Limit::begin(EvseManager &evse) {
   // todo get saved default limit
   DBUGLN("Starting Limit task");
   this->_evse = &evse;
+  setDefaultLimit(limit_default_type.c_str(), limit_default_value);
   MicroTask.startTask(this);
   _evse->onSessionComplete(&_sessionCompleteListener);
 };
@@ -217,7 +218,9 @@ unsigned long Limit::loop(MicroTasks::WakeReason reason)
         _evse->claim(EvseClient_OpenEVSE_Limit, EvseManager_Priority_Limit, props);
       }
     }
-    else if(EvseState::Disabled == config_default_state() && !_evse->clientHasClaim(EvseClient_OpenEVSE_Limit))
+    else if(_limit_properties.getAutoRelease() &&
+            EvseState::Disabled == config_default_state() &&
+            !_evse->clientHasClaim(EvseClient_OpenEVSE_Limit))
     {
       // The default state is disabled, so we need to make a claim to enable charging
       DBUGLN("Claiming EVSE due to default state");
@@ -323,4 +326,32 @@ bool Limit::clear() {
 
 uint8_t Limit::getVersion() {
   return _version;
+}
+
+bool Limit::setDefaultLimit(const char* typeStr, uint32_t value) {
+  LimitProperties limitprops;
+  LimitType limitType;
+
+  DBUGVAR(typeStr);
+  DBUGVAR((int)value);
+
+  limitType.fromString(typeStr);
+  limitprops.setType(limitType);
+  limitprops.setValue(value);
+  limitprops.setAutoRelease(false);
+
+  if (limitType == LimitType::None) {
+    clear();
+    DBUGLN("No limit to set");
+    return true;
+  }
+  else if (limitprops.getValue()) {
+    set(limitprops);
+    DBUGLN("Limit set");
+    DBUGVAR(limitprops.getType().toString());
+    DBUGVAR(limitprops.getValue());
+    return true;
+  }
+
+  return false;
 }

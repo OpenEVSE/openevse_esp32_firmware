@@ -82,6 +82,7 @@ class Limit: public MicroTasks::Task
 		bool set(LimitProperties props);
 		LimitProperties get();
 		bool clear();
+		bool setDefaultLimit(const char* typeStr, uint32_t value);
 		uint8_t getVersion();
 };
 
