@@ -41,7 +41,7 @@ unsigned long LockScreen::update()
     _screen.fillSmoothRoundRect(rect_x, rect_y, rect_width, rect_height, 10, TFT_WHITE);
 
     // Draw lock icon from PNG (if available) or draw a simple lock shape
-    // Try to render the lock image - the render_image function doesn't return a value
+    // Attempt to render the lock image from a PNG file at the specified location
     render_image("/lock.png", LOCK_ICON_X, LOCK_ICON_Y, _screen);
 
     // Always draw the text message
