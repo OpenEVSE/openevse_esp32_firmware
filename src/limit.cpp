@@ -211,7 +211,7 @@ unsigned long Limit::loop(MicroTasks::WakeReason reason)
       }
       if (limit_reached) {
         // Limit reached, disabling EVSE
-        DBUGLN("Limit as expired, disable evse");
+        DBUGLN("Limit has expired, disable evse");
         EvseProperties props;
         props.setState(EvseState::Disabled);
         props.setAutoRelease(true);
