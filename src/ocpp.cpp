@@ -389,7 +389,7 @@ void OcppTask::loadEvseBehavior() {
         }
         return nullptr;
     });
-    //Ammar - where the card checks happen
+
     onIdTagInput = [this] (const String& idInput) {
         if (idInput.isEmpty()) {
             DBUGLN("[ocpp] empty idTag");

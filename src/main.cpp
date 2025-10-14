@@ -53,8 +53,8 @@
 #include "current_shaper.h"
 #include "limit.h"
 
-#if defined(ENABLE_PN532)
-#include "pn532.h"
+#if defined(ENABLE_AccessCard)
+#include "AccessCard.h"
 #endif
 
 #include "LedManagerTask.h"
@@ -148,9 +148,9 @@ void setup()
   lcd.begin(evse, scheduler, manual);
   DBUGF("After lcd.begin: %d", ESPAL.getFreeHeap());
 
-#if defined(ENABLE_PN532)
-  pn532.begin();
-  rfid.begin(evse, pn532);
+#if defined(ENABLE_AccessCard)
+  accessCard.begin();
+  rfid.begin(evse, accessCard);
 #else
   rfid.begin(evse, rfidNullDevice);
 #endif
