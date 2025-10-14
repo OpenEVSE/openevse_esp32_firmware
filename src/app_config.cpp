@@ -133,10 +133,14 @@ String esp_hostname_default = "openevse-"+ESPAL.getShortId();
 
 void config_changed(String name);
 
+#ifndef CONFIG_DEFAULT_STATE_DEFAULT
+#define CONFIG_DEFAULT_STATE_DEFAULT CONFIG_DEFAULT_STATE
+#endif
+
 #define CONFIG_DEFAULT_FLAGS (CONFIG_SERVICE_SNTP | \
                               CONFIG_OCPP_AUTO_AUTH | \
                               CONFIG_OCPP_OFFLINE_AUTH | \
-                              CONFIG_DEFAULT_STATE)
+                              CONFIG_DEFAULT_STATE_DEFAULT)
 
 ConfigOptDefinition<uint32_t> flagsOpt = ConfigOptDefinition<uint32_t>(flags, CONFIG_DEFAULT_FLAGS, "flags", "f");
 ConfigOptDefinition<uint32_t> flagsChanged = ConfigOptDefinition<uint32_t>(flags_changed, 0, "flags_changed", "c");
@@ -165,8 +169,8 @@ ConfigOpt *opts[] =
   new ConfigOptDefinition<String>(time_zone, DEFAULT_TIME_ZONE, "time_zone", "tz"),
 
 // Limit
-  new ConfigOptDefinition<String>(limit_default_type, {}, "limit_default_type", "ldt"),
-  new ConfigOptDefinition<uint32_t>(limit_default_value, {}, "limit_default_value", "ldv"),
+  new ConfigOptDefinition<String>(limit_default_type, LIMIT_DEFAULT_TYPE_DEFAULT, "limit_default_type", "ldt"),
+  new ConfigOptDefinition<uint32_t>(limit_default_value, LIMIT_DEFAULT_VALUE_DEFAULT, "limit_default_value", "ldv"),
 
 // EMONCMS SERVER strings
   new ConfigOptDefinition<String>(emoncms_server, "https://data.openevse.com/emoncms", "emoncms_server", "es"),
@@ -324,16 +328,19 @@ config_load_settings()
   if(0 == flags_changed)
   {
     // Assume all flags that do not match the default value have changed
-    uint32_t new_changed = (flags ^ CONFIG_DEFAULT_FLAGS) & ~CONFIG_DEFAULT_STATE;
+    uint32_t new_changed = (flags ^ CONFIG_DEFAULT_FLAGS);
 
+#if CONFIG_DEFAULT_STATE_DEFAULT != 0
     // Handle the default charge state differently as that was set as a default to 0 previously, but is now 1
     // We will assume that if set to 1 it was intentional, but if 0 we will assume it was the just the default
     // and not an intentinal change
+    new_changed &= ~CONFIG_DEFAULT_STATE;
     if(flags != CONFIG_DEFAULT_FLAGS &&
        CONFIG_DEFAULT_STATE == (flags & CONFIG_DEFAULT_STATE))
     {
       new_changed |= CONFIG_DEFAULT_STATE;
     }
+#endif
 
     // Save any changes
     if(flagsChanged.set(new_changed)) {
@@ -386,23 +393,7 @@ void config_changed(String name)
     ledManager.setBrightness(led_brightness);
 #endif
   } else if(name.startsWith("limit_default_")) {
-    LimitProperties limitprops;
-    LimitType limitType;
-    DBUGVAR(limit_default_type);
-    DBUGVAR((int)limit_default_value);
-    limitType.fromString(limit_default_type.c_str());
-    limitprops.setType(limitType);
-    limitprops.setValue(limit_default_value);
-    limitprops.setAutoRelease(false);
-    if (limitType == LimitType::None) {
-      limit.clear();
-      DBUGLN("No limit to set");
-    }
-    else if (limitprops.getValue())
-      limit.set(limitprops);
-    DBUGLN("Limit set");
-    DBUGVAR(limitprops.getType().toString());
-    DBUGVAR(limitprops.getValue());
+    limit.setDefaultLimit(limit_default_type.c_str(), limit_default_value);
   } else if(name == "sntp_enabled") {
     timeManager.setSntpEnabled(config_sntp_enabled());
   }
