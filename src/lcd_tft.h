@@ -88,8 +88,17 @@ class LcdTask : public MicroTasks::Task
     // Screen management
     ScreenManager* _screenManager = nullptr;
 
+#ifdef TFT_BACKLIGHT_TIMEOUT_MS
+    long _last_backlight_wakeup = 0;
+    bool _previous_vehicle_state;
+#endif //TFT_BACKLIGHT_TIMEOUT_MS
+
     void display(Message *msg, uint32_t flags);
     unsigned long displayNextMessage();
+
+#ifdef TFT_BACKLIGHT_TIMEOUT_MS
+    void timeoutBacklight();
+#endif //TFT_BACKLIGHT_TIMEOUT_MS
 
   protected:
     void setup();
@@ -105,6 +114,10 @@ class LcdTask : public MicroTasks::Task
     void display(String &msg, int x, int y, int time, uint32_t flags);
     void display(const char *msg, int x, int y, int time, uint32_t flags);
     void setWifiMode(bool client, bool connected);
+
+#ifdef TFT_BACKLIGHT_TIMEOUT_MS
+    void wakeBacklight();
+#endif //TFT_BACKLIGHT_TIMEOUT_MS
 
     void fill_screen(uint16_t color) {
       _screen.fillScreen(color);
