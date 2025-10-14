@@ -5,12 +5,39 @@
   "version": "0.2.0",
   "configurations": [
     {
+      "name": "divert_sim: data_shaper.csv",
+      "type": "cppdbg",
+      "request": "launch",
+      "program": "${workspaceFolder}/divert_sim",
+      "args": [
+        "-c", "data/test_shapper.json",
+        "-l", "1",
+        "--sep", "\\;",
+        "<", "${workspaceFolder}/data/data_shaper.csv"
+      ],
+      "stopAtEntry": false,
+      "cwd": "${workspaceFolder}",
+      "environment": [],
+      "externalConsole": false,
+      "MIMode": "gdb",
+      "setupCommands": [
+        {
+          "description": "Enable pretty-printing for gdb",
+          "text": "-enable-pretty-printing",
+          "ignoreFailures": true
+        }
+      ],
+      "preLaunchTask": "build",
+      "miDebuggerPath": "/usr/bin/gdb"
+    },
+    {
       "name": "divert_sim: day1.csv",
       "type": "cppdbg",
       "request": "launch",
       "program": "${workspaceFolder}/divert_sim",
       "args": [
         "-c", "data/test_config.json",
+        "-s", "1",
         "<", "${workspaceFolder}/data/day1.csv"
       ],
       "stopAtEntry": false,
@@ -58,6 +85,7 @@
       "request": "launch",
       "program": "${workspaceFolder}/divert_sim",
       "args": [
+        "-s", "1",
         "-v", "2",
         "<", "${workspaceFolder}/data/solar-vrms.csv"
       ],
@@ -82,6 +110,7 @@
       "request": "launch",
       "program": "${workspaceFolder}/divert_sim",
       "args": [
+        "-s", "1",
         "--sep", "\\;", "--kw",
         "<", "${workspaceFolder}/data/Energy_and_Power_Day_2020-03-22.csv"
       ],
