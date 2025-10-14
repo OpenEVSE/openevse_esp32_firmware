@@ -1,16 +1,20 @@
 /*
- * Author: Matthias Akstaller
+ * Author: Ammar Panjwani
+ * Adapted from PN532 to work with Access Cards 
+ * Weigand Format: https://www.pagemac.com/projects/rfid/hid_data_formats
+ * 
+ * If you have questions you can reach me at ammar.panj@gmail.com or 832-654-1839
  */
 
-#if defined(ENABLE_PN532)
+#if defined(ENABLE_AccessCard)
 
-#ifndef PN532_H
-#define PN532_H
+#ifndef AccessCard_H
+#define AccessCard_H
 
 #include "rfid.h"
 #include <MicroTasks.h>
 
-class PN532 : public RfidReader, public MicroTasks::Task {
+class AccessCard : public RfidReader, public MicroTasks::Task {
 private:
     std::function<void(String &uid)> onCardDetected = [] (String&) {};
 
@@ -28,6 +32,7 @@ private:
     void initialize();
     void poll();
     void read();
+    void readFromBridge();
 
     ulong lastResponse = 0;
     uint pollCount = 0;
@@ -36,14 +41,14 @@ protected:
     unsigned long loop(MicroTasks::WakeReason reason);
 
 public:
-    PN532();
+    AccessCard();
     void begin();
 
     void setOnCardDetected(std::function<void(String&)> onCardDet) override {onCardDetected = onCardDet;}
     bool readerFailure() override;
 };
 
-extern PN532 pn532;
+extern AccessCard accessCard;
 
 #endif
 #endif

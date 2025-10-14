@@ -222,7 +222,7 @@ void buildStatus(DynamicJsonDocument &doc) {
 
   doc["ocpp_connected"] = (int)OcppTask::isConnected();
 
-#if defined(ENABLE_PN532) || defined(ENABLE_RFID)
+#if defined(ENABLE_AccessCard) || defined(ENABLE_RFID)
   doc["rfid_failure"] = (int) rfid.communicationFails();
 #endif
 
