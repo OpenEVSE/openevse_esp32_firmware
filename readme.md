@@ -1,10 +1,12 @@
-# OpenEVSE WiFi for ESP32
+# OpenEVSE WiFi for ESP32 with support for Weigand
 
 > **_NOTE:_** Breaking change! This release recommends a minimum of [7.1.3](https://github.com/OpenEVSE/open_evse/releases) of the OpenEVSE firmware, features including Solar Divert and push button menus may not behave as expected on older firmware.
 
 - *For the older WiFi V2.x ESP8266 version (pre June 2020), see the [v2 firmware repository](https://github.com/openevse/ESP8266_WiFi_v2.x/)*
 
 - **For latest API documentation see the new [Spotlight.io OpenEVSE WiFi documentation page](https://openevse.stoplight.io/docs/openevse-wifi-v4/ZG9jOjQyMjE5ODI-open-evse-wi-fi-esp-32-gateway-v4)**
+
+- The Alteratiosn for here make it possible to autheticate Weigand Access Cards with I2C. The code for the ESP32 Reader is provided as well
 
 ![main](docs/main2.png)
 
