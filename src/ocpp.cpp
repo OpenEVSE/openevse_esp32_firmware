@@ -9,8 +9,8 @@
 #include <MicroOcpp/Model/Diagnostics/DiagnosticsService.h>
 #include <MicroOcpp/Model/FirmwareManagement/FirmwareService.h>
 #include <MongooseCore.h>
-
 #include <cstdlib>
+#include <cstring>
 
 #include "app_config.h"
 #include "http_update.h"
@@ -171,7 +171,15 @@ bool OcppTask::applySecurityConfig() {
     }
 
     TlsConfig desired = resolveTlsConfig();
-    bool changed = !tlsConfigApplied || desired.rejectUnauthorized != appliedRejectUnauthorized || desired.caCert != appliedCaCert;
+
+    bool caChanged = false;
+    if (desired.caCert == nullptr || appliedCaCert == nullptr) {
+        caChanged = desired.caCert != appliedCaCert;
+    } else {
+        caChanged = std::strcmp(desired.caCert, appliedCaCert) != 0;
+    }
+
+    bool changed = !tlsConfigApplied || desired.rejectUnauthorized != appliedRejectUnauthorized || caChanged;
 
     if (changed) {
         connection->setCaCert(desired.caCert);
