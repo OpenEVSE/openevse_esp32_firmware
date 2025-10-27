@@ -88,7 +88,7 @@ jobs:
       run: pio run -e ${{ matrix.env }}
 
     - name: Upload output to GitHub
-      uses: actions/upload-artifact@v4
+      uses: actions/upload-artifact@v5
       with:
         name: ${{ matrix.env }}.bin
         path: .pio/build/${{ matrix.env }}/*.bin
