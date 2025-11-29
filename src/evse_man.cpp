@@ -122,6 +122,7 @@ EvseManager::EvseManager(Stream &port, EventLog &eventLog) :
   _evseStateListener(this),
   _evseBootListener(this),
   _sessionCompleteListener(this),
+  _settingsChangedListener(this),
   _targetProperties(EvseState::Active),
   _hasClaims(false),
   _sleepForDisable(true),
@@ -234,6 +235,7 @@ void EvseManager::setup()
   _monitor.onBootReady(&_evseBootListener);
   _monitor.onStateChange(&_evseStateListener);
   _monitor.onSessionComplete(&_sessionCompleteListener);
+  _monitor.onSettingsChanged(&_settingsChangedListener);
 }
 
 bool EvseManager::setTargetState(EvseProperties &target)
@@ -368,6 +370,18 @@ unsigned long EvseManager::loop(MicroTasks::WakeReason reason)
     releaseAutoReleaseClaims();
     // clear Session counter
     _monitor.clearEnergyMeterSession();
+  }
+
+  DBUGVAR(_settingsChangedListener.IsTriggered());
+  if(_settingsChangedListener.IsTriggered())
+  {
+    // Settings have changed, re-evaluate claims
+    _evaluateClaims = true;
+
+    DBUGVAR(_monitor.getPilot());
+    DBUGVAR(_monitor.getMinCurrent());
+    DBUGVAR(_monitor.getMaxConfiguredCurrent());
+    DBUGVAR(_monitor.getMaxHardwareCurrent());
   }
 
   DBUGVAR(_evaluateClaims);
@@ -594,20 +608,23 @@ void EvseManager::setVehicleEta(int vehicleEta)
 void EvseManager::setMaxConfiguredCurrent(long amps)
 {
   _monitor.setMaxConfiguredCurrent(amps);
-  DBUGF("Max configured current set to %ld", _monitor.getMaxConfiguredCurrent());
-  // Setting the Max Current will update the pilot as well, but in any case we may
-  // need to change the level so re-evaluate the claims
-  _evaluateClaims = true;
-  MicroTask.wakeTask(this);
+  DBUGF("Max configured current set to %ld (%ld)", _monitor.getMaxConfiguredCurrent(), amps);
+}
+
+void EvseManager::setMaxHardwareCurrent(long amps)
+{
+  _monitor.setMaxHardwareCurrent(amps);
+  DBUGF("Max hardware current set to actual: %ld, requested: %ld", _monitor.getMaxHardwareCurrent(), amps);
 }
 
 bool EvseManager::isRapiCommandBlocked(String rapi)
 {
-#ifdef ENABLE_FULL_RAPI
-  return false;
-#else
-  return !rapi.startsWith("$G");
-#endif
+  #ifdef ENABLE_FULL_RAPI
+    return false;
+  #else
+    // For commands starting with $G, $F0 o $FB
+    return !(rapi.startsWith("$G") || rapi.startsWith("$F0") || rapi.startsWith("$FB"));
+  #endif
 }
 
 bool EvseManager::serializeClaims(DynamicJsonDocument &doc)

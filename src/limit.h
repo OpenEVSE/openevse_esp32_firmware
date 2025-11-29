@@ -4,7 +4,7 @@
 
 #ifndef EVSE_LIMIT_LOOP_TIME
 #define EVSE_LIMIT_LOOP_TIME 1000
-#endif 
+#endif
 #include <Arduino.h>
 #include <ArduinoJson.h>
 #include <MicroTasks.h>
@@ -68,7 +68,6 @@ class Limit: public MicroTasks::Task
 		bool limitEnergy(uint32_t val);
 		bool limitSoc(uint32_t val);
 		bool limitRange(uint32_t val);
-    void onSessionComplete(MicroTasks::EventListener *listner);
 
 	protected:
 		void setup();
@@ -83,8 +82,9 @@ class Limit: public MicroTasks::Task
 		bool set(LimitProperties props);
 		LimitProperties get();
 		bool clear();
+		bool setDefaultLimit(const char* typeStr, uint32_t value);
 		uint8_t getVersion();
 };
 
 extern Limit limit;
-#endif 
+#endif

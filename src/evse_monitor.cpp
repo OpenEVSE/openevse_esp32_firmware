@@ -235,7 +235,6 @@ void EvseMonitor::evseBoot(const char *firmware)
       DBUGF("scale = %ld, offset = %ld", scale, offset);
       _current_sensor_scale = scale;
       _current_sensor_offset = offset;
-
       _boot_ready.ready(EVSE_MONITOR_CURRENT_SENSOR_BOOT_READY);
     }
   });
@@ -700,6 +699,35 @@ void EvseMonitor::setMaxConfiguredCurrent(long amps)
   });
 }
 
+// This method will attempt to set the hardware current limit. This
+// can only be set once. If called subsequent times it will be ignored.
+// We will need to read back the hardware limit to know what it is.
+void EvseMonitor::setMaxHardwareCurrent(long amps)
+{
+  // limit `amps` to the hardware limit
+  if(amps > _max_hardware_current) {
+    amps = _max_hardware_current;
+  }
+  if(amps < _min_current && _min_current != 0) {
+    amps = _min_current;
+  }
+
+  _openevse.setCurrentCapacityFactoryLimit(amps, [this, amps](int ret, long pilot)
+  {
+    if(RAPI_RESPONSE_OK == ret)
+    {
+      _max_hardware_current = amps;
+      DBUGVAR(_max_hardware_current);
+
+      if(_max_configured_current > _max_hardware_current) {
+        setMaxConfiguredCurrent(_max_hardware_current);
+      }
+
+      _settings_changed.Trigger();
+    }
+  });
+}
+
 void EvseMonitor::getStatusFromEvse(bool allowStart)
 {
   DBUGLN("Get EVSE status");
@@ -801,4 +829,17 @@ bool EvseMonitor::importTotalEnergy()
       }
     });
   return true;
+}
+
+void EvseMonitor::getAmmeterSettings()
+{
+  _openevse.getAmmeterSettings([this](int ret, long scale, long offset)
+  {
+    if(RAPI_RESPONSE_OK == ret)
+    {
+      DBUGF("scale = %ld, offset = %ld", scale, offset);
+      _current_sensor_scale = scale;
+      _current_sensor_offset = offset;
+    }
+  });
 }

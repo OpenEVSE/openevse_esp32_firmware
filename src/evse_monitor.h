@@ -197,6 +197,7 @@ class EvseMonitor : public MicroTasks::Task
     void disable();
     void restart();
     void setMaxConfiguredCurrent(long amps);
+    void setMaxHardwareCurrent(long amps);
 
     void setPilot(long amps, bool force=false, std::function<void(int ret)> callback = NULL);
     void setVoltage(double volts, std::function<void(int ret)> callback = NULL);
@@ -276,6 +277,7 @@ class EvseMonitor : public MicroTasks::Task
       return _energyMeter.reset(full, import);
     }
     bool importTotalEnergy();
+    void getAmmeterSettings();
 
     bool publishEnergyMeter() {
       return _energyMeter.publish();
