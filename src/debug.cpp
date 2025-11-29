@@ -1,3 +1,5 @@
+#ifndef UNIT_TEST
+
 #include <StreamSpy.h>
 
 #ifndef DEBUG_PORT
@@ -27,11 +29,15 @@
 StreamSpy SerialDebug(DEBUG_PORT);
 StreamSpy SerialEvse(RAPI_PORT);
 
+#endif // UNIT_TEST
+
 void debug_setup()
 {
   DEBUG_PORT.begin(115200);
-  SerialDebug.begin(2048);
-
   RAPI_PORT.begin(115200);
+
+#ifndef UNIT_TEST
+  SerialDebug.begin(2048);
   SerialEvse.begin(2048);
+#endif // UNIT_TEST
 }
