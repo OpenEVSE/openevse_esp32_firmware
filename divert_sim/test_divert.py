@@ -4,6 +4,7 @@
 # PYTHON_ARGCOMPLETE_OK
 # pylint: disable=line-too-long
 
+from typing import Union
 from run_simulations import run_simulation, setup_summary
 
 def setup():
@@ -20,8 +21,8 @@ def run_test_with_dataset(dataset: str,
                 expected_min_time_charging: int,
                 expected_max_time_charging: int,
                 expected_total_time_charging: int,
-                config: bool = False, grid_ie_col: bool = False,
-                solar_col: bool = False, voltage_col: bool = False,
+                config: Union[str, bool] = False, grid_ie_col: Union[bool, int] = False,
+                solar_col: Union[bool, int] = False, voltage_col: Union[bool, int] = False,
                 separator: str = ',', is_kw: bool = False) -> None:
     """Run the divert_sim process on the given dataset and return the results"""
 
