@@ -101,7 +101,7 @@ jobs:
 
     steps:
     - name: Download the built assets
-      uses: actions/download-artifact@v6
+      uses: actions/download-artifact@v7
       with:
         path: artifacts
 
