@@ -1,4 +1,5 @@
-var datasets = [
+
+var divert_datasets = [
   { id: "day1", class: "solar", title: "Day 1 (Solar)" },
   { id: "day2", class: "solar", title: "Day 2 (Solar)" },
   { id: "day3", class: "solar", title: "Day 3 (Solar)" },
@@ -11,14 +12,23 @@ var datasets = [
   { id: "Energy_and_Power_Day_2020-03-22", class: "solar", title: "Energy and Power Day 2020-03-22" },
   { id: "Energy_and_Power_Day_2020-03-31", class: "solar", title: "Energy and Power Day 2020-03-31" },
   { id: "Energy_and_Power_Day_2020-04-01", class: "solar", title: "Energy and Power Day 2020-04-01" },
-  { id: "data_shaper", class: "shapper", title: "Shapper example 1" },
+];
+
+var shaper_datasets = [
+  { id: "data_shaper", class: "shaper", title: "Shaper example 1" },
 ];
 
 var summary = {};
-function init_summary(profiles) {
-  for (const profile of profiles) {
+function init_summary(divert_profiles, shaper_profiles) {
+  for (const profile of divert_profiles) {
     summary[profile] = {};
-    for (const dataset of datasets) {
+    for (const dataset of divert_datasets) {
+      summary[profile][dataset.id] = {};
+    }
+  }
+  for (const profile of shaper_profiles) {
+    summary[profile] = {};
+    for (const dataset of shaper_datasets) {
       summary[profile][dataset.id] = {};
     }
   }
@@ -131,7 +141,7 @@ function loadChart(id, csv, title, type) {
         });
       }
     }
-    if("shapper" == type) {
+    if("shaper" == type) {
       opts.data.push({
         name: "Live Power",
         type: "line",
@@ -196,24 +206,12 @@ function loadSummary(csv, success, profile = false) {
   });
 }
 
-function generate_summary_table(profiles) {
-  var table_data = '<table class="table table-bordered table-striped">';
-  table_data += '<tr>';
-  table_data += '<th>Dataset</th>';
-  table_data += '<th>Config</th>';
-  table_data += '<th>Total Solar</th>';
-  table_data += '<th>Total EV Charged</th>';
-  table_data += '<th>Charge from Solar</th>';
-  table_data += '<th>Charge from Grid</th>';
-  table_data += '<th>Number of Charges</th>';
-  table_data += '<th>Min Time Charging</th>';
-  table_data += '<th>Max Time Charging</th>';
-  table_data += '<th>Total Time Charging</th>';
-  table_data += '</tr>';
+function generate_summary_table_rows(profiles, datasets) {
+  var table_data = '';
   for (const dataset of datasets) {
     for (const profile of profiles) {
       var data = summary[profile][dataset.id];
-      table_data += '<tr>';
+      table_data += '<tr class="' + dataset.class + '">';
       table_data += '<td><a href="#' + dataset.id + "_" + profile + '">' + dataset.title + '</a></td>';
       table_data += '<td>' + profile + '</td>';
       table_data += '<td>' + data.total_solar + '</td>';
@@ -227,6 +225,25 @@ function generate_summary_table(profiles) {
       table_data += '</tr>';
     }
   }
+  return table_data;
+}
+
+function generate_summary_table(divert_profiles, shaper_profiles) {
+  var table_data = '<table class="table table-bordered table-striped">';
+  table_data += '<tr>';
+  table_data += '<th>Dataset</th>';
+  table_data += '<th>Config</th>';
+  table_data += '<th>Total Solar</th>';
+  table_data += '<th>Total EV Charged</th>';
+  table_data += '<th>Charge from Solar</th>';
+  table_data += '<th>Charge from Grid</th>';
+  table_data += '<th>Number of Charges</th>';
+  table_data += '<th>Min Time Charging</th>';
+  table_data += '<th>Max Time Charging</th>';
+  table_data += '<th>Total Time Charging</th>';
+  table_data += '</tr>';
+  table_data += generate_summary_table_rows(divert_profiles, divert_datasets);
+  table_data += generate_summary_table_rows(shaper_profiles, shaper_datasets);
   table_data += '</table>';
   $('#summary_table').html(table_data);
 }
@@ -239,4 +256,21 @@ function generate_chart(dataset, profile)
   div.className = dataset.class;
   document.body.appendChild(div);
   return id;
+}
+
+function toggleCharts() {
+  var showDivert = document.getElementById('show_divert').checked;
+  var showShaper = document.getElementById('show_shaper').checked;
+
+  if (showDivert) {
+    document.body.classList.remove('hide-divert');
+  } else {
+    document.body.classList.add('hide-divert');
+  }
+
+  if (showShaper) {
+    document.body.classList.remove('hide-shaper');
+  } else {
+    document.body.classList.add('hide-shaper');
+  }
 }

@@ -13,6 +13,8 @@
       "interactive"
     ];
 
+    var datasets = divert_datasets.concat(shaper_datasets);
+
     function run_simulation() {
       $.post("simulation", JSON.stringify({
         "divert_PV_ratio": parseFloat($("#divert_PV_ratio").val()),
@@ -24,10 +26,10 @@
         "current_shaper_min_pause_time": parseInt($("#current_shaper_min_pause_time").val()),
         "current_shaper_data_maxinterval": parseInt($("#current_shaper_data_maxinterval").val())
       }), () => {
-        init_summary(profiles);
+        init_summary(profiles, profiles);
         loadSummary("output/summary_master.csv", () => {
           loadSummary("output/summary_interactive.csv", () => {
-            generate_summary_table(profiles);
+            generate_summary_table(profiles, profiles);
             for (const dataset of datasets) {
               var id = dataset.id + "_interactive";
               loadChart(id, "output/"+ id + ".csv", dataset.title + " (interactive)", dataset.class);
@@ -35,6 +37,11 @@
           }, "interactive");
         });
       });
+    }
+
+    // Run the simulations after the page loads
+    window.onload = function () {
+      run_simulation();
     }
   </script>
   <link rel="stylesheet" href="https://maxcdn.bootstrapcdn.com/bootstrap/3.3.6/css/bootstrap.min.css" />
@@ -45,6 +52,11 @@
   <h1>OpenEVSE Solar Divert Simulations</h1>
 
   <a href="view.html">Test Results</a><br/>
+
+  <div style="margin: 20px 0;">
+    <label><input type="checkbox" id="show_divert" checked onchange="toggleCharts()"> Show Divert Simulations</label>
+    <label style="margin-left: 20px;"><input type="checkbox" id="show_shaper" checked onchange="toggleCharts()"> Show Shaper Simulations</label>
+  </div>
 
   <label for="divert_PV_ratio">divert_PV_ratio</label>
   <input type="text" id="divert_PV_ratio" value="1.1"><br/>

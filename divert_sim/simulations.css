@@ -1,26 +1,40 @@
 
 @media print
 {
-  .solar,.gridie
+  .solar, .gridie, .shaper
   {
     page-break-inside: avoid;
   }
 }
 
-.solar
+div.solar
 {
   height: 370px;
   width: 100%;
 }
 
-.shapper
+div.shaper
 {
   height: 370px;
   width: 100%;
 }
 
-.gridie
+div.gridie
 {
   height: 740px;
   width: 100%;
+}
+
+.hide-divert .solar,
+.hide-divert .gridie,
+.hide-divert tr.solar,
+.hide-divert tr.gridie
+{
+  display: none;
+}
+
+.hide-shaper .shaper,
+.hide-shaper tr.shaper
+{
+  display: none;
 }

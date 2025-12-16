@@ -8,18 +8,37 @@
   <script type="text/javascript" src="https://cdnjs.cloudflare.com/ajax/libs/moment.js/2.24.0/moment.min.js"></script>
   <script type="text/javascript" src="simulations.js"></script>
   <script type="text/javascript">
-    var profiles = [
+    var divert_profiles = [
       "master",
       "default",
       "noimport",
       "nowaste"
     ];
 
+    var shaper_profiles = [
+      "default",
+      "3000w",
+      "5000w",
+      "8000w",
+      "10000w",
+      "smoothing_30s",
+      "smoothing_120s",
+      "minpause_60s",
+      "minpause_600s",
+      "maxinterval_30s",
+      "maxinterval_120s",
+      "aggressive",
+      "conservative",
+      "very_low_power",
+      "very_high_power",
+      "threephase"
+    ];
+
     window.onload = function () {
-      init_summary(profiles);
+      init_summary(divert_profiles, shaper_profiles);
       loadSummary("output/summary_master.csv", () => {
         loadSummary("output/summary.csv", () => {
-          generate_summary_table(profiles);
+          generate_summary_table(divert_profiles, shaper_profiles);
         });
       });
     }
@@ -33,20 +52,29 @@
 
   <a href="interactive.html">Interactive Simulations</a>
 
+  <div style="margin: 20px 0;">
+    <label><input type="checkbox" id="show_divert" checked onchange="toggleCharts()"> Show Divert Simulations</label>
+    <label style="margin-left: 20px;"><input type="checkbox" id="show_shaper" checked onchange="toggleCharts()"> Show Shaper Simulations</label>
+  </div>
+
   <h2>Summary</h2>
   <div id="summary_table">
   </div>
 
   <script type="text/javascript">
 
-    for (const dataset of datasets) {
-      for (const profile of profiles) {
+    for (const dataset of divert_datasets) {
+      for (const profile of divert_profiles) {
         var id = generate_chart(dataset, profile);
         loadChart(id, "output/" + id + ".csv", dataset.title + " (" + profile + ")", dataset.class);
       }
     }
-    //<div id="day1_default" style="width:100%; height:300px;" class="solar" csv="output/day1_default.csv" title="Day 1"></div>
-
+    for (const dataset of shaper_datasets) {
+      for (const profile of shaper_profiles) {
+        var id = generate_chart(dataset, profile);
+        loadChart(id, "output/" + id + ".csv", dataset.title + " (" + profile + ")", dataset.class);
+      }
+    }
   </script>
 
 </body>
