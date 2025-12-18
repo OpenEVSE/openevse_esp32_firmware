@@ -7,7 +7,7 @@
 from typing import Union
 from run_simulations import run_simulation, setup_summary
 
-def setup():
+def setup_module():
     """Create the output directory and summary file"""
     setup_summary('_shaper')
 
@@ -50,103 +50,104 @@ def run_shaper_test_with_dataset(dataset: str,
 def test_shaper_data_shaper_default() -> None:
     """Run the current shaper test with the data_shaper dataset with the default values"""
     run_shaper_test_with_dataset('data_shaper', 'data_shaper_default',
-                                  0.0, 0.0, 0.0, 0.0, 0, 0, 0, 0)
+                                  0.0, 0.0, 0.0, 0.0, 0, 0, 0, 0,
+                                  config='data/config-shaper-default.json')
 
 def test_shaper_data_shaper_3000w() -> None:
     """Run the current shaper test with the data_shaper dataset with 3000W max power"""
     run_shaper_test_with_dataset('data_shaper', 'data_shaper_3000w',
                                   0.0, 0.0, 0.0, 0.0, 0, 0, 0, 0,
-                                  config='data/test_shapper.json')
+                                  config='data/config-shaper-3000w.json')
 
 def test_shaper_data_shaper_5000w() -> None:
     """Run the current shaper test with the data_shaper dataset with 5000W max power"""
     run_shaper_test_with_dataset('data_shaper', 'data_shaper_5000w',
                                   0.0, 0.0, 0.0, 0.0, 0, 0, 0, 0,
-                                  config='{"current_shaper_max_pwr": 5000}')
+                                  config='data/config-shaper-5000w.json')
 
 def test_shaper_data_shaper_8000w() -> None:
     """Run the current shaper test with the data_shaper dataset with 8000W max power"""
     run_shaper_test_with_dataset('data_shaper', 'data_shaper_8000w',
                                   0.0, 0.0, 0.0, 0.0, 0, 0, 0, 0,
-                                  config='{"current_shaper_max_pwr": 8000}')
+                                  config='data/config-shaper-8000w.json')
 
 def test_shaper_data_shaper_10000w() -> None:
     """Run the current shaper test with the data_shaper dataset with 10000W max power"""
     run_shaper_test_with_dataset('data_shaper', 'data_shaper_10000w',
                                   0.0, 0.0, 0.0, 0.0, 0, 0, 0, 0,
-                                  config='{"current_shaper_max_pwr": 10000}')
+                                  config='data/config-shaper-10000w.json')
 
 # Test with different smoothing times
 def test_shaper_data_shaper_smoothing_30s() -> None:
     """Run the current shaper test with 30 second smoothing time"""
     run_shaper_test_with_dataset('data_shaper', 'data_shaper_smoothing_30s',
                                   0.0, 0.0, 0.0, 0.0, 0, 0, 0, 0,
-                                  config='{"current_shaper_max_pwr": 5000, "current_shaper_smoothing_time": 30}')
+                                  config='data/config-shaper-smoothing_30s.json')
 
 def test_shaper_data_shaper_smoothing_120s() -> None:
     """Run the current shaper test with 120 second smoothing time"""
     run_shaper_test_with_dataset('data_shaper', 'data_shaper_smoothing_120s',
                                   0.0, 0.0, 0.0, 0.0, 0, 0, 0, 0,
-                                  config='{"current_shaper_max_pwr": 5000, "current_shaper_smoothing_time": 120}')
+                                  config='data/config-shaper-smoothing_120s.json')
 
 # Test with different minimum pause times
 def test_shaper_data_shaper_minpause_60s() -> None:
     """Run the current shaper test with 60 second minimum pause time"""
     run_shaper_test_with_dataset('data_shaper', 'data_shaper_minpause_60s',
                                   0.0, 0.0, 0.0, 0.0, 0, 0, 0, 0,
-                                  config='{"current_shaper_max_pwr": 5000, "current_shaper_min_pause_time": 60}')
+                                  config='data/config-shaper-minpause_60s.json')
 
 def test_shaper_data_shaper_minpause_600s() -> None:
     """Run the current shaper test with 600 second (10 min) minimum pause time"""
     run_shaper_test_with_dataset('data_shaper', 'data_shaper_minpause_600s',
                                   0.0, 0.0, 0.0, 0.0, 0, 0, 0, 0,
-                                  config='{"current_shaper_max_pwr": 5000, "current_shaper_min_pause_time": 600}')
+                                  config='data/config-shaper-minpause_600s.json')
 
 # Test with different max data intervals
 def test_shaper_data_shaper_maxinterval_30s() -> None:
     """Run the current shaper test with 30 second max data interval"""
     run_shaper_test_with_dataset('data_shaper', 'data_shaper_maxinterval_30s',
                                   0.0, 0.0, 0.0, 0.0, 0, 0, 0, 0,
-                                  config='{"current_shaper_max_pwr": 5000, "current_shaper_data_maxinterval": 30}')
+                                  config='data/config-shaper-maxinterval_30s.json')
 
 def test_shaper_data_shaper_maxinterval_120s() -> None:
     """Run the current shaper test with 120 second max data interval"""
     run_shaper_test_with_dataset('data_shaper', 'data_shaper_maxinterval_120s',
                                   0.0, 0.0, 0.0, 0.0, 0, 0, 0, 0,
-                                  config='{"current_shaper_max_pwr": 5000, "current_shaper_data_maxinterval": 120}')
+                                  config='data/config-shaper-maxinterval_120s.json')
 
 # Combined parameter tests
 def test_shaper_data_shaper_aggressive() -> None:
     """Run the current shaper test with aggressive settings (low max power, fast response)"""
     run_shaper_test_with_dataset('data_shaper', 'data_shaper_aggressive',
                                   0.0, 0.0, 0.0, 0.0, 0, 0, 0, 0,
-                                  config='{"current_shaper_max_pwr": 3000, "current_shaper_smoothing_time": 30, "current_shaper_min_pause_time": 60}')
+                                  config='data/config-shaper-aggressive.json')
 
 def test_shaper_data_shaper_conservative() -> None:
     """Run the current shaper test with conservative settings (high max power, slow response)"""
     run_shaper_test_with_dataset('data_shaper', 'data_shaper_conservative',
                                   0.0, 0.0, 0.0, 0.0, 0, 0, 0, 0,
-                                  config='{"current_shaper_max_pwr": 8000, "current_shaper_smoothing_time": 120, "current_shaper_min_pause_time": 600}')
+                                  config='data/config-shaper-conservative.json')
 
 # Edge case tests
 def test_shaper_data_shaper_very_low_power() -> None:
     """Run the current shaper test with very low max power (1500W - below minimum charging)"""
     run_shaper_test_with_dataset('data_shaper', 'data_shaper_very_low_power',
                                   0.0, 0.0, 0.0, 0.0, 0, 0, 0, 0,
-                                  config='{"current_shaper_max_pwr": 1500}')
+                                  config='data/config-shaper-very_low_power.json')
 
 def test_shaper_data_shaper_very_high_power() -> None:
     """Run the current shaper test with very high max power (20000W - effectively no limit)"""
     run_shaper_test_with_dataset('data_shaper', 'data_shaper_very_high_power',
                                   0.0, 0.0, 0.0, 0.0, 0, 0, 0, 0,
-                                  config='{"current_shaper_max_pwr": 20000}')
+                                  config='data/config-shaper-very_high_power.json')
 
 # Test with three-phase configuration
 def test_shaper_data_shaper_threephase() -> None:
     """Run the current shaper test with three-phase configuration"""
     run_shaper_test_with_dataset('data_shaper', 'data_shaper_threephase',
                                   0.0, 0.0, 0.0, 0.0, 0, 0, 0, 0,
-                                  config='{"current_shaper_max_pwr": 5000, "threephase": true}')
+                                  config='data/config-shaper-threephase.json')
 
 if __name__ == '__main__':
     import pytest

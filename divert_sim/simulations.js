@@ -185,7 +185,7 @@ function loadSummary(csv, success, profile = false) {
         }
 
         var dataset = cell_data[0].replaceAll("\"", "");
-        config = false === profile ? cell_data[1].replaceAll("\"", "").replaceAll("data/config-inputfilter-", "").replaceAll(".json", "") : profile;
+        config = false === profile ? cell_data[1].replaceAll("\"", "").replaceAll("data/config-inputfilter-", "").replaceAll("data/config-shaper-", "").replaceAll(".json", "") : profile;
 
         var data = {
           total_solar: parseFloat(cell_data[2]).toFixed(2),

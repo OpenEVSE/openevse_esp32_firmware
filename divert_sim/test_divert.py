@@ -7,9 +7,9 @@
 from typing import Union
 from run_simulations import run_simulation, setup_summary
 
-def setup():
+def setup_module():
     """Create the output directory and summary file"""
-    setup_summary()
+    setup_summary('_divert')
 
 def run_test_with_dataset(dataset: str,
                 output: str,

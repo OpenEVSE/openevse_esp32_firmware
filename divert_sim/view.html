@@ -36,9 +36,13 @@
 
     window.onload = function () {
       init_summary(divert_profiles, shaper_profiles);
-      loadSummary("output/summary_master.csv", () => {
-        loadSummary("output/summary.csv", () => {
-          generate_summary_table(divert_profiles, shaper_profiles);
+      loadSummary("output/summary_divert_master.csv", () => {
+        loadSummary("output/summary_divert.csv", () => {
+          loadSummary("output/summary_shaper.csv", () => {
+            loadSummary("output/summary_shaper_master.csv", () => {
+              generate_summary_table(divert_profiles, shaper_profiles);
+            });
+          });
         });
       });
     }
