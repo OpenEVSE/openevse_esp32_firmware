@@ -1,0 +1,5 @@
+{
+  "current_shaper_enabled": true,
+  "current_shaper_max_pwr": 5000,
+  "current_shaper_min_pause_time": 60
+}

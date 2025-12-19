@@ -196,6 +196,9 @@ int CurrentShaperTask::getMaxPwr() {
 int CurrentShaperTask::getLivePwr() {
 	return _live_pwr;
 }
+int CurrentShaperTask::getSmoothedLivePwr() {
+	return _smoothed_live_pwr;
+}
 
 double CurrentShaperTask::getMaxCur() {
 	return _max_cur;
