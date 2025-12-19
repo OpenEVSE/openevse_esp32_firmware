@@ -143,18 +143,18 @@ function loadChart(id, csv, title, type) {
     }
     if("shaper" == type) {
       opts.data.push({
-        name: "Live Power",
-        type: "line",
-        lineThickness: 1,
-        showInLegend: true,
-        dataPoints: points[7]
-      });
-      opts.data.push({
         name: "Live Power (Smoothed)",
         type: "line",
         lineThickness: 1,
         showInLegend: true,
         dataPoints: points[8]
+      });
+      opts.data.push({
+        name: "Live Power",
+        type: "line",
+        lineThickness: 1,
+        showInLegend: true,
+        dataPoints: points[7]
       });
       opts.data.push({
         name: "Max Power",

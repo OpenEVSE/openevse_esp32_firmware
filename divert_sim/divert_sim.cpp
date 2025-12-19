@@ -159,7 +159,7 @@ int main(int argc, char** argv)
     config_commit();
   }
 
-  if(result.count("config-check")) 
+  if(result.count("config-check"))
   {
     String config_out;
     config_serialize(config_out, true, false, false);
@@ -254,7 +254,7 @@ int main(int argc, char** argv)
       double smoothed = divert.smoothedAvailableCurrent() * voltage;
 
       int live_power = shaper.getLivePwr();
-      int smoothed_live_pwr = shaper.getLivePwr();
+      int smoothed_live_pwr = shaper.getSmoothedLivePwr();
       int shapper_max_power = shaper.getMaxPwr();
 
       std::cout << buffer << "," << solar << "," << grid_ie << "," << ev_pilot << "," << ev_watt << "," << min_ev_watt << "," << state << "," << smoothed << "," << live_power << "," << smoothed_live_pwr << "," << shapper_max_power << std::endl;
