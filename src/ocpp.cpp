@@ -9,6 +9,8 @@
 #include <MicroOcpp/Model/Diagnostics/DiagnosticsService.h>
 #include <MicroOcpp/Model/FirmwareManagement/FirmwareService.h>
 #include <MongooseCore.h>
+#include <cstdlib>
+#include <cstring>
 
 #include "app_config.h"
 #include "http_update.h"
@@ -131,6 +133,64 @@ void OcppTask::notifyConfigChanged() {
     }
 }
 
+OcppTask::TlsConfig OcppTask::resolveTlsConfig() {
+    TlsConfig cfg{nullptr, config_ocpp_reject_unauthorized()};
+
+    if (!cfg.rejectUnauthorized) {
+        return cfg;
+    }
+
+    const char *selected = nullptr;
+
+    if (ocpp_certificate_id.length() > 0) {
+        char *end = nullptr;
+        uint64_t cert_id = strtoull(ocpp_certificate_id.c_str(), &end, 16);
+        if (end != ocpp_certificate_id.c_str() && *end == '\0') {
+            const char *cert = certs.getCertificate(cert_id);
+            if (cert && cert[0] != '\0') {
+                selected = cert;
+            } else {
+                DBUGF("[ocpp] certificate %s not found, falling back to default root CA", ocpp_certificate_id.c_str());
+            }
+        } else {
+            DBUGF("[ocpp] certificate id %s is invalid, falling back to default root CA", ocpp_certificate_id.c_str());
+        }
+    }
+
+    if (!selected) {
+        selected = certs.getRootCa();
+    }
+
+    cfg.caCert = selected;
+    return cfg;
+}
+
+bool OcppTask::applySecurityConfig() {
+    if (!connection) {
+        return false;
+    }
+
+    TlsConfig desired = resolveTlsConfig();
+
+    bool caChanged = false;
+    if (desired.caCert == nullptr || appliedCaCert == nullptr) {
+        caChanged = desired.caCert != appliedCaCert;
+    } else {
+        caChanged = std::strcmp(desired.caCert, appliedCaCert) != 0;
+    }
+
+    bool changed = !tlsConfigApplied || desired.rejectUnauthorized != appliedRejectUnauthorized || caChanged;
+
+    if (changed) {
+        connection->setCaCert(desired.caCert);
+        appliedRejectUnauthorized = desired.rejectUnauthorized;
+        appliedCaCert = desired.caCert;
+        tlsConfigApplied = true;
+    }
+
+    return changed;
+}
+
 void OcppTask::reconfigure() {
 
     if (config_ocpp_enabled()) {
@@ -141,11 +201,17 @@ void OcppTask::reconfigure() {
             initializeMicroOcpp();
         }
 
-        if (!ocpp_server.equals(connection->getBackendUrl()) ||
+        if (connection) {
+            bool credentialsChanged = !ocpp_server.equals(connection->getBackendUrl()) ||
                 !ocpp_chargeBoxId.equals(connection->getChargeBoxId()) ||
-                !ocpp_authkey.equals(connection->getAuthKey())) {
-            //OpenEVSE WS URL configs have been updated - these must be applied manually
-            connection->reloadConfigs();
+                !ocpp_authkey.equals(connection->getAuthKey());
+
+            bool tlsChanged = applySecurityConfig();
+
+            if (credentialsChanged || tlsChanged) {
+                //OpenEVSE WS URL configs have been updated - these must be applied manually
+                connection->reloadConfigs();
+            }
         }
     } else {
         //OCPP disabled via OpenEVSE config
@@ -240,7 +306,14 @@ void OcppTask::initializeMicroOcpp() {
     MicroOcpp::declareConfiguration<bool>(
         MO_CONFIG_EXT_PREFIX "SilentOfflineTransactions", true); //disable transaction journaling when being offline for a long time (can lead to data loss)
 
-    connection = new MicroOcpp::MOcppMongooseClient(Mongoose.getMgr(), nullptr, nullptr, nullptr, nullptr, filesystem);
+    TlsConfig tlsConfig = resolveTlsConfig();
+    const char *initialCa = tlsConfig.caCert;
+
+    connection = new MicroOcpp::MOcppMongooseClient(Mongoose.getMgr(), nullptr, nullptr, nullptr, initialCa, filesystem);
+
+    appliedRejectUnauthorized = tlsConfig.rejectUnauthorized;
+    appliedCaCert = tlsConfig.caCert;
+    tlsConfigApplied = true;
 
     /*
      * Initialize the OCPP library and provide it with the charger credentials
@@ -264,6 +337,9 @@ void OcppTask::deinitializeMicroOcpp() {
     mocpp_deinitialize();
     delete connection;
     connection = nullptr;
+    tlsConfigApplied = false;
+    appliedCaCert = nullptr;
+    appliedRejectUnauthorized = false;
 }
 
 void OcppTask::setup() {

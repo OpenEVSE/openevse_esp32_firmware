@@ -70,6 +70,7 @@ extern String ocpp_server;
 extern String ocpp_chargeBoxId;
 extern String ocpp_authkey;
 extern String ocpp_idtag;
+extern String ocpp_certificate_id;
 
 // RFID storage
 extern String rfid_storage;
@@ -129,6 +130,7 @@ extern uint32_t flags;
 #define CONFIG_THREEPHASE           (1 << 24)
 #define CONFIG_WIZARD               (1 << 25)
 #define CONFIG_DEFAULT_STATE        (1 << 26)
+#define CONFIG_OCPP_ALLOW_ANY_CERT  (1 << 27)
 
 #define INITIAL_CONFIG_VERSION  1
 
@@ -178,6 +180,10 @@ inline bool config_ocpp_auto_authorization() {
 
 inline bool config_ocpp_offline_authorization() {
   return CONFIG_OCPP_OFFLINE_AUTH == (flags & CONFIG_OCPP_OFFLINE_AUTH);
+}
+
+inline bool config_ocpp_reject_unauthorized() {
+  return 0 == (flags & CONFIG_OCPP_ALLOW_ANY_CERT);
 }
 
 inline bool config_divert_enabled() {

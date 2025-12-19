@@ -82,6 +82,7 @@ String ocpp_server;
 String ocpp_chargeBoxId;
 String ocpp_authkey;
 String ocpp_idtag;
+String ocpp_certificate_id;
 
 // Time
 String time_zone;
@@ -199,6 +200,7 @@ ConfigOpt *opts[] =
   new ConfigOptDefinition<String>(ocpp_chargeBoxId, "", "ocpp_chargeBoxId", "cid"),
   new ConfigOptDefinition<String>(ocpp_authkey, "", "ocpp_authkey", "oky"),
   new ConfigOptDefinition<String>(ocpp_idtag, "DefaultIdTag", "ocpp_idtag", "idt"),
+  new ConfigOptDefinition<String>(ocpp_certificate_id, "", "ocpp_certificate_id", "oci"),
 
 // Ohm Connect Settings
   new ConfigOptDefinition<String>(ohm, "", "ohm", "o"),
@@ -256,6 +258,7 @@ ConfigOpt *opts[] =
   new ConfigOptVirtualMaskedBool(flagsOpt, flagsChanged, CONFIG_SERVICE_OCPP, CONFIG_SERVICE_OCPP, "ocpp_enabled", "ope"),
   new ConfigOptVirtualMaskedBool(flagsOpt, flagsChanged, CONFIG_OCPP_AUTO_AUTH, CONFIG_OCPP_AUTO_AUTH, "ocpp_auth_auto", "oaa"),
   new ConfigOptVirtualMaskedBool(flagsOpt, flagsChanged, CONFIG_OCPP_OFFLINE_AUTH, CONFIG_OCPP_OFFLINE_AUTH, "ocpp_auth_offline", "ooa"),
+  new ConfigOptVirtualMaskedBool(flagsOpt, flagsChanged, CONFIG_OCPP_ALLOW_ANY_CERT, 0, "ocpp_reject_unauthorized", "oru"),
   new ConfigOptVirtualMaskedBool(flagsOpt, flagsChanged, CONFIG_OCPP_ACCESS_SUSPEND, CONFIG_OCPP_ACCESS_SUSPEND, "ocpp_suspend_evse", "ops"),
   new ConfigOptVirtualMaskedBool(flagsOpt, flagsChanged, CONFIG_OCPP_ACCESS_ENERGIZE, CONFIG_OCPP_ACCESS_ENERGIZE, "ocpp_energize_plug", "opn"),
   new ConfigOptVirtualMaskedBool(flagsOpt, flagsChanged, CONFIG_RFID, CONFIG_RFID, "rfid_enabled", "rf"),
