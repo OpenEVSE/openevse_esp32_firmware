@@ -27,14 +27,16 @@
         "current_shaper_data_maxinterval": parseInt($("#current_shaper_data_maxinterval").val())
       }), () => {
         init_summary(profiles, profiles);
-        loadSummary("output/summary_master.csv", () => {
-          loadSummary("output/summary_interactive.csv", () => {
-            generate_summary_table(profiles, profiles);
-            for (const dataset of datasets) {
-              var id = dataset.id + "_interactive";
-              loadChart(id, "output/"+ id + ".csv", dataset.title + " (interactive)", dataset.class);
-            }
-          }, "interactive");
+        loadSummary("output/summary_divert_master.csv", () => {
+          loadSummary("output/summary_shaper_master.csv", () => {
+            loadSummary("output/summary_interactive.csv", () => {
+              generate_summary_table(profiles, profiles);
+              for (const dataset of datasets) {
+                var id = dataset.id + "_interactive";
+                loadChart(id, "output/"+ id + ".csv", dataset.title + " (interactive)", dataset.class);
+              }
+            }, "interactive");
+          });
         });
       });
     }
@@ -67,7 +69,7 @@
   <label for="divert_min_charge_time">divert_min_charge_time</label>
   <input type="text" id="divert_min_charge_time" value="600"><br/>
   <label for="current_shaper_max_pwr">current_shaper_max_pwr</label>
-  <input type="text" id="current_shaper_max_pwr" value="6000"><br/>
+  <input type="text" id="current_shaper_max_pwr" value="5000"><br/>
   <label for="current_shaper_smoothing_time">current_shaper_smoothing_time</label>
   <input type="text" id="current_shaper_smoothing_time" value="60"><br/>
   <label for="current_shaper_min_pause_time">current_shaper_min_pause_time</label>
