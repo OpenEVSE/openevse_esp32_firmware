@@ -1170,45 +1170,7 @@ components:
           default: true
       required:
         - host
-
-    LoadSharingConfig:
-      type: object
-      description: Local load sharing configuration.
-      properties:
-        enabled:
-          type: boolean
-          default: false
-        group_id:
-          type: string
-          description: User-defined group identifier.
-        group_max_current:
-          type: number
-          format: double
-          minimum: 0
-          description: Total maximum current available to the group (amps).
-        safety_factor:
-          type: number
-          format: double
-          minimum: 0
-          maximum: 1
-          default: 1
-          description: Optional safety factor applied to group_max_current.
-        heartbeat_timeout:
-          type: integer
-          minimum: 1
-          default: 10
-          description: Seconds before a peer is considered offline.
-        members:
-          type: array
-          items:
-            $ref: '#/components/schemas/LoadSharingMember'
-        failsafe:
-          $ref: '#/components/schemas/LoadSharingFailSafe'
-      required:
-        - enabled
-        - group_id
-        - group_max_current
-
+ 
     LoadSharingPeerStatus:
       type: object
       description: Minimal peer status snapshot used for load sharing decisions.
