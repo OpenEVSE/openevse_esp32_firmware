@@ -1,4 +1,4 @@
-Date,Solar,Grid IE,Pilot,Charge Power,Min Charge Power,State,Smoothed Available,Live Power,Smoother Live Power,Shapper Max Power
+Date,Solar,Grid IE,Pilot,Charge Power,Min Charge Power,State,Smoothed Available,Live Power,Smoother Live Power,Shaper Max Power
 17/12/2023 13:25:00,0,0,0,0,1440,2,0,1056,1056,5000
 17/12/2023 13:25:01,0,0,0,0,1440,2,0,1056,1056,5000
 17/12/2023 13:25:02,0,0,0,0,1440,2,0,1056,1056,5000

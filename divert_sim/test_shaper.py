@@ -22,7 +22,7 @@ def run_shaper_test_with_dataset(dataset: str,
                                   expected_max_time_charging: int,
                                   expected_total_time_charging: int,
                                   config: Union[str, bool] = False,
-                                  live_pwr_col: int = 1,
+                                  live_power_col: int = 1,
                                   separator: str = ';') -> None:
     """Run the divert_sim process with current shaper on the given dataset and return the results"""
 
@@ -33,7 +33,7 @@ def run_shaper_test_with_dataset(dataset: str,
       number_of_charges,
       min_time_charging,
       max_time_charging,
-      total_time_charging ) = run_simulation(dataset, output, config, False, False, False, separator, False, live_pwr_col)
+      total_time_charging ) = run_simulation(dataset, output, config, False, False, False, separator, False, live_power_col)
 
     assert solar_kwh == expected_solar_kwh, f"Solar kWh mismatch: expected {expected_solar_kwh}, got {solar_kwh}"
     assert ev_kwh == expected_ev_kwh, f"EV kWh mismatch: expected {expected_ev_kwh}, got {ev_kwh}"

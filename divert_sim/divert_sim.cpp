@@ -36,7 +36,7 @@ int date_col = 0;
 int grid_ie_col = -1;
 int solar_col = -1;
 int voltage_col = -1;
-int live_pwr_col = -1;
+int live_power_col = -1;
 
 time_t simulated_time = 0;
 time_t last_time = 0;
@@ -116,7 +116,7 @@ int main(int argc, char** argv)
     ("d,date", "The date column", cxxopts::value<int>(date_col), "N")
     ("s,solar", "The solar column", cxxopts::value<int>(solar_col), "N")
     ("g,gridie", "The Grid IE column", cxxopts::value<int>(grid_ie_col), "N")
-    ("l,livepwr", "The live power column", cxxopts::value<int>(live_pwr_col), "N")
+    ("l,livepwr", "The live power column", cxxopts::value<int>(live_power_col), "N")
     ("c,config", "Config options, either a file name or JSON", cxxopts::value<std::string>(config))
     ("v,voltage", "The Voltage column if < 50, else the fixed voltage", cxxopts::value<int>(voltage_arg), "N")
     ("kw", "values are KW")
@@ -194,7 +194,7 @@ int main(int argc, char** argv)
   if(solar_col >= 0 || grid_ie_col >= 0) {
     divert.setMode(DivertMode::Eco);
   }
-  if(live_pwr_col >= 0) {
+  if(live_power_col >= 0) {
     shaper.setState(true);
   }
 
@@ -202,7 +202,7 @@ int main(int argc, char** argv)
   parser.delimiter(sep.c_str()[0]);
   int row_number = 0;
 
-  std::cout << "Date,Solar,Grid IE,Pilot,Charge Power,Min Charge Power,State,Smoothed Available,Live Power,Smoother Live Power,Shapper Max Power" << std::endl;
+  std::cout << "Date,Solar,Grid IE,Pilot,Charge Power,Min Charge Power,State,Smoothed Available,Live Power,Smoother Live Power,Shaper Max Power" << std::endl;
   for (auto& row : parser)
   {
     try
@@ -219,7 +219,7 @@ int main(int argc, char** argv)
           grid_ie = get_watt(val.c_str());
         } else if (solar_col == col) {
           solar = get_watt(val.c_str());
-        } else if (live_pwr_col == col) {
+        } else if (live_power_col == col) {
           shaper.setLivePwr(get_watt(val.c_str()));
         } else if (voltage_col == col) {
           voltage = stoi(field);
@@ -255,9 +255,9 @@ int main(int argc, char** argv)
 
       int live_power = shaper.getLivePwr();
       int smoothed_live_pwr = shaper.getSmoothedLivePwr();
-      int shapper_max_power = shaper.getMaxPwr();
+      int shaper_max_power = shaper.getMaxPwr();
 
-      std::cout << buffer << "," << solar << "," << grid_ie << "," << ev_pilot << "," << ev_watt << "," << min_ev_watt << "," << state << "," << smoothed << "," << live_power << "," << smoothed_live_pwr << "," << shapper_max_power << std::endl;
+      std::cout << buffer << "," << solar << "," << grid_ie << "," << ev_pilot << "," << ev_watt << "," << min_ev_watt << "," << state << "," << smoothed << "," << live_power << "," << smoothed_live_pwr << "," << shaper_max_power << std::endl;
     }
     catch(const std::invalid_argument& e)
     {

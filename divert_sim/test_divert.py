@@ -26,7 +26,7 @@ def run_test_with_dataset(dataset: str,
                 separator: str = ',', is_kw: bool = False) -> None:
     """Run the divert_sim process on the given dataset and return the results"""
 
-    if False is solar_col:
+    if not solar_col:
         solar_col = 1
 
     ( solar_kwh,

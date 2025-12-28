@@ -1,4 +1,4 @@
-﻿TimeStamp;Live_Power;EVSE_Current_power;Shaper_Max_Power;Charging_Current;Current_Capacity;FirmWare
+﻿TimeStamp;Live_Power;EVSE_Current_power;shaper_max_power;Charging_Current;Current_Capacity;FirmWare
 17/12/2023 13:25:00;1055.75000000000;0;8400;0;31;V4.2.2
 17/12/2023 13:25:01;1055.75000000000;0;8400;0;31;V4.2.2
 17/12/2023 13:25:02;1055.75000000000;0;8400;0;31;V4.2.2

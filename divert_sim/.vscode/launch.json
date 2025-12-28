@@ -10,7 +10,7 @@
       "request": "launch",
       "program": "${workspaceFolder}/divert_sim",
       "args": [
-        "-c", "data/test_shapper.json",
+        "-c", "data/test_shaper.json",
         "-l", "1",
         "--sep", "\\;",
         "<", "${workspaceFolder}/data/data_shaper.csv"
