@@ -6,6 +6,7 @@ from os import path
 import os
 from subprocess import PIPE, Popen
 from datetime import datetime
+from typing import Union
 
 OPENEVSE_STATE_STARTING = 0
 OPENEVSE_STATE_NOT_CONNECTED = 1
@@ -38,9 +39,10 @@ def setup_summary(postfix: str = ''):
 
 def run_simulation(dataset: str,
                 output: str,
-                config: bool = False, grid_ie_col: bool = False,
-                solar_col: bool = False, voltage_col: bool = False,
-                separator: str = ',', is_kw: bool = False) -> None:
+                config: Union[str, bool] = False, grid_ie_col: Union[bool, int] = False,
+                solar_col: Union[bool, int] = False, voltage_col: Union[bool, int] = False,
+                separator: str = ',', is_kw: bool = False,
+                live_power_col: Union[bool, int] = False) -> tuple:
     """Run the divert_sim process on the given dataset and return the results"""
     line_number = 0
 
@@ -73,6 +75,9 @@ def run_simulation(dataset: str,
             if solar_col:
                 command.append("-s")
                 command.append(str(solar_col))
+            if live_power_col:
+                command.append("-l")
+                command.append(str(live_power_col))
             if voltage_col:
                 command.append("-v")
                 command.append(str(voltage_col))
@@ -81,6 +86,8 @@ def run_simulation(dataset: str,
                 command.append(separator)
             if is_kw:
                 command.append("--kw")
+
+            print(f"cat {input_data.name} | {' '.join(command)}")
 
             divert_process = Popen(command, stdin=input_data, stdout=PIPE,
                     stderr=PIPE, universal_newlines=True)

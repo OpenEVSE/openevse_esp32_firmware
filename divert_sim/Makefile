@@ -1,5 +1,9 @@
 CPP      := g++
 
+# Set V=1 to see full commands
+ifndef V
+Q := @
+endif
 
 EPOXY_DUINO_DIR := ../../EpoxyDuino
 EPOXY_CORE_PATH ?= $(EPOXY_DUINO_DIR)/cores/epoxy
@@ -32,77 +36,77 @@ CPPFLAGS := \
   -D ENERGY_METER_STORE_STATE=0 \
   -D ARDUINOJSON_ENABLE_PROGMEM=0 \
   -D ENABLE_CONFIG_V1_IMPORT=0 \
-  -D ENABLE_CONFIG_CHANGE_NOTIFICATION=0
-#   \
+  -D ENABLE_CONFIG_CHANGE_NOTIFICATION=0  \
 #  -D ENABLE_DEBUG \
-#  -D SERIAL_OUTFD=STDERR_FILENO
+#  -D ENABLE_DEBUG_MICRO_TASK \
 #  -D ENABLE_DEBUG_DIVERT \
 #  -D ENABLE_DEBUG_INPUT_FILTER \
 #  -D ENABLE_DEBUG_EVSE_MAN \
 #  -D ENABLE_DEBUG_EVSE_MONITOR
 LDFLAGS := -pthread
 
+OBJ_DIR := obj
 TARGETS:= divert_sim
-MAINS  := $(addsuffix .o, $(TARGETS) )
+MAINS  := $(addprefix $(OBJ_DIR)/, $(addsuffix .o, $(TARGETS)) )
 #OBJ    := kbd.o command.o display.o $(MAINS)
 #DEPS   := defs.h command.h
 
 MICRO_TASKS_OBJ := \
-  MicroTasks.o \
-  MicroTasksTask.o \
-  MicroTasksEvent.o \
-  MicroTasksEventListener.o \
-  MicroTasksAlarm.o \
-  MicroTasksNode.o \
-  MicroTasksList.o
+  $(OBJ_DIR)/MicroTasks.o \
+  $(OBJ_DIR)/MicroTasksTask.o \
+  $(OBJ_DIR)/MicroTasksEvent.o \
+  $(OBJ_DIR)/MicroTasksEventListener.o \
+  $(OBJ_DIR)/MicroTasksAlarm.o \
+  $(OBJ_DIR)/MicroTasksNode.o \
+  $(OBJ_DIR)/MicroTasksList.o
 
 OPENEVSE_LIB_OBJ := \
-  openevse.o \
-  RapiSender.o
+  $(OBJ_DIR)/openevse.o \
+  $(OBJ_DIR)/RapiSender.o
 
 CONFIG_JSON_OBJ := \
-  ConfigJson.o
+  $(OBJ_DIR)/ConfigJson.o
 
 STREAM_SPY_OBJ := \
-  StreamSpy.o \
+  $(OBJ_DIR)/StreamSpy.o \
 
 OPENEVSE_WIFI_OBJ := \
-  input_filter.o \
-  divert.o \
-  current_shaper.o \
-  evse_man.o \
-  evse_monitor.o \
-  energy_meter.o \
-  event_log.o \
-  debug.o \
-  manual.o \
-  app_config.o
+  $(OBJ_DIR)/input_filter.o \
+  $(OBJ_DIR)/divert.o \
+  $(OBJ_DIR)/current_shaper.o \
+  $(OBJ_DIR)/evse_man.o \
+  $(OBJ_DIR)/evse_monitor.o \
+  $(OBJ_DIR)/energy_meter.o \
+  $(OBJ_DIR)/event_log.o \
+  $(OBJ_DIR)/debug.o \
+  $(OBJ_DIR)/manual.o \
+  $(OBJ_DIR)/app_config.o
 
 ARDUINO_OBJ := \
-  avr_stdlib.o \
-  Arduino.o \
-  base64.o \
-  Esp.o \
-  IPAddress.o \
-  Print.o \
-  SPI.o \
-  StdioSerial.o \
-  Stream.o \
-  Wire.o \
-  WMath.o \
-  WString.o \
-  Injection.o
+  $(OBJ_DIR)/avr_stdlib.o \
+  $(OBJ_DIR)/Arduino.o \
+  $(OBJ_DIR)/base64.o \
+  $(OBJ_DIR)/Esp.o \
+  $(OBJ_DIR)/IPAddress.o \
+  $(OBJ_DIR)/Print.o \
+  $(OBJ_DIR)/SPI.o \
+  $(OBJ_DIR)/StdioSerial.o \
+  $(OBJ_DIR)/Stream.o \
+  $(OBJ_DIR)/Wire.o \
+  $(OBJ_DIR)/WMath.o \
+  $(OBJ_DIR)/WString.o \
+  $(OBJ_DIR)/Injection.o
 
 EPOXY_FS_OBJ := \
-  EpoxyFS.o \
-  FS.o \
-  FSImpl.o
+  $(OBJ_DIR)/EpoxyFS.o \
+  $(OBJ_DIR)/FS.o \
+  $(OBJ_DIR)/FSImpl.o
 
 EPOXY_EEPROM_OBJ := \
-  EpoxyEepromEsp.o
+  $(OBJ_DIR)/EpoxyEepromEsp.o
 
 ESPAL_OBJ := \
-  espal.o
+  $(OBJ_DIR)/espal.o
 
 OBJ    := \
   $(MICRO_TASKS_OBJ) \
@@ -135,13 +139,19 @@ VPATH 	:= \
 all: $(TARGETS)
 
 clean:
-	rm -f $(TARGETS) $(OBJ)
+	rm -f $(TARGETS)
+	rm -rf $(OBJ_DIR)
 
 server:
 	python3 server.py
 
-$(OBJ): %.o : %.cpp $(DEPS)
-	$(CPP) -c -o $@ $< $(CPPFLAGS)
+$(OBJ_DIR):
+	$(Q)mkdir -p $(OBJ_DIR)
 
-$(TARGETS): % : $(filter-out $(MAINS), $(OBJ)) %.o
-	$(CPP) -o $@ $(LIBS) $^ $(CPPFLAGS) $(LDFLAGS)
+$(OBJ): $(OBJ_DIR)/%.o : %.cpp $(DEPS) | $(OBJ_DIR)
+	@echo "CC $<"
+	$(Q)$(CPP) -c -o $@ $< $(CPPFLAGS)
+
+$(TARGETS): % : $(filter-out $(MAINS), $(OBJ)) $(OBJ_DIR)/%.o
+	@echo "LD $@"
+	$(Q)$(CPP) -o $@ $(LIBS) $^ $(CPPFLAGS) $(LDFLAGS)

@@ -55,6 +55,7 @@ class CurrentShaperTask: public MicroTasks::Task
     bool getState();
     int getMaxPwr();
     int getLivePwr();
+    int getSmoothedLivePwr();
     double getMaxCur();
     bool isActive();
     bool isUpdated();
