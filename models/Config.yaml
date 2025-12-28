@@ -100,6 +100,17 @@ x-examples:
     wizard_passed: false
     default_state: false
     charge_mode: fast
+    loadsharing_enabled: true
+    loadsharing_group_id: home_circuit_1
+    loadsharing_group_max_current: 50.0
+    loadsharing_safety_factor: 1.0
+    loadsharing_heartbeat_timeout: 30
+    loadsharing_failsafe_mode: safe_current
+    loadsharing_failsafe_safe_current: 6.0
+    loadsharing_failsafe_peer_assumed_current: 6.0
+    loadsharing_priority: 1
+    loadsharing_config_version: 1
+    loadsharing_config_updated_at: 1735344000
 x-tags:
   - Config
 properties:
@@ -341,4 +352,70 @@ properties:
     type: boolean
     description: |
       OpenEVSE default state when no claims are running ( 0: disabled | 1: active)
+  loadsharing_enabled:
+    type: boolean
+    default: false
+    description: |
+      Enable local load sharing coordination with other OpenEVSE devices on the same LAN
+  loadsharing_group_id:
+    type: string
+    description: |
+      User-defined identifier for the load sharing group. All members must use the same group_id.
+  loadsharing_group_max_current:
+    type: number
+    minimum: 0
+    description: |
+      Total maximum current available to the group (amps). This is the upstream circuit limit shared by all members.
+  loadsharing_safety_factor:
+    type: number
+    minimum: 0
+    maximum: 1
+    default: 1.0
+    description: |
+      Optional safety factor applied to group_max_current (e.g., 0.8 to use 80% of circuit capacity)
+  loadsharing_heartbeat_timeout:
+    type: integer
+    minimum: 5
+    default: 30
+    description: |
+      Seconds before a peer is considered offline if no status update is received
+  loadsharing_failsafe_mode:
+    type: string
+    enum:
+      - disable
+      - safe_current
+    default: safe_current
+    description: |
+      Behavior when peers are unreachable: 'disable' stops charging, 'safe_current' limits to safe current
+  loadsharing_failsafe_safe_current:
+    type: number
+    minimum: 0
+    default: 6.0
+    description: |
+      Safe current (amps) to use when in safe_current failsafe mode
+  loadsharing_failsafe_peer_assumed_current:
+    type: number
+    minimum: 0
+    default: 6.0
+    description: |
+      Conservative assumed current (amps) for offline peers when calculating group allocation
+  loadsharing_priority:
+    type: integer
+    minimum: 0
+    default: 0
+    description: |
+      Local node priority in the load sharing group (lower means higher priority). This is NOT synced across nodes - each node maintains its own priority preference.
+  loadsharing_config_version:
+    type: integer
+    minimum: 0
+    default: 0
+    readOnly: true
+    description: |
+      Monotonically increasing version number for load sharing configuration, used for synchronization
+  loadsharing_config_updated_at:
+    type: integer
+    minimum: 0
+    readOnly: true
+    description: |
+      Unix timestamp of last load sharing configuration update, used for conflict resolution
 
