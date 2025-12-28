@@ -669,6 +669,102 @@ paths:
       operationId: limit_clear
       tags:
         - Limit
+  /loadsharing/peers:
+    get:
+      summary: List discovered and configured peers
+      description: |
+        Return the set of peers that are discovered (mDNS) and/or configured as
+        members of the load sharing group.
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/LoadSharingPeer'
+      operationId: listLoadSharingPeers
+      tags:
+        - Load Sharing
+    post:
+      summary: Add a peer to the load sharing group
+      description: |
+        Add a new peer member to the load sharing group. The peer can be specified
+        by hostname, IP address, or device ID. This will update the local
+        configuration and propagate to other group members via config sync.
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - host
+              properties:
+                host:
+                  type: string
+                  description: Hostname, IP address, or device ID of the peer to add
+                  example: openevse-2.local
+      responses:
+        '200':
+          $ref: '#/components/responses/UpdateSuccessful'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+      operationId: addLoadSharingPeer
+      tags:
+        - Load Sharing
+  '/loadsharing/peers/{host}':
+    delete:
+      summary: Remove a peer from the load sharing group
+      description: |
+        Remove a peer member from the load sharing group. This will update the local
+        configuration and propagate to other group members via config sync.
+      parameters:
+        - in: path
+          name: host
+          required: true
+          schema:
+            type: string
+          description: Hostname, IP address, or device ID of the peer to remove
+      responses:
+        '200':
+          $ref: '#/components/responses/UpdateSuccessful'
+        '404':
+          $ref: '#/components/responses/NotFound'
+      operationId: removeLoadSharingPeer
+      tags:
+        - Load Sharing
+  /loadsharing/status:
+    get:
+      summary: Get load sharing runtime status
+      description: |
+        Return runtime status for load sharing, including online/offline peers and
+        the most recent computed allocations.
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/LoadSharingStatus'
+      operationId: getLoadSharingStatus
+      tags:
+        - Load Sharing
+  /loadsharing/discover:
+    post:
+      summary: Trigger peer discovery
+      description: |
+        Trigger an mDNS discovery scan for other OpenEVSE devices.
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Message'
+      operationId: discoverLoadSharingPeers
+      tags:
+        - Load Sharing
   /emeter:
     delete:
       summary: Reset Energy Meter
@@ -1027,6 +1123,146 @@ components:
           minimum: 1
           maximum: 2
           exclusiveMaximum: false
+
+    LoadSharingFailSafe:
+      type: object
+      description: Load sharing safety behavior when peers are unreachable.
+      properties:
+        mode:
+          type: string
+          enum:
+            - disable
+            - safe_current
+          description: |
+            disable: refuse to charge when any configured member is offline.
+            safe_current: clamp to safe_current when any configured member is offline.
+        safe_current:
+          type: number
+          format: double
+          minimum: 0
+          description: Safe current (amps) to use when in safe_current mode.
+        peer_assumed_current:
+          type: number
+          format: double
+          minimum: 0
+          description: Conservative assumed current (amps) for offline peers.
+      required:
+        - mode
+
+    LoadSharingMember:
+      type: object
+      description: A configured member of a load sharing group.
+      properties:
+        id:
+          type: string
+          description: Stable device id (mDNS TXT record `id`).
+        host:
+          type: string
+          description: Hostname or IP address for this member.
+        name:
+          type: string
+          description: Optional human-readable name.
+        priority:
+          type: integer
+          description: Optional priority (lower means higher priority).
+        enabled:
+          type: boolean
+          default: true
+      required:
+        - host
+ 
+    LoadSharingPeerStatus:
+      type: object
+      description: Minimal peer status snapshot used for load sharing decisions.
+      properties:
+        amp:
+          type: number
+          format: double
+          description: Measured current (amps).
+        voltage:
+          type: number
+          format: double
+          description: Measured voltage (volts).
+        pilot:
+          type: number
+          format: double
+          description: Current pilot setpoint (amps).
+        vehicle:
+          type: integer
+          description: 1 if vehicle connected, else 0.
+        state:
+          type: integer
+          description: EVSE state code.
+
+    LoadSharingPeer:
+      type: object
+      description: A discovered or configured peer.
+      properties:
+        id:
+          type: string
+          description: Stable device id.
+        name:
+          type: string
+          description: mDNS instance/hostname if available.
+        host:
+          type: string
+          description: Hostname or IP address used to reach the peer.
+        ip:
+          type: string
+          description: Current resolved IP address.
+        version:
+          type: string
+          description: Firmware version if available.
+        online:
+          type: boolean
+        last_seen:
+          type: string
+          format: date-time
+        status:
+          $ref: '#/components/schemas/LoadSharingPeerStatus'
+
+    LoadSharingAllocation:
+      type: object
+      description: Per-member current allocation result.
+      properties:
+        id:
+          type: string
+          description: Member id.
+        target_current:
+          type: number
+          format: double
+          minimum: 0
+          description: Allocated current (amps).
+        reason:
+          type: string
+      required:
+        - target_current
+
+    LoadSharingStatus:
+      type: object
+      description: Runtime status for local load sharing.
+      properties:
+        enabled:
+          type: boolean
+        group_id:
+          type: string
+        computed_at:
+          type: string
+          format: date-time
+        failsafe_active:
+          type: boolean
+        online_count:
+          type: integer
+        offline_count:
+          type: integer
+        peers:
+          type: array
+          items:
+            $ref: '#/components/schemas/LoadSharingPeer'
+        allocations:
+          type: array
+          items:
+            $ref: '#/components/schemas/LoadSharingAllocation'
   responses:
     UpdateSuccessful:
       description: Update successful
@@ -1072,3 +1308,4 @@ tags:
   - name: Time
   - name: Restart
   - name: Certificates
+  - name: Load Sharing
