@@ -361,8 +361,12 @@ draw” as the shaper’s `live_pwr` (if actual values are not available) input:
 - Convert group current limit to power:
   $P_{max} = I_{group} \times V_{local}$ (or 3-phase equivalent)
 - Estimate other-members power:
-  $P_{others} = \sum_{j \neq self} I_{j} \times V_{j}$
+  $P_{others} = \sum_{j \neq self} I_{j} \times V_{j}$, where $V_{j}$ is the peer’s
+  reported voltage when available, otherwise a fallback value (typically $V_{local}$)
   - Prefer using peers’ measured `amp` and `voltage` from `/ws` status
+  - If a peer does not report `voltage`, use the local node’s measured voltage
+    as an approximation (implementations MAY instead use a configured nominal
+    supply voltage if that better matches the installation)
 - Set:
   - `shaper.setMaxPwr(P_max)`
   - `shaper.setLivePwr(P_others)`
