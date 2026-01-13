@@ -54,6 +54,7 @@ jobs:
 #          - elecrow_esp32_hmi_dev
           - openevse_wifi_tft_v1
           - openevse_wifi_tft_v1_dev
+          - native
 
     steps:
     - uses: ammaraskar/gcc-problem-matcher@master
