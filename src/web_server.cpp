@@ -1195,16 +1195,18 @@ void web_server_setup()
     const char *key = certs.getKey(cert_id);
     if(NULL != cert && NULL != key)
     {
-      server.begin(HTTPS_SERVER_PORT, cert, key);
+      DEBUG.printf("Starting HTTP server, https://0.0.0.0:%d\n", www_https_port);
+      server.begin(www_https_port, cert, key);
       use_ssl = true;
 
-      redirect.begin(HTTP_SERVER_PORT);
+      redirect.begin(www_http_port);
       redirect.on("/", handleHttpsRedirect);
     }
   }
 
   if(false == use_ssl) {
-    server.begin(HTTP_SERVER_PORT);
+    DEBUG.printf("Starting HTTP server, http://0.0.0.0:%d\n", www_http_port);
+    server.begin(www_http_port);
   }
 
   // Handle status updates
