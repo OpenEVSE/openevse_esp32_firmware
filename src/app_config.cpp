@@ -23,6 +23,14 @@
 #include "limit.h"
 #endif
 
+#ifndef HTTP_SERVER_PORT
+#define HTTP_SERVER_PORT 80
+#endif
+
+#ifndef HTTPS_SERVER_PORT
+#define HTTPS_SERVER_PORT 443
+#endif
+
 #define EEPROM_SIZE       4096
 
 #define CONFIG_OFFSET     0
@@ -46,6 +54,10 @@ String lang;
 String www_username;
 String www_password;
 String www_certificate_id;
+
+// Web server ports
+uint32_t www_http_port;
+uint32_t www_https_port;
 
 // Advanced settings
 String esp_hostname;
@@ -159,7 +171,11 @@ ConfigOpt *opts[] =
 // Web server authentication (leave blank for none)
   new ConfigOptDefinition<String>(www_username, "", "www_username", "au"),
   new ConfigOptSecret(www_password, "", "www_password", "ap"),
-  new ConfigOptDefenition<String>(www_certificate_id, "", "www_certificate_id", "wc"),
+  new ConfigOptDefinition<String>(www_certificate_id, "", "www_certificate_id", "wc"),
+
+// Web server ports
+  new ConfigOptDefinition<uint32_t>(www_http_port, HTTP_SERVER_PORT, "www_http_port", "whp"),
+  new ConfigOptDefinition<uint32_t>(www_https_port, HTTPS_SERVER_PORT, "www_https_port", "wsp"),
 
 // Advanced settings
   new ConfigOptDefinition<String>(esp_hostname, esp_hostname_default, "hostname", "hn"),
@@ -590,17 +606,47 @@ bool config_serialize(DynamicJsonDocument &doc, bool longNames, bool compactOutp
   return user_config.serialize(doc, longNames, compactOutput, hideSecrets);
 }
 
-void config_set(const char *name, uint32_t val) {
+bool config_set(const char *name, uint32_t val) {
   user_config.set(name, val);
 }
-void config_set(const char *name, String val) {
+bool config_set(const char *name, String val) {
   user_config.set(name, val);
 }
-void config_set(const char *name, bool val) {
+bool config_set(const char *name, bool val) {
   user_config.set(name, val);
 }
-void config_set(const char *name, double val) {
+bool config_set(const char *name, double val) {
   user_config.set(name, val);
+}
+
+bool config_set_opt_string(const char *name, const char *value) {
+  // Try to determine the type from the config option definition
+  // For now, we'll try as string first, then try as integer
+  
+  // Create a JSON document with the value as a string
+  const size_t capacity = JSON_OBJECT_SIZE(1) + 256;
+  DynamicJsonDocument doc(capacity);
+  
+  // Try to parse as a number first
+  char *endptr;
+  long int_val = strtol(value, &endptr, 10);
+  
+  if (*endptr == '\0' && value != endptr) {
+    // Successfully parsed as integer
+    doc[name] = int_val;
+  } else {
+    // Try parsing as double
+    double double_val = strtod(value, &endptr);
+    if (*endptr == '\0' && value != endptr && strchr(value, '.') != nullptr) {
+      // Successfully parsed as double
+      doc[name] = double_val;
+    } else {
+      // Use as string
+      doc[name] = value;
+    }
+  }
+  
+  return user_config.deserialize(doc);
 }
 
 void config_reset()

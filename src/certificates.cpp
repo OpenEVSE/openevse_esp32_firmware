@@ -8,9 +8,7 @@
 #include "emonesp.h"
 #include "certificates.h"
 #include "root_ca.h"
-
-#include "mbedtls/x509_crt.h"
-#include "mbedtls/pk.h"
+#include "certificate_validator.h"
 
 bool CertificateStore::Certificate::deserialize(JsonObject &obj)
 {
@@ -18,43 +16,38 @@ bool CertificateStore::Certificate::deserialize(JsonObject &obj)
 
   std::string cert = obj["certificate"].as<std::string>();
 
-  // Check if the certificate is valid
-  mbedtls_x509_crt x509;
-  mbedtls_x509_crt_init(&x509);
-  int ret = mbedtls_x509_crt_parse(&x509, (const unsigned char *)cert.c_str(), cert.length() + 1);
-  if(ret != 0) {
-    DBUGVAR(ret);
+  // Get the certificate validator instance
+  static CertificateValidator *validator = createCertificateValidator();
+  if(!validator) {
+    DBUGLN("Failed to create certificate validator");
+    return false;
+  }
+
+  // Validate the certificate
+  CertificateValidator::ValidationResult result = validator->validateCertificate(cert);
+  if(!result.valid) {
+    DBUGF("Certificate validation failed: %s", result.error.c_str());
     DBUGVAR(cert.c_str());
     return false;
   }
 
 #if defined(ENABLE_DEBUG_CETRIFICATES)
-  char p[1024];
-  mbedtls_x509_dn_gets(p, sizeof(p), &x509.issuer);
-  DBUGF("issuer: %s", p);
-  mbedtls_x509_dn_gets(p, sizeof(p), &x509.subject);
-  DBUGF("subject: %s", p);
+  DBUGF("issuer: %s", result.issuer.c_str());
+  DBUGF("subject: %s", result.subject.c_str());
 #endif
 
   _cert = cert;
   if(obj.containsKey("id")) {
     _id = std::stoull(obj["id"].as<std::string>(), nullptr, 16);
   } else {
-    uint64_t id = 0;
-    for(int i = 0; i < x509.serial.len; i++) {
-      id = id << 8 | x509.serial.p[i];
-    }
-    _id = id;
+    _id = result.serial;
   }
+
   if(obj.containsKey("key"))
   {
     std::string key = obj["key"].as<std::string>();
 
-    mbedtls_pk_context pk;
-    mbedtls_pk_init(&pk);
-    int ret = mbedtls_pk_parse_key(&pk, (const unsigned char *)key.c_str(), key.length() + 1, NULL, 0);
-    if(ret != 0) {
-      DBUGVAR(ret);
+    if(!validator->validatePrivateKey(key)) {
       DBUGVAR(key.c_str());
       return false;
     }
