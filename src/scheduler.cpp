@@ -373,7 +373,7 @@ void Scheduler::buildSchedule()
   event_send(doc);
 
   // publish updated schedule to mqtt
-  mqtt_publish_schedule();
+  mqtt.publishSchedule();
 
   // wake the main task to see if we actually need to do something
   MicroTask.wakeTask(this);

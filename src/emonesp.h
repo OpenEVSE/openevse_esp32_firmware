@@ -8,6 +8,18 @@
 #include "debug.h"
 #include "profile.h"
 
+// -------------------------------------------------------------------
+// Lock Screen Configuration
+// -------------------------------------------------------------------
+
+// Uncomment to enable lock screen when EVSE is disabled
+//#define ENABLE_LOCK_SCREEN
+
+// Default lock screen message displayed when EVSE is disabled
+#ifndef LOCK_SCREEN_MESSAGE
+#define LOCK_SCREEN_MESSAGE "STATION LOCKED"
+#endif
+
 #ifdef WIFI_LED
 #ifndef WIFI_LED_ON_STATE
 #define WIFI_LED_ON_STATE LOW
@@ -87,6 +99,14 @@
 #ifndef DEFAULT_TIME_ZONE
 // Default time zone, Europe/London
 #define DEFAULT_TIME_ZONE "Europe/London|GMT0BST,M3.5.0/1,M10.5.0"
+#endif
+
+#ifndef LIMIT_DEFAULT_TYPE_DEFAULT
+#define LIMIT_DEFAULT_TYPE_DEFAULT ""
+#endif
+
+#ifndef LIMIT_DEFAULT_VALUE_DEFAULT
+#define LIMIT_DEFAULT_VALUE_DEFAULT 0
 #endif
 
 #ifndef VOLTAGE_DEFAULT

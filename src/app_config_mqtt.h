@@ -4,7 +4,6 @@
 #include <ConfigOpt.h>
 #include <ConfigOptDefinition.h>
 
-#include "mqtt.h"
 #include "app_config.h"
 
 class ConfigOptVirtualMqttProtocol : public ConfigOpt

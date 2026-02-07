@@ -218,7 +218,7 @@ void buildStatus(DynamicJsonDocument &doc) {
   doc["packets_sent"] = packets_sent;
   doc["packets_success"] = packets_success;
 
-  doc["mqtt_connected"] = (int)mqtt_connected();
+  doc["mqtt_connected"] = (int)mqtt.isConnected();
 
   doc["ocpp_connected"] = (int)OcppTask::isConnected();
 
@@ -666,7 +666,6 @@ void handleLimitPost(MongooseHttpServerRequest *request, MongooseHttpServerRespo
     if (limit.set(body)) {
       response->setCode(201);
       response->print("{\"msg\":\"done\"}");
-      // todo: mqtt_publish_limit();  // update limit props to mqtt
     } else {
       // unused for now
       response->setCode(400);
@@ -794,10 +793,10 @@ void handleOverridePost(MongooseHttpServerRequest *request, MongooseHttpServerRe
     if(manual.claim(props)) {
       response->setCode(201);
       response->print("{\"msg\":\"Created\"}");
-      mqtt_publish_override();  // update override state to mqtt
+      mqtt.publishOverride();  // update override state to mqtt
     } else {
       response->setCode(500);
-      response->print("{\"msg\":\"Failed to claim manual overide\"}");
+      response->print("{\"msg\":\"Failed to claim manual override\"}");
     }
   } else {
     response->setCode(400);
@@ -810,10 +809,10 @@ void handleOverrideDelete(MongooseHttpServerRequest *request, MongooseHttpServer
   if(manual.release()) {
     response->setCode(200);
     response->print("{\"msg\":\"Deleted\"}");
-    mqtt_publish_override();  // update override state to mqtt
+    mqtt.publishOverride();  // update override state to mqtt
   } else {
     response->setCode(500);
-    response->print("{\"msg\":\"Failed to release manual overide\"}");
+    response->print("{\"msg\":\"Failed to release manual override\"}");
   }
 }
 
@@ -823,10 +822,10 @@ void handleOverridePatch(MongooseHttpServerRequest *request, MongooseHttpServerR
   {
     response->setCode(200);
     response->print("{\"msg\":\"Updated\"}");
-    mqtt_publish_override();  // update override state to mqtt
+    mqtt.publishOverride();  // update override state to mqtt
   } else {
     response->setCode(500);
-    response->print("{\"msg\":\"Failed to toggle manual overide\"}");
+    response->print("{\"msg\":\"Failed to toggle manual override\"}");
   }
 }
 
