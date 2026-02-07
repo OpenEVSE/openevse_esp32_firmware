@@ -1,4 +1,5 @@
 #include <StreamSpy.h>
+#include <cstdlib>  // for getenv
 
 #ifndef DEBUG_PORT
 #if defined(ESP32) || defined(DIVERT_SIM) || defined(EPOXY_DUINO)
@@ -16,7 +17,17 @@
 #elif defined(EPOXY_DUINO)
 #define RAPI_PORT SerialRapi
 #include "PtySerial.h"
-PtySerial SerialRapi("/tmp/rapi_pty");
+
+// Helper function to get RAPI serial port path from environment or default
+static const char* get_rapi_serial_path() {
+  const char* env_path = std::getenv("RAPI_SERIAL_PORT");
+  if (env_path && *env_path) {
+    return env_path;
+  }
+  return "/tmp/rapi_pty";  // Default fallback
+}
+
+PtySerial SerialRapi(get_rapi_serial_path());
 
 // Allow runtime override of the PTY path before begin()
 extern "C" void debug_set_rapi_path(const char* path) {
