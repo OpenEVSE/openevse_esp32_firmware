@@ -71,6 +71,7 @@ CertificateStore certs;
 EvseManager evse(RAPI_PORT, eventLog);
 Scheduler scheduler(evse);
 ManualOverride manual(evse);
+bool manualOverride = false;
 DivertTask divert(evse);
 
 NetManagerTask net(lcd, ledManager, timeManager);
@@ -280,6 +281,14 @@ loop() {
     Timer3 = millis();
   }
 #endif
+
+  if (manualOverride) {
+    EvseProperties props;
+    props.setState(EvseState::Active);
+    props.setAutoRelease(true);
+    manual.claim(props);
+    manualOverride = false;
+  }
 
   Profile_End(loop, 10);
 } // end loop

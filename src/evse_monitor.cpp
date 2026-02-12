@@ -267,6 +267,20 @@ void EvseMonitor::updateEvseState(uint8_t evse_state, uint8_t pilot_state, uint3
     // check if we need to increment the relay counter
     _energyMeter.increment_switch_counter();
 
+    unsigned long curms = millis();
+    if ((curms > 60000) && originalVehicleConnected && !_state.isVehicleConnected()) {
+      // Vehicle disconnected
+      _unplugStartMs = curms;
+    }
+    else if (_unplugStartMs && _state.isVehicleConnected()) {
+      // Vehicle reconnected
+      if ((curms - _unplugStartMs) < 3500) {
+        extern bool manualOverride;;
+        manualOverride = true;
+      }
+      _unplugStartMs = 0;
+    }
+
     if (false == originalVehicleConnected && _state.isVehicleConnected())
     {
       // Vehicle connected, reset the max temp

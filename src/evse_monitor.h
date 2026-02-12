@@ -24,6 +24,8 @@ class EvseMonitor : public MicroTasks::Task
 {
   private:
 
+    unsigned long _unplugStartMs = 0;
+
     class EvseStateEvent : public MicroTasks::Event
     {
       private:
