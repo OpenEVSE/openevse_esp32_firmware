@@ -129,6 +129,7 @@ extern uint32_t flags;
 #define CONFIG_THREEPHASE           (1 << 24)
 #define CONFIG_WIZARD               (1 << 25)
 #define CONFIG_DEFAULT_STATE        (1 << 26)
+#define CONFIG_BUTTON_ENABLED       (1 << 27)
 
 #define INITIAL_CONFIG_VERSION  1
 
@@ -220,6 +221,10 @@ inline bool config_wizard_passed()
 inline EvseState config_default_state()
 {
   return CONFIG_DEFAULT_STATE == (flags & CONFIG_DEFAULT_STATE) ? EvseState::Active : EvseState::Disabled;
+}
+
+inline bool config_button_enabled() {
+  return CONFIG_BUTTON_ENABLED == (flags & CONFIG_BUTTON_ENABLED);
 }
 
 // Ohm Connect Settings

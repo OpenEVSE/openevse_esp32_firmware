@@ -659,6 +659,13 @@ void EvseMonitor::enableTemperatureCheck(bool enabled, std::function<void(int re
   }
 }
 
+void EvseMonitor::enableButton(bool enabled, std::function<void(int ret)> callback)
+{
+  if(!isButtonDisabled() != enabled) {
+    enableFeature(OPENEVSE_FEATURE_BUTTON, enabled, callback);
+  }
+}
+
 void EvseMonitor::configureCurrentSensorScale(long scale, long offset, std::function<void(int ret)> callback)
 {
   _openevse.setAmmeterSettings(scale, offset, [this, scale, offset, callback](int ret)
