@@ -181,6 +181,7 @@ void NetManagerTask::wifiClientConnect()
   memset(&wifi_config, 0, sizeof(wifi_config_t));
   
   // Copy SSID and password with explicit null-termination for safety
+  // Maximum lengths: SSID 32 bytes, password 64 bytes (IEEE 802.11 standard)
   strncpy((char*)wifi_config.sta.ssid, esid.c_str(), sizeof(wifi_config.sta.ssid) - 1);
   wifi_config.sta.ssid[sizeof(wifi_config.sta.ssid) - 1] = '\0';
   strncpy((char*)wifi_config.sta.password, epass.c_str(), sizeof(wifi_config.sta.password) - 1);
@@ -192,6 +193,7 @@ void NetManagerTask::wifiClientConnect()
   esp_err_t err = esp_wifi_set_config(WIFI_IF_STA, &wifi_config);
   if (ESP_OK != err) {
     DBUGF("Failed to set WiFi config: %s (%d)", esp_err_to_name(err), err);
+    // Continue anyway - WiFi.begin() may still work with default settings
   }
   
   // Start WiFi connection without parameters (uses config set above)
@@ -202,6 +204,7 @@ void NetManagerTask::wifiClientConnect()
   err = esp_wifi_set_bandwidth(WIFI_IF_STA, WIFI_BW_HT20);
   if (ESP_OK != err) {
     DBUGF("Failed to set WiFi bandwidth: %s (%d)", esp_err_to_name(err), err);
+    // Continue anyway - WiFi will use default bandwidth (typically 40MHz or auto)
   }
 #else
   WiFi.begin(esid.c_str(), epass.c_str());
