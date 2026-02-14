@@ -54,7 +54,11 @@ LcdTask::LcdTask() :
   _scheduler(NULL),
   _nextMessageTime(0),
   _evseStateEvent(this),
-  _evseSettingsEvent(this)
+  _evseSettingsEvent(this),
+  _backlightTimeout(0),
+  _backlightOn(true),
+  _previousEvseState(OPENEVSE_STATE_STARTING),
+  _previousVehicleState(false)
 {
 }
 
@@ -264,6 +268,9 @@ unsigned long LcdTask::loop(MicroTasks::WakeReason reason)
   if(nextInfoDelay < nextUpdate) {
     nextUpdate = nextInfoDelay;
   }
+
+  // Update backlight state based on timeout and EVSE state
+  updateBacklight();
 
   DBUGVAR(nextUpdate);
   return nextUpdate;
@@ -738,6 +745,79 @@ void LcdTask::onButton(int long_press)
 void LcdTask::setWifiMode(bool client, bool connected)
 {
 //only used by the TFT display
+}
+
+// Backlight control methods
+void LcdTask::setBacklight(bool on)
+{
+  if(_backlightOn == on) {
+    return; // No change needed
+  }
+  
+  _backlightOn = on;
+  
+  // Send RAPI command to control backlight: $FB 0 (off) or $FB 1 (on)
+  String cmd = "$FB ";
+  cmd += on ? "1" : "0";
+  
+  DBUGF("Setting LCD backlight %s with command: %s", on ? "ON" : "OFF", cmd.c_str());
+  
+  _evse->getSender().sendCmd(cmd, [on](int ret) {
+    if(RAPI_RESPONSE_OK == ret) {
+      DBUGF("LCD backlight set to %s successfully", on ? "ON" : "OFF");
+    } else {
+      DBUGF("Failed to set LCD backlight, ret=%d", ret);
+    }
+  });
+}
+
+void LcdTask::wakeBacklight()
+{
+  if(lcd_backlight_timeout > 0) {
+    DBUGLN("Waking LCD backlight");
+    setBacklight(true);
+    _backlightTimeout = millis() + (lcd_backlight_timeout * 1000);
+  }
+}
+
+void LcdTask::updateBacklight()
+{
+  // If backlight timeout is disabled (0), keep backlight on
+  if(lcd_backlight_timeout == 0) {
+    if(!_backlightOn) {
+      setBacklight(true);
+    }
+    return;
+  }
+  
+  // Check for state changes that should wake the backlight
+  bool vehicle_state = _evse->isVehicleConnected();
+  uint8_t evse_state = _evse->getEvseState();
+  
+  if(_previousEvseState != evse_state || _previousVehicleState != vehicle_state) {
+    wakeBacklight();
+    _previousEvseState = evse_state;
+    _previousVehicleState = vehicle_state;
+    return;
+  }
+  
+  // Keep backlight on during error conditions
+  bool isError = (evse_state >= OPENEVSE_STATE_VENT_REQUIRED && 
+                  evse_state <= OPENEVSE_STATE_OVER_CURRENT);
+  
+  if(isError) {
+    // Always keep backlight on during errors
+    if(!_backlightOn) {
+      setBacklight(true);
+    }
+    return;
+  }
+  
+  // Check if timeout has expired
+  if(_backlightOn && millis() >= _backlightTimeout) {
+    DBUGLN("LCD backlight timeout expired");
+    setBacklight(false);
+  }
 }
 
 LcdTask lcd;
