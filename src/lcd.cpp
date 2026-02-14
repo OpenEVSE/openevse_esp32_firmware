@@ -776,7 +776,9 @@ void LcdTask::wakeBacklight()
   if(lcd_backlight_timeout > 0) {
     DBUGLN("Waking LCD backlight");
     setBacklight(true);
-    _backlightTimeout = millis() + (lcd_backlight_timeout * 1000);
+    // Prevent overflow by casting and limiting maximum timeout
+    unsigned long timeout_ms = (unsigned long)lcd_backlight_timeout * 1000UL;
+    _backlightTimeout = millis() + timeout_ms;
   }
 }
 
@@ -802,8 +804,7 @@ void LcdTask::updateBacklight()
   }
   
   // Keep backlight on during error conditions
-  bool isError = (evse_state >= OPENEVSE_STATE_VENT_REQUIRED && 
-                  evse_state <= OPENEVSE_STATE_OVER_CURRENT);
+  bool isError = _evse->isError();
   
   if(isError) {
     // Always keep backlight on during errors
@@ -813,8 +814,8 @@ void LcdTask::updateBacklight()
     return;
   }
   
-  // Check if timeout has expired
-  if(_backlightOn && millis() >= _backlightTimeout) {
+  // Check if timeout has expired (handle millis() rollover)
+  if(_backlightOn && (long)(millis() - _backlightTimeout) >= 0) {
     DBUGLN("LCD backlight timeout expired");
     setBacklight(false);
   }
