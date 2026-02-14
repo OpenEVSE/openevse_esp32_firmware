@@ -193,7 +193,8 @@ void config_changed(String name);
                               CONFIG_OCPP_OFFLINE_AUTH | \
                               CONFIG_TEMP_THROTTLE_DEFAULT | \
                               CONFIG_DEFAULT_STATE_DEFAULT | \
-                              CONFIG_LCD_NETWORK_INFO)
+                              CONFIG_LCD_NETWORK_INFO | \
+                              CONFIG_BUTTON_ENABLED)
 
 ConfigOptDefinition<uint32_t> flagsOpt = ConfigOptDefinition<uint32_t>(flags, CONFIG_DEFAULT_FLAGS, "flags", "f");
 ConfigOptDefinition<uint32_t> flagsChanged = ConfigOptDefinition<uint32_t>(flags_changed, 0, "flags_changed", "c");
@@ -346,6 +347,7 @@ ConfigOpt *opts[] =
   new ConfigOptVirtualMaskedBool(flagsOpt, flagsChanged, CONFIG_DEFAULT_STATE, CONFIG_DEFAULT_STATE, "default_state", "dfs"),
   new ConfigOptVirtualMaskedBool(flagsOpt, flagsChanged, CONFIG_TEMP_THROTTLE, CONFIG_TEMP_THROTTLE, "temp_throttle_enabled", "tte"),
   new ConfigOptVirtualMaskedBool(flagsOpt, flagsChanged, CONFIG_LCD_NETWORK_INFO, CONFIG_LCD_NETWORK_INFO, "lcd_network_info", "lni"),
+  new ConfigOptVirtualMaskedBool(flagsOpt, flagsChanged, CONFIG_BUTTON_ENABLED, CONFIG_BUTTON_ENABLED, "button_enabled", "be"),
   new ConfigOptVirtualMqttProtocol(flagsOpt, flagsChanged, "mqtt_protocol", "mprt"),
   new ConfigOptVirtualChargeMode(flagsOpt, flagsChanged, "charge_mode", "chmd")
 };
@@ -645,6 +647,16 @@ bool config_deserialize(DynamicJsonDocument &doc)
       evse.enableFrontButton(enable);
       config_modified = true;
       DBUGLN("front_button changed");
+    }
+  }
+
+  if(doc.containsKey("button_enabled"))
+  {
+    bool enable = doc["button_enabled"];
+    if(enable != evse.isFrontButtonEnabled()) {
+      evse.enableFrontButton(enable);
+      config_modified = true;
+      DBUGLN("button_enabled changed");
     }
   }
 

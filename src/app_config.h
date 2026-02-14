@@ -168,7 +168,8 @@ extern uint32_t flags;
 #define CONFIG_LCD_NETWORK_INFO     (1 << 28)
 // Inverted sense: bit SET disables the $SYS/broker/version probe. Existing
 // installs have this bit clear, so they keep probing exactly as before.
-#define CONFIG_MQTT_NO_SYS_QUERY    (1 << 29) // next free bit after CONFIG_MQTT_NO_SYS_QUERY
+#define CONFIG_MQTT_NO_SYS_QUERY    (1 << 29)
+#define CONFIG_BUTTON_ENABLED       (1 << 30) // next free bit after CONFIG_MQTT_NO_SYS_QUERY
 
 #define INITIAL_CONFIG_VERSION  1
 
@@ -275,6 +276,9 @@ inline bool config_lcd_network_info_enabled()
   return CONFIG_LCD_NETWORK_INFO == (flags & CONFIG_LCD_NETWORK_INFO);
 }
 
+inline bool config_button_enabled() {
+  return CONFIG_BUTTON_ENABLED == (flags & CONFIG_BUTTON_ENABLED);
+}
 
 extern uint32_t config_version();
 
