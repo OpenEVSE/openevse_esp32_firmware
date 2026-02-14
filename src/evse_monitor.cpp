@@ -661,7 +661,9 @@ void EvseMonitor::enableTemperatureCheck(bool enabled, std::function<void(int re
 
 void EvseMonitor::enableButton(bool enabled, std::function<void(int ret)> callback)
 {
-  if(!isButtonDisabled() != enabled) {
+  // isButtonDisabled() returns true if button is disabled, so we need to check if current state != desired state
+  bool currentlyEnabled = !isButtonDisabled();
+  if(currentlyEnabled != enabled) {
     enableFeature(OPENEVSE_FEATURE_BUTTON, enabled, callback);
   }
 }

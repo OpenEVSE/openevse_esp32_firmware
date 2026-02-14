@@ -488,7 +488,8 @@ bool config_deserialize(DynamicJsonDocument &doc)
   if(doc.containsKey("button_enabled"))
   {
     bool enable = doc["button_enabled"];
-    if(enable != !evse.isButtonDisabled()) {
+    bool currentlyEnabled = !evse.isButtonDisabled();
+    if(enable != currentlyEnabled) {
       evse.enableButton(enable);
       config_modified = true;
       DBUGLN("button_enabled changed");
