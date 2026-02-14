@@ -212,6 +212,7 @@ void buildStatus(DynamicJsonDocument &doc) {
   doc["eth_connected"] = (int)net.isWiredConnected();
   doc["net_connected"] = (int)net.isWifiClientConnected();
   doc["ipaddress"] = net.getIp();
+  doc["ipv6address"] = net.getIpv6();
   doc["macaddress"] = net.getMac();
 
   doc["emoncms_connected"] = (int)emoncms_connected;
