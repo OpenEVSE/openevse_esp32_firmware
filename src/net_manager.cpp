@@ -173,34 +173,34 @@ void NetManagerTask::wifiClientConnect()
 
 #ifdef ESP32
   // Configure WiFi for improved stability
+  // These advanced settings address WiFi stability issues reported in #841
   
-  // Set bandwidth to 20MHz for better reliability in congested environments
-  // This is independent of the WiFi config structure and must be called separately
-  esp_err_t err = esp_wifi_set_bandwidth(WIFI_IF_STA, WIFI_BW_HT20);
-  if (ESP_OK != err) {
-    DBUGF("Failed to set WiFi bandwidth: %d", err);
-  }
-  
-  // Configure PMF (Protected Management Frames) - capable but not required
-  // This provides better security when available but maintains compatibility
+  // Configure PMF (Protected Management Frames) and credentials
+  // PMF provides better security when available but maintains compatibility
   wifi_config_t wifi_config;
   memset(&wifi_config, 0, sizeof(wifi_config_t));
   
-  // Copy SSID and password, ensuring null-termination
+  // Copy SSID and password (memset ensures null-termination)
   strncpy((char*)wifi_config.sta.ssid, esid.c_str(), sizeof(wifi_config.sta.ssid) - 1);
-  wifi_config.sta.ssid[sizeof(wifi_config.sta.ssid) - 1] = '\0';
   strncpy((char*)wifi_config.sta.password, epass.c_str(), sizeof(wifi_config.sta.password) - 1);
-  wifi_config.sta.password[sizeof(wifi_config.sta.password) - 1] = '\0';
   
   wifi_config.sta.pmf_cfg.capable = true;
   wifi_config.sta.pmf_cfg.required = false;
   
-  err = esp_wifi_set_config(WIFI_IF_STA, &wifi_config);
+  esp_err_t err = esp_wifi_set_config(WIFI_IF_STA, &wifi_config);
   if (ESP_OK != err) {
     DBUGF("Failed to set WiFi config: %d", err);
   }
   
+  // Start WiFi connection without parameters (uses config set above)
   WiFi.begin();
+  
+  // Set bandwidth to 20MHz for better reliability in congested environments
+  // This must be called after WiFi.begin() when WiFi stack is initialized
+  err = esp_wifi_set_bandwidth(WIFI_IF_STA, WIFI_BW_HT20);
+  if (ESP_OK != err) {
+    DBUGF("Failed to set WiFi bandwidth: %d", err);
+  }
 #else
   WiFi.begin(esid.c_str(), epass.c_str());
 #endif
