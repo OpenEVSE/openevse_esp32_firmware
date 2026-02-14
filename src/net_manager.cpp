@@ -170,7 +170,26 @@ void NetManagerTask::wifiClientConnect()
   WiFi.setSleep(WIFI_PS_NONE);
   WiFi.setScanMethod(WIFI_ALL_CHANNEL_SCAN);
   WiFi.setSortMethod(WIFI_CONNECT_AP_BY_SIGNAL);
+
+#ifdef ESP32
+  // Configure WiFi for improved stability
+  // Set bandwidth to 20MHz for better reliability in congested environments
+  esp_wifi_set_bandwidth(WIFI_IF_STA, WIFI_BW_HT20);
+  
+  // Configure PMF (Protected Management Frames) - capable but not required
+  // This provides better security when available but maintains compatibility
+  wifi_config_t wifi_config;
+  memset(&wifi_config, 0, sizeof(wifi_config_t));
+  strncpy((char*)wifi_config.sta.ssid, esid.c_str(), sizeof(wifi_config.sta.ssid) - 1);
+  strncpy((char*)wifi_config.sta.password, epass.c_str(), sizeof(wifi_config.sta.password) - 1);
+  wifi_config.sta.pmf_cfg.capable = true;
+  wifi_config.sta.pmf_cfg.required = false;
+  
+  esp_wifi_set_config(WIFI_IF_STA, &wifi_config);
+  WiFi.begin();
+#else
   WiFi.begin(esid.c_str(), epass.c_str());
+#endif
 
   _clientRetryTime = millis() + WIFI_CLIENT_RETRY_TIMEOUT;
 }
