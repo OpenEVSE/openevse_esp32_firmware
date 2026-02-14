@@ -8,6 +8,8 @@
 
 const char* RfidUser::RFID_USERS_FILE = "/rfid_users.json";
 
+#define RFID_USERS_DOC_SIZE 2048
+
 bool RfidUser::load(DynamicJsonDocument &doc)
 {
   File file = LittleFS.open(RFID_USERS_FILE, "r");
@@ -51,7 +53,7 @@ String RfidUser::getUserName(const String &rfidTag)
     return "";
   }
 
-  DynamicJsonDocument doc(2048);
+  DynamicJsonDocument doc(RFID_USERS_DOC_SIZE);
   if(!load(doc)) {
     return "";
   }
@@ -70,7 +72,7 @@ bool RfidUser::setUserName(const String &rfidTag, const String &userName)
     return false;
   }
 
-  DynamicJsonDocument doc(2048);
+  DynamicJsonDocument doc(RFID_USERS_DOC_SIZE);
   load(doc); // Load existing data, ignore errors
 
   JsonObject users = doc.to<JsonObject>();
@@ -91,6 +93,6 @@ bool RfidUser::removeUserName(const String &rfidTag)
 
 bool RfidUser::clearAll()
 {
-  DynamicJsonDocument doc(2048);
+  DynamicJsonDocument doc(RFID_USERS_DOC_SIZE);
   return save(doc);
 }

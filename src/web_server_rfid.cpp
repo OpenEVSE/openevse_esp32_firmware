@@ -104,25 +104,33 @@ void handleLogsExport(MongooseHttpServerRequest *request)
     // CSV header
     response->print("Time,Type,State,Energy (kWh),Elapsed (min),RFID Tag,User Name,Temperature (C)\r\n");
     
+    // Load RFID user mappings once before iterating
+    DynamicJsonDocument usersDoc(2048);
+    RfidUser::load(usersDoc);
+    JsonObject users = usersDoc.as<JsonObject>();
+    
+    // Define CSV escaping function once
+    auto escapeCSV = [](const String &field) -> String {
+      if(field.indexOf(',') >= 0 || field.indexOf('"') >= 0 || field.indexOf('\n') >= 0) {
+        String escaped = field;
+        escaped.replace("\"", "\"\"");
+        return "\"" + escaped + "\"";
+      }
+      return field;
+    };
+    
     // Iterate through all log files
     for(uint32_t i = eventLog.getMinIndex(); i <= eventLog.getMaxIndex(); i++)
     {
-      eventLog.enumerate(i, [response](String time, EventType type, const String &logEntry, EvseState managerState, uint8_t evseState, uint32_t evseFlags, uint32_t pilot, double energy, uint32_t elapsed, double temperature, double temperatureMax, uint8_t divertMode, uint8_t shaper, const String &rfidTag)
+      eventLog.enumerate(i, [response, &users, &escapeCSV](String time, EventType type, const String &logEntry, EvseState managerState, uint8_t evseState, uint32_t evseFlags, uint32_t pilot, double energy, uint32_t elapsed, double temperature, double temperatureMax, uint8_t divertMode, uint8_t shaper, const String &rfidTag)
       {
         // Convert values
         double energyKwh = energy / 1000.0;
         double elapsedMin = elapsed / 60.0;
-        String userName = RfidUser::getUserName(rfidTag);
-        
-        // Escape CSV fields if they contain commas, quotes, or newlines
-        auto escapeCSV = [](const String &field) -> String {
-          if(field.indexOf(',') >= 0 || field.indexOf('"') >= 0 || field.indexOf('\n') >= 0) {
-            String escaped = field;
-            escaped.replace("\"", "\"\"");
-            return "\"" + escaped + "\"";
-          }
-          return field;
-        };
+        String userName = "";
+        if(rfidTag.length() > 0 && users.containsKey(rfidTag)) {
+          userName = users[rfidTag].as<String>();
+        }
         
         // Build CSV line
         response->print(escapeCSV(time));

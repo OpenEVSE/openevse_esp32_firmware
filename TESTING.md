@@ -130,5 +130,5 @@ curl -X GET http://openevse.local/logs/export > sessions.csv
 
 1. RFID user mappings are stored locally on the device (not synced across multiple devices)
 2. CSV export includes all sessions (no date range filtering yet - can be added if needed)
-3. Maximum recommended user mappings: ~100 (limited by JSON document size of 2048 bytes)
+3. Maximum recommended user mappings: ~40-50 (limited by JSON document buffer of 2048 bytes; typical entry with 10-char UID + 25-char name + JSON overhead ≈ 50 bytes)
 4. CSV export streams entire history - very large log files may take time to download
