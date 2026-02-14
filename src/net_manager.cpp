@@ -180,16 +180,18 @@ void NetManagerTask::wifiClientConnect()
   wifi_config_t wifi_config;
   memset(&wifi_config, 0, sizeof(wifi_config_t));
   
-  // Copy SSID and password (memset ensures null-termination)
+  // Copy SSID and password with explicit null-termination for safety
   strncpy((char*)wifi_config.sta.ssid, esid.c_str(), sizeof(wifi_config.sta.ssid) - 1);
+  wifi_config.sta.ssid[sizeof(wifi_config.sta.ssid) - 1] = '\0';
   strncpy((char*)wifi_config.sta.password, epass.c_str(), sizeof(wifi_config.sta.password) - 1);
+  wifi_config.sta.password[sizeof(wifi_config.sta.password) - 1] = '\0';
   
   wifi_config.sta.pmf_cfg.capable = true;
   wifi_config.sta.pmf_cfg.required = false;
   
   esp_err_t err = esp_wifi_set_config(WIFI_IF_STA, &wifi_config);
   if (ESP_OK != err) {
-    DBUGF("Failed to set WiFi config: %d", err);
+    DBUGF("Failed to set WiFi config: %s (%d)", esp_err_to_name(err), err);
   }
   
   // Start WiFi connection without parameters (uses config set above)
@@ -199,7 +201,7 @@ void NetManagerTask::wifiClientConnect()
   // This must be called after WiFi.begin() when WiFi stack is initialized
   err = esp_wifi_set_bandwidth(WIFI_IF_STA, WIFI_BW_HT20);
   if (ESP_OK != err) {
-    DBUGF("Failed to set WiFi bandwidth: %d", err);
+    DBUGF("Failed to set WiFi bandwidth: %s (%d)", esp_err_to_name(err), err);
   }
 #else
   WiFi.begin(esid.c_str(), epass.c_str());
