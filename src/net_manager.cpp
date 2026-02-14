@@ -432,7 +432,7 @@ void NetManagerTask::onNetEvent(WiFiEvent_t event, arduino_event_info_t &info)
       _ipv6address = WiFi.linkLocalIPv6().toString();
       DBUGF("WiFi STA IPv6: %s", _ipv6address.c_str());
       
-      StaticJsonDocument<128> doc;
+      StaticJsonDocument<256> doc;
       doc["wifi_client_connected"] = (int)net.isWifiClientConnected();
       doc["eth_connected"] = (int)net.isWiredConnected();
       doc["net_connected"] = (int)net.isWifiClientConnected();
