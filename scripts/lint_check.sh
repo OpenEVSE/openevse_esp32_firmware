@@ -1,6 +1,10 @@
 #!/bin/bash
 # Lint check script for OpenEVSE ESP32 Firmware
 # Runs clang-tidy on source files to check naming conventions
+#
+# Note: This script may report warnings in legacy code that doesn't follow
+# current naming conventions. Focus on ensuring NEW code follows conventions.
+# See NAMING_CONVENTIONS.md for details.
 
 set -e
 
@@ -8,10 +12,14 @@ set -e
 RED='\033[0;31m'
 GREEN='\033[0;32m'
 YELLOW='\033[1;33m'
+BLUE='\033[0;34m'
 NC='\033[0m' # No Color
 
 echo "OpenEVSE ESP32 Firmware - Code Linting"
 echo "======================================="
+echo -e "${BLUE}Note: Warnings in legacy code are informational.${NC}"
+echo -e "${BLUE}Focus on ensuring NEW code follows conventions.${NC}"
+echo ""
 
 # Check if clang-tidy is installed
 if ! command -v clang-tidy &> /dev/null; then

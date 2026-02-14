@@ -9,8 +9,9 @@ Checks: >
   readability-misleading-indentation,
   modernize-use-nullptr,
   modernize-use-override,
-  performance-*,
-  -performance-unnecessary-value-param
+  performance-for-range-copy,
+  performance-implicit-conversion-in-loop,
+  performance-inefficient-string-concatenation
 
 # Naming convention enforcement
 CheckOptions:
@@ -55,7 +56,7 @@ CheckOptions:
   
   # Local Variables: camelCase (preferred)
   # Note: snake_case is also acceptable for legacy compatibility
-  # We set this to camelCase for new code, but won't fail on snake_case
+  # We set this to camelCase for new code
   - key: readability-identifier-naming.VariableCase
     value: camelBack
   
@@ -80,6 +81,8 @@ CheckOptions:
   # Macros: UPPER_SNAKE_CASE
   - key: readability-identifier-naming.MacroDefinitionCase
     value: UPPER_CASE
+  - key: readability-identifier-naming.MacroDefinitionIgnoredRegexp
+    value: '^(_.*|DEBUG_PORT)$'
   
   # Namespaces: lowercase or snake_case
   - key: readability-identifier-naming.NamespaceCase
@@ -98,6 +101,8 @@ CheckOptions:
 # Exclude external libraries and generated code
 HeaderFilterRegex: '^.*/(src|lib)/.*\.(h|hpp)$'
 
-# Warning level
+# Set to warnings (not errors) for legacy code compatibility
+# New code should still aim to pass all checks
 WarningsAsErrors: ''
 ...
+

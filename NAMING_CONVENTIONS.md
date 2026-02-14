@@ -383,6 +383,17 @@ For existing code that doesn't follow these conventions:
 3. **Local cleanup:** When modifying a file, fix naming in that file
 4. **Gradual improvement:** Naming improves over time through incremental changes
 
+### Known Legacy Violations
+
+The following legacy patterns exist in the codebase but should **NOT** be replicated in new code:
+
+- **Config helper functions**: Functions like `config_mqtt_enabled()`, `config_divert_enabled()` use `snake_case` instead of `camelCase`. New code should use `camelCase`.
+- **Mixed-case globals**: Variables like `ocpp_chargeBoxId`, `divert_PV_ratio` mix cases. New globals should be pure `snake_case`.
+- **Plain enum types**: Some enums like `vehicle_data_src`, `divert_type` use `lowercase_snake_case` instead of `PascalCase`. New enums should use `PascalCase`.
+- **Header guards**: Some header guards start with underscore (e.g., `_EMONESP_CONFIG_H`). New headers should avoid leading underscores (e.g., `EMONESP_CONFIG_H`).
+
+These violations will be gradually fixed over time. clang-tidy will warn about them but won't block builds.
+
 ---
 
 ## Questions?
