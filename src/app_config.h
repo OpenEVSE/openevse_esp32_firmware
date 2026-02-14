@@ -129,7 +129,7 @@ extern uint32_t flags;
 #define CONFIG_THREEPHASE           (1 << 24)
 #define CONFIG_WIZARD               (1 << 25)
 #define CONFIG_DEFAULT_STATE        (1 << 26)
-#define CONFIG_BUTTON_ENABLED       (1 << 27)
+#define CONFIG_BUTTON_MODE          (7 << 27) // 3 bits for button mode (0=disabled, 1=enabled, 2-7=reserved for future)
 
 #define INITIAL_CONFIG_VERSION  1
 
@@ -223,8 +223,12 @@ inline EvseState config_default_state()
   return CONFIG_DEFAULT_STATE == (flags & CONFIG_DEFAULT_STATE) ? EvseState::Active : EvseState::Disabled;
 }
 
+inline uint8_t config_button_mode() {
+  return (flags & CONFIG_BUTTON_MODE) >> 27;
+}
+
 inline bool config_button_enabled() {
-  return CONFIG_BUTTON_ENABLED == (flags & CONFIG_BUTTON_ENABLED);
+  return config_button_mode() != 0; // 0=disabled, 1+=enabled (currently only using 0 and 1)
 }
 
 // Ohm Connect Settings

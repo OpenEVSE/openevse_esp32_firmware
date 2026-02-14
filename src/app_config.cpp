@@ -137,11 +137,15 @@ void config_changed(String name);
 #define CONFIG_DEFAULT_STATE_DEFAULT CONFIG_DEFAULT_STATE
 #endif
 
+#ifndef CONFIG_DEFAULT_BUTTON_MODE
+#define CONFIG_DEFAULT_BUTTON_MODE (1 << 27) // Mode 1 = enabled
+#endif
+
 #define CONFIG_DEFAULT_FLAGS (CONFIG_SERVICE_SNTP | \
                               CONFIG_OCPP_AUTO_AUTH | \
                               CONFIG_OCPP_OFFLINE_AUTH | \
                               CONFIG_DEFAULT_STATE_DEFAULT | \
-                              CONFIG_BUTTON_ENABLED)
+                              CONFIG_DEFAULT_BUTTON_MODE)
 
 ConfigOptDefinition<uint32_t> flagsOpt = ConfigOptDefinition<uint32_t>(flags, CONFIG_DEFAULT_FLAGS, "flags", "f");
 ConfigOptDefinition<uint32_t> flagsChanged = ConfigOptDefinition<uint32_t>(flags_changed, 0, "flags_changed", "c");
@@ -264,7 +268,7 @@ ConfigOpt *opts[] =
   new ConfigOptVirtualMaskedBool(flagsOpt, flagsChanged, CONFIG_THREEPHASE, CONFIG_THREEPHASE, "is_threephase", "itp"),
   new ConfigOptVirtualMaskedBool(flagsOpt, flagsChanged, CONFIG_WIZARD, CONFIG_WIZARD, "wizard_passed", "wzp"),
   new ConfigOptVirtualMaskedBool(flagsOpt, flagsChanged, CONFIG_DEFAULT_STATE, CONFIG_DEFAULT_STATE, "default_state", "dfs"),
-  new ConfigOptVirtualMaskedBool(flagsOpt, flagsChanged, CONFIG_BUTTON_ENABLED, CONFIG_BUTTON_ENABLED, "button_enabled", "be"),
+  new ConfigOptVirtualMaskedBool(flagsOpt, flagsChanged, CONFIG_BUTTON_MODE, (1 << 27), "button_enabled", "be"),
   new ConfigOptVirtualMqttProtocol(flagsOpt, flagsChanged, "mqtt_protocol", "mprt"),
   new ConfigOptVirtualChargeMode(flagsOpt, flagsChanged, "charge_mode", "chmd")
 };
