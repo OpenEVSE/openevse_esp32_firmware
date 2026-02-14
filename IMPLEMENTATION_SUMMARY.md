@@ -1,7 +1,7 @@
 # Implementation Summary: Add UI to Enable/Disable Front Button
 
 ## Overview
-This PR implements a UI toggle to enable/disable the OpenEVSE front button, addressing the security concern raised in [issue #XXX](link) where outdoor or publicly accessible charging stations need protection against tampering.
+This PR implements a UI toggle to enable/disable the OpenEVSE front button, addressing the security concern raised in the issue where outdoor or publicly accessible charging stations need protection against tampering.
 
 ## Problem Statement
 Stations installed outdoors or in publicly accessible locations are vulnerable to:
@@ -15,19 +15,32 @@ The OpenEVSE firmware supports RAPI commands `$SB 0` (disable) and `$SB 1` (enab
 
 ### Backend Implementation (ESP32 Firmware)
 
-#### 1. Configuration Flag
+#### 1. Configuration Flag (Updated for Future Extensibility)
 - **File**: `src/app_config.h`
-- Added `CONFIG_BUTTON_ENABLED` flag at bit position 27
-- Added inline helper function `config_button_enabled()`
-- Included in default flags (button enabled by default)
+- Added `CONFIG_BUTTON_MODE` as a 3-bit field at bit positions 27-29
+- Reserved bits 28-29 for future button behavior modes (2-7)
+- Currently uses modes: 0 = disabled, 1 = enabled
+- Added inline helper functions:
+  - `config_button_mode()` - returns the raw mode value (0-7)
+  - `config_button_enabled()` - returns true if mode != 0 (backward compatible boolean)
+- Included in default flags with mode 1 (enabled by default)
 
 ```cpp
-#define CONFIG_BUTTON_ENABLED       (1 << 27)
+#define CONFIG_BUTTON_MODE          (7 << 27) // 3 bits for button mode (0=disabled, 1=enabled, 2-7=reserved for future)
+
+inline uint8_t config_button_mode() {
+  return (flags & CONFIG_BUTTON_MODE) >> 27;
+}
 
 inline bool config_button_enabled() {
-  return CONFIG_BUTTON_ENABLED == (flags & CONFIG_BUTTON_ENABLED);
+  return config_button_mode() != 0; // 0=disabled, 1+=enabled (currently only using 0 and 1)
 }
 ```
+
+**Future Extensibility**: The 3-bit field allows for up to 8 different button modes:
+- Mode 0: Disabled (button locked out)
+- Mode 1: Enabled (default behavior)
+- Modes 2-7: Reserved for future features (e.g., custom actions, long-press behaviors, etc.)
 
 #### 2. JSON Serialization
 - **File**: `src/app_config.cpp`
