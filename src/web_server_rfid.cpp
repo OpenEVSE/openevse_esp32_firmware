@@ -9,6 +9,17 @@
 
 typedef const __FlashStringHelper *fstr_t;
 
+// Helper function for CSV field escaping
+static String escapeCSVField(const String &field)
+{
+  if(field.indexOf(',') >= 0 || field.indexOf('"') >= 0 || field.indexOf('\n') >= 0) {
+    String escaped = field;
+    escaped.replace("\"", "\"\"");
+    return "\"" + escaped + "\"";
+  }
+  return field;
+}
+
 // -------------------------------------------------------------------
 // Handle RFID user management
 // GET /rfid/users - Get all RFID user mappings
@@ -109,20 +120,10 @@ void handleLogsExport(MongooseHttpServerRequest *request)
     RfidUser::load(usersDoc);
     JsonObject users = usersDoc.as<JsonObject>();
     
-    // Define CSV escaping function once
-    auto escapeCSV = [](const String &field) -> String {
-      if(field.indexOf(',') >= 0 || field.indexOf('"') >= 0 || field.indexOf('\n') >= 0) {
-        String escaped = field;
-        escaped.replace("\"", "\"\"");
-        return "\"" + escaped + "\"";
-      }
-      return field;
-    };
-    
     // Iterate through all log files
     for(uint32_t i = eventLog.getMinIndex(); i <= eventLog.getMaxIndex(); i++)
     {
-      eventLog.enumerate(i, [response, &users, &escapeCSV](String time, EventType type, const String &logEntry, EvseState managerState, uint8_t evseState, uint32_t evseFlags, uint32_t pilot, double energy, uint32_t elapsed, double temperature, double temperatureMax, uint8_t divertMode, uint8_t shaper, const String &rfidTag)
+      eventLog.enumerate(i, [response, &users](String time, EventType type, const String &logEntry, EvseState managerState, uint8_t evseState, uint32_t evseFlags, uint32_t pilot, double energy, uint32_t elapsed, double temperature, double temperatureMax, uint8_t divertMode, uint8_t shaper, const String &rfidTag)
       {
         // Convert values
         double energyKwh = energy / 1000.0;
@@ -133,19 +134,19 @@ void handleLogsExport(MongooseHttpServerRequest *request)
         }
         
         // Build CSV line
-        response->print(escapeCSV(time));
+        response->print(escapeCSVField(time));
         response->print(",");
-        response->print(escapeCSV(type.toString()));
+        response->print(escapeCSVField(type.toString()));
         response->print(",");
-        response->print(escapeCSV(managerState.toString()));
+        response->print(escapeCSVField(managerState.toString()));
         response->print(",");
         response->print(String(energyKwh, 3));
         response->print(",");
         response->print(String(elapsedMin, 1));
         response->print(",");
-        response->print(escapeCSV(rfidTag));
+        response->print(escapeCSVField(rfidTag));
         response->print(",");
-        response->print(escapeCSV(userName));
+        response->print(escapeCSVField(userName));
         response->print(",");
         response->print(String(temperature, 1));
         response->print("\r\n");
