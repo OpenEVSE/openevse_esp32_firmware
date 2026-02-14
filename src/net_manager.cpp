@@ -507,15 +507,6 @@ void NetManagerTask::onNetEvent(WiFiEvent_t event, arduino_event_info_t &info)
     case ARDUINO_EVENT_ETH_GOT_IP6:
       _ipv6address = ETH.linkLocalIPv6().toString();
       DBUGF("ETH IPv6: %s", _ipv6address.c_str());
-      
-      StaticJsonDocument<128> doc;
-      doc["wifi_client_connected"] = (int)net.isWifiClientConnected();
-      doc["eth_connected"] = (int)net.isWiredConnected();
-      doc["net_connected"] = (int)net.isWiredConnected();
-      doc["ipaddress"] = net.getIp();
-      doc["ipv6address"] = net.getIpv6();
-      doc["macaddress"] = net.getMac();
-      event_send(doc);
       break;
     case ARDUINO_EVENT_ETH_DISCONNECTED:
       DBUGLN("ETH Disconnected");
