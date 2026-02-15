@@ -295,7 +295,7 @@ void NetManagerTask::wifiOnStationModeGotIP(const WiFiEventStationModeGotIP &eve
 {
   haveNetworkConnection(WiFi.localIP(), WiFi.subnetMask());
   _macaddress = WiFi.macAddress();
-  StaticJsonDocument<128> doc;
+  JsonDocument doc;
   doc["wifi_client_connected"] = (int)net.isWifiClientConnected();
   doc["eth_connected"] = (int)net.isWiredConnected();
   doc["net_connected"] = (int)net.isWifiClientConnected();

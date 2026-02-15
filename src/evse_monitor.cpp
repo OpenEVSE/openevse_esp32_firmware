@@ -677,7 +677,7 @@ void EvseMonitor::setPilot(long amps, bool force, std::function<void(int ret)> c
       if(pilot != _pilot) {
         _pilot = pilot;
         _settings_changed.Trigger();
-        StaticJsonDocument<128> event;
+        JsonDocument event;
         event["pilot"] = _pilot;
         event_send(event);
       }
@@ -1132,7 +1132,7 @@ void EvseMonitor::getChargeCurrentAndVoltageFromEvse()
           _power = _power * 3;
         }
 
-        StaticJsonDocument<64> event;
+        JsonDocument event;
         event["amp"] = _amp * AMPS_SCALE_FACTOR;;
         event["voltage"] = _voltage * VOLTS_SCALE_FACTOR;
         event["power"] = _power * POWER_SCALE_FACTOR;
