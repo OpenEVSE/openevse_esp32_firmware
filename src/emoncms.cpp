@@ -29,7 +29,7 @@ struct EmonCmsClientState {
 
 static void emoncms_result(bool success, String message)
 {
-  StaticJsonDocument<128> event;
+  JsonDocument event;
 
   if(emoncms_connected && success) {
     // Don't send events if we have already reported success
@@ -74,8 +74,8 @@ void emoncms_publish(JsonDocument &data)
 
       state->connected = true;
 
-      const size_t capacity = JSON_OBJECT_SIZE(2) + result.length();
-      DynamicJsonDocument doc(capacity);
+      const size_t capacity = result.length();
+      JsonDocument doc;
       if(DeserializationError::Code::Ok == deserializeJson(doc, result.c_str(), result.length()))
       {
         DBUGLN("Got JSON");

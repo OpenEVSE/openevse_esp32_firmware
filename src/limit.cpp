@@ -107,13 +107,13 @@ bool LimitProperties::getAutoRelease() {
 
 bool LimitProperties::deserialize(JsonObject &obj)
 {
-	if(obj.containsKey("type")) {
+	if(obj["type"].is<const char *>()) {
 		_type.fromString(obj["type"]);
   	}
-	if(obj.containsKey("value")) {
+	if(obj["value"].is<uint32_t>()) {
 		_value = obj["value"];
   	}
-	if(obj.containsKey("auto_release")) {
+	if(obj["auto_release"].is<bool>()) {
 		_auto_release = obj["auto_release"];
   	}
 	return _type > 0 && _value > 0;

@@ -49,7 +49,7 @@ void EnergyMeterData::reset(bool fullreset = false, bool import = false)
   }
 }
 
-void EnergyMeterData::serialize(StaticJsonDocument<capacity> &doc)
+void EnergyMeterData::serialize(JsonDocument &doc)
 {
   doc["to"] = total;
   doc["se"] = session;
@@ -60,71 +60,71 @@ void EnergyMeterData::serialize(StaticJsonDocument<capacity> &doc)
   doc["el"] = elapsed;
   doc["sw"] = switches;
   doc["im"] = imported;
-  doc.createNestedObject("dt");
+  doc["dt"].to<JsonObject>();
   doc["dt"]["dy"] = date.day;
   doc["dt"]["mo"] = date.month;
   doc["dt"]["yr"] = date.year;
 };
 
-void EnergyMeterData::deserialize(StaticJsonDocument<capacity> &doc)
+void EnergyMeterData::deserialize(JsonDocument &doc)
 {
-  if (doc.containsKey("to") && doc["to"].is<double>())
+  if (doc["to"].is<double>())
   {
     // total
     total = doc["to"];
   }
-  if (doc.containsKey("se") && doc["se"].is<double>())
+  if (doc["se"].is<double>())
   {
     // session
     session = doc["se"];
   }
-  if (doc.containsKey("dy") && doc["dy"].is<double>())
+  if (doc["dy"].is<double>())
   {
     // daily
     daily = doc["dy"];
   }
-  if (doc.containsKey("wk") && doc["wk"].is<double>())
+  if (doc["wk"].is<double>())
   {
     // weekly
     weekly = doc["wk"];
   }
-  if (doc.containsKey("mo") && doc["mo"].is<double>())
+  if (doc["mo"].is<double>())
   {
     // monthly
     monthly = doc["mo"];
   }
-  if (doc.containsKey("yr") && doc["yr"].is<double>())
+  if (doc["yr"].is<double>())
   {
     // yearly
     yearly = doc["yr"];
   }
-  if (doc.containsKey("dt"))
+  if (doc["dt"].is<JsonObject>())
   {
     // date
-    if (doc["dt"].containsKey("dy") && doc["dt"]["dy"].is<uint8_t>())
+    if (doc["dt"]["dy"].is<uint8_t>())
     {
       date.day = doc["dt"]["dy"];
     }
-    if (doc["dt"].containsKey("mo") && doc["dt"]["mo"].is<uint8_t>())
+    if (doc["dt"]["mo"].is<uint8_t>())
     {
       date.month = doc["dt"]["mo"];
     }
-    if (doc["dt"].containsKey("yr") && doc["dt"]["yr"].is<uint16_t>())
+    if (doc["dt"]["yr"].is<uint16_t>())
     {
       date.year = doc["dt"]["yr"];
     }
   }
-  if (doc.containsKey("im") && doc["im"].is<bool>())
+  if (doc["im"].is<bool>())
   {
     // old OpenEvse total_energy imported flag
     imported = doc["im"];
   }
-  if (doc.containsKey("el") && doc["el"].is<double>())
+  if (doc["el"].is<double>())
   {
     // elapsed
     elapsed = doc["el"];
   }
-  if (doc.containsKey("sw") && doc["sw"].is<uint32_t>())
+  if (doc["sw"].is<uint32_t>())
   {
     // switches
     switches = doc["sw"];
@@ -281,7 +281,7 @@ bool EnergyMeter::update()
 
 bool EnergyMeter::publish()
 {
-  DynamicJsonDocument doc(capacity);
+  JsonDocument doc;
   createEnergyMeterJsonDoc(doc);
   event_send(doc);
   return true;
@@ -345,7 +345,7 @@ bool EnergyMeter::load()
   {
     String ret = file.readString();
     DBUGVAR(ret);
-    StaticJsonDocument<capacity> doc;
+    JsonDocument doc;
     DeserializationError err = deserializeJson(doc, ret);
     file.close();
     DBUGVAR(err.code());
@@ -405,7 +405,7 @@ bool EnergyMeter::write(EnergyMeterData &data)
     DBUGLN("Energy Meter: error can't open/create file");
     return false;
   }
-  StaticJsonDocument<capacity> doc;
+  JsonDocument doc;
   _data.serialize(doc);
   // Keep previous "imported" property
   if (_data.imported)
@@ -467,7 +467,7 @@ void EnergyMeter::increment_switch_counter()
   if (_switch_state != _monitor->isActive())
   {
     _data.switches++;
-    DynamicJsonDocument doc(JSON_OBJECT_SIZE(1) + 16);
+    JsonDocument doc;
     doc["total_switches"] = _data.switches;
     event_send(doc);
   }

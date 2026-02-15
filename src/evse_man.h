@@ -273,9 +273,9 @@ class EvseManager : public MicroTasks::Task
     uint32_t getChargeCurrent(EvseClient client = EvseClient_NULL);
     uint32_t getMaxCurrent(EvseClient client = EvseClient_NULL);
 
-    bool serializeClaims(DynamicJsonDocument &doc);
-    bool serializeClaim(DynamicJsonDocument &doc, EvseClient client);
-    bool serializeTarget(DynamicJsonDocument &doc);
+    bool serializeClaims(JsonDocument &doc);
+    bool serializeClaim(JsonDocument &doc, EvseClient client);
+    bool serializeTarget(JsonDocument &doc);
 
     // Evse Status
     bool isConnected() {
