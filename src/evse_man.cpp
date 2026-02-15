@@ -11,7 +11,9 @@
 #include "divert.h"
 #include "current_shaper.h"
 #include "manual.h"
+#ifndef DIVERT_SIM
 #include "rfid.h"
+#endif
 
 static EvseProperties nullProperties;
 
@@ -360,8 +362,10 @@ unsigned long EvseManager::loop(MicroTasks::WakeReason reason)
                   _monitor.getTemperature(EVSE_MONITOR_TEMP_MONITOR),
                   _monitor.getTemperature(EVSE_MONITOR_TEMP_MAX),
                   divert.isActive(),
-                  shaper.getState(),
-                  rfid.getAuthenticatedTag()
+                  shaper.getState()
+#ifndef DIVERT_SIM
+                  ,rfid.getAuthenticatedTag()
+#endif
                   );
   }
 
