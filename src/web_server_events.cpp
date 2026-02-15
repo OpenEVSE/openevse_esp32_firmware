@@ -46,7 +46,7 @@ void handleEventLogs(MongooseHttpServerRequest *request)
 
         eventLog.enumerate(block, [&count, response](String time, EventType type, const String &logEntry, EvseState managerState, uint8_t evseState, uint32_t evseFlags, uint8_t pilotState, uint16_t changed, uint32_t pilot, double energy, uint32_t elapsed, double temperature, double temperatureMax, uint8_t divertMode, uint8_t shaper, const String &rfidTag, const char *notification)
         {
-          StaticJsonDocument<1024> event;
+          JsonDocument event;
 
           if(count++ > 0) {
             response->print(",");
@@ -99,7 +99,7 @@ void handleEventLogs(MongooseHttpServerRequest *request)
     }
     else
     {
-      StaticJsonDocument<1024> doc;
+      JsonDocument doc;
       doc["min"] = eventLog.getMinIndex();
       doc["max"] = eventLog.getMaxIndex();
 

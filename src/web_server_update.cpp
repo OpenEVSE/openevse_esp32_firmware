@@ -40,7 +40,7 @@ void handleUpdateFileFetch(MongooseHttpServerRequest *request)
   }
 
   String body = request->body().toString();
-  StaticJsonDocument<1024> doc;
+  JsonDocument doc;
   DeserializationError error = deserializeJson(doc, body);
   if(DeserializationError::Code::Ok == error)
   {

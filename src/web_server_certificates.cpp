@@ -79,7 +79,7 @@ void handleCertificatesPost(MongooseHttpServerRequest *request, MongooseHttpServ
 
   if(!hasCertificate)
   {
-    DynamicJsonDocument doc(CERTIFICATE_JSON_BUFFER_SIZE);
+    JsonDocument doc;
     DeserializationError jsonError = deserializeJson(doc, body);
     if(DeserializationError::Ok == jsonError)
     {
