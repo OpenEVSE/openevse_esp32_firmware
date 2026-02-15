@@ -17,7 +17,7 @@ typedef const __FlashStringHelper *fstr_t;
 #include <vector>
 
 extern bool isPositive(MongooseHttpServerRequest *request, const char *param);
-extern bool web_server_config_deserialise(DynamicJsonDocument &doc, bool factory);
+extern bool web_server_config_deserialise(JsonDocument &doc, bool factory);
 
 // -------------------------------------------------------------------
 // Returns OpenEVSE Config json
@@ -26,21 +26,7 @@ extern bool web_server_config_deserialise(DynamicJsonDocument &doc, bool factory
 void
 handleConfigGet(MongooseHttpServerRequest *request, MongooseHttpServerResponseStream *response)
 {
-  // Allocated once and reused -- same reasoning as handleStatus. Measured on
-  // hardware, sustained polling of /config drove the largest allocatable block
-  // from 53,236 down to 32,756 and it did not recover, while total free heap
-  // stayed above 70KB. Safe as a static because handlers run to completion on
-  // the single task that polls Mongoose.
-  //
-  // Capacity headroom: JSON_OBJECT_SIZE(128) is a sizing hint, not a hard
-  // member cap -- ArduinoJson only cares about total bytes, and a live TFT
-  // unit already serves ~135 members (~446 bytes of string pool) within this
-  // budget. The relay_health block added here (relay_life_pct and ~10
-  // siblings) still fits, but there isn't much room left for the next
-  // addition -- worth rechecking on hardware (or just bumping the constant)
-  // before adding more.
-  static DynamicJsonDocument doc(JSON_OBJECT_SIZE(128) + 1024);
-  doc.clear();
+  JsonDocument doc;
 
   config_serialize(doc, true, false, true);
 
@@ -59,8 +45,7 @@ handleConfigPost(MongooseHttpServerRequest *request, MongooseHttpServerResponseS
   MongooseString body = request->body();
 
   // Deserialize the JSON document
-  const size_t capacity = JSON_OBJECT_SIZE(128) + 1024;
-  DynamicJsonDocument doc(capacity);
+  JsonDocument doc;
   DeserializationError error = deserializeJson(doc, body.c_str(), body.length());
   if(!error)
   {
@@ -189,7 +174,7 @@ handleConfigPost(MongooseHttpServerRequest *request, MongooseHttpServerResponseS
       loadSharingPeerPoller.pushConfigToAllPeers();
     }
 
-    StaticJsonDocument<128> reply;
+    JsonDocument reply;
     reply["config_version"] = config_version();
     reply["msg"] = config_modified ? "done" : "no change";
 
@@ -221,7 +206,7 @@ void handleConfig(MongooseHttpServerRequest *request)
   request->send(response);
 }
 
-bool web_server_config_deserialise(DynamicJsonDocument &doc, bool factory)
+bool web_server_config_deserialise(JsonDocument &doc, bool factory)
 {
   bool config_modified = config_deserialize(doc);
 
