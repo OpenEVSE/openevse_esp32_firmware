@@ -14,7 +14,7 @@ typedef const __FlashStringHelper *fstr_t;
 #include "event.h"
 
 extern bool isPositive(MongooseHttpServerRequest *request, const char *param);
-extern bool web_server_config_deserialise(DynamicJsonDocument &doc, bool factory);
+extern bool web_server_config_deserialise(JsonDocument &doc, bool factory);
 
 // -------------------------------------------------------------------
 // Returns OpenEVSE Config json
@@ -23,8 +23,7 @@ extern bool web_server_config_deserialise(DynamicJsonDocument &doc, bool factory
 void
 handleConfigGet(MongooseHttpServerRequest *request, MongooseHttpServerResponseStream *response)
 {
-  const size_t capacity = JSON_OBJECT_SIZE(128) + 1024;
-  DynamicJsonDocument doc(capacity);
+  JsonDocument doc;
 
   config_serialize(doc, true, false, true);
 
@@ -38,8 +37,7 @@ handleConfigPost(MongooseHttpServerRequest *request, MongooseHttpServerResponseS
   MongooseString body = request->body();
 
   // Deserialize the JSON document
-  const size_t capacity = JSON_OBJECT_SIZE(128) + 1024;
-  DynamicJsonDocument doc(capacity);
+  JsonDocument doc;
   DeserializationError error = deserializeJson(doc, body.c_str(), body.length());
   if(!error)
   {
@@ -54,7 +52,7 @@ handleConfigPost(MongooseHttpServerRequest *request, MongooseHttpServerResponseS
 
     bool config_modified = web_server_config_deserialise(doc, storage.equals("factory"));
 
-    StaticJsonDocument<128> reply;
+    JsonDocument reply;
     reply["config_version"] = config_version();
     reply["msg"] = config_modified ? "done" : "no change";
 
@@ -86,7 +84,7 @@ void handleConfig(MongooseHttpServerRequest *request)
   request->send(response);
 }
 
-bool web_server_config_deserialise(DynamicJsonDocument &doc, bool factory)
+bool web_server_config_deserialise(JsonDocument &doc, bool factory)
 {
   bool config_modified = config_deserialize(doc);
 
