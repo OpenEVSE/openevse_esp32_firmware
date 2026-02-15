@@ -108,7 +108,7 @@ void EventLog::log(EventType type, EvseState managerState, uint8_t evseState, ui
 
   if(eventFile)
   {
-    StaticJsonDocument<256> line;
+    JsonDocument line;
     char output[80];
     strftime(output, 80, "%FT%TZ", &timeinfo);
 
@@ -148,7 +148,7 @@ void EventLog::enumerate(uint32_t index, std::function<void(String time, EventTy
       String line = eventFile.readStringUntil('\n');
       if(line.length() > 0)
       {
-        StaticJsonDocument<256> json;
+        JsonDocument json;
         DeserializationError error = deserializeJson(json, line);
         if(error)
         {
