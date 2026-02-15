@@ -1,0 +1,21 @@
+{
+  "name": "ConfigJson",
+  "version": "0.0.7-dev",
+  "description": "Configuration management using ArduinoJson (ArduinoJson v7 compatible)",
+  "keywords": "configuration, json, eeprom",
+  "authors": [
+    {
+      "name": "Jeremy Poulter",
+      "email": "jpoulter@webgains.com"
+    }
+  ],
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/jeremypoulter/ConfigJson.git"
+  },
+  "dependencies": {
+    "bblanchon/ArduinoJson": "^7.0.0"
+  },
+  "frameworks": "arduino",
+  "platforms": "*"
+}
