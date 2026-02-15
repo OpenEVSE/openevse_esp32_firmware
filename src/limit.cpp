@@ -272,7 +272,7 @@ bool Limit::set(String json) {
 
 bool Limit::set(LimitProperties props) {
 	_limit_properties = props;
-	StaticJsonDocument<32> doc;
+	JsonDocument doc;
 	doc["limit"] = hasLimit();
 	doc["limit_version"] = ++_version;
 	event_send(doc);
@@ -285,7 +285,7 @@ LimitProperties Limit::get() {
 
 bool Limit::clear() {
 	_limit_properties.init();
-	StaticJsonDocument<32> doc;
+	JsonDocument doc;
 	doc["limit"] = false;
 	doc["limit_version"] = ++_version;
 	event_send(doc);
