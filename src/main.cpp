@@ -62,6 +62,8 @@
 #include "evse_man.h"
 #include "scheduler.h"
 #include "loadsharing_discovery_task.h"
+#include "loadsharing_peer_poller.h"
+#include "loadsharing_types.h"
 
 #include "legacy_support.h"
 #include "certificates.h"
@@ -94,7 +96,6 @@ String buildenv = ESCAPEQUOTE(BUILD_ENV_NAME);
 String serial;
 
 OcppTask ocpp = OcppTask();
-
 
 static void hardware_setup();
 static void handle_serial();
@@ -190,9 +191,24 @@ void setup()
   web_server_setup();
   DBUGF("After web_server_setup: %d", ESPAL.getFreeHeap());
 
+  // Initialize load sharing group state:
+  // - Load persisted group peers from LittleFS
+  // - Register callback to wake poller when peer list changes
+  loadSharingGroupState.loadGroupPeers();
+  loadSharingGroupState.setOnPeerChange([]() {
+    MicroTask.wakeTask(&loadSharingPeerPoller);
+  });
+  DBUGF("After loadSharingGroupState init: %d", ESPAL.getFreeHeap());
+
   // Initialize background discovery task for load sharing
-  loadSharingDiscoveryTask.begin();
+  // Discovery will push results into group state via onDiscoveryComplete()
+  loadSharingDiscoveryTask.begin(loadSharingGroupState);
   DBUGF("After loadSharingDiscoveryTask.begin: %d", ESPAL.getFreeHeap());
+
+  // Initialize background peer poller task for load sharing
+  // Maintains WebSocket connections to group peers for real-time status updates
+  loadSharingPeerPoller.begin(loadSharingGroupState);
+  DBUGF("After loadSharingPeerPoller.begin: %d", ESPAL.getFreeHeap());
 
 #ifdef ENABLE_OTA
   ota_setup();
@@ -218,7 +234,7 @@ void setup()
 // -------------------------------------------------------------------
 // LOOP
 // -------------------------------------------------------------------
-void loop() 
+void loop()
 {
   Profile_Start(loop);
 
@@ -459,7 +475,7 @@ static void printUsage() {
 static int parseFlags(int argc, const char* const* argv) {
   int argc_original = argc;
   shift(argc, argv); // skip the name of the program at argv[0]
-  
+
   while (argc > 0) {
     if (argEquals(argv[0], "--rapi-serial") || argEquals(argv[0], "--rapi")) {
       shift(argc, argv);
@@ -480,46 +496,46 @@ static int parseFlags(int argc, const char* const* argv) {
         cmdline_exit_requested = true;
         return argc_original - argc;
       }
-      
+
       const char* config_pair = argv[0];
       const char* equals_pos = strchr(config_pair, '=');
-      
+
       if (equals_pos == nullptr) {
         fprintf(stderr, "Error: --set-config argument must be in format NAME=VALUE\n");
         cmdline_exit_requested = true;
         return argc_original - argc;
       }
-      
+
       // Extract name and value
       size_t name_len = equals_pos - config_pair;
       char name[64];
       strncpy(name, config_pair, name_len);
       name[name_len] = '\0';
-      
+
       const char* value = equals_pos + 1;
-      
+
       // Set the config value
       if (!config_set_opt_string(name, value)) {
         fprintf(stderr, "Warning: Unknown config option '%s'\n", name);
       } else {
         fprintf(stderr, "Set config: %s = %s\n", name, value);
       }
-    } 
+    }
     else if (argEquals(argv[0], "--")) {
       shift(argc, argv);
       break;
-    } 
+    }
     else if (argEquals(argv[0], "--help") || argEquals(argv[0], "-h")) {
       printUsage();
       cmdline_exit_requested = true;
       return argc_original - argc;
-    } 
+    }
     else if (argv[0][0] == '-') {
       fprintf(stderr, "Unknown flag '%s'\n", argv[0]);
       printUsage();
       cmdline_exit_requested = true;
       return argc_original - argc;
-    } 
+    }
     else {
       break;
     }

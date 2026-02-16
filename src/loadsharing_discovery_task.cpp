@@ -4,11 +4,10 @@
 
 #include "debug.h"
 #include "loadsharing_discovery_task.h"
+#include "loadsharing_types.h"
 #include <Arduino.h>
 #include <ESPmDNS.h>
 #include <mdns.h>
-#include <ArduinoJson.h>
-#include <LittleFS.h>
 
 // Global instance
 LoadSharingDiscoveryTask loadSharingDiscoveryTask;
@@ -21,7 +20,6 @@ LoadSharingDiscoveryTask::LoadSharingDiscoveryTask(unsigned long cacheTtl,
     _cacheTtl(cacheTtl),
     _lastDiscovery(0),
     _cacheValid(false),
-    _groupPeersDirty(false),
     _poll_interval_ms(poll_interval_ms),
     _discovery_interval_ms(discovery_interval_ms),
     _query_timeout_ms(query_timeout_ms),
@@ -29,6 +27,7 @@ LoadSharingDiscoveryTask::LoadSharingDiscoveryTask(unsigned long cacheTtl,
     _active_query(nullptr),
     _query_start_time(0),
     _query_in_progress(false),
+    _groupState(nullptr),
     _discovery_count(0),
     _last_result_count(0)
 {
@@ -72,12 +71,14 @@ unsigned long LoadSharingDiscoveryTask::loop(MicroTasks::WakeReason reason) {
   return _poll_interval_ms;
 }
 
-void LoadSharingDiscoveryTask::begin() {
+void LoadSharingDiscoveryTask::begin(LoadSharingGroupState& groupState) {
+  _groupState = &groupState;
+
+  // Wire the discovered peers pointer into group state
+  _groupState->setDiscoveredPeers(&_cachedPeers);
+
   _lastDiscovery = 0;  // Invalidate cache
   _last_discovery_time = 0;  // Force immediate first discovery
-
-  // Load group peers from storage
-  loadGroupPeers();
 
   MicroTask.startTask(this);
   DBUGF("LoadSharingDiscoveryTask: Started background discovery");
@@ -260,6 +261,11 @@ void LoadSharingDiscoveryTask::processQueryResults(const std::vector<DiscoveredP
   // Update statistics
   _last_result_count = peers.size();
 
+  // Notify group state so it can update peer online/offline status
+  if (_groupState) {
+    _groupState->onDiscoveryComplete();
+  }
+
   DBUGF("LoadSharingDiscoveryTask: Processed %u peer discovery results", (unsigned int)peers.size());
 }
 
@@ -271,181 +277,4 @@ void LoadSharingDiscoveryTask::cleanupQuery() {
   _query_in_progress = false;
 }
 
-// Group peer management methods
 
-bool LoadSharingDiscoveryTask::addGroupPeer(const String& hostname) {
-  // Check for duplicates
-  for (const auto& peer : _groupPeers) {
-    if (peer == hostname) {
-      DBUGF("LoadSharingDiscoveryTask: Peer already in group: %s", hostname.c_str());
-      return false;
-    }
-  }
-
-  _groupPeers.push_back(hostname);
-  _groupPeersDirty = true;
-  saveGroupPeers();
-
-  DBUGF("LoadSharingDiscoveryTask: Added peer to group: %s (total: %u)",
-        hostname.c_str(), _groupPeers.size());
-
-  return true;
-}
-
-bool LoadSharingDiscoveryTask::removeGroupPeer(const String& hostname) {
-  for (size_t i = 0; i < _groupPeers.size(); i++) {
-    if (_groupPeers[i] == hostname) {
-      _groupPeers.erase(_groupPeers.begin() + i);
-      _groupPeersDirty = true;
-      saveGroupPeers();
-
-      DBUGF("LoadSharingDiscoveryTask: Removed peer from group: %s (remaining: %u)",
-            hostname.c_str(), _groupPeers.size());
-
-      return true;
-    }
-  }
-
-  DBUGF("LoadSharingDiscoveryTask: Peer not found: %s", hostname.c_str());
-  return false;
-}
-
-const std::vector<String>& LoadSharingDiscoveryTask::getGroupPeers() const {
-  return _groupPeers;
-}
-
-bool LoadSharingDiscoveryTask::isGroupPeer(const String& hostname) const {
-  for (const auto& peer : _groupPeers) {
-    if (peer == hostname) {
-      return true;
-    }
-  }
-  return false;
-}
-
-std::vector<LoadSharingDiscoveryTask::PeerInfo> LoadSharingDiscoveryTask::getAllPeers(
-    bool includeDiscovered, bool includeGroup) const {
-
-  std::vector<PeerInfo> result;
-  std::vector<String> addedHosts;
-
-  // Add discovered peers
-  if (includeDiscovered) {
-    for (const auto& peer : _cachedPeers) {
-      PeerInfo info;
-      info.hostname = peer.hostname;
-      info.ipAddress = peer.ipAddress;
-      info.online = true;
-      info.joined = isGroupPeer(peer.hostname);
-
-      result.push_back(info);
-      addedHosts.push_back(peer.hostname);
-    }
-  }
-
-  // Add group peers that weren't discovered
-  if (includeGroup) {
-    for (const auto& hostname : _groupPeers) {
-      // Check if already added
-      bool alreadyAdded = false;
-      for (const auto& added : addedHosts) {
-        if (added == hostname) {
-          alreadyAdded = true;
-          break;
-        }
-      }
-
-      if (!alreadyAdded) {
-        PeerInfo info;
-        info.hostname = hostname;
-        info.ipAddress = "";
-        info.online = false;
-        info.joined = true;
-
-        result.push_back(info);
-      }
-    }
-  }
-
-  return result;
-}
-
-bool LoadSharingDiscoveryTask::loadGroupPeers() {
-  const char* filePath = "/loadsharing_peers.json";
-
-  if (!LittleFS.exists(filePath)) {
-    DBUGLN("LoadSharingDiscoveryTask: No persisted group peer list found, starting with empty list");
-    return false;
-  }
-
-  File file = LittleFS.open(filePath, "r");
-  if (!file) {
-    DBUGF("LoadSharingDiscoveryTask: Failed to open group peer list file: %s", filePath);
-    return false;
-  }
-
-  DynamicJsonDocument doc(1024);
-  DeserializationError error = deserializeJson(doc, file);
-  file.close();
-
-  if (error) {
-    DBUGF("LoadSharingDiscoveryTask: Failed to parse group peer list JSON: %s", error.c_str());
-    return false;
-  }
-
-  _groupPeers.clear();
-  JsonArray peers = doc["peers"].as<JsonArray>();
-  for (JsonVariant peer : peers) {
-    String hostname = peer.as<String>();
-    _groupPeers.push_back(hostname);
-  }
-
-  _groupPeersDirty = false;
-  DBUGF("LoadSharingDiscoveryTask: Loaded %u group peers", _groupPeers.size());
-
-  return true;
-}
-
-bool LoadSharingDiscoveryTask::saveGroupPeers() {
-  if (!_groupPeersDirty) {
-    return true;  // No changes to save
-  }
-
-  const char* filePath = "/loadsharing_peers.json";
-  const char* tempPath = "/loadsharing_peers.json.tmp";
-
-  // Write to temp file first
-  File file = LittleFS.open(tempPath, "w");
-  if (!file) {
-    DBUGF("LoadSharingDiscoveryTask: Failed to open temp file for writing: %s", tempPath);
-    return false;
-  }
-
-  DynamicJsonDocument doc(1024);
-  JsonArray peers = doc.createNestedArray("peers");
-  for (const auto& hostname : _groupPeers) {
-    peers.add(hostname);
-  }
-
-  if (serializeJson(doc, file) == 0) {
-    file.close();
-    DBUGLN("LoadSharingDiscoveryTask: Failed to write group peer list JSON");
-    return false;
-  }
-
-  file.close();
-
-  // Atomic rename (replace old with new)
-  if (LittleFS.exists(filePath)) {
-    LittleFS.remove(filePath);
-  }
-  if (!LittleFS.rename(tempPath, filePath)) {
-    DBUGF("LoadSharingDiscoveryTask: Failed to rename temp file to %s", filePath);
-    return false;
-  }
-
-  _groupPeersDirty = false;
-  DBUGF("LoadSharingDiscoveryTask: Saved %u group peers", _groupPeers.size());
-
-  return true;
-}

@@ -15,6 +15,8 @@
 #include <map>
 #include <Arduino.h>
 
+class LoadSharingGroupState;
+
 /**
  * @brief Discovered OpenEVSE peer information
  */
@@ -29,11 +31,11 @@ struct DiscoveredPeer {
 
 /**
  * @brief Background discovery task for load sharing
- * 
+ *
  * Combines mDNS peer discovery with background task scheduling.
  * Runs periodic mDNS queries in the background to discover OpenEVSE peers.
  * Uses asynchronous mDNS APIs to avoid blocking HTTP request handlers.
- * 
+ *
  * Architecture:
  * - Task wakes every poll_interval_ms (default 2 seconds)
  * - On cache TTL expiry, initiates async mDNS query
@@ -48,72 +50,57 @@ private:
   unsigned long _lastDiscovery;  // Timestamp of last successful discovery
   unsigned long _cacheTtl;       // Cache time-to-live in milliseconds
   bool _cacheValid;              // Whether cache has been populated
-  
-  // Group peers (manually added to the group via API)
-  std::vector<String> _groupPeers;           // List of peer hostnames in the group
-  bool _groupPeersDirty;                     // True if group peers need to be saved
-  
+
   // Query timing configuration
   unsigned long _poll_interval_ms;           // How often task wakes (default 2000ms)
   unsigned long _discovery_interval_ms;      // How often to start new queries (default 60000ms)
   unsigned long _last_discovery_time;        // When last query was initiated
   unsigned long _query_timeout_ms;           // How long to wait for query results (default 5000ms)
-  
+
   // Async query state
   void* _active_query;                       // Opaque mdns_search_once_t handle (void* for compatibility)
   unsigned long _query_start_time;           // When current async query started
   bool _query_in_progress;                   // True while query is running
-  
+
+  // Group state reference (set via begin)
+  LoadSharingGroupState* _groupState;
+
   // Statistics
   unsigned long _discovery_count;            // Number of discovery iterations completed
   unsigned long _last_result_count;          // Peer count from last successful query
-  
+
   /**
    * @brief Initiate a new async mDNS query for OpenEVSE peers
    */
   void startAsyncQuery();
-  
+
   /**
    * @brief Poll the status of the active async query
-   * 
+   *
    * @return true if query completed and results were processed
    */
   bool pollAsyncQuery();
-  
+
   /**
    * @brief Process results from completed async query
-   * 
+   *
    * @param peers Vector of discovered peers from query result
    */
   void processQueryResults(const std::vector<DiscoveredPeer>& peers);
-  
+
   /**
    * @brief Cleanup active query resources
    */
   void cleanupQuery();
-  
-  /**
-   * @brief Load group peers from SPIFFS
-   * 
-   * @return true if loaded successfully, false if file missing or corrupt
-   */
-  bool loadGroupPeers();
-  
-  /**
-   * @brief Save group peers to SPIFFS
-   * 
-   * @return true if saved successfully
-   */
-  bool saveGroupPeers();
-  
+
 protected:
   void setup();
   unsigned long loop(MicroTasks::WakeReason reason);
-  
+
 public:
   /**
    * @brief Initialize the background discovery task
-   * 
+   *
    * @param cacheTtl Time-to-live for cached results in milliseconds (default: 60000ms)
    * @param poll_interval_ms Task wake interval in milliseconds (default: 2000ms)
    * @param discovery_interval_ms How often to start new queries (default: 10000ms)
@@ -123,119 +110,74 @@ public:
                            unsigned long poll_interval_ms = 2000,
                            unsigned long discovery_interval_ms = 10000,
                            unsigned long query_timeout_ms = 5000);
-  
+
   /**
    * @brief Begin the task (starts in MicroTasks scheduler)
+   *
+   * @param groupState Reference to group state for discovery result notification.
+   *                   Discovery will call groupState.onDiscoveryComplete() after
+   *                   each mDNS query, and set up the discovered peers pointer.
    */
-  void begin();
-  
+  void begin(LoadSharingGroupState& groupState);
+
   /**
    * @brief End the task (stops in MicroTasks scheduler)
    */
   void end();
-  
+
   /**
    * @brief Manually trigger discovery on next task wake
-   * 
+   *
    * Used by POST /loadsharing/discover API endpoint
    */
   void triggerDiscovery();
 
   /**
    * @brief Get the currently cached peer list
-   * 
+   *
    * @return Vector of cached peers (may be empty or stale)
    */
   const std::vector<DiscoveredPeer>& getCachedPeers() const;
-  
+
   /**
    * @brief Check if cached results are still valid
-   * 
+   *
    * @return true if cache is valid and within TTL
    */
   bool isCacheValid() const;
-  
+
   /**
    * @brief Force cache refresh on next query
    */
   void invalidateCache();
-  
+
   /**
    * @brief Get time remaining on cache TTL
-   * 
+   *
    * @return Milliseconds remaining, or 0 if cache is expired
    */
   unsigned long cacheTimeRemaining() const;
-  
+
   /**
    * @brief Get the number of discovery iterations completed
    */
   unsigned long getDiscoveryCount() const {
     return _discovery_count;
   }
-  
+
   /**
    * @brief Check if a query is currently in progress
    */
   bool isQueryInProgress() const {
     return _query_in_progress;
   }
-  
+
   /**
    * @brief Get the last result count from a successful query
    */
   unsigned long getLastResultCount() const {
     return _last_result_count;
   }
-  
-  // Group peer management methods
-  
-  /**
-   * @brief Add a peer to the group
-   * 
-   * @param hostname Hostname or IP address of the peer
-   * @return true if added successfully, false if already exists
-   */
-  bool addGroupPeer(const String& hostname);
-  
-  /**
-   * @brief Remove a peer from the group
-   * 
-   * @param hostname Hostname or IP address of the peer
-   * @return true if removed successfully, false if not found
-   */
-  bool removeGroupPeer(const String& hostname);
-  
-  /**
-   * @brief Get list of group peers
-   * 
-   * @return Vector of group peer hostnames
-   */
-  const std::vector<String>& getGroupPeers() const;
-  
-  /**
-   * @brief Check if a hostname is in the group
-   * 
-   * @param hostname Hostname to check
-   * @return true if hostname is in group
-   */
-  bool isGroupPeer(const String& hostname) const;
-  
-  /**
-   * @brief Get unified peer list (discovered + group offline peers)
-   * Helper for GET /loadsharing/peers endpoint
-   * 
-   * @param includeDiscovered Include discovered peers (default: true)
-   * @param includeGroup Include group peers (default: true)
-   * @return Vector of peer info with online/joined status
-   */
-  struct PeerInfo {
-    String hostname;
-    String ipAddress;
-    bool online;    // True if discovered via mDNS
-    bool joined;    // True if in group
-  };
-  std::vector<PeerInfo> getAllPeers(bool includeDiscovered = true, bool includeGroup = true) const;
 };
 
 /**
