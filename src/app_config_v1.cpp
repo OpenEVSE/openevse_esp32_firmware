@@ -125,7 +125,7 @@ EEPROM_read_uint24(int start, uint32_t & val) {
 // Load saved settings from EEPROM
 // -------------------------------------------------------------------
 void
-configLoadV1Settings() {
+config_load_v1_settings() {
   DBUGLN("Loading config");
 
   EEPROM.begin(EEPROM_SIZE);

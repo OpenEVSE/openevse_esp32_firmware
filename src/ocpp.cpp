@@ -64,15 +64,15 @@ public:
 
     void setBool(bool v) override { //OCPP lib calls this to change config
         ocppTask.setSynchronizationLock(true); //avoid that `reconfigure()` will be called
-        configSet(keyOpenEvse, (uint32_t) (v ? 1 : 0));
-        configCommit();
+        config_set(keyOpenEvse, (uint32_t) (v ? 1 : 0));
+        config_commit();
         ocppTask.setSynchronizationLock(false);
     }
 
     bool setString(const char *v) override { //OCPP lib calls this to change config
         ocppTask.setSynchronizationLock(true); //avoid that `reconfigure()` will be called
-        configSet(keyOpenEvse, (String) (v ? v : ""));
-        configCommit();
+        config_set(keyOpenEvse, (String) (v ? v : ""));
+        config_commit();
         ocppTask.setSynchronizationLock(false);
         return true;
     }
@@ -168,9 +168,9 @@ void OcppTask::initializeMicroOcpp() {
      * the OCPP server will be lost. The WebSocket URL is stored in the OpenEVSE configs is not affected
      */
     MicroOcpp::configuration_init(filesystem);
-    auto configVersion = MicroOcpp::declareConfiguration<const char*>("MicroOcppVersion", "0.x", MO_KEYVALUE_FN, false, false, false);
+    auto config_version = MicroOcpp::declareConfiguration<const char*>("MicroOcppVersion", "0.x", MO_KEYVALUE_FN, false, false, false);
     MicroOcpp::configuration_load(MO_KEYVALUE_FN);
-    if (configVersion && !strcmp(configVersion->getString(), "0.x")) {
+    if (config_version && !strcmp(config_version->getString(), "0.x")) {
         if (auto root = LittleFS.open("/")) {
             while (auto file = root.openNextFile()) {
                 if (!strcmp(file.name(), "arduino-ocpp.cnf") ||

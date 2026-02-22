@@ -26,7 +26,7 @@ handleConfigGet(MongooseHttpServerRequest *request, MongooseHttpServerResponseSt
   const size_t capacity = JSON_OBJECT_SIZE(128) + 1024;
   DynamicJsonDocument doc(capacity);
 
-  configSerialize(doc, true, false, true);
+  config_serialize(doc, true, false, true);
 
   response->setCode(200);
   serializeJson(doc, *response);
@@ -55,7 +55,7 @@ handleConfigPost(MongooseHttpServerRequest *request, MongooseHttpServerResponseS
     bool config_modified = web_server_config_deserialise(doc, storage.equals("factory"));
 
     StaticJsonDocument<128> reply;
-    reply["configVersion"] = configVersion();
+    reply["config_version"] = config_version();
     reply["msg"] = config_modified ? "done" : "no change";
 
     response->setCode(200);
@@ -88,11 +88,11 @@ void handleConfig(MongooseHttpServerRequest *request)
 
 bool web_server_config_deserialise(DynamicJsonDocument &doc, bool factory)
 {
-  bool config_modified = configDeserialize(doc);
+  bool config_modified = config_deserialize(doc);
 
   if(config_modified)
   {
-    configCommit(factory);
+    config_commit(factory);
     DBUGLN("Config updated");
   }
 

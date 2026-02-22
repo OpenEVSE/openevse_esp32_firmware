@@ -618,7 +618,7 @@ unsigned long NetManagerTask::serviceButton()
 
     delay(1000);
 
-    configReset();
+    config_reset();
     ESPAL.eraseConfig();
 
     delay(50);

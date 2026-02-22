@@ -762,7 +762,7 @@ void EvseMonitor::getChargeCurrentAndVoltageFromEvse()
           _voltage = volts;
         }
         _power = _amp * _voltage;
-        if (config_threephase_enabled()) {
+        if (configThreephaseEnabled()) {
           _power = _power * 3;
         }
 

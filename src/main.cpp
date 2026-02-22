@@ -123,9 +123,9 @@ void setup()
   }
 
   // Read saved settings from the config
-  configLoadSettings();
+  config_load_settings();
 
-  DBUGF("After configLoadSettings: %d", ESPAL.getFreeHeap());
+  DBUGF("After config_load_settings: %d", ESPAL.getFreeHeap());
 
   eventLog.begin();
   DBUGF("After eventLog.begin: %d", ESPAL.getFreeHeap());
@@ -357,8 +357,8 @@ void handle_serial()
       }
 
       bool config_modified = false;
-      if(configDeserialize(doc)) {
-        configCommit(command == "factory");
+      if(config_deserialize(doc)) {
+        config_commit(command == "factory");
         config_modified = true;
         DBUGLN("Config updated");
       }

@@ -256,7 +256,7 @@ void buildStatus(DynamicJsonDocument &doc) {
 
   doc["ota_update"] = (int)Update.isRunning();
 
-  doc["configVersion"] = configVersion();
+  doc["config_version"] = config_version();
   doc["claims_version"] = evse.getClaimsVersion();
   doc["override_version"] = manual.getVersion();
   doc["schedule_version"] = scheduler.getVersion();
@@ -864,7 +864,7 @@ handleRst(MongooseHttpServerRequest *request) {
     return;
   }
 
-  configReset();
+  config_reset();
   ESPAL.eraseConfig();
 
   response->setCode(200);

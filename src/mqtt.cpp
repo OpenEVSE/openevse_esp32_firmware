@@ -271,10 +271,10 @@ void Mqtt::checkAndPublishUpdates() {
     _limitVersion = limit.getVersion();
   }
 
-  if (_configVersion != configVersion()) {
+  if (_configVersion != config_version()) {
     publishConfig(); // publishConfig now returns void
     DBUGLN("Config has changed, publishing to MQTT");
-    _configVersion = configVersion();
+    _configVersion = config_version();
   }
 }
 
@@ -377,10 +377,10 @@ void Mqtt::handleMqttMessage(MongooseString topic, MongooseString payload) {
     DynamicJsonDocument doc(4096); // Sufficiently large buffer
     DeserializationError error = deserializeJson(doc, payload_str);
     if(!error) {
-      if(configDeserialize(doc)) {
-        configCommit(false);
+      if(config_deserialize(doc)) {
+        config_commit(false);
         DBUGLN("Config updated via MQTT");
-        // publishConfig() will be called by checkAndPublishUpdates due to configVersion change
+        // publishConfig() will be called by checkAndPublishUpdates due to config_version change
       }
     }
   }
@@ -443,16 +443,16 @@ void Mqtt::publishConfig() {
   }
   const size_t capacity = JSON_OBJECT_SIZE(128) + 1024;
   DynamicJsonDocument doc(capacity);
-  configSerialize(doc, true, false, true);
+  config_serialize(doc, true, false, true);
 
   String fulltopic = mqtt_topic + "/config";
   String payload;
   serializeJson(doc, payload);
   _mqttclient.publish(fulltopic, payload, true); // Config usually retained
 
-  if(configVersion() == INITIAL_CONFIG_VERSION) {
-      String versionTopic = mqtt_topic + "/configVersion";
-      String versionPayload = String(configVersion());
+  if(config_version() == INITIAL_CONFIG_VERSION) {
+      String versionTopic = mqtt_topic + "/config_version";
+      String versionPayload = String(config_version());
       _mqttclient.publish(versionTopic, versionPayload, true);
   }
 }
@@ -570,8 +570,8 @@ void Mqtt::notifyLimitChanged() {
 }
 
 void Mqtt::notifyConfigChanged() {
-    if (_configVersion != configVersion()) {
-        _configVersion = configVersion();
+    if (_configVersion != config_version()) {
+        _configVersion = config_version();
         if (isConnected()) publishConfig();
     }
 }

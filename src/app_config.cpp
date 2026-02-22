@@ -131,7 +131,7 @@ uint32_t scheduler_start_window;
 
 String esp_hostname_default = "openevse-"+ESPAL.getShortId();
 
-void configChanged(String name);
+void config_changed(String name);
 
 #ifndef CONFIG_DEFAULT_STATE_DEFAULT
 #define CONFIG_DEFAULT_STATE_DEFAULT CONFIG_DEFAULT_STATE
@@ -274,7 +274,7 @@ ConfigJson factory_config(opts, sizeof(opts) / sizeof(opts[0]), EEPROM_SIZE, FAC
 // config version handling
 // -------------------------------------------------------------------
 uint32_t
-configVersion() {
+config_version() {
   return config_ver;
 }
 
@@ -285,7 +285,7 @@ increment_config() {
 
   #if ENABLE_CONFIG_CHANGE_NOTIFICATION
   StaticJsonDocument<128> event;
-  event["configVersion"] = config_ver;
+  event["config_version"] = config_ver;
   event_send(event);
   #endif
 }
@@ -309,16 +309,16 @@ ResetEEPROM() {
 // Load saved settings from EEPROM
 // -------------------------------------------------------------------
 void
-configLoadSettings()
+config_load_settings()
 {
-  user_config.onChanged(configChanged);
+  user_config.onChanged(config_changed);
 
   factory_config.load(false);
   if(!user_config.load(true))
   {
 #if ENABLE_CONFIG_V1_IMPORT
     DBUGF("No JSON config found, trying v1 settings");
-    configLoadV1Settings();
+    config_load_v1_settings();
 #else
     DBUGF("No JSON config found, using defaults");
 #endif
@@ -352,7 +352,7 @@ configLoadSettings()
   flags |= CONFIG_DEFAULT_FLAGS & ~flags_changed;
 }
 
-void configChanged(String name)
+void config_changed(String name)
 {
   DBUGF("%s changed", name.c_str());
 
@@ -400,23 +400,23 @@ void configChanged(String name)
 #endif
 }
 
-void configCommit(bool factory)
+void config_commit(bool factory)
 {
   ConfigJson &config = factory ? factory_config : user_config;
   config.set("factory_write_lock", true);
   config.commit();
 }
 
-bool configDeserialize(String& json) {
+bool config_deserialize(String& json) {
   return user_config.deserialize(json.c_str());
 }
 
-bool configDeserialize(const char *json)
+bool config_deserialize(const char *json)
 {
   return user_config.deserialize(json);
 }
 
-bool configDeserialize(DynamicJsonDocument &doc)
+bool config_deserialize(DynamicJsonDocument &doc)
 {
   bool config_modified = user_config.deserialize(doc);
 
@@ -543,12 +543,12 @@ bool configDeserialize(DynamicJsonDocument &doc)
   return config_modified;
 }
 
-bool configSerialize(String& json, bool longNames, bool compactOutput, bool hideSecrets)
+bool config_serialize(String& json, bool longNames, bool compactOutput, bool hideSecrets)
 {
   return user_config.serialize(json, longNames, compactOutput, hideSecrets);
 }
 
-bool configSerialize(DynamicJsonDocument &doc, bool longNames, bool compactOutput, bool hideSecrets)
+bool config_serialize(DynamicJsonDocument &doc, bool longNames, bool compactOutput, bool hideSecrets)
 {
   // Static supported protocols
   JsonArray mqtt_supported_protocols = doc.createNestedArray("mqtt_supported_protocols");
@@ -565,7 +565,7 @@ bool configSerialize(DynamicJsonDocument &doc, bool longNames, bool compactOutpu
   doc["espinfo"] = ESPAL.getChipInfo();
   doc["espflash"] = ESPAL.getFlashChipSize();
 
-  // EVSE information are only evailable when configVersion is incremented
+  // EVSE information are only evailable when config_version is incremented
   if(config_ver > 0) {
     // Read only information
     doc["firmware"] = evse.getFirmwareVersion();
@@ -590,24 +590,24 @@ bool configSerialize(DynamicJsonDocument &doc, bool longNames, bool compactOutpu
   return user_config.serialize(doc, longNames, compactOutput, hideSecrets);
 }
 
-void configSet(const char *name, uint32_t val) {
+void config_set(const char *name, uint32_t val) {
   user_config.set(name, val);
 }
-void configSet(const char *name, String val) {
+void config_set(const char *name, String val) {
   user_config.set(name, val);
 }
-void configSet(const char *name, bool val) {
+void config_set(const char *name, bool val) {
   user_config.set(name, val);
 }
-void configSet(const char *name, double val) {
+void config_set(const char *name, double val) {
   user_config.set(name, val);
 }
 
-void configReset()
+void config_reset()
 {
   ResetEEPROM();
   LittleFS.format();
-  configLoadSettings();
+  config_load_settings();
 }
 
 

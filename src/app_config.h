@@ -192,23 +192,23 @@ inline uint8_t configChargeMode() {
   return (flags & CONFIG_CHARGE_MODE) >> 10;
 }
 
-inline bool config_pause_uses_disabled() {
+inline bool configPauseUsesDisabled() {
   return CONFIG_PAUSE_USES_DISABLED == (flags & CONFIG_PAUSE_USES_DISABLED);
 }
 
-inline bool config_vehicle_range_miles() {
+inline bool configVehicleRangeMiles() {
   return CONFIG_VEHICLE_RANGE_MILES == (flags & CONFIG_VEHICLE_RANGE_MILES);
 }
 
-inline bool config_rfid_enabled() {
+inline bool configRfidEnabled() {
   return CONFIG_RFID == (flags & CONFIG_RFID);
 }
 
-inline bool config_factory_write_lock() {
+inline bool configFactoryWriteLock() {
   return CONFIG_FACTORY_WRITE_LOCK == (flags & CONFIG_FACTORY_WRITE_LOCK);
 }
 
-inline bool config_threephase_enabled() {
+inline bool configThreephaseEnabled() {
   return CONFIG_THREEPHASE == (flags & CONFIG_THREEPHASE);
 }
 
@@ -225,34 +225,34 @@ inline EvseState configDefaultState()
 // Ohm Connect Settings
 extern String ohm;
 
-extern uint32_t configVersion();
+extern uint32_t config_version();
 
 // -------------------------------------------------------------------
 // Load saved settings
 // -------------------------------------------------------------------
-extern void configLoadSettings();
+extern void config_load_settings();
 #if ENABLE_CONFIG_V1_IMPORT
-extern void configLoadV1Settings();
+extern void config_load_v1_settings();
 #endif
 
 // -------------------------------------------------------------------
 // Reset the config back to defaults
 // -------------------------------------------------------------------
-extern void configReset();
+extern void config_reset();
 
-void configSet(const char *name, uint32_t val);
-void configSet(const char *name, String val);
-void configSet(const char *name, bool val);
-void configSet(const char *name, double val);
+void config_set(const char *name, uint32_t val);
+void config_set(const char *name, String val);
+void config_set(const char *name, bool val);
+void config_set(const char *name, double val);
 
 // Read config settings from JSON object
-bool configDeserialize(String& json);
-bool configDeserialize(const char *json);
-bool configDeserialize(DynamicJsonDocument &doc);
-void configCommit(bool factory = false);
+bool config_deserialize(String& json);
+bool config_deserialize(const char *json);
+bool config_deserialize(DynamicJsonDocument &doc);
+void config_commit(bool factory = false);
 
 // Write config settings to JSON object
-bool configSerialize(String& json, bool longNames = true, bool compactOutput = false, bool hideSecrets = false);
-bool configSerialize(DynamicJsonDocument &doc, bool longNames = true, bool compactOutput = false, bool hideSecrets = false);
+bool config_serialize(String& json, bool longNames = true, bool compactOutput = false, bool hideSecrets = false);
+bool config_serialize(DynamicJsonDocument &doc, bool longNames = true, bool compactOutput = false, bool hideSecrets = false);
 
 #endif // EMONESP_CONFIG_H

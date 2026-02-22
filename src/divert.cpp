@@ -161,7 +161,7 @@ void DivertTask::update_state()
   if (_mode == DivertMode::Eco)
   {
     double voltage = _evse->getVoltage();
-    if (config_threephase_enabled()) {
+    if (configThreephaseEnabled()) {
       voltage = voltage * 3;
     }
 
@@ -299,8 +299,8 @@ void DivertTask::initDivertType() {
     }
     DynamicJsonDocument doc(JSON_OBJECT_SIZE(1) + 1); // use JSON in no-copy mode
     doc["divert_type"] = divert_type;
-    configDeserialize(doc);
-    configCommit();
+    config_deserialize(doc);
+    config_commit();
   }
 }
 //
