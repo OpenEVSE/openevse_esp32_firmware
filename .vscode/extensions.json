@@ -1,0 +1,35 @@
+{
+  // OpenEVSE ESP32 Firmware - Recommended VS Code Extensions
+  "recommendations": [
+    // C/C++ Development
+    "ms-vscode.cpptools",
+    "ms-vscode.cpptools-extension-pack",
+    
+    // PlatformIO Integration
+    "platformio.platformio-ide",
+    
+    // Code Quality
+    "llvm-vs-code-extensions.vscode-clangd",
+    "notskm.clang-tidy",
+    
+    // Git Integration
+    "eamodio.gitlens",
+    
+    // EditorConfig Support
+    "editorconfig.editorconfig",
+    
+    // JavaScript/TypeScript (for GUI development)
+    "dbaeumer.vscode-eslint",
+    "svelte.svelte-vscode",
+    
+    // Markdown Documentation
+    "yzhang.markdown-all-in-one",
+    
+    // YAML (for workflows)
+    "redhat.vscode-yaml",
+    
+    // General Utilities
+    "streetsidesoftware.code-spell-checker",
+    "wayou.vscode-todo-highlight"
+  ]
+}
