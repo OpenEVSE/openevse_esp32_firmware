@@ -107,5 +107,5 @@ jobs:
         uses: EnricoMi/publish-unit-test-result-action/composite@v2
         if: always()
         with:
-          junit_files: OpenEVSE_WiFi/divert_sim/output/*.xml
+          files: OpenEVSE_WiFi/divert_sim/output/*.xml
           check_name: Test Results
