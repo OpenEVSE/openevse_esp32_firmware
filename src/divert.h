@@ -15,7 +15,7 @@
 #include "evse_man.h"
 #include "input_filter.h"
 
-enum divert_type {
+enum DivertType {
   DIVERT_TYPE_UNSET = -1,
   DIVERT_TYPE_SOLAR = 0,
   DIVERT_TYPE_GRID = 1

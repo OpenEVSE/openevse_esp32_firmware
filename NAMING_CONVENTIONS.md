@@ -273,6 +273,17 @@ Refer to the ESLint configuration in `gui-v2/.eslintrc.json` for details.
 
 ## Enforcement
 
+### Editor Configuration
+
+The project uses **EditorConfig** (`.editorconfig`) to enforce consistent formatting:
+- **Indentation**: 2 spaces (not tabs)
+- **Encoding**: UTF-8
+- **Line endings**: LF (Unix-style)
+- **Trim trailing whitespace**: Yes
+- **Insert final newline**: Yes
+
+**VS Code Users**: The project includes `.vscode/settings.json` with recommended settings that align with these conventions. VS Code will automatically apply these settings when you open the project.
+
 ### Automated Checking
 
 The project uses **clang-tidy** for automated naming convention enforcement. The configuration is in `.clang-tidy`.

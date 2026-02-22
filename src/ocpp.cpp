@@ -142,7 +142,7 @@ void OcppTask::reconfigure() {
         }
 
         if (!ocpp_server.equals(connection->getBackendUrl()) ||
-                !ocpp_chargeBoxId.equals(connection->getChargeBoxId()) ||
+                !ocpp_charge_box_id.equals(connection->getChargeBoxId()) ||
                 !ocpp_authkey.equals(connection->getAuthKey())) {
             //OpenEVSE WS URL configs have been updated - these must be applied manually
             connection->reloadConfigs();
@@ -210,7 +210,7 @@ void OcppTask::initializeMicroOcpp() {
     openEvseConfigs->add(OcppConfigAdapter::makeConfigString(*this,
             MO_CONFIG_EXT_PREFIX "ChargeBoxId",
             "ocpp_chargeBoxId",
-            ocpp_chargeBoxId));
+            ocpp_charge_box_id));
     openEvseConfigs->add(OcppConfigAdapter::makeConfigString(*this,
             "AuthorizationKey",
             "ocpp_authkey",
