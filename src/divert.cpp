@@ -299,8 +299,8 @@ void DivertTask::initDivertType() {
     }
     DynamicJsonDocument doc(JSON_OBJECT_SIZE(1) + 1); // use JSON in no-copy mode
     doc["divert_type"] = divert_type;
-    config_deserialize(doc);
-    config_commit();
+    configDeserialize(doc);
+    configCommit();
   }
 }
 //

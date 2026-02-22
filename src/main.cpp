@@ -123,9 +123,9 @@ void setup()
   }
 
   // Read saved settings from the config
-  config_load_settings();
+  configLoadSettings();
 
-  DBUGF("After config_load_settings: %d", ESPAL.getFreeHeap());
+  DBUGF("After configLoadSettings: %d", ESPAL.getFreeHeap());
 
   eventLog.begin();
   DBUGF("After eventLog.begin: %d", ESPAL.getFreeHeap());
@@ -246,7 +246,7 @@ loop() {
     {
       if(!Update.isRunning())
       {
-        if(config_ohm_enabled()) {
+        if(configOhmEnabled()) {
           ohm_loop();
         }
       }
@@ -351,14 +351,14 @@ void handle_serial()
 
     if(command == "factory" || command == "config")
     {
-      if(command.equals("factory") && config_factory_write_lock()) {
+      if(command.equals("factory") && configFactoryWriteLock()) {
         DEBUG_PORT.println("{\"code\":423,\"msg\":\"Factory settings locked\"}");
         return;
       }
 
       bool config_modified = false;
-      if(config_deserialize(doc)) {
-        config_commit(command == "factory");
+      if(configDeserialize(doc)) {
+        configCommit(command == "factory");
         config_modified = true;
         DBUGLN("Config updated");
       }

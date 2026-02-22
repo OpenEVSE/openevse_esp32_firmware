@@ -26,7 +26,7 @@ handleConfigGet(MongooseHttpServerRequest *request, MongooseHttpServerResponseSt
   const size_t capacity = JSON_OBJECT_SIZE(128) + 1024;
   DynamicJsonDocument doc(capacity);
 
-  config_serialize(doc, true, false, true);
+  configSerialize(doc, true, false, true);
 
   response->setCode(200);
   serializeJson(doc, *response);
@@ -45,7 +45,7 @@ handleConfigPost(MongooseHttpServerRequest *request, MongooseHttpServerResponseS
   {
     // Update WiFi module config
     MongooseString storage = request->headers("X-Storage");
-    if(storage.equals("factory") && config_factory_write_lock())
+    if(storage.equals("factory") && configFactoryWriteLock())
     {
       response->setCode(423);
       response->print("{\"msg\":\"Factory settings locked\"}");
@@ -55,7 +55,7 @@ handleConfigPost(MongooseHttpServerRequest *request, MongooseHttpServerResponseS
     bool config_modified = web_server_config_deserialise(doc, storage.equals("factory"));
 
     StaticJsonDocument<128> reply;
-    reply["config_version"] = config_version();
+    reply["configVersion"] = configVersion();
     reply["msg"] = config_modified ? "done" : "no change";
 
     response->setCode(200);
@@ -88,11 +88,11 @@ void handleConfig(MongooseHttpServerRequest *request)
 
 bool web_server_config_deserialise(DynamicJsonDocument &doc, bool factory)
 {
-  bool config_modified = config_deserialize(doc);
+  bool config_modified = configDeserialize(doc);
 
   if(config_modified)
   {
-    config_commit(factory);
+    configCommit(factory);
     DBUGLN("Config updated");
   }
 

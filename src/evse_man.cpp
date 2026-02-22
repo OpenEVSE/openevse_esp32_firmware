@@ -167,7 +167,7 @@ bool EvseManager::evaluateClaims(EvseProperties &properties)
 {
   // Clear the target state and set to active by default
   properties.clear();
-  properties.setState(config_default_state());
+  properties.setState(configDefaultState());
 
   bool foundClaim = false;
 

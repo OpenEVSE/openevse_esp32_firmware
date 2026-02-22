@@ -567,7 +567,7 @@ void LcdTask::displayInfoLine(LcdInfoLine line, unsigned long &nextUpdate)
       break;
 
     case LcdInfoLine::Range:
-      displayNumberValue(1, "Range", _evse->getVehicleRange(), 0, config_vehicle_range_miles() ? " miles" : " km");
+      displayNumberValue(1, "Range", _evse->getVehicleRange(), 0, configVehicleRangeMiles() ? " miles" : " km");
       break;
 
     case LcdInfoLine::RangeAdded:

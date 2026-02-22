@@ -112,7 +112,7 @@ unsigned long RfidTask::loop(MicroTasks::WakeReason reason){
 
     updateEvseClaim();
 
-    if (!config_rfid_enabled()) {
+    if (!configRfidEnabled()) {
         if (!authenticatedTag.isEmpty()) {
             resetAuthentication();
         }
@@ -172,7 +172,7 @@ void RfidTask::setAuthentication(String &idTag){
 }
 
 void RfidTask::waitForTag(){
-    if(!config_rfid_enabled())
+    if(!configRfidEnabled())
         return;
     waitingForTag = true;
     waitingBegin = millis();
@@ -185,7 +185,7 @@ void RfidTask::waitForTag(){
 
 void RfidTask::updateEvseClaim() {
 
-    if (!config_rfid_enabled()) {
+    if (!configRfidEnabled()) {
         _evse->release(EvseClient_OpenEVSE_RFID);
         return;
     }
@@ -208,7 +208,7 @@ bool RfidTask::communicationFails() {
 }
 
 bool RfidReaderNullDevice::readerFailure() {
-    return config_rfid_enabled();
+    return configRfidEnabled();
 }
 
 RfidReaderNullDevice rfidNullDevice;

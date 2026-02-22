@@ -62,7 +62,7 @@ unsigned long PN532::loop(MicroTasks::WakeReason reason){
         return SCAN_DELAY;
     }
 
-    if (!config_rfid_enabled()) {
+    if (!configRfidEnabled()) {
         status = DeviceStatus::NOT_ACTIVE;
         return SCAN_DELAY;
     }
@@ -93,7 +93,7 @@ unsigned long PN532::loop(MicroTasks::WakeReason reason){
 }
 
 bool PN532::readerFailure() {
-    return config_rfid_enabled() && status == DeviceStatus::FAILED;
+    return configRfidEnabled() && status == DeviceStatus::FAILED;
 }
 
 void PN532::initialize() {

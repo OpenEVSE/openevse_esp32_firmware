@@ -64,15 +64,15 @@ public:
 
     void setBool(bool v) override { //OCPP lib calls this to change config
         ocppTask.setSynchronizationLock(true); //avoid that `reconfigure()` will be called
-        config_set(keyOpenEvse, (uint32_t) (v ? 1 : 0));
-        config_commit();
+        configSet(keyOpenEvse, (uint32_t) (v ? 1 : 0));
+        configCommit();
         ocppTask.setSynchronizationLock(false);
     }
 
     bool setString(const char *v) override { //OCPP lib calls this to change config
         ocppTask.setSynchronizationLock(true); //avoid that `reconfigure()` will be called
-        config_set(keyOpenEvse, (String) (v ? v : ""));
-        config_commit();
+        configSet(keyOpenEvse, (String) (v ? v : ""));
+        configCommit();
         ocppTask.setSynchronizationLock(false);
         return true;
     }
@@ -133,7 +133,7 @@ void OcppTask::notifyConfigChanged() {
 
 void OcppTask::reconfigure() {
 
-    if (config_ocpp_enabled()) {
+    if (configOcppEnabled()) {
         //OCPP enabled via OpenEVSE config. Load library (if not done yet) and apply OpenEVSE configs
 
         if (!getOcppContext()) {
@@ -218,7 +218,7 @@ void OcppTask::initializeMicroOcpp() {
     openEvseConfigs->add(OcppConfigAdapter::makeConfigBool(*this,
             MO_CONFIG_EXT_PREFIX "FreeVendActive",
             "ocpp_auth_auto",
-            config_ocpp_auto_authorization));                         //config value getter callback
+            configOcppAutoAuthorization));                         //config value getter callback
     openEvseConfigs->add(OcppConfigAdapter::makeConfigString(*this,
             MO_CONFIG_EXT_PREFIX "FreeVendIdTag",
             "ocpp_idtag",
@@ -226,7 +226,7 @@ void OcppTask::initializeMicroOcpp() {
     openEvseConfigs->add(OcppConfigAdapter::makeConfigBool(*this,
             "AllowOfflineTxForUnknownId",
             "ocpp_auth_offline",
-            config_ocpp_offline_authorization));
+            configOcppOfflineAuthorization));
 
     MicroOcpp::addConfigurationContainer(openEvseConfigs);
 
@@ -487,9 +487,9 @@ unsigned long OcppTask::loop(MicroTasks::WakeReason reason) {
             } else if (!isTransactionActive()) {
                 //vehicle plugged before authorization
 
-                if (config_rfid_enabled()) {
+                if (configRfidEnabled()) {
                     LCD_DISPLAY("Need card");
-                } else if (!config_ocpp_auto_authorization()) {
+                } else if (!configOcppAutoAuthorization()) {
                     //wait for RemoteStartTransaction
                     LCD_DISPLAY("Wait for app");
                 }
@@ -506,7 +506,7 @@ unsigned long OcppTask::loop(MicroTasks::WakeReason reason) {
 
     updateEvseClaim();
 
-    return config_ocpp_enabled() ? OCPP_LOOP_TIME : MicroTask.Infinate;
+    return configOcppEnabled() ? OCPP_LOOP_TIME : MicroTask.Infinate;
 }
 
 void OcppTask::updateEvseClaim() {
@@ -514,7 +514,7 @@ void OcppTask::updateEvseClaim() {
     EvseState evseState;
     EvseProperties evseProperties;
 
-    if (!getOcppContext() || !config_ocpp_enabled()) {
+    if (!getOcppContext() || !configOcppEnabled()) {
         if (evse->clientHasClaim(EvseClient_OpenEVSE_OCPP)) {
             evse->release(EvseClient_OpenEVSE_OCPP);
         }
@@ -546,13 +546,13 @@ void OcppTask::updateEvseClaim() {
         evseProperties.setChargeCurrent(charging_limit);
     }
 
-    if (evseState == EvseState::Disabled && !config_ocpp_access_can_suspend()) {
+    if (evseState == EvseState::Disabled && !configOcppAccessCanSuspend()) {
         //OCPP is configured to never put the EVSE into sleep
         evseState = EvseState::None;
         evseProperties = evseState;
     }
 
-    if (evseState == EvseState::Active && !config_ocpp_access_can_energize()) {
+    if (evseState == EvseState::Active && !configOcppAccessCanEnergize()) {
         //OCPP is configured to never override the sleep mode of other services
         evseState = EvseState::None;
         evseProperties = evseState;

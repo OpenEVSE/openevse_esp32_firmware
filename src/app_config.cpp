@@ -131,7 +131,7 @@ uint32_t scheduler_start_window;
 
 String esp_hostname_default = "openevse-"+ESPAL.getShortId();
 
-void config_changed(String name);
+void configChanged(String name);
 
 #ifndef CONFIG_DEFAULT_STATE_DEFAULT
 #define CONFIG_DEFAULT_STATE_DEFAULT CONFIG_DEFAULT_STATE
@@ -274,7 +274,7 @@ ConfigJson factory_config(opts, sizeof(opts) / sizeof(opts[0]), EEPROM_SIZE, FAC
 // config version handling
 // -------------------------------------------------------------------
 uint32_t
-config_version() {
+configVersion() {
   return config_ver;
 }
 
@@ -285,7 +285,7 @@ increment_config() {
 
   #if ENABLE_CONFIG_CHANGE_NOTIFICATION
   StaticJsonDocument<128> event;
-  event["config_version"] = config_ver;
+  event["configVersion"] = config_ver;
   event_send(event);
   #endif
 }
@@ -309,16 +309,16 @@ ResetEEPROM() {
 // Load saved settings from EEPROM
 // -------------------------------------------------------------------
 void
-config_load_settings()
+configLoadSettings()
 {
-  user_config.onChanged(config_changed);
+  user_config.onChanged(configChanged);
 
   factory_config.load(false);
   if(!user_config.load(true))
   {
 #if ENABLE_CONFIG_V1_IMPORT
     DBUGF("No JSON config found, trying v1 settings");
-    config_load_v1_settings();
+    configLoadV1Settings();
 #else
     DBUGF("No JSON config found, using defaults");
 #endif
@@ -352,7 +352,7 @@ config_load_settings()
   flags |= CONFIG_DEFAULT_FLAGS & ~flags_changed;
 }
 
-void config_changed(String name)
+void configChanged(String name)
 {
   DBUGF("%s changed", name.c_str());
 
@@ -360,16 +360,16 @@ void config_changed(String name)
   if(name == "time_zone") {
     timeManager.setTimeZone(time_zone);
   } else if(name == "flags") {
-    divert.setMode((config_divert_enabled() && 1 == config_charge_mode()) ? DivertMode::Eco : DivertMode::Normal);
-    if(mqtt.isConnected() != config_mqtt_enabled()) {
+    divert.setMode((configDivertEnabled() && 1 == configChargeMode()) ? DivertMode::Eco : DivertMode::Normal);
+    if(mqtt.isConnected() != configMqttEnabled()) {
       mqtt.restartConnection();
     }
-    if(emoncms_connected != config_emoncms_enabled()) {
+    if(emoncms_connected != configEmoncmsEnabled()) {
       emoncms_updated = true;
     }
-    timeManager.setSntpEnabled(config_sntp_enabled());
+    timeManager.setSntpEnabled(configSntpEnabled());
     OcppTask::notifyConfigChanged();
-    evse.setSleepForDisable(!config_pause_uses_disabled());
+    evse.setSleepForDisable(!configPauseUsesDisabled());
   } else if(name.startsWith("mqtt_")) {
     mqtt.restartConnection();
   } else if(name.startsWith("ocpp_")) {
@@ -379,11 +379,11 @@ void config_changed(String name)
   } else if(name.startsWith("scheduler_")) {
     scheduler.notifyConfigChanged();
   } else if(name == "divert_enabled" || name == "charge_mode") {
-    DBUGVAR(config_divert_enabled());
-    DBUGVAR(config_charge_mode());
-    divert.setMode((config_divert_enabled() && 1 == config_charge_mode()) ? DivertMode::Eco : DivertMode::Normal);
+    DBUGVAR(configDivertEnabled());
+    DBUGVAR(configChargeMode());
+    divert.setMode((configDivertEnabled() && 1 == configChargeMode()) ? DivertMode::Eco : DivertMode::Normal);
   } else if(name.startsWith("current_shaper_")) {
-    shaper.notifyConfigChanged(config_current_shaper_enabled()?1:0,current_shaper_max_pwr);
+    shaper.notifyConfigChanged(configCurrentShaperEnabled()?1:0,current_shaper_max_pwr);
   } else if(name == "tesla_vehicle_id") {
     teslaClient.setVehicleId(tesla_vehicle_id);
   } else if(name.startsWith("tesla_")) {
@@ -395,28 +395,28 @@ void config_changed(String name)
   } else if(name.startsWith("limit_default_")) {
     limit.setDefaultLimit(limit_default_type.c_str(), limit_default_value);
   } else if(name == "sntp_enabled") {
-    timeManager.setSntpEnabled(config_sntp_enabled());
+    timeManager.setSntpEnabled(configSntpEnabled());
   }
 #endif
 }
 
-void config_commit(bool factory)
+void configCommit(bool factory)
 {
   ConfigJson &config = factory ? factory_config : user_config;
   config.set("factory_write_lock", true);
   config.commit();
 }
 
-bool config_deserialize(String& json) {
+bool configDeserialize(String& json) {
   return user_config.deserialize(json.c_str());
 }
 
-bool config_deserialize(const char *json)
+bool configDeserialize(const char *json)
 {
   return user_config.deserialize(json);
 }
 
-bool config_deserialize(DynamicJsonDocument &doc)
+bool configDeserialize(DynamicJsonDocument &doc)
 {
   bool config_modified = user_config.deserialize(doc);
 
@@ -543,12 +543,12 @@ bool config_deserialize(DynamicJsonDocument &doc)
   return config_modified;
 }
 
-bool config_serialize(String& json, bool longNames, bool compactOutput, bool hideSecrets)
+bool configSerialize(String& json, bool longNames, bool compactOutput, bool hideSecrets)
 {
   return user_config.serialize(json, longNames, compactOutput, hideSecrets);
 }
 
-bool config_serialize(DynamicJsonDocument &doc, bool longNames, bool compactOutput, bool hideSecrets)
+bool configSerialize(DynamicJsonDocument &doc, bool longNames, bool compactOutput, bool hideSecrets)
 {
   // Static supported protocols
   JsonArray mqtt_supported_protocols = doc.createNestedArray("mqtt_supported_protocols");
@@ -565,7 +565,7 @@ bool config_serialize(DynamicJsonDocument &doc, bool longNames, bool compactOutp
   doc["espinfo"] = ESPAL.getChipInfo();
   doc["espflash"] = ESPAL.getFlashChipSize();
 
-  // EVSE information are only evailable when config_version is incremented
+  // EVSE information are only evailable when configVersion is incremented
   if(config_ver > 0) {
     // Read only information
     doc["firmware"] = evse.getFirmwareVersion();
@@ -590,24 +590,24 @@ bool config_serialize(DynamicJsonDocument &doc, bool longNames, bool compactOutp
   return user_config.serialize(doc, longNames, compactOutput, hideSecrets);
 }
 
-void config_set(const char *name, uint32_t val) {
+void configSet(const char *name, uint32_t val) {
   user_config.set(name, val);
 }
-void config_set(const char *name, String val) {
+void configSet(const char *name, String val) {
   user_config.set(name, val);
 }
-void config_set(const char *name, bool val) {
+void configSet(const char *name, bool val) {
   user_config.set(name, val);
 }
-void config_set(const char *name, double val) {
+void configSet(const char *name, double val) {
   user_config.set(name, val);
 }
 
-void config_reset()
+void configReset()
 {
   ResetEEPROM();
   LittleFS.format();
-  config_load_settings();
+  configLoadSettings();
 }
 
 

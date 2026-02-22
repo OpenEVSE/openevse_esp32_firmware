@@ -132,63 +132,63 @@ extern uint32_t flags;
 
 #define INITIAL_CONFIG_VERSION  1
 
-inline bool config_emoncms_enabled() {
+inline bool configEmoncmsEnabled() {
   return CONFIG_SERVICE_EMONCMS == (flags & CONFIG_SERVICE_EMONCMS);
 }
 
-inline bool config_mqtt_enabled() {
+inline bool configMqttEnabled() {
   return CONFIG_SERVICE_MQTT == (flags & CONFIG_SERVICE_MQTT);
 }
 
-inline bool config_ohm_enabled() {
+inline bool configOhmEnabled() {
   return CONFIG_SERVICE_OHM == (flags & CONFIG_SERVICE_OHM);
 }
 
-inline bool config_sntp_enabled() {
+inline bool configSntpEnabled() {
   return CONFIG_SERVICE_SNTP == (flags & CONFIG_SERVICE_SNTP);
 }
 
-inline uint8_t config_mqtt_protocol() {
+inline uint8_t configMqttProtocol() {
   return (flags & CONFIG_MQTT_PROTOCOL) >> 4;
 }
 
-inline bool config_mqtt_retained() {
+inline bool configMqttRetained() {
   return CONFIG_MQTT_RETAINED == (flags & CONFIG_MQTT_RETAINED);
 }
 
-inline bool config_mqtt_reject_unauthorized() {
+inline bool configMqttRejectUnauthorized() {
   return 0 == (flags & CONFIG_MQTT_ALLOW_ANY_CERT);
 }
 
-inline bool config_ocpp_enabled() {
+inline bool configOcppEnabled() {
   return CONFIG_SERVICE_OCPP == (flags & CONFIG_SERVICE_OCPP);
 }
 
-inline bool config_ocpp_access_can_suspend() {
+inline bool configOcppAccessCanSuspend() {
   return CONFIG_OCPP_ACCESS_SUSPEND == (flags & CONFIG_OCPP_ACCESS_SUSPEND);
 }
 
-inline bool config_ocpp_access_can_energize() {
+inline bool configOcppAccessCanEnergize() {
   return CONFIG_OCPP_ACCESS_ENERGIZE == (flags & CONFIG_OCPP_ACCESS_ENERGIZE);
 }
 
-inline bool config_ocpp_auto_authorization() {
+inline bool configOcppAutoAuthorization() {
   return CONFIG_OCPP_AUTO_AUTH == (flags & CONFIG_OCPP_AUTO_AUTH);
 }
 
-inline bool config_ocpp_offline_authorization() {
+inline bool configOcppOfflineAuthorization() {
   return CONFIG_OCPP_OFFLINE_AUTH == (flags & CONFIG_OCPP_OFFLINE_AUTH);
 }
 
-inline bool config_divert_enabled() {
+inline bool configDivertEnabled() {
   return CONFIG_SERVICE_DIVERT == (flags & CONFIG_SERVICE_DIVERT);
 }
 
-inline bool config_current_shaper_enabled() {
+inline bool configCurrentShaperEnabled() {
   return CONFIG_SERVICE_CUR_SHAPER == (flags & CONFIG_SERVICE_CUR_SHAPER);
 }
 
-inline uint8_t config_charge_mode() {
+inline uint8_t configChargeMode() {
   return (flags & CONFIG_CHARGE_MODE) >> 10;
 }
 
@@ -212,12 +212,12 @@ inline bool config_threephase_enabled() {
   return CONFIG_THREEPHASE == (flags & CONFIG_THREEPHASE);
 }
 
-inline bool config_wizard_passed()
+inline bool configWizardPassed()
 {
   return CONFIG_WIZARD == (flags & CONFIG_WIZARD);
 }
 
-inline EvseState config_default_state()
+inline EvseState configDefaultState()
 {
   return CONFIG_DEFAULT_STATE == (flags & CONFIG_DEFAULT_STATE) ? EvseState::Active : EvseState::Disabled;
 }
@@ -225,34 +225,34 @@ inline EvseState config_default_state()
 // Ohm Connect Settings
 extern String ohm;
 
-extern uint32_t config_version();
+extern uint32_t configVersion();
 
 // -------------------------------------------------------------------
 // Load saved settings
 // -------------------------------------------------------------------
-extern void config_load_settings();
+extern void configLoadSettings();
 #if ENABLE_CONFIG_V1_IMPORT
-extern void config_load_v1_settings();
+extern void configLoadV1Settings();
 #endif
 
 // -------------------------------------------------------------------
 // Reset the config back to defaults
 // -------------------------------------------------------------------
-extern void config_reset();
+extern void configReset();
 
-void config_set(const char *name, uint32_t val);
-void config_set(const char *name, String val);
-void config_set(const char *name, bool val);
-void config_set(const char *name, double val);
+void configSet(const char *name, uint32_t val);
+void configSet(const char *name, String val);
+void configSet(const char *name, bool val);
+void configSet(const char *name, double val);
 
 // Read config settings from JSON object
-bool config_deserialize(String& json);
-bool config_deserialize(const char *json);
-bool config_deserialize(DynamicJsonDocument &doc);
-void config_commit(bool factory = false);
+bool configDeserialize(String& json);
+bool configDeserialize(const char *json);
+bool configDeserialize(DynamicJsonDocument &doc);
+void configCommit(bool factory = false);
 
 // Write config settings to JSON object
-bool config_serialize(String& json, bool longNames = true, bool compactOutput = false, bool hideSecrets = false);
-bool config_serialize(DynamicJsonDocument &doc, bool longNames = true, bool compactOutput = false, bool hideSecrets = false);
+bool configSerialize(String& json, bool longNames = true, bool compactOutput = false, bool hideSecrets = false);
+bool configSerialize(DynamicJsonDocument &doc, bool longNames = true, bool compactOutput = false, bool hideSecrets = false);
 
 #endif // _EMONESP_CONFIG_H
