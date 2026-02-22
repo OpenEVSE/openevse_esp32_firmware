@@ -1,5 +1,5 @@
-#ifndef __SCREEN_CHARGE_H
-#define __SCREEN_CHARGE_H
+#ifndef SCREEN_CHARGE_H
+#define SCREEN_CHARGE_H
 
 #include "screen_base.h"
 #include "screen_renderer.h"
@@ -23,4 +23,4 @@ private:
   bool wifi_connected;
 };
 
-#endif // __SCREEN_CHARGE_H
+#endif // SCREEN_CHARGE_H

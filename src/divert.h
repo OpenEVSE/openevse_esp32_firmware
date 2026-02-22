@@ -2,8 +2,8 @@
 // Modulate charge rate based on solar PV output
 // Glyn Hudson | OpenEnergyMonitor.org
 
-#ifndef _EMONESP_DIVERT_H
-#define _EMONESP_DIVERT_H
+#ifndef EMONESP_DIVERT_H
+#define EMONESP_DIVERT_H
 
 #ifndef EVSE_DIVERT_HYSTERESIS
 #define EVSE_DIVERT_HYSTERESIS 0.5 // A
@@ -122,4 +122,4 @@ class DivertTask : public MicroTasks::Task
 
 extern class DivertTask divert;
 
-#endif // _EMONESP_DIVERT_H
+#endif // EMONESP_DIVERT_H

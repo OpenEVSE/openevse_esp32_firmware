@@ -1,5 +1,5 @@
-#ifndef _EMONESP_INPUT_H
-#define _EMONESP_INPUT_H
+#ifndef EMONESP_INPUT_H
+#define EMONESP_INPUT_H
 
 #include <Arduino.h>
 #include <ArduinoJson.h>
@@ -20,4 +20,4 @@ extern void create_rapi_json(JsonDocument &data);
 
 extern void input_setup();
 
-#endif // _EMONESP_INPUT_H
+#endif // EMONESP_INPUT_H

@@ -1,5 +1,5 @@
-#ifndef _INPUT_FILTER_H
-#define _INPUT_FILTER_H
+#ifndef INPUT_FILTER_H
+#define INPUT_FILTER_H
 
 
 #ifndef INPUT_FILTER_MIN_TAU

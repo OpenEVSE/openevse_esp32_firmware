@@ -4,8 +4,8 @@
  * Author: Sam C. Lin
  */
 
-#ifndef _TESLA_CLIENT_H_
-#define _TESLA_CLIENT_H_
+#ifndef TESLA_CLIENT_H_
+#define TESLA_CLIENT_H_
 
 #include <Arduino.h>
 #include <ArduinoJson.h>
@@ -87,4 +87,4 @@ class TeslaClient {
 // global instance
 extern TeslaClient teslaClient;
 
-#endif // _TESLA_CLIENT_H_
+#endif // TESLA_CLIENT_H_

@@ -1,5 +1,5 @@
-#ifndef _OPENEVSE_JSON_SERIALIZE
-#define _OPENEVSE_JSON_SERIALIZE
+#ifndef OPENEVSE_JSON_SERIALIZE
+#define OPENEVSE_JSON_SERIALIZE
 
 #include <Arduino.h>
 #include <ArduinoJson.h>
@@ -109,4 +109,4 @@ template <size_t CAPACITY> class JsonSerialize
     virtual bool serialize(JsonObject &obj) = 0;
 };
 
-#endif // !_OPENEVSE_JSON_SERIALIZE
+#endif // !OPENEVSE_JSON_SERIALIZE

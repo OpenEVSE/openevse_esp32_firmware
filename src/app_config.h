@@ -1,5 +1,5 @@
-#ifndef _EMONESP_CONFIG_H
-#define _EMONESP_CONFIG_H
+#ifndef EMONESP_CONFIG_H
+#define EMONESP_CONFIG_H
 
 #include <Arduino.h>
 #include <ArduinoJson.h>
@@ -255,4 +255,4 @@ void configCommit(bool factory = false);
 bool configSerialize(String& json, bool longNames = true, bool compactOutput = false, bool hideSecrets = false);
 bool configSerialize(DynamicJsonDocument &doc, bool longNames = true, bool compactOutput = false, bool hideSecrets = false);
 
-#endif // _EMONESP_CONFIG_H
+#endif // EMONESP_CONFIG_H

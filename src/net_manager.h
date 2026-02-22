@@ -1,5 +1,5 @@
-#ifndef _EMONESP_WIFI_H
-#define _EMONESP_WIFI_H
+#ifndef EMONESP_WIFI_H
+#define EMONESP_WIFI_H
 
 #include <functional>
 #include <list>
@@ -222,4 +222,4 @@ class NetManagerTask : public MicroTasks::Task
 
 extern NetManagerTask net;
 
-#endif // _EMONESP_WIFI_H
+#endif // EMONESP_WIFI_H

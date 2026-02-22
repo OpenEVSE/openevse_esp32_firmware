@@ -1,5 +1,5 @@
-#ifndef _OPENEVSE_EVSE_MAN_H
-#define _OPENEVSE_EVSE_MAN_H
+#ifndef OPENEVSE_EVSE_MAN_H
+#define OPENEVSE_EVSE_MAN_H
 
 #include <Arduino.h>
 #include <RapiSender.h>
@@ -529,4 +529,4 @@ class EvseManager : public MicroTasks::Task
     bool isRapiCommandBlocked(String rapi);
 };
 
-#endif // !_OPENEVSE_EVSE_MAN_H
+#endif // !OPENEVSE_EVSE_MAN_H

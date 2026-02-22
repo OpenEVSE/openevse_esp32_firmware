@@ -1,5 +1,5 @@
-#ifndef _OPENEVSE_ROOT_CA_H
-#define _OPENEVSE_ROOT_CA_H
+#ifndef OPENEVSE_ROOT_CA_H
+#define OPENEVSE_ROOT_CA_H
 
 #include <Arduino.h>
 
