@@ -219,7 +219,7 @@ unsigned long Limit::loop(MicroTasks::WakeReason reason)
       }
     }
     else if(_limit_properties.getAutoRelease() &&
-            EvseState::Disabled == configDefaultState() &&
+            EvseState::Disabled == config_default_state() &&
             !_evse->clientHasClaim(EvseClient_OpenEVSE_Limit))
     {
       // The default state is disabled, so we need to make a claim to enable charging

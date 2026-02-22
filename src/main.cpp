@@ -246,7 +246,7 @@ loop() {
     {
       if(!Update.isRunning())
       {
-        if(configOhmEnabled()) {
+        if(config_ohm_enabled()) {
           ohm_loop();
         }
       }
@@ -351,7 +351,7 @@ void handle_serial()
 
     if(command == "factory" || command == "config")
     {
-      if(command.equals("factory") && configFactoryWriteLock()) {
+      if(command.equals("factory") && config_factory_write_lock()) {
         DEBUG_PORT.println("{\"code\":423,\"msg\":\"Factory settings locked\"}");
         return;
       }

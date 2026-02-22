@@ -45,7 +45,7 @@ handleConfigPost(MongooseHttpServerRequest *request, MongooseHttpServerResponseS
   {
     // Update WiFi module config
     MongooseString storage = request->headers("X-Storage");
-    if(storage.equals("factory") && configFactoryWriteLock())
+    if(storage.equals("factory") && config_factory_write_lock())
     {
       response->setCode(423);
       response->print("{\"msg\":\"Factory settings locked\"}");

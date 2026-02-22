@@ -102,7 +102,7 @@ unsigned long CurrentShaperTask::loop(MicroTasks::WakeReason reason) {
 
 void CurrentShaperTask::begin(EvseManager &evse) {
 	this -> _timer   = millis();
-	this -> _enabled = configCurrentShaperEnabled();
+	this -> _enabled = config_current_shaper_enabled();
 	this -> _evse    = &evse;
 	this -> _max_pwr = current_shaper_max_pwr;
 	this -> _live_pwr = 0;
@@ -169,7 +169,7 @@ void CurrentShaperTask::shapeCurrent() {
 		livepwr = _smoothed_live_pwr;
 	}
 
-	if (configDivertEnabled() == true) {
+	if (config_divert_enabled() == true) {
 		if ( divert_type == DIVERT_TYPE_SOLAR ) {
 			max_pwr += solar;
 		}
@@ -177,7 +177,7 @@ void CurrentShaperTask::shapeCurrent() {
 //	if (livepwr > max_pwr) {
 //		livepwr = max_pwr;
 //	}
-	if(!configThreephaseEnabled()) {
+	if(!config_threephase_enabled()) {
 		_max_cur = ((max_pwr - livepwr) / evse.getVoltage()) + evse.getAmps();
 	 }
 

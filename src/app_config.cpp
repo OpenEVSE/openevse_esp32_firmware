@@ -360,16 +360,16 @@ void config_changed(String name)
   if(name == "time_zone") {
     timeManager.setTimeZone(time_zone);
   } else if(name == "flags") {
-    divert.setMode((configDivertEnabled() && 1 == configChargeMode()) ? DivertMode::Eco : DivertMode::Normal);
-    if(mqtt.isConnected() != configMqttEnabled()) {
+    divert.setMode((config_divert_enabled() && 1 == config_charge_mode()) ? DivertMode::Eco : DivertMode::Normal);
+    if(mqtt.isConnected() != config_mqtt_enabled()) {
       mqtt.restartConnection();
     }
-    if(emoncms_connected != configEmoncmsEnabled()) {
+    if(emoncms_connected != config_emoncms_enabled()) {
       emoncms_updated = true;
     }
-    timeManager.setSntpEnabled(configSntpEnabled());
+    timeManager.setSntpEnabled(config_sntp_enabled());
     OcppTask::notifyConfigChanged();
-    evse.setSleepForDisable(!configPauseUsesDisabled());
+    evse.setSleepForDisable(!config_pause_uses_disabled());
   } else if(name.startsWith("mqtt_")) {
     mqtt.restartConnection();
   } else if(name.startsWith("ocpp_")) {
@@ -379,11 +379,11 @@ void config_changed(String name)
   } else if(name.startsWith("scheduler_")) {
     scheduler.notifyConfigChanged();
   } else if(name == "divert_enabled" || name == "charge_mode") {
-    DBUGVAR(configDivertEnabled());
-    DBUGVAR(configChargeMode());
-    divert.setMode((configDivertEnabled() && 1 == configChargeMode()) ? DivertMode::Eco : DivertMode::Normal);
+    DBUGVAR(config_divert_enabled());
+    DBUGVAR(config_charge_mode());
+    divert.setMode((config_divert_enabled() && 1 == config_charge_mode()) ? DivertMode::Eco : DivertMode::Normal);
   } else if(name.startsWith("current_shaper_")) {
-    shaper.notifyConfigChanged(configCurrentShaperEnabled()?1:0,current_shaper_max_pwr);
+    shaper.notifyConfigChanged(config_current_shaper_enabled()?1:0,current_shaper_max_pwr);
   } else if(name == "tesla_vehicle_id") {
     teslaClient.setVehicleId(tesla_vehicle_id);
   } else if(name.startsWith("tesla_")) {
@@ -395,7 +395,7 @@ void config_changed(String name)
   } else if(name.startsWith("limit_default_")) {
     limit.setDefaultLimit(limit_default_type.c_str(), limit_default_value);
   } else if(name == "sntp_enabled") {
-    timeManager.setSntpEnabled(configSntpEnabled());
+    timeManager.setSntpEnabled(config_sntp_enabled());
   }
 #endif
 }

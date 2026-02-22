@@ -46,7 +46,7 @@ void emoncms_publish(JsonDocument &data)
 {
   Profile_Start(emoncms_publish);
 
-  if (configEmoncmsEnabled() && emoncms_apikey != 0)
+  if (config_emoncms_enabled() && emoncms_apikey != 0)
   {
     String url = emoncms_server + post_path;
     String json;

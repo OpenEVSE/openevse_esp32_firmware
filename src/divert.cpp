@@ -161,7 +161,7 @@ void DivertTask::update_state()
   if (_mode == DivertMode::Eco)
   {
     double voltage = _evse->getVoltage();
-    if (configThreephaseEnabled()) {
+    if (config_threephase_enabled()) {
       voltage = voltage * 3;
     }
 

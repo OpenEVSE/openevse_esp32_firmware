@@ -236,7 +236,7 @@ bool EnergyMeter::update()
     double v = _monitor->getVoltage();
     double a = _monitor->getAmps();
     double mws = v * a * dms;
-    if (configThreephaseEnabled())
+    if (config_threephase_enabled())
     {
       // Multiply calculation by 3 to get 3-phase energy.
       mws *= 3;

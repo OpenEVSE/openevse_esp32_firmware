@@ -132,92 +132,92 @@ extern uint32_t flags;
 
 #define INITIAL_CONFIG_VERSION  1
 
-inline bool configEmoncmsEnabled() {
+inline bool config_emoncms_enabled() {
   return CONFIG_SERVICE_EMONCMS == (flags & CONFIG_SERVICE_EMONCMS);
 }
 
-inline bool configMqttEnabled() {
+inline bool config_mqtt_enabled() {
   return CONFIG_SERVICE_MQTT == (flags & CONFIG_SERVICE_MQTT);
 }
 
-inline bool configOhmEnabled() {
+inline bool config_ohm_enabled() {
   return CONFIG_SERVICE_OHM == (flags & CONFIG_SERVICE_OHM);
 }
 
-inline bool configSntpEnabled() {
+inline bool config_sntp_enabled() {
   return CONFIG_SERVICE_SNTP == (flags & CONFIG_SERVICE_SNTP);
 }
 
-inline uint8_t configMqttProtocol() {
+inline uint8_t config_mqtt_protocol() {
   return (flags & CONFIG_MQTT_PROTOCOL) >> 4;
 }
 
-inline bool configMqttRetained() {
+inline bool config_mqtt_retained() {
   return CONFIG_MQTT_RETAINED == (flags & CONFIG_MQTT_RETAINED);
 }
 
-inline bool configMqttRejectUnauthorized() {
+inline bool config_mqtt_reject_unauthorized() {
   return 0 == (flags & CONFIG_MQTT_ALLOW_ANY_CERT);
 }
 
-inline bool configOcppEnabled() {
+inline bool config_ocpp_enabled() {
   return CONFIG_SERVICE_OCPP == (flags & CONFIG_SERVICE_OCPP);
 }
 
-inline bool configOcppAccessCanSuspend() {
+inline bool config_ocpp_access_can_suspend() {
   return CONFIG_OCPP_ACCESS_SUSPEND == (flags & CONFIG_OCPP_ACCESS_SUSPEND);
 }
 
-inline bool configOcppAccessCanEnergize() {
+inline bool config_ocpp_access_can_energize() {
   return CONFIG_OCPP_ACCESS_ENERGIZE == (flags & CONFIG_OCPP_ACCESS_ENERGIZE);
 }
 
-inline bool configOcppAutoAuthorization() {
+inline bool config_ocpp_auto_authorization() {
   return CONFIG_OCPP_AUTO_AUTH == (flags & CONFIG_OCPP_AUTO_AUTH);
 }
 
-inline bool configOcppOfflineAuthorization() {
+inline bool config_ocpp_offline_authorization() {
   return CONFIG_OCPP_OFFLINE_AUTH == (flags & CONFIG_OCPP_OFFLINE_AUTH);
 }
 
-inline bool configDivertEnabled() {
+inline bool config_divert_enabled() {
   return CONFIG_SERVICE_DIVERT == (flags & CONFIG_SERVICE_DIVERT);
 }
 
-inline bool configCurrentShaperEnabled() {
+inline bool config_current_shaper_enabled() {
   return CONFIG_SERVICE_CUR_SHAPER == (flags & CONFIG_SERVICE_CUR_SHAPER);
 }
 
-inline uint8_t configChargeMode() {
+inline uint8_t config_charge_mode() {
   return (flags & CONFIG_CHARGE_MODE) >> 10;
 }
 
-inline bool configPauseUsesDisabled() {
+inline bool config_pause_uses_disabled() {
   return CONFIG_PAUSE_USES_DISABLED == (flags & CONFIG_PAUSE_USES_DISABLED);
 }
 
-inline bool configVehicleRangeMiles() {
+inline bool config_vehicle_range_miles() {
   return CONFIG_VEHICLE_RANGE_MILES == (flags & CONFIG_VEHICLE_RANGE_MILES);
 }
 
-inline bool configRfidEnabled() {
+inline bool config_rfid_enabled() {
   return CONFIG_RFID == (flags & CONFIG_RFID);
 }
 
-inline bool configFactoryWriteLock() {
+inline bool config_factory_write_lock() {
   return CONFIG_FACTORY_WRITE_LOCK == (flags & CONFIG_FACTORY_WRITE_LOCK);
 }
 
-inline bool configThreephaseEnabled() {
+inline bool config_threephase_enabled() {
   return CONFIG_THREEPHASE == (flags & CONFIG_THREEPHASE);
 }
 
-inline bool configWizardPassed()
+inline bool config_wizard_passed()
 {
   return CONFIG_WIZARD == (flags & CONFIG_WIZARD);
 }
 
-inline EvseState configDefaultState()
+inline EvseState config_default_state()
 {
   return CONFIG_DEFAULT_STATE == (flags & CONFIG_DEFAULT_STATE) ? EvseState::Active : EvseState::Disabled;
 }

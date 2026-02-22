@@ -218,7 +218,7 @@ void OcppTask::initializeMicroOcpp() {
     openEvseConfigs->add(OcppConfigAdapter::makeConfigBool(*this,
             MO_CONFIG_EXT_PREFIX "FreeVendActive",
             "ocpp_auth_auto",
-            configOcppAutoAuthorization));                         //config value getter callback
+            config_ocpp_auto_authorization));                         //config value getter callback
     openEvseConfigs->add(OcppConfigAdapter::makeConfigString(*this,
             MO_CONFIG_EXT_PREFIX "FreeVendIdTag",
             "ocpp_idtag",
@@ -226,7 +226,7 @@ void OcppTask::initializeMicroOcpp() {
     openEvseConfigs->add(OcppConfigAdapter::makeConfigBool(*this,
             "AllowOfflineTxForUnknownId",
             "ocpp_auth_offline",
-            configOcppOfflineAuthorization));
+            config_ocpp_offline_authorization));
 
     MicroOcpp::addConfigurationContainer(openEvseConfigs);
 
@@ -487,9 +487,9 @@ unsigned long OcppTask::loop(MicroTasks::WakeReason reason) {
             } else if (!isTransactionActive()) {
                 //vehicle plugged before authorization
 
-                if (configRfidEnabled()) {
+                if (config_rfid_enabled()) {
                     LCD_DISPLAY("Need card");
-                } else if (!configOcppAutoAuthorization()) {
+                } else if (!config_ocpp_auto_authorization()) {
                     //wait for RemoteStartTransaction
                     LCD_DISPLAY("Wait for app");
                 }

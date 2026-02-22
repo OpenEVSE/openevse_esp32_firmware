@@ -113,7 +113,7 @@ void Mqtt::attemptConnection() {
   DBUGF("MQTT attempting connection... (%s)\n", net.isConnected() ? "connected" : "not connected");
 
   String mqtt_host = mqtt_server + ":" + String(mqtt_port);
-  DBUGF("MQTT Connecting to... %s://%s", MQTT_MQTT == configMqttProtocol() ? "mqtt" : "mqtts", mqtt_host.c_str());
+  DBUGF("MQTT Connecting to... %s://%s", MQTT_MQTT == config_mqtt_protocol() ? "mqtt" : "mqtts", mqtt_host.c_str());
 
   DynamicJsonDocument willDoc(JSON_OBJECT_SIZE(3) + 60);
   willDoc["state"] = "disconnected";
@@ -122,13 +122,13 @@ void Mqtt::attemptConnection() {
   _lastWill = "";
   serializeJson(willDoc, _lastWill);
 
-  if (!configMqttRejectUnauthorized()) {
+  if (!config_mqtt_reject_unauthorized()) {
     DEBUG.println("WARNING: Certificate verification disabled");
   }
 
   _mqttclient.setCredentials(mqtt_user, mqtt_pass);
   _mqttclient.setLastWillAndTestimment(mqtt_announce_topic, _lastWill, true);
-  _mqttclient.setRejectUnauthorized(configMqttRejectUnauthorized());
+  _mqttclient.setRejectUnauthorized(config_mqtt_reject_unauthorized());
 
   if (mqtt_certificate_id != "") {
     uint64_t cert_id = std::stoull(mqtt_certificate_id.c_str(), nullptr, 16);
@@ -139,7 +139,7 @@ void Mqtt::attemptConnection() {
     }
   }
 
-  _connecting = _mqttclient.connect((MongooseMqttProtocol)configMqttProtocol(), mqtt_host, esp_hostname, [this]() {
+  _connecting = _mqttclient.connect((MongooseMqttProtocol)config_mqtt_protocol(), mqtt_host, esp_hostname, [this]() {
     this->onMqttConnect();
   });
 
@@ -432,7 +432,7 @@ void Mqtt::publishData(JsonDocument &data) {
   for (JsonPair kv : root) {
     String topic = mqtt_topic + "/" + kv.key().c_str();
     String val = kv.value().as<String>(); // Consider non-string values too if needed
-    _mqttclient.publish(topic, val, configMqttRetained());
+    _mqttclient.publish(topic, val, config_mqtt_retained());
   }
 }
 

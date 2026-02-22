@@ -28,9 +28,9 @@ struct WiFiEventStationModeConnected { };
 ---
 
 ### 2. Functions and Methods
-**Convention:** `camelCase` for methods, `snake_case` for standalone C-style functions
+**Convention:** `camelCase` for class methods, `snake_case` for standalone functions (including inline helpers)
 
-**Class methods** and **inline helper functions** use camelCase (lower camel case), starting with a lowercase letter.
+**Class methods** use camelCase (lower camel case), starting with a lowercase letter.
 
 **Examples:**
 ```cpp
@@ -40,17 +40,17 @@ class EvseManager {
   void setChargeCurrent(int amps);
   bool attemptConnection();
 };
-
-// Inline helper functions - camelCase
-inline bool configMqttEnabled() {
-  return CONFIG_SERVICE_MQTT == (flags & CONFIG_SERVICE_MQTT);
-}
 ```
 
-**Standalone C-style functions** use snake_case to distinguish them from methods and maintain C compatibility.
+**Standalone functions** (including inline helper functions) use snake_case to maintain C compatibility and distinguish them from class methods.
 
 **Examples:**
 ```cpp
+// Inline helper functions - snake_case
+inline bool config_mqtt_enabled() {
+  return CONFIG_SERVICE_MQTT == (flags & CONFIG_SERVICE_MQTT);
+}
+
 // Standalone C-style functions - snake_case
 void config_load_settings();
 void config_reset();
@@ -58,7 +58,7 @@ bool config_deserialize(String& json);
 void config_set(const char *name, uint32_t val);
 ```
 
-**Why:** This follows C++ conventions where member functions use camelCase, while standalone/free functions in C-style APIs use snake_case. The distinction helps identify the function's scope and calling context at a glance.
+**Why:** This follows C++ conventions where member functions use camelCase, while all standalone/free functions (whether inline or not) use snake_case. This maintains C compatibility and clearly distinguishes between methods (which require an object) and standalone functions (which don't).
 
 ---
 
@@ -327,7 +327,7 @@ A GitHub Actions workflow automatically runs clang-tidy on all pull requests. Th
 In addition to automated checks, code reviewers should verify:
 1. New classes use PascalCase
 2. New class methods use camelCase
-3. New standalone C-style functions use snake_case
+3. New standalone functions (including inline helpers) use snake_case
 4. New member variables use `_snake_case`
 5. New constants use UPPER_SNAKE_CASE
 6. Enum types and values follow the appropriate convention
@@ -361,7 +361,11 @@ private:
   bool checkLimits();
 };
 
-// Standalone C-style functions use snake_case
+// Standalone functions (including inline helpers) use snake_case
+inline bool config_mqtt_enabled() {
+  return CONFIG_SERVICE_MQTT == (flags & CONFIG_SERVICE_MQTT);
+}
+
 void config_load_settings();
 void config_reset();
 bool config_serialize(String& json);
@@ -424,8 +428,7 @@ The codebase was comprehensively refactored to align with these conventions:
 
 - **Enum types**: Converted to `PascalCase` (e.g., `DivertType`, `VehicleDataSrc`)
 - **Global variables**: Fixed mixed-case (e.g., `ocpp_charge_box_id`, `divert_pv_ratio`)
-- **Inline helper functions**: Converted to `camelCase` (e.g., `configMqttEnabled()`, `configDivertEnabled()`)
-- **Standalone C-style functions**: Remain as `snake_case` (e.g., `config_load_settings()`, `config_reset()`)
+- **All standalone functions**: Use `snake_case` (e.g., `config_mqtt_enabled()`, `config_load_settings()`, `config_reset()`)
 - **Header guards**: Removed leading underscores (e.g., `EMONESP_CONFIG_H` instead of `_EMONESP_CONFIG_H`)
 
 All core naming conventions are now consistently applied throughout the codebase.
