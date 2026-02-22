@@ -394,16 +394,16 @@ For existing code that doesn't follow these conventions:
 3. **Local cleanup:** When modifying a file, fix naming in that file
 4. **Gradual improvement:** Naming improves over time through incremental changes
 
-### Known Legacy Violations
+### Recent Refactoring (2026-02)
 
-The following legacy patterns exist in the codebase but should **NOT** be replicated in new code:
+The codebase was comprehensively refactored to align with these conventions:
 
-- **Config helper functions**: Functions like `config_mqtt_enabled()`, `config_divert_enabled()` use `snake_case` instead of `camelCase`. New code should use `camelCase`.
-- **Mixed-case globals**: Variables like `ocpp_chargeBoxId`, `divert_PV_ratio` mix cases. New globals should be pure `snake_case`.
-- **Plain enum types**: Some enums like `vehicle_data_src`, `divert_type` use `lowercase_snake_case` instead of `PascalCase`. New enums should use `PascalCase`.
-- **Header guards**: Some header guards start with underscore (e.g., `_EMONESP_CONFIG_H`). New headers should avoid leading underscores (e.g., `EMONESP_CONFIG_H`).
+- **Enum types**: Converted to `PascalCase` (e.g., `DivertType`, `VehicleDataSrc`)
+- **Global variables**: Fixed mixed-case (e.g., `ocpp_charge_box_id`, `divert_pv_ratio`)
+- **Config functions**: Renamed to `camelCase` (e.g., `configMqttEnabled()`, `configDivertEnabled()`)
+- **Header guards**: Removed leading underscores (e.g., `EMONESP_CONFIG_H` instead of `_EMONESP_CONFIG_H`)
 
-These violations will be gradually fixed over time. clang-tidy will warn about them but won't block builds.
+All core naming conventions are now consistently applied throughout the codebase.
 
 ---
 
@@ -420,5 +420,5 @@ When in doubt, consistency with surrounding code takes precedence.
 
 ---
 
-**Last Updated:** 2026-02-14  
-**Version:** 1.0
+**Last Updated:** 2026-02-22  
+**Version:** 2.0
