@@ -196,7 +196,7 @@ ConfigOpt *opts[] =
 
 // OCPP 1.6 Settings
   new ConfigOptDefinition<String>(ocpp_server, "", "ocpp_server", "ows"),
-  new ConfigOptDefinition<String>(ocpp_chargeBoxId, "", "ocpp_chargeBoxId", "cid"),
+  new ConfigOptDefinition<String>(ocpp_charge_box_id, "", "ocpp_chargeBoxId", "cid"),
   new ConfigOptDefinition<String>(ocpp_authkey, "", "ocpp_authkey", "oky"),
   new ConfigOptDefinition<String>(ocpp_idtag, "DefaultIdTag", "ocpp_idtag", "idt"),
 
@@ -609,6 +609,5 @@ void config_reset()
   LittleFS.format();
   config_load_settings();
 }
-
 
 

@@ -99,7 +99,7 @@ class InputTask : public MicroTasks::Task
 void create_rapi_json(JsonDocument &doc)
 {
   doc["evse_connected"] = (int)evse.isConnected();
-  if(configRfidEnabled()) {
+  if(config_rfid_enabled()) {
     doc["rfid_auth"] = rfid.getAuthenticatedTag();
   }
   doc["amp"] = evse.getAmps() * AMPS_SCALE_FACTOR;

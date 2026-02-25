@@ -133,7 +133,7 @@ void OcppTask::notifyConfigChanged() {
 
 void OcppTask::reconfigure() {
 
-    if (configOcppEnabled()) {
+    if (config_ocpp_enabled()) {
         //OCPP enabled via OpenEVSE config. Load library (if not done yet) and apply OpenEVSE configs
 
         if (!getOcppContext()) {
@@ -506,7 +506,7 @@ unsigned long OcppTask::loop(MicroTasks::WakeReason reason) {
 
     updateEvseClaim();
 
-    return configOcppEnabled() ? OCPP_LOOP_TIME : MicroTask.Infinate;
+    return config_ocpp_enabled() ? OCPP_LOOP_TIME : MicroTask.Infinate;
 }
 
 void OcppTask::updateEvseClaim() {
@@ -514,7 +514,7 @@ void OcppTask::updateEvseClaim() {
     EvseState evseState;
     EvseProperties evseProperties;
 
-    if (!getOcppContext() || !configOcppEnabled()) {
+    if (!getOcppContext() || !config_ocpp_enabled()) {
         if (evse->clientHasClaim(EvseClient_OpenEVSE_OCPP)) {
             evse->release(EvseClient_OpenEVSE_OCPP);
         }
@@ -546,13 +546,13 @@ void OcppTask::updateEvseClaim() {
         evseProperties.setChargeCurrent(charging_limit);
     }
 
-    if (evseState == EvseState::Disabled && !configOcppAccessCanSuspend()) {
+    if (evseState == EvseState::Disabled && !config_ocpp_access_can_suspend()) {
         //OCPP is configured to never put the EVSE into sleep
         evseState = EvseState::None;
         evseProperties = evseState;
     }
 
-    if (evseState == EvseState::Active && !configOcppAccessCanEnergize()) {
+    if (evseState == EvseState::Active && !config_ocpp_access_can_energize()) {
         //OCPP is configured to never override the sleep mode of other services
         evseState = EvseState::None;
         evseProperties = evseState;
