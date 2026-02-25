@@ -128,12 +128,20 @@ void LcdTask::setWifiMode(bool client, bool connected)
 {
   if (_screenManager)
   {
-    _screenManager->setWifiMode(client, connected);
+    if(_screenManager->setWifiMode(client, connected))
+    {
+      _backlight.wake();
+    }
   }
 }
 
 void LcdTask::begin(EvseManager &evse, Scheduler &scheduler, ManualOverride &manual)
 {
+  // Initialize backlight control using GPIO pin
+  _backlight.begin(evse, [](bool on) {
+    digitalWrite(LCD_BACKLIGHT_PIN, on ? HIGH : LOW);
+  });
+
   MicroTask.startTask(this);
 }
 
@@ -170,11 +178,7 @@ unsigned long LcdTask::loop(MicroTasks::WakeReason reason)
     _screenManager = new ScreenManager(_screen, evse, scheduler, manual);
 
     pinMode(LCD_BACKLIGHT_PIN, OUTPUT);
-#ifdef TFT_BACKLIGHT_TIMEOUT_MS
-    _screenManager->wakeBacklight();
-#else
-    digitalWrite(LCD_BACKLIGHT_PIN, HIGH);
-#endif //TFT_BACKLIGHT_TIMEOUT_MS
+    _backlight.wake();
     _initialise = false;
   }
 
@@ -204,6 +208,9 @@ unsigned long LcdTask::loop(MicroTasks::WakeReason reason)
     }
   }
 
+  // Update backlight state based on timeout and EVSE state
+  _backlight.update();
+
 #ifdef ENABLE_DOUBLE_BUFFER
   _tft.pushImage(0, 0, _screen_width, _screen_height, _back_buffer_pixels);
   _tft.endWrite();
@@ -226,11 +233,7 @@ unsigned long LcdTask::displayNextMessage()
     }
 
     // Display the message
-#ifdef TFT_BACKLIGHT_TIMEOUT_MS
-    if (_screenManager) {
-      _screenManager->wakeBacklight();
-    }
-#endif //TFT_BACKLIGHT_TIMEOUT_MS
+    _backlight.wake();
     set_message_line(msg->getX(), msg->getY(), msg->getMsg(), msg->getClear());
 
     _nextMessageTime = millis() + msg->getTime();

@@ -10,6 +10,7 @@
 #include "evse_man.h"
 #include "scheduler.h"
 #include "manual.h"
+#include "lcd_backlight.h"
 #include "screens/screen_manager.h"
 
 #include <TFT_eSPI.h>
@@ -87,6 +88,9 @@ class LcdTask : public MicroTasks::Task
 
     // Screen management
     ScreenManager* _screenManager = nullptr;
+
+    // Backlight control
+    LcdBacklight _backlight;
 
     void display(Message *msg, uint32_t flags);
     unsigned long displayNextMessage();

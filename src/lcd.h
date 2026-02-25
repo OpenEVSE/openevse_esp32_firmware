@@ -26,6 +26,7 @@
 #include "evse_man.h"
 #include "scheduler.h"
 #include "manual.h"
+#include "lcd_backlight.h"
 
 class LcdTask : public MicroTasks::Task
 {
@@ -117,10 +118,7 @@ class LcdTask : public MicroTasks::Task
     bool _updateInfoLine;
 
     // Backlight control
-    unsigned long _backlightTimeout;
-    bool _backlightOn;
-    uint8_t _previousEvseState;
-    bool _previousVehicleState;
+    LcdBacklight _backlight;
 
     MicroTasks::EventListener _evseStateEvent;
     MicroTasks::EventListener _evseSettingsEvent;
@@ -149,11 +147,6 @@ class LcdTask : public MicroTasks::Task
     void displayInfoEventTime(const char *name, Scheduler::EventInstance &event);
     void displayNameValue(int line, const char *name, const char *value);
     void displayStopWatchTime(const char *name, uint32_t time);
-
-    // Backlight control methods
-    void wakeBacklight();
-    void updateBacklight();
-    void setBacklight(bool on);
 
   protected:
     void setup();

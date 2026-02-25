@@ -104,6 +104,7 @@ def test_config_defaults() -> None:
     assert config["tesla_vehicle_id"] ==  ""
     assert config["rfid_storage"] ==  ""
     assert config["scheduler_start_window"] ==  600
+    assert config["lcd_backlight_timeout"] ==  0
     assert config["flags"] ==  79691784
     assert config["flags_changed"] ==  0
     assert config["emoncms_enabled"] ==  False
