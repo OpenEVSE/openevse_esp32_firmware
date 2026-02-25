@@ -2,20 +2,15 @@
 #undef ENABLE_DEBUG
 #endif
 
-#ifndef ENABLE_SCREEN_LCD_TFT
+// === Base class implementation (always compiled) ===
 
 #include "emonesp.h"
 #include "lcd.h"
-#include "RapiSender.h"
-#include "openevse.h"
-#include "input.h"
 #include "app_config.h"
-#include <sys/time.h>
 
-static void IGNORE(int ret) {
-}
+// Message constructors
 
-LcdTask::Message::Message(const __FlashStringHelper *msg, int x, int y, int time, uint32_t flags) :
+LcdTaskBase::Message::Message(const __FlashStringHelper *msg, int x, int y, int time, uint32_t flags) :
   _next(NULL),
   _msg(""),
   _x(x),
@@ -27,12 +22,12 @@ LcdTask::Message::Message(const __FlashStringHelper *msg, int x, int y, int time
   _msg[LCD_MAX_LEN] = '\0';
 }
 
-LcdTask::Message::Message(String &msg, int x, int y, int time, uint32_t flags) :
+LcdTaskBase::Message::Message(String &msg, int x, int y, int time, uint32_t flags) :
   Message(msg.c_str(), x, y, time, flags)
 {
 }
 
-LcdTask::Message::Message(const char *msg, int x, int y, int time, uint32_t flags) :
+LcdTaskBase::Message::Message(const char *msg, int x, int y, int time, uint32_t flags) :
   _next(NULL),
   _msg(""),
   _x(x),
@@ -44,21 +39,44 @@ LcdTask::Message::Message(const char *msg, int x, int y, int time, uint32_t flag
   _msg[LCD_MAX_LEN] = '\0';
 }
 
-LcdTask::LcdTask() :
+// Base class constructor/destructor
+
+LcdTaskBase::LcdTaskBase() :
   MicroTasks::Task(),
   _head(NULL),
   _tail(NULL),
-  _infoLine(LcdInfoLine::Off),
-  _evseState(OPENEVSE_STATE_STARTING),
+  _nextMessageTime(0),
   _evse(NULL),
   _scheduler(NULL),
-  _nextMessageTime(0),
-  _evseStateEvent(this),
-  _evseSettingsEvent(this)
+  _manual(NULL),
+  _backlightTimeout(0),
+  _backlightOn(true),
+  _previousEvseState(OPENEVSE_STATE_STARTING),
+  _previousVehicleState(false)
 {
 }
 
-void LcdTask::display(Message *msg, uint32_t flags)
+LcdTaskBase::~LcdTaskBase()
+{
+  for(Message *next, *node = _head; node; node = next) {
+    next = node->getNext();
+    delete node;
+  }
+}
+
+// Base class begin
+
+void LcdTaskBase::begin(EvseManager &evse, Scheduler &scheduler, ManualOverride &manual)
+{
+  _evse = &evse;
+  _scheduler = &scheduler;
+  _manual = &manual;
+  MicroTask.startTask(this);
+}
+
+// Shared display methods
+
+void LcdTaskBase::display(Message *msg, uint32_t flags)
 {
   if(flags & LCD_DISPLAY_NOW)
   {
@@ -83,19 +101,161 @@ void LcdTask::display(Message *msg, uint32_t flags)
   }
 }
 
-void LcdTask::display(const __FlashStringHelper *msg, int x, int y, int time, uint32_t flags)
+void LcdTaskBase::display(const __FlashStringHelper *msg, int x, int y, int time, uint32_t flags)
 {
   display(new Message(msg, x, y, time, flags), flags);
 }
 
-void LcdTask::display(String &msg, int x, int y, int time, uint32_t flags)
+void LcdTaskBase::display(String &msg, int x, int y, int time, uint32_t flags)
 {
   display(new Message(msg, x, y, time, flags), flags);
 }
 
-void LcdTask::display(const char *msg, int x, int y, int time, uint32_t flags)
+void LcdTaskBase::display(const char *msg, int x, int y, int time, uint32_t flags)
 {
   display(new Message(msg, x, y, time, flags), flags);
+}
+
+// Shared message queue processing
+
+unsigned long LcdTaskBase::displayNextMessage()
+{
+  while(_head && millis() >= _nextMessageTime)
+  {
+    // Pop a message from the queue
+    Message *msg = _head;
+    DBUGF("msg = %p", msg);
+    _head = _head->getNext();
+    if(NULL == _head) {
+      _tail = NULL;
+    }
+
+    // Let subclass handle the actual display
+    onMessageDisplayed(msg);
+
+    _nextMessageTime = millis() + msg->getTime();
+
+    // delete the message
+    delete msg;
+  }
+
+  unsigned long nextUpdate = _nextMessageTime - millis();
+  DBUGVAR(nextUpdate);
+  return nextUpdate;
+}
+
+// Backlight methods
+
+void LcdTaskBase::setBacklight(bool on)
+{
+  if(_backlightOn == on) {
+    return;
+  }
+
+  _backlightOn = on;
+
+  DBUGF("Setting LCD backlight %s", on ? "ON" : "OFF");
+  backlightControl(on);
+}
+
+void LcdTaskBase::wakeBacklight()
+{
+  if(lcd_backlight_timeout > 0) {
+    DBUGLN("Waking LCD backlight");
+    setBacklight(true);
+    // Cap maximum timeout to ~49 days to prevent overflow
+    uint32_t timeout_sec = lcd_backlight_timeout;
+    if(timeout_sec > 4294967UL) {
+      timeout_sec = 4294967UL;
+    }
+    _backlightTimeout = millis() + (timeout_sec * 1000UL);
+  }
+}
+
+void LcdTaskBase::updateBacklight()
+{
+  if(!_evse) {
+    return;
+  }
+
+  // If backlight timeout is disabled (0), keep backlight on
+  if(lcd_backlight_timeout == 0) {
+    if(!_backlightOn) {
+      setBacklight(true);
+    }
+    return;
+  }
+
+  // Check for state changes that should wake the backlight
+  bool vehicleState = _evse->isVehicleConnected();
+  uint8_t evseState = _evse->getEvseState();
+
+  if(_previousEvseState != evseState || _previousVehicleState != vehicleState) {
+    wakeBacklight();
+    _previousEvseState = evseState;
+    _previousVehicleState = vehicleState;
+    return;
+  }
+
+  // Keep backlight on during error conditions
+  if(_evse->isError()) {
+    if(!_backlightOn) {
+      setBacklight(true);
+    }
+    return;
+  }
+
+  // Keep backlight on during charging
+  if(_evse->isCharging()) {
+    if(!_backlightOn) {
+      setBacklight(true);
+    }
+    return;
+  }
+
+  // Check if timeout has expired (handle millis() rollover)
+  if(_backlightOn && (long)(millis() - _backlightTimeout) >= 0) {
+    DBUGLN("LCD backlight timeout expired");
+    setBacklight(false);
+  }
+}
+
+// === Character LCD implementation (when TFT not enabled) ===
+
+#ifndef ENABLE_SCREEN_LCD_TFT
+
+#include "RapiSender.h"
+#include "openevse.h"
+#include "input.h"
+#include <sys/time.h>
+
+static void IGNORE(int ret) {
+}
+
+LcdTask::LcdTask() :
+  LcdTaskBase(),
+  _infoLine(LcdInfoLine::Off),
+  _evseState(OPENEVSE_STATE_STARTING),
+  _evseStateEvent(this),
+  _evseSettingsEvent(this)
+{
+}
+
+void LcdTask::backlightControl(bool on)
+{
+  // Send RAPI command to control backlight: $FB 0 (off) or $FB 1 (on)
+  String cmd = "$FB ";
+  cmd += on ? "1" : "0";
+  _evse->getSender().sendCmd(cmd, [](int ret) {
+    DBUGF("LCD backlight RAPI result: %d", ret);
+  });
+}
+
+void LcdTask::onMessageDisplayed(Message *msg)
+{
+  showText(msg->getX(), msg->getY(), msg->getMsg(), msg->getClear());
+  _updateStateDisplay = true;
+  _updateInfoLine = true;
 }
 
 void LcdTask::setEvseState(uint8_t lcdColour)
@@ -121,20 +281,7 @@ void LcdTask::setInfoLine(LcdInfoLine info)
 
 void LcdTask::begin(EvseManager &evse, Scheduler &scheduler, ManualOverride &manual)
 {
-  _evse = &evse;
-  _scheduler = &scheduler;
-  _manual = &manual;
-
-  // Initialize backlight control using RAPI $FB commands
-  _backlight.begin(evse, [this](bool on) {
-    String cmd = "$FB ";
-    cmd += on ? "1" : "0";
-    _evse->getSender().sendCmd(cmd, [](int ret) {
-      DBUGF("LCD backlight RAPI result: %d", ret);
-    });
-  });
-
-  MicroTask.startTask(this);
+  LcdTaskBase::begin(evse, scheduler, manual);
 }
 
 void LcdTask::setup()
@@ -276,37 +423,8 @@ unsigned long LcdTask::loop(MicroTasks::WakeReason reason)
   }
 
   // Update backlight state based on timeout and EVSE state
-  _backlight.update();
+  updateBacklight();
 
-  DBUGVAR(nextUpdate);
-  return nextUpdate;
-}
-
-unsigned long LcdTask::displayNextMessage()
-{
-  while(_head && millis() >= _nextMessageTime)
-  {
-    // Pop a message from the queue
-    Message *msg = _head;
-    DBUGF("msg = %p", msg);
-    _head = _head->getNext();
-    if(NULL == _head) {
-      _tail = NULL;
-    }
-
-    // Display the message
-    showText(msg->getX(), msg->getY(), msg->getMsg(), msg->getClear());
-
-    _nextMessageTime = millis() + msg->getTime();
-
-    // delete the message
-    delete msg;
-
-    _updateStateDisplay = true;
-    _updateInfoLine = true;
-  }
-
-  unsigned long nextUpdate = _nextMessageTime - millis();
   DBUGVAR(nextUpdate);
   return nextUpdate;
 }

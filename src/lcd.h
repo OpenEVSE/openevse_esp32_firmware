@@ -10,11 +10,6 @@
 #define LCD_DISPLAY_CHANGE_TIME (4 * 1000)
 #endif
 
-#if ENABLE_SCREEN_LCD_TFT
-// HACK: This should be done in a much more C++ way
-#include "lcd_tft.h"
-#else
-
 #define LCD_MAX_LEN 16
 
 #define LCD_CHAR_STOP       1
@@ -26,12 +21,11 @@
 #include "evse_man.h"
 #include "scheduler.h"
 #include "manual.h"
-#include "lcd_backlight.h"
 
-class LcdTask : public MicroTasks::Task
+// Base class for all LCD implementations
+class LcdTaskBase : public MicroTasks::Task
 {
-  private:
-
+  protected:
     class Message;
 
     class Message
@@ -77,6 +71,56 @@ class LcdTask : public MicroTasks::Task
         }
     };
 
+    Message *_head;
+    Message *_tail;
+    uint32_t _nextMessageTime;
+
+    EvseManager *_evse;
+    Scheduler *_scheduler;
+    ManualOverride *_manual;
+
+    // Backlight state
+    unsigned long _backlightTimeout;
+    bool _backlightOn;
+    uint8_t _previousEvseState;
+    bool _previousVehicleState;
+
+    void setBacklight(bool on);
+
+    // Hardware-specific backlight control - override in subclass
+    virtual void backlightControl(bool on) = 0;
+
+    void display(Message *msg, uint32_t flags);
+
+    // Called when a message is displayed from the queue - override for subclass-specific behavior
+    virtual void onMessageDisplayed(Message *msg) {}
+
+  public:
+    LcdTaskBase();
+    virtual ~LcdTaskBase();
+
+    virtual void begin(EvseManager &evse, Scheduler &scheduler, ManualOverride &manual);
+
+    void display(const __FlashStringHelper *msg, int x, int y, int time, uint32_t flags);
+    void display(String &msg, int x, int y, int time, uint32_t flags);
+    void display(const char *msg, int x, int y, int time, uint32_t flags);
+
+    virtual void setWifiMode(bool client, bool connected) = 0;
+
+    void wakeBacklight();
+    void updateBacklight();
+
+    unsigned long displayNextMessage();
+};
+
+#if ENABLE_SCREEN_LCD_TFT
+#include "lcd_tft.h"
+#else
+
+class LcdTask : public LcdTaskBase
+{
+  private:
+
     enum class LcdInfoLine
     {
       Off,
@@ -98,27 +142,16 @@ class LcdTask : public MicroTasks::Task
       ManualOverride
     };
 
-    Message *_head;
-    Message *_tail;
-
     LcdInfoLine _infoLine;
 
     uint8_t _evseState;
     uint8_t _pilotState;
     uint32_t _flags;
 
-    EvseManager *_evse;
-    Scheduler *_scheduler;
-    ManualOverride *_manual;
-
-    uint32_t _nextMessageTime;
     uint32_t _infoLineChageTime;
 
     bool _updateStateDisplay;
     bool _updateInfoLine;
-
-    // Backlight control
-    LcdBacklight _backlight;
 
     MicroTasks::EventListener _evseStateEvent;
     MicroTasks::EventListener _evseSettingsEvent;
@@ -133,12 +166,11 @@ class LcdTask : public MicroTasks::Task
     void setInfoLine(LcdInfoLine info);
 
     void onButton(int event);
-    
 
     LcdInfoLine getNextInfoLine(LcdInfoLine info);
 
-    void display(Message *msg, uint32_t flags);
-    unsigned long displayNextMessage();
+    void backlightControl(bool on) override;
+    void onMessageDisplayed(Message *msg) override;
 
     void displayStateLine(uint8_t EvseState, unsigned long &nextUpdate);
     void displayInfoLine(LcdInfoLine info, unsigned long &nextUpdate);
@@ -149,19 +181,15 @@ class LcdTask : public MicroTasks::Task
     void displayStopWatchTime(const char *name, uint32_t time);
 
   protected:
-    void setup();
-    unsigned long loop(MicroTasks::WakeReason reason);
+    void setup() override;
+    unsigned long loop(MicroTasks::WakeReason reason) override;
 
   public:
     LcdTask();
 
-    void begin(EvseManager &evse, Scheduler &scheduler, ManualOverride &manual);
+    void begin(EvseManager &evse, Scheduler &scheduler, ManualOverride &manual) override;
 
-    void display(const __FlashStringHelper *msg, int x, int y, int time, uint32_t flags);
-    void display(String &msg, int x, int y, int time, uint32_t flags);
-    void display(const char *msg, int x, int y, int time, uint32_t flags);
-    
-    void setWifiMode(bool client, bool connected);
+    void setWifiMode(bool client, bool connected) override;
 };
 
 #endif // ENABLE_SCREEN_LCD_TFT

@@ -1,76 +1,16 @@
 #ifndef __LCD_TFT_H
 #define __LCD_TFT_H
 
-#define LCD_CHAR_STOP       1
-#define LCD_CHAR_PLAY       2
-#define LCD_CHAR_LIGHTNING  3
-#define LCD_CHAR_LOCK       4
-#define LCD_CHAR_CLOCK      5
-
-#include "evse_man.h"
-#include "scheduler.h"
-#include "manual.h"
-#include "lcd_backlight.h"
 #include "screens/screen_manager.h"
 
 #include <TFT_eSPI.h>
 #include <PNGdec.h>
 
-#define LCD_MAX_LEN 16
 #define LCD_MAX_LINES 2
 
-class LcdTask : public MicroTasks::Task
+class LcdTask : public LcdTaskBase
 {
   private:
-    class Message;
-
-    class Message
-    {
-      private:
-        Message *_next;
-        char _msg[LCD_MAX_LEN + 1];
-        int _x;
-        int _y;
-        int _time;
-        uint32_t _clear:1;
-
-      public:
-        Message(const __FlashStringHelper *msg, int x, int y, int time, uint32_t flags);
-        Message(String &msg, int x, int y, int time, uint32_t flags);
-        Message(const char *msg, int x, int y, int time, uint32_t flags);
-
-        Message *getNext() {
-          return _next;
-        }
-        void setNext(Message *msg) {
-          _next = msg;
-        }
-
-        const char *getMsg() {
-          return _msg;
-        }
-
-        int getX() {
-          return _x;
-        }
-
-        int getY() {
-          return _y;
-        }
-
-        int getTime() {
-          return _time;
-        }
-
-        bool getClear() {
-          return _clear;
-        }
-    };
-
-    Message *_head;
-    Message *_tail;
-    uint32_t _nextMessageTime;
-
     TFT_eSPI _tft;                  // The TFT display
 
 #ifdef ENABLE_DOUBLE_BUFFER
@@ -89,33 +29,26 @@ class LcdTask : public MicroTasks::Task
     // Screen management
     ScreenManager* _screenManager = nullptr;
 
-    // Backlight control
-    LcdBacklight _backlight;
-
-    void display(Message *msg, uint32_t flags);
-    unsigned long displayNextMessage();
+    void backlightControl(bool on) override;
+    void onMessageDisplayed(Message *msg) override;
 
   protected:
-    void setup();
-    unsigned long loop(MicroTasks::WakeReason reason);
+    void setup() override;
+    unsigned long loop(MicroTasks::WakeReason reason) override;
 
   public:
     LcdTask();
-    ~LcdTask();
+    ~LcdTask() override;
 
-    void begin(EvseManager &evse, Scheduler &scheduler, ManualOverride &manual);
+    void begin(EvseManager &evse, Scheduler &scheduler, ManualOverride &manual) override;
 
-    void display(const __FlashStringHelper *msg, int x, int y, int time, uint32_t flags);
-    void display(String &msg, int x, int y, int time, uint32_t flags);
-    void display(const char *msg, int x, int y, int time, uint32_t flags);
-    void setWifiMode(bool client, bool connected);
+    void setWifiMode(bool client, bool connected) override;
 
     void fill_screen(uint16_t color) {
       _screen.fillScreen(color);
     }
 };
 
-extern LcdTask lcd;
 extern char _msg[LCD_MAX_LINES][LCD_MAX_LEN + 1]; // Message buffer shared with renderers
 
 #endif // __LCD_TFT_H
