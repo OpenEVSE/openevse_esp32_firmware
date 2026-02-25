@@ -41,7 +41,7 @@ public:
     return false;
   }
 
-  virtual bool serialize(DynamicJsonDocument &doc, bool longNames, bool compactOutput, bool hideSecrets) {
+  virtual bool serialize(JsonDocument &doc, bool longNames, bool compactOutput, bool hideSecrets) {
     if(!compactOutput) {
       doc[name(longNames)] = get();
       return true;
@@ -50,10 +50,10 @@ public:
     return false;
   }
 
-  virtual bool deserialize(DynamicJsonDocument &doc) {
-    if(doc.containsKey(_long)) {
+  virtual bool deserialize(JsonDocument &doc) {
+    if(doc[_long].is<const char *>()) {
       return set(doc[_long].as<String>());
-    } else if(doc.containsKey(_short)) { \
+    } else if(doc[_short].is<const char *>()) { \
       return set(doc[_short].as<String>());
     }
 

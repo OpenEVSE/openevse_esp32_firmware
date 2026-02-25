@@ -50,7 +50,7 @@ jobs:
         with:
           repository: bblanchon/ArduinoJson
           path: ArduinoJson
-          ref: v6.20.1
+          ref: v7.4.2
 
       - uses: actions/checkout@v4
         with:

@@ -37,7 +37,7 @@ bool CertificateStore::Certificate::deserialize(JsonObject &obj)
 #endif
 
   _cert = cert;
-  if(obj.containsKey("id")) {
+  if(obj["id"].is<const char*>()) {
     _id = std::stoull(obj["id"].as<std::string>(), nullptr, 16);
   } else {
     uint64_t id = 0;
@@ -46,7 +46,7 @@ bool CertificateStore::Certificate::deserialize(JsonObject &obj)
     }
     _id = id;
   }
-  if(obj.containsKey("key"))
+  if(obj["key"].is<const char*>())
   {
     std::string key = obj["key"].as<std::string>();
 
@@ -151,7 +151,7 @@ bool CertificateStore::addCertificate(const char *name, const char *certificate,
   return false;
 }
 
-bool CertificateStore::addCertificate(DynamicJsonDocument &doc, uint64_t *id, bool save)
+bool CertificateStore::addCertificate(JsonDocument &doc, uint64_t *id, bool save)
 {
   Certificate *cert = new Certificate();
   if(cert)
@@ -260,20 +260,20 @@ bool CertificateStore::getKey(uint64_t id, std::string &key)
   return false;
 }
 
-bool CertificateStore::serializeCertificates(DynamicJsonDocument &doc, uint32_t flags)
+bool CertificateStore::serializeCertificates(JsonDocument &doc, uint32_t flags)
 {
   doc.to<JsonArray>();
   for(auto &c : _certs)
   {
     DBUGF("c = %p", c);
     DBUGVAR(c->getId(), HEX);
-    JsonObject obj = doc.createNestedObject();
+    JsonObject obj = doc.add<JsonObject>();
     c->serialize(obj);
   }
   return true;
 }
 
-bool CertificateStore::serializeCertificate(DynamicJsonDocument &doc, uint64_t id, uint32_t flags)
+bool CertificateStore::serializeCertificate(JsonDocument &doc, uint64_t id, uint32_t flags)
 {
   Certificate *cert = nullptr;
   if(findCertificate(id, cert)) {
@@ -402,7 +402,7 @@ bool CertificateStore::loadCertificate(String &name)
   File file = LittleFS.open(path);
   if(file)
   {
-    DynamicJsonDocument doc(CERTIFICATE_JSON_BUFFER_SIZE);
+    JsonDocument doc;
     DeserializationError err = deserializeJson(doc, file);
     if(DeserializationError::Code::Ok == err)
     {
@@ -426,7 +426,7 @@ bool CertificateStore::saveCertificate(Certificate *cert)
   File file = LittleFS.open(name, "w");
   if(file)
   {
-    DynamicJsonDocument doc(CERTIFICATE_JSON_BUFFER_SIZE);
+    JsonDocument doc;
     JsonObject object = doc.to<JsonObject>();
     cert->serialize(object, Certificate::Flags::SHOW_PRIVATE_KEY);
     serializeJson(doc, file);

@@ -280,7 +280,7 @@ increment_config() {
   DBUGVAR(config_ver);
 
   #if ENABLE_CONFIG_CHANGE_NOTIFICATION
-  StaticJsonDocument<128> event;
+  JsonDocument event;
   event["config_version"] = config_ver;
   event_send(event);
   #endif
@@ -425,14 +425,14 @@ bool config_deserialize(const char *json)
   return user_config.deserialize(json);
 }
 
-bool config_deserialize(DynamicJsonDocument &doc)
+bool config_deserialize(JsonDocument &doc)
 {
   bool config_modified = user_config.deserialize(doc);
 
   #if ENABLE_CONFIG_CHANGE_NOTIFICATION
   // Update EVSE config
   // Update the EVSE setting flags, a little low level, may move later
-  if(doc.containsKey("diode_check"))
+  if(doc["diode_check"].is<bool>())
   {
     bool enable = doc["diode_check"];
     if(enable != evse.isDiodeCheckEnabled()) {
@@ -442,7 +442,7 @@ bool config_deserialize(DynamicJsonDocument &doc)
     }
   }
 
-  if(doc.containsKey("gfci_check"))
+  if(doc["gfci_check"].is<bool>())
   {
     bool enable = doc["gfci_check"];
     if(enable != evse.isGfiTestEnabled()) {
@@ -452,7 +452,7 @@ bool config_deserialize(DynamicJsonDocument &doc)
     }
   }
 
-  if(doc.containsKey("ground_check"))
+  if(doc["ground_check"].is<bool>())
   {
     bool enable = doc["ground_check"];
     if(enable != evse.isGroundCheckEnabled()) {
@@ -462,7 +462,7 @@ bool config_deserialize(DynamicJsonDocument &doc)
     }
   }
 
-  if(doc.containsKey("relay_check"))
+  if(doc["relay_check"].is<bool>())
   {
     bool enable = doc["relay_check"];
     if(enable != evse.isStuckRelayCheckEnabled()) {
@@ -472,7 +472,7 @@ bool config_deserialize(DynamicJsonDocument &doc)
     }
   }
 
-  if(doc.containsKey("vent_check"))
+  if(doc["vent_check"].is<bool>())
   {
     bool enable = doc["vent_check"];
     if(enable != evse.isVentRequiredEnabled()) {
@@ -482,7 +482,7 @@ bool config_deserialize(DynamicJsonDocument &doc)
     }
   }
 
-  if(doc.containsKey("temp_check"))
+  if(doc["temp_check"].is<bool>())
   {
     bool enable = doc["temp_check"];
     if(enable != evse.isTemperatureCheckEnabled()) {
@@ -492,7 +492,7 @@ bool config_deserialize(DynamicJsonDocument &doc)
     }
   }
 
-  if(doc.containsKey("service"))
+  if(doc["service"].is<uint8_t>())
   {
     EvseMonitor::ServiceLevel service = static_cast<EvseMonitor::ServiceLevel>(doc["service"].as<uint8_t>());
     if(service != evse.getServiceLevel()) {
@@ -502,7 +502,7 @@ bool config_deserialize(DynamicJsonDocument &doc)
     }
   }
 
-  if(doc.containsKey("max_current_soft"))
+  if(doc["max_current_soft"].is<long>())
   {
     long current = doc["max_current_soft"];
     if(current != evse.getMaxConfiguredCurrent()) {
@@ -512,7 +512,7 @@ bool config_deserialize(DynamicJsonDocument &doc)
     }
   }
 
-  if(doc.containsKey("scale") && doc.containsKey("offset"))
+  if(doc["scale"].is<long>() && doc["offset"].is<long>())
   {
     long scale = doc["scale"];
     long offset = doc["offset"];
@@ -546,13 +546,13 @@ bool config_serialize(String& json, bool longNames, bool compactOutput, bool hid
   return user_config.serialize(json, longNames, compactOutput, hideSecrets);
 }
 
-bool config_serialize(DynamicJsonDocument &doc, bool longNames, bool compactOutput, bool hideSecrets)
+bool config_serialize(JsonDocument &doc, bool longNames, bool compactOutput, bool hideSecrets)
 {
   // Static supported protocols
-  JsonArray mqtt_supported_protocols = doc.createNestedArray("mqtt_supported_protocols");
+  JsonArray mqtt_supported_protocols = doc["mqtt_supported_protocols"].to<JsonArray>();
   mqtt_supported_protocols.add("mqtt");
   mqtt_supported_protocols.add("mqtts");
-  JsonArray http_supported_protocols = doc.createNestedArray("http_supported_protocols");
+  JsonArray http_supported_protocols = doc["http_supported_protocols"].to<JsonArray>();
   http_supported_protocols.add("http");
 
   #if ENABLE_CONFIG_CHANGE_NOTIFICATION

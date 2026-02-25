@@ -257,8 +257,7 @@ loop() {
     if(emoncms_updated)
     {
       // Send the current state to check the config
-      const size_t capacity = JSON_OBJECT_SIZE(33) + 1024;
-      DynamicJsonDocument data(capacity);
+      JsonDocument data;
       create_rapi_json(data);
       emoncms_publish(data);
       emoncms_updated = false;
@@ -287,7 +286,7 @@ loop() {
 
 void event_send(String &json)
 {
-  StaticJsonDocument<512> event;
+  JsonDocument event;
   deserializeJson(event, json);
   event_send(event);
 }
@@ -341,8 +340,7 @@ void handle_serial()
     DBUGVAR(command);
     DBUGVAR(json);
 
-    const size_t capacity = JSON_OBJECT_SIZE(50) + 1024;
-    DynamicJsonDocument doc(capacity);
+    JsonDocument doc;
     DeserializationError error = deserializeJson(doc, json);
     if(error) {
       DEBUG_PORT.println("{\"code\":400,\"msg\":\"Could not parse JSON\"}");

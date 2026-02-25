@@ -258,7 +258,7 @@ class Scheduler : public MicroTasks::Task
     bool addEvent(uint32_t id, const char *time, uint8_t days, const char *state);
     bool addEvent(String& json);
     bool addEvent(const char *json);
-    bool addEvent(DynamicJsonDocument &doc);
+    bool addEvent(JsonDocument &doc);
 
     bool removeEvent(uint32_t id);
 
@@ -266,23 +266,23 @@ class Scheduler : public MicroTasks::Task
 
     bool deserialize(String& json);
     bool deserialize(const char *json);
-    bool deserialize(DynamicJsonDocument &doc);
+    bool deserialize(JsonDocument &doc);
     bool deserialize(Stream &stream);
 
     bool deserialize(String& json, uint32_t event);
     bool deserialize(const char *json, uint32_t event);
-    bool deserialize(DynamicJsonDocument &doc, uint32_t event);
+    bool deserialize(JsonDocument &doc, uint32_t event);
     bool deserialize(JsonObject &obj, uint32_t event);
 
     bool serialize(String& json);
-    bool serialize(DynamicJsonDocument &doc);
+    bool serialize(JsonDocument &doc);
     bool serialize(Stream &stream);
 
     bool serialize(String& json, uint32_t event);
-    bool serialize(DynamicJsonDocument &doc, uint32_t event);
+    bool serialize(JsonDocument &doc, uint32_t event);
     bool serialize(JsonObject &obj, uint32_t event);
 
-    bool serializePlan(DynamicJsonDocument &doc);
+    bool serializePlan(JsonDocument &doc);
 
     void notifyConfigChanged();
 
