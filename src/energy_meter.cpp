@@ -60,10 +60,10 @@ void EnergyMeterData::serialize(JsonDocument &doc)
   doc["el"] = elapsed;
   doc["sw"] = switches;
   doc["im"] = imported;
-  doc["dt"].to<JsonObject>();
-  doc["dt"]["dy"] = date.day;
-  doc["dt"]["mo"] = date.month;
-  doc["dt"]["yr"] = date.year;
+  JsonObject dt = doc["dt"].to<JsonObject>();
+  dt["dy"] = date.day;
+  dt["mo"] = date.month;
+  dt["yr"] = date.year;
 };
 
 void EnergyMeterData::deserialize(JsonDocument &doc)
