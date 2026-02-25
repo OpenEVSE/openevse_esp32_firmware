@@ -102,3 +102,6 @@ divert_sim/epoxyeepromdata
 
 *.pem
 *.pem
+
+# CodeQL
+_codeql_detected_source_root

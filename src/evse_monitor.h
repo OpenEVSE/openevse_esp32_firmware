@@ -210,6 +210,7 @@ class EvseMonitor : public MicroTasks::Task
     void enableStuckRelayCheck(bool enabled, std::function<void(int ret)> callback = NULL);
     void enableVentRequired(bool enabled, std::function<void(int ret)> callback = NULL);
     void enableTemperatureCheck(bool enabled, std::function<void(int ret)> callback = NULL);
+    void enableButton(bool enabled, std::function<void(int ret)> callback = NULL);
     void verifyPilot();
 
     uint8_t getEvseState() {

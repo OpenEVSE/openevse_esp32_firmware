@@ -29,6 +29,7 @@ CONFIG_OCPP_OFFLINE_AUTH = 1 << 23
 CONFIG_THREEPHASE = 1 << 24
 CONFIG_WIZARD = 1 << 25
 CONFIG_DEFAULT_STATE = 1 << 26
+CONFIG_BUTTON_MODE = 7 << 27
 
 def check_config(config: Union[bool, dict] = False, load: bool = False, commit: bool = False):
     command = ["./divert_sim", "--config-check"]
@@ -104,7 +105,7 @@ def test_config_defaults() -> None:
     assert config["tesla_vehicle_id"] ==  ""
     assert config["rfid_storage"] ==  ""
     assert config["scheduler_start_window"] ==  600
-    assert config["flags"] ==  79691784
+    assert config["flags"] ==  213909512
     assert config["flags_changed"] ==  0
     assert config["emoncms_enabled"] ==  False
     assert config["mqtt_enabled"] ==  False
@@ -127,6 +128,7 @@ def test_config_defaults() -> None:
     assert config["is_threephase"] ==  False
     assert config["wizard_passed"] ==  False
     assert config["default_state"] ==  True
+    assert config["button_enabled"] ==  True
     assert config["mqtt_protocol"] ==  "mqtt"
     assert config["charge_mode"] ==  "fast"
 

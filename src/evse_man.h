@@ -457,6 +457,9 @@ class EvseManager : public MicroTasks::Task
     void enableTemperatureCheck(bool enabled, std::function<void(int ret)> callback = NULL) {
       _monitor.enableTemperatureCheck(enabled, callback);
     }
+    void enableButton(bool enabled, std::function<void(int ret)> callback = NULL) {
+      _monitor.enableButton(enabled, callback);
+    }
     void restartEvse() {
       _monitor.restart();
     }
