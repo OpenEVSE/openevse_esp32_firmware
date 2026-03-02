@@ -19,7 +19,8 @@ permissions:
 
 env:
   REGISTRY: ghcr.io
-  IMAGE_NAME: ${{ github.repository_owner }}/openevse-wifi-native
+  #IMAGE_NAME: ${{ github.repository_owner }}/openevse-wifi-native
+  IMAGE_NAME: jeremypoulter/openevse-wifi-native
   UBUNTU_VERSION: 24.04
 
 jobs:
@@ -108,7 +109,7 @@ jobs:
           build-args: |
             UBUNTU_VERSION=${{ env.UBUNTU_VERSION }}
             NATIVE_BINARY=${{ steps.native-binary.outputs.path }}
-          push: ${{ github.event_name != 'pull_request' }}
+          push: true # ${{ github.event_name != 'pull_request' }}
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
           cache-from: type=gha
