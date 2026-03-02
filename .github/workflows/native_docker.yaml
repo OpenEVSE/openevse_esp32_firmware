@@ -20,10 +20,11 @@ permissions:
 env:
   REGISTRY: ghcr.io
   IMAGE_NAME: ${{ github.repository_owner }}/openevse-wifi-native
+  UBUNTU_VERSION: 24.04
 
 jobs:
   package-native:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
 
     steps:
       - name: Checkout
@@ -104,7 +105,7 @@ jobs:
           context: .
           file: docker/native/Dockerfile
           build-args: |
-            UBUNTU_VERSION=24.04
+            UBUNTU_VERSION=${{ env.UBUNTU_VERSION }}
             NATIVE_BINARY=${{ steps.native-binary.outputs.path }}
           push: ${{ github.event_name != 'pull_request' }}
           tags: ${{ steps.meta.outputs.tags }}
