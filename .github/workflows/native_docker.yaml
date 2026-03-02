@@ -32,6 +32,9 @@ jobs:
         run: |
           python -m pip install --upgrade pip
           pip install --upgrade platformio
+          sudo apt-get update
+          sudo apt-get install -y libavahi-client-dev libavahi-common-dev
+
 
       - name: Build native image
         run: pio run -e native

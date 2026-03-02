@@ -85,6 +85,12 @@ jobs:
         python -m pip install --upgrade pip
         pip install --upgrade platformio
 
+    - name: Install Avahi development libraries
+      if: matrix.env == 'native'
+      run: |
+        sudo apt-get update
+        sudo apt-get install -y libavahi-client-dev libavahi-common-dev
+
     - name: Run PlatformIO
       run: pio run -e ${{ matrix.env }}
 
