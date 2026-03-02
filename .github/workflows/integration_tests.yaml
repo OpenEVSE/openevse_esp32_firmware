@@ -1,0 +1,119 @@
+# yaml-language-server: $schema=https://json.schemastore.org/github-workflow.json
+
+name: Integration Tests (Load Sharing Peer Management)
+
+on:
+  workflow_run:
+    workflows: ["Build/Release OpenEVSE"]
+    types: [completed]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  checks: write
+
+jobs:
+  integration_test:
+    name: Load Sharing Peer Management Integration Tests
+    runs-on: ubuntu-latest
+
+    if: |
+      github.event_name == 'workflow_dispatch' ||
+      (github.event.workflow_run.conclusion == 'success' &&
+       contains(github.event.workflow_run.name, 'Build/Release'))
+
+    strategy:
+      fail-fast: false
+      matrix:
+        num_instances: [2, 3, 4]
+
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v6
+
+    - name: Set up Python
+      uses: actions/setup-python@v6
+      with:
+        python-version: '3.x'
+
+    - name: Cache pip
+      uses: actions/cache@v5
+      with:
+        path: ~/.cache/pip
+        key: ${{ runner.os }}-pip-integration-${{ hashFiles('**/requirements.txt') }}
+        restore-keys: |
+          ${{ runner.os }}-pip-
+
+    - name: Install system dependencies
+      run: |
+        sudo apt-get update
+        sudo apt-get install -y libavahi-client-dev libavahi-common-dev socat
+
+    - name: Download native firmware artifact
+      if: github.event_name != 'workflow_dispatch'
+      uses: actions/download-artifact@v6
+      with:
+        name: native.bin
+        path: ./
+
+    - name: Build native firmware locally
+      if: github.event_name == 'workflow_dispatch'
+      run: |
+        python -m pip install --upgrade pip
+        pip install --upgrade platformio
+        pio run -e native
+        cp .pio/build/native/program ./native_program
+
+    - name: Make native binary executable
+      run: |
+        if [ ! -f native_program ]; then
+          echo "Error: native_program not found"
+          ls -la
+          exit 1
+        fi
+        chmod +x native_program
+        file native_program
+
+    - name: Pull emulator Docker image
+      run: docker pull ghcr.io/jeremypoulter/openevse_emulator:latest
+
+    - name: Install test dependencies
+      run: pip install -r tests/integration/requirements.txt
+
+    - name: Create test output directory
+      run: mkdir -p tests/integration/output
+
+    - name: Run integration tests (instances=${{ matrix.num_instances }})
+      env:
+        NATIVE_BINARY_PATH: ./native_program
+      run: |
+        pytest tests/integration/ \
+          -v \
+          --color=yes \
+          --code-highlight=yes \
+          --tb=short \
+          --junit-xml=tests/integration/output/test_results_${{ matrix.num_instances }}.xml \
+          -k "test_loadsharing_peer_management or TestPeerManagement or TestResponseStructure"
+
+    - name: Upload test results
+      if: always()
+      uses: actions/upload-artifact@v6
+      with:
+        name: integration-test-results-${{ matrix.num_instances }}
+        path: tests/integration/output/
+
+    - name: Publish test results
+      if: always()
+      uses: EnricoMi/publish-unit-test-result-action@v2
+      with:
+        files: tests/integration/output/test_results_*.xml
+        check_name: Integration Tests (${{ matrix.num_instances }} instances)
+        compare_to_earlier_commit: false
+
+    - name: Cleanup
+      if: always()
+      run: |
+        # Stop any remaining containers
+        docker ps -q --filter "name=emulator_" | xargs -r docker stop || true
+        # Clean up PTY files
+        rm -f /tmp/rapi_pty_* || true

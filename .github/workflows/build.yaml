@@ -54,6 +54,7 @@ jobs:
 #          - elecrow_esp32_hmi_dev
           - openevse_wifi_tft_v1
           - openevse_wifi_tft_v1_dev
+          - native
 
     steps:
     - uses: ammaraskar/gcc-problem-matcher@master
@@ -83,6 +84,12 @@ jobs:
       run: |
         python -m pip install --upgrade pip
         pip install --upgrade platformio
+
+    - name: Install Avahi development libraries
+      if: matrix.env == 'native'
+      run: |
+        sudo apt-get update
+        sudo apt-get install -y libavahi-client-dev libavahi-common-dev
 
     - name: Run PlatformIO
       run: pio run -e ${{ matrix.env }}
