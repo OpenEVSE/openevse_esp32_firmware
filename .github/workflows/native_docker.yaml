@@ -6,6 +6,7 @@ on:
   push:
     branches:
       - master
+      - native_build
     tags:
       - 'v*'
   pull_request:
@@ -19,8 +20,7 @@ permissions:
 
 env:
   REGISTRY: ghcr.io
-  #IMAGE_NAME: ${{ github.repository_owner }}/openevse-wifi-native
-  IMAGE_NAME: jeremypoulter/openevse-wifi-native
+  IMAGE_NAME: ${{ github.repository_owner }}/openevse-wifi-native
   UBUNTU_VERSION: 24.04
 
 jobs:
@@ -77,7 +77,7 @@ jobs:
             # Tag with 'latest' on main branch
             type=raw,value=latest,enable={{is_default_branch}}
             # Tag with 'develop' on develop branch
-            type=raw,value=develop,enable=${{ github.ref == 'refs/heads/develop' }}
+            type=raw,value=develop,enable=${{ github.ref == 'refs/heads/native_build' }}
             # Tag with version on tags (e.g., v1.0.0 -> 1.0.0)
             type=semver,pattern={{version}}
             # Tag with major.minor on tags (e.g., v1.0.0 -> 1.0)
@@ -109,7 +109,7 @@ jobs:
           build-args: |
             UBUNTU_VERSION=${{ env.UBUNTU_VERSION }}
             NATIVE_BINARY=${{ steps.native-binary.outputs.path }}
-          push: true # ${{ github.event_name != 'pull_request' }}
+          push: ${{ github.event_name != 'pull_request' }}
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
           cache-from: type=gha
