@@ -34,6 +34,10 @@ extern String www_username;
 extern String www_password;
 extern String www_certificate_id;
 
+// Web server ports
+extern uint32_t www_http_port;
+extern uint32_t www_https_port;
+
 // Advanced settings
 extern String esp_hostname;
 extern String esp_hostname_default;
@@ -240,10 +244,15 @@ extern void config_load_v1_settings();
 // -------------------------------------------------------------------
 extern void config_reset();
 
-void config_set(const char *name, uint32_t val);
-void config_set(const char *name, String val);
-void config_set(const char *name, bool val);
-void config_set(const char *name, double val);
+bool config_set(const char *name, uint32_t val);
+bool config_set(const char *name, String val);
+bool config_set(const char *name, bool val);
+bool config_set(const char *name, double val);
+
+// Parse and set config value from string (used for command line arguments)
+// Tries to determine the type based on the config option definition
+// Returns true if the option was found and set
+bool config_set_opt_string(const char *name, const char *value);
 
 // Read config settings from JSON object
 bool config_deserialize(String& json);

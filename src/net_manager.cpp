@@ -624,7 +624,7 @@ unsigned long NetManagerTask::serviceButton()
     delay(50);
     ESPAL.reset();
   }
-  else if(false == _apMessage && LOW == _wifiButtonState && millis() > _wifiButtonTimeOut + WIFI_BUTTON_AP_TIMEOUT)
+  else if(false == _apMessage && WIFI_BUTTON_PRESSED_STATE == _wifiButtonState && millis() > _wifiButtonTimeOut + WIFI_BUTTON_AP_TIMEOUT)
   {
     DBUGLN("*** Enable Access Point ***");
 

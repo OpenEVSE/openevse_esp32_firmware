@@ -98,11 +98,22 @@ OcppTask ocpp = OcppTask();
 static void hardware_setup();
 static void handle_serial();
 
+#if defined(EPOXY_DUINO)
+#include "debug.h" // for debug_set_rapi_path
+static void process_command_line();
+static void process_early_command_line();
+#endif
+
 // -------------------------------------------------------------------
 // SETUP
 // -------------------------------------------------------------------
 void setup()
 {
+  // Parse command line early so we can set options (e.g. RAPI PTY path)
+#if defined(EPOXY_DUINO)
+  process_early_command_line();
+#endif
+
   hardware_setup();
   ESPAL.begin();
 
@@ -124,6 +135,9 @@ void setup()
 
   // Read saved settings from the config
   config_load_settings();
+#if defined(EPOXY_DUINO)
+  process_command_line();
+#endif
 
   DBUGF("After config_load_settings: %d", ESPAL.getFreeHeap());
 
@@ -199,11 +213,9 @@ void setup()
 // -------------------------------------------------------------------
 // LOOP
 // -------------------------------------------------------------------
-void
-loop() {
+void loop() 
+{
   Profile_Start(loop);
-
-  uptimeMillis();
 
   Profile_Start(Mongoose);
   Mongoose.poll(0);
@@ -376,3 +388,149 @@ uint64_t uptimeMillis()
     low32 = new_low32;
     return (uint64_t) high32 << 32 | low32;
 }
+
+#ifdef EPOXY_DUINO
+
+#include <stdio.h>
+#include <string.h>
+
+// Flag to indicate if command line processing should exit early
+static bool cmdline_exit_requested = false;
+
+// Early pass: parse only flags that must be applied before serial/network init
+static void process_early_command_line();
+
+/** Shift argument parameters to the left by one slot. */
+static void shift(int& argc, const char* const*& argv) {
+  argc--;
+  argv++;
+}
+
+/** Return true if 2 strings are equal. */
+static bool argEquals(const char* s, const char* t) {
+  return strcmp(s, t) == 0;
+}
+
+static void process_early_command_line()
+{
+  for (int i = 1; i < epoxy_argc; i++) {
+    const char* arg = epoxy_argv[i];
+    if (argEquals(arg, "--rapi-serial") || argEquals(arg, "--rapi")) {
+      if (i + 1 < epoxy_argc) {
+        const char* path = epoxy_argv[i + 1];
+        debug_set_rapi_path(path);
+        fprintf(stderr, "Set RAPI serial path: %s\n", path);
+        i++; // skip value
+      } else {
+        fprintf(stderr, "Error: --rapi-serial requires a path argument\n");
+        cmdline_exit_requested = true;
+        // Do not exit here; let later processing handle usage/exit
+      }
+    }
+  }
+}
+
+/** Print usage. */
+static void printUsage() {
+  fprintf(
+    stderr,
+    "Usage: %s [--help|-h] [--rapi-serial PATH] [--set-config NAME=VALUE] [--] [args ...]\n"
+    "Config options can be set with: --set-config NAME=VALUE\n"
+    "  Examples:\n"
+    "    --set-config www_http_port=8080\n"
+    "    --set-config www_https_port=8443\n"
+    "    --set-config mqtt_server=192.168.1.100\n"
+    "    --set-config mqtt_port=1883\n"
+    "Runtime options (EPOXY_DUINO native build):\n"
+    "  --rapi-serial PATH   Set PTY/serial path for RAPI (e.g., /dev/pts/5)\n",
+    epoxy_argv[0]
+  );
+}
+
+/**
+ * Parse command line flags.
+ * Returns the index of the first argument after the flags.
+ */
+static int parseFlags(int argc, const char* const* argv) {
+  int argc_original = argc;
+  shift(argc, argv); // skip the name of the program at argv[0]
+  
+  while (argc > 0) {
+    if (argEquals(argv[0], "--rapi-serial") || argEquals(argv[0], "--rapi")) {
+      shift(argc, argv);
+      if (argc == 0) {
+        fprintf(stderr, "Error: --rapi-serial requires a path argument\n");
+        cmdline_exit_requested = true;
+        return argc_original - argc;
+      }
+      const char* path = argv[0];
+      // Set the RAPI PTY path before Serial begin()
+      debug_set_rapi_path(path);
+      fprintf(stderr, "Set RAPI serial path: %s\n", path);
+    }
+    else if (argEquals(argv[0], "--set-config")) {
+      shift(argc, argv);
+      if (argc == 0) {
+        fprintf(stderr, "Error: --set-config requires an argument\n");
+        cmdline_exit_requested = true;
+        return argc_original - argc;
+      }
+      
+      const char* config_pair = argv[0];
+      const char* equals_pos = strchr(config_pair, '=');
+      
+      if (equals_pos == nullptr) {
+        fprintf(stderr, "Error: --set-config argument must be in format NAME=VALUE\n");
+        cmdline_exit_requested = true;
+        return argc_original - argc;
+      }
+      
+      // Extract name and value
+      size_t name_len = equals_pos - config_pair;
+      char name[64];
+      strncpy(name, config_pair, name_len);
+      name[name_len] = '\0';
+      
+      const char* value = equals_pos + 1;
+      
+      // Set the config value
+      if (!config_set_opt_string(name, value)) {
+        fprintf(stderr, "Warning: Unknown config option '%s'\n", name);
+      } else {
+        fprintf(stderr, "Set config: %s = %s\n", name, value);
+      }
+    } 
+    else if (argEquals(argv[0], "--")) {
+      shift(argc, argv);
+      break;
+    } 
+    else if (argEquals(argv[0], "--help") || argEquals(argv[0], "-h")) {
+      printUsage();
+      cmdline_exit_requested = true;
+      return argc_original - argc;
+    } 
+    else if (argv[0][0] == '-') {
+      fprintf(stderr, "Unknown flag '%s'\n", argv[0]);
+      printUsage();
+      cmdline_exit_requested = true;
+      return argc_original - argc;
+    } 
+    else {
+      break;
+    }
+    shift(argc, argv);
+  }
+
+  return argc_original - argc;
+}
+
+void process_command_line()
+{
+  parseFlags(epoxy_argc, epoxy_argv);
+  if (cmdline_exit_requested) {
+    // Exit early if user requested help or there was an error
+    exit(0);
+  }
+}
+
+#endif

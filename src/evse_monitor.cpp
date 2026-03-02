@@ -249,9 +249,11 @@ void EvseMonitor::evseBoot(const char *firmware)
     }
   });
 
+#ifndef DISABLE_HEARTBEAT
   _openevse.heartbeatEnable(EVSE_HEATBEAT_INTERVAL, EVSE_HEARTBEAT_CURRENT, [this](int ret, int interval, int current, int triggered) {
     _heartbeat = RAPI_RESPONSE_OK == ret;
   });
+#endif
 }
 
 void EvseMonitor::updateEvseState(uint8_t evse_state, uint8_t pilot_state, uint32_t vflags)
