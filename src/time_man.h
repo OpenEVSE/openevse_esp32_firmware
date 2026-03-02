@@ -1,5 +1,5 @@
-#ifndef _OPENEVSE_TIME_H
-#define _OPENEVSE_TIME_H
+#ifndef OPENEVSE_TIME_H
+#define OPENEVSE_TIME_H
 
 #include <MongooseSntpClient.h>
 #include <MicroTasks.h>
@@ -64,4 +64,4 @@ extern void time_set_time(struct timeval set_time, const char *source);
 extern String time_format_time(time_t time, bool local_time = true);
 extern String time_format_time(tm &time);
 
-#endif // _OPENEVSE_TIME_H
+#endif // OPENEVSE_TIME_H

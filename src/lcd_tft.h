@@ -1,5 +1,5 @@
-#ifndef __LCD_TFT_H
-#define __LCD_TFT_H
+#ifndef LCD_TFT_H
+#define LCD_TFT_H
 
 #define LCD_CHAR_STOP       1
 #define LCD_CHAR_PLAY       2
@@ -114,4 +114,4 @@ class LcdTask : public MicroTasks::Task
 extern LcdTask lcd;
 extern char _msg[LCD_MAX_LINES][LCD_MAX_LEN + 1]; // Message buffer shared with renderers
 
-#endif // __LCD_TFT_H
+#endif // LCD_TFT_H

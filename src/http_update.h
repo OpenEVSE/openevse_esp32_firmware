@@ -1,5 +1,5 @@
-#ifndef _HTTP_UPDATE_H
-#define _HTTP_UPDATE_H
+#ifndef HTTP_UPDATE_H
+#define HTTP_UPDATE_H
 
 // -------------------------------------------------------------------
 // Support for updating the fitmware os the ESP8266
@@ -23,4 +23,4 @@ bool http_update_start(String source, size_t total);
 bool http_update_write(uint8_t *data, size_t len);
 bool http_update_end();
 
-#endif // _HTTP_UPDATE_H
+#endif // HTTP_UPDATE_H

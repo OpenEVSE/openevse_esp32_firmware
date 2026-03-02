@@ -380,7 +380,7 @@ void Mqtt::handleMqttMessage(MongooseString topic, MongooseString payload) {
       if(config_deserialize(doc)) {
         config_commit(false);
         DBUGLN("Config updated via MQTT");
-        // publishConfig() will be called by checkAndPublishUpdates due to configVersion change
+        // publishConfig() will be called by checkAndPublishUpdates due to config_version change
       }
     }
   }

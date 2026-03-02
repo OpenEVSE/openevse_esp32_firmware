@@ -1,5 +1,5 @@
-#ifndef __EVENT_LOG_H
-#define __EVENT_LOG_H
+#ifndef EVENT_LOG_H
+#define EVENT_LOG_H
 
 #include <Arduino.h>
 #include "evse_state.h"
@@ -89,4 +89,4 @@ public:
 };
 
 
-#endif // !__EVENT_LOG_H
+#endif // !EVENT_LOG_H

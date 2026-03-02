@@ -1,5 +1,5 @@
-#ifndef _OPENEVSE_LIMIT_H
-#define _OPENEVSE_LIMIT_H
+#ifndef OPENEVSE_LIMIT_H
+#define OPENEVSE_LIMIT_H
 
 
 #ifndef EVSE_LIMIT_LOOP_TIME

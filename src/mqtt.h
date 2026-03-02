@@ -1,5 +1,5 @@
-#ifndef _EMONESP_MQTT_H
-#define _EMONESP_MQTT_H
+#ifndef EMONESP_MQTT_H
+#define EMONESP_MQTT_H
 
 #include <Arduino.h>
 #include <ArduinoJson.h>
@@ -102,4 +102,4 @@ class Mqtt : public MicroTasks::Task {
 
 extern Mqtt mqtt; // Global instance of the MQTT task
 
-#endif // _EMONESP_MQTT_H
+#endif // EMONESP_MQTT_H

@@ -1,5 +1,5 @@
-#ifndef _EMONESP_H
-#define _EMONESP_H
+#ifndef EMONESP_H
+#define EMONESP_H
 
 // -------------------------------------------------------------------
 // General support code used by all modules
@@ -203,4 +203,4 @@ void restart_system();
 
 uint64_t uptimeMillis();
 
-#endif // _EMONESP_H
+#endif // EMONESP_H

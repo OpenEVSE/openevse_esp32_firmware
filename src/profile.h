@@ -1,5 +1,5 @@
-#ifndef __PROFILE_H
-#define __PROFILE_H
+#ifndef PROFILE_H
+#define PROFILE_H
 
 #if defined(ENABLE_PROFILE)
 

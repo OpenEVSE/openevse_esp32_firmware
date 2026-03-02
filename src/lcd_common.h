@@ -1,5 +1,5 @@
-#ifndef __LCD_COMMON_H
-#define __LCD_COMMON_H
+#ifndef LCD_COMMON_H
+#define LCD_COMMON_H
 
 #include <TFT_eSPI.h>
 //#include <Fonts/FreeSans9pt7b.h>
@@ -27,4 +27,4 @@
 #define ARRAY_ITEMS(a) (sizeof(a) / sizeof(a[0]))
 #endif
 
-#endif // __LCD_COMMON_H
+#endif // LCD_COMMON_H

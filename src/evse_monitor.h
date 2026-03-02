@@ -1,5 +1,5 @@
-#ifndef _OPENEVSE_EVSE_MONITOR_H
-#define _OPENEVSE_EVSE_MONITOR_H
+#ifndef OPENEVSE_EVSE_MONITOR_H
+#define OPENEVSE_EVSE_MONITOR_H
 
 #include <Arduino.h>
 #include <openevse.h>
@@ -383,4 +383,4 @@ class EvseMonitor : public MicroTasks::Task
     }
   };
 
-#endif // _OPENEVSE_EVSE_MONITOR_H
+#endif // OPENEVSE_EVSE_MONITOR_H

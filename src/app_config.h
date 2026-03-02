@@ -1,5 +1,5 @@
-#ifndef _EMONESP_CONFIG_H
-#define _EMONESP_CONFIG_H
+#ifndef EMONESP_CONFIG_H
+#define EMONESP_CONFIG_H
 
 #include <Arduino.h>
 #include <ArduinoJson.h>
@@ -67,7 +67,7 @@ extern String mqtt_announce_topic;
 
 // OCPP 1.6 Settings
 extern String ocpp_server;
-extern String ocpp_chargeBoxId;
+extern String ocpp_charge_box_id;
 extern String ocpp_authkey;
 extern String ocpp_idtag;
 
@@ -79,7 +79,7 @@ extern String time_zone;
 
 // Divert settings
 extern int8_t divert_type;
-extern double divert_PV_ratio;
+extern double divert_pv_ratio;
 extern uint32_t divert_attack_smoothing_time;
 extern uint32_t divert_decay_smoothing_time;
 extern uint32_t divert_min_charge_time;
@@ -96,7 +96,7 @@ extern uint32_t current_shaper_data_maxinterval;
 // Vehicle
 extern uint8_t vehicle_data_src;
 
-enum vehicle_data_src {
+enum VehicleDataSrc {
   VEHICLE_DATA_SRC_NONE,
   VEHICLE_DATA_SRC_TESLA,
   VEHICLE_DATA_SRC_MQTT,
@@ -255,4 +255,4 @@ void config_commit(bool factory = false);
 bool config_serialize(String& json, bool longNames = true, bool compactOutput = false, bool hideSecrets = false);
 bool config_serialize(DynamicJsonDocument &doc, bool longNames = true, bool compactOutput = false, bool hideSecrets = false);
 
-#endif // _EMONESP_CONFIG_H
+#endif // EMONESP_CONFIG_H
