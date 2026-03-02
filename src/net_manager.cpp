@@ -170,7 +170,45 @@ void NetManagerTask::wifiClientConnect()
   WiFi.setSleep(WIFI_PS_NONE);
   WiFi.setScanMethod(WIFI_ALL_CHANNEL_SCAN);
   WiFi.setSortMethod(WIFI_CONNECT_AP_BY_SIGNAL);
+
+#ifdef ESP32
+  // Configure WiFi for improved stability
+  // These advanced settings address WiFi stability issues reported in #841
+  
+  // Configure PMF (Protected Management Frames) and credentials
+  // PMF provides better security when available but maintains compatibility
+  wifi_config_t wifi_config;
+  memset(&wifi_config, 0, sizeof(wifi_config_t));
+  
+  // Copy SSID and password with explicit null-termination for safety
+  // Maximum lengths: SSID 32 bytes, password 64 bytes (IEEE 802.11 standard)
+  strncpy((char*)wifi_config.sta.ssid, esid.c_str(), sizeof(wifi_config.sta.ssid) - 1);
+  wifi_config.sta.ssid[sizeof(wifi_config.sta.ssid) - 1] = '\0';
+  strncpy((char*)wifi_config.sta.password, epass.c_str(), sizeof(wifi_config.sta.password) - 1);
+  wifi_config.sta.password[sizeof(wifi_config.sta.password) - 1] = '\0';
+  
+  wifi_config.sta.pmf_cfg.capable = true;
+  wifi_config.sta.pmf_cfg.required = false;
+  
+  esp_err_t err = esp_wifi_set_config(WIFI_IF_STA, &wifi_config);
+  if (ESP_OK != err) {
+    DBUGF("Failed to set WiFi config: %s (%d)", esp_err_to_name(err), err);
+    // Continue anyway - WiFi.begin() may still work with default settings
+  }
+  
+  // Start WiFi connection without parameters (uses config set above)
+  WiFi.begin();
+  
+  // Set bandwidth to 20MHz for better reliability in congested environments
+  // This must be called after WiFi.begin() when WiFi stack is initialized
+  err = esp_wifi_set_bandwidth(WIFI_IF_STA, WIFI_BW_HT20);
+  if (ESP_OK != err) {
+    DBUGF("Failed to set WiFi bandwidth: %s (%d)", esp_err_to_name(err), err);
+    // Continue anyway - WiFi will use default bandwidth (typically 40MHz or auto)
+  }
+#else
   WiFi.begin(esid.c_str(), epass.c_str());
+#endif
 
   _clientRetryTime = millis() + WIFI_CLIENT_RETRY_TIMEOUT;
 }
