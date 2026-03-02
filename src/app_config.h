@@ -87,6 +87,9 @@ extern uint32_t divert_min_charge_time;
 // Scheduler settings
 extern uint32_t scheduler_start_window;
 
+// LCD backlight timeout (in seconds, 0 = never timeout)
+extern uint32_t lcd_backlight_timeout;
+
 //Shaper settings
 extern uint32_t current_shaper_max_pwr;
 extern uint32_t current_shaper_smoothing_time;

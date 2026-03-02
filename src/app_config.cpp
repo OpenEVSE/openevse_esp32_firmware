@@ -129,6 +129,9 @@ long max_current_soft;
 // Scheduler settings
 uint32_t scheduler_start_window;
 
+// LCD backlight timeout (in seconds, 0 = never timeout)
+uint32_t lcd_backlight_timeout;
+
 String esp_hostname_default = "openevse-"+ESPAL.getShortId();
 
 void config_changed(String name);
@@ -236,6 +239,9 @@ ConfigOpt *opts[] =
 
 // Scheduler options
   new ConfigOptDefinition<uint32_t>(scheduler_start_window, SCHEDULER_DEFAULT_START_WINDOW, "scheduler_start_window", "ssw"),
+
+// LCD backlight timeout
+  new ConfigOptDefinition<uint32_t>(lcd_backlight_timeout, LCD_BACKLIGHT_TIMEOUT_DEFAULT, "lcd_backlight_timeout", "lbt"),
 
 // Flags
   &flagsOpt,
