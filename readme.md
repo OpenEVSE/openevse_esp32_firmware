@@ -1,6 +1,6 @@
 # OpenEVSE WiFi for ESP32
 
-> **_NOTE:_** Breaking change! This release reccomends a minimum of [7.1.3](https://github.com/OpenEVSE/open_evse/releases) of the OpenEVSE firmware, features including Solar Divert and push button menus may not behave as expected on older firmware.
+> **_NOTE:_** Breaking change! This release recommends a minimum of [7.1.3](https://github.com/OpenEVSE/open_evse/releases) of the OpenEVSE firmware, features including Solar Divert and push button menus may not behave as expected on older firmware.
 
 - *For the older WiFi V2.x ESP8266 version (pre June 2020), see the [v2 firmware repository](https://github.com/openevse/ESP8266_WiFi_v2.x/)*
 
@@ -48,7 +48,7 @@ The WiFi gateway uses an **ESP32** which communicates with the OpenEVSE controll
 
 ### OpenEVSE / EmonEVSE charging station
 
-- Purchase via: [OpenEVSE Store (USA/Canda)](https://store.openevse.com) | [OpenEnergyMonitor (UK / EU)](https://shop.openenergymonitor.com/evse/)
+- Purchase via: [OpenEVSE Store](https://store.openevse.com)
 - OpenEVSE FW [V7.1.3 recommended](https://github.com/OpenEVSE/open_evse/releases)
 - All new OpenEVSE units are shipped with V7.1.3 pre-loaded (April 2021 onwards)
 

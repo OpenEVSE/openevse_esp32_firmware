@@ -1,4 +1,6 @@
-const char *root_ca = ""
+#include "root_ca.h"
+
+const char root_ca[] = ""
 
 #ifndef DISABLE_CA_CHECK
 #define DISABLE_CA_CHECK 0
@@ -122,3 +124,5 @@ const char *root_ca = ""
 "*"
 #endif
 ;
+
+const size_t root_ca_len = sizeof(root_ca) - 1;

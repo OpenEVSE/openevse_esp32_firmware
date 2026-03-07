@@ -4,6 +4,9 @@
 
 #include <Arduino.h>
 #include <Update.h>
+#include "certificates.h"
+
+#include <string>
 
 typedef const __FlashStringHelper *fstr_t;
 
@@ -42,6 +45,7 @@ typedef const __FlashStringHelper *fstr_t;
 #include "limit.h"
 
 MongooseHttpServer server;          // Create class for Web server
+MongooseHttpServer redirect;        // Server to redirect to HTTPS if enabled
 
 bool enableCors = false;
 bool streamDebug = false;
@@ -70,6 +74,7 @@ void handleConfig(MongooseHttpServerRequest *request);
 void handleEvseClaimsTarget(MongooseHttpServerRequest *request);
 void handleEvseClaims(MongooseHttpServerRequest *request);
 void handleEventLogs(MongooseHttpServerRequest *request);
+void handleCertificates(MongooseHttpServerRequest *request);
 
 void handleUpdateRequest(MongooseHttpServerRequest *request);
 size_t handleUpdateUpload(MongooseHttpServerRequest *request, int ev, MongooseString filename, uint64_t index, uint8_t *data, size_t len);
@@ -213,7 +218,7 @@ void buildStatus(DynamicJsonDocument &doc) {
   doc["packets_sent"] = packets_sent;
   doc["packets_success"] = packets_success;
 
-  doc["mqtt_connected"] = (int)mqtt_connected();
+  doc["mqtt_connected"] = (int)mqtt.isConnected();
 
   doc["ocpp_connected"] = (int)OcppTask::isConnected();
 
@@ -661,7 +666,6 @@ void handleLimitPost(MongooseHttpServerRequest *request, MongooseHttpServerRespo
     if (limit.set(body)) {
       response->setCode(201);
       response->print("{\"msg\":\"done\"}");
-      // todo: mqtt_publish_limit();  // update limit props to mqtt
     } else {
       // unused for now
       response->setCode(400);
@@ -789,10 +793,10 @@ void handleOverridePost(MongooseHttpServerRequest *request, MongooseHttpServerRe
     if(manual.claim(props)) {
       response->setCode(201);
       response->print("{\"msg\":\"Created\"}");
-      mqtt_publish_override();  // update override state to mqtt
+      mqtt.publishOverride();  // update override state to mqtt
     } else {
       response->setCode(500);
-      response->print("{\"msg\":\"Failed to claim manual overide\"}");
+      response->print("{\"msg\":\"Failed to claim manual override\"}");
     }
   } else {
     response->setCode(400);
@@ -805,10 +809,10 @@ void handleOverrideDelete(MongooseHttpServerRequest *request, MongooseHttpServer
   if(manual.release()) {
     response->setCode(200);
     response->print("{\"msg\":\"Deleted\"}");
-    mqtt_publish_override();  // update override state to mqtt
+    mqtt.publishOverride();  // update override state to mqtt
   } else {
     response->setCode(500);
-    response->print("{\"msg\":\"Failed to release manual overide\"}");
+    response->print("{\"msg\":\"Failed to release manual override\"}");
   }
 }
 
@@ -818,10 +822,10 @@ void handleOverridePatch(MongooseHttpServerRequest *request, MongooseHttpServerR
   {
     response->setCode(200);
     response->print("{\"msg\":\"Updated\"}");
-    mqtt_publish_override();  // update override state to mqtt
+    mqtt.publishOverride();  // update override state to mqtt
   } else {
     response->setCode(500);
-    response->print("{\"msg\":\"Failed to toggle manual overide\"}");
+    response->print("{\"msg\":\"Failed to toggle manual override\"}");
   }
 }
 
@@ -1112,6 +1116,28 @@ void handleNotFound(MongooseHttpServerRequest *request)
   }
 }
 
+void handleHttpsRedirect(MongooseHttpServerRequest *request)
+{
+  MongooseHttpServerResponseStream *response = request->beginResponseStream();
+  response->setContentType(CONTENT_TYPE_HTML);
+
+  String url = F("https://");
+  url += request->host().toString();
+  url += request->uri().toString();
+
+  String s = F("<html>");
+  s += F("<head><meta http-equiv=\"Refresh\" content=\"0; url=");
+  s += url;
+  s += F("\" /></head><body><a href=\"");
+  s += url;
+  s += F("\">OpenEVSE</a></body></html>");
+
+  response->setCode(301);
+  response->addHeader(F("Location"), url);
+  response->print(s);
+  request->send(response);
+}
+
 void onWsFrame(MongooseHttpWebSocketConnection *connection, int flags, uint8_t *data, size_t len)
 {
   DBUGF("Got message %.*s", len, (const char *)data);
@@ -1151,11 +1177,27 @@ void web_server_send_ascii_utf8(const char *endpoint, const uint8_t *buffer, siz
   server.sendAll(endpoint, WEBSOCKET_OP_TEXT, temp, size);
 }
 
-void
-web_server_setup() {
-//  SPIFFS.begin(); // mount the fs
+void web_server_setup()
+{
+  bool use_ssl = false;
+  if(www_certificate_id != "")
+  {
+    uint64_t cert_id = std::stoull(www_certificate_id.c_str(), nullptr, 16);
+    const char *cert = certs.getCertificate(cert_id);
+    const char *key = certs.getKey(cert_id);
+    if(NULL != cert && NULL != key)
+    {
+      server.begin(443, cert, key);
+      use_ssl = true;
 
-  server.begin(80);
+      redirect.begin(80);
+      redirect.on("/", handleHttpsRedirect);
+    }
+  }
+
+  if(false == use_ssl) {
+    server.begin(80);
+  }
 
   // Handle status updates
   server.on("/status$", handleStatus);
@@ -1185,7 +1227,7 @@ web_server_setup() {
   server.on("/override$", handleOverride);
 
   server.on("/logs", handleEventLogs);
-
+  server.on("/certificates", handleCertificates);
   server.on("/limit", handleLimit);
   server.on("/emeter", handleEmeter);
   server.on("/time", handleTime);

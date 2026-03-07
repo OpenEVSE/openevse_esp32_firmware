@@ -8,6 +8,18 @@
 #include "debug.h"
 #include "profile.h"
 
+// -------------------------------------------------------------------
+// Lock Screen Configuration
+// -------------------------------------------------------------------
+
+// Uncomment to enable lock screen when EVSE is disabled
+//#define ENABLE_LOCK_SCREEN
+
+// Default lock screen message displayed when EVSE is disabled
+#ifndef LOCK_SCREEN_MESSAGE
+#define LOCK_SCREEN_MESSAGE "STATION LOCKED"
+#endif
+
 #ifdef WIFI_LED
 #ifndef WIFI_LED_ON_STATE
 #define WIFI_LED_ON_STATE LOW
@@ -89,6 +101,14 @@
 #define DEFAULT_TIME_ZONE "Europe/London|GMT0BST,M3.5.0/1,M10.5.0"
 #endif
 
+#ifndef LIMIT_DEFAULT_TYPE_DEFAULT
+#define LIMIT_DEFAULT_TYPE_DEFAULT ""
+#endif
+
+#ifndef LIMIT_DEFAULT_VALUE_DEFAULT
+#define LIMIT_DEFAULT_VALUE_DEFAULT 0
+#endif
+
 #ifndef VOLTAGE_DEFAULT
 #define VOLTAGE_DEFAULT  240
 #endif
@@ -166,6 +186,14 @@
 #ifndef SCHEDULE_PATH
 #define SCHEDULE_PATH "/schedule.json"
 #endif // !SCHEDULE_PATH
+
+#ifndef CERTIFICATE_BASE_DIRECTORY
+#define CERTIFICATE_BASE_DIRECTORY "/certificates"
+#endif // !CERTIFICATE_BASE_DIRECTORY
+
+#ifndef CERTIFICATE_JSON_BUFFER_SIZE
+#define CERTIFICATE_JSON_BUFFER_SIZE (8 * 1024)
+#endif
 
 extern String currentfirmware;
 extern String buildenv;

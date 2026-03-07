@@ -30,9 +30,23 @@
 #include "emonesp.h"
 #include "LedManagerTask.h"
 
-#if defined(NEO_PIXEL_PIN) && defined(NEO_PIXEL_LENGTH)
+#if defined(NEO_PIXEL_PIN) && defined(NEO_PIXEL_LENGTH) && !defined(ENABLE_WS2812FX)
 #include <Adafruit_NeoPixel.h>
 Adafruit_NeoPixel strip = Adafruit_NeoPixel(NEO_PIXEL_LENGTH, NEO_PIXEL_PIN, NEO_GRB + NEO_KHZ800);
+#elif defined(NEO_PIXEL_PIN) && defined(NEO_PIXEL_LENGTH) && defined(ENABLE_WS2812FX)
+#include <WS2812FX.h>
+WS2812FX ws2812fx = WS2812FX(NEO_PIXEL_LENGTH, NEO_PIXEL_PIN, NEO_GRB + NEO_KHZ800);
+
+class LedAnimatorTask : public MicroTasks::Task
+{
+  public:
+    void setup() {
+    }
+    unsigned long loop(MicroTasks::WakeReason reason) {
+      ws2812fx.service();
+      return 10;
+    }
+} animator;
 #endif
 
 #define FADE_STEP         16
@@ -40,6 +54,13 @@ Adafruit_NeoPixel strip = Adafruit_NeoPixel(NEO_PIXEL_LENGTH, NEO_PIXEL_PIN, NEO
 
 #define CONNECTING_FLASH_TIME 450
 #define CONNECTED_FLASH_TIME  250
+
+#if defined(ENABLE_WS2812FX)
+// Speed for FX Bar Effects
+#define DEFAULT_FX_SPEED 1000
+#define CONNECTING_FX_SPEED 2000
+#define CONNECTED_FX_SPEED  1000
+#endif
 
 #define TEST_LED_TIME     500
 
@@ -91,6 +112,41 @@ uint8_t buttonShareState = 0;
 
 #define rgb(r,g,b) (r<<16|g<<8|b)
 
+#if defined(NEO_PIXEL_PIN) && defined(NEO_PIXEL_LENGTH) && defined(ENABLE_WS2812FX)
+
+static uint32_t status_colour_map(u_int8_t lcdcol)
+{
+  u_int32_t color;
+  switch (lcdcol)
+  {
+  case OPENEVSE_LCD_OFF:
+    color = 0x000000; // BLACK
+    break;
+  case OPENEVSE_LCD_RED:
+    color = 0xFF0000;  // RED
+    break;
+  case OPENEVSE_LCD_GREEN:
+    color = 0x00FF00; // GREEN
+    break;
+  case OPENEVSE_LCD_YELLOW:
+    color = 0xFFFF00; // YELLOW
+    break;
+  case OPENEVSE_LCD_BLUE:
+    color = 0x0000FF; // BLUE
+    break;
+  case OPENEVSE_LCD_VIOLET:
+    color = 0xFF00FF; // VIOLET
+    break;
+  case OPENEVSE_LCD_TEAL:
+    color = 0x00FFFF; // TEAL
+    break;
+  case OPENEVSE_LCD_WHITE:
+    color = 0xFFFFFF; // WHITE
+    break;
+  }
+  return color; // WHITE
+}
+#else
 static uint32_t status_colour_map[] =
 {
   rgb(0, 0, 0),       // OPENEVSE_LCD_OFF
@@ -102,6 +158,7 @@ static uint32_t status_colour_map[] =
   rgb(0, 255, 255),   // OPENEVSE_LCD_TEAL
   rgb(255, 255, 255), // OPENEVSE_LCD_WHITE
 };
+#endif
 #endif
 
 LedManagerTask::LedManagerTask() :
@@ -125,11 +182,24 @@ void LedManagerTask::begin(EvseManager &evse)
 
 void LedManagerTask::setup()
 {
-#if defined(NEO_PIXEL_PIN) && defined(NEO_PIXEL_LENGTH)
+#if defined(NEO_PIXEL_PIN) && defined(NEO_PIXEL_LENGTH) && !defined(ENABLE_WS2812FX)
   DBUGF("Initialising NeoPixels");
   strip.begin();
   //strip.setBrightness(brightness);
   setAllRGB(0, 0, 0);
+#elif defined(NEO_PIXEL_PIN) && defined(NEO_PIXEL_LENGTH) && defined(ENABLE_WS2812FX)
+  DEBUG.printf("Initialising NeoPixels WS2812FX MODE...\n");
+  ws2812fx.init();
+  ws2812fx.setBrightness(brightness);
+  ws2812fx.setSpeed(DEFAULT_FX_SPEED);
+  ws2812fx.setColor(BLACK);
+  ws2812fx.setMode(FX_MODE_STATIC);
+  //ws2812fx.setBrightness(this->brightness);
+  DBUGF("Brightness: %d ", this->brightness);
+  DBUGF("Brightness: %d ", brightness);
+
+  ws2812fx.start();
+  MicroTask.startTask(&animator);
 #endif
 
 #if defined(RED_LED) && defined(GREEN_LED) && defined(BLUE_LED)
@@ -179,6 +249,102 @@ unsigned long LedManagerTask::loop(MicroTasks::WakeReason reason)
   }
 
 #if RGB_LED
+#if defined(NEO_PIXEL_PIN) && defined(NEO_PIXEL_LENGTH) && defined(ENABLE_WS2812FX)
+  switch(state)
+  {
+    case LedState_Off:
+      //setAllRGB(0, 0, 0);
+      ws2812fx.setColor(BLACK);
+      return MicroTask.Infinate;
+
+    case LedState_Test_Red:
+      //setAllRGB(255, 0, 0);
+      ws2812fx.setColor(RED);
+      state = LedState_Test_Green;
+      return TEST_LED_TIME;
+
+    case LedState_Test_Green:
+      //setAllRGB(0, 255, 0);
+      ws2812fx.setColor(GREEN);
+      state = LedState_Test_Blue;
+      return TEST_LED_TIME;
+
+    case LedState_Test_Blue:
+      //setAllRGB(0, 0, 255);
+      ws2812fx.setColor(BLUE);
+      state = LedState_Off;
+      setNewState(false);
+      return TEST_LED_TIME;
+
+
+    case LedState_Evse_State:
+    case LedState_WiFi_Access_Point_Waiting:
+    case LedState_WiFi_Access_Point_Connected:
+    case LedState_WiFi_Client_Connecting:
+    case LedState_WiFi_Client_Connected:
+    {
+      uint8_t lcdCol = _evse->getStateColour();
+      DBUGVAR(lcdCol);
+      uint32_t col = status_colour_map(lcdCol);
+      DBUGVAR(col, HEX);
+      //DBUGF("Color: %x\n", col);
+      bool isCharging, isError;
+      u_int16_t speed;
+      speed = 2000 - ((_evse->getChargeCurrent()/_evse->getMaxHardwareCurrent())*1000);
+      DBUGF("Speed: %d ",speed);
+      DBUGF("Amps: %d ", _evse->getAmps());
+      DBUGF("ChargeCurrent: %d ", _evse->getChargeCurrent());
+      DBUGF("MaxHWCurrent: %d ", _evse->getMaxHardwareCurrent());
+      if (this->brightness == 0){
+        ws2812fx.setBrightness(255);
+      }
+      else {
+        ws2812fx.setBrightness(this->brightness-1);
+      }
+      switch(state)
+      {
+        case LedState_Evse_State:
+          isCharging = _evse->isCharging();
+          isError = _evse->isError();
+          if(isCharging){
+            setAllRGB(col, FX_MODE_COLOR_WIPE, speed);
+          } else if(isError){
+            setAllRGB(col, FX_MODE_FADE, DEFAULT_FX_SPEED);
+          } else {
+            setAllRGB(col, FX_MODE_STATIC, DEFAULT_FX_SPEED);
+          }    
+          //DBUGF("MODE:  LedState_Evse_State\n");
+          return MicroTask.Infinate;
+
+        case LedState_WiFi_Access_Point_Waiting:
+          setEvseAndWifiRGB(col, FX_MODE_BLINK, CONNECTING_FX_SPEED);
+          //DBUGF("MODE: LedState_WiFi_Access_Point_Waiting\n");
+          return CONNECTING_FLASH_TIME;
+
+        case LedState_WiFi_Access_Point_Connected:
+          setEvseAndWifiRGB(col, FX_MODE_FADE, CONNECTED_FX_SPEED);
+          flashState = !flashState;
+          //DBUGF("MODE: LedState_WiFi_Access_Point_Connected\n");
+          return CONNECTED_FLASH_TIME;
+
+        case LedState_WiFi_Client_Connecting:
+          setEvseAndWifiRGB(col, FX_MODE_FADE, CONNECTING_FX_SPEED);
+          flashState = !flashState;
+          //DBUGF("MODE: LedState_WiFi_Client_Connecting\n");
+          return CONNECTING_FLASH_TIME;
+
+        case LedState_WiFi_Client_Connected:
+          setEvseAndWifiRGB(col, FX_MODE_FADE, CONNECTED_FX_SPEED);
+          //DBUGF("MODOE: LedState_WiFi_Client_Connected\n");
+          return MicroTask.Infinate;
+
+        default:
+          break;
+      }
+    }
+
+  }
+#else
   switch(state)
   {
     case LedState_Off:
@@ -279,6 +445,7 @@ unsigned long LedManagerTask::loop(MicroTasks::WakeReason reason)
 #endif
   }
 #endif
+#endif
 
 #ifdef WIFI_LED
   switch(state)
@@ -339,13 +506,39 @@ int LedManagerTask::fadeLed(int fadeValue, int FadeDir)
 */
 
 #if RGB_LED
+#if defined(NEO_PIXEL_PIN) && defined(NEO_PIXEL_LENGTH) && defined(ENABLE_WS2812FX)
+void LedManagerTask::setAllRGB(uint32_t color, u_int8_t mode, uint16_t speed)
+{
+  setEvseAndWifiRGB(color, mode, speed);
+}
+
+
+void LedManagerTask::setEvseAndWifiRGB(uint32_t evseColor, u_int8_t mode, u_int16_t speed)
+{
+  DBUG("EVSE LED COLOR:");
+  DBUG(evseColor);
+  if(evseColor != ws2812fx.getColor()){
+    ws2812fx.setColor(evseColor);
+  }
+
+  if(speed != ws2812fx.getSpeed()){
+    ws2812fx.setSpeed(speed);
+  }
+
+  if (ws2812fx.getMode() != mode){
+    ws2812fx.setMode(mode);
+  }
+
+}
+#else
 void LedManagerTask::setAllRGB(uint8_t red, uint8_t green, uint8_t blue)
 {
   setEvseAndWifiRGB(red, green, blue, red, green, blue);
 }
 #endif
+#endif
 
-#if WIFI_PIXEL_NUMBER
+#if WIFI_PIXEL_NUMBER && !defined(ENABLE_WS2812FX)
 void LedManagerTask::setEvseAndWifiRGB(uint8_t evseRed, uint8_t evseGreen, uint8_t evseBlue, uint8_t wifiRed, uint8_t wifiGreen, uint8_t wifiBlue)
 {
   DBUG("EVSE LED R:");
@@ -385,7 +578,7 @@ void LedManagerTask::setEvseAndWifiRGB(uint8_t evseRed, uint8_t evseGreen, uint8
   DBUG(" B:");
   DBUGLN(wifiBlue);
 
-#if defined(NEO_PIXEL_PIN) && defined(NEO_PIXEL_LENGTH)
+#if defined(NEO_PIXEL_PIN) && defined(NEO_PIXEL_LENGTH) && !defined(ENABLE_WS2812FX)
   uint32_t col = strip.gamma32(strip.Color(evseRed, evseGreen, evseBlue));
   DBUGVAR(col, HEX);
   strip.fill(col);
@@ -549,10 +742,23 @@ void LedManagerTask::setBrightness(uint8_t brightness)
   // brightness (off), 255 = just below max brightness.
   this->brightness = brightness + 1;
 
+#if defined(NEO_PIXEL_PIN) && defined(NEO_PIXEL_LENGTH) && defined(ENABLE_WS2812FX)
+// This controls changes on the limits of the web interface slidebar.
+// Otherwise it gets out of sync
+  if (this->brightness == 0){
+    ws2812fx.setBrightness(255);
+  }
+  else {
+    ws2812fx.setBrightness(this->brightness-1);
+  }
+
+#endif
+
   DBUGVAR(this->brightness);
 
   // Wake the task to refresh the state
   MicroTask.wakeTask(this);
 }
+
 
 LedManagerTask ledManager;

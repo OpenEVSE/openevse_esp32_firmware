@@ -1,0 +1,21 @@
+title: Certificate defenition
+allOf:
+  - type: object
+    properties:
+      id:
+        type: string
+        description: 'The certificate ID, 64 bit hex number as a string'
+      name:
+        type: string
+        description: 'The human readable certificate name'
+      type:
+        type: string
+        description: 'The certificate type'
+      certificate:
+        type: string
+        description: 'A PEM formatted certificate'
+      private_key:
+        type: string
+        description: 'A PEM formatted private key'
+x-tags:
+  - Certificates

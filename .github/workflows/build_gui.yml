@@ -21,14 +21,14 @@ jobs:
 
     steps:
       - name: Checkout the repository
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
         with:
           submodules: recursive
           ref: ${{ github.head_ref }}
           token: ${{ secrets.DEPENDABOT_PAT }}
 
       - name: Cache pip
-        uses: actions/cache@v4
+        uses: actions/cache@v5
         with:
           path: ~/.cache/pip
           key: ${{ runner.os }}-pip-${{ hashFiles('**/requirements.txt') }}
@@ -36,13 +36,13 @@ jobs:
             ${{ runner.os }}-pip-
 
       - name: Cache PlatformIO
-        uses: actions/cache@v4
+        uses: actions/cache@v5
         with:
           path: ~/.platformio
           key: ${{ runner.os }}-${{ hashFiles('**/lockfiles') }}
 
       - name: Set up Python
-        uses: actions/setup-python@v5
+        uses: actions/setup-python@v6
         with:
           python-version: '3.x'
 
@@ -52,7 +52,7 @@ jobs:
           pip install --upgrade platformio
 
       - name: Set up Node JS
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@v6
         with:
           node-version: '20'
 
@@ -72,10 +72,11 @@ jobs:
           rm -f src/web_static/*.h
 
       - name: Run PlatformIO
-        run:
+        run: |
           pio run
+          git status
 
       - name: Push any changed files
-        uses: stefanzweifel/git-auto-commit-action@v5
+        uses: stefanzweifel/git-auto-commit-action@v7
         with:
           commit_message: "Update of pre-built GUI files"

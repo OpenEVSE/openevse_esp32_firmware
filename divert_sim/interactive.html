@@ -2,7 +2,7 @@
 <html>
 
 <head>
-  <title>OpenEVSE Solar Divert Simulations</title>
+  <title>OpenEVSE Interactive Simulations</title>
   <script type="text/javascript" src="https://canvasjs.com/assets/script/jquery-1.11.1.min.js"></script>
   <script type="text/javascript" src="https://canvasjs.com/assets/script/canvasjs.min.js"></script>
   <script type="text/javascript" src="https://cdnjs.cloudflare.com/ajax/libs/moment.js/2.24.0/moment.min.js"></script>
@@ -13,24 +13,37 @@
       "interactive"
     ];
 
+    var datasets = divert_datasets.concat(shaper_datasets);
+
     function run_simulation() {
       $.post("simulation", JSON.stringify({
         "divert_PV_ratio": parseFloat($("#divert_PV_ratio").val()),
         "divert_attack_smoothing_time": parseInt($("#divert_attack_smoothing_time").val()),
         "divert_decay_smoothing_time": parseInt($("#divert_decay_smoothing_time").val()),
-        "divert_min_charge_time": parseInt($("#divert_min_charge_time").val())
+        "divert_min_charge_time": parseInt($("#divert_min_charge_time").val()),
+        "current_shaper_max_pwr": parseInt($("#current_shaper_max_pwr").val()),
+        "current_shaper_smoothing_time": parseInt($("#current_shaper_smoothing_time").val()),
+        "current_shaper_min_pause_time": parseInt($("#current_shaper_min_pause_time").val()),
+        "current_shaper_data_maxinterval": parseInt($("#current_shaper_data_maxinterval").val())
       }), () => {
-        init_summary(profiles);
-        loadSummary("output/summary_master.csv", () => {
-          loadSummary("output/summary_interactive.csv", () => {
-            generate_summary_table(profiles);
-            for (const dataset of datasets) {
-              var id = dataset.id + "_interactive";
-              loadChart(id, "output/"+ id + ".csv", dataset.title + " (interactive)", dataset.class);
-            }
-          }, "interactive");
+        init_summary(profiles, profiles);
+        loadSummary("output/summary_divert_master.csv", () => {
+          loadSummary("output/summary_shaper_master.csv", () => {
+            loadSummary("output/summary_interactive.csv", () => {
+              generate_summary_table(profiles, profiles);
+              for (const dataset of datasets) {
+                var id = dataset.id + "_interactive";
+                loadChart(id, "output/"+ id + ".csv", dataset.title + " (interactive)", dataset.class);
+              }
+            }, "interactive");
+          });
         });
       });
+    }
+
+    // Run the simulations after the page loads
+    window.onload = function () {
+      run_simulation();
     }
   </script>
   <link rel="stylesheet" href="https://maxcdn.bootstrapcdn.com/bootstrap/3.3.6/css/bootstrap.min.css" />
@@ -38,9 +51,14 @@
 </head>
 
 <body>
-  <h1>OpenEVSE Solar Divert Simulations</h1>
+  <h1>OpenEVSE Interactive Simulations</h1>
 
   <a href="view.html">Test Results</a><br/>
+
+  <div style="margin: 20px 0;">
+    <label><input type="checkbox" id="show_divert" checked onchange="toggleCharts()"> Show Divert Simulations</label>
+    <label style="margin-left: 20px;"><input type="checkbox" id="show_shaper" checked onchange="toggleCharts()"> Show Shaper Simulations</label>
+  </div>
 
   <label for="divert_PV_ratio">divert_PV_ratio</label>
   <input type="text" id="divert_PV_ratio" value="1.1"><br/>
@@ -50,6 +68,14 @@
   <input type="text" id="divert_decay_smoothing_time" value="200"><br/>
   <label for="divert_min_charge_time">divert_min_charge_time</label>
   <input type="text" id="divert_min_charge_time" value="600"><br/>
+  <label for="current_shaper_max_pwr">current_shaper_max_pwr</label>
+  <input type="text" id="current_shaper_max_pwr" value="5000"><br/>
+  <label for="current_shaper_smoothing_time">current_shaper_smoothing_time</label>
+  <input type="text" id="current_shaper_smoothing_time" value="60"><br/>
+  <label for="current_shaper_min_pause_time">current_shaper_min_pause_time</label>
+  <input type="text" id="current_shaper_min_pause_time" value="300"><br/>
+  <label for="current_shaper_data_maxinterval">current_shaper_data_maxinterval</label>
+  <input type="text" id="current_shaper_data_maxinterval" value="120"><br/>
 
   <button onclick="run_simulation()">Run Simulation</button>
 

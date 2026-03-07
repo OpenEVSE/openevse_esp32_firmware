@@ -86,3 +86,4 @@ divert_sim
 *.csv
 test_results.xml
 !*_master.csv
+!data/*.csv

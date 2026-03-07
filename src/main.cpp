@@ -63,8 +63,11 @@
 #include "scheduler.h"
 
 #include "legacy_support.h"
+#include "certificates.h"
 
 EventLog eventLog;
+CertificateStore certs;
+
 EvseManager evse(RAPI_PORT, eventLog);
 Scheduler scheduler(evse);
 ManualOverride manual(evse);
@@ -158,11 +161,14 @@ void setup()
 
   // Initialise the WiFi
   net.begin();
+  certs.begin();
   DBUGF("After net_setup: %d", ESPAL.getFreeHeap());
 
   // Initialise Mongoose networking library
   Mongoose.begin();
-  Mongoose.setRootCa(root_ca);
+  Mongoose.setRootCaCallback([]() -> const char *{
+    return certs.getRootCa();
+  });
   DBUGF("After Mongoose.begin: %d", ESPAL.getFreeHeap());
 
   // Bring up the web server
@@ -175,6 +181,8 @@ void setup()
 #endif
 
   input_setup();
+
+  mqtt.begin();
 
   ocpp.begin(evse, lcd, eventLog, rfid);
   DBUGF("After ocpp.begin: %d", ESPAL.getFreeHeap());
@@ -230,8 +238,6 @@ loop() {
     if (vehicle_data_src == VEHICLE_DATA_SRC_TESLA) {
       teslaClient.loop();
     }
-
-    mqtt_loop();
 
     // -------------------------------------------------------------------
     // Do these things once every 30 seconds
@@ -294,7 +300,7 @@ void event_send(JsonDocument &event)
   #endif
   web_server_event(event);
   yield();
-  mqtt_publish(event);
+  mqtt.publishData(event);
   yield();
 }
 

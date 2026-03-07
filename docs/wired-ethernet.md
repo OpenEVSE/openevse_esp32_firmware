@@ -3,7 +3,9 @@
 Several boards are available with ethernet hardware, which can be used as drop-in replacements for ESP8266 / ESP32 WiFi modules and are compatible with all models of OpenEVSE / EmonEVSE.
 
 
-See [OpenEnergyMonitor web-store to purchase a pre-wired ESP32-Gateway module](https://shop.openenergymonitor.com/openevse-etherent-gateway-esp32/). The Ethernet gateway in our web-store will come with pre-wired power supply, serial connections, and pre-loaded with firmware for drop in replacement.
+The ESP32 Gateway (bare board) can be purchased from: https://www.olimex.com/Products/IoT/ESP32/ESP32-GATEWAY/open-source-hardware
+
+It will need to be wired up as follows. 
 
 ![esp32-gateway-prewired](esp32-gateway-prewired.jpg)
 

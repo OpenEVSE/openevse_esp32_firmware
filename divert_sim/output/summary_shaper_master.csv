@@ -1,0 +1,2 @@
+"Dataset","Config","Total Solar (kWh)","Total EV Charge (kWh)","Charge from solar (kWh)","Charge from grid (kWh)","Number of charges","Min time charging","Max time charging","Total time charging"
+"data_shaper","Master",0.0,0.5101333333333317,0.0,0.5101333333333317,1,410,410,410

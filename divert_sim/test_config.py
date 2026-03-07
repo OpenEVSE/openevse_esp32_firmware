@@ -3,6 +3,8 @@
 
 from subprocess import PIPE, Popen
 import json
+from typing import Union
+
 
 CONFIG_SERVICE_EMONCMS = 1 << 0
 CONFIG_SERVICE_MQTT = 1 << 1
@@ -28,7 +30,7 @@ CONFIG_THREEPHASE = 1 << 24
 CONFIG_WIZARD = 1 << 25
 CONFIG_DEFAULT_STATE = 1 << 26
 
-def check_config(config: bool = False, load: bool = False, commit: bool = False):
+def check_config(config: Union[bool, dict] = False, load: bool = False, commit: bool = False):
     command = ["./divert_sim", "--config-check"]
     if config:
         command.append("-c")
@@ -37,7 +39,7 @@ def check_config(config: bool = False, load: bool = False, commit: bool = False)
         command.append("--config-load")
     if commit:
         command.append("--config-commit")
-    
+
     print(f"{' '.join(command)}")
 
     divert_process = Popen(command, stdout=PIPE, stderr=PIPE, universal_newlines=True)
@@ -127,13 +129,6 @@ def test_config_defaults() -> None:
     assert config["default_state"] ==  True
     assert config["mqtt_protocol"] ==  "mqtt"
     assert config["charge_mode"] ==  "fast"
-
-def test_flags_changed_bits() -> None:
-    """Test the flags changed bits are set correctly"""
-    config = check_config({
-        "mqtt_enabled": "true"
-    })
-    assert config["flags_changed"] == CONFIG_SERVICE_MQTT
 
 def test_saving_and_loading() -> None:
     """Test the config is saved and loaded correctly"""

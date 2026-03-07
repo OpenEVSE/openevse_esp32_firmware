@@ -735,6 +735,11 @@ void LcdTask::onButton(int long_press)
   }
 }
 
+void LcdTask::setWifiMode(bool client, bool connected)
+{
+//only used by the TFT display
+}
+
 LcdTask lcd;
 
 #endif // ENABLE_SCREEN_LCD_TFT

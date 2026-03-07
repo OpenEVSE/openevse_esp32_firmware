@@ -56,6 +56,27 @@ Most ESP32 boards can be used (see platfromio.ini for full list of supported boa
 * Temp 3 IR sensor (not used)
 * Temp 4 OpenEVSE V1 module 
 
+### Lighting and Indicators
+
+OpenEVSE uses the LCD backlight and/or RGB pixels to indicate status:
+
+* **Off**: Initialising
+* OpenEVSE active
+  * **Green**: No EV Connected
+  * **Yellow**: Connected, but not charging
+  * **Cyan/Teal**: Charging
+  * **Red**: Fault
+* OpenEVSE Sleeping/Disabled
+  * **Cyan/Teal**: EV connected
+  * **Purple/Violet**: EV disconnected
+
+In addition to this the RGB pixels can be used to indicate the WiFi status on the first pixel:
+
+* **Slow Flashing Yellow**: WiFi AP enabled and waiting for connection
+* **Fast Flashing Purple/Violet**: WiFi client connected to AP
+* **Slow Flashing Yellow**: Connecting to WiFi network as a client
+* **Green**: Connected to WiFi network
+
 ## WiFi Setup
 
 At setup OpenEVSE will broadcast a WiFi access point (AP) `OpenEVSE_XXXX`. Connect your browser device to this AP (default password: `openevse`) and the captive portal will forward you to the log-in page. 
