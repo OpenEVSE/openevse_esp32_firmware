@@ -59,11 +59,23 @@ void handleUpdateFileFetch(MongooseHttpServerRequest *request)
   DeserializationError error = deserializeJson(doc, body);
   if(DeserializationError::Code::Ok == error)
   {
-    String url = doc["url"];
+    String url = doc["url"].as<String>();
+    if(url.isEmpty())
+    {
+      response->setCode(400);
+      response->print(F("{\"msg\":\"missing url\"}"));
+      request->send(response);
+      return;
+    }
     if(http_update_from_url(url,
       [](size_t complete, size_t total) {},
       [](int) { },
-      [](int) { }))
+      [](int errorCode) {
+        DBUGF("http_update_from_url error: %d", errorCode);
+        StaticJsonDocument<128> event;
+        event["ota"] = "failed";
+        web_server_event(event);
+      }))
     {
       response->setCode(200);
       response->print(F("{\"msg\":\"started\"}"));

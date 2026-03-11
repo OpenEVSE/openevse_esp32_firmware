@@ -22,6 +22,13 @@ bool http_update_from_url(String url,
 {
   DBUGF("Update from URL: %s", url.c_str());
 
+  if(url.isEmpty())
+  {
+    DBUGLN("Update from URL: empty URL");
+    error(HTTP_UPDATE_ERROR_INVALID_URL);
+    return false;
+  }
+
   MongooseHttpClientRequest *request = client.beginRequest(url.c_str());
   if(request)
   {
@@ -31,6 +38,9 @@ bool http_update_from_url(String url,
 
     request->onBody([url,progress,error,request](MongooseHttpClientResponse *response)
     {
+      // Feed the watchdog here as the HTTPS connection and body processing
+      // can keep Mongoose.poll() busy long enough to trigger the loop WDT.
+      feedLoopWDT();
       DBUGF("Update onBody %d", response->respCode());
       if(response->respCode() == 200)
       {
@@ -61,6 +71,9 @@ bool http_update_from_url(String url,
 
     request->onResponse([progress, error, success, request](MongooseHttpClientResponse *response)
     {
+      // Feed the watchdog: TLS handshake can take several seconds and may
+      // exceed the loop WDT timeout without an explicit reset here.
+      feedLoopWDT();
       DBUGF("Update onResponse %d", response->respCode());
       if(301 == response->respCode() ||
          302 == response->respCode())
@@ -85,6 +98,10 @@ bool http_update_from_url(String url,
         }
       }
     });
+
+    // Feed the watchdog before sending the request so that the TLS handshake
+    // (which blocks inside Mongoose.poll()) has a full WDT window.
+    feedLoopWDT();
     client.send(request);
 
     return true;
@@ -97,6 +114,7 @@ bool http_update_start(String source, size_t total)
 {
   update_position = 0;
   update_total_size = total;
+  lastPercent = -1;
   if(Update.begin())
   {
     DEBUG_PORT.printf("Update Start: %s %zu\n", source.c_str(), total);
@@ -109,6 +127,10 @@ bool http_update_start(String source, size_t total)
     return true;
   }
 
+  DBUGF("Update.begin() failed: %d", Update.getError());
+  StaticJsonDocument<128> event;
+  event["ota"] = "failed";
+  web_server_event(event);
   return false;
 }
 

@@ -11,6 +11,7 @@
 #define HTTP_UPDATE_ERROR_FAILED_TO_START_UPDATE      -1
 #define HTTP_UPDATE_ERROR_WRITE_FAILED                -2
 #define HTTP_UPDATE_ERROR_FAILED_TO_END_UPDATE        -3
+#define HTTP_UPDATE_ERROR_INVALID_URL                 -4
 
 #define HTTP_UPDATE_OK                                 0
 
