@@ -1,6 +1,6 @@
 # yaml-language-server: $schema=https://json.schemastore.org/github-workflow.json
 
-name: Integration Tests (Load Sharing Peer Management)
+name: Integration Tests (Load Sharing)
 
 on:
   workflow_run:
@@ -14,18 +14,13 @@ permissions:
 
 jobs:
   integration_test:
-    name: Load Sharing Peer Management Integration Tests
+    name: Integration Tests
     runs-on: ubuntu-latest
 
     if: |
       github.event_name == 'workflow_dispatch' ||
       (github.event.workflow_run.conclusion == 'success' &&
        contains(github.event.workflow_run.name, 'Build/Release'))
-
-    strategy:
-      fail-fast: false
-      matrix:
-        num_instances: [2, 3, 4]
 
     steps:
     - name: Checkout code
@@ -83,7 +78,7 @@ jobs:
     - name: Create test output directory
       run: mkdir -p tests/integration/output
 
-    - name: Run integration tests (instances=${{ matrix.num_instances }})
+    - name: Run integration tests
       env:
         NATIVE_BINARY_PATH: ./native_program
       run: |
@@ -92,8 +87,7 @@ jobs:
           --color=yes \
           --code-highlight=yes \
           --tb=short \
-          --junit-xml=tests/integration/output/test_results_${{ matrix.num_instances }}.xml \
-          -k "test_loadsharing_peer_management or TestPeerManagement or TestResponseStructure"
+          --junit-xml=tests/integration/output/test_results.xml
 
     - name: Upload test results
       if: always()
@@ -107,7 +101,7 @@ jobs:
       uses: EnricoMi/publish-unit-test-result-action@v2
       with:
         files: tests/integration/output/test_results_*.xml
-        check_name: Integration Tests (${{ matrix.num_instances }} instances)
+        check_name: Integration Tests
         compare_to_earlier_commit: false
 
     - name: Cleanup
