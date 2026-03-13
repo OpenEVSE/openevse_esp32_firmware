@@ -460,10 +460,15 @@ static void printUsage() {
     "  Examples:\n"
     "    --set-config www_http_port=8080\n"
     "    --set-config www_https_port=8443\n"
+    "    --set-config hostname=my-openevse\n"
     "    --set-config mqtt_server=192.168.1.100\n"
     "    --set-config mqtt_port=1883\n"
     "Runtime options (EPOXY_DUINO native build):\n"
-    "  --rapi-serial PATH   Set PTY/serial path for RAPI (e.g., /dev/pts/5)\n",
+    "  --rapi-serial PATH   Set PTY/serial path for RAPI (e.g., /dev/pts/5)\n"
+    "Environment variables:\n"
+    "  OPENEVSE_CHIP_ID     Set unique chip ID (hex, e.g. 0xAABBCCDDEEFF) for\n"
+    "                       multi-instance testing. Affects default hostname and\n"
+    "                       mDNS device ID.\n",
     epoxy_argv[0]
   );
 }
