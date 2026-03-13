@@ -12,9 +12,11 @@
 #include "debug.h"
 #include "loadsharing_types.h"
 #include "loadsharing_discovery_task.h"
+#include "app_config.h"
 #include <Arduino.h>
 #include <ArduinoJson.h>
 #include <LittleFS.h>
+#include <espal.h>
 
 // Global instance
 LoadSharingGroupState loadSharingGroupState;
@@ -49,11 +51,12 @@ void LoadSharingGroupState::onDiscoveryComplete() {
     bool found = false;
     for (const auto& discovered : *_discoveredPeers) {
       if (discovered.hostname == peer.getHost()) {
-        // Peer was discovered - update IP and mark online
+        // Peer was discovered - update IP, port and mark online
         if (!peer.isOnline() || peer.getIp() != discovered.ipAddress) {
           changed = true;
         }
         peer.setIp(discovered.ipAddress);
+        peer.setPort(discovered.port);
         peer.setOnline(true);
         found = true;
         break;
@@ -73,6 +76,12 @@ void LoadSharingGroupState::onDiscoveryComplete() {
 }
 
 bool LoadSharingGroupState::addGroupPeer(const String& hostname) {
+  // Block adding the local device as a remote peer
+  if (isLocalHost(hostname)) {
+    DBUGF("LoadSharingGroupState: Cannot add local device as peer: %s", hostname.c_str());
+    return false;
+  }
+
   // Check for duplicates
   for (const auto& peer : _groupPeers) {
     if (peer == hostname) {
@@ -96,6 +105,12 @@ bool LoadSharingGroupState::addGroupPeer(const String& hostname) {
 }
 
 bool LoadSharingGroupState::removeGroupPeer(const String& hostname) {
+  // Block removal of the local device
+  if (isLocalHost(hostname)) {
+    DBUGF("LoadSharingGroupState: Cannot remove local device from group: %s", hostname.c_str());
+    return false;
+  }
+
   for (size_t i = 0; i < _groupPeers.size(); i++) {
     if (_groupPeers[i] == hostname) {
       _groupPeers.erase(_groupPeers.begin() + i);
@@ -131,18 +146,61 @@ bool LoadSharingGroupState::isGroupPeer(const String& hostname) const {
   return false;
 }
 
+bool LoadSharingGroupState::isLocalHost(const String& hostname) const {
+  // Compare against local hostname (with and without .local suffix)
+  String localMdns = esp_hostname + String(".local");
+  if (hostname.equalsIgnoreCase(esp_hostname) ||
+      hostname.equalsIgnoreCase(localMdns)) {
+    return true;
+  }
+  // Compare against device ID
+  if (hostname == ESPAL.getLongId()) {
+    return true;
+  }
+  return false;
+}
+
+String LoadSharingGroupState::getLocalHostname() const {
+  return esp_hostname + String(".local");
+}
+
 std::vector<LoadSharingGroupState::PeerInfo> LoadSharingGroupState::getAllPeers(
     bool includeDiscovered, bool includeGroup) const {
 
   std::vector<PeerInfo> result;
   std::vector<String> addedHosts;
 
+  // Always include the local node first
+  {
+    PeerInfo local;
+    local.hostname = getLocalHostname();
+    local.ipAddress = "";
+    local.port = www_http_port;
+    local.online = true;
+    local.joined = true;
+    result.push_back(local);
+    addedHosts.push_back(local.hostname);
+  }
+
   // Add discovered peers (from mDNS discovery task)
   if (includeDiscovered && _discoveredPeers != nullptr) {
     for (const auto& peer : *_discoveredPeers) {
+      // Skip if already added (e.g. local node, though discovery should filter it)
+      bool alreadyAdded = false;
+      for (const auto& added : addedHosts) {
+        if (added.equalsIgnoreCase(peer.hostname)) {
+          alreadyAdded = true;
+          break;
+        }
+      }
+      if (alreadyAdded) {
+        continue;
+      }
+
       PeerInfo info;
       info.hostname = peer.hostname;
       info.ipAddress = peer.ipAddress;
+      info.port = peer.port;
       info.online = true;
       info.joined = isGroupPeer(peer.hostname);
 
@@ -167,6 +225,7 @@ std::vector<LoadSharingGroupState::PeerInfo> LoadSharingGroupState::getAllPeers(
         PeerInfo info;
         info.hostname = hostname;
         info.ipAddress = "";
+        info.port = www_http_port;
         info.online = false;
         info.joined = true;
 

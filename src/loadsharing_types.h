@@ -71,6 +71,7 @@ private:
   String _id;            // Stable device id (e.g., "openevse-a7d4")
   String _name;          // mDNS instance/hostname if available
   String _host;          // Hostname or IP address used to reach the peer
+  uint16_t _port;        // Service port (0 = default 80)
   String _ip;            // Current resolved IP address
   String _version;       // Firmware version if available
   bool _online;          // Is peer currently reachable?
@@ -82,6 +83,7 @@ public:
     _id(""),
     _name(""),
     _host(""),
+    _port(0),
     _ip(""),
     _version(""),
     _online(false),
@@ -93,6 +95,7 @@ public:
     _id(""),
     _name(""),
     _host(host_),
+    _port(0),
     _ip(""),
     _version(""),
     _online(false),
@@ -109,6 +112,15 @@ public:
 
   String getHost() const { return _host; }
   void setHost(const String& value) { _host = value; }
+
+  uint16_t getPort() const { return _port; }
+  void setPort(uint16_t value) { _port = value; }
+
+  /** Build "host" or "host:port" suitable for HTTP URLs. */
+  String getHostPort() const {
+    if (_port == 0 || _port == 80) return _host;
+    return _host + ":" + String(_port);
+  }
 
   String getIp() const { return _ip; }
   void setIp(const String& value) { _ip = value; }
@@ -435,6 +447,19 @@ public:
   bool isGroupPeer(const String& hostname) const;
 
   /**
+   * @brief Check if a hostname refers to the local device.
+   * Compares against esp_hostname, esp_hostname + ".local", and device ID.
+   * @param hostname Hostname, mDNS name, or device ID to check
+   * @return true if it matches the local device
+   */
+  bool isLocalHost(const String& hostname) const;
+
+  /**
+   * @brief Get the local device's mDNS hostname (e.g., "openevse-abcd.local").
+   */
+  String getLocalHostname() const;
+
+  /**
    * @brief Load group peers from LittleFS.
    * Also populates the active peer list from loaded hostnames.
    * @return true if loaded successfully
@@ -453,12 +478,14 @@ public:
   struct PeerInfo {
     String hostname;
     String ipAddress;
+    uint16_t port;  // Advertised service port (0 = default 80)
     bool online;    // True if discovered via mDNS
     bool joined;    // True if in group
   };
 
   /**
-   * @brief Get unified peer list (discovered + group offline peers).
+   * @brief Get unified peer list (discovered + group offline peers + local node).
+   * The local node is always included first with joined=true, online=true.
    * Helper for GET /loadsharing/peers endpoint.
    *
    * @param includeDiscovered Include mDNS-discovered peers (default: true)

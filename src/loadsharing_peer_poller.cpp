@@ -83,10 +83,10 @@ void LoadSharingPeerPoller::syncPeerList() {
 
   const auto& peerList = _groupState->getPeers();
 
-  // Build set of current hosts
+  // Build set of current host:port keys
   std::vector<String> currentHosts;
   for (const auto& peer : peerList) {
-    currentHosts.push_back(peer.getHost());
+    currentHosts.push_back(peer.getHostPort());
   }
 
   // Add new peers
