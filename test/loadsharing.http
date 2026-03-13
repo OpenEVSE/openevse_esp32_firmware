@@ -1,0 +1,279 @@
+# Name: REST Client
+# Id: humao.rest-client
+# Description: REST Client for Visual Studio Code
+# Version: 0.21.3
+# Publisher: Huachao Mao
+# VS Marketplace Link: https://marketplace.visualstudio.com/items?itemName=humao.rest-client
+
+# =========================================================================
+# Load Sharing API Tests
+# =========================================================================
+#
+# Prerequisites:
+#   1. Build the native firmware:
+#        pio run -e native
+#
+#   2. Start the OpenEVSE Emulator (provides RAPI serial backend):
+#        cd ../OpenEVSE_Emulator
+#        python src/main.py --serial-pty-path /tmp/rapi_pty_0 --web-port 8080
+#
+#   3. Start native firmware instance 1 (port 8000):
+#.       cd test/0
+#        OPENEVSE_CHIP_ID=0x1234567890ABCDEF ../../.pio/build/native/program --rapi-serial /tmp/rapi_pty_0 --set-config www_http_port=8000
+#
+#   4. (Optional) Start a second emulator + firmware for multi-peer testing:
+#        cd ../OpenEVSE_Emulator
+#        python src/main.py --serial-pty-path /tmp/rapi_pty_1 --web-port 8081
+#
+#        cd test/1
+#.       OPENEVSE_CHIP_ID=0xFEDCBA0987654321 ../../.pio/build/native/program --rapi-serial /tmp/rapi_pty_1 --set-config www_http_port=8001
+#
+# Environment variables:
+#   Set baseUrl in your VS Code REST Client environment, or uncomment below.
+#   For multi-instance testing, switch baseUrl between instances.
+# =========================================================================
+
+# Instance 1 (default)
+@host1 = http://localhost:8000
+# Instance 2 (for multi-peer testing)
+@host2 = http://localhost:8001
+
+#@baseUrl = http://localhost:8000
+
+# =========================================================================
+# GET /loadsharing/peers - List peers
+# =========================================================================
+
+###
+# @name getPeersEmpty
+# List peers (should be empty initially)
+
+GET {{host1}}/loadsharing/peers HTTP/1.1
+
+###
+# List peers on instance 2
+
+GET {{host2}}/loadsharing/peers HTTP/1.1
+
+# =========================================================================
+# POST /loadsharing/peers - Add peers to group
+# =========================================================================
+
+###
+# @name addPeer1
+# Add instance 2 as a peer on instance 1
+
+POST {{host1}}/loadsharing/peers HTTP/1.1
+Content-Type: application/json
+
+{
+  "host": "openevse-09ba.local"
+}
+
+###
+# @name addPeer2
+# Add instance 1 as a peer on instance 2
+
+POST {{host2}}/loadsharing/peers HTTP/1.1
+Content-Type: application/json
+
+{
+  "host": "openevse-7856.local"
+}
+
+###
+# Add a peer by hostname (mDNS-style)
+
+POST {{host1}}/loadsharing/peers HTTP/1.1
+Content-Type: application/json
+
+{
+  "host": "openevse-2.local"
+}
+
+###
+# Add a peer by IP address
+
+POST {{host1}}/loadsharing/peers HTTP/1.1
+Content-Type: application/json
+
+{
+  "host": "192.168.1.100"
+}
+
+# =========================================================================
+# POST /loadsharing/peers - Error cases
+# =========================================================================
+
+###
+# Try to add duplicate peer (expect 400)
+
+POST {{host1}}/loadsharing/peers HTTP/1.1
+Content-Type: application/json
+
+{
+  "host": "openevse-2.local"
+}
+
+###
+# Try to add peer with invalid format - no domain/IP (expect 400)
+
+POST {{host1}}/loadsharing/peers HTTP/1.1
+Content-Type: application/json
+
+{
+  "host": "invalid"
+}
+
+###
+# Try to add peer with empty host (expect 400)
+
+POST {{host1}}/loadsharing/peers HTTP/1.1
+Content-Type: application/json
+
+{
+  "host": ""
+}
+
+###
+# Try to add peer with missing host parameter (expect 400)
+
+POST {{host1}}/loadsharing/peers HTTP/1.1
+Content-Type: application/json
+
+{
+}
+
+###
+# Try to add peer with invalid JSON (expect 400)
+
+POST {{host1}}/loadsharing/peers HTTP/1.1
+Content-Type: application/json
+
+not json
+
+# =========================================================================
+# POST /loadsharing/discover - Trigger mDNS discovery
+# =========================================================================
+
+###
+# Trigger on-demand mDNS discovery on instance 1
+
+POST {{host1}}/loadsharing/discover HTTP/1.1
+
+###
+# Trigger discovery on instance 2
+
+POST {{host2}}/loadsharing/discover HTTP/1.1
+
+# =========================================================================
+# GET /loadsharing/peers - Verify peer list after adds
+# =========================================================================
+
+###
+# @name getPeersAfterAdd
+# List peers after adding (shows joined + discovered status)
+
+GET {{host1}}/loadsharing/peers HTTP/1.1
+
+###
+# List peers on instance 2
+
+GET {{host2}}/loadsharing/peers HTTP/1.1
+
+# =========================================================================
+# DELETE /loadsharing/peers/{host} - Remove peers
+# =========================================================================
+
+###
+# Remove a peer by hostname
+
+DELETE {{host1}}/loadsharing/peers/openevse-2.local HTTP/1.1
+
+###
+# Remove a peer by IP address
+
+DELETE {{host1}}/loadsharing/peers/192.168.1.100 HTTP/1.1
+
+###
+# Try to remove a peer that doesn't exist (expect 404)
+
+DELETE {{host1}}/loadsharing/peers/nonexistent.local HTTP/1.1
+
+# =========================================================================
+# GET /loadsharing/peers - Verify peer list after removals
+# =========================================================================
+
+###
+# @name getPeersAfterRemove
+# List peers after removals
+
+GET {{host1}}/loadsharing/peers HTTP/1.1
+
+# =========================================================================
+# WebSocket /ws - Real-time status updates
+# =========================================================================
+# The /ws endpoint pushes JSON status updates to connected clients.
+# The peer poller connects to each peer's /ws endpoint automatically
+# when peers are added to the group.
+#
+# To test manually with curl:
+#   curl --include \
+#     --no-buffer \
+#     --header "Connection: Upgrade" \
+#     --header "Upgrade: websocket" \
+#     --header "Sec-WebSocket-Version: 13" \
+#     --header "Sec-WebSocket-Key: dGhlIHNhbXBsZSBub25jZQ==" \
+#     http://localhost:8000/ws
+#
+# Or with websocat:
+#   websocat ws://localhost:8000/ws
+#   websocat ws://localhost:8001/ws
+
+# =========================================================================
+# GET /status - Check EVSE status (used by peer poller HTTP bootstrap)
+# =========================================================================
+
+###
+# Get status from instance 1
+
+GET {{host1}}/status HTTP/1.1
+
+###
+# Get status from instance 2
+
+GET {{host2}}/status HTTP/1.1
+
+# =========================================================================
+# Cleanup - Remove all test peers
+# =========================================================================
+
+###
+# Remove instance 2 peer from instance 1
+
+DELETE {{host1}}/loadsharing/peers/localhost:8001 HTTP/1.1
+
+###
+# Remove instance 1 peer from instance 2
+
+DELETE {{host2}}/loadsharing/peers/localhost:8000 HTTP/1.1
+
+###
+# Verify clean state on instance 1
+
+GET {{host1}}/loadsharing/peers HTTP/1.1
+
+###
+# Verify clean state on instance 2
+
+GET {{host2}}/loadsharing/peers HTTP/1.1
+
+###
+# Get the status of Peer 2 from Peer 1
+
+GET {{host1}}/loadsharing/status HTTP/1.1
+
+###
+# Get the status of Peer 1 from Peer 2
+
+GET {{host2}}/loadsharing/status HTTP/1.1

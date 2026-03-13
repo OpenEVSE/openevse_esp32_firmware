@@ -538,8 +538,8 @@ void NetManagerTask::setup()
 
   if (MDNS.begin(esp_hostname.c_str()))
   {
-    MDNS.addService("http", "tcp", 80);
-    MDNS.addService("openevse", "tcp", 80);
+    MDNS.addService("http", "tcp", www_http_port);
+    MDNS.addService("openevse", "tcp", www_http_port);
     MDNS.addServiceTxt("openevse", "tcp", "type", buildenv.c_str());
     MDNS.addServiceTxt("openevse", "tcp", "version", currentfirmware.c_str());
     MDNS.addServiceTxt("openevse", "tcp", "id", ESPAL.getLongId());
@@ -624,7 +624,7 @@ unsigned long NetManagerTask::serviceButton()
     delay(50);
     ESPAL.reset();
   }
-  else if(false == _apMessage && LOW == _wifiButtonState && millis() > _wifiButtonTimeOut + WIFI_BUTTON_AP_TIMEOUT)
+  else if(false == _apMessage && WIFI_BUTTON_PRESSED_STATE == _wifiButtonState && millis() > _wifiButtonTimeOut + WIFI_BUTTON_AP_TIMEOUT)
   {
     DBUGLN("*** Enable Access Point ***");
 

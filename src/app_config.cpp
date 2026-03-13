@@ -23,6 +23,14 @@
 #include "limit.h"
 #endif
 
+#ifndef HTTP_SERVER_PORT
+#define HTTP_SERVER_PORT 80
+#endif
+
+#ifndef HTTPS_SERVER_PORT
+#define HTTPS_SERVER_PORT 443
+#endif
+
 #define EEPROM_SIZE       4096
 
 #define CONFIG_OFFSET     0
@@ -46,6 +54,10 @@ String lang;
 String www_username;
 String www_password;
 String www_certificate_id;
+
+// Web server ports
+uint32_t www_http_port;
+uint32_t www_https_port;
 
 // Advanced settings
 String esp_hostname;
@@ -129,6 +141,19 @@ long max_current_soft;
 // Scheduler settings
 uint32_t scheduler_start_window;
 
+// Load Sharing settings
+bool loadsharing_enabled;
+String loadsharing_group_id;
+double loadsharing_group_max_current;
+double loadsharing_safety_factor;
+uint32_t loadsharing_heartbeat_timeout;
+String loadsharing_failsafe_mode;
+double loadsharing_failsafe_safe_current;
+double loadsharing_failsafe_peer_assumed_current;
+uint32_t loadsharing_priority;
+uint32_t loadsharing_config_version;
+uint32_t loadsharing_config_updated_at;
+
 String esp_hostname_default = "openevse-"+ESPAL.getShortId();
 
 void config_changed(String name);
@@ -159,7 +184,11 @@ ConfigOpt *opts[] =
 // Web server authentication (leave blank for none)
   new ConfigOptDefinition<String>(www_username, "", "www_username", "au"),
   new ConfigOptSecret(www_password, "", "www_password", "ap"),
-  new ConfigOptDefenition<String>(www_certificate_id, "", "www_certificate_id", "wc"),
+  new ConfigOptDefinition<String>(www_certificate_id, "", "www_certificate_id", "wc"),
+
+// Web server ports
+  new ConfigOptDefinition<uint32_t>(www_http_port, HTTP_SERVER_PORT, "www_http_port", "whp"),
+  new ConfigOptDefinition<uint32_t>(www_https_port, HTTPS_SERVER_PORT, "www_https_port", "wsp"),
 
 // Advanced settings
   new ConfigOptDefinition<String>(esp_hostname, esp_hostname_default, "hostname", "hn"),
@@ -233,6 +262,19 @@ ConfigOpt *opts[] =
 // LED brightness
   new ConfigOptDefinition<uint8_t>(led_brightness, LED_DEFAULT_BRIGHTNESS, "led_brightness", "lb"),
 #endif
+
+// Load Sharing settings
+  new ConfigOptDefinition<bool>(loadsharing_enabled, false, "loadsharing_enabled", "lse"),
+  new ConfigOptDefinition<String>(loadsharing_group_id, "", "loadsharing_group_id", "lsgi"),
+  new ConfigOptDefinition<double>(loadsharing_group_max_current, 0.0, "loadsharing_group_max_current", "lsgmc"),
+  new ConfigOptDefinition<double>(loadsharing_safety_factor, 1.0, "loadsharing_safety_factor", "lssf"),
+  new ConfigOptDefinition<uint32_t>(loadsharing_heartbeat_timeout, 30, "loadsharing_heartbeat_timeout", "lsht"),
+  new ConfigOptDefinition<String>(loadsharing_failsafe_mode, "safe_current", "loadsharing_failsafe_mode", "lsfm"),
+  new ConfigOptDefinition<double>(loadsharing_failsafe_safe_current, 6.0, "loadsharing_failsafe_safe_current", "lsfsc"),
+  new ConfigOptDefinition<double>(loadsharing_failsafe_peer_assumed_current, 6.0, "loadsharing_failsafe_peer_assumed_current", "lsfpac"),
+  new ConfigOptDefinition<uint32_t>(loadsharing_priority, 0, "loadsharing_priority", "lsp"),
+  new ConfigOptDefinition<uint32_t>(loadsharing_config_version, 0, "loadsharing_config_version", "lscv"),
+  new ConfigOptDefinition<uint32_t>(loadsharing_config_updated_at, 0, "loadsharing_config_updated_at", "lscua"),
 
 // Scheduler options
   new ConfigOptDefinition<uint32_t>(scheduler_start_window, SCHEDULER_DEFAULT_START_WINDOW, "scheduler_start_window", "ssw"),
@@ -590,17 +632,47 @@ bool config_serialize(DynamicJsonDocument &doc, bool longNames, bool compactOutp
   return user_config.serialize(doc, longNames, compactOutput, hideSecrets);
 }
 
-void config_set(const char *name, uint32_t val) {
-  user_config.set(name, val);
+bool config_set(const char *name, uint32_t val) {
+  return user_config.set(name, val);
 }
-void config_set(const char *name, String val) {
-  user_config.set(name, val);
+bool config_set(const char *name, String val) {
+  return user_config.set(name, val);
 }
-void config_set(const char *name, bool val) {
-  user_config.set(name, val);
+bool config_set(const char *name, bool val) {
+  return user_config.set(name, val);
 }
-void config_set(const char *name, double val) {
-  user_config.set(name, val);
+bool config_set(const char *name, double val) {
+  return user_config.set(name, val);
+}
+
+bool config_set_opt_string(const char *name, const char *value) {
+  // Try to determine the type from the config option definition
+  // For now, we'll try as string first, then try as integer
+  
+  // Create a JSON document with the value as a string
+  const size_t capacity = JSON_OBJECT_SIZE(1) + 256;
+  DynamicJsonDocument doc(capacity);
+  
+  // Try to parse as a number first
+  char *endptr;
+  long int_val = strtol(value, &endptr, 10);
+  
+  if (*endptr == '\0' && value != endptr) {
+    // Successfully parsed as integer
+    doc[name] = int_val;
+  } else {
+    // Try parsing as double
+    double double_val = strtod(value, &endptr);
+    if (*endptr == '\0' && value != endptr && strchr(value, '.') != nullptr) {
+      // Successfully parsed as double
+      doc[name] = double_val;
+    } else {
+      // Use as string
+      doc[name] = value;
+    }
+  }
+  
+  return user_config.deserialize(doc);
 }
 
 void config_reset()
