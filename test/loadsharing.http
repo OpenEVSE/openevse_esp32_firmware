@@ -18,17 +18,15 @@
 #        python src/main.py --serial-pty-path /tmp/rapi_pty_0 --web-port 8080
 #
 #   3. Start native firmware instance 1 (port 8000):
-#        .pio/build/native/program \
-#          --rapi-serial /tmp/rapi_pty_0 \
-#          --set-config www_http_port=8000
+#.       cd test/0
+#        OPENEVSE_CHIP_ID=0x1234567890ABCDEF ../../.pio/build/native/program --rapi-serial /tmp/rapi_pty_0 --set-config www_http_port=8000
 #
 #   4. (Optional) Start a second emulator + firmware for multi-peer testing:
 #        cd ../OpenEVSE_Emulator
 #        python src/main.py --serial-pty-path /tmp/rapi_pty_1 --web-port 8081
 #
-#        .pio/build/native/program \
-#          --rapi-serial /tmp/rapi_pty_1 \
-#          --set-config www_http_port=8001
+#        cd test/1
+#.       OPENEVSE_CHIP_ID=0xFEDCBA0987654321 ../../.pio/build/native/program --rapi-serial /tmp/rapi_pty_1 --set-config www_http_port=8001
 #
 # Environment variables:
 #   Set baseUrl in your VS Code REST Client environment, or uncomment below.
@@ -69,7 +67,7 @@ POST {{host1}}/loadsharing/peers HTTP/1.1
 Content-Type: application/json
 
 {
-  "host": "localhost:8001"
+  "host": "openevse-09ba.local"
 }
 
 ###
@@ -80,7 +78,7 @@ POST {{host2}}/loadsharing/peers HTTP/1.1
 Content-Type: application/json
 
 {
-  "host": "localhost:8000"
+  "host": "openevse-7856.local"
 }
 
 ###
