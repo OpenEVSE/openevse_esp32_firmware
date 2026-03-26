@@ -11,13 +11,20 @@ a single upstream electrical service limit (e.g. a 50A circuit) **without
 requiring a cloud service, MQTT broker, Home Assistant, or external
 controller**.
 
-The existing **Current Shaper** functionality remains responsible for
-**enforcing** the computed limit on each device. This feature adds:
+The system uses a **controller/member** architecture for the initial MVP:
+one device is designated as the **controller** and manages the group, while
+other devices act as **members** that receive their configuration and current
+allocations from the controller.
 
-- Group formation (configuration + discovery)
-- Peer-to-peer communication of EVSE status
-- A deterministic distributed algorithm to compute each node’s allowed current
-- Fail-safe behavior when peers are unreachable
+The existing **Current Shaper** claim system remains responsible for
+**enforcing** the computed limit on each member device, including built-in
+failsafe timeout behavior. This feature adds:
+
+- Group formation (configuration + discovery) on the controller
+- Real-time status monitoring of members via WebSocket
+- A centralized allocation algorithm on the controller
+- Allocation push from controller to members via WebSocket
+- Fail-safe behavior leveraging the existing Current Shaper timeout
 
 ## Requirements (from issues)
 
@@ -42,12 +49,15 @@ The existing **Current Shaper** functionality remains responsible for
 
 - Provide a robust local load-sharing mechanism for small groups (2–8 chargers
   typical).
-- Avoid a fixed “master/slave” architecture where possible.
-- Keep the system safe if some nodes are offline or the network is unstable.
+- Simple setup: configure load sharing from a single controller device;
+  members are configured automatically.
+- Keep the system safe if the controller or members go offline.
 - Reuse existing primitives:
-  - mDNS advertising (already present)
-  - Websocket status updates `/ws` (already present)
-  - Current Shaper (already present) for limiting and failsafe timing behavior
+  - mDNS advertising (already present) for peer discovery on the controller
+  - WebSocket status updates `/ws` (already present) for status monitoring
+    and allocation delivery
+  - Current Shaper claim system (already present) for enforcing limits and
+    failsafe timeout behavior on members
 
 ## Non-goals
 
@@ -60,21 +70,24 @@ The existing **Current Shaper** functionality remains responsible for
 
 - **Node**: one OpenEVSE WiFi gateway.
 - **Group**: a set of nodes that share a common upstream current limit.
-- **Member**: a node that is configured as part of a group.
+- **Controller**: the node where the user configures load sharing. It runs
+   the allocation algorithm and pushes current limits to members.
+- **Member**: a node that receives its load sharing configuration and current
+   allocation from the controller. Load sharing config is read-only on members.
 - **Peer**: another node on the LAN, discovered or configured.
 - **Demanding**: a member that currently wants current (vehicle connected and
    not explicitly disabled).
 
 ## High-level architecture
 
-### 1) Discovery
+### 1) Discovery (controller only)
 
 - Each device already advertises an mDNS service:
    - Service: `openevse` / `tcp` port `80`
    - TXT records include `type`, `version`, `id`
 
-Add a discovery process that periodically performs mDNS queries for
-`_openevse._tcp` (ESPmDNS uses `MDNS.queryService("openevse", "tcp")`).
+The **controller** periodically performs mDNS queries for `_openevse._tcp`
+(ESPmDNS uses `MDNS.queryService("openevse", "tcp")`).
 
 Discovery output is a list of candidates with:
 
@@ -83,9 +96,16 @@ Discovery output is a list of candidates with:
 - IP address
 - firmware version
 
-### 2) Group configuration
+Member devices also run discovery initially (to show available peers in the
+UI), but **stop discovery once they are connected to a controller** and have
+received their load sharing configuration. Discovery resumes on members if the
+controller connection is lost.
 
-A group is configured locally on each node.
+### 2) Group configuration (controller only)
+
+A group is configured on the **controller** device only. The user sets up load
+sharing from the controller's web UI or REST API. The controller then pushes
+the configuration to each member.
 
 Configuration includes:
 
@@ -93,8 +113,8 @@ Configuration includes:
 - `group_max_current`: the total current limit for the group (amps)
 - `safety_factor`: optional reduction (e.g. 0.8 to use 80% of circuit)
 - `members`: a list of peer hosts (hostname, IP address, or device ID)
-- `priority`: local node's priority (lower = higher priority, NOT synced)
-- `failsafe`: what to do when some members are unreachable (disable or limit to
+- `priority`: node's priority (lower = higher priority)
+- `failsafe`: what to do when members are unreachable (disable or limit to
    safe current)
 
 Members are simple strings that can be:
@@ -103,33 +123,40 @@ Members are simple strings that can be:
 - Static IP address (e.g., `192.168.1.101`)
 - Device ID (e.g., `openevse_abc123`)
 
-Members are managed via the `/loadsharing/peers` POST and DELETE endpoints.
+Members are managed via the `/loadsharing/peers` POST and DELETE endpoints
+**on the controller only**. These endpoints return 403 on member devices.
 
-### 3) Peer communication (status replication)
+#### Role designation
 
-Each node maintains a live view of other members by subscribing to their
-websocket status stream:
+The device where the user first enables load sharing and adds peers **becomes
+the controller** implicitly. When the controller pushes configuration to a
+peer, that peer becomes a **member** automatically. Member devices:
 
-- Connect to each peer’s websocket endpoint: `ws://<peer-host>/ws`
-- On connect, the peer sends a full status document (current behavior).
+- Accept load sharing configuration from the controller
+- Display load sharing status as read-only in the UI
+- Reject local changes to load sharing config fields (403)
+- Accept current allocation commands from the controller
+
+### 3) Status monitoring (controller → members)
+
+The **controller** maintains a live view of all members by subscribing to their
+WebSocket status stream (reusing the existing `/ws` endpoint):
+
+- Connect to each member's WebSocket endpoint: `ws://<member-host>/ws`
+- On connect, the member sends a full status document (current behavior).
 - Subsequently, only changes are sent.
 
-Each node keeps `last_seen` per peer and considers a peer **online** if a
-message has been received within `heartbeat_timeout` seconds.
+The controller keeps `last_seen` per member and considers a member **online**
+if a message has been received within `heartbeat_timeout` seconds.
 
-### 4) Distributed allocation algorithm (no permanent master)
+Members do not need to poll other members. Only the controller maintains
+WebSocket connections to all members.
 
-All nodes run the same deterministic calculation to decide their own allowed
-current.
+### 4) Allocation algorithm (controller only)
 
-Key idea:
-
-- Each node computes **the same view** of which members are online and
-   demanding.
-- Given the same inputs, each node computes the same per-member allocations.
-
-This avoids a fixed master while still converging to a consistent group
-behavior.
+The **controller** runs the allocation algorithm and pushes results to members.
+This centralized approach eliminates the need for distributed consensus or
+configuration synchronization.
 
 #### Inputs
 
@@ -146,13 +173,7 @@ Group-level:
 
 - `I_group = group_max_current * safety_factor`
 
-#### Deterministic member ordering
-
-To ensure all nodes compute the same ordering:
-
-- Sort members by a stable key, e.g. numeric `id` (TXT `id`) ascending.
-
-#### Baseline profile: “Equal Share with Minimums”
+#### Baseline profile: "Equal Share with Minimums"
 
 1. Determine `D` = set of demanding members that are online.
 2. If `D` is empty, allocation is 0 for all.
@@ -161,13 +182,32 @@ To ensure all nodes compute the same ordering:
     - Assign each demanding member `alloc_i = min_i`.
     - Distribute remaining current equally among demanding members, capped by
        `max_i`.
-5. Else (not enough for everyone’s minimum):
-    - Select a subset `S ⊆ D` in deterministic order.
+5. Else (not enough for everyone's minimum):
+    - Select a subset `S ⊆ D` in deterministic order (sorted by device id).
     - Add members until `sum(min_i in S) <= I_avail`.
     - Allocate `alloc_i = min_i` for i in S, and `alloc_i = 0` for others.
 
-This yields a safe, deterministic “some charge, others wait” behavior when the
+This yields a safe "some charge, others wait" behavior when the
 circuit cannot satisfy all minimums.
+
+### 5) Allocation delivery (controller → members)
+
+After computing allocations, the controller pushes each member's current limit
+via the existing WebSocket connection (the same connection used for status
+monitoring in step 3). The controller sends a JSON message containing the
+allocation:
+
+```json
+{"loadsharing": {"target_current": 16.5, "reason": "equal_share"}}
+```
+
+Members receive this message and apply it as a **claim** via the existing
+`EvseManager` claim system, using a dedicated `EvseClient_LoadSharing` client.
+The claim uses `Priority_Limit` to coexist with manual overrides and other
+claims.
+
+The controller also applies its own allocation locally via the same claim
+mechanism.
 
 #### Other profiles (future)
 
@@ -175,245 +215,150 @@ circuit cannot satisfy all minimums.
 - Reduce by percentage: everyone reduced proportionally.
 - FIFO/ramp behavior: staged ramp-up like JuiceNet.
 
-## Handling configuration differences
+## Configuration management (controller/member model)
 
-Because load sharing is a distributed system with no permanent master, each
-node maintains its own configuration. This creates the possibility of
-**configuration drift** where nodes disagree about group parameters.
+Because the controller is the single source of truth for load sharing
+configuration, configuration drift between nodes is eliminated by design.
 
-### Sources of configuration mismatch
+### How configuration flows
 
-Common scenarios:
+1. **User configures load sharing on the controller** via web UI or REST API:
+   group settings, member list, failsafe parameters.
+2. **Controller pushes config to each member** via `POST http://{member}/config`
+   when a peer is first added to the group (after the controller establishes a
+   WebSocket connection to the member).
+3. **Member accepts config from controller** and transitions to `role=member`.
+   Load sharing config fields become read-only on the member.
+4. **If the user changes config on the controller**, the controller pushes the
+   updated config to all online members. Members that are offline will receive
+   the updated config when they reconnect.
 
-1. **Different `group_max_current`**: One node configured for 50A, another for
-   60A.
-2. **Different member lists**: Node A knows about nodes B, C, D while node C
-   only knows about A and B.
-3. **Different `safety_factor`**: Nodes applying different derating factors.
-4. **Different `failsafe` modes**: Some nodes configured to disable on peer
-   loss, others configured for safe current.
+### Member config lockout
 
-### Impact of mismatched configuration
+When a device is operating as a member (`loadsharing_role=member`):
 
-When nodes have different configurations, they will compute **different
-allocations** for themselves:
+- Load sharing config fields are **read-only** (POST returns 403)
+- `/loadsharing/peers` POST and DELETE endpoints return 403
+- The web UI shows load sharing config as greyed-out / read-only
+- The member stores the controller's hostname in
+  `loadsharing_controller_host` for reconnection
 
-- If Node A thinks `group_max_current = 50A` but Node B thinks it's `60A`,
-  Node B may allocate more current to itself than Node A expects.
-- This can cause the **actual group current** to exceed the physical circuit
-  limit, potentially tripping breakers.
+### Config fields pushed by controller
 
-### Detection strategies
+The controller pushes these group-level settings to members:
 
-#### 1. Configuration hash exchange
+- `loadsharing_enabled`: true
+- `loadsharing_role`: "member"
+- `loadsharing_controller_host`: controller's hostname/IP
+- `loadsharing_group_id`
+- `loadsharing_group_max_current`
+- `loadsharing_safety_factor`
+- `loadsharing_heartbeat_timeout`
+- `loadsharing_failsafe_mode`
+- `loadsharing_failsafe_safe_current`
+- `loadsharing_failsafe_peer_assumed_current`
 
-Include a configuration fingerprint in peer status messages:
+### Resetting a member
 
-- Compute a hash of critical group config: `hash(group_id, group_max_current,
-  safety_factor, member_ids)`
-- Include this hash in websocket status updates
-- Each node compares received hashes against its own
+To remove a device from a load sharing group:
 
-If hashes differ, the node knows there's a configuration mismatch.
+1. **From the controller**: DELETE the peer via `/loadsharing/peers/{host}`.
+   The controller sends a config update to the member resetting
+   `loadsharing_enabled=false` and `loadsharing_role=""`.
+2. **From the member**: Factory-reset the load sharing config (or manually
+   clear `loadsharing_role` and `loadsharing_controller_host` via the API
+   with admin access).
 
-#### 2. Explicit config version field
-
-Add a `config_version` timestamp or counter to the group configuration:
-
-- When group config is updated, increment the version
-- Exchange versions in status messages
-- Nodes can detect when they're running older/newer configs
-
-### Handling mismatches
-
-When a configuration mismatch is detected:
-
-1. **Log a warning** to alert the administrator
-2. **Trigger automatic synchronization** (see Configuration Synchronization
-   below)
-3. **Apply conservative behavior** until sync completes:
-   - Use the **most restrictive** values encountered:
-     - `min(group_max_current)` across all peers
-     - `min(safety_factor)` across all peers
-   - This ensures the group stays under the physical limit even with
-     mismatched configs
-4. **Optionally disable charging** if mismatch is severe (e.g., different
-   `group_id` values)
-
-### Status reporting
-
-The `/loadsharing/status` endpoint should report configuration health:
-
-```json
-{
-  "config_consistent": false,
-  "config_issues": [
-    {
-      "peer_id": "openevse_abc123",
-      "issue": "group_max_current mismatch",
-      "local_value": 50.0,
-      "peer_value": 60.0
-    }
-  ]
-}
-```
-
-### Configuration synchronization
-
-**Automatic configuration sync** is part of the initial implementation to
-prevent configuration drift:
-
-#### Config version tracking
-
-Each node maintains:
-
-- `config_version`: monotonically increasing integer, incremented on every
-  config change
-- `config_hash`: hash of critical group parameters
-- `config_updated_at`: timestamp of last config change
-
-These are exchanged in peer status messages.
-
-#### Sync triggers
-
-1. **Adding a new node to the group**:
-   - New node discovers existing group members
-   - Queries each peer's config version via `GET /config`
-   - Adopts the configuration from the peer with the **highest
-     `config_version`**
-   - If multiple peers have the same highest version, use the one with the
-     most recent `config_updated_at`
-
-2. **Detecting version mismatch during operation**:
-   - If a node receives status from a peer with `config_version > local_version`:
-     - Fetch the newer configuration via `GET /config`
-     - Merge/adopt the group load sharing settings
-     - Increment local `config_version` to match
-
-3. **User updates configuration on any node**:
-   - Increment local `config_version`
-   - Push the new configuration to all online peers via `POST /config`
-   - Peers that receive the update increment their `config_version`
-   - If a peer is offline, it will sync when it comes back online and detects
-     the version mismatch
-
-#### Sync behavior
-
-When syncing configuration:
-
-- **Group-level settings** are fully synchronized:
-  - `group_id`
-  - `group_max_current`
-  - `safety_factor`
-  - `members` list
-  - `heartbeat_timeout`
-  - `failsafe` mode
-
-- **Node-local settings** are preserved:
-  - Node's own hostname/identification
-  - WiFi/network settings
-  - Other EVSE config unrelated to load sharing
-
-#### Conflict resolution
-
-If two nodes are updated simultaneously (split-brain):
-
-- Both increment their `config_version`
-- When they communicate, both detect a mismatch
-- The node with the **lower `config_updated_at` timestamp** adopts the
-  configuration from the node with the higher timestamp
-- If timestamps are identical (unlikely), use stable node ID as tiebreaker
-
-#### User experience
-
-- When user changes load sharing config on any node, the UI shows:
-  - "Configuration updated and synced to X peers"
-  - "Configuration updated; Y peers offline, will sync when available"
-- The `/loadsharing/status` endpoint shows per-peer sync status
-
-### Best practices for administrators
-
-1. **Update configuration from any node**: The system will automatically sync
-   to others.
-2. **Monitor status endpoint**: Check for configuration warnings and sync
-   failures.
-3. **Use static IPs or stable hostnames**: Reduces connection issues during
-   sync.
-4. **Verify sync completion**: After config changes, check that all nodes
-   report the same `config_version`.
-
-## Applying the allocation (TBD)
+## Applying the allocation
 
 ### Principle
 
-The load-sharing subsystem should *not* directly manage EVSE relays; it should
-compute an allowed current and rely on Current Shaper to:
+The load-sharing subsystem computes an allowed current for each member and
+delivers it as a **claim** via the existing `EvseManager` claim system. This
+approach:
 
-- apply claims to enforce the current limit
-- pause charging when insufficient current exists
-- provide time-based failsafe behavior
+- Uses the existing claim priority hierarchy
+- Coexists with manual overrides and solar divert
+- Does not directly manage EVSE relays
 
-### Proposed integration strategy
+### Controller applies allocations
 
-Use Current Shaper to enforce group limit by treating “other members’ EVSE
-draw” as the shaper’s `live_pwr` (if actual values are not available) input:
+On the **controller**:
 
-- Convert group current limit to power:
-  $P_{max} = I_{group} \times V_{local}$ (or 3-phase equivalent)
-- Estimate other-members power:
-  $P_{others} = \sum_{j \neq self} I_{j} \times V_{j}$, where $V_{j}$ is the peer’s
-  reported voltage when available, otherwise a fallback value (typically $V_{local}$)
-  - Prefer using peers’ measured `amp` and `voltage` from `/ws` status
-  - If a peer does not report `voltage`, use the local node’s measured voltage
-    as an approximation (implementations MAY instead use a configured nominal
-    supply voltage if that better matches the installation)
-- Set:
-  - `shaper.setMaxPwr(P_max)`
-  - `shaper.setLivePwr(P_others)`
+1. The allocation algorithm computes per-member target current.
+2. The controller applies its own allocation locally via a
+   `EvseClient_LoadSharing` claim at `Priority_Limit`.
+3. The controller sends each member's allocation via the WebSocket connection.
 
-Because the shaper already adds local amps back into the computed limit,
-`live_pwr` should represent **group load excluding local load** to avoid
-double-counting.
+On each **member**:
 
-This approach uses the existing shaper claim path (`EvseClient_OpenEVSE_Shaper`)
-and its existing “data timeout => disable” logic.
+1. The member receives an allocation message from the controller via WebSocket.
+2. The member applies the allocation as a `EvseClient_LoadSharing` claim at
+   `Priority_Limit`.
+3. The claim is subject to the existing Current Shaper timeout failsafe.
 
-If a more direct mapping is preferred later, extend shaper with an explicit
-“external max current” input while reusing its claim and failsafe timing.
+### Voltage handling
+
+When the controller computes power-based limits:
+
+- **Preferred**: Use each member's measured voltage from WebSocket status
+- **Fallback**: Use the controller's local measured voltage
+- **Last resort**: Use nominal 240V
 
 ## Fail-safe behavior
 
 Network failures are expected. The system must remain safe.
 
-### Offline member handling
+### Member failsafe (controller offline)
 
+Each member applies its load sharing allocation as a **claim** in the
+`EvseManager` claim system. The claim leverages the existing Current Shaper
+timeout mechanism:
+
+- If the controller does not send an allocation update within
+  `current_shaper_data_maxinterval` (default: 120 seconds), the claim
+  expires automatically.
+- When the claim expires, the member reverts to safe behavior (existing
+  shaper failsafe logic).
+
+This means **no new failsafe code is needed** on members for the MVP. The
+existing Current Shaper timeout provides the safety net.
+
+### Controller failsafe (member offline)
+
+The controller tracks each member's online status via WebSocket heartbeat.
 A member is considered offline if `now - last_seen > heartbeat_timeout`.
 
-Fail-safe modes (configurable):
+When a member goes offline, the controller's allocation algorithm handles
+this with **conservative accounting**:
 
-1. **Disable on peer loss (strict safety)**
-   - If any configured member is offline, stop charging locally
-      (allocation = 0).
-   - Matches #592’s “members refuse to charge on loss of connectivity”
-      guidance.
+- For each offline member, reserve `failsafe_peer_assumed_current` (default
+  6A) as assumed consumption.
+- This reduces the available current for online members, ensuring the group
+  stays under its configured maximum even if the offline member continues
+  charging.
 
-2. **Safe current on peer loss (graceful degradation)**
-   - If any member is offline, clamp local allocation to
-      `failsafe_current` (e.g. 6A) or 0.
-   - Intended for environments where occasional dropouts shouldn’t fully
-      halt charging.
+### Fail-safe modes (configurable on controller)
 
-### Conservative accounting
+1. **Safe current on peer loss (graceful degradation)** (default)
+   - If any member is offline, reduce allocations to account for the
+     offline member's assumed consumption.
+   - Online members continue charging with reduced capacity.
 
-When a peer is offline, you cannot trust its real consumption.
+2. **Disable on peer loss (strict safety)**
+   - If any configured member is offline, stop charging on all members
+     (allocation = 0).
+   - Matches #592's "members refuse to charge on loss of connectivity"
+     guidance.
 
-To remain safe, treat an offline peer as consuming at least:
+### Controller failure scenario
 
-- `failsafe_peer_assumed_current` (default = its last known pilot, or
-   configured safe value)
+If the controller goes offline permanently:
 
-This reduces the locally available current so the group remains under its
-configured maximum even if an offline peer continues charging.
+- Members' claims expire after the Current Shaper timeout (120s).
+- Members revert to safe behavior (no load sharing active).
+- A new controller must be manually designated to restore load sharing.
+- **Automatic controller election is a future enhancement.**
 
 ## Security and authorization
 
@@ -428,31 +373,83 @@ configured maximum even if an offline peer continues charging.
 
 Load sharing configuration is part of the main `/config` endpoint.
 
-New REST API endpoints:
+New REST API endpoints (available on **controller** only, except where noted):
 
 - `GET /loadsharing/peers` - List discovered and configured peers
-- `POST /loadsharing/peers` - Add a peer to the group
+  *(read-only on members: shows own group membership)*
+- `POST /loadsharing/peers` - Add a peer to the group *(controller only; 403
+  on members)*
 - `DELETE /loadsharing/peers/{host}` - Remove a peer from the group
-- `GET /loadsharing/status` - Get runtime status and allocations
-- `POST /loadsharing/discover` - Trigger mDNS peer discovery
+  *(controller only; 403 on members)*
+- `GET /loadsharing/status` - Get runtime status and allocations *(available
+  on both controller and members; members show own allocation and controller
+  connection status)*
+- `POST /loadsharing/discover` - Trigger mDNS peer discovery *(controller
+  only)*
 
 See the OpenAPI spec updates in api.yml.
 
 ## Implementation plan (incremental)
 
 1. Add data model + config persistence for load sharing.
-2. Add mDNS discovery list endpoint.
-3. Add peer status ingestion:
-   - Phase 1: poll `GET /status` for configured peers
-   - Phase 2: implement websocket client for `/ws` subscriptions
-4. Implement allocation algorithm and integrate with shaper via
-   `setMaxPwr/setLivePwr`.
-5. Add fail-safe handling and test with simulated peer loss.
+2. Add mDNS discovery list endpoint (controller).
+3. Add peer status ingestion (controller connects to members):
+   - HTTP GET `/status` bootstrap for initial cache
+   - WebSocket client for `/ws` subscriptions
+4. Implement allocation algorithm on controller.
+5. Implement allocation delivery: controller pushes allocations to members
+   via WebSocket; members apply as claims.
+6. Implement config push: controller pushes config to members on peer add.
+7. Add fail-safe handling leveraging existing Current Shaper timeout.
+8. Web UI for controller (config + dashboard) and members (read-only status).
 
 ## Testing strategy (no hardware required)
 
 - Unit-test allocation algorithm with synthetic peer sets.
-- Simulate peer online/offline transitions and ensure failsafe triggers.
-- Add a small local harness (or extend divert_sim) to feed status snapshots and
-   verify allocations converge.
+- Integration-test controller/member flow: config push, allocation delivery,
+  claim application.
+- Simulate member online/offline transitions and ensure failsafe triggers.
+- Extend divert_sim with multi-peer scenarios using OpenEVSE_Emulator.
+- Test controller failure: verify member claims expire within timeout.
 
+## Future extensions
+
+The following features are deferred from the initial MVP and may be
+implemented in future versions:
+
+### Distributed configuration synchronization
+
+The MVP uses a controller/member model where the controller is the single
+source of truth. A future enhancement could implement fully distributed
+configuration synchronization:
+
+- Config version tracking: each node maintains a monotonic `config_version`
+  counter and `config_hash` of critical parameters.
+- Config hash exchange: include config fingerprint in WebSocket status
+  messages for mismatch detection.
+- Automatic sync: nodes with older config versions fetch newer config from
+  peers.
+- Conflict resolution: simultaneous updates resolved by timestamp comparison
+  with device ID tiebreaker.
+- Conservative fallback: use most restrictive values when configs disagree.
+
+This would allow any node to be configured and changes to propagate
+automatically, eliminating the need for a designated controller.
+
+### Automatic controller election
+
+If the controller goes offline, the remaining members could automatically
+elect a new controller based on a deterministic algorithm (e.g., lowest
+device ID among online members). This would provide automatic failover
+without manual intervention.
+
+### Multiple allocation profiles
+
+- Priority-first: higher priority members get more current first.
+- Reduce by percentage: everyone reduced proportionally.
+- FIFO/ramp behavior: staged ramp-up like JuiceNet.
+
+### Hierarchical groups
+
+Group-of-groups configuration like JuiceNet, allowing nested sharing
+hierarchies for complex electrical installations.
