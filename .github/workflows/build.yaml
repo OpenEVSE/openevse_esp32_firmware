@@ -125,7 +125,7 @@ jobs:
 
     - name: Upload assets to latest release
       if: github.ref_name == 'master'
-      uses: "softprops/action-gh-release@v2"
+      uses: "softprops/action-gh-release@v3"
       with:
         prerelease: true
         tag_name: latest
@@ -136,7 +136,7 @@ jobs:
 
     - name: Upload assets to release
       if: startsWith(github.ref_name, 'v')
-      uses: "softprops/action-gh-release@v2"
+      uses: "softprops/action-gh-release@v3"
       with:
         prerelease: true
         name: "${{ github.ref_name }}"
