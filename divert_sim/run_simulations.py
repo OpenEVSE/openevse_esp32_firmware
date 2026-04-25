@@ -158,3 +158,162 @@ def run_simulation(dataset: str,
             min_time_charging,
             max_time_charging,
             total_time_charging)
+
+
+def run_loadsharing_simulation(scenario: str, output: str) -> dict:
+    """Run a load sharing simulation and return per-peer metrics.
+
+    Args:
+        scenario: Path to scenario JSON file (relative to divert_sim dir)
+        output: Output file name (without .csv)
+
+        Returns:
+                Dict keyed by peer_id with metrics:
+                    - allocated_amp_seconds: total allocated current × time
+                    - actual_amp_seconds: total actual draw × time
+                    - allocation_changes: number of times allocation changed
+                    - time_at_zero: seconds with zero allocation
+                    - max_allocation: peak allocated current
+                    - min_allocation_nonzero: minimum non-zero allocation
+                    - final_soc: final state of charge percentage
+                    - soc_delta: end SoC - start SoC
+                    - max_soc: peak SoC over run
+                Plus top-level keys:
+                    - _supply_exceeded: True if total demand ever exceeded max power budget
+                    - _max_total_actual: peak total actual current across all peers
+                    - _max_total_demand_w: peak total demand in watts
+                    - _rows: list of parsed output rows (for timestamp-specific assertions)
+    """
+    print(f"Testing load sharing scenario: {scenario}")
+
+    command = ["./divert_sim", "--loadsharing", "--scenario", scenario]
+    print(f"Running: {' '.join(command)}")
+
+    with open(path.join('output', output + '.csv'), 'w', encoding="utf-8") as output_file:
+        divert_process = Popen(command, stdout=PIPE, stderr=PIPE, universal_newlines=True)
+
+        header = None
+        peer_ids = []
+        rows = []
+        line_number = 0
+
+        while True:
+            line = divert_process.stdout.readline()
+            if line == '' and divert_process.poll() is not None:
+                break
+            if line:
+                output_file.write(line)
+                line = line.strip()
+                line_number += 1
+
+                if line_number == 1:
+                    header = line.split(',')
+                    # Extract peer IDs from header columns like "evse-001_online"
+                    for col in header:
+                        if col.endswith('_online'):
+                            peer_ids.append(col[:-len('_online')])
+                    continue
+
+                fields = line.split(',')
+                row = {
+                    'time': int(fields[0]),
+                    'max_pwr_w': float(fields[1]),
+                    'live_pwr_w': float(fields[2]),
+                    'available_pwr_w': float(fields[3]),
+                    'available_a': float(fields[4]),
+                }
+                col_idx = 5
+                for pid in peer_ids:
+                    row[f'{pid}_online'] = int(fields[col_idx])
+                    row[f'{pid}_vehicle'] = int(fields[col_idx + 1])
+                    row[f'{pid}_soc'] = float(fields[col_idx + 2])
+                    row[f'{pid}_allocated'] = float(fields[col_idx + 3])
+                    row[f'{pid}_available_power_w'] = float(fields[col_idx + 4])
+                    row[f'{pid}_actual'] = float(fields[col_idx + 5])
+                    row[f'{pid}_actual_power_w'] = float(fields[col_idx + 6])
+                    row[f'{pid}_reason'] = fields[col_idx + 7]
+                    col_idx += 8
+                row['total_allocated'] = float(fields[col_idx])
+                row['total_actual'] = float(fields[col_idx + 1])
+                row['total_ev_power_w'] = float(fields[col_idx + 2])
+                row['total_demand_w'] = float(fields[col_idx + 3])
+                rows.append(row)
+
+        # Check stderr for errors
+        stderr = divert_process.stderr.read()
+        if divert_process.returncode != 0:
+            print(f"divert_sim failed (rc={divert_process.returncode}): {stderr}")
+
+    # Compute per-peer metrics
+    result = {
+        '_rows': rows,
+        '_supply_exceeded': False,
+        '_max_total_actual': 0.0,
+        '_max_total_demand_w': 0.0,
+    }
+
+    for pid in peer_ids:
+        metrics = {
+            'allocated_amp_seconds': 0.0,
+            'actual_amp_seconds': 0.0,
+            'allocation_changes': 0,
+            'time_at_zero': 0,
+            'max_allocation': 0.0,
+            'min_allocation_nonzero': float('inf'),
+        }
+        last_allocation = None
+        last_actual = None
+        last_time = None
+
+        start_soc = rows[0][f'{pid}_soc'] if rows else 0.0
+        end_soc = start_soc
+        max_soc = start_soc
+
+        for row in rows:
+            alloc = row[f'{pid}_allocated']
+            actual = row[f'{pid}_actual']
+            t = row['time']
+
+            if last_time is not None:
+                dt = t - last_time
+                metrics['allocated_amp_seconds'] += last_allocation * dt
+                metrics['actual_amp_seconds'] += last_actual * dt
+                if last_allocation == 0:
+                    metrics['time_at_zero'] += dt
+
+            if last_allocation is not None and alloc != last_allocation:
+                metrics['allocation_changes'] += 1
+
+            if alloc > metrics['max_allocation']:
+                metrics['max_allocation'] = alloc
+            if alloc > 0 and alloc < metrics['min_allocation_nonzero']:
+                metrics['min_allocation_nonzero'] = alloc
+
+            soc = row[f'{pid}_soc']
+            end_soc = soc
+            if soc > max_soc:
+                max_soc = soc
+
+            last_allocation = alloc
+            last_actual = actual
+            last_time = t
+
+        if metrics['min_allocation_nonzero'] == float('inf'):
+            metrics['min_allocation_nonzero'] = 0.0
+
+        metrics['final_soc'] = end_soc
+        metrics['soc_delta'] = end_soc - start_soc
+        metrics['max_soc'] = max_soc
+
+        result[pid] = metrics
+
+    # Check safety invariant: total demand should never exceed max power
+    for row in rows:
+        if row['total_actual'] > result['_max_total_actual']:
+            result['_max_total_actual'] = row['total_actual']
+        if row['total_demand_w'] > result['_max_total_demand_w']:
+            result['_max_total_demand_w'] = row['total_demand_w']
+        if row['total_demand_w'] > row['max_pwr_w'] * 1.001:
+            result['_supply_exceeded'] = True
+
+    return result

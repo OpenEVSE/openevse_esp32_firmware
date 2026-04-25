@@ -111,6 +111,8 @@ x-examples:
     loadsharing_priority: 1
     loadsharing_config_version: 1
     loadsharing_config_updated_at: 1735344000
+    loadsharing_role: controller
+    loadsharing_controller_host: ''
 x-tags:
   - Config
 properties:
@@ -418,4 +420,20 @@ properties:
     readOnly: true
     description: |
       Unix timestamp of last load sharing configuration update, used for conflict resolution
+  loadsharing_role:
+    type: string
+    enum:
+      - ''
+      - controller
+      - member
+    default: ''
+    description: |
+      Role of this device in the load sharing group. Empty string means load sharing is not configured.
+      'controller' means this device manages the group and pushes allocations.
+      'member' means this device receives allocations from a controller.
+  loadsharing_controller_host:
+    type: string
+    default: ''
+    description: |
+      Hostname or IP of the controller device. Set automatically on members when the controller pushes config.
 

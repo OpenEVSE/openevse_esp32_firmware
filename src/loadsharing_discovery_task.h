@@ -69,6 +69,9 @@ private:
   unsigned long _discovery_count;            // Number of discovery iterations completed
   unsigned long _last_result_count;          // Peer count from last successful query
 
+  // Pause state (members pause discovery when connected to controller)
+  bool _paused;
+
   /**
    * @brief Initiate a new async mDNS query for OpenEVSE peers
    */
@@ -131,6 +134,16 @@ public:
    * Used by POST /loadsharing/discover API endpoint
    */
   void triggerDiscovery();
+
+  /**
+   * @brief Pause discovery (used on member devices when connected to controller)
+   */
+  void pause();
+
+  /**
+   * @brief Resume discovery (used when controller connection is lost)
+   */
+  void resume();
 
   /**
    * @brief Get the currently cached peer list

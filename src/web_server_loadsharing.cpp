@@ -92,6 +92,13 @@ void handleLoadSharingPeersPost(MongooseHttpServerRequest *request, MongooseHttp
 {
   DBUGLN("[LoadSharing] POST /loadsharing/peers");
 
+  // Members cannot modify the peer list
+  if (loadSharingGroupState.isMember()) {
+    response->setCode(403);
+    response->print("{\"msg\":\"Managed by controller\"}");
+    return;
+  }
+
   // Parse request body
   String body = request->body().toString();
   DBUGF("[LoadSharing] Request body: %s", body.c_str());
@@ -152,6 +159,14 @@ void handleLoadSharingPeersPost(MongooseHttpServerRequest *request, MongooseHttp
 
 void handleLoadSharingPeersDelete(MongooseHttpServerRequest *request, MongooseHttpServerResponseStream *response)
 {
+  // Members cannot modify the peer list
+  if (loadSharingGroupState.isMember()) {
+    response->setCode(403);
+    response->print("{\"msg\":\"Managed by controller\"}");
+    request->send(response);
+    return;
+  }
+
   // TODO: Phase 1.4 - Remove peer from configured group
   response->setCode(501);
   response->print("{\"msg\":\"Not implemented\"}");
@@ -160,6 +175,13 @@ void handleLoadSharingPeersDelete(MongooseHttpServerRequest *request, MongooseHt
 void handleLoadSharingPeersDeleteWithHost(MongooseHttpServerRequest *request, MongooseHttpServerResponseStream *response, const String &host)
 {
   DBUGF("[LoadSharing] DELETE /loadsharing/peers/%s", host.c_str());
+
+  // Members cannot modify the peer list
+  if (loadSharingGroupState.isMember()) {
+    response->setCode(403);
+    response->print("{\"msg\":\"Managed by controller\"}");
+    return;
+  }
 
   // Remove peer via group state
   if (!loadSharingGroupState.removeGroupPeer(host)) {
@@ -180,6 +202,13 @@ void handleLoadSharingPeersDeleteWithHost(MongooseHttpServerRequest *request, Mo
 void handleLoadSharingDiscover(MongooseHttpServerRequest *request, MongooseHttpServerResponseStream *response)
 {
   DBUGLN("[LoadSharing] POST /loadsharing/discover");
+
+  // Members cannot trigger discovery
+  if (loadSharingGroupState.isMember()) {
+    response->setCode(403);
+    response->print("{\"msg\":\"Managed by controller\"}");
+    return;
+  }
 
   // Trigger manual discovery via the background task
   loadSharingDiscoveryTask.triggerDiscovery();

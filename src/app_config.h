@@ -103,6 +103,8 @@ extern double loadsharing_failsafe_peer_assumed_current;
 extern uint32_t loadsharing_priority;
 extern uint32_t loadsharing_config_version;
 extern uint32_t loadsharing_config_updated_at;
+extern String loadsharing_role;
+extern String loadsharing_controller_host;
 
 //Shaper settings
 extern uint32_t current_shaper_max_pwr;

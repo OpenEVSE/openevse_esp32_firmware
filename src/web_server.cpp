@@ -43,6 +43,7 @@ typedef const __FlashStringHelper *fstr_t;
 #include "current_shaper.h"
 #include "evse_man.h"
 #include "limit.h"
+#include "loadsharing_types.h"
 
 #ifndef HTTP_SERVER_PORT
 #define HTTP_SERVER_PORT 80
@@ -1149,7 +1150,7 @@ void handleHttpsRedirect(MongooseHttpServerRequest *request)
 void onWsFrame(MongooseHttpWebSocketConnection *connection, int flags, uint8_t *data, size_t len)
 {
   DBUGF("Got message %.*s", len, (const char *)data);
-  const size_t capacity = JSON_OBJECT_SIZE(1) + 16;
+  const size_t capacity = JSON_OBJECT_SIZE(3) + JSON_OBJECT_SIZE(2) + 128;
   DynamicJsonDocument doc(capacity);
   DeserializationError error = deserializeJson(doc, data, len);
   if (!error) {
@@ -1157,8 +1158,36 @@ void onWsFrame(MongooseHttpWebSocketConnection *connection, int flags, uint8_t *
       {
         // answer pong
         connection->send("{\"pong\": 1}");
-
       }
+
+    // Handle load sharing allocation from controller (member side)
+    if (doc.containsKey("loadsharing")) {
+      JsonObject ls = doc["loadsharing"];
+      if (ls.containsKey("target_current")) {
+        double targetCurrent = ls["target_current"].as<double>();
+        String reason = ls.containsKey("reason") ? ls["reason"].as<String>() : "allocation";
+
+        DBUGF("LoadSharing: Received allocation %.1fA (reason: %s)", targetCurrent, reason.c_str());
+
+        if (loadSharingGroupState.isMember()) {
+          loadSharingGroupState.recordAllocationReceived();
+          if (targetCurrent > 0) {
+            EvseProperties props;
+            props.setMaxCurrent((uint32_t)targetCurrent);
+            props.setState(EvseState::None);
+            evse.claim(EvseClient_OpenEVSE_LoadSharing, EvseManager_Priority_Limit, props);
+          } else if (reason != "idle") {
+            // Active allocation of 0 means disable
+            EvseProperties props;
+            props.setState(EvseState::Disabled);
+            evse.claim(EvseClient_OpenEVSE_LoadSharing, EvseManager_Priority_Limit, props);
+          } else {
+            // No demand - release claim
+            evse.release(EvseClient_OpenEVSE_LoadSharing);
+          }
+        }
+      }
+    }
   }
 }
 

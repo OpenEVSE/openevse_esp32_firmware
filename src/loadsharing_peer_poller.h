@@ -17,6 +17,7 @@
 #include <vector>
 #include <Arduino.h>
 #include "loadsharing_types.h"
+#include "loadsharing_algorithm.h"
 
 /**
  * @brief Connection states for a peer
@@ -47,6 +48,7 @@ struct PeerConnection {
   uint16_t retryCount;                // Number of consecutive connection failures
   bool hasInitialStatus;              // True after first successful status fetch
   bool httpPending;                   // True while HTTP request is in flight
+  bool configPushed;                  // True after config has been pushed to this peer
 
   PeerConnection() :
     host(""),
@@ -60,7 +62,8 @@ struct PeerConnection {
     lastHttpTime(0),
     retryCount(0),
     hasInitialStatus(false),
-    httpPending(false)
+    httpPending(false),
+    configPushed(false)
   {}
 
   ~PeerConnection() {
@@ -197,6 +200,43 @@ private:
    */
   void syncPeerList();
 
+  /**
+   * @brief Push load sharing config from controller to a member peer via HTTP POST /config
+   *
+   * @param host Peer hostname/IP
+   * @param conn PeerConnection reference
+   */
+  void pushConfigToPeer(const String& host, PeerConnection& conn);
+
+  /**
+   * @brief Flag indicating config needs to be pushed to peers
+   */
+  bool _configPushPending;
+
+  /**
+   * @brief Timestamp of last allocation computation
+   */
+  unsigned long _lastAllocationTime;
+
+  /**
+   * @brief Recompute allocations and push to members (controller only)
+   */
+  void recomputeAndPushAllocations();
+
+  /**
+   * @brief Build allocation inputs from current peer statuses
+   * @return Vector of AllocationInput for all group members
+   */
+  std::vector<AllocationInput> buildAllocationInputs();
+
+  /**
+   * @brief Send allocation to a connected member via WebSocket
+   * @param host Peer hostname
+   * @param conn PeerConnection with active WebSocket
+   * @param alloc Allocation to send
+   */
+  void sendAllocationToPeer(const String& host, PeerConnection& conn, const LoadSharingAllocation& alloc);
+
 public:
   LoadSharingPeerPoller();
   virtual ~LoadSharingPeerPoller();
@@ -230,6 +270,19 @@ public:
   void setWsStaleTimeout(unsigned long ms) { _ws_stale_timeout_ms = ms; }
   void setWsPingInterval(unsigned long ms) { _ws_ping_interval_ms = ms; }
   void setMaxRetryCount(uint16_t count) { _max_retry_count = count; }
+
+  /**
+   * @brief Push load sharing config to all connected peers.
+   * Called when config changes on the controller.
+   */
+  void pushConfigToAllPeers();
+
+  /**
+   * @brief Send a reset config to a peer being removed from the group
+   *
+   * @param host Peer hostname/IP
+   */
+  void pushConfigResetToPeer(const String& host);
 
   // Status query methods
 

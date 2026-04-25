@@ -29,7 +29,8 @@ LoadSharingDiscoveryTask::LoadSharingDiscoveryTask(unsigned long cacheTtl,
     _query_in_progress(false),
     _groupState(nullptr),
     _discovery_count(0),
-    _last_result_count(0)
+    _last_result_count(0),
+    _paused(false)
 {
 }
 
@@ -40,6 +41,11 @@ void LoadSharingDiscoveryTask::setup() {
 
 unsigned long LoadSharingDiscoveryTask::loop(MicroTasks::WakeReason reason) {
   unsigned long now = millis();
+
+  // Skip discovery if paused (member connected to controller)
+  if (_paused) {
+    return _poll_interval_ms;
+  }
 
   // If a query is currently in progress, poll its status
   if (_query_in_progress) {
@@ -95,6 +101,27 @@ void LoadSharingDiscoveryTask::triggerDiscovery() {
   _last_discovery_time = 0;
   MicroTask.wakeTask(this);
   DBUGF("LoadSharingDiscoveryTask: Triggered manual discovery");
+}
+
+void LoadSharingDiscoveryTask::pause() {
+  if (!_paused) {
+    _paused = true;
+    // Cleanup any active query
+    if (_query_in_progress) {
+      cleanupQuery();
+      _query_in_progress = false;
+    }
+    DBUGLN("LoadSharingDiscoveryTask: Paused (member mode)");
+  }
+}
+
+void LoadSharingDiscoveryTask::resume() {
+  if (_paused) {
+    _paused = false;
+    _last_discovery_time = 0;  // Force immediate discovery on resume
+    MicroTask.wakeTask(this);
+    DBUGLN("LoadSharingDiscoveryTask: Resumed");
+  }
 }
 
 const std::vector<DiscoveredPeer>& LoadSharingDiscoveryTask::getCachedPeers() const {

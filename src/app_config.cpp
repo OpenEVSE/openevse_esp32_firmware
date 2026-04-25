@@ -153,6 +153,8 @@ double loadsharing_failsafe_peer_assumed_current;
 uint32_t loadsharing_priority;
 uint32_t loadsharing_config_version;
 uint32_t loadsharing_config_updated_at;
+String loadsharing_role;
+String loadsharing_controller_host;
 
 String esp_hostname_default = "openevse-"+ESPAL.getShortId();
 
@@ -275,6 +277,8 @@ ConfigOpt *opts[] =
   new ConfigOptDefinition<uint32_t>(loadsharing_priority, 0, "loadsharing_priority", "lsp"),
   new ConfigOptDefinition<uint32_t>(loadsharing_config_version, 0, "loadsharing_config_version", "lscv"),
   new ConfigOptDefinition<uint32_t>(loadsharing_config_updated_at, 0, "loadsharing_config_updated_at", "lscua"),
+  new ConfigOptDefinition<String>(loadsharing_role, "", "loadsharing_role", "lsr"),
+  new ConfigOptDefinition<String>(loadsharing_controller_host, "", "loadsharing_controller_host", "lsch"),
 
 // Scheduler options
   new ConfigOptDefinition<uint32_t>(scheduler_start_window, SCHEDULER_DEFAULT_START_WINDOW, "scheduler_start_window", "ssw"),

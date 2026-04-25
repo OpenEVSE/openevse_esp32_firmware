@@ -36,11 +36,13 @@
 
     window.onload = function () {
       init_summary(divert_profiles, shaper_profiles);
-      loadSummary("output/summary_divert_master.csv", () => {
-        loadSummary("output/summary_divert.csv", () => {
-          loadSummary("output/summary_shaper.csv", () => {
-            loadSummary("output/summary_shaper_master.csv", () => {
-              generate_summary_table(divert_profiles, shaper_profiles);
+      loadLoadSharingSummary(loadsharing_datasets, () => {
+        loadSummary("output/summary_divert_master.csv", () => {
+          loadSummary("output/summary_divert.csv", () => {
+            loadSummary("output/summary_shaper.csv", () => {
+              loadSummary("output/summary_shaper_master.csv", () => {
+                generate_summary_table(divert_profiles, shaper_profiles);
+              });
             });
           });
         });
@@ -59,6 +61,7 @@
   <div style="margin: 20px 0;">
     <label><input type="checkbox" id="show_divert" checked onchange="toggleCharts()"> Show Divert Simulations</label>
     <label style="margin-left: 20px;"><input type="checkbox" id="show_shaper" checked onchange="toggleCharts()"> Show Shaper Simulations</label>
+    <label style="margin-left: 20px;"><input type="checkbox" id="show_loadsharing" checked onchange="toggleCharts()"> Show Load Sharing Simulations</label>
   </div>
 
   <h2>Summary</h2>
@@ -78,6 +81,10 @@
         var id = generate_chart(dataset, profile);
         loadChart(id, "output/" + id + ".csv", dataset.title + " (" + profile + ")", dataset.class);
       }
+    }
+    for (const dataset of loadsharing_datasets) {
+      var id = generate_chart(dataset, "scenario");
+      loadChart(id, "output/" + dataset.id + ".csv", dataset.title + " (scenario)", dataset.class);
     }
   </script>
 

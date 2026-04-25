@@ -1,7 +1,7 @@
 
 @media print
 {
-  .solar, .gridie, .shaper
+  .solar, .gridie, .shaper, .loadsharing
   {
     page-break-inside: avoid;
   }
@@ -25,6 +25,12 @@ div.gridie
   width: 100%;
 }
 
+div.loadsharing
+{
+  height: 420px;
+  width: 100%;
+}
+
 .hide-divert .solar,
 .hide-divert .gridie,
 .hide-divert tr.solar,
@@ -35,6 +41,12 @@ div.gridie
 
 .hide-shaper .shaper,
 .hide-shaper tr.shaper
+{
+  display: none;
+}
+
+.hide-loadsharing .loadsharing,
+.hide-loadsharing tr.loadsharing
 {
   display: none;
 }

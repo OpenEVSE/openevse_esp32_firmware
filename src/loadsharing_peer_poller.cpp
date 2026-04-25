@@ -11,6 +11,10 @@
 
 #include "debug.h"
 #include "loadsharing_peer_poller.h"
+#include "loadsharing_algorithm.h"
+#include "app_config.h"
+#include "evse_man.h"
+#include "input.h"
 #include <Arduino.h>
 #include <ArduinoJson.h>
 #include <MongooseHttpClient.h>
@@ -36,7 +40,9 @@ LoadSharingPeerPoller::LoadSharingPeerPoller()
     _total_http_requests(0),
     _total_ws_connections(0),
     _total_reconnects(0),
-    _groupState(nullptr)
+    _groupState(nullptr),
+    _configPushPending(false),
+    _lastAllocationTime(0)
 {
 }
 
@@ -70,6 +76,23 @@ unsigned long LoadSharingPeerPoller::loop(MicroTasks::WakeReason reason) {
   // Process each peer connection state machine
   for (auto& pair : _connections) {
     processPeerConnection(pair.first, pair.second);
+  }
+
+  // Clear config push pending flag after all peers processed
+  _configPushPending = false;
+
+  // Periodic allocation recomputation (controller only)
+  if (_groupState && _groupState->isController()) {
+    unsigned long now = millis();
+    if ((long)(now - _lastAllocationTime) >= 5000 || _lastAllocationTime == 0) {
+      recomputeAndPushAllocations();
+      _lastAllocationTime = now;
+    }
+  }
+
+  // Member failsafe timeout check
+  if (_groupState && _groupState->isMember()) {
+    _groupState->checkMemberFailsafe();
   }
 
   // Wake again after poll interval
@@ -175,6 +198,17 @@ void LoadSharingPeerPoller::processPeerConnection(const String& host, PeerConnec
     }
 
     case PeerConnectionState::WS_CONNECTED: {
+      // Push config to newly connected peer if controller and not yet pushed
+      if (_groupState && _groupState->isController() && !conn.configPushed) {
+        pushConfigToPeer(host, conn);
+      }
+
+      // Re-push config if a config change was flagged
+      if (_groupState && _groupState->isController() && _configPushPending && conn.configPushed) {
+        conn.configPushed = false;  // Force re-push
+        pushConfigToPeer(host, conn);
+      }
+
       // Monitor for stale connection
       if (isPeerStale(conn)) {
         DBUGF("LoadSharingPeerPoller: [%s] Connection stale (no messages for %lu ms)",
@@ -537,4 +571,216 @@ void LoadSharingPeerPoller::getStatistics(unsigned long& outTotalMessages,
   outTotalHttpRequests = _total_http_requests;
   outTotalWsConnections = _total_ws_connections;
   outTotalReconnects = _total_reconnects;
+}
+
+void LoadSharingPeerPoller::pushConfigToPeer(const String& host, PeerConnection& conn) {
+  if (conn.configPushed) {
+    return;  // Already pushed
+  }
+
+  DBUGF("LoadSharingPeerPoller: [%s] Pushing load sharing config", host.c_str());
+
+  // Build config JSON
+  DynamicJsonDocument doc(1024);
+  doc["loadsharing_enabled"] = true;
+  doc["loadsharing_role"] = "member";
+  doc["loadsharing_controller_host"] = _groupState->getLocalHostname();
+  doc["loadsharing_group_id"] = loadsharing_group_id;
+  doc["loadsharing_group_max_current"] = loadsharing_group_max_current;
+  doc["loadsharing_safety_factor"] = loadsharing_safety_factor;
+  doc["loadsharing_heartbeat_timeout"] = loadsharing_heartbeat_timeout;
+  doc["loadsharing_failsafe_mode"] = loadsharing_failsafe_mode;
+  doc["loadsharing_failsafe_safe_current"] = loadsharing_failsafe_safe_current;
+  doc["loadsharing_failsafe_peer_assumed_current"] = loadsharing_failsafe_peer_assumed_current;
+
+  String body;
+  serializeJson(doc, body);
+
+  // POST to member's /config endpoint
+  String url = "http://" + host + "/config";
+
+  MongooseHttpClientRequest* req = httpClient.beginRequest(url.c_str());
+  req->setMethod(HTTP_POST);
+  req->setContentType("application/json");
+  req->setContent(body.c_str());
+
+  req->onResponse([this, host](MongooseHttpClientResponse* response) {
+    if (response->respCode() == 200) {
+      DBUGF("LoadSharingPeerPoller: [%s] Config push successful", host.c_str());
+      auto it = this->_connections.find(host);
+      if (it != this->_connections.end()) {
+        it->second.configPushed = true;
+      }
+    } else {
+      DBUGF("LoadSharingPeerPoller: [%s] Config push failed with code %d", host.c_str(), response->respCode());
+    }
+  });
+
+  req->onClose([host]() {
+    DBUGF("LoadSharingPeerPoller: [%s] Config push HTTP connection closed", host.c_str());
+  });
+
+  httpClient.send(req);
+}
+
+void LoadSharingPeerPoller::pushConfigResetToPeer(const String& host) {
+  DBUGF("LoadSharingPeerPoller: [%s] Pushing config reset (removing from group)", host.c_str());
+
+  // Build reset config JSON
+  DynamicJsonDocument doc(256);
+  doc["loadsharing_enabled"] = false;
+  doc["loadsharing_role"] = "";
+  doc["loadsharing_controller_host"] = "";
+
+  String body;
+  serializeJson(doc, body);
+
+  // POST to member's /config endpoint
+  String url = "http://" + host + "/config";
+
+  MongooseHttpClientRequest* req = httpClient.beginRequest(url.c_str());
+  req->setMethod(HTTP_POST);
+  req->setContentType("application/json");
+  req->setContent(body.c_str());
+
+  req->onResponse([host](MongooseHttpClientResponse* response) {
+    DBUGF("LoadSharingPeerPoller: [%s] Config reset response: %d", host.c_str(), response->respCode());
+  });
+
+  req->onClose([host]() {
+    DBUGF("LoadSharingPeerPoller: [%s] Config reset HTTP connection closed", host.c_str());
+  });
+
+  httpClient.send(req);
+}
+
+void LoadSharingPeerPoller::pushConfigToAllPeers() {
+  if (!_groupState || !_groupState->isController()) {
+    return;
+  }
+
+  DBUGLN("LoadSharingPeerPoller: Flagging config push to all connected peers");
+  _configPushPending = true;
+}
+
+std::vector<AllocationInput> LoadSharingPeerPoller::buildAllocationInputs() {
+  std::vector<AllocationInput> inputs;
+
+  if (!_groupState) {
+    return inputs;
+  }
+
+  // Add self (controller) as first member
+  {
+    AllocationInput self;
+    self.id = _groupState->getLocalHostname();
+    self.host = _groupState->getLocalHostname();
+    self.online = true;
+    // Controller is demanding if it has a vehicle connected and not sleeping/disabled
+    uint8_t state = evse.getEvseState();
+    self.demanding = (evse.isVehicleConnected() && state != OPENEVSE_STATE_SLEEPING);
+    self.min_current = evse.getMinCurrent();
+    self.max_current = evse.getMaxConfiguredCurrent();
+    self.priority = loadsharing_priority;
+    inputs.push_back(self);
+  }
+
+  // Add each configured peer
+  for (const auto& pair : _connections) {
+    AllocationInput input;
+    input.id = pair.first;
+    input.host = pair.first;
+    input.online = (pair.second.state == PeerConnectionState::WS_CONNECTED);
+    // Peer is demanding if vehicle connected and state indicates charging/connected
+    input.demanding = input.online &&
+                      pair.second.statusCache.getVehicle() == 1 &&
+                      pair.second.statusCache.getState() != 0 &&    // Not in idle state
+                      pair.second.statusCache.getState() != 254;    // Not in sleep state
+    input.min_current = evse.getMinCurrent();  // Use our min as default (peers may differ)
+    input.max_current = pair.second.statusCache.getPilot() > 0 ?
+                        pair.second.statusCache.getPilot() : evse.getMaxCurrent();
+    input.priority = loadsharing_priority;  // For now, same priority
+    inputs.push_back(input);
+  }
+
+  return inputs;
+}
+
+void LoadSharingPeerPoller::recomputeAndPushAllocations() {
+  if (!_groupState || !_groupState->isController()) {
+    return;
+  }
+
+  // Build inputs
+  std::vector<AllocationInput> inputs = buildAllocationInputs();
+
+  if (inputs.empty()) {
+    return;
+  }
+
+  // Compute allocations
+  bool failsafe_active = false;
+  std::vector<LoadSharingAllocation> allocations = computeAllocations(
+    inputs,
+    loadsharing_group_max_current,
+    loadsharing_safety_factor,
+    loadsharing_failsafe_peer_assumed_current,
+    loadsharing_failsafe_mode,
+    failsafe_active
+  );
+
+  // Update group state
+  _groupState->getAllocations() = allocations;
+  _groupState->setComputedAt(millis());
+  _groupState->setFailsafeActive(failsafe_active);
+
+  // Apply local allocation (first entry is always self)
+  if (!allocations.empty()) {
+    double selfAllocation = allocations[0].getTargetCurrent();
+
+    if (selfAllocation > 0) {
+      EvseProperties props;
+      props.setMaxCurrent((uint32_t)selfAllocation);
+      props.setState(EvseState::None);
+      evse.claim(EvseClient_OpenEVSE_LoadSharing, EvseManager_Priority_Limit, props);
+    } else if (allocations[0].getReason() != "idle") {
+      // Active allocation of 0 means we should disable
+      EvseProperties props;
+      props.setState(EvseState::Disabled);
+      evse.claim(EvseClient_OpenEVSE_LoadSharing, EvseManager_Priority_Limit, props);
+    } else {
+      // No demand - release claim
+      evse.release(EvseClient_OpenEVSE_LoadSharing);
+    }
+  }
+
+  // Push allocations to connected peers
+  for (size_t i = 1; i < allocations.size() && i < inputs.size(); i++) {
+    const String& host = inputs[i].host;
+    auto it = _connections.find(host);
+    if (it != _connections.end() && it->second.state == PeerConnectionState::WS_CONNECTED) {
+      sendAllocationToPeer(host, it->second, allocations[i]);
+    }
+  }
+}
+
+void LoadSharingPeerPoller::sendAllocationToPeer(const String& host, PeerConnection& conn,
+                                                   const LoadSharingAllocation& alloc) {
+  if (conn.wsClient == nullptr || !conn.wsClient->isConnectionOpen()) {
+    return;
+  }
+
+  // Build allocation JSON message
+  DynamicJsonDocument doc(256);
+  JsonObject ls = doc.createNestedObject("loadsharing");
+  ls["target_current"] = alloc.getTargetCurrent();
+  ls["reason"] = alloc.getReason();
+
+  String msg;
+  serializeJson(doc, msg);
+
+  DBUGF("LoadSharingPeerPoller: [%s] Sending allocation: %.1fA (%s)",
+        host.c_str(), alloc.getTargetCurrent(), alloc.getReason().c_str());
+
+  conn.wsClient->sendTXT(msg.c_str(), msg.length());
 }

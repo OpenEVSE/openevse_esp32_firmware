@@ -14,6 +14,7 @@
     ];
 
     var datasets = divert_datasets.concat(shaper_datasets);
+    var loadsharingDatasets = loadsharing_datasets;
 
     function run_simulation() {
       $.post("simulation", JSON.stringify({
@@ -27,14 +28,16 @@
         "current_shaper_data_maxinterval": parseInt($("#current_shaper_data_maxinterval").val())
       }), () => {
         init_summary(profiles, profiles);
-        loadSummary("output/summary_divert_master.csv", () => {
-          loadSummary("output/summary_shaper_master.csv", () => {
-            loadSummary("output/summary_interactive.csv", () => {
-              generate_summary_table(profiles, profiles);
-              for (const dataset of datasets) {
-                var id = dataset.id + "_interactive";
-                loadChart(id, "output/"+ id + ".csv", dataset.title + " (interactive)", dataset.class);
-              }
+        loadLoadSharingSummary(loadsharingDatasets, () => {
+          loadSummary("output/summary_divert_master.csv", () => {
+            loadSummary("output/summary_shaper_master.csv", () => {
+              loadSummary("output/summary_interactive.csv", () => {
+                generate_summary_table(profiles, profiles);
+                for (const dataset of datasets) {
+                  var id = dataset.id + "_interactive";
+                  loadChart(id, "output/"+ id + ".csv", dataset.title + " (interactive)", dataset.class);
+                }
+              }, "interactive");
             }, "interactive");
           });
         });
@@ -58,6 +61,7 @@
   <div style="margin: 20px 0;">
     <label><input type="checkbox" id="show_divert" checked onchange="toggleCharts()"> Show Divert Simulations</label>
     <label style="margin-left: 20px;"><input type="checkbox" id="show_shaper" checked onchange="toggleCharts()"> Show Shaper Simulations</label>
+    <label style="margin-left: 20px;"><input type="checkbox" id="show_loadsharing" checked onchange="toggleCharts()"> Show Load Sharing Simulations</label>
   </div>
 
   <label for="divert_PV_ratio">divert_PV_ratio</label>
@@ -89,6 +93,10 @@
       var id = generate_chart(dataset, "master");;
       loadChart(id, "output/"+ id + ".csv", dataset.title + " (master)", dataset.class);
       generate_chart(dataset, "interactive");
+    }
+    for (const dataset of loadsharingDatasets) {
+      var id = generate_chart(dataset, "scenario");
+      loadChart(id, "output/" + dataset.id + ".csv", dataset.title + " (scenario)", dataset.class);
     }
     //<div id="day1_default" style="width:100%; height:300px;" class="solar" csv="output/day1_default.csv" title="Day 1"></div>
 

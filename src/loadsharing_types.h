@@ -3,6 +3,7 @@
 
 #include <Arduino.h>
 #include <vector>
+#include "app_config.h"
 
 // Forward declarations
 class LoadSharingPeerStatus;
@@ -217,6 +218,10 @@ private:
   bool _config_consistent;       // Are all peer configs consistent?
   std::vector<String> _config_issues; // List of detected config mismatches
 
+  // Member failsafe tracking
+  unsigned long _lastAllocationReceivedTime;  // millis() when last allocation was received from controller
+  bool _memberFailsafeActive;                 // True if member failsafe timeout has fired
+
   // Peer change notification
   PeerChangeCallback _onPeerChange;
 
@@ -248,8 +253,71 @@ public:
     _offline_count(0),
     _config_consistent(true),
     _config_issues(),
+    _lastAllocationReceivedTime(0),
+    _memberFailsafeActive(false),
     _onPeerChange(nullptr)
   {}
+
+  // =========================================================================
+  // Role management
+  // =========================================================================
+
+  /**
+   * @brief Check if this device is the controller.
+   */
+  bool isController() const { return loadsharing_role == "controller"; }
+
+  /**
+   * @brief Check if this device is a member (managed by a controller).
+   */
+  bool isMember() const { return loadsharing_role == "member"; }
+
+  /**
+   * @brief Check if load sharing is enabled and this device has a role.
+   */
+  bool isActive() const { return loadsharing_enabled && (isController() || isMember()); }
+
+  /**
+   * @brief Transition this device to the controller role.
+   * Called when the user first adds a peer on this device.
+   */
+  void becomeController();
+
+  /**
+   * @brief Transition this device to the member role.
+   * Called when config push from a controller is received.
+   * @param controllerHost Hostname/IP of the controller
+   */
+  void becomeMember(const String& controllerHost);
+
+  /**
+   * @brief Reset the load sharing role to disabled.
+   * Called when load sharing is disabled or member is removed from group.
+   */
+  void resetRole();
+
+  // =========================================================================
+  // Member failsafe
+  // =========================================================================
+
+  /**
+   * @brief Record that an allocation was received from the controller.
+   * Resets the member failsafe timer. Called from the /ws onFrame handler.
+   */
+  void recordAllocationReceived();
+
+  /**
+   * @brief Check if member failsafe timeout has expired and take action.
+   * If no allocation from controller within loadsharing_heartbeat_timeout,
+   * applies failsafe_safe_current or disables charging based on failsafe_mode.
+   * Called periodically from the peer poller loop.
+   */
+  void checkMemberFailsafe();
+
+  /**
+   * @brief Whether the member failsafe timeout is currently active.
+   */
+  bool isMemberFailsafeActive() const { return _memberFailsafeActive; }
 
   // Accessors
   bool isEnabled() const { return _enabled; }
