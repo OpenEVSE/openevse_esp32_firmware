@@ -112,7 +112,6 @@ time_t divertmode_get_time()
 
 static const double TAPER_START_SOC = 80.0;
 static const double TAPER_RANGE = 20.0;
-static const double MAX_TAPER_FACTOR = 0.5;
 
 struct PeerEvent {
   long time_sec;
@@ -424,8 +423,7 @@ static int run_loadsharing_sim(const std::string &scenario_path)
 
         if (peer_states[i].soc > TAPER_START_SOC) {
           double taper_factor = 1.0 -
-                                ((peer_states[i].soc - TAPER_START_SOC) / TAPER_RANGE) *
-                                    MAX_TAPER_FACTOR;
+                                ((peer_states[i].soc - TAPER_START_SOC) / TAPER_RANGE);
           taper_factor = std::max(0.0, taper_factor);
           actual_power_w *= taper_factor;
         }
@@ -437,6 +435,12 @@ static int run_loadsharing_sim(const std::string &scenario_path)
         double energy_added_kwh = ((actual_power_w / 1000.0) * tick_interval) / 3600.0;
         double soc_increase = (energy_added_kwh / peer_states[i].battery_capacity_kwh) * 100.0;
         peer_states[i].soc = std::min(100.0, peer_states[i].soc + soc_increase);
+
+        if (peer_states[i].soc >= 100.0) {
+          peer_states[i].actual_power_w = 0;
+          peer_states[i].actual_current = 0;
+          peer_states[i].reason = "idle";
+        }
       } else {
         peer_states[i].available_power_w = 0;
         peer_states[i].actual_power_w = 0;
