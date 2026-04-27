@@ -27,6 +27,7 @@ var loadsharing_datasets = [
   { id: "loadsharing_failsafe_disable", class: "loadsharing", title: "Load Sharing: Failsafe Disable" },
   { id: "loadsharing_insufficient", class: "loadsharing", title: "Load Sharing: Insufficient Supply" },
   { id: "loadsharing_ev_taper", class: "loadsharing", title: "Load Sharing: EV Taper" },
+  { id: "loadsharing_longrun_2peer_handoff", class: "loadsharing", title: "Load Sharing: Long Run 2 Peer Handoff" },
 ];
 
 var loadsharing_summary = {};

@@ -178,6 +178,61 @@ def test_loadsharing_taper():
     assert peer_metrics['soc_delta'] > 0
 
 
+def test_loadsharing_longrun_2peer_handoff():
+    """Peer 1 starts alone, peer 2 joins later, then takes full capacity after peer 1 completes."""
+    result = run_loadsharing_simulation(
+        'data/scenario-longrun-2peer-handoff.json',
+        'loadsharing_longrun_2peer_handoff',
+    )
+    assert not result['_supply_exceeded'], "Total demand exceeded max power budget"
+
+    rows = result['_rows']
+    rows_by_time = {r['time']: r for r in rows}
+
+    # Peer 1 starts alone at full available current.
+    start = rows_by_time[0]
+    assert start['evse-001_allocated'] == approx(32.0)
+    assert start['evse-001_actual'] == approx(30.0)
+    assert start['evse-002_allocated'] == approx(0.0)
+    assert start['evse-002_actual'] == approx(0.0)
+
+    # When peer 2 connects, allocation should split equally.
+    split = rows_by_time[3600]
+    assert split['evse-001_allocated'] == approx(16.0)
+    assert split['evse-002_allocated'] == approx(16.0)
+
+    # During peer 1 taper/completion window, peer 1 should consume less than allocated power.
+    taper_rows = [
+        r for r in rows
+        if r['time'] >= 3600
+        and r['evse-001_actual'] > 0
+        and r['evse-001_actual_power_w'] < r['evse-001_available_power_w']
+    ]
+    assert len(taper_rows) > 0
+
+    # Peer 1 completes well before peer 2.
+    peer1_done_rows = [
+        r for r in rows
+        if r['evse-001_soc'] >= 100.0 and r['evse-001_actual'] == approx(0.0)
+    ]
+    peer2_done_rows = [
+        r for r in rows
+        if r['evse-002_soc'] >= 100.0 and r['evse-002_actual'] == approx(0.0)
+    ]
+    assert len(peer1_done_rows) > 0
+    assert len(peer2_done_rows) > 0
+
+    peer1_done_time = peer1_done_rows[0]['time']
+    peer2_done_time = peer2_done_rows[0]['time']
+    assert peer2_done_time - peer1_done_time >= 3600
+
+    # Once peer 1 is complete, peer 2 should pick up full available capacity.
+    after_peer1_done = [r for r in rows if r['time'] > peer1_done_time and r['evse-002_actual'] > 0]
+    assert len(after_peer1_done) > 0
+    assert max(r['evse-002_available_power_w'] for r in after_peer1_done) == approx(7680.0)
+    assert max(r['evse-002_actual_power_w'] for r in after_peer1_done) == approx(7200.0)
+
+
 def test_loadsharing_safety_invariant():
     """Across all scenarios, total demand should not exceed max power budget."""
     scenarios = [
@@ -188,6 +243,7 @@ def test_loadsharing_safety_invariant():
         ('data/scenario-peer-offline.json', 'safety_offline'),
         ('data/scenario-insufficient.json', 'safety_insufficient'),
         ('data/scenario-ev-taper.json', 'safety_taper'),
+        ('data/scenario-longrun-2peer-handoff.json', 'safety_longrun_handoff'),
     ]
     for scenario, output in scenarios:
         result = run_loadsharing_simulation(scenario, output)
