@@ -125,9 +125,14 @@ unsigned long TimeManager::loop(MicroTasks::WakeReason reason)
     {
       _setTheTime = false;
 
-      DBUGF("Setting the time on the EVSE, %s",
-        time_format_time(utc_time.tv_sec).c_str());
-      OpenEVSE.setTime(utc_time.tv_sec, [this](int ret)
+      DBUGF("Setting the time on the EVSE (UTC), %s",
+        time_format_time(utc_time.tv_sec, false).c_str());
+      // Use the tm& overload with UTC fields from gmtime_r so the EVSE/RTC
+      // stores UTC directly.  setTime(time_t) would call localtime_r()
+      // internally and store local time instead.
+      struct tm utc_tm;
+      gmtime_r(&utc_time.tv_sec, &utc_tm);
+      OpenEVSE.setTime(utc_tm, [this](int ret)
       {
         DBUGF("EVSE time %sset", RAPI_RESPONSE_OK == ret ? "" : "not ");
       });
@@ -185,15 +190,19 @@ void TimeManager::setTime(struct timeval setTime, const char *source)
   DBUGF("Diff %.2f", diffTime(setTime, local_time));
   settimeofday(&setTime, &tz_utc);
 
-  // Set the time on the OpenEVSE, set from the local time as this could take several ms
+  // Set the time on the OpenEVSE if it differs from the current time
   OpenEVSE.getTime([this](int ret, time_t evse_time)
   {
     if(RAPI_RESPONSE_OK == ret)
     {
+      // The EVSE stores UTC but getTime() returns mktime(utc_fields_as_local).
+      // Use evse_time_to_utc() to recover the actual UTC epoch.
+      time_t evse_utc = evse_time_to_utc(evse_time);
+
       time_t local_time = time(NULL);
       DBUGF("Local time: %s", time_format_time(local_time).c_str());
-      DBUGF("Time from EVSE: %s", time_format_time(evse_time).c_str());
-      time_t diff = local_time - evse_time;
+      DBUGF("Time from EVSE (UTC): %s", time_format_time(evse_utc, false).c_str());
+      time_t diff = local_time - evse_utc;
       DBUGF("Diff %ld", diff);
 
       if(diff != 0)
@@ -237,6 +246,30 @@ void TimeManager::setSntpEnabled(bool enabled)
 
 void time_set_time(struct timeval setTime, const char *source) {
   timeManager.setTime(setTime, source);
+}
+
+time_t evse_time_to_utc(time_t evse_time)
+{
+  // The EVSE now stores UTC calendar fields, but getTime() reconstructs a
+  // time_t via mktime() which treats the stored UTC fields as local time,
+  // introducing a timezone offset error.
+  //
+  // To compensate: decompose evse_time into its UTC calendar fields with
+  // gmtime_r(), then ask mktime() what time_t those same fields produce when
+  // treated as local time.  The difference between evse_time and that result
+  // equals the timezone offset that mktime() already baked in.  Adding it
+  // back recovers the true UTC epoch:
+  //   evse_utc = evse_time + (evse_time - mktime(gmtime(evse_time)))
+  //            = 2*evse_time - mktime(gmtime(evse_time))
+  //
+  // Using evse_time as the reference point (rather than time(NULL)) keeps
+  // the DST determination self-consistent even on first boot before the
+  // system clock has been initialised.
+  struct tm gm;
+  gmtime_r(&evse_time, &gm);
+  // mktime() may normalise and modify the struct, so work on a copy.
+  struct tm gm_copy = gm;
+  return evse_time + (evse_time - mktime(&gm_copy));
 }
 
 String time_format_time(time_t time, bool local_time)
