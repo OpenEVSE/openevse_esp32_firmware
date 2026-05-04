@@ -601,3 +601,385 @@ function toggleCharts() {
     document.body.classList.add('hide-loadsharing');
   }
 }
+
+// =============================================================================
+// view.html — tab-based lazy loading (interactive.html uses the older API above)
+// =============================================================================
+
+var csvDataCache = {};          // url -> fetched CSV text
+var currentDivertProfile = null;
+var currentShaperProfile = null;
+
+// ---------- Initialisation ---------------------------------------------------
+
+function initPage(divertProfiles, shaperProfiles) {
+  init_summary(divertProfiles, shaperProfiles);
+  populateProfileSelects(divertProfiles, shaperProfiles);
+  setupTabHandlers();
+  // Load all summaries in parallel; auto-start first tab's charts when done.
+  loadAllSummaries(divertProfiles, shaperProfiles);
+}
+
+function populateProfileSelects(divertProfiles, shaperProfiles) {
+  var $divert = $('#divert-profile-select');
+  divertProfiles.forEach(function (p) { $divert.append($('<option>').val(p).text(p)); });
+
+  var $shaper = $('#shaper-profile-select');
+  shaperProfiles.forEach(function (p) { $shaper.append($('<option>').val(p).text(p)); });
+
+  currentDivertProfile = divertProfiles[0];
+  currentShaperProfile = shaperProfiles[0];
+}
+
+function setupTabHandlers() {
+  $(document).on('click', '.sim-tab-nav a[data-tab]', function (e) {
+    e.preventDefault();
+    switchTab($(this).data('tab'));
+  });
+}
+
+function switchTab(tab) {
+  $('.sim-tab-nav li').removeClass('active');
+  $('.sim-tab-nav a[data-tab="' + tab + '"]').parent().addClass('active');
+  $('.tab-content .tab-pane').removeClass('active');
+  $('#tab-' + tab).addClass('active');
+
+  if (tab === 'divert') {
+    loadTabCharts('divert', currentDivertProfile);
+  } else if (tab === 'shaper') {
+    loadTabCharts('shaper', currentShaperProfile);
+  } else if (tab === 'loadsharing') {
+    loadTabCharts('loadsharing', null);
+  }
+}
+
+// ---------- Parallel summary loading ----------------------------------------
+
+/**
+ * Returns a jQuery Deferred that resolves once the summary CSV is parsed into
+ * the global `summary` object.  Never rejects — missing files are silently
+ * skipped so one bad file cannot block the whole batch.
+ */
+function loadSummaryP(url, profile) {
+  var def = $.Deferred();
+  $.ajax({
+    url: url,
+    dataType: 'text',
+    success: function (data) {
+      var lines = data.split(/\r?\n|\r/);
+      for (var i = 1; i < lines.length; i++) {
+        var cols = lines[i].split(',');
+        if (cols.length < 2) { continue; }
+        var dataset = cols[0].replace(/"/g, '');
+        var config = (profile !== false)
+          ? profile
+          : cols[1].replace(/"/g, '')
+                   .replace(/data\/config-(inputfilter|shaper)-/, '')
+                   .replace('.json', '');
+        var key = config.toLowerCase();
+        if (!summary[key]) { summary[key] = {}; }
+        summary[key][dataset] = {
+            total_solar:        parseFloat(cols[2]).toFixed(2),
+            total_ev_charged:   parseFloat(cols[3]).toFixed(2),
+            charge_from_solar:  parseFloat(cols[4]).toFixed(2),
+            charge_from_grid:   parseFloat(cols[5]).toFixed(2),
+            number_of_charges:  parseInt(cols[6]),
+            min_time_charging:  new Date(parseInt(cols[7])  * 1000).toISOString().slice(11, 19),
+            max_time_charging:  new Date(parseInt(cols[8])  * 1000).toISOString().slice(11, 19),
+            total_time_charging:new Date(parseInt(cols[9])  * 1000).toISOString().slice(11, 19),
+          };
+          }
+      def.resolve();
+    },
+    error: function () { def.resolve(); },
+  });
+  return def.promise();
+}
+
+/**
+ * Fetches all load-sharing CSVs in parallel, populates loadsharing_summary
+ * AND primes csvDataCache so that the Load Sharing tab charts render instantly
+ * from cache (no second network trip).
+ */
+function loadLoadSharingSummaryP(datasets) {
+  if (!datasets || datasets.length === 0) { return $.when(); }
+
+  var fetches = datasets.map(function (dataset) {
+    var url = 'output/' + dataset.id + '.csv';
+    return $.get(url)
+      .then(function (data) {
+        csvDataCache[url] = data;
+        var row = computeLoadSharingSummaryFromCsv(data);
+        if (row) { loadsharing_summary[dataset.id] = row; }
+      }, function () {});  // ignore 404s
+  });
+
+  return $.when.apply($, fetches);
+}
+
+function loadAllSummaries(divertProfiles, shaperProfiles) {
+  $.when(
+    loadSummaryP('output/summary_divert_master.csv', false),
+    loadSummaryP('output/summary_divert.csv',        false),
+    loadSummaryP('output/summary_shaper.csv',        false),
+    loadSummaryP('output/summary_shaper_master.csv', false),
+    loadLoadSharingSummaryP(loadsharing_datasets)
+  ).then(function () {
+    renderDivertSummaryTable(divertProfiles);
+    renderShaperSummaryTable(shaperProfiles);
+    renderLoadSharingSummaryTable();
+    // Auto-start loading the initially-active tab's charts.
+    loadTabCharts('divert', currentDivertProfile);
+  });
+}
+
+// ---------- Summary table rendering -----------------------------------------
+
+function buildDivertShaperSummaryTable(profiles, datasets) {
+  var html = '<div class="table-responsive">';
+  html += '<table class="table table-bordered table-striped table-condensed sim-summary-table">';
+  html += '<thead><tr>';
+  html += '<th>Dataset</th><th>Config</th>';
+  html += '<th>Total Solar</th><th>Total EV Charged</th>';
+  html += '<th>From Solar</th><th>From Grid</th>';
+  html += '<th>Charges</th>';
+  html += '<th>Min Charging</th><th>Max Charging</th><th>Total Charging</th>';
+  html += '</tr></thead><tbody>';
+  for (var d = 0; d < datasets.length; d++) {
+    var dataset = datasets[d];
+    for (var p = 0; p < profiles.length; p++) {
+      var profile = profiles[p];
+      var row = summary[profile] && summary[profile][dataset.id];
+      if (!row || !row.total_solar) { continue; }
+      html += '<tr>';
+      html += '<td>' + dataset.title + '</td>';
+      html += '<td>' + profile + '</td>';
+      html += '<td>' + row.total_solar + '</td>';
+      html += '<td>' + row.total_ev_charged + '</td>';
+      html += '<td>' + row.charge_from_solar + '</td>';
+      html += '<td>' + row.charge_from_grid + '</td>';
+      html += '<td>' + row.number_of_charges + '</td>';
+      html += '<td>' + row.min_time_charging + '</td>';
+      html += '<td>' + row.max_time_charging + '</td>';
+      html += '<td>' + row.total_time_charging + '</td>';
+      html += '</tr>';
+    }
+  }
+  html += '</tbody></table></div>';
+  return html;
+}
+
+function renderDivertSummaryTable(profiles) {
+  $('#summary-divert')
+    .html(buildDivertShaperSummaryTable(profiles, divert_datasets))
+    .removeClass('sim-summary-placeholder');
+}
+
+function renderShaperSummaryTable(profiles) {
+  $('#summary-shaper')
+    .html(buildDivertShaperSummaryTable(profiles, shaper_datasets))
+    .removeClass('sim-summary-placeholder');
+}
+
+function renderLoadSharingSummaryTable() {
+  if (Object.keys(loadsharing_summary).length === 0) {
+    $('#summary-loadsharing')
+      .html('<p class="text-muted">No load sharing results found.</p>')
+      .removeClass('sim-summary-placeholder');
+    return;
+  }
+
+  var html = '<div class="table-responsive">';
+  html += '<table class="table table-bordered table-striped table-condensed sim-summary-table">';
+  html += '<thead><tr>';
+  html += '<th>Scenario</th><th>Peers</th><th>Duration</th>';
+  html += '<th>Peak Budget (kW)</th><th>Peak Demand (kW)</th><th>Peak EV Power (kW)</th>';
+  html += '<th>Supply Violations</th><th>Final SoC</th>';
+  html += '</tr></thead><tbody>';
+
+  for (var i = 0; i < loadsharing_datasets.length; i++) {
+    var dataset = loadsharing_datasets[i];
+    var d = loadsharing_summary[dataset.id];
+    if (!d) { continue; }
+    var violations = d.violation_count > 0
+      ? '<span class="text-danger"><strong>' + d.violation_count + '</strong></span>'
+      : '0';
+    html += '<tr>';
+    html += '<td>' + dataset.title + '</td>';
+    html += '<td>' + d.peer_count + '</td>';
+    html += '<td>' + formatDuration(d.duration_s) + '</td>';
+    html += '<td>' + d.peak_budget_kw.toFixed(2) + '</td>';
+    html += '<td>' + d.peak_demand_kw.toFixed(2) + '</td>';
+    html += '<td>' + d.peak_ev_kw.toFixed(2) + '</td>';
+    html += '<td>' + violations + '</td>';
+    html += '<td>' + d.final_soc + '</td>';
+    html += '</tr>';
+  }
+
+  html += '</tbody></table></div>';
+  $('#summary-loadsharing')
+    .html(html)
+    .removeClass('sim-summary-placeholder');
+}
+
+// ---------- Lazy chart loading ----------------------------------------------
+
+function onDivertProfileChange() {
+  currentDivertProfile = $('#divert-profile-select').val();
+  loadTabCharts('divert', currentDivertProfile);
+}
+
+function onShaperProfileChange() {
+  currentShaperProfile = $('#shaper-profile-select').val();
+  loadTabCharts('shaper', currentShaperProfile);
+}
+
+function loadTabCharts(type, profile) {
+  var $container = $('#' + type + '-charts-container');
+  if ($container.length === 0) { return; }
+
+  var datasets, items;
+
+  if (type === 'loadsharing') {
+    // Load sharing: CSV filename differs from chart div ID
+    items = loadsharing_datasets.map(function (dataset) {
+      return {
+        dataset: dataset,
+        id:      dataset.id + '_scenario',
+        url:     'output/' + dataset.id + '.csv',   // no "_scenario" in filename
+        suffix:  'scenario',
+      };
+    });
+  } else {
+    if (!profile) { return; }
+    datasets = (type === 'divert') ? divert_datasets : shaper_datasets;
+    items = datasets.map(function (dataset) {
+      var id = dataset.id + '_' + profile;
+      return {
+        dataset: dataset,
+        id:      id,
+        url:     'output/' + id + '.csv',
+        suffix:  profile,
+      };
+    });
+  }
+
+  // If all CSV data is already cached, render immediately.
+  if (items.every(function (item) { return !!csvDataCache[item.url]; })) {
+    renderChartItems(items, $container);
+    return;
+  }
+
+  $container.html(
+    '<div class="sim-chart-loading">' +
+      '<span class="glyphicon glyphicon-refresh sim-spinning"></span> Loading charts&hellip;' +
+    '</div>'
+  );
+
+  // Fetch all missing CSVs in parallel, render when the last one arrives.
+  var pending = items.length;
+  items.forEach(function (item) {
+    if (csvDataCache[item.url]) {
+      if (--pending === 0) { renderChartItems(items, $container); }
+      return;
+    }
+    $.get(item.url)
+      .done(function (data) { csvDataCache[item.url] = data; })
+      .always(function ()   { if (--pending === 0) { renderChartItems(items, $container); } });
+  });
+}
+
+function renderChartItems(items, $container) {
+  $container.empty();
+  items.forEach(function (item) {
+    var data = csvDataCache[item.url];
+    if (!data) { return; }
+    var div = document.createElement('div');
+    div.id        = item.id;
+    div.className = item.dataset.class;
+    $container[0].appendChild(div);
+    renderChart(item.id, data, item.dataset.title + ' (' + item.suffix + ')', item.dataset.class);
+  });
+}
+
+/**
+ * Renders a CanvasJS chart from pre-fetched CSV text.
+ * Differs from loadChart() in that it takes raw data (not a URL) and returns
+ * the chart object.  animationEnabled is off for faster initial paint.
+ */
+function renderChart(id, data, title, type) {
+  if (type === 'loadsharing') {
+    var series = getLoadSharingSeriesFromCSV(data);
+    var chart = new CanvasJS.Chart(id, {
+      animationEnabled: false,
+      zoomEnabled: true,
+      toolTip: {
+        shared: true,
+        contentFormatter: function (e) {
+          var str = '<strong>' + moment(e.entries[0].dataPoint.x).format('HH:mm:ss') + '</strong><br/>';
+          for (var i = 0; i < e.entries.length; i++) {
+            str += '<span style="color:' + e.entries[i].dataSeries.color + '">' +
+                   e.entries[i].dataSeries.name + '</span> <strong>' +
+                   e.entries[i].dataPoint.y.toFixed(2) + '</strong><br/>';
+          }
+          return str;
+        },
+      },
+      title:  { text: title, fontSize: 18 },
+      legend: { fontSize: 14 },
+      axisY:  { title: 'Power (W)', minimum: 0, labelFontSize: 13 },
+      axisX:  { valueFormatString: 'HH:mm:ss', labelFontSize: 13 },
+      data:   series,
+    });
+    chart.render();
+    return chart;
+  }
+
+  var points = getDataPointsFromCSV(data);
+  var opts = {
+    animationEnabled: false,
+    zoomEnabled: true,
+    toolTip: {
+      shared: true,
+      contentFormatter: function (e) {
+        var str = '<strong>' + moment(e.entries[0].dataPoint.x).format('h:mm a') + '</strong><br/>';
+        for (var i = 0; i < e.entries.length; i++) {
+          str += '<span style="color:' + e.entries[i].dataSeries.color + '">' +
+                 e.entries[i].dataSeries.name + '</span> <strong>' +
+                 e.entries[i].dataPoint.y + '</strong><br/>';
+        }
+        return str;
+      },
+    },
+    title:  { text: title, fontSize: 18 },
+    legend: { fontSize: 14 },
+    axisY:  { minimum: 0, labelFontSize: 13 },
+    axisX:  { labelFontSize: 13 },
+    data:   [],
+  };
+
+  opts.data.push({
+    name: 'Charge Power', type: 'area',
+    color: 'rgba(244,180,0,0.7)', showInLegend: true, dataPoints: points[3],
+  });
+
+  if (type === 'gridie' || type === 'solar') {
+    opts.data.push({ name: 'Solar', type: 'line', lineThickness: 1, showInLegend: true, dataPoints: points[0] });
+    if (type === 'gridie') {
+      opts.data.push({ name: 'Grid IE',   type: 'line', lineThickness: 1, showInLegend: true, dataPoints: points[1] });
+      opts.data.push({ name: 'Smoothed',  type: 'line', lineThickness: 1, showInLegend: true, dataPoints: points[6] });
+      opts.data.push({ name: 'Min Charge',  type: 'line', lineThickness: 1, lineDashType: 'shortDash', lineColor: '#38761d', showInLegend: true, dataPoints: points[4] });
+      opts.data.push({ name: 'Min Grid IE', type: 'line', lineThickness: 1, lineDashType: 'shortDash', lineColor: '#38761d', showInLegend: true, dataPoints: points[2] });
+    }
+  }
+
+  if (type === 'shaper') {
+    opts.data.push({ name: 'Live Power (Smoothed)', type: 'line', lineThickness: 1, showInLegend: true, dataPoints: points[8] });
+    opts.data.push({ name: 'Live Power',            type: 'line', lineThickness: 1, showInLegend: true, dataPoints: points[7] });
+    opts.data.push({ name: 'Max Power',             type: 'line', lineThickness: 1, showInLegend: true, dataPoints: points[9] });
+  }
+
+  var chart = new CanvasJS.Chart(id, opts);
+  chart.render();
+  return chart;
+}

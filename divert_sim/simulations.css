@@ -31,6 +31,7 @@ div.loadsharing
   width: 100%;
 }
 
+/* Legacy toggleCharts() rules kept for interactive.html */
 .hide-divert .solar,
 .hide-divert .gridie,
 .hide-divert tr.solar,
@@ -50,3 +51,98 @@ div.loadsharing
 {
   display: none;
 }
+
+/* =============================================================================
+   view.html — tab-based layout
+   ============================================================================= */
+
+.sim-header {
+  padding: 10px 15px 0;
+}
+
+.sim-header h1 {
+  margin-top: 10px;
+}
+
+/* Attach tabs flush to the tab-content panel */
+.sim-tab-nav {
+  margin-top: 16px;
+  margin-bottom: 0;
+}
+
+.sim-tab-content {
+  border: 1px solid #ddd;
+  border-top: none;
+  padding: 16px;
+  border-radius: 0 0 4px 4px;
+}
+
+/* Summary section */
+.sim-summary-section {
+  margin-bottom: 12px;
+}
+
+.sim-summary-section h3 {
+  margin-top: 0;
+}
+
+.sim-summary-placeholder {
+  color: #888;
+  font-style: italic;
+  padding: 8px 0;
+}
+
+.sim-summary-table {
+  font-size: 12px;
+}
+
+/* Profile selector row */
+.sim-chart-controls {
+  margin-bottom: 12px;
+}
+
+.sim-profile-select {
+  display: inline-block;
+  width: auto;
+  min-width: 140px;
+  margin-left: 6px;
+  vertical-align: middle;
+}
+
+/* 2-column chart grid */
+.sim-charts-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 16px;
+}
+
+/* Load sharing charts span full width (multiple series, more visual space needed) */
+.sim-charts-grid div.loadsharing {
+  grid-column: span 2;
+}
+
+/* Gridie charts are taller; keep them full-width too */
+.sim-charts-grid div.gridie {
+  grid-column: span 2;
+}
+
+/* Loading indicator inside chart container */
+.sim-chart-loading {
+  grid-column: span 2;
+  padding: 32px;
+  text-align: center;
+  color: #555;
+  font-size: 16px;
+}
+
+/* Spinning animation for glyphicon-refresh */
+@keyframes sim-spin {
+  from { transform: rotate(0deg);   }
+  to   { transform: rotate(360deg); }
+}
+
+.sim-spinning {
+  display: inline-block;
+  animation: sim-spin 1s linear infinite;
+}
+

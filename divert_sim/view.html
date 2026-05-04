@@ -35,58 +35,78 @@
     ];
 
     window.onload = function () {
-      init_summary(divert_profiles, shaper_profiles);
-      loadLoadSharingSummary(loadsharing_datasets, () => {
-        loadSummary("output/summary_divert_master.csv", () => {
-          loadSummary("output/summary_divert.csv", () => {
-            loadSummary("output/summary_shaper.csv", () => {
-              loadSummary("output/summary_shaper_master.csv", () => {
-                generate_summary_table(divert_profiles, shaper_profiles);
-              });
-            });
-          });
-        });
-      });
-    }
+      initPage(divert_profiles, shaper_profiles);
+    };
   </script>
   <link rel="stylesheet" href="https://maxcdn.bootstrapcdn.com/bootstrap/3.3.6/css/bootstrap.min.css" />
   <link rel="stylesheet" href="simulations.css" />
 </head>
 
 <body>
-  <h1>OpenEVSE Simulations Results</h1>
-
-  <a href="interactive.html">Interactive Simulations</a>
-
-  <div style="margin: 20px 0;">
-    <label><input type="checkbox" id="show_divert" checked onchange="toggleCharts()"> Show Divert Simulations</label>
-    <label style="margin-left: 20px;"><input type="checkbox" id="show_shaper" checked onchange="toggleCharts()"> Show Shaper Simulations</label>
-    <label style="margin-left: 20px;"><input type="checkbox" id="show_loadsharing" checked onchange="toggleCharts()"> Show Load Sharing Simulations</label>
+  <div class="container-fluid sim-header">
+    <h1>OpenEVSE Simulations Results <small><a href="interactive.html">Interactive</a></small></h1>
   </div>
 
-  <h2>Summary</h2>
-  <div id="summary_table">
-  </div>
+  <div class="container-fluid">
 
-  <script type="text/javascript">
+    <!-- Tab navigation -->
+    <ul class="nav nav-tabs sim-tab-nav" id="sim-tabs">
+      <li class="active"><a href="#" data-tab="divert">Divert</a></li>
+      <li><a href="#" data-tab="shaper">Shaper</a></li>
+      <li><a href="#" data-tab="loadsharing">Load Sharing</a></li>
+    </ul>
 
-    for (const dataset of divert_datasets) {
-      for (const profile of divert_profiles) {
-        var id = generate_chart(dataset, profile);
-        loadChart(id, "output/" + id + ".csv", dataset.title + " (" + profile + ")", dataset.class);
-      }
-    }
-    for (const dataset of shaper_datasets) {
-      for (const profile of shaper_profiles) {
-        var id = generate_chart(dataset, profile);
-        loadChart(id, "output/" + id + ".csv", dataset.title + " (" + profile + ")", dataset.class);
-      }
-    }
-    for (const dataset of loadsharing_datasets) {
-      var id = generate_chart(dataset, "scenario");
-      loadChart(id, "output/" + dataset.id + ".csv", dataset.title + " (scenario)", dataset.class);
-    }
-  </script>
+    <div class="tab-content sim-tab-content">
+
+      <!-- Divert tab -->
+      <div class="tab-pane active" id="tab-divert">
+        <div class="sim-summary-section">
+          <h3>Summary</h3>
+          <div id="summary-divert" class="sim-summary-placeholder">
+            <span class="glyphicon glyphicon-refresh sim-spinning"></span> Loading summary&hellip;
+          </div>
+        </div>
+        <div class="sim-chart-controls">
+          <label class="control-label">
+            Profile:
+            <select id="divert-profile-select" class="form-control input-sm sim-profile-select"
+              onchange="onDivertProfileChange()"></select>
+          </label>
+        </div>
+        <div id="divert-charts-container" class="sim-charts-grid"></div>
+      </div>
+
+      <!-- Shaper tab -->
+      <div class="tab-pane" id="tab-shaper">
+        <div class="sim-summary-section">
+          <h3>Summary</h3>
+          <div id="summary-shaper" class="sim-summary-placeholder">
+            <span class="glyphicon glyphicon-refresh sim-spinning"></span> Loading summary&hellip;
+          </div>
+        </div>
+        <div class="sim-chart-controls">
+          <label class="control-label">
+            Profile:
+            <select id="shaper-profile-select" class="form-control input-sm sim-profile-select"
+              onchange="onShaperProfileChange()"></select>
+          </label>
+        </div>
+        <div id="shaper-charts-container" class="sim-charts-grid"></div>
+      </div>
+
+      <!-- Load Sharing tab -->
+      <div class="tab-pane" id="tab-loadsharing">
+        <div class="sim-summary-section">
+          <h3>Summary</h3>
+          <div id="summary-loadsharing" class="sim-summary-placeholder">
+            <span class="glyphicon glyphicon-refresh sim-spinning"></span> Loading summary&hellip;
+          </div>
+        </div>
+        <div id="loadsharing-charts-container" class="sim-charts-grid"></div>
+      </div>
+
+    </div><!-- /.tab-content -->
+  </div><!-- /.container-fluid -->
 
 </body>
 
