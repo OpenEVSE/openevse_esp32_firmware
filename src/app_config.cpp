@@ -20,6 +20,7 @@
 #include "input.h"
 #include "LedManagerTask.h"
 #include "current_shaper.h"
+#include "temp_throttle.h"
 #include "limit.h"
 #endif
 
@@ -105,6 +106,9 @@ uint32_t current_shaper_max_pwr;
 uint32_t current_shaper_smoothing_time;
 uint32_t current_shaper_min_pause_time;   // in seconds
 uint32_t current_shaper_data_maxinterval; // in seconds
+
+// Temperature Throttle settings
+uint32_t temp_throttle_setpoint;
 
 // Tesla Client settings
 String tesla_access_token;
@@ -216,6 +220,9 @@ ConfigOpt *opts[] =
   new ConfigOptDefinition<uint32_t>(current_shaper_min_pause_time, 300, "current_shaper_min_pause_time", "spt"),
   new ConfigOptDefinition<uint32_t>(current_shaper_data_maxinterval, 120, "current_shaper_data_maxinterval", "sdm"),
 
+// Temperature Throttle settings
+  new ConfigOptDefinition<uint32_t>(temp_throttle_setpoint, TEMP_THROTTLE_SETPOINT_DEFAULT, "temp_throttle_setpoint", "tts"),
+
 // Vehicle settings
   new ConfigOptDefinition<uint8_t>(vehicle_data_src, 0, "vehicle_data_src", "vds"),
 
@@ -263,6 +270,7 @@ ConfigOpt *opts[] =
   new ConfigOptVirtualMaskedBool(flagsOpt, flagsChanged, CONFIG_THREEPHASE, CONFIG_THREEPHASE, "is_threephase", "itp"),
   new ConfigOptVirtualMaskedBool(flagsOpt, flagsChanged, CONFIG_WIZARD, CONFIG_WIZARD, "wizard_passed", "wzp"),
   new ConfigOptVirtualMaskedBool(flagsOpt, flagsChanged, CONFIG_DEFAULT_STATE, CONFIG_DEFAULT_STATE, "default_state", "dfs"),
+  new ConfigOptVirtualMaskedBool(flagsOpt, flagsChanged, CONFIG_TEMP_THROTTLE, CONFIG_TEMP_THROTTLE, "temp_throttle_enabled", "tte"),
   new ConfigOptVirtualMqttProtocol(flagsOpt, flagsChanged, "mqtt_protocol", "mprt"),
   new ConfigOptVirtualChargeMode(flagsOpt, flagsChanged, "charge_mode", "chmd")
 };
@@ -384,6 +392,8 @@ void config_changed(String name)
     divert.setMode((config_divert_enabled() && 1 == config_charge_mode()) ? DivertMode::Eco : DivertMode::Normal);
   } else if(name.startsWith("current_shaper_")) {
     shaper.notifyConfigChanged(config_current_shaper_enabled()?1:0,current_shaper_max_pwr);
+  } else if(name.startsWith("temp_throttle_")) {
+    tempThrottle.notifyConfigChanged(config_temp_throttle_enabled(), temp_throttle_setpoint);
   } else if(name == "tesla_vehicle_id") {
     teslaClient.setVehicleId(tesla_vehicle_id);
   } else if(name.startsWith("tesla_")) {

@@ -83,6 +83,11 @@ void handleUpdateClose(MongooseHttpServerRequest *request);
 void handleTime(MongooseHttpServerRequest *request);
 void handleTimePost(MongooseHttpServerRequest *request, MongooseHttpServerResponseStream *response);
 
+void handleEnergyRaw(MongooseHttpServerRequest *request);
+void handleEnergyDaily(MongooseHttpServerRequest *request);
+void handleEnergyMonthly(MongooseHttpServerRequest *request);
+void handleEnergyAnnual(MongooseHttpServerRequest *request);
+
 void dumpRequest(MongooseHttpServerRequest *request)
 {
 #ifdef ENABLE_DEBUG_WEB_REQUEST
@@ -1231,6 +1236,11 @@ void web_server_setup()
   server.on("/limit", handleLimit);
   server.on("/emeter", handleEmeter);
   server.on("/time", handleTime);
+
+  server.on("/api/energy/raw$", handleEnergyRaw);
+  server.on("/api/energy/daily$", handleEnergyDaily);
+  server.on("/api/energy/monthly$", handleEnergyMonthly);
+  server.on("/api/energy/annual$", handleEnergyAnnual);
 
   // Simple Firmware Update Form
   server.on("/update$")->

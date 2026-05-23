@@ -251,6 +251,15 @@ void EvseMonitor::evseBoot(const char *firmware)
 
   _openevse.heartbeatEnable(EVSE_HEATBEAT_INTERVAL, EVSE_HEARTBEAT_CURRENT, [this](int ret, int interval, int current, int triggered) {
     _heartbeat = RAPI_RESPONSE_OK == ret;
+    // If the heartbeat was triggered (missed pulse during reboot), ack immediately
+    // so ampacity is restored without waiting for the next loop iteration
+    if (_heartbeat && 2 == triggered) {
+      _openevse.heartbeatPulse([](int ret) {
+        if (RAPI_RESPONSE_OK != ret) {
+          DEBUG_PORT.println("Heartbeat ack failed");
+        }
+      });
+    }
   });
 }
 
@@ -330,6 +339,20 @@ unsigned long EvseMonitor::loop(MicroTasks::WakeReason reason)
     {
       if(RAPI_RESPONSE_OK != ret) {
         DEBUG_PORT.println("Heartbeat failed");
+      }
+    });
+  }
+  else if(0 == _count % EVSE_MONITOR_STATE_TIME)
+  {
+    // Heartbeat enable failed or was never set; retry periodically
+    _openevse.heartbeatEnable(EVSE_HEATBEAT_INTERVAL, EVSE_HEARTBEAT_CURRENT, [this](int ret, int interval, int current, int triggered) {
+      _heartbeat = RAPI_RESPONSE_OK == ret;
+      if (_heartbeat && 2 == triggered) {
+        _openevse.heartbeatPulse([](int ret) {
+          if (RAPI_RESPONSE_OK != ret) {
+            DEBUG_PORT.println("Heartbeat ack failed");
+          }
+        });
       }
     });
   }

@@ -97,7 +97,10 @@ bool http_update_start(String source, size_t total)
 {
   update_position = 0;
   update_total_size = total;
-  if(Update.begin())
+  // Pass the expected size so the library can (a) reject an oversized binary
+  // before erasing the target partition, and (b) validate completeness at end().
+  // Fall back to UPDATE_SIZE_UNKNOWN only when Content-Length is absent.
+  if(Update.begin(total > 0 ? total : UPDATE_SIZE_UNKNOWN))
   {
     DEBUG_PORT.printf("Update Start: %s %zu\n", source.c_str(), total);
 

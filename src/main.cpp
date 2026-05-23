@@ -51,6 +51,7 @@
 #include "ocpp.h"
 #include "rfid.h"
 #include "current_shaper.h"
+#include "temp_throttle.h"
 #include "limit.h"
 
 #if defined(ENABLE_PN532)
@@ -61,6 +62,7 @@
 #include "event_log.h"
 #include "evse_man.h"
 #include "scheduler.h"
+#include "energy_logger.h"
 
 #include "legacy_support.h"
 #include "certificates.h"
@@ -72,6 +74,7 @@ EvseManager evse(RAPI_PORT, eventLog);
 Scheduler scheduler(evse);
 ManualOverride manual(evse);
 DivertTask divert(evse);
+EnergyLogger energyLogger;
 
 NetManagerTask net(lcd, ledManager, timeManager);
 
@@ -175,6 +178,9 @@ void setup()
   web_server_setup();
   DBUGF("After web_server_setup: %d", ESPAL.getFreeHeap());
 
+  energyLogger.begin(&evse);
+  DBUGF("After energyLogger.begin: %d", ESPAL.getFreeHeap());
+
 #ifdef ENABLE_OTA
   ota_setup();
   DBUGF("After ota_setup: %d", ESPAL.getFreeHeap());
@@ -189,6 +195,9 @@ void setup()
 
   shaper.begin(evse);
   DBUGF("After shaper.begin: %d", ESPAL.getFreeHeap());
+
+  tempThrottle.begin(evse);
+  DBUGF("After tempThrottle.begin: %d", ESPAL.getFreeHeap());
 
   lcd.display(F("OpenEVSE WiFI"), 0, 0, 0, LCD_CLEAR_LINE);
   lcd.display(currentfirmware, 0, 1, 5 * 1000, LCD_CLEAR_LINE);
@@ -316,6 +325,7 @@ class SystemRestart : public MicroTasks::Alarm
     void Trigger()
     {
       DBUGLN("Restarting...");
+      energyLogger.end();
       evse.saveEnergyMeter();
       net.wifiStop();
       ESPAL.reset();
