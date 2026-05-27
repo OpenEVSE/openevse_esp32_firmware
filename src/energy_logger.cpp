@@ -10,6 +10,48 @@
 #include "evse_man.h"
 #include "debug.h"
 
+// Returns true when LittleFS has at least `needed` bytes free plus an 8 KB safety margin.
+// Opening a file for write truncates it immediately, so we must check BEFORE open.
+static bool fs_has_space(size_t needed) {
+  size_t free_bytes = LittleFS.totalBytes() - LittleFS.usedBytes();
+  return free_bytes >= needed + 8192;
+}
+
+// Returns total bytes currently used by all files under a directory (non-recursive).
+static size_t dir_used_bytes(const char *path) {
+  size_t total = 0;
+  File dir = LittleFS.open(path);
+  if (!dir || !dir.isDirectory()) return 0;
+  File entry = dir.openNextFile();
+  while (entry) {
+    if (!entry.isDirectory()) total += entry.size();
+    entry = dir.openNextFile();
+  }
+  return total;
+}
+
+// Returns total bytes currently used by all energy logger files.
+static size_t energy_log_used_bytes() {
+  size_t total = 0;
+  total += dir_used_bytes(ENERGY_LOGGER_RAW_DIR);
+  total += dir_used_bytes(ENERGY_LOGGER_DAILY_DIR);
+  total += dir_used_bytes(ENERGY_LOGGER_MONTHLY_DIR);
+  File f = LittleFS.open(ENERGY_LOGGER_ANNUAL_FILE, "r");
+  if (f) { total += f.size(); f.close(); }
+  return total;
+}
+
+// Returns 40 when LittleFS is 1 MB or larger, 1 otherwise.
+// This scales the energy logger limits proportionally to the available partition.
+static uint32_t el_scale() {
+  return LittleFS.totalBytes() >= (1024u * 1024u) ? 40u : 1u;
+}
+
+// Returns true if adding `needed` bytes stays within the energy logger budget.
+static bool energy_log_has_budget(size_t needed) {
+  return energy_log_used_bytes() + needed <= (size_t)ENERGY_LOGGER_MAX_BYTES * el_scale();
+}
+
 EnergyLogger::EnergyLogger() : _buffer_index(0), _buffer_count(0), _monitor(nullptr),
   _last_sample_time(0), _last_hour_time(0), _last_day_time(0), _last_chunk_time(0),
   _last_month(0), _last_year(0),
@@ -198,22 +240,33 @@ void EnergyLogger::save_raw_chunk()
     }
   }
 
+  size_t needed = measureJson(doc);
+
+  cleanup_old_raw_files();
+
+  if (!energy_log_has_budget(needed) || !fs_has_space(needed)) {
+    DBUGF("[EnergyLogger] Insufficient space for raw chunk (%u B needed), skipping", needed);
+    return;
+  }
   File file = LittleFS.open(filepath, "w");
   if (!file) {
     DBUGF("[EnergyLogger] Failed to save raw chunk: %s", filepath);
     return;
   }
-  serializeJson(doc, file);
+  if (serializeJson(doc, file) == 0) {
+    DBUGF("[EnergyLogger] Write failed for raw chunk: %s", filepath);
+    file.close();
+    LittleFS.remove(filepath);
+    return;
+  }
   file.close();
-
-  cleanup_old_raw_files();
 
   DBUGF("[EnergyLogger] Saved %d raw samples to %s", count, filepath);
 }
 
 void EnergyLogger::cleanup_old_raw_files()
 {
-  time_t cutoff = time(NULL) - (time_t)ENERGY_LOGGER_RAW_KEEP_HOURS * 3600;
+  time_t cutoff = time(NULL) - (time_t)ENERGY_LOGGER_RAW_KEEP_HOURS * el_scale() * 3600;
   struct tm cutoff_tm;
   localtime_r(&cutoff, &cutoff_tm);
   // Align to the block boundary so we never clip a file that is still in window
@@ -283,7 +336,7 @@ void EnergyLogger::cleanup_old_daily_files()
       entry = dir.openNextFile();
     }
 
-    if (count > ENERGY_LOGGER_DAILY_MAX_QTRS && oldest_name[0] != '\0') {
+    if (count > (int)(ENERGY_LOGGER_DAILY_MAX_QTRS * el_scale()) && oldest_name[0] != '\0') {
       char filepath[64];
       snprintf(filepath, sizeof(filepath), "%s/%s", ENERGY_LOGGER_DAILY_DIR, oldest_name);
       LittleFS.remove(filepath);
@@ -360,15 +413,26 @@ bool EnergyLogger::append_daily_to_quarter(const DailyMetrics &metrics)
   obj["mn"] = metrics.min_temp;
   obj["en"] = metrics.energy_wh;
 
+  size_t needed = measureJson(doc);
+
+  cleanup_old_daily_files();
+
+  if (!energy_log_has_budget(needed) || !fs_has_space(needed)) {
+    DBUGF("[EnergyLogger] Insufficient space for quarterly file (%u B needed), skipping", needed);
+    return false;
+  }
   file = LittleFS.open(filepath, "w");
   if (!file) {
     DBUGF("[EnergyLogger] Failed to write quarterly file: %s", filepath);
     return false;
   }
-  serializeJson(doc, file);
+  if (serializeJson(doc, file) == 0) {
+    DBUGF("[EnergyLogger] Write failed for quarterly file: %s", filepath);
+    file.close();
+    LittleFS.remove(filepath);
+    return false;
+  }
   file.close();
-
-  cleanup_old_daily_files();
 
   DBUGF("[EnergyLogger] Appended daily entry to %s", filepath);
   return true;
@@ -435,7 +499,7 @@ void EnergyLogger::aggregate_monthly_yearly()
 
     if (found && peak > -99.0) {
       MonthlyMetrics monthly;
-      format_month(now, monthly.month, sizeof(monthly.month));
+      snprintf(monthly.month, sizeof(monthly.month), "%04d-%02d", prev_year, prev_month);
       monthly.peak_temp  = peak;
       monthly.min_temp   = (minT < 99.0) ? minT : 0;
       monthly.energy_kwh = energy_wh / 1000.0;
@@ -476,12 +540,22 @@ bool EnergyLogger::save_monthly(const MonthlyMetrics &metrics)
   obj["mn"] = metrics.min_temp;
   obj["en"] = metrics.energy_kwh;
 
+  size_t needed = measureJson(doc);
+  if (!energy_log_has_budget(needed) || !fs_has_space(needed)) {
+    DBUGF("[EnergyLogger] Insufficient space for monthly file (%u B needed), skipping", needed);
+    return false;
+  }
   file = LittleFS.open(filepath, "w");
   if (!file) {
     DBUGF("[EnergyLogger] Failed to write monthly file: %s", filepath);
     return false;
   }
-  serializeJson(doc, file);
+  if (serializeJson(doc, file) == 0) {
+    DBUGF("[EnergyLogger] Write failed for monthly file: %s", filepath);
+    file.close();
+    LittleFS.remove(filepath);
+    return false;
+  }
   file.close();
 
   DBUGF("[EnergyLogger] Saved monthly metrics: %s", metrics.month);
@@ -508,13 +582,22 @@ bool EnergyLogger::save_annual(const AnnualMetrics &metrics)
   metrics.serialize(obj);
 
   // Save
+  size_t needed = measureJson(doc);
+  if (!energy_log_has_budget(needed) || !fs_has_space(needed)) {
+    DBUGF("[EnergyLogger] Insufficient space for annual file (%u B needed), skipping", needed);
+    return false;
+  }
   file = LittleFS.open(ENERGY_LOGGER_ANNUAL_FILE, "w");
   if (!file) {
     DBUGF("[EnergyLogger] Failed to open annual file");
     return false;
   }
-
-  serializeJson(doc, file);
+  if (serializeJson(doc, file) == 0) {
+    DBUGF("[EnergyLogger] Write failed for annual file");
+    file.close();
+    LittleFS.remove(ENERGY_LOGGER_ANNUAL_FILE);
+    return false;
+  }
   file.close();
 
   DBUGF("[EnergyLogger] Saved annual metrics: %u", metrics.year);

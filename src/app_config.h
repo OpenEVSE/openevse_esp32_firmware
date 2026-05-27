@@ -96,6 +96,16 @@ extern uint32_t current_shaper_data_maxinterval;
 // Temperature Throttle settings
 extern uint32_t temp_throttle_setpoint;
 
+// Heartbeat Supervision settings (stored in ESP32 config, applied to EVSE on boot)
+extern uint32_t heartbeat_interval_cfg;
+extern uint32_t heartbeat_current_cfg;
+
+// Over-temperature shutdown threshold (degrees C)
+extern uint32_t over_temp_shutdown;
+
+// Voltage for power calculations (centivolt, 0 = use EVSE default)
+extern uint32_t voltage_cfg;
+
 // Vehicle
 extern uint8_t vehicle_data_src;
 

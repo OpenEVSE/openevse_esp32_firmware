@@ -14,8 +14,9 @@
 #define ENERGY_LOGGER_DAILY_DIR        "/logs/daily"
 #define ENERGY_LOGGER_RAW_DIR          "/logs/raw"
 #define ENERGY_LOGGER_RAW_SAVE_HOURS   3       // write a raw chunk file every 3 h
-#define ENERGY_LOGGER_RAW_KEEP_HOURS   24      // keep 24 h = 8 files
-#define ENERGY_LOGGER_DAILY_MAX_QTRS   8       // keep 8 quarterly files = 2 years (fits 128 KB SPIFFS)
+#define ENERGY_LOGGER_RAW_KEEP_HOURS   6       // keep 6 h = 2 files (~18 KB)
+#define ENERGY_LOGGER_DAILY_MAX_QTRS   2       // keep 2 quarterly files = 6 months (~6 KB)
+#define ENERGY_LOGGER_MAX_BYTES        20480   // hard cap for all /logs files (~20 KB)
 #define ENERGY_LOGGER_MONTHLY_DIR      "/logs/monthly"
 #define ENERGY_LOGGER_ANNUAL_FILE      "/logs/annual.json"
 

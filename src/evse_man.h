@@ -386,6 +386,15 @@ class EvseManager : public MicroTasks::Task
     bool isTemperatureCheckEnabled() {
       return _monitor.isTemperatureCheckEnabled();
     }
+    bool isOvercurrentMonitorEnabled() {
+      return _monitor.isOvercurrentMonitorEnabled();
+    }
+    uint32_t getPanicTemperature() {
+      return _monitor.getPanicTemperature();
+    }
+    bool isFrontButtonEnabled() {
+      return _monitor.isFrontButtonEnabled();
+    }
     bool isButtonDisabled() {
       return _monitor.isButtonDisabled();
     }
@@ -457,6 +466,33 @@ class EvseManager : public MicroTasks::Task
     }
     void enableTemperatureCheck(bool enabled, std::function<void(int ret)> callback = NULL) {
       _monitor.enableTemperatureCheck(enabled, callback);
+    }
+    void enableOvercurrentMonitor(bool enabled, std::function<void(int ret)> callback = NULL) {
+      _monitor.enableOvercurrentMonitor(enabled, callback);
+    }
+    void setPanicTemperature(uint32_t tempC, std::function<void(int ret)> callback = NULL) {
+      _monitor.setPanicTemperature(tempC, callback);
+    }
+    void enableFrontButton(bool enabled, std::function<void(int ret)> callback = NULL) {
+      _monitor.enableFrontButton(enabled, callback);
+    }
+    bool isBootLockEnabled() {
+      return _monitor.isBootLockEnabled();
+    }
+    void enableBootLock(bool enabled, std::function<void(int ret)> callback = NULL) {
+      _monitor.enableBootLock(enabled, callback);
+    }
+    uint32_t getHeartbeatInterval() {
+      return _monitor.getHeartbeatInterval();
+    }
+    uint32_t getHeartbeatCurrent() {
+      return _monitor.getHeartbeatCurrent();
+    }
+    bool isHeartbeatEnabled() {
+      return _monitor.isHeartbeatEnabled();
+    }
+    void setHeartbeatSupervision(uint32_t interval, uint32_t current, std::function<void(int ret)> callback = NULL) {
+      _monitor.setHeartbeatSupervision(interval, current, callback);
     }
     void restartEvse() {
       _monitor.restart();
