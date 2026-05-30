@@ -721,7 +721,11 @@ int LedManagerTask::getButtonPressed()
 {
 #if defined(WIFI_BUTTON_SHARE_LED)
   #ifdef RGB_LEDC_CHANNEL
+  #if ESP_ARDUINO_VERSION >= ESP_ARDUINO_VERSION_VAL(3,0,0)
+  ledcDetach(WIFI_BUTTON_SHARE_LED);
+  #else
   ledcDetachPin(WIFI_BUTTON_SHARE_LED);
+  #endif
   #else
   digitalWrite(WIFI_BUTTON_SHARE_LED, HIGH);
   #endif
