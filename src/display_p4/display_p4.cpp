@@ -8,6 +8,10 @@
 #include "display_p4.h"
 #include "panel_st7701_dsi.h"
 #include "touch/gt911_touch.h"
+#include "evse_ui_model.h"
+#include "evse_ui_command.h"
+#include "evse_man.h"
+#include "manual.h"
 
 #ifndef DISPLAY_P4_BACKLIGHT_PIN
 #define DISPLAY_P4_BACKLIGHT_PIN 23
@@ -37,11 +41,19 @@ static volatile bool s_activity = false;   // set by touch read_cb, consumed by 
 static lv_obj_t *s_touch_count_label = NULL;
 static uint32_t s_touch_count = 0;
 
+static IEvseUiModel *s_model = NULL;
+static IEvseUiCommandSink *s_cmd = NULL;
+static lv_obj_t *s_state_label = NULL;   // live state text
+static lv_obj_t *s_values_label = NULL;  // live V / A / kW
+
 static void dp4_btn_event_cb(lv_event_t *e)
 {
+  if (s_cmd) {
+    s_cmd->toggleCharge();
+  }
   s_touch_count++;
   if (s_touch_count_label) {
-    lv_label_set_text_fmt(s_touch_count_label, "Touches: %u", (unsigned)s_touch_count);
+    lv_label_set_text_fmt(s_touch_count_label, "Toggles: %u", (unsigned)s_touch_count);
   }
 }
 
@@ -56,10 +68,16 @@ static void dp4_build_bringup_screen(void)
   lv_obj_set_style_text_font(title, &lv_font_montserrat_28, LV_PART_MAIN);
   lv_obj_align(title, LV_ALIGN_TOP_MID, 0, 24);
 
-  lv_obj_t *sub = lv_label_create(scr);
-  lv_label_set_text(sub, "D2  -  HAL + MicroTask pump + LEDC backlight");
-  lv_obj_set_style_text_color(sub, lv_color_hex(0x8A9099), LV_PART_MAIN);
-  lv_obj_align(sub, LV_ALIGN_TOP_MID, 0, 62);
+  s_state_label = lv_label_create(scr);
+  lv_label_set_text(s_state_label, "State: ...");
+  lv_obj_set_style_text_color(s_state_label, lv_color_hex(0xE0E0E0), LV_PART_MAIN);
+  lv_obj_set_style_text_font(s_state_label, &lv_font_montserrat_16, LV_PART_MAIN);
+  lv_obj_align(s_state_label, LV_ALIGN_TOP_MID, 0, 64);
+
+  s_values_label = lv_label_create(scr);
+  lv_label_set_text(s_values_label, "0.0 V   0.00 A   0.000 kW");
+  lv_obj_set_style_text_color(s_values_label, lv_color_hex(0x8A9099), LV_PART_MAIN);
+  lv_obj_align(s_values_label, LV_ALIGN_TOP_MID, 0, 90);
 
   lv_obj_t *arc = lv_arc_create(scr);
   lv_obj_set_size(arc, 220, 220);
@@ -77,7 +95,7 @@ static void dp4_build_bringup_screen(void)
 
   s_touch_count = 0;
   s_touch_count_label = lv_label_create(scr);
-  lv_label_set_text(s_touch_count_label, "Touches: 0");
+  lv_label_set_text(s_touch_count_label, "Toggles: 0");
   lv_obj_set_style_text_color(s_touch_count_label, lv_color_hex(0xFFFFFF), LV_PART_MAIN);
   lv_obj_align(s_touch_count_label, LV_ALIGN_BOTTOM_MID, 0, -30);
 }
@@ -110,12 +128,16 @@ static void dp4_touch_read_cb(lv_indev_drv_t *drv, lv_indev_data_t *data)
 DisplayP4Task displayP4;
 
 DisplayP4Task::DisplayP4Task()
-  : MicroTasks::Task(), _backlightDeadline(0), _backlightOn(false)
+  : MicroTasks::Task(), _backlightDeadline(0), _backlightOn(false), _lastModelRefresh(0)
 {
 }
 
-void DisplayP4Task::begin()
+void DisplayP4Task::begin(EvseManager &evse, ManualOverride &manual)
 {
+  static EvseUiModel model(evse);
+  static EvseUiCommandSink cmd(manual);
+  s_model = &model;
+  s_cmd = &cmd;
   MicroTask.startTask(this);
 }
 
@@ -175,11 +197,29 @@ void DisplayP4Task::setup()
   _backlightDeadline = millis() + DISPLAY_P4_BACKLIGHT_TIMEOUT_MS;
 }
 
+static void dp4_refresh_model_view(void)
+{
+  if (!s_model) return;
+  if (s_state_label) {
+    lv_label_set_text_fmt(s_state_label, "State: %s%s", s_model->stateText(),
+                          s_model->vehicleConnected() ? "  (EV)" : "");
+  }
+  if (s_values_label) {
+    lv_label_set_text_fmt(s_values_label, "%.1f V   %.2f A   %.3f kW",
+                          s_model->voltage(), s_model->amps(), s_model->power() / 1000.0);
+  }
+}
+
 unsigned long DisplayP4Task::loop(MicroTasks::WakeReason reason)
 {
   lv_timer_handler();
 
   unsigned long now = millis();
+  if (now - _lastModelRefresh >= 500) {
+    _lastModelRefresh = now;
+    dp4_refresh_model_view();
+  }
+
   if (s_activity) {
     s_activity = false;
     if (!_backlightOn) {

@@ -4,13 +4,16 @@
 
 #include <MicroTasks.h>
 
+class EvseManager;
+class ManualOverride;
+
 // LVGL display + GT911 touch + backlight, pumped cooperatively by the MicroTask
 // scheduler. Replaces the D1 free function + raw FreeRTOS task.
 class DisplayP4Task : public MicroTasks::Task
 {
 public:
   DisplayP4Task();
-  void begin();           // register with the MicroTask scheduler
+  void begin(EvseManager &evse, ManualOverride &manual);  // register with the MicroTask scheduler
   void wakeBacklight();   // call on user activity to re-light + reset the idle timer
 
 protected:
@@ -20,6 +23,7 @@ protected:
 private:
   unsigned long _backlightDeadline;
   bool _backlightOn;
+  unsigned long _lastModelRefresh;
 };
 
 extern DisplayP4Task displayP4;
