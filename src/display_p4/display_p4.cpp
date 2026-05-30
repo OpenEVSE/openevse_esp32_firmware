@@ -12,6 +12,7 @@
 #include "evse_ui_command.h"
 #include "evse_man.h"
 #include "manual.h"
+#include "p4_screen_manager.h"
 
 #ifndef DISPLAY_P4_BACKLIGHT_PIN
 #define DISPLAY_P4_BACKLIGHT_PIN 23
@@ -45,6 +46,10 @@ static IEvseUiModel *s_model = NULL;
 static IEvseUiCommandSink *s_cmd = NULL;
 static lv_obj_t *s_state_label = NULL;   // live state text
 static lv_obj_t *s_values_label = NULL;  // live V / A / kW
+
+static P4ScreenManager *s_screens = NULL;
+static lv_obj_t *s_screen_label = NULL;
+static unsigned long s_bootMs = 0;
 
 static void dp4_btn_event_cb(lv_event_t *e)
 {
@@ -98,6 +103,11 @@ static void dp4_build_bringup_screen(void)
   lv_label_set_text(s_touch_count_label, "Toggles: 0");
   lv_obj_set_style_text_color(s_touch_count_label, lv_color_hex(0xFFFFFF), LV_PART_MAIN);
   lv_obj_align(s_touch_count_label, LV_ALIGN_BOTTOM_MID, 0, -30);
+
+  s_screen_label = lv_label_create(scr);
+  lv_label_set_text(s_screen_label, "Screen: boot");
+  lv_obj_set_style_text_color(s_screen_label, lv_color_hex(0x38BDF8), LV_PART_MAIN);
+  lv_obj_align(s_screen_label, LV_ALIGN_BOTTOM_MID, 0, -60);
 }
 
 // --- LVGL callbacks ---
@@ -138,6 +148,8 @@ void DisplayP4Task::begin(EvseManager &evse, ManualOverride &manual)
   static EvseUiCommandSink cmd(manual);
   s_model = &model;
   s_cmd = &cmd;
+  static P4ScreenManager screens(model);
+  s_screens = &screens;
   MicroTask.startTask(this);
 }
 
@@ -195,6 +207,8 @@ void DisplayP4Task::setup()
   ledcWrite(DISPLAY_P4_BACKLIGHT_PIN, DP4_BL_FULL);
   _backlightOn = true;
   _backlightDeadline = millis() + DISPLAY_P4_BACKLIGHT_TIMEOUT_MS;
+
+  s_bootMs = millis();
 }
 
 static void dp4_refresh_model_view(void)
@@ -207,6 +221,16 @@ static void dp4_refresh_model_view(void)
   if (s_values_label) {
     lv_label_set_text_fmt(s_values_label, "%.1f V   %.2f A   %.3f kW",
                           s_model->voltage(), s_model->amps(), s_model->power() / 1000.0);
+  }
+  if (s_screens) {
+    if (s_bootMs != 0 && (millis() - s_bootMs) > 3000) {
+      s_screens->markBooted();
+    }
+    s_screens->update();
+    if (s_screen_label) {
+      lv_label_set_text_fmt(s_screen_label, "Screen: %s",
+                            P4ScreenManager::name(s_screens->current()));
+    }
   }
 }
 
