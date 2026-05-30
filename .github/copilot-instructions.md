@@ -178,10 +178,65 @@ pio run -e openevse_wifi_v1  # Expected to fail with HTTPClientError in restrict
 - Monitor `.platformio` directory size growth to confirm download progress
 - Subsequent builds are faster (2-5 minutes) using cached dependencies
 
+## Coding Conventions and Patterns
+
+### Naming Conventions:
+- **Config variables**: `snake_case` (e.g., `mqtt_server`, `divert_type`, `led_brightness`)
+- **Private members**: `_snake_case` with leading underscore (e.g., `_openevse`, `_state`, `_pilot`)
+- **Constants/defines**: `UPPER_SNAKE_CASE` (e.g., `CONFIG_OFFSET`, `EVSE_MONITOR_POLL_TIME`)
+- **Classes**: `PascalCase` (e.g., `EvseMonitor`, `LcdTask`, `MongooseHttpServer`)
+- **Enum values**: `UPPER_SNAKE_CASE` (e.g., `OPENEVSE_STATE_STARTING`)
+
+### RAPI Command Integration:
+- **Pattern**: Use callback-based async RAPI commands with lambda functions
+- **Error handling**: Always check `RAPI_RESPONSE_OK` return code before proceeding
+- **Callbacks**: Use `std::function<void(int ret)>` for optional callbacks, always invoke if provided
+- **Example**:
+```cpp
+_openevse.setCurrentCapacity(amps, false, [this, callback](int ret, long pilot) {
+  if(RAPI_RESPONSE_OK == ret) {
+    _pilot = pilot;
+    _settings_changed.Trigger();
+  }
+  if(callback) { callback(ret); }
+});
+```
+
+### Configuration Management:
+- **Pattern**: Configuration options defined in 3 places:
+  1. Extern declaration in `src/app_config.h`
+  2. Variable definition in `src/app_config.cpp`
+  3. `ConfigOptDefinition` entry in `opts[]` array
+- **Flags**: Use bit positions in `uint32_t flags` variable with `#define` macros
+- **Change notifications**: Use `onChanged()` callback with string prefix matching (e.g., `name.startsWith("mqtt_")`)
+
+### Memory and Timing Patterns:
+- **Timeout checks**: Use signed comparison to handle `millis()` rollover: `(long)(millis() - timeout) >= 0`
+- **Task polling**: Return milliseconds until next wake from `loop()` method
+- **Bit flags**: Use `(1 << N)` pattern for flag definitions, bitwise ops for checks
+
+### Debug and Logging:
+- **Use MicroDebug macros**: `DBUGLN()`, `DBUGF()`, `DBUGVAR()` for consistent debug output
+- **Conditional compilation**: Wrap debug code in `#ifdef ENABLE_DEBUG` blocks
+- **Event logging**: Use `event_send()` with `StaticJsonDocument` for structured events
+
+### Code Style Preferences:
+- **Async-first**: Prefer callbacks and events over blocking operations
+- **Memory-conscious**: Clean up dynamic allocations, use bit flags to save memory
+- **Error handling**: Always check return codes, provide meaningful error messages
+- **Feature flags**: Use conditional compilation for optional features
+
+### Common Pitfalls to Avoid:
+- **Never** use simple `millis()` comparisons for timeouts (fails after ~49 days rollover)
+- **Never** cancel long-running ESP32 builds - they take 15-45 minutes on first run
+- **Always** invoke callbacks even on error paths
+- **Always** rebuild GUI before testing firmware changes that affect web interface
+
 ## API and Development References
 
 - **API Documentation**: https://openevse.stoplight.io/docs/openevse-wifi-v4/
 - **User Guide**: `docs/user-guide.md`  
 - **Developer Guide**: `docs/developer-guide.md`
 - **MQTT API**: `docs/mqtt.md`
+- **RAPI Protocol**: `docs/rapi.md`
 - **CI/CD Pipeline**: `.github/workflows/build.yaml`

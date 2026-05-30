@@ -16,10 +16,10 @@
     "debug": "^4.3.1",
     "express": "^4.21.2",
     "minimist": "^1.2.6",
-    "nodemon": "^2.0.20",
+    "nodemon": "^3.1.14",
     "teslajs": "^4.9.8"
   },
   "devDependencies": {
-    "eslint": "^8.26.0"
+    "eslint": "^10.0.1"
   }
 }
