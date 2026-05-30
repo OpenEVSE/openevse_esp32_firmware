@@ -2,7 +2,6 @@
 
 #include <Arduino.h>
 #include "lvgl.h"
-#include "demos/lv_demos.h"
 #include "driver/i2c_master.h"
 #include "esp_heap_caps.h"
 #include "esp_lcd_mipi_dsi.h"
@@ -60,6 +59,56 @@ static void dp4_lvgl_task(void *arg)
   }
 }
 
+static lv_obj_t *s_touch_count_label = NULL;
+static uint32_t s_touch_count = 0;
+
+static void dp4_btn_event_cb(lv_event_t *e)
+{
+  s_touch_count++;
+  if (s_touch_count_label) {
+    lv_label_set_text_fmt(s_touch_count_label, "Touches: %u", (unsigned)s_touch_count);
+  }
+}
+
+// Minimal self-contained bring-up screen: proves render (title/arc/button) and
+// touch (the button increments an on-screen counter). Replaces lv_demo_widgets.
+static void dp4_build_bringup_screen(void)
+{
+  lv_obj_t *scr = lv_scr_act();
+  lv_obj_set_style_bg_color(scr, lv_color_hex(0x101418), LV_PART_MAIN);
+
+  lv_obj_t *title = lv_label_create(scr);
+  lv_label_set_text(title, "OpenEVSE  ESP32-P4");
+  lv_obj_set_style_text_color(title, lv_color_hex(0x33C481), LV_PART_MAIN);
+  lv_obj_set_style_text_font(title, &lv_font_montserrat_28, LV_PART_MAIN);
+  lv_obj_align(title, LV_ALIGN_TOP_MID, 0, 24);
+
+  lv_obj_t *sub = lv_label_create(scr);
+  lv_label_set_text(sub, "ST7701 MIPI-DSI + GT911  -  D1 bring-up");
+  lv_obj_set_style_text_color(sub, lv_color_hex(0x8A9099), LV_PART_MAIN);
+  lv_obj_align(sub, LV_ALIGN_TOP_MID, 0, 62);
+
+  lv_obj_t *arc = lv_arc_create(scr);
+  lv_obj_set_size(arc, 220, 220);
+  lv_arc_set_range(arc, 0, 100);
+  lv_arc_set_value(arc, 66);
+  lv_obj_align(arc, LV_ALIGN_CENTER, 0, -40);
+
+  lv_obj_t *btn = lv_btn_create(scr);
+  lv_obj_set_size(btn, 200, 64);
+  lv_obj_align(btn, LV_ALIGN_CENTER, 0, 150);
+  lv_obj_add_event_cb(btn, dp4_btn_event_cb, LV_EVENT_CLICKED, NULL);
+  lv_obj_t *btn_lbl = lv_label_create(btn);
+  lv_label_set_text(btn_lbl, "TAP ME");
+  lv_obj_center(btn_lbl);
+
+  s_touch_count = 0;
+  s_touch_count_label = lv_label_create(scr);
+  lv_label_set_text(s_touch_count_label, "Touches: 0");
+  lv_obj_set_style_text_color(s_touch_count_label, lv_color_hex(0xFFFFFF), LV_PART_MAIN);
+  lv_obj_align(s_touch_count_label, LV_ALIGN_BOTTOM_MID, 0, -30);
+}
+
 void display_p4_begin()
 {
   // 1) Shared I2C bus on port 1 (GPIO7/8). GT911 driver fetches this via
@@ -105,8 +154,8 @@ void display_p4_begin()
   cbs.on_color_trans_done = dp4_dpi_flush_done;
   esp_lcd_dpi_panel_register_event_callbacks(s_panels.panel, &cbs, &s_disp_drv);
 
-  // 5) D1 bring-up content.
-  lv_demo_widgets();
+  // 5) D1 bring-up content: minimal self-contained render + touch test.
+  dp4_build_bringup_screen();
 
   // 6) Pump LVGL from its own task (D2 will migrate this to a MicroTasks::Task).
   xTaskCreatePinnedToCore(dp4_lvgl_task, "lvgl", 8192, NULL, 2, NULL, 1);

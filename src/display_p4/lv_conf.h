@@ -28,13 +28,11 @@
 #define LV_USE_THEME_DEFAULT 1
 #define LV_THEME_DEFAULT_DARK 1
 
-// Fonts used by lv_demo_widgets.
+// Fonts used by the bring-up screen.
 #define LV_FONT_MONTSERRAT_12 1
 #define LV_FONT_MONTSERRAT_14 1
 #define LV_FONT_MONTSERRAT_16 1
+#define LV_FONT_MONTSERRAT_28 1
 #define LV_FONT_DEFAULT &lv_font_montserrat_14
-
-// D1 bring-up content: the LVGL widgets demo.
-#define LV_USE_DEMO_WIDGETS 1
 
 #endif // LV_CONF_H
