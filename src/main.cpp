@@ -282,6 +282,7 @@ loop() {
   }
 #endif
 
+  // scl - support for unplug/plug override of timer
   if (manualOverride) {
     EvseProperties props;
     props.setState(EvseState::Active);

@@ -267,6 +267,9 @@ void EvseMonitor::updateEvseState(uint8_t evse_state, uint8_t pilot_state, uint3
     // check if we need to increment the relay counter
     _energyMeter.increment_switch_counter();
 
+    //
+    // scl - begin support for unplug/plug override of timer
+    //
     unsigned long curms = millis();
     if ((curms > 60000) && originalVehicleConnected && !_state.isVehicleConnected()) {
       // Vehicle disconnected
@@ -280,6 +283,9 @@ void EvseMonitor::updateEvseState(uint8_t evse_state, uint8_t pilot_state, uint3
       }
       _unplugStartMs = 0;
     }
+    //
+    // scl - end support for unplug/plug override of timer
+    //
 
     if (false == originalVehicleConnected && _state.isVehicleConnected())
     {
