@@ -152,8 +152,8 @@ void setup()
   DBUGF("After lcd.begin: %d", ESPAL.getFreeHeap());
 
 #if defined(ENABLE_SCREEN_LVGL)
-  display_p4_begin();
-  DBUGF("After display_p4_begin: %d", ESPAL.getFreeHeap());
+  displayP4.begin();
+  DBUGF("After displayP4.begin: %d", ESPAL.getFreeHeap());
 #endif
 
 #if defined(ENABLE_PN532)

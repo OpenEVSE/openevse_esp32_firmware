@@ -4,61 +4,36 @@
 #include "lvgl.h"
 #include "driver/i2c_master.h"
 #include "esp_heap_caps.h"
-#include "esp_lcd_mipi_dsi.h"
 
-#include "lcd/st7701_lcd.h"
-#include "touch/gt911_touch.h"
 #include "display_p4.h"
+#include "panel_st7701_dsi.h"
+#include "touch/gt911_touch.h"
 
-#define DP4_H_RES 480
-#define DP4_V_RES 800
-#define DP4_TP_SDA 7
-#define DP4_TP_SCL 8
+#ifndef DISPLAY_P4_BACKLIGHT_PIN
+#define DISPLAY_P4_BACKLIGHT_PIN 23
+#endif
+#ifndef DISPLAY_P4_BACKLIGHT_TIMEOUT_MS
+#define DISPLAY_P4_BACKLIGHT_TIMEOUT_MS 120000UL
+#endif
 
-static st7701_lcd s_lcd = st7701_lcd(-1);                 // panel reset is GPIO5 inside the driver
+#define DP4_TP_SDA   7
+#define DP4_TP_SCL   8
+#define DP4_BL_FREQ  5000
+#define DP4_BL_RES   8
+#define DP4_BL_FULL  255
+
+static St7701DsiPanel s_panel;
 static gt911_touch s_touch = gt911_touch(DP4_TP_SDA, DP4_TP_SCL, -1, -1);
-static bsp_lcd_handles_t s_panels;
 
 static lv_disp_draw_buf_t s_draw_buf;
-static lv_color_t *s_buf1;
-static lv_color_t *s_buf2;
+static lv_color_t *s_buf1 = NULL;
+static lv_color_t *s_buf2 = NULL;
 static lv_disp_drv_t s_disp_drv;
 static lv_indev_drv_t s_indev_drv;
 
-// DSI "color transfer done" -> LVGL flush complete.
-static bool dp4_dpi_flush_done(esp_lcd_panel_handle_t panel,
-                               esp_lcd_dpi_panel_event_data_t *edata, void *user_ctx)
-{
-  lv_disp_drv_t *drv = (lv_disp_drv_t *)user_ctx;
-  lv_disp_flush_ready(drv);
-  return false;
-}
+static volatile bool s_activity = false;   // set by touch read_cb, consumed by loop()
 
-static void dp4_flush_cb(lv_disp_drv_t *drv, const lv_area_t *area, lv_color_t *color_p)
-{
-  s_lcd.lcd_draw_bitmap(area->x1, area->y1, area->x2 + 1, area->y2 + 1, &color_p->full);
-}
-
-static void dp4_touch_read_cb(lv_indev_drv_t *drv, lv_indev_data_t *data)
-{
-  uint16_t x = 0, y = 0;
-  if (s_touch.getTouch(&x, &y)) {
-    data->state = LV_INDEV_STATE_PR;
-    data->point.x = x;
-    data->point.y = y;
-  } else {
-    data->state = LV_INDEV_STATE_REL;
-  }
-}
-
-static void dp4_lvgl_task(void *arg)
-{
-  for (;;) {
-    lv_timer_handler();
-    vTaskDelay(pdMS_TO_TICKS(5));
-  }
-}
-
+// --- bring-up screen (carried from D1) ---
 static lv_obj_t *s_touch_count_label = NULL;
 static uint32_t s_touch_count = 0;
 
@@ -70,8 +45,6 @@ static void dp4_btn_event_cb(lv_event_t *e)
   }
 }
 
-// Minimal self-contained bring-up screen: proves render (title/arc/button) and
-// touch (the button increments an on-screen counter). Replaces lv_demo_widgets.
 static void dp4_build_bringup_screen(void)
 {
   lv_obj_t *scr = lv_scr_act();
@@ -84,7 +57,7 @@ static void dp4_build_bringup_screen(void)
   lv_obj_align(title, LV_ALIGN_TOP_MID, 0, 24);
 
   lv_obj_t *sub = lv_label_create(scr);
-  lv_label_set_text(sub, "ST7701 MIPI-DSI + GT911  -  D1 bring-up");
+  lv_label_set_text(sub, "D2  -  HAL + MicroTask pump + LEDC backlight");
   lv_obj_set_style_text_color(sub, lv_color_hex(0x8A9099), LV_PART_MAIN);
   lv_obj_align(sub, LV_ALIGN_TOP_MID, 0, 62);
 
@@ -109,10 +82,52 @@ static void dp4_build_bringup_screen(void)
   lv_obj_align(s_touch_count_label, LV_ALIGN_BOTTOM_MID, 0, -30);
 }
 
-void display_p4_begin()
+// --- LVGL callbacks ---
+static void dp4_flush_ready_cb(void *arg)
 {
-  // 1) Shared I2C bus on port 1 (GPIO7/8). GT911 driver fetches this via
-  //    i2c_master_get_bus_handle(1, ...) so it MUST exist before touch.begin().
+  lv_disp_drv_t *drv = (lv_disp_drv_t *)arg;
+  lv_disp_flush_ready(drv);
+}
+
+static void dp4_flush_cb(lv_disp_drv_t *drv, const lv_area_t *area, lv_color_t *color_p)
+{
+  s_panel.flush(area->x1, area->y1, area->x2 + 1, area->y2 + 1, &color_p->full);
+}
+
+static void dp4_touch_read_cb(lv_indev_drv_t *drv, lv_indev_data_t *data)
+{
+  uint16_t x = 0, y = 0;
+  if (s_touch.getTouch(&x, &y)) {
+    data->state = LV_INDEV_STATE_PR;
+    data->point.x = x;
+    data->point.y = y;
+    s_activity = true;
+  } else {
+    data->state = LV_INDEV_STATE_REL;
+  }
+}
+
+DisplayP4Task displayP4;
+
+DisplayP4Task::DisplayP4Task()
+  : MicroTasks::Task(), _backlightDeadline(0), _backlightOn(false)
+{
+}
+
+void DisplayP4Task::begin()
+{
+  MicroTask.startTask(this);
+}
+
+void DisplayP4Task::wakeBacklight()
+{
+  s_activity = true;
+}
+
+void DisplayP4Task::setup()
+{
+  // 1) Shared I2C bus on port 1 (GPIO7/8) BEFORE touch.begin() (GT911 driver
+  //    fetches it via i2c_master_get_bus_handle(1, ...)).
   i2c_master_bus_handle_t i2c_handle = NULL;
   i2c_master_bus_config_t i2c_cfg = {};
   i2c_cfg.i2c_port = I2C_NUM_1;
@@ -123,22 +138,21 @@ void display_p4_begin()
   i2c_cfg.flags.enable_internal_pullup = 1;
   i2c_new_master_bus(&i2c_cfg, &i2c_handle);
 
-  // 2) Panel + touch.
-  s_lcd.begin();
+  // 2) Panel (via HAL) + touch.
+  s_panel.begin();
   s_touch.begin();
-  s_lcd.get_handle(&s_panels);
 
   // 3) LVGL core + full-screen double buffers in PSRAM.
   lv_init();
-  size_t buf_px = (size_t)DP4_H_RES * DP4_V_RES;
+  size_t buf_px = (size_t)s_panel.width() * s_panel.height();
   s_buf1 = (lv_color_t *)heap_caps_malloc(buf_px * sizeof(lv_color_t), MALLOC_CAP_SPIRAM);
   s_buf2 = (lv_color_t *)heap_caps_malloc(buf_px * sizeof(lv_color_t), MALLOC_CAP_SPIRAM);
   assert(s_buf1 && s_buf2);
   lv_disp_draw_buf_init(&s_draw_buf, s_buf1, s_buf2, buf_px);
 
   lv_disp_drv_init(&s_disp_drv);
-  s_disp_drv.hor_res = DP4_H_RES;
-  s_disp_drv.ver_res = DP4_V_RES;
+  s_disp_drv.hor_res = s_panel.width();
+  s_disp_drv.ver_res = s_panel.height();
   s_disp_drv.flush_cb = dp4_flush_cb;
   s_disp_drv.draw_buf = &s_draw_buf;
   s_disp_drv.full_refresh = false;
@@ -149,16 +163,36 @@ void display_p4_begin()
   s_indev_drv.read_cb = dp4_touch_read_cb;
   lv_indev_drv_register(&s_indev_drv);
 
-  // 4) Bind the DSI done-callback to flush completion.
-  esp_lcd_dpi_panel_event_callbacks_t cbs = {};
-  cbs.on_color_trans_done = dp4_dpi_flush_done;
-  esp_lcd_dpi_panel_register_event_callbacks(s_panels.panel, &cbs, &s_disp_drv);
+  s_panel.onFlushReady(dp4_flush_ready_cb, &s_disp_drv);
 
-  // 5) D1 bring-up content: minimal self-contained render + touch test.
+  // 4) Content.
   dp4_build_bringup_screen();
 
-  // 6) Pump LVGL from its own task (D2 will migrate this to a MicroTasks::Task).
-  xTaskCreatePinnedToCore(dp4_lvgl_task, "lvgl", 8192, NULL, 2, NULL, 1);
+  // 5) Backlight on LEDC PWM, full brightness, start the idle timer.
+  ledcAttach(DISPLAY_P4_BACKLIGHT_PIN, DP4_BL_FREQ, DP4_BL_RES);
+  ledcWrite(DISPLAY_P4_BACKLIGHT_PIN, DP4_BL_FULL);
+  _backlightOn = true;
+  _backlightDeadline = millis() + DISPLAY_P4_BACKLIGHT_TIMEOUT_MS;
+}
+
+unsigned long DisplayP4Task::loop(MicroTasks::WakeReason reason)
+{
+  lv_timer_handler();
+
+  unsigned long now = millis();
+  if (s_activity) {
+    s_activity = false;
+    if (!_backlightOn) {
+      ledcWrite(DISPLAY_P4_BACKLIGHT_PIN, DP4_BL_FULL);
+      _backlightOn = true;
+    }
+    _backlightDeadline = now + DISPLAY_P4_BACKLIGHT_TIMEOUT_MS;
+  } else if (_backlightOn && (long)(now - _backlightDeadline) >= 0) {
+    ledcWrite(DISPLAY_P4_BACKLIGHT_PIN, 0);
+    _backlightOn = false;
+  }
+
+  return 5;  // pump LVGL ~every 5 ms, cooperatively
 }
 
 #endif // ENABLE_SCREEN_LVGL
