@@ -42,6 +42,9 @@
 #include "divert.h"
 #include "ota.h"
 #include "lcd.h"
+#if defined(ENABLE_SCREEN_LVGL)
+#include "display_p4/display_p4.h"
+#endif
 #include "openevse.h"
 #include "root_ca.h"
 #include "espal.h"
@@ -147,6 +150,11 @@ void setup()
 
   lcd.begin(evse, scheduler, manual);
   DBUGF("After lcd.begin: %d", ESPAL.getFreeHeap());
+
+#if defined(ENABLE_SCREEN_LVGL)
+  display_p4_begin();
+  DBUGF("After display_p4_begin: %d", ESPAL.getFreeHeap());
+#endif
 
 #if defined(ENABLE_PN532)
   pn532.begin();
