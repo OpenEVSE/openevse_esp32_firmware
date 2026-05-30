@@ -204,10 +204,20 @@ void LedManagerTask::setup()
 
 #if defined(RED_LED) && defined(GREEN_LED) && defined(BLUE_LED)
   DBUGF("Initialising RGB LEDs, %d, %d, %d", RED_LED, GREEN_LED, BLUE_LED);
+  // configure LED PWM functionalitites
+#if ESP_ARDUINO_VERSION >= ESP_ARDUINO_VERSION_VAL(3,0,0)
   // core 3.x unified LEDC API: attach pin directly with freq + resolution.
   ledcAttach(RED_LED, LEDC_FREQUENCY, LEDC_RESOLUTION);
   ledcAttach(GREEN_LED, LEDC_FREQUENCY, LEDC_RESOLUTION);
   ledcAttach(BLUE_LED, LEDC_FREQUENCY, LEDC_RESOLUTION);
+#else
+  ledcSetup(RED_LEDC_CHANNEL, LEDC_FREQUENCY, LEDC_RESOLUTION);
+  ledcAttachPin(RED_LED, RED_LEDC_CHANNEL);
+  ledcSetup(GREEN_LEDC_CHANNEL, LEDC_FREQUENCY, LEDC_RESOLUTION);
+  ledcAttachPin(GREEN_LED, GREEN_LEDC_CHANNEL);
+  ledcSetup(BLUE_LEDC_CHANNEL, LEDC_FREQUENCY, LEDC_RESOLUTION);
+  ledcAttachPin(BLUE_LED, BLUE_LEDC_CHANNEL);
+#endif
 #endif
 
 #ifdef WIFI_LED
@@ -589,9 +599,15 @@ void LedManagerTask::setEvseAndWifiRGB(uint8_t evseRed, uint8_t evseGreen, uint8
   DBUGVAR(gamma8[wifiGreen]);
   DBUGVAR(gamma8[wifiBlue]);
 
+#if ESP_ARDUINO_VERSION >= ESP_ARDUINO_VERSION_VAL(3,0,0)
   ledcWrite(RED_LED, gamma8[wifiRed]);
   ledcWrite(GREEN_LED, gamma8[wifiGreen]);
   ledcWrite(BLUE_LED, gamma8[wifiBlue]);
+#else
+  ledcWrite(RED_LEDC_CHANNEL, gamma8[wifiRed]);
+  ledcWrite(GREEN_LEDC_CHANNEL, gamma8[wifiGreen]);
+  ledcWrite(BLUE_LEDC_CHANNEL, gamma8[wifiBlue]);
+#endif
 
 #ifdef WIFI_BUTTON_SHARE_LED
   #if RED_LED == WIFI_BUTTON_SHARE_LED
@@ -718,7 +734,11 @@ int LedManagerTask::getButtonPressed()
 
 #if defined(WIFI_BUTTON_SHARE_LED)
   #ifdef WIFI_BUTTON_SHARE_LEDC_CHANNEL
+  #if ESP_ARDUINO_VERSION >= ESP_ARDUINO_VERSION_VAL(3,0,0)
   ledcAttach(WIFI_BUTTON_SHARE_LED, LEDC_FREQUENCY, LEDC_RESOLUTION);
+  #else
+  ledcAttachPin(WIFI_BUTTON_SHARE_LED, WIFI_BUTTON_SHARE_LEDC_CHANNEL);
+  #endif
   ledcWrite(WIFI_BUTTON_SHARE_LED, buttonShareState);
   #else
   pinMode(WIFI_BUTTON_SHARE_LED, OUTPUT);
