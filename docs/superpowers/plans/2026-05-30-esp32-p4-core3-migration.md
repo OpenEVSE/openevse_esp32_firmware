@@ -41,6 +41,21 @@ Work happens on branch `feature/esp32-p4-port` (already created; the design spec
 
 ---
 
+## Probe results (2026-05-30) — REVISED downstream sequence
+
+Task 1 ran. Platform pinned = **`55.03.38-1`** (Arduino-ESP32 **3.3.8** / ESP-IDF **5.5.4**). Findings that revise Tasks 2–5:
+
+- **`pio run` stops at the first fatal error**, which is in a dependency compiled before any `src/` file. So errors surface one blocker at a time — fix, rebuild, see the next. Work the libraries first (they gate everything), then `src/`.
+- **Revised fix order:** Task 5 (ArduinoMongoose) → **new Task 4a** (ESPAL) → Task 3 (certificates) → Task 4 (net_manager WiFi, currently masked by ESPAL) → Task 2 (LEDC, only on an RGB-LED env) → Task 6 (link) → Task 7 (matrix).
+- **First blocker (Task 5):** `ArduinoMongoose/src/mongoose.c:4884: fatal error: mbedtls/net.h: No such file` — renamed to `mbedtls/net_sockets.h` in mbedTLS 3.x.
+- **New blocker (Task 4a, gates Task 4):** `ESPAL/src/espal_esp32.h` — `esp_chip_info_t` / `esp_chip_info` / `CHIP_ESP32*` / `CHIP_FEATURE_*` undeclared. IDF 5 moved these to `esp_chip_info.h`, which ESPAL doesn't include.
+- **Task 3 reality:** the real `certificates.cpp` error is `mbedtls_pk_parse_key: too few arguments` (3.x added an `f_rng`/`p_rng` RNG-callback pair) — NOT opaque-struct access. The opaque fields (`x509.serial`/`issuer`/`subject`) compiled fine, so IDF already defines `MBEDTLS_ALLOW_PRIVATE_ACCESS`; that build flag is likely unnecessary. See the revised Task 3.
+- **Task 2 reality:** `LedManagerTask.cpp`'s LEDC block is `#if defined(RED_LED) && defined(GREEN_LED) && defined(BLUE_LED)`, which is **not defined for `openevse_wifi_v1`** — so it is compiled out of the probe env. The 2.x symbols are confirmed gone in 3.3.8. Validate the Task 2 fix on an **RGB-LED env: `espressif_esp-wrover-kit`** (`RED_LED=0`, `GREEN_LED=2`, `BLUE_LED=4`).
+- **ESPAL + ArduinoMongoose** are `jeremypoulter` registry libs pinned to old versions. Preferred fix: bump to an IDF5-compatible release if one exists; else fork, patch minimally, and pin the fork's Git URL + commit in `[common] lib_deps`.
+- Aside: `gui-v2` submodule is not initialised (`git submodule update --init`) — needed for a full flashable image (web assets), not for compile.
+
+---
+
 ## Task 1: Pin the pioarduino core-3.x platform and run the probe build
 
 Repoint the build at the pioarduino platform and immediately build the primary env to capture the real error set that drives Tasks 2–5. This task is expected to **fail to compile** — that failure is its product.
@@ -154,10 +169,12 @@ with:
 
 (Note: line ~102 has a pre-existing malformed macro `WIFI_BUTTON_SHARE_LLEDC_CHANNELBLUE_LEDC_CHANNEL` in the `BLUE_LED == WIFI_BUTTON_SHARE_LED` branch. It is only reached if `WIFI_LED == BLUE_LED` on a board. Leave it unless a build in Task 7 actually trips it; if so, fix to `#define WIFI_BUTTON_SHARE_LEDC_CHANNEL BLUE_LEDC_CHANNEL`. Out of scope otherwise.)
 
-- [ ] **Step 4: Rebuild and confirm the LEDC errors are gone**
+- [ ] **Step 4: Rebuild and confirm the LEDC fix on an RGB-LED env**
 
-Run: `~/.platformio/penv/bin/pio run -e openevse_wifi_v1 2>&1 | tee /tmp/p0a-build.log`
-Expected: still FAIL overall, but **no `ledc*` errors** remain in the log (`grep -i ledc /tmp/p0a-build.log` shows none). Remaining errors are the mbedTLS / Mongoose ones.
+The probe env `openevse_wifi_v1` does **not** define `RED_LED`/`GREEN_LED`/`BLUE_LED`, so its LEDC block is compiled out and cannot validate this fix. Build an env that *does* exercise it: **`espressif_esp-wrover-kit`** (`RED_LED=0`, `GREEN_LED=2`, `BLUE_LED=4`).
+
+Run: `~/.platformio/penv/bin/pio run -e espressif_esp-wrover-kit 2>&1 | tee /tmp/p0a-led.log`
+Expected: **no `ledc*`/`ledcSetup`/`ledcAttachPin` errors** (`grep -i ledc /tmp/p0a-led.log` shows none). This env may still fail later on the same library blockers as the probe env — that is fine; only the LEDC path is being validated here.
 
 - [ ] **Step 5: Commit**
 
@@ -168,50 +185,105 @@ git commit -m "fix(led): port LEDC PWM calls to Arduino-ESP32 3.x unified API"
 
 ---
 
-## Task 3: Allow mbedTLS 3.x private-struct access
+## Task 3: Fix `mbedtls_pk_parse_key` signature in certificates.cpp
 
-IDF 5 ships **mbedTLS 3.x**, which marks many struct fields private. `certificates.cpp` reads `x509.issuer`, `x509.subject`, `x509.serial.len`, and `x509.serial.p[i]` directly, and ArduinoMongoose's TLS glue does similar. The lowest-risk, codebase-wide remedy is the documented mbedTLS escape hatch: define `MBEDTLS_ALLOW_PRIVATE_ACCESS`, which re-exposes the fields without source changes. Add it once, globally.
+**Revised per probe.** The actual `certificates.cpp` error on mbedTLS 3.x is `certificates.cpp:55: too few arguments to function 'mbedtls_pk_parse_key'`. In mbedTLS 3.x the signature gained a mandatory RNG-callback pair: `mbedtls_pk_parse_key(pk, key, keylen, pwd, pwdlen, f_rng, p_rng)`. The opaque-struct access the original plan worried about (`x509.serial`/`issuer`/`subject`) compiled fine — IDF already defines `MBEDTLS_ALLOW_PRIVATE_ACCESS` — so **no build flag is needed**; supply an RNG instead. Use ESP-IDF's `esp_random`-backed wrapper so no DRBG context setup is required.
 
 **Files:**
-- Modify: `platformio.ini` (`[common] build_flags`, the block starting line ~80)
+- Modify: `src/certificates.cpp` (the `mbedtls_pk_parse_key` call at line ~55; includes near the top)
 
-- [ ] **Step 1: Add the build flag**
+- [ ] **Step 1: Add a tiny RNG adapter and pass it to `pk_parse_key`**
 
-In `platformio.ini`, in `[common]` `build_flags =`, add this line near the other global `-D` defines (e.g. right after `-D ESP32`):
+`mbedtls_pk_parse_key` wants an `int (*f_rng)(void *, unsigned char *, size_t)`. ESP-IDF exposes hardware RNG via `esp_random()`. Add this free function near the top of `src/certificates.cpp` (after the includes), and include `<esp_random.h>`:
+
+```cpp
+#include <esp_random.h>
+
+// mbedTLS 3.x requires an RNG for key parsing; back it with the ESP HW RNG.
+static int esp_rng_for_mbedtls(void *ctx, unsigned char *buf, size_t len)
+{
+  (void)ctx;
+  esp_fill_random(buf, len);
+  return 0;
+}
+```
+
+Then update the call at line ~55:
+
+```cpp
+    int ret = mbedtls_pk_parse_key(&pk, (const unsigned char *)key.c_str(), key.length() + 1, NULL, 0);
+```
+
+to:
+
+```cpp
+    int ret = mbedtls_pk_parse_key(&pk, (const unsigned char *)key.c_str(), key.length() + 1, NULL, 0, esp_rng_for_mbedtls, NULL);
+```
+
+- [ ] **Step 2: Verify the file compiles (against the real toolchain)**
+
+`certificates.cpp` sits behind the full library chain, so a clean whole-env build only works once the library blockers (Tasks 5 + 4a) are fixed. To validate this fix in isolation before then, syntax-check just this TU using the env's compile flags:
+
+```bash
+~/.platformio/penv/bin/pio run -e openevse_wifi_v1 -t compiledb >/dev/null 2>&1
+# find the certificates.cpp compile command and run it with -fsyntax-only:
+python3 - <<'PY'
+import json,subprocess,shlex,sys
+cc=json.load(open('compile_commands.json'))
+cmd=next(e['command'] for e in cc if e['file'].endswith('certificates.cpp'))
+parts=shlex.split(cmd)+['-fsyntax-only']
+sys.exit(subprocess.call(parts))
+PY
+rm -f compile_commands.json
+```
+
+Expected: exit 0, no `mbedtls_pk_parse_key` argument error. (If `pio` ordering means certificates.cpp isn't reached in a full build yet, this isolated check is the gate.)
+
+- [ ] **Step 3: Commit**
+
+```bash
+git add src/certificates.cpp
+git commit -m "fix(tls): pass RNG to mbedtls_pk_parse_key for mbedTLS 3.x"
+```
+
+---
+
+## Task 4a: Fix ESPAL for IDF 5 (esp_chip_info.h relocation)
+
+**New, per probe.** `ESPAL/src/espal_esp32.h` uses `esp_chip_info_t`, `esp_chip_info()`, and `CHIP_ESP32*` / `CHIP_FEATURE_*` constants that IDF 5 relocated from `esp_system.h` into `esp_chip_info.h`. ESPAL (a `jeremypoulter` registry lib, pinned `0.0.4`) doesn't include the new header, so it fails to compile and **masks the real net_manager WiFi errors** (Task 4). Fix ESPAL, then Task 4 becomes observable.
+
+**Files:**
+- Modify (via fork or version bump): `ESPAL/src/espal_esp32.h`
+- Possibly modify: `platformio.ini` (`[common] lib_deps`, the `jeremypoulter/ESPAL@0.0.4` pin)
+
+- [ ] **Step 1: Prefer an upstream fix**
+
+Check the PlatformIO registry / GitHub `jeremypoulter/ESPAL` for a release newer than `0.0.4` that supports IDF 5. If one exists, bump the version in `[common] lib_deps` and rebuild — done.
+
+- [ ] **Step 2: If no compatible release, fork + patch**
+
+Fork `jeremypoulter/ESPAL`. In `src/espal_esp32.h`, add the relocated header alongside the existing ESP-IDF includes:
+
+```cpp
+#include <esp_chip_info.h>
+```
+
+(IDF 5 keeps `esp_chip_info_t`, `esp_chip_info()`, `CHIP_ESP32`, `CHIP_ESP32S2/S3/C3/...`, and `CHIP_FEATURE_*` — only their declaring header moved.) Pin the fork in `[common] lib_deps`:
 
 ```ini
-  -D MBEDTLS_ALLOW_PRIVATE_ACCESS
+  https://github.com/<your-fork>/ESPAL.git#<commit-sha>
 ```
 
-- [ ] **Step 2: Rebuild and confirm certificate-struct errors clear**
+- [ ] **Step 3: Rebuild and confirm ESPAL clears**
 
 Run: `~/.platformio/penv/bin/pio run -e openevse_wifi_v1 2>&1 | tee /tmp/p0a-build.log`
-Expected: no `x509`/`serial`/opaque-field errors from `certificates.cpp` remain (`grep -iE "certificates\.cpp|x509|MBEDTLS_PRIVATE" /tmp/p0a-build.log` shows no errors). Mongoose TLS errors (if any) are handled in Task 5.
-
-- [ ] **Step 3 (fallback, only if the flag does not clear `certificates.cpp`):** Refactor the direct field reads to mbedTLS API. Replace the serial loop at lines 44–45:
-
-```cpp
-    for(int i = 0; i < x509.serial.len; i++) {
-      id = id << 8 | x509.serial.p[i];
-    }
-```
-
-with access via the (still-public-with-flag) buffer, or compute the id from `mbedtls_x509_crt`'s serial using `MBEDTLS_PRIVATE(serial)`:
-
-```cpp
-    const mbedtls_x509_buf &serial = x509.MBEDTLS_PRIVATE(serial);
-    for(size_t i = 0; i < serial.MBEDTLS_PRIVATE(len); i++) {
-      id = id << 8 | serial.MBEDTLS_PRIVATE(p)[i];
-    }
-```
-
-and similarly wrap `&x509.issuer` / `&x509.subject` as `&x509.MBEDTLS_PRIVATE(issuer)` / `&x509.MBEDTLS_PRIVATE(subject)` in the `ENABLE_DEBUG_CETRIFICATES` block. (Only needed if Step 1's flag is insufficient — normally it is sufficient.)
+Expected: no `espal_esp32.h` / `esp_chip_info` / `CHIP_*` errors. The build advances past ESPAL (next errors will be net_manager or further deps).
 
 - [ ] **Step 4: Commit**
 
 ```bash
-git add platformio.ini src/certificates.cpp
-git commit -m "fix(tls): allow mbedTLS 3.x private struct access for cert parsing"
+git add platformio.ini
+git commit -m "build: fix ESPAL for IDF 5 esp_chip_info.h relocation"
 ```
 
 ---
@@ -247,20 +319,24 @@ If no change was needed, skip the commit and note "net_manager compiles unchange
 
 ## Task 5: Resolve the ArduinoMongoose / MicroOcpp TLS compile fallout
 
-This is the empirical core of the migration and the reason for the probe. `ArduinoMongoose` (Mongoose 6.14, `MG_SSL_IF_MBEDTLS`) and `MicroOcppMongoose` are registry deps compiled against mbedTLS 3.x for the first time. Work the remaining errors in `/tmp/p0a-build.log` after Tasks 2–4 using the decision tree below; each branch is a concrete, bounded action.
+This is the empirical core of the migration and the reason for the probe. `ArduinoMongoose` (Mongoose 6.14, `MG_SSL_IF_MBEDTLS`) and `MicroOcppMongoose` are registry deps compiled against mbedTLS 3.x for the first time. **This is the first build blocker** (it compiles before `src/`), so do it first per the revised sequence. Work the errors using the decision tree below; each branch is a concrete, bounded action.
+
+**Known first error (from the probe):** `ArduinoMongoose/src/mongoose.c:4884: fatal error: mbedtls/net.h: No such file or directory` — mbedTLS 3.x renamed this header to `mbedtls/net_sockets.h`. Expect more mbedTLS-3 API breakage behind it once the include is fixed.
 
 **Files:**
 - Possibly modify: `platformio.ini` (`[common] lib_deps`, the Mongoose flags ~83–110)
 - Possibly create: a patched fork referenced via `lib_deps` (only if upstream cannot build)
 
-- [ ] **Step 1: Categorise the remaining errors**
+- [ ] **Step 1: Categorise the errors (iteratively — the build stops at the first)**
 
+Run: `~/.platformio/penv/bin/pio run -e openevse_wifi_v1 2>&1 | tee /tmp/p0a-build.log`
 Run: `grep -iE "mongoose|mbedtls|ssl|/ArduinoMongoose/|MicroOcpp" /tmp/p0a-build.log | grep -iE "error|undefined"`
-Classify each into one of the branches in Step 2.
+Classify the current error into a Step 2 branch, fix, and rebuild — repeating until the Mongoose/MicroOcpp TLS errors are exhausted. Start with the `mbedtls/net.h` → `mbedtls/net_sockets.h` rename above.
 
 - [ ] **Step 2: Apply the matching remedy (in increasing order of effort)**
 
-  - **(a) Opaque-struct field access inside Mongoose's mbedTLS glue** → already addressed by `MBEDTLS_ALLOW_PRIVATE_ACCESS` (Task 3). If such errors persist, confirm the flag reaches the library build (it is a global `build_flags`, so it should). No further action.
+  - **(a0) Renamed headers** (e.g. `mbedtls/net.h` → `mbedtls/net_sockets.h`) → the include lives in the library. Bump the dep (branch b) or fork+patch (branch c). This is the confirmed first error.
+  - **(a) Opaque-struct field access inside Mongoose's mbedTLS glue** → IDF already defines `MBEDTLS_ALLOW_PRIVATE_ACCESS` (confirmed by the probe — `certificates.cpp`'s direct field reads compiled), so this should not error. If it somehow does, add `-D MBEDTLS_ALLOW_PRIVATE_ACCESS` to `[common] build_flags`.
   - **(b) Removed/renamed mbedTLS *functions*** (e.g. `mbedtls_ssl_conf_max_frag_len`, legacy RNG, `mbedtls_*_ret` suffixes dropped in 3.x): these live in the library, not `src/`. Prefer **bumping the dependency**: check the PlatformIO registry / GitHub for a newer `jeremypoulter/ArduinoMongoose` (or `MicroOcppMongoose`) release tagged for IDF 5 / mbedTLS 3, and update the version in `[common] lib_deps`. Rebuild.
   - **(c) No compatible upstream release exists** → fork the offending library, patch the handful of mbedTLS-3 call sites (replace `*_ret` names, drop removed config calls, use the 3.x RNG signature), and reference the fork from `lib_deps` as a Git URL pinned to a commit. Keep the patch minimal and documented in the fork's commit message.
   - **(d) A `-D MG_SSL_*` build flag is now invalid** → reconcile the Mongoose SSL flags (`platformio.ini` ~83–110) with what the (possibly bumped) library expects; remove flags the new version rejects.
