@@ -53,18 +53,18 @@ void create_screen_screen_charge() {
             // charge_state_label
             lv_obj_t *obj = lv_label_create(parent_obj);
             objects.charge_state_label = obj;
-            lv_obj_set_pos(obj, 281, 20);
+            lv_obj_set_pos(obj, 281, 39);
             lv_obj_set_size(obj, 240, LV_SIZE_CONTENT);
             lv_obj_set_style_text_color(obj, lv_color_hex(theme_colors[active_theme_index][7]), LV_PART_MAIN | LV_STATE_DEFAULT);
             lv_obj_set_style_text_align(obj, LV_TEXT_ALIGN_CENTER, LV_PART_MAIN | LV_STATE_DEFAULT);
-            lv_obj_set_style_text_font(obj, &lv_font_montserrat_20, LV_PART_MAIN | LV_STATE_DEFAULT);
+            lv_obj_set_style_text_font(obj, &lv_font_montserrat_32, LV_PART_MAIN | LV_STATE_DEFAULT);
             lv_label_set_text(obj, "Charging");
         }
         {
             // charge_wifi_label
             lv_obj_t *obj = lv_label_create(parent_obj);
             objects.charge_wifi_label = obj;
-            lv_obj_set_pos(obj, 600, 23);
+            lv_obj_set_pos(obj, 610, 13);
             lv_obj_set_size(obj, 176, LV_SIZE_CONTENT);
             lv_obj_set_style_text_color(obj, lv_color_hex(theme_colors[active_theme_index][4]), LV_PART_MAIN | LV_STATE_DEFAULT);
             lv_obj_set_style_text_align(obj, LV_TEXT_ALIGN_RIGHT, LV_PART_MAIN | LV_STATE_DEFAULT);
@@ -110,8 +110,8 @@ void create_screen_screen_charge() {
             // stats_card
             lv_obj_t *obj = lv_obj_create(parent_obj);
             objects.stats_card = obj;
-            lv_obj_set_pos(obj, 400, 80);
-            lv_obj_set_size(obj, 360, 306);
+            lv_obj_set_pos(obj, 401, 100);
+            lv_obj_set_size(obj, 360, 286);
             lv_obj_clear_flag(obj, LV_OBJ_FLAG_SCROLLABLE);
             lv_obj_set_style_bg_color(obj, lv_color_hex(theme_colors[active_theme_index][1]), LV_PART_MAIN | LV_STATE_DEFAULT);
             lv_obj_set_style_bg_opa(obj, 255, LV_PART_MAIN | LV_STATE_DEFAULT);
