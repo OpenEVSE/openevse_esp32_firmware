@@ -278,12 +278,14 @@ static void dp4_eez_update(void)
 
   lv_label_set_text_fmt(objects.charge_rate_value, "%u A", (unsigned)m->pilotCurrent());
 
-  if (m->wifiApMode()) {
-    lv_label_set_text(objects.charge_wifi_label, "AP mode");
-  } else if (m->wifiConnected()) {
-    lv_label_set_text_fmt(objects.charge_wifi_label, "WiFi %d dBm", m->wifiRssi());
-  } else {
-    lv_label_set_text(objects.charge_wifi_label, "offline");
+  // WiFi: a wifi/station glyph, green when connected (STA), red otherwise.
+  // Colours come from the active EEZ theme (success/error) so it tracks themes.
+  {
+    bool wifi_up = m->wifiConnected();
+    uint32_t wc = theme_colors[active_theme_index][wifi_up ? COLOR_ID_SUCCESS : COLOR_ID_ERROR];
+    lv_obj_set_style_text_color(objects.charge_wifi_label, lv_color_hex(wc),
+                                LV_PART_MAIN | LV_STATE_DEFAULT);
+    lv_label_set_text(objects.charge_wifi_label, LV_SYMBOL_WIFI);
   }
 
   // Power ring: fraction of the pilot (charge-current limit) actually drawn, 0-100.
