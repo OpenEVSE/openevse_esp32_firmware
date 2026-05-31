@@ -45,6 +45,9 @@
 #if defined(ENABLE_SCREEN_LVGL)
 #include "display_p4/display_p4.h"
 #endif
+#if defined(CONFIG_IDF_TARGET_ESP32P4)
+#include "bootloader_random.h"   // SAR-ADC entropy source for the HW RNG (P4 has no on-die radio)
+#endif
 #include "openevse.h"
 #include "root_ca.h"
 #include "espal.h"
@@ -315,6 +318,14 @@ void event_send(JsonDocument &event)
 void hardware_setup()
 {
   debug_setup();
+#if defined(CONFIG_IDF_TARGET_ESP32P4)
+  // The P4 has no on-die radio (Wi-Fi runs on the C6 over ESP-Hosted), so the HW
+  // RNG is NOT auto-seeded by an RF subsystem the way it is on the ESP32/C3. Turn
+  // on the internal SAR-ADC noise entropy source so esp_random()/esp_fill_random()
+  // (used by TLS via mg_ssl_if_mbed_random) are true-random. Called before any ADC
+  // use and left enabled -- the board does its sensing over I2C/RMT, not the ADC.
+  bootloader_random_enable();
+#endif
   enableLoopWDT();
 }
 
