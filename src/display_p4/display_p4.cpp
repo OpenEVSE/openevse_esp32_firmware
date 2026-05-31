@@ -73,10 +73,8 @@ static unsigned long s_bootMs = 0;
 static void dp4_eez_btn_toggle_cb(lv_event_t *e);   // defined below; used in setup()
 static void dp4_eez_sync_screen(void);              // defined below; used in setup()
 static void dp4_attach_breathe(lv_obj_t *ring);     // defined below; used in setup()
-static void dp4_make_status_cluster(void);          // defined below; used in setup()
-static void dp4_update_status_cluster(IEvseUiModel *m, bool conn);  // used in dp4_eez_update()
-static lv_obj_t *s_top_wifi = NULL;                 // wifi glyph on the top layer (all screens)
-static lv_obj_t *s_top_evse = NULL;                 // EVSE status dot on the top layer
+// Colour a per-screen wifi glyph + EVSE-status dot pair (EEZ widgets).
+static void dp4_color_status(lv_obj_t *wifi, lv_obj_t *evse, IEvseUiModel *m, bool conn);
 #endif
 
 static void dp4_btn_event_cb(lv_event_t *e)
@@ -240,10 +238,6 @@ void DisplayP4Task::setup()
   dp4_attach_breathe(objects.sleeping_ring);
   dp4_attach_breathe(objects.fault_ring);
 
-  // Wifi + EVSE-status indicators on the top layer (shown on every screen). The
-  // per-screen EEZ wifi label is now redundant -> hide it.
-  dp4_make_status_cluster();
-  lv_obj_add_flag(objects.charge_wifi_label, LV_OBJ_FLAG_HIDDEN);
 #else
   dp4_build_bringup_screen();
 #endif
@@ -324,8 +318,11 @@ static void dp4_eez_update(void)
   lv_label_set_text(objects.sleeping_state_label, m->stateText());
   lv_label_set_text(objects.fault_text_label, m->stateText());
 
-  // Wifi + EVSE-status indicators live on the top layer -> shown on every screen.
-  dp4_update_status_cluster(m, conn);
+  // Wifi + EVSE-status indicators -- per-screen EEZ widgets, coloured each refresh.
+  dp4_color_status(objects.charge_wifi_label, objects.charge_evse,   m, conn);
+  dp4_color_status(objects.boot_wifi,         objects.boot_evse,     m, conn);
+  dp4_color_status(objects.sleeping_wifi,     objects.sleeping_evse, m, conn);
+  dp4_color_status(objects.fault_wifi,        objects.fault_evse,    m, conn);
 }
 
 // Map the P4ScreenManager's logical screen to an EEZ screen; load on change.
@@ -376,42 +373,25 @@ static void dp4_attach_breathe(lv_obj_t *ring)
   lv_anim_start(&a);
 }
 
-// Status cluster (wifi glyph + EVSE-status dot) on LVGL's top layer, so it shows
-// on EVERY screen at a fixed top-right spot. Created once in setup().
-static void dp4_make_status_cluster(void)
+// Colour a per-screen wifi glyph + EVSE-status dot from the model each refresh.
+// Style/position come from the EEZ project; we only set the symbol + colours.
+static void dp4_color_status(lv_obj_t *wifi, lv_obj_t *evse, IEvseUiModel *m, bool conn)
 {
-  lv_obj_t *top = lv_layer_top();
-
-  s_top_evse = lv_obj_create(top);                 // EVSE status dot (left of wifi)
-  lv_obj_remove_style_all(s_top_evse);
-  lv_obj_set_size(s_top_evse, 14, 14);
-  lv_obj_set_pos(s_top_evse, 730, 17);
-  lv_obj_clear_flag(s_top_evse, LV_OBJ_FLAG_SCROLLABLE | LV_OBJ_FLAG_CLICKABLE);
-  lv_obj_set_style_radius(s_top_evse, LV_RADIUS_CIRCLE, LV_PART_MAIN);
-  lv_obj_set_style_bg_opa(s_top_evse, LV_OPA_COVER, LV_PART_MAIN);
-
-  s_top_wifi = lv_label_create(top);               // wifi glyph
-  lv_obj_set_pos(s_top_wifi, 756, 14);
-  lv_label_set_text(s_top_wifi, LV_SYMBOL_WIFI);
-}
-
-// Recolour the top-layer indicators from the active theme each refresh.
-static void dp4_update_status_cluster(IEvseUiModel *m, bool conn)
-{
-  if (s_top_wifi) {
+  if (wifi) {
     int cid = m->wifiConnected() ? COLOR_ID_SUCCESS   // green
             : m->wifiApMode()    ? COLOR_ID_SLEEP      // blue (AP)
                                  : COLOR_ID_ERROR;     // red
-    lv_obj_set_style_text_color(s_top_wifi, lv_color_hex(theme_colors[active_theme_index][cid]),
+    lv_obj_set_style_text_color(wifi, lv_color_hex(theme_colors[active_theme_index][cid]),
                                 LV_PART_MAIN | LV_STATE_DEFAULT);
+    lv_label_set_text(wifi, LV_SYMBOL_WIFI);
   }
-  if (s_top_evse) {
+  if (evse) {
     // Mirror the web status dot: charging=accent, fault/offline=red, else dim.
     int cid = !conn         ? COLOR_ID_ERROR
             : m->error()    ? COLOR_ID_ERROR
             : m->charging() ? COLOR_ID_CHARGING
                             : COLOR_ID_TEXT_DIM;
-    lv_obj_set_style_bg_color(s_top_evse, lv_color_hex(theme_colors[active_theme_index][cid]),
+    lv_obj_set_style_bg_color(evse, lv_color_hex(theme_colors[active_theme_index][cid]),
                               LV_PART_MAIN);
   }
 }

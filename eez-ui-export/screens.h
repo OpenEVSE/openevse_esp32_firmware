@@ -51,9 +51,12 @@ typedef struct _objects_t {
     lv_obj_t *obj10;
     lv_obj_t *obj11;
     lv_obj_t *obj12;
+    lv_obj_t *charge_evse;
     lv_obj_t *obj13;
     lv_obj_t *boot_status_label;
     lv_obj_t *boot_progress;
+    lv_obj_t *boot_wifi;
+    lv_obj_t *boot_evse;
     lv_obj_t *sleeping_ring;
     lv_obj_t *obj14;
     lv_obj_t *sleeping_state_label;
@@ -67,6 +70,8 @@ typedef struct _objects_t {
     lv_obj_t *obj21;
     lv_obj_t *obj22;
     lv_obj_t *sleeping_moon;
+    lv_obj_t *sleeping_wifi;
+    lv_obj_t *sleeping_evse;
     lv_obj_t *fault_ring;
     lv_obj_t *obj23;
     lv_obj_t *obj24;
@@ -78,6 +83,8 @@ typedef struct _objects_t {
     lv_obj_t *obj29;
     lv_obj_t *obj30;
     lv_obj_t *obj31;
+    lv_obj_t *fault_wifi;
+    lv_obj_t *fault_evse;
 } objects_t;
 
 extern objects_t objects;
