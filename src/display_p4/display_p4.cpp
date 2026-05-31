@@ -278,11 +278,13 @@ static void dp4_eez_update(void)
 
   lv_label_set_text_fmt(objects.charge_rate_value, "%u A", (unsigned)m->pilotCurrent());
 
-  // WiFi: a wifi/station glyph, green when connected (STA), red otherwise.
-  // Colours come from the active EEZ theme (success/error) so it tracks themes.
+  // WiFi: a wifi/station glyph, recoloured from the active EEZ theme so it
+  // tracks themes. Green = STA connected, blue (sleep) = AP mode, red = down.
   {
-    bool wifi_up = m->wifiConnected();
-    uint32_t wc = theme_colors[active_theme_index][wifi_up ? COLOR_ID_SUCCESS : COLOR_ID_ERROR];
+    int cid = m->wifiConnected() ? COLOR_ID_SUCCESS
+            : m->wifiApMode()    ? COLOR_ID_SLEEP
+                                 : COLOR_ID_ERROR;
+    uint32_t wc = theme_colors[active_theme_index][cid];
     lv_obj_set_style_text_color(objects.charge_wifi_label, lv_color_hex(wc),
                                 LV_PART_MAIN | LV_STATE_DEFAULT);
     lv_label_set_text(objects.charge_wifi_label, LV_SYMBOL_WIFI);
