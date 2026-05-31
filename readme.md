@@ -6,6 +6,8 @@
 
 - **For latest API documentation see the new [Spotlight.io OpenEVSE WiFi documentation page](https://openevse.stoplight.io/docs/openevse-wifi-v4/ZG9jOjQyMjE5ODI-open-evse-wi-fi-esp-32-gateway-v4)**
 
+- **Building from source?** See [docs/building.md](docs/building.md) — PlatformIO setup, the two-core (4MB vs 16MB/P4) tree, and the `scripts/pio` local-build wrapper.
+
 ![main](docs/main2.png)
 
 The WiFi gateway uses an **ESP32** which communicates with the OpenEVSE controller via serial RAPI API. The web UI is served directly from the ESP32 web server and can be controlled via a connected device on the local network.
