@@ -8,6 +8,7 @@
 
 EvseUiModel::EvseUiModel(EvseManager &evse) : _evse(evse) {}
 
+bool EvseUiModel::evseConnected()     { return _evse.isConnected(); }
 uint8_t EvseUiModel::evseState()      { return _evse.getEvseState(); }
 bool EvseUiModel::vehicleConnected()  { return _evse.isVehicleConnected(); }
 bool EvseUiModel::charging()          { return _evse.isCharging(); }

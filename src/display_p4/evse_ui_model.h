@@ -12,6 +12,7 @@ public:
   virtual ~IEvseUiModel() {}
 
   // Charge / connection state
+  virtual bool evseConnected() = 0;       // OpenEVSE controller reachable (RAPI)
   virtual uint8_t evseState() = 0;        // OPENEVSE_STATE_*
   virtual const char *stateText() = 0;    // human-readable state
   virtual bool vehicleConnected() = 0;
@@ -46,6 +47,7 @@ class EvseUiModel : public IEvseUiModel
 public:
   explicit EvseUiModel(EvseManager &evse);
 
+  bool evseConnected() override;
   uint8_t evseState() override;
   const char *stateText() override;
   bool vehicleConnected() override;

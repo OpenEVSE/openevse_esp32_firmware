@@ -73,6 +73,10 @@ static unsigned long s_bootMs = 0;
 static void dp4_eez_btn_toggle_cb(lv_event_t *e);   // defined below; used in setup()
 static void dp4_eez_sync_screen(void);              // defined below; used in setup()
 static void dp4_attach_breathe(lv_obj_t *ring);     // defined below; used in setup()
+static void dp4_make_status_cluster(void);          // defined below; used in setup()
+static void dp4_update_status_cluster(IEvseUiModel *m, bool conn);  // used in dp4_eez_update()
+static lv_obj_t *s_top_wifi = NULL;                 // wifi glyph on the top layer (all screens)
+static lv_obj_t *s_top_evse = NULL;                 // EVSE status dot on the top layer
 #endif
 
 static void dp4_btn_event_cb(lv_event_t *e)
@@ -235,6 +239,11 @@ void DisplayP4Task::setup()
   // Breathe the EEZ-designed indicator rings on the passive states.
   dp4_attach_breathe(objects.sleeping_ring);
   dp4_attach_breathe(objects.fault_ring);
+
+  // Wifi + EVSE-status indicators on the top layer (shown on every screen). The
+  // per-screen EEZ wifi label is now redundant -> hide it.
+  dp4_make_status_cluster();
+  lv_obj_add_flag(objects.charge_wifi_label, LV_OBJ_FLAG_HIDDEN);
 #else
   dp4_build_bringup_screen();
 #endif
@@ -265,43 +274,40 @@ static void dp4_eez_update(void)
   IEvseUiModel *m = s_model;
   if (!m) return;
 
-  lv_label_set_text(objects.charge_state_label, m->stateText());
-  lv_label_set_text_fmt(objects.charge_kw_value, "%.2f", m->power() / 1000.0);
-  lv_label_set_text_fmt(objects.charge_amps_value, "%.1f A", m->amps());
-  lv_label_set_text_fmt(objects.charge_volts_value, "%.1f V", m->voltage());
-  lv_label_set_text_fmt(objects.charge_energy_value, "%.2f kWh", m->sessionEnergy() / 1000.0);
+  bool conn = m->evseConnected();
 
-  uint32_t secs = m->sessionElapsed();
-  lv_label_set_text_fmt(objects.charge_elapsed_value, "%u:%02u:%02u",
-                        (unsigned)(secs / 3600), (unsigned)((secs / 60) % 60), (unsigned)(secs % 60));
-
-  if (m->tempValid()) {
-    lv_label_set_text_fmt(objects.charge_temp_value, "%.1f C", m->temperatureC());
+  // screen_charge values -- '--' when the EVSE controller is offline.
+  lv_label_set_text(objects.charge_state_label, conn ? m->stateText() : "No EVSE");
+  if (conn) {
+    lv_label_set_text_fmt(objects.charge_kw_value, "%.2f", m->power() / 1000.0);
+    lv_label_set_text_fmt(objects.charge_amps_value, "%.1f A", m->amps());
+    lv_label_set_text_fmt(objects.charge_volts_value, "%.1f V", m->voltage());
+    lv_label_set_text_fmt(objects.charge_energy_value, "%.2f kWh", m->sessionEnergy() / 1000.0);
+    uint32_t secs = m->sessionElapsed();
+    lv_label_set_text_fmt(objects.charge_elapsed_value, "%u:%02u:%02u",
+                          (unsigned)(secs / 3600), (unsigned)((secs / 60) % 60), (unsigned)(secs % 60));
+    lv_label_set_text_fmt(objects.charge_rate_value, "%u A", (unsigned)m->pilotCurrent());
+    if (m->tempValid()) lv_label_set_text_fmt(objects.charge_temp_value, "%.1f C", m->temperatureC());
+    else                lv_label_set_text(objects.charge_temp_value, "--");
   } else {
+    lv_label_set_text(objects.charge_kw_value, "--");
+    lv_label_set_text(objects.charge_amps_value, "--");
+    lv_label_set_text(objects.charge_volts_value, "--");
+    lv_label_set_text(objects.charge_energy_value, "--");
+    lv_label_set_text(objects.charge_elapsed_value, "--");
+    lv_label_set_text(objects.charge_rate_value, "--");
     lv_label_set_text(objects.charge_temp_value, "--");
   }
 
-  lv_label_set_text_fmt(objects.charge_rate_value, "%u A", (unsigned)m->pilotCurrent());
-
-  // WiFi: a wifi/station glyph, recoloured from the active EEZ theme so it
-  // tracks themes. Green = STA connected, blue (sleep) = AP mode, red = down.
-  {
-    int cid = m->wifiConnected() ? COLOR_ID_SUCCESS
-            : m->wifiApMode()    ? COLOR_ID_SLEEP
-                                 : COLOR_ID_ERROR;
-    uint32_t wc = theme_colors[active_theme_index][cid];
-    lv_obj_set_style_text_color(objects.charge_wifi_label, lv_color_hex(wc),
-                                LV_PART_MAIN | LV_STATE_DEFAULT);
-    lv_label_set_text(objects.charge_wifi_label, LV_SYMBOL_WIFI);
-  }
-
-  // Power ring: fraction of the pilot (charge-current limit) actually drawn, 0-100.
-  uint32_t pilot = m->pilotCurrent();
+  // Power ring: fraction of the pilot (charge-current limit) drawn (0 if offline).
   int pct = 0;
-  if (pilot > 0) {
-    pct = (int)((m->amps() / (double)pilot) * 100.0 + 0.5);
-    if (pct < 0) pct = 0;
-    if (pct > 100) pct = 100;
+  if (conn) {
+    uint32_t pilot = m->pilotCurrent();
+    if (pilot > 0) {
+      pct = (int)((m->amps() / (double)pilot) * 100.0 + 0.5);
+      if (pct < 0) pct = 0;
+      if (pct > 100) pct = 100;
+    }
   }
   lv_arc_set_value(objects.charge_power_ring, pct);
 
@@ -317,6 +323,9 @@ static void dp4_eez_update(void)
   }
   lv_label_set_text(objects.sleeping_state_label, m->stateText());
   lv_label_set_text(objects.fault_text_label, m->stateText());
+
+  // Wifi + EVSE-status indicators live on the top layer -> shown on every screen.
+  dp4_update_status_cluster(m, conn);
 }
 
 // Map the P4ScreenManager's logical screen to an EEZ screen; load on change.
@@ -365,6 +374,46 @@ static void dp4_attach_breathe(lv_obj_t *ring)
   lv_anim_set_repeat_count(&a, LV_ANIM_REPEAT_INFINITE);
   lv_anim_set_path_cb(&a, lv_anim_path_ease_in_out);
   lv_anim_start(&a);
+}
+
+// Status cluster (wifi glyph + EVSE-status dot) on LVGL's top layer, so it shows
+// on EVERY screen at a fixed top-right spot. Created once in setup().
+static void dp4_make_status_cluster(void)
+{
+  lv_obj_t *top = lv_layer_top();
+
+  s_top_evse = lv_obj_create(top);                 // EVSE status dot (left of wifi)
+  lv_obj_remove_style_all(s_top_evse);
+  lv_obj_set_size(s_top_evse, 14, 14);
+  lv_obj_set_pos(s_top_evse, 730, 17);
+  lv_obj_clear_flag(s_top_evse, LV_OBJ_FLAG_SCROLLABLE | LV_OBJ_FLAG_CLICKABLE);
+  lv_obj_set_style_radius(s_top_evse, LV_RADIUS_CIRCLE, LV_PART_MAIN);
+  lv_obj_set_style_bg_opa(s_top_evse, LV_OPA_COVER, LV_PART_MAIN);
+
+  s_top_wifi = lv_label_create(top);               // wifi glyph
+  lv_obj_set_pos(s_top_wifi, 756, 14);
+  lv_label_set_text(s_top_wifi, LV_SYMBOL_WIFI);
+}
+
+// Recolour the top-layer indicators from the active theme each refresh.
+static void dp4_update_status_cluster(IEvseUiModel *m, bool conn)
+{
+  if (s_top_wifi) {
+    int cid = m->wifiConnected() ? COLOR_ID_SUCCESS   // green
+            : m->wifiApMode()    ? COLOR_ID_SLEEP      // blue (AP)
+                                 : COLOR_ID_ERROR;     // red
+    lv_obj_set_style_text_color(s_top_wifi, lv_color_hex(theme_colors[active_theme_index][cid]),
+                                LV_PART_MAIN | LV_STATE_DEFAULT);
+  }
+  if (s_top_evse) {
+    // Mirror the web status dot: charging=accent, fault/offline=red, else dim.
+    int cid = !conn         ? COLOR_ID_ERROR
+            : m->error()    ? COLOR_ID_ERROR
+            : m->charging() ? COLOR_ID_CHARGING
+                            : COLOR_ID_TEXT_DIM;
+    lv_obj_set_style_bg_color(s_top_evse, lv_color_hex(theme_colors[active_theme_index][cid]),
+                              LV_PART_MAIN);
+  }
 }
 #endif
 

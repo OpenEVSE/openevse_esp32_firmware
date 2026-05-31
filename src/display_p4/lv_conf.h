@@ -56,4 +56,8 @@
 #define LV_FONT_MONTSERRAT_48 1
 #define LV_FONT_DEFAULT &lv_font_montserrat_14
 
+// lv_label_set_text_fmt() / lv_snprintf need this for %f to work (off by
+// default -> "%.1f" rendered a stray "f"). Required by the EVSE value bindings.
+#define LV_SPRINTF_USE_FLOAT 1
+
 #endif // LV_CONF_H
