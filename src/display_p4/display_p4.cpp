@@ -71,6 +71,7 @@ static unsigned long s_bootMs = 0;
 
 #if defined(ENABLE_EEZ_UI)
 static void dp4_eez_btn_toggle_cb(lv_event_t *e);   // defined below; used in setup()
+static void dp4_eez_sync_screen(void);              // defined below; used in setup()
 #endif
 
 static void dp4_btn_event_cb(lv_event_t *e)
@@ -227,6 +228,8 @@ void DisplayP4Task::setup()
 #if defined(ENABLE_EEZ_UI)
   ui_init();                 // build EEZ screens; loads the default screen
   lv_obj_add_event_cb(objects.btn_start_stop, dp4_eez_btn_toggle_cb, LV_EVENT_CLICKED, NULL);
+  lv_obj_add_event_cb(objects.btn_wake, dp4_eez_btn_toggle_cb, LV_EVENT_CLICKED, NULL);
+  dp4_eez_sync_screen();     // set the initial screen (boot) from the manager
 #else
   dp4_build_bringup_screen();
 #endif
@@ -294,6 +297,36 @@ static void dp4_eez_update(void)
   lv_arc_set_value(objects.charge_power_ring, pct);
 
   lv_label_set_text(objects.btn_start_stop_label, m->active() ? "STOP" : "START");
+
+  // --- other screens (set unconditionally; they render when shown) ---
+  lv_label_set_text(objects.boot_status_label, m->stateText());
+  {
+    uint32_t bms = (s_bootMs && millis() > s_bootMs) ? (millis() - s_bootMs) : 0;
+    int bpct = (int)(bms * 100UL / 3000UL);   // ramp over the ~3s boot window
+    if (bpct > 100) bpct = 100;
+    lv_bar_set_value(objects.boot_progress, bpct, LV_ANIM_OFF);
+  }
+  lv_label_set_text(objects.sleeping_state_label, m->stateText());
+  lv_label_set_text(objects.fault_text_label, m->stateText());
+}
+
+// Map the P4ScreenManager's logical screen to an EEZ screen; load on change.
+static int s_eez_loaded_screen = -1;
+static void dp4_eez_sync_screen(void)
+{
+  if (!s_screens) return;
+  int target;
+  switch (s_screens->current()) {
+    case P4Screen::Boot:     target = SCREEN_ID_SCREEN_BOOT;     break;
+    case P4Screen::Sleeping: target = SCREEN_ID_SCREEN_SLEEPING; break;
+    case P4Screen::Fault:    target = SCREEN_ID_SCREEN_FAULT;    break;
+    case P4Screen::Charge:
+    default:                 target = SCREEN_ID_SCREEN_CHARGE;   break;
+  }
+  if (target != s_eez_loaded_screen) {
+    s_eez_loaded_screen = target;
+    loadScreen((enum ScreensEnum)target);
+  }
 }
 #endif
 
@@ -320,6 +353,9 @@ static void dp4_refresh_model_view(void)
       lv_label_set_text_fmt(s_screen_label, "Screen: %s",
                             P4ScreenManager::name(s_screens->current()));
     }
+#if defined(ENABLE_EEZ_UI)
+    dp4_eez_sync_screen();   // switch EEZ screen to match the EVSE state
+#endif
   }
 }
 

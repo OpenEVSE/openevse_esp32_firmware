@@ -12,11 +12,17 @@ extern "C" {
 enum ScreensEnum {
     _SCREEN_ID_FIRST = 1,
     SCREEN_ID_SCREEN_CHARGE = 1,
-    _SCREEN_ID_LAST = 1
+    SCREEN_ID_SCREEN_BOOT = 2,
+    SCREEN_ID_SCREEN_SLEEPING = 3,
+    SCREEN_ID_SCREEN_FAULT = 4,
+    _SCREEN_ID_LAST = 4
 };
 
 typedef struct _objects_t {
     lv_obj_t *screen_charge;
+    lv_obj_t *screen_boot;
+    lv_obj_t *screen_sleeping;
+    lv_obj_t *screen_fault;
     lv_obj_t *brand_logo;
     lv_obj_t *obj0;
     lv_obj_t *charge_state_label;
@@ -45,12 +51,45 @@ typedef struct _objects_t {
     lv_obj_t *obj10;
     lv_obj_t *obj11;
     lv_obj_t *obj12;
+    lv_obj_t *obj13;
+    lv_obj_t *boot_status_label;
+    lv_obj_t *boot_progress;
+    lv_obj_t *obj14;
+    lv_obj_t *sleeping_state_label;
+    lv_obj_t *obj15;
+    lv_obj_t *btn_wake;
+    lv_obj_t *obj16;
+    lv_obj_t *obj17;
+    lv_obj_t *obj18;
+    lv_obj_t *obj19;
+    lv_obj_t *obj20;
+    lv_obj_t *obj21;
+    lv_obj_t *obj22;
+    lv_obj_t *obj23;
+    lv_obj_t *obj24;
+    lv_obj_t *fault_text_label;
+    lv_obj_t *obj25;
+    lv_obj_t *obj26;
+    lv_obj_t *obj27;
+    lv_obj_t *obj28;
+    lv_obj_t *obj29;
+    lv_obj_t *obj30;
+    lv_obj_t *obj31;
 } objects_t;
 
 extern objects_t objects;
 
 void create_screen_screen_charge();
 void tick_screen_screen_charge();
+
+void create_screen_screen_boot();
+void tick_screen_screen_boot();
+
+void create_screen_screen_sleeping();
+void tick_screen_screen_sleeping();
+
+void create_screen_screen_fault();
+void tick_screen_screen_fault();
 
 void tick_screen_by_id(enum ScreensEnum screenId);
 void tick_screen(int screen_index);
