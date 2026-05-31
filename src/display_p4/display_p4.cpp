@@ -72,7 +72,7 @@ static unsigned long s_bootMs = 0;
 #if defined(ENABLE_EEZ_UI)
 static void dp4_eez_btn_toggle_cb(lv_event_t *e);   // defined below; used in setup()
 static void dp4_eez_sync_screen(void);              // defined below; used in setup()
-static void dp4_make_breathing_ring(lv_obj_t *parent, uint32_t color_hex);  // used in setup()
+static void dp4_attach_breathe(lv_obj_t *ring);     // defined below; used in setup()
 #endif
 
 static void dp4_btn_event_cb(lv_event_t *e)
@@ -232,9 +232,9 @@ void DisplayP4Task::setup()
   lv_obj_add_event_cb(objects.btn_wake, dp4_eez_btn_toggle_cb, LV_EVENT_CLICKED, NULL);
   dp4_eez_sync_screen();     // set the initial screen (boot) from the manager
 
-  // Breathing indicator ring on the passive states (mirrors the web UI).
-  dp4_make_breathing_ring(objects.screen_sleeping, theme_colors[active_theme_index][COLOR_ID_SLEEP]);
-  dp4_make_breathing_ring(objects.screen_fault,    theme_colors[active_theme_index][COLOR_ID_ERROR]);
+  // Breathe the EEZ-designed indicator rings on the passive states.
+  dp4_attach_breathe(objects.sleeping_ring);
+  dp4_attach_breathe(objects.fault_ring);
 #else
   dp4_build_bringup_screen();
 #endif
@@ -343,27 +343,18 @@ static void dp4_eez_sync_screen(void)
 // anim value: 0 = full, 1000 = dim+small.
 static void dp4_breathe_anim_cb(void *var, int32_t v)
 {
-  lv_obj_t *obj = (lv_obj_t *)var;
-  lv_obj_set_style_opa(obj, (lv_opa_t)(255 - (v * (255 - 115)) / 1000), LV_PART_MAIN);
-  lv_obj_set_style_transform_zoom(obj, 256 - (v * (256 - 246)) / 1000, LV_PART_MAIN);
+  // Opacity-only breathe on the arc's ring: 100% -> ~35%, ease-in-out ping-pong.
+  lv_obj_set_style_arc_opa((lv_obj_t *)var, (lv_opa_t)(255 - (v * (255 - 90)) / 1000),
+                           LV_PART_MAIN);
 }
 
 // Add a colour-coded ring centred on `parent` (behind its content) that breathes.
-static void dp4_make_breathing_ring(lv_obj_t *parent, uint32_t color_hex)
+// Attach the opacity breathe to an EEZ-designed ring (sleeping_ring/fault_ring).
+// The arc's colour/size/thickness/position come from the EEZ project now; we
+// only animate its arc opacity.
+static void dp4_attach_breathe(lv_obj_t *ring)
 {
-  lv_obj_t *ring = lv_obj_create(parent);
-  lv_obj_remove_style_all(ring);
-  lv_obj_set_size(ring, 220, 220);
-  lv_obj_align(ring, LV_ALIGN_CENTER, 0, -30);
-  lv_obj_clear_flag(ring, LV_OBJ_FLAG_SCROLLABLE | LV_OBJ_FLAG_CLICKABLE);
-  lv_obj_set_style_radius(ring, LV_RADIUS_CIRCLE, LV_PART_MAIN);
-  lv_obj_set_style_bg_opa(ring, LV_OPA_TRANSP, LV_PART_MAIN);
-  lv_obj_set_style_border_width(ring, 6, LV_PART_MAIN);
-  lv_obj_set_style_border_color(ring, lv_color_hex(color_hex), LV_PART_MAIN);
-  lv_obj_set_style_transform_pivot_x(ring, 110, LV_PART_MAIN);   // centre of 220
-  lv_obj_set_style_transform_pivot_y(ring, 110, LV_PART_MAIN);
-  lv_obj_move_background(ring);   // sit behind the labels/glyph
-
+  if (!ring) return;
   lv_anim_t a;
   lv_anim_init(&a);
   lv_anim_set_var(&a, ring);

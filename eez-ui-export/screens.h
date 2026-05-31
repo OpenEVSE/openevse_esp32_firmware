@@ -54,6 +54,7 @@ typedef struct _objects_t {
     lv_obj_t *obj13;
     lv_obj_t *boot_status_label;
     lv_obj_t *boot_progress;
+    lv_obj_t *sleeping_ring;
     lv_obj_t *obj14;
     lv_obj_t *sleeping_state_label;
     lv_obj_t *obj15;
@@ -65,6 +66,7 @@ typedef struct _objects_t {
     lv_obj_t *obj20;
     lv_obj_t *obj21;
     lv_obj_t *obj22;
+    lv_obj_t *fault_ring;
     lv_obj_t *obj23;
     lv_obj_t *obj24;
     lv_obj_t *fault_text_label;

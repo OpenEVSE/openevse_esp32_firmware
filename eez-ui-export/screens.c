@@ -74,8 +74,8 @@ void create_screen_screen_charge() {
             // charge_power_ring
             lv_obj_t *obj = lv_arc_create(parent_obj);
             objects.charge_power_ring = obj;
-            lv_obj_set_pos(obj, 70, 80);
-            lv_obj_set_size(obj, 240, 240);
+            lv_obj_set_pos(obj, 70, 74);
+            lv_obj_set_size(obj, 240, 246);
             lv_arc_set_value(obj, 0);
             lv_obj_clear_flag(obj, LV_OBJ_FLAG_CLICKABLE);
             lv_obj_set_style_arc_color(obj, lv_color_hex(theme_colors[active_theme_index][6]), LV_PART_MAIN | LV_STATE_DEFAULT);
@@ -423,6 +423,22 @@ void create_screen_screen_sleeping() {
     {
         lv_obj_t *parent_obj = obj;
         {
+            // sleeping_ring
+            lv_obj_t *obj = lv_arc_create(parent_obj);
+            objects.sleeping_ring = obj;
+            lv_obj_set_pos(obj, 240, 70);
+            lv_obj_set_size(obj, 320, 320);
+            lv_arc_set_value(obj, 0);
+            lv_arc_set_bg_start_angle(obj, 0);
+            lv_arc_set_bg_end_angle(obj, 360);
+            lv_obj_clear_flag(obj, LV_OBJ_FLAG_CLICKABLE|LV_OBJ_FLAG_CLICK_FOCUSABLE|LV_OBJ_FLAG_PRESS_LOCK|LV_OBJ_FLAG_SCROLL_ELASTIC|LV_OBJ_FLAG_SCROLL_MOMENTUM|LV_OBJ_FLAG_SCROLL_WITH_ARROW);
+            lv_obj_set_style_arc_width(obj, 30, LV_PART_MAIN | LV_STATE_DEFAULT);
+            lv_obj_set_style_arc_color(obj, lv_color_hex(theme_colors[active_theme_index][10]), LV_PART_MAIN | LV_STATE_DEFAULT);
+            lv_obj_set_style_arc_rounded(obj, false, LV_PART_MAIN | LV_STATE_DEFAULT);
+            lv_obj_set_style_arc_width(obj, 0, LV_PART_INDICATOR | LV_STATE_DEFAULT);
+            lv_obj_set_style_bg_opa(obj, 0, LV_PART_KNOB | LV_STATE_DEFAULT);
+        }
+        {
             lv_obj_t *obj = lv_img_create(parent_obj);
             lv_obj_set_pos(obj, 16, 4);
             lv_obj_set_size(obj, LV_SIZE_CONTENT, LV_SIZE_CONTENT);
@@ -442,7 +458,7 @@ void create_screen_screen_sleeping() {
             // sleeping_state_label
             lv_obj_t *obj = lv_label_create(parent_obj);
             objects.sleeping_state_label = obj;
-            lv_obj_set_pos(obj, 200, 160);
+            lv_obj_set_pos(obj, 200, 206);
             lv_obj_set_size(obj, 400, LV_SIZE_CONTENT);
             lv_obj_set_style_text_color(obj, lv_color_hex(theme_colors[active_theme_index][10]), LV_PART_MAIN | LV_STATE_DEFAULT);
             lv_obj_set_style_text_align(obj, LV_TEXT_ALIGN_CENTER, LV_PART_MAIN | LV_STATE_DEFAULT);
@@ -452,7 +468,7 @@ void create_screen_screen_sleeping() {
         {
             lv_obj_t *obj = lv_label_create(parent_obj);
             objects.obj15 = obj;
-            lv_obj_set_pos(obj, 200, 235);
+            lv_obj_set_pos(obj, 200, 255);
             lv_obj_set_size(obj, 400, LV_SIZE_CONTENT);
             lv_obj_set_style_text_color(obj, lv_color_hex(theme_colors[active_theme_index][4]), LV_PART_MAIN | LV_STATE_DEFAULT);
             lv_obj_set_style_text_align(obj, LV_TEXT_ALIGN_CENTER, LV_PART_MAIN | LV_STATE_DEFAULT);
@@ -463,7 +479,7 @@ void create_screen_screen_sleeping() {
             // btn_wake
             lv_obj_t *obj = lv_btn_create(parent_obj);
             objects.btn_wake = obj;
-            lv_obj_set_pos(obj, 300, 320);
+            lv_obj_set_pos(obj, 577, 334);
             lv_obj_set_size(obj, 200, 56);
             lv_obj_set_style_bg_color(obj, lv_color_hex(theme_colors[active_theme_index][5]), LV_PART_MAIN | LV_STATE_DEFAULT);
             lv_obj_set_style_bg_opa(obj, 255, LV_PART_MAIN | LV_STATE_DEFAULT);
@@ -570,6 +586,22 @@ void create_screen_screen_fault() {
     {
         lv_obj_t *parent_obj = obj;
         {
+            // fault_ring
+            lv_obj_t *obj = lv_arc_create(parent_obj);
+            objects.fault_ring = obj;
+            lv_obj_set_pos(obj, 240, 70);
+            lv_obj_set_size(obj, 320, 320);
+            lv_arc_set_value(obj, 0);
+            lv_arc_set_bg_start_angle(obj, 0);
+            lv_arc_set_bg_end_angle(obj, 360);
+            lv_obj_clear_flag(obj, LV_OBJ_FLAG_CLICKABLE|LV_OBJ_FLAG_CLICK_FOCUSABLE|LV_OBJ_FLAG_PRESS_LOCK|LV_OBJ_FLAG_SCROLL_ELASTIC|LV_OBJ_FLAG_SCROLL_MOMENTUM|LV_OBJ_FLAG_SCROLL_WITH_ARROW);
+            lv_obj_set_style_arc_width(obj, 30, LV_PART_MAIN | LV_STATE_DEFAULT);
+            lv_obj_set_style_arc_color(obj, lv_color_hex(theme_colors[active_theme_index][8]), LV_PART_MAIN | LV_STATE_DEFAULT);
+            lv_obj_set_style_arc_rounded(obj, false, LV_PART_MAIN | LV_STATE_DEFAULT);
+            lv_obj_set_style_arc_width(obj, 0, LV_PART_INDICATOR | LV_STATE_DEFAULT);
+            lv_obj_set_style_bg_opa(obj, 0, LV_PART_KNOB | LV_STATE_DEFAULT);
+        }
+        {
             lv_obj_t *obj = lv_img_create(parent_obj);
             lv_obj_set_pos(obj, 16, 4);
             lv_obj_set_size(obj, LV_SIZE_CONTENT, LV_SIZE_CONTENT);
@@ -599,17 +631,17 @@ void create_screen_screen_fault() {
             // fault_text_label
             lv_obj_t *obj = lv_label_create(parent_obj);
             objects.fault_text_label = obj;
-            lv_obj_set_pos(obj, 150, 215);
+            lv_obj_set_pos(obj, 150, 206);
             lv_obj_set_size(obj, 500, LV_SIZE_CONTENT);
             lv_obj_set_style_text_color(obj, lv_color_hex(theme_colors[active_theme_index][8]), LV_PART_MAIN | LV_STATE_DEFAULT);
             lv_obj_set_style_text_align(obj, LV_TEXT_ALIGN_CENTER, LV_PART_MAIN | LV_STATE_DEFAULT);
-            lv_obj_set_style_text_font(obj, &lv_font_montserrat_28, LV_PART_MAIN | LV_STATE_DEFAULT);
+            lv_obj_set_style_text_font(obj, &lv_font_montserrat_44, LV_PART_MAIN | LV_STATE_DEFAULT);
             lv_label_set_text(obj, "Fault");
         }
         {
             lv_obj_t *obj = lv_label_create(parent_obj);
             objects.obj25 = obj;
-            lv_obj_set_pos(obj, 150, 265);
+            lv_obj_set_pos(obj, 150, 255);
             lv_obj_set_size(obj, 500, LV_SIZE_CONTENT);
             lv_obj_set_style_text_color(obj, lv_color_hex(theme_colors[active_theme_index][4]), LV_PART_MAIN | LV_STATE_DEFAULT);
             lv_obj_set_style_text_align(obj, LV_TEXT_ALIGN_CENTER, LV_PART_MAIN | LV_STATE_DEFAULT);
@@ -827,6 +859,7 @@ void change_color_theme(uint32_t theme_index) {
     }
     {
         lv_obj_set_style_bg_color(objects.screen_sleeping, lv_color_hex(theme_colors[theme_index][0]), LV_PART_MAIN | LV_STATE_DEFAULT);
+        lv_obj_set_style_arc_color(objects.sleeping_ring, lv_color_hex(theme_colors[theme_index][10]), LV_PART_MAIN | LV_STATE_DEFAULT);
         lv_obj_set_style_text_color(objects.obj14, lv_color_hex(theme_colors[theme_index][3]), LV_PART_MAIN | LV_STATE_DEFAULT);
         lv_obj_set_style_text_color(objects.sleeping_state_label, lv_color_hex(theme_colors[theme_index][10]), LV_PART_MAIN | LV_STATE_DEFAULT);
         lv_obj_set_style_text_color(objects.obj15, lv_color_hex(theme_colors[theme_index][4]), LV_PART_MAIN | LV_STATE_DEFAULT);
@@ -842,6 +875,7 @@ void change_color_theme(uint32_t theme_index) {
     }
     {
         lv_obj_set_style_bg_color(objects.screen_fault, lv_color_hex(theme_colors[theme_index][0]), LV_PART_MAIN | LV_STATE_DEFAULT);
+        lv_obj_set_style_arc_color(objects.fault_ring, lv_color_hex(theme_colors[theme_index][8]), LV_PART_MAIN | LV_STATE_DEFAULT);
         lv_obj_set_style_text_color(objects.obj23, lv_color_hex(theme_colors[theme_index][3]), LV_PART_MAIN | LV_STATE_DEFAULT);
         lv_obj_set_style_text_color(objects.obj24, lv_color_hex(theme_colors[theme_index][8]), LV_PART_MAIN | LV_STATE_DEFAULT);
         lv_obj_set_style_text_color(objects.fault_text_label, lv_color_hex(theme_colors[theme_index][8]), LV_PART_MAIN | LV_STATE_DEFAULT);
