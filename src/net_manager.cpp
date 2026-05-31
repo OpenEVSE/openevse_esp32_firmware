@@ -58,6 +58,7 @@ NetManagerTask::NetManagerTask(LcdTask &lcd, LedManagerTask &led, TimeManager &t
   _wifiButtonState(!WIFI_BUTTON_PRESSED_STATE),
   _wifiButtonTimeOut(millis()),
   _apMessage(false),
+  _mdnsStarted(false),
   #ifdef ENABLE_WIRED_ETHERNET
   _ethConnected(false),
   #endif
@@ -211,6 +212,9 @@ void NetManagerTask::haveNetworkConnection(IPAddress myAddress)
   _time.setHost(sntp_hostname.c_str());
 
   _apAutoApStopTime = millis() + ACCESS_POINT_AUTO_STOP_TIMEOUT;
+
+  // The netif is up now — safe to (re)start the mDNS responder.
+  startMDNS();
 
   _state = NetState::Connected;
 }
@@ -380,6 +384,8 @@ void NetManagerTask::onNetEvent(WiFiEvent_t event, arduino_event_info_t &info)
       } else {
         DBUGF("Setting host name failed: %s", esp_hostname.c_str());
       }
+      // SoftAP netif is up — start mDNS so the device is reachable as <host>.local.
+      startMDNS();
     } break;
 
     case ARDUINO_EVENT_WIFI_STA_START:
@@ -536,6 +542,21 @@ void NetManagerTask::setup()
   // Initially startup the netwrok to kick things off
   manageState();
 
+  // NOTE: mDNS is intentionally NOT started here. Starting it at boot (before any
+  // network interface exists) makes the mDNS predefined-interface handler join its
+  // multicast group on a null netif -> esp_netif_is_netif_up(NULL) load fault,
+  // seen as an even-cadence reboot loop on the ESP32-P4/ESP-Hosted build. It is now
+  // tied to the netif lifecycle: startMDNS() on connect, stopMDNS() before teardown.
+}
+
+void NetManagerTask::startMDNS()
+{
+  // Called once a netif is actually up (STA/ETH got-IP, or SoftAP started). Restart
+  // cleanly if already running so the responder re-binds to the current interface.
+  if (_mdnsStarted) {
+    MDNS.end();
+    _mdnsStarted = false;
+  }
   if (MDNS.begin(esp_hostname.c_str()))
   {
     MDNS.addService("http", "tcp", 80);
@@ -543,7 +564,17 @@ void NetManagerTask::setup()
     MDNS.addServiceTxt("openevse", "tcp", "type", buildenv.c_str());
     MDNS.addServiceTxt("openevse", "tcp", "version", currentfirmware.c_str());
     MDNS.addServiceTxt("openevse", "tcp", "id", ESPAL.getLongId());
-    
+    _mdnsStarted = true;
+  }
+}
+
+void NetManagerTask::stopMDNS()
+{
+  // Tear mDNS down BEFORE the WiFi netif is destroyed so its async handlers never
+  // touch a freed/null interface.
+  if (_mdnsStarted) {
+    MDNS.end();
+    _mdnsStarted = false;
   }
 }
 
@@ -763,6 +794,9 @@ void NetManagerTask::wifiStartInternal()
 
 void NetManagerTask::wifiStopInternal()
 {
+  // Stop mDNS before tearing the interface down so its async handlers don't run
+  // against a netif that's about to be destroyed.
+  stopMDNS();
   wifiTurnOffAp();
   if (isWifiModeSta()) {
     WiFi.disconnect(true);

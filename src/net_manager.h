@@ -118,6 +118,7 @@ class NetManagerTask : public MicroTasks::Task
     int _wifiButtonState;
     unsigned long _wifiButtonTimeOut;
     bool _apMessage;
+    bool _mdnsStarted;
 
     #ifdef ENABLE_WIRED_ETHERNET
     bool _ethConnected;
@@ -150,6 +151,11 @@ class NetManagerTask : public MicroTasks::Task
 
     void displayState();
     void haveNetworkConnection(IPAddress myAddress);
+
+    // mDNS is (re)started only when a netif is actually up and torn down before
+    // teardown — starting it at boot crashes on a null netif (see net_manager.cpp).
+    void startMDNS();
+    void stopMDNS();
 
     void wifiOnStationModeConnected(const WiFiEventStationModeConnected &event);
     void wifiOnStationModeGotIP(const WiFiEventStationModeGotIP &event);
