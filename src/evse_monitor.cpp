@@ -176,7 +176,11 @@ EvseMonitor::~EvseMonitor()
 void EvseMonitor::setup()
 {
   #ifdef ENABLE_MCP9808
+  #if !defined(I2C_USE_IDF_MASTER)
+  // P4 shares the GT911 touch bus (new IDF i2c_master driver); OevseMcp9808
+  // owns the device there, so we must NOT start the legacy Wire driver on it.
   Wire.begin(I2C_SDA, I2C_SCL);
+  #endif
 
   if(_mcp9808.begin())
   {

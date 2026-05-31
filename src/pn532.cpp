@@ -44,12 +44,58 @@
 
 #define I2C_READ_BUFFSIZE 35 //might increase later
 
+/*
+ * I2C transport. On the ESP32-P4 the PN532 shares the GT911 touch bus
+ * (CN3 = GPIO7/8, I2C_NUM_1) which is owned by the *new* IDF i2c_master driver;
+ * the legacy Arduino Wire driver cannot share that port, so we use the i2c_master
+ * device API there. Every other board keeps the original Wire transport.
+ * The device is added lazily so this works even if PN532::begin() runs before the
+ * display task creates the bus.
+ */
+#if defined(I2C_USE_IDF_MASTER)
+#include "display_p4/i2c_shared.h"
+static i2c_master_dev_handle_t s_pn532_dev = nullptr;
+#endif
+
+static void pn532_send(const uint8_t *buf, size_t len) {
+#if defined(I2C_USE_IDF_MASTER)
+    if (s_pn532_dev == nullptr && !dp4_i2c_add_device(PN532_I2C_ADDRESS, 100000, &s_pn532_dev)) {
+        return; // bus not up yet
+    }
+    i2c_master_transmit(s_pn532_dev, buf, len, 100);
+#else
+    Wire.beginTransmission(PN532_I2C_ADDRESS);
+    Wire.write(buf, len);
+    Wire.endTransmission();
+#endif
+}
+
+// Reads up to `len` bytes; returns the number actually read (0 = none/failure).
+static size_t pn532_recv(uint8_t *buf, size_t len) {
+#if defined(I2C_USE_IDF_MASTER)
+    if (s_pn532_dev == nullptr && !dp4_i2c_add_device(PN532_I2C_ADDRESS, 100000, &s_pn532_dev)) {
+        return 0;
+    }
+    return i2c_master_receive(s_pn532_dev, buf, len, 100) == ESP_OK ? len : 0;
+#else
+    Wire.requestFrom((int)PN532_I2C_ADDRESS, (int)len, 1);
+    size_t i = 0;
+    while (Wire.available() && i < len) {
+        buf[i++] = Wire.read();
+    }
+    Wire.flush();
+    return i;
+#endif
+}
+
 PN532::PN532() : MicroTasks::Task() {
-    
+
 }
 
 void PN532::begin() {
+#if !defined(I2C_USE_IDF_MASTER)
     Wire.begin(I2C_SDA, I2C_SCL);
+#endif
     MicroTask.startTask(this);
 }
 
@@ -101,12 +147,10 @@ void PN532::initialize() {
     /*
      * Command hardcoded according to NXP manual, page 89
      */
-    uint8_t SAMConfiguration [] = {0x00, 0xFF, 0x05, 0xFB, 
+    uint8_t SAMConfiguration [] = {0x00, 0xFF, 0x05, 0xFB,
                                    0xD4, 0x14, 0x01, 0x00, 0x00,
                                    0x17};
-    Wire.beginTransmission(PN532_I2C_ADDRESS);
-    Wire.write(SAMConfiguration, sizeof(SAMConfiguration) / sizeof(*SAMConfiguration));
-    Wire.endTransmission();
+    pn532_send(SAMConfiguration, sizeof(SAMConfiguration) / sizeof(*SAMConfiguration));
 
     listen = true;
 }
@@ -115,12 +159,10 @@ void PN532::poll() {
     /*
      * Command hardcoded according to NXP manual, page 144
      */
-    uint8_t InAutoPoll [] = {0x00, 0xFF, 0x06, 0xFA, 
+    uint8_t InAutoPoll [] = {0x00, 0xFF, 0x06, 0xFA,
                              0xD4, 0x60, 0x01, 0x01, 0x10, 0x20,
                              0x9A};
-    Wire.beginTransmission(PN532_I2C_ADDRESS);
-    Wire.write(InAutoPoll, sizeof(InAutoPoll) / sizeof(*InAutoPoll));
-    Wire.endTransmission();
+    pn532_send(InAutoPoll, sizeof(InAutoPoll) / sizeof(*InAutoPoll));
 
     listen = true;
 }
@@ -129,19 +171,23 @@ void PN532::read() {
     if (!listen)
         return;
 
-    Wire.requestFrom(PN532_I2C_ADDRESS, I2C_READ_BUFFSIZE + 1, 1);
-    if (Wire.read() != PN532_RDY) {
+    uint8_t raw [I2C_READ_BUFFSIZE + 1] = {0};
+    size_t got = pn532_recv(raw, I2C_READ_BUFFSIZE + 1);
+    if (got == 0) {
+        //read failed / bus not ready
+        return;
+    }
+    if (raw[0] != PN532_RDY) {
         //no msg available
         return;
     }
 
     uint8_t response [I2C_READ_BUFFSIZE] = {0};
     uint8_t frame_len = 0;
-    while (Wire.available() && frame_len < I2C_READ_BUFFSIZE) {
-        response[frame_len] = Wire.read();
+    for (size_t i = 1; i < got && frame_len < I2C_READ_BUFFSIZE; i++) {
+        response[frame_len] = raw[i];
         frame_len++;
     }
-    Wire.flush();
 
     /*
      * For frame layout, see NXP manual, page 28

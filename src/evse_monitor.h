@@ -7,8 +7,9 @@
 #include "energy_meter.h"
 
 #ifdef ENABLE_MCP9808
-#include <Wire.h>
-#include <Adafruit_MCP9808.h>
+// Wraps Adafruit_MCP9808 (legacy Wire) on most boards, or a direct IDF
+// i2c_master reader on the ESP32-P4 where the sensor shares the touch bus.
+#include "mcp9808_compat.h"
 #endif
 
 #define EVSE_MONITOR_TEMP_MONITOR       0
@@ -156,7 +157,7 @@ class EvseMonitor : public MicroTasks::Task
     char _serial[16];
 
 #ifdef ENABLE_MCP9808
-    Adafruit_MCP9808 _mcp9808;
+    OevseMcp9808 _mcp9808;
 #endif
 
     SettingsChangedEvent _settings_changed; // Settings changed
