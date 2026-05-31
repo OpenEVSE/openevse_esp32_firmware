@@ -1,0 +1,81 @@
+#!/usr/bin/env bash
+#
+# PlatformIO wrapper for the two-core tree.
+#
+# This repo builds on two incompatible Arduino-ESP32 cores:
+#   * core-2.x  (platform espressif32@6.12.0)   -> the 4MB boards (default)
+#   * core-3.x  (platform ${common.platform_core3}, pioarduino) -> 16MB / P4
+#
+# Both platforms declare ~13 package names in common (framework-arduinoespressif32,
+# framework-espidf, the toolchains, several tool-*) but pin different versions, so
+# building a core-2 env right after a core-3 env (or vice versa) in the SAME
+# PLATFORMIO_CORE_DIR evicts and re-downloads those packages every switch.
+#
+# Fix: give each core its own PLATFORMIO_CORE_DIR. core-2 keeps the default
+# (~/.platformio) so bare `pio`, CI and IDE integrations are unchanged; core-3
+# builds are redirected to a separate dir. Switching cores then never re-downloads.
+#
+# Usage: exactly like pio, e.g.
+#   scripts/pio run -e openevse_p4 -t upload
+#   scripts/pio run -e openevse_wifi_v1
+#   scripts/pio device monitor
+#
+# Override the core-3 dir with PIO_CORE3_DIR; force a specific pio binary with
+# PLATFORMIO_BIN.
+set -euo pipefail
+
+# Envs that build on the core-3 (pioarduino) platform. Keep in sync with the
+# `platform = ${common.platform_core3}` envs in platformio.ini.
+CORE3_ENVS="openevse_p4 openevse_wifi_tft_v1 openevse_wifi_tft_v1_dev"
+CORE3_DIR="${PIO_CORE3_DIR:-$HOME/.platformio-core3}"
+
+# Pull the -e / --environment value(s) out of the args.
+envs=""
+prev=""
+for a in "$@"; do
+  case "$prev" in
+    -e|--environment) envs="$envs $a" ;;
+  esac
+  case "$a" in
+    -e=*|--environment=*) envs="$envs ${a#*=}" ;;
+  esac
+  prev="$a"
+done
+
+want_core3=0
+want_core2=0
+for e in $envs; do
+  case " $CORE3_ENVS " in
+    *" $e "*) want_core3=1 ;;
+    *)        want_core2=1 ;;
+  esac
+done
+
+if [ "$want_core3" = 1 ] && [ "$want_core2" = 1 ]; then
+  echo "scripts/pio: won't build core-2 and core-3 envs in one invocation" >&2
+  echo "             (they live in separate PLATFORMIO_CORE_DIRs) -- split them." >&2
+  exit 2
+fi
+
+if [ "$want_core3" = 1 ]; then
+  export PLATFORMIO_CORE_DIR="$CORE3_DIR"
+  echo "scripts/pio: core-3 -> PLATFORMIO_CORE_DIR=$PLATFORMIO_CORE_DIR" >&2
+else
+  # core-2 / no env: leave PLATFORMIO_CORE_DIR alone (default ~/.platformio).
+  echo "scripts/pio: core-2 -> PLATFORMIO_CORE_DIR=${PLATFORMIO_CORE_DIR:-$HOME/.platformio}" >&2
+fi
+
+# Resolve the real pio binary (never recurse into this wrapper).
+PIO_BIN="${PLATFORMIO_BIN:-}"
+if [ -z "$PIO_BIN" ]; then
+  if [ -x "$HOME/.platformio/penv/bin/pio" ]; then
+    PIO_BIN="$HOME/.platformio/penv/bin/pio"
+  elif command -v platformio >/dev/null 2>&1; then
+    PIO_BIN="$(command -v platformio)"
+  else
+    echo "scripts/pio: cannot find the pio/platformio executable (set PLATFORMIO_BIN)" >&2
+    exit 127
+  fi
+fi
+
+exec "$PIO_BIN" "$@"
