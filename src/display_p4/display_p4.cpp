@@ -14,6 +14,10 @@
 #include "manual.h"
 #include "p4_screen_manager.h"
 
+#if defined(ENABLE_EEZ_UI)
+#include "ui.h"   // EEZ Studio export (eez-ui-export/, see eez_ui_unit.c)
+#endif
+
 #ifndef DISPLAY_P4_BACKLIGHT_PIN
 #define DISPLAY_P4_BACKLIGHT_PIN 23
 #endif
@@ -216,7 +220,11 @@ void DisplayP4Task::setup()
   s_panel.onFlushReady(dp4_flush_ready_cb, &s_disp_drv);
 
   // 4) Content.
+#if defined(ENABLE_EEZ_UI)
+  ui_init();                 // build EEZ screens; loads the default screen
+#else
   dp4_build_bringup_screen();
+#endif
 
   // 5) Backlight on LEDC PWM, full brightness, start the idle timer.
   ledcAttach(DISPLAY_P4_BACKLIGHT_PIN, DP4_BL_FREQ, DP4_BL_RES);
@@ -252,6 +260,9 @@ static void dp4_refresh_model_view(void)
 
 unsigned long DisplayP4Task::loop(MicroTasks::WakeReason reason)
 {
+#if defined(ENABLE_EEZ_UI)
+  ui_tick();                 // drive EEZ screen updates before LVGL renders
+#endif
   lv_timer_handler();
 
   unsigned long now = millis();
