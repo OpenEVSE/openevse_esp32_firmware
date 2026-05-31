@@ -31,6 +31,10 @@
 #include "wifi_esp32.h"
 #endif
 
+#if defined(CONFIG_IDF_TARGET_ESP32P4)
+#include <esp_random.h>          // seed Arduino random() from the HW RNG (see setup())
+#endif
+
 #ifndef WIRED_CONNECT_TIMEOUT
 #define WIRED_CONNECT_TIMEOUT (15 * 1000)
 #endif
@@ -514,7 +518,15 @@ void NetManagerTask::setup()
 
   // This is not really needed for our usecase on the ESP32, because random(n) uses theESP32 hardware random number
   // generator, but random() does not so safest to add some entropy here
+#if defined(CONFIG_IDF_TARGET_ESP32P4)
+  // RANDOM_SEED_CHANNEL defaults to GPIO14, which is NOT an ADC pin on the P4 (ADC1 =
+  // GPIO16-23), so analogRead(14) errors on every boot. It would also contend with the
+  // SAR-ADC noise entropy source enabled in hardware_setup() (bootloader_random_enable).
+  // That source already makes the HW RNG true-random here, so seed straight from it.
+  randomSeed(esp_random());
+#else
   randomSeed(millis() | analogRead(RANDOM_SEED_CHANNEL));
+#endif
 
   // If we have an SSID configured at this point we have likely
   // been running another firmware, clear the results
