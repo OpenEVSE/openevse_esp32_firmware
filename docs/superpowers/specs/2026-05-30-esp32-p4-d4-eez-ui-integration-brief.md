@@ -12,7 +12,7 @@ Status: scaffold built ahead of the export — `P4ScreenManager` (state machine)
 |---|---|---|
 | Project type | **LVGL** | (not "EEZ Flow Dashboard") |
 | **LVGL version** | **8.x** (8.3 or 8.4) | Firmware pins `lvgl@^8.3.9` (resolves to 8.4.0). A 9.x export is a major reconciliation — avoid. |
-| Display width × height | **480 × 800** (portrait) | Matches the ST7701 panel. |
+| Display width × height | **800 × 480** (landscape) | The firmware renders landscape via LVGL software rotation (the ST7701/DSI panel is physically 480×800 portrait but is rotated 90°). Design your screens at **800 wide × 480 tall**. |
 | Color depth | **16-bit (RGB565)** | Matches `lv_conf.h` (`LV_COLOR_DEPTH 16`, no swap). |
 | Flow | **Disabled ("without Flow")** *(recommended)* | Exports plain LVGL (`ui_init()` / `ui_tick()` + an `objects` struct). I bind data from firmware. "With Flow" works too but pulls in the eez-flow runtime lib and you'd bind data inside EEZ via native variables — tell me if you go that way and I'll adapt. |
 | Fonts | Montserrat (any sizes you like) | EEZ bundles fonts into the export, so no `lv_conf` font coordination needed. |
@@ -96,7 +96,7 @@ Name mismatches between your export and §3 are a quick fix on my side, not a re
 
 ## 6. Quick checklist before you export
 - [ ] LVGL version = 8.x
-- [ ] 480 × 800, 16-bit color
+- [ ] 800 × 480 (landscape), 16-bit color
 - [ ] Four screens named `screen_boot` / `screen_charge` / `screen_sleeping` / `screen_fault`
 - [ ] `screen_charge` has at least `charge_state_label`, `charge_kw_value`, `btn_start_stop` (+`btn_start_stop_label`)
 - [ ] Build → hand me the generated `ui/` folder
