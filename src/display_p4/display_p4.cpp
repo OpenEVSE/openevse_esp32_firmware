@@ -69,6 +69,10 @@ static P4ScreenManager *s_screens = NULL;
 static lv_obj_t *s_screen_label = NULL;
 static unsigned long s_bootMs = 0;
 
+#if defined(ENABLE_EEZ_UI)
+static void dp4_eez_btn_toggle_cb(lv_event_t *e);   // defined below; used in setup()
+#endif
+
 static void dp4_btn_event_cb(lv_event_t *e)
 {
   if (s_cmd) {
@@ -222,6 +226,7 @@ void DisplayP4Task::setup()
   // 4) Content.
 #if defined(ENABLE_EEZ_UI)
   ui_init();                 // build EEZ screens; loads the default screen
+  lv_obj_add_event_cb(objects.btn_start_stop, dp4_eez_btn_toggle_cb, LV_EVENT_CLICKED, NULL);
 #else
   dp4_build_bringup_screen();
 #endif
@@ -235,9 +240,69 @@ void DisplayP4Task::setup()
   s_bootMs = millis();
 }
 
+#if defined(ENABLE_EEZ_UI)
+// START/STOP button on screen_charge -> toggle the charge override.
+static void dp4_eez_btn_toggle_cb(lv_event_t *e)
+{
+  (void) e;
+  if (s_cmd) s_cmd->toggleCharge();
+}
+
+// Push live IEvseUiModel values into the EEZ screen_charge widgets (~2 Hz).
+// Bound here (vs. inside the EEZ export) so the generated UI stays pure layout.
+// NOTE: only screen_charge widgets are bound for now -- boot/sleeping/fault and
+// screen switching land once those screens are in the regenerated export.
+static void dp4_eez_update(void)
+{
+  IEvseUiModel *m = s_model;
+  if (!m) return;
+
+  lv_label_set_text(objects.charge_state_label, m->stateText());
+  lv_label_set_text_fmt(objects.charge_kw_value, "%.2f", m->power() / 1000.0);
+  lv_label_set_text_fmt(objects.charge_amps_value, "%.1f A", m->amps());
+  lv_label_set_text_fmt(objects.charge_volts_value, "%.1f V", m->voltage());
+  lv_label_set_text_fmt(objects.charge_energy_value, "%.2f kWh", m->sessionEnergy() / 1000.0);
+
+  uint32_t secs = m->sessionElapsed();
+  lv_label_set_text_fmt(objects.charge_elapsed_value, "%u:%02u:%02u",
+                        (unsigned)(secs / 3600), (unsigned)((secs / 60) % 60), (unsigned)(secs % 60));
+
+  if (m->tempValid()) {
+    lv_label_set_text_fmt(objects.charge_temp_value, "%.1f C", m->temperatureC());
+  } else {
+    lv_label_set_text(objects.charge_temp_value, "--");
+  }
+
+  lv_label_set_text_fmt(objects.charge_rate_value, "%u A", (unsigned)m->pilotCurrent());
+
+  if (m->wifiApMode()) {
+    lv_label_set_text(objects.charge_wifi_label, "AP mode");
+  } else if (m->wifiConnected()) {
+    lv_label_set_text_fmt(objects.charge_wifi_label, "WiFi %d dBm", m->wifiRssi());
+  } else {
+    lv_label_set_text(objects.charge_wifi_label, "offline");
+  }
+
+  // Power ring: fraction of the pilot (charge-current limit) actually drawn, 0-100.
+  uint32_t pilot = m->pilotCurrent();
+  int pct = 0;
+  if (pilot > 0) {
+    pct = (int)((m->amps() / (double)pilot) * 100.0 + 0.5);
+    if (pct < 0) pct = 0;
+    if (pct > 100) pct = 100;
+  }
+  lv_arc_set_value(objects.charge_power_ring, pct);
+
+  lv_label_set_text(objects.btn_start_stop_label, m->active() ? "STOP" : "START");
+}
+#endif
+
 static void dp4_refresh_model_view(void)
 {
   if (!s_model) return;
+#if defined(ENABLE_EEZ_UI)
+  dp4_eez_update();
+#endif
   if (s_state_label) {
     lv_label_set_text_fmt(s_state_label, "State: %s%s", s_model->stateText(),
                           s_model->vehicleConnected() ? "  (EV)" : "");
