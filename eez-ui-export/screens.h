@@ -66,6 +66,7 @@ typedef struct _objects_t {
     lv_obj_t *obj20;
     lv_obj_t *obj21;
     lv_obj_t *obj22;
+    lv_obj_t *sleeping_moon;
     lv_obj_t *fault_ring;
     lv_obj_t *obj23;
     lv_obj_t *obj24;

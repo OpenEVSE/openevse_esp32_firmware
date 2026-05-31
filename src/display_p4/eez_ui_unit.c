@@ -9,6 +9,7 @@
 #include "styles.c"
 #include "images.c"
 #include "ui_image_open_evse_logo.c"
+#include "ui_image_moon_sleep.c"
 #include "screens.c"
 #include "ui.c"
 #endif

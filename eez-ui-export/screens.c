@@ -568,6 +568,14 @@ void create_screen_screen_sleeping() {
                 }
             }
         }
+        {
+            // sleeping_moon
+            lv_obj_t *obj = lv_img_create(parent_obj);
+            objects.sleeping_moon = obj;
+            lv_obj_set_pos(obj, 360, 123);
+            lv_obj_set_size(obj, LV_SIZE_CONTENT, LV_SIZE_CONTENT);
+            lv_img_set_src(obj, &img_moon_sleep);
+        }
     }
     
     tick_screen_screen_sleeping();
