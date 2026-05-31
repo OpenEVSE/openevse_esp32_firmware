@@ -27,6 +27,20 @@
 #define DP4_BL_RES   8
 #define DP4_BL_FULL  255
 
+// Landscape orientation. The ST7701 is driven over MIPI-DSI/DPI, whose
+// framebuffer scans out in a fixed 480x800 (portrait) raster — the panel
+// driver exposes mirror() but no swap_xy(), so there is no hardware rotation.
+// We therefore rotate in LVGL software: the physical resolution stays 480x800
+// and LVGL presents an 800x480 landscape canvas, rotating each rendered area
+// into panel coordinates before flush. This requires full_refresh = false
+// (LVGL cannot software-rotate a full-refresh display). Touch needs no extra
+// work — lv_indev transforms the raw panel coordinates using `rotated`.
+// Flip to LV_DISP_ROT_270 (e.g. -D DISPLAY_P4_ROTATION=LV_DISP_ROT_270) if the
+// image is upside-down for the chosen mounting.
+#ifndef DISPLAY_P4_ROTATION
+#define DISPLAY_P4_ROTATION LV_DISP_ROT_90
+#endif
+
 static St7701DsiPanel s_panel;
 static gt911_touch s_touch = gt911_touch(DP4_TP_SDA, DP4_TP_SCL, -1, -1);
 
@@ -185,11 +199,13 @@ void DisplayP4Task::setup()
   lv_disp_draw_buf_init(&s_draw_buf, s_buf1, s_buf2, buf_px);
 
   lv_disp_drv_init(&s_disp_drv);
-  s_disp_drv.hor_res = s_panel.width();
+  s_disp_drv.hor_res = s_panel.width();    // physical (portrait) resolution
   s_disp_drv.ver_res = s_panel.height();
   s_disp_drv.flush_cb = dp4_flush_cb;
   s_disp_drv.draw_buf = &s_draw_buf;
-  s_disp_drv.full_refresh = false;
+  s_disp_drv.full_refresh = false;         // required for software rotation
+  s_disp_drv.sw_rotate = 1;                // DSI has no HW rotation; rotate in LVGL
+  s_disp_drv.rotated = DISPLAY_P4_ROTATION; // -> 800x480 landscape logical canvas
   lv_disp_drv_register(&s_disp_drv);
 
   lv_indev_drv_init(&s_indev_drv);
