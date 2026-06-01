@@ -287,6 +287,9 @@ void buildStatus(DynamicJsonDocument &doc) {
     if(evse.isVehicleEtaValid()) {
       doc["time_to_full_charge"] = evse.getVehicleEta();
     }
+    if(evse.isVehicleChargeLimitValid()) {
+      doc["vehicle_charge_limit"] = evse.getVehicleChargeLimit();
+    }
   }
 
   DBUGF("/status ArduinoJson size: %dbytes", doc.size());

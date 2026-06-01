@@ -367,9 +367,15 @@ LcdTask::LcdInfoLine LcdTask::getNextInfoLine(LcdInfoLine info)
             return LcdInfoLine::BatterySOC;
           }
         case LcdInfoLine::BatterySOC:
+          if(_evse->isVehicleChargeLimitValid()) {
+            return LcdInfoLine::ChargeLimit;
+          }
+          // fall through
+        case LcdInfoLine::ChargeLimit:
           if(_evse->isVehicleRangeValid()) {
             return LcdInfoLine::Range;
           }
+          // fall through
         case LcdInfoLine::Range:
           if(_evse->isVehicleEtaValid()) {
             return LcdInfoLine::TimeLeft;
@@ -563,7 +569,7 @@ void LcdTask::displayInfoLine(LcdInfoLine line, unsigned long &nextUpdate)
       break;
 
     case LcdInfoLine::ChargeLimit:
-      // Charge limit 85%
+      displayNumberValue(1, "Charge limit", _evse->getVehicleChargeLimit(), 0, "%");
       break;
 
     case LcdInfoLine::Range:
