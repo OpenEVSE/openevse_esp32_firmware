@@ -46,3 +46,19 @@ std::string ha_build_authorize_url(const std::string &ha_url,
   url += "&state=" + ha_url_encode(state);
   return url;
 }
+
+std::string ha_build_token_exchange_body(const std::string &client_id,
+                                         const std::string &code) {
+  std::string b = "grant_type=authorization_code";
+  b += "&code=" + ha_url_encode(code);
+  b += "&client_id=" + ha_url_encode(client_id);
+  return b;
+}
+
+std::string ha_build_refresh_body(const std::string &client_id,
+                                  const std::string &refresh_token) {
+  std::string b = "grant_type=refresh_token";
+  b += "&refresh_token=" + ha_url_encode(refresh_token);
+  b += "&client_id=" + ha_url_encode(client_id);
+  return b;
+}

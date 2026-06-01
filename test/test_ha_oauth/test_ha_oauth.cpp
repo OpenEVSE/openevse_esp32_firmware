@@ -41,3 +41,17 @@ TEST_CASE("ha_build_authorize_url strips a trailing slash from ha_url") {
       "http://ha:8123/", "cid", "ruri", "s");
   CHECK(url.rfind("http://ha:8123/auth/authorize", 0) == 0);
 }
+
+TEST_CASE("ha_build_token_exchange_body encodes the form body") {
+  CHECK(ha_build_token_exchange_body("http://openevse.local/", "the+code") ==
+        "grant_type=authorization_code"
+        "&code=the%2Bcode"
+        "&client_id=http%3A%2F%2Fopenevse.local%2F");
+}
+
+TEST_CASE("ha_build_refresh_body encodes the form body") {
+  CHECK(ha_build_refresh_body("cid", "rtok") ==
+        "grant_type=refresh_token"
+        "&refresh_token=rtok"
+        "&client_id=cid");
+}
