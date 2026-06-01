@@ -304,10 +304,11 @@ void HomeAssistantClient::pollVehicle() {
 void HomeAssistantClient::pollVehicleField(int field) {
   String entity;
   switch (field) {
-    case 0: entity = ha_vehicle_soc;   break;
-    case 1: entity = ha_vehicle_range; break;
-    case 2: entity = ha_vehicle_eta;   break;
-    default: _vehicleInFlight = false; return; // chain complete
+    case 0: entity = ha_vehicle_soc;          break;
+    case 1: entity = ha_vehicle_range;        break;
+    case 2: entity = ha_vehicle_eta;          break;
+    case 3: entity = ha_vehicle_charge_limit; break;
+    default: _vehicleInFlight = false; return; // chain complete (now at field 4)
   }
 
   if (entity.length() == 0) {
@@ -332,6 +333,7 @@ void HomeAssistantClient::pollVehicleField(int field) {
             case 0: evse.setVehicleStateOfCharge((int)lround(v)); break;
             case 1: evse.setVehicleRange((int)lround(v));         break;
             case 2: evse.setVehicleEta((int)lround(v));           break; // seconds
+            case 3: evse.setVehicleChargeLimit((int)lround(v));   break;
           }
         }
       } else {

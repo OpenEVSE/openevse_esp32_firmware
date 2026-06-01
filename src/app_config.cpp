@@ -124,6 +124,7 @@ String ha_client_id;
 String ha_vehicle_soc;
 String ha_vehicle_range;
 String ha_vehicle_eta;
+String ha_vehicle_charge_limit;
 
 // Vehicle
 uint8_t vehicle_data_src;
@@ -246,6 +247,7 @@ ConfigOpt *opts[] =
   new ConfigOptDefinition<String>(ha_vehicle_soc, "", "ha_vehicle_soc", "hvs"),
   new ConfigOptDefinition<String>(ha_vehicle_range, "", "ha_vehicle_range", "hvr"),
   new ConfigOptDefinition<String>(ha_vehicle_eta, "", "ha_vehicle_eta", "hve"),
+  new ConfigOptDefinition<String>(ha_vehicle_charge_limit, "", "ha_vehicle_charge_limit", "hvc"),
   new ConfigOptVirtualMaskedBool(flagsOpt, flagsChanged, CONFIG_SERVICE_HOMEASSISTANT, CONFIG_SERVICE_HOMEASSISTANT, "home_assistant_enabled", "hae"),
 
 // RFID storage

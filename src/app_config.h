@@ -83,6 +83,7 @@ extern String ha_client_id;
 extern String ha_vehicle_soc;
 extern String ha_vehicle_range;
 extern String ha_vehicle_eta;
+extern String ha_vehicle_charge_limit;
 
 // Time
 extern String time_zone;
