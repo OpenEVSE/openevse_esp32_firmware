@@ -55,3 +55,30 @@ TEST_CASE("ha_build_refresh_body encodes the form body") {
         "&refresh_token=rtok"
         "&client_id=cid");
 }
+
+TEST_CASE("ha_parse_token_response extracts tokens and expiry") {
+  HaTokens t;
+  bool ok = ha_parse_token_response(
+      "{\"access_token\":\"AT\",\"refresh_token\":\"RT\","
+      "\"expires_in\":1800,\"token_type\":\"Bearer\"}", t);
+  CHECK(ok);
+  CHECK(t.access_token == "AT");
+  CHECK(t.refresh_token == "RT");
+  CHECK(t.expires_in == 1800);
+}
+
+TEST_CASE("ha_parse_token_response: refresh response without refresh_token is ok") {
+  HaTokens t;
+  bool ok = ha_parse_token_response(
+      "{\"access_token\":\"AT2\",\"expires_in\":1800}", t);
+  CHECK(ok);
+  CHECK(t.access_token == "AT2");
+  CHECK(t.refresh_token.empty());
+}
+
+TEST_CASE("ha_parse_token_response fails on error / malformed bodies") {
+  HaTokens t;
+  CHECK_FALSE(ha_parse_token_response("{\"error\":\"invalid_grant\"}", t));
+  CHECK_FALSE(ha_parse_token_response("not json", t));
+  CHECK_FALSE(ha_parse_token_response("{\"expires_in\":1800}", t)); // no access_token
+}

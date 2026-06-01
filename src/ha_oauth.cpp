@@ -1,4 +1,5 @@
 #include "ha_oauth.h"
+#include <ArduinoJson.h>
 
 std::string ha_url_encode(const std::string &in) {
   static const char *hex = "0123456789ABCDEF";
@@ -61,4 +62,23 @@ std::string ha_build_refresh_body(const std::string &client_id,
   b += "&refresh_token=" + ha_url_encode(refresh_token);
   b += "&client_id=" + ha_url_encode(client_id);
   return b;
+}
+
+bool ha_parse_token_response(const std::string &json, HaTokens &out) {
+  StaticJsonDocument<512> doc;
+  DeserializationError err = deserializeJson(doc, json);
+  if (err) {
+    return false;
+  }
+  if (!doc["access_token"].is<const char *>()) {
+    return false;
+  }
+  out.access_token = doc["access_token"].as<const char *>();
+  if (doc["refresh_token"].is<const char *>()) {
+    out.refresh_token = doc["refresh_token"].as<const char *>();
+  } else {
+    out.refresh_token.clear();
+  }
+  out.expires_in = doc["expires_in"] | 0L;
+  return true;
 }
