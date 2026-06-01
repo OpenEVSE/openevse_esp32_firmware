@@ -4,6 +4,7 @@
 
 #include <Arduino.h>
 #include <time.h>
+#include <esp_random.h>
 
 #include "home_assistant.h"
 #include "app_config.h"
@@ -79,21 +80,105 @@ unsigned long HomeAssistantClient::loop(MicroTasks::WakeReason reason) {
   return HA_LOOP_INTERVAL_MS;
 }
 
-// --- flow methods implemented in Tasks 8 & 9 (stubs for now) ---
+// --- flow methods implemented in Tasks 8 & 9 ---
 String HomeAssistantClient::beginAuthorize(const String &host, bool secure) {
-  (void)host; (void)secure;
-  return "";
+  if (ha_url.length() == 0 || host.length() == 0) {
+    return "";
+  }
+
+  std::string scheme = secure ? "https" : "http";
+  std::string base = ha_derive_base_url(scheme, std::string(host.c_str()));
+  std::string clientId = base + "/";
+  std::string redirectUri = ha_build_redirect_uri(base);
+
+  // 16 hex chars of CSRF state from the HW RNG.
+  char stateBuf[17];
+  for (int i = 0; i < 16; i++) {
+    stateBuf[i] = "0123456789abcdef"[esp_random() & 0xF];
+  }
+  stateBuf[16] = '\0';
+
+  _pendingState = stateBuf;
+  _pendingClientId = clientId.c_str();
+  _pendingStateTime = millis();
+  if (_pendingStateTime == 0) _pendingStateTime = 1; // 0 means "none"; millis()==0 at boot/wrap is a benign miss
+
+  // Persist the client_id so token refresh can replay it after a reboot
+  // (it is derived from the device Host, which we don't otherwise know later).
+  ha_client_id = clientId.c_str();
+  config_commit();
+
+  std::string url = ha_build_authorize_url(
+      std::string(ha_url.c_str()), clientId, redirectUri, _pendingState.c_str());
+  return String(url.c_str());
 }
 
 bool HomeAssistantClient::handleCallback(const String &code, const String &state, String &error) {
-  (void)code; (void)state;
-  error = "not implemented";
-  return false;
+  if (_pendingStateTime == 0) {
+    error = "no pending authorization";
+    return false;
+  }
+  if (state.length() == 0 || state != _pendingState) {
+    error = "state mismatch";
+    return false;
+  }
+  if (code.length() == 0) {
+    error = "missing code";
+    return false;
+  }
+  // Consume the pending state (single use); keep _pendingClientId for the exchange.
+  _pendingStateTime = 0;
+  _pendingState = "";
+  exchangeCode(code);
+  return true;
 }
 
-void HomeAssistantClient::exchangeCode(const String &code) { (void)code; }
+void HomeAssistantClient::storeTokens(const HaTokens &t) {
+  ha_access_token = t.access_token.c_str();
+  if (!t.refresh_token.empty()) {
+    ha_refresh_token = t.refresh_token.c_str();
+  }
+  ha_token_expires = ha_compute_expiry(ha_now_unix(), t.expires_in);
+  config_commit();
+
+  StaticJsonDocument<128> ev;
+  ev["home_assistant"] = "connected";
+  event_send(ev);
+}
+
+void HomeAssistantClient::exchangeCode(const String &code) {
+  if (ha_url.length() == 0 || _pendingClientId.length() == 0) {
+    return;
+  }
+  std::string body = ha_build_token_exchange_body(
+      std::string(_pendingClientId.c_str()), std::string(code.c_str()));
+
+  String uri = ha_url;
+  while (uri.endsWith("/")) uri.remove(uri.length() - 1);
+  uri += "/auth/token";
+
+  MongooseHttpClientRequest *req = _client.beginRequest(uri.c_str());
+  req->setMethod(HTTP_POST);
+  req->addHeader("Content-Type", "application/x-www-form-urlencoded");
+  req->setContent((const uint8_t *)body.c_str(), body.length());
+  req->onResponse([this](MongooseHttpClientResponse *response) {
+    if (response->respCode() == 200) {
+      HaTokens t;
+      std::string json((const char *)response->body(), response->body().length());
+      if (ha_parse_token_response(json, t)) {
+        storeTokens(t);
+        return;
+      }
+    }
+    StaticJsonDocument<128> ev;
+    ev["home_assistant"] = "error";
+    ev["home_assistant_error"] = "token exchange failed";
+    event_send(ev);
+  });
+  _client.send(req);
+}
+
 void HomeAssistantClient::refreshTokens() {}
-void HomeAssistantClient::storeTokens(const HaTokens &t) { (void)t; }
 
 void HomeAssistantClient::get(const String &path, MongooseHttpResponseHandler onResponse) {
   (void)path; (void)onResponse;
