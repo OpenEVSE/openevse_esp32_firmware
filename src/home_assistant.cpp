@@ -14,6 +14,7 @@
 #define HA_PENDING_STATE_TTL_MS   (5 * 60 * 1000UL)
 #define HA_REFRESH_MARGIN_SEC     300
 #define HA_REFRESH_RETRY_MS       (60 * 1000UL)
+#define HA_REFRESH_TIMEOUT_MS     (30 * 1000UL)     // clear a stuck in-flight refresh
 #define HA_LOOP_INTERVAL_MS       (30 * 1000UL)
 
 HomeAssistantClient homeAssistant;
@@ -76,6 +77,14 @@ unsigned long HomeAssistantClient::loop(MicroTasks::WakeReason reason) {
     _pendingState = "";
     _pendingClientId = "";
   }
+  // Recover if a refresh request never completed (e.g. connect failed and no
+  // onResponse fired) -- otherwise _refreshInFlight would block refresh forever.
+  if (_refreshInFlight && _lastRefreshAttempt != 0 &&
+      (millis() - _lastRefreshAttempt) > HA_REFRESH_TIMEOUT_MS) {
+    DBUGLN("[ha] refresh timed out, clearing in-flight flag");
+    _refreshInFlight = false;
+  }
+
   if (config_home_assistant_enabled() && ha_refresh_token.length() > 0 && !_refreshInFlight) {
     bool due = ha_refresh_due(ha_token_expires, ha_now_unix(), HA_REFRESH_MARGIN_SEC);
     bool backoffElapsed = (millis() - _lastRefreshAttempt) > HA_REFRESH_RETRY_MS;
@@ -221,6 +230,7 @@ void HomeAssistantClient::refreshTokens() {
         return;
       }
     }
+    DBUGF("[ha] refresh response: %d", response->respCode());
     if (response->respCode() == 400) {
       // invalid_grant: refresh token revoked -> disconnect.
       disconnect();
@@ -243,7 +253,7 @@ void HomeAssistantClient::get(const String &path, MongooseHttpResponseHandler on
   MongooseHttpClientRequest *req = _client.beginRequest(uri.c_str());
   req->setMethod(HTTP_GET);
   req->addHeader("Authorization", bearer.c_str());
-  req->addHeader("Content-Type", "application/json");
+  req->addHeader("Accept", "application/json");
   req->onResponse(onResponse);
   _client.send(req);
 }
