@@ -83,6 +83,11 @@ void handleUpdateClose(MongooseHttpServerRequest *request);
 void handleTime(MongooseHttpServerRequest *request);
 void handleTimePost(MongooseHttpServerRequest *request, MongooseHttpServerResponseStream *response);
 
+void handleHomeAssistantAuthStart(MongooseHttpServerRequest *request);
+void handleHomeAssistantCallback(MongooseHttpServerRequest *request);
+void handleHomeAssistantStatus(MongooseHttpServerRequest *request);
+void handleHomeAssistantDisconnect(MongooseHttpServerRequest *request);
+
 void dumpRequest(MongooseHttpServerRequest *request)
 {
 #ifdef ENABLE_DEBUG_WEB_REQUEST
@@ -1225,6 +1230,11 @@ void web_server_setup()
   server.on("/claims", handleEvseClaims);
 
   server.on("/override$", handleOverride);
+
+  server.on("/ha/auth/start$", handleHomeAssistantAuthStart);
+  server.on("/ha_callback", handleHomeAssistantCallback);
+  server.on("/ha/status$", handleHomeAssistantStatus);
+  server.on("/ha/disconnect$", handleHomeAssistantDisconnect);
 
   server.on("/logs", handleEventLogs);
   server.on("/certificates", handleCertificates);
