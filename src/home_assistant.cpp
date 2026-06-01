@@ -138,6 +138,8 @@ void HomeAssistantClient::storeTokens(const HaTokens &t) {
   if (!t.refresh_token.empty()) {
     ha_refresh_token = t.refresh_token.c_str();
   }
+  // If NTP isn't synced yet (ha_now_unix()==0), expiry lands near epoch, causing an
+  // immediate re-refresh once the clock syncs -- safe degradation.
   ha_token_expires = ha_compute_expiry(ha_now_unix(), t.expires_in);
   config_commit();
 
@@ -148,6 +150,7 @@ void HomeAssistantClient::storeTokens(const HaTokens &t) {
 
 void HomeAssistantClient::exchangeCode(const String &code) {
   if (ha_url.length() == 0 || _pendingClientId.length() == 0) {
+    DBUGLN("[ha] exchangeCode: missing ha_url or client_id");
     return;
   }
   std::string body = ha_build_token_exchange_body(
@@ -160,11 +163,14 @@ void HomeAssistantClient::exchangeCode(const String &code) {
   MongooseHttpClientRequest *req = _client.beginRequest(uri.c_str());
   req->setMethod(HTTP_POST);
   req->addHeader("Content-Type", "application/x-www-form-urlencoded");
+  // Safe: send() -> mg_connect_http_opt() copies the body into the connection's
+  // send buffer synchronously, while `body` is still in scope here.
   req->setContent((const uint8_t *)body.c_str(), body.length());
   req->onResponse([this](MongooseHttpClientResponse *response) {
     if (response->respCode() == 200) {
       HaTokens t;
-      std::string json((const char *)response->body(), response->body().length());
+      MongooseString respBody = response->body();
+      std::string json((const char *)respBody, respBody.length());
       if (ha_parse_token_response(json, t)) {
         storeTokens(t);
         return;
