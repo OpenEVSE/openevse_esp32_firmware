@@ -1,12 +1,16 @@
 #include "ha_oauth.h"
-#include <cctype>
 
 std::string ha_url_encode(const std::string &in) {
   static const char *hex = "0123456789ABCDEF";
+  auto is_unreserved = [](unsigned char c) {
+    return (c >= 'A' && c <= 'Z') || (c >= 'a' && c <= 'z') ||
+           (c >= '0' && c <= '9') || c == '-' || c == '_' ||
+           c == '.' || c == '~';
+  };
   std::string out;
   out.reserve(in.size() * 3);
   for (unsigned char c : in) {
-    if (std::isalnum(c) || c == '-' || c == '_' || c == '.' || c == '~') {
+    if (is_unreserved(c)) {
       out += (char)c;
     } else {
       out += '%';

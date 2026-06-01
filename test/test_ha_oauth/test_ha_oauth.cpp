@@ -6,6 +6,8 @@ TEST_CASE("ha_url_encode percent-encodes reserved characters") {
   CHECK(ha_url_encode("abc-123_.~") == "abc-123_.~");
   CHECK(ha_url_encode("http://h:8123/") == "http%3A%2F%2Fh%3A8123%2F");
   CHECK(ha_url_encode("a b") == "a%20b");
+  CHECK(ha_url_encode("\xFF") == "%FF");                 // high byte always encoded
+  CHECK(ha_url_encode("a=1&b=2+3") == "a%3D1%26b%3D2%2B3"); // OAuth param chars
 }
 
 TEST_CASE("ha_derive_base_url joins scheme and host") {
