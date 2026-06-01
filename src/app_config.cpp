@@ -121,6 +121,9 @@ String ha_access_token;
 String ha_refresh_token;
 uint64_t ha_token_expires;
 String ha_client_id;
+String ha_vehicle_soc;
+String ha_vehicle_range;
+String ha_vehicle_eta;
 
 // Vehicle
 uint8_t vehicle_data_src;
@@ -240,6 +243,9 @@ ConfigOpt *opts[] =
   new ConfigOptSecret(ha_refresh_token, "", "ha_refresh_token", "har"),
   new ConfigOptDefinition<uint64_t>(ha_token_expires, 0, "ha_token_expires", "hax"),
   new ConfigOptDefinition<String>(ha_client_id, "", "ha_client_id", "hac"),
+  new ConfigOptDefinition<String>(ha_vehicle_soc, "", "ha_vehicle_soc", "hvs"),
+  new ConfigOptDefinition<String>(ha_vehicle_range, "", "ha_vehicle_range", "hvr"),
+  new ConfigOptDefinition<String>(ha_vehicle_eta, "", "ha_vehicle_eta", "hve"),
   new ConfigOptVirtualMaskedBool(flagsOpt, flagsChanged, CONFIG_SERVICE_HOMEASSISTANT, CONFIG_SERVICE_HOMEASSISTANT, "home_assistant_enabled", "hae"),
 
 // RFID storage

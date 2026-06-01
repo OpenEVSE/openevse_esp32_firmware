@@ -10,12 +10,15 @@
 #include "app_config.h"
 #include "debug.h"
 #include "event.h"
+#include <math.h>      // lround
+#include "input.h"     // global EvseManager `evse`
 
 #define HA_PENDING_STATE_TTL_MS   (5 * 60 * 1000UL)
 #define HA_REFRESH_MARGIN_SEC     300
 #define HA_REFRESH_RETRY_MS       (60 * 1000UL)
 #define HA_REFRESH_TIMEOUT_MS     (30 * 1000UL)     // clear a stuck in-flight refresh
 #define HA_LOOP_INTERVAL_MS       (30 * 1000UL)
+#define HA_VEHICLE_POLL_MS        (30 * 1000UL)   // poll HA vehicle entities every 30 s
 
 HomeAssistantClient homeAssistant;
 
@@ -28,7 +31,8 @@ HomeAssistantClient::HomeAssistantClient() :
   MicroTasks::Task(),
   _pendingStateTime(0),
   _refreshInFlight(false),
-  _lastRefreshAttempt(0)
+  _lastRefreshAttempt(0),
+  _lastVehiclePoll(0)
 {
 }
 
@@ -94,6 +98,16 @@ unsigned long HomeAssistantClient::loop(MicroTasks::WakeReason reason) {
       refreshTokens();
     }
   }
+
+  // Poll HA vehicle entities when HA is the selected vehicle-data source.
+  if (isConnected()
+      && vehicle_data_src == VEHICLE_DATA_SRC_HOMEASSISTANT
+      && (_lastVehiclePoll == 0 || (millis() - _lastVehiclePoll) >= HA_VEHICLE_POLL_MS)) {
+    _lastVehiclePoll = millis();
+    if (_lastVehiclePoll == 0) _lastVehiclePoll = 1; // 0 means "never polled"
+    pollVehicle();
+  }
+
   return HA_LOOP_INTERVAL_MS;
 }
 
@@ -262,4 +276,49 @@ void HomeAssistantClient::get(const String &path, MongooseHttpResponseHandler on
   req->addHeader("Accept", "application/json");
   req->onResponse(onResponse);
   _client.send(req);
+}
+
+void HomeAssistantClient::pollVehicle() {
+  pollVehicleField(0);
+}
+
+// Fetch one configured vehicle entity, set the matching EVSE value, then chain to
+// the next field. Sequential (one in-flight request at a time) to stay safe on the
+// shared MongooseHttpClient. An empty entity, a failed request, or an
+// unknown/unavailable state simply skips that field (keeps the last good value).
+void HomeAssistantClient::pollVehicleField(int field) {
+  String entity;
+  switch (field) {
+    case 0: entity = ha_vehicle_soc;   break;
+    case 1: entity = ha_vehicle_range; break;
+    case 2: entity = ha_vehicle_eta;   break;
+    default: return; // chain complete
+  }
+
+  if (entity.length() == 0) {
+    pollVehicleField(field + 1); // not configured -> skip to next
+    return;
+  }
+
+  String path = "/api/states/" + entity; // entity IDs are URL-safe (sensor.x_y)
+  int next = field + 1;
+  get(path, [this, field, next](MongooseHttpClientResponse *response) {
+    if (response->respCode() == 200) {
+      MongooseString body = response->body();
+      std::string state;
+      if (ha_parse_entity_state(std::string((const char *)body, body.length()), state)) {
+        double v = atof(state.c_str());
+        switch (field) {
+          case 0: evse.setVehicleStateOfCharge((int)lround(v)); break;
+          case 1: evse.setVehicleRange((int)lround(v));         break;
+          case 2: evse.setVehicleEta((int)v);                   break; // seconds
+        }
+      } else {
+        DBUGF("[ha] vehicle field %d: state unavailable/unparseable", field);
+      }
+    } else {
+      DBUGF("[ha] vehicle field %d: HTTP %d", field, response->respCode());
+    }
+    pollVehicleField(next); // advance regardless of this field's outcome
+  });
 }

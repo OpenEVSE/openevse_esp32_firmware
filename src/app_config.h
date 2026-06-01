@@ -80,6 +80,9 @@ extern String ha_access_token;
 extern String ha_refresh_token;
 extern uint64_t ha_token_expires;
 extern String ha_client_id;
+extern String ha_vehicle_soc;
+extern String ha_vehicle_range;
+extern String ha_vehicle_eta;
 
 // Time
 extern String time_zone;
@@ -107,7 +110,8 @@ enum vehicle_data_src {
   VEHICLE_DATA_SRC_NONE,
   VEHICLE_DATA_SRC_TESLA,
   VEHICLE_DATA_SRC_MQTT,
-  VEHICLE_DATA_SRC_HTTP
+  VEHICLE_DATA_SRC_HTTP,
+  VEHICLE_DATA_SRC_HOMEASSISTANT
 };
 
 // 24-bits of Flags
