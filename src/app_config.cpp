@@ -16,6 +16,7 @@
 #include "mqtt.h"
 #include "ocpp.h"
 #include "tesla_client.h"
+#include "home_assistant.h"
 #include "emoncms.h"
 #include "input.h"
 #include "LedManagerTask.h"
@@ -113,6 +114,13 @@ uint64_t tesla_created_at;
 uint64_t tesla_expires_in;
 
 String tesla_vehicle_id;
+
+// Home Assistant settings
+String ha_url;
+String ha_access_token;
+String ha_refresh_token;
+uint64_t ha_token_expires;
+String ha_client_id;
 
 // Vehicle
 uint8_t vehicle_data_src;
@@ -225,6 +233,14 @@ ConfigOpt *opts[] =
   new ConfigOptDefinition<uint64_t>(tesla_created_at, -1, "tesla_created_at", "tc"),
   new ConfigOptDefinition<uint64_t>(tesla_expires_in, -1, "tesla_expires_in", "tx"),
   new ConfigOptDefinition<String>(tesla_vehicle_id, "", "tesla_vehicle_id", "ti"),
+
+// Home Assistant settings
+  new ConfigOptDefinition<String>(ha_url, "", "ha_url", "hau"),
+  new ConfigOptSecret(ha_access_token, "", "ha_access_token", "haa"),
+  new ConfigOptSecret(ha_refresh_token, "", "ha_refresh_token", "har"),
+  new ConfigOptDefinition<uint64_t>(ha_token_expires, 0, "ha_token_expires", "hax"),
+  new ConfigOptDefinition<String>(ha_client_id, "", "ha_client_id", "hac"),
+  new ConfigOptVirtualMaskedBool(flagsOpt, flagsChanged, CONFIG_SERVICE_HOMEASSISTANT, CONFIG_SERVICE_HOMEASSISTANT, "home_assistant_enabled", "hae"),
 
 // RFID storage
   new ConfigOptDefinition<String>(rfid_storage, "", "rfid_storage", "rs"),
@@ -388,6 +404,8 @@ void config_changed(String name)
     teslaClient.setVehicleId(tesla_vehicle_id);
   } else if(name.startsWith("tesla_")) {
     teslaClient.setCredentials(tesla_access_token, tesla_refresh_token, tesla_created_at, tesla_expires_in);
+  } else if(name.startsWith("ha_") || name == "home_assistant_enabled") {
+    homeAssistant.notifyConfigChanged();
 #if RGB_LED
   } else if(name == "led_brightness") {
     ledManager.setBrightness(led_brightness);

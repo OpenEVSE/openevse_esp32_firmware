@@ -74,6 +74,13 @@ extern String ocpp_idtag;
 // RFID storage
 extern String rfid_storage;
 
+// Home Assistant settings
+extern String ha_url;
+extern String ha_access_token;
+extern String ha_refresh_token;
+extern uint64_t ha_token_expires;
+extern String ha_client_id;
+
 // Time
 extern String time_zone;
 
@@ -122,6 +129,7 @@ extern uint32_t flags;
 #define CONFIG_VEHICLE_RANGE_MILES  (1 << 17)
 #define CONFIG_RFID                 (1 << 18)
 #define CONFIG_SERVICE_CUR_SHAPER   (1 << 19)
+#define CONFIG_SERVICE_HOMEASSISTANT (1 << 27)
 #define CONFIG_MQTT_RETAINED        (1 << 20)
 #define CONFIG_FACTORY_WRITE_LOCK   (1 << 21)
 #define CONFIG_OCPP_AUTO_AUTH       (1 << 22)
@@ -186,6 +194,10 @@ inline bool config_divert_enabled() {
 
 inline bool config_current_shaper_enabled() {
   return CONFIG_SERVICE_CUR_SHAPER == (flags & CONFIG_SERVICE_CUR_SHAPER);
+}
+
+inline bool config_home_assistant_enabled() {
+  return CONFIG_SERVICE_HOMEASSISTANT == (flags & CONFIG_SERVICE_HOMEASSISTANT);
 }
 
 inline uint8_t config_charge_mode() {
