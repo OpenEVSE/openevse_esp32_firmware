@@ -28,3 +28,21 @@ std::string ha_derive_base_url(const std::string &scheme, const std::string &hos
   while (!h.empty() && h.back() == '/') h.pop_back();
   return s + "://" + h;
 }
+
+std::string ha_build_redirect_uri(const std::string &base_url) {
+  return base_url + "/ha_callback";
+}
+
+std::string ha_build_authorize_url(const std::string &ha_url,
+                                   const std::string &client_id,
+                                   const std::string &redirect_uri,
+                                   const std::string &state) {
+  std::string base = ha_url;
+  while (!base.empty() && base.back() == '/') base.pop_back();
+  std::string url = base + "/auth/authorize";
+  url += "?response_type=code";
+  url += "&client_id=" + ha_url_encode(client_id);
+  url += "&redirect_uri=" + ha_url_encode(redirect_uri);
+  url += "&state=" + ha_url_encode(state);
+  return url;
+}

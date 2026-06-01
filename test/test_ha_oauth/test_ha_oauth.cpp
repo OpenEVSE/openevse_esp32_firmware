@@ -16,3 +16,28 @@ TEST_CASE("ha_derive_base_url joins scheme and host") {
   CHECK(ha_derive_base_url("", "h") == "http://h");          // default scheme
   CHECK(ha_derive_base_url("http", "h/") == "http://h");     // trailing slash stripped
 }
+
+TEST_CASE("ha_build_redirect_uri appends the callback path") {
+  CHECK(ha_build_redirect_uri("http://openevse.local") ==
+        "http://openevse.local/ha_callback");
+}
+
+TEST_CASE("ha_build_authorize_url builds an encoded query") {
+  std::string url = ha_build_authorize_url(
+      "http://homeassistant.local:8123",
+      "http://openevse.local/",
+      "http://openevse.local/ha_callback",
+      "abc123");
+  CHECK(url ==
+        "http://homeassistant.local:8123/auth/authorize"
+        "?response_type=code"
+        "&client_id=http%3A%2F%2Fopenevse.local%2F"
+        "&redirect_uri=http%3A%2F%2Fopenevse.local%2Fha_callback"
+        "&state=abc123");
+}
+
+TEST_CASE("ha_build_authorize_url strips a trailing slash from ha_url") {
+  std::string url = ha_build_authorize_url(
+      "http://ha:8123/", "cid", "ruri", "s");
+  CHECK(url.rfind("http://ha:8123/auth/authorize", 0) == 0);
+}
