@@ -39,8 +39,9 @@ void HomeAssistantClient::setup() {
 
 bool HomeAssistantClient::isConnected() {
   if (!config_home_assistant_enabled()) return false;
-  if (ha_refresh_token.length() == 0) return false;
-  return ha_access_token.length() > 0 || ha_refresh_token.length() > 0;
+  // Connected once OAuth is complete: a refresh token means the session exists;
+  // the background refresh loop keeps the access token current.
+  return ha_refresh_token.length() > 0;
 }
 
 void HomeAssistantClient::getStatus(JsonDocument &doc) {

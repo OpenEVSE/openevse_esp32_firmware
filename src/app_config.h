@@ -129,7 +129,6 @@ extern uint32_t flags;
 #define CONFIG_VEHICLE_RANGE_MILES  (1 << 17)
 #define CONFIG_RFID                 (1 << 18)
 #define CONFIG_SERVICE_CUR_SHAPER   (1 << 19)
-#define CONFIG_SERVICE_HOMEASSISTANT (1 << 27)
 #define CONFIG_MQTT_RETAINED        (1 << 20)
 #define CONFIG_FACTORY_WRITE_LOCK   (1 << 21)
 #define CONFIG_OCPP_AUTO_AUTH       (1 << 22)
@@ -137,6 +136,7 @@ extern uint32_t flags;
 #define CONFIG_THREEPHASE           (1 << 24)
 #define CONFIG_WIZARD               (1 << 25)
 #define CONFIG_DEFAULT_STATE        (1 << 26)
+#define CONFIG_SERVICE_HOMEASSISTANT (1 << 27) // next free bit after CONFIG_DEFAULT_STATE
 
 #define INITIAL_CONFIG_VERSION  1
 

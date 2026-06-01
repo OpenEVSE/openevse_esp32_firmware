@@ -25,15 +25,15 @@ class HomeAssistantClient : public MicroTasks::Task {
     void get(const String &path, MongooseHttpResponseHandler onResponse);
 
   protected:
-    void setup();
-    unsigned long loop(MicroTasks::WakeReason reason);
+    void setup() override;
+    unsigned long loop(MicroTasks::WakeReason reason) override;
 
   private:
     MongooseHttpClient _client;
 
     String _pendingState;
     String _pendingClientId;
-    uint32_t _pendingStateTime; // millis() when issued; 0 = none
+    unsigned long _pendingStateTime; // millis() when issued; 0 = none
 
     bool _refreshInFlight;
     unsigned long _lastRefreshAttempt;
