@@ -76,7 +76,13 @@ unsigned long HomeAssistantClient::loop(MicroTasks::WakeReason reason) {
     _pendingState = "";
     _pendingClientId = "";
   }
-  // Refresh scheduling implemented in Task 9.
+  if (config_home_assistant_enabled() && ha_refresh_token.length() > 0 && !_refreshInFlight) {
+    bool due = ha_refresh_due(ha_token_expires, ha_now_unix(), HA_REFRESH_MARGIN_SEC);
+    bool backoffElapsed = (millis() - _lastRefreshAttempt) > HA_REFRESH_RETRY_MS;
+    if (due && (_lastRefreshAttempt == 0 || backoffElapsed)) {
+      refreshTokens();
+    }
+  }
   return HA_LOOP_INTERVAL_MS;
 }
 
@@ -184,8 +190,60 @@ void HomeAssistantClient::exchangeCode(const String &code) {
   _client.send(req);
 }
 
-void HomeAssistantClient::refreshTokens() {}
+void HomeAssistantClient::refreshTokens() {
+  if (_refreshInFlight) return;
+  if (ha_url.length() == 0 || ha_refresh_token.length() == 0) return;
+  if (ha_client_id.length() == 0) return; // never authorized
+
+  _refreshInFlight = true;
+  _lastRefreshAttempt = millis();
+
+  std::string clientId = std::string(ha_client_id.c_str());
+  std::string body = ha_build_refresh_body(clientId, std::string(ha_refresh_token.c_str()));
+
+  String uri = ha_url;
+  while (uri.endsWith("/")) uri.remove(uri.length() - 1);
+  uri += "/auth/token";
+
+  MongooseHttpClientRequest *req = _client.beginRequest(uri.c_str());
+  req->setMethod(HTTP_POST);
+  req->addHeader("Content-Type", "application/x-www-form-urlencoded");
+  // Safe: send() -> mg_connect_http_opt() copies the body synchronously while `body` is in scope.
+  req->setContent((const uint8_t *)body.c_str(), body.length());
+  req->onResponse([this](MongooseHttpClientResponse *response) {
+    _refreshInFlight = false;
+    if (response->respCode() == 200) {
+      HaTokens t;
+      MongooseString respBody = response->body();
+      std::string json((const char *)respBody, respBody.length());
+      if (ha_parse_token_response(json, t)) {
+        storeTokens(t);
+        return;
+      }
+    }
+    if (response->respCode() == 400) {
+      // invalid_grant: refresh token revoked -> disconnect.
+      disconnect();
+    }
+    // transient errors: leave tokens; loop() retries after backoff.
+  });
+  _client.send(req);
+}
 
 void HomeAssistantClient::get(const String &path, MongooseHttpResponseHandler onResponse) {
-  (void)path; (void)onResponse;
+  if (!isConnected() || ha_url.length() == 0) return;
+
+  String uri = ha_url;
+  while (uri.endsWith("/")) uri.remove(uri.length() - 1);
+  uri += path; // caller passes a leading-slash path, e.g. "/api/states/sensor.x"
+
+  String bearer = "Bearer ";
+  bearer += ha_access_token;
+
+  MongooseHttpClientRequest *req = _client.beginRequest(uri.c_str());
+  req->setMethod(HTTP_GET);
+  req->addHeader("Authorization", bearer.c_str());
+  req->addHeader("Content-Type", "application/json");
+  req->onResponse(onResponse);
+  _client.send(req);
 }
