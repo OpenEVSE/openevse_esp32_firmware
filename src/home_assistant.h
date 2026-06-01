@@ -38,6 +38,8 @@ class HomeAssistantClient : public MicroTasks::Task {
     bool _refreshInFlight;
     unsigned long _lastRefreshAttempt;
     unsigned long _lastVehiclePoll;
+    bool _vehicleInFlight;
+    unsigned long _vehiclePollStart;
 
     void exchangeCode(const String &code);
     void refreshTokens();

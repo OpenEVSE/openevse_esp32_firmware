@@ -410,7 +410,7 @@ void config_changed(String name)
     teslaClient.setVehicleId(tesla_vehicle_id);
   } else if(name.startsWith("tesla_")) {
     teslaClient.setCredentials(tesla_access_token, tesla_refresh_token, tesla_created_at, tesla_expires_in);
-  } else if(name.startsWith("ha_") || name == "home_assistant_enabled") {
+  } else if(name.startsWith("ha_") || name == "home_assistant_enabled" || name == "vehicle_data_src") {
     homeAssistant.notifyConfigChanged();
 #if RGB_LED
   } else if(name == "led_brightness") {

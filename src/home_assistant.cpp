@@ -3,6 +3,7 @@
 #endif
 
 #include <Arduino.h>
+#include <stdlib.h>
 #include <time.h>
 #include <esp_random.h>
 
@@ -19,6 +20,7 @@
 #define HA_REFRESH_TIMEOUT_MS     (30 * 1000UL)     // clear a stuck in-flight refresh
 #define HA_LOOP_INTERVAL_MS       (30 * 1000UL)
 #define HA_VEHICLE_POLL_MS        (30 * 1000UL)   // poll HA vehicle entities every 30 s
+#define HA_VEHICLE_TIMEOUT_MS     (30 * 1000UL)   // clear a stuck vehicle-poll chain
 
 HomeAssistantClient homeAssistant;
 
@@ -32,7 +34,9 @@ HomeAssistantClient::HomeAssistantClient() :
   _pendingStateTime(0),
   _refreshInFlight(false),
   _lastRefreshAttempt(0),
-  _lastVehiclePoll(0)
+  _lastVehiclePoll(0),
+  _vehicleInFlight(false),
+  _vehiclePollStart(0)
 {
 }
 
@@ -99,9 +103,18 @@ unsigned long HomeAssistantClient::loop(MicroTasks::WakeReason reason) {
     }
   }
 
+  // Recover a stuck vehicle-poll chain (e.g. a request that never completed and
+  // no onResponse fired) -- otherwise _vehicleInFlight would block polling forever.
+  if (_vehicleInFlight && _vehiclePollStart != 0 &&
+      (millis() - _vehiclePollStart) > HA_VEHICLE_TIMEOUT_MS) {
+    DBUGLN("[ha] vehicle poll timed out, clearing in-flight flag");
+    _vehicleInFlight = false;
+  }
+
   // Poll HA vehicle entities when HA is the selected vehicle-data source.
   if (isConnected()
       && vehicle_data_src == VEHICLE_DATA_SRC_HOMEASSISTANT
+      && !_vehicleInFlight
       && (_lastVehiclePoll == 0 || (millis() - _lastVehiclePoll) >= HA_VEHICLE_POLL_MS)) {
     _lastVehiclePoll = millis();
     if (_lastVehiclePoll == 0) _lastVehiclePoll = 1; // 0 means "never polled"
@@ -279,6 +292,8 @@ void HomeAssistantClient::get(const String &path, MongooseHttpResponseHandler on
 }
 
 void HomeAssistantClient::pollVehicle() {
+  _vehicleInFlight = true;
+  _vehiclePollStart = millis();
   pollVehicleField(0);
 }
 
@@ -292,7 +307,7 @@ void HomeAssistantClient::pollVehicleField(int field) {
     case 0: entity = ha_vehicle_soc;   break;
     case 1: entity = ha_vehicle_range; break;
     case 2: entity = ha_vehicle_eta;   break;
-    default: return; // chain complete
+    default: _vehicleInFlight = false; return; // chain complete
   }
 
   if (entity.length() == 0) {
@@ -307,11 +322,17 @@ void HomeAssistantClient::pollVehicleField(int field) {
       MongooseString body = response->body();
       std::string state;
       if (ha_parse_entity_state(std::string((const char *)body, body.length()), state)) {
-        double v = atof(state.c_str());
-        switch (field) {
-          case 0: evse.setVehicleStateOfCharge((int)lround(v)); break;
-          case 1: evse.setVehicleRange((int)lround(v));         break;
-          case 2: evse.setVehicleEta((int)v);                   break; // seconds
+        char *endp = nullptr;
+        double v = strtod(state.c_str(), &endp);
+        if (endp == state.c_str()) {
+          // non-numeric state (e.g. "charging") -> skip, don't write 0 to the EVSE
+          DBUGF("[ha] vehicle field %d: non-numeric state, skipping", field);
+        } else {
+          switch (field) {
+            case 0: evse.setVehicleStateOfCharge((int)lround(v)); break;
+            case 1: evse.setVehicleRange((int)lround(v));         break;
+            case 2: evse.setVehicleEta((int)lround(v));           break; // seconds
+          }
         }
       } else {
         DBUGF("[ha] vehicle field %d: state unavailable/unparseable", field);
