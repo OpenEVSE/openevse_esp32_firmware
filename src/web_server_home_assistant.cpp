@@ -33,6 +33,10 @@ void handleHomeAssistantAuthStart(MongooseHttpServerRequest *request)
     return;
   }
 
+  // Defense-in-depth: strip CR/LF so a crafted ha_url cannot inject response headers.
+  url.replace("\r", "");
+  url.replace("\n", "");
+
   // request->redirect() is a no-op stub in this build of ArduinoMongoose.
   // Use the manual redirect pattern (same as handleHttpsRedirect in web_server.cpp).
   response->setCode(302);
@@ -82,7 +86,7 @@ void handleHomeAssistantStatus(MongooseHttpServerRequest *request)
   if (false == requestPreProcess(request, response, CONTENT_TYPE_JSON)) {
     return;
   }
-  const size_t capacity = JSON_OBJECT_SIZE(4) + 256;
+  const size_t capacity = JSON_OBJECT_SIZE(4) + 512;
   DynamicJsonDocument doc(capacity);
   homeAssistant.getStatus(doc);
   serializeJson(doc, *response);
@@ -94,6 +98,13 @@ void handleHomeAssistantDisconnect(MongooseHttpServerRequest *request)
 {
   MongooseHttpServerResponseStream *response;
   if (false == requestPreProcess(request, response, CONTENT_TYPE_JSON)) {
+    return;
+  }
+  if (HTTP_POST != request->method()) {
+    response->setCode(405);
+    response->setContentType(CONTENT_TYPE_JSON);
+    response->print("{\"msg\":\"Method not allowed\"}");
+    request->send(response);
     return;
   }
   homeAssistant.disconnect();

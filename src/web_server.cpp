@@ -1232,7 +1232,7 @@ void web_server_setup()
   server.on("/override$", handleOverride);
 
   server.on("/ha/auth/start$", handleHomeAssistantAuthStart);
-  server.on("/ha_callback", handleHomeAssistantCallback);
+  server.on("/ha_callback", handleHomeAssistantCallback); // no $ anchor: matched against the path only (query stripped); HA appends ?code=&state=
   server.on("/ha/status$", handleHomeAssistantStatus);
   server.on("/ha/disconnect$", handleHomeAssistantDisconnect);
 
