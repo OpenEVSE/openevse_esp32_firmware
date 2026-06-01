@@ -40,6 +40,12 @@ std::string ha_build_refresh_body(const std::string &client_id,
 // (access_token and expires_in present); refresh_token may be empty on refresh.
 bool ha_parse_token_response(const std::string &json, HaTokens &out);
 
+// Extract the `.state` string from a Home Assistant /api/states/<entity> JSON
+// response. Returns false if the body doesn't parse, `state` is missing/non-string,
+// or it is empty / "unknown" / "unavailable". Uses an ArduinoJson filter so it is
+// memory-safe regardless of how large the entity's `attributes` object is.
+bool ha_parse_entity_state(const std::string &json, std::string &out);
+
 // Absolute expiry = now_unix + expires_in (0 if expires_in <= 0).
 uint64_t ha_compute_expiry(uint64_t now_unix, long expires_in);
 

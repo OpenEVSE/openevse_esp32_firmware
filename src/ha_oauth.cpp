@@ -93,3 +93,22 @@ bool ha_refresh_due(uint64_t expiry_unix, uint64_t now_unix, uint64_t margin_sec
   uint64_t threshold = (expiry_unix > margin_sec) ? (expiry_unix - margin_sec) : 0;
   return now_unix >= threshold;
 }
+
+bool ha_parse_entity_state(const std::string &json, std::string &out) {
+  // Filter so only "state" is materialized — entity `attributes` can be large.
+  StaticJsonDocument<32> filter;
+  filter["state"] = true;
+  StaticJsonDocument<128> doc;
+  if (deserializeJson(doc, json, DeserializationOption::Filter(filter))) {
+    return false;
+  }
+  if (!doc["state"].is<const char *>()) {
+    return false;
+  }
+  std::string s = doc["state"].as<const char *>();
+  if (s.empty() || s == "unknown" || s == "unavailable") {
+    return false;
+  }
+  out = s;
+  return true;
+}

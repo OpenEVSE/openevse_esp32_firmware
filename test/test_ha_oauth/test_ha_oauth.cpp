@@ -96,3 +96,20 @@ TEST_CASE("ha_refresh_due triggers within the margin") {
   CHECK(ha_refresh_due(2800, 3000, 300));    // already expired
   CHECK(ha_refresh_due(0, 5, 300));          // unknown expiry -> always due
 }
+
+TEST_CASE("ha_parse_entity_state extracts the state, ignoring attributes") {
+  std::string s;
+  CHECK(ha_parse_entity_state(
+      "{\"entity_id\":\"sensor.car\",\"state\":\"73.5\","
+      "\"attributes\":{\"unit_of_measurement\":\"%\",\"friendly_name\":\"Car\"}}", s));
+  CHECK(s == "73.5");
+}
+
+TEST_CASE("ha_parse_entity_state rejects unavailable/unknown/missing/bad") {
+  std::string s;
+  CHECK_FALSE(ha_parse_entity_state("{\"state\":\"unavailable\"}", s));
+  CHECK_FALSE(ha_parse_entity_state("{\"state\":\"unknown\"}", s));
+  CHECK_FALSE(ha_parse_entity_state("{\"state\":\"\"}", s));
+  CHECK_FALSE(ha_parse_entity_state("{\"attributes\":{}}", s)); // no state key
+  CHECK_FALSE(ha_parse_entity_state("not json", s));
+}
