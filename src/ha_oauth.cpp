@@ -98,7 +98,9 @@ bool ha_parse_entity_state(const std::string &json, std::string &out) {
   // Filter so only "state" is materialized — entity `attributes` can be large.
   StaticJsonDocument<32> filter;
   filter["state"] = true;
-  StaticJsonDocument<128> doc;
+  // 384 bytes covers the HA-spec max 255-char state value plus object overhead on
+  // both 32-bit (ESP32) and 64-bit (native test). The filter keeps `attributes` out.
+  StaticJsonDocument<384> doc;
   if (deserializeJson(doc, json, DeserializationOption::Filter(filter))) {
     return false;
   }

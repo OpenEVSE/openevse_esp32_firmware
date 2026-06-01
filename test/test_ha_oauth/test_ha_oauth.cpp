@@ -103,6 +103,14 @@ TEST_CASE("ha_parse_entity_state extracts the state, ignoring attributes") {
       "{\"entity_id\":\"sensor.car\",\"state\":\"73.5\","
       "\"attributes\":{\"unit_of_measurement\":\"%\",\"friendly_name\":\"Car\"}}", s));
   CHECK(s == "73.5");
+
+  // Large attributes blob: would overflow the result doc if not filtered out.
+  std::string big = "{\"state\":\"42\",\"attributes\":{\"blob\":\"";
+  big += std::string(400, 'x');
+  big += "\"}}";
+  std::string s2;
+  CHECK(ha_parse_entity_state(big, s2));
+  CHECK(s2 == "42");
 }
 
 TEST_CASE("ha_parse_entity_state rejects unavailable/unknown/missing/bad") {
