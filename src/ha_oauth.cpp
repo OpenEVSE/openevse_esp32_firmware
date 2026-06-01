@@ -82,3 +82,14 @@ bool ha_parse_token_response(const std::string &json, HaTokens &out) {
   out.expires_in = doc["expires_in"] | 0L;
   return true;
 }
+
+uint64_t ha_compute_expiry(uint64_t now_unix, long expires_in) {
+  if (expires_in <= 0) return 0;
+  return now_unix + (uint64_t)expires_in;
+}
+
+bool ha_refresh_due(uint64_t expiry_unix, uint64_t now_unix, uint64_t margin_sec) {
+  if (expiry_unix == 0) return true; // unknown expiry -> refresh
+  uint64_t threshold = (expiry_unix > margin_sec) ? (expiry_unix - margin_sec) : 0;
+  return now_unix >= threshold;
+}

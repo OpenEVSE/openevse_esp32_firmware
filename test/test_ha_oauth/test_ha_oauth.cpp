@@ -82,3 +82,17 @@ TEST_CASE("ha_parse_token_response fails on error / malformed bodies") {
   CHECK_FALSE(ha_parse_token_response("not json", t));
   CHECK_FALSE(ha_parse_token_response("{\"expires_in\":1800}", t)); // no access_token
 }
+
+TEST_CASE("ha_compute_expiry adds expires_in to now") {
+  CHECK(ha_compute_expiry(1000, 1800) == 2800);
+  CHECK(ha_compute_expiry(1000, 0) == 0);    // unknown expiry
+  CHECK(ha_compute_expiry(1000, -5) == 0);
+}
+
+TEST_CASE("ha_refresh_due triggers within the margin") {
+  // expiry at 2800, margin 300 -> refresh due at >= 2500
+  CHECK_FALSE(ha_refresh_due(2800, 2499, 300));
+  CHECK(ha_refresh_due(2800, 2500, 300));
+  CHECK(ha_refresh_due(2800, 3000, 300));    // already expired
+  CHECK(ha_refresh_due(0, 5, 300));          // unknown expiry -> always due
+}
