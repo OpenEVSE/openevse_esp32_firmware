@@ -61,9 +61,15 @@ void handleHomeAssistantCallback(MongooseHttpServerRequest *request)
 
   String error;
   bool ok = homeAssistant.handleCallback(code, state, error);
+  if (!ok) {
+    DBUGF("[ha] callback rejected: %s", error.c_str());
+  }
 
-  String dest = F("/#/settings/home-assistant?ha=");
-  dest += ok ? F("connected") : F("error");
+  // Redirect to the settings page with NO query string: the SPA hash router
+  // exact-matches the route ("/settings/home-assistant"), so a "?ha=..." suffix
+  // would land on a non-existent route. The page reflects the real connection
+  // state by polling /ha/status, so no hint is needed here.
+  String dest = F("/#/settings/home-assistant");
 
   // Manual redirect — same pattern as handleHttpsRedirect.
   MongooseHttpServerResponseStream *response = request->beginResponseStream();

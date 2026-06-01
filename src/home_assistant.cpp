@@ -64,6 +64,8 @@ void HomeAssistantClient::disconnect() {
   _pendingStateTime = 0;
   _pendingState = "";
   _pendingClientId = "";
+  // Disconnecting turns the integration off too, so isConnected() reads false.
+  config_set("home_assistant_enabled", false);
   config_commit();
   StaticJsonDocument<128> ev;
   ev["home_assistant"] = "disconnected";
@@ -156,6 +158,10 @@ void HomeAssistantClient::storeTokens(const HaTokens &t) {
   // If NTP isn't synced yet (ha_now_unix()==0), expiry lands near epoch, causing an
   // immediate re-refresh once the clock syncs -- safe degradation.
   ha_token_expires = ha_compute_expiry(ha_now_unix(), t.expires_in);
+  // A successful token grant IS the connection -- enable the service so isConnected()
+  // and the refresh loop treat it as active (the user clicked Connect; there is no
+  // separate enable toggle in v1).
+  config_set("home_assistant_enabled", true);
   config_commit();
 
   StaticJsonDocument<128> ev;
