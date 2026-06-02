@@ -22,7 +22,10 @@ class HomeAssistantClient : public MicroTasks::Task {
     void disconnect();
     void notifyConfigChanged();
 
-    void get(const String &path, MongooseHttpResponseHandler onResponse);
+    // Returns true if the request was dispatched. Returns false (and sends nothing)
+    // when not connected or when a token refresh is due -- callers must not assume
+    // onResponse will fire in that case.
+    bool get(const String &path, MongooseHttpResponseHandler onResponse);
 
   protected:
     void setup() override;

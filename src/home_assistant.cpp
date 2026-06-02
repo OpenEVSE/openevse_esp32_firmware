@@ -273,8 +273,15 @@ void HomeAssistantClient::refreshTokens() {
   _client.send(req);
 }
 
-void HomeAssistantClient::get(const String &path, MongooseHttpResponseHandler onResponse) {
-  if (!isConnected() || ha_url.length() == 0) return;
+bool HomeAssistantClient::get(const String &path, MongooseHttpResponseHandler onResponse) {
+  if (!isConnected() || ha_url.length() == 0) return false;
+
+  // Don't send a token that's at/near expiry -- HA would reject it and log an
+  // invalid-auth attempt. Skip the request; loop() refreshes when due.
+  if (ha_refresh_due(ha_token_expires, ha_now_unix(), HA_REFRESH_MARGIN_SEC)) {
+    DBUGLN("[ha] get() skipped: token refresh due");
+    return false;
+  }
 
   String uri = ha_url;
   while (uri.endsWith("/")) uri.remove(uri.length() - 1);
@@ -289,6 +296,7 @@ void HomeAssistantClient::get(const String &path, MongooseHttpResponseHandler on
   req->addHeader("Accept", "application/json");
   req->onResponse(onResponse);
   _client.send(req);
+  return true;
 }
 
 void HomeAssistantClient::pollVehicle() {
@@ -318,7 +326,7 @@ void HomeAssistantClient::pollVehicleField(int field) {
 
   String path = "/api/states/" + entity; // entity IDs are URL-safe (sensor.x_y)
   int next = field + 1;
-  get(path, [this, field, next](MongooseHttpClientResponse *response) {
+  bool sent = get(path, [this, field, next](MongooseHttpClientResponse *response) {
     if (response->respCode() == 200) {
       MongooseString body = response->body();
       std::string state;
@@ -344,4 +352,11 @@ void HomeAssistantClient::pollVehicleField(int field) {
     }
     pollVehicleField(next); // advance regardless of this field's outcome
   });
+
+  if (!sent) {
+    // get() declined (refresh due / not connected): onResponse won't fire, so end
+    // the chain now rather than stranding _vehicleInFlight until the timeout. The
+    // next poll cycle retries once loop() has refreshed the token.
+    _vehicleInFlight = false;
+  }
 }
