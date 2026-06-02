@@ -75,8 +75,14 @@ bool RfidUser::setUserName(const String &rfidTag, const String &userName)
   DynamicJsonDocument doc(RFID_USERS_DOC_SIZE);
   load(doc); // Load existing data, ignore errors
 
-  JsonObject users = doc.to<JsonObject>();
-  
+  // NB: doc.to<JsonObject>() would CLEAR the document we just loaded (upstream
+  // PR #1037 bug -- it dropped every other mapping on each save). Use the
+  // existing root object, only creating one if the file was missing/empty.
+  if(!doc.is<JsonObject>()) {
+    doc.to<JsonObject>();
+  }
+  JsonObject users = doc.as<JsonObject>();
+
   if(userName.length() > 0) {
     users[rfidTag] = userName;
   } else {

@@ -71,8 +71,16 @@ void handleRfidUsers(MongooseHttpServerRequest *request)
   }
   else if(HTTP_DELETE == request->method())
   {
-    String rfid = request->getParam("rfid");
-    
+    // This fork's pinned ArduinoMongoose only reads the query string via
+    // getParam() for GET requests; for other methods it reads the body. The gui
+    // sends `DELETE /rfid/users?rfid=<uid>` (UID in the query string), so parse
+    // it from the query string directly here, URL-decoded via mg_get_http_var.
+    char rfidBuf[64] = {0};
+    MongooseString q = request->queryString();
+    struct mg_str qs = mg_mk_str_n(q.c_str(), q.length());
+    int rfidLen = mg_get_http_var(&qs, "rfid", rfidBuf, sizeof(rfidBuf));
+    String rfid = (rfidLen > 0) ? String(rfidBuf) : String();
+
     if(rfid.length() == 0) {
       response->setCode(400);
       response->print("{\"msg\":\"RFID tag parameter is required\"}");
