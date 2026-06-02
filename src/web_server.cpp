@@ -1252,10 +1252,10 @@ void web_server_setup()
   server.on("/emeter", handleEmeter);
   server.on("/time", handleTime);
 
-  server.on("/api/energy/raw$", handleEnergyRaw);
-  server.on("/api/energy/daily$", handleEnergyDaily);
-  server.on("/api/energy/monthly$", handleEnergyMonthly);
-  server.on("/api/energy/annual$", handleEnergyAnnual);
+  server.on("/energy/raw$", handleEnergyRaw);
+  server.on("/energy/daily$", handleEnergyDaily);
+  server.on("/energy/monthly$", handleEnergyMonthly);
+  server.on("/energy/annual$", handleEnergyAnnual);
 
   // Simple Firmware Update Form
   server.on("/update$")->
