@@ -23,6 +23,7 @@ typedef const __FlashStringHelper *fstr_t;
 #endif
 
 //#include <FS.h>                       // SPIFFS file-system: store web server html, CSS etc.
+#include <LittleFS.h>
 
 #include "emonesp.h"
 #include "web_server.h"
@@ -87,6 +88,10 @@ void handleHomeAssistantAuthStart(MongooseHttpServerRequest *request);
 void handleHomeAssistantCallback(MongooseHttpServerRequest *request);
 void handleHomeAssistantStatus(MongooseHttpServerRequest *request);
 void handleHomeAssistantDisconnect(MongooseHttpServerRequest *request);
+void handleEnergyRaw(MongooseHttpServerRequest *request);
+void handleEnergyDaily(MongooseHttpServerRequest *request);
+void handleEnergyMonthly(MongooseHttpServerRequest *request);
+void handleEnergyAnnual(MongooseHttpServerRequest *request);
 
 void dumpRequest(MongooseHttpServerRequest *request)
 {
@@ -234,6 +239,8 @@ void buildStatus(DynamicJsonDocument &doc) {
   doc["ohm_hour"] = ohm_hour;
 
   doc["free_heap"] = ESPAL.getFreeHeap();
+  doc["littlefs_free"] = (uint32_t)(LittleFS.totalBytes() - LittleFS.usedBytes());
+  doc["littlefs_used"] = (uint32_t)LittleFS.usedBytes();
 
   doc["comm_sent"] = rapiSender.getSent();
   doc["comm_success"] = rapiSender.getSuccess();
@@ -1244,6 +1251,11 @@ void web_server_setup()
   server.on("/limit", handleLimit);
   server.on("/emeter", handleEmeter);
   server.on("/time", handleTime);
+
+  server.on("/api/energy/raw$", handleEnergyRaw);
+  server.on("/api/energy/daily$", handleEnergyDaily);
+  server.on("/api/energy/monthly$", handleEnergyMonthly);
+  server.on("/api/energy/annual$", handleEnergyAnnual);
 
   // Simple Firmware Update Form
   server.on("/update$")->

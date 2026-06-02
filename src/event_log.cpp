@@ -88,6 +88,12 @@ void EventLog::log(EventType type, EvseState managerState, uint8_t evseState, ui
     return;
   }
 
+  // Guard against filling LittleFS — keep at least 8 KB free to prevent filesystem corruption.
+  if (LittleFS.totalBytes() - LittleFS.usedBytes() < 8192) {
+    DBUGLN("EventLog: Low SPIFFS space, skipping entry");
+    return;
+  }
+
   String eventFilename = filenameFromIndex(_max_log_index);
   File eventFile = LittleFS.open(eventFilename, FILE_APPEND);
   if(eventFile && eventFile.size() > EVENTLOG_ROTATE_SIZE)

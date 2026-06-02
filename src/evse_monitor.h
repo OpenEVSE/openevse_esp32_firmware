@@ -12,6 +12,13 @@
 #include "mcp9808_compat.h"
 #endif
 
+#ifndef EVSE_HEATBEAT_INTERVAL
+#define EVSE_HEATBEAT_INTERVAL 5
+#endif
+#ifndef EVSE_HEARTBEAT_CURRENT
+#define EVSE_HEARTBEAT_CURRENT 6
+#endif
+
 #define EVSE_MONITOR_TEMP_MONITOR       0
 #define EVSE_MONITOR_TEMP_MAX           1
 #define EVSE_MONITOR_TEMP_EVSE_DS3232   2
@@ -145,6 +152,10 @@ class EvseMonitor : public MicroTasks::Task
 
     // Settings
     uint32_t _settings_flags;
+    uint32_t _panic_temperature;
+    uint32_t _heartbeat_interval;
+    uint32_t _heartbeat_current;
+    RapiSender *_sender;
 
     DataReady _data_ready;
     DataReady _boot_ready;
@@ -211,6 +222,11 @@ class EvseMonitor : public MicroTasks::Task
     void enableStuckRelayCheck(bool enabled, std::function<void(int ret)> callback = NULL);
     void enableVentRequired(bool enabled, std::function<void(int ret)> callback = NULL);
     void enableTemperatureCheck(bool enabled, std::function<void(int ret)> callback = NULL);
+    void enableOvercurrentMonitor(bool enabled, std::function<void(int ret)> callback = NULL);
+    void setPanicTemperature(uint32_t tempC, std::function<void(int ret)> callback = NULL);
+    void enableFrontButton(bool enabled, std::function<void(int ret)> callback = NULL);
+    void enableBootLock(bool enabled, std::function<void(int ret)> callback = NULL);
+    void setHeartbeatSupervision(uint32_t interval, uint32_t current, std::function<void(int ret)> callback = NULL);
     void verifyPilot();
 
     uint8_t getEvseState() {
@@ -345,9 +361,23 @@ class EvseMonitor : public MicroTasks::Task
     bool isTemperatureCheckEnabled() {
       return 0 == (getSettingsFlags() & OPENEVSE_ECF_TEMP_CHK_DISABLED);
     }
+    bool isOvercurrentMonitorEnabled() {
+      return 0 == (getSettingsFlags() & OPENEVSE_ECF_TEMP_CHK_DISABLED);
+    }
+    uint32_t getPanicTemperature() { return _panic_temperature; }
+    bool isFrontButtonEnabled() { return !isButtonDisabled(); }
     bool isButtonDisabled() {
       return OPENEVSE_ECF_BUTTON_DISABLED == (getSettingsFlags() & OPENEVSE_ECF_BUTTON_DISABLED);
     }
+#ifndef OPENEVSE_ECF_BOOT_LOCK_DISABLED
+#define OPENEVSE_ECF_BOOT_LOCK_DISABLED 0x2000
+#endif
+    bool isBootLockEnabled() {
+      return 0 == (getSettingsFlags() & OPENEVSE_ECF_BOOT_LOCK_DISABLED);
+    }
+    uint32_t getHeartbeatInterval() { return _heartbeat_interval; }
+    uint32_t getHeartbeatCurrent() { return _heartbeat_current; }
+    bool isHeartbeatEnabled() { return _heartbeat_current > 0; }
     bool isAutoStartDisabled() {
       return OPENEVSE_ECF_AUTO_START_DISABLED == (getSettingsFlags() & OPENEVSE_ECF_AUTO_START_DISABLED);
     }
