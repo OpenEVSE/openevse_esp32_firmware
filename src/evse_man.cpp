@@ -366,6 +366,7 @@ unsigned long EvseManager::loop(MicroTasks::WakeReason reason)
                   shaper.getState()
 #ifndef DIVERT_SIM
                   ,rfid.getAuthenticatedTag()
+                  ,isVehicleStateOfChargeValid() ? getVehicleStateOfCharge() : -1
 #endif
                   );
   }

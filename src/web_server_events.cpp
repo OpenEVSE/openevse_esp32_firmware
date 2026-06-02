@@ -44,7 +44,7 @@ void handleEventLogs(MongooseHttpServerRequest *request)
 
         response->print("[");
 
-        eventLog.enumerate(block, [&count, response](String time, EventType type, const String &logEntry, EvseState managerState, uint8_t evseState, uint32_t evseFlags, uint32_t pilot, double energy, uint32_t elapsed, double temperature, double temperatureMax, uint8_t divertMode, uint8_t shaper, const String &rfidTag)
+        eventLog.enumerate(block, [&count, response](String time, EventType type, const String &logEntry, EvseState managerState, uint8_t evseState, uint32_t evseFlags, uint32_t pilot, double energy, uint32_t elapsed, double temperature, double temperatureMax, uint8_t divertMode, uint8_t shaper, const String &rfidTag, int soc)
         {
           StaticJsonDocument<1024> event;
 
@@ -66,6 +66,9 @@ void handleEventLogs(MongooseHttpServerRequest *request)
           event["shaper"] = shaper == true?1:0;
           if(rfidTag.length() > 0) {
             event["rfidTag"] = rfidTag;
+          }
+          if(soc >= 0) {
+            event["soc"] = soc;
           }
           serializeJson(event, *response);
         });

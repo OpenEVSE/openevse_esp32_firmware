@@ -77,7 +77,7 @@ void EventLog::begin()
   }
 }
 
-void EventLog::log(EventType type, EvseState managerState, uint8_t evseState, uint32_t evseFlags, uint32_t pilot, double energy, uint32_t elapsed, double temperature, double temperatureMax, uint8_t divertMode, uint8_t shaper, const String &rfidTag)
+void EventLog::log(EventType type, EvseState managerState, uint8_t evseState, uint32_t evseFlags, uint32_t pilot, double energy, uint32_t elapsed, double temperature, double temperatureMax, uint8_t divertMode, uint8_t shaper, const String &rfidTag, int soc)
 {
   time_t now = time(NULL);
   struct tm timeinfo;
@@ -133,6 +133,9 @@ void EventLog::log(EventType type, EvseState managerState, uint8_t evseState, ui
     if(rfidTag.length() > 0) {
       line["rfid"] = rfidTag;
     }
+    if(soc >= 0) {
+      line["soc"] = soc;
+    }
 
     serializeJson(line, eventFile);
     eventFile.println("");
@@ -146,7 +149,7 @@ void EventLog::log(EventType type, EvseState managerState, uint8_t evseState, ui
   }
 }
 
-void EventLog::enumerate(uint32_t index, std::function<void(String time, EventType type, const String &logEntry, EvseState managerState, uint8_t evseState, uint32_t evseFlags, uint32_t pilot, double energy, uint32_t elapsed, double temperature, double temperatureMax, uint8_t divertMode, uint8_t shaper, const String &rfidTag)> callback)
+void EventLog::enumerate(uint32_t index, std::function<void(String time, EventType type, const String &logEntry, EvseState managerState, uint8_t evseState, uint32_t evseFlags, uint32_t pilot, double energy, uint32_t elapsed, double temperature, double temperatureMax, uint8_t divertMode, uint8_t shaper, const String &rfidTag, int soc)> callback)
 {
   String filename = filenameFromIndex(index);
   File eventFile = LittleFS.open(filename);
@@ -180,8 +183,9 @@ void EventLog::enumerate(uint32_t index, std::function<void(String time, EventTy
         uint8_t divertMode = json["dm"];
         uint8_t shaper = json["sh"];
         String rfidTag = json["rfid"] | "";
+        int soc = json["soc"] | -1;
 
-        callback(time, type, line, managerState, evseState, evseFlags, pilot, energy, elapsed, temperature, temperatureMax, divertMode, shaper, rfidTag);
+        callback(time, type, line, managerState, evseState, evseFlags, pilot, energy, elapsed, temperature, temperatureMax, divertMode, shaper, rfidTag, soc);
       }
     }
     eventFile.close();

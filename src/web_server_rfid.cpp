@@ -121,7 +121,7 @@ void handleLogsExport(MongooseHttpServerRequest *request)
     response->addHeader("Content-Disposition", "attachment; filename=\"session_history.csv\"");
     
     // CSV header
-    response->print("Time,Type,State,Energy (kWh),Elapsed (min),RFID Tag,User Name,Temperature (C)\r\n");
+    response->print("Time,Type,State,Energy (kWh),Elapsed (min),RFID Tag,User Name,Temperature (C),SoC (%)\r\n");
     
     // Load RFID user mappings once before iterating
     DynamicJsonDocument usersDoc(2048);
@@ -131,7 +131,7 @@ void handleLogsExport(MongooseHttpServerRequest *request)
     // Iterate through all log files
     for(uint32_t i = eventLog.getMinIndex(); i <= eventLog.getMaxIndex(); i++)
     {
-      eventLog.enumerate(i, [response, &users](String time, EventType type, const String &logEntry, EvseState managerState, uint8_t evseState, uint32_t evseFlags, uint32_t pilot, double energy, uint32_t elapsed, double temperature, double temperatureMax, uint8_t divertMode, uint8_t shaper, const String &rfidTag)
+      eventLog.enumerate(i, [response, &users](String time, EventType type, const String &logEntry, EvseState managerState, uint8_t evseState, uint32_t evseFlags, uint32_t pilot, double energy, uint32_t elapsed, double temperature, double temperatureMax, uint8_t divertMode, uint8_t shaper, const String &rfidTag, int soc)
       {
         // Convert values
         double energyKwh = energy / 1000.0;
@@ -157,6 +157,11 @@ void handleLogsExport(MongooseHttpServerRequest *request)
         response->print(escapeCSVField(userName));
         response->print(",");
         response->print(String(temperature, 1));
+        response->print(",");
+        // soc < 0 is the "no valid reading" sentinel -> leave the cell empty
+        if(soc >= 0) {
+          response->print(String(soc));
+        }
         response->print("\r\n");
       });
     }

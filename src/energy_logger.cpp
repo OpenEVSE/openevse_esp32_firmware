@@ -155,12 +155,18 @@ void EnergyLogger::sample()
                          ? _monitor->getTemperature(EVSE_MONITOR_TEMP_MONITOR)
                          : 0.0;
   double session_energy = _monitor->getSessionEnergy();
+  // Vehicle SoC: -1 is the "no valid reading" sentinel (0% is a legitimate
+  // reading, so unlike temperature we cannot reuse 0 as the sentinel).
+  int soc = _monitor->isVehicleStateOfChargeValid()
+              ? _monitor->getVehicleStateOfCharge()
+              : -1;
 
   // Add to circular buffer
   _hourly_buffer[_buffer_index].timestamp = now;
   _hourly_buffer[_buffer_index].amps = amps;
   _hourly_buffer[_buffer_index].temperature = temperature;
   _hourly_buffer[_buffer_index].energy_wh = session_energy;
+  _hourly_buffer[_buffer_index].soc = soc;
 
   _buffer_index = (_buffer_index + 1) % ENERGY_LOGGER_BUFFER_SIZE;
   if (_buffer_count < ENERGY_LOGGER_BUFFER_SIZE) {
@@ -179,7 +185,7 @@ void EnergyLogger::sample()
   _day_energy_wh  = session_energy;
   _hour_sample_count++;
 
-  DBUGF("[EnergyLogger] Sample: amps=%.2f, temp=%.2f, energy=%.2f Wh", amps, temperature, session_energy);
+  DBUGF("[EnergyLogger] Sample: amps=%.2f, temp=%.2f, energy=%.2f Wh, soc=%d", amps, temperature, session_energy, soc);
 }
 
 void EnergyLogger::aggregate_hourly()
@@ -224,7 +230,7 @@ void EnergyLogger::save_raw_chunk()
 
   if (count == 0) return;
 
-  const size_t cap = JSON_ARRAY_SIZE(count + 1) + (count + 1) * JSON_OBJECT_SIZE(4) + 64;
+  const size_t cap = JSON_ARRAY_SIZE(count + 1) + (count + 1) * JSON_OBJECT_SIZE(5) + 64;
   DynamicJsonDocument doc(cap);
   JsonArray arr = doc.to<JsonArray>();
 
@@ -237,6 +243,7 @@ void EnergyLogger::save_raw_chunk()
       obj["a"]  = s.amps;
       obj["t"]  = s.temperature;
       obj["e"]  = s.energy_wh;
+      obj["s"]  = s.soc;
     }
   }
 
@@ -722,7 +729,7 @@ void EnergyLogger::getRawSamples(JsonDocument &doc, int max_samples, time_t befo
 
     File file = LittleFS.open(filepath, "r");
     if (file) {
-      DynamicJsonDocument file_doc(JSON_ARRAY_SIZE(ENERGY_LOGGER_BUFFER_SIZE + 1) + (ENERGY_LOGGER_BUFFER_SIZE + 1) * JSON_OBJECT_SIZE(4) + 128);
+      DynamicJsonDocument file_doc(JSON_ARRAY_SIZE(ENERGY_LOGGER_BUFFER_SIZE + 1) + (ENERGY_LOGGER_BUFFER_SIZE + 1) * JSON_OBJECT_SIZE(5) + 128);
       DeserializationError err = deserializeJson(file_doc, file);
       file.close();
 
@@ -737,6 +744,7 @@ void EnergyLogger::getRawSamples(JsonDocument &doc, int max_samples, time_t befo
           obj["a"]  = item["a"];
           obj["t"]  = item["t"];
           obj["e"]  = item["e"];
+          obj["s"]  = item["s"] | -1;   // default for chunks written before SoC logging
           count++;
         }
       }
@@ -752,6 +760,7 @@ void EnergyLogger::getRawSamples(JsonDocument &doc, int max_samples, time_t befo
         obj["a"]  = s.amps;
         obj["t"]  = s.temperature;
         obj["e"]  = s.energy_wh;
+        obj["s"]  = s.soc;
       }
     }
     return;
@@ -775,6 +784,7 @@ void EnergyLogger::getRawSamples(JsonDocument &doc, int max_samples, time_t befo
     obj["a"]  = sample.amps;
     obj["t"]  = sample.temperature;
     obj["e"]  = sample.energy_wh;
+    obj["s"]  = sample.soc;
   }
 }
 

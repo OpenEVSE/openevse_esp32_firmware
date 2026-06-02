@@ -32,6 +32,7 @@ struct RawSample
   double amps;
   double temperature;
   double energy_wh;
+  int soc;            // vehicle state of charge (%), -1 when no valid reading
 };
 
 struct DailyMetrics
