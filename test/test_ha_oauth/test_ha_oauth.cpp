@@ -121,3 +121,26 @@ TEST_CASE("ha_parse_entity_state rejects unavailable/unknown/missing/bad") {
   CHECK_FALSE(ha_parse_entity_state("{\"attributes\":{}}", s)); // no state key
   CHECK_FALSE(ha_parse_entity_state("not json", s));
 }
+
+TEST_CASE("ha_parse_bool recognizes truthy and falsey states") {
+  bool b = false;
+  CHECK(ha_parse_bool("on", b));        CHECK(b == true);
+  CHECK(ha_parse_bool("ON", b));        CHECK(b == true);
+  CHECK(ha_parse_bool("true", b));      CHECK(b == true);
+  CHECK(ha_parse_bool("1", b));         CHECK(b == true);
+  CHECK(ha_parse_bool("home", b));      CHECK(b == true);
+  CHECK(ha_parse_bool("off", b));       CHECK(b == false);
+  CHECK(ha_parse_bool("OFF", b));       CHECK(b == false);
+  CHECK(ha_parse_bool("false", b));     CHECK(b == false);
+  CHECK(ha_parse_bool("0", b));         CHECK(b == false);
+  CHECK(ha_parse_bool("not_home", b));  CHECK(b == false);
+  CHECK(ha_parse_bool("unplugged", b)); CHECK(b == false);
+}
+
+TEST_CASE("ha_parse_bool rejects unrecognized states") {
+  bool b = true;
+  CHECK_FALSE(ha_parse_bool("charging", b));
+  CHECK_FALSE(ha_parse_bool("", b));
+  CHECK_FALSE(ha_parse_bool("42.5", b));
+  CHECK_FALSE(ha_parse_bool("maybe", b));
+}

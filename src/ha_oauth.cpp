@@ -1,5 +1,6 @@
 #include "ha_oauth.h"
 #include <ArduinoJson.h>
+#include <cctype>
 
 std::string ha_url_encode(const std::string &in) {
   static const char *hex = "0123456789ABCDEF";
@@ -113,4 +114,22 @@ bool ha_parse_entity_state(const std::string &json, std::string &out) {
   }
   out = s;
   return true;
+}
+
+bool ha_parse_bool(const std::string &state, bool &out) {
+  std::string s;
+  s.reserve(state.size());
+  for (char c : state) s += (char)tolower((unsigned char)c);
+
+  if (s == "on" || s == "true" || s == "1" || s == "home" ||
+      s == "open" || s == "yes" || s == "plugged" || s == "connected") {
+    out = true;
+    return true;
+  }
+  if (s == "off" || s == "false" || s == "0" || s == "not_home" ||
+      s == "closed" || s == "no" || s == "unplugged" || s == "disconnected") {
+    out = false;
+    return true;
+  }
+  return false;
 }
