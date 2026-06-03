@@ -406,6 +406,9 @@ void HomeAssistantClient::applyEntity(int sinkId, int type, const String &state)
       case SINK_HOME_BATTERY_POWER:
         _homeBatteryPower = (int)lround(v); _homeBatteryPowerValid = true; break;
       case SINK_SOLAR:
+        // solar is a direct shaper input, so recompute immediately (mirrors mqtt.cpp).
+        // grid_ie is not, and live power arrives via SINK_SHAPER_LIVE_PWR's own row,
+        // so SINK_GRID_IE deliberately does not call shapeCurrent().
         solar = (int)lround(v);
         divert.update_state();
         if (shaper.getState()) shaper.shapeCurrent();
