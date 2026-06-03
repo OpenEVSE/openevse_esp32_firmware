@@ -13,6 +13,8 @@
 #include "event.h"
 #include <math.h>      // lround
 #include "input.h"     // global EvseManager `evse`
+#include "divert.h"          // global `solar`/`grid_ie` ints + `divert`; DIVERT_TYPE_*
+#include "current_shaper.h"  // global `shaper`
 
 #define HA_PENDING_STATE_TTL_MS   (5 * 60 * 1000UL)
 #define HA_REFRESH_MARGIN_SEC     300
@@ -33,6 +35,9 @@ enum HaSink {
   SINK_VEHICLE_CHARGING_STATE,
   SINK_HOME_BATTERY_SOC,
   SINK_HOME_BATTERY_POWER,
+  SINK_SOLAR,
+  SINK_GRID_IE,
+  SINK_SHAPER_LIVE_PWR,
 };
 
 struct HaPollEntry {
@@ -50,6 +55,20 @@ static bool gateVehicleHA() {
 // gates on isConnected(), which implies HA is enabled and authorized.
 static bool gateAlways() { return true; }
 
+// Control-path feeds mirror the MQTT subscription conditions: only active when the
+// feature is enabled, the source is HA, and (for divert) the divert type matches.
+static bool gateSolarHA() {
+  return config_divert_enabled() && divert_data_src == DATA_SRC_HOMEASSISTANT
+         && divert_type == DIVERT_TYPE_SOLAR;
+}
+static bool gateGridHA() {
+  return config_divert_enabled() && divert_data_src == DATA_SRC_HOMEASSISTANT
+         && divert_type == DIVERT_TYPE_GRID;
+}
+static bool gateShaperHA() {
+  return config_current_shaper_enabled() && shaper_data_src == DATA_SRC_HOMEASSISTANT;
+}
+
 static const HaPollEntry HA_POLL_TABLE[] = {
   { &ha_vehicle_soc,             gateVehicleHA, HA_NUMERIC, SINK_VEHICLE_SOC },
   { &ha_vehicle_range,           gateVehicleHA, HA_NUMERIC, SINK_VEHICLE_RANGE },
@@ -59,6 +78,9 @@ static const HaPollEntry HA_POLL_TABLE[] = {
   { &ha_vehicle_charging_state,  gateVehicleHA, HA_STRING,  SINK_VEHICLE_CHARGING_STATE },
   { &ha_battery_soc,             gateAlways,    HA_NUMERIC, SINK_HOME_BATTERY_SOC },
   { &ha_battery_power,           gateAlways,    HA_NUMERIC, SINK_HOME_BATTERY_POWER },
+  { &ha_solar,    gateSolarHA,  HA_NUMERIC, SINK_SOLAR },
+  { &ha_grid_ie,  gateGridHA,   HA_NUMERIC, SINK_GRID_IE },
+  { &ha_live_pwr, gateShaperHA, HA_NUMERIC, SINK_SHAPER_LIVE_PWR },
 };
 static const int HA_POLL_TABLE_LEN = sizeof(HA_POLL_TABLE) / sizeof(HA_POLL_TABLE[0]);
 
@@ -383,6 +405,18 @@ void HomeAssistantClient::applyEntity(int sinkId, int type, const String &state)
         _homeBatterySoc = (int)lround(v); _homeBatterySocValid = true; break;
       case SINK_HOME_BATTERY_POWER:
         _homeBatteryPower = (int)lround(v); _homeBatteryPowerValid = true; break;
+      case SINK_SOLAR:
+        solar = (int)lround(v);
+        divert.update_state();
+        if (shaper.getState()) shaper.shapeCurrent();
+        break;
+      case SINK_GRID_IE:
+        grid_ie = (int)lround(v);
+        divert.update_state();
+        break;
+      case SINK_SHAPER_LIVE_PWR:
+        shaper.setLivePwr((int)lround(v));
+        break;
       default: break;
     }
   } else if (type == HA_BOOL) {
