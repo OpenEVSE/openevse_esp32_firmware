@@ -84,6 +84,10 @@ extern String ha_vehicle_soc;
 extern String ha_vehicle_range;
 extern String ha_vehicle_eta;
 extern String ha_vehicle_charge_limit;
+extern String ha_battery_soc;
+extern String ha_battery_power;
+extern String ha_vehicle_plugged;
+extern String ha_vehicle_charging_state;
 
 // Time
 extern String time_zone;
