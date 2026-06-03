@@ -16,6 +16,7 @@ class HomeAssistantClient : public MicroTasks::Task {
 
     bool isConnected();
     void getStatus(JsonDocument &doc);
+    void addStatusFields(JsonDocument &doc); // merge display-only HA values into /status
 
     String beginAuthorize(const String &host, bool secure);
     bool handleCallback(const String &code, const String &state, String &error);
@@ -43,6 +44,12 @@ class HomeAssistantClient : public MicroTasks::Task {
     unsigned long _lastPoll;
     bool _pollInFlight;
     unsigned long _pollStart;
+
+    // Display-only values polled from HA (omitted from /status until a valid read).
+    int    _homeBatterySoc = 0;       bool _homeBatterySocValid = false;
+    int    _homeBatteryPower = 0;     bool _homeBatteryPowerValid = false;
+    bool   _vehiclePlugged = false;   bool _vehiclePluggedValid = false;
+    String _vehicleChargingState;     // empty => absent
 
     void exchangeCode(const String &code);
     void refreshTokens();

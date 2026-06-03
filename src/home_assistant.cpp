@@ -29,6 +29,10 @@ enum HaSink {
   SINK_VEHICLE_RANGE,
   SINK_VEHICLE_ETA,
   SINK_VEHICLE_CHARGE_LIMIT,
+  SINK_VEHICLE_PLUGGED,
+  SINK_VEHICLE_CHARGING_STATE,
+  SINK_HOME_BATTERY_SOC,
+  SINK_HOME_BATTERY_POWER,
 };
 
 struct HaPollEntry {
@@ -42,11 +46,19 @@ static bool gateVehicleHA() {
   return vehicle_data_src == VEHICLE_DATA_SRC_HOMEASSISTANT;
 }
 
+// Home-battery feeds poll whenever the entity is configured; the loop already
+// gates on isConnected(), which implies HA is enabled and authorized.
+static bool gateAlways() { return true; }
+
 static const HaPollEntry HA_POLL_TABLE[] = {
-  { &ha_vehicle_soc,          gateVehicleHA, HA_NUMERIC, SINK_VEHICLE_SOC },
-  { &ha_vehicle_range,        gateVehicleHA, HA_NUMERIC, SINK_VEHICLE_RANGE },
-  { &ha_vehicle_eta,          gateVehicleHA, HA_NUMERIC, SINK_VEHICLE_ETA },
-  { &ha_vehicle_charge_limit, gateVehicleHA, HA_NUMERIC, SINK_VEHICLE_CHARGE_LIMIT },
+  { &ha_vehicle_soc,             gateVehicleHA, HA_NUMERIC, SINK_VEHICLE_SOC },
+  { &ha_vehicle_range,           gateVehicleHA, HA_NUMERIC, SINK_VEHICLE_RANGE },
+  { &ha_vehicle_eta,             gateVehicleHA, HA_NUMERIC, SINK_VEHICLE_ETA },
+  { &ha_vehicle_charge_limit,    gateVehicleHA, HA_NUMERIC, SINK_VEHICLE_CHARGE_LIMIT },
+  { &ha_vehicle_plugged,         gateVehicleHA, HA_BOOL,    SINK_VEHICLE_PLUGGED },
+  { &ha_vehicle_charging_state,  gateVehicleHA, HA_STRING,  SINK_VEHICLE_CHARGING_STATE },
+  { &ha_battery_soc,             gateAlways,    HA_NUMERIC, SINK_HOME_BATTERY_SOC },
+  { &ha_battery_power,           gateAlways,    HA_NUMERIC, SINK_HOME_BATTERY_POWER },
 };
 static const int HA_POLL_TABLE_LEN = sizeof(HA_POLL_TABLE) / sizeof(HA_POLL_TABLE[0]);
 
@@ -89,6 +101,14 @@ void HomeAssistantClient::getStatus(JsonDocument &doc) {
   doc["expires"] = ha_token_expires;
 }
 
+void HomeAssistantClient::addStatusFields(JsonDocument &doc) {
+  if (_homeBatterySocValid)   doc["home_battery_soc"] = _homeBatterySoc;
+  if (_homeBatteryPowerValid) doc["home_battery_power"] = _homeBatteryPower;
+  if (_vehiclePluggedValid)   doc["vehicle_plugged"] = _vehiclePlugged;
+  if (_vehicleChargingState.length() > 0)
+    doc["vehicle_charging_state"] = _vehicleChargingState;
+}
+
 void HomeAssistantClient::notifyConfigChanged() {
   MicroTask.wakeTask(this);
 }
@@ -100,6 +120,10 @@ void HomeAssistantClient::disconnect() {
   _pendingStateTime = 0;
   _pendingState = "";
   _pendingClientId = "";
+  _homeBatterySocValid = false;
+  _homeBatteryPowerValid = false;
+  _vehiclePluggedValid = false;
+  _vehicleChargingState = "";
   // Disconnecting turns the integration off too, so isConnected() reads false.
   config_set("home_assistant_enabled", false);
   config_commit();
@@ -351,11 +375,29 @@ void HomeAssistantClient::applyEntity(int sinkId, int type, const String &state)
       case SINK_VEHICLE_RANGE:        evse.setVehicleRange((int)lround(v));         break;
       case SINK_VEHICLE_ETA:          evse.setVehicleEta((int)lround(v));           break; // seconds
       case SINK_VEHICLE_CHARGE_LIMIT: evse.setVehicleChargeLimit((int)lround(v));   break;
+      case SINK_HOME_BATTERY_SOC:
+        _homeBatterySoc = (int)lround(v); _homeBatterySocValid = true; break;
+      case SINK_HOME_BATTERY_POWER:
+        _homeBatteryPower = (int)lround(v); _homeBatteryPowerValid = true; break;
+      default: break;
+    }
+  } else if (type == HA_BOOL) {
+    bool b;
+    if (!ha_parse_bool(std::string(state.c_str()), b)) {
+      DBUGF("[ha] sink %d: unrecognized bool state, skipping", sinkId);
+      return;
+    }
+    switch (sinkId) {
+      case SINK_VEHICLE_PLUGGED: _vehiclePlugged = b; _vehiclePluggedValid = true; break;
+      default: break;
+    }
+  } else if (type == HA_STRING) {
+    // ha_parse_entity_state already rejected ""/unavailable/unknown, so `state` is real.
+    switch (sinkId) {
+      case SINK_VEHICLE_CHARGING_STATE: _vehicleChargingState = state; break;
       default: break;
     }
   } else {
-    // HA_BOOL and HA_STRING sinks are added in a later task; until then a non-numeric
-    // row is a no-op -- log it so a prematurely added row is visible during development.
     DBUGF("[ha] sink %d: value type %d has no sink yet", sinkId, type);
   }
 }
