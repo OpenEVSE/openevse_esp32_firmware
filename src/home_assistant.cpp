@@ -22,6 +22,34 @@
 #define HA_VEHICLE_POLL_MS        (30 * 1000UL)   // poll HA vehicle entities every 30 s
 #define HA_VEHICLE_TIMEOUT_MS     (30 * 1000UL)   // clear a stuck vehicle-poll chain
 
+enum HaValueType { HA_NUMERIC, HA_BOOL, HA_STRING };
+
+enum HaSink {
+  SINK_VEHICLE_SOC = 0,
+  SINK_VEHICLE_RANGE,
+  SINK_VEHICLE_ETA,
+  SINK_VEHICLE_CHARGE_LIMIT,
+};
+
+struct HaPollEntry {
+  const String *entity;   // config string; empty => skip
+  bool (*gate)();         // is this row active right now?
+  int  type;              // HaValueType
+  int  sinkId;            // HaSink
+};
+
+static bool gateVehicleHA() {
+  return vehicle_data_src == VEHICLE_DATA_SRC_HOMEASSISTANT;
+}
+
+static const HaPollEntry HA_POLL_TABLE[] = {
+  { &ha_vehicle_soc,          gateVehicleHA, HA_NUMERIC, SINK_VEHICLE_SOC },
+  { &ha_vehicle_range,        gateVehicleHA, HA_NUMERIC, SINK_VEHICLE_RANGE },
+  { &ha_vehicle_eta,          gateVehicleHA, HA_NUMERIC, SINK_VEHICLE_ETA },
+  { &ha_vehicle_charge_limit, gateVehicleHA, HA_NUMERIC, SINK_VEHICLE_CHARGE_LIMIT },
+};
+static const int HA_POLL_TABLE_LEN = sizeof(HA_POLL_TABLE) / sizeof(HA_POLL_TABLE[0]);
+
 HomeAssistantClient homeAssistant;
 
 static uint64_t ha_now_unix() {
@@ -34,9 +62,9 @@ HomeAssistantClient::HomeAssistantClient() :
   _pendingStateTime(0),
   _refreshInFlight(false),
   _lastRefreshAttempt(0),
-  _lastVehiclePoll(0),
-  _vehicleInFlight(false),
-  _vehiclePollStart(0)
+  _lastPoll(0),
+  _pollInFlight(false),
+  _pollStart(0)
 {
 }
 
@@ -103,22 +131,24 @@ unsigned long HomeAssistantClient::loop(MicroTasks::WakeReason reason) {
     }
   }
 
-  // Recover a stuck vehicle-poll chain (e.g. a request that never completed and
-  // no onResponse fired) -- otherwise _vehicleInFlight would block polling forever.
-  if (_vehicleInFlight && _vehiclePollStart != 0 &&
-      (millis() - _vehiclePollStart) > HA_VEHICLE_TIMEOUT_MS) {
-    DBUGLN("[ha] vehicle poll timed out, clearing in-flight flag");
-    _vehicleInFlight = false;
+  // Recover a stuck poll chain (a request that never completed and no onResponse
+  // fired) -- otherwise _pollInFlight would block polling forever.
+  if (_pollInFlight && _pollStart != 0 &&
+      (millis() - _pollStart) > HA_VEHICLE_TIMEOUT_MS) {
+    DBUGLN("[ha] poll chain timed out, clearing in-flight flag");
+    _pollInFlight = false;
   }
 
-  // Poll HA vehicle entities when HA is the selected vehicle-data source.
+  // Poll HA entities when connected and at least one configured feed selects HA.
   if (isConnected()
-      && vehicle_data_src == VEHICLE_DATA_SRC_HOMEASSISTANT
-      && !_vehicleInFlight
-      && (_lastVehiclePoll == 0 || (millis() - _lastVehiclePoll) >= HA_VEHICLE_POLL_MS)) {
-    _lastVehiclePoll = millis();
-    if (_lastVehiclePoll == 0) _lastVehiclePoll = 1; // 0 means "never polled"
-    pollVehicle();
+      && anyPollActive()
+      && !_pollInFlight
+      && (_lastPoll == 0 || (millis() - _lastPoll) >= HA_VEHICLE_POLL_MS)) {
+    _lastPoll = millis();
+    if (_lastPoll == 0) _lastPoll = 1; // 0 means "never polled"
+    _pollInFlight = true;
+    _pollStart = millis();
+    pollNext(0);
   }
 
   return HA_LOOP_INTERVAL_MS;
@@ -299,64 +329,72 @@ bool HomeAssistantClient::get(const String &path, MongooseHttpResponseHandler on
   return true;
 }
 
-void HomeAssistantClient::pollVehicle() {
-  _vehicleInFlight = true;
-  _vehiclePollStart = millis();
-  pollVehicleField(0);
+bool HomeAssistantClient::anyPollActive() {
+  for (int i = 0; i < HA_POLL_TABLE_LEN; i++) {
+    const HaPollEntry &e = HA_POLL_TABLE[i];
+    if (e.entity->length() > 0 && e.gate()) return true;
+  }
+  return false;
 }
 
-// Fetch one configured vehicle entity, set the matching EVSE value, then chain to
-// the next field. Sequential (one in-flight request at a time) to stay safe on the
-// shared MongooseHttpClient. An empty entity, a failed request, or an
-// unknown/unavailable state simply skips that field (keeps the last good value).
-void HomeAssistantClient::pollVehicleField(int field) {
-  String entity;
-  switch (field) {
-    case 0: entity = ha_vehicle_soc;          break;
-    case 1: entity = ha_vehicle_range;        break;
-    case 2: entity = ha_vehicle_eta;          break;
-    case 3: entity = ha_vehicle_charge_limit; break;
-    default: _vehicleInFlight = false; return; // chain complete (now at field 4)
+// Apply one parsed entity state to its sink, dispatched by sinkId.
+void HomeAssistantClient::applyEntity(int sinkId, int type, const String &state) {
+  if (type == HA_NUMERIC) {
+    char *endp = nullptr;
+    double v = strtod(state.c_str(), &endp);
+    if (endp == state.c_str()) {
+      DBUGF("[ha] sink %d: non-numeric state, skipping", sinkId);
+      return;
+    }
+    switch (sinkId) {
+      case SINK_VEHICLE_SOC:          evse.setVehicleStateOfCharge((int)lround(v)); break;
+      case SINK_VEHICLE_RANGE:        evse.setVehicleRange((int)lround(v));         break;
+      case SINK_VEHICLE_ETA:          evse.setVehicleEta((int)lround(v));           break;
+      case SINK_VEHICLE_CHARGE_LIMIT: evse.setVehicleChargeLimit((int)lround(v));   break;
+      default: break;
+    }
   }
+  // HA_BOOL and HA_STRING sinks are added in Task 4.
+}
 
-  if (entity.length() == 0) {
-    pollVehicleField(field + 1); // not configured -> skip to next
-    return;
-  }
+// Fetch one active+configured entity, apply it, then chain to the next. Sequential
+// (one in-flight request at a time) to stay safe on the shared MongooseHttpClient.
+// An empty entity, inactive gate, failed request, or unparseable state simply skips
+// that row (keeps the last good value).
+void HomeAssistantClient::pollNext(int index) {
+  for (int i = index; i < HA_POLL_TABLE_LEN; i++) {
+    const HaPollEntry &e = HA_POLL_TABLE[i];
+    if (e.entity->length() == 0 || !e.gate()) {
+      continue; // not configured / not active -> skip
+    }
 
-  String path = "/api/states/" + entity; // entity IDs are URL-safe (sensor.x_y)
-  int next = field + 1;
-  bool sent = get(path, [this, field, next](MongooseHttpClientResponse *response) {
-    if (response->respCode() == 200) {
-      MongooseString body = response->body();
-      std::string state;
-      if (ha_parse_entity_state(std::string((const char *)body, body.length()), state)) {
-        char *endp = nullptr;
-        double v = strtod(state.c_str(), &endp);
-        if (endp == state.c_str()) {
-          // non-numeric state (e.g. "charging") -> skip, don't write 0 to the EVSE
-          DBUGF("[ha] vehicle field %d: non-numeric state, skipping", field);
+    String path = "/api/states/" + *e.entity; // entity IDs are URL-safe (sensor.x_y)
+    int next = i + 1;
+    int sinkId = e.sinkId;
+    int type = e.type;
+    bool sent = get(path, [this, sinkId, type, next](MongooseHttpClientResponse *response) {
+      if (response->respCode() == 200) {
+        MongooseString body = response->body();
+        std::string state;
+        if (ha_parse_entity_state(std::string((const char *)body, body.length()), state)) {
+          applyEntity(sinkId, type, String(state.c_str()));
         } else {
-          switch (field) {
-            case 0: evse.setVehicleStateOfCharge((int)lround(v)); break;
-            case 1: evse.setVehicleRange((int)lround(v));         break;
-            case 2: evse.setVehicleEta((int)lround(v));           break; // seconds
-            case 3: evse.setVehicleChargeLimit((int)lround(v));   break;
-          }
+          DBUGF("[ha] sink %d: state unavailable/unparseable", sinkId);
         }
       } else {
-        DBUGF("[ha] vehicle field %d: state unavailable/unparseable", field);
+        DBUGF("[ha] sink %d: HTTP %d", sinkId, response->respCode());
       }
-    } else {
-      DBUGF("[ha] vehicle field %d: HTTP %d", field, response->respCode());
-    }
-    pollVehicleField(next); // advance regardless of this field's outcome
-  });
+      pollNext(next); // advance regardless of this row's outcome
+    });
 
-  if (!sent) {
-    // get() declined (refresh due / not connected): onResponse won't fire, so end
-    // the chain now rather than stranding _vehicleInFlight until the timeout. The
-    // next poll cycle retries once loop() has refreshed the token.
-    _vehicleInFlight = false;
+    if (!sent) {
+      // get() declined (refresh due / not connected): onResponse won't fire, so end
+      // the chain now rather than stranding _pollInFlight until the timeout.
+      _pollInFlight = false;
+    }
+    return; // one in-flight request at a time; the callback resumes the walk
   }
+
+  // Walked off the end with nothing left to send -> chain complete.
+  _pollInFlight = false;
 }

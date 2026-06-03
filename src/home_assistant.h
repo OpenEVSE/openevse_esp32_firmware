@@ -40,15 +40,17 @@ class HomeAssistantClient : public MicroTasks::Task {
 
     bool _refreshInFlight;
     unsigned long _lastRefreshAttempt;
-    unsigned long _lastVehiclePoll;
-    bool _vehicleInFlight;
-    unsigned long _vehiclePollStart;
+    unsigned long _lastPoll;
+    bool _pollInFlight;
+    unsigned long _pollStart;
 
     void exchangeCode(const String &code);
     void refreshTokens();
     void storeTokens(const HaTokens &t);
-    void pollVehicle();
-    void pollVehicleField(int field); // 0=soc, 1=range, 2=eta; chains to the next
+
+    bool anyPollActive();          // true if at least one table row is active+configured
+    void pollNext(int index);      // walk the poll table from `index`
+    void applyEntity(int sinkId, int type, const String &state);
 };
 
 extern HomeAssistantClient homeAssistant;
