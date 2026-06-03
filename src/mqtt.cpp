@@ -204,8 +204,8 @@ void Mqtt::subscribeTopics() {
   _mqttclient.subscribe(mqtt_sub_topic);
   yield();
 
-  // Divert mode related
-  if (config_divert_enabled()) {
+  // Divert mode related (skip when the feed is sourced from Home Assistant)
+  if (config_divert_enabled() && divert_data_src == DATA_SRC_MQTT) {
     if (divert_type == DIVERT_TYPE_SOLAR && mqtt_solar != "") {
       _mqttclient.subscribe(mqtt_solar); yield();
     }
@@ -214,8 +214,8 @@ void Mqtt::subscribeTopics() {
     }
   }
 
-  // Current shaper related
-  if (config_current_shaper_enabled()) {
+  // Current shaper related (skip when sourced from Home Assistant)
+  if (config_current_shaper_enabled() && shaper_data_src == DATA_SRC_MQTT) {
     if (mqtt_live_pwr != "" && mqtt_live_pwr != mqtt_grid_ie) {
       _mqttclient.subscribe(mqtt_live_pwr); yield();
     }
@@ -296,7 +296,7 @@ void Mqtt::handleMqttMessage(MongooseString topic, MongooseString payload) {
   DBUGLN("Payload: " + payload_str);
 
   // Logic from old mqttmsg_callback
-  if (topic_string == mqtt_solar){
+  if (topic_string == mqtt_solar && divert_data_src == DATA_SRC_MQTT){
     solar = payload_str.toInt();
     DBUGF("solar:%dW", solar);
     divert.update_state();
@@ -304,7 +304,7 @@ void Mqtt::handleMqttMessage(MongooseString topic, MongooseString payload) {
       shaper.shapeCurrent();
     }
   }
-  else if (topic_string == mqtt_grid_ie) {
+  else if (topic_string == mqtt_grid_ie && divert_data_src == DATA_SRC_MQTT) {
     grid_ie = payload_str.toInt();
     DBUGF("grid:%dW", grid_ie);
     divert.update_state();
@@ -312,7 +312,7 @@ void Mqtt::handleMqttMessage(MongooseString topic, MongooseString payload) {
       shaper.setLivePwr(grid_ie);
     }
   }
-  else if (topic_string == mqtt_live_pwr) {
+  else if (topic_string == mqtt_live_pwr && shaper_data_src == DATA_SRC_MQTT) {
       shaper.setLivePwr(payload_str.toInt());
       DBUGF("shaper: Live Pwr:%dW", shaper.getLivePwr());
   }
