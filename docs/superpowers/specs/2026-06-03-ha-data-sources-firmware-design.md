@@ -99,8 +99,8 @@ A single static `_pollTable[]` lists every pollable entity. `loop()` polls when 
 
 | Key | Short | Type | Default | Notes |
 |---|---|---|---|---|
-| `divert_data_src` | `dds` | `uint8_t` | `0` | `0`=MQTT, `1`=Home Assistant |
-| `shaper_data_src` | `sds` | `uint8_t` | `0` | `0`=MQTT, `1`=Home Assistant |
+| `divert_data_src` | `dvs` | `uint8_t` | `0` | `0`=MQTT, `1`=Home Assistant (NB: `dds` is already taken by `divert_decay_smoothing_time`) |
+| `shaper_data_src` | `shs` | `uint8_t` | `0` | `0`=MQTT, `1`=Home Assistant |
 | `ha_solar` | `hso` | `String` | `""` | entity ID, used when `divert_type==SOLAR` |
 | `ha_grid_ie` | `hgi` | `String` | `""` | entity ID, used when `divert_type==GRID` |
 | `ha_live_pwr` | `hlp` | `String` | `""` | entity ID (shaper live power) |
