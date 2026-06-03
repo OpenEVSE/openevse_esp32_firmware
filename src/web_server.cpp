@@ -42,6 +42,7 @@ typedef const __FlashStringHelper *fstr_t;
 #include "scheduler.h"
 #include "rfid.h"
 #include "current_shaper.h"
+#include "home_assistant.h"
 #include "evse_man.h"
 #include "limit.h"
 
@@ -300,6 +301,8 @@ void buildStatus(DynamicJsonDocument &doc) {
       doc["vehicle_charge_limit"] = evse.getVehicleChargeLimit();
     }
   }
+
+  homeAssistant.addStatusFields(doc);
 
   DBUGF("/status ArduinoJson size: %dbytes", doc.size());
 }
