@@ -132,6 +132,18 @@ enum vehicle_data_src {
   VEHICLE_DATA_SRC_HOMEASSISTANT
 };
 
+// Per-feature data source for divert/shaper feeds (solar, grid, live power).
+enum data_src {
+  DATA_SRC_MQTT = 0,          // default: MQTT topic (existing behavior)
+  DATA_SRC_HOMEASSISTANT = 1, // poll a Home Assistant entity instead
+};
+
+extern uint8_t divert_data_src;
+extern uint8_t shaper_data_src;
+extern String ha_solar;
+extern String ha_grid_ie;
+extern String ha_live_pwr;
+
 // 24-bits of Flags
 extern uint32_t flags;
 

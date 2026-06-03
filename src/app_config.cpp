@@ -144,6 +144,11 @@ String ha_vehicle_plugged;
 String ha_vehicle_charging_state;
 String ha_battery_soc;
 String ha_battery_power;
+uint8_t divert_data_src;
+uint8_t shaper_data_src;
+String ha_solar;
+String ha_grid_ie;
+String ha_live_pwr;
 
 // Vehicle
 uint8_t vehicle_data_src;
@@ -278,6 +283,11 @@ ConfigOpt *opts[] =
   new ConfigOptDefinition<String>(ha_vehicle_charging_state, "", "ha_vehicle_charging_state", "hvg"),
   new ConfigOptDefinition<String>(ha_battery_soc, "", "ha_battery_soc", "hbs"),
   new ConfigOptDefinition<String>(ha_battery_power, "", "ha_battery_power", "hbp"),
+  new ConfigOptDefinition<uint8_t>(divert_data_src, 0, "divert_data_src", "dvs"),
+  new ConfigOptDefinition<uint8_t>(shaper_data_src, 0, "shaper_data_src", "shs"),
+  new ConfigOptDefinition<String>(ha_solar, "", "ha_solar", "hso"),
+  new ConfigOptDefinition<String>(ha_grid_ie, "", "ha_grid_ie", "hgi"),
+  new ConfigOptDefinition<String>(ha_live_pwr, "", "ha_live_pwr", "hlp"),
   new ConfigOptVirtualMaskedBool(flagsOpt, flagsChanged, CONFIG_SERVICE_HOMEASSISTANT, CONFIG_SERVICE_HOMEASSISTANT, "home_assistant_enabled", "hae"),
 
 // RFID storage
@@ -445,7 +455,8 @@ void config_changed(String name)
     teslaClient.setVehicleId(tesla_vehicle_id);
   } else if(name.startsWith("tesla_")) {
     teslaClient.setCredentials(tesla_access_token, tesla_refresh_token, tesla_created_at, tesla_expires_in);
-  } else if(name.startsWith("ha_") || name == "home_assistant_enabled" || name == "vehicle_data_src") {
+  } else if(name.startsWith("ha_") || name == "home_assistant_enabled" || name == "vehicle_data_src"
+            || name == "divert_data_src" || name == "shaper_data_src") {
     homeAssistant.notifyConfigChanged();
 #if RGB_LED
   } else if(name == "led_brightness") {
