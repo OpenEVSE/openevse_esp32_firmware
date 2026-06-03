@@ -466,6 +466,10 @@ void handleStatusPost(MongooseHttpServerRequest *request, MongooseHttpServerResp
       DBUGF("voltage:%.1f", volts);
       evse.setVoltage(volts);
     }
+    // NOTE: these solar/grid/live-power pushes intentionally bypass the
+    // divert_data_src/shaper_data_src arbitration. An explicit POST is a deliberate
+    // override by the caller (unlike the MQTT background source, which is muted when
+    // the feed is HA-sourced). There is no DATA_SRC_HTTP for these feeds, by design.
     if(doc.containsKey("shaper_live_pwr"))
     {
       double shaper_live_pwr = doc["shaper_live_pwr"];
