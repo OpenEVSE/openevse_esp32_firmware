@@ -204,8 +204,8 @@ void Mqtt::subscribeTopics() {
   _mqttclient.subscribe(mqtt_sub_topic);
   yield();
 
-  // Divert mode related (skip when the feed is sourced from Home Assistant)
-  if (config_divert_enabled() && divert_data_src == DATA_SRC_MQTT) {
+  // Divert mode related (arbitration is in the message handler, like vehicle topics)
+  if (config_divert_enabled()) {
     if (divert_type == DIVERT_TYPE_SOLAR && mqtt_solar != "") {
       _mqttclient.subscribe(mqtt_solar); yield();
     }
@@ -214,8 +214,8 @@ void Mqtt::subscribeTopics() {
     }
   }
 
-  // Current shaper related (skip when sourced from Home Assistant)
-  if (config_current_shaper_enabled() && shaper_data_src == DATA_SRC_MQTT) {
+  // Current shaper related (arbitration is in the message handler, like vehicle topics)
+  if (config_current_shaper_enabled()) {
     if (mqtt_live_pwr != "" && mqtt_live_pwr != mqtt_grid_ie) {
       _mqttclient.subscribe(mqtt_live_pwr); yield();
     }
@@ -295,8 +295,10 @@ void Mqtt::handleMqttMessage(MongooseString topic, MongooseString payload) {
   DBUGLN("Topic: " + topic_string);
   DBUGLN("Payload: " + payload_str);
 
+  // Solar/grid/live-power are ignored here when sourced from Home Assistant
+  // (the HA poll engine writes them instead); mirrors the vehicle_data_src guard below.
   // Logic from old mqttmsg_callback
-  if (topic_string == mqtt_solar && divert_data_src == DATA_SRC_MQTT){
+  if (topic_string == mqtt_solar && divert_data_src == DATA_SRC_MQTT) {
     solar = payload_str.toInt();
     DBUGF("solar:%dW", solar);
     divert.update_state();
