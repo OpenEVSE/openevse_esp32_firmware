@@ -135,12 +135,15 @@ TEST_CASE("ha_parse_bool recognizes truthy and falsey states") {
   CHECK(ha_parse_bool("0", b));         CHECK(b == false);
   CHECK(ha_parse_bool("not_home", b));  CHECK(b == false);
   CHECK(ha_parse_bool("unplugged", b)); CHECK(b == false);
+  CHECK(ha_parse_bool("open", b));          CHECK(b == true);
+  CHECK(ha_parse_bool("connected", b));     CHECK(b == true);
+  CHECK(ha_parse_bool("disconnected", b));  CHECK(b == false);
 }
 
 TEST_CASE("ha_parse_bool rejects unrecognized states") {
   bool b = true;
-  CHECK_FALSE(ha_parse_bool("charging", b));
-  CHECK_FALSE(ha_parse_bool("", b));
-  CHECK_FALSE(ha_parse_bool("42.5", b));
-  CHECK_FALSE(ha_parse_bool("maybe", b));
+  CHECK_FALSE(ha_parse_bool("charging", b));   CHECK(b == true); // out untouched
+  CHECK_FALSE(ha_parse_bool("", b));            CHECK(b == true);
+  CHECK_FALSE(ha_parse_bool("42.5", b));        CHECK(b == true);
+  CHECK_FALSE(ha_parse_bool("maybe", b));       CHECK(b == true);
 }

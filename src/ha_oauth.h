@@ -47,9 +47,11 @@ bool ha_parse_token_response(const std::string &json, HaTokens &out);
 bool ha_parse_entity_state(const std::string &json, std::string &out);
 
 // Map a Home Assistant state string (e.g. a binary_sensor's "on"/"off") to a bool.
-// Recognized: on/true/1/home/open/yes -> true; off/false/0/not_home/closed/no/unplugged
-// -> false (case-insensitive). Returns false (and leaves `out` untouched) for any
-// other state, so callers skip it and keep the last good value.
+// Case-insensitive. Truthy: on/true/1/home/open/yes/plugged/connected.
+// Falsey: off/false/0/not_home/closed/no/unplugged/disconnected. Returns false (and
+// leaves `out` untouched) for any other state, so callers skip it and keep the last
+// good value. NB: plugged/connected/unplugged/disconnected are convenience tokens, not
+// standard HA binary_sensor states (which are on/off) -- a caller may pass either.
 bool ha_parse_bool(const std::string &state, bool &out);
 
 // Absolute expiry = now_unix + expires_in (0 if expires_in <= 0).
