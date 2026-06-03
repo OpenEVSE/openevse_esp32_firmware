@@ -1178,7 +1178,9 @@ void onWsConnect(MongooseHttpWebSocketConnection *connection)
 {
   DBUGF("New client connected over ws");
   // pushing states to client
-  const size_t capacity = JSON_OBJECT_SIZE(40) + 1024;
+  // headroom for the HA display-only fields (home_battery_soc/power,
+  // vehicle_plugged/charging_state) appended at the end of buildStatus().
+  const size_t capacity = JSON_OBJECT_SIZE(48) + 1024;
   DynamicJsonDocument doc(capacity);
   buildStatus(doc);
   web_server_event(doc);
