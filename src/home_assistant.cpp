@@ -19,8 +19,8 @@
 #define HA_REFRESH_RETRY_MS       (60 * 1000UL)
 #define HA_REFRESH_TIMEOUT_MS     (30 * 1000UL)     // clear a stuck in-flight refresh
 #define HA_LOOP_INTERVAL_MS       (30 * 1000UL)
-#define HA_VEHICLE_POLL_MS        (30 * 1000UL)   // poll HA vehicle entities every 30 s
-#define HA_VEHICLE_TIMEOUT_MS     (30 * 1000UL)   // clear a stuck vehicle-poll chain
+#define HA_POLL_MS                (30 * 1000UL)   // poll HA entities every 30 s
+#define HA_POLL_TIMEOUT_MS        (30 * 1000UL)   // clear a stuck poll chain
 
 enum HaValueType { HA_NUMERIC, HA_BOOL, HA_STRING };
 
@@ -134,7 +134,7 @@ unsigned long HomeAssistantClient::loop(MicroTasks::WakeReason reason) {
   // Recover a stuck poll chain (a request that never completed and no onResponse
   // fired) -- otherwise _pollInFlight would block polling forever.
   if (_pollInFlight && _pollStart != 0 &&
-      (millis() - _pollStart) > HA_VEHICLE_TIMEOUT_MS) {
+      (millis() - _pollStart) > HA_POLL_TIMEOUT_MS) {
     DBUGLN("[ha] poll chain timed out, clearing in-flight flag");
     _pollInFlight = false;
   }
@@ -143,7 +143,7 @@ unsigned long HomeAssistantClient::loop(MicroTasks::WakeReason reason) {
   if (isConnected()
       && anyPollActive()
       && !_pollInFlight
-      && (_lastPoll == 0 || (millis() - _lastPoll) >= HA_VEHICLE_POLL_MS)) {
+      && (_lastPoll == 0 || (millis() - _lastPoll) >= HA_POLL_MS)) {
     _lastPoll = millis();
     if (_lastPoll == 0) _lastPoll = 1; // 0 means "never polled"
     _pollInFlight = true;
@@ -349,12 +349,15 @@ void HomeAssistantClient::applyEntity(int sinkId, int type, const String &state)
     switch (sinkId) {
       case SINK_VEHICLE_SOC:          evse.setVehicleStateOfCharge((int)lround(v)); break;
       case SINK_VEHICLE_RANGE:        evse.setVehicleRange((int)lround(v));         break;
-      case SINK_VEHICLE_ETA:          evse.setVehicleEta((int)lround(v));           break;
+      case SINK_VEHICLE_ETA:          evse.setVehicleEta((int)lround(v));           break; // seconds
       case SINK_VEHICLE_CHARGE_LIMIT: evse.setVehicleChargeLimit((int)lround(v));   break;
       default: break;
     }
+  } else {
+    // HA_BOOL and HA_STRING sinks are added in a later task; until then a non-numeric
+    // row is a no-op -- log it so a prematurely added row is visible during development.
+    DBUGF("[ha] sink %d: value type %d has no sink yet", sinkId, type);
   }
-  // HA_BOOL and HA_STRING sinks are added in Task 4.
 }
 
 // Fetch one active+configured entity, apply it, then chain to the next. Sequential
