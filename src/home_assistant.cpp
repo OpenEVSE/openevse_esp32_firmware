@@ -104,9 +104,13 @@ void HomeAssistantClient::getStatus(JsonDocument &doc) {
 void HomeAssistantClient::addStatusFields(JsonDocument &doc) {
   if (_homeBatterySocValid)   doc["home_battery_soc"] = _homeBatterySoc;
   if (_homeBatteryPowerValid) doc["home_battery_power"] = _homeBatteryPower;
-  if (_vehiclePluggedValid)   doc["vehicle_plugged"] = _vehiclePlugged;
-  if (_vehicleChargingState.length() > 0)
-    doc["vehicle_charging_state"] = _vehicleChargingState;
+  // Vehicle extras only while HA is the selected vehicle data source -- avoids
+  // emitting stale plugged/charging values after the source switches away.
+  if (vehicle_data_src == VEHICLE_DATA_SRC_HOMEASSISTANT) {
+    if (_vehiclePluggedValid)   doc["vehicle_plugged"] = _vehiclePlugged;
+    if (_vehicleChargingState.length() > 0)
+      doc["vehicle_charging_state"] = _vehicleChargingState;
+  }
 }
 
 void HomeAssistantClient::notifyConfigChanged() {
@@ -398,7 +402,7 @@ void HomeAssistantClient::applyEntity(int sinkId, int type, const String &state)
       default: break;
     }
   } else {
-    DBUGF("[ha] sink %d: value type %d has no sink yet", sinkId, type);
+    DBUGF("[ha] sink %d: unknown value type %d (bug)", sinkId, type);
   }
 }
 
