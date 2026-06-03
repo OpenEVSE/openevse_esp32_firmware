@@ -107,7 +107,7 @@ A single static `_pollTable[]` lists every pollable entity. `loop()` polls when 
 | `ha_battery_soc` | `hbs` | `String` | `""` | entity ID (home battery %) |
 | `ha_battery_power` | `hbp` | `String` | `""` | entity ID (home battery W) |
 | `ha_vehicle_plugged` | `hvp` | `String` | `""` | binary entity ID |
-| `ha_vehicle_charging_state` | `hcs` | `String` | `""` | entity ID |
+| `ha_vehicle_charging_state` | `hvg` | `String` | `""` | entity ID |
 
 The seven `ha_*` keys auto-route to `notifyConfigChanged()` via the existing `app_config.cpp:440` dispatch. The two `*_data_src` keys do **not** match `ha_*`, so add a dispatch branch that calls `homeAssistant.notifyConfigChanged()` (re-arms polling) — and, since changing the source also changes whether MQTT should subscribe, the same branch must re-evaluate MQTT subscriptions (Phase 2; e.g. `mqttClient.notifyConfigChanged()` or equivalent re-subscribe).
 
