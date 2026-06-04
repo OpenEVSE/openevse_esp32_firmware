@@ -25,9 +25,47 @@ TimeManager::TimeManager() :
   _timeHost(NULL),
   _sntp(),
   _nextCheckTime(0),
+  _fetchStartTime(0),
+  _retryCount(0),
   _fetchingTime(false),
-  _setTheTime(false)
+  _setTheTime(false),
+  _lastSyncTime(0)
 {
+}
+
+unsigned long TimeManager::retryDelay()
+{
+  // Exponential back-off: 10 s, 30 s, 90 s, 5 min, 30 min (cap)
+  static const unsigned long delays[] = {
+    10 * 1000UL,
+    30 * 1000UL,
+    90 * 1000UL,
+     5 * 60 * 1000UL,
+    30 * 60 * 1000UL,
+  };
+  uint8_t idx = _retryCount < sizeof(delays) / sizeof(delays[0])
+                  ? _retryCount
+                  : (uint8_t)(sizeof(delays) / sizeof(delays[0]) - 1);
+  return delays[idx];
+}
+
+const char *TimeManager::getNtpStatus()
+{
+  if (!_sntpEnabled)      return "disabled";
+  if (_fetchingTime)      return "connecting";
+  if (_retryCount > 0)    return "retry";
+  if (_lastSyncTime > 0)  return "synchronized";
+  return "waiting";
+}
+
+int32_t TimeManager::getNextSyncMs()
+{
+  if (!_sntpEnabled || _timeHost == NULL) return -1;
+  if (_fetchingTime)                      return 0;
+  if (_nextCheckTime == 0)                return -1;
+  int64_t diff = (int64_t)_nextCheckTime - (int64_t)millis();
+  if (diff > INT32_MAX) return INT32_MAX;
+  return (int32_t)(diff > 0 ? diff : 0);
 }
 
 void TimeManager::begin()
@@ -38,7 +76,7 @@ void TimeManager::begin()
 void TimeManager::setHost(const char *host)
 {
   _timeHost = host;
-  checkNow();
+  checkNow();   // checkNow() already resets _fetchingTime, _retryCount
 }
 
 bool TimeManager::setTimeZone(String tz)
@@ -79,9 +117,11 @@ void TimeManager::setup()
   setTimeZone(time_zone);
 
   _sntp.onError([this](uint8_t err) {
-    DBUGF("Got error %u", err);
+    DBUGF("NTP error %u (attempt %u)", err, _retryCount + 1);
     _fetchingTime = false;
-    _nextCheckTime = millis() + 10 * 1000;
+    unsigned long delay = retryDelay();
+    _retryCount++;
+    _nextCheckTime = millis() + delay;
     MicroTask.wakeTask(this);
   });
 }
@@ -142,6 +182,27 @@ unsigned long TimeManager::loop(MicroTasks::WakeReason reason)
     }
   }
 
+  // Watchdog: if an in-flight request has gone silent (MG_EV_CLOSE fired
+  // without MG_SNTP_REPLY or MG_SNTP_FAILED), unstick _fetchingTime.
+  if(_fetchingTime)
+  {
+    unsigned long elapsed = millis() - _fetchStartTime;
+    if(elapsed >= SNTP_FETCH_TIMEOUT)
+    {
+      DBUGF("NTP fetch timed out after %lums", elapsed);
+      _fetchingTime = false;
+      unsigned long delay = retryDelay();
+      _retryCount++;
+      _nextCheckTime = millis() + delay;
+      // fall through to the scheduling block below
+    }
+    else
+    {
+      // Wake when the timeout expires so the watchdog above can fire
+      return (unsigned long)(SNTP_FETCH_TIMEOUT - elapsed);
+    }
+  }
+
   DBUGVAR(_nextCheckTime);
   if(_sntpEnabled &&
     NULL != _timeHost &&
@@ -154,17 +215,38 @@ unsigned long TimeManager::loop(MicroTasks::WakeReason reason)
       delay <= 0)
     {
       _fetchingTime = true;
+      _fetchStartTime = millis();
       _nextCheckTime = 0;
 
       DBUGF("Trying to get time from %s", _timeHost);
-      _sntp.getTime(_timeHost, [this](struct timeval newTime)
+      bool started = _sntp.getTime(_timeHost, [this](struct timeval newTime)
       {
         setTime(newTime, _timeHost);
 
-        _fetchingTime = false;
+        _fetchingTime  = false;
+        _retryCount    = 0;
+        _lastSyncTime  = newTime.tv_sec;   // use NTP ts directly
         _nextCheckTime = millis() + TIME_POLL_TIME;
         MicroTask.wakeTask(this);
       });
+
+      if(started)
+      {
+        // Return the watchdog deadline so the task self-wakes if the
+        // callback never fires (stale _nc, DNS failure, dropped packet)
+        ret = SNTP_FETCH_TIMEOUT;
+      }
+      else
+      {
+        // getTime() returned false — _nc is still set from a previous
+        // connection that Mongoose hasn't closed yet.  Back off and retry.
+        DBUGLN("NTP: getTime() could not start, will retry");
+        _fetchingTime = false;
+        unsigned long backoff = retryDelay();
+        _retryCount++;
+        _nextCheckTime = millis() + backoff;
+        ret = backoff;
+      }
     } else {
       ret = delay > 0 ? (unsigned long)delay : 0;
     }
@@ -230,7 +312,7 @@ void TimeManager::setSntpEnabled(bool enabled)
   {
     _sntpEnabled = enabled;
     if(enabled) {
-      checkNow();
+      checkNow();   // fresh start; checkNow() clears retry state
     }
   }
 }
