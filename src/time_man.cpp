@@ -188,7 +188,7 @@ unsigned long TimeManager::loop(MicroTasks::WakeReason reason)
       _nextCheckTime = 0;
 
       DBUGF("Trying to get time from %s", _timeHost);
-      _sntp.getTime(_timeHost, [this](struct timeval newTime)
+      bool started = _sntp.getTime(_timeHost, [this](struct timeval newTime)
       {
         setTime(newTime, _timeHost);
 
@@ -198,6 +198,25 @@ unsigned long TimeManager::loop(MicroTasks::WakeReason reason)
         _nextCheckTime = millis() + TIME_POLL_TIME;
         MicroTask.wakeTask(this);
       });
+
+      if(started)
+      {
+        // Return the watchdog timeout so the task wakes itself if the success
+        // or error callback never fires (DNS failure, MG_EV_CLOSE without
+        // MG_SNTP_FAILED, etc.) — without this the task returns Infinate and
+        // sleeps forever, leaving _fetchingTime stuck true indefinitely.
+        ret = SNTP_FETCH_TIMEOUT;
+      }
+      else
+      {
+        // getTime() could not start the request: either _nc is still set from
+        // the previous sync (MG_EV_CLOSE hasn't fired yet) or Mongoose itself
+        // rejected it.  Reset and retry in 2 s rather than sleeping forever.
+        DBUGLN("NTP: getTime() could not start request, will retry in 2s");
+        _fetchingTime = false;
+        _nextCheckTime = millis() + 2000;
+        ret = 2000;
+      }
     } else {
       ret = delay > 0 ? (unsigned long)delay : 0;
     }
