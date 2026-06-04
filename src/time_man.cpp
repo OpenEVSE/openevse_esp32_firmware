@@ -194,7 +194,10 @@ unsigned long TimeManager::loop(MicroTasks::WakeReason reason)
 
         _fetchingTime = false;
         _retryCount = 0;
-        _lastSyncTime = time(NULL);
+        // Use the NTP timestamp directly — time(NULL) may transiently return
+        // the pre-existing clock value on some ESP32 SDK builds immediately
+        // after settimeofday(), causing _lastSyncTime to appear unchanged.
+        _lastSyncTime = newTime.tv_sec;
         _nextCheckTime = millis() + TIME_POLL_TIME;
         MicroTask.wakeTask(this);
       });

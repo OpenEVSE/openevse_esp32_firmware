@@ -118,6 +118,7 @@ class NetManagerTask : public MicroTasks::Task
     int _wifiButtonState;
     unsigned long _wifiButtonTimeOut;
     bool _apMessage;
+    unsigned long _wifiCheckLostAt;
 
     #ifdef ENABLE_WIRED_ETHERNET
     bool _ethConnected;
