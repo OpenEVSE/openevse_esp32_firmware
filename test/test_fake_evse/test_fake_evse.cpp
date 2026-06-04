@@ -87,6 +87,13 @@ TEST_CASE("$GS reports decimal state + elapsed") {
   CHECK(t[2] == "0");
 }
 
+TEST_CASE("$SC clamps pilot to capacity range") {
+  FakeEvseState st;                 // min_a=6, max_cfg_a=32
+  fake_evse_handle(st, "$SC 99");   CHECK(st.pilot_a == 32);   // clamped high
+  fake_evse_handle(st, "$SC 1");    CHECK(st.pilot_a == 6);    // clamped low
+  fake_evse_handle(st, "$SC 16");   CHECK(st.pilot_a == 16);   // in range
+}
+
 TEST_CASE("$SC sets pilot and echoes it; $GG follows charge state") {
   FakeEvseState st; st.set_vehicle(true);
   auto sc = toks(fake_evse_handle(st, "$SC 24"));

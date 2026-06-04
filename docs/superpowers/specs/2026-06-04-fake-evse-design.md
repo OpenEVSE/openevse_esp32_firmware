@@ -83,7 +83,7 @@ expectations against `RapiSender.h`). Token formats below are taken from the bun
 
 | Cmd  | Meaning | Fake reply (`$OK` + tokens) |
 |------|---------|------------------------------|
-| `$GV` | version | `firmware protocol` (e.g. `8.2.0 5.1.0`) |
+| `$GV` | version | `firmware protocol` (e.g. `8.2.0 4.0.1`; protocol 4.0.1 selects the decimal/3-token `$GS` form) |
 | `$GS` | status | `evse_state session_elapsed pilot_state vflags` |
 | `$GG` | charge A/V | `milliAmps milliVolts` (0 unless charging) |
 | `$GU` | energy | `wattSeconds wattHoursAccumulated` (session = ws/3600; total = wh/1000) |
@@ -109,7 +109,7 @@ over-temp**.
 
 Transition rules:
 - `vehicle=0` → state **1** (Not Connected). Charging current 0.
-- `vehicle=1` and not enabled / sleeping → state **2** (Connected, not charging).
+- `vehicle=1` and not enabled / sleeping → state **254** (Sleeping). (state 2 Connected is not separately emitted; a plugged-but-paused EVSE reports 254 Sleeping)
 - `vehicle=1` and enabled (via `$FE`, i.e. the GUI "start") and no fault → state **3**
   (Charging). Charging current = last `$SC` value (clamped to capacity).
 - A fault injected via the endpoint → the corresponding fault state; clears to 1/2 when set
@@ -136,7 +136,7 @@ POST /fakeevse
 
 GET /fakeevse
   → 200 { state, pilot, amps, volts, session_elapsed, session_wh, total_kwh,
-          vehicle, enabled, sleeping, fault, gfci_count, nognd_count, stuck_count }
+          vehicle, charging_allowed, fault }
 ```
 
 Charging current / start / stop are **not** in this endpoint — they ride the real RAPI path

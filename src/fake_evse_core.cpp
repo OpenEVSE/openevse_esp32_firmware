@@ -87,8 +87,13 @@ std::string fake_evse_handle(FakeEvseState &st, const std::string &cmd) {
     return rapi_frame("$OK 0 0 0 0");
   } else if (c == "$GI") {                          // serial
     return rapi_frame("$OK FAKE-0001");
-  } else if (c == "$SC") {                          // set current -> echo pilot
-    if (t.size() >= 2) st.pilot_a = strtol(t[1].c_str(), nullptr, 10);
+  } else if (c == "$SC") {                          // set current -> clamp to [min,maxCfg], echo pilot
+    if (t.size() >= 2) {
+      long req = strtol(t[1].c_str(), nullptr, 10);
+      if (req < st.min_a)      req = st.min_a;
+      if (req > st.max_cfg_a)  req = st.max_cfg_a;
+      st.pilot_a = req;
+    }
     snprintf(buf, sizeof(buf), "$OK %ld", st.pilot_a);
     return rapi_frame(buf);
   } else if (c == "$SV") {                          // set voltage (mV)
