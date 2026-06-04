@@ -12,14 +12,9 @@ class TimeManager : public MicroTasks::Task
     const char *_timeHost;
     MongooseSntpClient _sntp;
     unsigned long _nextCheckTime;
-    unsigned long _fetchStartTime;
-    uint8_t _retryCount;
     bool _fetchingTime;
     bool _setTheTime;
     bool _sntpEnabled;
-    time_t _lastSyncTime;
-
-    unsigned long retryDelay();
 
     class TimeChange : public MicroTasks::Event
     {
@@ -50,19 +45,9 @@ class TimeManager : public MicroTasks::Task
     void setSntpEnabled(bool enabled);
 
     void checkNow() {
-      // Reset _fetchingTime so a stuck or in-backoff state never blocks the
-      // sync from firing — MongooseSntpClient's own _nc guard prevents a
-      // duplicate request if one is genuinely in-flight.
-      _fetchingTime = false;
-      _retryCount = 0;
       _nextCheckTime = millis();
       MicroTask.wakeTask(this);
     }
-
-    // NTP status accessors (used by GET /time)
-    const char *getNtpStatus();
-    time_t getLastSyncTime() { return _lastSyncTime; }
-    int32_t getNextSyncMs();
 
     // Register for events
     void onTimeChange(MicroTasks::EventListener *listner) {

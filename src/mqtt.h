@@ -34,7 +34,6 @@ class Mqtt : public MicroTasks::Task {
     long _nextMqttReconnectAttempt = 0;
     unsigned long _mqttRestartTime = 0;
     bool _connecting = false;
-    unsigned long _connectStartTime = 0;  // When the current connection attempt started
     unsigned long _error_time = 0; // To handle disconnect events properly
 
     // Version tracking for publishing updates
