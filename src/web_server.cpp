@@ -45,6 +45,7 @@ typedef const __FlashStringHelper *fstr_t;
 #include "home_assistant.h"
 #include "evse_man.h"
 #include "limit.h"
+#include "fake_evse.h"
 
 MongooseHttpServer server;          // Create class for Web server
 MongooseHttpServer redirect;        // Server to redirect to HTTPS if enabled
@@ -1203,6 +1204,58 @@ void web_server_send_ascii_utf8(const char *endpoint, const uint8_t *buffer, siz
   server.sendAll(endpoint, WEBSOCKET_OP_TEXT, temp, size);
 }
 
+#ifdef FAKE_EVSE
+static void handleFakeEvse(MongooseHttpServerRequest *request)
+{
+  MongooseHttpServerResponseStream *response;
+  if(false == requestPreProcess(request, response)) {
+    return;
+  }
+
+  FakeEvseState &st = fakeEvseStream.state;
+
+  if(HTTP_GET == request->method()) {
+    // fall through to build the state response below
+  } else if(HTTP_POST == request->method()) {
+    String body = request->body().toString();
+    const size_t req_capacity = JSON_OBJECT_SIZE(8) + 128;
+    DynamicJsonDocument in(req_capacity);
+    DeserializationError err = deserializeJson(in, body);
+    if(!err) {
+      if(in.containsKey("vehicle")) st.set_vehicle(in["vehicle"].as<bool>());
+      if(in.containsKey("fault"))   st.fault = in["fault"].as<const char *>();  // unknown string => "no fault" per state()
+      if(in.containsKey("voltage")) st.voltage_mv = (long)(in["voltage"].as<double>() * 1000.0);
+    } else {
+      response->setCode(400);
+      response->print("{\"msg\":\"Could not parse JSON\"}");
+      request->send(response);
+      return;
+    }
+  } else {
+    response->setCode(405);
+    response->print("{\"msg\":\"Method not allowed\"}");
+    request->send(response);
+    return;
+  }
+
+  const size_t resp_capacity = JSON_OBJECT_SIZE(12) + 128;
+  DynamicJsonDocument doc(resp_capacity);
+  doc["state"]            = st.state();
+  doc["pilot"]            = st.pilot_a;
+  doc["amps"]             = st.charge_ma() / 1000.0;
+  doc["volts"]            = st.voltage_mv / 1000.0;
+  doc["session_elapsed"]  = st.session_elapsed_s;
+  doc["session_wh"]       = st.session_wh;
+  doc["total_kwh"]        = st.total_wh / 1000.0;
+  doc["vehicle"]          = st.vehicle_present;
+  doc["charging_allowed"] = st.charging_allowed;
+  doc["fault"]            = st.fault;
+  response->setCode(200);
+  serializeJson(doc, *response);
+  request->send(response);
+}
+#endif // FAKE_EVSE
+
 void web_server_setup()
 {
   bool use_ssl = false;
@@ -1324,6 +1377,10 @@ void web_server_setup()
     onFrame(onWsFrame)
     ->
     onConnect(onWsConnect);
+
+#ifdef FAKE_EVSE
+  server.on("/fakeevse$", handleFakeEvse);
+#endif
 
   server.onNotFound(handleNotFound);
 

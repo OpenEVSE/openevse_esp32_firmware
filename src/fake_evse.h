@@ -31,4 +31,7 @@ private:
   void enqueue(const std::string &frame) { if (!frame.empty()) _out += frame.c_str(); }
   void handleLine();          // process one complete "$...^CK" line
 };
+
+// The single bench-mode fake controller instance (defined in main.cpp).
+extern FakeEvseStream fakeEvseStream;
 #endif // FAKE_EVSE
