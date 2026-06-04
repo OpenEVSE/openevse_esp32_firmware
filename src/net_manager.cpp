@@ -58,7 +58,6 @@ NetManagerTask::NetManagerTask(LcdTask &lcd, LedManagerTask &led, TimeManager &t
   _wifiButtonState(!WIFI_BUTTON_PRESSED_STATE),
   _wifiButtonTimeOut(millis()),
   _apMessage(false),
-  _wifiCheckLostAt(0),
   #ifdef ENABLE_WIRED_ETHERNET
   _ethConnected(false),
   #endif
@@ -690,22 +689,15 @@ unsigned long NetManagerTask::manageState()
     case NetState::StationClientReconnecting:
       break;
     case NetState::Connected:
-      // Watchdog: recover from missed disconnect events, but debounce for 5 s
-      // to avoid false positives from transient WiFi.isConnected() glitches
-      // (a single-tick false would otherwise trigger a reconnect storm via
-      // haveNetworkConnection() → setHost() → checkNow()).
+      // Watchdog: if the disconnect event was missed for any reason, detect it
+      // here and recover.  The LOST_IP handler and wifiOnStationModeDisconnected
+      // cover the common cases; this is purely a safety net.
       if(!isWifiClientConnected() && !isWiredConnected()) {
-        if(_wifiCheckLostAt == 0) {
-          _wifiCheckLostAt = millis();
-        } else if(millis() - _wifiCheckLostAt >= 5000) {
-          _wifiCheckLostAt = 0;
-          DBUGLN("Watchdog: connection lost for 5s, reconnecting");
-          _state = NetState::StationClientConnecting;
-          wifiStart();
-        }
+        DBUGLN("Watchdog: lost connection without disconnect event, reconnecting");
+        _state = NetState::StationClientConnecting;
+        wifiStart();
         break;
       }
-      _wifiCheckLostAt = 0;
       if(millis() > _apAutoApStopTime)
       {
         if(isWifiModeAp()) {
