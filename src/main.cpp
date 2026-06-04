@@ -77,7 +77,13 @@
 EventLog eventLog;
 CertificateStore certs;
 
+#ifdef FAKE_EVSE
+#include "fake_evse.h"
+FakeEvseStream fakeEvseStream;
+EvseManager evse(fakeEvseStream, eventLog);
+#else
 EvseManager evse(RAPI_PORT, eventLog);
+#endif
 Scheduler scheduler(evse);
 ManualOverride manual(evse);
 DivertTask divert(evse);
@@ -235,6 +241,16 @@ loop() {
   web_server_loop();
   ota_loop();
   rapiSender.loop();
+#ifdef FAKE_EVSE
+  {
+    static unsigned long fake_last = millis();  // init on first loop pass -> clean 1Hz from boot
+    unsigned long now = millis();
+    if (now - fake_last >= 1000) {
+      fakeEvseStream.tick((now - fake_last) / 1000.0);
+      fake_last = now;
+    }
+  }
+#endif
 
   Profile_Start(MicroTask);
   MicroTask.update();
