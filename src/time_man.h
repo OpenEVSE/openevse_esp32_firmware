@@ -12,9 +12,13 @@ class TimeManager : public MicroTasks::Task
     const char *_timeHost;
     MongooseSntpClient _sntp;
     unsigned long _nextCheckTime;
+    unsigned long _fetchStartTime;
+    uint8_t _retryCount;
     bool _fetchingTime;
     bool _setTheTime;
     bool _sntpEnabled;
+
+    unsigned long retryDelay();
 
     class TimeChange : public MicroTasks::Event
     {

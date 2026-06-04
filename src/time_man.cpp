@@ -18,6 +18,11 @@
 //#define TIME_POLL_TIME 10 * 1000
 #endif
 
+// Timeout for an in-flight SNTP request before treating it as lost
+#ifndef SNTP_FETCH_TIMEOUT
+#define SNTP_FETCH_TIMEOUT 30 * 1000
+#endif
+
 TimeManager timeManager;
 
 TimeManager::TimeManager() :
@@ -25,6 +30,8 @@ TimeManager::TimeManager() :
   _timeHost(NULL),
   _sntp(),
   _nextCheckTime(0),
+  _fetchStartTime(0),
+  _retryCount(0),
   _fetchingTime(false),
   _setTheTime(false)
 {
@@ -38,6 +45,7 @@ void TimeManager::begin()
 void TimeManager::setHost(const char *host)
 {
   _timeHost = host;
+  _retryCount = 0;
   checkNow();
 }
 
@@ -79,9 +87,10 @@ void TimeManager::setup()
   setTimeZone(time_zone);
 
   _sntp.onError([this](uint8_t err) {
-    DBUGF("Got error %u", err);
+    DBUGF("NTP error %u (attempt %u)", err, _retryCount + 1);
     _fetchingTime = false;
-    _nextCheckTime = millis() + 10 * 1000;
+    _retryCount++;
+    _nextCheckTime = millis() + retryDelay();
     MicroTask.wakeTask(this);
   });
 }
@@ -142,6 +151,26 @@ unsigned long TimeManager::loop(MicroTasks::WakeReason reason)
     }
   }
 
+  // Watchdog: if an in-flight SNTP request has gone silent (no reply, no error —
+  // e.g. DNS failure closes the connection without firing MG_SNTP_FAILED), unstick
+  // _fetchingTime so the next sync can be attempted.
+  if(_fetchingTime)
+  {
+    unsigned long fetchElapsed = millis() - _fetchStartTime;
+    if(fetchElapsed >= SNTP_FETCH_TIMEOUT)
+    {
+      DBUGF("NTP request timed out after %lums (attempt %u)", fetchElapsed, _retryCount + 1);
+      _fetchingTime = false;
+      _retryCount++;
+      _nextCheckTime = millis() + retryDelay();
+    }
+    else
+    {
+      // Wake again when the timeout expires so the watchdog above can fire.
+      return SNTP_FETCH_TIMEOUT - fetchElapsed;
+    }
+  }
+
   DBUGVAR(_nextCheckTime);
   if(_sntpEnabled &&
     NULL != _timeHost &&
@@ -154,6 +183,7 @@ unsigned long TimeManager::loop(MicroTasks::WakeReason reason)
       delay <= 0)
     {
       _fetchingTime = true;
+      _fetchStartTime = millis();
       _nextCheckTime = 0;
 
       DBUGF("Trying to get time from %s", _timeHost);
@@ -162,6 +192,7 @@ unsigned long TimeManager::loop(MicroTasks::WakeReason reason)
         setTime(newTime, _timeHost);
 
         _fetchingTime = false;
+        _retryCount = 0;
         _nextCheckTime = millis() + TIME_POLL_TIME;
         MicroTask.wakeTask(this);
       });
@@ -230,9 +261,26 @@ void TimeManager::setSntpEnabled(bool enabled)
   {
     _sntpEnabled = enabled;
     if(enabled) {
+      _retryCount = 0;
       checkNow();
     }
   }
+}
+
+unsigned long TimeManager::retryDelay()
+{
+  // Exponential backoff: 10s → 30s → 90s → 5min → 30min (cap)
+  static const unsigned long delays[] = {
+    10 * 1000,
+    30 * 1000,
+    90 * 1000,
+    5  * 60 * 1000,
+    30 * 60 * 1000,
+  };
+  uint8_t idx = _retryCount < sizeof(delays) / sizeof(delays[0])
+                  ? _retryCount
+                  : (uint8_t)(sizeof(delays) / sizeof(delays[0]) - 1);
+  return delays[idx];
 }
 
 void time_set_time(struct timeval setTime, const char *source) {
