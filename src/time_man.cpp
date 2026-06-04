@@ -209,13 +209,16 @@ unsigned long TimeManager::loop(MicroTasks::WakeReason reason)
       }
       else
       {
-        // getTime() could not start the request: either _nc is still set from
-        // the previous sync (MG_EV_CLOSE hasn't fired yet) or Mongoose itself
-        // rejected it.  Reset and retry in 2 s rather than sleeping forever.
-        DBUGLN("NTP: getTime() could not start request, will retry in 2s");
+        // getTime() could not start the request: _nc may still be set from the
+        // previous connection (MG_EV_CLOSE hasn't fired) or Mongoose rejected
+        // it entirely.  Use the backoff table so repeated failures don't create
+        // a rapid oscillation visible in the UI.
+        DBUGF("NTP: getTime() could not start request (attempt %u), backing off", _retryCount + 1);
         _fetchingTime = false;
-        _nextCheckTime = millis() + 2000;
-        ret = 2000;
+        _retryCount++;
+        unsigned long backoff = retryDelay();
+        _nextCheckTime = millis() + backoff;
+        ret = backoff;
       }
     } else {
       ret = delay > 0 ? (unsigned long)delay : 0;
