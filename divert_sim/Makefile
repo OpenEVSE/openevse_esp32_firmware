@@ -109,6 +109,14 @@ EPOXY_EEPROM_OBJ := \
 ESPAL_OBJ := \
   $(OBJ_DIR)/espal.o
 
+SIM_OBJ := \
+  $(OBJ_DIR)/sim_evse.o \
+  $(OBJ_DIR)/time_series.o \
+  $(OBJ_DIR)/scenario.o \
+  $(OBJ_DIR)/csv_writer.o \
+  $(OBJ_DIR)/peer.o \
+  $(OBJ_DIR)/runner.o
+
 OBJ    := \
   $(MICRO_TASKS_OBJ) \
   $(CONFIG_JSON_OBJ) \
@@ -119,10 +127,12 @@ OBJ    := \
   $(EPOXY_FS_OBJ) \
   $(EPOXY_EEPROM_OBJ) \
   $(ARDUINO_OBJ) \
+  $(SIM_OBJ) \
   $(MAINS)
 DEPS   :=
 VPATH 	:= \
   . \
+  ./sim \
   ../src \
   $(EPOXY_CORE_PATH) \
   $(EPOXY_CORE_PATH)/epoxy_test/Injection \

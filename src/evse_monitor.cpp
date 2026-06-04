@@ -434,7 +434,7 @@ void EvseMonitor::unlock()
 
 void EvseMonitor::enable()
 {
-  OpenEVSE.enable([this](int ret)
+  _openevse.enable([this](int ret)
   {
     DBUGF("EVSE: enable - complete %d", ret);
     if(RAPI_RESPONSE_OK == ret) {
@@ -447,7 +447,7 @@ void EvseMonitor::enable()
 
 void EvseMonitor::sleep()
 {
-  OpenEVSE.sleep([this](int ret)
+  _openevse.sleep([this](int ret)
   {
     DBUGF("EVSE: sleep - complete %d", ret);
     if(RAPI_RESPONSE_OK == ret) {
@@ -458,7 +458,7 @@ void EvseMonitor::sleep()
 
 void EvseMonitor::disable()
 {
-  OpenEVSE.disable([this](int ret)
+  _openevse.disable([this](int ret)
   {
     DBUGF("EVSE: disable - complete %d", ret);
     if(RAPI_RESPONSE_OK == ret) {
@@ -469,7 +469,7 @@ void EvseMonitor::disable()
 
 void EvseMonitor::restart()
 {
-  OpenEVSE.restart([this](int ret)
+  _openevse.restart([this](int ret)
   {
     DBUGF("EVSE: reboot - complete %d", ret);
     if(RAPI_RESPONSE_OK == ret) {

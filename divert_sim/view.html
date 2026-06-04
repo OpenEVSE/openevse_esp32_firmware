@@ -1,113 +1,115 @@
 <!DOCTYPE html>
 <html>
-
 <head>
-  <title>OpenEVSE Simulations Results</title>
-  <script type="text/javascript" src="https://canvasjs.com/assets/script/jquery-1.11.1.min.js"></script>
-  <script type="text/javascript" src="https://canvasjs.com/assets/script/canvasjs.min.js"></script>
-  <script type="text/javascript" src="https://cdnjs.cloudflare.com/ajax/libs/moment.js/2.24.0/moment.min.js"></script>
-  <script type="text/javascript" src="simulations.js"></script>
-  <script type="text/javascript">
-    var divert_profiles = [
-      "master",
-      "default",
-      "noimport",
-      "nowaste"
-    ];
-
-    var shaper_profiles = [
-      "default",
-      "3000w",
-      "5000w",
-      "8000w",
-      "10000w",
-      "smoothing_30s",
-      "smoothing_120s",
-      "minpause_60s",
-      "minpause_600s",
-      "maxinterval_30s",
-      "maxinterval_120s",
-      "aggressive",
-      "conservative",
-      "very_low_power",
-      "very_high_power",
-      "threephase"
-    ];
-
-    window.onload = function () {
-      initPage(divert_profiles, shaper_profiles);
-    };
-  </script>
-  <link rel="stylesheet" href="https://maxcdn.bootstrapcdn.com/bootstrap/3.3.6/css/bootstrap.min.css" />
+  <meta charset="utf-8" />
+  <title>OpenEVSE Simulations</title>
+  <script src="https://canvasjs.com/assets/script/canvasjs.min.js"></script>
+  <script src="simulations.js?v=20260604d"></script>
   <link rel="stylesheet" href="simulations.css" />
 </head>
-
 <body>
-  <div class="container-fluid sim-header">
-    <h1>OpenEVSE Simulations Results <small><a href="interactive.html">Interactive</a></small></h1>
+  <h1>OpenEVSE Simulations</h1>
+  <p><a href="interactive.html">Interactive mode</a></p>
+
+  <div class="tab-controls">
+    <label for="profile">Profile:</label>
+    <select id="profile">
+      <option value="">loading...</option>
+    </select>
+    <button id="refresh">Load</button>
   </div>
 
-  <div class="container-fluid">
+  <div class="tabs" id="tabs"></div>
 
-    <!-- Tab navigation -->
-    <ul class="nav nav-tabs sim-tab-nav" id="sim-tabs">
-      <li class="active"><a href="#" data-tab="divert">Divert</a></li>
-      <li><a href="#" data-tab="shaper">Shaper</a></li>
-      <li><a href="#" data-tab="loadsharing">Load Sharing</a></li>
-    </ul>
+  <div id="status"></div>
+  <div id="content"></div>
 
-    <div class="tab-content sim-tab-content">
+  <script>
+    let activeCategory = "divert";
 
-      <!-- Divert tab -->
-      <div class="tab-pane active" id="tab-divert">
-        <div class="sim-summary-section">
-          <h3>Summary</h3>
-          <div id="summary-divert" class="sim-summary-placeholder">
-            <span class="glyphicon glyphicon-refresh sim-spinning"></span> Loading summary&hellip;
-          </div>
-        </div>
-        <div class="sim-chart-controls">
-          <label class="control-label">
-            Profile:
-            <select id="divert-profile-select" class="form-control input-sm sim-profile-select"
-              onchange="onDivertProfileChange()"></select>
-          </label>
-        </div>
-        <div id="divert-charts-container" class="sim-charts-grid"></div>
-      </div>
+    async function repopulateProfilesForCategory(preferredProfile) {
+      const select = document.getElementById("profile");
+      const profiles = await fetchProfilesForCategory(activeCategory);
+      select.innerHTML = "";
 
-      <!-- Shaper tab -->
-      <div class="tab-pane" id="tab-shaper">
-        <div class="sim-summary-section">
-          <h3>Summary</h3>
-          <div id="summary-shaper" class="sim-summary-placeholder">
-            <span class="glyphicon glyphicon-refresh sim-spinning"></span> Loading summary&hellip;
-          </div>
-        </div>
-        <div class="sim-chart-controls">
-          <label class="control-label">
-            Profile:
-            <select id="shaper-profile-select" class="form-control input-sm sim-profile-select"
-              onchange="onShaperProfileChange()"></select>
-          </label>
-        </div>
-        <div id="shaper-charts-container" class="sim-charts-grid"></div>
-      </div>
+      if (profiles.length === 0) {
+        select.innerHTML = '<option value="">none</option>';
+        return;
+      }
 
-      <!-- Load Sharing tab -->
-      <div class="tab-pane" id="tab-loadsharing">
-        <div class="sim-summary-section">
-          <h3>Summary</h3>
-          <div id="summary-loadsharing" class="sim-summary-placeholder">
-            <span class="glyphicon glyphicon-refresh sim-spinning"></span> Loading summary&hellip;
-          </div>
-        </div>
-        <div id="loadsharing-charts-container" class="sim-charts-grid"></div>
-      </div>
+      profiles.forEach((p) => {
+        const opt = document.createElement("option");
+        opt.value = p;
+        opt.textContent = p;
+        select.appendChild(opt);
+      });
 
-    </div><!-- /.tab-content -->
-  </div><!-- /.container-fluid -->
+      if (preferredProfile && profiles.includes(preferredProfile)) {
+        select.value = preferredProfile;
+      } else if (profiles.includes("default")) {
+        select.value = "default";
+      } else {
+        select.value = profiles[0];
+      }
+    }
 
+    async function setActiveTab(category, categories) {
+      const previousProfile = document.getElementById("profile").value;
+      activeCategory = category;
+      const tabs = document.getElementById("tabs");
+      Array.from(tabs.querySelectorAll("button")).forEach((button) => {
+        button.classList.toggle("active", button.dataset.category === category);
+      });
+      await repopulateProfilesForCategory(previousProfile);
+      await refresh();
+    }
+
+    function renderTabs(categories) {
+      const tabs = document.getElementById("tabs");
+      tabs.innerHTML = "";
+      categories.forEach((category) => {
+        const button = document.createElement("button");
+        button.type = "button";
+        button.dataset.category = category;
+        button.textContent = category === "loadsharing" ? "Load Sharing" :
+          category.charAt(0).toUpperCase() + category.slice(1);
+        button.classList.toggle("active", category === activeCategory);
+        button.addEventListener("click", () => setActiveTab(category, categories));
+        tabs.appendChild(button);
+      });
+      if (!categories.includes(activeCategory) && categories.length > 0) {
+        activeCategory = categories[0];
+      }
+    }
+
+    async function initProfiles() {
+      const status = document.getElementById("status");
+      try {
+        const categories = await fetchCategories();
+        if (categories.length > 0 && !categories.includes(activeCategory)) {
+          activeCategory = categories[0];
+        }
+        renderTabs(categories);
+        await repopulateProfilesForCategory("default");
+        status.textContent = "";
+      } catch (err) {
+        status.textContent = String(err);
+      }
+    }
+
+    async function refresh() {
+      const profile = document.getElementById("profile").value;
+      const status = document.getElementById("status");
+      try {
+        status.textContent = "";
+        await renderCategory("content", activeCategory, profile);
+      } catch (err) {
+        status.textContent = String(err);
+      }
+    }
+
+    document.getElementById("refresh").addEventListener("click", refresh);
+    initProfiles().then(refresh);
+  </script>
 </body>
-
 </html>

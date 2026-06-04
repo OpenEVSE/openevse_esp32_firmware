@@ -2,6 +2,8 @@
 #include "RapiSender.h"
 #include "openevse.h"
 #include "input.h"
+#include "sim/sim_stream.h"
+#include "sim/sim_evse.h"
 
 #define dbgprint(s) DBUG(s)
 #define dbgprintln(s) DBUGLN(s)
@@ -9,8 +11,19 @@
 #define DBG
 #endif
 
-extern long pilot;
-extern long state;
+// Fallback SimEvse used when _stream isn't a SimStream (e.g. during early
+// firmware init or self-tests). Each per-peer EvseManager owns a SimStream
+// pointing at its own SimEvse; reads/writes go to that instance.
+static SimEvse s_default_sim;
+
+static SimEvse *simFor(Stream *stream)
+{
+  SimStream *ss = dynamic_cast<SimStream *>(stream);
+  if (ss && ss->sim) {
+    return ss->sim;
+  }
+  return &s_default_sim;
+}
 
 static CommandItem commandQueueItems[RAPI_MAX_COMMANDS];
 
@@ -30,6 +43,9 @@ RapiSender::RapiSender(Stream * stream) :
   _waitingForReply(false),
   _respBuf{},
   _respBufOrig{}
+#ifdef DIVERT_SIM
+  , _sim_evse(nullptr)
+#endif
 {
 }
 
@@ -94,6 +110,8 @@ RapiSender::sendCmdSync(String &cmd, unsigned long timeout)
   static char zero[] = "0";
   static char buf1[32];
 
+  SimEvse *sim = _sim_evse ? _sim_evse : simFor(_stream);
+
   switch (cmd[1])
   {
     case 'G':
@@ -101,7 +119,7 @@ RapiSender::sendCmdSync(String &cmd, unsigned long timeout)
       {
         case 'E':
         {
-          sprintf(buf1, "%ld", pilot);
+          sprintf(buf1, "%ld", sim->pilot);
           _tokens[0] = ok;
           _tokens[1] = buf1;
           _tokens[2] = zero;
@@ -140,7 +158,7 @@ RapiSender::sendCmdSync(String &cmd, unsigned long timeout)
         } break;
         case 'C':
         {
-          sprintf(buf1, "%ld", pilot);
+          sprintf(buf1, "%ld", sim->pilot);
           _tokens[0] = ok;
           _tokens[1] = "6";
           _tokens[2] = "32";
@@ -167,10 +185,10 @@ RapiSender::sendCmdSync(String &cmd, unsigned long timeout)
 
           _tokens[0] = ok;
           _tokens[1] = ptr;
-          ptr += sprintf(ptr, "%ld", state) + 1;
+          ptr += sprintf(ptr, "%ld", sim->state) + 1;
           _tokens[2] = zero;
           _tokens[3] = ptr;
-          ptr += sprintf(ptr, "%ld", state) + 1; // Should not reflect the Sleep/Disabled state
+          ptr += sprintf(ptr, "%ld", sim->state) + 1; // Should not reflect the Sleep/Disabled state
           _tokens[4] = zero;
           _tokenCnt = 5;
         } break;
@@ -200,7 +218,7 @@ RapiSender::sendCmdSync(String &cmd, unsigned long timeout)
       {
         case 'C':
         {
-          sscanf(cmd.c_str(), "$SC %ld V", &pilot);
+          sscanf(cmd.c_str(), "$SC %ld V", &sim->pilot);
           _tokens[0] = ok;
           _tokenCnt = 1;
         } break;
@@ -225,19 +243,19 @@ RapiSender::sendCmdSync(String &cmd, unsigned long timeout)
       {
         case 'E':
         {
-          state = OPENEVSE_STATE_CHARGING;
+          sim->state = OPENEVSE_STATE_CHARGING;
           _tokens[0] = ok;
           _tokenCnt = 1;
         } break;
         case 'D':
         {
-          state = OPENEVSE_STATE_DISABLED;
+          sim->state = OPENEVSE_STATE_DISABLED;
           _tokens[0] = ok;
           _tokenCnt = 1;
         } break;
         case 'S':
         {
-          state = OPENEVSE_STATE_SLEEPING;
+          sim->state = OPENEVSE_STATE_SLEEPING;
           _tokens[0] = ok;
           _tokenCnt = 1;
         } break;

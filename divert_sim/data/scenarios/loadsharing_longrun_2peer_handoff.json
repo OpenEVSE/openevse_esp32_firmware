@@ -1,0 +1,31 @@
+{
+  "meta": {
+    "id": "loadsharing_longrun_2peer_handoff",
+    "title": "Load Sharing Longrun 2 Peer Handoff",
+    "category": "loadsharing",
+    "profile": "default"
+  },
+  "group": {
+    "safety_factor": 1.0,
+    "failsafe_mode": "safe_current",
+    "failsafe_peer_assumed_current": 6.0
+  },
+  "simulation": {
+    "duration": 54000,
+    "tick_interval": 60,
+    "nominal_voltage": 240
+  },
+  "supply": {
+    "max_pwr": 7680,
+    "live_pwr": 0
+  },
+  "peers": [
+    {"id": "evse-001", "min_current": 6, "max_current": 32, "voltage": 240, "priority": 0,
+      "ev": {"battery_capacity_kwh": 20, "initial_soc": 20, "max_charge_rate_kw": 7.2},
+      "initial": {"online": true, "vehicle": true}},
+    {"id": "evse-002", "min_current": 6, "max_current": 32, "voltage": 240, "priority": 0,
+      "ev": {"battery_capacity_kwh": 80, "initial_soc": 20, "max_charge_rate_kw": 7.2},
+      "initial": {"online": true, "vehicle": false},
+      "events": [{"time": 3600, "vehicle": true}]}
+  ]
+}

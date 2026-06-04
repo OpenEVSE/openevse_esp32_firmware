@@ -214,6 +214,7 @@ class EvseManager : public MicroTasks::Task
     };
 
     RapiSender _sender;
+    OpenEVSEClass _openevse;
     EvseMonitor _monitor;
     EventLog &_eventLog;
 
@@ -264,6 +265,10 @@ class EvseManager : public MicroTasks::Task
     ~EvseManager();
 
     bool begin();
+
+  #ifdef DIVERT_SIM
+    void attachSimEvse(class SimEvse *sim);
+  #endif
 
     bool claim(EvseClient client, int priority, EvseProperties &target);
     bool release(EvseClient client);

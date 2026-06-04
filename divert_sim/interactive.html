@@ -1,107 +1,61 @@
 <!DOCTYPE html>
 <html>
-
 <head>
+  <meta charset="utf-8" />
   <title>OpenEVSE Interactive Simulations</title>
-  <script type="text/javascript" src="https://canvasjs.com/assets/script/jquery-1.11.1.min.js"></script>
-  <script type="text/javascript" src="https://canvasjs.com/assets/script/canvasjs.min.js"></script>
-  <script type="text/javascript" src="https://cdnjs.cloudflare.com/ajax/libs/moment.js/2.24.0/moment.min.js"></script>
-  <script type="text/javascript" src="simulations.js"></script>
-  <script type="text/javascript">
-    var profiles = [
-      "master",
-      "interactive"
-    ];
-
-    var datasets = divert_datasets.concat(shaper_datasets);
-    var loadsharingDatasets = loadsharing_datasets;
-
-    function run_simulation() {
-      $.post("simulation", JSON.stringify({
-        "divert_PV_ratio": parseFloat($("#divert_PV_ratio").val()),
-        "divert_attack_smoothing_time": parseInt($("#divert_attack_smoothing_time").val()),
-        "divert_decay_smoothing_time": parseInt($("#divert_decay_smoothing_time").val()),
-        "divert_min_charge_time": parseInt($("#divert_min_charge_time").val()),
-        "current_shaper_max_pwr": parseInt($("#current_shaper_max_pwr").val()),
-        "current_shaper_smoothing_time": parseInt($("#current_shaper_smoothing_time").val()),
-        "current_shaper_min_pause_time": parseInt($("#current_shaper_min_pause_time").val()),
-        "current_shaper_data_maxinterval": parseInt($("#current_shaper_data_maxinterval").val())
-      }), () => {
-        init_summary(profiles, profiles);
-        loadLoadSharingSummary(loadsharingDatasets, () => {
-          loadSummary("output/summary_divert_master.csv", () => {
-            loadSummary("output/summary_shaper_master.csv", () => {
-              loadSummary("output/summary_interactive.csv", () => {
-                generate_summary_table(profiles, profiles);
-                for (const dataset of datasets) {
-                  var id = dataset.id + "_interactive";
-                  loadChart(id, "output/"+ id + ".csv", dataset.title + " (interactive)", dataset.class);
-                }
-              }, "interactive");
-            }, "interactive");
-          });
-        });
-      });
-    }
-
-    // Run the simulations after the page loads
-    window.onload = function () {
-      run_simulation();
-    }
-  </script>
-  <link rel="stylesheet" href="https://maxcdn.bootstrapcdn.com/bootstrap/3.3.6/css/bootstrap.min.css" />
+  <script src="https://canvasjs.com/assets/script/canvasjs.min.js"></script>
+  <script src="simulations.js?v=20260604d"></script>
   <link rel="stylesheet" href="simulations.css" />
 </head>
-
 <body>
   <h1>OpenEVSE Interactive Simulations</h1>
+  <p><a href="view.html">View mode</a></p>
 
-  <a href="view.html">Test Results</a><br/>
+  <form id="overrides-form">
+    <label>divert_PV_ratio <input name="divert_PV_ratio" type="number" step="0.1" value="1.1" /></label><br />
+    <label>divert_attack_smoothing_time <input name="divert_attack_smoothing_time" type="number" value="20" /></label><br />
+    <label>divert_decay_smoothing_time <input name="divert_decay_smoothing_time" type="number" value="600" /></label><br />
+    <label>divert_min_charge_time <input name="divert_min_charge_time" type="number" value="600" /></label><br />
+    <label>current_shaper_max_pwr <input name="current_shaper_max_pwr" type="number" value="5000" /></label><br />
+    <label>current_shaper_smoothing_time <input name="current_shaper_smoothing_time" type="number" value="60" /></label><br />
+    <label>current_shaper_min_pause_time <input name="current_shaper_min_pause_time" type="number" value="300" /></label><br />
+    <label>current_shaper_data_maxinterval <input name="current_shaper_data_maxinterval" type="number" value="120" /></label><br />
+    <button type="submit">Run</button>
+  </form>
 
-  <div style="margin: 20px 0;">
-    <label><input type="checkbox" id="show_divert" checked onchange="toggleCharts()"> Show Divert Simulations</label>
-    <label style="margin-left: 20px;"><input type="checkbox" id="show_shaper" checked onchange="toggleCharts()"> Show Shaper Simulations</label>
-    <label style="margin-left: 20px;"><input type="checkbox" id="show_loadsharing" checked onchange="toggleCharts()"> Show Load Sharing Simulations</label>
-  </div>
+  <div id="status"></div>
+  <div id="content"></div>
 
-  <label for="divert_PV_ratio">divert_PV_ratio</label>
-  <input type="text" id="divert_PV_ratio" value="1.1"><br/>
-  <label for="divert_attack_smoothing_time">divert_attack_smoothing_time</label>
-  <input type="text" id="divert_attack_smoothing_time" value="20"><br/>
-  <label for="divert_decay_smoothing_time">divert_decay_smoothing_time</label>
-  <input type="text" id="divert_decay_smoothing_time" value="200"><br/>
-  <label for="divert_min_charge_time">divert_min_charge_time</label>
-  <input type="text" id="divert_min_charge_time" value="600"><br/>
-  <label for="current_shaper_max_pwr">current_shaper_max_pwr</label>
-  <input type="text" id="current_shaper_max_pwr" value="5000"><br/>
-  <label for="current_shaper_smoothing_time">current_shaper_smoothing_time</label>
-  <input type="text" id="current_shaper_smoothing_time" value="60"><br/>
-  <label for="current_shaper_min_pause_time">current_shaper_min_pause_time</label>
-  <input type="text" id="current_shaper_min_pause_time" value="300"><br/>
-  <label for="current_shaper_data_maxinterval">current_shaper_data_maxinterval</label>
-  <input type="text" id="current_shaper_data_maxinterval" value="120"><br/>
-
-  <button onclick="run_simulation()">Run Simulation</button>
-
-  <h2>Summary</h2>
-  <div id="summary_table">
-  </div>
-
-  <script type="text/javascript">
-
-    for (const dataset of datasets) {
-      var id = generate_chart(dataset, "master");;
-      loadChart(id, "output/"+ id + ".csv", dataset.title + " (master)", dataset.class);
-      generate_chart(dataset, "interactive");
+  <script>
+    function collectOverrides() {
+      const form = document.getElementById("overrides-form");
+      const values = Object.fromEntries(new FormData(form).entries());
+      const overrides = {};
+      Object.keys(values).forEach((k) => {
+        const n = Number(values[k]);
+        overrides[k] = Number.isNaN(n) ? values[k] : n;
+      });
+      return overrides;
     }
-    for (const dataset of loadsharingDatasets) {
-      var id = generate_chart(dataset, "scenario");
-      loadChart(id, "output/" + dataset.id + ".csv", dataset.title + " (scenario)", dataset.class);
-    }
-    //<div id="day1_default" style="width:100%; height:300px;" class="solar" csv="output/day1_default.csv" title="Day 1"></div>
 
+    async function runInteractive() {
+      const status = document.getElementById("status");
+      try {
+        status.textContent = "Running scenarios...";
+        await runInteractiveSimulation(collectOverrides());
+        status.textContent = "Completed.";
+        await renderIndex("content", "interactive");
+      } catch (err) {
+        status.textContent = String(err);
+      }
+    }
+
+    document.getElementById("overrides-form").addEventListener("submit", async (e) => {
+      e.preventDefault();
+      await runInteractive();
+    });
+
+    runInteractive();
   </script>
-
 </body>
-
 </html>
