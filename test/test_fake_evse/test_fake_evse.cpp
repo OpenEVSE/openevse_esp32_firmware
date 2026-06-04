@@ -116,3 +116,49 @@ TEST_CASE("unknown command returns bare $OK") {
   FakeEvseState st;
   CHECK(fake_evse_handle(st, "$XYZ 1 2") == "$OK^20\r");
 }
+
+TEST_CASE("tick accrues energy only while charging") {
+  FakeEvseState st; st.set_vehicle(true);     // charging, pilot 32A @ 240V
+  fake_evse_tick(st, 3600.0);                 // 1 hour
+  CHECK(st.session_elapsed_s == 3600);
+  CHECK(st.session_wh == doctest::Approx(32.0 * 240.0)); // 7680 Wh
+  CHECK(st.total_wh   == doctest::Approx(7680.0));
+  // sleep -> no further accrual
+  fake_evse_handle(st, "$FS");
+  fake_evse_tick(st, 3600.0);
+  CHECK(st.session_elapsed_s == 3600);        // unchanged
+}
+
+TEST_CASE("tick emits $ST on transition with hex state") {
+  FakeEvseState st;                            // state 1
+  CHECK(fake_evse_tick(st, 1.0) == "");        // no change
+  st.set_vehicle(true);                        // -> 3 (charging)
+  std::string ev = fake_evse_tick(st, 1.0);
+  CHECK(ev == rapi_frame("$ST 03"));           // 3 in 2-hex
+  CHECK(fake_evse_tick(st, 1.0) == "");        // no re-emit once reported
+  st.set_vehicle(false);                       // unplug -> 1
+  CHECK(fake_evse_tick(st, 1.0) == rapi_frame("$ST 01"));
+}
+
+TEST_CASE("total_wh persists across replug; session resets") {
+  FakeEvseState st; st.set_vehicle(true);
+  fake_evse_tick(st, 3600.0);                  // ~7680 Wh
+  double total_after_first = st.total_wh;
+  CHECK(total_after_first == doctest::Approx(7680.0));
+  st.set_vehicle(false);                       // unplug
+  st.set_vehicle(true);                        // replug -> new session
+  CHECK(st.session_wh == doctest::Approx(0.0));
+  CHECK(st.session_elapsed_s == 0);
+  fake_evse_tick(st, 3600.0);                  // another ~7680 Wh
+  CHECK(st.total_wh == doctest::Approx(15360.0));   // accumulates
+  CHECK(st.session_wh == doctest::Approx(7680.0));  // session is just this round
+}
+
+TEST_CASE("faults map to OpenEVSE state codes") {
+  FakeEvseState st; st.set_vehicle(true);
+  st.fault = "gfci";     CHECK(st.state() == 6);
+  st.fault = "noground"; CHECK(st.state() == 7);
+  st.fault = "stuck";    CHECK(st.state() == 8);
+  st.fault = "overtemp"; CHECK(st.state() == 10);
+  st.fault = "none";     CHECK(st.state() == 3);
+}

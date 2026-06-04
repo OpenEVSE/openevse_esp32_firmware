@@ -103,3 +103,21 @@ std::string fake_evse_handle(FakeEvseState &st, const std::string &cmd) {
   }
   return rapi_frame("$OK");                          // accept everything else
 }
+
+std::string fake_evse_tick(FakeEvseState &st, double seconds) {
+  if (st.state() == FAKE_EVSE_CHARGING) {
+    st.session_elapsed_s += (uint32_t)(seconds + 0.5);
+    double watts = (st.charge_ma() / 1000.0) * (st.voltage_mv / 1000.0);
+    double wh = watts * seconds / 3600.0;
+    st.session_wh += wh;
+    st.total_wh   += wh;
+  }
+  uint8_t now = st.state();
+  if (now != st.last_reported_state) {
+    st.last_reported_state = now;
+    char buf[24];
+    snprintf(buf, sizeof(buf), "$ST %02X", now);   // hex per onEvent($ST)
+    return rapi_frame(buf);
+  }
+  return "";
+}

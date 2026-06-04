@@ -33,6 +33,7 @@ struct FakeEvseState {
   uint32_t session_elapsed_s = 0;
   double   session_wh        = 0.0;
   double   total_wh          = 0.0;
+  uint8_t  last_reported_state = FAKE_EVSE_NOT_CONNECTED;  // transition tracking (mutated by tick)
 
   // temps (tenths degC; -2560 == sensor absent)
   long temp1_tenths = 250;
@@ -55,3 +56,8 @@ std::string rapi_frame(const std::string &body);
 // Handle one inbound RAPI command body (e.g. "$GS", "$SC 24"; no "^CK"/CR),
 // mutate state, and return the framed reply ("$OK ...^XX\r"). Unknown -> "$OK".
 std::string fake_evse_handle(FakeEvseState &st, const std::string &cmd);
+
+// Advance `seconds` of simulated time. While charging, accrue session/total
+// energy from charge_ma()*voltage. Returns a framed async "$ST <hex>" if the
+// derived state changed since the previous call, else "".
+std::string fake_evse_tick(FakeEvseState &st, double seconds);
