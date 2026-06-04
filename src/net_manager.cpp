@@ -270,12 +270,18 @@ void NetManagerTask::wifiOnStationModeDisconnected(const WiFiEventStationModeDis
 
   _clientDisconnects++;
 
-  // Clear the WiFi state and try to connect again
-  WiFi.disconnect(true);
-
   if(!isWiredConnected() && NetState::Connected == _state) {
+    // Update _state synchronously before posting the wifiStart message so that
+    // any duplicate disconnect events queued behind this one (from the reconnection
+    // process or from WiFi.disconnect()) don't each trigger their own wifiStart.
+    _state = NetState::StationClientConnecting;
+    // Full radio reset for a clean reconnection from a previously connected state.
+    WiFi.disconnect(true);
     wifiStart();
   }
+  // For StationClientConnecting / AccessPointConnecting: manageState() is already
+  // driving the retry loop via _clientRetryTime — don't call WiFi.disconnect(true)
+  // here as it would abort a pending WiFi.begin() attempt.
 }
 
 void NetManagerTask::wifiOnAPModeStationConnected(const WiFiEventSoftAPModeStationConnected &event)
@@ -423,6 +429,15 @@ void NetManagerTask::onNetEvent(WiFiEvent_t event, arduino_event_info_t &info)
       dst.mask = src.netmask.addr;
       dst.gw = src.gw.addr;
       wifiOnStationModeGotIP(dst);
+    } break;
+
+    case ARDUINO_EVENT_WIFI_STA_LOST_IP:
+    {
+      DBUGLN("Lost IP address");
+      if(!isWiredConnected() && NetState::Connected == _state) {
+        _state = NetState::StationClientConnecting;
+        wifiStart();
+      }
     } break;
 
     case ARDUINO_EVENT_WIFI_AP_STACONNECTED:
@@ -674,6 +689,15 @@ unsigned long NetManagerTask::manageState()
     case NetState::StationClientReconnecting:
       break;
     case NetState::Connected:
+      // Watchdog: if the disconnect event was missed for any reason, detect it
+      // here and recover.  The LOST_IP handler and wifiOnStationModeDisconnected
+      // cover the common cases; this is purely a safety net.
+      if(!isWifiClientConnected() && !isWiredConnected()) {
+        DBUGLN("Watchdog: lost connection without disconnect event, reconnecting");
+        _state = NetState::StationClientConnecting;
+        wifiStart();
+        break;
+      }
       if(millis() > _apAutoApStopTime)
       {
         if(isWifiModeAp()) {

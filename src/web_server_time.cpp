@@ -48,6 +48,13 @@ void handleTimePost(MongooseHttpServerRequest *request, MongooseHttpServerRespon
     DeserializationError error = deserializeJson(doc, body.c_str(), body.length());
     if(!error)
     {
+      if(doc["sync_now"] | false)
+      {
+        timeManager.checkNow();
+        response->setCode(200);
+        response->print("{\"msg\":\"done\"}");
+        return;
+      }
       sntp_enabled = doc["sntp_enabled"];
       time = doc["time"].as<String>();
       time_zone = doc["time_zone"].as<String>();
@@ -103,8 +110,14 @@ void handleTimePost(MongooseHttpServerRequest *request, MongooseHttpServerRespon
 
 void handleTimeGet(MongooseHttpServerRequest *request, MongooseHttpServerResponseStream *response)
 {
-  StaticJsonDocument<128> doc;
+  DynamicJsonDocument doc(384);
   timeManager.serialise(doc);
+  doc["ntp_status"]      = timeManager.getNtpStatus();
+  doc["ntp_last_sync"]   = (uint32_t)timeManager.getLastSyncTime();
+  int32_t nextMs = timeManager.getNextSyncMs();
+  if(nextMs >= 0) {
+    doc["ntp_next_sync_ms"] = nextMs;
+  }
   response->setCode(200);
   serializeJson(doc, *response);
 }

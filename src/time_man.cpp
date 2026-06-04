@@ -18,6 +18,11 @@
 //#define TIME_POLL_TIME 10 * 1000
 #endif
 
+// Timeout for an in-flight SNTP request before treating it as lost
+#ifndef SNTP_FETCH_TIMEOUT
+#define SNTP_FETCH_TIMEOUT 30 * 1000
+#endif
+
 TimeManager timeManager;
 
 TimeManager::TimeManager() :
@@ -25,8 +30,11 @@ TimeManager::TimeManager() :
   _timeHost(NULL),
   _sntp(),
   _nextCheckTime(0),
+  _fetchStartTime(0),
+  _retryCount(0),
   _fetchingTime(false),
-  _setTheTime(false)
+  _setTheTime(false),
+  _lastSyncTime(0)
 {
 }
 
@@ -38,6 +46,7 @@ void TimeManager::begin()
 void TimeManager::setHost(const char *host)
 {
   _timeHost = host;
+  _retryCount = 0;
   checkNow();
 }
 
@@ -79,9 +88,10 @@ void TimeManager::setup()
   setTimeZone(time_zone);
 
   _sntp.onError([this](uint8_t err) {
-    DBUGF("Got error %u", err);
+    DBUGF("NTP error %u (attempt %u)", err, _retryCount + 1);
     _fetchingTime = false;
-    _nextCheckTime = millis() + 10 * 1000;
+    _retryCount++;
+    _nextCheckTime = millis() + retryDelay();
     MicroTask.wakeTask(this);
   });
 }
@@ -142,6 +152,26 @@ unsigned long TimeManager::loop(MicroTasks::WakeReason reason)
     }
   }
 
+  // Watchdog: if an in-flight SNTP request has gone silent (no reply, no error —
+  // e.g. DNS failure closes the connection without firing MG_SNTP_FAILED), unstick
+  // _fetchingTime so the next sync can be attempted.
+  if(_fetchingTime)
+  {
+    unsigned long fetchElapsed = millis() - _fetchStartTime;
+    if(fetchElapsed >= SNTP_FETCH_TIMEOUT)
+    {
+      DBUGF("NTP request timed out after %lums (attempt %u)", fetchElapsed, _retryCount + 1);
+      _fetchingTime = false;
+      _retryCount++;
+      _nextCheckTime = millis() + retryDelay();
+    }
+    else
+    {
+      // Wake again when the timeout expires so the watchdog above can fire.
+      return SNTP_FETCH_TIMEOUT - fetchElapsed;
+    }
+  }
+
   DBUGVAR(_nextCheckTime);
   if(_sntpEnabled &&
     NULL != _timeHost &&
@@ -154,17 +184,45 @@ unsigned long TimeManager::loop(MicroTasks::WakeReason reason)
       delay <= 0)
     {
       _fetchingTime = true;
+      _fetchStartTime = millis();
       _nextCheckTime = 0;
 
       DBUGF("Trying to get time from %s", _timeHost);
-      _sntp.getTime(_timeHost, [this](struct timeval newTime)
+      bool started = _sntp.getTime(_timeHost, [this](struct timeval newTime)
       {
         setTime(newTime, _timeHost);
 
         _fetchingTime = false;
+        _retryCount = 0;
+        // Use the NTP timestamp directly — time(NULL) may transiently return
+        // the pre-existing clock value on some ESP32 SDK builds immediately
+        // after settimeofday(), causing _lastSyncTime to appear unchanged.
+        _lastSyncTime = newTime.tv_sec;
         _nextCheckTime = millis() + TIME_POLL_TIME;
         MicroTask.wakeTask(this);
       });
+
+      if(started)
+      {
+        // Return the watchdog timeout so the task wakes itself if the success
+        // or error callback never fires (DNS failure, MG_EV_CLOSE without
+        // MG_SNTP_FAILED, etc.) — without this the task returns Infinate and
+        // sleeps forever, leaving _fetchingTime stuck true indefinitely.
+        ret = SNTP_FETCH_TIMEOUT;
+      }
+      else
+      {
+        // getTime() could not start the request: _nc may still be set from the
+        // previous connection (MG_EV_CLOSE hasn't fired) or Mongoose rejected
+        // it entirely.  Use the backoff table so repeated failures don't create
+        // a rapid oscillation visible in the UI.
+        DBUGF("NTP: getTime() could not start request (attempt %u), backing off", _retryCount + 1);
+        _fetchingTime = false;
+        _retryCount++;
+        unsigned long backoff = retryDelay();
+        _nextCheckTime = millis() + backoff;
+        ret = backoff;
+      }
     } else {
       ret = delay > 0 ? (unsigned long)delay : 0;
     }
@@ -230,9 +288,44 @@ void TimeManager::setSntpEnabled(bool enabled)
   {
     _sntpEnabled = enabled;
     if(enabled) {
+      _retryCount = 0;
       checkNow();
     }
   }
+}
+
+unsigned long TimeManager::retryDelay()
+{
+  // Exponential backoff: 10s → 30s → 90s → 5min → 30min (cap)
+  static const unsigned long delays[] = {
+    10 * 1000,
+    30 * 1000,
+    90 * 1000,
+    5  * 60 * 1000,
+    30 * 60 * 1000,
+  };
+  uint8_t idx = _retryCount < sizeof(delays) / sizeof(delays[0])
+                  ? _retryCount
+                  : (uint8_t)(sizeof(delays) / sizeof(delays[0]) - 1);
+  return delays[idx];
+}
+
+const char *TimeManager::getNtpStatus()
+{
+  if (!_sntpEnabled)               return "disabled";
+  if (_fetchingTime)               return "syncing";
+  if (_retryCount > 0)             return "failed";
+  if (_lastSyncTime > 0)           return "synced";
+  return "waiting";
+}
+
+int32_t TimeManager::getNextSyncMs()
+{
+  if (!_sntpEnabled || _timeHost == NULL) return -1;
+  if (_fetchingTime)                      return 0;
+  if (_nextCheckTime == 0)                return -1;
+  int64_t diff = (int64_t)_nextCheckTime - (int64_t)millis();
+  return diff > INT32_MAX ? INT32_MAX : (int32_t)(diff > 0 ? diff : 0);
 }
 
 void time_set_time(struct timeval setTime, const char *source) {
