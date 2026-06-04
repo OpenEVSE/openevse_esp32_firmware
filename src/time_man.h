@@ -17,6 +17,7 @@ class TimeManager : public MicroTasks::Task
     bool _fetchingTime;
     bool _setTheTime;
     bool _sntpEnabled;
+    time_t _lastSyncTime;
 
     unsigned long retryDelay();
 
@@ -52,6 +53,11 @@ class TimeManager : public MicroTasks::Task
       _nextCheckTime = millis();
       MicroTask.wakeTask(this);
     }
+
+    // NTP status accessors (used by GET /time)
+    const char *getNtpStatus();
+    time_t getLastSyncTime() { return _lastSyncTime; }
+    int32_t getNextSyncMs();
 
     // Register for events
     void onTimeChange(MicroTasks::EventListener *listner) {

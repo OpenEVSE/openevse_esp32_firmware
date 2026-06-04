@@ -33,7 +33,8 @@ TimeManager::TimeManager() :
   _fetchStartTime(0),
   _retryCount(0),
   _fetchingTime(false),
-  _setTheTime(false)
+  _setTheTime(false),
+  _lastSyncTime(0)
 {
 }
 
@@ -193,6 +194,7 @@ unsigned long TimeManager::loop(MicroTasks::WakeReason reason)
 
         _fetchingTime = false;
         _retryCount = 0;
+        _lastSyncTime = time(NULL);
         _nextCheckTime = millis() + TIME_POLL_TIME;
         MicroTask.wakeTask(this);
       });
@@ -281,6 +283,24 @@ unsigned long TimeManager::retryDelay()
                   ? _retryCount
                   : (uint8_t)(sizeof(delays) / sizeof(delays[0]) - 1);
   return delays[idx];
+}
+
+const char *TimeManager::getNtpStatus()
+{
+  if (!_sntpEnabled)               return "disabled";
+  if (_fetchingTime)               return "syncing";
+  if (_retryCount > 0)             return "failed";
+  if (_lastSyncTime > 0)           return "synced";
+  return "waiting";
+}
+
+int32_t TimeManager::getNextSyncMs()
+{
+  if (!_sntpEnabled || _timeHost == NULL) return -1;
+  if (_fetchingTime)                      return 0;
+  if (_nextCheckTime == 0)                return -1;
+  int64_t diff = (int64_t)_nextCheckTime - (int64_t)millis();
+  return diff > INT32_MAX ? INT32_MAX : (int32_t)(diff > 0 ? diff : 0);
 }
 
 void time_set_time(struct timeval setTime, const char *source) {
