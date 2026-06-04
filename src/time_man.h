@@ -50,6 +50,11 @@ class TimeManager : public MicroTasks::Task
     void setSntpEnabled(bool enabled);
 
     void checkNow() {
+      // Reset _fetchingTime so a stuck or in-backoff state never blocks the
+      // sync from firing — MongooseSntpClient's own _nc guard prevents a
+      // duplicate request if one is genuinely in-flight.
+      _fetchingTime = false;
+      _retryCount = 0;
       _nextCheckTime = millis();
       MicroTask.wakeTask(this);
     }
