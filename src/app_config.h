@@ -93,13 +93,6 @@ extern uint32_t current_shaper_smoothing_time;
 extern uint32_t current_shaper_min_pause_time;
 extern uint32_t current_shaper_data_maxinterval;
 
-// Heartbeat Supervision settings (stored in ESP32 config, applied to EVSE on boot)
-extern uint32_t heartbeat_interval_cfg;
-extern uint32_t heartbeat_current_cfg;
-
-// Voltage for power calculations (centivolt, 0 = use EVSE default)
-extern uint32_t voltage_cfg;
-
 // Vehicle
 extern uint8_t vehicle_data_src;
 

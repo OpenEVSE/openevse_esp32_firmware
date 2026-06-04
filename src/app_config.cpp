@@ -106,13 +106,6 @@ uint32_t current_shaper_smoothing_time;
 uint32_t current_shaper_min_pause_time;   // in seconds
 uint32_t current_shaper_data_maxinterval; // in seconds
 
-// Voltage for power calculations (centivolt, 0 = use EVSE default)
-uint32_t voltage_cfg;
-
-// Heartbeat Supervision settings
-uint32_t heartbeat_interval_cfg;
-uint32_t heartbeat_current_cfg;
-
 // Tesla Client settings
 String tesla_access_token;
 String tesla_refresh_token;
@@ -222,11 +215,6 @@ ConfigOpt *opts[] =
   new ConfigOptDefinition<uint32_t>(current_shaper_smoothing_time, 60, "current_shaper_smoothing_time", "sst"),
   new ConfigOptDefinition<uint32_t>(current_shaper_min_pause_time, 300, "current_shaper_min_pause_time", "spt"),
   new ConfigOptDefinition<uint32_t>(current_shaper_data_maxinterval, 120, "current_shaper_data_maxinterval", "sdm"),
-
-// Heartbeat Supervision settings
-  new ConfigOptDefinition<uint32_t>(voltage_cfg, 0, "voltage", "sv"),
-  new ConfigOptDefinition<uint32_t>(heartbeat_interval_cfg, 5, "heartbeat_interval", "hbi"),
-  new ConfigOptDefinition<uint32_t>(heartbeat_current_cfg, 6, "heartbeat_current", "hbc"),
 
 // Vehicle settings
   new ConfigOptDefinition<uint8_t>(vehicle_data_src, 0, "vehicle_data_src", "vds"),
@@ -408,8 +396,6 @@ void config_changed(String name)
     limit.setDefaultLimit(limit_default_type.c_str(), limit_default_value);
   } else if(name == "sntp_enabled") {
     timeManager.setSntpEnabled(config_sntp_enabled());
-  } else if(name == "sntp_hostname") {
-    timeManager.setHost(sntp_hostname.c_str());
   }
 #endif
 }
@@ -541,19 +527,6 @@ bool config_deserialize(DynamicJsonDocument &doc)
   }
   #endif
 
-  if(doc.containsKey("heartbeat_interval") || doc.containsKey("heartbeat_current"))
-  {
-    uint32_t interval = doc.containsKey("heartbeat_interval") ? (uint32_t)doc["heartbeat_interval"] : heartbeat_interval_cfg;
-    uint32_t current  = doc.containsKey("heartbeat_current")  ? (uint32_t)doc["heartbeat_current"]  : heartbeat_current_cfg;
-    if(interval != evse.getHeartbeatInterval() || current != evse.getHeartbeatCurrent()) {
-      heartbeat_interval_cfg = interval;
-      heartbeat_current_cfg  = current;
-      evse.setHeartbeatSupervision(interval, current);
-      config_modified = true;
-      DBUGLN("heartbeat changed");
-    }
-  }
-
   if(config_modified)
   {
     #if ENABLE_CONFIG_CHANGE_NOTIFICATION
@@ -604,11 +577,6 @@ bool config_serialize(DynamicJsonDocument &doc, bool longNames, bool compactOutp
     doc["relay_check"] = evse.isStuckRelayCheckEnabled();
     doc["vent_check"] = evse.isVentRequiredEnabled();
     doc["temp_check"] = evse.isTemperatureCheckEnabled();
-    doc["front_button"] = evse.isFrontButtonEnabled();
-    doc["boot_lock"] = evse.isBootLockEnabled();
-    doc["heartbeat_interval"] = evse.getHeartbeatInterval();
-    doc["heartbeat_current"] = evse.getHeartbeatCurrent();
-    doc["voltage"] = voltage_cfg;
     doc["max_current_soft"] = evse.getMaxConfiguredCurrent();
     // OpenEVSE Read only information
     doc["service"] = static_cast<uint8_t>(evse.getServiceLevel());
