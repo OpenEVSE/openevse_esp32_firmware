@@ -51,3 +51,7 @@ struct FakeEvseState {
 std::string rapi_xor_checksum(const std::string &body);
 // Full reply frame: "<body>^<XX>\r"
 std::string rapi_frame(const std::string &body);
+
+// Handle one inbound RAPI command body (e.g. "$GS", "$SC 24"; no "^CK"/CR),
+// mutate state, and return the framed reply ("$OK ...^XX\r"). Unknown -> "$OK".
+std::string fake_evse_handle(FakeEvseState &st, const std::string &cmd);
