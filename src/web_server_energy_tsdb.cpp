@@ -10,6 +10,7 @@
 #include "tsdb_sample.h"
 #include "debug.h"
 #include <time.h>
+#include <stdio.h>
 
 // ---------------------------------------------------------------------------
 // /energy/raw – tsdb-backed handler
@@ -125,6 +126,207 @@ void handleEnergyRaw(MongooseHttpServerRequest *request)
     }
 
     response->print("]}");
+
+  } else if (HTTP_OPTIONS == request->method()) {
+    response->setCode(200);
+  } else {
+    response->setCode(405);
+  }
+
+  request->send(response);
+}
+
+
+// ---------------------------------------------------------------------------
+// Shared bucketed-aggregate helper
+//
+// Iterates [window_start, now) in fixed-width `bucket_secs` buckets.
+// For each bucket that has ≥1 sample it emits one JSON object:
+//
+//   { "dt": "YYYY-MM-DD", "pk": <peak_temp_C>, "mn": <min_temp_C>,
+//     "en": <energy_wh> }
+//
+// This is the EXACT per-entry shape of the legacy EnergyLogger /energy/daily
+// response (wrapper is supplied by the caller).
+//
+// `date_key_is_bucket_start`:
+//   true  → "dt" = date of bucket start (used for daily where bucket ≡ day)
+//   false → "dt" = date of bucket start (same; weekly also uses start of week)
+//
+// Temp stored as deci-degC (x10) in TSDB_COL_TEMP, so divide by 10 for degC.
+// Energy stored as Wh delta per sample; SUM over bucket = total Wh.
+// ---------------------------------------------------------------------------
+
+#define ENERGY_DAILY_DEFAULT_DAYS    30
+#define ENERGY_WEEKLY_DEFAULT_WEEKS  12
+
+// Compute midnight (00:00:00 local) for the day containing epoch t.
+static time_t start_of_day(time_t t)
+{
+  struct tm tm_buf;
+  localtime_r(&t, &tm_buf);
+  tm_buf.tm_hour = 0;
+  tm_buf.tm_min  = 0;
+  tm_buf.tm_sec  = 0;
+  return mktime(&tm_buf);
+}
+
+// Format epoch t as "YYYY-MM-DD" into buf[11].
+static void format_date_buf(time_t t, char *buf, size_t len)
+{
+  struct tm tm_buf;
+  localtime_r(&t, &tm_buf);
+  snprintf(buf, len, "%04d-%02d-%02d",
+    tm_buf.tm_year + 1900,
+    tm_buf.tm_mon  + 1,
+    tm_buf.tm_mday);
+}
+
+// Emit a bucketed daily-shaped JSON array into the streaming response.
+// `bucket_days` controls the bucket width (1 = daily, 7 = weekly).
+// `num_buckets` controls how many buckets to generate (window = num_buckets
+//  buckets immediately before now, aligned to bucket boundaries).
+static void emit_bucketed_daily(MongooseHttpServerResponseStream *response,
+                                int bucket_days,
+                                int num_buckets)
+{
+  time_t now_t = time(NULL);
+
+  // Align to the START of today, then step back num_buckets * bucket_days.
+  // This ensures each bucket is a clean calendar-day multiple.
+  time_t today_start = start_of_day(now_t);
+  time_t window_start = today_start - (time_t)(num_buckets * bucket_days) * 86400;
+
+  bool first = true;
+  response->print("[");
+
+  for (int i = 0; i < num_buckets; i++) {
+    uint32_t d0 = (uint32_t)(window_start + (time_t)(i * bucket_days) * 86400);
+    uint32_t d1 = d0 + (uint32_t)(bucket_days) * 86400;
+
+    // --- check record count first to skip empty buckets cheaply ---
+    uint32_t cnt = 0;
+    if (tsdb_query_count(d0, d1, &cnt) != ESP_OK || cnt == 0) {
+      continue;
+    }
+
+    // --- four aggregations in one pass ---
+    tsdb_agg_request_t reqs[4] = {
+      { TSDB_COL_ENERGY, TSDB_AGG_SUM, 0 },
+      { TSDB_COL_TEMP,   TSDB_AGG_MAX, 0 },
+      { TSDB_COL_TEMP,   TSDB_AGG_MIN, 0 },
+      { TSDB_COL_ENERGY, TSDB_AGG_COUNT, 0 },  // redundant guard; keep for symmetry
+    };
+
+    uint32_t nscanned = 0;
+    esp_err_t err = tsdb_aggregate_multi(d0, d1, reqs, 4, &nscanned);
+    if (err != ESP_OK || nscanned == 0) {
+      continue;
+    }
+
+    int32_t energy_wh = reqs[0].result;            // Wh (int32; sum of Wh deltas)
+    double  peak_c    = (double)reqs[1].result / 10.0; // deci-degC → degC
+    double  min_c     = (double)reqs[2].result / 10.0;
+
+    char dt_buf[12];
+    format_date_buf((time_t)d0, dt_buf, sizeof(dt_buf));
+
+    char obj_buf[128];
+    snprintf(obj_buf, sizeof(obj_buf),
+      "%s{\"dt\":\"%s\",\"pk\":%.1f,\"mn\":%.1f,\"en\":%ld}",
+      first ? "" : ",",
+      dt_buf,
+      peak_c,
+      min_c,
+      (long)energy_wh);
+
+    response->print(obj_buf);
+    first = false;
+  }
+
+  response->print("]");
+}
+
+// ---------------------------------------------------------------------------
+// /energy/daily  –  tsdb-backed
+//
+// JSON shape matches the legacy EnergyLogger getDailyMetrics exactly:
+//
+//   { "daily": [
+//       { "dt": "YYYY-MM-DD", "pk": <peak_c>, "mn": <min_c>, "en": <wh> },
+//       ...
+//   ]}
+//
+// Query params:
+//   days=N   override window size (default 30)
+// ---------------------------------------------------------------------------
+
+void handleEnergyDaily(MongooseHttpServerRequest *request)
+{
+  MongooseHttpServerResponseStream *response = nullptr;
+
+  if (false == requestPreProcess(request, response, CONTENT_TYPE_JSON)) {
+    return;
+  }
+
+  if (HTTP_GET == request->method()) {
+    char days_buf[8] = {0};
+    int num_days = ENERGY_DAILY_DEFAULT_DAYS;
+    if (request->getParam("days", days_buf, sizeof(days_buf)) >= 0 && days_buf[0] != '\0') {
+      int d = atoi(days_buf);
+      if (d >= 1 && d <= 365) num_days = d;
+    }
+
+    response->setCode(200);
+    response->print("{\"daily\":");
+    emit_bucketed_daily(response, 1 /* bucket_days */, num_days);
+    response->print("}");
+
+  } else if (HTTP_OPTIONS == request->method()) {
+    response->setCode(200);
+  } else {
+    response->setCode(405);
+  }
+
+  request->send(response);
+}
+
+// ---------------------------------------------------------------------------
+// /energy/weekly  –  tsdb-backed (NEW, no legacy equivalent)
+//
+// Same per-entry shape as /energy/daily (dt/pk/mn/en) but each bucket spans
+// 7 calendar days.  "dt" is the date of the Monday that starts the ISO week
+// containing the bucket start.  Wrapper key is "weekly".
+//
+//   { "weekly": [
+//       { "dt": "YYYY-MM-DD", "pk": <peak_c>, "mn": <min_c>, "en": <wh> },
+//       ...
+//   ]}
+//
+// Query params:
+//   weeks=N   override window size (default 12)
+// ---------------------------------------------------------------------------
+
+void handleEnergyWeekly(MongooseHttpServerRequest *request)
+{
+  MongooseHttpServerResponseStream *response = nullptr;
+
+  if (false == requestPreProcess(request, response, CONTENT_TYPE_JSON)) {
+    return;
+  }
+
+  if (HTTP_GET == request->method()) {
+    char weeks_buf[8] = {0};
+    int num_weeks = ENERGY_WEEKLY_DEFAULT_WEEKS;
+    if (request->getParam("weeks", weeks_buf, sizeof(weeks_buf)) >= 0 && weeks_buf[0] != '\0') {
+      int w = atoi(weeks_buf);
+      if (w >= 1 && w <= 104) num_weeks = w;
+    }
+
+    response->setCode(200);
+    response->print("{\"weekly\":");
+    emit_bucketed_daily(response, 7 /* bucket_days */, num_weeks);
+    response->print("}");
 
   } else if (HTTP_OPTIONS == request->method()) {
     response->setCode(200);

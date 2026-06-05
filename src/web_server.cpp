@@ -99,6 +99,8 @@ void handleEnergyMonthly(MongooseHttpServerRequest *request);
 void handleEnergyAnnual(MongooseHttpServerRequest *request);
 #else // ENABLE_TSDB
 void handleEnergyRaw(MongooseHttpServerRequest *request);
+void handleEnergyDaily(MongooseHttpServerRequest *request);
+void handleEnergyWeekly(MongooseHttpServerRequest *request);
 #endif // ENABLE_TSDB
 
 void dumpRequest(MongooseHttpServerRequest *request)
@@ -1340,6 +1342,8 @@ void web_server_setup()
   server.on("/energy/annual$", handleEnergyAnnual);
 #else // ENABLE_TSDB
   server.on("/energy/raw$", handleEnergyRaw);
+  server.on("/energy/daily$", handleEnergyDaily);
+  server.on("/energy/weekly$", handleEnergyWeekly);
 #endif // ENABLE_TSDB
 
   // Simple Firmware Update Form
