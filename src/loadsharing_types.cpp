@@ -12,11 +12,7 @@
 #include "debug.h"
 #include "loadsharing_types.h"
 #include "loadsharing_discovery_task.h"
-#include "loadsharing_peer_poller.h"
 #include "app_config.h"
-#include "evse_man.h"
-#include "input.h"
-#include "event.h"
 #include <Arduino.h>
 #include <ArduinoJson.h>
 #include <LittleFS.h>
@@ -24,91 +20,6 @@
 
 // Global instance
 LoadSharingGroupState loadSharingGroupState;
-
-void LoadSharingGroupState::becomeController() {
-  if (isController()) {
-    return;  // Already controller
-  }
-  DBUGLN("LoadSharingGroupState: Transitioning to controller role");
-  loadsharing_role = "controller";
-  loadsharing_controller_host = "";
-  config_commit();
-}
-
-void LoadSharingGroupState::becomeMember(const String& controllerHost) {
-  DBUGF("LoadSharingGroupState: Transitioning to member role (controller: %s)", controllerHost.c_str());
-  loadsharing_role = "member";
-  loadsharing_controller_host = controllerHost;
-  config_commit();
-
-  // Pause discovery when operating as a member
-  loadSharingDiscoveryTask.pause();
-}
-
-void LoadSharingGroupState::resetRole() {
-  DBUGLN("LoadSharingGroupState: Resetting role to disabled");
-  loadsharing_role = "";
-  loadsharing_controller_host = "";
-  _memberFailsafeActive = false;
-  _lastAllocationReceivedTime = 0;
-  config_commit();
-
-  // Release any active load sharing claim
-  evse.release(EvseClient_OpenEVSE_LoadSharing);
-
-  // Resume discovery when role is cleared
-  loadSharingDiscoveryTask.resume();
-}
-
-void LoadSharingGroupState::recordAllocationReceived() {
-  _lastAllocationReceivedTime = millis();
-  if (_memberFailsafeActive) {
-    DBUGLN("LoadSharing: Member failsafe recovered - allocation received from controller");
-    _memberFailsafeActive = false;
-  }
-}
-
-void LoadSharingGroupState::checkMemberFailsafe() {
-  if (!isMember() || _lastAllocationReceivedTime == 0) {
-    return;  // Not a member or never received an allocation
-  }
-
-  unsigned long timeout_ms = loadsharing_heartbeat_timeout * 1000UL;
-  if (timeout_ms == 0) {
-    timeout_ms = 30000UL;  // Default 30s if not configured
-  }
-
-  if ((long)(millis() - _lastAllocationReceivedTime) < (long)timeout_ms) {
-    return;  // Not timed out yet
-  }
-
-  if (!_memberFailsafeActive) {
-    _memberFailsafeActive = true;
-    DBUGF("LoadSharing: Member failsafe ACTIVATED - no allocation from controller for %lus", timeout_ms / 1000);
-
-    StaticJsonDocument<128> event;
-    event["loadsharing_failsafe"] = 1;
-    event["loadsharing_failsafe_mode"] = loadsharing_failsafe_mode;
-    event_send(event);
-  }
-
-  // Apply failsafe action
-  if (loadsharing_failsafe_mode == "disable") {
-    EvseProperties props;
-    props.setState(EvseState::Disabled);
-    evse.claim(EvseClient_OpenEVSE_LoadSharing, EvseManager_Priority_Limit, props);
-  } else {
-    // Default: "safe_current" mode - limit to failsafe_safe_current
-    double safeCurrent = loadsharing_failsafe_safe_current;
-    if (safeCurrent <= 0) {
-      safeCurrent = 6.0;  // Absolute minimum fallback
-    }
-    EvseProperties props;
-    props.setMaxCurrent((uint32_t)safeCurrent);
-    props.setState(EvseState::None);
-    evse.claim(EvseClient_OpenEVSE_LoadSharing, EvseManager_Priority_Limit, props);
-  }
-}
 
 void LoadSharingGroupState::notifyPeerChange() {
   if (_onPeerChange) {
@@ -140,12 +51,11 @@ void LoadSharingGroupState::onDiscoveryComplete() {
     bool found = false;
     for (const auto& discovered : *_discoveredPeers) {
       if (discovered.hostname == peer.getHost()) {
-        // Peer was discovered - update IP, port and mark online
+        // Peer was discovered - update IP and mark online
         if (!peer.isOnline() || peer.getIp() != discovered.ipAddress) {
           changed = true;
         }
         peer.setIp(discovered.ipAddress);
-        peer.setPort(discovered.port);
         peer.setOnline(true);
         found = true;
         break;
@@ -171,12 +81,6 @@ bool LoadSharingGroupState::addGroupPeer(const String& hostname) {
     return false;
   }
 
-  // Block peer modifications on member devices
-  if (isMember()) {
-    DBUGF("LoadSharingGroupState: Cannot add peers on member device");
-    return false;
-  }
-
   // Check for duplicates
   for (const auto& peer : _groupPeers) {
     if (peer == hostname) {
@@ -192,11 +96,6 @@ bool LoadSharingGroupState::addGroupPeer(const String& hostname) {
   // Also add to the active peer list
   ensurePeerEntry(hostname);
 
-  // Auto-transition to controller role on first peer add
-  if (!isController()) {
-    becomeController();
-  }
-
   DBUGF("LoadSharingGroupState: Added peer to group: %s (total: %u)",
         hostname.c_str(), (unsigned int)_groupPeers.size());
 
@@ -211,22 +110,11 @@ bool LoadSharingGroupState::removeGroupPeer(const String& hostname) {
     return false;
   }
 
-  // Block peer modifications on member devices
-  if (isMember()) {
-    DBUGF("LoadSharingGroupState: Cannot remove peers on member device");
-    return false;
-  }
-
   for (size_t i = 0; i < _groupPeers.size(); i++) {
     if (_groupPeers[i] == hostname) {
       _groupPeers.erase(_groupPeers.begin() + i);
       _groupPeersDirty = true;
       saveGroupPeers();
-
-      // Push config reset to the removed peer (if controller)
-      if (isController()) {
-        loadSharingPeerPoller.pushConfigResetToPeer(hostname);
-      }
 
       // Also remove from the active peer list
       for (size_t j = 0; j < _peers.size(); j++) {
@@ -286,7 +174,6 @@ std::vector<LoadSharingGroupState::PeerInfo> LoadSharingGroupState::getAllPeers(
     PeerInfo local;
     local.hostname = getLocalHostname();
     local.ipAddress = "";
-    local.port = www_http_port;
     local.online = true;
     local.joined = true;
     result.push_back(local);
@@ -311,7 +198,6 @@ std::vector<LoadSharingGroupState::PeerInfo> LoadSharingGroupState::getAllPeers(
       PeerInfo info;
       info.hostname = peer.hostname;
       info.ipAddress = peer.ipAddress;
-      info.port = peer.port;
       info.online = true;
       info.joined = isGroupPeer(peer.hostname);
 
@@ -336,7 +222,6 @@ std::vector<LoadSharingGroupState::PeerInfo> LoadSharingGroupState::getAllPeers(
         PeerInfo info;
         info.hostname = hostname;
         info.ipAddress = "";
-        info.port = www_http_port;
         info.online = false;
         info.joined = true;
 

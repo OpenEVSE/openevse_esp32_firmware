@@ -11,8 +11,41 @@
 #include "debug.h"
 #include <vector>
 #include <ArduinoJson.h>
+#include <MongooseHttpClient.h>
+#include <MongooseHttp.h>
 
 typedef const __FlashStringHelper *fstr_t;
+
+// HTTP client for reciprocal peer sync requests
+static MongooseHttpClient loadSharingHttpClient;
+
+/**
+ * @brief Fire-and-forget async HTTP request to sync peer group membership.
+ * Used to add or remove the local device on a remote peer's group.
+ */
+static void syncPeerGroupMembership(const String &peerHost, HttpRequestMethodComposite method,
+                                     const String &jsonBody)
+{
+  String url = "http://" + peerHost + "/loadsharing/peers";
+  DBUGF("[LoadSharing] Reciprocal sync %s %s: %s",
+        method == HTTP_POST ? "POST" : "DELETE", url.c_str(), jsonBody.c_str());
+
+  MongooseHttpClientRequest *req = loadSharingHttpClient.beginRequest(url.c_str());
+  req->setMethod(method);
+  req->setContentType("application/json");
+  req->setContent(jsonBody.c_str());
+
+  req->onResponse([peerHost](MongooseHttpClientResponse *resp) {
+    DBUGF("[LoadSharing] Reciprocal sync to %s responded %d",
+          peerHost.c_str(), resp->respCode());
+  });
+
+  req->onClose([peerHost]() {
+    DBUGF("[LoadSharing] Reciprocal sync to %s connection closed", peerHost.c_str());
+  });
+
+  loadSharingHttpClient.send(req);
+}
 
 // Path prefix constants
 #define LOADSHARING_PEERS_PATH "/loadsharing/peers"
@@ -92,18 +125,11 @@ void handleLoadSharingPeersPost(MongooseHttpServerRequest *request, MongooseHttp
 {
   DBUGLN("[LoadSharing] POST /loadsharing/peers");
 
-  // Members cannot modify the peer list
-  if (loadSharingGroupState.isMember()) {
-    response->setCode(403);
-    response->print("{\"msg\":\"Managed by controller\"}");
-    return;
-  }
-
   // Parse request body
   String body = request->body().toString();
   DBUGF("[LoadSharing] Request body: %s", body.c_str());
 
-  const size_t capacity = JSON_OBJECT_SIZE(2) + 256;
+  const size_t capacity = JSON_OBJECT_SIZE(3) + 256;
   DynamicJsonDocument doc(capacity);
   DeserializationError error = deserializeJson(doc, body);
 
@@ -132,6 +158,14 @@ void handleLoadSharingPeersPost(MongooseHttpServerRequest *request, MongooseHttp
     return;
   }
 
+  // Check if this is the local device
+  if (loadSharingGroupState.isLocalHost(host)) {
+    DBUGF("[LoadSharing] Cannot add local device as peer: %s", host.c_str());
+    response->setCode(400);
+    response->print("{\"msg\":\"Cannot add local device as peer\"}");
+    return;
+  }
+
   DBUGF("[LoadSharing] Adding peer: %s", host.c_str());
 
   // Validate host is resolvable (basic check)
@@ -153,20 +187,24 @@ void handleLoadSharingPeersPost(MongooseHttpServerRequest *request, MongooseHttp
   DBUGF("[LoadSharing] Peer added successfully. Total in group: %u",
         (unsigned int)loadSharingGroupState.getGroupPeers().size());
 
+  // Reciprocal sync: add local device on the remote peer's group (unless this
+  // is itself a reciprocal call, indicated by reciprocal=false)
+  bool reciprocal = doc.containsKey("reciprocal") ? doc["reciprocal"].as<bool>() : true;
+  if (reciprocal) {
+    DynamicJsonDocument syncDoc(256);
+    syncDoc["host"] = loadSharingGroupState.getLocalHostname();
+    syncDoc["reciprocal"] = false;
+    String syncBody;
+    serializeJson(syncDoc, syncBody);
+    syncPeerGroupMembership(host, HTTP_POST, syncBody);
+  }
+
   response->setCode(200);
   response->print("{\"msg\":\"done\"}");
 }
 
 void handleLoadSharingPeersDelete(MongooseHttpServerRequest *request, MongooseHttpServerResponseStream *response)
 {
-  // Members cannot modify the peer list
-  if (loadSharingGroupState.isMember()) {
-    response->setCode(403);
-    response->print("{\"msg\":\"Managed by controller\"}");
-    request->send(response);
-    return;
-  }
-
   // TODO: Phase 1.4 - Remove peer from configured group
   response->setCode(501);
   response->print("{\"msg\":\"Not implemented\"}");
@@ -176,10 +214,11 @@ void handleLoadSharingPeersDeleteWithHost(MongooseHttpServerRequest *request, Mo
 {
   DBUGF("[LoadSharing] DELETE /loadsharing/peers/%s", host.c_str());
 
-  // Members cannot modify the peer list
-  if (loadSharingGroupState.isMember()) {
-    response->setCode(403);
-    response->print("{\"msg\":\"Managed by controller\"}");
+  // Block removal of the local device
+  if (loadSharingGroupState.isLocalHost(host)) {
+    DBUGF("[LoadSharing] Cannot remove local device: %s", host.c_str());
+    response->setCode(400);
+    response->print("{\"msg\":\"Cannot remove local device from group\"}");
     return;
   }
 
@@ -194,6 +233,31 @@ void handleLoadSharingPeersDeleteWithHost(MongooseHttpServerRequest *request, Mo
   DBUGF("[LoadSharing] Peer removed. Remaining peers: %u",
         (unsigned int)loadSharingGroupState.getGroupPeers().size());
 
+  // Reciprocal sync: check if caller passed reciprocal=false via query param
+  // For DELETE with path param, use query string: ?reciprocal=false
+  String uri = request->uri();
+  bool reciprocal = (uri.indexOf("reciprocal=false") == -1);
+  if (reciprocal) {
+    // Tell the remote peer to remove the local device from their group
+    String localHost = loadSharingGroupState.getLocalHostname();
+    String deleteUrl = "http://" + host + "/loadsharing/peers/" + localHost + "?reciprocal=false";
+    DBUGF("[LoadSharing] Reciprocal DELETE %s", deleteUrl.c_str());
+
+    MongooseHttpClientRequest *req = loadSharingHttpClient.beginRequest(deleteUrl.c_str());
+    req->setMethod(HTTP_DELETE);
+
+    req->onResponse([host](MongooseHttpClientResponse *resp) {
+      DBUGF("[LoadSharing] Reciprocal DELETE to %s responded %d",
+            host.c_str(), resp->respCode());
+    });
+
+    req->onClose([host]() {
+      DBUGF("[LoadSharing] Reciprocal DELETE to %s connection closed", host.c_str());
+    });
+
+    loadSharingHttpClient.send(req);
+  }
+
   // Return success
   response->setCode(200);
   response->print("{\"msg\":\"done\"}");
@@ -202,13 +266,6 @@ void handleLoadSharingPeersDeleteWithHost(MongooseHttpServerRequest *request, Mo
 void handleLoadSharingDiscover(MongooseHttpServerRequest *request, MongooseHttpServerResponseStream *response)
 {
   DBUGLN("[LoadSharing] POST /loadsharing/discover");
-
-  // Members cannot trigger discovery
-  if (loadSharingGroupState.isMember()) {
-    response->setCode(403);
-    response->print("{\"msg\":\"Managed by controller\"}");
-    return;
-  }
 
   // Trigger manual discovery via the background task
   loadSharingDiscoveryTask.triggerDiscovery();

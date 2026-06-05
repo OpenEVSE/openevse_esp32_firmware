@@ -4,7 +4,7 @@
   <meta charset="utf-8" />
   <title>OpenEVSE Simulations</title>
   <script src="https://canvasjs.com/assets/script/canvasjs.min.js"></script>
-  <script src="simulations.js?v=20260604d"></script>
+  <script src="simulations.js?v=20260605a"></script>
   <link rel="stylesheet" href="simulations.css" />
 </head>
 <body>
@@ -12,12 +12,15 @@
   <p><a href="interactive.html">Interactive mode</a></p>
 
   <div class="tab-controls">
-    <label for="profile">Profile:</label>
-    <select id="profile">
+    <label for="profile">Profiles:</label>
+    <select id="profile" multiple size="5">
       <option value="">loading...</option>
     </select>
+    <button id="profiles-all" type="button">Select All</button>
+    <button id="profiles-clear" type="button">Clear</button>
     <button id="refresh">Load</button>
   </div>
+  <div id="profile-solo" class="profile-solo"></div>
 
   <div class="tabs" id="tabs"></div>
 
@@ -27,13 +30,45 @@
   <script>
     let activeCategory = "divert";
 
-    async function repopulateProfilesForCategory(preferredProfile) {
+    function getSelectedProfiles() {
+      const select = document.getElementById("profile");
+      return Array.from(select.selectedOptions).map((o) => o.value).filter(Boolean);
+    }
+
+    function renderSoloButtons(profiles) {
+      const solo = document.getElementById("profile-solo");
+      solo.innerHTML = "";
+      if (!profiles.length) {
+        return;
+      }
+
+      const label = document.createElement("span");
+      label.textContent = "Solo:";
+      solo.appendChild(label);
+
+      profiles.forEach((p) => {
+        const btn = document.createElement("button");
+        btn.type = "button";
+        btn.textContent = p;
+        btn.addEventListener("click", async () => {
+          const select = document.getElementById("profile");
+          Array.from(select.options).forEach((opt) => {
+            opt.selected = opt.value === p;
+          });
+          await refresh();
+        });
+        solo.appendChild(btn);
+      });
+    }
+
+    async function repopulateProfilesForCategory(previousProfiles = []) {
       const select = document.getElementById("profile");
       const profiles = await fetchProfilesForCategory(activeCategory);
       select.innerHTML = "";
 
       if (profiles.length === 0) {
         select.innerHTML = '<option value="">none</option>';
+        renderSoloButtons([]);
         return;
       }
 
@@ -41,26 +76,29 @@
         const opt = document.createElement("option");
         opt.value = p;
         opt.textContent = p;
+        opt.selected = previousProfiles.includes(p);
         select.appendChild(opt);
       });
 
-      if (preferredProfile && profiles.includes(preferredProfile)) {
-        select.value = preferredProfile;
-      } else if (profiles.includes("default")) {
-        select.value = "default";
-      } else {
-        select.value = profiles[0];
+      // Default to all selected for side-by-side comparison.
+      const hasSelection = Array.from(select.options).some((o) => o.selected);
+      if (!hasSelection) {
+        Array.from(select.options).forEach((o) => {
+          o.selected = true;
+        });
       }
+
+      renderSoloButtons(profiles);
     }
 
     async function setActiveTab(category, categories) {
-      const previousProfile = document.getElementById("profile").value;
+      const previousProfiles = getSelectedProfiles();
       activeCategory = category;
       const tabs = document.getElementById("tabs");
       Array.from(tabs.querySelectorAll("button")).forEach((button) => {
         button.classList.toggle("active", button.dataset.category === category);
       });
-      await repopulateProfilesForCategory(previousProfile);
+      await repopulateProfilesForCategory(previousProfiles);
       await refresh();
     }
 
@@ -90,7 +128,7 @@
           activeCategory = categories[0];
         }
         renderTabs(categories);
-        await repopulateProfilesForCategory("default");
+        await repopulateProfilesForCategory([]);
         status.textContent = "";
       } catch (err) {
         status.textContent = String(err);
@@ -98,15 +136,31 @@
     }
 
     async function refresh() {
-      const profile = document.getElementById("profile").value;
+      const profiles = getSelectedProfiles();
       const status = document.getElementById("status");
       try {
         status.textContent = "";
-        await renderCategory("content", activeCategory, profile);
+        await renderCategory("content", activeCategory, profiles);
       } catch (err) {
         status.textContent = String(err);
       }
     }
+
+    document.getElementById("profiles-all").addEventListener("click", async () => {
+      const select = document.getElementById("profile");
+      Array.from(select.options).forEach((o) => {
+        o.selected = true;
+      });
+      await refresh();
+    });
+
+    document.getElementById("profiles-clear").addEventListener("click", async () => {
+      const select = document.getElementById("profile");
+      Array.from(select.options).forEach((o) => {
+        o.selected = false;
+      });
+      await refresh();
+    });
 
     document.getElementById("refresh").addEventListener("click", refresh);
     initProfiles().then(refresh);

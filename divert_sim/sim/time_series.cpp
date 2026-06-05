@@ -33,6 +33,7 @@ long parseTimestamp(const std::string &s)
   }
 
   int y = 1970, M = 1, d = 1, h = 0, mi = 0, sec = 0;
+  char ampm[3] = {0, 0, 0};
   if (sscanf(s.c_str(), "%d-%d-%dT%d:%d:%dZ", &y, &M, &d, &h, &mi, &sec) == 6 ||
       sscanf(s.c_str(), "%d-%d-%dT%d:%d:%d+00:00", &y, &M, &d, &h, &mi, &sec) == 6 ||
       sscanf(s.c_str(), "%d-%d-%d %d:%d:%d", &y, &M, &d, &h, &mi, &sec) == 6 ||
@@ -45,6 +46,27 @@ long parseTimestamp(const std::string &s)
     t.tm_min = mi;
     t.tm_sec = sec;
     return timegm(&t);
+  }
+
+  // Time-only input (e.g. "12:15 AM") is anchored to 2020-01-01.
+  int h12 = 0;
+  if (sscanf(s.c_str(), "%d:%d %2s", &h12, &mi, ampm) == 3) {
+    if ((ampm[0] == 'A' || ampm[0] == 'a' || ampm[0] == 'P' || ampm[0] == 'p') &&
+        (ampm[1] == 'M' || ampm[1] == 'm') && h12 >= 1 && h12 <= 12 && mi >= 0 && mi <= 59) {
+      h = h12 % 12;
+      if (ampm[0] == 'P' || ampm[0] == 'p') {
+        h += 12;
+      }
+
+      struct tm t = {};
+      t.tm_year = 2020 - 1900;
+      t.tm_mon = 0;
+      t.tm_mday = 1;
+      t.tm_hour = h;
+      t.tm_min = mi;
+      t.tm_sec = 0;
+      return timegm(&t);
+    }
   }
   return -1;
 }

@@ -171,6 +171,27 @@ div.loadsharing
 .tab-controls {
   margin-bottom: 12px;
 }
+
+#profile[multiple] {
+  min-width: 160px;
+  min-height: 110px;
+  vertical-align: middle;
+}
+
+.profile-solo {
+  margin-bottom: 12px;
+}
+
+.profile-solo span {
+  margin-right: 8px;
+  font-weight: 600;
+}
+
+.profile-solo button {
+  margin-right: 6px;
+  margin-bottom: 6px;
+}
+
 table.summary-table {
   border-collapse: collapse;
   margin: 8px 0 16px 0;

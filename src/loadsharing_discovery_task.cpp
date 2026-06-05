@@ -5,7 +5,9 @@
 #include "debug.h"
 #include "loadsharing_discovery_task.h"
 #include "loadsharing_types.h"
+#include "app_config.h"
 #include <Arduino.h>
+#include <espal.h>
 #include <ESPmDNS.h>
 #include <mdns.h>
 
@@ -29,8 +31,7 @@ LoadSharingDiscoveryTask::LoadSharingDiscoveryTask(unsigned long cacheTtl,
     _query_in_progress(false),
     _groupState(nullptr),
     _discovery_count(0),
-    _last_result_count(0),
-    _paused(false)
+    _last_result_count(0)
 {
 }
 
@@ -41,11 +42,6 @@ void LoadSharingDiscoveryTask::setup() {
 
 unsigned long LoadSharingDiscoveryTask::loop(MicroTasks::WakeReason reason) {
   unsigned long now = millis();
-
-  // Skip discovery if paused (member connected to controller)
-  if (_paused) {
-    return _poll_interval_ms;
-  }
 
   // If a query is currently in progress, poll its status
   if (_query_in_progress) {
@@ -101,27 +97,6 @@ void LoadSharingDiscoveryTask::triggerDiscovery() {
   _last_discovery_time = 0;
   MicroTask.wakeTask(this);
   DBUGF("LoadSharingDiscoveryTask: Triggered manual discovery");
-}
-
-void LoadSharingDiscoveryTask::pause() {
-  if (!_paused) {
-    _paused = true;
-    // Cleanup any active query
-    if (_query_in_progress) {
-      cleanupQuery();
-      _query_in_progress = false;
-    }
-    DBUGLN("LoadSharingDiscoveryTask: Paused (member mode)");
-  }
-}
-
-void LoadSharingDiscoveryTask::resume() {
-  if (_paused) {
-    _paused = false;
-    _last_discovery_time = 0;  // Force immediate discovery on resume
-    MicroTask.wakeTask(this);
-    DBUGLN("LoadSharingDiscoveryTask: Resumed");
-  }
 }
 
 const std::vector<DiscoveredPeer>& LoadSharingDiscoveryTask::getCachedPeers() const {
@@ -205,27 +180,36 @@ bool LoadSharingDiscoveryTask::pollAsyncQuery() {
 
     // Convert mdns_result_t linked list to our DiscoveredPeer vector
     std::vector<DiscoveredPeer> peers;
-    std::vector<String> seenPeerKeys;  // Track to deduplicate
+    std::vector<String> seenHostnames;  // Track to deduplicate
 
     for (mdns_result_t* r = results; r; r = r->next) {
       DiscoveredPeer peer;
 
-      // Prefer the mDNS hostname for connectivity, keep service instance separately.
-      if (r->hostname) {
+      // Build hostname
+      if (r->instance_name) {
+        peer.serviceName = String(r->instance_name);
+        peer.hostname = peer.serviceName + String(".local");
+      } else if (r->hostname) {
         peer.hostname = String(r->hostname);
         if (!peer.hostname.endsWith(".local")) {
           peer.hostname += ".local";
         }
-      } else if (r->instance_name) {
-        peer.hostname = String(r->instance_name) + String(".local");
+        peer.serviceName = r->hostname;
       } else {
         continue;  // Skip if no hostname
       }
 
-      if (r->instance_name) {
-        peer.serviceName = String(r->instance_name);
-      } else {
-        peer.serviceName = peer.hostname;
+      // Check for duplicates
+      bool isDuplicate = false;
+      for (const auto &seen : seenHostnames) {
+        if (seen == peer.hostname) {
+          isDuplicate = true;
+          break;
+        }
+      }
+
+      if (isDuplicate) {
+        continue;
       }
 
       // Extract IP address
@@ -248,47 +232,22 @@ bool LoadSharingDiscoveryTask::pollAsyncQuery() {
       }
 
       // Filter out the local instance by device ID (TXT "id" record) or hostname
+      String localId = ESPAL.getLongId();
+      String localHostname = esp_hostname + String(".local");
       auto idIt = peer.txtRecords.find(String("id"));
-      bool hasId = (idIt != peer.txtRecords.end() && idIt->second.length() > 0);
-      bool isSelf = (hasId && _groupState->isLocalHost(idIt->second)) ||
-                    (!hasId && _groupState->isLocalHost(peer.hostname));
-      if (isSelf) {
-        DBUGF("  Skipping self: host=%s id=%s",
-              peer.hostname.c_str(),
-              hasId ? idIt->second.c_str() : "");
+      if (idIt != peer.txtRecords.end() && idIt->second == localId) {
+        DBUGF("  Skipping self (matched device id): %s", peer.hostname.c_str());
+        continue;
+      }
+      if (peer.hostname.equalsIgnoreCase(localHostname)) {
+        DBUGF("  Skipping self (matched hostname): %s", peer.hostname.c_str());
         continue;
       }
 
-      // Dedupe by stable identity first; if unavailable use host:port.
-      String dedupeKey;
-      if (hasId) {
-        dedupeKey = String("id:") + idIt->second;
-      } else if (r->instance_name) {
-        dedupeKey = String("instance:") + String(r->instance_name);
-      } else {
-        dedupeKey = String("host:") + peer.hostname + String(":") + String(peer.port);
-      }
+      DBUGF("  Found peer: %s (%s:%u)",
+            peer.hostname.c_str(), peer.ipAddress.c_str(), peer.port);
 
-      bool isDuplicate = false;
-      for (const auto &seen : seenPeerKeys) {
-        if (seen.equalsIgnoreCase(dedupeKey)) {
-          isDuplicate = true;
-          break;
-        }
-      }
-
-      if (isDuplicate) {
-        DBUGF("  Skipping duplicate: key=%s", dedupeKey.c_str());
-        continue;
-      }
-
-      DBUGF("  Found peer: host=%s id=%s ip=%s port=%u",
-        peer.hostname.c_str(),
-        hasId ? idIt->second.c_str() : "",
-        peer.ipAddress.c_str(),
-        peer.port);
-
-      seenPeerKeys.push_back(dedupeKey);
+      seenHostnames.push_back(peer.hostname);
       peers.push_back(peer);
     }
 

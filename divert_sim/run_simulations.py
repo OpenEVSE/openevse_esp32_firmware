@@ -138,16 +138,21 @@ def run_scenario(
 def build_index(
     config_overrides: Optional[Dict[str, Any]] = None,
     profile_suffix: Optional[str] = None,
+    index_name: str = "index.json",
 ) -> Dict[str, Any]:
-    """Run all scenarios, write CSV outputs, and write output/index.json."""
+    """Run all scenarios, write CSV outputs, and write an index file."""
     OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
 
     scenarios = discover_scenarios()
     entries: List[Dict[str, Any]] = []
 
     for scenario in scenarios:
-        profile = profile_suffix or scenario.profile
-        output_name = f"{scenario.id}_{profile}"
+        if profile_suffix:
+            profile = profile_suffix
+            output_name = f"{scenario.id}_{profile}"
+        else:
+            profile = scenario.profile
+            output_name = scenario.id
         rows = run_scenario(str(scenario.path), output=output_name, config_overrides=config_overrides)
         row_count = len(rows)
         entries.append(
@@ -167,7 +172,7 @@ def build_index(
         "generated_at": datetime.now(timezone.utc).isoformat().replace("+00:00", "Z"),
         "scenarios": entries,
     }
-    with (OUTPUT_DIR / "index.json").open("w") as f:
+    with (OUTPUT_DIR / index_name).open("w") as f:
         json.dump(index, f, indent=2)
     return index
 

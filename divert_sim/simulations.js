@@ -96,7 +96,7 @@ function buildPeerSeries(rows, peerId) {
 }
 
 async function loadCsvRows(csvPath) {
-  const response = await fetch(csvPath);
+  const response = await fetch(csvPath, { cache: "no-store" });
   const text = await response.text();
   const parsed = parseCsv(text);
   return parsed;
@@ -166,7 +166,7 @@ async function renderScenario(container, scenario) {
   scenarioBlock.className = "scenario-block";
 
   const h3 = document.createElement("h3");
-  h3.textContent = `${scenario.title} (${scenario.profile})`;
+  h3.textContent = scenario.title || scenario.id || "Scenario";
   scenarioBlock.appendChild(h3);
   // CanvasJS requires the target container element to exist in the live DOM
   // before Chart(...) is constructed.
@@ -204,22 +204,22 @@ async function renderScenario(container, scenario) {
 
 }
 
-async function fetchIndex() {
-  const response = await fetch("output/index.json");
+async function fetchIndex(indexPath = "output/index.json") {
+  const response = await fetch(indexPath, { cache: "no-store" });
   if (!response.ok) {
-    throw new Error(`Failed to load output/index.json: ${response.status}`);
+    throw new Error(`Failed to load ${indexPath}: ${response.status}`);
   }
   return response.json();
 }
 
-async function fetchProfiles() {
-  const index = await fetchIndex();
+async function fetchProfiles(indexPath = "output/index.json") {
+  const index = await fetchIndex(indexPath);
   const set = new Set((index.scenarios || []).map((s) => s.profile).filter(Boolean));
   return Array.from(set).sort();
 }
 
-async function fetchProfilesForCategory(category) {
-  const index = await fetchIndex();
+async function fetchProfilesForCategory(category, indexPath = "output/index.json") {
+  const index = await fetchIndex(indexPath);
   const set = new Set(
     (index.scenarios || [])
       .filter((s) => s.category === category)
@@ -229,8 +229,8 @@ async function fetchProfilesForCategory(category) {
   return Array.from(set).sort();
 }
 
-async function fetchCategories() {
-  const index = await fetchIndex();
+async function fetchCategories(indexPath = "output/index.json") {
+  const index = await fetchIndex(indexPath);
   const set = new Set((index.scenarios || []).map((s) => s.category).filter(Boolean));
   return Array.from(set).sort();
 }
@@ -246,11 +246,11 @@ function groupByCategory(scenarios) {
   return grouped;
 }
 
-async function renderIndex(targetId, profile) {
+async function renderIndex(targetId, profile, indexPath = "output/index.json") {
   const root = document.getElementById(targetId);
   root.innerHTML = "";
 
-  const index = await fetchIndex();
+  const index = await fetchIndex(indexPath);
   const scenarios = index.scenarios || [];
   let filtered = scenarios.filter((s) => s.profile === profile);
   if (filtered.length === 0) {
@@ -279,19 +279,24 @@ async function renderIndex(targetId, profile) {
   }
 }
 
-async function renderCategory(targetId, category, profile) {
+async function renderCategory(targetId, category, profiles, indexPath = "output/index.json") {
   const root = document.getElementById(targetId);
   root.innerHTML = "";
 
-  const index = await fetchIndex();
+  const index = await fetchIndex(indexPath);
   const scenarios = (index.scenarios || []).filter((s) => s.category === category);
-  const filtered = profile
-    ? scenarios.filter((s) => s.profile === profile)
+
+  const selectedProfiles = Array.isArray(profiles)
+    ? profiles.filter(Boolean)
+    : (profiles ? [profiles] : []);
+
+  const filtered = selectedProfiles.length > 0
+    ? scenarios.filter((s) => selectedProfiles.includes(s.profile))
     : scenarios;
 
   if (filtered.length === 0) {
     const empty = document.createElement("p");
-    empty.textContent = "No scenarios available for this category/profile.";
+    empty.textContent = "No scenarios available for the selected profiles.";
     root.appendChild(empty);
     return;
   }

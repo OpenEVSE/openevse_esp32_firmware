@@ -4,7 +4,7 @@
   <meta charset="utf-8" />
   <title>OpenEVSE Interactive Simulations</title>
   <script src="https://canvasjs.com/assets/script/canvasjs.min.js"></script>
-  <script src="simulations.js?v=20260604d"></script>
+  <script src="simulations.js?v=20260604g"></script>
   <link rel="stylesheet" href="simulations.css" />
 </head>
 <body>
@@ -44,7 +44,7 @@
         status.textContent = "Running scenarios...";
         await runInteractiveSimulation(collectOverrides());
         status.textContent = "Completed.";
-        await renderIndex("content", "interactive");
+        await renderIndex("content", "interactive", "output/interactive.json");
       } catch (err) {
         status.textContent = String(err);
       }
