@@ -36,12 +36,6 @@
         "vehicle": true
       },
       "inputs": {
-        "solar": {
-          "csv": "../day2_grid_ie.csv",
-          "time_column": 0,
-          "column": 1,
-          "skip_header": true
-        },
         "grid_ie": {
           "csv": "../day2_grid_ie.csv",
           "time_column": 0,

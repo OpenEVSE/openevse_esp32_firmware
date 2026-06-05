@@ -144,6 +144,12 @@ bool Scenario::loadFromFile(const std::string &path)
 
     JsonObjectConst inputs = pj["inputs"].as<JsonObjectConst>();
     if (!inputs.isNull()) {
+      if (inputs.containsKey("solar") && inputs.containsKey("grid_ie")) {
+        std::cerr << "Scenario: inputs.solar and inputs.grid_ie are mutually exclusive for peer "
+                  << p.id << std::endl;
+        return false;
+      }
+
       if (inputs.containsKey("solar")) {
         if (!p.solar.loadFromJson(inputs["solar"],
                                  scenario_dir,
