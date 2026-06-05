@@ -69,7 +69,11 @@
 #include "event_log.h"
 #include "evse_man.h"
 #include "scheduler.h"
+#ifndef ENABLE_TSDB
 #include "energy_logger.h"
+#else
+#include "tsdb_energy_logger.h"
+#endif
 
 #include "legacy_support.h"
 #include "certificates.h"
@@ -87,7 +91,9 @@ EvseManager evse(RAPI_PORT, eventLog);
 Scheduler scheduler(evse);
 ManualOverride manual(evse);
 DivertTask divert(evse);
+#ifndef ENABLE_TSDB
 EnergyLogger energyLogger;
+#endif
 
 NetManagerTask net(lcd, ledManager, timeManager);
 
@@ -196,8 +202,13 @@ void setup()
   web_server_setup();
   DBUGF("After web_server_setup: %d", ESPAL.getFreeHeap());
 
+#ifdef ENABLE_TSDB
+  tsdbEnergyLogger.begin(evse);
+  DBUGF("After tsdbEnergyLogger.begin: %d", ESPAL.getFreeHeap());
+#else
   energyLogger.begin(&evse);
   DBUGF("After energyLogger.begin: %d", ESPAL.getFreeHeap());
+#endif
 
 #ifdef ENABLE_OTA
   ota_setup();
@@ -363,7 +374,9 @@ class SystemRestart : public MicroTasks::Alarm
     void Trigger()
     {
       DBUGLN("Restarting...");
+#ifndef ENABLE_TSDB
       energyLogger.end();
+#endif
       evse.saveEnergyMeter();
       net.wifiStop();
       ESPAL.reset();

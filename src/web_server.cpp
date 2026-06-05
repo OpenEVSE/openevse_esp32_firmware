@@ -92,10 +92,12 @@ void handleHomeAssistantAuthStart(MongooseHttpServerRequest *request);
 void handleHomeAssistantCallback(MongooseHttpServerRequest *request);
 void handleHomeAssistantStatus(MongooseHttpServerRequest *request);
 void handleHomeAssistantDisconnect(MongooseHttpServerRequest *request);
+#ifndef ENABLE_TSDB
 void handleEnergyRaw(MongooseHttpServerRequest *request);
 void handleEnergyDaily(MongooseHttpServerRequest *request);
 void handleEnergyMonthly(MongooseHttpServerRequest *request);
 void handleEnergyAnnual(MongooseHttpServerRequest *request);
+#endif // !ENABLE_TSDB
 
 void dumpRequest(MongooseHttpServerRequest *request)
 {
@@ -1329,10 +1331,12 @@ void web_server_setup()
   server.on("/emeter", handleEmeter);
   server.on("/time", handleTime);
 
+#ifndef ENABLE_TSDB
   server.on("/energy/raw$", handleEnergyRaw);
   server.on("/energy/daily$", handleEnergyDaily);
   server.on("/energy/monthly$", handleEnergyMonthly);
   server.on("/energy/annual$", handleEnergyAnnual);
+#endif // !ENABLE_TSDB
 
   // Simple Firmware Update Form
   server.on("/update$")->

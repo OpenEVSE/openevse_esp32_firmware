@@ -2,6 +2,8 @@
 #undef ENABLE_DEBUG
 #endif
 
+#ifndef ENABLE_TSDB
+
 #include <Arduino.h>
 #include "web_server.h"
 #include "energy_logger.h"
@@ -152,3 +154,5 @@ void handleEnergyAnnual(MongooseHttpServerRequest *request)
 
   request->send(response);
 }
+
+#endif // !ENABLE_TSDB
