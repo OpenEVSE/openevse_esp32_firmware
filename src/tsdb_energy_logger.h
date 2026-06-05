@@ -12,10 +12,9 @@
 // tsdb timestamp; writing a pre-NTP ~1970 epoch would corrupt the time index.
 #define TSDB_TIME_VALID_FLOOR     1700000000UL
 
-// Monthly/annual rollup files — reuse legacy paths so handlers are trivial.
-// LittleFS.open() uses these paths directly (no /littlefs/ prefix needed).
-#define TSDB_MONTHLY_DIR          "/logs/monthly"
-#define TSDB_ANNUAL_FILE          "/logs/annual.json"
+// Monthly/annual rollups reuse the legacy on-disk paths/format
+// (ENERGY_LOGGER_MONTHLY_DIR / ENERGY_LOGGER_ANNUAL_FILE from energy_logger.h)
+// so the /energy/monthly + /energy/annual handlers just stream the files.
 
 class TsdbEnergyLogger : public MicroTasks::Task {
 private:

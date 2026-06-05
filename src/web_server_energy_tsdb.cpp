@@ -8,8 +8,7 @@
 #include "web_server.h"
 #include "esp_tsdb.h"
 #include "tsdb_sample.h"
-#include "tsdb_energy_logger.h"   // TSDB_MONTHLY_DIR, TSDB_ANNUAL_FILE
-#include "energy_logger.h"        // ENERGY_LOGGER_MONTHLY_DIR, ENERGY_LOGGER_ANNUAL_FILE
+#include "energy_logger.h"        // ENERGY_LOGGER_MONTHLY_DIR, ENERGY_LOGGER_ANNUAL_FILE (legacy rollup paths)
 #include "debug.h"
 #include <time.h>
 #include <stdio.h>
