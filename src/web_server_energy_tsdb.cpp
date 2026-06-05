@@ -9,6 +9,7 @@
 #include "esp_tsdb.h"
 #include "tsdb_sample.h"
 #include "energy_logger.h"        // ENERGY_LOGGER_MONTHLY_DIR, ENERGY_LOGGER_ANNUAL_FILE (legacy rollup paths)
+#include "tsdb_energy_logger.h"   // tsdbEnergyLogger.isReady() guard
 #include "debug.h"
 #include <time.h>
 #include <stdio.h>
@@ -84,7 +85,10 @@ void handleEnergyRaw(MongooseHttpServerRequest *request)
     bool first  = true;
     int  count  = 0;
 
-    if (tsdb_query_init(&q, start_ts, end_ts, NULL, TSDB_NUM_COLS) == ESP_OK) {
+    // Guard on isReady(): if tsdb_init failed, the global DB handle is invalid and
+    // tsdb_query_init would dereference it. Return a valid empty {"samples":[]}.
+    if (tsdbEnergyLogger.isReady() &&
+        tsdb_query_init(&q, start_ts, end_ts, NULL, TSDB_NUM_COLS) == ESP_OK) {
       opened = true;
       uint32_t ts;
       int16_t  v[TSDB_NUM_COLS];

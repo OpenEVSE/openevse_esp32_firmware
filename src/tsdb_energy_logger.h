@@ -27,6 +27,7 @@ class TsdbEnergyLogger : public MicroTasks::Task {
 private:
   EvseManager *_evse = nullptr;
   bool         _ready = false;
+  int          _init_err = 0;          // esp_err_t from tsdb_init (0 = OK), for /status diag
   double       _last_session_wh = 0;   // for per-sample energy delta
 
   // Day-rollover tracking: seeded to today at setup() so the first real
@@ -42,6 +43,7 @@ protected:
 public:
   void begin(EvseManager &evse);
   bool isReady() { return _ready; }
+  int  initError() { return _init_err; }   // esp_err_t from tsdb_init (0 = OK)
 };
 
 extern TsdbEnergyLogger tsdbEnergyLogger;

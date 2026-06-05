@@ -27,6 +27,9 @@ typedef const __FlashStringHelper *fstr_t;
 
 #include "emonesp.h"
 #include "web_server.h"
+#ifdef ENABLE_TSDB
+#include "tsdb_energy_logger.h"
+#endif
 #include "web_server_static.h"
 #include "app_config.h"
 #include "net_manager.h"
@@ -312,6 +315,11 @@ void buildStatus(DynamicJsonDocument &doc) {
   }
 
   homeAssistant.addStatusFields(doc);
+
+#ifdef ENABLE_TSDB
+  doc["tsdb_ready"] = tsdbEnergyLogger.isReady() ? 1 : 0;
+  doc["tsdb_err"]   = tsdbEnergyLogger.initError();
+#endif
 
   DBUGF("/status ArduinoJson size: %dbytes", doc.size());
 }
