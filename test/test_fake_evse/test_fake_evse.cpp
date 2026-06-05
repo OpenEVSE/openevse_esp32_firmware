@@ -79,12 +79,39 @@ TEST_CASE("$GV reports parseable firmware/protocol") {
   int fa,fb,fc; CHECK(sscanf(t[1].c_str(), "%d.%d.%d", &fa,&fb,&fc) == 3);
 }
 
-TEST_CASE("$GS reports decimal state + elapsed") {
+TEST_CASE("$GS reports hex state/pilot/vflags + decimal elapsed") {
+  // charging: state 3, EV_CONNECTED(0x100) | CHARGING_ON(0x40) = 0x140
   FakeEvseState st; st.set_vehicle(true);          // -> charging (3)
+  st.session_elapsed_s = 42;
   auto t = toks(fake_evse_handle(st, "$GS"));
+  REQUIRE(t.size() >= 5);
   CHECK(t[0] == "$OK");
-  CHECK(t[1] == "3");
-  CHECK(t[2] == "0");
+  CHECK(t[1] == "3");        // state, hex
+  CHECK(t[2] == "42");       // elapsed, decimal
+  CHECK(t[3] == "3");        // pilot state, hex
+  CHECK(t[4] == "140");      // vflags: EV_CONNECTED|CHARGING_ON
+
+  SUBCASE("sleeping keeps EV_CONNECTED but drops CHARGING_ON, hex state FE") {
+    fake_evse_handle(st, "$FS");                   // -> sleeping (254 = 0xFE)
+    auto s = toks(fake_evse_handle(st, "$GS"));
+    CHECK(s[1] == "FE");
+    CHECK(s[4] == "100");    // EV_CONNECTED only
+  }
+  SUBCASE("unplugged clears EV_CONNECTED, state 1") {
+    st.set_vehicle(false);                         // -> not connected (1)
+    auto s = toks(fake_evse_handle(st, "$GS"));
+    CHECK(s[1] == "1");
+    CHECK(s[4] == "0");      // no flags
+  }
+}
+
+TEST_CASE("vflags(): EV_CONNECTED tracks plug, CHARGING_ON tracks relay") {
+  FakeEvseState st;
+  CHECK(st.vflags() == 0);                                 // unplugged
+  st.set_vehicle(true);
+  CHECK(st.vflags() == (FAKE_VFLAG_EV_CONNECTED | FAKE_VFLAG_CHARGING_ON));
+  fake_evse_handle(st, "$FS");                             // sleep, still plugged
+  CHECK(st.vflags() == FAKE_VFLAG_EV_CONNECTED);
 }
 
 TEST_CASE("$SC clamps pilot to capacity range") {
@@ -136,15 +163,16 @@ TEST_CASE("tick accrues energy only while charging") {
   CHECK(st.session_elapsed_s == 3600);        // unchanged
 }
 
-TEST_CASE("tick emits $ST on transition with hex state") {
-  FakeEvseState st;                            // state 1
+TEST_CASE("tick emits $AT on transition with hex state/pilot/vflags") {
+  FakeEvseState st;                            // state 1, unplugged
   CHECK(fake_evse_tick(st, 1.0) == "");        // no change
   st.set_vehicle(true);                        // -> 3 (charging)
   std::string ev = fake_evse_tick(st, 1.0);
-  CHECK(ev == rapi_frame("$ST 03"));           // 3 in 2-hex
+  // $AT <state:X> <pilot:X> <capacity:d> <vflags:X>; vflags=EV_CONNECTED|CHARGING_ON
+  CHECK(ev == rapi_frame("$AT 3 3 32 140"));
   CHECK(fake_evse_tick(st, 1.0) == "");        // no re-emit once reported
-  st.set_vehicle(false);                       // unplug -> 1
-  CHECK(fake_evse_tick(st, 1.0) == rapi_frame("$ST 01"));
+  st.set_vehicle(false);                       // unplug -> 1, vflags clears
+  CHECK(fake_evse_tick(st, 1.0) == rapi_frame("$AT 1 1 32 0"));
 }
 
 TEST_CASE("total_wh persists across replug; session resets") {

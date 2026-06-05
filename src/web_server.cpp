@@ -1225,6 +1225,16 @@ static void handleFakeEvse(MongooseHttpServerRequest *request)
       if(in.containsKey("vehicle")) st.set_vehicle(in["vehicle"].as<bool>());
       if(in.containsKey("fault"))   st.fault = in["fault"].as<const char *>();  // unknown string => "no fault" per state()
       if(in.containsKey("voltage")) st.voltage_mv = (long)(in["voltage"].as<double>() * 1000.0);
+      if(in.containsKey("current")) {
+        // Set delivered amps directly, and lift capacity so the firmware's next
+        // $SC (clamped to max_cfg_a) won't pull it back down. Bench knob only.
+        long a = in["current"].as<long>();
+        if(a < st.min_a) a = st.min_a;
+        if(a > 80)       a = 80;                       // sane bench ceiling
+        if(a > st.max_hw_a)  st.max_hw_a  = a;
+        if(a > st.max_cfg_a) st.max_cfg_a = a;
+        st.pilot_a = a;
+      }
     } else {
       response->setCode(400);
       response->print("{\"msg\":\"Could not parse JSON\"}");
@@ -1242,6 +1252,7 @@ static void handleFakeEvse(MongooseHttpServerRequest *request)
   DynamicJsonDocument doc(resp_capacity);
   doc["state"]            = st.state();
   doc["pilot"]            = st.pilot_a;
+  doc["max_current"]      = st.max_cfg_a;
   doc["amps"]             = st.charge_ma() / 1000.0;
   doc["volts"]            = st.voltage_mv / 1000.0;
   doc["session_elapsed"]  = st.session_elapsed_s;

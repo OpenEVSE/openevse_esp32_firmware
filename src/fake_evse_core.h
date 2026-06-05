@@ -14,6 +14,15 @@ enum {
   FAKE_EVSE_SLEEPING        = 254,
 };
 
+// Status vflags (subset of openevse.h OPENEVSE_VFLAG_*). Reported in the hex
+// 5-token $GS form. The firmware derives isVehicleConnected() and its
+// session-complete reset (clearSession on EV_CONNECTED 1->0) from these, so the
+// fake must drive EV_CONNECTED to exercise plug/unplug on the bench.
+enum {
+  FAKE_VFLAG_CHARGING_ON  = 0x0040,   // charging relay closed
+  FAKE_VFLAG_EV_CONNECTED = 0x0100,   // EV physically connected
+};
+
 struct FakeEvseState {
   // physical-world inputs (set via /fakeevse)
   bool        vehicle_present = false;
@@ -43,8 +52,9 @@ struct FakeEvseState {
   // fault counters
   long gfci_count = 0, nognd_count = 0, stuck_count = 0;
 
-  uint8_t state() const;                  // derived OpenEVSE state code
-  long    charge_ma() const;              // delivered current (mA); 0 unless charging
+  uint8_t  state() const;                 // derived OpenEVSE state code
+  uint32_t vflags() const;                // derived status vflags (EV_CONNECTED/CHARGING_ON)
+  long     charge_ma() const;             // delivered current (mA); 0 unless charging
   void    set_vehicle(bool present);      // resets session on rising edge
 };
 

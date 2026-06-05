@@ -20,6 +20,13 @@ uint8_t FakeEvseState::state() const {
   return FAKE_EVSE_CHARGING;
 }
 
+uint32_t FakeEvseState::vflags() const {
+  uint32_t f = 0;
+  if (vehicle_present)               f |= FAKE_VFLAG_EV_CONNECTED;  // physical plug
+  if (state() == FAKE_EVSE_CHARGING) f |= FAKE_VFLAG_CHARGING_ON;   // relay closed
+  return f;
+}
+
 long FakeEvseState::charge_ma() const {
   return state() == FAKE_EVSE_CHARGING ? pilot_a * 1000 : 0;
 }
@@ -51,11 +58,13 @@ std::string fake_evse_handle(FakeEvseState &st, const std::string &cmd) {
   char buf[96];
 
   if (c == "$GV") {
-    // protocol 4.0.1 (<5.0.0) => $GS uses decimal/3-token form. Do NOT bump to
-    // >=5.0.0 without switching $GS to hex + 5 tokens (state pilot vflags).
-    return rapi_frame("$OK 8.2.0 4.0.1");
-  } else if (c == "$GS") {                          // state(dec) elapsed
-    snprintf(buf, sizeof(buf), "$OK %d %u", st.state(), st.session_elapsed_s);
+    // protocol >=5.0.0 selects the hex 5-token $GS form below (state pilot
+    // vflags), which is the only path where the lib reads vflags -> required for
+    // EV_CONNECTED so isVehicleConnected() + session-complete reset work.
+    return rapi_frame("$OK 8.2.0 5.1.0");
+  } else if (c == "$GS") {                          // state(hex) elapsed(dec) pilot(hex) vflags(hex)
+    snprintf(buf, sizeof(buf), "$OK %X %u %X %X",
+             st.state(), st.session_elapsed_s, st.state(), st.vflags());
     return rapi_frame(buf);
   } else if (c == "$GG") {                          // milliAmps milliVolts
     snprintf(buf, sizeof(buf), "$OK %ld %ld", st.charge_ma(), st.voltage_mv);
@@ -120,8 +129,13 @@ std::string fake_evse_tick(FakeEvseState &st, double seconds) {
   uint8_t now = st.state();
   if (now != st.last_reported_state) {
     st.last_reported_state = now;
-    char buf[24];
-    snprintf(buf, sizeof(buf), "$ST %02X", now);   // hex per onEvent($ST)
+    // Emit $AT (not bare $ST): the lib's $ST async handler calls back with
+    // vflags=0, which would clobber EV_CONNECTED that $GS set. $AT carries
+    // state/pilot/capacity/vflags, so the async path preserves EV_CONNECTED ->
+    // isVehicleConnected() + session-complete reset stay correct on transitions.
+    char buf[32];
+    snprintf(buf, sizeof(buf), "$AT %X %X %ld %X",
+             now, now, st.pilot_a, st.vflags());
     return rapi_frame(buf);
   }
   return "";
