@@ -1,8 +1,20 @@
 # tsdb Energy-History Backend (P4 / 16 MB only) — Design
 
 **Date:** 2026-06-05
-**Status:** Approved (design); pending implementation plan
+**Status:** Implemented on `feature/tsdb-energy-history`. **P4-only** (see HW outcome below).
 **Branch target:** `feature/esp32-modernization` (new work branch `feature/tsdb-energy-history`)
+
+> **HW validation outcome (2026-06-05):** Fully validated on the **ESP32-P4**
+> (riscv + PSRAM): init, 1-min write, `/energy/raw`, daily/weekly aggregation,
+> and a forced **ring-wrap** query test all pass. On the **16 MB WROOM-32E**
+> (xtensa, no PSRAM) tsdb init + write + aggregate work, but the esp_tsdb
+> **streaming-query iterator (`tsdb_query_next`, used by `/energy/raw`)
+> hard-crashes the device** (reboot), with both paged and non-paged buffers —
+> an apparent unaligned-access / struct-layout bug in esp_tsdb on xtensa that
+> does not reproduce on riscv. Because the dashboard auto-calls `/energy/raw`,
+> `ENABLE_TSDB` is therefore **disabled on the 16 MB WROOM env** (it falls back
+> to the legacy `EnergyLogger`) and enabled only on `openevse_p4`. The WROOM
+> path is retained in code for re-enablement once esp_tsdb is fixed upstream.
 
 ## Goal
 
