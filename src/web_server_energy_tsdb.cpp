@@ -202,24 +202,32 @@ static void emit_bucketed_daily(MongooseHttpServerResponseStream *response,
 
   for (int i = 0; i < num_buckets; i++) {
     uint32_t d0 = (uint32_t)(window_start + (time_t)(i * bucket_days) * 86400);
-    uint32_t d1 = d0 + (uint32_t)(bucket_days) * 86400;
+    // tsdb range end_time is INCLUSIVE, so use d1_end = (next bucket start - 1)
+    // to avoid a sample landing exactly on the midnight boundary being counted
+    // in both adjacent buckets.
+    uint32_t d1_end = d0 + (uint32_t)(bucket_days) * 86400 - 1;
 
     // --- check record count first to skip empty buckets cheaply ---
     uint32_t cnt = 0;
-    if (tsdb_query_count(d0, d1, &cnt) != ESP_OK || cnt == 0) {
+    if (tsdb_query_count(d0, d1_end, &cnt) != ESP_OK || cnt == 0) {
       continue;
     }
 
-    // --- four aggregations in one pass ---
-    tsdb_agg_request_t reqs[4] = {
+    // --- three aggregations in one pass ---
+    // NOTE: TSDB_AGG_MIN on TEMP includes no-sensor samples (stored as 0 deci-degC),
+    // so on a day with any invalid-temp minute the reported "mn" can read 0.0. The
+    // engine's MIN/MAX cannot exclude invalid samples (a sentinel that fixes MIN
+    // would poison MAX). In practice the onboard MONITOR thermistor is valid except
+    // for a brief boot transient (which the logger's NTP write-guard usually skips),
+    // so this is a rare, secondary-display edge. Accepted limitation.
+    tsdb_agg_request_t reqs[3] = {
       { TSDB_COL_ENERGY, TSDB_AGG_SUM, 0 },
       { TSDB_COL_TEMP,   TSDB_AGG_MAX, 0 },
       { TSDB_COL_TEMP,   TSDB_AGG_MIN, 0 },
-      { TSDB_COL_ENERGY, TSDB_AGG_COUNT, 0 },  // redundant guard; keep for symmetry
     };
 
     uint32_t nscanned = 0;
-    esp_err_t err = tsdb_aggregate_multi(d0, d1, reqs, 4, &nscanned);
+    esp_err_t err = tsdb_aggregate_multi(d0, d1_end, reqs, 3, &nscanned);
     if (err != ESP_OK || nscanned == 0) {
       continue;
     }
