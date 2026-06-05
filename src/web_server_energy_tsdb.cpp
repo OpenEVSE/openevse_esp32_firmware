@@ -8,9 +8,12 @@
 #include "web_server.h"
 #include "esp_tsdb.h"
 #include "tsdb_sample.h"
+#include "tsdb_energy_logger.h"   // TSDB_MONTHLY_DIR, TSDB_ANNUAL_FILE
+#include "energy_logger.h"        // ENERGY_LOGGER_MONTHLY_DIR, ENERGY_LOGGER_ANNUAL_FILE
 #include "debug.h"
 #include <time.h>
 #include <stdio.h>
+#include <LittleFS.h>
 
 // ---------------------------------------------------------------------------
 // /energy/raw – tsdb-backed handler
@@ -334,6 +337,120 @@ void handleEnergyWeekly(MongooseHttpServerRequest *request)
     response->setCode(200);
     response->print("{\"weekly\":");
     emit_bucketed_daily(response, 7 /* bucket_days */, num_weeks);
+    response->print("}");
+
+  } else if (HTTP_OPTIONS == request->method()) {
+    response->setCode(200);
+  } else {
+    response->setCode(405);
+  }
+
+  request->send(response);
+}
+
+// ---------------------------------------------------------------------------
+// /energy/monthly  –  tsdb path: stream the persisted daily-fed rollup JSON.
+//
+// On-disk: /logs/monthly/YYYY.json  (same as legacy EnergyLogger)
+// Response shape matches legacy exactly:
+//
+//   { "monthly": [
+//       { "mo": "YYYY-MM", "pk": <peak_c>, "mn": <min_c>, "en": <kwh> },
+//       ...
+//   ]}
+//
+// Query params:
+//   year=N   select a specific year's file (default: current year)
+//
+// If the file is missing (no rollup yet) returns {"monthly":[]}.
+// ---------------------------------------------------------------------------
+
+void handleEnergyMonthly(MongooseHttpServerRequest *request)
+{
+  MongooseHttpServerResponseStream *response = nullptr;
+  if (false == requestPreProcess(request, response, CONTENT_TYPE_JSON)) return;
+
+  if (HTTP_GET == request->method()) {
+    char year_buf[6] = {0};
+    int year = 0;
+    if (request->getParam("year", year_buf, sizeof(year_buf)) >= 0 && year_buf[0] != '\0') {
+      int y = atoi(year_buf);
+      if (y >= 2020 && y <= 2100) year = y;
+    }
+    if (year == 0) {
+      time_t now = time(NULL);
+      struct tm tm_now;
+      localtime_r(&now, &tm_now);
+      year = tm_now.tm_year + 1900;
+    }
+
+    char filepath[64];
+    snprintf(filepath, sizeof(filepath), "%s/%04d.json",
+             ENERGY_LOGGER_MONTHLY_DIR, year);
+
+    response->setCode(200);
+    response->print("{\"monthly\":");
+
+    File f = LittleFS.open(filepath, "r");
+    if (!f || f.size() == 0) {
+      if (f) f.close();
+      response->print("[]");
+    } else {
+      // Stream the raw JSON array directly – it was written by rollup_yesterday()
+      // using the same {"mo","pk","mn","en"} shape the GUI expects.
+      uint8_t buf[128];
+      while (f.available()) {
+        int n = f.read(buf, sizeof(buf));
+        if (n > 0) response->write(buf, n);
+      }
+      f.close();
+    }
+    response->print("}");
+
+  } else if (HTTP_OPTIONS == request->method()) {
+    response->setCode(200);
+  } else {
+    response->setCode(405);
+  }
+
+  request->send(response);
+}
+
+// ---------------------------------------------------------------------------
+// /energy/annual  –  tsdb path: stream the persisted daily-fed rollup JSON.
+//
+// On-disk: /logs/annual.json  (same as legacy EnergyLogger)
+// Response shape:
+//
+//   { "annual": [
+//       { "yr": 2025, "pk": <peak_c>, "mn": <min_c>, "en": <kwh> },
+//       ...
+//   ]}
+//
+// If the file is missing returns {"annual":[]}.
+// ---------------------------------------------------------------------------
+
+void handleEnergyAnnual(MongooseHttpServerRequest *request)
+{
+  MongooseHttpServerResponseStream *response = nullptr;
+  if (false == requestPreProcess(request, response, CONTENT_TYPE_JSON)) return;
+
+  if (HTTP_GET == request->method()) {
+    response->setCode(200);
+    response->print("{\"annual\":");
+
+    File f = LittleFS.open(ENERGY_LOGGER_ANNUAL_FILE, "r");
+    if (!f || f.size() == 0) {
+      if (f) f.close();
+      response->print("[]");
+    } else {
+      uint8_t buf[128];
+      while (f.available()) {
+        int n = f.read(buf, sizeof(buf));
+        if (n > 0) response->write(buf, n);
+      }
+      f.close();
+    }
     response->print("}");
 
   } else if (HTTP_OPTIONS == request->method()) {
