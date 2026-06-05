@@ -22,13 +22,11 @@ bool TsdbEnergyLogger::init_db() {
   cfg.use_paged_allocation= true;
   cfg.page_size           = 4096;
 #else                                          // 16 MB WROOM-32E (xtensa): no PSRAM
-  // KNOWN ISSUE: on this xtensa/no-PSRAM path, tsdb init + write + aggregate all
-  // work, but the streaming query iterator (tsdb_query_next) HARD-CRASHES the
-  // device (reboot) — reproduced with both paged and non-paged buffers. The same
-  // code is fine on the P4 (riscv), pointing at an unaligned-access / struct-
-  // layout issue in esp_tsdb on xtensa. Until that's fixed upstream, ENABLE_TSDB
-  // is left OFF for the 16 MB WROOM env (it falls back to EnergyLogger); this
-  // branch is retained for when the library is fixed. See spec/plan for details.
+  // Internal-RAM path, HW-validated after fixing an esp_tsdb bug: its
+  // TSDB_ALLOC_INTERNAL_RAM strategy allocated block buffers with
+  // MALLOC_CAP_INTERNAL only, which can land in IRAM (word-access only) and
+  // faulted on the int16 block stores (LoadStoreError). Fixed to
+  // MALLOC_CAP_INTERNAL|MALLOC_CAP_8BIT in components/esp_tsdb/src/tsdb_buffer.c.
   cfg.alloc_strategy      = TSDB_ALLOC_INTERNAL_RAM;
   cfg.buffer_pool_size    = 12 * 1024;
   cfg.use_paged_allocation= false;

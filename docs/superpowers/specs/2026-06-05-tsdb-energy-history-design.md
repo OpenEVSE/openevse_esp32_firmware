@@ -1,20 +1,23 @@
 # tsdb Energy-History Backend (P4 / 16 MB only) — Design
 
 **Date:** 2026-06-05
-**Status:** Implemented on `feature/tsdb-energy-history`. **P4-only** (see HW outcome below).
+**Status:** Implemented + HW-validated on `feature/tsdb-energy-history` (P4 **and** 16 MB WROOM).
 **Branch target:** `feature/esp32-modernization` (new work branch `feature/tsdb-energy-history`)
 
-> **HW validation outcome (2026-06-05):** Fully validated on the **ESP32-P4**
-> (riscv + PSRAM): init, 1-min write, `/energy/raw`, daily/weekly aggregation,
-> and a forced **ring-wrap** query test all pass. On the **16 MB WROOM-32E**
-> (xtensa, no PSRAM) tsdb init + write + aggregate work, but the esp_tsdb
-> **streaming-query iterator (`tsdb_query_next`, used by `/energy/raw`)
-> hard-crashes the device** (reboot), with both paged and non-paged buffers —
-> an apparent unaligned-access / struct-layout bug in esp_tsdb on xtensa that
-> does not reproduce on riscv. Because the dashboard auto-calls `/energy/raw`,
-> `ENABLE_TSDB` is therefore **disabled on the 16 MB WROOM env** (it falls back
-> to the legacy `EnergyLogger`) and enabled only on `openevse_p4`. The WROOM
-> path is retained in code for re-enablement once esp_tsdb is fixed upstream.
+> **HW validation outcome (2026-06-05):** Validated on **both** targets — the
+> **ESP32-P4** (riscv + PSRAM) and the **16 MB WROOM-32E** (xtensa, internal RAM):
+> init, 1-min write, `/energy/raw`, daily/weekly aggregation, and a forced
+> **ring-wrap** query test all pass; the boards survive sustained write cycles.
+>
+> Validation found a real **esp_tsdb bug** on the xtensa/internal-RAM path: its
+> `TSDB_ALLOC_INTERNAL_RAM` strategy allocated block buffers with
+> `MALLOC_CAP_INTERNAL` only, which on ESP32 can return **IRAM** (32-bit-word
+> access only). The block writer does int16 (halfword) stores, so the 60-s sample
+> write faulted with `LoadStoreError` → reboot-loop. (riscv + the PSRAM path are
+> byte-addressable, so the P4 never hit it.) **Fixed** to
+> `MALLOC_CAP_INTERNAL | MALLOC_CAP_8BIT` in
+> `components/esp_tsdb/src/tsdb_buffer.c` — worth pushing to the upstream
+> esp_tsdb `tigomonitor` branch since it affects any xtensa/internal-RAM user.
 
 ## Goal
 
