@@ -76,7 +76,13 @@ void TimeManager::begin()
 void TimeManager::setHost(const char *host)
 {
   _timeHost = host;
-  checkNow();   // checkNow() already resets _fetchingTime, _retryCount
+  _fetchingTime = false;
+  _retryCount   = 0;
+  // Allow 2 s for the DNS resolver to initialise after WiFi connects before
+  // firing the first request.  Update Now / mode-change use checkNow()
+  // directly and bypass this delay to stay fully responsive.
+  _nextCheckTime = millis() + 2000;
+  MicroTask.wakeTask(this);
 }
 
 bool TimeManager::setTimeZone(String tz)
@@ -238,14 +244,16 @@ unsigned long TimeManager::loop(MicroTasks::WakeReason reason)
       }
       else
       {
-        // getTime() returned false — _nc is still set from a previous
-        // connection that Mongoose hasn't closed yet.  Back off and retry.
-        DBUGLN("NTP: getTime() could not start, will retry");
+        // getTime() returned false — either the stale-_nc library patch
+        // hasn't been applied yet and _nc is non-NULL, or mg_sntp_get_time()
+        // itself failed transiently (no memory, DNS not yet ready, etc.).
+        // Don't increment _retryCount: no network request was actually sent
+        // so this isn't a server-side failure.  Retry in 2 s so the UI
+        // stays on "waiting"/"synchronized" rather than jumping to "retry".
+        DBUGLN("NTP: getTime() could not start, retrying in 2s");
         _fetchingTime = false;
-        unsigned long backoff = retryDelay();
-        _retryCount++;
-        _nextCheckTime = millis() + backoff;
-        ret = backoff;
+        _nextCheckTime = millis() + 2000;
+        ret = 2000;
       }
     } else {
       ret = delay > 0 ? (unsigned long)delay : 0;
