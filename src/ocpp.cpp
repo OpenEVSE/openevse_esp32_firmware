@@ -3,6 +3,12 @@
  * Created: 2021-04-09
  */
 
+// OCPP can be compiled out (e.g. on the space-constrained esp32-c3 devkit, where
+// RISC-V codegen pushes the full image past the dual-OTA app slot). When
+// DISABLE_OCPP is defined the whole stack — including the MicroOcpp libraries —
+// drops out of the build. See main.cpp / web_server.cpp / app_config.cpp.
+#ifndef DISABLE_OCPP
+
 #include "ocpp.h"
 
 #include <MicroOcpp.h>
@@ -743,3 +749,5 @@ bool OcppTask::isConnected() {
 void OcppTask::setSynchronizationLock(bool locked) {
     synchronizationLock = locked;
 }
+
+#endif // DISABLE_OCPP

@@ -55,7 +55,9 @@
 #include "tesla_client.h"
 #include "home_assistant.h"
 #include "event.h"
+#ifndef DISABLE_OCPP
 #include "ocpp.h"
+#endif
 #include "rfid.h"
 #include "current_shaper.h"
 #include "temp_throttle.h"
@@ -114,7 +116,9 @@ String currentfirmware = ESCAPEQUOTE(BUILD_TAG);
 String buildenv = ESCAPEQUOTE(BUILD_ENV_NAME);
 String serial;
 
+#ifndef DISABLE_OCPP
 OcppTask ocpp = OcppTask();
+#endif
 
 
 static void hardware_setup();
@@ -221,8 +225,10 @@ void setup()
 
   homeAssistant.begin();
 
+#ifndef DISABLE_OCPP
   ocpp.begin(evse, lcd, eventLog, rfid);
   DBUGF("After ocpp.begin: %d", ESPAL.getFreeHeap());
+#endif
 
   shaper.begin(evse);
   DBUGF("After shaper.begin: %d", ESPAL.getFreeHeap());
