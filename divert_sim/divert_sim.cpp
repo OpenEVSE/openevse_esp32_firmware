@@ -102,7 +102,7 @@ int main(int argc, char **argv)
     config_commit(true);
   }
 
-  if (result.count("config-check")) {
+  if (result.count("config-check") && scenario.empty()) {
     String json;
     config_serialize(json, true, false, false);
     std::cout << json.c_str() << std::endl;
@@ -114,5 +114,5 @@ int main(int argc, char **argv)
     return 1;
   }
 
-  return sim::run(scenario, output, false);
+  return sim::run(scenario, output, result.count("config-check") != 0);
 }

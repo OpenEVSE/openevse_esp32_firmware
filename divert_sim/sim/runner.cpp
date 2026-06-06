@@ -78,7 +78,7 @@ int run(const std::string &scenario_path,
 
   if (config_check) {
     String dump;
-    config_serialize(dump, true, true, true);
+    config_serialize(dump, true, false, false);
     std::cout << dump.c_str() << std::endl;
     return 0;
   }
