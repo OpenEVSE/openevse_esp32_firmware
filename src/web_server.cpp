@@ -41,6 +41,7 @@ typedef const __FlashStringHelper *fstr_t;
 #include "scheduler.h"
 #include "rfid.h"
 #include "current_shaper.h"
+#include "home_assistant.h"
 #include "evse_man.h"
 #include "limit.h"
 
@@ -82,6 +83,11 @@ void handleUpdateClose(MongooseHttpServerRequest *request);
 
 void handleTime(MongooseHttpServerRequest *request);
 void handleTimePost(MongooseHttpServerRequest *request, MongooseHttpServerResponseStream *response);
+
+void handleHomeAssistantAuthStart(MongooseHttpServerRequest *request);
+void handleHomeAssistantCallback(MongooseHttpServerRequest *request);
+void handleHomeAssistantStatus(MongooseHttpServerRequest *request);
+void handleHomeAssistantDisconnect(MongooseHttpServerRequest *request);
 
 void dumpRequest(MongooseHttpServerRequest *request)
 {
@@ -282,7 +288,12 @@ void buildStatus(DynamicJsonDocument &doc) {
     if(evse.isVehicleEtaValid()) {
       doc["time_to_full_charge"] = evse.getVehicleEta();
     }
+    if(evse.isVehicleChargeLimitValid()) {
+      doc["vehicle_charge_limit"] = evse.getVehicleChargeLimit();
+    }
   }
+
+  homeAssistant.addStatusFields(doc);
 
   DBUGF("/status ArduinoJson size: %dbytes", doc.size());
 }
@@ -446,6 +457,10 @@ void handleStatusPost(MongooseHttpServerRequest *request, MongooseHttpServerResp
       DBUGF("voltage:%.1f", volts);
       evse.setVoltage(volts);
     }
+    // NOTE: these solar/grid/live-power pushes intentionally bypass the
+    // divert_data_src/shaper_data_src arbitration. An explicit POST is a deliberate
+    // override by the caller (unlike the MQTT background source, which is muted when
+    // the feed is HA-sourced). There is no DATA_SRC_HTTP for these feeds, by design.
     if(doc.containsKey("shaper_live_pwr"))
     {
       double shaper_live_pwr = doc["shaper_live_pwr"];
@@ -1158,7 +1173,9 @@ void onWsConnect(MongooseHttpWebSocketConnection *connection)
 {
   DBUGF("New client connected over ws");
   // pushing states to client
-  const size_t capacity = JSON_OBJECT_SIZE(40) + 1024;
+  // headroom for the HA display-only fields (home_battery_soc/power,
+  // vehicle_plugged/charging_state) appended at the end of buildStatus().
+  const size_t capacity = JSON_OBJECT_SIZE(48) + 1024;
   DynamicJsonDocument doc(capacity);
   buildStatus(doc);
   web_server_event(doc);
@@ -1225,6 +1242,11 @@ void web_server_setup()
   server.on("/claims", handleEvseClaims);
 
   server.on("/override$", handleOverride);
+
+  server.on("/ha/auth/start$", handleHomeAssistantAuthStart);
+  server.on("/ha_callback", handleHomeAssistantCallback); // no $ anchor: matched against the path only (query stripped); HA appends ?code=&state=
+  server.on("/ha/status$", handleHomeAssistantStatus);
+  server.on("/ha/disconnect$", handleHomeAssistantDisconnect);
 
   server.on("/logs", handleEventLogs);
   server.on("/certificates", handleCertificates);

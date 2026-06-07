@@ -16,6 +16,7 @@
 #include "mqtt.h"
 #include "ocpp.h"
 #include "tesla_client.h"
+#include "home_assistant.h"
 #include "emoncms.h"
 #include "input.h"
 #include "LedManagerTask.h"
@@ -113,6 +114,26 @@ uint64_t tesla_created_at;
 uint64_t tesla_expires_in;
 
 String tesla_vehicle_id;
+
+// Home Assistant settings
+String ha_url;
+String ha_access_token;
+String ha_refresh_token;
+uint64_t ha_token_expires;
+String ha_client_id;
+String ha_vehicle_soc;
+String ha_vehicle_range;
+String ha_vehicle_eta;
+String ha_vehicle_charge_limit;
+String ha_vehicle_plugged;
+String ha_vehicle_charging_state;
+String ha_battery_soc;
+String ha_battery_power;
+uint8_t divert_data_src;
+uint8_t shaper_data_src;
+String ha_solar;
+String ha_grid_ie;
+String ha_live_pwr;
 
 // Vehicle
 uint8_t vehicle_data_src;
@@ -225,6 +246,27 @@ ConfigOpt *opts[] =
   new ConfigOptDefinition<uint64_t>(tesla_created_at, -1, "tesla_created_at", "tc"),
   new ConfigOptDefinition<uint64_t>(tesla_expires_in, -1, "tesla_expires_in", "tx"),
   new ConfigOptDefinition<String>(tesla_vehicle_id, "", "tesla_vehicle_id", "ti"),
+
+// Home Assistant settings
+  new ConfigOptDefinition<String>(ha_url, "", "ha_url", "hau"),
+  new ConfigOptSecret(ha_access_token, "", "ha_access_token", "haa"),
+  new ConfigOptSecret(ha_refresh_token, "", "ha_refresh_token", "har"),
+  new ConfigOptDefinition<uint64_t>(ha_token_expires, 0, "ha_token_expires", "hax"),
+  new ConfigOptDefinition<String>(ha_client_id, "", "ha_client_id", "hac"),
+  new ConfigOptDefinition<String>(ha_vehicle_soc, "", "ha_vehicle_soc", "hvs"),
+  new ConfigOptDefinition<String>(ha_vehicle_range, "", "ha_vehicle_range", "hvr"),
+  new ConfigOptDefinition<String>(ha_vehicle_eta, "", "ha_vehicle_eta", "hve"),
+  new ConfigOptDefinition<String>(ha_vehicle_charge_limit, "", "ha_vehicle_charge_limit", "hvc"),
+  new ConfigOptDefinition<String>(ha_vehicle_plugged, "", "ha_vehicle_plugged", "hvp"),
+  new ConfigOptDefinition<String>(ha_vehicle_charging_state, "", "ha_vehicle_charging_state", "hvg"),
+  new ConfigOptDefinition<String>(ha_battery_soc, "", "ha_battery_soc", "hbs"),
+  new ConfigOptDefinition<String>(ha_battery_power, "", "ha_battery_power", "hbp"),
+  new ConfigOptDefinition<uint8_t>(divert_data_src, 0, "divert_data_src", "dvs"),
+  new ConfigOptDefinition<uint8_t>(shaper_data_src, 0, "shaper_data_src", "shs"),
+  new ConfigOptDefinition<String>(ha_solar, "", "ha_solar", "hso"),
+  new ConfigOptDefinition<String>(ha_grid_ie, "", "ha_grid_ie", "hgi"),
+  new ConfigOptDefinition<String>(ha_live_pwr, "", "ha_live_pwr", "hlp"),
+  new ConfigOptVirtualMaskedBool(flagsOpt, flagsChanged, CONFIG_SERVICE_HOMEASSISTANT, CONFIG_SERVICE_HOMEASSISTANT, "home_assistant_enabled", "hae"),
 
 // RFID storage
   new ConfigOptDefinition<String>(rfid_storage, "", "rfid_storage", "rs"),
@@ -388,6 +430,9 @@ void config_changed(String name)
     teslaClient.setVehicleId(tesla_vehicle_id);
   } else if(name.startsWith("tesla_")) {
     teslaClient.setCredentials(tesla_access_token, tesla_refresh_token, tesla_created_at, tesla_expires_in);
+  } else if(name.startsWith("ha_") || name == "home_assistant_enabled" || name == "vehicle_data_src"
+            || name == "divert_data_src" || name == "shaper_data_src") {
+    homeAssistant.notifyConfigChanged();
 #if RGB_LED
   } else if(name == "led_brightness") {
     ledManager.setBrightness(led_brightness);

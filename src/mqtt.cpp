@@ -286,8 +286,10 @@ void Mqtt::handleMqttMessage(MongooseString topic, MongooseString payload) {
   DBUGLN("Topic: " + topic_string);
   DBUGLN("Payload: " + payload_str);
 
+  // Solar/grid/live-power are ignored here when sourced from Home Assistant
+  // (the HA poll engine writes them instead); mirrors the vehicle_data_src guard below.
   // Logic from old mqttmsg_callback
-  if (topic_string == mqtt_solar){
+  if (topic_string == mqtt_solar && divert_data_src == DATA_SRC_MQTT) {
     solar = payload_str.toInt();
     DBUGF("solar:%dW", solar);
     divert.update_state();
@@ -295,7 +297,7 @@ void Mqtt::handleMqttMessage(MongooseString topic, MongooseString payload) {
       shaper.shapeCurrent();
     }
   }
-  else if (topic_string == mqtt_grid_ie) {
+  else if (topic_string == mqtt_grid_ie && divert_data_src == DATA_SRC_MQTT) {
     grid_ie = payload_str.toInt();
     DBUGF("grid:%dW", grid_ie);
     divert.update_state();
@@ -303,7 +305,7 @@ void Mqtt::handleMqttMessage(MongooseString topic, MongooseString payload) {
       shaper.setLivePwr(grid_ie);
     }
   }
-  else if (topic_string == mqtt_live_pwr) {
+  else if (topic_string == mqtt_live_pwr && shaper_data_src == DATA_SRC_MQTT) {
       shaper.setLivePwr(payload_str.toInt());
       DBUGF("shaper: Live Pwr:%dW", shaper.getLivePwr());
   }

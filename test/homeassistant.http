@@ -1,0 +1,29 @@
+# Name: REST Client
+# Id: humao.rest-client
+# Description: REST Client for Visual Studio Code
+# Version: 0.21.3
+# Publisher: Huachao Mao
+# VS Marketplace Link: https://marketplace.visualstudio.com/items?itemName=humao.rest-client
+
+# Home Assistant OAuth endpoints — manual integration tests.
+# Set baseUrl and auth via environment variables or edit below (don't check in credentials).
+
+#@baseUrl = http://openevse.local
+
+###
+
+# Get HA connection status
+# Expect: 200 { "enabled": true/false, "connected": true/false, "ha_url": "...", ... }
+GET {{baseUrl}}/ha/status HTTP/1.1
+
+###
+
+# Start OAuth flow — expect: 302 Location: <ha_url>/auth/authorize?client_id=...&state=...
+# Follow the redirect in a browser; HA will redirect back to /ha_callback?code=...&state=...
+GET {{baseUrl}}/ha/auth/start HTTP/1.1
+
+###
+
+# Disconnect (clear stored tokens)
+# Expect: 200 {"msg":"done"}
+POST {{baseUrl}}/ha/disconnect HTTP/1.1

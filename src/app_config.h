@@ -74,6 +74,21 @@ extern String ocpp_idtag;
 // RFID storage
 extern String rfid_storage;
 
+// Home Assistant settings
+extern String ha_url;
+extern String ha_access_token;
+extern String ha_refresh_token;
+extern uint64_t ha_token_expires;
+extern String ha_client_id;
+extern String ha_vehicle_soc;
+extern String ha_vehicle_range;
+extern String ha_vehicle_eta;
+extern String ha_vehicle_charge_limit;
+extern String ha_vehicle_plugged;
+extern String ha_vehicle_charging_state;
+extern String ha_battery_soc;
+extern String ha_battery_power;
+
 // Time
 extern String time_zone;
 
@@ -100,8 +115,21 @@ enum vehicle_data_src {
   VEHICLE_DATA_SRC_NONE,
   VEHICLE_DATA_SRC_TESLA,
   VEHICLE_DATA_SRC_MQTT,
-  VEHICLE_DATA_SRC_HTTP
+  VEHICLE_DATA_SRC_HTTP,
+  VEHICLE_DATA_SRC_HOMEASSISTANT
 };
+
+// Per-feature data source for divert/shaper feeds (solar, grid, live power).
+enum data_src {
+  DATA_SRC_MQTT = 0,          // default: MQTT topic (existing behavior)
+  DATA_SRC_HOMEASSISTANT = 1, // poll a Home Assistant entity instead
+};
+
+extern uint8_t divert_data_src;
+extern uint8_t shaper_data_src;
+extern String ha_solar;
+extern String ha_grid_ie;
+extern String ha_live_pwr;
 
 // 24-bits of Flags
 extern uint32_t flags;
@@ -129,6 +157,9 @@ extern uint32_t flags;
 #define CONFIG_THREEPHASE           (1 << 24)
 #define CONFIG_WIZARD               (1 << 25)
 #define CONFIG_DEFAULT_STATE        (1 << 26)
+// NOTE: bit 27 is also claimed by CONFIG_TEMP_THROTTLE in the separate energy
+// PR (#1094); to be deduplicated at merge.
+#define CONFIG_SERVICE_HOMEASSISTANT (1 << 27)
 
 #define INITIAL_CONFIG_VERSION  1
 
@@ -186,6 +217,10 @@ inline bool config_divert_enabled() {
 
 inline bool config_current_shaper_enabled() {
   return CONFIG_SERVICE_CUR_SHAPER == (flags & CONFIG_SERVICE_CUR_SHAPER);
+}
+
+inline bool config_home_assistant_enabled() {
+  return CONFIG_SERVICE_HOMEASSISTANT == (flags & CONFIG_SERVICE_HOMEASSISTANT);
 }
 
 inline uint8_t config_charge_mode() {

@@ -47,6 +47,7 @@
 #include "espal.h"
 #include "time_man.h"
 #include "tesla_client.h"
+#include "home_assistant.h"
 #include "event.h"
 #include "ocpp.h"
 #include "rfid.h"
@@ -183,6 +184,8 @@ void setup()
   input_setup();
 
   mqtt.begin();
+
+  homeAssistant.begin();
 
   ocpp.begin(evse, lcd, eventLog, rfid);
   DBUGF("After ocpp.begin: %d", ESPAL.getFreeHeap());
