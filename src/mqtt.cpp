@@ -83,6 +83,14 @@ unsigned long Mqtt::loop(MicroTasks::WakeReason reason) {
      _connecting = false; // Reset connecting flag
   }
 
+  // If a connection attempt has been in progress too long with no callback, reset and retry.
+  // Handles the case where the TCP stack hangs without firing onError or onClose.
+  if (_connecting && (millis() - _connectStartTime) > (MQTT_CONNECT_TIMEOUT * 2)) {
+    DBUGLN("MQTT connection attempt timed out, will retry");
+    _connecting = false;
+    _nextMqttReconnectAttempt = millis() + MQTT_CONNECT_TIMEOUT;
+  }
+
   // Manage connection state
   if (net.isConnected() && config_mqtt_enabled() && !_mqttclient.connected() && !_connecting) {
     long now = millis();
@@ -110,6 +118,7 @@ void Mqtt::attemptConnection() {
     return;
   }
   _connecting = true;
+  _connectStartTime = millis();
   DBUGF("MQTT attempting connection... (%s)\n", net.isConnected() ? "connected" : "not connected");
 
   String mqtt_host = mqtt_server + ":" + String(mqtt_port);
@@ -178,7 +187,7 @@ void Mqtt::onMqttConnect() {
 void Mqtt::onMqttDisconnect(int err, const char *reason) {
   DBUGLN("MQTT disconnected");
   _connecting = false;
-  // _nextMqttReconnectAttempt is handled by the main loop to retry.
+  MicroTask.wakeTask(this); // Ensure loop runs promptly to schedule reconnect
 
   DynamicJsonDocument doc(JSON_OBJECT_SIZE(3) + 70);
   doc["mqtt_connected"] = 0;
