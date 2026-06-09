@@ -251,6 +251,14 @@ void EvseMonitor::evseBoot(const char *firmware)
 
   _openevse.heartbeatEnable(EVSE_HEATBEAT_INTERVAL, EVSE_HEARTBEAT_CURRENT, [this](int ret, int interval, int current, int triggered) {
     _heartbeat = RAPI_RESPONSE_OK == ret;
+    // If heartbeat was triggered while WiFi module was rebooting, ack immediately to restore ampacity
+    if (_heartbeat && 2 == triggered) {
+      _openevse.heartbeatPulse([](int ret) {
+        if (RAPI_RESPONSE_OK != ret) {
+          DEBUG_PORT.println("Heartbeat ack failed");
+        }
+      });
+    }
   });
 }
 
@@ -330,6 +338,20 @@ unsigned long EvseMonitor::loop(MicroTasks::WakeReason reason)
     {
       if(RAPI_RESPONSE_OK != ret) {
         DEBUG_PORT.println("Heartbeat failed");
+      }
+    });
+  }
+  else if(0 == _count % EVSE_MONITOR_STATE_TIME)
+  {
+    // Heartbeat enable failed or was never set; retry periodically so WiFi module reboot resyncs
+    _openevse.heartbeatEnable(EVSE_HEATBEAT_INTERVAL, EVSE_HEARTBEAT_CURRENT, [this](int ret, int interval, int current, int triggered) {
+      _heartbeat = RAPI_RESPONSE_OK == ret;
+      if (_heartbeat && 2 == triggered) {
+        _openevse.heartbeatPulse([](int ret) {
+          if (RAPI_RESPONSE_OK != ret) {
+            DEBUG_PORT.println("Heartbeat ack failed");
+          }
+        });
       }
     });
   }
