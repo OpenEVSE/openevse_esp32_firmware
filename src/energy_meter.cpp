@@ -235,12 +235,20 @@ bool EnergyMeter::update()
     // accumulate data
     double v = _monitor->getVoltage();
     double a = _monitor->getAmps();
+
+    // Read the relay values directly from the monitor component
+    int r1 = _monitor->getRelay1();
+    int r2 = _monitor->getRelay2(); 
+
     double mws = v * a * dms;
+    
     if (config_threephase_enabled())
-    {
-      // Multiply calculation by 3 to get 3-phase energy.
-      mws *= 3;
-    }
+     {
+      if (r1 != 0 && r2 != 0){
+         mws = mws * 3;}
+      else if (r1 != 0 || r2 != 0) {
+          mws = mws * 2;}
+      }
 
     // convert to w/h
     double wh = mws / 3600000;

@@ -659,6 +659,15 @@ void EvseMonitor::enableTemperatureCheck(bool enabled, std::function<void(int re
   }
 }
 
+void EvseMonitor::enableButton(bool enabled, std::function<void(int ret)> callback)
+{
+  // isButtonDisabled() returns true if button is disabled, so we need to check if current state != desired state
+  bool currentlyEnabled = !isButtonDisabled();
+  if(currentlyEnabled != enabled) {
+    enableFeature(OPENEVSE_FEATURE_BUTTON, enabled, callback);
+  }
+}
+
 void EvseMonitor::configureCurrentSensorScale(long scale, long offset, std::function<void(int ret)> callback)
 {
   _openevse.setAmmeterSettings(scale, offset, [this, scale, offset, callback](int ret)
@@ -747,24 +756,32 @@ void EvseMonitor::getStatusFromEvse(bool allowStart)
   });
 }
 
-void EvseMonitor::getChargeCurrentAndVoltageFromEvse()
-{
-  if(_state.isCharging())
-  {
-    DBUGLN("Get charge current/voltage status");
-    _openevse.getChargeCurrentAndVoltage([this](int ret, double a, double volts)
-    {
-      if(RAPI_RESPONSE_OK == ret)
-      {
-        DBUGF("amps = %.2f, volts = %.2f", a, volts);
-        _amp = a;
-        if(VOLTAGE_MINIMUM <= volts && volts <= VOLTAGE_MAXIMUM) {
-          _voltage = volts;
-        }
-        _power = _amp * _voltage;
-        if (config_threephase_enabled()) {
-          _power = _power * 3;
-        }
+void EvseMonitor::getChargeCurrentAndVoltageFromEvse() {
+    if(_state.isCharging()) {
+        DBUGLN("Get charge status and relay energy flags");
+        
+        // 1. Pass a lambda that accepts 5 arguments total (status, amps, volts, relay1, relay2)
+        _openevse.getChargeCurrentAndVoltage([this](int ret, double a, double volts, int relay1, int relay2) {
+            if(RAPI_RESPONSE_OK == ret) {
+                DBUGF("amps = %.2f, volts = %.2f, relay1 = %d, relay2 = %d", a, volts, relay1, relay2);
+
+                // Process current, voltage, and power
+                _amp = a;
+                if(VOLTAGE_MINIMUM <= volts && volts <= VOLTAGE_MAXIMUM) {
+                    _voltage = volts;
+                }
+
+                //Save the relay flags to your class member variables
+                _relay1 = relay1;
+                _relay2 = relay2;
+
+                _power = _amp * _voltage;
+                if (config_threephase_enabled()) {
+                  if (relay1 != 0 && relay2 != 0){
+                    _power = _power * 3;}
+                  else if (relay1 != 0 || relay2 != 0) {
+                    _power = _power * 2;}
+                }
 
         StaticJsonDocument<64> event;
         event["amp"] = _amp * AMPS_SCALE_FACTOR;;
