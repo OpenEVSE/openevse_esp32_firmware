@@ -36,7 +36,6 @@ Peer::~Peer() = default;
 
 void Peer::begin()
 {
-  _evse.attachSimEvse(&_sim);
   _evse.begin();
   _divert.begin();
 

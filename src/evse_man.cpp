@@ -142,13 +142,6 @@ EvseManager::~EvseManager()
 {
 }
 
-#ifdef DIVERT_SIM
-void EvseManager::attachSimEvse(SimEvse *sim)
-{
-  (void)sim;
-}
-#endif
-
 void EvseManager::initialiseEvse()
 {
   // Check state the OpenEVSE is in.
