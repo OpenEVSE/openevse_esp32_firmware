@@ -51,3 +51,21 @@ def test_divert_config_override_changes_output():
     )
     assert len(overridden) == len(baseline)
     assert "evse-001_actual_charge_w" in overridden[0]
+
+
+def test_divert_stops_after_min_charge_time_when_power_stays_below_minimum():
+    rows = run_scenario("data/scenarios/divert_almostperfect_default.json")
+
+    below_min_rows = [
+        idx
+        for idx, row in enumerate(rows)
+        if float(row.get("evse-001_divert_smoothed_available_w", 0) or 0) < 6.0 * 240.0
+    ]
+    assert below_min_rows, "scenario must include a low-power period"
+
+    start_idx = below_min_rows[0]
+    low_power_tail = rows[start_idx:]
+
+    assert any(
+        row.get("evse-001_state") != "charging" for row in low_power_tail
+    ), "charging should stop once min charge time expires during sustained low power"

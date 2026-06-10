@@ -24,6 +24,7 @@
 // Global EventLog defined in divert_sim.cpp; reused by all peers since the
 // logging path is identical for each.
 extern EventLog eventLog;
+extern time_t simulated_time;
 
 namespace sim {
 
@@ -78,7 +79,7 @@ int run(const std::string &scenario_path,
 
   if (config_check) {
     String dump;
-    config_serialize(dump, true, false, false);
+    config_serialize(dump, true, true, true);
     std::cout << dump.c_str() << std::endl;
     return 0;
   }
@@ -113,6 +114,10 @@ int run(const std::string &scenario_path,
   bool failsafe_active = false;
 
   while (t_sec <= scenario.duration_sec) {
+    // Keep divert's time source aligned with simulation time so minimum
+    // charge duration logic can expire as expected.
+    simulated_time = t_start + t_sec;
+
     double group_max_current = scenario.group.max_current;
     if (scenario.supply_max_pwr_w > 0.0 && !scenario.supply_live_pwr.empty()) {
       double site_live_pwr_w = scenario.supply_live_pwr.valueAt(t_sec);
