@@ -368,6 +368,14 @@ bool EvseMonitor::begin(RapiSender &sender)
       _openevse.onState([this](uint8_t evse_state, uint8_t pilot_state, uint32_t current_capacity, uint32_t vflags)
       {
         DBUGF("evse_state = %02x, pilot_state = %02x, current_capacity = %d, vflags = %08x", evse_state, pilot_state, current_capacity, vflags);
+        // If the EVSE independently changed current capacity (e.g. heartbeat restore,
+        // temperature throttle recover), update _pilot so verifyPilot() doesn't fight
+        // the change, and trigger re-evaluation so setTargetState corrects if needed.
+        if(current_capacity > 0 && current_capacity != _pilot)
+        {
+          _pilot = current_capacity;
+          _settings_changed.Trigger();
+        }
         updateEvseState(evse_state, pilot_state, vflags);
       });
 
