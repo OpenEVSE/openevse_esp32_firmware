@@ -36,6 +36,7 @@ function buildPeerSeries(rows, peerId, visibility) {
   const showSolar = !!vis.showSolar;
   const showGridIE = !!vis.showGridIE;
   const showShaperInputs = !!vis.showShaperInputs;
+  const showLoadshareAllocated = !!vis.showLoadshareAllocated;
   const showSmoothedAvailable = showSolar || showGridIE;
 
   const metrics = [
@@ -44,7 +45,9 @@ function buildPeerSeries(rows, peerId, visibility) {
     ...(showSmoothedAvailable
       ? [["divert_smoothed_available_w", "Smoothed Available (W)", "line", "#009688"]]
       : []),
-    ["loadshare_allocated_w", "Loadshare Allocated (W)", "line", "#388e3c"],
+    ...(showLoadshareAllocated
+      ? [["loadshare_allocated_w", "Loadshare Allocated (W)", "line", "#388e3c"]]
+      : []),
     ...(showSolar ? [["solar_w", "Solar (W)", "line", "#7b1fa2"]] : []),
     ...(showGridIE ? [["grid_ie_w", "Grid I/E (W)", "line", "#455a64"]] : []),
     ...(showShaperInputs ? [["live_pwr_w", "Live Power (W)", "line", "#c2185b"]] : []),
@@ -124,15 +127,20 @@ function buildPeerVisibilityFromScenario(scenarioSource, peerId) {
     : [];
   const peer = peers.find((p) => p && p.id === peerId);
   const inputs = (peer && peer.inputs) ? peer.inputs : {};
+  const category = (scenarioSource && scenarioSource.meta && scenarioSource.meta.category)
+    ? String(scenarioSource.meta.category)
+    : "";
 
   const hasSolarInput = !!inputs.solar;
   const hasGridIEInput = !!inputs.grid_ie;
   const hasShaperInput = !!inputs.live_pwr;
+  const hasLoadsharing = category === "loadsharing";
 
   return {
     showSolar: hasSolarInput && !hasGridIEInput,
     showGridIE: hasGridIEInput,
     showShaperInputs: hasShaperInput,
+    showLoadshareAllocated: hasLoadsharing,
   };
 }
 
