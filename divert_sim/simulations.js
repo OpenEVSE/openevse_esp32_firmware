@@ -190,9 +190,8 @@ function createChart(containerId, title, series, options) {
       legend: { fontSize: 12 },
       axisX: { valueFormatString: "HH:mm:ss" },
       axisY: { title: "Power (W)", ...(opts.hasGridIE ? {} : { minimum: 0 }) },
-      // CanvasJS can throw on some mixed/partial series payloads; keep tooltip
-      // simple and allow fallback below if render still fails.
-      toolTip: { shared: false },
+      // Show all visible series values for the hovered timestamp.
+      toolTip: { shared: true },
       data: normalizedSeries,
     });
     chart.render();
