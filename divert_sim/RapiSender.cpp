@@ -43,9 +43,6 @@ RapiSender::RapiSender(Stream * stream) :
   _waitingForReply(false),
   _respBuf{},
   _respBufOrig{}
-#ifdef DIVERT_SIM
-  , _sim_evse(nullptr)
-#endif
 {
 }
 
@@ -110,7 +107,7 @@ RapiSender::sendCmdSync(String &cmd, unsigned long timeout)
   static char zero[] = "0";
   static char buf1[32];
 
-  SimEvse *sim = _sim_evse ? _sim_evse : simFor(_stream);
+  SimEvse *sim = simFor(_stream);
 
   switch (cmd[1])
   {

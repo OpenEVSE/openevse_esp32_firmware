@@ -110,6 +110,9 @@ public:
   String getHost() const { return _host; }
   void setHost(const String& value) { _host = value; }
 
+  // Normalized host key used by poller connection map.
+  String getHostPort() const { return _host; }
+
   String getIp() const { return _ip; }
   void setIp(const String& value) { _ip = value; }
 
@@ -202,6 +205,7 @@ private:
   bool _failsafe_active;         // Is failsafe mode currently active?
   uint8_t _online_count;         // Number of peers currently online
   uint8_t _offline_count;        // Number of peers currently offline
+  unsigned long _last_allocation_received_ms; // Last allocation heartbeat from controller
   bool _config_consistent;       // Are all peer configs consistent?
   std::vector<String> _config_issues; // List of detected config mismatches
 
@@ -234,6 +238,7 @@ public:
     _failsafe_active(false),
     _online_count(0),
     _offline_count(0),
+    _last_allocation_received_ms(0),
     _config_consistent(true),
     _config_issues(),
     _onPeerChange(nullptr)
@@ -242,6 +247,31 @@ public:
   // Accessors
   bool isEnabled() const { return _enabled; }
   void setEnabled(bool value) { _enabled = value; }
+
+  /**
+   * @brief True when this node is acting as the load sharing controller.
+   */
+  bool isController() const;
+
+  /**
+   * @brief True when this node is managed by a remote controller.
+   */
+  bool isMember() const;
+
+  /**
+   * @brief Transition this node to member role.
+   */
+  void becomeMember(const String& controllerHost);
+
+  /**
+   * @brief Reset role-related state back to standalone mode.
+   */
+  void resetRole();
+
+  /**
+   * @brief Evaluate member-side controller connectivity and failsafe state.
+   */
+  void checkMemberFailsafe();
 
   String getGroupId() const { return _group_id; }
   void setGroupId(const String& value) { _group_id = value; }
@@ -263,6 +293,9 @@ public:
 
   bool isFailsafeActive() const { return _failsafe_active; }
   void setFailsafeActive(bool value) { _failsafe_active = value; }
+
+  unsigned long getLastAllocationReceived() const { return _last_allocation_received_ms; }
+  void recordAllocationReceived() { _last_allocation_received_ms = millis(); }
 
   uint8_t getOnlineCount() const { return _online_count; }
   void setOnlineCount(uint8_t value) { _online_count = value; }

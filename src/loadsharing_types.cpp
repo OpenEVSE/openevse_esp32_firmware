@@ -21,6 +21,64 @@
 // Global instance
 LoadSharingGroupState loadSharingGroupState;
 
+bool LoadSharingGroupState::isController() const {
+  return loadsharing_role == "controller";
+}
+
+bool LoadSharingGroupState::isMember() const {
+  return loadsharing_role == "member";
+}
+
+void LoadSharingGroupState::becomeMember(const String& controllerHost) {
+  loadsharing_enabled = true;
+  loadsharing_role = "member";
+  loadsharing_controller_host = controllerHost;
+}
+
+void LoadSharingGroupState::resetRole() {
+  loadsharing_role = "";
+  loadsharing_controller_host = "";
+  _failsafe_active = false;
+}
+
+void LoadSharingGroupState::checkMemberFailsafe() {
+  if (!isMember()) {
+    _failsafe_active = false;
+    return;
+  }
+
+  if (loadsharing_controller_host.length() == 0) {
+    _failsafe_active = true;
+    return;
+  }
+
+  LoadSharingPeer* controller = getPeerByHost(loadsharing_controller_host);
+
+  if (!controller && loadsharing_controller_host.endsWith(".local")) {
+    String shortHost = loadsharing_controller_host.substring(
+        0, loadsharing_controller_host.length() - 6);
+    controller = getPeerByHost(shortHost);
+  }
+
+  bool controllerOnline = controller && controller->isOnline();
+  if (!controllerOnline) {
+    _failsafe_active = true;
+    return;
+  }
+
+  unsigned long timeoutMs = loadsharing_heartbeat_timeout * 1000UL;
+  if (timeoutMs == 0) {
+    timeoutMs = 10000;
+  }
+
+  if (_last_allocation_received_ms == 0) {
+    _failsafe_active = true;
+    return;
+  }
+
+  _failsafe_active = ((long)(millis() - (_last_allocation_received_ms + timeoutMs)) >= 0);
+}
+
 void LoadSharingGroupState::notifyPeerChange() {
   if (_onPeerChange) {
     _onPeerChange();

@@ -145,7 +145,7 @@ EvseManager::~EvseManager()
 #ifdef DIVERT_SIM
 void EvseManager::attachSimEvse(SimEvse *sim)
 {
-  _sender.attachSimEvse(sim);
+  (void)sim;
 }
 #endif
 
