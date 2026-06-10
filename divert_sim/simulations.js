@@ -27,19 +27,31 @@ function discoverPeerIds(headers) {
   return ids;
 }
 
-function buildPeerSeries(rows, peerId) {
+function buildPeerSeries(rows, peerId, visibility) {
   if (!rows || rows.length === 0) {
-    return [];
+    return { series: [], hasGridIE: false };
   }
+
+  const vis = visibility || {};
+  const showSolar = !!vis.showSolar;
+  const showGridIE = !!vis.showGridIE;
+  const showShaperInputs = !!vis.showShaperInputs;
+  const showSmoothedAvailable = showSolar || showGridIE;
 
   const metrics = [
     ["actual_charge_w", "Actual Charge (W)", "line", "#f57c00"],
     ["charge_available_w", "Charge Available (W)", "line", "#1976d2"],
+    ...(showSmoothedAvailable
+      ? [["divert_smoothed_available_w", "Smoothed Available (W)", "line", "#009688"]]
+      : []),
     ["loadshare_allocated_w", "Loadshare Allocated (W)", "line", "#388e3c"],
-    ["solar_w", "Solar (W)", "line", "#7b1fa2"],
-    ["grid_ie_w", "Grid I/E (W)", "line", "#455a64"],
-    ["live_pwr_w", "Live Power (W)", "line", "#c2185b"],
-    ["shaper_max_w", "Shaper Max (W)", "line", "#0097a7"],
+    ...(showSolar ? [["solar_w", "Solar (W)", "line", "#7b1fa2"]] : []),
+    ...(showGridIE ? [["grid_ie_w", "Grid I/E (W)", "line", "#455a64"]] : []),
+    ...(showShaperInputs ? [["live_pwr_w", "Live Power (W)", "line", "#c2185b"]] : []),
+    ...(showShaperInputs
+      ? [["shaper_smoothed_live_w", "Smoothed Live (W)", "line", "#6a1b9a"]]
+      : []),
+    ...(showShaperInputs ? [["shaper_max_w", "Shaper Max (W)", "line", "#0097a7"]] : []),
   ];
 
   const series = [];
@@ -92,7 +104,36 @@ function buildPeerSeries(rows, peerId) {
     return aIsFill === bIsFill ? 0 : (aIsFill ? -1 : 1);
   });
 
-  return series;
+  return { series, hasGridIE: showGridIE };
+}
+
+async function loadScenarioSource(sourcePath) {
+  if (!sourcePath) {
+    return null;
+  }
+  const response = await fetch(sourcePath, { cache: "no-store" });
+  if (!response.ok) {
+    return null;
+  }
+  return response.json();
+}
+
+function buildPeerVisibilityFromScenario(scenarioSource, peerId) {
+  const peers = (scenarioSource && Array.isArray(scenarioSource.peers))
+    ? scenarioSource.peers
+    : [];
+  const peer = peers.find((p) => p && p.id === peerId);
+  const inputs = (peer && peer.inputs) ? peer.inputs : {};
+
+  const hasSolarInput = !!inputs.solar;
+  const hasGridIEInput = !!inputs.grid_ie;
+  const hasShaperInput = !!inputs.live_pwr;
+
+  return {
+    showSolar: hasSolarInput && !hasGridIEInput,
+    showGridIE: hasGridIEInput,
+    showShaperInputs: hasShaperInput,
+  };
 }
 
 async function loadCsvRows(csvPath) {
@@ -102,7 +143,8 @@ async function loadCsvRows(csvPath) {
   return parsed;
 }
 
-function createChart(containerId, title, series) {
+function createChart(containerId, title, series, options) {
+  const opts = options || {};
   const normalizedSeries = (series || [])
     .filter((s) => !!s && Array.isArray(s.dataPoints) && s.dataPoints.length > 0)
     .map((s) => ({
@@ -139,7 +181,7 @@ function createChart(containerId, title, series) {
       title: { text: title, fontSize: 18 },
       legend: { fontSize: 12 },
       axisX: { valueFormatString: "HH:mm:ss" },
-      axisY: { title: "Power (W)", minimum: 0 },
+      axisY: { title: "Power (W)", ...(opts.hasGridIE ? {} : { minimum: 0 }) },
       // CanvasJS can throw on some mixed/partial series payloads; keep tooltip
       // simple and allow fallback below if render still fails.
       toolTip: { shared: false },
@@ -172,7 +214,10 @@ async function renderScenario(container, scenario) {
   // before Chart(...) is constructed.
   container.appendChild(scenarioBlock);
 
-  const parsed = await loadCsvRows(scenario.csv);
+  const [parsed, scenarioSource] = await Promise.all([
+    loadCsvRows(scenario.csv),
+    loadScenarioSource(scenario.source),
+  ]);
   if (!parsed.rows || parsed.rows.length === 0) {
     const empty = document.createElement("p");
     empty.textContent = "No rows found in CSV output for this scenario.";
@@ -199,7 +244,9 @@ async function renderScenario(container, scenario) {
     chartDiv.style.height = "280px";
     scenarioBlock.appendChild(chartDiv);
 
-    createChart(chartDiv.id, `${scenario.title} - ${peerId}`, buildPeerSeries(parsed.rows, peerId));
+    const visibility = buildPeerVisibilityFromScenario(scenarioSource, peerId);
+    const result = buildPeerSeries(parsed.rows, peerId, visibility);
+    createChart(chartDiv.id, `${scenario.title} - ${peerId}`, result.series, { hasGridIE: result.hasGridIE });
   });
 
 }
