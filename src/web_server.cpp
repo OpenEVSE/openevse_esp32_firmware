@@ -282,6 +282,9 @@ void buildStatus(DynamicJsonDocument &doc) {
     if(evse.isVehicleEtaValid()) {
       doc["time_to_full_charge"] = evse.getVehicleEta();
     }
+    if(evse.isVehicleChargeLimitValid()) {
+      doc["vehicle_charge_limit"] = evse.getVehicleChargeLimit();
+    }
   }
 
   DBUGF("/status ArduinoJson size: %dbytes", doc.size());
@@ -488,6 +491,12 @@ void handleStatusPost(MongooseHttpServerRequest *request, MongooseHttpServerResp
       double vehicle_eta = doc["time_to_full_charge"];
       DBUGF("vehicle_eta:%d", vehicle_eta);
       evse.setVehicleEta(vehicle_eta);
+      doc["vehicle_state_update"] = 0;
+    }
+    if(doc.containsKey("vehicle_charge_limit") && vehicle_data_src == VEHICLE_DATA_SRC_HTTP){
+      int vehicle_charge_limit = doc["vehicle_charge_limit"];
+      DBUGF("vehicle_charge_limit:%d%%", vehicle_charge_limit);
+      evse.setVehicleChargeLimit(vehicle_charge_limit);
       doc["vehicle_state_update"] = 0;
     }
     // send back new value to clients
