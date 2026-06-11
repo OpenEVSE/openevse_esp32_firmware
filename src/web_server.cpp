@@ -41,6 +41,7 @@ typedef const __FlashStringHelper *fstr_t;
 #include "scheduler.h"
 #include "rfid.h"
 #include "current_shaper.h"
+#include "home_battery.h"
 #include "evse_man.h"
 #include "limit.h"
 
@@ -287,6 +288,8 @@ void buildStatus(DynamicJsonDocument &doc) {
     }
   }
 
+  home_battery_add_status_fields(doc);
+
   DBUGF("/status ArduinoJson size: %dbytes", doc.size());
 }
 
@@ -498,6 +501,19 @@ void handleStatusPost(MongooseHttpServerRequest *request, MongooseHttpServerResp
       DBUGF("vehicle_charge_limit:%d%%", vehicle_charge_limit);
       evse.setVehicleChargeLimit(vehicle_charge_limit);
       doc["vehicle_state_update"] = 0;
+    }
+    // Display-only home/powerwall battery feeds. Like the solar/grid pushes
+    // above these are an explicit override (no data_src arbitration); they just
+    // surface in /status and on the display.
+    if(doc.containsKey("home_battery_soc")) {
+      int soc = doc["home_battery_soc"];
+      DBUGF("home_battery_soc:%d%%", soc);
+      home_battery_set_soc(soc);
+    }
+    if(doc.containsKey("home_battery_power")) {
+      int power = doc["home_battery_power"];
+      DBUGF("home_battery_power:%dW", power);
+      home_battery_set_power(power);
     }
     // send back new value to clients
     if(send_event) {
