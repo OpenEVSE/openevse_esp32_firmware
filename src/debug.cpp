@@ -1,23 +1,32 @@
 #include <StreamSpy.h>
 
 #ifndef DEBUG_PORT
-#ifdef ESP32
+#if defined(ESP32) || defined(DIVERT_SIM) || defined(EPOXY_DUINO)
 #define DEBUG_PORT Serial
 #elif defined(ESP8266)
 #define DEBUG_PORT Serial1
-#elif defined(DIVERT_SIM)
-#define DEBUG_PORT Serial
 #else
 #error Platform not supported
 #endif
 #endif
 
 #ifndef RAPI_PORT
-#ifdef ESP32
+#if defined(DIVERT_SIM)
+#define RAPI_PORT Serial
+#elif defined(EPOXY_DUINO)
+#define RAPI_PORT SerialRapi
+#include "PtySerial.h"
+PtySerial SerialRapi("/tmp/rapi_pty");
+
+// Allow runtime override of the PTY path before begin()
+extern "C" void debug_set_rapi_path(const char* path) {
+  if (path && *path) {
+    SerialRapi.setPortPath(path);
+  }
+}
+#elif defined(ESP32)
 #define RAPI_PORT Serial1
 #elif defined(ESP8266)
-#define RAPI_PORT Serial
-#elif defined(DIVERT_SIM)
 #define RAPI_PORT Serial
 #else
 #error Platform not supported
