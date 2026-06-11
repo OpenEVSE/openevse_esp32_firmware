@@ -216,6 +216,7 @@ void Mqtt::subscribeTopics() {
   if (mqtt_vehicle_soc != "") { _mqttclient.subscribe(mqtt_vehicle_soc); yield(); }
   if (mqtt_vehicle_range != "") { _mqttclient.subscribe(mqtt_vehicle_range); yield(); }
   if (mqtt_vehicle_eta != "") { _mqttclient.subscribe(mqtt_vehicle_eta); yield(); }
+  if (mqtt_vehicle_charge_limit != "") { _mqttclient.subscribe(mqtt_vehicle_charge_limit); yield(); }
   if (mqtt_vrms != "") { _mqttclient.subscribe(mqtt_vrms); yield(); }
 
   // Settable topics
@@ -326,6 +327,11 @@ void Mqtt::handleMqttMessage(MongooseString topic, MongooseString payload) {
     int vehicle_eta = payload_str.toInt();
     _evse->setVehicleEta(vehicle_eta);
     StaticJsonDocument<128> event; event["time_to_full_charge"] = vehicle_eta; event_send(event);
+  }
+  else if (topic_string == mqtt_vehicle_charge_limit && vehicle_data_src == VEHICLE_DATA_SRC_MQTT) {
+    int vehicle_charge_limit = payload_str.toInt();
+    _evse->setVehicleChargeLimit(vehicle_charge_limit);
+    StaticJsonDocument<128> event; event["vehicle_charge_limit"] = vehicle_charge_limit; event_send(event);
   }
   else if (topic_string == mqtt_topic + "/divertmode/set") {
     byte newdivert = payload_str.toInt();
