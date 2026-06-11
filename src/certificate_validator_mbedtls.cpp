@@ -10,6 +10,20 @@
 
 #include "mbedtls/x509_crt.h"
 #include "mbedtls/pk.h"
+#include "mbedtls/version.h"
+
+#if MBEDTLS_VERSION_NUMBER >= 0x03000000
+#include <esp_random.h>
+
+// mbedTLS 3.x requires an RNG for mbedtls_pk_parse_key(); back it with the ESP HW
+// RNG (same approach as certificates.cpp / the TLS RNG layer).
+static int esp_rng_for_mbedtls(void *ctx, unsigned char *buf, size_t len)
+{
+    (void)ctx;
+    esp_fill_random(buf, len);
+    return 0;
+}
+#endif
 
 /**
  * MbedTLS implementation of CertificateValidator
@@ -73,7 +87,12 @@ public:
         mbedtls_pk_context pk;
         mbedtls_pk_init(&pk);
 
+#if MBEDTLS_VERSION_NUMBER >= 0x03000000
+        // mbedTLS 3.x (ESP-IDF 5.x / core-3) added the f_rng/p_rng parameters.
+        int ret = mbedtls_pk_parse_key(&pk, (const unsigned char *)key_pem.c_str(), key_pem.length() + 1, NULL, 0, esp_rng_for_mbedtls, NULL);
+#else
         int ret = mbedtls_pk_parse_key(&pk, (const unsigned char *)key_pem.c_str(), key_pem.length() + 1, NULL, 0);
+#endif
         bool valid = (ret == 0);
 
         if(!valid)
