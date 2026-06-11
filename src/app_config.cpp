@@ -9,6 +9,7 @@
 #include "app_config.h"
 #include "app_config_mqtt.h"
 #include "app_config_mode.h"
+#include "temp_throttle.h"
 
 #if ENABLE_CONFIG_CHANGE_NOTIFICATION
 #include <esp_ota_ops.h>
@@ -21,7 +22,7 @@
 #include "input.h"
 #include "LedManagerTask.h"
 #include "current_shaper.h"
-#include "temp_throttle.h"
+
 #include "limit.h"
 #endif
 
