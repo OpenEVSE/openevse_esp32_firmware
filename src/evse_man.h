@@ -59,6 +59,7 @@ typedef uint32_t EvseClient;
 #define EVSE_VEHICLE_SOC    (1 << 0)
 #define EVSE_VEHICLE_RANGE  (1 << 1)
 #define EVSE_VEHICLE_ETA    (1 << 2)
+#define EVSE_VEHICLE_CHARGE_LIMIT (1 << 3)
 
 #ifndef EVSE_MANAGER_MAX_CLIENT_CLAIMS
 #define EVSE_MANAGER_MAX_CLIENT_CLAIMS 10
@@ -243,6 +244,7 @@ class EvseManager : public MicroTasks::Task
     int _vehicleStateOfCharge;
     int _vehicleRange;
     int _vehicleEta;
+    int _vehicleChargeLimit;
 
     void initialiseEvse();
     bool findClaim(EvseClient client, Claim **claim = NULL);
@@ -508,6 +510,9 @@ class EvseManager : public MicroTasks::Task
     int getVehicleEta() {
       return _vehicleEta;
     }
+    int getVehicleChargeLimit() {
+      return _vehicleChargeLimit;
+    }
     uint32_t getVehicleLastUpdated() {
       return _vehicleLastUpdated;
     }
@@ -520,9 +525,13 @@ class EvseManager : public MicroTasks::Task
     int isVehicleEtaValid() {
       return 0 != (_vehicleValid & EVSE_VEHICLE_ETA);
     }
+    int isVehicleChargeLimitValid() {
+      return 0 != (_vehicleValid & EVSE_VEHICLE_CHARGE_LIMIT);
+    }
     void setVehicleStateOfCharge(int vehicleStateOfCharge);
     void setVehicleRange(int vehicleRange);
     void setVehicleEta(int vehicleEta);
+    void setVehicleChargeLimit(int vehicleChargeLimit);
 
     // Get/set the 'disabled' mode
     bool isSleepForDisable() {

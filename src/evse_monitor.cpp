@@ -256,30 +256,17 @@ void EvseMonitor::evseBoot(const char *firmware)
     }
   });
 
-  if(voltage_cfg > 0) {
-    setVoltage((double)voltage_cfg / 100.0);
-  }
-
-  {
-    uint32_t hi = heartbeat_interval_cfg > 0 ? heartbeat_interval_cfg : EVSE_HEATBEAT_INTERVAL;
-    uint32_t hc = heartbeat_current_cfg > 0 ? heartbeat_current_cfg : EVSE_HEARTBEAT_CURRENT;
-    _openevse.heartbeatEnable(hi, hc, [this](int ret, int interval, int current, int triggered) {
-      _heartbeat = RAPI_RESPONSE_OK == ret;
-      if(_heartbeat) {
-        _heartbeat_interval = interval;
-        _heartbeat_current = current;
-      }
-      // If the heartbeat was triggered (missed pulse during reboot), ack immediately
-      // so ampacity is restored without waiting for the next loop iteration
-      if (_heartbeat && 2 == triggered) {
-        _openevse.heartbeatPulse([](int ret) {
-          if (RAPI_RESPONSE_OK != ret) {
-            DEBUG_PORT.println("Heartbeat ack failed");
-          }
-        });
-      }
-    });
-  }
+  _openevse.heartbeatEnable(EVSE_HEATBEAT_INTERVAL, EVSE_HEARTBEAT_CURRENT, [this](int ret, int interval, int current, int triggered) {
+    _heartbeat = RAPI_RESPONSE_OK == ret;
+    // If heartbeat was triggered while WiFi module was rebooting, ack immediately to restore ampacity
+    if (_heartbeat && 2 == triggered) {
+      _openevse.heartbeatPulse([](int ret) {
+        if (RAPI_RESPONSE_OK != ret) {
+          DEBUG_PORT.println("Heartbeat ack failed");
+        }
+      });
+    }
+  });
 }
 
 void EvseMonitor::updateEvseState(uint8_t evse_state, uint8_t pilot_state, uint32_t vflags)
@@ -363,15 +350,9 @@ unsigned long EvseMonitor::loop(MicroTasks::WakeReason reason)
   }
   else if(0 == _count % EVSE_MONITOR_STATE_TIME)
   {
-    // Heartbeat enable failed or was never set; retry periodically
-    uint32_t hi = heartbeat_interval_cfg > 0 ? heartbeat_interval_cfg : EVSE_HEATBEAT_INTERVAL;
-    uint32_t hc = heartbeat_current_cfg > 0 ? heartbeat_current_cfg : EVSE_HEARTBEAT_CURRENT;
-    _openevse.heartbeatEnable(hi, hc, [this](int ret, int interval, int current, int triggered) {
+    // Heartbeat enable failed or was never set; retry periodically so WiFi module reboot resyncs
+    _openevse.heartbeatEnable(EVSE_HEATBEAT_INTERVAL, EVSE_HEARTBEAT_CURRENT, [this](int ret, int interval, int current, int triggered) {
       _heartbeat = RAPI_RESPONSE_OK == ret;
-      if(_heartbeat) {
-        _heartbeat_interval = interval;
-        _heartbeat_current = current;
-      }
       if (_heartbeat && 2 == triggered) {
         _openevse.heartbeatPulse([](int ret) {
           if (RAPI_RESPONSE_OK != ret) {
@@ -417,6 +398,14 @@ bool EvseMonitor::begin(RapiSender &sender)
       _openevse.onState([this](uint8_t evse_state, uint8_t pilot_state, uint32_t current_capacity, uint32_t vflags)
       {
         DBUGF("evse_state = %02x, pilot_state = %02x, current_capacity = %d, vflags = %08x", evse_state, pilot_state, current_capacity, vflags);
+        // If the EVSE independently changed current capacity (e.g. heartbeat restore,
+        // temperature throttle recover), update _pilot so verifyPilot() doesn't fight
+        // the change, and trigger re-evaluation so setTargetState corrects if needed.
+        if(current_capacity > 0 && current_capacity != _pilot)
+        {
+          _pilot = current_capacity;
+          _settings_changed.Trigger();
+        }
         updateEvseState(evse_state, pilot_state, vflags);
       });
 
