@@ -23,7 +23,8 @@ public:
      * 
      * @note The serial field contains only the least significant 8 bytes of the certificate's
      *       serial number. Serial numbers larger than 8 bytes will be truncated. For certificates
-     *       with larger serial numbers, use getSerialNumber() and handle truncation appropriately.
+     *       with larger serial numbers, use validateCertificate() and inspect the serial field,
+     *       bearing in mind that only the least significant 8 bytes are retained.
      */
     struct ValidationResult
     {

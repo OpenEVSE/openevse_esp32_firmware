@@ -254,7 +254,9 @@ bool config_set(const char *name, double val);
 
 // Parse and set config value from string (used for command line arguments)
 // Tries to determine the type based on the config option definition
-// Returns true if the option was found and set
+// Returns true if the config was modified (i.e. a known option was found and
+// its value changed). Returns false if the option is unknown or if the value
+// was already set to the same value.
 bool config_set_opt_string(const char *name, const char *value);
 
 // Read config settings from JSON object

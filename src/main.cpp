@@ -488,14 +488,22 @@ static int parseFlags(int argc, const char* const* argv) {
       // Extract name and value
       size_t name_len = equals_pos - config_pair;
       char name[64];
+      if (name_len >= sizeof(name)) {
+        fprintf(stderr, "Error: config option name too long\n");
+        cmdline_exit_requested = true;
+        return argc_original - argc;
+      }
       strncpy(name, config_pair, name_len);
       name[name_len] = '\0';
       
       const char* value = equals_pos + 1;
       
       // Set the config value
+      // Note: config_set_opt_string returns whether the config was modified,
+      // not whether the option was found. A known option set to its existing
+      // value will also return false.
       if (!config_set_opt_string(name, value)) {
-        fprintf(stderr, "Warning: Unknown config option '%s'\n", name);
+        fprintf(stderr, "Warning: Config option '%s' was not modified (unknown option or value unchanged)\n", name);
       } else {
         fprintf(stderr, "Set config: %s = %s\n", name, value);
       }
@@ -524,7 +532,7 @@ static int parseFlags(int argc, const char* const* argv) {
   return argc_original - argc;
 }
 
-void process_command_line()
+static void process_command_line()
 {
   parseFlags(epoxy_argc, epoxy_argv);
   if (cmdline_exit_requested) {
