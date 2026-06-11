@@ -103,6 +103,7 @@ divert_sim/epoxyeepromdata
 
 *.pem
 *.pem
+*.orig
 
 epoxyfsdata
 epoxyeepromdata

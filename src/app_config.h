@@ -67,6 +67,9 @@ extern String mqtt_live_pwr;
 extern String mqtt_vehicle_soc;
 extern String mqtt_vehicle_range;
 extern String mqtt_vehicle_eta;
+extern String mqtt_vehicle_charge_limit;
+extern String mqtt_home_battery_soc;
+extern String mqtt_home_battery_power;
 extern String mqtt_announce_topic;
 
 // OCPP 1.6 Settings

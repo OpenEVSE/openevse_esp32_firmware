@@ -47,21 +47,21 @@ jobs:
           sudo apt-get install -y libavahi-client-dev libavahi-common-dev
 
       - name: Build native image
-        run: pio run -e native
+        run: pio run -e native_openevse
 
       - name: Resolve native executable path
         id: native-binary
         run: |
           set -e
-          if [ -x .pio/build/native/program ]; then
-            BINARY_PATH=.pio/build/native/program
+          if [ -x .pio/build/native_openevse/program ]; then
+            BINARY_PATH=.pio/build/native_openevse/program
           else
-            BINARY_PATH="$(find .pio/build/native -maxdepth 1 -type f -executable | head -n 1)"
+            BINARY_PATH="$(find .pio/build/native_openevse -maxdepth 1 -type f -executable | head -n 1)"
           fi
 
           if [ -z "$BINARY_PATH" ]; then
-            echo "No native executable found in .pio/build/native"
-            ls -la .pio/build/native || true
+            echo "No native executable found in .pio/build/native_openevse"
+            ls -la .pio/build/native_openevse || true
             exit 1
           fi
 

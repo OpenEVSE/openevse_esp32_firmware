@@ -1,7 +1,7 @@
 ARG UBUNTU_VERSION=25.10
 FROM ubuntu:${UBUNTU_VERSION}
 
-ARG NATIVE_BINARY=.pio/build/native/program
+ARG NATIVE_BINARY=.pio/build/native_openevse/program
 
 RUN apt-get update \
     && apt-get install -y --no-install-recommends socat ca-certificates libavahi-client3 \
