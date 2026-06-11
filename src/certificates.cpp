@@ -11,6 +11,19 @@
 
 #include "mbedtls/x509_crt.h"
 #include "mbedtls/pk.h"
+#include "mbedtls/version.h"
+
+#if MBEDTLS_VERSION_NUMBER >= 0x03000000
+#include <esp_random.h>
+
+// mbedTLS 3.x requires an RNG for key parsing; back it with the ESP HW RNG.
+static int esp_rng_for_mbedtls(void *ctx, unsigned char *buf, size_t len)
+{
+  (void)ctx;
+  esp_fill_random(buf, len);
+  return 0;
+}
+#endif
 
 bool CertificateStore::Certificate::deserialize(JsonObject &obj)
 {
@@ -52,7 +65,11 @@ bool CertificateStore::Certificate::deserialize(JsonObject &obj)
 
     mbedtls_pk_context pk;
     mbedtls_pk_init(&pk);
+#if MBEDTLS_VERSION_NUMBER >= 0x03000000
+    int ret = mbedtls_pk_parse_key(&pk, (const unsigned char *)key.c_str(), key.length() + 1, NULL, 0, esp_rng_for_mbedtls, NULL);
+#else
     int ret = mbedtls_pk_parse_key(&pk, (const unsigned char *)key.c_str(), key.length() + 1, NULL, 0);
+#endif
     if(ret != 0) {
       DBUGVAR(ret);
       DBUGVAR(key.c_str());
