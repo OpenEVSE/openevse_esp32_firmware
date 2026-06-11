@@ -51,7 +51,14 @@ jobs:
         pip install --upgrade platformio
 
     - name: Run native unit tests
-      run: pio test -e native_test
+      run: pio test -e native_test --junit-output-path=pio_test_results.xml
+
+    - name : Upload test results
+      uses: actions/upload-artifact@v7
+      with:
+        name: pio_test_results
+        path: |
+          pio_test_results.xml
 
   build:
     name: Build ${{ matrix.env }}
