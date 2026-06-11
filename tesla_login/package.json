@@ -21,5 +21,8 @@
   },
   "devDependencies": {
     "eslint": "^10.0.1"
+  },
+  "overrides": {
+    "form-data": "2.5.4"
   }
 }
