@@ -11,6 +11,7 @@ on:
 
   pull_request:
     paths:
+      - gui-nightshift
       - gui-v2
       - gui-tft/*
 
@@ -58,12 +59,12 @@ jobs:
 
       - name: Install dependencies
         run: |
-          cd gui-v2
+          cd gui-nightshift
           npm install
 
       - name: Build GUI
         run: |
-          cd gui-v2
+          cd gui-nightshift
           npm run build
 
       - name: Delete the existing pre-built GUI files

@@ -79,6 +79,8 @@ String mqtt_vehicle_soc;
 String mqtt_vehicle_range;
 String mqtt_vehicle_eta;
 String mqtt_vehicle_charge_limit;
+String mqtt_home_battery_soc;
+String mqtt_home_battery_power;
 String mqtt_announce_topic;
 
 // OCPP 1.6 Settings
@@ -210,6 +212,8 @@ ConfigOpt *opts[] =
   new ConfigOptDefinition<String>(mqtt_vehicle_range, "", "mqtt_vehicle_range", "mr"),
   new ConfigOptDefinition<String>(mqtt_vehicle_eta, "", "mqtt_vehicle_eta", "met"),
   new ConfigOptDefinition<String>(mqtt_vehicle_charge_limit, "", "mqtt_vehicle_charge_limit", "mcl"),
+  new ConfigOptDefinition<String>(mqtt_home_battery_soc, "", "mqtt_home_battery_soc", "mhs"),
+  new ConfigOptDefinition<String>(mqtt_home_battery_power, "", "mqtt_home_battery_power", "mhp"),
   new ConfigOptDefinition<String>(mqtt_announce_topic, "openevse/announce/" + ESPAL.getShortId(), "mqtt_announce_topic", "ma"),
 
 // OCPP 1.6 Settings

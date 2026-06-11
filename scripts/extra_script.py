@@ -185,7 +185,9 @@ if npm_installed:
 
     gui_name = environ.get("GUI_NAME")
     if gui_name in (None, ""):
-        gui_name = "gui-v2"
+        # Default web UI for this fork. Override with GUI_NAME=gui-v2 to build
+        # the upstream gui-v2 instead. Both are submodules (see .gitmodules).
+        gui_name = "gui-nightshift"
 
     gui_dir = join(env.subst("$PROJECT_DIR"), gui_name)
     dist_dir = join(gui_dir, "dist")
