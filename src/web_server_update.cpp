@@ -63,7 +63,15 @@ void handleUpdateFileFetch(MongooseHttpServerRequest *request)
     if(http_update_from_url(url,
       [](size_t complete, size_t total) {},
       [](int) { },
-      [](int) { }))
+      [](int) {
+        if(!Update.isRunning())
+        {
+          StaticJsonDocument<128> event;
+          event["ota"] = "failed";
+          web_server_event(event);
+          yield();
+        }
+      }))
     {
       response->setCode(200);
       response->print(F("{\"msg\":\"started\"}"));
