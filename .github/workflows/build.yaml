@@ -136,6 +136,13 @@ jobs:
         name: ${{ matrix.env }}.bin
         path: .pio/build/${{ matrix.env }}/*.bin
 
+    - name: Upload native output to GitHub
+      if: matrix.env == 'native_openevse'
+      uses: actions/upload-artifact@v7
+      with:
+        name: ${{ matrix.env }}.program
+        path: .pio/build/${{ matrix.env }}/program
+
   release:
     name: Upload release assets
     runs-on: ubuntu-latest

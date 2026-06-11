@@ -45,14 +45,6 @@ typedef const __FlashStringHelper *fstr_t;
 #include "evse_man.h"
 #include "limit.h"
 
-#ifndef HTTP_SERVER_PORT
-#define HTTP_SERVER_PORT 80
-#endif
-
-#ifndef HTTPS_SERVER_PORT
-#define HTTPS_SERVER_PORT 443
-#endif
-
 MongooseHttpServer server;          // Create class for Web server
 MongooseHttpServer redirect;        // Server to redirect to HTTPS if enabled
 
@@ -1220,7 +1212,7 @@ void web_server_setup()
     const char *key = certs.getKey(cert_id);
     if(NULL != cert && NULL != key)
     {
-      DEBUG.printf("Starting HTTP server, https://0.0.0.0:%d\n", www_https_port);
+      DEBUG.printf("Starting HTTPS server, https://0.0.0.0:%d\n", www_https_port);
       server.begin(www_https_port, cert, key);
       use_ssl = true;
 
