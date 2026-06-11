@@ -15,8 +15,7 @@
 #if MBEDTLS_VERSION_NUMBER >= 0x03000000
 #include <esp_random.h>
 
-// mbedTLS 3.x requires an RNG for mbedtls_pk_parse_key(); back it with the ESP HW
-// RNG (same approach as certificates.cpp / the TLS RNG layer).
+// mbedTLS 3.x requires an RNG for mbedtls_pk_parse_key(); back it with the ESP HW RNG.
 static int esp_rng_for_mbedtls(void *ctx, unsigned char *buf, size_t len)
 {
     (void)ctx;
