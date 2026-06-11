@@ -41,10 +41,19 @@ private:
     void initializeMicroOcpp();
     void deinitializeMicroOcpp();
     void loadEvseBehavior();
+    bool applySecurityConfig();
+    struct TlsConfig {
+        const char *caCert;
+        bool rejectUnauthorized;
+    };
+    TlsConfig resolveTlsConfig();
 
     static OcppTask *instance;
 
     bool synchronizationLock = false;
+    bool tlsConfigApplied = false;
+    const char *appliedCaCert = nullptr;
+    bool appliedRejectUnauthorized = false;
 protected:
 
     //hook method of MicroTask::Task
