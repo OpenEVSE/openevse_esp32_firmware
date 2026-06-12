@@ -2,3 +2,7 @@
 	path = gui-v2
 	url = https://github.com/OpenEVSE/openevse-gui-v2
 	branch = master
+[submodule "gui-nightshift"]
+	path = gui-nightshift
+	url = https://github.com/RAR/openevse-gui-nightshift
+	branch = main

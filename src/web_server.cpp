@@ -23,9 +23,13 @@ typedef const __FlashStringHelper *fstr_t;
 #endif
 
 //#include <FS.h>                       // SPIFFS file-system: store web server html, CSS etc.
+#include <LittleFS.h>
 
 #include "emonesp.h"
 #include "web_server.h"
+#ifdef ENABLE_TSDB
+#include "tsdb_energy_logger.h"
+#endif
 #include "web_server_static.h"
 #include "app_config.h"
 #include "net_manager.h"
@@ -41,6 +45,7 @@ typedef const __FlashStringHelper *fstr_t;
 #include "scheduler.h"
 #include "rfid.h"
 #include "current_shaper.h"
+#include "home_battery.h"
 #include "evse_man.h"
 #include "limit.h"
 
@@ -82,6 +87,19 @@ void handleUpdateClose(MongooseHttpServerRequest *request);
 
 void handleTime(MongooseHttpServerRequest *request);
 void handleTimePost(MongooseHttpServerRequest *request, MongooseHttpServerResponseStream *response);
+
+#ifndef ENABLE_TSDB
+void handleEnergyRaw(MongooseHttpServerRequest *request);
+void handleEnergyDaily(MongooseHttpServerRequest *request);
+void handleEnergyMonthly(MongooseHttpServerRequest *request);
+void handleEnergyAnnual(MongooseHttpServerRequest *request);
+#else // ENABLE_TSDB
+void handleEnergyRaw(MongooseHttpServerRequest *request);
+void handleEnergyDaily(MongooseHttpServerRequest *request);
+void handleEnergyWeekly(MongooseHttpServerRequest *request);
+void handleEnergyMonthly(MongooseHttpServerRequest *request);
+void handleEnergyAnnual(MongooseHttpServerRequest *request);
+#endif // ENABLE_TSDB
 
 void dumpRequest(MongooseHttpServerRequest *request)
 {
@@ -229,6 +247,8 @@ void buildStatus(DynamicJsonDocument &doc) {
   doc["ohm_hour"] = ohm_hour;
 
   doc["free_heap"] = ESPAL.getFreeHeap();
+  doc["littlefs_free"] = (uint32_t)(LittleFS.totalBytes() - LittleFS.usedBytes());
+  doc["littlefs_used"] = (uint32_t)LittleFS.usedBytes();
 
   doc["comm_sent"] = rapiSender.getSent();
   doc["comm_success"] = rapiSender.getSuccess();
@@ -282,7 +302,16 @@ void buildStatus(DynamicJsonDocument &doc) {
     if(evse.isVehicleEtaValid()) {
       doc["time_to_full_charge"] = evse.getVehicleEta();
     }
+    if(evse.isVehicleChargeLimitValid()) {
+      doc["vehicle_charge_limit"] = evse.getVehicleChargeLimit();
+    }
   }
+
+#ifdef ENABLE_TSDB
+  doc["tsdb_ready"] = tsdbEnergyLogger.isReady() ? 1 : 0;
+  doc["tsdb_err"]   = tsdbEnergyLogger.initError();
+#endif
+  home_battery_add_status_fields(doc);
 
   DBUGF("/status ArduinoJson size: %dbytes", doc.size());
 }
@@ -489,6 +518,25 @@ void handleStatusPost(MongooseHttpServerRequest *request, MongooseHttpServerResp
       DBUGF("vehicle_eta:%d", vehicle_eta);
       evse.setVehicleEta(vehicle_eta);
       doc["vehicle_state_update"] = 0;
+    }
+    if(doc.containsKey("vehicle_charge_limit") && vehicle_data_src == VEHICLE_DATA_SRC_HTTP){
+      int vehicle_charge_limit = doc["vehicle_charge_limit"];
+      DBUGF("vehicle_charge_limit:%d%%", vehicle_charge_limit);
+      evse.setVehicleChargeLimit(vehicle_charge_limit);
+      doc["vehicle_state_update"] = 0;
+    }
+    // Display-only home/powerwall battery feeds. Like the solar/grid pushes
+    // above these are an explicit override (no data_src arbitration); they just
+    // surface in /status and on the display.
+    if(doc.containsKey("home_battery_soc")) {
+      int soc = doc["home_battery_soc"];
+      DBUGF("home_battery_soc:%d%%", soc);
+      home_battery_set_soc(soc);
+    }
+    if(doc.containsKey("home_battery_power")) {
+      int power = doc["home_battery_power"];
+      DBUGF("home_battery_power:%dW", power);
+      home_battery_set_power(power);
     }
     // send back new value to clients
     if(send_event) {
@@ -1231,6 +1279,19 @@ void web_server_setup()
   server.on("/limit", handleLimit);
   server.on("/emeter", handleEmeter);
   server.on("/time", handleTime);
+
+#ifndef ENABLE_TSDB
+  server.on("/energy/raw$", handleEnergyRaw);
+  server.on("/energy/daily$", handleEnergyDaily);
+  server.on("/energy/monthly$", handleEnergyMonthly);
+  server.on("/energy/annual$", handleEnergyAnnual);
+#else // ENABLE_TSDB
+  server.on("/energy/raw$", handleEnergyRaw);
+  server.on("/energy/daily$", handleEnergyDaily);
+  server.on("/energy/weekly$", handleEnergyWeekly);
+  server.on("/energy/monthly$", handleEnergyMonthly);
+  server.on("/energy/annual$", handleEnergyAnnual);
+#endif // ENABLE_TSDB
 
   // Simple Firmware Update Form
   server.on("/update$")->
