@@ -32,6 +32,7 @@ static void handleUpdateGet(MongooseHttpServerRequest *request)
 }
 
 static MongooseHttpServerResponseStream *upgradeResponse = NULL;
+static bool fileUploadInProgress = false;
 
 void handleUpdateFileUpload(MongooseHttpServerRequest *request)
 {
@@ -44,6 +45,7 @@ void handleUpdateFileUpload(MongooseHttpServerRequest *request)
     return;
   }
 
+  fileUploadInProgress = true;
   // TODO: Add support for returning 100: Continue
 }
 
@@ -164,7 +166,13 @@ void handleUpdateClose(MongooseHttpServerRequest *request)
     upgradeResponse = NULL;
   }
 
-  if(Update.isFinished() && !Update.hasError()) {
+  // Only restart after a direct file upload. For URL-based updates the restart
+  // is handled inside http_update.cpp's onClose callback. We must not rely on
+  // Update.isFinished() alone here because it returns true while the Update
+  // library is idle (progress == size == 0), which would cause an immediate
+  // reboot when the JSON URL request closes — before the download even starts.
+  if(fileUploadInProgress && Update.isFinished() && !Update.hasError()) {
     restart_system();
   }
+  fileUploadInProgress = false;
 }
