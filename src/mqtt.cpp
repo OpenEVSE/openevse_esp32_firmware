@@ -85,7 +85,7 @@ unsigned long Mqtt::loop(MicroTasks::WakeReason reason) {
   }
 
   // If a connection attempt has been in progress too long with no callback, reset and retry.
-  // Handles the case where the TCP stack hangs without firing onError or onClose.
+  // This handles the case where the TCP stack hangs without firing onError or onClose.
   if (_connecting && (millis() - _connectStartTime) > (MQTT_CONNECT_TIMEOUT * 2)) {
     DBUGLN("MQTT connection attempt timed out, will retry");
     _connecting = false;
