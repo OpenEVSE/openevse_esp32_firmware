@@ -26,7 +26,7 @@ struct image_render_state {
 };
 
 // Forward declaration for PNG decoder callback
-static void png_draw(PNGDRAW *pDraw);
+static int png_draw(PNGDRAW *pDraw);
 
 void render_image(const char *filename, int16_t x, int16_t y, TFT_eSPI &screen)
 {
@@ -192,12 +192,13 @@ String get_message_line(int line)
   return String(start, len);
 }
 
-static void png_draw(PNGDRAW *pDraw)
+static int png_draw(PNGDRAW *pDraw)
 {
   image_render_state *state = (image_render_state *)pDraw->pUser;
   uint16_t lineBuffer[MAX_IMAGE_WIDTH];
   png.getLineAsRGB565(pDraw, lineBuffer, PNG_RGB565_BIG_ENDIAN, 0xffffffff);
   state->tft->pushImage(state->xpos, state->ypos + pDraw->y, pDraw->iWidth, 1, lineBuffer);
+  return 1;
 }
 
 #endif // ENABLE_SCREEN_LCD_TFT

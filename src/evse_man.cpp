@@ -49,19 +49,19 @@ EvseProperties & EvseProperties::operator = (EvseProperties &rhs)
 
 bool EvseProperties::deserialize(JsonObject &obj)
 {
-  if(obj.containsKey("state")) {
+  if(obj["state"].is<const char*>()) {
     obj["state"] == "clear" ? _state.None : _state.fromString(obj["state"]);
   }
 
-  if(obj.containsKey("charge_current")) {
+  if(obj["charge_current"].is<const char*>() || obj["charge_current"].is<uint32_t>()) {
     obj["charge_current"] == "clear" ? _charge_current = UINT32_MAX :_charge_current = obj["charge_current"];
   }
 
-  if(obj.containsKey("max_current")) {
+  if(obj["max_current"].is<const char*>() || obj["max_current"].is<uint32_t>()) {
     obj["max_current"] == "clear" ? _max_current = UINT32_MAX : _max_current = obj["max_current"];
   }
 
-  if(obj.containsKey("auto_release")) {
+  if(obj["auto_release"].is<bool>()) {
     _auto_release = obj["auto_release"];
     _has_auto_release = true;
   }
@@ -217,9 +217,8 @@ bool EvseManager::evaluateClaims(EvseProperties &properties)
       }
 
       if(claim.getClient() == EvseClient_OpenEVSE_Manual) {
-        const size_t capacity = JSON_OBJECT_SIZE(40) + 1024;
         // update manual_override event to socket & mqtt
-        DynamicJsonDocument event(capacity);
+        JsonDocument event;
         event["manual_override"] = 1;
         event_send(event);
       }
@@ -427,7 +426,7 @@ bool EvseManager::claim(EvseClient client, int priority, EvseProperties &target)
       DBUGF("Claim added/updated, waking task");
       _evaluateClaims = true;
       MicroTask.wakeTask(this);
-      StaticJsonDocument<128> event;
+      JsonDocument event;
       event["claims_version"] = ++_version;
       if (client == EvseClient_OpenEVSE_Manual) {
           event["override_version"] = manual.setVersion(manual.getVersion() + 1);
@@ -448,15 +447,14 @@ bool EvseManager::release(EvseClient client)
   {
     // if claim is manual override, publish data to socket & mqtt
     if (claim->getClient() == EvseClient_OpenEVSE_Manual) {
-      const size_t capacity = JSON_OBJECT_SIZE(40) + 1024;
-      DynamicJsonDocument event(capacity);
+      JsonDocument event;
       event["manual_override"] = 0;
       event_send(event);
     }
     claim->release();
     _evaluateClaims = true;
     MicroTask.wakeTask(this);
-    StaticJsonDocument<128> event;
+    JsonDocument event;
     event["claims_version"] = ++_version;
     if (client == EvseClient_OpenEVSE_Manual) {
           event["override_version"] = manual.setVersion(manual.getVersion() + 1);
@@ -610,7 +608,7 @@ bool EvseManager::isRapiCommandBlocked(String rapi)
 #endif
 }
 
-bool EvseManager::serializeClaims(DynamicJsonDocument &doc)
+bool EvseManager::serializeClaims(JsonDocument &doc)
 {
   doc.to<JsonArray>();
 
@@ -619,7 +617,7 @@ bool EvseManager::serializeClaims(DynamicJsonDocument &doc)
     Claim &claim = _clients[i];
     if(claim.isValid())
     {
-      JsonObject obj = doc.createNestedObject();
+      JsonObject obj = doc.add<JsonObject>();
       obj["client"] = claim.getClient();
       obj["priority"] = claim.getPriority();
       claim.getProperties().serialize(obj);
@@ -629,7 +627,7 @@ bool EvseManager::serializeClaims(DynamicJsonDocument &doc)
   return true;
 }
 
-bool EvseManager::serializeClaim(DynamicJsonDocument &doc, EvseClient client)
+bool EvseManager::serializeClaim(JsonDocument &doc, EvseClient client)
 {
   Claim *claim;
 
@@ -643,12 +641,12 @@ bool EvseManager::serializeClaim(DynamicJsonDocument &doc, EvseClient client)
   return false;
 }
 
-bool EvseManager::serializeTarget(DynamicJsonDocument &doc)
+bool EvseManager::serializeTarget(JsonDocument &doc)
 {
-  JsonObject properties = doc.createNestedObject("properties");
+  JsonObject properties = doc["properties"].to<JsonObject>();
   _targetProperties.serialize(properties);
 
-  JsonObject claims = doc.createNestedObject("claims");
+  JsonObject claims = doc["claims"].to<JsonObject>();
   if(EvseClient_NULL != _state_client) {
     claims["state"] = _state_client;
   }

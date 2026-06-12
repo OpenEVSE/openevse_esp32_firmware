@@ -68,7 +68,7 @@ bool TimeManager::setTimeZone(String tz)
 
   DBUGLN("Timezone set");
 // publish new time
- StaticJsonDocument<128> event;
+ JsonDocument event;
  serialise(event);
  event_send(event);
   return true;
@@ -209,7 +209,7 @@ void TimeManager::setTime(struct timeval setTime, const char *source)
   });
 
   // Event the time change
-  StaticJsonDocument<128> doc;
+  JsonDocument doc;
   serialise(doc);
   event_send(doc);
 

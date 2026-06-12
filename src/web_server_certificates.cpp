@@ -28,7 +28,7 @@ void handleCertificatesGetRootCa(MongooseHttpServerRequest *request, MongooseHtt
 // -------------------------------------------------------------------
 void handleCertificatesGet(MongooseHttpServerRequest *request, MongooseHttpServerResponseStream *response, uint64_t certificate)
 {
-  DynamicJsonDocument doc(4 * CERTIFICATE_JSON_BUFFER_SIZE);
+  JsonDocument doc;
 
   bool success = (UINT64_MAX == certificate) ?
     certs.serializeCertificates(doc) :
@@ -50,7 +50,7 @@ void handleCertificatesPost(MongooseHttpServerRequest *request, MongooseHttpServ
 
   if(UINT64_MAX == certificate)
   {
-    DynamicJsonDocument doc(CERTIFICATE_JSON_BUFFER_SIZE);
+    JsonDocument doc;
     DeserializationError jsonError = deserializeJson(doc, body);
     if(DeserializationError::Ok == jsonError)
     {

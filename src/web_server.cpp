@@ -185,7 +185,7 @@ bool isPositive(MongooseHttpServerRequest *request, const char *param) {
 // Build status data
 // --------------------------------------------------------------------
 
-void buildStatus(DynamicJsonDocument &doc) {
+void buildStatus(JsonDocument &doc) {
 
   // Get the current time
   struct timeval local_time;
@@ -408,14 +408,14 @@ handleTeslaVeh(MongooseHttpServerRequest *request)
     return;
   }
 
-  StaticJsonDocument<1024> doc;
+  JsonDocument doc;
   int count = teslaClient.getVehicleCnt();
   doc["count"] = count;
-  JsonArray vehicles = doc.createNestedArray("vehicles");
+  JsonArray vehicles = doc["vehicles"].to<JsonArray>();
 
   for (int i = 0; i < count; i++)
   {
-    JsonObject vehicle = vehicles.createNestedObject();
+    JsonObject vehicle = vehicles.add<JsonObject>();
     vehicle["id"] = teslaClient.getVehicleId(i);
     vehicle["name"] = teslaClient.getVehicleDisplayName(i);
   }
@@ -433,26 +433,25 @@ void handleStatusPost(MongooseHttpServerRequest *request, MongooseHttpServerResp
 {
   String body = request->body().toString();
   // Deserialize the JSON document
-  const size_t capacity = JSON_OBJECT_SIZE(32) + 1024;
-  DynamicJsonDocument doc(capacity);
+  JsonDocument doc;
   DeserializationError error = deserializeJson(doc, body);
   if(!error)
   {
     bool send_event = true;
 
-    if(doc.containsKey("voltage"))
+    if(doc["voltage"].is<double>())
     {
       double volts = doc["voltage"];
       DBUGF("voltage:%.1f", volts);
       evse.setVoltage(volts);
     }
-    if(doc.containsKey("shaper_live_pwr"))
+    if(doc["shaper_live_pwr"].is<double>())
     {
       double shaper_live_pwr = doc["shaper_live_pwr"];
       shaper.setLivePwr(shaper_live_pwr);
       DBUGF("shaper: live power:%dW", shaper.getLivePwr());
     }
-    if(doc.containsKey("solar")) {
+    if(doc["solar"].is<int>()) {
       solar = doc["solar"];
       DBUGF("solar:%dW", solar);
       divert.update_state();
@@ -462,7 +461,7 @@ void handleStatusPost(MongooseHttpServerRequest *request, MongooseHttpServerResp
       }
       send_event = false; // Divert sends the event so no need to send here
     }
-    else if(doc.containsKey("grid_ie")) {
+    else if(doc["grid_ie"].is<int>()) {
       grid_ie = doc["grid_ie"];
       DBUGF("grid:%dW", grid_ie);
       divert.update_state();
@@ -472,19 +471,19 @@ void handleStatusPost(MongooseHttpServerRequest *request, MongooseHttpServerResp
       }
       send_event = false; // Divert sends the event so no need to send here
     }
-    if(doc.containsKey("battery_level") && vehicle_data_src == VEHICLE_DATA_SRC_HTTP) {
+    if(doc["battery_level"].is<double>() && vehicle_data_src == VEHICLE_DATA_SRC_HTTP) {
       double vehicle_soc = doc["battery_level"];
       DBUGF("vehicle_soc:%d%%", vehicle_soc);
       evse.setVehicleStateOfCharge(vehicle_soc);
       doc["vehicle_state_update"] = 0;
     }
-    if(doc.containsKey("battery_range") && vehicle_data_src == VEHICLE_DATA_SRC_HTTP) {
+    if(doc["battery_range"].is<double>() && vehicle_data_src == VEHICLE_DATA_SRC_HTTP) {
       double vehicle_range = doc["battery_range"];
       DBUGF("vehicle_range:%dKM", vehicle_range);
       evse.setVehicleRange(vehicle_range);
       doc["vehicle_state_update"] = 0;
     }
-    if(doc.containsKey("time_to_full_charge") && vehicle_data_src == VEHICLE_DATA_SRC_HTTP){
+    if(doc["time_to_full_charge"].is<double>() && vehicle_data_src == VEHICLE_DATA_SRC_HTTP){
       double vehicle_eta = doc["time_to_full_charge"];
       DBUGF("vehicle_eta:%d", vehicle_eta);
       evse.setVehicleEta(vehicle_eta);
@@ -514,8 +513,7 @@ handleStatus(MongooseHttpServerRequest *request)
 
   if(HTTP_GET == request->method()) {
 
-    const size_t capacity = JSON_OBJECT_SIZE(128) + 2048;
-    DynamicJsonDocument doc(capacity);
+    JsonDocument doc;
     buildStatus(doc);
     response->setCode(200);
     serializeJson(doc, *response);
@@ -537,8 +535,7 @@ handleStatus(MongooseHttpServerRequest *request)
 void
 handleScheduleGet(MongooseHttpServerRequest *request, MongooseHttpServerResponseStream *response, uint16_t event)
 {
-  const size_t capacity = JSON_OBJECT_SIZE(40) + 1024;
-  DynamicJsonDocument doc(capacity);
+  JsonDocument doc;
 
   bool success = (SCHEDULER_EVENT_NULL == event) ?
     scheduler.serialize(doc) :
@@ -632,8 +629,7 @@ handleSchedulePlan(MongooseHttpServerRequest *request)
     return;
   }
 
-  const size_t capacity = JSON_OBJECT_SIZE(40) + 2048;
-  DynamicJsonDocument doc(capacity);
+  JsonDocument doc;
 
   scheduler.serializePlan(doc);
   response->setCode(200);
@@ -718,10 +714,10 @@ void handleLimit(MongooseHttpServerRequest *request)
 void handleEmeterDelete(MongooseHttpServerRequest *request, MongooseHttpServerResponseStream *response)
 {
   String body = request->body().toString();
-  DynamicJsonDocument doc(512);
+  JsonDocument doc;
   DeserializationError err = deserializeJson(doc, body);
   if (DeserializationError::Code::Ok == err) {
-    if (doc.containsKey("hard") && doc.containsKey("import")) {
+    if (doc["hard"].is<bool>() && doc["import"].is<bool>()) {
       bool hardreset = (bool)doc["hard"];
       bool import = (bool)doc["import"];
       if (evse.resetEnergyMeter(hardreset,import)) {
@@ -895,12 +891,11 @@ handleRestart(MongooseHttpServerRequest *request) {
   else if (HTTP_POST == request->method()) {
     String body = request->body().toString();
     // Deserialize the JSON document
-    const size_t capacity = JSON_OBJECT_SIZE(1) + 16;
-    DynamicJsonDocument doc(capacity);
+    JsonDocument doc;
     DeserializationError error = deserializeJson(doc, body);
     if(!error)
     {
-      if(doc.containsKey("device")){
+      if(doc["device"].is<const char*>()){
         if (strcmp(doc["device"], "gateway") == 0 ) {
           response->setCode(200);
           response->print("{\"msg\":\"restart gateway\"}");
@@ -1141,11 +1136,10 @@ void handleHttpsRedirect(MongooseHttpServerRequest *request)
 void onWsFrame(MongooseHttpWebSocketConnection *connection, int flags, uint8_t *data, size_t len)
 {
   DBUGF("Got message %.*s", len, (const char *)data);
-  const size_t capacity = JSON_OBJECT_SIZE(1) + 16;
-  DynamicJsonDocument doc(capacity);
+  JsonDocument doc;
   DeserializationError error = deserializeJson(doc, data, len);
   if (!error) {
-    if (doc.containsKey("ping") && doc["ping"].is<int8_t>())
+    if (doc["ping"].is<int8_t>())
       {
         // answer pong
         connection->send("{\"pong\": 1}");
@@ -1158,8 +1152,7 @@ void onWsConnect(MongooseHttpWebSocketConnection *connection)
 {
   DBUGF("New client connected over ws");
   // pushing states to client
-  const size_t capacity = JSON_OBJECT_SIZE(40) + 1024;
-  DynamicJsonDocument doc(capacity);
+  JsonDocument doc;
   buildStatus(doc);
   web_server_event(doc);
 }

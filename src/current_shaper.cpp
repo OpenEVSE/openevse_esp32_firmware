@@ -52,7 +52,7 @@ unsigned long CurrentShaperTask::loop(MicroTasks::WakeReason reason) {
 				if (evse.getState() != props.getState() || evse.getChargeCurrent() != props.getChargeCurrent())
 				{
 					evse.claim(EvseClient_OpenEVSE_Shaper, EvseManager_Priority_Safety, props);
-					StaticJsonDocument<128> event;
+					JsonDocument event;
 					event["shaper"] = 1;
 					event["shaper_live_pwr"] = _live_pwr;
 					event["shaper_smoothed_live_pwr"] = _smoothed_live_pwr;
@@ -78,7 +78,7 @@ unsigned long CurrentShaperTask::loop(MicroTasks::WakeReason reason) {
 				{
 					props.setState(EvseState::Disabled);
 					evse.claim(EvseClient_OpenEVSE_Shaper, EvseManager_Priority_Limit, props);
-					StaticJsonDocument<128> event;
+					JsonDocument event;
 					event["shaper"] = 1;
 					event["shaper_live_pwr"] = _live_pwr;
 					event["shaper_smoothed_live_pwr"] = _smoothed_live_pwr;
@@ -110,7 +110,7 @@ void CurrentShaperTask::begin(EvseManager &evse) {
 	this -> _max_cur = 0;
 	this -> _updated = false;
 	MicroTask.startTask(this);
-	StaticJsonDocument<128> event;
+	JsonDocument event;
 	event["shaper"]  = 1;
 	event_send(event);
 }
@@ -120,7 +120,7 @@ void CurrentShaperTask::notifyConfigChanged( bool enabled, uint32_t max_pwr) {
 	_enabled = enabled;
 	_max_pwr = max_pwr;
 	if (!enabled) evse.release(EvseClient_OpenEVSE_Shaper);
-	StaticJsonDocument<128> event;
+	JsonDocument event;
 	event["shaper"] = enabled == true ? 1 : 0;
 	event["shaper_max_pwr"] = max_pwr;
 	event_send(event);
@@ -143,7 +143,7 @@ void CurrentShaperTask::setState(bool state) {
 		//remove claim
 		evse.release(EvseClient_OpenEVSE_Shaper);
 	}
-	StaticJsonDocument<128> event;
+	JsonDocument event;
 	event["shaper"]  = state?1:0;
 	event_send(event);
 }

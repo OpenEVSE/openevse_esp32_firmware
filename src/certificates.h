@@ -111,7 +111,7 @@ class CertificateStore
 
     bool addCertificate(const char *name, const char *cert, const char *key, uint64_t *id = nullptr);
     bool addCertificate(const char *name, const char *cert, uint64_t *id = nullptr);
-    bool addCertificate(DynamicJsonDocument &doc, uint64_t *id = nullptr, bool save = true);
+    bool addCertificate(JsonDocument &doc, uint64_t *id = nullptr, bool save = true);
 
     bool removeCertificate(uint64_t id);
 
@@ -121,8 +121,8 @@ class CertificateStore
     bool getCertificate(uint64_t id, std::string &certificate);
     bool getKey(uint64_t id, std::string &key);
 
-    bool serializeCertificates(DynamicJsonDocument &doc, uint32_t flags = Certificate::Flags::REDACT_PRIVATE_KEY);
-    bool serializeCertificate(DynamicJsonDocument &doc, uint64_t id, uint32_t flags = Certificate::Flags::REDACT_PRIVATE_KEY);
+    bool serializeCertificates(JsonDocument &doc, uint32_t flags = Certificate::Flags::REDACT_PRIVATE_KEY);
+    bool serializeCertificate(JsonDocument &doc, uint64_t id, uint32_t flags = Certificate::Flags::REDACT_PRIVATE_KEY);
 
   private:
     bool loadCertificates();

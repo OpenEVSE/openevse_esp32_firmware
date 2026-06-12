@@ -13,7 +13,7 @@ typedef const __FlashStringHelper *fstr_t;
 #include "time_man.h"
 
 extern bool isPositive(MongooseHttpServerRequest *request, const char *param);
-extern bool web_server_config_deserialise(DynamicJsonDocument &doc, bool factory);
+extern bool web_server_config_deserialise(JsonDocument &doc, bool factory);
 
 void handleTimePost(MongooseHttpServerRequest *request, MongooseHttpServerResponseStream *response)
 {
@@ -43,7 +43,7 @@ void handleTimePost(MongooseHttpServerRequest *request, MongooseHttpServerRespon
     is_json = true;
     response->setContentType(CONTENT_TYPE_JSON);
 
-    DynamicJsonDocument doc(1024);
+    JsonDocument doc;
     MongooseString body = request->body();
     DeserializationError error = deserializeJson(doc, body.c_str(), body.length());
     if(!error)
@@ -62,7 +62,7 @@ void handleTimePost(MongooseHttpServerRequest *request, MongooseHttpServerRespon
   DBUGF("time: %s", time.c_str());
   DBUGF("time_zone: %s", time_zone.c_str());
 
-  DynamicJsonDocument config(1024);
+  JsonDocument config;
   config["sntp_enabled"] = sntp_enabled;
   config["time_zone"] = time_zone;
   web_server_config_deserialise(config, false);
@@ -103,7 +103,7 @@ void handleTimePost(MongooseHttpServerRequest *request, MongooseHttpServerRespon
 
 void handleTimeGet(MongooseHttpServerRequest *request, MongooseHttpServerResponseStream *response)
 {
-  StaticJsonDocument<128> doc;
+  JsonDocument doc;
   timeManager.serialise(doc);
   response->setCode(200);
   serializeJson(doc, *response);
