@@ -415,8 +415,8 @@ uint64_t uptimeMillis()
 #ifdef EPOXY_DUINO
 
 #include <stdio.h>
+#include <stdlib.h>
 #include <string.h>
-
 // Flag to indicate if command line processing should exit early
 static bool cmdline_exit_requested = false;
 
