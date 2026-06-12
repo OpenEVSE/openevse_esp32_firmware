@@ -6,6 +6,9 @@
 
 #include "emonesp.h"
 #include "evse_monitor.h"
+extern uint32_t voltage_cfg;
+extern uint32_t heartbeat_interval_cfg;
+extern uint32_t heartbeat_current_cfg;
 #include "event.h"
 #include "debug.h"
 
@@ -165,7 +168,11 @@ EvseMonitor::EvseMonitor(OpenEVSEClass &openevse) :
 #ifdef ENABLE_MCP9808
   _mcp9808(),
 #endif
-  _settings_changed()
+  _settings_changed(),
+  _panic_temperature(72),
+  _heartbeat_interval(EVSE_HEATBEAT_INTERVAL),
+  _heartbeat_current(EVSE_HEARTBEAT_CURRENT),
+  _sender(nullptr)
 {
 }
 
@@ -384,6 +391,7 @@ unsigned long EvseMonitor::loop(MicroTasks::WakeReason reason)
 
 bool EvseMonitor::begin(RapiSender &sender)
 {
+  _sender = &sender;
   _openevse.begin(sender, [this](bool connected, const char *firmware, const char *protocol)
   {
     if(connected)
@@ -689,6 +697,53 @@ void EvseMonitor::enableTemperatureCheck(bool enabled, std::function<void(int re
   if(isTemperatureCheckEnabled() != enabled) {
     enableFeature(OPENEVSE_FEATURE_TEMPURATURE_CHECK, enabled, callback);
   }
+}
+
+void EvseMonitor::enableOvercurrentMonitor(bool enabled, std::function<void(int ret)> callback)
+{
+  if(isOvercurrentMonitorEnabled() != enabled) {
+    enableFeature('O', enabled, callback);
+  }
+}
+
+void EvseMonitor::enableFrontButton(bool enabled, std::function<void(int ret)> callback)
+{
+  if(isFrontButtonEnabled() != enabled) {
+    enableFeature(OPENEVSE_FEATURE_BUTTON, enabled, callback);
+  }
+}
+
+void EvseMonitor::setPanicTemperature(uint32_t tempC, std::function<void(int ret)> callback)
+{
+  if(!_sender) {
+    if(callback) callback(RAPI_RESPONSE_NK);
+    return;
+  }
+  _panic_temperature = tempC;
+  char command[32];
+  snprintf(command, sizeof(command), "$FO %u", tempC * 10);
+  _sender->sendCmd(command, [callback](int ret) {
+    if(callback) callback(ret);
+  });
+}
+
+void EvseMonitor::enableBootLock(bool enabled, std::function<void(int ret)> callback)
+{
+  if(isBootLockEnabled() != enabled) {
+    enableFeature('L', enabled, callback);
+  }
+}
+
+void EvseMonitor::setHeartbeatSupervision(uint32_t interval, uint32_t current, std::function<void(int ret)> callback)
+{
+  _openevse.heartbeatEnable(interval, current, [this, interval, current, callback](int ret, int i, int c, int t) {
+    if(RAPI_RESPONSE_OK == ret) {
+      _heartbeat_interval = interval;
+      _heartbeat_current = current;
+      _heartbeat = interval > 0;
+    }
+    if(callback) callback(ret);
+  });
 }
 
 void EvseMonitor::configureCurrentSensorScale(long scale, long offset, std::function<void(int ret)> callback)

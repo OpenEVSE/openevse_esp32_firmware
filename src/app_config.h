@@ -100,6 +100,19 @@ extern uint32_t current_shaper_smoothing_time;
 extern uint32_t current_shaper_min_pause_time;
 extern uint32_t current_shaper_data_maxinterval;
 
+// Temperature Throttle settings
+extern uint32_t temp_throttle_setpoint;
+
+// Heartbeat Supervision settings (stored in ESP32 config, applied to EVSE on boot)
+extern uint32_t heartbeat_interval_cfg;
+extern uint32_t heartbeat_current_cfg;
+
+// Over-temperature shutdown threshold (degrees C)
+extern uint32_t over_temp_shutdown;
+
+// Voltage for power calculations (centivolt, 0 = use EVSE default)
+extern uint32_t voltage_cfg;
+
 // Vehicle
 extern uint8_t vehicle_data_src;
 
@@ -136,6 +149,7 @@ extern uint32_t flags;
 #define CONFIG_THREEPHASE           (1 << 24)
 #define CONFIG_WIZARD               (1 << 25)
 #define CONFIG_DEFAULT_STATE        (1 << 26)
+#define CONFIG_TEMP_THROTTLE        (1 << 27) // next free bit after CONFIG_DEFAULT_STATE
 
 #define INITIAL_CONFIG_VERSION  1
 
@@ -227,6 +241,11 @@ inline bool config_wizard_passed()
 inline EvseState config_default_state()
 {
   return CONFIG_DEFAULT_STATE == (flags & CONFIG_DEFAULT_STATE) ? EvseState::Active : EvseState::Disabled;
+}
+
+inline bool config_temp_throttle_enabled()
+{
+  return CONFIG_TEMP_THROTTLE == (flags & CONFIG_TEMP_THROTTLE);
 }
 
 // Ohm Connect Settings

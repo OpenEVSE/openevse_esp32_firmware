@@ -1,42 +1,38 @@
-#include "web_server.assets_components_bb056724_css_gz.h"
-#include "web_server.assets_components_ce5bee80_js_gz.h"
-#include "web_server.assets_config_a0694b83_css_gz.h"
-#include "web_server.assets_config_f5db9a6f_js_gz.h"
-#include "web_server.assets_en_f85d34d8_js_gz.h"
-#include "web_server.assets_es_09a99823_js_gz.h"
-#include "web_server.assets_fr_ca542547_js_gz.h"
-#include "web_server.assets_hu_d419d523_js_gz.h"
-#include "web_server.assets_icons_11ca588d_js_gz.h"
-#include "web_server.assets_index_b9abe03a_js_gz.h"
-#include "web_server.assets_index_e83393eb_css_gz.h"
-#include "web_server.assets_logo_mini_e4e21c4b_png.h"
-#include "web_server.assets_vendor_143d8acd_js_gz.h"
+#include "web_server.apple_touch_icon_png.h"
+#include "web_server.assets_charts_CnsZ1jie_css_gz.h"
+#include "web_server.assets_charts_DcZkpMN__js_gz.h"
+#include "web_server.assets_en_B_xUMPhW_js_gz.h"
+#include "web_server.assets_es_BWmLdg5x_js_gz.h"
+#include "web_server.assets_fr_B9aNoPA0_js_gz.h"
+#include "web_server.assets_hu_PqEnqCzd_js_gz.h"
+#include "web_server.assets_index_C0d7K1V2_js_gz.h"
+#include "web_server.assets_index_LO8E9kky_css_gz.h"
+#include "web_server.assets_rolldown_runtime_Bh1tDfsg_js_gz.h"
+#include "web_server.assets_vendor_P1Ep0BRL_js_gz.h"
 #include "web_server.favicon_ico.h"
 #include "web_server.index_html_gz.h"
 #include "web_server.manifest_webmanifest.h"
 #include "web_server.pwa_192x192_png.h"
-#include "web_server.pwa_masquable_png.h"
-#include "web_server.success_html.h"
+#include "web_server.pwa_512x512_png.h"
+#include "web_server.pwa_maskable_512x512_png.h"
 #include "web_server.sw_js.h"
 StaticFile web_server_static_files[] = {
-  { "/assets/components-bb056724.css", CONTENT_COMPONENTS_BB056724_CSS_GZ, sizeof(CONTENT_COMPONENTS_BB056724_CSS_GZ) - 1, _CONTENT_TYPE_CSS, CONTENT_COMPONENTS_BB056724_CSS_GZ_ETAG, true },
-  { "/assets/components-ce5bee80.js", CONTENT_COMPONENTS_CE5BEE80_JS_GZ, sizeof(CONTENT_COMPONENTS_CE5BEE80_JS_GZ) - 1, _CONTENT_TYPE_JS, CONTENT_COMPONENTS_CE5BEE80_JS_GZ_ETAG, true },
-  { "/assets/config-a0694b83.css", CONTENT_CONFIG_A0694B83_CSS_GZ, sizeof(CONTENT_CONFIG_A0694B83_CSS_GZ) - 1, _CONTENT_TYPE_CSS, CONTENT_CONFIG_A0694B83_CSS_GZ_ETAG, true },
-  { "/assets/config-f5db9a6f.js", CONTENT_CONFIG_F5DB9A6F_JS_GZ, sizeof(CONTENT_CONFIG_F5DB9A6F_JS_GZ) - 1, _CONTENT_TYPE_JS, CONTENT_CONFIG_F5DB9A6F_JS_GZ_ETAG, true },
-  { "/assets/en-f85d34d8.js", CONTENT_EN_F85D34D8_JS_GZ, sizeof(CONTENT_EN_F85D34D8_JS_GZ) - 1, _CONTENT_TYPE_JS, CONTENT_EN_F85D34D8_JS_GZ_ETAG, true },
-  { "/assets/es-09a99823.js", CONTENT_ES_09A99823_JS_GZ, sizeof(CONTENT_ES_09A99823_JS_GZ) - 1, _CONTENT_TYPE_JS, CONTENT_ES_09A99823_JS_GZ_ETAG, true },
-  { "/assets/fr-ca542547.js", CONTENT_FR_CA542547_JS_GZ, sizeof(CONTENT_FR_CA542547_JS_GZ) - 1, _CONTENT_TYPE_JS, CONTENT_FR_CA542547_JS_GZ_ETAG, true },
-  { "/assets/hu-d419d523.js", CONTENT_HU_D419D523_JS_GZ, sizeof(CONTENT_HU_D419D523_JS_GZ) - 1, _CONTENT_TYPE_JS, CONTENT_HU_D419D523_JS_GZ_ETAG, true },
-  { "/assets/icons-11ca588d.js", CONTENT_ICONS_11CA588D_JS_GZ, sizeof(CONTENT_ICONS_11CA588D_JS_GZ) - 1, _CONTENT_TYPE_JS, CONTENT_ICONS_11CA588D_JS_GZ_ETAG, true },
-  { "/assets/index-b9abe03a.js", CONTENT_INDEX_B9ABE03A_JS_GZ, sizeof(CONTENT_INDEX_B9ABE03A_JS_GZ) - 1, _CONTENT_TYPE_JS, CONTENT_INDEX_B9ABE03A_JS_GZ_ETAG, true },
-  { "/assets/index-e83393eb.css", CONTENT_INDEX_E83393EB_CSS_GZ, sizeof(CONTENT_INDEX_E83393EB_CSS_GZ) - 1, _CONTENT_TYPE_CSS, CONTENT_INDEX_E83393EB_CSS_GZ_ETAG, true },
-  { "/assets/logo-mini-e4e21c4b.png", CONTENT_LOGO_MINI_E4E21C4B_PNG, sizeof(CONTENT_LOGO_MINI_E4E21C4B_PNG) - 1, _CONTENT_TYPE_PNG, CONTENT_LOGO_MINI_E4E21C4B_PNG_ETAG, false },
-  { "/assets/vendor-143d8acd.js", CONTENT_VENDOR_143D8ACD_JS_GZ, sizeof(CONTENT_VENDOR_143D8ACD_JS_GZ) - 1, _CONTENT_TYPE_JS, CONTENT_VENDOR_143D8ACD_JS_GZ_ETAG, true },
+  { "/apple-touch-icon.png", CONTENT_APPLE_TOUCH_ICON_PNG, sizeof(CONTENT_APPLE_TOUCH_ICON_PNG) - 1, _CONTENT_TYPE_PNG, CONTENT_APPLE_TOUCH_ICON_PNG_ETAG, false },
+  { "/assets/charts-CnsZ1jie.css", CONTENT_CHARTS_CNSZ1JIE_CSS_GZ, sizeof(CONTENT_CHARTS_CNSZ1JIE_CSS_GZ) - 1, _CONTENT_TYPE_CSS, CONTENT_CHARTS_CNSZ1JIE_CSS_GZ_ETAG, true },
+  { "/assets/charts-DcZkpMN-.js", CONTENT_CHARTS_DCZKPMN__JS_GZ, sizeof(CONTENT_CHARTS_DCZKPMN__JS_GZ) - 1, _CONTENT_TYPE_JS, CONTENT_CHARTS_DCZKPMN__JS_GZ_ETAG, true },
+  { "/assets/en-B_xUMPhW.js", CONTENT_EN_B_XUMPHW_JS_GZ, sizeof(CONTENT_EN_B_XUMPHW_JS_GZ) - 1, _CONTENT_TYPE_JS, CONTENT_EN_B_XUMPHW_JS_GZ_ETAG, true },
+  { "/assets/es-BWmLdg5x.js", CONTENT_ES_BWMLDG5X_JS_GZ, sizeof(CONTENT_ES_BWMLDG5X_JS_GZ) - 1, _CONTENT_TYPE_JS, CONTENT_ES_BWMLDG5X_JS_GZ_ETAG, true },
+  { "/assets/fr-B9aNoPA0.js", CONTENT_FR_B9ANOPA0_JS_GZ, sizeof(CONTENT_FR_B9ANOPA0_JS_GZ) - 1, _CONTENT_TYPE_JS, CONTENT_FR_B9ANOPA0_JS_GZ_ETAG, true },
+  { "/assets/hu-PqEnqCzd.js", CONTENT_HU_PQENQCZD_JS_GZ, sizeof(CONTENT_HU_PQENQCZD_JS_GZ) - 1, _CONTENT_TYPE_JS, CONTENT_HU_PQENQCZD_JS_GZ_ETAG, true },
+  { "/assets/index-C0d7K1V2.js", CONTENT_INDEX_C0D7K1V2_JS_GZ, sizeof(CONTENT_INDEX_C0D7K1V2_JS_GZ) - 1, _CONTENT_TYPE_JS, CONTENT_INDEX_C0D7K1V2_JS_GZ_ETAG, true },
+  { "/assets/index-LO8E9kky.css", CONTENT_INDEX_LO8E9KKY_CSS_GZ, sizeof(CONTENT_INDEX_LO8E9KKY_CSS_GZ) - 1, _CONTENT_TYPE_CSS, CONTENT_INDEX_LO8E9KKY_CSS_GZ_ETAG, true },
+  { "/assets/rolldown-runtime-Bh1tDfsg.js", CONTENT_ROLLDOWN_RUNTIME_BH1TDFSG_JS_GZ, sizeof(CONTENT_ROLLDOWN_RUNTIME_BH1TDFSG_JS_GZ) - 1, _CONTENT_TYPE_JS, CONTENT_ROLLDOWN_RUNTIME_BH1TDFSG_JS_GZ_ETAG, true },
+  { "/assets/vendor-P1Ep0BRL.js", CONTENT_VENDOR_P1EP0BRL_JS_GZ, sizeof(CONTENT_VENDOR_P1EP0BRL_JS_GZ) - 1, _CONTENT_TYPE_JS, CONTENT_VENDOR_P1EP0BRL_JS_GZ_ETAG, true },
   { "/favicon.ico", CONTENT_FAVICON_ICO, sizeof(CONTENT_FAVICON_ICO) - 1, _CONTENT_TYPE_ICO, CONTENT_FAVICON_ICO_ETAG, false },
   { "/index.html", CONTENT_INDEX_HTML_GZ, sizeof(CONTENT_INDEX_HTML_GZ) - 1, _CONTENT_TYPE_HTML, CONTENT_INDEX_HTML_GZ_ETAG, true },
   { "/manifest.webmanifest", CONTENT_MANIFEST_WEBMANIFEST, sizeof(CONTENT_MANIFEST_WEBMANIFEST) - 1, _CONTENT_TYPE_MANIFEST, CONTENT_MANIFEST_WEBMANIFEST_ETAG, false },
   { "/pwa-192x192.png", CONTENT_PWA_192X192_PNG, sizeof(CONTENT_PWA_192X192_PNG) - 1, _CONTENT_TYPE_PNG, CONTENT_PWA_192X192_PNG_ETAG, false },
-  { "/pwa-masquable.png", CONTENT_PWA_MASQUABLE_PNG, sizeof(CONTENT_PWA_MASQUABLE_PNG) - 1, _CONTENT_TYPE_PNG, CONTENT_PWA_MASQUABLE_PNG_ETAG, false },
-  { "/success.html", CONTENT_SUCCESS_HTML, sizeof(CONTENT_SUCCESS_HTML) - 1, _CONTENT_TYPE_HTML, CONTENT_SUCCESS_HTML_ETAG, false },
+  { "/pwa-512x512.png", CONTENT_PWA_512X512_PNG, sizeof(CONTENT_PWA_512X512_PNG) - 1, _CONTENT_TYPE_PNG, CONTENT_PWA_512X512_PNG_ETAG, false },
+  { "/pwa-maskable-512x512.png", CONTENT_PWA_MASKABLE_512X512_PNG, sizeof(CONTENT_PWA_MASKABLE_512X512_PNG) - 1, _CONTENT_TYPE_PNG, CONTENT_PWA_MASKABLE_512X512_PNG_ETAG, false },
   { "/sw.js", CONTENT_SW_JS, sizeof(CONTENT_SW_JS) - 1, _CONTENT_TYPE_JS, CONTENT_SW_JS_ETAG, false },
 };
