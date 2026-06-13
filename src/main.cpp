@@ -233,7 +233,7 @@ void setup()
 // -------------------------------------------------------------------
 // LOOP
 // -------------------------------------------------------------------
-void loop() 
+void loop()
 {
   Profile_Start(loop);
 
@@ -477,7 +477,7 @@ static void printUsage() {
 static int parseFlags(int argc, const char* const* argv) {
   int argc_original = argc;
   shift(argc, argv); // skip the name of the program at argv[0]
-  
+
   while (argc > 0) {
     if (argEquals(argv[0], "--rapi-serial") || argEquals(argv[0], "--rapi")) {
       shift(argc, argv);
@@ -498,16 +498,16 @@ static int parseFlags(int argc, const char* const* argv) {
         cmdline_exit_requested = true;
         return argc_original - argc;
       }
-      
+
       const char* config_pair = argv[0];
       const char* equals_pos = strchr(config_pair, '=');
-      
+
       if (equals_pos == nullptr) {
         fprintf(stderr, "Error: --set-config argument must be in format NAME=VALUE\n");
         cmdline_exit_requested = true;
         return argc_original - argc;
       }
-      
+
       // Extract name and value
       size_t name_len = equals_pos - config_pair;
       char name[64];
@@ -518,31 +518,30 @@ static int parseFlags(int argc, const char* const* argv) {
       }
       memcpy(name, config_pair, name_len);
       name[name_len] = '\0';
-      
+
       const char* value = equals_pos + 1;
-      
+
       // Set the config value
       if (!config_set_opt_string(name, value)) {
         fprintf(stderr, "Config option '%s' not applied (unknown key or value unchanged)\n", name);
       } else {
         fprintf(stderr, "Set config: %s = %s\n", name, value);
       }
-    } 
+    }
     else if (argEquals(argv[0], "--")) {
       shift(argc, argv);
       break;
-    } 
+    }
     else if (argEquals(argv[0], "--help") || argEquals(argv[0], "-h")) {
       printUsage();
       exit(0);
     }
-    } 
     else if (argv[0][0] == '-') {
       fprintf(stderr, "Unknown flag '%s'\n", argv[0]);
       printUsage();
       cmdline_exit_requested = true;
       return argc_original - argc;
-    } 
+    }
     else {
       break;
     }
