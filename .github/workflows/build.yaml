@@ -125,7 +125,7 @@ jobs:
       if: matrix.env == 'native_openevse'
       run: |
         sudo apt-get update
-        sudo apt-get install -y libavahi-client-dev libavahi-common-dev
+        sudo apt-get install -y libavahi-client-dev libavahi-common-dev libssl-dev
 
     - name: Run PlatformIO
       run: pio run -e ${{ matrix.env }}

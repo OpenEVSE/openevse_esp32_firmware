@@ -534,8 +534,8 @@ static int parseFlags(int argc, const char* const* argv) {
     } 
     else if (argEquals(argv[0], "--help") || argEquals(argv[0], "-h")) {
       printUsage();
-      cmdline_exit_requested = true;
-      return argc_original - argc;
+      exit(0);
+    }
     } 
     else if (argv[0][0] == '-') {
       fprintf(stderr, "Unknown flag '%s'\n", argv[0]);
@@ -556,8 +556,8 @@ static void process_command_line()
 {
   parseFlags(epoxy_argc, epoxy_argv);
   if (cmdline_exit_requested) {
-    // Exit early if user requested help or there was an error
-    exit(0);
+    // Exit early if there was a command line error
+    exit(1);
   }
 }
 
