@@ -10,7 +10,13 @@
 // build can force a fast ring-wrap (e.g. -DTSDB_ENERGY_SAMPLE_MS=1000
 // -DTSDB_ENERGY_BYTES=4096UL) for bench testing the wrapped-ring query path.
 #ifndef TSDB_ENERGY_SAMPLE_MS
-#define TSDB_ENERGY_SAMPLE_MS     60000                 // 1/min, matches EnergyLogger
+#define TSDB_ENERGY_SAMPLE_MS     60000                 // 1/min while charging
+#endif
+// When the vehicle is not charging we only log slow-moving temperature (charge
+// current and SoC are meaningless, and reading SoC keeps the vehicle awake), so
+// we throttle the write cadence to cut flash wear ~5x during idle periods.
+#ifndef TSDB_ENERGY_IDLE_SAMPLE_MS
+#define TSDB_ENERGY_IDLE_SAMPLE_MS (5UL * 60000UL)      // 1/5min while idle
 #endif
 #ifndef TSDB_ENERGY_BYTES
 #define TSDB_ENERGY_BYTES         (2500UL * 1024UL)     // ~2.5 MB -> ~100 days

@@ -236,7 +236,12 @@ void TsdbEnergyLogger::rollup_yesterday() {
 }
 
 unsigned long TsdbEnergyLogger::loop(MicroTasks::WakeReason) {
+  // Throttle to the idle cadence whenever we are not actively charging.
+  unsigned long next_ms = TSDB_ENERGY_SAMPLE_MS;
   if (_ready && _evse) {
+    bool charging = _evse->isCharging();
+    if (!charging) next_ms = TSDB_ENERGY_IDLE_SAMPLE_MS;
+
     // Advance the energy baseline every wake (even when we skip the write below),
     // so deltas stay honest once logging resumes. A session reset to 0 on vehicle
     // unplug yields a small positive delta (cur_wh), not a negative one. (Lossy
@@ -266,17 +271,23 @@ unsigned long TsdbEnergyLogger::loop(MicroTasks::WakeReason) {
       }
 
       // -- Write tsdb sample --
+      // Temperature is logged in every sample (slow-moving, useful idle or not).
+      // Charge current, power, pilot and SoC are only meaningful while charging:
+      // when idle they stay at their idle sentinels (0 / SoC -1) so the history
+      // does not show post-charge current or a SoC that drifts as the car drives.
       EnergySample s;
-      s.amps    = _evse->getAmps();
-      s.volts   = _evse->getVoltage();
-      s.power_w = s.amps * s.volts;
-      s.energy_wh_delta = delta;
+      s.energy_wh_delta = delta;   // ~0 while idle; keeps cumulative totals exact
       s.temp_c  = _evse->isTemperatureValid(EVSE_MONITOR_TEMP_MONITOR)
                     ? _evse->getTemperature(EVSE_MONITOR_TEMP_MONITOR) : 0;
-      s.soc     = _evse->isVehicleStateOfChargeValid() ? _evse->getVehicleStateOfCharge() : -1;
-      // getChargeCurrent() with no args returns _monitor.getPilot() (the actual
-      // pilot current in amps); getPilot() is not forwarded directly on EvseManager.
-      s.pilot_a = _evse->getChargeCurrent();
+      if (charging) {
+        s.amps    = _evse->getAmps();
+        s.volts   = _evse->getVoltage();
+        s.power_w = s.amps * s.volts;
+        s.soc     = _evse->isVehicleStateOfChargeValid() ? _evse->getVehicleStateOfCharge() : -1;
+        // getChargeCurrent() with no args returns _monitor.getPilot() (the actual
+        // pilot current in amps); getPilot() is not forwarded directly on EvseManager.
+        s.pilot_a = _evse->getChargeCurrent();
+      }
 
       int16_t row[TSDB_NUM_COLS];
       tsdb_scale_sample(s, row);
@@ -284,6 +295,6 @@ unsigned long TsdbEnergyLogger::loop(MicroTasks::WakeReason) {
       if (e != ESP_OK) DBUGF("tsdb_write failed: %d", e);
     }
   }
-  return TSDB_ENERGY_SAMPLE_MS;
+  return next_ms;
 }
 #endif
