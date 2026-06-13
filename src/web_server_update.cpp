@@ -32,6 +32,9 @@ static void handleUpdateGet(MongooseHttpServerRequest *request)
 }
 
 static MongooseHttpServerResponseStream *upgradeResponse = NULL;
+// Update.isFinished() is true while idle (0 bytes of 0), so remember the
+// multipart request that actually completed instead.
+static MongooseHttpServerRequest *completedUpdateRequest = NULL;
 
 void handleUpdateFileUpload(MongooseHttpServerRequest *request)
 {
@@ -43,6 +46,8 @@ void handleUpdateFileUpload(MongooseHttpServerRequest *request)
   if(false == requestPreProcess(request, upgradeResponse, CONTENT_TYPE_TEXT)) {
     return;
   }
+
+  completedUpdateRequest = NULL;
 
   // TODO: Add support for returning 100: Continue
 }
@@ -131,6 +136,7 @@ size_t handleUpdateUpload(MongooseHttpServerRequest *request, int ev, MongooseSt
   if(MG_EV_HTTP_PART_END == ev)
   {
     if(http_update_end()) {
+      completedUpdateRequest = request;
       upgradeResponse->setCode(200);
       upgradeResponse->print("OK");
       request->send(upgradeResponse);
@@ -152,7 +158,8 @@ void handleUpdateClose(MongooseHttpServerRequest *request)
     upgradeResponse = NULL;
   }
 
-  if(Update.isFinished() && !Update.hasError()) {
+  if(request == completedUpdateRequest) {
+    completedUpdateRequest = NULL;
     restart_system();
   }
 }
