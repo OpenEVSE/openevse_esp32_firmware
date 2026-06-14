@@ -737,29 +737,41 @@ bool config_set_opt_string(const char *name, const char *value) {
   // For now, we'll try as string first, then try as integer
   
   // Create a JSON document with the value as a string
-  const size_t capacity = JSON_OBJECT_SIZE(1) + 256;
+  const size_t capacity = JSON_OBJECT_SIZE(1) +  strlen(value) + strlen(value) + 16;
   DynamicJsonDocument doc(capacity);
-  
-  // Try to parse as a number first
-  char *endptr;
-  long int_val = strtol(value, &endptr, 10);
-  
-  if (*endptr == '\0' && value != endptr) {
-    // Successfully parsed as integer
-    doc[name] = int_val;
-  } else {
-    // Try parsing as double
-    double double_val = strtod(value, &endptr);
-    if (*endptr == '\0' && value != endptr && strchr(value, '.') != nullptr) {
-      // Successfully parsed as double
-      doc[name] = double_val;
-    } else {
-      // Use as string
-      doc[name] = value;
+  const String value_str(value);
+  // Parse common scalar types from the string
+  if(value_str.equalsIgnoreCase("true")) {
+    doc[name] = true;
+  } else if(value_str.equalsIgnoreCase("false")) {
+    doc[name] = false;
+  }
+  else
+  {
+    // Try parsing as integer
+    char *endptr;
+    long int_val = strtol(value, &endptr, 10);
+    
+    if (*endptr == '\0' && value != endptr)
+    {
+      // Successfully parsed as integer
+      doc[name] = int_val;
+    }
+    else
+    {
+      // Try parsing as double
+      double double_val = strtod(value, &endptr);
+      if (*endptr == '\0' && value != endptr && strchr(value, '.') != nullptr) {
+        // Successfully parsed as double
+        doc[name] = double_val;
+      } else {
+        // Use as string
+        doc[name] = value;
+      }
     }
   }
   
-  return user_config.deserialize(doc);
+  return config_deserialize(doc);
 }
 
 void config_reset()

@@ -21,8 +21,8 @@ public:
     /**
      * Certificate validation result
      * 
-        * @note The serial field contains only the least significant 8 bytes of the certificate's
-        *       serial number. Serial numbers larger than 8 bytes will be truncated.
+     * @note The serial field contains only the least significant 8 bytes of the certificate's
+     *       serial number. Serial numbers larger than 8 bytes will be truncated.
      */
     struct ValidationResult
     {
