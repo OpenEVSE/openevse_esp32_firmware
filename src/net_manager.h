@@ -183,7 +183,7 @@ class NetManagerTask : public MicroTasks::Task
     void wifiTurnOffAp();
     void wifiTurnOnAp();
 
-    void wifiScanNetworks(WiFiScanCompleteCallback callback);
+    bool wifiScanNetworks(WiFiScanCompleteCallback callback);
 
     bool isConnected();
     bool isWifiClientConnected();

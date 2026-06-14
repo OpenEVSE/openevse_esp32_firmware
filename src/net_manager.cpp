@@ -175,12 +175,20 @@ void NetManagerTask::wifiClientConnect()
   _clientRetryTime = millis() + WIFI_CLIENT_RETRY_TIMEOUT;
 }
 
-void NetManagerTask::wifiScanNetworks(WiFiScanCompleteCallback callback)
+bool NetManagerTask::wifiScanNetworks(WiFiScanCompleteCallback callback)
 {
-  if(WiFi.scanComplete() != WIFI_SCAN_RUNNING) {
-    WiFi.scanNetworks(true, false, false);
+  if(WiFi.scanComplete() == WIFI_SCAN_RUNNING) {
+    _scanCompleteCallbacks.push_back(callback);
+    return true;
   }
+
   _scanCompleteCallbacks.push_back(callback);
+  if(WiFi.scanNetworks(true, false, false) != WIFI_SCAN_RUNNING) {
+    _scanCompleteCallbacks.pop_back();
+    return false;
+  }
+
+  return true;
 }
 
 void NetManagerTask::displayState()
