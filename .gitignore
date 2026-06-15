@@ -95,6 +95,7 @@ lib/jeremypoulter/ESPAL
 lib/jeremypoulter/Micro Debug
 lib/jeremypoulter/StreamSpy
 lib/jeremypoulter/MicroTasks
+lib/EpoxyDuino
 
 *.bin
 divert_sim/epoxyfsdata
@@ -103,3 +104,7 @@ divert_sim/epoxyeepromdata
 *.pem
 *.pem
 *.orig
+
+epoxyfsdata
+epoxyeepromdata
+pio_test_results.xml

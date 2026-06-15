@@ -256,6 +256,7 @@ void EvseMonitor::evseBoot(const char *firmware)
     }
   });
 
+#ifndef DISABLE_HEARTBEAT
   _openevse.heartbeatEnable(EVSE_HEATBEAT_INTERVAL, EVSE_HEARTBEAT_CURRENT, [this](int ret, int interval, int current, int triggered) {
     _heartbeat = RAPI_RESPONSE_OK == ret;
     // If heartbeat was triggered while WiFi module was rebooting, ack immediately to restore ampacity
@@ -267,6 +268,7 @@ void EvseMonitor::evseBoot(const char *firmware)
       });
     }
   });
+#endif
 }
 
 void EvseMonitor::updateEvseState(uint8_t evse_state, uint8_t pilot_state, uint32_t vflags)
