@@ -152,6 +152,7 @@ void NetManagerTask::wifiStopAccessPoint()
 // -------------------------------------------------------------------
 void NetManagerTask::wifiStartClient()
 {
+  WiFi.setAutoReconnect(true);
   wifiClientConnect();
 
   _led.setWifiMode(true, false);
@@ -175,12 +176,33 @@ void NetManagerTask::wifiClientConnect()
   _clientRetryTime = millis() + WIFI_CLIENT_RETRY_TIMEOUT;
 }
 
-void NetManagerTask::wifiScanNetworks(WiFiScanCompleteCallback callback)
+bool NetManagerTask::wifiScanNetworks(WiFiScanCompleteCallback callback)
 {
-  if(WiFi.scanComplete() != WIFI_SCAN_RUNNING) {
-    WiFi.scanNetworks(true, false, false);
+  if(WiFi.scanComplete() == WIFI_SCAN_RUNNING) {
+    _scanCompleteCallbacks.push_back(callback);
+    return true;
   }
+
+  // A pending STA connection has priority over scanning in ESP-IDF and makes
+  // esp_wifi_scan_start() fail immediately. This is especially visible while
+  // provisioning through the SoftAP. Stop the STA attempt without disabling
+  // the radio (which would also drop the SoftAP), then let the scan run first.
+  if(isWifiModeAp() && !isWifiClientConnected()) {
+    WiFi.setAutoReconnect(false);
+    WiFi.disconnect(false, false);
+    delay(100);
+  }
+
   _scanCompleteCallbacks.push_back(callback);
+  if(WiFi.scanNetworks(true, false, false) != WIFI_SCAN_RUNNING) {
+    _scanCompleteCallbacks.pop_back();
+    if(esid.length() > 0) {
+      WiFi.setAutoReconnect(true);
+    }
+    return false;
+  }
+
+  return true;
 }
 
 void NetManagerTask::displayState()
@@ -466,6 +488,9 @@ void NetManagerTask::onNetEvent(WiFiEvent_t event, arduino_event_info_t &info)
 
       _scanCompleteCallbacks.clear();
       WiFi.scanDelete();
+      if(esid.length() > 0) {
+        WiFi.setAutoReconnect(true);
+      }
     } break;
 #ifdef ENABLE_WIRED_ETHERNET
     case ARDUINO_EVENT_ETH_START:
@@ -680,7 +705,8 @@ unsigned long NetManagerTask::manageState()
       }
       // Intentionally fall through to AP State for the same client reconnect logic
     case NetState::AccessPointConnecting:
-      if(!isWifiClientConnected() && esid != 0 && esid != "" && millis() > _clientRetryTime) {
+      if(!isWifiClientConnected() && esid != 0 && esid != "" &&
+         WiFi.scanComplete() != WIFI_SCAN_RUNNING && millis() > _clientRetryTime) {
         wifiClientConnect();
       }
 
