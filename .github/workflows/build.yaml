@@ -26,6 +26,40 @@ jobs:
       - name: Dump github.ref_name
         run: echo "github.ref_name = '${{ github.ref_name }}'"
 
+  test:
+    name: Native unit tests
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@v6
+
+    - name: Cache pip
+      uses: actions/cache@v5
+      with:
+        path: ~/.cache/pip
+        key: ${{ runner.os }}-pip-${{ hashFiles('**/requirements.txt') }}
+        restore-keys: |
+          ${{ runner.os }}-pip-
+
+    - name: Set up Python
+      uses: actions/setup-python@v6
+      with:
+        python-version: '3.x'
+
+    - name: Install PlatformIO
+      run: |
+        python -m pip install --upgrade pip
+        pip install --upgrade platformio
+
+    - name: Run native unit tests
+      run: pio test -e native_test --junit-output-path=pio_test_results.xml
+
+    - name : Upload test results
+      uses: actions/upload-artifact@v7
+      with:
+        name: pio_test_results
+        path: |
+          pio_test_results.xml
+
   build:
     name: Build ${{ matrix.env }}
     runs-on: ubuntu-latest
@@ -54,7 +88,9 @@ jobs:
 #          - elecrow_esp32_hmi_dev
           - openevse_wifi_tft_v1
           - openevse_wifi_tft_v1_dev
-          - native
+          # core-3.x (pioarduino / IDF5) — 16MB+ boards
+          - openevse_wifi_v1_16mb
+          - native_openevse
 
     steps:
     - uses: ammaraskar/gcc-problem-matcher@master
@@ -86,10 +122,10 @@ jobs:
         pip install --upgrade platformio
 
     - name: Install Avahi development libraries
-      if: matrix.env == 'native'
+      if: matrix.env == 'native_openevse'
       run: |
         sudo apt-get update
-        sudo apt-get install -y libavahi-client-dev libavahi-common-dev
+        sudo apt-get install -y libavahi-client-dev libavahi-common-dev libssl-dev
 
     - name: Run PlatformIO
       run: pio run -e ${{ matrix.env }}
@@ -99,6 +135,13 @@ jobs:
       with:
         name: ${{ matrix.env }}.bin
         path: .pio/build/${{ matrix.env }}/*.bin
+
+    - name: Upload native output to GitHub
+      if: matrix.env == 'native_openevse'
+      uses: actions/upload-artifact@v7
+      with:
+        name: ${{ matrix.env }}.program
+        path: .pio/build/${{ matrix.env }}/program
 
   release:
     name: Upload release assets
@@ -132,7 +175,7 @@ jobs:
 
     - name: Upload assets to latest release
       if: github.ref_name == 'master'
-      uses: "softprops/action-gh-release@v2"
+      uses: "softprops/action-gh-release@v3"
       with:
         prerelease: true
         tag_name: latest
@@ -143,7 +186,7 @@ jobs:
 
     - name: Upload assets to release
       if: startsWith(github.ref_name, 'v')
-      uses: "softprops/action-gh-release@v2"
+      uses: "softprops/action-gh-release@v3"
       with:
         prerelease: true
         name: "${{ github.ref_name }}"

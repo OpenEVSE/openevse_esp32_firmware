@@ -103,6 +103,8 @@ divert_sim/epoxyeepromdata
 
 *.pem
 *.pem
+*.orig
 
 epoxyfsdata
 epoxyeepromdata
+pio_test_results.xml

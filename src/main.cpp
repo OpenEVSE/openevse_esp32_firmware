@@ -51,6 +51,7 @@
 #include "ocpp.h"
 #include "rfid.h"
 #include "current_shaper.h"
+#include "temp_throttle.h"
 #include "limit.h"
 
 #if defined(ENABLE_PN532)
@@ -64,6 +65,11 @@
 #include "loadsharing_discovery_task.h"
 #include "loadsharing_peer_poller.h"
 #include "loadsharing_types.h"
+#ifndef ENABLE_TSDB
+#include "energy_logger.h"
+#else
+#include "tsdb_energy_logger.h"
+#endif
 
 #include "legacy_support.h"
 #include "certificates.h"
@@ -75,6 +81,9 @@ EvseManager evse(RAPI_PORT, eventLog);
 Scheduler scheduler(evse);
 ManualOverride manual(evse);
 DivertTask divert(evse);
+#ifndef ENABLE_TSDB
+EnergyLogger energyLogger;
+#endif
 
 NetManagerTask net(lcd, ledManager, timeManager);
 
@@ -209,6 +218,13 @@ void setup()
   // Maintains WebSocket connections to group peers for real-time status updates
   loadSharingPeerPoller.begin(loadSharingGroupState);
   DBUGF("After loadSharingPeerPoller.begin: %d", ESPAL.getFreeHeap());
+#ifdef ENABLE_TSDB
+  tsdbEnergyLogger.begin(evse);
+  DBUGF("After tsdbEnergyLogger.begin: %d", ESPAL.getFreeHeap());
+#else
+  energyLogger.begin(&evse);
+  DBUGF("After energyLogger.begin: %d", ESPAL.getFreeHeap());
+#endif
 
 #ifdef ENABLE_OTA
   ota_setup();
@@ -224,6 +240,9 @@ void setup()
 
   shaper.begin(evse);
   DBUGF("After shaper.begin: %d", ESPAL.getFreeHeap());
+
+  tempThrottle.begin(evse);
+  DBUGF("After tempThrottle.begin: %d", ESPAL.getFreeHeap());
 
   lcd.display(F("OpenEVSE WiFI"), 0, 0, 0, LCD_CLEAR_LINE);
   lcd.display(currentfirmware, 0, 1, 5 * 1000, LCD_CLEAR_LINE);
@@ -349,6 +368,9 @@ class SystemRestart : public MicroTasks::Alarm
     void Trigger()
     {
       DBUGLN("Restarting...");
+#ifndef ENABLE_TSDB
+      energyLogger.end();
+#endif
       evse.saveEnergyMeter();
       net.wifiStop();
       ESPAL.reset();
@@ -413,8 +435,8 @@ uint64_t uptimeMillis()
 #ifdef EPOXY_DUINO
 
 #include <stdio.h>
+#include <stdlib.h>
 #include <string.h>
-
 // Flag to indicate if command line processing should exit early
 static bool cmdline_exit_requested = false;
 
@@ -514,14 +536,19 @@ static int parseFlags(int argc, const char* const* argv) {
       // Extract name and value
       size_t name_len = equals_pos - config_pair;
       char name[64];
-      strncpy(name, config_pair, name_len);
+      if (name_len >= sizeof(name)) {
+        fprintf(stderr, "Error: --set-config option name too long\n");
+        cmdline_exit_requested = true;
+        return argc_original - argc;
+      }
+      memcpy(name, config_pair, name_len);
       name[name_len] = '\0';
 
       const char* value = equals_pos + 1;
 
       // Set the config value
       if (!config_set_opt_string(name, value)) {
-        fprintf(stderr, "Warning: Unknown config option '%s'\n", name);
+        fprintf(stderr, "Config option '%s' not applied (unknown key or value unchanged)\n", name);
       } else {
         fprintf(stderr, "Set config: %s = %s\n", name, value);
       }
@@ -532,8 +559,7 @@ static int parseFlags(int argc, const char* const* argv) {
     }
     else if (argEquals(argv[0], "--help") || argEquals(argv[0], "-h")) {
       printUsage();
-      cmdline_exit_requested = true;
-      return argc_original - argc;
+      exit(0);
     }
     else if (argv[0][0] == '-') {
       fprintf(stderr, "Unknown flag '%s'\n", argv[0]);
@@ -550,12 +576,12 @@ static int parseFlags(int argc, const char* const* argv) {
   return argc_original - argc;
 }
 
-void process_command_line()
+static void process_command_line()
 {
   parseFlags(epoxy_argc, epoxy_argv);
   if (cmdline_exit_requested) {
-    // Exit early if user requested help or there was an error
-    exit(0);
+    // Exit early if there was a command line error
+    exit(1);
   }
 }
 

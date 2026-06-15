@@ -134,7 +134,8 @@ EvseManager::EvseManager(Stream &port, EventLog &eventLog) :
   _vehicleLastUpdated(0),
   _vehicleStateOfCharge(0),
   _vehicleRange(0),
-  _vehicleEta(0)
+  _vehicleEta(0),
+  _vehicleChargeLimit(0)
 {
 }
 
@@ -602,6 +603,15 @@ void EvseManager::setVehicleEta(int vehicleEta)
   _vehicleEta = vehicleEta;
   _vehicleValid |= EVSE_VEHICLE_ETA;
   _vehicleUpdated |= EVSE_VEHICLE_ETA;
+  _vehicleLastUpdated = millis();
+  MicroTask.wakeTask(this);
+}
+
+void EvseManager::setVehicleChargeLimit(int vehicleChargeLimit)
+{
+  _vehicleChargeLimit = vehicleChargeLimit;
+  _vehicleValid |= EVSE_VEHICLE_CHARGE_LIMIT;
+  _vehicleUpdated |= EVSE_VEHICLE_CHARGE_LIMIT;
   _vehicleLastUpdated = millis();
   MicroTask.wakeTask(this);
 }

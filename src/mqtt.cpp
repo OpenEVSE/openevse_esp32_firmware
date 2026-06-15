@@ -13,6 +13,7 @@
 #include "manual.h"
 #include "scheduler.h"
 #include "current_shaper.h"
+#include "home_battery.h"
 
 Mqtt mqtt(evse); // global instance
 
@@ -83,6 +84,14 @@ unsigned long Mqtt::loop(MicroTasks::WakeReason reason) {
      _connecting = false; // Reset connecting flag
   }
 
+  // If a connection attempt has been in progress too long with no callback, reset and retry.
+  // This handles the case where the TCP stack hangs without firing onError or onClose.
+  if (_connecting && (millis() - _connectStartTime) > (MQTT_CONNECT_TIMEOUT * 2)) {
+    DBUGLN("MQTT connection attempt timed out, will retry");
+    _connecting = false;
+    _nextMqttReconnectAttempt = millis() + MQTT_CONNECT_TIMEOUT;
+  }
+
   // Manage connection state
   if (net.isConnected() && config_mqtt_enabled() && !_mqttclient.connected() && !_connecting) {
     long now = millis();
@@ -110,6 +119,7 @@ void Mqtt::attemptConnection() {
     return;
   }
   _connecting = true;
+  _connectStartTime = millis();
   DBUGF("MQTT attempting connection... (%s)\n", net.isConnected() ? "connected" : "not connected");
 
   String mqtt_host = mqtt_server + ":" + String(mqtt_port);
@@ -178,7 +188,7 @@ void Mqtt::onMqttConnect() {
 void Mqtt::onMqttDisconnect(int err, const char *reason) {
   DBUGLN("MQTT disconnected");
   _connecting = false;
-  // _nextMqttReconnectAttempt is handled by the main loop to retry.
+  MicroTask.wakeTask(this); // Ensure loop runs promptly to schedule reconnect
 
   DynamicJsonDocument doc(JSON_OBJECT_SIZE(3) + 70);
   doc["mqtt_connected"] = 0;
@@ -216,6 +226,9 @@ void Mqtt::subscribeTopics() {
   if (mqtt_vehicle_soc != "") { _mqttclient.subscribe(mqtt_vehicle_soc); yield(); }
   if (mqtt_vehicle_range != "") { _mqttclient.subscribe(mqtt_vehicle_range); yield(); }
   if (mqtt_vehicle_eta != "") { _mqttclient.subscribe(mqtt_vehicle_eta); yield(); }
+  if (mqtt_vehicle_charge_limit != "") { _mqttclient.subscribe(mqtt_vehicle_charge_limit); yield(); }
+  if (mqtt_home_battery_soc != "") { _mqttclient.subscribe(mqtt_home_battery_soc); yield(); }
+  if (mqtt_home_battery_power != "") { _mqttclient.subscribe(mqtt_home_battery_power); yield(); }
   if (mqtt_vrms != "") { _mqttclient.subscribe(mqtt_vrms); yield(); }
 
   // Settable topics
@@ -328,6 +341,23 @@ void Mqtt::handleMqttMessage(MongooseString topic, MongooseString payload) {
     int vehicle_eta = payload_str.toInt();
     _evse->setVehicleEta(vehicle_eta);
     StaticJsonDocument<128> event; event["time_to_full_charge"] = vehicle_eta; event_send(event);
+  }
+  else if (topic_string == mqtt_vehicle_charge_limit && vehicle_data_src == VEHICLE_DATA_SRC_MQTT) {
+    int vehicle_charge_limit = payload_str.toInt();
+    _evse->setVehicleChargeLimit(vehicle_charge_limit);
+    StaticJsonDocument<128> event; event["vehicle_charge_limit"] = vehicle_charge_limit; event_send(event);
+  }
+  // Home/powerwall battery is display-only with no source arbitration (mirrors its
+  // POST /status path), so it is gated only on the topic being configured.
+  else if (mqtt_home_battery_soc != "" && topic_string == mqtt_home_battery_soc) {
+    int soc = payload_str.toInt();
+    home_battery_set_soc(soc);
+    StaticJsonDocument<128> event; event["home_battery_soc"] = soc; event_send(event);
+  }
+  else if (mqtt_home_battery_power != "" && topic_string == mqtt_home_battery_power) {
+    int power = payload_str.toInt();
+    home_battery_set_power(power);
+    StaticJsonDocument<128> event; event["home_battery_power"] = power; event_send(event);
   }
   else if (topic_string == mqtt_topic + "/divertmode/set") {
     byte newdivert = payload_str.toInt();

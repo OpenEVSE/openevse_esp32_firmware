@@ -152,6 +152,7 @@ void NetManagerTask::wifiStopAccessPoint()
 // -------------------------------------------------------------------
 void NetManagerTask::wifiStartClient()
 {
+  WiFi.setAutoReconnect(true);
   wifiClientConnect();
 
   _led.setWifiMode(true, false);
@@ -175,12 +176,33 @@ void NetManagerTask::wifiClientConnect()
   _clientRetryTime = millis() + WIFI_CLIENT_RETRY_TIMEOUT;
 }
 
-void NetManagerTask::wifiScanNetworks(WiFiScanCompleteCallback callback)
+bool NetManagerTask::wifiScanNetworks(WiFiScanCompleteCallback callback)
 {
-  if(WiFi.scanComplete() != WIFI_SCAN_RUNNING) {
-    WiFi.scanNetworks(true, false, false);
+  if(WiFi.scanComplete() == WIFI_SCAN_RUNNING) {
+    _scanCompleteCallbacks.push_back(callback);
+    return true;
   }
+
+  // A pending STA connection has priority over scanning in ESP-IDF and makes
+  // esp_wifi_scan_start() fail immediately. This is especially visible while
+  // provisioning through the SoftAP. Stop the STA attempt without disabling
+  // the radio (which would also drop the SoftAP), then let the scan run first.
+  if(isWifiModeAp() && !isWifiClientConnected()) {
+    WiFi.setAutoReconnect(false);
+    WiFi.disconnect(false, false);
+    delay(100);
+  }
+
   _scanCompleteCallbacks.push_back(callback);
+  if(WiFi.scanNetworks(true, false, false) != WIFI_SCAN_RUNNING) {
+    _scanCompleteCallbacks.pop_back();
+    if(esid.length() > 0) {
+      WiFi.setAutoReconnect(true);
+    }
+    return false;
+  }
+
+  return true;
 }
 
 void NetManagerTask::displayState()
@@ -270,12 +292,18 @@ void NetManagerTask::wifiOnStationModeDisconnected(const WiFiEventStationModeDis
 
   _clientDisconnects++;
 
-  // Clear the WiFi state and try to connect again
-  WiFi.disconnect(true);
-
   if(!isWiredConnected() && NetState::Connected == _state) {
+    // Update _state synchronously before posting the wifiStart message so that
+    // any duplicate disconnect events queued behind this one (from the reconnection
+    // process or from WiFi.disconnect()) don't each trigger their own wifiStart.
+    _state = NetState::StationClientConnecting;
+    // Full radio reset for a clean reconnection from a previously connected state.
+    WiFi.disconnect(true);
     wifiStart();
   }
+  // For StationClientConnecting / AccessPointConnecting: manageState() is already
+  // driving the retry loop via _clientRetryTime — don't call WiFi.disconnect(true)
+  // here as it would abort a pending WiFi.begin() attempt.
 }
 
 void NetManagerTask::wifiOnAPModeStationConnected(const WiFiEventSoftAPModeStationConnected &event)
@@ -425,6 +453,15 @@ void NetManagerTask::onNetEvent(WiFiEvent_t event, arduino_event_info_t &info)
       wifiOnStationModeGotIP(dst);
     } break;
 
+    case ARDUINO_EVENT_WIFI_STA_LOST_IP:
+    {
+      DBUGLN("Lost IP address");
+      if(!isWiredConnected() && NetState::Connected == _state) {
+        _state = NetState::StationClientConnecting;
+        wifiStart();
+      }
+    } break;
+
     case ARDUINO_EVENT_WIFI_AP_STACONNECTED:
     {
       auto& src = info.wifi_ap_staconnected;
@@ -451,6 +488,9 @@ void NetManagerTask::onNetEvent(WiFiEvent_t event, arduino_event_info_t &info)
 
       _scanCompleteCallbacks.clear();
       WiFi.scanDelete();
+      if(esid.length() > 0) {
+        WiFi.setAutoReconnect(true);
+      }
     } break;
 #ifdef ENABLE_WIRED_ETHERNET
     case ARDUINO_EVENT_ETH_START:
@@ -665,7 +705,8 @@ unsigned long NetManagerTask::manageState()
       }
       // Intentionally fall through to AP State for the same client reconnect logic
     case NetState::AccessPointConnecting:
-      if(!isWifiClientConnected() && esid != 0 && esid != "" && millis() > _clientRetryTime) {
+      if(!isWifiClientConnected() && esid != 0 && esid != "" &&
+         WiFi.scanComplete() != WIFI_SCAN_RUNNING && millis() > _clientRetryTime) {
         wifiClientConnect();
       }
 
@@ -674,6 +715,14 @@ unsigned long NetManagerTask::manageState()
     case NetState::StationClientReconnecting:
       break;
     case NetState::Connected:
+      // Watchdog: if the disconnect event was missed, detect and recover here
+      // rather than sitting in Connected state with no actual link.
+      if(!isWifiClientConnected() && !isWiredConnected()) {
+        DBUGLN("Watchdog: lost connection without disconnect event, reconnecting");
+        _state = NetState::StationClientConnecting;
+        wifiStart();
+        break;
+      }
       if(millis() > _apAutoApStopTime)
       {
         if(isWifiModeAp()) {
