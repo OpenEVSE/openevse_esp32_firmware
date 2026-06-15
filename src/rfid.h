@@ -43,6 +43,8 @@ class RfidTask : public MicroTasks::Task {
          */
         bool vehicleConnected = false;
 
+        bool _timer_required = false;  // true while a scheduler timer window requires RFID auth
+
         void updateEvseClaim();
 
         std::function<bool(const String& idTag)> *onCardScanned {nullptr};
@@ -60,6 +62,9 @@ class RfidTask : public MicroTasks::Task {
         bool communicationFails();
 
         void setOnCardScanned(std::function<bool(const String& idTag)> *onCardScanned);
+
+        // Enable/disable timer-controlled RFID enforcement
+        void setTimerRequired(bool required);
 };
 
 extern RfidReaderNullDevice rfidNullDevice;

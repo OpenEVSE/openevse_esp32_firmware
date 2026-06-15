@@ -112,7 +112,7 @@ unsigned long RfidTask::loop(MicroTasks::WakeReason reason){
 
     updateEvseClaim();
 
-    if (!config_rfid_enabled()) {
+    if (!config_rfid_enabled() && !_timer_required) {
         if (!authenticatedTag.isEmpty()) {
             resetAuthentication();
         }
@@ -185,7 +185,7 @@ void RfidTask::waitForTag(){
 
 void RfidTask::updateEvseClaim() {
 
-    if (!config_rfid_enabled()) {
+    if (!config_rfid_enabled() && !_timer_required) {
         _evse->release(EvseClient_OpenEVSE_RFID);
         return;
     }
@@ -197,6 +197,16 @@ void RfidTask::updateEvseClaim() {
         EvseProperties evseProperties {evseState};
         _evse->claim(EvseClient_OpenEVSE_RFID, EvseManager_Priority_RFID, evseProperties);
     }
+}
+
+void RfidTask::setTimerRequired(bool required)
+{
+    _timer_required = required;
+    if (!required && !config_rfid_enabled()) {
+        // Remove auth so the gate is lifted when the timer ends
+        resetAuthentication();
+    }
+    MicroTask.wakeTask(this);
 }
 
 void RfidTask::setOnCardScanned(std::function<bool(const String& idTag)> *onCardScanned) {

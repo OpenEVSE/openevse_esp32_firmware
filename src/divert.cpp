@@ -57,7 +57,8 @@ DivertTask::DivertTask(EvseManager &evse) :
   _evseState(this),
   _available_current(0),
   _smoothed_available_current(0),
-  _min_charge_end(0)
+  _min_charge_end(0),
+  _timer_divert_active(false)
 {
 
 }
@@ -284,6 +285,21 @@ time_t DivertTask::getMinChargeTimeRemaining()
           divertmode_get_time() < _min_charge_end) ?
             _min_charge_end - divertmode_get_time() :
             0;
+}
+
+void DivertTask::setTimerDivertActive(bool active)
+{
+  _timer_divert_active = active;
+  if(active) {
+    // Force eco mode for the timer window
+    setMode(DivertMode::Eco);
+  } else {
+    // Restore the mode from persistent config
+    bool configured_eco = config_divert_enabled() && 1 == config_charge_mode();
+    setMode(configured_eco ? DivertMode::Eco : DivertMode::Normal);
+  }
+  // Wake update_state so the new priority takes effect immediately
+  MicroTask.wakeTask(this);
 }
 
 // compatiblity trick, to remove after few version upgrade

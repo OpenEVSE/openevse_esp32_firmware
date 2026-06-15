@@ -9,6 +9,10 @@
 #include "app_config.h"
 #include "event.h"
 #include "mqtt.h"
+#include "divert.h"
+#include "current_shaper.h"
+#include "rfid.h"
+#include "limit.h"
 
 #include <algorithm>
 #include <vector>
@@ -51,7 +55,10 @@ Scheduler::Event::Event(uint32_t id, uint8_t hour, uint8_t minute, uint8_t secon
 {
 }
 
-Scheduler::Event::Event(uint32_t id, uint32_t second, uint8_t days, EvseState state)
+Scheduler::Event::Event(uint32_t id, uint32_t second, uint8_t days, EvseState state) :
+  _id(id), _seconds(second), _days(days), _state(state), _next(0),
+  _feature(SchedulerFeature::None), _feature_value(0),
+  _limit_type(SchedulerLimitType::None), _limit_value(0)
 {
   if(id >= _next_id) {
     _next_id = id + 1;
@@ -169,7 +176,9 @@ Scheduler::Scheduler(EvseManager &evse) :
   _loading(false),
   _timeChangeListener(this),
   _version(0),
-  _plan_version(0)
+  _plan_version(0),
+  _activeFeature(SchedulerFeature::None),
+  _activeLimitType(SchedulerLimitType::None)
 {
 
 }
@@ -218,6 +227,16 @@ unsigned long Scheduler::loop(MicroTasks::WakeReason reason)
   {
     DBUG("New event: ");
 
+    // Clean up any feature/limit applied by the previous active event
+    if(_activeFeature != SchedulerFeature::None) {
+      cleanupFeature(_activeFeature);
+      _activeFeature = SchedulerFeature::None;
+    }
+    if(_activeLimitType != SchedulerLimitType::None) {
+      limit.clear();
+      _activeLimitType = SchedulerLimitType::None;
+    }
+
     // We need to change state
     if(currentEvent.isValid())
     {
@@ -228,7 +247,24 @@ unsigned long Scheduler::loop(MicroTasks::WakeReason reason)
       if(EvseState::Active == currentEvent.getState())
       {
         priority = EvseManager_Priority_Timer;
-        properties.setChargeCurrent(_evse->getMaxHardwareCurrent());
+        Event *e = currentEvent.getEvent();
+
+        // Charge current: use feature_value if current feature selected, else hardware max
+        if(e->getFeature() == SchedulerFeature::Current && e->getFeatureValue() > 0) {
+          properties.setChargeCurrent(e->getFeatureValue());
+        } else {
+          properties.setChargeCurrent(_evse->getMaxHardwareCurrent());
+        }
+
+        // Apply feature (divert, shaper, rfid, etc.)
+        applyFeature(e);
+        _activeFeature = e->getFeature();
+
+        // Apply session limit
+        if(e->getLimitType() != SchedulerLimitType::None) {
+          applyLimit(e);
+          _activeLimitType = e->getLimitType();
+        }
       }
       _evse->claim(EvseClient_OpenEVSE_Schedule, priority, properties);
     } else {
@@ -462,7 +498,7 @@ bool Scheduler::findEvent(uint32_t id, Scheduler::Event **event)
   return false;
 }
 
-bool Scheduler::addEventInternal(uint32_t event_id, const char *time, uint8_t days, const char *state)
+Scheduler::Event *Scheduler::addEventInternal(uint32_t event_id, const char *time, uint8_t days, const char *state)
 {
   Event *event = NULL;
   bool foundEvent = findEvent(event_id, &event);
@@ -475,18 +511,21 @@ bool Scheduler::addEventInternal(uint32_t event_id, const char *time, uint8_t da
     event->setId(event_id);
     event->setTime(time);
     event->setState(state);
-
     event->setDays(days);
-
-    return true;
+    // Clear feature/limit when event is overwritten
+    event->setFeature(SchedulerFeature::None);
+    event->setFeatureValue(0);
+    event->setLimitType(SchedulerLimitType::None);
+    event->setLimitValue(0);
+    return event;
   }
 
-  return false;
+  return nullptr;
 }
 
 bool Scheduler::addEvent(uint32_t event_id, const char *time, uint8_t days, const char *state)
 {
-  if(addEventInternal(event_id, time, days, state))
+  if(addEventInternal(event_id, time, days, state) != nullptr)
   {
     commit();
     return true;
@@ -698,7 +737,20 @@ bool Scheduler::deserializeInternal(JsonObject &obj, uint32_t event_id)
 
     DBUGVAR(days);
 
-    if(addEventInternal(event_id, time, days, state)) {
+    Event *event = addEventInternal(event_id, time, days, state);
+    if(event != nullptr) {
+      if(obj.containsKey("feature")) {
+        event->setFeature(obj["feature"].as<const char *>());
+      }
+      if(obj.containsKey("feature_value")) {
+        event->setFeatureValue((uint32_t)obj["feature_value"]);
+      }
+      if(obj.containsKey("limit")) {
+        event->setLimitType(obj["limit"].as<const char *>());
+      }
+      if(obj.containsKey("limit_value")) {
+        event->setLimitValue((uint32_t)obj["limit_value"]);
+      }
       return true;
     }
   }
@@ -801,6 +853,16 @@ bool Scheduler::serialize(JsonObject &object, Scheduler::Event *event)
     }
   }
 
+  if(event->getFeature() != SchedulerFeature::None) {
+    object["feature"] = event->getFeatureName();
+    object["feature_value"] = event->getFeatureValue();
+  }
+
+  if(event->getLimitType() != SchedulerLimitType::None) {
+    object["limit"] = event->getLimitName();
+    object["limit_value"] = event->getLimitValue();
+  }
+
   return true;
 }
 
@@ -888,4 +950,130 @@ void Scheduler::getCurrentTime(int &day, int32_t &offset)
     (local_time.tm_hour * 3600) +
     (local_time.tm_min * 60) +
     local_time.tm_sec;
+}
+
+// ── Event feature/limit string converters ────────────────────────────────────
+
+static const char * const feature_names[] = {
+  "none", "divert", "shaper", "ocpp", "rfid", "current"
+};
+
+bool Scheduler::Event::setFeature(const char *name)
+{
+  for(uint8_t i = 0; i < sizeof(feature_names)/sizeof(feature_names[0]); i++) {
+    if(0 == strcmp(name, feature_names[i])) {
+      _feature = (SchedulerFeature)i;
+      return true;
+    }
+  }
+  _feature = SchedulerFeature::None;
+  return false;
+}
+
+const char *Scheduler::Event::getFeatureName()
+{
+  uint8_t idx = (uint8_t)_feature;
+  if(idx < sizeof(feature_names)/sizeof(feature_names[0])) {
+    return feature_names[idx];
+  }
+  return feature_names[0];
+}
+
+static const char * const limit_names[] = {
+  "none", "time", "energy", "soc", "cost"
+};
+
+bool Scheduler::Event::setLimitType(const char *name)
+{
+  for(uint8_t i = 0; i < sizeof(limit_names)/sizeof(limit_names[0]); i++) {
+    if(0 == strcmp(name, limit_names[i])) {
+      _limit_type = (SchedulerLimitType)i;
+      return true;
+    }
+  }
+  _limit_type = SchedulerLimitType::None;
+  return false;
+}
+
+const char *Scheduler::Event::getLimitName()
+{
+  uint8_t idx = (uint8_t)_limit_type;
+  if(idx < sizeof(limit_names)/sizeof(limit_names[0])) {
+    return limit_names[idx];
+  }
+  return limit_names[0];
+}
+
+// ── Scheduler feature/limit helpers ──────────────────────────────────────────
+
+void Scheduler::applyFeature(Event *event)
+{
+  switch(event->getFeature())
+  {
+    case SchedulerFeature::Divert:
+      // Enter eco mode at elevated priority (1100) so it overrides OCPP/RFID/Manual
+      divert.setTimerDivertActive(true);
+      break;
+    case SchedulerFeature::Shaper:
+      shaper.setTimerEnabled(true);
+      break;
+    case SchedulerFeature::RFID:
+      rfid.setTimerRequired(true);
+      break;
+    case SchedulerFeature::OCPP:
+      // OCPP manages its own claim state; no additional action here
+      break;
+    case SchedulerFeature::Current:
+      // Handled above in loop(): charge current set in the EVSE claim
+      break;
+    case SchedulerFeature::None:
+    default:
+      break;
+  }
+}
+
+void Scheduler::cleanupFeature(SchedulerFeature feature)
+{
+  switch(feature)
+  {
+    case SchedulerFeature::Divert:
+      divert.setTimerDivertActive(false);
+      break;
+    case SchedulerFeature::Shaper:
+      shaper.setTimerEnabled(false);
+      break;
+    case SchedulerFeature::RFID:
+      rfid.setTimerRequired(false);
+      break;
+    case SchedulerFeature::Current:
+      // Charge current resets automatically when the schedule claim is re-made
+      // with getMaxHardwareCurrent() on the next active event or released here
+      break;
+    default:
+      break;
+  }
+}
+
+void Scheduler::applyLimit(Event *event)
+{
+  LimitProperties props;
+  LimitType type;
+
+  switch(event->getLimitType())
+  {
+    case SchedulerLimitType::Time:   type = LimitType::Time;   break;
+    case SchedulerLimitType::Energy: type = LimitType::Energy; break;
+    case SchedulerLimitType::Soc:    type = LimitType::Soc;    break;
+    case SchedulerLimitType::Cost:
+      // Cost limit not yet enforced (requires tariff config); store only
+      DBUGLN("Scheduler: cost limit stored but not yet enforced");
+      return;
+    default:
+      return;
+  }
+
+  props.setType(type);
+  props.setValue(event->getLimitValue());
+  props.setAutoRelease(true);
+  limit.set(props);
 }
