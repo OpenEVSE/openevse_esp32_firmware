@@ -1,5 +1,5 @@
-#ifndef __DEBUG_H
-#define __DEBUG_H
+#ifndef DEBUG_H
+#define DEBUG_H
 
 #undef DEBUG_PORT
 #define DEBUG_PORT SerialDebug
@@ -15,4 +15,4 @@ extern StreamSpy SerialEvse;
 
 extern void debug_setup();
 
-#endif // __DEBUG_H
+#endif // DEBUG_H

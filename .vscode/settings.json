@@ -1,0 +1,95 @@
+{
+  // OpenEVSE ESP32 Firmware - VS Code Settings
+  // These settings align with the project's naming conventions documented in NAMING_CONVENTIONS.md
+  
+  // Editor Settings
+  "editor.tabSize": 2,
+  "editor.insertSpaces": true,
+  "editor.detectIndentation": false,
+  "editor.rulers": [100],
+  "editor.formatOnSave": false,
+  "files.trimTrailingWhitespace": true,
+  "files.insertFinalNewline": true,
+  "files.encoding": "utf8",
+  
+  // C/C++ Extension Settings
+  "C_Cpp.clang_format_fallbackStyle": "{ BasedOnStyle: Google, IndentWidth: 2, ColumnLimit: 100 }",
+  "C_Cpp.clang_format_sortIncludes": false,
+  "C_Cpp.codeAnalysis.clangTidy.enabled": true,
+  "C_Cpp.codeAnalysis.clangTidy.path": "clang-tidy",
+  "C_Cpp.codeAnalysis.clangTidy.config": "",
+  "C_Cpp.codeAnalysis.clangTidy.useBuildPath": false,
+  
+  // File Associations
+  "files.associations": {
+    "*.h": "cpp",
+    "*.cpp": "cpp",
+    "*.ino": "cpp"
+  },
+  
+  // Exclude build artifacts from search
+  "files.exclude": {
+    "**/.pio": true,
+    "**/.vscode/.browse.c_cpp.db*": true,
+    "**/.vscode/c_cpp_properties.json": true,
+    "**/.vscode/launch.json": true
+  },
+  
+  "search.exclude": {
+    "**/.pio": true,
+    "**/node_modules": true,
+    "**/gui-v2/dist": true
+  },
+  
+  // PlatformIO Integration
+  "platformio-ide.autoRebuildAutocompleteIndex": true,
+  "platformio-ide.useBuiltinPIOCore": true,
+  "platformio-ide.activateOnlyOnPlatformIOProject": false,
+  
+  // Git Settings
+  "git.ignoreLimitWarning": true,
+  
+  // Language Specific Settings
+  "[cpp]": {
+    "editor.tabSize": 2,
+    "editor.defaultFormatter": "ms-vscode.cpptools"
+  },
+  "[c]": {
+    "editor.tabSize": 2,
+    "editor.defaultFormatter": "ms-vscode.cpptools"
+  },
+  "[javascript]": {
+    "editor.tabSize": 2,
+    "editor.defaultFormatter": "dbaeumer.vscode-eslint"
+  },
+  "[typescript]": {
+    "editor.tabSize": 2,
+    "editor.defaultFormatter": "dbaeumer.vscode-eslint"
+  },
+  "[json]": {
+    "editor.tabSize": 2
+  },
+  "[markdown]": {
+    "editor.tabSize": 2,
+    "files.trimTrailingWhitespace": false
+  },
+  
+  // Naming Convention Hints (displayed in IntelliSense)
+  "C_Cpp.errorSquiggles": "enabled",
+  "C_Cpp.intelliSenseEngine": "default",
+  "C_Cpp.enhancedColorization": "enabled",
+  
+  // Recommended Extensions Banner
+  "extensions.ignoreRecommendations": false,
+  
+  // Terminal Settings
+  "terminal.integrated.env.linux": {
+    "PATH": "${env:HOME}/.platformio/penv/bin:${env:PATH}"
+  },
+  "terminal.integrated.env.osx": {
+    "PATH": "${env:HOME}/.platformio/penv/bin:${env:PATH}"
+  },
+  "terminal.integrated.env.windows": {
+    "PATH": "${env:USERPROFILE}\\.platformio\\penv\\Scripts;${env:PATH}"
+  }
+}

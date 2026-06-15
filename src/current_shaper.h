@@ -1,5 +1,5 @@
-#ifndef _OPENEVSE_CUR_SHAPER_H
-#define _OPENEVSE_CUR_SHAPER_H
+#ifndef OPENEVSE_CUR_SHAPER_H
+#define OPENEVSE_CUR_SHAPER_H
 
 // Time between loop polls
 #ifndef EVSE_SHAPER_LOOP_TIME

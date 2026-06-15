@@ -1,5 +1,5 @@
-#ifndef _EMONESP_EMONCMS_H
-#define _EMONESP_EMONCMS_H
+#ifndef EMONESP_EMONCMS_H
+#define EMONESP_EMONCMS_H
 
 #include <Arduino.h>
 #include <ArduinoJson.h>
@@ -21,5 +21,5 @@ extern unsigned long packets_success;
 // -------------------------------------------------------------------
 void emoncms_publish(JsonDocument &data);
 
-#endif // _EMONESP_EMONCMS_H
+#endif // EMONESP_EMONCMS_H
 

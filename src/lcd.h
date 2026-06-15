@@ -1,5 +1,5 @@
-#ifndef __LCD_H
-#define __LCD_H
+#ifndef LCD_H
+#define LCD_H
 
 #include <Arduino.h>
 
@@ -163,5 +163,5 @@ class LcdTask : public MicroTasks::Task
 
 extern LcdTask lcd;
 
-#endif // __LCD_H
+#endif // LCD_H
 

@@ -1,5 +1,5 @@
-#ifndef __SCREEN_RENDERER_H
-#define __SCREEN_RENDERER_H
+#ifndef SCREEN_RENDERER_H
+#define SCREEN_RENDERER_H
 
 #include <TFT_eSPI.h>
 #include <PNGdec.h>
@@ -46,4 +46,4 @@ extern void set_message_line(int x, int y, const char *msg, bool clear);
 extern void clear_message_line(int line);
 extern String get_message_line(int line);
 
-#endif // __SCREEN_RENDERER_H
+#endif // SCREEN_RENDERER_H

@@ -1,5 +1,5 @@
-#ifndef _OPENEVSE_SCHEDULER_H
-#define _OPENEVSE_SCHEDULER_H
+#ifndef OPENEVSE_SCHEDULER_H
+#define OPENEVSE_SCHEDULER_H
 
 #include <Arduino.h>
 #include <ArduinoJson.h>
@@ -298,4 +298,4 @@ class Scheduler : public MicroTasks::Task
 
 extern Scheduler scheduler;
 
-#endif // !_OPENEVSE_SCHEDULER_H
+#endif // !OPENEVSE_SCHEDULER_H

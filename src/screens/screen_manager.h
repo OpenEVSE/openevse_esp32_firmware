@@ -1,5 +1,5 @@
-#ifndef __SCREEN_MANAGER_H
-#define __SCREEN_MANAGER_H
+#ifndef SCREEN_MANAGER_H
+#define SCREEN_MANAGER_H
 
 #include "screen_base.h"
 #include <vector>
@@ -58,4 +58,4 @@ private:
   void initializeScreens();
 };
 
-#endif // __SCREEN_MANAGER_H
+#endif // SCREEN_MANAGER_H

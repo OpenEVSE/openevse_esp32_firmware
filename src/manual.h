@@ -1,5 +1,5 @@
-#ifndef _OPENEVSE_MANUAL_H
-#define _OPENEVSE_MANUAL_H
+#ifndef OPENEVSE_MANUAL_H
+#define OPENEVSE_MANUAL_H
 
 #include "evse_man.h"
 #include "json_serialize.h"
@@ -28,4 +28,4 @@ class ManualOverride
 
 extern ManualOverride manual;
 
-#endif // _OPENEVSE_MANUAL_H
+#endif // OPENEVSE_MANUAL_H

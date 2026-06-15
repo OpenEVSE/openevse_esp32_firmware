@@ -1,5 +1,5 @@
-#ifndef _EMONESP_WEB_SERVER_H
-#define _EMONESP_WEB_SERVER_H
+#ifndef EMONESP_WEB_SERVER_H
+#define EMONESP_WEB_SERVER_H
 
 #include <ArduinoJson.h>
 #include <MongooseHttpServer.h>
@@ -53,4 +53,4 @@ typedef const __FlashStringHelper *fstr_t;
 bool requestPreProcess(MongooseHttpServerRequest *request, MongooseHttpServerResponseStream *&response, fstr_t contentType = CONTENT_TYPE_JSON);
 void dumpRequest(MongooseHttpServerRequest *request);
 
-#endif // _EMONESP_WEB_SERVER_H
+#endif // EMONESP_WEB_SERVER_H

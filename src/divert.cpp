@@ -25,13 +25,13 @@
 
 // It's better to never import current from the grid but because of charging current quantification (min value of 6A and change in steps of 1A),
 // it may be better to import a fraction of the charge current and use the next charging level sooner, depending on electricity buying/selling prices.
-// The marginal fraction of current that is required to come from PV is the divert_PV_ratio. The requiring a pure PV charge is obtained by
-// setting divert_PV_ratio to 1.0. This is the best choice when the kWh selling price is the same as the kWh night buying price.  If instead the night tarif
-// is the same as the day tarif, any available current is good to take and divert_PV_ratio optimal setting is close to 0.0. Beyond 1.0, the excess of
-// divert_PV_ratio indicates the amount of power (in kW) that OpenEVSE will try to preserve. A value of 1.1 will start charging only when the
+// The marginal fraction of current that is required to come from PV is the divert_pv_ratio. The requiring a pure PV charge is obtained by
+// setting divert_pv_ratio to 1.0. This is the best choice when the kWh selling price is the same as the kWh night buying price.  If instead the night tarif
+// is the same as the day tarif, any available current is good to take and divert_pv_ratio optimal setting is close to 0.0. Beyond 1.0, the excess of
+// divert_pv_ratio indicates the amount of power (in kW) that OpenEVSE will try to preserve. A value of 1.1 will start charging only when the
 // PV power - 100 W (reserve) reaches the minimum charging power (reproducing the legacy behavior of OpenEVSE).
 
-// If EVSE is sleeping, charging will start as soon as solar PV / excess power exceeds the divert_PV_ratio fraction of the minimum charging power.
+// If EVSE is sleeping, charging will start as soon as solar PV / excess power exceeds the divert_pv_ratio fraction of the minimum charging power.
 // Once charging begins it will not pause before a minimum amount of time has passed and this even if solar PV / excess power drops less then minimum charge rate.
 // This avoids wear on the relay and the car.
 
@@ -187,7 +187,7 @@ void DivertTask::update_state()
       if (Igrid_ie < 0)
       {
         // If excess power
-        double reserve = (1000.0 * ((divert_PV_ratio > 1.0) ? (divert_PV_ratio - 1.0) : 0.0)) / voltage;
+        double reserve = (1000.0 * ((divert_pv_ratio > 1.0) ? (divert_pv_ratio - 1.0) : 0.0)) / voltage;
         DBUGVAR(reserve);
         _available_current = (-Igrid_ie - reserve);
       }
@@ -217,7 +217,7 @@ void DivertTask::update_state()
 
     _charge_rate = (int)floor(_available_current);
     // if the remaining current can be used with a sufficient ratio of PV current in it, use it
-    if ((_available_current - _charge_rate) > min(1.0, divert_PV_ratio)) {
+    if ((_available_current - _charge_rate) > min(1.0, divert_pv_ratio)) {
       _charge_rate += 1;
     }
 
@@ -226,7 +226,7 @@ void DivertTask::update_state()
     time_t min_charge_time_remaining = getMinChargeTimeRemaining();
     DBUGVAR(min_charge_time_remaining);
 
-    double trigger_current = _evse->getMinCurrent() * min(1.0, divert_PV_ratio);
+    double trigger_current = _evse->getMinCurrent() * min(1.0, divert_pv_ratio);
 
     // the smoothed current suffices to ensure a sufficient ratio of PV power
     if (_smoothed_available_current >= trigger_current + EVSE_DIVERT_HYSTERESIS)

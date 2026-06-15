@@ -1,5 +1,5 @@
-#ifndef _ENERGY_METER_H
-#define _ENERGY_METER_H
+#ifndef ENERGY_METER_H
+#define ENERGY_METER_H
 
 #include <Arduino.h>
 #include <ArduinoJson.h>
@@ -123,4 +123,4 @@ public:
   };
 };
 
-#endif // _ENERGY_METER_H
+#endif // ENERGY_METER_H

@@ -181,11 +181,19 @@ pio run -e openevse_wifi_v1  # Expected to fail with HTTPClientError in restrict
 ## Coding Conventions and Patterns
 
 ### Naming Conventions:
-- **Config variables**: `snake_case` (e.g., `mqtt_server`, `divert_type`, `led_brightness`)
-- **Private members**: `_snake_case` with leading underscore (e.g., `_openevse`, `_state`, `_pilot`)
-- **Constants/defines**: `UPPER_SNAKE_CASE` (e.g., `CONFIG_OFFSET`, `EVSE_MONITOR_POLL_TIME`)
-- **Classes**: `PascalCase` (e.g., `EvseMonitor`, `LcdTask`, `MongooseHttpServer`)
-- **Enum values**: `UPPER_SNAKE_CASE` (e.g., `OPENEVSE_STATE_STARTING`)
+
+**Complete naming conventions are documented in [NAMING_CONVENTIONS.md](../NAMING_CONVENTIONS.md)**
+
+Quick reference:
+- **Classes/Structs**: `PascalCase` (e.g., `EvseMonitor`, `LcdTask`, `MongooseHttpServer`)
+- **Functions/Methods**: `camelCase` (e.g., `getState()`, `setChargeCurrent()`)
+- **Member variables**: `_snake_case` with leading underscore (e.g., `_openevse`, `_state`, `_pilot`)
+- **Local variables**: `camelCase` preferred (e.g., `chargeCurrent`), `snake_case` acceptable
+- **Global variables**: `snake_case` (e.g., `mqtt_server`, `divert_type`, `led_brightness`)
+- **Constants/Macros**: `UPPER_SNAKE_CASE` (e.g., `CONFIG_OFFSET`, `EVSE_MONITOR_POLL_TIME`)
+- **Enum types**: `PascalCase` (e.g., `LedState`, `ScreenType`)
+- **Enum values (plain)**: `UPPER_SNAKE_CASE` with prefix (e.g., `SCREEN_BOOT`, `WIFI_DISCONNECT_REASON_AUTH_FAIL`)
+- **Enum values (scoped)**: `PascalCase` (e.g., `LimitType::Energy`, `DivertMode::Normal`)
 
 ### RAPI Command Integration:
 - **Pattern**: Use callback-based async RAPI commands with lambda functions

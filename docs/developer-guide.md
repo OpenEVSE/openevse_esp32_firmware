@@ -67,6 +67,60 @@ To clean an existing build, `pio run -e your_openevse_board -t`
 
 ---
 
+## Code Quality and Linting
+
+### Naming Conventions
+
+The project follows strict naming conventions documented in [NAMING_CONVENTIONS.md](../NAMING_CONVENTIONS.md). Please review this document before contributing code.
+
+**Quick reference:**
+- Classes/Structs: `PascalCase`
+- Functions/Methods: `camelCase`
+- Member variables: `_snake_case`
+- Local variables: `camelCase` (preferred)
+- Global variables: `snake_case`
+- Constants/Macros: `UPPER_SNAKE_CASE`
+- Enum types: `PascalCase`
+- Enum values (plain): `UPPER_SNAKE_CASE` with prefix
+- Enum values (scoped): `PascalCase`
+
+### Running Lint Checks Locally
+
+The project uses **clang-tidy** to enforce naming conventions and code quality. You can run lint checks locally before submitting a pull request.
+
+#### Install clang-tidy
+
+On Ubuntu/Debian:
+```bash
+sudo apt-get install clang-tidy
+```
+
+On macOS:
+```bash
+brew install llvm
+```
+
+#### Run the lint script
+
+```bash
+# Check all source files
+./scripts/lint_check.sh
+
+# Check specific files
+./scripts/lint_check.sh src/evse_man.cpp src/mqtt.cpp
+```
+
+#### Automated CI Checks
+
+Pull requests are automatically checked by GitHub Actions. The workflow will:
+1. Run clang-tidy on all changed C++ files
+2. Report any naming convention violations
+3. Comment on the PR if issues are found
+
+You can see the workflow configuration in `.github/workflows/lint.yaml`.
+
+---
+
 ## Troubleshooting
 
 ### Uploading issues

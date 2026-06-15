@@ -74,6 +74,9 @@ ubuntu-xenial-16.04-cloudimg-console.log
 
 # VSCode stuff
 .vscode
+# But allow shared project settings
+!.vscode/settings.json
+!.vscode/extensions.json
 .vscode/browse.vc.db*
 .vscode/c_cpp_properties.json
 .vscode/*.db

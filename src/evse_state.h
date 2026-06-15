@@ -1,6 +1,6 @@
 
-#ifndef _OPENEVSE_EVSE_STATE_H
-#define _OPENEVSE_EVSE_STATE_H
+#ifndef OPENEVSE_EVSE_STATE_H
+#define OPENEVSE_EVSE_STATE_H
 
 #include <Arduino.h>
 
@@ -45,4 +45,4 @@ class EvseState
     Value _value;
 };
 
-#endif // _OPENEVSE_EVSE_STATE_H
+#endif // OPENEVSE_EVSE_STATE_H
