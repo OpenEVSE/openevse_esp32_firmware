@@ -317,11 +317,8 @@ void buildStatus(DynamicJsonDocument &doc) {
 }
 
 // -------------------------------------------------------------------
-// Wifi scan /scan not currently used
+// Wifi scan
 // url: /scan
-//
-// First request will return 0 results unless you start scan from somewhere else (loop/setup)
-// Do not request more often than 3-5 seconds
 // -------------------------------------------------------------------
 void
 handleScan(MongooseHttpServerRequest *request) {
@@ -331,23 +328,28 @@ handleScan(MongooseHttpServerRequest *request) {
   }
 
   DBUGF("Starting WiFi scan");
-  net.wifiScanNetworks([request, response](int networksFound) {
+  bool scanStarted = net.wifiScanNetworks([request, response](int networksFound) {
     DBUGF("%d networks found", networksFound);
-    String json = "[";
+    response->print("[");
     for (int i = 0; i < networksFound; ++i) {
-      if(i) json += ",";
-      json += "{";
-      json += "\"rssi\":"+String(WiFi.RSSI(i));
-      json += ",\"ssid\":\""+WiFi.SSID(i)+"\"";
-      json += ",\"bssid\":\""+WiFi.BSSIDstr(i)+"\"";
-      json += ",\"channel\":"+String(WiFi.channel(i));
-      json += ",\"secure\":"+String(WiFi.encryptionType(i));
-      json += "}";
+      if(i) response->print(",");
+      StaticJsonDocument<256> network;
+      network["rssi"] = WiFi.RSSI(i);
+      network["ssid"] = WiFi.SSID(i);
+      network["bssid"] = WiFi.BSSIDstr(i);
+      network["channel"] = WiFi.channel(i);
+      network["secure"] = WiFi.encryptionType(i);
+      serializeJson(network, *response);
     }
-    json += "]";
-    response->print(json);
+    response->print("]");
     request->send(response);
   });
+
+  if(!scanStarted) {
+    DBUGLN("WiFi scan failed to start");
+    response->print("[]");
+    request->send(response);
+  }
 }
 
 // -------------------------------------------------------------------
