@@ -62,14 +62,6 @@ public:
   bool online = true;
   bool vehicle = true;
 
-  // Allocation handed to this peer by the load-sharing algorithm (amps).
-  // 0 = no constraint applied.
-  double loadshare_allocation_amps = 0.0;
-
-  // Reason text for the most recent reduction in pilot below max (filled by
-  // the runner before each row is written).
-  std::string reason;
-
 private:
   PeerScenario _scenario;
   SimEvse _sim;

@@ -109,8 +109,7 @@
         const button = document.createElement("button");
         button.type = "button";
         button.dataset.category = category;
-        button.textContent = category === "loadsharing" ? "Load Sharing" :
-          category.charAt(0).toUpperCase() + category.slice(1);
+        button.textContent = category.charAt(0).toUpperCase() + category.slice(1);
         button.classList.toggle("active", category === activeCategory);
         button.addEventListener("click", () => setActiveTab(category, categories));
         tabs.appendChild(button);

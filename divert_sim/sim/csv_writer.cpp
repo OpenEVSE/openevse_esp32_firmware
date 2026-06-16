@@ -33,9 +33,6 @@ void CsvWriter::writeHeader(const std::vector<std::string> &peer_ids)
       addString(id + "_" + col);
     }
   }
-  for (const auto &col : columns::groupColumns()) {
-    addString(col);
-  }
   endRow();
 }
 

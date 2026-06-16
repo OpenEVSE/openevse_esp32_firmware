@@ -80,8 +80,7 @@ OPENEVSE_WIFI_OBJ := \
   $(OBJ_DIR)/event_log.o \
   $(OBJ_DIR)/debug.o \
   $(OBJ_DIR)/manual.o \
-  $(OBJ_DIR)/app_config.o \
-  $(OBJ_DIR)/loadsharing_algorithm.o
+  $(OBJ_DIR)/app_config.o
 
 ARDUINO_OBJ := \
   $(OBJ_DIR)/avr_stdlib.o \

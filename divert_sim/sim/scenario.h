@@ -24,7 +24,6 @@ struct PeerScenario
   double voltage = 240.0;
   double min_current = 6.0;
   double max_current = 32.0;
-  int priority = 0;
 
   // EV battery model
   double battery_capacity_kwh = 75.0;
@@ -52,15 +51,6 @@ struct PeerScenario
   std::vector<PeerEvent> events;
 };
 
-struct GroupScenario
-{
-  bool enabled = false;
-  double max_current = 0.0;
-  double safety_factor = 1.0;
-  std::string failsafe_mode = "safe_current";
-  double failsafe_peer_assumed_current = 6.0;
-};
-
 struct Scenario
 {
   // simulation
@@ -72,9 +62,6 @@ struct Scenario
   // raw config JSON to apply to app_config (or empty)
   std::string config_json;
 
-  GroupScenario group;
-  double supply_max_pwr_w = 0.0;
-  TimeSeries supply_live_pwr;
   std::vector<PeerScenario> peers;
 
   // Directory containing the scenario file (used to resolve CSV refs).

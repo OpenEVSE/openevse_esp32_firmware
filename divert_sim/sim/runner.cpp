@@ -14,7 +14,6 @@
 #include <epoxy_test/ArduinoTest.h>
 
 #include "app_config.h"
-#include "loadsharing_algorithm.h"
 #include "openevse.h"
 
 #include "csv_writer.h"
@@ -111,20 +110,10 @@ int run(const std::string &scenario_path,
   unsigned long fake_millis = 0;
   EpoxyTest::set_millis(fake_millis);
 
-  bool failsafe_active = false;
-
   while (t_sec <= scenario.duration_sec) {
     // Keep divert's time source aligned with simulation time so minimum
     // charge duration logic can expire as expected.
     simulated_time = t_start + t_sec;
-
-    double group_max_current = scenario.group.max_current;
-    if (scenario.supply_max_pwr_w > 0.0 && !scenario.supply_live_pwr.empty()) {
-      double site_live_pwr_w = scenario.supply_live_pwr.valueAt(t_sec);
-      double available_w = scenario.supply_max_pwr_w - site_live_pwr_w;
-      if (available_w < 0.0) available_w = 0.0;
-      group_max_current = available_w / scenario.nominal_voltage;
-    }
 
     // 1. Apply scheduled events and time-series inputs to each peer.
     for (auto &p : peers) {
@@ -132,63 +121,19 @@ int run(const std::string &scenario_path,
       p->applyInputs(t_sec);
     }
 
-    // 2. Compute load-share allocations and apply them as a max constraint
-    //    on each peer's EvseManager.
-    if (scenario.group.enabled && !peers.empty()) {
-      std::vector<AllocationInput> inputs;
-      inputs.reserve(peers.size());
-      for (auto &p : peers) {
-        AllocationInput in;
-        in.id = p->id().c_str();
-        in.host = in.id;
-        in.online = p->online;
-        in.demanding = p->vehicle && p->online;
-        in.min_current = p->scenario().min_current;
-        in.max_current = p->scenario().max_current;
-        in.priority = p->scenario().priority;
-        inputs.push_back(in);
-      }
-      auto allocs = computeAllocations(
-          inputs,
-          group_max_current,
-          scenario.group.safety_factor,
-          scenario.group.failsafe_peer_assumed_current,
-          String(scenario.group.failsafe_mode.c_str()),
-          failsafe_active);
-
-      for (const auto &a : allocs) {
-        for (auto &p : peers) {
-          if (a.getId() == p->id().c_str()) {
-            p->loadshare_allocation_amps = a.getTargetCurrent();
-            p->reason = a.getReason().c_str();
-            // Apply allocation as a claim on the EvseManager.
-            EvseProperties props;
-            props.setState(a.getTargetCurrent() > 0 ? EvseState::Active
-                                                   : EvseState::Disabled);
-            props.setMaxCurrent((uint32_t) a.getTargetCurrent());
-            p->evse().claim(EvseClient_OpenEVSE_LoadSharing,
-                            EvseManager_Priority_Default, props);
-            break;
-          }
-        }
-      }
-    }
-
-    // 3. Advance the firmware task scheduler. Run several iterations so
+    // 2. Advance the firmware task scheduler. Run several iterations so
     //    callbacks chained across multiple loops settle within one tick.
     for (int i = 0; i < 5; i++) {
       MicroTask.update();
     }
 
-    // 4. Update the EV battery model based on the resulting pilot.
+    // 3. Update the EV battery model based on the resulting pilot.
     for (auto &p : peers) {
       p->updateBattery((double) tick);
     }
 
-    // 5. Emit a CSV row.
+    // 4. Emit a CSV row.
     writer.beginRow(formatTime(t_start + t_sec));
-    double group_total_actual_w = 0;
-    double group_total_demand_w = 0;
     for (auto &p : peers) {
       const SimEvse &s = p->simEvse();
       double pilot_w = s.pilot * s.voltage;
@@ -196,8 +141,6 @@ int run(const std::string &scenario_path,
       double actual_a = s.actualCurrent();
       double actual_w = actual_a * s.voltage;
       double ev_max_w = s.max_charge_rate_kw * 1000.0;
-      group_total_actual_w += actual_w;
-      group_total_demand_w += charge_available_w;
 
       writer.addBool(p->online);
       writer.addBool(p->vehicle);
@@ -207,19 +150,13 @@ int run(const std::string &scenario_path,
       writer.addDouble(p->divert().smoothedAvailableCurrent() * s.voltage, 1);
       writer.addDouble(p->shaper().getMaxCur() * s.voltage, 1);
       writer.addDouble((double) p->shaper().getSmoothedLivePwr(), 1);
-      writer.addDouble(p->loadshare_allocation_amps * s.voltage, 1);
       writer.addDouble(pilot_w, 1);
       writer.addDouble(charge_available_w, 1);
       writer.addString(stateName(s.state));
       writer.addDouble(ev_max_w, 1);
       writer.addDouble(actual_w, 1);
       writer.addDouble(s.soc, 2);
-      writer.addString(p->reason);
     }
-    writer.addDouble(group_max_current * scenario.nominal_voltage, 1);
-    writer.addDouble(group_total_actual_w, 1);
-    writer.addDouble(group_total_demand_w, 1);
-    writer.addBool(failsafe_active);
     writer.endRow();
 
     fake_millis += (unsigned long) tick * 1000UL;

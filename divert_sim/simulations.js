@@ -36,7 +36,6 @@ function buildPeerSeries(rows, peerId, visibility) {
   const showSolar = !!vis.showSolar;
   const showGridIE = !!vis.showGridIE;
   const showShaperInputs = !!vis.showShaperInputs;
-  const showLoadshareAllocated = !!vis.showLoadshareAllocated;
   const showSmoothedAvailable = showSolar || showGridIE;
 
   const metrics = [
@@ -44,9 +43,6 @@ function buildPeerSeries(rows, peerId, visibility) {
     ["charge_available_w", "Charge Available (W)", "line", "#1976d2"],
     ...(showSmoothedAvailable
       ? [["divert_smoothed_available_w", "Smoothed Available (W)", "line", "#009688"]]
-      : []),
-    ...(showLoadshareAllocated
-      ? [["loadshare_allocated_w", "Loadshare Allocated (W)", "line", "#388e3c"]]
       : []),
     ...(showSolar ? [["solar_w", "Solar (W)", "line", "#7b1fa2"]] : []),
     ...(showGridIE ? [["grid_ie_w", "Grid I/E (W)", "line", "#455a64"]] : []),
@@ -134,13 +130,11 @@ function buildPeerVisibilityFromScenario(scenarioSource, peerId) {
   const hasSolarInput = !!inputs.solar;
   const hasGridIEInput = !!inputs.grid_ie;
   const hasShaperInput = !!inputs.live_pwr;
-  const hasLoadsharing = category === "loadsharing";
 
   return {
     showSolar: hasSolarInput && !hasGridIEInput,
     showGridIE: hasGridIEInput,
     showShaperInputs: hasShaperInput,
-    showLoadshareAllocated: hasLoadsharing,
   };
 }
 
