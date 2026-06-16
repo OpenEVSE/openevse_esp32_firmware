@@ -37,6 +37,7 @@ typedef uint32_t EvseClient;
 #define EvseClient_OpenEVSE_MQTT              EVC(EvseClient_Vendor_OpenEVSE, 0x000B)
 #define EvseClient_OpenEVSE_Shaper            EVC(EvseClient_Vendor_OpenEVSE, 0x000C)
 #define EvseClient_OpenEVSE_TempThrottle      EVC(EvseClient_Vendor_OpenEVSE, 0x000D)
+#define EvseClient_OpenEVSE_LoadSharing       EVC(EvseClient_Vendor_OpenEVSE, 0x000E)
 
 #define EvseClient_OpenEnergyMonitor_DemandShaper EVC(EvseClient_Vendor_OpenEnergyMonitor, 0x0001)
 
@@ -215,6 +216,7 @@ class EvseManager : public MicroTasks::Task
     };
 
     RapiSender _sender;
+    OpenEVSEClass _openevse;
     EvseMonitor _monitor;
     EventLog &_eventLog;
 

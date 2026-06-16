@@ -1,276 +1,369 @@
-
-var divert_datasets = [
-  { id: "day1", class: "solar", title: "Day 1 (Solar)" },
-  { id: "day2", class: "solar", title: "Day 2 (Solar)" },
-  { id: "day3", class: "solar", title: "Day 3 (Solar)" },
-  { id: "almostperfect", class: "solar", title: "Almost Perfect" },
-  { id: "CloudyMorning", class: "solar", title: "Cloudy Morning" },
-  { id: "solar-vrms", class: "solar", title: "Solar with Voltage feed" },
-  { id: "day1_grid_ie", class: "gridie", title: "Day 1 (Grid I+/E-)" },
-  { id: "day2_grid_ie", class: "gridie", title: "Day 2 (Grid I+/E-)" },
-  { id: "day3_grid_ie", class: "gridie", title: "Day 3 (Grid I+/E-)" },
-  { id: "Energy_and_Power_Day_2020-03-22", class: "solar", title: "Energy and Power Day 2020-03-22" },
-  { id: "Energy_and_Power_Day_2020-03-31", class: "solar", title: "Energy and Power Day 2020-03-31" },
-  { id: "Energy_and_Power_Day_2020-04-01", class: "solar", title: "Energy and Power Day 2020-04-01" },
-];
-
-var shaper_datasets = [
-  { id: "data_shaper", class: "shaper", title: "Shaper example 1" },
-];
-
-var summary = {};
-function init_summary(divert_profiles, shaper_profiles) {
-  for (const profile of divert_profiles) {
-    summary[profile] = {};
-    for (const dataset of divert_datasets) {
-      summary[profile][dataset.id] = {};
-    }
+function parseCsv(text) {
+  const lines = text.split(/\r?\n/).filter((line) => line.length > 0);
+  if (lines.length < 2) {
+    return { headers: [], rows: [] };
   }
-  for (const profile of shaper_profiles) {
-    summary[profile] = {};
-    for (const dataset of shaper_datasets) {
-      summary[profile][dataset.id] = {};
-    }
-  }
-}
 
-function getDataPointsFromCSV(csv) {
-  var dataPoints = csvLines = points = [];
-  csvLines = csv.split(/[\r?\n|\r|\n]+/);
-
-  for (var i = 1; i < csvLines.length; i++)
-    if (csvLines[i].length > 0) {
-      points = csvLines[i].split(",");
-
-      while (dataPoints.length < points.length - 1) {
-        dataPoints.push([]);
-      }
-
-      var date = moment(points[0], "DD/MM/YYYY HH:mm:ss").toDate();
-      for (var p = 1; p < points.length; p++) {
-        dataPoints[p - 1].push({
-          x: date,
-          y: parseFloat(points[p])
-        });
-      }
-    }
-  return dataPoints;
-}
-
-function loadChart(id, csv, title, type) {
-  $.get(csv, (data) => {
-    var points = getDataPointsFromCSV(data);
-    var opts = {
-      animationEnabled: true,
-      zoomEnabled: true,
-      toolTip: {
-        shared: true,
-        contentFormatter: (e) => {
-
-          var str = "<strong>"+moment(e.entries[0].dataPoint.x).format('h:mm a') + "</strong> <br/>";
-          for (var i = 0; i < e.entries.length; i++){
-            str += "<span style=\"color:"+e.entries[i].dataSeries.color+"\">" + e.entries[i].dataSeries.name + "</span> <strong>"+  e.entries[i].dataPoint.y + "</strong> <br/>";
-          }
-          return (str);
-        }
-      },
-      title: {
-        text: title,
-        fontSize: 20
-      },
-      legend: {
-        fontSize: 16
-      },
-      axisY: {
-        labelFontSize: 14,
-        labelAngle: 0
-      },
-      axisX: {
-        labelFontSize: 14,
-        labelAngle: 0
-      },
-      data: []
-    }
-    opts.data.push({
-      name: "Charge Power",
-      type: "area",
-      color: "rgba(244,180,0,0.7)",
-      showInLegend: true,
-      dataPoints: points[3]
+  const headers = lines[0].split(",");
+  const rows = lines.slice(1).map((line) => {
+    const cells = line.split(",");
+    const row = {};
+    headers.forEach((h, idx) => {
+      row[h] = cells[idx] || "";
     });
-    if("gridie" === type || "solar" === type) {
-      opts.data.push({
-        name: "Solar",
-        type: "line",
-        lineThickness: 1,
-        showInLegend: true,
-        dataPoints: points[0]
-      });
-      if("gridie" === type) {
-        opts.data.push({
-          name: "Grid IE",
-          type: "line",
-          lineThickness: 1,
-          showInLegend: true,
-          dataPoints: points[1]
-        });
-        opts.data.push({
-          name: "Smoothed",
-          type: "line",
-          lineThickness: 1,
-          showInLegend: true,
-          dataPoints: points[6]
-        });
-        opts.data.push({
-          name: "Min Charge",
-          type: "line",
-          lineThickness: 1,
-          lineDashType: "shortDash",
-          lineColor: "#38761d",
-          showInLegend: true,
-          dataPoints: points[4]
-        });
-        opts.data.push({
-          name: "Min Grid IE",
-          type: "line",
-          lineThickness: 1,
-          lineDashType: "shortDash",
-          lineColor: "#38761d",
-          showInLegend: true,
-          dataPoints: points[2]
-        });
+    return row;
+  });
+
+  return { headers, rows };
+}
+
+function discoverPeerIds(headers) {
+  const ids = [];
+  headers.forEach((h) => {
+    if (h.endsWith("_online")) {
+      ids.push(h.slice(0, -7));
+    }
+  });
+  return ids;
+}
+
+function buildPeerSeries(rows, peerId, visibility) {
+  if (!rows || rows.length === 0) {
+    return { series: [], hasGridIE: false };
+  }
+
+  const vis = visibility || {};
+  const showSolar = !!vis.showSolar;
+  const showGridIE = !!vis.showGridIE;
+  const showShaperInputs = !!vis.showShaperInputs;
+  const showLoadshareAllocated = !!vis.showLoadshareAllocated;
+  const showSmoothedAvailable = showSolar || showGridIE;
+
+  const metrics = [
+    ["actual_charge_w", "Actual Charge (W)", "line", "#f57c00"],
+    ["charge_available_w", "Charge Available (W)", "line", "#1976d2"],
+    ...(showSmoothedAvailable
+      ? [["divert_smoothed_available_w", "Smoothed Available (W)", "line", "#009688"]]
+      : []),
+    ...(showLoadshareAllocated
+      ? [["loadshare_allocated_w", "Loadshare Allocated (W)", "line", "#388e3c"]]
+      : []),
+    ...(showSolar ? [["solar_w", "Solar (W)", "line", "#7b1fa2"]] : []),
+    ...(showGridIE ? [["grid_ie_w", "Grid I/E (W)", "line", "#455a64"]] : []),
+    ...(showShaperInputs ? [["live_pwr_w", "Live Power (W)", "line", "#c2185b"]] : []),
+    ...(showShaperInputs
+      ? [["shaper_smoothed_live_w", "Smoothed Live (W)", "line", "#6a1b9a"]]
+      : []),
+    ...(showShaperInputs ? [["shaper_max_w", "Shaper Max (W)", "line", "#0097a7"]] : []),
+  ];
+
+  const series = [];
+  metrics.forEach(([suffix, label, type, color]) => {
+    let key = `${peerId}_${suffix}`;
+    // Backward compatibility: older CSV outputs only had pilot_w.
+    if (suffix === "charge_available_w" && !(key in rows[0])) {
+      const fallbackKey = `${peerId}_pilot_w`;
+      if (fallbackKey in rows[0]) {
+        key = fallbackKey;
       }
     }
-    if("shaper" == type) {
-      opts.data.push({
-        name: "Live Power (Smoothed)",
-        type: "line",
-        lineThickness: 1,
-        showInLegend: true,
-        dataPoints: points[8]
-      });
-      opts.data.push({
-        name: "Live Power",
-        type: "line",
-        lineThickness: 1,
-        showInLegend: true,
-        dataPoints: points[7]
-      });
-      opts.data.push({
-        name: "Max Power",
-        type: "line",
-        lineThickness: 1,
-        showInLegend: true,
-        dataPoints: points[9]
-      });
+
+    if (!(key in rows[0])) {
+      return;
     }
 
-    var chart = new CanvasJS.Chart(id, opts);
+    const points = rows
+      .map((r) => ({
+        x: new Date(r.time),
+        y: parseFloat(r[key] || "0"),
+      }))
+      .filter((p) => Number.isFinite(p.y) && !Number.isNaN(p.x.getTime()));
 
+    if (points.length === 0) {
+      return;
+    }
+
+    const cfg = {
+      name: label,
+      type,
+      lineThickness: 1.5,
+      showInLegend: true,
+      color,
+      dataPoints: points,
+    };
+
+    if (suffix === "charge_available_w") {
+      cfg.type = "area";
+      cfg.fillOpacity = 0.25;
+      cfg.lineThickness = 0.8;
+    }
+
+    series.push(cfg);
+  });
+
+  series.sort((a, b) => {
+    const aIsFill = a.name === "Charge Available (W)";
+    const bIsFill = b.name === "Charge Available (W)";
+    return aIsFill === bIsFill ? 0 : (aIsFill ? -1 : 1);
+  });
+
+  return { series, hasGridIE: showGridIE };
+}
+
+async function loadScenarioSource(sourcePath) {
+  if (!sourcePath) {
+    return null;
+  }
+  const response = await fetch(sourcePath, { cache: "no-store" });
+  if (!response.ok) {
+    return null;
+  }
+  return response.json();
+}
+
+function buildPeerVisibilityFromScenario(scenarioSource, peerId) {
+  const peers = (scenarioSource && Array.isArray(scenarioSource.peers))
+    ? scenarioSource.peers
+    : [];
+  const peer = peers.find((p) => p && p.id === peerId);
+  const inputs = (peer && peer.inputs) ? peer.inputs : {};
+  const category = (scenarioSource && scenarioSource.meta && scenarioSource.meta.category)
+    ? String(scenarioSource.meta.category)
+    : "";
+
+  const hasSolarInput = !!inputs.solar;
+  const hasGridIEInput = !!inputs.grid_ie;
+  const hasShaperInput = !!inputs.live_pwr;
+  const hasLoadsharing = category === "loadsharing";
+
+  return {
+    showSolar: hasSolarInput && !hasGridIEInput,
+    showGridIE: hasGridIEInput,
+    showShaperInputs: hasShaperInput,
+    showLoadshareAllocated: hasLoadsharing,
+  };
+}
+
+async function loadCsvRows(csvPath) {
+  const response = await fetch(csvPath, { cache: "no-store" });
+  const text = await response.text();
+  const parsed = parseCsv(text);
+  return parsed;
+}
+
+function createChart(containerId, title, series, options) {
+  const opts = options || {};
+  const normalizedSeries = (series || [])
+    .filter((s) => !!s && Array.isArray(s.dataPoints) && s.dataPoints.length > 0)
+    .map((s) => ({
+      ...s,
+      dataPoints: s.dataPoints.filter(
+        (p) =>
+          !!p &&
+          p.x instanceof Date &&
+          !Number.isNaN(p.x.getTime()) &&
+          Number.isFinite(p.y)
+      ),
+    }))
+    .filter((s) => s.dataPoints.length > 0);
+
+  if (normalizedSeries.length === 0) {
+    const el = document.getElementById(containerId);
+    if (el) {
+      el.textContent = "No numeric data available for this peer in the selected scenario.";
+      el.style.display = "flex";
+      el.style.alignItems = "center";
+      el.style.justifyContent = "center";
+      el.style.color = "#666";
+      el.style.border = "1px dashed #ccc";
+      el.style.padding = "8px";
+      el.style.boxSizing = "border-box";
+    }
+    return;
+  }
+
+  try {
+    const chart = new CanvasJS.Chart(containerId, {
+      animationEnabled: false,
+      zoomEnabled: true,
+      title: { text: title, fontSize: 18 },
+      legend: { fontSize: 12 },
+      axisX: { valueFormatString: "HH:mm:ss" },
+      axisY: { title: "Power (W)", ...(opts.hasGridIE ? {} : { minimum: 0 }) },
+      // Show all visible series values for the hovered timestamp.
+      toolTip: { shared: true },
+      data: normalizedSeries,
+    });
     chart.render();
-  });
-
-};
-
-function loadSummary(csv, success, profile = false) {
-  $.ajax({
-    url: csv,
-    dataType: "text",
-    success: function (data) {
-      var summary_data = data.split(/\r?\n|\r/);
-      for (var count = 1; count < summary_data.length; count++) {
-        var cell_data = summary_data[count].split(",");
-        if(cell_data.length < 2) {
-          continue;
-        }
-
-        var dataset = cell_data[0].replaceAll("\"", "");
-        var config = false === profile ? cell_data[1].replaceAll("\"", "").replaceAll("data/config-inputfilter-", "").replaceAll("data/config-shaper-", "").replaceAll(".json", "") : profile;
-
-        var data = {
-          total_solar: parseFloat(cell_data[2]).toFixed(2),
-          total_ev_charged: parseFloat(cell_data[3]).toFixed(2),
-          charge_from_solar: parseFloat(cell_data[4]).toFixed(2),
-          charge_from_grid: parseFloat(cell_data[5]).toFixed(2),
-          number_of_charges: parseInt(cell_data[6]),
-          min_time_charging: (new Date(parseInt(cell_data[7]) * 1000).toISOString().slice(11, 19)),
-          max_time_charging: (new Date(parseInt(cell_data[8]) * 1000).toISOString().slice(11, 19)),
-          total_time_charging: (new Date(parseInt(cell_data[9]) * 1000).toISOString().slice(11, 19))
-        }
-
-        summary[config.toLowerCase()][dataset] = data;
-      }
-
-      success();
-    }
-  });
-}
-
-function generate_summary_table_rows(profiles, datasets) {
-  var table_data = '';
-  for (const dataset of datasets) {
-    for (const profile of profiles) {
-      var data = summary[profile][dataset.id];
-      table_data += '<tr class="' + dataset.class + '">';
-      table_data += '<td><a href="#' + dataset.id + "_" + profile + '">' + dataset.title + '</a></td>';
-      table_data += '<td>' + profile + '</td>';
-      table_data += '<td>' + data.total_solar + '</td>';
-      table_data += '<td>' + data.total_ev_charged + '</td>';
-      table_data += '<td>' + data.charge_from_solar + '</td>';
-      table_data += '<td>' + data.charge_from_grid + '</td>';
-      table_data += '<td>' + data.number_of_charges + '</td>';
-      table_data += '<td>' + data.min_time_charging + '</td>';
-      table_data += '<td>' + data.max_time_charging + '</td>';
-      table_data += '<td>' + data.total_time_charging + '</td>';
-      table_data += '</tr>';
+  } catch (err) {
+    const el = document.getElementById(containerId);
+    if (el) {
+      el.textContent = `Chart render failed: ${String(err)}`;
+      el.style.display = "flex";
+      el.style.alignItems = "center";
+      el.style.justifyContent = "center";
+      el.style.color = "#a94442";
+      el.style.border = "1px dashed #a94442";
+      el.style.padding = "8px";
+      el.style.boxSizing = "border-box";
     }
   }
-  return table_data;
 }
 
-function generate_summary_table(divert_profiles, shaper_profiles) {
-  var table_data = '<table class="table table-bordered table-striped">';
-  table_data += '<tr>';
-  table_data += '<th>Dataset</th>';
-  table_data += '<th>Config</th>';
-  table_data += '<th>Total Solar</th>';
-  table_data += '<th>Total EV Charged</th>';
-  table_data += '<th>Charge from Solar</th>';
-  table_data += '<th>Charge from Grid</th>';
-  table_data += '<th>Number of Charges</th>';
-  table_data += '<th>Min Time Charging</th>';
-  table_data += '<th>Max Time Charging</th>';
-  table_data += '<th>Total Time Charging</th>';
-  table_data += '</tr>';
-  table_data += generate_summary_table_rows(divert_profiles, divert_datasets);
-  table_data += generate_summary_table_rows(shaper_profiles, shaper_datasets);
-  table_data += '</table>';
-  $('#summary_table').html(table_data);
-}
+async function renderScenario(container, scenario) {
+  const scenarioBlock = document.createElement("section");
+  scenarioBlock.className = "scenario-block";
 
-function generate_chart(dataset, profile)
-{
-  var id = dataset.id + "_" + profile;
-  var div = document.createElement("div");
-  div.id = id;
-  div.className = dataset.class;
-  document.body.appendChild(div);
-  return id;
-}
+  const h3 = document.createElement("h3");
+  h3.textContent = scenario.title || scenario.id || "Scenario";
+  scenarioBlock.appendChild(h3);
+  // CanvasJS requires the target container element to exist in the live DOM
+  // before Chart(...) is constructed.
+  container.appendChild(scenarioBlock);
 
-function toggleCharts() {
-  var showDivert = document.getElementById('show_divert').checked;
-  var showShaper = document.getElementById('show_shaper').checked;
-
-  if (showDivert) {
-    document.body.classList.remove('hide-divert');
-  } else {
-    document.body.classList.add('hide-divert');
+  const [parsed, scenarioSource] = await Promise.all([
+    loadCsvRows(scenario.csv),
+    loadScenarioSource(scenario.source),
+  ]);
+  if (!parsed.rows || parsed.rows.length === 0) {
+    const empty = document.createElement("p");
+    empty.textContent = "No rows found in CSV output for this scenario.";
+    scenarioBlock.appendChild(empty);
+    return;
   }
 
-  if (showShaper) {
-    document.body.classList.remove('hide-shaper');
-  } else {
-    document.body.classList.add('hide-shaper');
+  const peerIds = discoverPeerIds(parsed.headers);
+  if (peerIds.length === 0) {
+    const empty = document.createElement("p");
+    empty.textContent = "No peer columns discovered in CSV header.";
+    scenarioBlock.appendChild(empty);
+    return;
   }
+
+  peerIds.forEach((peerId, idx) => {
+    const peerTitle = document.createElement("h4");
+    peerTitle.textContent = `${peerId}`;
+    scenarioBlock.appendChild(peerTitle);
+
+    const chartDiv = document.createElement("div");
+    chartDiv.id = `${scenario.id}_${scenario.profile}_${peerId}_${idx}`;
+    chartDiv.style.width = "100%";
+    chartDiv.style.height = "280px";
+    scenarioBlock.appendChild(chartDiv);
+
+    const visibility = buildPeerVisibilityFromScenario(scenarioSource, peerId);
+    const result = buildPeerSeries(parsed.rows, peerId, visibility);
+    createChart(chartDiv.id, `${scenario.title} - ${peerId}`, result.series, { hasGridIE: result.hasGridIE });
+  });
+
+}
+
+async function fetchIndex(indexPath = "output/index.json") {
+  const response = await fetch(indexPath, { cache: "no-store" });
+  if (!response.ok) {
+    throw new Error(`Failed to load ${indexPath}: ${response.status}`);
+  }
+  return response.json();
+}
+
+async function fetchProfiles(indexPath = "output/index.json") {
+  const index = await fetchIndex(indexPath);
+  const set = new Set((index.scenarios || []).map((s) => s.profile).filter(Boolean));
+  return Array.from(set).sort();
+}
+
+async function fetchProfilesForCategory(category, indexPath = "output/index.json") {
+  const index = await fetchIndex(indexPath);
+  const set = new Set(
+    (index.scenarios || [])
+      .filter((s) => s.category === category)
+      .map((s) => s.profile)
+      .filter(Boolean)
+  );
+  return Array.from(set).sort();
+}
+
+async function fetchCategories(indexPath = "output/index.json") {
+  const index = await fetchIndex(indexPath);
+  const set = new Set((index.scenarios || []).map((s) => s.category).filter(Boolean));
+  return Array.from(set).sort();
+}
+
+function groupByCategory(scenarios) {
+  const grouped = {};
+  scenarios.forEach((s) => {
+    if (!grouped[s.category]) {
+      grouped[s.category] = [];
+    }
+    grouped[s.category].push(s);
+  });
+  return grouped;
+}
+
+async function renderIndex(targetId, profile, indexPath = "output/index.json") {
+  const root = document.getElementById(targetId);
+  root.innerHTML = "";
+
+  const index = await fetchIndex(indexPath);
+  const scenarios = index.scenarios || [];
+  let filtered = scenarios.filter((s) => s.profile === profile);
+  if (filtered.length === 0) {
+    filtered = scenarios;
+  }
+
+  if (filtered.length === 0) {
+    const empty = document.createElement("p");
+    empty.textContent = "No scenarios available. Run run_simulations.py or use interactive run first.";
+    root.appendChild(empty);
+    return;
+  }
+
+  const grouped = groupByCategory(filtered);
+
+  for (const category of Object.keys(grouped).sort()) {
+    const section = document.createElement("section");
+    const title = document.createElement("h2");
+    title.textContent = category;
+    section.appendChild(title);
+    root.appendChild(section);
+
+    for (const scenario of grouped[category]) {
+      await renderScenario(section, scenario);
+    }
+  }
+}
+
+async function renderCategory(targetId, category, profiles, indexPath = "output/index.json") {
+  const root = document.getElementById(targetId);
+  root.innerHTML = "";
+
+  const index = await fetchIndex(indexPath);
+  const scenarios = (index.scenarios || []).filter((s) => s.category === category);
+
+  const selectedProfiles = Array.isArray(profiles)
+    ? profiles.filter(Boolean)
+    : (profiles ? [profiles] : []);
+
+  const filtered = selectedProfiles.length > 0
+    ? scenarios.filter((s) => selectedProfiles.includes(s.profile))
+    : scenarios;
+
+  if (filtered.length === 0) {
+    const empty = document.createElement("p");
+    empty.textContent = "No scenarios available for the selected profiles.";
+    root.appendChild(empty);
+    return;
+  }
+
+  for (const scenario of filtered) {
+    await renderScenario(root, scenario);
+  }
+}
+
+async function runInteractiveSimulation(overrides) {
+  await fetch("/simulation", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(overrides || {}),
+  });
 }

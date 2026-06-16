@@ -1,0 +1,45 @@
+{
+  "meta": {
+    "id": "shaper_data_shaper_minpause_600s",
+    "title": "Shaper: Data Shaper (minpause_600s)",
+    "category": "shaper",
+    "profile": "minpause_600s"
+  },
+  "simulation": {
+    "duration": 7200,
+    "tick_interval": 5,
+    "start_time": "2023-12-17T13:25:00Z"
+  },
+  "config": {
+    "divert_enabled": false,
+    "current_shaper_enabled": true,
+    "current_shaper_max_pwr": 5000,
+    "current_shaper_min_pause_time": 600
+  },
+  "peers": [
+    {
+      "id": "evse-001",
+      "voltage": 240,
+      "min_current": 6,
+      "max_current": 32,
+      "ev": {
+        "battery_capacity_kwh": 100,
+        "initial_soc": 10,
+        "max_charge_rate_kw": 7.2
+      },
+      "initial": {
+        "online": true,
+        "vehicle": true
+      },
+      "inputs": {
+        "live_pwr": {
+          "csv": "../data_shaper.csv",
+          "time_column": 0,
+          "column": 1,
+          "skip_header": true,
+          "separator": ";"
+        }
+      }
+    }
+  ]
+}
