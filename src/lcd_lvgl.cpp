@@ -13,12 +13,17 @@
 #include "emonesp.h"
 #include "lcd.h"
 #include "openevse.h"
+#include "app_config.h"   // esp_hostname
 #include "lvgl_tft/lvgl_panel.h"
+#include "lvgl_tft/boot_screen.h"
 #include "lvgl_tft/charge_screen.h"
 
 #ifndef LCD_BACKLIGHT_PIN
 #define LCD_BACKLIGHT_PIN TFT_BL
 #endif
+
+// How long the startup splash shows before handing off to the charge screen.
+#define BOOT_SPLASH_MS 4000
 
 // --- Message inner class (mechanics identical to the TFT_eSPI LcdTask) ---
 
@@ -154,7 +159,9 @@ unsigned long LcdTask::loop(MicroTasks::WakeReason reason)
     DBUGVAR(ESP.getFreeHeap());
     _displayOk = lvgl_panel_begin();
     if(_displayOk) {
-      charge_screen_build();
+      boot_screen_build();
+      _booting = true;
+      _bootStart = millis();
       pinMode(LCD_BACKLIGHT_PIN, OUTPUT);
 #ifdef TFT_BACKLIGHT_TIMEOUT_MS
       wakeBacklight();
@@ -175,6 +182,30 @@ unsigned long LcdTask::loop(MicroTasks::WakeReason reason)
   }
   if(!_msg_cleared && millis() >= _nextMessageTime) {
     clearMessageLines();
+  }
+
+  // Combined transient message string (shown by both the boot splash and charge screen).
+  char ml[2 * LCD_MAX_LEN + 4];
+  ml[0] = '\0';
+  if(!_msg_cleared) {
+    if(_msg[0][0] && _msg[1][0])      snprintf(ml, sizeof(ml), "%s  %s", _msg[0], _msg[1]);
+    else if(_msg[0][0])               snprintf(ml, sizeof(ml), "%s", _msg[0]);
+    else if(_msg[1][0])               snprintf(ml, sizeof(ml), "%s", _msg[1]);
+  }
+
+  // Boot splash: fill the progress bar over BOOT_SPLASH_MS, then hand off to the
+  // charge screen (build it, load it, delete the splash).
+  if(_booting) {
+    uint32_t el = millis() - _bootStart;
+    boot_screen_update((int)(el * 100 / BOOT_SPLASH_MS), ml);
+    lv_timer_handler();
+    if(el >= BOOT_SPLASH_MS) {
+      charge_screen_build();
+      boot_screen_destroy();
+      _booting = false;
+      return 50;
+    }
+    return 120;
   }
 
   // Assemble a full snapshot from EvseManager + WiFi + clock.
@@ -204,14 +235,13 @@ unsigned long LcdTask::loop(MicroTasks::WakeReason reason)
   strftime(dt, sizeof(dt), "%Y-%m-%d  %H:%M:%S", &ti);
   d.datetime = dt;
 
-  char ml[2 * LCD_MAX_LEN + 4];
-  ml[0] = '\0';
-  if(!_msg_cleared) {
-    if(_msg[0][0] && _msg[1][0])      snprintf(ml, sizeof(ml), "%s  %s", _msg[0], _msg[1]);
-    else if(_msg[0][0])               snprintf(ml, sizeof(ml), "%s", _msg[0]);
-    else if(_msg[1][0])               snprintf(ml, sizeof(ml), "%s", _msg[1]);
-  }
-  d.msg_line = ml;
+  // Bottom row: hostname (left) + IP (right). A transient message overrides both.
+  char ipbuf[20];
+  IPAddress ip = _wifi_client ? WiFi.localIP() : WiFi.softAPIP();
+  snprintf(ipbuf, sizeof(ipbuf), "%s", ip.toString().c_str());
+  d.hostname = esp_hostname.c_str();
+  d.ip = ipbuf;
+  d.msg_line = (!_msg_cleared && ml[0]) ? ml : "";
 
   charge_screen_update(d);
 

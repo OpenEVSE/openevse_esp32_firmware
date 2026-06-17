@@ -55,6 +55,8 @@ class LcdTask : public MicroTasks::Task
 
     bool _initialise = true;
     bool _displayOk = false;
+    bool _booting = false;       // showing the boot splash before the charge screen
+    uint32_t _bootStart = 0;
 
     // Transient message lines (set via display(); auto-cleared after their time).
     char _msg[LCD_MAX_LINES][LCD_MAX_LEN + 1];

@@ -21,18 +21,20 @@
 #define RING_FULL_SCALE_A 48.0f
 
 static lv_obj_t *arc          = nullptr;
-static lv_obj_t *big_value    = nullptr;  // kW (charging) or A (idle)
-static lv_obj_t *big_unit     = nullptr;
-static lv_obj_t *status_word  = nullptr;
+static lv_obj_t *big_value    = nullptr;  // kW number, centre of ring (charging only)
+static lv_obj_t *big_unit     = nullptr;  // "kW" (charging only)
+static lv_obj_t *center_state = nullptr;  // state word in ring centre (not charging)
+static lv_obj_t *pilot_lbl    = nullptr;  // pilot / allowed current, below the ring
 static lv_obj_t *datetime_lbl = nullptr;
-static lv_obj_t *topright_lbl = nullptr;  // temp + wifi + car
-static lv_obj_t *msg_lbl      = nullptr;
+static lv_obj_t *topright_lbl = nullptr;  // temp + wifi% + car
+static lv_obj_t *msg_lbl      = nullptr;  // transient message (bottom-centre)
+static lv_obj_t *host_lbl     = nullptr;  // hostname (bottom-left)
+static lv_obj_t *ip_lbl       = nullptr;  // IP (bottom-right)
 static lv_obj_t *elapsed_val  = nullptr;
 static lv_obj_t *delivered_val= nullptr;
 static lv_obj_t *va_val       = nullptr;
 
-// One stat tile: a rounded card with a dim title and a bright value. Returns the
-// value label via value_out.
+// One stat tile: a rounded card with a dim title and a bright value.
 static void make_tile(lv_obj_t *parent, const char *title, lv_obj_t **value_out,
                       lv_coord_t x, lv_coord_t y, lv_coord_t w, lv_coord_t h)
 {
@@ -42,7 +44,7 @@ static void make_tile(lv_obj_t *parent, const char *title, lv_obj_t **value_out,
   lv_obj_set_style_bg_color(tile, COL_CARD, 0);
   lv_obj_set_style_border_width(tile, 0, 0);
   lv_obj_set_style_radius(tile, 10, 0);
-  lv_obj_set_style_pad_all(tile, 8, 0);
+  lv_obj_set_style_pad_all(tile, 10, 0);
   lv_obj_clear_flag(tile, LV_OBJ_FLAG_SCROLLABLE);
 
   lv_obj_t *t = lv_label_create(tile);
@@ -61,7 +63,10 @@ static void make_tile(lv_obj_t *parent, const char *title, lv_obj_t **value_out,
 
 void charge_screen_build()
 {
-  lv_obj_t *scr = lv_scr_act();
+  // Own LVGL screen, loaded now (the boot splash is on a separate screen that the
+  // caller deletes after this returns).
+  lv_obj_t *scr = lv_obj_create(NULL);
+  lv_scr_load(scr);
   lv_obj_set_style_bg_color(scr, COL_BG, 0);
   lv_obj_clear_flag(scr, LV_OBJ_FLAG_SCROLLABLE);
 
@@ -78,7 +83,7 @@ void charge_screen_build()
   lv_obj_set_style_text_font(topright_lbl, &lv_font_montserrat_14, 0);
   lv_obj_align(topright_lbl, LV_ALIGN_TOP_RIGHT, -12, 8);
 
-  // --- Power ring + big value (left) ---
+  // --- Power ring (left) ---
   arc = lv_arc_create(scr);
   lv_obj_set_size(arc, 200, 200);
   lv_obj_align(arc, LV_ALIGN_LEFT_MID, 18, 8);
@@ -93,37 +98,62 @@ void charge_screen_build()
   lv_obj_set_style_arc_color(arc, COL_CARD, LV_PART_MAIN);
   lv_obj_set_style_arc_color(arc, COL_ACCENT, LV_PART_INDICATOR);
 
+  // --- Ring centre: state word (idle) OR big kW value (charging) ---
+  center_state = lv_label_create(scr);
+  lv_label_set_long_mode(center_state, LV_LABEL_LONG_WRAP);
+  lv_obj_set_width(center_state, 180);
+  lv_obj_set_style_text_align(center_state, LV_TEXT_ALIGN_CENTER, 0);
+  lv_label_set_text(center_state, "");
+  lv_obj_set_style_text_color(center_state, COL_ACCENT, 0);
+  lv_obj_set_style_text_font(center_state, &lv_font_montserrat_28, 0);
+  lv_obj_align_to(center_state, arc, LV_ALIGN_CENTER, 0, 0);
+
   big_value = lv_label_create(scr);
   lv_label_set_text(big_value, "0.00");
   lv_obj_set_style_text_color(big_value, COL_TEXT, 0);
   lv_obj_set_style_text_font(big_value, &lv_font_montserrat_48, 0);
-  lv_obj_align_to(big_value, arc, LV_ALIGN_CENTER, 0, -10);
+  lv_obj_align_to(big_value, arc, LV_ALIGN_CENTER, 0, -12);
+  lv_obj_add_flag(big_value, LV_OBJ_FLAG_HIDDEN);
 
   big_unit = lv_label_create(scr);
   lv_label_set_text(big_unit, "kW");
   lv_obj_set_style_text_color(big_unit, COL_DIM, 0);
   lv_obj_set_style_text_font(big_unit, &lv_font_montserrat_20, 0);
   lv_obj_align_to(big_unit, big_value, LV_ALIGN_OUT_BOTTOM_MID, 0, 4);
+  lv_obj_add_flag(big_unit, LV_OBJ_FLAG_HIDDEN);
 
-  // --- Status word (top of right column) ---
-  status_word = lv_label_create(scr);
-  lv_label_set_text(status_word, "");
-  lv_obj_set_style_text_color(status_word, COL_ACCENT, 0);
-  lv_obj_set_style_text_font(status_word, &lv_font_montserrat_28, 0);
-  lv_obj_align(status_word, LV_ALIGN_TOP_RIGHT, -16, 34);
+  // Pilot / allowed charge current, directly below the ring (shown in all states).
+  pilot_lbl = lv_label_create(scr);
+  lv_label_set_text(pilot_lbl, "");
+  lv_obj_set_style_text_color(pilot_lbl, COL_DIM, 0);
+  lv_obj_set_style_text_font(pilot_lbl, &lv_font_montserrat_20, 0);
+  lv_obj_align_to(pilot_lbl, arc, LV_ALIGN_OUT_BOTTOM_MID, 0, -14);
 
   // --- Stat tiles (right column) ---
-  const lv_coord_t TX = 250, TW = 214, TH = 56;
-  make_tile(scr, "ELAPSED",   &elapsed_val,   TX, 74,  TW, TH);
-  make_tile(scr, "DELIVERED", &delivered_val, TX, 138, TW, TH);
-  make_tile(scr, "VOLTS / AMPS", &va_val,     TX, 202, TW, TH);
+  const lv_coord_t TX = 248, TW = 226, TH = 70;
+  make_tile(scr, "ELAPSED",      &elapsed_val,   TX, 54,  TW, TH);
+  make_tile(scr, "DELIVERED",    &delivered_val, TX, 132, TW, TH);
+  make_tile(scr, "VOLTS / AMPS", &va_val,        TX, 210, TW, TH);
 
-  // --- Message line (bottom) ---
+  // --- Bottom row: hostname (left), IP (right), transient message (centre) ---
+  host_lbl = lv_label_create(scr);
+  lv_label_set_text(host_lbl, "");
+  lv_obj_set_style_text_color(host_lbl, COL_DIM, 0);
+  lv_obj_set_style_text_font(host_lbl, &lv_font_montserrat_14, 0);
+  lv_obj_align(host_lbl, LV_ALIGN_BOTTOM_LEFT, 12, -6);
+
+  ip_lbl = lv_label_create(scr);
+  lv_label_set_text(ip_lbl, "");
+  lv_obj_set_style_text_color(ip_lbl, COL_DIM, 0);
+  lv_obj_set_style_text_font(ip_lbl, &lv_font_montserrat_14, 0);
+  lv_obj_align(ip_lbl, LV_ALIGN_BOTTOM_RIGHT, -12, -6);
+
   msg_lbl = lv_label_create(scr);
   lv_label_set_text(msg_lbl, "");
-  lv_obj_set_style_text_color(msg_lbl, COL_DIM, 0);
+  lv_obj_set_style_text_color(msg_lbl, COL_TEXT, 0);
   lv_obj_set_style_text_font(msg_lbl, &lv_font_montserrat_14, 0);
   lv_obj_align(msg_lbl, LV_ALIGN_BOTTOM_MID, 0, -6);
+  lv_obj_add_flag(msg_lbl, LV_OBJ_FLAG_HIDDEN);
 }
 
 // Map EVSE state -> status word + accent colour.
@@ -148,16 +178,42 @@ static const char *state_word(uint8_t s, lv_color_t *colour)
   }
 }
 
+// RSSI (dBm) -> signal %, the usual piecewise mapping.
+static int wifi_percent(int rssi)
+{
+  if (rssi <= -100) return 0;
+  if (rssi >= -50)  return 100;
+  return 2 * (rssi + 100);
+}
+
 void charge_screen_update(const ChargeScreenData &d)
 {
   char buf[48];
 
-  // Status word + colour, ring colour follows.
+  // State -> ring colour. Charging shows kW in the centre; everything else shows
+  // the state word in the centre (the headline when there's no live power).
   lv_color_t accent;
   const char *word = state_word(d.evse_state, &accent);
-  lv_label_set_text(status_word, word);
-  lv_obj_set_style_text_color(status_word, accent, 0);
   lv_obj_set_style_arc_color(arc, accent, LV_PART_INDICATOR);
+
+  if (d.charging) {
+    lv_obj_add_flag(center_state, LV_OBJ_FLAG_HIDDEN);
+    lv_obj_clear_flag(big_value, LV_OBJ_FLAG_HIDDEN);
+    lv_obj_clear_flag(big_unit, LV_OBJ_FLAG_HIDDEN);
+    if (d.power_kw < 10)       snprintf(buf, sizeof(buf), "%.2f", d.power_kw);
+    else if (d.power_kw < 100) snprintf(buf, sizeof(buf), "%.1f", d.power_kw);
+    else                       snprintf(buf, sizeof(buf), "%.0f", d.power_kw);
+    lv_label_set_text(big_value, buf);
+    lv_obj_align_to(big_value, arc, LV_ALIGN_CENTER, 0, -12);
+    lv_obj_align_to(big_unit, big_value, LV_ALIGN_OUT_BOTTOM_MID, 0, 4);
+  } else {
+    lv_obj_add_flag(big_value, LV_OBJ_FLAG_HIDDEN);
+    lv_obj_add_flag(big_unit, LV_OBJ_FLAG_HIDDEN);
+    lv_obj_clear_flag(center_state, LV_OBJ_FLAG_HIDDEN);
+    lv_label_set_text(center_state, word);
+    lv_obj_set_style_text_color(center_state, accent, 0);
+    lv_obj_align_to(center_state, arc, LV_ALIGN_CENTER, 0, 0);
+  }
 
   // Ring: actual amps when charging, else the pilot setpoint, as % of full scale.
   float ring_a = d.charging ? d.amps : (float)d.pilot_a;
@@ -165,30 +221,20 @@ void charge_screen_update(const ChargeScreenData &d)
   if (ring < 0) ring = 0; else if (ring > 100) ring = 100;
   lv_arc_set_value(arc, ring);
 
-  // Center value: kW when charging, pilot A otherwise.
-  if (d.charging) {
-    if (d.power_kw < 10)      snprintf(buf, sizeof(buf), "%.2f", d.power_kw);
-    else if (d.power_kw < 100) snprintf(buf, sizeof(buf), "%.1f", d.power_kw);
-    else                       snprintf(buf, sizeof(buf), "%.0f", d.power_kw);
-    lv_label_set_text(big_value, buf);
-    lv_label_set_text(big_unit, "kW");
-  } else {
-    snprintf(buf, sizeof(buf), "%d", d.pilot_a);
-    lv_label_set_text(big_value, buf);
-    lv_label_set_text(big_unit, "A");
-  }
-  lv_obj_align_to(big_value, arc, LV_ALIGN_CENTER, 0, -10);
-  lv_obj_align_to(big_unit, big_value, LV_ALIGN_OUT_BOTTOM_MID, 0, 4);
+  // Pilot / allowed current, below the ring (always).
+  snprintf(buf, sizeof(buf), "Pilot %dA", d.pilot_a);
+  lv_label_set_text(pilot_lbl, buf);
+  lv_obj_align_to(pilot_lbl, arc, LV_ALIGN_OUT_BOTTOM_MID, 0, -14);
 
   // Top-left: date/time.
   lv_label_set_text(datetime_lbl, d.datetime ? d.datetime : "");
 
-  // Top-right: temp + wifi + car, space-separated.
+  // Top-right: temp + wifi% + car.
   char tr[48]; tr[0] = '\0';
   size_t n = 0;
   if (d.temp_valid) n += snprintf(tr + n, sizeof(tr) - n, "%.1fC  ", d.temp_c);
   if (d.wifi_client) {
-    if (d.wifi_connected) n += snprintf(tr + n, sizeof(tr) - n, LV_SYMBOL_WIFI " %d", d.rssi);
+    if (d.wifi_connected) n += snprintf(tr + n, sizeof(tr) - n, LV_SYMBOL_WIFI " %d%%", wifi_percent(d.rssi));
     else                  n += snprintf(tr + n, sizeof(tr) - n, LV_SYMBOL_WIFI " --");
   } else {
     n += snprintf(tr + n, sizeof(tr) - n, "AP:%d", d.sta_count);
@@ -208,8 +254,20 @@ void charge_screen_update(const ChargeScreenData &d)
   snprintf(buf, sizeof(buf), "%.0fV  %.1fA", d.volts, d.amps);
   lv_label_set_text(va_val, buf);
 
-  // Message line.
-  lv_label_set_text(msg_lbl, (d.msg_line && d.msg_line[0]) ? d.msg_line : "");
+  // Bottom row: a transient message takes over the centre and hides host/IP;
+  // otherwise hostname (left) + IP (right).
+  if (d.msg_line && d.msg_line[0]) {
+    lv_label_set_text(msg_lbl, d.msg_line);
+    lv_obj_clear_flag(msg_lbl, LV_OBJ_FLAG_HIDDEN);
+    lv_obj_add_flag(host_lbl, LV_OBJ_FLAG_HIDDEN);
+    lv_obj_add_flag(ip_lbl, LV_OBJ_FLAG_HIDDEN);
+  } else {
+    lv_obj_add_flag(msg_lbl, LV_OBJ_FLAG_HIDDEN);
+    lv_obj_clear_flag(host_lbl, LV_OBJ_FLAG_HIDDEN);
+    lv_obj_clear_flag(ip_lbl, LV_OBJ_FLAG_HIDDEN);
+    lv_label_set_text(host_lbl, d.hostname ? d.hostname : "");
+    lv_label_set_text(ip_lbl, d.ip ? d.ip : "");
+  }
 }
 
 #endif // ENABLE_SCREEN_LVGL_TFT

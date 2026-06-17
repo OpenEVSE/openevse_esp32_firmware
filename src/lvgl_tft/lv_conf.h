@@ -44,8 +44,9 @@
 // lv_label_set_text_fmt()/lv_snprintf need this for %f.
 #define LV_SPRINTF_USE_FLOAT 1
 
-// Widgets used: label, arc.
+// Widgets used: label, arc, bar (boot-splash progress).
 #define LV_USE_ARC 1
 #define LV_USE_LABEL 1
+#define LV_USE_BAR 1
 
 #endif // LV_CONF_H

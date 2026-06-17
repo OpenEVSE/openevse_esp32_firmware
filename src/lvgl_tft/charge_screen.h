@@ -27,7 +27,9 @@ struct ChargeScreenData {
   int      rssi;              // STA dBm (valid when wifi_client && connected)
   int      sta_count;         // AP connected stations (valid when !wifi_client)
   const char *datetime;       // "YYYY-MM-DD HH:MM:SS"
-  const char *msg_line;       // transient message (boot/OTA/status); "" when none
+  const char *hostname;       // bottom-left
+  const char *ip;             // bottom-right
+  const char *msg_line;       // transient message (boot/OTA/status); "" when none — overrides host/ip
 };
 
 // Build the widget tree on the active LVGL screen. Call once after lvgl_panel_begin().
