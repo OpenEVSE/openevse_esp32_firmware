@@ -104,6 +104,7 @@ void create_rapi_json(JsonDocument &doc)
   }
   doc["amp"] = evse.getAmps() * AMPS_SCALE_FACTOR;
   doc["voltage"] = evse.getVoltage() * VOLTS_SCALE_FACTOR;
+  doc["frequency"] = evse.getFrequency();
   doc["power"] = evse.getPower() * POWER_SCALE_FACTOR;
   doc["pilot"] = evse.getChargeCurrent();
   doc["max_current"] = evse.getMaxCurrent();

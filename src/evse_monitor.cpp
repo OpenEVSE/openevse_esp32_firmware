@@ -172,7 +172,12 @@ EvseMonitor::EvseMonitor(OpenEVSEClass &openevse) :
   _panic_temperature(72),
   _heartbeat_interval(EVSE_HEATBEAT_INTERVAL),
   _heartbeat_current(EVSE_HEARTBEAT_CURRENT),
-  _sender(nullptr)
+  _sender(nullptr),
+  _frequency(0),
+  _relay_dc1(true),
+  _relay_dc2(true),
+  _relay_ac(true),
+  _chip_id("")
 {
 }
 
@@ -256,6 +261,10 @@ void EvseMonitor::evseBoot(const char *firmware)
     }
   });
 
+  readChipId();
+  readRelayStatus();
+  readFrequency();
+
 #ifndef DISABLE_HEARTBEAT
   _openevse.heartbeatEnable(EVSE_HEATBEAT_INTERVAL, EVSE_HEARTBEAT_CURRENT, [this](int ret, int interval, int current, int triggered) {
     _heartbeat = RAPI_RESPONSE_OK == ret;
@@ -296,6 +305,11 @@ void EvseMonitor::updateEvseState(uint8_t evse_state, uint8_t pilot_state, uint3
     if(!isCharging()) {
       _amp = 0;
       _power = 0;
+      // Read voltage and frequency after relay opens
+      if(_sender) {
+        getChargeCurrentAndVoltageFromEvse();
+        readFrequency();
+      }
     }
     _session_complete.update(getFlags());
   }
@@ -572,6 +586,8 @@ void EvseMonitor::setVoltage(double volts, std::function<void(int ret)> callback
         StaticJsonDocument<128> event;
         event["voltage"] = _voltage;
         event_send(event);
+        // Read back confirmed voltage from EVSE via $GV
+        getChargeCurrentAndVoltageFromEvse();
       }
 
       if(callback) {
@@ -927,6 +943,90 @@ void EvseMonitor::getAmmeterSettings()
       DBUGF("scale = %ld, offset = %ld", scale, offset);
       _current_sensor_scale = scale;
       _current_sensor_offset = offset;
+    }
+  });
+}
+
+void EvseMonitor::enablePPAutoAmpacity(bool enabled, std::function<void(int ret)> callback)
+{
+  if(isPPAutoAmpacityEnabled() != enabled) {
+    enableFeature('P', enabled, callback);
+  }
+}
+
+void EvseMonitor::enableZeroCrossSwitch(bool enabled, std::function<void(int ret)> callback)
+{
+  if(isZeroCrossSwitchEnabled() != enabled) {
+    enableFeature('Z', enabled, callback);
+  }
+}
+
+void EvseMonitor::setRelayEnable(int relay, bool enabled, std::function<void(int ret)> callback)
+{
+  if(!_sender) {
+    if(callback) callback(RAPI_RESPONSE_NK);
+    return;
+  }
+  char command[16];
+  snprintf(command, sizeof(command), "$SR %d %d", relay, enabled ? 1 : 0);
+  _sender->sendCmd(command, [this, relay, enabled, callback](int ret) {
+    if(RAPI_RESPONSE_OK == ret) {
+      if(relay == 1) _relay_dc1 = enabled;
+      else if(relay == 2) _relay_dc2 = enabled;
+      else if(relay == 3) _relay_ac = enabled;
+    }
+    if(callback) callback(ret);
+  });
+}
+
+void EvseMonitor::resetFaultCounters(std::function<void(int ret)> callback)
+{
+  if(!_sender) {
+    if(callback) callback(RAPI_RESPONSE_NK);
+    return;
+  }
+  _sender->sendCmd("$FC", [this, callback](int ret) {
+    if(RAPI_RESPONSE_OK == ret) {
+      _gfci_count = 0;
+      _nognd_count = 0;
+      _stuck_count = 0;
+    }
+    if(callback) callback(ret);
+  });
+}
+
+void EvseMonitor::readFrequency()
+{
+  if(!_sender) return;
+  _sender->sendCmd("$GZ", [this](int ret) {
+    if(RAPI_RESPONSE_OK == ret && _sender->getTokenCnt() >= 2) {
+      _frequency = (uint32_t)strtoul(_sender->getToken(1), NULL, 10);
+      DBUGF("frequency = %u (×100 Hz)", _frequency);
+    }
+  });
+}
+
+void EvseMonitor::readRelayStatus()
+{
+  if(!_sender) return;
+  _sender->sendCmd("$GR", [this](int ret) {
+    if(RAPI_RESPONSE_OK == ret && _sender->getTokenCnt() >= 4) {
+      _relay_dc1 = strtol(_sender->getToken(1), NULL, 10) != 0;
+      _relay_dc2 = strtol(_sender->getToken(2), NULL, 10) != 0;
+      _relay_ac  = strtol(_sender->getToken(3), NULL, 10) != 0;
+      DBUGF("relay dc1=%d dc2=%d ac=%d", _relay_dc1, _relay_dc2, _relay_ac);
+    }
+  });
+}
+
+void EvseMonitor::readChipId()
+{
+  if(!_sender) return;
+  _sender->sendCmd("$GI", [this](int ret) {
+    if(RAPI_RESPONSE_OK == ret && _sender->getTokenCnt() >= 2) {
+      // Token already has checksum stripped by RapiSender tokenizer
+      snprintf(_chip_id, sizeof(_chip_id), "%s", _sender->getToken(1));
+      DBUGF("chip_id = %s", _chip_id);
     }
   });
 }

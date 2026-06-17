@@ -585,6 +585,56 @@ bool config_deserialize(DynamicJsonDocument &doc)
     }
   }
 
+  if(doc.containsKey("pp_auto"))
+  {
+    bool enable = doc["pp_auto"];
+    if(enable != evse.isPPAutoAmpacityEnabled()) {
+      evse.enablePPAutoAmpacity(enable);
+      config_modified = true;
+      DBUGLN("pp_auto changed");
+    }
+  }
+
+  if(doc.containsKey("zero_cross"))
+  {
+    bool enable = doc["zero_cross"];
+    if(enable != evse.isZeroCrossSwitchEnabled()) {
+      evse.enableZeroCrossSwitch(enable);
+      config_modified = true;
+      DBUGLN("zero_cross changed");
+    }
+  }
+
+  if(doc.containsKey("relay_dc1"))
+  {
+    bool enable = doc["relay_dc1"];
+    if(enable != evse.isDC1RelayEnabled()) {
+      evse.setRelayEnable(1, enable);
+      config_modified = true;
+      DBUGLN("relay_dc1 changed");
+    }
+  }
+
+  if(doc.containsKey("relay_dc2"))
+  {
+    bool enable = doc["relay_dc2"];
+    if(enable != evse.isDC2RelayEnabled()) {
+      evse.setRelayEnable(2, enable);
+      config_modified = true;
+      DBUGLN("relay_dc2 changed");
+    }
+  }
+
+  if(doc.containsKey("relay_ac"))
+  {
+    bool enable = doc["relay_ac"];
+    if(enable != evse.isACRelayEnabled()) {
+      evse.setRelayEnable(3, enable);
+      config_modified = true;
+      DBUGLN("relay_ac changed");
+    }
+  }
+
   if(doc.containsKey("heartbeat_interval") || doc.containsKey("heartbeat_current"))
   {
     uint32_t interval = doc.containsKey("heartbeat_interval") ? (uint32_t)doc["heartbeat_interval"] : heartbeat_interval_cfg;
@@ -703,6 +753,12 @@ bool config_serialize(DynamicJsonDocument &doc, bool longNames, bool compactOutp
     doc["over_temp_shutdown"] = over_temp_shutdown;
     doc["front_button"] = evse.isFrontButtonEnabled();
     doc["boot_lock"] = evse.isBootLockEnabled();
+    doc["pp_auto"] = evse.isPPAutoAmpacityEnabled();
+    doc["zero_cross"] = evse.isZeroCrossSwitchEnabled();
+    doc["relay_dc1"] = evse.isDC1RelayEnabled();
+    doc["relay_dc2"] = evse.isDC2RelayEnabled();
+    doc["relay_ac"]  = evse.isACRelayEnabled();
+    doc["chip_id"] = evse.getChipId();
     doc["heartbeat_interval"] = evse.getHeartbeatInterval();
     doc["heartbeat_current"] = evse.getHeartbeatCurrent();
     doc["voltage"] = voltage_cfg;

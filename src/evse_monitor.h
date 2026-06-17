@@ -156,6 +156,13 @@ class EvseMonitor : public MicroTasks::Task
     uint32_t _heartbeat_current;
     RapiSender *_sender;
 
+    // Extended state (linco-work firmware)
+    uint32_t _frequency;          // AC line frequency × 100 (from $GZ)
+    bool _relay_dc1;              // DC relay 1 enabled
+    bool _relay_dc2;              // DC relay 2 enabled
+    bool _relay_ac;               // AC relay enabled
+    char _chip_id[48];            // EVSE chip ID from $GI
+
     DataReady _data_ready;
     DataReady _boot_ready;
     StateChangeEvent _session_complete;
@@ -181,6 +188,9 @@ class EvseMonitor : public MicroTasks::Task
     void getStatusFromEvse(bool allowStart = true);
     void getChargeCurrentAndVoltageFromEvse();
     void getTemperatureFromEvse();
+    void readFrequency();
+    void readRelayStatus();
+    void readChipId();
 
   protected:
     void setup();
@@ -225,6 +235,10 @@ class EvseMonitor : public MicroTasks::Task
     void setPanicTemperature(uint32_t tempC, std::function<void(int ret)> callback = NULL);
     void enableFrontButton(bool enabled, std::function<void(int ret)> callback = NULL);
     void enableBootLock(bool enabled, std::function<void(int ret)> callback = NULL);
+    void enablePPAutoAmpacity(bool enabled, std::function<void(int ret)> callback = NULL);
+    void enableZeroCrossSwitch(bool enabled, std::function<void(int ret)> callback = NULL);
+    void setRelayEnable(int relay, bool enabled, std::function<void(int ret)> callback = NULL);
+    void resetFaultCounters(std::function<void(int ret)> callback = NULL);
     void setHeartbeatSupervision(uint32_t interval, uint32_t current, std::function<void(int ret)> callback = NULL);
     void verifyPilot();
 
@@ -371,9 +385,26 @@ class EvseMonitor : public MicroTasks::Task
 #ifndef OPENEVSE_ECF_BOOT_LOCK_DISABLED
 #define OPENEVSE_ECF_BOOT_LOCK_DISABLED 0x2000
 #endif
+#ifndef OPENEVSE_ECF_PP_AUTO_AMPACITY
+#define OPENEVSE_ECF_PP_AUTO_AMPACITY 0x0040
+#endif
+#ifndef OPENEVSE_ECF_RELAY_ZC_DISABLED
+#define OPENEVSE_ECF_RELAY_ZC_DISABLED 0x0800
+#endif
     bool isBootLockEnabled() {
       return 0 == (getSettingsFlags() & OPENEVSE_ECF_BOOT_LOCK_DISABLED);
     }
+    bool isPPAutoAmpacityEnabled() {
+      return OPENEVSE_ECF_PP_AUTO_AMPACITY == (getSettingsFlags() & OPENEVSE_ECF_PP_AUTO_AMPACITY);
+    }
+    bool isZeroCrossSwitchEnabled() {
+      return 0 == (getSettingsFlags() & OPENEVSE_ECF_RELAY_ZC_DISABLED);
+    }
+    bool isDC1RelayEnabled() { return _relay_dc1; }
+    bool isDC2RelayEnabled() { return _relay_dc2; }
+    bool isACRelayEnabled()  { return _relay_ac; }
+    uint32_t getFrequency()  { return _frequency; }
+    const char *getChipId()  { return _chip_id; }
     uint32_t getHeartbeatInterval() { return _heartbeat_interval; }
     uint32_t getHeartbeatCurrent() { return _heartbeat_current; }
     bool isHeartbeatEnabled() { return _heartbeat_current > 0; }

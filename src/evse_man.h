@@ -496,6 +496,29 @@ class EvseManager : public MicroTasks::Task
     void setHeartbeatSupervision(uint32_t interval, uint32_t current, std::function<void(int ret)> callback = NULL) {
       _monitor.setHeartbeatSupervision(interval, current, callback);
     }
+    bool isPPAutoAmpacityEnabled() {
+      return _monitor.isPPAutoAmpacityEnabled();
+    }
+    void enablePPAutoAmpacity(bool enabled, std::function<void(int ret)> callback = NULL) {
+      _monitor.enablePPAutoAmpacity(enabled, callback);
+    }
+    bool isZeroCrossSwitchEnabled() {
+      return _monitor.isZeroCrossSwitchEnabled();
+    }
+    void enableZeroCrossSwitch(bool enabled, std::function<void(int ret)> callback = NULL) {
+      _monitor.enableZeroCrossSwitch(enabled, callback);
+    }
+    bool isDC1RelayEnabled() { return _monitor.isDC1RelayEnabled(); }
+    bool isDC2RelayEnabled() { return _monitor.isDC2RelayEnabled(); }
+    bool isACRelayEnabled()  { return _monitor.isACRelayEnabled(); }
+    void setRelayEnable(int relay, bool enabled, std::function<void(int ret)> callback = NULL) {
+      _monitor.setRelayEnable(relay, enabled, callback);
+    }
+    void resetFaultCounters(std::function<void(int ret)> callback = NULL) {
+      _monitor.resetFaultCounters(callback);
+    }
+    uint32_t getFrequency() { return _monitor.getFrequency(); }
+    const char *getChipId() { return _monitor.getChipId(); }
     void restartEvse() {
       _monitor.restart();
     }
