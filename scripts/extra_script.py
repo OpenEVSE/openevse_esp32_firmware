@@ -88,9 +88,13 @@ def patch_sntp_client():
                                     "src", "MongooseSntpClient.cpp")):
         try:
             with open(candidate, "r") as f:
-                content = f.read()
-            if SNTP_PATCH_MARKER in content:
+                original = f.read()
+            if SNTP_PATCH_MARKER in original:
                 continue  # already patched
+            # Normalize trailing whitespace on each line before matching —
+            # some library versions have a trailing space on `if(NULL == _nc)`
+            # which would cause an exact-string match to silently fail.
+            content = "\n".join(line.rstrip() for line in original.splitlines())
             if OLD_GET_TIME not in content:
                 print("Warning: MongooseSntpClient patch target not found in %s" % candidate)
                 continue

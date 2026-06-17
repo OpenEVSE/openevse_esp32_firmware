@@ -111,7 +111,7 @@ void handleTimePost(MongooseHttpServerRequest *request, MongooseHttpServerRespon
 
 void handleTimeGet(MongooseHttpServerRequest *request, MongooseHttpServerResponseStream *response)
 {
-  DynamicJsonDocument doc(384);
+  DynamicJsonDocument doc(512);
   timeManager.serialise(doc);
   // NTP status fields
   doc["ntp_status"]    = timeManager.getNtpStatus();
@@ -119,6 +119,10 @@ void handleTimeGet(MongooseHttpServerRequest *request, MongooseHttpServerRespons
   int32_t nextMs = timeManager.getNextSyncMs();
   if(nextMs >= 0) {
     doc["ntp_next_sync_ms"] = nextMs;
+  }
+  const char *ip = timeManager.getResolvedIp();
+  if(ip && ip[0] != '\0') {
+    doc["ntp_server_ip"] = ip;
   }
   response->setCode(200);
   serializeJson(doc, *response);

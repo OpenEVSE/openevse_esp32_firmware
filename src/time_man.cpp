@@ -4,6 +4,7 @@
 
 #include <Arduino.h>
 #include <MongooseCore.h>
+#include <lwip/netdb.h>
 
 #include "debug.h"
 #include "time_man.h"
@@ -29,8 +30,10 @@ TimeManager::TimeManager() :
   _retryCount(0),
   _fetchingTime(false),
   _setTheTime(false),
-  _lastSyncTime(0)
+  _lastSyncTime(0),
+  _syncRequested(false)
 {
+  _resolvedIp[0] = '\0';
 }
 
 unsigned long TimeManager::retryDelay()
@@ -51,17 +54,17 @@ unsigned long TimeManager::retryDelay()
 
 const char *TimeManager::getNtpStatus()
 {
-  if (!_sntpEnabled)      return "disabled";
-  if (_fetchingTime)      return "connecting";
-  if (_retryCount > 0)    return "retry";
-  if (_lastSyncTime > 0)  return "synchronized";
+  if (!_sntpEnabled)                    return "disabled";
+  if (_fetchingTime || _syncRequested)  return "connecting";
+  if (_retryCount > 0)                  return "retry";
+  if (_lastSyncTime > 0)                return "synchronized";
   return "waiting";
 }
 
 int32_t TimeManager::getNextSyncMs()
 {
   if (!_sntpEnabled || _timeHost == NULL) return -1;
-  if (_fetchingTime)                      return 0;
+  if (_fetchingTime || _syncRequested)    return 0;   // pending/in-flight
   if (_nextCheckTime == 0)                return -1;
   int64_t diff = (int64_t)_nextCheckTime - (int64_t)millis();
   if (diff > INT32_MAX) return INT32_MAX;
@@ -125,6 +128,25 @@ void TimeManager::setup()
   _sntp.onError([this](uint8_t err) {
     DBUGF("NTP error %u (attempt %u)", err, _retryCount + 1);
     _fetchingTime = false;
+    // Distinguish DNS failure from other NTP errors (firewall, bad server, etc.)
+    // Only show "DNS failed" badge when DNS resolution itself fails.
+    if(_timeHost) {
+      struct addrinfo hints = {}, *res = nullptr;
+      hints.ai_family = AF_UNSPEC;
+      if(getaddrinfo(_timeHost, nullptr, &hints, &res) == 0 && res) {
+        void *addr = res->ai_family == AF_INET
+          ? (void *)&((struct sockaddr_in  *)res->ai_addr)->sin_addr
+          : (void *)&((struct sockaddr_in6 *)res->ai_addr)->sin6_addr;
+        inet_ntop(res->ai_family, addr, _resolvedIp, sizeof(_resolvedIp) - 1);
+        freeaddrinfo(res);
+      } else {
+        strncpy(_resolvedIp, "failed", sizeof(_resolvedIp) - 1);
+        _resolvedIp[sizeof(_resolvedIp) - 1] = '\0';
+      }
+    } else {
+      strncpy(_resolvedIp, "failed", sizeof(_resolvedIp) - 1);
+      _resolvedIp[sizeof(_resolvedIp) - 1] = '\0';
+    }
     unsigned long delay = retryDelay();
     _retryCount++;
     _nextCheckTime = millis() + delay;
@@ -204,7 +226,23 @@ unsigned long TimeManager::loop(MicroTasks::WakeReason reason)
     }
     else
     {
-      // Wake when the timeout expires so the watchdog above can fire
+      // Early DNS probe: populate _resolvedIp while the SNTP reply is still
+      // pending so the UI shows DNS status without waiting for the full cycle.
+      // Mongoose will have resolved the hostname before this fires (the UDP
+      // packet was already sent), so getaddrinfo() hits LwIP's DNS cache.
+      if(_resolvedIp[0] == '\0' && _timeHost) {
+        struct addrinfo hints = {}, *res = nullptr;
+        hints.ai_family = AF_UNSPEC;
+        if(getaddrinfo(_timeHost, nullptr, &hints, &res) == 0 && res) {
+          void *addr = res->ai_family == AF_INET
+            ? (void *)&((struct sockaddr_in  *)res->ai_addr)->sin_addr
+            : (void *)&((struct sockaddr_in6 *)res->ai_addr)->sin6_addr;
+          inet_ntop(res->ai_family, addr, _resolvedIp, sizeof(_resolvedIp) - 1);
+          freeaddrinfo(res);
+          DBUGF("NTP: early DNS probe → %s", _resolvedIp);
+        }
+      }
+      // Wake when the full watchdog deadline expires
       return (unsigned long)(SNTP_FETCH_TIMEOUT - elapsed);
     }
   }
@@ -220,7 +258,8 @@ unsigned long TimeManager::loop(MicroTasks::WakeReason reason)
       false == _fetchingTime &&
       delay <= 0)
     {
-      _fetchingTime = true;
+      _syncRequested = false;   // fetch is actually starting now
+      _fetchingTime  = true;
       _fetchStartTime = millis();
       _nextCheckTime = 0;
 
@@ -233,27 +272,44 @@ unsigned long TimeManager::loop(MicroTasks::WakeReason reason)
         _retryCount    = 0;
         _lastSyncTime  = newTime.tv_sec;   // use NTP ts directly
         _nextCheckTime = millis() + TIME_POLL_TIME;
+        // Resolve hostname → IP for status display (DNS is cached at this point)
+        if(_timeHost) {
+          struct addrinfo hints = {}, *res = nullptr;
+          hints.ai_family = AF_UNSPEC;
+          if(getaddrinfo(_timeHost, nullptr, &hints, &res) == 0 && res) {
+            void *addr = res->ai_family == AF_INET
+              ? (void *)&((struct sockaddr_in  *)res->ai_addr)->sin_addr
+              : (void *)&((struct sockaddr_in6 *)res->ai_addr)->sin6_addr;
+            inet_ntop(res->ai_family, addr, _resolvedIp, sizeof(_resolvedIp) - 1);
+            freeaddrinfo(res);
+          }
+        }
         MicroTask.wakeTask(this);
       });
 
       if(started)
       {
-        // Return the watchdog deadline so the task self-wakes if the
-        // callback never fires (stale _nc, DNS failure, dropped packet)
-        ret = SNTP_FETCH_TIMEOUT;
+        // Wake in 1 s for an early DNS probe while the SNTP request is
+        // in-flight.  By then Mongoose will have resolved the hostname and
+        // sent the UDP packet, so getaddrinfo() returns from LwIP's cache
+        // and we can show the DNS badge before the sync completes.
+        ret = 1000;
       }
       else
       {
-        // getTime() returned false — either the stale-_nc library patch
-        // hasn't been applied yet and _nc is non-NULL, or mg_sntp_get_time()
-        // itself failed transiently (no memory, DNS not yet ready, etc.).
-        // Don't increment _retryCount: no network request was actually sent
-        // so this isn't a server-side failure.  Retry in 2 s so the UI
-        // stays on "waiting"/"synchronized" rather than jumping to "retry".
-        DBUGLN("NTP: getTime() could not start, retrying in 2s");
+        // getTime() returned false — the MongooseSntpClient stale-_nc bug:
+        // after the first successful sync MG_EV_CLOSE never fires for UDP,
+        // so _nc stays non-NULL and every subsequent getTime() call returns
+        // false without sending any traffic.  No DNS attempt was made, so
+        // _resolvedIp is left untouched (already cleared by checkNow()) — the
+        // UI will show no DNS badge.  Increment _retryCount so status shows
+        // "retry" rather than falsely maintaining "synchronized".
+        DBUGLN("NTP: getTime() could not start (stale connection?), treating as failure");
         _fetchingTime = false;
-        _nextCheckTime = millis() + 2000;
-        ret = 2000;
+        unsigned long delay = retryDelay();
+        _retryCount++;
+        _nextCheckTime = millis() + delay;
+        ret = delay;
       }
     } else {
       ret = delay > 0 ? (unsigned long)delay : 0;

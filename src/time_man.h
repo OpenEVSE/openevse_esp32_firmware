@@ -23,6 +23,8 @@ class TimeManager : public MicroTasks::Task
     bool _setTheTime;
     bool _sntpEnabled;
     time_t _lastSyncTime;           // Unix timestamp of last successful sync
+    char   _resolvedIp[46];         // last resolved IP, "failed", or ""
+    bool   _syncRequested;          // set by checkNow(); shows "connecting" before fetch starts
 
     unsigned long retryDelay();     // exponential back-off based on _retryCount
 
@@ -56,8 +58,10 @@ class TimeManager : public MicroTasks::Task
 
     // Force an immediate sync attempt, clearing any stuck/backoff state
     void checkNow() {
-      _fetchingTime = false;
-      _retryCount   = 0;
+      _fetchingTime  = false;
+      _retryCount    = 0;
+      _syncRequested = true;          // show "connecting" immediately in the UI
+      _resolvedIp[0] = '\0';          // drop stale DNS badge
       _nextCheckTime = millis();
       MicroTask.wakeTask(this);
     }
@@ -66,6 +70,7 @@ class TimeManager : public MicroTasks::Task
     const char *getNtpStatus();
     time_t      getLastSyncTime()  { return _lastSyncTime; }
     int32_t     getNextSyncMs();
+    const char *getResolvedIp()    { return _resolvedIp; }
 
     // Register for events
     void onTimeChange(MicroTasks::EventListener *listner) {
