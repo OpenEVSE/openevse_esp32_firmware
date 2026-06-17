@@ -16,14 +16,20 @@
 #include "app_config.h"   // esp_hostname
 #include "lvgl_tft/lvgl_panel.h"
 #include "lvgl_tft/boot_screen.h"
+#include "lvgl_tft/setup_screen.h"
 #include "lvgl_tft/charge_screen.h"
 
 #ifndef LCD_BACKLIGHT_PIN
 #define LCD_BACKLIGHT_PIN TFT_BL
 #endif
 
-// How long the startup splash shows before handing off to the charge screen.
+// How long the startup splash shows before handing off to the main screen.
 #define BOOT_SPLASH_MS 4000
+
+// _activeScreen values.
+#define SCR_BOOT   0
+#define SCR_SETUP  1
+#define SCR_CHARGE 2
 
 // --- Message inner class (mechanics identical to the TFT_eSPI LcdTask) ---
 
@@ -135,9 +141,27 @@ void LcdTask::setWifiMode(bool client, bool connected)
 {
   _wifi_client = client;
   _wifi_connected = connected;
+  _wifiModeKnown = true;
 #ifdef TFT_BACKLIGHT_TIMEOUT_MS
   wakeBacklight();
 #endif
+}
+
+void LcdTask::buildSetupScreen()
+{
+  String ssid = WiFi.softAPSSID();
+  if(ssid.length() == 0) {
+    ssid = esp_hostname;
+  }
+  // Matches net_manager: configured ap_pass if >= 8 chars, else the default.
+  const char *pass = (ap_pass.length() >= 8) ? ap_pass.c_str() : "openevse";
+  String ip = WiFi.softAPIP().toString();
+
+  // WiFi-join payload a phone camera recognises (defaults have no chars needing
+  // WIFI:-format escaping; a custom ap_ssid/ap_pass with ; , : \ would).
+  char qr[160];
+  snprintf(qr, sizeof(qr), "WIFI:T:WPA;S:%s;P:%s;;", ssid.c_str(), pass);
+  setup_screen_build(qr, ssid.c_str(), pass, ip.c_str());
 }
 
 void LcdTask::begin(EvseManager &evse, Scheduler &scheduler, ManualOverride &manual)
@@ -200,12 +224,39 @@ unsigned long LcdTask::loop(MicroTasks::WakeReason reason)
     boot_screen_update((int)(el * 100 / BOOT_SPLASH_MS), ml);
     lv_timer_handler();
     if(el >= BOOT_SPLASH_MS) {
-      charge_screen_build();
+      // Show the QR setup screen only if we KNOW we're in AP mode; otherwise the
+      // charge screen (default), and switch later if AP mode is reported.
+      if(_wifiModeKnown && !_wifi_client) {
+        buildSetupScreen();
+        _activeScreen = SCR_SETUP;
+      } else {
+        charge_screen_build();
+        _activeScreen = SCR_CHARGE;
+      }
       boot_screen_destroy();
       _booting = false;
       return 50;
     }
     return 120;
+  }
+
+  // Switch screens if the WiFi mode resolved differently than what's showing
+  // (e.g. AP -> STA once the user completes setup via the QR).
+  bool wantSetup = _wifiModeKnown && !_wifi_client;
+  if(wantSetup && _activeScreen == SCR_CHARGE) {
+    buildSetupScreen();
+    charge_screen_destroy();
+    _activeScreen = SCR_SETUP;
+  } else if(!wantSetup && _activeScreen == SCR_SETUP) {
+    charge_screen_build();
+    setup_screen_destroy();
+    _activeScreen = SCR_CHARGE;
+  }
+
+  // The setup screen is static — just pump LVGL and idle.
+  if(_activeScreen == SCR_SETUP) {
+    lv_timer_handler();
+    return 1000;
   }
 
   // Assemble a full snapshot from EvseManager + WiFi + clock.

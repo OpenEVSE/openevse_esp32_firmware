@@ -32,8 +32,11 @@ struct ChargeScreenData {
   const char *msg_line;       // transient message (boot/OTA/status); "" when none — overrides host/ip
 };
 
-// Build the widget tree on the active LVGL screen. Call once after lvgl_panel_begin().
+// Build + load the charge screen (own LVGL screen object).
 void charge_screen_build();
+
+// Delete the charge screen (call after another screen is loaded).
+void charge_screen_destroy();
 
 // Push a full snapshot. Cheap; only changed pixels re-flush (LVGL dirty-rect).
 void charge_screen_update(const ChargeScreenData &d);

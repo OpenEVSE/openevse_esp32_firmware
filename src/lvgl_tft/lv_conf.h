@@ -49,4 +49,7 @@
 #define LV_USE_LABEL 1
 #define LV_USE_BAR 1
 
+// QR code (setup screen — phone scans to join the softAP).
+#define LV_USE_QRCODE 1
+
 #endif // LV_CONF_H

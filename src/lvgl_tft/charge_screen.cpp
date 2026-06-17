@@ -20,6 +20,7 @@
 // Ring full-scale (amps). The ring is indicative, not a hard gauge.
 #define RING_FULL_SCALE_A 48.0f
 
+static lv_obj_t *charge_scr   = nullptr;  // the screen object (for destroy on switch)
 static lv_obj_t *arc          = nullptr;
 static lv_obj_t *big_value    = nullptr;  // kW number, centre of ring (charging only)
 static lv_obj_t *big_unit     = nullptr;  // "kW" (charging only)
@@ -63,9 +64,10 @@ static void make_tile(lv_obj_t *parent, const char *title, lv_obj_t **value_out,
 
 void charge_screen_build()
 {
-  // Own LVGL screen, loaded now (the boot splash is on a separate screen that the
-  // caller deletes after this returns).
+  // Own LVGL screen, loaded now (the previous screen is on a separate object that
+  // the caller deletes after this returns).
   lv_obj_t *scr = lv_obj_create(NULL);
+  charge_scr = scr;
   lv_scr_load(scr);
   lv_obj_set_style_bg_color(scr, COL_BG, 0);
   lv_obj_clear_flag(scr, LV_OBJ_FLAG_SCROLLABLE);
@@ -267,6 +269,17 @@ void charge_screen_update(const ChargeScreenData &d)
     lv_obj_clear_flag(ip_lbl, LV_OBJ_FLAG_HIDDEN);
     lv_label_set_text(host_lbl, d.hostname ? d.hostname : "");
     lv_label_set_text(ip_lbl, d.ip ? d.ip : "");
+  }
+}
+
+void charge_screen_destroy()
+{
+  if (charge_scr) {
+    lv_obj_del(charge_scr);
+    charge_scr = nullptr;
+    arc = big_value = big_unit = center_state = pilot_lbl = nullptr;
+    datetime_lbl = topright_lbl = msg_lbl = host_lbl = ip_lbl = nullptr;
+    elapsed_val = delivered_val = va_val = nullptr;
   }
 }
 

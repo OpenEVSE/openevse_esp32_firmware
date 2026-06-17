@@ -55,8 +55,10 @@ class LcdTask : public MicroTasks::Task
 
     bool _initialise = true;
     bool _displayOk = false;
-    bool _booting = false;       // showing the boot splash before the charge screen
+    bool _booting = false;       // showing the boot splash before the main screen
     uint32_t _bootStart = 0;
+    uint8_t _activeScreen = 0;   // 0 = boot, 1 = setup (AP), 2 = charge
+    bool _wifiModeKnown = false; // has setWifiMode() been called yet?
 
     // Transient message lines (set via display(); auto-cleared after their time).
     char _msg[LCD_MAX_LINES][LCD_MAX_LEN + 1];
@@ -77,6 +79,7 @@ class LcdTask : public MicroTasks::Task
     void display(Message *msg, uint32_t flags);
     unsigned long displayNextMessage();
     void clearMessageLines();
+    void buildSetupScreen();     // gather AP creds + build the QR setup screen
 
   protected:
     void setup();
