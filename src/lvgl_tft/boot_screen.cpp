@@ -5,13 +5,13 @@
 #include <lvgl.h>
 
 #include "boot_screen.h"
+#include "nightshift.h"
 
-// Nightshift palette (matches charge_screen.cpp).
-#define COL_BG     lv_color_hex(0x0B1220)
-#define COL_TRACK  lv_color_hex(0x16202E)
-#define COL_ACCENT lv_color_hex(0x38BDF8)
-#define COL_TEXT   lv_color_hex(0xE6EDF3)
-#define COL_DIM    lv_color_hex(0x7D8A99)
+#define COL_BG     NS_SURFACE
+#define COL_TRACK  NS_BORDER
+#define COL_ACCENT NS_ACCENT
+#define COL_TEXT   NS_TEXT
+#define COL_DIM    NS_TEXTDIM
 
 static lv_obj_t *boot_scr = nullptr;
 static lv_obj_t *bar      = nullptr;

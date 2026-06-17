@@ -6,16 +6,18 @@
 #include <stdio.h>
 
 #include "charge_screen.h"
-#include "openevse.h"   // OPENEVSE_STATE_*
+#include "openevse.h"     // OPENEVSE_STATE_*
+#include "nightshift.h"   // exact nightshift palette
 
-// Nightshift palette (approximation; refine to the EEZ theme hexes later).
-#define COL_BG      lv_color_hex(0x0B1220) // deep surface
-#define COL_CARD    lv_color_hex(0x16202E) // tile surface
-#define COL_ACCENT  lv_color_hex(0x38BDF8) // cyan — connected/idle
-#define COL_OK      lv_color_hex(0x34D399) // green — charging
-#define COL_FAULT   lv_color_hex(0xF87171) // red — fault
-#define COL_TEXT    lv_color_hex(0xE6EDF3)
-#define COL_DIM     lv_color_hex(0x7D8A99)
+#define COL_BG      NS_SURFACE   // screen base
+#define COL_CARD    NS_SURFACE3  // tile surface
+#define COL_TRACK   NS_BORDER    // ring track
+#define COL_ACCENT  NS_ACCENT    // connected / starting
+#define COL_OK      NS_SUCCESS   // charging
+#define COL_FAULT   NS_ERROR     // fault
+#define COL_SLEEP   NS_SLEEP     // sleeping
+#define COL_TEXT    NS_TEXT
+#define COL_DIM     NS_TEXTDIM
 
 // Ring full-scale (amps). The ring is indicative, not a hard gauge.
 #define RING_FULL_SCALE_A 48.0f
@@ -97,7 +99,7 @@ void charge_screen_build()
   lv_obj_clear_flag(arc, LV_OBJ_FLAG_CLICKABLE);
   lv_obj_set_style_arc_width(arc, 14, LV_PART_MAIN);
   lv_obj_set_style_arc_width(arc, 14, LV_PART_INDICATOR);
-  lv_obj_set_style_arc_color(arc, COL_CARD, LV_PART_MAIN);
+  lv_obj_set_style_arc_color(arc, COL_TRACK, LV_PART_MAIN);
   lv_obj_set_style_arc_color(arc, COL_ACCENT, LV_PART_INDICATOR);
 
   // --- Ring centre: state word (idle) OR big kW value (charging) ---
@@ -164,7 +166,7 @@ static const char *state_word(uint8_t s, lv_color_t *colour)
   switch (s) {
     case OPENEVSE_STATE_CHARGING:      *colour = COL_OK;     return "CHARGING";
     case OPENEVSE_STATE_CONNECTED:     *colour = COL_ACCENT; return "CONNECTED";
-    case OPENEVSE_STATE_SLEEPING:      *colour = COL_DIM;    return "SLEEPING";
+    case OPENEVSE_STATE_SLEEPING:      *colour = COL_SLEEP;  return "SLEEPING";
     case OPENEVSE_STATE_DISABLED:      *colour = COL_DIM;    return "DISABLED";
     case OPENEVSE_STATE_STARTING:      *colour = COL_ACCENT; return "STARTING";
     case OPENEVSE_STATE_NOT_CONNECTED: *colour = COL_DIM;    return "NOT CONNECTED";
