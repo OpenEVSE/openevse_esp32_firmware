@@ -13,6 +13,7 @@
 #include "manual.h"
 #include "scheduler.h"
 #include "current_shaper.h"
+#include "home_battery.h"
 
 Mqtt mqtt(evse); // global instance
 
@@ -84,7 +85,7 @@ unsigned long Mqtt::loop(MicroTasks::WakeReason reason) {
   }
 
   // If a connection attempt has been in progress too long with no callback, reset and retry.
-  // Handles the case where the TCP stack hangs without firing onError or onClose.
+  // This handles the case where the TCP stack hangs without firing onError or onClose.
   if (_connecting && (millis() - _connectStartTime) > (MQTT_CONNECT_TIMEOUT * 2)) {
     DBUGLN("MQTT connection attempt timed out, will retry");
     _connecting = false;
@@ -226,6 +227,8 @@ void Mqtt::subscribeTopics() {
   if (mqtt_vehicle_range != "") { _mqttclient.subscribe(mqtt_vehicle_range); yield(); }
   if (mqtt_vehicle_eta != "") { _mqttclient.subscribe(mqtt_vehicle_eta); yield(); }
   if (mqtt_vehicle_charge_limit != "") { _mqttclient.subscribe(mqtt_vehicle_charge_limit); yield(); }
+  if (mqtt_home_battery_soc != "") { _mqttclient.subscribe(mqtt_home_battery_soc); yield(); }
+  if (mqtt_home_battery_power != "") { _mqttclient.subscribe(mqtt_home_battery_power); yield(); }
   if (mqtt_vrms != "") { _mqttclient.subscribe(mqtt_vrms); yield(); }
 
   // Settable topics
@@ -341,6 +344,18 @@ void Mqtt::handleMqttMessage(MongooseString topic, MongooseString payload) {
     int vehicle_charge_limit = payload_str.toInt();
     _evse->setVehicleChargeLimit(vehicle_charge_limit);
     StaticJsonDocument<128> event; event["vehicle_charge_limit"] = vehicle_charge_limit; event_send(event);
+  }
+  // Home/powerwall battery is display-only with no source arbitration (mirrors its
+  // POST /status path), so it is gated only on the topic being configured.
+  else if (mqtt_home_battery_soc != "" && topic_string == mqtt_home_battery_soc) {
+    int soc = payload_str.toInt();
+    home_battery_set_soc(soc);
+    StaticJsonDocument<128> event; event["home_battery_soc"] = soc; event_send(event);
+  }
+  else if (mqtt_home_battery_power != "" && topic_string == mqtt_home_battery_power) {
+    int power = payload_str.toInt();
+    home_battery_set_power(power);
+    StaticJsonDocument<128> event; event["home_battery_power"] = power; event_send(event);
   }
   else if (topic_string == mqtt_topic + "/divertmode/set") {
     byte newdivert = payload_str.toInt();

@@ -23,9 +23,13 @@ typedef const __FlashStringHelper *fstr_t;
 #endif
 
 //#include <FS.h>                       // SPIFFS file-system: store web server html, CSS etc.
+#include <LittleFS.h>
 
 #include "emonesp.h"
 #include "web_server.h"
+#ifdef ENABLE_TSDB
+#include "tsdb_energy_logger.h"
+#endif
 #include "web_server_static.h"
 #include "app_config.h"
 #include "net_manager.h"
@@ -41,6 +45,7 @@ typedef const __FlashStringHelper *fstr_t;
 #include "scheduler.h"
 #include "rfid.h"
 #include "current_shaper.h"
+#include "home_battery.h"
 #include "evse_man.h"
 #include "limit.h"
 
@@ -82,6 +87,19 @@ void handleUpdateClose(MongooseHttpServerRequest *request);
 
 void handleTime(MongooseHttpServerRequest *request);
 void handleTimePost(MongooseHttpServerRequest *request, MongooseHttpServerResponseStream *response);
+
+#ifndef ENABLE_TSDB
+void handleEnergyRaw(MongooseHttpServerRequest *request);
+void handleEnergyDaily(MongooseHttpServerRequest *request);
+void handleEnergyMonthly(MongooseHttpServerRequest *request);
+void handleEnergyAnnual(MongooseHttpServerRequest *request);
+#else // ENABLE_TSDB
+void handleEnergyRaw(MongooseHttpServerRequest *request);
+void handleEnergyDaily(MongooseHttpServerRequest *request);
+void handleEnergyWeekly(MongooseHttpServerRequest *request);
+void handleEnergyMonthly(MongooseHttpServerRequest *request);
+void handleEnergyAnnual(MongooseHttpServerRequest *request);
+#endif // ENABLE_TSDB
 
 void dumpRequest(MongooseHttpServerRequest *request)
 {
@@ -229,6 +247,8 @@ void buildStatus(DynamicJsonDocument &doc) {
   doc["ohm_hour"] = ohm_hour;
 
   doc["free_heap"] = ESPAL.getFreeHeap();
+  doc["littlefs_free"] = (uint32_t)(LittleFS.totalBytes() - LittleFS.usedBytes());
+  doc["littlefs_used"] = (uint32_t)LittleFS.usedBytes();
 
   doc["comm_sent"] = rapiSender.getSent();
   doc["comm_success"] = rapiSender.getSuccess();
@@ -287,15 +307,18 @@ void buildStatus(DynamicJsonDocument &doc) {
     }
   }
 
+#ifdef ENABLE_TSDB
+  doc["tsdb_ready"] = tsdbEnergyLogger.isReady() ? 1 : 0;
+  doc["tsdb_err"]   = tsdbEnergyLogger.initError();
+#endif
+  home_battery_add_status_fields(doc);
+
   DBUGF("/status ArduinoJson size: %dbytes", doc.size());
 }
 
 // -------------------------------------------------------------------
-// Wifi scan /scan not currently used
+// Wifi scan
 // url: /scan
-//
-// First request will return 0 results unless you start scan from somewhere else (loop/setup)
-// Do not request more often than 3-5 seconds
 // -------------------------------------------------------------------
 void
 handleScan(MongooseHttpServerRequest *request) {
@@ -305,23 +328,28 @@ handleScan(MongooseHttpServerRequest *request) {
   }
 
   DBUGF("Starting WiFi scan");
-  net.wifiScanNetworks([request, response](int networksFound) {
+  bool scanStarted = net.wifiScanNetworks([request, response](int networksFound) {
     DBUGF("%d networks found", networksFound);
-    String json = "[";
+    response->print("[");
     for (int i = 0; i < networksFound; ++i) {
-      if(i) json += ",";
-      json += "{";
-      json += "\"rssi\":"+String(WiFi.RSSI(i));
-      json += ",\"ssid\":\""+WiFi.SSID(i)+"\"";
-      json += ",\"bssid\":\""+WiFi.BSSIDstr(i)+"\"";
-      json += ",\"channel\":"+String(WiFi.channel(i));
-      json += ",\"secure\":"+String(WiFi.encryptionType(i));
-      json += "}";
+      if(i) response->print(",");
+      StaticJsonDocument<256> network;
+      network["rssi"] = WiFi.RSSI(i);
+      network["ssid"] = WiFi.SSID(i);
+      network["bssid"] = WiFi.BSSIDstr(i);
+      network["channel"] = WiFi.channel(i);
+      network["secure"] = WiFi.encryptionType(i);
+      serializeJson(network, *response);
     }
-    json += "]";
-    response->print(json);
+    response->print("]");
     request->send(response);
   });
+
+  if(!scanStarted) {
+    DBUGLN("WiFi scan failed to start");
+    response->print("[]");
+    request->send(response);
+  }
 }
 
 // -------------------------------------------------------------------
@@ -498,6 +526,19 @@ void handleStatusPost(MongooseHttpServerRequest *request, MongooseHttpServerResp
       DBUGF("vehicle_charge_limit:%d%%", vehicle_charge_limit);
       evse.setVehicleChargeLimit(vehicle_charge_limit);
       doc["vehicle_state_update"] = 0;
+    }
+    // Display-only home/powerwall battery feeds. Like the solar/grid pushes
+    // above these are an explicit override (no data_src arbitration); they just
+    // surface in /status and on the display.
+    if(doc.containsKey("home_battery_soc")) {
+      int soc = doc["home_battery_soc"];
+      DBUGF("home_battery_soc:%d%%", soc);
+      home_battery_set_soc(soc);
+    }
+    if(doc.containsKey("home_battery_power")) {
+      int power = doc["home_battery_power"];
+      DBUGF("home_battery_power:%dW", power);
+      home_battery_set_power(power);
     }
     // send back new value to clients
     if(send_event) {
@@ -1196,16 +1237,18 @@ void web_server_setup()
     const char *key = certs.getKey(cert_id);
     if(NULL != cert && NULL != key)
     {
-      server.begin(443, cert, key);
+      DEBUG.printf("Starting HTTPS server, https://0.0.0.0:%d\n", www_https_port);
+      server.begin(www_https_port, cert, key);
       use_ssl = true;
 
-      redirect.begin(80);
+      redirect.begin(www_http_port);
       redirect.on("/", handleHttpsRedirect);
     }
   }
 
   if(false == use_ssl) {
-    server.begin(80);
+    DEBUG.printf("Starting HTTP server, http://0.0.0.0:%d\n", www_http_port);
+    server.begin(www_http_port);
   }
 
   // Handle status updates
@@ -1240,6 +1283,19 @@ void web_server_setup()
   server.on("/limit", handleLimit);
   server.on("/emeter", handleEmeter);
   server.on("/time", handleTime);
+
+#ifndef ENABLE_TSDB
+  server.on("/energy/raw$", handleEnergyRaw);
+  server.on("/energy/daily$", handleEnergyDaily);
+  server.on("/energy/monthly$", handleEnergyMonthly);
+  server.on("/energy/annual$", handleEnergyAnnual);
+#else // ENABLE_TSDB
+  server.on("/energy/raw$", handleEnergyRaw);
+  server.on("/energy/daily$", handleEnergyDaily);
+  server.on("/energy/weekly$", handleEnergyWeekly);
+  server.on("/energy/monthly$", handleEnergyMonthly);
+  server.on("/energy/annual$", handleEnergyAnnual);
+#endif // ENABLE_TSDB
 
   // Simple Firmware Update Form
   server.on("/update$")->
