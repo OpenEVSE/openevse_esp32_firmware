@@ -376,22 +376,15 @@ class EvseMonitor : public MicroTasks::Task
       return 0 == (getSettingsFlags() & OPENEVSE_ECF_TEMP_CHK_DISABLED);
     }
     bool isOvercurrentMonitorEnabled() {
-      return 0 == (getSettingsFlags() & OPENEVSE_ECF_TEMP_CHK_DISABLED);
+      // NB: the controller aliases this to the temp-check bit (both 0x0400),
+      // so overcurrent and temperature monitoring cannot be toggled separately
+      return 0 == (getSettingsFlags() & OPENEVSE_ECF_OVERCURRENT_DISABLED);
     }
     uint32_t getPanicTemperature() { return _panic_temperature; }
     bool isFrontButtonEnabled() { return !isButtonDisabled(); }
     bool isButtonDisabled() {
       return OPENEVSE_ECF_BUTTON_DISABLED == (getSettingsFlags() & OPENEVSE_ECF_BUTTON_DISABLED);
     }
-#ifndef OPENEVSE_ECF_BOOT_LOCK_DISABLED
-#define OPENEVSE_ECF_BOOT_LOCK_DISABLED 0x2000
-#endif
-#ifndef OPENEVSE_ECF_PP_AUTO_AMPACITY
-#define OPENEVSE_ECF_PP_AUTO_AMPACITY 0x0040
-#endif
-#ifndef OPENEVSE_ECF_RELAY_ZC_DISABLED
-#define OPENEVSE_ECF_RELAY_ZC_DISABLED 0x0800
-#endif
     bool isBootLockEnabled() {
       return 0 == (getSettingsFlags() & OPENEVSE_ECF_BOOT_LOCK_DISABLED);
     }
