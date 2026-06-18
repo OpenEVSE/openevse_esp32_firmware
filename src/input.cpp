@@ -104,7 +104,12 @@ void create_rapi_json(JsonDocument &doc)
   }
   doc["amp"] = evse.getAmps() * AMPS_SCALE_FACTOR;
   doc["voltage"] = evse.getVoltage() * VOLTS_SCALE_FACTOR;
-  doc["frequency"] = evse.getFrequency();
+  // Frequency is reported in 100ths of a Hz (e.g. 5000 = 50.00 Hz); the GUI
+  // divides by 100. Only emitted on D9+ controllers that report a measurement;
+  // omitted (rather than 0) when unsupported so the GUI can hide it.
+  if(evse.isD9Supported() && evse.getFrequency() > 0) {
+    doc["frequency"] = evse.getFrequency();
+  }
   doc["power"] = evse.getPower() * POWER_SCALE_FACTOR;
   doc["pilot"] = evse.getChargeCurrent();
   doc["max_current"] = evse.getMaxCurrent();

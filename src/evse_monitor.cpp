@@ -177,6 +177,7 @@ EvseMonitor::EvseMonitor(OpenEVSEClass &openevse) :
   _relay_dc1(true),
   _relay_dc2(true),
   _relay_ac(true),
+  _relay_status_known(false),
   _chip_id("")
 {
 }
@@ -731,14 +732,8 @@ void EvseMonitor::enableFrontButton(bool enabled, std::function<void(int ret)> c
 
 void EvseMonitor::setPanicTemperature(uint32_t tempC, std::function<void(int ret)> callback)
 {
-  if(!_sender) {
-    if(callback) callback(RAPI_RESPONSE_NK);
-    return;
-  }
   _panic_temperature = tempC;
-  char command[32];
-  snprintf(command, sizeof(command), "$FO %u", tempC * 10);
-  _sender->sendCmd(command, [callback](int ret) {
+  _openevse.setPanicTemperature(tempC, [callback](int ret) {
     if(callback) callback(ret);
   });
 }
@@ -949,27 +944,29 @@ void EvseMonitor::getAmmeterSettings()
 
 void EvseMonitor::enablePPAutoAmpacity(bool enabled, std::function<void(int ret)> callback)
 {
+  if(!isD9Supported()) {
+    if(callback) callback(RAPI_RESPONSE_FEATURE_NOT_SUPPORTED);
+    return;
+  }
   if(isPPAutoAmpacityEnabled() != enabled) {
-    enableFeature('P', enabled, callback);
+    enableFeature(OPENEVSE_FEATURE_PP_AUTO_AMPACITY, enabled, callback);
   }
 }
 
 void EvseMonitor::enableZeroCrossSwitch(bool enabled, std::function<void(int ret)> callback)
 {
+  if(!isD9Supported()) {
+    if(callback) callback(RAPI_RESPONSE_FEATURE_NOT_SUPPORTED);
+    return;
+  }
   if(isZeroCrossSwitchEnabled() != enabled) {
-    enableFeature('Z', enabled, callback);
+    enableFeature(OPENEVSE_FEATURE_ZERO_CROSS_SWITCH, enabled, callback);
   }
 }
 
 void EvseMonitor::setRelayEnable(int relay, bool enabled, std::function<void(int ret)> callback)
 {
-  if(!_sender) {
-    if(callback) callback(RAPI_RESPONSE_NK);
-    return;
-  }
-  char command[16];
-  snprintf(command, sizeof(command), "$SR %d %d", relay, enabled ? 1 : 0);
-  _sender->sendCmd(command, [this, relay, enabled, callback](int ret) {
+  _openevse.setRelayEnable(relay, enabled, [this, relay, enabled, callback](int ret) {
     if(RAPI_RESPONSE_OK == ret) {
       if(relay == 1) _relay_dc1 = enabled;
       else if(relay == 2) _relay_dc2 = enabled;
@@ -981,11 +978,7 @@ void EvseMonitor::setRelayEnable(int relay, bool enabled, std::function<void(int
 
 void EvseMonitor::resetFaultCounters(std::function<void(int ret)> callback)
 {
-  if(!_sender) {
-    if(callback) callback(RAPI_RESPONSE_NK);
-    return;
-  }
-  _sender->sendCmd("$FC", [this, callback](int ret) {
+  _openevse.resetFaultCounters([this, callback](int ret) {
     if(RAPI_RESPONSE_OK == ret) {
       _gfci_count = 0;
       _nognd_count = 0;
@@ -997,10 +990,9 @@ void EvseMonitor::resetFaultCounters(std::function<void(int ret)> callback)
 
 void EvseMonitor::readFrequency()
 {
-  if(!_sender) return;
-  _sender->sendCmd("$GZ", [this](int ret) {
-    if(RAPI_RESPONSE_OK == ret && _sender->getTokenCnt() >= 2) {
-      _frequency = (uint32_t)strtoul(_sender->getToken(1), NULL, 10);
+  _openevse.getFrequency([this](int ret, uint32_t frequency) {
+    if(RAPI_RESPONSE_OK == ret) {
+      _frequency = frequency;
       DBUGF("frequency = %u (×100 Hz)", _frequency);
     }
   });
@@ -1008,12 +1000,12 @@ void EvseMonitor::readFrequency()
 
 void EvseMonitor::readRelayStatus()
 {
-  if(!_sender) return;
-  _sender->sendCmd("$GR", [this](int ret) {
-    if(RAPI_RESPONSE_OK == ret && _sender->getTokenCnt() >= 4) {
-      _relay_dc1 = strtol(_sender->getToken(1), NULL, 10) != 0;
-      _relay_dc2 = strtol(_sender->getToken(2), NULL, 10) != 0;
-      _relay_ac  = strtol(_sender->getToken(3), NULL, 10) != 0;
+  _openevse.getRelayStatus([this](int ret, bool dc1, bool dc2, bool ac) {
+    if(RAPI_RESPONSE_OK == ret) {
+      _relay_dc1 = dc1;
+      _relay_dc2 = dc2;
+      _relay_ac  = ac;
+      _relay_status_known = true;
       DBUGF("relay dc1=%d dc2=%d ac=%d", _relay_dc1, _relay_dc2, _relay_ac);
     }
   });
@@ -1021,11 +1013,10 @@ void EvseMonitor::readRelayStatus()
 
 void EvseMonitor::readChipId()
 {
-  if(!_sender) return;
-  _sender->sendCmd("$GI", [this](int ret) {
-    if(RAPI_RESPONSE_OK == ret && _sender->getTokenCnt() >= 2) {
-      // Token already has checksum stripped by RapiSender tokenizer
-      snprintf(_chip_id, sizeof(_chip_id), "%s", _sender->getToken(1));
+  // $GI is the MCU serial/chip ID - reuse the library's getSerial()
+  _openevse.getSerial([this](int ret, const char *serial) {
+    if(RAPI_RESPONSE_OK == ret && serial) {
+      snprintf(_chip_id, sizeof(_chip_id), "%s", serial);
       DBUGF("chip_id = %s", _chip_id);
     }
   });

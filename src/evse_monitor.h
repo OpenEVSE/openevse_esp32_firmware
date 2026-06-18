@@ -157,10 +157,11 @@ class EvseMonitor : public MicroTasks::Task
     RapiSender *_sender;
 
     // Extended state (linco-work firmware)
-    uint32_t _frequency;          // AC line frequency × 100 (from $GZ)
-    bool _relay_dc1;              // DC relay 1 enabled
-    bool _relay_dc2;              // DC relay 2 enabled
-    bool _relay_ac;               // AC relay enabled
+    uint32_t _frequency;          // AC line frequency × 100 (from $GZ); 0 = unknown/unsupported
+    bool _relay_dc1;              // DC relay 1 enabled (only valid when _relay_status_known)
+    bool _relay_dc2;              // DC relay 2 enabled (only valid when _relay_status_known)
+    bool _relay_ac;               // AC relay enabled (only valid when _relay_status_known)
+    bool _relay_status_known;     // true once $GR has been answered by the controller
     char _chip_id[48];            // EVSE chip ID from $GI
 
     DataReady _data_ready;
@@ -403,8 +404,11 @@ class EvseMonitor : public MicroTasks::Task
     bool isDC1RelayEnabled() { return _relay_dc1; }
     bool isDC2RelayEnabled() { return _relay_dc2; }
     bool isACRelayEnabled()  { return _relay_ac; }
-    uint32_t getFrequency()  { return _frequency; }
+    bool isRelayStatusKnown() { return _relay_status_known; }
+    uint32_t getFrequency()  { return _frequency; }  // × 100 Hz (5000 = 50.00 Hz); 0 = unknown
     const char *getChipId()  { return _chip_id; }
+    // True if the controller's RAPI protocol supports the D9 command set
+    bool isD9Supported() { return _openevse.isD9Supported(); }
     uint32_t getHeartbeatInterval() { return _heartbeat_interval; }
     uint32_t getHeartbeatCurrent() { return _heartbeat_current; }
     bool isHeartbeatEnabled() { return _heartbeat_current > 0; }

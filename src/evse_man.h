@@ -511,6 +511,7 @@ class EvseManager : public MicroTasks::Task
     bool isDC1RelayEnabled() { return _monitor.isDC1RelayEnabled(); }
     bool isDC2RelayEnabled() { return _monitor.isDC2RelayEnabled(); }
     bool isACRelayEnabled()  { return _monitor.isACRelayEnabled(); }
+    bool isRelayStatusKnown() { return _monitor.isRelayStatusKnown(); }
     void setRelayEnable(int relay, bool enabled, std::function<void(int ret)> callback = NULL) {
       _monitor.setRelayEnable(relay, enabled, callback);
     }
@@ -519,6 +520,7 @@ class EvseManager : public MicroTasks::Task
     }
     uint32_t getFrequency() { return _monitor.getFrequency(); }
     const char *getChipId() { return _monitor.getChipId(); }
+    bool isD9Supported() { return _monitor.isD9Supported(); }
     void restartEvse() {
       _monitor.restart();
     }
