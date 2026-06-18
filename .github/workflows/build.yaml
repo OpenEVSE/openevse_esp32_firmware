@@ -60,6 +60,13 @@ jobs:
         path: |
           pio_test_results.xml
 
+    - name: Publish Unit Test Results
+      uses: EnricoMi/publish-unit-test-result-action@v2
+      if: always()
+      with:
+        files: pio_test_results.xml
+        check_name: Unit Tests
+
   build:
     name: Build ${{ matrix.env }}
     runs-on: ubuntu-latest
