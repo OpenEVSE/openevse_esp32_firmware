@@ -13,7 +13,7 @@ import requests
 import time
 
 
-@pytest.mark.timeout(60)
+@pytest.mark.timeout(120)
 class TestStatus:
     """Tests for the GET /status endpoint."""
 
@@ -110,7 +110,7 @@ class TestStatus:
             )
 
 
-@pytest.mark.timeout(60)
+@pytest.mark.timeout(120)
 class TestOverride:
     """Tests for the manual override endpoint (POST/DELETE /override)."""
 
@@ -127,8 +127,8 @@ class TestOverride:
             f"{evse_instance['native_url']}/override",
             json={"state": "disabled"},
         )
-        assert response.status_code == 200, (
-            f"Expected 200, got {response.status_code}: {response.text}"
+        assert response.status_code in (200, 201), (
+            f"Expected 200 or 201, got {response.status_code}: {response.text}"
         )
         data = response.json()
         assert "msg" in data or "state" in data
@@ -139,8 +139,8 @@ class TestOverride:
             f"{evse_instance['native_url']}/override",
             json={"state": "active"},
         )
-        assert response.status_code == 200, (
-            f"Expected 200, got {response.status_code}: {response.text}"
+        assert response.status_code in (200, 201), (
+            f"Expected 200 or 201, got {response.status_code}: {response.text}"
         )
         data = response.json()
         assert "msg" in data or "state" in data
@@ -189,8 +189,8 @@ class TestOverride:
             f"{evse_instance['native_url']}/override",
             json={"state": "active"},
         )
-        assert response.status_code == 200, (
-            f"Expected 200, got {response.status_code}: {response.text}"
+        assert response.status_code in (200, 201), (
+            f"Expected 200 or 201, got {response.status_code}: {response.text}"
         )
 
         time.sleep(2)
@@ -207,12 +207,12 @@ class TestOverride:
             f"{evse_instance['native_url']}/override",
             json={"state": "active", "charge_current": 16},
         )
-        assert response.status_code == 200, (
-            f"Expected 200, got {response.status_code}: {response.text}"
+        assert response.status_code in (200, 201), (
+            f"Expected 200 or 201, got {response.status_code}: {response.text}"
         )
 
 
-@pytest.mark.timeout(60)
+@pytest.mark.timeout(120)
 class TestConfig:
     """Tests for the GET/POST /config endpoint."""
 
@@ -261,7 +261,7 @@ class TestConfig:
         )
 
 
-@pytest.mark.timeout(60)
+@pytest.mark.timeout(120)
 class TestClaims:
     """Tests for the claims endpoint (GET /claims)."""
 

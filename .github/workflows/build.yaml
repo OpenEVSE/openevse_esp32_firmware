@@ -4,6 +4,7 @@ name: Build/Release OpenEVSE
 
 permissions:
   contents: write
+  checks: write
 
 on:
   push:

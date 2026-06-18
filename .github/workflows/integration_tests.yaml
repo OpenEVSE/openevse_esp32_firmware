@@ -7,6 +7,7 @@ on:
     workflows: ["Build/Release OpenEVSE"]
     types: [completed]
   workflow_dispatch:
+  pull_request:
 
 permissions:
   contents: read
@@ -19,6 +20,7 @@ jobs:
 
     if: |
       github.event_name == 'workflow_dispatch' ||
+      github.event_name == 'pull_request' ||
       (github.event.workflow_run.conclusion == 'success' &&
        contains(github.event.workflow_run.name, 'Build/Release'))
 
@@ -45,7 +47,7 @@ jobs:
         sudo apt-get install -y socat
 
     - name: Download native firmware artifact
-      if: github.event_name != 'workflow_dispatch'
+      if: github.event_name == 'workflow_run'
       uses: actions/download-artifact@v8
       with:
         name: native_openevse.program
@@ -54,7 +56,7 @@ jobs:
         path: ./
 
     - name: Build native firmware locally
-      if: github.event_name == 'workflow_dispatch'
+      if: github.event_name == 'workflow_dispatch' || github.event_name == 'pull_request'
       run: |
         sudo apt-get install -y libavahi-client-dev libavahi-common-dev libssl-dev
         python -m pip install --upgrade pip

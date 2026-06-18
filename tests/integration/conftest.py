@@ -62,7 +62,39 @@ def wait_for_http_ready(url: str, timeout: float = 30, poll_interval: float = 0.
             response = requests.get(url, timeout=2)
             if response.status_code == 200:
                 return True
-        except requests.RequestException:
+        except (requests.RequestException, ValueError):
+            pass
+        time.sleep(poll_interval)
+    return False
+
+
+def wait_for_evse_state(url: str, timeout: float = 30, poll_interval: float = 0.5) -> bool:
+    """
+    Poll GET /status until the EVSE state is no longer 0 (STARTING).
+
+    The native firmware initialises with state=0 (OPENEVSE_STATE_STARTING) and
+    only transitions to a real state (1=Not Connected, 2=Connected, …) once the
+    first RAPI $GS response has been received from the emulator.  Tests that
+    assert on the state field must wait for this transition to avoid false
+    failures.
+
+    Args:
+        url: HTTP endpoint to poll (e.g., http://localhost:8000/status)
+        timeout: Maximum seconds to wait
+        poll_interval: Seconds between polls
+
+    Returns:
+        True if EVSE reached a non-starting state, False if timeout
+    """
+    start = time.time()
+    while time.time() - start < timeout:
+        try:
+            response = requests.get(url, timeout=2)
+            if response.status_code == 200:
+                data = response.json()
+                if data.get("state", 0) != 0:
+                    return True
+        except (requests.RequestException, ValueError):
             pass
         time.sleep(poll_interval)
     return False
@@ -277,6 +309,15 @@ def evse_instance(docker_client, emulator_image, tmp_path):
 
         if not wait_for_http_ready(f"http://localhost:{native_port}/config", timeout=30):
             pytest.fail(f"Native firmware did not become ready on port {native_port}")
+
+        # Wait for EVSE state to transition out of STARTING (0) – the HTTP
+        # server comes up before the first RAPI response arrives, so tests that
+        # inspect /status["state"] would see 0 if we don't wait here.
+        if not wait_for_evse_state(f"http://localhost:{native_port}/status", timeout=30):
+            pytest.fail(
+                f"EVSE did not reach a valid state on port {native_port} "
+                f"(still in STARTING state after 30s – RAPI communication may have failed)"
+            )
 
         yield {
             "emulator_port": emulator_port,
