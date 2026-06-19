@@ -13,6 +13,25 @@ import requests
 import time
 
 
+def wait_for_state(native_url, predicate, timeout=10, poll_interval=0.2):
+    """Poll GET /status until ``predicate(state)`` is True or timeout elapses.
+
+    Returns the last observed state (or None if /status never responded).
+    """
+    last_state = None
+    deadline = time.time() + timeout
+    while time.time() < deadline:
+        try:
+            data = requests.get(f"{native_url}/status", timeout=2).json()
+            last_state = data.get("state")
+            if predicate(last_state):
+                return last_state
+        except (requests.RequestException, ValueError):
+            pass
+        time.sleep(poll_interval)
+    return last_state
+
+
 @pytest.mark.timeout(120)
 class TestStatus:
     """Tests for the GET /status endpoint."""
@@ -167,13 +186,13 @@ class TestOverride:
             json={"state": "disabled"},
         )
 
-        # Allow firmware to process the command
-        time.sleep(2)
-
-        status = requests.get(f"{evse_instance['native_url']}/status").json()
-        # State 255 = disabled
-        assert status["state"] == 255, (
-            f"Expected disabled state (255) after override, got {status['state']}"
+        # The firmware pauses by sleeping the EVSE ($FS), so the reported
+        # state is 254 (sleeping).
+        state = wait_for_state(
+            evse_instance["native_url"], lambda s: s == 254
+        )
+        assert state == 254, (
+            f"Expected sleeping state (254) after override, got {state}"
         )
 
     def test_enable_after_disable(self, evse_instance):
@@ -183,7 +202,7 @@ class TestOverride:
             f"{evse_instance['native_url']}/override",
             json={"state": "disabled"},
         )
-        time.sleep(1)
+        wait_for_state(evse_instance["native_url"], lambda s: s == 254)
 
         response = requests.post(
             f"{evse_instance['native_url']}/override",
@@ -193,12 +212,12 @@ class TestOverride:
             f"Expected 200 or 201, got {response.status_code}: {response.text}"
         )
 
-        time.sleep(2)
-
-        status = requests.get(f"{evse_instance['native_url']}/status").json()
-        # Should no longer be in disabled state (255)
-        assert status["state"] != 255, (
-            f"Expected non-disabled state after re-enable, got {status['state']}"
+        # Should no longer be in sleeping state (254)
+        state = wait_for_state(
+            evse_instance["native_url"], lambda s: s != 254
+        )
+        assert state != 254, (
+            f"Expected non-sleeping state after re-enable, got {state}"
         )
 
     def test_override_with_charge_current(self, evse_instance):

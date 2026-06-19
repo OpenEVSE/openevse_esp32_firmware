@@ -44,7 +44,7 @@ def is_port_available(port: int, retries: int = 10, delay: float = 1.0) -> bool:
     return False
 
 
-def wait_for_http_ready(url: str, timeout: float = 30, poll_interval: float = 0.5) -> bool:
+def wait_for_http_ready(url: str, timeout: float = 30, poll_interval: float = 0.2) -> bool:
     """
     Poll an HTTP endpoint until it responds with 200 OK.
 
@@ -68,7 +68,7 @@ def wait_for_http_ready(url: str, timeout: float = 30, poll_interval: float = 0.
     return False
 
 
-def wait_for_evse_state(url: str, timeout: float = 30, poll_interval: float = 0.5) -> bool:
+def wait_for_evse_state(url: str, timeout: float = 30, poll_interval: float = 0.2) -> bool:
     """
     Poll GET /status until the EVSE state is no longer 0 (STARTING).
 
@@ -215,10 +215,16 @@ def _cleanup_instance(port_offset: int, docker_client) -> None:
     time.sleep(1)
 
 
-@pytest.fixture
-def evse_instance(docker_client, emulator_image, tmp_path):
+@pytest.fixture(scope="session")
+def evse_instance(docker_client, emulator_image, tmp_path_factory):
     """
-    Spawn a paired emulator + native firmware instance for one test.
+    Spawn a paired emulator + native firmware instance shared by the whole
+    test session.
+
+    The container, native firmware process and socat bridge are expensive to
+    start, so they are created once per session.  Per-test isolation is
+    provided by the ``reset_evse_state`` autouse fixture, which clears any
+    override/config mutations between tests.
 
     Yields a dict with:
         - emulator_url: base URL for the emulator (http://localhost:808X)
@@ -290,8 +296,7 @@ def evse_instance(docker_client, emulator_image, tmp_path):
             pytest.fail(f"PTY not created at {pty_path} after 5 seconds")
 
         # Start native firmware
-        instance_workdir = tmp_path / "native_instance"
-        instance_workdir.mkdir(parents=True, exist_ok=True)
+        instance_workdir = tmp_path_factory.mktemp("native_instance")
 
         native_process = subprocess.Popen(
             [
@@ -352,4 +357,51 @@ def evse_instance(docker_client, emulator_image, tmp_path):
             except Exception:
                 pass
 
-        time.sleep(0.5)
+
+@pytest.fixture(scope="session")
+def evse_baseline_config(evse_instance):
+    """Capture the firmware's initial /config so it can be restored per test."""
+    try:
+        return requests.get(
+            f"{evse_instance['native_url']}/config", timeout=5
+        ).json()
+    except (requests.RequestException, ValueError):
+        return {}
+
+
+@pytest.fixture(autouse=True)
+def reset_evse_state(evse_instance, evse_baseline_config):
+    """
+    Reset mutable EVSE state *after* each test so the shared session instance
+    behaves like a fresh one for the next test.
+
+    Cleanup runs in teardown (rather than setup) so each test exercises the
+    same path it would on a dedicated instance, without a reset request racing
+    the test's own override/config writes.  Config is only rewritten when it
+    actually differs from the captured baseline, to avoid coalescing rapid
+    back-to-back config writes.
+    """
+    native_url = evse_instance["native_url"]
+
+    yield
+
+    # Clear any manual override left behind by the test.
+    try:
+        requests.delete(f"{native_url}/override", timeout=5)
+    except requests.RequestException:
+        pass
+
+    # Restore mutated config fields to their baseline values, but only if they
+    # changed (avoids unnecessary writes that the firmware may coalesce).
+    baseline_current = evse_baseline_config.get("max_current_soft")
+    if baseline_current is not None:
+        try:
+            current = requests.get(f"{native_url}/config", timeout=5).json()
+            if current.get("max_current_soft") != baseline_current:
+                requests.post(
+                    f"{native_url}/config",
+                    json={"max_current_soft": baseline_current},
+                    timeout=5,
+                )
+        except (requests.RequestException, ValueError):
+            pass
