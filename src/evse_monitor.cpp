@@ -151,6 +151,8 @@ EvseMonitor::EvseMonitor(OpenEVSEClass &openevse) :
   _state(),
   _amp(0),
   _voltage(VOLTAGE_DEFAULT),
+  _mqtt_voltage(0),
+  _mqtt_voltage_time(0),
   _temps(),
   _gfci_count(0),
   _nognd_count(0),
@@ -389,6 +391,10 @@ unsigned long EvseMonitor::loop(MicroTasks::WakeReason reason)
     getChargeCurrentAndVoltageFromEvse();
   }
 
+  // Re-resolve the reported voltage every cycle so a stale MQTT voltage falls
+  // back to the configured ($SV/$GV) or default value once it ages out.
+  updateEffectiveVoltage();
+
   if(0 == _count % EVSE_MONITOR_TEMP_TIME) {
     getTemperatureFromEvse();
   }
@@ -583,18 +589,64 @@ void EvseMonitor::setVoltage(double volts, std::function<void(int ret)> callback
     _openevse.setVoltage(volts, [this, volts, callback](int ret)
     {
       if(RAPI_RESPONSE_OK == ret) {
-        _voltage = volts;
-        StaticJsonDocument<128> event;
-        event["voltage"] = _voltage;
-        event_send(event);
-        // Read back confirmed voltage from EVSE via $GV
-        getChargeCurrentAndVoltageFromEvse();
+        // The voltage has been pushed to the OpenEVSE controller; refresh the
+        // resolved voltage we report/display (MQTT > configured ($SV/$GV) > default).
+        updateEffectiveVoltage();
       }
 
       if(callback) {
         callback(ret);
       }
     });
+  }
+}
+
+void EvseMonitor::setMqttVoltage(double volts)
+{
+  if(VOLTAGE_MINIMUM <= volts && volts <= VOLTAGE_MAXIMUM)
+  {
+    // Mark MQTT voltage as freshly available (highest-priority source).
+    _mqtt_voltage_time = millis();
+    if(volts != _mqtt_voltage)
+    {
+      _mqtt_voltage = volts;
+      // Keep pushing the live grid voltage to the OpenEVSE controller so its
+      // own power calculation tracks it, as before.
+      _openevse.setVoltage(volts, [](int) {});
+    }
+    updateEffectiveVoltage();
+  }
+}
+
+// Resolve the voltage we report/display, in priority order:
+//   1. live voltage received over MQTT (while still fresh)
+//   2. statically configured voltage from Settings > Charger ($SV/$GV)
+//   3. default
+// The OpenEVSE charging reading ($GG) is intentionally NOT used here.
+void EvseMonitor::updateEffectiveVoltage()
+{
+  double volts;
+  if(_mqtt_voltage_time != 0 &&
+     (millis() - _mqtt_voltage_time) < EVSE_MONITOR_MQTT_VOLTAGE_TIMEOUT_MS) {
+    volts = _mqtt_voltage;
+  } else if(voltage_cfg > 0) {
+    volts = (double)voltage_cfg / 100.0;
+  } else {
+    volts = VOLTAGE_DEFAULT;
+  }
+
+  if(volts != _voltage)
+  {
+    _voltage = volts;
+    _power = _amp * _voltage;
+    if(config_threephase_enabled()) {
+      _power = _power * 3;
+    }
+
+    StaticJsonDocument<64> event;
+    event["voltage"] = _voltage * VOLTS_SCALE_FACTOR;
+    event["power"] = _power * POWER_SCALE_FACTOR;
+    event_send(event);
   }
 }
 
@@ -856,9 +908,10 @@ void EvseMonitor::getChargeCurrentAndVoltageFromEvse()
       {
         DBUGF("amps = %.2f, volts = %.2f", a, volts);
         _amp = a;
-        if(VOLTAGE_MINIMUM <= volts && volts <= VOLTAGE_MAXIMUM) {
-          _voltage = volts;
-        }
+        // _voltage is resolved from MQTT > configured ($SV/$GV) > default in
+        // updateEffectiveVoltage(); the $GG charging voltage is intentionally
+        // ignored so the reported value tracks the configured setpoint.
+        (void)volts;
         _power = _amp * _voltage;
         if (config_threephase_enabled()) {
           _power = _power * 3;

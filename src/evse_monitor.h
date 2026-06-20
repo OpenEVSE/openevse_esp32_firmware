@@ -27,6 +27,13 @@
 
 #define EVSE_MONITOR_TEMP_COUNT         6
 
+// How long a voltage received over MQTT is considered "available" before we
+// fall back to the statically configured ($SV/$GV) voltage. Refreshed on every
+// MQTT voltage message.
+#ifndef EVSE_MONITOR_MQTT_VOLTAGE_TIMEOUT_MS
+#define EVSE_MONITOR_MQTT_VOLTAGE_TIMEOUT_MS  120000UL
+#endif
+
 class EvseMonitor : public MicroTasks::Task
 {
   private:
@@ -131,7 +138,9 @@ class EvseMonitor : public MicroTasks::Task
 
     EvseStateEvent _state;            // OpenEVSE State
     double _amp;                      // OpenEVSE Current Sensor
-    double _voltage;                  // Voltage from OpenEVSE or MQTT
+    double _voltage;                  // Resolved voltage: MQTT > configured ($SV/$GV) > default
+    double _mqtt_voltage;             // Last voltage received over MQTT (0 = none received)
+    uint32_t _mqtt_voltage_time;      // millis() of last MQTT voltage (0 = never)
     double _power;                    // Calculated Power from _amp & _voltage & mono|threephase
     Temperature _temps[EVSE_MONITOR_TEMP_COUNT];
     EnergyMeter _energyMeter;
@@ -188,6 +197,7 @@ class EvseMonitor : public MicroTasks::Task
 
     void getStatusFromEvse(bool allowStart = true);
     void getChargeCurrentAndVoltageFromEvse();
+    void updateEffectiveVoltage();
     void getTemperatureFromEvse();
     void readFrequency();
     void readRelayStatus();
@@ -223,6 +233,7 @@ class EvseMonitor : public MicroTasks::Task
 
     void setPilot(long amps, bool force=false, std::function<void(int ret)> callback = NULL);
     void setVoltage(double volts, std::function<void(int ret)> callback = NULL);
+    void setMqttVoltage(double volts);
     void setServiceLevel(ServiceLevel level, std::function<void(int ret)> callback = NULL);
     void configureCurrentSensorScale(long scale, long offset, std::function<void(int ret)> callback = NULL);
     void enableFeature(uint8_t feature, bool enabled, std::function<void(int ret)> callback = NULL);
