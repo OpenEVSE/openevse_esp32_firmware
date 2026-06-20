@@ -160,9 +160,14 @@ void DivertTask::update_state()
   // If divert mode = Eco (2)
   if (_mode == DivertMode::Eco)
   {
+    // voltage = per-phase voltage, kept as the published value (consistent with
+    // evse_monitor's canonical ~240V). calc_voltage = the value used for the divert
+    // current math, which is tripled on 3-phase. Publishing the tripled value here
+    // leaked 720V over /ws and flickered the GUI PowerRing (gui-nightshift#16).
     double voltage = _evse->getVoltage();
+    double calc_voltage = voltage;
     if (config_threephase_enabled()) {
-      voltage = voltage * 3;
+      calc_voltage = voltage * 3;
     }
 
     // Calculate current
@@ -173,8 +178,8 @@ void DivertTask::update_state()
       // grid_ie is negative when exporting
       // If grid feeds is available and exporting (negative)
 
-      DBUGVAR(voltage);
-      double Igrid_ie = (double)grid_ie / voltage;
+      DBUGVAR(calc_voltage);
+      double Igrid_ie = (double)grid_ie / calc_voltage;
       DBUGVAR(Igrid_ie);
 
       // Subtract the current charge the EV is using from the Grid IE
@@ -187,7 +192,7 @@ void DivertTask::update_state()
       if (Igrid_ie < 0)
       {
         // If excess power
-        double reserve = (1000.0 * ((divert_PV_ratio > 1.0) ? (divert_PV_ratio - 1.0) : 0.0)) / voltage;
+        double reserve = (1000.0 * ((divert_PV_ratio > 1.0) ? (divert_PV_ratio - 1.0) : 0.0)) / calc_voltage;
         DBUGVAR(reserve);
         _available_current = (-Igrid_ie - reserve);
       }
@@ -200,8 +205,8 @@ void DivertTask::update_state()
     else if (divert_type == DIVERT_TYPE_SOLAR)
     {
       // if grid feed is not available: charge rate = solar generation
-      DBUGVAR(voltage);
-      _available_current = (double)solar / voltage;
+      DBUGVAR(calc_voltage);
+      _available_current = (double)solar / calc_voltage;
     }
 
     if(_available_current < 0) {
