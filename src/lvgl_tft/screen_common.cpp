@@ -1,3 +1,4 @@
+// src/lvgl_tft/screen_common.cpp — see screen_common.h.
 #include "screen_common.h"
 
 #ifdef ENABLE_SCREEN_LVGL_TFT

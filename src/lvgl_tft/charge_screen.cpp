@@ -14,9 +14,6 @@
 #define COL_CARD    NS_SURFACE3  // tile surface
 #define COL_TRACK   NS_BORDER    // ring track
 #define COL_ACCENT  NS_ACCENT    // connected / starting
-#define COL_OK      NS_SUCCESS   // charging
-#define COL_FAULT   NS_ERROR     // fault
-#define COL_SLEEP   NS_SLEEP     // sleeping
 #define COL_TEXT    NS_TEXT
 #define COL_DIM     NS_TEXTDIM
 
