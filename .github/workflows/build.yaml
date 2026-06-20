@@ -5,6 +5,7 @@ name: Build/Release OpenEVSE
 permissions:
   contents: write
   checks: write
+  pull-requests: write
 
 on:
   push:

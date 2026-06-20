@@ -116,7 +116,7 @@ def get_native_binary_path() -> Path:
     """
     env_path = os.environ.get("NATIVE_BINARY_PATH")
     if env_path:
-        path = Path(env_path)
+        path = Path(env_path).resolve()
         if path.exists():
             return path
 
