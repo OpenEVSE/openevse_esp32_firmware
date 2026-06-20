@@ -78,3 +78,14 @@ pio test -e native_test
 
 Test suites live under `test/`. New host-testable logic should land with a
 doctest suite alongside it.
+
+The full native firmware build is `native_openevse`. To build the host binary with
+the LVGL local UI path enabled, use `native_openevse_lvgl`:
+
+```bash
+pio run -e native_openevse_lvgl
+```
+
+That env enables the LVGL local UI code on the host build and registers a headless
+LVGL display driver, so the UI logic is compiled and exercised without requiring
+ESP32 display hardware.

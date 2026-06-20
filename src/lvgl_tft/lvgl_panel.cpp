@@ -2,9 +2,14 @@
 #ifdef ENABLE_SCREEN_LVGL_TFT
 
 #include <Arduino.h>
-#include <TFT_eSPI.h>
 #include <lvgl.h>
+
+#if defined(EPOXY_DUINO)
+#include <stdlib.h>
+#else
+#include <TFT_eSPI.h>
 #include <esp_heap_caps.h>
+#endif
 
 #include "lvgl_panel.h"
 #include "backlight.h"
@@ -40,7 +45,9 @@ static const uint16_t SCREEN_H = TFT_WIDTH;  // 320
 // buffer could never overlap a flush.
 static const uint32_t DRAW_BUF_PIXELS = SCREEN_W * 32; // 480*32 = 15360 px (~30 KB)
 
+#if !defined(EPOXY_DUINO)
 static TFT_eSPI tft = TFT_eSPI();
+#endif
 
 static lv_disp_draw_buf_t draw_buf;
 static lv_disp_drv_t disp_drv;
@@ -48,6 +55,11 @@ static lv_color_t *buf1 = nullptr;
 
 static void flush_cb(lv_disp_drv_t *drv, const lv_area_t *area, lv_color_t *color_p)
 {
+#if defined(EPOXY_DUINO)
+  (void)area;
+  (void)color_p;
+  lv_disp_flush_ready(drv);
+#else
   uint32_t w = (area->x2 - area->x1 + 1);
   uint32_t h = (area->y2 - area->y1 + 1);
 
@@ -57,10 +69,22 @@ static void flush_cb(lv_disp_drv_t *drv, const lv_area_t *area, lv_color_t *colo
   tft.endWrite();
 
   lv_disp_flush_ready(drv);
+#endif
 }
 
 bool lvgl_panel_begin()
 {
+#if defined(EPOXY_DUINO)
+  lv_init();
+
+  const size_t buf_bytes = DRAW_BUF_PIXELS * sizeof(lv_color_t);
+  buf1 = (lv_color_t *)malloc(buf_bytes);
+  if (buf1 == nullptr) {
+    Serial.printf("[panel] FATAL: draw-buffer alloc failed (%u B host heap)\n",
+                  (unsigned)buf_bytes);
+    return false;
+  }
+#else
   tft.init();
   tft.setRotation(1); // landscape, matches the original renderer
 #if ESP_ARDUINO_VERSION >= ESP_ARDUINO_VERSION_VAL(3, 0, 0)
@@ -95,6 +119,7 @@ bool lvgl_panel_begin()
                   (unsigned)heap_caps_get_largest_free_block(MALLOC_CAP_INTERNAL));
     return false;
   }
+#endif
   lv_disp_draw_buf_init(&draw_buf, buf1, nullptr, DRAW_BUF_PIXELS);
 
   lv_disp_drv_init(&disp_drv);
@@ -104,9 +129,14 @@ bool lvgl_panel_begin()
   disp_drv.draw_buf = &draw_buf;
   lv_disp_drv_register(&disp_drv);
 
+#if defined(EPOXY_DUINO)
+  Serial.printf("[panel] headless LVGL display up %ux%u, 1 buf %u B host heap\n",
+                SCREEN_W, SCREEN_H, (unsigned)buf_bytes);
+#else
   Serial.printf("[panel] display up %ux%u, 1 buf %u B internal, free internal heap=%u\n",
                 SCREEN_W, SCREEN_H, (unsigned)buf_bytes,
                 (unsigned)heap_caps_get_free_size(MALLOC_CAP_INTERNAL));
+#endif
   return true;
 }
 
