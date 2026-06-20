@@ -45,6 +45,9 @@ extern String sntp_hostname;
 
 // On-device LVGL TFT display theme: "dark" (nightshift) or "light".
 extern String tft_theme;
+extern uint32_t tft_brightness;
+extern uint32_t tft_standby_brightness;
+extern uint32_t tft_timeout;
 
 // LIMIT Settings
 extern String limit_default_type;

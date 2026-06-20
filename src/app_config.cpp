@@ -68,6 +68,9 @@ String sntp_hostname;
 
 // On-device LVGL TFT display theme ("dark" | "light").
 String tft_theme;
+uint32_t tft_brightness;
+uint32_t tft_standby_brightness;
+uint32_t tft_timeout;
 
 // LIMIT Settings
 String limit_default_type;
@@ -207,6 +210,9 @@ ConfigOpt *opts[] =
 // On-device display theme (only present on LVGL-TFT builds; its presence in
 // /config is the GUI's capability signal that this device has the panel).
   new ConfigOptDefinition<String>(tft_theme, "dark", "tft_theme", "tt"),
+  new ConfigOptDefinition<uint32_t>(tft_brightness, 100, "tft_brightness", "tb"),
+  new ConfigOptDefinition<uint32_t>(tft_standby_brightness, 15, "tft_standby_brightness", "tsb"),
+  new ConfigOptDefinition<uint32_t>(tft_timeout, 600, "tft_timeout", "tto"),
 #endif
 
 // Time
