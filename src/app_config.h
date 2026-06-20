@@ -43,6 +43,9 @@ extern String esp_hostname;
 extern String esp_hostname_default;
 extern String sntp_hostname;
 
+// On-device LVGL TFT display theme: "dark" (nightshift) or "light".
+extern String tft_theme;
+
 // LIMIT Settings
 extern String limit_default_type;
 extern uint32_t limit_default_value;

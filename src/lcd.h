@@ -10,7 +10,10 @@
 #define LCD_DISPLAY_CHANGE_TIME (4 * 1000)
 #endif
 
-#if ENABLE_SCREEN_LCD_TFT
+#if ENABLE_SCREEN_LVGL_TFT
+// LVGL renderer for the stock ILI9488 TFT (drop-in LcdTask, same public API).
+#include "lcd_lvgl.h"
+#elif ENABLE_SCREEN_LCD_TFT
 // HACK: This should be done in a much more C++ way
 #include "lcd_tft.h"
 #else
