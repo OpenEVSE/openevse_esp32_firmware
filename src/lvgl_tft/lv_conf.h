@@ -19,10 +19,16 @@
 #define LV_MEM_CUSTOM 0
 #define LV_MEM_SIZE (32U * 1024U)
 
-// Tick from Arduino millis().
+// Tick from Arduino millis() on-device. The native/EpoxyDuino host build advances
+// LVGL explicitly from lcd_lvgl.cpp so the C-only LVGL sources don't need to
+// include the C++ Arduino headers.
+#ifdef EPOXY_DUINO
+#define LV_TICK_CUSTOM 0
+#else
 #define LV_TICK_CUSTOM 1
 #define LV_TICK_CUSTOM_INCLUDE "Arduino.h"
 #define LV_TICK_CUSTOM_SYS_TIME_EXPR (millis())
+#endif
 
 #define LV_DPI_DEF 130
 
