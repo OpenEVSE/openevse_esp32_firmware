@@ -15,6 +15,15 @@ static int lastPercent = -1;
 static size_t update_total_size = 0;
 static size_t update_position = 0;
 
+struct HttpUpdateRequestState
+{
+  bool startedUpdate = false;
+  bool updateComplete = false;
+  bool responseComplete = false;
+  bool redirected = false;
+  bool errorReported = false;
+};
+
 bool http_update_from_url(String url,
   std::function<void(size_t complete, size_t total)> progress,
   std::function<void(int)> success,
@@ -25,71 +34,151 @@ bool http_update_from_url(String url,
   MongooseHttpClientRequest *request = client.beginRequest(url.c_str());
   if(request)
   {
+    HttpUpdateRequestState *state = new HttpUpdateRequestState();
+    if(!state)
+    {
+      delete request;
+      error(HTTP_UPDATE_ERROR_FAILED_TO_START_UPDATE);
+      return false;
+    }
+
     request->setMethod(HTTP_GET);
 
     DBUGF("Trying to fetch firmware from %s", url.c_str());
 
-    request->onBody([url,progress,error,request](MongooseHttpClientResponse *response)
+    request->onBody([url,progress,success,error,request,state](MongooseHttpClientResponse *response)
     {
       DBUGF("Update onBody %d", response->respCode());
+      if(state->updateComplete)
+      {
+        return;
+      }
+
       if(response->respCode() == 200)
       {
         size_t total = response->contentLength();
         DBUGVAR(total);
         if(Update.isRunning() || http_update_start(url, total))
         {
+          state->startedUpdate = true;
           uint8_t *data = (uint8_t *)response->body().c_str();
           size_t len = response->body().length();
           if(http_update_write(data, len))
           {
             progress(len, total);
+
+            // With Mongoose's streaming client the final body chunk is
+            // observable even when MG_EV_HTTP_REPLY is not delivered later.
+            // Finalize as soon as every Content-Length byte is written.
+            if(update_total_size > 0 && update_position == update_total_size)
+            {
+              DEBUG_PORT.printf("Update download complete: %zu bytes, finalizing\n", update_position);
+              if(http_update_end(false))
+              {
+                state->updateComplete = true;
+                success(HTTP_UPDATE_OK);
+                restart_system();
+              } else {
+                state->errorReported = true;
+                error(HTTP_UPDATE_ERROR_FAILED_TO_END_UPDATE);
+              }
+            }
             return;
           } else {
+            state->errorReported = true;
             error(HTTP_UPDATE_ERROR_WRITE_FAILED);
           }
         } else {
+          state->errorReported = true;
           error(HTTP_UPDATE_ERROR_FAILED_TO_START_UPDATE);
         }
       } else if (300 <= response->respCode() && response->respCode() < 400) {
         // handle 3xx redirects (later)
         return;
       } else {
+        state->errorReported = true;
         error(response->respCode());
       }
       request->abort();
     });
 
-    request->onResponse([progress, error, success, request](MongooseHttpClientResponse *response)
+    request->onResponse([progress, error, success, request,state](MongooseHttpClientResponse *response)
     {
       DBUGF("Update onResponse %d", response->respCode());
       if(301 == response->respCode() ||
          302 == response->respCode())
       {
+        state->redirected = true;
         MongooseString location = response->headers("Location");
         DBUGVAR(location.toString());
         http_update_from_url(location.toString(), progress, success, error);
-      }
-    });
+      } else if(200 == response->respCode()) {
+        state->responseComplete = true;
 
-    request->onClose([success, error]()
-    {
-      DBUGLN("Update onClose");
-      if(Update.isRunning())
-      {
-        if(http_update_end())
+        if(state->updateComplete)
         {
+          return;
+        }
+
+        if(!state->startedUpdate || !Update.isRunning())
+        {
+          if(!state->errorReported)
+          {
+            state->errorReported = true;
+            error(HTTP_UPDATE_ERROR_FAILED_TO_START_UPDATE);
+          }
+          return;
+        }
+
+        if(update_total_size > 0)
+        {
+          DEBUG_PORT.printf("Update incomplete: %zu/%zu bytes\n", update_position, update_total_size);
+          Update.abort();
+          state->errorReported = true;
+          error(HTTP_UPDATE_ERROR_INCOMPLETE_DOWNLOAD);
+          return;
+        }
+
+        // MG_EV_HTTP_REPLY means the complete HTTP response has been received.
+        // Finalize here rather than waiting for a later socket-close callback.
+        if(http_update_end(true))
+        {
+          state->updateComplete = true;
           success(HTTP_UPDATE_OK);
           restart_system();
         } else {
+          state->errorReported = true;
           error(HTTP_UPDATE_ERROR_FAILED_TO_END_UPDATE);
         }
       }
     });
-    client.send(request);
 
+    request->onClose([error,state]()
+    {
+      DBUGLN("Update onClose");
+      if(state->startedUpdate && !state->updateComplete && !state->responseComplete)
+      {
+        if(Update.isRunning())
+        {
+          Update.abort();
+        }
+        if(!state->errorReported)
+        {
+          error(HTTP_UPDATE_ERROR_INCOMPLETE_DOWNLOAD);
+        }
+      }
+      else if(!state->redirected && !state->responseComplete && !state->errorReported)
+      {
+        error(HTTP_UPDATE_ERROR_INCOMPLETE_DOWNLOAD);
+      }
+      delete state;
+    });
+
+    client.send(request);
     return true;
   }
 
+  error(HTTP_UPDATE_ERROR_FAILED_TO_START_UPDATE);
   return false;
 }
 
@@ -97,6 +186,7 @@ bool http_update_start(String source, size_t total)
 {
   update_position = 0;
   update_total_size = total;
+  lastPercent = -1;
   // Pass the expected size so the library can (a) reject an oversized binary
   // before erasing the target partition, and (b) validate completeness at end().
   // Fall back to UPDATE_SIZE_UNKNOWN only when Content-Length is absent.
@@ -130,7 +220,8 @@ bool http_update_write(uint8_t *data, size_t len)
     update_position += len;
     if(update_total_size > 0)
     {
-      int percent = update_position / (update_total_size / 100);
+      int percent = (int)((update_position * 100) / update_total_size);
+      percent = min(percent, 100);
       DBUGVAR(percent);
       DBUGVAR(lastPercent);
       if(percent != lastPercent)
@@ -154,10 +245,10 @@ bool http_update_write(uint8_t *data, size_t len)
   return false;
 }
 
-bool http_update_end()
+bool http_update_end(bool evenIfRemaining)
 {
   DBUGLN("Upload finished");
-  if(Update.end(true))
+  if(Update.end(evenIfRemaining))
   {
     DBUGF("Update Success: %u", update_position);
     lcd.display(F("Complete"), 0, 1, 10 * 1000, LCD_CLEAR_LINE | LCD_DISPLAY_NOW);
@@ -167,7 +258,7 @@ bool http_update_end()
     yield();
     return true;
   } else {
-    DBUGF("Update failed: %d", Update.getError());
+    DEBUG_PORT.printf("Update failed: %d (%s)\n", Update.getError(), Update.errorString());
     StaticJsonDocument<128> event;
     event["ota"] = "failed";
     web_server_event(event);

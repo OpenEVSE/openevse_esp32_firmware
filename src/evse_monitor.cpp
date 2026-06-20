@@ -172,7 +172,13 @@ EvseMonitor::EvseMonitor(OpenEVSEClass &openevse) :
   _panic_temperature(72),
   _heartbeat_interval(EVSE_HEATBEAT_INTERVAL),
   _heartbeat_current(EVSE_HEARTBEAT_CURRENT),
-  _sender(nullptr)
+  _sender(nullptr),
+  _frequency(0),
+  _relay_dc1(true),
+  _relay_dc2(true),
+  _relay_ac(true),
+  _relay_status_known(false),
+  _chip_id("")
 {
 }
 
@@ -256,6 +262,10 @@ void EvseMonitor::evseBoot(const char *firmware)
     }
   });
 
+  readChipId();
+  readRelayStatus();
+  readFrequency();
+
 #ifndef DISABLE_HEARTBEAT
   _openevse.heartbeatEnable(EVSE_HEATBEAT_INTERVAL, EVSE_HEARTBEAT_CURRENT, [this](int ret, int interval, int current, int triggered) {
     _heartbeat = RAPI_RESPONSE_OK == ret;
@@ -296,6 +306,11 @@ void EvseMonitor::updateEvseState(uint8_t evse_state, uint8_t pilot_state, uint3
     if(!isCharging()) {
       _amp = 0;
       _power = 0;
+      // Read voltage and frequency after relay opens
+      if(_sender) {
+        getChargeCurrentAndVoltageFromEvse();
+        readFrequency();
+      }
     }
     _session_complete.update(getFlags());
   }
@@ -572,6 +587,8 @@ void EvseMonitor::setVoltage(double volts, std::function<void(int ret)> callback
         StaticJsonDocument<128> event;
         event["voltage"] = _voltage;
         event_send(event);
+        // Read back confirmed voltage from EVSE via $GV
+        getChargeCurrentAndVoltageFromEvse();
       }
 
       if(callback) {
@@ -715,14 +732,8 @@ void EvseMonitor::enableFrontButton(bool enabled, std::function<void(int ret)> c
 
 void EvseMonitor::setPanicTemperature(uint32_t tempC, std::function<void(int ret)> callback)
 {
-  if(!_sender) {
-    if(callback) callback(RAPI_RESPONSE_NK);
-    return;
-  }
   _panic_temperature = tempC;
-  char command[32];
-  snprintf(command, sizeof(command), "$FO %u", tempC * 10);
-  _sender->sendCmd(command, [callback](int ret) {
+  _openevse.setPanicTemperature(tempC, [callback](int ret) {
     if(callback) callback(ret);
   });
 }
@@ -927,6 +938,86 @@ void EvseMonitor::getAmmeterSettings()
       DBUGF("scale = %ld, offset = %ld", scale, offset);
       _current_sensor_scale = scale;
       _current_sensor_offset = offset;
+    }
+  });
+}
+
+void EvseMonitor::enablePPAutoAmpacity(bool enabled, std::function<void(int ret)> callback)
+{
+  if(!isD9Supported()) {
+    if(callback) callback(RAPI_RESPONSE_FEATURE_NOT_SUPPORTED);
+    return;
+  }
+  if(isPPAutoAmpacityEnabled() != enabled) {
+    enableFeature(OPENEVSE_FEATURE_PP_AUTO_AMPACITY, enabled, callback);
+  }
+}
+
+void EvseMonitor::enableZeroCrossSwitch(bool enabled, std::function<void(int ret)> callback)
+{
+  if(!isD9Supported()) {
+    if(callback) callback(RAPI_RESPONSE_FEATURE_NOT_SUPPORTED);
+    return;
+  }
+  if(isZeroCrossSwitchEnabled() != enabled) {
+    enableFeature(OPENEVSE_FEATURE_ZERO_CROSS_SWITCH, enabled, callback);
+  }
+}
+
+void EvseMonitor::setRelayEnable(int relay, bool enabled, std::function<void(int ret)> callback)
+{
+  _openevse.setRelayEnable(relay, enabled, [this, relay, enabled, callback](int ret) {
+    if(RAPI_RESPONSE_OK == ret) {
+      if(relay == 1) _relay_dc1 = enabled;
+      else if(relay == 2) _relay_dc2 = enabled;
+      else if(relay == 3) _relay_ac = enabled;
+    }
+    if(callback) callback(ret);
+  });
+}
+
+void EvseMonitor::resetFaultCounters(std::function<void(int ret)> callback)
+{
+  _openevse.resetFaultCounters([this, callback](int ret) {
+    if(RAPI_RESPONSE_OK == ret) {
+      _gfci_count = 0;
+      _nognd_count = 0;
+      _stuck_count = 0;
+    }
+    if(callback) callback(ret);
+  });
+}
+
+void EvseMonitor::readFrequency()
+{
+  _openevse.getFrequency([this](int ret, uint32_t frequency) {
+    if(RAPI_RESPONSE_OK == ret) {
+      _frequency = frequency;
+      DBUGF("frequency = %u (×100 Hz)", _frequency);
+    }
+  });
+}
+
+void EvseMonitor::readRelayStatus()
+{
+  _openevse.getRelayStatus([this](int ret, bool dc1, bool dc2, bool ac) {
+    if(RAPI_RESPONSE_OK == ret) {
+      _relay_dc1 = dc1;
+      _relay_dc2 = dc2;
+      _relay_ac  = ac;
+      _relay_status_known = true;
+      DBUGF("relay dc1=%d dc2=%d ac=%d", _relay_dc1, _relay_dc2, _relay_ac);
+    }
+  });
+}
+
+void EvseMonitor::readChipId()
+{
+  // $GI is the MCU serial/chip ID - reuse the library's getSerial()
+  _openevse.getSerial([this](int ret, const char *serial) {
+    if(RAPI_RESPONSE_OK == ret && serial) {
+      snprintf(_chip_id, sizeof(_chip_id), "%s", serial);
+      DBUGF("chip_id = %s", _chip_id);
     }
   });
 }
