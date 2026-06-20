@@ -8,6 +8,7 @@
 #include "charge_screen.h"
 #include "openevse.h"     // OPENEVSE_STATE_*
 #include "nightshift.h"   // exact nightshift palette
+#include "screen_common.h"
 
 #define COL_BG      NS_SURFACE   // screen base
 #define COL_CARD    NS_SURFACE3  // tile surface
@@ -166,36 +167,6 @@ void charge_screen_build()
   if(old) {
     lv_obj_del(old);
   }
-}
-
-// Map EVSE state -> status word + accent colour.
-static const char *state_word(uint8_t s, lv_color_t *colour)
-{
-  switch (s) {
-    case OPENEVSE_STATE_CHARGING:      *colour = COL_OK;     return "CHARGING";
-    case OPENEVSE_STATE_CONNECTED:     *colour = COL_ACCENT; return "CONNECTED";
-    case OPENEVSE_STATE_SLEEPING:      *colour = COL_SLEEP;  return "SLEEPING";
-    case OPENEVSE_STATE_DISABLED:      *colour = COL_DIM;    return "DISABLED";
-    case OPENEVSE_STATE_STARTING:      *colour = COL_ACCENT; return "STARTING";
-    case OPENEVSE_STATE_NOT_CONNECTED: *colour = COL_DIM;    return "NOT CONNECTED";
-    case OPENEVSE_STATE_VENT_REQUIRED:
-    case OPENEVSE_STATE_DIODE_CHECK_FAILED:
-    case OPENEVSE_STATE_GFI_FAULT:
-    case OPENEVSE_STATE_NO_EARTH_GROUND:
-    case OPENEVSE_STATE_STUCK_RELAY:
-    case OPENEVSE_STATE_GFI_SELF_TEST_FAILED:
-    case OPENEVSE_STATE_OVER_TEMPERATURE:
-    case OPENEVSE_STATE_OVER_CURRENT:  *colour = COL_FAULT;  return "FAULT";
-    default:                           *colour = COL_DIM;    return "--";
-  }
-}
-
-// RSSI (dBm) -> signal %, the usual piecewise mapping.
-static int wifi_percent(int rssi)
-{
-  if (rssi <= -100) return 0;
-  if (rssi >= -50)  return 100;
-  return 2 * (rssi + 100);
 }
 
 void charge_screen_update(const ChargeScreenData &d)
