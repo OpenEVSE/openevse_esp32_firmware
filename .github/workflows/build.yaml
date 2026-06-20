@@ -54,11 +54,14 @@ jobs:
 
     - name: Run native unit tests
       run: |
-        pio test -e native_test
         mkdir -p doctest_results
-        for prog in .pio/build/native_test/*/program; do
-          suite=$(basename "$(dirname "$prog")")
-          "$prog" --reporters=junit --out="doctest_results/${suite}.xml"
+        # PlatformIO builds all test suites to the same .pio/build/native_test/program
+        # path (no per-suite subdirectory), so run each suite individually to capture
+        # JUnit output before the binary is overwritten by the next suite.
+        for suite_dir in test/test_*/; do
+          name=$(basename "$suite_dir")
+          pio test -e native_test -f "$name" --without-testing
+          .pio/build/native_test/program --reporters=junit --out="doctest_results/${name}.xml"
         done
 
     - name: Upload test results
