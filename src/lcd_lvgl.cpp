@@ -283,7 +283,8 @@ unsigned long LcdTask::loop(MicroTasks::WakeReason reason)
   // --- Backlight / standby decision (chooses which screen we render) ---
   uint8_t state = _evse->getEvseState();
   bool vehicle = _evse->isVehicleConnected();
-  applyDisplayConfig();   // pick up live /config changes to brightness/timeout
+  applyDisplayConfig();   // pick up live /config changes; also applies brightness now
+                          // so slider changes take effect without waiting for a wake
 
   if(_prev_state != state || _prev_vehicle != vehicle) {
     wakeBacklight();      // any state change -> full brightness, exit standby, re-arm
@@ -291,13 +292,15 @@ unsigned long LcdTask::loop(MicroTasks::WakeReason reason)
     _prev_vehicle = vehicle;
   }
 
-  bool keepAwake = stateKeepsAwake(state, _evse->getAmps());
+  bool keepAwake = stateKeepsAwake(state, vehicle, _evse->getAmps());
   if(keepAwake) {
     _lastWake = millis(); // keep re-arming so we never time out while charging/fault
     if(_standby) {
       wakeBacklight();
     }
-  } else if(bl_should_standby(false, (uint32_t)_timeoutS, millis() - _lastWake)) {
+  }
+  // bl_should_standby returns false when keepAwake, so this is a plain guard.
+  if(bl_should_standby(keepAwake, (uint32_t)_timeoutS, millis() - _lastWake)) {
     if(!_standby) {
       enterStandby();
     }
@@ -419,9 +422,9 @@ void LcdTask::enterStandby()
   lvgl_panel_set_backlight((uint8_t)(_standbyBrightness < 0 ? 0 : _standbyBrightness));
 }
 
-bool LcdTask::stateKeepsAwake(uint8_t state, double amps)
+bool LcdTask::stateKeepsAwake(uint8_t state, bool vehicle, double amps)
 {
-  if(!_evse->isVehicleConnected()) {
+  if(!vehicle) {
     return false;
   }
   switch(state) {

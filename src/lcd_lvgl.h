@@ -78,12 +78,14 @@ class LcdTask : public MicroTasks::Task
     uint8_t  _prev_state = 0xff;
     bool     _prev_vehicle = false;
     bool     _standby = false;          // currently dimmed to the standby screen/level
-    int32_t  _activeBrightness = -1;    // cached config (-1 = not read yet)
+    // int32_t with a -1 sentinel = "not read yet"; only -1 until the first
+    // applyDisplayConfig() in init() (a uint32 config cast can't go negative after).
+    int32_t  _activeBrightness = -1;
     int32_t  _standbyBrightness = -1;
     int32_t  _timeoutS = -1;
     void wakeBacklight();               // active brightness, exit standby, re-arm idle
     void enterStandby();                // standby brightness (+ standby screen if >0)
-    bool stateKeepsAwake(uint8_t state, double amps);  // charging/fault force-bright
+    bool stateKeepsAwake(uint8_t state, bool vehicle, double amps);  // charging/fault force-bright
     void applyDisplayConfig();          // refresh cached brightness/timeout + apply live
 
     void display(Message *msg, uint32_t flags);
