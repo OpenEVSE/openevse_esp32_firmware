@@ -7,6 +7,7 @@
 #include <esp_heap_caps.h>
 
 #include "lvgl_panel.h"
+#include "backlight.h"
 
 // The ILI9488 forces TFT_eSPI's SPI_18BIT_DRIVER, which disables ESP32_DMA
 // (DMA only supports 16-bit pushes). So there is no DMA path on this panel —
@@ -14,6 +15,20 @@
 #if defined(ESP32_DMA)
 #warning "ESP32_DMA unexpectedly available on ILI9488 — still using blocking pushPixels"
 #endif
+
+// Backlight PWM. RGB-LED PWM (LedManagerTask) uses LEDC channels 1..3 and WS2812
+// uses RMT, so channel 0 is free for the 2.x ledcAttachPin path.
+#ifndef LCD_BL_PWM_FREQ
+#define LCD_BL_PWM_FREQ 5000
+#endif
+#ifndef LCD_BL_PWM_RES
+#define LCD_BL_PWM_RES 8
+#endif
+#ifndef LCD_BL_LEDC_CHANNEL
+#define LCD_BL_LEDC_CHANNEL 0
+#endif
+
+static bool bl_ready = false;
 
 // Landscape: native panel is 320x480, rotated to 480x320.
 static const uint16_t SCREEN_W = TFT_HEIGHT; // 480
@@ -47,8 +62,24 @@ bool lvgl_panel_begin()
 {
   tft.init();
   tft.setRotation(1); // landscape, matches the original renderer
-  pinMode(TFT_BL, OUTPUT);
-  digitalWrite(TFT_BL, HIGH);
+#if ESP_ARDUINO_VERSION >= ESP_ARDUINO_VERSION_VAL(3, 0, 0)
+  ledcAttach(TFT_BL, LCD_BL_PWM_FREQ, LCD_BL_PWM_RES);
+#else
+  ledcSetup(LCD_BL_LEDC_CHANNEL, LCD_BL_PWM_FREQ, LCD_BL_PWM_RES);
+  ledcAttachPin(TFT_BL, LCD_BL_LEDC_CHANNEL);
+#endif
+  bl_ready = true;
+  lvgl_panel_set_backlight(100); // full on until LcdTask applies the configured level
+
+#ifdef LCD_BL_PWM_SELFTEST
+  // Gated diagnostic: ramp the backlight up/down a few times so a human can
+  // confirm the panel actually dims (some BL circuits are on/off-only).
+  for (int cycle = 0; cycle < 3; ++cycle) {
+    for (int p = 0; p <= 100; p += 5) { lvgl_panel_set_backlight((uint8_t)p); delay(30); }
+    for (int p = 100; p >= 0; p -= 5) { lvgl_panel_set_backlight((uint8_t)p); delay(30); }
+  }
+  lvgl_panel_set_backlight(100);
+#endif
 
   lv_init();
 
@@ -73,6 +104,19 @@ bool lvgl_panel_begin()
                 SCREEN_W, SCREEN_H, (unsigned)buf_bytes,
                 (unsigned)heap_caps_get_free_size(MALLOC_CAP_INTERNAL));
   return true;
+}
+
+void lvgl_panel_set_backlight(uint8_t pct)
+{
+  if (!bl_ready) {
+    return;
+  }
+  uint8_t duty = bl_pct_to_duty(pct);
+#if ESP_ARDUINO_VERSION >= ESP_ARDUINO_VERSION_VAL(3, 0, 0)
+  ledcWrite(TFT_BL, duty);
+#else
+  ledcWrite(LCD_BL_LEDC_CHANNEL, duty);
+#endif
 }
 
 #endif // ENABLE_SCREEN_LVGL_TFT
