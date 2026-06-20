@@ -73,13 +73,18 @@ class LcdTask : public MicroTasks::Task
     int8_t _themeLight = -1;
     bool applyThemeFromConfig();  // sets the palette; true if it changed
 
-#ifdef TFT_BACKLIGHT_TIMEOUT_MS
-    uint32_t _backlight_timeout = 0;
+    // Backlight + standby (PWM). Brightness 0..100; idle measured from _lastWake.
+    uint32_t _lastWake = 0;
     uint8_t  _prev_state = 0xff;
     bool     _prev_vehicle = false;
-    void wakeBacklight();
-    void updateBacklight();
-#endif
+    bool     _standby = false;          // currently dimmed to the standby screen/level
+    int32_t  _activeBrightness = -1;    // cached config (-1 = not read yet)
+    int32_t  _standbyBrightness = -1;
+    int32_t  _timeoutS = -1;
+    void wakeBacklight();               // active brightness, exit standby, re-arm idle
+    void enterStandby();                // standby brightness (+ standby screen if >0)
+    bool stateKeepsAwake(uint8_t state, double amps);  // charging/fault force-bright
+    void applyDisplayConfig();          // refresh cached brightness/timeout + apply live
 
     void display(Message *msg, uint32_t flags);
     unsigned long displayNextMessage();
