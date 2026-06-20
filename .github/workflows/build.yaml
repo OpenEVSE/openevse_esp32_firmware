@@ -32,7 +32,7 @@ jobs:
     name: Native unit tests
     runs-on: ubuntu-latest
     steps:
-    - uses: actions/checkout@v6
+    - uses: actions/checkout@v7
 
     - name: Cache pip
       uses: actions/cache@v5
@@ -104,7 +104,7 @@ jobs:
     steps:
     - uses: ammaraskar/gcc-problem-matcher@master
 
-    - uses: actions/checkout@v6
+    - uses: actions/checkout@v7
 
     - name: Cache pip
       uses: actions/cache@v5
