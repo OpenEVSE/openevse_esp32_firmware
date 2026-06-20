@@ -1,12 +1,12 @@
 #include "web_server.apple_touch_icon_png.h"
 #include "web_server.assets_charts_CnsZ1jie_css_gz.h"
 #include "web_server.assets_charts_DcZkpMN__js_gz.h"
-#include "web_server.assets_en_DaBqmkrj_js_gz.h"
-#include "web_server.assets_es_BJWRiA6M_js_gz.h"
-#include "web_server.assets_fr_yQ_IDknI_js_gz.h"
-#include "web_server.assets_hu_BXSHmbqR_js_gz.h"
-#include "web_server.assets_index_D6RCSBhf_js_gz.h"
-#include "web_server.assets_index_DkVatPEQ_css_gz.h"
+#include "web_server.assets_en_BH9yT0sC_js_gz.h"
+#include "web_server.assets_es_DOISQMW8_js_gz.h"
+#include "web_server.assets_fr_Csl8uoPK_js_gz.h"
+#include "web_server.assets_hu_BzB0WCWH_js_gz.h"
+#include "web_server.assets_index_BG1NZV3m_js_gz.h"
+#include "web_server.assets_index_BOolKD8i_css_gz.h"
 #include "web_server.assets_rolldown_runtime_Bh1tDfsg_js_gz.h"
 #include "web_server.assets_vendor_KRe_m33__js_gz.h"
 #include "web_server.favicon_ico.h"
@@ -20,12 +20,12 @@ StaticFile web_server_static_files[] = {
   { "/apple-touch-icon.png", CONTENT_APPLE_TOUCH_ICON_PNG, sizeof(CONTENT_APPLE_TOUCH_ICON_PNG) - 1, _CONTENT_TYPE_PNG, CONTENT_APPLE_TOUCH_ICON_PNG_ETAG, false },
   { "/assets/charts-CnsZ1jie.css", CONTENT_CHARTS_CNSZ1JIE_CSS_GZ, sizeof(CONTENT_CHARTS_CNSZ1JIE_CSS_GZ) - 1, _CONTENT_TYPE_CSS, CONTENT_CHARTS_CNSZ1JIE_CSS_GZ_ETAG, true },
   { "/assets/charts-DcZkpMN-.js", CONTENT_CHARTS_DCZKPMN__JS_GZ, sizeof(CONTENT_CHARTS_DCZKPMN__JS_GZ) - 1, _CONTENT_TYPE_JS, CONTENT_CHARTS_DCZKPMN__JS_GZ_ETAG, true },
-  { "/assets/en-DaBqmkrj.js", CONTENT_EN_DABQMKRJ_JS_GZ, sizeof(CONTENT_EN_DABQMKRJ_JS_GZ) - 1, _CONTENT_TYPE_JS, CONTENT_EN_DABQMKRJ_JS_GZ_ETAG, true },
-  { "/assets/es-BJWRiA6M.js", CONTENT_ES_BJWRIA6M_JS_GZ, sizeof(CONTENT_ES_BJWRIA6M_JS_GZ) - 1, _CONTENT_TYPE_JS, CONTENT_ES_BJWRIA6M_JS_GZ_ETAG, true },
-  { "/assets/fr-yQ_IDknI.js", CONTENT_FR_YQ_IDKNI_JS_GZ, sizeof(CONTENT_FR_YQ_IDKNI_JS_GZ) - 1, _CONTENT_TYPE_JS, CONTENT_FR_YQ_IDKNI_JS_GZ_ETAG, true },
-  { "/assets/hu-BXSHmbqR.js", CONTENT_HU_BXSHMBQR_JS_GZ, sizeof(CONTENT_HU_BXSHMBQR_JS_GZ) - 1, _CONTENT_TYPE_JS, CONTENT_HU_BXSHMBQR_JS_GZ_ETAG, true },
-  { "/assets/index-D6RCSBhf.js", CONTENT_INDEX_D6RCSBHF_JS_GZ, sizeof(CONTENT_INDEX_D6RCSBHF_JS_GZ) - 1, _CONTENT_TYPE_JS, CONTENT_INDEX_D6RCSBHF_JS_GZ_ETAG, true },
-  { "/assets/index-DkVatPEQ.css", CONTENT_INDEX_DKVATPEQ_CSS_GZ, sizeof(CONTENT_INDEX_DKVATPEQ_CSS_GZ) - 1, _CONTENT_TYPE_CSS, CONTENT_INDEX_DKVATPEQ_CSS_GZ_ETAG, true },
+  { "/assets/en-BH9yT0sC.js", CONTENT_EN_BH9YT0SC_JS_GZ, sizeof(CONTENT_EN_BH9YT0SC_JS_GZ) - 1, _CONTENT_TYPE_JS, CONTENT_EN_BH9YT0SC_JS_GZ_ETAG, true },
+  { "/assets/es-DOISQMW8.js", CONTENT_ES_DOISQMW8_JS_GZ, sizeof(CONTENT_ES_DOISQMW8_JS_GZ) - 1, _CONTENT_TYPE_JS, CONTENT_ES_DOISQMW8_JS_GZ_ETAG, true },
+  { "/assets/fr-Csl8uoPK.js", CONTENT_FR_CSL8UOPK_JS_GZ, sizeof(CONTENT_FR_CSL8UOPK_JS_GZ) - 1, _CONTENT_TYPE_JS, CONTENT_FR_CSL8UOPK_JS_GZ_ETAG, true },
+  { "/assets/hu-BzB0WCWH.js", CONTENT_HU_BZB0WCWH_JS_GZ, sizeof(CONTENT_HU_BZB0WCWH_JS_GZ) - 1, _CONTENT_TYPE_JS, CONTENT_HU_BZB0WCWH_JS_GZ_ETAG, true },
+  { "/assets/index-BG1NZV3m.js", CONTENT_INDEX_BG1NZV3M_JS_GZ, sizeof(CONTENT_INDEX_BG1NZV3M_JS_GZ) - 1, _CONTENT_TYPE_JS, CONTENT_INDEX_BG1NZV3M_JS_GZ_ETAG, true },
+  { "/assets/index-BOolKD8i.css", CONTENT_INDEX_BOOLKD8I_CSS_GZ, sizeof(CONTENT_INDEX_BOOLKD8I_CSS_GZ) - 1, _CONTENT_TYPE_CSS, CONTENT_INDEX_BOOLKD8I_CSS_GZ_ETAG, true },
   { "/assets/rolldown-runtime-Bh1tDfsg.js", CONTENT_ROLLDOWN_RUNTIME_BH1TDFSG_JS_GZ, sizeof(CONTENT_ROLLDOWN_RUNTIME_BH1TDFSG_JS_GZ) - 1, _CONTENT_TYPE_JS, CONTENT_ROLLDOWN_RUNTIME_BH1TDFSG_JS_GZ_ETAG, true },
   { "/assets/vendor-KRe-m33_.js", CONTENT_VENDOR_KRE_M33__JS_GZ, sizeof(CONTENT_VENDOR_KRE_M33__JS_GZ) - 1, _CONTENT_TYPE_JS, CONTENT_VENDOR_KRE_M33__JS_GZ_ETAG, true },
   { "/favicon.ico", CONTENT_FAVICON_ICO, sizeof(CONTENT_FAVICON_ICO) - 1, _CONTENT_TYPE_ICO, CONTENT_FAVICON_ICO_ETAG, false },
