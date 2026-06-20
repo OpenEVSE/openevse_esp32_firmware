@@ -18,7 +18,7 @@ struct StandbyScreenData {
   int      sta_count;         // AP station count
   double   today_kwh;         // getTotalDay()  (kWh)
   double   total_kwh;         // getTotalEnergy() (kWh)
-  const char *clock;          // "9:41 · Fri Jun 20"
+  const char *clock;          // "YYYY-MM-DD  HH:MM:SS" (matches the charge header)
   const char *hostname;       // bottom-left
   const char *ip;             // bottom-right
 };

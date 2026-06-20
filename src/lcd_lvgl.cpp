@@ -319,13 +319,10 @@ unsigned long LcdTask::loop(MicroTasks::WakeReason reason)
     sd.today_kwh         = _evse->getTotalDay();
     sd.total_kwh         = _evse->getTotalEnergy();
 
-    char ck[40];
+    char ck[24];
     timeval tv; gettimeofday(&tv, NULL);
     struct tm ti; localtime_r(&tv.tv_sec, &ti);
-    char hm[8]; strftime(hm, sizeof(hm), "%I:%M", &ti);
-    const char *hmp = (hm[0] == '0') ? hm + 1 : hm;  // "09:41" -> "9:41"
-    char dm[16]; strftime(dm, sizeof(dm), "%a %b %d", &ti);
-    snprintf(ck, sizeof(ck), "%s \xC2\xB7 %s", hmp, dm);  // \xC2\xB7 = UTF-8 middot
+    strftime(ck, sizeof(ck), "%Y-%m-%d  %H:%M:%S", &ti);  // match the charge screen header
     sd.clock = ck;
 
     char ipbuf[20];
