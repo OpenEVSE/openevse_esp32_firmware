@@ -10,6 +10,11 @@
 #define LCD_DISPLAY_CHANGE_TIME (4 * 1000)
 #endif
 
+#if ENABLE_SCREEN_LVGL_TFT
+// LVGL renderer for the stock ILI9488 TFT (drop-in LcdTask, same public API).
+#include "lcd_lvgl.h"
+#else
+
 #define LCD_MAX_LEN 16
 
 #define LCD_CHAR_STOP       1
@@ -193,6 +198,8 @@ class LcdTask : public LcdTaskBase
 };
 
 #endif // ENABLE_SCREEN_LCD_TFT
+
+#endif // ENABLE_SCREEN_LVGL_TFT
 
 extern LcdTask lcd;
 

@@ -2,7 +2,9 @@
 #undef ENABLE_DEBUG
 #endif
 
-// === Base class implementation (always compiled) ===
+#if !defined(ENABLE_SCREEN_LVGL_TFT)
+
+// === Base class implementation (always compiled for char LCD and TFT) ===
 
 #include "emonesp.h"
 #include "lcd.h"
@@ -874,3 +876,5 @@ void LcdTask::setWifiMode(bool client, bool connected)
 LcdTask lcd;
 
 #endif // ENABLE_SCREEN_LCD_TFT
+
+#endif // !ENABLE_SCREEN_LVGL_TFT

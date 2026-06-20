@@ -4,6 +4,11 @@
 
 #include <Arduino.h>
 #include <MongooseCore.h>
+#ifdef EPOXY_DUINO
+#include <netdb.h>
+#else
+#include <lwip/netdb.h>
+#endif
 
 #include "debug.h"
 #include "time_man.h"
@@ -25,9 +30,49 @@ TimeManager::TimeManager() :
   _timeHost(NULL),
   _sntp(),
   _nextCheckTime(0),
+  _fetchStartTime(0),
+  _retryCount(0),
   _fetchingTime(false),
-  _setTheTime(false)
+  _setTheTime(false),
+  _lastSyncTime(0),
+  _syncRequested(false)
 {
+  _resolvedIp[0] = '\0';
+}
+
+unsigned long TimeManager::retryDelay()
+{
+  // Exponential back-off: 10 s, 30 s, 90 s, 5 min, 30 min (cap)
+  static const unsigned long delays[] = {
+    10 * 1000UL,
+    30 * 1000UL,
+    90 * 1000UL,
+     5 * 60 * 1000UL,
+    30 * 60 * 1000UL,
+  };
+  uint8_t idx = _retryCount < sizeof(delays) / sizeof(delays[0])
+                  ? _retryCount
+                  : (uint8_t)(sizeof(delays) / sizeof(delays[0]) - 1);
+  return delays[idx];
+}
+
+const char *TimeManager::getNtpStatus()
+{
+  if (!_sntpEnabled)                    return "disabled";
+  if (_fetchingTime || _syncRequested)  return "connecting";
+  if (_retryCount > 0)                  return "retry";
+  if (_lastSyncTime > 0)                return "synchronized";
+  return "waiting";
+}
+
+int32_t TimeManager::getNextSyncMs()
+{
+  if (!_sntpEnabled || _timeHost == NULL) return -1;
+  if (_fetchingTime || _syncRequested)    return 0;   // pending/in-flight
+  if (_nextCheckTime == 0)                return -1;
+  int64_t diff = (int64_t)_nextCheckTime - (int64_t)millis();
+  if (diff > INT32_MAX) return INT32_MAX;
+  return (int32_t)(diff > 0 ? diff : 0);
 }
 
 void TimeManager::begin()
@@ -38,7 +83,13 @@ void TimeManager::begin()
 void TimeManager::setHost(const char *host)
 {
   _timeHost = host;
-  checkNow();
+  _fetchingTime = false;
+  _retryCount   = 0;
+  // Allow 2 s for the DNS resolver to initialise after WiFi connects before
+  // firing the first request.  Update Now / mode-change use checkNow()
+  // directly and bypass this delay to stay fully responsive.
+  _nextCheckTime = millis() + 2000;
+  MicroTask.wakeTask(this);
 }
 
 bool TimeManager::setTimeZone(String tz)
@@ -79,9 +130,30 @@ void TimeManager::setup()
   setTimeZone(time_zone);
 
   _sntp.onError([this](uint8_t err) {
-    DBUGF("Got error %u", err);
+    DBUGF("NTP error %u (attempt %u)", err, _retryCount + 1);
     _fetchingTime = false;
-    _nextCheckTime = millis() + 10 * 1000;
+    // Distinguish DNS failure from other NTP errors (firewall, bad server, etc.)
+    // Only show "DNS failed" badge when DNS resolution itself fails.
+    if(_timeHost) {
+      struct addrinfo hints = {}, *res = nullptr;
+      hints.ai_family = AF_UNSPEC;
+      if(getaddrinfo(_timeHost, nullptr, &hints, &res) == 0 && res) {
+        void *addr = res->ai_family == AF_INET
+          ? (void *)&((struct sockaddr_in  *)res->ai_addr)->sin_addr
+          : (void *)&((struct sockaddr_in6 *)res->ai_addr)->sin6_addr;
+        inet_ntop(res->ai_family, addr, _resolvedIp, sizeof(_resolvedIp) - 1);
+        freeaddrinfo(res);
+      } else {
+        strncpy(_resolvedIp, "failed", sizeof(_resolvedIp) - 1);
+        _resolvedIp[sizeof(_resolvedIp) - 1] = '\0';
+      }
+    } else {
+      strncpy(_resolvedIp, "failed", sizeof(_resolvedIp) - 1);
+      _resolvedIp[sizeof(_resolvedIp) - 1] = '\0';
+    }
+    unsigned long delay = retryDelay();
+    _retryCount++;
+    _nextCheckTime = millis() + delay;
     MicroTask.wakeTask(this);
   });
 }
@@ -142,6 +214,43 @@ unsigned long TimeManager::loop(MicroTasks::WakeReason reason)
     }
   }
 
+  // Watchdog: if an in-flight request has gone silent (MG_EV_CLOSE fired
+  // without MG_SNTP_REPLY or MG_SNTP_FAILED), unstick _fetchingTime.
+  if(_fetchingTime)
+  {
+    unsigned long elapsed = millis() - _fetchStartTime;
+    if(elapsed >= SNTP_FETCH_TIMEOUT)
+    {
+      DBUGF("NTP fetch timed out after %lums", elapsed);
+      _fetchingTime = false;
+      unsigned long delay = retryDelay();
+      _retryCount++;
+      _nextCheckTime = millis() + delay;
+      // fall through to the scheduling block below
+    }
+    else
+    {
+      // Early DNS probe: populate _resolvedIp while the SNTP reply is still
+      // pending so the UI shows DNS status without waiting for the full cycle.
+      // Mongoose will have resolved the hostname before this fires (the UDP
+      // packet was already sent), so getaddrinfo() hits LwIP's DNS cache.
+      if(_resolvedIp[0] == '\0' && _timeHost) {
+        struct addrinfo hints = {}, *res = nullptr;
+        hints.ai_family = AF_UNSPEC;
+        if(getaddrinfo(_timeHost, nullptr, &hints, &res) == 0 && res) {
+          void *addr = res->ai_family == AF_INET
+            ? (void *)&((struct sockaddr_in  *)res->ai_addr)->sin_addr
+            : (void *)&((struct sockaddr_in6 *)res->ai_addr)->sin6_addr;
+          inet_ntop(res->ai_family, addr, _resolvedIp, sizeof(_resolvedIp) - 1);
+          freeaddrinfo(res);
+          DBUGF("NTP: early DNS probe → %s", _resolvedIp);
+        }
+      }
+      // Wake when the full watchdog deadline expires
+      return (unsigned long)(SNTP_FETCH_TIMEOUT - elapsed);
+    }
+  }
+
   DBUGVAR(_nextCheckTime);
   if(_sntpEnabled &&
     NULL != _timeHost &&
@@ -153,18 +262,59 @@ unsigned long TimeManager::loop(MicroTasks::WakeReason reason)
       false == _fetchingTime &&
       delay <= 0)
     {
-      _fetchingTime = true;
+      _syncRequested = false;   // fetch is actually starting now
+      _fetchingTime  = true;
+      _fetchStartTime = millis();
       _nextCheckTime = 0;
 
       DBUGF("Trying to get time from %s", _timeHost);
-      _sntp.getTime(_timeHost, [this](struct timeval newTime)
+      bool started = _sntp.getTime(_timeHost, [this](struct timeval newTime)
       {
         setTime(newTime, _timeHost);
 
-        _fetchingTime = false;
+        _fetchingTime  = false;
+        _retryCount    = 0;
+        _lastSyncTime  = newTime.tv_sec;   // use NTP ts directly
         _nextCheckTime = millis() + TIME_POLL_TIME;
+        // Resolve hostname → IP for status display (DNS is cached at this point)
+        if(_timeHost) {
+          struct addrinfo hints = {}, *res = nullptr;
+          hints.ai_family = AF_UNSPEC;
+          if(getaddrinfo(_timeHost, nullptr, &hints, &res) == 0 && res) {
+            void *addr = res->ai_family == AF_INET
+              ? (void *)&((struct sockaddr_in  *)res->ai_addr)->sin_addr
+              : (void *)&((struct sockaddr_in6 *)res->ai_addr)->sin6_addr;
+            inet_ntop(res->ai_family, addr, _resolvedIp, sizeof(_resolvedIp) - 1);
+            freeaddrinfo(res);
+          }
+        }
         MicroTask.wakeTask(this);
       });
+
+      if(started)
+      {
+        // Wake in 1 s for an early DNS probe while the SNTP request is
+        // in-flight.  By then Mongoose will have resolved the hostname and
+        // sent the UDP packet, so getaddrinfo() returns from LwIP's cache
+        // and we can show the DNS badge before the sync completes.
+        ret = 1000;
+      }
+      else
+      {
+        // getTime() returned false — the MongooseSntpClient stale-_nc bug:
+        // after the first successful sync MG_EV_CLOSE never fires for UDP,
+        // so _nc stays non-NULL and every subsequent getTime() call returns
+        // false without sending any traffic.  No DNS attempt was made, so
+        // _resolvedIp is left untouched (already cleared by checkNow()) — the
+        // UI will show no DNS badge.  Increment _retryCount so status shows
+        // "retry" rather than falsely maintaining "synchronized".
+        DBUGLN("NTP: getTime() could not start (stale connection?), treating as failure");
+        _fetchingTime = false;
+        unsigned long delay = retryDelay();
+        _retryCount++;
+        _nextCheckTime = millis() + delay;
+        ret = delay;
+      }
     } else {
       ret = delay > 0 ? (unsigned long)delay : 0;
     }
@@ -230,7 +380,7 @@ void TimeManager::setSntpEnabled(bool enabled)
   {
     _sntpEnabled = enabled;
     if(enabled) {
-      checkNow();
+      checkNow();   // fresh start; checkNow() clears retry state
     }
   }
 }
