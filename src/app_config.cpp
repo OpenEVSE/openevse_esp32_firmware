@@ -444,6 +444,8 @@ void config_changed(String name)
     limit.setDefaultLimit(limit_default_type.c_str(), limit_default_value);
   } else if(name == "sntp_enabled") {
     timeManager.setSntpEnabled(config_sntp_enabled());
+  } else if(name == "sntp_hostname") {
+    timeManager.setHost(sntp_hostname.c_str());
   }
 #endif
 }
