@@ -322,6 +322,9 @@ class EvseManager : public MicroTasks::Task
     void setVoltage(double volts) {
       _monitor.setVoltage(volts);
     }
+    void setMqttVoltage(double volts) {
+      _monitor.setMqttVoltage(volts);
+    }
     uint32_t getSessionElapsed() {
       return _monitor.getSessionElapsed();
     }

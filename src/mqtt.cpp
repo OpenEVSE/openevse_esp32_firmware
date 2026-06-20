@@ -441,7 +441,7 @@ void Mqtt::handleMqttMessage(MongooseString topic, MongooseString payload) {
   else if (topic_string == mqtt_vrms) {
     double volts = payload_str.toFloat();
     DBUGF("voltage:%.1f", volts);
-    _evse->setVoltage(volts);
+    _evse->setMqttVoltage(volts);
   }
   else if (topic_string == mqtt_vehicle_soc && vehicle_data_src == VEHICLE_DATA_SRC_MQTT) {
     int vehicle_soc = payload_str.toInt();
