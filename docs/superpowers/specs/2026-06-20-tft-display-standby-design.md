@@ -88,14 +88,15 @@ Notes:
 
 ## Standby screen layout (direction B + totals)
 
-480×320 landscape, nightshift palette, physically dimmed via backlight:
+480×320 landscape, nightshift palette, physically dimmed via backlight. **Two-column layout (approved via mockup):**
 
-- **Center:** the status ring (outline only, no fill) with the **status word** in the middle — e.g. `Ready` (accent) with a sub-line `not connected` / `connected` (dim). Ring color tracks state like the charge screen.
+- **Left half — status ring** (outline only, no fill) with the **status word** inside — e.g. `Ready` (accent) and a sub-line `not connected` / `connected` (dim). Ring placement mirrors the charge screen; ring color tracks EVSE state (teal ready, green connected/complete, amber/red fault).
+- **Right half — totals, stacked and right-aligned**, vertically centered on the ring:
+  - **TODAY** ← `EvseManager::getTotalDay()` (kWh), accent
+  - **TOTAL** ← `EvseManager::getTotalEnergy()` (kWh)
+  - Large numerals (room to be bigger than the charge-screen tiles since the right half is theirs).
 - **Top-left:** clock — `9:41 · Fri Jun 20`.
 - **Top-right:** `24°C  📶 86%` (temp + wifi%).
-- **Bottom row (totals):** two figures —
-  - **TODAY** ← `EvseManager::getTotalDay()` (kWh)
-  - **TOTAL** ← `EvseManager::getTotalEnergy()` (kWh)
 - **Bottom corners:** hostname (left) + IP (right), faint.
 
 `DisplayData` (the struct the charge screen already receives — it carries `session_wh` today) gains two fields, `today_wh` and `total_wh`, populated by `lcd_lvgl` from `getTotalDay()/getTotalEnergy()`. `standby_screen_update(const DisplayData &d)` reads them — no direct `EvseManager` access from the screen.
