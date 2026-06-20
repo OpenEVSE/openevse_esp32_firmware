@@ -17,7 +17,8 @@
 #endif
 
 // Backlight PWM. RGB-LED PWM (LedManagerTask) uses LEDC channels 1..3 and WS2812
-// uses RMT, so channel 0 is free for the 2.x ledcAttachPin path.
+// uses RMT, so channel 0 is free (relevant only to the 2.x ledcAttachPin path;
+// core 3.x's ledcAttach allocates a channel itself).
 #ifndef LCD_BL_PWM_FREQ
 #define LCD_BL_PWM_FREQ 5000
 #endif
@@ -68,12 +69,15 @@ bool lvgl_panel_begin()
   ledcSetup(LCD_BL_LEDC_CHANNEL, LCD_BL_PWM_FREQ, LCD_BL_PWM_RES);
   ledcAttachPin(TFT_BL, LCD_BL_LEDC_CHANNEL);
 #endif
+  // The backlight is independent of the LVGL draw buffer below, so it stays
+  // usable even if that alloc fails and we return false — bl_ready is not cleared.
   bl_ready = true;
   lvgl_panel_set_backlight(100); // full on until LcdTask applies the configured level
 
 #ifdef LCD_BL_PWM_SELFTEST
   // Gated diagnostic: ramp the backlight up/down a few times so a human can
   // confirm the panel actually dims (some BL circuits are on/off-only).
+  // delay() is safe here: LVGL isn't running yet, and this is gated out of prod.
   for (int cycle = 0; cycle < 3; ++cycle) {
     for (int p = 0; p <= 100; p += 5) { lvgl_panel_set_backlight((uint8_t)p); delay(30); }
     for (int p = 100; p >= 0; p -= 5) { lvgl_panel_set_backlight((uint8_t)p); delay(30); }
