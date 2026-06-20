@@ -4,7 +4,11 @@
 
 #include "mqtt.h"
 #include "app_config.h"
+#ifdef EPOXY_DUINO
+#include <netdb.h>
+#else
 #include <lwip/netdb.h>
+#endif
 #include "openevse.h"
 #include "divert.h"
 #include "input.h"
