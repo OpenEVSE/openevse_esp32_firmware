@@ -13,6 +13,7 @@
 #include "emonesp.h"
 #include "lcd.h"
 #include "openevse.h"
+#include "espal.h"
 #include "app_config.h"   // esp_hostname, tft_theme
 #include "lvgl_tft/lvgl_panel.h"
 #include "lvgl_tft/nightshift.h"
@@ -163,9 +164,11 @@ bool LcdTask::applyThemeFromConfig()
 
 void LcdTask::buildSetupScreen()
 {
-  String ssid = WiFi.softAPSSID();
-  if(ssid.length() == 0) {
-    ssid = esp_hostname;
+  String ssid;
+  if(ap_ssid.length() < 2) {
+    ssid = String("OpenEVSE_") + ESPAL.getShortId();
+  } else {
+    ssid = ap_ssid;
   }
   // Matches net_manager: configured ap_pass if >= 8 chars, else the default.
   const char *pass = (ap_pass.length() >= 8) ? ap_pass.c_str() : "openevse";
