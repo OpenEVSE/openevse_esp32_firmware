@@ -32,6 +32,23 @@
 #define SCR_CHARGE 2
 #define SCR_STANDBY 3
 
+#ifdef EPOXY_DUINO
+static uint32_t g_lvgl_last_tick = 0;
+
+static void lvgl_pump()
+{
+  uint32_t now = millis();
+  lv_tick_inc(now - g_lvgl_last_tick);
+  g_lvgl_last_tick = now;
+  lv_timer_handler();
+}
+#else
+static void lvgl_pump()
+{
+  lv_timer_handler();
+}
+#endif
+
 // --- Message inner class (mechanics identical to the TFT_eSPI LcdTask) ---
 
 LcdTask::Message::Message(const __FlashStringHelper *msg, int x, int y, int time, uint32_t flags) :
@@ -200,7 +217,15 @@ unsigned long LcdTask::loop(MicroTasks::WakeReason reason)
       boot_screen_build();
       _booting = true;
       _bootStart = millis();
-      wakeBacklight();         // light the splash at the active brightness
+#ifdef EPOXY_DUINO
+      g_lvgl_last_tick = _bootStart;
+#endif
+      pinMode(LCD_BACKLIGHT_PIN, OUTPUT);
+#ifdef TFT_BACKLIGHT_TIMEOUT_MS
+      wakeBacklight();
+#else
+      digitalWrite(LCD_BACKLIGHT_PIN, HIGH);
+#endif
     }
     _initialise = false;
   }
@@ -231,7 +256,7 @@ unsigned long LcdTask::loop(MicroTasks::WakeReason reason)
   if(_booting) {
     uint32_t el = millis() - _bootStart;
     boot_screen_update((int)(el * 100 / BOOT_SPLASH_MS), ml);
-    lv_timer_handler();
+    lvgl_pump();
     if(el >= BOOT_SPLASH_MS) {
       // Show the QR setup screen only if we KNOW we're in AP mode; otherwise the
       // charge screen (default), and switch later if AP mode is reported.
@@ -244,6 +269,7 @@ unsigned long LcdTask::loop(MicroTasks::WakeReason reason)
       }
       boot_screen_destroy();
       _booting = false;
+      lvgl_pump();
       return 50;
     }
     return 120;
@@ -275,11 +301,12 @@ unsigned long LcdTask::loop(MicroTasks::WakeReason reason)
     } else if(_activeScreen == SCR_STANDBY) {
       standby_screen_build();
     }
+    lvgl_pump();
   }
 
   // The setup screen is static — just pump LVGL and idle.
   if(_activeScreen == SCR_SETUP) {
-    lv_timer_handler();
+    lvgl_pump();
     return 1000;
   }
 
@@ -335,7 +362,7 @@ unsigned long LcdTask::loop(MicroTasks::WakeReason reason)
     sd.ip = ipbuf;
 
     standby_screen_update(sd);
-    lv_timer_handler();
+    lvgl_pump();
     gettimeofday(&tv, NULL);
     return 1000 - tv.tv_usec / 1000;
   }
@@ -375,8 +402,7 @@ unsigned long LcdTask::loop(MicroTasks::WakeReason reason)
   d.msg_line = (!_msg_cleared && ml[0]) ? ml : "";
 
   charge_screen_update(d);
-
-  lv_timer_handler();
+  lvgl_pump();
 
   // Wake on the next whole second so the clock doesn't skip.
   gettimeofday(&tv, NULL);
