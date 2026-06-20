@@ -4,7 +4,11 @@
 
 #include <Arduino.h>
 #include <MongooseCore.h>
+#ifdef EPOXY_DUINO
+#include <netdb.h>
+#else
 #include <lwip/netdb.h>
+#endif
 
 #include "debug.h"
 #include "time_man.h"
