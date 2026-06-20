@@ -34,10 +34,17 @@ extern String www_username;
 extern String www_password;
 extern String www_certificate_id;
 
+// Web server ports
+extern uint32_t www_http_port;
+extern uint32_t www_https_port;
+
 // Advanced settings
 extern String esp_hostname;
 extern String esp_hostname_default;
 extern String sntp_hostname;
+
+// On-device LVGL TFT display theme: "dark" (nightshift) or "light".
+extern String tft_theme;
 
 // LIMIT Settings
 extern String limit_default_type;
@@ -63,6 +70,9 @@ extern String mqtt_live_pwr;
 extern String mqtt_vehicle_soc;
 extern String mqtt_vehicle_range;
 extern String mqtt_vehicle_eta;
+extern String mqtt_vehicle_charge_limit;
+extern String mqtt_home_battery_soc;
+extern String mqtt_home_battery_power;
 extern String mqtt_announce_topic;
 
 // OCPP 1.6 Settings
@@ -92,6 +102,19 @@ extern uint32_t current_shaper_max_pwr;
 extern uint32_t current_shaper_smoothing_time;
 extern uint32_t current_shaper_min_pause_time;
 extern uint32_t current_shaper_data_maxinterval;
+
+// Temperature Throttle settings
+extern uint32_t temp_throttle_setpoint;
+
+// Heartbeat Supervision settings (stored in ESP32 config, applied to EVSE on boot)
+extern uint32_t heartbeat_interval_cfg;
+extern uint32_t heartbeat_current_cfg;
+
+// Over-temperature shutdown threshold (degrees C)
+extern uint32_t over_temp_shutdown;
+
+// Voltage for power calculations (centivolt, 0 = use EVSE default)
+extern uint32_t voltage_cfg;
 
 // Vehicle
 extern uint8_t vehicle_data_src;
@@ -129,6 +152,7 @@ extern uint32_t flags;
 #define CONFIG_THREEPHASE           (1 << 24)
 #define CONFIG_WIZARD               (1 << 25)
 #define CONFIG_DEFAULT_STATE        (1 << 26)
+#define CONFIG_TEMP_THROTTLE        (1 << 27) // next free bit after CONFIG_DEFAULT_STATE
 
 #define INITIAL_CONFIG_VERSION  1
 
@@ -222,6 +246,11 @@ inline EvseState config_default_state()
   return CONFIG_DEFAULT_STATE == (flags & CONFIG_DEFAULT_STATE) ? EvseState::Active : EvseState::Disabled;
 }
 
+inline bool config_temp_throttle_enabled()
+{
+  return CONFIG_TEMP_THROTTLE == (flags & CONFIG_TEMP_THROTTLE);
+}
+
 // Ohm Connect Settings
 extern String ohm;
 
@@ -240,10 +269,15 @@ extern void config_load_v1_settings();
 // -------------------------------------------------------------------
 extern void config_reset();
 
-void config_set(const char *name, uint32_t val);
-void config_set(const char *name, String val);
-void config_set(const char *name, bool val);
-void config_set(const char *name, double val);
+bool config_set(const char *name, uint32_t val);
+bool config_set(const char *name, String val);
+bool config_set(const char *name, bool val);
+bool config_set(const char *name, double val);
+
+// Parse and set config value from string (used for command line arguments)
+// Tries to infer the value type from its string representation.
+// Returns true if applying the value modified the config (unknown keys or unchanged values return false).
+bool config_set_opt_string(const char *name, const char *value);
 
 // Read config settings from JSON object
 bool config_deserialize(String& json);

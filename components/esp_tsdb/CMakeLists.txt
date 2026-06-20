@@ -1,0 +1,17 @@
+idf_component_register(
+    SRCS
+        "src/tsdb_buffer.c"
+        "src/tsdb_core.c"
+        "src/tsdb_write.c"
+        "src/tsdb_query.c"
+        "src/tsdb_index.c"
+        "src/tsdb_benchmark.c"
+    INCLUDE_DIRS
+        "include"
+    PRIV_INCLUDE_DIRS
+        "src"
+    REQUIRES
+        esp_common
+        esp_timer
+        freertos
+)

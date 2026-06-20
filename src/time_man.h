@@ -6,15 +6,27 @@
 #include <MicroTasksTask.h>
 #include <ArduinoJson.h>
 
+// How long to wait for an in-flight SNTP reply before treating it as lost
+#ifndef SNTP_FETCH_TIMEOUT
+#define SNTP_FETCH_TIMEOUT (30 * 1000UL)
+#endif
+
 class TimeManager : public MicroTasks::Task
 {
   private:
     const char *_timeHost;
     MongooseSntpClient _sntp;
     unsigned long _nextCheckTime;
+    unsigned long _fetchStartTime;  // when current fetch was started
+    uint8_t       _retryCount;      // consecutive failures; reset on success
     bool _fetchingTime;
     bool _setTheTime;
     bool _sntpEnabled;
+    time_t _lastSyncTime;           // Unix timestamp of last successful sync
+    char   _resolvedIp[46];         // last resolved IP, "failed", or ""
+    bool   _syncRequested;          // set by checkNow(); shows "connecting" before fetch starts
+
+    unsigned long retryDelay();     // exponential back-off based on _retryCount
 
     class TimeChange : public MicroTasks::Event
     {
@@ -44,10 +56,21 @@ class TimeManager : public MicroTasks::Task
     }
     void setSntpEnabled(bool enabled);
 
+    // Force an immediate sync attempt, clearing any stuck/backoff state
     void checkNow() {
+      _fetchingTime  = false;
+      _retryCount    = 0;
+      _syncRequested = true;          // show "connecting" immediately in the UI
+      _resolvedIp[0] = '\0';          // drop stale DNS badge
       _nextCheckTime = millis();
       MicroTask.wakeTask(this);
     }
+
+    // NTP status accessors (used by GET /time)
+    const char *getNtpStatus();
+    time_t      getLastSyncTime()  { return _lastSyncTime; }
+    int32_t     getNextSyncMs();
+    const char *getResolvedIp()    { return _resolvedIp; }
 
     // Register for events
     void onTimeChange(MicroTasks::EventListener *listner) {
