@@ -6,6 +6,7 @@
 #include "input.h"
 #include "app_config.h"
 #include "RapiSender.h"
+#include <openevse.h>
 
 #define ACTIVE_TAG_START  "<active>"
 #define ACTIVE_TAG_END    "</active>"
@@ -59,7 +60,7 @@ void ohm_loop()
             if (evse_sleep == 0)
             {
               evse_sleep = 1;
-              rapiSender.sendCmd(F("$FS"), [](int ret)
+              OpenEVSE.sleep([](int ret)
               {
                 if(RAPI_RESPONSE_OK == ret) {
                   DBUGLN(F("Charge Stopped"));
@@ -73,7 +74,7 @@ void ohm_loop()
             if (evse_sleep == 1)
             {
               evse_sleep = 0;
-              rapiSender.sendCmd(F("$FE"), [](int ret)
+              OpenEVSE.enable([](int ret)
               {
                 if(RAPI_RESPONSE_OK == ret) {
                   DBUGLN(F("Charging enabled"));
