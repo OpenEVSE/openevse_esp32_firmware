@@ -68,6 +68,11 @@ class LcdTask : public MicroTasks::Task
     bool _wifi_client = false;
     bool _wifi_connected = false;
 
+    // Active display theme last applied from the tft_theme config (-1 = none yet,
+    // 0 = dark/nightshift, 1 = light). Polled in loop(); a change repaints.
+    int8_t _themeLight = -1;
+    bool applyThemeFromConfig();  // sets the palette; true if it changed
+
 #ifdef TFT_BACKLIGHT_TIMEOUT_MS
     uint32_t _backlight_timeout = 0;
     uint8_t  _prev_state = 0xff;

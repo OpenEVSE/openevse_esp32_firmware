@@ -66,6 +66,9 @@ uint32_t www_https_port;
 String esp_hostname;
 String sntp_hostname;
 
+// On-device LVGL TFT display theme ("dark" | "light").
+String tft_theme;
+
 // LIMIT Settings
 String limit_default_type;
 uint32_t limit_default_value;
@@ -199,6 +202,12 @@ ConfigOpt *opts[] =
 // Advanced settings
   new ConfigOptDefinition<String>(esp_hostname, esp_hostname_default, "hostname", "hn"),
   new ConfigOptDefinition<String>(sntp_hostname, SNTP_DEFAULT_HOST, "sntp_hostname", "sh"),
+
+#ifdef ENABLE_SCREEN_LVGL_TFT
+// On-device display theme (only present on LVGL-TFT builds; its presence in
+// /config is the GUI's capability signal that this device has the panel).
+  new ConfigOptDefinition<String>(tft_theme, "dark", "tft_theme", "tt"),
+#endif
 
 // Time
   new ConfigOptDefinition<String>(time_zone, DEFAULT_TIME_ZONE, "time_zone", "tz"),

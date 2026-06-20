@@ -13,8 +13,9 @@
 #include "emonesp.h"
 #include "lcd.h"
 #include "openevse.h"
-#include "app_config.h"   // esp_hostname
+#include "app_config.h"   // esp_hostname, tft_theme
 #include "lvgl_tft/lvgl_panel.h"
+#include "lvgl_tft/nightshift.h"
 #include "lvgl_tft/boot_screen.h"
 #include "lvgl_tft/setup_screen.h"
 #include "lvgl_tft/charge_screen.h"
@@ -147,6 +148,19 @@ void LcdTask::setWifiMode(bool client, bool connected)
 #endif
 }
 
+// Resolve the tft_theme config into the active palette. Returns true if the theme
+// actually changed (so the caller can rebuild the on-screen widgets to repaint).
+bool LcdTask::applyThemeFromConfig()
+{
+  int want = tft_theme.equals("light") ? 1 : 0;  // anything not "light" => dark
+  if(want == _themeLight) {
+    return false;
+  }
+  _themeLight = want;
+  ns_set_theme(want == 1);
+  return true;
+}
+
 void LcdTask::buildSetupScreen()
 {
   String ssid = WiFi.softAPSSID();
@@ -183,6 +197,7 @@ unsigned long LcdTask::loop(MicroTasks::WakeReason reason)
     DBUGVAR(ESP.getFreeHeap());
     _displayOk = lvgl_panel_begin();
     if(_displayOk) {
+      applyThemeFromConfig();  // pick the palette before the first screen is built
       boot_screen_build();
       _booting = true;
       _bootStart = millis();
@@ -251,6 +266,18 @@ unsigned long LcdTask::loop(MicroTasks::WakeReason reason)
     charge_screen_build();
     setup_screen_destroy();
     _activeScreen = SCR_CHARGE;
+  }
+
+  // Live theme switch: if tft_theme changed (e.g. the web GUI wrote /config),
+  // swap the palette and rebuild the current screen so the new colours take.
+  if(applyThemeFromConfig()) {
+    if(_activeScreen == SCR_CHARGE) {
+      charge_screen_destroy();
+      charge_screen_build();
+    } else if(_activeScreen == SCR_SETUP) {
+      setup_screen_destroy();
+      buildSetupScreen();
+    }
   }
 
   // The setup screen is static — just pump LVGL and idle.
