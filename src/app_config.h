@@ -47,7 +47,10 @@ extern String sntp_hostname;
 extern String tft_theme;
 extern uint32_t tft_brightness;
 extern uint32_t tft_standby_brightness;
-extern uint32_t tft_timeout;
+
+// LCD backlight timeout (in seconds, 0 = never timeout). Shared key with the
+// char-LCD / TFT_eSPI energy-saving timeout (upstream PR #1039).
+extern uint32_t lcd_backlight_timeout;
 
 // LIMIT Settings
 extern String limit_default_type;

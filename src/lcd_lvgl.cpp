@@ -384,7 +384,7 @@ void LcdTask::applyDisplayConfig()
 {
   _activeBrightness  = (int32_t)tft_brightness;
   _standbyBrightness = (int32_t)tft_standby_brightness;
-  _timeoutS          = (int32_t)tft_timeout;
+  _timeoutS          = (int32_t)lcd_backlight_timeout;
   if(_activeBrightness < 10) _activeBrightness = 10;  // never black out the active screen
   // Apply live so brightness-slider changes take effect without waiting for a wake.
   lvgl_panel_set_backlight((uint8_t)(_standby ? (_standbyBrightness < 0 ? 0 : _standbyBrightness)

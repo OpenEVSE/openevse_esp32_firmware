@@ -70,7 +70,10 @@ String sntp_hostname;
 String tft_theme;
 uint32_t tft_brightness;
 uint32_t tft_standby_brightness;
-uint32_t tft_timeout;
+
+// LCD backlight timeout (in seconds, 0 = never timeout). Shared key with the
+// char-LCD / TFT_eSPI energy-saving timeout (upstream PR #1039).
+uint32_t lcd_backlight_timeout;
 
 // LIMIT Settings
 String limit_default_type;
@@ -212,8 +215,10 @@ ConfigOpt *opts[] =
   new ConfigOptDefinition<String>(tft_theme, "dark", "tft_theme", "tt"),
   new ConfigOptDefinition<uint32_t>(tft_brightness, 100, "tft_brightness", "tb"),
   new ConfigOptDefinition<uint32_t>(tft_standby_brightness, 15, "tft_standby_brightness", "tsb"),
-  new ConfigOptDefinition<uint32_t>(tft_timeout, 600, "tft_timeout", "tto"),
 #endif
+
+// LCD backlight timeout
+  new ConfigOptDefinition<uint32_t>(lcd_backlight_timeout, LCD_BACKLIGHT_TIMEOUT_DEFAULT, "lcd_backlight_timeout", "lbt"),
 
 // Time
   new ConfigOptDefinition<String>(time_zone, DEFAULT_TIME_ZONE, "time_zone", "tz"),
