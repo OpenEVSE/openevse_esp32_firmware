@@ -5,7 +5,8 @@
 TEST_CASE("bl_pct_to_duty maps 0..100 to 0..255") {
   CHECK(bl_pct_to_duty(0) == 0);
   CHECK(bl_pct_to_duty(100) == 255);
-  CHECK(bl_pct_to_duty(50) == 128);   // (50*255+50)/100 = 128 (rounded)
+  CHECK(bl_pct_to_duty(10) == 26);    // 10*2.55 = 25.5 -> rounds up to 26
+  CHECK(bl_pct_to_duty(50) == 128);   // 50*2.55 = 127.5 -> rounds up to 128
   CHECK(bl_pct_to_duty(200) == 255);  // over-range clamps
   for (uint8_t p = 1; p <= 100; ++p) {
     CHECK(bl_pct_to_duty(p) >= bl_pct_to_duty((uint8_t)(p - 1)));

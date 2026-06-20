@@ -17,5 +17,6 @@ bool bl_should_standby(bool keep_awake, uint32_t timeout_s, uint32_t idle_ms)
   if (timeout_s == 0) {
     return false;
   }
-  return idle_ms >= timeout_s * 1000UL;
+  // uint64_t keeps the multiply identical on the 32-bit device and 64-bit host.
+  return idle_ms >= (uint64_t)timeout_s * 1000u;
 }
