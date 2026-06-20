@@ -2,10 +2,10 @@
 #include "web_server.assets_charts_CnsZ1jie_css_gz.h"
 #include "web_server.assets_charts_DcZkpMN__js_gz.h"
 #include "web_server.assets_en_CAsFNI7u_js_gz.h"
-#include "web_server.assets_es_QpW3Jmym_js_gz.h"
-#include "web_server.assets_fr_BPDlQuoN_js_gz.h"
-#include "web_server.assets_hu_BDCfD5r9_js_gz.h"
-#include "web_server.assets_index_Ch_4x7mc_js_gz.h"
+#include "web_server.assets_es_fQ5t4kRk_js_gz.h"
+#include "web_server.assets_fr_DXbaqGA9_js_gz.h"
+#include "web_server.assets_hu_C_7KNntR_js_gz.h"
+#include "web_server.assets_index_A4zeBnfR_js_gz.h"
 #include "web_server.assets_index_DkVatPEQ_css_gz.h"
 #include "web_server.assets_rolldown_runtime_Bh1tDfsg_js_gz.h"
 #include "web_server.assets_vendor_KRe_m33__js_gz.h"
@@ -21,10 +21,10 @@ StaticFile web_server_static_files[] = {
   { "/assets/charts-CnsZ1jie.css", CONTENT_CHARTS_CNSZ1JIE_CSS_GZ, sizeof(CONTENT_CHARTS_CNSZ1JIE_CSS_GZ) - 1, _CONTENT_TYPE_CSS, CONTENT_CHARTS_CNSZ1JIE_CSS_GZ_ETAG, true },
   { "/assets/charts-DcZkpMN-.js", CONTENT_CHARTS_DCZKPMN__JS_GZ, sizeof(CONTENT_CHARTS_DCZKPMN__JS_GZ) - 1, _CONTENT_TYPE_JS, CONTENT_CHARTS_DCZKPMN__JS_GZ_ETAG, true },
   { "/assets/en-CAsFNI7u.js", CONTENT_EN_CASFNI7U_JS_GZ, sizeof(CONTENT_EN_CASFNI7U_JS_GZ) - 1, _CONTENT_TYPE_JS, CONTENT_EN_CASFNI7U_JS_GZ_ETAG, true },
-  { "/assets/es-QpW3Jmym.js", CONTENT_ES_QPW3JMYM_JS_GZ, sizeof(CONTENT_ES_QPW3JMYM_JS_GZ) - 1, _CONTENT_TYPE_JS, CONTENT_ES_QPW3JMYM_JS_GZ_ETAG, true },
-  { "/assets/fr-BPDlQuoN.js", CONTENT_FR_BPDLQUON_JS_GZ, sizeof(CONTENT_FR_BPDLQUON_JS_GZ) - 1, _CONTENT_TYPE_JS, CONTENT_FR_BPDLQUON_JS_GZ_ETAG, true },
-  { "/assets/hu-BDCfD5r9.js", CONTENT_HU_BDCFD5R9_JS_GZ, sizeof(CONTENT_HU_BDCFD5R9_JS_GZ) - 1, _CONTENT_TYPE_JS, CONTENT_HU_BDCFD5R9_JS_GZ_ETAG, true },
-  { "/assets/index-Ch-4x7mc.js", CONTENT_INDEX_CH_4X7MC_JS_GZ, sizeof(CONTENT_INDEX_CH_4X7MC_JS_GZ) - 1, _CONTENT_TYPE_JS, CONTENT_INDEX_CH_4X7MC_JS_GZ_ETAG, true },
+  { "/assets/es-fQ5t4kRk.js", CONTENT_ES_FQ5T4KRK_JS_GZ, sizeof(CONTENT_ES_FQ5T4KRK_JS_GZ) - 1, _CONTENT_TYPE_JS, CONTENT_ES_FQ5T4KRK_JS_GZ_ETAG, true },
+  { "/assets/fr-DXbaqGA9.js", CONTENT_FR_DXBAQGA9_JS_GZ, sizeof(CONTENT_FR_DXBAQGA9_JS_GZ) - 1, _CONTENT_TYPE_JS, CONTENT_FR_DXBAQGA9_JS_GZ_ETAG, true },
+  { "/assets/hu-C_7KNntR.js", CONTENT_HU_C_7KNNTR_JS_GZ, sizeof(CONTENT_HU_C_7KNNTR_JS_GZ) - 1, _CONTENT_TYPE_JS, CONTENT_HU_C_7KNNTR_JS_GZ_ETAG, true },
+  { "/assets/index-A4zeBnfR.js", CONTENT_INDEX_A4ZEBNFR_JS_GZ, sizeof(CONTENT_INDEX_A4ZEBNFR_JS_GZ) - 1, _CONTENT_TYPE_JS, CONTENT_INDEX_A4ZEBNFR_JS_GZ_ETAG, true },
   { "/assets/index-DkVatPEQ.css", CONTENT_INDEX_DKVATPEQ_CSS_GZ, sizeof(CONTENT_INDEX_DKVATPEQ_CSS_GZ) - 1, _CONTENT_TYPE_CSS, CONTENT_INDEX_DKVATPEQ_CSS_GZ_ETAG, true },
   { "/assets/rolldown-runtime-Bh1tDfsg.js", CONTENT_ROLLDOWN_RUNTIME_BH1TDFSG_JS_GZ, sizeof(CONTENT_ROLLDOWN_RUNTIME_BH1TDFSG_JS_GZ) - 1, _CONTENT_TYPE_JS, CONTENT_ROLLDOWN_RUNTIME_BH1TDFSG_JS_GZ_ETAG, true },
   { "/assets/vendor-KRe-m33_.js", CONTENT_VENDOR_KRE_M33__JS_GZ, sizeof(CONTENT_VENDOR_KRE_M33__JS_GZ) - 1, _CONTENT_TYPE_JS, CONTENT_VENDOR_KRE_M33__JS_GZ_ETAG, true },
