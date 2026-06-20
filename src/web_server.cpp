@@ -87,6 +87,7 @@ void handleUpdateClose(MongooseHttpServerRequest *request);
 
 void handleTime(MongooseHttpServerRequest *request);
 void handleTimePost(MongooseHttpServerRequest *request, MongooseHttpServerResponseStream *response);
+void handleMqttAction(MongooseHttpServerRequest *request);
 
 #ifndef ENABLE_TSDB
 void handleEnergyRaw(MongooseHttpServerRequest *request);
@@ -237,6 +238,19 @@ void buildStatus(DynamicJsonDocument &doc) {
   doc["packets_success"] = packets_success;
 
   doc["mqtt_connected"] = (int)mqtt.isConnected();
+  doc["mqtt_status"]    = mqtt.getMqttStatus();
+  if (mqtt.getBrokerIp()[0] != '\0')
+    doc["mqtt_broker_ip"]      = mqtt.getBrokerIp();
+  if (mqtt.getBrokerVersion()[0] != '\0')
+    doc["mqtt_broker_version"] = mqtt.getBrokerVersion();
+  if (mqtt.getConnectedSince() > 0)
+    doc["mqtt_connected_since"] = (uint32_t)mqtt.getConnectedSince();
+  if (mqtt.getLastRxTime() > 0)
+    doc["mqtt_last_rx"]         = (uint32_t)mqtt.getLastRxTime();
+  if (mqtt.getErrorCategory()[0] != '\0') {
+    doc["mqtt_error"]        = mqtt.getErrorCategory();
+    doc["mqtt_error_detail"] = mqtt.getErrorDetail();
+  }
 
   doc["ocpp_connected"] = (int)OcppTask::isConnected();
 
@@ -1227,6 +1241,39 @@ void web_server_send_ascii_utf8(const char *endpoint, const uint8_t *buffer, siz
   server.sendAll(endpoint, WEBSOCKET_OP_TEXT, temp, size);
 }
 
+void handleMqttAction(MongooseHttpServerRequest *request) {
+  MongooseHttpServerResponseStream *response;
+  if (false == requestPreProcess(request, response)) return;
+
+  if (HTTP_GET == request->method()) {
+    DynamicJsonDocument doc(JSON_OBJECT_SIZE(8) + 384);
+    doc["mqtt_connected"] = (int)mqtt.isConnected();
+    doc["mqtt_status"]    = mqtt.getMqttStatus();
+    if (mqtt.getBrokerIp()[0] != '\0')
+      doc["mqtt_broker_ip"]      = mqtt.getBrokerIp();
+    if (mqtt.getBrokerVersion()[0] != '\0')
+      doc["mqtt_broker_version"] = mqtt.getBrokerVersion();
+    if (mqtt.getConnectedSince() > 0)
+      doc["mqtt_connected_since"] = (uint32_t)mqtt.getConnectedSince();
+    if (mqtt.getLastRxTime() > 0)
+      doc["mqtt_last_rx"]         = (uint32_t)mqtt.getLastRxTime();
+    // Always include error fields (empty string when no failure) so the GUI can
+    // clear a previously-shown reason once reconnected.
+    doc["mqtt_error"]        = mqtt.getErrorCategory();
+    doc["mqtt_error_detail"] = mqtt.getErrorDetail();
+    response->setCode(200);
+    serializeJson(doc, *response);
+  } else if (HTTP_POST == request->method()) {
+    mqtt.restartConnection();
+    response->setCode(200);
+    response->print("{\"msg\":\"done\"}");
+  } else {
+    response->setCode(405);
+    response->print("{\"msg\":\"Method not allowed\"}");
+  }
+  request->send(response);
+}
+
 void web_server_setup()
 {
   bool use_ssl = false;
@@ -1283,6 +1330,7 @@ void web_server_setup()
   server.on("/limit", handleLimit);
   server.on("/emeter", handleEmeter);
   server.on("/time", handleTime);
+  server.on("/mqtt$", handleMqttAction);
 
 #ifndef ENABLE_TSDB
   server.on("/energy/raw$", handleEnergyRaw);
