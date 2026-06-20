@@ -67,7 +67,10 @@ static void make_tile(lv_obj_t *parent, const char *title, lv_obj_t **value_out,
 void charge_screen_build()
 {
   // Own LVGL screen, loaded now (the previous screen is on a separate object that
-  // the caller deletes after this returns).
+  // the caller deletes after this returns). If a charge screen already exists
+  // (theme rebuild), keep it until the new one is loaded, then delete it — never
+  // delete the *active* screen first, or LVGL's active-screen pointer dangles.
+  lv_obj_t *old = charge_scr;
   lv_obj_t *scr = lv_obj_create(NULL);
   charge_scr = scr;
   lv_scr_load(scr);
@@ -158,6 +161,11 @@ void charge_screen_build()
   lv_obj_set_style_text_font(msg_lbl, &lv_font_montserrat_14, 0);
   lv_obj_align(msg_lbl, LV_ALIGN_BOTTOM_MID, 0, -6);
   lv_obj_add_flag(msg_lbl, LV_OBJ_FLAG_HIDDEN);
+
+  // New screen is now active; safe to delete the previous instance (theme rebuild).
+  if(old) {
+    lv_obj_del(old);
+  }
 }
 
 // Map EVSE state -> status word + accent colour.

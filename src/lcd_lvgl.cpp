@@ -270,12 +270,12 @@ unsigned long LcdTask::loop(MicroTasks::WakeReason reason)
 
   // Live theme switch: if tft_theme changed (e.g. the web GUI wrote /config),
   // swap the palette and rebuild the current screen so the new colours take.
+  // build() loads the new screen BEFORE deleting the old one, so we must NOT
+  // destroy first here — deleting the active screen would dangle LVGL and panic.
   if(applyThemeFromConfig()) {
     if(_activeScreen == SCR_CHARGE) {
-      charge_screen_destroy();
       charge_screen_build();
     } else if(_activeScreen == SCR_SETUP) {
-      setup_screen_destroy();
       buildSetupScreen();
     }
   }

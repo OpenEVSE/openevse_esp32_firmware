@@ -18,6 +18,9 @@ static lv_obj_t *setup_scr = nullptr;
 void setup_screen_build(const char *qr_join, const char *ssid,
                         const char *pass, const char *ip)
 {
+  // Keep any existing setup screen until the new one is loaded, then delete it —
+  // never delete the *active* screen first (LVGL's active pointer would dangle).
+  lv_obj_t *old = setup_scr;
   setup_scr = lv_obj_create(NULL);
   lv_scr_load(setup_scr);
   lv_obj_set_style_bg_color(setup_scr, COL_BG, 0);
@@ -73,6 +76,11 @@ void setup_screen_build(const char *qr_join, const char *ssid,
   lv_obj_set_style_text_color(url, COL_DIM, 0);
   lv_obj_set_style_text_font(url, &lv_font_montserrat_14, 0);
   lv_obj_align(url, LV_ALIGN_TOP_RIGHT, -16, 192);
+
+  // New screen is now active; safe to delete the previous instance (theme rebuild).
+  if(old) {
+    lv_obj_del(old);
+  }
 }
 
 void setup_screen_destroy()
