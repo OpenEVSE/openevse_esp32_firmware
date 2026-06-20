@@ -317,11 +317,8 @@ void buildStatus(DynamicJsonDocument &doc) {
 }
 
 // -------------------------------------------------------------------
-// Wifi scan /scan not currently used
+// Wifi scan
 // url: /scan
-//
-// First request will return 0 results unless you start scan from somewhere else (loop/setup)
-// Do not request more often than 3-5 seconds
 // -------------------------------------------------------------------
 void
 handleScan(MongooseHttpServerRequest *request) {
@@ -331,23 +328,28 @@ handleScan(MongooseHttpServerRequest *request) {
   }
 
   DBUGF("Starting WiFi scan");
-  net.wifiScanNetworks([request, response](int networksFound) {
+  bool scanStarted = net.wifiScanNetworks([request, response](int networksFound) {
     DBUGF("%d networks found", networksFound);
-    String json = "[";
+    response->print("[");
     for (int i = 0; i < networksFound; ++i) {
-      if(i) json += ",";
-      json += "{";
-      json += "\"rssi\":"+String(WiFi.RSSI(i));
-      json += ",\"ssid\":\""+WiFi.SSID(i)+"\"";
-      json += ",\"bssid\":\""+WiFi.BSSIDstr(i)+"\"";
-      json += ",\"channel\":"+String(WiFi.channel(i));
-      json += ",\"secure\":"+String(WiFi.encryptionType(i));
-      json += "}";
+      if(i) response->print(",");
+      StaticJsonDocument<256> network;
+      network["rssi"] = WiFi.RSSI(i);
+      network["ssid"] = WiFi.SSID(i);
+      network["bssid"] = WiFi.BSSIDstr(i);
+      network["channel"] = WiFi.channel(i);
+      network["secure"] = WiFi.encryptionType(i);
+      serializeJson(network, *response);
     }
-    json += "]";
-    response->print(json);
+    response->print("]");
     request->send(response);
   });
+
+  if(!scanStarted) {
+    DBUGLN("WiFi scan failed to start");
+    response->print("[]");
+    request->send(response);
+  }
 }
 
 // -------------------------------------------------------------------
@@ -1235,16 +1237,18 @@ void web_server_setup()
     const char *key = certs.getKey(cert_id);
     if(NULL != cert && NULL != key)
     {
-      server.begin(443, cert, key);
+      DEBUG.printf("Starting HTTPS server, https://0.0.0.0:%d\n", www_https_port);
+      server.begin(www_https_port, cert, key);
       use_ssl = true;
 
-      redirect.begin(80);
+      redirect.begin(www_http_port);
       redirect.on("/", handleHttpsRedirect);
     }
   }
 
   if(false == use_ssl) {
-    server.begin(80);
+    DEBUG.printf("Starting HTTP server, http://0.0.0.0:%d\n", www_http_port);
+    server.begin(www_http_port);
   }
 
   // Handle status updates

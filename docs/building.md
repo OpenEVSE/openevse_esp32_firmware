@@ -70,10 +70,10 @@ never re-downloading on a core switch.
 
 ## Host-side unit tests
 
-Pure, framework-free logic is tested on the build host via the `native` env:
+Pure, framework-free logic is tested on the build host via the `native_test` env:
 
 ```bash
-pio test -e native
+pio test -e native_test
 ```
 
 Test suites live under `test/`. New host-testable logic should land with a
