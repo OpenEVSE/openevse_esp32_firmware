@@ -273,6 +273,7 @@ unsigned long LcdTask::loop(MicroTasks::WakeReason reason)
       }
       boot_screen_destroy();
       _booting = false;
+      lvgl_pump();
       return 50;
     }
     return 120;
@@ -301,6 +302,7 @@ unsigned long LcdTask::loop(MicroTasks::WakeReason reason)
     } else if(_activeScreen == SCR_SETUP) {
       buildSetupScreen();
     }
+    lvgl_pump();
   }
 
   // The setup screen is static — just pump LVGL and idle.
