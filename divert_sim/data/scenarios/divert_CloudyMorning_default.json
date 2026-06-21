@@ -6,9 +6,9 @@
     "profile": "default"
   },
   "simulation": {
-    "duration": 57600,
+    "duration": 57300,
     "tick_interval": 60,
-    "start_time": "2018-08-06T05:25:00Z"
+    "start_time": "2018-08-06T04:45:00Z"
   },
   "config": {
     "divert_enabled": true,

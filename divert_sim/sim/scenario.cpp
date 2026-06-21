@@ -106,12 +106,6 @@ bool Scenario::loadFromFile(const std::string &path)
 
     JsonObjectConst inputs = pj["inputs"].as<JsonObjectConst>();
     if (!inputs.isNull()) {
-      if (inputs.containsKey("solar") && inputs.containsKey("grid_ie")) {
-        std::cerr << "Scenario: inputs.solar and inputs.grid_ie are mutually exclusive for peer "
-                  << p.id << std::endl;
-        return false;
-      }
-
       if (inputs.containsKey("solar")) {
         if (!p.solar.loadFromJson(inputs["solar"],
                                  scenario_dir,
@@ -136,6 +130,15 @@ bool Scenario::loadFromFile(const std::string &path)
                                     (long) start_epoch,
                                     duration_sec)) {
           std::cerr << "Scenario: invalid inputs.live_pwr for peer " << p.id << std::endl;
+          return false;
+        }
+      }
+      if (inputs.containsKey("vrms")) {
+        if (!p.vrms.loadFromJson(inputs["vrms"],
+                                 scenario_dir,
+                                 (long) start_epoch,
+                                 duration_sec)) {
+          std::cerr << "Scenario: invalid inputs.vrms for peer " << p.id << std::endl;
           return false;
         }
       }

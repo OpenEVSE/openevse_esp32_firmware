@@ -6,7 +6,7 @@
     "profile": "noimport"
   },
   "simulation": {
-    "duration": 43200,
+    "duration": 39540,
     "tick_interval": 60,
     "start_time": "2018-06-14T08:21:00Z"
   },
@@ -40,6 +40,12 @@
           "csv": "../day2_grid_ie.csv",
           "time_column": 0,
           "column": 2,
+          "skip_header": true
+        },
+        "solar": {
+          "csv": "../day2_grid_ie.csv",
+          "time_column": 0,
+          "column": 1,
           "skip_header": true
         }
       }

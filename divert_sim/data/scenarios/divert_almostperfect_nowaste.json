@@ -6,9 +6,9 @@
     "profile": "nowaste"
   },
   "simulation": {
-    "duration": 56400,
+    "duration": 56220,
     "tick_interval": 60,
-    "start_time": "2018-07-08T06:08:00Z"
+    "start_time": "2018-07-08T04:28:00Z"
   },
   "config": {
     "divert_enabled": true,
