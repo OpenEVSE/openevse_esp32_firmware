@@ -469,6 +469,11 @@ static void process_early_command_line()
 
 /** Print usage. */
 static void printUsage() {
+  const char *lvgl_usage = "";
+#if defined(ENABLE_SCREEN_LVGL_TFT)
+  lvgl_usage = "  --dump-lvgl-screens DIR  Render sample LVGL UI screens into DIR as PPM files\n";
+#endif
+
   fprintf(
     stderr,
     "Usage: %s [--help|-h] [--rapi-serial PATH] [--set-config NAME=VALUE] [--] [args ...]\n"
@@ -480,12 +485,8 @@ static void printUsage() {
     "    --set-config mqtt_port=1883\n"
     "Runtime options (EPOXY_DUINO native build):\n"
     "  --rapi-serial PATH   Set PTY/serial path for RAPI (e.g., /dev/pts/5)\n"
-#if defined(ENABLE_SCREEN_LVGL_TFT)
-    "  --dump-lvgl-screens DIR  Render sample LVGL UI screens into DIR as PPM files\n",
-#else
-    ,
-#endif
-    epoxy_argv[0]
+    "%s",
+    epoxy_argv[0], lvgl_usage
   );
 }
 

@@ -146,6 +146,7 @@ bool lvgl_panel_write_ppm(const char *path)
   fprintf(fp, "P6\n%u %u\n255\n", SCREEN_W, SCREEN_H);
   for(uint32_t i = 0; i < SCREEN_W * SCREEN_H; i++) {
     uint16_t px = host_fb[i].full;
+    // RGB565 layout: RRRRRGGGGGGBBBBB. Expand each packed channel to 8-bit RGB.
     uint8_t rgb[3] = {
       (uint8_t)((((px >> 11) & 0x1F) * 255) / 31),
       (uint8_t)((((px >> 5)  & 0x3F) * 255) / 63),
