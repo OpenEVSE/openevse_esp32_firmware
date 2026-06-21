@@ -106,6 +106,9 @@ bool Scenario::loadFromFile(const std::string &path)
 
     JsonObjectConst inputs = pj["inputs"].as<JsonObjectConst>();
     if (!inputs.isNull()) {
+      // solar and grid_ie may both be present when the same CSV provides both
+      // columns (e.g. day1/2/3_grid_ie.csv col1=solar, col2=grid_ie).
+      // DivertTask reads them independently, so both inputs are applied each tick.
       if (inputs.containsKey("solar")) {
         if (!p.solar.loadFromJson(inputs["solar"],
                                  scenario_dir,

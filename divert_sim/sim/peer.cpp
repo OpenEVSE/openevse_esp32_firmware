@@ -71,7 +71,7 @@ void Peer::applyInputs(long t_sec)
   }
   if (!_scenario.vrms.empty()) {
     double v = _scenario.vrms.valueAt(t_sec);
-    if (v > 0) _sim.voltage = (int) v;
+    if (v >= 100 && v <= 300) _sim.voltage = (int) v;
   }
 }
 
