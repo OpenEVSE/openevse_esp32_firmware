@@ -86,9 +86,20 @@ the LVGL local UI path enabled, use `native_openevse_lvgl`:
 pio run -e native_openevse_lvgl
 ```
 
-That env enables the LVGL local UI code on the host build and registers a headless
-LVGL display driver, so the UI logic is compiled and exercised without requiring
-ESP32 display hardware.
+That env enables the LVGL local UI code on the host build. By default it runs in
+headless mode so the UI logic is compiled and exercised without requiring ESP32
+display hardware.
+
+For interactive local development you can also open the native LVGL output in an
+SDL window:
+
+```bash
+.pio/build/native_openevse_lvgl/program --lvgl-display window
+```
+
+That runtime mode loads SDL2 dynamically when it is available on the host (for
+example via `libsdl2-dev` on Debian/Ubuntu) and keeps the default headless path
+unchanged for CI and screenshot export.
 
 To dump the sample LVGL screens from the native binary after that build completes:
 

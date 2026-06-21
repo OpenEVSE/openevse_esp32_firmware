@@ -41,6 +41,7 @@ static void lvgl_pump()
   lv_tick_inc(now - g_lvgl_last_tick);
   g_lvgl_last_tick = now;
   lv_timer_handler();
+  lvgl_panel_pump();
 }
 #else
 static void lvgl_pump()
