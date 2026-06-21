@@ -13,6 +13,7 @@
 #include "wifi_esp32.h"
 #elif defined(ESP8266)
 #include <ESP8266WiFi.h>
+#elif defined(EPOXY_DUINO)
 #else
 #error Platform not supported
 #endif
@@ -184,7 +185,7 @@ class NetManagerTask : public MicroTasks::Task
     void wifiTurnOffAp();
     void wifiTurnOnAp();
 
-    void wifiScanNetworks(WiFiScanCompleteCallback callback);
+    bool wifiScanNetworks(WiFiScanCompleteCallback callback);
 
     bool isConnected();
     bool isWifiClientConnected();

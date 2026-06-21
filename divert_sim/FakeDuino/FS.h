@@ -110,6 +110,8 @@ public:
     bool rmdir(const char *path);
     bool rmdir(const String &path);
 
+    size_t totalBytes() { return 1024 * 1024; }
+    size_t usedBytes() { return 0; }
 
 protected:
     FSImplPtr _impl;
