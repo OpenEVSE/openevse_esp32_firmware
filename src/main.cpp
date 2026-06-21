@@ -112,6 +112,10 @@ static void handle_serial();
 #include "debug.h" // for debug_set_rapi_path
 static void process_command_line();
 static void process_early_command_line();
+#if defined(ENABLE_SCREEN_LVGL_TFT)
+#include "lvgl_tft/lvgl_capture.h"
+static const char *lvgl_capture_dir = nullptr;
+#endif
 #endif
 
 #if defined(ESP32) && defined(ENABLE_FLASH_MIGRATE)
@@ -155,6 +159,16 @@ void setup()
   config_load_settings();
 #if defined(EPOXY_DUINO)
   process_command_line();
+#if defined(ENABLE_SCREEN_LVGL_TFT)
+  if(lvgl_capture_dir != nullptr) {
+    if(!lvgl_capture_write_samples(lvgl_capture_dir)) {
+      fflush(NULL);
+      _Exit(1);
+    }
+    fflush(NULL);
+    _Exit(0);
+  }
+#endif
 #endif
 
   DBUGF("After config_load_settings: %d", ESPAL.getFreeHeap());
@@ -475,7 +489,12 @@ static void printUsage() {
     "    --set-config mqtt_server=192.168.1.100\n"
     "    --set-config mqtt_port=1883\n"
     "Runtime options (EPOXY_DUINO native build):\n"
-    "  --rapi-serial PATH   Set PTY/serial path for RAPI (e.g., /dev/pts/5)\n",
+    "  --rapi-serial PATH   Set PTY/serial path for RAPI (e.g., /dev/pts/5)\n"
+#if defined(ENABLE_SCREEN_LVGL_TFT)
+    "  --dump-lvgl-screens DIR  Render sample LVGL UI screens into DIR as PPM files\n",
+#else
+    ,
+#endif
     epoxy_argv[0]
   );
 }
@@ -538,6 +557,18 @@ static int parseFlags(int argc, const char* const* argv) {
         fprintf(stderr, "Set config: %s = %s\n", name, value);
       }
     }
+#if defined(ENABLE_SCREEN_LVGL_TFT)
+    else if (argEquals(argv[0], "--dump-lvgl-screens")) {
+      shift(argc, argv);
+      if (argc == 0) {
+        fprintf(stderr, "Error: --dump-lvgl-screens requires a directory argument\n");
+        cmdline_exit_requested = true;
+        return argc_original - argc;
+      }
+
+      lvgl_capture_dir = argv[0];
+    }
+#endif
     else if (argEquals(argv[0], "--")) {
       shift(argc, argv);
       break;

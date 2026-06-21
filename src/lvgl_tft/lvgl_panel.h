@@ -16,5 +16,11 @@ bool lvgl_panel_begin();
 // (no-op until the LEDC channel is attached). Drives active vs. standby dimming.
 void lvgl_panel_set_backlight(uint8_t pct);
 
+#ifdef EPOXY_DUINO
+// Write the current native LVGL framebuffer to a binary PPM image. Returns false
+// if the headless framebuffer is unavailable or the file could not be written.
+bool lvgl_panel_write_ppm(const char *path);
+#endif
+
 #endif // ENABLE_SCREEN_LVGL_TFT
 #endif // __LVGL_PANEL_H

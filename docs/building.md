@@ -89,3 +89,13 @@ pio run -e native_openevse_lvgl
 That env enables the LVGL local UI code on the host build and registers a headless
 LVGL display driver, so the UI logic is compiled and exercised without requiring
 ESP32 display hardware.
+
+To dump the sample LVGL screens from the native binary after that build completes:
+
+```bash
+mkdir -p /tmp/lvgl-screens
+.pio/build/native_openevse_lvgl/program --dump-lvgl-screens /tmp/lvgl-screens
+```
+
+That command writes the boot, setup, and charge-state captures as `.ppm` images so
+review comments can attach fresh screenshots of the LVGL local UI.
