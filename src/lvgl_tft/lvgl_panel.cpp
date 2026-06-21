@@ -175,8 +175,15 @@ static bool load_sdl()
   }
 
   static const char *const names[] = {
+#if defined(_WIN32)
+    "SDL2.dll",
+#elif defined(__APPLE__)
+    "libSDL2.dylib",
+    "SDL2.framework/SDL2",
+#else
     "libSDL2-2.0.so.0",
-    "libSDL2.so"
+    "libSDL2.so",
+#endif
   };
 
   for(size_t i = 0; i < sizeof(names) / sizeof(names[0]); i++) {
@@ -218,7 +225,7 @@ static bool sdl_window_begin()
   }
 
   if(!load_sdl()) {
-    Serial.println("[panel] SDL2 runtime unavailable for window display mode");
+    Serial.println("[panel] SDL2 runtime unavailable for window display mode; install SDL2 to enable it");
     return false;
   }
 
@@ -343,7 +350,7 @@ bool lvgl_panel_begin()
   }
 #elif defined(EPOXY_DUINO)
   if(display_mode == LVGL_PANEL_DISPLAY_WINDOW) {
-    Serial.println("[panel] window display mode requires SDL2 headers at build time");
+    Serial.println("[panel] window display mode unavailable: rebuild on a host with SDL2 headers installed");
     free(host_fb);
     host_fb = nullptr;
     free(buf1);
