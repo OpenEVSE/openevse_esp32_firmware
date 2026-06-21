@@ -4,6 +4,11 @@
 
 #include "mqtt.h"
 #include "app_config.h"
+#ifdef EPOXY_DUINO
+#include <netdb.h>
+#else
+#include <lwip/netdb.h>
+#endif
 #include "openevse.h"
 #include "divert.h"
 #include "input.h"
@@ -19,14 +24,27 @@ Mqtt mqtt(evse); // global instance
 
 Mqtt::Mqtt(EvseManager &evseManager) :
   MicroTasks::Task(),
-  _evse(&evseManager)
+  _evse(&evseManager),
+  _connectedSince(0),
+  _lastRxTime(0)
 {
+  _brokerIp[0]      = '\0';
+  _brokerVersion[0] = '\0';
+  _errorCategory[0] = '\0';
+  _errorDetail[0]   = '\0';
 }
 
 Mqtt::~Mqtt() {
   if (_mqttclient.connected()) {
     _mqttclient.disconnect();
   }
+}
+
+void Mqtt::setError(const char *category, const char *detail) {
+  strncpy(_errorCategory, category ? category : "", sizeof(_errorCategory) - 1);
+  _errorCategory[sizeof(_errorCategory) - 1] = '\0';
+  strncpy(_errorDetail, detail ? detail : "", sizeof(_errorDetail) - 1);
+  _errorDetail[sizeof(_errorDetail) - 1] = '\0';
 }
 
 void Mqtt::begin() {
@@ -90,6 +108,13 @@ unsigned long Mqtt::loop(MicroTasks::WakeReason reason) {
     DBUGLN("MQTT connection attempt timed out, will retry");
     _connecting = false;
     _nextMqttReconnectAttempt = millis() + MQTT_CONNECT_TIMEOUT;
+    setError("timeout", "Server not responding");
+    StaticJsonDocument<160> doc;
+    doc["mqtt_connected"]    = 0;
+    doc["mqtt_status"]       = "disconnected";
+    doc["mqtt_error"]        = _errorCategory;
+    doc["mqtt_error_detail"] = _errorDetail;
+    web_server_event(doc);
   }
 
   // Manage connection state
@@ -101,16 +126,56 @@ unsigned long Mqtt::loop(MicroTasks::WakeReason reason) {
     }
   }
 
-  // If connected, perform periodic checks
+  // If connected, perform periodic checks and safe deferred DNS lookup
   if (_mqttclient.connected()) {
     if (millis() - _loop_timer > MQTT_LOOP_INTERVAL) {
       _loop_timer = millis();
       checkAndPublishUpdates();
     }
+
+    // DNS lookup deferred from onMqttConnect (safe to block here, not in callback)
+    if (_needsDnsLookup) {
+      _needsDnsLookup = false;
+      struct in_addr addr4; struct in6_addr addr6;
+      bool isIp = (inet_pton(AF_INET,  mqtt_server.c_str(), &addr4) == 1) ||
+                  (inet_pton(AF_INET6, mqtt_server.c_str(), &addr6) == 1);
+      if (isIp) {
+        strncpy(_brokerIp, mqtt_server.c_str(), sizeof(_brokerIp) - 1);
+      } else if (mqtt_server.length() > 0) {
+        struct addrinfo hints = {}, *res = nullptr;
+        hints.ai_family = AF_UNSPEC;
+        if (getaddrinfo(mqtt_server.c_str(), nullptr, &hints, &res) == 0 && res) {
+          void *addr = res->ai_family == AF_INET
+            ? (void *)&((struct sockaddr_in  *)res->ai_addr)->sin_addr
+            : (void *)&((struct sockaddr_in6 *)res->ai_addr)->sin6_addr;
+          inet_ntop(res->ai_family, addr, _brokerIp, sizeof(_brokerIp) - 1);
+          freeaddrinfo(res);
+        } else {
+          strncpy(_brokerIp, "failed", sizeof(_brokerIp) - 1);
+        }
+        _brokerIp[sizeof(_brokerIp) - 1] = '\0';
+      }
+      if (_brokerIp[0] != '\0') {
+        // WebSocket only — this is a UI status field, not broker data
+        StaticJsonDocument<128> dns_event;
+        dns_event["mqtt_broker_ip"] = _brokerIp;
+        web_server_event(dns_event);
+      }
+    }
+  }
+
+  // Periodic status push so GUI always reflects the real connection state
+  // (covers cases where the page loads between connect/disconnect events).
+  // WebSocket only — do not re-publish status fields back to the broker.
+  if (millis() - _lastStatusPush > 15000) {
+    _lastStatusPush = millis();
+    StaticJsonDocument<128> status_event;
+    status_event["mqtt_connected"] = (int)_mqttclient.connected();
+    status_event["mqtt_status"]    = getMqttStatus();
+    web_server_event(status_event);
   }
 
   Profile_End(Mqtt_loop, 5);
-  //return config_mqtt_enabled() ? MQTT_LOOP_INTERVAL : MicroTask.Infinate;
   return MQTT_LOOP_INTERVAL;
 }
 
@@ -120,6 +185,7 @@ void Mqtt::attemptConnection() {
   }
   _connecting = true;
   _connectStartTime = millis();
+  _brokerIp[0] = '\0';   // clear stale DNS badge while new attempt is in flight
   DBUGF("MQTT attempting connection... (%s)\n", net.isConnected() ? "connected" : "not connected");
 
   String mqtt_host = mqtt_server + ":" + String(mqtt_port);
@@ -164,7 +230,19 @@ void Mqtt::attemptConnection() {
 void Mqtt::onMqttConnect() {
   DBUGLN("MQTT connected");
   _connecting = false;
-  _nextMqttReconnectAttempt = 0; // Reset reconnect timer
+  _nextMqttReconnectAttempt = 0;
+  _connectedSince  = time(NULL);
+  _brokerVersion[0] = '\0';   // fresh — will arrive via $SYS/broker/version
+  _brokerIp[0]     = '\0';   // cleared; DNS lookup scheduled for loop() below
+  _errorCategory[0] = '\0';  // clear any prior failure reason
+  _errorDetail[0]   = '\0';
+
+  // Do NOT call getaddrinfo() here — this is a Mongoose callback and getaddrinfo()
+  // uses LwIP's resolver (separate cache from Mongoose's), so it can block the
+  // event loop for hundreds of milliseconds, causing the broker to drop the TCP
+  // connection. Schedule it for loop() instead.
+  _needsDnsLookup = true;
+  MicroTask.wakeTask(this);
 
   DynamicJsonDocument doc(JSON_OBJECT_SIZE(5) + 200);
   doc["state"] = "connected";
@@ -178,22 +256,46 @@ void Mqtt::onMqttConnect() {
   _mqttclient.publish(mqtt_announce_topic, announce, true);
 
   doc.clear();
-  doc["mqtt_connected"] = 1;
+  doc["mqtt_connected"]      = 1;
+  doc["mqtt_status"]         = "connected";
+  doc["mqtt_connected_since"] = (uint32_t)_connectedSince;
+  if (_brokerIp[0] != '\0') doc["mqtt_broker_ip"] = _brokerIp;
+  doc["mqtt_broker_version"] = "";   // reset; will be updated when $SYS reply arrives
   event_send(doc);
 
   subscribeTopics();
-  publishInitialState(); // Publish current states like config, claims, etc.
+  publishInitialState();
 }
 
 void Mqtt::onMqttDisconnect(int err, const char *reason) {
   DBUGLN("MQTT disconnected");
   _connecting = false;
-  MicroTask.wakeTask(this); // Ensure loop runs promptly to schedule reconnect
+  // Do NOT call getaddrinfo() here — this is a Mongoose callback and will
+  // block the entire event loop, delaying the reconnect attempt by the full
+  // DNS round-trip time. DNS is handled safely in loop() after reconnect.
+  MicroTask.wakeTask(this);
 
-  DynamicJsonDocument doc(JSON_OBJECT_SIZE(3) + 70);
-  doc["mqtt_connected"] = 0;
-  doc["mqtt_close_code"] = err;
+  // Classify the failure so the UI can show an actionable reason. The CONNACK
+  // codes (1-5) arrive via the broker's connection-acknowledgement; anything
+  // else is a transport/network level close.
+  const char *category;
+  switch (err) {
+    case MG_EV_MQTT_CONNACK_BAD_AUTH:
+    case MG_EV_MQTT_CONNACK_NOT_AUTHORIZED:    category = "auth";        break;
+    case MG_EV_MQTT_CONNACK_SERVER_UNAVAILABLE: category = "unavailable"; break;
+    case MG_EV_MQTT_CONNACK_IDENTIFIER_REJECTED: category = "id_rejected"; break;
+    case MG_EV_MQTT_CONNACK_UNACCEPTABLE_VERSION: category = "version";    break;
+    default:                                   category = "network";     break;
+  }
+  setError(category, reason);
+
+  DynamicJsonDocument doc(JSON_OBJECT_SIZE(6) + 160);
+  doc["mqtt_connected"]    = 0;
+  doc["mqtt_status"]       = "disconnected";
+  doc["mqtt_close_code"]   = err;
   doc["mqtt_close_reason"] = reason;
+  doc["mqtt_error"]        = _errorCategory;
+  doc["mqtt_error_detail"] = _errorDetail;
   event_send(doc);
 }
 
@@ -241,6 +343,9 @@ void Mqtt::subscribeTopics() {
   _mqttclient.subscribe(mqtt_topic + "/limit/set"); yield();
   _mqttclient.subscribe(mqtt_topic + "/config/set"); yield();
   _mqttclient.subscribe(mqtt_topic + "/restart"); yield();
+
+  // Broker metadata — most brokers publish this as a retained message
+  _mqttclient.subscribe("$SYS/broker/version"); yield();
 
   DBUGLN("MQTT Subscriptions complete");
 }
@@ -299,6 +404,23 @@ void Mqtt::handleMqttMessage(MongooseString topic, MongooseString payload) {
   DBUGLN("Topic: " + topic_string);
   DBUGLN("Payload: " + payload_str);
 
+  // Record last receive time silently. Do NOT event_send() here — event_send()
+  // re-publishes to the broker, which on a busy broker (subscribed to 1 Hz topics
+  // like emon/emonpi/power1) would create a publish storm. The GUI reads this via
+  // its periodic GET /mqtt poll instead.
+  _lastRxTime = time(NULL);
+
+  // Broker version advertised by the broker itself
+  if (topic_string == "$SYS/broker/version") {
+    strncpy(_brokerVersion, payload_str.c_str(), sizeof(_brokerVersion) - 1);
+    _brokerVersion[sizeof(_brokerVersion) - 1] = '\0';
+    // WebSocket only — do not echo broker metadata back to the broker
+    StaticJsonDocument<128> ver_event;
+    ver_event["mqtt_broker_version"] = _brokerVersion;
+    web_server_event(ver_event);
+    return;
+  }
+
   // Logic from old mqttmsg_callback
   if (topic_string == mqtt_solar){
     divert.setSolar(payload_str.toInt());
@@ -323,7 +445,7 @@ void Mqtt::handleMqttMessage(MongooseString topic, MongooseString payload) {
   else if (topic_string == mqtt_vrms) {
     double volts = payload_str.toFloat();
     DBUGF("voltage:%.1f", volts);
-    _evse->setVoltage(volts);
+    _evse->setMqttVoltage(volts);
   }
   else if (topic_string == mqtt_vehicle_soc && vehicle_data_src == VEHICLE_DATA_SRC_MQTT) {
     int vehicle_soc = payload_str.toInt();
@@ -448,10 +570,38 @@ bool Mqtt::isConnected() {
   return _mqttclient.connected();
 }
 
+const char *Mqtt::getMqttStatus() {
+  if (!config_mqtt_enabled()) return "disabled";
+  if (_mqttclient.connected())  return "connected";
+  if (_connecting)              return "connecting";
+  return "disconnected";
+}
+
 void Mqtt::restartConnection() {
   DBUGLN("MQTT restart requested");
-  _mqttRestartTime = millis() + 50; // Schedule restart in the near future in loop
-  MicroTask.wakeTask(this); // Ensure loop runs to handle the restart
+
+  // Tear down immediately rather than waiting for a scheduled restart
+  if (_mqttclient.connected()) {
+    _mqttclient.disconnect();
+  }
+  _connecting = false;
+  _needsDnsLookup = false;
+  _brokerIp[0] = '\0';
+  _errorCategory[0] = '\0';   // clear stale failure reason on manual restart
+  _errorDetail[0]   = '\0';
+  _nextMqttReconnectAttempt = 0; // reconnect on the very next loop iteration
+
+  // Push "connecting" status immediately so the UI reacts
+  {
+    StaticJsonDocument<160> doc;
+    doc["mqtt_connected"]    = 0;
+    doc["mqtt_status"]       = "connecting";
+    doc["mqtt_error"]        = "";
+    doc["mqtt_error_detail"] = "";
+    web_server_event(doc);
+  }
+
+  MicroTask.wakeTask(this);
 }
 
 void Mqtt::publishData(JsonDocument &data) {
@@ -459,10 +609,16 @@ void Mqtt::publishData(JsonDocument &data) {
     return;
   }
   JsonObject root = data.as<JsonObject>();
+  bool published = false;
   for (JsonPair kv : root) {
     String topic = mqtt_topic + "/" + kv.key().c_str();
     String val = kv.value().as<String>(); // Consider non-string values too if needed
     _mqttclient.publish(topic, val, config_mqtt_retained());
+    published = true;
+  }
+  // "Last message" tracks any broker traffic — reset on send as well as receive
+  if (published) {
+    _lastRxTime = time(NULL);
   }
 }
 

@@ -27,6 +27,13 @@
 
 #define EVSE_MONITOR_TEMP_COUNT         6
 
+// How long a voltage received over MQTT is considered "available" before we
+// fall back to the statically configured ($SV/$GV) voltage. Refreshed on every
+// MQTT voltage message.
+#ifndef EVSE_MONITOR_MQTT_VOLTAGE_TIMEOUT_MS
+#define EVSE_MONITOR_MQTT_VOLTAGE_TIMEOUT_MS  120000UL
+#endif
+
 class EvseMonitor : public MicroTasks::Task
 {
   private:
@@ -131,7 +138,9 @@ class EvseMonitor : public MicroTasks::Task
 
     EvseStateEvent _state;            // OpenEVSE State
     double _amp;                      // OpenEVSE Current Sensor
-    double _voltage;                  // Voltage from OpenEVSE or MQTT
+    double _voltage;                  // Resolved voltage: MQTT > configured ($SV/$GV) > default
+    double _mqtt_voltage;             // Last voltage received over MQTT (0 = none received)
+    uint32_t _mqtt_voltage_time;      // millis() of last MQTT voltage (0 = never)
     double _power;                    // Calculated Power from _amp & _voltage & mono|threephase
     Temperature _temps[EVSE_MONITOR_TEMP_COUNT];
     EnergyMeter _energyMeter;
@@ -155,6 +164,14 @@ class EvseMonitor : public MicroTasks::Task
     uint32_t _heartbeat_interval;
     uint32_t _heartbeat_current;
     RapiSender *_sender;
+
+    // Extended state (linco-work firmware)
+    uint32_t _frequency;          // AC line frequency × 100 (from $GZ); 0 = unknown/unsupported
+    bool _relay_dc1;              // DC relay 1 enabled (only valid when _relay_status_known)
+    bool _relay_dc2;              // DC relay 2 enabled (only valid when _relay_status_known)
+    bool _relay_ac;               // AC relay enabled (only valid when _relay_status_known)
+    bool _relay_status_known;     // true once $GR has been answered by the controller
+    char _chip_id[48];            // EVSE chip ID from $GI
 
     DataReady _data_ready;
     DataReady _boot_ready;
@@ -180,7 +197,11 @@ class EvseMonitor : public MicroTasks::Task
 
     void getStatusFromEvse(bool allowStart = true);
     void getChargeCurrentAndVoltageFromEvse();
+    void updateEffectiveVoltage();
     void getTemperatureFromEvse();
+    void readFrequency();
+    void readRelayStatus();
+    void readChipId();
 
   protected:
     void setup();
@@ -212,6 +233,7 @@ class EvseMonitor : public MicroTasks::Task
 
     void setPilot(long amps, bool force=false, std::function<void(int ret)> callback = NULL);
     void setVoltage(double volts, std::function<void(int ret)> callback = NULL);
+    void setMqttVoltage(double volts);
     void setServiceLevel(ServiceLevel level, std::function<void(int ret)> callback = NULL);
     void configureCurrentSensorScale(long scale, long offset, std::function<void(int ret)> callback = NULL);
     void enableFeature(uint8_t feature, bool enabled, std::function<void(int ret)> callback = NULL);
@@ -225,6 +247,10 @@ class EvseMonitor : public MicroTasks::Task
     void setPanicTemperature(uint32_t tempC, std::function<void(int ret)> callback = NULL);
     void enableFrontButton(bool enabled, std::function<void(int ret)> callback = NULL);
     void enableBootLock(bool enabled, std::function<void(int ret)> callback = NULL);
+    void enablePPAutoAmpacity(bool enabled, std::function<void(int ret)> callback = NULL);
+    void enableZeroCrossSwitch(bool enabled, std::function<void(int ret)> callback = NULL);
+    void setRelayEnable(int relay, bool enabled, std::function<void(int ret)> callback = NULL);
+    void resetFaultCounters(std::function<void(int ret)> callback = NULL);
     void setHeartbeatSupervision(uint32_t interval, uint32_t current, std::function<void(int ret)> callback = NULL);
     void verifyPilot();
 
@@ -361,19 +387,32 @@ class EvseMonitor : public MicroTasks::Task
       return 0 == (getSettingsFlags() & OPENEVSE_ECF_TEMP_CHK_DISABLED);
     }
     bool isOvercurrentMonitorEnabled() {
-      return 0 == (getSettingsFlags() & OPENEVSE_ECF_TEMP_CHK_DISABLED);
+      // NB: the controller aliases this to the temp-check bit (both 0x0400),
+      // so overcurrent and temperature monitoring cannot be toggled separately
+      return 0 == (getSettingsFlags() & OPENEVSE_ECF_OVERCURRENT_DISABLED);
     }
     uint32_t getPanicTemperature() { return _panic_temperature; }
     bool isFrontButtonEnabled() { return !isButtonDisabled(); }
     bool isButtonDisabled() {
       return OPENEVSE_ECF_BUTTON_DISABLED == (getSettingsFlags() & OPENEVSE_ECF_BUTTON_DISABLED);
     }
-#ifndef OPENEVSE_ECF_BOOT_LOCK_DISABLED
-#define OPENEVSE_ECF_BOOT_LOCK_DISABLED 0x2000
-#endif
     bool isBootLockEnabled() {
       return 0 == (getSettingsFlags() & OPENEVSE_ECF_BOOT_LOCK_DISABLED);
     }
+    bool isPPAutoAmpacityEnabled() {
+      return OPENEVSE_ECF_PP_AUTO_AMPACITY == (getSettingsFlags() & OPENEVSE_ECF_PP_AUTO_AMPACITY);
+    }
+    bool isZeroCrossSwitchEnabled() {
+      return 0 == (getSettingsFlags() & OPENEVSE_ECF_RELAY_ZC_DISABLED);
+    }
+    bool isDC1RelayEnabled() { return _relay_dc1; }
+    bool isDC2RelayEnabled() { return _relay_dc2; }
+    bool isACRelayEnabled()  { return _relay_ac; }
+    bool isRelayStatusKnown() { return _relay_status_known; }
+    uint32_t getFrequency()  { return _frequency; }  // × 100 Hz (5000 = 50.00 Hz); 0 = unknown
+    const char *getChipId()  { return _chip_id; }
+    // True if the controller's RAPI protocol supports the D9 command set
+    bool isD9Supported() { return _openevse.isD9Supported(); }
     uint32_t getHeartbeatInterval() { return _heartbeat_interval; }
     uint32_t getHeartbeatCurrent() { return _heartbeat_current; }
     bool isHeartbeatEnabled() { return _heartbeat_current > 0; }
