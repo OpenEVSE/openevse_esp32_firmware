@@ -5,11 +5,15 @@
 
 #include <stdint.h>
 
-// 16-bit colour. TFT_eSPI pushes via pushPixels; LV_COLOR_16_SWAP matches its
-// byte order so the buffer goes out verbatim. If colours look swapped on
-// hardware, flip this to 0 (and add tft.setSwapBytes(true) in lvgl_panel.cpp).
+// 16-bit colour. TFT_eSPI pushes via pushPixels on-device, so that path keeps
+// the byte-swapped buffer order. The native headless build snapshots LVGL's
+// pixels directly, so it must keep the host-order RGB565 bytes unswapped.
 #define LV_COLOR_DEPTH 16
+#ifdef EPOXY_DUINO
+#define LV_COLOR_16_SWAP 0
+#else
 #define LV_COLOR_16_SWAP 1
+#endif
 
 // LVGL widget/render scratch pool. Static (BSS) array of this size — the partial
 // draw buffer is separate and lives in internal DRAM (lvgl_panel.cpp). No PSRAM
