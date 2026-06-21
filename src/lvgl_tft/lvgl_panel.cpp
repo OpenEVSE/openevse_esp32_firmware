@@ -6,6 +6,7 @@
 
 #if defined(EPOXY_DUINO)
 #include <stdlib.h>
+#include <string.h>
 #else
 #include <TFT_eSPI.h>
 #include <esp_heap_caps.h>
@@ -36,12 +37,28 @@ static TFT_eSPI tft = TFT_eSPI();
 static lv_disp_draw_buf_t draw_buf;
 static lv_disp_drv_t disp_drv;
 static lv_color_t *buf1 = nullptr;
+#if defined(EPOXY_DUINO)
+static lv_color_t *host_fb = nullptr;
+#endif
 
 static void flush_cb(lv_disp_drv_t *drv, const lv_area_t *area, lv_color_t *color_p)
 {
 #if defined(EPOXY_DUINO)
-  (void)area;
-  (void)color_p;
+  if(host_fb) {
+    int32_t x1 = area->x1 < 0 ? 0 : area->x1;
+    int32_t y1 = area->y1 < 0 ? 0 : area->y1;
+    int32_t x2 = area->x2 >= SCREEN_W ? SCREEN_W - 1 : area->x2;
+    int32_t y2 = area->y2 >= SCREEN_H ? SCREEN_H - 1 : area->y2;
+    int32_t area_w = area->x2 - area->x1 + 1;
+
+    if(x1 <= x2 && y1 <= y2) {
+      for(int32_t y = y1; y <= y2; y++) {
+        const lv_color_t *src = color_p + (y - area->y1) * area_w + (x1 - area->x1);
+        lv_color_t *dst = host_fb + y * SCREEN_W + x1;
+        memcpy(dst, src, (x2 - x1 + 1) * sizeof(lv_color_t));
+      }
+    }
+  }
   lv_disp_flush_ready(drv);
 #else
   uint32_t w = (area->x2 - area->x1 + 1);
@@ -66,6 +83,15 @@ bool lvgl_panel_begin()
   if (buf1 == nullptr) {
     Serial.printf("[panel] FATAL: draw-buffer alloc failed (%u B host heap)\n",
                   (unsigned)buf_bytes);
+    return false;
+  }
+
+  host_fb = (lv_color_t *)calloc(SCREEN_W * SCREEN_H, sizeof(lv_color_t));
+  if(host_fb == nullptr) {
+    Serial.printf("[panel] FATAL: framebuffer alloc failed (%u B host heap)\n",
+                  (unsigned)(SCREEN_W * SCREEN_H * sizeof(lv_color_t)));
+    free(buf1);
+    buf1 = nullptr;
     return false;
   }
 #else
@@ -104,5 +130,36 @@ bool lvgl_panel_begin()
 #endif
   return true;
 }
+
+#if defined(EPOXY_DUINO)
+bool lvgl_panel_write_ppm(const char *path)
+{
+  if(host_fb == nullptr || path == nullptr || path[0] == '\0') {
+    return false;
+  }
+
+  FILE *fp = fopen(path, "wb");
+  if(fp == nullptr) {
+    return false;
+  }
+
+  fprintf(fp, "P6\n%u %u\n255\n", SCREEN_W, SCREEN_H);
+  for(uint32_t i = 0; i < SCREEN_W * SCREEN_H; i++) {
+    uint16_t px = host_fb[i].full;
+    uint8_t rgb[3] = {
+      (uint8_t)((((px >> 11) & 0x1F) * 255) / 31),
+      (uint8_t)((((px >> 5)  & 0x3F) * 255) / 63),
+      (uint8_t)(((px & 0x1F) * 255) / 31)
+    };
+    if(fwrite(rgb, sizeof(rgb), 1, fp) != 1) {
+      fclose(fp);
+      return false;
+    }
+  }
+
+  fclose(fp);
+  return true;
+}
+#endif
 
 #endif // ENABLE_SCREEN_LVGL_TFT
