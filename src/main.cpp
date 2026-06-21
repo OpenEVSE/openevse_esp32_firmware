@@ -113,6 +113,7 @@ static void process_command_line();
 static void process_early_command_line();
 #if defined(ENABLE_SCREEN_LVGL_TFT)
 #include "lvgl_tft/lvgl_capture.h"
+#include "lvgl_tft/lvgl_panel.h"
 static const char *lvgl_capture_dir = nullptr;
 #endif
 #endif
@@ -471,7 +472,9 @@ static void process_early_command_line()
 static void printUsage() {
   const char *lvgl_usage = "";
 #if defined(ENABLE_SCREEN_LVGL_TFT)
-  lvgl_usage = "  --dump-lvgl-screens DIR  Render sample LVGL UI screens into DIR as PPM files\n";
+  lvgl_usage =
+    "  --dump-lvgl-screens DIR  Render sample LVGL UI screens into DIR as PPM files\n"
+    "  --lvgl-display MODE      Select native LVGL display mode: headless or window\n";
 #endif
 
   fprintf(
@@ -558,6 +561,26 @@ static int parseFlags(int argc, const char* const* argv) {
       }
 
       lvgl_capture_dir = argv[0];
+    }
+    else if (argEquals(argv[0], "--lvgl-display")) {
+      shift(argc, argv);
+      if (argc == 0) {
+        fprintf(stderr, "Error: --lvgl-display requires a mode argument\n");
+        cmdline_exit_requested = true;
+        return argc_original - argc;
+      }
+
+      if (argEquals(argv[0], "headless")) {
+        lvgl_panel_set_display_mode(LVGL_PANEL_DISPLAY_HEADLESS);
+      }
+      else if (argEquals(argv[0], "window")) {
+        lvgl_panel_set_display_mode(LVGL_PANEL_DISPLAY_WINDOW);
+      }
+      else {
+        fprintf(stderr, "Error: unsupported LVGL display mode '%s' (expected headless or window)\n", argv[0]);
+        cmdline_exit_requested = true;
+        return argc_original - argc;
+      }
     }
 #endif
     else if (argEquals(argv[0], "--")) {

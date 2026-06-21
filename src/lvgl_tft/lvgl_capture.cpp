@@ -22,6 +22,7 @@ static void pump_frames(uint32_t frames = 4)
     lv_tick_inc(16);
     lv_timer_handler();
     lv_refr_now(NULL);
+    lvgl_panel_pump();
   }
 }
 
