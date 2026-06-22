@@ -256,6 +256,7 @@ void buildStatus(DynamicJsonDocument &doc) {
 
 #if defined(ENABLE_PN532) || defined(ENABLE_RFID)
   doc["rfid_failure"] = (int) rfid.communicationFails();
+  doc["rfid_reader"] = (int) rfid.readerPresent();
 #endif
 
   doc["ohm_hour"] = ohm_hour;

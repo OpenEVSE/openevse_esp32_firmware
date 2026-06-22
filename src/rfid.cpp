@@ -217,6 +217,10 @@ bool RfidTask::communicationFails() {
     return _rfid->readerFailure();
 }
 
+bool RfidTask::readerPresent() {
+    return _rfid->readerPresent();
+}
+
 bool RfidReaderNullDevice::readerFailure() {
     return config_rfid_enabled();
 }

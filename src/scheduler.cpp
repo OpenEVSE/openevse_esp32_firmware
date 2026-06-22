@@ -125,18 +125,29 @@ bool Scheduler::Event::setState(const char *state)
 
 uint32_t Scheduler::EventInstance::getDuration()
 {
-  int lengthInDays = getNext()._day - _day;
+  EventInstance &next = getNext();
+
+  int lengthInDays = next._day - _day;
   if(lengthInDays < 0) {
     lengthInDays += SCHEDULER_DAYS_IN_A_WEEK;
   }
 
-  uint32_t duration = (lengthInDays * 24 * 60 * 60) + (getNext().getStartOffset() - getStartOffset());
-  // Handle special case where the duration is 0 (IE only single event so the next event is this event)
-  if(0 == duration) {
-    // Event duration is a week
-    duration = 7 * 24 * 60 * 60;
+  // Signed maths so a non-positive span can be detected (was an unsigned
+  // underflow that produced a week-long, never-ending window).
+  int32_t duration = (lengthInDays * 24 * 60 * 60) +
+                     ((int32_t)next.getStartOffset() - (int32_t)getStartOffset());
+
+  // The next occurrence wraps to the following week whenever the span is
+  // non-positive: a lone event (its "next" is itself), OR the last event of a
+  // day wrapping back to an earlier event on the SAME day — e.g. a Sunday-only
+  // window where the 17:50 stop's next is the 17:49 start a week later
+  // (lengthInDays == 0, offset diff negative). Without this the disabled "gap"
+  // between windows is never current, so the feature looks active all week and
+  // never turns off.
+  if(duration <= 0) {
+    duration += 7 * 24 * 60 * 60;
   }
-  return duration;
+  return (uint32_t)duration;
 }
 
 int32_t Scheduler::EventInstance::getStartOffset(int fromDay, int dayOffset) {
@@ -162,7 +173,12 @@ uint32_t Scheduler::EventInstance::randomiseStartOffset()
   }
 
   int32_t offset = _event->getOffset();
-  if(_event->getState() == EvseState::Active) {
+  // scheduler_start_window staggers the start of plain charge sessions across a
+  // fleet to spread grid load. Feature windows (divert/shaper/rfid/ocpp and
+  // explicit charge-current windows) are precise control windows — randomising
+  // their start can push it past the window's stop event, inverting the window
+  // (see getDuration) and leaving the feature stuck on. Never stagger those.
+  if(_event->getState() == EvseState::Active && _event->getFeature() == SchedulerFeature::None) {
     offset += random(-min((int32_t)scheduler_start_window, offset), scheduler_start_window);
   }
   return offset;
