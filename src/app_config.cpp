@@ -171,9 +171,14 @@ void config_changed(String name);
 #define CONFIG_DEFAULT_STATE_DEFAULT CONFIG_DEFAULT_STATE
 #endif
 
+#ifndef CONFIG_TEMP_THROTTLE_DEFAULT
+#define CONFIG_TEMP_THROTTLE_DEFAULT CONFIG_TEMP_THROTTLE
+#endif
+
 #define CONFIG_DEFAULT_FLAGS (CONFIG_SERVICE_SNTP | \
                               CONFIG_OCPP_AUTO_AUTH | \
                               CONFIG_OCPP_OFFLINE_AUTH | \
+                              CONFIG_TEMP_THROTTLE_DEFAULT | \
                               CONFIG_DEFAULT_STATE_DEFAULT)
 
 ConfigOptDefinition<uint32_t> flagsOpt = ConfigOptDefinition<uint32_t>(flags, CONFIG_DEFAULT_FLAGS, "flags", "f");
@@ -394,6 +399,18 @@ config_load_settings()
        CONFIG_DEFAULT_STATE == (flags & CONFIG_DEFAULT_STATE))
     {
       new_changed |= CONFIG_DEFAULT_STATE;
+    }
+#endif
+
+#if CONFIG_TEMP_THROTTLE_DEFAULT != 0
+    // Temperature throttle default flipped from 0 to 1: a current 0 is treated
+    // as the old default (not an intentional change) so it becomes enabled on
+    // upgrade; a current 1 is kept as an intentional setting.
+    new_changed &= ~CONFIG_TEMP_THROTTLE;
+    if(flags != CONFIG_DEFAULT_FLAGS &&
+       CONFIG_TEMP_THROTTLE == (flags & CONFIG_TEMP_THROTTLE))
+    {
+      new_changed |= CONFIG_TEMP_THROTTLE;
     }
 #endif
 
