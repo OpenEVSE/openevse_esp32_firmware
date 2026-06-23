@@ -4,6 +4,7 @@
 
 #include "debug.h"
 #include "scheduler.h"
+#include "fs_util.h"
 #include "time_man.h"
 #include "emonesp.h"
 #include "app_config.h"
@@ -332,12 +333,24 @@ bool Scheduler::commit()
     return true;
   }
 
+  // Serialize first and ensure there's room, so a full filesystem never
+  // truncates a previously-valid schedule file into a corrupt one.
+  DynamicJsonDocument doc(4096);
+  if(!serialize(doc) || !littlefs_has_space(measureJson(doc))) {
+    DBUGLN("Scheduler: insufficient space, keeping existing file");
+    return false;
+  }
+
   // Save the schedule to storage
   File file = LittleFS.open(SCHEDULE_PATH, FILE_WRITE);
   if(file)
   {
-    ret = serialize(file);
+    ret = serializeJson(doc, file) > 0;
     file.close();
+    if(!ret) {
+      // Write failed part-way — drop the corrupt file rather than keep it.
+      LittleFS.remove(SCHEDULE_PATH);
+    }
   }
 
   return ret;
