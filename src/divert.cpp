@@ -57,7 +57,8 @@ DivertTask::DivertTask(EvseManager &evse) :
   _evseState(this),
   _available_current(0),
   _smoothed_available_current(0),
-  _min_charge_end(0)
+  _min_charge_end(0),
+  _timer_divert_active(false)
 {
 
 }
@@ -128,8 +129,12 @@ void DivertTask::setMode(DivertMode mode)
         event["available_current"] = _available_current = 0;
         event["smoothed_available_current"] = _smoothed_available_current = 0;
 
+        // Timer-driven divert must outrank the schedule's base Timer claim
+        // (100) so "solar only" wins (idle = EVSE off when there's no excess
+        // solar). Always-on (config) divert keeps its normal low priority.
         EvseProperties props(EvseState::Disabled);
-        _evse->claim(EvseClient_OpenEVSE_Divert, EvseManager_Priority_Default, props);
+        _evse->claim(EvseClient_OpenEVSE_Divert,
+          _timer_divert_active ? EvseManager_Priority_Limit : EvseManager_Priority_Default, props);
       } break;
 
       default:
@@ -233,14 +238,16 @@ void DivertTask::update_state()
     {
       EvseProperties props(EvseState::Active);
       props.setChargeCurrent(_charge_rate);
-      _evse->claim(EvseClient_OpenEVSE_Divert, EvseManager_Priority_Divert, props);
+      _evse->claim(EvseClient_OpenEVSE_Divert,
+        _timer_divert_active ? EvseManager_Priority_Limit : EvseManager_Priority_Divert, props);
     }
     else if (_smoothed_available_current <= trigger_current)
     {
       if( EvseState::Active == _evse->getState(EvseClient_OpenEVSE_Divert) && 0 == min_charge_time_remaining)
       {
         EvseProperties props(EvseState::Disabled);
-        _evse->claim(EvseClient_OpenEVSE_Divert, EvseManager_Priority_Default, props);
+        _evse->claim(EvseClient_OpenEVSE_Divert,
+          _timer_divert_active ? EvseManager_Priority_Limit : EvseManager_Priority_Default, props);
       }
     }
 
@@ -284,6 +291,21 @@ time_t DivertTask::getMinChargeTimeRemaining()
           divertmode_get_time() < _min_charge_end) ?
             _min_charge_end - divertmode_get_time() :
             0;
+}
+
+void DivertTask::setTimerDivertActive(bool active)
+{
+  _timer_divert_active = active;
+  if(active) {
+    // Force eco mode for the timer window
+    setMode(DivertMode::Eco);
+  } else {
+    // Restore the mode from persistent config
+    bool configured_eco = config_divert_enabled() && 1 == config_charge_mode();
+    setMode(configured_eco ? DivertMode::Eco : DivertMode::Normal);
+  }
+  // Wake update_state so the new priority takes effect immediately
+  MicroTask.wakeTask(this);
 }
 
 // compatiblity trick, to remove after few version upgrade

@@ -16,12 +16,16 @@ public:
     virtual ~RfidReader() = default;
     virtual void setOnCardDetected(std::function<void(String&)> onCardDet) = 0;
     virtual bool readerFailure() = 0;
+    // True when a reader is physically present on the bus, independent of
+    // whether RFID is enabled (so the UI can show "reader found / not found").
+    virtual bool readerPresent() = 0;
 };
 
 class RfidReaderNullDevice : public RfidReader {
 public:
     void setOnCardDetected(std::function<void(String&)> onCardDet) override {}
     bool readerFailure() override;
+    bool readerPresent() override { return false; }
 };
 
 class RfidTask : public MicroTasks::Task {
@@ -43,6 +47,8 @@ class RfidTask : public MicroTasks::Task {
          */
         bool vehicleConnected = false;
 
+        bool _timer_required = false;  // true while a scheduler timer window requires RFID auth
+
         void updateEvseClaim();
 
         std::function<bool(const String& idTag)> *onCardScanned {nullptr};
@@ -58,8 +64,12 @@ class RfidTask : public MicroTasks::Task {
 
         String getAuthenticatedTag();
         bool communicationFails();
+        bool readerPresent();
 
         void setOnCardScanned(std::function<bool(const String& idTag)> *onCardScanned);
+
+        // Enable/disable timer-controlled RFID enforcement
+        void setTimerRequired(bool required);
 };
 
 extern RfidReaderNullDevice rfidNullDevice;

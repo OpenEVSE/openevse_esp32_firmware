@@ -50,6 +50,10 @@ PN532::PN532() : MicroTasks::Task() {
 
 void PN532::begin() {
     Wire.begin(I2C_SDA, I2C_SCL);
+    // One-shot I2C presence probe: a reader ACKs its address even when RFID
+    // isn't enabled, so the UI can report whether one is connected.
+    Wire.beginTransmission(PN532_I2C_ADDRESS);
+    _reader_present = (Wire.endTransmission() == 0);
     MicroTask.startTask(this);
 }
 
@@ -94,6 +98,11 @@ unsigned long PN532::loop(MicroTasks::WakeReason reason){
 
 bool PN532::readerFailure() {
     return config_rfid_enabled() && status == DeviceStatus::FAILED;
+}
+
+bool PN532::readerPresent() {
+    // Detected at boot, or currently responding (ACTIVE) while RFID is enabled.
+    return _reader_present || status == DeviceStatus::ACTIVE;
 }
 
 void PN532::initialize() {

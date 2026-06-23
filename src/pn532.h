@@ -24,6 +24,7 @@ private:
     boolean hasContact = false;
     bool listenAck = false;
     bool listen = false;
+    bool _reader_present = false;   // probed once on the I2C bus at boot
 
     void initialize();
     void poll();
@@ -41,6 +42,7 @@ public:
 
     void setOnCardDetected(std::function<void(String&)> onCardDet) override {onCardDetected = onCardDet;}
     bool readerFailure() override;
+    bool readerPresent() override;
 };
 
 extern PN532 pn532;
