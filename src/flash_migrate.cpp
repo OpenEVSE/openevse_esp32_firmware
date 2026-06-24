@@ -66,6 +66,7 @@ const char *flash_migrate_partition_scheme()
 #include "rom/spi_flash.h"   // esp_rom_spiflash_* (writes the protected regions)
 #include "rom/cache.h"       // Cache_Read_Disable/Enable/Flush (direct, no coord)
 #include "esp_cpu.h"         // esp_cpu_stall()/unstall() — hardware core stall
+#include "esp_rom_sys.h"     // esp_rom_printf() — early-boot console (UART0)
 #include "hal/wdt_hal.h"     // disable the MWDT watchdogs during the commit
 #include "soc/timer_group_struct.h"
 #include "soc/rtc_wdt.h"     // feed the RTC watchdog (kept as a hang safety-net)
@@ -759,22 +760,22 @@ static void flash_migrate_commit()
 // IRAM placement is lost and executing them with the cache disabled faults.
 static void IRAM_ATTR NOINLINE_ATTR flash_op_begin()
 {
-  esp_cpu_stall(xPortGetCoreID() ? 0 : 1); // hardware-freeze the other core
+  int me = xPortGetCoreID();
+  esp_cpu_stall(me ? 0 : 1); // hardware-freeze the other core
   portDISABLE_INTERRUPTS();
-  // Direct ROM cache control — does no inter-core coordination, so it is safe
-  // to disable the stalled core's cache (spi_flash_disable_cache() would hang).
-  Cache_Read_Disable(0);
-  Cache_Read_Disable(1);
+  // Only touch THIS core's cache. Disabling the stalled core's cache hangs
+  // (it waits for the frozen core); the other core won't access flash while
+  // frozen, and the regions we write are not XIP-executed by it.
+  Cache_Read_Disable(me);
 }
 
 static void IRAM_ATTR NOINLINE_ATTR flash_op_end()
 {
-  Cache_Flush(0); // invalidate any stale cache lines for the just-written flash
-  Cache_Flush(1);
-  Cache_Read_Enable(0);
-  Cache_Read_Enable(1);
+  int me = xPortGetCoreID();
+  Cache_Flush(me); // invalidate any stale cache lines for the just-written flash
+  Cache_Read_Enable(me);
   portENABLE_INTERRUPTS();
-  esp_cpu_unstall(xPortGetCoreID() ? 0 : 1);
+  esp_cpu_unstall(me ? 0 : 1);
 }
 
 static bool IRAM_ATTR NOINLINE_ATTR raw_flash_erase_sector(uint32_t sector)
@@ -824,6 +825,7 @@ static bool raw_write_region(uint32_t off, const uint8_t *data, uint32_t len)
   for(int attempt = 0; attempt < 3; attempt++) {
     bool ok = true;
     for(uint32_t a = a0; a < a1 && ok; a += FLASH_SECTOR) {
+      esp_rom_printf("[migrate] erase %x\n", a);
       ok = raw_flash_erase_sector(a / FLASH_SECTOR);
       rtc_wdt_feed(); // each op is short; feed the RTC WDT between them
     }
@@ -831,6 +833,7 @@ static bool raw_write_region(uint32_t off, const uint8_t *data, uint32_t len)
     for(uint32_t w = 0; w < wlen && ok; w += FLASH_SECTOR) {
       uint32_t n = wlen - w;
       if(n > FLASH_SECTOR) n = FLASH_SECTOR;
+      esp_rom_printf("[migrate] write %x\n", off + w);
       ok = raw_flash_write(off + w, (const uint32_t *)(data + w), n);
       rtc_wdt_feed();
     }
@@ -888,8 +891,10 @@ static void prepare_watchdogs_for_commit()
   wdt_hal_write_protect_enable(&twdt);
 
   rtc_wdt_protect_off();
-  rtc_wdt_set_time(RTC_WDT_STAGE0, 30000);
+  rtc_wdt_set_stage(RTC_WDT_STAGE0, RTC_WDT_STAGE_ACTION_RESET_SYSTEM);
+  rtc_wdt_set_time(RTC_WDT_STAGE0, 20000); // hang -> auto reset in 20s (-> 4MB)
   rtc_wdt_feed();
+  rtc_wdt_enable();
   rtc_wdt_protect_on();
 }
 
@@ -906,42 +911,59 @@ void flash_migrate_early_commit()
     return;
   }
 
-  DEBUG_PORT.println("[migrate] staged commit found, applying 16MB layout before WiFi");
+  // Use esp_rom_printf: it writes straight to the console UART (UART0) so the
+  // checkpoints below appear on the programming serial port even this early in
+  // boot, and it is safe to call while flash/cache work is in progress.
+  esp_rom_printf("\n[migrate] staged commit found (bl=%u pt=%u), applying before WiFi\n",
+                 h.bl_len, h.pt_len);
 
   uint32_t bl_w = (h.bl_len + 3) & ~3u;
   uint32_t pt_w = (h.pt_len + 3) & ~3u;
   uint8_t *bl = (uint8_t *)malloc(bl_w);
   uint8_t *pt = (uint8_t *)malloc(pt_w);
-  if(!bl || !pt) { free(bl); free(pt); return; }
+  if(!bl || !pt) { esp_rom_printf("[migrate] malloc failed\n"); free(bl); free(pt); return; }
 
   bool ok = (esp_flash_read(esp_flash_default_chip, bl, SCRATCH_BL_OFFSET, bl_w) == ESP_OK) &&
             (esp_flash_read(esp_flash_default_chip, pt, SCRATCH_PT_OFFSET, pt_w) == ESP_OK) &&
             esp_rom_crc32_le(UINT32_MAX, bl, h.bl_len) == h.bl_crc &&
             esp_rom_crc32_le(UINT32_MAX, pt, h.pt_len) == h.pt_crc &&
             bl[0] == 0xE9;
+  esp_rom_printf("[migrate] images read+crc: %s\n", ok ? "OK" : "BAD");
 
   // One-shot: invalidate the header now so a crash mid-commit can't boot-loop.
   esp_flash_erase_region(esp_flash_default_chip, SCRATCH_HEADER_OFFSET, FLASH_SECTOR);
 
   if(!ok) {
-    DEBUG_PORT.println("[migrate] staged images invalid, aborting commit");
     free(bl); free(pt);
     return;
   }
 
   // Point of no return. WiFi is not up yet, so the hardware core-stall is safe.
   g_migrate_marker = 30;
+  esp_rom_printf("[migrate] disabling watchdogs\n");
   prepare_watchdogs_for_commit();
 
   g_migrate_marker = 31;
+  esp_rom_printf("[migrate] writing bootloader @0x1000 ...\n");
   bool committed = raw_write_region(BOOTLOADER_OFFSET, bl, h.bl_len);
-  if(committed) { g_migrate_marker = 32; committed = raw_write_region(PARTITION_TABLE_OFFSET, pt, h.pt_len); }
-  if(committed) { g_migrate_marker = 33; committed = raw_write_otadata_ota1(); }
+  esp_rom_printf("[migrate] bootloader: %s\n", committed ? "OK" : "FAIL");
+  if(committed) {
+    g_migrate_marker = 32;
+    esp_rom_printf("[migrate] writing partition table @0x8000 ...\n");
+    committed = raw_write_region(PARTITION_TABLE_OFFSET, pt, h.pt_len);
+    esp_rom_printf("[migrate] partitions: %s\n", committed ? "OK" : "FAIL");
+  }
+  if(committed) {
+    g_migrate_marker = 33;
+    esp_rom_printf("[migrate] writing otadata ...\n");
+    committed = raw_write_otadata_ota1();
+    esp_rom_printf("[migrate] otadata: %s\n", committed ? "OK" : "FAIL");
+  }
   if(committed) { g_migrate_marker = 34; }
 
   free(bl); free(pt);
 
-  DEBUG_PORT.printf("[migrate] commit %s, rebooting\n", committed ? "complete" : "FAILED");
+  esp_rom_printf("[migrate] commit %s, rebooting\n", committed ? "COMPLETE" : "FAILED");
   esp_restart();
 }
 

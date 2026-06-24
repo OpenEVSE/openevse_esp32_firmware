@@ -23,39 +23,57 @@ detection in `src/app_config.cpp` (`/config` exposes `can_expand_16mb` /
   region at `0x400000` (also unprotected), with a header (`magic + lengths +
   crc`) written last; then the device reboots.
 
-## What does NOT work yet — applying the protected regions
+## What does NOT work — applying the protected regions (CONCLUSION)
 
 `flash_migrate_early_commit()` runs from `setup()` before WiFi and is meant to
 write the staged bootloader → `0x1000`, partition table → `0x8000`, and otadata
-→ select `ota_1`, then reboot into the 16MB firmware. It currently **hangs** in
-the ROM flash op and the device is force-reset (RTC WDT, POWERON), then boots
-back to 4MB (the one-shot scratch header is erased first, so no boot loop; the
-bootloader is never actually written, so no corruption).
+→ select `ota_1`, then reboot into the 16MB firmware. **It cannot be made to
+work** and field-OTA rewrite of the bootloader/partition table is impractical on
+this platform. The device auto-recovers (RTC WDT reset, ~20s) back to 4MB; the
+one-shot scratch header is erased first so there is no boot loop, and the
+bootloader is never successfully written so there is no corruption.
 
-### Approaches tried (all fail)
+### Approaches tried (all fail), proven on-device with a serial console
 
 | Approach | Result |
 |---|---|
 | `esp_flash` / `spi_flash_*` | **abort** — `CONFIG_SPI_FLASH_DANGEROUS_WRITE_ABORTS` blocks 0x1000/0x8000 |
-| ROM `esp_rom_spiflash_*` + IDF cache guard (IPI stall) | **deadlock** (cross-core) |
-| ROM + `esp_cpu_stall` + `spi_flash_disable_cache` | **hang** |
-| ROM + `esp_cpu_stall` + ROM `Cache_Read_Disable` | **hang** |
+| ROM `esp_rom_spiflash_*` + IDF cache guard (IPI stall) | **deadlock**, then **corrupts** the chip |
+| ROM + `esp_cpu_stall` + `spi_flash_disable_cache` (both cores) | **hang** |
+| ROM + `esp_cpu_stall` + ROM `Cache_Read_Disable` (this core only) | **hang in `esp_rom_spiflash_erase_sector`** |
 
-Root cause: the ROM flash functions (the only ones that bypass the write
-protection) are incompatible with the running system's SPI-flash-controller
-state, and force-stalling the other core while the SMP scheduler is live hangs
-the system. Coredump partition does not capture POWERON resets, so remote
-debugging is blind here.
+Serial proof (the instrumented build prints checkpoints via `esp_rom_printf` to
+UART0): the trace reaches `[migrate] erase 1000` and then the ROM erase never
+returns (clean hang), or — with the IDF guard — emits a burst of UART garbage
+(corrupted chip state) before the RTC reset.
 
-### Recommended fix (needs serial console)
+**Root cause:** the ROM flash functions are the *only* path that bypasses the
+write-protection, but they cannot drive the SPI flash while the app's modern
+`esp_flash` driver owns the controller (the chip is left in a mode the ROM
+command path can't use). A custom 2nd-stage bootloader does not help either —
+you cannot deliver a new bootloader over OTA, which is the whole problem
+(circular). `esp_flash` *would* handle the cache/cross-core/watchdog correctly
+but refuses these regions and the check is not overridable at runtime.
 
-Apply the staged commit from a **custom 2nd-stage bootloader** hook: the
-bootloader checks the scratch header (`SCRATCH_OFFSET` / `SCRATCH_MAGIC`) and, if
-present and CRC-valid, writes `0x1000` / `0x8000` / otadata and clears the header
-— all *before* the app and the modern flash driver touch the SPI controller, so
-ROM flash access is well-defined and there is no other core to coordinate with.
-This is how OTA bootloader-update solutions do it. Develop it on the bench with a
-serial console (the panic backtrace and `[migrate]` logs print to the debug UART).
+### The dependable conversion: a one-time USB/serial flash
+
+Convert each affected module over USB with esptool (the canonical 16MB flash):
+
+```
+pio run -e openevse_wifi_v1_16mb -t upload --upload-port <PORT>
+# or, with the release binaries:
+esptool --chip esp32 -p <PORT> -b 460800 write_flash \
+  0x1000 bootloader_v1_16mb.bin  0x8000 partitions_v1_16mb.bin \
+  0x10000 openevse_wifi_v1_16mb.bin
+esptool --chip esp32 -p <PORT> erase_region 0xe000 0x2000   # boot the new app (ota_0)
+```
+
+NVS at 0x9000 (WiFi creds) is preserved; the OpenEVSE EEPROM config may reset.
+
+The OTA download/verify/staging pipeline in this engine is solid and reused for
+nothing now, but is kept in case a future IDF/bootloader path makes the protected
+write feasible. `flash_migrate_early_commit()` and the staging code remain for
+that, behind the WIP markers above.
 
 ## On-device diagnostics (kept for the serial work)
 
