@@ -284,8 +284,8 @@ def evse_instance(docker_client, emulator_image, tmp_path_factory):
                 f"PTY,link={pty_path},rawer,wait-slave",
                 f"TCP:localhost:{emulator_rapi_port}",
             ],
-            stdout=subprocess.PIPE,
-            stderr=subprocess.PIPE,
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.DEVNULL,
         )
 
         for _ in range(50):
@@ -306,8 +306,8 @@ def evse_instance(docker_client, emulator_image, tmp_path_factory):
                 "--set-config",
                 f"www_http_port={native_port}",
             ],
-            stdout=subprocess.PIPE,
-            stderr=subprocess.PIPE,
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.DEVNULL,
             text=True,
             cwd=str(instance_workdir),
         )
