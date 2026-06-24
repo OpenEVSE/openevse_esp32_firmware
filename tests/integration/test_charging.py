@@ -13,6 +13,7 @@ import requests
 import time
 
 REQUEST_TIMEOUT = 5
+# Matches app_config.h enum vehicle_data_src: VEHICLE_DATA_SRC_HTTP = 3.
 VEHICLE_DATA_SRC_HTTP = 3
 
 
@@ -128,9 +129,9 @@ class TestStatus:
         original_config = api_get(config_url).json()
         original_src = original_config.get("vehicle_data_src")
 
-        set_src = api_post(config_url, json={"vehicle_data_src": VEHICLE_DATA_SRC_HTTP})
-        assert set_src.status_code == 200, (
-            f"Expected 200, got {set_src.status_code}: {set_src.text}"
+        set_src_response = api_post(config_url, json={"vehicle_data_src": VEHICLE_DATA_SRC_HTTP})
+        assert set_src_response.status_code == 200, (
+            f"Expected 200, got {set_src_response.status_code}: {set_src_response.text}"
         )
 
         payload = {
@@ -300,11 +301,11 @@ class TestOverride:
         assert response.status_code in (200, 201), (
             f"Expected 200 or 201, got {response.status_code}: {response.text}"
         )
-        claims_target = api_get(f"{evse_instance['native_url']}/claims/target")
-        assert claims_target.status_code == 200, (
-            f"Expected 200, got {claims_target.status_code}: {claims_target.text}"
+        claims_target_response = api_get(f"{evse_instance['native_url']}/claims/target")
+        assert claims_target_response.status_code == 200, (
+            f"Expected 200, got {claims_target_response.status_code}: {claims_target_response.text}"
         )
-        target = claims_target.json()
+        target = claims_target_response.json()
         charge_current = target.get("properties", {}).get("charge_current")
         assert charge_current == 16, (
             f"Expected /claims/target properties.charge_current=16, got {charge_current}"
