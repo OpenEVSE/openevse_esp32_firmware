@@ -1,8 +1,8 @@
 # OpenEVSE Integration Tests
 
 Integration tests that spin up a real instance of the native firmware paired
-with the OpenEVSE emulator, then exercise the HTTP API to verify basic
-charging behaviour.
+with the OpenEVSE emulator, then exercise the HTTP API to validate the core
+charging API surface.
 
 ## Overview
 
@@ -24,7 +24,9 @@ Covered API endpoints:
 
 ## Prerequisites
 
-### Local Development
+### Local Development (Linux only)
+
+The current integration harness is supported on Linux hosts only.
 
 1. **Native firmware build** – build once before running tests:
    ```bash
@@ -40,9 +42,6 @@ Covered API endpoints:
    ```bash
    # Ubuntu/Debian
    sudo apt-get install socat
-
-   # macOS
-   brew install socat
    ```
 
 4. **Python dependencies**:
