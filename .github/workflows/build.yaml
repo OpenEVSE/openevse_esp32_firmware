@@ -166,12 +166,35 @@ jobs:
 
     - name: Get the bootloader and partition files
       run: |
-        for i in openevse_wifi_tft_v1:16mb openevse_wifi_v1:4mb; do
+        for i in openevse_wifi_tft_v1:16mb openevse_wifi_v1:4mb openevse_wifi_v1_16mb:v1_16mb; do
           env=$(cut -f1 -d: <<< $i)
           name=$(cut -f2 -d: <<< $i)
           mv artifacts/$env.bin/bootloader.bin bootloader_$name.bin
           mv artifacts/$env.bin/partitions.bin partitions_$name.bin
         done
+
+    - name: Generate 16MB migration manifest
+      # Self-consistent {app, bootloader, partitions} triple from the SAME
+      # (core-3) openevse_wifi_v1_16mb build, consumed by the firmware's
+      # "Expand partition to 16MB" tool. URLs point at this release; keep the
+      # firmware's MIGRATE_MANIFEST_URL pointed at the same repo/release.
+      run: |
+        if [ "${{ github.ref_name }}" = "master" ]; then TAG=latest; else TAG="${{ github.ref_name }}"; fi
+        BASE="${{ github.server_url }}/${{ github.repository }}/releases/download/${TAG}"
+        app_sha=$(sha256sum openevse_wifi_v1_16mb.bin | cut -d' ' -f1)
+        bl_sha=$(sha256sum bootloader_v1_16mb.bin | cut -d' ' -f1)
+        pt_sha=$(sha256sum partitions_v1_16mb.bin | cut -d' ' -f1)
+        cat > migrate_v1_16mb.json <<EOF
+        {
+          "target": "openevse_wifi_v1_16mb",
+          "target_partitions": "openevse_16mb",
+          "flash_size": "16MB",
+          "app": { "url": "${BASE}/openevse_wifi_v1_16mb.bin", "sha256": "${app_sha}" },
+          "bootloader": { "url": "${BASE}/bootloader_v1_16mb.bin", "sha256": "${bl_sha}" },
+          "partitions": { "url": "${BASE}/partitions_v1_16mb.bin", "sha256": "${pt_sha}" }
+        }
+        EOF
+        cat migrate_v1_16mb.json
 
     - name: Upload assets to latest release
       if: github.ref_name == 'master'
@@ -183,6 +206,7 @@ jobs:
         generate_release_notes: true
         files: |
           *.bin
+          migrate_v1_16mb.json
 
     - name: Upload assets to release
       if: startsWith(github.ref_name, 'v')
@@ -192,3 +216,4 @@ jobs:
         name: "${{ github.ref_name }}"
         files: |
           *.bin
+          migrate_v1_16mb.json

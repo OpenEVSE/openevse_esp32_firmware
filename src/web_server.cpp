@@ -85,6 +85,8 @@ void handleUpdateRequest(MongooseHttpServerRequest *request);
 size_t handleUpdateUpload(MongooseHttpServerRequest *request, int ev, MongooseString filename, uint64_t index, uint8_t *data, size_t len);
 void handleUpdateClose(MongooseHttpServerRequest *request);
 
+void handleMigrateExpand16mb(MongooseHttpServerRequest *request);
+
 void handleTime(MongooseHttpServerRequest *request);
 void handleTimePost(MongooseHttpServerRequest *request, MongooseHttpServerResponseStream *response);
 void handleMqttAction(MongooseHttpServerRequest *request);
@@ -1350,6 +1352,9 @@ void web_server_setup()
     onRequest(handleUpdateRequest)->
     onUpload(handleUpdateUpload)->
     onClose(handleUpdateClose);
+
+  // In-place 16MB flash repartition (16MB module flashed with 4MB layout)
+  server.on("/migrate/expand16mb$", handleMigrateExpand16mb);
 
   server.on("/debug$", [](MongooseHttpServerRequest *request) {
     MongooseHttpServerResponseStream *response;
