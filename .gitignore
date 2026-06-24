@@ -108,3 +108,4 @@ divert_sim/epoxyeepromdata
 epoxyfsdata
 epoxyeepromdata
 pio_test_results.xml
+tests/integration/output/test_results.xml

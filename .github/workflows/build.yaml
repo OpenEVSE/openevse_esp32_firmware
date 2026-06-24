@@ -4,6 +4,8 @@ name: Build/Release OpenEVSE
 
 permissions:
   contents: write
+  checks: write
+  pull-requests: write
 
 on:
   push:
@@ -51,14 +53,29 @@ jobs:
         pip install --upgrade platformio
 
     - name: Run native unit tests
-      run: pio test -e native_test --junit-output-path=pio_test_results.xml
+      run: |
+        mkdir -p doctest_results
+        # PlatformIO builds all test suites to the same .pio/build/native_test/program
+        # path (no per-suite subdirectory), so run each suite individually to capture
+        # JUnit output before the binary is overwritten by the next suite.
+        for suite_dir in test/test_*/; do
+          name=$(basename "$suite_dir")
+          pio test -e native_test -f "$name" --without-testing
+          .pio/build/native_test/program --reporters=junit --out="doctest_results/${name}.xml"
+        done
 
-    - name : Upload test results
+    - name: Upload test results
       uses: actions/upload-artifact@v7
       with:
         name: pio_test_results
-        path: |
-          pio_test_results.xml
+        path: doctest_results/
+
+    - name: Publish Unit Test Results
+      uses: EnricoMi/publish-unit-test-result-action@v2
+      if: always()
+      with:
+        files: doctest_results/*.xml
+        check_name: Unit Tests
 
   build:
     name: Build ${{ matrix.env }}
