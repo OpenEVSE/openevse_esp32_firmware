@@ -13,6 +13,7 @@ import requests
 import time
 
 REQUEST_TIMEOUT = 5
+VEHICLE_DATA_SRC_HTTP = 3
 
 
 def api_get(url):
@@ -49,8 +50,8 @@ def wait_for_state(native_url, predicate, timeout=10, poll_interval=0.2):
 def wait_for_status_field(native_url, field, predicate, timeout=10, poll_interval=0.2):
     """Poll GET /status until ``predicate(status[field])`` is True."""
     last_value = None
-    deadline = time.time() + timeout
-    while time.time() < deadline:
+    start = time.monotonic()
+    while time.monotonic() - start < timeout:
         try:
             data = api_get(f"{native_url}/status").json()
             last_value = data.get(field)
@@ -127,7 +128,7 @@ class TestStatus:
         original_config = api_get(config_url).json()
         original_src = original_config.get("vehicle_data_src")
 
-        set_src = api_post(config_url, json={"vehicle_data_src": 3})
+        set_src = api_post(config_url, json={"vehicle_data_src": VEHICLE_DATA_SRC_HTTP})
         assert set_src.status_code == 200, (
             f"Expected 200, got {set_src.status_code}: {set_src.text}"
         )
@@ -153,7 +154,7 @@ class TestStatus:
                     f"Expected /status {field}={expected}, got {value}"
                 )
         finally:
-            if original_src is not None and original_src != 3:
+            if original_src is not None and original_src != VEHICLE_DATA_SRC_HTTP:
                 api_post(config_url, json={"vehicle_data_src": original_src})
 
     def test_status_post_solar_input(self, evse_instance):
