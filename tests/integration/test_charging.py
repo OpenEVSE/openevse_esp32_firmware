@@ -51,6 +51,7 @@ def wait_for_state(native_url, predicate, timeout=10, poll_interval=0.2):
 def wait_for_status_field(native_url, field, predicate, timeout=10, poll_interval=0.2):
     """Poll GET /status until ``predicate(status[field])`` is True."""
     last_value = None
+    last_error = None
     start = time.monotonic()
     while time.monotonic() - start < timeout:
         try:
@@ -58,9 +59,11 @@ def wait_for_status_field(native_url, field, predicate, timeout=10, poll_interva
             last_value = data.get(field)
             if predicate(last_value):
                 return last_value
-        except (requests.RequestException, ValueError):
-            pass
+        except (requests.RequestException, ValueError) as exc:
+            last_error = exc
         time.sleep(poll_interval)
+    if last_error is not None:
+        print(f"wait_for_status_field({field}) last polling error: {last_error}")
     return last_value
 
 
@@ -156,7 +159,11 @@ class TestStatus:
                 )
         finally:
             if original_src is not None and original_src != VEHICLE_DATA_SRC_HTTP:
-                api_post(config_url, json={"vehicle_data_src": original_src})
+                restore_src_response = api_post(config_url, json={"vehicle_data_src": original_src})
+                assert restore_src_response.status_code == 200, (
+                    f"Expected 200 while restoring vehicle_data_src, got "
+                    f"{restore_src_response.status_code}: {restore_src_response.text}"
+                )
 
     def test_status_post_solar_input(self, evse_instance):
         """Test: POST /status accepts solar generation update (W)."""
