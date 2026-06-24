@@ -5,8 +5,8 @@
 #include "web_server.assets_es_DDngyDOz_js_gz.h"
 #include "web_server.assets_fr_B1A_tzrn_js_gz.h"
 #include "web_server.assets_hu_BPjA0ti8_js_gz.h"
+#include "web_server.assets_index_CP1Gtajd_js_gz.h"
 #include "web_server.assets_index_DHtqdovw_css_gz.h"
-#include "web_server.assets_index_Fv8q64g5_js_gz.h"
 #include "web_server.assets_rolldown_runtime_Bh1tDfsg_js_gz.h"
 #include "web_server.assets_vendor_KRe_m33__js_gz.h"
 #include "web_server.favicon_ico.h"
@@ -24,8 +24,8 @@ StaticFile web_server_static_files[] = {
   { "/assets/es-DDngyDOz.js", CONTENT_ES_DDNGYDOZ_JS_GZ, sizeof(CONTENT_ES_DDNGYDOZ_JS_GZ) - 1, _CONTENT_TYPE_JS, CONTENT_ES_DDNGYDOZ_JS_GZ_ETAG, true },
   { "/assets/fr-B1A_tzrn.js", CONTENT_FR_B1A_TZRN_JS_GZ, sizeof(CONTENT_FR_B1A_TZRN_JS_GZ) - 1, _CONTENT_TYPE_JS, CONTENT_FR_B1A_TZRN_JS_GZ_ETAG, true },
   { "/assets/hu-BPjA0ti8.js", CONTENT_HU_BPJA0TI8_JS_GZ, sizeof(CONTENT_HU_BPJA0TI8_JS_GZ) - 1, _CONTENT_TYPE_JS, CONTENT_HU_BPJA0TI8_JS_GZ_ETAG, true },
+  { "/assets/index-CP1Gtajd.js", CONTENT_INDEX_CP1GTAJD_JS_GZ, sizeof(CONTENT_INDEX_CP1GTAJD_JS_GZ) - 1, _CONTENT_TYPE_JS, CONTENT_INDEX_CP1GTAJD_JS_GZ_ETAG, true },
   { "/assets/index-DHtqdovw.css", CONTENT_INDEX_DHTQDOVW_CSS_GZ, sizeof(CONTENT_INDEX_DHTQDOVW_CSS_GZ) - 1, _CONTENT_TYPE_CSS, CONTENT_INDEX_DHTQDOVW_CSS_GZ_ETAG, true },
-  { "/assets/index-Fv8q64g5.js", CONTENT_INDEX_FV8Q64G5_JS_GZ, sizeof(CONTENT_INDEX_FV8Q64G5_JS_GZ) - 1, _CONTENT_TYPE_JS, CONTENT_INDEX_FV8Q64G5_JS_GZ_ETAG, true },
   { "/assets/rolldown-runtime-Bh1tDfsg.js", CONTENT_ROLLDOWN_RUNTIME_BH1TDFSG_JS_GZ, sizeof(CONTENT_ROLLDOWN_RUNTIME_BH1TDFSG_JS_GZ) - 1, _CONTENT_TYPE_JS, CONTENT_ROLLDOWN_RUNTIME_BH1TDFSG_JS_GZ_ETAG, true },
   { "/assets/vendor-KRe-m33_.js", CONTENT_VENDOR_KRE_M33__JS_GZ, sizeof(CONTENT_VENDOR_KRE_M33__JS_GZ) - 1, _CONTENT_TYPE_JS, CONTENT_VENDOR_KRE_M33__JS_GZ_ETAG, true },
   { "/favicon.ico", CONTENT_FAVICON_ICO, sizeof(CONTENT_FAVICON_ICO) - 1, _CONTENT_TYPE_ICO, CONTENT_FAVICON_ICO_ETAG, false },
