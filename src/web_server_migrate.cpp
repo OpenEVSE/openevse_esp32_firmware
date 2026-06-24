@@ -15,6 +15,38 @@
 // GitHub release manifest. Returns immediately; progress/state is pushed over
 // the /ws websocket as {"migrate":...,"migrate_progress":...}.
 // -------------------------------------------------------------------
+// -------------------------------------------------------------------
+// Live migration state (diagnostics / progress polling).
+// url: /migrate/status   (GET)
+// -------------------------------------------------------------------
+void handleMigrateStatus(MongooseHttpServerRequest *request)
+{
+  MongooseHttpServerResponseStream *response;
+  if(false == requestPreProcess(request, response, CONTENT_TYPE_JSON)) {
+    return;
+  }
+  const size_t capacity = JSON_OBJECT_SIZE(16) + 256;
+  DynamicJsonDocument doc(capacity);
+  flash_migrate_status_json(doc);
+  response->setCode(200);
+  serializeJson(doc, *response);
+  request->send(response);
+}
+
+// GET /migrate/coredump — decoded summary of the last panic (for diagnostics).
+void handleMigrateCoredump(MongooseHttpServerRequest *request)
+{
+  MongooseHttpServerResponseStream *response;
+  if(false == requestPreProcess(request, response, CONTENT_TYPE_JSON)) {
+    return;
+  }
+  DynamicJsonDocument doc(1024);
+  flash_migrate_coredump_json(doc);
+  response->setCode(200);
+  serializeJson(doc, *response);
+  request->send(response);
+}
+
 void handleMigrateExpand16mb(MongooseHttpServerRequest *request)
 {
   MongooseHttpServerResponseStream *response;
@@ -44,6 +76,7 @@ void handleMigrateExpand16mb(MongooseHttpServerRequest *request)
   }
 
   String manifest_url = "";
+  bool dry_run = false;
   String body = request->body().toString();
   if(body.length() > 0)
   {
@@ -51,10 +84,11 @@ void handleMigrateExpand16mb(MongooseHttpServerRequest *request)
     DeserializationError error = deserializeJson(doc, body);
     if(DeserializationError::Code::Ok == error) {
       manifest_url = (const char *)(doc["url"] | "");
+      dry_run = doc["dry_run"] | false;
     }
   }
 
-  if(flash_migrate_start_16mb(manifest_url)) {
+  if(flash_migrate_start_16mb(manifest_url, dry_run)) {
     response->setCode(200);
     response->print(F("{\"msg\":\"started\"}"));
   } else {

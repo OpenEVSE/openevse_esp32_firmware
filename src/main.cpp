@@ -35,6 +35,7 @@
 #include "app_config.h"
 #include "net_manager.h"
 #include "web_server.h"
+#include "flash_migrate.h"
 #include "ohm.h"
 #include "input.h"
 #include "emoncms.h"
@@ -113,6 +114,14 @@ static void process_command_line();
 static void process_early_command_line();
 #endif
 
+#if defined(ESP32) && defined(ENABLE_FLASH_MIGRATE)
+// The flash-repartition migration writes to flash from deep inside the mongoose
+// + mbedTLS receive path (loop -> Mongoose.poll -> SSL_read -> onBody ->
+// esp_flash_write). That call chain overflows the default 8KB Arduino loop-task
+// stack and panics mid-stream, so give the loop task more headroom.
+SET_LOOP_TASK_STACK_SIZE(16 * 1024);
+#endif
+
 // -------------------------------------------------------------------
 // SETUP
 // -------------------------------------------------------------------
@@ -136,6 +145,10 @@ void setup()
 
   serial = ESPAL.getLongId();
   serial.toUpperCase();
+
+  // Apply a staged 16MB repartition (if any) before WiFi starts — the protected
+  // bootloader/partition-table writes are only safe while the other core is idle.
+  flash_migrate_early_commit();
 
   if(!LittleFS.begin(FORMAT_LITTLEFS_IF_FAILED)){
     DEBUG.println("LittleFS Mount Failed");
@@ -242,6 +255,7 @@ void loop()
   Profile_End(Mongoose, 10);
 
   web_server_loop();
+  flash_migrate_loop();
   ota_loop();
   rapiSender.loop();
 

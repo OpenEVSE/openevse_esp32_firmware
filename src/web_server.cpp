@@ -86,6 +86,8 @@ size_t handleUpdateUpload(MongooseHttpServerRequest *request, int ev, MongooseSt
 void handleUpdateClose(MongooseHttpServerRequest *request);
 
 void handleMigrateExpand16mb(MongooseHttpServerRequest *request);
+void handleMigrateStatus(MongooseHttpServerRequest *request);
+void handleMigrateCoredump(MongooseHttpServerRequest *request);
 
 void handleTime(MongooseHttpServerRequest *request);
 void handleTimePost(MongooseHttpServerRequest *request, MongooseHttpServerResponseStream *response);
@@ -1355,6 +1357,8 @@ void web_server_setup()
 
   // In-place 16MB flash repartition (16MB module flashed with 4MB layout)
   server.on("/migrate/expand16mb$", handleMigrateExpand16mb);
+  server.on("/migrate/status$", handleMigrateStatus);
+  server.on("/migrate/coredump$", handleMigrateCoredump);
 
   server.on("/debug$", [](MongooseHttpServerRequest *request) {
     MongooseHttpServerResponseStream *response;
