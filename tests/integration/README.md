@@ -6,10 +6,10 @@ charging behaviour.
 
 ## Overview
 
-Each test spawns one instance of the OpenEVSE emulator (Docker) and one
-instance of the native firmware (host process), connects them over a virtual
-serial port (socat PTY bridge), and then makes HTTP requests against the
-firmware's web server.
+The test suite spawns one instance of the OpenEVSE emulator (Docker) and one
+instance of the native firmware (host process) per pytest session, connects
+them over a virtual serial port (socat PTY bridge), and then makes HTTP
+requests against the firmware's web server.
 
 Covered API endpoints:
 
@@ -105,12 +105,11 @@ pytest tests/integration/ -v -s
 
 ## Test Timing
 
-- **Setup per test**: ~10–20 s (spawn Docker container + wait for readiness)
+- **Setup per session**: ~10–20 s (spawn Docker container + wait for readiness)
 - **Single test**: ~1–5 s
 - **Full suite**: ~3–5 min
 
-Each test is guarded by `@pytest.mark.timeout(60)` to prevent hangs.
-
+Each test class is guarded by `@pytest.mark.timeout(120)` to prevent hangs.
 ## Debugging Failed Tests
 
 ### Port conflicts
@@ -158,4 +157,4 @@ ls -l .pio/build/native_openevse/program
        response = requests.get(f"{evse_instance['native_url']}/some/endpoint")
        assert response.status_code == 200
    ```
-3. Use `@pytest.mark.timeout(60)` on the class or individual test.
+3. Use `@pytest.mark.timeout(120)` on the class or individual test.

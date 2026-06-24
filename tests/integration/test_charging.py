@@ -167,9 +167,12 @@ class TestOverride:
     def test_clear_override(self, evse_instance):
         """Test: DELETE /override clears the manual override."""
         # Set an override first
-        requests.post(
+        set_resp = requests.post(
             f"{evse_instance['native_url']}/override",
             json={"state": "disabled"},
+        )
+        assert set_resp.status_code in (200, 201), (
+            f"Expected 200 or 201, got {set_resp.status_code}: {set_resp.text}"
         )
 
         # Clear it
@@ -181,9 +184,12 @@ class TestOverride:
     def test_disable_reflected_in_status(self, evse_instance):
         """Test: disabling charging is reflected in /status state."""
         # Disable charging
-        requests.post(
+        resp = requests.post(
             f"{evse_instance['native_url']}/override",
             json={"state": "disabled"},
+        )
+        assert resp.status_code in (200, 201), (
+            f"Expected 200 or 201, got {resp.status_code}: {resp.text}"
         )
 
         # The firmware pauses by sleeping the EVSE ($FS), so the reported
@@ -198,11 +204,15 @@ class TestOverride:
     def test_enable_after_disable(self, evse_instance):
         """Test: re-enabling after disabling restores EVSE to active state."""
         # Disable then re-enable
-        requests.post(
+        disable_resp = requests.post(
             f"{evse_instance['native_url']}/override",
             json={"state": "disabled"},
         )
-        wait_for_state(evse_instance["native_url"], lambda s: s == 254)
+        assert disable_resp.status_code in (200, 201), (
+            f"Expected 200 or 201, got {disable_resp.status_code}: {disable_resp.text}"
+        )
+        state = wait_for_state(evse_instance["native_url"], lambda s: s == 254)
+        assert state == 254, f"Expected sleeping state (254) after disable, got {state}"
 
         response = requests.post(
             f"{evse_instance['native_url']}/override",
