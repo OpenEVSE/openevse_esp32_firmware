@@ -69,6 +69,12 @@ String sntp_hostname;
 
 // On-device LVGL TFT display theme ("dark" | "light").
 String tft_theme;
+uint32_t tft_brightness;
+uint32_t tft_standby_brightness;
+
+// LCD backlight timeout (in seconds, 0 = never timeout). Shared key with the
+// char-LCD / TFT_eSPI energy-saving timeout (upstream PR #1039).
+uint32_t lcd_backlight_timeout;
 
 // LIMIT Settings
 String limit_default_type;
@@ -208,7 +214,12 @@ ConfigOpt *opts[] =
 // On-device display theme (only present on LVGL-TFT builds; its presence in
 // /config is the GUI's capability signal that this device has the panel).
   new ConfigOptDefinition<String>(tft_theme, "dark", "tft_theme", "tt"),
+  new ConfigOptDefinition<uint32_t>(tft_brightness, 100, "tft_brightness", "tb"),
+  new ConfigOptDefinition<uint32_t>(tft_standby_brightness, 15, "tft_standby_brightness", "tsb"),
 #endif
+
+// LCD backlight timeout
+  new ConfigOptDefinition<uint32_t>(lcd_backlight_timeout, LCD_BACKLIGHT_TIMEOUT_DEFAULT, "lcd_backlight_timeout", "lbt"),
 
 // Time
   new ConfigOptDefinition<String>(time_zone, DEFAULT_TIME_ZONE, "time_zone", "tz"),
