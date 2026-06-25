@@ -35,6 +35,7 @@
 #include "app_config.h"
 #include "net_manager.h"
 #include "web_server.h"
+#include "flash_migrate.h"
 #include "ohm.h"
 #include "input.h"
 #include "emoncms.h"
@@ -111,6 +112,14 @@ static void handle_serial();
 #include "debug.h" // for debug_set_rapi_path
 static void process_command_line();
 static void process_early_command_line();
+#endif
+
+#if defined(ESP32) && defined(ENABLE_FLASH_MIGRATE)
+// The flash-repartition migration writes to flash from deep inside the mongoose
+// + mbedTLS receive path (loop -> Mongoose.poll -> SSL_read -> onBody ->
+// esp_flash_write). That call chain overflows the default 8KB Arduino loop-task
+// stack and panics mid-stream, so give the loop task more headroom.
+SET_LOOP_TASK_STACK_SIZE(16 * 1024);
 #endif
 
 // -------------------------------------------------------------------
@@ -242,6 +251,7 @@ void loop()
   Profile_End(Mongoose, 10);
 
   web_server_loop();
+  flash_migrate_loop();
   ota_loop();
   rapiSender.loop();
 

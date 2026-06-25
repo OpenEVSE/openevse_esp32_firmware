@@ -10,6 +10,7 @@
 #include "app_config_mqtt.h"
 #include "app_config_mode.h"
 #include "temp_throttle.h"
+#include "flash_migrate.h"
 
 #if ENABLE_CONFIG_CHANGE_NOTIFICATION
 #include <esp_ota_ops.h>
@@ -742,11 +743,16 @@ bool config_serialize(DynamicJsonDocument &doc, bool longNames, bool compactOutp
   doc["espflash"] = ESPAL.getFlashChipSize();
   doc["heap_size"] = (uint32_t)ESP.getHeapSize();
   doc["littlefs_size"] = (uint32_t)LittleFS.totalBytes();
+  doc["littlefs_used"] = (uint32_t)LittleFS.usedBytes();
   {
     const esp_partition_t *p = esp_ota_get_running_partition();
     doc["app0_size"]   = p ? (uint32_t)p->size : 0;
     doc["sketch_size"] = (uint32_t)ESP.getSketchSize();
   }
+  // Flash repartition migration: lets the UI offer "Expand to 16MB" on a 16MB
+  // module that was flashed with the 4MB partition layout.
+  doc["partition_scheme"] = flash_migrate_partition_scheme();
+  doc["can_expand_16mb"]  = flash_migrate_can_expand_16mb();
 
   // EVSE information are only evailable when config_version is incremented
   if(config_ver > 0) {
