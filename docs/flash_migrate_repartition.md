@@ -1,99 +1,87 @@
-# In-place 16MB flash repartition (`flash_migrate`) — status & handoff
+# In-place 16MB flash repartition (`flash_migrate`) — design & handoff
 
 Migrates a 16MB ESP32 module that was flashed with the **4MB** partition layout
-(`min_spiffs.csv`) to the full **16MB** layout (`openevse_16mb.csv`) over-the-air,
-from Settings → Developer Tools → **Flash & storage → Expand partition to 16MB**.
+(`min_spiffs.csv`) to the full **16MB** layout (`openevse_16mb.csv`)
+**over-the-air**, from Settings → Developer Tools → **Flash & storage → Expand
+partition to 16MB**. **Hardware-validated end to end** (16MB ESP32-D0WD-V3): 4MB
+OpenEVSE → full 16MB OpenEVSE in ~75s, fully OTA, no USB, WiFi creds preserved.
 
-Engine: `src/flash_migrate.{cpp,h}`, endpoint `src/web_server_migrate.cpp`,
-detection in `src/app_config.cpp` (`/config` exposes `can_expand_16mb` /
-`partition_scheme`). Gated by `-D ENABLE_FLASH_MIGRATE` (on `openevse_wifi_v1`).
+## Why an external "migrator"
 
-## What works (verified on hardware)
+The bootloader (`0x1000`) and partition table (`0x8000`) are protected regions.
+The prebuilt Arduino-ESP32 `spi_flash` lib is compiled with
+`CONFIG_SPI_FLASH_DANGEROUS_WRITE_ABORTS`, so the OpenEVSE app **cannot** write
+them (`esp_flash` aborts; the ROM-function workaround can't drive the controller
+while the modern driver owns it — see `flash_migrate_worklog.md` for the full
+dead-end log). The fix is to do that one protected write from a **tiny separate
+ESP-IDF app built with `CONFIG_SPI_FLASH_DANGEROUS_WRITE_ALLOWED=y`**, where
+plain `esp_flash` writes `0x1000`/`0x8000`/otadata correctly.
 
-- **Detection** — `can_expand_16mb` true only on a 16MB chip running a <=4MB layout.
-- **Download + verify** — `migrate_v1_16mb.json` manifest, then bootloader /
-  partition-table / app, each SHA256-verified. Downloads are serialized (one TLS
-  connection at a time) and driven from `flash_migrate_loop()`, never from a
-  mongoose callback. RAM buffers are pre-reserved to avoid `bad_alloc` (growing a
-  `std::vector` mid-TLS fragments the heap and panics). Stall watchdog +
-  generation counter recover cleanly from a hung transfer.
-- **App staging** — the 2MB app streams to `0x650000` (the new `ota_1`) via
-  `esp_flash_*` (an ordinary, unprotected region; works while WiFi runs).
-- **Commit staging** — the bootloader + partition table are written to a scratch
-  region at `0x400000` (also unprotected), with a header (`magic + lengths +
-  crc`) written last; then the device reboots.
+That app — the **migrator** — lives at https://github.com/RAR/openevse-16mb-migrator
+(submodule `migrator/`). It embeds the 16MB `bootloader.bin` + `partitions.bin`
+and, when run, verifies a staged app at `0x650000`, writes+verifies the
+bootloader → `0x1000` and partition table → `0x8000`, points otadata → ota_1,
+and reboots. `nvs` (`0x9000`) is never touched, so WiFi creds survive.
 
-## What does NOT work — applying the protected regions (CONCLUSION)
-
-`flash_migrate_early_commit()` runs from `setup()` before WiFi and is meant to
-write the staged bootloader → `0x1000`, partition table → `0x8000`, and otadata
-→ select `ota_1`, then reboot into the 16MB firmware. **It cannot be made to
-work** and field-OTA rewrite of the bootloader/partition table is impractical on
-this platform. The device auto-recovers (RTC WDT reset, ~20s) back to 4MB; the
-one-shot scratch header is erased first so there is no boot loop, and the
-bootloader is never successfully written so there is no corruption.
-
-### Approaches tried (all fail), proven on-device with a serial console
-
-| Approach | Result |
-|---|---|
-| `esp_flash` / `spi_flash_*` | **abort** — `CONFIG_SPI_FLASH_DANGEROUS_WRITE_ABORTS` blocks 0x1000/0x8000 |
-| ROM `esp_rom_spiflash_*` + IDF cache guard (IPI stall) | **deadlock**, then **corrupts** the chip |
-| ROM + `esp_cpu_stall` + `spi_flash_disable_cache` (both cores) | **hang** |
-| ROM + `esp_cpu_stall` + ROM `Cache_Read_Disable` (this core only) | **hang in `esp_rom_spiflash_erase_sector`** |
-
-Serial proof (the instrumented build prints checkpoints via `esp_rom_printf` to
-UART0): the trace reaches `[migrate] erase 1000` and then the ROM erase never
-returns (clean hang), or — with the IDF guard — emits a burst of UART garbage
-(corrupted chip state) before the RTC reset.
-
-**Root cause:** the ROM flash functions are the *only* path that bypasses the
-write-protection, but they cannot drive the SPI flash while the app's modern
-`esp_flash` driver owns the controller (the chip is left in a mode the ROM
-command path can't use). A custom 2nd-stage bootloader does not help either —
-you cannot deliver a new bootloader over OTA, which is the whole problem
-(circular). `esp_flash` *would* handle the cache/cross-core/watchdog correctly
-but refuses these regions and the check is not overridable at runtime.
-
-### The dependable conversion: a one-time USB/serial flash
-
-Convert each affected module over USB with esptool (the canonical 16MB flash):
+## The flow
 
 ```
-pio run -e openevse_wifi_v1_16mb -t upload --upload-port <PORT>
-# or, with the release binaries:
-esptool --chip esp32 -p <PORT> -b 460800 write_flash \
-  0x1000 bootloader_v1_16mb.bin  0x8000 partitions_v1_16mb.bin \
-  0x10000 openevse_wifi_v1_16mb.bin
-esptool --chip esp32 -p <PORT> erase_region 0xe000 0x2000   # boot the new app (ota_0)
+OpenEVSE-4MB (this engine, flash_migrate.cpp)
+  manifest { app, migrator }
+  1. stream 16MB app   -> 0x650000 (ota_1 of the 16MB layout = free flash in 4MB)
+                          raw esp_flash; verify SHA-256 + image magic 0xE9
+  2. stream migrator   -> esp_ota_get_next_update_partition() (inactive 4MB OTA slot)
+                          esp_ota_write; verify SHA-256; esp_ota_set_boot_partition()
+  3. reboot
+migrator (IDF, DANGEROUS_WRITE_ALLOWED)
+  4. verify 0xE9 @0x650000 -> write+verify bl@0x1000 -> write+verify PT@0x8000
+     -> otadata -> ota_1 -> reboot
+OpenEVSE-16MB boots from ota_1
 ```
 
-NVS at 0x9000 (WiFi creds) is preserved; the OpenEVSE EEPROM config may reset.
+The handoff itself (step 2) is an **ordinary app OTA** — no protected write — so
+the running OpenEVSE-4MB stays in its slot as a fallback until the migrator's own
+reboot. The only protected write is the verified ~25KB bootloader inside the
+audited migrator, before a single partition-table sector flip.
 
-The OTA download/verify/staging pipeline in this engine is solid and reused for
-nothing now, but is kept in case a future IDF/bootloader path makes the protected
-write feasible. `flash_migrate_early_commit()` and the staging code remain for
-that, behind the WIP markers above.
+## Manifest (`migrate_v1_16mb.json`)
 
-## On-device diagnostics (kept for the serial work)
-
-- `GET /migrate/status` — live state: `state`, `dl_pos/dl_total`, `commit_marker`
-  (RTC-persisted; survives a soft reset, wiped by POWERON), `reset_reason`
-  (1=POWERON, 3=SW, 4=PANIC, 5=INT_WDT, 6=TASK_WDT), `free_heap`, etc.
-- `GET /migrate/coredump` — decoded last panic (task/PC/backtrace) for addr2line.
-- `POST /migrate/expand16mb` `{ "url": "...", "dry_run": true }` — `dry_run`
-  downloads + verifies everything and writes nothing (no scratch, no commit).
-- `g_migrate_marker` values: 20 stage, 25 staged+reboot; 30/31/32/33/34 early
-  commit (watchdogs disabled / bootloader / partitions / otadata / done).
-
-Decode a backtrace:
-```
-xtensa-esp32-elf-addr2line -pfiaC -e .pio/build/openevse_wifi_v1/firmware.elf <addrs...>
+```json
+{
+  "app":      { "url": ".../openevse_wifi_v1_16mb.bin", "sha256": "..." },
+  "migrator": { "url": ".../openevse_migrator.bin",      "sha256": "..." }
+}
 ```
 
-## CI
+Firmware default URL: `MIGRATE_MANIFEST_URL` (override with `-D`). The `app` is
+the normal 16MB OpenEVSE firmware; the `migrator` carries the bl/PT, so they are
+not downloaded separately.
 
-`.github/workflows/build.yaml` publishes a self-consistent core-3
-`bootloader_v1_16mb.bin` + `partitions_v1_16mb.bin` + `openevse_wifi_v1_16mb.bin`
-and a `migrate_v1_16mb.json` manifest (SHA256s) to the release. The `vRePartition`
-tag has a test release of these.
+## Endpoints / states
+
+- `POST /migrate/expand16mb` `{ "url": "...", "dry_run": true }` — start (or, with
+  `dry_run`, download + SHA-verify app **and** migrator and write nothing).
+  `412` if not eligible (needs a 16MB chip on a <=4MB layout), `409` if running.
+- `GET /migrate/status` — `state` (`manifest`/`app`/`migrator`/`idle`),
+  `dl_pos`/`dl_total`, `failed`/`fail_code`, `free_heap`.
+- `/config` exposes `can_expand_16mb` + `partition_scheme` for the GUI button.
+- Websocket `migrate` states: `staging`, `downloading_app`, `verifying`,
+  `downloading_migrator`, `done`, `dryrun_ok`, `failed`.
+
+## Building the migrator (CI does this per release)
+
+```sh
+pio run -e openevse_wifi_v1_16mb                          # the 16MB app
+python migrator/scripts/gen_embeds.py .pio/build/openevse_wifi_v1_16mb
+( cd migrator && pio run )                                # the migrator (espidf)
+```
+CI publishes `openevse_wifi_v1_16mb.bin` + `openevse_migrator.bin` +
+`migrate_v1_16mb.json` to the release.
+
+## Safety
+
+- The migrator refuses to touch anything unless a valid app image (`0xE9`) is
+  staged at `0x650000`; bootloader and PT are read-back-verified.
+- `nvs` (creds) and the staged app are never at risk; the device is always
+  old-OpenEVSE-or-new, never neither (PoR = one PT sector after a verified bl).
+- The migrator boots under the existing OpenEVSE 4MB bootloader (validated).
