@@ -19,10 +19,8 @@
 #include "lvgl_tft/boot_screen.h"
 #include "lvgl_tft/setup_screen.h"
 #include "lvgl_tft/charge_screen.h"
-
-#ifndef LCD_BACKLIGHT_PIN
-#define LCD_BACKLIGHT_PIN TFT_BL
-#endif
+#include "lvgl_tft/standby_screen.h"
+#include "lvgl_tft/backlight.h"
 
 // How long the startup splash shows before handing off to the main screen.
 #define BOOT_SPLASH_MS 4000
@@ -31,6 +29,7 @@
 #define SCR_BOOT   0
 #define SCR_SETUP  1
 #define SCR_CHARGE 2
+#define SCR_STANDBY 3
 
 // --- Message inner class (mechanics identical to the TFT_eSPI LcdTask) ---
 
@@ -120,9 +119,7 @@ unsigned long LcdTask::displayNextMessage()
       _tail = NULL;
     }
 
-#ifdef TFT_BACKLIGHT_TIMEOUT_MS
     wakeBacklight();
-#endif
 
     int line = msg->getY();
     if(line >= 0 && line < LCD_MAX_LINES) {
@@ -143,9 +140,7 @@ void LcdTask::setWifiMode(bool client, bool connected)
   _wifi_client = client;
   _wifi_connected = connected;
   _wifiModeKnown = true;
-#ifdef TFT_BACKLIGHT_TIMEOUT_MS
   wakeBacklight();
-#endif
 }
 
 // Resolve the tft_theme config into the active palette. Returns true if the theme
@@ -198,15 +193,11 @@ unsigned long LcdTask::loop(MicroTasks::WakeReason reason)
     _displayOk = lvgl_panel_begin();
     if(_displayOk) {
       applyThemeFromConfig();  // pick the palette before the first screen is built
+      applyDisplayConfig();    // cache brightness/timeout before the first wake
       boot_screen_build();
       _booting = true;
       _bootStart = millis();
-      pinMode(LCD_BACKLIGHT_PIN, OUTPUT);
-#ifdef TFT_BACKLIGHT_TIMEOUT_MS
-      wakeBacklight();
-#else
-      digitalWrite(LCD_BACKLIGHT_PIN, HIGH);
-#endif
+      wakeBacklight();         // light the splash at the active brightness
     }
     _initialise = false;
   }
@@ -258,6 +249,10 @@ unsigned long LcdTask::loop(MicroTasks::WakeReason reason)
   // Switch screens if the WiFi mode resolved differently than what's showing
   // (e.g. AP -> STA once the user completes setup via the QR).
   bool wantSetup = _wifiModeKnown && !_wifi_client;
+  // The setup screen owns the whole display; never run standby in AP mode.
+  if(wantSetup && _standby) {
+    wakeBacklight();  // exits standby, rebuilds the charge screen, so the swap below works
+  }
   if(wantSetup && _activeScreen == SCR_CHARGE) {
     buildSetupScreen();
     charge_screen_destroy();
@@ -268,15 +263,14 @@ unsigned long LcdTask::loop(MicroTasks::WakeReason reason)
     _activeScreen = SCR_CHARGE;
   }
 
-  // Live theme switch: if tft_theme changed (e.g. the web GUI wrote /config),
-  // swap the palette and rebuild the current screen so the new colours take.
-  // build() loads the new screen BEFORE deleting the old one, so we must NOT
-  // destroy first here — deleting the active screen would dangle LVGL and panic.
+  // Live theme switch: swap palette + rebuild whichever screen is showing.
   if(applyThemeFromConfig()) {
     if(_activeScreen == SCR_CHARGE) {
       charge_screen_build();
     } else if(_activeScreen == SCR_SETUP) {
       buildSetupScreen();
+    } else if(_activeScreen == SCR_STANDBY) {
+      standby_screen_build();
     }
   }
 
@@ -286,12 +280,68 @@ unsigned long LcdTask::loop(MicroTasks::WakeReason reason)
     return 1000;
   }
 
+  // --- Backlight / standby decision (chooses which screen we render) ---
+  uint8_t state = _evse->getEvseState();
+  bool vehicle = _evse->isVehicleConnected();
+  applyDisplayConfig();   // pick up live /config changes; also applies brightness now
+                          // so slider changes take effect without waiting for a wake
+
+  if(_prev_state != state || _prev_vehicle != vehicle) {
+    wakeBacklight();      // any state change -> full brightness, exit standby, re-arm
+    _prev_state = state;
+    _prev_vehicle = vehicle;
+  }
+
+  bool keepAwake = stateKeepsAwake(state, vehicle, _evse->getAmps());
+  if(keepAwake) {
+    _lastWake = millis(); // keep re-arming so we never time out while charging/fault
+    if(_standby) {
+      wakeBacklight();
+    }
+  }
+  // bl_should_standby returns false when keepAwake, so this is a plain guard.
+  if(bl_should_standby(keepAwake, (uint32_t)_timeoutS, millis() - _lastWake)) {
+    if(!_standby) {
+      enterStandby();
+    }
+  }
+
+  // Render the standby screen when dimmed-with-screen; otherwise fall through to charge.
+  if(_activeScreen == SCR_STANDBY) {
+    StandbyScreenData sd = {};
+    sd.evse_state        = state;
+    sd.temp_valid        = _evse->isTemperatureValid(EVSE_MONITOR_TEMP_MONITOR);
+    sd.temp_c            = sd.temp_valid ? _evse->getTemperature(EVSE_MONITOR_TEMP_MONITOR) : 0.0f;
+    sd.wifi_client       = _wifi_client;
+    sd.wifi_connected    = _wifi_connected;
+    sd.rssi              = WiFi.RSSI();
+    sd.sta_count         = WiFi.softAPgetStationNum();
+    sd.today_kwh         = _evse->getTotalDay();
+    sd.total_kwh         = _evse->getTotalEnergy();
+
+    char ck[24];
+    timeval tv; gettimeofday(&tv, NULL);
+    struct tm ti; localtime_r(&tv.tv_sec, &ti);
+    strftime(ck, sizeof(ck), "%Y-%m-%d  %H:%M:%S", &ti);  // match the charge screen header
+    sd.clock = ck;
+
+    char ipbuf[20];
+    IPAddress ip = _wifi_client ? WiFi.localIP() : WiFi.softAPIP();
+    snprintf(ipbuf, sizeof(ipbuf), "%s", ip.toString().c_str());
+    sd.hostname = esp_hostname.c_str();
+    sd.ip = ipbuf;
+
+    standby_screen_update(sd);
+    lv_timer_handler();
+    gettimeofday(&tv, NULL);
+    return 1000 - tv.tv_usec / 1000;
+  }
+
   // Assemble a full snapshot from EvseManager + WiFi + clock.
   ChargeScreenData d = {};
-  uint8_t state = _evse->getEvseState();
   d.evse_state        = state;
   d.charging          = (state == OPENEVSE_STATE_CHARGING);
-  d.vehicle_connected = _evse->isVehicleConnected();
+  d.vehicle_connected = vehicle;
   d.power_kw          = _evse->getPower() / 1000.0f;
   d.pilot_a           = (int)_evse->getChargeCurrent();
   d.volts             = _evse->getVoltage();
@@ -323,16 +373,6 @@ unsigned long LcdTask::loop(MicroTasks::WakeReason reason)
 
   charge_screen_update(d);
 
-#ifdef TFT_BACKLIGHT_TIMEOUT_MS
-  if(_prev_state != state || _prev_vehicle != d.vehicle_connected) {
-    wakeBacklight();
-    _prev_state = state;
-    _prev_vehicle = d.vehicle_connected;
-  } else {
-    updateBacklight();
-  }
-#endif
-
   lv_timer_handler();
 
   // Wake on the next whole second so the clock doesn't skip.
@@ -340,49 +380,71 @@ unsigned long LcdTask::loop(MicroTasks::WakeReason reason)
   return 1000 - tv.tv_usec / 1000;
 }
 
-#ifdef TFT_BACKLIGHT_TIMEOUT_MS
-void LcdTask::wakeBacklight()
+void LcdTask::applyDisplayConfig()
 {
-  digitalWrite(LCD_BACKLIGHT_PIN, HIGH);
-  _backlight_timeout = millis() + TFT_BACKLIGHT_TIMEOUT_MS;
+  _activeBrightness  = (int32_t)tft_brightness;
+  _standbyBrightness = (int32_t)tft_standby_brightness;
+  _timeoutS          = (int32_t)lcd_backlight_timeout;
+  if(_activeBrightness < 10) _activeBrightness = 10;  // never black out the active screen
+  // Apply live so brightness-slider changes take effect without waiting for a wake.
+  lvgl_panel_set_backlight((uint8_t)(_standby ? (_standbyBrightness < 0 ? 0 : _standbyBrightness)
+                                              : (_activeBrightness  < 0 ? 100 : _activeBrightness)));
 }
 
-void LcdTask::updateBacklight()
+void LcdTask::wakeBacklight()
 {
-  bool timeout = true;
-  if(_evse->isVehicleConnected()) {
-    switch(_evse->getEvseState()) {
-      case OPENEVSE_STATE_STARTING:
-      case OPENEVSE_STATE_VENT_REQUIRED:
-      case OPENEVSE_STATE_DIODE_CHECK_FAILED:
-      case OPENEVSE_STATE_GFI_FAULT:
-      case OPENEVSE_STATE_NO_EARTH_GROUND:
-      case OPENEVSE_STATE_STUCK_RELAY:
-      case OPENEVSE_STATE_GFI_SELF_TEST_FAILED:
-      case OPENEVSE_STATE_OVER_TEMPERATURE:
-      case OPENEVSE_STATE_OVER_CURRENT:
-        timeout = false;
-        break;
-      case OPENEVSE_STATE_CHARGING:
-#ifdef TFT_BACKLIGHT_CHARGING_THRESHOLD
-        if(_evse->getAmps() >= TFT_BACKLIGHT_CHARGING_THRESHOLD) {
-          wakeBacklight();
-          timeout = false;
-        }
-#else
-        timeout = false;
-#endif
-        break;
-      default:
-        timeout = true;
-        break;
+  _lastWake = millis();
+  if(_activeBrightness < 0) _activeBrightness = (int32_t)tft_brightness;  // boot safety
+  lvgl_panel_set_backlight((uint8_t)_activeBrightness);
+  if(_standby) {
+    _standby = false;
+    if(_activeScreen == SCR_STANDBY) {
+      charge_screen_build();
+      standby_screen_destroy();
+      _activeScreen = SCR_CHARGE;
     }
   }
-  if(timeout && millis() >= _backlight_timeout) {
-    digitalWrite(LCD_BACKLIGHT_PIN, LOW);
+}
+
+void LcdTask::enterStandby()
+{
+  _standby = true;
+  if(_standbyBrightness > 0) {
+    standby_screen_build();
+    if(_activeScreen == SCR_CHARGE) {
+      charge_screen_destroy();
+    }
+    _activeScreen = SCR_STANDBY;
+  }
+  lvgl_panel_set_backlight((uint8_t)(_standbyBrightness < 0 ? 0 : _standbyBrightness));
+}
+
+bool LcdTask::stateKeepsAwake(uint8_t state, bool vehicle, double amps)
+{
+  if(!vehicle) {
+    return false;
+  }
+  switch(state) {
+    case OPENEVSE_STATE_STARTING:
+    case OPENEVSE_STATE_VENT_REQUIRED:
+    case OPENEVSE_STATE_DIODE_CHECK_FAILED:
+    case OPENEVSE_STATE_GFI_FAULT:
+    case OPENEVSE_STATE_NO_EARTH_GROUND:
+    case OPENEVSE_STATE_STUCK_RELAY:
+    case OPENEVSE_STATE_GFI_SELF_TEST_FAILED:
+    case OPENEVSE_STATE_OVER_TEMPERATURE:
+    case OPENEVSE_STATE_OVER_CURRENT:
+      return true;
+    case OPENEVSE_STATE_CHARGING:
+#ifdef TFT_BACKLIGHT_CHARGING_THRESHOLD
+      return amps >= TFT_BACKLIGHT_CHARGING_THRESHOLD;
+#else
+      return true;
+#endif
+    default:
+      return false;
   }
 }
-#endif // TFT_BACKLIGHT_TIMEOUT_MS
 
 LcdTask lcd;
 

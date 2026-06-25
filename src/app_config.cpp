@@ -10,6 +10,7 @@
 #include "app_config_mqtt.h"
 #include "app_config_mode.h"
 #include "temp_throttle.h"
+#include "flash_migrate.h"
 
 #if ENABLE_CONFIG_CHANGE_NOTIFICATION
 #include <esp_ota_ops.h>
@@ -68,6 +69,12 @@ String sntp_hostname;
 
 // On-device LVGL TFT display theme ("dark" | "light").
 String tft_theme;
+uint32_t tft_brightness;
+uint32_t tft_standby_brightness;
+
+// LCD backlight timeout (in seconds, 0 = never timeout). Shared key with the
+// char-LCD / TFT_eSPI energy-saving timeout (upstream PR #1039).
+uint32_t lcd_backlight_timeout;
 
 // LIMIT Settings
 String limit_default_type;
@@ -212,7 +219,12 @@ ConfigOpt *opts[] =
 // On-device display theme (only present on LVGL-TFT builds; its presence in
 // /config is the GUI's capability signal that this device has the panel).
   new ConfigOptDefinition<String>(tft_theme, "dark", "tft_theme", "tt"),
+  new ConfigOptDefinition<uint32_t>(tft_brightness, 100, "tft_brightness", "tb"),
+  new ConfigOptDefinition<uint32_t>(tft_standby_brightness, 15, "tft_standby_brightness", "tsb"),
 #endif
+
+// LCD backlight timeout
+  new ConfigOptDefinition<uint32_t>(lcd_backlight_timeout, LCD_BACKLIGHT_TIMEOUT_DEFAULT, "lcd_backlight_timeout", "lbt"),
 
 // Time
   new ConfigOptDefinition<String>(time_zone, DEFAULT_TIME_ZONE, "time_zone", "tz"),
@@ -759,11 +771,16 @@ bool config_serialize(DynamicJsonDocument &doc, bool longNames, bool compactOutp
   doc["espflash"] = ESPAL.getFlashChipSize();
   doc["heap_size"] = (uint32_t)ESP.getHeapSize();
   doc["littlefs_size"] = (uint32_t)LittleFS.totalBytes();
+  doc["littlefs_used"] = (uint32_t)LittleFS.usedBytes();
   {
     const esp_partition_t *p = esp_ota_get_running_partition();
     doc["app0_size"]   = p ? (uint32_t)p->size : 0;
     doc["sketch_size"] = (uint32_t)ESP.getSketchSize();
   }
+  // Flash repartition migration: lets the UI offer "Expand to 16MB" on a 16MB
+  // module that was flashed with the 4MB partition layout.
+  doc["partition_scheme"] = flash_migrate_partition_scheme();
+  doc["can_expand_16mb"]  = flash_migrate_can_expand_16mb();
 
   // EVSE information are only evailable when config_version is incremented
   if(config_ver > 0) {
