@@ -40,12 +40,6 @@ bool flash_migrate_in_progress();
 // network connections are started from here (never from a mongoose callback).
 void flash_migrate_loop();
 
-// Apply a staged repartition commit (bootloader + partition table + otadata).
-// MUST be called very early in setup(), before WiFi/networking starts. A no-op
-// unless a commit was staged to scratch flash on the previous boot; otherwise
-// it writes the protected flash regions and reboots into the 16MB layout.
-void flash_migrate_early_commit();
-
 // Fill `doc` with the live migration state (for GET /migrate/status diagnostics).
 void flash_migrate_status_json(JsonDocument &doc);
 

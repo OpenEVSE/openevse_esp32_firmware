@@ -57,21 +57,18 @@ const char *flash_migrate_partition_scheme()
 #include <vector>
 #include <string.h>
 
-#include "esp_flash.h"       // esp_flash_* for the (unprotected) scratch region
-#include "esp_rom_crc.h"
+#include "esp_flash.h"       // esp_flash_* — stream the 16MB app to free flash @0x650000
+#include "esp_ota_ops.h"     // esp_ota_* — write the migrator into the inactive OTA slot
 #include "mbedtls/sha256.h"
 #include "esp_core_dump.h"
-#include "esp_attr.h"
-#include "esp_spi_flash.h"
-#include "rom/spi_flash.h"   // esp_rom_spiflash_* (writes the protected regions)
-#include "rom/cache.h"       // Cache_Read_Disable/Enable/Flush (direct, no coord)
-#include "esp_cpu.h"         // esp_cpu_stall()/unstall() — hardware core stall
-#include "esp_rom_sys.h"     // esp_rom_printf() — early-boot console (UART0)
-#include "hal/wdt_hal.h"     // disable the MWDT watchdogs during the commit
-#include "soc/timer_group_struct.h"
-#include "soc/rtc_wdt.h"     // feed the RTC watchdog (kept as a hang safety-net)
-#include "freertos/FreeRTOS.h"
-#include "freertos/task.h"
+
+// The protected bootloader (0x1000) / partition table (0x8000) / otadata writes
+// are NOT done here. The Arduino spi_flash lib is built with DANGEROUS_WRITE_
+// ABORTS, so this app cannot write those regions. Instead we stage the 16MB app
+// to ota_1 (0x650000) and OTA a tiny IDF "migrator" app (built with DANGEROUS_
+// WRITE_ALLOWED) into the inactive 4MB OTA slot; on reboot the migrator performs
+// the protected commit. See docs/flash_migrate_repartition.md and
+// https://github.com/OpenEVSE/openevse-16mb-migrator
 
 // Default release manifest. Points at this repo's GitHub releases, where the CI
 // (.github/workflows/build.yaml) publishes migrate_v1_16mb.json together with
@@ -81,51 +78,21 @@ const char *flash_migrate_partition_scheme()
 #define MIGRATE_MANIFEST_URL "https://github.com/OpenEVSE/openevse_esp32_firmware/releases/latest/download/migrate_v1_16mb.json"
 #endif
 
-// Critical flash regions (identical across the ESP32 family for our boards).
-static const uint32_t BOOTLOADER_OFFSET     = 0x1000;
-static const uint32_t PARTITION_TABLE_OFFSET = 0x8000;
-static const uint32_t PARTITION_TABLE_MAX   = 0xC00;   // 4KB sector holds it
-static const uint32_t OTADATA_OFFSET        = 0xE000;
-static const uint32_t OTADATA_SIZE          = 0x2000;
+// The 16MB app is streamed to ota_1 of the 16MB layout, which is free, unused
+// flash in the current 4MB layout — so esp_flash writes it fine while WiFi runs.
 static const uint32_t NEW_APP1_OFFSET       = 0x650000; // ota_1 in 16MB layout
 static const uint32_t NEW_APP1_SIZE         = 0x640000;
-static const uint32_t BOOTLOADER_MAX        = PARTITION_TABLE_OFFSET - BOOTLOADER_OFFSET;
 
-// Scratch staging area in the currently-unused flash above 4MB. The bootloader
-// and partition table are written here at runtime (an ordinary, unprotected
-// region esp_flash can write while WiFi runs), then applied to the protected
-// 0x1000 / 0x8000 regions at the next boot — before WiFi starts, where the ROM
-// flash writes can stall the (idle) other core without deadlocking it.
-static const uint32_t SCRATCH_OFFSET        = 0x400000; // free in the 4MB layout
-static const uint32_t SCRATCH_HEADER_OFFSET = 0x400000; // magic + lengths + crcs
-static const uint32_t SCRATCH_BL_OFFSET     = 0x401000; // bootloader (<=28KB)
-static const uint32_t SCRATCH_PT_OFFSET     = 0x408000; // partition table (<=3KB)
-static const uint32_t SCRATCH_TOTAL         = 0x9000;   // header + bl + pt span
-static const uint32_t SCRATCH_MAGIC         = 0x16DB0001;
-
-typedef struct {
-  uint32_t magic;
-  uint32_t bl_len;
-  uint32_t bl_crc;
-  uint32_t pt_len;
-  uint32_t pt_crc;
-} scratch_header_t;
-
-// RAM buffers reserved up front (while the heap is unfragmented) so no buffered
-// download ever reallocates mid-TLS-transfer. Each file lands in its own
-// buffer. Kept small so an open mbedTLS connection still has room: bootloader
-// is <=28KB, partitions 3KB, manifest <1KB; the app streams to flash.
-static const size_t MIGRATE_SCRATCH_CAP     = 4 * 1024;   // manifest
-static const size_t MIGRATE_BOOTLOADER_CAP  = 30 * 1024;
-static const size_t MIGRATE_PARTITIONS_CAP  = 4 * 1024;
+// Manifest scratch buffer reserved up front (heap unfragmented) so the JSON
+// download never reallocates mid-TLS-transfer.
+static const size_t MIGRATE_SCRATCH_CAP     = 4 * 1024;
 static const uint32_t MIGRATE_STALL_MS      = 25000;      // no-progress timeout
 
 enum {
   ST_IDLE = 0,
   ST_MANIFEST,
-  ST_BOOTLOADER,
-  ST_PARTITIONS,
-  ST_APP,
+  ST_APP,       // 16MB app -> free flash @0x650000 (raw esp_flash)
+  ST_MIGRATOR,  // migrator -> inactive OTA slot (esp_ota), then boot it
 };
 
 struct MigrateCtx
@@ -135,12 +102,10 @@ struct MigrateCtx
   int state = ST_IDLE;
   String manifest_url;
 
-  String app_url, bl_url, pt_url;
-  String app_sha, bl_sha, pt_sha;
+  String app_url, migrator_url;
+  String app_sha, migrator_sha;
 
-  std::vector<uint8_t> buf;          // current buffered download (manifest/bl/pt)
-  std::vector<uint8_t> bootloader;   // verified, held until commit
-  std::vector<uint8_t> partitions;   // verified, held until commit
+  std::vector<uint8_t> buf;          // buffered download (the manifest JSON)
 
   size_t dl_total = 0;
   size_t dl_pos = 0;
@@ -166,15 +131,21 @@ struct MigrateCtx
   uint32_t last_progress_ms = 0; // for the stall watchdog
   size_t last_dl_pos = 0;
 
-  // app streaming -> flash
+  // streaming targets (one at a time): the app to raw flash @0x650000, or the
+  // migrator to the inactive OTA partition via esp_ota.
   bool streaming_app = false;
+  bool streaming_migrator = false;
   uint32_t app_flash_off = 0;
   uint8_t sect[FLASH_SECTOR];
   uint32_t sect_fill = 0;
-  bool app_seen_first = false;
-  uint8_t app_first = 0;
-  mbedtls_sha256_context appsha;
-  bool appsha_init = false;
+  bool seen_first = false;
+  uint8_t first_byte = 0;            // app image magic check (0xE9)
+
+  esp_ota_handle_t ota_handle = 0;   // migrator OTA write handle
+  const esp_partition_t *ota_part = NULL;
+
+  mbedtls_sha256_context dlsha;      // SHA-256 of the current streamed image
+  bool dlsha_init = false;
 };
 
 // Per-request async state (mirrors http_update's HttpUpdateRequestState so the
@@ -188,16 +159,8 @@ struct DlState
 static MongooseHttpClient mclient;
 static MigrateCtx mctx;
 
-// Survives a software reset / crash (not power loss). Records how far the
-// commit got so a crash mid-commit can be pinpointed after the reboot:
-//   10 verifying app, 11 app verified, 20 commit start,
-//   21 before bootloader write, 22 bootloader done, 23 partitions done,
-//   24 otadata done, 25 about to reboot.
-RTC_NOINIT_ATTR uint32_t g_migrate_marker;
-
 static void start_download(const String &url);
 static void finalize_current();
-static void flash_migrate_commit();
 
 // Park the next GET; it is launched from the current connection's onClose.
 static void schedule_download(const String &url)
@@ -235,9 +198,14 @@ static void migrate_fail(int err, const char *where)
   mctx.active = false;
   mctx.state = ST_IDLE;
   mctx.streaming_app = false;
-  if(mctx.appsha_init) {
-    mbedtls_sha256_free(&mctx.appsha);
-    mctx.appsha_init = false;
+  mctx.streaming_migrator = false;
+  if(mctx.dlsha_init) {
+    mbedtls_sha256_free(&mctx.dlsha);
+    mctx.dlsha_init = false;
+  }
+  if(mctx.ota_handle) {
+    esp_ota_abort(mctx.ota_handle);
+    mctx.ota_handle = 0;
   }
   StaticJsonDocument<128> e;
   e["migrate"] = "failed";
@@ -266,18 +234,6 @@ static bool sha_equals(const uint8_t digest[32], const String &expected_hex)
   return expected_hex.equalsIgnoreCase(hex);
 }
 
-static void sha256_buf(const uint8_t *data, size_t len, uint8_t out[32])
-{
-  mbedtls_sha256_context c;
-  mbedtls_sha256_init(&c);
-  mbedtls_sha256_starts_ret(&c, 0);
-  if(len) {
-    mbedtls_sha256_update_ret(&c, data, len);
-  }
-  mbedtls_sha256_finish_ret(&c, out);
-  mbedtls_sha256_free(&c);
-}
-
 // Erase one sector then write `len` bytes (region freshly erased).
 static bool flash_write_sector(uint32_t off, const uint8_t *buf, uint32_t len)
 {
@@ -292,68 +248,64 @@ static bool flash_write_sector(uint32_t off, const uint8_t *buf, uint32_t len)
 
 // ---- download streaming -------------------------------------------------
 
-// Destination buffer for the current buffered (non-app) download. Each file
-// lands directly in its own pre-reserved vector — no shared scratch, no copy —
-// to keep RAM use (and heap fragmentation) low while a TLS connection is open.
-static std::vector<uint8_t> *dl_dest()
-{
-  switch(mctx.state) {
-    case ST_BOOTLOADER: return &mctx.bootloader;
-    case ST_PARTITIONS: return &mctx.partitions;
-    default:            return &mctx.buf; // manifest
-  }
-}
-
 static bool consume_chunk(const uint8_t *data, size_t len)
 {
-  if(mctx.streaming_app)
+  if(mctx.streaming_app || mctx.streaming_migrator)
   {
     if(len) {
-      mbedtls_sha256_update_ret(&mctx.appsha, data, len);
+      mbedtls_sha256_update_ret(&mctx.dlsha, data, len);
     }
-    if(!mctx.app_seen_first && len > 0) {
-      mctx.app_first = data[0];
-      mctx.app_seen_first = true;
+    if(!mctx.seen_first && len > 0) {
+      mctx.first_byte = data[0];
+      mctx.seen_first = true;
     }
-    // Dry run: verify the transfer (sha + size) but never touch flash.
-    if(mctx.dry_run) {
-      mctx.dl_pos += len;
-      feedLoopWDT();
-      return true;
-    }
-    size_t i = 0;
-    while(i < len)
-    {
-      size_t take = FLASH_SECTOR - mctx.sect_fill;
-      if(take > len - i) {
-        take = len - i;
-      }
-      memcpy(mctx.sect + mctx.sect_fill, data + i, take);
-      mctx.sect_fill += take;
-      i += take;
-      if(mctx.sect_fill == FLASH_SECTOR)
+  }
+
+  if(mctx.streaming_app)
+  {
+    if(!mctx.dry_run) {
+      // Stream into the free flash at ota_1 (0x650000), one sector at a time.
+      size_t i = 0;
+      while(i < len)
       {
-        if(mctx.app_flash_off + FLASH_SECTOR > NEW_APP1_OFFSET + NEW_APP1_SIZE) {
-          return false; // image larger than the target partition
+        size_t take = FLASH_SECTOR - mctx.sect_fill;
+        if(take > len - i) {
+          take = len - i;
         }
-        if(!flash_write_sector(mctx.app_flash_off, mctx.sect, FLASH_SECTOR)) {
-          return false;
+        memcpy(mctx.sect + mctx.sect_fill, data + i, take);
+        mctx.sect_fill += take;
+        i += take;
+        if(mctx.sect_fill == FLASH_SECTOR)
+        {
+          if(mctx.app_flash_off + FLASH_SECTOR > NEW_APP1_OFFSET + NEW_APP1_SIZE) {
+            return false; // image larger than the target partition
+          }
+          if(!flash_write_sector(mctx.app_flash_off, mctx.sect, FLASH_SECTOR)) {
+            return false;
+          }
+          mctx.app_flash_off += FLASH_SECTOR;
+          mctx.sect_fill = 0;
         }
-        mctx.app_flash_off += FLASH_SECTOR;
-        mctx.sect_fill = 0;
+      }
+    }
+  }
+  else if(mctx.streaming_migrator)
+  {
+    // Stream into the inactive OTA partition via esp_ota (handles erase).
+    if(!mctx.dry_run && len) {
+      if(esp_ota_write(mctx.ota_handle, data, len) != ESP_OK) {
+        return false;
       }
     }
   }
   else
   {
-    // Never reallocate here: growing the vector mid-download fragments and can
-    // throw bad_alloc -> terminate -> panic. The destination was reserved up
-    // front (heap clean); a file bigger than that is a hard failure instead.
-    std::vector<uint8_t> *dst = dl_dest();
-    if(dst->size() + len > dst->capacity()) {
+    // Buffered (the manifest JSON). Never reallocate mid-TLS: growing the vector
+    // fragments the heap and can throw bad_alloc -> panic. Reserved up front.
+    if(mctx.buf.size() + len > mctx.buf.capacity()) {
       return false;
     }
-    dst->insert(dst->end(), data, data + len);
+    mctx.buf.insert(mctx.buf.end(), data, data + len);
   }
 
   mctx.dl_pos += len;
@@ -361,10 +313,11 @@ static bool consume_chunk(const uint8_t *data, size_t len)
   return true;
 }
 
-static bool finalize_app_image()
+// Finish + verify the currently-streamed image (app or migrator).
+static bool finalize_streamed_image(const String &expected_sha, bool check_app_magic)
 {
-  // Flush the final partial sector (pad with 0xFF, region is erased anyway).
-  if(mctx.sect_fill > 0 && !mctx.dry_run)
+  // App only: flush the final partial sector (padded with 0xFF).
+  if(mctx.streaming_app && mctx.sect_fill > 0 && !mctx.dry_run)
   {
     memset(mctx.sect + mctx.sect_fill, 0xFF, FLASH_SECTOR - mctx.sect_fill);
     if(!flash_write_sector(mctx.app_flash_off, mctx.sect, FLASH_SECTOR)) {
@@ -375,16 +328,16 @@ static bool finalize_app_image()
   }
 
   uint8_t dig[32];
-  mbedtls_sha256_finish_ret(&mctx.appsha, dig);
-  mbedtls_sha256_free(&mctx.appsha);
-  mctx.appsha_init = false;
+  mbedtls_sha256_finish_ret(&mctx.dlsha, dig);
+  mbedtls_sha256_free(&mctx.dlsha);
+  mctx.dlsha_init = false;
 
-  if(mctx.app_first != 0xE9) {
-    DEBUG_PORT.println("[migrate] app image bad magic");
+  if(check_app_magic && mctx.first_byte != 0xE9) {
+    DEBUG_PORT.println("[migrate] image bad magic");
     return false;
   }
-  if(!sha_equals(dig, mctx.app_sha)) {
-    DEBUG_PORT.println("[migrate] app image sha mismatch");
+  if(!sha_equals(dig, expected_sha)) {
+    DEBUG_PORT.println("[migrate] image sha mismatch");
     return false;
   }
   return true;
@@ -402,56 +355,13 @@ static void finalize_current()
         migrate_fail(-20, "manifest json");
         return;
       }
-      mctx.bl_url  = (const char *)(doc["bootloader"]["url"]    | "");
-      mctx.bl_sha  = (const char *)(doc["bootloader"]["sha256"] | "");
-      mctx.pt_url  = (const char *)(doc["partitions"]["url"]    | "");
-      mctx.pt_sha  = (const char *)(doc["partitions"]["sha256"] | "");
-      mctx.app_url = (const char *)(doc["app"]["url"]           | "");
-      mctx.app_sha = (const char *)(doc["app"]["sha256"]        | "");
-      if(mctx.bl_url.length() == 0 || mctx.pt_url.length() == 0 || mctx.app_url.length() == 0 ||
-         mctx.bl_sha.length() != 64 || mctx.pt_sha.length() != 64 || mctx.app_sha.length() != 64) {
+      mctx.app_url      = (const char *)(doc["app"]["url"]            | "");
+      mctx.app_sha      = (const char *)(doc["app"]["sha256"]         | "");
+      mctx.migrator_url = (const char *)(doc["migrator"]["url"]       | "");
+      mctx.migrator_sha = (const char *)(doc["migrator"]["sha256"]    | "");
+      if(mctx.app_url.length() == 0 || mctx.migrator_url.length() == 0 ||
+         mctx.app_sha.length() != 64 || mctx.migrator_sha.length() != 64) {
         migrate_fail(-21, "manifest fields");
-        return;
-      }
-      emit_state("staging");
-      mctx.state = ST_BOOTLOADER;
-      schedule_download(mctx.bl_url);
-      break;
-    }
-
-    case ST_BOOTLOADER:
-    {
-      // Downloaded directly into mctx.bootloader; held until commit.
-      if(mctx.bootloader.empty() || mctx.bootloader[0] != 0xE9) {
-        migrate_fail(-22, "bootloader magic");
-        return;
-      }
-      if(mctx.bootloader.size() > BOOTLOADER_MAX) {
-        migrate_fail(-27, "bootloader too large");
-        return;
-      }
-      uint8_t dig[32];
-      sha256_buf(mctx.bootloader.data(), mctx.bootloader.size(), dig);
-      if(!sha_equals(dig, mctx.bl_sha)) {
-        migrate_fail(-23, "bootloader sha");
-        return;
-      }
-      mctx.state = ST_PARTITIONS;
-      schedule_download(mctx.pt_url);
-      break;
-    }
-
-    case ST_PARTITIONS:
-    {
-      // Downloaded directly into mctx.partitions; held until commit.
-      if(mctx.partitions.size() < 96 || mctx.partitions.size() > PARTITION_TABLE_MAX) {
-        migrate_fail(-25, "partition table size");
-        return;
-      }
-      uint8_t dig[32];
-      sha256_buf(mctx.partitions.data(), mctx.partitions.size(), dig);
-      if(!sha_equals(dig, mctx.pt_sha)) {
-        migrate_fail(-24, "partition table sha");
         return;
       }
       emit_state("downloading_app");
@@ -462,22 +372,54 @@ static void finalize_current()
 
     case ST_APP:
     {
+      // 16MB app streamed to ota_1 (0x650000); verify before staging the migrator.
       emit_state("verifying");
-      g_migrate_marker = 10;
-      if(!finalize_app_image()) {
+      if(!finalize_streamed_image(mctx.app_sha, /*check_app_magic=*/true)) {
         migrate_fail(-26, "app verify");
         return;
       }
-      g_migrate_marker = 11;
+      emit_state("downloading_migrator");
+      mctx.state = ST_MIGRATOR;
+      schedule_download(mctx.migrator_url);
+      break;
+    }
+
+    case ST_MIGRATOR:
+    {
+      emit_state("verifying");
       if(mctx.dry_run) {
-        // Everything downloaded + verified; stop before touching flash.
-        DEBUG_PORT.println("[migrate] dry run OK - all images verified, nothing written");
+        // download+verify only; never write flash / OTA / boot.
+        if(!finalize_streamed_image(mctx.migrator_sha, /*check_app_magic=*/false)) {
+          migrate_fail(-26, "migrator verify");
+          return;
+        }
+        DEBUG_PORT.println("[migrate] dry run OK - app + migrator verified, nothing written");
         mctx.active = false;
         mctx.state = ST_IDLE;
         emit_state("dryrun_ok");
         return;
       }
-      flash_migrate_commit();
+      // Finalize the OTA image (esp_ota_end validates magic/checksum) then verify
+      // our own SHA-256 before we let it become bootable.
+      esp_err_t e = esp_ota_end(mctx.ota_handle);
+      mctx.ota_handle = 0;
+      if(e != ESP_OK) {
+        migrate_fail(-28, "migrator esp_ota_end");
+        return;
+      }
+      if(!finalize_streamed_image(mctx.migrator_sha, /*check_app_magic=*/false)) {
+        migrate_fail(-26, "migrator verify");
+        return;
+      }
+      if(esp_ota_set_boot_partition(mctx.ota_part) != ESP_OK) {
+        migrate_fail(-29, "set boot partition");
+        return;
+      }
+      mctx.active = false;
+      mctx.state = ST_IDLE;
+      emit_state("done");
+      DEBUG_PORT.println("[migrate] migrator staged + selected; rebooting to commit 16MB layout");
+      restart_system();
       break;
     }
 
@@ -506,9 +448,7 @@ static void start_download(const String &url)
 {
   DBUGF("[migrate] GET %s", url.c_str());
 
-  // Clear only the destination for this download (keeps already-downloaded
-  // bootloader/partitions intact, and preserves each vector's reserved cap).
-  dl_dest()->clear();
+  mctx.buf.clear(); // manifest scratch (kept capacity)
   mctx.dl_total = 0;
   mctx.dl_pos = 0;
   mctx.last_dl_pos = 0;
@@ -516,24 +456,41 @@ static void start_download(const String &url)
   mctx.body_complete = false;
   mctx.has_redirect = false;
   mctx.last_progress_ms = millis();
+  mctx.streaming_app = false;
+  mctx.streaming_migrator = false;
 
-  if(mctx.state == ST_APP)
+  if(mctx.state == ST_APP || mctx.state == ST_MIGRATOR)
   {
-    mctx.streaming_app = true;
-    mctx.app_flash_off = NEW_APP1_OFFSET;
-    mctx.sect_fill = 0;
-    mctx.app_seen_first = false;
-    mctx.app_first = 0;
-    if(mctx.appsha_init) {
-      mbedtls_sha256_free(&mctx.appsha);
+    // Reset the streaming SHA + first-byte (re-run on each redirect hop).
+    mctx.seen_first = false;
+    mctx.first_byte = 0;
+    if(mctx.dlsha_init) {
+      mbedtls_sha256_free(&mctx.dlsha);
     }
-    mbedtls_sha256_init(&mctx.appsha);
-    mbedtls_sha256_starts_ret(&mctx.appsha, 0);
-    mctx.appsha_init = true;
-  }
-  else
-  {
-    mctx.streaming_app = false;
+    mbedtls_sha256_init(&mctx.dlsha);
+    mbedtls_sha256_starts_ret(&mctx.dlsha, 0);
+    mctx.dlsha_init = true;
+
+    if(mctx.state == ST_APP) {
+      mctx.streaming_app = true;
+      mctx.app_flash_off = NEW_APP1_OFFSET;
+      mctx.sect_fill = 0;
+    } else {
+      mctx.streaming_migrator = true;
+      if(!mctx.dry_run) {
+        // (Re)open the inactive OTA partition for the migrator write.
+        if(mctx.ota_handle) {
+          esp_ota_abort(mctx.ota_handle);
+          mctx.ota_handle = 0;
+        }
+        mctx.ota_part = esp_ota_get_next_update_partition(NULL);
+        if(!mctx.ota_part ||
+           esp_ota_begin(mctx.ota_part, OTA_SIZE_UNKNOWN, &mctx.ota_handle) != ESP_OK) {
+          flag_fail(-27, "esp_ota_begin");
+          return;
+        }
+      }
+    }
   }
 
   MongooseHttpClientRequest *request = mclient.beginRequest(url.c_str());
@@ -679,294 +636,6 @@ void flash_migrate_loop()
   }
 }
 
-// ---- runtime: stage the protected-region images to scratch flash -----------
-//
-// The bootloader (0x1000) and partition table (0x8000) are "dangerous" regions
-// the IDF flash API refuses to write at runtime, and the ROM functions that
-// bypass that check deadlock against the modern esp_flash driver that WiFi uses
-// on the other core. So at runtime we only write the SCRATCH region (ordinary
-// flash above 4MB) — which esp_flash handles fine while WiFi runs — and apply
-// it to the protected regions during the next boot, before WiFi starts.
-
-static bool flash_stage_to_scratch()
-{
-  // Erase the whole scratch span, then write bl + pt, then the header last so a
-  // valid header means "fully staged, commit on next boot".
-  if(esp_flash_erase_region(esp_flash_default_chip, SCRATCH_OFFSET, SCRATCH_TOTAL) != ESP_OK) {
-    return false;
-  }
-  feedLoopWDT();
-  uint32_t bl_w = (mctx.bootloader.size() + 3) & ~3u;
-  uint32_t pt_w = (mctx.partitions.size() + 3) & ~3u;
-  if(esp_flash_write(esp_flash_default_chip, mctx.bootloader.data(), SCRATCH_BL_OFFSET, bl_w) != ESP_OK) {
-    return false;
-  }
-  feedLoopWDT();
-  if(esp_flash_write(esp_flash_default_chip, mctx.partitions.data(), SCRATCH_PT_OFFSET, pt_w) != ESP_OK) {
-    return false;
-  }
-  feedLoopWDT();
-  scratch_header_t h;
-  h.magic  = SCRATCH_MAGIC;
-  h.bl_len = mctx.bootloader.size();
-  h.bl_crc = esp_rom_crc32_le(UINT32_MAX, mctx.bootloader.data(), mctx.bootloader.size());
-  h.pt_len = mctx.partitions.size();
-  h.pt_crc = esp_rom_crc32_le(UINT32_MAX, mctx.partitions.data(), mctx.partitions.size());
-  if(esp_flash_write(esp_flash_default_chip, &h, SCRATCH_HEADER_OFFSET, sizeof(h)) != ESP_OK) {
-    return false;
-  }
-  return true;
-}
-
-static void flash_migrate_commit()
-{
-  emit_state("committing");
-  g_migrate_marker = 20;
-  DEBUG_PORT.println("[migrate] staging commit images to scratch flash");
-  if(!flash_stage_to_scratch()) {
-    migrate_fail(-33, "stage to scratch");
-    return;
-  }
-  g_migrate_marker = 24;
-  mctx.active = false;
-  mctx.state = ST_IDLE;
-  emit_state("done");
-  g_migrate_marker = 25;
-  DEBUG_PORT.println("[migrate] staged; rebooting to apply 16MB layout - DO NOT POWER OFF");
-  restart_system();
-}
-
-// ---- early boot: apply the staged images to the protected regions ----------
-//
-// !!! KNOWN ISSUE / WORK IN PROGRESS !!!
-// Everything up to and including staging works (download, verify, app -> ota_1,
-// bootloader+partition-table -> scratch flash, reboot). Applying the staged
-// images to the protected 0x1000 / 0x8000 regions does NOT work yet and is the
-// remaining task — see docs/flash_migrate_repartition.md. Symptom: the device
-// hangs in the ROM flash op below and is force-reset (POWERON) by the RTC
-// watchdog, then boots back to the 4MB layout (no damage; the bootloader is
-// never reached for an actual write). The robust fix is to apply the commit
-// from a custom 2nd-stage bootloader (before the OS/flash driver touch the SPI
-// controller), which needs on-device serial debugging to develop safely.
-//
-// Runs from setup() before WiFi/networking starts. To write the protected
-// regions with the ROM flash functions we must disable the flash cache while
-// the op runs. The IDF cache guard stalls the other core via an inter-core IPI
-// handshake, which deadlocks here (the other core never acknowledges), so we
-// stall it in HARDWARE with esp_cpu_stall() instead. These helpers MUST be
-// IRAM-resident: the cache is disabled between begin()/end().
-
-// NOINLINE is essential: if these get inlined into a flash-resident caller the
-// IRAM placement is lost and executing them with the cache disabled faults.
-static void IRAM_ATTR NOINLINE_ATTR flash_op_begin()
-{
-  int me = xPortGetCoreID();
-  esp_cpu_stall(me ? 0 : 1); // hardware-freeze the other core
-  portDISABLE_INTERRUPTS();
-  // Only touch THIS core's cache. Disabling the stalled core's cache hangs
-  // (it waits for the frozen core); the other core won't access flash while
-  // frozen, and the regions we write are not XIP-executed by it.
-  Cache_Read_Disable(me);
-}
-
-static void IRAM_ATTR NOINLINE_ATTR flash_op_end()
-{
-  int me = xPortGetCoreID();
-  Cache_Flush(me); // invalidate any stale cache lines for the just-written flash
-  Cache_Read_Enable(me);
-  portENABLE_INTERRUPTS();
-  esp_cpu_unstall(me ? 0 : 1);
-}
-
-static bool IRAM_ATTR NOINLINE_ATTR raw_flash_erase_sector(uint32_t sector)
-{
-  flash_op_begin();
-  esp_rom_spiflash_result_t r = esp_rom_spiflash_erase_sector(sector);
-  flash_op_end();
-  return r == ESP_ROM_SPIFLASH_RESULT_OK;
-}
-
-// src 4-byte aligned, len a multiple of 4.
-static bool IRAM_ATTR NOINLINE_ATTR raw_flash_write(uint32_t addr, const uint32_t *src, uint32_t len)
-{
-  flash_op_begin();
-  esp_rom_spiflash_result_t r = esp_rom_spiflash_write(addr, src, (int32_t)len);
-  flash_op_end();
-  return r == ESP_ROM_SPIFLASH_RESULT_OK;
-}
-
-static bool IRAM_ATTR NOINLINE_ATTR raw_flash_read(uint32_t addr, uint32_t *dst, uint32_t len)
-{
-  flash_op_begin();
-  esp_rom_spiflash_result_t r = esp_rom_spiflash_read(addr, dst, (int32_t)len);
-  flash_op_end();
-  return r == ESP_ROM_SPIFLASH_RESULT_OK;
-}
-
-static bool raw_verify(uint32_t addr, const uint8_t *data, uint32_t len)
-{
-  uint32_t off = 0;
-  uint8_t tmp[256];
-  while(off < len) {
-    uint32_t n = len - off;
-    if(n > sizeof(tmp)) n = sizeof(tmp);
-    if(!raw_flash_read(addr + off, (uint32_t *)tmp, (n + 3) & ~3u)) return false;
-    if(memcmp(tmp, data + off, n) != 0) return false;
-    off += n;
-  }
-  return true;
-}
-
-static bool raw_write_region(uint32_t off, const uint8_t *data, uint32_t len)
-{
-  uint32_t a0 = off & ~(FLASH_SECTOR - 1);
-  uint32_t a1 = (off + len + FLASH_SECTOR - 1) & ~(FLASH_SECTOR - 1);
-  uint32_t wlen = (len + 3) & ~3u;
-  for(int attempt = 0; attempt < 3; attempt++) {
-    bool ok = true;
-    for(uint32_t a = a0; a < a1 && ok; a += FLASH_SECTOR) {
-      esp_rom_printf("[migrate] erase %x\n", a);
-      ok = raw_flash_erase_sector(a / FLASH_SECTOR);
-      rtc_wdt_feed(); // each op is short; feed the RTC WDT between them
-    }
-    // Write a sector at a time so a single cache-disabled window stays short.
-    for(uint32_t w = 0; w < wlen && ok; w += FLASH_SECTOR) {
-      uint32_t n = wlen - w;
-      if(n > FLASH_SECTOR) n = FLASH_SECTOR;
-      esp_rom_printf("[migrate] write %x\n", off + w);
-      ok = raw_flash_write(off + w, (const uint32_t *)(data + w), n);
-      rtc_wdt_feed();
-    }
-    if(ok && raw_verify(off, data, len)) {
-      return true;
-    }
-  }
-  return false;
-}
-
-// otadata select entry layout (esp_ota_select_entry_t).
-typedef struct {
-  uint32_t ota_seq;
-  uint8_t  seq_label[20];
-  uint32_t ota_state;
-  uint32_t crc;          // CRC32 of ota_seq only
-} ota_select_entry_t;
-
-// Select ota_1 (the staged 16MB firmware): with 2 OTA apps, boot index =
-// (ota_seq - 1) % 2, so ota_seq=2 -> ota_1. ota_0 keeps the old firmware.
-static bool raw_write_otadata_ota1()
-{
-  if(!raw_flash_erase_sector(OTADATA_OFFSET / FLASH_SECTOR)) return false;
-  rtc_wdt_feed();
-  if(!raw_flash_erase_sector((OTADATA_OFFSET + FLASH_SECTOR) / FLASH_SECTOR)) return false;
-  rtc_wdt_feed();
-  ota_select_entry_t s;
-  memset(&s, 0xFF, sizeof(s));
-  s.ota_seq = 2;
-  s.ota_state = 0xFFFFFFFF; // ESP_OTA_IMG_UNDEFINED -> no rollback verification
-  s.crc = esp_rom_crc32_le(UINT32_MAX, (const uint8_t *)&s.ota_seq, sizeof(s.ota_seq));
-  if(!raw_flash_write(OTADATA_OFFSET, (const uint32_t *)&s, sizeof(s))) return false;
-  return raw_verify(OTADATA_OFFSET, (const uint8_t *)&s, sizeof(s));
-}
-
-static void prepare_watchdogs_for_commit()
-{
-  // Disable the interrupt watchdog (MWDT1 / TIMERG1) and task watchdog
-  // (MWDT0 / TIMERG0) — the per-sector cache-disabled windows would otherwise
-  // trip them. The RTC watchdog is KEPT as a last-resort hang safety-net (so a
-  // bug can't hang the device forever); give it a generous timeout and feed it
-  // between each (short) flash op.
-  wdt_hal_context_t iwdt;
-  iwdt.inst = WDT_MWDT1;
-  iwdt.mwdt_dev = &TIMERG1;
-  wdt_hal_write_protect_disable(&iwdt);
-  wdt_hal_disable(&iwdt);
-  wdt_hal_write_protect_enable(&iwdt);
-
-  wdt_hal_context_t twdt;
-  twdt.inst = WDT_MWDT0;
-  twdt.mwdt_dev = &TIMERG0;
-  wdt_hal_write_protect_disable(&twdt);
-  wdt_hal_disable(&twdt);
-  wdt_hal_write_protect_enable(&twdt);
-
-  rtc_wdt_protect_off();
-  rtc_wdt_set_stage(RTC_WDT_STAGE0, RTC_WDT_STAGE_ACTION_RESET_SYSTEM);
-  rtc_wdt_set_time(RTC_WDT_STAGE0, 20000); // hang -> auto reset in 20s (-> 4MB)
-  rtc_wdt_feed();
-  rtc_wdt_enable();
-  rtc_wdt_protect_on();
-}
-
-void flash_migrate_early_commit()
-{
-  scratch_header_t h;
-  if(esp_flash_read(esp_flash_default_chip, &h, SCRATCH_HEADER_OFFSET, sizeof(h)) != ESP_OK) {
-    return;
-  }
-  if(h.magic != SCRATCH_MAGIC) {
-    return; // nothing staged
-  }
-  if(h.bl_len == 0 || h.bl_len > BOOTLOADER_MAX || h.pt_len < 96 || h.pt_len > PARTITION_TABLE_MAX) {
-    return;
-  }
-
-  // Use esp_rom_printf: it writes straight to the console UART (UART0) so the
-  // checkpoints below appear on the programming serial port even this early in
-  // boot, and it is safe to call while flash/cache work is in progress.
-  esp_rom_printf("\n[migrate] staged commit found (bl=%u pt=%u), applying before WiFi\n",
-                 h.bl_len, h.pt_len);
-
-  uint32_t bl_w = (h.bl_len + 3) & ~3u;
-  uint32_t pt_w = (h.pt_len + 3) & ~3u;
-  uint8_t *bl = (uint8_t *)malloc(bl_w);
-  uint8_t *pt = (uint8_t *)malloc(pt_w);
-  if(!bl || !pt) { esp_rom_printf("[migrate] malloc failed\n"); free(bl); free(pt); return; }
-
-  bool ok = (esp_flash_read(esp_flash_default_chip, bl, SCRATCH_BL_OFFSET, bl_w) == ESP_OK) &&
-            (esp_flash_read(esp_flash_default_chip, pt, SCRATCH_PT_OFFSET, pt_w) == ESP_OK) &&
-            esp_rom_crc32_le(UINT32_MAX, bl, h.bl_len) == h.bl_crc &&
-            esp_rom_crc32_le(UINT32_MAX, pt, h.pt_len) == h.pt_crc &&
-            bl[0] == 0xE9;
-  esp_rom_printf("[migrate] images read+crc: %s\n", ok ? "OK" : "BAD");
-
-  // One-shot: invalidate the header now so a crash mid-commit can't boot-loop.
-  esp_flash_erase_region(esp_flash_default_chip, SCRATCH_HEADER_OFFSET, FLASH_SECTOR);
-
-  if(!ok) {
-    free(bl); free(pt);
-    return;
-  }
-
-  // Point of no return. WiFi is not up yet, so the hardware core-stall is safe.
-  g_migrate_marker = 30;
-  esp_rom_printf("[migrate] disabling watchdogs\n");
-  prepare_watchdogs_for_commit();
-
-  g_migrate_marker = 31;
-  esp_rom_printf("[migrate] writing bootloader @0x1000 ...\n");
-  bool committed = raw_write_region(BOOTLOADER_OFFSET, bl, h.bl_len);
-  esp_rom_printf("[migrate] bootloader: %s\n", committed ? "OK" : "FAIL");
-  if(committed) {
-    g_migrate_marker = 32;
-    esp_rom_printf("[migrate] writing partition table @0x8000 ...\n");
-    committed = raw_write_region(PARTITION_TABLE_OFFSET, pt, h.pt_len);
-    esp_rom_printf("[migrate] partitions: %s\n", committed ? "OK" : "FAIL");
-  }
-  if(committed) {
-    g_migrate_marker = 33;
-    esp_rom_printf("[migrate] writing otadata ...\n");
-    committed = raw_write_otadata_ota1();
-    esp_rom_printf("[migrate] otadata: %s\n", committed ? "OK" : "FAIL");
-  }
-  if(committed) { g_migrate_marker = 34; }
-
-  free(bl); free(pt);
-
-  esp_rom_printf("[migrate] commit %s, rebooting\n", committed ? "COMPLETE" : "FAILED");
-  esp_restart();
-}
-
 // ---- public API ---------------------------------------------------------
 
 bool flash_migrate_in_progress()
@@ -976,9 +645,9 @@ bool flash_migrate_in_progress()
 
 void flash_migrate_status_json(JsonDocument &doc)
 {
-  static const char *names[] = { "idle", "manifest", "bootloader", "partitions", "app" };
+  static const char *names[] = { "idle", "manifest", "app", "migrator" };
   doc["active"] = mctx.active;
-  doc["state"] = (mctx.state >= 0 && mctx.state <= ST_APP) ? names[mctx.state] : "?";
+  doc["state"] = (mctx.state >= 0 && mctx.state <= ST_MIGRATOR) ? names[mctx.state] : "?";
   doc["conn_open"] = mctx.conn_open;
   doc["awaiting"] = mctx.awaiting_result;
   doc["body_complete"] = mctx.body_complete;
@@ -991,8 +660,6 @@ void flash_migrate_status_json(JsonDocument &doc)
   doc["fail_code"] = mctx.fail_code;
   doc["fail_where"] = mctx.fail_where;
   doc["free_heap"] = (uint32_t)ESP.getFreeHeap();
-  doc["commit_marker"] = g_migrate_marker;       // survives a crash/reboot
-  doc["reset_reason"] = (int)esp_reset_reason();  // 1=POWERON 3=SW 4=PANIC 6=WDT...
 }
 
 // Decode the last panic's core dump (written to the coredump partition) into
@@ -1042,29 +709,26 @@ bool flash_migrate_start_16mb(const String &manifest_url, bool dry_run)
   }
   mctx.dry_run = dry_run;
 
-  mctx.app_url = ""; mctx.bl_url = ""; mctx.pt_url = "";
-  mctx.app_sha = ""; mctx.bl_sha = ""; mctx.pt_sha = "";
+  mctx.app_url = ""; mctx.app_sha = "";
+  mctx.migrator_url = ""; mctx.migrator_sha = "";
   mctx.buf.clear();
-  mctx.bootloader.clear();
-  mctx.partitions.clear();
-  // Reserve scratch now, while the heap is unfragmented. Doing this lazily
-  // during a TLS download throws bad_alloc -> panic (the heap is fragmented by
-  // the active mbedTLS connection). bad_alloc is caught so a genuinely full
-  // heap fails cleanly instead of crashing.
+  // Reserve the manifest buffer now, while the heap is unfragmented. Doing this
+  // lazily during a TLS download throws bad_alloc -> panic (the heap is
+  // fragmented by the active mbedTLS connection). bad_alloc is caught so a
+  // genuinely full heap fails cleanly instead of crashing.
   try {
     mctx.buf.reserve(MIGRATE_SCRATCH_CAP);
-    mctx.bootloader.reserve(MIGRATE_BOOTLOADER_CAP);
-    mctx.partitions.reserve(MIGRATE_PARTITIONS_CAP);
   } catch(...) {
-    DEBUG_PORT.println("[migrate] could not reserve scratch buffers");
+    DEBUG_PORT.println("[migrate] could not reserve manifest buffer");
     return false;
   }
   mctx.dl_total = 0;
   mctx.dl_pos = 0;
   mctx.last_percent = -1;
   mctx.streaming_app = false;
+  mctx.streaming_migrator = false;
   mctx.sect_fill = 0;
-  mctx.app_seen_first = false;
+  mctx.seen_first = false;
   mctx.conn_open = false;
   mctx.awaiting_result = false;
   mctx.body_complete = false;
@@ -1072,12 +736,15 @@ bool flash_migrate_start_16mb(const String &manifest_url, bool dry_run)
   mctx.failed = false;
   mctx.has_pending = false;
   mctx.pending_url = "";
-  if(mctx.appsha_init) {
-    mbedtls_sha256_free(&mctx.appsha);
-    mctx.appsha_init = false;
+  if(mctx.dlsha_init) {
+    mbedtls_sha256_free(&mctx.dlsha);
+    mctx.dlsha_init = false;
+  }
+  if(mctx.ota_handle) {
+    esp_ota_abort(mctx.ota_handle);
+    mctx.ota_handle = 0;
   }
 
-  g_migrate_marker = 0;
   mctx.manifest_url = manifest_url.length() ? manifest_url : String(MIGRATE_MANIFEST_URL);
   mctx.state = ST_MANIFEST;
   mctx.active = true;
@@ -1098,7 +765,6 @@ bool flash_migrate_can_expand_16mb() { return false; }
 bool flash_migrate_in_progress() { return false; }
 bool flash_migrate_start_16mb(const String &, bool) { return false; }
 void flash_migrate_loop() {}
-void flash_migrate_early_commit() {}
 void flash_migrate_status_json(JsonDocument &doc) { doc["active"] = false; }
 void flash_migrate_coredump_json(JsonDocument &doc) { doc["coredump"] = "n/a"; }
 
@@ -1112,7 +778,6 @@ const char *flash_migrate_partition_scheme() { return "unknown"; }
 bool flash_migrate_start_16mb(const String &, bool) { return false; }
 bool flash_migrate_in_progress() { return false; }
 void flash_migrate_loop() {}
-void flash_migrate_early_commit() {}
 void flash_migrate_status_json(JsonDocument &doc) { doc["active"] = false; }
 void flash_migrate_coredump_json(JsonDocument &doc) { doc["coredump"] = "n/a"; }
 

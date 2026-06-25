@@ -146,10 +146,6 @@ void setup()
   serial = ESPAL.getLongId();
   serial.toUpperCase();
 
-  // Apply a staged 16MB repartition (if any) before WiFi starts — the protected
-  // bootloader/partition-table writes are only safe while the other core is idle.
-  flash_migrate_early_commit();
-
   if(!LittleFS.begin(FORMAT_LITTLEFS_IF_FAILED)){
     DEBUG.println("LittleFS Mount Failed");
     return;
