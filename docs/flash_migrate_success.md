@@ -198,9 +198,14 @@ The migrator must embed the **same** 16 MB bootloader + partition table that the
 4. Publish `openevse_migrator.bin` + `openevse_wifi_v1_16mb.bin` and a
    `migrate_v1_16mb.json` manifest carrying both URLs and SHA-256s.
 
-The 4 MB firmware's default `MIGRATE_MANIFEST_URL` points at
-`releases/latest/download/migrate_v1_16mb.json`, so a device pulls the migrator
-and app that match the firmware it's about to install.
+The 4 MB firmware's default `MIGRATE_MANIFEST_URL` points at the release with the
+**literal-tag** form, `releases/download/<tag>/migrate_v1_16mb.json` (currently
+the `vRePartition4MB` prerelease), so a device pulls the migrator and app that
+match the firmware it's about to install. The literal-tag form is required
+because the CI marks its builds as **prereleases**, and GitHub's
+`releases/latest/download/...` redirect never resolves to a prerelease — the
+manifest's own asset URLs use this same `releases/download/<tag>/` base, so they
+agree.
 
 ---
 
