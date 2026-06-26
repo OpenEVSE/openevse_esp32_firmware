@@ -30,14 +30,8 @@ public:
   // Handle events (button presses, etc)
   void handleEvent(uint8_t event);
 
-  // Set WiFi mode on the charge screen
-  void setWifiMode(bool client, bool connected);
-
-#ifdef TFT_BACKLIGHT_TIMEOUT_MS
-  void wakeBacklight();
-  void timeoutBacklight();
-  void updateBacklight();
-#endif //TFT_BACKLIGHT_TIMEOUT_MS
+  // Set WiFi mode on the charge screen, returns true if changed
+  bool setWifiMode(bool client, bool connected);
 
 private:
   TFT_eSPI &_screen;
@@ -47,12 +41,6 @@ private:
 
   ScreenType _current_screen;
   ScreenBase* _screens[SCREEN_COUNT];
-
-#ifdef TFT_BACKLIGHT_TIMEOUT_MS
-  unsigned long _backlight_timeout = 0;
-  bool _previous_vehicle_state = false;
-  uint8_t _previous_evse_state = 0;
-#endif //TFT_BACKLIGHT_TIMEOUT_MS
 
   // Initialize all screen objects
   void initializeScreens();
