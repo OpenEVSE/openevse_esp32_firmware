@@ -433,6 +433,10 @@ bool lvgl_panel_begin()
 
 void lvgl_panel_set_backlight(uint8_t pct)
 {
+#if defined(EPOXY_DUINO)
+  (void)pct;
+  return;
+#else
   if (!bl_ready) {
     return;
   }
@@ -441,6 +445,7 @@ void lvgl_panel_set_backlight(uint8_t pct)
   ledcWrite(TFT_BL, duty);
 #else
   ledcWrite(LCD_BL_LEDC_CHANNEL, duty);
+#endif
 #endif
 }
 
@@ -473,7 +478,6 @@ bool lvgl_panel_write_ppm(const char *path)
   fclose(fp);
   return true;
 }
-#endif
 #endif
 
 #endif // ENABLE_SCREEN_LVGL_TFT
