@@ -23,6 +23,10 @@
 #include "lvgl_tft/standby_screen.h"
 #include "lvgl_tft/backlight.h"
 
+#ifndef LCD_BACKLIGHT_PIN
+#define LCD_BACKLIGHT_PIN TFT_BL
+#endif
+
 // How long the startup splash shows before handing off to the main screen.
 #define BOOT_SPLASH_MS 4000
 
