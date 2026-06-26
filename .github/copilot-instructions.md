@@ -74,6 +74,7 @@ Always reference these instructions first and fallback to search or bash command
 2. **Verify Submodules**: `git submodule status` -- must show clean state
 3. **Run Python Tests**: `cd divert_sim && pytest -v` -- must pass when dependencies available
 4. **Check Build Config**: Review `platformio.ini` for any new board configurations
+5. **Validate documentation**: Update `docs/` if any user-facing changes were made and check that it passes markdownlint validation rules
 
 ### Complete Validation Workflow:
 ```bash

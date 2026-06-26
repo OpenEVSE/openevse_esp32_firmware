@@ -1,0 +1,748 @@
+{
+  "generated_at": "2026-06-06T21:52:44.018726Z",
+  "scenarios": [
+    {
+      "id": "divert_CloudyMorning_default",
+      "title": "Divert: Cloudy Morning (default)",
+      "category": "divert",
+      "profile": "interactive",
+      "peers": [
+        "evse-001"
+      ],
+      "source": "data/scenarios/divert_CloudyMorning_default.json",
+      "csv": "output/divert_CloudyMorning_default_interactive.csv",
+      "row_count": 961
+    },
+    {
+      "id": "divert_CloudyMorning_noimport",
+      "title": "Divert: Cloudy Morning (noimport)",
+      "category": "divert",
+      "profile": "interactive",
+      "peers": [
+        "evse-001"
+      ],
+      "source": "data/scenarios/divert_CloudyMorning_noimport.json",
+      "csv": "output/divert_CloudyMorning_noimport_interactive.csv",
+      "row_count": 961
+    },
+    {
+      "id": "divert_CloudyMorning_nowaste",
+      "title": "Divert: Cloudy Morning (nowaste)",
+      "category": "divert",
+      "profile": "interactive",
+      "peers": [
+        "evse-001"
+      ],
+      "source": "data/scenarios/divert_CloudyMorning_nowaste.json",
+      "csv": "output/divert_CloudyMorning_nowaste_interactive.csv",
+      "row_count": 961
+    },
+    {
+      "id": "divert_Energy_and_Power_Day_2020_03_22_default",
+      "title": "Divert: Energy and Power Day 2020-03-22 (default)",
+      "category": "divert",
+      "profile": "interactive",
+      "peers": [
+        "evse-001"
+      ],
+      "source": "data/scenarios/divert_Energy_and_Power_Day_2020_03_22_default.json",
+      "csv": "output/divert_Energy_and_Power_Day_2020_03_22_default_interactive.csv",
+      "row_count": 1441
+    },
+    {
+      "id": "divert_Energy_and_Power_Day_2020_03_22_noimport",
+      "title": "Divert: Energy and Power Day 2020-03-22 (noimport)",
+      "category": "divert",
+      "profile": "interactive",
+      "peers": [
+        "evse-001"
+      ],
+      "source": "data/scenarios/divert_Energy_and_Power_Day_2020_03_22_noimport.json",
+      "csv": "output/divert_Energy_and_Power_Day_2020_03_22_noimport_interactive.csv",
+      "row_count": 1441
+    },
+    {
+      "id": "divert_Energy_and_Power_Day_2020_03_22_nowaste",
+      "title": "Divert: Energy and Power Day 2020-03-22 (nowaste)",
+      "category": "divert",
+      "profile": "interactive",
+      "peers": [
+        "evse-001"
+      ],
+      "source": "data/scenarios/divert_Energy_and_Power_Day_2020_03_22_nowaste.json",
+      "csv": "output/divert_Energy_and_Power_Day_2020_03_22_nowaste_interactive.csv",
+      "row_count": 1441
+    },
+    {
+      "id": "divert_Energy_and_Power_Day_2020_03_31_default",
+      "title": "Divert: Energy and Power Day 2020-03-31 (default)",
+      "category": "divert",
+      "profile": "interactive",
+      "peers": [
+        "evse-001"
+      ],
+      "source": "data/scenarios/divert_Energy_and_Power_Day_2020_03_31_default.json",
+      "csv": "output/divert_Energy_and_Power_Day_2020_03_31_default_interactive.csv",
+      "row_count": 1441
+    },
+    {
+      "id": "divert_Energy_and_Power_Day_2020_03_31_noimport",
+      "title": "Divert: Energy and Power Day 2020-03-31 (noimport)",
+      "category": "divert",
+      "profile": "interactive",
+      "peers": [
+        "evse-001"
+      ],
+      "source": "data/scenarios/divert_Energy_and_Power_Day_2020_03_31_noimport.json",
+      "csv": "output/divert_Energy_and_Power_Day_2020_03_31_noimport_interactive.csv",
+      "row_count": 1441
+    },
+    {
+      "id": "divert_Energy_and_Power_Day_2020_03_31_nowaste",
+      "title": "Divert: Energy and Power Day 2020-03-31 (nowaste)",
+      "category": "divert",
+      "profile": "interactive",
+      "peers": [
+        "evse-001"
+      ],
+      "source": "data/scenarios/divert_Energy_and_Power_Day_2020_03_31_nowaste.json",
+      "csv": "output/divert_Energy_and_Power_Day_2020_03_31_nowaste_interactive.csv",
+      "row_count": 1441
+    },
+    {
+      "id": "divert_Energy_and_Power_Day_2020_04_01_default",
+      "title": "Divert: Energy and Power Day 2020-04-01 (default)",
+      "category": "divert",
+      "profile": "interactive",
+      "peers": [
+        "evse-001"
+      ],
+      "source": "data/scenarios/divert_Energy_and_Power_Day_2020_04_01_default.json",
+      "csv": "output/divert_Energy_and_Power_Day_2020_04_01_default_interactive.csv",
+      "row_count": 1441
+    },
+    {
+      "id": "divert_Energy_and_Power_Day_2020_04_01_noimport",
+      "title": "Divert: Energy and Power Day 2020-04-01 (noimport)",
+      "category": "divert",
+      "profile": "interactive",
+      "peers": [
+        "evse-001"
+      ],
+      "source": "data/scenarios/divert_Energy_and_Power_Day_2020_04_01_noimport.json",
+      "csv": "output/divert_Energy_and_Power_Day_2020_04_01_noimport_interactive.csv",
+      "row_count": 1441
+    },
+    {
+      "id": "divert_Energy_and_Power_Day_2020_04_01_nowaste",
+      "title": "Divert: Energy and Power Day 2020-04-01 (nowaste)",
+      "category": "divert",
+      "profile": "interactive",
+      "peers": [
+        "evse-001"
+      ],
+      "source": "data/scenarios/divert_Energy_and_Power_Day_2020_04_01_nowaste.json",
+      "csv": "output/divert_Energy_and_Power_Day_2020_04_01_nowaste_interactive.csv",
+      "row_count": 1441
+    },
+    {
+      "id": "divert_almostperfect_default",
+      "title": "Divert: Almost Perfect (default)",
+      "category": "divert",
+      "profile": "interactive",
+      "peers": [
+        "evse-001"
+      ],
+      "source": "data/scenarios/divert_almostperfect_default.json",
+      "csv": "output/divert_almostperfect_default_interactive.csv",
+      "row_count": 941
+    },
+    {
+      "id": "divert_almostperfect_noimport",
+      "title": "Divert: Almost Perfect (noimport)",
+      "category": "divert",
+      "profile": "interactive",
+      "peers": [
+        "evse-001"
+      ],
+      "source": "data/scenarios/divert_almostperfect_noimport.json",
+      "csv": "output/divert_almostperfect_noimport_interactive.csv",
+      "row_count": 941
+    },
+    {
+      "id": "divert_almostperfect_nowaste",
+      "title": "Divert: Almost Perfect (nowaste)",
+      "category": "divert",
+      "profile": "interactive",
+      "peers": [
+        "evse-001"
+      ],
+      "source": "data/scenarios/divert_almostperfect_nowaste.json",
+      "csv": "output/divert_almostperfect_nowaste_interactive.csv",
+      "row_count": 941
+    },
+    {
+      "id": "divert_day1_default",
+      "title": "Divert: Day 1 (default)",
+      "category": "divert",
+      "profile": "interactive",
+      "peers": [
+        "evse-001"
+      ],
+      "source": "data/scenarios/divert_day1_default.json",
+      "csv": "output/divert_day1_default_interactive.csv",
+      "row_count": 721
+    },
+    {
+      "id": "divert_day1_grid_ie_default",
+      "title": "Divert: Day 1 (Grid I/E) (default)",
+      "category": "divert",
+      "profile": "interactive",
+      "peers": [
+        "evse-001"
+      ],
+      "source": "data/scenarios/divert_day1_grid_ie_default.json",
+      "csv": "output/divert_day1_grid_ie_default_interactive.csv",
+      "row_count": 721
+    },
+    {
+      "id": "divert_day1_grid_ie_noimport",
+      "title": "Divert: Day 1 (Grid I/E) (noimport)",
+      "category": "divert",
+      "profile": "interactive",
+      "peers": [
+        "evse-001"
+      ],
+      "source": "data/scenarios/divert_day1_grid_ie_noimport.json",
+      "csv": "output/divert_day1_grid_ie_noimport_interactive.csv",
+      "row_count": 721
+    },
+    {
+      "id": "divert_day1_grid_ie_nowaste",
+      "title": "Divert: Day 1 (Grid I/E) (nowaste)",
+      "category": "divert",
+      "profile": "interactive",
+      "peers": [
+        "evse-001"
+      ],
+      "source": "data/scenarios/divert_day1_grid_ie_nowaste.json",
+      "csv": "output/divert_day1_grid_ie_nowaste_interactive.csv",
+      "row_count": 721
+    },
+    {
+      "id": "divert_day1_noimport",
+      "title": "Divert: Day 1 (noimport)",
+      "category": "divert",
+      "profile": "interactive",
+      "peers": [
+        "evse-001"
+      ],
+      "source": "data/scenarios/divert_day1_noimport.json",
+      "csv": "output/divert_day1_noimport_interactive.csv",
+      "row_count": 721
+    },
+    {
+      "id": "divert_day1_nowaste",
+      "title": "Divert: Day 1 (nowaste)",
+      "category": "divert",
+      "profile": "interactive",
+      "peers": [
+        "evse-001"
+      ],
+      "source": "data/scenarios/divert_day1_nowaste.json",
+      "csv": "output/divert_day1_nowaste_interactive.csv",
+      "row_count": 721
+    },
+    {
+      "id": "divert_day2_default",
+      "title": "Divert: Day 2 (default)",
+      "category": "divert",
+      "profile": "interactive",
+      "peers": [
+        "evse-001"
+      ],
+      "source": "data/scenarios/divert_day2_default.json",
+      "csv": "output/divert_day2_default_interactive.csv",
+      "row_count": 721
+    },
+    {
+      "id": "divert_day2_grid_ie_default",
+      "title": "Divert: Day 2 (Grid I/E) (default)",
+      "category": "divert",
+      "profile": "interactive",
+      "peers": [
+        "evse-001"
+      ],
+      "source": "data/scenarios/divert_day2_grid_ie_default.json",
+      "csv": "output/divert_day2_grid_ie_default_interactive.csv",
+      "row_count": 721
+    },
+    {
+      "id": "divert_day2_grid_ie_noimport",
+      "title": "Divert: Day 2 (Grid I/E) (noimport)",
+      "category": "divert",
+      "profile": "interactive",
+      "peers": [
+        "evse-001"
+      ],
+      "source": "data/scenarios/divert_day2_grid_ie_noimport.json",
+      "csv": "output/divert_day2_grid_ie_noimport_interactive.csv",
+      "row_count": 721
+    },
+    {
+      "id": "divert_day2_grid_ie_nowaste",
+      "title": "Divert: Day 2 (Grid I/E) (nowaste)",
+      "category": "divert",
+      "profile": "interactive",
+      "peers": [
+        "evse-001"
+      ],
+      "source": "data/scenarios/divert_day2_grid_ie_nowaste.json",
+      "csv": "output/divert_day2_grid_ie_nowaste_interactive.csv",
+      "row_count": 721
+    },
+    {
+      "id": "divert_day2_noimport",
+      "title": "Divert: Day 2 (noimport)",
+      "category": "divert",
+      "profile": "interactive",
+      "peers": [
+        "evse-001"
+      ],
+      "source": "data/scenarios/divert_day2_noimport.json",
+      "csv": "output/divert_day2_noimport_interactive.csv",
+      "row_count": 721
+    },
+    {
+      "id": "divert_day2_nowaste",
+      "title": "Divert: Day 2 (nowaste)",
+      "category": "divert",
+      "profile": "interactive",
+      "peers": [
+        "evse-001"
+      ],
+      "source": "data/scenarios/divert_day2_nowaste.json",
+      "csv": "output/divert_day2_nowaste_interactive.csv",
+      "row_count": 721
+    },
+    {
+      "id": "divert_day3_default",
+      "title": "Divert: Day 3 (default)",
+      "category": "divert",
+      "profile": "interactive",
+      "peers": [
+        "evse-001"
+      ],
+      "source": "data/scenarios/divert_day3_default.json",
+      "csv": "output/divert_day3_default_interactive.csv",
+      "row_count": 721
+    },
+    {
+      "id": "divert_day3_grid_ie_default",
+      "title": "Divert: Day 3 (Grid I/E) (default)",
+      "category": "divert",
+      "profile": "interactive",
+      "peers": [
+        "evse-001"
+      ],
+      "source": "data/scenarios/divert_day3_grid_ie_default.json",
+      "csv": "output/divert_day3_grid_ie_default_interactive.csv",
+      "row_count": 721
+    },
+    {
+      "id": "divert_day3_grid_ie_noimport",
+      "title": "Divert: Day 3 (Grid I/E) (noimport)",
+      "category": "divert",
+      "profile": "interactive",
+      "peers": [
+        "evse-001"
+      ],
+      "source": "data/scenarios/divert_day3_grid_ie_noimport.json",
+      "csv": "output/divert_day3_grid_ie_noimport_interactive.csv",
+      "row_count": 721
+    },
+    {
+      "id": "divert_day3_grid_ie_nowaste",
+      "title": "Divert: Day 3 (Grid I/E) (nowaste)",
+      "category": "divert",
+      "profile": "interactive",
+      "peers": [
+        "evse-001"
+      ],
+      "source": "data/scenarios/divert_day3_grid_ie_nowaste.json",
+      "csv": "output/divert_day3_grid_ie_nowaste_interactive.csv",
+      "row_count": 721
+    },
+    {
+      "id": "divert_day3_noimport",
+      "title": "Divert: Day 3 (noimport)",
+      "category": "divert",
+      "profile": "interactive",
+      "peers": [
+        "evse-001"
+      ],
+      "source": "data/scenarios/divert_day3_noimport.json",
+      "csv": "output/divert_day3_noimport_interactive.csv",
+      "row_count": 721
+    },
+    {
+      "id": "divert_day3_nowaste",
+      "title": "Divert: Day 3 (nowaste)",
+      "category": "divert",
+      "profile": "interactive",
+      "peers": [
+        "evse-001"
+      ],
+      "source": "data/scenarios/divert_day3_nowaste.json",
+      "csv": "output/divert_day3_nowaste_interactive.csv",
+      "row_count": 721
+    },
+    {
+      "id": "divert_solar_vrms_default",
+      "title": "Divert: Solar (Variable Vrms) (default)",
+      "category": "divert",
+      "profile": "interactive",
+      "peers": [
+        "evse-001"
+      ],
+      "source": "data/scenarios/divert_solar_vrms_default.json",
+      "csv": "output/divert_solar_vrms_default_interactive.csv",
+      "row_count": 721
+    },
+    {
+      "id": "divert_solar_vrms_noimport",
+      "title": "Divert: Solar (Variable Vrms) (noimport)",
+      "category": "divert",
+      "profile": "interactive",
+      "peers": [
+        "evse-001"
+      ],
+      "source": "data/scenarios/divert_solar_vrms_noimport.json",
+      "csv": "output/divert_solar_vrms_noimport_interactive.csv",
+      "row_count": 721
+    },
+    {
+      "id": "divert_solar_vrms_nowaste",
+      "title": "Divert: Solar (Variable Vrms) (nowaste)",
+      "category": "divert",
+      "profile": "interactive",
+      "peers": [
+        "evse-001"
+      ],
+      "source": "data/scenarios/divert_solar_vrms_nowaste.json",
+      "csv": "output/divert_solar_vrms_nowaste_interactive.csv",
+      "row_count": 721
+    },
+    {
+      "id": "loadsharing_2peer_basic",
+      "title": "Load Sharing 2 Peer Basic",
+      "category": "loadsharing",
+      "profile": "interactive",
+      "peers": [
+        "evse-001",
+        "evse-002"
+      ],
+      "source": "data/scenarios/loadsharing_2peer_basic.json",
+      "csv": "output/loadsharing_2peer_basic_interactive.csv",
+      "row_count": 11
+    },
+    {
+      "id": "loadsharing_3peer_staggered",
+      "title": "Load Sharing 3 Peer Staggered",
+      "category": "loadsharing",
+      "profile": "interactive",
+      "peers": [
+        "evse-001",
+        "evse-002",
+        "evse-003"
+      ],
+      "source": "data/scenarios/loadsharing_3peer_staggered.json",
+      "csv": "output/loadsharing_3peer_staggered_interactive.csv",
+      "row_count": 21
+    },
+    {
+      "id": "loadsharing_ev_limited",
+      "title": "Load Sharing EV Limited",
+      "category": "loadsharing",
+      "profile": "interactive",
+      "peers": [
+        "evse-001",
+        "evse-002"
+      ],
+      "source": "data/scenarios/loadsharing_ev_limited.json",
+      "csv": "output/loadsharing_ev_limited_interactive.csv",
+      "row_count": 11
+    },
+    {
+      "id": "loadsharing_ev_taper",
+      "title": "Load Sharing EV Taper",
+      "category": "loadsharing",
+      "profile": "interactive",
+      "peers": [
+        "evse-001"
+      ],
+      "source": "data/scenarios/loadsharing_ev_taper.json",
+      "csv": "output/loadsharing_ev_taper_interactive.csv",
+      "row_count": 121
+    },
+    {
+      "id": "loadsharing_failsafe_disable",
+      "title": "Load Sharing Failsafe Disable",
+      "category": "loadsharing",
+      "profile": "interactive",
+      "peers": [
+        "evse-001",
+        "evse-002"
+      ],
+      "source": "data/scenarios/loadsharing_failsafe_disable.json",
+      "csv": "output/loadsharing_failsafe_disable_interactive.csv",
+      "row_count": 41
+    },
+    {
+      "id": "loadsharing_insufficient",
+      "title": "Load Sharing Insufficient",
+      "category": "loadsharing",
+      "profile": "interactive",
+      "peers": [
+        "evse-001",
+        "evse-002",
+        "evse-003",
+        "evse-004"
+      ],
+      "source": "data/scenarios/loadsharing_insufficient.json",
+      "csv": "output/loadsharing_insufficient_interactive.csv",
+      "row_count": 11
+    },
+    {
+      "id": "loadsharing_longrun_2peer_handoff",
+      "title": "Load Sharing Longrun 2 Peer Handoff",
+      "category": "loadsharing",
+      "profile": "interactive",
+      "peers": [
+        "evse-001",
+        "evse-002"
+      ],
+      "source": "data/scenarios/loadsharing_longrun_2peer_handoff.json",
+      "csv": "output/loadsharing_longrun_2peer_handoff_interactive.csv",
+      "row_count": 901
+    },
+    {
+      "id": "loadsharing_peer_offline",
+      "title": "Load Sharing Peer Offline",
+      "category": "loadsharing",
+      "profile": "interactive",
+      "peers": [
+        "evse-001",
+        "evse-002"
+      ],
+      "source": "data/scenarios/loadsharing_peer_offline.json",
+      "csv": "output/loadsharing_peer_offline_interactive.csv",
+      "row_count": 41
+    },
+    {
+      "id": "loadsharing_variable_supply",
+      "title": "Load Sharing Variable Supply",
+      "category": "loadsharing",
+      "profile": "interactive",
+      "peers": [
+        "evse-001",
+        "evse-002"
+      ],
+      "source": "data/scenarios/loadsharing_variable_supply.json",
+      "csv": "output/loadsharing_variable_supply_interactive.csv",
+      "row_count": 101
+    },
+    {
+      "id": "shaper_data_shaper_10000w",
+      "title": "Shaper: Data Shaper (10000w)",
+      "category": "shaper",
+      "profile": "interactive",
+      "peers": [
+        "evse-001"
+      ],
+      "source": "data/scenarios/shaper_data_shaper_10000w.json",
+      "csv": "output/shaper_data_shaper_10000w_interactive.csv",
+      "row_count": 1441
+    },
+    {
+      "id": "shaper_data_shaper_3000w",
+      "title": "Shaper: Data Shaper (3000w)",
+      "category": "shaper",
+      "profile": "interactive",
+      "peers": [
+        "evse-001"
+      ],
+      "source": "data/scenarios/shaper_data_shaper_3000w.json",
+      "csv": "output/shaper_data_shaper_3000w_interactive.csv",
+      "row_count": 1441
+    },
+    {
+      "id": "shaper_data_shaper_5000w",
+      "title": "Shaper: Data Shaper (5000w)",
+      "category": "shaper",
+      "profile": "interactive",
+      "peers": [
+        "evse-001"
+      ],
+      "source": "data/scenarios/shaper_data_shaper_5000w.json",
+      "csv": "output/shaper_data_shaper_5000w_interactive.csv",
+      "row_count": 1441
+    },
+    {
+      "id": "shaper_data_shaper_8000w",
+      "title": "Shaper: Data Shaper (8000w)",
+      "category": "shaper",
+      "profile": "interactive",
+      "peers": [
+        "evse-001"
+      ],
+      "source": "data/scenarios/shaper_data_shaper_8000w.json",
+      "csv": "output/shaper_data_shaper_8000w_interactive.csv",
+      "row_count": 1441
+    },
+    {
+      "id": "shaper_data_shaper_aggressive",
+      "title": "Shaper: Data Shaper (aggressive)",
+      "category": "shaper",
+      "profile": "interactive",
+      "peers": [
+        "evse-001"
+      ],
+      "source": "data/scenarios/shaper_data_shaper_aggressive.json",
+      "csv": "output/shaper_data_shaper_aggressive_interactive.csv",
+      "row_count": 1441
+    },
+    {
+      "id": "shaper_data_shaper_conservative",
+      "title": "Shaper: Data Shaper (conservative)",
+      "category": "shaper",
+      "profile": "interactive",
+      "peers": [
+        "evse-001"
+      ],
+      "source": "data/scenarios/shaper_data_shaper_conservative.json",
+      "csv": "output/shaper_data_shaper_conservative_interactive.csv",
+      "row_count": 1441
+    },
+    {
+      "id": "shaper_data_shaper_default",
+      "title": "Shaper: Data Shaper (default)",
+      "category": "shaper",
+      "profile": "interactive",
+      "peers": [
+        "evse-001"
+      ],
+      "source": "data/scenarios/shaper_data_shaper_default.json",
+      "csv": "output/shaper_data_shaper_default_interactive.csv",
+      "row_count": 1441
+    },
+    {
+      "id": "shaper_data_shaper_maxinterval_120s",
+      "title": "Shaper: Data Shaper (maxinterval_120s)",
+      "category": "shaper",
+      "profile": "interactive",
+      "peers": [
+        "evse-001"
+      ],
+      "source": "data/scenarios/shaper_data_shaper_maxinterval_120s.json",
+      "csv": "output/shaper_data_shaper_maxinterval_120s_interactive.csv",
+      "row_count": 1441
+    },
+    {
+      "id": "shaper_data_shaper_maxinterval_30s",
+      "title": "Shaper: Data Shaper (maxinterval_30s)",
+      "category": "shaper",
+      "profile": "interactive",
+      "peers": [
+        "evse-001"
+      ],
+      "source": "data/scenarios/shaper_data_shaper_maxinterval_30s.json",
+      "csv": "output/shaper_data_shaper_maxinterval_30s_interactive.csv",
+      "row_count": 1441
+    },
+    {
+      "id": "shaper_data_shaper_minpause_600s",
+      "title": "Shaper: Data Shaper (minpause_600s)",
+      "category": "shaper",
+      "profile": "interactive",
+      "peers": [
+        "evse-001"
+      ],
+      "source": "data/scenarios/shaper_data_shaper_minpause_600s.json",
+      "csv": "output/shaper_data_shaper_minpause_600s_interactive.csv",
+      "row_count": 1441
+    },
+    {
+      "id": "shaper_data_shaper_minpause_60s",
+      "title": "Shaper: Data Shaper (minpause_60s)",
+      "category": "shaper",
+      "profile": "interactive",
+      "peers": [
+        "evse-001"
+      ],
+      "source": "data/scenarios/shaper_data_shaper_minpause_60s.json",
+      "csv": "output/shaper_data_shaper_minpause_60s_interactive.csv",
+      "row_count": 1441
+    },
+    {
+      "id": "shaper_data_shaper_smoothing_120s",
+      "title": "Shaper: Data Shaper (smoothing_120s)",
+      "category": "shaper",
+      "profile": "interactive",
+      "peers": [
+        "evse-001"
+      ],
+      "source": "data/scenarios/shaper_data_shaper_smoothing_120s.json",
+      "csv": "output/shaper_data_shaper_smoothing_120s_interactive.csv",
+      "row_count": 1441
+    },
+    {
+      "id": "shaper_data_shaper_smoothing_30s",
+      "title": "Shaper: Data Shaper (smoothing_30s)",
+      "category": "shaper",
+      "profile": "interactive",
+      "peers": [
+        "evse-001"
+      ],
+      "source": "data/scenarios/shaper_data_shaper_smoothing_30s.json",
+      "csv": "output/shaper_data_shaper_smoothing_30s_interactive.csv",
+      "row_count": 1441
+    },
+    {
+      "id": "shaper_data_shaper_threephase",
+      "title": "Shaper: Data Shaper (threephase)",
+      "category": "shaper",
+      "profile": "interactive",
+      "peers": [
+        "evse-001"
+      ],
+      "source": "data/scenarios/shaper_data_shaper_threephase.json",
+      "csv": "output/shaper_data_shaper_threephase_interactive.csv",
+      "row_count": 1441
+    },
+    {
+      "id": "shaper_data_shaper_very_high_power",
+      "title": "Shaper: Data Shaper (very_high_power)",
+      "category": "shaper",
+      "profile": "interactive",
+      "peers": [
+        "evse-001"
+      ],
+      "source": "data/scenarios/shaper_data_shaper_very_high_power.json",
+      "csv": "output/shaper_data_shaper_very_high_power_interactive.csv",
+      "row_count": 1441
+    },
+    {
+      "id": "shaper_data_shaper_very_low_power",
+      "title": "Shaper: Data Shaper (very_low_power)",
+      "category": "shaper",
+      "profile": "interactive",
+      "peers": [
+        "evse-001"
+      ],
+      "source": "data/scenarios/shaper_data_shaper_very_low_power.json",
+      "csv": "output/shaper_data_shaper_very_low_power_interactive.csv",
+      "row_count": 1441
+    }
+  ]
+}

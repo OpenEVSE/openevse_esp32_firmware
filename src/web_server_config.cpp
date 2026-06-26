@@ -12,6 +12,8 @@ typedef const __FlashStringHelper *fstr_t;
 #include "espal.h"
 #include "input.h"
 #include "event.h"
+#include "loadsharing_types.h"
+#include <vector>
 
 extern bool isPositive(MongooseHttpServerRequest *request, const char *param);
 extern bool web_server_config_deserialise(DynamicJsonDocument &doc, bool factory);
@@ -43,6 +45,92 @@ handleConfigPost(MongooseHttpServerRequest *request, MongooseHttpServerResponseS
   DeserializationError error = deserializeJson(doc, body.c_str(), body.length());
   if(!error)
   {
+    // If this device is a member, check if this is a controller config push
+    // or a local request trying to change load sharing fields
+    if (loadSharingGroupState.isMember()) {
+      bool isControllerPush = doc.containsKey("loadsharing_role") &&
+                              doc["loadsharing_role"].as<String>() == "member";
+      if (!isControllerPush) {
+        // Strip out any loadsharing fields from the request - members can't change them locally
+        JsonObject obj = doc.as<JsonObject>();
+        std::vector<String> keysToRemove;
+        for (JsonObject::iterator it = obj.begin(); it != obj.end(); ++it) {
+          String key = it->key().c_str();
+          if (key.startsWith("loadsharing_")) {
+            keysToRemove.push_back(key);
+          }
+        }
+        for (const auto& key : keysToRemove) {
+          obj.remove(key);
+        }
+      }
+    }
+
+    // If this is a config push that sets role=member, handle the role transition
+    if (doc.containsKey("loadsharing_role") &&
+        doc["loadsharing_role"].as<String>() == "member" &&
+        doc.containsKey("loadsharing_controller_host")) {
+      String controllerHost = doc["loadsharing_controller_host"].as<String>();
+      loadSharingGroupState.becomeMember(controllerHost);
+    }
+
+    // If this is a config push that resets the role (member removal)
+    if (doc.containsKey("loadsharing_role") &&
+        doc["loadsharing_role"].as<String>() == "" &&
+        loadSharingGroupState.isMember()) {
+      loadSharingGroupState.resetRole();
+    }
+
+    // Validate load sharing config ranges
+    if (doc.containsKey("loadsharing_group_max_current")) {
+      double val = doc["loadsharing_group_max_current"].as<double>();
+      if (val < 0) {
+        response->setCode(400);
+        response->print("{\"msg\":\"loadsharing_group_max_current must be >= 0\"}");
+        return;
+      }
+    }
+    if (doc.containsKey("loadsharing_safety_factor")) {
+      double val = doc["loadsharing_safety_factor"].as<double>();
+      if (val < 0.0 || val > 1.0) {
+        response->setCode(400);
+        response->print("{\"msg\":\"loadsharing_safety_factor must be between 0.0 and 1.0\"}");
+        return;
+      }
+    }
+    if (doc.containsKey("loadsharing_heartbeat_timeout")) {
+      uint32_t val = doc["loadsharing_heartbeat_timeout"].as<uint32_t>();
+      if (val < 5 || val > 600) {
+        response->setCode(400);
+        response->print("{\"msg\":\"loadsharing_heartbeat_timeout must be between 5 and 600 seconds\"}");
+        return;
+      }
+    }
+    if (doc.containsKey("loadsharing_failsafe_safe_current")) {
+      double val = doc["loadsharing_failsafe_safe_current"].as<double>();
+      if (val < 0 || val > 80) {
+        response->setCode(400);
+        response->print("{\"msg\":\"loadsharing_failsafe_safe_current must be between 0 and 80 amps\"}");
+        return;
+      }
+    }
+    if (doc.containsKey("loadsharing_failsafe_peer_assumed_current")) {
+      double val = doc["loadsharing_failsafe_peer_assumed_current"].as<double>();
+      if (val < 0 || val > 80) {
+        response->setCode(400);
+        response->print("{\"msg\":\"loadsharing_failsafe_peer_assumed_current must be between 0 and 80 amps\"}");
+        return;
+      }
+    }
+    if (doc.containsKey("loadsharing_failsafe_mode")) {
+      String val = doc["loadsharing_failsafe_mode"].as<String>();
+      if (val != "safe_current" && val != "disable") {
+        response->setCode(400);
+        response->print("{\"msg\":\"loadsharing_failsafe_mode must be 'safe_current' or 'disable'\"}");
+        return;
+      }
+    }
+
     // Update WiFi module config
     MongooseString storage = request->headers("X-Storage");
     if(storage.equals("factory") && config_factory_write_lock())

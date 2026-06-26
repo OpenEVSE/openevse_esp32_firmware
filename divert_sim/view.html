@@ -1,86 +1,169 @@
 <!DOCTYPE html>
 <html>
-
 <head>
-  <title>OpenEVSE Simulations Results</title>
-  <script type="text/javascript" src="https://canvasjs.com/assets/script/jquery-1.11.1.min.js"></script>
-  <script type="text/javascript" src="https://canvasjs.com/assets/script/canvasjs.min.js"></script>
-  <script type="text/javascript" src="https://cdnjs.cloudflare.com/ajax/libs/moment.js/2.24.0/moment.min.js"></script>
-  <script type="text/javascript" src="simulations.js"></script>
-  <script type="text/javascript">
-    var divert_profiles = [
-      "master",
-      "default",
-      "noimport",
-      "nowaste"
-    ];
-
-    var shaper_profiles = [
-      "default",
-      "3000w",
-      "5000w",
-      "8000w",
-      "10000w",
-      "smoothing_30s",
-      "smoothing_120s",
-      "minpause_60s",
-      "minpause_600s",
-      "maxinterval_30s",
-      "maxinterval_120s",
-      "aggressive",
-      "conservative",
-      "very_low_power",
-      "very_high_power",
-      "threephase"
-    ];
-
-    window.onload = function () {
-      init_summary(divert_profiles, shaper_profiles);
-      loadSummary("output/summary_divert_master.csv", () => {
-        loadSummary("output/summary_divert.csv", () => {
-          loadSummary("output/summary_shaper.csv", () => {
-            loadSummary("output/summary_shaper_master.csv", () => {
-              generate_summary_table(divert_profiles, shaper_profiles);
-            });
-          });
-        });
-      });
-    }
-  </script>
-  <link rel="stylesheet" href="https://maxcdn.bootstrapcdn.com/bootstrap/3.3.6/css/bootstrap.min.css" />
+  <meta charset="utf-8" />
+  <title>OpenEVSE Simulations</title>
+  <script src="https://canvasjs.com/assets/script/canvasjs.min.js"></script>
+  <script src="simulations.js?v=20260605a"></script>
   <link rel="stylesheet" href="simulations.css" />
 </head>
-
 <body>
-  <h1>OpenEVSE Simulations Results</h1>
+  <h1>OpenEVSE Simulations</h1>
+  <p><a href="interactive.html">Interactive mode</a></p>
 
-  <a href="interactive.html">Interactive Simulations</a>
-
-  <div style="margin: 20px 0;">
-    <label><input type="checkbox" id="show_divert" checked onchange="toggleCharts()"> Show Divert Simulations</label>
-    <label style="margin-left: 20px;"><input type="checkbox" id="show_shaper" checked onchange="toggleCharts()"> Show Shaper Simulations</label>
+  <div class="tab-controls">
+    <label for="profile">Profiles:</label>
+    <select id="profile" multiple size="5">
+      <option value="">loading...</option>
+    </select>
+    <button id="profiles-all" type="button">Select All</button>
+    <button id="profiles-clear" type="button">Clear</button>
+    <button id="refresh">Load</button>
   </div>
+  <div id="profile-solo" class="profile-solo"></div>
 
-  <h2>Summary</h2>
-  <div id="summary_table">
-  </div>
+  <div class="tabs" id="tabs"></div>
 
-  <script type="text/javascript">
+  <div id="status"></div>
+  <div id="content"></div>
 
-    for (const dataset of divert_datasets) {
-      for (const profile of divert_profiles) {
-        var id = generate_chart(dataset, profile);
-        loadChart(id, "output/" + id + ".csv", dataset.title + " (" + profile + ")", dataset.class);
+  <script>
+    let activeCategory = "divert";
+
+    function getSelectedProfiles() {
+      const select = document.getElementById("profile");
+      return Array.from(select.selectedOptions).map((o) => o.value).filter(Boolean);
+    }
+
+    function renderSoloButtons(profiles) {
+      const solo = document.getElementById("profile-solo");
+      solo.innerHTML = "";
+      if (!profiles.length) {
+        return;
+      }
+
+      const label = document.createElement("span");
+      label.textContent = "Solo:";
+      solo.appendChild(label);
+
+      profiles.forEach((p) => {
+        const btn = document.createElement("button");
+        btn.type = "button";
+        btn.textContent = p;
+        btn.addEventListener("click", async () => {
+          const select = document.getElementById("profile");
+          Array.from(select.options).forEach((opt) => {
+            opt.selected = opt.value === p;
+          });
+          await refresh();
+        });
+        solo.appendChild(btn);
+      });
+    }
+
+    async function repopulateProfilesForCategory(previousProfiles = []) {
+      const select = document.getElementById("profile");
+      const profiles = await fetchProfilesForCategory(activeCategory);
+      select.innerHTML = "";
+
+      if (profiles.length === 0) {
+        select.innerHTML = '<option value="">none</option>';
+        renderSoloButtons([]);
+        return;
+      }
+
+      profiles.forEach((p) => {
+        const opt = document.createElement("option");
+        opt.value = p;
+        opt.textContent = p;
+        opt.selected = previousProfiles.includes(p);
+        select.appendChild(opt);
+      });
+
+      // Default to all selected for side-by-side comparison.
+      const hasSelection = Array.from(select.options).some((o) => o.selected);
+      if (!hasSelection) {
+        Array.from(select.options).forEach((o) => {
+          o.selected = true;
+        });
+      }
+
+      renderSoloButtons(profiles);
+    }
+
+    async function setActiveTab(category, categories) {
+      const previousProfiles = getSelectedProfiles();
+      activeCategory = category;
+      const tabs = document.getElementById("tabs");
+      Array.from(tabs.querySelectorAll("button")).forEach((button) => {
+        button.classList.toggle("active", button.dataset.category === category);
+      });
+      await repopulateProfilesForCategory(previousProfiles);
+      await refresh();
+    }
+
+    function renderTabs(categories) {
+      const tabs = document.getElementById("tabs");
+      tabs.innerHTML = "";
+      categories.forEach((category) => {
+        const button = document.createElement("button");
+        button.type = "button";
+        button.dataset.category = category;
+        button.textContent = category === "loadsharing" ? "Load Sharing" :
+          category.charAt(0).toUpperCase() + category.slice(1);
+        button.classList.toggle("active", category === activeCategory);
+        button.addEventListener("click", () => setActiveTab(category, categories));
+        tabs.appendChild(button);
+      });
+      if (!categories.includes(activeCategory) && categories.length > 0) {
+        activeCategory = categories[0];
       }
     }
-    for (const dataset of shaper_datasets) {
-      for (const profile of shaper_profiles) {
-        var id = generate_chart(dataset, profile);
-        loadChart(id, "output/" + id + ".csv", dataset.title + " (" + profile + ")", dataset.class);
+
+    async function initProfiles() {
+      const status = document.getElementById("status");
+      try {
+        const categories = await fetchCategories();
+        if (categories.length > 0 && !categories.includes(activeCategory)) {
+          activeCategory = categories[0];
+        }
+        renderTabs(categories);
+        await repopulateProfilesForCategory([]);
+        status.textContent = "";
+      } catch (err) {
+        status.textContent = String(err);
       }
     }
+
+    async function refresh() {
+      const profiles = getSelectedProfiles();
+      const status = document.getElementById("status");
+      try {
+        status.textContent = "";
+        await renderCategory("content", activeCategory, profiles);
+      } catch (err) {
+        status.textContent = String(err);
+      }
+    }
+
+    document.getElementById("profiles-all").addEventListener("click", async () => {
+      const select = document.getElementById("profile");
+      Array.from(select.options).forEach((o) => {
+        o.selected = true;
+      });
+      await refresh();
+    });
+
+    document.getElementById("profiles-clear").addEventListener("click", async () => {
+      const select = document.getElementById("profile");
+      Array.from(select.options).forEach((o) => {
+        o.selected = false;
+      });
+      await refresh();
+    });
+
+    document.getElementById("refresh").addEventListener("click", refresh);
+    initProfiles().then(refresh);
   </script>
-
 </body>
-
 </html>

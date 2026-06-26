@@ -48,6 +48,7 @@ typedef const __FlashStringHelper *fstr_t;
 #include "home_battery.h"
 #include "evse_man.h"
 #include "limit.h"
+#include "loadsharing_types.h"
 
 MongooseHttpServer server;          // Create class for Web server
 MongooseHttpServer redirect;        // Server to redirect to HTTPS if enabled
@@ -279,8 +280,8 @@ void buildStatus(DynamicJsonDocument &doc) {
   doc["nogndcount"] = evse.getFaultCountNoGround();
   doc["stuckcount"] = evse.getFaultCountStuckRelay();
 
-  doc["solar"] = solar;
-  doc["grid_ie"] = grid_ie;
+  doc["solar"] = divert.getSolar();
+  doc["grid_ie"] = divert.getGridIe();
   doc["charge_rate"] = divert.getChargeRate();
   doc["divert_update"] = (millis() - divert.getLastUpdate()) / 1000;
   doc["divert_active"] = divert.isActive();
@@ -502,7 +503,8 @@ void handleStatusPost(MongooseHttpServerRequest *request, MongooseHttpServerResp
       DBUGF("shaper: live power:%dW", shaper.getLivePwr());
     }
     if(doc.containsKey("solar")) {
-      solar = doc["solar"];
+      int solar = doc["solar"];
+      divert.setSolar(solar);
       DBUGF("solar:%dW", solar);
       divert.update_state();
       // recalculate shaper
@@ -512,7 +514,8 @@ void handleStatusPost(MongooseHttpServerRequest *request, MongooseHttpServerResp
       send_event = false; // Divert sends the event so no need to send here
     }
     else if(doc.containsKey("grid_ie")) {
-      grid_ie = doc["grid_ie"];
+      int grid_ie = doc["grid_ie"];
+      divert.setGridIe(grid_ie);
       DBUGF("grid:%dW", grid_ie);
       divert.update_state();
       // recalculate shaper
@@ -1209,7 +1212,7 @@ void handleHttpsRedirect(MongooseHttpServerRequest *request)
 void onWsFrame(MongooseHttpWebSocketConnection *connection, int flags, uint8_t *data, size_t len)
 {
   DBUGF("Got message %.*s", len, (const char *)data);
-  const size_t capacity = JSON_OBJECT_SIZE(1) + 16;
+  const size_t capacity = JSON_OBJECT_SIZE(3) + JSON_OBJECT_SIZE(2) + 128;
   DynamicJsonDocument doc(capacity);
   DeserializationError error = deserializeJson(doc, data, len);
   if (!error) {
@@ -1217,8 +1220,36 @@ void onWsFrame(MongooseHttpWebSocketConnection *connection, int flags, uint8_t *
       {
         // answer pong
         connection->send("{\"pong\": 1}");
-
       }
+
+    // Handle load sharing allocation from controller (member side)
+    if (doc.containsKey("loadsharing")) {
+      JsonObject ls = doc["loadsharing"];
+      if (ls.containsKey("target_current")) {
+        double targetCurrent = ls["target_current"].as<double>();
+        String reason = ls.containsKey("reason") ? ls["reason"].as<String>() : "allocation";
+
+        DBUGF("LoadSharing: Received allocation %.1fA (reason: %s)", targetCurrent, reason.c_str());
+
+        if (loadSharingGroupState.isMember()) {
+          loadSharingGroupState.recordAllocationReceived();
+          if (targetCurrent > 0) {
+            EvseProperties props;
+            props.setMaxCurrent((uint32_t)targetCurrent);
+            props.setState(EvseState::None);
+            evse.claim(EvseClient_OpenEVSE_LoadSharing, EvseManager_Priority_Limit, props);
+          } else if (reason != "idle") {
+            // Active allocation of 0 means disable
+            EvseProperties props;
+            props.setState(EvseState::Disabled);
+            evse.claim(EvseClient_OpenEVSE_LoadSharing, EvseManager_Priority_Limit, props);
+          } else {
+            // No demand - release claim
+            evse.release(EvseClient_OpenEVSE_LoadSharing);
+          }
+        }
+      }
+    }
   }
 }
 
@@ -1410,6 +1441,9 @@ void web_server_setup()
     onConnect(onWsConnect);
 
   server.onNotFound(handleNotFound);
+
+  // Setup load sharing endpoints
+  web_server_load_sharing_setup();
 
   DEBUG.println("Server started");
 }

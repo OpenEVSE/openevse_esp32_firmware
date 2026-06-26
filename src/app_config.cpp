@@ -170,6 +170,21 @@ long max_current_soft;
 // Scheduler settings
 uint32_t scheduler_start_window;
 
+// Load Sharing settings
+bool loadsharing_enabled;
+String loadsharing_group_id;
+double loadsharing_group_max_current;
+double loadsharing_safety_factor;
+uint32_t loadsharing_heartbeat_timeout;
+String loadsharing_failsafe_mode;
+double loadsharing_failsafe_safe_current;
+double loadsharing_failsafe_peer_assumed_current;
+uint32_t loadsharing_priority;
+uint32_t loadsharing_config_version;
+uint32_t loadsharing_config_updated_at;
+String loadsharing_role;
+String loadsharing_controller_host;
+
 String esp_hostname_default = "openevse-"+ESPAL.getShortId();
 
 void config_changed(String name);
@@ -299,6 +314,21 @@ ConfigOpt *opts[] =
 // LED brightness
   new ConfigOptDefinition<uint8_t>(led_brightness, LED_DEFAULT_BRIGHTNESS, "led_brightness", "lb"),
 #endif
+
+// Load Sharing settings
+  new ConfigOptDefinition<bool>(loadsharing_enabled, false, "loadsharing_enabled", "lse"),
+  new ConfigOptDefinition<String>(loadsharing_group_id, "", "loadsharing_group_id", "lsgi"),
+  new ConfigOptDefinition<double>(loadsharing_group_max_current, 0.0, "loadsharing_group_max_current", "lsgmc"),
+  new ConfigOptDefinition<double>(loadsharing_safety_factor, 1.0, "loadsharing_safety_factor", "lssf"),
+  new ConfigOptDefinition<uint32_t>(loadsharing_heartbeat_timeout, 30, "loadsharing_heartbeat_timeout", "lsht"),
+  new ConfigOptDefinition<String>(loadsharing_failsafe_mode, "safe_current", "loadsharing_failsafe_mode", "lsfm"),
+  new ConfigOptDefinition<double>(loadsharing_failsafe_safe_current, 6.0, "loadsharing_failsafe_safe_current", "lsfsc"),
+  new ConfigOptDefinition<double>(loadsharing_failsafe_peer_assumed_current, 6.0, "loadsharing_failsafe_peer_assumed_current", "lsfpac"),
+  new ConfigOptDefinition<uint32_t>(loadsharing_priority, 0, "loadsharing_priority", "lsp"),
+  new ConfigOptDefinition<uint32_t>(loadsharing_config_version, 0, "loadsharing_config_version", "lscv"),
+  new ConfigOptDefinition<uint32_t>(loadsharing_config_updated_at, 0, "loadsharing_config_updated_at", "lscua"),
+  new ConfigOptDefinition<String>(loadsharing_role, "", "loadsharing_role", "lsr"),
+  new ConfigOptDefinition<String>(loadsharing_controller_host, "", "loadsharing_controller_host", "lsch"),
 
 // Scheduler options
   new ConfigOptDefinition<uint32_t>(scheduler_start_window, SCHEDULER_DEFAULT_START_WINDOW, "scheduler_start_window", "ssw"),

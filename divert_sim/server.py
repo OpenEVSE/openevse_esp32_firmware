@@ -1,84 +1,64 @@
-"""
-Simple HTTP server to run dynamic simulations and view results.
-"""
+#!/usr/bin/env python3
+"""HTTP server for interactive scenario execution and viewer assets."""
+
+from __future__ import annotations
 
 import http.server
+import json
+import os
 import socketserver
-import simplejson as json
+from pathlib import Path
 
-from run_simulations import run_simulation, setup_summary
+from run_simulations import build_index
 
-class MyHttpRequestHandler(http.server.SimpleHTTPRequestHandler):
-    """
-    This class will handles any incoming request from the browser
-    """
-    def do_GET(self):
-        if self.path == '/':
-            self.path = 'view.html'
+
+ROOT = Path(__file__).resolve().parent
+PORT = 8000
+
+# Always serve files relative to divert_sim/, regardless of where server.py is launched.
+os.chdir(ROOT)
+
+
+class ReusableTCPServer(socketserver.TCPServer):
+    allow_reuse_address = True
+
+
+class SimRequestHandler(http.server.SimpleHTTPRequestHandler):
+    def do_GET(self) -> None:  # noqa: N802
+        if self.path == "/":
+            self.path = "/view.html"
         return http.server.SimpleHTTPRequestHandler.do_GET(self)
 
-    def do_POST(self):
-        content_length = int(self.headers['Content-Length']) # <--- Gets the size of data
-        post_data = self.rfile.read(content_length) # <--- Gets the data itself
-        self.send_response(200)
-        self.end_headers()
+    def do_POST(self) -> None:  # noqa: N802
+        if self.path not in ("/simulation", "/simulation/"):
+            self.send_error(404, "Unknown endpoint")
+            return
+
+        length = int(self.headers.get("Content-Length", "0"))
+        raw = self.rfile.read(length)
 
         try:
-          config = json.loads(post_data)
-        except ValueError as e:
-          config = {}
-        print("{}".format(config))
+            overrides = json.loads(raw.decode("utf-8")) if raw else {}
+            if not isinstance(overrides, dict):
+                overrides = {}
+        except ValueError:
+            overrides = {}
 
-        # Run the simulation
-        setup_summary('_interactive')
-        run_simulation('almostperfect', 'almostperfect_interactive',
-                    solar_col=1, config=json.dumps(config))
+        index = build_index(
+            config_overrides=overrides,
+            profile_suffix="interactive",
+            index_name="interactive.json",
+        )
 
-        run_simulation('CloudyMorning', 'CloudyMorning_interactive',
-                    solar_col=1, config=json.dumps(config))
-
-        run_simulation('day1', 'day1_interactive',
-                    solar_col=1, config=json.dumps(config))
-
-        run_simulation('day2', 'day2_interactive',
-                    solar_col=1, config=json.dumps(config))
-
-        run_simulation('day3', 'day3_interactive',
-                    solar_col=1, config=json.dumps(config))
-
-        run_simulation('day1_grid_ie', 'day1_grid_ie_interactive',
-                    solar_col=1, grid_ie_col=2, config=json.dumps(config))
-
-        run_simulation('day2_grid_ie', 'day2_grid_ie_interactive',
-                    solar_col=1, grid_ie_col=2, config=json.dumps(config))
-
-        run_simulation('day3_grid_ie', 'day3_grid_ie_interactive',
-                    solar_col=1, grid_ie_col=2, config=json.dumps(config))
-
-        run_simulation('solar-vrms', 'solar-vrms_interactive',
-                    solar_col=1, voltage_col=2, config=json.dumps(config))
-
-        run_simulation('Energy_and_Power_Day_2020-03-22', 'Energy_and_Power_Day_2020-03-22_interactive',
-                    solar_col=1, separator=';', is_kw=True, config=json.dumps(config))
-
-        run_simulation('Energy_and_Power_Day_2020-03-31', 'Energy_and_Power_Day_2020-03-31_interactive',
-                    solar_col=1, separator=';', is_kw=True, config=json.dumps(config))
-
-        run_simulation('Energy_and_Power_Day_2020-04-01', 'Energy_and_Power_Day_2020-04-01_interactive',
-                    solar_col=1, separator=';', is_kw=True, config=json.dumps(config))
-
-        run_simulation('data_shaper', 'data_shaper_interactive',
-                    live_power_col=1, separator=';', config=json.dumps(config))
-
-        self.wfile.write("OK".encode('utf-8'))
+        payload = json.dumps(index).encode("utf-8")
+        self.send_response(200)
+        self.send_header("Content-Type", "application/json")
+        self.send_header("Content-Length", str(len(payload)))
+        self.end_headers()
+        self.wfile.write(payload)
 
 
-# Create an object of the above class
-handler_object = MyHttpRequestHandler
-
-PORT = 8000
-my_server = socketserver.TCPServer(("", PORT), handler_object)
-
-# Start the server
-print("Server started at localhost:" + str(PORT))
-my_server.serve_forever()
+if __name__ == "__main__":
+    with ReusableTCPServer(("", PORT), SimRequestHandler) as server:
+        print(f"Server started at http://localhost:{PORT}")
+        server.serve_forever()
