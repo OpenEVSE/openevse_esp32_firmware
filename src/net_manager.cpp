@@ -51,6 +51,7 @@ NetManagerTask::NetManagerTask(LcdTask &lcd, LedManagerTask &led, TimeManager &t
   _apClients(0),
   _state(NetState::Starting),
   _ipaddress(""),
+  _ipv6address(""),
   _macaddress(""),
   _clientDisconnects(0),
   _clientRetry(false),
@@ -171,6 +172,13 @@ void NetManagerTask::wifiClientConnect()
   WiFi.setSleep(WIFI_PS_NONE);
   WiFi.setScanMethod(WIFI_ALL_CHANNEL_SCAN);
   WiFi.setSortMethod(WIFI_CONNECT_AP_BY_SIGNAL);
+#if defined(ESP32) && !defined(EPOXY_DUINO)
+#if ESP_ARDUINO_VERSION_MAJOR >= 3
+  WiFi.enableIPv6();
+#else
+  WiFi.enableIpV6();
+#endif
+#endif
   WiFi.begin(esid.c_str(), epass.c_str());
 
   _clientRetryTime = millis() + WIFI_CLIENT_RETRY_TIMEOUT;
@@ -462,6 +470,27 @@ void NetManagerTask::onNetEvent(WiFiEvent_t event, arduino_event_info_t &info)
       }
     } break;
 
+    case ARDUINO_EVENT_WIFI_STA_GOT_IP6:
+    {
+#if defined(ESP32) && !defined(EPOXY_DUINO)
+#if ESP_ARDUINO_VERSION_MAJOR >= 3
+      _ipv6address = WiFi.linkLocalIPv6().toString();
+#else
+      _ipv6address = WiFi.localIPv6().toString();
+#endif
+#endif
+      DBUGF("WiFi STA IPv6: %s", _ipv6address.c_str());
+
+      StaticJsonDocument<256> doc;
+      doc["wifi_client_connected"] = (int)net.isWifiClientConnected();
+      doc["eth_connected"] = (int)net.isWiredConnected();
+      doc["net_connected"] = (int)net.isWifiClientConnected();
+      doc["ipaddress"] = net.getIp();
+      doc["ipv6address"] = net.getIpv6();
+      doc["macaddress"] = net.getMac();
+      event_send(doc);
+    } break;
+
     case ARDUINO_EVENT_WIFI_AP_STACONNECTED:
     {
       auto& src = info.wifi_ap_staconnected;
@@ -509,6 +538,11 @@ void NetManagerTask::onNetEvent(WiFiEvent_t event, arduino_event_info_t &info)
       break;
     case ARDUINO_EVENT_ETH_CONNECTED:
       DBUGLN("ETH Connected");
+#if ESP_ARDUINO_VERSION_MAJOR >= 3
+      ETH.enableIPv6();
+#else
+      ETH.enableIpV6();
+#endif
       break;
     case ARDUINO_EVENT_ETH_GOT_IP:
       DBUG("ETH MAC: ");
@@ -525,6 +559,14 @@ void NetManagerTask::onNetEvent(WiFiEvent_t event, arduino_event_info_t &info)
       _macaddress = ETH.macAddress();
       _ethConnected = true;
       wifiStop();
+      break;
+    case ARDUINO_EVENT_ETH_GOT_IP6:
+#if ESP_ARDUINO_VERSION_MAJOR >= 3
+      _ipv6address = ETH.linkLocalIPv6().toString();
+#else
+      _ipv6address = ETH.localIPv6().toString();
+#endif
+      DBUGF("ETH IPv6: %s", _ipv6address.c_str());
       break;
     case ARDUINO_EVENT_ETH_DISCONNECTED:
       DBUGLN("ETH Disconnected");
