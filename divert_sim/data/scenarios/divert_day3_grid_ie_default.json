@@ -1,0 +1,54 @@
+{
+  "meta": {
+    "id": "divert_day3_grid_ie_default",
+    "title": "Divert: Day 3 (Grid I/E) (default)",
+    "category": "divert",
+    "profile": "default"
+  },
+  "simulation": {
+    "duration": 39000,
+    "tick_interval": 60,
+    "start_time": "2019-03-30T07:03:00Z"
+  },
+  "config": {
+    "divert_enabled": true,
+    "charge_mode": "eco",
+    "divert_type": 1,
+    "current_shaper_enabled": false,
+    "divert_PV_ratio": 1.1,
+    "divert_attack_smoothing_time": 20,
+    "divert_decay_smoothing_time": 600,
+    "divert_min_charge_time": 600
+  },
+  "peers": [
+    {
+      "id": "evse-001",
+      "voltage": 240,
+      "min_current": 6,
+      "max_current": 32,
+      "ev": {
+        "battery_capacity_kwh": 1000,
+        "initial_soc": 0,
+        "max_charge_rate_kw": 22
+      },
+      "initial": {
+        "online": true,
+        "vehicle": true
+      },
+      "inputs": {
+        "grid_ie": {
+          "csv": "../day3_grid_ie.csv",
+          "time_column": 0,
+          "column": 2,
+          "skip_header": true
+        },
+        "solar": {
+          "csv": "../day3_grid_ie.csv",
+          "time_column": 0,
+          "column": 1,
+          "skip_header": true
+        }
+      }
+    }
+  ]
+}

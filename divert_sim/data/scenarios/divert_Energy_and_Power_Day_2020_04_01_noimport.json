@@ -1,0 +1,50 @@
+{
+  "meta": {
+    "id": "divert_Energy_and_Power_Day_2020_04_01_noimport",
+    "title": "Divert: Energy and Power Day 2020-04-01 (noimport)",
+    "category": "divert",
+    "profile": "noimport"
+  },
+  "simulation": {
+    "duration": 86400,
+    "tick_interval": 60,
+    "start_time": "2020-01-01T00:00:00Z"
+  },
+  "config": {
+    "divert_enabled": true,
+    "charge_mode": "eco",
+    "divert_type": 0,
+    "current_shaper_enabled": false,
+    "divert_PV_ratio": 1.1,
+    "divert_attack_smoothing_time": 300,
+    "divert_decay_smoothing_time": 20,
+    "divert_min_charge_time": 600
+  },
+  "peers": [
+    {
+      "id": "evse-001",
+      "voltage": 240,
+      "min_current": 6,
+      "max_current": 32,
+      "ev": {
+        "battery_capacity_kwh": 1000,
+        "initial_soc": 0,
+        "max_charge_rate_kw": 22
+      },
+      "initial": {
+        "online": true,
+        "vehicle": true
+      },
+      "inputs": {
+        "solar": {
+          "csv": "../Energy_and_Power_Day_2020-04-01.csv",
+          "time_column": 0,
+          "column": 1,
+          "skip_header": true,
+          "separator": ";",
+          "kw": true
+        }
+      }
+    }
+  ]
+}

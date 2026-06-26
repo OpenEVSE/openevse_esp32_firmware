@@ -37,9 +37,6 @@
 
 // Default to normal charging unless set. Divert mode always defaults back to 1 if unit is reset (_mode not saved in EEPROM)
 
-int solar = 0;
-int grid_ie = 0;
-
 // define as 'weak' so the simulator can override
 time_t __attribute__((weak)) divertmode_get_time()
 {
@@ -57,7 +54,9 @@ DivertTask::DivertTask(EvseManager &evse) :
   _evseState(this),
   _available_current(0),
   _smoothed_available_current(0),
-  _min_charge_end(0)
+  _min_charge_end(0),
+  _solar(0),
+  _grid_ie(0)
 {
 
 }
@@ -150,11 +149,11 @@ void DivertTask::update_state()
 
   if (divert_type == DIVERT_TYPE_GRID)
   {
-    event["grid_ie"] = grid_ie;
+    event["grid_ie"] = _grid_ie;
   }
   else if (divert_type == DIVERT_TYPE_SOLAR)
   {
-    event["solar"] = solar;
+    event["solar"] = _solar;
   }
 
   // If divert mode = Eco (2)
@@ -174,7 +173,7 @@ void DivertTask::update_state()
       // If grid feeds is available and exporting (negative)
 
       DBUGVAR(voltage);
-      double Igrid_ie = (double)grid_ie / voltage;
+      double Igrid_ie = (double)_grid_ie / voltage;
       DBUGVAR(Igrid_ie);
 
       // Subtract the current charge the EV is using from the Grid IE
@@ -201,7 +200,7 @@ void DivertTask::update_state()
     {
       // if grid feed is not available: charge rate = solar generation
       DBUGVAR(voltage);
-      _available_current = (double)solar / voltage;
+      _available_current = (double)_solar / voltage;
     }
 
     if(_available_current < 0) {
