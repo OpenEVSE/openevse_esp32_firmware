@@ -20,12 +20,12 @@ Main components:
 ## Build
 
 ```bash
-pio run -e native_divert_sim
+pio run -e native_simulator
 ```
 
 This writes the simulator binary to:
 
-`../.pio/build/native_divert_sim/program`
+`../.pio/build/native_simulator/program`
 
 `run_simulations.py` and pytest will use that binary automatically. If you prefer,
 you can still provide a local `./divert_sim` binary.

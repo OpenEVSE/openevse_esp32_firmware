@@ -26,7 +26,7 @@ ROOT = Path(__file__).resolve().parent
 DATA_DIR = ROOT / "data"
 SCENARIO_DIR = DATA_DIR / "scenarios"
 OUTPUT_DIR = ROOT / "output"
-PIO_ENV = os.environ.get("DIVERT_SIM_PIO_ENV", "native_divert_sim")
+PIO_ENV = os.environ.get("DIVERT_SIM_PIO_ENV", "native_simulator")
 
 
 def resolve_binary() -> Path:
@@ -39,7 +39,7 @@ def resolve_binary() -> Path:
         return pio_binary
 
     raise FileNotFoundError(
-        "divert_sim binary not found. Build with `pio run -e native_divert_sim` "
+        "divert_sim binary not found. Build with `pio run -e native_simulator` "
         "(or set DIVERT_SIM_PIO_ENV) or provide ./divert_sim."
     )
 

@@ -69,6 +69,10 @@ void Peer::applyInputs(long t_sec)
     last_live_pwr_w = _scenario.live_pwr.valueAt(t_sec);
     _shaper.setLivePwr((int) last_live_pwr_w);
   }
+  if (!_scenario.vrms.empty()) {
+    double v = _scenario.vrms.valueAt(t_sec);
+    if (v >= 100 && v <= 300) _sim.voltage = (int) v;
+  }
 }
 
 void Peer::applyEvents(long t_sec)

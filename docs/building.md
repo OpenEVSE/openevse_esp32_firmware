@@ -84,9 +84,9 @@ doctest suite alongside it.
 Build the simulator with PlatformIO:
 
 ```bash
-pio run -e native_divert_sim
+pio run -e native_simulator
 ```
 
-This writes the binary to `.pio/build/native_divert_sim/program`. The
+This writes the binary to `.pio/build/native_simulator/program`. The
 `divert_sim` pytest suite uses that binary automatically (or `./divert_sim` if
 present).
