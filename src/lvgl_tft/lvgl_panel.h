@@ -12,5 +12,9 @@
 // which case no display is registered and the caller must NOT build any UI.
 bool lvgl_panel_begin();
 
+// Set the backlight brightness, 0..100%. Safe to call before lvgl_panel_begin()
+// (no-op until the LEDC channel is attached). Drives active vs. standby dimming.
+void lvgl_panel_set_backlight(uint8_t pct);
+
 #endif // ENABLE_SCREEN_LVGL_TFT
 #endif // __LVGL_PANEL_H
