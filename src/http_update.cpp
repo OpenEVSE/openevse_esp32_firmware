@@ -7,6 +7,7 @@
 #include "debug.h"
 #include "emonesp.h"
 #include "web_server.h"
+#include <espal.h>
 #include <MongooseHttpClient.h>
 #include <Update.h>
 
@@ -14,6 +15,11 @@ MongooseHttpClient client;
 static int lastPercent = -1;
 static size_t update_total_size = 0;
 static size_t update_position = 0;
+
+bool http_update_has_sufficient_heap()
+{
+  return ESPAL.getFreeHeap() >= HTTP_UPDATE_MIN_FREE_HEAP;
+}
 
 struct HttpUpdateRequestState
 {
@@ -58,7 +64,12 @@ bool http_update_from_url(String url,
       {
         size_t total = response->contentLength();
         DBUGVAR(total);
-        if(Update.isRunning() || http_update_start(url, total))
+        if(!Update.isRunning() && !http_update_has_sufficient_heap())
+        {
+          state->errorReported = true;
+          error(HTTP_UPDATE_ERROR_LOW_MEMORY);
+        }
+        else if(Update.isRunning() || http_update_start(url, total))
         {
           state->startedUpdate = true;
           uint8_t *data = (uint8_t *)response->body().c_str();
@@ -184,6 +195,18 @@ bool http_update_from_url(String url,
 
 bool http_update_start(String source, size_t total)
 {
+  // Last-resort guard — callers should already have checked this up front
+  // (so they can reject with a clear message before any data even starts
+  // flowing), but check again here since this is the one place every update
+  // path (multipart upload, URL fetch) converges on before Update.begin().
+  if(!http_update_has_sufficient_heap()) {
+    DEBUG_PORT.printf("Update Start rejected: free heap %u below %u minimum\n",
+      (unsigned)ESPAL.getFreeHeap(), (unsigned)HTTP_UPDATE_MIN_FREE_HEAP);
+    return false;
+  }
+
+  DEBUG_PORT.printf("Update Start: free heap %u\n", (unsigned)ESPAL.getFreeHeap());
+
   update_position = 0;
   update_total_size = total;
   lastPercent = -1;

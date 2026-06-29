@@ -741,7 +741,7 @@ unsigned long NetManagerTask::loop(MicroTasks::WakeReason reason)
 {
   unsigned long nextLoopDelay = MicroTask.Infinate;
 
-  Profile_Start(NetManagerTask::loop);
+  Profile_Start(NetManagerTask_loop);
 
 //  DBUG("NetManagerTask woke: ");
 //  DBUG(NetState::Starting == _state ? "Starting" :
@@ -770,7 +770,7 @@ unsigned long NetManagerTask::loop(MicroTasks::WakeReason reason)
     _dnsServer.processNextRequest(); // Captive portal DNS re-dierct
   }
 
-  Profile_End(NetManagerTask::loop, 5);
+  Profile_End(NetManagerTask_loop, 5);
 
   return nextLoopDelay;
 }

@@ -1278,30 +1278,17 @@ void handleMqttAction(MongooseHttpServerRequest *request) {
   request->send(response);
 }
 
-void web_server_setup()
+// MongooseHttpServer::on() attaches each route to whichever mg_connection*
+// the server's `nc` member currently points at (mg_register_http_endpoint(nc,
+// ...) — see MongooseHttpServer.cpp) — i.e. routes are per-LISTENER, not
+// server-instance-wide, even though `server` is a single C++ object. Calling
+// server.begin() twice (once per port) and registering routes only once
+// after both binds would attach every route only to the second (most
+// recent) listener, leaving the first with none — exactly the 404-on-HTTPS
+// bug this was split out to fix. So this whole block runs once per listener
+// (see web_server_setup() below).
+static void registerWebServerRoutes()
 {
-  bool use_ssl = false;
-  if(www_certificate_id != "")
-  {
-    uint64_t cert_id = std::stoull(www_certificate_id.c_str(), nullptr, 16);
-    const char *cert = certs.getCertificate(cert_id);
-    const char *key = certs.getKey(cert_id);
-    if(NULL != cert && NULL != key)
-    {
-      DEBUG.printf("Starting HTTPS server, https://0.0.0.0:%d\n", www_https_port);
-      server.begin(www_https_port, cert, key);
-      use_ssl = true;
-
-      redirect.begin(www_http_port);
-      redirect.on("/", handleHttpsRedirect);
-    }
-  }
-
-  if(false == use_ssl) {
-    DEBUG.printf("Starting HTTP server, http://0.0.0.0:%d\n", www_http_port);
-    server.begin(www_http_port);
-  }
-
   // Handle status updates
   server.on("/status$", handleStatus);
   server.on("/config$", handleConfig);
@@ -1376,11 +1363,6 @@ void web_server_setup()
   server.on("/debug/console$")->onFrame([](MongooseHttpWebSocketConnection *connection, int flags, uint8_t *data, size_t len) {
   });
 
-  SerialDebug.onWrite([](const uint8_t *buffer, size_t size)
-  {
-    server.sendAll("/debug/console", WEBSOCKET_OP_TEXT, buffer, size);
-  });
-
   server.on("/evse$", [](MongooseHttpServerRequest *request) {
     MongooseHttpServerResponseStream *response;
     if(false == requestPreProcess(request, response, CONTENT_TYPE_TEXT)) {
@@ -1397,17 +1379,55 @@ void web_server_setup()
   server.on("/evse/console$")->onFrame([](MongooseHttpWebSocketConnection *connection, int flags, uint8_t *data, size_t len) {
   });
 
+  server.on("/ws$")->
+    onFrame(onWsFrame)
+    ->
+    onConnect(onWsConnect);
+}
+
+void web_server_setup()
+{
+  bool use_ssl = false;
+  if(config_https_enabled() && www_certificate_id != "")
+  {
+    uint64_t cert_id = std::stoull(www_certificate_id.c_str(), nullptr, 16);
+    const char *cert = certs.getCertificate(cert_id);
+    const char *key = certs.getKey(cert_id);
+    if(NULL != cert && NULL != key)
+    {
+      DEBUG.printf("Starting HTTPS server, https://0.0.0.0:%d\n", www_https_port);
+      server.begin(www_https_port, cert, key);
+      registerWebServerRoutes();
+      use_ssl = true;
+    }
+  }
+
+  // HTTP and HTTPS are independently switchable (www_http_enabled /
+  // www_https_enabled) — but if HTTPS didn't actually start (disabled, no
+  // cert chosen, or cert load failed), force HTTP on regardless so the
+  // device is never left with no reachable web server.
+  if(config_http_enabled() || false == use_ssl) {
+    if(false == use_ssl || www_http_port != www_https_port) {
+      DEBUG.printf("Starting HTTP server, http://0.0.0.0:%d\n", www_http_port);
+      server.begin(www_http_port);
+      registerWebServerRoutes();
+    }
+  }
+
+  // Instance-wide (not per-listener, unlike the routes above): onNotFound
+  // sets a single fallback endpoint object on `server` itself, and these
+  // StreamSpy callback slots are one-per-StreamSpy regardless of how many
+  // HTTP listeners exist, so none of these belong in registerWebServerRoutes().
+  SerialDebug.onWrite([](const uint8_t *buffer, size_t size)
+  {
+    server.sendAll("/debug/console", WEBSOCKET_OP_TEXT, buffer, size);
+  });
   SerialEvse.onWrite([](const uint8_t *buffer, size_t size) {
     web_server_send_ascii_utf8("/evse/console", buffer, size);
   });
   SerialEvse.onRead([](const uint8_t *buffer, size_t size) {
     web_server_send_ascii_utf8("/evse/console", buffer, size);
   });
-
-  server.on("/ws$")->
-    onFrame(onWsFrame)
-    ->
-    onConnect(onWsConnect);
 
   server.onNotFound(handleNotFound);
 

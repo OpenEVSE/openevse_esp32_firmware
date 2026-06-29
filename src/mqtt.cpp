@@ -47,6 +47,26 @@ void Mqtt::setError(const char *category, const char *detail) {
   _errorDetail[sizeof(_errorDetail) - 1] = '\0';
 }
 
+unsigned long Mqtt::retryDelay() {
+  // Same table as TimeManager::retryDelay() (time_man.cpp) — see mqtt.h.
+  static const unsigned long delays[] = {
+    10 * 1000UL,
+    30 * 1000UL,
+    90 * 1000UL,
+     5 * 60 * 1000UL,
+    30 * 60 * 1000UL,
+  };
+  uint8_t idx = _retryCount < sizeof(delays) / sizeof(delays[0])
+                  ? _retryCount
+                  : (uint8_t)(sizeof(delays) / sizeof(delays[0]) - 1);
+  return delays[idx];
+}
+
+void Mqtt::scheduleReconnect() {
+  _nextMqttReconnectAttempt = millis() + retryDelay();
+  if (_retryCount < 255) _retryCount++;
+}
+
 void Mqtt::begin() {
   MicroTask.startTask(this);
 }
@@ -99,6 +119,7 @@ unsigned long Mqtt::loop(MicroTasks::WakeReason reason) {
       _mqttclient.disconnect(); // This should trigger onClose and then onMqttDisconnect
     }
      _nextMqttReconnectAttempt = 0; // Force immediate reconnect attempt
+     _retryCount = 0; // user explicitly asked to retry now — start the backoff fresh
      _connecting = false; // Reset connecting flag
   }
 
@@ -107,7 +128,7 @@ unsigned long Mqtt::loop(MicroTasks::WakeReason reason) {
   if (_connecting && (millis() - _connectStartTime) > (MQTT_CONNECT_TIMEOUT * 2)) {
     DBUGLN("MQTT connection attempt timed out, will retry");
     _connecting = false;
-    _nextMqttReconnectAttempt = millis() + MQTT_CONNECT_TIMEOUT;
+    scheduleReconnect();
     setError("timeout", "Server not responding");
     StaticJsonDocument<160> doc;
     doc["mqtt_connected"]    = 0;
@@ -117,11 +138,12 @@ unsigned long Mqtt::loop(MicroTasks::WakeReason reason) {
     web_server_event(doc);
   }
 
-  // Manage connection state
+  // Manage connection state. _nextMqttReconnectAttempt is advanced by
+  // scheduleReconnect() (exponential back-off) once a result is known —
+  // not preemptively here — since _connecting already prevents this block
+  // from re-entering while an attempt is in flight.
   if (net.isConnected() && config_mqtt_enabled() && !_mqttclient.connected() && !_connecting) {
-    long now = millis();
-    if (now > _nextMqttReconnectAttempt) {
-      _nextMqttReconnectAttempt = now + MQTT_CONNECT_TIMEOUT;
+    if (millis() > _nextMqttReconnectAttempt) {
       attemptConnection();
     }
   }
@@ -202,7 +224,7 @@ void Mqtt::attemptConnection() {
     DEBUG.println("WARNING: Certificate verification disabled");
   }
 
-  _mqttclient.setCredentials(mqtt_user, mqtt_pass);
+  _mqttclient.setCredentials("", mqtt_pass.c_str());
   _mqttclient.setLastWillAndTestimment(mqtt_announce_topic, _lastWill, true);
   _mqttclient.setRejectUnauthorized(config_mqtt_reject_unauthorized());
 
@@ -231,6 +253,7 @@ void Mqtt::onMqttConnect() {
   DBUGLN("MQTT connected");
   _connecting = false;
   _nextMqttReconnectAttempt = 0;
+  _retryCount = 0;
   _connectedSince  = time(NULL);
   _brokerVersion[0] = '\0';   // fresh — will arrive via $SYS/broker/version
   _brokerIp[0]     = '\0';   // cleared; DNS lookup scheduled for loop() below
@@ -270,6 +293,7 @@ void Mqtt::onMqttConnect() {
 void Mqtt::onMqttDisconnect(int err, const char *reason) {
   DBUGLN("MQTT disconnected");
   _connecting = false;
+  scheduleReconnect(); // exponential back-off — see Mqtt::retryDelay()
   // Do NOT call getaddrinfo() here — this is a Mongoose callback and will
   // block the entire event loop, delaying the reconnect attempt by the full
   // DNS round-trip time. DNS is handled safely in loop() after reconnect.
@@ -590,6 +614,7 @@ void Mqtt::restartConnection() {
   _errorCategory[0] = '\0';   // clear stale failure reason on manual restart
   _errorDetail[0]   = '\0';
   _nextMqttReconnectAttempt = 0; // reconnect on the very next loop iteration
+  _retryCount = 0; // explicit restart — start the backoff fresh
 
   // Push "connecting" status immediately so the UI reacts
   {
