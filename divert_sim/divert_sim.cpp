@@ -53,7 +53,7 @@ void emoncms_publish(JsonDocument &) {}
 
 int main(int argc, char **argv)
 {
-  auto exit_now = [](int code) -> int {
+  auto exit_now = [](int code) -> void {
     std::cout.flush();
     std::cerr.flush();
     std::_Exit(code);
@@ -77,7 +77,7 @@ int main(int argc, char **argv)
 
   if (result.count("help")) {
     std::cout << options.help() << std::endl;
-    return exit_now(0);
+    exit_now(0);
   }
 
   EpoxyTest::set_millis(0);
@@ -113,13 +113,14 @@ int main(int argc, char **argv)
     String json;
     config_serialize(json, true, false, false);
     std::cout << json.c_str() << std::endl;
-    return exit_now(0);
+    exit_now(0);
   }
 
   if (scenario.empty()) {
     std::cerr << options.help() << std::endl;
-    return exit_now(1);
+    exit_now(1);
   }
 
-  return exit_now(sim::run(scenario, output, result.count("config-check") != 0));
+  exit_now(sim::run(scenario, output, result.count("config-check") != 0));
+  return 0;
 }

@@ -188,7 +188,9 @@ bool TimeSeries::loadCsv(const std::string &path,
     }
 
     double v = 0;
-    sscanf(fields[value_col].c_str(), "%lf", &v);
+    if (fields[value_col].empty() || sscanf(fields[value_col].c_str(), "%lf", &v) != 1) {
+      continue;
+    }
     if (kw) v *= 1000.0;
     p.value = v;
     _points.push_back(p);
