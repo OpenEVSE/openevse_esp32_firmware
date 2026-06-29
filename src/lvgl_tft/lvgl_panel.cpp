@@ -56,13 +56,10 @@ static const uint16_t SCREEN_H = TFT_WIDTH;  // 320
 // buffer could never overlap a flush.
 static const uint32_t DRAW_BUF_PIXELS = SCREEN_W * 32; // 480*32 = 15360 px (~30 KB)
 
-#if !defined(EPOXY_DUINO)
-static TFT_eSPI tft = TFT_eSPI();
-#endif
-
 static lv_disp_draw_buf_t draw_buf;
 static lv_disp_drv_t disp_drv;
 static lv_color_t *buf1 = nullptr;
+
 #if defined(EPOXY_DUINO)
 static lv_color_t *host_fb = nullptr;
 static LvglPanelDisplayMode display_mode = LVGL_PANEL_DISPLAY_HEADLESS;
@@ -96,62 +93,16 @@ struct SdlWindowState {
 static SdlApi sdl;
 static SdlWindowState sdl_window;
 #endif
-#endif
 
-static void flush_cb(lv_disp_drv_t *drv, const lv_area_t *area, lv_color_t *color_p)
+static void lvgl_panel_cleanup_host_allocations()
 {
-#if defined(EPOXY_DUINO)
-  if(host_fb) {
-    int32_t x1 = area->x1 < 0 ? 0 : area->x1;
-    int32_t y1 = area->y1 < 0 ? 0 : area->y1;
-    int32_t x2 = area->x2 >= SCREEN_W ? SCREEN_W - 1 : area->x2;
-    int32_t y2 = area->y2 >= SCREEN_H ? SCREEN_H - 1 : area->y2;
-    int32_t area_w = area->x2 - area->x1 + 1;
-
-    if(x1 <= x2 && y1 <= y2) {
-      for(int32_t y = y1; y <= y2; y++) {
-        const lv_color_t *src = color_p + (y - area->y1) * area_w + (x1 - area->x1);
-        lv_color_t *dst = host_fb + y * SCREEN_W + x1;
-        memcpy(dst, src, (x2 - x1 + 1) * sizeof(lv_color_t));
-      }
-    }
+  if(host_fb != nullptr) {
+    free(host_fb);
+    host_fb = nullptr;
   }
-#if LVGL_PANEL_HAS_SDL
-  sdl_window.dirty = true;
-#endif
-  lv_disp_flush_ready(drv);
-#else
-  uint32_t w = (area->x2 - area->x1 + 1);
-  uint32_t h = (area->y2 - area->y1 + 1);
-
-  tft.startWrite();
-  tft.setAddrWindow(area->x1, area->y1, w, h);
-  tft.pushPixels((uint16_t *)&color_p->full, w * h);
-  tft.endWrite();
-
-  lv_disp_flush_ready(drv);
-#endif
-}
-
-#if defined(EPOXY_DUINO)
-void lvgl_panel_set_display_mode(LvglPanelDisplayMode mode)
-{
-  display_mode = mode;
-}
-
-LvglPanelDisplayMode lvgl_panel_get_display_mode()
-{
-  return display_mode;
-}
-
-const char *lvgl_panel_get_display_mode_name(LvglPanelDisplayMode mode)
-{
-  switch(mode) {
-    case LVGL_PANEL_DISPLAY_WINDOW:
-      return "window";
-    case LVGL_PANEL_DISPLAY_HEADLESS:
-    default:
-      return "headless";
+  if(buf1 != nullptr) {
+    free(buf1);
+    buf1 = nullptr;
   }
 }
 
@@ -299,6 +250,62 @@ static bool sdl_window_begin()
 }
 #endif
 
+static bool lvgl_panel_prepare_begin(size_t buf_bytes)
+{
+  lv_init();
+
+  buf1 = (lv_color_t *)malloc(buf_bytes);
+  if(buf1 == nullptr) {
+    Serial.printf("[panel] FATAL: draw-buffer alloc failed (%u B host heap)\n",
+                  (unsigned)buf_bytes);
+    return false;
+  }
+
+  host_fb = (lv_color_t *)calloc(SCREEN_W * SCREEN_H, sizeof(lv_color_t));
+  if(host_fb == nullptr) {
+    Serial.printf("[panel] FATAL: framebuffer alloc failed (%u B host heap)\n",
+                  (unsigned)(SCREEN_W * SCREEN_H * sizeof(lv_color_t)));
+    lvgl_panel_cleanup_host_allocations();
+    return false;
+  }
+
+#if LVGL_PANEL_HAS_SDL
+  if(!sdl_window_begin()) {
+    lvgl_panel_cleanup_host_allocations();
+    return false;
+  }
+#elif defined(EPOXY_DUINO)
+  if(display_mode == LVGL_PANEL_DISPLAY_WINDOW) {
+    Serial.println("[panel] window display mode unavailable: rebuild on a host with SDL2 headers installed");
+    lvgl_panel_cleanup_host_allocations();
+    return false;
+  }
+#endif
+
+  return true;
+}
+
+void lvgl_panel_set_display_mode(LvglPanelDisplayMode mode)
+{
+  display_mode = mode;
+}
+
+LvglPanelDisplayMode lvgl_panel_get_display_mode()
+{
+  return display_mode;
+}
+
+const char *lvgl_panel_get_display_mode_name(LvglPanelDisplayMode mode)
+{
+  switch(mode) {
+    case LVGL_PANEL_DISPLAY_WINDOW:
+      return "window";
+    case LVGL_PANEL_DISPLAY_HEADLESS:
+    default:
+      return "headless";
+  }
+}
+
 void lvgl_panel_pump()
 {
 #if LVGL_PANEL_HAS_SDL
@@ -330,126 +337,11 @@ void lvgl_panel_pump()
   sdl.RenderCopy(sdl_window.renderer, sdl_window.texture, nullptr, nullptr);
   sdl.RenderPresent(sdl_window.renderer);
   sdl_window.dirty = false;
-#endif
-}
-#endif
-
-bool lvgl_panel_begin()
-{
-#if defined(EPOXY_DUINO)
-  lv_init();
-
-  const size_t buf_bytes = DRAW_BUF_PIXELS * sizeof(lv_color_t);
-  buf1 = (lv_color_t *)malloc(buf_bytes);
-  if (buf1 == nullptr) {
-    Serial.printf("[panel] FATAL: draw-buffer alloc failed (%u B host heap)\n",
-                  (unsigned)buf_bytes);
-    return false;
-  }
-
-  host_fb = (lv_color_t *)calloc(SCREEN_W * SCREEN_H, sizeof(lv_color_t));
-  if(host_fb == nullptr) {
-    Serial.printf("[panel] FATAL: framebuffer alloc failed (%u B host heap)\n",
-                  (unsigned)(SCREEN_W * SCREEN_H * sizeof(lv_color_t)));
-    free(buf1);
-    buf1 = nullptr;
-    return false;
-  }
-
-#if LVGL_PANEL_HAS_SDL
-  if(!sdl_window_begin()) {
-    free(host_fb);
-    host_fb = nullptr;
-    free(buf1);
-    buf1 = nullptr;
-    return false;
-  }
-#elif defined(EPOXY_DUINO)
-  if(display_mode == LVGL_PANEL_DISPLAY_WINDOW) {
-    Serial.println("[panel] window display mode unavailable: rebuild on a host with SDL2 headers installed");
-    free(host_fb);
-    host_fb = nullptr;
-    free(buf1);
-    buf1 = nullptr;
-    return false;
-  }
-#endif
 #else
-  tft.init();
-  tft.setRotation(1); // landscape, matches the original renderer
-#if ESP_ARDUINO_VERSION >= ESP_ARDUINO_VERSION_VAL(3, 0, 0)
-  ledcAttach(TFT_BL, LCD_BL_PWM_FREQ, LCD_BL_PWM_RES);
-#else
-  ledcSetup(LCD_BL_LEDC_CHANNEL, LCD_BL_PWM_FREQ, LCD_BL_PWM_RES);
-  ledcAttachPin(TFT_BL, LCD_BL_LEDC_CHANNEL);
-#endif
-  // The backlight is independent of the LVGL draw buffer below, so it stays
-  // usable even if that alloc fails and we return false — bl_ready is not cleared.
-  bl_ready = true;
-  lvgl_panel_set_backlight(100); // full on until LcdTask applies the configured level
-
-#ifdef LCD_BL_PWM_SELFTEST
-  // Gated diagnostic: ramp the backlight up/down a few times so a human can
-  // confirm the panel actually dims (some BL circuits are on/off-only).
-  // delay() is safe here: LVGL isn't running yet, and this is gated out of prod.
-  for (int cycle = 0; cycle < 3; ++cycle) {
-    for (int p = 0; p <= 100; p += 5) { lvgl_panel_set_backlight((uint8_t)p); delay(30); }
-    for (int p = 100; p >= 0; p -= 5) { lvgl_panel_set_backlight((uint8_t)p); delay(30); }
-  }
-  lvgl_panel_set_backlight(100);
-#endif
-
-  lv_init();
-
-  const size_t buf_bytes = DRAW_BUF_PIXELS * sizeof(lv_color_t);
-  buf1 = (lv_color_t *)heap_caps_malloc(buf_bytes, MALLOC_CAP_INTERNAL | MALLOC_CAP_8BIT);
-  if (buf1 == nullptr) {
-    Serial.printf("[panel] FATAL: draw-buffer alloc failed (%u B internal); largest free block=%u\n",
-                  (unsigned)buf_bytes,
-                  (unsigned)heap_caps_get_largest_free_block(MALLOC_CAP_INTERNAL));
-    return false;
-  }
-#endif
-  lv_disp_draw_buf_init(&draw_buf, buf1, nullptr, DRAW_BUF_PIXELS);
-
-  lv_disp_drv_init(&disp_drv);
-  disp_drv.hor_res = SCREEN_W;
-  disp_drv.ver_res = SCREEN_H;
-  disp_drv.flush_cb = flush_cb;
-  disp_drv.draw_buf = &draw_buf;
-  lv_disp_drv_register(&disp_drv);
-
-#if defined(EPOXY_DUINO)
-  Serial.printf("[panel] %s LVGL display up %ux%u, 1 buf %u B host heap\n",
-                lvgl_panel_get_display_mode_name(display_mode),
-                SCREEN_W, SCREEN_H, (unsigned)buf_bytes);
-#else
-  Serial.printf("[panel] display up %ux%u, 1 buf %u B internal, free internal heap=%u\n",
-                SCREEN_W, SCREEN_H, (unsigned)buf_bytes,
-                (unsigned)heap_caps_get_free_size(MALLOC_CAP_INTERNAL));
-#endif
-  return true;
-}
-
-void lvgl_panel_set_backlight(uint8_t pct)
-{
-#if defined(EPOXY_DUINO)
-  (void)pct;
-  return;
-#else
-  if (!bl_ready) {
-    return;
-  }
-  uint8_t duty = bl_pct_to_duty(pct);
-#if ESP_ARDUINO_VERSION >= ESP_ARDUINO_VERSION_VAL(3, 0, 0)
-  ledcWrite(TFT_BL, duty);
-#else
-  ledcWrite(LCD_BL_LEDC_CHANNEL, duty);
-#endif
+  (void)0;
 #endif
 }
 
-#if defined(EPOXY_DUINO)
 bool lvgl_panel_write_ppm(const char *path)
 {
   if(host_fb == nullptr || path == nullptr || path[0] == '\0') {
@@ -478,6 +370,133 @@ bool lvgl_panel_write_ppm(const char *path)
   fclose(fp);
   return true;
 }
+
+void lvgl_panel_set_backlight(uint8_t pct)
+{
+  (void)pct;
+}
+
+static void flush_cb(lv_disp_drv_t *drv, const lv_area_t *area, lv_color_t *color_p)
+{
+  if(host_fb) {
+    int32_t x1 = area->x1 < 0 ? 0 : area->x1;
+    int32_t y1 = area->y1 < 0 ? 0 : area->y1;
+    int32_t x2 = area->x2 >= SCREEN_W ? SCREEN_W - 1 : area->x2;
+    int32_t y2 = area->y2 >= SCREEN_H ? SCREEN_H - 1 : area->y2;
+    int32_t area_w = area->x2 - area->x1 + 1;
+
+    if(x1 <= x2 && y1 <= y2) {
+      for(int32_t y = y1; y <= y2; y++) {
+        const lv_color_t *src = color_p + (y - area->y1) * area_w + (x1 - area->x1);
+        lv_color_t *dst = host_fb + y * SCREEN_W + x1;
+        memcpy(dst, src, (x2 - x1 + 1) * sizeof(lv_color_t));
+      }
+    }
+  }
+#if LVGL_PANEL_HAS_SDL
+  sdl_window.dirty = true;
 #endif
+  lv_disp_flush_ready(drv);
+}
+
+#else
+
+static TFT_eSPI tft = TFT_eSPI();
+
+static bool lvgl_panel_prepare_begin(size_t buf_bytes)
+{
+  tft.init();
+  tft.setRotation(1); // landscape, matches the original renderer
+#if ESP_ARDUINO_VERSION >= ESP_ARDUINO_VERSION_VAL(3, 0, 0)
+  ledcAttach(TFT_BL, LCD_BL_PWM_FREQ, LCD_BL_PWM_RES);
+#else
+  ledcSetup(LCD_BL_LEDC_CHANNEL, LCD_BL_PWM_FREQ, LCD_BL_PWM_RES);
+  ledcAttachPin(TFT_BL, LCD_BL_LEDC_CHANNEL);
+#endif
+  // The backlight is independent of the LVGL draw buffer below, so it stays
+  // usable even if that alloc fails and we return false — bl_ready is not cleared.
+  bl_ready = true;
+  lvgl_panel_set_backlight(100); // full on until LcdTask applies the configured level
+
+#ifdef LCD_BL_PWM_SELFTEST
+  // Gated diagnostic: ramp the backlight up/down a few times so a human can
+  // confirm the panel actually dims (some BL circuits are on/off-only).
+  // delay() is safe here: LVGL isn't running yet, and this is gated out of prod.
+  for(int cycle = 0; cycle < 3; ++cycle) {
+    for(int p = 0; p <= 100; p += 5) { lvgl_panel_set_backlight((uint8_t)p); delay(30); }
+    for(int p = 100; p >= 0; p -= 5) { lvgl_panel_set_backlight((uint8_t)p); delay(30); }
+  }
+  lvgl_panel_set_backlight(100);
+#endif
+
+  lv_init();
+
+  buf1 = (lv_color_t *)heap_caps_malloc(buf_bytes, MALLOC_CAP_INTERNAL | MALLOC_CAP_8BIT);
+  if(buf1 == nullptr) {
+    Serial.printf("[panel] FATAL: draw-buffer alloc failed (%u B internal); largest free block=%u\n",
+                  (unsigned)buf_bytes,
+                  (unsigned)heap_caps_get_largest_free_block(MALLOC_CAP_INTERNAL));
+    return false;
+  }
+
+  return true;
+}
+
+void lvgl_panel_set_backlight(uint8_t pct)
+{
+  if(!bl_ready) {
+    return;
+  }
+  uint8_t duty = bl_pct_to_duty(pct);
+#if ESP_ARDUINO_VERSION >= ESP_ARDUINO_VERSION_VAL(3, 0, 0)
+  ledcWrite(TFT_BL, duty);
+#else
+  ledcWrite(LCD_BL_LEDC_CHANNEL, duty);
+#endif
+}
+
+static void flush_cb(lv_disp_drv_t *drv, const lv_area_t *area, lv_color_t *color_p)
+{
+  uint32_t w = (area->x2 - area->x1 + 1);
+  uint32_t h = (area->y2 - area->y1 + 1);
+
+  tft.startWrite();
+  tft.setAddrWindow(area->x1, area->y1, w, h);
+  tft.pushPixels((uint16_t *)&color_p->full, w * h);
+  tft.endWrite();
+
+  lv_disp_flush_ready(drv);
+}
+
+#endif
+
+bool lvgl_panel_begin()
+{
+  const size_t buf_bytes = DRAW_BUF_PIXELS * sizeof(lv_color_t);
+
+  if(!lvgl_panel_prepare_begin(buf_bytes)) {
+    return false;
+  }
+
+  lv_disp_draw_buf_init(&draw_buf, buf1, nullptr, DRAW_BUF_PIXELS);
+
+  lv_disp_drv_init(&disp_drv);
+  disp_drv.hor_res = SCREEN_W;
+  disp_drv.ver_res = SCREEN_H;
+  disp_drv.flush_cb = flush_cb;
+  disp_drv.draw_buf = &draw_buf;
+  lv_disp_drv_register(&disp_drv);
+
+#if defined(EPOXY_DUINO)
+  Serial.printf("[panel] %s LVGL display up %ux%u, 1 buf %u B host heap\n",
+                lvgl_panel_get_display_mode_name(display_mode),
+                SCREEN_W, SCREEN_H, (unsigned)buf_bytes);
+#else
+  Serial.printf("[panel] display up %ux%u, 1 buf %u B internal, free internal heap=%u\n",
+                SCREEN_W, SCREEN_H, (unsigned)buf_bytes,
+                (unsigned)heap_caps_get_free_size(MALLOC_CAP_INTERNAL));
+#endif
+  return true;
+}
 
 #endif // ENABLE_SCREEN_LVGL_TFT
