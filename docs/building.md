@@ -78,3 +78,15 @@ pio test -e native_test
 
 Test suites live under `test/`. New host-testable logic should land with a
 doctest suite alongside it.
+
+## divert_sim host build
+
+Build the simulator with PlatformIO:
+
+```bash
+pio run -e native_divert_sim
+```
+
+This writes the binary to `.pio/build/native_divert_sim/program`. The
+`divert_sim` pytest suite uses that binary automatically (or `./divert_sim` if
+present).

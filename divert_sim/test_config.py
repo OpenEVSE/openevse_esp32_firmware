@@ -6,9 +6,11 @@ from pathlib import Path
 from subprocess import PIPE, run
 from tempfile import NamedTemporaryFile
 
+from run_simulations import BINARY
+
 
 def check_config(config: dict | None = None, load: bool = False, commit: bool = False) -> dict:
-    cmd = ["./divert_sim", "--config-check"]
+    cmd = [str(BINARY), "--config-check"]
     if config:
         cmd.extend(["-c", json.dumps(config)])
     if load:
@@ -76,7 +78,7 @@ def test_scenario_rejects_solar_and_grid_ie_together():
 
     try:
         result = run(
-            ["./divert_sim", "--scenario", tmp_path],
+            [str(BINARY), "--scenario", tmp_path],
             stdout=PIPE,
             stderr=PIPE,
             text=True,

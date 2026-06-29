@@ -23,10 +23,28 @@ from typing import Any, Dict, List, Optional
 
 
 ROOT = Path(__file__).resolve().parent
-BINARY = ROOT / "divert_sim"
 DATA_DIR = ROOT / "data"
 SCENARIO_DIR = DATA_DIR / "scenarios"
 OUTPUT_DIR = ROOT / "output"
+PIO_ENV = os.environ.get("DIVERT_SIM_PIO_ENV", "native_divert_sim")
+
+
+def resolve_binary() -> Path:
+    local_binary = ROOT / "divert_sim"
+    if local_binary.exists():
+        return local_binary
+
+    pio_binary = ROOT.parent / ".pio" / "build" / PIO_ENV / "program"
+    if pio_binary.exists():
+        return pio_binary
+
+    raise FileNotFoundError(
+        "divert_sim binary not found. Build with `pio run -e native_divert_sim` "
+        "(or set DIVERT_SIM_PIO_ENV) or provide ./divert_sim."
+    )
+
+
+BINARY = resolve_binary()
 
 
 @dataclass
