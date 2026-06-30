@@ -17,6 +17,7 @@ ROOT = Path(__file__).resolve().parent
 PORT = 8000
 SCENARIO_DIR = ROOT / "data" / "scenarios"
 DATA_DIR = ROOT / "data"
+OUTPUT_INDEX = ROOT / "output" / "index.json"
 
 # Always serve files relative to divert_sim/, regardless of where server.py is launched.
 os.chdir(ROOT)
@@ -88,9 +89,18 @@ def _config_entries() -> list[str]:
     return configs
 
 
+def _ensure_default_index() -> None:
+    if OUTPUT_INDEX.exists():
+        return
+    build_index()
+
+
 class SimRequestHandler(http.server.SimpleHTTPRequestHandler):
     def do_GET(self) -> None:  # noqa: N802
         parsed = urlparse(self.path)
+        if parsed.path in ("/", "/view.html", "/output/index.json"):
+            _ensure_default_index()
+
         if parsed.path == "/api/editor/options":
             _json_response(
                 self,
@@ -241,6 +251,7 @@ class SimRequestHandler(http.server.SimpleHTTPRequestHandler):
 
 
 if __name__ == "__main__":
+    _ensure_default_index()
     with ReusableTCPServer(("", PORT), SimRequestHandler) as server:
         print(f"Server started at http://localhost:{PORT}")
         server.serve_forever()

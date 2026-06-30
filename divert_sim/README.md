@@ -120,6 +120,8 @@ Start server:
 python3 server.py
 ```
 
+`server.py` will generate `output/index.json` and the matching scenario CSVs on first load if they are missing.
+
 Then open:
 
 - `http://localhost:8000/view.html`
@@ -130,6 +132,7 @@ UI behavior:
 - Reads scenario metadata from `output/index.json` (or `output/interactive.json`)
 - Renders categories/profiles dynamically
 - Uses unified CSV headers for chart series
+- Treats `output/` as generated runtime state rather than committed source data
 
 ## Notes
 
