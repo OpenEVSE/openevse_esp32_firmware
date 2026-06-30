@@ -10,16 +10,6 @@
     "tick_interval": 60,
     "start_time": "2020-03-16T06:40:00Z"
   },
-  "config": {
-    "divert_enabled": true,
-    "charge_mode": "eco",
-    "divert_type": 0,
-    "current_shaper_enabled": false,
-    "divert_PV_ratio": 0.5,
-    "divert_attack_smoothing_time": 20,
-    "divert_decay_smoothing_time": 600,
-    "divert_min_charge_time": 600
-  },
   "peers": [
     {
       "id": "evse-001",
@@ -44,5 +34,6 @@
         }
       }
     }
-  ]
+  ],
+  "config_include": "config-divert-nowaste.json"
 }

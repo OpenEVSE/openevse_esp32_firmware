@@ -11,11 +11,9 @@
     "start_time": "2023-12-17T13:25:00Z"
   },
   "config": {
-    "divert_enabled": false,
-    "current_shaper_enabled": true,
-    "current_shaper_max_pwr": 3000,
     "current_shaper_smoothing_time": 30,
-    "current_shaper_min_pause_time": 60
+    "current_shaper_min_pause_time": 60,
+    "current_shaper_max_pwr": 3000
   },
   "peers": [
     {
@@ -42,5 +40,6 @@
         }
       }
     }
-  ]
+  ],
+  "config_include": "config-shaper-default.json"
 }

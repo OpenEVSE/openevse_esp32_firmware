@@ -10,11 +10,6 @@
     "tick_interval": 1,
     "start_time": "2023-12-17T13:25:00Z"
   },
-  "config": {
-    "divert_enabled": false,
-    "current_shaper_enabled": true,
-    "current_shaper_max_pwr": 5000
-  },
   "peers": [
     {
       "id": "evse-001",
@@ -40,5 +35,6 @@
         }
       }
     }
-  ]
+  ],
+  "config_include": "config-shaper-default.json"
 }

@@ -10,16 +10,6 @@
     "tick_interval": 60,
     "start_time": "2018-06-14T08:21:00Z"
   },
-  "config": {
-    "divert_enabled": true,
-    "charge_mode": "eco",
-    "divert_type": 1,
-    "current_shaper_enabled": false,
-    "divert_PV_ratio": 1.1,
-    "divert_attack_smoothing_time": 300,
-    "divert_decay_smoothing_time": 20,
-    "divert_min_charge_time": 600
-  },
   "peers": [
     {
       "id": "evse-001",
@@ -50,5 +40,6 @@
         }
       }
     }
-  ]
+  ],
+  "config_include": "config-divert-grid_ie-noimport.json"
 }

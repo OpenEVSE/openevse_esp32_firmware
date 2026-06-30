@@ -79,6 +79,8 @@ def _resolve_config_includes(scenario_doc: Dict[str, Any], scenario_path: Path) 
         include_doc = _read_json(candidate)
         if not isinstance(include_doc, dict):
             raise ValueError(f"Config include is not an object: {candidate}")
+        if isinstance(include_doc.get("config"), dict):
+            include_doc = include_doc["config"]
         merged_config = _merge_dict(merged_config, include_doc)
 
     inline_config = resolved.get("config", {})
@@ -108,10 +110,16 @@ def setup_summary(_: str = "") -> None:
     OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
 
 
+def _is_config_profile(path: Path) -> bool:
+    return path.name.startswith("config-")
+
+
 def discover_scenarios() -> List[ScenarioMeta]:
     scenarios: List[ScenarioMeta] = []
     for raw_path in sorted(glob(str(SCENARIO_DIR / "*.json"))):
         path = Path(raw_path)
+        if _is_config_profile(path):
+            continue
         doc = _read_json(path)
 
         meta = doc.get("meta", {})

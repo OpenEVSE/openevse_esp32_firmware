@@ -42,9 +42,15 @@ def _resolve_under_root(relative_path: str) -> Path:
     return candidate
 
 
+def _is_config_profile(path: Path) -> bool:
+    return path.name.startswith("config-")
+
+
 def _scenario_entries() -> list[dict]:
     entries: list[dict] = []
     for path in sorted(SCENARIO_DIR.glob("*.json")):
+        if _is_config_profile(path):
+            continue
         try:
             with path.open() as f:
                 doc = json.load(f)
@@ -77,7 +83,7 @@ def _feed_entries() -> list[str]:
 
 def _config_entries() -> list[str]:
     configs: list[str] = []
-    for path in sorted(DATA_DIR.glob("config-*.json")):
+    for path in sorted(SCENARIO_DIR.glob("config-*.json")):
         configs.append(os.path.relpath(path, SCENARIO_DIR).replace("\\", "/"))
     return configs
 
