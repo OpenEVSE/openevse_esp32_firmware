@@ -20,6 +20,11 @@
 // Ring full-scale (amps). The ring is indicative, not a hard gauge.
 #define RING_FULL_SCALE_A 48.0f
 
+// Max rendered width (px) for the centre state word at the large font before we
+// step down a size. Sized to the ring's usable inner width (200px ring - 14px
+// band each side) so long words ("NOT CONNECTED") never wrap onto the band.
+#define STATE_WORD_FIT_W 172
+
 static lv_obj_t *charge_scr   = nullptr;  // the screen object (for destroy on switch)
 static lv_obj_t *arc          = nullptr;
 static lv_obj_t *big_value    = nullptr;  // kW number, centre of ring (charging only)
@@ -190,6 +195,15 @@ void charge_screen_update(const ChargeScreenData &d)
     lv_obj_add_flag(big_value, LV_OBJ_FLAG_HIDDEN);
     lv_obj_add_flag(big_unit, LV_OBJ_FLAG_HIDDEN);
     lv_obj_clear_flag(center_state, LV_OBJ_FLAG_HIDDEN);
+
+    // Length-adaptive font: keep the large size for words that render inside the
+    // ring, drop one size for the wide ones so they stay on a single line.
+    lv_point_t sz;
+    lv_txt_get_size(&sz, word, &lv_font_montserrat_28, 0, 0, LV_COORD_MAX, LV_TEXT_FLAG_NONE);
+    const lv_font_t *font = (sz.x <= STATE_WORD_FIT_W) ? &lv_font_montserrat_28
+                                                       : &lv_font_montserrat_20;
+    lv_obj_set_style_text_font(center_state, font, 0);
+
     lv_label_set_text(center_state, word);
     lv_obj_set_style_text_color(center_state, accent, 0);
     lv_obj_align_to(center_state, arc, LV_ALIGN_CENTER, 0, 0);
