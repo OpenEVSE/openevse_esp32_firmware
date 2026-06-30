@@ -79,6 +79,38 @@ pio test -e native_test
 Test suites live under `test/`. New host-testable logic should land with a
 doctest suite alongside it.
 
+The full native firmware build is `native_openevse`. To build the host binary with
+the LVGL local UI path enabled, use `native_openevse_lvgl`:
+
+```bash
+pio run -e native_openevse_lvgl
+```
+
+That env enables the LVGL local UI code on the host build. By default it runs in
+headless mode so the UI logic is compiled and exercised without requiring ESP32
+display hardware.
+
+For interactive local development you can also open the native LVGL output in an
+SDL window:
+
+```bash
+.pio/build/native_openevse_lvgl/program --lvgl-display window
+```
+
+That runtime mode loads SDL2 dynamically when it is available on the host (for
+example via `libsdl2-dev` on Debian/Ubuntu) and keeps the default headless path
+unchanged for CI and screenshot export.
+
+To dump the sample LVGL screens from the native binary after that build completes:
+
+```bash
+mkdir -p /tmp/lvgl-screens
+.pio/build/native_openevse_lvgl/program --dump-lvgl-screens /tmp/lvgl-screens
+```
+
+That command writes the boot, setup, and charge-state captures as `.ppm` images so
+review comments can attach fresh screenshots of the LVGL local UI.
+
 ## divert_sim host build
 
 Build the simulator with PlatformIO:
@@ -90,3 +122,4 @@ pio run -e native_simulator
 This writes the binary to `.pio/build/native_simulator/program`. The
 `divert_sim` pytest suite uses that binary automatically (or `./divert_sim` if
 present).
+

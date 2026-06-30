@@ -63,6 +63,9 @@ Always reference these instructions first and fallback to search or bash command
 - **Divert Algorithm**: Solar divert simulation testing
 - **Build Process**: Firmware compilation (when network allows)
 
+### UI review captures
+- When a PR changes the local UI or any user-visible screen in `gui-v2`, `gui-nightshift`, `gui-tft`, or `src/lvgl_tft/`, the Bugbot/Copilot review comment for that PR should include fresh screenshots of each changed screen when the agent can render them from the branch.
+
 ### What You CANNOT Test Without Hardware:
 - **Runtime Functionality**: ESP32 firmware execution
 - **API Endpoints**: HTTP/MQTT communication
