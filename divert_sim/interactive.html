@@ -4,58 +4,967 @@
   <meta charset="utf-8" />
   <title>OpenEVSE Interactive Simulations</title>
   <script src="https://canvasjs.com/assets/script/canvasjs.min.js"></script>
-  <script src="simulations.js?v=20260604g"></script>
+  <script src="simulations.js?v=20260630a"></script>
   <link rel="stylesheet" href="simulations.css" />
+  <style>
+    .editor-layout {
+      display: grid;
+      grid-template-columns: minmax(380px, 540px) 1fr;
+      gap: 14px;
+      align-items: start;
+    }
+
+    .editor-panel {
+      border: 1px solid #ddd;
+      border-radius: 4px;
+      padding: 12px;
+      background: #fafafa;
+    }
+
+    .editor-section {
+      margin-bottom: 12px;
+      padding-bottom: 12px;
+      border-bottom: 1px solid #e6e6e6;
+    }
+
+    .editor-section:last-child {
+      border-bottom: none;
+      margin-bottom: 0;
+      padding-bottom: 0;
+    }
+
+    .editor-row {
+      display: grid;
+      grid-template-columns: 160px 1fr;
+      gap: 8px;
+      align-items: center;
+      margin-bottom: 6px;
+    }
+
+    .editor-row input,
+    .editor-row select,
+    .editor-row textarea {
+      width: 100%;
+    }
+
+    .editor-actions button {
+      margin-right: 6px;
+      margin-bottom: 6px;
+    }
+
+    .peer-card {
+      border: 1px solid #ddd;
+      border-radius: 4px;
+      padding: 8px;
+      margin-bottom: 10px;
+      background: #fff;
+    }
+
+    .peer-card h4 {
+      margin-top: 0;
+      margin-bottom: 8px;
+    }
+
+    .inputs-table {
+      width: 100%;
+      border-collapse: collapse;
+      margin-top: 8px;
+      font-size: 12px;
+    }
+
+    .inputs-table th,
+    .inputs-table td {
+      border: 1px solid #ddd;
+      padding: 4px;
+      text-align: left;
+      vertical-align: middle;
+    }
+
+    .inputs-table input,
+    .inputs-table select {
+      width: 100%;
+      font-size: 12px;
+    }
+
+    .config-kv-row {
+      display: flex;
+      gap: 6px;
+      margin-bottom: 6px;
+      align-items: center;
+    }
+
+    .config-key-select {
+      flex: 0 0 240px;
+    }
+
+    .config-custom-key {
+      flex: 0 0 130px;
+    }
+
+    .config-value-wrapper {
+      flex: 1;
+      min-width: 0;
+    }
+
+    .config-value-wrapper input,
+    .config-value-wrapper select {
+      width: 100%;
+    }
+
+    .config-value-wrapper input[type="checkbox"] {
+      width: auto;
+    }
+
+    #raw-scenario {
+      width: 100%;
+      min-height: 420px;
+      font-family: monospace;
+      font-size: 12px;
+      line-height: 1.3;
+    }
+
+    #content {
+      margin-top: 16px;
+    }
+
+    @media (max-width: 1200px) {
+      .editor-layout {
+        grid-template-columns: 1fr;
+      }
+    }
+  </style>
 </head>
 <body>
   <h1>OpenEVSE Interactive Simulations</h1>
   <p><a href="view.html">View mode</a></p>
 
-  <form id="overrides-form">
-    <label>divert_PV_ratio <input name="divert_PV_ratio" type="number" step="0.1" value="1.1" /></label><br />
-    <label>divert_attack_smoothing_time <input name="divert_attack_smoothing_time" type="number" value="20" /></label><br />
-    <label>divert_decay_smoothing_time <input name="divert_decay_smoothing_time" type="number" value="600" /></label><br />
-    <label>divert_min_charge_time <input name="divert_min_charge_time" type="number" value="600" /></label><br />
-    <label>current_shaper_max_pwr <input name="current_shaper_max_pwr" type="number" value="5000" /></label><br />
-    <label>current_shaper_smoothing_time <input name="current_shaper_smoothing_time" type="number" value="60" /></label><br />
-    <label>current_shaper_min_pause_time <input name="current_shaper_min_pause_time" type="number" value="300" /></label><br />
-    <label>current_shaper_data_maxinterval <input name="current_shaper_data_maxinterval" type="number" value="120" /></label><br />
-    <button type="submit">Run</button>
-  </form>
+  <div class="editor-layout">
+    <div class="editor-panel">
+      <div class="editor-section">
+        <h3 style="margin-top: 0;">Scenario File</h3>
+        <div class="editor-row">
+          <label for="scenario-select">Load existing</label>
+          <select id="scenario-select"></select>
+        </div>
+        <div class="editor-actions">
+          <button id="load-scenario" type="button">Load</button>
+          <button id="new-scenario" type="button">New</button>
+          <button id="reload-options" type="button">Refresh Lists</button>
+        </div>
+        <div class="editor-row">
+          <label for="save-name">Save name</label>
+          <input id="save-name" type="text" value="interactive_generated.json" />
+        </div>
+        <div class="editor-actions">
+          <button id="save-scenario" type="button">Save Scenario</button>
+          <button id="run-scenario" type="button">Run Interactive Simulation</button>
+        </div>
+      </div>
 
-  <div id="status"></div>
+      <div class="editor-section">
+        <h3 style="margin-top: 0;">Meta</h3>
+        <div class="editor-row"><label for="meta-id">id</label><input id="meta-id" type="text" /></div>
+        <div class="editor-row"><label for="meta-title">title</label><input id="meta-title" type="text" /></div>
+        <div class="editor-row"><label for="meta-category">category</label><input id="meta-category" type="text" /></div>
+        <div class="editor-row"><label for="meta-profile">profile</label><input id="meta-profile" type="text" /></div>
+      </div>
+
+      <div class="editor-section">
+        <h3 style="margin-top: 0;">Simulation</h3>
+        <div class="editor-row"><label for="sim-duration">duration</label><input id="sim-duration" type="number" step="1" /></div>
+        <div class="editor-row"><label for="sim-tick">tick_interval</label><input id="sim-tick" type="number" step="1" /></div>
+        <div class="editor-row"><label for="sim-start">start_time</label><input id="sim-start" type="text" /></div>
+      </div>
+
+      <div class="editor-section">
+        <h3 style="margin-top: 0;">Config</h3>
+        <div class="editor-row">
+          <label for="config-include">config include</label>
+          <select id="config-include"></select>
+        </div>
+        <div id="config-kv-list"></div>
+        <div class="editor-actions">
+          <button id="add-config-kv" type="button">Add Config Key</button>
+        </div>
+      </div>
+
+      <div class="editor-section">
+        <h3 style="margin-top: 0;">Peers and Inputs</h3>
+        <div id="peers-list"></div>
+        <div class="editor-actions">
+          <button id="add-peer" type="button">Add Peer</button>
+        </div>
+      </div>
+    </div>
+
+    <div class="editor-panel">
+      <h3 style="margin-top: 0;">Scenario JSON (Advanced)</h3>
+      <p style="margin-top: 0;">Use this if you need to edit any field that is not covered by the form.</p>
+      <textarea id="raw-scenario"></textarea>
+      <div class="editor-actions" style="margin-top: 8px;">
+        <button id="apply-raw" type="button">Apply Raw JSON to Form</button>
+        <button id="refresh-raw" type="button">Refresh Raw JSON from Form</button>
+      </div>
+    </div>
+  </div>
+
+  <div id="status" style="margin-top: 12px;"></div>
   <div id="content"></div>
 
   <script>
-    function collectOverrides() {
-      const form = document.getElementById("overrides-form");
-      const values = Object.fromEntries(new FormData(form).entries());
-      const overrides = {};
-      Object.keys(values).forEach((k) => {
-        const n = Number(values[k]);
-        overrides[k] = Number.isNaN(n) ? values[k] : n;
+    const INPUT_TYPES = ["solar", "grid_ie", "live_pwr"];
+
+    // Schema for all known config keys: drives key dropdown and typed value controls.
+    const CONFIG_SCHEMA = [
+      { key: "divert_enabled",                  type: "bool" },
+      { key: "charge_mode",                     type: "enum",  options: ["eco", "fast", "eco-boost"] },
+      { key: "divert_type",                     type: "enum",  options: [0, 1], labels: ["0 (Solar)", "1 (Grid I/E)"] },
+      { key: "divert_PV_ratio",                 type: "float", step: 0.05, min: 0.1 },
+      { key: "divert_attack_smoothing_time",    type: "int",   min: 0 },
+      { key: "divert_decay_smoothing_time",     type: "int",   min: 0 },
+      { key: "divert_min_charge_time",          type: "int",   min: 0 },
+      { key: "current_shaper_enabled",          type: "bool" },
+      { key: "current_shaper_max_pwr",          type: "int",   min: 0 },
+      { key: "current_shaper_smoothing_time",   type: "int",   min: 0 },
+      { key: "current_shaper_min_pause_time",   type: "int",   min: 0 },
+      { key: "current_shaper_data_maxinterval", type: "int",   min: 0 },
+      { key: "threephase",                      type: "bool" },
+    ];
+
+    // Return feeds from the global list that are valid for the given input type.
+    // solar: everything except data_shaper.csv
+    // grid_ie: *grid_ie* files only
+    // live_pwr: data_shaper.csv only
+    function feedsForInputType(inputType) {
+      return (state.options.feeds || []).filter((feed) => {
+        const name = feed.split("/").pop().toLowerCase();
+        if (inputType === "live_pwr") return name === "data_shaper.csv";
+        if (inputType === "grid_ie")  return name.includes("grid_ie");
+        if (inputType === "solar")    return name !== "data_shaper.csv";
+        return true;
       });
-      return overrides;
     }
 
-    async function runInteractive() {
+    const state = {
+      options: {
+        scenarios: [],
+        feeds: [],
+        config_includes: [],
+      },
+      scenario: null,
+      loadedSource: "",
+    };
+
+    function createDefaultScenario() {
+      return {
+        meta: {
+          id: "interactive_generated",
+          title: "Interactive Generated Scenario",
+          category: "interactive",
+          profile: "editor",
+        },
+        simulation: {
+          duration: 3600,
+          tick_interval: 60,
+          start_time: "2020-01-01T00:00:00Z",
+        },
+        config_include: "../config-default.json",
+        config: {
+          divert_enabled: true,
+          charge_mode: "eco",
+        },
+        peers: [
+          {
+            id: "evse-001",
+            voltage: 240,
+            min_current: 6,
+            max_current: 32,
+            ev: {
+              battery_capacity_kwh: 100,
+              initial_soc: 10,
+              max_charge_rate_kw: 7.2,
+            },
+            initial: {
+              online: true,
+              vehicle: true,
+            },
+            inputs: {
+              solar: {
+                csv: "../day1.csv",
+                time_column: 0,
+                column: 1,
+                skip_header: true,
+              },
+            },
+          },
+        ],
+      };
+    }
+
+    function deepClone(obj) {
+      return JSON.parse(JSON.stringify(obj));
+    }
+
+    function setStatus(message, isError) {
       const status = document.getElementById("status");
-      try {
-        status.textContent = "Running scenarios...";
-        await runInteractiveSimulation(collectOverrides());
-        status.textContent = "Completed.";
-        await renderIndex("content", "interactive", "output/interactive.json");
-      } catch (err) {
-        status.textContent = String(err);
+      status.textContent = message || "";
+      status.style.color = isError ? "#a94442" : "#222";
+    }
+
+    function parseLooseValue(text) {
+      const value = String(text || "").trim();
+      if (value === "") {
+        return "";
+      }
+      if (value === "true") {
+        return true;
+      }
+      if (value === "false") {
+        return false;
+      }
+      if (value === "null") {
+        return null;
+      }
+      const n = Number(value);
+      if (Number.isFinite(n) && /^-?\d+(\.\d+)?$/.test(value)) {
+        return n;
+      }
+      return value;
+    }
+
+    function toDisplayValue(value) {
+      if (typeof value === "string") {
+        return value;
+      }
+      return JSON.stringify(value);
+    }
+
+    function renderScenarioOptions() {
+      const select = document.getElementById("scenario-select");
+      select.innerHTML = "";
+      state.options.scenarios.forEach((scenario) => {
+        const option = document.createElement("option");
+        option.value = scenario.source;
+        option.textContent = `[${scenario.category}] ${scenario.title} (${scenario.name})`;
+        select.appendChild(option);
+      });
+    }
+
+    function renderConfigIncludeOptions(currentValue) {
+      const select = document.getElementById("config-include");
+      select.innerHTML = "";
+
+      const noneOption = document.createElement("option");
+      noneOption.value = "";
+      noneOption.textContent = "(none)";
+      select.appendChild(noneOption);
+
+      state.options.config_includes.forEach((path) => {
+        const option = document.createElement("option");
+        option.value = path;
+        option.textContent = path;
+        select.appendChild(option);
+      });
+
+      select.value = currentValue || "";
+      if (select.value !== (currentValue || "")) {
+        select.value = "";
       }
     }
 
-    document.getElementById("overrides-form").addEventListener("submit", async (e) => {
-      e.preventDefault();
-      await runInteractive();
-    });
+    function schemaFor(key) {
+      return CONFIG_SCHEMA.find((s) => s.key === key) || null;
+    }
 
-    runInteractive();
+    function buildValueControl(schema, currentVal) {
+      if (!schema || schema.type === "string") {
+        const input = document.createElement("input");
+        input.type = "text";
+        input.className = "config-value";
+        input.placeholder = "value";
+        input.value = currentVal !== undefined ? toDisplayValue(currentVal) : "";
+        return input;
+      }
+      if (schema.type === "bool") {
+        const input = document.createElement("input");
+        input.type = "checkbox";
+        input.className = "config-value";
+        input.checked = currentVal !== undefined ? !!currentVal : false;
+        return input;
+      }
+      if (schema.type === "int" || schema.type === "float") {
+        const input = document.createElement("input");
+        input.type = "number";
+        input.step = schema.step !== undefined ? schema.step : (schema.type === "float" ? "any" : "1");
+        input.className = "config-value";
+        if (schema.min !== undefined) { input.min = schema.min; }
+        input.value = currentVal !== undefined ? currentVal : (schema.min !== undefined ? schema.min : 0);
+        return input;
+      }
+      if (schema.type === "enum") {
+        const sel = document.createElement("select");
+        sel.className = "config-value";
+        schema.options.forEach((opt, idx) => {
+          const o = document.createElement("option");
+          o.value = JSON.stringify(opt);
+          o.textContent = schema.labels ? schema.labels[idx] : String(opt);
+          sel.appendChild(o);
+        });
+        const defaultSerialized = JSON.stringify(currentVal !== undefined ? currentVal : schema.options[0]);
+        sel.value = defaultSerialized;
+        if (sel.value !== defaultSerialized) { sel.selectedIndex = 0; }
+        return sel;
+      }
+      const input = document.createElement("input");
+      input.type = "text";
+      input.className = "config-value";
+      input.value = currentVal !== undefined ? toDisplayValue(currentVal) : "";
+      return input;
+    }
+
+    function createConfigRow(key, value) {
+      const row = document.createElement("div");
+      row.className = "config-kv-row";
+
+      const keySelect = document.createElement("select");
+      keySelect.className = "config-key-select";
+      CONFIG_SCHEMA.forEach(({ key: k }) => {
+        const opt = document.createElement("option");
+        opt.value = k;
+        opt.textContent = k;
+        keySelect.appendChild(opt);
+      });
+      const customOpt = document.createElement("option");
+      customOpt.value = "__custom__";
+      customOpt.textContent = "(custom key...)";
+      keySelect.appendChild(customOpt);
+
+      const customKeyInput = document.createElement("input");
+      customKeyInput.type = "text";
+      customKeyInput.className = "config-custom-key";
+      customKeyInput.placeholder = "key name";
+
+      const valueWrapper = document.createElement("div");
+      valueWrapper.className = "config-value-wrapper";
+
+      function updateValueControl(prevRawValue) {
+        const k = keySelect.value;
+        const isCustom = (k === "__custom__");
+        customKeyInput.style.display = isCustom ? "" : "none";
+        valueWrapper.innerHTML = "";
+        valueWrapper.appendChild(buildValueControl(isCustom ? null : schemaFor(k), prevRawValue));
+      }
+
+      const isKnown = !!schemaFor(key);
+      if (isKnown) {
+        keySelect.value = key;
+        customKeyInput.style.display = "none";
+        valueWrapper.appendChild(buildValueControl(schemaFor(key), value));
+      } else if (key) {
+        keySelect.value = "__custom__";
+        customKeyInput.value = key;
+        customKeyInput.style.display = "";
+        valueWrapper.appendChild(buildValueControl(null, value));
+      } else {
+        keySelect.value = CONFIG_SCHEMA[0].key;
+        customKeyInput.style.display = "none";
+        valueWrapper.appendChild(buildValueControl(schemaFor(CONFIG_SCHEMA[0].key), undefined));
+      }
+
+      keySelect.addEventListener("change", () => {
+        const existingInput = valueWrapper.querySelector(".config-value");
+        let prev;
+        if (existingInput) {
+          prev = existingInput.type === "checkbox" ? existingInput.checked : existingInput.value;
+        }
+        updateValueControl(prev);
+      });
+
+      const removeButton = document.createElement("button");
+      removeButton.type = "button";
+      removeButton.textContent = "✕";
+      removeButton.addEventListener("click", () => row.remove());
+
+      row.appendChild(keySelect);
+      row.appendChild(customKeyInput);
+      row.appendChild(valueWrapper);
+      row.appendChild(removeButton);
+      return row;
+    }
+
+    function renderConfigRows(configObj) {
+      const list = document.getElementById("config-kv-list");
+      list.innerHTML = "";
+      const config = configObj && typeof configObj === "object" ? configObj : {};
+      Object.keys(config).sort().forEach((key) => {
+        list.appendChild(createConfigRow(key, config[key]));
+      });
+      if (list.children.length === 0) {
+        list.appendChild(createConfigRow("", undefined));
+      }
+    }
+
+    function createInputRow(inputType, value) {
+      const tr = document.createElement("tr");
+
+      const typeTd = document.createElement("td");
+      typeTd.textContent = inputType;
+      tr.appendChild(typeTd);
+
+      const enabledTd = document.createElement("td");
+      const enabled = document.createElement("input");
+      enabled.type = "checkbox";
+      enabled.className = "input-enabled";
+      enabled.checked = !!value;
+      enabledTd.appendChild(enabled);
+      tr.appendChild(enabledTd);
+
+      const feedTd = document.createElement("td");
+      const feedSelect = document.createElement("select");
+      feedSelect.className = "input-feed";
+      const empty = document.createElement("option");
+      empty.value = "";
+      empty.textContent = "(none)";
+      feedSelect.appendChild(empty);
+      feedsForInputType(inputType).forEach((feed) => {
+        const opt = document.createElement("option");
+        opt.value = feed;
+        opt.textContent = feed.replace("../", "");
+        feedSelect.appendChild(opt);
+      });
+      feedSelect.value = value && value.csv ? value.csv : "";
+      if (feedSelect.value !== (value && value.csv ? value.csv : "")) {
+        feedSelect.value = "";
+      }
+      feedTd.appendChild(feedSelect);
+      tr.appendChild(feedTd);
+
+      const timeTd = document.createElement("td");
+      const timeInput = document.createElement("input");
+      timeInput.type = "number";
+      timeInput.step = "1";
+      timeInput.className = "input-time-column";
+      timeInput.value = value && value.time_column !== undefined ? value.time_column : 0;
+      timeTd.appendChild(timeInput);
+      tr.appendChild(timeTd);
+
+      const colTd = document.createElement("td");
+      const colInput = document.createElement("input");
+      colInput.type = "number";
+      colInput.step = "1";
+      colInput.className = "input-column";
+      colInput.value = value && value.column !== undefined ? value.column : 1;
+      colTd.appendChild(colInput);
+      tr.appendChild(colTd);
+
+      const headerTd = document.createElement("td");
+      const headerInput = document.createElement("input");
+      headerInput.type = "checkbox";
+      headerInput.className = "input-skip-header";
+      headerInput.checked = !!(value && value.skip_header);
+      headerTd.appendChild(headerInput);
+      tr.appendChild(headerTd);
+
+      const sepTd = document.createElement("td");
+      const sepInput = document.createElement("input");
+      sepInput.type = "text";
+      sepInput.className = "input-separator";
+      sepInput.value = value && value.separator ? value.separator : "";
+      sepInput.placeholder = ",";
+      sepTd.appendChild(sepInput);
+      tr.appendChild(sepTd);
+
+      tr.dataset.inputType = inputType;
+      return tr;
+    }
+
+    function createPeerCard(peer) {
+      const card = document.createElement("div");
+      card.className = "peer-card";
+
+      const title = document.createElement("h4");
+      title.textContent = `Peer ${peer.id || ""}`;
+      card.appendChild(title);
+
+      const row = (label, cls, value, type = "text") => {
+        const wrapper = document.createElement("div");
+        wrapper.className = "editor-row";
+
+        const l = document.createElement("label");
+        l.textContent = label;
+        const input = document.createElement("input");
+        input.type = type;
+        input.className = cls;
+        input.value = value !== undefined ? value : "";
+
+        wrapper.appendChild(l);
+        wrapper.appendChild(input);
+        card.appendChild(wrapper);
+      };
+
+      row("id", "peer-id", peer.id || "");
+      row("voltage", "peer-voltage", peer.voltage ?? 240, "number");
+      row("min_current", "peer-min-current", peer.min_current ?? 6, "number");
+      row("max_current", "peer-max-current", peer.max_current ?? 32, "number");
+
+      const ev = peer.ev || {};
+      row("ev.battery_capacity_kwh", "peer-ev-capacity", ev.battery_capacity_kwh ?? 100, "number");
+      row("ev.initial_soc", "peer-ev-initial-soc", ev.initial_soc ?? 10, "number");
+      row("ev.max_charge_rate_kw", "peer-ev-max-rate", ev.max_charge_rate_kw ?? 7.2, "number");
+
+      const initial = peer.initial || {};
+      const initialRow = document.createElement("div");
+      initialRow.className = "editor-row";
+      const initialLabel = document.createElement("label");
+      initialLabel.textContent = "initial";
+      const initialValue = document.createElement("div");
+
+      const online = document.createElement("input");
+      online.type = "checkbox";
+      online.className = "peer-online";
+      online.checked = initial.online !== false;
+      const onlineText = document.createElement("span");
+      onlineText.textContent = " online ";
+
+      const vehicle = document.createElement("input");
+      vehicle.type = "checkbox";
+      vehicle.className = "peer-vehicle";
+      vehicle.checked = initial.vehicle !== false;
+      const vehicleText = document.createElement("span");
+      vehicleText.textContent = " vehicle";
+
+      initialValue.appendChild(online);
+      initialValue.appendChild(onlineText);
+      initialValue.appendChild(vehicle);
+      initialValue.appendChild(vehicleText);
+      initialRow.appendChild(initialLabel);
+      initialRow.appendChild(initialValue);
+      card.appendChild(initialRow);
+
+      const table = document.createElement("table");
+      table.className = "inputs-table";
+      table.innerHTML = "<thead><tr><th>Input</th><th>Use</th><th>Feed</th><th>time_column</th><th>column</th><th>skip_header</th><th>separator</th></tr></thead>";
+      const body = document.createElement("tbody");
+
+      const inputs = peer.inputs || {};
+      INPUT_TYPES.forEach((inputType) => {
+        body.appendChild(createInputRow(inputType, inputs[inputType]));
+      });
+
+      table.appendChild(body);
+      card.appendChild(table);
+
+      const remove = document.createElement("button");
+      remove.type = "button";
+      remove.textContent = "Remove Peer";
+      remove.style.marginTop = "8px";
+      remove.addEventListener("click", () => card.remove());
+      card.appendChild(remove);
+
+      return card;
+    }
+
+    function renderPeers(peers) {
+      const list = document.getElementById("peers-list");
+      list.innerHTML = "";
+      const items = Array.isArray(peers) ? peers : [];
+      if (items.length === 0) {
+        list.appendChild(createPeerCard({ id: "evse-001" }));
+        return;
+      }
+      items.forEach((peer) => list.appendChild(createPeerCard(peer)));
+    }
+
+    function readConfigObjectFromForm() {
+      const config = {};
+      const rows = document.querySelectorAll("#config-kv-list .config-kv-row");
+      rows.forEach((row) => {
+        const keySelect = row.querySelector(".config-key-select");
+        const customKeyInput = row.querySelector(".config-custom-key");
+        if (!keySelect) { return; }
+
+        const key = keySelect.value === "__custom__"
+          ? (customKeyInput ? customKeyInput.value.trim() : "")
+          : keySelect.value;
+        if (!key) { return; }
+
+        const valueEl = row.querySelector(".config-value");
+        if (!valueEl) { return; }
+
+        let value;
+        if (valueEl.type === "checkbox") {
+          value = valueEl.checked;
+        } else if (valueEl.tagName === "SELECT") {
+          try { value = JSON.parse(valueEl.value); } catch { value = valueEl.value; }
+        } else if (valueEl.type === "number") {
+          const n = Number(valueEl.value);
+          value = Number.isFinite(n) ? n : 0;
+        } else {
+          value = parseLooseValue(valueEl.value);
+        }
+
+        config[key] = value;
+      });
+      return config;
+    }
+
+    function readPeersFromForm() {
+      const peers = [];
+      const cards = document.querySelectorAll("#peers-list .peer-card");
+      cards.forEach((card) => {
+        const peer = {
+          id: card.querySelector(".peer-id").value.trim() || "evse-001",
+          voltage: Number(card.querySelector(".peer-voltage").value || 0),
+          min_current: Number(card.querySelector(".peer-min-current").value || 0),
+          max_current: Number(card.querySelector(".peer-max-current").value || 0),
+          ev: {
+            battery_capacity_kwh: Number(card.querySelector(".peer-ev-capacity").value || 0),
+            initial_soc: Number(card.querySelector(".peer-ev-initial-soc").value || 0),
+            max_charge_rate_kw: Number(card.querySelector(".peer-ev-max-rate").value || 0),
+          },
+          initial: {
+            online: !!card.querySelector(".peer-online").checked,
+            vehicle: !!card.querySelector(".peer-vehicle").checked,
+          },
+          inputs: {},
+        };
+
+        const rows = card.querySelectorAll("tbody tr");
+        rows.forEach((row) => {
+          if (!row.querySelector(".input-enabled").checked) {
+            return;
+          }
+          const inputType = row.dataset.inputType;
+          const csv = row.querySelector(".input-feed").value;
+          if (!csv) {
+            return;
+          }
+          const input = {
+            csv,
+            time_column: Number(row.querySelector(".input-time-column").value || 0),
+            column: Number(row.querySelector(".input-column").value || 0),
+            skip_header: !!row.querySelector(".input-skip-header").checked,
+          };
+          const separator = row.querySelector(".input-separator").value;
+          if (separator) {
+            input.separator = separator;
+          }
+          peer.inputs[inputType] = input;
+        });
+
+        peers.push(peer);
+      });
+      return peers;
+    }
+
+    function scenarioFromForm() {
+      const includeValue = document.getElementById("config-include").value;
+      const scenario = {
+        meta: {
+          id: document.getElementById("meta-id").value.trim() || "interactive_generated",
+          title: document.getElementById("meta-title").value.trim() || "Interactive Generated Scenario",
+          category: document.getElementById("meta-category").value.trim() || "interactive",
+          profile: document.getElementById("meta-profile").value.trim() || "editor",
+        },
+        simulation: {
+          duration: Number(document.getElementById("sim-duration").value || 0),
+          tick_interval: Number(document.getElementById("sim-tick").value || 0),
+          start_time: document.getElementById("sim-start").value.trim(),
+        },
+        config: readConfigObjectFromForm(),
+        peers: readPeersFromForm(),
+      };
+
+      if (includeValue) {
+        scenario.config_include = includeValue;
+      }
+
+      return scenario;
+    }
+
+    function renderRawScenario(scenario) {
+      document.getElementById("raw-scenario").value = JSON.stringify(scenario, null, 2);
+    }
+
+    function scenarioFromRaw() {
+      const raw = document.getElementById("raw-scenario").value;
+      return JSON.parse(raw);
+    }
+
+    function renderScenarioIntoForm(scenario) {
+      const doc = scenario && typeof scenario === "object" ? scenario : createDefaultScenario();
+      state.scenario = deepClone(doc);
+
+      const meta = doc.meta || {};
+      document.getElementById("meta-id").value = meta.id || "";
+      document.getElementById("meta-title").value = meta.title || "";
+      document.getElementById("meta-category").value = meta.category || "";
+      document.getElementById("meta-profile").value = meta.profile || "";
+
+      const simulation = doc.simulation || {};
+      document.getElementById("sim-duration").value = simulation.duration ?? "";
+      document.getElementById("sim-tick").value = simulation.tick_interval ?? "";
+      document.getElementById("sim-start").value = simulation.start_time || "";
+
+      const includeValue = typeof doc.config_include === "string"
+        ? doc.config_include
+        : (Array.isArray(doc.config_includes) && doc.config_includes.length > 0 ? doc.config_includes[0] : "");
+      renderConfigIncludeOptions(includeValue);
+      renderConfigRows(doc.config || {});
+      renderPeers(doc.peers || []);
+      renderRawScenario(doc);
+    }
+
+    async function fetchJson(url, options) {
+      const response = await fetch(url, options);
+      if (!response.ok) {
+        throw new Error(`${url} failed: ${response.status}`);
+      }
+      return response.json();
+    }
+
+    async function loadOptions() {
+      const options = await fetchJson("/api/editor/options", { cache: "no-store" });
+      state.options = options;
+      renderScenarioOptions();
+      renderConfigIncludeOptions(document.getElementById("config-include").value);
+    }
+
+    async function loadSelectedScenario() {
+      const source = document.getElementById("scenario-select").value;
+      if (!source) {
+        return;
+      }
+      const payload = await fetchJson(`/api/scenario?source=${encodeURIComponent(source)}`, { cache: "no-store" });
+      state.loadedSource = payload.source || source;
+      document.getElementById("save-name").value = payload.name || "interactive_generated.json";
+      renderScenarioIntoForm(payload.scenario || createDefaultScenario());
+      setStatus(`Loaded ${state.loadedSource}`, false);
+    }
+
+    async function saveScenario() {
+      const scenario = scenarioFromForm();
+      const saveName = document.getElementById("save-name").value.trim() || "interactive_generated.json";
+      const payload = await fetchJson("/api/scenario/save", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          name: saveName,
+          scenario,
+        }),
+      });
+      state.loadedSource = payload.source || "";
+      document.getElementById("save-name").value = payload.name || saveName;
+      await loadOptions();
+      if (state.loadedSource) {
+        document.getElementById("scenario-select").value = state.loadedSource;
+      }
+      setStatus(`Saved ${payload.source}`, false);
+      renderRawScenario(scenario);
+    }
+
+    async function runScenario() {
+      const scenario = scenarioFromForm();
+      const scenarioName = "interactive_generated.json";
+      setStatus("Running interactive simulation...", false);
+      await runInteractiveSimulation({
+        scenario_doc: scenario,
+        scenario_name: scenarioName,
+      });
+      setStatus("Completed.", false);
+      await renderIndex("content", "interactive", "output/interactive.json");
+      await loadOptions();
+      const newSource = `data/scenarios/${scenarioName}`;
+      document.getElementById("scenario-select").value = newSource;
+    }
+
+    function installEventHandlers() {
+      document.getElementById("load-scenario").addEventListener("click", async () => {
+        try {
+          await loadSelectedScenario();
+        } catch (err) {
+          setStatus(String(err), true);
+        }
+      });
+
+      document.getElementById("new-scenario").addEventListener("click", () => {
+        state.loadedSource = "";
+        document.getElementById("save-name").value = "interactive_generated.json";
+        renderScenarioIntoForm(createDefaultScenario());
+        setStatus("Started new scenario", false);
+      });
+
+      document.getElementById("reload-options").addEventListener("click", async () => {
+        try {
+          await loadOptions();
+          setStatus("Refreshed scenario/config/feed lists", false);
+        } catch (err) {
+          setStatus(String(err), true);
+        }
+      });
+
+      document.getElementById("save-scenario").addEventListener("click", async () => {
+        try {
+          await saveScenario();
+        } catch (err) {
+          setStatus(String(err), true);
+        }
+      });
+
+      document.getElementById("run-scenario").addEventListener("click", async () => {
+        try {
+          await runScenario();
+        } catch (err) {
+          setStatus(String(err), true);
+        }
+      });
+
+      document.getElementById("add-config-kv").addEventListener("click", () => {
+        document.getElementById("config-kv-list").appendChild(createConfigRow("", ""));
+      });
+
+      document.getElementById("add-peer").addEventListener("click", () => {
+        document.getElementById("peers-list").appendChild(createPeerCard({ id: "evse-new" }));
+      });
+
+      document.getElementById("apply-raw").addEventListener("click", () => {
+        try {
+          const scenario = scenarioFromRaw();
+          renderScenarioIntoForm(scenario);
+          setStatus("Applied raw JSON", false);
+        } catch (err) {
+          setStatus(`Invalid JSON: ${String(err)}`, true);
+        }
+      });
+
+      document.getElementById("refresh-raw").addEventListener("click", () => {
+        try {
+          const scenario = scenarioFromForm();
+          renderRawScenario(scenario);
+          setStatus("Refreshed raw JSON from form", false);
+        } catch (err) {
+          setStatus(String(err), true);
+        }
+      });
+    }
+
+    async function init() {
+      installEventHandlers();
+      try {
+        await loadOptions();
+        if (state.options.scenarios.length > 0) {
+          document.getElementById("scenario-select").value = state.options.scenarios[0].source;
+          await loadSelectedScenario();
+        } else {
+          renderScenarioIntoForm(createDefaultScenario());
+        }
+      } catch (err) {
+        setStatus(String(err), true);
+        renderScenarioIntoForm(createDefaultScenario());
+      }
+    }
+
+    init();
   </script>
 </body>
 </html>

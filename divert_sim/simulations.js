@@ -354,10 +354,13 @@ async function renderCategory(targetId, category, profiles, indexPath = "output/
   }
 }
 
-async function runInteractiveSimulation(overrides) {
-  await fetch("/simulation", {
+async function runInteractiveSimulation(payload) {
+  const response = await fetch("/simulation", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify(overrides || {}),
+    body: JSON.stringify(payload || {}),
   });
+  if (!response.ok) {
+    throw new Error(`Simulation request failed: ${response.status}`);
+  }
 }
