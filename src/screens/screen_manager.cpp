@@ -97,19 +97,6 @@ unsigned long ScreenManager::update()
     nextUpdate = _screens[_current_screen]->update();
   }
 
-#ifdef TFT_BACKLIGHT_TIMEOUT_MS
-  bool vehicle_state = _evse.isVehicleConnected();
-  uint8_t evse_state = _evse.getEvseState();
-
-  if (_previous_evse_state != evse_state || _previous_vehicle_state != vehicle_state) {
-    wakeBacklight();
-    _previous_vehicle_state = vehicle_state;  
-    _previous_evse_state = evse_state;
-  } else {
-    updateBacklight();
-  }
-#endif //TFT_BACKLIGHT_TIMEOUT_MS
-
   return nextUpdate; 
 }
 
@@ -120,82 +107,14 @@ void ScreenManager::handleEvent(uint8_t event)
   }
 }
 
-void ScreenManager::setWifiMode(bool client, bool connected)
+bool ScreenManager::setWifiMode(bool client, bool connected)
 {
   // Currently only the charge screen needs to know about WiFi mode
   ChargeScreen* chargeScreen = static_cast<ChargeScreen*>(_screens[SCREEN_CHARGE]);
   if (chargeScreen) {
-    if(chargeScreen->setWifiMode(client, connected))
-    {
-      #ifdef TFT_BACKLIGHT_TIMEOUT_MS
-      wakeBacklight();
-      #endif //TFT_BACKLIGHT_TIMEOUT_MS
-    }
+    return chargeScreen->setWifiMode(client, connected);
   }
+  return false;
 }
-
-// Add backlight management implementations
-#ifdef TFT_BACKLIGHT_TIMEOUT_MS
-void ScreenManager::wakeBacklight()
-{
-  DBUGLN("🔦 Waking backlight");
-  digitalWrite(LCD_BACKLIGHT_PIN, HIGH);
-  _backlight_timeout = millis() + TFT_BACKLIGHT_TIMEOUT_MS;
-}
-
-void ScreenManager::timeoutBacklight()
-{
-  if (millis() >= _backlight_timeout) 
-  {
-    DBUGLN("Timing out backlight");
-    digitalWrite(LCD_BACKLIGHT_PIN, LOW);
-  }
-}
-
-void ScreenManager::updateBacklight()
-{
-  DBUGF("Backlight timeout in %lu ms", _backlight_timeout - millis());
-
-  bool timeout = true;
-  if (_evse.isVehicleConnected()) {
-    switch (_evse.getEvseState()) {
-      case OPENEVSE_STATE_STARTING:
-      case OPENEVSE_STATE_VENT_REQUIRED:
-      case OPENEVSE_STATE_DIODE_CHECK_FAILED:
-      case OPENEVSE_STATE_GFI_FAULT:
-      case OPENEVSE_STATE_NO_EARTH_GROUND:
-      case OPENEVSE_STATE_STUCK_RELAY:
-      case OPENEVSE_STATE_GFI_SELF_TEST_FAILED:
-      case OPENEVSE_STATE_OVER_TEMPERATURE:
-      case OPENEVSE_STATE_OVER_CURRENT:
-        timeout = false;
-        break;
-      case OPENEVSE_STATE_NOT_CONNECTED:
-      case OPENEVSE_STATE_CONNECTED:
-      case OPENEVSE_STATE_SLEEPING:
-      case OPENEVSE_STATE_DISABLED:
-        timeout = true;
-        break;
-      case OPENEVSE_STATE_CHARGING:
-#ifdef TFT_BACKLIGHT_CHARGING_THRESHOLD
-        if (_evse.getAmps() >= TFT_BACKLIGHT_CHARGING_THRESHOLD) {
-          wakeBacklight();
-          timeout = false;
-        }
-#else
-        timeout = false;
-#endif //TFT_BACKLIGHT_CHARGING_THRESHOLD
-        break;
-      default:
-        timeout = true;
-        break;
-    }
-  }
-  DBUGVAR(timeout);
-  if (timeout) {
-    timeoutBacklight();
-  }
-}
-#endif //TFT_BACKLIGHT_TIMEOUT_MS
 
 #endif // ENABLE_SCREEN_LCD_TFT
