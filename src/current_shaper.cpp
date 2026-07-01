@@ -164,7 +164,7 @@ void CurrentShaperTask::shapeCurrent() {
 			_smoothed_live_pwr = _live_pwr;
 		}
 		else {
-			_smoothed_live_pwr = _inputFilter.filter(_live_pwr, _smoothed_live_pwr, current_shaper_smoothing_time);
+			_smoothed_live_pwr = _inputFilter.filter(_live_pwr, _smoothed_live_pwr, current_shaper_input_smoothing_time);
 		}
 		livepwr = _smoothed_live_pwr;
 	}
@@ -177,15 +177,16 @@ void CurrentShaperTask::shapeCurrent() {
 //	if (livepwr > max_pwr) {
 //		livepwr = max_pwr;
 //	}
+        double max_cur;
 	if(!config_threephase_enabled()) {
-		_max_cur = ((max_pwr - livepwr) / evse.getVoltage()) + evse.getAmps();
+		max_cur = ((max_pwr - livepwr) / evse.getVoltage()) + evse.getAmps();
 	 }
 
 	else {
-		_max_cur = ((max_pwr - livepwr) / evse.getVoltage() / 3.0) + evse.getAmps();
+		max_cur = ((max_pwr - livepwr) / evse.getVoltage() / 3.0) + evse.getAmps();
 	}
-
-
+        // Smooth shaper output to avoid instability with delayed live power samples.
+        _max_cur = _outputFilter.filter(max_cur, _max_cur, current_shaper_output_smoothing_time);
 
 	_changed = true;
 }
