@@ -68,9 +68,9 @@ jobs:
             OpenEVSE_WiFi/divert_sim/output
             OpenEVSE_WiFi/divert_sim/view.html
 
-      - name: Publish Unit Test Results
-        uses: EnricoMi/publish-unit-test-result-action/composite@v2
+      - name: Publish Simulator Test Results
+        uses: EnricoMi/publish-unit-test-result-action@v2
         if: always()
         with:
           files: OpenEVSE_WiFi/divert_sim/output/*.xml
-          check_name: Test Results
+          check_name: Simulator Tests
