@@ -13,6 +13,7 @@
 #include "event.h"
 #include "net_manager.h"
 #include "openevse.h"
+#include "time_man.h"
 #include "espal.h"
 #include "emoncms.h"
 #include "tesla_client.h"
@@ -173,9 +174,13 @@ handleRapiRead()
   {
     if(RAPI_RESPONSE_OK == ret)
     {
+      // The EVSE stores UTC but getTime() returns mktime(utc_fields_as_local).
+      // Use evse_time_to_utc() to recover the actual UTC epoch.
+      time_t evse_utc = evse_time_to_utc(evse_time);
+
       time_t local_time = time(NULL);
-      if(evse_time > local_time) {
-        struct timeval set_time = { evse_time, 0 };
+      if(evse_utc > local_time) {
+        struct timeval set_time = { evse_utc, 0 };
         settimeofday(&set_time, NULL);
       }
     }
