@@ -143,7 +143,7 @@ void DivertTask::setMode(DivertMode mode)
 // Set charge rate depending on divert mode and solar / grid_ie
 void DivertTask::update_state()
 {
-  Profile_Start(DivertTask::update_state);
+  Profile_Start(DivertTask_update_state);
 
   StaticJsonDocument<256> event;
   event["divert_update"] = 0;
@@ -269,7 +269,7 @@ void DivertTask::update_state()
 
   _last_update = millis();
 
-  Profile_End(DivertTask::update_state, 5);
+  Profile_End(DivertTask_update_state, 5);
 } //end divert_update_state
 
 bool DivertTask::isActive()

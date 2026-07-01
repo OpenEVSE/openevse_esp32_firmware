@@ -37,6 +37,14 @@ class Mqtt : public MicroTasks::Task {
     unsigned long _connectStartTime = 0;  // When the current connection attempt started
     unsigned long _error_time = 0; // To handle disconnect events properly
 
+    // Exponential back-off on repeated failures — same pattern/table as
+    // TimeManager::retryDelay() (time_man.h/.cpp), so the two unrelated
+    // retry loops in this firmware behave consistently. Reset to 0 on a
+    // successful connect or an explicit user-triggered restart.
+    uint8_t _retryCount = 0;
+    unsigned long retryDelay();
+    void scheduleReconnect();
+
     // Version tracking for publishing updates
     uint8_t _claimsVersion = 0;
     uint8_t _overrideVersion = 0;

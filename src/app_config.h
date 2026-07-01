@@ -34,6 +34,19 @@ extern String www_username;
 extern String www_password;
 extern String www_certificate_id;
 
+#ifdef ENABLE_SSH_CLI
+// SSH CLI authentication (separate credentials from the web admin login)
+extern String ssh_username;
+extern String ssh_password;
+// NOTE: the SSH host key is NOT stored here — see ssh_server.cpp. It's a
+// ~400+ byte PEM-armored blob; the shared user_config blob this file backs
+// is a single fixed-size (CONFIG_SIZE, 3072 bytes) EEPROM-emulated region
+// shared by ~90 other fields, and silently truncates whatever doesn't fit
+// (ConfigJson::commit() bounds-checks writes against that fixed buffer with
+// no error reported on overflow). The host key instead gets its own
+// dedicated LittleFS file, sized independently.
+#endif
+
 // Web server ports
 extern uint32_t www_http_port;
 extern uint32_t www_https_port;
@@ -66,7 +79,6 @@ extern String emoncms_fingerprint;
 extern String mqtt_server;
 extern uint32_t mqtt_port;
 extern String mqtt_topic;
-extern String mqtt_user;
 extern String mqtt_pass;
 extern String mqtt_certificate_id;
 extern String mqtt_solar;
@@ -159,6 +171,9 @@ extern uint32_t flags;
 #define CONFIG_WIZARD               (1 << 25)
 #define CONFIG_DEFAULT_STATE        (1 << 26)
 #define CONFIG_TEMP_THROTTLE        (1 << 27) // next free bit after CONFIG_DEFAULT_STATE
+#define CONFIG_SERVICE_SSH          (1 << 28) // next free bit after CONFIG_TEMP_THROTTLE
+#define CONFIG_HTTP_ENABLED         (1 << 29)
+#define CONFIG_HTTPS_ENABLED        (1 << 30)
 
 #define INITIAL_CONFIG_VERSION  1
 
@@ -168,6 +183,20 @@ inline bool config_emoncms_enabled() {
 
 inline bool config_mqtt_enabled() {
   return CONFIG_SERVICE_MQTT == (flags & CONFIG_SERVICE_MQTT);
+}
+
+#ifdef ENABLE_SSH_CLI
+inline bool config_ssh_enabled() {
+  return CONFIG_SERVICE_SSH == (flags & CONFIG_SERVICE_SSH);
+}
+#endif
+
+inline bool config_http_enabled() {
+  return CONFIG_HTTP_ENABLED == (flags & CONFIG_HTTP_ENABLED);
+}
+
+inline bool config_https_enabled() {
+  return CONFIG_HTTPS_ENABLED == (flags & CONFIG_HTTPS_ENABLED);
 }
 
 inline bool config_ohm_enabled() {

@@ -25,6 +25,9 @@
 #include "current_shaper.h"
 
 #include "limit.h"
+#ifdef ENABLE_SSH_CLI
+#include "ssh_server.h"
+#endif
 #endif
 
 #ifndef HTTP_SERVER_PORT
@@ -59,6 +62,13 @@ String www_username;
 String www_password;
 String www_certificate_id;
 
+#ifdef ENABLE_SSH_CLI
+// SSH CLI authentication (separate credentials from the web admin login)
+// Host key is NOT here — see app_config.h and ssh_server.cpp.
+String ssh_username;
+String ssh_password;
+#endif
+
 // Web server ports
 uint32_t www_http_port;
 uint32_t www_https_port;
@@ -90,7 +100,6 @@ String emoncms_fingerprint;
 String mqtt_server;
 uint32_t mqtt_port;
 String mqtt_topic;
-String mqtt_user;
 String mqtt_pass;
 String mqtt_certificate_id;
 String mqtt_solar;
@@ -178,9 +187,17 @@ void config_changed(String name);
 #define CONFIG_DEFAULT_STATE_DEFAULT CONFIG_DEFAULT_STATE
 #endif
 
+// CONFIG_SERVICE_MQTT is intentionally NOT included here — MQTT stays
+// disabled out of the box (paired with mqtt_server/mqtt_pass defaulting to
+// "" below) so a fresh device never auto-dials a hardcoded broker/password.
+// CONFIG_HTTPS_ENABLED is intentionally NOT included here — HTTPS stays
+// disabled out of the box (plain HTTP only) until the user picks/generates
+// a certificate, since an unreachable HTTPS listener with no HTTP fallback
+// can lock the device's web UI out entirely.
 #define CONFIG_DEFAULT_FLAGS (CONFIG_SERVICE_SNTP | \
                               CONFIG_OCPP_AUTO_AUTH | \
                               CONFIG_OCPP_OFFLINE_AUTH | \
+                              CONFIG_HTTP_ENABLED | \
                               CONFIG_DEFAULT_STATE_DEFAULT)
 
 ConfigOptDefinition<uint32_t> flagsOpt = ConfigOptDefinition<uint32_t>(flags, CONFIG_DEFAULT_FLAGS, "flags", "f");
@@ -201,6 +218,13 @@ ConfigOpt *opts[] =
   new ConfigOptDefinition<String>(www_username, "", "www_username", "au"),
   new ConfigOptSecret(www_password, "", "www_password", "ap"),
   new ConfigOptDefinition<String>(www_certificate_id, "", "www_certificate_id", "wc"),
+
+#ifdef ENABLE_SSH_CLI
+// SSH CLI authentication (leave blank for none). Host key is not a config
+// opt — see app_config.h.
+  new ConfigOptDefinition<String>(ssh_username, "", "ssh_username", "shu"),
+  new ConfigOptSecret(ssh_password, "", "ssh_password", "shp"),
+#endif
 
 // Web server ports
   new ConfigOptDefinition<uint32_t>(www_http_port, HTTP_SERVER_PORT, "www_http_port", "whp"),
@@ -235,15 +259,14 @@ ConfigOpt *opts[] =
   new ConfigOptDefinition<String>(emoncms_fingerprint, "", "emoncms_fingerprint", "ef"),
 
 // MQTT Settings
-  new ConfigOptDefinition<String>(mqtt_server, "emonpi", "mqtt_server", "ms"),
+  new ConfigOptDefinition<String>(mqtt_server, "", "mqtt_server", "ms"),
   new ConfigOptDefinition<uint32_t>(mqtt_port, 1883, "mqtt_port", "mpt"),
   new ConfigOptDefinition<String>(mqtt_topic, esp_hostname, "mqtt_topic", "mt"),
-  new ConfigOptDefinition<String>(mqtt_user, "emonpi", "mqtt_user", "mu"),
-  new ConfigOptSecret(mqtt_pass, "emonpimqtt2016", "mqtt_pass", "mp"),
+  new ConfigOptSecret(mqtt_pass, "", "mqtt_pass", "mp"),
   new ConfigOptDefinition<String>(mqtt_certificate_id, "", "mqtt_certificate_id", "mct"),
   new ConfigOptDefinition<String>(mqtt_solar, "", "mqtt_solar", "mo"),
   new ConfigOptDefinition<String>(mqtt_grid_ie, "emon/emonpi/power1", "mqtt_grid_ie", "mg"),
-  new ConfigOptDefinition<String>(mqtt_vrms, "emon/emonpi/vrms", "mqtt_vrms", "mv"),
+  new ConfigOptDefinition<String>(mqtt_vrms, "", "mqtt_vrms", "mv"),
   new ConfigOptDefinition<String>(mqtt_live_pwr, "", "mqtt_live_pwr", "map"),
   new ConfigOptDefinition<String>(mqtt_vehicle_soc, "", "mqtt_vehicle_soc", "mc"),
   new ConfigOptDefinition<String>(mqtt_vehicle_range, "", "mqtt_vehicle_range", "mr"),
@@ -330,6 +353,11 @@ ConfigOpt *opts[] =
   new ConfigOptVirtualMaskedBool(flagsOpt, flagsChanged, CONFIG_WIZARD, CONFIG_WIZARD, "wizard_passed", "wzp"),
   new ConfigOptVirtualMaskedBool(flagsOpt, flagsChanged, CONFIG_DEFAULT_STATE, CONFIG_DEFAULT_STATE, "default_state", "dfs"),
   new ConfigOptVirtualMaskedBool(flagsOpt, flagsChanged, CONFIG_TEMP_THROTTLE, CONFIG_TEMP_THROTTLE, "temp_throttle_enabled", "tte"),
+  new ConfigOptVirtualMaskedBool(flagsOpt, flagsChanged, CONFIG_HTTP_ENABLED, CONFIG_HTTP_ENABLED, "www_http_enabled", "whe"),
+  new ConfigOptVirtualMaskedBool(flagsOpt, flagsChanged, CONFIG_HTTPS_ENABLED, CONFIG_HTTPS_ENABLED, "www_https_enabled", "wse"),
+#ifdef ENABLE_SSH_CLI
+  new ConfigOptVirtualMaskedBool(flagsOpt, flagsChanged, CONFIG_SERVICE_SSH, CONFIG_SERVICE_SSH, "ssh_enabled", "she"),
+#endif
   new ConfigOptVirtualMqttProtocol(flagsOpt, flagsChanged, "mqtt_protocol", "mprt"),
   new ConfigOptVirtualChargeMode(flagsOpt, flagsChanged, "charge_mode", "chmd")
 };
@@ -437,6 +465,9 @@ void config_changed(String name)
     timeManager.setSntpEnabled(config_sntp_enabled());
     OcppTask::notifyConfigChanged();
     evse.setSleepForDisable(!config_pause_uses_disabled());
+#ifdef ENABLE_SSH_CLI
+    sshServer.notifyConfigChanged();
+#endif
   } else if(name.startsWith("mqtt_")) {
     mqtt.restartConnection();
   } else if(name.startsWith("ocpp_")) {
@@ -467,6 +498,10 @@ void config_changed(String name)
     timeManager.setSntpEnabled(config_sntp_enabled());
   } else if(name == "sntp_hostname") {
     timeManager.setHost(sntp_hostname.c_str());
+#ifdef ENABLE_SSH_CLI
+  } else if(name.startsWith("ssh_")) {
+    sshServer.notifyConfigChanged();
+#endif
   }
 #endif
 }

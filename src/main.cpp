@@ -54,6 +54,9 @@
 #include "current_shaper.h"
 #include "temp_throttle.h"
 #include "limit.h"
+#ifdef ENABLE_SSH_CLI
+#include "ssh_server.h"
+#endif
 
 #if defined(ENABLE_PN532)
 #include "pn532.h"
@@ -238,6 +241,10 @@ void setup()
   input_setup();
 
   mqtt.begin();
+#ifdef ENABLE_SSH_CLI
+  sshServer.begin();
+  DBUGF("After sshServer.begin: %d", ESPAL.getFreeHeap());
+#endif
 
   ocpp.begin(evse, lcd, eventLog, rfid);
   DBUGF("After ocpp.begin: %d", ESPAL.getFreeHeap());

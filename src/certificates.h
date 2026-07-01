@@ -115,6 +115,8 @@ class CertificateStore
 
     bool removeCertificate(uint64_t id);
 
+    size_t count() { return _certs.size(); }
+
     const char *getCertificate(uint64_t id);
     const char *getKey(uint64_t id);
 

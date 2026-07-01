@@ -9,6 +9,7 @@
 #include "web_server.h"
 #include "lcd.h"
 #include "http_update.h"
+#include <espal.h>
 
 
 // -------------------------------------------------------------------
@@ -43,6 +44,17 @@ void handleUpdateFileUpload(MongooseHttpServerRequest *request)
     return;
   }
 
+  // Reject up front rather than letting the multipart body start flowing
+  // only to fail deep inside Update.begin() — e.g. an open SSH session
+  // (~20-40KB) plus this connection's own buffers can leave too little heap
+  // for the OTA partition write to start safely.
+  if(!http_update_has_sufficient_heap()) {
+    DEBUG_PORT.printf("Update upload rejected: free heap %u below %u minimum\n",
+      (unsigned)ESPAL.getFreeHeap(), (unsigned)HTTP_UPDATE_MIN_FREE_HEAP);
+    request->send(503, CONTENT_TYPE_TEXT, "Error: Not enough free memory to start a firmware update right now — close any other active connections (e.g. an SSH session) and try again");
+    return;
+  }
+
   if(false == requestPreProcess(request, upgradeResponse, CONTENT_TYPE_TEXT)) {
     return;
   }
@@ -64,6 +76,13 @@ void handleUpdateFileFetch(MongooseHttpServerRequest *request)
   DeserializationError error = deserializeJson(doc, body);
   if(DeserializationError::Code::Ok == error)
   {
+    if(!http_update_has_sufficient_heap()) {
+      response->setCode(503);
+      response->print(F("{\"msg\":\"Not enough free memory to start a firmware update right now\"}"));
+      request->send(response);
+      return;
+    }
+
     String url = doc["url"];
     if(http_update_from_url(url,
       [](size_t complete, size_t total) {},
