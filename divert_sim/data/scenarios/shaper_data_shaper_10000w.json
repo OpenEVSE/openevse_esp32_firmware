@@ -1,0 +1,43 @@
+{
+  "meta": {
+    "id": "shaper_data_shaper_10000w",
+    "title": "Shaper: Data Shaper (10000w)",
+    "category": "shaper",
+    "profile": "10000w"
+  },
+  "simulation": {
+    "duration": 7200,
+    "tick_interval": 1,
+    "start_time": "2023-12-17T13:25:00Z"
+  },
+  "config": {
+    "current_shaper_max_pwr": 10000
+  },
+  "peers": [
+    {
+      "id": "evse-001",
+      "voltage": 240,
+      "min_current": 6,
+      "max_current": 32,
+      "ev": {
+        "battery_capacity_kwh": 100,
+        "initial_soc": 10,
+        "max_charge_rate_kw": 7.2
+      },
+      "initial": {
+        "online": true,
+        "vehicle": true
+      },
+      "inputs": {
+        "live_pwr": {
+          "csv": "../data_shaper.csv",
+          "time_column": 0,
+          "column": 1,
+          "skip_header": true,
+          "separator": ";"
+        }
+      }
+    }
+  ],
+  "config_include": "config-shaper-default.json"
+}

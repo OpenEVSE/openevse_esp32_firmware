@@ -110,3 +110,16 @@ mkdir -p /tmp/lvgl-screens
 
 That command writes the boot, setup, and charge-state captures as `.ppm` images so
 review comments can attach fresh screenshots of the LVGL local UI.
+
+## divert_sim host build
+
+Build the simulator with PlatformIO:
+
+```bash
+pio run -e native_simulator
+```
+
+This writes the binary to `.pio/build/native_simulator/program`. The
+`divert_sim` pytest suite uses that binary automatically (or `./divert_sim` if
+present).
+
