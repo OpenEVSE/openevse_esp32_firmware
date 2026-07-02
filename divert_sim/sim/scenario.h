@@ -39,6 +39,7 @@ struct PeerScenario
   TimeSeries solar;
   TimeSeries grid_ie;
   TimeSeries live_pwr;
+  TimeSeries vrms;     // optional per-tick AC RMS voltage (overrides fixed 'voltage')
 
   // Optional per-peer override of divert mode: "off" (default), "solar", "grid".
   // When unset, divert is enabled if the peer has any solar/grid_ie data.

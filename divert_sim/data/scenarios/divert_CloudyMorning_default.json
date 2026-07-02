@@ -6,19 +6,9 @@
     "profile": "default"
   },
   "simulation": {
-    "duration": 57600,
+    "duration": 57300,
     "tick_interval": 60,
-    "start_time": "2018-08-06T05:25:00Z"
-  },
-  "config": {
-    "divert_enabled": true,
-    "charge_mode": "eco",
-    "divert_type": 0,
-    "current_shaper_enabled": false,
-    "divert_PV_ratio": 1.1,
-    "divert_attack_smoothing_time": 20,
-    "divert_decay_smoothing_time": 600,
-    "divert_min_charge_time": 600
+    "start_time": "2018-08-06T04:45:00Z"
   },
   "peers": [
     {
@@ -44,5 +34,6 @@
         }
       }
     }
-  ]
+  ],
+  "config_include": "config-divert-default.json"
 }

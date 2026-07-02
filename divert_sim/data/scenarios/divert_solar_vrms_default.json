@@ -6,24 +6,14 @@
     "profile": "default"
   },
   "simulation": {
-    "duration": 43200,
+    "duration": 74640,
     "tick_interval": 60,
     "start_time": "2020-03-27T01:00:00Z"
-  },
-  "config": {
-    "divert_enabled": true,
-    "charge_mode": "eco",
-    "divert_type": 0,
-    "current_shaper_enabled": false,
-    "divert_PV_ratio": 1.1,
-    "divert_attack_smoothing_time": 20,
-    "divert_decay_smoothing_time": 600,
-    "divert_min_charge_time": 600
   },
   "peers": [
     {
       "id": "evse-001",
-      "voltage": 248,
+      "voltage": 240,
       "min_current": 6,
       "max_current": 32,
       "ev": {
@@ -41,8 +31,15 @@
           "time_column": 0,
           "column": 1,
           "skip_header": true
+        },
+        "vrms": {
+          "csv": "../solar-vrms.csv",
+          "time_column": 0,
+          "column": 2,
+          "skip_header": true
         }
       }
     }
-  ]
+  ],
+  "config_include": "config-divert-default.json"
 }

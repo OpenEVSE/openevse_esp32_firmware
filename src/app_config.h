@@ -43,6 +43,15 @@ extern String esp_hostname;
 extern String esp_hostname_default;
 extern String sntp_hostname;
 
+// On-device LVGL TFT display theme: "dark" (nightshift) or "light".
+extern String tft_theme;
+extern uint32_t tft_brightness;
+extern uint32_t tft_standby_brightness;
+
+// LCD backlight timeout (in seconds, 0 = never timeout). Shared key with the
+// char-LCD / TFT_eSPI energy-saving timeout (upstream PR #1039).
+extern uint32_t lcd_backlight_timeout;
+
 // LIMIT Settings
 extern String limit_default_type;
 extern uint32_t limit_default_value;

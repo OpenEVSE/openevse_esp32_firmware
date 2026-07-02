@@ -12,13 +12,13 @@ jobs:
     name: Pre-built GUI Validation
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7
         with:
           submodules: recursive
 
       ### Check the pre-built GUI files are up-to-date
       - name: Cache pip
-        uses: actions/cache@v5
+        uses: actions/cache@v6
         with:
           path: ~/.cache/pip
           key: ${{ runner.os }}-pip-${{ hashFiles('**/requirements.txt') }}
@@ -26,7 +26,7 @@ jobs:
             ${{ runner.os }}-pip-
 
       - name: Cache PlatformIO
-        uses: actions/cache@v5
+        uses: actions/cache@v6
         with:
           path: ~/.platformio
           key: ${{ runner.os }}-${{ hashFiles('**/lockfiles') }}
@@ -76,7 +76,7 @@ jobs:
 
     steps:
       ### Check the version number in the code matches the tag number
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7
 
       - name: Set up Python
         uses: actions/setup-python@v6

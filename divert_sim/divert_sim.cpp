@@ -7,6 +7,7 @@
 #include <iostream>
 #include <string>
 #include <cstdio>   // std::remove
+#include <cstdlib>  // std::_Exit
 
 #include <Arduino.h>
 #include <MicroTasks.h>
@@ -52,10 +53,15 @@ void emoncms_publish(JsonDocument &) {}
 
 int main(int argc, char **argv)
 {
+  auto exit_now = [](int code) -> void {
+    std::cout.flush();
+    std::cerr.flush();
+    std::_Exit(code);
+  };
+
   std::string scenario;
   std::string output;
   std::string config_json_arg;
-
   cxxopts::Options options(argv[0], "OpenEVSE multi-peer backend simulator");
   options.add_options()
     ("help", "Print help")
@@ -70,7 +76,7 @@ int main(int argc, char **argv)
 
   if (result.count("help")) {
     std::cout << options.help() << std::endl;
-    return 0;
+    exit_now(0);
   }
 
   EpoxyTest::set_millis(0);
@@ -106,13 +112,19 @@ int main(int argc, char **argv)
     String json;
     config_serialize(json, true, false, false);
     std::cout << json.c_str() << std::endl;
+<<<<<<< HEAD
     return 0;
+=======
+    exit_now(0);
+>>>>>>> ee3487851fdeb40392bc9a3d51d40697ad89301a
   }
 
   if (scenario.empty()) {
     std::cerr << options.help() << std::endl;
-    return 1;
+    exit_now(1);
   }
 
-  return sim::run(scenario, output, result.count("config-check") != 0);
+  exit_now(sim::run(scenario, output, result.count("config-check") != 0));
+  return 0;
+}
 }

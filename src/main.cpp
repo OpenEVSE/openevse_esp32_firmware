@@ -35,6 +35,7 @@
 #include "app_config.h"
 #include "net_manager.h"
 #include "web_server.h"
+#include "flash_migrate.h"
 #include "ohm.h"
 #include "input.h"
 #include "emoncms.h"
@@ -113,6 +114,19 @@ static void handle_serial();
 #include "debug.h" // for debug_set_rapi_path
 static void process_command_line();
 static void process_early_command_line();
+#if defined(ENABLE_SCREEN_LVGL_TFT)
+#include "lvgl_tft/lvgl_capture.h"
+#include "lvgl_tft/lvgl_panel.h"
+static const char *lvgl_capture_dir = nullptr;
+#endif
+#endif
+
+#if defined(ESP32) && defined(ENABLE_FLASH_MIGRATE)
+// The flash-repartition migration writes to flash from deep inside the mongoose
+// + mbedTLS receive path (loop -> Mongoose.poll -> SSL_read -> onBody ->
+// esp_flash_write). That call chain overflows the default 8KB Arduino loop-task
+// stack and panics mid-stream, so give the loop task more headroom.
+SET_LOOP_TASK_STACK_SIZE(16 * 1024);
 #endif
 
 // -------------------------------------------------------------------
@@ -148,6 +162,16 @@ void setup()
   config_load_settings();
 #if defined(EPOXY_DUINO)
   process_command_line();
+#if defined(ENABLE_SCREEN_LVGL_TFT)
+  if(lvgl_capture_dir != nullptr) {
+    if(!lvgl_capture_write_samples(lvgl_capture_dir)) {
+      fflush(NULL);
+      _Exit(1);
+    }
+    fflush(NULL);
+    _Exit(0);
+  }
+#endif
 #endif
 
   DBUGF("After config_load_settings: %d", ESPAL.getFreeHeap());
@@ -262,6 +286,7 @@ void loop()
   Profile_End(Mongoose, 10);
 
   web_server_loop();
+  flash_migrate_loop();
   ota_loop();
   rapiSender.loop();
 
@@ -475,6 +500,13 @@ static void process_early_command_line()
 
 /** Print usage. */
 static void printUsage() {
+  const char *lvgl_usage = "";
+#if defined(ENABLE_SCREEN_LVGL_TFT)
+  lvgl_usage =
+    "  --dump-lvgl-screens DIR  Render sample LVGL UI screens into DIR as PPM files\n"
+    "  --lvgl-display MODE      Select native LVGL display mode: headless or window\n";
+#endif
+
   fprintf(
     stderr,
     "Usage: %s [--help|-h] [--rapi-serial PATH] [--set-config NAME=VALUE] [--] [args ...]\n"
@@ -553,6 +585,38 @@ static int parseFlags(int argc, const char* const* argv) {
         fprintf(stderr, "Set config: %s = %s\n", name, value);
       }
     }
+#if defined(ENABLE_SCREEN_LVGL_TFT)
+    else if (argEquals(argv[0], "--dump-lvgl-screens")) {
+      shift(argc, argv);
+      if (argc == 0) {
+        fprintf(stderr, "Error: --dump-lvgl-screens requires a directory argument\n");
+        cmdline_exit_requested = true;
+        return argc_original - argc;
+      }
+
+      lvgl_capture_dir = argv[0];
+    }
+    else if (argEquals(argv[0], "--lvgl-display")) {
+      shift(argc, argv);
+      if (argc == 0) {
+        fprintf(stderr, "Error: --lvgl-display requires a mode argument\n");
+        cmdline_exit_requested = true;
+        return argc_original - argc;
+      }
+
+      if (argEquals(argv[0], "headless")) {
+        lvgl_panel_set_display_mode(LVGL_PANEL_DISPLAY_HEADLESS);
+      }
+      else if (argEquals(argv[0], "window")) {
+        lvgl_panel_set_display_mode(LVGL_PANEL_DISPLAY_WINDOW);
+      }
+      else {
+        fprintf(stderr, "Error: unsupported LVGL display mode '%s' (expected headless or window)\n", argv[0]);
+        cmdline_exit_requested = true;
+        return argc_original - argc;
+      }
+    }
+#endif
     else if (argEquals(argv[0], "--")) {
       shift(argc, argv);
       break;

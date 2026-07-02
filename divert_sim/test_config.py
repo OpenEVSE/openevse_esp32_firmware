@@ -6,9 +6,11 @@ from pathlib import Path
 from subprocess import PIPE, run
 from tempfile import NamedTemporaryFile
 
+from run_simulations import BINARY
+
 
 def check_config(config: dict | None = None, load: bool = False, commit: bool = False) -> dict:
-    cmd = ["./divert_sim", "--config-check"]
+    cmd = [str(BINARY), "--config-check"]
     if config:
         cmd.extend(["-c", json.dumps(config)])
     if load:
@@ -37,7 +39,10 @@ def test_config_round_trip_commit_and_load():
     assert loaded["divert_PV_ratio"] == 1.25
 
 
-def test_scenario_rejects_solar_and_grid_ie_together():
+def test_scenario_accepts_solar_and_grid_ie_together():
+    # solar and grid_ie may come from different columns of the same CSV
+    # (e.g. day*_grid_ie.csv col1=solar, col2=grid_ie); both inputs are valid
+    # simultaneously and DivertTask reads them independently each tick.
     scenario = {
         "simulation": {
             "duration": 60,
@@ -76,13 +81,12 @@ def test_scenario_rejects_solar_and_grid_ie_together():
 
     try:
         result = run(
-            ["./divert_sim", "--scenario", tmp_path],
+            [str(BINARY), "--scenario", tmp_path],
             stdout=PIPE,
             stderr=PIPE,
             text=True,
             check=False,
         )
-        assert result.returncode != 0
-        assert "mutually exclusive" in result.stderr
+        assert result.returncode == 0, f"Expected success; stderr: {result.stderr}"
     finally:
         Path(tmp_path).unlink(missing_ok=True)

@@ -23,10 +23,28 @@ from typing import Any, Dict, List, Optional
 
 
 ROOT = Path(__file__).resolve().parent
-BINARY = ROOT / "divert_sim"
 DATA_DIR = ROOT / "data"
 SCENARIO_DIR = DATA_DIR / "scenarios"
 OUTPUT_DIR = ROOT / "output"
+PIO_ENV = os.environ.get("DIVERT_SIM_PIO_ENV", "native_simulator")
+
+
+def resolve_binary() -> Path:
+    local_binary = ROOT / "divert_sim"
+    if local_binary.exists():
+        return local_binary
+
+    pio_binary = ROOT.parent / ".pio" / "build" / PIO_ENV / "program"
+    if pio_binary.exists():
+        return pio_binary
+
+    raise FileNotFoundError(
+        "divert_sim binary not found. Build with `pio run -e native_simulator` "
+        "(or set DIVERT_SIM_PIO_ENV) or provide ./divert_sim."
+    )
+
+
+BINARY = resolve_binary()
 
 
 @dataclass
@@ -54,6 +72,53 @@ def _merge_dict(base: Dict[str, Any], overrides: Dict[str, Any]) -> Dict[str, An
     return merged
 
 
+def _scenario_base_dir(path: Path) -> Path:
+    return path.parent if path.parent else ROOT
+
+
+def _resolve_config_includes(scenario_doc: Dict[str, Any], scenario_path: Path) -> Dict[str, Any]:
+    resolved = dict(scenario_doc)
+    includes = resolved.get("config_include")
+    if includes is None:
+        includes = resolved.get("config_includes")
+
+    include_paths: List[str] = []
+    if isinstance(includes, str) and includes.strip():
+        include_paths = [includes]
+    elif isinstance(includes, list):
+        include_paths = [str(item) for item in includes if isinstance(item, str) and item.strip()]
+
+    merged_config: Dict[str, Any] = {}
+    base_dir = _scenario_base_dir(scenario_path)
+    for include_path in include_paths:
+        candidate = Path(include_path)
+        if not candidate.is_absolute():
+            candidate = (base_dir / candidate).resolve()
+        include_doc = _read_json(candidate)
+        if not isinstance(include_doc, dict):
+            raise ValueError(f"Config include is not an object: {candidate}")
+        if isinstance(include_doc.get("config"), dict):
+            include_doc = include_doc["config"]
+        merged_config = _merge_dict(merged_config, include_doc)
+
+    inline_config = resolved.get("config", {})
+    if isinstance(inline_config, dict):
+        merged_config = _merge_dict(merged_config, inline_config)
+    resolved["config"] = merged_config
+    return resolved
+
+
+def prepare_scenario_doc(
+    scenario_doc: Dict[str, Any],
+    scenario_path: Path,
+    config_overrides: Optional[Dict[str, Any]] = None,
+) -> Dict[str, Any]:
+    resolved = _resolve_config_includes(scenario_doc, scenario_path)
+    if config_overrides:
+        resolved["config"] = _merge_dict(resolved.get("config", {}), config_overrides)
+    return resolved
+
+
 def _parse_time(ts: str) -> datetime:
     return datetime.fromisoformat(ts.replace("Z", "+00:00"))
 
@@ -63,10 +128,16 @@ def setup_summary(_: str = "") -> None:
     OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
 
 
+def _is_config_profile(path: Path) -> bool:
+    return path.name.startswith("config-")
+
+
 def discover_scenarios() -> List[ScenarioMeta]:
     scenarios: List[ScenarioMeta] = []
     for raw_path in sorted(glob(str(SCENARIO_DIR / "*.json"))):
         path = Path(raw_path)
+        if _is_config_profile(path):
+            continue
         doc = _read_json(path)
 
         meta = doc.get("meta", {})
@@ -102,18 +173,17 @@ def run_scenario(
     cmd = [str(BINARY), "--scenario", str(path)]
 
     temp_scenario: Optional[Path] = None
-    if config_overrides:
-        scenario_doc = _read_json(path)
-        scenario_doc["config"] = _merge_dict(scenario_doc.get("config", {}), config_overrides)
-        with tempfile.NamedTemporaryFile(
-            "w",
-            suffix=".json",
-            delete=False,
-            dir=path.parent,
-        ) as tf:
-            json.dump(scenario_doc, tf)
-            temp_scenario = Path(tf.name)
-        cmd = [str(BINARY), "--scenario", str(temp_scenario)]
+    scenario_doc = _read_json(path)
+    scenario_doc = prepare_scenario_doc(scenario_doc, path, config_overrides=config_overrides)
+    with tempfile.NamedTemporaryFile(
+        "w",
+        suffix=".json",
+        delete=False,
+        dir=path.parent,
+    ) as tf:
+        json.dump(scenario_doc, tf)
+        temp_scenario = Path(tf.name)
+    cmd = [str(BINARY), "--scenario", str(temp_scenario)]
 
     try:
         if output:
@@ -139,11 +209,23 @@ def build_index(
     config_overrides: Optional[Dict[str, Any]] = None,
     profile_suffix: Optional[str] = None,
     index_name: str = "index.json",
+    scenario_ids: Optional[List[str]] = None,
+    scenario_sources: Optional[List[str]] = None,
 ) -> Dict[str, Any]:
     """Run all scenarios, write CSV outputs, and write an index file."""
     OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
 
     scenarios = discover_scenarios()
+    if scenario_ids:
+        allowed = set(scenario_ids)
+        scenarios = [scenario for scenario in scenarios if scenario.id in allowed]
+    if scenario_sources:
+        allowed_sources = set(scenario_sources)
+        scenarios = [
+            scenario
+            for scenario in scenarios
+            if str(scenario.path.relative_to(ROOT)) in allowed_sources
+        ]
     entries: List[Dict[str, Any]] = []
 
     for scenario in scenarios:
