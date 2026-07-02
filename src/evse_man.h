@@ -215,6 +215,7 @@ class EvseManager : public MicroTasks::Task
     };
 
     RapiSender _sender;
+    OpenEVSEClass _openevse;
     EvseMonitor _monitor;
     EventLog &_eventLog;
 
