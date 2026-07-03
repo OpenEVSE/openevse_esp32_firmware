@@ -340,10 +340,10 @@ void DivertTask::initDivertType() {
   if (divert_type == DIVERT_TYPE_UNSET) {
     // divert_type unset, guess previous version setup for smoother upgrade
     if (mqtt_grid_ie) {
-      divert_type == DIVERT_TYPE_GRID;
+      divert_type = DIVERT_TYPE_GRID;
     }
     else {
-      divert_type == DIVERT_TYPE_SOLAR;
+      divert_type = DIVERT_TYPE_SOLAR;
     }
     DynamicJsonDocument doc(JSON_OBJECT_SIZE(1) + 1); // use JSON in no-copy mode
     doc["divert_type"] = divert_type;
