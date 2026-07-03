@@ -10,6 +10,9 @@
 #include <espal.h>
 #include <ESPmDNS.h>
 #include <mdns.h>
+#if __has_include(<esp_idf_version.h>)
+#include <esp_idf_version.h>
+#endif
 
 // Global instance
 LoadSharingDiscoveryTask loadSharingDiscoveryTask;
@@ -169,11 +172,22 @@ bool LoadSharingDiscoveryTask::pollAsyncQuery() {
 
   // Poll for results with short timeout to avoid blocking
   // Returns true when query is complete (whether or not results were found)
-  bool isComplete = mdns_query_async_get_results(
+  bool isComplete = false;
+#if defined(ESP_IDF_VERSION_MAJOR) && ESP_IDF_VERSION_MAJOR >= 5
+  uint8_t numResults = 0;
+  isComplete = mdns_query_async_get_results(
+      (mdns_search_once_t*)_active_query,
+      100,  // 100ms polling timeout
+      &results,
+      &numResults
+  );
+#else
+  isComplete = mdns_query_async_get_results(
       (mdns_search_once_t*)_active_query,
       100,  // 100ms polling timeout
       &results
   );
+#endif
 
   if (isComplete) {
     unsigned long elapsed = millis() - _query_start_time;
