@@ -112,11 +112,7 @@ int main(int argc, char **argv)
     String json;
     config_serialize(json, true, false, false);
     std::cout << json.c_str() << std::endl;
-<<<<<<< HEAD
-    return 0;
-=======
     exit_now(0);
->>>>>>> ee3487851fdeb40392bc9a3d51d40697ad89301a
   }
 
   if (scenario.empty()) {
@@ -125,6 +121,4 @@ int main(int argc, char **argv)
   }
 
   exit_now(sim::run(scenario, output, result.count("config-check") != 0));
-  return 0;
-}
 }

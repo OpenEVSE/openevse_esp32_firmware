@@ -30,13 +30,22 @@ PIO_ENV = os.environ.get("DIVERT_SIM_PIO_ENV", "native_simulator")
 
 
 def resolve_binary() -> Path:
-    local_binary = ROOT / "divert_sim"
-    if local_binary.exists():
-        return local_binary
+    explicit_binary = os.environ.get("DIVERT_SIM_BINARY")
+    if explicit_binary:
+        path = Path(explicit_binary).expanduser().resolve()
+        if not path.exists():
+            raise FileNotFoundError(
+                f"DIVERT_SIM_BINARY points to missing file: {path}"
+            )
+        return path
 
     pio_binary = ROOT.parent / ".pio" / "build" / PIO_ENV / "program"
     if pio_binary.exists():
         return pio_binary
+
+    local_binary = ROOT / "divert_sim"
+    if local_binary.exists():
+        return local_binary
 
     raise FileNotFoundError(
         "divert_sim binary not found. Build with `pio run -e native_simulator` "
