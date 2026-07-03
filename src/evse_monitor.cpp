@@ -367,10 +367,12 @@ unsigned long EvseMonitor::loop(MicroTasks::WakeReason reason)
       }
     });
   }
-  else if(0 == _count % EVSE_MONITOR_STATE_TIME)
+  else if(0 == _count % EVSE_MONITOR_STATE_TIME && _heartbeat_interval > 0)
   {
-    // Heartbeat enable failed or was never set; retry periodically so WiFi module reboot resyncs
-    _openevse.heartbeatEnable(EVSE_HEATBEAT_INTERVAL, EVSE_HEARTBEAT_CURRENT, [this](int ret, int interval, int current, int triggered) {
+    // Heartbeat enable failed; retry with the configured values so WiFi module
+    // reboot resyncs. Gate on _heartbeat_interval > 0 so an explicit disable
+    // (interval==0) does not get overwritten by the retry.
+    _openevse.heartbeatEnable(_heartbeat_interval, _heartbeat_current, [this](int ret, int interval, int current, int triggered) {
       _heartbeat = RAPI_RESPONSE_OK == ret;
       if (_heartbeat && 2 == triggered) {
         _openevse.heartbeatPulse([](int ret) {
@@ -805,10 +807,14 @@ void EvseMonitor::enableBootLock(bool enabled, std::function<void(int ret)> call
 
 void EvseMonitor::setHeartbeatSupervision(uint32_t interval, uint32_t current, std::function<void(int ret)> callback)
 {
-  _openevse.heartbeatEnable(interval, current, [this, interval, current, callback](int ret, int i, int c, int t) {
+  // Disabling heartbeat (interval==0) must send current=0 so the EVSE falls
+  // back to 0 A on any pending missed-pulse condition rather than the
+  // configured restricted current.
+  uint32_t effective_current = (interval == 0) ? 0 : current;
+  _openevse.heartbeatEnable(interval, effective_current, [this, interval, effective_current, callback](int ret, int i, int c, int t) {
     if(RAPI_RESPONSE_OK == ret) {
       _heartbeat_interval = interval;
-      _heartbeat_current = current;
+      _heartbeat_current = effective_current;
       _heartbeat = interval > 0;
     }
     if(callback) callback(ret);
