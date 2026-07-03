@@ -25,6 +25,7 @@ private:
     bool listenAck = false;
     bool listen = false;
     bool _reader_present = false;   // probed once on the I2C bus at boot
+    bool _timer_scanning = false;   // true while a scheduler timer window needs scanning
 
     void initialize();
     void poll();
@@ -43,6 +44,7 @@ public:
     void setOnCardDetected(std::function<void(String&)> onCardDet) override {onCardDetected = onCardDet;}
     bool readerFailure() override;
     bool readerPresent() override;
+    void setTimerScanning(bool active) override { _timer_scanning = active; }
 };
 
 extern PN532 pn532;

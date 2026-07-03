@@ -19,6 +19,8 @@ public:
     // True when a reader is physically present on the bus, independent of
     // whether RFID is enabled (so the UI can show "reader found / not found").
     virtual bool readerPresent() = 0;
+    // Drive scanning even when global RFID is off (timer-window use-case).
+    virtual void setTimerScanning(bool active) = 0;
 };
 
 class RfidReaderNullDevice : public RfidReader {
@@ -26,6 +28,7 @@ public:
     void setOnCardDetected(std::function<void(String&)> onCardDet) override {}
     bool readerFailure() override;
     bool readerPresent() override { return false; }
+    void setTimerScanning(bool active) override {}
 };
 
 class RfidTask : public MicroTasks::Task {

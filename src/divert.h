@@ -84,6 +84,7 @@ class DivertTask : public MicroTasks::Task
 
     // Enable/disable timer-controlled divert (elevates claim priority to 1100)
     void setTimerDivertActive(bool active);
+    bool isTimerDivertActive() { return _timer_divert_active; }
 
     uint32_t lastUpdate() {
       return _last_update;

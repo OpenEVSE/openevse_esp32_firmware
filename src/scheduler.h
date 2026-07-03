@@ -289,7 +289,7 @@ class Scheduler : public MicroTasks::Task
 
     void applyFeature(Event *event);
     void cleanupFeature(SchedulerFeature feature);
-    void applyLimit(Event *event);
+    bool applyLimit(Event *event);
 
 
   protected:

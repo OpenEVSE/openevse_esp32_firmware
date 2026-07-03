@@ -202,6 +202,9 @@ void RfidTask::updateEvseClaim() {
 void RfidTask::setTimerRequired(bool required)
 {
     _timer_required = required;
+    // Drive PN532 scanning independently of rfid_enabled so a badge can be
+    // read during the timer window even when global RFID is turned off.
+    _rfid->setTimerScanning(required);
     if (!required && !config_rfid_enabled()) {
         // Remove auth so the gate is lifted when the timer ends
         resetAuthentication();

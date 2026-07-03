@@ -444,7 +444,9 @@ void config_changed(String name)
   if(name == "time_zone") {
     timeManager.setTimeZone(time_zone);
   } else if(name == "flags") {
-    divert.setMode((config_divert_enabled() && 1 == config_charge_mode()) ? DivertMode::Eco : DivertMode::Normal);
+    if(!divert.isTimerDivertActive()) {
+      divert.setMode((config_divert_enabled() && 1 == config_charge_mode()) ? DivertMode::Eco : DivertMode::Normal);
+    }
     if(mqtt.isConnected() != config_mqtt_enabled()) {
       mqtt.restartConnection();
     }
@@ -465,7 +467,9 @@ void config_changed(String name)
   } else if(name == "divert_enabled" || name == "charge_mode") {
     DBUGVAR(config_divert_enabled());
     DBUGVAR(config_charge_mode());
-    divert.setMode((config_divert_enabled() && 1 == config_charge_mode()) ? DivertMode::Eco : DivertMode::Normal);
+    if(!divert.isTimerDivertActive()) {
+      divert.setMode((config_divert_enabled() && 1 == config_charge_mode()) ? DivertMode::Eco : DivertMode::Normal);
+    }
   } else if(name.startsWith("current_shaper_")) {
     shaper.notifyConfigChanged(config_current_shaper_enabled()?1:0,current_shaper_max_pwr);
   } else if(name.startsWith("temp_throttle_")) {

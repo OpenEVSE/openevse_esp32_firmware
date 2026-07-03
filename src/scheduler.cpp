@@ -163,8 +163,14 @@ uint32_t Scheduler::EventInstance::getDelay(int fromDay, uint32_t fromOffset)
     delayDays += SCHEDULER_DAYS_IN_A_WEEK;
   }
 
-  uint32_t delay = (delayDays * 24 * 60 * 60) + (getStartOffset() - fromOffset);
-  return delay;
+  // Signed maths: when the event already passed today (delayDays==0, offset
+  // behind fromOffset) the subtraction underflowed to ~49 days as uint32_t.
+  int32_t delay = (int32_t)(delayDays * 24 * 60 * 60) +
+                  ((int32_t)getStartOffset() - (int32_t)fromOffset);
+  if(delay < 0) {
+    delay += 7 * 24 * 60 * 60;
+  }
+  return (uint32_t)delay;
 }
 
 uint32_t Scheduler::EventInstance::randomiseStartOffset()
@@ -204,12 +210,21 @@ void Scheduler::setup()
 {
   _loading = true;
 
-  // Load the schedule from storage
+  // Load the schedule from storage.  Size the JSON doc to the actual file so
+  // schedules with per-event feature/limit fields don't overflow the old fixed
+  // 1024-byte budget and silently load as empty (ArduinoJson 6 NoMemory).
   File file = LittleFS.open(SCHEDULE_PATH);
   if(file)
   {
-    deserialize(file);
+    size_t capacity = max((size_t)file.size() * 2, (size_t)4096);
+    DynamicJsonDocument doc(capacity);
+    DeserializationError err = deserializeJson(doc, file);
     file.close();
+    if(err == DeserializationError::Code::Ok && !doc.overflowed()) {
+      deserialize(doc);
+    } else {
+      DBUGLN("Scheduler: failed to load schedule (parse error or doc overflow)");
+    }
   }
 
   timeManager.onTimeChange(&_timeChangeListener);
@@ -250,7 +265,8 @@ unsigned long Scheduler::loop(MicroTasks::WakeReason reason)
       _activeFeature = SchedulerFeature::None;
     }
     if(_activeLimitType != SchedulerLimitType::None) {
-      limit.clear();
+      // Restore the user's persistent default limit rather than wiping it.
+      limit.setDefaultLimit(limit_default_type.c_str(), limit_default_value);
       _activeLimitType = SchedulerLimitType::None;
     }
 
@@ -277,9 +293,9 @@ unsigned long Scheduler::loop(MicroTasks::WakeReason reason)
         applyFeature(e);
         _activeFeature = e->getFeature();
 
-        // Apply session limit
-        if(e->getLimitType() != SchedulerLimitType::None) {
-          applyLimit(e);
+        // Apply session limit (applyLimit returns false for Cost/unimplemented
+        // types so we don't mark them active and trigger a spurious cleanup).
+        if(e->getLimitType() != SchedulerLimitType::None && applyLimit(e)) {
           _activeLimitType = e->getLimitType();
         }
       }
@@ -336,8 +352,8 @@ bool Scheduler::commit()
   // Serialize first and ensure there's room, so a full filesystem never
   // truncates a previously-valid schedule file into a corrupt one.
   DynamicJsonDocument doc(4096);
-  if(!serialize(doc) || !littlefs_has_space(measureJson(doc))) {
-    DBUGLN("Scheduler: insufficient space, keeping existing file");
+  if(!serialize(doc) || doc.overflowed() || !littlefs_has_space(measureJson(doc))) {
+    DBUGLN("Scheduler: insufficient space or doc overflow, keeping existing file");
     return false;
   }
 
@@ -556,8 +572,7 @@ bool Scheduler::addEvent(uint32_t event_id, const char *time, uint8_t days, cons
 {
   if(addEventInternal(event_id, time, days, state) != nullptr)
   {
-    commit();
-    return true;
+    return commit();
   }
 
   return false;
@@ -1047,6 +1062,12 @@ void Scheduler::applyFeature(Event *event)
       shaper.setTimerEnabled(true);
       break;
     case SchedulerFeature::RFID:
+      if(!rfid.readerPresent()) {
+        // No PN532 on this board — timer-RFID cannot function; skip silently
+        // so the rest of the scheduled event (state/current) still applies.
+        DBUGLN("Scheduler: no RFID reader present, skipping timer-RFID feature");
+        break;
+      }
       rfid.setTimerRequired(true);
       break;
     case SchedulerFeature::OCPP:
@@ -1083,7 +1104,7 @@ void Scheduler::cleanupFeature(SchedulerFeature feature)
   }
 }
 
-void Scheduler::applyLimit(Event *event)
+bool Scheduler::applyLimit(Event *event)
 {
   LimitProperties props;
   LimitType type;
@@ -1094,15 +1115,17 @@ void Scheduler::applyLimit(Event *event)
     case SchedulerLimitType::Energy: type = LimitType::Energy; break;
     case SchedulerLimitType::Soc:    type = LimitType::Soc;    break;
     case SchedulerLimitType::Cost:
-      // Cost limit not yet enforced (requires tariff config); store only
+      // Cost limit not yet enforced (requires tariff config); skip activation
+      // so _activeLimitType stays None and cleanup is never triggered.
       DBUGLN("Scheduler: cost limit stored but not yet enforced");
-      return;
+      return false;
     default:
-      return;
+      return false;
   }
 
   props.setType(type);
   props.setValue(event->getLimitValue());
   props.setAutoRelease(true);
   limit.set(props);
+  return true;
 }

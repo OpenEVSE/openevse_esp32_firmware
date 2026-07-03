@@ -66,7 +66,10 @@ unsigned long PN532::loop(MicroTasks::WakeReason reason){
         return SCAN_DELAY;
     }
 
-    if (!config_rfid_enabled()) {
+    // Allow scanning when a scheduler timer window requires RFID even if the
+    // global rfid_enabled setting is off — without this, the PN532 stays
+    // NOT_ACTIVE and no badge can ever be read during the window.
+    if (!config_rfid_enabled() && !_timer_scanning) {
         status = DeviceStatus::NOT_ACTIVE;
         return SCAN_DELAY;
     }

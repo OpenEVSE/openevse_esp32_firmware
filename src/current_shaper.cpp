@@ -122,9 +122,10 @@ void CurrentShaperTask::begin(EvseManager &evse) {
 
 void CurrentShaperTask::notifyConfigChanged( bool enabled, uint32_t max_pwr) {
 	DBUGF("CurrentShaper: got config changed");
-	_enabled = enabled;
+	// A timer window overrides the config setting; don't cancel it mid-window.
+	_enabled = enabled || _timer_controlled;
 	_max_pwr = max_pwr;
-	if (!enabled && _evse) _evse->release(EvseClient_OpenEVSE_Shaper);
+	if (!_enabled && _evse) _evse->release(EvseClient_OpenEVSE_Shaper);
 	StaticJsonDocument<128> event;
 	event["shaper"] = enabled == true ? 1 : 0;
 	event["shaper_max_pwr"] = max_pwr;

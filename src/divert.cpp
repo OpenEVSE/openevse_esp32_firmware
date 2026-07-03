@@ -296,14 +296,31 @@ void DivertTask::setTimerDivertActive(bool active)
 {
   _timer_divert_active = active;
   if(active) {
-    // Force eco mode for the timer window
-    setMode(DivertMode::Eco);
+    if(_mode == DivertMode::Eco) {
+      // Already in Eco — setMode() would no-op, so force-re-issue the idle
+      // Disabled claim at the elevated priority right now.  update_state()
+      // will override this with an Active claim if solar is available.
+      if(_evse->getState(EvseClient_OpenEVSE_Divert) != EvseState::Active) {
+        EvseProperties props(EvseState::Disabled);
+        _evse->claim(EvseClient_OpenEVSE_Divert, EvseManager_Priority_Limit, props);
+      }
+    } else {
+      setMode(DivertMode::Eco);
+    }
   } else {
-    // Restore the mode from persistent config
     bool configured_eco = config_divert_enabled() && 1 == config_charge_mode();
-    setMode(configured_eco ? DivertMode::Eco : DivertMode::Normal);
+    DivertMode target = configured_eco ? DivertMode::Eco : DivertMode::Normal;
+    if(_mode == DivertMode::Eco && target == DivertMode::Eco) {
+      // Staying in Eco — downgrade the idle claim back to Default priority.
+      if(_evse->getState(EvseClient_OpenEVSE_Divert) != EvseState::Active) {
+        EvseProperties props(EvseState::Disabled);
+        _evse->claim(EvseClient_OpenEVSE_Divert, EvseManager_Priority_Default, props);
+      }
+    } else {
+      setMode(target);
+    }
   }
-  // Wake update_state so the new priority takes effect immediately
+  // Wake update_state so priority changes propagate to the Active claim too.
   MicroTask.wakeTask(this);
 }
 
