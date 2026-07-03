@@ -530,3 +530,9 @@ def instance_pair_auto(instance_pair, unique_port_offset):
         return instance_pair(port_offset=unique_port_offset)
 
     return auto_create
+
+
+@pytest.fixture
+def evse_instance(instance_pair_auto):
+    """Backward-compatible single-instance fixture for charging integration tests."""
+    return instance_pair_auto()
