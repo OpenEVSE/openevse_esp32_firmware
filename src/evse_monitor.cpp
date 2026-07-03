@@ -417,6 +417,12 @@ bool EvseMonitor::begin(RapiSender &sender)
   {
     if(connected)
     {
+      // Immediately tell all WebSocket clients we are connected so the GUI
+      // banner clears without waiting for the full data-ready chain.
+      StaticJsonDocument<32> connectedEvent;
+      connectedEvent["evse_connected"] = 1;
+      event_send(connectedEvent);
+
       _energyMeter.begin(this);
       _openevse.onState([this](uint8_t evse_state, uint8_t pilot_state, uint32_t current_capacity, uint32_t vflags)
       {

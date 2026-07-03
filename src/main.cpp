@@ -274,7 +274,7 @@ void loop()
   MicroTask.update();
   Profile_End(MicroTask, 10);
 
-  if(OpenEVSE.isConnected())
+  if(evse.isConnected())
   {
     if(OPENEVSE_STATE_STARTING != evse.getEvseState())
     {
