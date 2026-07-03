@@ -297,10 +297,16 @@ void DivertTask::setTimerDivertActive(bool active)
   _timer_divert_active = active;
   if(active) {
     if(_mode == DivertMode::Eco) {
-      // Already in Eco — setMode() would no-op, so force-re-issue the idle
-      // Disabled claim at the elevated priority right now.  update_state()
-      // will override this with an Active claim if solar is available.
-      if(_evse->getState(EvseClient_OpenEVSE_Divert) != EvseState::Active) {
+      // Already in Eco — setMode() would no-op.  Re-issue the current claim
+      // immediately at Priority_Limit so the schedule's Timer(100) claim can't
+      // override us while we wait for the next MQTT update_state() call.
+      // If already charging, re-issue Active with the last known charge_rate;
+      // update_state() will correct it on the next solar/grid MQTT message.
+      if(_evse->getState(EvseClient_OpenEVSE_Divert) == EvseState::Active) {
+        EvseProperties props(EvseState::Active);
+        props.setChargeCurrent(_charge_rate);
+        _evse->claim(EvseClient_OpenEVSE_Divert, EvseManager_Priority_Limit, props);
+      } else {
         EvseProperties props(EvseState::Disabled);
         _evse->claim(EvseClient_OpenEVSE_Divert, EvseManager_Priority_Limit, props);
       }
@@ -311,8 +317,12 @@ void DivertTask::setTimerDivertActive(bool active)
     bool configured_eco = config_divert_enabled() && 1 == config_charge_mode();
     DivertMode target = configured_eco ? DivertMode::Eco : DivertMode::Normal;
     if(_mode == DivertMode::Eco && target == DivertMode::Eco) {
-      // Staying in Eco — downgrade the idle claim back to Default priority.
-      if(_evse->getState(EvseClient_OpenEVSE_Divert) != EvseState::Active) {
+      // Staying in Eco — downgrade back to Default priority immediately.
+      if(_evse->getState(EvseClient_OpenEVSE_Divert) == EvseState::Active) {
+        EvseProperties props(EvseState::Active);
+        props.setChargeCurrent(_charge_rate);
+        _evse->claim(EvseClient_OpenEVSE_Divert, EvseManager_Priority_Divert, props);
+      } else {
         EvseProperties props(EvseState::Disabled);
         _evse->claim(EvseClient_OpenEVSE_Divert, EvseManager_Priority_Default, props);
       }
@@ -320,7 +330,7 @@ void DivertTask::setTimerDivertActive(bool active)
       setMode(target);
     }
   }
-  // Wake update_state so priority changes propagate to the Active claim too.
+  // Wake update_state so the next MQTT value corrects the charge_rate.
   MicroTask.wakeTask(this);
 }
 
