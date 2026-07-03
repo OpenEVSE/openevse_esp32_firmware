@@ -51,7 +51,9 @@ jobs:
         if: github.event_name == 'workflow_run'
         uses: actions/download-artifact@v6
         with:
-          name: native.bin
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          run-id: ${{ github.event.workflow_run.id }}
+          name: native_openevse.program
           path: ./
 
       - name: Build native firmware locally
@@ -67,10 +69,19 @@ jobs:
       - name: Make native binary executable
         run: |
           if [ ! -f program ]; then
+            CANDIDATE="$(find . -type f -name program | head -n 1)"
+            if [ -n "$CANDIDATE" ]; then
+              cp "$CANDIDATE" ./program
+            fi
+          fi
+
+          if [ ! -f program ]; then
             echo "Error: native program not found"
             ls -la
+            find . -maxdepth 4 -type f | head -n 200
             exit 1
           fi
+
           chmod +x program
           file program
 
@@ -98,14 +109,14 @@ jobs:
         if: always()
         uses: actions/upload-artifact@v7
         with:
-          name: integration-test-results-${{ matrix.num_instances }}
+          name: integration-test-results
           path: tests/integration/output/
 
       - name: Publish test results
         if: always()
         uses: EnricoMi/publish-unit-test-result-action@v2
         with:
-          files: tests/integration/output/test_results_*.xml
+          files: tests/integration/output/test_results*.xml
           check_name: Integration Tests
           compare_to_earlier_commit: false
 
