@@ -45,7 +45,7 @@ jobs:
       - name: Install system dependencies
         run: |
           sudo apt-get update
-          sudo apt-get install -y libavahi-client-dev libavahi-common-dev socat
+          sudo apt-get install -y libavahi-client-dev libavahi-common-dev avahi-utils socat
 
       - name: Download native firmware artifact
         if: github.event_name == 'workflow_run'
