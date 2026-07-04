@@ -330,6 +330,11 @@ class Scheduler : public MicroTasks::Task
 
     bool serializePlan(DynamicJsonDocument &doc);
 
+    // JSON document capacity sufficient to serialize the whole stored
+    // schedule.  Scales with the event count: the per-event feature/limit
+    // fields outgrew the old fixed 1024/4096 budgets (~384 bytes/event).
+    size_t scheduleJsonCapacity();
+
     void notifyConfigChanged();
 
     uint32_t getVersion() {

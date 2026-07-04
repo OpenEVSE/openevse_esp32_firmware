@@ -224,6 +224,10 @@ bool RfidTask::readerPresent() {
     return _rfid->readerPresent();
 }
 
+bool RfidTask::probeReader() {
+    return _rfid->probeReader();
+}
+
 bool RfidReaderNullDevice::readerFailure() {
     return config_rfid_enabled();
 }

@@ -4,6 +4,7 @@
 
 #include "debug.h"
 #include "scheduler.h"
+#include "scheduler_time.h"
 #include "fs_util.h"
 #include "time_man.h"
 #include "emonesp.h"
@@ -128,27 +129,17 @@ uint32_t Scheduler::EventInstance::getDuration()
 {
   EventInstance &next = getNext();
 
-  int lengthInDays = next._day - _day;
-  if(lengthInDays < 0) {
-    lengthInDays += SCHEDULER_DAYS_IN_A_WEEK;
-  }
-
-  // Signed maths so a non-positive span can be detected (was an unsigned
-  // underflow that produced a week-long, never-ending window).
-  int32_t duration = (lengthInDays * 24 * 60 * 60) +
-                     ((int32_t)next.getStartOffset() - (int32_t)getStartOffset());
-
-  // The next occurrence wraps to the following week whenever the span is
-  // non-positive: a lone event (its "next" is itself), OR the last event of a
-  // day wrapping back to an earlier event on the SAME day — e.g. a Sunday-only
-  // window where the 17:50 stop's next is the 17:49 start a week later
-  // (lengthInDays == 0, offset diff negative). Without this the disabled "gap"
-  // between windows is never current, so the feature looks active all week and
-  // never turns off.
-  if(duration <= 0) {
-    duration += 7 * 24 * 60 * 60;
-  }
-  return (uint32_t)duration;
+  // Signed weekly-wheel maths (see scheduler_time.h; was an unsigned
+  // underflow that produced a week-long, never-ending window).  A
+  // non-positive span wraps to the following week: a lone event (its "next"
+  // is itself), OR the last event of a day wrapping back to an earlier event
+  // on the SAME day — e.g. a Sunday-only window where the 17:50 stop's next
+  // is the 17:49 start a week later.  Without this the disabled "gap"
+  // between windows is never current, so the feature looks active all week
+  // and never turns off.
+  return SchedulerTime::weeklySpan(_day, (int32_t)getStartOffset(),
+                                   next._day, (int32_t)next.getStartOffset(),
+                                   true);
 }
 
 int32_t Scheduler::EventInstance::getStartOffset(int fromDay, int dayOffset) {
@@ -158,19 +149,12 @@ int32_t Scheduler::EventInstance::getStartOffset(int fromDay, int dayOffset) {
 
 uint32_t Scheduler::EventInstance::getDelay(int fromDay, uint32_t fromOffset)
 {
-  int delayDays = _day - fromDay;
-  if(delayDays < 0) {
-    delayDays += SCHEDULER_DAYS_IN_A_WEEK;
-  }
-
-  // Signed maths: when the event already passed today (delayDays==0, offset
-  // behind fromOffset) the subtraction underflowed to ~49 days as uint32_t.
-  int32_t delay = (int32_t)(delayDays * 24 * 60 * 60) +
-                  ((int32_t)getStartOffset() - (int32_t)fromOffset);
-  if(delay < 0) {
-    delay += 7 * 24 * 60 * 60;
-  }
-  return (uint32_t)delay;
+  // Signed weekly-wheel maths (see scheduler_time.h): when the event already
+  // passed today the subtraction underflowed to ~49 days as uint32_t.  A
+  // delay of zero means "now" and does not wrap.
+  return SchedulerTime::weeklySpan(fromDay, (int32_t)fromOffset,
+                                   _day, (int32_t)getStartOffset(),
+                                   false);
 }
 
 uint32_t Scheduler::EventInstance::randomiseStartOffset()
@@ -351,7 +335,7 @@ bool Scheduler::commit()
 
   // Serialize first and ensure there's room, so a full filesystem never
   // truncates a previously-valid schedule file into a corrupt one.
-  DynamicJsonDocument doc(4096);
+  DynamicJsonDocument doc(scheduleJsonCapacity());
   if(!serialize(doc) || doc.overflowed() || !littlefs_has_space(measureJson(doc))) {
     DBUGLN("Scheduler: insufficient space or doc overflow, keeping existing file");
     return false;
@@ -646,12 +630,14 @@ bool Scheduler::deserialize(String& json)
 
 bool Scheduler::deserialize(const char *json)
 {
-  // IMPROVE: work out a better value
-  const size_t capacity = 1024;
+  // Parsing from const char* copies keys/values into the pool, so a
+  // multi-rule Charge Manager schedule overflows a fixed 1024 budget at
+  // ~2 events.  Size from the input instead (2x covers ArduinoJson overhead).
+  const size_t capacity = max((size_t)4096, strlen(json) * 2);
   DynamicJsonDocument doc(capacity);
 
   DeserializationError err = deserializeJson(doc, json);
-  if(DeserializationError::Code::Ok == err) {
+  if(DeserializationError::Code::Ok == err && !doc.overflowed()) {
     return Scheduler::deserialize(doc);
   }
 
@@ -660,12 +646,12 @@ bool Scheduler::deserialize(const char *json)
 
 bool Scheduler::deserialize(Stream &stream)
 {
-  // IMPROVE: work out a better value
-  const size_t capacity = 1024;
+  // Size from the bytes remaining in the stream (see deserialize(const char*)).
+  const size_t capacity = max((size_t)4096, (size_t)stream.available() * 2);
   DynamicJsonDocument doc(capacity);
 
   DeserializationError err = deserializeJson(doc, stream);
-  if(DeserializationError::Code::Ok == err) {
+  if(DeserializationError::Code::Ok == err && !doc.overflowed()) {
     return Scheduler::deserialize(doc);
   }
 
@@ -710,8 +696,9 @@ bool Scheduler::deserialize(String& json, uint32_t event)
 
 bool Scheduler::deserialize(const char *json, uint32_t event)
 {
-  // IMPROVE: work out a better value
-  const size_t capacity = 1024;
+  // Single event, but with feature/limit fields 1024 was borderline; size
+  // from the input like the bulk path.
+  const size_t capacity = max((size_t)2048, strlen(json) * 2);
   DynamicJsonDocument doc(capacity);
 
   DBUGVAR(json);
@@ -802,11 +789,25 @@ bool Scheduler::deserializeInternal(JsonObject &obj, uint32_t event_id)
   return false;
 }
 
+size_t Scheduler::scheduleJsonCapacity()
+{
+  size_t count = 0;
+  for(int i = 0; i < SCHEDULER_MAX_EVENTS; i++)
+  {
+    if(_events[i].isValid()) {
+      count++;
+    }
+  }
+
+  // Per-event budget: object of up to 8 members (128) + days array of up to 7
+  // (112) + copied key/value strings (time/state/feature/limit names, ~100),
+  // rounded up to 384; 512 headroom for the enclosing array and slop.
+  return 512 + count * 384;
+}
+
 bool Scheduler::serialize(String& json)
 {
-  // IMPROVE: do a better calculation of required space
-  const size_t capacity = 4096;
-  DynamicJsonDocument doc(capacity);
+  DynamicJsonDocument doc(scheduleJsonCapacity());
 
   if(Scheduler::serialize(doc))
   {
@@ -819,9 +820,7 @@ bool Scheduler::serialize(String& json)
 
 bool Scheduler::serialize(Stream &stream)
 {
-  // IMPROVE: do a better calculation of required space
-  const size_t capacity = 4096;
-  DynamicJsonDocument doc(capacity);
+  DynamicJsonDocument doc(scheduleJsonCapacity());
 
   if(Scheduler::serialize(doc))
   {
@@ -845,7 +844,10 @@ bool Scheduler::serialize(DynamicJsonDocument &doc)
     }
   }
 
-  return true;
+  // On overflow createNestedObject() returns null objects and events are
+  // silently dropped from the output — report that as a failure rather than
+  // serving a truncated schedule.
+  return !doc.overflowed();
 }
 
 bool Scheduler::serialize(String& json, uint32_t event)
@@ -1062,10 +1064,17 @@ void Scheduler::applyFeature(Event *event)
       shaper.setTimerEnabled(true);
       break;
     case SchedulerFeature::RFID:
-      if(!rfid.readerPresent()) {
-        // No PN532 on this board — timer-RFID cannot function; skip silently
-        // so the rest of the scheduled event (state/current) still applies.
+      // Re-probe at window start — the boot-time presence check can
+      // false-negative and never recovers on its own.
+      if(!rfid.probeReader()) {
+        // No reader — timer-RFID cannot function; skip enforcement so the
+        // rest of the scheduled event (state/current) still applies, but
+        // surface it: silently failing open is wrong for an access-control
+        // feature.
         DBUGLN("Scheduler: no RFID reader present, skipping timer-RFID feature");
+        StaticJsonDocument<64> evt;
+        evt["schedule_feature_skipped"] = "rfid";
+        event_send(evt);
         break;
       }
       rfid.setTimerRequired(true);

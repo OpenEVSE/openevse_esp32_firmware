@@ -50,11 +50,23 @@ PN532::PN532() : MicroTasks::Task() {
 
 void PN532::begin() {
     Wire.begin(I2C_SDA, I2C_SCL);
-    // One-shot I2C presence probe: a reader ACKs its address even when RFID
-    // isn't enabled, so the UI can report whether one is connected.
+    // I2C presence probe: a reader ACKs its address even when RFID isn't
+    // enabled, so the UI can report whether one is connected.
+    probeReader();
+    MicroTask.startTask(this);
+}
+
+bool PN532::probeReader() {
+    if (status == DeviceStatus::ACTIVE) {
+        // Actively communicating — no need to disturb the bus.
+        return true;
+    }
+    // Re-run the ACK probe and refresh the cached result: the boot-time
+    // one-shot can false-negative (reader still powering up) and would
+    // otherwise report absent until reboot.
     Wire.beginTransmission(PN532_I2C_ADDRESS);
     _reader_present = (Wire.endTransmission() == 0);
-    MicroTask.startTask(this);
+    return _reader_present;
 }
 
 unsigned long PN532::loop(MicroTasks::WakeReason reason){

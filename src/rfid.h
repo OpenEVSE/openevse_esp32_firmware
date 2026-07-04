@@ -19,6 +19,9 @@ public:
     // True when a reader is physically present on the bus, independent of
     // whether RFID is enabled (so the UI can show "reader found / not found").
     virtual bool readerPresent() = 0;
+    // Actively re-check for the reader (e.g. at timer-window start) — the
+    // boot-time result can false-negative and would otherwise never recover.
+    virtual bool probeReader() { return readerPresent(); }
     // Drive scanning even when global RFID is off (timer-window use-case).
     virtual void setTimerScanning(bool active) = 0;
 };
@@ -68,6 +71,7 @@ class RfidTask : public MicroTasks::Task {
         String getAuthenticatedTag();
         bool communicationFails();
         bool readerPresent();
+        bool probeReader();
 
         void setOnCardScanned(std::function<bool(const String& idTag)> *onCardScanned);
 

@@ -44,6 +44,7 @@ public:
     void setOnCardDetected(std::function<void(String&)> onCardDet) override {onCardDetected = onCardDet;}
     bool readerFailure() override;
     bool readerPresent() override;
+    bool probeReader() override;
     void setTimerScanning(bool active) override { _timer_scanning = active; }
 };
 

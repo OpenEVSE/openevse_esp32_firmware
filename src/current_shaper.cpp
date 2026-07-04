@@ -54,8 +54,11 @@ unsigned long CurrentShaperTask::loop(MicroTasks::WakeReason reason) {
 				// claim only if we have change
 				if (_evse->getState() != props.getState() || _evse->getChargeCurrent() != props.getChargeCurrent())
 				{
-					// Always-on shaper claims at Safety (5000); timer-window shaper at Limit (1100)
-					int priority = _timer_controlled ? EvseManager_Priority_Limit : EvseManager_Priority_Safety;
+					// Always-on shaper claims at Safety (5000); a shaper running *only*
+					// because of a timer window claims at Limit (1100).  A window must
+					// never demote a config-enabled (always-on) shaper below Safety.
+					int priority = (_timer_controlled && !config_current_shaper_enabled())
+					               ? EvseManager_Priority_Limit : EvseManager_Priority_Safety;
 					_evse->claim(EvseClient_OpenEVSE_Shaper, priority, props);
 					StaticJsonDocument<128> event;
 					event["shaper"] = 1;
@@ -160,8 +163,8 @@ void CurrentShaperTask::setState(bool state) {
 void CurrentShaperTask::setTimerEnabled(bool active) {
 	_timer_controlled = active;
 	_enabled = active ? true : config_current_shaper_enabled();
-	if (!_enabled) {
-		evse.release(EvseClient_OpenEVSE_Shaper);
+	if (!_enabled && _evse) {
+		_evse->release(EvseClient_OpenEVSE_Shaper);
 	}
 	StaticJsonDocument<128> event;
 	event["shaper"] = _enabled ? 1 : 0;
