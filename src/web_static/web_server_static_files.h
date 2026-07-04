@@ -5,8 +5,8 @@
 #include "web_server.assets_es_DkDtzVVF_js_gz.h"
 #include "web_server.assets_fr_uI_7mRBB_js_gz.h"
 #include "web_server.assets_hu_DhOH_4oC_js_gz.h"
-#include "web_server.assets_index_C1GfQDp8_css_gz.h"
-#include "web_server.assets_index_beNyc2Z1_js_gz.h"
+#include "web_server.assets_index_B8rEnHiL_css_gz.h"
+#include "web_server.assets_index_BtD4RT5k_js_gz.h"
 #include "web_server.assets_rolldown_runtime_Bh1tDfsg_js_gz.h"
 #include "web_server.assets_vendor_qwqsuqgE_js_gz.h"
 #include "web_server.favicon_ico.h"
@@ -24,8 +24,8 @@ StaticFile web_server_static_files[] = {
   { "/assets/es-DkDtzVVF.js", CONTENT_ES_DKDTZVVF_JS_GZ, sizeof(CONTENT_ES_DKDTZVVF_JS_GZ) - 1, _CONTENT_TYPE_JS, CONTENT_ES_DKDTZVVF_JS_GZ_ETAG, true },
   { "/assets/fr-uI_7mRBB.js", CONTENT_FR_UI_7MRBB_JS_GZ, sizeof(CONTENT_FR_UI_7MRBB_JS_GZ) - 1, _CONTENT_TYPE_JS, CONTENT_FR_UI_7MRBB_JS_GZ_ETAG, true },
   { "/assets/hu-DhOH-4oC.js", CONTENT_HU_DHOH_4OC_JS_GZ, sizeof(CONTENT_HU_DHOH_4OC_JS_GZ) - 1, _CONTENT_TYPE_JS, CONTENT_HU_DHOH_4OC_JS_GZ_ETAG, true },
-  { "/assets/index-C1GfQDp8.css", CONTENT_INDEX_C1GFQDP8_CSS_GZ, sizeof(CONTENT_INDEX_C1GFQDP8_CSS_GZ) - 1, _CONTENT_TYPE_CSS, CONTENT_INDEX_C1GFQDP8_CSS_GZ_ETAG, true },
-  { "/assets/index-beNyc2Z1.js", CONTENT_INDEX_BENYC2Z1_JS_GZ, sizeof(CONTENT_INDEX_BENYC2Z1_JS_GZ) - 1, _CONTENT_TYPE_JS, CONTENT_INDEX_BENYC2Z1_JS_GZ_ETAG, true },
+  { "/assets/index-B8rEnHiL.css", CONTENT_INDEX_B8RENHIL_CSS_GZ, sizeof(CONTENT_INDEX_B8RENHIL_CSS_GZ) - 1, _CONTENT_TYPE_CSS, CONTENT_INDEX_B8RENHIL_CSS_GZ_ETAG, true },
+  { "/assets/index-BtD4RT5k.js", CONTENT_INDEX_BTD4RT5K_JS_GZ, sizeof(CONTENT_INDEX_BTD4RT5K_JS_GZ) - 1, _CONTENT_TYPE_JS, CONTENT_INDEX_BTD4RT5K_JS_GZ_ETAG, true },
   { "/assets/rolldown-runtime-Bh1tDfsg.js", CONTENT_ROLLDOWN_RUNTIME_BH1TDFSG_JS_GZ, sizeof(CONTENT_ROLLDOWN_RUNTIME_BH1TDFSG_JS_GZ) - 1, _CONTENT_TYPE_JS, CONTENT_ROLLDOWN_RUNTIME_BH1TDFSG_JS_GZ_ETAG, true },
   { "/assets/vendor-qwqsuqgE.js", CONTENT_VENDOR_QWQSUQGE_JS_GZ, sizeof(CONTENT_VENDOR_QWQSUQGE_JS_GZ) - 1, _CONTENT_TYPE_JS, CONTENT_VENDOR_QWQSUQGE_JS_GZ_ETAG, true },
   { "/favicon.ico", CONTENT_FAVICON_ICO, sizeof(CONTENT_FAVICON_ICO) - 1, _CONTENT_TYPE_ICO, CONTENT_FAVICON_ICO_ETAG, false },
