@@ -85,5 +85,16 @@ divert_sim
 
 *.csv
 test_results.xml
-!*_master.csv
 !data/*.csv
+
+# Python and test caches
+__pycache__/
+.pytest_cache/
+.venv/
+
+# Simulator build and runtime artifacts
+obj/
+output/
+epoxyfsdata/
+epoxyeepromdata
+data/scenarios/interactive_generated.json
