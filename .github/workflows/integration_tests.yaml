@@ -96,7 +96,7 @@ jobs:
 
       - name: Run integration tests
         env:
-          NATIVE_BINARY_PATH: ./program
+          NATIVE_BINARY_PATH: ${{ github.workspace }}/program
         run: |
           pytest tests/integration/ \
             -v \
