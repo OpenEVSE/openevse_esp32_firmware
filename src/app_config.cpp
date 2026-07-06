@@ -72,6 +72,9 @@ String tft_theme;
 uint32_t tft_brightness;
 uint32_t tft_standby_brightness;
 
+// Remote-display client: the OpenEVSE station this display mirrors.
+String remote_display_host;
+
 // LCD backlight timeout (in seconds, 0 = never timeout). Shared key with the
 // char-LCD / TFT_eSPI energy-saving timeout (upstream PR #1039).
 uint32_t lcd_backlight_timeout;
@@ -216,6 +219,12 @@ ConfigOpt *opts[] =
   new ConfigOptDefinition<String>(tft_theme, "dark", "tft_theme", "tt"),
   new ConfigOptDefinition<uint32_t>(tft_brightness, 100, "tft_brightness", "tb"),
   new ConfigOptDefinition<uint32_t>(tft_standby_brightness, 15, "tft_standby_brightness", "tsb"),
+#endif
+
+#ifdef ENABLE_REMOTE_DISPLAY_CLIENT
+// Station this remote display mirrors (only present on remote-display builds;
+// same capability-signal pattern as the tft_* options above).
+  new ConfigOptDefinition<String>(remote_display_host, "", "remote_display_host", "rdh"),
 #endif
 
 // LCD backlight timeout

@@ -59,6 +59,10 @@
 #include "pn532.h"
 #endif
 
+#ifdef ENABLE_REMOTE_DISPLAY_CLIENT
+#include "remote_display_client.h"
+#endif
+
 #include "LedManagerTask.h"
 #include "event_log.h"
 #include "evse_man.h"
@@ -247,6 +251,11 @@ void setup()
 
   tempThrottle.begin(evse);
   DBUGF("After tempThrottle.begin: %d", ESPAL.getFreeHeap());
+
+#ifdef ENABLE_REMOTE_DISPLAY_CLIENT
+  remoteDisplay.begin();
+  DBUGF("After remoteDisplay.begin: %d", ESPAL.getFreeHeap());
+#endif
 
   lcd.display(F("OpenEVSE WiFI"), 0, 0, 0, LCD_CLEAR_LINE);
   lcd.display(currentfirmware, 0, 1, 5 * 1000, LCD_CLEAR_LINE);
