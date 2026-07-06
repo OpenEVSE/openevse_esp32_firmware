@@ -22,63 +22,28 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7
         with:
           path: OpenEVSE_WiFi
 
-      - uses: actions/checkout@v6
-        with:
-          repository: JeremyPoulter/MicroDebug
-          path: MicroDebug
-
-      - uses: actions/checkout@v6
-        with:
-          repository: JeremyPoulter/MicroTasks
-          path: MicroTasks
-
-      - uses: actions/checkout@v6
-        with:
-          repository: JeremyPoulter/StreamSpy
-          path: StreamSpy
-
-      - uses: actions/checkout@v6
-        with:
-          repository: JeremyPoulter/ConfigJson
-          path: ConfigJson
-
-      - uses: actions/checkout@v6
-        with:
-          repository: bblanchon/ArduinoJson
-          path: ArduinoJson
-          ref: v6.20.1
-
-      - uses: actions/checkout@v6
-        with:
-          repository: JeremyPoulter/OpenEVSE_Lib
-          path: OpenEVSE_Lib
-
-      - uses: actions/checkout@v6
-        with:
-          repository: JeremyPoulter/EpoxyDuino
-          path: EpoxyDuino
-
-      - uses: actions/checkout@v6
-        with:
-          repository: JeremyPoulter/ESPAL
-          path: ESPAL
-
       - uses: ammaraskar/gcc-problem-matcher@master
+
+      - name: Install native build dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends libavahi-client-dev libavahi-common-dev
 
       - name: Build the simulator
         run: |
-          cd OpenEVSE_WiFi/divert_sim
-          make -j
+          python -m pip install --upgrade pip platformio
+          cd OpenEVSE_WiFi
+          python -m platformio run -e native_simulator
 
       - name: Upload artifacts
         uses: actions/upload-artifact@v7
         with:
           name: divert_sim
-          path: OpenEVSE_WiFi/divert_sim/divert_sim
+          path: OpenEVSE_WiFi/.pio/build/native_simulator/program
 
       - name: Set up Python 3.10
         uses: actions/setup-python@v6
@@ -103,9 +68,9 @@ jobs:
             OpenEVSE_WiFi/divert_sim/output
             OpenEVSE_WiFi/divert_sim/view.html
 
-      - name: Publish Unit Test Results
-        uses: EnricoMi/publish-unit-test-result-action/composite@v2
+      - name: Publish Simulator Test Results
+        uses: EnricoMi/publish-unit-test-result-action@v2
         if: always()
         with:
-          junit_files: OpenEVSE_WiFi/divert_sim/output/*.xml
-          check_name: Test Results
+          files: OpenEVSE_WiFi/divert_sim/output/*.xml
+          check_name: Simulator Tests

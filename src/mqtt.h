@@ -47,6 +47,20 @@ class Mqtt : public MicroTasks::Task {
     String _lastWill = "";
     unsigned long _loop_timer = 0; // Timer for periodic publishing tasks
 
+    // Status observability
+    char   _brokerIp[46];       // resolved broker IP, "failed" on DNS error, or ""
+    char   _brokerVersion[96];  // payload of $SYS/broker/version, or ""
+    time_t _connectedSince;     // Unix ts when last connected (0 = never)
+    time_t _lastRxTime;         // Unix ts of most recent broker traffic, sent or received (0 = never)
+    bool   _needsDnsLookup = false; // set in onMqttConnect; DNS done safely in loop()
+    unsigned long _lastStatusPush = 0; // millis() of last periodic status WebSocket push
+
+    // Last failure cause, for troubleshooting in the UI
+    char   _errorCategory[16];  // "", "auth", "unavailable", "id_rejected",
+                                // "version", "network", "timeout", "dns"
+    char   _errorDetail[64];    // human-readable detail (broker reason / strerror)
+    void   setError(const char *category, const char *detail);
+
     // Properties for claims, overrides, limits
     EvseProperties _claim_props;
     EvseProperties _override_props;
@@ -80,6 +94,15 @@ class Mqtt : public MicroTasks::Task {
     // Public interface (existing functions from mqtt.h, adapted)
     bool isConnected();
     void restartConnection();
+
+    // Status accessors (used by GET /status and WebSocket events)
+    const char *getMqttStatus();
+    const char *getBrokerIp()      { return _brokerIp; }
+    const char *getBrokerVersion() { return _brokerVersion; }
+    time_t      getConnectedSince(){ return _connectedSince; }
+    time_t      getLastRxTime()    { return _lastRxTime; }
+    const char *getErrorCategory() { return _errorCategory; }
+    const char *getErrorDetail()   { return _errorDetail; }
 
     // Publishing methods - these can be called from other modules
     void publishData(JsonDocument &data); // Generic data publish

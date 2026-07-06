@@ -68,14 +68,13 @@ void handleUpdateFileFetch(MongooseHttpServerRequest *request)
     if(http_update_from_url(url,
       [](size_t complete, size_t total) {},
       [](int) { },
-      [](int) {
-        if(!Update.isRunning())
-        {
-          StaticJsonDocument<128> event;
-          event["ota"] = "failed";
-          web_server_event(event);
-          yield();
-        }
+      [](int errorCode) {
+        DEBUG_PORT.printf("HTTP OTA failed: %d\n", errorCode);
+        StaticJsonDocument<128> event;
+        event["ota"] = "failed";
+        event["ota_error"] = errorCode;
+        web_server_event(event);
+        yield();
       }))
     {
       response->setCode(200);

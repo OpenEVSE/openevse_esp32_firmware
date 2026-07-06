@@ -116,7 +116,8 @@ void EvseManager::Claim::release()
 EvseManager::EvseManager(Stream &port, EventLog &eventLog) :
   MicroTasks::Task(),
   _sender(&port),
-  _monitor(OpenEVSE),
+  _openevse(),
+  _monitor(_openevse),
   _eventLog(eventLog),
   _clients(),
   _evseStateListener(this),
@@ -327,14 +328,14 @@ unsigned long EvseManager::loop(MicroTasks::WakeReason reason)
        WakeReason_Manual == reason ? "WakeReason_Manual" :
        "UNKNOWN");
   DBUG(" connected: ");
-  DBUGLN(OpenEVSE.isConnected());
+  DBUGLN(_openevse.isConnected());
 
   DBUGVAR(getActiveState().toString());
   DBUGVAR(_monitor.getEvseState());
   DBUGVAR(_monitor.getPilotState());
 
   // If we are not connected yet try and connect to the EVSE module
-  if(!OpenEVSE.isConnected())
+  if(!_openevse.isConnected())
   {
     initialiseEvse();
     return 10 * 1000;
@@ -550,6 +551,10 @@ uint8_t EvseManager::getStateColour()
     case OPENEVSE_STATE_GFI_SELF_TEST_FAILED:
     case OPENEVSE_STATE_OVER_TEMPERATURE:
     case OPENEVSE_STATE_OVER_CURRENT:
+    case OPENEVSE_STATE_RELAY_CLOSURE_FAULT:
+    case OPENEVSE_STATE_PP_SHORTED:
+    case OPENEVSE_STATE_PP_MISSING:
+    case OPENEVSE_STATE_EEPROM_FAILURE:
       return OPENEVSE_LCD_RED;
 
     case OPENEVSE_STATE_SLEEPING:

@@ -10,6 +10,7 @@
 #include "app_config_mqtt.h"
 #include "app_config_mode.h"
 #include "temp_throttle.h"
+#include "flash_migrate.h"
 
 #if ENABLE_CONFIG_CHANGE_NOTIFICATION
 #include <esp_ota_ops.h>
@@ -65,6 +66,15 @@ uint32_t www_https_port;
 // Advanced settings
 String esp_hostname;
 String sntp_hostname;
+
+// On-device LVGL TFT display theme ("dark" | "light").
+String tft_theme;
+uint32_t tft_brightness;
+uint32_t tft_standby_brightness;
+
+// LCD backlight timeout (in seconds, 0 = never timeout). Shared key with the
+// char-LCD / TFT_eSPI energy-saving timeout (upstream PR #1039).
+uint32_t lcd_backlight_timeout;
 
 // LIMIT Settings
 String limit_default_type;
@@ -199,6 +209,17 @@ ConfigOpt *opts[] =
 // Advanced settings
   new ConfigOptDefinition<String>(esp_hostname, esp_hostname_default, "hostname", "hn"),
   new ConfigOptDefinition<String>(sntp_hostname, SNTP_DEFAULT_HOST, "sntp_hostname", "sh"),
+
+#ifdef ENABLE_SCREEN_LVGL_TFT
+// On-device display theme (only present on LVGL-TFT builds; its presence in
+// /config is the GUI's capability signal that this device has the panel).
+  new ConfigOptDefinition<String>(tft_theme, "dark", "tft_theme", "tt"),
+  new ConfigOptDefinition<uint32_t>(tft_brightness, 100, "tft_brightness", "tb"),
+  new ConfigOptDefinition<uint32_t>(tft_standby_brightness, 15, "tft_standby_brightness", "tsb"),
+#endif
+
+// LCD backlight timeout
+  new ConfigOptDefinition<uint32_t>(lcd_backlight_timeout, LCD_BACKLIGHT_TIMEOUT_DEFAULT, "lcd_backlight_timeout", "lbt"),
 
 // Time
   new ConfigOptDefinition<String>(time_zone, DEFAULT_TIME_ZONE, "time_zone", "tz"),
@@ -444,6 +465,8 @@ void config_changed(String name)
     limit.setDefaultLimit(limit_default_type.c_str(), limit_default_value);
   } else if(name == "sntp_enabled") {
     timeManager.setSntpEnabled(config_sntp_enabled());
+  } else if(name == "sntp_hostname") {
+    timeManager.setHost(sntp_hostname.c_str());
   }
 #endif
 }
@@ -585,6 +608,56 @@ bool config_deserialize(DynamicJsonDocument &doc)
     }
   }
 
+  if(doc.containsKey("pp_auto"))
+  {
+    bool enable = doc["pp_auto"];
+    if(enable != evse.isPPAutoAmpacityEnabled()) {
+      evse.enablePPAutoAmpacity(enable);
+      config_modified = true;
+      DBUGLN("pp_auto changed");
+    }
+  }
+
+  if(doc.containsKey("zero_cross"))
+  {
+    bool enable = doc["zero_cross"];
+    if(enable != evse.isZeroCrossSwitchEnabled()) {
+      evse.enableZeroCrossSwitch(enable);
+      config_modified = true;
+      DBUGLN("zero_cross changed");
+    }
+  }
+
+  if(doc.containsKey("relay_dc1"))
+  {
+    bool enable = doc["relay_dc1"];
+    if(enable != evse.isDC1RelayEnabled()) {
+      evse.setRelayEnable(1, enable);
+      config_modified = true;
+      DBUGLN("relay_dc1 changed");
+    }
+  }
+
+  if(doc.containsKey("relay_dc2"))
+  {
+    bool enable = doc["relay_dc2"];
+    if(enable != evse.isDC2RelayEnabled()) {
+      evse.setRelayEnable(2, enable);
+      config_modified = true;
+      DBUGLN("relay_dc2 changed");
+    }
+  }
+
+  if(doc.containsKey("relay_ac"))
+  {
+    bool enable = doc["relay_ac"];
+    if(enable != evse.isACRelayEnabled()) {
+      evse.setRelayEnable(3, enable);
+      config_modified = true;
+      DBUGLN("relay_ac changed");
+    }
+  }
+
   if(doc.containsKey("heartbeat_interval") || doc.containsKey("heartbeat_current"))
   {
     uint32_t interval = doc.containsKey("heartbeat_interval") ? (uint32_t)doc["heartbeat_interval"] : heartbeat_interval_cfg;
@@ -681,11 +754,16 @@ bool config_serialize(DynamicJsonDocument &doc, bool longNames, bool compactOutp
   doc["espflash"] = ESPAL.getFlashChipSize();
   doc["heap_size"] = (uint32_t)ESP.getHeapSize();
   doc["littlefs_size"] = (uint32_t)LittleFS.totalBytes();
+  doc["littlefs_used"] = (uint32_t)LittleFS.usedBytes();
   {
     const esp_partition_t *p = esp_ota_get_running_partition();
     doc["app0_size"]   = p ? (uint32_t)p->size : 0;
     doc["sketch_size"] = (uint32_t)ESP.getSketchSize();
   }
+  // Flash repartition migration: lets the UI offer "Expand to 16MB" on a 16MB
+  // module that was flashed with the 4MB partition layout.
+  doc["partition_scheme"] = flash_migrate_partition_scheme();
+  doc["can_expand_16mb"]  = flash_migrate_can_expand_16mb();
 
   // EVSE information are only evailable when config_version is incremented
   if(config_ver > 0) {
@@ -700,9 +778,28 @@ bool config_serialize(DynamicJsonDocument &doc, bool longNames, bool compactOutp
     doc["vent_check"] = evse.isVentRequiredEnabled();
     doc["temp_check"] = evse.isTemperatureCheckEnabled();
     doc["overcurrent_monitor"] = evse.isOvercurrentMonitorEnabled();
-    doc["over_temp_shutdown"] = over_temp_shutdown;
+    // Runtime over-temperature panic threshold is set via $FO, which only
+    // exists on D9+ controllers; omit so the GUI hides the control
+    if(evse.isD9Supported()) {
+      doc["over_temp_shutdown"] = over_temp_shutdown;
+    }
     doc["front_button"] = evse.isFrontButtonEnabled();
     doc["boot_lock"] = evse.isBootLockEnabled();
+    // D9-only capability flag so clients can gate the controls below
+    doc["d9_support"] = evse.isD9Supported();
+    // PP auto-ampacity / zero-cross switching only exist on D9+ controllers
+    if(evse.isD9Supported()) {
+      doc["pp_auto"] = evse.isPPAutoAmpacityEnabled();
+      doc["zero_cross"] = evse.isZeroCrossSwitchEnabled();
+    }
+    // Per-relay state is only emitted once $GR has actually been answered, so
+    // an unknown state is omitted rather than defaulting to "enabled"
+    if(evse.isRelayStatusKnown()) {
+      doc["relay_dc1"] = evse.isDC1RelayEnabled();
+      doc["relay_dc2"] = evse.isDC2RelayEnabled();
+      doc["relay_ac"]  = evse.isACRelayEnabled();
+    }
+    doc["chip_id"] = evse.getChipId();
     doc["heartbeat_interval"] = evse.getHeartbeatInterval();
     doc["heartbeat_current"] = evse.getHeartbeatCurrent();
     doc["voltage"] = voltage_cfg;
