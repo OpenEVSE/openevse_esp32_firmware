@@ -330,6 +330,45 @@ function appendScenarioDescription(container, scenario, scenarioSource) {
   container.appendChild(details);
 }
 
+function buildSharedPowerAxisOptions(peerSeriesResults) {
+  const values = [];
+  let hasGridIE = false;
+
+  (peerSeriesResults || []).forEach((result) => {
+    if (!result) {
+      return;
+    }
+    hasGridIE = hasGridIE || !!result.hasGridIE;
+    (result.series || []).forEach((series) => {
+      (series.dataPoints || []).forEach((point) => {
+        if (point && Number.isFinite(point.y)) {
+          values.push(point.y);
+        }
+      });
+    });
+  });
+
+  if (values.length === 0) {
+    return hasGridIE ? {} : { minimum: 0 };
+  }
+
+  let minimum = hasGridIE ? Math.min(...values) : 0;
+  let maximum = Math.max(...values);
+
+  if (maximum <= minimum) {
+    maximum = minimum + 1;
+  }
+
+  const range = maximum - minimum;
+  const padding = Math.max(range * 0.05, 100);
+  maximum += padding;
+  if (hasGridIE) {
+    minimum -= padding;
+  }
+
+  return { minimum, maximum };
+}
+
 async function loadCsvRows(csvPath) {
   const response = await fetch(csvPath, { cache: "no-store" });
   if (!response.ok) {
@@ -378,7 +417,7 @@ function createChart(containerId, title, series, options) {
       title: { text: title, fontSize: 18 },
       legend: { fontSize: 12 },
       axisX: { valueFormatString: "HH:mm:ss" },
-      axisY: { title: "Power (W)", ...(opts.hasGridIE ? {} : { minimum: 0 }) },
+      axisY: { title: "Power (W)", ...(opts.hasGridIE ? {} : { minimum: 0 }), ...(opts.axisY || {}) },
       // Show all visible series values for the hovered timestamp.
       toolTip: { shared: true },
       data: normalizedSeries,
@@ -461,6 +500,12 @@ async function renderScenario(container, scenario, renderToken) {
   }
 
   const charts = [];
+  const peerSeriesResults = peerIds.map((peerId) => {
+    const visibility = buildPeerVisibilityFromScenario(scenarioSource, peerId);
+    return buildPeerSeries(parsed.rows, peerId, visibility);
+  });
+  const sharedAxisY = buildSharedPowerAxisOptions(peerSeriesResults);
+
   peerIds.forEach((peerId, idx) => {
     const peerTitle = document.createElement("h4");
     peerTitle.textContent = `${peerId}`;
@@ -472,9 +517,8 @@ async function renderScenario(container, scenario, renderToken) {
     chartDiv.style.height = "280px";
     scenarioBlock.appendChild(chartDiv);
 
-    const visibility = buildPeerVisibilityFromScenario(scenarioSource, peerId);
-    const result = buildPeerSeries(parsed.rows, peerId, visibility);
-    const chart = createChart(chartDiv.id, `${scenario.title} - ${peerId}`, result.series, { hasGridIE: result.hasGridIE });
+    const result = peerSeriesResults[idx];
+    const chart = createChart(chartDiv.id, `${scenario.title} - ${peerId}`, result.series, { hasGridIE: result.hasGridIE, axisY: sharedAxisY });
     charts.push(chart);
   });
 
