@@ -3,7 +3,13 @@
     "id": "divert_day1_grid_ie_nowaste",
     "title": "Divert: Day 1 (Grid I/E) (nowaste)",
     "category": "divert",
-    "profile": "nowaste"
+    "profile": "nowaste",
+    "description": [
+      "Divert: Day 1 (Grid I/E) (nowaste) replays the Day 1 solar trace used for repeatable divert tuning comparisons.",
+      "No-waste settings should be more aggressive, preferring to use available solar even if that risks brief import.",
+      "This variant includes grid import/export input, so the chart exposes grid I/E and smoothed available power as control signals.",
+      "Duration: 618 minutes."
+    ]
   },
   "simulation": {
     "duration": 37080,

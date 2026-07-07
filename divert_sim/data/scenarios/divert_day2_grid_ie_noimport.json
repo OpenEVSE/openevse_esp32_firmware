@@ -3,7 +3,13 @@
     "id": "divert_day2_grid_ie_noimport",
     "title": "Divert: Day 2 (Grid I/E) (noimport)",
     "category": "divert",
-    "profile": "noimport"
+    "profile": "noimport",
+    "description": [
+      "Divert: Day 2 (Grid I/E) (noimport) replays the Day 2 solar trace used for repeatable divert tuning comparisons.",
+      "No-import settings should be more conservative, preferring to leave surplus unused rather than import from the grid.",
+      "This variant includes grid import/export input, so the chart exposes grid I/E and smoothed available power as control signals.",
+      "Duration: 659 minutes."
+    ]
   },
   "simulation": {
     "duration": 39540,

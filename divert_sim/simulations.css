@@ -192,6 +192,34 @@ div.loadsharing
   margin-bottom: 6px;
 }
 
+.scenario-description {
+  margin: 4px 0 14px;
+  color: #333;
+  font-size: 14px;
+}
+
+.scenario-description summary {
+  color: #1976d2;
+  cursor: pointer;
+  display: inline-block;
+  font-weight: 600;
+  margin-bottom: 6px;
+}
+
+.scenario-description summary:hover {
+  text-decoration: underline;
+}
+
+.scenario-description ul {
+  margin: 4px 0 0 20px;
+  padding: 0;
+  max-width: 980px;
+}
+
+.scenario-description li {
+  margin-bottom: 4px;
+}
+
 table.summary-table {
   border-collapse: collapse;
   margin: 8px 0 16px 0;

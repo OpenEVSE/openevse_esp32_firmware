@@ -3,7 +3,13 @@
     "id": "loadsharing_ev_limited",
     "title": "Load Sharing EV Limited",
     "category": "loadsharing",
-    "profile": "default"
+    "profile": "default",
+    "description": [
+      "Two-EVSE case where one vehicle cannot consume its full allocation.",
+      "The EV-limited peer should draw less actual power than allocated, leaving unused headroom visible between allocation and actual charge.",
+      "Group setup: 2 peers, 7,680 W shared supply, safety factor 1.0. Failsafe mode: safe_current.",
+      "Duration: 10 minutes."
+    ]
   },
   "group": {
     "safety_factor": 1.0,

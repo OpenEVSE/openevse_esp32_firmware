@@ -3,7 +3,13 @@
     "id": "loadsharing_insufficient",
     "title": "Load Sharing Insufficient",
     "category": "loadsharing",
-    "profile": "default"
+    "profile": "default",
+    "description": [
+      "Four-EVSE contention scenario with less shared supply than all connected vehicles want.",
+      "Allocations should be constrained below each charger maximum. This is useful for checking minimum-current handling and whether total allocated/actual power stays within the constrained group limit.",
+      "Group setup: 4 peers, 5,760 W shared supply, safety factor 1.0. Failsafe mode: safe_current.",
+      "Duration: 10 minutes."
+    ]
   },
   "group": {
     "safety_factor": 1.0,

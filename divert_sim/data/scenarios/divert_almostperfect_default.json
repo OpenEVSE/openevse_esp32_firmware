@@ -3,7 +3,13 @@
     "id": "divert_almostperfect_default",
     "title": "Divert: Almost Perfect (default)",
     "category": "divert",
-    "profile": "default"
+    "profile": "default",
+    "description": [
+      "Divert: Almost Perfect (default) replays a mostly ideal solar day where available surplus is stable enough to show near-perfect tracking.",
+      "Default divert settings balance using surplus quickly with avoiding excessive import/export swings.",
+      "This variant is driven from solar input, so the main comparison is available charge power versus actual EV charge power.",
+      "Duration: 937 minutes."
+    ]
   },
   "simulation": {
     "duration": 56220,

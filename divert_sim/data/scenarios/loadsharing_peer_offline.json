@@ -3,7 +3,13 @@
     "id": "loadsharing_peer_offline",
     "title": "Load Sharing Peer Offline",
     "category": "loadsharing",
-    "profile": "default"
+    "profile": "default",
+    "description": [
+      "Two-EVSE scenario where one peer goes offline during the run.",
+      "The online peer should continue safely while the offline peer is accounted for according to the failsafe assumed-current reserve.",
+      "Group setup: 2 peers, 7,680 W shared supply, safety factor 1.0. Failsafe mode: safe_current.",
+      "Duration: 40 minutes."
+    ]
   },
   "group": {
     "safety_factor": 1.0,

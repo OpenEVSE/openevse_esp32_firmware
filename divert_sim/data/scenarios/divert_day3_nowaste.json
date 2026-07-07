@@ -3,7 +3,13 @@
     "id": "divert_day3_nowaste",
     "title": "Divert: Day 3 (nowaste)",
     "category": "divert",
-    "profile": "nowaste"
+    "profile": "nowaste",
+    "description": [
+      "Divert: Day 3 (nowaste) replays the Day 3 solar trace used for repeatable divert tuning comparisons.",
+      "No-waste settings should be more aggressive, preferring to use available solar even if that risks brief import.",
+      "This variant is driven from solar input, so the main comparison is available charge power versus actual EV charge power.",
+      "Duration: 12 hours."
+    ]
   },
   "simulation": {
     "duration": 43200,

@@ -3,7 +3,13 @@
     "id": "divert_CloudyMorning_nowaste",
     "title": "Divert: Cloudy Morning (nowaste)",
     "category": "divert",
-    "profile": "nowaste"
+    "profile": "nowaste",
+    "description": [
+      "Divert: Cloudy Morning (nowaste) replays a cloudy morning feed with intermittent solar surplus and changing charge opportunities.",
+      "No-waste settings should be more aggressive, preferring to use available solar even if that risks brief import.",
+      "This variant is driven from solar input, so the main comparison is available charge power versus actual EV charge power.",
+      "Duration: 955 minutes."
+    ]
   },
   "simulation": {
     "duration": 57300,

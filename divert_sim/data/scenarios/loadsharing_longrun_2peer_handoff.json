@@ -3,7 +3,13 @@
     "id": "loadsharing_longrun_2peer_handoff",
     "title": "Load Sharing Longrun 2 Peer Handoff",
     "category": "loadsharing",
-    "profile": "default"
+    "profile": "default",
+    "description": [
+      "Long-duration two-EVSE run that exercises handoff as one vehicle tapers or finishes and the other can use more capacity.",
+      "Watch for a smooth transfer of available capacity between peers over many hours, without oscillation or stale allocation artifacts.",
+      "Group setup: 2 peers, 7,680 W shared supply, safety factor 1.0. Failsafe mode: safe_current.",
+      "Duration: 15 hours."
+    ]
   },
   "group": {
     "safety_factor": 1.0,

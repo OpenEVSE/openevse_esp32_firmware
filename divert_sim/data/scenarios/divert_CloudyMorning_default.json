@@ -3,7 +3,13 @@
     "id": "divert_CloudyMorning_default",
     "title": "Divert: Cloudy Morning (default)",
     "category": "divert",
-    "profile": "default"
+    "profile": "default",
+    "description": [
+      "Divert: Cloudy Morning (default) replays a cloudy morning feed with intermittent solar surplus and changing charge opportunities.",
+      "Default divert settings balance using surplus quickly with avoiding excessive import/export swings.",
+      "This variant is driven from solar input, so the main comparison is available charge power versus actual EV charge power.",
+      "Duration: 955 minutes."
+    ]
   },
   "simulation": {
     "duration": 57300,

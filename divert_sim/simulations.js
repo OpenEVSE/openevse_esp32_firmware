@@ -20,7 +20,7 @@ function parseCsv(text) {
 let activeRenderToken = 0;
 
 function isRenderTokenCurrent(token) {
-  return token === activeRenderToken;
+  return token === undefined || token === activeRenderToken;
 }
 
 function discoverPeerIds(headers) {
@@ -283,6 +283,53 @@ function buildPeerVisibilityFromScenario(scenarioSource, peerId) {
   };
 }
 
+function buildScenarioDescription(scenario, scenarioSource) {
+  const id = (scenario && scenario.id) || (scenarioSource && scenarioSource.meta && scenarioSource.meta.id) || "Scenario";
+  const title = (scenario && scenario.title) || (scenarioSource && scenarioSource.meta && scenarioSource.meta.title) || id;
+  const category = (scenario && scenario.category) || (scenarioSource && scenarioSource.meta && scenarioSource.meta.category) || "";
+  const profile = (scenario && scenario.profile) || (scenarioSource && scenarioSource.meta && scenarioSource.meta.profile) || "default";
+  const description = scenarioSource && scenarioSource.meta
+    ? scenarioSource.meta.description
+    : null;
+
+  if (Array.isArray(description)) {
+    return description.map((line) => String(line).trim()).filter(Boolean);
+  }
+  if (typeof description === "string" && description.trim()) {
+    return [description.trim()];
+  }
+
+  return [`${title} is a ${category || "simulation"} scenario using profile '${profile}'.`];
+}
+
+function appendScenarioDescription(container, scenario, scenarioSource) {
+  const lines = buildScenarioDescription(scenario, scenarioSource).filter(Boolean);
+  if (lines.length === 0) {
+    return;
+  }
+
+  const details = document.createElement("details");
+  details.className = "scenario-description";
+
+  const summary = document.createElement("summary");
+  summary.textContent = "Show description";
+  details.appendChild(summary);
+
+  const list = document.createElement("ul");
+  lines.forEach((line) => {
+    const item = document.createElement("li");
+    item.textContent = line;
+    list.appendChild(item);
+  });
+  details.appendChild(list);
+
+  details.addEventListener("toggle", () => {
+    summary.textContent = details.open ? "Hide description" : "Show description";
+  });
+
+  container.appendChild(details);
+}
+
 async function loadCsvRows(csvPath) {
   const response = await fetch(csvPath, { cache: "no-store" });
   if (!response.ok) {
@@ -395,6 +442,8 @@ async function renderScenario(container, scenario, renderToken) {
   if (!isRenderTokenCurrent(renderToken)) {
     return;
   }
+
+  appendScenarioDescription(scenarioBlock, scenario, scenarioSource);
 
   if (!parsed.rows || parsed.rows.length === 0) {
     const empty = document.createElement("p");

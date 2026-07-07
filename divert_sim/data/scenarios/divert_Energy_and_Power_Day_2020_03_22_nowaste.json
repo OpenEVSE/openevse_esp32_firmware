@@ -3,7 +3,13 @@
     "id": "divert_Energy_and_Power_Day_2020_03_22_nowaste",
     "title": "Divert: Energy and Power Day 2020-03-22 (nowaste)",
     "category": "divert",
-    "profile": "nowaste"
+    "profile": "nowaste",
+    "description": [
+      "Divert: Energy and Power Day 2020-03-22 (nowaste) replays the 2020-03-22 full-day solar/power trace.",
+      "No-waste settings should be more aggressive, preferring to use available solar even if that risks brief import.",
+      "This variant is driven from solar input, so the main comparison is available charge power versus actual EV charge power.",
+      "Duration: 24 hours."
+    ]
   },
   "simulation": {
     "duration": 86400,

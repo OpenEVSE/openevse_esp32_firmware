@@ -3,7 +3,13 @@
     "id": "divert_Energy_and_Power_Day_2020_03_31_default",
     "title": "Divert: Energy and Power Day 2020-03-31 (default)",
     "category": "divert",
-    "profile": "default"
+    "profile": "default",
+    "description": [
+      "Divert: Energy and Power Day 2020-03-31 (default) replays the 2020-03-31 full-day solar/power trace.",
+      "Default divert settings balance using surplus quickly with avoiding excessive import/export swings.",
+      "This variant is driven from solar input, so the main comparison is available charge power versus actual EV charge power.",
+      "Duration: 24 hours."
+    ]
   },
   "simulation": {
     "duration": 86400,

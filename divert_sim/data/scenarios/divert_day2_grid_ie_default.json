@@ -3,7 +3,13 @@
     "id": "divert_day2_grid_ie_default",
     "title": "Divert: Day 2 (Grid I/E) (default)",
     "category": "divert",
-    "profile": "default"
+    "profile": "default",
+    "description": [
+      "Divert: Day 2 (Grid I/E) (default) replays the Day 2 solar trace used for repeatable divert tuning comparisons.",
+      "Default divert settings balance using surplus quickly with avoiding excessive import/export swings.",
+      "This variant includes grid import/export input, so the chart exposes grid I/E and smoothed available power as control signals.",
+      "Duration: 659 minutes."
+    ]
   },
   "simulation": {
     "duration": 39540,

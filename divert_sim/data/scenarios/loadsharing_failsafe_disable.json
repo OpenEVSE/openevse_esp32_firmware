@@ -3,7 +3,13 @@
     "id": "loadsharing_failsafe_disable",
     "title": "Load Sharing Failsafe Disable",
     "category": "loadsharing",
-    "profile": "default"
+    "profile": "default",
+    "description": [
+      "Failsafe scenario for controller or peer communication loss using disable mode.",
+      "After the fault condition, the affected peer should stop drawing charge rather than continue with a stale allocation.",
+      "Group setup: 2 peers, 7,680 W shared supply, safety factor 1.0. Failsafe mode: disable.",
+      "Duration: 40 minutes."
+    ]
   },
   "group": {
     "safety_factor": 1.0,

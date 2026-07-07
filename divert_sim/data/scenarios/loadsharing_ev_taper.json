@@ -3,7 +3,13 @@
     "id": "loadsharing_ev_taper",
     "title": "Load Sharing EV Taper",
     "category": "loadsharing",
-    "profile": "default"
+    "profile": "default",
+    "description": [
+      "Single-EVSE case that shows vehicle-side tapering as the simulated battery fills.",
+      "Available load-share power stays high while actual charge falls away over time as the EV reduces its requested charge rate.",
+      "Group setup: 1 peer, 7,680 W shared supply, safety factor 1.0. Failsafe mode: safe_current.",
+      "Duration: 2 hours."
+    ]
   },
   "group": {
     "safety_factor": 1.0,

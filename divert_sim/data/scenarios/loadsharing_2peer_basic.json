@@ -3,7 +3,13 @@
     "id": "loadsharing_2peer_basic",
     "title": "Load Sharing 2 Peer Basic",
     "category": "loadsharing",
-    "profile": "default"
+    "profile": "default",
+    "description": [
+      "Baseline two-EVSE load-sharing case with both vehicles present from the start.",
+      "Both peers should receive an even allocation, and actual charge should track the load-share allocation while total demand remains within the group supply limit.",
+      "Group setup: 2 peers, 7,680 W shared supply, safety factor 1.0. Failsafe mode: safe_current.",
+      "Duration: 10 minutes."
+    ]
   },
   "group": {
     "safety_factor": 1.0,
