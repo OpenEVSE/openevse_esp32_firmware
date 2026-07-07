@@ -25,6 +25,10 @@ typedef const __FlashStringHelper *fstr_t;
 //#include <FS.h>                       // SPIFFS file-system: store web server html, CSS etc.
 #include <LittleFS.h>
 
+#ifdef ENABLE_REMOTE_DISPLAY_CLIENT
+#include <ESPmDNS.h>   // station discovery for /remotedisplay/scan
+#endif
+
 #include "emonesp.h"
 #include "web_server.h"
 #ifdef ENABLE_TSDB
@@ -369,6 +373,38 @@ handleScan(MongooseHttpServerRequest *request) {
     request->send(response);
   }
 }
+
+#ifdef ENABLE_REMOTE_DISPLAY_CLIENT
+// -------------------------------------------------------------------
+// Remote display: find OpenEVSE stations on the local network via mDNS
+// (_openevse._tcp, advertised by every OpenEVSE gateway). Browsers can't
+// do mDNS, so the wizard asks the device to browse on its behalf.
+// url: /remotedisplay/scan
+// -------------------------------------------------------------------
+void
+handleRemoteDisplayScan(MongooseHttpServerRequest *request) {
+  MongooseHttpServerResponseStream *response;
+  if(false == requestPreProcess(request, response, CONTENT_TYPE_JSON)) {
+    return;
+  }
+
+  // Blocking browse (~3 s) — acceptable for a manual wizard action, and
+  // still well inside the 5 s loop watchdog.
+  int found = MDNS.queryService("openevse", "tcp");
+  DBUGF("mDNS station scan found %d", found);
+  response->print("[");
+  for(int i = 0; i < found; i++) {
+    if(i) response->print(",");
+    StaticJsonDocument<192> station;
+    station["name"] = MDNS.hostname(i);
+    station["ip"] = MDNS.IP(i).toString();
+    station["port"] = MDNS.port(i);
+    serializeJson(station, *response);
+  }
+  response->print("]");
+  request->send(response);
+}
+#endif // ENABLE_REMOTE_DISPLAY_CLIENT
 
 // -------------------------------------------------------------------
 // Handle turning Access point off
@@ -1315,6 +1351,9 @@ void web_server_setup()
   server.on("/rapi$", handleRapi);
   server.on("/r$", handleRapi);
   server.on("/scan$", handleScan);
+#ifdef ENABLE_REMOTE_DISPLAY_CLIENT
+  server.on("/remotedisplay/scan$", handleRemoteDisplayScan);
+#endif
   server.on("/apoff$", handleAPOff);
   server.on("/divertmode$", handleDivertMode);
   server.on("/shaper$", handleCurrentShaper);
