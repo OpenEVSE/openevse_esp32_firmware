@@ -6,7 +6,7 @@
 #include "web_server.assets_fr_C_56HYDD_js_gz.h"
 #include "web_server.assets_hu_C3Wiayz1_js_gz.h"
 #include "web_server.assets_index_CHf0FDZI_css_gz.h"
-#include "web_server.assets_index_CIuN391t_js_gz.h"
+#include "web_server.assets_index_ChJO55___js_gz.h"
 #include "web_server.assets_rolldown_runtime_Bh1tDfsg_js_gz.h"
 #include "web_server.assets_vendor_qwqsuqgE_js_gz.h"
 #include "web_server.favicon_ico.h"
@@ -25,7 +25,7 @@ StaticFile web_server_static_files[] = {
   { "/assets/fr-C-56HYDD.js", CONTENT_FR_C_56HYDD_JS_GZ, sizeof(CONTENT_FR_C_56HYDD_JS_GZ) - 1, _CONTENT_TYPE_JS, CONTENT_FR_C_56HYDD_JS_GZ_ETAG, true },
   { "/assets/hu-C3Wiayz1.js", CONTENT_HU_C3WIAYZ1_JS_GZ, sizeof(CONTENT_HU_C3WIAYZ1_JS_GZ) - 1, _CONTENT_TYPE_JS, CONTENT_HU_C3WIAYZ1_JS_GZ_ETAG, true },
   { "/assets/index-CHf0FDZI.css", CONTENT_INDEX_CHF0FDZI_CSS_GZ, sizeof(CONTENT_INDEX_CHF0FDZI_CSS_GZ) - 1, _CONTENT_TYPE_CSS, CONTENT_INDEX_CHF0FDZI_CSS_GZ_ETAG, true },
-  { "/assets/index-CIuN391t.js", CONTENT_INDEX_CIUN391T_JS_GZ, sizeof(CONTENT_INDEX_CIUN391T_JS_GZ) - 1, _CONTENT_TYPE_JS, CONTENT_INDEX_CIUN391T_JS_GZ_ETAG, true },
+  { "/assets/index-ChJO55-_.js", CONTENT_INDEX_CHJO55___JS_GZ, sizeof(CONTENT_INDEX_CHJO55___JS_GZ) - 1, _CONTENT_TYPE_JS, CONTENT_INDEX_CHJO55___JS_GZ_ETAG, true },
   { "/assets/rolldown-runtime-Bh1tDfsg.js", CONTENT_ROLLDOWN_RUNTIME_BH1TDFSG_JS_GZ, sizeof(CONTENT_ROLLDOWN_RUNTIME_BH1TDFSG_JS_GZ) - 1, _CONTENT_TYPE_JS, CONTENT_ROLLDOWN_RUNTIME_BH1TDFSG_JS_GZ_ETAG, true },
   { "/assets/vendor-qwqsuqgE.js", CONTENT_VENDOR_QWQSUQGE_JS_GZ, sizeof(CONTENT_VENDOR_QWQSUQGE_JS_GZ) - 1, _CONTENT_TYPE_JS, CONTENT_VENDOR_QWQSUQGE_JS_GZ_ETAG, true },
   { "/favicon.ico", CONTENT_FAVICON_ICO, sizeof(CONTENT_FAVICON_ICO) - 1, _CONTENT_TYPE_ICO, CONTENT_FAVICON_ICO_ETAG, false },
