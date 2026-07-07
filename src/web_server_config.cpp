@@ -115,6 +115,22 @@ handleConfigPost(MongooseHttpServerRequest *request, MongooseHttpServerResponseS
         return;
       }
     }
+    // Cross-field: a member's failsafe current must fit inside the group
+    // budget, otherwise a single islanded member can exceed the group max
+    // on its own. Use incoming values when present, stored values otherwise.
+    {
+      double failsafe = doc.containsKey("loadsharing_failsafe_safe_current")
+          ? doc["loadsharing_failsafe_safe_current"].as<double>()
+          : loadsharing_failsafe_safe_current;
+      double groupMax = doc.containsKey("loadsharing_group_max_current")
+          ? doc["loadsharing_group_max_current"].as<double>()
+          : loadsharing_group_max_current;
+      if (groupMax > 0 && failsafe > groupMax) {
+        response->setCode(400);
+        response->print("{\"msg\":\"loadsharing_failsafe_safe_current must not exceed loadsharing_group_max_current\"}");
+        return;
+      }
+    }
 
     // Role transitions are applied after validation so that a rejected
     // request does not mutate group-membership state as a side effect.
