@@ -1237,6 +1237,10 @@ void onWsFrame(MongooseHttpWebSocketConnection *connection, int flags, uint8_t *
             shaper.setLoadSharingLimit(targetCurrent, reason == "failsafe_disabled");
           } else {
             // No active load sharing limit; release shaper-side load sharing override.
+            // The poller's _failsafeLimitApplied flag may briefly read true here
+            // with no backing shaper limit (this clear removed it). That is safe:
+            // re-engaging failsafe requires seconds of allocation staleness, and
+            // any intervening 500 ms poll clears the flag before then.
             shaper.clearLoadSharingLimit();
           }
         }

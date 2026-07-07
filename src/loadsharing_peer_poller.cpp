@@ -101,9 +101,37 @@ unsigned long LoadSharingPeerPoller::loop(MicroTasks::WakeReason reason) {
     }
   }
 
-  // Member failsafe timeout check
+  // Member failsafe timeout check + local enforcement
   if (_groupState && _groupState->isMember()) {
     _groupState->checkMemberFailsafe();
+
+    if (_groupState->isFailsafeActive()) {
+      if (!_failsafeLimitApplied) {
+        // Enforce the failsafe on the local EVSE through the same shaper
+        // override the allocation path uses, so it outranks a manual override.
+        // Note: a change to loadsharing_failsafe_safe_current while failsafe is
+        // already engaged takes effect on the next engage, not mid-engagement
+        // (the limit is set once here and not re-issued while it holds).
+        if (loadsharing_failsafe_mode == "disable" ||
+            loadsharing_failsafe_safe_current <= 0) {
+          shaper.setLoadSharingLimit(0, true);
+        } else {
+          shaper.setLoadSharingLimit(loadsharing_failsafe_safe_current);
+        }
+        _failsafeLimitApplied = true;
+        DBUGF("LoadSharing: member failsafe limit applied (%s)",
+              loadsharing_failsafe_mode.c_str());
+      }
+    } else if (_failsafeLimitApplied) {
+      // Failsafe cleared: a fresh allocation has been received, and the
+      // allocation handler (web_server.cpp onWsFrame) has already replaced
+      // this limit with the allocation limit. Just drop our marker.
+      _failsafeLimitApplied = false;
+    }
+  } else if (_failsafeLimitApplied) {
+    // Left member role with a failsafe limit outstanding: release it.
+    shaper.clearLoadSharingLimit();
+    _failsafeLimitApplied = false;
   }
 
   // Wake again after poll interval

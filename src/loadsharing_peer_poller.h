@@ -219,6 +219,11 @@ private:
   unsigned long _lastAllocationTime;
 
   /**
+   * @brief True while the member failsafe limit is in place on the shaper
+   */
+  bool _failsafeLimitApplied = false;
+
+  /**
    * @brief Recompute allocations and push to members (controller only)
    */
   void recomputeAndPushAllocations();
