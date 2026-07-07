@@ -156,8 +156,12 @@ config_load_v1_settings() {
   }
   EEPROM_read_string(EEPROM_MQTT_TOPIC_START, EEPROM_MQTT_TOPIC_SIZE,
                      mqtt_topic);
+  // mqtt_user field removed (broker auth is username-less by default now) —
+  // still read past the legacy EEPROM slot so the rest of the migration
+  // stays aligned, but discard the value.
+  String mqtt_user_unused;
   EEPROM_read_string(EEPROM_MQTT_USER_START, EEPROM_MQTT_USER_SIZE,
-                     mqtt_user);
+                     mqtt_user_unused);
   EEPROM_read_string(EEPROM_MQTT_PASS_START, EEPROM_MQTT_PASS_SIZE,
                      mqtt_pass);
   EEPROM_read_string(EEPROM_MQTT_SOLAR_START, EEPROM_MQTT_SOLAR_SIZE,
