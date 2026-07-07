@@ -17,6 +17,12 @@ function parseCsv(text) {
   return { headers, rows };
 }
 
+let activeRenderToken = 0;
+
+function isRenderTokenCurrent(token) {
+  return token === activeRenderToken;
+}
+
 function discoverPeerIds(headers) {
   const ids = [];
   headers.forEach((h) => {
@@ -146,6 +152,9 @@ function buildPeerVisibilityFromScenario(scenarioSource, peerId) {
 
 async function loadCsvRows(csvPath) {
   const response = await fetch(csvPath, { cache: "no-store" });
+  if (!response.ok) {
+    throw new Error(`Failed to load ${csvPath}: ${response.status} ${response.statusText}`);
+  }
   const text = await response.text();
   const parsed = parseCsv(text);
   return parsed;
@@ -210,21 +219,48 @@ function createChart(containerId, title, series, options) {
   }
 }
 
-async function renderScenario(container, scenario) {
+async function renderScenario(container, scenario, renderToken) {
+  if (!isRenderTokenCurrent(renderToken)) {
+    return;
+  }
+
   const scenarioBlock = document.createElement("section");
   scenarioBlock.className = "scenario-block";
 
   const h3 = document.createElement("h3");
   h3.textContent = scenario.title || scenario.id || "Scenario";
   scenarioBlock.appendChild(h3);
+
+  if (!isRenderTokenCurrent(renderToken)) {
+    return;
+  }
+
   // CanvasJS requires the target container element to exist in the live DOM
   // before Chart(...) is constructed.
   container.appendChild(scenarioBlock);
 
-  const [parsed, scenarioSource] = await Promise.all([
-    loadCsvRows(scenario.csv),
-    loadScenarioSource(scenario.source),
-  ]);
+  let parsed;
+  let scenarioSource;
+  try {
+    [parsed, scenarioSource] = await Promise.all([
+      loadCsvRows(scenario.csv),
+      loadScenarioSource(scenario.source),
+    ]);
+  } catch (err) {
+    if (!isRenderTokenCurrent(renderToken)) {
+      return;
+    }
+    const error = document.createElement("p");
+    error.textContent = `Failed to load scenario data: ${String(err)}`;
+    error.style.color = "#a94442";
+    scenarioBlock.appendChild(error);
+    return;
+  }
+
+  if (!isRenderTokenCurrent(renderToken)) {
+    return;
+  }
+
   if (!parsed.rows || parsed.rows.length === 0) {
     const empty = document.createElement("p");
     empty.textContent = "No rows found in CSV output for this scenario.";
@@ -337,7 +373,12 @@ async function renderCategory(targetId, category, profiles, indexPath = "output/
   const root = document.getElementById(targetId);
   root.innerHTML = "";
 
+  const renderToken = ++activeRenderToken;
+
   const index = await fetchIndex(indexPath);
+  if (!isRenderTokenCurrent(renderToken)) {
+    return;
+  }
   const scenarios = (index.scenarios || []).filter((s) => s.category === category);
 
   const selectedProfiles = Array.isArray(profiles)
@@ -356,7 +397,10 @@ async function renderCategory(targetId, category, profiles, indexPath = "output/
   }
 
   for (const scenario of filtered) {
-    await renderScenario(root, scenario);
+    if (!isRenderTokenCurrent(renderToken)) {
+      return;
+    }
+    await renderScenario(root, scenario, renderToken);
   }
 }
 
