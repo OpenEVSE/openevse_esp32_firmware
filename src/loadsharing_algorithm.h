@@ -27,7 +27,8 @@ struct AllocationInput {
  * 3. Determine demanding online members
  * 4. If no demand: all get 0
  * 5. If enough for all minimums: allocate min + equal share of remainder (capped by max)
- * 6. If insufficient: select deterministic subset (sorted by id) until minimums fit
+ * 6. If insufficient: select subset sorted by priority (lower value = higher
+ *    priority), then id, until minimums fit
  *
  * @param members Input list of all group members (including self)
  * @param group_max_current Total circuit limit (amps)

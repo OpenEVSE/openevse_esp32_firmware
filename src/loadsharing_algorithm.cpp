@@ -84,9 +84,13 @@ std::vector<LoadSharingAllocation> computeAllocations(
     return result;
   }
 
-  // Sort demanding members by id for deterministic ordering
+  // Sort demanding members by priority (lower value = higher priority),
+  // then by id for a deterministic order within equal priority.
   std::sort(demanding_indices.begin(), demanding_indices.end(),
-    [&members](size_t a, size_t b) {
+    [&members](size_t a, size_t b) -> bool {
+      if (members[a].priority != members[b].priority) {
+        return members[a].priority < members[b].priority;
+      }
       return members[a].id < members[b].id;
     });
 
