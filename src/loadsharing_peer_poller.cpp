@@ -784,7 +784,10 @@ void LoadSharingPeerPoller::recomputeAndPushAllocations() {
     loadsharing_safety_factor,
     loadsharing_failsafe_peer_assumed_current,
     loadsharing_failsafe_mode,
-    failsafe_active
+    failsafe_active,
+    _rotationState,
+    millis(),
+    loadsharing_rotation_interval * 1000UL
   );
 
   // Update group state

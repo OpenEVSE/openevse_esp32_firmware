@@ -224,6 +224,11 @@ private:
   bool _failsafeLimitApplied = false;
 
   /**
+   * @brief Rotation state for time-slicing equal-priority members under scarcity
+   */
+  LoadSharingRotationState _rotationState;
+
+  /**
    * @brief Recompute allocations and push to members (controller only)
    */
   void recomputeAndPushAllocations();

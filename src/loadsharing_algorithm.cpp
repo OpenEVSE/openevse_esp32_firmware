@@ -19,7 +19,10 @@ std::vector<LoadSharingAllocation> computeAllocations(
     double safety_factor,
     double failsafe_peer_assumed_current,
     const String& failsafe_mode,
-    bool& failsafe_active)
+    bool& failsafe_active,
+    LoadSharingRotationState& rotation,
+    unsigned long now_ms,
+    unsigned long rotation_interval_ms)
 {
   std::vector<LoadSharingAllocation> result;
   failsafe_active = false;
@@ -93,6 +96,38 @@ std::vector<LoadSharingAllocation> computeAllocations(
       }
       return members[a].id < members[b].id;
     });
+
+  // Time-slice equal-priority members under scarcity: advance a rotation
+  // offset every rotation_interval and rotate each equal-priority run of
+  // the demanding list by it. With ample budget the reorder is harmless
+  // (equal-share is order-insensitive); under scarcity it moves the front
+  // of the line so the same peer doesn't starve indefinitely.
+  if (rotation_interval_ms > 0 && demanding_indices.size() > 1) {
+    if (!rotation.initialized) {
+      rotation.initialized = true;
+      rotation.last_rotation_ms = now_ms;
+    } else if ((unsigned long)(now_ms - rotation.last_rotation_ms) >= rotation_interval_ms) {
+      rotation.offset++;
+      rotation.last_rotation_ms = now_ms;
+    }
+
+    size_t runStart = 0;
+    while (runStart < demanding_indices.size()) {
+      size_t runEnd = runStart + 1;
+      while (runEnd < demanding_indices.size() &&
+             members[demanding_indices[runEnd]].priority ==
+             members[demanding_indices[runStart]].priority) {
+        runEnd++;
+      }
+      size_t runLen = runEnd - runStart;
+      if (runLen > 1 && (rotation.offset % runLen) != 0) {
+        std::rotate(demanding_indices.begin() + runStart,
+                    demanding_indices.begin() + runStart + (rotation.offset % runLen),
+                    demanding_indices.begin() + runEnd);
+      }
+      runStart = runEnd;
+    }
+  }
 
   // Compute total minimum current needed
   double total_min = 0.0;
