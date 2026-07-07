@@ -66,21 +66,6 @@ handleConfigPost(MongooseHttpServerRequest *request, MongooseHttpServerResponseS
       }
     }
 
-    // If this is a config push that sets role=member, handle the role transition
-    if (doc.containsKey("loadsharing_role") &&
-        doc["loadsharing_role"].as<String>() == "member" &&
-        doc.containsKey("loadsharing_controller_host")) {
-      String controllerHost = doc["loadsharing_controller_host"].as<String>();
-      loadSharingGroupState.becomeMember(controllerHost);
-    }
-
-    // If this is a config push that resets the role (member removal)
-    if (doc.containsKey("loadsharing_role") &&
-        doc["loadsharing_role"].as<String>() == "" &&
-        loadSharingGroupState.isMember()) {
-      loadSharingGroupState.resetRole();
-    }
-
     // Validate load sharing config ranges
     if (doc.containsKey("loadsharing_group_max_current")) {
       double val = doc["loadsharing_group_max_current"].as<double>();
@@ -129,6 +114,20 @@ handleConfigPost(MongooseHttpServerRequest *request, MongooseHttpServerResponseS
         response->print("{\"msg\":\"loadsharing_failsafe_mode must be 'safe_current' or 'disable'\"}");
         return;
       }
+    }
+
+    // Role transitions are applied after validation so that a rejected
+    // request does not mutate group-membership state as a side effect.
+    if (doc.containsKey("loadsharing_role") &&
+        doc["loadsharing_role"].as<String>() == "member" &&
+        doc.containsKey("loadsharing_controller_host")) {
+      String controllerHost = doc["loadsharing_controller_host"].as<String>();
+      loadSharingGroupState.becomeMember(controllerHost);
+    }
+    if (doc.containsKey("loadsharing_role") &&
+        doc["loadsharing_role"].as<String>() == "" &&
+        loadSharingGroupState.isMember()) {
+      loadSharingGroupState.resetRole();
     }
 
     // Update WiFi module config
