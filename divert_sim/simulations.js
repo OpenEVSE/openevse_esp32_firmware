@@ -116,6 +116,139 @@ function buildPeerSeries(rows, peerId, visibility) {
   return { series, hasGridIE: showGridIE };
 }
 
+function findNearestDataPointX(seriesList, targetXValue) {
+  if (!Array.isArray(seriesList) || seriesList.length === 0 || !Number.isFinite(targetXValue)) {
+    return null;
+  }
+
+  let nearestX = null;
+  let nearestDistance = Number.POSITIVE_INFINITY;
+
+  seriesList.forEach((series) => {
+    if (!series || !Array.isArray(series.dataPoints)) {
+      return;
+    }
+    series.dataPoints.forEach((point) => {
+      if (!point || !(point.x instanceof Date)) {
+        return;
+      }
+      const x = point.x.getTime();
+      const distance = Math.abs(x - targetXValue);
+      if (distance < nearestDistance) {
+        nearestDistance = distance;
+        nearestX = x;
+      }
+    });
+  });
+
+  return nearestX;
+}
+
+function ensureHoverLine(chart) {
+  if (!chart || !chart.container) {
+    return null;
+  }
+
+  const host = chart.container;
+  if (!host.style.position) {
+    host.style.position = "relative";
+  }
+
+  let line = host.querySelector(".sync-hover-line");
+  if (!line) {
+    line = document.createElement("div");
+    line.className = "sync-hover-line";
+    line.style.position = "absolute";
+    line.style.top = "0";
+    line.style.bottom = "0";
+    line.style.width = "0";
+    line.style.marginLeft = "0";
+    line.style.borderLeft = "2px dotted #5c6b7a";
+    line.style.opacity = "0.9";
+    line.style.pointerEvents = "none";
+    line.style.zIndex = "1000";
+    line.style.display = "none";
+    host.appendChild(line);
+  }
+
+  return line;
+}
+
+function attachScenarioHoverSync(charts) {
+  const activeCharts = (charts || []).filter((c) => !!c);
+  if (activeCharts.length < 2) {
+    return;
+  }
+
+  const syncAll = (sourceChart, targetXValue) => {
+    const nearestX = findNearestDataPointX(sourceChart.options.data, targetXValue);
+    if (!Number.isFinite(nearestX)) {
+      return;
+    }
+
+    activeCharts.forEach((chart) => {
+      try {
+        if (chart.toolTip && typeof chart.toolTip.showAtX === "function") {
+          chart.toolTip.showAtX(nearestX);
+        }
+
+        const line = ensureHoverLine(chart);
+        if (line && chart.axisX && chart.axisX[0]) {
+          const pixelX = chart.axisX[0].convertValueToPixel(nearestX);
+          if (Number.isFinite(pixelX)) {
+            line.style.left = `${pixelX}px`;
+            line.style.display = "block";
+          }
+        }
+      } catch (_) {
+        // Ignore sync errors per-chart so one failure does not break others.
+      }
+    });
+  };
+
+  const clearAll = () => {
+    activeCharts.forEach((chart) => {
+      try {
+        if (chart.toolTip && typeof chart.toolTip.hide === "function") {
+          chart.toolTip.hide();
+        }
+        const line = ensureHoverLine(chart);
+        if (line) {
+          line.style.display = "none";
+        }
+      } catch (_) {
+        // Ignore cleanup errors per-chart.
+      }
+    });
+  };
+
+  activeCharts.forEach((chart) => {
+    const canvas = chart.container
+      ? chart.container.querySelector("canvas.canvasjs-chart-canvas:last-of-type")
+      : null;
+    if (!canvas) {
+      return;
+    }
+
+    canvas.addEventListener("mousemove", (event) => {
+      const rect = canvas.getBoundingClientRect();
+      const pixelX = event.clientX - rect.left;
+      if (!Number.isFinite(pixelX)) {
+        return;
+      }
+      let xValue;
+      try {
+        xValue = chart.axisX[0].convertPixelToValue(pixelX);
+      } catch (_) {
+        return;
+      }
+      syncAll(chart, xValue);
+    });
+
+    canvas.addEventListener("mouseleave", clearAll);
+  });
+}
+
 async function loadScenarioSource(sourcePath) {
   if (!sourcePath) {
     return null;
@@ -204,6 +337,7 @@ function createChart(containerId, title, series, options) {
       data: normalizedSeries,
     });
     chart.render();
+    return chart;
   } catch (err) {
     const el = document.getElementById(containerId);
     if (el) {
@@ -216,6 +350,7 @@ function createChart(containerId, title, series, options) {
       el.style.padding = "8px";
       el.style.boxSizing = "border-box";
     }
+    return null;
   }
 }
 
@@ -276,6 +411,7 @@ async function renderScenario(container, scenario, renderToken) {
     return;
   }
 
+  const charts = [];
   peerIds.forEach((peerId, idx) => {
     const peerTitle = document.createElement("h4");
     peerTitle.textContent = `${peerId}`;
@@ -289,8 +425,11 @@ async function renderScenario(container, scenario, renderToken) {
 
     const visibility = buildPeerVisibilityFromScenario(scenarioSource, peerId);
     const result = buildPeerSeries(parsed.rows, peerId, visibility);
-    createChart(chartDiv.id, `${scenario.title} - ${peerId}`, result.series, { hasGridIE: result.hasGridIE });
+    const chart = createChart(chartDiv.id, `${scenario.title} - ${peerId}`, result.series, { hasGridIE: result.hasGridIE });
+    charts.push(chart);
   });
+
+  attachScenarioHoverSync(charts);
 
 }
 
