@@ -1,10 +1,9 @@
 # OpenEVSE WiFi for ESP32
 
-> **_NOTE:_** Breaking change! This release recommends a minimum of [7.1.3](https://github.com/OpenEVSE/open_evse/releases) of the OpenEVSE firmware, features including Solar Divert and push button menus may not behave as expected on older firmware.
+>  This release recommends [9.0.0](https://github.com/OpenEVSE/open_evse/releases). minimum of [7.1.3](https://github.com/OpenEVSE/open_evse/releases) of the OpenEVSE firmware, features including Solar Divert and push button menus may not behave as expected on older firmware.
 
 - *For the older WiFi V2.x ESP8266 version (pre June 2020), see the [v2 firmware repository](https://github.com/openevse/ESP8266_WiFi_v2.x/)*
 
-- **For latest API documentation see the new [Spotlight.io OpenEVSE WiFi documentation page](https://openevse.stoplight.io/docs/openevse-wifi-v4/ZG9jOjQyMjE5ODI-open-evse-wi-fi-esp-32-gateway-v4)**
 
 <table>
   <tr>
@@ -16,8 +15,6 @@
 *Screenshots of every screen — [auto-generated](docs/developer/gui-development.md#screenshots) and always current — illustrate the [user guide](docs/user/index.md).*
 
 The WiFi gateway uses an **ESP32** which communicates with the OpenEVSE controller via serial RAPI API. The web UI is served directly from the ESP32 web server and can be controlled via a connected device on the local network.
-
-**This FW also supports wired Ethernet connection using [ESP32 Gateway](docs/wired-ethernet.md)**
 
 
 ***
@@ -32,8 +29,6 @@ The WiFi gateway uses an **ESP32** which communicates with the OpenEVSE controll
   - [User Guide](docs/user/index.md)
   - [Developer Guide](docs/developer/index.md)
   - [AI / coding-agent docs](docs/ai/)
-  - [API](https://openevse.stoplight.io/docs/openevse-wifi-v4/)
-- [About](#about)
 - [Licence](#licence)
 
 <!-- tocstop -->
@@ -57,17 +52,11 @@ The WiFi gateway uses an **ESP32** which communicates with the OpenEVSE controll
 
 ## Requirements
 
-### OpenEVSE / EmonEVSE charging station
+### OpenEVSE based Safety/ESP32 WiFi
 
 - Purchase via: [OpenEVSE Store](https://store.openevse.com)
-- OpenEVSE FW [V7.1.3 recommended](https://github.com/OpenEVSE/open_evse/releases)
-- All new OpenEVSE units are shipped with V7.1.3 pre-loaded (April 2021 onwards)
-
-### ESP32 WiFi Module
-
-- **Note: WiFi module is included as standard in most OpenEVSE units**
-- Purchase via: [OpenEVSE Store (USA/Canda)](https://store.openevse.com/collections/frontpage/products/openevse-wifi-kit) | [OpenEnergyMonitor (UK / EU)](https://shop.openenergymonitor.com/openevse-wifi-gateway/)
-- See [OpenEVSE WiFi setup guide](https://openevse.dozuki.com/Guide/WiFi+-+Join+Network/29) for basic instructions
+- OpenEVSE FW [V9.0.0 recommended](https://github.com/OpenEVSE/open_evse/releases)
+- All new OpenEVSE units are shipped with 9.0.0 pre-loaded (July 2026 onwards)
 
 ***
 
@@ -119,22 +108,6 @@ browse them in [docs/user/screenshots/](docs/user/screenshots/), or see
 [how they're generated](docs/developer/gui-development.md#screenshots).
 
 ***
-
-## About
-
-Collaboration of [OpenEnegyMonitor](http://openenergymonitor.org) and [OpenEVSE](https://openevse.com).
-
-Contributions by:
-
-- @glynhudson
-- @chris1howell
-- @trystanlea
-- @jeremypoulter
-- @sandeen
-- @lincomatic
-- @joverbee
-- @matth-x (OCPP)
-- @kipk
 
 ## Licence
 
