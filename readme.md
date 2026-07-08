@@ -35,20 +35,58 @@ The WiFi gateway uses an **ESP32** which communicates with the OpenEVSE controll
 
 ## Features
 
-- Web UI to view & control all OpenEVSE functions
-  - [Start / pause and charge modes](docs/user/dashboard.md)
-  - [Scheduler](docs/user/schedule.md)
-  - [Session & system limits](docs/user/dashboard.md#session-limits) (time, energy, soc, range)
-  - Adjust charging current
-  - [Monitoring](docs/user/monitoring.md) and [charge history](docs/user/history.md)
+### Web UI
 
-- [MQTT status & control](docs/user/integrations.md)
-- Log to Emoncms server e.g [data.openevse.com](https://data.openevse.com) or [emoncms.org](https://emoncms.org)
-- ['Eco' mode](docs/user/solar-divert.md): automatically adjust charging current based on availability of power from solar PV or grid export
-- [Shaper](docs/user/load-shaper.md): throttle current to prevent overflowing main power capacity
-- [OCPP V1.6](docs/user/ocpp.md) (beta)
-- [RFID authorisation](docs/user/rfid.md) and [vehicle SOC/range display](docs/user/vehicle.md)
-- [Home Assistant Integration (beta)](https://github.com/firstof9/openevse)
+- [Dashboard](docs/user/dashboard.md) — live charge state, power/session chart,
+  charge modes (Auto / Eco / On / Off), Boost, charging-current control
+- [First-run setup wizard](docs/user/getting-started.md), light & dark themes,
+  responsive/installable on mobile, four languages (EN / ES / FR / HU)
+- [Session limits](docs/user/dashboard.md#session-limits) — stop automatically
+  at a target SOC, range, time, or energy
+- [Scheduler](docs/user/schedule.md) — up to 50 recurring weekly charge timers,
+  evaluated on-device
+- [Monitoring](docs/user/monitoring.md) — live energy, sensor, vehicle, and
+  claims data
+- [History](docs/user/history.md) — session & event log with CSV export, plus
+  on-device energy logging (daily / monthly / annual)
+
+### Energy management
+
+- ['Eco' mode / solar divert](docs/user/solar-divert.md) — start, stop, and
+  modulate charging from excess solar PV or grid export (MQTT or HTTP fed)
+- [Current shaper](docs/user/load-shaper.md) — throttle charging so total
+  household load stays within your supply capacity
+- [Vehicle integration](docs/user/vehicle.md) — SOC, range, and charge ETA
+  from Tesla, MQTT (e.g. Home Assistant), OCPP, or HTTP; home-battery display
+- [OhmConnect](docs/user/integrations.md#ohmconnect) demand-response support
+
+### Integrations & access control
+
+- [MQTT status & control](docs/user/integrations.md) — full status published,
+  control topics, MQTTS support; basis of the
+  [Home Assistant integration (beta)](https://github.com/firstof9/openevse)
+- [Emoncms logging](docs/user/integrations.md#emoncms) — e.g.
+  [data.openevse.com](https://data.openevse.com) or [emoncms.org](https://emoncms.org)
+- [OCPP 1.6-J](docs/user/ocpp.md) (beta) — connect to a charge-point
+  management system
+- [RFID authorisation](docs/user/rfid.md) — card-based access with per-user
+  charge history (PN532 module)
+- [HTTP API](https://openevse.stoplight.io/docs/openevse-wifi-v4/) +
+  WebSocket live stream; [RAPI passthrough](docs/rapi.md)
+
+### System & safety
+
+- [Safety](docs/user/safety.md) — GFCI / diode / ground / stuck-relay / vent
+  checks, temperature throttling, boot lock, heartbeat watchdog
+- [Time & timezone](docs/user/settings.md#time--date) via SNTP with automatic DST
+- [TLS certificates](docs/user/settings.md#system) for MQTTS/HTTPS; HTTP
+  authentication
+- [Firmware updates](docs/user/firmware-update.md) — one-click GitHub OTA or
+  file upload from the web UI
+- [Wired Ethernet](docs/wired-ethernet.md) support (Olimex ESP32 Gateway and
+  similar); automatic WiFi access-point fallback
+- On-device [TFT touchscreen display](docs/user/settings.md#system) on
+  supported hardware
 
 ## Requirements
 
