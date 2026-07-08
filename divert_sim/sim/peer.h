@@ -63,9 +63,8 @@ public:
   bool vehicle = true;
 
   // Allocation handed to this peer by the load-sharing algorithm (amps).
-  // Use has_loadshare_allocation to distinguish startup from an explicit 0 A allocation.
+  // 0 = no constraint applied.
   double loadshare_allocation_amps = 0.0;
-  bool has_loadshare_allocation = false;
 
   // Reason text for the most recent reduction in pilot below max (filled by
   // the runner before each row is written).

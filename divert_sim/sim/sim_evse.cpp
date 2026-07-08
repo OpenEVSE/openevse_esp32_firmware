@@ -15,14 +15,14 @@ double SimEvse::actualCurrent() const
 
   double offered_w = static_cast<double>(pilot) * voltage;
   double max_ev_w = max_charge_rate_kw * 1000.0;
+  double actual_w = std::min(offered_w, max_ev_w);
 
   if (soc > SIM_EVSE_TAPER_START_SOC) {
     double taper = 1.0 - ((soc - SIM_EVSE_TAPER_START_SOC) / SIM_EVSE_TAPER_RANGE);
     if (taper < 0.0) taper = 0.0;
-    max_ev_w *= taper;
+    actual_w *= taper;
   }
 
-  double actual_w = std::min(offered_w, max_ev_w);
   return actual_w / voltage;
 }
 
@@ -35,9 +35,6 @@ void SimEvse::tick(double dt_seconds)
   double energy_kwh = (amps * voltage / 1000.0) * (dt_seconds / 3600.0);
   double soc_delta = (energy_kwh / battery_capacity_kwh) * 100.0;
   soc = std::min(100.0, soc + soc_delta);
-  if (soc >= SIM_EVSE_COMPLETE_SOC) {
-    soc = 100.0;
-  }
 }
 
 void SimEvse::setVehicleConnected(bool connected)

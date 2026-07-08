@@ -21,7 +21,6 @@ private:
   double _amp;           // Measured current (amps)
   double _voltage;       // Measured voltage (volts)
   double _pilot;         // Current pilot setpoint (amps)
-  double _max_current;   // Configured max current (amps)
   uint8_t _vehicle;      // 1 if vehicle connected, else 0
   uint8_t _state;        // EVSE state code (J1772 state)
   uint32_t _config_version;  // Config version for sync detection
@@ -32,7 +31,6 @@ public:
     _amp(0.0),
     _voltage(0.0),
     _pilot(0.0),
-    _max_current(0.0),
     _vehicle(0),
     _state(0),
     _config_version(0),
@@ -48,9 +46,6 @@ public:
 
   double getPilot() const { return _pilot; }
   void setPilot(double value) { _pilot = value; }
-
-  double getMaxCurrent() const { return _max_current; }
-  void setMaxCurrent(double value) { _max_current = value; }
 
   uint8_t getVehicle() const { return _vehicle; }
   void setVehicle(uint8_t value) { _vehicle = value; }

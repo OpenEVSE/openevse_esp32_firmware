@@ -1,6 +1,7 @@
 /*
  * MIT License
  * Copyright (c) 2025 Jeremy Poulter
+ *
  * Load Sharing Allocation Algorithm - "Equal Share with Minimums"
  */
 
@@ -11,53 +12,6 @@
 #include "debug.h"
 #include "loadsharing_algorithm.h"
 #include <algorithm>
-
-namespace {
-
-constexpr double kUnderuseThresholdA = 0.1;
-constexpr double kNoDrawThresholdA = 0.01;
-constexpr double kUnderuseHeadroomA = 1.0;
-
-bool hasObservedDemand(const AllocationInput& member)
-{
-  if (!member.online || !member.demanding) {
-    return false;
-  }
-
-  if (!member.observed_current_valid) {
-    return true;
-  }
-
-  return member.actual_current > kNoDrawThresholdA;
-}
-
-double computeEffectiveMaxCurrent(const AllocationInput& member)
-{
-  double configured_max = member.max_current;
-  if (configured_max < member.min_current) {
-    configured_max = member.min_current;
-  }
-
-  if (!member.online || !member.demanding || !member.observed_current_valid) {
-    return configured_max;
-  }
-
-  if (member.offered_current <= 0.0 || member.actual_current < 0.0) {
-    return configured_max;
-  }
-
-  const double offered = std::min(member.offered_current, configured_max);
-  const double unused = offered - member.actual_current;
-  if (unused <= kUnderuseThresholdA) {
-    return configured_max;
-  }
-
-  const double reclaimed_cap = std::max(member.min_current,
-                                        member.actual_current + kUnderuseHeadroomA);
-  return std::min(reclaimed_cap, configured_max);
-}
-
-} // namespace
 
 std::vector<LoadSharingAllocation> computeAllocations(
     const std::vector<AllocationInput>& members,
@@ -120,19 +74,12 @@ std::vector<LoadSharingAllocation> computeAllocations(
   // Build list of demanding online members (indices into result/members)
   std::vector<size_t> demanding_indices;
   for (size_t i = 0; i < members.size(); i++) {
-    if (hasObservedDemand(members[i])) {
+    if (members[i].online && members[i].demanding) {
       demanding_indices.push_back(i);
-    } else if (members[i].online && members[i].demanding) {
-      result[i].setReason("no_draw");
     }
   }
 
   if (demanding_indices.empty()) {
-    for (size_t i = 0; i < members.size(); i++) {
-      if (!members[i].online) {
-        result[i].setReason("offline");
-      }
-    }
     DBUGLN("LoadSharing: No demanding members, all allocations 0");
     return result;
   }
@@ -152,17 +99,10 @@ std::vector<LoadSharingAllocation> computeAllocations(
   DBUGF("LoadSharing: %u demanding member(s), total_min=%.1fA, I_avail=%.1fA",
         (unsigned int)demanding_indices.size(), total_min, I_avail);
 
-  std::vector<double> effective_max(members.size(), 0.0);
-  const bool apply_observed_reclaim = members.size() > 1;
-  for (size_t idx : demanding_indices) {
-    effective_max[idx] = apply_observed_reclaim
-      ? computeEffectiveMaxCurrent(members[idx])
-      : std::max(members[idx].max_current, members[idx].min_current);
-  }
-
   if (I_avail >= total_min) {
     // Enough for all minimums - assign min + equal share of remainder
     double remainder = I_avail - total_min;
+    size_t num_demanding = demanding_indices.size();
 
     // Iterative distribution: distribute remainder equally, cap at max, redistribute
     std::vector<double> allocations(members.size(), 0.0);
@@ -183,9 +123,9 @@ std::vector<LoadSharingAllocation> computeAllocations(
 
       for (size_t idx : uncapped) {
         double proposed = allocations[idx] + share;
-        if (proposed > effective_max[idx]) {
-          leftover += proposed - effective_max[idx];
-          allocations[idx] = effective_max[idx];
+        if (proposed > members[idx].max_current) {
+          leftover += proposed - members[idx].max_current;
+          allocations[idx] = members[idx].max_current;
         } else {
           allocations[idx] = proposed;
           still_uncapped.push_back(idx);

@@ -175,41 +175,26 @@ def get_native_binary_path() -> Path:
     Raises:
         FileNotFoundError if binary not found in any location
     """
-    repo_root = Path(__file__).resolve().parents[2]
-
     # Check environment variable first (used in CI)
     env_path = os.environ.get("NATIVE_BINARY_PATH")
     if env_path:
-        path = Path(env_path).expanduser()
-        candidates = [path]
+        path = Path(env_path)
+        if path.exists():
+            return path
 
-        # If env path is relative, resolve it against common bases.
-        if not path.is_absolute():
-            candidates.extend([
-                repo_root / path,
-                Path.cwd() / path,
-            ])
+    # Check local build location (relative to workspace root)
+    local_path = Path.cwd().parent.parent / ".pio" / "build" / "native" / "program"
+    if local_path.exists():
+        return local_path
 
-        for candidate in candidates:
-            resolved = candidate.resolve()
-            if resolved.exists():
-                return resolved
-
-    # Check common local build locations.
-    local_candidates = [
-        repo_root / ".pio" / "build" / "native_openevse" / "program",
-        repo_root / ".pio" / "build" / "native" / "program",
-        Path.cwd() / ".pio" / "build" / "native_openevse" / "program",
-        Path.cwd() / ".pio" / "build" / "native" / "program",
-    ]
-    for local_path in local_candidates:
-        resolved = local_path.resolve()
-        if resolved.exists():
-            return resolved
+    # Check if we're already in the right directory
+    local_path = Path.cwd() / ".pio" / "build" / "native" / "program"
+    if local_path.exists():
+        return local_path
 
     raise FileNotFoundError(
         "Native firmware binary not found. Set NATIVE_BINARY_PATH or run "
-        "'pio run -e native_openevse' to build locally."
+        "'pio run -e native' to build locally."
     )
 
 
