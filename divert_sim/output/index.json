@@ -1,5 +1,5 @@
 {
-  "generated_at": "2026-06-05T10:47:16.211039Z",
+  "generated_at": "2026-07-08T22:30:28.940896Z",
   "scenarios": [
     {
       "id": "divert_CloudyMorning_default",
@@ -11,7 +11,7 @@
       ],
       "source": "data/scenarios/divert_CloudyMorning_default.json",
       "csv": "output/divert_CloudyMorning_default.csv",
-      "row_count": 961
+      "row_count": 956
     },
     {
       "id": "divert_CloudyMorning_noimport",
@@ -23,7 +23,7 @@
       ],
       "source": "data/scenarios/divert_CloudyMorning_noimport.json",
       "csv": "output/divert_CloudyMorning_noimport.csv",
-      "row_count": 961
+      "row_count": 956
     },
     {
       "id": "divert_CloudyMorning_nowaste",
@@ -35,7 +35,7 @@
       ],
       "source": "data/scenarios/divert_CloudyMorning_nowaste.json",
       "csv": "output/divert_CloudyMorning_nowaste.csv",
-      "row_count": 961
+      "row_count": 956
     },
     {
       "id": "divert_Energy_and_Power_Day_2020_03_22_default",
@@ -155,7 +155,7 @@
       ],
       "source": "data/scenarios/divert_almostperfect_default.json",
       "csv": "output/divert_almostperfect_default.csv",
-      "row_count": 941
+      "row_count": 938
     },
     {
       "id": "divert_almostperfect_noimport",
@@ -167,7 +167,7 @@
       ],
       "source": "data/scenarios/divert_almostperfect_noimport.json",
       "csv": "output/divert_almostperfect_noimport.csv",
-      "row_count": 941
+      "row_count": 938
     },
     {
       "id": "divert_almostperfect_nowaste",
@@ -179,7 +179,7 @@
       ],
       "source": "data/scenarios/divert_almostperfect_nowaste.json",
       "csv": "output/divert_almostperfect_nowaste.csv",
-      "row_count": 941
+      "row_count": 938
     },
     {
       "id": "divert_day1_default",
@@ -203,7 +203,7 @@
       ],
       "source": "data/scenarios/divert_day1_grid_ie_default.json",
       "csv": "output/divert_day1_grid_ie_default.csv",
-      "row_count": 721
+      "row_count": 619
     },
     {
       "id": "divert_day1_grid_ie_noimport",
@@ -215,7 +215,7 @@
       ],
       "source": "data/scenarios/divert_day1_grid_ie_noimport.json",
       "csv": "output/divert_day1_grid_ie_noimport.csv",
-      "row_count": 721
+      "row_count": 619
     },
     {
       "id": "divert_day1_grid_ie_nowaste",
@@ -227,7 +227,7 @@
       ],
       "source": "data/scenarios/divert_day1_grid_ie_nowaste.json",
       "csv": "output/divert_day1_grid_ie_nowaste.csv",
-      "row_count": 721
+      "row_count": 619
     },
     {
       "id": "divert_day1_noimport",
@@ -275,7 +275,7 @@
       ],
       "source": "data/scenarios/divert_day2_grid_ie_default.json",
       "csv": "output/divert_day2_grid_ie_default.csv",
-      "row_count": 721
+      "row_count": 660
     },
     {
       "id": "divert_day2_grid_ie_noimport",
@@ -287,7 +287,7 @@
       ],
       "source": "data/scenarios/divert_day2_grid_ie_noimport.json",
       "csv": "output/divert_day2_grid_ie_noimport.csv",
-      "row_count": 721
+      "row_count": 660
     },
     {
       "id": "divert_day2_grid_ie_nowaste",
@@ -299,7 +299,7 @@
       ],
       "source": "data/scenarios/divert_day2_grid_ie_nowaste.json",
       "csv": "output/divert_day2_grid_ie_nowaste.csv",
-      "row_count": 721
+      "row_count": 660
     },
     {
       "id": "divert_day2_noimport",
@@ -347,7 +347,7 @@
       ],
       "source": "data/scenarios/divert_day3_grid_ie_default.json",
       "csv": "output/divert_day3_grid_ie_default.csv",
-      "row_count": 721
+      "row_count": 651
     },
     {
       "id": "divert_day3_grid_ie_noimport",
@@ -359,7 +359,7 @@
       ],
       "source": "data/scenarios/divert_day3_grid_ie_noimport.json",
       "csv": "output/divert_day3_grid_ie_noimport.csv",
-      "row_count": 721
+      "row_count": 651
     },
     {
       "id": "divert_day3_grid_ie_nowaste",
@@ -371,7 +371,7 @@
       ],
       "source": "data/scenarios/divert_day3_grid_ie_nowaste.json",
       "csv": "output/divert_day3_grid_ie_nowaste.csv",
-      "row_count": 721
+      "row_count": 651
     },
     {
       "id": "divert_day3_noimport",
@@ -407,7 +407,7 @@
       ],
       "source": "data/scenarios/divert_solar_vrms_default.json",
       "csv": "output/divert_solar_vrms_default.csv",
-      "row_count": 721
+      "row_count": 1245
     },
     {
       "id": "divert_solar_vrms_noimport",
@@ -419,7 +419,7 @@
       ],
       "source": "data/scenarios/divert_solar_vrms_noimport.json",
       "csv": "output/divert_solar_vrms_noimport.csv",
-      "row_count": 721
+      "row_count": 1245
     },
     {
       "id": "divert_solar_vrms_nowaste",
@@ -431,7 +431,19 @@
       ],
       "source": "data/scenarios/divert_solar_vrms_nowaste.json",
       "csv": "output/divert_solar_vrms_nowaste.csv",
-      "row_count": 721
+      "row_count": 1245
+    },
+    {
+      "id": "divert_CloudyMorning_default",
+      "title": "Divert: Cloudy Morning (default)",
+      "category": "divert",
+      "profile": "default",
+      "peers": [
+        "evse-001"
+      ],
+      "source": "data/scenarios/interactive_generated.json",
+      "csv": "output/divert_CloudyMorning_default.csv",
+      "row_count": 956
     },
     {
       "id": "loadsharing_2peer_basic",
@@ -562,7 +574,7 @@
       ],
       "source": "data/scenarios/shaper_data_shaper_10000w.json",
       "csv": "output/shaper_data_shaper_10000w.csv",
-      "row_count": 1441
+      "row_count": 7201
     },
     {
       "id": "shaper_data_shaper_3000w",
@@ -574,7 +586,7 @@
       ],
       "source": "data/scenarios/shaper_data_shaper_3000w.json",
       "csv": "output/shaper_data_shaper_3000w.csv",
-      "row_count": 1441
+      "row_count": 7201
     },
     {
       "id": "shaper_data_shaper_5000w",
@@ -586,7 +598,7 @@
       ],
       "source": "data/scenarios/shaper_data_shaper_5000w.json",
       "csv": "output/shaper_data_shaper_5000w.csv",
-      "row_count": 1441
+      "row_count": 7201
     },
     {
       "id": "shaper_data_shaper_8000w",
@@ -598,7 +610,7 @@
       ],
       "source": "data/scenarios/shaper_data_shaper_8000w.json",
       "csv": "output/shaper_data_shaper_8000w.csv",
-      "row_count": 1441
+      "row_count": 7201
     },
     {
       "id": "shaper_data_shaper_aggressive",
@@ -610,7 +622,7 @@
       ],
       "source": "data/scenarios/shaper_data_shaper_aggressive.json",
       "csv": "output/shaper_data_shaper_aggressive.csv",
-      "row_count": 1441
+      "row_count": 7201
     },
     {
       "id": "shaper_data_shaper_conservative",
@@ -622,7 +634,7 @@
       ],
       "source": "data/scenarios/shaper_data_shaper_conservative.json",
       "csv": "output/shaper_data_shaper_conservative.csv",
-      "row_count": 1441
+      "row_count": 7201
     },
     {
       "id": "shaper_data_shaper_default",
@@ -634,7 +646,7 @@
       ],
       "source": "data/scenarios/shaper_data_shaper_default.json",
       "csv": "output/shaper_data_shaper_default.csv",
-      "row_count": 1441
+      "row_count": 7201
     },
     {
       "id": "shaper_data_shaper_maxinterval_120s",
@@ -646,7 +658,7 @@
       ],
       "source": "data/scenarios/shaper_data_shaper_maxinterval_120s.json",
       "csv": "output/shaper_data_shaper_maxinterval_120s.csv",
-      "row_count": 1441
+      "row_count": 7201
     },
     {
       "id": "shaper_data_shaper_maxinterval_30s",
@@ -658,7 +670,7 @@
       ],
       "source": "data/scenarios/shaper_data_shaper_maxinterval_30s.json",
       "csv": "output/shaper_data_shaper_maxinterval_30s.csv",
-      "row_count": 1441
+      "row_count": 7201
     },
     {
       "id": "shaper_data_shaper_minpause_600s",
@@ -670,7 +682,7 @@
       ],
       "source": "data/scenarios/shaper_data_shaper_minpause_600s.json",
       "csv": "output/shaper_data_shaper_minpause_600s.csv",
-      "row_count": 1441
+      "row_count": 7201
     },
     {
       "id": "shaper_data_shaper_minpause_60s",
@@ -682,7 +694,7 @@
       ],
       "source": "data/scenarios/shaper_data_shaper_minpause_60s.json",
       "csv": "output/shaper_data_shaper_minpause_60s.csv",
-      "row_count": 1441
+      "row_count": 7201
     },
     {
       "id": "shaper_data_shaper_smoothing_120s",
@@ -694,7 +706,7 @@
       ],
       "source": "data/scenarios/shaper_data_shaper_smoothing_120s.json",
       "csv": "output/shaper_data_shaper_smoothing_120s.csv",
-      "row_count": 1441
+      "row_count": 7201
     },
     {
       "id": "shaper_data_shaper_smoothing_30s",
@@ -706,7 +718,7 @@
       ],
       "source": "data/scenarios/shaper_data_shaper_smoothing_30s.json",
       "csv": "output/shaper_data_shaper_smoothing_30s.csv",
-      "row_count": 1441
+      "row_count": 7201
     },
     {
       "id": "shaper_data_shaper_threephase",
@@ -718,7 +730,7 @@
       ],
       "source": "data/scenarios/shaper_data_shaper_threephase.json",
       "csv": "output/shaper_data_shaper_threephase.csv",
-      "row_count": 1441
+      "row_count": 7201
     },
     {
       "id": "shaper_data_shaper_very_high_power",
@@ -730,7 +742,7 @@
       ],
       "source": "data/scenarios/shaper_data_shaper_very_high_power.json",
       "csv": "output/shaper_data_shaper_very_high_power.csv",
-      "row_count": 1441
+      "row_count": 7201
     },
     {
       "id": "shaper_data_shaper_very_low_power",
@@ -742,7 +754,7 @@
       ],
       "source": "data/scenarios/shaper_data_shaper_very_low_power.json",
       "csv": "output/shaper_data_shaper_very_low_power.csv",
-      "row_count": 1441
+      "row_count": 7201
     }
   ]
 }

@@ -161,13 +161,8 @@ int run(const std::string &scenario_path,
           if (a.getId() == p->id().c_str()) {
             p->loadshare_allocation_amps = a.getTargetCurrent();
             p->reason = a.getReason().c_str();
-            // Apply allocation as a claim on the EvseManager.
-            EvseProperties props;
-            props.setState(a.getTargetCurrent() > 0 ? EvseState::Active
-                                                   : EvseState::Disabled);
-            props.setMaxCurrent((uint32_t) a.getTargetCurrent());
-            p->evse().claim(EvseClient_OpenEVSE_LoadSharing,
-                            EvseManager_Priority_Default, props);
+            // Runner intentionally does not apply EVSE claims for load sharing.
+            // Allocation and reason are recorded for reporting only.
             break;
           }
         }

@@ -1234,18 +1234,13 @@ void onWsFrame(MongooseHttpWebSocketConnection *connection, int flags, uint8_t *
         if (loadSharingGroupState.isMember()) {
           loadSharingGroupState.recordAllocationReceived();
           if (targetCurrent > 0) {
-            EvseProperties props;
-            props.setMaxCurrent((uint32_t)targetCurrent);
-            props.setState(EvseState::None);
-            evse.claim(EvseClient_OpenEVSE_LoadSharing, EvseManager_Priority_Limit, props);
-          } else if (reason != "idle") {
-            // Active allocation of 0 means disable
-            EvseProperties props;
-            props.setState(EvseState::Disabled);
-            evse.claim(EvseClient_OpenEVSE_LoadSharing, EvseManager_Priority_Limit, props);
+            shaper.setLoadSharingLimit(targetCurrent, false);
+          } else if (reason == "failsafe_disabled") {
+            // Explicit controller failsafe-disable mode should force disabled.
+            shaper.setLoadSharingLimit(0, true);
           } else {
-            // No demand - release claim
-            evse.release(EvseClient_OpenEVSE_LoadSharing);
+            // No active load sharing limit; release shaper-side load sharing override.
+            shaper.clearLoadSharingLimit();
           }
         }
       }

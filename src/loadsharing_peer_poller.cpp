@@ -13,6 +13,7 @@
 #include "loadsharing_peer_poller.h"
 #include "loadsharing_algorithm.h"
 #include "app_config.h"
+#include "current_shaper.h"
 #include "evse_man.h"
 #include "input.h"
 #include <Arduino.h>
@@ -737,20 +738,16 @@ void LoadSharingPeerPoller::recomputeAndPushAllocations() {
   // Apply local allocation (first entry is always self)
   if (!allocations.empty()) {
     double selfAllocation = allocations[0].getTargetCurrent();
+    String selfReason = allocations[0].getReason();
 
     if (selfAllocation > 0) {
-      EvseProperties props;
-      props.setMaxCurrent((uint32_t)selfAllocation);
-      props.setState(EvseState::None);
-      evse.claim(EvseClient_OpenEVSE_LoadSharing, EvseManager_Priority_Limit, props);
-    } else if (allocations[0].getReason() != "idle") {
-      // Active allocation of 0 means we should disable
-      EvseProperties props;
-      props.setState(EvseState::Disabled);
-      evse.claim(EvseClient_OpenEVSE_LoadSharing, EvseManager_Priority_Limit, props);
+      shaper.setLoadSharingLimit(selfAllocation, false);
+    } else if (selfReason == "failsafe_disabled") {
+      // Explicit failsafe-disable mode should force charging disabled.
+      shaper.setLoadSharingLimit(0, true);
     } else {
-      // No demand - release claim
-      evse.release(EvseClient_OpenEVSE_LoadSharing);
+      // No active load sharing limit; release shaper-side load sharing override.
+      shaper.clearLoadSharingLimit();
     }
   }
 
