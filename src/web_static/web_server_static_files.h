@@ -5,7 +5,7 @@
 #include "web_server.assets_es_CZhIePfP_js_gz.h"
 #include "web_server.assets_fr_BJ4__DNH_js_gz.h"
 #include "web_server.assets_hu_MvOEF61J_js_gz.h"
-#include "web_server.assets_index_C9zsb6Vh_js_gz.h"
+#include "web_server.assets_index_Jl2LAD5z_js_gz.h"
 #include "web_server.assets_index_dcXp_5pg_css_gz.h"
 #include "web_server.assets_rolldown_runtime_Bh1tDfsg_js_gz.h"
 #include "web_server.assets_vendor_qwqsuqgE_js_gz.h"
@@ -24,7 +24,7 @@ StaticFile web_server_static_files[] = {
   { "/assets/es-CZhIePfP.js", CONTENT_ES_CZHIEPFP_JS_GZ, sizeof(CONTENT_ES_CZHIEPFP_JS_GZ) - 1, _CONTENT_TYPE_JS, CONTENT_ES_CZHIEPFP_JS_GZ_ETAG, true },
   { "/assets/fr-BJ4-_DNH.js", CONTENT_FR_BJ4__DNH_JS_GZ, sizeof(CONTENT_FR_BJ4__DNH_JS_GZ) - 1, _CONTENT_TYPE_JS, CONTENT_FR_BJ4__DNH_JS_GZ_ETAG, true },
   { "/assets/hu-MvOEF61J.js", CONTENT_HU_MVOEF61J_JS_GZ, sizeof(CONTENT_HU_MVOEF61J_JS_GZ) - 1, _CONTENT_TYPE_JS, CONTENT_HU_MVOEF61J_JS_GZ_ETAG, true },
-  { "/assets/index-C9zsb6Vh.js", CONTENT_INDEX_C9ZSB6VH_JS_GZ, sizeof(CONTENT_INDEX_C9ZSB6VH_JS_GZ) - 1, _CONTENT_TYPE_JS, CONTENT_INDEX_C9ZSB6VH_JS_GZ_ETAG, true },
+  { "/assets/index-Jl2LAD5z.js", CONTENT_INDEX_JL2LAD5Z_JS_GZ, sizeof(CONTENT_INDEX_JL2LAD5Z_JS_GZ) - 1, _CONTENT_TYPE_JS, CONTENT_INDEX_JL2LAD5Z_JS_GZ_ETAG, true },
   { "/assets/index-dcXp_5pg.css", CONTENT_INDEX_DCXP_5PG_CSS_GZ, sizeof(CONTENT_INDEX_DCXP_5PG_CSS_GZ) - 1, _CONTENT_TYPE_CSS, CONTENT_INDEX_DCXP_5PG_CSS_GZ_ETAG, true },
   { "/assets/rolldown-runtime-Bh1tDfsg.js", CONTENT_ROLLDOWN_RUNTIME_BH1TDFSG_JS_GZ, sizeof(CONTENT_ROLLDOWN_RUNTIME_BH1TDFSG_JS_GZ) - 1, _CONTENT_TYPE_JS, CONTENT_ROLLDOWN_RUNTIME_BH1TDFSG_JS_GZ_ETAG, true },
   { "/assets/vendor-qwqsuqgE.js", CONTENT_VENDOR_QWQSUQGE_JS_GZ, sizeof(CONTENT_VENDOR_QWQSUQGE_JS_GZ) - 1, _CONTENT_TYPE_JS, CONTENT_VENDOR_QWQSUQGE_JS_GZ_ETAG, true },
