@@ -80,8 +80,14 @@ void Peer::applyEvents(long t_sec)
   while (_next_event_idx < _scenario.events.size() &&
          _scenario.events[_next_event_idx].t_sec <= t_sec) {
     const PeerEvent &e = _scenario.events[_next_event_idx];
-    if (e.set_online) online = e.online;
+    if (e.set_online && online != e.online) {
+      online = e.online;
+      has_loadshare_allocation = false;
+    }
     if (e.set_vehicle) {
+      if (vehicle != e.vehicle) {
+        has_loadshare_allocation = false;
+      }
       vehicle = e.vehicle;
       _sim.setVehicleConnected(vehicle);
     }

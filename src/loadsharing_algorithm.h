@@ -13,8 +13,11 @@ struct AllocationInput {
   String host;         // Hostname for allocation delivery
   bool online;         // Is peer currently reachable?
   bool demanding;      // Wants current (vehicle connected and charging enabled)
+  bool observed_current_valid; // True if offered/actual current measurements are fresh
+  double offered_current; // Offered current before this allocation step (amps)
+  double actual_current;  // Measured actual current draw (amps)
   double min_current;  // Minimum current for this EVSE (amps)
-  double max_current;  // Maximum current (pilot limit, amps)
+  double max_current;  // Maximum current capability/configured limit (amps)
   int priority;        // Priority (lower = higher priority)
 };
 

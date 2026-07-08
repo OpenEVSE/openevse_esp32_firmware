@@ -14,6 +14,11 @@
 #define SIM_EVSE_TAPER_RANGE 20.0
 #endif
 
+// SoC at which the simplified battery model considers the charge complete.
+#ifndef SIM_EVSE_COMPLETE_SOC
+#define SIM_EVSE_COMPLETE_SOC 99.95
+#endif
+
 // Models a single simulated EVSE + EV pair.
 //
 // Holds the pilot/state values that the firmware backend expects to see (these

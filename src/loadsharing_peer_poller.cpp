@@ -298,6 +298,9 @@ void LoadSharingPeerPoller::startHttpBootstrap(const String& host, PeerConnectio
     if (doc.containsKey("pilot")) {
       conn.statusCache.setPilot(doc["pilot"].as<double>());
     }
+    if (doc.containsKey("max_current")) {
+      conn.statusCache.setMaxCurrent(doc["max_current"].as<double>());
+    }
     if (doc.containsKey("vehicle")) {
       conn.statusCache.setVehicle(doc["vehicle"].as<uint8_t>());
     }
@@ -453,6 +456,9 @@ void LoadSharingPeerPoller::handleWebSocketMessage(const String& host, PeerConne
   }
   if (doc.containsKey("pilot")) {
     conn.statusCache.setPilot(doc["pilot"].as<double>());
+  }
+  if (doc.containsKey("max_current")) {
+    conn.statusCache.setMaxCurrent(doc["max_current"].as<double>());
   }
   if (doc.containsKey("vehicle")) {
     conn.statusCache.setVehicle(doc["vehicle"].as<uint8_t>());
@@ -679,6 +685,9 @@ std::vector<AllocationInput> LoadSharingPeerPoller::buildAllocationInputs() {
     // Controller is demanding if it has a vehicle connected and not sleeping/disabled
     uint8_t state = evse.getEvseState();
     self.demanding = (evse.isVehicleConnected() && state != OPENEVSE_STATE_SLEEPING);
+    self.observed_current_valid = true;
+    self.offered_current = evse.getChargeCurrent();
+    self.actual_current = evse.getAmps();
     self.min_current = evse.getMinCurrent();
     self.max_current = evse.getMaxConfiguredCurrent();
     self.priority = loadsharing_priority;
@@ -696,9 +705,15 @@ std::vector<AllocationInput> LoadSharingPeerPoller::buildAllocationInputs() {
                       pair.second.statusCache.getVehicle() == 1 &&
                       pair.second.statusCache.getState() != 0 &&    // Not in idle state
                       pair.second.statusCache.getState() != 254;    // Not in sleep state
+    input.observed_current_valid = input.online && pair.second.hasInitialStatus;
+    input.offered_current = pair.second.statusCache.getPilot();
+    input.actual_current = pair.second.statusCache.getAmp();
     input.min_current = evse.getMinCurrent();  // Use our min as default (peers may differ)
-    input.max_current = pair.second.statusCache.getPilot() > 0 ?
-                        pair.second.statusCache.getPilot() : evse.getMaxCurrent();
+    input.max_current = pair.second.statusCache.getMaxCurrent() > 0
+                        ? pair.second.statusCache.getMaxCurrent()
+                        : (pair.second.statusCache.getPilot() > 0
+                           ? pair.second.statusCache.getPilot()
+                           : evse.getMaxCurrent());
     input.priority = loadsharing_priority;  // For now, same priority
     inputs.push_back(input);
   }

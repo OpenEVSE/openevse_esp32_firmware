@@ -138,11 +138,17 @@ int run(const std::string &scenario_path,
       std::vector<AllocationInput> inputs;
       inputs.reserve(peers.size());
       for (auto &p : peers) {
+        const SimEvse &s = p->simEvse();
         AllocationInput in;
         in.id = p->id().c_str();
         in.host = in.id;
         in.online = p->online;
-        in.demanding = p->vehicle && p->online;
+        in.demanding = p->vehicle && p->online && s.soc < 100.0;
+        in.observed_current_valid = p->online && p->has_loadshare_allocation;
+        in.offered_current = p->has_loadshare_allocation
+          ? p->loadshare_allocation_amps
+          : s.pilot;
+        in.actual_current = s.actualCurrent();
         in.min_current = p->scenario().min_current;
         in.max_current = p->scenario().max_current;
         in.priority = p->scenario().priority;
@@ -160,6 +166,7 @@ int run(const std::string &scenario_path,
         for (auto &p : peers) {
           if (a.getId() == p->id().c_str()) {
             p->loadshare_allocation_amps = a.getTargetCurrent();
+            p->has_loadshare_allocation = true;
             p->reason = a.getReason().c_str();
             // Apply allocation as a claim on the EvseManager.
             EvseProperties props;
