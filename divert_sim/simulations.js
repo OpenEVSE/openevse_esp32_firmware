@@ -20,7 +20,7 @@ function parseCsv(text) {
 let activeRenderToken = 0;
 
 function isRenderTokenCurrent(token) {
-  return token === undefined || token === activeRenderToken;
+  return token === activeRenderToken;
 }
 
 function discoverPeerIds(headers) {
@@ -114,6 +114,378 @@ function buildPeerSeries(rows, peerId, visibility) {
   });
 
   return { series, hasGridIE: showGridIE };
+}
+
+function getEvseStateVisual(stateCode) {
+  const raw = String(stateCode || "").trim().toLowerCase();
+  let code = Number.NaN;
+  if (raw.startsWith("0x")) {
+    code = Number.parseInt(raw.slice(2), 16);
+  } else if (/^\d+$/.test(raw)) {
+    code = Number.parseInt(raw, 10);
+  } else {
+    const names = {
+      ready: 1,
+      connected: 2,
+      charging: 3,
+      sleeping: 254,
+      disabled: 255,
+    };
+    code = names[raw];
+  }
+  // Match EVSE LED semantics while keeping sleeping visibly distinct from charging.
+  const map = {
+    1: { label: "No EV connected", state: "ready", color: "#9e9e9e" },
+    2: { label: "Connected", state: "connected", color: "#03a9f4" },
+    3: { label: "Charging", state: "charging", color: "#00ffff" },
+    4: { label: "Vent Required", state: "vent", color: "#9c27b0" },
+    5: { label: "Diode Fault", state: "diode_fault", color: "#f44336" },
+    6: { label: "GFCI Fault", state: "gfci_fault", color: "#f44336" },
+    7: { label: "No Ground", state: "no_ground", color: "#f44336" },
+    8: { label: "Stuck Relay", state: "stuck_relay", color: "#f44336" },
+    9: { label: "GFCI Self-test Fault", state: "gfci_self_test_fault", color: "#f44336" },
+    10: { label: "Over Temperature", state: "over_temp", color: "#ff9800" },
+    254: { label: "Sleeping", state: "sleeping", color: "#2dd9e8" },
+    255: { label: "Disabled", state: "disabled", color: "#607d8b" },
+  };
+
+  return map[code] || { label: `State ${code}`, state: `state_${code}`, color: "#78909c" };
+}
+
+function getClaimStateVisual(claimState) {
+  const state = String(claimState || "none").trim().toLowerCase();
+  const map = {
+    none: { label: "No claim", state: "none", color: "#9e9e9e" },
+    active: { label: "Active claim", state: "active", color: "#43a047" },
+    disabled: { label: "Disable claim", state: "disabled", color: "#e53935" },
+    other: { label: "Other claim", state: "other", color: "#fdd835" },
+  };
+
+  return map[state] || { label: `${state || "other"} claim`, state: "other", color: "#fdd835" };
+}
+
+function formatClaimOwnerLabel(owner) {
+  return String(owner || "Claims")
+    .split("_")
+    .filter(Boolean)
+    .map((part) => part.charAt(0).toUpperCase() + part.slice(1))
+    .join(" ");
+}
+
+function parseClaimDetails(row, peerId) {
+  const details = String(row[`${peerId}_claim_details`] || "").trim();
+  const claimsByOwner = {};
+
+  if (!details || details === "No active claims" || details === "No claim details") {
+    return { claimsByOwner, details };
+  }
+
+  const claimsPart = details.split(" ; wins ")[0] || "";
+  claimsPart
+    .split(" | ")
+    .map((chunk) => chunk.trim())
+    .filter(Boolean)
+    .forEach((chunk) => {
+      const match = chunk.match(/^([a-z0-9_]+)@\d+:([a-z_]+)/i);
+      if (match) {
+        claimsByOwner[match[1].toLowerCase()] = {
+          state: match[2].toLowerCase(),
+          summary: chunk,
+        };
+      }
+    });
+
+  return { claimsByOwner, details };
+}
+
+function buildTimelineSegments(rows, getValue, getVisual) {
+  const points = rows
+    .map((row) => ({ row, ms: Date.parse(row.time) }))
+    .filter((p) => Number.isFinite(p.ms));
+
+  if (points.length === 0) {
+    return [];
+  }
+
+  const segments = [];
+  for (let i = 0; i < points.length; i += 1) {
+    const currentValue = getValue(points[i].row);
+    const startMs = points[i].ms;
+    let endMs = points[i].ms + 1;
+
+    let j = i + 1;
+    while (j < points.length) {
+      const nextValue = getValue(points[j].row);
+      if (nextValue !== currentValue) {
+        break;
+      }
+      endMs = points[j].ms;
+      j += 1;
+    }
+
+    if (j < points.length) {
+      endMs = points[j].ms;
+    } else if (i > 0) {
+      const delta = Math.max(1, points[i].ms - points[i - 1].ms);
+      endMs = points[i].ms + delta;
+    }
+
+    const visual = getVisual(currentValue, points[i].row);
+    segments.push({
+      startMs,
+      endMs: Math.max(endMs, startMs + 1),
+      color: visual.color,
+      title: visual.title,
+      stateClass: visual.stateClass,
+    });
+
+    i = j - 1;
+  }
+
+  return segments;
+}
+
+function renderTimelineRow(label, segments) {
+  const row = document.createElement("div");
+  row.className = "timeline-row";
+
+  const labelEl = document.createElement("div");
+  labelEl.className = "timeline-label";
+  labelEl.textContent = label;
+  row.appendChild(labelEl);
+
+  const track = document.createElement("div");
+  track.className = "timeline-track";
+
+  segments.forEach((segment, idx) => {
+    const block = document.createElement("span");
+    block.className = `timeline-segment ${segment.stateClass || ""}`.trim();
+    block.dataset.startMs = String(segment.startMs);
+    block.dataset.endMs = String(segment.endMs);
+    if (idx === segments.length - 1) {
+      block.dataset.lastSegment = "true";
+    }
+    block.title = segment.title || "";
+    block.style.backgroundColor = segment.color;
+    block.style.left = "0%";
+    block.style.width = "0%";
+    track.appendChild(block);
+  });
+
+  row.appendChild(track);
+  return row;
+}
+
+function createPeerTimeline(rows, peerId, options) {
+  const opts = options || {};
+  const stateKey = `${peerId}_state`;
+  const claimStateKey = `${peerId}_claim_state`;
+  const loadshareAllocatedKey = `${peerId}_loadshare_allocated_w`;
+  const hasExplicitClaims = rows && rows.length > 0 && claimStateKey in rows[0];
+  const hasDerivedLoadSharingClaims = rows && rows.length > 0 && opts.fallbackLoadSharingClaims && loadshareAllocatedKey in rows[0];
+  if (!rows || rows.length === 0 || (!(stateKey in rows[0]) && !hasExplicitClaims && !hasDerivedLoadSharingClaims)) {
+    return null;
+  }
+
+  const wrapper = document.createElement("div");
+  wrapper.className = "peer-timeline";
+
+  if (stateKey in rows[0]) {
+    const stateSegments = buildTimelineSegments(
+      rows,
+      (row) => row[stateKey],
+      (value) => {
+        const visual = getEvseStateVisual(value);
+        return {
+          color: visual.color,
+          title: `${visual.label} (${visual.state})`,
+          stateClass: `state-${visual.state}`,
+        };
+      }
+    );
+
+    wrapper.appendChild(renderTimelineRow("EVSE State", stateSegments));
+  }
+
+  if (hasExplicitClaims) {
+    const owners = new Set();
+    rows.forEach((row) => {
+      Object.keys(parseClaimDetails(row, peerId).claimsByOwner).forEach((owner) => owners.add(owner));
+    });
+
+    const ownerList = Array.from(owners);
+    if (ownerList.length === 0) {
+      ownerList.push("claims");
+    }
+
+    ownerList.forEach((owner) => {
+      const claimSegments = buildTimelineSegments(
+        rows,
+        (row) => {
+          const parsed = parseClaimDetails(row, peerId);
+          const ownerClaim = parsed.claimsByOwner[owner];
+          return `${owner}:${ownerClaim ? ownerClaim.state : String(row[claimStateKey] || "none")}:${parsed.details}`;
+        },
+        (_value, row) => {
+          const parsed = parseClaimDetails(row, peerId);
+          const ownerClaim = parsed.claimsByOwner[owner];
+          const claimState = ownerClaim ? ownerClaim.state : String(row[claimStateKey] || "none");
+          const visual = getClaimStateVisual(claimState);
+          const details = parsed.details || "No claim details";
+          return {
+            color: visual.color,
+            title: `${formatClaimOwnerLabel(owner)} (${visual.label})\n${details}`,
+            stateClass: `claim-${visual.state}`,
+          };
+        }
+      );
+
+      wrapper.appendChild(renderTimelineRow(formatClaimOwnerLabel(owner), claimSegments));
+    });
+  } else if (hasDerivedLoadSharingClaims) {
+    const claimSegments = buildTimelineSegments(
+      rows,
+      (row) => {
+        const allocatedW = Number.parseFloat(row[loadshareAllocatedKey] || "0");
+        return Number.isFinite(allocatedW) && allocatedW > 0 ? "active" : "none";
+      },
+      (value, row) => {
+        const visual = getClaimStateVisual(value);
+        const allocatedW = Number.parseFloat(row[loadshareAllocatedKey] || "0");
+        const detail = Number.isFinite(allocatedW)
+          ? `Derived from loadshare_allocated_w=${allocatedW.toFixed(1)} W`
+          : "Derived from loadshare_allocated_w";
+        return {
+          color: visual.color,
+          title: `Load Sharing (${visual.label})\n${detail}`,
+          stateClass: `claim-${visual.state}`,
+        };
+      }
+    );
+
+    wrapper.appendChild(renderTimelineRow("Load Sharing", claimSegments));
+  }
+
+  return wrapper;
+}
+
+function layoutTimelineSegments(peerTimeline, domainMin, domainMax, dataMax) {
+  if (!peerTimeline || !Number.isFinite(domainMin) || !Number.isFinite(domainMax)) {
+    return;
+  }
+
+  const range = Math.max(1, domainMax - domainMin);
+  const lastSegmentEnd = Number.isFinite(dataMax) ? Math.min(dataMax, domainMax) : domainMax;
+  const segments = peerTimeline.querySelectorAll(".timeline-segment");
+  segments.forEach((segment) => {
+    const startMs = Number.parseFloat(segment.dataset.startMs || "NaN");
+    const rawEndMs = Number.parseFloat(segment.dataset.endMs || "NaN");
+    const endMs = segment.dataset.lastSegment === "true"
+      ? lastSegmentEnd
+      : rawEndMs;
+    if (!Number.isFinite(startMs) || !Number.isFinite(endMs)) {
+      segment.style.display = "none";
+      return;
+    }
+
+    const leftPct = ((startMs - domainMin) / range) * 100;
+    const rightPct = ((endMs - domainMin) / range) * 100;
+    const clippedLeft = Math.max(0, Math.min(100, leftPct));
+    const clippedRight = Math.max(0, Math.min(100, rightPct));
+    const widthPct = clippedRight - clippedLeft;
+
+    if (widthPct <= 0) {
+      segment.style.display = "none";
+      return;
+    }
+
+    segment.style.display = "block";
+    segment.style.left = `${clippedLeft}%`;
+    segment.style.width = `${Math.max(0.2, widthPct)}%`;
+  });
+}
+
+function alignTimelineToChart(peerTimeline, chart) {
+  if (!peerTimeline || !chart || !chart.axisX || !chart.axisX[0]) {
+    return;
+  }
+
+  const axis = chart.axisX[0];
+  const getOpt = (name) => (typeof axis.get === "function" ? axis.get(name) : undefined);
+
+  const viewportMin = getOpt("viewportMinimum");
+  const viewportMax = getOpt("viewportMaximum");
+  const minimum = getOpt("minimum");
+  const maximum = getOpt("maximum");
+
+  const segments = peerTimeline.querySelectorAll(".timeline-segment");
+  let minMs = Number.POSITIVE_INFINITY;
+  let maxMs = Number.NEGATIVE_INFINITY;
+  segments.forEach((seg) => {
+    const startMs = Number.parseFloat(seg.dataset.startMs || "NaN");
+    const endMs = Number.parseFloat(seg.dataset.endMs || "NaN");
+    if (Number.isFinite(startMs)) {
+      minMs = Math.min(minMs, startMs);
+    }
+    if (Number.isFinite(endMs)) {
+      maxMs = Math.max(maxMs, endMs);
+    }
+  });
+
+  if (!Number.isFinite(minMs) || !Number.isFinite(maxMs) || maxMs <= minMs) {
+    return;
+  }
+
+  const axisMin = Number.isFinite(viewportMin) ? viewportMin : (Number.isFinite(minimum) ? minimum : minMs);
+  const axisMax = Number.isFinite(viewportMax) ? viewportMax : (Number.isFinite(maximum) ? maximum : maxMs);
+
+  let dataMax = Number.NEGATIVE_INFINITY;
+  (chart.options && Array.isArray(chart.options.data) ? chart.options.data : []).forEach((series) => {
+    (Array.isArray(series.dataPoints) ? series.dataPoints : []).forEach((point) => {
+      const pointMs = point && point.x instanceof Date ? point.x.getTime() : Number.NaN;
+      if (Number.isFinite(pointMs)) {
+        dataMax = Math.max(dataMax, pointMs);
+      }
+    });
+  });
+
+  const timelineMax = Number.isFinite(dataMax) && dataMax > axisMin
+    ? Math.min(axisMax, dataMax)
+    : axisMax;
+
+  layoutTimelineSegments(peerTimeline, axisMin, timelineMax, dataMax);
+
+  const plotX1 = chart.plotArea && Number.isFinite(chart.plotArea.x1) ? chart.plotArea.x1 : Number.NaN;
+  const plotX2 = chart.plotArea && Number.isFinite(chart.plotArea.x2) ? chart.plotArea.x2 : Number.NaN;
+  const chartWidth = chart.container ? chart.container.clientWidth : 0;
+  if (!Number.isFinite(plotX1) || !Number.isFinite(plotX2) || chartWidth <= 0) {
+    return;
+  }
+
+  const leftInset = Math.max(0, plotX1);
+  let trackRight = plotX2;
+  if (Number.isFinite(timelineMax) && timelineMax < axisMax) {
+    try {
+      const timelineMaxPx = axis.convertValueToPixel(timelineMax);
+      if (Number.isFinite(timelineMaxPx)) {
+        trackRight = timelineMaxPx;
+      }
+    } catch (_) {
+      trackRight = plotX2;
+    }
+  }
+  const trackWidth = Math.max(0, trackRight - plotX1);
+
+  const rows = peerTimeline.querySelectorAll(".timeline-row");
+  rows.forEach((row) => {
+    row.style.setProperty("--timeline-left-inset", `${leftInset}px`);
+    row.style.setProperty("--timeline-track-width", `${trackWidth}px`);
+    const track = row.querySelector(".timeline-track");
+    if (track) {
+      track.style.marginLeft = "0";
+      track.style.marginRight = "0";
+    }
+  });
 }
 
 function findNearestDataPointX(seriesList, targetXValue) {
@@ -283,92 +655,6 @@ function buildPeerVisibilityFromScenario(scenarioSource, peerId) {
   };
 }
 
-function buildScenarioDescription(scenario, scenarioSource) {
-  const id = (scenario && scenario.id) || (scenarioSource && scenarioSource.meta && scenarioSource.meta.id) || "Scenario";
-  const title = (scenario && scenario.title) || (scenarioSource && scenarioSource.meta && scenarioSource.meta.title) || id;
-  const category = (scenario && scenario.category) || (scenarioSource && scenarioSource.meta && scenarioSource.meta.category) || "";
-  const profile = (scenario && scenario.profile) || (scenarioSource && scenarioSource.meta && scenarioSource.meta.profile) || "default";
-  const description = scenarioSource && scenarioSource.meta
-    ? scenarioSource.meta.description
-    : null;
-
-  if (Array.isArray(description)) {
-    return description.map((line) => String(line).trim()).filter(Boolean);
-  }
-  if (typeof description === "string" && description.trim()) {
-    return [description.trim()];
-  }
-
-  return [`${title} is a ${category || "simulation"} scenario using profile '${profile}'.`];
-}
-
-function appendScenarioDescription(container, scenario, scenarioSource) {
-  const lines = buildScenarioDescription(scenario, scenarioSource).filter(Boolean);
-  if (lines.length === 0) {
-    return;
-  }
-
-  const details = document.createElement("details");
-  details.className = "scenario-description";
-
-  const summary = document.createElement("summary");
-  summary.textContent = "Show description";
-  details.appendChild(summary);
-
-  const list = document.createElement("ul");
-  lines.forEach((line) => {
-    const item = document.createElement("li");
-    item.textContent = line;
-    list.appendChild(item);
-  });
-  details.appendChild(list);
-
-  details.addEventListener("toggle", () => {
-    summary.textContent = details.open ? "Hide description" : "Show description";
-  });
-
-  container.appendChild(details);
-}
-
-function buildSharedPowerAxisOptions(peerSeriesResults) {
-  const values = [];
-  let hasGridIE = false;
-
-  (peerSeriesResults || []).forEach((result) => {
-    if (!result) {
-      return;
-    }
-    hasGridIE = hasGridIE || !!result.hasGridIE;
-    (result.series || []).forEach((series) => {
-      (series.dataPoints || []).forEach((point) => {
-        if (point && Number.isFinite(point.y)) {
-          values.push(point.y);
-        }
-      });
-    });
-  });
-
-  if (values.length === 0) {
-    return hasGridIE ? {} : { minimum: 0 };
-  }
-
-  let minimum = hasGridIE ? Math.min(...values) : 0;
-  let maximum = Math.max(...values);
-
-  if (maximum <= minimum) {
-    maximum = minimum + 1;
-  }
-
-  const range = maximum - minimum;
-  const padding = Math.max(range * 0.05, 100);
-  maximum += padding;
-  if (hasGridIE) {
-    minimum -= padding;
-  }
-
-  return { minimum, maximum };
-}
-
 async function loadCsvRows(csvPath) {
   const response = await fetch(csvPath, { cache: "no-store" });
   if (!response.ok) {
@@ -411,18 +697,31 @@ function createChart(containerId, title, series, options) {
   }
 
   try {
-    const chart = new CanvasJS.Chart(containerId, {
+    let chart = null;
+    const onRangeChanged = (e) => {
+      if (typeof opts.onRangeChanged === "function") {
+        opts.onRangeChanged((e && e.chart) ? e.chart : chart);
+      }
+    };
+
+    chart = new CanvasJS.Chart(containerId, {
       animationEnabled: false,
       zoomEnabled: true,
       title: { text: title, fontSize: 18 },
       legend: { fontSize: 12 },
       axisX: { valueFormatString: "HH:mm:ss" },
-      axisY: { title: "Power (W)", ...(opts.hasGridIE ? {} : { minimum: 0 }), ...(opts.axisY || {}) },
+      axisY: { title: "Power (W)", ...(opts.hasGridIE ? {} : { minimum: 0 }) },
+      rangeChanged: onRangeChanged,
       // Show all visible series values for the hovered timestamp.
       toolTip: { shared: true },
       data: normalizedSeries,
     });
     chart.render();
+    window.__simCharts = window.__simCharts || {};
+    window.__simCharts[containerId] = chart;
+    if (typeof opts.onRangeChanged === "function") {
+      opts.onRangeChanged(chart);
+    }
     return chart;
   } catch (err) {
     const el = document.getElementById(containerId);
@@ -482,8 +781,6 @@ async function renderScenario(container, scenario, renderToken) {
     return;
   }
 
-  appendScenarioDescription(scenarioBlock, scenario, scenarioSource);
-
   if (!parsed.rows || parsed.rows.length === 0) {
     const empty = document.createElement("p");
     empty.textContent = "No rows found in CSV output for this scenario.";
@@ -500,16 +797,17 @@ async function renderScenario(container, scenario, renderToken) {
   }
 
   const charts = [];
-  const peerSeriesResults = peerIds.map((peerId) => {
-    const visibility = buildPeerVisibilityFromScenario(scenarioSource, peerId);
-    return buildPeerSeries(parsed.rows, peerId, visibility);
-  });
-  const sharedAxisY = buildSharedPowerAxisOptions(peerSeriesResults);
-
   peerIds.forEach((peerId, idx) => {
     const peerTitle = document.createElement("h4");
     peerTitle.textContent = `${peerId}`;
     scenarioBlock.appendChild(peerTitle);
+
+    const peerTimeline = createPeerTimeline(parsed.rows, peerId, {
+      fallbackLoadSharingClaims: scenario.category === "loadsharing",
+    });
+    if (peerTimeline) {
+      scenarioBlock.appendChild(peerTimeline);
+    }
 
     const chartDiv = document.createElement("div");
     chartDiv.id = `${scenario.id}_${scenario.profile}_${peerId}_${idx}`;
@@ -517,8 +815,16 @@ async function renderScenario(container, scenario, renderToken) {
     chartDiv.style.height = "280px";
     scenarioBlock.appendChild(chartDiv);
 
-    const result = peerSeriesResults[idx];
-    const chart = createChart(chartDiv.id, `${scenario.title} - ${peerId}`, result.series, { hasGridIE: result.hasGridIE, axisY: sharedAxisY });
+    const visibility = buildPeerVisibilityFromScenario(scenarioSource, peerId);
+    const result = buildPeerSeries(parsed.rows, peerId, visibility);
+    const chart = createChart(chartDiv.id, `${scenario.title} - ${peerId}`, result.series, {
+      hasGridIE: result.hasGridIE,
+      onRangeChanged: (activeChart) => {
+        if (peerTimeline && activeChart) {
+          alignTimelineToChart(peerTimeline, activeChart);
+        }
+      },
+    });
     charts.push(chart);
   });
 

@@ -68,10 +68,6 @@ Scenarios are stored in:
 
 Legacy top-level load-sharing scenario files under `data/` have been removed in favor of this unified location.
 
-Each scenario can include `meta.description` as a string array. The web viewer
-renders those lines in a collapsed `Show description` section above the charts,
-so scenario notes can be maintained alongside the scenario data.
-
 ## Unified CSV Schema
 
 Columns are generated dynamically by peer id.
