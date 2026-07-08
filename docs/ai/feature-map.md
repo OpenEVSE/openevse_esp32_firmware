@@ -11,8 +11,9 @@ relative to the configured base topic (see [mqtt.md](../mqtt.md)).
 
 | Feature | Firmware source | UI route | Config options | HTTP API | MQTT | User doc |
 |---|---|---|---|---|---|---|
-| Charge state & mode (Auto/Eco/On/Off), manual override | `evse_man.*`, `manual.*` | `/` | `default_state`, `pause_uses_disabled` | `/status`, `/override`, `/claims` | `override/set`, `status` | [dashboard.md](../user/dashboard.md) |
-| Charge rate / current control | `evse_man.*`, `evse_monitor.*` | `/` | `max_current_soft` | `/config`, `/override` | `charge_rate/set` | [dashboard.md](../user/dashboard.md) |
+| Charge state & mode (Auto/Eco/On/Off), manual override | `evse_man.*`, `manual.*` | `/` | `default_state`, `pause_uses_disabled` | `/status`, `/ws` (live stream), `/override`, `/claims` | `override/set`, `status` | [dashboard.md](../user/dashboard.md) |
+| Charge rate / current control, charger hardware config | `evse_man.*`, `evse_monitor.*` | `/`, `/settings/evse` | `max_current_soft`, `service`, `scale`, `offset` | `/config`, `/override` | `charge_rate/set` | [dashboard.md](../user/dashboard.md) |
+| Local display & LEDs (character LCD, RGB pixels) | `lcd.*`, `led_manager.*` | `/settings/evse` | `lcd_backlight_timeout`, `led_brightness` | `/config` | — | [settings.md](../user/settings.md) |
 | Session limits (energy/time/SOC/range) | `limit.*` | `/` (limit pills) | `limit_default_type`, `limit_default_value` | `/limit` | `limit/set` | [dashboard.md](../user/dashboard.md) |
 | First-run setup wizard | — (UI only) | `/` until passed | `wizard_passed` | `/config` | — | [getting-started.md](../user/getting-started.md) |
 | Weekly charge schedule | `scheduler.*` | `/schedule` | `scheduler_start_window` | `/schedule`, `/schedule/plan` | `schedule/set` | [schedule.md](../user/schedule.md) |

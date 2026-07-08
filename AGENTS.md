@@ -59,7 +59,8 @@ Never bump the pointer to a submodule commit that isn't pushed.
 
 If a UI change alters any screen, regenerate the documentation screenshots in
 the same change: `cd gui-nightshift && npm run screenshots` (deterministic;
-manifest in `scripts/screenshots.config.js`).
+manifest in `scripts/screenshots.config.js`), then mirror them into the user
+guide with `python scripts/sync_screenshots.py` (CI enforces the sync).
 
 ### Config options
 
@@ -68,7 +69,8 @@ definition in `src/app_config.cpp`, and a `ConfigOptDefinition` in the `opts[]`
 array. Changing a **default** also requires updating the assertion in
 `divert_sim/test_config.py`. Update
 [docs/ai/feature-map.md](docs/ai/feature-map.md) and the relevant
-`docs/user/` page when adding options.
+`docs/user/` page when adding options — `python scripts/docs_coverage.py
+--strict` (run by CI) fails on undocumented options, routes, or API paths.
 
 ## Code conventions (essentials)
 
