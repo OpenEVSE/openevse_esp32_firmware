@@ -329,8 +329,10 @@ function createPeerTimeline(rows, peerId, options) {
         (_value, row) => {
           const parsed = parseClaimDetails(row, peerId);
           const ownerClaim = parsed.claimsByOwner[owner];
-          const claimState = ownerClaim ? ownerClaim.state : String(row[claimStateKey] || "none");
-          const visual = getClaimStateVisual(claimState);
+          const claimStateRaw = ownerClaim ? ownerClaim.state : String(row[claimStateKey] || "none");
+          // If an owner claim exists but its state is neutral, still show claim-present (yellow).
+          const claimStateForVisual = ownerClaim && claimStateRaw === "none" ? "other" : claimStateRaw;
+          const visual = getClaimStateVisual(claimStateForVisual);
           const details = parsed.details || "No claim details";
           return {
             color: visual.color,
