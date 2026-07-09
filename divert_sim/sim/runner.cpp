@@ -161,8 +161,11 @@ int run(const std::string &scenario_path,
           if (a.getId() == p->id().c_str()) {
             p->loadshare_allocation_amps = a.getTargetCurrent();
             p->reason = a.getReason().c_str();
-            // Runner intentionally does not apply EVSE claims for load sharing.
-            // Allocation and reason are recorded for reporting only.
+            if (a.getTargetCurrent() > 0 || a.getReason() == "failsafe_disabled") {
+              p->shaper().setLoadSharingLimit(a.getTargetCurrent(), a.getReason() == "failsafe_disabled");
+            } else {
+              p->shaper().clearLoadSharingLimit();
+            }
             break;
           }
         }

@@ -1233,11 +1233,8 @@ void onWsFrame(MongooseHttpWebSocketConnection *connection, int flags, uint8_t *
 
         if (loadSharingGroupState.isMember()) {
           loadSharingGroupState.recordAllocationReceived();
-          if (targetCurrent > 0) {
-            shaper.setLoadSharingLimit(targetCurrent, false);
-          } else if (reason == "failsafe_disabled") {
-            // Explicit controller failsafe-disable mode should force disabled.
-            shaper.setLoadSharingLimit(0, true);
+          if (targetCurrent > 0 || reason == "failsafe_disabled") {
+            shaper.setLoadSharingLimit(targetCurrent, reason == "failsafe_disabled");
           } else {
             // No active load sharing limit; release shaper-side load sharing override.
             shaper.clearLoadSharingLimit();

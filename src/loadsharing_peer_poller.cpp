@@ -740,11 +740,8 @@ void LoadSharingPeerPoller::recomputeAndPushAllocations() {
     double selfAllocation = allocations[0].getTargetCurrent();
     String selfReason = allocations[0].getReason();
 
-    if (selfAllocation > 0) {
-      shaper.setLoadSharingLimit(selfAllocation, false);
-    } else if (selfReason == "failsafe_disabled") {
-      // Explicit failsafe-disable mode should force charging disabled.
-      shaper.setLoadSharingLimit(0, true);
+    if (selfAllocation > 0 || selfReason == "failsafe_disabled") {
+      shaper.setLoadSharingLimit(selfAllocation, selfReason == "failsafe_disabled");
     } else {
       // No active load sharing limit; release shaper-side load sharing override.
       shaper.clearLoadSharingLimit();

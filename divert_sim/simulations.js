@@ -349,23 +349,27 @@ function createPeerTimeline(rows, peerId, options) {
       rows,
       (row) => {
         const allocatedW = Number.parseFloat(row[loadshareAllocatedKey] || "0");
-        return Number.isFinite(allocatedW) && allocatedW > 0 ? "active" : "none";
+        const reason = String(row[`${peerId}_reason`] || "").trim().toLowerCase();
+        if (reason === "failsafe_disabled") {
+          return "disabled";
+        }
+        return Number.isFinite(allocatedW) && allocatedW > 0 ? "other" : "none";
       },
       (value, row) => {
         const visual = getClaimStateVisual(value);
         const allocatedW = Number.parseFloat(row[loadshareAllocatedKey] || "0");
         const detail = Number.isFinite(allocatedW)
-          ? `Derived from loadshare_allocated_w=${allocatedW.toFixed(1)} W`
-          : "Derived from loadshare_allocated_w";
+          ? `Max current derived from loadshare_allocated_w=${allocatedW.toFixed(1)} W`
+          : "Max current derived from loadshare_allocated_w";
         return {
           color: visual.color,
-          title: `Load Sharing (${visual.label})\n${detail}`,
+          title: `Shaper (${visual.label})\n${detail}`,
           stateClass: `claim-${visual.state}`,
         };
       }
     );
 
-    wrapper.appendChild(renderTimelineRow("Load Sharing", claimSegments));
+    wrapper.appendChild(renderTimelineRow("Shaper", claimSegments));
   }
 
   return wrapper;

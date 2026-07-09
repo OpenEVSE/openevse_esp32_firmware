@@ -41,7 +41,7 @@ unsigned long CurrentShaperTask::loop(MicroTasks::WakeReason reason) {
 					effective_max_cur = _loadshare_max_cur;
 				}
 				props.setMaxCurrent(floor(effective_max_cur));
-				if (_loadshare_force_disabled || effective_max_cur < _evse->getMinCurrent()) {
+				if (_loadshare_force_disabled || _max_cur < _evse->getMinCurrent()) {
 					// pause temporary, not enough amps available
 					props.setState(EvseState::Disabled);
 					if (!_pause_timer)
@@ -103,11 +103,7 @@ unsigned long CurrentShaperTask::loop(MicroTasks::WakeReason reason) {
 		if (_loadshare_limit_active) {
 			EvseProperties props;
 			props.setMaxCurrent(floor(_loadshare_max_cur));
-			if (_loadshare_force_disabled) {
-				props.setState(EvseState::Disabled);
-			} else {
-				props.setState(EvseState::None);
-			}
+			props.setState(_loadshare_force_disabled ? EvseState::Disabled : EvseState::None);
 
 			if (_changed ||
 				_evse->getState(EvseClient_OpenEVSE_Shaper) != props.getState() ||
