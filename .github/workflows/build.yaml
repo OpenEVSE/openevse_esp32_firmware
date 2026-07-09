@@ -105,6 +105,8 @@ jobs:
 #          - elecrow_esp32_hmi_dev
           - openevse_wifi_tft_v1
           - openevse_wifi_tft_v1_dev
+          - openevse_remote_display
+          - openevse_remote_display_dev
           # core-3.x (pioarduino / IDF5) — 16MB+ boards
           - openevse_wifi_v1_16mb
           - native_openevse
@@ -197,8 +199,10 @@ jobs:
         done
 
     - name: Get the bootloader and partition files
+      # remote_display is an ESP32-S3 (its bootloader is chip-specific) — the
+      # s3_16mb files are what a first-time USB flash of a CrowPanel needs.
       run: |
-        for i in openevse_wifi_tft_v1:16mb openevse_wifi_v1:4mb openevse_wifi_v1_16mb:v1_16mb; do
+        for i in openevse_wifi_tft_v1:16mb openevse_wifi_v1:4mb openevse_wifi_v1_16mb:v1_16mb openevse_remote_display:s3_16mb; do
           env=$(cut -f1 -d: <<< $i)
           name=$(cut -f2 -d: <<< $i)
           mv artifacts/$env.bin/bootloader.bin bootloader_$name.bin

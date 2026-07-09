@@ -22,6 +22,12 @@
 #include "lvgl_tft/charge_screen.h"
 #include "lvgl_tft/standby_screen.h"
 #include "lvgl_tft/backlight.h"
+#ifdef ENABLE_TOUCH_GT911
+#include "lvgl_tft/touch_gt911.h"
+#endif
+#ifdef ENABLE_REMOTE_DISPLAY_CLIENT
+#include "remote_display_client.h"   // EVSE data comes over HTTP, not RAPI
+#endif
 
 #ifndef LCD_BACKLIGHT_PIN
 #define LCD_BACKLIGHT_PIN TFT_BL
@@ -223,12 +229,12 @@ unsigned long LcdTask::loop(MicroTasks::WakeReason reason)
 #ifdef EPOXY_DUINO
       g_lvgl_last_tick = _bootStart;
 #endif
-      pinMode(LCD_BACKLIGHT_PIN, OUTPUT);
-#ifdef TFT_BACKLIGHT_TIMEOUT_MS
+      // The panel owns the backlight pin via LEDC (lvgl_panel_prepare_begin
+      // attached it before we got here). Never pinMode()/digitalWrite() the
+      // pin from this task — that re-muxes it to plain GPIO and silently
+      // detaches the PWM, leaving the backlight pinned at full and making the
+      // tft_brightness / standby settings no-ops.
       wakeBacklight();
-#else
-      digitalWrite(LCD_BACKLIGHT_PIN, HIGH);
-#endif
     }
     _initialise = false;
   }
@@ -307,6 +313,13 @@ unsigned long LcdTask::loop(MicroTasks::WakeReason reason)
     lvgl_pump();
   }
 
+#ifdef ENABLE_TOUCH_GT911
+  // Any touch since the last pass = full brightness + back to the charge screen.
+  if(touch_gt911_was_touched()) {
+    wakeBacklight();
+  }
+#endif
+
   // The setup screen is static — just pump LVGL and idle.
   if(_activeScreen == SCR_SETUP) {
     lvgl_pump();
@@ -314,8 +327,13 @@ unsigned long LcdTask::loop(MicroTasks::WakeReason reason)
   }
 
   // --- Backlight / standby decision (chooses which screen we render) ---
+#ifdef ENABLE_REMOTE_DISPLAY_CLIENT
+  uint8_t state = remoteDisplay.getEvseState();
+  bool vehicle = remoteDisplay.isVehicleConnected();
+#else
   uint8_t state = _evse->getEvseState();
   bool vehicle = _evse->isVehicleConnected();
+#endif
   applyDisplayConfig();   // pick up live /config changes; also applies brightness now
                           // so slider changes take effect without waiting for a wake
 
@@ -325,7 +343,11 @@ unsigned long LcdTask::loop(MicroTasks::WakeReason reason)
     _prev_vehicle = vehicle;
   }
 
+#ifdef ENABLE_REMOTE_DISPLAY_CLIENT
+  bool keepAwake = stateKeepsAwake(state, vehicle, remoteDisplay.getAmps());
+#else
   bool keepAwake = stateKeepsAwake(state, vehicle, _evse->getAmps());
+#endif
   if(keepAwake) {
     _lastWake = millis(); // keep re-arming so we never time out while charging/fault
     if(_standby) {
@@ -343,14 +365,24 @@ unsigned long LcdTask::loop(MicroTasks::WakeReason reason)
   if(_activeScreen == SCR_STANDBY) {
     StandbyScreenData sd = {};
     sd.evse_state        = state;
+#ifdef ENABLE_REMOTE_DISPLAY_CLIENT
+    sd.temp_valid        = remoteDisplay.isTemperatureValid();
+    sd.temp_c            = sd.temp_valid ? remoteDisplay.getTemperature() : 0.0f;
+#else
     sd.temp_valid        = _evse->isTemperatureValid(EVSE_MONITOR_TEMP_MONITOR);
     sd.temp_c            = sd.temp_valid ? _evse->getTemperature(EVSE_MONITOR_TEMP_MONITOR) : 0.0f;
+#endif
     sd.wifi_client       = _wifi_client;
     sd.wifi_connected    = _wifi_connected;
     sd.rssi              = WiFi.RSSI();
     sd.sta_count         = WiFi.softAPgetStationNum();
+#ifdef ENABLE_REMOTE_DISPLAY_CLIENT
+    sd.today_kwh         = remoteDisplay.getTotalDay();
+    sd.total_kwh         = remoteDisplay.getTotalEnergy();
+#else
     sd.today_kwh         = _evse->getTotalDay();
     sd.total_kwh         = _evse->getTotalEnergy();
+#endif
 
     char ck[24];
     timeval tv; gettimeofday(&tv, NULL);
@@ -361,13 +393,21 @@ unsigned long LcdTask::loop(MicroTasks::WakeReason reason)
     char ipbuf[20];
     IPAddress ip = _wifi_client ? WiFi.localIP() : WiFi.softAPIP();
     snprintf(ipbuf, sizeof(ipbuf), "%s", ip.toString().c_str());
+#ifdef ENABLE_REMOTE_DISPLAY_CLIENT
+    sd.hostname = remote_display_host.c_str();  // the station this display mirrors
+#else
     sd.hostname = esp_hostname.c_str();
+#endif
     sd.ip = ipbuf;
 
     standby_screen_update(sd);
     lvgl_pump();
     gettimeofday(&tv, NULL);
+#ifdef ENABLE_TOUCH_GT911
+    return 250;  // pump often enough that LVGL polls the touch controller
+#else
     return 1000 - tv.tv_usec / 1000;
+#endif
   }
 
   // Assemble a full snapshot from EvseManager + WiFi + clock.
@@ -375,6 +415,16 @@ unsigned long LcdTask::loop(MicroTasks::WakeReason reason)
   d.evse_state        = state;
   d.charging          = (state == OPENEVSE_STATE_CHARGING);
   d.vehicle_connected = vehicle;
+#ifdef ENABLE_REMOTE_DISPLAY_CLIENT
+  d.power_kw          = remoteDisplay.getPower() / 1000.0f;
+  d.pilot_a           = (int)remoteDisplay.getChargeCurrent();
+  d.volts             = remoteDisplay.getVoltage();
+  d.amps              = remoteDisplay.getAmps();
+  d.elapsed_s         = remoteDisplay.getSessionElapsed();
+  d.session_wh        = remoteDisplay.getSessionEnergy();
+  d.temp_valid        = remoteDisplay.isTemperatureValid();
+  d.temp_c            = d.temp_valid ? remoteDisplay.getTemperature() : 0.0f;
+#else
   d.power_kw          = _evse->getPower() / 1000.0f;
   d.pilot_a           = (int)_evse->getChargeCurrent();
   d.volts             = _evse->getVoltage();
@@ -383,6 +433,7 @@ unsigned long LcdTask::loop(MicroTasks::WakeReason reason)
   d.session_wh        = _evse->getSessionEnergy();
   d.temp_valid        = _evse->isTemperatureValid(EVSE_MONITOR_TEMP_MONITOR);
   d.temp_c            = d.temp_valid ? _evse->getTemperature(EVSE_MONITOR_TEMP_MONITOR) : 0.0f;
+#endif
   d.wifi_client       = _wifi_client;
   d.wifi_connected    = _wifi_connected;
   d.rssi              = WiFi.RSSI();
@@ -400,16 +451,37 @@ unsigned long LcdTask::loop(MicroTasks::WakeReason reason)
   char ipbuf[20];
   IPAddress ip = _wifi_client ? WiFi.localIP() : WiFi.softAPIP();
   snprintf(ipbuf, sizeof(ipbuf), "%s", ip.toString().c_str());
+#ifdef ENABLE_REMOTE_DISPLAY_CLIENT
+  d.hostname = remote_display_host.c_str();  // the station this display mirrors
+#else
   d.hostname = esp_hostname.c_str();
+#endif
   d.ip = ipbuf;
   d.msg_line = (!_msg_cleared && ml[0]) ? ml : "";
+
+#ifdef ENABLE_REMOTE_DISPLAY_CLIENT
+  // No fresh station data: say so (unless a transient message is already up).
+  char rmsg[96];
+  if('\0' == d.msg_line[0] && !remoteDisplay.isDataValid()) {
+    if(0 == remote_display_host.length()) {
+      snprintf(rmsg, sizeof(rmsg), "Set remote_display_host to your OpenEVSE station");
+    } else {
+      snprintf(rmsg, sizeof(rmsg), "No data from %s", remote_display_host.c_str());
+    }
+    d.msg_line = rmsg;
+  }
+#endif
 
   charge_screen_update(d);
   lvgl_pump();
 
   // Wake on the next whole second so the clock doesn't skip.
   gettimeofday(&tv, NULL);
+#ifdef ENABLE_TOUCH_GT911
+  return 250;  // pump often enough that LVGL polls the touch controller
+#else
   return 1000 - tv.tv_usec / 1000;
+#endif
 }
 
 void LcdTask::applyDisplayConfig()

@@ -24,6 +24,9 @@
 
 #include "lvgl_panel.h"
 #include "backlight.h"
+#ifdef ENABLE_TOUCH_GT911
+#include "touch_gt911.h"
+#endif
 
 // The ILI9488 forces TFT_eSPI's SPI_18BIT_DRIVER, which disables ESP32_DMA
 // (DMA only supports 16-bit pushes). So there is no DMA path on this panel —
@@ -403,10 +406,16 @@ static void flush_cb(lv_disp_drv_t *drv, const lv_area_t *area, lv_color_t *colo
 
 static TFT_eSPI tft = TFT_eSPI();
 
+// Which of the two landscape orientations is "up". 1 = stock OpenEVSE TFT;
+// boards mounted the other way round (e.g. Elecrow CrowPanel Advance) use 3.
+#ifndef TFT_ROTATION
+#define TFT_ROTATION 1
+#endif
+
 static bool lvgl_panel_prepare_begin(size_t buf_bytes)
 {
   tft.init();
-  tft.setRotation(1); // landscape, matches the original renderer
+  tft.setRotation(TFT_ROTATION); // landscape, matches the original renderer
 #if ESP_ARDUINO_VERSION >= ESP_ARDUINO_VERSION_VAL(3, 0, 0)
   ledcAttach(TFT_BL, LCD_BL_PWM_FREQ, LCD_BL_PWM_RES);
 #else
@@ -486,6 +495,11 @@ bool lvgl_panel_begin()
   disp_drv.flush_cb = flush_cb;
   disp_drv.draw_buf = &draw_buf;
   lv_disp_drv_register(&disp_drv);
+
+#ifdef ENABLE_TOUCH_GT911
+  // Failure is non-fatal: the display still works, just without touch wake.
+  touch_gt911_init();
+#endif
 
 #if defined(EPOXY_DUINO)
   Serial.printf("[panel] %s LVGL display up %ux%u, 1 buf %u B host heap\n",
