@@ -1,5 +1,5 @@
 {
-  "generated_at": "2026-07-09T17:27:44.704761Z",
+  "generated_at": "2026-07-09T19:18:03.516196Z",
   "scenarios": [
     {
       "id": "divert_CloudyMorning_default",
@@ -496,6 +496,19 @@
       "source": "data/scenarios/loadsharing_ev_taper.json",
       "csv": "output/loadsharing_ev_taper.csv",
       "row_count": 121
+    },
+    {
+      "id": "loadsharing_ev_taper_redistribution",
+      "title": "Load Sharing EV Taper Redistribution",
+      "category": "loadsharing",
+      "profile": "default",
+      "peers": [
+        "evse-001",
+        "evse-002"
+      ],
+      "source": "data/scenarios/loadsharing_ev_taper_redistribution.json",
+      "csv": "output/loadsharing_ev_taper_redistribution.csv",
+      "row_count": 21
     },
     {
       "id": "loadsharing_failsafe_disable",

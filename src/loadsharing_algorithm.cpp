@@ -93,7 +93,7 @@ std::vector<LoadSharingAllocation> computeAllocations(
   // Compute total minimum current needed
   double total_min = 0.0;
   for (size_t idx : demanding_indices) {
-    total_min += members[idx].min_current;
+    total_min += std::min(members[idx].min_current, members[idx].max_current);
   }
 
   DBUGF("LoadSharing: %u demanding member(s), total_min=%.1fA, I_avail=%.1fA",
@@ -109,7 +109,7 @@ std::vector<LoadSharingAllocation> computeAllocations(
 
     // First pass: assign minimums
     for (size_t idx : demanding_indices) {
-      allocations[idx] = members[idx].min_current;
+      allocations[idx] = std::min(members[idx].min_current, members[idx].max_current);
     }
 
     // Distribute remainder iteratively (handles max capping)
@@ -148,10 +148,11 @@ std::vector<LoadSharingAllocation> computeAllocations(
 
     double budget = I_avail;
     for (size_t idx : demanding_indices) {
-      if (budget >= members[idx].min_current) {
-        result[idx].setTargetCurrent(members[idx].min_current);
+      double required_min = std::min(members[idx].min_current, members[idx].max_current);
+      if (budget >= required_min) {
+        result[idx].setTargetCurrent(required_min);
         result[idx].setReason("min_subset");
-        budget -= members[idx].min_current;
+        budget -= required_min;
       } else {
         result[idx].setTargetCurrent(0.0);
         result[idx].setReason("insufficient");

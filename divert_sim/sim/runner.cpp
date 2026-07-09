@@ -57,6 +57,17 @@ bool isStateActive(long s)
   return s == OPENEVSE_STATE_CHARGING;
 }
 
+double capLoadSharingMaxCurrent(double max_current, double measured_current, double pilot_current)
+{
+  if (pilot_current > 0.0 && measured_current > 0.0 && measured_current < (pilot_current - 0.25)) {
+    double taper_ratio = measured_current / pilot_current;
+    double unrestricted_demand = max_current * taper_ratio;
+    return unrestricted_demand > measured_current ? unrestricted_demand : measured_current;
+  }
+
+  return max_current;
+}
+
 } // namespace
 
 int run(const std::string &scenario_path,
@@ -137,6 +148,12 @@ int run(const std::string &scenario_path,
     if (scenario.group.enabled && !peers.empty()) {
       std::vector<AllocationInput> inputs;
       inputs.reserve(peers.size());
+      size_t demanding_count = 0;
+      for (auto &p : peers) {
+        if (p->vehicle && p->online) {
+          demanding_count++;
+        }
+      }
       for (auto &p : peers) {
         AllocationInput in;
         in.id = p->id().c_str();
@@ -145,6 +162,12 @@ int run(const std::string &scenario_path,
         in.demanding = p->vehicle && p->online;
         in.min_current = p->scenario().min_current;
         in.max_current = p->scenario().max_current;
+        if (demanding_count > 1) {
+          in.max_current = capLoadSharingMaxCurrent(
+            in.max_current,
+            p->simEvse().actualCurrent(),
+            p->simEvse().pilot);
+        }
         in.priority = p->scenario().priority;
         inputs.push_back(in);
       }

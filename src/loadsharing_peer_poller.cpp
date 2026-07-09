@@ -21,6 +21,16 @@
 #include <MongooseHttpClient.h>
 #include <MongooseHttp.h>
 
+static double capLoadSharingMaxCurrent(double max_current, double measured_current, double pilot_current) {
+  if (pilot_current > 0 && measured_current > 0 && measured_current < (pilot_current - 0.25)) {
+    double taper_ratio = measured_current / pilot_current;
+    double unrestricted_demand = max_current * taper_ratio;
+    return unrestricted_demand > measured_current ? unrestricted_demand : measured_current;
+  }
+
+  return max_current;
+}
+
 // Global HTTP client for all peer HTTP requests
 static MongooseHttpClient httpClient;
 
@@ -698,10 +708,29 @@ std::vector<AllocationInput> LoadSharingPeerPoller::buildAllocationInputs() {
                       pair.second.statusCache.getState() != 0 &&    // Not in idle state
                       pair.second.statusCache.getState() != 254;    // Not in sleep state
     input.min_current = evse.getMinCurrent();  // Use our min as default (peers may differ)
-    input.max_current = pair.second.statusCache.getPilot() > 0 ?
-                        pair.second.statusCache.getPilot() : evse.getMaxCurrent();
+    input.max_current = evse.getMaxCurrent();
     input.priority = loadsharing_priority;  // For now, same priority
     inputs.push_back(input);
+  }
+
+  size_t demanding_count = 0;
+  for (const auto& input : inputs) {
+    if (input.online && input.demanding) {
+      demanding_count++;
+    }
+  }
+
+  if (demanding_count > 1) {
+    inputs[0].max_current = capLoadSharingMaxCurrent(inputs[0].max_current, evse.getAmps(), evse.getChargeCurrent());
+
+    size_t index = 1;
+    for (const auto& pair : _connections) {
+      inputs[index].max_current = capLoadSharingMaxCurrent(
+        inputs[index].max_current,
+        pair.second.statusCache.getAmp(),
+        pair.second.statusCache.getPilot());
+      index++;
+    }
   }
 
   return inputs;

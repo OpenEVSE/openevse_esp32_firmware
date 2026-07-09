@@ -716,7 +716,11 @@ function createChart(containerId, title, series, options) {
       title: { text: title, fontSize: 18 },
       legend: { fontSize: 12 },
       axisX: { valueFormatString: "HH:mm:ss" },
-      axisY: { title: "Power (W)", ...(opts.hasGridIE ? {} : { minimum: 0 }) },
+      axisY: {
+        title: "Power (W)",
+        ...(Number.isFinite(opts.axisYMinimum) ? { minimum: opts.axisYMinimum } : (opts.hasGridIE ? {} : { minimum: 0 })),
+        ...(Number.isFinite(opts.axisYMaximum) ? { maximum: opts.axisYMaximum } : {}),
+      },
       rangeChanged: onRangeChanged,
       // Show all visible series values for the hovered timestamp.
       toolTip: { shared: true },
@@ -743,6 +747,25 @@ function createChart(containerId, title, series, options) {
     }
     return null;
   }
+}
+
+function getSeriesYRange(seriesList) {
+  let min = Number.POSITIVE_INFINITY;
+  let max = Number.NEGATIVE_INFINITY;
+  (seriesList || []).forEach((series) => {
+    (series && Array.isArray(series.dataPoints) ? series.dataPoints : []).forEach((point) => {
+      if (point && Number.isFinite(point.y)) {
+        min = Math.min(min, point.y);
+        max = Math.max(max, point.y);
+      }
+    });
+  });
+
+  if (!Number.isFinite(min) || !Number.isFinite(max)) {
+    return null;
+  }
+
+  return { min, max };
 }
 
 async function renderScenario(container, scenario, renderToken) {
@@ -802,8 +825,22 @@ async function renderScenario(container, scenario, renderToken) {
     return;
   }
 
+  const peerData = peerIds.map((peerId) => {
+    const visibility = buildPeerVisibilityFromScenario(scenarioSource, peerId);
+    const result = buildPeerSeries(parsed.rows, peerId, visibility);
+    return { peerId, result };
+  });
+
+  const yRanges = peerData
+    .map((peer) => getSeriesYRange(peer.result.series))
+    .filter(Boolean);
+  const sharedMin = yRanges.length > 0 ? Math.min(...yRanges.map((range) => range.min)) : Number.NaN;
+  const sharedMax = yRanges.length > 0 ? Math.max(...yRanges.map((range) => range.max)) : Number.NaN;
+  const sharedAxisMin = Number.isFinite(sharedMin) && sharedMin < 0 ? sharedMin : 0;
+  const sharedAxisMax = Number.isFinite(sharedMax) ? sharedMax : Number.NaN;
+
   const charts = [];
-  peerIds.forEach((peerId, idx) => {
+  peerData.forEach(({ peerId, result }, idx) => {
     const peerTitle = document.createElement("h4");
     peerTitle.textContent = `${peerId}`;
     scenarioBlock.appendChild(peerTitle);
@@ -821,10 +858,10 @@ async function renderScenario(container, scenario, renderToken) {
     chartDiv.style.height = "280px";
     scenarioBlock.appendChild(chartDiv);
 
-    const visibility = buildPeerVisibilityFromScenario(scenarioSource, peerId);
-    const result = buildPeerSeries(parsed.rows, peerId, visibility);
     const chart = createChart(chartDiv.id, `${scenario.title} - ${peerId}`, result.series, {
       hasGridIE: result.hasGridIE,
+      axisYMinimum: sharedAxisMin,
+      axisYMaximum: sharedAxisMax,
       onRangeChanged: (activeChart) => {
         if (peerTimeline && activeChart) {
           alignTimelineToChart(peerTimeline, activeChart);

@@ -65,3 +65,22 @@ def test_loadsharing_ev_taper_reaches_high_soc():
     peer = result["evse-001"]
     assert peer["final_soc"] >= 99.0
     assert peer["soc_delta"] > 0
+
+
+def test_loadsharing_ev_taper_releases_current_to_other_peer():
+    result = run_loadsharing_simulation(
+        "data/scenarios/loadsharing_ev_taper_redistribution.json",
+        "loadsharing_ev_taper_redistribution",
+    )
+    assert max(row["total_actual"] for row in result["_rows"]) <= 32.0 * 1.001
+
+    rows_by_time = {row["time"]: row for row in result["_rows"]}
+    assert rows_by_time[300]["evse-001_allocated"] == approx(16.0)
+
+    redistributed_rows = [
+        row for row in result["_rows"]
+        if row["time"] >= 900
+        and row["evse-001_allocated"] < 16.0
+        and row["evse-002_allocated"] > 16.0
+    ]
+    assert redistributed_rows
