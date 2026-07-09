@@ -156,7 +156,7 @@ function buildTooltipFormatter(extra) {
       if (amps) {
         suffix = `W (${amps})`;
       }
-      lines.push(`${seriesName.replace(" (W)", "")}: ${roundedW}${suffix ? ` ${suffix}` : ""}`);
+      lines.push(`${seriesName.replace(" (W)", "")}: ${roundedW} ${suffix}`);
     });
 
     if (pointMeta && Number.isFinite(pointMeta.soc)) {
@@ -557,7 +557,7 @@ function layoutTimelineSegments(peerTimeline, domainMin, domainMax, dataMax) {
     segment.style.display = "block";
     segment.style.left = `${clippedLeft}%`;
     segment.style.width = `${Math.max(0.2, widthPct)}%`;
-    segment.classList.toggle("segment-label-hidden", widthPct < 5);
+    segment.classList.toggle("label-hidden", widthPct < 5);
   });
 }
 
@@ -1042,6 +1042,9 @@ async function renderScenario(container, scenario, renderToken) {
     chartDiv.style.width = "100%";
     chartDiv.style.height = "280px";
     scenarioBlock.appendChild(chartDiv);
+    const peerVoltageRaw = scenarioSource && Array.isArray(scenarioSource.peers)
+      ? (scenarioSource.peers.find((peer) => peer && peer.id === peerId) || {}).voltage
+      : Number.NaN;
 
     const chart = createChart(chartDiv.id, `${scenario.title} - ${peerId}`, result.series, {
       hasGridIE: result.hasGridIE,
@@ -1051,11 +1054,7 @@ async function renderScenario(container, scenario, renderToken) {
         metaByTime: buildPeerPointMeta(
           parsed.rows,
           peerId,
-          Number.parseFloat(
-            (scenarioSource && Array.isArray(scenarioSource.peers)
-              ? (scenarioSource.peers.find((peer) => peer && peer.id === peerId) || {}).voltage
-              : Number.NaN)
-          )
+          Number.parseFloat(peerVoltageRaw)
         ),
       },
       onRangeChanged: (activeChart) => {

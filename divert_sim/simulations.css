@@ -299,7 +299,7 @@ table.summary-table td:nth-child(3) {
   pointer-events: none;
 }
 
-.timeline-segment.segment-label-hidden .timeline-segment-label {
+.timeline-segment.label-hidden .timeline-segment-label {
   display: none;
 }
 
