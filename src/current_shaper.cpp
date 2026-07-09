@@ -7,6 +7,7 @@ CurrentShaperTask shaper;
 CurrentShaperTask::CurrentShaperTask() : MicroTasks::Task() {
 	_changed = false;
 	_enabled = false;
+	_timer_controlled = false;
 	_max_pwr = 0;
 	_live_pwr = 0;
 	_smoothed_live_pwr = 0;
@@ -53,7 +54,12 @@ unsigned long CurrentShaperTask::loop(MicroTasks::WakeReason reason) {
 				// claim only if we have change
 				if (_evse->getState() != props.getState() || _evse->getChargeCurrent() != props.getChargeCurrent())
 				{
-					_evse->claim(EvseClient_OpenEVSE_Shaper, EvseManager_Priority_Safety, props);
+					// Always-on shaper claims at Safety (5000); a shaper running *only*
+					// because of a timer window claims at Limit (1100).  A window must
+					// never demote a config-enabled (always-on) shaper below Safety.
+					int priority = (_timer_controlled && !config_current_shaper_enabled())
+					               ? EvseManager_Priority_Limit : EvseManager_Priority_Safety;
+					_evse->claim(EvseClient_OpenEVSE_Shaper, priority, props);
 					StaticJsonDocument<128> event;
 					event["shaper"] = 1;
 					event["shaper_live_pwr"] = _live_pwr;
@@ -119,9 +125,10 @@ void CurrentShaperTask::begin(EvseManager &evse) {
 
 void CurrentShaperTask::notifyConfigChanged( bool enabled, uint32_t max_pwr) {
 	DBUGF("CurrentShaper: got config changed");
-	_enabled = enabled;
+	// A timer window overrides the config setting; don't cancel it mid-window.
+	_enabled = enabled || _timer_controlled;
 	_max_pwr = max_pwr;
-	if (!enabled && _evse) _evse->release(EvseClient_OpenEVSE_Shaper);
+	if (!_enabled && _evse) _evse->release(EvseClient_OpenEVSE_Shaper);
 	StaticJsonDocument<128> event;
 	event["shaper"] = enabled == true ? 1 : 0;
 	event["shaper_max_pwr"] = max_pwr;
@@ -149,6 +156,18 @@ void CurrentShaperTask::setState(bool state) {
 	}
 	StaticJsonDocument<128> event;
 	event["shaper"]  = state?1:0;
+	event_send(event);
+}
+
+// Enable shaper from a scheduler timer window (priority 1100 instead of 5000)
+void CurrentShaperTask::setTimerEnabled(bool active) {
+	_timer_controlled = active;
+	_enabled = active ? true : config_current_shaper_enabled();
+	if (!_enabled && _evse) {
+		_evse->release(EvseClient_OpenEVSE_Shaper);
+	}
+	StaticJsonDocument<128> event;
+	event["shaper"] = _enabled ? 1 : 0;
 	event_send(event);
 }
 

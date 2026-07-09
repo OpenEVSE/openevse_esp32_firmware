@@ -223,12 +223,9 @@ unsigned long LcdTask::loop(MicroTasks::WakeReason reason)
 #ifdef EPOXY_DUINO
       g_lvgl_last_tick = _bootStart;
 #endif
-      pinMode(LCD_BACKLIGHT_PIN, OUTPUT);
-#ifdef TFT_BACKLIGHT_TIMEOUT_MS
+      // lvgl_panel_begin() already owns the backlight pin via LEDC; a raw
+      // pinMode here would detach the PWM binding on core 3.x (perimanager).
       wakeBacklight();
-#else
-      digitalWrite(LCD_BACKLIGHT_PIN, HIGH);
-#endif
     }
     _initialise = false;
   }
