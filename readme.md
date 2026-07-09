@@ -66,8 +66,7 @@ The WiFi gateway uses an **ESP32** which communicates with the OpenEVSE controll
 - [MQTT status & control](docs/user/integrations.md) — full status published,
   control topics, MQTTS support; basis of the
   [Home Assistant integration (beta)](https://github.com/firstof9/openevse)
-- [Emoncms logging](docs/user/integrations.md#emoncms) — e.g.
-  [data.openevse.com](https://data.openevse.com) or [emoncms.org](https://emoncms.org)
+- [Emoncms logging](docs/user/integrations.md#emoncms) — [emoncms.org](https://emoncms.org)
 - [OCPP 1.6-J](docs/user/ocpp.md) (beta) — connect to a charge-point
   management system
 - [RFID authorisation](docs/user/rfid.md) — card-based access with per-user
