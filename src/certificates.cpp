@@ -8,6 +8,7 @@
 
 #include "emonesp.h"
 #include "certificates.h"
+#include "fs_util.h"
 #include "root_ca.h"
 #include "certificate_validator.h"
 
@@ -417,18 +418,32 @@ bool CertificateStore::loadCertificate(String &name)
 bool CertificateStore::saveCertificate(Certificate *cert)
 {
   String name = String(CERTIFICATE_BASE_DIRECTORY) + "/" + String(cert->getId(), HEX) + ".json";
-  File file = LittleFS.open(name, "w");
-  if(file)
+
+  DynamicJsonDocument doc(CERTIFICATE_JSON_BUFFER_SIZE);
+  JsonObject object = doc.to<JsonObject>();
+  cert->serialize(object, Certificate::Flags::SHOW_PRIVATE_KEY);
+
+  // Don't truncate an existing valid cert if the new contents won't fit.
+  if(!littlefs_has_space(measureJson(doc)))
   {
-    DynamicJsonDocument doc(CERTIFICATE_JSON_BUFFER_SIZE);
-    JsonObject object = doc.to<JsonObject>();
-    cert->serialize(object, Certificate::Flags::SHOW_PRIVATE_KEY);
-    serializeJson(doc, file);
-    file.close();
-    return true;
+    DBUGLN("Certificates: insufficient space, not saving");
+    return false;
   }
 
-  return false;
+  File file = LittleFS.open(name, "w");
+  if(!file)
+  {
+    return false;
+  }
+
+  bool ok = serializeJson(doc, file) > 0;
+  file.close();
+  if(!ok)
+  {
+    // Partial write — remove the corrupt file rather than leave it.
+    LittleFS.remove(name);
+  }
+  return ok;
 }
 
 bool CertificateStore::removeCertificate(Certificate *cert)
