@@ -286,7 +286,7 @@ table.summary-table td:nth-child(3) {
 
 .timeline-segment-label {
   position: absolute;
-  left: 3px;
+  left: 2px;
   right: 2px;
   top: 50%;
   transform: translateY(-50%);

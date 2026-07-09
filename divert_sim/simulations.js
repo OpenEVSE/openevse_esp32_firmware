@@ -61,9 +61,9 @@ function getContrastTextColor(color) {
       .join("");
   }
 
-  const r = Number.parseInt(hex.slice(0, 2), 16);
-  const g = Number.parseInt(hex.slice(2, 4), 16);
-  const b = Number.parseInt(hex.slice(4, 6), 16);
+  const r = parseInt(hex.slice(0, 2), 16);
+  const g = parseInt(hex.slice(2, 4), 16);
+  const b = parseInt(hex.slice(4, 6), 16);
   const luminance = (0.299 * r + 0.587 * g + 0.114 * b) / 255;
   return luminance > 0.62 ? "#17212b" : "#ffffff";
 }
@@ -73,7 +73,7 @@ function formatAmps(amps) {
     return null;
   }
   const rounded = Number.parseFloat(amps.toFixed(2));
-  return `${rounded.toString()}A`;
+  return `${rounded}A`;
 }
 
 function buildPeerPointMeta(rows, peerId, voltage) {
@@ -149,7 +149,7 @@ function buildTooltipFormatter(extra) {
         return;
       }
 
-      const roundedW = Number.parseFloat(yValue.toFixed(1));
+      const roundedW = yValue.toFixed(1);
       let suffix = "W";
       const ampsLookup = pointMeta && pointMeta.ampsByLabel ? pointMeta.ampsByLabel[seriesName] : Number.NaN;
       const amps = formatAmps(ampsLookup);
@@ -160,7 +160,7 @@ function buildTooltipFormatter(extra) {
     });
 
     if (pointMeta && Number.isFinite(pointMeta.soc)) {
-      lines.push(`SoC: ${Number.parseFloat(pointMeta.soc.toFixed(2))}%`);
+      lines.push(`SoC: ${pointMeta.soc.toFixed(2)}%`);
     }
 
     return lines.join("<br/>");
