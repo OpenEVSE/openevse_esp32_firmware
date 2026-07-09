@@ -284,7 +284,7 @@ class EvseManager : public MicroTasks::Task
 
     // Evse Status
     bool isConnected() {
-      return OpenEVSE.isConnected();
+      return _openevse.isConnected();
     }
     bool isActive() {
       return getActiveState() == EvseState::Active;

@@ -55,6 +55,7 @@ DivertTask::DivertTask(EvseManager &evse) :
   _available_current(0),
   _smoothed_available_current(0),
   _min_charge_end(0),
+  _timer_divert_active(false),
   _solar(0),
   _grid_ie(0)
 {
@@ -127,8 +128,12 @@ void DivertTask::setMode(DivertMode mode)
         event["available_current"] = _available_current = 0;
         event["smoothed_available_current"] = _smoothed_available_current = 0;
 
+        // Timer-driven divert must outrank the schedule's base Timer claim
+        // (100) so "solar only" wins (idle = EVSE off when there's no excess
+        // solar). Always-on (config) divert keeps its normal low priority.
         EvseProperties props(EvseState::Disabled);
-        _evse->claim(EvseClient_OpenEVSE_Divert, EvseManager_Priority_Default, props);
+        _evse->claim(EvseClient_OpenEVSE_Divert,
+          _timer_divert_active ? EvseManager_Priority_Limit : EvseManager_Priority_Default, props);
       } break;
 
       default:
@@ -232,14 +237,16 @@ void DivertTask::update_state()
     {
       EvseProperties props(EvseState::Active);
       props.setChargeCurrent(_charge_rate);
-      _evse->claim(EvseClient_OpenEVSE_Divert, EvseManager_Priority_Divert, props);
+      _evse->claim(EvseClient_OpenEVSE_Divert,
+        _timer_divert_active ? EvseManager_Priority_Limit : EvseManager_Priority_Divert, props);
     }
     else if (_smoothed_available_current <= trigger_current)
     {
       if( EvseState::Active == _evse->getState(EvseClient_OpenEVSE_Divert) && 0 == min_charge_time_remaining)
       {
         EvseProperties props(EvseState::Disabled);
-        _evse->claim(EvseClient_OpenEVSE_Divert, EvseManager_Priority_Default, props);
+        _evse->claim(EvseClient_OpenEVSE_Divert,
+          _timer_divert_active ? EvseManager_Priority_Limit : EvseManager_Priority_Default, props);
       }
     }
 
@@ -285,16 +292,58 @@ time_t DivertTask::getMinChargeTimeRemaining()
             0;
 }
 
+void DivertTask::setTimerDivertActive(bool active)
+{
+  _timer_divert_active = active;
+  if(active) {
+    if(_mode == DivertMode::Eco) {
+      // Already in Eco — setMode() would no-op.  Re-issue the current claim
+      // immediately at Priority_Limit so the schedule's Timer(100) claim can't
+      // override us while we wait for the next MQTT update_state() call.
+      // If already charging, re-issue Active with the last known charge_rate;
+      // update_state() will correct it on the next solar/grid MQTT message.
+      if(_evse->getState(EvseClient_OpenEVSE_Divert) == EvseState::Active) {
+        EvseProperties props(EvseState::Active);
+        props.setChargeCurrent(_charge_rate);
+        _evse->claim(EvseClient_OpenEVSE_Divert, EvseManager_Priority_Limit, props);
+      } else {
+        EvseProperties props(EvseState::Disabled);
+        _evse->claim(EvseClient_OpenEVSE_Divert, EvseManager_Priority_Limit, props);
+      }
+    } else {
+      setMode(DivertMode::Eco);
+    }
+  } else {
+    bool configured_eco = config_divert_enabled() && 1 == config_charge_mode();
+    DivertMode target = configured_eco ? DivertMode::Eco : DivertMode::Normal;
+    if(_mode == DivertMode::Eco && target == DivertMode::Eco) {
+      // Staying in Eco — downgrade back to Default priority immediately.
+      if(_evse->getState(EvseClient_OpenEVSE_Divert) == EvseState::Active) {
+        EvseProperties props(EvseState::Active);
+        props.setChargeCurrent(_charge_rate);
+        _evse->claim(EvseClient_OpenEVSE_Divert, EvseManager_Priority_Divert, props);
+      } else {
+        EvseProperties props(EvseState::Disabled);
+        _evse->claim(EvseClient_OpenEVSE_Divert, EvseManager_Priority_Default, props);
+      }
+    } else {
+      setMode(target);
+    }
+  }
+  // Wake update_state so the next MQTT value corrects the charge_rate.
+  MicroTask.wakeTask(this);
+}
+
 // compatiblity trick, to remove after few version upgrade
 void DivertTask::initDivertType() {
 
   if (divert_type == DIVERT_TYPE_UNSET) {
     // divert_type unset, guess previous version setup for smoother upgrade
     if (mqtt_grid_ie) {
-      divert_type == DIVERT_TYPE_GRID;
+      divert_type = DIVERT_TYPE_GRID;
     }
     else {
-      divert_type == DIVERT_TYPE_SOLAR;
+      divert_type = DIVERT_TYPE_SOLAR;
     }
     DynamicJsonDocument doc(JSON_OBJECT_SIZE(1) + 1); // use JSON in no-copy mode
     doc["divert_type"] = divert_type;

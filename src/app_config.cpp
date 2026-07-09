@@ -178,9 +178,14 @@ void config_changed(String name);
 #define CONFIG_DEFAULT_STATE_DEFAULT CONFIG_DEFAULT_STATE
 #endif
 
+#ifndef CONFIG_TEMP_THROTTLE_DEFAULT
+#define CONFIG_TEMP_THROTTLE_DEFAULT CONFIG_TEMP_THROTTLE
+#endif
+
 #define CONFIG_DEFAULT_FLAGS (CONFIG_SERVICE_SNTP | \
                               CONFIG_OCPP_AUTO_AUTH | \
                               CONFIG_OCPP_OFFLINE_AUTH | \
+                              CONFIG_TEMP_THROTTLE_DEFAULT | \
                               CONFIG_DEFAULT_STATE_DEFAULT)
 
 ConfigOptDefinition<uint32_t> flagsOpt = ConfigOptDefinition<uint32_t>(flags, CONFIG_DEFAULT_FLAGS, "flags", "f");
@@ -409,6 +414,18 @@ config_load_settings()
     }
 #endif
 
+#if CONFIG_TEMP_THROTTLE_DEFAULT != 0
+    // Temperature throttle default flipped from 0 to 1: a current 0 is treated
+    // as the old default (not an intentional change) so it becomes enabled on
+    // upgrade; a current 1 is kept as an intentional setting.
+    new_changed &= ~CONFIG_TEMP_THROTTLE;
+    if(flags != CONFIG_DEFAULT_FLAGS &&
+       CONFIG_TEMP_THROTTLE == (flags & CONFIG_TEMP_THROTTLE))
+    {
+      new_changed |= CONFIG_TEMP_THROTTLE;
+    }
+#endif
+
     // Save any changes
     if(flagsChanged.set(new_changed)) {
       user_config.commit();
@@ -427,7 +444,9 @@ void config_changed(String name)
   if(name == "time_zone") {
     timeManager.setTimeZone(time_zone);
   } else if(name == "flags") {
-    divert.setMode((config_divert_enabled() && 1 == config_charge_mode()) ? DivertMode::Eco : DivertMode::Normal);
+    if(!divert.isTimerDivertActive()) {
+      divert.setMode((config_divert_enabled() && 1 == config_charge_mode()) ? DivertMode::Eco : DivertMode::Normal);
+    }
     if(mqtt.isConnected() != config_mqtt_enabled()) {
       mqtt.restartConnection();
     }
@@ -448,7 +467,9 @@ void config_changed(String name)
   } else if(name == "divert_enabled" || name == "charge_mode") {
     DBUGVAR(config_divert_enabled());
     DBUGVAR(config_charge_mode());
-    divert.setMode((config_divert_enabled() && 1 == config_charge_mode()) ? DivertMode::Eco : DivertMode::Normal);
+    if(!divert.isTimerDivertActive()) {
+      divert.setMode((config_divert_enabled() && 1 == config_charge_mode()) ? DivertMode::Eco : DivertMode::Normal);
+    }
   } else if(name.startsWith("current_shaper_")) {
     shaper.notifyConfigChanged(config_current_shaper_enabled()?1:0,current_shaper_max_pwr);
   } else if(name.startsWith("temp_throttle_")) {

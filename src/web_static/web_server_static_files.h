@@ -1,14 +1,14 @@
 #include "web_server.apple_touch_icon_png.h"
 #include "web_server.assets_charts_CnsZ1jie_css_gz.h"
 #include "web_server.assets_charts_DcZkpMN__js_gz.h"
-#include "web_server.assets_en_BxQM_eyt_js_gz.h"
-#include "web_server.assets_es_CAeSEUV3_js_gz.h"
-#include "web_server.assets_fr_gPRBW8mA_js_gz.h"
-#include "web_server.assets_hu_DyE_nsLD_js_gz.h"
-#include "web_server.assets_index_CmbqUNJb_js_gz.h"
-#include "web_server.assets_index_DHtqdovw_css_gz.h"
+#include "web_server.assets_en_D70qDNfJ_js_gz.h"
+#include "web_server.assets_es_CZhIePfP_js_gz.h"
+#include "web_server.assets_fr_BJ4__DNH_js_gz.h"
+#include "web_server.assets_hu_MvOEF61J_js_gz.h"
+#include "web_server.assets_index_13r_rMmp_css_gz.h"
+#include "web_server.assets_index_Bj7tE_UI_js_gz.h"
 #include "web_server.assets_rolldown_runtime_Bh1tDfsg_js_gz.h"
-#include "web_server.assets_vendor_KRe_m33__js_gz.h"
+#include "web_server.assets_vendor_qwqsuqgE_js_gz.h"
 #include "web_server.favicon_ico.h"
 #include "web_server.index_html_gz.h"
 #include "web_server.manifest_webmanifest.h"
@@ -20,14 +20,14 @@ StaticFile web_server_static_files[] = {
   { "/apple-touch-icon.png", CONTENT_APPLE_TOUCH_ICON_PNG, sizeof(CONTENT_APPLE_TOUCH_ICON_PNG) - 1, _CONTENT_TYPE_PNG, CONTENT_APPLE_TOUCH_ICON_PNG_ETAG, false },
   { "/assets/charts-CnsZ1jie.css", CONTENT_CHARTS_CNSZ1JIE_CSS_GZ, sizeof(CONTENT_CHARTS_CNSZ1JIE_CSS_GZ) - 1, _CONTENT_TYPE_CSS, CONTENT_CHARTS_CNSZ1JIE_CSS_GZ_ETAG, true },
   { "/assets/charts-DcZkpMN-.js", CONTENT_CHARTS_DCZKPMN__JS_GZ, sizeof(CONTENT_CHARTS_DCZKPMN__JS_GZ) - 1, _CONTENT_TYPE_JS, CONTENT_CHARTS_DCZKPMN__JS_GZ_ETAG, true },
-  { "/assets/en-BxQM_eyt.js", CONTENT_EN_BXQM_EYT_JS_GZ, sizeof(CONTENT_EN_BXQM_EYT_JS_GZ) - 1, _CONTENT_TYPE_JS, CONTENT_EN_BXQM_EYT_JS_GZ_ETAG, true },
-  { "/assets/es-CAeSEUV3.js", CONTENT_ES_CAESEUV3_JS_GZ, sizeof(CONTENT_ES_CAESEUV3_JS_GZ) - 1, _CONTENT_TYPE_JS, CONTENT_ES_CAESEUV3_JS_GZ_ETAG, true },
-  { "/assets/fr-gPRBW8mA.js", CONTENT_FR_GPRBW8MA_JS_GZ, sizeof(CONTENT_FR_GPRBW8MA_JS_GZ) - 1, _CONTENT_TYPE_JS, CONTENT_FR_GPRBW8MA_JS_GZ_ETAG, true },
-  { "/assets/hu-DyE-nsLD.js", CONTENT_HU_DYE_NSLD_JS_GZ, sizeof(CONTENT_HU_DYE_NSLD_JS_GZ) - 1, _CONTENT_TYPE_JS, CONTENT_HU_DYE_NSLD_JS_GZ_ETAG, true },
-  { "/assets/index-CmbqUNJb.js", CONTENT_INDEX_CMBQUNJB_JS_GZ, sizeof(CONTENT_INDEX_CMBQUNJB_JS_GZ) - 1, _CONTENT_TYPE_JS, CONTENT_INDEX_CMBQUNJB_JS_GZ_ETAG, true },
-  { "/assets/index-DHtqdovw.css", CONTENT_INDEX_DHTQDOVW_CSS_GZ, sizeof(CONTENT_INDEX_DHTQDOVW_CSS_GZ) - 1, _CONTENT_TYPE_CSS, CONTENT_INDEX_DHTQDOVW_CSS_GZ_ETAG, true },
+  { "/assets/en-D70qDNfJ.js", CONTENT_EN_D70QDNFJ_JS_GZ, sizeof(CONTENT_EN_D70QDNFJ_JS_GZ) - 1, _CONTENT_TYPE_JS, CONTENT_EN_D70QDNFJ_JS_GZ_ETAG, true },
+  { "/assets/es-CZhIePfP.js", CONTENT_ES_CZHIEPFP_JS_GZ, sizeof(CONTENT_ES_CZHIEPFP_JS_GZ) - 1, _CONTENT_TYPE_JS, CONTENT_ES_CZHIEPFP_JS_GZ_ETAG, true },
+  { "/assets/fr-BJ4-_DNH.js", CONTENT_FR_BJ4__DNH_JS_GZ, sizeof(CONTENT_FR_BJ4__DNH_JS_GZ) - 1, _CONTENT_TYPE_JS, CONTENT_FR_BJ4__DNH_JS_GZ_ETAG, true },
+  { "/assets/hu-MvOEF61J.js", CONTENT_HU_MVOEF61J_JS_GZ, sizeof(CONTENT_HU_MVOEF61J_JS_GZ) - 1, _CONTENT_TYPE_JS, CONTENT_HU_MVOEF61J_JS_GZ_ETAG, true },
+  { "/assets/index-13r-rMmp.css", CONTENT_INDEX_13R_RMMP_CSS_GZ, sizeof(CONTENT_INDEX_13R_RMMP_CSS_GZ) - 1, _CONTENT_TYPE_CSS, CONTENT_INDEX_13R_RMMP_CSS_GZ_ETAG, true },
+  { "/assets/index-Bj7tE-UI.js", CONTENT_INDEX_BJ7TE_UI_JS_GZ, sizeof(CONTENT_INDEX_BJ7TE_UI_JS_GZ) - 1, _CONTENT_TYPE_JS, CONTENT_INDEX_BJ7TE_UI_JS_GZ_ETAG, true },
   { "/assets/rolldown-runtime-Bh1tDfsg.js", CONTENT_ROLLDOWN_RUNTIME_BH1TDFSG_JS_GZ, sizeof(CONTENT_ROLLDOWN_RUNTIME_BH1TDFSG_JS_GZ) - 1, _CONTENT_TYPE_JS, CONTENT_ROLLDOWN_RUNTIME_BH1TDFSG_JS_GZ_ETAG, true },
-  { "/assets/vendor-KRe-m33_.js", CONTENT_VENDOR_KRE_M33__JS_GZ, sizeof(CONTENT_VENDOR_KRE_M33__JS_GZ) - 1, _CONTENT_TYPE_JS, CONTENT_VENDOR_KRE_M33__JS_GZ_ETAG, true },
+  { "/assets/vendor-qwqsuqgE.js", CONTENT_VENDOR_QWQSUQGE_JS_GZ, sizeof(CONTENT_VENDOR_QWQSUQGE_JS_GZ) - 1, _CONTENT_TYPE_JS, CONTENT_VENDOR_QWQSUQGE_JS_GZ_ETAG, true },
   { "/favicon.ico", CONTENT_FAVICON_ICO, sizeof(CONTENT_FAVICON_ICO) - 1, _CONTENT_TYPE_ICO, CONTENT_FAVICON_ICO_ETAG, false },
   { "/index.html", CONTENT_INDEX_HTML_GZ, sizeof(CONTENT_INDEX_HTML_GZ) - 1, _CONTENT_TYPE_HTML, CONTENT_INDEX_HTML_GZ_ETAG, true },
   { "/manifest.webmanifest", CONTENT_MANIFEST_WEBMANIFEST, sizeof(CONTENT_MANIFEST_WEBMANIFEST) - 1, _CONTENT_TYPE_MANIFEST, CONTENT_MANIFEST_WEBMANIFEST_ETAG, false },
