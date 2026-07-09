@@ -1,16 +1,20 @@
 # OpenEVSE WiFi for ESP32
 
-> **_NOTE:_** Breaking change! This release recommends a minimum of [7.1.3](https://github.com/OpenEVSE/open_evse/releases) of the OpenEVSE firmware, features including Solar Divert and push button menus may not behave as expected on older firmware.
+> This release recommends OpenEVSE firmware [9.0.0](https://github.com/OpenEVSE/open_evse/releases) (minimum [7.1.3](https://github.com/OpenEVSE/open_evse/releases)); features including Solar Divert and push-button menus may not behave as expected on older firmware.
 
 - *For the older WiFi V2.x ESP8266 version (pre June 2020), see the [v2 firmware repository](https://github.com/openevse/ESP8266_WiFi_v2.x/)*
 
-- **For latest API documentation see the new [Spotlight.io OpenEVSE WiFi documentation page](https://openevse.stoplight.io/docs/openevse-wifi-v4/ZG9jOjQyMjE5ODI-open-evse-wi-fi-esp-32-gateway-v4)**
 
-![main](docs/main2.png)
+<table>
+  <tr>
+    <td width="50%"><a href="docs/user/dashboard.md"><img src="docs/user/screenshots/dashboard-charging-dark-desktop.png" alt="Dashboard during a charging session (dark theme)"></a><br><sub><a href="docs/user/dashboard.md">Dashboard</a> — charging (dark theme)</sub></td>
+    <td width="50%"><a href="docs/user/dashboard.md"><img src="docs/user/screenshots/dashboard-charging-light-desktop.png" alt="Dashboard during a charging session (light theme)"></a><br><sub><a href="docs/user/dashboard.md">Dashboard</a> — charging (light theme)</sub></td>
+  </tr>
+</table>
+
+*Screenshots of every screen — [auto-generated](docs/developer/gui-development.md#screenshots) and always current — illustrate the [user guide](docs/user/index.md).*
 
 The WiFi gateway uses an **ESP32** which communicates with the OpenEVSE controller via serial RAPI API. The web UI is served directly from the ESP32 web server and can be controlled via a connected device on the local network.
-
-**This FW also supports wired Ethernet connection using [ESP32 Gateway](docs/wired-ethernet.md)**
 
 
 ***
@@ -21,60 +25,128 @@ The WiFi gateway uses an **ESP32** which communicates with the OpenEVSE controll
 
 - [Features](#features)
 - [Requirements](#requirements)
-- [User Guide](docs/user-guide.md)
-- [Firmware Development Guide](docs/developer-guide.md)
-- [API](https://openevse.stoplight.io/docs/openevse-wifi-v4/)
-- [About](#about)
+- [Documentation](#documentation)
+  - [User Guide](docs/user/index.md)
+  - [Developer Guide](docs/developer/index.md)
+  - [AI / coding-agent docs](docs/ai/)
 - [Licence](#licence)
 
 <!-- tocstop -->
 
 ## Features
 
-- Web UI to view & control all OpenEVSE functions
-  - Start / pause
-  - Scheduler
-  - Session & system limits (time, energy, soc, range)
-  - Adjust charging current
+### Web UI
 
-- MQTT status & control
-- Log to Emoncms server e.g [data.openevse.com](https://data.openevse.com) or [emoncms.org](https://emoncms.org)
-- 'Eco' mode: automatically adjust charging current based on availability of power from solar PV or grid export
-- Shaper: throttle current to prevent overflowing main power capacity 
-- OCPP V1.6 (beta)
-- [Home Assistant Integration (beta)](https://github.com/firstof9/openevse)
+- [Dashboard](docs/user/dashboard.md) — live charge state, power/session chart,
+  charge modes (Auto / Eco / On / Off), Boost, charging-current control
+- [First-run setup wizard](docs/user/getting-started.md), light & dark themes,
+  responsive/installable on mobile, four languages (EN / ES / FR / HU)
+- [Session limits](docs/user/dashboard.md#session-limits) — stop automatically
+  at a target SOC, range, time, or energy
+- [Charge Manager](docs/user/charge-manager.md) — station defaults,
+  always-active features, and recurring weekly charge rules (up to 50 timer
+  slots), evaluated on-device
+- [Monitoring](docs/user/monitoring.md) — live energy, sensor, vehicle, and
+  claims data
+- [History](docs/user/history.md) — session & event log with CSV export, plus
+  on-device energy logging (daily / monthly / annual)
+
+### Energy management
+
+- ['Eco' mode / solar divert](docs/user/solar-divert.md) — start, stop, and
+  modulate charging from excess solar PV or grid export (MQTT or HTTP fed)
+- [Current shaper](docs/user/load-shaper.md) — throttle charging so total
+  household load stays within your supply capacity
+- [Vehicle integration](docs/user/vehicle.md) — SOC, range, and charge ETA
+  from Tesla, MQTT (e.g. Home Assistant), OCPP, or HTTP; home-battery display
+- [OhmConnect](docs/user/integrations.md#ohmconnect) demand-response support
+
+### Integrations & access control
+
+- [MQTT status & control](docs/user/integrations.md) — full status published,
+  control topics, MQTTS support; basis of the
+  [Home Assistant integration (beta)](https://github.com/firstof9/openevse)
+- [Emoncms logging](docs/user/integrations.md#emoncms) — e.g.
+  [data.openevse.com](https://data.openevse.com) or [emoncms.org](https://emoncms.org)
+- [OCPP 1.6-J](docs/user/ocpp.md) (beta) — connect to a charge-point
+  management system
+- [RFID authorisation](docs/user/rfid.md) — card-based access with per-user
+  charge history (PN532 module)
+- [HTTP API](https://openevse.stoplight.io/docs/openevse-wifi-v4/) +
+  WebSocket live stream; [RAPI passthrough](docs/rapi.md)
+
+### System & safety
+
+- [Safety](docs/user/safety.md) — GFCI / diode / ground / stuck-relay / vent
+  checks, temperature throttling, boot lock, heartbeat watchdog
+- [Time & timezone](docs/user/settings.md#time--date) via SNTP with automatic DST
+- [TLS certificates](docs/user/settings.md#system) for MQTTS/HTTPS; HTTP
+  authentication
+- [Firmware updates](docs/user/firmware-update.md) — one-click GitHub OTA or
+  file upload from the web UI
+- [Wired Ethernet](docs/wired-ethernet.md) support (Olimex ESP32 Gateway and
+  similar); automatic WiFi access-point fallback
+- On-device [TFT touchscreen display](docs/user/settings.md#system) on
+  supported hardware
 
 ## Requirements
 
-### OpenEVSE / EmonEVSE charging station
+### OpenEVSE based Safety/ESP32 WiFi
 
 - Purchase via: [OpenEVSE Store](https://store.openevse.com)
-- OpenEVSE FW [V7.1.3 recommended](https://github.com/OpenEVSE/open_evse/releases)
-- All new OpenEVSE units are shipped with V7.1.3 pre-loaded (April 2021 onwards)
-
-### ESP32 WiFi Module
-
-- **Note: WiFi module is included as standard in most OpenEVSE units**
-- Purchase via: [OpenEVSE Store (USA/Canda)](https://store.openevse.com/collections/frontpage/products/openevse-wifi-kit) | [OpenEnergyMonitor (UK / EU)](https://shop.openenergymonitor.com/openevse-wifi-gateway/)
-- See [OpenEVSE WiFi setup guide](https://openevse.dozuki.com/Guide/WiFi+-+Join+Network/29) for basic instructions
+- OpenEVSE FW [V9.0.0 recommended](https://github.com/OpenEVSE/open_evse/releases)
+- All new OpenEVSE units are shipped with 9.0.0 pre-loaded (July 2026 onwards)
 
 ***
 
-## About
+## Documentation
 
-Collaboration of [OpenEnegyMonitor](http://openenergymonitor.org) and [OpenEVSE](https://openevse.com).
+Documentation is organised by audience — start at the
+[documentation index](docs/index.md).
 
-Contributions by:
+### [User Guide](docs/user/index.md)
 
-- @glynhudson
-- @chris1howell
-- @trystanlea
-- @jeremypoulter
-- @sandeen
-- @lincomatic
-- @joverbee
-- @matth-x (OCPP)
-- @kipk
+One page per screen of the web UI, illustrated with auto-generated
+screenshots: [getting started](docs/user/getting-started.md) (WiFi setup,
+first-run wizard), [dashboard](docs/user/dashboard.md),
+[charge manager](docs/user/charge-manager.md), [monitoring](docs/user/monitoring.md),
+[history](docs/user/history.md), [solar divert](docs/user/solar-divert.md),
+[load shaper](docs/user/load-shaper.md),
+[integrations](docs/user/integrations.md) (MQTT, Home Assistant, EmonCMS),
+[OCPP](docs/user/ocpp.md), [RFID](docs/user/rfid.md),
+[vehicle](docs/user/vehicle.md), [settings reference](docs/user/settings.md),
+[safety](docs/user/safety.md), [firmware update](docs/user/firmware-update.md),
+and [troubleshooting & reset](docs/user/troubleshooting.md).
+
+### [Developer Guide](docs/developer/index.md)
+
+[Architecture](docs/developer/architecture.md) (subsystems, EvseManager
+priorities, RAPI patterns), [building the firmware](docs/developer/building.md)
+(PlatformIO envs, host tests), [web UI development](docs/developer/gui-development.md)
+(gui-nightshift, mock mode, automated screenshots), and
+[wired Ethernet](docs/wired-ethernet.md).
+
+### API references
+
+[HTTP API](https://openevse.stoplight.io/docs/openevse-wifi-v4/) ·
+[MQTT API](docs/mqtt.md) ([developer guide](docs/Developers_Guide_MQTT.md)) ·
+[RAPI protocol](docs/rapi.md)
+
+### AI / coding-agent docs
+
+[AGENTS.md](AGENTS.md) (build/test commands, critical workflows),
+[invariants](docs/ai/invariants.md), and the
+[feature map](docs/ai/feature-map.md) — CI enforces that every config option,
+UI route, and API path stays documented.
+
+### Screenshots
+
+Every screenshot in the docs is generated automatically from the web UI
+(37 images covering all screens, light/dark themes, desktop and mobile):
+browse them in [docs/user/screenshots/](docs/user/screenshots/), or see
+[how they're generated](docs/developer/gui-development.md#screenshots).
+
+***
 
 ## Licence
 
