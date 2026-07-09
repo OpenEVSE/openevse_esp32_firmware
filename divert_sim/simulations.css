@@ -213,6 +213,32 @@ table.summary-table td:nth-child(3) {
   text-align: left;
 }
 
+.scenario-description {
+  margin: 2px 0 8px;
+}
+
+.scenario-description-toggle {
+  display: inline-block;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: #1976d2;
+  cursor: pointer;
+  text-decoration: underline;
+  font-size: 12px;
+}
+
+.scenario-description-body {
+  margin-top: 6px;
+  color: #37474f;
+  font-size: 12px;
+  line-height: 1.4;
+}
+
+.scenario-description-body p {
+  margin: 0 0 4px;
+}
+
 .peer-timeline {
   margin: 6px 0 8px;
   --timeline-left-inset: 104px;
@@ -255,6 +281,26 @@ table.summary-table td:nth-child(3) {
   top: 0;
   bottom: 0;
   border-right: 1px solid rgba(255, 255, 255, 0.35);
+  overflow: hidden;
+}
+
+.timeline-segment-label {
+  position: absolute;
+  left: 3px;
+  right: 2px;
+  top: 50%;
+  transform: translateY(-50%);
+  font-size: 10px;
+  font-weight: 600;
+  line-height: 1;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+  overflow: hidden;
+  pointer-events: none;
+}
+
+.timeline-segment.segment-label-hidden .timeline-segment-label {
+  display: none;
 }
 
 /* Keep charging cyan and make sleeping visibly distinct. */
@@ -291,4 +337,3 @@ table.summary-table td:nth-child(3) {
 .timeline-segment.claim-other {
   background-color: #fdd835 !important;
 }
-
