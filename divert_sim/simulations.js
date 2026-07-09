@@ -937,6 +937,32 @@ async function renderScenario(container, scenario, renderToken) {
     return;
   }
 
+  // CanvasJS requires the target container element to exist in the live DOM
+  // before Chart(...) is constructed.
+  container.appendChild(scenarioBlock);
+
+  let parsed;
+  let scenarioSource;
+  try {
+    [parsed, scenarioSource] = await Promise.all([
+      loadCsvRows(scenario.csv),
+      loadScenarioSource(scenario.source),
+    ]);
+  } catch (err) {
+    if (!isRenderTokenCurrent(renderToken)) {
+      return;
+    }
+    const error = document.createElement("p");
+    error.textContent = `Failed to load scenario data: ${String(err)}`;
+    error.style.color = "#a94442";
+    scenarioBlock.appendChild(error);
+    return;
+  }
+
+  if (!isRenderTokenCurrent(renderToken)) {
+    return;
+  }
+
   const descriptionLines = normalizeDescriptionLines(
     scenarioSource && scenarioSource.meta ? scenarioSource.meta.description : null
   );
@@ -967,32 +993,6 @@ async function renderScenario(container, scenario, renderToken) {
     descriptionWrapper.appendChild(toggle);
     descriptionWrapper.appendChild(body);
     scenarioBlock.appendChild(descriptionWrapper);
-  }
-
-  // CanvasJS requires the target container element to exist in the live DOM
-  // before Chart(...) is constructed.
-  container.appendChild(scenarioBlock);
-
-  let parsed;
-  let scenarioSource;
-  try {
-    [parsed, scenarioSource] = await Promise.all([
-      loadCsvRows(scenario.csv),
-      loadScenarioSource(scenario.source),
-    ]);
-  } catch (err) {
-    if (!isRenderTokenCurrent(renderToken)) {
-      return;
-    }
-    const error = document.createElement("p");
-    error.textContent = `Failed to load scenario data: ${String(err)}`;
-    error.style.color = "#a94442";
-    scenarioBlock.appendChild(error);
-    return;
-  }
-
-  if (!isRenderTokenCurrent(renderToken)) {
-    return;
   }
 
   if (!parsed.rows || parsed.rows.length === 0) {
