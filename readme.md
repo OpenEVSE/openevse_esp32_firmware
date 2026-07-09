@@ -43,8 +43,9 @@ The WiFi gateway uses an **ESP32** which communicates with the OpenEVSE controll
   responsive/installable on mobile, four languages (EN / ES / FR / HU)
 - [Session limits](docs/user/dashboard.md#session-limits) — stop automatically
   at a target SOC, range, time, or energy
-- [Scheduler](docs/user/schedule.md) — up to 50 recurring weekly charge timers,
-  evaluated on-device
+- [Charge Manager](docs/user/charge-manager.md) — station defaults,
+  always-active features, and recurring weekly charge rules (up to 50 timer
+  slots), evaluated on-device
 - [Monitoring](docs/user/monitoring.md) — live energy, sensor, vehicle, and
   claims data
 - [History](docs/user/history.md) — session & event log with CSV export, plus
@@ -108,7 +109,7 @@ Documentation is organised by audience — start at the
 One page per screen of the web UI, illustrated with auto-generated
 screenshots: [getting started](docs/user/getting-started.md) (WiFi setup,
 first-run wizard), [dashboard](docs/user/dashboard.md),
-[schedule](docs/user/schedule.md), [monitoring](docs/user/monitoring.md),
+[charge manager](docs/user/charge-manager.md), [monitoring](docs/user/monitoring.md),
 [history](docs/user/history.md), [solar divert](docs/user/solar-divert.md),
 [load shaper](docs/user/load-shaper.md),
 [integrations](docs/user/integrations.md) (MQTT, Home Assistant, EmonCMS),

@@ -53,6 +53,6 @@ connected to the access point · green = connected to your network.
 ## Next steps
 
 - Learn the [Dashboard](dashboard.md) — modes, charge rate, limits
-- Set up [charging schedules](schedule.md)
+- Set up [charging rules](charge-manager.md)
 - Have solar? Enable [solar divert](solar-divert.md)
 - Connect [Home Assistant or MQTT](integrations.md)

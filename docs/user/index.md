@@ -13,7 +13,7 @@ UI — if your unit looks different, check
 ## Everyday use
 
 - [Dashboard](dashboard.md) — charge modes, charge rate, session limits
-- [Schedule](schedule.md) — recurring charge timers
+- [Charge Manager](charge-manager.md) — station defaults, always-active features, scheduled rules
 - [Monitoring](monitoring.md) — live energy, sensor, and vehicle data
 - [History](history.md) — session and event log, CSV export
 

@@ -3,7 +3,7 @@
 ## Why isn't it charging?
 
 1. Check the [Dashboard](dashboard.md) — is the mode **Off**? Is a
-   [schedule](schedule.md) or [session limit](dashboard.md#session-limits)
+   [scheduled rule](charge-manager.md) or [session limit](dashboard.md#session-limits)
    active? Is [Eco mode](solar-divert.md) waiting for solar excess?
 2. Check [Monitoring → Manager](monitoring.md): the claims list shows exactly
    which subsystem is holding the charger in its current state and why.
