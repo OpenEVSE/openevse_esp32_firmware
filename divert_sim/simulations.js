@@ -46,6 +46,200 @@ function normalizeDescriptionLines(description) {
   return [];
 }
 
+function formatDetailValue(value, suffix) {
+  if (value === null || typeof value === "undefined" || value === "") {
+    return null;
+  }
+  if (typeof value === "boolean") {
+    return value ? "yes" : "no";
+  }
+  return `${value}${suffix || ""}`;
+}
+
+function pushDetail(parts, label, value, suffix) {
+  const formatted = formatDetailValue(value, suffix);
+  if (formatted) {
+    parts.push(`${label}: ${formatted}`);
+  }
+}
+
+function formatSeconds(seconds) {
+  const value = Number(seconds);
+  if (!Number.isFinite(value)) {
+    return null;
+  }
+  if (value % 3600 === 0) {
+    return `${value / 3600}h`;
+  }
+  if (value % 60 === 0) {
+    return `${value / 60}min`;
+  }
+  return `${value}s`;
+}
+
+function describeTimeSeries(input) {
+  if (input === null || typeof input === "undefined") {
+    return null;
+  }
+  if (typeof input === "number" || typeof input === "string" || typeof input === "boolean") {
+    return String(input);
+  }
+  if (typeof input === "object") {
+    if (input.csv) {
+      return `${input.csv}${input.column !== undefined ? ` column ${input.column}` : ""}`;
+    }
+    if (Array.isArray(input.points)) {
+      return `${input.points.length} points`;
+    }
+  }
+  return "configured";
+}
+
+function buildScenarioDetailLines(scenarioSource) {
+  if (!scenarioSource) {
+    return [];
+  }
+
+  const lines = [];
+  const simulation = scenarioSource.simulation || {};
+  const simulationParts = [];
+  pushDetail(simulationParts, "duration", formatSeconds(simulation.duration));
+  pushDetail(simulationParts, "tick", formatSeconds(simulation.tick_interval));
+  pushDetail(simulationParts, "start", simulation.start_time);
+  pushDetail(simulationParts, "nominal voltage", simulation.nominal_voltage, "V");
+  if (simulationParts.length > 0) {
+    lines.push(`Simulation: ${simulationParts.join(", ")}.`);
+  }
+
+  const supply = scenarioSource.supply || {};
+  const supplyParts = [];
+  pushDetail(supplyParts, "max power", supply.max_pwr, "W");
+  pushDetail(supplyParts, "live power", describeTimeSeries(supply.live_pwr));
+  if (supplyParts.length > 0) {
+    lines.push(`Supply: ${supplyParts.join(", ")}.`);
+  }
+
+  const group = scenarioSource.group || {};
+  const groupParts = [];
+  pushDetail(groupParts, "enabled", group.enabled);
+  pushDetail(groupParts, "max current", group.max_current, "A");
+  pushDetail(groupParts, "safety factor", group.safety_factor);
+  pushDetail(groupParts, "failsafe", group.failsafe_mode);
+  pushDetail(groupParts, "offline peer assumed current", group.failsafe_peer_assumed_current, "A");
+  if (groupParts.length > 0) {
+    lines.push(`Load sharing: ${groupParts.join(", ")}.`);
+  }
+
+  const peers = Array.isArray(scenarioSource.peers) ? scenarioSource.peers : [];
+  if (peers.length > 0) {
+    lines.push(`Peers: ${peers.length}.`);
+  }
+
+  return lines;
+}
+
+function buildPeerDetailLines(peer) {
+  if (!peer) {
+    return [];
+  }
+
+  const lines = [];
+  const chargerParts = [];
+  pushDetail(chargerParts, "voltage", peer.voltage, "V");
+  pushDetail(chargerParts, "min current", peer.min_current, "A");
+  pushDetail(chargerParts, "max current", peer.max_current, "A");
+  pushDetail(chargerParts, "priority", peer.priority);
+  pushDetail(chargerParts, "divert mode", peer.divert_mode);
+  pushDetail(chargerParts, "shaper enabled", peer.shaper_enabled);
+  if (chargerParts.length > 0) {
+    lines.push(`Charger: ${chargerParts.join(", ")}.`);
+  }
+
+  const initial = peer.initial || {};
+  const initialParts = [];
+  pushDetail(initialParts, "online", initial.online);
+  pushDetail(initialParts, "vehicle connected", initial.vehicle);
+  if (initialParts.length > 0) {
+    lines.push(`Initial state: ${initialParts.join(", ")}.`);
+  }
+
+  const ev = peer.ev || {};
+  const evParts = [];
+  pushDetail(evParts, "battery", ev.battery_capacity_kwh, "kWh");
+  pushDetail(evParts, "initial SoC", ev.initial_soc, "%");
+  pushDetail(evParts, "max charge rate", ev.max_charge_rate_kw, "kW");
+  pushDetail(evParts, "request current", ev.request_current);
+  pushDetail(evParts, "aux load", ev.aux_load_kw, "kW");
+  if (evParts.length > 0) {
+    lines.push(`EV: ${evParts.join(", ")}.`);
+  }
+
+  const inputs = peer.inputs || {};
+  const inputParts = Object.keys(inputs)
+    .map((key) => `${key}: ${describeTimeSeries(inputs[key])}`)
+    .filter(Boolean);
+  if (inputParts.length > 0) {
+    lines.push(`Inputs: ${inputParts.join(", ")}.`);
+  }
+
+  const events = Array.isArray(peer.events) ? peer.events : [];
+  if (events.length > 0) {
+    const eventSummary = events.map((event) => {
+      const parts = [];
+      Object.keys(event || {}).forEach((key) => {
+        if (key !== "time") {
+          pushDetail(parts, key, event[key]);
+        }
+      });
+      return `t=${formatSeconds(event.time) || event.time}: ${parts.join(", ")}`;
+    });
+    lines.push(`Events: ${eventSummary.join("; ")}.`);
+  }
+
+  return lines;
+}
+
+function appendDetailSection(parent, title, lines) {
+  if (!parent || !Array.isArray(lines) || lines.length === 0) {
+    return;
+  }
+
+  if (title) {
+    const heading = document.createElement("h5");
+    heading.textContent = title;
+    parent.appendChild(heading);
+  }
+
+  lines.forEach((line) => {
+    const p = document.createElement("p");
+    p.textContent = line;
+    parent.appendChild(p);
+  });
+}
+
+function createToggleLink(body, showText, hideText) {
+  const toggle = document.createElement("a");
+  toggle.href = "#";
+  toggle.className = "scenario-description-toggle";
+  toggle.textContent = showText;
+  body.hidden = true;
+
+  toggle.addEventListener("click", (event) => {
+    event.preventDefault();
+    body.hidden = !body.hidden;
+    toggle.textContent = body.hidden ? showText : hideText;
+  });
+
+  return toggle;
+}
+
+function findPeerSource(scenarioSource, peerId) {
+  const peers = scenarioSource && Array.isArray(scenarioSource.peers)
+    ? scenarioSource.peers
+    : [];
+  return peers.find((peer) => peer && peer.id === peerId) || null;
+}
+
 function getContrastTextColor(color) {
   const value = String(color || "").trim();
   const hexMatch = value.match(/^#([0-9a-f]{3}|[0-9a-f]{6})$/i);
@@ -966,31 +1160,29 @@ async function renderScenario(container, scenario, renderToken) {
   const descriptionLines = normalizeDescriptionLines(
     scenarioSource && scenarioSource.meta ? scenarioSource.meta.description : null
   );
-  if (descriptionLines.length > 0) {
+  const scenarioDetailLines = buildScenarioDetailLines(scenarioSource);
+  const sourcePeers = scenarioSource && Array.isArray(scenarioSource.peers)
+    ? scenarioSource.peers
+    : [];
+  const singlePeerDetails = sourcePeers.length === 1
+    ? buildPeerDetailLines(sourcePeers[0])
+    : [];
+  if (descriptionLines.length > 0 || scenarioDetailLines.length > 0 || singlePeerDetails.length > 0) {
     const descriptionWrapper = document.createElement("div");
     descriptionWrapper.className = "scenario-description";
 
-    const toggle = document.createElement("a");
-    toggle.href = "#";
-    toggle.className = "scenario-description-toggle";
-    toggle.textContent = "Show more";
-
     const body = document.createElement("div");
     body.className = "scenario-description-body";
-    body.hidden = true;
     descriptionLines.forEach((line) => {
       const p = document.createElement("p");
       p.textContent = line;
       body.appendChild(p);
     });
+    appendDetailSection(body, "Scenario details", scenarioDetailLines);
+    appendDetailSection(body, sourcePeers.length === 1 ? `Peer ${sourcePeers[0].id || "peer"}` : "", singlePeerDetails);
 
-    toggle.addEventListener("click", (event) => {
-      event.preventDefault();
-      body.hidden = !body.hidden;
-      toggle.textContent = body.hidden ? "Show more" : "Show less";
-    });
-
-    descriptionWrapper.appendChild(toggle);
+    const toggle = createToggleLink(body, "Show more", "Show less");
+    h3.appendChild(toggle);
     descriptionWrapper.appendChild(body);
     scenarioBlock.appendChild(descriptionWrapper);
   }
@@ -1029,6 +1221,21 @@ async function renderScenario(container, scenario, renderToken) {
     const peerTitle = document.createElement("h4");
     peerTitle.textContent = `${peerId}`;
     scenarioBlock.appendChild(peerTitle);
+
+    if (sourcePeers.length > 1) {
+      const peerDetails = buildPeerDetailLines(findPeerSource(scenarioSource, peerId));
+      if (peerDetails.length > 0) {
+        const peerInfo = document.createElement("div");
+        peerInfo.className = "peer-description";
+        const peerBody = document.createElement("div");
+        peerBody.className = "peer-description-body";
+        appendDetailSection(peerBody, "", peerDetails);
+        const toggle = createToggleLink(peerBody, "Show", "Hide");
+        peerTitle.appendChild(toggle);
+        peerInfo.appendChild(peerBody);
+        scenarioBlock.appendChild(peerInfo);
+      }
+    }
 
     const peerTimeline = createPeerTimeline(parsed.rows, peerId, {
       fallbackLoadSharingClaims: scenario.category === "loadsharing",
