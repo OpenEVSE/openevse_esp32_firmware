@@ -33,6 +33,140 @@ function discoverPeerIds(headers) {
   return ids;
 }
 
+function normalizeDescriptionLines(description) {
+  if (Array.isArray(description)) {
+    return description.map((line) => String(line || "").trim()).filter(Boolean);
+  }
+  if (typeof description === "string") {
+    return description
+      .split(/\r?\n/)
+      .map((line) => line.trim())
+      .filter(Boolean);
+  }
+  return [];
+}
+
+function getContrastTextColor(color) {
+  const value = String(color || "").trim();
+  const hexMatch = value.match(/^#([0-9a-f]{3}|[0-9a-f]{6})$/i);
+  if (!hexMatch) {
+    return "#17212b";
+  }
+
+  let hex = hexMatch[1];
+  if (hex.length === 3) {
+    hex = hex
+      .split("")
+      .map((ch) => `${ch}${ch}`)
+      .join("");
+  }
+
+  const r = parseInt(hex.slice(0, 2), 16);
+  const g = parseInt(hex.slice(2, 4), 16);
+  const b = parseInt(hex.slice(4, 6), 16);
+  const luminance = (0.299 * r + 0.587 * g + 0.114 * b) / 255;
+  return luminance > 0.62 ? "#17212b" : "#ffffff";
+}
+
+function formatAmps(amps) {
+  if (!Number.isFinite(amps)) {
+    return null;
+  }
+  const rounded = Number.parseFloat(amps.toFixed(2));
+  return `${rounded}A`;
+}
+
+function buildPeerPointMeta(rows, peerId, voltage) {
+  const byTime = {};
+  if (!Array.isArray(rows) || rows.length === 0) {
+    return byTime;
+  }
+
+  rows.forEach((row) => {
+    const ms = Date.parse(row.time);
+    if (!Number.isFinite(ms)) {
+      return;
+    }
+
+    const chargeAvailableW = Number.parseFloat(row[`${peerId}_charge_available_w`] || row[`${peerId}_pilot_w`] || "NaN");
+    const actualChargeW = Number.parseFloat(row[`${peerId}_actual_charge_w`] || "NaN");
+    const allocatedW = Number.parseFloat(row[`${peerId}_loadshare_allocated_w`] || "NaN");
+    const soc = Number.parseFloat(row[`${peerId}_soc`] || "NaN");
+
+    const entry = {};
+    if (Number.isFinite(chargeAvailableW)) {
+      entry["Charge Available (W)"] = chargeAvailableW;
+    }
+    if (Number.isFinite(actualChargeW)) {
+      entry["Actual Charge (W)"] = actualChargeW;
+    }
+    if (Number.isFinite(allocatedW)) {
+      entry["Loadshare Allocated (W)"] = allocatedW;
+    }
+    if (Number.isFinite(soc)) {
+      entry.soc = soc;
+    }
+
+    if (Number.isFinite(voltage) && voltage > 0) {
+      const ampsByLabel = {};
+      Object.keys(entry).forEach((label) => {
+        if (label.endsWith("(W)")) {
+          ampsByLabel[label] = entry[label] / voltage;
+        }
+      });
+      if (Object.keys(ampsByLabel).length > 0) {
+        entry.ampsByLabel = ampsByLabel;
+      }
+    }
+
+    byTime[ms] = entry;
+  });
+
+  return byTime;
+}
+
+function buildTooltipFormatter(extra) {
+  const metaByTime = (extra && extra.metaByTime) ? extra.metaByTime : {};
+  return function formatTooltip(e) {
+    const entries = (e && Array.isArray(e.entries)) ? e.entries : [];
+    if (entries.length === 0) {
+      return "";
+    }
+
+    const first = entries[0];
+    const date = first && first.dataPoint && first.dataPoint.x instanceof Date
+      ? first.dataPoint.x
+      : null;
+    const timeMs = date ? date.getTime() : Number.NaN;
+    const pointMeta = Number.isFinite(timeMs) ? (metaByTime[timeMs] || {}) : {};
+    const lines = [];
+
+    lines.push(`<strong>${date ? date.toLocaleTimeString() : ""}</strong>`);
+    entries.forEach((entry) => {
+      const seriesName = String((entry && entry.dataSeries && entry.dataSeries.name) || "");
+      const yValue = entry && entry.dataPoint ? entry.dataPoint.y : Number.NaN;
+      if (!Number.isFinite(yValue)) {
+        return;
+      }
+
+      const roundedW = yValue.toFixed(1);
+      let suffix = "W";
+      const ampsLookup = pointMeta && pointMeta.ampsByLabel ? pointMeta.ampsByLabel[seriesName] : Number.NaN;
+      const amps = formatAmps(ampsLookup);
+      if (amps) {
+        suffix = `W (${amps})`;
+      }
+      lines.push(`${seriesName.replace(" (W)", "")}: ${roundedW} ${suffix}`);
+    });
+
+    if (pointMeta && Number.isFinite(pointMeta.soc)) {
+      lines.push(`SoC: ${pointMeta.soc.toFixed(2)}%`);
+    }
+
+    return lines.join("<br/>");
+  };
+}
+
 function buildPeerSeries(rows, peerId, visibility) {
   if (!rows || rows.length === 0) {
     return { series: [], hasGridIE: false };
@@ -236,6 +370,8 @@ function buildTimelineSegments(rows, getValue, getVisual) {
       endMs: Math.max(endMs, startMs + 1),
       color: visual.color,
       title: visual.title,
+      label: visual.label,
+      textColor: visual.textColor,
       stateClass: visual.stateClass,
     });
 
@@ -269,6 +405,13 @@ function renderTimelineRow(label, segments) {
     block.style.backgroundColor = segment.color;
     block.style.left = "0%";
     block.style.width = "0%";
+    const text = document.createElement("span");
+    text.className = "timeline-segment-label";
+    text.textContent = segment.label || "";
+    if (segment.textColor) {
+      text.style.color = segment.textColor;
+    }
+    block.appendChild(text);
     track.appendChild(block);
   });
 
@@ -298,7 +441,9 @@ function createPeerTimeline(rows, peerId, options) {
         const visual = getEvseStateVisual(value);
         return {
           color: visual.color,
+          label: visual.label,
           title: `${visual.label} (${visual.state})`,
+          textColor: getContrastTextColor(visual.color),
           stateClass: `state-${visual.state}`,
         };
       }
@@ -336,7 +481,9 @@ function createPeerTimeline(rows, peerId, options) {
           const details = parsed.details || "No claim details";
           return {
             color: visual.color,
+            label: visual.label,
             title: `${formatClaimOwnerLabel(owner)} (${visual.label})\n${details}`,
+            textColor: getContrastTextColor(visual.color),
             stateClass: `claim-${visual.state}`,
           };
         }
@@ -363,7 +510,9 @@ function createPeerTimeline(rows, peerId, options) {
           : "Max current derived from loadshare_allocated_w";
         return {
           color: visual.color,
+          label: visual.label,
           title: `Shaper (${visual.label})\n${detail}`,
+          textColor: getContrastTextColor(visual.color),
           stateClass: `claim-${visual.state}`,
         };
       }
@@ -408,6 +557,7 @@ function layoutTimelineSegments(peerTimeline, domainMin, domainMax, dataMax) {
     segment.style.display = "block";
     segment.style.left = `${clippedLeft}%`;
     segment.style.width = `${Math.max(0.2, widthPct)}%`;
+    segment.classList.toggle("label-hidden", widthPct < 5);
   });
 }
 
@@ -723,7 +873,10 @@ function createChart(containerId, title, series, options) {
       },
       rangeChanged: onRangeChanged,
       // Show all visible series values for the hovered timestamp.
-      toolTip: { shared: true },
+      toolTip: {
+        shared: true,
+        contentFormatter: buildTooltipFormatter(opts.tooltipExtra),
+      },
       data: normalizedSeries,
     });
     chart.render();
@@ -810,6 +963,38 @@ async function renderScenario(container, scenario, renderToken) {
     return;
   }
 
+  const descriptionLines = normalizeDescriptionLines(
+    scenarioSource && scenarioSource.meta ? scenarioSource.meta.description : null
+  );
+  if (descriptionLines.length > 0) {
+    const descriptionWrapper = document.createElement("div");
+    descriptionWrapper.className = "scenario-description";
+
+    const toggle = document.createElement("a");
+    toggle.href = "#";
+    toggle.className = "scenario-description-toggle";
+    toggle.textContent = "Show more";
+
+    const body = document.createElement("div");
+    body.className = "scenario-description-body";
+    body.hidden = true;
+    descriptionLines.forEach((line) => {
+      const p = document.createElement("p");
+      p.textContent = line;
+      body.appendChild(p);
+    });
+
+    toggle.addEventListener("click", (event) => {
+      event.preventDefault();
+      body.hidden = !body.hidden;
+      toggle.textContent = body.hidden ? "Show more" : "Show less";
+    });
+
+    descriptionWrapper.appendChild(toggle);
+    descriptionWrapper.appendChild(body);
+    scenarioBlock.appendChild(descriptionWrapper);
+  }
+
   if (!parsed.rows || parsed.rows.length === 0) {
     const empty = document.createElement("p");
     empty.textContent = "No rows found in CSV output for this scenario.";
@@ -857,11 +1042,21 @@ async function renderScenario(container, scenario, renderToken) {
     chartDiv.style.width = "100%";
     chartDiv.style.height = "280px";
     scenarioBlock.appendChild(chartDiv);
+    const peerVoltageRaw = scenarioSource && Array.isArray(scenarioSource.peers)
+      ? (scenarioSource.peers.find((peer) => peer && peer.id === peerId) || {}).voltage
+      : Number.NaN;
 
     const chart = createChart(chartDiv.id, `${scenario.title} - ${peerId}`, result.series, {
       hasGridIE: result.hasGridIE,
       axisYMinimum: sharedAxisMin,
       axisYMaximum: sharedAxisMax,
+      tooltipExtra: {
+        metaByTime: buildPeerPointMeta(
+          parsed.rows,
+          peerId,
+          Number.parseFloat(peerVoltageRaw)
+        ),
+      },
       onRangeChanged: (activeChart) => {
         if (peerTimeline && activeChart) {
           alignTimelineToChart(peerTimeline, activeChart);
