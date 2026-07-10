@@ -17,7 +17,7 @@
     "failsafe_peer_assumed_current": 6.0
   },
   "simulation": {
-    "duration": 1200,
+    "duration": 1500,
     "tick_interval": 1,
     "nominal_voltage": 240
   },
