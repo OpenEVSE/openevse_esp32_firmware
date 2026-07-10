@@ -13,7 +13,7 @@
   },
   "simulation": {
     "duration": 86400,
-    "tick_interval": 60,
+    "tick_interval": 1,
     "start_time": "2020-01-01T00:00:00Z"
   },
   "peers": [
