@@ -15,11 +15,12 @@ import json
 import os
 import subprocess
 import tempfile
+from concurrent.futures import ThreadPoolExecutor, as_completed
 from dataclasses import dataclass
 from datetime import datetime, timezone
 from glob import glob
 from pathlib import Path
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List, Optional, Tuple
 
 
 ROOT = Path(__file__).resolve().parent
@@ -27,6 +28,16 @@ DATA_DIR = ROOT / "data"
 SCENARIO_DIR = DATA_DIR / "scenarios"
 OUTPUT_DIR = ROOT / "output"
 PIO_ENV = os.environ.get("DIVERT_SIM_PIO_ENV", "native_simulator")
+
+
+def default_jobs() -> int:
+    raw = os.environ.get("DIVERT_SIM_JOBS", "").strip()
+    if raw:
+        try:
+            return max(1, int(raw))
+        except ValueError:
+            raise ValueError(f"DIVERT_SIM_JOBS must be an integer, got {raw!r}")
+    return max(1, os.cpu_count() or 1)
 
 
 def resolve_binary() -> Path:
@@ -220,6 +231,7 @@ def build_index(
     index_name: str = "index.json",
     scenario_ids: Optional[List[str]] = None,
     scenario_sources: Optional[List[str]] = None,
+    jobs: Optional[int] = None,
 ) -> Dict[str, Any]:
     """Run all scenarios, write CSV outputs, and write an index file."""
     OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
@@ -235,9 +247,8 @@ def build_index(
             for scenario in scenarios
             if str(scenario.path.relative_to(ROOT)) in allowed_sources
         ]
-    entries: List[Dict[str, Any]] = []
 
-    for scenario in scenarios:
+    def run_entry(scenario: ScenarioMeta) -> Dict[str, Any]:
         if profile_suffix:
             profile = profile_suffix
             output_name = f"{scenario.id}_{profile}"
@@ -245,23 +256,39 @@ def build_index(
             profile = scenario.profile
             output_name = scenario.id
         rows = run_scenario(str(scenario.path), output=output_name, config_overrides=config_overrides)
-        row_count = len(rows)
-        entries.append(
-            {
-                "id": scenario.id,
-                "title": scenario.title,
-                "category": scenario.category,
-                "profile": profile,
-                "peers": scenario.peers,
-                "source": str(scenario.path.relative_to(ROOT)),
-                "csv": f"output/{output_name}.csv",
-                "row_count": row_count,
+        return {
+            "id": scenario.id,
+            "title": scenario.title,
+            "category": scenario.category,
+            "profile": profile,
+            "peers": scenario.peers,
+            "source": str(scenario.path.relative_to(ROOT)),
+            "csv": f"output/{output_name}.csv",
+            "row_count": len(rows),
+        }
+
+    worker_count = min(max(1, jobs if jobs is not None else default_jobs()), max(1, len(scenarios)))
+    entries: List[Optional[Dict[str, Any]]] = [None] * len(scenarios)
+
+    if worker_count == 1:
+        for idx, scenario in enumerate(scenarios):
+            entries[idx] = run_entry(scenario)
+    else:
+        with ThreadPoolExecutor(max_workers=worker_count) as executor:
+            futures: Dict[Any, Tuple[int, ScenarioMeta]] = {
+                executor.submit(run_entry, scenario): (idx, scenario)
+                for idx, scenario in enumerate(scenarios)
             }
-        )
+            for future in as_completed(futures):
+                idx, scenario = futures[future]
+                try:
+                    entries[idx] = future.result()
+                except Exception as exc:
+                    raise RuntimeError(f"Failed to run scenario {scenario.path}: {exc}") from exc
 
     index = {
         "generated_at": datetime.now(timezone.utc).isoformat().replace("+00:00", "Z"),
-        "scenarios": entries,
+        "scenarios": [entry for entry in entries if entry is not None],
     }
     with (OUTPUT_DIR / index_name).open("w") as f:
         json.dump(index, f, indent=2)
