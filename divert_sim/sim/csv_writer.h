@@ -31,6 +31,8 @@ inline const std::vector<std::string> &peerColumns()
       "ev_max_charge_w",
       "actual_charge_w",
       "soc",
+      "claim_state",
+      "claim_details",
       "reason",
   };
   return cols;

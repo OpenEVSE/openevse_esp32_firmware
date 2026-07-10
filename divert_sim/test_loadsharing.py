@@ -84,3 +84,35 @@ def test_loadsharing_ev_taper_releases_current_to_other_peer():
         and row["evse-002_allocated"] > 16.0
     ]
     assert redistributed_rows
+
+
+def test_loadsharing_ev_can_delay_start_while_connected():
+    result = run_loadsharing_simulation(
+        "data/scenarios/loadsharing_ev_delayed_start.json",
+        "loadsharing_ev_delayed_start",
+    )
+    rows_by_time = {row["time"]: row for row in result["_rows"]}
+
+    assert rows_by_time[0]["evse-001_state"] == "connected"
+    assert rows_by_time[0]["evse-001_actual"] == approx(0.0)
+    assert rows_by_time[600]["evse-001_state"] == "charging"
+    assert rows_by_time[600]["evse-001_actual"] > 0.0
+
+
+def test_loadsharing_finished_ev_stops_then_requests_aux_load():
+    result = run_loadsharing_simulation(
+        "data/scenarios/loadsharing_ev_finish_aux_resume.json",
+        "loadsharing_ev_finish_aux_resume",
+    )
+    rows_by_time = {row["time"]: row for row in result["_rows"]}
+
+    finished = [
+        row for row in result["_rows"]
+        if row["time"] < 1800
+        and row["evse-001_state"] == "connected"
+        and row["evse-001_actual"] == approx(0.0)
+    ]
+    assert finished
+    assert rows_by_time[1800]["evse-001_state"] == "charging"
+    assert rows_by_time[1800]["evse-001_actual"] > 0.0
+    assert rows_by_time[1800]["evse-002_actual"] > 0.0

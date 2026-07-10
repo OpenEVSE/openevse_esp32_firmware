@@ -21,6 +21,8 @@ Peer::Peer(const PeerScenario &scenario, EventLog &eventLog) :
   _sim.battery_capacity_kwh = _scenario.battery_capacity_kwh;
   _sim.max_charge_rate_kw = _scenario.max_charge_rate_kw;
   _sim.soc = _scenario.initial_soc;
+  _sim.request_current = _scenario.initial_request_current;
+  _sim.aux_load_kw = _scenario.initial_aux_load_kw;
   _sim.pilot = (long) _scenario.max_current;
   _sim.vehicle_connected = _scenario.initial_vehicle;
   _sim.state = _scenario.initial_vehicle
@@ -85,6 +87,8 @@ void Peer::applyEvents(long t_sec)
       vehicle = e.vehicle;
       _sim.setVehicleConnected(vehicle);
     }
+    if (e.set_request_current) _sim.request_current = e.request_current;
+    if (e.set_aux_load_kw) _sim.aux_load_kw = e.aux_load_kw;
     _next_event_idx++;
   }
 }
@@ -93,13 +97,17 @@ void Peer::updateBattery(double dt_seconds)
 {
   // The runner has already executed firmware tasks for this tick — read the
   // current pilot and decide if we are charging.
-  bool is_charging = vehicle && _sim.pilot > 0 && _sim.soc < 100.0
+  bool is_charging = vehicle && _sim.request_current && _sim.pilot > 0
       && _sim.state != OPENEVSE_STATE_DISABLED
       && _sim.state != OPENEVSE_STATE_SLEEPING
       && _sim.state != OPENEVSE_STATE_NOT_CONNECTED;
 
   if (is_charging) {
     _sim.state = OPENEVSE_STATE_CHARGING;
+    if (_sim.actualCurrent() < 1.0) {
+      _sim.request_current = false;
+      _sim.state = OPENEVSE_STATE_CONNECTED;
+    }
   } else if (vehicle) {
     if (_sim.state == OPENEVSE_STATE_CHARGING) {
       _sim.state = OPENEVSE_STATE_CONNECTED;

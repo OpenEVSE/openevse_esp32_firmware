@@ -309,6 +309,9 @@ def run_loadsharing_simulation(scenario_path: str, output: str = "") -> Dict[str
             row[f"{pid}_actual_power_w"] = actual_w
             row[f"{pid}_available_power_w"] = charge_available_w
             row[f"{pid}_soc"] = float(raw.get(f"{pid}_soc", 0) or 0)
+            row[f"{pid}_state"] = raw.get(f"{pid}_state", "")
+            row[f"{pid}_claim_state"] = raw.get(f"{pid}_claim_state", "")
+            row[f"{pid}_claim_details"] = raw.get(f"{pid}_claim_details", "")
             row[f"{pid}_reason"] = raw.get(f"{pid}_reason", "")
 
             total_actual_w += actual_w

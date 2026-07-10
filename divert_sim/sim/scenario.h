@@ -16,6 +16,10 @@ struct PeerEvent
   bool online = false;
   bool set_vehicle = false;
   bool vehicle = false;
+  bool set_request_current = false;
+  bool request_current = false;
+  bool set_aux_load_kw = false;
+  double aux_load_kw = 0.0;
 };
 
 struct PeerScenario
@@ -30,6 +34,8 @@ struct PeerScenario
   double battery_capacity_kwh = 75.0;
   double initial_soc = 50.0;
   double max_charge_rate_kw = 7.2;
+  bool initial_request_current = true;
+  double initial_aux_load_kw = 0.0;
 
   // Initial state
   bool initial_online = true;

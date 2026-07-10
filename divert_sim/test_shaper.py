@@ -20,9 +20,15 @@ def test_shaper_scenarios_generate_charge_and_limit_signal(scenario: Path):
     live_values = [float(r.get("evse-001_live_pwr_w", 0) or 0) for r in rows]
     actual_values = [float(r.get("evse-001_actual_charge_w", 0) or 0) for r in rows]
 
+    assert "evse-001_claim_state" in rows[0]
+    assert "evse-001_claim_details" in rows[0]
     assert any(v > 0 for v in live_values)
     assert any(v > 0 for v in max_values)
     assert all(v >= 0 for v in actual_values)
+    assert any(
+        row.get("evse-001_claim_details", "") != "No active claims"
+        for row in rows
+    )
 
 
 def test_shaper_override_max_power_changes_outcome():

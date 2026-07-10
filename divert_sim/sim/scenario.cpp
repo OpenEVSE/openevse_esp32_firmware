@@ -134,6 +134,8 @@ bool Scenario::loadFromFile(const std::string &path)
       p.battery_capacity_kwh = ev["battery_capacity_kwh"] | 75.0;
       p.initial_soc = ev["initial_soc"] | 50.0;
       p.max_charge_rate_kw = ev["max_charge_rate_kw"] | 7.2;
+      p.initial_request_current = ev["request_current"] | true;
+      p.initial_aux_load_kw = ev["aux_load_kw"] | 0.0;
     }
 
     JsonObjectConst init = pj["initial"].as<JsonObjectConst>();
@@ -204,6 +206,12 @@ bool Scenario::loadFromFile(const std::string &path)
         }
         if (ej.containsKey("vehicle")) {
           e.set_vehicle = true; e.vehicle = ej["vehicle"].as<bool>();
+        }
+        if (ej.containsKey("request_current")) {
+          e.set_request_current = true; e.request_current = ej["request_current"].as<bool>();
+        }
+        if (ej.containsKey("aux_load_kw")) {
+          e.set_aux_load_kw = true; e.aux_load_kw = ej["aux_load_kw"].as<double>();
         }
         p.events.push_back(e);
       }

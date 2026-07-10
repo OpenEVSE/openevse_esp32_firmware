@@ -10,6 +10,7 @@
 #include <vector>
 
 #include <Arduino.h>
+#include <ArduinoJson.h>
 #include <MicroTasks.h>
 #include <epoxy_test/ArduinoTest.h>
 
@@ -55,6 +56,73 @@ const char *stateName(long s)
 bool isStateActive(long s)
 {
   return s == OPENEVSE_STATE_CHARGING;
+}
+
+const char *clientName(EvseClient client)
+{
+  switch (client) {
+    case EvseClient_OpenEVSE_Divert:      return "divert";
+    case EvseClient_OpenEVSE_Shaper:      return "shaper";
+    case EvseClient_OpenEVSE_LoadSharing: return "loadsharing";
+    case EvseClient_OpenEVSE_Manual:      return "manual";
+    case EvseClient_OpenEVSE_Schedule:    return "schedule";
+    case EvseClient_OpenEVSE_Limit:       return "limit";
+    default:                              return "client";
+  }
+}
+
+std::string claimState(JsonObjectConst claim)
+{
+  const char *state = claim["state"] | "";
+  if (std::string(state) == "disabled") return "disabled";
+  if (std::string(state) == "active") return "active";
+  if (claim.containsKey("max_current") || claim.containsKey("charge_current")) return "other";
+  return "none";
+}
+
+std::string formatClaimDetails(EvseManager &evse, std::string &aggregate_state)
+{
+  DynamicJsonDocument claims_doc(1024);
+  evse.serializeClaims(claims_doc);
+  JsonArrayConst claims = claims_doc.as<JsonArrayConst>();
+  if (claims.isNull() || claims.size() == 0) {
+    aggregate_state = "none";
+    return "No active claims";
+  }
+
+  DynamicJsonDocument target_doc(512);
+  evse.serializeTarget(target_doc);
+  JsonObjectConst winners = target_doc["claims"].as<JsonObjectConst>();
+
+  bool any_active = false;
+  bool any_disabled = false;
+  bool any_other = false;
+  std::ostringstream details;
+  bool first = true;
+  for (JsonObjectConst claim : claims) {
+    EvseClient client = claim["client"] | EvseClient_NULL;
+    std::string state = claimState(claim);
+    any_active = any_active || state == "active";
+    any_disabled = any_disabled || state == "disabled";
+    any_other = any_other || state == "other";
+
+    if (!first) details << " | ";
+    first = false;
+    details << clientName(client) << '@' << (int)(claim["priority"] | 0) << ':' << state;
+    if (claim.containsKey("charge_current")) details << " charge_current=" << (uint32_t) claim["charge_current"];
+    if (claim.containsKey("max_current")) details << " max_current=" << (uint32_t) claim["max_current"];
+  }
+
+  if (!winners.isNull() && winners.size() > 0) {
+    details << " ; wins";
+    for (JsonPairConst winner : winners) {
+      EvseClient client = winner.value().as<EvseClient>();
+      details << ' ' << winner.key().c_str() << '=' << clientName(client);
+    }
+  }
+
+  aggregate_state = any_disabled ? "disabled" : (any_active ? "active" : (any_other ? "other" : "none"));
+  return details.str();
 }
 
 double capLoadSharingMaxCurrent(double max_current, double measured_current, double pilot_current)
@@ -235,6 +303,10 @@ int run(const std::string &scenario_path,
       writer.addDouble(ev_max_w, 1);
       writer.addDouble(actual_w, 1);
       writer.addDouble(s.soc, 2);
+      std::string claim_state;
+      std::string claim_details = formatClaimDetails(p->evse(), claim_state);
+      writer.addString(claim_state);
+      writer.addString(claim_details);
       writer.addString(p->reason);
     }
     writer.addDouble(group_max_current * scenario.nominal_voltage, 1);
