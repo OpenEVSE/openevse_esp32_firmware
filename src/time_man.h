@@ -84,6 +84,17 @@ extern TimeManager timeManager;
 
 extern void time_set_time(struct timeval set_time, const char *source);
 
+// Convert the raw time_t returned by OpenEVSE.getTime() to the actual UTC epoch.
+//
+// The EVSE stores time as UTC calendar fields (year/month/day/hour/min/sec).
+// However the library's getTime() reconstructs a time_t by calling mktime(),
+// which treats those fields as *local* time, introducing a timezone offset error.
+// This function undoes that offset so callers always work with true UTC.
+//
+// The compensation is computed using only evse_time itself as the reference,
+// so it is self-consistent even on first boot before the WiFi clock is set.
+extern time_t evse_time_to_utc(time_t evse_time);
+
 extern String time_format_time(time_t time, bool local_time = true);
 extern String time_format_time(tm &time);
 
