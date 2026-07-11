@@ -1354,6 +1354,7 @@ static void registerWebServerRoutes()
   });
 
   server.on("/debug/console$", [](MongooseHttpWebSocketConnection *connection, int flags, uint8_t *data, size_t len) {
+    // Intentionally no-op: this endpoint is server-push only via SerialDebug.onWrite.
   });
 
   SerialDebug.onWrite([](const uint8_t *buffer, size_t size)
@@ -1375,6 +1376,7 @@ static void registerWebServerRoutes()
   });
 
   server.on("/evse/console$", [](MongooseHttpWebSocketConnection *connection, int flags, uint8_t *data, size_t len) {
+    // Intentionally no-op: this endpoint is server-push only via SerialEvse callbacks.
   });
 
   SerialEvse.onWrite([](const uint8_t *buffer, size_t size) {
@@ -1405,12 +1407,12 @@ void web_server_setup()
   }
 
   // Keep HTTP reachable whenever HTTPS is unavailable, so we never strand the UI.
-  if(config_http_enabled() || false == use_ssl) {
-    if(false == use_ssl || www_http_port != www_https_port) {
+  const bool should_start_http = config_http_enabled() || false == use_ssl;
+  const bool should_bind_http_port = false == use_ssl || www_http_port != www_https_port;
+  if(should_start_http && should_bind_http_port) {
       DEBUG.printf("Starting HTTP server, http://0.0.0.0:%d\n", www_http_port);
       server.begin(www_http_port);
       registerWebServerRoutes();
-    }
   }
 
   server.onNotFound(handleNotFound);

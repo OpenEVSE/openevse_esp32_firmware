@@ -53,9 +53,15 @@ void emoncms_publish(JsonDocument &data)
     String json;
     serializeJson(data, json);
     url += "fulljson=";
+    // Worst-case URL encoding is 3x expansion ("%XX" per byte), plus NUL.
     size_t encoded_len = (json.length() * 3) + 1;
     std::unique_ptr<char[]> encoded_json(new char[encoded_len]);
     size_t encoded_size = mg_url_encode(json.c_str(), json.length(), encoded_json.get(), encoded_len);
+    if(encoded_size == 0 && json.length() > 0) {
+      emoncms_result(false, String("URL encode failed"));
+      Profile_End(emoncms_publish, 10);
+      return;
+    }
     url += String(encoded_json.get(), encoded_size);
     url += "&node=";
     url += emoncms_node;
