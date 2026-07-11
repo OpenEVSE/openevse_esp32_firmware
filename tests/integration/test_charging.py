@@ -18,15 +18,15 @@ VEHICLE_DATA_SRC_HTTP = 3
 
 
 def api_get(url):
-    return requests.get(url, timeout=REQUEST_TIMEOUT)
+    return requests.get(url, timeout=REQUEST_TIMEOUT, allow_redirects=False)
 
 
 def api_post(url, json):
-    return requests.post(url, json=json, timeout=REQUEST_TIMEOUT)
+    return requests.post(url, json=json, timeout=REQUEST_TIMEOUT, allow_redirects=False)
 
 
 def api_delete(url):
-    return requests.delete(url, timeout=REQUEST_TIMEOUT)
+    return requests.delete(url, timeout=REQUEST_TIMEOUT, allow_redirects=False)
 
 
 def wait_for_state(native_url, predicate, timeout=10, poll_interval=0.2):
@@ -38,7 +38,9 @@ def wait_for_state(native_url, predicate, timeout=10, poll_interval=0.2):
     deadline = time.time() + timeout
     while time.time() < deadline:
         try:
-            data = requests.get(f"{native_url}/status", timeout=2).json()
+            data = requests.get(
+                f"{native_url}/status", timeout=2, allow_redirects=False
+            ).json()
             last_state = data.get("state")
             if predicate(last_state):
                 return last_state
@@ -65,6 +67,26 @@ def wait_for_status_field(native_url, field, predicate, timeout=10, poll_interva
     if last_error is not None:
         print(f"wait_for_status_field({field}) last polling error: {last_error}")
     return last_value
+
+
+@pytest.mark.timeout(120)
+class TestMongooseRouting:
+    """Coverage for HTTP route binding through ArduinoMongoose."""
+
+    def test_core_api_routes_bind_without_legacy_dollar_suffix(self, evse_instance):
+        routes = [
+            "/status",
+            "/config",
+            "/override",
+            "/claims",
+            "/claims/target",
+        ]
+        for route in routes:
+            response = api_get(f"{evse_instance['native_url']}{route}")
+            assert response.status_code == 200, (
+                f"{route}: Expected 200, got {response.status_code}; "
+                f"Location={response.headers.get('Location')}, body={response.text[:200]}"
+            )
 
 
 @pytest.mark.timeout(120)

@@ -1296,64 +1296,64 @@ void handleMqttAction(MongooseHttpServerRequest *request) {
 static void registerWebServerRoutes(MongooseHttpServer &server)
 {
   // Handle status updates
-  server.on("/status$", handleStatus);
-  server.on("/config$", handleConfig);
+  server.on("/status", handleStatus);
+  server.on("/config", handleConfig);
 
   // Handle HTTP web interface button presses
-  server.on("/teslaveh$", handleTeslaVeh);
-  server.on("/tesla/vehicles$", handleTeslaVeh);
-  server.on("/settime$", handleSetTime);
-  server.on("/reset$", handleRst);
-  server.on("/restart$", handleRestart);
-  server.on("/rapi$", handleRapi);
-  server.on("/r$", handleRapi);
-  server.on("/scan$", handleScan);
-  server.on("/apoff$", handleAPOff);
-  server.on("/divertmode$", handleDivertMode);
-  server.on("/shaper$", handleCurrentShaper);
-  server.on("/emoncms/describe$", handleDescribe);
-  server.on("/rfid/add$", handleAddRFID);
+  server.on("/teslaveh", handleTeslaVeh);
+  server.on("/tesla/vehicles", handleTeslaVeh);
+  server.on("/settime", handleSetTime);
+  server.on("/reset", handleRst);
+  server.on("/restart", handleRestart);
+  server.on("/rapi", handleRapi);
+  server.on("/r", handleRapi);
+  server.on("/scan", handleScan);
+  server.on("/apoff", handleAPOff);
+  server.on("/divertmode", handleDivertMode);
+  server.on("/shaper", handleCurrentShaper);
+  server.on("/emoncms/describe", handleDescribe);
+  server.on("/rfid/add", handleAddRFID);
 
-  server.on("/schedule/plan$", handleSchedulePlan);
+  server.on("/schedule/plan", handleSchedulePlan);
   server.on("/schedule", handleSchedule);
 
-  server.on("/claims/target$", handleEvseClaimsTarget);
+  server.on("/claims/target", handleEvseClaimsTarget);
   server.on("/claims", handleEvseClaims);
 
-  server.on("/override$", handleOverride);
+  server.on("/override", handleOverride);
 
   server.on("/logs", handleEventLogs);
   server.on("/certificates", handleCertificates);
   server.on("/limit", handleLimit);
   server.on("/emeter", handleEmeter);
   server.on("/time", handleTime);
-  server.on("/mqtt$", handleMqttAction);
+  server.on("/mqtt", handleMqttAction);
 
 #ifndef ENABLE_TSDB
-  server.on("/energy/raw$", handleEnergyRaw);
-  server.on("/energy/daily$", handleEnergyDaily);
-  server.on("/energy/monthly$", handleEnergyMonthly);
-  server.on("/energy/annual$", handleEnergyAnnual);
+  server.on("/energy/raw", handleEnergyRaw);
+  server.on("/energy/daily", handleEnergyDaily);
+  server.on("/energy/monthly", handleEnergyMonthly);
+  server.on("/energy/annual", handleEnergyAnnual);
 #else // ENABLE_TSDB
-  server.on("/energy/raw$", handleEnergyRaw);
-  server.on("/energy/daily$", handleEnergyDaily);
-  server.on("/energy/weekly$", handleEnergyWeekly);
-  server.on("/energy/monthly$", handleEnergyMonthly);
-  server.on("/energy/annual$", handleEnergyAnnual);
+  server.on("/energy/raw", handleEnergyRaw);
+  server.on("/energy/daily", handleEnergyDaily);
+  server.on("/energy/weekly", handleEnergyWeekly);
+  server.on("/energy/monthly", handleEnergyMonthly);
+  server.on("/energy/annual", handleEnergyAnnual);
 #endif // ENABLE_TSDB
 
   // Simple Firmware Update Form
-  server.on("/update$")->
+  server.on("/update")->
     onRequest(handleUpdateRequest)->
     onUpload(handleUpdateUpload)->
     onClose(handleUpdateClose);
 
   // In-place 16MB flash repartition (16MB module flashed with 4MB layout)
-  server.on("/migrate/expand16mb$", handleMigrateExpand16mb);
-  server.on("/migrate/status$", handleMigrateStatus);
-  server.on("/migrate/coredump$", handleMigrateCoredump);
+  server.on("/migrate/expand16mb", handleMigrateExpand16mb);
+  server.on("/migrate/status", handleMigrateStatus);
+  server.on("/migrate/coredump", handleMigrateCoredump);
 
-  server.on("/debug$", [](MongooseHttpServerRequest *request) {
+  server.on("/debug", [](MongooseHttpServerRequest *request) {
     MongooseHttpServerResponseStream *response;
     if(false == requestPreProcess(request, response, CONTENT_TYPE_TEXT)) {
       return;
@@ -1366,7 +1366,7 @@ static void registerWebServerRoutes(MongooseHttpServer &server)
     request->send(response);
   });
 
-  server.on("/debug/console$", [](MongooseHttpWebSocketConnection *connection, int flags, uint8_t *data, size_t len) {
+  server.on("/debug/console", [](MongooseHttpWebSocketConnection *connection, int flags, uint8_t *data, size_t len) {
     // Intentionally no-op: this endpoint is server-push only via SerialDebug.onWrite.
   });
 
@@ -1375,7 +1375,7 @@ static void registerWebServerRoutes(MongooseHttpServer &server)
     web_server_send_all("/debug/console", buffer, size);
   });
 
-  server.on("/evse$", [](MongooseHttpServerRequest *request) {
+  server.on("/evse", [](MongooseHttpServerRequest *request) {
     MongooseHttpServerResponseStream *response;
     if(false == requestPreProcess(request, response, CONTENT_TYPE_TEXT)) {
       return;
@@ -1388,7 +1388,7 @@ static void registerWebServerRoutes(MongooseHttpServer &server)
     request->send(response);
   });
 
-  server.on("/evse/console$", [](MongooseHttpWebSocketConnection *connection, int flags, uint8_t *data, size_t len) {
+  server.on("/evse/console", [](MongooseHttpWebSocketConnection *connection, int flags, uint8_t *data, size_t len) {
     // Intentionally no-op: this endpoint is server-push only via SerialEvse callbacks.
   });
 
@@ -1399,7 +1399,7 @@ static void registerWebServerRoutes(MongooseHttpServer &server)
     web_server_send_ascii_utf8("/evse/console", buffer, size);
   });
 
-  server.on("/ws$", onWsFrame)->onConnect(onWsConnect);
+  server.on("/ws", onWsFrame)->onConnect(onWsConnect);
 }
 
 void web_server_setup()
