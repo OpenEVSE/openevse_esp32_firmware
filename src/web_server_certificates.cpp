@@ -9,6 +9,9 @@ typedef const __FlashStringHelper *fstr_t;
 #include "emonesp.h"
 #include "web_server.h"
 #include "certificates.h"
+#include "self_signed_cert.h"
+#include "app_config.h"
+#include "net_manager.h"
 
 // -------------------------------------------------------------------
 //
@@ -19,6 +22,39 @@ void handleCertificatesGetRootCa(MongooseHttpServerRequest *request, MongooseHtt
   response->setCode(200);
   response->setContentType(CONTENT_TYPE_TEXT);
   response->print(certs.getRootCa());
+}
+
+void handleCertificatesGenerateSelfSigned(MongooseHttpServerRequest *request, MongooseHttpServerResponseStream *response)
+{
+  (void)request;
+#if defined(CERT_VALIDATOR_OPENSSL)
+  response->setCode(501);
+  response->print("{\"msg\":\"Self-signed certificate generation is not available in native builds\"}");
+#else
+  String certPem, keyPem;
+  if(!generateSelfSignedCertificate(esp_hostname, net.getIp(), certPem, keyPem)) {
+    response->setCode(500);
+    response->print("{\"msg\":\"Failed to generate certificate\"}");
+    return;
+  }
+
+  DynamicJsonDocument doc(CERTIFICATE_JSON_BUFFER_SIZE);
+  doc["name"] = "Self-signed (" + esp_hostname + ")";
+  doc["certificate"] = certPem;
+  doc["key"] = keyPem;
+
+  uint64_t id = UINT64_MAX;
+  if(certs.addCertificate(doc, &id)) {
+    doc.clear();
+    doc["id"] = String(id, HEX);
+    doc["msg"] = "done";
+    serializeJson(doc, *response);
+    response->setCode(200);
+  } else {
+    response->setCode(400);
+    response->print("{\"msg\":\"Could not add certificate\"}");
+  }
+#endif
 }
 
 
@@ -115,6 +151,17 @@ void handleCertificates(MongooseHttpServerRequest *request)
       if(HTTP_GET == request->method())
       {
         handleCertificatesGetRootCa(request, response);
+        request->send(response);
+        return;
+      } else {
+        response->setCode(405);
+        response->print("{\"msg\":\"Method not allowed\"}");
+      }
+    } else if(clientStr == "self-signed")
+    {
+      if(HTTP_POST == request->method())
+      {
+        handleCertificatesGenerateSelfSigned(request, response);
         request->send(response);
         return;
       } else {
