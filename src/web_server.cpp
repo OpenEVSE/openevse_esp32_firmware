@@ -1317,6 +1317,7 @@ static void registerWebServerRoutes(MongooseHttpServer &server)
   server.on("/schedule/plan", handleSchedulePlan);
   server.on("/schedule", handleSchedule);
 
+  server.on("/claims/#", handleEvseClaims);
   server.on("/claims/target", handleEvseClaimsTarget);
   server.on("/claims", handleEvseClaims);
 

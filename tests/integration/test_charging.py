@@ -104,16 +104,24 @@ class TestMongooseRouting:
             f"Location={clear_response.headers.get('Location')}, body={clear_response.text}"
         )
 
+        claim_url = f"{evse_instance['native_url']}/claims/9998"
         claim_response = api_post(
-            f"{evse_instance['native_url']}/claims",
+            claim_url,
             json={
-                "claim": "integration-route-test",
                 "state": "active",
+                "charge_current": 20,
+                "auto_release": True,
             },
         )
         assert claim_response.status_code in (200, 201), (
-            f"/claims POST: Expected 200/201, got {claim_response.status_code}; "
+            f"/claims/{{id}} POST: Expected 200/201, got {claim_response.status_code}; "
             f"Location={claim_response.headers.get('Location')}, body={claim_response.text}"
+        )
+
+        release_response = api_delete(claim_url)
+        assert release_response.status_code == 200, (
+            f"/claims/{{id}} DELETE: Expected 200, got {release_response.status_code}; "
+            f"Location={release_response.headers.get('Location')}, body={release_response.text}"
         )
 
 
