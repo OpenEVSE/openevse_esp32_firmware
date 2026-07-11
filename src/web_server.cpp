@@ -50,7 +50,6 @@ typedef const __FlashStringHelper *fstr_t;
 #include "limit.h"
 
 MongooseHttpServer server;          // Create class for Web server
-MongooseHttpServer redirect;        // Server to redirect to HTTPS if enabled
 
 bool enableCors = false;
 bool streamDebug = false;
@@ -1281,30 +1280,8 @@ void handleMqttAction(MongooseHttpServerRequest *request) {
   request->send(response);
 }
 
-void web_server_setup()
+static void registerWebServerRoutes()
 {
-  bool use_ssl = false;
-  if(www_certificate_id != "")
-  {
-    uint64_t cert_id = std::stoull(www_certificate_id.c_str(), nullptr, 16);
-    const char *cert = certs.getCertificate(cert_id);
-    const char *key = certs.getKey(cert_id);
-    if(NULL != cert && NULL != key)
-    {
-      DEBUG.printf("Starting HTTPS server, https://0.0.0.0:%d\n", www_https_port);
-      server.begin(www_https_port, cert, key);
-      use_ssl = true;
-
-      redirect.begin(www_http_port);
-      redirect.on("/", handleHttpsRedirect);
-    }
-  }
-
-  if(false == use_ssl) {
-    DEBUG.printf("Starting HTTP server, http://0.0.0.0:%d\n", www_http_port);
-    server.begin(www_http_port);
-  }
-
   // Handle status updates
   server.on("/status$", handleStatus);
   server.on("/config$", handleConfig);
@@ -1376,7 +1353,7 @@ void web_server_setup()
     request->send(response);
   });
 
-  server.on("/debug/console$")->onFrame([](MongooseHttpWebSocketConnection *connection, int flags, uint8_t *data, size_t len) {
+  server.on("/debug/console$", [](MongooseHttpWebSocketConnection *connection, int flags, uint8_t *data, size_t len) {
   });
 
   SerialDebug.onWrite([](const uint8_t *buffer, size_t size)
@@ -1397,7 +1374,7 @@ void web_server_setup()
     request->send(response);
   });
 
-  server.on("/evse/console$")->onFrame([](MongooseHttpWebSocketConnection *connection, int flags, uint8_t *data, size_t len) {
+  server.on("/evse/console$", [](MongooseHttpWebSocketConnection *connection, int flags, uint8_t *data, size_t len) {
   });
 
   SerialEvse.onWrite([](const uint8_t *buffer, size_t size) {
@@ -1407,10 +1384,34 @@ void web_server_setup()
     web_server_send_ascii_utf8("/evse/console", buffer, size);
   });
 
-  server.on("/ws$")->
-    onFrame(onWsFrame)
-    ->
-    onConnect(onWsConnect);
+  server.on("/ws$", onWsFrame)->onConnect(onWsConnect);
+}
+
+void web_server_setup()
+{
+  bool use_ssl = false;
+  if(config_https_enabled() && www_certificate_id != "")
+  {
+    uint64_t cert_id = std::stoull(www_certificate_id.c_str(), nullptr, 16);
+    const char *cert = certs.getCertificate(cert_id);
+    const char *key = certs.getKey(cert_id);
+    if(NULL != cert && NULL != key)
+    {
+      DEBUG.printf("Starting HTTPS server, https://0.0.0.0:%d\n", www_https_port);
+      server.begin(www_https_port, cert, key);
+      registerWebServerRoutes();
+      use_ssl = true;
+    }
+  }
+
+  // Keep HTTP reachable whenever HTTPS is unavailable, so we never strand the UI.
+  if(config_http_enabled() || false == use_ssl) {
+    if(false == use_ssl || www_http_port != www_https_port) {
+      DEBUG.printf("Starting HTTP server, http://0.0.0.0:%d\n", www_http_port);
+      server.begin(www_http_port);
+      registerWebServerRoutes();
+    }
+  }
 
   server.onNotFound(handleNotFound);
 

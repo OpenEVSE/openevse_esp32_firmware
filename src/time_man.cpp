@@ -129,8 +129,8 @@ void TimeManager::setup()
 {
   setTimeZone(time_zone);
 
-  _sntp.onError([this](uint8_t err) {
-    DBUGF("NTP error %u (attempt %u)", err, _retryCount + 1);
+  _sntp.onError([this](const char *err) {
+    DBUGF("NTP error %s (attempt %u)", err ? err : "unknown", _retryCount + 1);
     _fetchingTime = false;
     // Distinguish DNS failure from other NTP errors (firewall, bad server, etc.)
     // Only show "DNS failed" badge when DNS resolution itself fails.

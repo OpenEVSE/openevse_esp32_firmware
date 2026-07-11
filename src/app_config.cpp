@@ -185,6 +185,7 @@ void config_changed(String name);
 #define CONFIG_DEFAULT_FLAGS (CONFIG_SERVICE_SNTP | \
                               CONFIG_OCPP_AUTO_AUTH | \
                               CONFIG_OCPP_OFFLINE_AUTH | \
+                              CONFIG_HTTP_ENABLED | \
                               CONFIG_TEMP_THROTTLE_DEFAULT | \
                               CONFIG_DEFAULT_STATE_DEFAULT)
 
@@ -335,6 +336,8 @@ ConfigOpt *opts[] =
   new ConfigOptVirtualMaskedBool(flagsOpt, flagsChanged, CONFIG_WIZARD, CONFIG_WIZARD, "wizard_passed", "wzp"),
   new ConfigOptVirtualMaskedBool(flagsOpt, flagsChanged, CONFIG_DEFAULT_STATE, CONFIG_DEFAULT_STATE, "default_state", "dfs"),
   new ConfigOptVirtualMaskedBool(flagsOpt, flagsChanged, CONFIG_TEMP_THROTTLE, CONFIG_TEMP_THROTTLE, "temp_throttle_enabled", "tte"),
+  new ConfigOptVirtualMaskedBool(flagsOpt, flagsChanged, CONFIG_HTTP_ENABLED, CONFIG_HTTP_ENABLED, "www_http_enabled", "whe"),
+  new ConfigOptVirtualMaskedBool(flagsOpt, flagsChanged, CONFIG_HTTPS_ENABLED, CONFIG_HTTPS_ENABLED, "www_https_enabled", "wse"),
   new ConfigOptVirtualMqttProtocol(flagsOpt, flagsChanged, "mqtt_protocol", "mprt"),
   new ConfigOptVirtualChargeMode(flagsOpt, flagsChanged, "charge_mode", "chmd")
 };
@@ -898,6 +901,5 @@ void config_reset()
   LittleFS.format();
   config_load_settings();
 }
-
 
 
