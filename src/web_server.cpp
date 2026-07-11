@@ -49,7 +49,10 @@ typedef const __FlashStringHelper *fstr_t;
 #include "evse_man.h"
 #include "limit.h"
 
-MongooseHttpServer server;          // Create class for Web server
+static MongooseHttpServer http_server;   // Create class for HTTP server
+static MongooseHttpServer https_server;  // Create class for HTTPS server
+static bool http_server_started = false;
+static bool https_server_started = false;
 
 bool enableCors = false;
 bool streamDebug = false;
@@ -1238,13 +1241,23 @@ void onWsConnect(MongooseHttpWebSocketConnection *connection)
  * Really simple 'conversion' of ASCII to UTF-8, basically only a few places send >127 chars
  * so just filter those to be acceptable as UTF-8
  */
+static void web_server_send_all(const char *endpoint, const uint8_t *buffer, size_t size)
+{
+  if(http_server_started) {
+    http_server.sendAll(endpoint, WEBSOCKET_OP_TEXT, buffer, size);
+  }
+  if(https_server_started) {
+    https_server.sendAll(endpoint, WEBSOCKET_OP_TEXT, buffer, size);
+  }
+}
+
 void web_server_send_ascii_utf8(const char *endpoint, const uint8_t *buffer, size_t size)
 {
   char temp[size];
   for(int i = 0; i < size; i++) {
     temp[i] = buffer[i] & 0x7f;
   }
-  server.sendAll(endpoint, WEBSOCKET_OP_TEXT, temp, size);
+  web_server_send_all(endpoint, (const uint8_t *)temp, size);
 }
 
 void handleMqttAction(MongooseHttpServerRequest *request) {
@@ -1280,7 +1293,7 @@ void handleMqttAction(MongooseHttpServerRequest *request) {
   request->send(response);
 }
 
-static void registerWebServerRoutes()
+static void registerWebServerRoutes(MongooseHttpServer &server)
 {
   // Handle status updates
   server.on("/status$", handleStatus);
@@ -1359,7 +1372,7 @@ static void registerWebServerRoutes()
 
   SerialDebug.onWrite([](const uint8_t *buffer, size_t size)
   {
-    server.sendAll("/debug/console", WEBSOCKET_OP_TEXT, buffer, size);
+    web_server_send_all("/debug/console", buffer, size);
   });
 
   server.on("/evse$", [](MongooseHttpServerRequest *request) {
@@ -1391,6 +1404,9 @@ static void registerWebServerRoutes()
 
 void web_server_setup()
 {
+  http_server_started = false;
+  https_server_started = false;
+
   bool use_ssl = false;
   if(config_https_enabled() && www_certificate_id != "")
   {
@@ -1400,8 +1416,10 @@ void web_server_setup()
     if(NULL != cert && NULL != key)
     {
       DEBUG.printf("Starting HTTPS server, https://0.0.0.0:%d\n", www_https_port);
-      server.begin(www_https_port, cert, key);
-      registerWebServerRoutes();
+      https_server.begin(www_https_port, cert, key);
+      registerWebServerRoutes(https_server);
+      https_server.onNotFound(handleNotFound);
+      https_server_started = true;
       use_ssl = true;
     }
   }
@@ -1411,11 +1429,11 @@ void web_server_setup()
   const bool should_bind_http_port = false == use_ssl || www_http_port != www_https_port;
   if(should_start_http && should_bind_http_port) {
       DEBUG.printf("Starting HTTP server, http://0.0.0.0:%d\n", www_http_port);
-      server.begin(www_http_port);
-      registerWebServerRoutes();
+      http_server.begin(www_http_port);
+      registerWebServerRoutes(http_server);
+      http_server.onNotFound(handleNotFound);
+      http_server_started = true;
   }
-
-  server.onNotFound(handleNotFound);
 
   DEBUG.println("Server started");
 }
@@ -1443,5 +1461,10 @@ void web_server_event(JsonDocument &event)
 {
   String json;
   serializeJson(event, json);
-  server.sendAll("/ws", json);
+  if(http_server_started) {
+    http_server.sendAll("/ws", json);
+  }
+  if(https_server_started) {
+    https_server.sendAll("/ws", json);
+  }
 }

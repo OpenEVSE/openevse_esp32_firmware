@@ -62,7 +62,8 @@ void emoncms_publish(JsonDocument &data)
       Profile_End(emoncms_publish, 10);
       return;
     }
-    url += String(encoded_json.get(), encoded_size);
+    encoded_json[encoded_size] = '\0';
+    url += encoded_json.get();
     url += "&node=";
     url += emoncms_node;
     url += "&apikey=";
