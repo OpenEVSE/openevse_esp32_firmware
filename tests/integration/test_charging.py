@@ -85,8 +85,36 @@ class TestMongooseRouting:
             response = api_get(f"{evse_instance['native_url']}{route}")
             assert response.status_code == 200, (
                 f"{route}: Expected 200, got {response.status_code}; "
-                f"Location={response.headers.get('Location')}, body={response.text[:200]}"
+                f"Location={response.headers.get('Location')}, body={response.text}"
             )
+
+    def test_override_and_claims_routes_accept_non_get_methods(self, evse_instance):
+        disable_response = api_post(
+            f"{evse_instance['native_url']}/override",
+            json={"state": "disabled"},
+        )
+        assert disable_response.status_code in (200, 201), (
+            f"/override POST: Expected 200/201, got {disable_response.status_code}; "
+            f"Location={disable_response.headers.get('Location')}, body={disable_response.text}"
+        )
+
+        clear_response = api_delete(f"{evse_instance['native_url']}/override")
+        assert clear_response.status_code in (200, 204), (
+            f"/override DELETE: Expected 200/204, got {clear_response.status_code}; "
+            f"Location={clear_response.headers.get('Location')}, body={clear_response.text}"
+        )
+
+        claim_response = api_post(
+            f"{evse_instance['native_url']}/claims",
+            json={
+                "claim": "integration-route-test",
+                "state": "active",
+            },
+        )
+        assert claim_response.status_code in (200, 201), (
+            f"/claims POST: Expected 200/201, got {claim_response.status_code}; "
+            f"Location={claim_response.headers.get('Location')}, body={claim_response.text}"
+        )
 
 
 @pytest.mark.timeout(120)
