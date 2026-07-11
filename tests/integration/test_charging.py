@@ -15,6 +15,7 @@ import time
 REQUEST_TIMEOUT = 5
 # Matches app_config.h enum vehicle_data_src: VEHICLE_DATA_SRC_HTTP = 3.
 VEHICLE_DATA_SRC_HTTP = 3
+ROUTE_BINDING_CLAIM_ID = 9998
 
 
 def api_get(url):
@@ -104,7 +105,7 @@ class TestMongooseRouting:
             f"Location={clear_response.headers.get('Location')}, body={clear_response.text}"
         )
 
-        claim_url = f"{evse_instance['native_url']}/claims/9998"
+        claim_url = f"{evse_instance['native_url']}/claims/{ROUTE_BINDING_CLAIM_ID}"
         claim_response = api_post(
             claim_url,
             json={
