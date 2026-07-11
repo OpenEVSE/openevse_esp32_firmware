@@ -29,7 +29,7 @@ void handleCertificatesGenerateSelfSigned(MongooseHttpServerRequest *request, Mo
   (void)request;
 #if defined(CERT_VALIDATOR_OPENSSL)
   response->setCode(501);
-  response->print("{\"msg\":\"Self-signed certificate generation is not available in native builds\"}");
+  response->print("{\"msg\":\"Self-signed certificate generation is not available in native builds.\"}");
 #else
   String certPem, keyPem;
   if(!generateSelfSignedCertificate(esp_hostname, net.getIp(), certPem, keyPem)) {

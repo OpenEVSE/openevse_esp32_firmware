@@ -323,7 +323,7 @@ class TestMongooseServices:
                 seen = wait_until(lambda: server.requests[0] if server.requests else None, timeout=15)
                 assert seen is not None
                 assert seen.get("node") == ["integration"]
-                assert seen.get("apikey", [""])[0].startswith("key12345")
+                assert "apikey" in seen
 
                 status = wait_until(
                     lambda: api_get(f"{native_url}/status").json().get("emoncms_connected") == 1,

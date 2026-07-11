@@ -37,6 +37,9 @@ static int esp_rng_for_mbedtls(void *ctx, unsigned char *buf, size_t len)
 
 static int addSubjectAltNames(mbedtls_x509write_cert &crt, const String &dnsName, const String &ipAddress)
 {
+  // SAN payload is one DNS name (hostname config is short) plus one IPv4
+  // address, with ASN.1 tags/lengths. 160 bytes leaves ample headroom while
+  // keeping this stack buffer small for ESP32.
   uint8_t buf[160];
   uint8_t *p = buf + sizeof(buf);
   size_t len = 0;
