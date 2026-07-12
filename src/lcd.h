@@ -97,6 +97,8 @@ class LcdTask : public MicroTasks::Task
       TimerStart,     // Start 10:00PM
       TimerStop,      // Stop 06:00AM
       TimerRemaining, // Remaining 6:23
+      SolarPower,     // Solar 3.41kW / Grid IE -500W
+      DivertRate,     // Divert 16A / Avail 4.2A
       ManualOverride
     };
 
@@ -112,6 +114,8 @@ class LcdTask : public MicroTasks::Task
     EvseManager *_evse;
     Scheduler *_scheduler;
     ManualOverride *_manual;
+
+    EvseClient _lastStateClient;
 
     uint32_t _nextMessageTime;
     uint32_t _infoLineChageTime;
@@ -143,6 +147,7 @@ class LcdTask : public MicroTasks::Task
     void displayInfoLine(LcdInfoLine info, unsigned long &nextUpdate);
     void displayNumberValue(int line, const char *name, double value, int precision, const char *unit);
     void displayScaledNumberValue(int line, const char *name, double value, int precision, const char *unit);
+    void displayPowerValue(int line, const char *name, double watts);
     void displayInfoEventTime(const char *name, Scheduler::EventInstance &event);
     void displayNameValue(int line, const char *name, const char *value);
     void displayStopWatchTime(const char *name, uint32_t time);
