@@ -158,7 +158,8 @@ extern uint32_t flags;
 #define CONFIG_THREEPHASE           (1 << 24)
 #define CONFIG_WIZARD               (1 << 25)
 #define CONFIG_DEFAULT_STATE        (1 << 26)
-#define CONFIG_TEMP_THROTTLE        (1 << 27) // next free bit after CONFIG_DEFAULT_STATE
+#define CONFIG_TEMP_THROTTLE        (1 << 27)
+#define CONFIG_LCD_NETWORK_INFO     (1 << 28) // next free bit after CONFIG_LCD_NETWORK_INFO
 
 #define INITIAL_CONFIG_VERSION  1
 
@@ -255,6 +256,11 @@ inline EvseState config_default_state()
 inline bool config_temp_throttle_enabled()
 {
   return CONFIG_TEMP_THROTTLE == (flags & CONFIG_TEMP_THROTTLE);
+}
+
+inline bool config_lcd_network_info_enabled()
+{
+  return CONFIG_LCD_NETWORK_INFO == (flags & CONFIG_LCD_NETWORK_INFO);
 }
 
 // Ohm Connect Settings

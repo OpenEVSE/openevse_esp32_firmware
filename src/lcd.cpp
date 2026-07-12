@@ -11,6 +11,7 @@
 #include "input.h"
 #include "app_config.h"
 #include "divert.h"
+#include "net_manager.h"
 #include <sys/time.h>
 
 static void IGNORE(int ret) {
@@ -162,6 +163,8 @@ unsigned long LcdTask::loop(MicroTasks::WakeReason reason)
          LcdInfoLine::TimerRemaining == _infoLine ? "LcdInfoLine::TimerRemaining" :
          LcdInfoLine::SolarPower == _infoLine ? "LcdInfoLine::SolarPower" :
          LcdInfoLine::DivertRate == _infoLine ? "LcdInfoLine::DivertRate" :
+         LcdInfoLine::Hostname == _infoLine ? "LcdInfoLine::Hostname" :
+         LcdInfoLine::IPAddress == _infoLine ? "LcdInfoLine::IPAddress" :
          LcdInfoLine::ManualOverride == _infoLine ? "LcdInfoLine::ManualOverride" :
          "UNKNOWN");
 
@@ -342,6 +345,14 @@ LcdTask::LcdInfoLine LcdTask::getNextInfoLine(LcdInfoLine info)
         case LcdInfoLine::Time:
           return LcdInfoLine::Date;
         case LcdInfoLine::Date:
+          if(config_lcd_network_info_enabled()) {
+            return LcdInfoLine::Hostname;
+          }
+        case LcdInfoLine::Hostname:
+          if(config_lcd_network_info_enabled()) {
+            return LcdInfoLine::IPAddress;
+          }
+        case LcdInfoLine::IPAddress:
           if(_scheduler->getNextEvent(EvseState::Active).isValid()) {
             return LcdInfoLine::TimerStart;
           }
@@ -379,6 +390,14 @@ LcdTask::LcdInfoLine LcdTask::getNextInfoLine(LcdInfoLine info)
             return LcdInfoLine::DivertRate;
           }
         case LcdInfoLine::DivertRate:
+          if(config_lcd_network_info_enabled()) {
+            return LcdInfoLine::Hostname;
+          }
+        case LcdInfoLine::Hostname:
+          if(config_lcd_network_info_enabled()) {
+            return LcdInfoLine::IPAddress;
+          }
+        case LcdInfoLine::IPAddress:
           if(_scheduler->getNextEvent(EvseState::Disabled).isValid()) {
             return LcdInfoLine::TimerStop;
           }
@@ -422,6 +441,14 @@ LcdTask::LcdInfoLine LcdTask::getNextInfoLine(LcdInfoLine info)
         case LcdInfoLine::Time:
           return LcdInfoLine::Date;
         case LcdInfoLine::Date:
+          if(config_lcd_network_info_enabled()) {
+            return LcdInfoLine::Hostname;
+          }
+        case LcdInfoLine::Hostname:
+          if(config_lcd_network_info_enabled()) {
+            return LcdInfoLine::IPAddress;
+          }
+        case LcdInfoLine::IPAddress:
           if(_scheduler->getNextEvent(EvseState::Active).isValid()) {
             return LcdInfoLine::TimerStart;
           }
@@ -706,6 +733,21 @@ void LcdTask::displayInfoLine(LcdInfoLine line, unsigned long &nextUpdate)
       }
       nextUpdate = 1000;
       break;
+
+    case LcdInfoLine::Hostname:
+      // openevse-55ad
+      snprintf(temp, sizeof(temp), "%.*s", LCD_MAX_LEN, esp_hostname.c_str());
+      showText(0, 1, temp, true);
+      _updateInfoLine = false;
+      break;
+
+    case LcdInfoLine::IPAddress:
+    {
+      // IP 192.168.1.42
+      String ip = net.getIp();
+      displayNameValue(1, "IP", ip.length() > 0 ? ip.c_str() : "none");
+      _updateInfoLine = false;
+    } break;
 
     case LcdInfoLine::ManualOverride:
       showText(0, 1, "Manual Override", true);

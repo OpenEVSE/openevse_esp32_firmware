@@ -87,17 +87,28 @@ Every entry shows for 4 s, then advances. Entries that need live data
 
 **Not connected / Connected:**
 `Energy 1,018Wh` → `Lifetime 2313kWh` → `EVSE Temp 30.5C` →
-`Time 3:14:00 PM` → `Date 2020-08-25` → [`Start 10:00 PM`] → [`Stop 6:00 AM`]
+`Time 3:14:00 PM` → `Date 2020-08-25` →
+[`openevse-55ad` → `IP 192.168.1.42`] →
+[`Start 10:00 PM`] → [`Stop 6:00 AM`]
 
 **Charging:**
 `Energy` → `Lifetime` → `EVSE Temp` →
 [if divert active: `Solar 3.41kW` → `Divert 16A`] →
+[`openevse-55ad` → `IP 192.168.1.42`] →
 [`Stop 6:00 AM`] → [`Left 6:23:00`] →
 [if vehicle data: `Charge level 79%` → `Range 259 miles` → `ETA h:mm:ss`]
 
 **Sleeping / Disabled:**
 [if paused by divert: `Solar 3.41kW` → `Avail 4.2A`] →
-`Time` → `Date` → [`Start 10:00 PM`] → [`Stop 6:00 AM`]
+`Time` → `Date` →
+[`openevse-55ad` → `IP 192.168.1.42`] →
+[`Start 10:00 PM`] → [`Stop 6:00 AM`]
+
+The hostname and IP address entries appear in every non-fault state and are
+controlled by the `lcd_network_info` config setting (boolean, default
+enabled; persisted in the config store). Disable via the config API/MQTT
+(`{"lcd_network_info": false}`) to remove them from the rotation. Fault
+states show fixed two-line error text and never rotate.
 
 Divert-related entries:
 

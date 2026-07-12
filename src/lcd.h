@@ -99,6 +99,8 @@ class LcdTask : public MicroTasks::Task
       TimerRemaining, // Remaining 6:23
       SolarPower,     // Solar 3.41kW / Grid IE -500W
       DivertRate,     // Divert 16A / Avail 4.2A
+      Hostname,       // openevse-55ad
+      IPAddress,      // IP 192.168.1.42
       ManualOverride
     };
 
