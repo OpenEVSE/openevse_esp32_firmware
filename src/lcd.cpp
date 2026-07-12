@@ -743,9 +743,10 @@ void LcdTask::displayInfoLine(LcdInfoLine line, unsigned long &nextUpdate)
 
     case LcdInfoLine::IPAddress:
     {
-      // IP 192.168.1.42
+      // 192.168.100.100 (bare, a full IPv4 is 15 chars so no room for a prefix)
       String ip = net.getIp();
-      displayNameValue(1, "IP", ip.length() > 0 ? ip.c_str() : "none");
+      snprintf(temp, sizeof(temp), "%.*s", LCD_MAX_LEN, ip.length() > 0 ? ip.c_str() : "No IP address");
+      showText(0, 1, temp, true);
       _updateInfoLine = false;
     } break;
 
