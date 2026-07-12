@@ -468,13 +468,10 @@ void EvseMonitor::updateFaultCounters(int ret, long gfci_count, long nognd_count
 
 EvseMonitor::ServiceLevel EvseMonitor::getServiceLevel()
 {
-  if(0 == (getSettingsFlags() & OPENEVSE_ECF_AUTO_SVC_LEVEL_DISABLED)) {
-    return ServiceLevel::Auto;
-  }
-
-  return (OPENEVSE_ECF_L2 == (getSettingsFlags() & OPENEVSE_ECF_L2)) ?
-    ServiceLevel::L2 :
-    ServiceLevel::L1;
+  // Auto service level is only supported by legacy non-WiFi controller builds
+  // ($SL A gets NK'd by the controllers this firmware ships with), so always
+  // report the actual L1/L2 level rather than a state the user cannot select.
+  return getActualServiceLevel();
 }
 
 EvseMonitor::ServiceLevel EvseMonitor::getActualServiceLevel()
@@ -660,6 +657,16 @@ void EvseMonitor::updateEffectiveVoltage()
 
 void EvseMonitor::setServiceLevel(ServiceLevel level, std::function<void(int ret)> callback)
 {
+  // Auto is not supported by the controller builds this firmware ships with
+  // ($SL A answers NK); refuse it here so it never goes on the wire.
+  if(ServiceLevel::Auto == level)
+  {
+    if(callback) {
+      callback(RAPI_RESPONSE_NK);
+    }
+    return;
+  }
+
   if(level == getServiceLevel())
   {
     if(callback) {
