@@ -697,11 +697,17 @@ bool config_deserialize(DynamicJsonDocument &doc)
 
   if(doc.containsKey("service"))
   {
-    EvseMonitor::ServiceLevel service = static_cast<EvseMonitor::ServiceLevel>(doc["service"].as<uint8_t>());
-    if(service != evse.getServiceLevel()) {
-      evse.setServiceLevel(service);
-      config_modified = true;
-      DBUGLN("service changed");
+    // Only L1/L2 are valid; Auto (0, no longer offered) and anything else are
+    // ignored so a stale stored value can't put $SL A on the wire.
+    uint8_t value = doc["service"].as<uint8_t>();
+    if(1 == value || 2 == value)
+    {
+      EvseMonitor::ServiceLevel service = static_cast<EvseMonitor::ServiceLevel>(value);
+      if(service != evse.getServiceLevel()) {
+        evse.setServiceLevel(service);
+        config_modified = true;
+        DBUGLN("service changed");
+      }
     }
   }
 

@@ -37,6 +37,15 @@ Adafruit_NeoPixel strip = Adafruit_NeoPixel(NEO_PIXEL_LENGTH, NEO_PIXEL_PIN, NEO
 #include <WS2812FX.h>
 WS2812FX ws2812fx = WS2812FX(NEO_PIXEL_LENGTH, NEO_PIXEL_PIN, NEO_GRB + NEO_KHZ800);
 
+// True once ws2812fx.init() has run. WS2812FX::setBrightness() calls show(),
+// and a show() before init() breaks the strip on core 3: NeoPixel's espShow()
+// caches the pin it has RMT-initialised, then init()'s pinMode(OUTPUT) makes
+// the Peripheral Manager destroy that RMT channel, and every later show()
+// trusts the stale cache, skips re-init and dies silently in rmtWrite().
+// config_load_settings() calls setBrightness() before setup() runs, so the
+// pre-init forward has to be suppressed (the value is applied in setup()).
+static bool neopixels_ready = false;
+
 class LedAnimatorTask : public MicroTasks::Task
 {
   public:
@@ -190,7 +199,10 @@ void LedManagerTask::setup()
 #elif defined(NEO_PIXEL_PIN) && defined(NEO_PIXEL_LENGTH) && defined(ENABLE_WS2812FX)
   DEBUG.printf("Initialising NeoPixels WS2812FX MODE...\n");
   ws2812fx.init();
-  ws2812fx.setBrightness(brightness);
+  neopixels_ready = true;
+  // apply the brightness stored by any pre-init setBrightness() call, with
+  // the same 0 = max mapping it uses
+  ws2812fx.setBrightness(0 == brightness ? 255 : brightness - 1);
   ws2812fx.setSpeed(DEFAULT_FX_SPEED);
   ws2812fx.setColor(BLACK);
   ws2812fx.setMode(FX_MODE_STATIC);
@@ -766,13 +778,15 @@ void LedManagerTask::setBrightness(uint8_t brightness)
 #if defined(NEO_PIXEL_PIN) && defined(NEO_PIXEL_LENGTH) && defined(ENABLE_WS2812FX)
 // This controls changes on the limits of the web interface slidebar.
 // Otherwise it gets out of sync
-  if (this->brightness == 0){
-    ws2812fx.setBrightness(255);
+  if(neopixels_ready)
+  {
+    if (this->brightness == 0){
+      ws2812fx.setBrightness(255);
+    }
+    else {
+      ws2812fx.setBrightness(this->brightness-1);
+    }
   }
-  else {
-    ws2812fx.setBrightness(this->brightness-1);
-  }
-
 #endif
 
   DBUGVAR(this->brightness);
