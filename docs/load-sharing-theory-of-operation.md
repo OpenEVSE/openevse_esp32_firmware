@@ -6,7 +6,8 @@
 > or the other must be corrected.
 >
 > Branch: `jeremypoulter/issue940`
-> Last updated: 2026-07-13
+> Last updated: 2026-07-15
+> Includes: [#1147](https://github.com/OpenEVSE/openevse_esp32_firmware/pull/1147) member failsafe, priority, rotation
 
 ---
 
@@ -87,13 +88,20 @@ Configuration is stored via `ConfigJson` and exposed on the `/config` endpoint.
 | `loadsharing_safety_factor` | double | `1.0` | De-rating multiplier `[0..1]`. |
 | `loadsharing_heartbeat_timeout` | int | `30` | Seconds; min 5. Controller → member staleness threshold. |
 | `loadsharing_failsafe_mode` | string | `"safe_current"` | `"safe_current"` or `"disable"`. |
-| `loadsharing_failsafe_safe_current` | double | `6.0` | Amps; used in safe_current mode. |
+| `loadsharing_failsafe_safe_current` | double | `6.0` | Amps; used in safe_current mode. MUST be ≤ `loadsharing_group_max_current`. |
 | `loadsharing_failsafe_peer_assumed_current` | double | `6.0` | Amps; offline peer reserve. |
 | `loadsharing_priority` | int | `0` | Node priority (lower = higher); NOT synced. |
+| `loadsharing_rotation_interval` | uint | `1800` | Seconds; under scarcity, rotate equal-priority winners. `0` disables. |
 
 > **Invariant**: On a member device (`loadsharing_role == "member"`), load
 > sharing configuration fields MUST be read-only.  POST/DELETE to
 > `/loadsharing/peers` MUST return HTTP 403.
+>
+> **Invariant**: `POST /config` MUST reject writes where
+> `loadsharing_failsafe_safe_current > loadsharing_group_max_current` (using
+> incoming values when present, otherwise stored values).  Role transitions
+> (`becomeMember()` / `resetRole()`) MUST run only after all validation
+> succeeds.
 
 ### 4.2  Peer List Persistence
 
@@ -215,7 +223,7 @@ For each member `i` (including the controller itself):
 - `demanding_i` — boolean: vehicle connected AND actively charging (state C).
 - `charging_i` — boolean: state C specifically.
 - `min_current_i` — EVSE minimum (amps).
-- `max_current_i` — EVSE maximum, possibly capped by taper detection.
+- `max_current_i` — EVSE maximum, possibly capped when measured current is below pilot.
 - `priority_i` — integer (lower = higher).
 
 Group level:
@@ -223,6 +231,9 @@ Group level:
 - `I_group = group_max_current × safety_factor`
 - `failsafe_peer_assumed_current`
 - `failsafe_mode` (`"safe_current"` or `"disable"`)
+- `rotation_interval_ms` (0 disables rotation)
+- `rotation` state persisted across calls (`offset`, `initialized`, `last_rotation_ms`)
+- `now_ms` (firmware `millis()` or simulator time)
 
 ### 5.2  Algorithm Steps
 
@@ -250,12 +261,23 @@ Group level:
 
 6. IF demanding_indices is empty: RETURN (only connected_min allocations if any).
 
-7. SORT demanding members by device ID (deterministic ordering).
+7. SORT demanding members by priority ascending (lower value = higher priority),
+   then by device ID for a deterministic order within equal priority.
 
-8. SUM MINIMUMS:
+8. UNDER SCARCITY ROTATION (only when later steps will take the insufficient
+   path; harmless under ample budget because equal-share is order-insensitive):
+   IF `rotation_interval_ms > 0` AND more than one demanding member:
+     - First call: seed `last_rotation_ms = now_ms` (`initialized = true`);
+       do not advance offset.
+     - Else IF `(now_ms - last_rotation_ms) >= rotation_interval_ms`:
+       advance `offset`, update `last_rotation_ms`.
+     - For each contiguous equal-priority run in the sorted list, rotate the
+       run left by `offset % run_length`.
+
+9. SUM MINIMUMS:
    total_min = Σ min(min_i, max_i) for i in demanding.
 
-9. IF I_avail ≥ total_min (sufficient capacity):
+10. IF I_avail ≥ total_min (sufficient capacity):
    a. Assign each demanding member: alloc_i = min(min_i, max_i).
    b. remainder = I_avail − total_min.
    c. Iteratively distribute remainder equally among uncapped members:
@@ -266,14 +288,14 @@ Group level:
       - Repeat with leftover and still-uncapped members until leftover < 0.01.
    d. Set reason "equal_share" for all demanding members.
 
-10. ELSE (insufficient capacity):
-    Walk demanding members in sorted order:
+11. ELSE (insufficient capacity):
+    Walk demanding members in sorted (and possibly rotated) order:
       IF budget ≥ min_i: allocate min_i, reason "min_subset", deduct from budget.
       ELSE: allocate 0, reason "insufficient".
 
-11. MARK OFFLINE: For all offline members, override reason to "offline".
+12. MARK OFFLINE: For all offline members, override reason to "offline".
 
-12. RETURN allocation vector.
+13. RETURN allocation vector.
 
 ### 5.3  Underutilized Pilot Cap (`capLoadSharingMaxCurrent`)
 
@@ -376,26 +398,35 @@ each poller loop iteration.  It sets `_failsafe_active = true` when:
 - No allocation has ever been received (`_last_allocation_received_ms == 0`), OR
 - `millis() - _last_allocation_received_ms > heartbeat_timeout × 1000`.
 
-> **Known issue (from project-status.md)**: `checkMemberFailsafe()` sets the
-> `_failsafe_active` flag but does **not** currently enforce the failsafe
-> (i.e., it does not apply `loadsharing_failsafe_safe_current` or disable the
-> EVSE).  Enforcement relies on the shaper's existing
-> `current_shaper_data_maxinterval` timeout, but this only works if the shaper
-> is independently enabled and receiving live power data.  A standalone member
-> failsafe enforcement path is needed.
+When failsafe is active, `LoadSharingPeerPoller` MUST enforce it through the
+same shaper load-sharing limit path used for allocations:
+
+| Mode | Enforcement |
+|------|-------------|
+| `safe_current` | `shaper.setLoadSharingLimit(loadsharing_failsafe_safe_current)` |
+| `disable` (or safe current ≤ 0) | `shaper.setLoadSharingLimit(0, force_disabled=true)` |
+
+The shaper claim sits at `EvseManager_Priority_Safety`, so it outranks a
+manual override while the member is islanded.  The failsafe limit is applied
+once on engage (`_failsafeLimitApplied`); a mid-engagement change to
+`loadsharing_failsafe_safe_current` takes effect on the next engage.  When
+failsafe clears (fresh allocation received), the WebSocket allocation handler
+replaces the limit and the poller clears `_failsafeLimitApplied`.
 
 ### 6.3  Controller Failure Recovery
 
-If the controller goes offline permanently:
+If the controller goes offline:
 
-1. Members' load sharing limits (delivered through the shaper) become stale.
-2. The shaper's `current_shaper_data_maxinterval` timeout (120 s) fires,
-   disabling the shaper claim.
-3. Members revert to normal operation (no load sharing active).
-4. A new controller must be manually designated.
+1. Member failsafe engages within `loadsharing_heartbeat_timeout` (default 30 s)
+   and applies the safe-current or disable limit (§6.2).
+2. When a controller returns and resumes allocation pushes, the member applies
+   the new allocation and clears the failsafe marker.
+3. A permanently lost controller requires a new controller to be designated
+   manually.
 
-> **Invariant**: After controller loss and claim expiry, a member MUST NOT
-> remain constrained by a stale load sharing limit.
+> **Invariant**: After controller loss, a member MUST NOT continue charging
+> uncapped at a stale allocation.  Failsafe enforcement MUST engage within the
+> heartbeat timeout.
 
 ---
 
@@ -406,7 +437,7 @@ All endpoints are on the HTTP server (port 80).
 | Method | Path | Controller | Member | Description |
 |--------|------|-----------|--------|-------------|
 | GET | `/loadsharing/peers` | ✅ List discovered + group peers | ✅ (read-only) | Returns JSON array with `id`, `name`, `host`, `ip`, `online`, `joined`. |
-| POST | `/loadsharing/peers` | ✅ Add peer to group | ❌ 403 | Body: `{"host": "..."}`.  Returns `{"msg":"done"}`. |
+| POST | `/loadsharing/peers` | ✅ Add peer to group | ❌ 403 | Body: `{"host": "..."}`.  Returns `{"msg":"done"}`, or `200 {"msg":"already in group"}` if the peer is already joined (idempotent; skips reciprocal sync). |
 | DELETE | `/loadsharing/peers/{host}` | ✅ Remove peer | ❌ 403 | Returns `{"msg":"done"}` or 404. |
 | POST | `/loadsharing/discover` | ✅ Trigger mDNS query | ❌ (or 403) | Returns `{"msg":"done"}`. |
 | GET | `/loadsharing/status` | ✅ Full group status | ✅ (own perspective) | Returns `LoadSharingStatus` (see below). |
@@ -474,7 +505,7 @@ Member receive handler in `web_server.cpp::onWsFrame()`:
 | `idle` | Member is not demanding current (no vehicle or sleeping). |
 | `equal_share` | Normal operation; budget shared equally among demanding members. |
 | `connected_min` | Vehicle connected (state B) but not charging; minimum allocated outside budget. |
-| `min_subset` | Insufficient budget; this member was selected (by sorted ID) to receive its minimum. |
+| `min_subset` | Insufficient budget; this member was selected (by priority, then ID, with optional rotation) to receive its minimum. |
 | `insufficient` | Insufficient budget; this member was NOT selected to receive its minimum. |
 | `offline` | Member is offline; reason is overridden regardless of allocation amount. |
 | `failsafe_disabled` | Failsafe mode "disable" triggered; all members get 0 A. |
@@ -519,11 +550,14 @@ the basis for test assertions.
 > **INV-2**: Every group member (including the controller) MUST appear in the
 > allocation result vector.  No member may be silently skipped.
 
-### 10.3  Deterministic Subset Selection
+### 10.3  Priority-Aware Subset Selection
 
 > **INV-3**: When the budget is insufficient for all minimums, members MUST be
-> selected in sorted device-ID order.  The same inputs MUST always produce the
-> same allocation.
+> selected in priority order (lower value = higher priority), then device-ID
+> order within equal priority.  With `loadsharing_rotation_interval > 0`,
+> equal-priority runs MUST rotate on that interval so no equal-priority member
+> is permanently starved.  For a fixed rotation state and inputs, the same
+> allocation MUST be produced.
 
 ### 10.4  Offline Member Accounting
 
@@ -536,8 +570,10 @@ the basis for test assertions.
 ### 10.5  Failsafe Liveness
 
 > **INV-6**: If the controller stops sending allocations to a member, the
-> member MUST revert to safe operation within `current_shaper_data_maxinterval`
-> (default 120 s).
+> member MUST engage failsafe within `loadsharing_heartbeat_timeout` (default
+> 30 s) and apply either `loadsharing_failsafe_safe_current` or a disabled
+> charge state per `loadsharing_failsafe_mode`.  A manual override MUST NOT
+> defeat this limit while failsafe is active.
 
 ### 10.6  Config Consistency
 
@@ -582,6 +618,8 @@ algorithm using scenario JSON files from `divert_sim/data/scenarios/`.
 | `loadsharing_ev_delayed_start` | Connected EV starts late | t=0: state=connected, actual=0; t=600: state=charging, actual>0. |
 | `loadsharing_ev_finish_aux_resume` | EV finishes then resumes | Finished EV goes to connected/0 A; at t=1800 resumes charging. |
 | `loadsharing_connected_min_no_budget` | Connected min outside budget | Connected peer gets 6 A (connected_min), draws 0 A; charging peer gets >25 A. |
+| `loadsharing_priority_wins` | Priority under scarcity | Higher-priority peer (lower value) wins min_subset over lower-id peer. |
+| `loadsharing_scarcity_rotation` | Equal-priority rotation | Exactly one 6 A winner per tick; winner rotates every 1800 s. |
 
 ### 11.2  Additional Scenario Files (Not Yet Tested)
 
@@ -613,6 +651,8 @@ Blockers).
 | EV delayed start | INV-1 | ✅ |
 | EV finish and resume | INV-1, INV-2 | ✅ |
 | Connected min outside budget | INV-1 (physical) | ✅ |
+| Priority wins under scarcity | INV-3 | ✅ |
+| Equal-priority scarcity rotation | INV-3 | ✅ |
 | Insufficient budget subset | INV-3 | Scenario exists, no pytest |
 | 3+ peers staggered | INV-1, INV-2 | Scenario exists, no pytest |
 | Zero members edge case | INV-2 | Not tested |
@@ -622,26 +662,27 @@ Blockers).
 
 | Test File | Coverage |
 |-----------|----------|
-| `test_loadsharing_peer_management.py` (14 tests) | Discovery, peer add/remove, duplicate rejection, delete, response structure. |
+| `test_loadsharing_peer_management.py` | Discovery, peer add/remove, idempotent duplicate add, delete, response structure. |
 | `test_loadsharing_peer_status.py` | Status ingestion, WebSocket connect, peer online tracking, multi-peer. |
+| `test_loadsharing_fixes.py` | Role-transition-after-validation, failsafe vs group-max config reject, member failsafe claim. |
+| `test_loadsharing_drills.py` | Failsafe timing and manual-override drills from bench findings (#1147). |
 
 ### 12.3  Recommended Additional Tests
 
-1. **Member failsafe enforcement** — Simulate controller loss; verify member
-   applies safe current or disables (once member failsafe enforcement is fixed;
-   see [load-sharing-project-status.md](docs/load-sharing-project-status.md)).
-2. **Config lockout on members** — POST to `/loadsharing/peers` on a member
+1. **Config lockout on members** — POST to `/loadsharing/peers` on a member
    device → expect 403 (INV-7).
-3. **Persistence across reboot** — Add peers, restart native binary, verify
+2. **Persistence across reboot** — Add peers, restart native binary, verify
    peers are still listed (INV-9).
-4. **Reciprocal sync** — Add peer on A, verify B's peer list includes A (INV-8).
-5. **Rollover-safe timers** — Inject `millis()` near rollover and verify
+3. **Reciprocal sync** — Add peer on A, verify B's peer list includes A (INV-8).
+4. **Rollover-safe timers** — Inject `millis()` near rollover and verify
    timeouts still work (see poller rollover blocker in
    [load-sharing-project-status.md](docs/load-sharing-project-status.md)).
-6. **Undrawn pilot with >2 peers** — 3-peer group where one EV draws below
+5. **Undrawn pilot with >2 peers** — 3-peer group where one EV draws below
    pilot; verify remaining two share freed budget (INV-10).
-7. **All-idle group** — All members connected, none charging; verify budget
+6. **All-idle group** — All members connected, none charging; verify budget
    is not consumed (connected_min is outside budget).
+7. **Per-peer priority on live controller** — Controller must use each peer's
+   own `loadsharing_priority`, not only the controller's local value.
 
 ---
 
