@@ -229,6 +229,8 @@ int run(const std::string &scenario_path,
         in.host = in.id;
         in.online = p->online;
         in.demanding = p->vehicle && p->online;
+        in.charging = p->vehicle && p->online &&
+                      p->simEvse().state == OPENEVSE_STATE_CHARGING;
         in.min_current = p->scenario().min_current;
         in.max_current = p->scenario().max_current;
         if (demanding_count > 1) {

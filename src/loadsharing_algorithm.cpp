@@ -74,16 +74,30 @@ std::vector<LoadSharingAllocation> computeAllocations(
   DBUGF("LoadSharing: I_avail=%.1fA (max=%.1f, safety=%.2f, offline_reserve=%.1f)",
         I_avail, group_max_current, safety_factor, offline_reserve);
 
-  // Build list of demanding online members (indices into result/members)
+  // Build list of demanding online members (indices into result/members).
+  //
+  // Members that are connected but NOT charging (EVSE state B) get their
+  // minimum reserved via the shaper so the EV can start on demand, but this
+  // does NOT consume the shared budget: a connected EV draws no real current,
+  // so charging peers keep their full share. Once the EV starts drawing
+  // (state C) it becomes "charging" and normal load sharing resumes.
+  // ponytail: intentional over-allocation, bounded by (connected members * min_current)
   std::vector<size_t> demanding_indices;
   for (size_t i = 0; i < members.size(); i++) {
-    if (members[i].online && members[i].demanding) {
+    if (!members[i].online || !members[i].demanding) {
+      continue;
+    }
+    if (members[i].charging) {
       demanding_indices.push_back(i);
+    } else {
+      double connected_min = std::min(members[i].min_current, members[i].max_current);
+      result[i].setTargetCurrent(connected_min);
+      result[i].setReason("connected_min");
     }
   }
 
   if (demanding_indices.empty()) {
-    DBUGLN("LoadSharing: No demanding members, all allocations 0");
+    DBUGLN("LoadSharing: No charging members, only connected minimums (if any)");
     return result;
   }
 

@@ -718,6 +718,7 @@ std::vector<AllocationInput> LoadSharingPeerPoller::buildAllocationInputs() {
     // Controller is demanding if it has a vehicle connected and not sleeping/disabled
     uint8_t state = evse.getEvseState();
     self.demanding = (evse.isVehicleConnected() && state != OPENEVSE_STATE_SLEEPING);
+    self.charging = (state == OPENEVSE_STATE_CHARGING);
     self.min_current = evse.getMinCurrent();
     self.max_current = evse.getMaxConfiguredCurrent();
     self.priority = loadsharing_priority;
@@ -735,6 +736,8 @@ std::vector<AllocationInput> LoadSharingPeerPoller::buildAllocationInputs() {
                       pair.second.statusCache.getVehicle() == 1 &&
                       pair.second.statusCache.getState() != 0 &&    // Not in idle state
                       pair.second.statusCache.getState() != 254;    // Not in sleep state
+    input.charging = input.online &&
+                     pair.second.statusCache.getState() == OPENEVSE_STATE_CHARGING;
     input.min_current = evse.getMinCurrent();  // Use our min as default (peers may differ)
     input.max_current = evse.getMaxCurrent();
     input.priority = loadsharing_priority;  // For now, same priority

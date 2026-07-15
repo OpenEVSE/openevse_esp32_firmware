@@ -158,3 +158,24 @@ def test_loadsharing_priority_selects_winner_under_scarcity():
         assert row["evse-001_allocated"] == approx(0.0)
     assert result["_rows"][-1]["evse-002_reason"] == "min_subset"
     assert result["_rows"][-1]["evse-001_reason"] == "insufficient"
+
+
+def test_loadsharing_connected_member_gets_min_without_taking_budget():
+    result = run_loadsharing_simulation(
+        "data/scenarios/loadsharing_connected_min_no_budget.json",
+        "loadsharing_connected_min_no_budget",
+    )
+    rows_by_time = {r["time"]: r for r in result["_rows"]}
+    row = rows_by_time[600]
+
+    # Connected-but-not-charging peer is offered its minimum, drawing nothing.
+    assert row["evse-002_state"] == "connected"
+    assert row["evse-002_reason"] == "connected_min"
+    assert row["evse-002_allocated"] == approx(6.0)
+    assert row["evse-002_actual"] == approx(0.0)
+
+    # The connected minimum is not taken from the budget, so the charging peer
+    # keeps the full group allocation instead of being cut to a 16/16 split.
+    assert row["evse-001_state"] == "charging"
+    assert row["evse-001_allocated"] > 25.0
+
