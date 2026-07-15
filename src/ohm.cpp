@@ -60,7 +60,7 @@ void ohm_loop()
             if (evse_sleep == 0)
             {
               evse_sleep = 1;
-              OpenEVSE.sleep([](int ret)
+              evse.getOpenEVSE().sleep([](int ret)
               {
                 if(RAPI_RESPONSE_OK == ret) {
                   DBUGLN(F("Charge Stopped"));
@@ -74,7 +74,7 @@ void ohm_loop()
             if (evse_sleep == 1)
             {
               evse_sleep = 0;
-              OpenEVSE.enable([](int ret)
+              evse.getOpenEVSE().enable([](int ret)
               {
                 if(RAPI_RESPONSE_OK == ret) {
                   DBUGLN(F("Charging enabled"));
