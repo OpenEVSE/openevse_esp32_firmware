@@ -191,6 +191,7 @@ int run(const std::string &scenario_path,
   EpoxyTest::set_millis(fake_millis);
 
   bool failsafe_active = false;
+  LoadSharingRotationState rotationState;
 
   while (t_sec <= scenario.duration_sec) {
     // Keep divert's time source aligned with simulation time so minimum
@@ -245,7 +246,10 @@ int run(const std::string &scenario_path,
           scenario.group.safety_factor,
           scenario.group.failsafe_peer_assumed_current,
           String(scenario.group.failsafe_mode.c_str()),
-          failsafe_active);
+          failsafe_active,
+          rotationState,
+          (unsigned long) t_sec * 1000UL,
+          (unsigned long) scenario.group.rotation_interval * 1000UL);
 
       for (const auto &a : allocs) {
         for (auto &p : peers) {
