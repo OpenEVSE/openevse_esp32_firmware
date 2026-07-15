@@ -12,6 +12,7 @@ typedef const __FlashStringHelper *fstr_t;
 #include "espal.h"
 #include "input.h"
 #include "event.h"
+#include "loadsharing_peer_poller.h"
 #include "loadsharing_types.h"
 #include <vector>
 
@@ -45,24 +46,24 @@ handleConfigPost(MongooseHttpServerRequest *request, MongooseHttpServerResponseS
   DeserializationError error = deserializeJson(doc, body.c_str(), body.length());
   if(!error)
   {
+    bool loadsharingConfigRequest = false;
+    for (JsonPairConst field : doc.as<JsonObjectConst>()) {
+      if (String(field.key().c_str()).startsWith("loadsharing_")) {
+        loadsharingConfigRequest = true;
+        break;
+      }
+    }
+
     // If this device is a member, check if this is a controller config push
     // or a local request trying to change load sharing fields
     if (loadSharingGroupState.isMember()) {
       bool isControllerPush = doc.containsKey("loadsharing_role") &&
-                              doc["loadsharing_role"].as<String>() == "member";
-      if (!isControllerPush) {
-        // Strip out any loadsharing fields from the request - members can't change them locally
-        JsonObject obj = doc.as<JsonObject>();
-        std::vector<String> keysToRemove;
-        for (JsonObject::iterator it = obj.begin(); it != obj.end(); ++it) {
-          String key = it->key().c_str();
-          if (key.startsWith("loadsharing_")) {
-            keysToRemove.push_back(key);
-          }
-        }
-        for (const auto& key : keysToRemove) {
-          obj.remove(key);
-        }
+                              (doc["loadsharing_role"].as<String>() == "member" ||
+                               doc["loadsharing_role"].as<String>() == "");
+      if (loadsharingConfigRequest && !isControllerPush) {
+        response->setCode(403);
+        response->print("{\"msg\":\"Load sharing configuration is read-only on members\"}");
+        return;
       }
     }
 
@@ -143,6 +144,7 @@ handleConfigPost(MongooseHttpServerRequest *request, MongooseHttpServerResponseS
     if (doc.containsKey("loadsharing_role") &&
         doc["loadsharing_role"].as<String>() == "" &&
         loadSharingGroupState.isMember()) {
+      loadSharingGroupState.removeGroupPeer(loadsharing_controller_host);
       loadSharingGroupState.resetRole();
     }
 
@@ -156,6 +158,10 @@ handleConfigPost(MongooseHttpServerRequest *request, MongooseHttpServerResponseS
     }
 
     bool config_modified = web_server_config_deserialise(doc, storage.equals("factory"));
+    if (config_modified && loadsharingConfigRequest &&
+        loadSharingGroupState.isController()) {
+      loadSharingPeerPoller.pushConfigToAllPeers();
+    }
 
     StaticJsonDocument<128> reply;
     reply["config_version"] = config_version();

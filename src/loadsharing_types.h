@@ -23,6 +23,9 @@ private:
   double _pilot;         // Current pilot setpoint (amps)
   uint8_t _vehicle;      // 1 if vehicle connected, else 0
   uint8_t _state;        // EVSE state code (J1772 state)
+  double _min_current;   // EVSE minimum current (amps)
+  double _max_current;   // EVSE configured maximum current (amps)
+  int _priority;         // Node-local load sharing priority
   uint32_t _config_version;  // Config version for sync detection
   String _config_hash;   // Config hash for mismatch detection
 
@@ -33,6 +36,9 @@ public:
     _pilot(0.0),
     _vehicle(0),
     _state(0),
+    _min_current(0.0),
+    _max_current(0.0),
+    _priority(0),
     _config_version(0),
     _config_hash("")
   {}
@@ -52,6 +58,15 @@ public:
 
   uint8_t getState() const { return _state; }
   void setState(uint8_t value) { _state = value; }
+
+  double getMinCurrent() const { return _min_current; }
+  void setMinCurrent(double value) { _min_current = value; }
+
+  double getMaxCurrent() const { return _max_current; }
+  void setMaxCurrent(double value) { _max_current = value; }
+
+  int getPriority() const { return _priority; }
+  void setPriority(int value) { _priority = value; }
 
   uint32_t getConfigVersion() const { return _config_version; }
   void setConfigVersion(uint32_t value) { _config_version = value; }

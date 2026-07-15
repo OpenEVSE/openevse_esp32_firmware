@@ -22,11 +22,11 @@
 LoadSharingGroupState loadSharingGroupState;
 
 bool LoadSharingGroupState::isController() const {
-  return loadsharing_role == "controller";
+  return loadsharing_enabled && loadsharing_role == "controller";
 }
 
 bool LoadSharingGroupState::isMember() const {
-  return loadsharing_role == "member";
+  return loadsharing_enabled && loadsharing_role == "member";
 }
 
 void LoadSharingGroupState::becomeMember(const String& controllerHost) {
@@ -48,20 +48,6 @@ void LoadSharingGroupState::checkMemberFailsafe() {
   }
 
   if (loadsharing_controller_host.length() == 0) {
-    _failsafe_active = true;
-    return;
-  }
-
-  LoadSharingPeer* controller = getPeerByHost(loadsharing_controller_host);
-
-  if (!controller && loadsharing_controller_host.endsWith(".local")) {
-    String shortHost = loadsharing_controller_host.substring(
-        0, loadsharing_controller_host.length() - 6);
-    controller = getPeerByHost(shortHost);
-  }
-
-  bool controllerOnline = controller && controller->isOnline();
-  if (!controllerOnline) {
     _failsafe_active = true;
     return;
   }

@@ -26,8 +26,14 @@ controller is required.
 | **Controller** | The node where the user configures load sharing. Runs the allocation algorithm, pushes current limits to members. |
 | **Member** | A node that receives its load sharing configuration and current allocation from the controller. Config is read-only. |
 | **Peer** | Any other node on the LAN, discovered or manually configured. |
-| **Demanding** | A node whose vehicle is connected **and** is actively charging (EVSE state C). |
-| **Connected** | A node whose vehicle is connected but not yet drawing current (EVSE state B). |
+| **Idle** | No vehicle is connected (EVSE state A or equivalent). Allocation reason `idle`, target 0 A. |
+| **Connected** | A node whose vehicle is connected but not drawing current (EVSE state B). |
+| **Charging** | A node whose vehicle is actively drawing current (EVSE state C). |
+| **Demanding** | Allocator input for an online node with a connected vehicle that is not idle, sleeping, or disabled (states B or C). Only `charging` nodes consume the shared budget. |
+| **Connected min** | `min(min_current, max_current)` offered to a state-B node outside the shared budget. Its physical draw is 0 A. |
+| **Physical draw** | Measured EV current. INV-1 applies to the sum of physical draws. |
+| **Offered allocation** | The allocator's `target_current`. It may exceed physical draw during taper or for `connected_min`. |
+| **Pilot demand** | Current available from the pilot signal. It is not the measurement used for INV-1. |
 | **Claim** | An entry in the `EvseManager` claim system that constrains the EVSE's pilot signal. |
 | **Shaper** | The `CurrentShaperTask` which manages the `EvseClient_OpenEVSE_Shaper` claim and integrates load sharing limits. |
 
@@ -86,7 +92,7 @@ Configuration is stored via `ConfigJson` and exposed on the `/config` endpoint.
 | `loadsharing_group_id` | string | `""` | User-defined group identifier. |
 | `loadsharing_group_max_current` | double | `0` | Total circuit limit (amps). |
 | `loadsharing_safety_factor` | double | `1.0` | De-rating multiplier `[0..1]`. |
-| `loadsharing_heartbeat_timeout` | int | `30` | Seconds; min 5. Controller → member staleness threshold. |
+| `loadsharing_heartbeat_timeout` | int | `30` | Seconds; min 5. Allocation heartbeat timeout used for member failsafe and controller peer-offline detection. |
 | `loadsharing_failsafe_mode` | string | `"safe_current"` | `"safe_current"` or `"disable"`. |
 | `loadsharing_failsafe_safe_current` | double | `6.0` | Amps; used in safe_current mode. MUST be ≤ `loadsharing_group_max_current`. |
 | `loadsharing_failsafe_peer_assumed_current` | double | `6.0` | Amps; offline peer reserve. |
@@ -305,9 +311,7 @@ member's `max_current` is adjusted when the EV draws less than its pilot:
 ```
 IF pilot_current > 0 AND measured_current > 0
    AND measured_current < (pilot_current − 0.25):
-  utilisation_ratio = measured_current / pilot_current
-  unrestricted_demand = max_current × utilisation_ratio
-  effective_max = max(unrestricted_demand, measured_current)
+  effective_max = min(max_current, measured_current)
 ELSE:
   effective_max = max_current
 ```
@@ -378,8 +382,8 @@ separate claim.  The shaper has three new fields:
 
 ### 6.1  Controller Failsafe (Member Offline)
 
-When a member goes offline (no WebSocket messages within `_heartbeat_timeout_ms`,
-default 120 s):
+When a member goes offline (no WebSocket messages within
+`loadsharing_heartbeat_timeout`, default 30 s):
 
 | Mode | Behaviour |
 |------|-----------|
@@ -391,10 +395,11 @@ default 120 s):
 ### 6.2  Member Failsafe (Controller Offline)
 
 On the member side, `LoadSharingGroupState::checkMemberFailsafe()` runs on
-each poller loop iteration.  It sets `_failsafe_active = true` when:
+each poller loop iteration. Allocation receipt is authoritative: a fresh
+allocation proves controller liveness even if mDNS discovery is stale. It sets
+`_failsafe_active = true` when:
 
 - `loadsharing_controller_host` is empty, OR
-- The controller peer is not online, OR
 - No allocation has ever been received (`_last_allocation_received_ms == 0`), OR
 - `millis() - _last_allocation_received_ms > heartbeat_timeout × 1000`.
 
@@ -492,9 +497,20 @@ Sent from controller to member on existing `/ws` connection:
 Member receive handler in `web_server.cpp::onWsFrame()`:
 - If `loadSharingGroupState.isMember()`:
   - Records allocation received timestamp.
-  - If `target_current > 0` or `reason == "failsafe_disabled"`: calls
-    `shaper.setLoadSharingLimit(target_current, force_disabled)`.
-  - Else: calls `shaper.clearLoadSharingLimit()`.
+  - Calls `shaper.setLoadSharingLimit(target_current, force_disabled)` for
+    every allocation, including a 0 A allocation. `force_disabled` is true
+    only for `failsafe_disabled`.
+
+`clearLoadSharingLimit()` is reserved for disabling load sharing or clearing
+the node's role. A zero allocation for an in-group member is an active safety
+limit and MUST NOT clear the claim:
+
+| Allocation | Enforcement |
+|------------|-------------|
+| `target_current > 0` | `setLoadSharingLimit(target_current, false)` |
+| `target_current == 0`, reason `idle`, `offline`, or `insufficient` | `setLoadSharingLimit(0, false)` |
+| `target_current == 0`, reason `failsafe_disabled` | `setLoadSharingLimit(0, true)` |
+| Load sharing disabled or role cleared | `clearLoadSharingLimit()` |
 
 ---
 
@@ -521,13 +537,24 @@ Member receive handler in `web_server.cpp::onWsFrame()`:
 | HTTP bootstrap timeout | 10 000 ms | `_http_timeout_ms` | Per-peer HTTP GET timeout. |
 | WebSocket stale timeout | 30 000 ms | `_ws_stale_timeout_ms` | Close WS if no message for this long. |
 | WebSocket PING interval | 15 000 ms | `_ws_ping_interval_ms` | PING/PONG keepalive. |
-| Heartbeat timeout | 120 000 ms | `_heartbeat_timeout_ms` | Mark peer offline. |
+| Allocation heartbeat timeout | 30 s | `loadsharing_heartbeat_timeout` | Member failsafe and controller peer-offline detection. |
 | Retry base interval | 1 000 ms | `_base_retry_interval_ms` | Exponential backoff base. |
 | Retry max interval | 60 000 ms | `_max_retry_interval_ms` | Backoff cap. |
-| Max retry count | 5 | `_max_retry_count` | After this many failures, peer stays offline until manually refreshed. |
 | Discovery interval | 60 s | Config/constant | mDNS query frequency. |
 | Shaper failsafe timeout | 120 s | `current_shaper_data_maxinterval` | Shaper disables charge if no update. |
 | Shaper min pause time | Config | `current_shaper_min_pause_time` | Minimum pause before re-enabling after undercurrent. |
+
+### 9.1  Timer Roles
+
+These timers are independent:
+
+| Timer | Role |
+|-------|------|
+| Allocation heartbeat | User-facing liveness threshold. A member engages failsafe when controller allocations stop; a controller marks a peer offline when status stops. |
+| WebSocket stale timeout | Transport-only timeout that closes a dead socket and starts reconnection. |
+| Allocation recompute | Controller recalculates and pushes every 5 s; this is the INV-10 deadline. |
+| WebSocket PING | Keepalive only. |
+| Shaper failsafe | Protects stale CT-shaper data and is not a load-sharing group timer. |
 
 ---
 
@@ -541,6 +568,8 @@ the basis for test assertions.
 > **INV-1**: The sum of all *physically drawn* currents across the group MUST
 > NOT exceed `group_max_current × safety_factor` in steady state.
 >
+> Pilot demand and offered allocations are not physical-current measurements.
+>
 > Transient over-allocation is tolerable only for connected-but-not-charging
 > members (which draw 0 A) and during the brief window (one allocation cycle,
 > ≤5 s) after a member begins charging.
@@ -549,6 +578,9 @@ the basis for test assertions.
 
 > **INV-2**: Every group member (including the controller) MUST appear in the
 > allocation result vector.  No member may be silently skipped.
+>
+> An empty member list or an unconfigured group (`group_max_current <= 0`)
+> returns an empty result and is outside this invariant.
 
 ### 10.3  Priority-Aware Subset Selection
 
@@ -596,6 +628,18 @@ the basis for test assertions.
 > **INV-10**: When a member's EV is drawing less than its pilot (for any
 > reason — taper, EV current limit, aux load, etc.), the freed budget MUST be
 > redistributed to other demanding members within one allocation cycle (≤5 s).
+
+### 10.10  Allocation Stability
+
+> **INV-STAB**: With unchanged group inputs (online set, EV states, measured
+> currents, and configuration), consecutive allocation recomputations MUST NOT
+> oscillate.
+>
+> A target MUST NOT move by more than 0.5 A and return within two consecutive
+> 5 s cycles unless an input changed. Equal-priority scarcity winners may
+> change only at a rotation boundary. During taper, the physical over-budget
+> gap must converge without repeatedly changing sign. The one-cycle state-B
+> to state-C exception in INV-1 still applies.
 
 ---
 
@@ -717,7 +761,7 @@ Interaction with other claim sources:
 | Manual override | `Priority_Manual` (1000) | Outranked by the Safety-priority shaper claim while a load-share limit is active. |
 | Solar divert | `Priority_Divert` | Runs independently; load sharing caps the max, divert may reduce further. |
 | Current Shaper (CT clamp) | `Priority_Safety` (5000) | Same claim; the lower of shaper and load sharing limits wins. |
-| Timer/Schedule | `Priority_Timer` | Operates independently; layering vs load sharing still under discussion (#1112). |
+| Timer/Schedule | `Priority_Timer` | Owns `charge_current`; the shaper-owned load-sharing `max_current` composes by taking the lower effective limit. |
 | OCPP | Varies | Operates independently. |
 
 > **Key point**: Because load sharing piggybacks on the shaper claim, there is
@@ -725,3 +769,9 @@ Interaction with other claim sources:
 > into a single claim using `min(shaper_limit, loadshare_limit)`. While that
 > claim is active, a manual override cannot raise the pilot above the load-share
 > limit.
+>
+> A timer window does not require a new claim client. Schedule controls
+> `charge_current`, while load sharing controls the shaper claim's
+> `max_current`; `EvseManager` composes the properties by selecting the lower
+> effective pilot. An active load-sharing limit keeps the shaper claim at
+> Safety priority even when the shaper is timer-controlled.

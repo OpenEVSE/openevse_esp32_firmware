@@ -37,8 +37,10 @@ class TestPeerManagement:
         # Response is a JSON array directly (not wrapped in "data")
         peers = response.json()
         assert isinstance(peers, list), f"Expected list, got {type(peers)}"
-        # Initially should be empty or just contain discovered self
-        assert len(peers) >= 0, "Peer list should be a list"
+        assert all(
+            {"host", "online", "joined"}.issubset(peer)
+            for peer in peers
+        ), f"peer entries must follow the documented contract: {peers}"
 
     def test_discover_trigger(self, instance_pair_auto):
         """
@@ -179,6 +181,70 @@ class TestPeerManagement:
             f"Duplicate add must leave exactly one entry, got: {matching_peers}"
         )
 
+    def test_reciprocal_add_and_remove_do_not_loop(self, instance_pair):
+        first = instance_pair(port_offset=0)
+        second = instance_pair(port_offset=1)
+        first_url = first["native_url"]
+        second_url = second["native_url"]
+        second_host = f"localhost:{second['native_port']}"
+
+        controller_config = requests.post(
+            f"{first_url}/config",
+            json={
+                "loadsharing_enabled": True,
+                "loadsharing_role": "controller",
+                "loadsharing_group_id": "integration-test",
+                "loadsharing_group_max_current": 32,
+            },
+            timeout=10,
+        )
+        assert controller_config.status_code == 200, controller_config.text
+
+        added = requests.post(
+            f"{first_url}/loadsharing/peers",
+            json={"host": second_host},
+            timeout=10,
+        )
+        assert added.status_code == 200, added.text
+        time.sleep(2)
+
+        first_peers = requests.get(
+            f"{first_url}/loadsharing/peers", timeout=10).json()
+        second_peers = requests.get(
+            f"{second_url}/loadsharing/peers", timeout=10).json()
+        first_host = next(
+            p["host"] for p in first_peers if p.get("host") != second_host and p.get("joined"))
+        assert sum(p.get("host") == second_host for p in first_peers) == 1
+        assert sum(p.get("host") == first_host and p.get("joined")
+                   for p in second_peers) == 1
+
+        configured = requests.post(
+            f"{second_url}/config",
+            json={
+                "loadsharing_enabled": True,
+                "loadsharing_role": "member",
+                "loadsharing_controller_host": first_host,
+            },
+            timeout=10,
+        )
+        assert configured.status_code == 200, configured.text
+
+        removed = requests.delete(
+            f"{first_url}/loadsharing/peers/{quote(second_host, safe='')}",
+            timeout=10,
+        )
+        assert removed.status_code == 200, removed.text
+        deadline = time.time() + 10
+        while time.time() < deadline:
+            second_peers = requests.get(
+                f"{second_url}/loadsharing/peers", timeout=10).json()
+            if not any(p.get("host") == first_host and p.get("joined")
+                       for p in second_peers):
+                break
+            time.sleep(0.5)
+        assert not any(p.get("host") == first_host and p.get("joined")
+                       for p in second_peers), second_peers
+
     def test_delete_peer(self, instance_pair_auto, peer_hostname_factory):
         """
         Test: DELETE /loadsharing/peers/{host} removes joined status.
@@ -243,6 +309,28 @@ class TestPeerManagement:
         data = response.json()
         error_msg = data.get("error", "") or data.get("msg", "")
         assert "not found" in error_msg.lower() or "not" in error_msg.lower()
+
+    def test_joined_peer_persists_across_native_restart(
+            self, instance_pair_auto, peer_hostname_factory):
+        pair = instance_pair_auto()
+        native_url = pair["native_url"]
+        test_host = peer_hostname_factory("persistent")
+
+        added = requests.post(
+            f"{native_url}/loadsharing/peers",
+            json={"host": test_host, "reciprocal": False},
+            timeout=10,
+        )
+        assert added.status_code == 200, added.text
+
+        pair["restart_native"]()
+
+        peers = requests.get(
+            f"{native_url}/loadsharing/peers", timeout=10).json()
+        assert any(
+            peer.get("host") == test_host and peer.get("joined") is True
+            for peer in peers
+        ), f"joined peer was not restored after restart: {peers}"
 
     @pytest.mark.parametrize("num_instances", [2, 3, 4])
     def test_discovered_peers_joined_status(self, multi_instance_group, num_instances):

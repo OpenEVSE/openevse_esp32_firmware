@@ -101,7 +101,6 @@ struct PeerConnection {
  * Reconnection strategy:
  * - Exponential backoff: retry_delay = min(base_interval * 2^retryCount, max_retry_interval)
  * - Base interval: 1000ms, max interval: 60000ms
- * - After 5 consecutive failures, mark peer as persistently offline
  * - Reset retry counter on successful connection
  */
 class LoadSharingPeerPoller : public MicroTasks::Task {
@@ -111,13 +110,12 @@ private:
 
   // Configuration
   unsigned long _poll_interval_ms;           // Task wake interval (default 500ms)
-  unsigned long _heartbeat_timeout_ms;       // Mark offline if no message (default 120000ms)
+  unsigned long _heartbeat_timeout_ms;       // Mark offline if no message (default 30000ms)
   unsigned long _base_retry_interval_ms;     // Base retry delay (default 1000ms)
   unsigned long _max_retry_interval_ms;      // Max retry delay cap (default 60000ms)
   unsigned long _http_timeout_ms;            // HTTP request timeout (default 10000ms)
   unsigned long _ws_stale_timeout_ms;        // WebSocket stale timeout (default 30000ms)
   unsigned long _ws_ping_interval_ms;        // WebSocket PING interval (default 15000ms)
-  uint16_t _max_retry_count;                 // Max retries before persistent offline (default 5)
 
   // Statistics
   unsigned long _total_messages_received;    // Total WebSocket messages received
@@ -279,7 +277,6 @@ public:
   void setHttpTimeout(unsigned long ms) { _http_timeout_ms = ms; }
   void setWsStaleTimeout(unsigned long ms) { _ws_stale_timeout_ms = ms; }
   void setWsPingInterval(unsigned long ms) { _ws_ping_interval_ms = ms; }
-  void setMaxRetryCount(uint16_t count) { _max_retry_count = count; }
 
   /**
    * @brief Push load sharing config to all connected peers.

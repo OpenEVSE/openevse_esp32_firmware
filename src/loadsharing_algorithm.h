@@ -29,8 +29,12 @@ struct AllocationInput {
 struct LoadSharingRotationState {
   uint32_t offset = 0;
   bool initialized = false;
-  unsigned long last_rotation_ms = 0;
+  uint32_t last_rotation_ms = 0;
 };
+
+double capLoadSharingMaxCurrent(double max_current,
+                                double measured_current,
+                                double pilot_current);
 
 /**
  * @brief Compute load sharing allocations using "Equal Share with Minimums" algorithm.
@@ -70,8 +74,8 @@ std::vector<LoadSharingAllocation> computeAllocations(
     const String& failsafe_mode,
     bool& failsafe_active,
     LoadSharingRotationState& rotation,
-    unsigned long now_ms,
-    unsigned long rotation_interval_ms
+    uint32_t now_ms,
+    uint32_t rotation_interval_ms
 );
 
 #endif // LOADSHARING_ALGORITHM_H

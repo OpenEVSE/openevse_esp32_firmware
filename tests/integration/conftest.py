@@ -360,15 +360,18 @@ def instance_pair(docker_client, emulator_image, tmp_path, request):
 
         # Start native firmware in its own working directory
         # This prevents NVS persistence conflicts between tests
+        native_command = [
+            str(native_binary),
+            "--rapi-serial",
+            pty_path,
+            "--set-config",
+            f"www_http_port={native_port}",
+            "--set-config",
+            f"hostname=openevse-native-{port_offset}",
+        ]
         try:
             process = subprocess.Popen(
-                [
-                    str(native_binary),
-                    "--rapi-serial",
-                    pty_path,
-                    "--set-config",
-                    f"www_http_port={native_port}",
-                ],
+                native_command,
                 stdout=subprocess.PIPE,
                 stderr=subprocess.PIPE,
                 text=True,
@@ -392,12 +395,29 @@ def instance_pair(docker_client, emulator_image, tmp_path, request):
             process.terminate()
             pytest.fail(f"Native firmware did not become ready at {native_url}")
 
+        def restart_native():
+            process.terminate()
+            process.wait(timeout=5)
+            restarted = subprocess.Popen(
+                native_command,
+                stdout=subprocess.PIPE,
+                stderr=subprocess.PIPE,
+                text=True,
+                cwd=str(instance_workdir),
+            )
+            processes.append(restarted)
+            if not wait_for_http_ready(native_url, timeout=30):
+                restarted.terminate()
+                pytest.fail(f"Native firmware did not restart at {native_url}")
+            return restarted
+
         return {
             "emulator_port": emulator_port,
             "native_port": native_port,
             "pty_path": pty_path,
             "emulator_container": container,
             "native_process": process,
+            "restart_native": restart_native,
             "emulator_url": f"http://localhost:{emulator_port}",
             "native_url": f"http://localhost:{native_port}",
         }

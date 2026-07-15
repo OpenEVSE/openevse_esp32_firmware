@@ -7,7 +7,7 @@
     "description": [
       "Four-EVSE contention scenario with less shared supply than all connected vehicles want.",
       "Allocations should be constrained below each charger maximum. This is useful for checking minimum-current handling and whether total allocated/actual power stays within the constrained group limit.",
-      "Group setup: 4 peers, 5,760 W shared supply, safety factor 1.0. Failsafe mode: safe_current.",
+      "Group setup: 4 peers, 4,800 W shared supply, safety factor 1.0. Failsafe mode: safe_current.",
       "Duration: 10 minutes."
     ]
   },
@@ -22,7 +22,7 @@
     "nominal_voltage": 240
   },
   "supply": {
-    "max_pwr": 5760,
+    "max_pwr": 4800,
     "live_pwr": 0
   },
   "peers": [

@@ -752,25 +752,6 @@ paths:
       operationId: addLoadSharingPeer
       tags:
         - Load Sharing
-    delete:
-      summary: Remove all peers from the load sharing group
-      description: |
-        Bulk removal of all configured peers. Not implemented; use
-        DELETE /loadsharing/peers/{host} to remove individual peers.
-      responses:
-        '501':
-          description: Not implemented
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/Message'
-              examples:
-                Not implemented:
-                  value:
-                    msg: Not implemented
-      operationId: removeAllLoadSharingPeers
-      tags:
-        - Load Sharing
   '/loadsharing/peers/{host}':
     delete:
       summary: Remove a peer from the load sharing group
@@ -1233,6 +1214,17 @@ components:
         state:
           type: integer
           description: EVSE state code.
+        min_current:
+          type: number
+          format: double
+          description: EVSE minimum current (amps).
+        max_current:
+          type: number
+          format: double
+          description: EVSE configured maximum current (amps).
+        priority:
+          type: integer
+          description: Node-local load sharing priority; lower values win under scarcity.
 
     LoadSharingPeer:
       type: object

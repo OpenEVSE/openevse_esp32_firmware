@@ -8,12 +8,12 @@ up later without needing to reconstruct the review from chat history.
 ## Branches and PRs
 
 - Firmware repo: `OpenEVSE/openevse_esp32_firmware`
-- Firmware branch: `jeremypoulter/issue940`
+- Firmware branch: `TODO-721-complete-load-sharing`
 - Firmware PR: <https://github.com/OpenEVSE/openevse_esp32_firmware/pull/1027>
 - Merged onto the branch: [#1147](https://github.com/OpenEVSE/openevse_esp32_firmware/pull/1147)
   (member failsafe enforcement, config validation, priority + rotation)
 - GUI repo: `OpenEVSE/openevse-gui-nightshift`
-- GUI branch: `copilot/add-load-sharing-gui-support`
+- GUI branch: `TODO-721-complete-load-sharing`
 - GUI PR: <https://github.com/OpenEVSE/openevse-gui-nightshift/pull/47>
 
 ## Implemented Firmware Scope
@@ -65,7 +65,7 @@ It does not expose fields such as `member.assigned_limit`, `assigned_limit`,
 
 Applied current limits are visible via the normal EVSE claim path. Load sharing
 limits are applied through the shaper claim (Safety priority). GUI code should
-read the active `charge_current` claim from `claims_target_store` rather than
+read the shaper-owned `max_current` claim from `claims_target_store` rather than
 inventing an `assigned_limit` field on the load-sharing status endpoint.
 
 ## Recently Resolved
@@ -97,6 +97,22 @@ commit `522074bd` (`get_native_binary_path()` / workflow path resolution).
 
 ## Validation Completed
 
+TODO-721 completion evidence:
+
+- All load-sharing simulator scenarios pass executable physical-budget,
+  allocation/reason, offline-reserve, redistribution, and stability checks.
+- Native allocator tests cover empty/invalid budgets, min/max boundaries,
+  reserve exhaustion, disable mode, deterministic priority, completeness,
+  redistribution caps, and rotation across `millis()` rollover.
+- Load-sharing integration suites passed 18 tests. The four-peer mDNS case
+  timed out once during Docker teardown and passed when repeated.
+- GUI production build and all 872 unit tests pass; deterministic screenshots
+  include `/settings/loadsharing` and are mirrored into the user guide.
+- Documentation coverage reports 75/75 config options, 25/25 UI routes, and
+  17/17 HTTP paths documented.
+- `pio test -e native_test`, `pio run -e native_simulator`, and the production
+  `openevse_wifi_v1` firmware build pass.
+
 Focused simulation validation was run on the #1147 bench:
 
 - divert_sim load-sharing suite (including priority + rotation scenarios)
@@ -115,17 +131,15 @@ cd divert_sim
 pytest -v test_loadsharing.py
 ```
 
-## Current Blockers
+## Historical Blockers Resolved by TODO-721
 
-### 1. GUI PR Does Not Match Firmware Contract
+### 1. GUI/Firmware Contract — Resolved
 
 The nightshift GUI branch has green checks but unresolved review threads. The
 main issue is API/claim contract mismatch.
 
 Observed mismatches:
 
-- `src/lib/stores/loadsharing.js` uses `Promise.all()` for peer/status reads.
-  The firmware web server is single-threaded, so these should be serialized.
 - `src/routes/Dashboard.svelte` expects non-existent status fields such as
   `status.member.assigned_limit`, `status.assigned_limit`, and
   `status.member.reason`.
@@ -142,10 +156,10 @@ Observed mismatches:
 
 Recommended GUI fixes:
 
-- Serialize load-sharing store reads.
 - Use firmware `allocations[]` for group allocation display.
-- Use `claims_target_store` for this EVSE's applied charge-current claim.
-- Add `EvseClients.loadSharing` with ID `65550`.
+- Use the shaper-owned `max_current` property from `claims_target_store` for
+  this EVSE's applied load-sharing cap. The defined load-sharing client ID
+  65550 is not the enforcing claim.
 - Expose actual config fields with accurate labels:
   - `loadsharing_failsafe_mode`
   - `loadsharing_failsafe_safe_current`
@@ -157,7 +171,12 @@ Recommended GUI fixes:
 - Avoid showing unavailable controller/member telemetry unless firmware adds it
   to the API.
 
-### 2. Poller Timeout Comparisons Need Rollover-Safe Pattern
+Resolved during review:
+
+- `src/lib/stores/loadsharing.js` already serializes peer/status requests
+  through `serialQueue`; the earlier `Promise.all()` finding was stale.
+
+### 2. Poller Rollover Safety — Resolved
 
 The repo convention is signed subtraction for `millis()` rollover safety, for
 example:
@@ -181,55 +200,39 @@ Recommended fix:
 - Sweep `src/loadsharing_peer_poller.cpp` and replace remaining direct
   elapsed-time comparisons with the repository's rollover-safe pattern.
 
-### 3. Bulk DELETE /loadsharing/peers Returns 501
+### 3. Bulk DELETE Contract — Resolved
 
-`handleLoadSharingPeersDelete()` returns HTTP 501 "Not implemented" when called
-without a host path parameter. Only `DELETE /loadsharing/peers/{host}` is
-functional.
+Bulk deletion is intentionally unsupported. The firmware returns 405 and the
+OpenAPI contract exposes only `DELETE /loadsharing/peers/{host}`.
 
-Recommended fix:
+### 4. Per-Peer Priority and Limits — Resolved
 
-- Either implement bulk delete for `DELETE /loadsharing/peers`, or document in
-  `api.yml` and user-facing docs that only the `{host}` variant is supported.
+Status now publishes each node's minimum, maximum, and priority. The controller
+uses those peer-local values when building allocation inputs and does not
+overwrite member priority during config sync.
 
-### 4. Live Controller Does Not Yet Ingest Peer Priority
+### 5. Timer/Load-Sharing Claim Layering (#1112) — Resolved
 
-The allocator consults `AllocationInput::priority`, and divert_sim scenarios
-prove priority + rotation. On the live controller,
-`LoadSharingPeerPoller::buildAllocationInputs()` still assigns
-`loadsharing_priority` (the controller's local value) to every peer:
+Schedule owns `charge_current`, while load sharing owns the
+shaper claim's `max_current`; `EvseManager` composes the lower effective pilot.
+An active load-sharing cap keeps the shaper claim at Safety priority even when
+the shaper was enabled by a timer window.
 
-```cpp
-input.priority = loadsharing_priority;  // For now, same priority
-```
+### 6. Zero-Allocation Safety Enforcement (INV-1) — Resolved
 
-Until each peer's own priority is read from status/config sync, multi-node
-priority only works in the simulator.
+The controller, member handler, and simulator now retain 0 A allocations as
+active shaper limits. `clearLoadSharingLimit()` is reserved for leaving or
+disabling the group. The 601 s offline regression remains within the physical
+group budget.
 
-Recommended fix:
+### 7. Executable Stability Checks (INV-STAB) — Resolved
 
-- Publish each node's `loadsharing_priority` in status (or config push), and
-  use that value when building allocation inputs on the controller.
+Simulation checks reject period-two allocation flapping, winner changes outside
+rotation boundaries, non-finite outputs, reason/state mismatches, and physical
+budget violations on the firmware's 5 s allocation cadence.
 
-### 5. Claim Priority Interaction With Timer Windows (#1112)
+## Remaining Non-Goals
 
-#1147 notes an open design question: load-sharing limits and charge-manager
-timer-window claims both sit at Limit/Safety-adjacent priority today. How they
-should layer when both are active still needs an explicit decision and tests.
-
-## Suggested Next Work Order
-
-1. Bring the nightshift GUI branch back into alignment with the firmware API and
-   EVSE claim model (including rotation interval and priority fields).
-2. Sweep load-sharing poller timeout checks for rollover safety.
-3. Ingest per-peer `loadsharing_priority` on the live controller so INV-3 holds
-   outside the simulator.
-4. Resolve bulk `DELETE /loadsharing/peers` behaviour — implement it or
-   document that only `DELETE /loadsharing/peers/{host}` is supported.
-5. Decide and document claim layering between load sharing and timer-window
-   claims (#1112).
-6. Rerun validation:
-   - `pio run -e native_simulator`
-   - `cd divert_sim && pytest -v test_loadsharing.py`
-   - firmware integration tests
-   - GUI tests/build after the API-contract fixes
+- Bulk peer deletion remains unsupported.
+- Peer transport remains LAN HTTP/WebSocket without a new authentication layer;
+  this work preserves the existing local-network trust model.

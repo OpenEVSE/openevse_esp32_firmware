@@ -298,6 +298,9 @@ void buildStatus(DynamicJsonDocument &doc) {
   doc["ota_update"] = (int)Update.isRunning();
 
   doc["config_version"] = config_version();
+  doc["loadsharing_min_current"] = evse.getMinCurrent();
+  doc["loadsharing_max_current"] = evse.getMaxConfiguredCurrent();
+  doc["loadsharing_priority"] = loadsharing_priority;
   doc["claims_version"] = evse.getClaimsVersion();
   doc["override_version"] = manual.getVersion();
   doc["schedule_version"] = scheduler.getVersion();
@@ -1236,16 +1239,7 @@ void onWsFrame(MongooseHttpWebSocketConnection *connection, int flags, uint8_t *
 
         if (loadSharingGroupState.isMember()) {
           loadSharingGroupState.recordAllocationReceived();
-          if (targetCurrent > 0 || reason == "failsafe_disabled") {
-            shaper.setLoadSharingLimit(targetCurrent, reason == "failsafe_disabled");
-          } else {
-            // No active load sharing limit; release shaper-side load sharing override.
-            // The poller's _failsafeLimitApplied flag may briefly read true here
-            // with no backing shaper limit (this clear removed it). That is safe:
-            // re-engaging failsafe requires seconds of allocation staleness, and
-            // any intervening 500 ms poll clears the flag before then.
-            shaper.clearLoadSharingLimit();
-          }
+          shaper.setLoadSharingLimit(targetCurrent, reason == "failsafe_disabled");
         }
       }
     }

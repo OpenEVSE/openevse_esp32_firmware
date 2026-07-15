@@ -125,17 +125,6 @@ std::string formatClaimDetails(EvseManager &evse, std::string &aggregate_state)
   return details.str();
 }
 
-double capLoadSharingMaxCurrent(double max_current, double measured_current, double pilot_current)
-{
-  if (pilot_current > 0.0 && measured_current > 0.0 && measured_current < (pilot_current - 0.25)) {
-    double taper_ratio = measured_current / pilot_current;
-    double unrestricted_demand = max_current * taper_ratio;
-    return unrestricted_demand > measured_current ? unrestricted_demand : measured_current;
-  }
-
-  return max_current;
-}
-
 } // namespace
 
 int run(const std::string &scenario_path,
@@ -192,6 +181,7 @@ int run(const std::string &scenario_path,
 
   bool failsafe_active = false;
   LoadSharingRotationState rotationState;
+  long last_allocation_sec = -5;
 
   while (t_sec <= scenario.duration_sec) {
     // Keep divert's time source aligned with simulation time so minimum
@@ -214,7 +204,9 @@ int run(const std::string &scenario_path,
 
     // 2. Compute load-share allocations and apply them as a max constraint
     //    on each peer's EvseManager.
-    if (scenario.group.enabled && !peers.empty()) {
+    if (scenario.group.enabled && !peers.empty() &&
+        t_sec - last_allocation_sec >= 5) {
+      last_allocation_sec = t_sec;
       std::vector<AllocationInput> inputs;
       inputs.reserve(peers.size());
       size_t demanding_count = 0;
@@ -230,7 +222,8 @@ int run(const std::string &scenario_path,
         in.online = p->online;
         in.demanding = p->vehicle && p->online;
         in.charging = p->vehicle && p->online &&
-                      p->simEvse().state == OPENEVSE_STATE_CHARGING;
+                      (p->simEvse().state == OPENEVSE_STATE_CHARGING ||
+                       p->reason == "insufficient");
         in.min_current = p->scenario().min_current;
         in.max_current = p->scenario().max_current;
         if (demanding_count > 1) {
@@ -258,11 +251,8 @@ int run(const std::string &scenario_path,
           if (a.getId() == p->id().c_str()) {
             p->loadshare_allocation_amps = a.getTargetCurrent();
             p->reason = a.getReason().c_str();
-            if (a.getTargetCurrent() > 0 || a.getReason() == "failsafe_disabled") {
-              p->shaper().setLoadSharingLimit(a.getTargetCurrent(), a.getReason() == "failsafe_disabled");
-            } else {
-              p->shaper().clearLoadSharingLimit();
-            }
+            p->shaper().setLoadSharingLimit(
+              a.getTargetCurrent(), a.getReason() == "failsafe_disabled");
             break;
           }
         }

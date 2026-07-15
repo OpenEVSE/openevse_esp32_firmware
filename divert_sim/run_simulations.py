@@ -299,7 +299,12 @@ def run_loadsharing_simulation(scenario_path: str, output: str = "") -> Dict[str
     """Run one load-sharing scenario and return translated metrics for tests."""
     rows_raw = run_scenario(scenario_path, output)
     if not rows_raw:
-        return {"_rows": [], "_supply_exceeded": False, "_max_total_demand_w": 0.0}
+        return {
+            "_rows": [],
+            "_physical_supply_exceeded": False,
+            "_offered_supply_exceeded": False,
+            "_max_total_demand_w": 0.0,
+        }
 
     peer_ids: List[str] = []
     for col in rows_raw[0].keys():
@@ -309,7 +314,10 @@ def run_loadsharing_simulation(scenario_path: str, output: str = "") -> Dict[str
     t0 = _parse_time(rows_raw[0]["time"])
     translated: List[Dict[str, Any]] = []
     max_total_demand_w = 0.0
-    supply_exceeded = False
+    physical_supply_exceeded = False
+    offered_supply_exceeded = False
+    previous_states: Dict[str, str] = {}
+    transition_grace_until = -1
 
     for raw in rows_raw:
         row: Dict[str, Any] = {}
@@ -320,6 +328,7 @@ def run_loadsharing_simulation(scenario_path: str, output: str = "") -> Dict[str
         group_total_demand_w = float(raw.get("group_total_demand_w", 0) or 0)
 
         row["available_a"] = group_max_w / 240.0 if group_max_w else 0.0
+        row["group_max_power_w"] = group_max_w
         row["failsafe_active"] = raw.get("failsafe_active", "0") in ("1", "true", "True")
 
         total_actual_w = 0.0
@@ -333,6 +342,8 @@ def run_loadsharing_simulation(scenario_path: str, output: str = "") -> Dict[str
 
             row[f"{pid}_allocated"] = alloc_w / 240.0
             row[f"{pid}_actual"] = actual_w / 240.0
+            row[f"{pid}_online"] = raw.get(f"{pid}_online", "0") in ("1", "true", "True")
+            row[f"{pid}_vehicle"] = raw.get(f"{pid}_vehicle", "0") in ("1", "true", "True")
             row[f"{pid}_actual_power_w"] = actual_w
             row[f"{pid}_available_power_w"] = charge_available_w
             row[f"{pid}_soc"] = float(raw.get(f"{pid}_soc", 0) or 0)
@@ -346,16 +357,35 @@ def run_loadsharing_simulation(scenario_path: str, output: str = "") -> Dict[str
 
         row["total_actual"] = total_actual_w / 240.0
         row["total_allocated"] = total_allocated_w / 240.0
+        row["total_pilot_demand"] = group_total_demand_w / 240.0
+        if (not previous_states and any(
+                row[f"{pid}_state"] == "charging" for pid in peer_ids
+            )) or any(
+                previous_states.get(pid) != "charging"
+                and row[f"{pid}_state"] == "charging"
+                for pid in peer_ids
+            ):
+            transition_grace_until = row["time"] + 5
+        row["budget_transition_grace"] = row["time"] <= transition_grace_until
+        previous_states = {
+            pid: row[f"{pid}_state"]
+            for pid in peer_ids
+        }
 
         max_total_demand_w = max(max_total_demand_w, group_total_demand_w)
+        if (group_max_w > 0 and group_total_actual_w > group_max_w * 1.001
+                and not row["budget_transition_grace"]):
+            physical_supply_exceeded = True
         if group_max_w > 0 and group_total_demand_w > group_max_w * 1.001:
-            supply_exceeded = True
+            offered_supply_exceeded = True
 
         translated.append(row)
 
     result: Dict[str, Any] = {
         "_rows": translated,
-        "_supply_exceeded": supply_exceeded,
+        "_peer_ids": peer_ids,
+        "_physical_supply_exceeded": physical_supply_exceeded,
+        "_offered_supply_exceeded": offered_supply_exceeded,
         "_max_total_demand_w": max_total_demand_w,
     }
 

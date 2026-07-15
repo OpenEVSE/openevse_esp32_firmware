@@ -167,3 +167,30 @@ def test_member_failsafe_places_claim_and_caps_override(instance_pair):
     assert owners.get("max_current") == SHAPER_CLIENT, (
         f"the failsafe (Shaper) claim must own the effective max_current: {target}"
     )
+
+
+@pytest.mark.timeout(60)
+def test_member_rejects_local_loadsharing_writes(instance_pair):
+    pair = instance_pair(port_offset=0)
+    native_url = pair["native_url"]
+    configured = requests.post(f"{native_url}/config", json={
+        "loadsharing_enabled": True,
+        "loadsharing_role": "member",
+        "loadsharing_controller_host": "localhost:59999",
+        "loadsharing_group_max_current": 32.0,
+    }, timeout=10)
+    assert configured.status_code == 200, configured.text
+
+    config_write = requests.post(f"{native_url}/config", json={
+        "loadsharing_group_max_current": 40.0,
+    }, timeout=10)
+    assert config_write.status_code == 403, config_write.text
+
+    add = requests.post(f"{native_url}/loadsharing/peers", json={
+        "host": "peer.local",
+    }, timeout=10)
+    assert add.status_code == 403, add.text
+
+    delete = requests.delete(
+        f"{native_url}/loadsharing/peers/peer.local", timeout=10)
+    assert delete.status_code == 403, delete.text

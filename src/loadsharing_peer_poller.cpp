@@ -21,16 +21,6 @@
 #include <MongooseHttpClient.h>
 #include <MongooseHttp.h>
 
-static double capLoadSharingMaxCurrent(double max_current, double measured_current, double pilot_current) {
-  if (pilot_current > 0 && measured_current > 0 && measured_current < (pilot_current - 0.25)) {
-    double taper_ratio = measured_current / pilot_current;
-    double unrestricted_demand = max_current * taper_ratio;
-    return unrestricted_demand > measured_current ? unrestricted_demand : measured_current;
-  }
-
-  return max_current;
-}
-
 // Global HTTP client for all peer HTTP requests
 static MongooseHttpClient httpClient;
 
@@ -40,13 +30,12 @@ LoadSharingPeerPoller loadSharingPeerPoller;
 LoadSharingPeerPoller::LoadSharingPeerPoller()
   : MicroTasks::Task(),
     _poll_interval_ms(500),
-    _heartbeat_timeout_ms(120000),
+    _heartbeat_timeout_ms(30000),
     _base_retry_interval_ms(1000),
     _max_retry_interval_ms(60000),
     _http_timeout_ms(10000),
     _ws_stale_timeout_ms(30000),
     _ws_ping_interval_ms(15000),
-    _max_retry_count(5),
     _total_messages_received(0),
     _total_http_requests(0),
     _total_ws_connections(0),
@@ -81,6 +70,14 @@ void LoadSharingPeerPoller::setup() {
 }
 
 unsigned long LoadSharingPeerPoller::loop(MicroTasks::WakeReason reason) {
+  _heartbeat_timeout_ms = loadsharing_heartbeat_timeout * 1000UL;
+  if (_groupState) {
+    _groupState->setEnabled(loadsharing_enabled);
+    _groupState->setGroupId(loadsharing_group_id);
+    _groupState->setGroupMaxCurrent(loadsharing_group_max_current);
+    _groupState->setSafetyFactor(loadsharing_safety_factor);
+  }
+
   // Sync peer list from authoritative source
   syncPeerList();
 
@@ -88,9 +85,16 @@ unsigned long LoadSharingPeerPoller::loop(MicroTasks::WakeReason reason) {
   for (auto& pair : _connections) {
     processPeerConnection(pair.first, pair.second);
   }
+  if (_groupState) {
+    _groupState->updateCounts();
+  }
 
   // Clear config push pending flag after all peers processed
   _configPushPending = false;
+
+  if (!loadsharing_enabled) {
+    shaper.clearLoadSharingLimit();
+  }
 
   // Periodic allocation recomputation (controller only)
   if (_groupState && _groupState->isController()) {
@@ -199,7 +203,8 @@ void LoadSharingPeerPoller::processPeerConnection(const String& host, PeerConnec
     case PeerConnectionState::HTTP_FETCHING: {
       // HTTP request is in flight, state transitions happen in callbacks
       // Check for timeout
-      if (conn.httpPending && now - conn.lastHttpTime > _http_timeout_ms) {
+      if (conn.httpPending &&
+          (long)(now - (conn.lastHttpTime + _http_timeout_ms)) >= 0) {
         DBUGF("LoadSharingPeerPoller: [%s] HTTP timeout after %lu ms", host.c_str(), _http_timeout_ms);
         conn.state = PeerConnectionState::HTTP_FAILED;
         conn.retryCount++;
@@ -215,7 +220,7 @@ void LoadSharingPeerPoller::processPeerConnection(const String& host, PeerConnec
     case PeerConnectionState::HTTP_FAILED: {
       // Wait for retry delay before attempting reconnect
       unsigned long retryDelay = calculateRetryDelay(conn.retryCount);
-      if (now - conn.lastReconnectTime >= retryDelay) {
+      if ((long)(now - (conn.lastReconnectTime + retryDelay)) >= 0) {
         DBUGF("LoadSharingPeerPoller: [%s] Retrying HTTP after %lu ms delay (attempt %d)",
               host.c_str(), retryDelay, conn.retryCount + 1);
         conn.state = PeerConnectionState::DISCONNECTED;  // Restart from HTTP
@@ -267,7 +272,7 @@ void LoadSharingPeerPoller::processPeerConnection(const String& host, PeerConnec
     case PeerConnectionState::WS_FAILED: {
       // Wait for retry delay before attempting reconnect
       unsigned long retryDelay = calculateRetryDelay(conn.retryCount);
-      if (now - conn.lastReconnectTime >= retryDelay) {
+      if ((long)(now - (conn.lastReconnectTime + retryDelay)) >= 0) {
         DBUGF("LoadSharingPeerPoller: [%s] Retrying connection after %lu ms delay (attempt %d)",
               host.c_str(), retryDelay, conn.retryCount + 1);
         conn.state = PeerConnectionState::DISCONNECTED;  // Restart from HTTP bootstrap
@@ -342,6 +347,15 @@ void LoadSharingPeerPoller::startHttpBootstrap(const String& host, PeerConnectio
     }
     if (doc.containsKey("state")) {
       conn.statusCache.setState(doc["state"].as<uint8_t>());
+    }
+    if (doc.containsKey("loadsharing_min_current")) {
+      conn.statusCache.setMinCurrent(doc["loadsharing_min_current"].as<double>());
+    }
+    if (doc.containsKey("loadsharing_max_current")) {
+      conn.statusCache.setMaxCurrent(doc["loadsharing_max_current"].as<double>());
+    }
+    if (doc.containsKey("loadsharing_priority")) {
+      conn.statusCache.setPriority(doc["loadsharing_priority"].as<int>());
     }
     if (doc.containsKey("config_version")) {
       conn.statusCache.setConfigVersion(doc["config_version"].as<uint32_t>());
@@ -460,7 +474,7 @@ void LoadSharingPeerPoller::checkWebSocketConnection(const String& host, PeerCon
   } else {
     // Check for connection failure (timeout)
     unsigned long now = millis();
-    if (now - conn.lastReconnectTime > _http_timeout_ms) {
+    if ((long)(now - (conn.lastReconnectTime + _http_timeout_ms)) >= 0) {
       DBUGF("LoadSharingPeerPoller: [%s] WebSocket connection timeout", host.c_str());
       conn.state = PeerConnectionState::WS_FAILED;
       conn.retryCount++;
@@ -499,6 +513,15 @@ void LoadSharingPeerPoller::handleWebSocketMessage(const String& host, PeerConne
   if (doc.containsKey("state")) {
     conn.statusCache.setState(doc["state"].as<uint8_t>());
   }
+  if (doc.containsKey("loadsharing_min_current")) {
+    conn.statusCache.setMinCurrent(doc["loadsharing_min_current"].as<double>());
+  }
+  if (doc.containsKey("loadsharing_max_current")) {
+    conn.statusCache.setMaxCurrent(doc["loadsharing_max_current"].as<double>());
+  }
+  if (doc.containsKey("loadsharing_priority")) {
+    conn.statusCache.setPriority(doc["loadsharing_priority"].as<int>());
+  }
   if (doc.containsKey("config_version")) {
     conn.statusCache.setConfigVersion(doc["config_version"].as<uint32_t>());
   }
@@ -515,7 +538,7 @@ void LoadSharingPeerPoller::handleWebSocketMessage(const String& host, PeerConne
 
 bool LoadSharingPeerPoller::isPeerStale(const PeerConnection& conn) const {
   unsigned long now = millis();
-  return (now - conn.lastMessageTime) > _heartbeat_timeout_ms;
+  return (long)(now - (conn.lastMessageTime + _heartbeat_timeout_ms)) >= 0;
 }
 
 unsigned long LoadSharingPeerPoller::calculateRetryDelay(uint16_t retryCount) const {
@@ -632,16 +655,16 @@ void LoadSharingPeerPoller::pushConfigToPeer(const String& host, PeerConnection&
   doc["loadsharing_failsafe_safe_current"] = loadsharing_failsafe_safe_current;
   doc["loadsharing_failsafe_peer_assumed_current"] = loadsharing_failsafe_peer_assumed_current;
 
-  String body;
-  serializeJson(doc, body);
+  String* body = new String();
+  serializeJson(doc, *body);
 
   // POST to member's /config endpoint
-  String url = "http://" + host + "/config";
+  String* url = new String("http://" + host + "/config");
 
-  MongooseHttpClientRequest* req = httpClient.beginRequest(url.c_str());
+  MongooseHttpClientRequest* req = httpClient.beginRequest(url->c_str());
   req->setMethod(HTTP_POST);
   req->setContentType("application/json");
-  req->setContent(body.c_str());
+  req->setContent(body->c_str());
 
   req->onResponse([this, host](MongooseHttpClientResponse* response) {
     if (response->respCode() == 200) {
@@ -655,8 +678,10 @@ void LoadSharingPeerPoller::pushConfigToPeer(const String& host, PeerConnection&
     }
   });
 
-  req->onClose([host]() {
+  req->onClose([host, url, body]() {
     DBUGF("LoadSharingPeerPoller: [%s] Config push HTTP connection closed", host.c_str());
+    delete url;
+    delete body;
   });
 
   httpClient.send(req);
@@ -671,23 +696,25 @@ void LoadSharingPeerPoller::pushConfigResetToPeer(const String& host) {
   doc["loadsharing_role"] = "";
   doc["loadsharing_controller_host"] = "";
 
-  String body;
-  serializeJson(doc, body);
+  String* body = new String();
+  serializeJson(doc, *body);
 
   // POST to member's /config endpoint
-  String url = "http://" + host + "/config";
+  String* url = new String("http://" + host + "/config");
 
-  MongooseHttpClientRequest* req = httpClient.beginRequest(url.c_str());
+  MongooseHttpClientRequest* req = httpClient.beginRequest(url->c_str());
   req->setMethod(HTTP_POST);
   req->setContentType("application/json");
-  req->setContent(body.c_str());
+  req->setContent(body->c_str());
 
   req->onResponse([host](MongooseHttpClientResponse* response) {
     DBUGF("LoadSharingPeerPoller: [%s] Config reset response: %d", host.c_str(), response->respCode());
   });
 
-  req->onClose([host]() {
+  req->onClose([host, url, body]() {
     DBUGF("LoadSharingPeerPoller: [%s] Config reset HTTP connection closed", host.c_str());
+    delete url;
+    delete body;
   });
 
   httpClient.send(req);
@@ -709,6 +736,15 @@ std::vector<AllocationInput> LoadSharingPeerPoller::buildAllocationInputs() {
     return inputs;
   }
 
+  auto wasSuppressed = [this](const String& id) -> bool {
+    for (const auto& allocation : _groupState->getAllocations()) {
+      if (allocation.getId() == id) {
+        return allocation.getReason() == "insufficient";
+      }
+    }
+    return false;
+  };
+
   // Add self (controller) as first member
   {
     AllocationInput self;
@@ -718,7 +754,8 @@ std::vector<AllocationInput> LoadSharingPeerPoller::buildAllocationInputs() {
     // Controller is demanding if it has a vehicle connected and not sleeping/disabled
     uint8_t state = evse.getEvseState();
     self.demanding = (evse.isVehicleConnected() && state != OPENEVSE_STATE_SLEEPING);
-    self.charging = (state == OPENEVSE_STATE_CHARGING);
+    self.charging = (state == OPENEVSE_STATE_CHARGING) ||
+                    wasSuppressed(self.id);
     self.min_current = evse.getMinCurrent();
     self.max_current = evse.getMaxConfiguredCurrent();
     self.priority = loadsharing_priority;
@@ -737,10 +774,15 @@ std::vector<AllocationInput> LoadSharingPeerPoller::buildAllocationInputs() {
                       pair.second.statusCache.getState() != 0 &&    // Not in idle state
                       pair.second.statusCache.getState() != 254;    // Not in sleep state
     input.charging = input.online &&
-                     pair.second.statusCache.getState() == OPENEVSE_STATE_CHARGING;
-    input.min_current = evse.getMinCurrent();  // Use our min as default (peers may differ)
-    input.max_current = evse.getMaxCurrent();
-    input.priority = loadsharing_priority;  // For now, same priority
+                     (pair.second.statusCache.getState() == OPENEVSE_STATE_CHARGING ||
+                      wasSuppressed(input.id));
+    input.min_current = pair.second.statusCache.getMinCurrent() > 0
+                          ? pair.second.statusCache.getMinCurrent()
+                          : evse.getMinCurrent();
+    input.max_current = pair.second.statusCache.getMaxCurrent() > 0
+                          ? pair.second.statusCache.getMaxCurrent()
+                          : evse.getMaxCurrent();
+    input.priority = pair.second.statusCache.getPriority();
     inputs.push_back(input);
   }
 
@@ -803,12 +845,7 @@ void LoadSharingPeerPoller::recomputeAndPushAllocations() {
     double selfAllocation = allocations[0].getTargetCurrent();
     String selfReason = allocations[0].getReason();
 
-    if (selfAllocation > 0 || selfReason == "failsafe_disabled") {
-      shaper.setLoadSharingLimit(selfAllocation, selfReason == "failsafe_disabled");
-    } else {
-      // No active load sharing limit; release shaper-side load sharing override.
-      shaper.clearLoadSharingLimit();
-    }
+    shaper.setLoadSharingLimit(selfAllocation, selfReason == "failsafe_disabled");
   }
 
   // Push allocations to connected peers

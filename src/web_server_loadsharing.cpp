@@ -23,25 +23,26 @@ static MongooseHttpClient loadSharingHttpClient;
  * @brief Fire-and-forget async HTTP request to sync peer group membership.
  * Used to add or remove the local device on a remote peer's group.
  */
-static void syncPeerGroupMembership(const String &peerHost, HttpRequestMethodComposite method,
-                                     const String &jsonBody)
+static void syncPeerGroupMembership(const String &peerHost, const String &jsonBody)
 {
-  String url = "http://" + peerHost + "/loadsharing/peers";
-  DBUGF("[LoadSharing] Reciprocal sync %s %s: %s",
-        method == HTTP_POST ? "POST" : "DELETE", url.c_str(), jsonBody.c_str());
+  String *url = new String("http://" + peerHost + "/loadsharing/peers");
+  String *body = new String(jsonBody);
+  DBUGF("[LoadSharing] Reciprocal sync POST %s: %s", url->c_str(), body->c_str());
 
-  MongooseHttpClientRequest *req = loadSharingHttpClient.beginRequest(url.c_str());
-  req->setMethod(method);
+  MongooseHttpClientRequest *req = loadSharingHttpClient.beginRequest(url->c_str());
+  req->setMethod(HTTP_POST);
   req->setContentType("application/json");
-  req->setContent(jsonBody.c_str());
+  req->setContent(body->c_str());
 
   req->onResponse([peerHost](MongooseHttpClientResponse *resp) {
     DBUGF("[LoadSharing] Reciprocal sync to %s responded %d",
           peerHost.c_str(), resp->respCode());
   });
 
-  req->onClose([peerHost]() {
+  req->onClose([peerHost, url, body]() {
     DBUGF("[LoadSharing] Reciprocal sync to %s connection closed", peerHost.c_str());
+    delete url;
+    delete body;
   });
 
   loadSharingHttpClient.send(req);
@@ -150,6 +151,13 @@ void handleLoadSharingPeersPost(MongooseHttpServerRequest *request, MongooseHttp
 
   String host = doc["host"].as<String>();
   host.trim();
+  bool reciprocal = doc.containsKey("reciprocal") ? doc["reciprocal"].as<bool>() : true;
+
+  if (loadSharingGroupState.isMember()) {
+    response->setCode(403);
+    response->print("{\"msg\":\"Load sharing configuration is read-only on members\"}");
+    return;
+  }
 
   if (host.isEmpty()) {
     DBUGLN("[LoadSharing] Empty host parameter");
@@ -192,14 +200,13 @@ void handleLoadSharingPeersPost(MongooseHttpServerRequest *request, MongooseHttp
 
   // Reciprocal sync: add local device on the remote peer's group (unless this
   // is itself a reciprocal call, indicated by reciprocal=false)
-  bool reciprocal = doc.containsKey("reciprocal") ? doc["reciprocal"].as<bool>() : true;
   if (reciprocal) {
     DynamicJsonDocument syncDoc(256);
     syncDoc["host"] = loadSharingGroupState.getLocalHostname();
     syncDoc["reciprocal"] = false;
     String syncBody;
     serializeJson(syncDoc, syncBody);
-    syncPeerGroupMembership(host, HTTP_POST, syncBody);
+    syncPeerGroupMembership(host, syncBody);
   }
 
   response->setCode(200);
@@ -208,14 +215,18 @@ void handleLoadSharingPeersPost(MongooseHttpServerRequest *request, MongooseHttp
 
 void handleLoadSharingPeersDelete(MongooseHttpServerRequest *request, MongooseHttpServerResponseStream *response)
 {
-  // TODO: Phase 1.4 - Remove peer from configured group
-  response->setCode(501);
-  response->print("{\"msg\":\"Not implemented\"}");
+  response->setCode(405);
+  response->print("{\"msg\":\"Use DELETE /loadsharing/peers/{host}\"}");
 }
 
 void handleLoadSharingPeersDeleteWithHost(MongooseHttpServerRequest *request, MongooseHttpServerResponseStream *response, const String &host)
 {
   DBUGF("[LoadSharing] DELETE /loadsharing/peers/%s", host.c_str());
+  if (loadSharingGroupState.isMember()) {
+    response->setCode(403);
+    response->print("{\"msg\":\"Load sharing configuration is read-only on members\"}");
+    return;
+  }
 
   // Block removal of the local device
   if (loadSharingGroupState.isLocalHost(host)) {
@@ -224,6 +235,8 @@ void handleLoadSharingPeersDeleteWithHost(MongooseHttpServerRequest *request, Mo
     response->print("{\"msg\":\"Cannot remove local device from group\"}");
     return;
   }
+
+  loadSharingPeerPoller.pushConfigResetToPeer(host);
 
   // Remove peer via group state
   if (!loadSharingGroupState.removeGroupPeer(host)) {
@@ -235,31 +248,6 @@ void handleLoadSharingPeersDeleteWithHost(MongooseHttpServerRequest *request, Mo
 
   DBUGF("[LoadSharing] Peer removed. Remaining peers: %u",
         (unsigned int)loadSharingGroupState.getGroupPeers().size());
-
-  // Reciprocal sync: check if caller passed reciprocal=false via query param
-  // For DELETE with path param, use query string: ?reciprocal=false
-  String uri = request->uri();
-  bool reciprocal = (uri.indexOf("reciprocal=false") == -1);
-  if (reciprocal) {
-    // Tell the remote peer to remove the local device from their group
-    String localHost = loadSharingGroupState.getLocalHostname();
-    String deleteUrl = "http://" + host + "/loadsharing/peers/" + localHost + "?reciprocal=false";
-    DBUGF("[LoadSharing] Reciprocal DELETE %s", deleteUrl.c_str());
-
-    MongooseHttpClientRequest *req = loadSharingHttpClient.beginRequest(deleteUrl.c_str());
-    req->setMethod(HTTP_DELETE);
-
-    req->onResponse([host](MongooseHttpClientResponse *resp) {
-      DBUGF("[LoadSharing] Reciprocal DELETE to %s responded %d",
-            host.c_str(), resp->respCode());
-    });
-
-    req->onClose([host]() {
-      DBUGF("[LoadSharing] Reciprocal DELETE to %s connection closed", host.c_str());
-    });
-
-    loadSharingHttpClient.send(req);
-  }
 
   // Return success
   response->setCode(200);
@@ -339,6 +327,9 @@ void handleLoadSharingStatus(MongooseHttpServerRequest *request, MongooseHttpSer
         statusObj["pilot"] = peerStatus.getPilot();
         statusObj["vehicle"] = peerStatus.getVehicle();
         statusObj["state"] = peerStatus.getState();
+        statusObj["min_current"] = peerStatus.getMinCurrent();
+        statusObj["max_current"] = peerStatus.getMaxCurrent();
+        statusObj["priority"] = peerStatus.getPriority();
       }
     }
   }
@@ -374,7 +365,18 @@ void web_server_load_sharing_setup()
     String path = request->uri();
     if(path.length() > LOADSHARING_PEERS_PATH_LEN + 1) {
       String host = path.substring(LOADSHARING_PEERS_PATH_LEN + 1);
-      // URL decode the host if needed
+      int queryStart = host.indexOf('?');
+      if(queryStart >= 0) {
+        host.remove(queryStart);
+      }
+      std::vector<char> decodedHost(host.length() + 1);
+      if(mg_url_decode(host.c_str(), host.length(), decodedHost.data(), decodedHost.size(), 0) < 0) {
+        response->setCode(400);
+        response->print("{\"msg\":\"Invalid host\"}");
+        request->send(response);
+        return;
+      }
+      host = decodedHost.data();
       DBUGF("[LoadSharing] DELETE path parameter: %s", host.c_str());
 
       if(HTTP_DELETE == request->method()) {

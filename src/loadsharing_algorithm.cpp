@@ -13,6 +13,17 @@
 #include "loadsharing_algorithm.h"
 #include <algorithm>
 
+double capLoadSharingMaxCurrent(double max_current,
+                                double measured_current,
+                                double pilot_current)
+{
+  if (pilot_current > 0 && measured_current > 0 &&
+      measured_current < (pilot_current - 0.25)) {
+    return std::min(max_current, measured_current);
+  }
+  return max_current;
+}
+
 std::vector<LoadSharingAllocation> computeAllocations(
     const std::vector<AllocationInput>& members,
     double group_max_current,
@@ -21,8 +32,8 @@ std::vector<LoadSharingAllocation> computeAllocations(
     const String& failsafe_mode,
     bool& failsafe_active,
     LoadSharingRotationState& rotation,
-    unsigned long now_ms,
-    unsigned long rotation_interval_ms)
+    uint32_t now_ms,
+    uint32_t rotation_interval_ms)
 {
   std::vector<LoadSharingAllocation> result;
   failsafe_active = false;
@@ -120,7 +131,7 @@ std::vector<LoadSharingAllocation> computeAllocations(
     if (!rotation.initialized) {
       rotation.initialized = true;
       rotation.last_rotation_ms = now_ms;
-    } else if ((unsigned long)(now_ms - rotation.last_rotation_ms) >= rotation_interval_ms) {
+    } else if ((uint32_t)(now_ms - rotation.last_rotation_ms) >= rotation_interval_ms) {
       rotation.offset++;
       rotation.last_rotation_ms = now_ms;
     }
