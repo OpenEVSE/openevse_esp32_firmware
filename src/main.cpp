@@ -72,7 +72,6 @@
 #include "tsdb_energy_logger.h"
 #endif
 
-#include "legacy_support.h"
 #include "certificates.h"
 
 EventLog eventLog;
@@ -92,8 +91,6 @@ RapiSender &rapiSender = evse.getSender();
 
 unsigned long Timer1; // Timer for events once every 30 seconds
 unsigned long Timer3; // Timer for events once every 2 seconds
-
-boolean rapi_read = 0; //flag to indicate first read of RAPI status
 
 static uint32_t start_mem = 0;
 static uint32_t last_mem = 0;
@@ -294,21 +291,12 @@ void loop()
   MicroTask.update();
   Profile_End(MicroTask, 10);
 
-  if(OpenEVSE.isConnected())
-  {
-    if(OPENEVSE_STATE_STARTING != evse.getEvseState())
-    {
-      // Read initial state from OpenEVSE
-      if (rapi_read == 0)
-      {
-        DBUGLN("first read RAPI values");
-        handleRapiRead(); //Read all RAPI values
-        rapi_read=1;
-
-        import_timers(&scheduler);
-      }
-    }
-  }
+  // NOTE: the legacy first-connect block (handleRapiRead() + import_timers())
+  // was removed: both call through the sender-less global OpenEVSE object and
+  // have been silent no-ops since the EvseManager refactor.  Reviving
+  // import_timers() would auto-import (and clear) the controller's delay timer
+  // into Charge Manager rules — a deliberate decision for a separate change,
+  // along with routing time_man/ohm/input off the dead global.
 
   if(net.isConnected())
   {

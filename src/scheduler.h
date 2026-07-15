@@ -6,6 +6,25 @@
 #include <MicroTasks.h>
 #include "evse_man.h"
 
+// Feature activated/deactivated by the timer window.
+enum class SchedulerFeature : uint8_t {
+  None    = 0,
+  Divert,   // Solar eco-divert at elevated priority (1100)
+  Shaper,   // Grid current shaper
+  OCPP,     // OCPP-managed charging (placeholder)
+  RFID,     // Require RFID authentication
+  Current,  // Set charge current (feature_value = amps)
+};
+
+// Session limit applied while the timer window is active.
+enum class SchedulerLimitType : uint8_t {
+  None   = 0,
+  Time,     // Minutes of charging
+  Energy,   // Watt-hours
+  Soc,      // State of charge (%)
+  Cost,     // Cost (placeholder – requires tariff config)
+};
+
 #ifndef SCHEDULER_MAX_EVENTS
 #define SCHEDULER_MAX_EVENTS 50
 #endif // !SCHEDULER_MAX_EVENTS
@@ -143,6 +162,10 @@ class Scheduler : public MicroTasks::Task
         uint8_t _days;
         EvseState _state;
         time_t _next;
+        SchedulerFeature _feature;
+        uint32_t _feature_value;
+        SchedulerLimitType _limit_type;
+        uint32_t _limit_value;
 
         EventInstance _nextEvents[SCHEDULER_DAYS_IN_A_WEEK];
       public:
@@ -203,6 +226,22 @@ class Scheduler : public MicroTasks::Task
         }
         bool setState(const char *state);
 
+        SchedulerFeature getFeature() { return _feature; }
+        void setFeature(SchedulerFeature f) { _feature = f; }
+        bool setFeature(const char *name);
+        const char *getFeatureName();
+
+        uint32_t getFeatureValue() { return _feature_value; }
+        void setFeatureValue(uint32_t v) { _feature_value = v; }
+
+        SchedulerLimitType getLimitType() { return _limit_type; }
+        void setLimitType(SchedulerLimitType t) { _limit_type = t; }
+        bool setLimitType(const char *name);
+        const char *getLimitName();
+
+        uint32_t getLimitValue() { return _limit_value; }
+        void setLimitValue(uint32_t v) { _limit_value = v; }
+
         bool isValid() {
           return SCHEDULER_EVENT_NULL != _id;
         }
@@ -235,6 +274,9 @@ class Scheduler : public MicroTasks::Task
     uint32_t _version;
     uint32_t _plan_version;
 
+    SchedulerFeature _activeFeature;
+    SchedulerLimitType _activeLimitType;
+
     void buildSchedule();
     bool commit();
     EventInstance &getCurrentEvent();
@@ -242,8 +284,12 @@ class Scheduler : public MicroTasks::Task
     bool serialize(JsonObject &obj, Event *event);
     void serializeEventInstance(JsonObject &object, Scheduler::EventInstance *e, bool includeDay = false);
 
-    bool addEventInternal(uint32_t id, const char *time, uint8_t days, const char *state);
+    Event *addEventInternal(uint32_t id, const char *time, uint8_t days, const char *state);
     bool deserializeInternal(JsonObject &obj, uint32_t event);
+
+    void applyFeature(Event *event);
+    void cleanupFeature(SchedulerFeature feature);
+    bool applyLimit(Event *event);
 
 
   protected:
@@ -283,6 +329,11 @@ class Scheduler : public MicroTasks::Task
     bool serialize(JsonObject &obj, uint32_t event);
 
     bool serializePlan(DynamicJsonDocument &doc);
+
+    // JSON document capacity sufficient to serialize the whole stored
+    // schedule.  Scales with the event count: the per-event feature/limit
+    // fields outgrew the old fixed 1024/4096 budgets (~384 bytes/event).
+    size_t scheduleJsonCapacity();
 
     void notifyConfigChanged();
 

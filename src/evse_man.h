@@ -285,7 +285,7 @@ class EvseManager : public MicroTasks::Task
 
     // Evse Status
     bool isConnected() {
-      return OpenEVSE.isConnected();
+      return _openevse.isConnected();
     }
     bool isActive() {
       return getActiveState() == EvseState::Active;
@@ -580,9 +580,11 @@ class EvseManager : public MicroTasks::Task
       return _sender;
     }
 
-    // Get the OpenEVSE API
+    // Get the OpenEVSE API. Must be the instance the monitor initialised with
+    // the RAPI sender; the global OpenEVSE object is never begin()-ed so its
+    // commands are silently dropped.
     OpenEVSEClass &getOpenEVSE() {
-      return OpenEVSE;
+      return _openevse;
     }
 
     // Register for events

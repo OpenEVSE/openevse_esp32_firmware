@@ -367,10 +367,12 @@ unsigned long EvseMonitor::loop(MicroTasks::WakeReason reason)
       }
     });
   }
-  else if(0 == _count % EVSE_MONITOR_STATE_TIME)
+  else if(0 == _count % EVSE_MONITOR_STATE_TIME && _heartbeat_interval > 0)
   {
-    // Heartbeat enable failed or was never set; retry periodically so WiFi module reboot resyncs
-    _openevse.heartbeatEnable(EVSE_HEATBEAT_INTERVAL, EVSE_HEARTBEAT_CURRENT, [this](int ret, int interval, int current, int triggered) {
+    // Heartbeat enable failed; retry with the configured values so WiFi module
+    // reboot resyncs. Gate on _heartbeat_interval > 0 so an explicit disable
+    // (interval==0) does not get overwritten by the retry.
+    _openevse.heartbeatEnable(_heartbeat_interval, _heartbeat_current, [this](int ret, int interval, int current, int triggered) {
       _heartbeat = RAPI_RESPONSE_OK == ret;
       if (_heartbeat && 2 == triggered) {
         _openevse.heartbeatPulse([](int ret) {
@@ -417,6 +419,12 @@ bool EvseMonitor::begin(RapiSender &sender)
   {
     if(connected)
     {
+      // Immediately tell all WebSocket clients we are connected so the GUI
+      // banner clears without waiting for the full data-ready chain.
+      StaticJsonDocument<32> connectedEvent;
+      connectedEvent["evse_connected"] = 1;
+      event_send(connectedEvent);
+
       _energyMeter.begin(this);
       _openevse.onState([this](uint8_t evse_state, uint8_t pilot_state, uint32_t current_capacity, uint32_t vflags)
       {
@@ -460,13 +468,10 @@ void EvseMonitor::updateFaultCounters(int ret, long gfci_count, long nognd_count
 
 EvseMonitor::ServiceLevel EvseMonitor::getServiceLevel()
 {
-  if(0 == (getSettingsFlags() & OPENEVSE_ECF_AUTO_SVC_LEVEL_DISABLED)) {
-    return ServiceLevel::Auto;
-  }
-
-  return (OPENEVSE_ECF_L2 == (getSettingsFlags() & OPENEVSE_ECF_L2)) ?
-    ServiceLevel::L2 :
-    ServiceLevel::L1;
+  // Auto service level is only supported by legacy non-WiFi controller builds
+  // ($SL A gets NK'd by the controllers this firmware ships with), so always
+  // report the actual L1/L2 level rather than a state the user cannot select.
+  return getActualServiceLevel();
 }
 
 EvseMonitor::ServiceLevel EvseMonitor::getActualServiceLevel()
@@ -652,6 +657,16 @@ void EvseMonitor::updateEffectiveVoltage()
 
 void EvseMonitor::setServiceLevel(ServiceLevel level, std::function<void(int ret)> callback)
 {
+  // Auto is not supported by the controller builds this firmware ships with
+  // ($SL A answers NK); refuse it here so it never goes on the wire.
+  if(ServiceLevel::Auto == level)
+  {
+    if(callback) {
+      callback(RAPI_RESPONSE_NK);
+    }
+    return;
+  }
+
   if(level == getServiceLevel())
   {
     if(callback) {
@@ -799,10 +814,14 @@ void EvseMonitor::enableBootLock(bool enabled, std::function<void(int ret)> call
 
 void EvseMonitor::setHeartbeatSupervision(uint32_t interval, uint32_t current, std::function<void(int ret)> callback)
 {
-  _openevse.heartbeatEnable(interval, current, [this, interval, current, callback](int ret, int i, int c, int t) {
+  // Disabling heartbeat (interval==0) must send current=0 so the EVSE falls
+  // back to 0 A on any pending missed-pulse condition rather than the
+  // configured restricted current.
+  uint32_t effective_current = (interval == 0) ? 0 : current;
+  _openevse.heartbeatEnable(interval, effective_current, [this, interval, effective_current, callback](int ret, int i, int c, int t) {
     if(RAPI_RESPONSE_OK == ret) {
       _heartbeat_interval = interval;
-      _heartbeat_current = current;
+      _heartbeat_current = effective_current;
       _heartbeat = interval > 0;
     }
     if(callback) callback(ret);
