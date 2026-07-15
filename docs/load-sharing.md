@@ -2,454 +2,260 @@
 
 ## Overview
 
-This document describes a proposed **local load sharing** feature for OpenEVSE
-ESP32 WiFi firmware, based on the requirements and discussion in GitHub issues
-\#592 and \#940.
+Load sharing lets a small group of OpenEVSE devices on the same LAN share a
+single upstream circuit limit (for example a 50 A feeder) **without** a cloud
+service, MQTT broker, Home Assistant, or external controller.
 
-The design goal is to allow a set of OpenEVSE devices on the same LAN to share
-a single upstream electrical service limit (e.g. a 50A circuit) **without
-requiring a cloud service, MQTT broker, Home Assistant, or external
-controller**.
+The design uses a **controller/member** model:
 
-The system uses a **controller/member** architecture for the initial MVP:
-one device is designated as the **controller** and manages the group, while
-other devices act as **members** that receive their configuration and current
-allocations from the controller.
+- One device is the **controller**: it discovers peers, owns group config, runs
+  the allocation algorithm, and pushes limits to members.
+- Other devices are **members**: they receive config and allocations from the
+  controller.
 
-The existing **Current Shaper** claim system remains responsible for
-**enforcing** the computed limit on each member device, including built-in
-failsafe timeout behavior. This feature adds:
+Limits are enforced on each node through the existing **Current Shaper** claim
+(`EvseClient_OpenEVSE_Shaper` at `EvseManager_Priority_Safety`), via
+`setLoadSharingLimit()` / `clearLoadSharingLimit()`. Member islanding also has
+an explicit failsafe path driven by `loadsharing_heartbeat_timeout`.
 
-- Group formation (configuration + discovery) on the controller
-- Real-time status monitoring of members via WebSocket
-- A centralized allocation algorithm on the controller
-- Allocation push from controller to members via WebSocket
-- Fail-safe behavior leveraging the existing Current Shaper timeout
+### Related documents
 
-## Requirements (from issues)
+| Document | Role |
+|----------|------|
+| [load-sharing-theory-of-operation.md](load-sharing-theory-of-operation.md) | **Normative** behaviour, invariants, algorithm detail |
+| [load-sharing-project-status.md](load-sharing-project-status.md) | Branch/PR status, known gaps, next work |
+| `api.yml` | OpenAPI for `/loadsharing/*` |
 
-### Must have
-
-- Local (LAN) operation; no dependency on cloud services (#940).
-- Multi-charger sharing of a fixed circuit limit (#592, #940).
-- Simple setup flow: discover peers by mDNS and/or allow static IP entry
-  (#940 comments).
-- Safety-first behavior on communication loss (either refuse to charge, or fall
-  back to a safe configured current) (#592, #940).
-
-### Nice to have / future extension
-
-- Multiple sharing profiles (equal share, priority-first, FIFO/ramp, etc.)
-  (#940).
-- Potential future data sharing (metering/log export) (#940 comments).
-- Hierarchical groups like JuiceNet “group of groups” (discussed in #940
-  comments). Not in scope for initial implementation.
+Originating discussion: GitHub issues
+[#592](https://github.com/OpenEVSE/openevse_esp32_firmware/issues/592) and
+[#940](https://github.com/OpenEVSE/openevse_esp32_firmware/issues/940).
 
 ## Goals
 
-- Provide a robust local load-sharing mechanism for small groups (2–8 chargers
-  typical).
-- Simple setup: configure load sharing from a single controller device;
-  members are configured automatically.
-- Keep the system safe if the controller or members go offline.
+- Local multi-charger sharing of a fixed circuit limit (typical group size 2–8).
+- Simple setup from a single controller; members are configured by config push.
+- Safe behaviour if the controller or members go offline.
 - Reuse existing primitives:
-  - mDNS advertising (already present) for peer discovery on the controller
-  - WebSocket status updates `/ws` (already present) for status monitoring
-    and allocation delivery
-  - Current Shaper claim system (already present) for enforcing limits and
-    failsafe timeout behavior on members
+  - mDNS advertising / discovery
+  - WebSocket `/ws` for status and allocation delivery
+  - Current Shaper for limit enforcement
 
 ## Non-goals
 
 - Coordinating across multiple subnets / VLANs.
-- Scheduling / queuing logic beyond minimal “who gets to charge when”.
-- OCPP local controller / proxy behavior.
+- OCPP local controller / proxy behaviour.
+- Hierarchical “group of groups”.
+- Automatic controller election / failover.
 - Guaranteeing perfect fairness under all packet-loss scenarios.
 
 ## Terminology
 
 - **Node**: one OpenEVSE WiFi gateway.
-- **Group**: a set of nodes that share a common upstream current limit.
-- **Controller**: the node where the user configures load sharing. It runs
-   the allocation algorithm and pushes current limits to members.
-- **Member**: a node that receives its load sharing configuration and current
-   allocation from the controller. Load sharing config is read-only on members.
-- **Peer**: another node on the LAN, discovered or configured.
-- **Demanding**: a member that currently wants current (vehicle connected and
-   not explicitly disabled).
+- **Group**: nodes that share a common upstream current limit.
+- **Controller**: node that owns group config and runs allocation.
+- **Member**: node that receives config and allocations from the controller.
+- **Peer**: another node on the LAN (discovered or manually added).
+- **Connected**: vehicle present, EVSE state B (not drawing current).
+- **Demanding / charging**: vehicle charging, EVSE state C (counts against the
+  shared budget).
+- **Connected min**: minimum offered to a connected (state B) member so it can
+  start on demand; this allocation is **outside** the shared budget because the
+  EV draws 0 A while connected.
 
 ## High-level architecture
 
-### 1) Discovery (controller only)
+```mermaid
+flowchart LR
+  subgraph controller [Controller]
+    discovery[mDNS discovery]
+    poller[Peer poller]
+    algo[Allocation algorithm]
+    discovery --> poller
+    poller --> algo
+  end
+  subgraph member [Member]
+    ws[/ws receive]
+    shaper[Shaper load-share limit]
+    ws --> shaper
+  end
+  poller -->|"WS status"| poller
+  algo -->|"WS allocation"| ws
+  algo --> shaperLocal[Local shaper limit]
+```
 
-- Each device already advertises an mDNS service:
-   - Service: `openevse` / `tcp` port `80`
-   - TXT records include `type`, `version`, `id`
+### 1) Discovery
 
-The **controller** periodically performs mDNS queries for `_openevse._tcp`
-(ESPmDNS uses `MDNS.queryService("openevse", "tcp")`).
+Each device advertises `_openevse._tcp` (service `openevse` / `tcp` port 80)
+with TXT records such as `type`, `version`, and `id`.
 
-Discovery output is a list of candidates with:
+The controller periodically queries for peers and builds a candidate list
+(hostname, IP, firmware version, device id). Peers can also be added by
+hostname, static IP, or device id via `POST /loadsharing/peers`.
 
-- unique device id (TXT `id`)
-- hostname / instance name
-- IP address
-- firmware version
+### 2) Group configuration (controller)
 
-Member devices also run discovery initially (to show available peers in the
-UI), but **stop discovery once they are connected to a controller** and have
-received their load sharing configuration. Discovery resumes on members if the
-controller connection is lost.
+Set `loadsharing_role` to `"controller"` (typically via the web UI), enable load
+sharing, and add peers. The controller pushes group settings to each member with
+`POST http://{member}/config` after the WebSocket connection is up. That push
+sets the peer’s role to `"member"` and stores `loadsharing_controller_host`.
 
-### 2) Group configuration (controller only)
+Key config fields (see theory doc §4.1 for the full table):
 
-A group is configured on the **controller** device only. The user sets up load
-sharing from the controller's web UI or REST API. The controller then pushes
-the configuration to each member.
+| Key | Default | Notes |
+|-----|---------|-------|
+| `loadsharing_enabled` | `false` | Master enable |
+| `loadsharing_role` | `""` | `""`, `"controller"`, or `"member"` |
+| `loadsharing_group_max_current` | `0` | Group circuit limit (A) |
+| `loadsharing_safety_factor` | `1.0` | De-rate `[0..1]` |
+| `loadsharing_heartbeat_timeout` | `30` | Seconds; member allocation staleness |
+| `loadsharing_failsafe_mode` | `"safe_current"` | Or `"disable"` |
+| `loadsharing_failsafe_safe_current` | `6.0` | Must be ≤ group max |
+| `loadsharing_failsafe_peer_assumed_current` | `6.0` | Offline peer reserve |
+| `loadsharing_priority` | `0` | Lower = higher priority; **not** pushed to peers |
+| `loadsharing_rotation_interval` | `1800` | Seconds; scarcity time-slice; `0` disables |
 
-Configuration includes:
+`POST /config` rejects writes where failsafe safe current exceeds the group
+max. Role transitions (`becomeMember` / `resetRole`) run only after validation.
 
-- `group_id`: user-defined string
-- `group_max_current`: the total current limit for the group (amps)
-- `safety_factor`: optional reduction (e.g. 0.8 to use 80% of circuit)
-- `members`: a list of peer hosts (hostname, IP address, or device ID)
-- `priority`: node's priority (lower = higher priority)
-- `failsafe`: what to do when members are unreachable (disable or limit to
-   safe current)
-
-Members are simple strings that can be:
-
-- mDNS hostname (e.g., `openevse-1.local`)
-- Static IP address (e.g., `192.168.1.101`)
-- Device ID (e.g., `openevse_abc123`)
-
-Members are managed via the `/loadsharing/peers` POST and DELETE endpoints
-**on the controller only**. These endpoints return 403 on member devices.
-
-#### Role designation
-
-The device where the user first enables load sharing and adds peers **becomes
-the controller** implicitly. When the controller pushes configuration to a
-peer, that peer becomes a **member** automatically. Member devices:
-
-- Accept load sharing configuration from the controller
-- Display load sharing status as read-only in the UI
-- Reject local changes to load sharing config fields (403)
-- Accept current allocation commands from the controller
+Members store the peer list in `/loadsharing_peers.json` on LittleFS so it
+survives reboot.
 
 ### 3) Status monitoring (controller → members)
 
-The **controller** maintains a live view of all members by subscribing to their
-WebSocket status stream (reusing the existing `/ws` endpoint):
+The controller connects to each member’s `ws://{host}/ws`, bootstraps with
+`GET /status` when needed, and tracks online/offline from the live stream.
+Members do not poll each other.
 
-- Connect to each member's WebSocket endpoint: `ws://<member-host>/ws`
-- On connect, the member sends a full status document (current behavior).
-- Subsequently, only changes are sent.
+### 4) Allocation algorithm (controller)
 
-The controller keeps `last_seen` per member and considers a member **online**
-if a message has been received within `heartbeat_timeout` seconds.
+Profile: **Equal Share with Minimums**.
 
-Members do not need to poll other members. Only the controller maintains
-WebSocket connections to all members.
+1. Offline handling:
+   - `disable` mode → all allocations 0 if any peer is offline.
+   - `safe_current` mode → reserve
+     `offline_count × failsafe_peer_assumed_current` from the budget.
+2. Connected (state B) members get `connected_min` **outside** the shared budget.
+3. Charging (state C) members share `I_avail = group_max × safety_factor − reserve`.
+4. If budget covers all minimums: give each min, then equal-share the remainder
+   (capped by each member’s max / underutilized-pilot cap).
+5. If not: select a subset ordered by **priority** (lower value wins), then
+   device id. With `loadsharing_rotation_interval > 0`, equal-priority runs
+   rotate so one vehicle is not permanently starved overnight.
 
-### 4) Allocation algorithm (controller only)
+When more than one member is charging and an EV draws below its pilot, the
+controller caps that member’s effective max so freed budget can move to others.
 
-The **controller** runs the allocation algorithm and pushes results to members.
-This centralized approach eliminates the need for distributed consensus or
-configuration synchronization.
+> **Live firmware note**: the algorithm supports per-peer priority, but the
+> controller currently fills every peer’s priority with its own
+> `loadsharing_priority`. Per-peer priority works in divert_sim; ingesting each
+> peer’s priority on the live controller is still outstanding (see project
+> status).
 
-#### Inputs
+### 5) Allocation delivery
 
-For each member `i` (including self), the algorithm uses:
-
-- `online_i`: boolean based on heartbeat
-- `demand_i`: boolean derived from status (e.g. `vehicle==1` and state not
-   disabled)
-- `min_i`: EVSE minimum current (from EVSE config/status)
-- `max_i`: EVSE max allowable current (pilot maximum)
-- `priority_i`: optional (default derived from stable device id)
-
-Group-level:
-
-- `I_group = group_max_current * safety_factor`
-
-#### Baseline profile: "Equal Share with Minimums"
-
-1. Determine `D` = set of demanding members that are online.
-2. If `D` is empty, allocation is 0 for all.
-3. Compute `I_avail = I_group`.
-4. If `I_avail >= sum(min_i for i in D)`:
-    - Assign each demanding member `alloc_i = min_i`.
-    - Distribute remaining current equally among demanding members, capped by
-       `max_i`.
-5. Else (not enough for everyone's minimum):
-    - Select a subset `S ⊆ D` in deterministic order (sorted by device id).
-    - Add members until `sum(min_i in S) <= I_avail`.
-    - Allocate `alloc_i = min_i` for i in S, and `alloc_i = 0` for others.
-
-This yields a safe "some charge, others wait" behavior when the
-circuit cannot satisfy all minimums.
-
-### 5) Allocation delivery (controller → members)
-
-After computing allocations, the controller pushes each member's current limit
-via the existing WebSocket connection (the same connection used for status
-monitoring in step 3). The controller sends a JSON message containing the
-allocation:
+Controller → member over the existing WebSocket:
 
 ```json
 {"loadsharing": {"target_current": 16.5, "reason": "equal_share"}}
 ```
 
-Members receive this message and apply it as a **claim** via the existing
-`EvseManager` claim system, using a dedicated `EvseClient_LoadSharing` client.
-The claim uses `Priority_Limit` to coexist with manual overrides and other
-claims.
+Common reasons: `equal_share`, `connected_min`, `min_subset`, `insufficient`,
+`offline`, `failsafe_disabled`, `idle`.
 
-The controller also applies its own allocation locally via the same claim
-mechanism.
+Each node applies the limit with `shaper.setLoadSharingLimit(...)` (or clears
+it). The shaper claim is at **Safety** priority, so while active it outranks a
+manual override. Solar divert and other lower-priority claims still interact
+normally; the effective charge current is the winning claim stack with
+`min(shaper_limit, loadshare_limit)` on the shaper claim.
 
-#### Other profiles (future)
+`EvseClient_OpenEVSE_LoadSharing` (claim id `65550`) is defined but **not** used
+for enforcement today.
 
-- Priority-first: higher priority members get more current first.
-- Reduce by percentage: everyone reduced proportionally.
-- FIFO/ramp behavior: staged ramp-up like JuiceNet.
-
-## Configuration management (controller/member model)
-
-Because the controller is the single source of truth for load sharing
-configuration, configuration drift between nodes is eliminated by design.
-
-### How configuration flows
-
-1. **User configures load sharing on the controller** via web UI or REST API:
-   group settings, member list, failsafe parameters.
-2. **Controller pushes config to each member** via `POST http://{member}/config`
-   when a peer is first added to the group (after the controller establishes a
-   WebSocket connection to the member).
-3. **Member accepts config from controller** and transitions to `role=member`.
-   Load sharing config fields become read-only on the member.
-4. **If the user changes config on the controller**, the controller pushes the
-   updated config to all online members. Members that are offline will receive
-   the updated config when they reconnect.
-
-### Member config lockout
-
-When a device is operating as a member (`loadsharing_role=member`):
-
-- Load sharing config fields are **read-only** (POST returns 403)
-- `/loadsharing/peers` POST and DELETE endpoints return 403
-- The web UI shows load sharing config as greyed-out / read-only
-- The member stores the controller's hostname in
-  `loadsharing_controller_host` for reconnection
-
-### Config fields pushed by controller
-
-The controller pushes these group-level settings to members:
-
-- `loadsharing_enabled`: true
-- `loadsharing_role`: "member"
-- `loadsharing_controller_host`: controller's hostname/IP
-- `loadsharing_group_id`
-- `loadsharing_group_max_current`
-- `loadsharing_safety_factor`
-- `loadsharing_heartbeat_timeout`
-- `loadsharing_failsafe_mode`
-- `loadsharing_failsafe_safe_current`
-- `loadsharing_failsafe_peer_assumed_current`
-
-### Resetting a member
-
-To remove a device from a load sharing group:
-
-1. **From the controller**: DELETE the peer via `/loadsharing/peers/{host}`.
-   The controller sends a config update to the member resetting
-   `loadsharing_enabled=false` and `loadsharing_role=""`.
-2. **From the member**: Factory-reset the load sharing config (or manually
-   clear `loadsharing_role` and `loadsharing_controller_host` via the API
-   with admin access).
-
-## Applying the allocation
-
-### Principle
-
-The load-sharing subsystem computes an allowed current for each member and
-delivers it as a **claim** via the existing `EvseManager` claim system. This
-approach:
-
-- Uses the existing claim priority hierarchy
-- Coexists with manual overrides and solar divert
-- Does not directly manage EVSE relays
-
-### Controller applies allocations
-
-On the **controller**:
-
-1. The allocation algorithm computes per-member target current.
-2. The controller applies its own allocation locally via a
-   `EvseClient_LoadSharing` claim at `Priority_Limit`.
-3. The controller sends each member's allocation via the WebSocket connection.
-
-On each **member**:
-
-1. The member receives an allocation message from the controller via WebSocket.
-2. The member applies the allocation as a `EvseClient_LoadSharing` claim at
-   `Priority_Limit`.
-3. The claim is subject to the existing Current Shaper timeout failsafe.
-
-### Voltage handling
-
-When the controller computes power-based limits:
-
-- **Preferred**: Use each member's measured voltage from WebSocket status
-- **Fallback**: Use the controller's local measured voltage
-- **Last resort**: Use nominal 240V
-
-## Fail-safe behavior
-
-Network failures are expected. The system must remain safe.
+## Fail-safe behaviour
 
 ### Member failsafe (controller offline)
 
-Each member applies its load sharing allocation as a **claim** in the
-`EvseManager` claim system. The claim leverages the existing Current Shaper
-timeout mechanism:
+`checkMemberFailsafe()` runs on the member poller loop. Failsafe engages when
+the controller host is missing, the controller is offline, no allocation has
+been received, or the last allocation is older than
+`loadsharing_heartbeat_timeout` (default **30 s**).
 
-- If the controller does not send an allocation update within
-  `current_shaper_data_maxinterval` (default: 120 seconds), the claim
-  expires automatically.
-- When the claim expires, the member reverts to safe behavior (existing
-  shaper failsafe logic).
+Enforcement:
 
-This means **no new failsafe code is needed** on members for the MVP. The
-existing Current Shaper timeout provides the safety net.
+| Mode | Action |
+|------|--------|
+| `safe_current` | `setLoadSharingLimit(failsafe_safe_current)` |
+| `disable` | `setLoadSharingLimit(0, force_disabled=true)` |
+
+When a fresh allocation arrives, the WebSocket handler replaces the failsafe
+limit.
 
 ### Controller failsafe (member offline)
 
-The controller tracks each member's online status via WebSocket heartbeat.
-A member is considered offline if `now - last_seen > heartbeat_timeout`.
+- **`safe_current`** (default): reserve assumed current for each offline peer;
+  online peers keep charging on the reduced budget.
+- **`disable`**: if any configured peer is offline, allocate 0 to everyone.
 
-When a member goes offline, the controller's allocation algorithm handles
-this with **conservative accounting**:
+### Controller failure
 
-- For each offline member, reserve `failsafe_peer_assumed_current` (default
-  6A) as assumed consumption.
-- This reduces the available current for online members, ensuring the group
-  stays under its configured maximum even if the offline member continues
-  charging.
+Members engage failsafe within the heartbeat timeout (not by waiting for the
+shaper’s 120 s live-power data interval). A new controller must be designated
+manually; automatic election is future work.
 
-### Fail-safe modes (configurable on controller)
+## Configuration lockout on members
 
-1. **Safe current on peer loss (graceful degradation)** (default)
-   - If any member is offline, reduce allocations to account for the
-     offline member's assumed consumption.
-   - Online members continue charging with reduced capacity.
+When `loadsharing_role == "member"`:
 
-2. **Disable on peer loss (strict safety)**
-   - If any configured member is offline, stop charging on all members
-     (allocation = 0).
-   - Matches #592's "members refuse to charge on loss of connectivity"
-     guidance.
+- Local `POST /config` **strips** `loadsharing_*` keys unless the post is a
+  controller push that sets `loadsharing_role` to `"member"`.
+- Intended behaviour (theory INV-7): peer management writes on members should
+  be rejected. Treat hard HTTP 403 on `/loadsharing/peers` as a target; verify
+  against current firmware if relying on it.
 
-### Controller failure scenario
+## API surface
 
-If the controller goes offline permanently:
+Load-sharing settings also appear on `/config`. Dedicated endpoints:
 
-- Members' claims expire after the Current Shaper timeout (120s).
-- Members revert to safe behavior (no load sharing active).
-- A new controller must be manually designated to restore load sharing.
-- **Automatic controller election is a future enhancement.**
+| Method | Path | Notes |
+|--------|------|-------|
+| `GET` | `/loadsharing/peers` | Discovered + group peers |
+| `POST` | `/loadsharing/peers` | Add peer. Duplicate → `200 {"msg":"already in group"}` (idempotent; skips reciprocal sync) |
+| `DELETE` | `/loadsharing/peers/{host}` | Remove peer; triggers reset config on the peer and reciprocal remove |
+| `DELETE` | `/loadsharing/peers` | Returns **501** (not implemented); only the `{host}` form works |
+| `GET` | `/loadsharing/status` | Runtime status + `allocations[]` |
+| `POST` | `/loadsharing/discover` | Trigger mDNS query |
 
-## Security and authorization
+`GET /loadsharing/status` fields: `enabled`, `group_id`, `computed_at`,
+`failsafe_active`, `online_count`, `offline_count`, `peers[]`, `allocations[]`.
+There is no `assigned_limit` / `controller_id` field; read the applied limit
+from the EVSE claim / shaper path.
 
-- Group communication occurs over the local network and uses existing
-   HTTP/WebSocket infrastructure.
-- If the firmware is configured with authentication / security profile settings
-   for websocket/API access, load sharing connections should reuse them.
-- The design assumes members are on a trusted LAN. If not, a shared group
-   secret or pairing token can be added later.
+See `api.yml` for schemas.
 
-## API surface (summary)
+## Testing
 
-Load sharing configuration is part of the main `/config` endpoint.
+- divert_sim scenarios + `divert_sim/test_loadsharing.py` (equal share, offline
+  failsafe, undrawn-pilot redistribution, priority, scarcity rotation, …)
+- Integration tests under `tests/integration/`
+  (`test_loadsharing_peer_*`, `test_loadsharing_fixes.py`,
+  `test_loadsharing_drills.py`)
 
-New REST API endpoints (available on **controller** only, except where noted):
+## Known limitations
 
-- `GET /loadsharing/peers` - List discovered and configured peers
-  *(read-only on members: shows own group membership)*
-- `POST /loadsharing/peers` - Add a peer to the group *(controller only; 403
-  on members)*
-- `DELETE /loadsharing/peers/{host}` - Remove a peer from the group
-  *(controller only; 403 on members)*
-- `GET /loadsharing/status` - Get runtime status and allocations *(available
-  on both controller and members; members show own allocation and controller
-  connection status)*
-- `POST /loadsharing/discover` - Trigger mDNS peer discovery *(controller
-  only)*
+See [load-sharing-project-status.md](load-sharing-project-status.md) for the
+live list. Important ones for readers of this overview:
 
-See the OpenAPI spec updates in api.yml.
-
-## Implementation plan (incremental)
-
-1. Add data model + config persistence for load sharing.
-2. Add mDNS discovery list endpoint (controller).
-3. Add peer status ingestion (controller connects to members):
-   - HTTP GET `/status` bootstrap for initial cache
-   - WebSocket client for `/ws` subscriptions
-4. Implement allocation algorithm on controller.
-5. Implement allocation delivery: controller pushes allocations to members
-   via WebSocket; members apply as claims.
-6. Implement config push: controller pushes config to members on peer add.
-7. Add fail-safe handling leveraging existing Current Shaper timeout.
-8. Web UI for controller (config + dashboard) and members (read-only status).
-
-## Testing strategy (no hardware required)
-
-- Unit-test allocation algorithm with synthetic peer sets.
-- Integration-test controller/member flow: config push, allocation delivery,
-  claim application.
-- Simulate member online/offline transitions and ensure failsafe triggers.
-- Extend divert_sim with multi-peer scenarios using OpenEVSE_Emulator.
-- Test controller failure: verify member claims expire within timeout.
+- GUI contract still mismatches firmware status/claim fields.
+- Live controller does not yet ingest each peer’s own priority.
+- Some poller elapsed-time checks are not rollover-safe.
+- Bulk `DELETE /loadsharing/peers` returns 501.
+- Claim layering vs charge-manager timer windows (#1112) still needs an
+  explicit decision.
 
 ## Future extensions
 
-The following features are deferred from the initial MVP and may be
-implemented in future versions:
-
-### Distributed configuration synchronization
-
-The MVP uses a controller/member model where the controller is the single
-source of truth. A future enhancement could implement fully distributed
-configuration synchronization:
-
-- Config version tracking: each node maintains a monotonic `config_version`
-  counter and `config_hash` of critical parameters.
-- Config hash exchange: include config fingerprint in WebSocket status
-  messages for mismatch detection.
-- Automatic sync: nodes with older config versions fetch newer config from
-  peers.
-- Conflict resolution: simultaneous updates resolved by timestamp comparison
-  with device ID tiebreaker.
-- Conservative fallback: use most restrictive values when configs disagree.
-
-This would allow any node to be configured and changes to propagate
-automatically, eliminating the need for a designated controller.
-
-### Automatic controller election
-
-If the controller goes offline, the remaining members could automatically
-elect a new controller based on a deterministic algorithm (e.g., lowest
-device ID among online members). This would provide automatic failover
-without manual intervention.
-
-### Multiple allocation profiles
-
-- Priority-first: higher priority members get more current first.
-- Reduce by percentage: everyone reduced proportionally.
-- FIFO/ramp behavior: staged ramp-up like JuiceNet.
-
-### Hierarchical groups
-
-Group-of-groups configuration like JuiceNet, allowing nested sharing
-hierarchies for complex electrical installations.
+- Additional allocation profiles (FIFO/ramp, proportional reduce).
+- Automatic controller election on controller loss.
+- Fully distributed config sync (no designated controller).
+- Hierarchical groups (group-of-groups).
+- Optional shared secret / pairing for untrusted LANs.

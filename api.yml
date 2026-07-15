@@ -690,9 +690,11 @@ paths:
     post:
       summary: Add a peer to the load sharing group
       description: |
-        Add a new peer member to the load sharing group. The peer can be specified
-        by hostname, IP address, or device ID. This will update the local
-        configuration and propagate to other group members via config sync.
+        Add a new peer to the load sharing group. The peer must be specified as a
+        hostname or IP address (the value must contain `.` or `:`). On success the
+        controller performs reciprocal peer-list sync on the remote unless
+        `reciprocal` is false. Config push to the new member is handled separately
+        by the peer poller after the WebSocket connection is established.
       requestBody:
         content:
           application/json:
@@ -703,34 +705,119 @@ paths:
               properties:
                 host:
                   type: string
-                  description: Hostname, IP address, or device ID of the peer to add
+                  description: Hostname or IP address of the peer to add
                   example: openevse-2.local
+                reciprocal:
+                  type: boolean
+                  default: true
+                  description: |
+                    When true (default), add this device to the remote peer's group
+                    list. Set false when handling a reciprocal sync from the remote.
       responses:
         '200':
-          $ref: '#/components/responses/UpdateSuccessful'
+          description: Peer added or already in group
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Message'
+              examples:
+                Added:
+                  value:
+                    msg: done
+                Already in group:
+                  value:
+                    msg: already in group
         '400':
-          $ref: '#/components/responses/BadRequest'
+          description: Invalid request
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Message'
+              examples:
+                Invalid JSON:
+                  value:
+                    msg: Invalid JSON
+                Missing host:
+                  value:
+                    msg: Missing required 'host' parameter
+                Empty host:
+                  value:
+                    msg: Host cannot be empty
+                Local device:
+                  value:
+                    msg: Cannot add local device as peer
+                Invalid host format:
+                  value:
+                    msg: Invalid host format - must contain domain or IP
       operationId: addLoadSharingPeer
+      tags:
+        - Load Sharing
+    delete:
+      summary: Remove all peers from the load sharing group
+      description: |
+        Bulk removal of all configured peers. Not implemented; use
+        DELETE /loadsharing/peers/{host} to remove individual peers.
+      responses:
+        '501':
+          description: Not implemented
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Message'
+              examples:
+                Not implemented:
+                  value:
+                    msg: Not implemented
+      operationId: removeAllLoadSharingPeers
       tags:
         - Load Sharing
   '/loadsharing/peers/{host}':
     delete:
       summary: Remove a peer from the load sharing group
       description: |
-        Remove a peer member from the load sharing group. This will update the local
-        configuration and propagate to other group members via config sync.
+        Remove a peer from the load sharing group. On success the controller
+        performs reciprocal removal on the remote unless `reciprocal=false`.
+        The controller also pushes a reset config to the removed member when
+        applicable.
       parameters:
         - in: path
           name: host
           required: true
           schema:
             type: string
-          description: Hostname, IP address, or device ID of the peer to remove
+          description: Hostname or IP address of the peer to remove
+        - in: query
+          name: reciprocal
+          required: false
+          schema:
+            type: boolean
+            default: true
+          description: |
+            When true (default), remove this device from the remote peer's group
+            list. Set false when handling a reciprocal sync from the remote.
       responses:
         '200':
           $ref: '#/components/responses/UpdateSuccessful'
+        '400':
+          description: Cannot remove local device
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Message'
+              examples:
+                Local device:
+                  value:
+                    msg: Cannot remove local device from group
         '404':
-          $ref: '#/components/responses/NotFound'
+          description: Peer not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Message'
+              examples:
+                Peer not found:
+                  value:
+                    msg: Peer not found
       operationId: removeLoadSharingPeer
       tags:
         - Load Sharing
@@ -1124,53 +1211,6 @@ components:
           maximum: 2
           exclusiveMaximum: false
 
-    LoadSharingFailSafe:
-      type: object
-      description: Load sharing safety behavior when peers are unreachable.
-      properties:
-        mode:
-          type: string
-          enum:
-            - disable
-            - safe_current
-          description: |
-            disable: refuse to charge when any configured member is offline.
-            safe_current: clamp to safe_current when any configured member is offline.
-        safe_current:
-          type: number
-          format: double
-          minimum: 0
-          description: Safe current (amps) to use when in safe_current mode.
-        peer_assumed_current:
-          type: number
-          format: double
-          minimum: 0
-          description: Conservative assumed current (amps) for offline peers.
-      required:
-        - mode
-
-    LoadSharingMember:
-      type: object
-      description: A configured member of a load sharing group.
-      properties:
-        id:
-          type: string
-          description: Stable device id (mDNS TXT record `id`).
-        host:
-          type: string
-          description: Hostname or IP address for this member.
-        name:
-          type: string
-          description: Optional human-readable name.
-        priority:
-          type: integer
-          description: Optional priority (lower means higher priority).
-        enabled:
-          type: boolean
-          default: true
-      required:
-        - host
- 
     LoadSharingPeerStatus:
       type: object
       description: Minimal peer status snapshot used for load sharing decisions.
@@ -1219,8 +1259,8 @@ components:
           type: boolean
           description: True if this peer is joined to the load sharing group (manually configured).
         last_seen:
-          type: string
-          format: date-time
+          type: integer
+          description: Seconds since boot when the peer was last seen (millis/1000).
         status:
           $ref: '#/components/schemas/LoadSharingPeerStatus'
 
@@ -1238,6 +1278,15 @@ components:
           description: Allocated current (amps).
         reason:
           type: string
+          enum:
+            - idle
+            - equal_share
+            - connected_min
+            - min_subset
+            - insufficient
+            - offline
+            - failsafe_disabled
+          description: Why this allocation was computed.
       required:
         - target_current
 

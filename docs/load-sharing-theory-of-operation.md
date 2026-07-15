@@ -714,12 +714,14 @@ Interaction with other claim sources:
 
 | Claim Source | Priority | Interaction |
 |-------------|----------|-------------|
-| Manual override | `Priority_Claim` | Can override load sharing (higher priority). |
+| Manual override | `Priority_Manual` (1000) | Outranked by the Safety-priority shaper claim while a load-share limit is active. |
 | Solar divert | `Priority_Divert` | Runs independently; load sharing caps the max, divert may reduce further. |
-| Current Shaper (CT clamp) | `Priority_Safety` | Same claim; the lower of shaper and load sharing limits wins. |
-| Timer/Schedule | `Priority_Timer` | Operates independently. |
+| Current Shaper (CT clamp) | `Priority_Safety` (5000) | Same claim; the lower of shaper and load sharing limits wins. |
+| Timer/Schedule | `Priority_Timer` | Operates independently; layering vs load sharing still under discussion (#1112). |
 | OCPP | Varies | Operates independently. |
 
 > **Key point**: Because load sharing piggybacks on the shaper claim, there is
 > no conflict between load sharing and the CT clamp shaper — they are combined
-> into a single claim using `min(shaper_limit, loadshare_limit)`.
+> into a single claim using `min(shaper_limit, loadshare_limit)`. While that
+> claim is active, a manual override cannot raise the pilot above the load-share
+> limit.

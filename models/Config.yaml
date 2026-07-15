@@ -109,6 +109,7 @@ x-examples:
     loadsharing_failsafe_safe_current: 6.0
     loadsharing_failsafe_peer_assumed_current: 6.0
     loadsharing_priority: 1
+    loadsharing_rotation_interval: 1800
     loadsharing_config_version: 1
     loadsharing_config_updated_at: 1735344000
     loadsharing_role: controller
@@ -378,9 +379,12 @@ properties:
   loadsharing_heartbeat_timeout:
     type: integer
     minimum: 5
+    maximum: 600
     default: 30
     description: |
-      Seconds before a peer is considered offline if no status update is received
+      Seconds before a member considers controller allocations stale and engages
+      failsafe. Also used by the controller to mark peers offline when no status
+      update is received.
   loadsharing_failsafe_mode:
     type: string
     enum:
@@ -394,7 +398,8 @@ properties:
     minimum: 0
     default: 6.0
     description: |
-      Safe current (amps) to use when in safe_current failsafe mode
+      Safe current (amps) to use when in safe_current failsafe mode. Must not
+      exceed loadsharing_group_max_current.
   loadsharing_failsafe_peer_assumed_current:
     type: number
     minimum: 0
@@ -407,6 +412,14 @@ properties:
     default: 0
     description: |
       Local node priority in the load sharing group (lower means higher priority). This is NOT synced across nodes - each node maintains its own priority preference.
+  loadsharing_rotation_interval:
+    type: integer
+    minimum: 0
+    default: 1800
+    description: |
+      Seconds between equal-priority member rotations when the budget cannot
+      cover all minimums. 0 disables rotation. Under scarcity, equal-priority
+      peers time-slice so one vehicle is not permanently starved.
   loadsharing_config_version:
     type: integer
     minimum: 0
