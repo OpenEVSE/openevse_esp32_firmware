@@ -202,7 +202,7 @@ remote's group list.  The same pattern applies to `DELETE`.
 
 ## 5  Allocation Algorithm
 
-File: [loadsharing_algorithm.cpp](file:///home/jpoulter/Dev/JeremyPoulter/ESP32_WiFi_V3.x/src/loadsharing_algorithm.cpp)
+File: [loadsharing_algorithm.cpp](src/loadsharing_algorithm.cpp)
 
 The algorithm is **"Equal Share with Minimums"**, executed on the controller
 every 5 seconds (or when triggered by status changes).
@@ -275,23 +275,23 @@ Group level:
 
 12. RETURN allocation vector.
 
-### 5.3  Taper Detection (`capLoadSharingMaxCurrent`)
+### 5.3  Underutilized Pilot Cap (`capLoadSharingMaxCurrent`)
 
 Before building allocation inputs, if more than one member is demanding, each
-member's `max_current` is adjusted for EV taper:
+member's `max_current` is adjusted when the EV draws less than its pilot:
 
 ```
 IF pilot_current > 0 AND measured_current > 0
    AND measured_current < (pilot_current − 0.25):
-  taper_ratio = measured_current / pilot_current
-  unrestricted_demand = max_current × taper_ratio
+  utilisation_ratio = measured_current / pilot_current
+  unrestricted_demand = max_current × utilisation_ratio
   effective_max = max(unrestricted_demand, measured_current)
 ELSE:
   effective_max = max_current
 ```
 
-This prevents over-allocating to a member whose EV is tapering (reducing its
-charge rate as it approaches full SOC), freeing budget for other members.
+This prevents over-allocating to a member whose EV is not using its full pilot
+(taper, EV current limit, aux load, etc.), freeing budget for other members.
 
 ### 5.4  Connected-But-Not-Charging ("Connected Min")
 
@@ -555,17 +555,17 @@ the basis for test assertions.
 > cycle, `GET /loadsharing/peers` MUST return all previously added peers
 > (with `joined: true`, `online` reflecting current discovery state).
 
-### 10.9  Taper Redistribution
+### 10.9  Undrawn Pilot Redistribution
 
-> **INV-10**: When one member's EV tapers (reduces charge rate below its pilot
-> setting), the freed budget MUST be redistributed to other demanding members
-> within one allocation cycle (≤5 s).
+> **INV-10**: When a member's EV is drawing less than its pilot (for any
+> reason — taper, EV current limit, aux load, etc.), the freed budget MUST be
+> redistributed to other demanding members within one allocation cycle (≤5 s).
 
 ---
 
 ## 11  Simulation Framework
 
-Simulation tests live in [divert_sim/test_loadsharing.py](file:///home/jpoulter/Dev/JeremyPoulter/ESP32_WiFi_V3.x/divert_sim/test_loadsharing.py).
+Simulation tests live in [divert_sim/test_loadsharing.py](divert_sim/test_loadsharing.py).
 They call `run_loadsharing_simulation()` which exercises the allocation
 algorithm using scenario JSON files from `divert_sim/data/scenarios/`.
 
@@ -594,71 +594,14 @@ algorithm using scenario JSON files from `divert_sim/data/scenarios/`.
 
 ---
 
-## 12  Known Issues and Gaps
-
-These items are documented in [load-sharing-project-status.md](file:///home/jpoulter/Dev/JeremyPoulter/ESP32_WiFi_V3.x/docs/load-sharing-project-status.md)
-and confirmed by code review.
-
-### 12.1  Member Failsafe Not Enforced
-
-`checkMemberFailsafe()` sets `_failsafe_active` but does not apply the safe
-current or disable the EVSE.  Enforcement depends entirely on the shaper's
-`current_shaper_data_maxinterval` timeout, which only fires when the shaper is
-enabled and receiving live power data.
-
-**Impact**: If the shaper is disabled (no CT clamp / no live power feed), a
-member with a stale allocation will continue charging at the last received
-limit indefinitely.
-
-**Required fix**: When member failsafe becomes active, actively claim either
-`loadsharing_failsafe_safe_current` (safe_current mode) or disabled state
-(disable mode).
-
-### 12.2  Poller Timeout Comparisons Not Rollover-Safe
-
-Several elapsed-time checks in `loadsharing_peer_poller.cpp` use direct
-subtraction (`now - lastTime > threshold`) instead of the repo's rollover-safe
-pattern (`(long)(millis() - deadline) >= 0`).
-
-**Impact**: At `millis()` rollover (~49.7 days), timeout checks may
-malfunction briefly.
-
-**Affected lines**: HTTP timeout check (L174), retry delay checks (L190, L242),
-WebSocket connection timeout (L435).
-
-### 12.3  Integration CI Binary Path
-
-The GitHub Actions integration test workflow sets `NATIVE_BINARY_PATH=./program`
-as a relative path, but the test fixture starts the native process in a
-per-instance temp directory, causing `FileNotFoundError`.
-
-### 12.4  GUI Contract Mismatch
-
-The GUI branch (`copilot/add-load-sharing-gui-support`) references API fields
-that do not exist in the firmware contract (e.g., `status.member.assigned_limit`,
-`controller_id`, `last_command_age`).
-
-### 12.5  Phase 3 Not Yet Implemented in Plan
-
-Role designation (`loadsharing_role`), config lockout on members, and config
-push from controller to members are implemented in the code but the
-implementation plan still marks Phase 3 tasks as "NOT STARTED".  The code
-review shows these are actually implemented (see `pushConfigToPeer()`,
-`becomeMember()`, etc.).  The implementation plan is stale on this point.
-
-### 12.6  DELETE /loadsharing/peers (without host) Returns 501
-
-`handleLoadSharingPeersDelete()` returns HTTP 501 "Not implemented".  Only the
-path-parameter variant (`DELETE /loadsharing/peers/{host}`) is functional.
-
----
-
-## 13  Test Plan Summary
+## 12  Test Plan Summary
 
 Tests should verify the invariants listed in §10 against the scenarios in §11
-and the failure modes in §12.
+and the known gaps documented in
+[load-sharing-project-status.md](docs/load-sharing-project-status.md) (Current
+Blockers).
 
-### 13.1  Unit / Simulation Tests (divert_sim)
+### 12.1  Unit / Simulation Tests (divert_sim)
 
 | Test Case | Invariants Covered | Status |
 |-----------|--------------------|--------|
@@ -675,26 +618,28 @@ and the failure modes in §12.
 | Zero members edge case | INV-2 | Not tested |
 | Negative available current | INV-1 | Not tested |
 
-### 13.2  Integration Tests (tests/integration/)
+### 12.2  Integration Tests (tests/integration/)
 
 | Test File | Coverage |
 |-----------|----------|
 | `test_loadsharing_peer_management.py` (14 tests) | Discovery, peer add/remove, duplicate rejection, delete, response structure. |
 | `test_loadsharing_peer_status.py` | Status ingestion, WebSocket connect, peer online tracking, multi-peer. |
 
-### 13.3  Recommended Additional Tests
+### 12.3  Recommended Additional Tests
 
 1. **Member failsafe enforcement** — Simulate controller loss; verify member
-   applies safe current or disables (once §12.1 is fixed).
+   applies safe current or disables (once member failsafe enforcement is fixed;
+   see [load-sharing-project-status.md](docs/load-sharing-project-status.md)).
 2. **Config lockout on members** — POST to `/loadsharing/peers` on a member
    device → expect 403 (INV-7).
 3. **Persistence across reboot** — Add peers, restart native binary, verify
    peers are still listed (INV-9).
 4. **Reciprocal sync** — Add peer on A, verify B's peer list includes A (INV-8).
 5. **Rollover-safe timers** — Inject `millis()` near rollover and verify
-   timeouts still work (§12.2).
-6. **Taper with >2 peers** — 3-peer group where one tapers; verify remaining
-   two share freed budget (INV-10).
+   timeouts still work (see poller rollover blocker in
+   [load-sharing-project-status.md](docs/load-sharing-project-status.md)).
+6. **Undrawn pilot with >2 peers** — 3-peer group where one EV draws below
+   pilot; verify remaining two share freed budget (INV-10).
 7. **All-idle group** — All members connected, none charging; verify budget
    is not consumed (connected_min is outside budget).
 
@@ -704,18 +649,18 @@ and the failure modes in §12.
 
 | File | Role |
 |------|------|
-| [loadsharing_types.h](file:///home/jpoulter/Dev/JeremyPoulter/ESP32_WiFi_V3.x/src/loadsharing_types.h) | Data structures: `LoadSharingPeerStatus`, `LoadSharingPeer`, `LoadSharingAllocation`, `LoadSharingGroupState`. |
-| [loadsharing_types.cpp](file:///home/jpoulter/Dev/JeremyPoulter/ESP32_WiFi_V3.x/src/loadsharing_types.cpp) | Group state management, peer persistence, member failsafe check. |
-| [loadsharing_algorithm.h](file:///home/jpoulter/Dev/JeremyPoulter/ESP32_WiFi_V3.x/src/loadsharing_algorithm.h) | `AllocationInput` struct, `computeAllocations()` declaration. |
-| [loadsharing_algorithm.cpp](file:///home/jpoulter/Dev/JeremyPoulter/ESP32_WiFi_V3.x/src/loadsharing_algorithm.cpp) | Allocation algorithm implementation. |
-| [loadsharing_peer_poller.h](file:///home/jpoulter/Dev/JeremyPoulter/ESP32_WiFi_V3.x/src/loadsharing_peer_poller.h) | `PeerConnectionState`, `PeerConnection`, `LoadSharingPeerPoller` class. |
-| [loadsharing_peer_poller.cpp](file:///home/jpoulter/Dev/JeremyPoulter/ESP32_WiFi_V3.x/src/loadsharing_peer_poller.cpp) | State machine, HTTP bootstrap, WebSocket ingestion, config push, allocation computation and delivery. |
-| [loadsharing_discovery_task.h/cpp](file:///home/jpoulter/Dev/JeremyPoulter/ESP32_WiFi_V3.x/src/loadsharing_discovery_task.h) | Background mDNS discovery task. |
-| [web_server_loadsharing.cpp](file:///home/jpoulter/Dev/JeremyPoulter/ESP32_WiFi_V3.x/src/web_server_loadsharing.cpp) | REST API endpoints for load sharing. |
-| [web_server.cpp (L1225-1244)](file:///home/jpoulter/Dev/JeremyPoulter/ESP32_WiFi_V3.x/src/web_server.cpp#L1225-L1244) | WebSocket allocation receive handler (member side). |
-| [current_shaper.cpp](file:///home/jpoulter/Dev/JeremyPoulter/ESP32_WiFi_V3.x/src/current_shaper.cpp) | Shaper claim integration for load sharing limits. |
-| [evse_man.h (L40)](file:///home/jpoulter/Dev/JeremyPoulter/ESP32_WiFi_V3.x/src/evse_man.h#L40) | `EvseClient_OpenEVSE_LoadSharing` claim ID definition. |
-| [test_loadsharing.py](file:///home/jpoulter/Dev/JeremyPoulter/ESP32_WiFi_V3.x/divert_sim/test_loadsharing.py) | Simulation-driven pytest suite. |
+| [loadsharing_types.h](src/loadsharing_types.h) | Data structures: `LoadSharingPeerStatus`, `LoadSharingPeer`, `LoadSharingAllocation`, `LoadSharingGroupState`. |
+| [loadsharing_types.cpp](src/loadsharing_types.cpp) | Group state management, peer persistence, member failsafe check. |
+| [loadsharing_algorithm.h](src/loadsharing_algorithm.h) | `AllocationInput` struct, `computeAllocations()` declaration. |
+| [loadsharing_algorithm.cpp](src/loadsharing_algorithm.cpp) | Allocation algorithm implementation. |
+| [loadsharing_peer_poller.h](src/loadsharing_peer_poller.h) | `PeerConnectionState`, `PeerConnection`, `LoadSharingPeerPoller` class. |
+| [loadsharing_peer_poller.cpp](src/loadsharing_peer_poller.cpp) | State machine, HTTP bootstrap, WebSocket ingestion, config push, allocation computation and delivery. |
+| [loadsharing_discovery_task.h/cpp](src/loadsharing_discovery_task.h) | Background mDNS discovery task. |
+| [web_server_loadsharing.cpp](src/web_server_loadsharing.cpp) | REST API endpoints for load sharing. |
+| [web_server.cpp (L1225-1244)](src/web_server.cpp#L1225-L1244) | WebSocket allocation receive handler (member side). |
+| [current_shaper.cpp](src/current_shaper.cpp) | Shaper claim integration for load sharing limits. |
+| [evse_man.h (L40)](src/evse_man.h#L40) | `EvseClient_OpenEVSE_LoadSharing` claim ID definition. |
+| [test_loadsharing.py](divert_sim/test_loadsharing.py) | Simulation-driven pytest suite. |
 
 ---
 
