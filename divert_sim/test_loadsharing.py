@@ -116,3 +116,45 @@ def test_loadsharing_finished_ev_stops_then_requests_aux_load():
     assert rows_by_time[1800]["evse-001_state"] == "charging"
     assert rows_by_time[1800]["evse-001_actual"] > 0.0
     assert rows_by_time[1800]["evse-002_actual"] > 0.0
+
+
+def test_loadsharing_scarcity_rotates_equal_priority_peers():
+    """Under scarcity, equal-priority peers time-slice: the winner rotates
+    every rotation_interval (1800 s here), so both cars make progress
+    instead of the lowest id starving the other all night."""
+    result = run_loadsharing_simulation(
+        "data/scenarios/loadsharing_scarcity_rotation.json",
+        "loadsharing_scarcity_rotation",
+    )
+    rows = result["_rows"]
+    winners = []
+    for row in rows:
+        one, two = row["evse-001_allocated"], row["evse-002_allocated"]
+        # Exactly one winner at the 6 A minimum each tick; never both.
+        assert sorted([one, two]) == [approx(0.0), approx(6.0)]
+        winners.append("evse-001" if one > 0 else "evse-002")
+
+    # The winner changes over the run (no permanent starvation)...
+    assert len(set(winners)) == 2, "rotation never happened"
+    # ...and each peer holds the slot for a contiguous window, not per-tick
+    # flapping: count winner changes. With the rotation clock seeded on the
+    # first call (t=0), windows run from t=0 and the offset advances at
+    # 1800/3600/5400/7200 s. The 7200 s run's last tick lands on the final
+    # boundary, so a 7200 s run at a 1800 s interval yields 4 changes.
+    changes = sum(1 for a, b in zip(winners, winners[1:]) if a != b)
+    assert changes == 4, f"expected 4 rotations in 2 h at 30 min, got {changes}"
+
+
+def test_loadsharing_priority_selects_winner_under_scarcity():
+    """Priority (lower value = higher priority, per loadsharing_algorithm.h)
+    decides who charges when the budget only fits one minimum: evse-002
+    (priority 0) must win over evse-001 (priority 10) despite its higher id."""
+    result = run_loadsharing_simulation(
+        "data/scenarios/loadsharing_priority_wins.json",
+        "loadsharing_priority_wins",
+    )
+    for row in result["_rows"]:
+        assert row["evse-002_allocated"] == approx(6.0)
+        assert row["evse-001_allocated"] == approx(0.0)
+    assert result["_rows"][-1]["evse-002_reason"] == "min_subset"
+    assert result["_rows"][-1]["evse-001_reason"] == "insufficient"

@@ -136,9 +136,12 @@ class TestPeerManagement:
 
     def test_add_peer_duplicate_rejection(self, instance_pair_auto, peer_hostname_factory):
         """
-        Test: POST /loadsharing/peers rejects duplicate hosts.
+        Test: POST /loadsharing/peers handles duplicate hosts idempotently.
 
-        Verifies that adding the same peer twice fails on the second attempt.
+        Duplicate adds are idempotent by design: mDNS auto-discovery racing a
+        manual add (or a repeated reciprocal sync) is a normal sequence, not a
+        client error. The second add returns 200 "already in group" and the
+        peer still appears exactly once.
         """
         pair = instance_pair_auto()
         native_url = pair["native_url"]
@@ -152,19 +155,28 @@ class TestPeerManagement:
         )
         assert response.status_code == 200
 
-        # Add peer second time (should fail)
+        # Add peer second time (idempotent no-op, not an error)
         response = requests.post(
             f"{native_url}/loadsharing/peers",
             json={"host": test_host}
         )
-        assert response.status_code == 400, (
-            f"Expected 400 for duplicate peer, got {response.status_code}: {response.text}"
+        assert response.status_code == 200, (
+            f"Expected 200 for idempotent duplicate peer, got {response.status_code}: {response.text}"
         )
 
         data = response.json()
         error_msg = data.get("error", "") or data.get("msg", "")
-        assert "already" in error_msg.lower() or "duplicate" in error_msg.lower(), (
-            f"Error message should mention duplicate: {error_msg}"
+        assert "already in group" in error_msg.lower(), (
+            f"Message should note the peer is already in the group: {error_msg}"
+        )
+
+        # The duplicate must not create a second entry.
+        response = requests.get(f"{native_url}/loadsharing/peers")
+        assert response.status_code == 200
+        peers = response.json()
+        matching_peers = [p for p in peers if p.get("host") == test_host]
+        assert len(matching_peers) == 1, (
+            f"Duplicate add must leave exactly one entry, got: {matching_peers}"
         )
 
     def test_delete_peer(self, instance_pair_auto, peer_hostname_factory):

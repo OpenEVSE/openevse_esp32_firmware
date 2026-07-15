@@ -1,6 +1,7 @@
 #ifndef _DIVERT_SIM_SIM_SCENARIO_H
 #define _DIVERT_SIM_SIM_SCENARIO_H
 
+#include <cstdint>
 #include <ctime>
 #include <string>
 #include <vector>
@@ -66,6 +67,7 @@ struct GroupScenario
   double safety_factor = 1.0;
   std::string failsafe_mode = "safe_current";
   double failsafe_peer_assumed_current = 6.0;
+  uint32_t rotation_interval = 1800;
 };
 
 struct Scenario

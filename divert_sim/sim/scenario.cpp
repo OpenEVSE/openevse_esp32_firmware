@@ -87,6 +87,7 @@ bool Scenario::loadFromFile(const std::string &path)
     }
     group.failsafe_peer_assumed_current =
         grp["failsafe_peer_assumed_current"] | 6.0;
+    group.rotation_interval = grp["rotation_interval"] | 1800;
   }
 
   // Backward-compat: old scenario files use a top-level "supply" object with

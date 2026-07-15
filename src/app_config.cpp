@@ -184,6 +184,7 @@ uint32_t loadsharing_config_version;
 uint32_t loadsharing_config_updated_at;
 String loadsharing_role;
 String loadsharing_controller_host;
+uint32_t loadsharing_rotation_interval;
 
 String esp_hostname_default = "openevse-"+ESPAL.getShortId();
 
@@ -329,6 +330,8 @@ ConfigOpt *opts[] =
   new ConfigOptDefinition<uint32_t>(loadsharing_config_updated_at, 0, "loadsharing_config_updated_at", "lscua"),
   new ConfigOptDefinition<String>(loadsharing_role, "", "loadsharing_role", "lsr"),
   new ConfigOptDefinition<String>(loadsharing_controller_host, "", "loadsharing_controller_host", "lsch"),
+  // Rotation interval in seconds (0 disables). Effective max ~49 days on 32-bit millis; larger values wrap.
+  new ConfigOptDefinition<uint32_t>(loadsharing_rotation_interval, 1800, "loadsharing_rotation_interval", "lsri"),
 
 // Scheduler options
   new ConfigOptDefinition<uint32_t>(scheduler_start_window, SCHEDULER_DEFAULT_START_WINDOW, "scheduler_start_window", "ssw"),

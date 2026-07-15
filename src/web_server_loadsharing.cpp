@@ -178,9 +178,12 @@ void handleLoadSharingPeersPost(MongooseHttpServerRequest *request, MongooseHttp
 
   // Add to group peers list via group state
   if (!loadSharingGroupState.addGroupPeer(host)) {
-    DBUGF("[LoadSharing] Peer already in group: %s", host.c_str());
-    response->setCode(400);
-    response->print("{\"msg\":\"Peer already in group\"}");
+    // Already present: treat as an idempotent no-op. mDNS auto-discovery
+    // racing a manual add (or a repeated reciprocal sync) is a normal
+    // sequence, not a client error.
+    DBUGF("[LoadSharing] Peer already in group (idempotent add): %s", host.c_str());
+    response->setCode(200);
+    response->print("{\"msg\":\"already in group\"}");
     return;
   }
 
