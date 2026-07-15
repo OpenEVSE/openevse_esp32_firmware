@@ -236,6 +236,7 @@ void buildStatus(DynamicJsonDocument &doc) {
   doc["eth_connected"] = (int)net.isWiredConnected();
   doc["net_connected"] = (int)net.isWifiClientConnected();
   doc["ipaddress"] = net.getIp();
+  doc["ipv6address"] = net.getIpv6();
   doc["macaddress"] = net.getMac();
 
   doc["emoncms_connected"] = (int)emoncms_connected;
@@ -261,6 +262,7 @@ void buildStatus(DynamicJsonDocument &doc) {
 
 #if defined(ENABLE_PN532) || defined(ENABLE_RFID)
   doc["rfid_failure"] = (int) rfid.communicationFails();
+  doc["rfid_reader"] = (int) rfid.readerPresent();
 #endif
 
   doc["ohm_hour"] = ohm_hour;
@@ -608,8 +610,9 @@ handleStatus(MongooseHttpServerRequest *request)
 void
 handleScheduleGet(MongooseHttpServerRequest *request, MongooseHttpServerResponseStream *response, uint16_t event)
 {
-  const size_t capacity = JSON_OBJECT_SIZE(40) + 1024;
-  DynamicJsonDocument doc(capacity);
+  // Sized from the stored event count — a fixed budget silently truncated
+  // multi-rule schedules (serialize() drops events once the doc overflows).
+  DynamicJsonDocument doc(scheduler.scheduleJsonCapacity());
 
   bool success = (SCHEDULER_EVENT_NULL == event) ?
     scheduler.serialize(doc) :
