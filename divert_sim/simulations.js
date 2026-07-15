@@ -444,6 +444,154 @@ function buildPeerSeries(rows, peerId, visibility) {
   return { series, hasGridIE: showGridIE };
 }
 
+function sumPeerColumn(row, peerIds, suffix) {
+  let sum = 0;
+  let hasAny = false;
+  peerIds.forEach((peerId) => {
+    const value = Number.parseFloat(row[`${peerId}_${suffix}`] || "NaN");
+    if (Number.isFinite(value)) {
+      sum += value;
+      hasAny = true;
+    }
+  });
+  return hasAny ? sum : Number.NaN;
+}
+
+function buildGroupPointMeta(rows, peerIds, voltage) {
+  const byTime = {};
+  if (!Array.isArray(rows) || rows.length === 0 || !Array.isArray(peerIds) || peerIds.length < 2) {
+    return byTime;
+  }
+
+  rows.forEach((row) => {
+    const ms = Date.parse(row.time);
+    if (!Number.isFinite(ms)) {
+      return;
+    }
+
+    const totalActualW = "group_total_actual_w" in row
+      ? Number.parseFloat(row.group_total_actual_w || "NaN")
+      : sumPeerColumn(row, peerIds, "actual_charge_w");
+    const totalAllocatedW = sumPeerColumn(row, peerIds, "loadshare_allocated_w");
+    const groupLimitW = Number.parseFloat(row.group_max_w || "NaN");
+
+    const entry = {};
+    if (Number.isFinite(totalActualW)) {
+      entry["Total Actual Charge (W)"] = totalActualW;
+    }
+    if (Number.isFinite(totalAllocatedW)) {
+      entry["Total Loadshare Allocated (W)"] = totalAllocatedW;
+    }
+    if (Number.isFinite(groupLimitW)) {
+      entry["Group Limit (W)"] = groupLimitW;
+    }
+
+    if (Number.isFinite(voltage) && voltage > 0) {
+      const ampsByLabel = {};
+      Object.keys(entry).forEach((label) => {
+        if (label.endsWith("(W)")) {
+          ampsByLabel[label] = entry[label] / voltage;
+        }
+      });
+      if (Object.keys(ampsByLabel).length > 0) {
+        entry.ampsByLabel = ampsByLabel;
+      }
+    }
+
+    byTime[ms] = entry;
+  });
+
+  return byTime;
+}
+
+function buildGroupSeries(rows, peerIds) {
+  if (!rows || rows.length === 0 || !peerIds || peerIds.length < 2) {
+    return { series: [] };
+  }
+
+  const sample = rows[0];
+  const series = [];
+
+  const addSeries = (label, color, getY, options) => {
+    const opts = options || {};
+    const points = rows
+      .map((row) => ({
+        x: new Date(row.time),
+        y: getY(row),
+      }))
+      .filter((point) => Number.isFinite(point.y) && !Number.isNaN(point.x.getTime()));
+
+    if (points.length === 0) {
+      return;
+    }
+
+    series.push({
+      name: label,
+      type: opts.filled ? "area" : "line",
+      lineThickness: opts.filled ? 0.8 : (opts.lineThickness || 1.5),
+      showInLegend: true,
+      color,
+      ...(opts.filled ? { fillOpacity: 0.25 } : {}),
+      ...(opts.lineDashType ? { lineDashType: opts.lineDashType } : {}),
+      dataPoints: points,
+    });
+  };
+
+  if ("group_total_actual_w" in sample) {
+    addSeries(
+      "Total Actual Charge (W)",
+      "#f57c00",
+      (row) => Number.parseFloat(row.group_total_actual_w || "NaN")
+    );
+  } else {
+    addSeries(
+      "Total Actual Charge (W)",
+      "#f57c00",
+      (row) => sumPeerColumn(row, peerIds, "actual_charge_w")
+    );
+  }
+
+  if (peerIds.some((peerId) => `${peerId}_loadshare_allocated_w` in sample)) {
+    addSeries(
+      "Total Loadshare Allocated (W)",
+      "#388e3c",
+      (row) => sumPeerColumn(row, peerIds, "loadshare_allocated_w"),
+      { filled: true }
+    );
+  }
+
+  if ("group_max_w" in sample) {
+    addSeries(
+      "Group Limit (W)",
+      "#d32f2f",
+      (row) => Number.parseFloat(row.group_max_w || "NaN"),
+      { lineThickness: 2, lineDashType: "dash" }
+    );
+  }
+
+  series.sort((a, b) => {
+    const aIsFill = a.name === "Total Loadshare Allocated (W)";
+    const bIsFill = b.name === "Total Loadshare Allocated (W)";
+    return aIsFill === bIsFill ? 0 : (aIsFill ? -1 : 1);
+  });
+
+  return { series };
+}
+
+function getScenarioVoltage(scenarioSource) {
+  const fromSimulation = scenarioSource
+    && scenarioSource.simulation
+    ? scenarioSource.simulation.nominal_voltage
+    : Number.NaN;
+  if (Number.isFinite(Number.parseFloat(fromSimulation))) {
+    return Number.parseFloat(fromSimulation);
+  }
+
+  const peers = scenarioSource && Array.isArray(scenarioSource.peers) ? scenarioSource.peers : [];
+  const fromPeer = peers.length > 0 && peers[0] ? peers[0].voltage : Number.NaN;
+  return Number.parseFloat(fromPeer);
+}
+
 function getEvseStateVisual(stateCode) {
   const raw = String(stateCode || "").trim().toLowerCase();
   let code = Number.NaN;
@@ -1208,15 +1356,54 @@ async function renderScenario(container, scenario, renderToken) {
     return { peerId, result };
   });
 
-  const yRanges = peerData
-    .map((peer) => getSeriesYRange(peer.result.series))
-    .filter(Boolean);
+  const groupResult = peerIds.length > 1
+    ? buildGroupSeries(parsed.rows, peerIds)
+    : { series: [] };
+  const scenarioVoltage = getScenarioVoltage(scenarioSource);
+
+  const yRanges = [
+    ...peerData.map((peer) => getSeriesYRange(peer.result.series)),
+    ...(groupResult.series.length > 0 ? [getSeriesYRange(groupResult.series)] : []),
+  ].filter(Boolean);
   const sharedMin = yRanges.length > 0 ? Math.min(...yRanges.map((range) => range.min)) : Number.NaN;
   const sharedMax = yRanges.length > 0 ? Math.max(...yRanges.map((range) => range.max)) : Number.NaN;
   const sharedAxisMin = Number.isFinite(sharedMin) && sharedMin < 0 ? sharedMin : 0;
   const sharedAxisMax = Number.isFinite(sharedMax) ? sharedMax : Number.NaN;
 
   const charts = [];
+
+  if (peerIds.length > 1) {
+    const summarySection = document.createElement("div");
+    summarySection.className = "sim-summary-section";
+
+    const summaryTitle = document.createElement("h4");
+    summaryTitle.textContent = "Group summary";
+    summarySection.appendChild(summaryTitle);
+
+    const summaryChartDiv = document.createElement("div");
+    summaryChartDiv.id = `${scenario.id}_${scenario.profile}_group_summary`;
+    summaryChartDiv.style.width = "100%";
+    summaryChartDiv.style.height = "320px";
+    summarySection.appendChild(summaryChartDiv);
+    scenarioBlock.appendChild(summarySection);
+
+    const summaryChart = createChart(
+      summaryChartDiv.id,
+      `${scenario.title} - Group summary`,
+      groupResult.series,
+      {
+        axisYMinimum: sharedAxisMin,
+        axisYMaximum: sharedAxisMax,
+        tooltipExtra: {
+          metaByTime: buildGroupPointMeta(parsed.rows, peerIds, scenarioVoltage),
+        },
+      }
+    );
+    if (summaryChart) {
+      charts.push(summaryChart);
+    }
+  }
+
   peerData.forEach(({ peerId, result }, idx) => {
     const peerTitle = document.createElement("h4");
     peerTitle.textContent = `${peerId}`;
