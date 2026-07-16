@@ -175,6 +175,12 @@ def test_loadsharing_ev_can_delay_start_while_connected():
     assert rows_by_time[600]["evse-001_state"] == "charging"
     assert rows_by_time[600]["evse-001_actual"] > 0.0
 
+    # Once the allocation opens up after the (delayed) start, the actual draw
+    # must expand to fill it rather than staying pinned at the connected_min
+    # ramp point. The EV can pull ~30 A (7.2 kW / 240 V) against a 32 A grant.
+    assert rows_by_time[700]["evse-001_allocated"] >= 30.0
+    assert rows_by_time[700]["evse-001_actual"] >= 28.0
+
 
 def test_loadsharing_finished_ev_stops_then_requests_aux_load():
     result = run_loadsharing_simulation(

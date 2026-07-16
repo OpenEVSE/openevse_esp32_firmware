@@ -216,8 +216,14 @@ RapiSender::sendCmdSync(String &cmd, unsigned long timeout)
         case 'C':
         {
           sscanf(cmd.c_str(), "$SC %ld V", &sim->pilot);
+          // Real hardware echoes the resultant current capacity as the first
+          // token ("$OK ampsset"); the firmware relies on this to update its
+          // pilot belief. Without it, EvseMonitor::setPilot never records the
+          // new pilot and skips subsequent identical-target re-sends.
+          sprintf(buf1, "%ld", sim->pilot);
           _tokens[0] = ok;
-          _tokenCnt = 1;
+          _tokens[1] = buf1;
+          _tokenCnt = 2;
         } break;
         case 'Y':
         {
