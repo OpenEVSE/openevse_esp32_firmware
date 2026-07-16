@@ -67,6 +67,9 @@ uint32_t www_https_port;
 String esp_hostname;
 String sntp_hostname;
 
+// Device-wide temperature display unit ("c" | "f").
+String temp_unit;
+
 // On-device LVGL TFT display theme ("dark" | "light").
 String tft_theme;
 uint32_t tft_brightness;
@@ -214,6 +217,10 @@ ConfigOpt *opts[] =
 // Advanced settings
   new ConfigOptDefinition<String>(esp_hostname, esp_hostname_default, "hostname", "hn"),
   new ConfigOptDefinition<String>(sntp_hostname, SNTP_DEFAULT_HOST, "sntp_hostname", "sh"),
+
+// Temperature display unit ("c" | "f") — device-wide, read by the display and
+// the web UI so both agree. Default Celsius (the device always reports °C).
+  new ConfigOptDefinition<String>(temp_unit, "c", "temp_unit", "tu"),
 
 #ifdef ENABLE_SCREEN_LVGL_TFT
 // On-device display theme (only present on LVGL-TFT builds; its presence in

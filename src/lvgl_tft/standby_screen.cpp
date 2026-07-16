@@ -140,7 +140,7 @@ void standby_screen_update(const StandbyScreenData &d)
 
   char tr[48]; tr[0] = '\0';
   size_t n = 0;
-  if (d.temp_valid) n += snprintf(tr + n, sizeof(tr) - n, "%.1fC  ", d.temp_c);
+  if (d.temp_valid) n += fmt_temp(tr + n, sizeof(tr) - n, d.temp_c, d.temp_fahrenheit);
   if (d.wifi_client) {
     if (d.wifi_connected) n += snprintf(tr + n, sizeof(tr) - n, LV_SYMBOL_WIFI " %d%%", wifi_percent(d.rssi));
     else                  n += snprintf(tr + n, sizeof(tr) - n, LV_SYMBOL_WIFI " --");
