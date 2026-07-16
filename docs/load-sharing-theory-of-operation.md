@@ -316,7 +316,12 @@ allocation:
    allocation increases so ramp-up transients are not mistaken for a hard ceiling.
 2. **Sticky cap**: while active, keep `effective_max = min(configured_max,
    demand_cap)` even when integer pilot quantization would clear a stateless
-   `measured < pilot − 0.25` check on the next cycle.
+   `measured < pilot − 0.25` check on the next cycle. The cap is floored at
+   `min_current`: an EVSE cannot physically offer below its minimum pilot, so a
+   near-full EV drawing a sub-minimum taper trickle is held at `min_current`
+   rather than driven below it (which would make the shaper disable the port and
+   restart an enable/disable limit cycle). The unused portion of its share is
+   still released to other members.
 3. **Recovery**: release the cap when measured current tracks the offered
    allocation again (`measured ≥ offered − 0.25` and `measured ≥ demand_cap −
    0.25`).

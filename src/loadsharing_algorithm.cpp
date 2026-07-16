@@ -100,7 +100,14 @@ double applyLoadSharingDemandCap(LoadSharingDemandState& state,
       return configured_max;
     }
 
-    return std::min(configured_max, state.demand_cap);
+    // Never cap below the minimum offerable pilot: the EVSE cannot physically
+    // offer less than min_current, and doing so makes the shaper disable/sleep
+    // the port, which resets this state and produces an enable/disable limit
+    // cycle for near-full EVs drawing a sub-minimum taper trickle. Holding at
+    // min_current keeps the port charging steadily while still releasing the
+    // rest of its share to other members.
+    double floor = std::min(min_current, configured_max);
+    return std::max(floor, std::min(configured_max, state.demand_cap));
   }
 
   return configured_max;

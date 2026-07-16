@@ -196,6 +196,22 @@ def test_loadsharing_finished_ev_stops_then_requests_aux_load():
         and row["evse-001_actual"] == approx(0.0)
     ]
     assert finished
+
+    # While EV1 is still drawing its sub-minimum taper trickle (before it truly
+    # completes), the demand cap must hold it steady at the minimum pilot rather
+    # than cycling it between charging and sleeping. Count enable/disable edges
+    # over the trickle window and require none.
+    trickle = [
+        row for row in result["_rows"]
+        if row["time"] <= 170 and row["evse-001_actual"] > 0.0
+    ]
+    sleep_edges = sum(
+        1 for prev, cur in zip(trickle, trickle[1:])
+        if prev["evse-001_state"] == "charging"
+        and cur["evse-001_state"] in ("sleeping", "disabled")
+    )
+    assert sleep_edges == 0, f"EV1 oscillated into sleep {sleep_edges} times"
+
     assert rows_by_time[1800]["evse-001_state"] == "charging"
     assert rows_by_time[1800]["evse-001_actual"] > 0.0
     assert rows_by_time[1800]["evse-002_actual"] > 0.0

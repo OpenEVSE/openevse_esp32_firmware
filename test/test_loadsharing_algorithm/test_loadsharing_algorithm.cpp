@@ -115,6 +115,17 @@ TEST_CASE("demand cap detects under-draw against pilot current") {
   CHECK(state.active);
 }
 
+TEST_CASE("demand cap never falls below the minimum offerable pilot") {
+  // A near-full EV drawing a sub-minimum taper trickle (1.4A) must not be
+  // capped below min_current: offering < min forces the shaper to disable the
+  // port, which resets the state and creates an enable/disable limit cycle.
+  LoadSharingDemandState state;
+  double capped = applyLoadSharingDemandCap(
+      state, 32, 1.4, 16, 16, 6, true, true);
+  CHECK(capped == doctest::Approx(6.0));
+  CHECK(state.active);
+}
+
 TEST_CASE("demand cap stays sticky across pilot quantization cycles") {
   LoadSharingDemandState state;
   applyLoadSharingDemandCap(state, 32, 15.6, 16, 16, 6, true, true);
