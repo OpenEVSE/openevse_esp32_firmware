@@ -20,10 +20,6 @@
 // Ring full-scale (amps). The ring is indicative, not a hard gauge.
 #define RING_FULL_SCALE_A 48.0f
 
-// Max rendered width (px) for the centre state word at the large font before we
-// step down a size. Sized to the ring's usable inner width (200px ring - 14px
-// band each side) so long words ("NOT CONNECTED") never wrap onto the band.
-#define STATE_WORD_FIT_W 172
 
 static lv_obj_t *charge_scr   = nullptr;  // the screen object (for destroy on switch)
 static lv_obj_t *arc          = nullptr;
