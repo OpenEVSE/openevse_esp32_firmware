@@ -11,6 +11,7 @@
 #include "current_shaper.h"
 #include "manual.h"
 #include "event_log.h"
+#include "loadsharing_algorithm.h"
 
 #include "scenario.h"
 #include "sim_evse.h"
@@ -65,6 +66,9 @@ public:
   // Allocation handed to this peer by the load-sharing algorithm (amps).
   // 0 = no constraint applied.
   double loadshare_allocation_amps = 0.0;
+
+  // Persistent under-draw cap state (mirrors firmware peer poller).
+  LoadSharingDemandState demand_state;
 
   // Reason text for the most recent reduction in pilot below max (filled by
   // the runner before each row is written).

@@ -227,10 +227,15 @@ int run(const std::string &scenario_path,
         in.min_current = p->scenario().min_current;
         in.max_current = p->scenario().max_current;
         if (demanding_count > 1) {
-          in.max_current = capLoadSharingMaxCurrent(
+          in.max_current = applyLoadSharingDemandCap(
+            p->demand_state,
             in.max_current,
             p->simEvse().actualCurrent(),
-            p->simEvse().pilot);
+            p->simEvse().pilot,
+            p->loadshare_allocation_amps,
+            in.min_current,
+            in.charging,
+            in.demanding);
         }
         in.priority = p->scenario().priority;
         inputs.push_back(in);

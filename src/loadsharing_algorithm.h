@@ -32,9 +32,43 @@ struct LoadSharingRotationState {
   uint32_t last_rotation_ms = 0;
 };
 
-double capLoadSharingMaxCurrent(double max_current,
-                                double measured_current,
-                                double pilot_current);
+/**
+ * @brief Persistent per-member demand cap for under-drawing EVs.
+ *
+ * Retains a detected acceptance ceiling across allocation recomputations so
+ * integer pilot quantization cannot release and re-apply the cap every cycle.
+ */
+struct LoadSharingDemandState {
+  bool active = false;
+  double demand_cap = 0.0;
+  bool was_charging = false;
+  uint8_t probe_cycles = 0;
+  double last_probe_measured = 0.0;
+  double last_offered = 0.0;
+  uint8_t detection_holdoff = 0;
+};
+
+/**
+ * @brief Apply the underutilized-pilot demand cap with hysteresis and probing.
+ *
+ * @param state Per-member demand state persisted by the caller
+ * @param configured_max Member's configured maximum current (amps)
+ * @param measured_current Measured charge current (amps)
+ * @param pilot_current Active pilot current at the EVSE (amps)
+ * @param offered_current Previous allocation target offered to this member (amps)
+ * @param min_current Member minimum current (amps)
+ * @param charging True when the member is actively charging (state C)
+ * @param demanding True when the member wants current (vehicle connected, online)
+ * @return Effective max_current for allocation input
+ */
+double applyLoadSharingDemandCap(LoadSharingDemandState& state,
+                                 double configured_max,
+                                 double measured_current,
+                                 double pilot_current,
+                                 double offered_current,
+                                 double min_current,
+                                 bool charging,
+                                 bool demanding);
 
 /**
  * @brief Compute load sharing allocations using "Equal Share with Minimums" algorithm.

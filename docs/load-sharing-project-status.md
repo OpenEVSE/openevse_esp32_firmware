@@ -8,12 +8,12 @@ up later without needing to reconstruct the review from chat history.
 ## Branches and PRs
 
 - Firmware repo: `OpenEVSE/openevse_esp32_firmware`
-- Firmware branch: `TODO-721-complete-load-sharing`
+- Firmware branch: `jeremypoulter/issue940`
 - Firmware PR: <https://github.com/OpenEVSE/openevse_esp32_firmware/pull/1027>
 - Merged onto the branch: [#1147](https://github.com/OpenEVSE/openevse_esp32_firmware/pull/1147)
   (member failsafe enforcement, config validation, priority + rotation)
 - GUI repo: `OpenEVSE/openevse-gui-nightshift`
-- GUI branch: `TODO-721-complete-load-sharing`
+- GUI branch: `copilot/add-load-sharing-gui-support`
 - GUI PR: <https://github.com/OpenEVSE/openevse-gui-nightshift/pull/47>
 
 ## Implemented Firmware Scope
@@ -227,9 +227,22 @@ group budget.
 
 ### 7. Executable Stability Checks (INV-STAB) — Resolved
 
-Simulation checks reject period-two allocation flapping, winner changes outside
-rotation boundaries, non-finite outputs, reason/state mismatches, and physical
-budget violations on the firmware's 5 s allocation cadence.
+Simulation checks reject period-two allocation flapping at allocation
+recomputation points (compressed allocation runs, not adjacent 1 s CSV rows),
+winner changes outside rotation boundaries, non-finite outputs, reason/state
+mismatches, and physical budget violations on the firmware's 5 s allocation
+cadence. The stateful demand-cap tracker (`LoadSharingDemandState` /
+`applyLoadSharingDemandCap`) eliminated the measured-current feedback limit
+cycle that previously caused 16/16 ↔ 17/15 A reversals every 10 s in
+`loadsharing_ev_limited`, taper redistribution, finish/resume, and long-run
+handoff scenarios.
+
+**2026-07-16 validation (stateful demand cap)**:
+- `pio run -e native_simulator` — rebuilt simulator binary
+- `python3 divert_sim/run_simulations.py` — regenerated all CSV outputs and `output/index.json`
+- `pio test -e native_test` — all native unit tests passed (including expanded `test_loadsharing_algorithm`)
+- `pytest divert_sim` — 76/76 passed (18 load-sharing scenarios, including INV-STAB flapping guards)
+- `pio run -e openevse_wifi_v1` — production firmware build succeeded
 
 ## Remaining Non-Goals
 

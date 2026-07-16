@@ -303,21 +303,33 @@ Group level:
 
 13. RETURN allocation vector.
 
-### 5.3  Underutilized Pilot Cap (`capLoadSharingMaxCurrent`)
+### 5.3  Underutilized Demand Cap (`applyLoadSharingDemandCap`)
 
 Before building allocation inputs, if more than one member is demanding, each
-member's `max_current` is adjusted when the EV draws less than its pilot:
+member's `max_current` is adjusted through a persistent
+`LoadSharingDemandState` when the EV draws less than its last offered
+allocation:
 
-```
-IF pilot_current > 0 AND measured_current > 0
-   AND measured_current < (pilot_current − 0.25):
-  effective_max = min(max_current, measured_current)
-ELSE:
-  effective_max = max_current
-```
+1. **Detect (immediate downward)**: if the pilot is above the member minimum and
+   `measured_current < pilot_current − 0.25`, set `demand_cap = measured_current`
+   and mark the state active. Detection is suppressed briefly after the offered
+   allocation increases so ramp-up transients are not mistaken for a hard ceiling.
+2. **Sticky cap**: while active, keep `effective_max = min(configured_max,
+   demand_cap)` even when integer pilot quantization would clear a stateless
+   `measured < pilot − 0.25` check on the next cycle.
+3. **Recovery**: release the cap when measured current tracks the offered
+   allocation again (`measured ≥ offered − 0.25` and `measured ≥ demand_cap −
+   0.25`).
+4. **Bounded probe**: every 6 allocation cycles (30 s at the 5 s cadence),
+   sample whether measured current has risen above the capped ceiling. A probe
+   does not bump the offered allocation; it only releases the cap when measured
+   demand has genuinely recovered.
+5. **Reset**: clear demand state when the member disconnects, leaves charging,
+   or begins a new charging session.
 
 This prevents over-allocating to a member whose EV is not using its full pilot
-(taper, EV current limit, aux load, etc.), freeing budget for other members.
+(taper, EV current limit, aux load, etc.), freeing budget for other members
+without oscillating allocations every 5 s.
 
 ### 5.4  Connected-But-Not-Charging ("Connected Min")
 
@@ -636,10 +648,12 @@ the basis for test assertions.
 > oscillate.
 >
 > A target MUST NOT move by more than 0.5 A and return within two consecutive
-> 5 s cycles unless an input changed. Equal-priority scarcity winners may
-> change only at a rotation boundary. During taper, the physical over-budget
-> gap must converge without repeatedly changing sign. The one-cycle state-B
-> to state-C exception in INV-1 still applies.
+> 5 s recomputation cycles unless an input changed. Equal-priority scarcity
+> winners may change only at a rotation boundary. During taper, the physical
+> over-budget gap must converge without repeatedly changing sign. The one-cycle
+> state-B to state-C exception in INV-1 still applies. The demand-cap tracker
+> (`LoadSharingDemandState`) provides the hysteresis that enforces this against
+> integer pilot quantization.
 
 ---
 

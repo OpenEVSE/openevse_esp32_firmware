@@ -745,6 +745,15 @@ std::vector<AllocationInput> LoadSharingPeerPoller::buildAllocationInputs() {
     return false;
   };
 
+  auto lastOffered = [this](const String& id) -> double {
+    for (const auto& allocation : _groupState->getAllocations()) {
+      if (allocation.getId() == id) {
+        return allocation.getTargetCurrent();
+      }
+    }
+    return 0.0;
+  };
+
   // Add self (controller) as first member
   {
     AllocationInput self;
@@ -794,14 +803,27 @@ std::vector<AllocationInput> LoadSharingPeerPoller::buildAllocationInputs() {
   }
 
   if (demanding_count > 1) {
-    inputs[0].max_current = capLoadSharingMaxCurrent(inputs[0].max_current, evse.getAmps(), evse.getChargeCurrent());
+    inputs[0].max_current = applyLoadSharingDemandCap(
+      _selfDemandState,
+      inputs[0].max_current,
+      evse.getAmps(),
+      evse.getChargeCurrent(),
+      lastOffered(inputs[0].id),
+      inputs[0].min_current,
+      inputs[0].charging,
+      inputs[0].demanding);
 
     size_t index = 1;
-    for (const auto& pair : _connections) {
-      inputs[index].max_current = capLoadSharingMaxCurrent(
+    for (auto& pair : _connections) {
+      inputs[index].max_current = applyLoadSharingDemandCap(
+        pair.second.demandState,
         inputs[index].max_current,
         pair.second.statusCache.getAmp(),
-        pair.second.statusCache.getPilot());
+        pair.second.statusCache.getPilot(),
+        lastOffered(inputs[index].id),
+        inputs[index].min_current,
+        inputs[index].charging,
+        inputs[index].demanding);
       index++;
     }
   }

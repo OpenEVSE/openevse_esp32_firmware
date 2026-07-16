@@ -31,14 +31,47 @@ def assert_valid_allocations(result):
                 assert row[f"{peer_id}_reason"] == "offline"
 
 
+def compress_allocation_runs(rows, peer_ids):
+    compressed = []
+    previous = None
+    for row in rows:
+        signature = tuple(round(row[f"{peer_id}_allocated"], 2) for peer_id in peer_ids)
+        if signature != previous:
+            compressed.append(row)
+            previous = signature
+    return compressed
+
+
+def row_input_signature(row, peer_ids):
+    return tuple(
+        (
+            row[f"{peer_id}_online"],
+            row[f"{peer_id}_vehicle"],
+            row[f"{peer_id}_state"],
+            round(row[f"{peer_id}_actual"], 1),
+        )
+        for peer_id in peer_ids
+    )
+
+
 def assert_no_period_two_flapping(result, threshold=0.5):
+    rows = compress_allocation_runs(result["_rows"], result["_peer_ids"])
     for peer_id in result["_peer_ids"]:
-        allocations = [row[f"{peer_id}_allocated"] for row in result["_rows"]]
-        for first, middle, last in zip(allocations, allocations[1:], allocations[2:]):
+        allocations = [row[f"{peer_id}_allocated"] for row in rows]
+        signatures = [row_input_signature(row, result["_peer_ids"]) for row in rows]
+        for i in range(len(allocations) - 2):
+            first = allocations[i]
+            middle = allocations[i + 1]
+            last = allocations[i + 2]
+            if signatures[i] != signatures[i + 1] or signatures[i] != signatures[i + 2]:
+                continue
             assert not (
                 abs(middle - first) > threshold
                 and abs(last - first) <= 0.01
-            ), f"{peer_id} allocation flapped {first:.2f} → {middle:.2f} → {last:.2f}"
+            ), (
+                f"{peer_id} allocation flapped {first:.2f} → {middle:.2f} → "
+                f"{last:.2f} at recompute points with unchanged inputs"
+            )
 
 
 def test_loadsharing_2peer_basic_split():
@@ -271,6 +304,36 @@ def test_loadsharing_ev_limit_redistributes_within_one_cycle():
         and row["evse-001_allocated"] > 16.0
     ]
     assert redistributed
+
+
+def test_loadsharing_ev_limited_does_not_flap():
+    result = run_loadsharing_simulation(
+        "data/scenarios/loadsharing_ev_limited.json",
+        "loadsharing_ev_limited",
+    )
+    assert_physical_budget(result)
+    assert_valid_allocations(result)
+    assert_no_period_two_flapping(result)
+
+
+def test_loadsharing_ev_taper_redistribution_does_not_flap():
+    result = run_loadsharing_simulation(
+        "data/scenarios/loadsharing_ev_taper_redistribution.json",
+        "loadsharing_ev_taper_redistribution",
+    )
+    assert_physical_budget(result)
+    assert_valid_allocations(result)
+    assert_no_period_two_flapping(result)
+
+
+def test_loadsharing_ev_finish_aux_resume_does_not_flap():
+    result = run_loadsharing_simulation(
+        "data/scenarios/loadsharing_ev_finish_aux_resume.json",
+        "loadsharing_ev_finish_aux_resume",
+    )
+    assert_physical_budget(result)
+    assert_valid_allocations(result)
+    assert_no_period_two_flapping(result)
 
 
 def test_loadsharing_longrun_handoff_does_not_flap():

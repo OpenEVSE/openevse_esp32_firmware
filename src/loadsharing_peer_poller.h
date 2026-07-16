@@ -49,6 +49,7 @@ struct PeerConnection {
   bool hasInitialStatus;              // True after first successful status fetch
   bool httpPending;                   // True while HTTP request is in flight
   bool configPushed;                  // True after config has been pushed to this peer
+  LoadSharingDemandState demandState; // Persistent under-draw cap for allocation
 
   PeerConnection() :
     host(""),
@@ -225,6 +226,11 @@ private:
    * @brief Rotation state for time-slicing equal-priority members under scarcity
    */
   LoadSharingRotationState _rotationState;
+
+  /**
+   * @brief Persistent demand cap for the controller (self)
+   */
+  LoadSharingDemandState _selfDemandState;
 
   /**
    * @brief Recompute allocations and push to members (controller only)

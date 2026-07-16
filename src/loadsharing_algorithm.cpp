@@ -13,15 +13,97 @@
 #include "loadsharing_algorithm.h"
 #include <algorithm>
 
-double capLoadSharingMaxCurrent(double max_current,
-                                double measured_current,
-                                double pilot_current)
+namespace {
+
+constexpr double kDemandDetectMarginA = 0.25;
+constexpr double kDemandRecoveryMarginA = 0.25;
+constexpr uint8_t kDemandProbeInterval = 6;
+constexpr uint8_t kDemandOfferIncreaseHoldoff = 6;
+
+void resetLoadSharingDemandState(LoadSharingDemandState& state) {
+  state.active = false;
+  state.demand_cap = 0.0;
+  state.probe_cycles = 0;
+  state.last_probe_measured = 0.0;
+  state.detection_holdoff = 0;
+}
+
+} // namespace
+
+double applyLoadSharingDemandCap(LoadSharingDemandState& state,
+                                 double configured_max,
+                                 double measured_current,
+                                 double pilot_current,
+                                 double offered_current,
+                                 double min_current,
+                                 bool charging,
+                                 bool demanding)
 {
-  if (pilot_current > 0 && measured_current > 0 &&
-      measured_current < (pilot_current - 0.25)) {
-    return std::min(max_current, measured_current);
+  if (!demanding || configured_max <= 0) {
+    resetLoadSharingDemandState(state);
+    state.was_charging = false;
+    return configured_max;
   }
-  return max_current;
+
+  if (charging != state.was_charging) {
+    resetLoadSharingDemandState(state);
+  }
+  state.was_charging = charging;
+
+  if (!charging) {
+    state.last_offered = 0.0;
+    return configured_max;
+  }
+
+  if (state.last_offered > 0 &&
+      offered_current > (state.last_offered + 0.5)) {
+    state.detection_holdoff = kDemandOfferIncreaseHoldoff;
+  }
+  state.last_offered = offered_current;
+
+  bool detect_allowed = true;
+  if (state.detection_holdoff > 0) {
+    state.detection_holdoff--;
+    detect_allowed = false;
+  }
+
+  if (detect_allowed &&
+      pilot_current > min_current &&
+      measured_current > 0 &&
+      pilot_current > 0 &&
+      measured_current < (pilot_current - kDemandDetectMarginA)) {
+    if (!state.active || measured_current < state.demand_cap) {
+      state.demand_cap = measured_current;
+    }
+    state.active = true;
+    state.probe_cycles = 0;
+    state.last_probe_measured = measured_current;
+  }
+
+  if (state.active && state.demand_cap > 0) {
+    state.probe_cycles++;
+    if (state.probe_cycles >= kDemandProbeInterval) {
+      state.probe_cycles = 0;
+      if (measured_current >= (state.demand_cap + kDemandRecoveryMarginA)) {
+        resetLoadSharingDemandState(state);
+        return configured_max;
+      }
+      if (measured_current > (state.last_probe_measured + kDemandRecoveryMarginA)) {
+        state.demand_cap = measured_current;
+        state.last_probe_measured = measured_current;
+        resetLoadSharingDemandState(state);
+        return configured_max;
+      }
+      state.last_probe_measured = measured_current;
+    } else if (measured_current >= (state.demand_cap + kDemandRecoveryMarginA)) {
+      resetLoadSharingDemandState(state);
+      return configured_max;
+    }
+
+    return std::min(configured_max, state.demand_cap);
+  }
+
+  return configured_max;
 }
 
 std::vector<LoadSharingAllocation> computeAllocations(

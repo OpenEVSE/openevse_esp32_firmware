@@ -1,5 +1,6 @@
 #define DOCTEST_CONFIG_IMPLEMENT_WITH_MAIN
 #include "doctest.h"
+#include <cmath>
 #include "loadsharing_algorithm.h"
 
 static AllocationInput member(const char* id, bool online = true,
@@ -106,8 +107,112 @@ TEST_CASE("scarcity rotation boundary survives millis rollover") {
   CHECK(after[1].getTargetCurrent() == doctest::Approx(6));
 }
 
-TEST_CASE("underused pilot cap preserves measured demand floor") {
-  CHECK(capLoadSharingMaxCurrent(32, 8, 16) == doctest::Approx(8));
-  CHECK(capLoadSharingMaxCurrent(32, 20, 16) == doctest::Approx(32));
-  CHECK(capLoadSharingMaxCurrent(32, 0, 16) == doctest::Approx(32));
+TEST_CASE("demand cap detects under-draw against pilot current") {
+  LoadSharingDemandState state;
+  double capped = applyLoadSharingDemandCap(
+      state, 32, 15.6, 16, 16, 6, true, true);
+  CHECK(capped == doctest::Approx(15.6));
+  CHECK(state.active);
+}
+
+TEST_CASE("demand cap stays sticky across pilot quantization cycles") {
+  LoadSharingDemandState state;
+  applyLoadSharingDemandCap(state, 32, 15.6, 16, 16, 6, true, true);
+
+  for (int i = 0; i < 4; i++) {
+    double capped = applyLoadSharingDemandCap(
+        state, 32, 15.6, 15, 15, 6, true, true);
+    CHECK(capped == doctest::Approx(15.6));
+    CHECK(state.active);
+  }
+}
+
+TEST_CASE("demand cap converges downward when measured draw falls") {
+  LoadSharingDemandState state;
+  applyLoadSharingDemandCap(state, 32, 15.6, 16, 16, 6, true, true);
+  double capped = applyLoadSharingDemandCap(
+      state, 32, 10.0, 15.6, 15.6, 6, true, true);
+  CHECK(capped == doctest::Approx(10.0));
+}
+
+TEST_CASE("demand cap resets when member stops demanding") {
+  LoadSharingDemandState state;
+  applyLoadSharingDemandCap(state, 32, 15.6, 16, 16, 6, true, true);
+  double released = applyLoadSharingDemandCap(
+      state, 32, 15.6, 16, 16, 6, true, false);
+  CHECK(released == doctest::Approx(32));
+  CHECK_FALSE(state.active);
+}
+
+TEST_CASE("demand cap resets on new charging session") {
+  LoadSharingDemandState state;
+  applyLoadSharingDemandCap(state, 32, 15.6, 16, 16, 6, true, true);
+  applyLoadSharingDemandCap(state, 32, 0, 0, 0, 6, false, true);
+  double fresh = applyLoadSharingDemandCap(
+      state, 32, 15.6, 16, 16, 6, true, true);
+  CHECK(fresh == doctest::Approx(15.6));
+}
+
+TEST_CASE("demand cap probes for recovery without perturbing allocation") {
+  LoadSharingDemandState state;
+  applyLoadSharingDemandCap(state, 32, 15.6, 16, 16, 6, true, true);
+
+  double capped = 0;
+  for (int i = 0; i < 4; i++) {
+    capped = applyLoadSharingDemandCap(
+        state, 32, 15.6, 15.6, 15.6, 6, true, true);
+    CHECK(capped == doctest::Approx(15.6));
+  }
+
+  double probed = applyLoadSharingDemandCap(
+      state, 32, 15.6, 15.6, 15.6, 6, true, true);
+  CHECK(probed == doctest::Approx(15.6));
+
+  double recovered = applyLoadSharingDemandCap(
+      state, 32, 16.2, 16.2, 15.6, 6, true, true);
+  CHECK(recovered == doctest::Approx(32));
+  CHECK_FALSE(state.active);
+}
+
+TEST_CASE("demand cap releases when measured exceeds capped ceiling") {
+  LoadSharingDemandState state;
+  applyLoadSharingDemandCap(state, 32, 15.6, 16, 16, 6, true, true);
+  double released = applyLoadSharingDemandCap(
+      state, 32, 16.2, 16.2, 16, 6, true, true);
+  CHECK(released == doctest::Approx(32));
+  CHECK_FALSE(state.active);
+}
+
+TEST_CASE("sticky demand cap stabilizes integer pilot redistribution") {
+  LoadSharingDemandState limited;
+  LoadSharingDemandState peer;
+
+  limited.demand_cap = 15.6;
+  limited.active = true;
+
+  std::vector<double> limited_max;
+  std::vector<double> peer_alloc;
+
+  for (int cycle = 0; cycle < 8; cycle++) {
+    double offered_limited = cycle == 0 ? 16.0 : limited_max.back();
+    double offered_peer = cycle == 0 ? 16.0 : peer_alloc.back();
+
+    double effective_limited = applyLoadSharingDemandCap(
+        limited, 32, 15.6, 16, offered_limited, 6, true, true);
+    double effective_peer = applyLoadSharingDemandCap(
+        peer, 32, 16.0, 16, offered_peer, 6, true, true);
+
+    auto result = allocate(
+        {member("limited", true, 0, 6, effective_limited),
+         member("peer", true, 0, 6, effective_peer)},
+        32);
+    limited_max.push_back(effective_limited);
+    peer_alloc.push_back(result[1].getTargetCurrent());
+  }
+
+  CHECK(limited_max.back() == doctest::Approx(15.6));
+  CHECK(peer_alloc.back() == doctest::Approx(16.4).epsilon(0.2));
+  for (size_t i = 2; i < peer_alloc.size(); i++) {
+    CHECK(std::abs(peer_alloc[i] - peer_alloc[i - 1]) <= 0.5);
+  }
 }
