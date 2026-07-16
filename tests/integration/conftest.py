@@ -167,7 +167,7 @@ def get_native_binary_path() -> Path:
 
     Priority:
     1. NATIVE_BINARY_PATH environment variable (set in CI)
-    2. Local build output .pio/build/native/program (local development)
+    2. Local build output .pio/build/native_openevse/program (local development)
 
     Returns:
         Path to native binary

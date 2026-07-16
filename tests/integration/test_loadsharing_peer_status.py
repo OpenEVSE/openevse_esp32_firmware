@@ -16,7 +16,7 @@ These tests verify that the native firmware's LoadSharingPeerPoller can:
 Prerequisites:
 - Docker (emulator image)
 - socat (TCP-to-PTY bridge)
-- Native firmware binary (.pio/build/native/program)
+- Native firmware binary (.pio/build/native_openevse/program)
 """
 
 import pytest

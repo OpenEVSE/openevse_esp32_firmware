@@ -199,7 +199,7 @@ API compliance tests:
 ### Local Development
 
 ```bash
-# Override native binary location (default: .pio/build/native/program)
+# Override native binary location (default: .pio/build/native_openevse/program)
 export NATIVE_BINARY_PATH=/path/to/native/binary
 
 # Run tests
