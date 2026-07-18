@@ -22,6 +22,7 @@ struct ChargeScreenData {
   double   session_wh;        // session energy delivered
   bool     temp_valid;
   float    temp_c;
+  bool     temp_fahrenheit;   // render temp_c in °F
   bool     wifi_client;       // true = STA, false = AP
   bool     wifi_connected;
   int      rssi;              // STA dBm (valid when wifi_client && connected)

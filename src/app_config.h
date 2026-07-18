@@ -43,6 +43,10 @@ extern String esp_hostname;
 extern String esp_hostname_default;
 extern String sntp_hostname;
 
+// Device-wide temperature display unit: "c" (Celsius) or "f" (Fahrenheit).
+// Source of truth for both the on-device display and the web UI.
+extern String temp_unit;
+
 // On-device LVGL TFT display theme: "dark" (nightshift) or "light".
 extern String tft_theme;
 extern uint32_t tft_brightness;

@@ -121,6 +121,16 @@ void standby_screen_update(const StandbyScreenData &d)
 
   lv_color_t accent;
   const char *word = state_word(d.evse_state, &accent);
+
+  // Length-adaptive font, mirroring the charge screen: keep the large size for
+  // words that render inside the ring, drop one size for the wide ones so they
+  // stay on a single line.
+  lv_point_t sz;
+  lv_txt_get_size(&sz, word, &lv_font_montserrat_28, 0, 0, LV_COORD_MAX, LV_TEXT_FLAG_NONE);
+  const lv_font_t *font = (sz.x <= STATE_WORD_FIT_W) ? &lv_font_montserrat_28
+                                                     : &lv_font_montserrat_20;
+  lv_obj_set_style_text_font(state_lbl, font, 0);
+
   lv_label_set_text(state_lbl, word);
   lv_obj_set_style_text_color(state_lbl, accent, 0);
   lv_obj_align_to(state_lbl, arc, LV_ALIGN_CENTER, 0, 0);
@@ -130,7 +140,7 @@ void standby_screen_update(const StandbyScreenData &d)
 
   char tr[48]; tr[0] = '\0';
   size_t n = 0;
-  if (d.temp_valid) n += snprintf(tr + n, sizeof(tr) - n, "%.1fC  ", d.temp_c);
+  if (d.temp_valid) n += fmt_temp(tr + n, sizeof(tr) - n, d.temp_c, d.temp_fahrenheit);
   if (d.wifi_client) {
     if (d.wifi_connected) n += snprintf(tr + n, sizeof(tr) - n, LV_SYMBOL_WIFI " %d%%", wifi_percent(d.rssi));
     else                  n += snprintf(tr + n, sizeof(tr) - n, LV_SYMBOL_WIFI " --");
