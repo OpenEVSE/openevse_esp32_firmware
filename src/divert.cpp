@@ -130,10 +130,11 @@ void DivertTask::setMode(DivertMode mode)
 
         // Timer-driven divert must outrank the schedule's base Timer claim
         // (100) so "solar only" wins (idle = EVSE off when there's no excess
-        // solar). Always-on (config) divert keeps its normal low priority.
+        // solar), but stays below Manual so an override still works.
+        // Always-on (config) divert keeps its normal low priority.
         EvseProperties props(EvseState::Disabled);
         _evse->claim(EvseClient_OpenEVSE_Divert,
-          _timer_divert_active ? EvseManager_Priority_Limit : EvseManager_Priority_Default, props);
+          _timer_divert_active ? EvseManager_Priority_TimerFeature : EvseManager_Priority_Default, props);
       } break;
 
       default:
@@ -238,7 +239,7 @@ void DivertTask::update_state()
       EvseProperties props(EvseState::Active);
       props.setChargeCurrent(_charge_rate);
       _evse->claim(EvseClient_OpenEVSE_Divert,
-        _timer_divert_active ? EvseManager_Priority_Limit : EvseManager_Priority_Divert, props);
+        _timer_divert_active ? EvseManager_Priority_TimerFeature : EvseManager_Priority_Divert, props);
     }
     else if (_smoothed_available_current <= trigger_current)
     {
@@ -246,7 +247,7 @@ void DivertTask::update_state()
       {
         EvseProperties props(EvseState::Disabled);
         _evse->claim(EvseClient_OpenEVSE_Divert,
-          _timer_divert_active ? EvseManager_Priority_Limit : EvseManager_Priority_Default, props);
+          _timer_divert_active ? EvseManager_Priority_TimerFeature : EvseManager_Priority_Default, props);
       }
     }
 
@@ -298,17 +299,18 @@ void DivertTask::setTimerDivertActive(bool active)
   if(active) {
     if(_mode == DivertMode::Eco) {
       // Already in Eco — setMode() would no-op.  Re-issue the current claim
-      // immediately at Priority_Limit so the schedule's Timer(100) claim can't
-      // override us while we wait for the next MQTT update_state() call.
+      // immediately at Priority_TimerFeature so the schedule's Timer(100)
+      // claim can't override us while we wait for the next MQTT
+      // update_state() call.
       // If already charging, re-issue Active with the last known charge_rate;
       // update_state() will correct it on the next solar/grid MQTT message.
       if(_evse->getState(EvseClient_OpenEVSE_Divert) == EvseState::Active) {
         EvseProperties props(EvseState::Active);
         props.setChargeCurrent(_charge_rate);
-        _evse->claim(EvseClient_OpenEVSE_Divert, EvseManager_Priority_Limit, props);
+        _evse->claim(EvseClient_OpenEVSE_Divert, EvseManager_Priority_TimerFeature, props);
       } else {
         EvseProperties props(EvseState::Disabled);
-        _evse->claim(EvseClient_OpenEVSE_Divert, EvseManager_Priority_Limit, props);
+        _evse->claim(EvseClient_OpenEVSE_Divert, EvseManager_Priority_TimerFeature, props);
       }
     } else {
       setMode(DivertMode::Eco);
