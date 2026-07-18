@@ -9,6 +9,7 @@
 #else
 #include <lwip/netdb.h>
 #endif
+#include <cstring>
 #include "openevse.h"
 #include "divert.h"
 #include "input.h"
@@ -67,16 +68,9 @@ void Mqtt::setup() {
     this->handleMqttMessage(topic, payload);
   });
 
-  _mqttclient.onError([this](int err) {
-    DBUGF("MQTT error %d", err);
-    this->onMqttDisconnect(err,
-      MG_EV_MQTT_CONNACK_UNACCEPTABLE_VERSION == err ? "CONNACK_UNACCEPTABLE_VERSION" :
-      MG_EV_MQTT_CONNACK_IDENTIFIER_REJECTED == err ? "CONNACK_IDENTIFIER_REJECTED" :
-      MG_EV_MQTT_CONNACK_SERVER_UNAVAILABLE == err ? "CONNACK_SERVER_UNAVAILABLE" :
-      MG_EV_MQTT_CONNACK_BAD_AUTH == err ? "CONNACK_BAD_AUTH" :
-      MG_EV_MQTT_CONNACK_NOT_AUTHORIZED == err ? "CONNACK_NOT_AUTHORIZED" :
-      strerror(err)
-    );
+  _mqttclient.onError([this](const char *err) {
+    DBUGF("MQTT error: %s", err ? err : "unknown");
+    this->onMqttDisconnect(-1, err ? err : "ERROR");
     _error_time = millis();
   });
 
@@ -275,17 +269,16 @@ void Mqtt::onMqttDisconnect(int err, const char *reason) {
   // DNS round-trip time. DNS is handled safely in loop() after reconnect.
   MicroTask.wakeTask(this);
 
-  // Classify the failure so the UI can show an actionable reason. The CONNACK
-  // codes (1-5) arrive via the broker's connection-acknowledgement; anything
-  // else is a transport/network level close.
-  const char *category;
-  switch (err) {
-    case MG_EV_MQTT_CONNACK_BAD_AUTH:
-    case MG_EV_MQTT_CONNACK_NOT_AUTHORIZED:    category = "auth";        break;
-    case MG_EV_MQTT_CONNACK_SERVER_UNAVAILABLE: category = "unavailable"; break;
-    case MG_EV_MQTT_CONNACK_IDENTIFIER_REJECTED: category = "id_rejected"; break;
-    case MG_EV_MQTT_CONNACK_UNACCEPTABLE_VERSION: category = "version";    break;
-    default:                                   category = "network";     break;
+  // Mongoose 7 wrapper reports disconnect errors as text, so classify by reason.
+  const char *category = "network";
+  if(reason && (strstr(reason, "BAD_AUTH") || strstr(reason, "NOT_AUTHORIZED"))) {
+    category = "auth";
+  } else if(reason && strstr(reason, "SERVER_UNAVAILABLE")) {
+    category = "unavailable";
+  } else if(reason && strstr(reason, "IDENTIFIER_REJECTED")) {
+    category = "id_rejected";
+  } else if(reason && strstr(reason, "UNACCEPTABLE_VERSION")) {
+    category = "version";
   }
   setError(category, reason);
 

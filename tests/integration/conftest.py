@@ -59,7 +59,7 @@ def wait_for_http_ready(url: str, timeout: float = 30, poll_interval: float = 0.
     start = time.time()
     while time.time() - start < timeout:
         try:
-            response = requests.get(url, timeout=2)
+            response = requests.get(url, timeout=2, allow_redirects=False)
             if response.status_code == 200:
                 return True
         except (requests.RequestException, ValueError):
@@ -89,7 +89,7 @@ def wait_for_evse_state(url: str, timeout: float = 30, poll_interval: float = 0.
     start = time.time()
     while time.time() - start < timeout:
         try:
-            response = requests.get(url, timeout=2)
+            response = requests.get(url, timeout=2, allow_redirects=False)
             if response.status_code == 200:
                 data = response.json()
                 if data.get("state", 0) != 0:
@@ -305,6 +305,12 @@ def evse_instance(docker_client, emulator_image, tmp_path_factory):
                 pty_path,
                 "--set-config",
                 f"www_http_port={native_port}",
+                "--set-config",
+                "ssid=EPX_OK",
+                "--set-config",
+                "pass=integration",
+                "--set-config",
+                "sntp_enabled=true",
             ],
             stdout=subprocess.DEVNULL,
             stderr=subprocess.DEVNULL,

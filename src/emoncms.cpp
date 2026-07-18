@@ -4,6 +4,7 @@
 
 #include <Arduino.h>
 #include <ArduinoJson.h>
+#include <memory>
 #include <MongooseString.h>
 #include <MongooseHttpClient.h>
 
@@ -52,9 +53,17 @@ void emoncms_publish(JsonDocument &data)
     String json;
     serializeJson(data, json);
     url += "fulljson=";
-    MongooseString encodedJson = mg_url_encode(MongooseString(json));
-    url += (const char *)encodedJson;
-    mg_strfree(encodedJson);
+    // Worst-case URL encoding is 3x expansion ("%XX" per byte), plus NUL.
+    size_t encoded_len = (json.length() * 3) + 1;
+    std::unique_ptr<char[]> encoded_json(new char[encoded_len]);
+    size_t encoded_size = mg_url_encode(json.c_str(), json.length(), encoded_json.get(), encoded_len);
+    if(encoded_size == 0 && json.length() > 0) {
+      emoncms_result(false, String("URL encode failed"));
+      Profile_End(emoncms_publish, 10);
+      return;
+    }
+    encoded_json[encoded_size] = '\0';
+    url += encoded_json.get();
     url += "&node=";
     url += emoncms_node;
     url += "&apikey=";

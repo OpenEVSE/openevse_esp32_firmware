@@ -49,8 +49,10 @@ typedef const __FlashStringHelper *fstr_t;
 #include "evse_man.h"
 #include "limit.h"
 
-MongooseHttpServer server;          // Create class for Web server
-MongooseHttpServer redirect;        // Server to redirect to HTTPS if enabled
+static MongooseHttpServer http_server;   // Create class for HTTP server
+static MongooseHttpServer https_server;  // Create class for HTTPS server
+static bool http_server_started = false;
+static bool https_server_started = false;
 
 bool enableCors = false;
 bool streamDebug = false;
@@ -1239,13 +1241,23 @@ void onWsConnect(MongooseHttpWebSocketConnection *connection)
  * Really simple 'conversion' of ASCII to UTF-8, basically only a few places send >127 chars
  * so just filter those to be acceptable as UTF-8
  */
+static void web_server_send_all(const char *endpoint, const uint8_t *buffer, size_t size)
+{
+  if(http_server_started) {
+    http_server.sendAll(endpoint, WEBSOCKET_OP_TEXT, buffer, size);
+  }
+  if(https_server_started) {
+    https_server.sendAll(endpoint, WEBSOCKET_OP_TEXT, buffer, size);
+  }
+}
+
 void web_server_send_ascii_utf8(const char *endpoint, const uint8_t *buffer, size_t size)
 {
   char temp[size];
   for(int i = 0; i < size; i++) {
     temp[i] = buffer[i] & 0x7f;
   }
-  server.sendAll(endpoint, WEBSOCKET_OP_TEXT, temp, size);
+  web_server_send_all(endpoint, (const uint8_t *)temp, size);
 }
 
 void handleMqttAction(MongooseHttpServerRequest *request) {
@@ -1281,89 +1293,69 @@ void handleMqttAction(MongooseHttpServerRequest *request) {
   request->send(response);
 }
 
-void web_server_setup()
+static void registerWebServerRoutes(MongooseHttpServer &server)
 {
-  bool use_ssl = false;
-  if(www_certificate_id != "")
-  {
-    uint64_t cert_id = std::stoull(www_certificate_id.c_str(), nullptr, 16);
-    const char *cert = certs.getCertificate(cert_id);
-    const char *key = certs.getKey(cert_id);
-    if(NULL != cert && NULL != key)
-    {
-      DEBUG.printf("Starting HTTPS server, https://0.0.0.0:%d\n", www_https_port);
-      server.begin(www_https_port, cert, key);
-      use_ssl = true;
-
-      redirect.begin(www_http_port);
-      redirect.on("/", handleHttpsRedirect);
-    }
-  }
-
-  if(false == use_ssl) {
-    DEBUG.printf("Starting HTTP server, http://0.0.0.0:%d\n", www_http_port);
-    server.begin(www_http_port);
-  }
-
   // Handle status updates
-  server.on("/status$", handleStatus);
-  server.on("/config$", handleConfig);
+  server.on("/status", handleStatus);
+  server.on("/config", handleConfig);
 
   // Handle HTTP web interface button presses
-  server.on("/teslaveh$", handleTeslaVeh);
-  server.on("/tesla/vehicles$", handleTeslaVeh);
-  server.on("/settime$", handleSetTime);
-  server.on("/reset$", handleRst);
-  server.on("/restart$", handleRestart);
-  server.on("/rapi$", handleRapi);
-  server.on("/r$", handleRapi);
-  server.on("/scan$", handleScan);
-  server.on("/apoff$", handleAPOff);
-  server.on("/divertmode$", handleDivertMode);
-  server.on("/shaper$", handleCurrentShaper);
-  server.on("/emoncms/describe$", handleDescribe);
-  server.on("/rfid/add$", handleAddRFID);
+  server.on("/teslaveh", handleTeslaVeh);
+  server.on("/tesla/vehicles", handleTeslaVeh);
+  server.on("/settime", handleSetTime);
+  server.on("/reset", handleRst);
+  server.on("/restart", handleRestart);
+  server.on("/rapi", handleRapi);
+  server.on("/r", handleRapi);
+  server.on("/scan", handleScan);
+  server.on("/apoff", handleAPOff);
+  server.on("/divertmode", handleDivertMode);
+  server.on("/shaper", handleCurrentShaper);
+  server.on("/emoncms/describe", handleDescribe);
+  server.on("/rfid/add", handleAddRFID);
 
-  server.on("/schedule/plan$", handleSchedulePlan);
+  server.on("/schedule/plan", handleSchedulePlan);
   server.on("/schedule", handleSchedule);
 
-  server.on("/claims/target$", handleEvseClaimsTarget);
+  server.on("/claims/#", handleEvseClaims);
+  server.on("/claims/target", handleEvseClaimsTarget);
   server.on("/claims", handleEvseClaims);
 
-  server.on("/override$", handleOverride);
+  server.on("/override", handleOverride);
 
   server.on("/logs", handleEventLogs);
+  server.on("/certificates/#", handleCertificates);
   server.on("/certificates", handleCertificates);
   server.on("/limit", handleLimit);
   server.on("/emeter", handleEmeter);
   server.on("/time", handleTime);
-  server.on("/mqtt$", handleMqttAction);
+  server.on("/mqtt", handleMqttAction);
 
 #ifndef ENABLE_TSDB
-  server.on("/energy/raw$", handleEnergyRaw);
-  server.on("/energy/daily$", handleEnergyDaily);
-  server.on("/energy/monthly$", handleEnergyMonthly);
-  server.on("/energy/annual$", handleEnergyAnnual);
+  server.on("/energy/raw", handleEnergyRaw);
+  server.on("/energy/daily", handleEnergyDaily);
+  server.on("/energy/monthly", handleEnergyMonthly);
+  server.on("/energy/annual", handleEnergyAnnual);
 #else // ENABLE_TSDB
-  server.on("/energy/raw$", handleEnergyRaw);
-  server.on("/energy/daily$", handleEnergyDaily);
-  server.on("/energy/weekly$", handleEnergyWeekly);
-  server.on("/energy/monthly$", handleEnergyMonthly);
-  server.on("/energy/annual$", handleEnergyAnnual);
+  server.on("/energy/raw", handleEnergyRaw);
+  server.on("/energy/daily", handleEnergyDaily);
+  server.on("/energy/weekly", handleEnergyWeekly);
+  server.on("/energy/monthly", handleEnergyMonthly);
+  server.on("/energy/annual", handleEnergyAnnual);
 #endif // ENABLE_TSDB
 
   // Simple Firmware Update Form
-  server.on("/update$")->
+  server.on("/update")->
     onRequest(handleUpdateRequest)->
     onUpload(handleUpdateUpload)->
     onClose(handleUpdateClose);
 
   // In-place 16MB flash repartition (16MB module flashed with 4MB layout)
-  server.on("/migrate/expand16mb$", handleMigrateExpand16mb);
-  server.on("/migrate/status$", handleMigrateStatus);
-  server.on("/migrate/coredump$", handleMigrateCoredump);
+  server.on("/migrate/expand16mb", handleMigrateExpand16mb);
+  server.on("/migrate/status", handleMigrateStatus);
+  server.on("/migrate/coredump", handleMigrateCoredump);
 
-  server.on("/debug$", [](MongooseHttpServerRequest *request) {
+  server.on("/debug", [](MongooseHttpServerRequest *request) {
     MongooseHttpServerResponseStream *response;
     if(false == requestPreProcess(request, response, CONTENT_TYPE_TEXT)) {
       return;
@@ -1376,15 +1368,16 @@ void web_server_setup()
     request->send(response);
   });
 
-  server.on("/debug/console$")->onFrame([](MongooseHttpWebSocketConnection *connection, int flags, uint8_t *data, size_t len) {
+  server.on("/debug/console", [](MongooseHttpWebSocketConnection *connection, int flags, uint8_t *data, size_t len) {
+    // Intentionally no-op: this endpoint is server-push only via SerialDebug.onWrite.
   });
 
   SerialDebug.onWrite([](const uint8_t *buffer, size_t size)
   {
-    server.sendAll("/debug/console", WEBSOCKET_OP_TEXT, buffer, size);
+    web_server_send_all("/debug/console", buffer, size);
   });
 
-  server.on("/evse$", [](MongooseHttpServerRequest *request) {
+  server.on("/evse", [](MongooseHttpServerRequest *request) {
     MongooseHttpServerResponseStream *response;
     if(false == requestPreProcess(request, response, CONTENT_TYPE_TEXT)) {
       return;
@@ -1397,7 +1390,8 @@ void web_server_setup()
     request->send(response);
   });
 
-  server.on("/evse/console$")->onFrame([](MongooseHttpWebSocketConnection *connection, int flags, uint8_t *data, size_t len) {
+  server.on("/evse/console", [](MongooseHttpWebSocketConnection *connection, int flags, uint8_t *data, size_t len) {
+    // Intentionally no-op: this endpoint is server-push only via SerialEvse callbacks.
   });
 
   SerialEvse.onWrite([](const uint8_t *buffer, size_t size) {
@@ -1407,12 +1401,41 @@ void web_server_setup()
     web_server_send_ascii_utf8("/evse/console", buffer, size);
   });
 
-  server.on("/ws$")->
-    onFrame(onWsFrame)
-    ->
-    onConnect(onWsConnect);
+  server.on("/ws", onWsFrame)->onConnect(onWsConnect);
+}
 
-  server.onNotFound(handleNotFound);
+void web_server_setup()
+{
+  http_server_started = false;
+  https_server_started = false;
+
+  bool use_ssl = false;
+  if(config_https_enabled() && www_certificate_id != "")
+  {
+    uint64_t cert_id = std::stoull(www_certificate_id.c_str(), nullptr, 16);
+    const char *cert = certs.getCertificate(cert_id);
+    const char *key = certs.getKey(cert_id);
+    if(NULL != cert && NULL != key)
+    {
+      DEBUG.printf("Starting HTTPS server, https://0.0.0.0:%d\n", www_https_port);
+      https_server.begin(www_https_port, cert, key);
+      registerWebServerRoutes(https_server);
+      https_server.onNotFound(handleNotFound);
+      https_server_started = true;
+      use_ssl = true;
+    }
+  }
+
+  // Keep HTTP reachable whenever HTTPS is unavailable, so we never strand the UI.
+  const bool should_start_http = config_http_enabled() || false == use_ssl;
+  const bool should_bind_http_port = false == use_ssl || www_http_port != www_https_port;
+  if(should_start_http && should_bind_http_port) {
+      DEBUG.printf("Starting HTTP server, http://0.0.0.0:%d\n", www_http_port);
+      http_server.begin(www_http_port);
+      registerWebServerRoutes(http_server);
+      http_server.onNotFound(handleNotFound);
+      http_server_started = true;
+  }
 
   DEBUG.println("Server started");
 }
@@ -1440,5 +1463,10 @@ void web_server_event(JsonDocument &event)
 {
   String json;
   serializeJson(event, json);
-  server.sendAll("/ws", json);
+  if(http_server_started) {
+    http_server.sendAll("/ws", json);
+  }
+  if(https_server_started) {
+    https_server.sendAll("/ws", json);
+  }
 }

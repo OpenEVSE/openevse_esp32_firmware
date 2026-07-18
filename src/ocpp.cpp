@@ -600,9 +600,8 @@ void OcppTask::initializeDiagnosticsService() {
             diagFailure = false;
 
             //check if input URL is valid
-            unsigned int port_i = 0;
-            struct mg_str scheme, query, fragment;
-            if (mg_parse_uri(mg_mk_str(location.c_str()), &scheme, NULL, NULL, &port_i, NULL, &query, &fragment)) {
+            struct mg_str host = mg_url_host(location.c_str());
+            if (host.len == 0) {
                 DBUGF("[ocpp] Diagnostics upload, invalid URL: %s", location.c_str());
                 diagFailure = true;
                 return false;
@@ -690,7 +689,7 @@ void OcppTask::initializeDiagnosticsService() {
                     diagFailure = true;
                 }
             });
-            diagClient.send(request);
+            request->send();
 
             return true;
         });

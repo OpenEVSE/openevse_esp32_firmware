@@ -163,6 +163,8 @@ extern uint32_t flags;
 #define CONFIG_WIZARD               (1 << 25)
 #define CONFIG_DEFAULT_STATE        (1 << 26)
 #define CONFIG_TEMP_THROTTLE        (1 << 27) // next free bit after CONFIG_DEFAULT_STATE
+#define CONFIG_HTTP_ENABLED         (1 << 28)
+#define CONFIG_HTTPS_ENABLED        (1 << 29)
 
 #define INITIAL_CONFIG_VERSION  1
 
@@ -172,6 +174,14 @@ inline bool config_emoncms_enabled() {
 
 inline bool config_mqtt_enabled() {
   return CONFIG_SERVICE_MQTT == (flags & CONFIG_SERVICE_MQTT);
+}
+
+inline bool config_http_enabled() {
+  return CONFIG_HTTP_ENABLED == (flags & CONFIG_HTTP_ENABLED);
+}
+
+inline bool config_https_enabled() {
+  return CONFIG_HTTPS_ENABLED == (flags & CONFIG_HTTPS_ENABLED);
 }
 
 inline bool config_ohm_enabled() {
