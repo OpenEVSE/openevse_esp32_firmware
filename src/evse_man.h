@@ -282,6 +282,15 @@ class EvseManager : public MicroTasks::Task
     uint32_t getChargeCurrent(EvseClient client = EvseClient_NULL);
     uint32_t getMaxCurrent(EvseClient client = EvseClient_NULL);
 
+    // Get the client whose claim is currently setting the state/charge current,
+    // EvseClient_NULL if no active claim sets the property
+    EvseClient getStateClient() {
+      return _state_client;
+    }
+    EvseClient getChargeCurrentClient() {
+      return _charge_current_client;
+    }
+
     bool serializeClaims(DynamicJsonDocument &doc);
     bool serializeClaim(DynamicJsonDocument &doc, EvseClient client);
     bool serializeTarget(DynamicJsonDocument &doc);
