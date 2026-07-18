@@ -105,6 +105,19 @@ unsigned long DivertTask::loop(MicroTasks::WakeReason reason)
 void DivertTask::setMode(DivertMode mode)
 {
   DBUGF("Set _mode: %d", mode);
+
+  // A timer window owns Eco: ignore requests to drop back to Normal while the
+  // scheduler's divert feature is active (the GUI normalises divertmode to 1
+  // when the user reselects Auto after a manual override; MQTT clients can
+  // send the same). End-of-window cleanup is unaffected — setTimerDivertActive
+  // clears _timer_divert_active before restoring the configured mode. To stop
+  // eco charging inside a window, use a manual override (which outranks it).
+  if(_timer_divert_active && DivertMode::Normal == mode)
+  {
+    DBUGLN("Ignoring divertmode Normal while timer divert active");
+    return;
+  }
+
   if(_mode != mode)
   {
     _mode = mode;
