@@ -165,14 +165,68 @@ void dumpRequest(MongooseHttpServerRequest *request)
 }
 
 // -------------------------------------------------------------------
+// Constant-time credential comparison
+//
+// Compares two NUL-terminated strings without an early exit on the first
+// differing byte, so the time taken does not leak how many leading bytes
+// matched (CWE-208). The length difference is folded in so a length mismatch
+// does not short-circuit either. Not a substitute for a slow hash, but removes
+// the trivial byte-by-byte timing signal from Basic-auth checks.
+// -------------------------------------------------------------------
+static bool credentialsMatch(const char *a, const char *b)
+{
+  size_t la = strlen(a);
+  size_t lb = strlen(b);
+  unsigned char diff = (unsigned char)(la ^ lb);
+  size_t n = la < lb ? la : lb;
+  for(size_t i = 0; i < n; i++) {
+    diff |= (unsigned char)(a[i] ^ b[i]);
+  }
+  return 0 == diff;
+}
+
+// -------------------------------------------------------------------
+// Single source of truth for HTTP Basic authentication
+//
+// Used by both the REST path (requestPreProcess) and the WebSocket handshake
+// gate (onWsAuthenticate). Returns true when the request is permitted:
+//  - AP-only provisioning mode (captive portal, before credentials are set), or
+//  - no admin credentials configured, or
+//  - a valid Basic Authorization header.
+// Parsing reuses the library's tested Basic-auth parser; only the comparison is
+// swapped for a constant-time one.
+// -------------------------------------------------------------------
+bool isAuthenticated(MongooseHttpServerRequest *request)
+{
+  if(net.isWifiModeApOnly() || www_username == "") {
+    return true;
+  }
+
+  MongooseString authHeader = request->headers("Authorization");
+  if(!authHeader) {
+    return false;
+  }
+
+  mg_str hdr = authHeader.toMgStr();
+  char user_buf[64] = {0};
+  char pass_buf[64] = {0};
+  if(0 != mg_parse_http_basic_auth(&hdr, user_buf, sizeof(user_buf),
+                                   pass_buf, sizeof(pass_buf))) {
+    return false;
+  }
+
+  return credentialsMatch(www_username.c_str(), user_buf) &&
+         credentialsMatch(www_password.c_str(), pass_buf);
+}
+
+// -------------------------------------------------------------------
 // Helper function to perform the standard operations on a request
 // -------------------------------------------------------------------
 bool requestPreProcess(MongooseHttpServerRequest *request, MongooseHttpServerResponseStream *&response, fstr_t contentType)
 {
   dumpRequest(request);
 
-  if(!net.isWifiModeApOnly() && www_username!="" &&
-     false == request->authenticate(www_username, www_password)) {
+  if(!isAuthenticated(request)) {
     request->requestAuthentication(esp_hostname);
     return false;
   }
@@ -1225,6 +1279,26 @@ void onWsFrame(MongooseHttpWebSocketConnection *connection, int flags, uint8_t *
   }
 }
 
+// WebSocket handshake authentication gate.
+//
+// Registered via ->onRequest() on every WebSocket endpoint, so it runs during
+// MG_EV_WEBSOCKET_HANDSHAKE_REQUEST — before the 101 Switching Protocols
+// response. On failure, requestAuthentication() sends a 401 and sets
+// MG_F_SEND_AND_CLOSE; mongoose then skips handshake completion (see
+// mongoose.c, MG_EV_WEBSOCKET_HANDSHAKE_REQUEST handling), so no onConnect
+// fires and no data is ever pushed to an unauthenticated client. On success we
+// return without sending a response and the handshake proceeds normally.
+//
+// Note: the library dispatches HANDSHAKE_REQUEST to the endpoint's onRequest
+// handler when one is set, and onConnect/onFrame at the later HANDSHAKE_DONE /
+// FRAME events, so gating here does not interfere with those callbacks.
+void onWsAuthenticate(MongooseHttpServerRequest *request)
+{
+  if(!isAuthenticated(request)) {
+    request->requestAuthentication(esp_hostname);
+  }
+}
+
 void onWsConnect(MongooseHttpWebSocketConnection *connection)
 {
   DBUGF("New client connected over ws");
@@ -1376,7 +1450,9 @@ void web_server_setup()
     request->send(response);
   });
 
-  server.on("/debug/console$")->onFrame([](MongooseHttpWebSocketConnection *connection, int flags, uint8_t *data, size_t len) {
+  server.on("/debug/console$")
+    ->onRequest(onWsAuthenticate)
+    ->onFrame([](MongooseHttpWebSocketConnection *connection, int flags, uint8_t *data, size_t len) {
   });
 
   SerialDebug.onWrite([](const uint8_t *buffer, size_t size)
@@ -1397,7 +1473,9 @@ void web_server_setup()
     request->send(response);
   });
 
-  server.on("/evse/console$")->onFrame([](MongooseHttpWebSocketConnection *connection, int flags, uint8_t *data, size_t len) {
+  server.on("/evse/console$")
+    ->onRequest(onWsAuthenticate)
+    ->onFrame([](MongooseHttpWebSocketConnection *connection, int flags, uint8_t *data, size_t len) {
   });
 
   SerialEvse.onWrite([](const uint8_t *buffer, size_t size) {
@@ -1408,6 +1486,8 @@ void web_server_setup()
   });
 
   server.on("/ws$")->
+    onRequest(onWsAuthenticate)
+    ->
     onFrame(onWsFrame)
     ->
     onConnect(onWsConnect);
