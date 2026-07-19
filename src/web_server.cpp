@@ -264,10 +264,10 @@ static const uint32_t SESSION_TTL  = 21600;   // 6 hours
 static uint8_t  s_loginFails = 0;
 static uint32_t s_lockUntil  = 0;
 
-static uint32_t backoffSeconds(uint8_t fails)
-{
+static uint32_t backoffSeconds(uint8_t fails) {
   if(fails < 5) return 0;
-  uint32_t s = 30u << (fails - 5);
+  if(fails >= 10) return 900;       // 30<<5 already exceeds the cap; avoids shift UB
+  uint32_t s = 30u << (fails - 5);  // fails 5..9 -> 30,60,120,240,480
   return s > 900 ? 900 : s;
 }
 
@@ -335,6 +335,7 @@ void handleLogout(MongooseHttpServerRequest *request)
 {
   MongooseHttpServerResponseStream *response = request->beginResponseStream();
   response->setContentType(CONTENT_TYPE_JSON);
+  if(HTTP_POST != request->method()) { response->setCode(405); request->send(response); return; }
   response->addHeader(F("Set-Cookie"), F("oevse_session=; Path=/; HttpOnly; SameSite=Strict; Max-Age=0"));
   response->setCode(200);
   response->print(F("{\"msg\":\"ok\"}"));
