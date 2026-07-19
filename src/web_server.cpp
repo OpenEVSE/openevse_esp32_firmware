@@ -271,7 +271,7 @@ static bool hasValidSessionCookie(MongooseHttpServerRequest *request)
 // Basic header carried the wrong password, so requestPreProcess can escalate
 // to a throttle response without re-parsing.
 // -------------------------------------------------------------------
-bool isAuthenticated(MongooseHttpServerRequest *request, bool *usedCookie, bool *badCredential, bool recordThrottle)
+bool isAuthenticated(MongooseHttpServerRequest *request, bool *usedCookie, bool *badCredential)
 {
   if(usedCookie) *usedCookie = false;
   if(badCredential) *badCredential = false;
@@ -298,14 +298,12 @@ bool isAuthenticated(MongooseHttpServerRequest *request, bool *usedCookie, bool 
       if(u && p) {
         // Correct credentials always win and clear the throttle, so a flood of
         // bad guesses can never lock out a machine client holding the password.
-        if(recordThrottle) auth_throttle_record_success(s_authThrottle, authNowSecs());
+        auth_throttle_record_success(s_authThrottle, authNowSecs());
         return true;
       }
       // Wrong Basic credential — feed the same throttle as POST /login so a
-      // brute force can't dodge the counter by hammering GET /status.  Static
-      // asset loads pass recordThrottle=false so a browser replaying a stale
-      // Basic header across a page's assets can't self-trip the lock.
-      if(recordThrottle) auth_throttle_record_failure(s_authThrottle, authNowSecs());
+      // brute force can't dodge the counter by hammering GET /status.
+      auth_throttle_record_failure(s_authThrottle, authNowSecs());
       if(badCredential) *badCredential = true;
     }
   }

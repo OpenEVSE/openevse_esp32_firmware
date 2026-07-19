@@ -53,14 +53,11 @@ typedef const __FlashStringHelper *fstr_t;
 bool requestPreProcess(MongooseHttpServerRequest *request, MongooseHttpServerResponseStream *&response, fstr_t contentType = CONTENT_TYPE_JSON);
 
 // Single source of truth for HTTP auth (Basic for machine clients, session
-// cookie for the browser UI). Shared by the REST path, the WebSocket handshake
-// gate, and the static file handler so all three honour the same policy.
-// `usedCookie`/`badCredential` are optional out-params (see web_server.cpp).
-// `recordThrottle` (default true) feeds the failed-credential throttle; the
-// static handler passes false so a page's worth of asset loads carrying a
-// stale Basic header can't trip the brute-force counter (only the API and
-// /login, which adjudicate credentials, should count).
-bool isAuthenticated(MongooseHttpServerRequest *request, bool *usedCookie = nullptr, bool *badCredential = nullptr, bool recordThrottle = true);
+// cookie for the browser UI). Shared by the REST path and the WebSocket
+// handshake gate. The static shell is served open (see web_server_static.cpp),
+// so it does not call this. `usedCookie`/`badCredential` are optional out-params
+// (see web_server.cpp); a wrong Basic credential feeds the failed-auth throttle.
+bool isAuthenticated(MongooseHttpServerRequest *request, bool *usedCookie = nullptr, bool *badCredential = nullptr);
 
 void dumpRequest(MongooseHttpServerRequest *request);
 

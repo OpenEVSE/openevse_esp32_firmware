@@ -46,17 +46,15 @@ bool web_static_handle(MongooseHttpServerRequest *request)
 {
   dumpRequest(request);
 
-  // Are we authenticated — go through the shared gate so the static shell
-  // honours the same policy as the API/WebSocket: Basic *or* a session cookie,
-  // keyed on the password being set (a password with a blank username is still
-  // protected, via the default admin user). A cookie-authed browser can reload
-  // the page without being re-prompted for Basic credentials.  recordThrottle
-  // is false here: a page pulls many assets, so a browser replaying a stale
-  // Basic header must not count as a burst of failed credential attempts.
-  if(!isAuthenticated(request, nullptr, nullptr, false)) {
-    request->requestAuthentication(esp_hostname);
-    return false;
-  }
+  // The web UI shell (HTML/JS/CSS/assets) is served WITHOUT authentication, so
+  // the single-page app can always load and present its own login page. It
+  // carries no secrets: every piece of data and every action lives behind the
+  // authenticated API and WebSocket (see isAuthenticated — Basic for machine
+  // clients, session cookie for the browser).
+  //
+  // Gating the shell behind HTTP Basic here would make the browser pop its
+  // native Basic dialog on the very first navigation, pre-empting the SPA login
+  // page (the whole point of F1). So we intentionally do not challenge here.
 
   StaticFile *file = NULL;
   if (web_static_get_file(request, &file))
