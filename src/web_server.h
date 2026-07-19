@@ -56,7 +56,11 @@ bool requestPreProcess(MongooseHttpServerRequest *request, MongooseHttpServerRes
 // cookie for the browser UI). Shared by the REST path, the WebSocket handshake
 // gate, and the static file handler so all three honour the same policy.
 // `usedCookie`/`badCredential` are optional out-params (see web_server.cpp).
-bool isAuthenticated(MongooseHttpServerRequest *request, bool *usedCookie = nullptr, bool *badCredential = nullptr);
+// `recordThrottle` (default true) feeds the failed-credential throttle; the
+// static handler passes false so a page's worth of asset loads carrying a
+// stale Basic header can't trip the brute-force counter (only the API and
+// /login, which adjudicate credentials, should count).
+bool isAuthenticated(MongooseHttpServerRequest *request, bool *usedCookie = nullptr, bool *badCredential = nullptr, bool recordThrottle = true);
 
 void dumpRequest(MongooseHttpServerRequest *request);
 

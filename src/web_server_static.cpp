@@ -50,8 +50,10 @@ bool web_static_handle(MongooseHttpServerRequest *request)
   // honours the same policy as the API/WebSocket: Basic *or* a session cookie,
   // keyed on the password being set (a password with a blank username is still
   // protected, via the default admin user). A cookie-authed browser can reload
-  // the page without being re-prompted for Basic credentials.
-  if(!isAuthenticated(request)) {
+  // the page without being re-prompted for Basic credentials.  recordThrottle
+  // is false here: a page pulls many assets, so a browser replaying a stale
+  // Basic header must not count as a burst of failed credential attempts.
+  if(!isAuthenticated(request, nullptr, nullptr, false)) {
     request->requestAuthentication(esp_hostname);
     return false;
   }
