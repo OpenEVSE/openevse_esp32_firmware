@@ -48,6 +48,8 @@ typedef const __FlashStringHelper *fstr_t;
 #include "home_battery.h"
 #include "evse_man.h"
 #include "limit.h"
+#include "web_auth.h"
+#include "web_auth_secret.h"
 
 MongooseHttpServer server;          // Create class for Web server
 MongooseHttpServer redirect;        // Server to redirect to HTTPS if enabled
@@ -189,13 +191,37 @@ static bool credentialsMatch(const char *a, const char *b)
 }
 
 // -------------------------------------------------------------------
-// Single source of truth for HTTP Basic authentication
+// Session-cookie auth helper (browser UI)
+//
+// Extracts the oevse_session cookie from the request, verifies its HMAC
+// signature and expiry against the current secret, and returns true when
+// the cookie is valid.  File-local; consumed by isAuthenticated() below
+// and the login handler (Task 7).
+// -------------------------------------------------------------------
+static bool hasValidSessionCookie(MongooseHttpServerRequest *request)
+{
+  MongooseString cookieHdr = request->headers("Cookie");
+  if(!cookieHdr) {
+    return false;
+  }
+  std::string tok = cookie_extract(
+    std::string(cookieHdr.c_str(), cookieHdr.length()), "oevse_session");
+  if(tok.empty()) {
+    return false;
+  }
+  return session_token_verify(
+    std::string(web_auth_get_secret().c_str()), tok, (uint32_t)time(nullptr));
+}
+
+// -------------------------------------------------------------------
+// Single source of truth for HTTP authentication
 //
 // Used by both the REST path (requestPreProcess) and the WebSocket handshake
 // gate (onWsAuthenticate). Returns true when the request is permitted:
 //  - AP-only provisioning mode (captive portal, before credentials are set), or
 //  - no admin credentials configured, or
-//  - a valid Basic Authorization header.
+//  - a valid Basic Authorization header (machine clients: HA, MQTT, app), or
+//  - a valid session cookie (browser UI).
 // Parsing reuses the library's tested Basic-auth parser; only the comparison is
 // swapped for a constant-time one.
 // -------------------------------------------------------------------
@@ -205,21 +231,22 @@ bool isAuthenticated(MongooseHttpServerRequest *request)
     return true;
   }
 
+  // Basic auth (machine clients: HA, MQTT, app, scripts)
   MongooseString authHeader = request->headers("Authorization");
-  if(!authHeader) {
-    return false;
+  if(authHeader) {
+    mg_str hdr = authHeader.toMgStr();
+    char user_buf[64] = {0};
+    char pass_buf[64] = {0};
+    if(0 == mg_parse_http_basic_auth(&hdr, user_buf, sizeof(user_buf),
+                                     pass_buf, sizeof(pass_buf)) &&
+       credentialsMatch(www_username.c_str(), user_buf) &&
+       credentialsMatch(www_password.c_str(), pass_buf)) {
+      return true;
+    }
   }
 
-  mg_str hdr = authHeader.toMgStr();
-  char user_buf[64] = {0};
-  char pass_buf[64] = {0};
-  if(0 != mg_parse_http_basic_auth(&hdr, user_buf, sizeof(user_buf),
-                                   pass_buf, sizeof(pass_buf))) {
-    return false;
-  }
-
-  return credentialsMatch(www_username.c_str(), user_buf) &&
-         credentialsMatch(www_password.c_str(), pass_buf);
+  // Session cookie (browser UI)
+  return hasValidSessionCookie(request);
 }
 
 // -------------------------------------------------------------------
