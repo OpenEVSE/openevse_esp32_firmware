@@ -8,6 +8,7 @@
 #include "emonesp.h"
 #include "web_server.h"
 #include "ota_signing.h"
+#include "ota_url_allow.h"
 #include <MongooseHttpClient.h>
 #include <Update.h>
 
@@ -25,51 +26,10 @@ struct HttpUpdateRequestState
   bool errorReported = false;
 };
 
-// Case-insensitive check that `host` equals `suffix` or ends with ".suffix".
-static bool host_matches(const String &host, const char *suffix)
-{
-  String s = host;
-  s.toLowerCase();
-  String suf = suffix;
-  if(s == suf) {
-    return true;
-  }
-  String dotted = "." + suf;
-  return s.length() > dotted.length() &&
-         s.endsWith(dotted);
-}
-
 bool http_update_url_allowed(const String &url)
 {
-  // Require HTTPS: prevents a plaintext-MITM'd fetch and enforces a trusted
-  // transport to the release host.
-  if(!url.startsWith("https://")) {
-    return false;
-  }
-
-  // Extract the host: everything between "https://" and the next '/', '?' or ':'.
-  int start = 8; // strlen("https://")
-  int end = url.length();
-  for(int i = start; i < url.length(); i++) {
-    char c = url[i];
-    if(c == '/' || c == '?' || c == ':') {
-      end = i;
-      break;
-    }
-  }
-  // Strip any userinfo ("user@host") to avoid "github.com@evil.example" tricks.
-  String authority = url.substring(start, end);
-  int at = authority.lastIndexOf('@');
-  String host = (at >= 0) ? authority.substring(at + 1) : authority;
-  if(host.length() == 0) {
-    return false;
-  }
-
-  // Allowlist: OpenEVSE release downloads live on github.com and are served
-  // (after redirect) from the *.githubusercontent.com CDN. Edit here to permit
-  // other trusted firmware hosts.
-  return host_matches(host, "github.com") ||
-         host_matches(host, "githubusercontent.com");
+  // Delegates to the pure, unit-tested host-allowlist check (ota_url_allow.cpp).
+  return ota_url_host_allowed(url.c_str());
 }
 
 bool http_update_from_url(String url,
