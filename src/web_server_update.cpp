@@ -128,7 +128,20 @@ size_t handleUpdateUpload(MongooseHttpServerRequest *request, int ev, MongooseSt
   {
 //    dumpRequest(request);
 
-    if(!http_update_start(filename, request->contentLength())) {
+    // For a multipart upload, contentLength() is the whole request body
+    // (boundary + headers + file), which is larger than the firmware image.
+    // Unsigned updates self-correct at end(), but signed OTA needs the exact
+    // image size at begin() to locate the signature trailer, so accept an
+    // optional "?size=" query hint (the exact bytes of the uploaded file,
+    // including the 512-byte signature trailer). Falls back to contentLength().
+    size_t total = request->contentLength();
+    char sizeBuf[16];
+    mg_str qs = request->queryString().toMgStr();
+    if(mg_get_http_var(&qs, "size", sizeBuf, sizeof(sizeBuf)) > 0) {
+      total = strtoul(sizeBuf, NULL, 10);
+    }
+
+    if(!http_update_start(filename, total)) {
       handleUpdateError(request);
     }
   }
