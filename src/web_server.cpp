@@ -177,7 +177,10 @@ static bool credentialsMatch(const char *a, const char *b)
 {
   size_t la = strlen(a);
   size_t lb = strlen(b);
-  unsigned char diff = (unsigned char)(la ^ lb);
+  // Keep the length difference full-width: truncating to a narrow type could
+  // fold a length delta that is a nonzero multiple of the type's range to 0 and
+  // (with matching overlapping bytes) false-accept.
+  size_t diff = la ^ lb;
   size_t n = la < lb ? la : lb;
   for(size_t i = 0; i < n; i++) {
     diff |= (unsigned char)(a[i] ^ b[i]);
