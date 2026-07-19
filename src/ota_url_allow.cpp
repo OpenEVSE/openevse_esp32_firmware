@@ -43,30 +43,39 @@ bool ota_url_host_allowed(const char *url_c)
 
   std::string::size_type start = sep + 3;
 
-  // The authority ends at the first '/' or '?' — NOT ':', because a ':' can
-  // appear inside userinfo (user:pass@host) before the '@'.
-  std::string::size_type end = url.size();
-  for(std::string::size_type i = start; i < url.size(); i++) {
-    char c = url[i];
-    if(c == '/' || c == '?') {
-      end = i;
-      break;
-    }
+  // The authority ends at the first '/' ONLY. Mongoose's userinfo scan
+  // (mg_parse_uri, P_USER_INFO) terminates on '@', '[' or '/', so ':', '?' and
+  // '#' are NOT authority delimiters for the host it actually connects to.
+  // Ending on '?' here (as an earlier version did) would let
+  // "https://github.com?@evil.example/..." parse to host "github.com" while the
+  // client connects to "evil.example".
+  std::string::size_type end = url.find('/', start);
+  if(end == std::string::npos) {
+    end = url.size();
   }
   std::string authority = url.substr(start, end - start);
 
-  // Userinfo is everything up to and including the last '@'.
-  std::string::size_type at = authority.rfind('@');
-  std::string host = (at == std::string::npos) ? authority : authority.substr(at + 1);
-
-  // Strip the port (first ':' of the real host).
-  std::string::size_type colon = host.find(':');
-  if(colon != std::string::npos) {
-    host = host.substr(0, colon);
+  // Reject anything that could make our host differ from the client's, rather
+  // than trying to re-derive the exact parser. A firmware URL never needs
+  // userinfo, IPv6 literals, or stray delimiters in its authority.
+  if(authority.find_first_of("@[]?#\\ \t") != std::string::npos) {
+    return false;
   }
+
+  // Strip the port.
+  std::string host = authority.substr(0, authority.find(':'));
 
   if(host.empty()) {
     return false;
+  }
+
+  // Host must be a plain DNS name (letters, digits, '.', '-').
+  for(char c : host) {
+    bool ok = (c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z') ||
+              (c >= '0' && c <= '9') || c == '.' || c == '-';
+    if(!ok) {
+      return false;
+    }
   }
   host = to_lower(host);
 

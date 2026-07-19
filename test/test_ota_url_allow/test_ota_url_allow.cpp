@@ -22,6 +22,13 @@ TEST_CASE("userinfo / port bypass attempts are rejected") {
   // The key bypass: ':' inside userinfo before '@' must not truncate the host.
   CHECK_FALSE(ota_url_host_allowed("https://github.com:1@evil.example/firmware.bin"));
   CHECK_FALSE(ota_url_host_allowed("https://github.com:anything@evil.example/firmware.bin"));
+  // '?' before '@' must not truncate the host either: Mongoose's userinfo scan
+  // does not treat '?' as an authority delimiter, so it connects to evil.example.
+  CHECK_FALSE(ota_url_host_allowed("https://github.com?@evil.example/firmware.bin"));
+  CHECK_FALSE(ota_url_host_allowed("https://github.com?x@evil.example/firmware.bin"));
+  CHECK_FALSE(ota_url_host_allowed("https://github.com?@192.0.2.66/fw.bin"));
+  // '#' before '@' is caught by the delimiter reject too.
+  CHECK_FALSE(ota_url_host_allowed("https://github.com#@evil.example/fw.bin"));
   // Plain userinfo form.
   CHECK_FALSE(ota_url_host_allowed("https://github.com@evil.example/firmware.bin"));
   // Password-style userinfo.
