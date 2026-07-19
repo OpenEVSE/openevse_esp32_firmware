@@ -6,6 +6,13 @@ default auth, F2 unsigned arbitrary-URL OTA, F3 reflected XSS in `/r`).
 
 Branched from `master`.
 
+> **Status (after on-device testing):** F3 (XSS) and F2a (URL allowlist) are
+> done and sound. F2b **signed OTA is not production-ready** — the on-device
+> verifier is proven working, but delivering a correctly-signed image hits a
+> core-library flash-erase bug on the exact-size streaming path. Keep signing
+> **disabled** (no `OTA_SIGNING_KEY` secret) until this is resolved. See the
+> Testing section for detail.
+
 ## Decisions (given the "no forced password" constraint)
 
 Forcing a web password was explicitly rejected (support burden when users
@@ -129,9 +136,46 @@ rely on the URL allowlist + F3 fix.
 - Signing round-trip verified off-device: `sign_firmware.py` output validates
   against the public key with the device's exact PSS parameters (salt 222,
   256-byte sig, 512-byte trailer); a tampered image is rejected.
-- **Not yet validated on hardware:** end-to-end signed OTA on a real device
-  (accept-signed / reject-unsigned), and the interaction with the 16MB
-  migration manifest flow (signed image flashed by the migrator). Recommend an
-  on-device pass before enabling in production.
 - F3 and the URL allowlist are on-device testable (unauthenticated `/r` probe;
   a non-GitHub `POST /update` URL should return the not-allowed error).
+
+### On-device signed-OTA test (openevse-c620, 16MB) — verifier PASS, delivery BLOCKED
+
+An enforcing build (`-DUPDATE_SIGN -DREQUIRE_SIGNED_OTA`) was flashed to c620
+and images were pushed over the web `/update` file-upload path:
+
+- **Verifier works.** An **unsigned** image is rejected with
+  `Update failed: 14 (Signature Verification Failed)` — the on-device mbedtls
+  RSA-PSS verifier ran and correctly rejected it. This validates the public
+  key, the PSS parameters, and the `sign_firmware.py` trailer format against
+  real silicon.
+- **Delivery is blocked by a core-library flash-erase bug.** To verify a
+  *correctly-signed* image the exact image size must be given to
+  `Update.begin()` (so the 512-byte signature trailer can be located). With the
+  exact size, the core Update library flushes the final partial sector *during*
+  `write()` (Updater.cpp:791, `_bufferLen == remaining()`) instead of at
+  `end()`, and that erase fails with `Update failed: 2 (Flash Erase Failed)` in
+  the streaming callback context. Without the exact size the erase succeeds but
+  the signature hash covers the wrong byte range, so a signed image can't be
+  verified that way either.
+
+**Status: signed OTA is NOT production-ready.** The verifier is proven, but
+there is no working end-to-end delivery of a signed image on this core via the
+OpenEVSE streaming update path. The `?size` file-upload hint that exposed this
+was reverted. Resolving it needs one of:
+
+1. Root-cause the exact-size final-sector erase (possibly a flash/cache-context
+   issue with erasing inside the network callback) and fix delivery so
+   `end()`-time flushing is used, or
+2. Verify the signature in OpenEVSE code instead of via the core
+   `installSignature()` API — hash incrementally over the streamed firmware,
+   hold back the last 512 bytes, and RSA-PSS-verify with mbedtls at `end()` —
+   avoiding the exact-size `begin()` requirement entirely.
+
+Until then, keep signing **disabled** (no `OTA_SIGNING_KEY` secret). F3 and the
+F2 URL allowlist are unaffected and stand on their own.
+
+Note: because an enforcing build rejects every image it can't verify, c620 was
+left on the enforcing test build and recovered by **USB flash** of a clean
+non-enforcing image (there is no working signed-OTA path to recover it over the
+network — the same delivery bug).
