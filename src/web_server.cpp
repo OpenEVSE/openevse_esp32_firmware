@@ -354,6 +354,22 @@ bool requestPreProcess(MongooseHttpServerRequest *request, MongooseHttpServerRes
     return false;
   }
 
+  // CSRF: a browser session cookie is auto-attached cross-site, so any
+  // state-changing (non-GET) request authenticated via cookie must also carry
+  // the SPA's custom header, which a cross-origin form cannot set. Basic-auth
+  // (machine) clients never send our cookie and are unaffected.
+  if(request->method() != HTTP_GET && hasValidSessionCookie(request)) {
+    MongooseString xrw = request->headers("X-Requested-With");
+    if(!(xrw && 0 == strcmp(xrw.c_str(), "OpenEVSE"))) {
+      response = request->beginResponseStream();
+      response->setContentType(CONTENT_TYPE_JSON);
+      response->setCode(403);
+      response->print(F("{\"msg\":\"csrf\"}"));
+      request->send(response);
+      return false;
+    }
+  }
+
   response = request->beginResponseStream();
   response->setContentType(contentType);
 
