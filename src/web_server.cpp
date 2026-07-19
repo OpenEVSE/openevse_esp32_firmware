@@ -250,6 +250,98 @@ bool isAuthenticated(MongooseHttpServerRequest *request)
 }
 
 // -------------------------------------------------------------------
+// POST /login  — credential check + session cookie mint
+// POST /logout — session cookie clear
+//
+// Both handlers build their own response and intentionally do NOT call
+// requestPreProcess / isAuthenticated: an unauthenticated user must be
+// able to reach /login, and /logout should always succeed.
+// -------------------------------------------------------------------
+static const uint32_t REMEMBER_TTL = 2592000; // 30 days
+static const uint32_t SESSION_TTL  = 21600;   // 6 hours
+
+// Login brute-force lockout state (volatile, single-user model)
+static uint8_t  s_loginFails = 0;
+static uint32_t s_lockUntil  = 0;
+
+static uint32_t backoffSeconds(uint8_t fails)
+{
+  if(fails < 5) return 0;
+  uint32_t s = 30u << (fails - 5);
+  return s > 900 ? 900 : s;
+}
+
+void handleLogin(MongooseHttpServerRequest *request)
+{
+  MongooseHttpServerResponseStream *response = request->beginResponseStream();
+  response->setContentType(CONTENT_TYPE_JSON);
+
+  if(HTTP_POST != request->method()) {
+    response->setCode(405);
+    request->send(response);
+    return;
+  }
+
+  uint32_t now = (uint32_t)time(nullptr);
+  if(now < s_lockUntil) {
+    response->setCode(429);
+    response->print(F("{\"msg\":\"locked\"}"));
+    request->send(response);
+    return;
+  }
+
+  String body = request->body().toString();
+  DynamicJsonDocument doc(512);
+  if(deserializeJson(doc, body)) {
+    response->setCode(400);
+    response->print(F("{\"msg\":\"bad json\"}"));
+    request->send(response);
+    return;
+  }
+
+  String user = doc["user"] | "";
+  String pass = doc["pass"] | "";
+  bool remember = doc["remember"] | false;
+
+  bool ok = auth_constant_time_equals(std::string(user.c_str()), std::string(www_username.c_str())) &&
+            auth_constant_time_equals(std::string(pass.c_str()), std::string(www_password.c_str()));
+  if(!ok) {
+    if(s_loginFails < 255) s_loginFails++;
+    uint32_t bo = backoffSeconds(s_loginFails);
+    if(bo) s_lockUntil = now + bo;
+    response->setCode(401);
+    response->print(F("{\"msg\":\"invalid\"}"));
+    request->send(response);
+    return;
+  }
+
+  s_loginFails = 0;
+  s_lockUntil  = 0;
+  uint32_t exp = now + (remember ? REMEMBER_TTL : SESSION_TTL);
+  std::string token = session_token_mint(std::string(web_auth_get_secret().c_str()), exp);
+
+  String cookie = "oevse_session=";
+  cookie += token.c_str();
+  cookie += "; Path=/; HttpOnly; SameSite=Strict";
+  if(remember) { cookie += "; Max-Age="; cookie += String(REMEMBER_TTL); }
+  // if(tls_active()) cookie += "; Secure";   // add when TLS status is known
+  response->addHeader(F("Set-Cookie"), cookie.c_str());
+  response->setCode(200);
+  response->print(F("{\"msg\":\"ok\"}"));
+  request->send(response);
+}
+
+void handleLogout(MongooseHttpServerRequest *request)
+{
+  MongooseHttpServerResponseStream *response = request->beginResponseStream();
+  response->setContentType(CONTENT_TYPE_JSON);
+  response->addHeader(F("Set-Cookie"), F("oevse_session=; Path=/; HttpOnly; SameSite=Strict; Max-Age=0"));
+  response->setCode(200);
+  response->print(F("{\"msg\":\"ok\"}"));
+  request->send(response);
+}
+
+// -------------------------------------------------------------------
 // Helper function to perform the standard operations on a request
 // -------------------------------------------------------------------
 bool requestPreProcess(MongooseHttpServerRequest *request, MongooseHttpServerResponseStream *&response, fstr_t contentType)
@@ -1408,6 +1500,10 @@ void web_server_setup()
     DEBUG.printf("Starting HTTP server, http://0.0.0.0:%d\n", www_http_port);
     server.begin(www_http_port);
   }
+
+  // Session management (no auth gate — user must reach these unauthenticated)
+  server.on("/login$", handleLogin);
+  server.on("/logout$", handleLogout);
 
   // Handle status updates
   server.on("/status$", handleStatus);

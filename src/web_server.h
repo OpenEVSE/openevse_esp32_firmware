@@ -53,4 +53,7 @@ typedef const __FlashStringHelper *fstr_t;
 bool requestPreProcess(MongooseHttpServerRequest *request, MongooseHttpServerResponseStream *&response, fstr_t contentType = CONTENT_TYPE_JSON);
 void dumpRequest(MongooseHttpServerRequest *request);
 
+void handleLogin(MongooseHttpServerRequest *request);
+void handleLogout(MongooseHttpServerRequest *request);
+
 #endif // _EMONESP_WEB_SERVER_H
