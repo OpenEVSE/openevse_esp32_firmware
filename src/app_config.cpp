@@ -12,6 +12,8 @@
 #include "temp_throttle.h"
 #include "flash_migrate.h"
 
+#include "web_auth_secret.h"
+
 #if ENABLE_CONFIG_CHANGE_NOTIFICATION
 #include <esp_ota_ops.h>
 #include "divert.h"
@@ -58,6 +60,9 @@ String lang;
 String www_username;
 String www_password;
 String www_certificate_id;
+
+// Session HMAC key — generated on first load, rotated on credential change.
+String server_secret;
 
 // Web server ports
 uint32_t www_http_port;
@@ -210,6 +215,7 @@ ConfigOpt *opts[] =
   new ConfigOptDefinition<String>(www_username, "", "www_username", "au"),
   new ConfigOptSecret(www_password, "", "www_password", "ap"),
   new ConfigOptDefinition<String>(www_certificate_id, "", "www_certificate_id", "wc"),
+  new ConfigOptSecret(server_secret, "", "server_secret", "wsk"),
 
 // Web server ports
   new ConfigOptDefinition<uint32_t>(www_http_port, HTTP_SERVER_PORT, "www_http_port", "whp"),
@@ -443,6 +449,10 @@ config_load_settings()
 
   // now lets apply any default flags that have not explicitly been set by the user
   flags |= CONFIG_DEFAULT_FLAGS & ~flags_changed;
+
+  // Generate server_secret on first boot (empty after load means the key was
+  // never stored). web_auth_get_secret() persists via user_config.commit().
+  web_auth_get_secret();
 }
 
 void config_changed(String name)
@@ -497,6 +507,8 @@ void config_changed(String name)
     timeManager.setSntpEnabled(config_sntp_enabled());
   } else if(name == "sntp_hostname") {
     timeManager.setHost(sntp_hostname.c_str());
+  } else if(name == "www_password" || name == "www_username") {
+    web_auth_rotate_secret();  // invalidate all sessions on credential change
   }
 #endif
 }
@@ -506,6 +518,14 @@ void config_commit(bool factory)
   ConfigJson &config = factory ? factory_config : user_config;
   config.set("factory_write_lock", true);
   config.commit();
+}
+
+// Persist user config without touching the factory_write_lock flag.
+// Use this from code that writes individual fields (e.g. server_secret) and
+// must not inadvertently lock the factory partition.
+void config_user_commit()
+{
+  user_config.commit();
 }
 
 bool config_deserialize(String& json) {

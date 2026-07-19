@@ -34,6 +34,9 @@ extern String www_username;
 extern String www_password;
 extern String www_certificate_id;
 
+// Session HMAC key — generated on first load, rotated on credential change.
+extern String server_secret;
+
 // Web server ports
 extern uint32_t www_http_port;
 extern uint32_t www_https_port;
@@ -300,6 +303,7 @@ bool config_deserialize(String& json);
 bool config_deserialize(const char *json);
 bool config_deserialize(DynamicJsonDocument &doc);
 void config_commit(bool factory = false);
+void config_user_commit();  // persist user config without touching factory_write_lock
 
 // Write config settings to JSON object
 bool config_serialize(String& json, bool longNames = true, bool compactOutput = false, bool hideSecrets = false);
