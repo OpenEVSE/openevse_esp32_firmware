@@ -451,13 +451,19 @@ config_load_settings()
   flags |= CONFIG_DEFAULT_FLAGS & ~flags_changed;
 
   // Generate server_secret on first boot (empty after load means the key was
-  // never stored). web_auth_get_secret() persists via user_config.commit().
-  web_auth_get_secret();
+  // never stored). web_auth_ensure_secret() persists via user_config.commit().
+  web_auth_ensure_secret();
 }
 
 void config_changed(String name)
 {
   DBUGF("%s changed", name.c_str());
+
+  // Security: invalidate all sessions whenever credentials change.
+  // This must run regardless of ENABLE_CONFIG_CHANGE_NOTIFICATION.
+  if(name == "www_password" || name == "www_username") {
+    web_auth_rotate_secret();
+  }
 
 #if ENABLE_CONFIG_CHANGE_NOTIFICATION
   if(name == "time_zone") {
@@ -507,8 +513,6 @@ void config_changed(String name)
     timeManager.setSntpEnabled(config_sntp_enabled());
   } else if(name == "sntp_hostname") {
     timeManager.setHost(sntp_hostname.c_str());
-  } else if(name == "www_password" || name == "www_username") {
-    web_auth_rotate_secret();  // invalidate all sessions on credential change
   }
 #endif
 }

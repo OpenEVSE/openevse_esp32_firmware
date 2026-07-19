@@ -200,6 +200,10 @@ static bool credentialsMatch(const char *a, const char *b)
 // -------------------------------------------------------------------
 static bool hasValidSessionCookie(MongooseHttpServerRequest *request)
 {
+  String secret = web_auth_get_secret();
+  if(secret.length() == 0) {
+    return false;  // no secret yet — fail closed
+  }
   MongooseString cookieHdr = request->headers("Cookie");
   if(!cookieHdr) {
     return false;
@@ -210,7 +214,7 @@ static bool hasValidSessionCookie(MongooseHttpServerRequest *request)
     return false;
   }
   return session_token_verify(
-    std::string(web_auth_get_secret().c_str()), tok, (uint32_t)time(nullptr));
+    std::string(secret.c_str()), tok, (uint32_t)time(nullptr));
 }
 
 // -------------------------------------------------------------------
@@ -225,8 +229,10 @@ static bool hasValidSessionCookie(MongooseHttpServerRequest *request)
 // Parsing reuses the library's tested Basic-auth parser; only the comparison is
 // swapped for a constant-time one.
 // -------------------------------------------------------------------
-bool isAuthenticated(MongooseHttpServerRequest *request)
+bool isAuthenticated(MongooseHttpServerRequest *request, bool *usedCookie = nullptr)
 {
+  if(usedCookie) *usedCookie = false;
+
   if(net.isWifiModeApOnly() || www_username == "") {
     return true;
   }
@@ -238,15 +244,19 @@ bool isAuthenticated(MongooseHttpServerRequest *request)
     char user_buf[64] = {0};
     char pass_buf[64] = {0};
     if(0 == mg_parse_http_basic_auth(&hdr, user_buf, sizeof(user_buf),
-                                     pass_buf, sizeof(pass_buf)) &&
-       credentialsMatch(www_username.c_str(), user_buf) &&
-       credentialsMatch(www_password.c_str(), pass_buf)) {
-      return true;
+                                     pass_buf, sizeof(pass_buf))) {
+      bool u = credentialsMatch(www_username.c_str(), user_buf);
+      bool p = credentialsMatch(www_password.c_str(), pass_buf);
+      if(u && p) {
+        return true;
+      }
     }
   }
 
-  // Session cookie (browser UI)
-  return hasValidSessionCookie(request);
+  // Session cookie (browser UI) — computed exactly once here
+  bool cookie = hasValidSessionCookie(request);
+  if(usedCookie) *usedCookie = cookie;
+  return cookie;
 }
 
 // -------------------------------------------------------------------
@@ -275,6 +285,7 @@ void handleLogin(MongooseHttpServerRequest *request)
 {
   MongooseHttpServerResponseStream *response = request->beginResponseStream();
   response->setContentType(CONTENT_TYPE_JSON);
+  response->addHeader(F("Cache-Control"), F("no-store"));
 
   if(HTTP_POST != request->method()) {
     response->setCode(405);
@@ -303,8 +314,9 @@ void handleLogin(MongooseHttpServerRequest *request)
   String pass = doc["pass"] | "";
   bool remember = doc["remember"] | false;
 
-  bool ok = auth_constant_time_equals(std::string(user.c_str()), std::string(www_username.c_str())) &&
-            auth_constant_time_equals(std::string(pass.c_str()), std::string(www_password.c_str()));
+  bool u_ok = auth_constant_time_equals(std::string(user.c_str()), std::string(www_username.c_str()));
+  bool p_ok = auth_constant_time_equals(std::string(pass.c_str()), std::string(www_password.c_str()));
+  bool ok = u_ok && p_ok;
   if(!ok) {
     if(s_loginFails < 255) s_loginFails++;
     uint32_t bo = backoffSeconds(s_loginFails);
@@ -317,8 +329,15 @@ void handleLogin(MongooseHttpServerRequest *request)
 
   s_loginFails = 0;
   s_lockUntil  = 0;
+  String secret = web_auth_get_secret();
+  if(secret.length() == 0) {
+    response->setCode(503);
+    response->print(F("{\"msg\":\"not ready\"}"));
+    request->send(response);
+    return;
+  }
   uint32_t exp = now + (remember ? REMEMBER_TTL : SESSION_TTL);
-  std::string token = session_token_mint(std::string(web_auth_get_secret().c_str()), exp);
+  std::string token = session_token_mint(std::string(secret.c_str()), exp);
 
   String cookie = "oevse_session=";
   cookie += token.c_str();
@@ -335,6 +354,7 @@ void handleLogout(MongooseHttpServerRequest *request)
 {
   MongooseHttpServerResponseStream *response = request->beginResponseStream();
   response->setContentType(CONTENT_TYPE_JSON);
+  response->addHeader(F("Cache-Control"), F("no-store"));
   if(HTTP_POST != request->method()) { response->setCode(405); request->send(response); return; }
   response->addHeader(F("Set-Cookie"), F("oevse_session=; Path=/; HttpOnly; SameSite=Strict; Max-Age=0"));
   response->setCode(200);
@@ -349,8 +369,18 @@ bool requestPreProcess(MongooseHttpServerRequest *request, MongooseHttpServerRes
 {
   dumpRequest(request);
 
-  if(!isAuthenticated(request)) {
-    request->requestAuthentication(esp_hostname);
+  bool usedCookie = false;
+  if(!isAuthenticated(request, &usedCookie)) {
+    MongooseString xrw = request->headers("X-Requested-With");
+    if(xrw && 0 == strcmp(xrw.c_str(), "OpenEVSE")) {
+      response = request->beginResponseStream();
+      response->setContentType(CONTENT_TYPE_JSON);
+      response->setCode(401);
+      response->print(F("{\"msg\":\"auth\"}"));
+      request->send(response);
+    } else {
+      request->requestAuthentication(esp_hostname);
+    }
     return false;
   }
 
@@ -358,7 +388,7 @@ bool requestPreProcess(MongooseHttpServerRequest *request, MongooseHttpServerRes
   // state-changing (non-GET) request authenticated via cookie must also carry
   // the SPA's custom header, which a cross-origin form cannot set. Basic-auth
   // (machine) clients never send our cookie and are unaffected.
-  if(request->method() != HTTP_GET && hasValidSessionCookie(request)) {
+  if(request->method() != HTTP_GET && usedCookie) {
     MongooseString xrw = request->headers("X-Requested-With");
     if(!(xrw && 0 == strcmp(xrw.c_str(), "OpenEVSE"))) {
       response = request->beginResponseStream();

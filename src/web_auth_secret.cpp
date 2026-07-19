@@ -22,10 +22,15 @@ static String randomHex32()
 
 String web_auth_get_secret()
 {
+  // Read-only: returns whatever is currently in server_secret (may be empty).
+  return server_secret;
+}
+
+void web_auth_ensure_secret()
+{
   if (server_secret.length() == 0) {
     web_auth_rotate_secret();
   }
-  return server_secret;
 }
 
 void web_auth_rotate_secret()
