@@ -23,6 +23,22 @@ bool auth_constant_time_equals(const std::string &a, const std::string &b) {
   return diff == 0;
 }
 
+std::string cookie_extract(const std::string &hdr, const std::string &name) {
+  size_t i = 0;
+  while(i < hdr.size()) {
+    while(i < hdr.size() && (hdr[i] == ' ' || hdr[i] == ';')) i++;
+    size_t eq = hdr.find('=', i);
+    if(eq == std::string::npos) break;
+    std::string key = hdr.substr(i, eq - i);
+    size_t end = hdr.find(';', eq + 1);
+    std::string val = hdr.substr(eq + 1, (end == std::string::npos ? hdr.size() : end) - (eq + 1));
+    if(key == name) return val;
+    if(end == std::string::npos) break;
+    i = end + 1;
+  }
+  return "";
+}
+
 bool session_token_verify(const std::string &secret, const std::string &token, uint32_t now) {
   // expect "v1." + 8 hex + "." + 32 hex  => length 3 + 8 + 1 + 32 = 44
   if(token.size() != VER.size() + 8 + 1 + SIG_LEN) return false;
