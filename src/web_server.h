@@ -51,6 +51,13 @@ extern void web_server_event(JsonDocument &event);
 typedef const __FlashStringHelper *fstr_t;
 
 bool requestPreProcess(MongooseHttpServerRequest *request, MongooseHttpServerResponseStream *&response, fstr_t contentType = CONTENT_TYPE_JSON);
+
+// Single source of truth for HTTP auth (Basic for machine clients, session
+// cookie for the browser UI). Shared by the REST path, the WebSocket handshake
+// gate, and the static file handler so all three honour the same policy.
+// `usedCookie`/`badCredential` are optional out-params (see web_server.cpp).
+bool isAuthenticated(MongooseHttpServerRequest *request, bool *usedCookie = nullptr, bool *badCredential = nullptr);
+
 void dumpRequest(MongooseHttpServerRequest *request);
 
 void handleLogin(MongooseHttpServerRequest *request);

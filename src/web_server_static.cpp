@@ -46,9 +46,12 @@ bool web_static_handle(MongooseHttpServerRequest *request)
 {
   dumpRequest(request);
 
-  // Are we authenticated
-  if(!net.isWifiModeApOnly() && www_username!="" &&
-     false == request->authenticate(www_username, www_password)) {
+  // Are we authenticated — go through the shared gate so the static shell
+  // honours the same policy as the API/WebSocket: Basic *or* a session cookie,
+  // keyed on the password being set (a password with a blank username is still
+  // protected, via the default admin user). A cookie-authed browser can reload
+  // the page without being re-prompted for Basic credentials.
+  if(!isAuthenticated(request)) {
     request->requestAuthentication(esp_hostname);
     return false;
   }

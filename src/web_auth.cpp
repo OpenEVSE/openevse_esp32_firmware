@@ -59,3 +59,28 @@ bool session_token_verify(const std::string &secret, const std::string &token, u
   if(!auth_constant_time_equals(sig, expected)) return false;
   return now < exp;
 }
+
+// -------------------------------------------------------------------
+// Decaying failed-authentication throttle (see web_auth.h)
+// -------------------------------------------------------------------
+uint16_t auth_throttle_effective(const AuthThrottle &t, uint32_t now) {
+  if(t.fails == 0) return 0;
+  uint32_t elapsed = (now >= t.updated) ? (now - t.updated) : 0;
+  uint32_t decay = elapsed / AUTH_THROTTLE_DECAY_SECS;
+  return (decay >= t.fails) ? 0 : (uint16_t)(t.fails - decay);
+}
+
+void auth_throttle_record_failure(AuthThrottle &t, uint32_t now) {
+  uint16_t eff = auth_throttle_effective(t, now);
+  t.fails = (eff < 0xFFFF) ? (uint16_t)(eff + 1) : eff;
+  t.updated = now;
+}
+
+void auth_throttle_record_success(AuthThrottle &t, uint32_t now) {
+  t.fails = 0;
+  t.updated = now;
+}
+
+bool auth_throttle_locked(const AuthThrottle &t, uint32_t now) {
+  return auth_throttle_effective(t, now) >= AUTH_THROTTLE_LOCK_AT;
+}
