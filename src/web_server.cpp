@@ -188,7 +188,35 @@ bool requestPreProcess(MongooseHttpServerRequest *request, MongooseHttpServerRes
 
   response->addHeader(F("Cache-Control"), F("no-cache, private, no-store, must-revalidate, max-stale=0, post-check=0, pre-check=0"));
 
+  // Baseline security headers, safe for the SPA and all API responses. A global
+  // Content-Security-Policy is intentionally not set here (it can break the
+  // bundled web UI); endpoints that emit raw HTML add their own CSP.
+  response->addHeader(F("X-Content-Type-Options"), F("nosniff"));
+  response->addHeader(F("X-Frame-Options"), F("SAMEORIGIN"));
+
   return true;
+}
+
+// -------------------------------------------------------------------
+// HTML-escape a user-controlled string before reflecting it into a
+// text/html response, to prevent reflected XSS (CWE-79). Escapes the five
+// characters that are significant in HTML element/attribute contexts.
+// -------------------------------------------------------------------
+String htmlEscape(const String &in) {
+  String out;
+  out.reserve(in.length() + 16);
+  for(size_t i = 0; i < in.length(); i++) {
+    char c = in[i];
+    switch(c) {
+      case '&':  out += F("&amp;");  break;
+      case '<':  out += F("&lt;");   break;
+      case '>':  out += F("&gt;");   break;
+      case '"':  out += F("&quot;"); break;
+      case '\'': out += F("&#x27;"); break;
+      default:   out += c;           break;
+    }
+  }
+  return out;
 }
 
 // -------------------------------------------------------------------
@@ -1111,9 +1139,9 @@ handleRapi(MongooseHttpServerRequest *request) {
       if (json) {
         s = "{\"cmd\":\""+rapi+"\",\"ret\":\""+rapiString+"\"}";
       } else {
-        s += rapi;
+        s += htmlEscape(rapi);
         s += F("<p>&gt;");
-        s += rapiString;
+        s += htmlEscape(rapiString);
       }
     }
     else
@@ -1135,7 +1163,7 @@ handleRapi(MongooseHttpServerRequest *request) {
       if (json) {
         s = "{\"cmd\":\""+rapi+"\",\"error\":\""+errorString+"\"}";
       } else {
-        s += rapi;
+        s += htmlEscape(rapi);
         s += F("<p><strong>Error:</strong>");
         s += errorString;
       }
@@ -1144,8 +1172,12 @@ handleRapi(MongooseHttpServerRequest *request) {
     }
   }
   if (false == json) {
-    s += F("<script type='text/javascript'>document.getElementById('rapi').focus();</script>");
     s += F("<p></html>\r\n\r\n");
+    // Strict CSP as defence-in-depth on this raw-HTML console: no scripts, no
+    // external resources, form submits only to same origin. The user input is
+    // already HTML-escaped above; this blocks any residual injection vector.
+    response->addHeader(F("Content-Security-Policy"),
+      F("default-src 'none'; form-action 'self'; base-uri 'none'"));
   }
 
   response->setCode(code);

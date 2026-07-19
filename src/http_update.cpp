@@ -7,6 +7,7 @@
 #include "debug.h"
 #include "emonesp.h"
 #include "web_server.h"
+#include "ota_signing.h"
 #include <MongooseHttpClient.h>
 #include <Update.h>
 
@@ -24,12 +25,68 @@ struct HttpUpdateRequestState
   bool errorReported = false;
 };
 
+// Case-insensitive check that `host` equals `suffix` or ends with ".suffix".
+static bool host_matches(const String &host, const char *suffix)
+{
+  String s = host;
+  s.toLowerCase();
+  String suf = suffix;
+  if(s == suf) {
+    return true;
+  }
+  String dotted = "." + suf;
+  return s.length() > dotted.length() &&
+         s.endsWith(dotted);
+}
+
+bool http_update_url_allowed(const String &url)
+{
+  // Require HTTPS: prevents a plaintext-MITM'd fetch and enforces a trusted
+  // transport to the release host.
+  if(!url.startsWith("https://")) {
+    return false;
+  }
+
+  // Extract the host: everything between "https://" and the next '/', '?' or ':'.
+  int start = 8; // strlen("https://")
+  int end = url.length();
+  for(int i = start; i < url.length(); i++) {
+    char c = url[i];
+    if(c == '/' || c == '?' || c == ':') {
+      end = i;
+      break;
+    }
+  }
+  // Strip any userinfo ("user@host") to avoid "github.com@evil.example" tricks.
+  String authority = url.substring(start, end);
+  int at = authority.lastIndexOf('@');
+  String host = (at >= 0) ? authority.substring(at + 1) : authority;
+  if(host.length() == 0) {
+    return false;
+  }
+
+  // Allowlist: OpenEVSE release downloads live on github.com and are served
+  // (after redirect) from the *.githubusercontent.com CDN. Edit here to permit
+  // other trusted firmware hosts.
+  return host_matches(host, "github.com") ||
+         host_matches(host, "githubusercontent.com");
+}
+
 bool http_update_from_url(String url,
   std::function<void(size_t complete, size_t total)> progress,
   std::function<void(int)> success,
   std::function<void(int)> error)
 {
   DBUGF("Update from URL: %s", url.c_str());
+
+  // Enforced on the initial fetch and on every redirect target (this function
+  // is re-entered for 30x Location), so firmware can only come from a trusted
+  // origin regardless of where the redirect chain leads.
+  if(!http_update_url_allowed(url)) {
+    DEBUG_PORT.printf("OTA URL not allowed: %s\n", url.c_str());
+    error(HTTP_UPDATE_ERROR_URL_NOT_ALLOWED);
+    return false;
+  }
 
   MongooseHttpClientRequest *request = client.beginRequest(url.c_str());
   if(request)
@@ -187,6 +244,25 @@ bool http_update_start(String source, size_t total)
   update_position = 0;
   update_total_size = total;
   lastPercent = -1;
+
+  // Signed-OTA builds must know the exact image size up front: the verifier
+  // hashes (total - 512) bytes and treats the trailing 512 as the signature,
+  // so an unknown Content-Length would hash the signature into the firmware and
+  // always fail. Reject rather than silently mis-verify.
+  if(ota_signing_required() && total == 0)
+  {
+    DEBUG_PORT.println(F("Signed OTA requires a known Content-Length; refusing update"));
+    return false;
+  }
+
+  // Install the image-signature verifier before begin() (no-op unless this is a
+  // signed-OTA build). If it is required but cannot be installed, fail closed.
+  if(!ota_install_signature())
+  {
+    DEBUG_PORT.println(F("Failed to install OTA signature verifier; refusing update"));
+    return false;
+  }
+
   // Pass the expected size so the library can (a) reject an oversized binary
   // before erasing the target partition, and (b) validate completeness at end().
   // Fall back to UPDATE_SIZE_UNKNOWN only when Content-Length is absent.
