@@ -3,11 +3,17 @@
     "id": "divert_almostperfect_noimport",
     "title": "Divert: Almost Perfect (noimport)",
     "category": "divert",
-    "profile": "noimport"
+    "profile": "noimport",
+    "description": [
+      "Divert: Almost Perfect (noimport) replays a mostly ideal solar day where available surplus is stable enough to show near-perfect tracking.",
+      "No-import settings should be more conservative, preferring to leave surplus unused rather than import from the grid.",
+      "This variant is driven from solar input, so the main comparison is available charge power versus actual EV charge power.",
+      "Duration: 937 minutes."
+    ]
   },
   "simulation": {
     "duration": 56220,
-    "tick_interval": 60,
+    "tick_interval": 1,
     "start_time": "2018-07-08T04:28:00Z"
   },
   "peers": [

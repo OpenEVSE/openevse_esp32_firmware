@@ -12,6 +12,9 @@ typedef const __FlashStringHelper *fstr_t;
 #include "espal.h"
 #include "input.h"
 #include "event.h"
+#include "loadsharing_peer_poller.h"
+#include "loadsharing_types.h"
+#include <vector>
 
 extern bool isPositive(MongooseHttpServerRequest *request, const char *param);
 extern bool web_server_config_deserialise(DynamicJsonDocument &doc, bool factory);
@@ -43,6 +46,108 @@ handleConfigPost(MongooseHttpServerRequest *request, MongooseHttpServerResponseS
   DeserializationError error = deserializeJson(doc, body.c_str(), body.length());
   if(!error)
   {
+    bool loadsharingConfigRequest = false;
+    for (JsonPairConst field : doc.as<JsonObjectConst>()) {
+      if (String(field.key().c_str()).startsWith("loadsharing_")) {
+        loadsharingConfigRequest = true;
+        break;
+      }
+    }
+
+    // If this device is a member, check if this is a controller config push
+    // or a local request trying to change load sharing fields
+    if (loadSharingGroupState.isMember()) {
+      bool isControllerPush = doc.containsKey("loadsharing_role") &&
+                              (doc["loadsharing_role"].as<String>() == "member" ||
+                               doc["loadsharing_role"].as<String>() == "");
+      if (loadsharingConfigRequest && !isControllerPush) {
+        response->setCode(403);
+        response->print("{\"msg\":\"Load sharing configuration is read-only on members\"}");
+        return;
+      }
+    }
+
+    // Validate load sharing config ranges
+    if (doc.containsKey("loadsharing_group_max_current")) {
+      double val = doc["loadsharing_group_max_current"].as<double>();
+      if (val < 0) {
+        response->setCode(400);
+        response->print("{\"msg\":\"loadsharing_group_max_current must be >= 0\"}");
+        return;
+      }
+    }
+    if (doc.containsKey("loadsharing_safety_factor")) {
+      double val = doc["loadsharing_safety_factor"].as<double>();
+      if (val < 0.0 || val > 1.0) {
+        response->setCode(400);
+        response->print("{\"msg\":\"loadsharing_safety_factor must be between 0.0 and 1.0\"}");
+        return;
+      }
+    }
+    if (doc.containsKey("loadsharing_heartbeat_timeout")) {
+      uint32_t val = doc["loadsharing_heartbeat_timeout"].as<uint32_t>();
+      if (val < 5 || val > 600) {
+        response->setCode(400);
+        response->print("{\"msg\":\"loadsharing_heartbeat_timeout must be between 5 and 600 seconds\"}");
+        return;
+      }
+    }
+    if (doc.containsKey("loadsharing_failsafe_safe_current")) {
+      double val = doc["loadsharing_failsafe_safe_current"].as<double>();
+      if (val < 0 || val > 80) {
+        response->setCode(400);
+        response->print("{\"msg\":\"loadsharing_failsafe_safe_current must be between 0 and 80 amps\"}");
+        return;
+      }
+    }
+    if (doc.containsKey("loadsharing_failsafe_peer_assumed_current")) {
+      double val = doc["loadsharing_failsafe_peer_assumed_current"].as<double>();
+      if (val < 0 || val > 80) {
+        response->setCode(400);
+        response->print("{\"msg\":\"loadsharing_failsafe_peer_assumed_current must be between 0 and 80 amps\"}");
+        return;
+      }
+    }
+    if (doc.containsKey("loadsharing_failsafe_mode")) {
+      String val = doc["loadsharing_failsafe_mode"].as<String>();
+      if (val != "safe_current" && val != "disable") {
+        response->setCode(400);
+        response->print("{\"msg\":\"loadsharing_failsafe_mode must be 'safe_current' or 'disable'\"}");
+        return;
+      }
+    }
+    // Cross-field: a member's failsafe current must fit inside the group
+    // budget, otherwise a single islanded member can exceed the group max
+    // on its own. Use incoming values when present, stored values otherwise.
+    {
+      double failsafe = doc.containsKey("loadsharing_failsafe_safe_current")
+          ? doc["loadsharing_failsafe_safe_current"].as<double>()
+          : loadsharing_failsafe_safe_current;
+      double groupMax = doc.containsKey("loadsharing_group_max_current")
+          ? doc["loadsharing_group_max_current"].as<double>()
+          : loadsharing_group_max_current;
+      if (groupMax > 0 && failsafe > groupMax) {
+        response->setCode(400);
+        response->print("{\"msg\":\"loadsharing_failsafe_safe_current must not exceed loadsharing_group_max_current\"}");
+        return;
+      }
+    }
+
+    // Role transitions are applied after validation so that a rejected
+    // request does not mutate group-membership state as a side effect.
+    if (doc.containsKey("loadsharing_role") &&
+        doc["loadsharing_role"].as<String>() == "member" &&
+        doc.containsKey("loadsharing_controller_host")) {
+      String controllerHost = doc["loadsharing_controller_host"].as<String>();
+      loadSharingGroupState.becomeMember(controllerHost);
+    }
+    if (doc.containsKey("loadsharing_role") &&
+        doc["loadsharing_role"].as<String>() == "" &&
+        loadSharingGroupState.isMember()) {
+      loadSharingGroupState.removeGroupPeer(loadsharing_controller_host);
+      loadSharingGroupState.resetRole();
+    }
+
     // Update WiFi module config
     MongooseString storage = request->headers("X-Storage");
     if(storage.equals("factory") && config_factory_write_lock())
@@ -53,6 +158,10 @@ handleConfigPost(MongooseHttpServerRequest *request, MongooseHttpServerResponseS
     }
 
     bool config_modified = web_server_config_deserialise(doc, storage.equals("factory"));
+    if (config_modified && loadsharingConfigRequest &&
+        loadSharingGroupState.isController()) {
+      loadSharingPeerPoller.pushConfigToAllPeers();
+    }
 
     StaticJsonDocument<128> reply;
     reply["config_version"] = config_version();

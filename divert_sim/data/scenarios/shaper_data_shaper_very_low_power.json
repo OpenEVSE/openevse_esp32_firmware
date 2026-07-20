@@ -3,7 +3,13 @@
     "id": "shaper_data_shaper_very_low_power",
     "title": "Shaper: Data Shaper (very_low_power)",
     "category": "shaper",
-    "profile": "very_low_power"
+    "profile": "very_low_power",
+    "description": [
+      "Shaper: Data Shaper (very_low_power) replays live-power input through the current shaper rather than solar-divert control.",
+      "Low available-power edge case. Useful for checking minimum-current behavior and avoiding unstable start/stop decisions.",
+      "Compare live power, smoothed live power, shaper maximum, available charge power, and actual charge power to see how the limiter reacts.",
+      "Duration: 2 hours."
+    ]
   },
   "simulation": {
     "duration": 7200,

@@ -63,6 +63,9 @@
 #include "event_log.h"
 #include "evse_man.h"
 #include "scheduler.h"
+#include "loadsharing_discovery_task.h"
+#include "loadsharing_peer_poller.h"
+#include "loadsharing_types.h"
 #ifndef ENABLE_TSDB
 #include "energy_logger.h"
 #else
@@ -100,7 +103,6 @@ String buildenv = ESCAPEQUOTE(BUILD_ENV_NAME);
 String serial;
 
 OcppTask ocpp = OcppTask();
-
 
 static void hardware_setup();
 static void handle_serial();
@@ -219,6 +221,24 @@ void setup()
   web_server_setup();
   DBUGF("After web_server_setup: %d", ESPAL.getFreeHeap());
 
+  // Initialize load sharing group state:
+  // - Load persisted group peers from LittleFS
+  // - Register callback to wake poller when peer list changes
+  loadSharingGroupState.loadGroupPeers();
+  loadSharingGroupState.setOnPeerChange([]() {
+    MicroTask.wakeTask(&loadSharingPeerPoller);
+  });
+  DBUGF("After loadSharingGroupState init: %d", ESPAL.getFreeHeap());
+
+  // Initialize background discovery task for load sharing
+  // Discovery will push results into group state via onDiscoveryComplete()
+  loadSharingDiscoveryTask.begin(loadSharingGroupState);
+  DBUGF("After loadSharingDiscoveryTask.begin: %d", ESPAL.getFreeHeap());
+
+  // Initialize background peer poller task for load sharing
+  // Maintains WebSocket connections to group peers for real-time status updates
+  loadSharingPeerPoller.begin(loadSharingGroupState);
+  DBUGF("After loadSharingPeerPoller.begin: %d", ESPAL.getFreeHeap());
 #ifdef ENABLE_TSDB
   tsdbEnergyLogger.begin(evse);
   DBUGF("After tsdbEnergyLogger.begin: %d", ESPAL.getFreeHeap());
@@ -482,12 +502,16 @@ static void printUsage() {
     "  Examples:\n"
     "    --set-config www_http_port=8080\n"
     "    --set-config www_https_port=8443\n"
+    "    --set-config hostname=my-openevse\n"
     "    --set-config mqtt_server=192.168.1.100\n"
     "    --set-config mqtt_port=1883\n"
     "Runtime options (EPOXY_DUINO native build):\n"
     "  --rapi-serial PATH   Set PTY/serial path for RAPI (e.g., /dev/pts/5)\n"
-    "%s",
-    epoxy_argv[0], lvgl_usage
+    "Environment variables:\n"
+    "  OPENEVSE_CHIP_ID     Set unique chip ID (hex, e.g. 0xAABBCCDDEEFF) for\n"
+    "                       multi-instance testing. Affects default hostname and\n"
+    "                       mDNS device ID.\n",
+    epoxy_argv[0]
   );
 }
 

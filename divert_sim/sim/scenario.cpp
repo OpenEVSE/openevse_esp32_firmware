@@ -77,6 +77,44 @@ bool Scenario::loadFromFile(const std::string &path)
     config_json = cfg.str();
   }
 
+  JsonObjectConst grp = root["group"].as<JsonObjectConst>();
+  if (!grp.isNull()) {
+    group.enabled = grp["enabled"] | false;
+    group.max_current = grp["max_current"] | 0.0;
+    group.safety_factor = grp["safety_factor"] | 1.0;
+    if (grp.containsKey("failsafe_mode")) {
+      group.failsafe_mode = grp["failsafe_mode"].as<const char *>();
+    }
+    group.failsafe_peer_assumed_current =
+        grp["failsafe_peer_assumed_current"] | 6.0;
+    group.rotation_interval = grp["rotation_interval"] | 1800;
+  }
+
+  // Backward-compat: old scenario files use a top-level "supply" object with
+  // "max_pwr" in watts and no "group.enabled" or "group.max_current".
+  JsonObjectConst supply = root["supply"].as<JsonObjectConst>();
+  if (!supply.isNull()) {
+    supply_max_pwr_w = supply["max_pwr"] | 0.0;
+    if (supply_max_pwr_w > 0 && group.max_current == 0.0) {
+      group.max_current = supply_max_pwr_w / nominal_voltage;
+      group.enabled = true;
+    }
+    if (supply.containsKey("live_pwr")) {
+      if (!supply_live_pwr.loadFromJson(supply["live_pwr"],
+                                        scenario_dir,
+                                        (long) start_epoch,
+                                        duration_sec)) {
+        std::cerr << "Scenario: invalid supply.live_pwr" << std::endl;
+        return false;
+      }
+    }
+  }
+  // If group section exists with max_current > 0, treat as enabled unless
+  // explicitly set to false.
+  if (!grp.isNull() && group.max_current > 0.0 && !grp.containsKey("enabled")) {
+    group.enabled = true;
+  }
+
   JsonArrayConst peerArr = root["peers"].as<JsonArrayConst>();
   if (peerArr.isNull() || peerArr.size() == 0) {
     std::cerr << "Scenario: no peers defined" << std::endl;
@@ -90,12 +128,15 @@ bool Scenario::loadFromFile(const std::string &path)
     p.voltage = pj["voltage"] | 240.0;
     p.min_current = pj["min_current"] | 6.0;
     p.max_current = pj["max_current"] | 32.0;
+    p.priority = pj["priority"] | 0;
 
     JsonObjectConst ev = pj["ev"].as<JsonObjectConst>();
     if (!ev.isNull()) {
       p.battery_capacity_kwh = ev["battery_capacity_kwh"] | 75.0;
       p.initial_soc = ev["initial_soc"] | 50.0;
       p.max_charge_rate_kw = ev["max_charge_rate_kw"] | 7.2;
+      p.initial_request_current = ev["request_current"] | true;
+      p.initial_aux_load_kw = ev["aux_load_kw"] | 0.0;
     }
 
     JsonObjectConst init = pj["initial"].as<JsonObjectConst>();
@@ -109,6 +150,7 @@ bool Scenario::loadFromFile(const std::string &path)
       // solar and grid_ie may both be present when the same CSV provides both
       // columns (e.g. day1/2/3_grid_ie.csv col1=solar, col2=grid_ie).
       // DivertTask reads them independently, so both inputs are applied each tick.
+
       if (inputs.containsKey("solar")) {
         if (!p.solar.loadFromJson(inputs["solar"],
                                  scenario_dir,
@@ -138,9 +180,9 @@ bool Scenario::loadFromFile(const std::string &path)
       }
       if (inputs.containsKey("vrms")) {
         if (!p.vrms.loadFromJson(inputs["vrms"],
-                                 scenario_dir,
-                                 (long) start_epoch,
-                                 duration_sec)) {
+                                scenario_dir,
+                                (long) start_epoch,
+                                duration_sec)) {
           std::cerr << "Scenario: invalid inputs.vrms for peer " << p.id << std::endl;
           return false;
         }
@@ -165,6 +207,12 @@ bool Scenario::loadFromFile(const std::string &path)
         }
         if (ej.containsKey("vehicle")) {
           e.set_vehicle = true; e.vehicle = ej["vehicle"].as<bool>();
+        }
+        if (ej.containsKey("request_current")) {
+          e.set_request_current = true; e.request_current = ej["request_current"].as<bool>();
+        }
+        if (ej.containsKey("aux_load_kw")) {
+          e.set_aux_load_kw = true; e.aux_load_kw = ej["aux_load_kw"].as<double>();
         }
         p.events.push_back(e);
       }

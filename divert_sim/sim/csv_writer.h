@@ -24,12 +24,27 @@ inline const std::vector<std::string> &peerColumns()
       "divert_smoothed_available_w",
       "shaper_max_w",
       "shaper_smoothed_live_w",
+      "loadshare_allocated_w",
       "pilot_w",
       "charge_available_w",
       "state",
       "ev_max_charge_w",
       "actual_charge_w",
       "soc",
+      "claim_state",
+      "claim_details",
+      "reason",
+  };
+  return cols;
+}
+
+inline const std::vector<std::string> &groupColumns()
+{
+  static const std::vector<std::string> cols = {
+      "group_max_w",
+      "group_total_actual_w",
+      "group_total_demand_w",
+      "failsafe_active",
   };
   return cols;
 }

@@ -16,6 +16,9 @@ CurrentShaperTask::CurrentShaperTask() : MicroTasks::Task() {
 	_pause_timer = 0;
 	_timer = 0;
 	_updated = false;
+	_loadshare_limit_active = false;
+	_loadshare_max_cur = 0;
+	_loadshare_force_disabled = false;
 }
 
 CurrentShaperTask::~CurrentShaperTask() {
@@ -34,8 +37,12 @@ unsigned long CurrentShaperTask::loop(MicroTasks::WakeReason reason) {
 	if (_enabled) {
 			EvseProperties props;
 			if (_changed) {
-				props.setMaxCurrent(floor(_max_cur));
-				if (_max_cur < _evse->getMinCurrent()) {
+				double effective_max_cur = _max_cur;
+				if (_loadshare_limit_active && _loadshare_max_cur < effective_max_cur) {
+					effective_max_cur = _loadshare_max_cur;
+				}
+				props.setMaxCurrent(floor(effective_max_cur));
+				if (_loadshare_force_disabled || effective_max_cur < _evse->getMinCurrent()) {
 					// pause temporary, not enough amps available
 					props.setState(EvseState::Disabled);
 					if (!_pause_timer)
@@ -44,7 +51,7 @@ unsigned long CurrentShaperTask::loop(MicroTasks::WakeReason reason) {
 					}
 
 				}
-				else if (millis() - _pause_timer >= current_shaper_min_pause_time * 1000 && (_max_cur - _evse->getMinCurrent() >= EVSE_SHAPER_HYSTERESIS))
+				else if (millis() - _pause_timer >= current_shaper_min_pause_time * 1000 && (effective_max_cur - _evse->getMinCurrent() >= EVSE_SHAPER_HYSTERESIS))
 				{
 					_pause_timer = 0;
 					props.setState(EvseState::None);
@@ -52,12 +59,14 @@ unsigned long CurrentShaperTask::loop(MicroTasks::WakeReason reason) {
 				_timer = millis();
 				_changed = false;
 				// claim only if we have change
-				if (_evse->getState() != props.getState() || _evse->getChargeCurrent() != props.getChargeCurrent())
+				if (_evse->getState(EvseClient_OpenEVSE_Shaper) != props.getState() ||
+					_evse->getMaxCurrent(EvseClient_OpenEVSE_Shaper) != props.getMaxCurrent())
 				{
 					// Always-on shaper claims at Safety (5000); a shaper running *only*
 					// because of a timer window claims at Limit (1100).  A window must
 					// never demote a config-enabled (always-on) shaper below Safety.
-					int priority = (_timer_controlled && !config_current_shaper_enabled())
+					int priority = (_timer_controlled && !config_current_shaper_enabled() &&
+					                !_loadshare_limit_active)
 					               ? EvseManager_Priority_Limit : EvseManager_Priority_Safety;
 					_evse->claim(EvseClient_OpenEVSE_Shaper, priority, props);
 					StaticJsonDocument<128> event;
@@ -98,10 +107,25 @@ unsigned long CurrentShaperTask::loop(MicroTasks::WakeReason reason) {
 			}
 	}
 	else {
-		//remove shaper claim
-		if (_evse->clientHasClaim(EvseClient_OpenEVSE_Shaper)) {
-			_evse->release(EvseClient_OpenEVSE_Shaper);
-			_smoothed_live_pwr = 0;
+		if (_loadshare_limit_active) {
+			EvseProperties props;
+			props.setMaxCurrent(floor(_loadshare_max_cur));
+			props.setState((_loadshare_force_disabled ||
+			                _loadshare_max_cur < _evse->getMinCurrent())
+			                 ? EvseState::Disabled : EvseState::None);
+
+			if (_changed ||
+				_evse->getState(EvseClient_OpenEVSE_Shaper) != props.getState() ||
+				_evse->getMaxCurrent(EvseClient_OpenEVSE_Shaper) != props.getMaxCurrent()) {
+				_evse->claim(EvseClient_OpenEVSE_Shaper, EvseManager_Priority_Safety, props);
+				_changed = false;
+			}
+		} else {
+			//remove shaper claim
+			if (_evse->clientHasClaim(EvseClient_OpenEVSE_Shaper)) {
+				_evse->release(EvseClient_OpenEVSE_Shaper);
+				_smoothed_live_pwr = 0;
+			}
 		}
 	}
 
@@ -236,4 +260,25 @@ bool CurrentShaperTask::isActive() {
 
 bool CurrentShaperTask::isUpdated() {
 	return _updated;
+}
+
+void CurrentShaperTask::setLoadSharingLimit(double max_cur, bool force_disabled) {
+	if (max_cur < 0) {
+		max_cur = 0;
+	}
+	_loadshare_limit_active = true;
+	_loadshare_max_cur = max_cur;
+	_loadshare_force_disabled = force_disabled;
+	_changed = true;
+}
+
+void CurrentShaperTask::clearLoadSharingLimit() {
+	_loadshare_limit_active = false;
+	_loadshare_max_cur = 0;
+	_loadshare_force_disabled = false;
+	_changed = true;
+}
+
+bool CurrentShaperTask::hasLoadSharingLimit() {
+	return _loadshare_limit_active;
 }

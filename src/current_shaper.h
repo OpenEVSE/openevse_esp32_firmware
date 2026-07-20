@@ -39,6 +39,9 @@ class CurrentShaperTask: public MicroTasks::Task
     uint32_t     _timer;
     uint32_t     _pause_timer;
     bool         _updated;
+    bool         _loadshare_limit_active;
+    double       _loadshare_max_cur;
+    bool         _loadshare_force_disabled;
     InputFilter  _inputFilter;
 
   protected:
@@ -60,6 +63,9 @@ class CurrentShaperTask: public MicroTasks::Task
     double getMaxCur();
     bool isActive();
     bool isUpdated();
+    void setLoadSharingLimit(double max_cur, bool force_disabled = false);
+    void clearLoadSharingLimit();
+    bool hasLoadSharingLimit();
 
     void notifyConfigChanged(bool enabled, uint32_t max_pwr);
     // Enable shaper from a scheduler timer window (uses Limit priority 1100 instead of Safety 5000)

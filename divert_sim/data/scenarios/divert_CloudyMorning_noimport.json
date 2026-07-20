@@ -3,11 +3,17 @@
     "id": "divert_CloudyMorning_noimport",
     "title": "Divert: Cloudy Morning (noimport)",
     "category": "divert",
-    "profile": "noimport"
+    "profile": "noimport",
+    "description": [
+      "Divert: Cloudy Morning (noimport) replays a cloudy morning feed with intermittent solar surplus and changing charge opportunities.",
+      "No-import settings should be more conservative, preferring to leave surplus unused rather than import from the grid.",
+      "This variant is driven from solar input, so the main comparison is available charge power versus actual EV charge power.",
+      "Duration: 955 minutes."
+    ]
   },
   "simulation": {
     "duration": 57300,
-    "tick_interval": 60,
+    "tick_interval": 1,
     "start_time": "2018-08-06T04:45:00Z"
   },
   "peers": [

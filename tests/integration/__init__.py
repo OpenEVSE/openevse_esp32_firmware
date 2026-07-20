@@ -1,1 +1,1 @@
-"""OpenEVSE integration tests package."""
+"""Load sharing integration tests package."""

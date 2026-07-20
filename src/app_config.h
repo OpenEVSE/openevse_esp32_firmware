@@ -107,6 +107,22 @@ extern uint32_t divert_min_charge_time;
 // Scheduler settings
 extern uint32_t scheduler_start_window;
 
+// Load Sharing settings
+extern bool loadsharing_enabled;
+extern String loadsharing_group_id;
+extern double loadsharing_group_max_current;
+extern double loadsharing_safety_factor;
+extern uint32_t loadsharing_heartbeat_timeout;
+extern String loadsharing_failsafe_mode;
+extern double loadsharing_failsafe_safe_current;
+extern double loadsharing_failsafe_peer_assumed_current;
+extern uint32_t loadsharing_priority;
+extern uint32_t loadsharing_config_version;
+extern uint32_t loadsharing_config_updated_at;
+extern String loadsharing_role;
+extern String loadsharing_controller_host;
+extern uint32_t loadsharing_rotation_interval;
+
 //Shaper settings
 extern uint32_t current_shaper_max_pwr;
 extern uint32_t current_shaper_smoothing_time;

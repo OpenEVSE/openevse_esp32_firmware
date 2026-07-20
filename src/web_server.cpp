@@ -48,6 +48,7 @@ typedef const __FlashStringHelper *fstr_t;
 #include "home_battery.h"
 #include "evse_man.h"
 #include "limit.h"
+#include "loadsharing_types.h"
 
 MongooseHttpServer server;          // Create class for Web server
 MongooseHttpServer redirect;        // Server to redirect to HTTPS if enabled
@@ -354,6 +355,9 @@ void buildStatus(DynamicJsonDocument &doc) {
   doc["ota_update"] = (int)Update.isRunning();
 
   doc["config_version"] = config_version();
+  doc["loadsharing_min_current"] = evse.getMinCurrent();
+  doc["loadsharing_max_current"] = evse.getMaxConfiguredCurrent();
+  doc["loadsharing_priority"] = loadsharing_priority;
   doc["claims_version"] = evse.getClaimsVersion();
   doc["override_version"] = manual.getVersion();
   doc["schedule_version"] = scheduler.getVersion();
@@ -561,8 +565,9 @@ void handleStatusPost(MongooseHttpServerRequest *request, MongooseHttpServerResp
       DBUGF("shaper: live power:%dW", shaper.getLivePwr());
     }
     if(doc.containsKey("solar")) {
-      divert.setSolar(doc["solar"]);
-      DBUGF("solar:%dW", divert.getSolar());
+      int solar = doc["solar"];
+      divert.setSolar(solar);
+      DBUGF("solar:%dW", solar);
       divert.update_state();
       // recalculate shaper
       if (shaper.getState()) {
@@ -571,8 +576,9 @@ void handleStatusPost(MongooseHttpServerRequest *request, MongooseHttpServerResp
       send_event = false; // Divert sends the event so no need to send here
     }
     else if(doc.containsKey("grid_ie")) {
-      divert.setGridIe(doc["grid_ie"]);
-      DBUGF("grid:%dW", divert.getGridIe());
+      int grid_ie = doc["grid_ie"];
+      divert.setGridIe(grid_ie);
+      DBUGF("grid:%dW", grid_ie);
       divert.update_state();
       // recalculate shaper
       if (shaper.getState()) {
@@ -1269,7 +1275,7 @@ void handleHttpsRedirect(MongooseHttpServerRequest *request)
 void onWsFrame(MongooseHttpWebSocketConnection *connection, int flags, uint8_t *data, size_t len)
 {
   DBUGF("Got message %.*s", len, (const char *)data);
-  const size_t capacity = JSON_OBJECT_SIZE(1) + 16;
+  const size_t capacity = JSON_OBJECT_SIZE(3) + JSON_OBJECT_SIZE(2) + 128;
   DynamicJsonDocument doc(capacity);
   DeserializationError error = deserializeJson(doc, data, len);
   if (!error) {
@@ -1277,8 +1283,23 @@ void onWsFrame(MongooseHttpWebSocketConnection *connection, int flags, uint8_t *
       {
         // answer pong
         connection->send("{\"pong\": 1}");
-
       }
+
+    // Handle load sharing allocation from controller (member side)
+    if (doc.containsKey("loadsharing")) {
+      JsonObject ls = doc["loadsharing"];
+      if (ls.containsKey("target_current")) {
+        double targetCurrent = ls["target_current"].as<double>();
+        String reason = ls.containsKey("reason") ? ls["reason"].as<String>() : "allocation";
+
+        DBUGF("LoadSharing: Received allocation %.1fA (reason: %s)", targetCurrent, reason.c_str());
+
+        if (loadSharingGroupState.isMember()) {
+          loadSharingGroupState.recordAllocationReceived();
+          shaper.setLoadSharingLimit(targetCurrent, reason == "failsafe_disabled");
+        }
+      }
+    }
   }
 }
 
@@ -1496,6 +1517,9 @@ void web_server_setup()
     onConnect(onWsConnect);
 
   server.onNotFound(handleNotFound);
+
+  // Setup load sharing endpoints
+  web_server_load_sharing_setup();
 
   DEBUG.println("Server started");
 }

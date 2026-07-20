@@ -669,6 +669,170 @@ paths:
       operationId: limit_clear
       tags:
         - Limit
+  /loadsharing/peers:
+    get:
+      summary: List discovered and configured peers
+      description: |
+        Return the set of peers that are discovered (mDNS) and/or configured as
+        members of the load sharing group.
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/LoadSharingPeer'
+      operationId: listLoadSharingPeers
+      tags:
+        - Load Sharing
+    post:
+      summary: Add a peer to the load sharing group
+      description: |
+        Add a new peer to the load sharing group. The peer must be specified as a
+        hostname or IP address (the value must contain `.` or `:`). On success the
+        controller performs reciprocal peer-list sync on the remote unless
+        `reciprocal` is false. Config push to the new member is handled separately
+        by the peer poller after the WebSocket connection is established.
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - host
+              properties:
+                host:
+                  type: string
+                  description: Hostname or IP address of the peer to add
+                  example: openevse-2.local
+                reciprocal:
+                  type: boolean
+                  default: true
+                  description: |
+                    When true (default), add this device to the remote peer's group
+                    list. Set false when handling a reciprocal sync from the remote.
+      responses:
+        '200':
+          description: Peer added or already in group
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Message'
+              examples:
+                Added:
+                  value:
+                    msg: done
+                Already in group:
+                  value:
+                    msg: already in group
+        '400':
+          description: Invalid request
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Message'
+              examples:
+                Invalid JSON:
+                  value:
+                    msg: Invalid JSON
+                Missing host:
+                  value:
+                    msg: Missing required 'host' parameter
+                Empty host:
+                  value:
+                    msg: Host cannot be empty
+                Local device:
+                  value:
+                    msg: Cannot add local device as peer
+                Invalid host format:
+                  value:
+                    msg: Invalid host format - must contain domain or IP
+      operationId: addLoadSharingPeer
+      tags:
+        - Load Sharing
+  '/loadsharing/peers/{host}':
+    delete:
+      summary: Remove a peer from the load sharing group
+      description: |
+        Remove a peer from the load sharing group. On success the controller
+        performs reciprocal removal on the remote unless `reciprocal=false`.
+        The controller also pushes a reset config to the removed member when
+        applicable.
+      parameters:
+        - in: path
+          name: host
+          required: true
+          schema:
+            type: string
+          description: Hostname or IP address of the peer to remove
+        - in: query
+          name: reciprocal
+          required: false
+          schema:
+            type: boolean
+            default: true
+          description: |
+            When true (default), remove this device from the remote peer's group
+            list. Set false when handling a reciprocal sync from the remote.
+      responses:
+        '200':
+          $ref: '#/components/responses/UpdateSuccessful'
+        '400':
+          description: Cannot remove local device
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Message'
+              examples:
+                Local device:
+                  value:
+                    msg: Cannot remove local device from group
+        '404':
+          description: Peer not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Message'
+              examples:
+                Peer not found:
+                  value:
+                    msg: Peer not found
+      operationId: removeLoadSharingPeer
+      tags:
+        - Load Sharing
+  /loadsharing/status:
+    get:
+      summary: Get load sharing runtime status
+      description: |
+        Return runtime status for load sharing, including online/offline peers and
+        the most recent computed allocations.
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/LoadSharingStatus'
+      operationId: getLoadSharingStatus
+      tags:
+        - Load Sharing
+  /loadsharing/discover:
+    post:
+      summary: Trigger peer discovery
+      description: |
+        Trigger an mDNS discovery scan for other OpenEVSE devices.
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Message'
+      operationId: discoverLoadSharingPeers
+      tags:
+        - Load Sharing
   /emeter:
     delete:
       summary: Reset Energy Meter
@@ -1027,6 +1191,122 @@ components:
           minimum: 1
           maximum: 2
           exclusiveMaximum: false
+
+    LoadSharingPeerStatus:
+      type: object
+      description: Minimal peer status snapshot used for load sharing decisions.
+      properties:
+        amp:
+          type: number
+          format: double
+          description: Measured current (amps).
+        voltage:
+          type: number
+          format: double
+          description: Measured voltage (volts).
+        pilot:
+          type: number
+          format: double
+          description: Current pilot setpoint (amps).
+        vehicle:
+          type: integer
+          description: 1 if vehicle connected, else 0.
+        state:
+          type: integer
+          description: EVSE state code.
+        min_current:
+          type: number
+          format: double
+          description: EVSE minimum current (amps).
+        max_current:
+          type: number
+          format: double
+          description: EVSE configured maximum current (amps).
+        priority:
+          type: integer
+          description: Node-local load sharing priority; lower values win under scarcity.
+
+    LoadSharingPeer:
+      type: object
+      description: A discovered or configured peer.
+      properties:
+        id:
+          type: string
+          description: Stable device id.
+        name:
+          type: string
+          description: mDNS instance/hostname if available.
+        host:
+          type: string
+          description: Hostname or IP address used to reach the peer.
+        ip:
+          type: string
+          description: Current resolved IP address.
+        version:
+          type: string
+          description: Firmware version if available.
+        online:
+          type: boolean
+        joined:
+          type: boolean
+          description: True if this peer is joined to the load sharing group (manually configured).
+        last_seen:
+          type: integer
+          description: Seconds since boot when the peer was last seen (millis/1000).
+        status:
+          $ref: '#/components/schemas/LoadSharingPeerStatus'
+
+    LoadSharingAllocation:
+      type: object
+      description: Per-member current allocation result.
+      properties:
+        id:
+          type: string
+          description: Member id.
+        target_current:
+          type: number
+          format: double
+          minimum: 0
+          description: Allocated current (amps).
+        reason:
+          type: string
+          enum:
+            - idle
+            - equal_share
+            - connected_min
+            - min_subset
+            - insufficient
+            - offline
+            - failsafe_disabled
+          description: Why this allocation was computed.
+      required:
+        - target_current
+
+    LoadSharingStatus:
+      type: object
+      description: Runtime status for local load sharing.
+      properties:
+        enabled:
+          type: boolean
+        group_id:
+          type: string
+        computed_at:
+          type: string
+          format: date-time
+        failsafe_active:
+          type: boolean
+        online_count:
+          type: integer
+        offline_count:
+          type: integer
+        peers:
+          type: array
+          items:
+            $ref: '#/components/schemas/LoadSharingPeer'
+        allocations:
+          type: array
+          items:
+            $ref: '#/components/schemas/LoadSharingAllocation'
   responses:
     UpdateSuccessful:
       description: Update successful
@@ -1072,3 +1352,4 @@ tags:
   - name: Time
   - name: Restart
   - name: Certificates
+  - name: Load Sharing

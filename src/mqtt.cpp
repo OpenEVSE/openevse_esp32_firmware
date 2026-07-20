@@ -423,16 +423,18 @@ void Mqtt::handleMqttMessage(MongooseString topic, MongooseString payload) {
 
   // Logic from old mqttmsg_callback
   if (topic_string == mqtt_solar){
-    divert.setSolar(payload_str.toInt());
-    DBUGF("solar:%dW", divert.getSolar());
+    int solar = payload_str.toInt();
+    divert.setSolar(solar);
+    DBUGF("solar:%dW", solar);
     divert.update_state();
     if (shaper.getState()) {
       shaper.shapeCurrent();
     }
   }
   else if (topic_string == mqtt_grid_ie) {
-    divert.setGridIe(payload_str.toInt());
-    DBUGF("grid:%dW", divert.getGridIe());
+    int grid_ie = payload_str.toInt();
+    divert.setGridIe(grid_ie);
+    DBUGF("grid:%dW", grid_ie);
     divert.update_state();
     if (mqtt_live_pwr == mqtt_grid_ie) {
       shaper.setLivePwr(divert.getGridIe());
