@@ -436,7 +436,7 @@ bool requestPreProcess(MongooseHttpServerRequest *request, MongooseHttpServerRes
       return false;
     }
     MongooseString xrw = request->headers("X-Requested-With");
-    if(xrw && 0 == strcmp(xrw.c_str(), "OpenEVSE")) {
+    if(xrw.equals("OpenEVSE")) {
       response = request->beginResponseStream();
       response->setContentType(CONTENT_TYPE_JSON);
       response->setCode(401);
@@ -454,7 +454,7 @@ bool requestPreProcess(MongooseHttpServerRequest *request, MongooseHttpServerRes
   // (machine) clients never send our cookie and are unaffected.
   if(request->method() != HTTP_GET && usedCookie) {
     MongooseString xrw = request->headers("X-Requested-With");
-    if(!(xrw && 0 == strcmp(xrw.c_str(), "OpenEVSE"))) {
+    if(!(xrw.equals("OpenEVSE"))) {
       response = request->beginResponseStream();
       response->setContentType(CONTENT_TYPE_JSON);
       response->setCode(403);
@@ -674,7 +674,7 @@ static bool actuatorMethodAllowed(MongooseHttpServerRequest *request,
     return true;
   }
   MongooseString xrw = request->headers("X-Requested-With");
-  if(xrw && 0 == strcmp(xrw.c_str(), "OpenEVSE")) {
+  if(xrw.equals("OpenEVSE")) {
     return true;
   }
   response->setCode(403);
