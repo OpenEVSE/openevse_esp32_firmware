@@ -371,8 +371,24 @@ void handleLogin(MongooseHttpServerRequest *request)
   }
   auth_throttle_record_success(s_authThrottle, tnow);
 
-  // Cookies carry a wall-clock expiry; refuse to mint one the device can't
-  // date, or it would never expire. The client stays on Basic until NTP lands.
+  // Cookies carry a wall-clock expiry, so the device needs a real clock to mint
+  // one. If it has none yet (no NTP reachable, no controller RTC), adopt the
+  // time the client sent with the login — the caller has just proven the
+  // password, and could set the clock via /settime anyway, so this is no new
+  // authority. Only ever bootstraps an *unset* clock; never moves a real one,
+  // and a bogus (pre-2023) value is ignored so it can't roll the clock back.
+  if(!clockIsSane()) {
+    uint32_t clientNow = doc["now"] | 0u;   // epoch seconds from the browser
+    if(clientNow > AUTH_CLOCK_SANE_EPOCH) {
+      struct timeval tv;
+      tv.tv_sec  = (time_t)clientNow;
+      tv.tv_usec = 0;
+      time_set_time(tv, "login");
+    }
+  }
+
+  // Still no usable clock (client sent nothing / a bad value) — can't date a
+  // cookie, so fall back to Basic rather than mint an unexpirable one.
   if(!clockIsSane()) {
     response->setCode(503);
     response->print(F("{\"msg\":\"clock\"}"));
