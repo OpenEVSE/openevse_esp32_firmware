@@ -55,6 +55,11 @@ GET {{host1}}/loadsharing/peers HTTP/1.1
 
 GET {{host2}}/loadsharing/peers HTTP/1.1
 
+###
+# List peers on configured host
+
+GET {{baseUrl}}/loadsharing/peers HTTP/1.1
+
 # =========================================================================
 # POST /loadsharing/peers - Add peers to group
 # =========================================================================

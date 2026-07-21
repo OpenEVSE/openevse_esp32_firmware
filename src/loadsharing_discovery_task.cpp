@@ -10,9 +10,22 @@
 #include <espal.h>
 #include <ESPmDNS.h>
 #include <mdns.h>
+#include <algorithm>
 #if __has_include(<esp_idf_version.h>)
 #include <esp_idf_version.h>
 #endif
+
+static String normalizeTxtField(const String& raw) {
+  String value = raw;
+  value.trim();
+  while (value.length() >= 2 &&
+         ((value.charAt(0) == '"' && value.charAt(value.length() - 1) == '"') ||
+          (value.charAt(0) == '\'' && value.charAt(value.length() - 1) == '\''))) {
+    value = value.substring(1, value.length() - 1);
+    value.trim();
+  }
+  return value;
+}
 
 // Global instance
 LoadSharingDiscoveryTask loadSharingDiscoveryTask;
@@ -78,9 +91,6 @@ unsigned long LoadSharingDiscoveryTask::loop(MicroTasks::WakeReason reason) {
 
 void LoadSharingDiscoveryTask::begin(LoadSharingGroupState& groupState) {
   _groupState = &groupState;
-
-  // Wire the discovered peers pointer into group state
-  _groupState->setDiscoveredPeers(&_cachedPeers);
 
   _lastDiscovery = 0;  // Invalidate cache
   _last_discovery_time = 0;  // Force immediate first discovery
@@ -192,9 +202,26 @@ bool LoadSharingDiscoveryTask::pollAsyncQuery() {
   if (isComplete) {
     unsigned long elapsed = millis() - _query_start_time;
 
+    auto hasUsableIp = [](const String& ip) -> bool {
+      return !ip.isEmpty() && ip != "0.0.0.0";
+    };
+
+    auto mergePeer = [&](DiscoveredPeer& dst, const DiscoveredPeer& src) {
+      if (dst.serviceName.isEmpty() && !src.serviceName.isEmpty()) dst.serviceName = src.serviceName;
+      if (dst.hostname.isEmpty() && !src.hostname.isEmpty()) dst.hostname = src.hostname;
+      if (!hasUsableIp(dst.ipAddress) && hasUsableIp(src.ipAddress)) dst.ipAddress = src.ipAddress;
+      if (dst.port == 0 && src.port > 0) dst.port = src.port;
+      if (dst.id.isEmpty() && !src.id.isEmpty()) dst.id = src.id;
+      if (dst.name.isEmpty() && !src.name.isEmpty()) dst.name = src.name;
+      if (dst.url.isEmpty() && !src.url.isEmpty()) dst.url = src.url;
+      for (const auto& kv : src.txtRecords) {
+        dst.txtRecords[kv.first] = kv.second;
+      }
+    };
+
     // Convert mdns_result_t linked list to our DiscoveredPeer vector
     std::vector<DiscoveredPeer> peers;
-    std::vector<String> seenHostnames;  // Track to deduplicate
+    std::vector<String> seenHostnames;  // Track to deduplicate/merge
 
     for (mdns_result_t* r = results; r; r = r->next) {
       DiscoveredPeer peer;
@@ -213,17 +240,12 @@ bool LoadSharingDiscoveryTask::pollAsyncQuery() {
         continue;  // Skip if no hostname
       }
 
-      // Check for duplicates
-      bool isDuplicate = false;
-      for (const auto &seen : seenHostnames) {
-        if (seen == peer.hostname) {
-          isDuplicate = true;
-          break;
-        }
-      }
-
-      if (isDuplicate) {
-        continue;
+      // Save resolved host target if available. In native builds this can be
+      // different from instance_name.local and is often not directly usable as
+      // a per-peer key, but it is useful for URL/IP fallback.
+      String resolvedHost;
+      if (r->hostname && strlen(r->hostname) > 0) {
+        resolvedHost = String(r->hostname);
       }
 
       // Extract IP address
@@ -241,7 +263,11 @@ bool LoadSharingDiscoveryTask::pollAsyncQuery() {
       // Extract TXT records
       for (size_t i = 0; i < r->txt_count; i++) {
         if (r->txt[i].key && r->txt[i].value) {
-          peer.txtRecords[String(r->txt[i].key)] = String(r->txt[i].value);
+          String key = normalizeTxtField(String(r->txt[i].key));
+          String value = normalizeTxtField(String(r->txt[i].value));
+          if (!key.isEmpty()) {
+            peer.txtRecords[key] = value;
+          }
         }
       }
 
@@ -261,8 +287,47 @@ bool LoadSharingDiscoveryTask::pollAsyncQuery() {
       DBUGF("  Found peer: %s (%s:%u)",
             peer.hostname.c_str(), peer.ipAddress.c_str(), peer.port);
 
-      seenHostnames.push_back(peer.hostname);
-      peers.push_back(peer);
+      // Build URL from discovered port and ssl TXT record
+      bool ssl = false;
+      auto sslIt = peer.txtRecords.find("ssl");
+      if (sslIt != peer.txtRecords.end() && sslIt->second == "1") {
+        ssl = true;
+      }
+
+      // Prefer an actual resolved IP for URLs (native mode may advertise
+      // instance names that are not resolvable via .local DNS).
+      String urlHost = hasUsableIp(peer.ipAddress)
+                           ? peer.ipAddress
+                           : (!resolvedHost.isEmpty() ? resolvedHost : peer.hostname);
+
+      peer.url = ssl ? "https://" : "http://";
+      peer.url += urlHost;
+      if (peer.port > 0) {
+        if ((ssl && peer.port != 443) || (!ssl && peer.port != 80)) {
+          peer.url += ":" + String(peer.port);
+        }
+      }
+
+      // Extract device ID from TXT records
+      auto idIt2 = peer.txtRecords.find("id");
+      if (idIt2 != peer.txtRecords.end() && !idIt2->second.isEmpty()) {
+        peer.id = idIt2->second;
+      }
+
+      // Build display name (strip .local suffix)
+      peer.name = peer.hostname;
+      if (peer.name.endsWith(".local")) {
+        peer.name.remove(peer.name.length() - 6, 6);
+      }
+
+      auto it = std::find(seenHostnames.begin(), seenHostnames.end(), peer.hostname);
+      if (it != seenHostnames.end()) {
+        size_t index = (size_t)std::distance(seenHostnames.begin(), it);
+        mergePeer(peers[index], peer);
+      } else {
+        seenHostnames.push_back(peer.hostname);
+        peers.push_back(peer);
+      }
     }
 
     DBUGF("LoadSharingDiscoveryTask: Query complete in %lu ms, found %u peers",
@@ -287,12 +352,10 @@ bool LoadSharingDiscoveryTask::pollAsyncQuery() {
 }
 
 void LoadSharingDiscoveryTask::processQueryResults(const std::vector<DiscoveredPeer>& peers) {
-  // Update statistics
   _last_result_count = peers.size();
 
-  // Notify group state so it can update peer online/offline status
   if (_groupState) {
-    _groupState->onDiscoveryComplete();
+    _groupState->onDiscoveryComplete(peers);
   }
 
   DBUGF("LoadSharingDiscoveryTask: Processed %u peer discovery results", (unsigned int)peers.size());

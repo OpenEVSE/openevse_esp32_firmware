@@ -9,6 +9,7 @@
 #include "app_config.h"
 #include "app_config_mqtt.h"
 #include "app_config_mode.h"
+#include "certificates.h"
 #include "temp_throttle.h"
 #include "flash_migrate.h"
 
@@ -182,6 +183,8 @@ double loadsharing_failsafe_peer_assumed_current;
 uint32_t loadsharing_priority;
 uint32_t loadsharing_config_version;
 uint32_t loadsharing_config_updated_at;
+uint32_t loadsharing_peers_version;
+uint32_t loadsharing_status_version;
 String loadsharing_role;
 String loadsharing_controller_host;
 uint32_t loadsharing_rotation_interval;
@@ -530,6 +533,21 @@ void config_commit(bool factory)
   ConfigJson &config = factory ? factory_config : user_config;
   config.set("factory_write_lock", true);
   config.commit();
+}
+
+bool config_https_enabled()
+{
+#ifndef DIVERT_SIM
+  if (www_certificate_id == "") {
+    return false;
+  }
+  uint64_t cert_id = std::stoull(www_certificate_id.c_str(), nullptr, 16);
+  const char *cert = certs.getCertificate(cert_id);
+  const char *key = certs.getKey(cert_id);
+  return (NULL != cert && NULL != key);
+#else
+  return false;
+#endif
 }
 
 bool config_deserialize(String& json) {
@@ -892,7 +910,7 @@ bool config_set(const char *name, double val) {
 bool config_set_opt_string(const char *name, const char *value) {
   // Try to determine the type from the config option definition
   // For now, we'll try as string first, then try as integer
-  
+
   // Create a JSON document with the value as a string
   const size_t capacity = JSON_OBJECT_SIZE(1) +  strlen(value) + strlen(value) + 16;
   DynamicJsonDocument doc(capacity);
@@ -908,7 +926,7 @@ bool config_set_opt_string(const char *name, const char *value) {
     // Try parsing as integer
     char *endptr;
     long int_val = strtol(value, &endptr, 10);
-    
+
     if (*endptr == '\0' && value != endptr)
     {
       // Successfully parsed as integer
@@ -927,7 +945,7 @@ bool config_set_opt_string(const char *name, const char *value) {
       }
     }
   }
-  
+
   return config_deserialize(doc);
 }
 

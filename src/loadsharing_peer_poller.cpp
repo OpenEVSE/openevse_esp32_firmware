@@ -364,6 +364,9 @@ void LoadSharingPeerPoller::startHttpBootstrap(const String& host, PeerConnectio
       conn.statusCache.setConfigHash(doc["config_hash"].as<String>());
     }
 
+    // Notify that peer status has changed
+    loadsharing_status_version++;
+
     conn.lastMessageTime = millis();
     conn.hasInitialStatus = true;
     conn.retryCount = 0;  // Reset retry counter on success
@@ -528,6 +531,9 @@ void LoadSharingPeerPoller::handleWebSocketMessage(const String& host, PeerConne
   if (doc.containsKey("config_hash")) {
     conn.statusCache.setConfigHash(doc["config_hash"].as<String>());
   }
+
+  // Notify that peer status has changed
+  loadsharing_status_version++;
 
   conn.lastMessageTime = millis();
   _total_messages_received++;

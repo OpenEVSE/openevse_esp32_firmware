@@ -87,10 +87,13 @@ private:
   String _name;          // mDNS instance/hostname if available
   String _host;          // Hostname or IP address used to reach the peer
   String _ip;            // Current resolved IP address
+  String _url;           // Full URL (http://hostname:port)
   String _version;       // Firmware version if available
   bool _online;          // Is peer currently reachable?
+  bool _joined;          // Is peer a member of the load sharing group?
   unsigned long _last_seen;  // millis() timestamp of last successful contact
   LoadSharingPeerStatus _status;  // Latest status snapshot
+  uint16_t _port;        // Service port (from mDNS or default)
 
 public:
   LoadSharingPeer() :
@@ -98,10 +101,13 @@ public:
     _name(""),
     _host(""),
     _ip(""),
+    _url(""),
     _version(""),
     _online(false),
+    _joined(false),
     _last_seen(0),
-    _status()
+    _status(),
+    _port(0)
   {}
 
   LoadSharingPeer(const String& host_) :
@@ -109,10 +115,13 @@ public:
     _name(""),
     _host(host_),
     _ip(""),
+    _url(""),
     _version(""),
     _online(false),
+    _joined(false),
     _last_seen(0),
-    _status()
+    _status(),
+    _port(0)
   {}
 
   // Accessors
@@ -131,11 +140,17 @@ public:
   String getIp() const { return _ip; }
   void setIp(const String& value) { _ip = value; }
 
+  String getUrl() const { return _url; }
+  void setUrl(const String& value) { _url = value; }
+
   String getVersion() const { return _version; }
   void setVersion(const String& value) { _version = value; }
 
   bool isOnline() const { return _online; }
   void setOnline(bool value) { _online = value; }
+
+  bool isJoined() const { return _joined; }
+  void setJoined(bool value) { _joined = value; }
 
   unsigned long getLastSeen() const { return _last_seen; }
   void setLastSeen(unsigned long value) { _last_seen = value; }
@@ -143,6 +158,9 @@ public:
   LoadSharingPeerStatus& getStatus() { return _status; }
   const LoadSharingPeerStatus& getStatus() const { return _status; }
   void setStatus(const LoadSharingPeerStatus& value) { _status = value; }
+
+  uint16_t getPort() const { return _port; }
+  void setPort(uint16_t value) { _port = value; }
 };
 
 /**
@@ -202,15 +220,8 @@ private:
   double _safety_factor; // Safety multiplier (0-1)
 
   // Peer list - the authoritative merged list of active group members
-  // Populated from _groupPeers and updated with discovery results
+  // Populated from persistence and updated with discovery results
   std::vector<LoadSharingPeer> _peers;
-
-  // Group peers (manually added hostnames, persisted to LittleFS)
-  std::vector<String> _groupPeers;
-  bool _groupPeersDirty;
-
-  // Pointer to discovery task's cached peers (set by discovery task in begin)
-  const std::vector<DiscoveredPeer>* _discoveredPeers;
 
   // Computed allocations (result of allocation algorithm)
   std::vector<LoadSharingAllocation> _allocations;
@@ -233,10 +244,10 @@ private:
   void notifyPeerChange();
 
   /**
-   * @brief Ensure a LoadSharingPeer entry exists in _peers for a hostname.
-   * Creates one if it doesn't exist.
+   * @brief Add the local device as the first peer in _peers.
+   * Called automatically by loadGroupPeers(). Idempotent.
    */
-  void ensurePeerEntry(const String& hostname);
+  void addLocalPeer();
 
 public:
   LoadSharingGroupState() :
@@ -245,9 +256,6 @@ public:
     _group_max_current(0.0),
     _safety_factor(1.0),
     _peers(),
-    _groupPeers(),
-    _groupPeersDirty(false),
-    _discoveredPeers(nullptr),
     _allocations(),
     _computed_at(0),
     _failsafe_active(false),
@@ -438,19 +446,12 @@ public:
   // =========================================================================
 
   /**
-   * @brief Set reference to discovery task's cached peer list.
-   * Called by LoadSharingDiscoveryTask::begin() to wire discovery results.
-   */
-  void setDiscoveredPeers(const std::vector<DiscoveredPeer>* discoveredPeers) {
-    _discoveredPeers = discoveredPeers;
-  }
-
-  /**
    * @brief Called by discovery task after each mDNS query completes.
    * Updates online/offline status and IP addresses for group peers
    * based on discovery results, then notifies the peer poller.
+   * @param discoveredPeers Peers found by this mDNS query cycle
    */
-  void onDiscoveryComplete();
+  void onDiscoveryComplete(const std::vector<struct DiscoveredPeer>& discoveredPeers);
 
   // =========================================================================
   // Group peer management (persisted to LittleFS)
@@ -471,16 +472,6 @@ public:
    * @return true if removed successfully, false if not found
    */
   bool removeGroupPeer(const String& hostname);
-
-  /**
-   * @brief Get list of group peer hostnames.
-   */
-  const std::vector<String>& getGroupPeers() const { return _groupPeers; }
-
-  /**
-   * @brief Check if a hostname is in the group.
-   */
-  bool isGroupPeer(const String& hostname) const;
 
   /**
    * @brief Check if a hostname refers to the local device.
@@ -512,10 +503,14 @@ public:
    * @brief Unified peer info for API responses.
    */
   struct PeerInfo {
-    String hostname;
-    String ipAddress;
-    bool online;    // True if discovered via mDNS
-    bool joined;    // True if in group
+    String id;          // Device ID (from TXT records or empty string)
+    String name;        // Display name (hostname without .local)
+    String url;         // Full URL (http://hostname:port)
+    String hostname;    // Full hostname
+    String ipAddress;   // IP address
+    bool online;        // True if discovered via mDNS
+    bool joined;        // True if in group
+    bool isLocal;       // True if this is the local device (default: false)
   };
 
   /**

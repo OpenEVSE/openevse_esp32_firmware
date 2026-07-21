@@ -13,6 +13,7 @@
 #include "loadsharing_types.h"
 #include "loadsharing_discovery_task.h"
 #include "app_config.h"
+#include "net_manager.h"
 #include <Arduino.h>
 #include <ArduinoJson.h>
 #include <LittleFS.h>
@@ -66,50 +67,62 @@ void LoadSharingGroupState::checkMemberFailsafe() {
 }
 
 void LoadSharingGroupState::notifyPeerChange() {
+  loadsharing_peers_version++;
   if (_onPeerChange) {
     _onPeerChange();
   }
 }
 
-void LoadSharingGroupState::ensurePeerEntry(const String& hostname) {
-  for (auto& peer : _peers) {
-    if (peer.getHost() == hostname) {
-      return;  // Already exists
-    }
-  }
-  // Create a new offline peer entry
-  LoadSharingPeer newPeer;
-  newPeer.setHost(hostname);
-  _peers.push_back(newPeer);
-}
-
-void LoadSharingGroupState::onDiscoveryComplete() {
-  if (!_discoveredPeers) {
-    return;
-  }
+void LoadSharingGroupState::onDiscoveryComplete(
+    const std::vector<DiscoveredPeer>& discoveredPeers) {
 
   bool changed = false;
 
-  // Update group peers with discovery info (IP address, online status)
+  // Update existing peers with discovery info (IP, online status, URL)
   for (auto& peer : _peers) {
     bool found = false;
-    for (const auto& discovered : *_discoveredPeers) {
+    for (const auto& discovered : discoveredPeers) {
       if (discovered.hostname == peer.getHost()) {
-        // Peer was discovered - update IP and mark online
         if (!peer.isOnline() || peer.getIp() != discovered.ipAddress) {
           changed = true;
         }
-        peer.setIp(discovered.ipAddress);
+        if (!discovered.ipAddress.isEmpty() && discovered.ipAddress != "0.0.0.0") {
+          peer.setIp(discovered.ipAddress);
+        }
         peer.setOnline(true);
+        if (!discovered.url.isEmpty()) {
+          peer.setUrl(discovered.url);
+        }
+        if (!discovered.name.isEmpty()) {
+          peer.setName(discovered.name);
+        }
+        if (!discovered.id.isEmpty()) {
+          peer.setId(discovered.id);
+        }
         found = true;
         break;
       }
     }
     if (!found && peer.isOnline()) {
-      // Peer was previously online but not discovered this time
       peer.setOnline(false);
       changed = true;
     }
+  }
+
+  // Add newly-discovered peers not already in _peers (joined=false)
+  for (const auto& discovered : discoveredPeers) {
+    if (isLocalHost(discovered.hostname)) continue;
+    if (getPeerByHost(discovered.hostname)) continue;
+
+    LoadSharingPeer peer(discovered.hostname);
+    peer.setIp(discovered.ipAddress);
+    peer.setOnline(true);
+    peer.setUrl(discovered.url);
+    peer.setName(discovered.name);
+    peer.setId(discovered.id);
+    peer.setJoined(false);
+    _peers.push_back(peer);
+    changed = true;
   }
 
   if (changed) {
@@ -119,84 +132,61 @@ void LoadSharingGroupState::onDiscoveryComplete() {
 }
 
 bool LoadSharingGroupState::addGroupPeer(const String& hostname) {
-  // Block adding the local device as a remote peer
   if (isLocalHost(hostname)) {
     DBUGF("LoadSharingGroupState: Cannot add local device as peer: %s", hostname.c_str());
     return false;
   }
 
-  // Check for duplicates
-  for (const auto& peer : _groupPeers) {
-    if (peer == hostname) {
+  // Find existing peer or create new one
+  LoadSharingPeer* existing = getPeerByHost(hostname);
+  if (existing) {
+    if (existing->isJoined()) {
       DBUGF("LoadSharingGroupState: Peer already in group: %s", hostname.c_str());
       return false;
     }
+    existing->setJoined(true);
+  } else {
+    LoadSharingPeer newPeer(hostname);
+    newPeer.setJoined(true);
+    _peers.push_back(newPeer);
   }
 
-  _groupPeers.push_back(hostname);
-  _groupPeersDirty = true;
   saveGroupPeers();
 
-  // Also add to the active peer list
-  ensurePeerEntry(hostname);
-
   DBUGF("LoadSharingGroupState: Added peer to group: %s (total: %u)",
-        hostname.c_str(), (unsigned int)_groupPeers.size());
+        hostname.c_str(), (unsigned int)_peers.size());
 
   notifyPeerChange();
   return true;
 }
 
 bool LoadSharingGroupState::removeGroupPeer(const String& hostname) {
-  // Block removal of the local device
   if (isLocalHost(hostname)) {
     DBUGF("LoadSharingGroupState: Cannot remove local device from group: %s", hostname.c_str());
     return false;
   }
 
-  for (size_t i = 0; i < _groupPeers.size(); i++) {
-    if (_groupPeers[i] == hostname) {
-      _groupPeers.erase(_groupPeers.begin() + i);
-      _groupPeersDirty = true;
-      saveGroupPeers();
-
-      // Also remove from the active peer list
-      for (size_t j = 0; j < _peers.size(); j++) {
-        if (_peers[j].getHost() == hostname) {
-          _peers.erase(_peers.begin() + j);
-          break;
-        }
-      }
-
-      DBUGF("LoadSharingGroupState: Removed peer from group: %s (remaining: %u)",
-            hostname.c_str(), (unsigned int)_groupPeers.size());
-
-      notifyPeerChange();
-      return true;
-    }
+  LoadSharingPeer* peer = getPeerByHost(hostname);
+  if (!peer || !peer->isJoined()) {
+    DBUGF("LoadSharingGroupState: Peer not found: %s", hostname.c_str());
+    return false;
   }
 
-  DBUGF("LoadSharingGroupState: Peer not found: %s", hostname.c_str());
-  return false;
-}
+  peer->setJoined(false);
+  saveGroupPeers();
 
-bool LoadSharingGroupState::isGroupPeer(const String& hostname) const {
-  for (const auto& peer : _groupPeers) {
-    if (peer == hostname) {
-      return true;
-    }
-  }
-  return false;
+  DBUGF("LoadSharingGroupState: Removed peer from group: %s", hostname.c_str());
+
+  notifyPeerChange();
+  return true;
 }
 
 bool LoadSharingGroupState::isLocalHost(const String& hostname) const {
-  // Compare against local hostname (with and without .local suffix)
   String localMdns = esp_hostname + String(".local");
   if (hostname.equalsIgnoreCase(esp_hostname) ||
       hostname.equalsIgnoreCase(localMdns)) {
     return true;
   }
-  // Compare against device ID
   if (hostname == ESPAL.getLongId()) {
     return true;
   }
@@ -211,77 +201,71 @@ std::vector<LoadSharingGroupState::PeerInfo> LoadSharingGroupState::getAllPeers(
     bool includeDiscovered, bool includeGroup) const {
 
   std::vector<PeerInfo> result;
-  std::vector<String> addedHosts;
+  String localHostname = getLocalHostname();
 
-  // Always include the local node first
-  {
-    PeerInfo local;
-    local.hostname = getLocalHostname();
-    local.ipAddress = "";
-    local.online = true;
-    local.joined = true;
-    result.push_back(local);
-    addedHosts.push_back(local.hostname);
-  }
+  for (auto& peer : _peers) {
+    bool isLocal = (peer.getHost() == localHostname);
 
-  // Add discovered peers (from mDNS discovery task)
-  if (includeDiscovered && _discoveredPeers != nullptr) {
-    for (const auto& peer : *_discoveredPeers) {
-      // Skip if already added (e.g. local node, though discovery should filter it)
-      bool alreadyAdded = false;
-      for (const auto& added : addedHosts) {
-        if (added.equalsIgnoreCase(peer.hostname)) {
-          alreadyAdded = true;
-          break;
-        }
-      }
-      if (alreadyAdded) {
-        continue;
-      }
-
-      PeerInfo info;
-      info.hostname = peer.hostname;
-      info.ipAddress = peer.ipAddress;
-      info.online = true;
-      info.joined = isGroupPeer(peer.hostname);
-
-      result.push_back(info);
-      addedHosts.push_back(peer.hostname);
+    // Refresh local peer with live network state (IP may have been empty at boot)
+    if (isLocal) {
+      const_cast<LoadSharingPeer&>(peer).setIp(net.getIp());
+      const_cast<LoadSharingPeer&>(peer).setOnline(net.getIp().length() > 0);
     }
-  }
 
-  // Add group peers that weren't discovered (offline peers)
-  if (includeGroup) {
-    for (const auto& hostname : _groupPeers) {
-      // Check if already added from discovery
-      bool alreadyAdded = false;
-      for (const auto& added : addedHosts) {
-        if (added == hostname) {
-          alreadyAdded = true;
-          break;
-        }
-      }
+    // Skip non-local online-only peers when includeDiscovered is false
+    if (!includeDiscovered && peer.isOnline() && !isLocal) continue;
+    // Skip non-local joined peers when includeGroup is false
+    if (!includeGroup && peer.isJoined() && !isLocal) continue;
 
-      if (!alreadyAdded) {
-        PeerInfo info;
-        info.hostname = hostname;
-        info.ipAddress = "";
-        info.online = false;
-        info.joined = true;
-
-        result.push_back(info);
-      }
-    }
+    PeerInfo info;
+    info.hostname = peer.getHost();
+    info.ipAddress = peer.getIp();
+    info.id = peer.getId();
+    info.name = peer.getName();
+    info.url = peer.getUrl();
+    info.online = peer.isOnline();
+    info.joined = peer.isJoined();
+    info.isLocal = isLocal;
+    result.push_back(info);
   }
 
   return result;
 }
 
+void LoadSharingGroupState::addLocalPeer() {
+  String localHostname = getLocalHostname();
+
+  // Build local peer entry
+  LoadSharingPeer local(localHostname);
+  local.setId(ESPAL.getLongId());
+  local.setName(String(esp_hostname));
+  local.setIp(net.getIp());
+  bool ssl = config_https_enabled();
+  uint16_t port = ssl ? www_https_port : www_http_port;
+  String localUrl = ssl ? "https://" : "http://";
+  localUrl += localHostname;
+  if ((ssl && port != 443) || (!ssl && port != 80)) {
+    localUrl += ":" + String(port);
+  }
+  local.setUrl(localUrl);
+  local.setPort(port);
+  local.setOnline(true);
+  local.setJoined(true);
+
+  // Insert at front so it's always first
+  _peers.insert(_peers.begin(), local);
+}
+
 bool LoadSharingGroupState::loadGroupPeers() {
   const char* filePath = "/loadsharing_peers.json";
 
+  _peers.clear();
+
+  // Always add the local peer first
+  addLocalPeer();
+
   if (!LittleFS.exists(filePath)) {
-    DBUGLN("LoadSharingGroupState: No persisted group peer list found, starting with empty list");
+    DBUGLN("LoadSharingGroupState: No persisted group peer list found");
     return false;
   }
 
@@ -300,31 +284,29 @@ bool LoadSharingGroupState::loadGroupPeers() {
     return false;
   }
 
-  _groupPeers.clear();
-  _peers.clear();
   JsonArray peers = doc["peers"].as<JsonArray>();
   for (JsonVariant peer : peers) {
     String hostname = peer.as<String>();
-    _groupPeers.push_back(hostname);
-    // Create corresponding peer entry (initially offline)
-    ensurePeerEntry(hostname);
+    if (isLocalHost(hostname)) continue;  // Skip local host in saved list
+
+    LoadSharingPeer* existing = getPeerByHost(hostname);
+    if (existing) {
+      existing->setJoined(true);
+    } else {
+      LoadSharingPeer p(hostname);
+      p.setJoined(true);
+      _peers.push_back(p);
+    }
   }
 
-  _groupPeersDirty = false;
-  DBUGF("LoadSharingGroupState: Loaded %u group peers", (unsigned int)_groupPeers.size());
-
+  DBUGF("LoadSharingGroupState: Loaded %u group peers", (unsigned int)peers.size());
   return true;
 }
 
 bool LoadSharingGroupState::saveGroupPeers() {
-  if (!_groupPeersDirty) {
-    return true;  // No changes to save
-  }
-
   const char* filePath = "/loadsharing_peers.json";
   const char* tempPath = "/loadsharing_peers.json.tmp";
 
-  // Write to temp file first (atomic write-rename pattern)
   File file = LittleFS.open(tempPath, "w");
   if (!file) {
     DBUGF("LoadSharingGroupState: Failed to open temp file for writing: %s", tempPath);
@@ -333,8 +315,10 @@ bool LoadSharingGroupState::saveGroupPeers() {
 
   DynamicJsonDocument doc(1024);
   JsonArray peers = doc.createNestedArray("peers");
-  for (const auto& hostname : _groupPeers) {
-    peers.add(hostname);
+  for (const auto& peer : _peers) {
+    if (peer.isJoined() && !isLocalHost(peer.getHost())) {
+      peers.add(peer.getHost());
+    }
   }
 
   if (serializeJson(doc, file) == 0) {
@@ -345,7 +329,6 @@ bool LoadSharingGroupState::saveGroupPeers() {
 
   file.close();
 
-  // Atomic rename (replace old with new)
   if (LittleFS.exists(filePath)) {
     LittleFS.remove(filePath);
   }
@@ -354,8 +337,6 @@ bool LoadSharingGroupState::saveGroupPeers() {
     return false;
   }
 
-  _groupPeersDirty = false;
-  DBUGF("LoadSharingGroupState: Saved %u group peers", (unsigned int)_groupPeers.size());
-
+  DBUGF("LoadSharingGroupState: Saved group peers");
   return true;
 }

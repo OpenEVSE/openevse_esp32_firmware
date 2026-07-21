@@ -115,6 +115,8 @@ extern double loadsharing_failsafe_peer_assumed_current;
 extern uint32_t loadsharing_priority;
 extern uint32_t loadsharing_config_version;
 extern uint32_t loadsharing_config_updated_at;
+extern uint32_t loadsharing_peers_version;
+extern uint32_t loadsharing_status_version;
 extern String loadsharing_role;
 extern String loadsharing_controller_host;
 extern uint32_t loadsharing_rotation_interval;
@@ -272,6 +274,8 @@ inline bool config_temp_throttle_enabled()
 {
   return CONFIG_TEMP_THROTTLE == (flags & CONFIG_TEMP_THROTTLE);
 }
+
+bool config_https_enabled();
 
 // Ohm Connect Settings
 extern String ohm;

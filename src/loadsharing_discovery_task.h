@@ -24,6 +24,9 @@ struct DiscoveredPeer {
   String hostname;      // Fully qualified hostname (e.g., "openevse-7856.local")
   String serviceName;   // Service instance name (e.g., "openevse-7856")
   String ipAddress;     // IP address as string
+  String url;           // Full URL (http(s)://hostname[:port])
+  String id;            // Device ID from TXT records (empty if absent)
+  String name;          // Display name (hostname without .local)
   uint16_t port;        // Service port
   std::map<String, String> txtRecords;  // TXT records (version, type, id, etc.)
   unsigned long discoveredAt;  // Timestamp when discovered (millis())

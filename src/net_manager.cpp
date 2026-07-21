@@ -620,12 +620,14 @@ void NetManagerTask::setup()
 
   if (MDNS.begin(esp_hostname.c_str()))
   {
-    MDNS.addService("http", "tcp", www_http_port);
-    MDNS.addService("openevse", "tcp", www_http_port);
+    bool ssl = config_https_enabled();
+    uint16_t svcPort = ssl ? www_https_port : www_http_port;
+    MDNS.addService("http", "tcp", svcPort);
+    MDNS.addService("openevse", "tcp", svcPort);
     MDNS.addServiceTxt("openevse", "tcp", "type", buildenv.c_str());
     MDNS.addServiceTxt("openevse", "tcp", "version", currentfirmware.c_str());
     MDNS.addServiceTxt("openevse", "tcp", "id", ESPAL.getLongId());
-    
+    MDNS.addServiceTxt("openevse", "tcp", "ssl", ssl ? "1" : "0");
   }
 }
 

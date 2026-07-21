@@ -9,6 +9,7 @@
 #include "loadsharing_peer_poller.h"
 #include "loadsharing_types.h"
 #include "debug.h"
+#include <espal.h>
 #include <vector>
 #include <ArduinoJson.h>
 #include <MongooseHttpClient.h>
@@ -95,7 +96,7 @@ void handleLoadSharingPeersGet(MongooseHttpServerRequest *request, MongooseHttpS
   DBUGLN("[LoadSharing] GET /loadsharing/peers");
 
   // Build JSON response array
-  const size_t capacity = JSON_ARRAY_SIZE(20) + JSON_OBJECT_SIZE(6) * 20 + 1024;
+  const size_t capacity = JSON_ARRAY_SIZE(20) + JSON_OBJECT_SIZE(7) * 20 + 1024;
   DynamicJsonDocument doc(capacity);
   JsonArray peerArray = doc.to<JsonArray>();
 
@@ -106,16 +107,19 @@ void handleLoadSharingPeersGet(MongooseHttpServerRequest *request, MongooseHttpS
 
   // Add all peers to response
   for(const auto &peer : peers) {
-    DBUGF("[LoadSharing] Adding peer: %s (online: %s, joined: %s)",
-          peer.hostname.c_str(), peer.online ? "yes" : "no", peer.joined ? "yes" : "no");
+    DBUGF("[LoadSharing] Adding peer: %s (online: %s, joined: %s, isLocal: %s)",
+          peer.hostname.c_str(), peer.online ? "yes" : "no", peer.joined ? "yes" : "no",
+          peer.isLocal ? "yes" : "no");
 
     JsonObject peerObj = peerArray.createNestedObject();
-    peerObj["id"] = "unknown";
-    peerObj["name"] = peer.hostname;
+    peerObj["id"] = peer.id;
+    peerObj["name"] = peer.name;
     peerObj["host"] = peer.hostname;
+    peerObj["url"] = peer.url;
     peerObj["ip"] = peer.ipAddress;
     peerObj["online"] = peer.online;
     peerObj["joined"] = peer.joined;
+    peerObj["isLocal"] = peer.isLocal;
   }
 
   response->setCode(200);
@@ -195,8 +199,11 @@ void handleLoadSharingPeersPost(MongooseHttpServerRequest *request, MongooseHttp
     return;
   }
 
-  DBUGF("[LoadSharing] Peer added successfully. Total in group: %u",
-        (unsigned int)loadSharingGroupState.getGroupPeers().size());
+  unsigned int joinedCount = 0;
+  for (const auto& p : loadSharingGroupState.getPeers()) {
+    if (p.isJoined()) joinedCount++;
+  }
+  DBUGF("[LoadSharing] Peer added successfully. Total in group: %u", joinedCount);
 
   // Reciprocal sync: add local device on the remote peer's group (unless this
   // is itself a reciprocal call, indicated by reciprocal=false)
@@ -246,8 +253,11 @@ void handleLoadSharingPeersDeleteWithHost(MongooseHttpServerRequest *request, Mo
     return;
   }
 
-  DBUGF("[LoadSharing] Peer removed. Remaining peers: %u",
-        (unsigned int)loadSharingGroupState.getGroupPeers().size());
+  unsigned int joinedCount = 0;
+  for (const auto& p : loadSharingGroupState.getPeers()) {
+    if (p.isJoined()) joinedCount++;
+  }
+  DBUGF("[LoadSharing] Peer removed. Remaining peers: %u", joinedCount);
 
   // Return success
   response->setCode(200);
@@ -271,7 +281,7 @@ void handleLoadSharingStatus(MongooseHttpServerRequest *request, MongooseHttpSer
   DBUGLN("[LoadSharing] GET /loadsharing/status");
 
   // Build LoadSharingStatus response
-  const size_t capacity = JSON_OBJECT_SIZE(10) + 
+  const size_t capacity = JSON_OBJECT_SIZE(10) +
                           JSON_ARRAY_SIZE(20) +  // peers array
                           JSON_ARRAY_SIZE(20) +  // allocations array
                           JSON_ARRAY_SIZE(10) +  // config_issues array
@@ -296,27 +306,28 @@ void handleLoadSharingStatus(MongooseHttpServerRequest *request, MongooseHttpSer
 
   // Add peers array
   JsonArray peersArray = doc.createNestedArray("peers");
-  
+
   // Get all peers (discovered and configured)
   std::vector<LoadSharingGroupState::PeerInfo> peersList = loadSharingGroupState.getAllPeers();
-  
+
   for (const auto& peerInfo : peersList) {
     JsonObject peerObj = peersArray.createNestedObject();
-    
+
     // Find the full peer object to get more details
     LoadSharingPeer* fullPeer = loadSharingGroupState.getPeerByHost(peerInfo.hostname);
-    
+
     peerObj["id"] = fullPeer ? fullPeer->getId() : "unknown";
-    peerObj["name"] = peerInfo.hostname;
+    peerObj["name"] = peerInfo.name;
     peerObj["host"] = peerInfo.hostname;
+    peerObj["url"] = peerInfo.url;
     peerObj["ip"] = peerInfo.ipAddress;
     peerObj["online"] = peerInfo.online;
     peerObj["joined"] = peerInfo.joined;
-    
+
     if (fullPeer) {
       peerObj["version"] = fullPeer->getVersion();
       peerObj["last_seen"] = (unsigned int)(fullPeer->getLastSeen() / 1000);  // Convert ms to seconds
-      
+
       // Query peer poller for current status
       LoadSharingPeerStatus peerStatus;
       if (loadSharingPeerPoller.getPeerStatus(peerInfo.hostname, peerStatus)) {
@@ -337,7 +348,7 @@ void handleLoadSharingStatus(MongooseHttpServerRequest *request, MongooseHttpSer
   // Add allocations array
   JsonArray allocationsArray = doc.createNestedArray("allocations");
   const std::vector<LoadSharingAllocation>& allocations = loadSharingGroupState.getAllocations();
-  
+
   for (const auto& alloc : allocations) {
     JsonObject allocObj = allocationsArray.createNestedObject();
     allocObj["id"] = alloc.getId();

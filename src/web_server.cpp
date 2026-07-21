@@ -49,6 +49,7 @@ typedef const __FlashStringHelper *fstr_t;
 #include "evse_man.h"
 #include "limit.h"
 #include "loadsharing_types.h"
+#include "loadsharing_peer_poller.h"
 
 MongooseHttpServer server;          // Create class for Web server
 MongooseHttpServer redirect;        // Server to redirect to HTTPS if enabled
@@ -301,6 +302,45 @@ void buildStatus(DynamicJsonDocument &doc) {
   doc["loadsharing_min_current"] = evse.getMinCurrent();
   doc["loadsharing_max_current"] = evse.getMaxConfiguredCurrent();
   doc["loadsharing_priority"] = loadsharing_priority;
+  doc["loadsharing_peers_version"] = loadsharing_peers_version;
+  doc["loadsharing_status_version"] = loadsharing_status_version;
+
+  // Add joined peers array with real-time status from peer poller
+  {
+    JsonArray peersArray = doc.createNestedArray("loadsharing_joined_peers");
+    double groupTotalAmp = 0.0;
+    
+    for (const auto& peer : loadSharingGroupState.getPeers()) {
+      // Only include joined peers (exclude discovered-but-not-joined)
+      if (!peer.isJoined()) {
+        continue;
+      }
+      
+      JsonObject peerObj = peersArray.createNestedObject();
+      peerObj["hostname"] = peer.getHost();
+      peerObj["id"] = peer.getId();
+      peerObj["name"] = peer.getName();
+      
+      // Get real-time status from peer poller
+      LoadSharingPeerStatus peerStatus;
+      if (loadSharingPeerPoller.getPeerStatus(peer.getHost(), peerStatus)) {
+        peerObj["amp"] = peerStatus.getAmp();
+        peerObj["voltage"] = peerStatus.getVoltage();
+        peerObj["pilot"] = peerStatus.getPilot();
+        peerObj["vehicle"] = peerStatus.getVehicle();
+        peerObj["state"] = peerStatus.getState();
+        peerObj["min_current"] = peerStatus.getMinCurrent();
+        peerObj["max_current"] = peerStatus.getMaxCurrent();
+        peerObj["priority"] = peerStatus.getPriority();
+        groupTotalAmp += peerStatus.getAmp();
+      }
+    }
+    
+    // Include self in group total
+    groupTotalAmp += evse.getChargeCurrent();
+    doc["loadsharing_group_current_total"] = groupTotalAmp;
+  }
+
   doc["claims_version"] = evse.getClaimsVersion();
   doc["override_version"] = manual.getVersion();
   doc["schedule_version"] = scheduler.getVersion();
