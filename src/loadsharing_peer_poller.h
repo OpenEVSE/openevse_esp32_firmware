@@ -49,6 +49,7 @@ struct PeerConnection {
   bool hasInitialStatus;              // True after first successful status fetch
   bool httpPending;                   // True while HTTP request is in flight
   bool configPushed;                  // True after config has been pushed to this peer
+  bool identityFetched;               // True after device id/name learned from /config
   LoadSharingDemandState demandState; // Persistent under-draw cap for allocation
 
   PeerConnection() :
@@ -64,7 +65,8 @@ struct PeerConnection {
     retryCount(0),
     hasInitialStatus(false),
     httpPending(false),
-    configPushed(false)
+    configPushed(false),
+    identityFetched(false)
   {}
 
   ~PeerConnection() {
@@ -168,6 +170,56 @@ private:
    * @param len Message length
    */
   void handleWebSocketMessage(const String& host, PeerConnection& conn, const uint8_t* data, size_t len);
+
+  /**
+   * @brief Parse a peer status JSON payload and merge it into the status cache.
+   *
+   * Parses only the fields the poller consumes (via a deserialization filter)
+   * so document memory stays bounded regardless of how large the peer's /status
+   * or /ws payload is. Shared by the HTTP bootstrap and WebSocket paths.
+   *
+   * @param host Peer hostname/IP (for logging)
+   * @param conn PeerConnection whose statusCache is updated
+   * @param data JSON payload
+   * @param len Payload length
+   * @return true if parsed successfully, false on JSON error
+   */
+  bool mergeStatusPayload(const String& host, PeerConnection& conn, const char* data, size_t len);
+
+  /**
+   * @brief Fetch a peer's stable identity (device id/name) from its /config.
+   *
+   * A peer added by hostname (e.g. "localhost:8001") starts with no device id.
+   * /config already exposes the identity (wifi_serial == ESPAL.getLongId(),
+   * hostname), so this GETs /config once and records the id/name on the group
+   * peer, letting discovery reconcile the member with its mDNS entry by id
+   * instead of creating a duplicate row.
+   *
+   * @param host Peer hostname/IP
+   */
+  void fetchPeerIdentity(const String& host);
+
+  /**
+   * @brief Resolve the base URL used to reach a peer.
+   *
+   * Prefers the peer's discovered url (which uses a resolved IP or reachable
+   * hostname), falling back to http://<host> for manually-added peers that
+   * have no discovered url yet. The connection map is still keyed by host; only
+   * the actual request target differs, so a peer can display its friendly mDNS
+   * hostname while being reached via its resolved address.
+   *
+   * @param host Peer connection key (host)
+   * @return Base URL without trailing slash, e.g. "http://172.16.3.84:8001"
+   */
+  String getPeerBaseUrl(const String& host);
+
+  /**
+   * @brief Resolve the WebSocket URL for a peer (ws(s)://<base>/ws).
+   *
+   * @param host Peer connection key (host)
+   * @return WebSocket URL
+   */
+  String getPeerWsUrl(const String& host);
 
   /**
    * @brief Check if peer should be marked offline due to stale data

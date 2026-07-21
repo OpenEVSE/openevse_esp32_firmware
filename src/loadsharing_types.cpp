@@ -77,12 +77,24 @@ void LoadSharingGroupState::onDiscoveryComplete(
     const std::vector<DiscoveredPeer>& discoveredPeers) {
 
   bool changed = false;
+  // Tracks changes to persisted fields (id/host) of joined members, so we only
+  // rewrite flash when the saved representation actually changes -- not on
+  // every discovery sweep that merely toggles a non-member's online flag.
+  bool persistChanged = false;
 
-  // Update existing peers with discovery info (IP, online status, URL)
+  // Update existing peers with discovery info (IP, online status, URL).
+  // Match by stable device id first (a peer added by hostname reaches the same
+  // device the discovery advertises under its mDNS hostname), falling back to
+  // hostname when the id is not yet known. Matching by id prevents the same
+  // device appearing as two rows (e.g. joined "localhost:8001" and discovered
+  // "openevse-ev1.local").
   for (auto& peer : _peers) {
     bool found = false;
     for (const auto& discovered : discoveredPeers) {
-      if (discovered.hostname == peer.getHost()) {
+      bool idMatch = !peer.getId().isEmpty() && !discovered.id.isEmpty() &&
+                     peer.getId() == discovered.id;
+      bool hostMatch = discovered.hostname == peer.getHost();
+      if (idMatch || hostMatch) {
         if (!peer.isOnline() || peer.getIp() != discovered.ipAddress) {
           changed = true;
         }
@@ -90,14 +102,37 @@ void LoadSharingGroupState::onDiscoveryComplete(
           peer.setIp(discovered.ipAddress);
         }
         peer.setOnline(true);
+        // Adopt the discovered mDNS hostname as the peer's host so it displays
+        // (and is reached) by its friendly name (e.g. "openevse-ev1.local")
+        // rather than however it was originally added (e.g. "localhost:8001").
+        // Append the port only when it is non-default for the scheme, matching
+        // the convention used elsewhere.
+        if (!discovered.hostname.isEmpty()) {
+          bool ssl = false;
+          auto sslIt = discovered.txtRecords.find("ssl");
+          if (sslIt != discovered.txtRecords.end() && sslIt->second == "1") {
+            ssl = true;
+          }
+          String newHost = discovered.hostname;
+          if (discovered.port > 0 &&
+              ((ssl && discovered.port != 443) || (!ssl && discovered.port != 80))) {
+            newHost += ":" + String(discovered.port);
+          }
+          if (peer.getHost() != newHost) {
+            peer.setHost(newHost);
+            changed = true;
+            if (peer.isJoined()) persistChanged = true;
+          }
+        }
         if (!discovered.url.isEmpty()) {
           peer.setUrl(discovered.url);
         }
         if (!discovered.name.isEmpty()) {
           peer.setName(discovered.name);
         }
-        if (!discovered.id.isEmpty()) {
+        if (!discovered.id.isEmpty() && peer.getId() != discovered.id) {
           peer.setId(discovered.id);
+          if (peer.isJoined()) persistChanged = true;
         }
         found = true;
         break;
@@ -109,10 +144,13 @@ void LoadSharingGroupState::onDiscoveryComplete(
     }
   }
 
-  // Add newly-discovered peers not already in _peers (joined=false)
+  // Add newly-discovered peers not already in _peers (joined=false). Skip any
+  // discovery that matches an existing peer by hostname or by device id so a
+  // group member added by hostname is not duplicated once discovered.
   for (const auto& discovered : discoveredPeers) {
     if (isLocalHost(discovered.hostname)) continue;
     if (getPeerByHost(discovered.hostname)) continue;
+    if (!discovered.id.isEmpty() && getPeerById(discovered.id)) continue;
 
     LoadSharingPeer peer(discovered.hostname);
     peer.setIp(discovered.ipAddress);
@@ -123,6 +161,12 @@ void LoadSharingGroupState::onDiscoveryComplete(
     peer.setJoined(false);
     _peers.push_back(peer);
     changed = true;
+  }
+
+  if (persistChanged) {
+    // A joined member's persisted identity (id/host) changed; rewrite the
+    // saved list so the reconciliation survives a restart.
+    saveGroupPeers();
   }
 
   if (changed) {
@@ -286,14 +330,36 @@ bool LoadSharingGroupState::loadGroupPeers() {
 
   JsonArray peers = doc["peers"].as<JsonArray>();
   for (JsonVariant peer : peers) {
-    String hostname = peer.as<String>();
+    // Support both the current object form ({id, host}) and the legacy form
+    // where each entry was a bare host string.
+    String hostname;
+    String id;
+    if (peer.is<JsonObject>()) {
+      hostname = peer["host"].as<String>();
+      id = peer["id"].as<String>();
+    } else {
+      hostname = peer.as<String>();
+    }
+    if (hostname.isEmpty() && id.isEmpty()) continue;
     if (isLocalHost(hostname)) continue;  // Skip local host in saved list
 
-    LoadSharingPeer* existing = getPeerByHost(hostname);
+    // Re-match an already-present peer by id first (survives host changes),
+    // then by host.
+    LoadSharingPeer* existing = nullptr;
+    if (!id.isEmpty()) {
+      existing = getPeerById(id);
+    }
+    if (existing == nullptr && !hostname.isEmpty()) {
+      existing = getPeerByHost(hostname);
+    }
     if (existing) {
       existing->setJoined(true);
+      if (existing->getId().isEmpty() && !id.isEmpty()) {
+        existing->setId(id);
+      }
     } else {
       LoadSharingPeer p(hostname);
+      p.setId(id);
       p.setJoined(true);
       _peers.push_back(p);
     }
@@ -317,7 +383,12 @@ bool LoadSharingGroupState::saveGroupPeers() {
   JsonArray peers = doc.createNestedArray("peers");
   for (const auto& peer : _peers) {
     if (peer.isJoined() && !isLocalHost(peer.getHost())) {
-      peers.add(peer.getHost());
+      // Persist both the stable device id and the host so a peer can be
+      // re-matched by id after a restart (discovery may re-key it under a
+      // different reachable host). Legacy entries stored a bare host string.
+      JsonObject obj = peers.createNestedObject();
+      obj["id"] = peer.getId();
+      obj["host"] = peer.getHost();
     }
   }
 

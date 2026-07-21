@@ -402,6 +402,11 @@ public:
     _online_count = 0;
     _offline_count = 0;
     for (const auto& peer : _peers) {
+      // Only peers that have joined the group count toward the group status;
+      // discovered-but-not-joined peers are ignored.
+      if (!peer.isJoined()) {
+        continue;
+      }
       if (peer.isOnline()) {
         _online_count++;
       } else {

@@ -86,6 +86,32 @@ unsigned long LoadSharingPeerPoller::loop(MicroTasks::WakeReason reason) {
     processPeerConnection(pair.first, pair.second);
   }
   if (_groupState) {
+    // Reconcile each peer's online flag according to its category:
+    //  - Local device: always online. It is not polled over HTTP/WebSocket;
+    //    its values come straight from the local EVSE state.
+    //  - Joined group member: online is driven by the poller's live view -- we
+    //    have received status from it (HTTP bootstrap or WebSocket) and that
+    //    status is not yet stale past the heartbeat timeout. This matches the
+    //    documented liveness semantics rather than the momentary WS state,
+    //    which drops out during every bootstrap/reconnect cycle.
+    //  - Discovered-but-not-joined peer: online reflects whether it was seen in
+    //    the last mDNS discovery sweep (managed by onDiscoveryComplete); the
+    //    WebSocket is not used for these, so leave the flag untouched here.
+    for (auto& peer : _groupState->getPeers()) {
+      if (_groupState->isLocalHost(peer.getHost())) {
+        peer.setOnline(true);
+        continue;
+      }
+      if (!peer.isJoined()) {
+        continue;  // discovery owns the online flag for non-members
+      }
+      bool online = false;
+      auto it = _connections.find(peer.getHostPort());
+      if (it != _connections.end()) {
+        online = it->second.hasInitialStatus && !isPeerStale(it->second);
+      }
+      peer.setOnline(online);
+    }
     _groupState->updateCounts();
   }
 
@@ -149,9 +175,15 @@ void LoadSharingPeerPoller::syncPeerList() {
 
   const auto& peerList = _groupState->getPeers();
 
-  // Build set of current host:port keys
+  // Build set of current host:port keys. Only joined, non-local peers are
+  // polled over HTTP/WebSocket: the local device reports its own state
+  // directly, and discovered-but-not-joined peers derive their online status
+  // from mDNS discovery rather than a live connection.
   std::vector<String> currentHosts;
   for (const auto& peer : peerList) {
+    if (_groupState->isLocalHost(peer.getHost()) || !peer.isJoined()) {
+      continue;
+    }
     currentHosts.push_back(peer.getHostPort());
   }
 
@@ -289,9 +321,40 @@ void LoadSharingPeerPoller::processPeerConnection(const String& host, PeerConnec
   }
 }
 
+String LoadSharingPeerPoller::getPeerBaseUrl(const String& host) {
+  // Prefer the discovered url (uses a resolved IP or reachable hostname). Fall
+  // back to http://<host> for manually-added peers with no url yet.
+  if (_groupState != nullptr) {
+    LoadSharingPeer* peer = _groupState->getPeerByHost(host);
+    if (peer != nullptr) {
+      String url = peer->getUrl();
+      if (!url.isEmpty()) {
+        while (url.endsWith("/")) {
+          url.remove(url.length() - 1);
+        }
+        return url;
+      }
+    }
+  }
+  return "http://" + host;
+}
+
+String LoadSharingPeerPoller::getPeerWsUrl(const String& host) {
+  String base = getPeerBaseUrl(host);
+  // http(s):// -> ws(s)://
+  if (base.startsWith("https://")) {
+    return "wss://" + base.substring(8) + "/ws";
+  }
+  if (base.startsWith("http://")) {
+    return "ws://" + base.substring(7) + "/ws";
+  }
+  return "ws://" + base + "/ws";
+}
+
 void LoadSharingPeerPoller::startHttpBootstrap(const String& host, PeerConnection& conn) {
-  // Build URL
-  String url = "http://" + host + "/status";
+  // Build URL from the peer's reachable base (see getPeerBaseUrl); the map is
+  // keyed by host but the request target may be a resolved IP/hostname.
+  String url = getPeerBaseUrl(host) + "/status";
 
   DBUGF("LoadSharingPeerPoller: [%s] Starting HTTP GET %s", host.c_str(), url.c_str());
 
@@ -317,57 +380,20 @@ void LoadSharingPeerPoller::startHttpBootstrap(const String& host, PeerConnectio
       return;
     }
 
-    // Parse JSON response
+    // Parse the status response into the cache. mergeStatusPayload uses a
+    // filtered parse so document memory stays bounded even though /status has
+    // ~90 keys -- an unfiltered parse overflowed and left the peer stuck
+    // offline (bootstrap never completed).
     MongooseString bodyStr = response->body();
     String body = bodyStr.toString();
 
-    DynamicJsonDocument doc(4096);
-    DeserializationError error = deserializeJson(doc, body);
-
-    if (error) {
-      DBUGF("LoadSharingPeerPoller: [%s] JSON parse error: %s", host.c_str(), error.c_str());
+    if (!this->mergeStatusPayload(host, conn, body.c_str(), body.length())) {
       conn.state = PeerConnectionState::HTTP_FAILED;
       conn.retryCount++;
       conn.httpPending = false;
       return;
     }
 
-    // Extract status fields and populate cache
-    if (doc.containsKey("amp")) {
-      conn.statusCache.setAmp(doc["amp"].as<double>());
-    }
-    if (doc.containsKey("voltage")) {
-      conn.statusCache.setVoltage(doc["voltage"].as<double>());
-    }
-    if (doc.containsKey("pilot")) {
-      conn.statusCache.setPilot(doc["pilot"].as<double>());
-    }
-    if (doc.containsKey("vehicle")) {
-      conn.statusCache.setVehicle(doc["vehicle"].as<uint8_t>());
-    }
-    if (doc.containsKey("state")) {
-      conn.statusCache.setState(doc["state"].as<uint8_t>());
-    }
-    if (doc.containsKey("loadsharing_min_current")) {
-      conn.statusCache.setMinCurrent(doc["loadsharing_min_current"].as<double>());
-    }
-    if (doc.containsKey("loadsharing_max_current")) {
-      conn.statusCache.setMaxCurrent(doc["loadsharing_max_current"].as<double>());
-    }
-    if (doc.containsKey("loadsharing_priority")) {
-      conn.statusCache.setPriority(doc["loadsharing_priority"].as<int>());
-    }
-    if (doc.containsKey("config_version")) {
-      conn.statusCache.setConfigVersion(doc["config_version"].as<uint32_t>());
-    }
-    if (doc.containsKey("config_hash")) {
-      conn.statusCache.setConfigHash(doc["config_hash"].as<String>());
-    }
-
-    // Notify that peer status has changed
-    loadsharing_status_version++;
-
-    conn.lastMessageTime = millis();
     conn.hasInitialStatus = true;
     conn.retryCount = 0;  // Reset retry counter on success
     conn.state = PeerConnectionState::WS_CONNECTING;
@@ -375,6 +401,12 @@ void LoadSharingPeerPoller::startHttpBootstrap(const String& host, PeerConnectio
 
     DBUGF("LoadSharingPeerPoller: [%s] HTTP bootstrap successful (amp=%.1f, pilot=%.1f, state=%d)",
           host.c_str(), conn.statusCache.getAmp(), conn.statusCache.getPilot(), conn.statusCache.getState());
+
+    // Learn the peer's stable identity (device id/name) from /config once, so
+    // discovery can reconcile this member with its mDNS entry by id.
+    if (!conn.identityFetched) {
+      this->fetchPeerIdentity(host);
+    }
   });
 
   conn.httpRequest->onClose([this, host]() {
@@ -445,8 +477,8 @@ void LoadSharingPeerPoller::startWebSocketConnection(const String& host, PeerCon
     }
   });
 
-  // Build WebSocket URL
-  String wsUrl = "ws://" + host + "/ws";
+  // Build WebSocket URL from the peer's reachable base (see getPeerBaseUrl).
+  String wsUrl = getPeerWsUrl(host);
 
   DBUGF("LoadSharingPeerPoller: [%s] Connecting to WebSocket %s", host.c_str(), wsUrl.c_str());
 
@@ -491,13 +523,39 @@ void LoadSharingPeerPoller::handleWebSocketMessage(const String& host, PeerConne
                                                      const uint8_t* data, size_t len) {
   DBUGF("LoadSharingPeerPoller: [%s] Received WebSocket message (%d bytes)", host.c_str(), len);
 
-  // Parse JSON message
-  DynamicJsonDocument doc(4096);
-  DeserializationError error = deserializeJson(doc, data, len);
+  if (!mergeStatusPayload(host, conn, reinterpret_cast<const char*>(data), len)) {
+    return;
+  }
+
+  _total_messages_received++;
+
+  DBUGF("LoadSharingPeerPoller: [%s] Status updated (amp=%.1f, pilot=%.1f, state=%d)",
+        host.c_str(), conn.statusCache.getAmp(), conn.statusCache.getPilot(), conn.statusCache.getState());
+}
+
+bool LoadSharingPeerPoller::mergeStatusPayload(const String& host, PeerConnection& conn,
+                                               const char* data, size_t len) {
+  // Filter to just the fields we consume so the parse stays bounded regardless
+  // of the full payload size (both /status and /ws frames carry ~90 keys).
+  StaticJsonDocument<256> filter;
+  filter["amp"] = true;
+  filter["voltage"] = true;
+  filter["pilot"] = true;
+  filter["vehicle"] = true;
+  filter["state"] = true;
+  filter["loadsharing_min_current"] = true;
+  filter["loadsharing_max_current"] = true;
+  filter["loadsharing_priority"] = true;
+  filter["config_version"] = true;
+  filter["config_hash"] = true;
+
+  StaticJsonDocument<512> doc;
+  DeserializationError error =
+      deserializeJson(doc, data, len, DeserializationOption::Filter(filter));
 
   if (error) {
     DBUGF("LoadSharingPeerPoller: [%s] JSON parse error: %s", host.c_str(), error.c_str());
-    return;
+    return false;
   }
 
   // Merge fields into status cache (delta update)
@@ -536,10 +594,7 @@ void LoadSharingPeerPoller::handleWebSocketMessage(const String& host, PeerConne
   loadsharing_status_version++;
 
   conn.lastMessageTime = millis();
-  _total_messages_received++;
-
-  DBUGF("LoadSharingPeerPoller: [%s] Status updated (amp=%.1f, pilot=%.1f, state=%d)",
-        host.c_str(), conn.statusCache.getAmp(), conn.statusCache.getPilot(), conn.statusCache.getState());
+  return true;
 }
 
 bool LoadSharingPeerPoller::isPeerStale(const PeerConnection& conn) const {
@@ -665,7 +720,7 @@ void LoadSharingPeerPoller::pushConfigToPeer(const String& host, PeerConnection&
   serializeJson(doc, *body);
 
   // POST to member's /config endpoint
-  String* url = new String("http://" + host + "/config");
+  String* url = new String(getPeerBaseUrl(host) + "/config");
 
   MongooseHttpClientRequest* req = httpClient.beginRequest(url->c_str());
   req->setMethod(HTTP_POST);
@@ -693,6 +748,76 @@ void LoadSharingPeerPoller::pushConfigToPeer(const String& host, PeerConnection&
   httpClient.send(req);
 }
 
+void LoadSharingPeerPoller::fetchPeerIdentity(const String& host) {
+  DBUGF("LoadSharingPeerPoller: [%s] Fetching identity from /config", host.c_str());
+
+  String* url = new String(getPeerBaseUrl(host) + "/config");
+
+  MongooseHttpClientRequest* req = httpClient.beginRequest(url->c_str());
+  req->setMethod(HTTP_GET);
+
+  req->onResponse([this, host](MongooseHttpClientResponse* response) {
+    if (response->respCode() != 200) {
+      DBUGF("LoadSharingPeerPoller: [%s] Identity fetch failed with code %d",
+            host.c_str(), response->respCode());
+      return;
+    }
+
+    // /config is large; filter to just the identity fields to bound memory.
+    MongooseString bodyStr = response->body();
+    String body = bodyStr.toString();
+
+    StaticJsonDocument<64> filter;
+    filter["wifi_serial"] = true;
+    filter["hostname"] = true;
+
+    StaticJsonDocument<256> doc;
+    DeserializationError error =
+        deserializeJson(doc, body, DeserializationOption::Filter(filter));
+    if (error) {
+      DBUGF("LoadSharingPeerPoller: [%s] Identity parse error: %s",
+            host.c_str(), error.c_str());
+      return;
+    }
+
+    if (_groupState == nullptr) {
+      return;
+    }
+
+    LoadSharingPeer* peer = _groupState->getPeerByHost(host);
+    if (peer == nullptr) {
+      return;
+    }
+
+    // wifi_serial is ESPAL.getLongId() uppercased; the discovery/loadsharing id
+    // is the lowercase form, so normalise before storing to match by id.
+    if (doc.containsKey("wifi_serial")) {
+      String deviceId = doc["wifi_serial"].as<String>();
+      deviceId.toLowerCase();
+      if (!deviceId.isEmpty() && peer->getId() != deviceId) {
+        peer->setId(deviceId);
+      }
+    }
+    if (peer->getName().isEmpty() && doc.containsKey("hostname")) {
+      peer->setName(doc["hostname"].as<String>());
+    }
+
+    auto it = this->_connections.find(host);
+    if (it != this->_connections.end()) {
+      it->second.identityFetched = true;
+    }
+
+    DBUGF("LoadSharingPeerPoller: [%s] Identity learned (id=%s, name=%s)",
+          host.c_str(), peer->getId().c_str(), peer->getName().c_str());
+  });
+
+  req->onClose([host, url]() {
+    delete url;
+  });
+
+  httpClient.send(req);
+}
+
 void LoadSharingPeerPoller::pushConfigResetToPeer(const String& host) {
   DBUGF("LoadSharingPeerPoller: [%s] Pushing config reset (removing from group)", host.c_str());
 
@@ -706,7 +831,7 @@ void LoadSharingPeerPoller::pushConfigResetToPeer(const String& host) {
   serializeJson(doc, *body);
 
   // POST to member's /config endpoint
-  String* url = new String("http://" + host + "/config");
+  String* url = new String(getPeerBaseUrl(host) + "/config");
 
   MongooseHttpClientRequest* req = httpClient.beginRequest(url->c_str());
   req->setMethod(HTTP_POST);

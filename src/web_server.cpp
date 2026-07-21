@@ -320,7 +320,24 @@ void buildStatus(DynamicJsonDocument &doc) {
       peerObj["hostname"] = peer.getHost();
       peerObj["id"] = peer.getId();
       peerObj["name"] = peer.getName();
-      
+
+      if (loadSharingGroupState.isLocalHost(peer.getHost())) {
+        // The local device is not polled over HTTP/WebSocket; report its
+        // values directly from the local EVSE (same sources as create_rapi_json
+        // so they match what remote peers publish on /status).
+        double localAmp = evse.getAmps() * AMPS_SCALE_FACTOR;
+        peerObj["amp"] = localAmp;
+        peerObj["voltage"] = evse.getVoltage() * VOLTS_SCALE_FACTOR;
+        peerObj["pilot"] = evse.getChargeCurrent();
+        peerObj["vehicle"] = evse.isVehicleConnected() ? 1 : 0;
+        peerObj["state"] = evse.getEvseState();
+        peerObj["min_current"] = evse.getMinCurrent();
+        peerObj["max_current"] = evse.getMaxConfiguredCurrent();
+        peerObj["priority"] = loadsharing_priority;
+        groupTotalAmp += localAmp;
+        continue;
+      }
+
       // Get real-time status from peer poller
       LoadSharingPeerStatus peerStatus;
       if (loadSharingPeerPoller.getPeerStatus(peer.getHost(), peerStatus)) {
@@ -335,9 +352,9 @@ void buildStatus(DynamicJsonDocument &doc) {
         groupTotalAmp += peerStatus.getAmp();
       }
     }
-    
-    // Include self in group total
-    groupTotalAmp += evse.getChargeCurrent();
+
+    // The local device is included in the loop above (as a joined peer), so its
+    // current is already part of groupTotalAmp -- no separate self addition.
     doc["loadsharing_group_current_total"] = groupTotalAmp;
   }
 
