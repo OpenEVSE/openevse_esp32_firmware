@@ -49,6 +49,10 @@ typedef uint32_t EvseClient;
 #define EvseManager_Priority_API       500
 #define EvseManager_Priority_MQTT      500
 #define EvseManager_Priority_Ohm       500
+// Schedule-activated divert/shaper: must outrank the scheduler's base Timer
+// claim (100) and API pokes (500), but stay below Manual/RFID/OCPP so an
+// explicit human action can always override a timer window.
+#define EvseManager_Priority_TimerFeature 900
 #define EvseManager_Priority_Manual   1000
 #define EvseManager_Priority_RFID     1030
 #define EvseManager_Priority_OCPP     1050

@@ -81,6 +81,17 @@ jobs:
     name: Build ${{ matrix.env }}
     runs-on: ubuntu-latest
 
+    env:
+      # Environments whose Arduino core (core-3.x / pioarduino / IDF5) provides
+      # the signed-update verifier. Signed OTA is only enforced on these; add
+      # future core-3.x envs here. Older-core (4MB) envs cannot verify and are
+      # left unsigned.
+      SIGNED_OTA_ENVS: '["openevse_wifi_v1_16mb"]'
+      # 'true' only when the image-signing key is configured. Keeps signed OTA
+      # dormant (builds unchanged, unsigned) until the OTA_SIGNING_KEY secret is
+      # added, so merging this does not alter the fleet's update behaviour.
+      SIGN_ENABLED: ${{ secrets.OTA_SIGNING_KEY != '' }}
+
     strategy:
       fail-fast: false
       matrix:
@@ -145,7 +156,24 @@ jobs:
         sudo apt-get install -y libavahi-client-dev libavahi-common-dev libssl-dev
 
     - name: Run PlatformIO
+      env:
+        # Enforce signed OTA only when a signing key is configured AND this is a
+        # signed-capable env. Dormant (unsigned, unchanged) until the
+        # OTA_SIGNING_KEY secret is added, so merging this does not alter the
+        # fleet's update behaviour on its own.
+        PLATFORMIO_BUILD_FLAGS: ${{ (env.SIGN_ENABLED == 'true' && contains(fromJSON(env.SIGNED_OTA_ENVS), matrix.env)) && '-DUPDATE_SIGN -DREQUIRE_SIGNED_OTA' || '' }}
       run: pio run -e ${{ matrix.env }}
+
+    - name: Sign firmware image
+      # Append the RSA-2048 PSS signature trailer expected by REQUIRE_SIGNED_OTA
+      # builds. Same gating as the build flags above.
+      if: ${{ env.SIGN_ENABLED == 'true' && contains(fromJSON(env.SIGNED_OTA_ENVS), matrix.env) }}
+      env:
+        OTA_SIGNING_KEY: ${{ secrets.OTA_SIGNING_KEY }}
+      run: |
+        pip install cryptography
+        python scripts/sign_firmware.py --key-env OTA_SIGNING_KEY \
+          ".pio/build/${{ matrix.env }}/firmware.bin" ".pio/build/${{ matrix.env }}/firmware.bin"
 
     - name: Upload output to GitHub
       uses: actions/upload-artifact@v7

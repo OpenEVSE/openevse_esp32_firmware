@@ -1057,7 +1057,8 @@ void Scheduler::applyFeature(Event *event)
   switch(event->getFeature())
   {
     case SchedulerFeature::Divert:
-      // Enter eco mode at elevated priority (1100) so it overrides OCPP/RFID/Manual
+      // Enter eco mode at elevated priority (TimerFeature, 900) — above the
+      // base Timer claim but below Manual/RFID/OCPP so those still override
       divert.setTimerDivertActive(true);
       break;
     case SchedulerFeature::Shaper:

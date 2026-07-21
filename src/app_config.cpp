@@ -248,21 +248,21 @@ ConfigOpt *opts[] =
   new ConfigOptDefinition<uint32_t>(limit_default_value, LIMIT_DEFAULT_VALUE_DEFAULT, "limit_default_value", "ldv"),
 
 // EMONCMS SERVER strings
-  new ConfigOptDefinition<String>(emoncms_server, "https://data.openevse.com/emoncms", "emoncms_server", "es"),
+  new ConfigOptDefinition<String>(emoncms_server, "https://emoncms.org", "emoncms_server", "es"),
   new ConfigOptDefinition<String>(emoncms_node, esp_hostname, "emoncms_node", "en"),
   new ConfigOptSecret(emoncms_apikey, "", "emoncms_apikey", "ea"),
   new ConfigOptDefinition<String>(emoncms_fingerprint, "", "emoncms_fingerprint", "ef"),
 
 // MQTT Settings
-  new ConfigOptDefinition<String>(mqtt_server, "emonpi", "mqtt_server", "ms"),
+  new ConfigOptDefinition<String>(mqtt_server, "", "mqtt_server", "ms"),
   new ConfigOptDefinition<uint32_t>(mqtt_port, 1883, "mqtt_port", "mpt"),
   new ConfigOptDefinition<String>(mqtt_topic, esp_hostname, "mqtt_topic", "mt"),
-  new ConfigOptDefinition<String>(mqtt_user, "emonpi", "mqtt_user", "mu"),
-  new ConfigOptSecret(mqtt_pass, "emonpimqtt2016", "mqtt_pass", "mp"),
+  new ConfigOptDefinition<String>(mqtt_user, "", "mqtt_user", "mu"),
+  new ConfigOptSecret(mqtt_pass, "", "mqtt_pass", "mp"),
   new ConfigOptDefinition<String>(mqtt_certificate_id, "", "mqtt_certificate_id", "mct"),
   new ConfigOptDefinition<String>(mqtt_solar, "", "mqtt_solar", "mo"),
-  new ConfigOptDefinition<String>(mqtt_grid_ie, "emon/emonpi/power1", "mqtt_grid_ie", "mg"),
-  new ConfigOptDefinition<String>(mqtt_vrms, "emon/emonpi/vrms", "mqtt_vrms", "mv"),
+  new ConfigOptDefinition<String>(mqtt_grid_ie, "", "mqtt_grid_ie", "mg"),
+  new ConfigOptDefinition<String>(mqtt_vrms, "", "mqtt_vrms", "mv"),
   new ConfigOptDefinition<String>(mqtt_live_pwr, "", "mqtt_live_pwr", "map"),
   new ConfigOptDefinition<String>(mqtt_vehicle_soc, "", "mqtt_vehicle_soc", "mc"),
   new ConfigOptDefinition<String>(mqtt_vehicle_range, "", "mqtt_vehicle_range", "mr"),

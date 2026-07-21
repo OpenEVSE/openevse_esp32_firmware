@@ -507,6 +507,27 @@ bool isPositive(MongooseHttpServerRequest *request, const char *param) {
   return paramFound >= 0 && (0 == paramFound || isPositive(String(paramValue)));
 }
 
+// -------------------------------------------------------------------
+// Escape a string for safe inclusion in an HTML response body, so that
+// reflected user input cannot be interpreted as markup or script.
+// -------------------------------------------------------------------
+static String html_escape(const String &input) {
+  String out;
+  out.reserve(input.length());
+  for(size_t i = 0; i < input.length(); i++) {
+    char c = input.charAt(i);
+    switch(c) {
+      case '&':  out += F("&amp;");  break;
+      case '<':  out += F("&lt;");   break;
+      case '>':  out += F("&gt;");   break;
+      case '"':  out += F("&quot;"); break;
+      case '\'': out += F("&#39;");  break;
+      default:   out += c;           break;
+    }
+  }
+  return out;
+}
+
 //---------------------------------------------------------------------
 // Build status data
 // --------------------------------------------------------------------
@@ -1447,9 +1468,9 @@ handleRapi(MongooseHttpServerRequest *request) {
       if (json) {
         s = "{\"cmd\":\""+rapi+"\",\"ret\":\""+rapiString+"\"}";
       } else {
-        s += rapi;
+        s += html_escape(rapi);
         s += F("<p>&gt;");
-        s += rapiString;
+        s += html_escape(rapiString);
       }
     }
     else
@@ -1471,7 +1492,7 @@ handleRapi(MongooseHttpServerRequest *request) {
       if (json) {
         s = "{\"cmd\":\""+rapi+"\",\"error\":\""+errorString+"\"}";
       } else {
-        s += rapi;
+        s += html_escape(rapi);
         s += F("<p><strong>Error:</strong>");
         s += errorString;
       }
