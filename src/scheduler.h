@@ -9,7 +9,7 @@
 // Feature activated/deactivated by the timer window.
 enum class SchedulerFeature : uint8_t {
   None    = 0,
-  Divert,   // Solar eco-divert at elevated priority (1100)
+  Divert,   // Solar eco-divert at elevated priority (TimerFeature, 900)
   Shaper,   // Grid current shaper
   OCPP,     // OCPP-managed charging (placeholder)
   RFID,     // Require RFID authentication
