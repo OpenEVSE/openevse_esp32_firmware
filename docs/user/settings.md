@@ -13,8 +13,10 @@ hardware is present.
   boards. See [Getting started](getting-started.md).
 - **[HTTP](screenshots/settings-http-dark-desktop.png)** — web access:
   admin username/password (strongly recommended — HTTP auth then protects
-  every request including the input APIs), TLS certificate selection, and UI
-  language. Four languages ship: English, Spanish, French, Hungarian.
+  every request including the input APIs), TLS certificate selection, UI
+  language (English, Spanish, French, Hungarian), and the temperature unit
+  (`temp_unit`, Celsius or Fahrenheit) applied across the web UI and the
+  on-device display.
 - **[MQTT](screenshots/settings-mqtt-dark-desktop.png)** — broker, credentials,
   base topic. See [Integrations](integrations.md).
 - **[OCPP](screenshots/settings-ocpp-dark-desktop.png)** — see [OCPP](ocpp.md).

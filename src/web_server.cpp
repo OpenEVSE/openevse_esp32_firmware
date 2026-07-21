@@ -48,6 +48,8 @@ typedef const __FlashStringHelper *fstr_t;
 #include "home_battery.h"
 #include "evse_man.h"
 #include "limit.h"
+#include "web_auth.h"
+#include "web_auth_secret.h"
 
 MongooseHttpServer server;          // Create class for Web server
 MongooseHttpServer redirect;        // Server to redirect to HTTPS if enabled
@@ -189,37 +191,242 @@ static bool credentialsMatch(const char *a, const char *b)
 }
 
 // -------------------------------------------------------------------
-// Single source of truth for HTTP Basic authentication
+// The ESP32 has no battery-backed RTC, so time(nullptr) returns ~0 from boot
+// until SNTP (or the EVSE controller, or a manual set) lands.  Session cookies
+// carry a wall-clock expiry, so they are meaningless — and unexpirable — until
+// the clock is real.  This floor (2023-11-14) is source-agnostic: any of SNTP,
+// the EVSE RTC, or a manual settimeofday() lifts time() above it, whereas a
+// timeManager "SNTP synced" flag would miss a clock set from the controller.
+// -------------------------------------------------------------------
+static const uint32_t AUTH_CLOCK_SANE_EPOCH = 1700000000UL;
+static bool clockIsSane()
+{
+  return (uint32_t)time(nullptr) > AUTH_CLOCK_SANE_EPOCH;
+}
+
+// Monotonic seconds for the failed-auth throttle, independent of the wall
+// clock (see web_auth.h) so an SNTP jump can't distort the decay window.
+static inline uint32_t authNowSecs()
+{
+  return (uint32_t)(millis() / 1000);
+}
+
+// Shared failed-credential throttle: fed by both the Basic-auth path in
+// isAuthenticated() and POST /login, so a brute force can't dodge it by
+// hammering GET /status instead of the login form.
+static AuthThrottle s_authThrottle;
+
+// The effective admin username.  Auth is keyed on the *password* being set;
+// when a password exists but the username was left blank, we fall back to a
+// non-obvious default rather than treating the device as open (F1).
+static String effectiveAdminUser()
+{
+  return www_username.length() > 0 ? www_username : String("openevseadmin");
+}
+
+// -------------------------------------------------------------------
+// Session-cookie auth helper (browser UI)
+//
+// Extracts the oevse_session cookie from the request, verifies its HMAC
+// signature and expiry against the current secret, and returns true when
+// the cookie is valid.  File-local; consumed by isAuthenticated() below
+// and the login handler (Task 7).
+// -------------------------------------------------------------------
+static bool hasValidSessionCookie(MongooseHttpServerRequest *request)
+{
+  // Cookies are inert until the wall clock is set: an unexpirable cookie is
+  // worse than none, and this closes the replay-after-reboot window (a
+  // captured cookie can't verify while time() is ~0).  Basic auth still works.
+  if(!clockIsSane()) {
+    return false;
+  }
+  String secret = web_auth_get_secret();
+  if(secret.length() == 0) {
+    return false;  // no secret yet — fail closed
+  }
+  MongooseString cookieHdr = request->headers("Cookie");
+  if(!cookieHdr) {
+    return false;
+  }
+  std::string tok = cookie_extract(
+    std::string(cookieHdr.c_str(), cookieHdr.length()), "oevse_session");
+  if(tok.empty()) {
+    return false;
+  }
+  return session_token_verify(
+    std::string(secret.c_str()), tok, (uint32_t)time(nullptr));
+}
+
+// -------------------------------------------------------------------
+// Single source of truth for HTTP authentication
 //
 // Used by both the REST path (requestPreProcess) and the WebSocket handshake
 // gate (onWsAuthenticate). Returns true when the request is permitted:
 //  - AP-only provisioning mode (captive portal, before credentials are set), or
-//  - no admin credentials configured, or
-//  - a valid Basic Authorization header.
+//  - no password configured (auth disabled), or
+//  - a valid Basic Authorization header (machine clients: HA, MQTT, app), or
+//  - a valid session cookie (browser UI).
 // Parsing reuses the library's tested Basic-auth parser; only the comparison is
-// swapped for a constant-time one.
+// swapped for a constant-time one. `badCredential` (optional) is set when a
+// Basic header carried the wrong password, so requestPreProcess can escalate
+// to a throttle response without re-parsing.
 // -------------------------------------------------------------------
-bool isAuthenticated(MongooseHttpServerRequest *request)
+bool isAuthenticated(MongooseHttpServerRequest *request, bool *usedCookie, bool *badCredential)
 {
-  if(net.isWifiModeApOnly() || www_username == "") {
+  if(usedCookie) *usedCookie = false;
+  if(badCredential) *badCredential = false;
+
+  // Auth is keyed on the *password*: a blank password means "no auth" even if a
+  // username is set; a set password with a blank username uses a default user
+  // (effectiveAdminUser) rather than leaving the device open (F1).
+  if(net.isWifiModeApOnly() || www_password == "") {
     return true;
   }
 
+  String adminUser = effectiveAdminUser();
+
+  // Basic auth (machine clients: HA, MQTT, app, scripts)
   MongooseString authHeader = request->headers("Authorization");
-  if(!authHeader) {
-    return false;
+  if(authHeader) {
+    mg_str hdr = authHeader.toMgStr();
+    char user_buf[64] = {0};
+    char pass_buf[64] = {0};
+    if(0 == mg_parse_http_basic_auth(&hdr, user_buf, sizeof(user_buf),
+                                     pass_buf, sizeof(pass_buf))) {
+      bool u = credentialsMatch(adminUser.c_str(), user_buf);
+      bool p = credentialsMatch(www_password.c_str(), pass_buf);
+      if(u && p) {
+        // Correct credentials always win and clear the throttle, so a flood of
+        // bad guesses can never lock out a machine client holding the password.
+        auth_throttle_record_success(s_authThrottle, authNowSecs());
+        return true;
+      }
+      // Wrong Basic credential — feed the same throttle as POST /login so a
+      // brute force can't dodge the counter by hammering GET /status.
+      auth_throttle_record_failure(s_authThrottle, authNowSecs());
+      if(badCredential) *badCredential = true;
+    }
   }
 
-  mg_str hdr = authHeader.toMgStr();
-  char user_buf[64] = {0};
-  char pass_buf[64] = {0};
-  if(0 != mg_parse_http_basic_auth(&hdr, user_buf, sizeof(user_buf),
-                                   pass_buf, sizeof(pass_buf))) {
-    return false;
+  // Session cookie (browser UI) — computed exactly once here
+  bool cookie = hasValidSessionCookie(request);
+  if(usedCookie) *usedCookie = cookie;
+  return cookie;
+}
+
+// -------------------------------------------------------------------
+// POST /login  — credential check + session cookie mint
+// POST /logout — session cookie clear
+//
+// Both handlers build their own response and intentionally do NOT call
+// requestPreProcess / isAuthenticated: an unauthenticated user must be
+// able to reach /login, and /logout should always succeed.
+// -------------------------------------------------------------------
+static const uint32_t REMEMBER_TTL = 2592000; // 30 days
+static const uint32_t SESSION_TTL  = 21600;   // 6 hours
+
+void handleLogin(MongooseHttpServerRequest *request)
+{
+  MongooseHttpServerResponseStream *response = request->beginResponseStream();
+  response->setContentType(CONTENT_TYPE_JSON);
+  response->addHeader(F("Cache-Control"), F("no-store"));
+
+  if(HTTP_POST != request->method()) {
+    response->setCode(405);
+    request->send(response);
+    return;
   }
 
-  return credentialsMatch(www_username.c_str(), user_buf) &&
-         credentialsMatch(www_password.c_str(), pass_buf);
+  String body = request->body().toString();
+  DynamicJsonDocument doc(512);
+  if(deserializeJson(doc, body)) {
+    response->setCode(400);
+    response->print(F("{\"msg\":\"bad json\"}"));
+    request->send(response);
+    return;
+  }
+
+  String user = doc["user"] | "";
+  String pass = doc["pass"] | "";
+  bool remember = doc["remember"] | false;
+
+  // Evaluate both compares into locals before combining, so a username miss
+  // doesn't short-circuit the password compare (no timing oracle).
+  bool u_ok = auth_constant_time_equals(std::string(user.c_str()),
+                                        std::string(effectiveAdminUser().c_str()));
+  bool p_ok = auth_constant_time_equals(std::string(pass.c_str()),
+                                        std::string(www_password.c_str()));
+  bool ok = u_ok && p_ok;
+  uint32_t tnow = authNowSecs();
+  if(!ok) {
+    // Correct credentials are checked above and always pass, so the throttle
+    // only ever rejects *wrong* guesses — a soft lock can't shut out the admin
+    // or a machine client. 429 signals the lock; the counter decays on its own.
+    auth_throttle_record_failure(s_authThrottle, tnow);
+    bool locked = auth_throttle_locked(s_authThrottle, tnow);
+    response->setCode(locked ? 429 : 401);
+    response->print(locked ? F("{\"msg\":\"locked\"}") : F("{\"msg\":\"invalid\"}"));
+    request->send(response);
+    return;
+  }
+  auth_throttle_record_success(s_authThrottle, tnow);
+
+  // Cookies carry a wall-clock expiry, so the device needs a real clock to mint
+  // one. If it has none yet (no NTP reachable, no controller RTC), adopt the
+  // time the client sent with the login — the caller has just proven the
+  // password, and could set the clock via /settime anyway, so this is no new
+  // authority. Only ever bootstraps an *unset* clock; never moves a real one,
+  // and a bogus (pre-2023) value is ignored so it can't roll the clock back.
+  if(!clockIsSane()) {
+    uint32_t clientNow = doc["now"] | 0u;   // epoch seconds from the browser
+    if(clientNow > AUTH_CLOCK_SANE_EPOCH) {
+      struct timeval tv;
+      tv.tv_sec  = (time_t)clientNow;
+      tv.tv_usec = 0;
+      time_set_time(tv, "login");
+    }
+  }
+
+  // Still no usable clock (client sent nothing / a bad value) — can't date a
+  // cookie, so fall back to Basic rather than mint an unexpirable one.
+  if(!clockIsSane()) {
+    response->setCode(503);
+    response->print(F("{\"msg\":\"clock\"}"));
+    request->send(response);
+    return;
+  }
+
+  String secret = web_auth_get_secret();
+  if(secret.length() == 0) {
+    response->setCode(503);
+    response->print(F("{\"msg\":\"not ready\"}"));
+    request->send(response);
+    return;
+  }
+  uint32_t exp = (uint32_t)time(nullptr) + (remember ? REMEMBER_TTL : SESSION_TTL);
+  std::string token = session_token_mint(std::string(secret.c_str()), exp);
+
+  String cookie = "oevse_session=";
+  cookie += token.c_str();
+  cookie += "; Path=/; HttpOnly; SameSite=Strict";
+  if(remember) { cookie += "; Max-Age="; cookie += String(REMEMBER_TTL); }
+  // if(tls_active()) cookie += "; Secure";   // add when TLS status is known
+  response->addHeader(F("Set-Cookie"), cookie.c_str());
+  response->setCode(200);
+  response->print(F("{\"msg\":\"ok\"}"));
+  request->send(response);
+}
+
+void handleLogout(MongooseHttpServerRequest *request)
+{
+  MongooseHttpServerResponseStream *response = request->beginResponseStream();
+  response->setContentType(CONTENT_TYPE_JSON);
+  response->addHeader(F("Cache-Control"), F("no-store"));
+  if(HTTP_POST != request->method()) { response->setCode(405); request->send(response); return; }
+  response->addHeader(F("Set-Cookie"), F("oevse_session=; Path=/; HttpOnly; SameSite=Strict; Max-Age=0"));
+  response->setCode(200);
+  response->print(F("{\"msg\":\"ok\"}"));
+  request->send(response);
 }
 
 // -------------------------------------------------------------------
@@ -229,9 +436,48 @@ bool requestPreProcess(MongooseHttpServerRequest *request, MongooseHttpServerRes
 {
   dumpRequest(request);
 
-  if(!isAuthenticated(request)) {
-    request->requestAuthentication(esp_hostname);
+  bool usedCookie = false;
+  bool badCredential = false;
+  if(!isAuthenticated(request, &usedCookie, &badCredential)) {
+    // A wrong Basic credential presented while the throttle is hot gets 429
+    // (rate-limited), so brute forcing GET /status is throttled the same as
+    // POST /login. A request with no credential at all still gets the normal
+    // 401 challenge — the throttle only ever answers *failed* attempts.
+    if(badCredential && auth_throttle_locked(s_authThrottle, authNowSecs())) {
+      response = request->beginResponseStream();
+      response->setContentType(CONTENT_TYPE_JSON);
+      response->setCode(429);
+      response->print(F("{\"msg\":\"locked\"}"));
+      request->send(response);
+      return false;
+    }
+    MongooseString xrw = request->headers("X-Requested-With");
+    if(xrw.equals("OpenEVSE")) {
+      response = request->beginResponseStream();
+      response->setContentType(CONTENT_TYPE_JSON);
+      response->setCode(401);
+      response->print(F("{\"msg\":\"auth\"}"));
+      request->send(response);
+    } else {
+      request->requestAuthentication(esp_hostname);
+    }
     return false;
+  }
+
+  // CSRF: a browser session cookie is auto-attached cross-site, so any
+  // state-changing (non-GET) request authenticated via cookie must also carry
+  // the SPA's custom header, which a cross-origin form cannot set. Basic-auth
+  // (machine) clients never send our cookie and are unaffected.
+  if(request->method() != HTTP_GET && usedCookie) {
+    MongooseString xrw = request->headers("X-Requested-With");
+    if(!(xrw.equals("OpenEVSE"))) {
+      response = request->beginResponseStream();
+      response->setContentType(CONTENT_TYPE_JSON);
+      response->setCode(403);
+      response->print(F("{\"msg\":\"csrf\"}"));
+      request->send(response);
+      return false;
+    }
   }
 
   response = request->beginResponseStream();
@@ -451,6 +697,30 @@ handleScan(MongooseHttpServerRequest *request) {
 }
 
 // -------------------------------------------------------------------
+// Destructive actuators (/reset, /restart, /apoff) must not fire from a bare
+// cross-site GET (e.g. <img src="/reset">). Require either a non-GET method or
+// the SPA's custom header, which a cross-origin GET cannot set — defense in
+// depth beyond SameSite=Strict on the worst-consequence endpoints. Sends 403
+// and returns false when the request is a headerless GET; the caller's response
+// stream is already open (from requestPreProcess).
+// -------------------------------------------------------------------
+static bool actuatorMethodAllowed(MongooseHttpServerRequest *request,
+                                  MongooseHttpServerResponseStream *response)
+{
+  if(request->method() != HTTP_GET) {
+    return true;
+  }
+  MongooseString xrw = request->headers("X-Requested-With");
+  if(xrw.equals("OpenEVSE")) {
+    return true;
+  }
+  response->setCode(403);
+  response->print("Forbidden: use POST or the app");
+  request->send(response);
+  return false;
+}
+
+// -------------------------------------------------------------------
 // Handle turning Access point off
 // url: /apoff
 // -------------------------------------------------------------------
@@ -458,6 +728,9 @@ void
 handleAPOff(MongooseHttpServerRequest *request) {
   MongooseHttpServerResponseStream *response;
   if(false == requestPreProcess(request, response, CONTENT_TYPE_TEXT)) {
+    return;
+  }
+  if(!actuatorMethodAllowed(request, response)) {
     return;
   }
 
@@ -1012,6 +1285,9 @@ handleRst(MongooseHttpServerRequest *request) {
   if(false == requestPreProcess(request, response, CONTENT_TYPE_TEXT)) {
     return;
   }
+  if(!actuatorMethodAllowed(request, response)) {
+    return;
+  }
 
   config_reset();
   ESPAL.eraseConfig();
@@ -1032,6 +1308,9 @@ void
 handleRestart(MongooseHttpServerRequest *request) {
   MongooseHttpServerResponseStream *response;
   if(false == requestPreProcess(request, response, CONTENT_TYPE_TEXT)) {
+    return;
+  }
+  if(!actuatorMethodAllowed(request, response)) {
     return;
   }
 
@@ -1402,6 +1681,10 @@ void web_server_setup()
     DEBUG.printf("Starting HTTP server, http://0.0.0.0:%d\n", www_http_port);
     server.begin(www_http_port);
   }
+
+  // Session management (no auth gate — user must reach these unauthenticated)
+  server.on("/login$", handleLogin);
+  server.on("/logout$", handleLogout);
 
   // Handle status updates
   server.on("/status$", handleStatus);

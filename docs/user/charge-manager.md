@@ -5,7 +5,7 @@ the power-up defaults, features that apply to every session, and scheduled
 rules — charge on cheap overnight tariffs, require a card tap during the day,
 or follow your solar excess on weekends.
 
-![Charge Manager screen](screenshots/charge-manager-dark-desktop.png)
+![Charge Manager screen](screenshots/schedule-dark-desktop.png)
 
 ## Station defaults
 
@@ -77,6 +77,4 @@ asserting control and at what priority. The same view lives on the
 
 The raw timer list the rules compile into is still available at
 `/schedule/legacy` — useful for checking exactly what was written to the
-device, or for timer setups made before the Charge Manager existed:
-
-![Legacy schedule screen](screenshots/schedule-legacy-dark-desktop.png)
+device, or for timer setups made before the Charge Manager existed.
