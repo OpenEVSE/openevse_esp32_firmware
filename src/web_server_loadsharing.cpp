@@ -3,8 +3,11 @@
 #endif
 
 #include <Arduino.h>
+#include "emonesp.h"
 #include "web_server.h"
 #include "app_config.h"
+#include "input.h"
+#include "evse_man.h"
 #include "loadsharing_discovery_task.h"
 #include "loadsharing_peer_poller.h"
 #include "loadsharing_types.h"
@@ -328,19 +331,34 @@ void handleLoadSharingStatus(MongooseHttpServerRequest *request, MongooseHttpSer
       peerObj["version"] = fullPeer->getVersion();
       peerObj["last_seen"] = (unsigned int)(fullPeer->getLastSeen() / 1000);  // Convert ms to seconds
 
-      // Query peer poller for current status
-      LoadSharingPeerStatus peerStatus;
-      if (loadSharingPeerPoller.getPeerStatus(peerInfo.hostname, peerStatus)) {
-        // Add nested status object from peer poller
+      if (loadSharingGroupState.isLocalHost(peerInfo.hostname)) {
+        // The local device is not polled over HTTP/WebSocket; report its
+        // status directly from the local EVSE (same sources as create_rapi_json
+        // so it matches what remote peers publish on /status).
         JsonObject statusObj = peerObj.createNestedObject("status");
-        statusObj["amp"] = peerStatus.getAmp();
-        statusObj["voltage"] = peerStatus.getVoltage();
-        statusObj["pilot"] = peerStatus.getPilot();
-        statusObj["vehicle"] = peerStatus.getVehicle();
-        statusObj["state"] = peerStatus.getState();
-        statusObj["min_current"] = peerStatus.getMinCurrent();
-        statusObj["max_current"] = peerStatus.getMaxCurrent();
-        statusObj["priority"] = peerStatus.getPriority();
+        statusObj["amp"] = evse.getAmps() * AMPS_SCALE_FACTOR;
+        statusObj["voltage"] = evse.getVoltage() * VOLTS_SCALE_FACTOR;
+        statusObj["pilot"] = evse.getChargeCurrent();
+        statusObj["vehicle"] = evse.isVehicleConnected() ? 1 : 0;
+        statusObj["state"] = evse.getEvseState();
+        statusObj["min_current"] = evse.getMinCurrent();
+        statusObj["max_current"] = evse.getMaxConfiguredCurrent();
+        statusObj["priority"] = loadsharing_priority;
+      } else {
+        // Query peer poller for current status
+        LoadSharingPeerStatus peerStatus;
+        if (loadSharingPeerPoller.getPeerStatus(peerInfo.hostname, peerStatus)) {
+          // Add nested status object from peer poller
+          JsonObject statusObj = peerObj.createNestedObject("status");
+          statusObj["amp"] = peerStatus.getAmp();
+          statusObj["voltage"] = peerStatus.getVoltage();
+          statusObj["pilot"] = peerStatus.getPilot();
+          statusObj["vehicle"] = peerStatus.getVehicle();
+          statusObj["state"] = peerStatus.getState();
+          statusObj["min_current"] = peerStatus.getMinCurrent();
+          statusObj["max_current"] = peerStatus.getMaxCurrent();
+          statusObj["priority"] = peerStatus.getPriority();
+        }
       }
     }
   }
