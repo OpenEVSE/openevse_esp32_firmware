@@ -7,6 +7,7 @@
 typedef const __FlashStringHelper *fstr_t;
 
 #include "emonesp.h"
+#include "certificate_id.h"
 #include "web_server.h"
 #include "certificates.h"
 
@@ -59,7 +60,7 @@ void handleCertificatesPost(MongooseHttpServerRequest *request, MongooseHttpServ
       {
         DBUGVAR(id, HEX);
         doc.clear();
-        doc["id"] = String(id, HEX);
+        doc["id"] = certificate_id_hex(id);
         doc["msg"] = "done";
         serializeJson(doc, *response);
         response->setCode(200);

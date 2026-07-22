@@ -27,6 +27,7 @@ typedef const __FlashStringHelper *fstr_t;
 
 #include "emonesp.h"
 #include "web_server.h"
+#include "web_server_tls_startup.h"
 #ifdef ENABLE_TSDB
 #include "tsdb_energy_logger.h"
 #endif
@@ -1666,12 +1667,15 @@ void web_server_setup()
     uint64_t cert_id = std::stoull(www_certificate_id.c_str(), nullptr, 16);
     const char *cert = certs.getCertificate(cert_id);
     const char *key = certs.getKey(cert_id);
-    if(NULL != cert && NULL != key)
+    // Keep HTTP available unless the TLS listener starts successfully.
+    use_ssl = web_server_start_https(cert, key,
+      [](const char *certificate, const char *private_key)
+      {
+        DEBUG.printf("Starting HTTPS server, https://0.0.0.0:%d\n", www_https_port);
+        return server.begin(www_https_port, certificate, private_key);
+      });
+    if(use_ssl)
     {
-      DEBUG.printf("Starting HTTPS server, https://0.0.0.0:%d\n", www_https_port);
-      server.begin(www_https_port, cert, key);
-      use_ssl = true;
-
       redirect.begin(www_http_port);
       redirect.on("/", handleHttpsRedirect);
     }
