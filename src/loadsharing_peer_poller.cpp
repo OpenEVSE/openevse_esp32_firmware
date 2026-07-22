@@ -410,10 +410,13 @@ void LoadSharingPeerPoller::startHttpBootstrap(const String& host, PeerConnectio
   });
 
   conn.httpRequest->onClose([this, host]() {
-    // HTTP request closed (timeout or error)
+    // HTTP request closed (timeout or error). Mongoose deletes the request
+    // object right after this callback, so drop our pointer to it -- otherwise
+    // a later disconnectPeer() would call abort() on freed memory.
     auto it = this->_connections.find(host);
     if (it != this->_connections.end()) {
       PeerConnection& conn = it->second;
+      conn.httpRequest = nullptr;
       if (conn.httpPending && conn.state == PeerConnectionState::HTTP_FETCHING) {
         DBUGF("LoadSharingPeerPoller: [%s] HTTP connection closed without response", host.c_str());
         conn.state = PeerConnectionState::HTTP_FAILED;
