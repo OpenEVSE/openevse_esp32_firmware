@@ -136,6 +136,8 @@ class CertificateStore
     bool findCertificate(uint64_t id, Certificate *&cert);
     bool findCertificate(uint64_t id, int &index);
 
+    bool prepareRootCa(Certificate *additional, const char *&prepared);
+    void replaceRootCa(const char *replacement);
     bool buildRootCa();
 };
 
