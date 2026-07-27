@@ -25,6 +25,16 @@ First firmware build downloads ~500 MB of toolchain and takes 15–45 minutes �
 **never cancel it**; incremental builds take 2–5 minutes. Full env list and the
 two-core (IDF4/IDF5) subtleties: [docs/developer/building.md](docs/developer/building.md).
 
+## Sandbox
+
+Agent work runs behind Claude Code's built-in Bash sandbox — an egress allowlist plus
+filesystem/credential guards in [`.claude/settings.json`](.claude/settings.json). It is
+enabled by that config, not by a command — on Linux/WSL2 first
+`sudo apt-get install bubblewrap socat`. The `/sandbox` panel (terminal CLI only) shows
+the resolved policy. Build/test commands run without prompts;
+`docker` (integration tests) runs outside the sandbox. Full rationale and the domain
+allowlist: [docs/ai/sandbox.md](docs/ai/sandbox.md).
+
 ## Test
 
 ```bash
