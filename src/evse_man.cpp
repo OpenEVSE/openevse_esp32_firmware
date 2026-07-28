@@ -553,7 +553,7 @@ uint8_t EvseManager::getStateColour()
 
     case OPENEVSE_STATE_SLEEPING:
     case OPENEVSE_STATE_DISABLED:
-      return isVehicleConnected() ? OPENEVSE_LCD_TEAL : OPENEVSE_LCD_VIOLET;
+      return isVehicleConnected() ? OPENEVSE_LCD_WHITE : OPENEVSE_LCD_VIOLET;
       break;
   }
 
