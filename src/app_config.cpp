@@ -180,7 +180,6 @@ uint32_t loadsharing_heartbeat_timeout;
 String loadsharing_failsafe_mode;
 double loadsharing_failsafe_safe_current;
 double loadsharing_failsafe_peer_assumed_current;
-uint32_t loadsharing_priority;
 uint32_t loadsharing_config_version;
 uint32_t loadsharing_config_updated_at;
 uint32_t loadsharing_peers_version;
@@ -333,7 +332,6 @@ ConfigOpt *opts[] =
   new ConfigOptDefinition<String>(loadsharing_failsafe_mode, "safe_current", "loadsharing_failsafe_mode", "lsfm"),
   new ConfigOptDefinition<double>(loadsharing_failsafe_safe_current, 6.0, "loadsharing_failsafe_safe_current", "lsfsc"),
   new ConfigOptDefinition<double>(loadsharing_failsafe_peer_assumed_current, 6.0, "loadsharing_failsafe_peer_assumed_current", "lsfpac"),
-  new ConfigOptDefinition<uint32_t>(loadsharing_priority, 0, "loadsharing_priority", "lsp"),
   new ConfigOptDefinition<uint32_t>(loadsharing_config_version, 0, "loadsharing_config_version", "lscv"),
   new ConfigOptDefinition<uint32_t>(loadsharing_config_updated_at, 0, "loadsharing_config_updated_at", "lscua"),
   new ConfigOptDefinition<String>(loadsharing_role, "", "loadsharing_role", "lsr"),

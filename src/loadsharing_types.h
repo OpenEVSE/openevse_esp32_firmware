@@ -94,6 +94,9 @@ private:
   unsigned long _last_seen;  // millis() timestamp of last successful contact
   LoadSharingPeerStatus _status;  // Latest status snapshot
   uint16_t _port;        // Service port (from mDNS or default)
+  int _priority;         // Controller-managed load sharing priority (persisted)
+  double _min_current;   // Normal per-EVSE minimum (learned from peer /config)
+  double _max_current;   // Normal per-EVSE maximum (learned from peer /config)
 
 public:
   LoadSharingPeer() :
@@ -107,7 +110,10 @@ public:
     _joined(false),
     _last_seen(0),
     _status(),
-    _port(0)
+    _port(0),
+    _priority(0),
+    _min_current(0.0),
+    _max_current(0.0)
   {}
 
   LoadSharingPeer(const String& host_) :
@@ -121,7 +127,10 @@ public:
     _joined(false),
     _last_seen(0),
     _status(),
-    _port(0)
+    _port(0),
+    _priority(0),
+    _min_current(0.0),
+    _max_current(0.0)
   {}
 
   // Accessors
@@ -161,6 +170,15 @@ public:
 
   uint16_t getPort() const { return _port; }
   void setPort(uint16_t value) { _port = value; }
+
+  int getPriority() const { return _priority; }
+  void setPriority(int value) { _priority = value; }
+
+  double getMinCurrent() const { return _min_current; }
+  void setMinCurrent(double value) { _min_current = value; }
+
+  double getMaxCurrent() const { return _max_current; }
+  void setMaxCurrent(double value) { _max_current = value; }
 };
 
 /**
@@ -359,6 +377,19 @@ public:
   }
 
   /**
+   * @brief Get the local device's peer entry (always first in _peers).
+   * @return Pointer to the local peer, or nullptr before loadGroupPeers().
+   */
+  LoadSharingPeer* getLocalPeer() {
+    for (auto& peer : _peers) {
+      if (isLocalHost(peer.getHost())) {
+        return &peer;
+      }
+    }
+    return nullptr;
+  }
+
+  /**
    * @brief Add or update a peer in the group.
    * @return true if peer was added, false if updated.
    */
@@ -477,6 +508,17 @@ public:
    * @return true if removed successfully, false if not found
    */
   bool removeGroupPeer(const String& hostname);
+
+  /**
+   * @brief Set the controller-managed priority for a peer (by host).
+   * Persists the peer list and notifies listeners so the allocation recomputes.
+   * The local controller is a normal entry, so its own priority is set the same
+   * way. Lower value = higher priority.
+   * @param hostname Hostname or IP address of the peer (or the local host)
+   * @param priority New priority value
+   * @return true if the peer was found and updated, false otherwise
+   */
+  bool setPeerPriority(const String& hostname, int priority);
 
   /**
    * @brief Check if a hostname refers to the local device.

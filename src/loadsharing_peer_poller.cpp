@@ -285,6 +285,18 @@ void LoadSharingPeerPoller::processPeerConnection(const String& host, PeerConnec
         pushConfigToPeer(host, conn);
       }
 
+      // Re-fetch the peer's /config (limits/identity) when its config_version
+      // changes. Use != (not >) because config_version resets to 1 on a peer
+      // reboot, so a decrease must still trigger a refresh. This keeps the
+      // cached min/max in step with the peer without polling /config every
+      // cycle. Skip while an HTTP request is already in flight for this peer.
+      if (conn.identityFetched && conn.httpRequest == nullptr &&
+          conn.statusCache.getConfigVersion() != conn.configVersionFetched) {
+        DBUGF("LoadSharingPeerPoller: [%s] Peer config_version changed (%u -> %u), refetching /config",
+              host.c_str(), conn.configVersionFetched, conn.statusCache.getConfigVersion());
+        fetchPeerConfig(host);
+      }
+
       // Monitor for stale connection
       if (isPeerStale(conn)) {
         DBUGF("LoadSharingPeerPoller: [%s] Connection stale (no messages for %lu ms)",
@@ -402,10 +414,12 @@ void LoadSharingPeerPoller::startHttpBootstrap(const String& host, PeerConnectio
     DBUGF("LoadSharingPeerPoller: [%s] HTTP bootstrap successful (amp=%.1f, pilot=%.1f, state=%d)",
           host.c_str(), conn.statusCache.getAmp(), conn.statusCache.getPilot(), conn.statusCache.getState());
 
-    // Learn the peer's stable identity (device id/name) from /config once, so
-    // discovery can reconcile this member with its mDNS entry by id.
+    // Learn the peer's identity (device id/name) and current limits (min/max)
+    // from /config once, so discovery can reconcile this member with its mDNS
+    // entry by id and the allocator has its real limits. Refreshed later when
+    // the peer's config_version changes (see WS_CONNECTED handling).
     if (!conn.identityFetched) {
-      this->fetchPeerIdentity(host);
+      this->fetchPeerConfig(host);
     }
   });
 
@@ -546,9 +560,6 @@ bool LoadSharingPeerPoller::mergeStatusPayload(const String& host, PeerConnectio
   filter["pilot"] = true;
   filter["vehicle"] = true;
   filter["state"] = true;
-  filter["loadsharing_min_current"] = true;
-  filter["loadsharing_max_current"] = true;
-  filter["loadsharing_priority"] = true;
   filter["config_version"] = true;
   filter["config_hash"] = true;
 
@@ -576,15 +587,6 @@ bool LoadSharingPeerPoller::mergeStatusPayload(const String& host, PeerConnectio
   }
   if (doc.containsKey("state")) {
     conn.statusCache.setState(doc["state"].as<uint8_t>());
-  }
-  if (doc.containsKey("loadsharing_min_current")) {
-    conn.statusCache.setMinCurrent(doc["loadsharing_min_current"].as<double>());
-  }
-  if (doc.containsKey("loadsharing_max_current")) {
-    conn.statusCache.setMaxCurrent(doc["loadsharing_max_current"].as<double>());
-  }
-  if (doc.containsKey("loadsharing_priority")) {
-    conn.statusCache.setPriority(doc["loadsharing_priority"].as<int>());
   }
   if (doc.containsKey("config_version")) {
     conn.statusCache.setConfigVersion(doc["config_version"].as<uint32_t>());
@@ -712,7 +714,8 @@ void LoadSharingPeerPoller::pushConfigToPeer(const String& host, PeerConnection&
   doc["loadsharing_role"] = "member";
   doc["loadsharing_controller_host"] = _groupState->getLocalHostname();
   doc["loadsharing_group_id"] = loadsharing_group_id;
-  doc["loadsharing_group_max_current"] = loadsharing_group_max_current;
+  // loadsharing_group_max_current is the site budget -- a controller-only
+  // concept. Members do not store or use it, so it is not pushed.
   doc["loadsharing_safety_factor"] = loadsharing_safety_factor;
   doc["loadsharing_heartbeat_timeout"] = loadsharing_heartbeat_timeout;
   doc["loadsharing_failsafe_mode"] = loadsharing_failsafe_mode;
@@ -751,8 +754,8 @@ void LoadSharingPeerPoller::pushConfigToPeer(const String& host, PeerConnection&
   httpClient.send(req);
 }
 
-void LoadSharingPeerPoller::fetchPeerIdentity(const String& host) {
-  DBUGF("LoadSharingPeerPoller: [%s] Fetching identity from /config", host.c_str());
+void LoadSharingPeerPoller::fetchPeerConfig(const String& host) {
+  DBUGF("LoadSharingPeerPoller: [%s] Fetching identity/limits from /config", host.c_str());
 
   String* url = new String(getPeerBaseUrl(host) + "/config");
 
@@ -761,24 +764,29 @@ void LoadSharingPeerPoller::fetchPeerIdentity(const String& host) {
 
   req->onResponse([this, host](MongooseHttpClientResponse* response) {
     if (response->respCode() != 200) {
-      DBUGF("LoadSharingPeerPoller: [%s] Identity fetch failed with code %d",
+      DBUGF("LoadSharingPeerPoller: [%s] Config fetch failed with code %d",
             host.c_str(), response->respCode());
       return;
     }
 
-    // /config is large; filter to just the identity fields to bound memory.
+    // /config is large; filter to just the identity and current-limit fields
+    // to bound memory. min_current_hard / max_current_soft are the peer's
+    // normal EVSE limits (== evse.getMinCurrent()/getMaxConfiguredCurrent()).
     MongooseString bodyStr = response->body();
     String body = bodyStr.toString();
 
-    StaticJsonDocument<64> filter;
+    StaticJsonDocument<128> filter;
     filter["wifi_serial"] = true;
     filter["hostname"] = true;
+    filter["min_current_hard"] = true;
+    filter["max_current_soft"] = true;
+    filter["config_version"] = true;
 
-    StaticJsonDocument<256> doc;
+    StaticJsonDocument<384> doc;
     DeserializationError error =
         deserializeJson(doc, body, DeserializationOption::Filter(filter));
     if (error) {
-      DBUGF("LoadSharingPeerPoller: [%s] Identity parse error: %s",
+      DBUGF("LoadSharingPeerPoller: [%s] Config parse error: %s",
             host.c_str(), error.c_str());
       return;
     }
@@ -804,14 +812,29 @@ void LoadSharingPeerPoller::fetchPeerIdentity(const String& host) {
     if (peer->getName().isEmpty() && doc.containsKey("hostname")) {
       peer->setName(doc["hostname"].as<String>());
     }
+    // Learn the peer's normal current limits for the allocation algorithm.
+    if (doc.containsKey("min_current_hard")) {
+      peer->setMinCurrent(doc["min_current_hard"].as<double>());
+    }
+    if (doc.containsKey("max_current_soft")) {
+      peer->setMaxCurrent(doc["max_current_soft"].as<double>());
+    }
 
     auto it = this->_connections.find(host);
     if (it != this->_connections.end()) {
       it->second.identityFetched = true;
+      // Record the config_version this fetch reflects so the WS_CONNECTED
+      // handler only refetches when the peer's config actually changes.
+      if (doc.containsKey("config_version")) {
+        it->second.configVersionFetched = doc["config_version"].as<uint32_t>();
+      } else {
+        it->second.configVersionFetched = it->second.statusCache.getConfigVersion();
+      }
     }
 
-    DBUGF("LoadSharingPeerPoller: [%s] Identity learned (id=%s, name=%s)",
-          host.c_str(), peer->getId().c_str(), peer->getName().c_str());
+    DBUGF("LoadSharingPeerPoller: [%s] Config learned (id=%s, name=%s, min=%.1f, max=%.1f)",
+          host.c_str(), peer->getId().c_str(), peer->getName().c_str(),
+          peer->getMinCurrent(), peer->getMaxCurrent());
   });
 
   req->onClose([host, url]() {
@@ -901,12 +924,19 @@ std::vector<AllocationInput> LoadSharingPeerPoller::buildAllocationInputs() {
                     wasSuppressed(self.id);
     self.min_current = evse.getMinCurrent();
     self.max_current = evse.getMaxConfiguredCurrent();
-    self.priority = loadsharing_priority;
+    // Priority for the local controller lives on its peer-list entry, managed
+    // exactly like every other peer.
+    LoadSharingPeer* localPeer = _groupState->getLocalPeer();
+    self.priority = localPeer ? localPeer->getPriority() : 0;
     inputs.push_back(self);
   }
 
-  // Add each configured peer
+  // Add each configured peer. min/max come from the peer's /config (learned by
+  // fetchPeerConfig into the group peer entry); priority is controller-managed
+  // and stored on the same entry. Neither is read from the polled status.
   for (const auto& pair : _connections) {
+    LoadSharingPeer* groupPeer = _groupState->getPeerByHost(pair.first);
+
     AllocationInput input;
     input.id = pair.first;
     input.host = pair.first;
@@ -919,13 +949,11 @@ std::vector<AllocationInput> LoadSharingPeerPoller::buildAllocationInputs() {
     input.charging = input.online &&
                      (pair.second.statusCache.getState() == OPENEVSE_STATE_CHARGING ||
                       wasSuppressed(input.id));
-    input.min_current = pair.second.statusCache.getMinCurrent() > 0
-                          ? pair.second.statusCache.getMinCurrent()
-                          : evse.getMinCurrent();
-    input.max_current = pair.second.statusCache.getMaxCurrent() > 0
-                          ? pair.second.statusCache.getMaxCurrent()
-                          : evse.getMaxCurrent();
-    input.priority = pair.second.statusCache.getPriority();
+    double peerMin = groupPeer ? groupPeer->getMinCurrent() : 0.0;
+    double peerMax = groupPeer ? groupPeer->getMaxCurrent() : 0.0;
+    input.min_current = peerMin > 0 ? peerMin : evse.getMinCurrent();
+    input.max_current = peerMax > 0 ? peerMax : evse.getMaxCurrent();
+    input.priority = groupPeer ? groupPeer->getPriority() : 0;
     inputs.push_back(input);
   }
 

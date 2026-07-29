@@ -61,6 +61,7 @@ void handleLoadSharingPeersGet(MongooseHttpServerRequest *request, MongooseHttpS
 void handleLoadSharingPeersPost(MongooseHttpServerRequest *request, MongooseHttpServerResponseStream *response);
 void handleLoadSharingPeersDelete(MongooseHttpServerRequest *request, MongooseHttpServerResponseStream *response);
 void handleLoadSharingPeersDeleteWithHost(MongooseHttpServerRequest *request, MongooseHttpServerResponseStream *response, const String &host);
+void handleLoadSharingPeersUpdateWithHost(MongooseHttpServerRequest *request, MongooseHttpServerResponseStream *response, const String &host);
 void handleLoadSharingDiscover(MongooseHttpServerRequest *request, MongooseHttpServerResponseStream *response);
 void handleLoadSharingStatus(MongooseHttpServerRequest *request, MongooseHttpServerResponseStream *response);
 
@@ -123,6 +124,12 @@ void handleLoadSharingPeersGet(MongooseHttpServerRequest *request, MongooseHttpS
     peerObj["online"] = peer.online;
     peerObj["joined"] = peer.joined;
     peerObj["isLocal"] = peer.isLocal;
+
+    // Controller-managed priority (stored on the group peer entry)
+    LoadSharingPeer* fullPeer = loadSharingGroupState.getPeerByHost(peer.hostname);
+    if (fullPeer) {
+      peerObj["priority"] = fullPeer->getPriority();
+    }
   }
 
   response->setCode(200);
@@ -267,6 +274,46 @@ void handleLoadSharingPeersDeleteWithHost(MongooseHttpServerRequest *request, Mo
   response->print("{\"msg\":\"done\"}");
 }
 
+void handleLoadSharingPeersUpdateWithHost(MongooseHttpServerRequest *request, MongooseHttpServerResponseStream *response, const String &host)
+{
+  DBUGF("[LoadSharing] PUT /loadsharing/peers/%s", host.c_str());
+
+  if (loadSharingGroupState.isMember()) {
+    response->setCode(403);
+    response->print("{\"msg\":\"Load sharing configuration is read-only on members\"}");
+    return;
+  }
+
+  String body = request->body().toString();
+  DynamicJsonDocument doc(JSON_OBJECT_SIZE(2) + 128);
+  DeserializationError error = deserializeJson(doc, body);
+  if (error) {
+    DBUGF("[LoadSharing] JSON parse error: %s", error.c_str());
+    response->setCode(400);
+    response->print("{\"msg\":\"Invalid JSON\"}");
+    return;
+  }
+
+  if (!doc.containsKey("priority")) {
+    response->setCode(400);
+    response->print("{\"msg\":\"Missing 'priority' field\"}");
+    return;
+  }
+
+  // Priority is controller-managed and stored on the group peer entry. The
+  // local controller is a normal entry, so its own priority is edited through
+  // this same path (no local special-case).
+  if (!loadSharingGroupState.setPeerPriority(host, doc["priority"].as<int>())) {
+    DBUGF("[LoadSharing] Peer not found: %s", host.c_str());
+    response->setCode(404);
+    response->print("{\"msg\":\"Peer not found\"}");
+    return;
+  }
+
+  response->setCode(200);
+  response->print("{\"msg\":\"done\"}");
+}
+
 void handleLoadSharingDiscover(MongooseHttpServerRequest *request, MongooseHttpServerResponseStream *response)
 {
   DBUGLN("[LoadSharing] POST /loadsharing/discover");
@@ -329,6 +376,7 @@ void handleLoadSharingStatus(MongooseHttpServerRequest *request, MongooseHttpSer
 
     if (fullPeer) {
       peerObj["version"] = fullPeer->getVersion();
+      peerObj["priority"] = fullPeer->getPriority();
       peerObj["last_seen"] = (unsigned int)(fullPeer->getLastSeen() / 1000);  // Convert ms to seconds
 
       if (loadSharingGroupState.isLocalHost(peerInfo.hostname)) {
@@ -343,9 +391,11 @@ void handleLoadSharingStatus(MongooseHttpServerRequest *request, MongooseHttpSer
         statusObj["state"] = evse.getEvseState();
         statusObj["min_current"] = evse.getMinCurrent();
         statusObj["max_current"] = evse.getMaxConfiguredCurrent();
-        statusObj["priority"] = loadsharing_priority;
+        statusObj["priority"] = fullPeer->getPriority();
       } else {
-        // Query peer poller for current status
+        // Query peer poller for current status. min/max/priority are
+        // controller-owned (min/max learned from the peer's /config, priority
+        // stored on the group peer entry), not part of the polled status.
         LoadSharingPeerStatus peerStatus;
         if (loadSharingPeerPoller.getPeerStatus(peerInfo.hostname, peerStatus)) {
           // Add nested status object from peer poller
@@ -355,9 +405,9 @@ void handleLoadSharingStatus(MongooseHttpServerRequest *request, MongooseHttpSer
           statusObj["pilot"] = peerStatus.getPilot();
           statusObj["vehicle"] = peerStatus.getVehicle();
           statusObj["state"] = peerStatus.getState();
-          statusObj["min_current"] = peerStatus.getMinCurrent();
-          statusObj["max_current"] = peerStatus.getMaxCurrent();
-          statusObj["priority"] = peerStatus.getPriority();
+          statusObj["min_current"] = fullPeer->getMinCurrent();
+          statusObj["max_current"] = fullPeer->getMaxCurrent();
+          statusObj["priority"] = fullPeer->getPriority();
         }
       }
     }
@@ -406,10 +456,12 @@ void web_server_load_sharing_setup()
         return;
       }
       host = decodedHost.data();
-      DBUGF("[LoadSharing] DELETE path parameter: %s", host.c_str());
+      DBUGF("[LoadSharing] Path parameter: %s", host.c_str());
 
       if(HTTP_DELETE == request->method()) {
         handleLoadSharingPeersDeleteWithHost(request, response, host);
+      } else if(HTTP_PUT == request->method()) {
+        handleLoadSharingPeersUpdateWithHost(request, response, host);
       } else {
         response->setCode(405);
         response->print("{\"msg\":\"Method not allowed\"}");

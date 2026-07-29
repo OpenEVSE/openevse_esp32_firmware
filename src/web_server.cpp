@@ -299,9 +299,6 @@ void buildStatus(DynamicJsonDocument &doc) {
   doc["ota_update"] = (int)Update.isRunning();
 
   doc["config_version"] = config_version();
-  doc["loadsharing_min_current"] = evse.getMinCurrent();
-  doc["loadsharing_max_current"] = evse.getMaxConfiguredCurrent();
-  doc["loadsharing_priority"] = loadsharing_priority;
   doc["loadsharing_peers_version"] = loadsharing_peers_version;
   doc["loadsharing_status_version"] = loadsharing_status_version;
 
@@ -333,12 +330,14 @@ void buildStatus(DynamicJsonDocument &doc) {
         peerObj["state"] = evse.getEvseState();
         peerObj["min_current"] = evse.getMinCurrent();
         peerObj["max_current"] = evse.getMaxConfiguredCurrent();
-        peerObj["priority"] = loadsharing_priority;
+        peerObj["priority"] = peer.getPriority();
         groupTotalAmp += localAmp;
         continue;
       }
 
-      // Get real-time status from peer poller
+      // Get real-time status from peer poller. min/max/priority are controller-
+      // owned (min/max learned from the peer's /config, priority stored on the
+      // group peer entry), not part of the polled status.
       LoadSharingPeerStatus peerStatus;
       if (loadSharingPeerPoller.getPeerStatus(peer.getHost(), peerStatus)) {
         peerObj["amp"] = peerStatus.getAmp();
@@ -346,9 +345,9 @@ void buildStatus(DynamicJsonDocument &doc) {
         peerObj["pilot"] = peerStatus.getPilot();
         peerObj["vehicle"] = peerStatus.getVehicle();
         peerObj["state"] = peerStatus.getState();
-        peerObj["min_current"] = peerStatus.getMinCurrent();
-        peerObj["max_current"] = peerStatus.getMaxCurrent();
-        peerObj["priority"] = peerStatus.getPriority();
+        peerObj["min_current"] = peer.getMinCurrent();
+        peerObj["max_current"] = peer.getMaxCurrent();
+        peerObj["priority"] = peer.getPriority();
         groupTotalAmp += peerStatus.getAmp();
       }
     }

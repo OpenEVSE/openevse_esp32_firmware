@@ -49,7 +49,8 @@ struct PeerConnection {
   bool hasInitialStatus;              // True after first successful status fetch
   bool httpPending;                   // True while HTTP request is in flight
   bool configPushed;                  // True after config has been pushed to this peer
-  bool identityFetched;               // True after device id/name learned from /config
+  bool identityFetched;               // True after id/name/limits learned from /config
+  uint32_t configVersionFetched;      // Peer config_version at last /config fetch
   LoadSharingDemandState demandState; // Persistent under-draw cap for allocation
 
   PeerConnection() :
@@ -66,7 +67,8 @@ struct PeerConnection {
     hasInitialStatus(false),
     httpPending(false),
     configPushed(false),
-    identityFetched(false)
+    identityFetched(false),
+    configVersionFetched(0)
   {}
 
   ~PeerConnection() {
@@ -187,17 +189,19 @@ private:
   bool mergeStatusPayload(const String& host, PeerConnection& conn, const char* data, size_t len);
 
   /**
-   * @brief Fetch a peer's stable identity (device id/name) from its /config.
+   * @brief Fetch a peer's identity and current limits from its /config.
    *
    * A peer added by hostname (e.g. "localhost:8001") starts with no device id.
-   * /config already exposes the identity (wifi_serial == ESPAL.getLongId(),
-   * hostname), so this GETs /config once and records the id/name on the group
-   * peer, letting discovery reconcile the member with its mDNS entry by id
-   * instead of creating a duplicate row.
+   * /config exposes both the identity (wifi_serial == ESPAL.getLongId(),
+   * hostname) and the EVSE's normal current limits (min_current_hard,
+   * max_current_soft). This GETs /config and records id/name plus min/max on
+   * the group peer, letting discovery reconcile the member by id and giving the
+   * allocation algorithm the peer's real limits. Re-fetched whenever the peer's
+   * config_version changes (see configVersionFetched), so limits never go stale.
    *
    * @param host Peer hostname/IP
    */
-  void fetchPeerIdentity(const String& host);
+  void fetchPeerConfig(const String& host);
 
   /**
    * @brief Resolve the base URL used to reach a peer.

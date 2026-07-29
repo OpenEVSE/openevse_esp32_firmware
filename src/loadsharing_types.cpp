@@ -225,6 +225,25 @@ bool LoadSharingGroupState::removeGroupPeer(const String& hostname) {
   return true;
 }
 
+bool LoadSharingGroupState::setPeerPriority(const String& hostname, int priority) {
+  // The local controller is a normal entry; match it via getLocalPeer() so its
+  // own priority is editable through the same path as remote peers.
+  LoadSharingPeer* peer = isLocalHost(hostname) ? getLocalPeer()
+                                                : getPeerByHost(hostname);
+  if (!peer) {
+    DBUGF("LoadSharingGroupState: setPeerPriority peer not found: %s", hostname.c_str());
+    return false;
+  }
+
+  peer->setPriority(priority);
+  saveGroupPeers();
+
+  DBUGF("LoadSharingGroupState: Set priority for %s to %d", hostname.c_str(), priority);
+
+  notifyPeerChange();
+  return true;
+}
+
 bool LoadSharingGroupState::isLocalHost(const String& hostname) const {
   String localMdns = esp_hostname + String(".local");
   if (hostname.equalsIgnoreCase(esp_hostname) ||
@@ -330,18 +349,31 @@ bool LoadSharingGroupState::loadGroupPeers() {
 
   JsonArray peers = doc["peers"].as<JsonArray>();
   for (JsonVariant peer : peers) {
-    // Support both the current object form ({id, host}) and the legacy form
-    // where each entry was a bare host string.
+    // Support both the current object form ({id, host, priority}) and the
+    // legacy form where each entry was a bare host string.
     String hostname;
     String id;
+    int priority = 0;
     if (peer.is<JsonObject>()) {
       hostname = peer["host"].as<String>();
       id = peer["id"].as<String>();
+      priority = peer["priority"] | 0;
     } else {
       hostname = peer.as<String>();
     }
     if (hostname.isEmpty() && id.isEmpty()) continue;
-    if (isLocalHost(hostname)) continue;  // Skip local host in saved list
+
+    // The local device entry is created first by addLocalPeer(); when the saved
+    // list contains the local row, apply its saved priority to that entry
+    // rather than adding a duplicate. Priority for the local controller is
+    // managed exactly like any other peer.
+    if (isLocalHost(hostname) || (!id.isEmpty() && id == ESPAL.getLongId())) {
+      LoadSharingPeer* local = getLocalPeer();
+      if (local) {
+        local->setPriority(priority);
+      }
+      continue;
+    }
 
     // Re-match an already-present peer by id first (survives host changes),
     // then by host.
@@ -354,6 +386,7 @@ bool LoadSharingGroupState::loadGroupPeers() {
     }
     if (existing) {
       existing->setJoined(true);
+      existing->setPriority(priority);
       if (existing->getId().isEmpty() && !id.isEmpty()) {
         existing->setId(id);
       }
@@ -361,6 +394,7 @@ bool LoadSharingGroupState::loadGroupPeers() {
       LoadSharingPeer p(hostname);
       p.setId(id);
       p.setJoined(true);
+      p.setPriority(priority);
       _peers.push_back(p);
     }
   }
@@ -382,13 +416,18 @@ bool LoadSharingGroupState::saveGroupPeers() {
   DynamicJsonDocument doc(1024);
   JsonArray peers = doc.createNestedArray("peers");
   for (const auto& peer : _peers) {
-    if (peer.isJoined() && !isLocalHost(peer.getHost())) {
-      // Persist both the stable device id and the host so a peer can be
-      // re-matched by id after a restart (discovery may re-key it under a
-      // different reachable host). Legacy entries stored a bare host string.
+    // Persist joined peers AND the local device entry. The local row carries
+    // the controller's own priority, which is managed the same way as every
+    // other peer, so it must round-trip through the saved list too.
+    if (peer.isJoined()) {
+      // Persist the stable device id and host so a peer can be re-matched by id
+      // after a restart (discovery may re-key it under a different reachable
+      // host), plus the controller-managed priority. Legacy entries stored a
+      // bare host string.
       JsonObject obj = peers.createNestedObject();
       obj["id"] = peer.getId();
       obj["host"] = peer.getHost();
+      obj["priority"] = peer.getPriority();
     }
   }
 

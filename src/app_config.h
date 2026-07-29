@@ -112,7 +112,6 @@ extern uint32_t loadsharing_heartbeat_timeout;
 extern String loadsharing_failsafe_mode;
 extern double loadsharing_failsafe_safe_current;
 extern double loadsharing_failsafe_peer_assumed_current;
-extern uint32_t loadsharing_priority;
 extern uint32_t loadsharing_config_version;
 extern uint32_t loadsharing_config_updated_at;
 extern uint32_t loadsharing_peers_version;
