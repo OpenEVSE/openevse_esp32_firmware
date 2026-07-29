@@ -6,6 +6,7 @@
 #include "loadsharing_discovery_task.h"
 #include "loadsharing_types.h"
 #include "app_config.h"
+#include "net_manager.h"
 #include <Arduino.h>
 #include <espal.h>
 #include <ESPmDNS.h>
@@ -25,6 +26,43 @@ static String normalizeTxtField(const String& raw) {
     value.trim();
   }
   return value;
+}
+
+// Parse a dotted-quad IPv4 string into a 32-bit host-order value. Returns false
+// on malformed input.
+static bool parseIpv4(const String& ip, uint32_t& out) {
+  uint32_t parts[4] = {0, 0, 0, 0};
+  int part = 0;
+  int value = -1;
+  for (size_t i = 0; i <= (size_t)ip.length(); i++) {
+    char c = (i < (size_t)ip.length()) ? ip.charAt(i) : '.';
+    if (c == '.') {
+      if (value < 0 || value > 255 || part > 3) return false;
+      parts[part++] = (uint32_t)value;
+      value = -1;
+    } else if (c >= '0' && c <= '9') {
+      value = (value < 0 ? 0 : value) * 10 + (c - '0');
+    } else {
+      return false;
+    }
+  }
+  if (part != 4) return false;
+  out = (parts[0] << 24) | (parts[1] << 16) | (parts[2] << 8) | parts[3];
+  return true;
+}
+
+// True when addr is on the same IPv4 subnet as the local device. When the local
+// IP or netmask is unknown (e.g. not yet connected, or a platform that does not
+// report a mask), returns false so callers fall back to their default choice.
+static bool isSameSubnet(const String& addr) {
+  String localIp = net.getIp();
+  String mask = net.getNetmask();
+  uint32_t a, l, m;
+  if (!parseIpv4(addr, a) || !parseIpv4(localIp, l) || !parseIpv4(mask, m)) {
+    return false;
+  }
+  if (m == 0) return false;  // No usable mask
+  return (a & m) == (l & m);
 }
 
 // Global instance
@@ -209,7 +247,18 @@ bool LoadSharingDiscoveryTask::pollAsyncQuery() {
     auto mergePeer = [&](DiscoveredPeer& dst, const DiscoveredPeer& src) {
       if (dst.serviceName.isEmpty() && !src.serviceName.isEmpty()) dst.serviceName = src.serviceName;
       if (dst.hostname.isEmpty() && !src.hostname.isEmpty()) dst.hostname = src.hostname;
-      if (!hasUsableIp(dst.ipAddress) && hasUsableIp(src.ipAddress)) dst.ipAddress = src.ipAddress;
+      // Choose the peer address, preferring one on our own subnet. An mDNS host
+      // often advertises several interface addresses (docker bridges, VPNs,
+      // secondary NICs); only a same-subnet address is reliably routable, so a
+      // same-subnet candidate upgrades whatever we picked first.
+      if (hasUsableIp(src.ipAddress)) {
+        bool dstUsable = hasUsableIp(dst.ipAddress);
+        bool srcSameSubnet = isSameSubnet(src.ipAddress);
+        bool dstSameSubnet = dstUsable && isSameSubnet(dst.ipAddress);
+        if (!dstUsable || (srcSameSubnet && !dstSameSubnet)) {
+          dst.ipAddress = src.ipAddress;
+        }
+      }
       if (dst.port == 0 && src.port > 0) dst.port = src.port;
       if (dst.id.isEmpty() && !src.id.isEmpty()) dst.id = src.id;
       if (dst.name.isEmpty() && !src.name.isEmpty()) dst.name = src.name;
@@ -328,6 +377,27 @@ bool LoadSharingDiscoveryTask::pollAsyncQuery() {
         seenHostnames.push_back(peer.hostname);
         peers.push_back(peer);
       }
+    }
+
+    // Rebuild each URL from the finally-chosen IP. The per-result URL above is
+    // built before merge, so a merge that upgraded the address to a same-subnet
+    // IP would otherwise leave the URL pointing at the earlier (possibly
+    // unroutable) address. Only rebuild when we have a usable IP; keep the
+    // hostname-based URL as a fallback otherwise.
+    for (auto& peer : peers) {
+      if (!hasUsableIp(peer.ipAddress)) continue;
+      bool ssl = false;
+      auto sslIt = peer.txtRecords.find("ssl");
+      if (sslIt != peer.txtRecords.end() && sslIt->second == "1") {
+        ssl = true;
+      }
+      String url = ssl ? "https://" : "http://";
+      url += peer.ipAddress;
+      if (peer.port > 0 &&
+          ((ssl && peer.port != 443) || (!ssl && peer.port != 80))) {
+        url += ":" + String(peer.port);
+      }
+      peer.url = url;
     }
 
     DBUGF("LoadSharingDiscoveryTask: Query complete in %lu ms, found %u peers",
