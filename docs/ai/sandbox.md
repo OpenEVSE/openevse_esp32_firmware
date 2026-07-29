@@ -25,12 +25,45 @@ writes your mode choice to the gitignored `.claude/settings.local.json`, and sho
 Dependencies tab if `bubblewrap`/`socat` are missing). That panel is not available in
 the VS Code extension or SDK harnesses; the policy still applies there.
 
-On Ubuntu 24.04+, `kernel.apparmor_restrict_unprivileged_userns=1` can stop bubblewrap
-from creating user namespaces. Check with
-`bwrap --ro-bind / / --unshare-user --unshare-net true` — if that fails, add the `bwrap`
-AppArmor profile from the
-[sandboxing docs](https://code.claude.com/docs/en/sandboxing) and
-`sudo systemctl reload apparmor`.
+### Ubuntu 24.04+ — AppArmor user namespace restriction
+
+Ubuntu 24.04 and later ship `kernel.apparmor_restrict_unprivileged_userns=1`, which stops
+bubblewrap from creating the user namespaces the sandbox needs. This bites hardest in the
+**VS Code extension**, which runs commands through its own bundled sandbox runtime, so
+Claude's sandbox has to open a *nested* namespace inside it. The symptom is every Bash
+command failing with:
+
+```text
+apply-seccomp: write /proc/self/setgroups (nested userns is capability-restricted; ...)
+bwrap: No permissions to create a new namespace
+```
+
+Note that a *single* namespace can succeed while nesting still fails, so test nesting
+specifically:
+
+```bash
+bwrap --ro-bind / / --proc /proc --dev /dev --unshare-user --unshare-pid -- \
+  bwrap --ro-bind / / --proc /proc --unshare-user true && echo OK
+```
+
+If that fails, install a `bwrap` AppArmor profile granting the `userns` capability:
+
+```bash
+sudo tee /etc/apparmor.d/bwrap > /dev/null <<'EOF'
+abi <abi/4.0>,
+include <tunables/global>
+
+profile bwrap /usr/bin/bwrap flags=(unconfined) {
+  userns,
+  include if exists <local/bwrap>
+}
+EOF
+sudo apparmor_parser -r -W /etc/apparmor.d/bwrap
+```
+
+The profile applies only to `bwrap` itself, not to the commands it runs inside the
+sandbox. Re-run the nesting test to confirm, then restart Claude Code. Verified on Ubuntu
+26.04 / kernel 7.0.
 
 ## What the policy does
 
