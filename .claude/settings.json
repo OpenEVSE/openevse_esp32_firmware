@@ -1,0 +1,66 @@
+{
+  "$schema": "https://json.schemastore.org/claude-code-settings.json",
+  "permissions": {
+    "ask": [
+      "Bash(git push:*)",
+      "Bash(curl *update*)"
+    ],
+    "deny": [
+      "Read(./*.pem)",
+      "Read(./**/*.pem)",
+      "Read(./.env)",
+      "Read(./.env.local)",
+      "Read(./**/.env)",
+      "Read(./**/.env.local)",
+      "Read(./.vscode/settings.json)",
+      "Read(./.vscode/settings.local.json)"
+    ]
+  },
+  "sandbox": {
+    "enabled": true,
+    "autoAllowBashIfSandboxed": true,
+    "excludedCommands": [
+      "docker *"
+    ],
+    "network": {
+      "allowedDomains": [
+        "api.anthropic.com",
+        "*.platformio.org",
+        "github.com",
+        "*.githubusercontent.com",
+        "objects.githubusercontent.com",
+        "codeload.github.com",
+        "registry.npmjs.org",
+        "pypi.org",
+        "files.pythonhosted.org",
+        "ghcr.io",
+        "*.pkg.github.com",
+        "playwright.azureedge.net",
+        "cdn.playwright.dev"
+      ]
+    },
+    "filesystem": {
+      "allowWrite": [
+        "~/.platformio",
+        "~/.platformio-core3",
+        "~/.cache"
+      ],
+      "denyRead": [
+        "~/.ssh",
+        "~/.aws"
+      ]
+    },
+    "credentials": {
+      "files": [
+        { "path": "~/.ssh", "mode": "deny" },
+        { "path": "~/.aws/credentials", "mode": "deny" }
+      ],
+      "envVars": [
+        { "name": "DEPENDABOT_PAT", "mode": "deny" },
+        { "name": "OTA_SIGNING_KEY", "mode": "deny" },
+        { "name": "GITHUB_TOKEN", "mode": "deny" },
+        { "name": "NPM_TOKEN", "mode": "deny" }
+      ]
+    }
+  }
+}

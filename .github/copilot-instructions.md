@@ -6,6 +6,7 @@ critical workflows. Read it first. Deeper context:
 
 - [docs/ai/invariants.md](../docs/ai/invariants.md) — rules that must never break
 - [docs/ai/feature-map.md](../docs/ai/feature-map.md) — feature → source → config → API → docs
+- [docs/ai/sandbox.md](../docs/ai/sandbox.md) — running agents in the Bash sandbox (egress allowlist, credential guards)
 - [docs/developer/architecture.md](../docs/developer/architecture.md) — subsystem map and patterns
 
 Essentials, duplicated here for quick reference:
