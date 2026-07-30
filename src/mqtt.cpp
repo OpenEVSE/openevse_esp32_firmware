@@ -307,21 +307,19 @@ void Mqtt::subscribeTopics() {
   _mqttclient.subscribe(mqtt_sub_topic);
   yield();
 
-  // Divert mode related
-  if (config_divert_enabled()) {
-    if (divert_type == DIVERT_TYPE_SOLAR && mqtt_solar != "") {
-      _mqttclient.subscribe(mqtt_solar); yield();
-    }
-    if (divert_type == DIVERT_TYPE_GRID && mqtt_grid_ie != "") {
-      _mqttclient.subscribe(mqtt_grid_ie); yield();
-    }
+  // Divert / shaper feeds: subscribe whenever a topic is configured, not only
+  // when the config enable flag is set — the scheduler's Divert and Shaper
+  // timer features activate these at runtime without touching the config
+  // flags, and they need the feed data to already be flowing.
+  if (divert_type == DIVERT_TYPE_SOLAR && mqtt_solar != "") {
+    _mqttclient.subscribe(mqtt_solar); yield();
+  }
+  if (divert_type == DIVERT_TYPE_GRID && mqtt_grid_ie != "") {
+    _mqttclient.subscribe(mqtt_grid_ie); yield();
   }
 
-  // Current shaper related
-  if (config_current_shaper_enabled()) {
-    if (mqtt_live_pwr != "" && mqtt_live_pwr != mqtt_grid_ie) {
-      _mqttclient.subscribe(mqtt_live_pwr); yield();
-    }
+  if (mqtt_live_pwr != "" && mqtt_live_pwr != mqtt_grid_ie) {
+    _mqttclient.subscribe(mqtt_live_pwr); yield();
   }
 
   // Vehicle data

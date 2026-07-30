@@ -13,6 +13,8 @@
 #include "temp_throttle.h"
 #include "flash_migrate.h"
 
+#include "web_auth_secret.h"
+
 #if ENABLE_CONFIG_CHANGE_NOTIFICATION
 #include <esp_ota_ops.h>
 #include "divert.h"
@@ -60,6 +62,9 @@ String www_username;
 String www_password;
 String www_certificate_id;
 
+// Session HMAC key — generated on first load, rotated on credential change.
+String server_secret;
+
 // Web server ports
 uint32_t www_http_port;
 uint32_t www_https_port;
@@ -67,6 +72,9 @@ uint32_t www_https_port;
 // Advanced settings
 String esp_hostname;
 String sntp_hostname;
+
+// Device-wide temperature display unit ("c" | "f").
+String temp_unit;
 
 // On-device LVGL TFT display theme ("dark" | "light").
 String tft_theme;
@@ -204,7 +212,8 @@ void config_changed(String name);
                               CONFIG_OCPP_AUTO_AUTH | \
                               CONFIG_OCPP_OFFLINE_AUTH | \
                               CONFIG_TEMP_THROTTLE_DEFAULT | \
-                              CONFIG_DEFAULT_STATE_DEFAULT)
+                              CONFIG_DEFAULT_STATE_DEFAULT | \
+                              CONFIG_LCD_NETWORK_INFO)
 
 ConfigOptDefinition<uint32_t> flagsOpt = ConfigOptDefinition<uint32_t>(flags, CONFIG_DEFAULT_FLAGS, "flags", "f");
 ConfigOptDefinition<uint32_t> flagsChanged = ConfigOptDefinition<uint32_t>(flags_changed, 0, "flags_changed", "c");
@@ -224,6 +233,7 @@ ConfigOpt *opts[] =
   new ConfigOptDefinition<String>(www_username, "", "www_username", "au"),
   new ConfigOptSecret(www_password, "", "www_password", "ap"),
   new ConfigOptDefinition<String>(www_certificate_id, "", "www_certificate_id", "wc"),
+  new ConfigOptSecret(server_secret, "", "server_secret", "wsk"),
 
 // Web server ports
   new ConfigOptDefinition<uint32_t>(www_http_port, HTTP_SERVER_PORT, "www_http_port", "whp"),
@@ -232,6 +242,10 @@ ConfigOpt *opts[] =
 // Advanced settings
   new ConfigOptDefinition<String>(esp_hostname, esp_hostname_default, "hostname", "hn"),
   new ConfigOptDefinition<String>(sntp_hostname, SNTP_DEFAULT_HOST, "sntp_hostname", "sh"),
+
+// Temperature display unit ("c" | "f") — device-wide, read by the display and
+// the web UI so both agree. Default Celsius (the device always reports °C).
+  new ConfigOptDefinition<String>(temp_unit, "c", "temp_unit", "tu"),
 
 #ifdef ENABLE_SCREEN_LVGL_TFT
 // On-device display theme (only present on LVGL-TFT builds; its presence in
@@ -252,21 +266,21 @@ ConfigOpt *opts[] =
   new ConfigOptDefinition<uint32_t>(limit_default_value, LIMIT_DEFAULT_VALUE_DEFAULT, "limit_default_value", "ldv"),
 
 // EMONCMS SERVER strings
-  new ConfigOptDefinition<String>(emoncms_server, "https://data.openevse.com/emoncms", "emoncms_server", "es"),
+  new ConfigOptDefinition<String>(emoncms_server, "https://emoncms.org", "emoncms_server", "es"),
   new ConfigOptDefinition<String>(emoncms_node, esp_hostname, "emoncms_node", "en"),
   new ConfigOptSecret(emoncms_apikey, "", "emoncms_apikey", "ea"),
   new ConfigOptDefinition<String>(emoncms_fingerprint, "", "emoncms_fingerprint", "ef"),
 
 // MQTT Settings
-  new ConfigOptDefinition<String>(mqtt_server, "emonpi", "mqtt_server", "ms"),
+  new ConfigOptDefinition<String>(mqtt_server, "", "mqtt_server", "ms"),
   new ConfigOptDefinition<uint32_t>(mqtt_port, 1883, "mqtt_port", "mpt"),
   new ConfigOptDefinition<String>(mqtt_topic, esp_hostname, "mqtt_topic", "mt"),
-  new ConfigOptDefinition<String>(mqtt_user, "emonpi", "mqtt_user", "mu"),
-  new ConfigOptSecret(mqtt_pass, "emonpimqtt2016", "mqtt_pass", "mp"),
+  new ConfigOptDefinition<String>(mqtt_user, "", "mqtt_user", "mu"),
+  new ConfigOptSecret(mqtt_pass, "", "mqtt_pass", "mp"),
   new ConfigOptDefinition<String>(mqtt_certificate_id, "", "mqtt_certificate_id", "mct"),
   new ConfigOptDefinition<String>(mqtt_solar, "", "mqtt_solar", "mo"),
-  new ConfigOptDefinition<String>(mqtt_grid_ie, "emon/emonpi/power1", "mqtt_grid_ie", "mg"),
-  new ConfigOptDefinition<String>(mqtt_vrms, "emon/emonpi/vrms", "mqtt_vrms", "mv"),
+  new ConfigOptDefinition<String>(mqtt_grid_ie, "", "mqtt_grid_ie", "mg"),
+  new ConfigOptDefinition<String>(mqtt_vrms, "", "mqtt_vrms", "mv"),
   new ConfigOptDefinition<String>(mqtt_live_pwr, "", "mqtt_live_pwr", "map"),
   new ConfigOptDefinition<String>(mqtt_vehicle_soc, "", "mqtt_vehicle_soc", "mc"),
   new ConfigOptDefinition<String>(mqtt_vehicle_range, "", "mqtt_vehicle_range", "mr"),
@@ -369,6 +383,7 @@ ConfigOpt *opts[] =
   new ConfigOptVirtualMaskedBool(flagsOpt, flagsChanged, CONFIG_WIZARD, CONFIG_WIZARD, "wizard_passed", "wzp"),
   new ConfigOptVirtualMaskedBool(flagsOpt, flagsChanged, CONFIG_DEFAULT_STATE, CONFIG_DEFAULT_STATE, "default_state", "dfs"),
   new ConfigOptVirtualMaskedBool(flagsOpt, flagsChanged, CONFIG_TEMP_THROTTLE, CONFIG_TEMP_THROTTLE, "temp_throttle_enabled", "tte"),
+  new ConfigOptVirtualMaskedBool(flagsOpt, flagsChanged, CONFIG_LCD_NETWORK_INFO, CONFIG_LCD_NETWORK_INFO, "lcd_network_info", "lni"),
   new ConfigOptVirtualMqttProtocol(flagsOpt, flagsChanged, "mqtt_protocol", "mprt"),
   new ConfigOptVirtualChargeMode(flagsOpt, flagsChanged, "charge_mode", "chmd")
 };
@@ -468,11 +483,21 @@ config_load_settings()
 
   // now lets apply any default flags that have not explicitly been set by the user
   flags |= CONFIG_DEFAULT_FLAGS & ~flags_changed;
+
+  // Generate server_secret on first boot (empty after load means the key was
+  // never stored). web_auth_ensure_secret() persists via user_config.commit().
+  web_auth_ensure_secret();
 }
 
 void config_changed(String name)
 {
   DBUGF("%s changed", name.c_str());
+
+  // Security: invalidate all sessions whenever credentials change.
+  // This must run regardless of ENABLE_CONFIG_CHANGE_NOTIFICATION.
+  if(name == "www_password" || name == "www_username") {
+    web_auth_rotate_secret();
+  }
 
 #if ENABLE_CONFIG_CHANGE_NOTIFICATION
   if(name == "time_zone") {
@@ -531,6 +556,14 @@ void config_commit(bool factory)
   ConfigJson &config = factory ? factory_config : user_config;
   config.set("factory_write_lock", true);
   config.commit();
+}
+
+// Persist user config without touching the factory_write_lock flag.
+// Use this from code that writes individual fields (e.g. server_secret) and
+// must not inadvertently lock the factory partition.
+void config_user_commit()
+{
+  user_config.commit();
 }
 
 bool config_https_enabled()

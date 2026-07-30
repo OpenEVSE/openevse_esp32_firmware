@@ -12,6 +12,7 @@ struct StandbyScreenData {
   uint8_t  evse_state;        // OPENEVSE_STATE_* (drives the ring word + colour)
   bool     temp_valid;
   float    temp_c;
+  bool     temp_fahrenheit;   // render temp_c in °F
   bool     wifi_client;       // true = STA, false = AP
   bool     wifi_connected;
   int      rssi;              // STA dBm

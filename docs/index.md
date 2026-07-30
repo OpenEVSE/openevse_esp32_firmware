@@ -24,6 +24,7 @@ the web UI, with screenshots.
   source: [api.yml](../api.yml))
 - [MQTT API](mqtt.md) and the [MQTT developer guide](Developers_Guide_MQTT.md)
 - [RAPI protocol](rapi.md)
+- [Character LCD display](lcd.md) — what the 2×16 LCD shows in each state
 
 ## AI / coding-agent context — [docs/ai/](ai/)
 

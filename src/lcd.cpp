@@ -10,6 +10,8 @@
 #include "openevse.h"
 #include "input.h"
 #include "app_config.h"
+#include "divert.h"
+#include "net_manager.h"
 #include <sys/time.h>
 
 static void IGNORE(int ret) {
@@ -52,6 +54,7 @@ LcdTask::LcdTask() :
   _evseState(OPENEVSE_STATE_STARTING),
   _evse(NULL),
   _scheduler(NULL),
+  _lastStateClient(EvseClient_NULL),
   _nextMessageTime(0),
   _evseStateEvent(this),
   _evseSettingsEvent(this)
@@ -158,6 +161,10 @@ unsigned long LcdTask::loop(MicroTasks::WakeReason reason)
          LcdInfoLine::TimerStart == _infoLine ? "LcdInfoLine::TimerStart" :
          LcdInfoLine::TimerStop == _infoLine ? "LcdInfoLine::TimerStop" :
          LcdInfoLine::TimerRemaining == _infoLine ? "LcdInfoLine::TimerRemaining" :
+         LcdInfoLine::SolarPower == _infoLine ? "LcdInfoLine::SolarPower" :
+         LcdInfoLine::DivertRate == _infoLine ? "LcdInfoLine::DivertRate" :
+         LcdInfoLine::Hostname == _infoLine ? "LcdInfoLine::Hostname" :
+         LcdInfoLine::IPAddress == _infoLine ? "LcdInfoLine::IPAddress" :
          LcdInfoLine::ManualOverride == _infoLine ? "LcdInfoLine::ManualOverride" :
          "UNKNOWN");
 
@@ -222,6 +229,18 @@ unsigned long LcdTask::loop(MicroTasks::WakeReason reason)
   // If the OpenEVSE has not started don't do anything
   if(OPENEVSE_STATE_STARTING == _evseState) {
     return MicroTask.Infinate;
+  }
+
+  // Repaint if the client controlling the EVSE state has changed, the cause
+  // shown while sleeping (divert/timer/manual/...) can change without a
+  // hardware state change, e.g. manual override released while a timer still
+  // holds the EVSE off
+  EvseClient newStateClient = _evse->getStateClient();
+  if(newStateClient != _lastStateClient)
+  {
+    _lastStateClient = newStateClient;
+    _updateStateDisplay = true;
+    _updateInfoLine = true;
   }
 
   if(evseStateChanged || flagsChanged)
@@ -326,6 +345,14 @@ LcdTask::LcdInfoLine LcdTask::getNextInfoLine(LcdInfoLine info)
         case LcdInfoLine::Time:
           return LcdInfoLine::Date;
         case LcdInfoLine::Date:
+          if(config_lcd_network_info_enabled()) {
+            return LcdInfoLine::Hostname;
+          }
+        case LcdInfoLine::Hostname:
+          if(config_lcd_network_info_enabled()) {
+            return LcdInfoLine::IPAddress;
+          }
+        case LcdInfoLine::IPAddress:
           if(_scheduler->getNextEvent(EvseState::Active).isValid()) {
             return LcdInfoLine::TimerStart;
           }
@@ -355,6 +382,22 @@ LcdTask::LcdInfoLine LcdTask::getNextInfoLine(LcdInfoLine info)
         case LcdInfoLine::EnergyTotal:
           return LcdInfoLine::Temperature;
         case LcdInfoLine::Temperature:
+          if(DivertMode::Eco == divert.getMode() && divert.isActive()) {
+            return LcdInfoLine::SolarPower;
+          }
+        case LcdInfoLine::SolarPower:
+          if(DivertMode::Eco == divert.getMode() && divert.isActive()) {
+            return LcdInfoLine::DivertRate;
+          }
+        case LcdInfoLine::DivertRate:
+          if(config_lcd_network_info_enabled()) {
+            return LcdInfoLine::Hostname;
+          }
+        case LcdInfoLine::Hostname:
+          if(config_lcd_network_info_enabled()) {
+            return LcdInfoLine::IPAddress;
+          }
+        case LcdInfoLine::IPAddress:
           if(_scheduler->getNextEvent(EvseState::Disabled).isValid()) {
             return LcdInfoLine::TimerStop;
           }
@@ -380,16 +423,32 @@ LcdTask::LcdInfoLine LcdTask::getNextInfoLine(LcdInfoLine info)
 
     case OPENEVSE_STATE_SLEEPING:
     case OPENEVSE_STATE_DISABLED:
-      // Line 1 "Time 03:14PM"
+      // Line 1 if divert "Solar 3.41kW"
+      //                  "Avail 4.2A"
+      //        "Time 03:14PM"
       //        "Date 08/25/2020"
       //        if timer "Start 10:00PM"
       //                 "Stop 06:00AM"
 
       switch(info)
       {
+        case LcdInfoLine::SolarPower:
+          if(EvseClient_OpenEVSE_Divert == _evse->getStateClient()) {
+            return LcdInfoLine::DivertRate;
+          }
+        case LcdInfoLine::DivertRate:
+          return LcdInfoLine::Time;
         case LcdInfoLine::Time:
           return LcdInfoLine::Date;
         case LcdInfoLine::Date:
+          if(config_lcd_network_info_enabled()) {
+            return LcdInfoLine::Hostname;
+          }
+        case LcdInfoLine::Hostname:
+          if(config_lcd_network_info_enabled()) {
+            return LcdInfoLine::IPAddress;
+          }
+        case LcdInfoLine::IPAddress:
           if(_scheduler->getNextEvent(EvseState::Active).isValid()) {
             return LcdInfoLine::TimerStart;
           }
@@ -398,7 +457,9 @@ LcdTask::LcdInfoLine LcdTask::getNextInfoLine(LcdInfoLine info)
             return LcdInfoLine::TimerStop;
           }
         default:
-          return LcdInfoLine::Time;
+          return EvseClient_OpenEVSE_Divert == _evse->getStateClient() ?
+                   LcdInfoLine::SolarPower :
+                   LcdInfoLine::Time;
       }
   }
 
@@ -422,8 +483,10 @@ void LcdTask::displayStateLine(uint8_t evseState, unsigned long &nextUpdate)
       break;
 
     case OPENEVSE_STATE_CHARGING:
-      // Line 0 "Charging 47.8A"
-      displayNumberValue(0, "Charging", _evse->getAmps(), 2, "A");
+      // Line 0 "Charging 47.8A", or "Eco 16.00A" when divert is modulating the rate
+      displayNumberValue(0,
+        (DivertMode::Eco == divert.getMode() && divert.isActive()) ? "Eco" : "Charging",
+        _evse->getAmps(), 2, "A");
       nextUpdate = 1000;
       break;
 
@@ -493,10 +556,48 @@ void LcdTask::displayStateLine(uint8_t evseState, unsigned long &nextUpdate)
 
     case OPENEVSE_STATE_SLEEPING:
     case OPENEVSE_STATE_DISABLED:
-      // Line 0 "zzZ Sleeping Zzz"
-      showText(0, 0, "zzZ Sleeping Zzz", true);
-      _updateStateDisplay = false;
-      break;
+    {
+      // Line 0 shows why the EVSE is paused and, when waiting on divert, the
+      // live incoming power (solar generation, or grid export for grid divert)
+      EvseClient stateClient = _evse->getStateClient();
+      if(EvseClient_OpenEVSE_Divert == stateClient)
+      {
+        // Line 0 "Divert 1.23kW"
+        double watts = DIVERT_TYPE_GRID == divert_type ?
+                         -divert.getGridIe() :
+                         divert.getSolar();
+        displayPowerValue(0, "Divert", watts);
+        nextUpdate = 1000;
+      }
+      else if(EvseClient_OpenEVSE_Schedule == stateClient)
+      {
+        showText(0, 0, "Paused Timer", true);
+        _updateStateDisplay = false;
+      }
+      else if(EvseClient_OpenEVSE_Manual == stateClient)
+      {
+        showText(0, 0, "Paused Manual", true);
+        _updateStateDisplay = false;
+      }
+      else if(EvseClient_OpenEVSE_Limit == stateClient)
+      {
+        showText(0, 0, "Limit Reached", true);
+        _updateStateDisplay = false;
+      }
+      else if(EvseClient_OpenEVSE_OCPP == stateClient ||
+              EvseClient_OpenEVSE_MQTT == stateClient ||
+              EvseClient_OpenEVSE_Ohm == stateClient)
+      {
+        showText(0, 0, "Paused Remote", true);
+        _updateStateDisplay = false;
+      }
+      else
+      {
+        // Line 0 "zzZ Sleeping Zzz"
+        showText(0, 0, "zzZ Sleeping Zzz", true);
+        _updateStateDisplay = false;
+      }
+    } break;
 
     default:
       break;
@@ -612,6 +713,43 @@ void LcdTask::displayInfoLine(LcdInfoLine line, unsigned long &nextUpdate)
       }
     } break;
 
+    case LcdInfoLine::SolarPower:
+      // Solar 3.41kW, or Grid IE -500W for grid divert (negative = exporting)
+      if(DIVERT_TYPE_GRID == divert_type) {
+        displayPowerValue(1, "Grid IE", divert.getGridIe());
+      } else {
+        displayPowerValue(1, "Solar", divert.getSolar());
+      }
+      nextUpdate = 1000;
+      break;
+
+    case LcdInfoLine::DivertRate:
+      if(divert.isActive()) {
+        // Divert 16A, the charge rate divert has set
+        displayNumberValue(1, "Divert", divert.getChargeRate(), 0, "A");
+      } else {
+        // Avail 4.2A, how close the excess is to the minimum needed to charge
+        displayNumberValue(1, "Avail", divert.smoothedAvailableCurrent(), 1, "A");
+      }
+      nextUpdate = 1000;
+      break;
+
+    case LcdInfoLine::Hostname:
+      // openevse-55ad
+      snprintf(temp, sizeof(temp), "%.*s", LCD_MAX_LEN, esp_hostname.c_str());
+      showText(0, 1, temp, true);
+      _updateInfoLine = false;
+      break;
+
+    case LcdInfoLine::IPAddress:
+    {
+      // 192.168.100.100 (bare, a full IPv4 is 15 chars so no room for a prefix)
+      String ip = net.getIp();
+      snprintf(temp, sizeof(temp), "%.*s", LCD_MAX_LEN, ip.length() > 0 ? ip.c_str() : "No IP address");
+      showText(0, 1, temp, true);
+      _updateInfoLine = false;
+    } break;
+
     case LcdInfoLine::ManualOverride:
       showText(0, 1, "Manual Override", true);
       break;
@@ -651,6 +789,20 @@ void LcdTask::displayNumberValue(int line, const char *name, double value, int p
   snprintf(number, sizeof(number), "%.*f%s", precision, value, unit);
 
   displayNameValue(line, name, number);
+}
+
+void LcdTask::displayPowerValue(int line, const char *name, double watts)
+{
+  char value[20];
+  if(watts >= 10000 || watts <= -10000) {
+    snprintf(value, sizeof(value), "%.1fkW", watts / 1000.0);
+  } else if(watts >= 1000 || watts <= -1000) {
+    snprintf(value, sizeof(value), "%.2fkW", watts / 1000.0);
+  } else {
+    snprintf(value, sizeof(value), "%.0fW", watts);
+  }
+
+  displayNameValue(line, name, value);
 }
 
 void LcdTask::displayInfoEventTime(const char *name, Scheduler::EventInstance &event)

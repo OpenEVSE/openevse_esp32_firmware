@@ -3,6 +3,7 @@
 
 #ifdef ENABLE_SCREEN_LVGL_TFT
 
+#include <stdio.h>        // snprintf
 #include "openevse.h"     // OPENEVSE_STATE_*
 #include "nightshift.h"   // NS_* palette macros
 
@@ -32,6 +33,12 @@ int wifi_percent(int rssi)
   if (rssi <= -100) return 0;
   if (rssi >= -50)  return 100;
   return 2 * (rssi + 100);
+}
+
+int fmt_temp(char *buf, size_t n, float temp_c, bool fahrenheit)
+{
+  float t = fahrenheit ? (temp_c * 9.0f / 5.0f + 32.0f) : temp_c;
+  return snprintf(buf, n, "%.1f%c  ", t, fahrenheit ? 'F' : 'C');
 }
 
 #endif // ENABLE_SCREEN_LVGL_TFT

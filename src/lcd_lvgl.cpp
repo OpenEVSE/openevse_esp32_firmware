@@ -342,6 +342,7 @@ unsigned long LcdTask::loop(MicroTasks::WakeReason reason)
     sd.evse_state        = state;
     sd.temp_valid        = _evse->isTemperatureValid(EVSE_MONITOR_TEMP_MONITOR);
     sd.temp_c            = sd.temp_valid ? _evse->getTemperature(EVSE_MONITOR_TEMP_MONITOR) : 0.0f;
+    sd.temp_fahrenheit   = temp_unit.equals("f");
     sd.wifi_client       = _wifi_client;
     sd.wifi_connected    = _wifi_connected;
     sd.rssi              = WiFi.RSSI();
@@ -380,6 +381,7 @@ unsigned long LcdTask::loop(MicroTasks::WakeReason reason)
   d.session_wh        = _evse->getSessionEnergy();
   d.temp_valid        = _evse->isTemperatureValid(EVSE_MONITOR_TEMP_MONITOR);
   d.temp_c            = d.temp_valid ? _evse->getTemperature(EVSE_MONITOR_TEMP_MONITOR) : 0.0f;
+  d.temp_fahrenheit   = temp_unit.equals("f");
   d.wifi_client       = _wifi_client;
   d.wifi_connected    = _wifi_connected;
   d.rssi              = WiFi.RSSI();

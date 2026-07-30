@@ -68,7 +68,7 @@ class CurrentShaperTask: public MicroTasks::Task
     bool hasLoadSharingLimit();
 
     void notifyConfigChanged(bool enabled, uint32_t max_pwr);
-    // Enable shaper from a scheduler timer window (uses Limit priority 1100 instead of Safety 5000)
+    // Enable shaper from a scheduler timer window (uses TimerFeature priority 900 instead of Safety 5000)
     void setTimerEnabled(bool active);
 };
 
