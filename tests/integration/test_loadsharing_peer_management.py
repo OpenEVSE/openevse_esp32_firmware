@@ -70,10 +70,15 @@ class TestPeerManagement:
         pairs = multi_instance_group(num_instances)
         assert len(pairs) == num_instances
 
+        REQUEST_TIMEOUT = 5.0
+
         # Trigger discovery on all instances
         for pair in pairs:
             native_url = pair["native_url"]
-            response = requests.post(f"{native_url}/loadsharing/discover")
+            response = requests.post(
+                f"{native_url}/loadsharing/discover",
+                timeout=REQUEST_TIMEOUT,
+            )
             assert response.status_code == 200
 
         # Allow some tolerance: mDNS may take time and may not always work in CI
@@ -82,30 +87,57 @@ class TestPeerManagement:
         # Poll each instance until expected_min online peers appear or timeout.
         # CI with 4 instances can be slower than the previous fixed 3-second
         # sleep, so use a longer deadline with polling.
-        DISCOVERY_TIMEOUT = 15.0
+        DISCOVERY_TIMEOUT = 30.0
         POLL_INTERVAL = 1.0
+        REDISCOVER_INTERVAL = 5.0
 
-        # Verify each instance discovered the others
-        for i, pair in enumerate(pairs):
-            native_url = pair["native_url"]
+        # Verify all instances discover peers within one shared deadline so this
+        # parametrized test stays within its timeout budget.
+        deadline = time.time() + DISCOVERY_TIMEOUT
+        remaining = set(range(len(pairs)))
+        online_counts = {i: 0 for i in remaining}
+        last_peers = {i: [] for i in remaining}
+        last_discover = 0.0
 
-            deadline = time.time() + DISCOVERY_TIMEOUT
-            online_peers = []
-            peers = []
-            while time.time() < deadline:
-                response = requests.get(f"{native_url}/loadsharing/peers")
+        while remaining and time.time() < deadline:
+            now = time.time()
+            if now - last_discover >= REDISCOVER_INTERVAL:
+                for i in list(remaining):
+                    try:
+                        discover_response = requests.post(
+                            f"{pairs[i]['native_url']}/loadsharing/discover",
+                            timeout=REQUEST_TIMEOUT,
+                        )
+                    except requests.RequestException:
+                        continue
+                    assert discover_response.status_code == 200
+                last_discover = now
+
+            for i in list(remaining):
+                try:
+                    response = requests.get(
+                        f"{pairs[i]['native_url']}/loadsharing/peers",
+                        timeout=REQUEST_TIMEOUT,
+                    )
+                except requests.RequestException:
+                    continue
                 assert response.status_code == 200
                 peers = response.json()
                 assert isinstance(peers, list), f"Expected list, got {type(peers)}"
                 online_peers = [p for p in peers if p.get("online", False)]
-                if len(online_peers) >= expected_min:
-                    break
+                online_counts[i] = len(online_peers)
+                last_peers[i] = peers
+                if online_counts[i] >= expected_min:
+                    remaining.remove(i)
+
+            if remaining:
                 time.sleep(POLL_INTERVAL)
 
-            discovered_count = len(online_peers)
+        for i in range(len(pairs)):
+            discovered_count = online_counts[i]
             assert discovered_count >= expected_min, (
                 f"Instance {i}: expected at least {expected_min} discovered peers, "
-                f"got {discovered_count}. Peers: {peers}"
+                f"got {discovered_count}. Peers: {last_peers[i]}"
             )
 
     def test_add_peer_manual(self, instance_pair_auto, peer_hostname_factory):
