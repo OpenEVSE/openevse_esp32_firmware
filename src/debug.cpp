@@ -1,5 +1,3 @@
-#ifndef UNIT_TEST
-
 #include <StreamSpy.h>
 #include <cstdlib>  // for getenv
 
@@ -49,15 +47,11 @@ extern "C" void debug_set_rapi_path(const char* path) {
 StreamSpy SerialDebug(DEBUG_PORT);
 StreamSpy SerialEvse(RAPI_PORT);
 
-#endif // UNIT_TEST
-
 void debug_setup()
 {
   DEBUG_PORT.begin(115200);
-  RAPI_PORT.begin(115200);
-
-#ifndef UNIT_TEST
   SerialDebug.begin(2048);
+
+  RAPI_PORT.begin(115200);
   SerialEvse.begin(2048);
-#endif // UNIT_TEST
 }
