@@ -1,0 +1,18 @@
+version: "2.0.3"
+license: "MIT"
+description: "Data-agnostic time-series database for ESP32. Columnar storage, sparse indexing, runtime-extensible parameters, schema migration, built-in aggregations, configurable memory allocation (internal RAM or PSRAM), ring-buffer eviction, and streaming queries with on-device benchmarking."
+url: "https://github.com/zakery292/esp_tsdb"
+repository: "https://github.com/zakery292/esp_tsdb"
+documentation: "https://github.com/zakery292/esp_tsdb/blob/main/README.md"
+issues: "https://github.com/zakery292/esp_tsdb/issues"
+targets:
+  - esp32
+  - esp32s2
+  - esp32s3
+  - esp32c3
+  - esp32c6
+  - esp32h2
+  - esp32p4
+dependencies:
+  idf:
+    version: ">=5.0.0"

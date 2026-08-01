@@ -10,11 +10,10 @@ A full list of RAPI commands can be found in the [OpenEVSE plus source code](htt
 
 ## RAPI via web interface
 
-Enter RAPI commands directly into to web interface (dev mode must be enabled), RAPI response is printed in return:
+Enter RAPI commands directly into the web interface under
+**Settings → Developer Tools**; the RAPI response is printed in return:
 
-![enable-rapi](enable-rapi.png)
-
-![rapi-web](rapi-web.png)
+![RAPI terminal](user/screenshots/settings-terminal-dark-desktop.png)
 
 ## RAPI over MQTT
 
