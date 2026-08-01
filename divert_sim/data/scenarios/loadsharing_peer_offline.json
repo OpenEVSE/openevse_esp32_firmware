@@ -6,15 +6,16 @@
     "profile": "default",
     "description": [
       "Two-EVSE scenario where one peer goes offline during the run.",
-      "The online peer should continue safely while the offline peer is accounted for according to the failsafe assumed-current reserve.",
-      "Group setup: 2 peers, 7,680 W shared supply, safety factor 1.0. Failsafe mode: safe_current.",
+      "One offline peer puts the whole group into failsafe: the offline peer is accounted for by the assumed-current reserve and the online peer derates to failsafe_safe_current rather than absorbing the remaining budget.",
+      "Group setup: 2 peers, 7,680 W shared supply, safety factor 1.0. Failsafe mode: safe_current, safe current 6 A.",
       "Duration: 40 minutes."
     ]
   },
   "group": {
     "safety_factor": 1.0,
     "failsafe_mode": "safe_current",
-    "failsafe_peer_assumed_current": 6.0
+    "failsafe_peer_assumed_current": 6.0,
+    "failsafe_safe_current": 6.0
   },
   "simulation": {
     "duration": 2400,

@@ -661,6 +661,35 @@ PeerConnectionState LoadSharingPeerPoller::getPeerConnectionState(const String& 
   return it->second.state;
 }
 
+String LoadSharingPeerPoller::getPeerConnectionError(const String& host) const {
+  auto it = _connections.find(host);
+  if (it == _connections.end()) {
+    return "unknown_peer";
+  }
+  const PeerConnection& conn = it->second;
+
+  // Never got a single status back: the host is wrong, unresolvable, or the
+  // peer is down. This is the case that otherwise fails silently.
+  if (!conn.hasInitialStatus) {
+    switch (conn.state) {
+      case PeerConnectionState::HTTP_FAILED:
+      case PeerConnectionState::WS_FAILED:
+      case PeerConnectionState::ERROR:
+        return "unreachable";
+      default:
+        return conn.retryCount > 0 ? "unreachable" : "connecting";
+    }
+  }
+
+  if (isPeerStale(conn)) {
+    return "stale";
+  }
+  if (conn.state != PeerConnectionState::WS_CONNECTED) {
+    return "connecting";
+  }
+  return "";
+}
+
 bool LoadSharingPeerPoller::isPeerConnected(const String& host) const {
   auto it = _connections.find(host);
   if (it == _connections.end()) {
@@ -1012,6 +1041,7 @@ void LoadSharingPeerPoller::recomputeAndPushAllocations() {
     loadsharing_group_max_current,
     loadsharing_safety_factor,
     loadsharing_failsafe_peer_assumed_current,
+    loadsharing_failsafe_safe_current,
     loadsharing_failsafe_mode,
     failsafe_active,
     _rotationState,

@@ -74,7 +74,10 @@ double applyLoadSharingDemandCap(LoadSharingDemandState& state,
  * @brief Compute load sharing allocations using "Equal Share with Minimums" algorithm.
  *
  * Algorithm steps:
- * 1. Reserve failsafe_peer_assumed_current for each offline member
+ * 1. If ANY member is offline the whole group enters failsafe: in "disable"
+ *    mode (or with failsafe_safe_current <= 0) every allocation is 0;
+ *    otherwise failsafe_peer_assumed_current is reserved per offline member AND
+ *    every remaining member is capped at failsafe_safe_current.
  * 2. Compute I_avail = group_max_current * safety_factor - offline reserves
  * 3. Determine demanding online members
  * 4. If no demand: all get 0
@@ -89,6 +92,8 @@ double applyLoadSharingDemandCap(LoadSharingDemandState& state,
  * @param group_max_current Total circuit limit (amps)
  * @param safety_factor Safety multiplier (0-1)
  * @param failsafe_peer_assumed_current Conservative current for offline peers (amps)
+ * @param failsafe_safe_current Per-member ceiling while the group is in
+ *        failsafe (amps); <= 0 is treated as "disable"
  * @param failsafe_mode "safe_current" or "disable"
  * @param[out] failsafe_active Set to true if failsafe mode is engaged
  * @param[in,out] rotation Rotation state persisted across calls (see below)
@@ -105,6 +110,7 @@ std::vector<LoadSharingAllocation> computeAllocations(
     double group_max_current,
     double safety_factor,
     double failsafe_peer_assumed_current,
+    double failsafe_safe_current,
     const String& failsafe_mode,
     bool& failsafe_active,
     LoadSharingRotationState& rotation,

@@ -118,6 +118,7 @@ std::vector<LoadSharingAllocation> computeAllocations(
     double group_max_current,
     double safety_factor,
     double failsafe_peer_assumed_current,
+    double failsafe_safe_current,
     const String& failsafe_mode,
     bool& failsafe_active,
     LoadSharingRotationState& rotation,
@@ -147,8 +148,13 @@ std::vector<LoadSharingAllocation> computeAllocations(
     }
   }
 
-  // If failsafe_mode is "disable" and any member is offline, set all to 0
-  if (offline_count > 0 && failsafe_mode == "disable") {
+  // A single offline member puts the WHOLE group into failsafe: the controller
+  // cannot see what an unreachable node is drawing, so no member may keep
+  // running on the assumption that the missing one is idle. In "disable" mode
+  // (or with no usable safe current) everything stops; otherwise every member
+  // derates to failsafe_safe_current below.
+  if (offline_count > 0 &&
+      (failsafe_mode == "disable" || failsafe_safe_current <= 0)) {
     failsafe_active = true;
     for (auto& alloc : result) {
       alloc.setTargetCurrent(0.0);
@@ -158,11 +164,29 @@ std::vector<LoadSharingAllocation> computeAllocations(
     return result;
   }
 
-  // Reserve current for offline members (conservative accounting)
+  // Group-wide failsafe derate. An offline member is assumed to be drawing
+  // failsafe_peer_assumed_current (it applies its own member failsafe locally,
+  // see checkMemberFailsafe) so that is reserved off the top, and every
+  // remaining member is capped at failsafe_safe_current instead of soaking up
+  // the leftover budget.
+  bool group_failsafe = false;
+  double member_ceiling = -1.0;  // < 0 means "no ceiling"
   if (offline_count > 0) {
     offline_reserve = offline_count * failsafe_peer_assumed_current;
     failsafe_active = true;
-    DBUGF("LoadSharing: Reserving %.1fA for %d offline member(s)", offline_reserve, offline_count);
+    group_failsafe = true;
+    member_ceiling = failsafe_safe_current;
+    DBUGF("LoadSharing: Group failsafe - %d offline member(s), reserving %.1fA, "
+          "capping every member at %.1fA",
+          offline_count, offline_reserve, failsafe_safe_current);
+  }
+
+  // Effective maximum per member, after any group failsafe derate.
+  std::vector<double> eff_max(members.size(), 0.0);
+  for (size_t i = 0; i < members.size(); i++) {
+    eff_max[i] = member_ceiling >= 0
+                   ? std::min(members[i].max_current, member_ceiling)
+                   : members[i].max_current;
   }
 
   // Compute available current
@@ -184,15 +208,33 @@ std::vector<LoadSharingAllocation> computeAllocations(
   // ponytail: intentional over-allocation, bounded by (connected members * min_current)
   std::vector<size_t> demanding_indices;
   for (size_t i = 0; i < members.size(); i++) {
-    if (!members[i].online || !members[i].demanding) {
+    if (!members[i].online) {
+      continue;
+    }
+    if (!members[i].demanding) {
+      // Keep-awake minimum for an idle member.
+      //
+      // Offering 0 A makes the shaper claim EvseState::Disabled, which puts the
+      // port to sleep -- and a sleeping port reports no vehicle, so the member
+      // can never become demanding again. That deadlock meant load sharing was
+      // only safe to enable *after* charging had started; it must be safe to
+      // leave on permanently, so an idle member is offered its minimum instead.
+      //
+      // Like connected_min (see below) this sits OUTSIDE the shared budget and
+      // is physically 0 A: an idle member has no vehicle drawing current. Once
+      // a vehicle is plugged in the member becomes connected, then charging,
+      // and joins the shared budget on the next cycle.
+      double idle_min = std::min(members[i].min_current, eff_max[i]);
+      result[i].setTargetCurrent(idle_min);
+      result[i].setReason(group_failsafe ? "failsafe_safe_current" : "idle");
       continue;
     }
     if (members[i].charging) {
       demanding_indices.push_back(i);
     } else {
-      double connected_min = std::min(members[i].min_current, members[i].max_current);
+      double connected_min = std::min(members[i].min_current, eff_max[i]);
       result[i].setTargetCurrent(connected_min);
-      result[i].setReason("connected_min");
+      result[i].setReason(group_failsafe ? "failsafe_safe_current" : "connected_min");
     }
   }
 
@@ -246,7 +288,7 @@ std::vector<LoadSharingAllocation> computeAllocations(
   // Compute total minimum current needed
   double total_min = 0.0;
   for (size_t idx : demanding_indices) {
-    total_min += std::min(members[idx].min_current, members[idx].max_current);
+    total_min += std::min(members[idx].min_current, eff_max[idx]);
   }
 
   DBUGF("LoadSharing: %u demanding member(s), total_min=%.1fA, I_avail=%.1fA",
@@ -262,7 +304,7 @@ std::vector<LoadSharingAllocation> computeAllocations(
 
     // First pass: assign minimums
     for (size_t idx : demanding_indices) {
-      allocations[idx] = std::min(members[idx].min_current, members[idx].max_current);
+      allocations[idx] = std::min(members[idx].min_current, eff_max[idx]);
     }
 
     // Distribute remainder iteratively (handles max capping)
@@ -276,9 +318,9 @@ std::vector<LoadSharingAllocation> computeAllocations(
 
       for (size_t idx : uncapped) {
         double proposed = allocations[idx] + share;
-        if (proposed > members[idx].max_current) {
-          leftover += proposed - members[idx].max_current;
-          allocations[idx] = members[idx].max_current;
+        if (proposed > eff_max[idx]) {
+          leftover += proposed - eff_max[idx];
+          allocations[idx] = eff_max[idx];
         } else {
           allocations[idx] = proposed;
           still_uncapped.push_back(idx);
@@ -292,7 +334,7 @@ std::vector<LoadSharingAllocation> computeAllocations(
     // Write results
     for (size_t idx : demanding_indices) {
       result[idx].setTargetCurrent(allocations[idx]);
-      result[idx].setReason("equal_share");
+      result[idx].setReason(group_failsafe ? "failsafe_safe_current" : "equal_share");
     }
 
   } else {
@@ -301,10 +343,10 @@ std::vector<LoadSharingAllocation> computeAllocations(
 
     double budget = I_avail;
     for (size_t idx : demanding_indices) {
-      double required_min = std::min(members[idx].min_current, members[idx].max_current);
+      double required_min = std::min(members[idx].min_current, eff_max[idx]);
       if (budget >= required_min) {
         result[idx].setTargetCurrent(required_min);
-        result[idx].setReason("min_subset");
+        result[idx].setReason(group_failsafe ? "failsafe_safe_current" : "min_subset");
         budget -= required_min;
       } else {
         result[idx].setTargetCurrent(0.0);

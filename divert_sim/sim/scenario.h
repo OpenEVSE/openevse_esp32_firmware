@@ -67,6 +67,7 @@ struct GroupScenario
   double safety_factor = 1.0;
   std::string failsafe_mode = "safe_current";
   double failsafe_peer_assumed_current = 6.0;
+  double failsafe_safe_current = 6.0;
   uint32_t rotation_interval = 1800;
 };
 

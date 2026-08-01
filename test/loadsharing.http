@@ -66,24 +66,33 @@ GET {{baseUrl}}/loadsharing/peers HTTP/1.1
 
 ###
 # @name addPeer1
-# Add instance 2 as a peer on instance 1
+# Add instance 2 as a peer on instance 1.
+#
+# Both instances run on localhost on non-default ports, so address instance 2 by
+# host:port. Their mDNS names (openevse-ev0/openevse-ev1, set via
+# --set-config hostname above) only resolve if an mDNS responder is publishing
+# them; "openevse-ev1.local" alone also loses the :8001 port. Adding a peer that
+# never resolves puts the whole group into failsafe -- check
+# GET /loadsharing/status, where the peer reports "error": "unreachable".
 
 POST {{host1}}/loadsharing/peers HTTP/1.1
 Content-Type: application/json
 
 {
-  "host": "openevse-09ba.local"
+  "host": "localhost:8001"
 }
 
 ###
 # @name addPeer2
-# Add instance 1 as a peer on instance 2
+# Add instance 1 as a peer on instance 2.
+# (Not normally needed: addPeer1 reciprocally registers instance 1 on
+# instance 2 and pushes it the member role.)
 
 POST {{host2}}/loadsharing/peers HTTP/1.1
 Content-Type: application/json
 
 {
-  "host": "openevse-7856.local"
+  "host": "localhost:8000"
 }
 
 ###

@@ -6,8 +6,9 @@
 > or the other must be corrected.
 >
 > Branch: `jeremypoulter/issue940`
-> Last updated: 2026-07-15
+> Last updated: 2026-08-01
 > Includes: [#1147](https://github.com/OpenEVSE/openevse_esp32_firmware/pull/1147) member failsafe, priority, rotation
+> Includes: group-wide failsafe on any offline member, idle keep-awake minimum, unreachable-peer error reporting
 
 ---
 
@@ -26,11 +27,13 @@ controller is required.
 | **Controller** | The node where the user configures load sharing. Runs the allocation algorithm, pushes current limits to members. |
 | **Member** | A node that receives its load sharing configuration and current allocation from the controller. Config is read-only. |
 | **Peer** | Any other node on the LAN, discovered or manually configured. |
-| **Idle** | No vehicle is connected (EVSE state A or equivalent). Allocation reason `idle`, target 0 A. |
+| **Idle** | No vehicle is connected (EVSE state A or equivalent). Allocation reason `idle`, target = keep-awake minimum `min(min_current, max_current)` outside the shared budget (physical draw 0 A). |
 | **Connected** | A node whose vehicle is connected but not drawing current (EVSE state B). |
 | **Charging** | A node whose vehicle is actively drawing current (EVSE state C). |
 | **Demanding** | Allocator input for an online node with a connected vehicle that is not idle, sleeping, or disabled (states B or C). Only `charging` nodes consume the shared budget. |
 | **Connected min** | `min(min_current, max_current)` offered to a state-B node outside the shared budget. Its physical draw is 0 A. |
+| **Keep-awake minimum** | The same minimum offered to an *idle* node. A 0 A offer makes the shaper claim `Disabled`; a disabled port reports no vehicle, so the node could never become demanding again. |
+| **Group failsafe** | Any offline member derates *every* member to `failsafe_safe_current` (reason `failsafe_safe_current`), or stops the group entirely in `disable` mode. |
 | **Physical draw** | Measured EV current. INV-1 applies to the sum of physical draws. |
 | **Offered allocation** | The allocator's `target_current`. It may exceed physical draw during taper or for `connected_min`. |
 | **Pilot demand** | Current available from the pilot signal. It is not the measurement used for INV-1. |
@@ -75,6 +78,12 @@ flowchart TB
    65550) is defined in `evse_man.h`, the actual enforcement goes through the
    shaper's `_loadshare_limit_active` flag on the existing shaper claim rather
    than creating a separate claim.
+5. **Safe to leave enabled permanently** — load sharing is a safety feature, so
+   enabling it MUST never be order-dependent.  In particular it must be safe to
+   enable while every port is idle: an idle member is therefore offered its
+   keep-awake minimum rather than 0 A (§5.2 step 5), because a 0 A offer makes
+   the shaper claim `Disabled`, a disabled port reports no vehicle, and the
+   member could then never become demanding again.
 
 ---
 
@@ -245,27 +254,40 @@ Group level:
 
 1. INITIALISE: Create result vector; set all allocations to 0, reason "idle".
 
-2. OFFLINE CHECK (disable mode):
-   IF any member is offline AND failsafe_mode == "disable":
+2. OFFLINE CHECK (stop-everything cases):
+   IF any member is offline AND (failsafe_mode == "disable" OR
+                                failsafe_safe_current <= 0):
      → Set ALL allocations to 0, reason "failsafe_disabled".
      → Set failsafe_active = true.
      → RETURN.
 
-3. OFFLINE RESERVE (safe_current mode):
-   offline_reserve = count(offline members) × failsafe_peer_assumed_current
-   IF offline_reserve > 0: failsafe_active = true.
+3. GROUP FAILSAFE DERATE (safe_current mode):
+   IF any member is offline:
+     offline_reserve = count(offline members) × failsafe_peer_assumed_current
+     failsafe_active = true; group_failsafe = true
+     member_ceiling = failsafe_safe_current
+   Every member's effective maximum becomes
+   eff_max_i = min(max_i, member_ceiling) when group_failsafe, else max_i.
+   All later steps use eff_max_i in place of max_i, and every allocated reason
+   becomes "failsafe_safe_current" while group_failsafe holds.
 
 4. COMPUTE AVAILABLE:
    I_avail = max(0, I_group − offline_reserve)
 
 5. CLASSIFY MEMBERS:
-   For each online, demanding member:
-     IF charging (state C): add to demanding_indices.
-     ELSE (connected, state B): allocate connected_min = min(min_i, max_i),
+   For each online member:
+     IF NOT demanding (idle): allocate idle keep-awake minimum
+       min(min_i, eff_max_i), reason "idle".  This allocation is OUTSIDE the
+       shared budget (an idle member has no vehicle drawing current).  A 0 A
+       offer would make the shaper claim `Disabled`, and a disabled port
+       reports no vehicle, so the member could never become demanding again.
+     ELSE IF charging (state C): add to demanding_indices.
+     ELSE (connected, state B): allocate connected_min = min(min_i, eff_max_i),
        reason "connected_min".  This allocation is OUTSIDE the shared budget
        (an EV in state B draws 0 A physically).
 
-6. IF demanding_indices is empty: RETURN (only connected_min allocations if any).
+6. IF demanding_indices is empty: RETURN (idle and connected_min allocations
+   only).
 
 7. SORT demanding members by priority ascending (lower value = higher priority),
    then by device ID for a deterministic order within equal priority.
@@ -281,22 +303,24 @@ Group level:
        run left by `offset % run_length`.
 
 9. SUM MINIMUMS:
-   total_min = Σ min(min_i, max_i) for i in demanding.
+   total_min = Σ min(min_i, eff_max_i) for i in demanding.
 
 10. IF I_avail ≥ total_min (sufficient capacity):
-   a. Assign each demanding member: alloc_i = min(min_i, max_i).
+   a. Assign each demanding member: alloc_i = min(min_i, eff_max_i).
    b. remainder = I_avail − total_min.
    c. Iteratively distribute remainder equally among uncapped members:
       - share = remainder / |uncapped|
       - proposed = alloc_i + share
-      - IF proposed > max_i: cap at max_i, add overshoot to leftover.
+      - IF proposed > eff_max_i: cap at eff_max_i, add overshoot to leftover.
       - ELSE: accept proposed.
       - Repeat with leftover and still-uncapped members until leftover < 0.01.
-   d. Set reason "equal_share" for all demanding members.
+   d. Set reason "equal_share" for all demanding members ("failsafe_safe_current"
+      while group_failsafe holds).
 
 11. ELSE (insufficient capacity):
     Walk demanding members in sorted (and possibly rotated) order:
-      IF budget ≥ min_i: allocate min_i, reason "min_subset", deduct from budget.
+      IF budget ≥ min_i: allocate min(min_i, eff_max_i), reason "min_subset"
+        ("failsafe_safe_current" while group_failsafe holds), deduct from budget.
       ELSE: allocate 0, reason "insufficient".
 
 12. MARK OFFLINE: For all offline members, override reason to "offline".
@@ -402,12 +426,17 @@ separate claim.  The shaper has three new fields:
 When a member goes offline (no WebSocket messages within
 `loadsharing_heartbeat_timeout`, default 30 s):
 
+A member the controller cannot see may be drawing anything, so a single
+offline member puts the **whole group** into failsafe rather than letting the
+remaining members absorb the spare budget.
+
 | Mode | Behaviour |
 |------|-----------|
-| `safe_current` | Reserve `failsafe_peer_assumed_current` (default 6 A) for each offline member. Remaining budget is shared among online demanding members. |
-| `disable` | Set ALL allocations to 0 A.  All charging stops. |
+| `safe_current` | Reserve `failsafe_peer_assumed_current` (default 6 A) for each offline member AND cap *every* member at `failsafe_safe_current` (reason `failsafe_safe_current`). |
+| `disable` (or `failsafe_safe_current` ≤ 0) | Set ALL allocations to 0 A.  All charging stops. |
 
-**Invariant**: In `safe_current` mode, `I_avail = I_group − (offline_count × failsafe_peer_assumed_current)`.
+**Invariant**: In `safe_current` mode, `I_avail = I_group − (offline_count × failsafe_peer_assumed_current)`
+and every member's effective maximum is `min(max_i, failsafe_safe_current)`.
 
 ### 6.2  Member Failsafe (Controller Offline)
 
@@ -472,6 +501,7 @@ All endpoints are on the HTTP server (port 80).
   "group_id": "garage",
   "computed_at": "2026-07-13T08:30:00Z",
   "failsafe_active": false,
+  "failsafe_reason": "peer offline: openevse-def456.local",
   "online_count": 2,
   "offline_count": 0,
   "peers": [
@@ -482,6 +512,7 @@ All endpoints are on the HTTP server (port 80).
       "ip": "192.168.1.101",
       "online": true,
       "joined": true,
+      "error": "",
       "version": "4.2.0",
       "last_seen": 12345,
       "status": {
@@ -526,6 +557,7 @@ limit and MUST NOT clear the claim:
 |------------|-------------|
 | `target_current > 0` | `setLoadSharingLimit(target_current, false)` |
 | `target_current == 0`, reason `idle`, `offline`, or `insufficient` | `setLoadSharingLimit(0, false)` |
+| `target_current > 0`, reason `failsafe_safe_current` | `setLoadSharingLimit(target_current, false)` |
 | `target_current == 0`, reason `failsafe_disabled` | `setLoadSharingLimit(0, true)` |
 | Load sharing disabled or role cleared | `clearLoadSharingLimit()` |
 
@@ -535,13 +567,14 @@ limit and MUST NOT clear the claim:
 
 | Reason | Meaning |
 |--------|---------|
-| `idle` | Member is not demanding current (no vehicle or sleeping). |
+| `idle` | Member is not demanding current (no vehicle or sleeping). Offered the keep-awake minimum outside the shared budget so its port does not sleep. |
 | `equal_share` | Normal operation; budget shared equally among demanding members. |
 | `connected_min` | Vehicle connected (state B) but not charging; minimum allocated outside budget. |
 | `min_subset` | Insufficient budget; this member was selected (by priority, then ID, with optional rotation) to receive its minimum. |
 | `insufficient` | Insufficient budget; this member was NOT selected to receive its minimum. |
 | `offline` | Member is offline; reason is overridden regardless of allocation amount. |
-| `failsafe_disabled` | Failsafe mode "disable" triggered; all members get 0 A. |
+| `failsafe_safe_current` | A member is offline; the whole group is derated to `failsafe_safe_current`. |
+| `failsafe_disabled` | Failsafe mode "disable" (or `failsafe_safe_current` ≤ 0) triggered; all members get 0 A. |
 
 ---
 
@@ -610,11 +643,20 @@ the basis for test assertions.
 
 ### 10.4  Offline Member Accounting
 
-> **INV-4** (`safe_current` mode): For each offline member, `failsafe_peer_assumed_current`
-> MUST be subtracted from the available budget before allocating to online members.
+> **INV-4** (`safe_current` mode): If ANY configured member is offline, the
+> group enters failsafe: `failsafe_peer_assumed_current` MUST be subtracted from
+> the available budget for each offline member, AND every remaining member MUST
+> be capped at `failsafe_safe_current`.  An online member MUST NOT absorb the
+> budget freed by an offline one, because the controller cannot observe what the
+> unreachable member is drawing.
 >
-> **INV-5** (`disable` mode): If ANY configured member is offline, ALL
-> allocations MUST be 0.
+> **INV-5** (`disable` mode, or `failsafe_safe_current` ≤ 0): If ANY configured
+> member is offline, ALL allocations MUST be 0.
+>
+> **INV-5a**: An offline joined member MUST be reported with a machine-readable
+> `error` on `GET /loadsharing/status` (`unreachable`, `connecting`, `stale`),
+> and an active failsafe MUST carry a `failsafe_reason`.  A group must never
+> derate silently.
 
 ### 10.5  Failsafe Liveness
 

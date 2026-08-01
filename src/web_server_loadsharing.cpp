@@ -393,6 +393,16 @@ void handleLoadSharingStatus(MongooseHttpServerRequest *request, MongooseHttpSer
         statusObj["max_current"] = evse.getMaxConfiguredCurrent();
         statusObj["priority"] = fullPeer->getPriority();
       } else {
+        // Surface why a joined member is unusable. Without this an unresolvable
+        // hostname just reads as offline, and the resulting group failsafe has
+        // no visible cause.
+        if (peerInfo.joined && !peerInfo.online) {
+          String err = loadSharingPeerPoller.getPeerConnectionError(peerInfo.hostname);
+          if (!err.isEmpty()) {
+            peerObj["error"] = err;
+          }
+        }
+
         // Query peer poller for current status. min/max/priority are
         // controller-owned (min/max learned from the peer's /config, priority
         // stored on the group peer entry), not part of the polled status.
@@ -410,6 +420,23 @@ void handleLoadSharingStatus(MongooseHttpServerRequest *request, MongooseHttpSer
           statusObj["priority"] = fullPeer->getPriority();
         }
       }
+    }
+  }
+
+  // Explain an active failsafe. Any offline member derates the whole group, so
+  // name the members responsible rather than leaving the user to infer it.
+  if (loadSharingGroupState.isFailsafeActive()) {
+    String offlineHosts;
+    for (const auto& peerInfo : peersList) {
+      if (peerInfo.joined && !peerInfo.online) {
+        if (!offlineHosts.isEmpty()) offlineHosts += ", ";
+        offlineHosts += peerInfo.hostname;
+      }
+    }
+    if (!offlineHosts.isEmpty()) {
+      doc["failsafe_reason"] = String("peer offline: ") + offlineHosts;
+    } else if (loadSharingGroupState.isMember()) {
+      doc["failsafe_reason"] = "no allocation from controller";
     }
   }
 

@@ -21,12 +21,12 @@ static AllocationInput member(const char* id, bool online = true,
 static std::vector<LoadSharingAllocation> allocate(
     const std::vector<AllocationInput>& members, double budget,
     const char* mode = "safe_current", unsigned long now = 0,
-    unsigned long rotation_interval = 0) {
+    unsigned long rotation_interval = 0, double safe_current = 6.0) {
   bool failsafe = false;
   static LoadSharingRotationState rotation;
   rotation = LoadSharingRotationState();
-  return computeAllocations(members, budget, 1.0, 6.0, mode, failsafe,
-                            rotation, now, rotation_interval);
+  return computeAllocations(members, budget, 1.0, 6.0, safe_current, mode,
+                            failsafe, rotation, now, rotation_interval);
 }
 
 TEST_CASE("empty and unconfigured groups return no allocations") {
@@ -51,11 +51,24 @@ TEST_CASE("priority selects a deterministic minimum subset") {
   CHECK(result[1].getReason() == "min_subset");
 }
 
-TEST_CASE("offline reserve reduces available current") {
+TEST_CASE("one offline member derates the whole group to safe current") {
+  // A single unreachable member must not leave the online members soaking up
+  // the remaining budget: the controller cannot see what the missing node is
+  // drawing, so everyone falls back to failsafe_safe_current.
   auto result = allocate({member("online"), member("offline", false)}, 32);
-  CHECK(result[0].getTargetCurrent() == doctest::Approx(26));
+  REQUIRE(result.size() == 2);
+  CHECK(result[0].getTargetCurrent() == doctest::Approx(6));
+  CHECK(result[0].getReason() == "failsafe_safe_current");
   CHECK(result[1].getTargetCurrent() == doctest::Approx(0));
   CHECK(result[1].getReason() == "offline");
+}
+
+TEST_CASE("group failsafe derate honours a safe current above the minimum") {
+  auto result = allocate({member("online"), member("offline", false)}, 32,
+                         "safe_current", 0, 0, 10.0);
+  REQUIRE(result.size() == 2);
+  CHECK(result[0].getTargetCurrent() == doctest::Approx(10));
+  CHECK(result[0].getReason() == "failsafe_safe_current");
 }
 
 TEST_CASE("offline reserve exhaustion never produces negative allocations") {
@@ -73,6 +86,46 @@ TEST_CASE("disable mode zeros every allocation when a peer is offline") {
     CHECK(allocation.getTargetCurrent() == doctest::Approx(0));
     CHECK(allocation.getReason() == "failsafe_disabled");
   }
+}
+
+TEST_CASE("a non-positive safe current is treated as disable") {
+  auto result = allocate({member("online"), member("offline", false)}, 32,
+                         "safe_current", 0, 0, 0.0);
+  REQUIRE(result.size() == 2);
+  for (const auto& allocation : result) {
+    CHECK(allocation.getTargetCurrent() == doctest::Approx(0));
+    CHECK(allocation.getReason() == "failsafe_disabled");
+  }
+}
+
+TEST_CASE("an idle member is offered its minimum so its port stays awake") {
+  // Offering 0A makes the shaper disable the port; a sleeping port reports no
+  // vehicle, so the member could never become demanding again. Load sharing
+  // must be safe to leave enabled while every port is idle.
+  AllocationInput idle = member("idle");
+  idle.demanding = false;
+  idle.charging = false;
+  auto result = allocate({idle}, 32);
+  REQUIRE(result.size() == 1);
+  CHECK(result[0].getTargetCurrent() == doctest::Approx(6));
+  CHECK(result[0].getReason() == "idle");
+}
+
+TEST_CASE("idle keep-awake minimums stay outside the shared budget") {
+  // Two idle members plus one charging: the charging member keeps the whole
+  // budget because idle members physically draw 0A.
+  AllocationInput idle_a = member("idle_a");
+  idle_a.demanding = false;
+  idle_a.charging = false;
+  AllocationInput idle_b = member("idle_b");
+  idle_b.demanding = false;
+  idle_b.charging = false;
+  auto result = allocate({idle_a, idle_b, member("charging")}, 32);
+  REQUIRE(result.size() == 3);
+  CHECK(result[0].getTargetCurrent() == doctest::Approx(6));
+  CHECK(result[1].getTargetCurrent() == doctest::Approx(6));
+  CHECK(result[2].getTargetCurrent() == doctest::Approx(32));
+  CHECK(result[2].getReason() == "equal_share");
 }
 
 TEST_CASE("max below minimum is capped without negative output") {
@@ -93,13 +146,13 @@ TEST_CASE("scarcity rotation boundary survives millis rollover") {
   bool failsafe = false;
   LoadSharingRotationState rotation;
   auto first = computeAllocations(
-      members, 6, 1, 0, "safe_current", failsafe, rotation,
+      members, 6, 1, 0, 6, "safe_current", failsafe, rotation,
       0xFFFFFF00UL, 1000);
   auto before = computeAllocations(
-      members, 6, 1, 0, "safe_current", failsafe, rotation,
+      members, 6, 1, 0, 6, "safe_current", failsafe, rotation,
       0x00000200UL, 1000);
   auto after = computeAllocations(
-      members, 6, 1, 0, "safe_current", failsafe, rotation,
+      members, 6, 1, 0, 6, "safe_current", failsafe, rotation,
       0x00000300UL, 1000);
 
   CHECK(first[0].getTargetCurrent() == doctest::Approx(6));

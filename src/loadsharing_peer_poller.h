@@ -373,6 +373,20 @@ public:
   PeerConnectionState getPeerConnectionState(const String& host) const;
 
   /**
+   * @brief Describe why a joined peer is not currently usable.
+   *
+   * A member that never completes its HTTP bootstrap (e.g. added by a hostname
+   * that does not resolve) is silently treated as offline, which drags the
+   * whole group into failsafe with no indication of the cause. This returns a
+   * short machine-readable code for the status API so the failure is visible.
+   *
+   * @param host Peer hostname/IP
+   * @return "" when the peer is connected and fresh, otherwise one of
+   *         "unreachable", "connecting", "stale", or "unknown_peer".
+   */
+  String getPeerConnectionError(const String& host) const;
+
+  /**
    * @brief Check if peer has active WebSocket connection
    *
    * @param host Peer hostname/IP

@@ -18,6 +18,7 @@ def assert_valid_allocations(result):
     valid_reasons = {
         "idle", "equal_share", "connected_min", "min_subset",
         "insufficient", "offline", "failsafe_disabled",
+        "failsafe_safe_current",
     }
     for row in result["_rows"]:
         for peer_id in result["_peer_ids"]:
@@ -112,7 +113,11 @@ def test_loadsharing_peer_offline_failsafe_safe_current():
     offline = rows_by_time[1800]
     assert offline["evse-002_allocated"] == approx(0.0)
     assert offline["evse-002_reason"] == "offline"
-    assert offline["evse-001_allocated"] > 20.0
+    # One offline peer trips a group-wide failsafe: the still-online peer
+    # derates to failsafe_safe_current instead of absorbing the spare budget,
+    # because the controller cannot see what the missing node is drawing.
+    assert offline["evse-001_allocated"] == approx(6.0)
+    assert offline["evse-001_reason"] == "failsafe_safe_current"
     assert_physical_budget(result)
     assert_valid_allocations(result)
     assert all(
@@ -132,6 +137,40 @@ def test_loadsharing_failsafe_disable():
     offline = rows_by_time[1800]
     assert offline["evse-001_allocated"] == approx(0.0)
     assert offline["evse-002_allocated"] == approx(0.0)
+
+
+def test_loadsharing_enabled_while_idle_can_still_start_charging():
+    """Load sharing must be safe to leave enabled permanently.
+
+    Enabling it while every port is idle used to deadlock: a 0 A allocation made
+    the shaper claim EvseState::Disabled, a disabled port reports no vehicle, so
+    the member never became demanding and charging could never start. An idle
+    member is now offered its minimum to keep the port awake.
+    """
+    result = run_loadsharing_simulation(
+        "data/scenarios/loadsharing_enabled_while_idle.json",
+        "loadsharing_enabled_while_idle",
+    )
+    rows_by_time = {r["time"]: r for r in result["_rows"]}
+    peer_ids = result["_peer_ids"]
+
+    # While idle: keep-awake minimum offered, nothing physically drawn.
+    idle = rows_by_time[300]
+    for peer_id in peer_ids:
+        assert idle[f"{peer_id}_reason"] == "idle"
+        assert idle[f"{peer_id}_allocated"] == approx(6.0)
+        assert idle[f"{peer_id}_actual"] == approx(0.0)
+
+    # After both vehicles arrive the group settles on an equal share.
+    settled = rows_by_time[1200]
+    for peer_id in peer_ids:
+        assert settled[f"{peer_id}_reason"] == "equal_share"
+        assert settled[f"{peer_id}_allocated"] == approx(16.0)
+        assert settled[f"{peer_id}_state"] == "charging"
+        assert settled[f"{peer_id}_actual"] > 0
+
+    assert_physical_budget(result)
+    assert_valid_allocations(result)
 
 
 def test_loadsharing_ev_taper_reaches_high_soc():
