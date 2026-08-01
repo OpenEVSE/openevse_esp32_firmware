@@ -76,25 +76,33 @@ class TestPeerManagement:
             response = requests.post(f"{native_url}/loadsharing/discover")
             assert response.status_code == 200
 
-        # Give mDNS time to resolve
-        time.sleep(3)
+        # Allow some tolerance: mDNS may take time and may not always work in CI
+        expected_min = max(0, num_instances - 2)
+
+        # Poll each instance until expected_min online peers appear or timeout.
+        # CI with 4 instances can be slower than the previous fixed 3-second
+        # sleep, so use a longer deadline with polling.
+        DISCOVERY_TIMEOUT = 15.0
+        POLL_INTERVAL = 1.0
 
         # Verify each instance discovered the others
         for i, pair in enumerate(pairs):
             native_url = pair["native_url"]
-            response = requests.get(f"{native_url}/loadsharing/peers")
-            assert response.status_code == 200
 
-            # Response is a JSON array directly
-            peers = response.json()
-            assert isinstance(peers, list), f"Expected list, got {type(peers)}"
+            deadline = time.time() + DISCOVERY_TIMEOUT
+            online_peers = []
+            peers = []
+            while time.time() < deadline:
+                response = requests.get(f"{native_url}/loadsharing/peers")
+                assert response.status_code == 200
+                peers = response.json()
+                assert isinstance(peers, list), f"Expected list, got {type(peers)}"
+                online_peers = [p for p in peers if p.get("online", False)]
+                if len(online_peers) >= expected_min:
+                    break
+                time.sleep(POLL_INTERVAL)
 
-            # Should discover num_instances-1 other peers (all except self)
-            online_peers = [p for p in peers if p.get("online", False)]
             discovered_count = len(online_peers)
-
-            # Allow some tolerance: mDNS may take time and may not always work in CI
-            expected_min = max(0, num_instances - 2)
             assert discovered_count >= expected_min, (
                 f"Instance {i}: expected at least {expected_min} discovered peers, "
                 f"got {discovered_count}. Peers: {peers}"
