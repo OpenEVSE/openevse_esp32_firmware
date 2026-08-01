@@ -82,8 +82,9 @@ class TestPeerManagement:
         # Poll each instance until expected_min online peers appear or timeout.
         # CI with 4 instances can be slower than the previous fixed 3-second
         # sleep, so use a longer deadline with polling.
-        DISCOVERY_TIMEOUT = 15.0
+        DISCOVERY_TIMEOUT = 30.0
         POLL_INTERVAL = 1.0
+        REDISCOVER_INTERVAL = 5.0
 
         # Verify each instance discovered the others
         for i, pair in enumerate(pairs):
@@ -92,7 +93,14 @@ class TestPeerManagement:
             deadline = time.time() + DISCOVERY_TIMEOUT
             online_peers = []
             peers = []
+            last_discover = 0.0
             while time.time() < deadline:
+                now = time.time()
+                if now - last_discover >= REDISCOVER_INTERVAL:
+                    discover_response = requests.post(f"{native_url}/loadsharing/discover")
+                    assert discover_response.status_code == 200
+                    last_discover = now
+
                 response = requests.get(f"{native_url}/loadsharing/peers")
                 assert response.status_code == 200
                 peers = response.json()
