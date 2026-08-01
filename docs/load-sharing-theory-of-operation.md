@@ -216,7 +216,7 @@ remote's group list.  The same pattern applies to `DELETE`.
 
 ## 5  Allocation Algorithm
 
-File: [loadsharing_algorithm.cpp](src/loadsharing_algorithm.cpp)
+File: [loadsharing_algorithm.cpp](../src/loadsharing_algorithm.cpp)
 
 The algorithm is **"Equal Share with Minimums"**, executed on the controller
 every 5 seconds (or when triggered by status changes).
@@ -664,7 +664,7 @@ the basis for test assertions.
 
 ## 11  Simulation Framework
 
-Simulation tests live in [divert_sim/test_loadsharing.py](divert_sim/test_loadsharing.py).
+Simulation tests live in [divert_sim/test_loadsharing.py](../divert_sim/test_loadsharing.py).
 They call `run_loadsharing_simulation()` which exercises the allocation
 algorithm using scenario JSON files from `divert_sim/data/scenarios/`.
 
@@ -699,7 +699,7 @@ algorithm using scenario JSON files from `divert_sim/data/scenarios/`.
 
 Tests should verify the invariants listed in §10 against the scenarios in §11
 and the known gaps documented in
-[load-sharing-project-status.md](docs/load-sharing-project-status.md) (Current
+[load-sharing-project-status.md](load-sharing-project-status.md) (Current
 Blockers).
 
 ### 12.1  Unit / Simulation Tests (divert_sim)
@@ -739,7 +739,7 @@ Blockers).
 3. **Reciprocal sync** — Add peer on A, verify B's peer list includes A (INV-8).
 4. **Rollover-safe timers** — Inject `millis()` near rollover and verify
    timeouts still work (see poller rollover blocker in
-   [load-sharing-project-status.md](docs/load-sharing-project-status.md)).
+   [load-sharing-project-status.md](load-sharing-project-status.md)).
 5. **Undrawn pilot with >2 peers** — 3-peer group where one EV draws below
    pilot; verify remaining two share freed budget (INV-10).
 6. **All-idle group** — All members connected, none charging; verify budget
@@ -753,18 +753,18 @@ Blockers).
 
 | File | Role |
 |------|------|
-| [loadsharing_types.h](src/loadsharing_types.h) | Data structures: `LoadSharingPeerStatus`, `LoadSharingPeer`, `LoadSharingAllocation`, `LoadSharingGroupState`. |
-| [loadsharing_types.cpp](src/loadsharing_types.cpp) | Group state management, peer persistence, member failsafe check. |
-| [loadsharing_algorithm.h](src/loadsharing_algorithm.h) | `AllocationInput` struct, `computeAllocations()` declaration. |
-| [loadsharing_algorithm.cpp](src/loadsharing_algorithm.cpp) | Allocation algorithm implementation. |
-| [loadsharing_peer_poller.h](src/loadsharing_peer_poller.h) | `PeerConnectionState`, `PeerConnection`, `LoadSharingPeerPoller` class. |
-| [loadsharing_peer_poller.cpp](src/loadsharing_peer_poller.cpp) | State machine, HTTP bootstrap, WebSocket ingestion, config push, allocation computation and delivery. |
-| [loadsharing_discovery_task.h/cpp](src/loadsharing_discovery_task.h) | Background mDNS discovery task. |
-| [web_server_loadsharing.cpp](src/web_server_loadsharing.cpp) | REST API endpoints for load sharing. |
-| [web_server.cpp (L1225-1244)](src/web_server.cpp#L1225-L1244) | WebSocket allocation receive handler (member side). |
-| [current_shaper.cpp](src/current_shaper.cpp) | Shaper claim integration for load sharing limits. |
-| [evse_man.h (L40)](src/evse_man.h#L40) | `EvseClient_OpenEVSE_LoadSharing` claim ID definition. |
-| [test_loadsharing.py](divert_sim/test_loadsharing.py) | Simulation-driven pytest suite. |
+| [loadsharing_types.h](../src/loadsharing_types.h) | Data structures: `LoadSharingPeerStatus`, `LoadSharingPeer`, `LoadSharingAllocation`, `LoadSharingGroupState`. |
+| [loadsharing_types.cpp](../src/loadsharing_types.cpp) | Group state management, peer persistence, member failsafe check. |
+| [loadsharing_algorithm.h](../src/loadsharing_algorithm.h) | `AllocationInput` struct, `computeAllocations()` declaration. |
+| [loadsharing_algorithm.cpp](../src/loadsharing_algorithm.cpp) | Allocation algorithm implementation. |
+| [loadsharing_peer_poller.h](../src/loadsharing_peer_poller.h) | `PeerConnectionState`, `PeerConnection`, `LoadSharingPeerPoller` class. |
+| [loadsharing_peer_poller.cpp](../src/loadsharing_peer_poller.cpp) | State machine, HTTP bootstrap, WebSocket ingestion, config push, allocation computation and delivery. |
+| [loadsharing_discovery_task.h/cpp](../src/loadsharing_discovery_task.h) | Background mDNS discovery task. |
+| [web_server_loadsharing.cpp](../src/web_server_loadsharing.cpp) | REST API endpoints for load sharing. |
+| [web_server.cpp (L1225-1244)](../src/web_server.cpp#L1225-L1244) | WebSocket allocation receive handler (member side). |
+| [current_shaper.cpp](../src/current_shaper.cpp) | Shaper claim integration for load sharing limits. |
+| [evse_man.h (L40)](../src/evse_man.h#L40) | `EvseClient_OpenEVSE_LoadSharing` claim ID definition. |
+| [test_loadsharing.py](../divert_sim/test_loadsharing.py) | Simulation-driven pytest suite. |
 
 ---
 
