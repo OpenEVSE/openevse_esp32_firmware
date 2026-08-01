@@ -70,10 +70,15 @@ class TestPeerManagement:
         pairs = multi_instance_group(num_instances)
         assert len(pairs) == num_instances
 
+        REQUEST_TIMEOUT = 5.0
+
         # Trigger discovery on all instances
         for pair in pairs:
             native_url = pair["native_url"]
-            response = requests.post(f"{native_url}/loadsharing/discover")
+            response = requests.post(
+                f"{native_url}/loadsharing/discover",
+                timeout=REQUEST_TIMEOUT,
+            )
             assert response.status_code == 200
 
         # Allow some tolerance: mDNS may take time and may not always work in CI
@@ -98,12 +103,24 @@ class TestPeerManagement:
             now = time.time()
             if now - last_discover >= REDISCOVER_INTERVAL:
                 for i in list(remaining):
-                    discover_response = requests.post(f"{pairs[i]['native_url']}/loadsharing/discover")
+                    try:
+                        discover_response = requests.post(
+                            f"{pairs[i]['native_url']}/loadsharing/discover",
+                            timeout=REQUEST_TIMEOUT,
+                        )
+                    except requests.RequestException:
+                        continue
                     assert discover_response.status_code == 200
                 last_discover = now
 
             for i in list(remaining):
-                response = requests.get(f"{pairs[i]['native_url']}/loadsharing/peers")
+                try:
+                    response = requests.get(
+                        f"{pairs[i]['native_url']}/loadsharing/peers",
+                        timeout=REQUEST_TIMEOUT,
+                    )
+                except requests.RequestException:
+                    continue
                 assert response.status_code == 200
                 peers = response.json()
                 assert isinstance(peers, list), f"Expected list, got {type(peers)}"
