@@ -23,7 +23,13 @@ const char *state_word(uint8_t s, lv_color_t *colour)
     case OPENEVSE_STATE_STUCK_RELAY:
     case OPENEVSE_STATE_GFI_SELF_TEST_FAILED:
     case OPENEVSE_STATE_OVER_TEMPERATURE:
-    case OPENEVSE_STATE_OVER_CURRENT:  *colour = NS_ERROR;   return "FAULT";
+    case OPENEVSE_STATE_OVER_CURRENT:
+    case OPENEVSE_STATE_RELAY_CLOSURE_FAULT:
+    case OPENEVSE_STATE_EEPROM_FAILURE: *colour = NS_ERROR;  return "FAULT";
+    // Split out from the generic FAULT group so the display names the actual
+    // wiring condition instead of a bare "FAULT".
+    case OPENEVSE_STATE_PP_MISSING:    *colour = NS_ERROR;   return "PP MISSING";
+    case OPENEVSE_STATE_PP_SHORTED:    *colour = NS_ERROR;   return "PP SHORTED";
     default:                           *colour = NS_TEXTDIM; return "--";
   }
 }
