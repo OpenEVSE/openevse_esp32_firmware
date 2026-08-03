@@ -34,6 +34,9 @@ extern String www_username;
 extern String www_password;
 extern String www_certificate_id;
 
+// Session HMAC key — generated on first load, rotated on credential change.
+extern String server_secret;
+
 // Web server ports
 extern uint32_t www_http_port;
 extern uint32_t www_https_port;
@@ -162,9 +165,13 @@ extern uint32_t flags;
 #define CONFIG_THREEPHASE           (1 << 24)
 #define CONFIG_WIZARD               (1 << 25)
 #define CONFIG_DEFAULT_STATE        (1 << 26)
-#define CONFIG_TEMP_THROTTLE        (1 << 27) // next free bit after CONFIG_DEFAULT_STATE
-#define CONFIG_HTTP_ENABLED         (1 << 28)
-#define CONFIG_HTTPS_ENABLED        (1 << 29)
+#define CONFIG_TEMP_THROTTLE        (1 << 27)
+#define CONFIG_LCD_NETWORK_INFO     (1 << 28)
+// Bits 29/30: the Mongoose 7 HTTPS work. Bit 28 belongs to master's
+// CONFIG_LCD_NETWORK_INFO, which shipped first and is already persisted in
+// users' saved config, so these move up rather than collide with it.
+#define CONFIG_HTTP_ENABLED         (1 << 29)
+#define CONFIG_HTTPS_ENABLED        (1 << 30) // next free bit after CONFIG_HTTPS_ENABLED
 
 #define INITIAL_CONFIG_VERSION  1
 
@@ -271,6 +278,11 @@ inline bool config_temp_throttle_enabled()
   return CONFIG_TEMP_THROTTLE == (flags & CONFIG_TEMP_THROTTLE);
 }
 
+inline bool config_lcd_network_info_enabled()
+{
+  return CONFIG_LCD_NETWORK_INFO == (flags & CONFIG_LCD_NETWORK_INFO);
+}
+
 // Ohm Connect Settings
 extern String ohm;
 
@@ -304,6 +316,7 @@ bool config_deserialize(String& json);
 bool config_deserialize(const char *json);
 bool config_deserialize(DynamicJsonDocument &doc);
 void config_commit(bool factory = false);
+void config_user_commit();  // persist user config without touching factory_write_lock
 
 // Write config settings to JSON object
 bool config_serialize(String& json, bool longNames = true, bool compactOutput = false, bool hideSecrets = false);

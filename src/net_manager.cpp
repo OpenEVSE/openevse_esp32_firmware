@@ -239,6 +239,11 @@ void NetManagerTask::haveNetworkConnection(IPAddress myAddress)
   _led.setWifiMode(true, true);
   _lcd.setWifiMode(true, true);
   _time.setHost(sntp_hostname.c_str());
+  // Apply the persisted SNTP-enable to the running TimeManager. Its _sntpEnabled
+  // starts false and is otherwise only updated by a runtime config change, so
+  // without this a cold boot leaves NTP disabled even when the config has it on
+  // (masked on real hardware by the controller's RTC, exposed on a bare ESP32).
+  _time.setSntpEnabled(config_sntp_enabled());
 
   _apAutoApStopTime = millis() + ACCESS_POINT_AUTO_STOP_TIMEOUT;
 
