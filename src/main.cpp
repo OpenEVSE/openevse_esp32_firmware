@@ -54,6 +54,7 @@
 #include "current_shaper.h"
 #include "temp_throttle.h"
 #include "limit.h"
+#include "diagnostics.h"
 
 #if defined(ENABLE_PN532)
 #include "pn532.h"
@@ -133,6 +134,8 @@ void setup()
 #if defined(EPOXY_DUINO)
   process_early_command_line();
 #endif
+
+  diagnostics_begin();
 
   hardware_setup();
   ESPAL.begin();
@@ -263,6 +266,7 @@ void loop()
   Profile_End(Mongoose, 10);
 
   web_server_loop();
+  diagnostics_loop();
   flash_migrate_loop();
   ota_loop();
   rapiSender.loop();

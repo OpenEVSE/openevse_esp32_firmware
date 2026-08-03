@@ -27,6 +27,7 @@ typedef const __FlashStringHelper *fstr_t;
 
 #include "emonesp.h"
 #include "web_server.h"
+#include "diagnostics.h"
 #ifdef ENABLE_TSDB
 #include "tsdb_energy_logger.h"
 #endif
@@ -591,6 +592,7 @@ void buildStatus(DynamicJsonDocument &doc) {
   doc["ohm_hour"] = ohm_hour;
 
   doc["free_heap"] = ESPAL.getFreeHeap();
+  diagnostics_status(doc);
   doc["littlefs_free"] = (uint32_t)(LittleFS.totalBytes() - LittleFS.usedBytes());
   doc["littlefs_used"] = (uint32_t)LittleFS.usedBytes();
 
@@ -1826,6 +1828,14 @@ web_server_loop() {
 void web_server_event(JsonDocument &event)
 {
   String json;
+  // Reserve up front: the default String growth pattern reallocates on almost
+  // every append, and exact-fit reallocs at this frequency are what shreds the
+  // heap into unusable fragments.
+  json.reserve(measureJson(event) + 1);
   serializeJson(event, json);
+
+  // Drop any client that has stopped draining before adding to its backlog.
+  diagnostics_ws_reap();
+
   server.sendAll("/ws", json);
 }
