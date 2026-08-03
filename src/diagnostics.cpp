@@ -4,7 +4,17 @@
 #include <MongooseCore.h>
 #include <MongooseHttpServer.h>
 
-#ifdef ESP32
+// native_openevse defines -D ESP32 for the host build (platformio.ini), so a
+// bare "#ifdef ESP32" is true there too and pulls in IDF headers that do not
+// exist on the host. Gate on the real condition: an ESP32 target that is not
+// the EpoxyDuino host.
+#if defined(ESP32) && !defined(EPOXY_DUINO)
+#define DIAG_HAVE_IDF 1
+#else
+#define DIAG_HAVE_IDF 0
+#endif
+
+#if DIAG_HAVE_IDF
 #include <esp_heap_caps.h>
 #include <esp_system.h>
 #include <freertos/FreeRTOS.h>
@@ -50,7 +60,7 @@ static uint32_t diag_lv_used_max = 0;
 static uint32_t diag_lv_frag_max = 0;
 #endif
 
-#ifdef ESP32
+#if DIAG_HAVE_IDF
 static const char *diagnostics_reset_reason_name(uint32_t reason)
 {
   switch(reason)
@@ -72,7 +82,7 @@ static const char *diagnostics_reset_reason_name(uint32_t reason)
 
 void diagnostics_begin()
 {
-#ifdef ESP32
+#if DIAG_HAVE_IDF
   diag_reset_reason = (uint32_t)esp_reset_reason();
 #endif
 }
@@ -85,7 +95,7 @@ void diagnostics_loop()
   }
   diag_last_sample = now;
 
-#ifdef ESP32
+#if DIAG_HAVE_IDF
   uint32_t largest = (uint32_t)heap_caps_get_largest_free_block(MALLOC_CAP_8BIT);
   if(largest < diag_largest_block_min) {
     diag_largest_block_min = largest;
@@ -168,7 +178,7 @@ int diagnostics_ws_reap()
 
 void diagnostics_status(JsonDocument &doc)
 {
-#ifdef ESP32
+#if DIAG_HAVE_IDF
   // Fold this reading into the minimum as well. /status is itself one of the
   // heavier allocations, so a sample taken here is a sample taken under load —
   // exactly the moment the periodic sampler is least likely to have caught.
