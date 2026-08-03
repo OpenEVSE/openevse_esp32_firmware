@@ -103,6 +103,7 @@ jobs:
           - adafruit_huzzah32
           - adafruit_featheresp32
           - openevse_wifi_v1
+          - openevse_wifi_v1_rc522
           - olimex_esp32-gateway-old
           - olimex_esp32-gateway-e
           - olimex_esp32-gateway-f

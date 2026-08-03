@@ -24,8 +24,9 @@
 
 class RC522Reader : public RfidReader, public MicroTasks::Task {
 private:
-    // MFRC522 talks over the platform default SPI peripheral; bus pin remapping
-    // is done via SPI.begin(...) before PCD_Init(), not via the library constructor.
+    // MFRC522 talks over the platform default SPI peripheral. The optional
+    // SPIClass* constructor argument only selects which bus gets SPI.begin()
+    // pin remapping; MFRC522 library transfers always use the global SPI object.
     MFRC522 _mfrc522;
     SPIClass *_spi;
     uint8_t _ss_pin;
@@ -59,7 +60,12 @@ public:
     bool readerFailure() override;
     bool readerPresent() override;
     bool probeReader() override;
-    void setTimerScanning(bool active) override { _timer_scanning = active; }
+    void setTimerScanning(bool active) override {
+        _timer_scanning = active;
+        if (active) {
+            MicroTask.wakeTask(this);
+        }
+    }
 };
 
 extern RC522Reader rc522;

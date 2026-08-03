@@ -63,6 +63,10 @@
 #include "rc522.h"
 #endif
 
+#if defined(ENABLE_PN532) && defined(ENABLE_RC522)
+#error "ENABLE_PN532 and ENABLE_RC522 are mutually exclusive — use separate PlatformIO envs"
+#endif
+
 #include "LedManagerTask.h"
 #include "event_log.h"
 #include "evse_man.h"
@@ -200,8 +204,8 @@ void setup()
   pn532.begin();
   rfid.begin(evse, pn532);
 #elif defined(ENABLE_RC522)
-  rc522.begin();
   rfid.begin(evse, rc522);
+  rc522.begin();
 #else
   rfid.begin(evse, rfidNullDevice);
 #endif
