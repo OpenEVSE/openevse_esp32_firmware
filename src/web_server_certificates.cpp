@@ -28,13 +28,39 @@ void handleCertificatesGetRootCa(MongooseHttpServerRequest *request, MongooseHtt
 // -------------------------------------------------------------------
 void handleCertificatesGet(MongooseHttpServerRequest *request, MongooseHttpServerResponseStream *response, uint64_t certificate)
 {
-  DynamicJsonDocument doc(4 * CERTIFICATE_JSON_BUFFER_SIZE);
+  if(UINT64_MAX == certificate)
+  {
+    // Emit the array one certificate at a time. Building it in a single
+    // document required a buffer sized for every PEM body at once — 32KB here
+    // — which is larger than the biggest contiguous block this board can
+    // reliably allocate, so the request would fail rather than merely cost a
+    // lot. Peak allocation is now one certificate.
+    response->setCode(200);
+    response->print("[");
 
-  bool success = (UINT64_MAX == certificate) ?
-    certs.serializeCertificates(doc) :
-    certs.serializeCertificate(doc, certificate);
+    size_t count = certs.certificateCount();
+    size_t emitted = 0;
+    for(size_t i = 0; i < count; i++)
+    {
+      DynamicJsonDocument doc(CERTIFICATE_JSON_BUFFER_SIZE);
+      if(!certs.serializeCertificateAt(doc, i)) {
+        continue;
+      }
+      // Count what was actually written, not the loop index: a skipped entry
+      // would otherwise put a leading comma in front of the first element.
+      if(emitted > 0) {
+        response->print(",");
+      }
+      serializeJson(doc, *response);
+      emitted++;
+    }
 
-  if(success) {
+    response->print("]");
+    return;
+  }
+
+  DynamicJsonDocument doc(CERTIFICATE_JSON_BUFFER_SIZE);
+  if(certs.serializeCertificate(doc, certificate)) {
     response->setCode(200);
     serializeJson(doc, *response);
   } else {

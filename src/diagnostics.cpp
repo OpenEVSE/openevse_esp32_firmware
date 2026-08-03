@@ -11,6 +11,10 @@
 #include <freertos/task.h>
 #endif
 
+#ifdef ENABLE_SCREEN_LVGL_TFT
+#include <lvgl.h>
+#endif
+
 // Outbound websocket buffer above which a client is considered stalled and
 // dropped. Sized well under the free heap this board runs with (~60KB) so that
 // even several stalled clients cannot exhaust it between reaps.
@@ -38,6 +42,13 @@ static uint32_t diag_stack_events_min = UINT32_MAX;
 static uint32_t diag_ws_send_max = 0;
 static uint32_t diag_ws_reaped = 0;
 static uint32_t diag_ws_conns = 0;
+
+#if defined(ENABLE_SCREEN_LVGL_TFT) && (0 == LV_MEM_CUSTOM)
+// Peak (not current) LVGL pool usage: the pool has to be sized for the worst
+// screen transition, which a spot reading almost never catches.
+static uint32_t diag_lv_used_max = 0;
+static uint32_t diag_lv_frag_max = 0;
+#endif
 
 #ifdef ESP32
 static const char *diagnostics_reset_reason_name(uint32_t reason)
@@ -87,6 +98,17 @@ void diagnostics_loop()
   if(loop_free < diag_stack_loop_min) {
     diag_stack_loop_min = loop_free;
   }
+
+#if defined(ENABLE_SCREEN_LVGL_TFT) && (0 == LV_MEM_CUSTOM)
+  lv_mem_monitor_t lv_mon;
+  lv_mem_monitor(&lv_mon);
+  if(lv_mon.used_pct > diag_lv_used_max) {
+    diag_lv_used_max = lv_mon.used_pct;
+  }
+  if(lv_mon.frag_pct > diag_lv_frag_max) {
+    diag_lv_frag_max = lv_mon.frag_pct;
+  }
+#endif
 
   TaskHandle_t events = xTaskGetHandle("arduino_events");
   if(nullptr != events) {
@@ -158,4 +180,13 @@ void diagnostics_status(JsonDocument &doc)
   doc["ws_conns"] = diag_ws_conns;
   doc["ws_send_max"] = diag_ws_send_max;
   doc["ws_reaped"] = diag_ws_reaped;
+
+#if defined(ENABLE_SCREEN_LVGL_TFT) && (0 == LV_MEM_CUSTOM)
+  // LV_MEM_SIZE is a fixed .bss pool. Trimming it blind is dangerous — LVGL
+  // responds to pool exhaustion with an assert loop, which the task watchdog
+  // turns into a reboot, so a wrong guess adds a reboot source rather than
+  // removing one. Report peak usage instead and size it from measurement.
+  doc["lv_used_max"] = diag_lv_used_max;
+  doc["lv_frag_max"] = diag_lv_frag_max;
+#endif
 }
