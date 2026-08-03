@@ -261,11 +261,45 @@ class TestPeerManagement:
             f"{first_url}/loadsharing/peers", timeout=10).json()
         second_peers = requests.get(
             f"{second_url}/loadsharing/peers", timeout=10).json()
-        first_host = next(
-            p["host"] for p in first_peers if p.get("host") != second_host and p.get("joined"))
-        assert sum(p.get("host") == second_host for p in first_peers) == 1
-        assert sum(p.get("host") == first_host and p.get("joined")
-                   for p in second_peers) == 1
+
+        # Identify both ends by device id rather than host string. The two sides
+        # legitimately spell the same peer differently: first knows itself as
+        # "openevse-native-0.local" while second, having learned it over mDNS on
+        # a non-default port, knows it as "openevse-native-0.local:8000". The
+        # manually added entry is also re-keyed from "localhost:8001" to its
+        # discovered hostname once mDNS resolves the same device, so the string
+        # used to add a peer is not a durable handle for it.
+        first_local = next(p for p in first_peers if p.get("isLocal"))
+        first_id = first_local["id"]
+
+        second_local = next(p for p in second_peers if p.get("isLocal"))
+        second_id = second_local["id"]
+
+        # Point the member at the controller using the host string the member
+        # itself uses for it. On the reset path the member calls
+        # removeGroupPeer(loadsharing_controller_host), so a controller host
+        # spelled any other way would not match its own peer entry.
+        first_as_second_sees_it = next(
+            p for p in second_peers
+            if p.get("id") == first_id and not p.get("isLocal")
+        )
+        first_host = first_as_second_sees_it["host"]
+
+        # The point of this test is that a reciprocal add does not loop, so what
+        # matters is that each side ends up with exactly one *joined* entry for
+        # the other -- a loop would keep appending them. Match on id and joined
+        # rather than on the host string, which is not stable (see above).
+        second_joined_in_first = [
+            p for p in first_peers
+            if p.get("id") == second_id and not p.get("isLocal") and p.get("joined")
+        ]
+        assert len(second_joined_in_first) == 1, (
+            f"second should be joined in first exactly once: {first_peers}"
+        )
+        assert sum(p.get("id") == first_id and p.get("joined")
+                   for p in second_peers) == 1, (
+            f"first should be a joined peer of second: {second_peers}"
+        )
 
         configured = requests.post(
             f"{second_url}/config",
@@ -278,8 +312,11 @@ class TestPeerManagement:
         )
         assert configured.status_code == 200, configured.text
 
+        # Delete the host as currently listed, which is what a client would do,
+        # rather than the string used to add it.
         removed = requests.delete(
-            f"{first_url}/loadsharing/peers/{quote(second_host, safe='')}",
+            f"{first_url}/loadsharing/peers/"
+            f"{quote(second_joined_in_first[0]['host'], safe='')}",
             timeout=10,
         )
         assert removed.status_code == 200, removed.text
@@ -287,11 +324,11 @@ class TestPeerManagement:
         while time.time() < deadline:
             second_peers = requests.get(
                 f"{second_url}/loadsharing/peers", timeout=10).json()
-            if not any(p.get("host") == first_host and p.get("joined")
+            if not any(p.get("id") == first_id and p.get("joined")
                        for p in second_peers):
                 break
             time.sleep(0.5)
-        assert not any(p.get("host") == first_host and p.get("joined")
+        assert not any(p.get("id") == first_id and p.get("joined")
                        for p in second_peers), second_peers
 
     def test_delete_peer(self, instance_pair_auto, peer_hostname_factory):

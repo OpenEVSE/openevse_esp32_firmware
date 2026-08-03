@@ -406,6 +406,14 @@ def instance_pair(docker_client, emulator_image, tmp_path, request):
             "--set-config",
             f"hostname=openevse-native-{port_offset}",
         ]
+
+        # Give each instance a distinct device id. The EpoxyDuino ESPAL returns a
+        # fixed chip id unless OPENEVSE_CHIP_ID is set, so without this every
+        # instance advertises the same mDNS "id" TXT record and discovery
+        # discards all its peers as being itself.
+        native_env = dict(os.environ)
+        native_env["OPENEVSE_CHIP_ID"] = f"{0x1234567890AB0000 + port_offset:016x}"
+
         try:
             process = subprocess.Popen(
                 native_command,
@@ -413,6 +421,7 @@ def instance_pair(docker_client, emulator_image, tmp_path, request):
                 stderr=subprocess.PIPE,
                 text=True,
                 cwd=str(instance_workdir),  # Each instance gets unique storage
+                env=native_env,
             )
             processes.append(process)
         except Exception as e:
@@ -457,6 +466,7 @@ def instance_pair(docker_client, emulator_image, tmp_path, request):
                 stderr=subprocess.PIPE,
                 text=True,
                 cwd=str(instance_workdir),
+                env=native_env,
             )
             processes.append(restarted)
             if not wait_for_http_ready(native_url, timeout=30):
