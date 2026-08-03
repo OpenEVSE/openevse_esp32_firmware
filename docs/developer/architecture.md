@@ -119,7 +119,7 @@ unless `deserialize()` has marked the config modified.
 | `temp_throttle.h/.cpp` | Current reduction on over-temperature |
 | `notifications.h/.cpp`, `notifications_rules.h/.cpp`, `notifications_acks.h/.cpp` | Non-fault advisories: a pure rule table over EvseManager state, a 5 s MicroTask, and a persisted acknowledgement store |
 | `ocpp.h/.cpp` | OCPP 1.6 via the MicroOcpp library |
-| `rfid.h/.cpp` | RFID card auth, PN532 NFC module (optional) |
+| `rfid.h/.cpp` | RFID card auth, PN532 (I2C) or RC522 (SPI) reader (optional) |
 | `net_manager.h/.cpp` | WiFi / wired Ethernet, OTA capability |
 | `lcd.h/.cpp`, `lcd_lvgl.h/.cpp`, `src/lvgl_tft/` | Character LCD and LVGL TFT touchscreen display |
 | `time_man.h/.cpp` | SNTP sync, POSIX timezone strings |
