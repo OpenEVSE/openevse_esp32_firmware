@@ -3,6 +3,7 @@
 #endif
 
 #include <Arduino.h>
+#include <errno.h>
 #include <Update.h>
 #include "certificates.h"
 
@@ -1665,9 +1666,23 @@ void web_server_setup()
   bool use_ssl = false;
   if(www_certificate_id != "")
   {
-    uint64_t cert_id = std::stoull(www_certificate_id.c_str(), nullptr, 16);
-    const char *cert = certs.getCertificate(cert_id);
-    const char *key = certs.getKey(cert_id);
+    // This one sits on the boot path. std::stoull throws on a malformed value
+    // and nothing catches it, so a corrupted stored www_certificate_id would
+    // abort inside web_server_setup() and boot-loop the unit with no way back
+    // in over the network. Parse defensively and fall through to plain HTTP,
+    // which at least leaves the device reachable to correct the config.
+    const char *idStr = www_certificate_id.c_str();
+    char *end = nullptr;
+    errno = 0;
+    unsigned long long parsed = strtoull(idStr, &end, 16);
+    bool id_valid = (end != idStr && '\0' == *end && ERANGE != errno);
+    if(!id_valid) {
+      DEBUG.printf("Ignoring malformed www_certificate_id '%s', serving HTTP\n", idStr);
+    }
+
+    uint64_t cert_id = id_valid ? (uint64_t)parsed : 0;
+    const char *cert = id_valid ? certs.getCertificate(cert_id) : NULL;
+    const char *key = id_valid ? certs.getKey(cert_id) : NULL;
     if(NULL != cert && NULL != key)
     {
       DEBUG.printf("Starting HTTPS server, https://0.0.0.0:%d\n", www_https_port);

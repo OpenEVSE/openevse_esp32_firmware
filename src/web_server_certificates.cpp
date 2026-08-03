@@ -3,6 +3,7 @@
 #endif
 
 #include <Arduino.h>
+#include <errno.h>
 
 typedef const __FlashStringHelper *fstr_t;
 
@@ -148,7 +149,21 @@ void handleCertificates(MongooseHttpServerRequest *request)
         response->print("{\"msg\":\"Method not allowed\"}");
       }
     } else {
-      certificate = std::stoull(clientStr.c_str(), nullptr, 16);
+      // std::stoull throws on a non-hex path segment, and nothing here catches
+      // it, so GET /certificates/zz aborted and rebooted the board. strtoull
+      // reports failure through the end pointer instead; reject anything that
+      // is not a complete hex id.
+      const char *idStr = clientStr.c_str();
+      char *end = nullptr;
+      errno = 0;
+      unsigned long long parsed = strtoull(idStr, &end, 16);
+      if(end == idStr || '\0' != *end || ERANGE == errno) {
+        response->setCode(404);
+        response->print("{\"msg\":\"Not found\"}");
+        request->send(response);
+        return;
+      }
+      certificate = (uint64_t)parsed;
     }
   }
 
