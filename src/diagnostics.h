@@ -27,4 +27,12 @@ void diagnostics_status(JsonDocument &doc);
 // the send path applies backpressure. Returns the number closed.
 int diagnostics_ws_reap();
 
+// Largest-free-block probes, for attributing fragmentation to a code section.
+// begin() returns the current largest block; end() records the worst drop seen
+// for that slot. Reported as probe0_max..probe3_max in /status. Diagnostic
+// only -- each call walks the free list.
+#define DIAG_PROBE_SLOTS 4
+uint32_t diagnostics_probe_begin();
+void diagnostics_probe_end(int slot, uint32_t start);
+
 #endif // _OPENEVSE_DIAGNOSTICS_H

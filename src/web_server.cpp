@@ -945,10 +945,34 @@ handleStatus(MongooseHttpServerRequest *request)
 
   if(HTTP_GET == request->method()) {
 
-    DynamicJsonDocument doc(STATUS_JSON_CAPACITY);
+    // Allocated once and reused. Building a fresh multi-KB document per
+    // request, freed again immediately, is what fragments this heap: measured
+    // on hardware, sustained polling of /status alone drove the largest
+    // allocatable block from 61,428 down to 38,900 and it never recovered,
+    // while total free heap stayed above 70KB.
+    //
+    // Safe as a static because Mongoose is polled from loop() on a single
+    // task and each handler runs to completion inside its own event callback;
+    // this one calls nothing that re-enters the HTTP layer.
+    static DynamicJsonDocument doc(STATUS_JSON_CAPACITY);
+    doc.clear();
+
+    uint32_t probe = diagnostics_probe_begin();
     buildStatus(doc);
+    diagnostics_probe_end(0, probe);
+
     response->setCode(200);
-    serializeJson(doc, *response);
+    probe = diagnostics_probe_begin();
+    // Serialise into a right-sized buffer and hand the stream one write.
+    // Writing incrementally makes the stream's mbuf realloc up a 1.5x ladder
+    // (128->192->288->...->2187 for a 1.7KB body): eight ascending
+    // allocate/free pairs per request, which is what shreds the heap. One
+    // reserved String plus one write is two exact-sized allocations.
+    String json;
+    json.reserve(measureJson(doc) + 1);
+    serializeJson(doc, json);
+    response->write((const uint8_t *)json.c_str(), json.length());
+    diagnostics_probe_end(1, probe);
 
   } else if(HTTP_POST == request->method()) {
     handleStatusPost(request, response);

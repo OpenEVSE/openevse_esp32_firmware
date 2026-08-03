@@ -53,6 +53,9 @@ static uint32_t diag_ws_send_max = 0;
 static uint32_t diag_ws_reaped = 0;
 static uint32_t diag_ws_conns = 0;
 
+static uint32_t diag_probe_max[DIAG_PROBE_SLOTS] = {0};
+static uint32_t diag_probe_hits[DIAG_PROBE_SLOTS] = {0};
+
 #if defined(ENABLE_SCREEN_LVGL_TFT) && (0 == LV_MEM_CUSTOM)
 // Peak (not current) LVGL pool usage: the pool has to be sized for the worst
 // screen transition, which a spot reading almost never catches.
@@ -176,6 +179,32 @@ int diagnostics_ws_reap()
   return reaped;
 }
 
+uint32_t diagnostics_probe_begin()
+{
+#if DIAG_HAVE_IDF
+  return (uint32_t)heap_caps_get_largest_free_block(MALLOC_CAP_8BIT);
+#else
+  return 0;
+#endif
+}
+
+void diagnostics_probe_end(int slot, uint32_t start)
+{
+#if DIAG_HAVE_IDF
+  if(slot < 0 || slot >= DIAG_PROBE_SLOTS) {
+    return;
+  }
+  uint32_t now = (uint32_t)heap_caps_get_largest_free_block(MALLOC_CAP_8BIT);
+  diag_probe_hits[slot]++;
+  if(now < start) {
+    uint32_t drop = start - now;
+    if(drop > diag_probe_max[slot]) {
+      diag_probe_max[slot] = drop;
+    }
+  }
+#endif
+}
+
 void diagnostics_status(JsonDocument &doc)
 {
 #if DIAG_HAVE_IDF
@@ -198,6 +227,13 @@ void diagnostics_status(JsonDocument &doc)
   doc["ws_conns"] = diag_ws_conns;
   doc["ws_send_max"] = diag_ws_send_max;
   doc["ws_reaped"] = diag_ws_reaped;
+  for(int i = 0; i < DIAG_PROBE_SLOTS; i++) {
+    char key[16];
+    snprintf(key, sizeof(key), "probe%d_max", i);
+    doc[key] = diag_probe_max[i];
+    snprintf(key, sizeof(key), "probe%d_n", i);
+    doc[key] = diag_probe_hits[i];
+  }
 
 #if defined(ENABLE_SCREEN_LVGL_TFT) && (0 == LV_MEM_CUSTOM)
   // LV_MEM_SIZE is a fixed .bss pool. Trimming it blind is dangerous — LVGL
