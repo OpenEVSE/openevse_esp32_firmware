@@ -534,6 +534,13 @@ static String html_escape(const String &input) {
 // Build status data
 // --------------------------------------------------------------------
 
+// Capacity for any document buildStatus() fills. Defined once because the two
+// call sites had drifted: onWsConnect sized its document for 40 members while
+// buildStatus emits around 95, so every websocket connect pushed a silently
+// truncated status. ArduinoJson does not signal that with an error -- it just
+// stops adding members.
+#define STATUS_JSON_CAPACITY (JSON_OBJECT_SIZE(128) + 2048)
+
 void buildStatus(DynamicJsonDocument &doc) {
 
   // Get the current time
@@ -938,8 +945,7 @@ handleStatus(MongooseHttpServerRequest *request)
 
   if(HTTP_GET == request->method()) {
 
-    const size_t capacity = JSON_OBJECT_SIZE(128) + 2048;
-    DynamicJsonDocument doc(capacity);
+    DynamicJsonDocument doc(STATUS_JSON_CAPACITY);
     buildStatus(doc);
     response->setCode(200);
     serializeJson(doc, *response);
@@ -1608,11 +1614,20 @@ void onWsAuthenticate(MongooseHttpServerRequest *request)
 void onWsConnect(MongooseHttpWebSocketConnection *connection)
 {
   DBUGF("New client connected over ws");
-  // pushing states to client
-  const size_t capacity = JSON_OBJECT_SIZE(40) + 1024;
-  DynamicJsonDocument doc(capacity);
+
+  DynamicJsonDocument doc(STATUS_JSON_CAPACITY);
   buildStatus(doc);
-  web_server_event(doc);
+
+  // Send only to the client that just connected. This used to call
+  // web_server_event(), which broadcasts to every open websocket -- so one
+  // client reconnecting pushed a full status to all of them. Under a
+  // reconnect storm (a Home Assistant integration retrying, say) that
+  // multiplies into a burst of full-status sends against connections that
+  // never asked for one, straight into send buffers with no backpressure.
+  String json;
+  json.reserve(measureJson(doc) + 1);
+  serializeJson(doc, json);
+  connection->send(json);
 }
 
 /*
