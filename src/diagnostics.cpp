@@ -100,13 +100,21 @@ void diagnostics_loop()
   }
 
 #if defined(ENABLE_SCREEN_LVGL_TFT) && (0 == LV_MEM_CUSTOM)
-  lv_mem_monitor_t lv_mon;
-  lv_mem_monitor(&lv_mon);
-  if(lv_mon.used_pct > diag_lv_used_max) {
-    diag_lv_used_max = lv_mon.used_pct;
-  }
-  if(lv_mon.frag_pct > diag_lv_frag_max) {
-    diag_lv_frag_max = lv_mon.frag_pct;
+  // Must be guarded: this runs from loop() ahead of MicroTask.update(), and
+  // MicroTask.update() is what first runs LcdTask::setup() -> lv_init(). On
+  // the first pass after boot the pool does not exist yet, and lv_mem_monitor
+  // walks it unconditionally -- an unguarded call panics with LoadProhibited
+  // and boot-loops the board.
+  if(lv_is_initialized())
+  {
+    lv_mem_monitor_t lv_mon;
+    lv_mem_monitor(&lv_mon);
+    if(lv_mon.used_pct > diag_lv_used_max) {
+      diag_lv_used_max = lv_mon.used_pct;
+    }
+    if(lv_mon.frag_pct > diag_lv_frag_max) {
+      diag_lv_frag_max = lv_mon.frag_pct;
+    }
   }
 #endif
 
