@@ -57,7 +57,16 @@ class TestPeerManagement:
         data = response.json()
         assert "msg" in data or "status" in data
 
-    @pytest.mark.parametrize("num_instances", [2, 3, 4])
+    # Bringing up each emulator+firmware pair costs roughly 12s, so the budget
+    # has to scale with the instance count rather than sit at the class default.
+    @pytest.mark.parametrize(
+        "num_instances",
+        [
+            pytest.param(2, marks=pytest.mark.timeout(90)),
+            pytest.param(3, marks=pytest.mark.timeout(120)),
+            pytest.param(4, marks=pytest.mark.timeout(150)),
+        ],
+    )
     def test_peer_discovery_mdns(self, multi_instance_group, num_instances):
         """
         Test: mDNS peer discovery detects multiple instances.
@@ -372,7 +381,15 @@ class TestPeerManagement:
             for peer in peers
         ), f"joined peer was not restored after restart: {peers}"
 
-    @pytest.mark.parametrize("num_instances", [2, 3, 4])
+    # Same per-instance setup cost as test_peer_discovery_mdns above.
+    @pytest.mark.parametrize(
+        "num_instances",
+        [
+            pytest.param(2, marks=pytest.mark.timeout(90)),
+            pytest.param(3, marks=pytest.mark.timeout(120)),
+            pytest.param(4, marks=pytest.mark.timeout(150)),
+        ],
+    )
     def test_discovered_peers_joined_status(self, multi_instance_group, num_instances):
         """
         Test: Discovered peers can be marked as joined.
