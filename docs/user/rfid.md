@@ -6,7 +6,8 @@ workplaces, and multi-tenant parking.
 
 Stock `openevse_wifi_v1` builds use the PN532. For RC522, build with
 `pio run -e openevse_wifi_v1_rc522` (SPI pins configurable via `RC522_*` build
-flags in `platformio.ini`).
+flags in `platformio.ini`). The stock env defaults `RC522_RST_PIN` to GPIO4 so
+RC522 reset does not share GPIO22 (I2C SCL / MCP9808).
 
 ![RFID settings](screenshots/settings-rfid-dark-desktop.png)
 
