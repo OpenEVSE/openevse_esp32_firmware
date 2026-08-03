@@ -74,6 +74,35 @@ def wait_for_http_ready(url: str, timeout: float = 30, poll_interval: float = 0.
     return False
 
 
+def wait_for_evse_state(url: str, timeout: float = 30, poll_interval: float = 0.1) -> bool:
+    """
+    Poll /status until the firmware has a real EVSE state from the RAPI link.
+
+    The web server starts serving before the first RAPI exchange completes, so
+    /config returning 200 does not mean the EVSE is readable yet -- until then
+    /status reports state 0, which is not a valid J1772 state. Waiting on the
+    state avoids a startup race for any test that reads EVSE data immediately.
+
+    Args:
+        url: Base native URL (e.g. http://localhost:8000)
+        timeout: Maximum seconds to wait
+        poll_interval: Seconds between polls
+
+    Returns:
+        True if a valid state appeared, False if timeout
+    """
+    start = time.time()
+    while time.time() - start < timeout:
+        try:
+            response = requests.get(f"{url}/status", timeout=2)
+            if response.status_code == 200 and response.json().get("state", 0) >= 1:
+                return True
+        except (requests.RequestException, ValueError):
+            pass
+        time.sleep(poll_interval)
+    return False
+
+
 def get_pty_name(pty_path: str) -> str:
     """
     Extract the PTY name from a full PTY path for easy identification.
@@ -327,8 +356,15 @@ def instance_pair(docker_client, emulator_image, tmp_path, request):
 
         # Create socat bridge: TCP (from emulator) -> PTY (for native firmware)
         # This creates a real PTY on the host and bridges it to emulator's TCP RAPI port
-        try:
-            socat_process = subprocess.Popen(
+        def start_socat_bridge():
+            """
+            (Re)create the TCP<->PTY bridge and wait for the PTY to appear.
+
+            socat is configured with wait-slave, so it exits once the firmware
+            closes the PTY slave. Any restart of the firmware therefore needs a
+            fresh bridge, or the new process comes up with no RAPI link at all.
+            """
+            proc = subprocess.Popen(
                 [
                     "socat",
                     f"PTY,link={pty_path},rawer,wait-slave",
@@ -337,16 +373,17 @@ def instance_pair(docker_client, emulator_image, tmp_path, request):
                 stdout=subprocess.PIPE,
                 stderr=subprocess.PIPE,
             )
-            socat_processes.append(socat_process)
+            socat_processes.append(proc)
 
             # Wait for PTY to be created
             for _ in range(50):  # 5 seconds max
                 if os.path.exists(pty_path):
-                    break
+                    return proc
                 time.sleep(0.1)
-            else:
-                raise Exception(f"PTY not created at {pty_path} after 5 seconds")
+            raise Exception(f"PTY not created at {pty_path} after 5 seconds")
 
+        try:
+            start_socat_bridge()
         except Exception as e:
             try:
                 container.stop()
@@ -395,9 +432,25 @@ def instance_pair(docker_client, emulator_image, tmp_path, request):
             process.terminate()
             pytest.fail(f"Native firmware did not become ready at {native_url}")
 
+        # HTTP being up does not mean the RAPI link has been read yet, so also
+        # wait for a valid EVSE state before handing the instance to a test.
+        if not wait_for_evse_state(f"http://localhost:{native_port}", timeout=30):
+            try:
+                container.stop()
+            except:
+                pass
+            process.terminate()
+            pytest.fail(
+                f"Native firmware did not report a valid EVSE state on port {native_port}"
+            )
+
         def restart_native():
             process.terminate()
             process.wait(timeout=5)
+            # The old socat exited with the firmware, so rebuild the RAPI bridge
+            # before the replacement process starts looking for it.
+            if not os.path.exists(pty_path):
+                start_socat_bridge()
             restarted = subprocess.Popen(
                 native_command,
                 stdout=subprocess.PIPE,
@@ -409,6 +462,12 @@ def instance_pair(docker_client, emulator_image, tmp_path, request):
             if not wait_for_http_ready(native_url, timeout=30):
                 restarted.terminate()
                 pytest.fail(f"Native firmware did not restart at {native_url}")
+            if not wait_for_evse_state(f"http://localhost:{native_port}", timeout=30):
+                restarted.terminate()
+                pytest.fail(
+                    f"Native firmware did not report a valid EVSE state after restart "
+                    f"on port {native_port}"
+                )
             return restarted
 
         return {
