@@ -68,8 +68,29 @@ class EvseMonitor : public MicroTasks::Task
         bool isCharging() {
           return OPENEVSE_STATE_CHARGING == _evse_state;
         }
+        // Listed explicitly rather than as a range: the controller's fault
+        // states are not contiguous (0x0C/0x0D are reserved), so a range check
+        // silently treats anything added above it as a non-error. Keep in sync
+        // with the OPENEVSE_STATE_* fault values in the OpenEVSE library.
         bool isError() {
-          return OPENEVSE_STATE_VENT_REQUIRED <= _evse_state && _evse_state <= OPENEVSE_STATE_OVER_CURRENT;
+          switch(_evse_state)
+          {
+            case OPENEVSE_STATE_VENT_REQUIRED:
+            case OPENEVSE_STATE_DIODE_CHECK_FAILED:
+            case OPENEVSE_STATE_GFI_FAULT:
+            case OPENEVSE_STATE_NO_EARTH_GROUND:
+            case OPENEVSE_STATE_STUCK_RELAY:
+            case OPENEVSE_STATE_GFI_SELF_TEST_FAILED:
+            case OPENEVSE_STATE_OVER_TEMPERATURE:
+            case OPENEVSE_STATE_OVER_CURRENT:
+            case OPENEVSE_STATE_RELAY_CLOSURE_FAULT:
+            case OPENEVSE_STATE_PP_SHORTED:
+            case OPENEVSE_STATE_PP_MISSING:
+            case OPENEVSE_STATE_EEPROM_FAILURE:
+              return true;
+            default:
+              return false;
+          }
         }
         bool isVehicleConnected() {
           return OPENEVSE_VFLAG_EV_CONNECTED == (getFlags() & OPENEVSE_VFLAG_EV_CONNECTED);

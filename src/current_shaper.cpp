@@ -55,10 +55,11 @@ unsigned long CurrentShaperTask::loop(MicroTasks::WakeReason reason) {
 				if (_evse->getState() != props.getState() || _evse->getChargeCurrent() != props.getChargeCurrent())
 				{
 					// Always-on shaper claims at Safety (5000); a shaper running *only*
-					// because of a timer window claims at Limit (1100).  A window must
-					// never demote a config-enabled (always-on) shaper below Safety.
+					// because of a timer window claims at TimerFeature (900) so a
+					// manual override can still beat it.  A window must never demote a
+					// config-enabled (always-on) shaper below Safety.
 					int priority = (_timer_controlled && !config_current_shaper_enabled())
-					               ? EvseManager_Priority_Limit : EvseManager_Priority_Safety;
+					               ? EvseManager_Priority_TimerFeature : EvseManager_Priority_Safety;
 					_evse->claim(EvseClient_OpenEVSE_Shaper, priority, props);
 					StaticJsonDocument<128> event;
 					event["shaper"] = 1;
@@ -85,7 +86,11 @@ unsigned long CurrentShaperTask::loop(MicroTasks::WakeReason reason) {
 				if (_evse->getState(EvseClient_OpenEVSE_Shaper) != EvseState::Disabled)
 				{
 					props.setState(EvseState::Disabled);
-					_evse->claim(EvseClient_OpenEVSE_Shaper, EvseManager_Priority_Limit, props);
+					// Stale-data failsafe: overridable by Manual only when the shaper
+					// runs purely from a timer window, as above.
+					int failsafe_priority = (_timer_controlled && !config_current_shaper_enabled())
+					               ? EvseManager_Priority_TimerFeature : EvseManager_Priority_Limit;
+					_evse->claim(EvseClient_OpenEVSE_Shaper, failsafe_priority, props);
 					StaticJsonDocument<128> event;
 					event["shaper"] = 1;
 					event["shaper_live_pwr"] = _live_pwr;
@@ -159,7 +164,7 @@ void CurrentShaperTask::setState(bool state) {
 	event_send(event);
 }
 
-// Enable shaper from a scheduler timer window (priority 1100 instead of 5000)
+// Enable shaper from a scheduler timer window (priority 900 instead of 5000)
 void CurrentShaperTask::setTimerEnabled(bool active) {
 	_timer_controlled = active;
 	_enabled = active ? true : config_current_shaper_enabled();

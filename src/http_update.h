@@ -12,8 +12,14 @@
 #define HTTP_UPDATE_ERROR_WRITE_FAILED                -2
 #define HTTP_UPDATE_ERROR_FAILED_TO_END_UPDATE        -3
 #define HTTP_UPDATE_ERROR_INCOMPLETE_DOWNLOAD         -4
+#define HTTP_UPDATE_ERROR_URL_NOT_ALLOWED             -5
 
 #define HTTP_UPDATE_OK                                 0
+
+// True if `url` is an HTTPS URL on a host permitted for firmware fetch
+// (OpenEVSE's GitHub release hosts). Enforced on both the initial fetch and any
+// redirect target, so a device can only pull firmware from a trusted origin.
+bool http_update_url_allowed(const String &url);
 
 bool http_update_from_url(String url,
   std::function<void(size_t complete, size_t total)> progress,
