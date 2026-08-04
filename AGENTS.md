@@ -45,6 +45,22 @@ cd divert_sim && pip install -r requirements.txt && pytest -v && cd ..
 pio test -e native_test                       # host-side firmware unit tests
 ```
 
+[`scripts/openevse_test.sh`](scripts/openevse_test.sh) wraps all of the above
+plus the emulator-backed harness, and is the path of least friction for agents:
+
+```bash
+scripts/openevse_test.sh all                  # unit + divert + gui
+scripts/openevse_test.sh native -n 2          # 2 firmware instances, status dump
+scripts/openevse_test.sh native -- curl -s "$EVSE_URL/status"
+scripts/openevse_test.sh integration          # emulator-backed pytest (needs docker)
+```
+
+Each sandboxed Bash call gets its **own network namespace**, so a server started
+in one command is unreachable from the next. The wrapper therefore starts,
+uses, and tears down everything inside a single invocation — pass what you want
+to run after `--`, and read the instance URLs from `$EVSE_URL` / `$EVSE_URL_<i>`.
+`emulator` and `integration` need Docker and so run outside the sandbox.
+
 ## Validation gate — run after ANY change
 
 ```bash

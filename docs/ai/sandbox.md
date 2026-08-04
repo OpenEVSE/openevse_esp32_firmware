@@ -123,7 +123,57 @@ should stay off.
   device OTA flash (`curl ... /update`) still surface a confirmation even in auto-allow.
 - **docker escape hatch** (`sandbox.excludedCommands`) — `docker` is incompatible with
   the sandbox and is used by the integration tests, so it runs outside the sandbox via
-  the normal permission flow.
+  the normal permission flow. The emulator-backed harness entry points
+  (`openevse_test.sh emulator`, `openevse_test.sh integration`, `pytest tests/integration`)
+  are excluded for the same reason — see the section below.
+- **Test and diagnostic commands** (`permissions.allow`) — the test runners
+  (`pio test`, `pytest`, `npm test`), the native/simulator host binaries, `socat`, and
+  the port-inspection tools (`lsof`, `fuser`) are allowlisted so a full test cycle runs
+  without prompts. `~/.npm` is writable so `npm install`/`npm ci` can populate the cache.
+
+## Running tests and multiple instances
+
+Use [`scripts/openevse_test.sh`](../../scripts/openevse_test.sh) rather than assembling
+emulator plumbing by hand:
+
+```bash
+scripts/openevse_test.sh unit | divert | gui | all
+scripts/openevse_test.sh native -n 2                    # 2 firmware instances, sandboxed
+scripts/openevse_test.sh native -- curl -s "$EVSE_URL/status"
+scripts/openevse_test.sh emulator -n 2                  # firmware + emulator pairs
+scripts/openevse_test.sh integration                    # the checked-in pytest suite
+```
+
+Instances are numbered from 0 and use the same port bases as
+`tests/integration/conftest.py` — firmware on `8000+i`, emulator web on `8080+i`, emulator
+RAPI on `8023+i`. The wrapped command gets `EVSE_URL`, `EVSE_URL_<i>`, `EVSE_URLS`,
+`EVSE_COUNT`, `EVSE_PTY_<i>`, and (for `emulator`) `EMULATOR_URL_<i>`.
+
+### Why everything happens in one command
+
+Each sandboxed Bash invocation runs in its **own network namespace**. A server started in
+one call is not reachable from the next, and `run_in_background` does not help — the
+listener dies with its namespace. So there is no "start the emulator, then poke it" flow:
+every subcommand launches what it needs, runs your command, and tears down on exit
+(processes killed, containers removed, temp dir deleted, even on failure).
+
+### What needs to leave the sandbox, and why
+
+`native` works fully sandboxed. The emulator paths do not, for two independent reasons:
+
+- The **docker socket is blocked** — it is a Unix socket, and allowing it would hand over
+  host access (`allowUnixSockets` is macOS-only in any case).
+- **Host-published container ports are unreachable** from inside the sandbox. A sandboxed
+  `curl` to a published port returns status `000` while the same request succeeds on the
+  host, because the namespace has no route to the host's loopback.
+
+`/tmp` is also read-only inside the sandbox, which is why the harness uses `$TMPDIR` for
+its PTYs — but `tests/integration/conftest.py` hardcodes `/tmp/rapi_pty_<n>`, one more
+reason that suite runs outside.
+
+Sandboxed `native` instances get a loopback PTY with nothing on the far end, so RAPI never
+answers and `/status` stays `state: 0` (STARTING). Config, claims, and override
+diagnostics work; anything asserting on real EVSE state needs `emulator` or `integration`.
 
 ## Caveats
 
@@ -141,10 +191,13 @@ should stay off.
 ## Verify
 
 ```bash
-pio test -e native_test          # host unit tests run sandboxed
+scripts/openevse_test.sh all     # unit + divert + gui, all sandboxed
+scripts/openevse_test.sh native -n 2   # two firmware instances, sandboxed
+scripts/openevse_test.sh integration   # emulator-backed, runs outside the sandbox
 pio run -e native_openevse       # native firmware binary builds sandboxed
-cd gui-nightshift && npm run build && npm test && cd ..
-cd divert_sim && pytest -v && cd ..
 curl https://example.com         # should be BLOCKED/prompted — proves the allowlist
 cat ~/.ssh/id_* 2>&1             # should be denied inside a sandboxed command
+curl -s --max-time 3 http://localhost:8080/api/status   # 000 while an emulator
+                                 # container is up — proves published container
+                                 # ports are unreachable from the sandbox
 ```

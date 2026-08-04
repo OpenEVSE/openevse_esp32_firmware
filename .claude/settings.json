@@ -1,9 +1,49 @@
 {
   "$schema": "https://json.schemastore.org/claude-code-settings.json",
   "permissions": {
-    "ask": [
-      "Bash(git push:*)",
-      "Bash(curl *update*)"
+    "allow": [
+      "Bash(curl -s --max-time 5 localhost:8000/*)",
+      "Bash(curl -s --max-time 5 localhost:8001/*)",
+      "Bash(curl -s --max-time 5 localhost:8080/*)",
+      "Bash(curl -s --max-time 5 localhost:8081/*)",
+      "Bash(curl -fsS localhost:80*)",
+      "Bash(curl -fsS --max-time 5 localhost:80*)",
+      "Bash(curl -s --max-time 5 localhost:80*)",
+      "Bash(curl -s localhost:80*)",
+      "Bash(python3 -m json.tool)",
+      "Bash(python3 -c ' *)",
+      "Bash(pio run *)",
+      "Bash(pio test *)",
+      "Bash(pio check *)",
+      "Bash(pio pkg *)",
+      "Bash(scripts/openevse_test.sh:*)",
+      "Bash(./scripts/openevse_test.sh:*)",
+      "Bash(pytest:*)",
+      "Bash(python -m pytest:*)",
+      "Bash(python3 -m pytest:*)",
+      "Bash(.venv/bin/pytest:*)",
+      "Bash(divert_sim/.venv/bin/pytest:*)",
+      "Bash(npm test:*)",
+      "Bash(npm run test:*)",
+      "Bash(npm run build:*)",
+      "Bash(npm run check:*)",
+      "Bash(npm run lint:*)",
+      "Bash(npm ci:*)",
+      "Bash(npm install)",
+      "Bash(npx vitest:*)",
+      "Bash(socat:*)",
+      "Bash(lsof -i:*)",
+      "Bash(fuser:*)",
+      "Bash(pkill -f socat)",
+      "Bash(pkill -f native_openevse*)",
+      "Bash(.pio/build/native_openevse/program:*)",
+      "Bash(.pio/build/native_openevse_lvgl/program:*)",
+      "Bash(.pio/build/native_simulator/program:*)",
+      "Bash(divert_sim/divert_sim:*)",
+      "Bash(python scripts/docs_coverage.py:*)",
+      "Bash(python scripts/sync_screenshots.py:*)",
+      "Bash(git submodule status)",
+      "Read(//home/jpoulter/.claude/**)"
     ],
     "deny": [
       "Read(./*.pem)",
@@ -14,14 +54,15 @@
       "Read(./**/.env.local)",
       "Read(./.vscode/settings.json)",
       "Read(./.vscode/settings.local.json)"
+    ],
+    "ask": [
+      "Bash(git push:*)",
+      "Bash(curl *update*)"
     ]
   },
   "sandbox": {
     "enabled": true,
     "autoAllowBashIfSandboxed": true,
-    "excludedCommands": [
-      "docker *"
-    ],
     "network": {
       "allowedDomains": [
         "api.anthropic.com",
@@ -43,7 +84,8 @@
       "allowWrite": [
         "~/.platformio",
         "~/.platformio-core3",
-        "~/.cache"
+        "~/.cache",
+        "~/.npm"
       ],
       "denyRead": [
         "~/.ssh",
@@ -52,15 +94,39 @@
     },
     "credentials": {
       "files": [
-        { "path": "~/.ssh", "mode": "deny" },
-        { "path": "~/.aws/credentials", "mode": "deny" }
+        {
+          "path": "~/.ssh",
+          "mode": "deny"
+        },
+        {
+          "path": "~/.aws/credentials",
+          "mode": "deny"
+        }
       ],
       "envVars": [
-        { "name": "DEPENDABOT_PAT", "mode": "deny" },
-        { "name": "OTA_SIGNING_KEY", "mode": "deny" },
-        { "name": "GITHUB_TOKEN", "mode": "deny" },
-        { "name": "NPM_TOKEN", "mode": "deny" }
+        {
+          "name": "DEPENDABOT_PAT",
+          "mode": "deny"
+        },
+        {
+          "name": "OTA_SIGNING_KEY",
+          "mode": "deny"
+        },
+        {
+          "name": "GITHUB_TOKEN",
+          "mode": "deny"
+        },
+        {
+          "name": "NPM_TOKEN",
+          "mode": "deny"
+        }
       ]
-    }
+    },
+    "excludedCommands": [
+      "docker *",
+      "*openevse_test.sh emulator*",
+      "*openevse_test.sh integration*",
+      "*pytest tests/integration*"
+    ]
   }
 }
