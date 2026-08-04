@@ -510,6 +510,38 @@ public:
   bool removeGroupPeer(const String& hostname);
 
   /**
+   * @brief Remove the group's single remote peer, whatever it is keyed by.
+   *
+   * A member has exactly one joined remote peer: its controller. That entry is
+   * created from loadsharing_controller_host but discovery may later re-key it
+   * under the mDNS hostname it advertises, so removing it by the configured
+   * spelling is an unreliable (and silent) no-op. Leaving the group therefore
+   * resolves the entry structurally instead of by host string.
+   *
+   * @return true if a joined remote peer was found and removed
+   */
+  bool removeSoleRemoteGroupPeer();
+
+  /**
+   * @brief Merge a peer entry that has just learned its device id.
+   *
+   * A manually-added peer starts with no id, so it cannot be deduplicated
+   * against a discovery entry for the same device until its id arrives (see
+   * LoadSharingPeerPoller::fetchPeerConfig). Once it does, this collapses the
+   * two rows into one: the joined flag and controller-managed priority win, while
+   * the surviving row keeps its own host/url because those are known to reach the
+   * device (a /config fetch against them just succeeded), unlike the discovered
+   * addressing which may not resolve from here.
+   *
+   * The id also identifies a peer that turns out to be this device added under an
+   * address isLocalHost() does not recognise; such an entry is dropped.
+   *
+   * @param host Host key of the peer whose id was just set
+   * @return true if the entry was merged away or dropped as self
+   */
+  bool reconcilePeerId(const String& host);
+
+  /**
    * @brief Set the controller-managed priority for a peer (by host).
    * Persists the peer list and notifies listeners so the allocation recomputes.
    * The local controller is a normal entry, so its own priority is set the same

@@ -144,7 +144,12 @@ handleConfigPost(MongooseHttpServerRequest *request, MongooseHttpServerResponseS
     if (doc.containsKey("loadsharing_role") &&
         doc["loadsharing_role"].as<String>() == "" &&
         loadSharingGroupState.isMember()) {
-      loadSharingGroupState.removeGroupPeer(loadsharing_controller_host);
+      // Drop the controller entry structurally rather than by
+      // loadsharing_controller_host: discovery may have re-keyed it under the
+      // mDNS hostname the controller advertises, in which case removing it by
+      // the configured spelling silently does nothing and the stale peer is
+      // left behind.
+      loadSharingGroupState.removeSoleRemoteGroupPeer();
       loadSharingGroupState.resetRole();
     }
 

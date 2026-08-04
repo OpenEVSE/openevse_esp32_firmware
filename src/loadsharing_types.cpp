@@ -225,6 +225,101 @@ bool LoadSharingGroupState::removeGroupPeer(const String& hostname) {
   return true;
 }
 
+bool LoadSharingGroupState::removeSoleRemoteGroupPeer() {
+  for (auto& peer : _peers) {
+    if (peer.isJoined() && !isLocalHost(peer.getHost())) {
+      DBUGF("LoadSharingGroupState: Removing sole remote peer from group: %s",
+            peer.getHost().c_str());
+      peer.setJoined(false);
+      saveGroupPeers();
+      notifyPeerChange();
+      return true;
+    }
+  }
+
+  DBUGLN("LoadSharingGroupState: No joined remote peer to remove");
+  return false;
+}
+
+bool LoadSharingGroupState::reconcilePeerId(const String& host) {
+  LoadSharingPeer* peer = getPeerByHost(host);
+  if (peer == nullptr || peer->getId().isEmpty()) {
+    return false;
+  }
+
+  const String id = peer->getId();
+
+  // The id also validates who we actually reached. isLocalHost() only knows this
+  // device's hostname, mDNS name and id, so adding ourselves by any other
+  // reachable address (a bare IP, a DNS alias) gets past it -- and a device
+  // sharing load with itself would double-count its own draw. Now that the id is
+  // known, drop the entry.
+  if (!isLocalHost(peer->getHost()) && id == ESPAL.getLongId()) {
+    DBUGF("LoadSharingGroupState: Peer %s is this device (id %s), removing",
+          peer->getHost().c_str(), id.c_str());
+    for (auto it = _peers.begin(); it != _peers.end(); ++it) {
+      if (&(*it) == peer) {
+        _peers.erase(it);
+        break;
+      }
+    }
+    saveGroupPeers();
+    notifyPeerChange();
+    return true;
+  }
+
+  // Look for another entry for the same device. Compare by address rather than
+  // by host so the entry we just updated is never matched against itself.
+  LoadSharingPeer* duplicate = nullptr;
+  for (auto& candidate : _peers) {
+    if (&candidate != peer && candidate.getId() == id) {
+      duplicate = &candidate;
+      break;
+    }
+  }
+  if (duplicate == nullptr) {
+    return false;
+  }
+
+  DBUGF("LoadSharingGroupState: Merging duplicate entries for id %s (%s + %s)",
+        id.c_str(), peer->getHost().c_str(), duplicate->getHost().c_str());
+
+  // Group membership and the controller-managed priority are the fields a user
+  // set deliberately, so they survive from whichever row carries them.
+  if (duplicate->isJoined()) {
+    peer->setJoined(true);
+  }
+  if (peer->getPriority() == 0 && duplicate->getPriority() != 0) {
+    peer->setPriority(duplicate->getPriority());
+  }
+
+  // Keep the surviving entry's own host/url. We only got here because a /config
+  // fetch against them succeeded, so they demonstrably reach the device --
+  // whereas the discovered addressing may not resolve from here at all (mDNS
+  // advertises whatever name the peer knows itself by). Only fill in details the
+  // surviving entry is missing.
+  if (duplicate->isOnline()) {
+    peer->setOnline(true);
+  }
+  if (peer->getIp().isEmpty() && !duplicate->getIp().isEmpty()) {
+    peer->setIp(duplicate->getIp());
+  }
+  if (peer->getName().isEmpty() && !duplicate->getName().isEmpty()) {
+    peer->setName(duplicate->getName());
+  }
+
+  for (auto it = _peers.begin(); it != _peers.end(); ++it) {
+    if (&(*it) == duplicate) {
+      _peers.erase(it);
+      break;
+    }
+  }
+
+  saveGroupPeers();
+  notifyPeerChange();
+  return true;
+}
+
 bool LoadSharingGroupState::setPeerPriority(const String& hostname, int priority) {
   // The local controller is a normal entry; match it via getLocalPeer() so its
   // own priority is editable through the same path as remote peers.

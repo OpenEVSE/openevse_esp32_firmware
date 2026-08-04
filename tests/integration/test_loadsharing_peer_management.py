@@ -331,6 +331,156 @@ class TestPeerManagement:
         assert not any(p.get("id") == first_id and p.get("joined")
                        for p in second_peers), second_peers
 
+    @pytest.mark.timeout(90)
+    def test_manual_add_deduplicates_against_discovery_by_id(self, instance_pair):
+        """
+        Test: a manually added peer collapses into its discovery entry by id.
+
+        A manual add supplies only a host string, so the new entry starts with no
+        device id and mDNS discovery -- which keys peers by the hostname they
+        advertise -- cannot tell it is the same device. That leaves two rows for
+        one peer: the joined manual entry and a discovered, not-joined one. The
+        poller learns the id from the peer's /config shortly after, which is the
+        point at which the two can be recognised as one and merged.
+        """
+        first = instance_pair(port_offset=0)
+        second = instance_pair(port_offset=1)
+        first_url = first["native_url"]
+        second_url = second["native_url"]
+
+        controller_config = requests.post(
+            f"{first_url}/config",
+            json={
+                "loadsharing_enabled": True,
+                "loadsharing_role": "controller",
+                "loadsharing_group_id": "integration-test",
+                "loadsharing_group_max_current": 32,
+            },
+            timeout=10,
+        )
+        assert controller_config.status_code == 200, controller_config.text
+
+        second_id = next(
+            p for p in requests.get(f"{second_url}/loadsharing/peers", timeout=10).json()
+            if p.get("isLocal")
+        )["id"]
+
+        # Add by "localhost:<port>", which is reachable but is never the spelling
+        # mDNS advertises, so discovery is guaranteed to produce a separate entry
+        # for the same device.
+        added = requests.post(
+            f"{first_url}/loadsharing/peers",
+            json={"host": f"localhost:{second['native_port']}", "reciprocal": False},
+            timeout=10,
+        )
+        assert added.status_code == 200, added.text
+
+        # Allow discovery to run and the poller to fetch /config and merge.
+        deadline = time.time() + 20
+        while time.time() < deadline:
+            peers = requests.get(f"{first_url}/loadsharing/peers", timeout=10).json()
+            entries = [p for p in peers if p.get("id") == second_id and not p.get("isLocal")]
+            if len(entries) == 1 and entries[0].get("joined"):
+                break
+            time.sleep(0.5)
+
+        assert len(entries) == 1, (
+            f"the same device must appear exactly once, got {entries}"
+        )
+        assert entries[0].get("joined") is True, (
+            f"the merged entry must stay in the group: {entries[0]}"
+        )
+
+    @pytest.mark.timeout(90)
+    def test_member_leaves_group_with_rekeyed_controller_host(self, instance_pair):
+        """
+        Test: leaving the group drops the controller peer after it is re-keyed.
+
+        A member's controller entry is created from loadsharing_controller_host,
+        but discovery adopts the mDNS hostname the controller advertises, so the
+        entry stops being keyed by the configured spelling. Clearing the role must
+        still remove it -- matching on the configured host would silently leave a
+        stale joined peer behind while reporting success.
+        """
+        first = instance_pair(port_offset=0)
+        second = instance_pair(port_offset=1)
+        first_url = first["native_url"]
+        second_url = second["native_url"]
+
+        controller_config = requests.post(
+            f"{first_url}/config",
+            json={
+                "loadsharing_enabled": True,
+                "loadsharing_role": "controller",
+                "loadsharing_group_id": "integration-test",
+                "loadsharing_group_max_current": 32,
+            },
+            timeout=10,
+        )
+        assert controller_config.status_code == 200, controller_config.text
+
+        first_id = next(
+            p for p in requests.get(f"{first_url}/loadsharing/peers", timeout=10).json()
+            if p.get("isLocal")
+        )["id"]
+
+        # The reciprocal add gives the member a joined entry for the controller.
+        added = requests.post(
+            f"{first_url}/loadsharing/peers",
+            json={"host": f"localhost:{second['native_port']}"},
+            timeout=10,
+        )
+        assert added.status_code == 200, added.text
+
+        deadline = time.time() + 20
+        controller_entry = None
+        while time.time() < deadline:
+            second_peers = requests.get(
+                f"{second_url}/loadsharing/peers", timeout=10).json()
+            matches = [
+                p for p in second_peers
+                if p.get("id") == first_id and not p.get("isLocal") and p.get("joined")
+            ]
+            if matches:
+                controller_entry = matches[0]
+                break
+            time.sleep(0.5)
+        assert controller_entry is not None, (
+            f"member should have a joined entry for the controller: {second_peers}"
+        )
+
+        # Configure the member using a reachable spelling that deliberately
+        # differs from however its peer entry is keyed, which is what happens in
+        # practice once discovery adopts the advertised mDNS hostname.
+        stale_host = f"localhost:{first['native_port']}"
+        assert controller_entry["host"] != stale_host, (
+            "test needs the entry keyed differently from the configured host"
+        )
+        configured = requests.post(
+            f"{second_url}/config",
+            json={
+                "loadsharing_enabled": True,
+                "loadsharing_role": "member",
+                "loadsharing_controller_host": stale_host,
+            },
+            timeout=10,
+        )
+        assert configured.status_code == 200, configured.text
+
+        left = requests.post(
+            f"{second_url}/config",
+            json={"loadsharing_role": ""},
+            timeout=10,
+        )
+        assert left.status_code == 200, left.text
+
+        second_peers = requests.get(
+            f"{second_url}/loadsharing/peers", timeout=10).json()
+        assert not any(
+            p.get("id") == first_id and not p.get("isLocal") and p.get("joined")
+            for p in second_peers
+        ), f"controller must not remain a joined peer after leaving: {second_peers}"
+
     def test_delete_peer(self, instance_pair_auto, peer_hostname_factory):
         """
         Test: DELETE /loadsharing/peers/{host} removes joined status.

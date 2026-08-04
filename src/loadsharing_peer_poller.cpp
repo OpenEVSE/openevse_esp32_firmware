@@ -831,11 +831,13 @@ void LoadSharingPeerPoller::fetchPeerConfig(const String& host) {
 
     // wifi_serial is ESPAL.getLongId() uppercased; the discovery/loadsharing id
     // is the lowercase form, so normalise before storing to match by id.
+    bool idLearned = false;
     if (doc.containsKey("wifi_serial")) {
       String deviceId = doc["wifi_serial"].as<String>();
       deviceId.toLowerCase();
       if (!deviceId.isEmpty() && peer->getId() != deviceId) {
         peer->setId(deviceId);
+        idLearned = true;
       }
     }
     if (peer->getName().isEmpty() && doc.containsKey("hostname")) {
@@ -864,6 +866,15 @@ void LoadSharingPeerPoller::fetchPeerConfig(const String& host) {
     DBUGF("LoadSharingPeerPoller: [%s] Config learned (id=%s, name=%s, min=%.1f, max=%.1f)",
           host.c_str(), peer->getId().c_str(), peer->getName().c_str(),
           peer->getMinCurrent(), peer->getMaxCurrent());
+
+    // A manually-added peer had no id until now, so it could not be matched
+    // against a discovery entry for the same device. With the id known, collapse
+    // any such pair into one row. This invalidates `peer`, so it must come after
+    // every use of it above; the merge may also re-key the entry under the
+    // discovered host, which syncPeerList() then picks up on the next cycle.
+    if (idLearned) {
+      _groupState->reconcilePeerId(host);
+    }
   });
 
   req->onClose([host, url]() {
