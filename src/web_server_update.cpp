@@ -133,7 +133,18 @@ size_t handleUpdateUpload(MongooseHttpServerRequest *request, int ev, MongooseSt
     }
   }
 
-  if(!Update.hasError())
+  // Only PART_DATA carries payload; PART_BEGIN and PART_END arrive with len 0.
+  // A zero-length Update.write() is not a no-op: once the upload has delivered
+  // exactly the size passed to Update.begin(), remaining() is 0, so the
+  // `_bufferLen == remaining()` test in Updater.cpp fires on an empty buffer and
+  // flushes it. _writeBuffer() then erases at the unaligned _progress, which
+  // esp_partition_erase_range() rejects, aborting the update with
+  // UPDATE_ERROR_ERASE after every byte has already been written.
+  //
+  // This only bites when the declared length matches the image exactly, which is
+  // the raw-body upload path. A multipart Content-Length includes the boundary
+  // overhead, so remaining() never reaches 0 and the bug stays hidden.
+  if(len > 0 && !Update.hasError())
   {
     if(!http_update_write(data, len)) {
       handleUpdateError(request);
