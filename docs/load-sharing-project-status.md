@@ -167,7 +167,8 @@ Recommended GUI fixes:
   - `loadsharing_safety_factor`
   - `loadsharing_heartbeat_timeout`
   - `loadsharing_rotation_interval`
-  - `loadsharing_priority`
+- Edit priority per peer via `PUT /loadsharing/peers/{host}` rather than as a
+  config field; it is a controller-owned, per-peer setting.
 - Avoid showing unavailable controller/member telemetry unless firmware adds it
   to the API.
 

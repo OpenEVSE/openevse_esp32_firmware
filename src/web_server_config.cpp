@@ -133,8 +133,20 @@ handleConfigPost(MongooseHttpServerRequest *request, MongooseHttpServerResponseS
       }
     }
 
-    // Role transitions are applied after validation so that a rejected
-    // request does not mutate group-membership state as a side effect.
+    // Update WiFi module config
+    MongooseString storage = request->headers("X-Storage");
+    if(storage.equals("factory") && config_factory_write_lock())
+    {
+      response->setCode(423);
+      response->print("{\"msg\":\"Factory settings locked\"}");
+      return;
+    }
+
+    // Role transitions are applied after every check that can reject the
+    // request -- both the validation above and the factory write lock -- so a
+    // rejected request never mutates group-membership state as a side effect.
+    // resetRole() in particular also drops the controller peer and rewrites the
+    // persisted peer list, which a 423 response must not leave behind.
     if (doc.containsKey("loadsharing_role") &&
         doc["loadsharing_role"].as<String>() == "member" &&
         doc.containsKey("loadsharing_controller_host")) {
@@ -151,15 +163,6 @@ handleConfigPost(MongooseHttpServerRequest *request, MongooseHttpServerResponseS
       // left behind.
       loadSharingGroupState.removeSoleRemoteGroupPeer();
       loadSharingGroupState.resetRole();
-    }
-
-    // Update WiFi module config
-    MongooseString storage = request->headers("X-Storage");
-    if(storage.equals("factory") && config_factory_write_lock())
-    {
-      response->setCode(423);
-      response->print("{\"msg\":\"Factory settings locked\"}");
-      return;
     }
 
     bool config_modified = web_server_config_deserialise(doc, storage.equals("factory"));

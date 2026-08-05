@@ -572,7 +572,24 @@ bool config_https_enabled()
   if (www_certificate_id == "") {
     return false;
   }
-  uint64_t cert_id = std::stoull(www_certificate_id.c_str(), nullptr, 16);
+  // Validate before parsing: std::stoull throws on a non-hex value and an
+  // uncaught exception reboots the device. This runs from mDNS setup during
+  // network bring-up, so a corrupt stored id would otherwise crash-loop the
+  // firmware. A certificate id is a 64-bit hex string, so anything longer than
+  // 16 digits cannot be valid either.
+  const char *id_str = www_certificate_id.c_str();
+  if (www_certificate_id.length() > 16) {
+    DBUGF("config_https_enabled: www_certificate_id too long '%s'", id_str);
+    return false;
+  }
+  for (const char *c = id_str; '\0' != *c; c++) {
+    if (!isxdigit((unsigned char)*c)) {
+      DBUGF("config_https_enabled: invalid www_certificate_id '%s'", id_str);
+      return false;
+    }
+  }
+
+  uint64_t cert_id = strtoull(id_str, nullptr, 16);
   const char *cert = certs.getCertificate(cert_id);
   const char *key = certs.getKey(cert_id);
   return (NULL != cert && NULL != key);

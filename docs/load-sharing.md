@@ -85,8 +85,9 @@ flowchart LR
 
 ### 1) Discovery
 
-Each device advertises `_openevse._tcp` (service `openevse` / `tcp` port 80)
-with TXT records such as `type`, `version`, and `id`.
+Each device advertises `_openevse._tcp` (service `openevse` / `tcp`) on its own
+web server port — `www_https_port` when HTTPS is configured, otherwise
+`www_http_port` — with TXT records `type`, `version`, `id` and `ssl`.
 
 The controller periodically queries for peers and builds a candidate list
 (hostname, IP, firmware version, device id). Peers can also be added by
@@ -111,8 +112,11 @@ Key config fields (see theory doc §4.1 for the full table):
 | `loadsharing_failsafe_mode` | `"safe_current"` | Or `"disable"` |
 | `loadsharing_failsafe_safe_current` | `6.0` | Must be ≤ group max |
 | `loadsharing_failsafe_peer_assumed_current` | `6.0` | Offline peer reserve |
-| `loadsharing_priority` | `0` | Lower = higher priority; **not** pushed to peers |
 | `loadsharing_rotation_interval` | `1800` | Seconds; scarcity time-slice; `0` disables |
+
+Priority is **not** a config field — it is set per peer by the controller via
+`PUT /loadsharing/peers/{host}` and stored in the peer list (the controller's own
+entry is edited through the same endpoint). Lower value = higher priority.
 
 `POST /config` rejects writes where failsafe safe current exceeds the group
 max. Role transitions (`becomeMember` / `resetRole`) run only after validation.
@@ -145,11 +149,9 @@ Profile: **Equal Share with Minimums**.
 When more than one member is charging and an EV draws below its pilot, the
 controller caps that member’s effective max so freed budget can move to others.
 
-> **Live firmware note**: the algorithm supports per-peer priority, but the
-> controller currently fills every peer’s priority with its own
-> `loadsharing_priority`. Per-peer priority works in divert_sim; ingesting each
-> peer’s priority on the live controller is still outstanding (see project
-> status).
+Priority is per peer: each allocation input takes the priority from that peer’s
+entry in the controller’s peer list (see §2), so it is a controller-side setting
+and never read from the peer’s own config.
 
 ### 5) Allocation delivery
 

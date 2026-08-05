@@ -115,12 +115,9 @@ Content-Type: application/json
   "host": "192.168.1.100"
 }
 
-# =========================================================================
-# POST /loadsharing/peers - Error cases
-# =========================================================================
-
 ###
-# Try to add duplicate peer (expect 400)
+# Re-add a peer that is already joined. The endpoint is idempotent:
+# expect 200 {"msg":"already in group"} (no reciprocal sync is performed).
 
 POST {{host1}}/loadsharing/peers HTTP/1.1
 Content-Type: application/json
@@ -128,6 +125,10 @@ Content-Type: application/json
 {
   "host": "openevse-2.local"
 }
+
+# =========================================================================
+# POST /loadsharing/peers - Error cases
+# =========================================================================
 
 ###
 # Try to add peer with invalid format - no domain/IP (expect 400)

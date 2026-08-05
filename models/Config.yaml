@@ -108,7 +108,6 @@ x-examples:
     loadsharing_failsafe_mode: safe_current
     loadsharing_failsafe_safe_current: 6.0
     loadsharing_failsafe_peer_assumed_current: 6.0
-    loadsharing_priority: 1
     loadsharing_rotation_interval: 1800
     loadsharing_config_version: 1
     loadsharing_config_updated_at: 1735344000
@@ -406,12 +405,6 @@ properties:
     default: 6.0
     description: |
       Conservative assumed current (amps) for offline peers when calculating group allocation
-  loadsharing_priority:
-    type: integer
-    minimum: 0
-    default: 0
-    description: |
-      Local node priority in the load sharing group (lower means higher priority). This is NOT synced across nodes - each node maintains its own priority preference.
   loadsharing_rotation_interval:
     type: integer
     minimum: 0

@@ -105,8 +105,12 @@ Configuration is stored via `ConfigJson` and exposed on the `/config` endpoint.
 | `loadsharing_failsafe_mode` | string | `"safe_current"` | `"safe_current"` or `"disable"`. |
 | `loadsharing_failsafe_safe_current` | double | `6.0` | Amps; used in safe_current mode. MUST be ≤ `loadsharing_group_max_current`. |
 | `loadsharing_failsafe_peer_assumed_current` | double | `6.0` | Amps; offline peer reserve. |
-| `loadsharing_priority` | int | `0` | Node priority (lower = higher); NOT synced. |
 | `loadsharing_rotation_interval` | uint | `1800` | Seconds; under scarcity, rotate equal-priority winners. `0` disables. |
+
+> Priority is deliberately **not** a config field. It is per peer, owned by the
+> controller, set via `PUT /loadsharing/peers/{host}` and persisted with the peer
+> list in `/loadsharing_peers.json` (the controller's own row included). Lower
+> value = higher priority.
 
 > **Invariant**: On a member device (`loadsharing_role == "member"`), load
 > sharing configuration fields MUST be read-only.  POST/DELETE to
@@ -483,7 +487,8 @@ If the controller goes offline:
 
 ## 7  REST API Surface
 
-All endpoints are on the HTTP server (port 80).
+All endpoints are on the device's web server (`www_http_port`, or
+`www_https_port` when HTTPS is configured — the same port advertised over mDNS).
 
 | Method | Path | Controller | Member | Description |
 |--------|------|-----------|--------|-------------|
@@ -786,8 +791,9 @@ Blockers).
    pilot; verify remaining two share freed budget (INV-10).
 6. **All-idle group** — All members connected, none charging; verify budget
    is not consumed (connected_min is outside budget).
-7. **Per-peer priority on live controller** — Controller must use each peer's
-   own `loadsharing_priority`, not only the controller's local value.
+7. **Per-peer priority on live controller** — Set distinct priorities via
+   `PUT /loadsharing/peers/{host}` and verify the allocator honours each peer's
+   own value under scarcity, and that they survive a reboot.
 
 ---
 
