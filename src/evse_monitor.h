@@ -217,6 +217,7 @@ class EvseMonitor : public MicroTasks::Task
     void updateCurrentSettings(long min_current, long max_hardware_current, long pilot, long max_configured_current);
 
     void getStatusFromEvse(bool allowStart = true);
+    void getSettingsFromEvse();
     void getChargeCurrentAndVoltageFromEvse();
     void updateEffectiveVoltage();
     void getTemperatureFromEvse();
