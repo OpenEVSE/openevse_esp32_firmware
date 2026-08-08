@@ -126,8 +126,6 @@ String time_zone;
 uint32_t flags;
 uint32_t flags_changed;
 
-// Ohm Connect Settings
-String ohm;
 
 // Divert settings
 int8_t divert_type;
@@ -278,8 +276,6 @@ ConfigOpt *opts[] =
   new ConfigOptDefinition<String>(ocpp_authkey, "", "ocpp_authkey", "oky"),
   new ConfigOptDefinition<String>(ocpp_idtag, "DefaultIdTag", "ocpp_idtag", "idt"),
 
-// Ohm Connect Settings
-  new ConfigOptDefinition<String>(ohm, "", "ohm", "o"),
 
 // Divert settings
   new ConfigOptDefinition<int8_t>(divert_type, -1, "divert_type", "dm"),
@@ -331,7 +327,6 @@ ConfigOpt *opts[] =
   new ConfigOptVirtualMaskedBool(flagsOpt, flagsChanged, CONFIG_SERVICE_MQTT, CONFIG_SERVICE_MQTT, "mqtt_enabled", "me"),
   new ConfigOptVirtualMaskedBool(flagsOpt, flagsChanged, CONFIG_MQTT_ALLOW_ANY_CERT, 0, "mqtt_reject_unauthorized", "mru"),
   new ConfigOptVirtualMaskedBool(flagsOpt, flagsChanged, CONFIG_MQTT_RETAINED, CONFIG_MQTT_RETAINED, "mqtt_retained", "mrt"),
-  new ConfigOptVirtualMaskedBool(flagsOpt, flagsChanged, CONFIG_SERVICE_OHM, CONFIG_SERVICE_OHM, "ohm_enabled", "oe"),
   new ConfigOptVirtualMaskedBool(flagsOpt, flagsChanged, CONFIG_SERVICE_SNTP, CONFIG_SERVICE_SNTP, "sntp_enabled", "se"),
   new ConfigOptVirtualMaskedBool(flagsOpt, flagsChanged, CONFIG_SERVICE_TESLA, CONFIG_SERVICE_TESLA, "tesla_enabled", "te"),
   new ConfigOptVirtualMaskedBool(flagsOpt, flagsChanged, CONFIG_SERVICE_DIVERT, CONFIG_SERVICE_DIVERT, "divert_enabled", "de"),
