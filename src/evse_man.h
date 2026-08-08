@@ -238,8 +238,6 @@ class EvseManager : public MicroTasks::Task
     EvseClient _charge_current_client;
     EvseClient _max_current_client;
 
-    bool _sleepForDisable;
-
     bool _evaluateClaims;
     bool _evaluateTargetState;
 
@@ -265,6 +263,10 @@ class EvseManager : public MicroTasks::Task
   protected:
     void setup();
     unsigned long loop(MicroTasks::WakeReason reason);
+
+    // Whether a pause should use the controller's SLEEPING state rather than
+    // DISABLED. Derived from config on each use -- see the definition.
+    bool sleepForDisable();
 
   public:
     EvseManager(Stream &port, EventLog &eventLog);
@@ -577,7 +579,7 @@ class EvseManager : public MicroTasks::Task
 
     // Get/set the 'disabled' mode
     bool isSleepForDisable() {
-      return _sleepForDisable;
+      return sleepForDisable();
     }
     void setSleepForDisable(bool sleepForDisable);
 

@@ -93,6 +93,18 @@ class EvseMonitor : public MicroTasks::Task
           }
         }
         bool isVehicleConnected() {
+          // OPENEVSE_VFLAG_EV_CONNECTED is documented in the controller as
+          // "valid only when pilot not N12", and J1772EVSEController::Disable()
+          // sets exactly that -- so while the EVSE is DISABLED the controller
+          // cannot see a plug or unplug and simply leaves the flag at whatever
+          // it was when the pause started. Reporting that stale value showed a
+          // vehicle still connected long after it had been unplugged.
+          //
+          // SLEEPING is deliberately not covered: it holds the pilot at P12 and
+          // keeps detecting normally, so the flag stays trustworthy there.
+          if(OPENEVSE_STATE_DISABLED == getEvseState()) {
+            return false;
+          }
           return OPENEVSE_VFLAG_EV_CONNECTED == (getFlags() & OPENEVSE_VFLAG_EV_CONNECTED);
         }
         bool isBootLocked() {
