@@ -9,8 +9,13 @@
 #include "app_config.h"
 #include "app_config_mqtt.h"
 #include "app_config_mode.h"
+#include "temp_throttle.h"
+#include "flash_migrate.h"
+
+#include "web_auth_secret.h"
 
 #if ENABLE_CONFIG_CHANGE_NOTIFICATION
+#include <esp_ota_ops.h>
 #include "divert.h"
 #include "net_manager.h"
 #include "mqtt.h"
@@ -20,7 +25,16 @@
 #include "input.h"
 #include "LedManagerTask.h"
 #include "current_shaper.h"
+
 #include "limit.h"
+#endif
+
+#ifndef HTTP_SERVER_PORT
+#define HTTP_SERVER_PORT 80
+#endif
+
+#ifndef HTTPS_SERVER_PORT
+#define HTTPS_SERVER_PORT 443
 #endif
 
 #define EEPROM_SIZE       4096
@@ -47,9 +61,28 @@ String www_username;
 String www_password;
 String www_certificate_id;
 
+// Session HMAC key — generated on first load, rotated on credential change.
+String server_secret;
+
+// Web server ports
+uint32_t www_http_port;
+uint32_t www_https_port;
+
 // Advanced settings
 String esp_hostname;
 String sntp_hostname;
+
+// Device-wide temperature display unit ("c" | "f").
+String temp_unit;
+
+// On-device LVGL TFT display theme ("dark" | "light").
+String tft_theme;
+uint32_t tft_brightness;
+uint32_t tft_standby_brightness;
+
+// LCD backlight timeout (in seconds, 0 = never timeout). Shared key with the
+// char-LCD / TFT_eSPI energy-saving timeout (upstream PR #1039).
+uint32_t lcd_backlight_timeout;
 
 // LIMIT Settings
 String limit_default_type;
@@ -75,6 +108,9 @@ String mqtt_live_pwr;
 String mqtt_vehicle_soc;
 String mqtt_vehicle_range;
 String mqtt_vehicle_eta;
+String mqtt_vehicle_charge_limit;
+String mqtt_home_battery_soc;
+String mqtt_home_battery_power;
 String mqtt_announce_topic;
 
 // OCPP 1.6 Settings
@@ -105,6 +141,19 @@ uint32_t current_shaper_max_pwr;
 uint32_t current_shaper_smoothing_time;
 uint32_t current_shaper_min_pause_time;   // in seconds
 uint32_t current_shaper_data_maxinterval; // in seconds
+
+// Temperature Throttle settings
+uint32_t temp_throttle_setpoint;
+
+// Over-temperature shutdown threshold (degrees C)
+uint32_t over_temp_shutdown;
+
+// Voltage for power calculations (centivolt, 0 = use EVSE default)
+uint32_t voltage_cfg;
+
+// Heartbeat Supervision settings
+uint32_t heartbeat_interval_cfg;
+uint32_t heartbeat_current_cfg;
 
 // Tesla Client settings
 String tesla_access_token;
@@ -137,10 +186,16 @@ void config_changed(String name);
 #define CONFIG_DEFAULT_STATE_DEFAULT CONFIG_DEFAULT_STATE
 #endif
 
+#ifndef CONFIG_TEMP_THROTTLE_DEFAULT
+#define CONFIG_TEMP_THROTTLE_DEFAULT CONFIG_TEMP_THROTTLE
+#endif
+
 #define CONFIG_DEFAULT_FLAGS (CONFIG_SERVICE_SNTP | \
                               CONFIG_OCPP_AUTO_AUTH | \
                               CONFIG_OCPP_OFFLINE_AUTH | \
-                              CONFIG_DEFAULT_STATE_DEFAULT)
+                              CONFIG_TEMP_THROTTLE_DEFAULT | \
+                              CONFIG_DEFAULT_STATE_DEFAULT | \
+                              CONFIG_LCD_NETWORK_INFO)
 
 ConfigOptDefinition<uint32_t> flagsOpt = ConfigOptDefinition<uint32_t>(flags, CONFIG_DEFAULT_FLAGS, "flags", "f");
 ConfigOptDefinition<uint32_t> flagsChanged = ConfigOptDefinition<uint32_t>(flags_changed, 0, "flags_changed", "c");
@@ -159,11 +214,31 @@ ConfigOpt *opts[] =
 // Web server authentication (leave blank for none)
   new ConfigOptDefinition<String>(www_username, "", "www_username", "au"),
   new ConfigOptSecret(www_password, "", "www_password", "ap"),
-  new ConfigOptDefenition<String>(www_certificate_id, "", "www_certificate_id", "wc"),
+  new ConfigOptDefinition<String>(www_certificate_id, "", "www_certificate_id", "wc"),
+  new ConfigOptSecret(server_secret, "", "server_secret", "wsk"),
+
+// Web server ports
+  new ConfigOptDefinition<uint32_t>(www_http_port, HTTP_SERVER_PORT, "www_http_port", "whp"),
+  new ConfigOptDefinition<uint32_t>(www_https_port, HTTPS_SERVER_PORT, "www_https_port", "wsp"),
 
 // Advanced settings
   new ConfigOptDefinition<String>(esp_hostname, esp_hostname_default, "hostname", "hn"),
   new ConfigOptDefinition<String>(sntp_hostname, SNTP_DEFAULT_HOST, "sntp_hostname", "sh"),
+
+// Temperature display unit ("c" | "f") — device-wide, read by the display and
+// the web UI so both agree. Default Celsius (the device always reports °C).
+  new ConfigOptDefinition<String>(temp_unit, "c", "temp_unit", "tu"),
+
+#ifdef ENABLE_SCREEN_LVGL_TFT
+// On-device display theme (only present on LVGL-TFT builds; its presence in
+// /config is the GUI's capability signal that this device has the panel).
+  new ConfigOptDefinition<String>(tft_theme, "dark", "tft_theme", "tt"),
+  new ConfigOptDefinition<uint32_t>(tft_brightness, 100, "tft_brightness", "tb"),
+  new ConfigOptDefinition<uint32_t>(tft_standby_brightness, 15, "tft_standby_brightness", "tsb"),
+#endif
+
+// LCD backlight timeout
+  new ConfigOptDefinition<uint32_t>(lcd_backlight_timeout, LCD_BACKLIGHT_TIMEOUT_DEFAULT, "lcd_backlight_timeout", "lbt"),
 
 // Time
   new ConfigOptDefinition<String>(time_zone, DEFAULT_TIME_ZONE, "time_zone", "tz"),
@@ -173,25 +248,28 @@ ConfigOpt *opts[] =
   new ConfigOptDefinition<uint32_t>(limit_default_value, LIMIT_DEFAULT_VALUE_DEFAULT, "limit_default_value", "ldv"),
 
 // EMONCMS SERVER strings
-  new ConfigOptDefinition<String>(emoncms_server, "https://data.openevse.com/emoncms", "emoncms_server", "es"),
+  new ConfigOptDefinition<String>(emoncms_server, "https://emoncms.org", "emoncms_server", "es"),
   new ConfigOptDefinition<String>(emoncms_node, esp_hostname, "emoncms_node", "en"),
   new ConfigOptSecret(emoncms_apikey, "", "emoncms_apikey", "ea"),
   new ConfigOptDefinition<String>(emoncms_fingerprint, "", "emoncms_fingerprint", "ef"),
 
 // MQTT Settings
-  new ConfigOptDefinition<String>(mqtt_server, "emonpi", "mqtt_server", "ms"),
+  new ConfigOptDefinition<String>(mqtt_server, "", "mqtt_server", "ms"),
   new ConfigOptDefinition<uint32_t>(mqtt_port, 1883, "mqtt_port", "mpt"),
   new ConfigOptDefinition<String>(mqtt_topic, esp_hostname, "mqtt_topic", "mt"),
-  new ConfigOptDefinition<String>(mqtt_user, "emonpi", "mqtt_user", "mu"),
-  new ConfigOptSecret(mqtt_pass, "emonpimqtt2016", "mqtt_pass", "mp"),
+  new ConfigOptDefinition<String>(mqtt_user, "", "mqtt_user", "mu"),
+  new ConfigOptSecret(mqtt_pass, "", "mqtt_pass", "mp"),
   new ConfigOptDefinition<String>(mqtt_certificate_id, "", "mqtt_certificate_id", "mct"),
   new ConfigOptDefinition<String>(mqtt_solar, "", "mqtt_solar", "mo"),
-  new ConfigOptDefinition<String>(mqtt_grid_ie, "emon/emonpi/power1", "mqtt_grid_ie", "mg"),
-  new ConfigOptDefinition<String>(mqtt_vrms, "emon/emonpi/vrms", "mqtt_vrms", "mv"),
+  new ConfigOptDefinition<String>(mqtt_grid_ie, "", "mqtt_grid_ie", "mg"),
+  new ConfigOptDefinition<String>(mqtt_vrms, "", "mqtt_vrms", "mv"),
   new ConfigOptDefinition<String>(mqtt_live_pwr, "", "mqtt_live_pwr", "map"),
   new ConfigOptDefinition<String>(mqtt_vehicle_soc, "", "mqtt_vehicle_soc", "mc"),
   new ConfigOptDefinition<String>(mqtt_vehicle_range, "", "mqtt_vehicle_range", "mr"),
   new ConfigOptDefinition<String>(mqtt_vehicle_eta, "", "mqtt_vehicle_eta", "met"),
+  new ConfigOptDefinition<String>(mqtt_vehicle_charge_limit, "", "mqtt_vehicle_charge_limit", "mcl"),
+  new ConfigOptDefinition<String>(mqtt_home_battery_soc, "", "mqtt_home_battery_soc", "mhs"),
+  new ConfigOptDefinition<String>(mqtt_home_battery_power, "", "mqtt_home_battery_power", "mhp"),
   new ConfigOptDefinition<String>(mqtt_announce_topic, "openevse/announce/" + ESPAL.getShortId(), "mqtt_announce_topic", "ma"),
 
 // OCPP 1.6 Settings
@@ -215,6 +293,13 @@ ConfigOpt *opts[] =
   new ConfigOptDefinition<uint32_t>(current_shaper_smoothing_time, 60, "current_shaper_smoothing_time", "sst"),
   new ConfigOptDefinition<uint32_t>(current_shaper_min_pause_time, 300, "current_shaper_min_pause_time", "spt"),
   new ConfigOptDefinition<uint32_t>(current_shaper_data_maxinterval, 120, "current_shaper_data_maxinterval", "sdm"),
+
+// Temperature Throttle settings
+  new ConfigOptDefinition<uint32_t>(temp_throttle_setpoint, TEMP_THROTTLE_SETPOINT_DEFAULT, "temp_throttle_setpoint", "tts"),
+  new ConfigOptDefinition<uint32_t>(over_temp_shutdown, 72, "over_temp_shutdown", "ots"),
+  new ConfigOptDefinition<uint32_t>(voltage_cfg, 0, "voltage", "sv"),
+  new ConfigOptDefinition<uint32_t>(heartbeat_interval_cfg, 5, "heartbeat_interval", "hbi"),
+  new ConfigOptDefinition<uint32_t>(heartbeat_current_cfg, 6, "heartbeat_current", "hbc"),
 
 // Vehicle settings
   new ConfigOptDefinition<uint8_t>(vehicle_data_src, 0, "vehicle_data_src", "vds"),
@@ -263,6 +348,8 @@ ConfigOpt *opts[] =
   new ConfigOptVirtualMaskedBool(flagsOpt, flagsChanged, CONFIG_THREEPHASE, CONFIG_THREEPHASE, "is_threephase", "itp"),
   new ConfigOptVirtualMaskedBool(flagsOpt, flagsChanged, CONFIG_WIZARD, CONFIG_WIZARD, "wizard_passed", "wzp"),
   new ConfigOptVirtualMaskedBool(flagsOpt, flagsChanged, CONFIG_DEFAULT_STATE, CONFIG_DEFAULT_STATE, "default_state", "dfs"),
+  new ConfigOptVirtualMaskedBool(flagsOpt, flagsChanged, CONFIG_TEMP_THROTTLE, CONFIG_TEMP_THROTTLE, "temp_throttle_enabled", "tte"),
+  new ConfigOptVirtualMaskedBool(flagsOpt, flagsChanged, CONFIG_LCD_NETWORK_INFO, CONFIG_LCD_NETWORK_INFO, "lcd_network_info", "lni"),
   new ConfigOptVirtualMqttProtocol(flagsOpt, flagsChanged, "mqtt_protocol", "mprt"),
   new ConfigOptVirtualChargeMode(flagsOpt, flagsChanged, "charge_mode", "chmd")
 };
@@ -342,6 +429,18 @@ config_load_settings()
     }
 #endif
 
+#if CONFIG_TEMP_THROTTLE_DEFAULT != 0
+    // Temperature throttle default flipped from 0 to 1: a current 0 is treated
+    // as the old default (not an intentional change) so it becomes enabled on
+    // upgrade; a current 1 is kept as an intentional setting.
+    new_changed &= ~CONFIG_TEMP_THROTTLE;
+    if(flags != CONFIG_DEFAULT_FLAGS &&
+       CONFIG_TEMP_THROTTLE == (flags & CONFIG_TEMP_THROTTLE))
+    {
+      new_changed |= CONFIG_TEMP_THROTTLE;
+    }
+#endif
+
     // Save any changes
     if(flagsChanged.set(new_changed)) {
       user_config.commit();
@@ -350,17 +449,29 @@ config_load_settings()
 
   // now lets apply any default flags that have not explicitly been set by the user
   flags |= CONFIG_DEFAULT_FLAGS & ~flags_changed;
+
+  // Generate server_secret on first boot (empty after load means the key was
+  // never stored). web_auth_ensure_secret() persists via user_config.commit().
+  web_auth_ensure_secret();
 }
 
 void config_changed(String name)
 {
   DBUGF("%s changed", name.c_str());
 
+  // Security: invalidate all sessions whenever credentials change.
+  // This must run regardless of ENABLE_CONFIG_CHANGE_NOTIFICATION.
+  if(name == "www_password" || name == "www_username") {
+    web_auth_rotate_secret();
+  }
+
 #if ENABLE_CONFIG_CHANGE_NOTIFICATION
   if(name == "time_zone") {
     timeManager.setTimeZone(time_zone);
   } else if(name == "flags") {
-    divert.setMode((config_divert_enabled() && 1 == config_charge_mode()) ? DivertMode::Eco : DivertMode::Normal);
+    if(!divert.isTimerDivertActive()) {
+      divert.setMode((config_divert_enabled() && 1 == config_charge_mode()) ? DivertMode::Eco : DivertMode::Normal);
+    }
     if(mqtt.isConnected() != config_mqtt_enabled()) {
       mqtt.restartConnection();
     }
@@ -381,9 +492,13 @@ void config_changed(String name)
   } else if(name == "divert_enabled" || name == "charge_mode") {
     DBUGVAR(config_divert_enabled());
     DBUGVAR(config_charge_mode());
-    divert.setMode((config_divert_enabled() && 1 == config_charge_mode()) ? DivertMode::Eco : DivertMode::Normal);
+    if(!divert.isTimerDivertActive()) {
+      divert.setMode((config_divert_enabled() && 1 == config_charge_mode()) ? DivertMode::Eco : DivertMode::Normal);
+    }
   } else if(name.startsWith("current_shaper_")) {
     shaper.notifyConfigChanged(config_current_shaper_enabled()?1:0,current_shaper_max_pwr);
+  } else if(name.startsWith("temp_throttle_")) {
+    tempThrottle.notifyConfigChanged(config_temp_throttle_enabled(), temp_throttle_setpoint);
   } else if(name == "tesla_vehicle_id") {
     teslaClient.setVehicleId(tesla_vehicle_id);
   } else if(name.startsWith("tesla_")) {
@@ -396,6 +511,8 @@ void config_changed(String name)
     limit.setDefaultLimit(limit_default_type.c_str(), limit_default_value);
   } else if(name == "sntp_enabled") {
     timeManager.setSntpEnabled(config_sntp_enabled());
+  } else if(name == "sntp_hostname") {
+    timeManager.setHost(sntp_hostname.c_str());
   }
 #endif
 }
@@ -405,6 +522,14 @@ void config_commit(bool factory)
   ConfigJson &config = factory ? factory_config : user_config;
   config.set("factory_write_lock", true);
   config.commit();
+}
+
+// Persist user config without touching the factory_write_lock flag.
+// Use this from code that writes individual fields (e.g. server_secret) and
+// must not inadvertently lock the factory partition.
+void config_user_commit()
+{
+  user_config.commit();
 }
 
 bool config_deserialize(String& json) {
@@ -483,13 +608,136 @@ bool config_deserialize(DynamicJsonDocument &doc)
     }
   }
 
+  if(doc.containsKey("overcurrent_monitor"))
+  {
+    bool enable = doc["overcurrent_monitor"];
+    if(enable != evse.isOvercurrentMonitorEnabled()) {
+      evse.enableOvercurrentMonitor(enable);
+      config_modified = true;
+      DBUGLN("overcurrent_monitor changed");
+    }
+  }
+
+  if(doc.containsKey("over_temp_shutdown"))
+  {
+    uint32_t val = doc["over_temp_shutdown"];
+    if(val != over_temp_shutdown || val != evse.getPanicTemperature()) {
+      over_temp_shutdown = val;
+      evse.setPanicTemperature(val);
+      config_modified = true;
+      DBUGLN("over_temp_shutdown changed");
+    }
+  }
+
+  if(doc.containsKey("voltage"))
+  {
+    uint32_t val = doc["voltage"];
+    if(val > 0) {
+      double new_volts = (double)val / 100.0;
+      if(new_volts != evse.getVoltage()) {
+        evse.setVoltage(new_volts);
+        config_modified = true;
+        DBUGLN("voltage changed");
+      }
+    }
+  }
+
+  if(doc.containsKey("front_button"))
+  {
+    bool enable = doc["front_button"];
+    if(enable != evse.isFrontButtonEnabled()) {
+      evse.enableFrontButton(enable);
+      config_modified = true;
+      DBUGLN("front_button changed");
+    }
+  }
+
+  if(doc.containsKey("boot_lock"))
+  {
+    bool enable = doc["boot_lock"];
+    if(enable != evse.isBootLockEnabled()) {
+      evse.enableBootLock(enable);
+      config_modified = true;
+      DBUGLN("boot_lock changed");
+    }
+  }
+
+  if(doc.containsKey("pp_auto"))
+  {
+    bool enable = doc["pp_auto"];
+    if(enable != evse.isPPAutoAmpacityEnabled()) {
+      evse.enablePPAutoAmpacity(enable);
+      config_modified = true;
+      DBUGLN("pp_auto changed");
+    }
+  }
+
+  if(doc.containsKey("zero_cross"))
+  {
+    bool enable = doc["zero_cross"];
+    if(enable != evse.isZeroCrossSwitchEnabled()) {
+      evse.enableZeroCrossSwitch(enable);
+      config_modified = true;
+      DBUGLN("zero_cross changed");
+    }
+  }
+
+  if(doc.containsKey("relay_dc1"))
+  {
+    bool enable = doc["relay_dc1"];
+    if(enable != evse.isDC1RelayEnabled()) {
+      evse.setRelayEnable(1, enable);
+      config_modified = true;
+      DBUGLN("relay_dc1 changed");
+    }
+  }
+
+  if(doc.containsKey("relay_dc2"))
+  {
+    bool enable = doc["relay_dc2"];
+    if(enable != evse.isDC2RelayEnabled()) {
+      evse.setRelayEnable(2, enable);
+      config_modified = true;
+      DBUGLN("relay_dc2 changed");
+    }
+  }
+
+  if(doc.containsKey("relay_ac"))
+  {
+    bool enable = doc["relay_ac"];
+    if(enable != evse.isACRelayEnabled()) {
+      evse.setRelayEnable(3, enable);
+      config_modified = true;
+      DBUGLN("relay_ac changed");
+    }
+  }
+
+  if(doc.containsKey("heartbeat_interval") || doc.containsKey("heartbeat_current"))
+  {
+    uint32_t interval = doc.containsKey("heartbeat_interval") ? (uint32_t)doc["heartbeat_interval"] : heartbeat_interval_cfg;
+    uint32_t current  = doc.containsKey("heartbeat_current")  ? (uint32_t)doc["heartbeat_current"]  : heartbeat_current_cfg;
+    if(interval != evse.getHeartbeatInterval() || current != evse.getHeartbeatCurrent()) {
+      heartbeat_interval_cfg = interval;
+      heartbeat_current_cfg  = current;
+      evse.setHeartbeatSupervision(interval, current);
+      config_modified = true;
+      DBUGLN("heartbeat changed");
+    }
+  }
+
   if(doc.containsKey("service"))
   {
-    EvseMonitor::ServiceLevel service = static_cast<EvseMonitor::ServiceLevel>(doc["service"].as<uint8_t>());
-    if(service != evse.getServiceLevel()) {
-      evse.setServiceLevel(service);
-      config_modified = true;
-      DBUGLN("service changed");
+    // Only L1/L2 are valid; Auto (0, no longer offered) and anything else are
+    // ignored so a stale stored value can't put $SL A on the wire.
+    uint8_t value = doc["service"].as<uint8_t>();
+    if(1 == value || 2 == value)
+    {
+      EvseMonitor::ServiceLevel service = static_cast<EvseMonitor::ServiceLevel>(value);
+      if(service != evse.getServiceLevel()) {
+        evse.setServiceLevel(service);
+        config_modified = true;
+        DBUGLN("service changed");
+      }
     }
   }
 
@@ -564,6 +812,18 @@ bool config_serialize(DynamicJsonDocument &doc, bool longNames, bool compactOutp
   doc["protocol"] = "-";
   doc["espinfo"] = ESPAL.getChipInfo();
   doc["espflash"] = ESPAL.getFlashChipSize();
+  doc["heap_size"] = (uint32_t)ESP.getHeapSize();
+  doc["littlefs_size"] = (uint32_t)LittleFS.totalBytes();
+  doc["littlefs_used"] = (uint32_t)LittleFS.usedBytes();
+  {
+    const esp_partition_t *p = esp_ota_get_running_partition();
+    doc["app0_size"]   = p ? (uint32_t)p->size : 0;
+    doc["sketch_size"] = (uint32_t)ESP.getSketchSize();
+  }
+  // Flash repartition migration: lets the UI offer "Expand to 16MB" on a 16MB
+  // module that was flashed with the 4MB partition layout.
+  doc["partition_scheme"] = flash_migrate_partition_scheme();
+  doc["can_expand_16mb"]  = flash_migrate_can_expand_16mb();
 
   // EVSE information are only evailable when config_version is incremented
   if(config_ver > 0) {
@@ -577,6 +837,32 @@ bool config_serialize(DynamicJsonDocument &doc, bool longNames, bool compactOutp
     doc["relay_check"] = evse.isStuckRelayCheckEnabled();
     doc["vent_check"] = evse.isVentRequiredEnabled();
     doc["temp_check"] = evse.isTemperatureCheckEnabled();
+    doc["overcurrent_monitor"] = evse.isOvercurrentMonitorEnabled();
+    // Runtime over-temperature panic threshold is set via $FO, which only
+    // exists on D9+ controllers; omit so the GUI hides the control
+    if(evse.isD9Supported()) {
+      doc["over_temp_shutdown"] = over_temp_shutdown;
+    }
+    doc["front_button"] = evse.isFrontButtonEnabled();
+    doc["boot_lock"] = evse.isBootLockEnabled();
+    // D9-only capability flag so clients can gate the controls below
+    doc["d9_support"] = evse.isD9Supported();
+    // PP auto-ampacity / zero-cross switching only exist on D9+ controllers
+    if(evse.isD9Supported()) {
+      doc["pp_auto"] = evse.isPPAutoAmpacityEnabled();
+      doc["zero_cross"] = evse.isZeroCrossSwitchEnabled();
+    }
+    // Per-relay state is only emitted once $GR has actually been answered, so
+    // an unknown state is omitted rather than defaulting to "enabled"
+    if(evse.isRelayStatusKnown()) {
+      doc["relay_dc1"] = evse.isDC1RelayEnabled();
+      doc["relay_dc2"] = evse.isDC2RelayEnabled();
+      doc["relay_ac"]  = evse.isACRelayEnabled();
+    }
+    doc["chip_id"] = evse.getChipId();
+    doc["heartbeat_interval"] = evse.getHeartbeatInterval();
+    doc["heartbeat_current"] = evse.getHeartbeatCurrent();
+    doc["voltage"] = voltage_cfg;
     doc["max_current_soft"] = evse.getMaxConfiguredCurrent();
     // OpenEVSE Read only information
     doc["service"] = static_cast<uint8_t>(evse.getServiceLevel());
@@ -590,17 +876,59 @@ bool config_serialize(DynamicJsonDocument &doc, bool longNames, bool compactOutp
   return user_config.serialize(doc, longNames, compactOutput, hideSecrets);
 }
 
-void config_set(const char *name, uint32_t val) {
-  user_config.set(name, val);
+bool config_set(const char *name, uint32_t val) {
+  return user_config.set(name, val);
 }
-void config_set(const char *name, String val) {
-  user_config.set(name, val);
+bool config_set(const char *name, String val) {
+  return user_config.set(name, val);
 }
-void config_set(const char *name, bool val) {
-  user_config.set(name, val);
+bool config_set(const char *name, bool val) {
+  return user_config.set(name, val);
 }
-void config_set(const char *name, double val) {
-  user_config.set(name, val);
+bool config_set(const char *name, double val) {
+  return user_config.set(name, val);
+}
+
+bool config_set_opt_string(const char *name, const char *value) {
+  // Try to determine the type from the config option definition
+  // For now, we'll try as string first, then try as integer
+  
+  // Create a JSON document with the value as a string
+  const size_t capacity = JSON_OBJECT_SIZE(1) +  strlen(value) + strlen(value) + 16;
+  DynamicJsonDocument doc(capacity);
+  const String value_str(value);
+  // Parse common scalar types from the string
+  if(value_str.equalsIgnoreCase("true")) {
+    doc[name] = true;
+  } else if(value_str.equalsIgnoreCase("false")) {
+    doc[name] = false;
+  }
+  else
+  {
+    // Try parsing as integer
+    char *endptr;
+    long int_val = strtol(value, &endptr, 10);
+    
+    if (*endptr == '\0' && value != endptr)
+    {
+      // Successfully parsed as integer
+      doc[name] = int_val;
+    }
+    else
+    {
+      // Try parsing as double
+      double double_val = strtod(value, &endptr);
+      if (*endptr == '\0' && value != endptr && strchr(value, '.') != nullptr) {
+        // Successfully parsed as double
+        doc[name] = double_val;
+      } else {
+        // Use as string
+        doc[name] = value;
+      }
+    }
+  }
+  
+  return config_deserialize(doc);
 }
 
 void config_reset()

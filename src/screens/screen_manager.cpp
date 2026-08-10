@@ -168,6 +168,10 @@ void ScreenManager::updateBacklight()
       case OPENEVSE_STATE_GFI_SELF_TEST_FAILED:
       case OPENEVSE_STATE_OVER_TEMPERATURE:
       case OPENEVSE_STATE_OVER_CURRENT:
+      case OPENEVSE_STATE_RELAY_CLOSURE_FAULT:
+      case OPENEVSE_STATE_PP_SHORTED:
+      case OPENEVSE_STATE_PP_MISSING:
+      case OPENEVSE_STATE_EEPROM_FAILURE:
         timeout = false;
         break;
       case OPENEVSE_STATE_NOT_CONNECTED:

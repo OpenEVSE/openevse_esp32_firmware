@@ -1,0 +1,45 @@
+{
+  "meta": {
+    "id": "divert_day1_grid_ie_nowaste",
+    "title": "Divert: Day 1 (Grid I/E) (nowaste)",
+    "category": "divert",
+    "profile": "nowaste"
+  },
+  "simulation": {
+    "duration": 37080,
+    "tick_interval": 60,
+    "start_time": "2018-06-10T07:00:00Z"
+  },
+  "peers": [
+    {
+      "id": "evse-001",
+      "voltage": 240,
+      "min_current": 6,
+      "max_current": 32,
+      "ev": {
+        "battery_capacity_kwh": 1000,
+        "initial_soc": 0,
+        "max_charge_rate_kw": 22
+      },
+      "initial": {
+        "online": true,
+        "vehicle": true
+      },
+      "inputs": {
+        "grid_ie": {
+          "csv": "../day1_grid_ie.csv",
+          "time_column": 0,
+          "column": 2,
+          "skip_header": true
+        },
+        "solar": {
+          "csv": "../day1_grid_ie.csv",
+          "time_column": 0,
+          "column": 1,
+          "skip_header": true
+        }
+      }
+    }
+  ],
+  "config_include": "config-divert-grid_ie-nowaste.json"
+}
