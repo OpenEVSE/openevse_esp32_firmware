@@ -26,6 +26,7 @@ static MongooseHttpClient client;
 
 struct EmonCmsClientState {
   bool connected;
+  String url;
 };
 
 static void emoncms_result(bool success, String message)
@@ -73,10 +74,11 @@ void emoncms_publish(JsonDocument &data)
     packets_sent++;
 
     auto state = new EmonCmsClientState;
-
     state->connected = false;
+    state->url = url;
 
-    client.get(url, [state](MongooseHttpClientResponse *response)
+    MongooseHttpClientRequest *request = client.beginRequest(state->url.c_str());
+    request->onResponse([state](MongooseHttpClientResponse *response)
     {
       MongooseString result = response->body();
       DBUGF("result = %.*s", result.length(), result.c_str());
@@ -101,7 +103,8 @@ void emoncms_publish(JsonDocument &data)
         DEBUG.printf("%.*s\n", result.length(), (const char *)result);
         emoncms_result(false, result.toString());
       }
-    }, [state]()
+    });
+    request->onClose([state]()
     {
       DBUGF("onClose");
       if(false == state->connected) {
@@ -109,6 +112,11 @@ void emoncms_publish(JsonDocument &data)
       }
       delete state;
     });
+    if(!request->send()) {
+      delete request;
+      delete state;
+      emoncms_result(false, String("Failed to connect"));
+    }
   } else {
     if(false != emoncms_connected) {
       emoncms_result(false, String("Disabled"));
