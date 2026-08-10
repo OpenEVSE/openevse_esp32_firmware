@@ -37,8 +37,8 @@
 #define EVSE_MONITOR_TEMP_TIME              30
 #endif // !EVSE_MONITOR_TEMP_TIME
 
-#ifndef EVSE_HEATBEAT_INTERVAL
-#define EVSE_HEATBEAT_INTERVAL              5
+#ifndef EVSE_HEARTBEAT_INTERVAL
+#define EVSE_HEARTBEAT_INTERVAL              5
 #endif
 #ifndef EVSE_HEARTBEAT_CURRENT
 #define EVSE_HEARTBEAT_CURRENT              6
@@ -249,7 +249,7 @@ void EvseMonitor::evseBoot(const char *firmware)
     }
   });
 
-  _openevse.heartbeatEnable(EVSE_HEATBEAT_INTERVAL, EVSE_HEARTBEAT_CURRENT, [this](int ret, int interval, int current, int triggered) {
+  _openevse.heartbeatEnable(EVSE_HEARTBEAT_INTERVAL, EVSE_HEARTBEAT_CURRENT, [this](int ret, int interval, int current, int triggered) {
     _heartbeat = RAPI_RESPONSE_OK == ret;
   });
 }
