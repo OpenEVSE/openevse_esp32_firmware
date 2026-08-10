@@ -73,7 +73,7 @@ void emoncms_publish(JsonDocument &data)
     DBUGVAR(url);
     packets_sent++;
 
-    auto state = new EmonCmsClientState;
+    auto state = std::make_shared<EmonCmsClientState>();
     state->connected = false;
     state->url = url;
 
@@ -110,13 +110,11 @@ void emoncms_publish(JsonDocument &data)
       if(false == state->connected) {
         emoncms_result(false, String("Failed to connect"));
       }
-      delete state;
     });
     if(!request->send()) {
       request->onResponse(MongooseHttpResponseHandler());
       request->onClose(MongooseSocketCloseHandler());
       delete request;
-      delete state;
       emoncms_result(false, String("Failed to connect"));
     }
   } else {
