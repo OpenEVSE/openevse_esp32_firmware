@@ -104,12 +104,6 @@ void emoncms_publish(JsonDocument &data)
         emoncms_result(false, result.toString());
       }
     });
-    if(!request->send()) {
-      delete request;
-      delete state;
-      emoncms_result(false, String("Failed to connect"));
-      return;
-    }
     request->onClose([state]()
     {
       DBUGF("onClose");
@@ -118,6 +112,13 @@ void emoncms_publish(JsonDocument &data)
       }
       delete state;
     });
+    if(!request->send()) {
+      request->onResponse(MongooseHttpResponseHandler());
+      request->onClose(MongooseSocketCloseHandler());
+      delete request;
+      delete state;
+      emoncms_result(false, String("Failed to connect"));
+    }
   } else {
     if(false != emoncms_connected) {
       emoncms_result(false, String("Disabled"));
