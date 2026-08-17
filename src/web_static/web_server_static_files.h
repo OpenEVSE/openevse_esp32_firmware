@@ -1,14 +1,14 @@
 #include "web_server.apple_touch_icon_png.h"
-#include "web_server.assets_charts_2ynqPV6l_js_gz.h"
+#include "web_server.assets_charts_BwRwvqTk_js_gz.h"
 #include "web_server.assets_charts_CnsZ1jie_css_gz.h"
-#include "web_server.assets_en_BW1y5bV5_js_gz.h"
-#include "web_server.assets_es_C5Mp5haA_js_gz.h"
-#include "web_server.assets_fr_CORlna4i_js_gz.h"
-#include "web_server.assets_hu_D1AyHTRC_js_gz.h"
-#include "web_server.assets_index_ChLf_jAb_css_gz.h"
-#include "web_server.assets_index_Dc5MpQ5K_js_gz.h"
-#include "web_server.assets_rolldown_runtime_Bh1tDfsg_js_gz.h"
-#include "web_server.assets_vendor_BJMtwemW_js_gz.h"
+#include "web_server.assets_en_CMYHnNb0_js_gz.h"
+#include "web_server.assets_es_CVMvGy0h_js_gz.h"
+#include "web_server.assets_fr_t0eNdETv_js_gz.h"
+#include "web_server.assets_hu_BZYKsDCc_js_gz.h"
+#include "web_server.assets_index_BeMecANi_css_gz.h"
+#include "web_server.assets_index_C4x_RX8m_js_gz.h"
+#include "web_server.assets_rolldown_runtime_CbXtAM7H_js_gz.h"
+#include "web_server.assets_vendor_BbWlGqGY_js_gz.h"
 #include "web_server.favicon_ico.h"
 #include "web_server.index_html_gz.h"
 #include "web_server.manifest_webmanifest.h"
@@ -18,16 +18,16 @@
 #include "web_server.sw_js.h"
 StaticFile web_server_static_files[] = {
   { "/apple-touch-icon.png", CONTENT_APPLE_TOUCH_ICON_PNG, sizeof(CONTENT_APPLE_TOUCH_ICON_PNG) - 1, _CONTENT_TYPE_PNG, CONTENT_APPLE_TOUCH_ICON_PNG_ETAG, false },
-  { "/assets/charts-2ynqPV6l.js", CONTENT_CHARTS_2YNQPV6L_JS_GZ, sizeof(CONTENT_CHARTS_2YNQPV6L_JS_GZ) - 1, _CONTENT_TYPE_JS, CONTENT_CHARTS_2YNQPV6L_JS_GZ_ETAG, true },
+  { "/assets/charts-BwRwvqTk.js", CONTENT_CHARTS_BWRWVQTK_JS_GZ, sizeof(CONTENT_CHARTS_BWRWVQTK_JS_GZ) - 1, _CONTENT_TYPE_JS, CONTENT_CHARTS_BWRWVQTK_JS_GZ_ETAG, true },
   { "/assets/charts-CnsZ1jie.css", CONTENT_CHARTS_CNSZ1JIE_CSS_GZ, sizeof(CONTENT_CHARTS_CNSZ1JIE_CSS_GZ) - 1, _CONTENT_TYPE_CSS, CONTENT_CHARTS_CNSZ1JIE_CSS_GZ_ETAG, true },
-  { "/assets/en-BW1y5bV5.js", CONTENT_EN_BW1Y5BV5_JS_GZ, sizeof(CONTENT_EN_BW1Y5BV5_JS_GZ) - 1, _CONTENT_TYPE_JS, CONTENT_EN_BW1Y5BV5_JS_GZ_ETAG, true },
-  { "/assets/es-C5Mp5haA.js", CONTENT_ES_C5MP5HAA_JS_GZ, sizeof(CONTENT_ES_C5MP5HAA_JS_GZ) - 1, _CONTENT_TYPE_JS, CONTENT_ES_C5MP5HAA_JS_GZ_ETAG, true },
-  { "/assets/fr-CORlna4i.js", CONTENT_FR_CORLNA4I_JS_GZ, sizeof(CONTENT_FR_CORLNA4I_JS_GZ) - 1, _CONTENT_TYPE_JS, CONTENT_FR_CORLNA4I_JS_GZ_ETAG, true },
-  { "/assets/hu-D1AyHTRC.js", CONTENT_HU_D1AYHTRC_JS_GZ, sizeof(CONTENT_HU_D1AYHTRC_JS_GZ) - 1, _CONTENT_TYPE_JS, CONTENT_HU_D1AYHTRC_JS_GZ_ETAG, true },
-  { "/assets/index-ChLf-jAb.css", CONTENT_INDEX_CHLF_JAB_CSS_GZ, sizeof(CONTENT_INDEX_CHLF_JAB_CSS_GZ) - 1, _CONTENT_TYPE_CSS, CONTENT_INDEX_CHLF_JAB_CSS_GZ_ETAG, true },
-  { "/assets/index-Dc5MpQ5K.js", CONTENT_INDEX_DC5MPQ5K_JS_GZ, sizeof(CONTENT_INDEX_DC5MPQ5K_JS_GZ) - 1, _CONTENT_TYPE_JS, CONTENT_INDEX_DC5MPQ5K_JS_GZ_ETAG, true },
-  { "/assets/rolldown-runtime-Bh1tDfsg.js", CONTENT_ROLLDOWN_RUNTIME_BH1TDFSG_JS_GZ, sizeof(CONTENT_ROLLDOWN_RUNTIME_BH1TDFSG_JS_GZ) - 1, _CONTENT_TYPE_JS, CONTENT_ROLLDOWN_RUNTIME_BH1TDFSG_JS_GZ_ETAG, true },
-  { "/assets/vendor-BJMtwemW.js", CONTENT_VENDOR_BJMTWEMW_JS_GZ, sizeof(CONTENT_VENDOR_BJMTWEMW_JS_GZ) - 1, _CONTENT_TYPE_JS, CONTENT_VENDOR_BJMTWEMW_JS_GZ_ETAG, true },
+  { "/assets/en-CMYHnNb0.js", CONTENT_EN_CMYHNNB0_JS_GZ, sizeof(CONTENT_EN_CMYHNNB0_JS_GZ) - 1, _CONTENT_TYPE_JS, CONTENT_EN_CMYHNNB0_JS_GZ_ETAG, true },
+  { "/assets/es-CVMvGy0h.js", CONTENT_ES_CVMVGY0H_JS_GZ, sizeof(CONTENT_ES_CVMVGY0H_JS_GZ) - 1, _CONTENT_TYPE_JS, CONTENT_ES_CVMVGY0H_JS_GZ_ETAG, true },
+  { "/assets/fr-t0eNdETv.js", CONTENT_FR_T0ENDETV_JS_GZ, sizeof(CONTENT_FR_T0ENDETV_JS_GZ) - 1, _CONTENT_TYPE_JS, CONTENT_FR_T0ENDETV_JS_GZ_ETAG, true },
+  { "/assets/hu-BZYKsDCc.js", CONTENT_HU_BZYKSDCC_JS_GZ, sizeof(CONTENT_HU_BZYKSDCC_JS_GZ) - 1, _CONTENT_TYPE_JS, CONTENT_HU_BZYKSDCC_JS_GZ_ETAG, true },
+  { "/assets/index-BeMecANi.css", CONTENT_INDEX_BEMECANI_CSS_GZ, sizeof(CONTENT_INDEX_BEMECANI_CSS_GZ) - 1, _CONTENT_TYPE_CSS, CONTENT_INDEX_BEMECANI_CSS_GZ_ETAG, true },
+  { "/assets/index-C4x-RX8m.js", CONTENT_INDEX_C4X_RX8M_JS_GZ, sizeof(CONTENT_INDEX_C4X_RX8M_JS_GZ) - 1, _CONTENT_TYPE_JS, CONTENT_INDEX_C4X_RX8M_JS_GZ_ETAG, true },
+  { "/assets/rolldown-runtime-CbXtAM7H.js", CONTENT_ROLLDOWN_RUNTIME_CBXTAM7H_JS_GZ, sizeof(CONTENT_ROLLDOWN_RUNTIME_CBXTAM7H_JS_GZ) - 1, _CONTENT_TYPE_JS, CONTENT_ROLLDOWN_RUNTIME_CBXTAM7H_JS_GZ_ETAG, true },
+  { "/assets/vendor-BbWlGqGY.js", CONTENT_VENDOR_BBWLGQGY_JS_GZ, sizeof(CONTENT_VENDOR_BBWLGQGY_JS_GZ) - 1, _CONTENT_TYPE_JS, CONTENT_VENDOR_BBWLGQGY_JS_GZ_ETAG, true },
   { "/favicon.ico", CONTENT_FAVICON_ICO, sizeof(CONTENT_FAVICON_ICO) - 1, _CONTENT_TYPE_ICO, CONTENT_FAVICON_ICO_ETAG, false },
   { "/index.html", CONTENT_INDEX_HTML_GZ, sizeof(CONTENT_INDEX_HTML_GZ) - 1, _CONTENT_TYPE_HTML, CONTENT_INDEX_HTML_GZ_ETAG, true },
   { "/manifest.webmanifest", CONTENT_MANIFEST_WEBMANIFEST, sizeof(CONTENT_MANIFEST_WEBMANIFEST) - 1, _CONTENT_TYPE_MANIFEST, CONTENT_MANIFEST_WEBMANIFEST_ETAG, false },
