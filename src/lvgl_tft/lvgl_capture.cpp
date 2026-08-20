@@ -16,6 +16,8 @@
 #include "openevse.h"
 #include "setup_screen.h"
 #include "standby_screen.h"
+#include "fault_screen.h"
+#include "fault_text.h"
 
 // Advance LVGL until the screen has settled, then a few frames more.
 //
@@ -197,7 +199,42 @@ bool lvgl_capture_write_samples(const char *out_dir)
     return false;
   }
 
+  // Every fault page, so the whole copy set can be reviewed at the size it is
+  // actually read at rather than one sample standing in for twelve.
+  static const struct { uint8_t state; const char *name; } FAULT_SHOTS[] = {
+    { OPENEVSE_STATE_VENT_REQUIRED,        "fault-vent-required" },
+    { OPENEVSE_STATE_DIODE_CHECK_FAILED,   "fault-diode-check" },
+    { OPENEVSE_STATE_GFI_FAULT,            "fault-gfci-trip" },
+    { OPENEVSE_STATE_NO_EARTH_GROUND,      "fault-no-ground" },
+    { OPENEVSE_STATE_STUCK_RELAY,          "fault-stuck-relay" },
+    { OPENEVSE_STATE_GFI_SELF_TEST_FAILED, "fault-gfci-self-test" },
+    { OPENEVSE_STATE_OVER_TEMPERATURE,     "fault-over-temp" },
+    { OPENEVSE_STATE_OVER_CURRENT,         "fault-over-current" },
+    { OPENEVSE_STATE_RELAY_CLOSURE_FAULT,  "fault-relay-fault" },
+    { OPENEVSE_STATE_EEPROM_FAILURE,       "fault-eeprom-fail" },
+    { OPENEVSE_STATE_PP_MISSING,           "fault-pp-missing" },
+    { OPENEVSE_STATE_PP_SHORTED,           "fault-pp-shorted" },
+  };
+
+  FaultScreenData fd = {};
+  fd.wifi_client = true;
+  fd.wifi_connected = true;
+  fd.wifi_pct = 85;
+  fd.hostname = "openevse.local";
+  fd.ip = "192.168.4.2";
+
+  fault_screen_build();
   standby_screen_destroy();
+  for(size_t i = 0; i < sizeof(FAULT_SHOTS) / sizeof(FAULT_SHOTS[0]); i++) {
+    fd.evse_state = FAULT_SHOTS[i].state;
+    fault_screen_update(fd);
+    pump_frames();
+    if(!write_capture(out_dir, FAULT_SHOTS[i].name)) {
+      return false;
+    }
+  }
+
+  fault_screen_destroy();
   return true;
 }
 

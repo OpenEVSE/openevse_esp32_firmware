@@ -21,6 +21,8 @@
 #include "lvgl_tft/setup_screen.h"
 #include "lvgl_tft/charge_screen.h"
 #include "lvgl_tft/standby_screen.h"
+#include "lvgl_tft/fault_screen.h"
+#include "fault_text.h"
 #include "lvgl_tft/backlight.h"
 
 #ifndef LCD_BACKLIGHT_PIN
@@ -47,6 +49,13 @@
 #define SCR_SETUP  1
 #define SCR_CHARGE 2
 #define SCR_STANDBY 3
+#define SCR_FAULT   4
+
+// Minimum time the fault screen stays up once a fault has been seen. The
+// contactor-chatter investigation had VENT REQUIRED appearing and clearing on
+// a 12V sag; without a dwell that becomes a strobe between two full-screen
+// layouts, which reads as a broken display rather than an intermittent fault.
+#define FAULT_MIN_DWELL_MS 5000
 
 #ifdef EPOXY_DUINO
 static uint32_t g_lvgl_last_tick = 0;
@@ -363,6 +372,8 @@ unsigned long LcdTask::loop(MicroTasks::WakeReason reason)
       buildSetupScreen();
     } else if(_activeScreen == SCR_STANDBY) {
       standby_screen_build();
+    } else if(_activeScreen == SCR_FAULT) {
+      fault_screen_build();
     }
     lvgl_pump();
   }
@@ -397,6 +408,56 @@ unsigned long LcdTask::loop(MicroTasks::WakeReason reason)
     if(!_standby) {
       enterStandby();
     }
+  }
+
+  // --- Fault takeover ---
+  // A fault owns the whole screen: the charge screen can only name it, and a
+  // name alone leaves whoever is standing here with nothing to do next.
+  if(state_is_fault(state)) {
+    _faultState = state;
+    _faultHoldUntil = millis() + FAULT_MIN_DWELL_MS;
+  }
+  bool wantFault = state_is_fault(state) ||
+                   (_activeScreen == SCR_FAULT &&
+                    (int32_t)(millis() - _faultHoldUntil) < 0);
+  if(wantFault && _standby) {
+    wakeBacklight();  // exits standby (rebuilding charge) so the swap below works
+  }
+  if(wantFault && _activeScreen != SCR_FAULT) {
+    fault_screen_build();
+    if(_activeScreen == SCR_CHARGE) {
+      charge_screen_destroy();
+    } else if(_activeScreen == SCR_STANDBY) {
+      standby_screen_destroy();
+    }
+    _activeScreen = SCR_FAULT;
+  } else if(!wantFault && _activeScreen == SCR_FAULT) {
+    charge_screen_build();
+    fault_screen_destroy();
+    _activeScreen = SCR_CHARGE;
+  }
+
+  if(_activeScreen == SCR_FAULT) {
+    FaultScreenData fd = {};
+    // _faultState, not state: during the dwell the fault has already cleared,
+    // and re-reading state here would blank the page we are holding up.
+    fd.evse_state     = _faultState;
+    fd.wifi_client    = _wifi_client;
+    fd.wifi_connected = _wifi_connected;
+    fd.wifi_pct       = smoothedWifiPercent(WiFi.RSSI());
+    fd.sta_count      = WiFi.softAPgetStationNum();
+
+    timeval tv;
+    char ipbuf[20];
+    IPAddress ip = _wifi_client ? WiFi.localIP() : WiFi.softAPIP();
+    snprintf(ipbuf, sizeof(ipbuf), "%s", ip.toString().c_str());
+    fd.hostname = esp_hostname.c_str();
+    fd.ip = ipbuf;
+
+    fault_screen_update(fd);
+    lvgl_pump();
+    gettimeofday(&tv, NULL);
+    return 1000 - tv.tv_usec / 1000;
   }
 
   // Render the standby screen when dimmed-with-screen; otherwise fall through to charge.
@@ -560,6 +621,13 @@ void LcdTask::enterStandby()
 
 bool LcdTask::stateKeepsAwake(uint8_t state, bool vehicle, double amps)
 {
+  // Faults keep the screen up whether or not a vehicle is plugged in. Several
+  // of them -- no ground, a failed GFCI self-test, a stuck relay, EEPROM --
+  // are reported with nothing connected, and a fault page that dims itself away
+  // before anyone reads it is no better than no fault page.
+  if(state_is_fault(state)) {
+    return true;
+  }
   if(!vehicle) {
     return false;
   }

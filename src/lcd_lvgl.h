@@ -57,7 +57,12 @@ class LcdTask : public MicroTasks::Task
     bool _displayOk = false;
     bool _booting = false;       // showing the boot splash before the main screen
     uint32_t _bootStart = 0;
-    uint8_t _activeScreen = 0;   // 0 = boot, 1 = setup (AP), 2 = charge
+    uint8_t _activeScreen = 0;   // SCR_* (lcd_lvgl.cpp)
+    // Fault takeover. _faultState is the last fault seen, held across the
+    // minimum dwell so the page doesn't blank when a transient fault clears
+    // under it; _faultHoldUntil is when that dwell expires.
+    uint8_t  _faultState = 0;
+    uint32_t _faultHoldUntil = 0;
     bool _wifiModeKnown = false; // has setWifiMode() been called yet?
 
     // Transient message lines (set via display(); auto-cleared after their time).
