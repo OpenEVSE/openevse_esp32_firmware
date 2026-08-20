@@ -828,6 +828,22 @@ handleTeslaVeh(MongooseHttpServerRequest *request)
 }
 
 // -------------------------------------------------------------------
+// Whether vehicle telemetry pushed to POST /status should be accepted.
+//
+// The four vehicle fields below each repeated the same source comparison, which
+// is one copy-paste away from a field that quietly accepts a push it should
+// not, or rejects one it should. Naming the rule once means the next field
+// added here inherits it rather than restating it.
+//
+// Sources that own the vehicle data themselves are excluded on purpose: a push
+// must not be able to fight a source that is actively fetching the same values.
+// -------------------------------------------------------------------
+static bool vehiclePushAccepted()
+{
+  return VEHICLE_DATA_SRC_HTTP == vehicle_data_src;
+}
+
+// -------------------------------------------------------------------
 // Returns status json
 // url: /status
 // -------------------------------------------------------------------
@@ -874,25 +890,25 @@ void handleStatusPost(MongooseHttpServerRequest *request, MongooseHttpServerResp
       }
       send_event = false; // Divert sends the event so no need to send here
     }
-    if(doc.containsKey("battery_level") && vehicle_data_src == VEHICLE_DATA_SRC_HTTP) {
+    if(doc.containsKey("battery_level") && vehiclePushAccepted()) {
       double vehicle_soc = doc["battery_level"];
       DBUGF("vehicle_soc:%d%%", vehicle_soc);
       evse.setVehicleStateOfCharge(vehicle_soc);
       doc["vehicle_state_update"] = 0;
     }
-    if(doc.containsKey("battery_range") && vehicle_data_src == VEHICLE_DATA_SRC_HTTP) {
+    if(doc.containsKey("battery_range") && vehiclePushAccepted()) {
       double vehicle_range = doc["battery_range"];
       DBUGF("vehicle_range:%dKM", vehicle_range);
       evse.setVehicleRange(vehicle_range);
       doc["vehicle_state_update"] = 0;
     }
-    if(doc.containsKey("time_to_full_charge") && vehicle_data_src == VEHICLE_DATA_SRC_HTTP){
+    if(doc.containsKey("time_to_full_charge") && vehiclePushAccepted()){
       double vehicle_eta = doc["time_to_full_charge"];
       DBUGF("vehicle_eta:%d", vehicle_eta);
       evse.setVehicleEta(vehicle_eta);
       doc["vehicle_state_update"] = 0;
     }
-    if(doc.containsKey("vehicle_charge_limit") && vehicle_data_src == VEHICLE_DATA_SRC_HTTP){
+    if(doc.containsKey("vehicle_charge_limit") && vehiclePushAccepted()){
       int vehicle_charge_limit = doc["vehicle_charge_limit"];
       DBUGF("vehicle_charge_limit:%d%%", vehicle_charge_limit);
       evse.setVehicleChargeLimit(vehicle_charge_limit);
