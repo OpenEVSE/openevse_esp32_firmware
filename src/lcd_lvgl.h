@@ -68,6 +68,18 @@ class LcdTask : public MicroTasks::Task
     bool _wifi_client = false;
     bool _wifi_connected = false;
 
+    // Smoothed signal strength. Raw RSSI wanders several dB sample to sample, so
+    // an undamped percentage flickers continuously on an otherwise static screen.
+    // See smoothedWifiPercent().
+    float _rssi_avg = 0.0f;
+    bool  _rssi_avg_valid = false;
+    int   _wifi_pct = 0;
+    int smoothedWifiPercent(int rssi);
+
+    // Next time the data snapshot is due (ms). Between snapshots loop() may still
+    // run, but only to pump LVGL while the ring tween finishes.
+    uint32_t _nextDataUpdate = 0;
+
     // Active display theme last applied from the tft_theme config (-1 = none yet,
     // 0 = dark/nightshift, 1 = light). Polled in loop(); a change repaints.
     int8_t _themeLight = -1;

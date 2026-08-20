@@ -1,6 +1,7 @@
 // src/lvgl_tft/standby_screen.h — dimmed idle screen for the stock TFT.
-// Ring + status word (left), TODAY/TOTAL kWh stacked (right), clock + temp/wifi
-// in the top corners, host/IP in the bottom corners. Read-only (no touch).
+// Deliberately the charge screen's layout with the live figures removed: same
+// ring in the same place, same tile column, same top strip. It is meant to read
+// as that screen turned down, not as a different one. Read-only (no touch).
 #ifndef __STANDBY_SCREEN_H
 #define __STANDBY_SCREEN_H
 
@@ -15,13 +16,14 @@ struct StandbyScreenData {
   bool     temp_fahrenheit;   // render temp_c in °F
   bool     wifi_client;       // true = STA, false = AP
   bool     wifi_connected;
-  int      rssi;              // STA dBm
+  int      wifi_pct;          // STA signal %, smoothed/quantised by the caller
   int      sta_count;         // AP station count
-  double   today_kwh;         // getTotalDay()  (kWh)
-  double   total_kwh;         // getTotalEnergy() (kWh)
-  const char *clock;          // "YYYY-MM-DD  HH:MM:SS" (matches the charge header)
-  const char *hostname;       // bottom-left
-  const char *ip;             // bottom-right
+  double   today_kwh;         // getTotalDay()   (kWh)
+  double   week_kwh;          // getTotalWeek()  (kWh)
+  double   total_kwh;         // getTotalEnergy()(kWh)
+  const char *clock;          // "YYYY-MM-DD  HH:MM" (matches the charge header)
+  const char *hostname;       // top strip, second line
+  const char *ip;             // top strip, second line
 };
 
 void standby_screen_build();

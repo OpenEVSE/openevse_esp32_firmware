@@ -30,6 +30,18 @@
 // How long the startup splash shows before handing off to the main screen.
 #define BOOT_SPLASH_MS 4000
 
+// How often the data snapshot is reassembled. Between snapshots loop() only
+// pumps LVGL, and only while the power-ring tween is still running.
+#define DATA_INTERVAL_MS 1000
+#define ANIM_PUMP_MS       33
+
+// Signal-strength smoothing. RSSI is noisy enough that a raw percentage
+// repaints the chip every second on a screen that is otherwise still. A ~8 s
+// exponential average takes the jitter out, and the 5-point quantisation stops
+// the label changing at all unless the signal has genuinely moved.
+#define RSSI_SMOOTH_ALPHA 0.125f
+#define WIFI_PCT_STEP     5
+
 // _activeScreen values.
 #define SCR_BOOT   0
 #define SCR_SETUP  1
@@ -164,6 +176,57 @@ void LcdTask::setWifiMode(bool client, bool connected)
   _wifi_connected = connected;
   _wifiModeKnown = true;
   wakeBacklight();
+}
+
+// RSSI (dBm) -> signal %, the usual piecewise mapping.
+static int wifi_percent(int rssi)
+{
+  if (rssi <= -100) return 0;
+  if (rssi >= -50)  return 100;
+  return 2 * (rssi + 100);
+}
+
+// Exponentially averaged, then snapped to WIFI_PCT_STEP. The snap is what the
+// eye actually notices: without it the average still drifts a point at a time.
+int LcdTask::smoothedWifiPercent(int rssi)
+{
+  if(!_rssi_avg_valid) {
+    _rssi_avg = (float)rssi;
+    _rssi_avg_valid = true;
+  } else {
+    _rssi_avg += RSSI_SMOOTH_ALPHA * ((float)rssi - _rssi_avg);
+  }
+
+  int pct = wifi_percent((int)lroundf(_rssi_avg));
+  _wifi_pct = ((pct + WIFI_PCT_STEP / 2) / WIFI_PCT_STEP) * WIFI_PCT_STEP;
+  if(_wifi_pct > 100) {
+    _wifi_pct = 100;
+  }
+  return _wifi_pct;
+}
+
+// Short label for whichever claim won the charge-current arbitration, for the
+// line under the ring. Sized to fit the left column at 20px alongside "NN A · ".
+// EvseClient_NULL means no claim is active and the configured default applies,
+// which needs no explanation — hence "".
+static const char *pilot_source_name(EvseClient client)
+{
+  switch(client) {
+    case EvseClient_NULL:                          return "";
+    case EvseClient_OpenEVSE_Manual:               return "manual";
+    case EvseClient_OpenEVSE_Divert:               return "solar divert";
+    case EvseClient_OpenEVSE_Boost:                return "boost";
+    case EvseClient_OpenEVSE_Schedule:             return "schedule";
+    case EvseClient_OpenEVSE_Limit:                return "session limit";
+    case EvseClient_OpenEVSE_Error:                return "fault hold";
+    case EvseClient_OpenEVSE_OCPP:                 return "ocpp";
+    case EvseClient_OpenEVSE_RFID:                 return "rfid";
+    case EvseClient_OpenEVSE_MQTT:                 return "mqtt";
+    case EvseClient_OpenEVSE_Shaper:               return "grid limit";
+    case EvseClient_OpenEVSE_TempThrottle:         return "temp limit";
+    case EvseClient_OpenEnergyMonitor_DemandShaper:return "demand shaper";
+    default:                                       return "claim";
+  }
 }
 
 // Resolve the tft_theme config into the active palette. Returns true if the theme
@@ -345,15 +408,16 @@ unsigned long LcdTask::loop(MicroTasks::WakeReason reason)
     sd.temp_fahrenheit   = temp_unit.equals("f");
     sd.wifi_client       = _wifi_client;
     sd.wifi_connected    = _wifi_connected;
-    sd.rssi              = WiFi.RSSI();
+    sd.wifi_pct          = smoothedWifiPercent(WiFi.RSSI());
     sd.sta_count         = WiFi.softAPgetStationNum();
     sd.today_kwh         = _evse->getTotalDay();
+    sd.week_kwh          = _evse->getTotalWeek();
     sd.total_kwh         = _evse->getTotalEnergy();
 
     char ck[24];
     timeval tv; gettimeofday(&tv, NULL);
     struct tm ti; localtime_r(&tv.tv_sec, &ti);
-    strftime(ck, sizeof(ck), "%Y-%m-%d  %H:%M:%S", &ti);  // match the charge screen header
+    strftime(ck, sizeof(ck), "%Y-%m-%d  %H:%M", &ti);  // match the charge screen header
     sd.clock = ck;
 
     char ipbuf[20];
@@ -368,6 +432,22 @@ unsigned long LcdTask::loop(MicroTasks::WakeReason reason)
     return 1000 - tv.tv_usec / 1000;
   }
 
+  // The data snapshot is only worth reassembling once a second, but the power
+  // ring tweens between values and LVGL has to be pumped far faster than that
+  // for the tween to render as motion. Between snapshots, do only the pump.
+  //
+  // Charge screen only: the standby branch above has already returned, and
+  // nothing on it animates. Backlight and standby timing stay on the 1 Hz
+  // path above, which is the cadence they were written for.
+  uint32_t now = millis();
+  if((int32_t)(now - _nextDataUpdate) < 0) {
+    lvgl_pump();
+    if(charge_screen_animating()) {
+      return ANIM_PUMP_MS;
+    }
+    return _nextDataUpdate - now;
+  }
+
   // Assemble a full snapshot from EvseManager + WiFi + clock.
   ChargeScreenData d = {};
   d.evse_state        = state;
@@ -375,6 +455,8 @@ unsigned long LcdTask::loop(MicroTasks::WakeReason reason)
   d.vehicle_connected = vehicle;
   d.power_kw          = _evse->getPower() / 1000.0f;
   d.pilot_a           = (int)_evse->getChargeCurrent();
+  d.pilot_source      = pilot_source_name(_evse->getChargeCurrentClient());
+  d.max_a             = (int)_evse->getMaxConfiguredCurrent();
   d.volts             = _evse->getVoltage();
   d.amps              = _evse->getAmps();
   d.elapsed_s         = _evse->getSessionElapsed();
@@ -384,31 +466,53 @@ unsigned long LcdTask::loop(MicroTasks::WakeReason reason)
   d.temp_fahrenheit   = temp_unit.equals("f");
   d.wifi_client       = _wifi_client;
   d.wifi_connected    = _wifi_connected;
-  d.rssi              = WiFi.RSSI();
+  d.wifi_pct          = smoothedWifiPercent(WiFi.RSSI());
   d.sta_count         = WiFi.softAPgetStationNum();
+
+  // Tile column: session figures only mean something with a vehicle attached.
+  // The rest of the time show the running totals instead of three dashes.
+  d.session_active    = d.vehicle_connected;
+  d.total_day_kwh     = _evse->getTotalDay();
+  d.total_week_kwh    = _evse->getTotalWeek();
+  d.total_kwh         = _evse->getTotalEnergy();
+
+  // Vehicle data arrives from the Home Assistant / MQTT push path and simply
+  // isn't there for most setups; the ring and readout stay hidden until it is.
+  d.soc_valid         = _evse->isVehicleStateOfChargeValid();
+  d.soc_percent       = _evse->getVehicleStateOfCharge();
+  d.range_valid       = _evse->isVehicleRangeValid();
+  d.range             = _evse->getVehicleRange();
+  d.range_miles       = config_vehicle_range_miles();
 
   char dt[24];
   timeval tv;
   gettimeofday(&tv, NULL);
   struct tm ti;
   localtime_r(&tv.tv_sec, &ti);
-  strftime(dt, sizeof(dt), "%Y-%m-%d  %H:%M:%S", &ti);
+  strftime(dt, sizeof(dt), "%Y-%m-%d  %H:%M", &ti);
   d.datetime = dt;
 
-  // Bottom row: hostname (left) + IP (right). A transient message overrides both.
+  // The address lives on the standby screen. Fall back to showing it here only
+  // when standby can never appear -- bl_should_standby() returns false outright
+  // for a timeout of 0, so otherwise the address would be nowhere on the panel.
   char ipbuf[20];
   IPAddress ip = _wifi_client ? WiFi.localIP() : WiFi.softAPIP();
   snprintf(ipbuf, sizeof(ipbuf), "%s", ip.toString().c_str());
   d.hostname = esp_hostname.c_str();
   d.ip = ipbuf;
+  d.show_hostip = (0 == (uint32_t)lcd_backlight_timeout);
   d.msg_line = (!_msg_cleared && ml[0]) ? ml : "";
 
   charge_screen_update(d);
   lvgl_pump();
 
-  // Wake on the next whole second so the clock doesn't skip.
+  // Next snapshot on the whole second, so the elapsed-time tile doesn't skip.
   gettimeofday(&tv, NULL);
-  return 1000 - tv.tv_usec / 1000;
+  uint32_t to_next = DATA_INTERVAL_MS - tv.tv_usec / 1000;
+  _nextDataUpdate = millis() + to_next;
+
+  // Come back sooner than that if the ring is still travelling.
+  return charge_screen_animating() ? ANIM_PUMP_MS : to_next;
 }
 
 void LcdTask::applyDisplayConfig()

@@ -17,21 +17,21 @@
 
 // LVGL widget/render scratch pool. Static (BSS) array of this size — the partial
 // draw buffer is separate and lives in internal DRAM (lvgl_panel.cpp). No PSRAM
-// on this board, and this branch's static footprint is large, so keep it modest:
-// 32 KB is ample for one static screen (an arc + ~12 labels) and leaves DRAM for
-// the WiFi/TLS/Mongoose stack + the ~30 KB draw buffer.
+// on this board, so it competes directly with the WiFi/TLS/Mongoose stack and
+// the ~30 KB draw buffer.
 #define LV_MEM_CUSTOM 0
-// 24 KB, down from 32 KB. Measured peak on hardware (lv_used_max in /status)
-// is 27% of the 32 KB pool, about 8.6 KB, with 5% fragmentation -- so 24 KB
-// keeps roughly 2.8x headroom over anything observed.
+// 32 KB. This was cut to 24 KB on the strength of a measured 8.6 KB peak
+// (lv_used_max in /status) with the previous, sparser charge screen. The
+// reworked screen carries noticeably more: a second arc, three tile containers
+// and roughly half again as many labels, so that measurement no longer bounds
+// this build.
 //
-// Deliberately not cut to 16 KB yet: the peak above was sampled before the
-// display had rendered the charge or QR screens, and LVGL peaks during a
-// screen transition while both screens are briefly live. Confirm lv_used_max
-// across a full charge session before trimming further. Undersizing here does
-// not fail gracefully -- LVGL answers pool exhaustion with an assert loop that
-// the task watchdog turns into a reboot.
-#define LV_MEM_SIZE (24U * 1024U)
+// 32 KB is the interim value until lv_used_max has been re-read on hardware
+// across a screen transition (LVGL peaks while both screens are briefly live).
+// Erring high on purpose: undersizing does not fail gracefully -- LVGL answers
+// pool exhaustion with an assert loop that the task watchdog turns into a
+// reboot -- and this runs on the live charger. Trim once measured.
+#define LV_MEM_SIZE (32U * 1024U)
 
 // Tick from Arduino millis() on-device. The native/EpoxyDuino host build advances
 // LVGL explicitly from lcd_lvgl.cpp so the C-only LVGL sources don't need to
@@ -54,10 +54,17 @@
 #define LV_USE_THEME_DEFAULT 1
 #define LV_THEME_DEFAULT_DARK 1
 
-// Fonts used by charge_screen.cpp.
+// Fonts. Sized for reading the panel from across a garage, not from a desk:
+//   14  tile captions, host/IP strip      20  pilot line, kW unit, long state words
+//   18  clock, status chips, SoC readout  28  state word
+//   36  tile values                       48  live kW
+// Each size is ~10-25 KB of flash; the 16 MB partition is at ~34%, so the trade
+// is worth it. Revisit only if a 4 MB build ever needs this env.
 #define LV_FONT_MONTSERRAT_14 1
+#define LV_FONT_MONTSERRAT_18 1
 #define LV_FONT_MONTSERRAT_20 1
 #define LV_FONT_MONTSERRAT_28 1
+#define LV_FONT_MONTSERRAT_36 1
 #define LV_FONT_MONTSERRAT_48 1
 #define LV_FONT_DEFAULT &lv_font_montserrat_14
 

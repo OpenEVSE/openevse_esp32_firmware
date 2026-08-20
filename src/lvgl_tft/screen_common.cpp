@@ -16,21 +16,23 @@ const char *state_word(uint8_t s, lv_color_t *colour)
     case OPENEVSE_STATE_DISABLED:      *colour = NS_TEXTDIM; return "DISABLED";
     case OPENEVSE_STATE_STARTING:      *colour = NS_ACCENT;  return "STARTING";
     case OPENEVSE_STATE_NOT_CONNECTED: *colour = NS_TEXTDIM; return "NOT CONNECTED";
-    case OPENEVSE_STATE_VENT_REQUIRED:
-    case OPENEVSE_STATE_DIODE_CHECK_FAILED:
-    case OPENEVSE_STATE_GFI_FAULT:
-    case OPENEVSE_STATE_NO_EARTH_GROUND:
-    case OPENEVSE_STATE_STUCK_RELAY:
-    case OPENEVSE_STATE_GFI_SELF_TEST_FAILED:
-    case OPENEVSE_STATE_OVER_TEMPERATURE:
-    case OPENEVSE_STATE_OVER_CURRENT:
-    case OPENEVSE_STATE_RELAY_CLOSURE_FAULT:
-    case OPENEVSE_STATE_EEPROM_FAILURE: *colour = NS_ERROR;  return "FAULT";
-    // Split out from the generic FAULT group so the display names the actual
-    // wiring condition instead of a bare "FAULT".
-    case OPENEVSE_STATE_PP_MISSING:    *colour = NS_ERROR;   return "PP MISSING";
-    case OPENEVSE_STATE_PP_SHORTED:    *colour = NS_ERROR;   return "PP SHORTED";
-    default:                           *colour = NS_TEXTDIM; return "--";
+    // Every fault names itself, continuing what PP MISSING/SHORTED started. A
+    // bare "FAULT" tells whoever is standing at the charger nothing about what
+    // to do next, and these want different responses: a GFCI trip is a reset,
+    // no ground is an electrician, over-temp is airflow.
+    case OPENEVSE_STATE_VENT_REQUIRED:        *colour = NS_ERROR; return "VENT REQUIRED";
+    case OPENEVSE_STATE_DIODE_CHECK_FAILED:   *colour = NS_ERROR; return "DIODE CHECK";
+    case OPENEVSE_STATE_GFI_FAULT:            *colour = NS_ERROR; return "GFCI TRIP";
+    case OPENEVSE_STATE_NO_EARTH_GROUND:      *colour = NS_ERROR; return "NO GROUND";
+    case OPENEVSE_STATE_STUCK_RELAY:          *colour = NS_ERROR; return "STUCK RELAY";
+    case OPENEVSE_STATE_GFI_SELF_TEST_FAILED: *colour = NS_ERROR; return "GFCI SELF TEST";
+    case OPENEVSE_STATE_OVER_TEMPERATURE:     *colour = NS_ERROR; return "OVER TEMP";
+    case OPENEVSE_STATE_OVER_CURRENT:         *colour = NS_ERROR; return "OVER CURRENT";
+    case OPENEVSE_STATE_RELAY_CLOSURE_FAULT:  *colour = NS_ERROR; return "RELAY FAULT";
+    case OPENEVSE_STATE_EEPROM_FAILURE:       *colour = NS_ERROR; return "EEPROM FAIL";
+    case OPENEVSE_STATE_PP_MISSING:           *colour = NS_ERROR; return "PP MISSING";
+    case OPENEVSE_STATE_PP_SHORTED:           *colour = NS_ERROR; return "PP SHORTED";
+    default:                                  *colour = NS_TEXTDIM; return "--";
   }
 }
 

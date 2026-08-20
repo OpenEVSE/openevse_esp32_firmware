@@ -1,7 +1,13 @@
-// src/lvgl_tft/nightshift.h — the nightshift palette, exact hexes from the source
-// of truth gui-nightshift/src/app.css, shared with the P4 EEZ UI so the stock TFT,
-// the P4 panel and the web GUI all match. See
+// src/lvgl_tft/nightshift.h — the nightshift palette, hue-matched to the source of
+// truth gui-nightshift/src/app.css and shared in spirit with the P4 EEZ UI. See
 // docs/superpowers/specs/2026-05-31-p4-eez-nightshift-theme.md.
+//
+// NOT hex-identical to app.css. The web tokens are tuned for a phone or monitor at
+// arm's length; this panel is a 3.5" ILI9488 read from across a garage, through
+// RGB565 quantisation that collapses near-black steps. The tokens below keep the
+// web palette's hues but widen the luminance gaps — chiefly textdim, the tile
+// surface and the ring track, which were all within a few RGB565 steps of the
+// background. Treat app.css as the hue reference, not the value reference.
 //
 // Two themes (dark = nightshift, light) live as runtime palettes; the NS_* macros
 // resolve the *active* palette so every call site is theme-agnostic. Swap with
@@ -27,6 +33,9 @@ struct NsPalette
   lv_color_t warning;
   lv_color_t sleep;
   lv_color_t success;
+  lv_color_t soc;       // vehicle state-of-charge ring — deliberately not accent
+                        // (teal) or success (green), both already in use on the
+                        // power ring, so the two rings never read as one.
 };
 
 extern const NsPalette ns_dark;   // nightshift (default)
@@ -50,6 +59,7 @@ void ns_set_theme(bool light);
 #define NS_WARNING   (ns_active->warning)
 #define NS_SLEEP     (ns_active->sleep)
 #define NS_SUCCESS   (ns_active->success)
+#define NS_SOC       (ns_active->soc)
 
 #endif // ENABLE_SCREEN_LVGL_TFT
 #endif // __NIGHTSHIFT_H
