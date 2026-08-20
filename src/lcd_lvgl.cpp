@@ -406,6 +406,8 @@ unsigned long LcdTask::loop(MicroTasks::WakeReason reason)
     sd.temp_valid        = _evse->isTemperatureValid(EVSE_MONITOR_TEMP_MONITOR);
     sd.temp_c            = sd.temp_valid ? _evse->getTemperature(EVSE_MONITOR_TEMP_MONITOR) : 0.0f;
     sd.temp_fahrenheit   = temp_unit.equals("f");
+    sd.temp_throttle_setpoint = config_temp_throttle_enabled() ? (int)temp_throttle_setpoint : 0;
+    sd.temp_throttling        = (EvseClient_OpenEVSE_TempThrottle == _evse->getChargeCurrentClient());
     sd.wifi_client       = _wifi_client;
     sd.wifi_connected    = _wifi_connected;
     sd.wifi_pct          = smoothedWifiPercent(WiFi.RSSI());
@@ -464,6 +466,8 @@ unsigned long LcdTask::loop(MicroTasks::WakeReason reason)
   d.temp_valid        = _evse->isTemperatureValid(EVSE_MONITOR_TEMP_MONITOR);
   d.temp_c            = d.temp_valid ? _evse->getTemperature(EVSE_MONITOR_TEMP_MONITOR) : 0.0f;
   d.temp_fahrenheit   = temp_unit.equals("f");
+  d.temp_throttle_setpoint = config_temp_throttle_enabled() ? (int)temp_throttle_setpoint : 0;
+  d.temp_throttling       = (EvseClient_OpenEVSE_TempThrottle == _evse->getChargeCurrentClient());
   d.wifi_client       = _wifi_client;
   d.wifi_connected    = _wifi_connected;
   d.wifi_pct          = smoothedWifiPercent(WiFi.RSSI());

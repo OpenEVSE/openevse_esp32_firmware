@@ -14,6 +14,14 @@ struct StandbyScreenData {
   bool     temp_valid;
   float    temp_c;
   bool     temp_fahrenheit;   // render temp_c in °F
+  // Temperature warning thresholds, from the throttle config rather than a
+  // number picked here: warn as the panel approaches the setpoint the user
+  // actually set, and flag it differently once the throttle is really holding
+  // current down. temp_throttle_setpoint is in degrees C regardless of the
+  // unit the chip is rendered in. Setpoint 0 means throttling is disabled, and
+  // the chip stays neutral -- there is no threshold the user has asked about.
+  int      temp_throttle_setpoint;  // degrees C, 0 when throttling is disabled
+  bool     temp_throttling;         // the throttle claim is active right now
   bool     wifi_client;       // true = STA, false = AP
   bool     wifi_connected;
   int      wifi_pct;          // STA signal %, smoothed/quantised by the caller

@@ -35,6 +35,11 @@
 #define COL_OK      NS_SUCCESS   // charging
 #define COL_FAULT   NS_ERROR     // fault
 #define COL_WARN    NS_WARNING
+
+// How far below the throttle setpoint the chip starts warning. Wide enough to
+// be a heads-up rather than a coincidence with the throttle kicking in.
+#define TEMP_WARN_MARGIN_C 10.0f
+
 #define COL_SLEEP   NS_SLEEP     // sleeping
 #define COL_TEXT    NS_TEXT
 #define COL_DIM     NS_TEXTDIM
@@ -431,8 +436,20 @@ void charge_screen_update(const ChargeScreenData &d)
     int tn = fmt_temp(buf, sizeof(buf), d.temp_c, d.temp_fahrenheit);
     while (tn > 0 && buf[tn - 1] == ' ') buf[--tn] = '\0';
     // Warm but fine below 50 C; above that the temp throttle is in play.
-    if (d.temp_c >= 50.0f) chip_set(chip_temp, buf, COL_WARN, COL_BG);
-    else                   chip_set(chip_temp, buf, COL_CARD, COL_TEXT);
+    // Colour off the user's own throttle setpoint: amber approaching it, fault
+    // colour once the throttle is actually holding current down. The active
+    // claim is the truth for that -- inferring it from temperature alone would
+    // light up during the recovery ramp, when it is no longer limiting.
+    if (d.temp_throttling) {
+      chip_set(chip_temp, buf, COL_FAULT, COL_BG);
+    } else if (d.temp_throttle_setpoint > 0 &&
+               d.temp_c >= (float)d.temp_throttle_setpoint - TEMP_WARN_MARGIN_C) {
+      chip_set(chip_temp, buf, COL_WARN, COL_BG);
+    } else {
+      // No setpoint means throttling is off: there is no threshold the user
+      // has asked about, so the chip stays neutral however warm it reads.
+      chip_set(chip_temp, buf, COL_CARD, COL_TEXT);
+    }
   } else {
     lv_obj_add_flag(chip_temp, LV_OBJ_FLAG_HIDDEN);
   }
