@@ -61,5 +61,12 @@ void ns_set_theme(bool light);
 #define NS_SUCCESS   (ns_active->success)
 #define NS_SOC       (ns_active->soc)
 
+// The brand mark's bolt. Deliberately NOT in the palette and NOT theme-dependent:
+// it is the one fixed colour in the mark, matching --mark-bolt in the web UI's
+// app.css. Violet because red/amber/green/blue are already error/warning/success/
+// sleep here, and a bolt in any of those would read as a status rather than a
+// brand. Clears 3:1 on both the dark and light surface, so one value serves both.
+#define NS_MARK_BOLT (lv_color_hex(0x8b5cf6))
+
 #endif // ENABLE_SCREEN_LVGL_TFT
 #endif // __NIGHTSHIFT_H

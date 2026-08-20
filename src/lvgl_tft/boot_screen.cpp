@@ -6,6 +6,7 @@
 
 #include "boot_screen.h"
 #include "nightshift.h"
+#include "mark_img.h"
 
 #define COL_BG     NS_SURFACE
 #define COL_TRACK  NS_BORDER
@@ -24,11 +25,27 @@ void boot_screen_build()
   lv_obj_set_style_bg_color(boot_scr, COL_BG, 0);
   lv_obj_clear_flag(boot_scr, LV_OBJ_FLAG_SCROLLABLE);
 
+  // The charge point mark, above the wordmark. Two stacked alpha masks sharing
+  // one origin: the shell takes the theme accent, the bolt the fixed violet.
+  // img_recolor_opa is not optional -- LVGL reads img_recolor only when the opa
+  // is above zero, and otherwise draws an A8 mask in black.
+  lv_obj_t *mark_shell = lv_img_create(boot_scr);
+  lv_img_set_src(mark_shell, &mark_shell_img);
+  lv_obj_set_style_img_recolor(mark_shell, COL_ACCENT, 0);
+  lv_obj_set_style_img_recolor_opa(mark_shell, LV_OPA_COVER, 0);
+  lv_obj_align(mark_shell, LV_ALIGN_CENTER, 0, -92);
+
+  lv_obj_t *mark_bolt = lv_img_create(boot_scr);
+  lv_img_set_src(mark_bolt, &mark_bolt_img);
+  lv_obj_set_style_img_recolor(mark_bolt, NS_MARK_BOLT, 0);
+  lv_obj_set_style_img_recolor_opa(mark_bolt, LV_OPA_COVER, 0);
+  lv_obj_align(mark_bolt, LV_ALIGN_CENTER, 0, -92);
+
   lv_obj_t *title = lv_label_create(boot_scr);
   lv_label_set_text(title, "OpenEVSE");
   lv_obj_set_style_text_color(title, COL_TEXT, 0);
   lv_obj_set_style_text_font(title, &lv_font_montserrat_48, 0);
-  lv_obj_align(title, LV_ALIGN_CENTER, 0, -42);
+  lv_obj_align(title, LV_ALIGN_CENTER, 0, -26);
 
   lv_obj_t *sub = lv_label_create(boot_scr);
   lv_label_set_text(sub, "STARTING");
@@ -38,7 +55,7 @@ void boot_screen_build()
 
   bar = lv_bar_create(boot_scr);
   lv_obj_set_size(bar, 300, 10);
-  lv_obj_align(bar, LV_ALIGN_CENTER, 0, 52);
+  lv_obj_align(bar, LV_ALIGN_CENTER, 0, 68);
   lv_obj_set_style_bg_color(bar, COL_TRACK, LV_PART_MAIN);
   lv_obj_set_style_bg_color(bar, COL_ACCENT, LV_PART_INDICATOR);
   lv_obj_set_style_radius(bar, 5, LV_PART_MAIN);

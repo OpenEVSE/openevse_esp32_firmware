@@ -18,6 +18,13 @@
 #include "standby_screen.h"
 #include "screen_common.h"   // state_word, fmt_temp, shared geometry
 #include "nightshift.h"
+#include "mark_img.h"
+
+// The mark sits where the ring did: same 188px column, same centre, lifted so
+// the mark and the wordmark below it balance about the ring's old midline.
+#define MARK_PX 80
+#define MARK_X  (RING_LEFT + (RING_SIZE - MARK_PX) / 2)
+#define MARK_Y  (RING_Y - 26)
 
 #define COL_BG     NS_SURFACE
 #define COL_CARD   NS_SURFACE3
@@ -29,8 +36,11 @@
 #define COL_FAULT  NS_ERROR
 #define COL_WARN   NS_WARNING
 
+
 static lv_obj_t *standby_scr  = nullptr;
-static lv_obj_t *arc          = nullptr;
+static lv_obj_t *mark_shell_obj = nullptr;
+static lv_obj_t *mark_bolt_obj  = nullptr;
+static lv_obj_t *wordmark_lbl   = nullptr;
 static lv_obj_t *state_lbl    = nullptr;
 static lv_obj_t *clock_lbl    = nullptr;
 static lv_obj_t *chip_row     = nullptr;
@@ -129,22 +139,29 @@ void standby_screen_build()
   lv_obj_align(hostip_lbl, LV_ALIGN_BOTTOM_MID, 0, -6);
 
   // --- Ring (left) — same geometry as the charge screen's power ring ---
-  arc = lv_arc_create(scr);
-  lv_obj_set_size(arc, RING_SIZE, RING_SIZE);
-  lv_obj_align(arc, LV_ALIGN_LEFT_MID, RING_LEFT, RING_Y);
-  lv_arc_set_rotation(arc, 135);
-  lv_arc_set_bg_angles(arc, 0, 270);
-  lv_arc_set_range(arc, 0, 100);
-  // Nothing is flowing on this screen, so the ring stays an empty track: it is
-  // the state word's frame here, not a gauge.
-  lv_arc_set_value(arc, 0);
-  lv_obj_remove_style(arc, NULL, LV_PART_KNOB);
-  lv_obj_clear_flag(arc, LV_OBJ_FLAG_CLICKABLE);
-  lv_obj_set_style_bg_opa(arc, LV_OPA_TRANSP, LV_PART_MAIN);
-  lv_obj_set_style_arc_width(arc, RING_BAND, LV_PART_MAIN);
-  lv_obj_set_style_arc_width(arc, RING_BAND, LV_PART_INDICATOR);
-  lv_obj_set_style_arc_color(arc, COL_TRACK, LV_PART_MAIN);
-  lv_obj_set_style_arc_color(arc, COL_ACCENT, LV_PART_INDICATOR);
+  // Standby has no value to plot -- the ring here was always an empty track --
+  // so the space carries the brand instead. Same footprint and centre as the
+  // charge screen's ring, so the two screens still line up.
+  //
+  // img_recolor_opa is required, not decorative: LVGL reads img_recolor only
+  // when the opa is non-zero, and otherwise draws an A8 mask in black.
+  mark_shell_obj = lv_img_create(scr);
+  lv_img_set_src(mark_shell_obj, &mark_shell_img);
+  lv_obj_set_style_img_recolor(mark_shell_obj, COL_ACCENT, 0);
+  lv_obj_set_style_img_recolor_opa(mark_shell_obj, LV_OPA_COVER, 0);
+  lv_obj_align(mark_shell_obj, LV_ALIGN_LEFT_MID, MARK_X, MARK_Y);
+
+  mark_bolt_obj = lv_img_create(scr);
+  lv_img_set_src(mark_bolt_obj, &mark_bolt_img);
+  lv_obj_set_style_img_recolor(mark_bolt_obj, NS_MARK_BOLT, 0);
+  lv_obj_set_style_img_recolor_opa(mark_bolt_obj, LV_OPA_COVER, 0);
+  lv_obj_align(mark_bolt_obj, LV_ALIGN_LEFT_MID, MARK_X, MARK_Y);
+
+  wordmark_lbl = lv_label_create(scr);
+  lv_label_set_text(wordmark_lbl, "OpenEVSE");
+  lv_obj_set_style_text_color(wordmark_lbl, COL_TEXT, 0);
+  lv_obj_set_style_text_font(wordmark_lbl, &lv_font_montserrat_28, 0);
+  lv_obj_align_to(wordmark_lbl, mark_shell_obj, LV_ALIGN_OUT_BOTTOM_MID, 0, 6);
 
   state_lbl = lv_label_create(scr);
   lv_label_set_long_mode(state_lbl, LV_LABEL_LONG_WRAP);
@@ -153,7 +170,8 @@ void standby_screen_build()
   lv_label_set_text(state_lbl, "");
   lv_obj_set_style_text_color(state_lbl, COL_ACCENT, 0);
   lv_obj_set_style_text_font(state_lbl, &lv_font_montserrat_28, 0);
-  lv_obj_align_to(state_lbl, arc, LV_ALIGN_CENTER, 0, 0);
+  lv_obj_align_to(state_lbl, wordmark_lbl, LV_ALIGN_OUT_BOTTOM_MID, 0, 6);
+  lv_obj_add_flag(state_lbl, LV_OBJ_FLAG_HIDDEN);
 
   // --- Totals (right) — the same three slots the charge screen uses when idle,
   // lifted by the height of the second top-strip line this screen doesn't have
@@ -193,8 +211,7 @@ void standby_screen_update(const StandbyScreenData &d)
 
   lv_label_set_text(state_lbl, word);
   lv_obj_set_style_text_color(state_lbl, accent, 0);
-  lv_obj_align_to(state_lbl, arc, LV_ALIGN_CENTER, 0, 0);
-  lv_obj_set_style_arc_color(arc, accent, LV_PART_INDICATOR);
+  lv_obj_align_to(state_lbl, wordmark_lbl, LV_ALIGN_OUT_BOTTOM_MID, 0, 6);
 
   lv_label_set_text(clock_lbl, d.clock ? d.clock : "");
 
@@ -204,6 +221,10 @@ void standby_screen_update(const StandbyScreenData &d)
     // sizes to its text, so trim them.
     int tn = fmt_temp(buf, sizeof(buf), d.temp_c, d.temp_fahrenheit);
     while (tn > 0 && buf[tn - 1] == ' ') buf[--tn] = '\0';
+    // Colour off the user's own throttle setpoint: amber approaching it, fault
+    // colour once the throttle is actually holding current down. The active
+    // claim is the truth for that -- inferring it from temperature alone would
+    // light up during the recovery ramp, when it is no longer limiting.
     if (d.temp_c >= 50.0f) chip_set(chip_temp, buf, COL_WARN, COL_BG);
     else                   chip_set(chip_temp, buf, COL_CARD, COL_TEXT);
   } else {
@@ -239,7 +260,7 @@ void standby_screen_destroy()
   if (standby_scr) {
     lv_obj_del(standby_scr);
     standby_scr  = nullptr;
-    arc = state_lbl = clock_lbl = hostip_lbl = nullptr;
+    mark_shell_obj = mark_bolt_obj = wordmark_lbl = state_lbl = clock_lbl = hostip_lbl = nullptr;
     chip_row = chip_temp = chip_wifi = nullptr;
     for (int i = 0; i < 3; i++) {
       tile_value[i] = nullptr;
