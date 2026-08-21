@@ -621,8 +621,7 @@ void LcdTask::displayStateLine(uint8_t evseState, unsigned long &nextUpdate)
         _updateStateDisplay = false;
       }
       else if(EvseClient_OpenEVSE_OCPP == stateClient ||
-              EvseClient_OpenEVSE_MQTT == stateClient ||
-              EvseClient_OpenEVSE_Ohm == stateClient)
+              EvseClient_OpenEVSE_MQTT == stateClient)
       {
         showText(0, 0, "Paused Remote", true);
         _updateStateDisplay = false;

@@ -59,7 +59,6 @@ x-examples:
     ocpp_server: ''
     ocpp_chargeBoxId: ''
     ocpp_authkey: ''
-    ohm: ''
     divert_type: -1
     divert_PV_ratio: 1.1
     divert_attack_smoothing_time: 20
@@ -81,7 +80,6 @@ x-examples:
     emoncms_enabled: true
     mqtt_enabled: true
     mqtt_reject_unauthorized: true
-    ohm_enabled: false
     sntp_enabled: true
     tesla_enabled: true
     divert_enabled: true
@@ -274,8 +272,6 @@ properties:
     type: boolean
   rfid_enabled:
     type: boolean
-  ohm:
-    type: string
   divert_type:
     type: number
   divert_PV_ratio:
@@ -312,8 +308,6 @@ properties:
   mqtt_enabled:
     type: boolean
   mqtt_reject_unauthorized:
-    type: boolean
-  ohm_enabled:
     type: boolean
   sntp_enabled:
     type: boolean
