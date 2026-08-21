@@ -16,8 +16,9 @@ TEST_CASE("claim_timer_expired: before/at/after deadline") {
 TEST_CASE("claim_timer_expired: millis() wrap is rollover-safe") {
   // release_at_ms just after the wrap, now_ms just before it: not yet expired.
   CHECK_FALSE(claim_timer_expired(100, 0xFFFFFF00));
-  // now_ms has wrapped past the deadline: expired.
+  // now_ms == release_at_ms: equality-at-deadline is expired (not itself a wrap case).
   CHECK(claim_timer_expired(100, 100));
+  // now_ms has wrapped past the deadline: expired.
   CHECK(claim_timer_expired(100, 200));
 }
 
@@ -41,4 +42,19 @@ TEST_CASE("claim_timer_remaining_s: ceil rounding") {
 TEST_CASE("claim_timer_remaining_s: millis() wrap") {
   // deadline 100ms after the wrap, now 0x100ms before it -> 200ms left -> ceils to 1s.
   CHECK(claim_timer_remaining_s(100, 0xFFFFFF9C) == 1);
+}
+
+TEST_CASE("CLAIM_TIMER_MAX_DURATION_S survives the deadline math") {
+  // A duration at the clamp max (7 days) is well inside the ~24.8-day signed-compare horizon:
+  // the computed deadline must not read as already expired, and remaining seconds must come
+  // back at (approximately) the max, not 0.
+  uint32_t now_ms = 0;
+  uint32_t release_at_ms = now_ms + (uint32_t)CLAIM_TIMER_MAX_DURATION_S * 1000UL;
+
+  CHECK_FALSE(claim_timer_expired(release_at_ms, now_ms));
+  CHECK(claim_timer_remaining_s(release_at_ms, now_ms) == (uint32_t)CLAIM_TIMER_MAX_DURATION_S);
+
+  // Still not expired, and remaining is still ~max, a moment later.
+  CHECK_FALSE(claim_timer_expired(release_at_ms, now_ms + 1000));
+  CHECK(claim_timer_remaining_s(release_at_ms, now_ms + 1000) == (uint32_t)CLAIM_TIMER_MAX_DURATION_S - 1);
 }

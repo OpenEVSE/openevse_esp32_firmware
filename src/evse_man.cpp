@@ -68,8 +68,19 @@ bool EvseProperties::deserialize(JsonObject &obj)
     _has_auto_release = true;
   }
 
-  if(obj.containsKey("duration")) {
-    obj["duration"] == "clear" ? _duration = 0 : _duration = obj["duration"];
+  // duration deliberately diverges from the present-keys-only convention used by the fields
+  // above: it's a one-shot request-side instruction, not a persistent field, so it's reset
+  // unconditionally on every deserialize() call and only set when present in *this* message.
+  // Without this, a persistent EvseProperties object (e.g. mqtt.cpp's _override_props /
+  // _claim_props) that received a duration once would keep carrying it forward into every
+  // later set on that topic, silently re-arming the expiry timer.
+  _duration = 0;
+  if(obj.containsKey("duration") && obj["duration"] != "clear") {
+    _duration = obj["duration"];
+    // Clamp to CLAIM_TIMER_MAX_DURATION_S: see claim_timer.h for why (signed-compare horizon).
+    if(_duration > CLAIM_TIMER_MAX_DURATION_S) {
+      _duration = CLAIM_TIMER_MAX_DURATION_S;
+    }
   }
 
   return true;
@@ -106,6 +117,11 @@ bool EvseManager::Claim::claim(EvseClient client, int priority, EvseProperties &
   // a re-claim with an unchanged duration must still restart the timer (press
   // boost again = restart), and re-claiming with duration 0/"clear" cancels it.
   _release_at_ms = target.getDuration() > 0 ? (millis() + target.getDuration() * 1000UL) : 0;
+  if(target.getDuration() > 0 && 0 == _release_at_ms) {
+    // 1-in-2^32 coincidence: the computed deadline landed exactly on the "no deadline" sentinel.
+    // Nudge forward 1ms so a requested duration is never silently treated as no expiry.
+    _release_at_ms = 1;
+  }
 
   if(_client != client ||
      _priority != priority ||
@@ -716,8 +732,9 @@ bool EvseManager::serializeClaims(DynamicJsonDocument &doc)
       obj["client"] = claim.getClient();
       obj["priority"] = claim.getPriority();
       claim.getProperties().serialize(obj);
-      if(claim.remainingSeconds() > 0) {
-        obj["remaining"] = claim.remainingSeconds();
+      uint32_t remaining = claim.remainingSeconds();
+      if(remaining > 0) {
+        obj["remaining"] = remaining;
       }
     }
   }
@@ -733,8 +750,9 @@ bool EvseManager::serializeClaim(DynamicJsonDocument &doc, EvseClient client)
   {
     doc["priority"] = claim->getPriority();
     claim->getProperties().serialize(doc);
-    if(claim->remainingSeconds() > 0) {
-      doc["remaining"] = claim->remainingSeconds();
+    uint32_t remaining = claim->remainingSeconds();
+    if(remaining > 0) {
+      doc["remaining"] = remaining;
     }
     return true;
   }
