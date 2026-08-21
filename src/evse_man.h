@@ -11,6 +11,7 @@
 #include "event_log.h"
 #include "json_serialize.h"
 #include "app_config.h"
+#include "claim_timer.h"
 
 typedef uint32_t EvseClient;
 
@@ -77,6 +78,10 @@ class EvseProperties : virtual public JsonSerialize<512>
     uint32_t _max_current;
     bool _auto_release;
     bool _has_auto_release = false;
+    // Request-side only: seconds from now until the resulting claim should be
+    // auto-released. Not part of the target state, so it is deliberately left
+    // out of equals()/operator== (see Claim::claim() for how it is consumed).
+    uint32_t _duration = 0;
   public:
     EvseProperties();
     EvseProperties(EvseState state);
@@ -121,6 +126,16 @@ class EvseProperties : virtual public JsonSerialize<512>
     void setAutoRelease(bool auto_release) {
       _auto_release = auto_release;
       _has_auto_release = true;
+    }
+
+    // Get/set the requested claim duration in seconds from now (0 = no expiry).
+    // This is a request-side instruction consumed once by Claim::claim() to
+    // compute the deadline; it is not part of the serialized target state.
+    uint32_t getDuration() {
+      return _duration;
+    }
+    void setDuration(uint32_t duration) {
+      _duration = duration;
     }
 
     EvseProperties & operator = (EvseProperties &rhs);
@@ -170,6 +185,9 @@ class EvseManager : public MicroTasks::Task
         EvseClient _client;
         int _priority;
         EvseProperties _properties;
+        // millis()-based deadline for this claim, 0 = no expiry. RAM-only,
+        // does not survive a reboot (claims themselves don't either).
+        uint32_t _release_at_ms;
 
       public:
         Claim();
@@ -215,6 +233,22 @@ class EvseManager : public MicroTasks::Task
 
         EvseProperties &getProperties() {
           return _properties;
+        }
+
+        bool hasDeadline() const {
+          return _release_at_ms != 0;
+        }
+
+        bool isExpired() const {
+          return claim_timer_expired(_release_at_ms, millis());
+        }
+
+        uint32_t remainingSeconds() const {
+          return claim_timer_remaining_s(_release_at_ms, millis());
+        }
+
+        uint32_t releaseAtMs() const {
+          return _release_at_ms;
         }
     };
 
@@ -278,6 +312,9 @@ class EvseManager : public MicroTasks::Task
     uint8_t getClaimsVersion();
 
     EvseProperties &getClaimProperties(EvseClient client);
+    // Seconds left before the client's claim auto-releases, 0 if the client
+    // has no claim or the claim has no deadline.
+    uint32_t getClaimRemaining(EvseClient client);
     EvseState getState(EvseClient client = EvseClient_NULL);
     uint32_t getChargeCurrent(EvseClient client = EvseClient_NULL);
     uint32_t getMaxCurrent(EvseClient client = EvseClient_NULL);

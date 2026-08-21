@@ -36,6 +36,7 @@ void EvseProperties::clear()
   _charge_current = UINT32_MAX;
   _max_current = UINT32_MAX;
   _auto_release = false;
+  _duration = 0;
 }
 
 EvseProperties & EvseProperties::operator = (EvseProperties &rhs)
@@ -44,6 +45,7 @@ EvseProperties & EvseProperties::operator = (EvseProperties &rhs)
   _charge_current = rhs._charge_current;
   _max_current = rhs._max_current;
   _auto_release = rhs._auto_release;
+  _duration = rhs._duration;
   return *this;
 }
 
@@ -64,6 +66,10 @@ bool EvseProperties::deserialize(JsonObject &obj)
   if(obj.containsKey("auto_release")) {
     _auto_release = obj["auto_release"];
     _has_auto_release = true;
+  }
+
+  if(obj.containsKey("duration")) {
+    obj["duration"] == "clear" ? _duration = 0 : _duration = obj["duration"];
   }
 
   return true;
@@ -89,12 +95,18 @@ bool EvseProperties::serialize(JsonObject &obj)
 EvseManager::Claim::Claim() :
   _client(EvseClient_NULL),
   _priority(0),
-  _properties()
+  _properties(),
+  _release_at_ms(0)
 {
 }
 
 bool EvseManager::Claim::claim(EvseClient client, int priority, EvseProperties &target)
 {
+  // Always (re)compute the expiry deadline, even if nothing else below changes:
+  // a re-claim with an unchanged duration must still restart the timer (press
+  // boost again = restart), and re-claiming with duration 0/"clear" cancels it.
+  _release_at_ms = target.getDuration() > 0 ? (millis() + target.getDuration() * 1000UL) : 0;
+
   if(_client != client ||
      _priority != priority ||
      _properties != target)
@@ -111,6 +123,7 @@ bool EvseManager::Claim::claim(EvseClient client, int priority, EvseProperties &
 void EvseManager::Claim::release()
 {
   _client = EvseClient_NULL;
+  _release_at_ms = 0;
 }
 
 EvseManager::EvseManager(Stream &port, EventLog &eventLog) :
@@ -386,6 +399,35 @@ unsigned long EvseManager::loop(MicroTasks::WakeReason reason)
     DBUGVAR(_monitor.getMaxHardwareCurrent());
   }
 
+  // Release any timed claims whose deadline has passed. Collect the expired
+  // clients first, then release them, since release() mutates the _clients
+  // array and we must not do that while iterating it. release() already
+  // bumps claims_version (and override_version/manual_override for Manual),
+  // so expiry converges every connected client for free.
+  bool haveDeadline = false;
+  {
+    EvseClient expired[EVSE_MANAGER_MAX_CLIENT_CLAIMS];
+    size_t expiredCount = 0;
+
+    for (size_t i = 0; i < EVSE_MANAGER_MAX_CLIENT_CLAIMS; i++)
+    {
+      if(_clients[i].isValid() && _clients[i].hasDeadline())
+      {
+        if(_clients[i].isExpired()) {
+          expired[expiredCount++] = _clients[i].getClient();
+        } else {
+          haveDeadline = true;
+        }
+      }
+    }
+
+    for (size_t i = 0; i < expiredCount; i++)
+    {
+      DBUGF("Claim from 0x%08x expired, releasing", expired[i]);
+      release(expired[i]);
+    }
+  }
+
   DBUGVAR(_evaluateClaims);
   if(_evaluateClaims)
   {
@@ -407,7 +449,10 @@ unsigned long EvseManager::loop(MicroTasks::WakeReason reason)
     _evaluateTargetState = false;
     setTargetState(_targetProperties);
   }
-  return MicroTask.Infinate;
+
+  // Keep ticking at 1Hz while any claim is running down a deadline, so
+  // expiry is checked promptly; otherwise sleep until the next event.
+  return haveDeadline ? 1000 : MicroTask.Infinate;
 }
 
 bool EvseManager::begin()
@@ -449,6 +494,12 @@ bool EvseManager::claim(EvseClient client, int priority, EvseProperties &target)
           event["override_version"] = manual.setVersion(manual.getVersion() + 1);
       }
       event_send(event);
+    } else if(target.getDuration() > 0) {
+      // Nothing else about the claim changed, but Claim::claim() always resets
+      // the deadline - wake the task so the 1Hz expiry tick picks up the new
+      // deadline (e.g. pressing "boost" again with the same duration must
+      // still restart the timer).
+      MicroTask.wakeTask(this);
     }
     return true;
   }
@@ -519,6 +570,16 @@ EvseProperties &EvseManager::getClaimProperties(EvseClient client)
   }
 
   return nullProperties;
+}
+
+uint32_t EvseManager::getClaimRemaining(EvseClient client)
+{
+  Claim *claim;
+  if(findClaim(client, &claim)) {
+    return claim->remainingSeconds();
+  }
+
+  return 0;
 }
 
 EvseState EvseManager::getState(EvseClient client)
@@ -655,6 +716,9 @@ bool EvseManager::serializeClaims(DynamicJsonDocument &doc)
       obj["client"] = claim.getClient();
       obj["priority"] = claim.getPriority();
       claim.getProperties().serialize(obj);
+      if(claim.remainingSeconds() > 0) {
+        obj["remaining"] = claim.remainingSeconds();
+      }
     }
   }
 
@@ -669,6 +733,9 @@ bool EvseManager::serializeClaim(DynamicJsonDocument &doc, EvseClient client)
   {
     doc["priority"] = claim->getPriority();
     claim->getProperties().serialize(doc);
+    if(claim->remainingSeconds() > 0) {
+      doc["remaining"] = claim->remainingSeconds();
+    }
     return true;
   }
 
