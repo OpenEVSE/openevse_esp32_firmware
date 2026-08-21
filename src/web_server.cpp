@@ -588,7 +588,6 @@ void buildStatus(DynamicJsonDocument &doc) {
   doc["rfid_reader"] = (int) rfid.readerPresent();
 #endif
 
-  doc["ohm_hour"] = ohm_hour;
 
   doc["free_heap"] = ESPAL.getFreeHeap();
   doc["littlefs_free"] = (uint32_t)(LittleFS.totalBytes() - LittleFS.usedBytes());
