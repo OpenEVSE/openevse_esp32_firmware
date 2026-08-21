@@ -1198,7 +1198,17 @@ void handleEmeter(MongooseHttpServerRequest *request)
     {
       EvseProperties props;
       manual.getProperties(props);
-      props.serialize(response);
+
+      const size_t capacity = JSON_OBJECT_SIZE(40) + 1024;
+      DynamicJsonDocument doc(capacity);
+      props.serialize(doc);
+
+      uint32_t remaining = evse.getClaimRemaining(EvseClient_OpenEVSE_Manual);
+      if(remaining > 0) {
+        doc["remaining"] = remaining;
+      }
+
+      serializeJson(doc, *response);
     } else {
     response->setCode(200);
     response->print("{}");
