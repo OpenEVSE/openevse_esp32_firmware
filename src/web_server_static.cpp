@@ -66,11 +66,15 @@ bool web_static_handle(MongooseHttpServerRequest *request)
     // immutable by construction: a changed file gets a changed name. Telling
     // the browser so removes the revalidation round trip entirely. index.html
     // is NOT hashed -- it is what points at the current asset names -- so it
-    // keeps a short lifetime or a new build would never be picked up.
+    // gets a day lifetime instead: iOS 17 WebKit turns same-document #hash
+    // taps into full page reloads whenever the shell is cache-stale against a
+    // slow server (and this server is always slow), so the shell must stay
+    // fresh. The ETag/304 path below still lets an explicit browser refresh
+    // pick up a new build immediately.
     bool immutable = 0 == strncmp(file->filename, "/assets/", 8);
     response->addHeader(F("Cache-Control"),
                         immutable ? F("public, max-age=31536000, immutable")
-                                  : F("public, max-age=30, must-revalidate"));
+                                  : F("public, max-age=86400"));
 
     MongooseString ifNoneMatch = request->headers("If-None-Match");
     if(http_etag_matches(ifNoneMatch.c_str(), ifNoneMatch.length(), file->etag)) {
