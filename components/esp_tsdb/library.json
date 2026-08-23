@@ -1,0 +1,14 @@
+{
+  "name": "esp_tsdb",
+  "version": "2.0.3+tigomonitor",
+  "description": "Data-agnostic time-series database for ESP32. Columnar storage, sparse indexing, ring-buffer eviction, streaming queries. (tigomonitor branch: correct time-range iteration on wrapped ring buffer)",
+  "keywords": ["time-series", "tsdb", "esp32", "idf"],
+  "license": "MIT",
+  "homepage": "https://github.com/RAR/esp_tsdb",
+  "frameworks": ["espidf", "arduino"],
+  "platforms": ["espressif32"],
+  "build": {
+    "srcDir": "src",
+    "includeDir": "include"
+  }
+}

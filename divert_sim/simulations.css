@@ -1,7 +1,7 @@
 
 @media print
 {
-  .solar, .gridie, .shaper
+  .solar, .gridie, .shaper, .loadsharing
   {
     page-break-inside: avoid;
   }
@@ -25,6 +25,13 @@ div.gridie
   width: 100%;
 }
 
+div.loadsharing
+{
+  height: 420px;
+  width: 100%;
+}
+
+/* Legacy toggleCharts() rules kept for interactive.html */
 .hide-divert .solar,
 .hide-divert .gridie,
 .hide-divert tr.solar,
@@ -37,4 +44,171 @@ div.gridie
 .hide-shaper tr.shaper
 {
   display: none;
+}
+
+.hide-loadsharing .loadsharing,
+.hide-loadsharing tr.loadsharing
+{
+  display: none;
+}
+
+/* =============================================================================
+   view.html — tab-based layout
+   ============================================================================= */
+
+.sim-header {
+  padding: 10px 15px 0;
+}
+
+.sim-header h1 {
+  margin-top: 10px;
+}
+
+/* Attach tabs flush to the tab-content panel */
+.sim-tab-nav {
+  margin-top: 16px;
+  margin-bottom: 0;
+}
+
+.sim-tab-content {
+  border: 1px solid #ddd;
+  border-top: none;
+  padding: 16px;
+  border-radius: 0 0 4px 4px;
+}
+
+/* Summary section */
+.sim-summary-section {
+  margin-bottom: 12px;
+}
+
+.sim-summary-section h3 {
+  margin-top: 0;
+}
+
+.sim-summary-placeholder {
+  color: #888;
+  font-style: italic;
+  padding: 8px 0;
+}
+
+.sim-summary-table {
+  font-size: 12px;
+}
+
+/* Profile selector row */
+.sim-chart-controls {
+  margin-bottom: 12px;
+}
+
+.sim-profile-select {
+  display: inline-block;
+  width: auto;
+  min-width: 140px;
+  margin-left: 6px;
+  vertical-align: middle;
+}
+
+/* 2-column chart grid */
+.sim-charts-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 16px;
+}
+
+/* Load sharing charts span full width (multiple series, more visual space needed) */
+.sim-charts-grid div.loadsharing {
+  grid-column: span 2;
+}
+
+/* Gridie charts are taller; keep them full-width too */
+.sim-charts-grid div.gridie {
+  grid-column: span 2;
+}
+
+/* Loading indicator inside chart container */
+.sim-chart-loading {
+  grid-column: span 2;
+  padding: 32px;
+  text-align: center;
+  color: #555;
+  font-size: 16px;
+}
+
+/* Spinning animation for glyphicon-refresh */
+@keyframes sim-spin {
+  from { transform: rotate(0deg);   }
+  to   { transform: rotate(360deg); }
+}
+
+.sim-spinning {
+  display: inline-block;
+  animation: sim-spin 1s linear infinite;
+}
+
+
+/* Tabbed nav + summary table */
+.tabs {
+  display: flex;
+  gap: 4px;
+  border-bottom: 2px solid #ccc;
+  margin-bottom: 12px;
+}
+.tabs button {
+  padding: 8px 16px;
+  border: 1px solid #ccc;
+  border-bottom: none;
+  background: #f5f5f5;
+  cursor: pointer;
+  font-size: 14px;
+}
+.tabs button.active {
+  background: #fff;
+  border-bottom: 2px solid #fff;
+  margin-bottom: -2px;
+  font-weight: bold;
+}
+.tab-controls {
+  margin-bottom: 12px;
+}
+
+#profile[multiple] {
+  min-width: 160px;
+  min-height: 110px;
+  vertical-align: middle;
+}
+
+.profile-solo {
+  margin-bottom: 12px;
+}
+
+.profile-solo span {
+  margin-right: 8px;
+  font-weight: 600;
+}
+
+.profile-solo button {
+  margin-right: 6px;
+  margin-bottom: 6px;
+}
+
+table.summary-table {
+  border-collapse: collapse;
+  margin: 8px 0 16px 0;
+  font-size: 13px;
+}
+table.summary-table th,
+table.summary-table td {
+  border: 1px solid #ccc;
+  padding: 4px 8px;
+  text-align: right;
+}
+table.summary-table th {
+  background: #eee;
+  text-align: center;
+}
+table.summary-table td:nth-child(1),
+table.summary-table td:nth-child(2),
+table.summary-table td:nth-child(3) {
+  text-align: left;
 }

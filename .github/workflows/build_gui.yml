@@ -11,6 +11,7 @@ on:
 
   pull_request:
     paths:
+      - gui-nightshift
       - gui-v2
       - gui-tft/*
 
@@ -21,14 +22,14 @@ jobs:
 
     steps:
       - name: Checkout the repository
-        uses: actions/checkout@v6
+        uses: actions/checkout@v7
         with:
           submodules: recursive
           ref: ${{ github.head_ref }}
           token: ${{ secrets.DEPENDABOT_PAT }}
 
       - name: Cache pip
-        uses: actions/cache@v5
+        uses: actions/cache@v6
         with:
           path: ~/.cache/pip
           key: ${{ runner.os }}-pip-${{ hashFiles('**/requirements.txt') }}
@@ -36,13 +37,13 @@ jobs:
             ${{ runner.os }}-pip-
 
       - name: Cache PlatformIO
-        uses: actions/cache@v5
+        uses: actions/cache@v6
         with:
           path: ~/.platformio
           key: ${{ runner.os }}-${{ hashFiles('**/lockfiles') }}
 
       - name: Set up Python
-        uses: actions/setup-python@v6
+        uses: actions/setup-python@v7
         with:
           python-version: '3.x'
 
@@ -52,18 +53,18 @@ jobs:
           pip install --upgrade platformio
 
       - name: Set up Node JS
-        uses: actions/setup-node@v6
+        uses: actions/setup-node@v7
         with:
           node-version: '20'
 
       - name: Install dependencies
         run: |
-          cd gui-v2
+          cd gui-nightshift
           npm install
 
       - name: Build GUI
         run: |
-          cd gui-v2
+          cd gui-nightshift
           npm run build
 
       - name: Delete the existing pre-built GUI files

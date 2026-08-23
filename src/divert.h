@@ -21,9 +21,6 @@ enum DivertType {
   DIVERT_TYPE_GRID = 1
 };
 
-extern int solar;
-extern int grid_ie;
-
 class DivertMode
 {
   public:
@@ -54,7 +51,6 @@ class DivertMode
 class DivertTask : public MicroTasks::Task
 {
   private:
-    // global variable
     EvseManager *_evse;
     DivertMode _mode;
     EvseState _state;
@@ -66,6 +62,9 @@ class DivertTask : public MicroTasks::Task
     time_t _min_charge_end;
     uint8_t _evse_last_state;
     InputFilter _inputFilter;
+    bool _timer_divert_active;  // true while a scheduler timer window controls divert
+    int _solar;
+    int _grid_ie;
 
   protected:
     void setup();
@@ -82,6 +81,10 @@ class DivertTask : public MicroTasks::Task
     DivertMode getMode() {
       return _mode;
     }
+
+    // Enable/disable timer-controlled divert (elevates claim priority to 900)
+    void setTimerDivertActive(bool active);
+    bool isTimerDivertActive() { return _timer_divert_active; }
 
     uint32_t lastUpdate() {
       return _last_update;
@@ -101,6 +104,11 @@ class DivertTask : public MicroTasks::Task
 
     // Set charge rate depending on charge mode and solarPV output
     void update_state();
+
+    void setSolar(int value) { _solar = value; }
+    void setGridIe(int value) { _grid_ie = value; }
+    int getSolar() const { return _solar; }
+    int getGridIe() const { return _grid_ie; }
 
     EvseState getState() {
       return _state;

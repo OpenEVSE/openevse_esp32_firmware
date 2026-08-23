@@ -10,6 +10,7 @@
 #include "app_config.h"
 #include "net_manager.h"
 #include "embedded_files.h"
+#include "http_etag.h"
 
 extern bool enableCors; // defined in web_server.cpp
 
@@ -46,22 +47,33 @@ bool web_static_handle(MongooseHttpServerRequest *request)
 {
   dumpRequest(request);
 
-  // Are we authenticated
-  if(!net.isWifiModeApOnly() && www_username!="" &&
-     false == request->authenticate(www_username, www_password)) {
-    request->requestAuthentication(esp_hostname);
-    return false;
-  }
+  // The web UI shell (HTML/JS/CSS/assets) is served WITHOUT authentication, so
+  // the single-page app can always load and present its own login page. It
+  // carries no secrets: every piece of data and every action lives behind the
+  // authenticated API and WebSocket (see isAuthenticated — Basic for machine
+  // clients, session cookie for the browser).
+  //
+  // Gating the shell behind HTTP Basic here would make the browser pop its
+  // native Basic dialog on the very first navigation, pre-empting the SPA login
+  // page (the whole point of F1). So we intentionally do not challenge here.
 
   StaticFile *file = NULL;
   if (web_static_get_file(request, &file))
   {
     MongooseHttpServerResponseBasic *response = request->beginResponse();
 
-    response->addHeader(F("Cache-Control"), F("public, max-age=30, must-revalidate"));
+    // Vite content-hashes everything under /assets/, so those URLs are
+    // immutable by construction: a changed file gets a changed name. Telling
+    // the browser so removes the revalidation round trip entirely. index.html
+    // is NOT hashed -- it is what points at the current asset names -- so it
+    // keeps a short lifetime or a new build would never be picked up.
+    bool immutable = 0 == strncmp(file->filename, "/assets/", 8);
+    response->addHeader(F("Cache-Control"),
+                        immutable ? F("public, max-age=31536000, immutable")
+                                  : F("public, max-age=30, must-revalidate"));
 
     MongooseString ifNoneMatch = request->headers("If-None-Match");
-    if(ifNoneMatch.equals(file->etag)) {
+    if(http_etag_matches(ifNoneMatch.c_str(), ifNoneMatch.length(), file->etag)) {
       request->send(304);
       return true;
     }
@@ -77,7 +89,13 @@ bool web_static_handle(MongooseHttpServerRequest *request)
       response->addHeader(F("Content-Encoding"), F("gzip"));
     }
 
-    response->addHeader("Etag", file->etag);
+    // Quoted, per RFC 7232. Sending a bare tag is what broke this: browsers
+    // store it, hand it back quoted in If-None-Match, and the old exact-match
+    // compare above never fired -- so every page load re-sent the whole bundle.
+    char etag[HTTP_ETAG_QUOTED_MAX];
+    if(http_etag_quote(file->etag, etag, sizeof(etag))) {
+      response->addHeader("Etag", etag);
+    }
     response->setContent((const uint8_t *)file->data, file->length);
 
     request->send(response);

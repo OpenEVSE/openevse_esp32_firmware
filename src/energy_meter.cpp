@@ -5,6 +5,7 @@
 #include <sys/time.h>
 
 #include "energy_meter.h"
+#include "fs_util.h"
 #include "evse_monitor.h"
 
 #include "debug.h"
@@ -398,13 +399,7 @@ bool EnergyMeter::load()
 bool EnergyMeter::write(EnergyMeterData &data)
 {
   DBUGLN("Energy Meter: Saving data");
-  File file = LittleFS.open(ENERGY_METER_FILE, "w");
-  if (!file)
-  {
-    file.close();
-    DBUGLN("Energy Meter: error can't open/create file");
-    return false;
-  }
+
   StaticJsonDocument<capacity> doc;
   _data.serialize(doc);
   // Keep previous "imported" property
@@ -412,18 +407,32 @@ bool EnergyMeter::write(EnergyMeterData &data)
   {
     doc["imported"] = _data.imported;
   }
+
+  // Don't truncate the existing (valid) file if the new contents can't fit.
+  if (!littlefs_has_space(measureJson(doc)))
+  {
+    DBUGLN("Energy Meter: insufficient space, keeping existing file");
+    return false;
+  }
+
+  File file = LittleFS.open(ENERGY_METER_FILE, "w");
+  if (!file)
+  {
+    DBUGLN("Energy Meter: error can't open/create file");
+    return false;
+  }
   if (serializeJson(doc, file))
   {
     DBUGLN("Energy Meter: data saved");
     file.close();
     return true;
   }
-  else
-  {
-    file.close();
-    DBUGLN("Energy Meter: can't write to file");
-    return false;
-  }
+
+  // Write failed part-way — remove the now-corrupt file rather than leave it.
+  file.close();
+  LittleFS.remove(ENERGY_METER_FILE);
+  DBUGLN("Energy Meter: can't write to file (removed partial)");
+  return false;
 };
 
 bool EnergyMeter::createEnergyMeterStorage(bool fullreset = false, bool forceimport = false)

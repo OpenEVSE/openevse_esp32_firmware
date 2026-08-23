@@ -359,8 +359,16 @@ void OcppTask::loadEvseBehavior() {
     });
 
     addErrorCodeInput([this] () -> const char* {
-        if (evse->getEvseState() == OPENEVSE_STATE_STUCK_RELAY) {
+        if (evse->getEvseState() == OPENEVSE_STATE_STUCK_RELAY ||
+                evse->getEvseState() == OPENEVSE_STATE_RELAY_CLOSURE_FAULT) {
             return "PowerSwitchFailure";
+        }
+        return nullptr;
+    });
+
+    addErrorCodeInput([this] () -> const char* {
+        if (evse->getEvseState() == OPENEVSE_STATE_EEPROM_FAILURE) {
+            return "InternalError";
         }
         return nullptr;
     });
@@ -368,6 +376,22 @@ void OcppTask::loadEvseBehavior() {
     addErrorCodeInput([this] () -> const char* {
         if (rfid->communicationFails()) {
             return "ReaderFailure";
+        }
+        return nullptr;
+    });
+
+    addErrorDataInput([this] () -> MicroOcpp::ErrorData {
+        // The proximity pilot faults have no dedicated OCPP 1.6 error code, so
+        // report them as OtherError and let the free text carry the detail.
+        if (evse->getEvseState() == OPENEVSE_STATE_PP_SHORTED ||
+                evse->getEvseState() == OPENEVSE_STATE_PP_MISSING) {
+
+            MicroOcpp::ErrorData error = "OtherError";
+
+            //add free text error info
+            error.info = evse->getEvseState() == OPENEVSE_STATE_PP_SHORTED ? "proximity pilot shorted" :
+                                                                            "proximity pilot resistor missing";
+            return error;
         }
         return nullptr;
     });
