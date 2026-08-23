@@ -5,6 +5,7 @@ Runs against the paired emulator + native firmware fixtures from conftest.py
 its ``native_url`` entry).
 """
 
+import pytest
 import requests
 
 REQUEST_TIMEOUT = 10
@@ -43,9 +44,31 @@ class TestBoostRest:
         assert r.status_code == 400
 
     def test_post_soc_without_vehicle_data_is_422(self, evse_instance):
+        """A soc boost is 422 while the EVSE has no vehicle SoC source.
+
+        The firmware's vehicle-validity bits are set-once — nothing in the HTTP
+        API clears them again — so this test cannot reset the harness into the
+        no-vehicle-data state.  Instead it probes /status first: ``battery_level``
+        is only emitted once EvseManager::isVehicleStateOfChargeValid() is true
+        (src/web_server.cpp buildStatus).  If an earlier test in the session
+        pushed SoC data (test_charging.py::test_status_post_vehicle_data does),
+        the 422 precondition no longer holds and we skip rather than fail on a
+        collection-order accident.
+        """
         native_url = evse_instance["native_url"]
+        status = requests.get(f"{native_url}/status", timeout=REQUEST_TIMEOUT).json()
+        if "battery_level" in status:
+            pytest.skip(
+                "EVSE already has vehicle SoC data (battery_level="
+                f"{status['battery_level']}); vehicle validity cannot be reset "
+                "via the API, so the 422 precondition is unavailable in this "
+                "session. Run test_boost.py on its own to cover it."
+            )
+
         r = requests.post(f"{native_url}/boost", json={"type": "soc", "value": 80}, timeout=REQUEST_TIMEOUT)
-        assert r.status_code == 422
+        assert r.status_code == 422, (
+            f"Expected 422 with no vehicle SoC data, got {r.status_code}: {r.text}"
+        )
 
     def test_time_boost_lifecycle(self, evse_instance):
         native_url = evse_instance["native_url"]
