@@ -51,7 +51,22 @@ void Boost::sendEvent(bool active, const char *reason)
 
 int Boost::arm(LimitType type, uint32_t value)
 {
-  if(LimitType::None == type || 0 == value) {
+  // Whitelist the dimensions we can actually evaluate. A bare
+  // `None` check is not enough: LimitType's default ctor leaves the value
+  // indeterminate and LimitType::fromString() has no default arm, so an
+  // unrecognised string can yield a garbage code >= 5. Arming on one of those
+  // would take the priority-200 Active claim with a type the tick's switch
+  // never matches, and the boost would never end on its own.
+  switch(type) {
+    case LimitType::Time:
+    case LimitType::Energy:
+    case LimitType::Soc:
+    case LimitType::Range:
+      break;
+    default:
+      return Boost_BadRequest;
+  }
+  if(0 == value) {
     return Boost_BadRequest;
   }
   if((LimitType::Soc == type && !_evse->isVehicleStateOfChargeValid()) ||
@@ -101,8 +116,18 @@ int Boost::arm(const char *json)
   if(err || !doc.containsKey("type") || !doc.containsKey("value")) {
     return Boost_BadRequest;
   }
-  LimitType type;
-  type.fromString(doc["type"].as<const char *>());
+  // "type" must be a string: JSON null, a number or an object all satisfy
+  // containsKey() but as<const char *>() then hands back NULL, and
+  // LimitType::fromString() dereferences value[0] unguarded.
+  if(!doc["type"].is<const char *>()) {
+    return Boost_BadRequest;
+  }
+  const char *type_str = doc["type"].as<const char *>();
+  if(NULL == type_str) {
+    return Boost_BadRequest;
+  }
+  LimitType type = LimitType::None;   // fromString() may not assign
+  type.fromString(type_str);
   return arm(type, doc["value"].as<uint32_t>());
 }
 
@@ -136,8 +161,14 @@ uint32_t Boost::getRemaining()
     case LimitType::Time:
       return deadline_timer_remaining_s(_deadline_ms, millis());
     case LimitType::Energy:
-      return ChargeThreshold::remaining(_type, _value, _energy_basis_wh,
-                                        (uint32_t)_evse->getSessionEnergy());
+    {
+      // Mirror the tick's session-reset heuristic (read-only: the tick owns
+      // the re-snapshot) so a report taken between the reset and the next
+      // tick does not overstate what is left.
+      uint32_t session_wh = (uint32_t)_evse->getSessionEnergy();
+      uint32_t basis = session_wh < _energy_basis_wh ? session_wh : _energy_basis_wh;
+      return ChargeThreshold::remaining(_type, _value, basis, session_wh);
+    }
     case LimitType::Soc:
       return ChargeThreshold::remaining(_type, _value, 0,
                                         (uint32_t)_evse->getVehicleStateOfCharge());
@@ -180,9 +211,23 @@ unsigned long Boost::loop(MicroTasks::WakeReason reason)
       reached = deadline_timer_expired(_deadline_ms, millis());
       break;
     case LimitType::Energy:
+    {
+      // Session energy is monotonic within a session and resets to 0 when the
+      // next session starts. A boost armed while unplugged snapshots the old
+      // session's total, so once the vehicle plugs in the basis is stale and
+      // the target would be met only after basis + target Wh. A decrease can
+      // never happen inside one session, so treat it as "new session" and
+      // re-snapshot the basis.
+      uint32_t session_wh = (uint32_t)_evse->getSessionEnergy();
+      if(session_wh < _energy_basis_wh) {
+        DBUGF("Session energy reset (%u < %u), re-basing boost",
+              session_wh, _energy_basis_wh);
+        _energy_basis_wh = session_wh;
+      }
       reached = ChargeThreshold::reached(_type, _value, _energy_basis_wh,
-                                         (uint32_t)_evse->getSessionEnergy());
+                                         session_wh);
       break;
+    }
     case LimitType::Soc:
       reached = ChargeThreshold::reached(_type, _value, 0,
                                          (uint32_t)_evse->getVehicleStateOfCharge());
