@@ -706,8 +706,9 @@ handleScan(MongooseHttpServerRequest *request) {
 }
 
 // -------------------------------------------------------------------
-// Destructive actuators (/reset, /restart, /apoff) must not fire from a bare
-// cross-site GET (e.g. <img src="/reset">). Require either a non-GET method or
+// Destructive actuators (/reset, /restart, /apoff, /divertmode, /shaper,
+// /settime, /rfid/add) must not fire from a bare cross-site GET (e.g.
+// <img src="/reset">). Require either a non-GET method or
 // the SPA's custom header, which a cross-origin GET cannot set — defense in
 // depth beyond SameSite=Strict on the worst-consequence endpoints. Sends 403
 // and returns false when the request is a headerless GET; the caller's response
@@ -762,6 +763,10 @@ handleDivertMode(MongooseHttpServerRequest *request){
     return;
   }
 
+  if(!actuatorMethodAllowed(request, response)) {
+    return;
+  }
+
   DivertMode divertmode = (DivertMode)(request->getParam("divertmode").toInt());
   divert.setMode(divertmode);
 
@@ -782,6 +787,10 @@ handleCurrentShaper(MongooseHttpServerRequest *request) {
   if(false == requestPreProcess(request, response, CONTENT_TYPE_TEXT)) {
     return;
   }
+  if(!actuatorMethodAllowed(request, response)) {
+    return;
+  }
+
   shaper.setState(request->getParam("shaper").toInt() == 1? true: false);
 
   response->setCode(200);
@@ -799,6 +808,10 @@ void handleSetTime(MongooseHttpServerRequest *request)
 {
   MongooseHttpServerResponseStream *response;
   if(false == requestPreProcess(request, response, CONTENT_TYPE_TEXT)) {
+    return;
+  }
+
+  if(!actuatorMethodAllowed(request, response)) {
     return;
   }
 
@@ -1415,6 +1428,10 @@ void handleAddRFID(MongooseHttpServerRequest *request) {
   if(false == requestPreProcess(request, response)) {
     return;
   }
+  if(!actuatorMethodAllowed(request, response)) {
+    return;
+  }
+
   response->setCode(200);
   response->addHeader("Access-Control-Allow-Origin", "*");
   response->print("{\"msg\":\"Waiting for badge\"}");
