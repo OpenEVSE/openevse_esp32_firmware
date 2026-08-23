@@ -5,8 +5,11 @@
 #include <Arduino.h>
 #include <LittleFS.h>
 #include <memory>
+#include <new>
 
 #include "emonesp.h"
+#include "certificate_id.h"
+#include "certificate_storage_transaction.h"
 #include "certificates.h"
 #include "fs_util.h"
 #include "root_ca.h"
@@ -71,7 +74,7 @@ bool CertificateStore::Certificate::deserialize(JsonObject &obj)
 
 bool CertificateStore::Certificate::serialize(JsonObject &doc, uint32_t flags)
 {
-  doc["id"] = String(_id, HEX);
+  doc["id"] = certificate_id_hex(_id);
   doc["type"] = _type.toString();
   doc["name"] = _name;
   doc["certificate"] = _cert;
@@ -100,7 +103,7 @@ CertificateStore::~CertificateStore()
   }
 
   if(_root_ca != root_ca) {
-    delete _root_ca;
+    delete[] _root_ca;
   }
 }
 
@@ -171,18 +174,28 @@ bool CertificateStore::addCertificate(Certificate *cert, uint64_t *id, bool save
     return false;
   }
 
-  if(id != nullptr) {
-    *id = cert->getId();
+  const char *prepared_root_ca = nullptr;
+  if(cert->getType() == Certificate::Type::Root && !prepareRootCa(cert, prepared_root_ca)) {
+    return false;
   }
 
   _certs.push_back(cert);
 
-  if(cert->getType() == Certificate::Type::Root) {
-    buildRootCa();
+  if(save && !saveCertificate(cert))
+  {
+    _certs.pop_back();
+    if(nullptr != prepared_root_ca && prepared_root_ca != root_ca) {
+      delete[] prepared_root_ca;
+    }
+    return false;
   }
 
-  if(save) {
-    return saveCertificate(cert);
+  if(nullptr != prepared_root_ca) {
+    replaceRootCa(prepared_root_ca);
+  }
+
+  if(id != nullptr) {
+    *id = cert->getId();
   }
 
   return true;
@@ -307,7 +320,7 @@ bool CertificateStore::findCertificate(uint64_t id, int &index)
   return false;
 }
 
-bool CertificateStore::buildRootCa()
+bool CertificateStore::prepareRootCa(Certificate *additional, const char *&prepared)
 {
   size_t len = 1;
   for(auto &c : _certs)
@@ -317,28 +330,26 @@ bool CertificateStore::buildRootCa()
     }
   }
 
-  DBUGVAR(len);
-  DBUGF("%p != %p", _root_ca, root_ca);
-
-  if(_root_ca != root_ca) {
-    delete _root_ca;
+  if(nullptr != additional && additional->getType() == Certificate::Type::Root) {
+    len += additional->getCert().length();
   }
+
+  DBUGVAR(len);
 
   if(len <= 1)
   {
     DBUGLN("Using default root certificates");
-    _root_ca = root_ca;
+    prepared = root_ca;
     return true;
   }
 
   len += root_ca_len;
   DBUGVAR(len);
 
-  char *new_root_ca = new char[len];
+  char *new_root_ca = new (std::nothrow) char[len];
   if(new_root_ca == nullptr)
   {
-    DBUGLN("Memmory allocation failed, using default root certificates");
-    _root_ca = root_ca;
+    DBUGLN("Memory allocation failed while preparing root certificates");
     return false;
   }
 
@@ -354,8 +365,31 @@ bool CertificateStore::buildRootCa()
     }
   }
 
+  if(nullptr != additional && additional->getType() == Certificate::Type::Root)
+  {
+    strcpy(ptr, additional->getCert().c_str());
+  }
+
   DBUGLN("Using custom root certificates");
-  _root_ca = new_root_ca;
+  prepared = new_root_ca;
+  return true;
+}
+
+void CertificateStore::replaceRootCa(const char *replacement)
+{
+  if(_root_ca != root_ca) {
+    delete[] _root_ca;
+  }
+  _root_ca = replacement;
+}
+
+bool CertificateStore::buildRootCa()
+{
+  const char *prepared = nullptr;
+  if(!prepareRootCa(nullptr, prepared)) {
+    return false;
+  }
+  replaceRootCa(prepared);
   return true;
 }
 
@@ -373,7 +407,15 @@ bool CertificateStore::loadCertificates()
       {
         String name = file.name();
         DBUGVAR(name.c_str());
-        if(false == loadCertificate(name)) {
+        if(name.endsWith(".tmp"))
+        {
+          file.close();
+          String path = String(CERTIFICATE_BASE_DIRECTORY) + "/" + name;
+          if(!LittleFS.remove(path)) {
+            loaded = false;
+          }
+        }
+        else if(false == loadCertificate(name)) {
           loaded = false;
         }
       }
@@ -417,38 +459,57 @@ bool CertificateStore::loadCertificate(String &name)
 
 bool CertificateStore::saveCertificate(Certificate *cert)
 {
-  String name = String(CERTIFICATE_BASE_DIRECTORY) + "/" + String(cert->getId(), HEX) + ".json";
+  std::string id = certificate_id_hex(cert->getId());
+  String name = String(CERTIFICATE_BASE_DIRECTORY) + "/" + id.c_str() + ".json";
 
   DynamicJsonDocument doc(CERTIFICATE_JSON_BUFFER_SIZE);
   JsonObject object = doc.to<JsonObject>();
   cert->serialize(object, Certificate::Flags::SHOW_PRIVATE_KEY);
 
-  // Don't truncate an existing valid cert if the new contents won't fit.
-  if(!littlefs_has_space(measureJson(doc)))
-  {
-    DBUGLN("Certificates: insufficient space, not saving");
+  if(doc.overflowed()) {
     return false;
   }
 
-  File file = LittleFS.open(name, "w");
-  if(!file)
-  {
+  size_t expected = measureJson(doc);
+  std::string record;
+  record.reserve(expected);
+  size_t serialized = serializeJson(doc, record);
+  if(0 == expected || serialized != expected) {
     return false;
   }
 
-  bool ok = serializeJson(doc, file) > 0;
-  file.close();
-  if(!ok)
+  class LittleFsCertificateStorage
   {
-    // Partial write — remove the corrupt file rather than leave it.
-    LittleFS.remove(name);
-  }
-  return ok;
+    public:
+      bool exists(const char *path) const { return LittleFS.exists(path); }
+      bool remove(const char *path) { return LittleFS.remove(path); }
+      bool hasSpace(size_t needed) const { return littlefs_has_space(needed); }
+      bool rename(const char *from, const char *to) { return LittleFS.rename(from, to); }
+
+      bool write(const char *path, const uint8_t *data, size_t size, size_t &written)
+      {
+        File file = LittleFS.open(path, "w");
+        if(!file) {
+          written = 0;
+          return false;
+        }
+
+        written = file.write(data, size);
+        file.flush();
+        file.close();
+        return true;
+      }
+  } storage;
+
+  return certificate_storage_commit(storage, name.c_str(),
+                                    reinterpret_cast<const uint8_t *>(record.data()),
+                                    record.size());
 }
 
 bool CertificateStore::removeCertificate(Certificate *cert)
 {
-  String name = String(CERTIFICATE_BASE_DIRECTORY) + "/" + String(cert->getId(), HEX) + ".json";
+  std::string id = certificate_id_hex(cert->getId());
+  String name = String(CERTIFICATE_BASE_DIRECTORY) + "/" + id.c_str() + ".json";
   if(LittleFS.remove(name))
   {
     return true;
