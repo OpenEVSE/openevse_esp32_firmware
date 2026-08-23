@@ -278,6 +278,26 @@ bool CertificateStore::serializeCertificate(DynamicJsonDocument &doc, uint64_t i
   return false;
 }
 
+size_t CertificateStore::certificateCount()
+{
+  return _certs.size();
+}
+
+bool CertificateStore::serializeCertificateAt(DynamicJsonDocument &doc, size_t index, uint32_t flags)
+{
+  if(index >= _certs.size()) {
+    return false;
+  }
+
+  Certificate *cert = _certs[index];
+  if(nullptr == cert) {
+    return false;
+  }
+
+  JsonObject obj = doc.to<JsonObject>();
+  return cert->serialize(obj, flags);
+}
+
 bool CertificateStore::findCertificate(uint64_t id, Certificate *&cert)
 {
   for(auto &c : _certs)
