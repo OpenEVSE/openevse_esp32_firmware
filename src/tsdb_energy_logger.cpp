@@ -14,7 +14,22 @@ bool TsdbEnergyLogger::init_db() {
   cfg.filepath     = TSDB_ENERGY_FILE;
   cfg.num_params   = TSDB_NUM_COLS;
   cfg.param_names  = TSDB_PARAM_NAMES;
-  cfg.max_records  = TSDB_CALC_MAX_RECORDS(TSDB_ENERGY_BYTES, TSDB_NUM_COLS);
+  // Clamp the on-disk ring to the actual LittleFS partition, reserving room for
+  // the other users (config, certs, schedule, emeter, JSON energy logs). On the
+  // 16 MB build this leaves the full TSDB_ENERGY_BYTES; on a small partition
+  // (e.g. the 4 MB build's 128 KB) it shrinks the ring so it can't fill the FS.
+  {
+    const size_t reserve   = 384u * 1024u;  // headroom for everything else
+    size_t       fs_total  = LittleFS.totalBytes();
+    size_t       fs_budget = fs_total > reserve ? fs_total - reserve : fs_total / 4;
+    size_t       budget    = TSDB_ENERGY_BYTES;
+    if(budget > fs_budget) {
+      budget = fs_budget;
+      DEBUG_PORT.printf("[tsdb] ring clamped to %u bytes for %u byte FS\n",
+                        (unsigned)budget, (unsigned)fs_total);
+    }
+    cfg.max_records = TSDB_CALC_MAX_RECORDS(budget, TSDB_NUM_COLS);
+  }
   cfg.index_stride = 380;
 #if defined(CONFIG_IDF_TARGET_ESP32P4)        // P4 has PSRAM
   cfg.alloc_strategy      = TSDB_ALLOC_PSRAM;

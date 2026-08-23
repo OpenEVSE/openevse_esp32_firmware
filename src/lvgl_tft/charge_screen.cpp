@@ -8,19 +8,18 @@
 #include "charge_screen.h"
 #include "openevse.h"     // OPENEVSE_STATE_*
 #include "nightshift.h"   // exact nightshift palette
+#include "screen_common.h"
 
 #define COL_BG      NS_SURFACE   // screen base
 #define COL_CARD    NS_SURFACE3  // tile surface
 #define COL_TRACK   NS_BORDER    // ring track
 #define COL_ACCENT  NS_ACCENT    // connected / starting
-#define COL_OK      NS_SUCCESS   // charging
-#define COL_FAULT   NS_ERROR     // fault
-#define COL_SLEEP   NS_SLEEP     // sleeping
 #define COL_TEXT    NS_TEXT
 #define COL_DIM     NS_TEXTDIM
 
 // Ring full-scale (amps). The ring is indicative, not a hard gauge.
 #define RING_FULL_SCALE_A 48.0f
+
 
 static lv_obj_t *charge_scr   = nullptr;  // the screen object (for destroy on switch)
 static lv_obj_t *arc          = nullptr;
@@ -168,36 +167,6 @@ void charge_screen_build()
   }
 }
 
-// Map EVSE state -> status word + accent colour.
-static const char *state_word(uint8_t s, lv_color_t *colour)
-{
-  switch (s) {
-    case OPENEVSE_STATE_CHARGING:      *colour = COL_OK;     return "CHARGING";
-    case OPENEVSE_STATE_CONNECTED:     *colour = COL_ACCENT; return "CONNECTED";
-    case OPENEVSE_STATE_SLEEPING:      *colour = COL_SLEEP;  return "SLEEPING";
-    case OPENEVSE_STATE_DISABLED:      *colour = COL_DIM;    return "DISABLED";
-    case OPENEVSE_STATE_STARTING:      *colour = COL_ACCENT; return "STARTING";
-    case OPENEVSE_STATE_NOT_CONNECTED: *colour = COL_DIM;    return "NOT CONNECTED";
-    case OPENEVSE_STATE_VENT_REQUIRED:
-    case OPENEVSE_STATE_DIODE_CHECK_FAILED:
-    case OPENEVSE_STATE_GFI_FAULT:
-    case OPENEVSE_STATE_NO_EARTH_GROUND:
-    case OPENEVSE_STATE_STUCK_RELAY:
-    case OPENEVSE_STATE_GFI_SELF_TEST_FAILED:
-    case OPENEVSE_STATE_OVER_TEMPERATURE:
-    case OPENEVSE_STATE_OVER_CURRENT:  *colour = COL_FAULT;  return "FAULT";
-    default:                           *colour = COL_DIM;    return "--";
-  }
-}
-
-// RSSI (dBm) -> signal %, the usual piecewise mapping.
-static int wifi_percent(int rssi)
-{
-  if (rssi <= -100) return 0;
-  if (rssi >= -50)  return 100;
-  return 2 * (rssi + 100);
-}
-
 void charge_screen_update(const ChargeScreenData &d)
 {
   char buf[48];
@@ -222,6 +191,15 @@ void charge_screen_update(const ChargeScreenData &d)
     lv_obj_add_flag(big_value, LV_OBJ_FLAG_HIDDEN);
     lv_obj_add_flag(big_unit, LV_OBJ_FLAG_HIDDEN);
     lv_obj_clear_flag(center_state, LV_OBJ_FLAG_HIDDEN);
+
+    // Length-adaptive font: keep the large size for words that render inside the
+    // ring, drop one size for the wide ones so they stay on a single line.
+    lv_point_t sz;
+    lv_txt_get_size(&sz, word, &lv_font_montserrat_28, 0, 0, LV_COORD_MAX, LV_TEXT_FLAG_NONE);
+    const lv_font_t *font = (sz.x <= STATE_WORD_FIT_W) ? &lv_font_montserrat_28
+                                                       : &lv_font_montserrat_20;
+    lv_obj_set_style_text_font(center_state, font, 0);
+
     lv_label_set_text(center_state, word);
     lv_obj_set_style_text_color(center_state, accent, 0);
     lv_obj_align_to(center_state, arc, LV_ALIGN_CENTER, 0, 0);
@@ -244,7 +222,7 @@ void charge_screen_update(const ChargeScreenData &d)
   // Top-right: temp + wifi% + car.
   char tr[48]; tr[0] = '\0';
   size_t n = 0;
-  if (d.temp_valid) n += snprintf(tr + n, sizeof(tr) - n, "%.1fC  ", d.temp_c);
+  if (d.temp_valid) n += fmt_temp(tr + n, sizeof(tr) - n, d.temp_c, d.temp_fahrenheit);
   if (d.wifi_client) {
     if (d.wifi_connected) n += snprintf(tr + n, sizeof(tr) - n, LV_SYMBOL_WIFI " %d%%", wifi_percent(d.rssi));
     else                  n += snprintf(tr + n, sizeof(tr) - n, LV_SYMBOL_WIFI " --");

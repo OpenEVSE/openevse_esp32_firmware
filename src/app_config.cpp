@@ -10,6 +10,9 @@
 #include "app_config_mqtt.h"
 #include "app_config_mode.h"
 #include "temp_throttle.h"
+#include "flash_migrate.h"
+
+#include "web_auth_secret.h"
 
 #if ENABLE_CONFIG_CHANGE_NOTIFICATION
 #include <esp_ota_ops.h>
@@ -58,6 +61,9 @@ String www_username;
 String www_password;
 String www_certificate_id;
 
+// Session HMAC key — generated on first load, rotated on credential change.
+String server_secret;
+
 // Web server ports
 uint32_t www_http_port;
 uint32_t www_https_port;
@@ -66,8 +72,17 @@ uint32_t www_https_port;
 String esp_hostname;
 String sntp_hostname;
 
+// Device-wide temperature display unit ("c" | "f").
+String temp_unit;
+
 // On-device LVGL TFT display theme ("dark" | "light").
 String tft_theme;
+uint32_t tft_brightness;
+uint32_t tft_standby_brightness;
+
+// LCD backlight timeout (in seconds, 0 = never timeout). Shared key with the
+// char-LCD / TFT_eSPI energy-saving timeout (upstream PR #1039).
+uint32_t lcd_backlight_timeout;
 
 // LIMIT Settings
 String limit_default_type;
@@ -111,8 +126,6 @@ String time_zone;
 uint32_t flags;
 uint32_t flags_changed;
 
-// Ohm Connect Settings
-String ohm;
 
 // Divert settings
 int8_t divert_type;
@@ -174,10 +187,16 @@ void config_changed(String name);
 #define CONFIG_DEFAULT_STATE_DEFAULT CONFIG_DEFAULT_STATE
 #endif
 
+#ifndef CONFIG_TEMP_THROTTLE_DEFAULT
+#define CONFIG_TEMP_THROTTLE_DEFAULT CONFIG_TEMP_THROTTLE
+#endif
+
 #define CONFIG_DEFAULT_FLAGS (CONFIG_SERVICE_SNTP | \
                               CONFIG_OCPP_AUTO_AUTH | \
                               CONFIG_OCPP_OFFLINE_AUTH | \
-                              CONFIG_DEFAULT_STATE_DEFAULT)
+                              CONFIG_TEMP_THROTTLE_DEFAULT | \
+                              CONFIG_DEFAULT_STATE_DEFAULT | \
+                              CONFIG_LCD_NETWORK_INFO)
 
 ConfigOptDefinition<uint32_t> flagsOpt = ConfigOptDefinition<uint32_t>(flags, CONFIG_DEFAULT_FLAGS, "flags", "f");
 ConfigOptDefinition<uint32_t> flagsChanged = ConfigOptDefinition<uint32_t>(flags_changed, 0, "flags_changed", "c");
@@ -197,6 +216,7 @@ ConfigOpt *opts[] =
   new ConfigOptDefinition<String>(www_username, "", "www_username", "au"),
   new ConfigOptSecret(www_password, "", "www_password", "ap"),
   new ConfigOptDefinition<String>(www_certificate_id, "", "www_certificate_id", "wc"),
+  new ConfigOptSecret(server_secret, "", "server_secret", "wsk"),
 
 // Web server ports
   new ConfigOptDefinition<uint32_t>(www_http_port, HTTP_SERVER_PORT, "www_http_port", "whp"),
@@ -206,11 +226,20 @@ ConfigOpt *opts[] =
   new ConfigOptDefinition<String>(esp_hostname, esp_hostname_default, "hostname", "hn"),
   new ConfigOptDefinition<String>(sntp_hostname, SNTP_DEFAULT_HOST, "sntp_hostname", "sh"),
 
+// Temperature display unit ("c" | "f") — device-wide, read by the display and
+// the web UI so both agree. Default Celsius (the device always reports °C).
+  new ConfigOptDefinition<String>(temp_unit, "c", "temp_unit", "tu"),
+
 #ifdef ENABLE_SCREEN_LVGL_TFT
 // On-device display theme (only present on LVGL-TFT builds; its presence in
 // /config is the GUI's capability signal that this device has the panel).
   new ConfigOptDefinition<String>(tft_theme, "dark", "tft_theme", "tt"),
+  new ConfigOptDefinition<uint32_t>(tft_brightness, 100, "tft_brightness", "tb"),
+  new ConfigOptDefinition<uint32_t>(tft_standby_brightness, 15, "tft_standby_brightness", "tsb"),
 #endif
+
+// LCD backlight timeout
+  new ConfigOptDefinition<uint32_t>(lcd_backlight_timeout, LCD_BACKLIGHT_TIMEOUT_DEFAULT, "lcd_backlight_timeout", "lbt"),
 
 // Time
   new ConfigOptDefinition<String>(time_zone, DEFAULT_TIME_ZONE, "time_zone", "tz"),
@@ -220,21 +249,21 @@ ConfigOpt *opts[] =
   new ConfigOptDefinition<uint32_t>(limit_default_value, LIMIT_DEFAULT_VALUE_DEFAULT, "limit_default_value", "ldv"),
 
 // EMONCMS SERVER strings
-  new ConfigOptDefinition<String>(emoncms_server, "https://data.openevse.com/emoncms", "emoncms_server", "es"),
+  new ConfigOptDefinition<String>(emoncms_server, "https://emoncms.org", "emoncms_server", "es"),
   new ConfigOptDefinition<String>(emoncms_node, esp_hostname, "emoncms_node", "en"),
   new ConfigOptSecret(emoncms_apikey, "", "emoncms_apikey", "ea"),
   new ConfigOptDefinition<String>(emoncms_fingerprint, "", "emoncms_fingerprint", "ef"),
 
 // MQTT Settings
-  new ConfigOptDefinition<String>(mqtt_server, "emonpi", "mqtt_server", "ms"),
+  new ConfigOptDefinition<String>(mqtt_server, "", "mqtt_server", "ms"),
   new ConfigOptDefinition<uint32_t>(mqtt_port, 1883, "mqtt_port", "mpt"),
   new ConfigOptDefinition<String>(mqtt_topic, esp_hostname, "mqtt_topic", "mt"),
-  new ConfigOptDefinition<String>(mqtt_user, "emonpi", "mqtt_user", "mu"),
-  new ConfigOptSecret(mqtt_pass, "emonpimqtt2016", "mqtt_pass", "mp"),
+  new ConfigOptDefinition<String>(mqtt_user, "", "mqtt_user", "mu"),
+  new ConfigOptSecret(mqtt_pass, "", "mqtt_pass", "mp"),
   new ConfigOptDefinition<String>(mqtt_certificate_id, "", "mqtt_certificate_id", "mct"),
   new ConfigOptDefinition<String>(mqtt_solar, "", "mqtt_solar", "mo"),
-  new ConfigOptDefinition<String>(mqtt_grid_ie, "emon/emonpi/power1", "mqtt_grid_ie", "mg"),
-  new ConfigOptDefinition<String>(mqtt_vrms, "emon/emonpi/vrms", "mqtt_vrms", "mv"),
+  new ConfigOptDefinition<String>(mqtt_grid_ie, "", "mqtt_grid_ie", "mg"),
+  new ConfigOptDefinition<String>(mqtt_vrms, "", "mqtt_vrms", "mv"),
   new ConfigOptDefinition<String>(mqtt_live_pwr, "", "mqtt_live_pwr", "map"),
   new ConfigOptDefinition<String>(mqtt_vehicle_soc, "", "mqtt_vehicle_soc", "mc"),
   new ConfigOptDefinition<String>(mqtt_vehicle_range, "", "mqtt_vehicle_range", "mr"),
@@ -250,8 +279,6 @@ ConfigOpt *opts[] =
   new ConfigOptDefinition<String>(ocpp_authkey, "", "ocpp_authkey", "oky"),
   new ConfigOptDefinition<String>(ocpp_idtag, "DefaultIdTag", "ocpp_idtag", "idt"),
 
-// Ohm Connect Settings
-  new ConfigOptDefinition<String>(ohm, "", "ohm", "o"),
 
 // Divert settings
   new ConfigOptDefinition<int8_t>(divert_type, -1, "divert_type", "dm"),
@@ -306,7 +333,6 @@ ConfigOpt *opts[] =
   new ConfigOptVirtualMaskedBool(flagsOpt, flagsChanged, CONFIG_SERVICE_MQTT, CONFIG_SERVICE_MQTT, "mqtt_enabled", "me"),
   new ConfigOptVirtualMaskedBool(flagsOpt, flagsChanged, CONFIG_MQTT_ALLOW_ANY_CERT, 0, "mqtt_reject_unauthorized", "mru"),
   new ConfigOptVirtualMaskedBool(flagsOpt, flagsChanged, CONFIG_MQTT_RETAINED, CONFIG_MQTT_RETAINED, "mqtt_retained", "mrt"),
-  new ConfigOptVirtualMaskedBool(flagsOpt, flagsChanged, CONFIG_SERVICE_OHM, CONFIG_SERVICE_OHM, "ohm_enabled", "oe"),
   new ConfigOptVirtualMaskedBool(flagsOpt, flagsChanged, CONFIG_SERVICE_SNTP, CONFIG_SERVICE_SNTP, "sntp_enabled", "se"),
   new ConfigOptVirtualMaskedBool(flagsOpt, flagsChanged, CONFIG_SERVICE_TESLA, CONFIG_SERVICE_TESLA, "tesla_enabled", "te"),
   new ConfigOptVirtualMaskedBool(flagsOpt, flagsChanged, CONFIG_SERVICE_DIVERT, CONFIG_SERVICE_DIVERT, "divert_enabled", "de"),
@@ -324,6 +350,7 @@ ConfigOpt *opts[] =
   new ConfigOptVirtualMaskedBool(flagsOpt, flagsChanged, CONFIG_WIZARD, CONFIG_WIZARD, "wizard_passed", "wzp"),
   new ConfigOptVirtualMaskedBool(flagsOpt, flagsChanged, CONFIG_DEFAULT_STATE, CONFIG_DEFAULT_STATE, "default_state", "dfs"),
   new ConfigOptVirtualMaskedBool(flagsOpt, flagsChanged, CONFIG_TEMP_THROTTLE, CONFIG_TEMP_THROTTLE, "temp_throttle_enabled", "tte"),
+  new ConfigOptVirtualMaskedBool(flagsOpt, flagsChanged, CONFIG_LCD_NETWORK_INFO, CONFIG_LCD_NETWORK_INFO, "lcd_network_info", "lni"),
   new ConfigOptVirtualMqttProtocol(flagsOpt, flagsChanged, "mqtt_protocol", "mprt"),
   new ConfigOptVirtualChargeMode(flagsOpt, flagsChanged, "charge_mode", "chmd")
 };
@@ -403,6 +430,18 @@ config_load_settings()
     }
 #endif
 
+#if CONFIG_TEMP_THROTTLE_DEFAULT != 0
+    // Temperature throttle default flipped from 0 to 1: a current 0 is treated
+    // as the old default (not an intentional change) so it becomes enabled on
+    // upgrade; a current 1 is kept as an intentional setting.
+    new_changed &= ~CONFIG_TEMP_THROTTLE;
+    if(flags != CONFIG_DEFAULT_FLAGS &&
+       CONFIG_TEMP_THROTTLE == (flags & CONFIG_TEMP_THROTTLE))
+    {
+      new_changed |= CONFIG_TEMP_THROTTLE;
+    }
+#endif
+
     // Save any changes
     if(flagsChanged.set(new_changed)) {
       user_config.commit();
@@ -411,17 +450,29 @@ config_load_settings()
 
   // now lets apply any default flags that have not explicitly been set by the user
   flags |= CONFIG_DEFAULT_FLAGS & ~flags_changed;
+
+  // Generate server_secret on first boot (empty after load means the key was
+  // never stored). web_auth_ensure_secret() persists via user_config.commit().
+  web_auth_ensure_secret();
 }
 
 void config_changed(String name)
 {
   DBUGF("%s changed", name.c_str());
 
+  // Security: invalidate all sessions whenever credentials change.
+  // This must run regardless of ENABLE_CONFIG_CHANGE_NOTIFICATION.
+  if(name == "www_password" || name == "www_username") {
+    web_auth_rotate_secret();
+  }
+
 #if ENABLE_CONFIG_CHANGE_NOTIFICATION
   if(name == "time_zone") {
     timeManager.setTimeZone(time_zone);
   } else if(name == "flags") {
-    divert.setMode((config_divert_enabled() && 1 == config_charge_mode()) ? DivertMode::Eco : DivertMode::Normal);
+    if(!divert.isTimerDivertActive()) {
+      divert.setMode((config_divert_enabled() && 1 == config_charge_mode()) ? DivertMode::Eco : DivertMode::Normal);
+    }
     if(mqtt.isConnected() != config_mqtt_enabled()) {
       mqtt.restartConnection();
     }
@@ -442,7 +493,9 @@ void config_changed(String name)
   } else if(name == "divert_enabled" || name == "charge_mode") {
     DBUGVAR(config_divert_enabled());
     DBUGVAR(config_charge_mode());
-    divert.setMode((config_divert_enabled() && 1 == config_charge_mode()) ? DivertMode::Eco : DivertMode::Normal);
+    if(!divert.isTimerDivertActive()) {
+      divert.setMode((config_divert_enabled() && 1 == config_charge_mode()) ? DivertMode::Eco : DivertMode::Normal);
+    }
   } else if(name.startsWith("current_shaper_")) {
     shaper.notifyConfigChanged(config_current_shaper_enabled()?1:0,current_shaper_max_pwr);
   } else if(name.startsWith("temp_throttle_")) {
@@ -470,6 +523,14 @@ void config_commit(bool factory)
   ConfigJson &config = factory ? factory_config : user_config;
   config.set("factory_write_lock", true);
   config.commit();
+}
+
+// Persist user config without touching the factory_write_lock flag.
+// Use this from code that writes individual fields (e.g. server_secret) and
+// must not inadvertently lock the factory partition.
+void config_user_commit()
+{
+  user_config.commit();
 }
 
 bool config_deserialize(String& json) {
@@ -667,11 +728,17 @@ bool config_deserialize(DynamicJsonDocument &doc)
 
   if(doc.containsKey("service"))
   {
-    EvseMonitor::ServiceLevel service = static_cast<EvseMonitor::ServiceLevel>(doc["service"].as<uint8_t>());
-    if(service != evse.getServiceLevel()) {
-      evse.setServiceLevel(service);
-      config_modified = true;
-      DBUGLN("service changed");
+    // Only L1/L2 are valid; Auto (0, no longer offered) and anything else are
+    // ignored so a stale stored value can't put $SL A on the wire.
+    uint8_t value = doc["service"].as<uint8_t>();
+    if(1 == value || 2 == value)
+    {
+      EvseMonitor::ServiceLevel service = static_cast<EvseMonitor::ServiceLevel>(value);
+      if(service != evse.getServiceLevel()) {
+        evse.setServiceLevel(service);
+        config_modified = true;
+        DBUGLN("service changed");
+      }
     }
   }
 
@@ -748,11 +815,16 @@ bool config_serialize(DynamicJsonDocument &doc, bool longNames, bool compactOutp
   doc["espflash"] = ESPAL.getFlashChipSize();
   doc["heap_size"] = (uint32_t)ESP.getHeapSize();
   doc["littlefs_size"] = (uint32_t)LittleFS.totalBytes();
+  doc["littlefs_used"] = (uint32_t)LittleFS.usedBytes();
   {
     const esp_partition_t *p = esp_ota_get_running_partition();
     doc["app0_size"]   = p ? (uint32_t)p->size : 0;
     doc["sketch_size"] = (uint32_t)ESP.getSketchSize();
   }
+  // Flash repartition migration: lets the UI offer "Expand to 16MB" on a 16MB
+  // module that was flashed with the 4MB partition layout.
+  doc["partition_scheme"] = flash_migrate_partition_scheme();
+  doc["can_expand_16mb"]  = flash_migrate_can_expand_16mb();
 
   // EVSE information are only evailable when config_version is incremented
   if(config_ver > 0) {

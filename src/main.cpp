@@ -35,7 +35,7 @@
 #include "app_config.h"
 #include "net_manager.h"
 #include "web_server.h"
-#include "ohm.h"
+#include "flash_migrate.h"
 #include "input.h"
 #include "emoncms.h"
 #include "mqtt.h"
@@ -68,7 +68,6 @@
 #include "tsdb_energy_logger.h"
 #endif
 
-#include "legacy_support.h"
 #include "certificates.h"
 
 EventLog eventLog;
@@ -86,10 +85,7 @@ NetManagerTask net(lcd, ledManager, timeManager);
 
 RapiSender &rapiSender = evse.getSender();
 
-unsigned long Timer1; // Timer for events once every 30 seconds
 unsigned long Timer3; // Timer for events once every 2 seconds
-
-boolean rapi_read = 0; //flag to indicate first read of RAPI status
 
 static uint32_t start_mem = 0;
 static uint32_t last_mem = 0;
@@ -111,6 +107,19 @@ static void handle_serial();
 #include "debug.h" // for debug_set_rapi_path
 static void process_command_line();
 static void process_early_command_line();
+#if defined(ENABLE_SCREEN_LVGL_TFT)
+#include "lvgl_tft/lvgl_capture.h"
+#include "lvgl_tft/lvgl_panel.h"
+static const char *lvgl_capture_dir = nullptr;
+#endif
+#endif
+
+#if defined(ESP32) && defined(ENABLE_FLASH_MIGRATE)
+// The flash-repartition migration writes to flash from deep inside the mongoose
+// + mbedTLS receive path (loop -> Mongoose.poll -> SSL_read -> onBody ->
+// esp_flash_write). That call chain overflows the default 8KB Arduino loop-task
+// stack and panics mid-stream, so give the loop task more headroom.
+SET_LOOP_TASK_STACK_SIZE(16 * 1024);
 #endif
 
 // -------------------------------------------------------------------
@@ -146,6 +155,16 @@ void setup()
   config_load_settings();
 #if defined(EPOXY_DUINO)
   process_command_line();
+#if defined(ENABLE_SCREEN_LVGL_TFT)
+  if(lvgl_capture_dir != nullptr) {
+    if(!lvgl_capture_write_samples(lvgl_capture_dir)) {
+      fflush(NULL);
+      _Exit(1);
+    }
+    fflush(NULL);
+    _Exit(0);
+  }
+#endif
 #endif
 
   DBUGF("After config_load_settings: %d", ESPAL.getFreeHeap());
@@ -242,6 +261,7 @@ void loop()
   Profile_End(Mongoose, 10);
 
   web_server_loop();
+  flash_migrate_loop();
   ota_loop();
   rapiSender.loop();
 
@@ -249,41 +269,17 @@ void loop()
   MicroTask.update();
   Profile_End(MicroTask, 10);
 
-  if(OpenEVSE.isConnected())
-  {
-    if(OPENEVSE_STATE_STARTING != evse.getEvseState())
-    {
-      // Read initial state from OpenEVSE
-      if (rapi_read == 0)
-      {
-        DBUGLN("first read RAPI values");
-        handleRapiRead(); //Read all RAPI values
-        rapi_read=1;
-
-        import_timers(&scheduler);
-      }
-    }
-  }
+  // NOTE: the legacy first-connect block (handleRapiRead() + import_timers())
+  // was removed: both call through the sender-less global OpenEVSE object and
+  // have been silent no-ops since the EvseManager refactor.  Reviving
+  // import_timers() would auto-import (and clear) the controller's delay timer
+  // into Charge Manager rules — a deliberate decision for a separate change,
+  // along with routing time_man/input off the dead global.
 
   if(net.isConnected())
   {
     if (vehicle_data_src == VEHICLE_DATA_SRC_TESLA) {
       teslaClient.loop();
-    }
-
-    // -------------------------------------------------------------------
-    // Do these things once every 30 seconds
-    // -------------------------------------------------------------------
-    if ((millis() - Timer1) >= 30000)
-    {
-      if(!Update.isRunning())
-      {
-        if(config_ohm_enabled()) {
-          ohm_loop();
-        }
-      }
-
-      Timer1 = millis();
     }
 
     if(emoncms_updated)
@@ -455,6 +451,13 @@ static void process_early_command_line()
 
 /** Print usage. */
 static void printUsage() {
+  const char *lvgl_usage = "";
+#if defined(ENABLE_SCREEN_LVGL_TFT)
+  lvgl_usage =
+    "  --dump-lvgl-screens DIR  Render sample LVGL UI screens into DIR as PPM files\n"
+    "  --lvgl-display MODE      Select native LVGL display mode: headless or window\n";
+#endif
+
   fprintf(
     stderr,
     "Usage: %s [--help|-h] [--rapi-serial PATH] [--set-config NAME=VALUE] [--] [args ...]\n"
@@ -465,8 +468,9 @@ static void printUsage() {
     "    --set-config mqtt_server=192.168.1.100\n"
     "    --set-config mqtt_port=1883\n"
     "Runtime options (EPOXY_DUINO native build):\n"
-    "  --rapi-serial PATH   Set PTY/serial path for RAPI (e.g., /dev/pts/5)\n",
-    epoxy_argv[0]
+    "  --rapi-serial PATH   Set PTY/serial path for RAPI (e.g., /dev/pts/5)\n"
+    "%s",
+    epoxy_argv[0], lvgl_usage
   );
 }
 
@@ -528,6 +532,38 @@ static int parseFlags(int argc, const char* const* argv) {
         fprintf(stderr, "Set config: %s = %s\n", name, value);
       }
     }
+#if defined(ENABLE_SCREEN_LVGL_TFT)
+    else if (argEquals(argv[0], "--dump-lvgl-screens")) {
+      shift(argc, argv);
+      if (argc == 0) {
+        fprintf(stderr, "Error: --dump-lvgl-screens requires a directory argument\n");
+        cmdline_exit_requested = true;
+        return argc_original - argc;
+      }
+
+      lvgl_capture_dir = argv[0];
+    }
+    else if (argEquals(argv[0], "--lvgl-display")) {
+      shift(argc, argv);
+      if (argc == 0) {
+        fprintf(stderr, "Error: --lvgl-display requires a mode argument\n");
+        cmdline_exit_requested = true;
+        return argc_original - argc;
+      }
+
+      if (argEquals(argv[0], "headless")) {
+        lvgl_panel_set_display_mode(LVGL_PANEL_DISPLAY_HEADLESS);
+      }
+      else if (argEquals(argv[0], "window")) {
+        lvgl_panel_set_display_mode(LVGL_PANEL_DISPLAY_WINDOW);
+      }
+      else {
+        fprintf(stderr, "Error: unsupported LVGL display mode '%s' (expected headless or window)\n", argv[0]);
+        cmdline_exit_requested = true;
+        return argc_original - argc;
+      }
+    }
+#endif
     else if (argEquals(argv[0], "--")) {
       shift(argc, argv);
       break;

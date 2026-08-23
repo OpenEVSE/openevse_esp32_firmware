@@ -34,6 +34,9 @@ extern String www_username;
 extern String www_password;
 extern String www_certificate_id;
 
+// Session HMAC key — generated on first load, rotated on credential change.
+extern String server_secret;
+
 // Web server ports
 extern uint32_t www_http_port;
 extern uint32_t www_https_port;
@@ -43,8 +46,18 @@ extern String esp_hostname;
 extern String esp_hostname_default;
 extern String sntp_hostname;
 
+// Device-wide temperature display unit: "c" (Celsius) or "f" (Fahrenheit).
+// Source of truth for both the on-device display and the web UI.
+extern String temp_unit;
+
 // On-device LVGL TFT display theme: "dark" (nightshift) or "light".
 extern String tft_theme;
+extern uint32_t tft_brightness;
+extern uint32_t tft_standby_brightness;
+
+// LCD backlight timeout (in seconds, 0 = never timeout). Shared key with the
+// char-LCD / TFT_eSPI energy-saving timeout (upstream PR #1039).
+extern uint32_t lcd_backlight_timeout;
 
 // LIMIT Settings
 extern String limit_default_type;
@@ -134,7 +147,6 @@ extern uint32_t flags;
 
 #define CONFIG_SERVICE_EMONCMS      (1 << 0)
 #define CONFIG_SERVICE_MQTT         (1 << 1)
-#define CONFIG_SERVICE_OHM          (1 << 2)
 #define CONFIG_SERVICE_SNTP         (1 << 3)
 #define CONFIG_MQTT_PROTOCOL        (7 << 4) // Maybe leave a bit of space after for additional protocols
 #define CONFIG_MQTT_ALLOW_ANY_CERT  (1 << 7)
@@ -155,7 +167,8 @@ extern uint32_t flags;
 #define CONFIG_THREEPHASE           (1 << 24)
 #define CONFIG_WIZARD               (1 << 25)
 #define CONFIG_DEFAULT_STATE        (1 << 26)
-#define CONFIG_TEMP_THROTTLE        (1 << 27) // next free bit after CONFIG_DEFAULT_STATE
+#define CONFIG_TEMP_THROTTLE        (1 << 27)
+#define CONFIG_LCD_NETWORK_INFO     (1 << 28) // next free bit after CONFIG_LCD_NETWORK_INFO
 
 #define INITIAL_CONFIG_VERSION  1
 
@@ -165,10 +178,6 @@ inline bool config_emoncms_enabled() {
 
 inline bool config_mqtt_enabled() {
   return CONFIG_SERVICE_MQTT == (flags & CONFIG_SERVICE_MQTT);
-}
-
-inline bool config_ohm_enabled() {
-  return CONFIG_SERVICE_OHM == (flags & CONFIG_SERVICE_OHM);
 }
 
 inline bool config_sntp_enabled() {
@@ -254,8 +263,11 @@ inline bool config_temp_throttle_enabled()
   return CONFIG_TEMP_THROTTLE == (flags & CONFIG_TEMP_THROTTLE);
 }
 
-// Ohm Connect Settings
-extern String ohm;
+inline bool config_lcd_network_info_enabled()
+{
+  return CONFIG_LCD_NETWORK_INFO == (flags & CONFIG_LCD_NETWORK_INFO);
+}
+
 
 extern uint32_t config_version();
 
@@ -287,6 +299,7 @@ bool config_deserialize(String& json);
 bool config_deserialize(const char *json);
 bool config_deserialize(DynamicJsonDocument &doc);
 void config_commit(bool factory = false);
+void config_user_commit();  // persist user config without touching factory_write_lock
 
 // Write config settings to JSON object
 bool config_serialize(String& json, bool longNames = true, bool compactOutput = false, bool hideSecrets = false);

@@ -12,6 +12,7 @@
 
 #include "debug.h"
 #include "time_man.h"
+#include "input.h"
 #include "net_manager.h"
 #include "openevse.h"
 #include "app_config.h"
@@ -199,7 +200,7 @@ unsigned long TimeManager::loop(MicroTasks::WakeReason reason)
 
       DBUGF("Setting the time on the EVSE, %s",
         time_format_time(utc_time.tv_sec).c_str());
-      OpenEVSE.setTime(utc_time.tv_sec, [this](int ret)
+      evse.getOpenEVSE().setTime(utc_time.tv_sec, [this](int ret)
       {
         DBUGF("EVSE time %sset", RAPI_RESPONSE_OK == ret ? "" : "not ");
       });
@@ -336,7 +337,7 @@ void TimeManager::setTime(struct timeval setTime, const char *source)
   settimeofday(&setTime, &tz_utc);
 
   // Set the time on the OpenEVSE, set from the local time as this could take several ms
-  OpenEVSE.getTime([this](int ret, time_t evse_time)
+  evse.getOpenEVSE().getTime([this](int ret, time_t evse_time)
   {
     if(RAPI_RESPONSE_OK == ret)
     {

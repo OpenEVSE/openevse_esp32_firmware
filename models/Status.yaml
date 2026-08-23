@@ -36,13 +36,6 @@ properties:
   mqtt_connected:
     type: integer
     description: '`1`, if connected to an EmonCMS server, `0` not connected'
-  ohm_hour:
-    type: string
-    description: Last status message from the OhmHour connection
-    enum:
-      - NotConnected
-      - 'True'
-      - 'False'
       - None
   free_heap:
     type: integer

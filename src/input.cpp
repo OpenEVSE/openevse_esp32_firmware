@@ -169,7 +169,7 @@ handleRapiRead()
 {
   Profile_Start(handleRapiRead);
 
-  OpenEVSE.getTime([](int ret, time_t evse_time)
+  evse.getOpenEVSE().getTime([](int ret, time_t evse_time)
   {
     if(RAPI_RESPONSE_OK == ret)
     {
@@ -188,7 +188,7 @@ void input_setup()
 {
   MicroTask.startTask(input);
 
-  OpenEVSE.onWiFi([](uint8_t wifiMode)
+  evse.getOpenEVSE().onWiFi([](uint8_t wifiMode)
   {
     DBUGVAR(wifiMode);
     switch(wifiMode)

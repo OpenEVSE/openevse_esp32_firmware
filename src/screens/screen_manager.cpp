@@ -117,4 +117,5 @@ bool ScreenManager::setWifiMode(bool client, bool connected)
   return false;
 }
 
+
 #endif // ENABLE_SCREEN_LCD_TFT
