@@ -21,7 +21,17 @@
 // 32 KB is ample for one static screen (an arc + ~12 labels) and leaves DRAM for
 // the WiFi/TLS/Mongoose stack + the ~30 KB draw buffer.
 #define LV_MEM_CUSTOM 0
-#define LV_MEM_SIZE (32U * 1024U)
+// 24 KB, down from 32 KB. Measured peak on hardware (lv_used_max in /status)
+// is 27% of the 32 KB pool, about 8.6 KB, with 5% fragmentation -- so 24 KB
+// keeps roughly 2.8x headroom over anything observed.
+//
+// Deliberately not cut to 16 KB yet: the peak above was sampled before the
+// display had rendered the charge or QR screens, and LVGL peaks during a
+// screen transition while both screens are briefly live. Confirm lv_used_max
+// across a full charge session before trimming further. Undersizing here does
+// not fail gracefully -- LVGL answers pool exhaustion with an assert loop that
+// the task watchdog turns into a reboot.
+#define LV_MEM_SIZE (24U * 1024U)
 
 // Tick from Arduino millis() on-device. The native/EpoxyDuino host build advances
 // LVGL explicitly from lcd_lvgl.cpp so the C-only LVGL sources don't need to
