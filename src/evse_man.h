@@ -31,7 +31,6 @@ typedef uint32_t EvseClient;
 #define EvseClient_OpenEVSE_Schedule          EVC(EvseClient_Vendor_OpenEVSE, 0x0004)
 #define EvseClient_OpenEVSE_Limit             EVC(EvseClient_Vendor_OpenEVSE, 0x0006)
 #define EvseClient_OpenEVSE_Error             EVC(EvseClient_Vendor_OpenEVSE, 0x0007)
-#define EvseClient_OpenEVSE_Ohm               EVC(EvseClient_Vendor_OpenEVSE, 0x0008)
 #define EvseClient_OpenEVSE_OCPP              EVC(EvseClient_Vendor_OpenEVSE, 0x0009)
 #define EvseClient_OpenEVSE_RFID              EVC(EvseClient_Vendor_OpenEVSE, 0x000A)
 #define EvseClient_OpenEVSE_MQTT              EVC(EvseClient_Vendor_OpenEVSE, 0x000B)
@@ -48,7 +47,6 @@ typedef uint32_t EvseClient;
 #define EvseManager_Priority_Boost     200
 #define EvseManager_Priority_API       500
 #define EvseManager_Priority_MQTT      500
-#define EvseManager_Priority_Ohm       500
 // Schedule-activated divert/shaper: must outrank the scheduler's base Timer
 // claim (100) and API pokes (500), but stay below Manual/RFID/OCPP so an
 // explicit human action can always override a timer window.

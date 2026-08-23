@@ -51,10 +51,19 @@ static bool bl_ready = false;
 static const uint16_t SCREEN_W = TFT_HEIGHT; // 480
 static const uint16_t SCREEN_H = TFT_WIDTH;  // 320
 
-// ONE partial buffer (~1/10 screen) in INTERNAL DRAM — this board has no PSRAM.
-// A single buffer is correct: no DMA means flush_cb blocks the CPU, so a second
-// buffer could never overlap a flush.
-static const uint32_t DRAW_BUF_PIXELS = SCREEN_W * 32; // 480*32 = 15360 px (~30 KB)
+// ONE partial buffer in INTERNAL DRAM — this board has no PSRAM. A single
+// buffer is correct: no DMA means flush_cb blocks the CPU, so a second buffer
+// could never overlap a flush.
+//
+// 16 lines rather than 32. At 32 this took a 30KB contiguous block at boot out
+// of a heap with only ~60KB free; instrumentation on hardware showed the
+// largest allocatable block down at 11KB while total free sat flat at ~60KB.
+// Halving costs twice as many flush calls for the same total pixels — small
+// next to the blocking SPI write itself — and returns 15KB of contiguous DRAM.
+#ifndef DRAW_BUF_LINES
+#define DRAW_BUF_LINES 16
+#endif
+static const uint32_t DRAW_BUF_PIXELS = SCREEN_W * DRAW_BUF_LINES; // 480*16 = 7680 px (~15 KB)
 
 static lv_disp_draw_buf_t draw_buf;
 static lv_disp_drv_t disp_drv;
