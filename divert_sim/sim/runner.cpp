@@ -156,6 +156,7 @@ int run(const std::string &scenario_path,
       writer.addDouble(ev_max_w, 1);
       writer.addDouble(actual_w, 1);
       writer.addDouble(s.soc, 2);
+      writer.addBool(p->boost().isActive());
     }
     writer.endRow();
 

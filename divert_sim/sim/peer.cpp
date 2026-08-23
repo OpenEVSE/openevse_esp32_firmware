@@ -51,6 +51,7 @@ void Peer::begin()
   _divert.setMode(eco ? DivertMode::Eco : DivertMode::Normal);
 
   _shaper.begin(_evse);
+  _boost.begin(_evse);
 }
 
 void Peer::applyInputs(long t_sec)
@@ -84,6 +85,24 @@ void Peer::applyEvents(long t_sec)
     if (e.set_vehicle) {
       vehicle = e.vehicle;
       _sim.setVehicleConnected(vehicle);
+    }
+    if (e.set_boost) {
+      if (e.boost_cancel) {
+        _boost.cancel();
+      } else {
+        LimitType type;
+        type.fromString(e.boost_type.c_str());
+        _boost.arm(type, e.boost_value);
+      }
+    }
+    if (e.set_manual) {
+      if (e.manual_state == "release") {
+        _manual.release();
+      } else {
+        EvseProperties props(e.manual_state == "disabled" ? EvseState::Disabled
+                                                          : EvseState::Active);
+        _manual.claim(props);
+      }
     }
     _next_event_idx++;
   }

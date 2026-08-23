@@ -166,6 +166,20 @@ bool Scenario::loadFromFile(const std::string &path)
         if (ej.containsKey("vehicle")) {
           e.set_vehicle = true; e.vehicle = ej["vehicle"].as<bool>();
         }
+        if (ej.containsKey("boost")) {
+          e.set_boost = true;
+          if (ej["boost"].is<const char *>()) {
+            e.boost_cancel = (std::string(ej["boost"].as<const char *>()) == "cancel");
+          } else {
+            JsonObjectConst bj = ej["boost"].as<JsonObjectConst>();
+            e.boost_type = bj["type"] | "";
+            e.boost_value = bj["value"] | 0;
+          }
+        }
+        if (ej.containsKey("manual")) {
+          e.set_manual = true;
+          e.manual_state = ej["manual"].as<const char *>();
+        }
         p.events.push_back(e);
       }
     }
