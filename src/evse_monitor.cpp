@@ -40,6 +40,14 @@ extern uint32_t heartbeat_current_cfg;
 #define EVSE_MONITOR_TEMP_TIME              30
 #endif // !EVSE_MONITOR_TEMP_TIME
 
+#ifndef EVSE_MONITOR_SETTINGS_TIME
+#define EVSE_MONITOR_SETTINGS_TIME          60
+#endif // !EVSE_MONITOR_SETTINGS_TIME
+
+#ifndef EVSE_MONITOR_SETTINGS_OFFSET
+#define EVSE_MONITOR_SETTINGS_OFFSET        7
+#endif // !EVSE_MONITOR_SETTINGS_OFFSET
+
 #ifndef EVSE_HEATBEAT_INTERVAL
 #define EVSE_HEATBEAT_INTERVAL              5
 #endif
@@ -399,6 +407,12 @@ unsigned long EvseMonitor::loop(MicroTasks::WakeReason reason)
 
   if(0 == _count % EVSE_MONITOR_TEMP_TIME) {
     getTemperatureFromEvse();
+  }
+
+  // Offset off zero so this does not land on the same tick as the state and
+  // temperature polls, which share a 30-count cadence that 60 is a multiple of.
+  if(EVSE_MONITOR_SETTINGS_OFFSET == _count % EVSE_MONITOR_SETTINGS_TIME) {
+    getSettingsFromEvse();
   }
 
   // Check if pilot is wrong ( solve OpenEvse fw compiled with -D PP_AUTO_AMPACITY)
@@ -912,6 +926,28 @@ void EvseMonitor::getStatusFromEvse(bool allowStart)
       updateEvseState(evse_state, pilot_state, vflags);
 
       _data_ready.ready(EVSE_MONITOR_STATE_DATA_READY);
+    }
+  });
+}
+
+// The settings flags are otherwise only read at evseBoot() and after we
+// ourselves write a setting, so any change the controller makes on its own --
+// or a boot read that landed before the controller finished loading its
+// settings -- leaves our cache permanently disagreeing with the hardware. That
+// showed up as the diode/vent checks reading disabled in the UI while $GE
+// reported them enabled, and it "fixed itself" only because toggling any
+// feature forces the refresh below. Re-read periodically so the two resync.
+void EvseMonitor::getSettingsFromEvse()
+{
+  _openevse.getSettings([this](int ret, long pilot, uint32_t flags)
+  {
+    if(RAPI_RESPONSE_OK == ret && flags != _settings_flags)
+    {
+      DBUGF("Settings flags changed behind us: %x -> %x", _settings_flags, flags);
+      _settings_flags = flags;
+      // Only on an actual change -- firing every poll would push a needless
+      // event to every WebSocket and MQTT subscriber once a minute.
+      _settings_changed.Trigger();
     }
   });
 }
