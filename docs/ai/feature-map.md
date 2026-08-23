@@ -15,6 +15,7 @@ relative to the configured base topic (see [mqtt.md](../mqtt.md)).
 | Charge rate / current control, charger hardware config | `evse_man.*`, `evse_monitor.*` | `/`, `/settings/evse` | `max_current_soft`, `service`, `scale`, `offset` | `/config`, `/override` | `charge_rate/set` | [dashboard.md](../user/dashboard.md) |
 | Local display & LEDs (character LCD, RGB pixels) | `lcd.*`, `led_manager.*` | `/settings/evse` | `lcd_backlight_timeout`, `led_brightness` | `/config` | — | [settings.md](../user/settings.md) |
 | Session limits (energy/time/SOC/range) | `limit.*` | `/` (limit pills) | `limit_default_type`, `limit_default_value` | `/limit` | `limit/set` | [dashboard.md](../user/dashboard.md) |
+| Boost (charge to a time/energy/SoC/range target, then release) | `boost.*`, `charge_threshold.*` | — | — | `/boost` | `boost/set` | — |
 | First-run setup wizard | — (UI only) | `/` until passed | `wizard_passed` | `/config` | — | [getting-started.md](../user/getting-started.md) |
 | Charge Manager (station defaults, always-active features, weekly rules; legacy timer list at `/schedule/legacy`) | `scheduler.*` | `/schedule` | `scheduler_start_window` | `/schedule`, `/schedule/plan` | `schedule/set` | [charge-manager.md](../user/charge-manager.md) |
 | Solar divert / Eco mode | `divert.*` | `/settings/solar` | `divert_*` (`divert_enabled`, `divert_type`, `divert_PV_ratio`, smoothing/attack/decay, min charge time) | `/config`, `/status` (`solar`, `grid_ie`) | `divertmode/set`, solar/grid topics | [solar-divert.md](../user/solar-divert.md) |
