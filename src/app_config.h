@@ -144,7 +144,6 @@ extern uint32_t flags;
 
 #define CONFIG_SERVICE_EMONCMS      (1 << 0)
 #define CONFIG_SERVICE_MQTT         (1 << 1)
-#define CONFIG_SERVICE_OHM          (1 << 2)
 #define CONFIG_SERVICE_SNTP         (1 << 3)
 #define CONFIG_MQTT_PROTOCOL        (7 << 4) // Maybe leave a bit of space after for additional protocols
 #define CONFIG_MQTT_ALLOW_ANY_CERT  (1 << 7)
@@ -189,10 +188,6 @@ inline bool config_http_enabled() {
 
 inline bool config_https_enabled() {
   return CONFIG_HTTPS_ENABLED == (flags & CONFIG_HTTPS_ENABLED);
-}
-
-inline bool config_ohm_enabled() {
-  return CONFIG_SERVICE_OHM == (flags & CONFIG_SERVICE_OHM);
 }
 
 inline bool config_sntp_enabled() {
@@ -283,8 +278,6 @@ inline bool config_lcd_network_info_enabled()
   return CONFIG_LCD_NETWORK_INFO == (flags & CONFIG_LCD_NETWORK_INFO);
 }
 
-// Ohm Connect Settings
-extern String ohm;
 
 extern uint32_t config_version();
 
