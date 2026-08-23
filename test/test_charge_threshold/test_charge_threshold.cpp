@@ -2,8 +2,8 @@
 #include "doctest.h"
 #include "charge_threshold.h"
 
-// Mirror of LimitType::Value (limit.h) — kept in sync by the static_asserts
-// in charge_threshold.cpp's includes being compiled firmware-side.
+// Mirror of LimitType::Value (limit.h) — kept in sync by convention; a
+// firmware-side caller is expected to static_assert TYPE_NONE == LimitType::None.
 enum { T_NONE = 0, T_TIME = 1, T_ENERGY = 2, T_SOC = 3, T_RANGE = 4 };
 
 TEST_CASE("absolute target (basis 0): reached at/above target") {
@@ -40,7 +40,10 @@ TEST_CASE("remaining counts down to 0 and never underflows") {
 }
 
 TEST_CASE("basis + target near uint32 max does not overflow") {
-  // 64-bit internal sum: a huge basis must not wrap into "already reached".
-  CHECK_FALSE(ChargeThreshold::reached(T_ENERGY, 10, 0xFFFFFFF0u, 0xFFFFFFF5u));
-  CHECK(ChargeThreshold::remaining(T_ENERGY, 10, 0xFFFFFFF0u, 0xFFFFFFF5u) == 5);
+  // basis (0xFFFFFFF0) + target (0x20) = 0x100000010, which wraps to 0x10
+  // under 32-bit arithmetic. current (0xFFFFFFF5) is above that wrapped
+  // value but below the true 64-bit goal, so 32-bit math would wrongly
+  // report "reached" with 0 remaining; the 64-bit internal sum must not.
+  CHECK_FALSE(ChargeThreshold::reached(T_ENERGY, 0x20u, 0xFFFFFFF0u, 0xFFFFFFF5u));
+  CHECK(ChargeThreshold::remaining(T_ENERGY, 0x20u, 0xFFFFFFF0u, 0xFFFFFFF5u) == 0x1Bu);
 }
