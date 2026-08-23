@@ -287,6 +287,9 @@ class EvseManager : public MicroTasks::Task
     EvseClient getStateClient() {
       return _state_client;
     }
+    // Which claim won the charge-current arbitration, or EvseClient_NULL when no
+    // claim is active and the configured default applies. Lets a UI answer "why
+    // am I limited to 12 A?" rather than just reporting the number.
     EvseClient getChargeCurrentClient() {
       return _charge_current_client;
     }
