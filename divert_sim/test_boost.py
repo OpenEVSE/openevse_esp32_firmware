@@ -38,7 +38,7 @@ def test_time_boost_overrides_divert_then_releases():
     during = _rows_between(rows, 1810, 2690)
     assert during and all(_boost_active(r) for r in during)
     assert all(r["evse-001_state"] == "charging" for r in during)
-    assert all(float(r["evse-001_actual_charge_w"]) > 1000 for r in during)
+    assert all(float(r["evse-001_actual_charge_w"]) > 6500 for r in during)
 
     # After the deadline: boost released, divert back in control, no charging.
     after = _rows_between(rows, 2760, 5400)
@@ -58,8 +58,8 @@ def test_energy_boost_releases_on_delta_not_session_total():
     last = _rel(rows, armed[-1])
     assert first >= 1800
     # 500 Wh at ~7.2 kW is ~250 s. Instant release (< 3 ticks) means the
-    # delta basis is broken; hours means release never fired.
-    assert 100 <= (last - first) <= 600
+    # delta basis is broken; a long tail means release never fired.
+    assert 100 <= (last - first) <= 400
 
 
 def test_manual_disabled_outranks_active_boost():
@@ -122,7 +122,7 @@ def test_energy_boost_armed_between_sessions_targets_the_new_session():
     charging_after = [r for r in rows
                       if 1500 <= _rel(rows, r) <= last and r["evse-001_state"] == "charging"]
     delivered_wh = sum(float(r["evse-001_actual_charge_w"]) for r in charging_after) * 5.0 / 3600.0
-    assert 300 <= delivered_wh <= 1200, f"delivered {delivered_wh:.0f} Wh before release"
+    assert 450 <= delivered_wh <= 1200, f"delivered {delivered_wh:.0f} Wh before release"
 
     # And it does release — control hands back rather than charging forever.
     after = _rows_between(rows, last + 60, 3600)

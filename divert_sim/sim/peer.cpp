@@ -90,7 +90,7 @@ void Peer::applyEvents(long t_sec)
       if (e.boost_cancel) {
         _boost.cancel();
       } else {
-        LimitType type;
+        LimitType type = LimitType::None;  // fromString() may not assign
         type.fromString(e.boost_type.c_str());
         _boost.arm(type, e.boost_value);
       }

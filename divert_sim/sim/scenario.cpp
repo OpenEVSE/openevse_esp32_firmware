@@ -176,9 +176,15 @@ bool Scenario::loadFromFile(const std::string &path)
             e.boost_value = bj["value"] | 0;
           }
         }
-        if (ej.containsKey("manual")) {
-          e.set_manual = true;
-          e.manual_state = ej["manual"].as<const char *>();
+        // A non-string "manual" (null, number, object) still satisfies
+        // containsKey() but yields NULL from as<const char *>(), which is UB
+        // to feed to std::string. Ignore the event instead.
+        if (ej.containsKey("manual") && ej["manual"].is<const char *>()) {
+          const char *ms = ej["manual"].as<const char *>();
+          if (ms) {
+            e.set_manual = true;
+            e.manual_state = ms;
+          }
         }
         p.events.push_back(e);
       }
