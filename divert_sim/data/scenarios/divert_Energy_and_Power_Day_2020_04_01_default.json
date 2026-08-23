@@ -1,0 +1,41 @@
+{
+  "meta": {
+    "id": "divert_Energy_and_Power_Day_2020_04_01_default",
+    "title": "Divert: Energy and Power Day 2020-04-01 (default)",
+    "category": "divert",
+    "profile": "default"
+  },
+  "simulation": {
+    "duration": 86400,
+    "tick_interval": 60,
+    "start_time": "2020-01-01T00:00:00Z"
+  },
+  "peers": [
+    {
+      "id": "evse-001",
+      "voltage": 240,
+      "min_current": 6,
+      "max_current": 32,
+      "ev": {
+        "battery_capacity_kwh": 1000,
+        "initial_soc": 0,
+        "max_charge_rate_kw": 22
+      },
+      "initial": {
+        "online": true,
+        "vehicle": true
+      },
+      "inputs": {
+        "solar": {
+          "csv": "../Energy_and_Power_Day_2020-04-01.csv",
+          "time_column": 0,
+          "column": 1,
+          "skip_header": true,
+          "separator": ";",
+          "kw": true
+        }
+      }
+    }
+  ],
+  "config_include": "config-divert-default.json"
+}

@@ -1,160 +1,263 @@
-"""Test the divert_sim process"""
+#!/usr/bin/env python3
+"""Scenario runner helpers for divert_sim.
 
-# pylint: disable=line-too-long
+This module is the single Python entrypoint for:
+- running one scenario and parsing its unified CSV output,
+- discovering scenario metadata from data/scenarios/*.json,
+- writing output/index.json for view.html / interactive.html.
+"""
 
-from os import path
+from __future__ import annotations
+
+import csv
+import io
+import json
 import os
-from subprocess import PIPE, Popen
-from datetime import datetime
-from typing import Union
-
-OPENEVSE_STATE_STARTING = 0
-OPENEVSE_STATE_NOT_CONNECTED = 1
-OPENEVSE_STATE_CONNECTED = 2
-OPENEVSE_STATE_CHARGING = 3
-OPENEVSE_STATE_VENT_REQUIRED = 4
-OPENEVSE_STATE_DIODE_CHECK_FAILED = 5
-OPENEVSE_STATE_GFI_FAULT = 6
-OPENEVSE_STATE_NO_EARTH_GROUND = 7
-OPENEVSE_STATE_STUCK_RELAY = 8
-OPENEVSE_STATE_GFI_SELF_TEST_FAILED = 9
-OPENEVSE_STATE_OVER_TEMPERATURE = 0
-OPENEVSE_STATE_OVER_CURRENT = 1
-OPENEVSE_STATE_SLEEPING = 4
-OPENEVSE_STATE_DISABLED = 5
-
-KWH_ROUNDING = 2
-
-summary_filename = 'summary.csv'
-
-def setup_summary(postfix: str = ''):
-    global summary_filename
-    """Create the output directory"""
-    print("Setting up test environment")
-    if not path.exists('output'):
-        os.mkdir('output')
-    summary_filename = 'summary'+postfix+'.csv'
-    with open(path.join('output', summary_filename), 'w', encoding="utf-8") as summary_file:
-        summary_file.write('"Dataset","Config","Total Solar (kWh)","Total EV Charge (kWh)","Charge from solar (kWh)","Charge from grid (kWh)","Number of charges","Min time charging","Max time charging","Total time charging"\n')
-
-def run_simulation(dataset: str,
-                output: str,
-                config: Union[str, bool] = False, grid_ie_col: Union[bool, int] = False,
-                solar_col: Union[bool, int] = False, voltage_col: Union[bool, int] = False,
-                separator: str = ',', is_kw: bool = False,
-                live_power_col: Union[bool, int] = False) -> tuple:
-    """Run the divert_sim process on the given dataset and return the results"""
-    line_number = 0
-
-    last_date = None
-    last_state = 0
-    charge_start_date = None
-
-    total_solar_wh = 0
-    total_ev_wh = 0
-    wh_from_solar = 0
-    wh_from_grid = 0
-    number_of_charges = 0
-    min_time_charging = 0
-    max_time_charging = 0
-    total_time_charging = 0
-
-    print("Testing dataset: " + dataset)
-
-    # Read in the dataset and pass to the divert_sim process
-    with open(path.join('data', dataset+'.csv'), 'r', encoding="utf-8") as input_data:
-        with open(path.join('output', output+'.csv'), 'w', encoding="utf-8") as output_data:
-            # open the divert_sim process
-            command = ["./divert_sim"]
-            if config:
-                command.append("-c")
-                command.append(config)
-            if grid_ie_col:
-                command.append("-g")
-                command.append(str(grid_ie_col))
-            if solar_col:
-                command.append("-s")
-                command.append(str(solar_col))
-            if live_power_col:
-                command.append("-l")
-                command.append(str(live_power_col))
-            if voltage_col:
-                command.append("-v")
-                command.append(str(voltage_col))
-            if separator:
-                command.append("--sep")
-                command.append(separator)
-            if is_kw:
-                command.append("--kw")
-
-            print(f"cat {input_data.name} | {' '.join(command)}")
-
-            divert_process = Popen(command, stdin=input_data, stdout=PIPE,
-                    stderr=PIPE, universal_newlines=True)
-            while True:
-                output = divert_process.stdout.readline()
-                if output == '' and divert_process.poll() is not None:
-                    break
-                if output:
-                    output_data.write(output)
-                    line_number += 1
-                    if line_number > 1:
-                        # read in the csv line
-                        csv_line = output.split(',')
-                        date = datetime.strptime(csv_line[0], '%d/%m/%Y %H:%M:%S')
-                        solar = float(csv_line[1])
-                        # grid_ie = float(csv_line[2])
-                        # pilot = int(csv_line[3])
-                        charge_power = float(csv_line[4])
-                        # min_charge_power = float(csv_line[5])
-                        state = int(csv_line[6])
-                        # smoothed_available = float(csv_line[7])
-
-                        if last_date is not None:
-                            # Get the difference between this date and last date
-                            diff = date - last_date
-
-                            hours = diff.seconds / 3600
-
-                            total_solar_wh += solar * hours
-                            ev_wh = charge_power * hours
-                            total_ev_wh += charge_power * hours
-                            charge_from_solar_wh = min(solar, charge_power) * hours
-                            wh_from_solar += charge_from_solar_wh
-                            wh_from_grid += ev_wh - charge_from_solar_wh
-
-                            if state == OPENEVSE_STATE_CHARGING and last_state != OPENEVSE_STATE_CHARGING:
-                                number_of_charges += 1
-                                charge_start_date = date
-
-                            if state != OPENEVSE_STATE_CHARGING and last_state == OPENEVSE_STATE_CHARGING:
-                                this_session_time_charging = (date - charge_start_date).seconds
-                                total_time_charging += this_session_time_charging
-                                if min_time_charging == 0 or this_session_time_charging < min_time_charging:
-                                    min_time_charging = this_session_time_charging
-                                if this_session_time_charging > max_time_charging:
-                                    max_time_charging = this_session_time_charging
-
-                        last_date = date
-                        last_state = state
-
-        solar_kwh=total_solar_wh / 1000
-        ev_kwh=total_ev_wh / 1000
-        kwh_from_solar=wh_from_solar / 1000
-        kwh_from_grid=wh_from_grid / 1000
-
-        if config is False or config.startswith('{'):
-            config = "Default"
-
-        with open(path.join('output', summary_filename), 'a', encoding="utf-8") as summary_file:
-            summary_file.write(f'"{dataset}","{config}",{solar_kwh},{ev_kwh},{kwh_from_solar},{kwh_from_grid},{number_of_charges},{min_time_charging},{max_time_charging},{total_time_charging}\n')
+import subprocess
+import tempfile
+from dataclasses import dataclass
+from datetime import datetime, timezone
+from glob import glob
+from pathlib import Path
+from typing import Any, Dict, List, Optional
 
 
-    return (round(solar_kwh, KWH_ROUNDING),
-            round(ev_kwh, KWH_ROUNDING),
-            round(kwh_from_solar, KWH_ROUNDING),
-            round(kwh_from_grid, KWH_ROUNDING),
-            number_of_charges,
-            min_time_charging,
-            max_time_charging,
-            total_time_charging)
+ROOT = Path(__file__).resolve().parent
+DATA_DIR = ROOT / "data"
+SCENARIO_DIR = DATA_DIR / "scenarios"
+OUTPUT_DIR = ROOT / "output"
+PIO_ENV = os.environ.get("DIVERT_SIM_PIO_ENV", "native_simulator")
+
+
+def resolve_binary() -> Path:
+    local_binary = ROOT / "divert_sim"
+    if local_binary.exists():
+        return local_binary
+
+    pio_binary = ROOT.parent / ".pio" / "build" / PIO_ENV / "program"
+    if pio_binary.exists():
+        return pio_binary
+
+    raise FileNotFoundError(
+        "divert_sim binary not found. Build with `pio run -e native_simulator` "
+        "(or set DIVERT_SIM_PIO_ENV) or provide ./divert_sim."
+    )
+
+
+BINARY = resolve_binary()
+
+
+@dataclass
+class ScenarioMeta:
+    id: str
+    title: str
+    category: str
+    profile: str
+    path: Path
+    peers: List[str]
+
+
+def _read_json(path: Path) -> Dict[str, Any]:
+    with path.open() as f:
+        return json.load(f)
+
+
+def _merge_dict(base: Dict[str, Any], overrides: Dict[str, Any]) -> Dict[str, Any]:
+    merged = dict(base)
+    for key, value in overrides.items():
+        if isinstance(value, dict) and isinstance(merged.get(key), dict):
+            merged[key] = _merge_dict(merged[key], value)
+        else:
+            merged[key] = value
+    return merged
+
+
+def _scenario_base_dir(path: Path) -> Path:
+    return path.parent if path.parent else ROOT
+
+
+def _resolve_config_includes(scenario_doc: Dict[str, Any], scenario_path: Path) -> Dict[str, Any]:
+    resolved = dict(scenario_doc)
+    includes = resolved.get("config_include")
+    if includes is None:
+        includes = resolved.get("config_includes")
+
+    include_paths: List[str] = []
+    if isinstance(includes, str) and includes.strip():
+        include_paths = [includes]
+    elif isinstance(includes, list):
+        include_paths = [str(item) for item in includes if isinstance(item, str) and item.strip()]
+
+    merged_config: Dict[str, Any] = {}
+    base_dir = _scenario_base_dir(scenario_path)
+    for include_path in include_paths:
+        candidate = Path(include_path)
+        if not candidate.is_absolute():
+            candidate = (base_dir / candidate).resolve()
+        include_doc = _read_json(candidate)
+        if not isinstance(include_doc, dict):
+            raise ValueError(f"Config include is not an object: {candidate}")
+        if isinstance(include_doc.get("config"), dict):
+            include_doc = include_doc["config"]
+        merged_config = _merge_dict(merged_config, include_doc)
+
+    inline_config = resolved.get("config", {})
+    if isinstance(inline_config, dict):
+        merged_config = _merge_dict(merged_config, inline_config)
+    resolved["config"] = merged_config
+    return resolved
+
+
+def prepare_scenario_doc(
+    scenario_doc: Dict[str, Any],
+    scenario_path: Path,
+    config_overrides: Optional[Dict[str, Any]] = None,
+) -> Dict[str, Any]:
+    resolved = _resolve_config_includes(scenario_doc, scenario_path)
+    if config_overrides:
+        resolved["config"] = _merge_dict(resolved.get("config", {}), config_overrides)
+    return resolved
+
+
+def _parse_time(ts: str) -> datetime:
+    return datetime.fromisoformat(ts.replace("Z", "+00:00"))
+
+
+def setup_summary(_: str = "") -> None:
+    """Backwards-compatible shim used by old test modules."""
+    OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
+
+
+def _is_config_profile(path: Path) -> bool:
+    return path.name.startswith("config-")
+
+
+def discover_scenarios() -> List[ScenarioMeta]:
+    scenarios: List[ScenarioMeta] = []
+    for raw_path in sorted(glob(str(SCENARIO_DIR / "*.json"))):
+        path = Path(raw_path)
+        if _is_config_profile(path):
+            continue
+        doc = _read_json(path)
+
+        meta = doc.get("meta", {})
+        scenario_id = meta.get("id") or path.stem
+        title = meta.get("title") or scenario_id.replace("_", " ").title()
+        category = meta.get("category") or "misc"
+        profile = meta.get("profile") or "default"
+        peers = [p.get("id", f"peer-{idx}") for idx, p in enumerate(doc.get("peers", []))]
+
+        scenarios.append(
+            ScenarioMeta(
+                id=scenario_id,
+                title=title,
+                category=category,
+                profile=profile,
+                path=path,
+                peers=peers,
+            )
+        )
+    return scenarios
+
+
+def run_scenario(
+    scenario_path: str,
+    output: str = "",
+    config_overrides: Optional[Dict[str, Any]] = None,
+) -> List[Dict[str, str]]:
+    """Run divert_sim with one scenario and return parsed CSV rows."""
+    path = Path(scenario_path)
+    if not path.is_absolute():
+        path = ROOT / path
+
+    cmd = [str(BINARY), "--scenario", str(path)]
+
+    temp_scenario: Optional[Path] = None
+    scenario_doc = _read_json(path)
+    scenario_doc = prepare_scenario_doc(scenario_doc, path, config_overrides=config_overrides)
+    with tempfile.NamedTemporaryFile(
+        "w",
+        suffix=".json",
+        delete=False,
+        dir=path.parent,
+    ) as tf:
+        json.dump(scenario_doc, tf)
+        temp_scenario = Path(tf.name)
+    cmd = [str(BINARY), "--scenario", str(temp_scenario)]
+
+    try:
+        if output:
+            OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
+            out_path = OUTPUT_DIR / f"{output}.csv"
+            cmd += ["-o", str(out_path)]
+            result = subprocess.run(cmd, capture_output=True, text=True, check=False)
+            if result.returncode != 0:
+                raise RuntimeError(f"divert_sim failed ({path}): {result.stderr.strip()}")
+            with out_path.open() as f:
+                return list(csv.DictReader(f))
+
+        result = subprocess.run(cmd, capture_output=True, text=True, check=False)
+        if result.returncode != 0:
+            raise RuntimeError(f"divert_sim failed ({path}): {result.stderr.strip()}")
+        return list(csv.DictReader(io.StringIO(result.stdout)))
+    finally:
+        if temp_scenario and temp_scenario.exists():
+            temp_scenario.unlink()
+
+
+def build_index(
+    config_overrides: Optional[Dict[str, Any]] = None,
+    profile_suffix: Optional[str] = None,
+    index_name: str = "index.json",
+    scenario_ids: Optional[List[str]] = None,
+    scenario_sources: Optional[List[str]] = None,
+) -> Dict[str, Any]:
+    """Run all scenarios, write CSV outputs, and write an index file."""
+    OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
+
+    scenarios = discover_scenarios()
+    if scenario_ids:
+        allowed = set(scenario_ids)
+        scenarios = [scenario for scenario in scenarios if scenario.id in allowed]
+    if scenario_sources:
+        allowed_sources = set(scenario_sources)
+        scenarios = [
+            scenario
+            for scenario in scenarios
+            if str(scenario.path.relative_to(ROOT)) in allowed_sources
+        ]
+    entries: List[Dict[str, Any]] = []
+
+    for scenario in scenarios:
+        if profile_suffix:
+            profile = profile_suffix
+            output_name = f"{scenario.id}_{profile}"
+        else:
+            profile = scenario.profile
+            output_name = scenario.id
+        rows = run_scenario(str(scenario.path), output=output_name, config_overrides=config_overrides)
+        row_count = len(rows)
+        entries.append(
+            {
+                "id": scenario.id,
+                "title": scenario.title,
+                "category": scenario.category,
+                "profile": profile,
+                "peers": scenario.peers,
+                "source": str(scenario.path.relative_to(ROOT)),
+                "csv": f"output/{output_name}.csv",
+                "row_count": row_count,
+            }
+        )
+
+    index = {
+        "generated_at": datetime.now(timezone.utc).isoformat().replace("+00:00", "Z"),
+        "scenarios": entries,
+    }
+    with (OUTPUT_DIR / index_name).open("w") as f:
+        json.dump(index, f, indent=2)
+    return index
+
+
+if __name__ == "__main__":
+    build_index()

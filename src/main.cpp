@@ -35,7 +35,7 @@
 #include "app_config.h"
 #include "net_manager.h"
 #include "web_server.h"
-#include "ohm.h"
+#include "flash_migrate.h"
 #include "input.h"
 #include "emoncms.h"
 #include "mqtt.h"
@@ -51,6 +51,7 @@
 #include "ocpp.h"
 #include "rfid.h"
 #include "current_shaper.h"
+#include "temp_throttle.h"
 #include "limit.h"
 
 #if defined(ENABLE_PN532)
@@ -61,8 +62,12 @@
 #include "event_log.h"
 #include "evse_man.h"
 #include "scheduler.h"
+#ifndef ENABLE_TSDB
+#include "energy_logger.h"
+#else
+#include "tsdb_energy_logger.h"
+#endif
 
-#include "legacy_support.h"
 #include "certificates.h"
 
 EventLog eventLog;
@@ -72,15 +77,15 @@ EvseManager evse(RAPI_PORT, eventLog);
 Scheduler scheduler(evse);
 ManualOverride manual(evse);
 DivertTask divert(evse);
+#ifndef ENABLE_TSDB
+EnergyLogger energyLogger;
+#endif
 
 NetManagerTask net(lcd, ledManager, timeManager);
 
 RapiSender &rapiSender = evse.getSender();
 
-unsigned long Timer1; // Timer for events once every 30 seconds
 unsigned long Timer3; // Timer for events once every 2 seconds
-
-boolean rapi_read = 0; //flag to indicate first read of RAPI status
 
 static uint32_t start_mem = 0;
 static uint32_t last_mem = 0;
@@ -98,11 +103,35 @@ OcppTask ocpp = OcppTask();
 static void hardware_setup();
 static void handle_serial();
 
+#if defined(EPOXY_DUINO)
+#include "debug.h" // for debug_set_rapi_path
+static void process_command_line();
+static void process_early_command_line();
+#if defined(ENABLE_SCREEN_LVGL_TFT)
+#include "lvgl_tft/lvgl_capture.h"
+#include "lvgl_tft/lvgl_panel.h"
+static const char *lvgl_capture_dir = nullptr;
+#endif
+#endif
+
+#if defined(ESP32) && defined(ENABLE_FLASH_MIGRATE)
+// The flash-repartition migration writes to flash from deep inside the mongoose
+// + mbedTLS receive path (loop -> Mongoose.poll -> SSL_read -> onBody ->
+// esp_flash_write). That call chain overflows the default 8KB Arduino loop-task
+// stack and panics mid-stream, so give the loop task more headroom.
+SET_LOOP_TASK_STACK_SIZE(16 * 1024);
+#endif
+
 // -------------------------------------------------------------------
 // SETUP
 // -------------------------------------------------------------------
 void setup()
 {
+  // Parse command line early so we can set options (e.g. RAPI PTY path)
+#if defined(EPOXY_DUINO)
+  process_early_command_line();
+#endif
+
   hardware_setup();
   ESPAL.begin();
 
@@ -124,6 +153,19 @@ void setup()
 
   // Read saved settings from the config
   config_load_settings();
+#if defined(EPOXY_DUINO)
+  process_command_line();
+#if defined(ENABLE_SCREEN_LVGL_TFT)
+  if(lvgl_capture_dir != nullptr) {
+    if(!lvgl_capture_write_samples(lvgl_capture_dir)) {
+      fflush(NULL);
+      _Exit(1);
+    }
+    fflush(NULL);
+    _Exit(0);
+  }
+#endif
+#endif
 
   DBUGF("After config_load_settings: %d", ESPAL.getFreeHeap());
 
@@ -175,6 +217,14 @@ void setup()
   web_server_setup();
   DBUGF("After web_server_setup: %d", ESPAL.getFreeHeap());
 
+#ifdef ENABLE_TSDB
+  tsdbEnergyLogger.begin(evse);
+  DBUGF("After tsdbEnergyLogger.begin: %d", ESPAL.getFreeHeap());
+#else
+  energyLogger.begin(&evse);
+  DBUGF("After energyLogger.begin: %d", ESPAL.getFreeHeap());
+#endif
+
 #ifdef ENABLE_OTA
   ota_setup();
   DBUGF("After ota_setup: %d", ESPAL.getFreeHeap());
@@ -190,6 +240,9 @@ void setup()
   shaper.begin(evse);
   DBUGF("After shaper.begin: %d", ESPAL.getFreeHeap());
 
+  tempThrottle.begin(evse);
+  DBUGF("After tempThrottle.begin: %d", ESPAL.getFreeHeap());
+
   lcd.display(F("OpenEVSE WiFI"), 0, 0, 0, LCD_CLEAR_LINE);
   lcd.display(currentfirmware, 0, 1, 5 * 1000, LCD_CLEAR_LINE);
 
@@ -199,17 +252,16 @@ void setup()
 // -------------------------------------------------------------------
 // LOOP
 // -------------------------------------------------------------------
-void
-loop() {
+void loop()
+{
   Profile_Start(loop);
-
-  uptimeMillis();
 
   Profile_Start(Mongoose);
   Mongoose.poll(0);
   Profile_End(Mongoose, 10);
 
   web_server_loop();
+  flash_migrate_loop();
   ota_loop();
   rapiSender.loop();
 
@@ -217,41 +269,17 @@ loop() {
   MicroTask.update();
   Profile_End(MicroTask, 10);
 
-  if(OpenEVSE.isConnected())
-  {
-    if(OPENEVSE_STATE_STARTING != evse.getEvseState())
-    {
-      // Read initial state from OpenEVSE
-      if (rapi_read == 0)
-      {
-        DBUGLN("first read RAPI values");
-        handleRapiRead(); //Read all RAPI values
-        rapi_read=1;
-
-        import_timers(&scheduler);
-      }
-    }
-  }
+  // NOTE: the legacy first-connect block (handleRapiRead() + import_timers())
+  // was removed: both call through the sender-less global OpenEVSE object and
+  // have been silent no-ops since the EvseManager refactor.  Reviving
+  // import_timers() would auto-import (and clear) the controller's delay timer
+  // into Charge Manager rules — a deliberate decision for a separate change,
+  // along with routing time_man/input off the dead global.
 
   if(net.isConnected())
   {
     if (vehicle_data_src == VEHICLE_DATA_SRC_TESLA) {
       teslaClient.loop();
-    }
-
-    // -------------------------------------------------------------------
-    // Do these things once every 30 seconds
-    // -------------------------------------------------------------------
-    if ((millis() - Timer1) >= 30000)
-    {
-      if(!Update.isRunning())
-      {
-        if(config_ohm_enabled()) {
-          ohm_loop();
-        }
-      }
-
-      Timer1 = millis();
     }
 
     if(emoncms_updated)
@@ -316,6 +344,9 @@ class SystemRestart : public MicroTasks::Alarm
     void Trigger()
     {
       DBUGLN("Restarting...");
+#ifndef ENABLE_TSDB
+      energyLogger.end();
+#endif
       evse.saveEnergyMeter();
       net.wifiStop();
       ESPAL.reset();
@@ -376,3 +407,193 @@ uint64_t uptimeMillis()
     low32 = new_low32;
     return (uint64_t) high32 << 32 | low32;
 }
+
+#ifdef EPOXY_DUINO
+
+#include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
+// Flag to indicate if command line processing should exit early
+static bool cmdline_exit_requested = false;
+
+// Early pass: parse only flags that must be applied before serial/network init
+static void process_early_command_line();
+
+/** Shift argument parameters to the left by one slot. */
+static void shift(int& argc, const char* const*& argv) {
+  argc--;
+  argv++;
+}
+
+/** Return true if 2 strings are equal. */
+static bool argEquals(const char* s, const char* t) {
+  return strcmp(s, t) == 0;
+}
+
+static void process_early_command_line()
+{
+  for (int i = 1; i < epoxy_argc; i++) {
+    const char* arg = epoxy_argv[i];
+    if (argEquals(arg, "--rapi-serial") || argEquals(arg, "--rapi")) {
+      if (i + 1 < epoxy_argc) {
+        const char* path = epoxy_argv[i + 1];
+        debug_set_rapi_path(path);
+        fprintf(stderr, "Set RAPI serial path: %s\n", path);
+        i++; // skip value
+      } else {
+        fprintf(stderr, "Error: --rapi-serial requires a path argument\n");
+        cmdline_exit_requested = true;
+        // Do not exit here; let later processing handle usage/exit
+      }
+    }
+  }
+}
+
+/** Print usage. */
+static void printUsage() {
+  const char *lvgl_usage = "";
+#if defined(ENABLE_SCREEN_LVGL_TFT)
+  lvgl_usage =
+    "  --dump-lvgl-screens DIR  Render sample LVGL UI screens into DIR as PPM files\n"
+    "  --lvgl-display MODE      Select native LVGL display mode: headless or window\n";
+#endif
+
+  fprintf(
+    stderr,
+    "Usage: %s [--help|-h] [--rapi-serial PATH] [--set-config NAME=VALUE] [--] [args ...]\n"
+    "Config options can be set with: --set-config NAME=VALUE\n"
+    "  Examples:\n"
+    "    --set-config www_http_port=8080\n"
+    "    --set-config www_https_port=8443\n"
+    "    --set-config mqtt_server=192.168.1.100\n"
+    "    --set-config mqtt_port=1883\n"
+    "Runtime options (EPOXY_DUINO native build):\n"
+    "  --rapi-serial PATH   Set PTY/serial path for RAPI (e.g., /dev/pts/5)\n"
+    "%s",
+    epoxy_argv[0], lvgl_usage
+  );
+}
+
+/**
+ * Parse command line flags.
+ * Returns the index of the first argument after the flags.
+ */
+static int parseFlags(int argc, const char* const* argv) {
+  int argc_original = argc;
+  shift(argc, argv); // skip the name of the program at argv[0]
+
+  while (argc > 0) {
+    if (argEquals(argv[0], "--rapi-serial") || argEquals(argv[0], "--rapi")) {
+      shift(argc, argv);
+      if (argc == 0) {
+        fprintf(stderr, "Error: --rapi-serial requires a path argument\n");
+        cmdline_exit_requested = true;
+        return argc_original - argc;
+      }
+      const char* path = argv[0];
+      // Set the RAPI PTY path before Serial begin()
+      debug_set_rapi_path(path);
+      fprintf(stderr, "Set RAPI serial path: %s\n", path);
+    }
+    else if (argEquals(argv[0], "--set-config")) {
+      shift(argc, argv);
+      if (argc == 0) {
+        fprintf(stderr, "Error: --set-config requires an argument\n");
+        cmdline_exit_requested = true;
+        return argc_original - argc;
+      }
+
+      const char* config_pair = argv[0];
+      const char* equals_pos = strchr(config_pair, '=');
+
+      if (equals_pos == nullptr) {
+        fprintf(stderr, "Error: --set-config argument must be in format NAME=VALUE\n");
+        cmdline_exit_requested = true;
+        return argc_original - argc;
+      }
+
+      // Extract name and value
+      size_t name_len = equals_pos - config_pair;
+      char name[64];
+      if (name_len >= sizeof(name)) {
+        fprintf(stderr, "Error: --set-config option name too long\n");
+        cmdline_exit_requested = true;
+        return argc_original - argc;
+      }
+      memcpy(name, config_pair, name_len);
+      name[name_len] = '\0';
+
+      const char* value = equals_pos + 1;
+
+      // Set the config value
+      if (!config_set_opt_string(name, value)) {
+        fprintf(stderr, "Config option '%s' not applied (unknown key or value unchanged)\n", name);
+      } else {
+        fprintf(stderr, "Set config: %s = %s\n", name, value);
+      }
+    }
+#if defined(ENABLE_SCREEN_LVGL_TFT)
+    else if (argEquals(argv[0], "--dump-lvgl-screens")) {
+      shift(argc, argv);
+      if (argc == 0) {
+        fprintf(stderr, "Error: --dump-lvgl-screens requires a directory argument\n");
+        cmdline_exit_requested = true;
+        return argc_original - argc;
+      }
+
+      lvgl_capture_dir = argv[0];
+    }
+    else if (argEquals(argv[0], "--lvgl-display")) {
+      shift(argc, argv);
+      if (argc == 0) {
+        fprintf(stderr, "Error: --lvgl-display requires a mode argument\n");
+        cmdline_exit_requested = true;
+        return argc_original - argc;
+      }
+
+      if (argEquals(argv[0], "headless")) {
+        lvgl_panel_set_display_mode(LVGL_PANEL_DISPLAY_HEADLESS);
+      }
+      else if (argEquals(argv[0], "window")) {
+        lvgl_panel_set_display_mode(LVGL_PANEL_DISPLAY_WINDOW);
+      }
+      else {
+        fprintf(stderr, "Error: unsupported LVGL display mode '%s' (expected headless or window)\n", argv[0]);
+        cmdline_exit_requested = true;
+        return argc_original - argc;
+      }
+    }
+#endif
+    else if (argEquals(argv[0], "--")) {
+      shift(argc, argv);
+      break;
+    }
+    else if (argEquals(argv[0], "--help") || argEquals(argv[0], "-h")) {
+      printUsage();
+      exit(0);
+    }
+    else if (argv[0][0] == '-') {
+      fprintf(stderr, "Unknown flag '%s'\n", argv[0]);
+      printUsage();
+      cmdline_exit_requested = true;
+      return argc_original - argc;
+    }
+    else {
+      break;
+    }
+    shift(argc, argv);
+  }
+
+  return argc_original - argc;
+}
+
+static void process_command_line()
+{
+  parseFlags(epoxy_argc, epoxy_argv);
+  if (cmdline_exit_requested) {
+    // Exit early if there was a command line error
+    exit(1);
+  }
+}
+
+#endif

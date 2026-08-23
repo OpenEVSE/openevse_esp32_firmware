@@ -23,9 +23,13 @@ typedef const __FlashStringHelper *fstr_t;
 #endif
 
 //#include <FS.h>                       // SPIFFS file-system: store web server html, CSS etc.
+#include <LittleFS.h>
 
 #include "emonesp.h"
 #include "web_server.h"
+#ifdef ENABLE_TSDB
+#include "tsdb_energy_logger.h"
+#endif
 #include "web_server_static.h"
 #include "app_config.h"
 #include "net_manager.h"
@@ -41,8 +45,11 @@ typedef const __FlashStringHelper *fstr_t;
 #include "scheduler.h"
 #include "rfid.h"
 #include "current_shaper.h"
+#include "home_battery.h"
 #include "evse_man.h"
 #include "limit.h"
+#include "web_auth.h"
+#include "web_auth_secret.h"
 
 MongooseHttpServer server;          // Create class for Web server
 MongooseHttpServer redirect;        // Server to redirect to HTTPS if enabled
@@ -80,8 +87,26 @@ void handleUpdateRequest(MongooseHttpServerRequest *request);
 size_t handleUpdateUpload(MongooseHttpServerRequest *request, int ev, MongooseString filename, uint64_t index, uint8_t *data, size_t len);
 void handleUpdateClose(MongooseHttpServerRequest *request);
 
+void handleMigrateExpand16mb(MongooseHttpServerRequest *request);
+void handleMigrateStatus(MongooseHttpServerRequest *request);
+void handleMigrateCoredump(MongooseHttpServerRequest *request);
+
 void handleTime(MongooseHttpServerRequest *request);
 void handleTimePost(MongooseHttpServerRequest *request, MongooseHttpServerResponseStream *response);
+void handleMqttAction(MongooseHttpServerRequest *request);
+
+#ifndef ENABLE_TSDB
+void handleEnergyRaw(MongooseHttpServerRequest *request);
+void handleEnergyDaily(MongooseHttpServerRequest *request);
+void handleEnergyMonthly(MongooseHttpServerRequest *request);
+void handleEnergyAnnual(MongooseHttpServerRequest *request);
+#else // ENABLE_TSDB
+void handleEnergyRaw(MongooseHttpServerRequest *request);
+void handleEnergyDaily(MongooseHttpServerRequest *request);
+void handleEnergyWeekly(MongooseHttpServerRequest *request);
+void handleEnergyMonthly(MongooseHttpServerRequest *request);
+void handleEnergyAnnual(MongooseHttpServerRequest *request);
+#endif // ENABLE_TSDB
 
 void dumpRequest(MongooseHttpServerRequest *request)
 {
@@ -142,16 +167,317 @@ void dumpRequest(MongooseHttpServerRequest *request)
 }
 
 // -------------------------------------------------------------------
+// Constant-time credential comparison
+//
+// Compares two NUL-terminated strings without an early exit on the first
+// differing byte, so the time taken does not leak how many leading bytes
+// matched (CWE-208). The length difference is folded in so a length mismatch
+// does not short-circuit either. Not a substitute for a slow hash, but removes
+// the trivial byte-by-byte timing signal from Basic-auth checks.
+// -------------------------------------------------------------------
+static bool credentialsMatch(const char *a, const char *b)
+{
+  size_t la = strlen(a);
+  size_t lb = strlen(b);
+  // Keep the length difference full-width: truncating to a narrow type could
+  // fold a length delta that is a nonzero multiple of the type's range to 0 and
+  // (with matching overlapping bytes) false-accept.
+  size_t diff = la ^ lb;
+  size_t n = la < lb ? la : lb;
+  for(size_t i = 0; i < n; i++) {
+    diff |= (unsigned char)(a[i] ^ b[i]);
+  }
+  return 0 == diff;
+}
+
+// -------------------------------------------------------------------
+// The ESP32 has no battery-backed RTC, so time(nullptr) returns ~0 from boot
+// until SNTP (or the EVSE controller, or a manual set) lands.  Session cookies
+// carry a wall-clock expiry, so they are meaningless — and unexpirable — until
+// the clock is real.  This floor (2023-11-14) is source-agnostic: any of SNTP,
+// the EVSE RTC, or a manual settimeofday() lifts time() above it, whereas a
+// timeManager "SNTP synced" flag would miss a clock set from the controller.
+// -------------------------------------------------------------------
+static const uint32_t AUTH_CLOCK_SANE_EPOCH = 1700000000UL;
+static bool clockIsSane()
+{
+  return (uint32_t)time(nullptr) > AUTH_CLOCK_SANE_EPOCH;
+}
+
+// Monotonic seconds for the failed-auth throttle, independent of the wall
+// clock (see web_auth.h) so an SNTP jump can't distort the decay window.
+static inline uint32_t authNowSecs()
+{
+  return (uint32_t)(millis() / 1000);
+}
+
+// Shared failed-credential throttle: fed by both the Basic-auth path in
+// isAuthenticated() and POST /login, so a brute force can't dodge it by
+// hammering GET /status instead of the login form.
+static AuthThrottle s_authThrottle;
+
+// The effective admin username.  Auth is keyed on the *password* being set;
+// when a password exists but the username was left blank, we fall back to a
+// non-obvious default rather than treating the device as open (F1).
+static String effectiveAdminUser()
+{
+  return www_username.length() > 0 ? www_username : String("openevseadmin");
+}
+
+// -------------------------------------------------------------------
+// Session-cookie auth helper (browser UI)
+//
+// Extracts the oevse_session cookie from the request, verifies its HMAC
+// signature and expiry against the current secret, and returns true when
+// the cookie is valid.  File-local; consumed by isAuthenticated() below
+// and the login handler (Task 7).
+// -------------------------------------------------------------------
+static bool hasValidSessionCookie(MongooseHttpServerRequest *request)
+{
+  // Cookies are inert until the wall clock is set: an unexpirable cookie is
+  // worse than none, and this closes the replay-after-reboot window (a
+  // captured cookie can't verify while time() is ~0).  Basic auth still works.
+  if(!clockIsSane()) {
+    return false;
+  }
+  String secret = web_auth_get_secret();
+  if(secret.length() == 0) {
+    return false;  // no secret yet — fail closed
+  }
+  MongooseString cookieHdr = request->headers("Cookie");
+  if(!cookieHdr) {
+    return false;
+  }
+  std::string tok = cookie_extract(
+    std::string(cookieHdr.c_str(), cookieHdr.length()), "oevse_session");
+  if(tok.empty()) {
+    return false;
+  }
+  return session_token_verify(
+    std::string(secret.c_str()), tok, (uint32_t)time(nullptr));
+}
+
+// -------------------------------------------------------------------
+// Single source of truth for HTTP authentication
+//
+// Used by both the REST path (requestPreProcess) and the WebSocket handshake
+// gate (onWsAuthenticate). Returns true when the request is permitted:
+//  - AP-only provisioning mode (captive portal, before credentials are set), or
+//  - no password configured (auth disabled), or
+//  - a valid Basic Authorization header (machine clients: HA, MQTT, app), or
+//  - a valid session cookie (browser UI).
+// Parsing reuses the library's tested Basic-auth parser; only the comparison is
+// swapped for a constant-time one. `badCredential` (optional) is set when a
+// Basic header carried the wrong password, so requestPreProcess can escalate
+// to a throttle response without re-parsing.
+// -------------------------------------------------------------------
+bool isAuthenticated(MongooseHttpServerRequest *request, bool *usedCookie, bool *badCredential)
+{
+  if(usedCookie) *usedCookie = false;
+  if(badCredential) *badCredential = false;
+
+  // Auth is keyed on the *password*: a blank password means "no auth" even if a
+  // username is set; a set password with a blank username uses a default user
+  // (effectiveAdminUser) rather than leaving the device open (F1).
+  if(net.isWifiModeApOnly() || www_password == "") {
+    return true;
+  }
+
+  String adminUser = effectiveAdminUser();
+
+  // Basic auth (machine clients: HA, MQTT, app, scripts)
+  MongooseString authHeader = request->headers("Authorization");
+  if(authHeader) {
+    mg_str hdr = authHeader.toMgStr();
+    char user_buf[64] = {0};
+    char pass_buf[64] = {0};
+    if(0 == mg_parse_http_basic_auth(&hdr, user_buf, sizeof(user_buf),
+                                     pass_buf, sizeof(pass_buf))) {
+      bool u = credentialsMatch(adminUser.c_str(), user_buf);
+      bool p = credentialsMatch(www_password.c_str(), pass_buf);
+      if(u && p) {
+        // Correct credentials always win and clear the throttle, so a flood of
+        // bad guesses can never lock out a machine client holding the password.
+        auth_throttle_record_success(s_authThrottle, authNowSecs());
+        return true;
+      }
+      // Wrong Basic credential — feed the same throttle as POST /login so a
+      // brute force can't dodge the counter by hammering GET /status.
+      auth_throttle_record_failure(s_authThrottle, authNowSecs());
+      if(badCredential) *badCredential = true;
+    }
+  }
+
+  // Session cookie (browser UI) — computed exactly once here
+  bool cookie = hasValidSessionCookie(request);
+  if(usedCookie) *usedCookie = cookie;
+  return cookie;
+}
+
+// -------------------------------------------------------------------
+// POST /login  — credential check + session cookie mint
+// POST /logout — session cookie clear
+//
+// Both handlers build their own response and intentionally do NOT call
+// requestPreProcess / isAuthenticated: an unauthenticated user must be
+// able to reach /login, and /logout should always succeed.
+// -------------------------------------------------------------------
+static const uint32_t REMEMBER_TTL = 2592000; // 30 days
+static const uint32_t SESSION_TTL  = 21600;   // 6 hours
+
+void handleLogin(MongooseHttpServerRequest *request)
+{
+  MongooseHttpServerResponseStream *response = request->beginResponseStream();
+  response->setContentType(CONTENT_TYPE_JSON);
+  response->addHeader(F("Cache-Control"), F("no-store"));
+
+  if(HTTP_POST != request->method()) {
+    response->setCode(405);
+    request->send(response);
+    return;
+  }
+
+  String body = request->body().toString();
+  DynamicJsonDocument doc(512);
+  if(deserializeJson(doc, body)) {
+    response->setCode(400);
+    response->print(F("{\"msg\":\"bad json\"}"));
+    request->send(response);
+    return;
+  }
+
+  String user = doc["user"] | "";
+  String pass = doc["pass"] | "";
+  bool remember = doc["remember"] | false;
+
+  // Evaluate both compares into locals before combining, so a username miss
+  // doesn't short-circuit the password compare (no timing oracle).
+  bool u_ok = auth_constant_time_equals(std::string(user.c_str()),
+                                        std::string(effectiveAdminUser().c_str()));
+  bool p_ok = auth_constant_time_equals(std::string(pass.c_str()),
+                                        std::string(www_password.c_str()));
+  bool ok = u_ok && p_ok;
+  uint32_t tnow = authNowSecs();
+  if(!ok) {
+    // Correct credentials are checked above and always pass, so the throttle
+    // only ever rejects *wrong* guesses — a soft lock can't shut out the admin
+    // or a machine client. 429 signals the lock; the counter decays on its own.
+    auth_throttle_record_failure(s_authThrottle, tnow);
+    bool locked = auth_throttle_locked(s_authThrottle, tnow);
+    response->setCode(locked ? 429 : 401);
+    response->print(locked ? F("{\"msg\":\"locked\"}") : F("{\"msg\":\"invalid\"}"));
+    request->send(response);
+    return;
+  }
+  auth_throttle_record_success(s_authThrottle, tnow);
+
+  // Cookies carry a wall-clock expiry, so the device needs a real clock to mint
+  // one. If it has none yet (no NTP reachable, no controller RTC), adopt the
+  // time the client sent with the login — the caller has just proven the
+  // password, and could set the clock via /settime anyway, so this is no new
+  // authority. Only ever bootstraps an *unset* clock; never moves a real one,
+  // and a bogus (pre-2023) value is ignored so it can't roll the clock back.
+  if(!clockIsSane()) {
+    uint32_t clientNow = doc["now"] | 0u;   // epoch seconds from the browser
+    if(clientNow > AUTH_CLOCK_SANE_EPOCH) {
+      struct timeval tv;
+      tv.tv_sec  = (time_t)clientNow;
+      tv.tv_usec = 0;
+      time_set_time(tv, "login");
+    }
+  }
+
+  // Still no usable clock (client sent nothing / a bad value) — can't date a
+  // cookie, so fall back to Basic rather than mint an unexpirable one.
+  if(!clockIsSane()) {
+    response->setCode(503);
+    response->print(F("{\"msg\":\"clock\"}"));
+    request->send(response);
+    return;
+  }
+
+  String secret = web_auth_get_secret();
+  if(secret.length() == 0) {
+    response->setCode(503);
+    response->print(F("{\"msg\":\"not ready\"}"));
+    request->send(response);
+    return;
+  }
+  uint32_t exp = (uint32_t)time(nullptr) + (remember ? REMEMBER_TTL : SESSION_TTL);
+  std::string token = session_token_mint(std::string(secret.c_str()), exp);
+
+  String cookie = "oevse_session=";
+  cookie += token.c_str();
+  cookie += "; Path=/; HttpOnly; SameSite=Strict";
+  if(remember) { cookie += "; Max-Age="; cookie += String(REMEMBER_TTL); }
+  // if(tls_active()) cookie += "; Secure";   // add when TLS status is known
+  response->addHeader(F("Set-Cookie"), cookie.c_str());
+  response->setCode(200);
+  response->print(F("{\"msg\":\"ok\"}"));
+  request->send(response);
+}
+
+void handleLogout(MongooseHttpServerRequest *request)
+{
+  MongooseHttpServerResponseStream *response = request->beginResponseStream();
+  response->setContentType(CONTENT_TYPE_JSON);
+  response->addHeader(F("Cache-Control"), F("no-store"));
+  if(HTTP_POST != request->method()) { response->setCode(405); request->send(response); return; }
+  response->addHeader(F("Set-Cookie"), F("oevse_session=; Path=/; HttpOnly; SameSite=Strict; Max-Age=0"));
+  response->setCode(200);
+  response->print(F("{\"msg\":\"ok\"}"));
+  request->send(response);
+}
+
+// -------------------------------------------------------------------
 // Helper function to perform the standard operations on a request
 // -------------------------------------------------------------------
 bool requestPreProcess(MongooseHttpServerRequest *request, MongooseHttpServerResponseStream *&response, fstr_t contentType)
 {
   dumpRequest(request);
 
-  if(!net.isWifiModeApOnly() && www_username!="" &&
-     false == request->authenticate(www_username, www_password)) {
-    request->requestAuthentication(esp_hostname);
+  bool usedCookie = false;
+  bool badCredential = false;
+  if(!isAuthenticated(request, &usedCookie, &badCredential)) {
+    // A wrong Basic credential presented while the throttle is hot gets 429
+    // (rate-limited), so brute forcing GET /status is throttled the same as
+    // POST /login. A request with no credential at all still gets the normal
+    // 401 challenge — the throttle only ever answers *failed* attempts.
+    if(badCredential && auth_throttle_locked(s_authThrottle, authNowSecs())) {
+      response = request->beginResponseStream();
+      response->setContentType(CONTENT_TYPE_JSON);
+      response->setCode(429);
+      response->print(F("{\"msg\":\"locked\"}"));
+      request->send(response);
+      return false;
+    }
+    MongooseString xrw = request->headers("X-Requested-With");
+    if(xrw.equals("OpenEVSE")) {
+      response = request->beginResponseStream();
+      response->setContentType(CONTENT_TYPE_JSON);
+      response->setCode(401);
+      response->print(F("{\"msg\":\"auth\"}"));
+      request->send(response);
+    } else {
+      request->requestAuthentication(esp_hostname);
+    }
     return false;
+  }
+
+  // CSRF: a browser session cookie is auto-attached cross-site, so any
+  // state-changing (non-GET) request authenticated via cookie must also carry
+  // the SPA's custom header, which a cross-origin form cannot set. Basic-auth
+  // (machine) clients never send our cookie and are unaffected.
+  if(request->method() != HTTP_GET && usedCookie) {
+    MongooseString xrw = request->headers("X-Requested-With");
+    if(!(xrw.equals("OpenEVSE"))) {
+      response = request->beginResponseStream();
+      response->setContentType(CONTENT_TYPE_JSON);
+      response->setCode(403);
+      response->print(F("{\"msg\":\"csrf\"}"));
+      request->send(response);
+      return false;
+    }
   }
 
   response = request->beginResponseStream();
@@ -179,6 +505,27 @@ bool isPositive(MongooseHttpServerRequest *request, const char *param) {
   char paramValue[8];
   int paramFound = request->getParam(param, paramValue, sizeof(paramValue));
   return paramFound >= 0 && (0 == paramFound || isPositive(String(paramValue)));
+}
+
+// -------------------------------------------------------------------
+// Escape a string for safe inclusion in an HTML response body, so that
+// reflected user input cannot be interpreted as markup or script.
+// -------------------------------------------------------------------
+static String html_escape(const String &input) {
+  String out;
+  out.reserve(input.length());
+  for(size_t i = 0; i < input.length(); i++) {
+    char c = input.charAt(i);
+    switch(c) {
+      case '&':  out += F("&amp;");  break;
+      case '<':  out += F("&lt;");   break;
+      case '>':  out += F("&gt;");   break;
+      case '"':  out += F("&quot;"); break;
+      case '\'': out += F("&#39;");  break;
+      default:   out += c;           break;
+    }
+  }
+  return out;
 }
 
 //---------------------------------------------------------------------
@@ -212,6 +559,7 @@ void buildStatus(DynamicJsonDocument &doc) {
   doc["eth_connected"] = (int)net.isWiredConnected();
   doc["net_connected"] = (int)net.isWifiClientConnected();
   doc["ipaddress"] = net.getIp();
+  doc["ipv6address"] = net.getIpv6();
   doc["macaddress"] = net.getMac();
 
   doc["emoncms_connected"] = (int)emoncms_connected;
@@ -219,16 +567,31 @@ void buildStatus(DynamicJsonDocument &doc) {
   doc["packets_success"] = packets_success;
 
   doc["mqtt_connected"] = (int)mqtt.isConnected();
+  doc["mqtt_status"]    = mqtt.getMqttStatus();
+  if (mqtt.getBrokerIp()[0] != '\0')
+    doc["mqtt_broker_ip"]      = mqtt.getBrokerIp();
+  if (mqtt.getBrokerVersion()[0] != '\0')
+    doc["mqtt_broker_version"] = mqtt.getBrokerVersion();
+  if (mqtt.getConnectedSince() > 0)
+    doc["mqtt_connected_since"] = (uint32_t)mqtt.getConnectedSince();
+  if (mqtt.getLastRxTime() > 0)
+    doc["mqtt_last_rx"]         = (uint32_t)mqtt.getLastRxTime();
+  if (mqtt.getErrorCategory()[0] != '\0') {
+    doc["mqtt_error"]        = mqtt.getErrorCategory();
+    doc["mqtt_error_detail"] = mqtt.getErrorDetail();
+  }
 
   doc["ocpp_connected"] = (int)OcppTask::isConnected();
 
 #if defined(ENABLE_PN532) || defined(ENABLE_RFID)
   doc["rfid_failure"] = (int) rfid.communicationFails();
+  doc["rfid_reader"] = (int) rfid.readerPresent();
 #endif
 
-  doc["ohm_hour"] = ohm_hour;
 
   doc["free_heap"] = ESPAL.getFreeHeap();
+  doc["littlefs_free"] = (uint32_t)(LittleFS.totalBytes() - LittleFS.usedBytes());
+  doc["littlefs_used"] = (uint32_t)LittleFS.usedBytes();
 
   doc["comm_sent"] = rapiSender.getSent();
   doc["comm_success"] = rapiSender.getSuccess();
@@ -241,8 +604,8 @@ void buildStatus(DynamicJsonDocument &doc) {
   doc["nogndcount"] = evse.getFaultCountNoGround();
   doc["stuckcount"] = evse.getFaultCountStuckRelay();
 
-  doc["solar"] = solar;
-  doc["grid_ie"] = grid_ie;
+  doc["solar"] = divert.getSolar();
+  doc["grid_ie"] = divert.getGridIe();
   doc["charge_rate"] = divert.getChargeRate();
   doc["divert_update"] = (millis() - divert.getLastUpdate()) / 1000;
   doc["divert_active"] = divert.isActive();
@@ -282,17 +645,23 @@ void buildStatus(DynamicJsonDocument &doc) {
     if(evse.isVehicleEtaValid()) {
       doc["time_to_full_charge"] = evse.getVehicleEta();
     }
+    if(evse.isVehicleChargeLimitValid()) {
+      doc["vehicle_charge_limit"] = evse.getVehicleChargeLimit();
+    }
   }
+
+#ifdef ENABLE_TSDB
+  doc["tsdb_ready"] = tsdbEnergyLogger.isReady() ? 1 : 0;
+  doc["tsdb_err"]   = tsdbEnergyLogger.initError();
+#endif
+  home_battery_add_status_fields(doc);
 
   DBUGF("/status ArduinoJson size: %dbytes", doc.size());
 }
 
 // -------------------------------------------------------------------
-// Wifi scan /scan not currently used
+// Wifi scan
 // url: /scan
-//
-// First request will return 0 results unless you start scan from somewhere else (loop/setup)
-// Do not request more often than 3-5 seconds
 // -------------------------------------------------------------------
 void
 handleScan(MongooseHttpServerRequest *request) {
@@ -302,23 +671,52 @@ handleScan(MongooseHttpServerRequest *request) {
   }
 
   DBUGF("Starting WiFi scan");
-  net.wifiScanNetworks([request, response](int networksFound) {
+  bool scanStarted = net.wifiScanNetworks([request, response](int networksFound) {
     DBUGF("%d networks found", networksFound);
-    String json = "[";
+    response->print("[");
     for (int i = 0; i < networksFound; ++i) {
-      if(i) json += ",";
-      json += "{";
-      json += "\"rssi\":"+String(WiFi.RSSI(i));
-      json += ",\"ssid\":\""+WiFi.SSID(i)+"\"";
-      json += ",\"bssid\":\""+WiFi.BSSIDstr(i)+"\"";
-      json += ",\"channel\":"+String(WiFi.channel(i));
-      json += ",\"secure\":"+String(WiFi.encryptionType(i));
-      json += "}";
+      if(i) response->print(",");
+      StaticJsonDocument<256> network;
+      network["rssi"] = WiFi.RSSI(i);
+      network["ssid"] = WiFi.SSID(i);
+      network["bssid"] = WiFi.BSSIDstr(i);
+      network["channel"] = WiFi.channel(i);
+      network["secure"] = WiFi.encryptionType(i);
+      serializeJson(network, *response);
     }
-    json += "]";
-    response->print(json);
+    response->print("]");
     request->send(response);
   });
+
+  if(!scanStarted) {
+    DBUGLN("WiFi scan failed to start");
+    response->print("[]");
+    request->send(response);
+  }
+}
+
+// -------------------------------------------------------------------
+// Destructive actuators (/reset, /restart, /apoff) must not fire from a bare
+// cross-site GET (e.g. <img src="/reset">). Require either a non-GET method or
+// the SPA's custom header, which a cross-origin GET cannot set — defense in
+// depth beyond SameSite=Strict on the worst-consequence endpoints. Sends 403
+// and returns false when the request is a headerless GET; the caller's response
+// stream is already open (from requestPreProcess).
+// -------------------------------------------------------------------
+static bool actuatorMethodAllowed(MongooseHttpServerRequest *request,
+                                  MongooseHttpServerResponseStream *response)
+{
+  if(request->method() != HTTP_GET) {
+    return true;
+  }
+  MongooseString xrw = request->headers("X-Requested-With");
+  if(xrw.equals("OpenEVSE")) {
+    return true;
+  }
+  response->setCode(403);
+  response->print("Forbidden: use POST or the app");
+  request->send(response);
+  return false;
 }
 
 // -------------------------------------------------------------------
@@ -329,6 +727,9 @@ void
 handleAPOff(MongooseHttpServerRequest *request) {
   MongooseHttpServerResponseStream *response;
   if(false == requestPreProcess(request, response, CONTENT_TYPE_TEXT)) {
+    return;
+  }
+  if(!actuatorMethodAllowed(request, response)) {
     return;
   }
 
@@ -453,8 +854,8 @@ void handleStatusPost(MongooseHttpServerRequest *request, MongooseHttpServerResp
       DBUGF("shaper: live power:%dW", shaper.getLivePwr());
     }
     if(doc.containsKey("solar")) {
-      solar = doc["solar"];
-      DBUGF("solar:%dW", solar);
+      divert.setSolar(doc["solar"]);
+      DBUGF("solar:%dW", divert.getSolar());
       divert.update_state();
       // recalculate shaper
       if (shaper.getState()) {
@@ -463,8 +864,8 @@ void handleStatusPost(MongooseHttpServerRequest *request, MongooseHttpServerResp
       send_event = false; // Divert sends the event so no need to send here
     }
     else if(doc.containsKey("grid_ie")) {
-      grid_ie = doc["grid_ie"];
-      DBUGF("grid:%dW", grid_ie);
+      divert.setGridIe(doc["grid_ie"]);
+      DBUGF("grid:%dW", divert.getGridIe());
       divert.update_state();
       // recalculate shaper
       if (shaper.getState()) {
@@ -489,6 +890,25 @@ void handleStatusPost(MongooseHttpServerRequest *request, MongooseHttpServerResp
       DBUGF("vehicle_eta:%d", vehicle_eta);
       evse.setVehicleEta(vehicle_eta);
       doc["vehicle_state_update"] = 0;
+    }
+    if(doc.containsKey("vehicle_charge_limit") && vehicle_data_src == VEHICLE_DATA_SRC_HTTP){
+      int vehicle_charge_limit = doc["vehicle_charge_limit"];
+      DBUGF("vehicle_charge_limit:%d%%", vehicle_charge_limit);
+      evse.setVehicleChargeLimit(vehicle_charge_limit);
+      doc["vehicle_state_update"] = 0;
+    }
+    // Display-only home/powerwall battery feeds. Like the solar/grid pushes
+    // above these are an explicit override (no data_src arbitration); they just
+    // surface in /status and on the display.
+    if(doc.containsKey("home_battery_soc")) {
+      int soc = doc["home_battery_soc"];
+      DBUGF("home_battery_soc:%d%%", soc);
+      home_battery_set_soc(soc);
+    }
+    if(doc.containsKey("home_battery_power")) {
+      int power = doc["home_battery_power"];
+      DBUGF("home_battery_power:%dW", power);
+      home_battery_set_power(power);
     }
     // send back new value to clients
     if(send_event) {
@@ -537,8 +957,9 @@ handleStatus(MongooseHttpServerRequest *request)
 void
 handleScheduleGet(MongooseHttpServerRequest *request, MongooseHttpServerResponseStream *response, uint16_t event)
 {
-  const size_t capacity = JSON_OBJECT_SIZE(40) + 1024;
-  DynamicJsonDocument doc(capacity);
+  // Sized from the stored event count — a fixed budget silently truncated
+  // multi-rule schedules (serialize() drops events once the doc overflows).
+  DynamicJsonDocument doc(scheduler.scheduleJsonCapacity());
 
   bool success = (SCHEDULER_EVENT_NULL == event) ?
     scheduler.serialize(doc) :
@@ -863,6 +1284,9 @@ handleRst(MongooseHttpServerRequest *request) {
   if(false == requestPreProcess(request, response, CONTENT_TYPE_TEXT)) {
     return;
   }
+  if(!actuatorMethodAllowed(request, response)) {
+    return;
+  }
 
   config_reset();
   ESPAL.eraseConfig();
@@ -883,6 +1307,9 @@ void
 handleRestart(MongooseHttpServerRequest *request) {
   MongooseHttpServerResponseStream *response;
   if(false == requestPreProcess(request, response, CONTENT_TYPE_TEXT)) {
+    return;
+  }
+  if(!actuatorMethodAllowed(request, response)) {
     return;
   }
 
@@ -1040,9 +1467,9 @@ handleRapi(MongooseHttpServerRequest *request) {
       if (json) {
         s = "{\"cmd\":\""+rapi+"\",\"ret\":\""+rapiString+"\"}";
       } else {
-        s += rapi;
+        s += html_escape(rapi);
         s += F("<p>&gt;");
-        s += rapiString;
+        s += html_escape(rapiString);
       }
     }
     else
@@ -1064,7 +1491,7 @@ handleRapi(MongooseHttpServerRequest *request) {
       if (json) {
         s = "{\"cmd\":\""+rapi+"\",\"error\":\""+errorString+"\"}";
       } else {
-        s += rapi;
+        s += html_escape(rapi);
         s += F("<p><strong>Error:</strong>");
         s += errorString;
       }
@@ -1154,6 +1581,26 @@ void onWsFrame(MongooseHttpWebSocketConnection *connection, int flags, uint8_t *
   }
 }
 
+// WebSocket handshake authentication gate.
+//
+// Registered via ->onRequest() on every WebSocket endpoint, so it runs during
+// MG_EV_WEBSOCKET_HANDSHAKE_REQUEST — before the 101 Switching Protocols
+// response. On failure, requestAuthentication() sends a 401 and sets
+// MG_F_SEND_AND_CLOSE; mongoose then skips handshake completion (see
+// mongoose.c, MG_EV_WEBSOCKET_HANDSHAKE_REQUEST handling), so no onConnect
+// fires and no data is ever pushed to an unauthenticated client. On success we
+// return without sending a response and the handshake proceeds normally.
+//
+// Note: the library dispatches HANDSHAKE_REQUEST to the endpoint's onRequest
+// handler when one is set, and onConnect/onFrame at the later HANDSHAKE_DONE /
+// FRAME events, so gating here does not interfere with those callbacks.
+void onWsAuthenticate(MongooseHttpServerRequest *request)
+{
+  if(!isAuthenticated(request)) {
+    request->requestAuthentication(esp_hostname);
+  }
+}
+
 void onWsConnect(MongooseHttpWebSocketConnection *connection)
 {
   DBUGF("New client connected over ws");
@@ -1177,6 +1624,39 @@ void web_server_send_ascii_utf8(const char *endpoint, const uint8_t *buffer, siz
   server.sendAll(endpoint, WEBSOCKET_OP_TEXT, temp, size);
 }
 
+void handleMqttAction(MongooseHttpServerRequest *request) {
+  MongooseHttpServerResponseStream *response;
+  if (false == requestPreProcess(request, response)) return;
+
+  if (HTTP_GET == request->method()) {
+    DynamicJsonDocument doc(JSON_OBJECT_SIZE(8) + 384);
+    doc["mqtt_connected"] = (int)mqtt.isConnected();
+    doc["mqtt_status"]    = mqtt.getMqttStatus();
+    if (mqtt.getBrokerIp()[0] != '\0')
+      doc["mqtt_broker_ip"]      = mqtt.getBrokerIp();
+    if (mqtt.getBrokerVersion()[0] != '\0')
+      doc["mqtt_broker_version"] = mqtt.getBrokerVersion();
+    if (mqtt.getConnectedSince() > 0)
+      doc["mqtt_connected_since"] = (uint32_t)mqtt.getConnectedSince();
+    if (mqtt.getLastRxTime() > 0)
+      doc["mqtt_last_rx"]         = (uint32_t)mqtt.getLastRxTime();
+    // Always include error fields (empty string when no failure) so the GUI can
+    // clear a previously-shown reason once reconnected.
+    doc["mqtt_error"]        = mqtt.getErrorCategory();
+    doc["mqtt_error_detail"] = mqtt.getErrorDetail();
+    response->setCode(200);
+    serializeJson(doc, *response);
+  } else if (HTTP_POST == request->method()) {
+    mqtt.restartConnection();
+    response->setCode(200);
+    response->print("{\"msg\":\"done\"}");
+  } else {
+    response->setCode(405);
+    response->print("{\"msg\":\"Method not allowed\"}");
+  }
+  request->send(response);
+}
+
 void web_server_setup()
 {
   bool use_ssl = false;
@@ -1187,17 +1667,23 @@ void web_server_setup()
     const char *key = certs.getKey(cert_id);
     if(NULL != cert && NULL != key)
     {
-      server.begin(443, cert, key);
+      DEBUG.printf("Starting HTTPS server, https://0.0.0.0:%d\n", www_https_port);
+      server.begin(www_https_port, cert, key);
       use_ssl = true;
 
-      redirect.begin(80);
+      redirect.begin(www_http_port);
       redirect.on("/", handleHttpsRedirect);
     }
   }
 
   if(false == use_ssl) {
-    server.begin(80);
+    DEBUG.printf("Starting HTTP server, http://0.0.0.0:%d\n", www_http_port);
+    server.begin(www_http_port);
   }
+
+  // Session management (no auth gate — user must reach these unauthenticated)
+  server.on("/login$", handleLogin);
+  server.on("/logout$", handleLogout);
 
   // Handle status updates
   server.on("/status$", handleStatus);
@@ -1231,12 +1717,31 @@ void web_server_setup()
   server.on("/limit", handleLimit);
   server.on("/emeter", handleEmeter);
   server.on("/time", handleTime);
+  server.on("/mqtt$", handleMqttAction);
+
+#ifndef ENABLE_TSDB
+  server.on("/energy/raw$", handleEnergyRaw);
+  server.on("/energy/daily$", handleEnergyDaily);
+  server.on("/energy/monthly$", handleEnergyMonthly);
+  server.on("/energy/annual$", handleEnergyAnnual);
+#else // ENABLE_TSDB
+  server.on("/energy/raw$", handleEnergyRaw);
+  server.on("/energy/daily$", handleEnergyDaily);
+  server.on("/energy/weekly$", handleEnergyWeekly);
+  server.on("/energy/monthly$", handleEnergyMonthly);
+  server.on("/energy/annual$", handleEnergyAnnual);
+#endif // ENABLE_TSDB
 
   // Simple Firmware Update Form
   server.on("/update$")->
     onRequest(handleUpdateRequest)->
     onUpload(handleUpdateUpload)->
     onClose(handleUpdateClose);
+
+  // In-place 16MB flash repartition (16MB module flashed with 4MB layout)
+  server.on("/migrate/expand16mb$", handleMigrateExpand16mb);
+  server.on("/migrate/status$", handleMigrateStatus);
+  server.on("/migrate/coredump$", handleMigrateCoredump);
 
   server.on("/debug$", [](MongooseHttpServerRequest *request) {
     MongooseHttpServerResponseStream *response;
@@ -1251,7 +1756,9 @@ void web_server_setup()
     request->send(response);
   });
 
-  server.on("/debug/console$")->onFrame([](MongooseHttpWebSocketConnection *connection, int flags, uint8_t *data, size_t len) {
+  server.on("/debug/console$")
+    ->onRequest(onWsAuthenticate)
+    ->onFrame([](MongooseHttpWebSocketConnection *connection, int flags, uint8_t *data, size_t len) {
   });
 
   SerialDebug.onWrite([](const uint8_t *buffer, size_t size)
@@ -1272,7 +1779,9 @@ void web_server_setup()
     request->send(response);
   });
 
-  server.on("/evse/console$")->onFrame([](MongooseHttpWebSocketConnection *connection, int flags, uint8_t *data, size_t len) {
+  server.on("/evse/console$")
+    ->onRequest(onWsAuthenticate)
+    ->onFrame([](MongooseHttpWebSocketConnection *connection, int flags, uint8_t *data, size_t len) {
   });
 
   SerialEvse.onWrite([](const uint8_t *buffer, size_t size) {
@@ -1283,6 +1792,8 @@ void web_server_setup()
   });
 
   server.on("/ws$")->
+    onRequest(onWsAuthenticate)
+    ->
     onFrame(onWsFrame)
     ->
     onConnect(onWsConnect);

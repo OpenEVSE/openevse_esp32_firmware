@@ -31,11 +31,11 @@ typedef uint32_t EvseClient;
 #define EvseClient_OpenEVSE_Schedule          EVC(EvseClient_Vendor_OpenEVSE, 0x0004)
 #define EvseClient_OpenEVSE_Limit             EVC(EvseClient_Vendor_OpenEVSE, 0x0006)
 #define EvseClient_OpenEVSE_Error             EVC(EvseClient_Vendor_OpenEVSE, 0x0007)
-#define EvseClient_OpenEVSE_Ohm               EVC(EvseClient_Vendor_OpenEVSE, 0x0008)
 #define EvseClient_OpenEVSE_OCPP              EVC(EvseClient_Vendor_OpenEVSE, 0x0009)
 #define EvseClient_OpenEVSE_RFID              EVC(EvseClient_Vendor_OpenEVSE, 0x000A)
 #define EvseClient_OpenEVSE_MQTT              EVC(EvseClient_Vendor_OpenEVSE, 0x000B)
 #define EvseClient_OpenEVSE_Shaper            EVC(EvseClient_Vendor_OpenEVSE, 0x000C)
+#define EvseClient_OpenEVSE_TempThrottle      EVC(EvseClient_Vendor_OpenEVSE, 0x000D)
 
 #define EvseClient_OpenEnergyMonitor_DemandShaper EVC(EvseClient_Vendor_OpenEnergyMonitor, 0x0001)
 
@@ -47,7 +47,10 @@ typedef uint32_t EvseClient;
 #define EvseManager_Priority_Boost     200
 #define EvseManager_Priority_API       500
 #define EvseManager_Priority_MQTT      500
-#define EvseManager_Priority_Ohm       500
+// Schedule-activated divert/shaper: must outrank the scheduler's base Timer
+// claim (100) and API pokes (500), but stay below Manual/RFID/OCPP so an
+// explicit human action can always override a timer window.
+#define EvseManager_Priority_TimerFeature 900
 #define EvseManager_Priority_Manual   1000
 #define EvseManager_Priority_RFID     1030
 #define EvseManager_Priority_OCPP     1050
@@ -58,6 +61,7 @@ typedef uint32_t EvseClient;
 #define EVSE_VEHICLE_SOC    (1 << 0)
 #define EVSE_VEHICLE_RANGE  (1 << 1)
 #define EVSE_VEHICLE_ETA    (1 << 2)
+#define EVSE_VEHICLE_CHARGE_LIMIT (1 << 3)
 
 #ifndef EVSE_MANAGER_MAX_CLIENT_CLAIMS
 #define EVSE_MANAGER_MAX_CLIENT_CLAIMS 10
@@ -213,6 +217,7 @@ class EvseManager : public MicroTasks::Task
     };
 
     RapiSender _sender;
+    OpenEVSEClass _openevse;
     EvseMonitor _monitor;
     EventLog &_eventLog;
 
@@ -242,6 +247,7 @@ class EvseManager : public MicroTasks::Task
     int _vehicleStateOfCharge;
     int _vehicleRange;
     int _vehicleEta;
+    int _vehicleChargeLimit;
 
     void initialiseEvse();
     bool findClaim(EvseClient client, Claim **claim = NULL);
@@ -274,13 +280,22 @@ class EvseManager : public MicroTasks::Task
     uint32_t getChargeCurrent(EvseClient client = EvseClient_NULL);
     uint32_t getMaxCurrent(EvseClient client = EvseClient_NULL);
 
+    // Get the client whose claim is currently setting the state/charge current,
+    // EvseClient_NULL if no active claim sets the property
+    EvseClient getStateClient() {
+      return _state_client;
+    }
+    EvseClient getChargeCurrentClient() {
+      return _charge_current_client;
+    }
+
     bool serializeClaims(DynamicJsonDocument &doc);
     bool serializeClaim(DynamicJsonDocument &doc, EvseClient client);
     bool serializeTarget(DynamicJsonDocument &doc);
 
     // Evse Status
     bool isConnected() {
-      return OpenEVSE.isConnected();
+      return _openevse.isConnected();
     }
     bool isActive() {
       return getActiveState() == EvseState::Active;
@@ -318,6 +333,9 @@ class EvseManager : public MicroTasks::Task
     }
     void setVoltage(double volts) {
       _monitor.setVoltage(volts);
+    }
+    void setMqttVoltage(double volts) {
+      _monitor.setMqttVoltage(volts);
     }
     uint32_t getSessionElapsed() {
       return _monitor.getSessionElapsed();
@@ -384,6 +402,15 @@ class EvseManager : public MicroTasks::Task
     }
     bool isTemperatureCheckEnabled() {
       return _monitor.isTemperatureCheckEnabled();
+    }
+    bool isOvercurrentMonitorEnabled() {
+      return _monitor.isOvercurrentMonitorEnabled();
+    }
+    uint32_t getPanicTemperature() {
+      return _monitor.getPanicTemperature();
+    }
+    bool isFrontButtonEnabled() {
+      return _monitor.isFrontButtonEnabled();
     }
     bool isButtonDisabled() {
       return _monitor.isButtonDisabled();
@@ -457,6 +484,58 @@ class EvseManager : public MicroTasks::Task
     void enableTemperatureCheck(bool enabled, std::function<void(int ret)> callback = NULL) {
       _monitor.enableTemperatureCheck(enabled, callback);
     }
+    void enableOvercurrentMonitor(bool enabled, std::function<void(int ret)> callback = NULL) {
+      _monitor.enableOvercurrentMonitor(enabled, callback);
+    }
+    void setPanicTemperature(uint32_t tempC, std::function<void(int ret)> callback = NULL) {
+      _monitor.setPanicTemperature(tempC, callback);
+    }
+    void enableFrontButton(bool enabled, std::function<void(int ret)> callback = NULL) {
+      _monitor.enableFrontButton(enabled, callback);
+    }
+    bool isBootLockEnabled() {
+      return _monitor.isBootLockEnabled();
+    }
+    void enableBootLock(bool enabled, std::function<void(int ret)> callback = NULL) {
+      _monitor.enableBootLock(enabled, callback);
+    }
+    uint32_t getHeartbeatInterval() {
+      return _monitor.getHeartbeatInterval();
+    }
+    uint32_t getHeartbeatCurrent() {
+      return _monitor.getHeartbeatCurrent();
+    }
+    bool isHeartbeatEnabled() {
+      return _monitor.isHeartbeatEnabled();
+    }
+    void setHeartbeatSupervision(uint32_t interval, uint32_t current, std::function<void(int ret)> callback = NULL) {
+      _monitor.setHeartbeatSupervision(interval, current, callback);
+    }
+    bool isPPAutoAmpacityEnabled() {
+      return _monitor.isPPAutoAmpacityEnabled();
+    }
+    void enablePPAutoAmpacity(bool enabled, std::function<void(int ret)> callback = NULL) {
+      _monitor.enablePPAutoAmpacity(enabled, callback);
+    }
+    bool isZeroCrossSwitchEnabled() {
+      return _monitor.isZeroCrossSwitchEnabled();
+    }
+    void enableZeroCrossSwitch(bool enabled, std::function<void(int ret)> callback = NULL) {
+      _monitor.enableZeroCrossSwitch(enabled, callback);
+    }
+    bool isDC1RelayEnabled() { return _monitor.isDC1RelayEnabled(); }
+    bool isDC2RelayEnabled() { return _monitor.isDC2RelayEnabled(); }
+    bool isACRelayEnabled()  { return _monitor.isACRelayEnabled(); }
+    bool isRelayStatusKnown() { return _monitor.isRelayStatusKnown(); }
+    void setRelayEnable(int relay, bool enabled, std::function<void(int ret)> callback = NULL) {
+      _monitor.setRelayEnable(relay, enabled, callback);
+    }
+    void resetFaultCounters(std::function<void(int ret)> callback = NULL) {
+      _monitor.resetFaultCounters(callback);
+    }
+    uint32_t getFrequency() { return _monitor.getFrequency(); }
+    const char *getChipId() { return _monitor.getChipId(); }
+    bool isD9Supported() { return _monitor.isD9Supported(); }
     void restartEvse() {
       _monitor.restart();
     }
@@ -471,6 +550,9 @@ class EvseManager : public MicroTasks::Task
     int getVehicleEta() {
       return _vehicleEta;
     }
+    int getVehicleChargeLimit() {
+      return _vehicleChargeLimit;
+    }
     uint32_t getVehicleLastUpdated() {
       return _vehicleLastUpdated;
     }
@@ -483,9 +565,13 @@ class EvseManager : public MicroTasks::Task
     int isVehicleEtaValid() {
       return 0 != (_vehicleValid & EVSE_VEHICLE_ETA);
     }
+    int isVehicleChargeLimitValid() {
+      return 0 != (_vehicleValid & EVSE_VEHICLE_CHARGE_LIMIT);
+    }
     void setVehicleStateOfCharge(int vehicleStateOfCharge);
     void setVehicleRange(int vehicleRange);
     void setVehicleEta(int vehicleEta);
+    void setVehicleChargeLimit(int vehicleChargeLimit);
 
     // Get/set the 'disabled' mode
     bool isSleepForDisable() {
@@ -504,9 +590,11 @@ class EvseManager : public MicroTasks::Task
       return _sender;
     }
 
-    // Get the OpenEVSE API
+    // Get the OpenEVSE API. Must be the instance the monitor initialised with
+    // the RAPI sender; the global OpenEVSE object is never begin()-ed so its
+    // commands are silently dropped.
     OpenEVSEClass &getOpenEVSE() {
-      return OpenEVSE;
+      return _openevse;
     }
 
     // Register for events
