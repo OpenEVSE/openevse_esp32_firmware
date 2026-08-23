@@ -54,6 +54,7 @@
 #include "temp_throttle.h"
 #include "limit.h"
 #include "diagnostics.h"
+#include "boost.h"
 
 #if defined(ENABLE_PN532)
 #include "pn532.h"
@@ -192,6 +193,9 @@ void setup()
 
   limit.begin(evse);
   DBUGF("After limit.begin: %d", ESPAL.getFreeHeap());
+
+  boost.begin(evse);
+  DBUGF("After boost.begin: %d", ESPAL.getFreeHeap());
 
   lcd.begin(evse, scheduler, manual);
   DBUGF("After lcd.begin: %d", ESPAL.getFreeHeap());
