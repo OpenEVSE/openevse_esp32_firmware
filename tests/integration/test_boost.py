@@ -5,6 +5,8 @@ Runs against the paired emulator + native firmware fixtures from conftest.py
 its ``native_url`` entry).
 """
 
+import time
+
 import pytest
 import requests
 
@@ -12,6 +14,9 @@ REQUEST_TIMEOUT = 10
 
 # EvseManager_Priority_Boost, src/evse_man.h
 BOOST_PRIORITY = 200
+
+# app_config.h enum vehicle_data_src: VEHICLE_DATA_SRC_HTTP = 3
+VEHICLE_DATA_SRC_HTTP = 3
 
 
 def boost_claims(native_url):
@@ -122,3 +127,52 @@ class TestBoostRest:
         body = requests.get(f"{native_url}/boost", timeout=REQUEST_TIMEOUT).json()
         assert body["value"] == 7 * 24 * 3600
         assert requests.delete(f"{native_url}/boost", timeout=REQUEST_TIMEOUT).status_code == 200
+
+    def test_already_met_soc_target_arms_as_a_noop(self, evse_instance):
+        """An already-met soc target must not take the claim, even for a tick.
+
+        Spec: "already met => release immediately, arm is a no-op".  The POST
+        still succeeds (201) and the version still bumps so surfaces stay in
+        step, but no boost is left active and no priority-200 claim is taken.
+
+        Kept last in the class: it pushes vehicle SoC data into the session-
+        scoped EVSE, which would break the 422 precondition above.
+        """
+        native_url = evse_instance["native_url"]
+        config_url = f"{native_url}/config"
+
+        original_src = requests.get(config_url, timeout=REQUEST_TIMEOUT).json().get("vehicle_data_src")
+        assert requests.post(
+            config_url, json={"vehicle_data_src": VEHICLE_DATA_SRC_HTTP}, timeout=REQUEST_TIMEOUT
+        ).status_code == 200
+        try:
+            assert requests.post(
+                f"{native_url}/status", json={"battery_level": 90}, timeout=REQUEST_TIMEOUT
+            ).status_code == 200
+
+            deadline = time.time() + 10
+            while time.time() < deadline:
+                status = requests.get(f"{native_url}/status", timeout=REQUEST_TIMEOUT).json()
+                if status.get("battery_level") == 90:
+                    break
+                time.sleep(0.2)
+            assert status.get("battery_level") == 90, "vehicle SoC never reached the EVSE"
+
+            before_version = status["boost_version"]
+
+            r = requests.post(
+                f"{native_url}/boost", json={"type": "soc", "value": 50}, timeout=REQUEST_TIMEOUT
+            )
+            assert r.status_code == 201, f"Expected 201, got {r.status_code}: {r.text}"
+
+            assert requests.get(f"{native_url}/boost", timeout=REQUEST_TIMEOUT).json() == {}
+            status = requests.get(f"{native_url}/status", timeout=REQUEST_TIMEOUT).json()
+            assert status["boost"] is False
+            assert status["boost_version"] != before_version
+            assert not boost_claims(native_url)
+
+            # And nothing is left to cancel.
+            assert requests.delete(f"{native_url}/boost", timeout=REQUEST_TIMEOUT).status_code == 404
+        finally:
+            if original_src is not None and original_src != VEHICLE_DATA_SRC_HTTP:
+                requests.post(config_url, json={"vehicle_data_src": original_src}, timeout=REQUEST_TIMEOUT)

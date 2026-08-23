@@ -12,7 +12,7 @@
 
 ## Global Constraints
 
-- Worktree: `/tmp/claude-1000/-home-rar-oevse-openevse-esp32-firmware/114e4db8-161f-433c-85d7-283e84f7ad8f/scratchpad/wt-boost`, branch `feature/boost` off upstream master `b7a606b1`. All paths below are relative to it. All commits authored as the default git identity (Andrew Rankin); no AI attribution anywhere.
+- Branch: `feature/boost`, cut off upstream master `b7a606b1`. Work in an isolated worktree/checkout of that branch; all paths below are relative to the repository root. All commits authored as the default git identity (Andrew Rankin); no AI attribution anywhere.
 - Claim identity: `EvseClient_OpenEVSE_Boost` / `EvseManager_Priority_Boost` (200) — **already defined** in `src/evse_man.h:30,48`; define nothing new there.
 - Boost time values are **seconds** (Limit's are minutes). Energy Wh **delta since activation**. SoC/Range **absolute** targets.
 - `BOOST_MAX_TIME_S` = `(7 * 24 * 3600)`; deadline compares must be rollover-safe (`(int32_t)(now - deadline) >= 0`).

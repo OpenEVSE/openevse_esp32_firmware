@@ -77,6 +77,41 @@ int Boost::arm(LimitType type, uint32_t value)
 
   bool replaced = isActive();
 
+  // Already-met absolute target: arming is a no-op. Taking the Active claim
+  // for the single tick it would take the loop to notice pulses the
+  // controller, so never claim at all. The vehicle data behind these reads is
+  // known valid - the 422 check above is what guarantees it.
+  if(LimitType::Soc == type || LimitType::Range == type)
+  {
+    uint32_t current = (LimitType::Soc == type)
+      ? (uint32_t)_evse->getVehicleStateOfCharge()
+      : (uint32_t)_evse->getVehicleRange();
+
+    if(ChargeThreshold::reached(type, value, 0, current))
+    {
+      DBUGF("Boost target already met: %s %u >= %u", type.toString(), current, value);
+      if(replaced) {
+        // The boost that was running really does end here.
+        endBoost("replaced");
+      }
+      // Armed-and-immediately-reached: emit the pair so every surface sees a
+      // coherent transition, but leave isActive() false and no claim behind.
+      _version++;
+      sendEvent(true, NULL);
+      _version++;
+      sendEvent(false, "reached");
+      return Boost_Armed;
+    }
+  }
+
+  if(replaced) {
+    // boost_reason belongs only on end events: a re-arm is an end
+    // ("replaced") immediately followed by a fresh arm. The claim is updated
+    // in place below rather than released, so the controller sees no gap.
+    _version++;
+    sendEvent(false, "replaced");
+  }
+
   _type = type;
   _value = value;
   _started = time(NULL);
@@ -100,9 +135,9 @@ int Boost::arm(LimitType type, uint32_t value)
   _evse->claim(EvseClient_OpenEVSE_Boost, EvseManager_Priority_Boost, props);
 
   _version++;
-  sendEvent(true, replaced ? "replaced" : NULL);
+  sendEvent(true, NULL);
 
-  // Wake the task so an already-met absolute target releases immediately.
+  // Wake the task so the first threshold check happens now, not a tick late.
   MicroTask.wakeTask(this);
 
   DBUGF("Boost armed: %s %u", _type.toString(), _value);
@@ -120,6 +155,11 @@ int Boost::arm(const char *json)
   // containsKey() but as<const char *>() then hands back NULL, and
   // LimitType::fromString() dereferences value[0] unguarded.
   if(!doc["type"].is<const char *>()) {
+    return Boost_BadRequest;
+  }
+  // "value" must be a non-negative integer: as<uint32_t>() would wrap a
+  // negative (or truncate a float/string) into a huge but "valid" target.
+  if(!doc["value"].is<uint32_t>()) {
     return Boost_BadRequest;
   }
   const char *type_str = doc["type"].as<const char *>();
@@ -185,11 +225,13 @@ void Boost::serialize(JsonDocument &doc)
   doc["type"] = _type.toString();
   doc["value"] = _value;
   doc["remaining"] = getRemaining();
-  char buf[24];
-  struct tm tm;
-  gmtime_r(&_started, &tm);
-  strftime(buf, sizeof(buf), "%Y-%m-%dT%H:%M:%SZ", &tm);
-  doc["started"] = buf;
+  if(0 != _started) {
+    char buf[24];
+    struct tm tm;
+    gmtime_r(&_started, &tm);
+    strftime(buf, sizeof(buf), "%Y-%m-%dT%H:%M:%SZ", &tm);
+    doc["started"] = buf;
+  }
 }
 
 unsigned long Boost::loop(MicroTasks::WakeReason reason)

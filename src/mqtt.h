@@ -43,7 +43,7 @@ class Mqtt : public MicroTasks::Task {
     uint8_t _overrideVersion = 0;
     uint8_t _scheduleVersion = 0;
     uint8_t _limitVersion = 0;
-    uint8_t _boostVersion;
+    uint8_t _boostVersion = 0;
     uint32_t _configVersion = 0;
 
     String _lastWill = "";

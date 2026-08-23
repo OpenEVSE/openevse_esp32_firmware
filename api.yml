@@ -712,9 +712,13 @@ paths:
         boost is active replaces it with a fresh activation snapshot. Time
         values clamp to 604800 seconds (7 days). Energy value is a Wh delta
         from the moment of activation; soc/range values are absolute targets
-        and require a vehicle data source (422 otherwise). The MQTT
-        <base>/boost event topic publishes the boolean boost + boost_version
-        on every change (+ boost_reason on end); the retained <base>/boost
+        and require a vehicle data source (422 otherwise). A soc/range target
+        that is ALREADY met arms as a no-op: 201, no claim is taken, and GET
+        /boost still returns {}. The MQTT <base>/boost event topic publishes
+        the boolean boost + boost_version on every change; boost_reason
+        ("reached", "cancelled" or "replaced") appears only on end events
+        (boost false) and never on an active one, so a replace emits the end
+        event first and then the fresh arm event. The retained <base>/boost
         state topic carries this same serialized object ({} when idle) - the
         retained remaining is a snapshot at arm/end, not a live countdown.
       responses:

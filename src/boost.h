@@ -12,7 +12,7 @@
 // Dimensions share Limit's type/value vocabulary but differ in basis:
 //   time   — wall-clock seconds from activation (Limit: session minutes)
 //   energy — Wh added since activation             (Limit: session total)
-//   soc    — absolute %  (already met => releases on the first tick)
+//   soc    — absolute %  (already met => arm is a no-op, no claim taken)
 //   range  — absolute distance (same)
 //
 // One boost at a time; re-arming replaces (fresh activation snapshot).
