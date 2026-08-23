@@ -597,7 +597,6 @@ void buildStatus(DynamicJsonDocument &doc) {
   doc["rfid_reader"] = (int) rfid.readerPresent();
 #endif
 
-  doc["ohm_hour"] = ohm_hour;
 
   doc["free_heap"] = ESPAL.getFreeHeap();
   diagnostics_status(doc);

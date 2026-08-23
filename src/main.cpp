@@ -36,7 +36,6 @@
 #include "net_manager.h"
 #include "web_server.h"
 #include "flash_migrate.h"
-#include "ohm.h"
 #include "input.h"
 #include "emoncms.h"
 #include "mqtt.h"
@@ -87,7 +86,6 @@ NetManagerTask net(lcd, ledManager, timeManager);
 
 RapiSender &rapiSender = evse.getSender();
 
-unsigned long Timer1; // Timer for events once every 30 seconds
 unsigned long Timer3; // Timer for events once every 2 seconds
 
 static uint32_t start_mem = 0;
@@ -295,27 +293,12 @@ void loop()
   // have been silent no-ops since the EvseManager refactor.  Reviving
   // import_timers() would auto-import (and clear) the controller's delay timer
   // into Charge Manager rules — a deliberate decision for a separate change,
-  // along with routing time_man/ohm/input off the dead global.
+  // along with routing time_man/input off the dead global.
 
   if(net.isConnected())
   {
     if (vehicle_data_src == VEHICLE_DATA_SRC_TESLA) {
       teslaClient.loop();
-    }
-
-    // -------------------------------------------------------------------
-    // Do these things once every 30 seconds
-    // -------------------------------------------------------------------
-    if ((millis() - Timer1) >= 30000)
-    {
-      if(!Update.isRunning())
-      {
-        if(config_ohm_enabled()) {
-          ohm_loop();
-        }
-      }
-
-      Timer1 = millis();
     }
 
     if(emoncms_updated)
