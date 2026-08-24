@@ -13,6 +13,15 @@
 
 uint8_t LimitType::fromString(const char *value)
 {
+  // Same hazard as EvseState::fromString: limit.cpp:111 passes obj["type"]
+  // straight in, which is nullptr for a missing or non-string key, so a POST
+  // to /limit carrying a non-string "type" dereferenced null and rebooted the
+  // board. Leave _value untouched, matching what already happens for an
+  // unrecognised string.
+  if(nullptr == value) {
+    return _value;
+  }
+
   // Cheat a bit and just check the first char
   switch (value[0]) {
     // None

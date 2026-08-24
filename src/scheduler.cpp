@@ -180,6 +180,7 @@ Scheduler::Scheduler(EvseManager &evse) :
   _events(),
   _firstEvent(),
   _activeEvent(),
+  _active_event_dirty(false),
   _loading(false),
   _timeChangeListener(this),
   _version(0),
@@ -239,7 +240,11 @@ unsigned long Scheduler::loop(MicroTasks::WakeReason reason)
     _activeEvent.isValid() ? _activeEvent.getEvent()->getTime().c_str() : "none",
     _activeEvent.isValid() ? _activeEvent.getEvent()->getStateText() : "none");
 
-  if(currentEvent != _activeEvent)
+  // Editing an active event updates its Event object in place, so the
+  // EventInstance identity remains equal even when its current, feature or
+  // limit changed. Re-apply that event so its runtime claim follows the saved
+  // schedule immediately.
+  if(currentEvent != _activeEvent || _active_event_dirty)
   {
     DBUG("New event: ");
 
@@ -291,6 +296,7 @@ unsigned long Scheduler::loop(MicroTasks::WakeReason reason)
     }
 
     _activeEvent = currentEvent;
+    _active_event_dirty = false;
 
     StaticJsonDocument<128> doc;
     doc["schedule_plan_version"] = ++_plan_version;
@@ -537,6 +543,9 @@ Scheduler::Event *Scheduler::addEventInternal(uint32_t event_id, const char *tim
 
   if(foundEvent)
   {
+    const bool active_event_updated = _activeEvent.isValid() &&
+      _activeEvent.getEvent() == event;
+
     event->setId(event_id);
     event->setTime(time);
     event->setState(state);
@@ -546,6 +555,9 @@ Scheduler::Event *Scheduler::addEventInternal(uint32_t event_id, const char *tim
     event->setFeatureValue(0);
     event->setLimitType(SchedulerLimitType::None);
     event->setLimitValue(0);
+    if(active_event_updated) {
+      _active_event_dirty = true;
+    }
     return event;
   }
 
@@ -572,6 +584,9 @@ bool Scheduler::addEvent(uint32_t event_id, int hour, int minute, int second, ui
 
   if(foundEvent)
   {
+    const bool active_event_updated = _activeEvent.isValid() &&
+      _activeEvent.getEvent() == event;
+
     event->setId(event_id);
     event->setHours(hour);
     event->setMinutes(minute);
@@ -579,6 +594,10 @@ bool Scheduler::addEvent(uint32_t event_id, int hour, int minute, int second, ui
     event->setState(state);
 
     event->setDays(days);
+
+    if(active_event_updated) {
+      _active_event_dirty = true;
+    }
 
     commit();
 

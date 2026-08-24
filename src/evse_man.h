@@ -237,8 +237,6 @@ class EvseManager : public MicroTasks::Task
     EvseClient _charge_current_client;
     EvseClient _max_current_client;
 
-    bool _sleepForDisable;
-
     bool _evaluateClaims;
     bool _evaluateTargetState;
 
@@ -265,6 +263,10 @@ class EvseManager : public MicroTasks::Task
     void setup();
     unsigned long loop(MicroTasks::WakeReason reason);
 
+    // Whether a pause should use the controller's SLEEPING state rather than
+    // DISABLED. Derived from config on each use -- see the definition.
+    bool sleepForDisable();
+
   public:
     EvseManager(Stream &port, EventLog &eventLog);
     ~EvseManager();
@@ -286,6 +288,9 @@ class EvseManager : public MicroTasks::Task
     EvseClient getStateClient() {
       return _state_client;
     }
+    // Which claim won the charge-current arbitration, or EvseClient_NULL when no
+    // claim is active and the configured default applies. Lets a UI answer "why
+    // am I limited to 12 A?" rather than just reporting the number.
     EvseClient getChargeCurrentClient() {
       return _charge_current_client;
     }
@@ -576,7 +581,7 @@ class EvseManager : public MicroTasks::Task
 
     // Get/set the 'disabled' mode
     bool isSleepForDisable() {
-      return _sleepForDisable;
+      return sleepForDisable();
     }
     void setSleepForDisable(bool sleepForDisable);
 
