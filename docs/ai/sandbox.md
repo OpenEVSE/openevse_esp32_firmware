@@ -119,6 +119,15 @@ should stay off.
 - **Read denials for on-disk secrets** (`permissions.deny`) — the built-in Read/Edit
   tools are *not* covered by the Bash sandbox, so `*.pem` (OTA signing keys), `.env`
   files, and `.vscode/settings.json` (holds test Wi-Fi creds) are denied directly.
+- **Bounded-depth deny globs, deliberately** — the secret denials use explicit
+  `./*/`, `./*/*/` levels rather than a recursive `./**/`. Path patterns are resolved
+  against the real tree, and that resolution follows symlinks. `lib/` symlinks point at
+  sibling checkouts (`../../ArduinoMongoose` etc.) whose `examples/*/lib/` directories
+  symlink *back* to their own root, forming cycles. A recursive `**` walk never
+  terminates on that shape — it generates paths until the process is OOM-killed (observed:
+  ~20 GB RSS in the V3.x tree, which has these `lib/` symlinks). Every real secret lives
+  at depth ≤ 3, so bounding the depth costs no coverage. **Do not change these back to
+  `**`.**
 - **Prompts on network-mutating actions** (`permissions.ask`) — `git push` and the
   device OTA flash (`curl ... /update`) still surface a confirmation even in auto-allow.
 - **docker escape hatch** (`sandbox.excludedCommands`) — `docker` is incompatible with

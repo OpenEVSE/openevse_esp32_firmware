@@ -47,11 +47,14 @@
     ],
     "deny": [
       "Read(./*.pem)",
-      "Read(./**/*.pem)",
+      "Read(./*/*.pem)",
+      "Read(./*/*/*.pem)",
       "Read(./.env)",
       "Read(./.env.local)",
-      "Read(./**/.env)",
-      "Read(./**/.env.local)",
+      "Read(./*/.env)",
+      "Read(./*/.env.local)",
+      "Read(./*/*/.env)",
+      "Read(./*/*/.env.local)",
       "Read(./.vscode/settings.json)",
       "Read(./.vscode/settings.local.json)"
     ],
