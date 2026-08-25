@@ -3734,3 +3734,10 @@ CONFIG_ESPTOOLPY_FLASHSIZE="16MB"
 # CONFIG_PARTITION_TABLE_* values in the seed are inert. Leaving them alone
 # keeps the per-env CSV choice in platformio.ini where it belongs.
 #
+
+# Bluetooth: compiled in by the Arduino seed but never used by this firmware
+# (nothing in src/ references BT/BLE, and esp_bt_controller_mem_release is
+# never called, so the controller's DRAM was simply wasted). With IDF built
+# from source we can drop the whole stack. Last-value-wins overrides the
+# seed's CONFIG_BT_ENABLED=y above.
+CONFIG_BT_ENABLED=n
