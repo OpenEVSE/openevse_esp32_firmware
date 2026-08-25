@@ -30,7 +30,15 @@ Kconfig-resolved input instead of the current `custom_sdkconfig` shim.
    main reason the AWS-IoT TLS build is not upstreamable today.
 3. **Kconfig dependency resolution.** In the shim, options whose `depends on`
    is unsatisfied vanish silently (e.g. `MBEDTLS_DYNAMIC_BUFFER` vs DTLS) and
-   nonexistent options are accepted. Real Kconfig rejects/reports both.
+   nonexistent options are accepted. Real Kconfig fixes the first case — an
+   existing symbol's dependencies are resolved for real, whatever it `select`s
+   comes along automatically, and the outcome is visible in the generated
+   `sdkconfig.<env>`. It does **not** fix the second: *(negative-tested
+   2026-08-25 — nonexistent symbols still drop silently; adding
+   `CONFIG_MBEDTLS_DYNAMIC_FREE_PEER_CERT=y`, which does not exist in IDF
+   5.5.4, built SUCCESS with no warning anywhere in the log.)* Verify an
+   option landed by grepping the generated `sdkconfig.<env>`, never by a
+   zero exit code.
 4. **RAM knobs (measure now, flip later).** From-source IDF unlocks options
    the prebuilt config locks: `CONFIG_BT_ENABLED=y` (4,749 B DRAM .bss in BT
    symbols, no `esp_bt_controller_mem_release` caller — verify at runtime
