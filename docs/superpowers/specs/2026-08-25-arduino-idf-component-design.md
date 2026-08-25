@@ -62,10 +62,12 @@ is an allocation-pattern problem; no sdkconfig value touches it.
 
 ## Scope
 
-**Migrate (all seven core-3 envs):**
-`openevse_wifi_tft_v1`, `openevse_wifi_tft_v1_dev`, `openevse_wifi_v1_16mb`,
-`openevse_wifi_v1_16mb_fake`, `openevse_s3_lcd4`, `openevse_s3_lcd43b`,
-`openevse_p4`.
+**Migrate:** every core-3 env present on the implementation branch (off
+`master`): `openevse_wifi_tft_v1`, `openevse_wifi_tft_v1_dev`,
+`openevse_wifi_v1_16mb`. The remaining core-3 envs
+(`openevse_wifi_v1_16mb_fake`, `openevse_s3_lcd4`, `openevse_s3_lcd43b`,
+`openevse_p4`) live on other fork branches and adopt the same shared
+pattern when they rebase onto this work.
 
 **Untouched:** every core-2 (espressif32@6.12.0) 4MB env, `native`,
 partition tables, board manifests, all application source.
