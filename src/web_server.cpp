@@ -541,6 +541,43 @@ static String html_escape(const String &input) {
 // stops adding members.
 #define STATUS_JSON_CAPACITY (JSON_OBJECT_SIZE(128) + 2048)
 
+// LittleFS.totalBytes() and LittleFS.usedBytes() each run lfs_fs_size(), a
+// full traversal of every metadata pair and data block in the filesystem,
+// reading flash with the FS lock held. Arduino's wrapper discards whichever
+// half of esp_littlefs_info() you did not ask for, so reporting both numbers
+// cost three traversals per request.
+//
+// That made /status the most expensive poll on the device, and expensive in
+// proportion to how full the filesystem is: measured on hardware, a trivial
+// JSON endpoint answers in 11ms while /status took 94ms on a box with 57KB
+// used and 143ms on one with 237KB used. The TSDB store grows, so the cost
+// grows with it. With evcc and the Home Assistant integration polling, the
+// main loop was stalled on flash reads several percent of the time -- and
+// nothing drains the network stack while it is.
+//
+// These two numbers only move when something writes, so sample them on a
+// timer rather than per request.
+#define LFS_STATUS_SAMPLE_MS 30000
+
+static void status_littlefs_usage(uint32_t &free_bytes, uint32_t &used_bytes)
+{
+  static uint32_t sampled_at = 0;
+  static uint32_t cached_free = 0;
+  static uint32_t cached_used = 0;
+
+  uint32_t now = millis();
+  if(0 == sampled_at || (now - sampled_at) >= LFS_STATUS_SAMPLE_MS)
+  {
+    size_t total = LittleFS.totalBytes();
+    cached_used = (uint32_t)LittleFS.usedBytes();
+    cached_free = (uint32_t)(total - cached_used);
+    sampled_at = now;
+  }
+
+  free_bytes = cached_free;
+  used_bytes = cached_used;
+}
+
 void buildStatus(DynamicJsonDocument &doc) {
 
   // Get the current time
@@ -600,8 +637,12 @@ void buildStatus(DynamicJsonDocument &doc) {
 
   doc["free_heap"] = ESPAL.getFreeHeap();
   diagnostics_status(doc);
-  doc["littlefs_free"] = (uint32_t)(LittleFS.totalBytes() - LittleFS.usedBytes());
-  doc["littlefs_used"] = (uint32_t)LittleFS.usedBytes();
+  {
+    uint32_t lfs_free, lfs_used;
+    status_littlefs_usage(lfs_free, lfs_used);
+    doc["littlefs_free"] = lfs_free;
+    doc["littlefs_used"] = lfs_used;
+  }
 
   doc["comm_sent"] = rapiSender.getSent();
   doc["comm_success"] = rapiSender.getSuccess();
