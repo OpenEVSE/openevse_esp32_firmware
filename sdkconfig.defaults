@@ -3741,3 +3741,19 @@ CONFIG_ESPTOOLPY_FLASHSIZE="16MB"
 # from source we can drop the whole stack. Last-value-wins overrides the
 # seed's CONFIG_BT_ENABLED=y above.
 CONFIG_BT_ENABLED=n
+
+# PSRAM: neither the TFT (denky32/WROOM) nor the 16MB WROOM board has PSRAM;
+# drop the probe and support structures. (Seed had CONFIG_SPIRAM=y.)
+CONFIG_SPIRAM=n
+
+# WiFi buffers: static RX 8->6 (~1.6K DRAM each) and dynamic RX/TX caps 32->16.
+# Costs burst throughput only; this workload is small JSON/MQTT frames.
+CONFIG_ESP_WIFI_STATIC_RX_BUFFER_NUM=6
+CONFIG_ESP_WIFI_DYNAMIC_RX_BUFFER_NUM=16
+CONFIG_ESP_WIFI_DYNAMIC_TX_BUFFER_NUM=16
+
+# Allow esp_flash writes to the bootloader/partition-table regions: enables the
+# in-place 4MB->16MB repartition OTA path (see upstream PR #1136 discussion —
+# the ESPHome-proven mechanism). Guarded at runtime by whoever calls it; no
+# behavior change for normal operation.
+CONFIG_SPI_FLASH_DANGEROUS_WRITE_ALLOWED=y
