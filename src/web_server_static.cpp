@@ -10,6 +10,7 @@
 #include "app_config.h"
 #include "net_manager.h"
 #include "embedded_files.h"
+#include "http_etag.h"
 
 extern bool enableCors; // defined in web_server.cpp
 
@@ -61,11 +62,37 @@ bool web_static_handle(MongooseHttpServerRequest *request)
   {
     MongooseHttpServerResponseBasic *response = request->beginResponse();
 
-    response->addHeader(F("Cache-Control"), F("public, max-age=30, must-revalidate"));
+    // Vite content-hashes everything under /assets/, so those URLs are
+    // immutable by construction: a changed file gets a changed name. Telling
+    // the browser so removes the revalidation round trip entirely. index.html
+    // is NOT hashed -- it is what points at the current asset names -- so it
+    // gets a day lifetime instead: iOS 17 WebKit turns same-document #hash
+    // taps into full page reloads whenever the shell is cache-stale against a
+    // slow server (and this server is always slow), so the shell must stay
+    // fresh. The ETag/304 path below still lets an explicit browser refresh
+    // pick up a new build immediately.
+    bool immutable = 0 == strncmp(file->filename, "/assets/", 8);
+    response->addHeader(F("Cache-Control"),
+                        immutable ? F("public, max-age=31536000, immutable")
+                                  : F("public, max-age=86400"));
 
     MongooseString ifNoneMatch = request->headers("If-None-Match");
-    if(ifNoneMatch.equals(file->etag)) {
-      request->send(304);
+    if(http_etag_matches(ifNoneMatch.c_str(), ifNoneMatch.length(), file->etag)) {
+      // A 304's headers are what renew the cached entry's freshness lifetime
+      // (RFC 9111 s4.3.4). A bare 304 leaves the stored copy stale forever:
+      // max-age=86400 protects the shell for exactly one day after the last
+      // full 200, then iOS 17's stale-shell renavigation bug returns and no
+      // number of successful revalidations ever clears it. So send the 304
+      // through the response object carrying Cache-Control, plus the quoted
+      // ETag (RFC 7232 s4.1). Explicit zero length: the default -1 would
+      // serialize as Transfer-Encoding: chunked with no terminating chunk.
+      response->setCode(304);
+      response->setContentLength(0);
+      char etag[HTTP_ETAG_QUOTED_MAX];
+      if(http_etag_quote(file->etag, etag, sizeof(etag))) {
+        response->addHeader("Etag", etag);
+      }
+      request->send(response);
       return true;
     }
 
@@ -80,7 +107,13 @@ bool web_static_handle(MongooseHttpServerRequest *request)
       response->addHeader(F("Content-Encoding"), F("gzip"));
     }
 
-    response->addHeader("Etag", file->etag);
+    // Quoted, per RFC 7232. Sending a bare tag is what broke this: browsers
+    // store it, hand it back quoted in If-None-Match, and the old exact-match
+    // compare above never fired -- so every page load re-sent the whole bundle.
+    char etag[HTTP_ETAG_QUOTED_MAX];
+    if(http_etag_quote(file->etag, etag, sizeof(etag))) {
+      response->addHeader("Etag", etag);
+    }
     response->setContent((const uint8_t *)file->data, file->length);
 
     request->send(response);

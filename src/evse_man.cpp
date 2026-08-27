@@ -126,7 +126,6 @@ EvseManager::EvseManager(Stream &port, EventLog &eventLog) :
   _settingsChangedListener(this),
   _targetProperties(EvseState::Active),
   _hasClaims(false),
-  _sleepForDisable(true),
   _evaluateClaims(true),
   _evaluateTargetState(false),
   _vehicleValid(0),
@@ -256,7 +255,7 @@ bool EvseManager::setTargetState(EvseProperties &target)
     }
     else
     {
-      if(_sleepForDisable) {
+      if(sleepForDisable()) {
         DBUGLN("EVSE: sleep");
         _monitor.sleep();
       } else {
@@ -297,21 +296,45 @@ bool EvseManager::setTargetState(EvseProperties &target)
   return changeMade;
 }
 
+// Derived from config on every use rather than cached.
+//
+// The previous cached copy was only ever written from the config-change
+// handler, never at boot, so it kept the constructor default until some
+// unrelated flags key happened to be written. A value latched at the wrong
+// moment then stuck for the life of the boot, and pauses went to DISABLED when
+// the config asked for SLEEPING.
+//
+// That distinction is not cosmetic. J1772EVSEController::Disable() drives the
+// pilot to N12 while Sleep() holds it at P12, and the controller cannot detect
+// plug/unplug at N12 -- it leaves ECVF_EV_CONNECTED at whatever it was when the
+// pause began. So the wrong branch here freezes `vehicle` in /status until the
+// EVSE next wakes.
+bool EvseManager::sleepForDisable()
+{
+  return !config_pause_uses_disabled();
+}
+
 void EvseManager::setSleepForDisable(bool sleepForDisable)
 {
-  if(_sleepForDisable != sleepForDisable)
-  {
-    _sleepForDisable = sleepForDisable;
-    if(EvseState::Disabled == getActiveState())
-    {
-      if(_sleepForDisable) {
-        DBUGLN("EVSE: sleep");
-        _monitor.sleep();
-      } else {
-        DBUGLN("EVSE: disable");
-        _monitor.disable();
-      }
-    }
+  // config is the source of truth now; this only re-applies the choice to a
+  // pause that is already in progress.
+  if(EvseState::Disabled != getActiveState()) {
+    return;
+  }
+
+  // The config-change handler fires for every flags key, not just this one, so
+  // check the controller's actual state rather than re-issuing each time.
+  uint8_t want = sleepForDisable ? OPENEVSE_STATE_SLEEPING : OPENEVSE_STATE_DISABLED;
+  if(want == _monitor.getEvseState()) {
+    return;
+  }
+
+  if(sleepForDisable) {
+    DBUGLN("EVSE: sleep");
+    _monitor.sleep();
+  } else {
+    DBUGLN("EVSE: disable");
+    _monitor.disable();
   }
 }
 
