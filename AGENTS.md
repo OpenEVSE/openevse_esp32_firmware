@@ -53,6 +53,7 @@ scripts/openevse_test.sh all                  # unit + divert + gui
 scripts/openevse_test.sh native -n 2          # 2 firmware instances, status dump
 scripts/openevse_test.sh native -- curl -s "$EVSE_URL/status"
 scripts/openevse_test.sh integration          # emulator-backed pytest (needs docker)
+scripts/openevse_test.sh launch -i 1          # one long-lived emulator + firmware pair
 ```
 
 Each sandboxed Bash call gets its **own network namespace**, so a server started
@@ -60,6 +61,15 @@ in one command is unreachable from the next. The wrapper therefore starts,
 uses, and tears down everything inside a single invocation — pass what you want
 to run after `--`, and read the instance URLs from `$EVSE_URL` / `$EVSE_URL_<i>`.
 `emulator` and `integration` need Docker and so run outside the sandbox.
+
+`launch` is for humans and REST clients: it brings up a single pair for one
+instance ID (ports, chip ID, hostname and working directory all derived from the
+ID, all individually overridable) and stays in the foreground until Ctrl-C, so a
+REST client such as `test/*.http` can drive it. The emulator comes from the
+Docker image by default; `--local` runs it from a source checkout and
+`--no-emulator` gives a firmware-only instance that works inside the sandbox.
+The firmware console is mirrored to the terminal (`[fw<i>] …`) and the emulator
+console is not — `--[no-]firmware-console` / `--[no-]emulator-console` flip either.
 
 ## Validation gate — run after ANY change
 

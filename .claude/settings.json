@@ -125,6 +125,7 @@
     "excludedCommands": [
       "docker *",
       "*openevse_test.sh emulator*",
+      "*openevse_test.sh launch*",
       "*openevse_test.sh integration*",
       "*pytest tests/integration*"
     ]
