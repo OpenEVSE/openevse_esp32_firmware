@@ -114,3 +114,6 @@ tests/integration/output/test_results.xml
 .superpowers/
 divert_sim/data/scenarios/interactive_generated.json
 divert_sim/output/interactive.json
+
+# CodeQL
+_codeql_detected_source_root
