@@ -11,26 +11,6 @@
 #include "http_update.h"
 
 
-// -------------------------------------------------------------------
-// Update firmware
-// url: /update
-// -------------------------------------------------------------------
-static void handleUpdateGet(MongooseHttpServerRequest *request)
-{
-  MongooseHttpServerResponseStream *response;
-  if(false == requestPreProcess(request, response, CONTENT_TYPE_HTML)) {
-    return;
-  }
-
-  response->setCode(200);
-  response->print(
-    F("<html><form method='POST' action='/update' enctype='multipart/form-data'>"
-        "<input type='file' name='firmware'> "
-        "<input type='submit' value='Update'>"
-      "</form></html>"));
-  request->send(response);
-}
-
 static MongooseHttpServerResponseStream *upgradeResponse = NULL;
 // Update.isFinished() is true while idle (0 bytes of 0), so remember the
 // multipart request that actually completed instead.
@@ -97,7 +77,12 @@ void handleUpdateRequest(MongooseHttpServerRequest *request)
 {
   if(HTTP_GET == request->method())
   {
-    handleUpdateGet(request);
+    // This used to serve a bare multipart upload form. It had no way to work
+    // for a browser authenticated by the session cookie -- the CSRF guard in
+    // requestPreProcess() requires the X-Requested-With header on non-GET
+    // requests, and a plain HTML form cannot set one. Uploading is the web
+    // app's job; machine clients POST here directly.
+    request->send(405, CONTENT_TYPE_TEXT, "POST firmware to this endpoint");
   }
   else if(HTTP_POST == request->method())
   {

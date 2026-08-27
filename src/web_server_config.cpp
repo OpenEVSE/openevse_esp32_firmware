@@ -23,13 +23,23 @@ extern bool web_server_config_deserialise(DynamicJsonDocument &doc, bool factory
 void
 handleConfigGet(MongooseHttpServerRequest *request, MongooseHttpServerResponseStream *response)
 {
-  const size_t capacity = JSON_OBJECT_SIZE(128) + 1024;
-  DynamicJsonDocument doc(capacity);
+  // Allocated once and reused -- same reasoning as handleStatus. Measured on
+  // hardware, sustained polling of /config drove the largest allocatable block
+  // from 53,236 down to 32,756 and it did not recover, while total free heap
+  // stayed above 70KB. Safe as a static because handlers run to completion on
+  // the single task that polls Mongoose.
+  static DynamicJsonDocument doc(JSON_OBJECT_SIZE(128) + 1024);
+  doc.clear();
 
   config_serialize(doc, true, false, true);
 
   response->setCode(200);
-  serializeJson(doc, *response);
+  // One exact-sized buffer and a single write -- see handleStatus for why
+  // incremental writes into the response stream fragment the heap.
+  String json;
+  json.reserve(measureJson(doc) + 1);
+  serializeJson(doc, json);
+  response->write((const uint8_t *)json.c_str(), json.length());
 }
 
 void

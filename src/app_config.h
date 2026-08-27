@@ -166,11 +166,12 @@ extern uint32_t flags;
 #define CONFIG_DEFAULT_STATE        (1 << 26)
 #define CONFIG_TEMP_THROTTLE        (1 << 27)
 #define CONFIG_LCD_NETWORK_INFO     (1 << 28)
-// Bits 29/30: the Mongoose 7 HTTPS work. Bit 28 belongs to master's
-// CONFIG_LCD_NETWORK_INFO, which shipped first and is already persisted in
-// users' saved config, so these move up rather than collide with it.
-#define CONFIG_HTTP_ENABLED         (1 << 29)
-#define CONFIG_HTTPS_ENABLED        (1 << 30) // next free bit after CONFIG_HTTPS_ENABLED
+// Inverted sense: bit SET disables the $SYS/broker/version probe. Existing
+// installs have this bit clear, so they keep probing exactly as before.
+#define CONFIG_MQTT_NO_SYS_QUERY    (1UL << 29)
+// Bits 30/31: the Mongoose 7 HTTP/HTTPS listener controls.
+#define CONFIG_HTTP_ENABLED         (1UL << 30)
+#define CONFIG_HTTPS_ENABLED        (1UL << 31)
 
 #define INITIAL_CONFIG_VERSION  1
 
@@ -200,6 +201,13 @@ inline uint8_t config_mqtt_protocol() {
 
 inline bool config_mqtt_retained() {
   return CONFIG_MQTT_RETAINED == (flags & CONFIG_MQTT_RETAINED);
+}
+
+// Query broker metadata via $SYS/broker/version. Must be off for managed
+// brokers (AWS IoT Core): they have no $SYS tree and answer an unauthorised
+// subscribe by closing the connection rather than failing the SUBACK.
+inline bool config_mqtt_sys_query() {
+  return 0 == (flags & CONFIG_MQTT_NO_SYS_QUERY);
 }
 
 inline bool config_mqtt_reject_unauthorized() {

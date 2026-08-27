@@ -3,6 +3,7 @@
 #endif
 
 #include <Arduino.h>
+#include <errno.h>
 
 typedef const __FlashStringHelper *fstr_t;
 
@@ -64,13 +65,39 @@ void handleCertificatesGenerateSelfSigned(MongooseHttpServerRequest *request, Mo
 // -------------------------------------------------------------------
 void handleCertificatesGet(MongooseHttpServerRequest *request, MongooseHttpServerResponseStream *response, uint64_t certificate)
 {
-  DynamicJsonDocument doc(4 * CERTIFICATE_JSON_BUFFER_SIZE);
+  if(UINT64_MAX == certificate)
+  {
+    // Emit the array one certificate at a time. Building it in a single
+    // document required a buffer sized for every PEM body at once — 32KB here
+    // — which is larger than the biggest contiguous block this board can
+    // reliably allocate, so the request would fail rather than merely cost a
+    // lot. Peak allocation is now one certificate.
+    response->setCode(200);
+    response->print("[");
 
-  bool success = (UINT64_MAX == certificate) ?
-    certs.serializeCertificates(doc) :
-    certs.serializeCertificate(doc, certificate);
+    size_t count = certs.certificateCount();
+    size_t emitted = 0;
+    for(size_t i = 0; i < count; i++)
+    {
+      DynamicJsonDocument doc(CERTIFICATE_JSON_BUFFER_SIZE);
+      if(!certs.serializeCertificateAt(doc, i)) {
+        continue;
+      }
+      // Count what was actually written, not the loop index: a skipped entry
+      // would otherwise put a leading comma in front of the first element.
+      if(emitted > 0) {
+        response->print(",");
+      }
+      serializeJson(doc, *response);
+      emitted++;
+    }
 
-  if(success) {
+    response->print("]");
+    return;
+  }
+
+  DynamicJsonDocument doc(CERTIFICATE_JSON_BUFFER_SIZE);
+  if(certs.serializeCertificate(doc, certificate)) {
     response->setCode(200);
     serializeJson(doc, *response);
   } else {
@@ -169,7 +196,21 @@ void handleCertificates(MongooseHttpServerRequest *request)
         response->print("{\"msg\":\"Method not allowed\"}");
       }
     } else {
-      certificate = std::stoull(clientStr.c_str(), nullptr, 16);
+      // std::stoull throws on a non-hex path segment, and nothing here catches
+      // it, so GET /certificates/zz aborted and rebooted the board. strtoull
+      // reports failure through the end pointer instead; reject anything that
+      // is not a complete hex id.
+      const char *idStr = clientStr.c_str();
+      char *end = nullptr;
+      errno = 0;
+      unsigned long long parsed = strtoull(idStr, &end, 16);
+      if(end == idStr || '\0' != *end || ERANGE == errno) {
+        response->setCode(404);
+        response->print("{\"msg\":\"Not found\"}");
+        request->send(response);
+        return;
+      }
+      certificate = (uint64_t)parsed;
     }
   }
 
