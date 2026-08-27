@@ -327,6 +327,7 @@ ConfigOpt *opts[] =
   new ConfigOptVirtualMaskedBool(flagsOpt, flagsChanged, CONFIG_SERVICE_MQTT, CONFIG_SERVICE_MQTT, "mqtt_enabled", "me"),
   new ConfigOptVirtualMaskedBool(flagsOpt, flagsChanged, CONFIG_MQTT_ALLOW_ANY_CERT, 0, "mqtt_reject_unauthorized", "mru"),
   new ConfigOptVirtualMaskedBool(flagsOpt, flagsChanged, CONFIG_MQTT_RETAINED, CONFIG_MQTT_RETAINED, "mqtt_retained", "mrt"),
+  new ConfigOptVirtualMaskedBool(flagsOpt, flagsChanged, CONFIG_MQTT_NO_SYS_QUERY, 0, "mqtt_sys_query", "msq"),
   new ConfigOptVirtualMaskedBool(flagsOpt, flagsChanged, CONFIG_SERVICE_SNTP, CONFIG_SERVICE_SNTP, "sntp_enabled", "se"),
   new ConfigOptVirtualMaskedBool(flagsOpt, flagsChanged, CONFIG_SERVICE_TESLA, CONFIG_SERVICE_TESLA, "tesla_enabled", "te"),
   new ConfigOptVirtualMaskedBool(flagsOpt, flagsChanged, CONFIG_SERVICE_DIVERT, CONFIG_SERVICE_DIVERT, "divert_enabled", "de"),
