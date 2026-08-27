@@ -182,7 +182,10 @@ extern uint32_t flags;
 #define CONFIG_WIZARD               (1 << 25)
 #define CONFIG_DEFAULT_STATE        (1 << 26)
 #define CONFIG_TEMP_THROTTLE        (1 << 27)
-#define CONFIG_LCD_NETWORK_INFO     (1 << 28) // next free bit after CONFIG_LCD_NETWORK_INFO
+#define CONFIG_LCD_NETWORK_INFO     (1 << 28)
+// Inverted sense: bit SET disables the $SYS/broker/version probe. Existing
+// installs have this bit clear, so they keep probing exactly as before.
+#define CONFIG_MQTT_NO_SYS_QUERY    (1 << 29) // next free bit after CONFIG_MQTT_NO_SYS_QUERY
 
 #define INITIAL_CONFIG_VERSION  1
 
@@ -204,6 +207,13 @@ inline uint8_t config_mqtt_protocol() {
 
 inline bool config_mqtt_retained() {
   return CONFIG_MQTT_RETAINED == (flags & CONFIG_MQTT_RETAINED);
+}
+
+// Query broker metadata via $SYS/broker/version. Must be off for managed
+// brokers (AWS IoT Core): they have no $SYS tree and answer an unauthorised
+// subscribe by closing the connection rather than failing the SUBACK.
+inline bool config_mqtt_sys_query() {
+  return 0 == (flags & CONFIG_MQTT_NO_SYS_QUERY);
 }
 
 inline bool config_mqtt_reject_unauthorized() {
