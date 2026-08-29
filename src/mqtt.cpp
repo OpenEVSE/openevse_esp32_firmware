@@ -344,8 +344,16 @@ void Mqtt::subscribeTopics() {
   _mqttclient.subscribe(mqtt_topic + "/config/set"); yield();
   _mqttclient.subscribe(mqtt_topic + "/restart"); yield();
 
-  // Broker metadata — most brokers publish this as a retained message
-  _mqttclient.subscribe("$SYS/broker/version"); yield();
+  // Broker metadata — most brokers publish this as a retained message.
+  //
+  // Off for managed brokers (AWS IoT Core): they have no $SYS tree and answer a
+  // subscribe to an unauthorised topic by closing the connection, not by failing
+  // the SUBACK. So this cannot be "try it and tolerate the failure" — probing
+  // kills the session and the client reconnects straight back into the same
+  // probe. _brokerVersion stays "", which is exactly what it means: unknown.
+  if (config_mqtt_sys_query()) {
+    _mqttclient.subscribe("$SYS/broker/version"); yield();
+  }
 
   DBUGLN("MQTT Subscriptions complete");
 }

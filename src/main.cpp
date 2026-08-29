@@ -282,6 +282,10 @@ void loop()
   Mongoose.poll(0);
   Profile_End(Mongoose, 10);
 
+  // Follow HTTP OTA redirects only after Mongoose.poll() has destroyed the
+  // previous TLS connection, avoiding two simultaneous TLS contexts.
+  http_update_loop();
+
   web_server_loop();
   diagnostics_loop();
   flash_migrate_loop();
