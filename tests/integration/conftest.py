@@ -391,6 +391,14 @@ def reset_evse_state(evse_instance, evse_baseline_config):
     except requests.RequestException:
         pass
 
+    # Clear any boost left behind by the test (e.g. a mid-test assert failure
+    # after arming).  An active boost holds a priority-200 Active claim that
+    # would otherwise pollute every later test.  404 = already idle, ignore.
+    try:
+        requests.delete(f"{native_url}/boost", timeout=5)
+    except requests.RequestException:
+        pass
+
     # Restore mutated config fields to their baseline values, but only if they
     # changed (avoids unnecessary writes that the firmware may coalesce).
     baseline_current = evse_baseline_config.get("max_current_soft")

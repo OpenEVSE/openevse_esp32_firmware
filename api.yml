@@ -668,6 +668,134 @@ paths:
       operationId: limit_clear
       tags:
         - Limit
+  /boost:
+    get:
+      summary: Get the active boost
+      description: >
+        Returns the active boost (type, value, remaining, started), or an
+        empty object when no boost is active. The idle 200+{} response
+        doubles as the capability probe: older firmware has no clean 404 for
+        this path, so clients should treat any non-200-JSON response as
+        unsupported rather than relying on a 404.
+      responses:
+        '200':
+          description: Active boost, or {} when idle
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  type:
+                    type: string
+                    enum: [time, energy, soc, range]
+                  value:
+                    type: integer
+                    description: >
+                      time: seconds (NOT minutes, unlike /limit); energy: Wh
+                      added since activation; soc: absolute percent; range:
+                      absolute distance
+                  remaining:
+                    type: integer
+                    description: Remaining amount in the dimension's unit (ceil)
+                  started:
+                    type: string
+                    format: date-time
+      operationId: boost_get
+      tags:
+        - Boost
+    post:
+      summary: Arm (or replace) a boost
+      description: >
+        Boost charges NOW - an Active claim at priority 200 (above Divert and
+        the Scheduler, below Manual and Limit) - until the target is reached,
+        then releases so the previous controller resumes. Re-POSTing while a
+        boost is active replaces it with a fresh activation snapshot. Time
+        values clamp to 604800 seconds (7 days). Energy value is a Wh delta
+        from the moment of activation; soc/range values are absolute targets
+        and require a vehicle data source (422 otherwise). A soc/range target
+        that is ALREADY met arms as a no-op: 201, no claim is taken, and GET
+        /boost still returns {}. The MQTT <base>/boost event topic publishes
+        the boolean boost + boost_version on every change; boost_reason
+        ("reached", "cancelled" or "replaced") appears only on end events
+        (boost false) and never on an active one, so a replace emits the end
+        event first and then the fresh arm event. The retained <base>/boost
+        state topic carries this same serialized object ({} when idle) - the
+        retained remaining is a snapshot at arm/end, not a live countdown.
+      responses:
+        '201':
+          description: Boost armed
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  msg:
+                    type: string
+                    description: created
+        '400':
+          description: Malformed body, unknown type, or zero value
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  msg:
+                    type: string
+                    description: Failed to parse JSON
+        '422':
+          description: soc/range boost without a vehicle data source
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  msg:
+                    type: string
+                    description: No vehicle data available
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [type, value]
+              properties:
+                type:
+                  type: string
+                  enum: [time, energy, soc, range]
+                value:
+                  type: integer
+                  minimum: 1
+      operationId: boost_set
+      tags:
+        - Boost
+    delete:
+      summary: Cancel the active boost
+      description: This will clear the active boost, if any
+      responses:
+        '200':
+          description: Boost cancelled
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  msg:
+                    type: string
+                    description: Deleted
+        '404':
+          description: No boost active
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  msg:
+                    type: string
+                    description: No boost to clear
+      operationId: boost_clear
+      tags:
+        - Boost
   /emeter:
     delete:
       summary: Reset Energy Meter
@@ -1067,6 +1195,7 @@ tags:
   - name: Status
   - name: Tesla
   - name: Limit
+  - name: Boost
   - name: Energy Meter
   - name: Time
   - name: Restart

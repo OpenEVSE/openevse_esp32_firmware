@@ -1,6 +1,7 @@
 #ifndef _DIVERT_SIM_SIM_SCENARIO_H
 #define _DIVERT_SIM_SIM_SCENARIO_H
 
+#include <cstdint>
 #include <ctime>
 #include <string>
 #include <vector>
@@ -16,6 +17,17 @@ struct PeerEvent
   bool online = false;
   bool set_vehicle = false;
   bool vehicle = false;
+
+  // {"boost": {"type": "time", "value": 900}} arms; {"boost": "cancel"} cancels.
+  bool set_boost = false;
+  bool boost_cancel = false;
+  std::string boost_type;
+  uint32_t boost_value = 0;
+
+  // {"manual": "disabled"|"active"|"release"} drives the peer's ManualOverride
+  // (priority 1000), which outranks Boost (200).
+  bool set_manual = false;
+  std::string manual_state;
 };
 
 struct PeerScenario

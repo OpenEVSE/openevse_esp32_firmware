@@ -50,6 +50,7 @@ typedef const __FlashStringHelper *fstr_t;
 #include "home_battery.h"
 #include "evse_man.h"
 #include "limit.h"
+#include "boost.h"
 #include "web_auth.h"
 #include "web_auth_secret.h"
 
@@ -667,6 +668,7 @@ void buildStatus(DynamicJsonDocument &doc) {
   doc["shaper_updated"] = shaper.isUpdated();
   doc["service_level"] = static_cast<uint8_t>(evse.getActualServiceLevel());
   doc["limit"] = limit.hasLimit();
+  doc["boost"] = boost.isActive();
 
   doc["ota_update"] = (int)Update.isRunning();
 
@@ -676,6 +678,7 @@ void buildStatus(DynamicJsonDocument &doc) {
   doc["schedule_version"] = scheduler.getVersion();
   doc["schedule_plan_version"] = scheduler.getPlanVersion();
   doc["limit_version"] = limit.getVersion();
+  doc["boost_version"] = boost.getVersion();
 
   doc["vehicle_state_update"] = (millis() - evse.getVehicleLastUpdated()) / 1000;
   if(teslaClient.getVehicleCnt() > 0) {
@@ -1226,6 +1229,76 @@ void handleLimit(MongooseHttpServerRequest *request)
     handleLimitPost(request, response);
   } else if(HTTP_DELETE == request->method()) {
     handleLimitDelete(request, response);
+  } else {
+    response->setCode(405);
+    response->print("{\"msg\":\"Method not allowed\"}");
+  }
+
+  request->send(response);
+}
+
+//----------------------------------------------------------
+//
+//            Boost
+//
+//----------------------------------------------------------
+
+void handleBoostGet(MongooseHttpServerRequest *request, MongooseHttpServerResponseStream *response)
+{
+  if(boost.isActive())
+  {
+    StaticJsonDocument<192> doc;
+    boost.serialize(doc);
+    response->setCode(200);
+    serializeJson(doc, *response);
+  } else {
+    // 200 + {} doubles as the capability probe: old firmware 404s /boost.
+    response->setCode(200);
+    response->print("{}");
+  }
+}
+
+void handleBoostPost(MongooseHttpServerRequest *request, MongooseHttpServerResponseStream *response)
+{
+  String body = request->body().toString();
+  int rc = boost.arm(body.c_str());
+
+  if(Boost_Armed == rc) {
+    response->setCode(201);
+    response->print("{\"msg\":\"done\"}");
+  } else if(Boost_Unsupported == rc) {
+    response->setCode(422);
+    response->print("{\"msg\":\"no vehicle data source for this boost type\"}");
+  } else {
+    response->setCode(400);
+    response->print("{\"msg\":\"failed to parse JSON\"}");
+  }
+}
+
+void handleBoostDelete(MongooseHttpServerRequest *request, MongooseHttpServerResponseStream *response)
+{
+  if(boost.cancel()) {
+    response->setCode(200);
+    response->print("{\"msg\":\"done\"}");
+  } else {
+    response->setCode(404);
+    response->print("{\"msg\":\"no boost\"}");
+  }
+}
+
+void handleBoost(MongooseHttpServerRequest *request)
+{
+  MongooseHttpServerResponseStream *response;
+  if(false == requestPreProcess(request, response)) {
+    return;
+  }
+
+  if(HTTP_GET == request->method()) {
+    handleBoostGet(request, response);
+  } else if(HTTP_POST == request->method()) {
+    handleBoostPost(request, response);
+  } else if(HTTP_DELETE == request->method()) {
+    handleBoostDelete(request, response);
   } else {
     response->setCode(405);
     response->print("{\"msg\":\"Method not allowed\"}");
@@ -1845,6 +1918,7 @@ void web_server_setup()
   server.on("/logs", handleEventLogs);
   server.on("/certificates", handleCertificates);
   server.on("/limit", handleLimit);
+  server.on("/boost", handleBoost);
   server.on("/emeter", handleEmeter);
   server.on("/time", handleTime);
   server.on("/mqtt$", handleMqttAction);
