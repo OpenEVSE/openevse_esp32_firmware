@@ -47,7 +47,6 @@ paths:
                     packets_sent: 22307
                     packets_success: 22290
                     mqtt_connected: 1
-                    ohm_hour: NotConnected
                     free_heap: 203268
                     comm_sent: 335139
                     comm_success: 335139

@@ -221,6 +221,10 @@ unsigned long LcdTask::loop(MicroTasks::WakeReason reason)
        OPENEVSE_STATE_GFI_SELF_TEST_FAILED == _evseState ? "OPENEVSE_STATE_GFI_SELF_TEST_FAILED" :
        OPENEVSE_STATE_OVER_TEMPERATURE == _evseState ? "OPENEVSE_STATE_OVER_TEMPERATURE" :
        OPENEVSE_STATE_OVER_CURRENT == _evseState ? "OPENEVSE_STATE_OVER_CURRENT" :
+       OPENEVSE_STATE_RELAY_CLOSURE_FAULT == _evseState ? "OPENEVSE_STATE_RELAY_CLOSURE_FAULT" :
+       OPENEVSE_STATE_PP_SHORTED == _evseState ? "OPENEVSE_STATE_PP_SHORTED" :
+       OPENEVSE_STATE_PP_MISSING == _evseState ? "OPENEVSE_STATE_PP_MISSING" :
+       OPENEVSE_STATE_EEPROM_FAILURE == _evseState ? "OPENEVSE_STATE_EEPROM_FAILURE" :
        OPENEVSE_STATE_SLEEPING == _evseState ? "OPENEVSE_STATE_SLEEPING" :
        OPENEVSE_STATE_DISABLED == _evseState ? "OPENEVSE_STATE_DISABLED" :
        "UNKNOWN");
@@ -554,6 +558,38 @@ void LcdTask::displayStateLine(uint8_t evseState, unsigned long &nextUpdate)
       _updateStateDisplay = false;
       break;
 
+    case OPENEVSE_STATE_RELAY_CLOSURE_FAULT:
+      // Line 0 "SAFETY ERROR "
+      // Line 1 "RELAY FAULT "
+      showText(0, 0, "SAFETY ERROR", true);
+      showText(0, 1, "RELAY FAULT", true);
+      _updateStateDisplay = false;
+      break;
+
+    case OPENEVSE_STATE_PP_SHORTED:
+      // Line 0 "CABLE ERROR "
+      // Line 1 "PP SHORTED "
+      showText(0, 0, "CABLE ERROR", true);
+      showText(0, 1, "PP SHORTED", true);
+      _updateStateDisplay = false;
+      break;
+
+    case OPENEVSE_STATE_PP_MISSING:
+      // Line 0 "CABLE ERROR "
+      // Line 1 "PP MISSING "
+      showText(0, 0, "CABLE ERROR", true);
+      showText(0, 1, "PP MISSING", true);
+      _updateStateDisplay = false;
+      break;
+
+    case OPENEVSE_STATE_EEPROM_FAILURE:
+      // Line 0 "EVSE ERROR "
+      // Line 1 "EEPROM FAILURE "
+      showText(0, 0, "EVSE ERROR", true);
+      showText(0, 1, "EEPROM FAILURE", true);
+      _updateStateDisplay = false;
+      break;
+
     case OPENEVSE_STATE_SLEEPING:
     case OPENEVSE_STATE_DISABLED:
     {
@@ -585,8 +621,7 @@ void LcdTask::displayStateLine(uint8_t evseState, unsigned long &nextUpdate)
         _updateStateDisplay = false;
       }
       else if(EvseClient_OpenEVSE_OCPP == stateClient ||
-              EvseClient_OpenEVSE_MQTT == stateClient ||
-              EvseClient_OpenEVSE_Ohm == stateClient)
+              EvseClient_OpenEVSE_MQTT == stateClient)
       {
         showText(0, 0, "Paused Remote", true);
         _updateStateDisplay = false;
