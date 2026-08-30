@@ -337,21 +337,44 @@ void diagnostics_coredump_json(JsonDocument &doc)
     doc["task"] = s->exc_task;
     snprintf(buf, sizeof(buf), "0x%08x", (unsigned)s->exc_pc);
     doc["pc"] = buf;
+    // The exception detail and the backtrace are architecture specific: the
+    // Xtensa parts carry an EXCCAUSE/EXCVADDR pair and a walked backtrace,
+    // the RISC-V parts (C3, and the C6 co-processor) carry the machine trap
+    // CSRs and no backtrace at all -- RISC-V cannot unwind on device without
+    // parsing DWARF, so the IDF stores a raw stack dump for the host to walk.
+#if defined(__riscv)
+    snprintf(buf, sizeof(buf), "0x%08x", (unsigned)s->ex_info.mcause);
+    doc["mcause"] = buf;
+    snprintf(buf, sizeof(buf), "0x%08x", (unsigned)s->ex_info.mtval);
+    doc["mtval"] = buf;
+    snprintf(buf, sizeof(buf), "0x%08x", (unsigned)s->ex_info.ra);
+    doc["ra"] = buf;
+    snprintf(buf, sizeof(buf), "0x%08x", (unsigned)s->ex_info.sp);
+    doc["sp"] = buf;
+#else
     snprintf(buf, sizeof(buf), "0x%08x", (unsigned)s->ex_info.exc_cause);
     doc["exc_cause"] = buf;
     snprintf(buf, sizeof(buf), "0x%08x", (unsigned)s->ex_info.exc_vaddr);
     doc["exc_vaddr"] = buf;
+#endif
 
     // Identifies the exact build that crashed, so a backtrace is never
     // symbolised against the wrong ELF.
     doc["elf_sha256"] = (char *)s->app_elf_sha256;
 
+#if defined(__riscv)
+    // No on-device backtrace to offer. Say so explicitly rather than
+    // returning an empty `bt` that reads as "the stack was clean"; the raw
+    // image from /debug/crash/raw still carries the stack dump.
+    doc["bt"] = "riscv-no-unwind";
+#else
     JsonArray bt = doc.createNestedArray("bt");
     for(uint32_t i = 0; i < s->exc_bt_info.depth && i < 16; i++) {
       snprintf(buf, sizeof(buf), "0x%08x", (unsigned)s->exc_bt_info.bt[i]);
       bt.add(buf);
     }
     doc["bt_corrupted"] = s->exc_bt_info.corrupted;
+#endif
   }
   else
   {
