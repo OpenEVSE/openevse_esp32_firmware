@@ -198,7 +198,8 @@ EvseMonitor::EvseMonitor(OpenEVSEClass &openevse) :
   _relay_transit_drift_warning(false),
   _relay_thermal_index_x100(OPENEVSE_RELAY_HEALTH_NOT_AVAILABLE),
   _relay_thermal_baseline_x100(OPENEVSE_RELAY_HEALTH_NOT_AVAILABLE),
-  _relay_thermal_warning_level(0)
+  _relay_thermal_warning_level(0),
+  _relay_stuck_recovery_count(0)
 {
 }
 
@@ -1176,7 +1177,8 @@ void EvseMonitor::readRelayHealth()
   _openevse.getRelayHealth([this](int ret, uint8_t life_remaining_pct, uint32_t cold_open_count,
                                    uint32_t elec_damage_x1e6, uint32_t transit_baseline_ms,
                                    bool transit_drift_warning, uint32_t thermal_index_x100,
-                                   uint32_t thermal_baseline_x100, uint8_t thermal_warning_level)
+                                   uint32_t thermal_baseline_x100, uint8_t thermal_warning_level,
+                                   uint32_t stuck_relay_recovery_count)
   {
     if(RAPI_RESPONSE_OK == ret)
     {
@@ -1189,9 +1191,24 @@ void EvseMonitor::readRelayHealth()
       _relay_thermal_index_x100 = thermal_index_x100;
       _relay_thermal_baseline_x100 = thermal_baseline_x100;
       _relay_thermal_warning_level = thermal_warning_level;
-      DBUGF("relay health: life=%u%% cold_opens=%u elec_damage=%u transit_drift=%d thermal_warn=%u",
+      _relay_stuck_recovery_count = stuck_relay_recovery_count;
+      DBUGF("relay health: life=%u%% cold_opens=%u elec_damage=%u transit_drift=%d thermal_warn=%u stuck_recoveries=%u",
             _relay_life_remaining_pct, _relay_cold_open_count, _relay_elec_damage_x1e6,
-            _relay_transit_drift_warning, _relay_thermal_warning_level);
+            _relay_transit_drift_warning, _relay_thermal_warning_level, _relay_stuck_recovery_count);
     }
+  });
+}
+
+void EvseMonitor::runStuckRelayRecovery(std::function<void(int ret)> callback)
+{
+  // $FK doesn't report whether the relay actually came free, only that the
+  // controller ran (or refused) the cycle - re-read $GL/$GR afterward so
+  // the cached recovery count and relay status reflect what just happened.
+  _openevse.runStuckRelayRecovery([this, callback](int ret) {
+    if(RAPI_RESPONSE_OK == ret) {
+      readRelayHealth();
+      readRelayStatus();
+    }
+    if(callback) callback(ret);
   });
 }

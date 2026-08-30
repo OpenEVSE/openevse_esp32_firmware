@@ -223,6 +223,7 @@ class EvseMonitor : public MicroTasks::Task
     uint32_t _relay_thermal_index_x100;    // OPENEVSE_RELAY_HEALTH_NOT_AVAILABLE = not available
     uint32_t _relay_thermal_baseline_x100; // OPENEVSE_RELAY_HEALTH_NOT_AVAILABLE = not available
     uint8_t  _relay_thermal_warning_level; // 0=ok/not available 1=watch 2=warn
+    uint32_t _relay_stuck_recovery_count;  // cumulative stuck-relay recovery attempts run; 0 against pre-9.3.0 controllers
 
     DataReady _data_ready;
     DataReady _boot_ready;
@@ -478,6 +479,11 @@ class EvseMonitor : public MicroTasks::Task
     uint32_t getRelayThermalIndexX100() { return _relay_thermal_index_x100; }
     uint32_t getRelayThermalBaselineX100() { return _relay_thermal_baseline_x100; }
     uint8_t getRelayThermalWarningLevel() { return _relay_thermal_warning_level; }
+    uint32_t getRelayStuckRecoveryCount() { return _relay_stuck_recovery_count; }
+    // Manually run the controller's stuck-relay recovery cycle (requires
+    // firmware 9.3.0+ / ADVPWR). NAK'd by the controller if an EV is
+    // connected. Blocking on the controller side for up to ~30s.
+    void runStuckRelayRecovery(std::function<void(int ret)> callback = NULL);
     // True if the controller's RAPI protocol supports the D9 command set
     bool isD9Supported() { return _openevse.isD9Supported(); }
     uint32_t getHeartbeatInterval() { return _heartbeat_interval; }

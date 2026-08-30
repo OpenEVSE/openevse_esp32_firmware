@@ -553,6 +553,10 @@ class EvseManager : public MicroTasks::Task
     uint32_t getRelayThermalIndexX100() { return _monitor.getRelayThermalIndexX100(); }
     uint32_t getRelayThermalBaselineX100() { return _monitor.getRelayThermalBaselineX100(); }
     uint8_t getRelayThermalWarningLevel() { return _monitor.getRelayThermalWarningLevel(); }
+    uint32_t getRelayStuckRecoveryCount() { return _monitor.getRelayStuckRecoveryCount(); }
+    void runStuckRelayRecovery(std::function<void(int ret)> callback = NULL) {
+      _monitor.runStuckRelayRecovery(callback);
+    }
     void restartEvse() {
       _monitor.restart();
     }

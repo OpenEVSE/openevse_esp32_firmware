@@ -880,6 +880,9 @@ bool config_serialize(DynamicJsonDocument &doc, bool longNames, bool compactOutp
       if(evse.getRelayThermalBaselineX100() != OPENEVSE_RELAY_HEALTH_NOT_AVAILABLE) {
         doc["relay_thermal_baseline_x100"] = evse.getRelayThermalBaselineX100();
       }
+      // 0 against firmware older than 9.3.0 (the field doesn't exist there),
+      // same as the controller-side default - no sentinel needed
+      doc["relay_stuck_recovery_count"] = evse.getRelayStuckRecoveryCount();
     }
     doc["chip_id"] = evse.getChipId();
     doc["heartbeat_interval"] = evse.getHeartbeatInterval();
