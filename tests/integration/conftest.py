@@ -356,6 +356,8 @@ def instance_pair(docker_client, emulator_image, tmp_path, request):
 
         # Create socat bridge: TCP (from emulator) -> PTY (for native firmware)
         # This creates a real PTY on the host and bridges it to emulator's TCP RAPI port
+        socat_bridge = {"proc": None}
+
         def start_socat_bridge():
             """
             (Re)create the TCP<->PTY bridge and wait for the PTY to appear.
@@ -374,6 +376,7 @@ def instance_pair(docker_client, emulator_image, tmp_path, request):
                 stderr=subprocess.PIPE,
             )
             socat_processes.append(proc)
+            socat_bridge["proc"] = proc
 
             # Wait for PTY to be created
             for _ in range(50):  # 5 seconds max
@@ -381,6 +384,37 @@ def instance_pair(docker_client, emulator_image, tmp_path, request):
                     return proc
                 time.sleep(0.1)
             raise Exception(f"PTY not created at {pty_path} after 5 seconds")
+
+        def stop_socat_bridge():
+            """
+            Tear the bridge down and wait until the PTY symlink is really gone.
+
+            socat exits on its own when the firmware closes the slave, but that
+            exit -- and the unlink of the symlink that goes with it -- races
+            anything starting straight afterwards. Stopping it explicitly makes
+            the restart path deterministic.
+            """
+            proc = socat_bridge["proc"]
+            socat_bridge["proc"] = None
+            if proc is not None:
+                proc.terminate()
+                try:
+                    proc.wait(timeout=5)
+                except subprocess.TimeoutExpired:
+                    proc.kill()
+                    proc.wait(timeout=5)
+
+            for _ in range(50):  # 5 seconds max
+                if not os.path.lexists(pty_path):
+                    return
+                time.sleep(0.1)
+
+            # socat should have unlinked it; clear the leftover so the fresh
+            # bridge is not fooled by a stale symlink.
+            try:
+                os.remove(pty_path)
+            except OSError:
+                pass
 
         try:
             start_socat_bridge()
@@ -455,11 +489,17 @@ def instance_pair(docker_client, emulator_image, tmp_path, request):
 
         def restart_native():
             process.terminate()
-            process.wait(timeout=5)
-            # The old socat exited with the firmware, so rebuild the RAPI bridge
-            # before the replacement process starts looking for it.
-            if not os.path.exists(pty_path):
-                start_socat_bridge()
+            try:
+                process.wait(timeout=5)
+            except subprocess.TimeoutExpired:
+                process.kill()
+                process.wait(timeout=5)
+            # The old socat exits with the firmware, so rebuild the RAPI bridge
+            # before the replacement process starts looking for it. Testing the
+            # symlink is not enough: socat can still be on its way out with the
+            # link in place, and then unlink it from under the new process.
+            stop_socat_bridge()
+            start_socat_bridge()
             restarted = subprocess.Popen(
                 native_command,
                 stdout=subprocess.PIPE,
