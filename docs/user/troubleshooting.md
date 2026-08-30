@@ -37,6 +37,26 @@ re-flash over USB (see [Firmware update](firmware-update.md)):
 esptool.py erase_flash
 ```
 
+## Reporting an unexpected reboot
+
+If the unit rebooted or reboot-looped on its own, it stores a crash report in
+flash that survives the reboot. Read it over the network -- no serial cable
+needed:
+
+```bash
+curl -u openevse:<password> http://<charger>/debug/crash
+```
+
+The response names the panic reason, the task that faulted and a backtrace.
+Paste it into your GitHub issue along with the firmware version; it is the
+single most useful thing you can attach. `curl -X DELETE` on the same URL
+clears the stored report, so the next one is unambiguously new.
+
+Developers chasing a crash can fetch the raw dump from
+`/debug/crash/raw` and decode it with `esp-coredump` against the exact
+`firmware.elf` the unit is running -- the `elf_sha256` field says which build
+that is.
+
 ## Getting help
 
 - [OpenEVSE knowledge base & support](https://openevse.dozuki.com/)
