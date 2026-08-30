@@ -847,6 +847,12 @@ bool config_serialize(DynamicJsonDocument &doc, bool longNames, bool compactOutp
     if(evse.isD9Supported()) {
       doc["pp_auto"] = evse.isPPAutoAmpacityEnabled();
       doc["zero_cross"] = evse.isZeroCrossSwitchEnabled();
+      // Relay-open current-zero threshold (mA), configurable on the
+      // controller via $SZ. Omitted (rather than a sentinel) when the
+      // controller hasn't reported one yet.
+      if(evse.getZeroCrossThresholdMa() != OPENEVSE_RELAY_HEALTH_NOT_AVAILABLE) {
+        doc["zero_cross_threshold_ma"] = evse.getZeroCrossThresholdMa();
+      }
     }
     // Per-relay state is only emitted once $GR has actually been answered, so
     // an unknown state is omitted rather than defaulting to "enabled"
@@ -854,6 +860,26 @@ bool config_serialize(DynamicJsonDocument &doc, bool longNames, bool compactOutp
       doc["relay_dc1"] = evse.isDC1RelayEnabled();
       doc["relay_dc2"] = evse.isDC2RelayEnabled();
       doc["relay_ac"]  = evse.isACRelayEnabled();
+    }
+    // Relay contact-life health estimate (requires the controller's
+    // RELAY_HEALTH feature). Read only; the whole block is omitted rather
+    // than defaulting to 0% until $GL has actually been answered, same
+    // pattern as the per-relay state above.
+    if(evse.isRelayHealthKnown()) {
+      doc["relay_life_pct"] = evse.getRelayLifeRemainingPct();
+      doc["relay_cold_open_count"] = evse.getRelayColdOpenCount();
+      doc["relay_elec_damage_x1e6"] = evse.getRelayElecDamageX1e6();
+      doc["relay_transit_drift_warning"] = evse.isRelayTransitDriftWarning();
+      if(evse.getRelayTransitBaselineMs() != OPENEVSE_RELAY_HEALTH_NOT_AVAILABLE) {
+        doc["relay_transit_baseline_ms"] = evse.getRelayTransitBaselineMs();
+      }
+      doc["relay_thermal_warning_level"] = evse.getRelayThermalWarningLevel();
+      if(evse.getRelayThermalIndexX100() != OPENEVSE_RELAY_HEALTH_NOT_AVAILABLE) {
+        doc["relay_thermal_index_x100"] = evse.getRelayThermalIndexX100();
+      }
+      if(evse.getRelayThermalBaselineX100() != OPENEVSE_RELAY_HEALTH_NOT_AVAILABLE) {
+        doc["relay_thermal_baseline_x100"] = evse.getRelayThermalBaselineX100();
+      }
     }
     doc["chip_id"] = evse.getChipId();
     doc["heartbeat_interval"] = evse.getHeartbeatInterval();

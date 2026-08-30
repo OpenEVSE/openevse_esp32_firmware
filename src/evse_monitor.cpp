@@ -184,11 +184,21 @@ EvseMonitor::EvseMonitor(OpenEVSEClass &openevse) :
   _heartbeat_current(EVSE_HEARTBEAT_CURRENT),
   _sender(nullptr),
   _frequency(0),
+  _zero_cross_threshold_ma(OPENEVSE_RELAY_HEALTH_NOT_AVAILABLE),
   _relay_dc1(true),
   _relay_dc2(true),
   _relay_ac(true),
   _relay_status_known(false),
-  _chip_id("")
+  _chip_id(""),
+  _relay_health_known(false),
+  _relay_life_remaining_pct(0),
+  _relay_cold_open_count(0),
+  _relay_elec_damage_x1e6(0),
+  _relay_transit_baseline_ms(OPENEVSE_RELAY_HEALTH_NOT_AVAILABLE),
+  _relay_transit_drift_warning(false),
+  _relay_thermal_index_x100(OPENEVSE_RELAY_HEALTH_NOT_AVAILABLE),
+  _relay_thermal_baseline_x100(OPENEVSE_RELAY_HEALTH_NOT_AVAILABLE),
+  _relay_thermal_warning_level(0)
 {
 }
 
@@ -275,6 +285,7 @@ void EvseMonitor::evseBoot(const char *firmware)
   readChipId();
   readRelayStatus();
   readFrequency();
+  readRelayHealth();
 
 #ifndef DISABLE_HEARTBEAT
   _openevse.heartbeatEnable(EVSE_HEATBEAT_INTERVAL, EVSE_HEARTBEAT_CURRENT, [this](int ret, int interval, int current, int triggered) {
@@ -316,10 +327,13 @@ void EvseMonitor::updateEvseState(uint8_t evse_state, uint8_t pilot_state, uint3
     if(!isCharging()) {
       _amp = 0;
       _power = 0;
-      // Read voltage and frequency after relay opens
+      // Read voltage, frequency, and the relay-health estimate after relay
+      // opens - $GL is only meaningful once a relay open has occurred, since
+      // that's when the controller updates its cumulative-damage accumulator
       if(_sender) {
         getChargeCurrentAndVoltageFromEvse();
         readFrequency();
+        readRelayHealth();
       }
     }
     _session_complete.update(getFlags());
@@ -950,6 +964,17 @@ void EvseMonitor::getSettingsFromEvse()
       _settings_changed.Trigger();
     }
   });
+
+  // Relay health/damage barely moves between charge sessions (it only
+  // updates on a relay open), and the zero-cross threshold only changes via
+  // an explicit $SZ, but re-reading both here on the same ~60s cadence as
+  // the rest of the settings keeps them in sync if something else on the
+  // RAPI bus changes them, and covers installations that stay connected for
+  // days without a session boundary.
+  if(_sender) {
+    readFrequency();
+  }
+  readRelayHealth();
 }
 
 void EvseMonitor::getChargeCurrentAndVoltageFromEvse()
@@ -1098,10 +1123,21 @@ void EvseMonitor::resetFaultCounters(std::function<void(int ret)> callback)
 
 void EvseMonitor::readFrequency()
 {
-  _openevse.getFrequency([this](int ret, uint32_t frequency) {
-    if(RAPI_RESPONSE_OK == ret) {
-      _frequency = frequency;
+  // $GZ returns both AC line frequency and the relay-open current-zero
+  // threshold in one response; OpenEVSEClass::getFrequency() only exposes
+  // the first field, so read raw here rather than round-tripping $GZ twice
+  // (once via the library, once for the threshold).
+  if(!_sender) {
+    return;
+  }
+  _sender->sendCmd("$GZ", [this](int ret) {
+    if(RAPI_RESPONSE_OK == ret && _sender->getTokenCnt() >= 2) {
+      _frequency = strtoul(_sender->getToken(1), NULL, 10);
       DBUGF("frequency = %u (×100 Hz)", _frequency);
+      if(_sender->getTokenCnt() >= 3) {
+        _zero_cross_threshold_ma = strtoul(_sender->getToken(2), NULL, 10);
+        DBUGF("zero_cross_threshold_ma = %u", _zero_cross_threshold_ma);
+      }
     }
   });
 }
@@ -1126,6 +1162,36 @@ void EvseMonitor::readChipId()
     if(RAPI_RESPONSE_OK == ret && serial) {
       snprintf(_chip_id, sizeof(_chip_id), "%s", serial);
       DBUGF("chip_id = %s", _chip_id);
+    }
+  });
+}
+
+void EvseMonitor::readRelayHealth()
+{
+  // $GL - relay contact-life health estimate (requires the controller's
+  // RELAY_HEALTH feature). Not gated on isD9Supported() here: the callback
+  // itself no-ops (leaves _relay_health_known false) on unsupported
+  // controllers, since getRelayHealth() already returns
+  // RAPI_RESPONSE_FEATURE_NOT_SUPPORTED for those.
+  _openevse.getRelayHealth([this](int ret, uint8_t life_remaining_pct, uint32_t cold_open_count,
+                                   uint32_t elec_damage_x1e6, uint32_t transit_baseline_ms,
+                                   bool transit_drift_warning, uint32_t thermal_index_x100,
+                                   uint32_t thermal_baseline_x100, uint8_t thermal_warning_level)
+  {
+    if(RAPI_RESPONSE_OK == ret)
+    {
+      _relay_health_known = true;
+      _relay_life_remaining_pct = life_remaining_pct;
+      _relay_cold_open_count = cold_open_count;
+      _relay_elec_damage_x1e6 = elec_damage_x1e6;
+      _relay_transit_baseline_ms = transit_baseline_ms;
+      _relay_transit_drift_warning = transit_drift_warning;
+      _relay_thermal_index_x100 = thermal_index_x100;
+      _relay_thermal_baseline_x100 = thermal_baseline_x100;
+      _relay_thermal_warning_level = thermal_warning_level;
+      DBUGF("relay health: life=%u%% cold_opens=%u elec_damage=%u transit_drift=%d thermal_warn=%u",
+            _relay_life_remaining_pct, _relay_cold_open_count, _relay_elec_damage_x1e6,
+            _relay_transit_drift_warning, _relay_thermal_warning_level);
     }
   });
 }
