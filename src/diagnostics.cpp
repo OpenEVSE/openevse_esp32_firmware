@@ -17,17 +17,37 @@
 #if DIAG_HAVE_IDF
 #include <esp_heap_caps.h>
 #include <esp_system.h>
+#include <esp_idf_version.h>
 #include <esp_core_dump.h>
 #include <esp_partition.h>
 #include <freertos/FreeRTOS.h>
 #include <freertos/task.h>
 
 // esp_core_dump_image_get()/erase() are always available; the decoded summary
-// and the panic reason string exist only for the ELF dump format.
+// exists only for the ELF dump format.
 #if CONFIG_ESP_COREDUMP_ENABLE_TO_FLASH && CONFIG_ESP_COREDUMP_DATA_FORMAT_ELF
 #define DIAG_COREDUMP_SUMMARY 1
 #else
 #define DIAG_COREDUMP_SUMMARY 0
+#endif
+
+// esp_core_dump_get_panic_reason() arrived in IDF 5. On the core-2.x (IDF 4.4)
+// boards the summary still decodes; only the human-readable reason string is
+// missing, so that one field is simply absent from the response there.
+#if ESP_IDF_VERSION >= ESP_IDF_VERSION_VAL(5, 0, 0)
+#define DIAG_COREDUMP_PANIC_REASON 1
+#else
+#define DIAG_COREDUMP_PANIC_REASON 0
+#endif
+
+// esp_partition_mmap() took a spi_flash_mmap_handle_t and SPI_FLASH_MMAP_DATA
+// before IDF 5 renamed both into the esp_partition namespace.
+#if ESP_IDF_VERSION >= ESP_IDF_VERSION_VAL(5, 0, 0)
+typedef esp_partition_mmap_handle_t diag_mmap_handle_t;
+#define DIAG_MMAP_DATA ESP_PARTITION_MMAP_DATA
+#else
+typedef spi_flash_mmap_handle_t diag_mmap_handle_t;
+#define DIAG_MMAP_DATA SPI_FLASH_MMAP_DATA
 #endif
 #endif
 
@@ -75,7 +95,7 @@ static uint32_t diag_probe_hits[DIAG_PROBE_SLOTS] = {0};
 // need to invalidate the mapping, and a *new* dump cannot appear without a
 // reboot clearing these statics anyway.
 static const void *diag_cd_map = NULL;
-static esp_partition_mmap_handle_t diag_cd_handle = 0;
+static diag_mmap_handle_t diag_cd_handle = 0;
 static size_t diag_cd_len = 0;
 #endif
 
@@ -291,10 +311,12 @@ void diagnostics_coredump_json(JsonDocument &doc)
   }
 
 #if DIAG_COREDUMP_SUMMARY
+#if DIAG_COREDUMP_PANIC_REASON
   char reason[128];
   if(ESP_OK == esp_core_dump_get_panic_reason(reason, sizeof(reason))) {
     doc["panic_reason"] = reason;
   }
+#endif
 
   // Roughly 2KB of registers and backtrace -- more than the loop task's stack
   // headroom, so it goes on the heap and is released before the document is
@@ -368,9 +390,9 @@ bool diagnostics_coredump_image(const uint8_t **data, size_t *len)
   // load, so a buffered copy would fail precisely when a crash report is most
   // wanted.
   const void *ptr = NULL;
-  esp_partition_mmap_handle_t handle = 0;
+  diag_mmap_handle_t handle = 0;
   if(ESP_OK != esp_partition_mmap(part, addr - part->address, size,
-                                  ESP_PARTITION_MMAP_DATA, &ptr, &handle)) {
+                                  DIAG_MMAP_DATA, &ptr, &handle)) {
     return false;
   }
 
