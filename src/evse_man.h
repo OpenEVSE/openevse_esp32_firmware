@@ -539,8 +539,20 @@ class EvseManager : public MicroTasks::Task
       _monitor.resetFaultCounters(callback);
     }
     uint32_t getFrequency() { return _monitor.getFrequency(); }
+    uint32_t getZeroCrossThresholdMa() { return _monitor.getZeroCrossThresholdMa(); }
     const char *getChipId() { return _monitor.getChipId(); }
     bool isD9Supported() { return _monitor.isD9Supported(); }
+
+    // Relay contact-life health estimate
+    bool isRelayHealthKnown() { return _monitor.isRelayHealthKnown(); }
+    uint8_t getRelayLifeRemainingPct() { return _monitor.getRelayLifeRemainingPct(); }
+    uint32_t getRelayColdOpenCount() { return _monitor.getRelayColdOpenCount(); }
+    uint32_t getRelayElecDamageX1e6() { return _monitor.getRelayElecDamageX1e6(); }
+    uint32_t getRelayTransitBaselineMs() { return _monitor.getRelayTransitBaselineMs(); }
+    bool isRelayTransitDriftWarning() { return _monitor.isRelayTransitDriftWarning(); }
+    uint32_t getRelayThermalIndexX100() { return _monitor.getRelayThermalIndexX100(); }
+    uint32_t getRelayThermalBaselineX100() { return _monitor.getRelayThermalBaselineX100(); }
+    uint8_t getRelayThermalWarningLevel() { return _monitor.getRelayThermalWarningLevel(); }
     void restartEvse() {
       _monitor.restart();
     }
