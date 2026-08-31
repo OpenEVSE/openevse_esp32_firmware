@@ -63,6 +63,10 @@
 # poll. Both always go to their log file under the run directory either way.
 set -euo pipefail
 
+# Resolve our own path before the cd below: a relative BASH_SOURCE
+# (./openevse_test.sh from scripts/) stops resolving once the cwd changes, and
+# `usage` reads this file to print its own header.
+script_path="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/$(basename "${BASH_SOURCE[0]}")"
 repo_root="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 cd "$repo_root"
 
@@ -451,16 +455,24 @@ export_instance_env() {
 # Print a short status dump for each instance — the default when no command is
 # given, and the quickest way to see that a change did not break the API.
 status_dump() {
-  local i path
+  local i path body="$run_dir/.status_dump"
   for i in "${!inst_index[@]}"; do
     printf '\n--- instance %s (%s, %s) ---\n' \
       "${inst_index[$i]}" "${inst_name[$i]}" "${inst_url[$i]}"
     for path in /status /config /claims; do
       printf '%s: ' "$path"
-      curl -fsS --max-time 5 "${inst_url[$i]}$path" 2>/dev/null | head -c 400 || printf '(request failed)'
+      # Fetch to a file rather than piping into `head`: under `set -o pipefail`
+      # a body big enough to outlive head's 400 bytes kills curl with EPIPE, and
+      # the pipeline then reports failure after printing perfectly good output.
+      if curl -fsS --max-time 5 -o "$body" "${inst_url[$i]}$path" 2>/dev/null; then
+        head -c 400 "$body"
+      else
+        printf '(request failed)'
+      fi
       printf '\n'
     done
   done
+  rm -f "$body"
 }
 
 cmd_unit() {
@@ -784,7 +796,7 @@ cmd_integration() {
 usage() {
   # Print the header comment block (everything after the shebang up to the
   # first line of code), with the comment markers stripped.
-  awk 'NR == 1 { next } /^#/ { sub(/^# ?/, ""); print; next } { exit }' "${BASH_SOURCE[0]}"
+  awk 'NR == 1 { next } /^#/ { sub(/^# ?/, ""); print; next } { exit }' "$script_path"
 }
 
 command=${1:-}

@@ -230,9 +230,12 @@ The first two bullets are the checked-in half, in
 sandbox. The rest describe the opt-in block above, and only apply once you have pasted it
 into `.claude/settings.local.json`.
 
-- **Read denials for on-disk secrets** (`permissions.deny`, checked in) — the built-in
-  Read/Edit tools are *not* covered by the Bash sandbox, so `*.pem` (OTA signing keys),
-  `.env` files, and `.vscode/settings.json` (holds test Wi-Fi creds) are denied directly.
+- **Denials for on-disk secrets** (`permissions.deny`, checked in) — the built-in file
+  tools are *not* covered by the Bash sandbox, so `*.pem` (OTA signing keys), `.env`
+  files, and `.vscode/settings.json` (holds test Wi-Fi creds) are denied directly. Each
+  glob is listed for `Read`, `Edit` and `Write`: `Edit` is in practice already gated by
+  its own requirement to `Read` first, but `Write` is not, so without the third verb a
+  signing key could still be overwritten.
   - **Bounded-depth deny globs, deliberately** — the secret denials use explicit
     `./*/`, `./*/*/` levels rather than a recursive `./**/`. Path patterns are resolved
     against the real tree, and that resolution follows symlinks. `lib/` symlinks point at
