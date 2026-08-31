@@ -2011,6 +2011,69 @@ void web_server_setup()
     request->send(response);
   });
 
+  // -----------------------------------------------------------------
+  // Last-panic forensics. A crash on a deployed unit leaves a core dump in
+  // flash that outlives the reboot; these two endpoints are what make it
+  // reachable without a serial cable.
+  //
+  //   GET    /debug/crash      decoded summary (task, PC, backtrace)
+  //   DELETE /debug/crash      clear it, so the next panic is unambiguous
+  //   GET    /debug/crash/raw  the image itself, for esp-coredump
+  // -----------------------------------------------------------------
+  server.on("/debug/crash$", [](MongooseHttpServerRequest *request) {
+    MongooseHttpServerResponseStream *response;
+    if(false == requestPreProcess(request, response, CONTENT_TYPE_JSON)) {
+      return;
+    }
+
+    if(HTTP_DELETE == request->method()) {
+      bool erased = diagnostics_coredump_erase();
+      response->setCode(erased ? 200 : 500);
+      response->print(erased ? F("{\"msg\":\"erased\"}") : F("{\"msg\":\"error\"}"));
+      request->send(response);
+      return;
+    }
+
+    const size_t capacity = JSON_OBJECT_SIZE(12) + JSON_ARRAY_SIZE(16) + 640;
+    DynamicJsonDocument doc(capacity);
+    diagnostics_coredump_json(doc);
+    response->setCode(200);
+    serializeJson(doc, *response);
+    request->send(response);
+  });
+
+  server.on("/debug/crash/raw$", [](MongooseHttpServerRequest *request) {
+    dumpRequest(request);
+
+    // Not routed through requestPreProcess: that opens a buffered stream
+    // response, and the whole point here is to send from a flash mapping
+    // instead of buffering the image in a heap that has no room for it.
+    if(!isAuthenticated(request)) {
+      request->requestAuthentication(esp_hostname);
+      return;
+    }
+
+    const uint8_t *data = NULL;
+    size_t len = 0;
+    if(!diagnostics_coredump_image(&data, &len)) {
+      MongooseHttpServerResponseStream *response = request->beginResponseStream();
+      response->setContentType(CONTENT_TYPE_JSON);
+      response->setCode(404);
+      response->print(F("{\"msg\":\"none\"}"));
+      request->send(response);
+      return;
+    }
+
+    MongooseHttpServerResponseBasic *response = request->beginResponse();
+    response->setCode(200);
+    response->setContentType("application/octet-stream");
+    response->setContentLength(len);
+    response->addHeader(F("Content-Disposition"), F("attachment; filename=\"coredump.bin\""));
+    response->addHeader(F("Cache-Control"), F("no-store"));
+    response->setContent(data, len);
+    request->send(response);
+  });
+
   server.on("/debug/console$")
     ->onRequest(onWsAuthenticate)
     ->onFrame([](MongooseHttpWebSocketConnection *connection, int flags, uint8_t *data, size_t len) {
