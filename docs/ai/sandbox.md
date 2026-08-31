@@ -155,9 +155,35 @@ scripts/openevse_test.sh launch -i 1                    # one pair, held up unti
 ```
 
 Instances are numbered from 0 and use the same port bases as
-`tests/integration/conftest.py` — firmware on `8000+i`, emulator web on `8080+i`, emulator
-RAPI on `8023+i`. The wrapped command gets `EVSE_URL`, `EVSE_URL_<i>`, `EVSE_URLS`,
-`EVSE_COUNT`, `EVSE_PTY_<i>`, and (for `emulator`) `EMULATOR_URL_<i>`.
+`tests/integration/conftest.py` — firmware on `8000+i`, firmware HTTPS on `8443+i`,
+emulator web on `8080+i`, emulator RAPI on `8023+i`. The instance number also derives the
+firmware hostname (`openevse-ev<i>`) and its chip id, which is what makes several instances
+addressable at once — needed for the load sharing work in
+[openevse_esp32_firmware#1027](https://github.com/OpenEVSE/openevse_esp32_firmware/pull/1027),
+where members join a group by mDNS name.
+
+The wrapped command gets `EVSE_URL`, `EVSE_URL_<i>`, `EVSE_URLS`, `EVSE_NAME_<i>`,
+`EVSE_NAMES`, `EVSE_COUNT`, `EVSE_PTY_<i>`, and (for `emulator` and `launch`)
+`EMULATOR_URL_<i>`.
+
+### How the chip id is varied
+
+The chip id is set through `OPENEVSE_CHIP_ID`, which the EpoxyDuino `ESPAL` HAL reads.
+ESPAL treats it as a MAC: `getLongId()` reverses the bytes and shifts right by 16, and
+`getShortId()` keeps the last four hex digits of that. Those digits come from **bytes 2-3**
+of the chip id, so varying the low byte would leave every instance sharing a short id — and
+with it the default hostname, the softAP SSID and the MQTT announce topic. The harness
+varies the `0x5678` field instead (`0x1234<5678+i>90ABCDEF`), leaving instance 0 on the
+firmware's own default of `0x1234567890ABCDEF`:
+
+| instance | chip id              | short id |
+| -------- | -------------------- | -------- |
+| 0        | `0x1234567890ABCDEF` | `7856`   |
+| 1        | `0x1234567990ABCDEF` | `7956`   |
+| 2        | `0x1234567A90ABCDEF` | `7a56`   |
+
+The *EVSE*'s chip id is a different thing — it comes from the emulator's `$GI` reply and is
+hardcoded there, so `/config`'s `chip_id` is the same for every instance.
 
 ### `launch` — a single pair for interactive work
 
@@ -168,15 +194,16 @@ terminal, not from a sandboxed agent Bash call, for the namespace reason below.
 
 Everything is derived from `-i ID` and can be overridden individually:
 
-| default for instance `i`     | override            |
-| ---------------------------- | ------------------- |
-| firmware HTTP `8000+i`       | `--http-port`       |
-| emulator web `8080+i`        | `--web-port`        |
-| emulator RAPI TCP `8023+i`   | `--rapi-port`       |
-| PTY in the run dir           | `--rapi-serial PATH`|
-| chip ID `0x1234567890ABCDEF-i` | `--chip-id HEX`   |
-| hostname `openevse-ev<i>`    | `--hostname NAME`   |
-| working directory `test/<i>` | `--workdir DIR`     |
+| default for instance `i`         | override             |
+| -------------------------------- | -------------------- |
+| firmware HTTP `8000+i`           | `--http-port`        |
+| firmware HTTPS `8443+i`          | (derived)            |
+| emulator web `8080+i`            | `--web-port`         |
+| emulator RAPI TCP `8023+i`       | `--rapi-port`        |
+| PTY in the run dir               | `--rapi-serial PATH` |
+| chip ID `0x1234<5678+i>90ABCDEF` | `--chip-id HEX`      |
+| hostname `openevse-ev<i>`        | `--hostname NAME`    |
+| working directory `test/<i>`     | `--workdir DIR`      |
 
 Anything else the firmware understands can be passed through with a repeatable
 `--set-config NAME=VALUE`.
@@ -188,8 +215,10 @@ The firmware console is mirrored to the terminal as `[fw<i>] …`; the emulator 
 directory, whose path is printed at startup.
 
 The chip ID reaches the firmware as `OPENEVSE_CHIP_ID` (read by ESPAL's EpoxyDuino HAL) so
-each peer in a load-sharing group has a distinct identity, and the per-instance working
-directory keeps EEPROM/LittleFS state separate and persistent across runs.
+each peer in a load-sharing group has a distinct identity — see
+[How the chip id is varied](#how-the-chip-id-is-varied) for why the default is not simply
+`base - i`. The per-instance working directory keeps EEPROM/LittleFS state separate and
+persistent across runs.
 
 The emulator runs from the Docker image by default, bridged to the firmware's PTY with
 `socat`. `--local` (or `--emulator-dir DIR`, default `../OpenEVSE_Emulator`, env

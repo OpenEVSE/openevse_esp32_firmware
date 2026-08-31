@@ -42,8 +42,7 @@
       "Bash(divert_sim/divert_sim:*)",
       "Bash(python scripts/docs_coverage.py:*)",
       "Bash(python scripts/sync_screenshots.py:*)",
-      "Bash(git submodule status)",
-      "Read(//home/jpoulter/.claude/**)"
+      "Bash(git submodule status)"
     ],
     "deny": [
       "Read(./*.pem)",

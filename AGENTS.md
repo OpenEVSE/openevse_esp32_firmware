@@ -52,6 +52,7 @@ plus the emulator-backed harness, and is the path of least friction for agents:
 scripts/openevse_test.sh all                  # unit + divert + gui
 scripts/openevse_test.sh native -n 2          # 2 firmware instances, status dump
 scripts/openevse_test.sh native -- curl -s "$EVSE_URL/status"
+scripts/openevse_test.sh emulator -n 2        # 2 firmware + emulator pairs (needs docker)
 scripts/openevse_test.sh integration          # emulator-backed pytest (needs docker)
 scripts/openevse_test.sh launch -i 1          # one long-lived emulator + firmware pair
 ```
@@ -59,8 +60,14 @@ scripts/openevse_test.sh launch -i 1          # one long-lived emulator + firmwa
 Each sandboxed Bash call gets its **own network namespace**, so a server started
 in one command is unreachable from the next. The wrapper therefore starts,
 uses, and tears down everything inside a single invocation — pass what you want
-to run after `--`, and read the instance URLs from `$EVSE_URL` / `$EVSE_URL_<i>`.
+to run after `--`, and read the instance URLs from `$EVSE_URL` / `$EVSE_URL_<i>`
+(also `$EVSE_NAME_<i>`, `$EVSE_NAMES`, `$EVSE_COUNT`).
 `emulator` and `integration` need Docker and so run outside the sandbox.
+
+Every instance gets its own hostname (`openevse-ev<i>`) and chip id, so several
+are addressable at once — needed for the load sharing work in
+[openevse_esp32_firmware#1027](https://github.com/OpenEVSE/openevse_esp32_firmware/pull/1027),
+where members join a group by mDNS name.
 
 `launch` is for humans and REST clients: it brings up a single pair for one
 instance ID (ports, chip ID, hostname and working directory all derived from the

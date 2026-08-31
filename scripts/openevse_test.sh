@@ -30,16 +30,17 @@
 #   launch [-i ID] [--http-port P] [--web-port P] [--rapi-port P]
 #          [--rapi-serial PATH] [--chip-id HEX] [--hostname NAME]
 #          [--workdir DIR] [--set-config NAME=VALUE]...
-#          [--local | --emulator-dir DIR] [--emulator-image IMAGE]
-#          [--no-emulator] [--[no-]firmware-console] [--[no-]emulator-console]
+#          [--emulator docker|local|none] [--local] [--emulator-dir DIR]
+#          [--emulator-image IMAGE] [--no-emulator]
+#          [--[no-]firmware-console] [--[no-]emulator-console]
 #          [--console | --no-console] [-- cmd ...]
 #
-# Defaults for instance ID i: firmware HTTP 8000+i, emulator web 8080+i,
-# emulator RAPI 8023+i, chip ID 0x1234567890ABCDEF-i, hostname openevse-ev<i>,
-# working directory test/<i> (so EEPROM/LittleFS state persists per instance).
-# The emulator runs from the Docker image by default (bridged to the firmware's
-# PTY with socat); `--local` runs it from a source checkout instead, which needs
-# no Docker and no socat.
+# Defaults for instance ID i: firmware HTTP 8000+i, firmware HTTPS 8443+i,
+# emulator web 8080+i, emulator RAPI 8023+i, chip ID 0x1234<5678+i>90ABCDEF,
+# hostname openevse-ev<i>, working directory test/<i> (so EEPROM/LittleFS state
+# persists per instance). The emulator runs from the Docker image by default
+# (bridged to the firmware's PTY with socat); `--local` runs it from a source
+# checkout instead, which needs no Docker and no socat.
 #
 # The firmware console is mirrored to this terminal as `[fw<i>] ...`; the
 # emulator console (`[emu<i>] ...`) is off by default because it logs every RAPI
@@ -51,6 +52,7 @@ cd "$repo_root"
 
 # Port bases match tests/integration/conftest.py so both harnesses agree.
 native_base=8000
+native_tls_base=8443
 emu_web_base=8080
 emu_rapi_base=8023
 
@@ -59,15 +61,18 @@ sim_binary=".pio/build/native_simulator/program"
 emulator_image="${OPENEVSE_EMULATOR_IMAGE:-ghcr.io/jeremypoulter/openevse_emulator:latest}"
 emulator_dir="${OPENEVSE_EMULATOR_DIR:-$repo_root/../OpenEVSE_Emulator}"
 
-# Instance 0 keeps the ESPAL default chip ID; later instances count down from it
-# so every peer in a load-sharing group has a distinct identity.
-chip_id_base=$((0x1234567890ABCDEF))
-
 # /tmp is read-only inside the sandbox; TMPDIR is not.
 run_dir="$(mktemp -d "${TMPDIR:-/tmp}/openevse-harness.XXXXXX")"
 
 pids=()
 containers=()
+
+# Parallel arrays describing the instances this invocation started, so the
+# env export and the status dump work off real instance IDs rather than
+# assuming a 0..count-1 range (`launch -i 1` starts a single instance 1).
+inst_index=()
+inst_name=()
+inst_url=()
 
 log() { printf '==> %s\n' "$*" >&2; }
 die() { printf 'error: %s\n' "$*" >&2; exit 1; }
@@ -98,6 +103,32 @@ trap cleanup EXIT
 trap 'exit 130' INT
 trap 'exit 143' TERM
 
+is_number() {
+  case ${1:-} in
+    ''|*[!0-9]*) return 1 ;;
+    *) return 0 ;;
+  esac
+}
+
+# Read the value of a flag, failing usefully when it was left off the end.
+# Without this a trailing `--http-port` silently consumes the `--` separator.
+arg_value() {
+  local flag=$1 value=${2:-}
+  [ -n "$value" ] || die "$flag requires a value"
+  printf '%s' "$value"
+}
+
+instance_name() { printf 'openevse-ev%d' "$1"; }
+
+# ESPAL treats the chip id as a MAC: getLongId() reverses the bytes and shifts
+# right by 16, and getShortId() keeps the last ESPAL_SHORT_ID_LENGTH (4) hex
+# digits of that. Those digits come from bytes 2-3 of the chip id, so varying
+# the low byte would leave every instance sharing a short id — and with it the
+# default hostname, the softAP SSID and the MQTT announce topic. Vary the
+# 0x5678 field instead, leaving instance 0 on the firmware's own default of
+# 0x1234567890ABCDEF.
+instance_chip_id() { printf '0x1234%04X90ABCDEF' "$((0x5678 + $1))"; }
+
 require_native_binary() {
   if [ ! -x "$native_binary" ]; then
     log "building $native_binary (first build pulls the toolchain — do not cancel)"
@@ -126,6 +157,23 @@ wait_for_path() {
   [ -e "$path" ]
 }
 
+# The HTTP server comes up before the first RAPI reply arrives, so /status
+# reports state=0 (STARTING) for a moment after wait_for_http succeeds. Wait it
+# out, or a wrapped command sees a firmware that is up but has not yet talked
+# to its EVSE. Only meaningful when there is an emulator on the far end.
+wait_for_evse_state() {
+  local url=$1 timeout=${2:-30} deadline body
+  deadline=$((SECONDS + timeout))
+  while [ $SECONDS -lt $deadline ]; do
+    body="$(curl -fsS --max-time 2 "$url/status" 2>/dev/null)" || body=
+    if [ -n "$body" ] && ! printf '%s' "$body" | grep -q '"state":[[:space:]]*0[,}]'; then
+      return 0
+    fi
+    sleep 0.2
+  done
+  return 1
+}
+
 # Console pass-through, set by `launch`: everything still goes to its log file,
 # these only decide whether it is also mirrored to this terminal.
 firmware_console=0
@@ -148,17 +196,24 @@ follow_console() {
 }
 
 # Start one native firmware instance:
-#   $1 = index, $2 = RAPI PTY path, $3 = HTTP port, $4 = working directory,
-#   $5.. = extra arguments for the binary.
-# Export OPENEVSE_CHIP_ID before calling to give the instance its own chip ID.
+#   $1 = index, $2 = hostname, $3 = chip ID, $4 = RAPI PTY path,
+#   $5 = HTTP port, $6 = working directory, $7.. = extra arguments.
+# The chip ID reaches the firmware as OPENEVSE_CHIP_ID, which ESPAL's
+# EpoxyDuino HAL reads — that is what gives each peer a distinct identity.
+# Records the instance in inst_* for export_instance_env and status_dump.
 start_native() {
-  local idx=$1 pty=$2 port=$3 workdir=$4 logfile="$run_dir/native$1.log" native_pid
-  shift 4
+  local idx=$1 name=$2 chip_id=$3 pty=$4 port=$5 workdir=$6
+  local logfile="$run_dir/native$1.log" native_pid tls_port=$((native_tls_base + $1))
+  shift 6
   mkdir -p "$workdir"
   (
     cd "$workdir"
-    exec "$native_binary" --rapi-serial "$pty" --set-config "www_http_port=$port" "$@" \
-      > "$logfile" 2>&1
+    export OPENEVSE_CHIP_ID="$chip_id"
+    exec "$native_binary" --rapi-serial "$pty" \
+      --set-config "hostname=$name" \
+      --set-config "www_http_port=$port" \
+      --set-config "www_https_port=$tls_port" \
+      "$@" > "$logfile" 2>&1
   ) &
   native_pid=$!
   pids+=("$native_pid")
@@ -167,10 +222,13 @@ start_native() {
     tail -20 "$logfile" >&2 || true
     die "native firmware failed to start"
   fi
-  log "instance $idx ready on http://localhost:$port (log: $logfile)"
+  log "instance $idx ($name, chip id $chip_id) ready on http://localhost:$port (log: $logfile)"
   if [ "$firmware_console" = 1 ]; then
     follow_console "fw$idx" "[fw$idx]" -- tail --pid="$native_pid" -n +1 -F "$logfile"
   fi
+  inst_index+=("$idx")
+  inst_name+=("$name")
+  inst_url+=("http://localhost:$port")
 }
 
 # Loopback PTY pair at $1: the firmware opens one end, nothing answers on the
@@ -202,8 +260,9 @@ require_docker() {
 start_emulator_docker() {
   local idx=$1 name=$2 web_port=$3 rapi_port=$4
   docker rm -f "$name" >/dev/null 2>&1 || true
+  # Publish on loopback only — these are test instances with no auth in front.
   docker run -d --name "$name" \
-    -p "$web_port:8080" -p "$rapi_port:8023" \
+    -p "127.0.0.1:$web_port:8080" -p "127.0.0.1:$rapi_port:8023" \
     -e WEB_PORT=8080 -e SERIAL_MODE=tcp -e SERIAL_TCP_PORT=8023 \
     -e PYTHONUNBUFFERED=1 \
     "$emulator_image" >/dev/null
@@ -221,13 +280,15 @@ start_emulator_docker() {
 # The emulator creates the PTY itself, so no socat bridge is needed.
 start_emulator_local() {
   local idx=$1 web_port=$2 pty=$3 python_bin=python3 logfile="$run_dir/emulator$1.log" emu_pid
-  [ -f "$emulator_dir/src/main.py" ] || die "emulator source not found at $emulator_dir — pass --emulator-dir DIR or set OPENEVSE_EMULATOR_DIR"
+  [ -f "$emulator_dir/src/main.py" ] \
+    || die "no emulator checkout at $emulator_dir — clone https://github.com/jeremypoulter/OpenEVSE_Emulator, pass --emulator-dir DIR, or drop --local to use the docker image"
   [ -x "$emulator_dir/.venv/bin/python" ] && python_bin="$emulator_dir/.venv/bin/python"
   (
     cd "$emulator_dir"
     # -u so the log (and the mirrored console) is not held in python's buffer.
     exec "$python_bin" -u src/main.py \
-      --serial-mode pty --serial-pty-path "$pty" --web-port "$web_port" \
+      --serial-mode pty --serial-pty-path "$pty" \
+      --web-host 127.0.0.1 --web-port "$web_port" \
       > "$logfile" 2>&1
   ) &
   emu_pid=$!
@@ -235,7 +296,7 @@ start_emulator_local() {
   if ! wait_for_http "http://localhost:$web_port/api/status" 30; then
     log "emulator $idx did not become ready on port $web_port; last log lines:"
     tail -20 "$logfile" >&2 || true
-    die "emulator failed to start"
+    die "local emulator failed to start — missing deps? pip install -r $emulator_dir/requirements.txt (or drop --local to use the docker image)"
   fi
   wait_for_path "$pty" || die "emulator did not create $pty"
   log "emulator $idx ready on http://localhost:$web_port (source: $emulator_dir, log: $logfile)"
@@ -245,27 +306,30 @@ start_emulator_local() {
 }
 
 # Export EVSE_URL_<i> / EVSE_URLS so the wrapped command can find the instances.
+# Driven off what start_native actually recorded, so it is right for `launch`,
+# whose single instance is not necessarily numbered 0.
 export_instance_env() {
-  local count=$1 urls=() i
-  for ((i = 0; i < count; i++)); do
-    export "EVSE_URL_$i=http://localhost:$((native_base + i))"
-    urls+=("http://localhost:$((native_base + i))")
+  local i
+  for i in "${!inst_index[@]}"; do
+    export "EVSE_URL_${inst_index[$i]}=${inst_url[$i]}"
+    export "EVSE_NAME_${inst_index[$i]}=${inst_name[$i]}"
   done
-  export EVSE_COUNT="$count"
-  export EVSE_URL="${urls[0]}"
-  export EVSE_URLS="${urls[*]}"
+  export EVSE_COUNT="${#inst_index[@]}"
+  export EVSE_URL="${inst_url[0]}"
+  export EVSE_URLS="${inst_url[*]}"
+  export EVSE_NAMES="${inst_name[*]}"
 }
 
 # Print a short status dump for each instance — the default when no command is
 # given, and the quickest way to see that a change did not break the API.
 status_dump() {
-  local count=$1 i url
-  for ((i = 0; i < count; i++)); do
-    url="http://localhost:$((native_base + i))"
-    printf '\n--- instance %d (%s) ---\n' "$i" "$url"
+  local i path
+  for i in "${!inst_index[@]}"; do
+    printf '\n--- instance %s (%s, %s) ---\n' \
+      "${inst_index[$i]}" "${inst_name[$i]}" "${inst_url[$i]}"
     for path in /status /config /claims; do
       printf '%s: ' "$path"
-      curl -fsS --max-time 5 "$url$path" 2>/dev/null | head -c 400 || printf '(request failed)'
+      curl -fsS --max-time 5 "${inst_url[$i]}$path" 2>/dev/null | head -c 400 || printf '(request failed)'
       printf '\n'
     done
   done
@@ -316,11 +380,13 @@ cmd_native() {
   local count=1
   while [ $# -gt 0 ]; do
     case $1 in
-      -n|--instances) count=$2; shift 2 ;;
+      -n|--instances) count=$(arg_value "$1" "${2:-}"); shift 2 ;;
       --) shift; break ;;
       *) die "unexpected argument to 'native': $1" ;;
     esac
   done
+  { is_number "$count" && [ "$count" -ge 1 ]; } \
+    || die "-n takes a positive number (got '$count')"
 
   require_native_binary
   local i pty
@@ -328,14 +394,15 @@ cmd_native() {
     pty="$run_dir/rapi_pty_$i"
     start_loopback_pty "$pty"
     export "EVSE_PTY_$i=$pty"
-    start_native "$i" "$pty" "$((native_base + i))" "$run_dir/native$i"
+    start_native "$i" "$(instance_name "$i")" "$(instance_chip_id "$i")" \
+      "$pty" "$((native_base + i))" "$run_dir/native$i"
   done
 
-  export_instance_env "$count"
+  export_instance_env
   if [ $# -gt 0 ]; then
     "$@"
   else
-    status_dump "$count"
+    status_dump
   fi
 }
 
@@ -344,18 +411,21 @@ cmd_emulator() {
   local count=1
   while [ $# -gt 0 ]; do
     case $1 in
-      -n|--instances) count=$2; shift 2 ;;
+      -n|--instances) count=$(arg_value "$1" "${2:-}"); shift 2 ;;
       --) shift; break ;;
       *) die "unexpected argument to 'emulator': $1" ;;
     esac
   done
+  { is_number "$count" && [ "$count" -ge 1 ]; } \
+    || die "-n takes a positive number (got '$count')"
 
   require_docker
   require_native_binary
 
-  local i name web_port rapi_port pty
+  local i name http_port web_port rapi_port pty
   for ((i = 0; i < count; i++)); do
     name="openevse_emulator_$i"
+    http_port=$((native_base + i))
     web_port=$((emu_web_base + i))
     rapi_port=$((emu_rapi_base + i))
     pty="$run_dir/rapi_pty_$i"
@@ -363,14 +433,17 @@ cmd_emulator() {
     start_emulator_docker "$i" "$name" "$web_port" "$rapi_port"
     bridge_pty_to_tcp "$pty" "$rapi_port"
     export "EVSE_PTY_$i=$pty" "EMULATOR_URL_$i=http://localhost:$web_port"
-    start_native "$i" "$pty" "$((native_base + i))" "$run_dir/native$i"
+    start_native "$i" "$(instance_name "$i")" "$(instance_chip_id "$i")" \
+      "$pty" "$http_port" "$run_dir/native$i"
+    wait_for_evse_state "http://localhost:$http_port" 30 \
+      || die "instance $i never left state=0 (STARTING) — RAPI is not getting through to the emulator on port $rapi_port"
   done
 
-  export_instance_env "$count"
+  export_instance_env
   if [ $# -gt 0 ]; then
     "$@"
   else
-    status_dump "$count"
+    status_dump
   fi
 }
 
@@ -388,37 +461,48 @@ cmd_launch() {
   emulator_console=0
   while [ $# -gt 0 ]; do
     case $1 in
-      -i|--instance)          id=$2; shift 2 ;;
-      --set-config)           extra_config+=(--set-config "$2"); shift 2 ;;
+      -i|--instance)          id=$(arg_value "$1" "${2:-}"); shift 2 ;;
+      --set-config)           extra_config+=(--set-config "$(arg_value "$1" "${2:-}")"); shift 2 ;;
       --firmware-console)     firmware_console=1; shift ;;
       --no-firmware-console)  firmware_console=0; shift ;;
       --emulator-console)     emulator_console=1; shift ;;
       --no-emulator-console)  emulator_console=0; shift ;;
       --console)              firmware_console=1; emulator_console=1; shift ;;
       --no-console)           firmware_console=0; emulator_console=0; shift ;;
-      --http-port)            http_port=$2; shift 2 ;;
-      --web-port)             web_port=$2; shift 2 ;;
-      --rapi-port)            rapi_port=$2; shift 2 ;;
-      --rapi-serial|--pty)    pty=$2; shift 2 ;;
-      --chip-id)              chip_id=$2; shift 2 ;;
-      --hostname)             hostname=$2; shift 2 ;;
-      -C|--workdir)           workdir=$2; shift 2 ;;
+      --http-port)            http_port=$(arg_value "$1" "${2:-}"); shift 2 ;;
+      --web-port)             web_port=$(arg_value "$1" "${2:-}"); shift 2 ;;
+      --rapi-port)            rapi_port=$(arg_value "$1" "${2:-}"); shift 2 ;;
+      --rapi-serial|--pty)    pty=$(arg_value "$1" "${2:-}"); shift 2 ;;
+      --chip-id)              chip_id=$(arg_value "$1" "${2:-}"); shift 2 ;;
+      --hostname)             hostname=$(arg_value "$1" "${2:-}"); shift 2 ;;
+      -C|--workdir)           workdir=$(arg_value "$1" "${2:-}"); shift 2 ;;
+      --emulator)             emulator_mode=$(arg_value "$1" "${2:-}"); shift 2 ;;
       --local|--local-source) emulator_mode=local; shift ;;
-      --emulator-dir)         emulator_dir=$2; emulator_mode=local; shift 2 ;;
-      --emulator-image)       emulator_image=$2; emulator_mode=docker; shift 2 ;;
+      --docker)               emulator_mode=docker; shift ;;
+      --emulator-dir)         emulator_dir=$(arg_value "$1" "${2:-}"); emulator_mode=local; shift 2 ;;
+      --emulator-image)       emulator_image=$(arg_value "$1" "${2:-}"); emulator_mode=docker; shift 2 ;;
       --no-emulator)          emulator_mode=none; shift ;;
       --) shift; break ;;
       *) die "unexpected argument to 'launch': $1" ;;
     esac
   done
 
-  [[ $id =~ ^[0-9]+$ ]] || die "instance ID must be a non-negative integer (got '$id')"
+  case $emulator_mode in
+    docker|local|none) ;;
+    *) die "--emulator takes docker, local or none (got '$emulator_mode')" ;;
+  esac
+  is_number "$id" || die "instance ID must be a non-negative integer (got '$id')"
+  local port
+  for port in "$http_port" "$web_port" "$rapi_port"; do
+    [ -z "$port" ] || is_number "$port" || die "port arguments take a number (got '$port')"
+  done
+
   : "${http_port:=$((native_base + id))}"
   : "${web_port:=$((emu_web_base + id))}"
   : "${rapi_port:=$((emu_rapi_base + id))}"
   : "${pty:=$run_dir/rapi_pty_$id}"
-  : "${chip_id:=$(printf '0x%016X' $((chip_id_base - id)))}"
-  : "${hostname:=openevse-ev$id}"
+  : "${chip_id:=$(instance_chip_id "$id")}"
+  : "${hostname:=$(instance_name "$id")}"
   : "${workdir:=$repo_root/test/$id}"
   # The emulator runs with its own cwd, so it needs an absolute PTY path.
   [[ $pty == /* ]] || pty="$repo_root/$pty"
@@ -462,19 +546,18 @@ EOF
             start_loopback_pty "$pty" ;;
   esac
 
-  # ESPAL's EpoxyDuino HAL reads OPENEVSE_CHIP_ID, which is what gives each
-  # load-sharing peer a distinct identity.
-  export OPENEVSE_CHIP_ID="$chip_id"
-  start_native "$id" "$pty" "$http_port" "$workdir" \
-    --set-config "hostname=$hostname" "${extra_config[@]}"
+  start_native "$id" "$hostname" "$chip_id" "$pty" "$http_port" "$workdir" \
+    "${extra_config[@]}"
 
-  export "EVSE_URL_$id=http://localhost:$http_port"
+  if [ "$emulator_mode" != none ]; then
+    wait_for_evse_state "http://localhost:$http_port" 30 \
+      || die "instance $id never left state=0 (STARTING) — RAPI is not getting through to the emulator"
+  fi
+
   export "EVSE_PTY_$id=$pty"
   export "EVSE_CHIP_ID_$id=$chip_id"
-  export EVSE_URL="http://localhost:$http_port"
-  export EVSE_COUNT=1
-  export EVSE_URLS="$EVSE_URL"
   [ "$emulator_mode" = none ] || export "EMULATOR_URL_$id=http://localhost:$web_port"
+  export_instance_env
 
   if [ $# -gt 0 ]; then
     "$@"
