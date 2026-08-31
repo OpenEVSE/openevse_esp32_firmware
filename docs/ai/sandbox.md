@@ -133,8 +133,8 @@ should stay off.
 - **docker escape hatch** (`sandbox.excludedCommands`) — `docker` is incompatible with
   the sandbox and is used by the integration tests, so it runs outside the sandbox via
   the normal permission flow. The emulator-backed harness entry points
-  (`openevse_test.sh emulator`, `openevse_test.sh integration`, `pytest tests/integration`)
-  are excluded for the same reason — see the section below.
+  (`openevse_test.sh emulator`, `openevse_test.sh launch`, `openevse_test.sh integration`,
+  `pytest tests/integration`) are excluded for the same reason — see the section below.
 - **Test and diagnostic commands** (`permissions.allow`) — the test runners
   (`pio test`, `pytest`, `npm test`), the native/simulator host binaries, `socat`, and
   the port-inspection tools (`lsof`, `fuser`) are allowlisted so a full test cycle runs
@@ -151,12 +151,61 @@ scripts/openevse_test.sh native -n 2                    # 2 firmware instances, 
 scripts/openevse_test.sh native -- curl -s "$EVSE_URL/status"
 scripts/openevse_test.sh emulator -n 2                  # firmware + emulator pairs
 scripts/openevse_test.sh integration                    # the checked-in pytest suite
+scripts/openevse_test.sh launch -i 1                    # one pair, held up until Ctrl-C
 ```
 
 Instances are numbered from 0 and use the same port bases as
 `tests/integration/conftest.py` — firmware on `8000+i`, emulator web on `8080+i`, emulator
 RAPI on `8023+i`. The wrapped command gets `EVSE_URL`, `EVSE_URL_<i>`, `EVSE_URLS`,
 `EVSE_COUNT`, `EVSE_PTY_<i>`, and (for `emulator`) `EMULATOR_URL_<i>`.
+
+### `launch` — a single pair for interactive work
+
+`launch` is the one subcommand meant to outlive its own startup: it brings up one emulator
+plus one firmware instance for a given instance ID and blocks until Ctrl-C, so a VS Code
+REST client (`test/*.http`) or a second terminal can drive it. It only works from a real
+terminal, not from a sandboxed agent Bash call, for the namespace reason below.
+
+Everything is derived from `-i ID` and can be overridden individually:
+
+| default for instance `i`     | override            |
+| ---------------------------- | ------------------- |
+| firmware HTTP `8000+i`       | `--http-port`       |
+| emulator web `8080+i`        | `--web-port`        |
+| emulator RAPI TCP `8023+i`   | `--rapi-port`       |
+| PTY in the run dir           | `--rapi-serial PATH`|
+| chip ID `0x1234567890ABCDEF-i` | `--chip-id HEX`   |
+| hostname `openevse-ev<i>`    | `--hostname NAME`   |
+| working directory `test/<i>` | `--workdir DIR`     |
+
+Anything else the firmware understands can be passed through with a repeatable
+`--set-config NAME=VALUE`.
+
+The firmware console is mirrored to the terminal as `[fw<i>] …`; the emulator console
+(`[emu<i>] …`) is off by default because it logs every RAPI poll. Toggle either with
+`--[no-]firmware-console` / `--[no-]emulator-console`, or both at once with `--console` /
+`--no-console`. Either way both consoles are always written to their log file under the run
+directory, whose path is printed at startup.
+
+The chip ID reaches the firmware as `OPENEVSE_CHIP_ID` (read by ESPAL's EpoxyDuino HAL) so
+each peer in a load-sharing group has a distinct identity, and the per-instance working
+directory keeps EEPROM/LittleFS state separate and persistent across runs.
+
+The emulator runs from the Docker image by default, bridged to the firmware's PTY with
+`socat`. `--local` (or `--emulator-dir DIR`, default `../OpenEVSE_Emulator`, env
+`OPENEVSE_EMULATOR_DIR`) runs it from a source checkout instead, in which case the emulator
+creates the PTY itself and neither Docker nor `socat` is involved. `--no-emulator` gives a
+firmware-only instance on a loopback PTY — no Docker, so it also works sandboxed, at the
+cost of RAPI never answering (`/status` stays `state=0`).
+
+```bash
+# two terminals, two peers, Docker emulators
+scripts/openevse_test.sh launch -i 0
+scripts/openevse_test.sh launch -i 1
+
+# emulator from a source checkout, non-default firmware port
+scripts/openevse_test.sh launch -i 1 --local --http-port 9001
+```
 
 ### Why everything happens in one command
 

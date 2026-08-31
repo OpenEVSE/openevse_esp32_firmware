@@ -14,12 +14,36 @@
 #   scripts/openevse_test.sh native -n 2 -- curl -s localhost:8000/config
 #   scripts/openevse_test.sh integration -v            # emulator-backed pytest
 #   scripts/openevse_test.sh emulator -- pytest tests/integration/
+#   scripts/openevse_test.sh launch -i 1               # one long-lived pair
 #
 # `native` runs sandboxed: each instance gets a loopback PTY with nothing on
 # the far end, so RAPI never answers and /status stays state=0 (STARTING).
 # That is fine for config/claims/override diagnostics. Anything that depends on
 # real EVSE state needs `emulator` or `integration`, which drive the Docker
 # emulator and so must run outside the sandbox (see docs/ai/sandbox.md).
+#
+# `launch` is the interactive counterpart: it brings up ONE emulator + firmware
+# pair for a given instance ID and stays in the foreground until Ctrl-C, so a
+# REST client (test/loadsharing.http) or another terminal can drive it. Every
+# derived setting can be overridden:
+#
+#   launch [-i ID] [--http-port P] [--web-port P] [--rapi-port P]
+#          [--rapi-serial PATH] [--chip-id HEX] [--hostname NAME]
+#          [--workdir DIR] [--set-config NAME=VALUE]...
+#          [--local | --emulator-dir DIR] [--emulator-image IMAGE]
+#          [--no-emulator] [--[no-]firmware-console] [--[no-]emulator-console]
+#          [--console | --no-console] [-- cmd ...]
+#
+# Defaults for instance ID i: firmware HTTP 8000+i, emulator web 8080+i,
+# emulator RAPI 8023+i, chip ID 0x1234567890ABCDEF-i, hostname openevse-ev<i>,
+# working directory test/<i> (so EEPROM/LittleFS state persists per instance).
+# The emulator runs from the Docker image by default (bridged to the firmware's
+# PTY with socat); `--local` runs it from a source checkout instead, which needs
+# no Docker and no socat.
+#
+# The firmware console is mirrored to this terminal as `[fw<i>] ...`; the
+# emulator console (`[emu<i>] ...`) is off by default because it logs every RAPI
+# poll. Both always go to their log file under the run directory either way.
 set -euo pipefail
 
 repo_root="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
@@ -33,6 +57,11 @@ emu_rapi_base=8023
 native_binary="${NATIVE_BINARY_PATH:-.pio/build/native_openevse/program}"
 sim_binary=".pio/build/native_simulator/program"
 emulator_image="${OPENEVSE_EMULATOR_IMAGE:-ghcr.io/jeremypoulter/openevse_emulator:latest}"
+emulator_dir="${OPENEVSE_EMULATOR_DIR:-$repo_root/../OpenEVSE_Emulator}"
+
+# Instance 0 keeps the ESPAL default chip ID; later instances count down from it
+# so every peer in a load-sharing group has a distinct identity.
+chip_id_base=$((0x1234567890ABCDEF))
 
 # /tmp is read-only inside the sandbox; TMPDIR is not.
 run_dir="$(mktemp -d "${TMPDIR:-/tmp}/openevse-harness.XXXXXX")"
@@ -64,6 +93,10 @@ cleanup() {
   return $status
 }
 trap cleanup EXIT
+# `launch` sits in the foreground waiting for Ctrl-C, so make sure a signal
+# still routes through cleanup rather than leaving containers behind.
+trap 'exit 130' INT
+trap 'exit 143' TERM
 
 require_native_binary() {
   if [ ! -x "$native_binary" ]; then
@@ -86,22 +119,129 @@ wait_for_http() {
   return 1
 }
 
-# Start one native firmware instance: $1 = index, $2 = RAPI PTY path.
+# Wait (up to 5s) for a path — a PTY link, usually — to appear.
+wait_for_path() {
+  local path=$1 waited=0
+  while [ ! -e "$path" ] && [ $waited -lt 50 ]; do sleep 0.1; waited=$((waited + 1)); done
+  [ -e "$path" ]
+}
+
+# Console pass-through, set by `launch`: everything still goes to its log file,
+# these only decide whether it is also mirrored to this terminal.
+firmware_console=0
+emulator_console=0
+
+# Mirror a console to stderr, tagged with $2:
+#   follow_console NAME TAG -- producer command ...
+# The producer is the pid we track and kill; the `sed` that adds the tag reads
+# from a FIFO, so it ends by itself when the producer closes it. Tagging with a
+# plain `producer | sed` pipeline instead would leave the producer untracked
+# ($! is the last pipeline member), and a `tail --pid` using inotify can sit on
+# a dead writer indefinitely.
+follow_console() {
+  local name=$1 tag=$2 fifo="$run_dir/$1.console"
+  shift 3
+  mkfifo "$fifo"
+  sed -u "s/^/$tag /" < "$fifo" >&2 &
+  "$@" > "$fifo" 2>&1 &
+  pids+=("$!")
+}
+
+# Start one native firmware instance:
+#   $1 = index, $2 = RAPI PTY path, $3 = HTTP port, $4 = working directory,
+#   $5.. = extra arguments for the binary.
+# Export OPENEVSE_CHIP_ID before calling to give the instance its own chip ID.
 start_native() {
-  local idx=$1 pty=$2 port=$((native_base + $1)) workdir="$run_dir/native$1"
+  local idx=$1 pty=$2 port=$3 workdir=$4 logfile="$run_dir/native$1.log" native_pid
+  shift 4
   mkdir -p "$workdir"
   (
     cd "$workdir"
-    exec "$native_binary" --rapi-serial "$pty" --set-config "www_http_port=$port" \
-      > "$run_dir/native$idx.log" 2>&1
+    exec "$native_binary" --rapi-serial "$pty" --set-config "www_http_port=$port" "$@" \
+      > "$logfile" 2>&1
   ) &
-  pids+=("$!")
+  native_pid=$!
+  pids+=("$native_pid")
   if ! wait_for_http "http://localhost:$port/config" 30; then
     log "instance $idx did not come up on port $port; last log lines:"
-    tail -20 "$run_dir/native$idx.log" >&2 || true
+    tail -20 "$logfile" >&2 || true
     die "native firmware failed to start"
   fi
-  log "instance $idx ready on http://localhost:$port (log: $run_dir/native$idx.log)"
+  log "instance $idx ready on http://localhost:$port (log: $logfile)"
+  if [ "$firmware_console" = 1 ]; then
+    follow_console "fw$idx" "[fw$idx]" -- tail --pid="$native_pid" -n +1 -F "$logfile"
+  fi
+}
+
+# Loopback PTY pair at $1: the firmware opens one end, nothing answers on the
+# other. Keeps the serial port open so the firmware boots and serves HTTP.
+start_loopback_pty() {
+  local pty=$1
+  socat "PTY,link=$pty,rawer,wait-slave" "PTY,rawer" >/dev/null 2>&1 &
+  pids+=("$!")
+  wait_for_path "$pty" || die "socat did not create $pty"
+}
+
+# Bridge a PTY at $1 to the emulator's TCP RAPI port $2. Needed for the Docker
+# emulator: a PTY inside the container is invisible to the host, so the
+# container serves RAPI over TCP and socat gives the firmware a serial port.
+bridge_pty_to_tcp() {
+  local pty=$1 rapi_port=$2
+  socat "PTY,link=$pty,rawer,wait-slave" "TCP:localhost:$rapi_port" >/dev/null 2>&1 &
+  pids+=("$!")
+  wait_for_path "$pty" || die "socat did not bridge $pty to port $rapi_port"
+}
+
+require_docker() {
+  docker info >/dev/null 2>&1 || die "docker unreachable. The sandbox blocks the docker socket and host-published ports — run this subcommand outside the sandbox (see docs/ai/sandbox.md)."
+  docker image inspect "$emulator_image" >/dev/null 2>&1 || docker pull "$emulator_image"
+}
+
+# Emulator from the Docker image: $1 = index, $2 = container name,
+# $3 = published web port, $4 = published RAPI TCP port.
+start_emulator_docker() {
+  local idx=$1 name=$2 web_port=$3 rapi_port=$4
+  docker rm -f "$name" >/dev/null 2>&1 || true
+  docker run -d --name "$name" \
+    -p "$web_port:8080" -p "$rapi_port:8023" \
+    -e WEB_PORT=8080 -e SERIAL_MODE=tcp -e SERIAL_TCP_PORT=8023 \
+    -e PYTHONUNBUFFERED=1 \
+    "$emulator_image" >/dev/null
+  containers+=("$name")
+  wait_for_http "http://localhost:$web_port/api/status" 30 \
+    || die "emulator $idx did not become ready on port $web_port"
+  log "emulator $idx ready on http://localhost:$web_port (container $name)"
+  if [ "$emulator_console" = 1 ]; then
+    # No log file to follow here — the console lives in the container.
+    follow_console "emu$idx" "[emu$idx]" -- docker logs -f --tail=all "$name"
+  fi
+}
+
+# Emulator from a source checkout: $1 = index, $2 = web port, $3 = PTY path.
+# The emulator creates the PTY itself, so no socat bridge is needed.
+start_emulator_local() {
+  local idx=$1 web_port=$2 pty=$3 python_bin=python3 logfile="$run_dir/emulator$1.log" emu_pid
+  [ -f "$emulator_dir/src/main.py" ] || die "emulator source not found at $emulator_dir — pass --emulator-dir DIR or set OPENEVSE_EMULATOR_DIR"
+  [ -x "$emulator_dir/.venv/bin/python" ] && python_bin="$emulator_dir/.venv/bin/python"
+  (
+    cd "$emulator_dir"
+    # -u so the log (and the mirrored console) is not held in python's buffer.
+    exec "$python_bin" -u src/main.py \
+      --serial-mode pty --serial-pty-path "$pty" --web-port "$web_port" \
+      > "$logfile" 2>&1
+  ) &
+  emu_pid=$!
+  pids+=("$emu_pid")
+  if ! wait_for_http "http://localhost:$web_port/api/status" 30; then
+    log "emulator $idx did not become ready on port $web_port; last log lines:"
+    tail -20 "$logfile" >&2 || true
+    die "emulator failed to start"
+  fi
+  wait_for_path "$pty" || die "emulator did not create $pty"
+  log "emulator $idx ready on http://localhost:$web_port (source: $emulator_dir, log: $logfile)"
+  if [ "$emulator_console" = 1 ]; then
+    follow_console "emu$idx" "[emu$idx]" -- tail --pid="$emu_pid" -n +1 -F "$logfile"
+  fi
 }
 
 # Export EVSE_URL_<i> / EVSE_URLS so the wrapped command can find the instances.
@@ -186,15 +326,9 @@ cmd_native() {
   local i pty
   for ((i = 0; i < count; i++)); do
     pty="$run_dir/rapi_pty_$i"
-    # Loopback PTY pair: the firmware opens one end, nothing answers on the
-    # other. Keeps the serial port open so the firmware boots and serves HTTP.
-    socat "PTY,link=$pty,rawer,wait-slave" "PTY,rawer" >/dev/null 2>&1 &
-    pids+=("$!")
+    start_loopback_pty "$pty"
     export "EVSE_PTY_$i=$pty"
-    local waited=0
-    while [ ! -e "$pty" ] && [ $waited -lt 50 ]; do sleep 0.1; waited=$((waited + 1)); done
-    [ -e "$pty" ] || die "socat did not create $pty"
-    start_native "$i" "$pty"
+    start_native "$i" "$pty" "$((native_base + i))" "$run_dir/native$i"
   done
 
   export_instance_env "$count"
@@ -216,9 +350,8 @@ cmd_emulator() {
     esac
   done
 
-  docker info >/dev/null 2>&1 || die "docker unreachable. The sandbox blocks the docker socket and host-published ports — run this subcommand outside the sandbox (see docs/ai/sandbox.md)."
+  require_docker
   require_native_binary
-  docker image inspect "$emulator_image" >/dev/null 2>&1 || docker pull "$emulator_image"
 
   local i name web_port rapi_port pty
   for ((i = 0; i < count; i++)); do
@@ -227,23 +360,10 @@ cmd_emulator() {
     rapi_port=$((emu_rapi_base + i))
     pty="$run_dir/rapi_pty_$i"
 
-    docker rm -f "$name" >/dev/null 2>&1 || true
-    docker run -d --name "$name" \
-      -p "$web_port:8080" -p "$rapi_port:8023" \
-      -e WEB_PORT=8080 -e SERIAL_MODE=tcp -e SERIAL_TCP_PORT=8023 \
-      "$emulator_image" >/dev/null
-    containers+=("$name")
-    wait_for_http "http://localhost:$web_port/api/status" 30 \
-      || die "emulator $i did not become ready on port $web_port"
-    log "emulator $i ready on http://localhost:$web_port"
-
-    socat "PTY,link=$pty,rawer,wait-slave" "TCP:localhost:$rapi_port" >/dev/null 2>&1 &
-    pids+=("$!")
+    start_emulator_docker "$i" "$name" "$web_port" "$rapi_port"
+    bridge_pty_to_tcp "$pty" "$rapi_port"
     export "EVSE_PTY_$i=$pty" "EMULATOR_URL_$i=http://localhost:$web_port"
-    local waited=0
-    while [ ! -e "$pty" ] && [ $waited -lt 50 ]; do sleep 0.1; waited=$((waited + 1)); done
-    [ -e "$pty" ] || die "socat did not bridge $pty to port $rapi_port"
-    start_native "$i" "$pty"
+    start_native "$i" "$pty" "$((native_base + i))" "$run_dir/native$i"
   done
 
   export_instance_env "$count"
@@ -252,6 +372,129 @@ cmd_emulator() {
   else
     status_dump "$count"
   fi
+}
+
+# launch [-i ID] [overrides ...] [-- cmd ...] — one emulator + firmware pair,
+# left running in the foreground so a REST client can drive it. Everything is
+# derived from the instance ID; every derived value has an override. Needs
+# Docker unless --local or --no-emulator is given.
+cmd_launch() {
+  local id=0 http_port= web_port= rapi_port= pty= chip_id= hostname= workdir=
+  local emulator_mode=docker
+  local extra_config=()
+  # Firmware console on, emulator console off — the firmware is what you are
+  # usually debugging, the emulator is chatty about every RAPI poll.
+  firmware_console=1
+  emulator_console=0
+  while [ $# -gt 0 ]; do
+    case $1 in
+      -i|--instance)          id=$2; shift 2 ;;
+      --set-config)           extra_config+=(--set-config "$2"); shift 2 ;;
+      --firmware-console)     firmware_console=1; shift ;;
+      --no-firmware-console)  firmware_console=0; shift ;;
+      --emulator-console)     emulator_console=1; shift ;;
+      --no-emulator-console)  emulator_console=0; shift ;;
+      --console)              firmware_console=1; emulator_console=1; shift ;;
+      --no-console)           firmware_console=0; emulator_console=0; shift ;;
+      --http-port)            http_port=$2; shift 2 ;;
+      --web-port)             web_port=$2; shift 2 ;;
+      --rapi-port)            rapi_port=$2; shift 2 ;;
+      --rapi-serial|--pty)    pty=$2; shift 2 ;;
+      --chip-id)              chip_id=$2; shift 2 ;;
+      --hostname)             hostname=$2; shift 2 ;;
+      -C|--workdir)           workdir=$2; shift 2 ;;
+      --local|--local-source) emulator_mode=local; shift ;;
+      --emulator-dir)         emulator_dir=$2; emulator_mode=local; shift 2 ;;
+      --emulator-image)       emulator_image=$2; emulator_mode=docker; shift 2 ;;
+      --no-emulator)          emulator_mode=none; shift ;;
+      --) shift; break ;;
+      *) die "unexpected argument to 'launch': $1" ;;
+    esac
+  done
+
+  [[ $id =~ ^[0-9]+$ ]] || die "instance ID must be a non-negative integer (got '$id')"
+  : "${http_port:=$((native_base + id))}"
+  : "${web_port:=$((emu_web_base + id))}"
+  : "${rapi_port:=$((emu_rapi_base + id))}"
+  : "${pty:=$run_dir/rapi_pty_$id}"
+  : "${chip_id:=$(printf '0x%016X' $((chip_id_base - id)))}"
+  : "${hostname:=openevse-ev$id}"
+  : "${workdir:=$repo_root/test/$id}"
+  # The emulator runs with its own cwd, so it needs an absolute PTY path.
+  [[ $pty == /* ]] || pty="$repo_root/$pty"
+
+  local consoles=()
+  [ "$firmware_console" = 1 ] && consoles+=("[fw$id] firmware")
+  [ "$emulator_console" = 1 ] && consoles+=("[emu$id] emulator")
+  local console_summary="off (logs only)"
+  if [ ${#consoles[@]} -gt 0 ]; then
+    console_summary="$(printf '%s, ' "${consoles[@]}")"
+    console_summary="${console_summary%, }"
+  fi
+
+  # Printed before anything starts, so it is not buried under the console
+  # output that follows.
+  cat >&2 <<EOF
+
+instance     $id
+firmware     http://localhost:$http_port  (workdir $workdir)
+emulator     $(case $emulator_mode in
+                docker) printf 'http://localhost:%s  (docker image %s)' "$web_port" "$emulator_image" ;;
+                local)  printf 'http://localhost:%s  (source %s)' "$web_port" "$emulator_dir" ;;
+                none)   printf 'none' ;;
+              esac)
+rapi serial  $pty$([ "$emulator_mode" = docker ] && printf ' -> tcp/%s' "$rapi_port")
+chip ID      $chip_id
+hostname     $hostname
+console      $console_summary
+logs         $run_dir
+
+EOF
+
+  [ "$emulator_mode" = docker ] && require_docker
+  require_native_binary
+
+  case $emulator_mode in
+    docker) start_emulator_docker "$id" "openevse_emulator_$id" "$web_port" "$rapi_port"
+            bridge_pty_to_tcp "$pty" "$rapi_port" ;;
+    local)  start_emulator_local "$id" "$web_port" "$pty" ;;
+    none)   log "no emulator — loopback PTY only, so RAPI never answers and /status stays state=0"
+            start_loopback_pty "$pty" ;;
+  esac
+
+  # ESPAL's EpoxyDuino HAL reads OPENEVSE_CHIP_ID, which is what gives each
+  # load-sharing peer a distinct identity.
+  export OPENEVSE_CHIP_ID="$chip_id"
+  start_native "$id" "$pty" "$http_port" "$workdir" \
+    --set-config "hostname=$hostname" "${extra_config[@]}"
+
+  export "EVSE_URL_$id=http://localhost:$http_port"
+  export "EVSE_PTY_$id=$pty"
+  export "EVSE_CHIP_ID_$id=$chip_id"
+  export EVSE_URL="http://localhost:$http_port"
+  export EVSE_COUNT=1
+  export EVSE_URLS="$EVSE_URL"
+  [ "$emulator_mode" = none ] || export "EMULATOR_URL_$id=http://localhost:$web_port"
+
+  if [ $# -gt 0 ]; then
+    "$@"
+  else
+    log "running — point your REST client at http://localhost:$http_port; Ctrl-C to stop"
+    wait_until_interrupted
+  fi
+}
+
+# Block until Ctrl-C, or until one of the processes we started dies.
+wait_until_interrupted() {
+  while :; do
+    local pid
+    for pid in "${pids[@]}"; do
+      kill -0 "$pid" 2>/dev/null && continue
+      log "a launched process exited — shutting down (logs: $run_dir)"
+      return 1
+    done
+    sleep 1
+  done
 }
 
 # integration — the checked-in pytest suite, which builds its own emulator and
@@ -281,6 +524,7 @@ case $command in
   all)         cmd_all "$@" ;;
   native)      cmd_native "$@" ;;
   emulator)    cmd_emulator "$@" ;;
+  launch)      cmd_launch "$@" ;;
   integration) cmd_integration "$@" ;;
   ""|-h|--help|help) usage ;;
   *) die "unknown command '$command' (try --help)" ;;
