@@ -220,11 +220,19 @@ emulator_console=0
 # plain `producer | sed` pipeline instead would leave the producer untracked
 # ($! is the last pipeline member), and a `tail --pid` using inotify can sit on
 # a dead writer indefinitely.
+#
+# socat notice/info/debug lines are dropped on the way through. Images built
+# before the entrypoint stopped passing `-d -d` log a line per write — two per
+# RAPI poll, forever — which buries the firmware's own console, and
+# `--firmware-tag latest` still pulls one of those. Fatal, error and warning
+# lines are kept, so a refused connection to the emulator still shows up. The
+# log file behind the mirror keeps everything either way: for a container it is
+# `docker logs`, which is untouched.
 follow_console() {
   local name=$1 tag=$2 fifo="$run_dir/$1.console"
   shift 3
   mkfifo "$fifo"
-  sed -u "s/^/$tag /" < "$fifo" >&2 &
+  sed -u -e '/ socat\[[0-9]\{1,\}\] [NID] /d' -e "s/^/$tag /" < "$fifo" >&2 &
   "$@" > "$fifo" 2>&1 &
   pids+=("$!")
 }
