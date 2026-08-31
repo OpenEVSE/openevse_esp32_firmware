@@ -199,7 +199,8 @@ EvseMonitor::EvseMonitor(OpenEVSEClass &openevse) :
   _relay_thermal_index_x100(OPENEVSE_RELAY_HEALTH_NOT_AVAILABLE),
   _relay_thermal_baseline_x100(OPENEVSE_RELAY_HEALTH_NOT_AVAILABLE),
   _relay_thermal_warning_level(0),
-  _relay_stuck_recovery_count(0)
+  _relay_stuck_recovery_count(0),
+  _relay_recovery_in_flight(false)
 {
 }
 
@@ -233,6 +234,15 @@ void EvseMonitor::evseBoot(const char *firmware)
   DBUGF("EVSE boot v%s", firmware);
 
   snprintf(_firmware_version, sizeof(_firmware_version), "%s", firmware);
+
+  // Invalidate controller-reported state that has no "known" gate of its own
+  // and would otherwise keep serving the previous controller's values
+  // indefinitely if this one doesn't support/answer the query - e.g. a
+  // controller swapped in without an ESP32 reboot, or a non-D9 controller.
+  // _relay_health_known itself only ever latches true (readRelayHealth()'s
+  // callback simply no-ops when unsupported), so it needs the same reset.
+  _relay_health_known = false;
+  _zero_cross_threshold_ma = OPENEVSE_RELAY_HEALTH_NOT_AVAILABLE;
 
   _openevse.getFaultCounters([this](int ret, long gfci_count, long nognd_count, long stuck_count)
   {
@@ -374,6 +384,17 @@ unsigned long EvseMonitor::loop(MicroTasks::WakeReason reason)
        "UNKNOWN");
   DBUG(", _count = ");
   DBUGLN(_count);
+
+  if(_relay_recovery_in_flight) {
+    // A stuck-relay recovery ($FK) is in flight and can hold the RAPI queue
+    // for up to ~30s on the controller side - every periodic poll below
+    // would just enqueue behind it and, once the queue (RAPI_MAX_COMMANDS
+    // deep) fills, get RAPI_RESPONSE_QUEUE_FULL, heartbeatPulse() included.
+    // Sit this cycle out rather than starve the queue and risk tripping the
+    // controller's heartbeat-supervision fallback current.
+    _count++;
+    return EVSE_MONITOR_POLL_TIME;
+  }
 
   // unlock openevse fw compiled with BOOTLOCK
   if (isBootLocked()) {
@@ -1127,8 +1148,11 @@ void EvseMonitor::readFrequency()
   // $GZ returns both AC line frequency and the relay-open current-zero
   // threshold in one response; OpenEVSEClass::getFrequency() only exposes
   // the first field, so read raw here rather than round-tripping $GZ twice
-  // (once via the library, once for the threshold).
-  if(!_sender) {
+  // (once via the library, once for the threshold). getFrequency() itself
+  // short-circuits on !isD9Supported() without touching the bus - replicate
+  // that gate here too, or a pre-D9 controller gets a $GZ (NAK'd every time)
+  // at boot and every settings-poll cycle.
+  if(!_sender || !_openevse.isD9Supported()) {
     return;
   }
   _sender->sendCmd("$GZ", [this](int ret) {
@@ -1204,10 +1228,31 @@ void EvseMonitor::runStuckRelayRecovery(std::function<void(int ret)> callback)
   // $FK doesn't report whether the relay actually came free, only that the
   // controller ran (or refused) the cycle - re-read $GL/$GR afterward so
   // the cached recovery count and relay status reflect what just happened.
+  //
+  // _relay_recovery_in_flight pauses loop()'s own periodic RAPI traffic for
+  // the duration - see the guard there. Set unconditionally: an EV-connected
+  // refusal NAKs almost immediately (the controller checks before doing
+  // anything), so the pause is negligible on that path and only matters when
+  // the recovery genuinely runs (up to ~30s).
+  _relay_recovery_in_flight = true;
   _openevse.runStuckRelayRecovery([this, callback](int ret) {
+    _relay_recovery_in_flight = false;
     if(RAPI_RESPONSE_OK == ret) {
       readRelayHealth();
       readRelayStatus();
+    }
+    if(callback) callback(ret);
+  });
+}
+
+void EvseMonitor::resetRelayHealth(std::function<void(int ret)> callback)
+{
+  // $FH has no response payload beyond OK/NAK - re-read $GL afterward
+  // rather than guessing what a freshly-reset accumulator/baseline set
+  // looks like locally.
+  _openevse.resetRelayHealth([this, callback](int ret) {
+    if(RAPI_RESPONSE_OK == ret) {
+      readRelayHealth();
     }
     if(callback) callback(ret);
   });

@@ -557,6 +557,9 @@ class EvseManager : public MicroTasks::Task
     void runStuckRelayRecovery(std::function<void(int ret)> callback = NULL) {
       _monitor.runStuckRelayRecovery(callback);
     }
+    void resetRelayHealth(std::function<void(int ret)> callback = NULL) {
+      _monitor.resetRelayHealth(callback);
+    }
     void restartEvse() {
       _monitor.restart();
     }
