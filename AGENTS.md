@@ -27,15 +27,18 @@ two-core (IDF4/IDF5) subtleties: [docs/developer/building.md](docs/developer/bui
 
 ## Sandbox
 
-Agent work runs behind Claude Code's built-in Bash sandbox — an egress allowlist plus
-filesystem/credential guards in [`.claude/settings.json`](.claude/settings.json). It is
-enabled by that config, not by a command — on Linux/WSL2 first
-`sudo apt-get install bubblewrap socat`, and on Ubuntu 24.04+ add the `bwrap` AppArmor
-profile or every command fails with a `nested userns` error (especially in the VS Code
-extension). The `/sandbox` panel (terminal CLI only) shows
-the resolved policy. Build/test commands run without prompts;
-`docker` (integration tests) runs outside the sandbox. Full rationale and the domain
-allowlist: [docs/ai/sandbox.md](docs/ai/sandbox.md).
+Agent work can run behind Claude Code's built-in Bash sandbox — an egress allowlist plus
+filesystem/credential guards. That part is **opt-in and per-developer**: paste the starting
+point from [docs/ai/sandbox.md](docs/ai/sandbox.md) into your gitignored
+`.claude/settings.local.json`. On Linux/WSL2 first `sudo apt-get install bubblewrap socat`,
+and on Ubuntu 24.04+ add the `bwrap` AppArmor profile or every command fails with a
+`nested userns` error (especially in the VS Code extension). The `/sandbox` panel (terminal
+CLI only) shows the resolved policy. With it on, build/test commands run without prompts;
+`docker` (integration tests) runs outside the sandbox.
+
+What *is* checked in — and applies whether or not you sandbox — is
+[`.claude/settings.json`](.claude/settings.json): read denials for `*.pem`, `.env*` and
+`.vscode/settings.json`, and a confirmation prompt on `git push` and OTA flash.
 
 ## Test
 

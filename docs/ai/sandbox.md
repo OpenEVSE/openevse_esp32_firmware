@@ -5,11 +5,37 @@ permission friction but a real safety boundary — an agent can build, flash, an
 without either constant prompting or the ability to exfiltrate secrets, reach arbitrary
 hosts, or clobber the host filesystem.
 
-The policy lives in [`.claude/settings.json`](../../.claude/settings.json) (checked in,
-team-shared). It configures Claude Code's built-in **Bash sandbox**, which uses OS
-primitives — Seatbelt on macOS, [bubblewrap](https://github.com/containers/bubblewrap)
-on Linux/WSL2 — to confine every Bash command and its children. Native Windows is not
-supported; use WSL2 or a container.
+The sandbox is Claude Code's built-in **Bash sandbox**, which uses OS primitives —
+Seatbelt on macOS, [bubblewrap](https://github.com/containers/bubblewrap) on Linux/WSL2 —
+to confine every Bash command and its children. Native Windows is not supported; use
+WSL2 or a container.
+
+## What is checked in, and what is not
+
+The configuration is deliberately split in two:
+
+- [`.claude/settings.json`](../../.claude/settings.json) is checked in and applies to
+  everyone. It holds only the portable parts: the `deny` list for on-disk secrets and the
+  `ask` list for network-mutating commands. Neither needs a sandbox, neither assumes
+  anything about your machine, and neither changes your security posture — they only add
+  friction in front of things you probably want friction in front of.
+- **The sandbox itself is opt-in**, and lives in your gitignored
+  `.claude/settings.local.json`. Turning the sandbox on decides how much autonomy an agent
+  has on *your* machine, so the repo does not make that call for you. [Enable it](#enable-it)
+  below has a starting point to paste in.
+
+The split matters because the sandbox config is not free to adopt. It restricts network
+egress to a fixed list of domains, so anyone behind a corporate proxy or a PyPI/npm mirror
+that is not on the list gets build failures that do not obviously point back at this
+config. Ubuntu 24.04+ users need the [AppArmor workaround](#ubuntu-2404--apparmor-user-namespace-restriction)
+as well. And it is Claude-Code-only — contributors using Copilot, Codex or Cursor get
+nothing from it, while [`AGENTS.md`](../../AGENTS.md) and
+[`docs/ai/invariants.md`](invariants.md) serve all of them.
+
+Note also what the egress allowlist does *not* buy you: `github.com` and
+`api.anthropic.com` have to be reachable for the agent to work at all, so a determined
+exfiltration path stays open. Treat the allowlist as a guard against accidental reach and
+dependency confusion, not as a containment boundary.
 
 ## Enable it
 
@@ -18,12 +44,109 @@ supported; use WSL2 or a container.
 sudo apt-get install bubblewrap socat
 ```
 
-The sandbox is enabled by `sandbox.enabled` in the checked-in settings, so it applies as
-soon as the config is present — there is no command to run. In a terminal Claude Code
-session, `/sandbox` opens a panel to inspect the resolved policy and switch modes (it
-writes your mode choice to the gitignored `.claude/settings.local.json`, and shows a
-Dependencies tab if `bubblewrap`/`socat` are missing). That panel is not available in
-the VS Code extension or SDK harnesses; the policy still applies there.
+Then paste the block below into `.claude/settings.local.json` (gitignored, per-developer).
+It is a starting point, not a fixed policy — trim the `allow` list to the commands you
+actually run, and add any domain your mirror or proxy needs.
+
+```json
+{
+  "$schema": "https://json.schemastore.org/claude-code-settings.json",
+  "permissions": {
+    "allow": [
+      "Bash(curl -s --max-time 5 localhost:80*)",
+      "Bash(curl -fsS --max-time 5 localhost:80*)",
+      "Bash(python3 -m json.tool)",
+      "Bash(pio run *)",
+      "Bash(pio test *)",
+      "Bash(pio check *)",
+      "Bash(pio pkg *)",
+      "Bash(scripts/openevse_test.sh:*)",
+      "Bash(./scripts/openevse_test.sh:*)",
+      "Bash(pytest:*)",
+      "Bash(python3 -m pytest:*)",
+      "Bash(.venv/bin/pytest:*)",
+      "Bash(npm test:*)",
+      "Bash(npm run test:*)",
+      "Bash(npm run build:*)",
+      "Bash(npm run lint:*)",
+      "Bash(npm ci:*)",
+      "Bash(npx vitest:*)",
+      "Bash(socat:*)",
+      "Bash(lsof -i:*)",
+      "Bash(fuser:*)",
+      "Bash(.pio/build/native_openevse/program:*)",
+      "Bash(.pio/build/native_simulator/program:*)",
+      "Bash(divert_sim/divert_sim:*)",
+      "Bash(python scripts/docs_coverage.py:*)",
+      "Bash(python scripts/sync_screenshots.py:*)",
+      "Bash(git submodule status)"
+    ]
+  },
+  "sandbox": {
+    "enabled": true,
+    "autoAllowBashIfSandboxed": true,
+    "network": {
+      "allowedDomains": [
+        "api.anthropic.com",
+        "*.platformio.org",
+        "github.com",
+        "*.githubusercontent.com",
+        "objects.githubusercontent.com",
+        "codeload.github.com",
+        "registry.npmjs.org",
+        "pypi.org",
+        "files.pythonhosted.org",
+        "ghcr.io",
+        "*.pkg.github.com",
+        "playwright.azureedge.net",
+        "cdn.playwright.dev"
+      ]
+    },
+    "filesystem": {
+      "allowWrite": [
+        "~/.platformio",
+        "~/.platformio-core3",
+        "~/.cache",
+        "~/.npm"
+      ],
+      "denyRead": [
+        "~/.ssh",
+        "~/.aws"
+      ]
+    },
+    "credentials": {
+      "files": [
+        { "path": "~/.ssh", "mode": "deny" },
+        { "path": "~/.aws/credentials", "mode": "deny" }
+      ],
+      "envVars": [
+        { "name": "DEPENDABOT_PAT", "mode": "deny" },
+        { "name": "OTA_SIGNING_KEY", "mode": "deny" },
+        { "name": "GITHUB_TOKEN", "mode": "deny" },
+        { "name": "NPM_TOKEN", "mode": "deny" }
+      ]
+    },
+    "excludedCommands": [
+      "docker *",
+      "*openevse_test.sh emulator*",
+      "*openevse_test.sh launch*",
+      "*openevse_test.sh integration*",
+      "*pytest tests/integration*"
+    ]
+  }
+}
+```
+
+In a terminal Claude Code session, `/sandbox` opens a panel to inspect the resolved policy
+and switch modes (it writes your mode choice to the same
+`.claude/settings.local.json`, and shows a Dependencies tab if `bubblewrap`/`socat` are
+missing). That panel is not available in the VS Code extension or SDK harnesses; the
+policy still applies there.
+
+Claude Code's settings schema moves fairly quickly, and renamed or removed keys degrade
+silently rather than erroring — a stale block can look protective while doing nothing. If
+you paste this and later find prompts appearing where they did not before, check the
+current schema rather than assuming the config is still in force.
 
 ### Ubuntu 24.04+ — AppArmor user namespace restriction
 
@@ -74,9 +197,9 @@ blocked like any other Unix socket. Without this, `git push` falls back to runni
 outside the sandbox and prompts each time.
 
 Prefer the **ssh-agent** over exposing a key file — the agent only ever returns
-signatures, never private key material, so no key becomes readable. Because the socket
-path is specific to your UID and agent, put it in the gitignored
-`.claude/settings.local.json`, not the shared policy:
+signatures, never private key material, so no key becomes readable. The socket path is
+specific to your UID and agent, so this is per-developer too — merge it into the same
+`.claude/settings.local.json` as the block above:
 
 ```json
 {
@@ -102,6 +225,26 @@ should stay off.
 
 ## What the policy does
 
+The first two bullets are the checked-in half, in
+[`.claude/settings.json`](../../.claude/settings.json); they apply to everyone and need no
+sandbox. The rest describe the opt-in block above, and only apply once you have pasted it
+into `.claude/settings.local.json`.
+
+- **Read denials for on-disk secrets** (`permissions.deny`, checked in) — the built-in
+  Read/Edit tools are *not* covered by the Bash sandbox, so `*.pem` (OTA signing keys),
+  `.env` files, and `.vscode/settings.json` (holds test Wi-Fi creds) are denied directly.
+  - **Bounded-depth deny globs, deliberately** — the secret denials use explicit
+    `./*/`, `./*/*/` levels rather than a recursive `./**/`. Path patterns are resolved
+    against the real tree, and that resolution follows symlinks. `lib/` symlinks point at
+    sibling checkouts (`../../ArduinoMongoose` etc.) whose `examples/*/lib/` directories
+    symlink *back* to their own root, forming cycles. A recursive `**` walk never
+    terminates on that shape — it generates paths until the process is OOM-killed
+    (observed: ~20 GB RSS in the V3.x tree, which has these `lib/` symlinks). Every real
+    secret lives at depth ≤ 3, so bounding the depth costs no coverage. **Do not change
+    these back to `**`.**
+- **Prompts on network-mutating actions** (`permissions.ask`, checked in) — `git push` and
+  the device OTA flash (`curl ... /update`) still surface a confirmation even in
+  auto-allow.
 - **Network egress allowlist** (`sandbox.network.allowedDomains`) — sandboxed commands
   can only reach the domains the build actually needs: PlatformIO registry, GitHub
   (toolchain + git deps), npm, PyPI, GHCR (integration-test emulator image), Playwright
@@ -116,20 +259,6 @@ should stay off.
 - **Credential protection** (`sandbox.credentials` + `filesystem.denyRead`) — reads of
   `~/.ssh` and `~/.aws` are blocked, and `DEPENDABOT_PAT`, `OTA_SIGNING_KEY`,
   `GITHUB_TOKEN`, `NPM_TOKEN` are unset for sandboxed commands.
-- **Read denials for on-disk secrets** (`permissions.deny`) — the built-in Read/Edit
-  tools are *not* covered by the Bash sandbox, so `*.pem` (OTA signing keys), `.env`
-  files, and `.vscode/settings.json` (holds test Wi-Fi creds) are denied directly.
-- **Bounded-depth deny globs, deliberately** — the secret denials use explicit
-  `./*/`, `./*/*/` levels rather than a recursive `./**/`. Path patterns are resolved
-  against the real tree, and that resolution follows symlinks. `lib/` symlinks point at
-  sibling checkouts (`../../ArduinoMongoose` etc.) whose `examples/*/lib/` directories
-  symlink *back* to their own root, forming cycles. A recursive `**` walk never
-  terminates on that shape — it generates paths until the process is OOM-killed (observed:
-  ~20 GB RSS in the V3.x tree, which has these `lib/` symlinks). Every real secret lives
-  at depth ≤ 3, so bounding the depth costs no coverage. **Do not change these back to
-  `**`.**
-- **Prompts on network-mutating actions** (`permissions.ask`) — `git push` and the
-  device OTA flash (`curl ... /update`) still surface a confirmation even in auto-allow.
 - **docker escape hatch** (`sandbox.excludedCommands`) — `docker` is incompatible with
   the sandbox and is used by the integration tests, so it runs outside the sandbox via
   the normal permission flow. The emulator-backed harness entry points
@@ -276,6 +405,9 @@ diagnostics work; anything asserting on real EVSE state needs `emulator` or `int
   reference container) or a VM. That is a deliberate follow-up, not set up here.
 
 ## Verify
+
+Assumes you have pasted the [opt-in block](#enable-it) into `.claude/settings.local.json`;
+without it there is no sandbox to verify and these all just run normally.
 
 ```bash
 scripts/openevse_test.sh all     # unit + divert + gui, all sandboxed
