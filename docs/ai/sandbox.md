@@ -356,6 +356,58 @@ creates the PTY itself and neither Docker nor `socat` is involved. `--no-emulato
 firmware-only instance on a loopback PTY — no Docker, so it also works sandboxed, at the
 cost of RAPI never answering (`/status` stays `state=0`).
 
+### Running someone else's firmware build
+
+The firmware is your local native build unless you ask otherwise. `--firmware docker` runs
+it from the image built by
+[`.github/workflows/native_docker.yaml`](../../.github/workflows/native_docker.yaml)
+instead, which is how you try a change without building it:
+
+| flag                   | image                                           |
+| ---------------------- | ----------------------------------------------- |
+| `--pr N`               | `ghcr.io/openevse/openevse-wifi-native:pr-N`    |
+| `--firmware-tag TAG`   | the same repo at `TAG` (`latest`, a version)    |
+| `--firmware-image REF` | any image reference, e.g. one you built locally |
+
+```bash
+# review a PR by running it, with an emulator behind it
+scripts/openevse_test.sh launch -i 1 --pr 1027
+
+# the released build, or your own image
+scripts/openevse_test.sh launch -i 1 --firmware-tag latest
+scripts/openevse_test.sh launch -i 1 --firmware-image openevse-native:wip
+```
+
+The repo default is overridable with `OPENEVSE_NATIVE_IMAGE_REPO` / `OPENEVSE_NATIVE_IMAGE`.
+The image is public, so `docker pull` needs no login and no `gh`.
+
+**PR images exist only for branches in this repo.** A fork's `GITHUB_TOKEN` is read-only, so
+its build cannot push — publishing those would need `pull_request_target`, which runs
+untrusted code with a write token and is not worth it. `--pr N` on a fork PR fails with a
+message saying so; use `--firmware-image` with something you built, or drop `--pr`.
+
+#### How the RAPI link differs
+
+The image's entrypoint runs `socat` itself, so a containerised firmware takes RAPI over TCP
+rather than a PTY, and the host bridges nothing:
+
+| firmware | emulator | RAPI link                                                    |
+| -------- | -------- | ------------------------------------------------------------ |
+| local    | docker   | host `socat` PTY → published TCP port                        |
+| local    | local    | emulator creates the PTY directly                            |
+| local    | none     | host loopback PTY, nothing on the far end                    |
+| docker   | docker   | private Docker network, `openevse_emulator_<i>:8023`         |
+| docker   | local    | `host.docker.internal:8023+i`, emulator switched to TCP mode |
+| docker   | none     | a TCP sink on `8023+i` that accepts and never replies        |
+
+When both are containers they get a private network rather than talking through the host,
+so the emulator's RAPI port stays published on loopback only.
+
+Because the container brings its own filesystem and makes its own PTY, `--workdir` and
+`--rapi-serial` mean nothing there — both are rejected rather than silently ignored. Note
+also that state does not persist across runs the way it does for a local instance with its
+per-instance working directory.
+
 ```bash
 # two terminals, two peers, Docker emulators
 scripts/openevse_test.sh launch -i 0

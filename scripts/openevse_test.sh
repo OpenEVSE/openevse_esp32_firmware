@@ -15,6 +15,7 @@
 #   scripts/openevse_test.sh integration -v            # emulator-backed pytest
 #   scripts/openevse_test.sh emulator -- pytest tests/integration/
 #   scripts/openevse_test.sh launch -i 1               # one long-lived pair
+#   scripts/openevse_test.sh launch -i 1 --pr 1027     # ... running a PR's build
 #
 # `native` runs sandboxed: each instance gets a loopback PTY with nothing on
 # the far end, so RAPI never answers and /status stays state=0 (STARTING).
@@ -32,6 +33,8 @@
 #          [--workdir DIR] [--set-config NAME=VALUE]...
 #          [--emulator docker|local|none] [--local] [--emulator-dir DIR]
 #          [--emulator-image IMAGE] [--no-emulator]
+#          [--firmware docker|local] [--firmware-image IMAGE]
+#          [--firmware-tag TAG] [--pr N]
 #          [--[no-]firmware-console] [--[no-]emulator-console]
 #          [--console | --no-console] [-- cmd ...]
 #
@@ -41,6 +44,19 @@
 # persists per instance). The emulator runs from the Docker image by default
 # (bridged to the firmware's PTY with socat); `--local` runs it from a source
 # checkout instead, which needs no Docker and no socat.
+#
+# The FIRMWARE is the local native build by default. `--firmware docker` runs it
+# from the image built by .github/workflows/native_docker.yaml instead, which is
+# how you try someone else's build without building it yourself:
+#
+#   --pr N               ghcr.io/openevse/openevse-wifi-native:pr-N
+#   --firmware-tag TAG   the same repo at an arbitrary tag (latest, a version)
+#   --firmware-image REF any image at all, for a locally built one
+#
+# The image's entrypoint runs socat itself, so a containerised firmware takes
+# RAPI over TCP rather than a PTY and reaches the emulator back through
+# host.docker.internal. That makes --workdir and --rapi-serial meaningless
+# there, and both are rejected rather than ignored.
 #
 # The firmware console is mirrored to this terminal as `[fw<i>] ...`; the
 # emulator console (`[emu<i>] ...`) is off by default because it logs every RAPI
@@ -59,6 +75,12 @@ emu_rapi_base=8023
 native_binary="${NATIVE_BINARY_PATH:-.pio/build/native_openevse/program}"
 sim_binary=".pio/build/native_simulator/program"
 emulator_image="${OPENEVSE_EMULATOR_IMAGE:-ghcr.io/jeremypoulter/openevse_emulator:latest}"
+
+# Firmware-from-Docker: the image built by .github/workflows/native_docker.yaml.
+# Its entrypoint runs socat itself (TCP -> PTY) and then the firmware, so the
+# host does not bridge anything for a containerised instance.
+native_image_repo="${OPENEVSE_NATIVE_IMAGE_REPO:-ghcr.io/openevse/openevse-wifi-native}"
+native_image="${OPENEVSE_NATIVE_IMAGE:-$native_image_repo:latest}"
 emulator_dir="${OPENEVSE_EMULATOR_DIR:-$repo_root/../OpenEVSE_Emulator}"
 
 # /tmp is read-only inside the sandbox; TMPDIR is not.
@@ -66,6 +88,13 @@ run_dir="$(mktemp -d "${TMPDIR:-/tmp}/openevse-harness.XXXXXX")"
 
 pids=()
 containers=()
+networks=()
+
+# Set when the firmware and the emulator are both containers: they then talk
+# over a private network by container name, so the emulator's RAPI port stays
+# published on loopback only (or not at all) rather than being opened up to
+# reach the firmware container.
+docker_network=""
 
 # Parallel arrays describing the instances this invocation started, so the
 # env export and the status dump work off real instance IDs rather than
@@ -93,6 +122,11 @@ cleanup() {
   for name in "${containers[@]:-}"; do
     [ -n "$name" ] || continue
     docker rm -f "$name" >/dev/null 2>&1
+  done
+  # After the containers, or the network is still in use.
+  for name in "${networks[@]:-}"; do
+    [ -n "$name" ] || continue
+    docker network rm "$name" >/dev/null 2>&1
   done
   rm -rf "$run_dir"
   return $status
@@ -231,6 +265,59 @@ start_native() {
   inst_url+=("http://localhost:$port")
 }
 
+# Start one firmware instance from the Docker image instead of a local build:
+#   $1 = index, $2 = hostname, $3 = chip ID, $4 = RAPI TCP port on the host,
+#   $5 = HTTP port, $6.. = extra arguments for the binary.
+# The image's entrypoint runs socat (TCP -> PTY) and then the firmware, so the
+# RAPI link is a TCP port here rather than a PTY the host has to bridge. The
+# emulator is reached back out through host-gateway, which works whether it is
+# another container publishing a port or a source checkout listening on one.
+start_native_docker() {
+  local idx=$1 name=$2 chip_id=$3 rapi_host=$4 rapi_port=$5 port=$6
+  local container="openevse_native_$1" tls_port=$((native_tls_base + $1))
+  shift 6
+  docker rm -f "$container" >/dev/null 2>&1 || true
+  docker run -d --name "$container" \
+    ${docker_network:+--network "$docker_network"} \
+    --add-host "host.docker.internal:host-gateway" \
+    -p "127.0.0.1:$port:$port" -p "127.0.0.1:$tls_port:$tls_port" \
+    -e "OPENEVSE_CHIP_ID=$chip_id" \
+    -e "EMULATOR_HOST=$rapi_host" \
+    -e "EMULATOR_PORT=$rapi_port" \
+    "$native_image" \
+    --set-config "hostname=$name" \
+    --set-config "www_http_port=$port" \
+    --set-config "www_https_port=$tls_port" \
+    "$@" >/dev/null
+  containers+=("$container")
+  if ! wait_for_http "http://localhost:$port/config" 60; then
+    log "instance $idx did not come up on port $port; last log lines:"
+    docker logs --tail 20 "$container" >&2 2>&1 || true
+    die "containerised firmware failed to start"
+  fi
+  log "instance $idx ($name, chip id $chip_id) ready on http://localhost:$port (container $container, image $native_image)"
+  if [ "$firmware_console" = 1 ]; then
+    # No host log file — the console lives in the container.
+    follow_console "fw$idx" "[fw$idx]" -- docker logs -f --tail=all "$container"
+  fi
+  inst_index+=("$idx")
+  inst_name+=("$name")
+  inst_url+=("http://localhost:$port")
+}
+
+# A TCP listener that accepts the containerised firmware's RAPI connection and
+# never answers — the TCP equivalent of start_loopback_pty, for --no-emulator.
+# Without something listening, the socat inside the image exits and takes the
+# entrypoint with it.
+start_null_rapi_listener() {
+  local rapi_port=$1
+  # Bound to all interfaces, not loopback: the client is inside a container and
+  # arrives via the bridge. It is a sink that never replies, so there is nothing
+  # to reach.
+  socat "TCP-LISTEN:$rapi_port,reuseaddr,fork" "PTY,rawer" >/dev/null 2>&1 &
+  pids+=("$!")
+}
+
 # Loopback PTY pair at $1: the firmware opens one end, nothing answers on the
 # other. Keeps the serial port open so the firmware boots and serves HTTP.
 start_loopback_pty() {
@@ -250,6 +337,26 @@ bridge_pty_to_tcp() {
   wait_for_path "$pty" || die "socat did not bridge $pty to port $rapi_port"
 }
 
+# Pull the firmware image if it is not already local. A missing pr-N tag is the
+# common case and worth explaining: the image is built for every PR but only
+# published for branches in this repo, because a fork's GITHUB_TOKEN cannot
+# write packages.
+require_native_image() {
+  local pr=${1:-}
+  docker image inspect "$native_image" >/dev/null 2>&1 && return 0
+  log "pulling $native_image"
+  if docker pull "$native_image" >/dev/null 2>&1; then
+    return 0
+  fi
+  if [ -n "$pr" ]; then
+    die "no image published for PR #$pr ($native_image).
+  Either the build has not finished yet, or the PR is from a fork — fork builds
+  cannot push to GHCR. Check the 'Native Docker Image' run on the PR, or use
+  --firmware-image IMAGE with an image you have, or drop --pr to build locally."
+  fi
+  die "could not pull $native_image — check the tag exists, or pass --firmware-image IMAGE"
+}
+
 require_docker() {
   docker info >/dev/null 2>&1 || die "docker unreachable. The sandbox blocks the docker socket and host-published ports — run this subcommand outside the sandbox (see docs/ai/sandbox.md)."
   docker image inspect "$emulator_image" >/dev/null 2>&1 || docker pull "$emulator_image"
@@ -262,6 +369,7 @@ start_emulator_docker() {
   docker rm -f "$name" >/dev/null 2>&1 || true
   # Publish on loopback only — these are test instances with no auth in front.
   docker run -d --name "$name" \
+    ${docker_network:+--network "$docker_network"} \
     -p "127.0.0.1:$web_port:8080" -p "127.0.0.1:$rapi_port:8023" \
     -e WEB_PORT=8080 -e SERIAL_MODE=tcp -e SERIAL_TCP_PORT=8023 \
     -e PYTHONUNBUFFERED=1 \
@@ -276,18 +384,28 @@ start_emulator_docker() {
   fi
 }
 
-# Emulator from a source checkout: $1 = index, $2 = web port, $3 = PTY path.
-# The emulator creates the PTY itself, so no socat bridge is needed.
+# Emulator from a source checkout: $1 = index, $2 = web port, $3 = PTY path,
+# $4 = RAPI TCP port (empty for PTY mode).
+# In PTY mode the emulator creates the PTY itself, so no socat bridge is needed.
+# A containerised firmware cannot see a host PTY, so it asks for TCP mode
+# instead and the socat inside the image does the bridging.
 start_emulator_local() {
-  local idx=$1 web_port=$2 pty=$3 python_bin=python3 logfile="$run_dir/emulator$1.log" emu_pid
+  local idx=$1 web_port=$2 pty=$3 rapi_port=${4:-}
+  local python_bin=python3 logfile="$run_dir/emulator$1.log" emu_pid
+  local serial_args
   [ -f "$emulator_dir/src/main.py" ] \
     || die "no emulator checkout at $emulator_dir — clone https://github.com/jeremypoulter/OpenEVSE_Emulator, pass --emulator-dir DIR, or drop --local to use the docker image"
   [ -x "$emulator_dir/.venv/bin/python" ] && python_bin="$emulator_dir/.venv/bin/python"
+  if [ -n "$rapi_port" ]; then
+    serial_args="--serial-mode tcp --serial-tcp-port $rapi_port"
+  else
+    serial_args="--serial-mode pty --serial-pty-path $pty"
+  fi
   (
     cd "$emulator_dir"
     # -u so the log (and the mirrored console) is not held in python's buffer.
-    exec "$python_bin" -u src/main.py \
-      --serial-mode pty --serial-pty-path "$pty" \
+    # shellcheck disable=SC2086 # serial_args is built above, deliberately split
+    exec "$python_bin" -u src/main.py $serial_args \
       --web-host 127.0.0.1 --web-port "$web_port" \
       > "$logfile" 2>&1
   ) &
@@ -298,7 +416,9 @@ start_emulator_local() {
     tail -20 "$logfile" >&2 || true
     die "local emulator failed to start — missing deps? pip install -r $emulator_dir/requirements.txt (or drop --local to use the docker image)"
   fi
-  wait_for_path "$pty" || die "emulator did not create $pty"
+  if [ -z "$rapi_port" ]; then
+    wait_for_path "$pty" || die "emulator did not create $pty"
+  fi
   log "emulator $idx ready on http://localhost:$web_port (source: $emulator_dir, log: $logfile)"
   if [ "$emulator_console" = 1 ]; then
     follow_console "emu$idx" "[emu$idx]" -- tail --pid="$emu_pid" -n +1 -F "$logfile"
@@ -453,7 +573,7 @@ cmd_emulator() {
 # Docker unless --local or --no-emulator is given.
 cmd_launch() {
   local id=0 http_port= web_port= rapi_port= pty= chip_id= hostname= workdir=
-  local emulator_mode=docker
+  local emulator_mode=docker firmware_mode=local pr=
   local extra_config=()
   # Firmware console on, emulator console off — the firmware is what you are
   # usually debugging, the emulator is chatty about every RAPI poll.
@@ -479,6 +599,10 @@ cmd_launch() {
       --emulator)             emulator_mode=$(arg_value "$1" "${2:-}"); shift 2 ;;
       --local|--local-source) emulator_mode=local; shift ;;
       --docker)               emulator_mode=docker; shift ;;
+      --firmware)             firmware_mode=$(arg_value "$1" "${2:-}"); shift 2 ;;
+      --firmware-image)       native_image=$(arg_value "$1" "${2:-}"); firmware_mode=docker; shift 2 ;;
+      --firmware-tag)         native_image="$native_image_repo:$(arg_value "$1" "${2:-}")"; firmware_mode=docker; shift 2 ;;
+      --pr)                   pr=$(arg_value "$1" "${2:-}"); firmware_mode=docker; shift 2 ;;
       --emulator-dir)         emulator_dir=$(arg_value "$1" "${2:-}"); emulator_mode=local; shift 2 ;;
       --emulator-image)       emulator_image=$(arg_value "$1" "${2:-}"); emulator_mode=docker; shift 2 ;;
       --no-emulator)          emulator_mode=none; shift ;;
@@ -491,6 +615,20 @@ cmd_launch() {
     docker|local|none) ;;
     *) die "--emulator takes docker, local or none (got '$emulator_mode')" ;;
   esac
+  case $firmware_mode in
+    docker|local) ;;
+    *) die "--firmware takes docker or local (got '$firmware_mode')" ;;
+  esac
+  if [ -n "$pr" ]; then
+    is_number "$pr" || die "--pr takes a pull request number (got '$pr')"
+    native_image="$native_image_repo:pr-$pr"
+  fi
+  if [ "$firmware_mode" = docker ]; then
+    # The container brings its own filesystem and makes its own PTY, so these
+    # would be silently ignored rather than doing what they say.
+    [ -z "$workdir" ] || die "--workdir has no meaning with a containerised firmware — its state lives in the container"
+    [ -z "$pty" ] || die "--rapi-serial has no meaning with a containerised firmware — it bridges RAPI over tcp/$((emu_rapi_base + id)) instead"
+  fi
   is_number "$id" || die "instance ID must be a non-negative integer (got '$id')"
   local port
   for port in "$http_port" "$web_port" "$rapi_port"; do
@@ -521,13 +659,24 @@ cmd_launch() {
   cat >&2 <<EOF
 
 instance     $id
-firmware     http://localhost:$http_port  (workdir $workdir)
+firmware     http://localhost:$http_port  $(case $firmware_mode in
+                local)  printf '(local build %s, workdir %s)' "$native_binary" "$workdir" ;;
+                docker) printf '(docker image %s)' "$native_image" ;;
+              esac)
 emulator     $(case $emulator_mode in
                 docker) printf 'http://localhost:%s  (docker image %s)' "$web_port" "$emulator_image" ;;
                 local)  printf 'http://localhost:%s  (source %s)' "$web_port" "$emulator_dir" ;;
                 none)   printf 'none' ;;
               esac)
-rapi serial  $pty$([ "$emulator_mode" = docker ] && printf ' -> tcp/%s' "$rapi_port")
+rapi link    $(if [ "$firmware_mode" = docker ] && [ "$emulator_mode" = docker ]; then
+                printf 'openevse_emulator_%s:8023 over a private docker network' "$id"
+              elif [ "$firmware_mode" = docker ]; then
+                printf 'host.docker.internal:%s (bridged inside the firmware container)' "$rapi_port"
+              elif [ "$emulator_mode" = docker ]; then
+                printf '%s -> tcp/%s' "$pty" "$rapi_port"
+              else
+                printf '%s' "$pty"
+              fi)
 chip ID      $chip_id
 hostname     $hostname
 console      $console_summary
@@ -535,19 +684,51 @@ logs         $run_dir
 
 EOF
 
-  [ "$emulator_mode" = docker ] && require_docker
-  require_native_binary
+  { [ "$emulator_mode" = docker ] || [ "$firmware_mode" = docker ]; } && require_docker
+  if [ "$firmware_mode" = docker ]; then
+    require_native_image "$pr"
+  else
+    require_native_binary
+  fi
+
+  # A containerised firmware reaches RAPI over TCP, so the emulator has to offer
+  # a TCP port rather than a PTY, and --no-emulator needs something listening.
+  local emulator_rapi= rapi_host=host.docker.internal
+  if [ "$firmware_mode" = docker ]; then
+    emulator_rapi=$rapi_port
+    # Both containers: give them a private network and let the firmware reach
+    # the emulator by name on its internal port, so the emulator's RAPI stays
+    # published on loopback only.
+    if [ "$emulator_mode" = docker ]; then
+      docker_network="openevse_harness_$id"
+      docker network rm "$docker_network" >/dev/null 2>&1 || true
+      docker network create "$docker_network" >/dev/null \
+        || die "could not create docker network $docker_network"
+      networks+=("$docker_network")
+      rapi_host="openevse_emulator_$id"
+      emulator_rapi=8023
+    fi
+  fi
 
   case $emulator_mode in
     docker) start_emulator_docker "$id" "openevse_emulator_$id" "$web_port" "$rapi_port"
-            bridge_pty_to_tcp "$pty" "$rapi_port" ;;
-    local)  start_emulator_local "$id" "$web_port" "$pty" ;;
-    none)   log "no emulator — loopback PTY only, so RAPI never answers and /status stays state=0"
-            start_loopback_pty "$pty" ;;
+            [ "$firmware_mode" = docker ] || bridge_pty_to_tcp "$pty" "$rapi_port" ;;
+    local)  start_emulator_local "$id" "$web_port" "$pty" "$emulator_rapi" ;;
+    none)   log "no emulator — RAPI never answers, so /status stays state=0"
+            if [ "$firmware_mode" = docker ]; then
+              start_null_rapi_listener "$rapi_port"
+            else
+              start_loopback_pty "$pty"
+            fi ;;
   esac
 
-  start_native "$id" "$hostname" "$chip_id" "$pty" "$http_port" "$workdir" \
-    "${extra_config[@]}"
+  if [ "$firmware_mode" = docker ]; then
+    start_native_docker "$id" "$hostname" "$chip_id" "$rapi_host" "$emulator_rapi" \
+      "$http_port" "${extra_config[@]}"
+  else
+    start_native "$id" "$hostname" "$chip_id" "$pty" "$http_port" "$workdir" \
+      "${extra_config[@]}"
+  fi
 
   if [ "$emulator_mode" != none ]; then
     wait_for_evse_state "http://localhost:$http_port" 30 \

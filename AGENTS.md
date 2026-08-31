@@ -58,6 +58,7 @@ scripts/openevse_test.sh native -- curl -s "$EVSE_URL/status"
 scripts/openevse_test.sh emulator -n 2        # 2 firmware + emulator pairs (needs docker)
 scripts/openevse_test.sh integration          # emulator-backed pytest (needs docker)
 scripts/openevse_test.sh launch -i 1          # one long-lived emulator + firmware pair
+scripts/openevse_test.sh launch -i 1 --pr 1027   # ... running a PR's build, not yours
 ```
 
 Each sandboxed Bash call gets its **own network namespace**, so a server started
@@ -80,6 +81,11 @@ Docker image by default; `--local` runs it from a source checkout and
 `--no-emulator` gives a firmware-only instance that works inside the sandbox.
 The firmware console is mirrored to the terminal (`[fw<i>] …`) and the emulator
 console is not — `--[no-]firmware-console` / `--[no-]emulator-console` flip either.
+
+The firmware is your local native build unless you ask otherwise. `--pr N` runs a PR's
+published image instead (`--firmware-tag` / `--firmware-image` for any other), which is the
+quick way to try someone's change without building it. Fork PRs have no published image —
+their CI cannot push — and `--pr` says so if you hit one.
 
 ## Validation gate — run after ANY change
 
