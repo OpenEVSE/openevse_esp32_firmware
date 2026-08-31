@@ -191,6 +191,7 @@ In addition to the individual status values, the firmware maintains a set of **r
 | `<base>/override` | The current manual override, or `{"state":"null"}` when none |
 | `<base>/schedule` | The charge scheduler configuration |
 | `<base>/limit` | The active charge limit, or an empty/none limit when not set |
+| `<base>/boost` | The active boost as a retained JSON object, or `{}` when idle |
 
 ## Command topics (subscribed by OpenEVSE)
 
@@ -207,6 +208,8 @@ All commands are sub-topics of the base-topic. JSON payloads use exactly the sam
 | `<base>/schedule/clear` | event id (integer) | Remove one schedule event |
 | `<base>/limit/set` | JSON [limit properties](https://openevse.stoplight.io/docs/openevse-wifi-v4/c410fb5e48294-set-charge-limit) | Set a session limit (`type`: `time`, `energy`, `soc` or `range`) |
 | `<base>/limit/set` | `clear` | Clear the session limit |
+| `<base>/boost/set` | JSON boost properties (same schema as `POST /boost`) | Arm/replace a boost (`type`: `time`, `energy`, `soc` or `range`) |
+| `<base>/boost/set` | `off` or `clear` | Cancel the active boost |
 | `<base>/config/set` | JSON config object (any subset of [config keys](../models/Config.yaml)) | Update device configuration |
 | `<base>/divertmode/set` | `1` or `2` | Set divert mode: `1` = normal, `2` = eco |
 | `<base>/shaper/set` | `0` or `1` | Temporarily disable (`0`) / enable (`1`) the current shaper (does not survive a reboot) |

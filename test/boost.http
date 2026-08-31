@@ -1,0 +1,45 @@
+# Name: REST Client
+# Id: humao.rest-client
+# Description: REST Client for Visual Studio Code
+#
+# Set {{baseUrl}} in your environment vars, e.g. http://openevse.local
+
+###
+
+# Get the current boost (idle: 200 + {})
+GET {{baseUrl}}/boost HTTP/1.1
+
+###
+
+# Arm a 1-hour time boost (value is SECONDS)
+POST {{baseUrl}}/boost HTTP/1.1
+
+{
+  "type": "time",
+  "value": 3600
+}
+
+###
+
+# Arm an energy boost: 5 kWh more from now (Wh delta since arming)
+POST {{baseUrl}}/boost HTTP/1.1
+
+{
+  "type": "energy",
+  "value": 5000
+}
+
+###
+
+# Boost to 80% SoC (422 without a vehicle data source)
+POST {{baseUrl}}/boost HTTP/1.1
+
+{
+  "type": "soc",
+  "value": 80
+}
+
+###
+
+# Cancel the boost (404 when idle)
+DELETE {{baseUrl}}/boost HTTP/1.1
