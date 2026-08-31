@@ -61,6 +61,7 @@ void Mqtt::setup() {
   _overrideVersion = manual.getVersion() == 0 ? 1 : manual.getVersion() -1;
   _scheduleVersion = scheduler.getVersion() == 0 ? 1 : scheduler.getVersion() -1;
   _limitVersion = limit.getVersion() == 0 ? 1 : limit.getVersion() -1;
+  _boostVersion = boost.getVersion() == 0 ? 1 : boost.getVersion() - 1;
 
   // Setup MQTT client callbacks
   _mqttclient.onMessage([this](MongooseString topic, MongooseString payload) {
@@ -339,6 +340,7 @@ void Mqtt::subscribeTopics() {
   _mqttclient.subscribe(mqtt_topic + "/schedule/set"); yield();
   _mqttclient.subscribe(mqtt_topic + "/schedule/clear"); yield();
   _mqttclient.subscribe(mqtt_topic + "/limit/set"); yield();
+  _mqttclient.subscribe(mqtt_topic + "/boost/set"); yield();
   _mqttclient.subscribe(mqtt_topic + "/config/set"); yield();
   _mqttclient.subscribe(mqtt_topic + "/restart"); yield();
 
@@ -364,6 +366,7 @@ void Mqtt::publishInitialState() {
     _overrideVersion = manual.getVersion() == 0 ? 1 : manual.getVersion() -1;
     _scheduleVersion = scheduler.getVersion() == 0 ? 1 : scheduler.getVersion() -1;
     _limitVersion = limit.getVersion() == 0 ? 1 : limit.getVersion() -1;
+    _boostVersion = boost.getVersion() == 0 ? 1 : boost.getVersion() - 1;
 
     checkAndPublishUpdates(); // This will now publish everything
 }
@@ -393,6 +396,12 @@ void Mqtt::checkAndPublishUpdates() {
     publishLimit();
     DBUGLN("Limit has changed, publishing to MQTT");
     _limitVersion = limit.getVersion();
+  }
+
+  if (_boostVersion != boost.getVersion()) {
+    publishBoost();
+    DBUGLN("Boost has changed, publishing to MQTT");
+    _boostVersion = boost.getVersion();
   }
 
   if (_configVersion != config_version()) {
@@ -531,6 +540,13 @@ void Mqtt::handleMqttMessage(MongooseString topic, MongooseString payload) {
       publishLimit(); // Need to ensure limit publishes its state.
     } else if (_limit_props.deserialize(payload_str)) {
       setLimit(_limit_props);
+    }
+  }
+  else if (topic_string == mqtt_topic + "/boost/set") {
+    if (payload_str.equals("off") || payload_str.equals("clear") || payload_str.length() == 0) {
+      boost.cancel();  // version bump makes the poll republish
+    } else if (Boost_Armed != boost.arm(payload_str.c_str())) {
+      DBUGLN("MQTT boost/set rejected");
     }
   }
   else if (topic_string == mqtt_topic + "/config/set") {
@@ -732,6 +748,19 @@ void Mqtt::publishLimit() {
     serializeJson(limit_data, payload);
     _mqttclient.publish(fulltopic, payload, true); // Limits usually retained
   }
+}
+
+void Mqtt::publishBoost() {
+  String payload;
+  if (boost.isActive()) {
+    StaticJsonDocument<192> boost_data;
+    boost.serialize(boost_data);
+    serializeJson(boost_data, payload);
+  } else {
+    payload = "{}";
+  }
+  String fulltopic = mqtt_topic + "/boost";
+  _mqttclient.publish(fulltopic, payload, true);
 }
 
 // --- Notification methods ---

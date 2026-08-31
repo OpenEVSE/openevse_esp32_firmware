@@ -21,6 +21,17 @@ struct PeerEvent
   bool request_current = false;
   bool set_aux_load_kw = false;
   double aux_load_kw = 0.0;
+
+  // {"boost": {"type": "time", "value": 900}} arms; {"boost": "cancel"} cancels.
+  bool set_boost = false;
+  bool boost_cancel = false;
+  std::string boost_type;
+  uint32_t boost_value = 0;
+
+  // {"manual": "disabled"|"active"|"release"} drives the peer's ManualOverride
+  // (priority 1000), which outranks Boost (200).
+  bool set_manual = false;
+  std::string manual_state;
 };
 
 struct PeerScenario

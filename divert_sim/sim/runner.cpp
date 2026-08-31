@@ -305,6 +305,7 @@ int run(const std::string &scenario_path,
       writer.addDouble(ev_max_w, 1);
       writer.addDouble(actual_w, 1);
       writer.addDouble(s.soc, 2);
+      writer.addBool(p->boost().isActive());
       std::string claim_state;
       std::string claim_details = formatClaimDetails(p->evse(), claim_state);
       writer.addString(claim_state);

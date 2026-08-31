@@ -52,6 +52,7 @@ typedef const __FlashStringHelper *fstr_t;
 #include "limit.h"
 #include "loadsharing_types.h"
 #include "loadsharing_peer_poller.h"
+#include "boost.h"
 #include "web_auth.h"
 #include "web_auth_secret.h"
 
@@ -669,6 +670,7 @@ void buildStatus(DynamicJsonDocument &doc) {
   doc["shaper_updated"] = shaper.isUpdated();
   doc["service_level"] = static_cast<uint8_t>(evse.getActualServiceLevel());
   doc["limit"] = limit.hasLimit();
+  doc["boost"] = boost.isActive();
 
   doc["ota_update"] = (int)Update.isRunning();
 
@@ -736,6 +738,7 @@ void buildStatus(DynamicJsonDocument &doc) {
   doc["schedule_version"] = scheduler.getVersion();
   doc["schedule_plan_version"] = scheduler.getPlanVersion();
   doc["limit_version"] = limit.getVersion();
+  doc["boost_version"] = boost.getVersion();
 
   doc["vehicle_state_update"] = (millis() - evse.getVehicleLastUpdated()) / 1000;
   if(teslaClient.getVehicleCnt() > 0) {
@@ -1288,6 +1291,76 @@ void handleLimit(MongooseHttpServerRequest *request)
     handleLimitPost(request, response);
   } else if(HTTP_DELETE == request->method()) {
     handleLimitDelete(request, response);
+  } else {
+    response->setCode(405);
+    response->print("{\"msg\":\"Method not allowed\"}");
+  }
+
+  request->send(response);
+}
+
+//----------------------------------------------------------
+//
+//            Boost
+//
+//----------------------------------------------------------
+
+void handleBoostGet(MongooseHttpServerRequest *request, MongooseHttpServerResponseStream *response)
+{
+  if(boost.isActive())
+  {
+    StaticJsonDocument<192> doc;
+    boost.serialize(doc);
+    response->setCode(200);
+    serializeJson(doc, *response);
+  } else {
+    // 200 + {} doubles as the capability probe: old firmware 404s /boost.
+    response->setCode(200);
+    response->print("{}");
+  }
+}
+
+void handleBoostPost(MongooseHttpServerRequest *request, MongooseHttpServerResponseStream *response)
+{
+  String body = request->body().toString();
+  int rc = boost.arm(body.c_str());
+
+  if(Boost_Armed == rc) {
+    response->setCode(201);
+    response->print("{\"msg\":\"done\"}");
+  } else if(Boost_Unsupported == rc) {
+    response->setCode(422);
+    response->print("{\"msg\":\"no vehicle data source for this boost type\"}");
+  } else {
+    response->setCode(400);
+    response->print("{\"msg\":\"failed to parse JSON\"}");
+  }
+}
+
+void handleBoostDelete(MongooseHttpServerRequest *request, MongooseHttpServerResponseStream *response)
+{
+  if(boost.cancel()) {
+    response->setCode(200);
+    response->print("{\"msg\":\"done\"}");
+  } else {
+    response->setCode(404);
+    response->print("{\"msg\":\"no boost\"}");
+  }
+}
+
+void handleBoost(MongooseHttpServerRequest *request)
+{
+  MongooseHttpServerResponseStream *response;
+  if(false == requestPreProcess(request, response)) {
+    return;
+  }
+
+  if(HTTP_GET == request->method()) {
+    handleBoostGet(request, response);
+  } else if(HTTP_POST == request->method()) {
+    handleBoostPost(request, response);
+  } else if(HTTP_DELETE == request->method()) {
+    handleBoostDelete(request, response);
   } else {
     response->setCode(405);
     response->print("{\"msg\":\"Method not allowed\"}");
@@ -1922,6 +1995,7 @@ void web_server_setup()
   server.on("/logs", handleEventLogs);
   server.on("/certificates", handleCertificates);
   server.on("/limit", handleLimit);
+  server.on("/boost", handleBoost);
   server.on("/emeter", handleEmeter);
   server.on("/time", handleTime);
   server.on("/mqtt$", handleMqttAction);
@@ -1960,6 +2034,69 @@ void web_server_setup()
     response->setContentType(CONTENT_TYPE_TEXT);
     response->addHeader("Access-Control-Allow-Origin", "*");
     SerialDebug.printBuffer(*response);
+    request->send(response);
+  });
+
+  // -----------------------------------------------------------------
+  // Last-panic forensics. A crash on a deployed unit leaves a core dump in
+  // flash that outlives the reboot; these two endpoints are what make it
+  // reachable without a serial cable.
+  //
+  //   GET    /debug/crash      decoded summary (task, PC, backtrace)
+  //   DELETE /debug/crash      clear it, so the next panic is unambiguous
+  //   GET    /debug/crash/raw  the image itself, for esp-coredump
+  // -----------------------------------------------------------------
+  server.on("/debug/crash$", [](MongooseHttpServerRequest *request) {
+    MongooseHttpServerResponseStream *response;
+    if(false == requestPreProcess(request, response, CONTENT_TYPE_JSON)) {
+      return;
+    }
+
+    if(HTTP_DELETE == request->method()) {
+      bool erased = diagnostics_coredump_erase();
+      response->setCode(erased ? 200 : 500);
+      response->print(erased ? F("{\"msg\":\"erased\"}") : F("{\"msg\":\"error\"}"));
+      request->send(response);
+      return;
+    }
+
+    const size_t capacity = JSON_OBJECT_SIZE(12) + JSON_ARRAY_SIZE(16) + 640;
+    DynamicJsonDocument doc(capacity);
+    diagnostics_coredump_json(doc);
+    response->setCode(200);
+    serializeJson(doc, *response);
+    request->send(response);
+  });
+
+  server.on("/debug/crash/raw$", [](MongooseHttpServerRequest *request) {
+    dumpRequest(request);
+
+    // Not routed through requestPreProcess: that opens a buffered stream
+    // response, and the whole point here is to send from a flash mapping
+    // instead of buffering the image in a heap that has no room for it.
+    if(!isAuthenticated(request)) {
+      request->requestAuthentication(esp_hostname);
+      return;
+    }
+
+    const uint8_t *data = NULL;
+    size_t len = 0;
+    if(!diagnostics_coredump_image(&data, &len)) {
+      MongooseHttpServerResponseStream *response = request->beginResponseStream();
+      response->setContentType(CONTENT_TYPE_JSON);
+      response->setCode(404);
+      response->print(F("{\"msg\":\"none\"}"));
+      request->send(response);
+      return;
+    }
+
+    MongooseHttpServerResponseBasic *response = request->beginResponse();
+    response->setCode(200);
+    response->setContentType("application/octet-stream");
+    response->setContentLength(len);
+    response->addHeader(F("Content-Disposition"), F("attachment; filename=\"coredump.bin\""));
+    response->addHeader(F("Cache-Control"), F("no-store"));
+    response->setContent(data, len);
     request->send(response);
   });
 

@@ -10,6 +10,7 @@
 #include "divert.h"
 #include "current_shaper.h"
 #include "manual.h"
+#include "boost.h"
 #include "event_log.h"
 #include "loadsharing_algorithm.h"
 
@@ -52,6 +53,7 @@ public:
   EvseManager &evse() { return _evse; }
   DivertTask &divert() { return _divert; }
   CurrentShaperTask &shaper() { return _shaper; }
+  Boost &boost() { return _boost; }
 
   // Cached values used both for output and for load-share allocation.
   double last_solar_w = 0.0;
@@ -82,6 +84,7 @@ private:
   DivertTask _divert;
   CurrentShaperTask _shaper;
   ManualOverride _manual;
+  Boost _boost;
 
   // Track which event-indices have already fired.
   size_t _next_event_idx = 0;

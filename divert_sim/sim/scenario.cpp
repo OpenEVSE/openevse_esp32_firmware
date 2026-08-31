@@ -215,6 +215,26 @@ bool Scenario::loadFromFile(const std::string &path)
         if (ej.containsKey("aux_load_kw")) {
           e.set_aux_load_kw = true; e.aux_load_kw = ej["aux_load_kw"].as<double>();
         }
+        if (ej.containsKey("boost")) {
+          e.set_boost = true;
+          if (ej["boost"].is<const char *>()) {
+            e.boost_cancel = (std::string(ej["boost"].as<const char *>()) == "cancel");
+          } else {
+            JsonObjectConst bj = ej["boost"].as<JsonObjectConst>();
+            e.boost_type = bj["type"] | "";
+            e.boost_value = bj["value"] | 0;
+          }
+        }
+        // A non-string "manual" (null, number, object) still satisfies
+        // containsKey() but yields NULL from as<const char *>(), which is UB
+        // to feed to std::string. Ignore the event instead.
+        if (ej.containsKey("manual") && ej["manual"].is<const char *>()) {
+          const char *ms = ej["manual"].as<const char *>();
+          if (ms) {
+            e.set_manual = true;
+            e.manual_state = ms;
+          }
+        }
         p.events.push_back(e);
       }
     }
