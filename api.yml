@@ -1104,6 +1104,9 @@ components:
             managerState: active
             evseState: 1
             evseFlags: 123
+            pilotState: 2
+            changed:
+              - pilot
             pilot: 32
             energy: 1234.5
             elapsed: 123456
@@ -1130,6 +1133,35 @@ components:
         evseFlags:
           type: integer
           format: int32
+        pilotState:
+          description: >-
+            J1772 pilot state at the time of the event. 255 for entries written
+            before this field was recorded.
+          type: integer
+          minimum: 0
+          maximum: 255
+        changed:
+          description: >-
+            Which fields differ from the previous entry, i.e. why this entry
+            exists. "boot" means there was no previous entry to compare
+            against; "periodic" means nothing visible changed and the entry is
+            the periodic sample of an unchanging state. Empty for entries
+            written before this field was recorded. The pilot state is never
+            listed: it is recorded, but a change in it alone does not create an
+            entry.
+          type: array
+          items:
+            type: string
+            enum:
+              - boot
+              - type
+              - manager
+              - state
+              - flags
+              - pilot
+              - divert
+              - shaper
+              - periodic
         pilot:
           type: integer
           format: int32
