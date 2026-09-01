@@ -28,6 +28,23 @@
 #define EVENTLOG_REPEAT_INTERVAL    300
 #endif
 
+// Why an entry was kept. The event log records state, but a reader diffing two
+// rows to work out what moved needs the row before it - which may have rotated
+// away, or sit in another block. So each entry carries the fields that differ
+// from the last one written.
+//
+// The pilot state is never a reason: it is recorded, but a flicker in it is
+// exactly what the repeat filter exists to swallow.
+#define EVENTLOG_CHANGE_FIRST       0x0001  // nothing to compare against (boot)
+#define EVENTLOG_CHANGE_TYPE        0x0002
+#define EVENTLOG_CHANGE_MANAGER     0x0004
+#define EVENTLOG_CHANGE_EVSE_STATE  0x0008
+#define EVENTLOG_CHANGE_FLAGS       0x0010
+#define EVENTLOG_CHANGE_PILOT       0x0020
+#define EVENTLOG_CHANGE_DIVERT      0x0040
+#define EVENTLOG_CHANGE_SHAPER      0x0080
+#define EVENTLOG_CHANGE_PERIODIC    0x0100  // nothing visible moved; the interval lapsed
+
 struct EventLogEntryKey
 {
   uint8_t type;
@@ -86,6 +103,28 @@ class EventLogRepeatFilter
       }
 
       return (now - _last_time) < EVENTLOG_REPEAT_INTERVAL;
+    }
+
+    // Which fields differ from the last entry written, as EVENTLOG_CHANGE_*
+    // bits. EVENTLOG_CHANGE_FIRST when there is nothing to compare against;
+    // zero when nothing differs, which only reaches the log once the repeat
+    // interval has lapsed.
+    uint16_t changedFrom(const EventLogEntryKey &key) const
+    {
+      if(!_have_last) {
+        return EVENTLOG_CHANGE_FIRST;
+      }
+
+      uint16_t changed = 0;
+      if(_last.type != key.type)                 changed |= EVENTLOG_CHANGE_TYPE;
+      if(_last.managerState != key.managerState) changed |= EVENTLOG_CHANGE_MANAGER;
+      if(_last.evseState != key.evseState)       changed |= EVENTLOG_CHANGE_EVSE_STATE;
+      if(_last.evseFlags != key.evseFlags)       changed |= EVENTLOG_CHANGE_FLAGS;
+      if(_last.pilot != key.pilot)               changed |= EVENTLOG_CHANGE_PILOT;
+      if(_last.divertMode != key.divertMode)     changed |= EVENTLOG_CHANGE_DIVERT;
+      if(_last.shaper != key.shaper)             changed |= EVENTLOG_CHANGE_SHAPER;
+
+      return changed;
     }
 
     // Call after an entry is successfully written, never before: a write that

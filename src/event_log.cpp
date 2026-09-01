@@ -108,6 +108,13 @@ void EventLog::log(EventType type, EvseState managerState, uint8_t evseState, ui
     return;
   }
 
+  // Why this entry is here. Zero only survives the check above once the repeat
+  // interval has lapsed, which is the periodic sample of an unchanging state.
+  uint16_t changed = _repeat.changedFrom(key);
+  if(0 == changed) {
+    changed = EVENTLOG_CHANGE_PERIODIC;
+  }
+
   // Guard against filling LittleFS — keep at least 8 KB free to prevent filesystem corruption.
   if (LittleFS.totalBytes() - LittleFS.usedBytes() < 8192) {
     DBUGLN("EventLog: Low SPIFFS space, skipping entry");
@@ -144,6 +151,7 @@ void EventLog::log(EventType type, EvseState managerState, uint8_t evseState, ui
     line["es"] = evseState;
     line["ef"] = evseFlags;
     line["ps"] = pilotState;
+    line["ch"] = changed;
     line["p"] = pilot;
     line["e"] = energy;
     line["el"] = elapsed;
@@ -166,7 +174,7 @@ void EventLog::log(EventType type, EvseState managerState, uint8_t evseState, ui
   }
 }
 
-void EventLog::enumerate(uint32_t index, std::function<void(String time, EventType type, const String &logEntry, EvseState managerState, uint8_t evseState, uint32_t evseFlags, uint8_t pilotState, uint32_t pilot, double energy, uint32_t elapsed, double temperature, double temperatureMax, uint8_t divertMode, uint8_t shaper)> callback)
+void EventLog::enumerate(uint32_t index, std::function<void(String time, EventType type, const String &logEntry, EvseState managerState, uint8_t evseState, uint32_t evseFlags, uint8_t pilotState, uint16_t changed, uint32_t pilot, double energy, uint32_t elapsed, double temperature, double temperatureMax, uint8_t divertMode, uint8_t shaper)> callback)
 {
   String filename = filenameFromIndex(index);
   File eventFile = LittleFS.open(filename);
@@ -194,6 +202,8 @@ void EventLog::enumerate(uint32_t index, std::function<void(String time, EventTy
         uint32_t evseFlags = json["ef"];
         // Entries written before "ps" existed have no pilot state to report.
         uint8_t pilotState = json["ps"] | EVENTLOG_PILOT_STATE_UNKNOWN;
+        // Entries written before "ch" existed cannot say why they are there.
+        uint16_t changed = json["ch"] | 0;
         uint32_t pilot = json["p"];
         double energy = json["e"];
         uint32_t elapsed = json["el"];
@@ -202,7 +212,7 @@ void EventLog::enumerate(uint32_t index, std::function<void(String time, EventTy
         uint8_t divertMode = json["dm"];
         uint8_t shaper = json["sh"];
 
-        callback(time, type, line, managerState, evseState, evseFlags, pilotState, pilot, energy, elapsed, temperature, temperatureMax, divertMode, shaper);
+        callback(time, type, line, managerState, evseState, evseFlags, pilotState, changed, pilot, energy, elapsed, temperature, temperatureMax, divertMode, shaper);
       }
     }
     eventFile.close();

@@ -123,3 +123,33 @@ TEST_CASE("recording a different entry resets what counts as a repeat")
   CHECK(true == filter.isRepeat(sleeping, 1011));
   CHECK(false == filter.isRepeat(charging(), 1011));
 }
+
+TEST_CASE("an entry says which fields put it there")
+{
+  EventLogRepeatFilter filter;
+
+  // Nothing to compare against yet.
+  CHECK(EVENTLOG_CHANGE_FIRST == filter.changedFrom(charging()));
+
+  filter.recordWritten(charging(), 1000);
+  CHECK(0 == filter.changedFrom(charging()));
+
+  // The case that prompted this: the History view shows neither the pilot
+  // current nor the status flags, so a row that moved only in those reads as a
+  // duplicate of the one above it unless it says what changed.
+  EventLogEntryKey throttled = charging();
+  throttled.pilot = 42;
+  CHECK(EVENTLOG_CHANGE_PILOT == filter.changedFrom(throttled));
+
+  EventLogEntryKey relay = charging();
+  relay.evseFlags = 1280;
+  CHECK(EVENTLOG_CHANGE_FLAGS == filter.changedFrom(relay));
+
+  // Several at once is the normal case for a real transition.
+  EventLogEntryKey stopped = charging();
+  stopped.evseState = 254;
+  stopped.evseFlags = 1280;
+  stopped.managerState = 2;
+  CHECK((EVENTLOG_CHANGE_EVSE_STATE | EVENTLOG_CHANGE_FLAGS | EVENTLOG_CHANGE_MANAGER)
+        == filter.changedFrom(stopped));
+}
