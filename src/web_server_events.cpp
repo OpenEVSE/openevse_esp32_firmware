@@ -44,7 +44,7 @@ void handleEventLogs(MongooseHttpServerRequest *request)
 
         response->print("[");
 
-        eventLog.enumerate(block, [&count, response](String time, EventType type, const String &logEntry, EvseState managerState, uint8_t evseState, uint32_t evseFlags, uint32_t pilot, double energy, uint32_t elapsed, double temperature, double temperatureMax, uint8_t divertMode, uint8_t shaper)
+        eventLog.enumerate(block, [&count, response](String time, EventType type, const String &logEntry, EvseState managerState, uint8_t evseState, uint32_t evseFlags, uint8_t pilotState, uint32_t pilot, double energy, uint32_t elapsed, double temperature, double temperatureMax, uint8_t divertMode, uint8_t shaper)
         {
           StaticJsonDocument<1024> event;
 
@@ -57,6 +57,7 @@ void handleEventLogs(MongooseHttpServerRequest *request)
           event["managerState"] = managerState.toString();
           event["evseState"] = evseState;
           event["evseFlags"] = evseFlags;
+          event["pilotState"] = pilotState;
           event["pilot"] = pilot;
           event["energy"] = energy;
           event["elapsed"] = elapsed;
