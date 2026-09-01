@@ -45,6 +45,27 @@
 #define EVENTLOG_CHANGE_SHAPER      0x0080
 #define EVENTLOG_CHANGE_PERIODIC    0x0100  // nothing visible moved; the interval lapsed
 
+// evseFlags bits that must not, on their own, create an entry: they mirror
+// state the log already records, so a row whose only difference is one of them
+// has nothing to tell a reader.
+//
+//   SESSION_ENDED     (0x0200) session-timing bookkeeping
+//   EV_CONNECTED_PREV (0x0400) literally the previous value of EV_CONNECTED,
+//                              so it lags it by one update and turns every
+//                              plug-in into two entries instead of one
+//
+// The full evseFlags value is still recorded in the entry; this only excludes
+// these bits from the comparison that decides whether an entry is worth
+// keeping. Values mirror the OpenEVSE library's OPENEVSE_VFLAG_*, spelled out
+// here so this header stays free of the EVSE library.
+#define EVENTLOG_FLAGS_NOT_SIGNIFICANT (0x0200 | 0x0400)
+
+// The part of evseFlags worth comparing entries on.
+inline uint32_t eventLogSignificantFlags(uint32_t evseFlags)
+{
+  return evseFlags & ~((uint32_t)EVENTLOG_FLAGS_NOT_SIGNIFICANT);
+}
+
 struct EventLogEntryKey
 {
   uint8_t type;

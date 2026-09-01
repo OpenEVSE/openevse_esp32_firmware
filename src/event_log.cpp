@@ -92,7 +92,7 @@ void EventLog::log(EventType type, EvseState managerState, uint8_t evseState, ui
     type.toInt(),
     (uint8_t)managerState,
     evseState,
-    evseFlags,
+    eventLogSignificantFlags(evseFlags),
     pilot,
     divertMode,
     shaper

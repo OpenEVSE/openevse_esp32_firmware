@@ -153,3 +153,35 @@ TEST_CASE("an entry says which fields put it there")
   CHECK((EVENTLOG_CHANGE_EVSE_STATE | EVENTLOG_CHANGE_FLAGS | EVENTLOG_CHANGE_MANAGER)
         == filter.changedFrom(stopped));
 }
+
+TEST_CASE("bookkeeping flag bits do not make an entry worth keeping")
+{
+  // 0x0200 SESSION_ENDED and 0x0400 EV_CONNECTED_PREV mirror state the log
+  // already records. EV_CONNECTED_PREV in particular lags EV_CONNECTED by one
+  // update, so on a live unit every plug-in wrote a second entry whose only
+  // difference was that bit - and which nothing in a UI could explain.
+  CHECK(0x0140 == eventLogSignificantFlags(0x0740));
+  CHECK(0x0100 == eventLogSignificantFlags(0x0700));
+
+  // Bits that mean something to a reader are untouched: charging relay,
+  // EV connected, boot lock, hard fault.
+  CHECK(0x4142 == eventLogSignificantFlags(0x4142));
+
+  EventLogRepeatFilter filter;
+  EventLogEntryKey connected = charging();
+  connected.evseFlags = eventLogSignificantFlags(0x0300);   // EV_CONNECTED set
+  filter.recordWritten(connected, 1000);
+
+  // The follow-up update that only sets EV_CONNECTED_PREV is now the same
+  // entry, so it is suppressed rather than logged as an unexplainable row.
+  EventLogEntryKey lagged = charging();
+  lagged.evseFlags = eventLogSignificantFlags(0x0700);      // + EV_CONNECTED_PREV
+  CHECK(true == filter.isRepeat(lagged, 1027));
+  CHECK(0 == filter.changedFrom(lagged));
+
+  // A real relay move in the same breath still logs.
+  EventLogEntryKey relay = charging();
+  relay.evseFlags = eventLogSignificantFlags(0x0740);       // + CHARGING_ON
+  CHECK(false == filter.isRepeat(relay, 1027));
+  CHECK(EVENTLOG_CHANGE_FLAGS == filter.changedFrom(relay));
+}

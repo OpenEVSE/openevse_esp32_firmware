@@ -1143,7 +1143,9 @@ components:
         changed:
           description: >-
             Which fields differ from the previous entry, i.e. why this entry
-            exists. "boot" means there was no previous entry to compare
+            exists. "flags" covers only the meaningful evseFlags bits: the
+            session-timing and previous-EV-connected bookkeeping bits are
+            recorded in evseFlags but never create an entry of their own. "boot" means there was no previous entry to compare
             against; "periodic" means nothing visible changed and the entry is
             the periodic sample of an unchanging state. Empty for entries
             written before this field was recorded. The pilot state is never
