@@ -41,6 +41,9 @@ struct DiscoveredPeer {
  *
  * Architecture:
  * - Task wakes every poll_interval_ms (default 2 seconds)
+ * - Periodic queries run only while load sharing is enabled; when disabled
+ *   the task idles and only runs a query on triggerDiscovery() (the
+ *   POST /loadsharing/discover path used by the peer-management UI)
  * - On cache TTL expiry, initiates async mDNS query
  * - Task polls query status and processes results when ready
  * - HTTP handlers always get immediate cached results
@@ -64,6 +67,7 @@ private:
   void* _active_query;                       // Opaque mdns_search_once_t handle (void* for compatibility)
   unsigned long _query_start_time;           // When current async query started
   bool _query_in_progress;                   // True while query is running
+  bool _manual_trigger;                      // A one-shot query was requested via triggerDiscovery()
 
   // Group state reference (set via begin)
   LoadSharingGroupState* _groupState;

@@ -83,6 +83,7 @@ LoadSharingDiscoveryTask::LoadSharingDiscoveryTask(unsigned long cacheTtl,
     _active_query(nullptr),
     _query_start_time(0),
     _query_in_progress(false),
+    _manual_trigger(false),
     _groupState(nullptr),
     _discovery_count(0),
     _last_result_count(0)
@@ -116,9 +117,16 @@ unsigned long LoadSharingDiscoveryTask::loop(MicroTasks::WakeReason reason) {
       }
     }
   } else {
-    // No query in progress, check if we should start a new one
-    if (now - _last_discovery_time >= _discovery_interval_ms || _last_discovery_time == 0) {
-      // Time to start a new discovery
+    // No query in progress, check if we should start a new one. Periodic
+    // discovery only runs while load sharing is enabled: with it off nothing
+    // consumes the results, and every query is an mDNS round that every other
+    // OpenEVSE on the LAN answers plus a burst of heap churn on no-PSRAM
+    // boards. A manual trigger still runs a single query so the UI can browse
+    // for peers before enabling.
+    bool periodic_due = loadsharing_enabled &&
+                        (now - _last_discovery_time >= _discovery_interval_ms || _last_discovery_time == 0);
+    if (_manual_trigger || periodic_due) {
+      _manual_trigger = false;
       DBUGF("LoadSharingDiscoveryTask: Starting discovery iteration %lu", _discovery_count + 1);
       startAsyncQuery();
       _last_discovery_time = now;
@@ -147,8 +155,8 @@ void LoadSharingDiscoveryTask::end() {
 }
 
 void LoadSharingDiscoveryTask::triggerDiscovery() {
-  // Reset discovery timer to force immediate query on next task wake
-  _last_discovery_time = 0;
+  // Run one query on the next task wake, regardless of the enabled flag
+  _manual_trigger = true;
   MicroTask.wakeTask(this);
   DBUGF("LoadSharingDiscoveryTask: Triggered manual discovery");
 }
