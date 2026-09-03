@@ -240,6 +240,11 @@ class EvseManager : public MicroTasks::Task
     bool _evaluateClaims;
     bool _evaluateTargetState;
 
+    // Retry interval while the EVSE module has not answered yet: starts at
+    // 1 s and doubles to 10 s, so a probe lost during boot costs a second
+    // rather than the full steady-state interval.
+    uint32_t _evseConnectRetryMs;
+
     uint32_t _vehicleValid;
     uint32_t _vehicleUpdated;
     uint32_t _vehicleLastUpdated;
