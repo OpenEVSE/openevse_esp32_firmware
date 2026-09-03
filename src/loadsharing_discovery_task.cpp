@@ -196,16 +196,18 @@ void LoadSharingDiscoveryTask::startAsyncQuery() {
   // Start an async mDNS query for OpenEVSE services
   // Parameters:
   //   - name: NULL (search for all instances)
-  //   - service_type: "openevse" (without leading underscore)
-  //   - proto: "tcp" (without leading underscore)
+  //   - service_type: "_openevse", proto: "_tcp". The raw IDF API takes the
+  //     DNS-SD labels verbatim (mdns.h: "_http", "_tcp"); only the Arduino
+  //     ESPmDNS wrapper prepends the underscores. Units advertise via
+  //     MDNS.addService("openevse", "tcp"), i.e. _openevse._tcp.local.
   //   - type: MDNS_TYPE_PTR (PTR record for service discovery)
   //   - timeout_ms: query timeout
   //   - max_results: 20 (collect up to 20 results)
   //   - notifier: NULL (we'll poll instead)
   _active_query = (void*)mdns_query_async_new(
       NULL,
-      "openevse",
-      "tcp",
+      "_openevse",
+      "_tcp",
       MDNS_TYPE_PTR,
       _query_timeout_ms,
       20,
