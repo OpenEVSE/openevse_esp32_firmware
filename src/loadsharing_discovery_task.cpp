@@ -100,9 +100,12 @@ unsigned long LoadSharingDiscoveryTask::loop(MicroTasks::WakeReason reason) {
   // If a query is currently in progress, poll its status
   if (_query_in_progress) {
     if (pollAsyncQuery()) {
-      // Query completed, process results handled in pollAsyncQuery()
-      _query_in_progress = false;
-      _active_query = nullptr;
+      // Query completed, results already processed in pollAsyncQuery(). The
+      // finished search object is still ours to free: mdns_query_async_delete
+      // is the only thing that releases it (struct, name strings, semaphore).
+      // Dropping the handle here leaked ~230 bytes every 10 s query and
+      // exhausted the heap in about an hour on no-PSRAM boards.
+      cleanupQuery();
     } else {
       // Query still in progress, check timeout
       if (now - _query_start_time > _query_timeout_ms) {
