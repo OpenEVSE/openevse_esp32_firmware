@@ -1570,6 +1570,55 @@ void handleAddRFID(MongooseHttpServerRequest *request) {
   rfid.waitForTag();
 }
 
+// -------------------------------------------------------------------
+// Reset the relay contact-life health estimate ($FH via EvseManager,
+// requires the controller's RELAY_HEALTH feature) - use after a physical
+// relay replacement, so the accumulator doesn't carry over wear from the
+// old relay.
+// url: /relay/reset
+// -------------------------------------------------------------------
+void handleRelayHealthReset(MongooseHttpServerRequest *request) {
+  MongooseHttpServerResponseStream *response;
+  if(false == requestPreProcess(request, response, CONTENT_TYPE_JSON)) {
+    return;
+  }
+  if(!actuatorMethodAllowed(request, response)) {
+    return;
+  }
+
+  evse.resetRelayHealth([request, response](int ret) {
+    response->setCode(RAPI_RESPONSE_OK == ret ? 200 : 500);
+    response->print(RAPI_RESPONSE_OK == ret ? "{\"msg\":\"done\"}" : "{\"msg\":\"error\"}");
+    request->send(response);
+  });
+}
+
+// -------------------------------------------------------------------
+// Manually run the stuck-relay recovery cycle ($FK via EvseManager,
+// requires firmware 9.3.0+ / ADVPWR). NAK'd by the controller if an EV is
+// connected. Blocking on the controller side for up to ~30s - the HTTP
+// response is deferred until the async RAPI callback fires (EvseMonitor
+// pauses its own periodic polling for the duration, see
+// _relay_recovery_in_flight) rather than blocking this request thread, so
+// the rest of the server stays responsive while the cycle runs.
+// url: /relay/recovery
+// -------------------------------------------------------------------
+void handleRelayRecovery(MongooseHttpServerRequest *request) {
+  MongooseHttpServerResponseStream *response;
+  if(false == requestPreProcess(request, response, CONTENT_TYPE_JSON)) {
+    return;
+  }
+  if(!actuatorMethodAllowed(request, response)) {
+    return;
+  }
+
+  evse.runStuckRelayRecovery([request, response](int ret) {
+    response->setCode(RAPI_RESPONSE_OK == ret ? 200 : 500);
+    response->print(RAPI_RESPONSE_OK == ret ? "{\"msg\":\"done\"}" : "{\"msg\":\"error\"}");
+    request->send(response);
+  });
+}
+
 String delayTimer = "0 0 0 0";
 
 void
@@ -1906,6 +1955,8 @@ void web_server_setup()
   server.on("/shaper$", handleCurrentShaper);
   server.on("/emoncms/describe$", handleDescribe);
   server.on("/rfid/add$", handleAddRFID);
+  server.on("/relay/reset$", handleRelayHealthReset);
+  server.on("/relay/recovery$", handleRelayRecovery);
 
   server.on("/schedule/plan$", handleSchedulePlan);
   server.on("/schedule", handleSchedule);
