@@ -3,7 +3,13 @@
     "id": "shaper_data_shaper_3000w",
     "title": "Shaper: Data Shaper (3000w)",
     "category": "shaper",
-    "profile": "3000w"
+    "profile": "3000w",
+    "description": [
+      "Shaper: Data Shaper (3000w) replays live-power input through the current shaper rather than solar-divert control.",
+      "Fixed low power-cap case for checking behavior near the minimum useful charging threshold.",
+      "Compare live power, smoothed live power, shaper maximum, available charge power, and actual charge power to see how the limiter reacts.",
+      "Duration: 2 hours."
+    ]
   },
   "simulation": {
     "duration": 7200,

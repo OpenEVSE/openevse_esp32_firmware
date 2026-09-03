@@ -150,4 +150,15 @@ class CertificateStore
 
 extern CertificateStore certs;
 
+// Parse a certificate id as written by CertificateStore::Certificate::serialize()
+// -- a bare hex string of 1 to 16 digits. Returns false, leaving id untouched,
+// for anything else.
+//
+// std::stoull() throws on a malformed value and nothing on the paths that parse
+// these ids catches it, so an uncaught exception reboots the device: a corrupt
+// stored id would boot-loop the unit and a bad id in a POSTed certificate would
+// reboot it from the API. Every parse of a stored or user-supplied id goes
+// through here instead.
+bool certificate_id_from_string(const char *str, uint64_t &id);
+
 # endif // CERTIFICATES_h

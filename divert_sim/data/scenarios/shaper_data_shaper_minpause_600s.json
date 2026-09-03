@@ -3,7 +3,13 @@
     "id": "shaper_data_shaper_minpause_600s",
     "title": "Shaper: Data Shaper (minpause_600s)",
     "category": "shaper",
-    "profile": "minpause_600s"
+    "profile": "minpause_600s",
+    "description": [
+      "Shaper: Data Shaper (minpause_600s) replays live-power input through the current shaper rather than solar-divert control.",
+      "Long minimum pause interval after stopping charge. This should suppress rapid restart cycling.",
+      "Compare live power, smoothed live power, shaper maximum, available charge power, and actual charge power to see how the limiter reacts.",
+      "Duration: 2 hours."
+    ]
   },
   "simulation": {
     "duration": 7200,

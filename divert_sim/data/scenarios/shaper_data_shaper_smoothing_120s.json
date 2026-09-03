@@ -3,7 +3,13 @@
     "id": "shaper_data_shaper_smoothing_120s",
     "title": "Shaper: Data Shaper (smoothing_120s)",
     "category": "shaper",
-    "profile": "smoothing_120s"
+    "profile": "smoothing_120s",
+    "description": [
+      "Shaper: Data Shaper (smoothing_120s) replays live-power input through the current shaper rather than solar-divert control.",
+      "Long smoothing window. The shaped limit should be steadier and less responsive to short spikes.",
+      "Compare live power, smoothed live power, shaper maximum, available charge power, and actual charge power to see how the limiter reacts.",
+      "Duration: 2 hours."
+    ]
   },
   "simulation": {
     "duration": 7200,

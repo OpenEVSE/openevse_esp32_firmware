@@ -3,7 +3,13 @@
     "id": "shaper_data_shaper_maxinterval_30s",
     "title": "Shaper: Data Shaper (maxinterval_30s)",
     "category": "shaper",
-    "profile": "maxinterval_30s"
+    "profile": "maxinterval_30s",
+    "description": [
+      "Shaper: Data Shaper (maxinterval_30s) replays live-power input through the current shaper rather than solar-divert control.",
+      "Short maximum update interval. Look for more frequent permissible current changes.",
+      "Compare live power, smoothed live power, shaper maximum, available charge power, and actual charge power to see how the limiter reacts.",
+      "Duration: 2 hours."
+    ]
   },
   "simulation": {
     "duration": 7200,

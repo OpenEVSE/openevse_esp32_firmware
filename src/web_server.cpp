@@ -3,7 +3,6 @@
 #endif
 
 #include <Arduino.h>
-#include <errno.h>
 #include <Update.h>
 #include "certificates.h"
 
@@ -50,6 +49,8 @@ typedef const __FlashStringHelper *fstr_t;
 #include "home_battery.h"
 #include "evse_man.h"
 #include "limit.h"
+#include "loadsharing_types.h"
+#include "loadsharing_peer_poller.h"
 #include "boost.h"
 #include "web_auth.h"
 #include "web_auth_secret.h"
@@ -673,6 +674,64 @@ void buildStatus(DynamicJsonDocument &doc) {
   doc["ota_update"] = (int)Update.isRunning();
 
   doc["config_version"] = config_version();
+  doc["loadsharing_peers_version"] = loadsharing_peers_version;
+  doc["loadsharing_status_version"] = loadsharing_status_version;
+
+  // Add joined peers array with real-time status from peer poller
+  {
+    JsonArray peersArray = doc.createNestedArray("loadsharing_joined_peers");
+    double groupTotalAmp = 0.0;
+    
+    for (const auto& peer : loadSharingGroupState.getPeers()) {
+      // Only include joined peers (exclude discovered-but-not-joined)
+      if (!peer.isJoined()) {
+        continue;
+      }
+      
+      JsonObject peerObj = peersArray.createNestedObject();
+      peerObj["hostname"] = peer.getHost();
+      peerObj["id"] = peer.getId();
+      peerObj["name"] = peer.getName();
+
+      if (loadSharingGroupState.isLocalHost(peer.getHost())) {
+        // The local device is not polled over HTTP/WebSocket; report its
+        // values directly from the local EVSE (same sources as create_rapi_json
+        // so they match what remote peers publish on /status).
+        double localAmp = evse.getAmps() * AMPS_SCALE_FACTOR;
+        peerObj["amp"] = localAmp;
+        peerObj["voltage"] = evse.getVoltage() * VOLTS_SCALE_FACTOR;
+        peerObj["pilot"] = evse.getChargeCurrent();
+        peerObj["vehicle"] = evse.isVehicleConnected() ? 1 : 0;
+        peerObj["state"] = evse.getEvseState();
+        peerObj["min_current"] = evse.getMinCurrent();
+        peerObj["max_current"] = evse.getMaxConfiguredCurrent();
+        peerObj["priority"] = peer.getPriority();
+        groupTotalAmp += localAmp;
+        continue;
+      }
+
+      // Get real-time status from peer poller. min/max/priority are controller-
+      // owned (min/max learned from the peer's /config, priority stored on the
+      // group peer entry), not part of the polled status.
+      LoadSharingPeerStatus peerStatus;
+      if (loadSharingPeerPoller.getPeerStatus(peer.getHost(), peerStatus)) {
+        peerObj["amp"] = peerStatus.getAmp();
+        peerObj["voltage"] = peerStatus.getVoltage();
+        peerObj["pilot"] = peerStatus.getPilot();
+        peerObj["vehicle"] = peerStatus.getVehicle();
+        peerObj["state"] = peerStatus.getState();
+        peerObj["min_current"] = peer.getMinCurrent();
+        peerObj["max_current"] = peer.getMaxCurrent();
+        peerObj["priority"] = peer.getPriority();
+        groupTotalAmp += peerStatus.getAmp();
+      }
+    }
+
+    // The local device is included in the loop above (as a joined peer), so its
+    // current is already part of groupTotalAmp -- no separate self addition.
+    doc["loadsharing_group_current_total"] = groupTotalAmp;
+  }
+
   doc["claims_version"] = evse.getClaimsVersion();
   doc["override_version"] = manual.getVersion();
   doc["schedule_version"] = scheduler.getVersion();
@@ -937,8 +996,9 @@ void handleStatusPost(MongooseHttpServerRequest *request, MongooseHttpServerResp
       DBUGF("shaper: live power:%dW", shaper.getLivePwr());
     }
     if(doc.containsKey("solar")) {
-      divert.setSolar(doc["solar"]);
-      DBUGF("solar:%dW", divert.getSolar());
+      int solar = doc["solar"];
+      divert.setSolar(solar);
+      DBUGF("solar:%dW", solar);
       divert.update_state();
       // recalculate shaper
       if (shaper.getState()) {
@@ -947,8 +1007,9 @@ void handleStatusPost(MongooseHttpServerRequest *request, MongooseHttpServerResp
       send_event = false; // Divert sends the event so no need to send here
     }
     else if(doc.containsKey("grid_ie")) {
-      divert.setGridIe(doc["grid_ie"]);
-      DBUGF("grid:%dW", divert.getGridIe());
+      int grid_ie = doc["grid_ie"];
+      divert.setGridIe(grid_ie);
+      DBUGF("grid:%dW", grid_ie);
       divert.update_state();
       // recalculate shaper
       if (shaper.getState()) {
@@ -1797,7 +1858,7 @@ void handleHttpsRedirect(MongooseHttpServerRequest *request)
 void onWsFrame(MongooseHttpWebSocketConnection *connection, int flags, uint8_t *data, size_t len)
 {
   DBUGF("Got message %.*s", len, (const char *)data);
-  const size_t capacity = JSON_OBJECT_SIZE(1) + 16;
+  const size_t capacity = JSON_OBJECT_SIZE(3) + JSON_OBJECT_SIZE(2) + 128;
   DynamicJsonDocument doc(capacity);
   DeserializationError error = deserializeJson(doc, data, len);
   if (!error) {
@@ -1805,8 +1866,23 @@ void onWsFrame(MongooseHttpWebSocketConnection *connection, int flags, uint8_t *
       {
         // answer pong
         connection->send("{\"pong\": 1}");
-
       }
+
+    // Handle load sharing allocation from controller (member side)
+    if (doc.containsKey("loadsharing")) {
+      JsonObject ls = doc["loadsharing"];
+      if (ls.containsKey("target_current")) {
+        double targetCurrent = ls["target_current"].as<double>();
+        String reason = ls.containsKey("reason") ? ls["reason"].as<String>() : "allocation";
+
+        DBUGF("LoadSharing: Received allocation %.1fA (reason: %s)", targetCurrent, reason.c_str());
+
+        if (loadSharingGroupState.isMember()) {
+          loadSharingGroupState.recordAllocationReceived();
+          shaper.setLoadSharingLimit(targetCurrent, reason == "failsafe_disabled");
+        }
+      }
+    }
   }
 }
 
@@ -1900,21 +1976,17 @@ void web_server_setup()
   bool use_ssl = false;
   if(www_certificate_id != "")
   {
-    // This one sits on the boot path. std::stoull throws on a malformed value
-    // and nothing catches it, so a corrupted stored www_certificate_id would
-    // abort inside web_server_setup() and boot-loop the unit with no way back
-    // in over the network. Parse defensively and fall through to plain HTTP,
-    // which at least leaves the device reachable to correct the config.
-    const char *idStr = www_certificate_id.c_str();
-    char *end = nullptr;
-    errno = 0;
-    unsigned long long parsed = strtoull(idStr, &end, 16);
-    bool id_valid = (end != idStr && '\0' == *end && ERANGE != errno);
+    // This one sits on the boot path: a corrupted stored www_certificate_id
+    // parsed with a throwing conversion would abort inside web_server_setup()
+    // and boot-loop the unit with no way back in over the network. Fall through
+    // to plain HTTP instead, which at least leaves the device reachable to
+    // correct the config.
+    uint64_t cert_id = 0;
+    bool id_valid = certificate_id_from_string(www_certificate_id.c_str(), cert_id);
     if(!id_valid) {
-      DEBUG.printf("Ignoring malformed www_certificate_id '%s', serving HTTP\n", idStr);
+      DEBUG.printf("Ignoring malformed www_certificate_id '%s', serving HTTP\n", www_certificate_id.c_str());
     }
 
-    uint64_t cert_id = id_valid ? (uint64_t)parsed : 0;
     const char *cert = id_valid ? certs.getCertificate(cert_id) : NULL;
     const char *key = id_valid ? certs.getKey(cert_id) : NULL;
     if(NULL != cert && NULL != key)
@@ -2117,6 +2189,9 @@ void web_server_setup()
     onConnect(onWsConnect);
 
   server.onNotFound(handleNotFound);
+
+  // Setup load sharing endpoints
+  web_server_load_sharing_setup();
 
   DEBUG.println("Server started");
 }

@@ -222,11 +222,13 @@ void NetManagerTask::displayState()
   _lcd.display(_ipaddress.c_str(), 0, 1, 5000, LCD_CLEAR_LINE);
 }
 
-void NetManagerTask::haveNetworkConnection(IPAddress myAddress)
+void NetManagerTask::haveNetworkConnection(IPAddress myAddress, IPAddress netmask)
 {
   char tmpStr[40];
   sprintf(tmpStr, "%d.%d.%d.%d", myAddress[0], myAddress[1], myAddress[2], myAddress[3]);
   _ipaddress = tmpStr;
+  sprintf(tmpStr, "%d.%d.%d.%d", netmask[0], netmask[1], netmask[2], netmask[3]);
+  _netmask = tmpStr;
   _macaddress = WiFi.macAddress();
 
   DEBUG.print("Connected, IP: ");
@@ -256,7 +258,7 @@ void NetManagerTask::wifiOnStationModeConnected(const WiFiEventStationModeConnec
 
 void NetManagerTask::wifiOnStationModeGotIP(const WiFiEventStationModeGotIP &event)
 {
-  haveNetworkConnection(WiFi.localIP());
+  haveNetworkConnection(WiFi.localIP(), WiFi.subnetMask());
   _macaddress = WiFi.macAddress();
   StaticJsonDocument<128> doc;
   doc["wifi_client_connected"] = (int)net.isWifiClientConnected();
@@ -560,7 +562,7 @@ void NetManagerTask::onNetEvent(WiFiEvent_t event, arduino_event_info_t &info)
       DBUG(", ");
       DBUG(ETH.linkSpeed());
       DBUGLN("Mbps");
-      haveNetworkConnection(ETH.localIP());
+      haveNetworkConnection(ETH.localIP(), ETH.subnetMask());
       _macaddress = ETH.macAddress();
       _ethConnected = true;
       wifiStop();
@@ -625,12 +627,14 @@ void NetManagerTask::setup()
 
   if (MDNS.begin(esp_hostname.c_str()))
   {
-    MDNS.addService("http", "tcp", www_http_port);
-    MDNS.addService("openevse", "tcp", www_http_port);
+    bool ssl = config_https_enabled();
+    uint16_t svcPort = ssl ? www_https_port : www_http_port;
+    MDNS.addService("http", "tcp", svcPort);
+    MDNS.addService("openevse", "tcp", svcPort);
     MDNS.addServiceTxt("openevse", "tcp", "type", buildenv.c_str());
     MDNS.addServiceTxt("openevse", "tcp", "version", currentfirmware.c_str());
     MDNS.addServiceTxt("openevse", "tcp", "id", ESPAL.getLongId());
-    
+    MDNS.addServiceTxt("openevse", "tcp", "ssl", ssl ? "1" : "0");
   }
 }
 

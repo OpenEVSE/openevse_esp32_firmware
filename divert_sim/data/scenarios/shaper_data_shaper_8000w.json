@@ -3,7 +3,13 @@
     "id": "shaper_data_shaper_8000w",
     "title": "Shaper: Data Shaper (8000w)",
     "category": "shaper",
-    "profile": "8000w"
+    "profile": "8000w",
+    "description": [
+      "Shaper: Data Shaper (8000w) replays live-power input through the current shaper rather than solar-divert control.",
+      "Fixed higher power-cap case that should allow sustained charging close to common single-phase limits.",
+      "Compare live power, smoothed live power, shaper maximum, available charge power, and actual charge power to see how the limiter reacts.",
+      "Duration: 2 hours."
+    ]
   },
   "simulation": {
     "duration": 7200,

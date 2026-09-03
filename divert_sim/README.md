@@ -119,6 +119,10 @@ Run tests:
 - `run_scenario(path, output="", config_overrides=None)`
 - `build_index(...)` to generate `output/index.json`
 
+`build_index(...)` runs scenarios in parallel by default using the host CPU count.
+Set `DIVERT_SIM_JOBS=1` for serial execution, or another integer to choose the
+worker count.
+
 ## Web UI
 
 Start server:

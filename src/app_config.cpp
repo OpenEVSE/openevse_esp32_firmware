@@ -9,6 +9,7 @@
 #include "app_config.h"
 #include "app_config_mqtt.h"
 #include "app_config_mode.h"
+#include "certificates.h"
 #include "temp_throttle.h"
 #include "flash_migrate.h"
 
@@ -176,6 +177,23 @@ long max_current_soft;
 // Scheduler settings
 uint32_t scheduler_start_window;
 
+// Load Sharing settings
+bool loadsharing_enabled;
+String loadsharing_group_id;
+double loadsharing_group_max_current;
+double loadsharing_safety_factor;
+uint32_t loadsharing_heartbeat_timeout;
+String loadsharing_failsafe_mode;
+double loadsharing_failsafe_safe_current;
+double loadsharing_failsafe_peer_assumed_current;
+uint32_t loadsharing_config_version;
+uint32_t loadsharing_config_updated_at;
+uint32_t loadsharing_peers_version;
+uint32_t loadsharing_status_version;
+String loadsharing_role;
+String loadsharing_controller_host;
+uint32_t loadsharing_rotation_interval;
+
 String esp_hostname_default = "openevse-"+ESPAL.getShortId();
 
 void config_changed(String name);
@@ -314,6 +332,22 @@ ConfigOpt *opts[] =
 // LED brightness
   new ConfigOptDefinition<uint8_t>(led_brightness, LED_DEFAULT_BRIGHTNESS, "led_brightness", "lb"),
 #endif
+
+// Load Sharing settings
+  new ConfigOptDefinition<bool>(loadsharing_enabled, false, "loadsharing_enabled", "lse"),
+  new ConfigOptDefinition<String>(loadsharing_group_id, "", "loadsharing_group_id", "lsgi"),
+  new ConfigOptDefinition<double>(loadsharing_group_max_current, 0.0, "loadsharing_group_max_current", "lsgmc"),
+  new ConfigOptDefinition<double>(loadsharing_safety_factor, 1.0, "loadsharing_safety_factor", "lssf"),
+  new ConfigOptDefinition<uint32_t>(loadsharing_heartbeat_timeout, 30, "loadsharing_heartbeat_timeout", "lsht"),
+  new ConfigOptDefinition<String>(loadsharing_failsafe_mode, "safe_current", "loadsharing_failsafe_mode", "lsfm"),
+  new ConfigOptDefinition<double>(loadsharing_failsafe_safe_current, 6.0, "loadsharing_failsafe_safe_current", "lsfsc"),
+  new ConfigOptDefinition<double>(loadsharing_failsafe_peer_assumed_current, 6.0, "loadsharing_failsafe_peer_assumed_current", "lsfpac"),
+  new ConfigOptDefinition<uint32_t>(loadsharing_config_version, 0, "loadsharing_config_version", "lscv"),
+  new ConfigOptDefinition<uint32_t>(loadsharing_config_updated_at, 0, "loadsharing_config_updated_at", "lscua"),
+  new ConfigOptDefinition<String>(loadsharing_role, "", "loadsharing_role", "lsr"),
+  new ConfigOptDefinition<String>(loadsharing_controller_host, "", "loadsharing_controller_host", "lsch"),
+  // Rotation interval in seconds (0 disables). Effective max ~49 days on 32-bit millis; larger values wrap.
+  new ConfigOptDefinition<uint32_t>(loadsharing_rotation_interval, 1800, "loadsharing_rotation_interval", "lsri"),
 
 // Scheduler options
   new ConfigOptDefinition<uint32_t>(scheduler_start_window, SCHEDULER_DEFAULT_START_WINDOW, "scheduler_start_window", "ssw"),
@@ -526,6 +560,28 @@ void config_commit(bool factory)
 void config_user_commit()
 {
   user_config.commit();
+}
+
+bool config_https_enabled()
+{
+#ifndef DIVERT_SIM
+  if (www_certificate_id == "") {
+    return false;
+  }
+  // This runs from mDNS setup during network bring-up, so a corrupt stored id
+  // would crash-loop the firmware if it were parsed with a throwing conversion.
+  uint64_t cert_id = 0;
+  if (!certificate_id_from_string(www_certificate_id.c_str(), cert_id)) {
+    DBUGF("config_https_enabled: invalid www_certificate_id '%s'", www_certificate_id.c_str());
+    return false;
+  }
+
+  const char *cert = certs.getCertificate(cert_id);
+  const char *key = certs.getKey(cert_id);
+  return (NULL != cert && NULL != key);
+#else
+  return false;
+#endif
 }
 
 bool config_deserialize(String& json) {
@@ -917,7 +973,7 @@ bool config_set(const char *name, double val) {
 bool config_set_opt_string(const char *name, const char *value) {
   // Try to determine the type from the config option definition
   // For now, we'll try as string first, then try as integer
-  
+
   // Create a JSON document with the value as a string
   const size_t capacity = JSON_OBJECT_SIZE(1) +  strlen(value) + strlen(value) + 16;
   DynamicJsonDocument doc(capacity);
@@ -933,7 +989,7 @@ bool config_set_opt_string(const char *name, const char *value) {
     // Try parsing as integer
     char *endptr;
     long int_val = strtol(value, &endptr, 10);
-    
+
     if (*endptr == '\0' && value != endptr)
     {
       // Successfully parsed as integer
@@ -952,7 +1008,7 @@ bool config_set_opt_string(const char *name, const char *value) {
       }
     }
   }
-  
+
   return config_deserialize(doc);
 }
 

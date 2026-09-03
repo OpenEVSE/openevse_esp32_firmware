@@ -35,12 +35,19 @@ def test_divert_scenarios_produce_expected_signals(scenario: Path):
     assert len(rows) > 100
     assert "evse-001_actual_charge_w" in rows[0]
     assert "evse-001_state" in rows[0]
+    assert "evse-001_claim_state" in rows[0]
+    assert "evse-001_claim_details" in rows[0]
 
     ev_kwh = _energy_kwh(rows, "evse-001_actual_charge_w")
     assert ev_kwh >= 0.0
 
     states = {row.get("evse-001_state", "") for row in rows}
     assert states & {"sleeping", "charging", "connected"}
+
+    assert any(
+        row.get("evse-001_claim_details", "") != "No active claims"
+        for row in rows
+    )
 
 
 def test_divert_config_override_changes_output():
