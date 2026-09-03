@@ -12,12 +12,6 @@
 #include <ESPmDNS.h>
 #include <mdns.h>
 #include <algorithm>
-
-// The EpoxymDNS shim used by the native builds carries the esp_ip_addr_t
-// type field but not the IDF constant for it. IDF defines it as 0U.
-#ifndef ESP_IPADDR_TYPE_V4
-#define ESP_IPADDR_TYPE_V4 0U
-#endif
 #if __has_include(<esp_idf_version.h>)
 #include <esp_idf_version.h>
 #endif
