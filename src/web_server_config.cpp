@@ -28,6 +28,14 @@ handleConfigGet(MongooseHttpServerRequest *request, MongooseHttpServerResponseSt
   // from 53,236 down to 32,756 and it did not recover, while total free heap
   // stayed above 70KB. Safe as a static because handlers run to completion on
   // the single task that polls Mongoose.
+  //
+  // Capacity headroom: JSON_OBJECT_SIZE(128) is a sizing hint, not a hard
+  // member cap -- ArduinoJson only cares about total bytes, and a live TFT
+  // unit already serves ~135 members (~446 bytes of string pool) within this
+  // budget. The relay_health block added here (relay_life_pct and ~10
+  // siblings) still fits, but there isn't much room left for the next
+  // addition -- worth rechecking on hardware (or just bumping the constant)
+  // before adding more.
   static DynamicJsonDocument doc(JSON_OBJECT_SIZE(128) + 1024);
   doc.clear();
 
