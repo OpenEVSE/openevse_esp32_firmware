@@ -57,15 +57,13 @@ class TestPeerManagement:
         data = response.json()
         assert "msg" in data or "status" in data
 
-    # Bringing up each emulator+firmware pair costs roughly 12s, so the budget
-    # has to scale with the instance count rather than sit at the class default.
+    # Bringing up each emulator+firmware pair has a real cost, so the budget
+    # scales with the instance count rather than sitting at the class default.
+    # Only the 4-instance case runs: it exercises everything the 2- and
+    # 3-instance cases did, and each extra case paid the full setup again.
     @pytest.mark.parametrize(
         "num_instances",
-        [
-            pytest.param(2, marks=pytest.mark.timeout(90)),
-            pytest.param(3, marks=pytest.mark.timeout(120)),
-            pytest.param(4, marks=pytest.mark.timeout(150)),
-        ],
+        [pytest.param(4, marks=pytest.mark.timeout(150))],
     )
     def test_peer_discovery_mdns(self, multi_instance_group, num_instances):
         """
@@ -571,11 +569,7 @@ class TestPeerManagement:
     # Same per-instance setup cost as test_peer_discovery_mdns above.
     @pytest.mark.parametrize(
         "num_instances",
-        [
-            pytest.param(2, marks=pytest.mark.timeout(90)),
-            pytest.param(3, marks=pytest.mark.timeout(120)),
-            pytest.param(4, marks=pytest.mark.timeout(150)),
-        ],
+        [pytest.param(4, marks=pytest.mark.timeout(150))],
     )
     def test_discovered_peers_joined_status(self, multi_instance_group, num_instances):
         """

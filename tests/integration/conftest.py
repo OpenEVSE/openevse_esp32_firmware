@@ -362,14 +362,18 @@ def instance_pair(docker_client, emulator_image, tmp_path, request):
             """
             (Re)create the TCP<->PTY bridge and wait for the PTY to appear.
 
-            socat is configured with wait-slave, so it exits once the firmware
-            closes the PTY slave. Any restart of the firmware therefore needs a
-            fresh bridge, or the new process comes up with no RAPI link at all.
+            The bridge dials the emulator as soon as it starts (no wait-slave):
+            with wait-slave the TCP side only connected once the firmware
+            opened the PTY, and the firmware's first RAPI probe went out before
+            that connect completed, so every pair lost it and sat in the
+            EVSE reconnect backoff. Restarts still get a fresh bridge via
+            stop_socat_bridge()/start_socat_bridge() so the new process never
+            comes up with a stale link.
             """
             proc = subprocess.Popen(
                 [
                     "socat",
-                    f"PTY,link={pty_path},rawer,wait-slave",
+                    f"PTY,link={pty_path},rawer",
                     f"TCP:localhost:{emulator_rapi_port}",
                 ],
                 stdout=subprocess.PIPE,
@@ -389,10 +393,9 @@ def instance_pair(docker_client, emulator_image, tmp_path, request):
             """
             Tear the bridge down and wait until the PTY symlink is really gone.
 
-            socat exits on its own when the firmware closes the slave, but that
-            exit -- and the unlink of the symlink that goes with it -- races
-            anything starting straight afterwards. Stopping it explicitly makes
-            the restart path deterministic.
+            The unlink of the symlink races anything starting straight
+            afterwards, so wait for it explicitly to keep the restart path
+            deterministic.
             """
             proc = socat_bridge["proc"]
             socat_bridge["proc"] = None

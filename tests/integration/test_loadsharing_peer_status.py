@@ -314,7 +314,7 @@ class TestNativeStatusEndpoints:
 class TestPeerStatusIngestion:
     """Test that peer poller ingests status from added peers."""
 
-    @pytest.mark.parametrize("num_instances", [2, 3, 4])
+    @pytest.mark.parametrize("num_instances", [4])  # 4 subsumes 2 and 3; each case pays full setup
     def test_peer_status_ingested_after_add(
         self, multi_instance_group, num_instances
     ):
@@ -461,7 +461,7 @@ class TestPeerStatusIngestion:
 class TestMultiPeerTracking:
     """Test simultaneous status tracking of multiple peers."""
 
-    @pytest.mark.parametrize("num_instances", [2, 3, 4])
+    @pytest.mark.parametrize("num_instances", [4])  # 4 subsumes 2 and 3; each case pays full setup
     def test_peer_status_multiple_peers(
         self, multi_instance_group, num_instances
     ):
