@@ -5,6 +5,11 @@
 #include <openevse.h>
 
 #include "evse_man.h"
+
+#include <algorithm>
+
+#define EVSE_CONNECT_RETRY_MIN_MS   1000
+#define EVSE_CONNECT_RETRY_MAX_MS  10000
 #include "debug.h"
 
 #include "event_log.h"
@@ -128,6 +133,7 @@ EvseManager::EvseManager(Stream &port, EventLog &eventLog) :
   _hasClaims(false),
   _evaluateClaims(true),
   _evaluateTargetState(false),
+  _evseConnectRetryMs(EVSE_CONNECT_RETRY_MIN_MS),
   _vehicleValid(0),
   _vehicleUpdated(0),
   _vehicleLastUpdated(0),
@@ -361,8 +367,11 @@ unsigned long EvseManager::loop(MicroTasks::WakeReason reason)
   if(!_openevse.isConnected())
   {
     initialiseEvse();
-    return 10 * 1000;
+    unsigned long retry = _evseConnectRetryMs;
+    _evseConnectRetryMs = std::min<uint32_t>(_evseConnectRetryMs * 2, EVSE_CONNECT_RETRY_MAX_MS);
+    return retry;
   }
+  _evseConnectRetryMs = EVSE_CONNECT_RETRY_MIN_MS;
 
   DBUGVAR(_evseBootListener.IsTriggered());
   if(_evseBootListener.IsTriggered()) {

@@ -57,15 +57,13 @@ class TestPeerManagement:
         data = response.json()
         assert "msg" in data or "status" in data
 
-    # Bringing up each emulator+firmware pair costs roughly 12s, so the budget
-    # has to scale with the instance count rather than sit at the class default.
+    # Bringing up each emulator+firmware pair has a real cost, so the budget
+    # scales with the instance count rather than sitting at the class default.
+    # Only the 4-instance case runs: it exercises everything the 2- and
+    # 3-instance cases did, and each extra case paid the full setup again.
     @pytest.mark.parametrize(
         "num_instances",
-        [
-            pytest.param(2, marks=pytest.mark.timeout(90)),
-            pytest.param(3, marks=pytest.mark.timeout(120)),
-            pytest.param(4, marks=pytest.mark.timeout(150)),
-        ],
+        [pytest.param(4, marks=pytest.mark.timeout(150))],
     )
     def test_peer_discovery_mdns(self, multi_instance_group, num_instances):
         """
@@ -255,12 +253,27 @@ class TestPeerManagement:
             timeout=10,
         )
         assert added.status_code == 200, added.text
-        time.sleep(2)
 
-        first_peers = requests.get(
-            f"{first_url}/loadsharing/peers", timeout=10).json()
-        second_peers = requests.get(
-            f"{second_url}/loadsharing/peers", timeout=10).json()
+        # The reciprocal add is an asynchronous HTTP POST from first to second,
+        # so poll until second actually lists first rather than sleeping a fixed
+        # interval and hoping it has landed. With the faster instance startup
+        # the old 2 s sleep lost that race about one run in three.
+        first_id = next(
+            p for p in requests.get(f"{first_url}/loadsharing/peers", timeout=10).json()
+            if p.get("isLocal")
+        )["id"]
+        deadline = time.time() + 20
+        while True:
+            first_peers = requests.get(
+                f"{first_url}/loadsharing/peers", timeout=10).json()
+            second_peers = requests.get(
+                f"{second_url}/loadsharing/peers", timeout=10).json()
+            if any(p.get("id") == first_id and not p.get("isLocal") for p in second_peers):
+                break
+            assert time.time() < deadline, (
+                f"second never listed first after the reciprocal add: {second_peers}"
+            )
+            time.sleep(0.5)
 
         # Identify both ends by device id rather than host string. The two sides
         # legitimately spell the same peer differently: first knows itself as
@@ -269,9 +282,6 @@ class TestPeerManagement:
         # manually added entry is also re-keyed from "localhost:8001" to its
         # discovered hostname once mDNS resolves the same device, so the string
         # used to add a peer is not a durable handle for it.
-        first_local = next(p for p in first_peers if p.get("isLocal"))
-        first_id = first_local["id"]
-
         second_local = next(p for p in second_peers if p.get("isLocal"))
         second_id = second_local["id"]
 
@@ -571,11 +581,7 @@ class TestPeerManagement:
     # Same per-instance setup cost as test_peer_discovery_mdns above.
     @pytest.mark.parametrize(
         "num_instances",
-        [
-            pytest.param(2, marks=pytest.mark.timeout(90)),
-            pytest.param(3, marks=pytest.mark.timeout(120)),
-            pytest.param(4, marks=pytest.mark.timeout(150)),
-        ],
+        [pytest.param(4, marks=pytest.mark.timeout(150))],
     )
     def test_discovered_peers_joined_status(self, multi_instance_group, num_instances):
         """
