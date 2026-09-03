@@ -253,12 +253,27 @@ class TestPeerManagement:
             timeout=10,
         )
         assert added.status_code == 200, added.text
-        time.sleep(2)
 
-        first_peers = requests.get(
-            f"{first_url}/loadsharing/peers", timeout=10).json()
-        second_peers = requests.get(
-            f"{second_url}/loadsharing/peers", timeout=10).json()
+        # The reciprocal add is an asynchronous HTTP POST from first to second,
+        # so poll until second actually lists first rather than sleeping a fixed
+        # interval and hoping it has landed. With the faster instance startup
+        # the old 2 s sleep lost that race about one run in three.
+        first_id = next(
+            p for p in requests.get(f"{first_url}/loadsharing/peers", timeout=10).json()
+            if p.get("isLocal")
+        )["id"]
+        deadline = time.time() + 20
+        while True:
+            first_peers = requests.get(
+                f"{first_url}/loadsharing/peers", timeout=10).json()
+            second_peers = requests.get(
+                f"{second_url}/loadsharing/peers", timeout=10).json()
+            if any(p.get("id") == first_id and not p.get("isLocal") for p in second_peers):
+                break
+            assert time.time() < deadline, (
+                f"second never listed first after the reciprocal add: {second_peers}"
+            )
+            time.sleep(0.5)
 
         # Identify both ends by device id rather than host string. The two sides
         # legitimately spell the same peer differently: first knows itself as
@@ -267,9 +282,6 @@ class TestPeerManagement:
         # manually added entry is also re-keyed from "localhost:8001" to its
         # discovered hostname once mDNS resolves the same device, so the string
         # used to add a peer is not a durable handle for it.
-        first_local = next(p for p in first_peers if p.get("isLocal"))
-        first_id = first_local["id"]
-
         second_local = next(p for p in second_peers if p.get("isLocal"))
         second_id = second_local["id"]
 
