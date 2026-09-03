@@ -378,6 +378,7 @@ unsigned long EvseManager::loop(MicroTasks::WakeReason reason)
                   getState(),
                   _monitor.getEvseState(),
                   _monitor.getFlags(),
+                  _monitor.getPilotState(),
                   _monitor.getPilot(),
                   _monitor.getSessionEnergy(),
                   _monitor.getSessionElapsed(),
