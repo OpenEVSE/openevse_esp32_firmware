@@ -83,6 +83,7 @@ LoadSharingDiscoveryTask::LoadSharingDiscoveryTask(unsigned long cacheTtl,
     _active_query(nullptr),
     _query_start_time(0),
     _query_in_progress(false),
+    _manual_trigger(false),
     _groupState(nullptr),
     _discovery_count(0),
     _last_result_count(0)
@@ -116,9 +117,16 @@ unsigned long LoadSharingDiscoveryTask::loop(MicroTasks::WakeReason reason) {
       }
     }
   } else {
-    // No query in progress, check if we should start a new one
-    if (now - _last_discovery_time >= _discovery_interval_ms || _last_discovery_time == 0) {
-      // Time to start a new discovery
+    // No query in progress, check if we should start a new one. Periodic
+    // discovery only runs while load sharing is enabled: with it off nothing
+    // consumes the results, and every query is an mDNS round that every other
+    // OpenEVSE on the LAN answers plus a burst of heap churn on no-PSRAM
+    // boards. A manual trigger still runs a single query so the UI can browse
+    // for peers before enabling.
+    bool periodic_due = loadsharing_enabled &&
+                        (now - _last_discovery_time >= _discovery_interval_ms || _last_discovery_time == 0);
+    if (_manual_trigger || periodic_due) {
+      _manual_trigger = false;
       DBUGF("LoadSharingDiscoveryTask: Starting discovery iteration %lu", _discovery_count + 1);
       startAsyncQuery();
       _last_discovery_time = now;
@@ -147,8 +155,8 @@ void LoadSharingDiscoveryTask::end() {
 }
 
 void LoadSharingDiscoveryTask::triggerDiscovery() {
-  // Reset discovery timer to force immediate query on next task wake
-  _last_discovery_time = 0;
+  // Run one query on the next task wake, regardless of the enabled flag
+  _manual_trigger = true;
   MicroTask.wakeTask(this);
   DBUGF("LoadSharingDiscoveryTask: Triggered manual discovery");
 }
@@ -188,16 +196,18 @@ void LoadSharingDiscoveryTask::startAsyncQuery() {
   // Start an async mDNS query for OpenEVSE services
   // Parameters:
   //   - name: NULL (search for all instances)
-  //   - service_type: "openevse" (without leading underscore)
-  //   - proto: "tcp" (without leading underscore)
+  //   - service_type: "_openevse", proto: "_tcp". The raw IDF API takes the
+  //     DNS-SD labels verbatim (mdns.h: "_http", "_tcp"); only the Arduino
+  //     ESPmDNS wrapper prepends the underscores. Units advertise via
+  //     MDNS.addService("openevse", "tcp"), i.e. _openevse._tcp.local.
   //   - type: MDNS_TYPE_PTR (PTR record for service discovery)
   //   - timeout_ms: query timeout
   //   - max_results: 20 (collect up to 20 results)
   //   - notifier: NULL (we'll poll instead)
   _active_query = (void*)mdns_query_async_new(
       NULL,
-      "openevse",
-      "tcp",
+      "_openevse",
+      "_tcp",
       MDNS_TYPE_PTR,
       _query_timeout_ms,
       20,
@@ -300,13 +310,21 @@ bool LoadSharingDiscoveryTask::pollAsyncQuery() {
         resolvedHost = String(r->hostname);
       }
 
-      // Extract IP address
-      if (r->addr) {
-        uint32_t ip = r->addr->addr.u_addr.ip4.addr;
+      // Extract IP address. A responder lists every address it has, IPv6
+      // included (link-local and ULA AAAA records come back alongside the A
+      // record), and the list order is not ours to rely on. Take the first
+      // IPv4 entry; reading an IPv6 entry's first four bytes as IPv4 turned
+      // fd4b:288b:... into 253.75.40.139.
+      for (mdns_ip_addr_t* a = r->addr; a; a = a->next) {
+        if (a->addr.type != ESP_IPADDR_TYPE_V4) {
+          continue;
+        }
+        uint32_t ip = a->addr.u_addr.ip4.addr;
         peer.ipAddress = String((ip & 0xFF)) + "." +
                         String((ip >> 8) & 0xFF) + "." +
                         String((ip >> 16) & 0xFF) + "." +
                         String((ip >> 24) & 0xFF);
+        break;
       }
 
       peer.port = r->port;
