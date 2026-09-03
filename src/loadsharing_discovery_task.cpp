@@ -12,6 +12,12 @@
 #include <ESPmDNS.h>
 #include <mdns.h>
 #include <algorithm>
+
+// The EpoxymDNS shim used by the native builds carries the esp_ip_addr_t
+// type field but not the IDF constant for it. IDF defines it as 0U.
+#ifndef ESP_IPADDR_TYPE_V4
+#define ESP_IPADDR_TYPE_V4 0U
+#endif
 #if __has_include(<esp_idf_version.h>)
 #include <esp_idf_version.h>
 #endif
@@ -310,13 +316,21 @@ bool LoadSharingDiscoveryTask::pollAsyncQuery() {
         resolvedHost = String(r->hostname);
       }
 
-      // Extract IP address
-      if (r->addr) {
-        uint32_t ip = r->addr->addr.u_addr.ip4.addr;
+      // Extract IP address. A responder lists every address it has, IPv6
+      // included (link-local and ULA AAAA records come back alongside the A
+      // record), and the list order is not ours to rely on. Take the first
+      // IPv4 entry; reading an IPv6 entry's first four bytes as IPv4 turned
+      // fd4b:288b:... into 253.75.40.139.
+      for (mdns_ip_addr_t* a = r->addr; a; a = a->next) {
+        if (a->addr.type != ESP_IPADDR_TYPE_V4) {
+          continue;
+        }
+        uint32_t ip = a->addr.u_addr.ip4.addr;
         peer.ipAddress = String((ip & 0xFF)) + "." +
                         String((ip >> 8) & 0xFF) + "." +
                         String((ip >> 16) & 0xFF) + "." +
                         String((ip >> 24) & 0xFF);
+        break;
       }
 
       peer.port = r->port;
