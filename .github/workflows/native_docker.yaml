@@ -85,6 +85,9 @@ jobs:
             type=semver,pattern={{major}}
             # Tag with SHA for pull requests
             type=sha,enable=${{ github.event_name == 'pull_request' }}
+            # Tag with the PR number, so `openevse_test.sh launch --pr N` can
+            # pull a PR's build without knowing its SHA
+            type=ref,event=pr
           labels: |
             org.opencontainers.image.title=OpenEVSE WiFi Firmware
             org.opencontainers.image.description=Native Linux build of the OpenEVSE WiFi firmware for testing and development purposes
@@ -108,7 +111,14 @@ jobs:
           build-args: |
             UBUNTU_VERSION=${{ env.UBUNTU_VERSION }}
             NATIVE_BINARY=${{ steps.native-binary.outputs.path }}
-          push: ${{ github.event_name != 'pull_request' }}
+          # Publish PR builds too, as pr-<N>, so a reviewer can run someone's
+          # change with `openevse_test.sh launch --pr <N>` instead of building
+          # it. Forks are excluded because their GITHUB_TOKEN is read-only —
+          # pushing them would need pull_request_target, which would run
+          # untrusted code with a write token.
+          push: >-
+            ${{ github.event_name != 'pull_request'
+                || github.event.pull_request.head.repo.full_name == github.repository }}
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
           cache-from: type=gha

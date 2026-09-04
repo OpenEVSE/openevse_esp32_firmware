@@ -110,6 +110,23 @@ extern uint32_t divert_min_charge_time;
 // Scheduler settings
 extern uint32_t scheduler_start_window;
 
+// Load Sharing settings
+extern bool loadsharing_enabled;
+extern String loadsharing_group_id;
+extern double loadsharing_group_max_current;
+extern double loadsharing_safety_factor;
+extern uint32_t loadsharing_heartbeat_timeout;
+extern String loadsharing_failsafe_mode;
+extern double loadsharing_failsafe_safe_current;
+extern double loadsharing_failsafe_peer_assumed_current;
+extern uint32_t loadsharing_config_version;
+extern uint32_t loadsharing_config_updated_at;
+extern uint32_t loadsharing_peers_version;
+extern uint32_t loadsharing_status_version;
+extern String loadsharing_role;
+extern String loadsharing_controller_host;
+extern uint32_t loadsharing_rotation_interval;
+
 //Shaper settings
 extern uint32_t current_shaper_max_pwr;
 extern uint32_t current_shaper_smoothing_time;
@@ -286,6 +303,10 @@ inline bool config_lcd_network_info_enabled()
   return CONFIG_LCD_NETWORK_INFO == (flags & CONFIG_LCD_NETWORK_INFO);
 }
 
+// True when the device is actually serving HTTPS: the user has enabled it and a
+// usable certificate/key pair is stored. config_https_enabled() above only
+// reports the flag, which on its own does not mean the listener came up.
+bool config_https_active();
 
 extern uint32_t config_version();
 

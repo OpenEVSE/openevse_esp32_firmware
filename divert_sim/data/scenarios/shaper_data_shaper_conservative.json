@@ -3,7 +3,13 @@
     "id": "shaper_data_shaper_conservative",
     "title": "Shaper: Data Shaper (conservative)",
     "category": "shaper",
-    "profile": "conservative"
+    "profile": "conservative",
+    "description": [
+      "Shaper: Data Shaper (conservative) replays live-power input through the current shaper rather than solar-divert control.",
+      "More cautious shaping profile. Look for slower ramping and less aggressive use of short power headroom changes.",
+      "Compare live power, smoothed live power, shaper maximum, available charge power, and actual charge power to see how the limiter reacts.",
+      "Duration: 2 hours."
+    ]
   },
   "simulation": {
     "duration": 7200,

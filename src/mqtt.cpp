@@ -202,11 +202,18 @@ void Mqtt::attemptConnection() {
   _mqttclient.setRejectUnauthorized(config_mqtt_reject_unauthorized());
 
   if (mqtt_certificate_id != "") {
-    uint64_t cert_id = std::stoull(mqtt_certificate_id.c_str(), nullptr, 16);
-    const char *cert = certs.getCertificate(cert_id);
-    const char *key = certs.getKey(cert_id);
-    if (NULL != cert && NULL != key) {
-      _mqttclient.setCertificate(cert, key);
+    // A malformed stored id used to throw out of std::stoull and reboot the
+    // unit on every connect attempt. Skip the client certificate instead, so a
+    // bad id costs authentication rather than the device.
+    uint64_t cert_id = 0;
+    if (certificate_id_from_string(mqtt_certificate_id.c_str(), cert_id)) {
+      const char *cert = certs.getCertificate(cert_id);
+      const char *key = certs.getKey(cert_id);
+      if (NULL != cert && NULL != key) {
+        _mqttclient.setCertificate(cert, key);
+      }
+    } else {
+      DBUGF("Ignoring malformed mqtt_certificate_id '%s'", mqtt_certificate_id.c_str());
     }
   }
 
@@ -431,16 +438,18 @@ void Mqtt::handleMqttMessage(MongooseString topic, MongooseString payload) {
 
   // Logic from old mqttmsg_callback
   if (topic_string == mqtt_solar){
-    divert.setSolar(payload_str.toInt());
-    DBUGF("solar:%dW", divert.getSolar());
+    int solar = payload_str.toInt();
+    divert.setSolar(solar);
+    DBUGF("solar:%dW", solar);
     divert.update_state();
     if (shaper.getState()) {
       shaper.shapeCurrent();
     }
   }
   else if (topic_string == mqtt_grid_ie) {
-    divert.setGridIe(payload_str.toInt());
-    DBUGF("grid:%dW", divert.getGridIe());
+    int grid_ie = payload_str.toInt();
+    divert.setGridIe(grid_ie);
+    DBUGF("grid:%dW", grid_ie);
     divert.update_state();
     if (mqtt_live_pwr == mqtt_grid_ie) {
       shaper.setLivePwr(divert.getGridIe());

@@ -19,6 +19,7 @@ jobs:
     steps:
       - name: Checkout code
         uses: actions/checkout@v7
+
       - name: Set up Python
         uses: actions/setup-python@v7
         with:
@@ -35,11 +36,10 @@ jobs:
       - name: Install system dependencies
         run: |
           sudo apt-get update
-          sudo apt-get install -y socat
+          sudo apt-get install -y libavahi-client-dev libavahi-common-dev avahi-utils socat
 
       - name: Build native firmware locally
         run: |
-          sudo apt-get install -y libavahi-client-dev libavahi-common-dev libssl-dev
           python -m pip install --upgrade pip
           pip install --upgrade platformio
           pio run -e native_openevse
@@ -48,10 +48,19 @@ jobs:
       - name: Make native binary executable
         run: |
           if [ ! -f program ]; then
+            CANDIDATE="$(find . -type f -name program | head -n 1)"
+            if [ -n "$CANDIDATE" ]; then
+              cp "$CANDIDATE" ./program
+            fi
+          fi
+
+          if [ ! -f program ]; then
             echo "Error: native program not found"
             ls -la
+            find . -maxdepth 4 -type f | head -n 200
             exit 1
           fi
+
           chmod +x program
           file program
 
@@ -66,11 +75,12 @@ jobs:
 
       - name: Run integration tests
         env:
-          NATIVE_BINARY_PATH: ./program
+          NATIVE_BINARY_PATH: ${{ github.workspace }}/program
         run: |
           pytest tests/integration/ \
             -v \
             --color=yes \
+            --code-highlight=yes \
             --tb=short \
             --junit-xml=tests/integration/output/test_results.xml
 
@@ -85,12 +95,14 @@ jobs:
         if: always()
         uses: EnricoMi/publish-unit-test-result-action@v2
         with:
-          files: tests/integration/output/test_results.xml
+          files: tests/integration/output/test_results*.xml
           check_name: Integration Tests
           compare_to_earlier_commit: false
 
       - name: Cleanup
         if: always()
         run: |
+          # Stop any remaining containers
           docker ps -q --filter "name=emulator_" | xargs -r docker stop || true
+          # Clean up PTY files
           rm -f /tmp/rapi_pty_* || true

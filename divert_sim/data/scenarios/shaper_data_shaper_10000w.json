@@ -3,7 +3,13 @@
     "id": "shaper_data_shaper_10000w",
     "title": "Shaper: Data Shaper (10000w)",
     "category": "shaper",
-    "profile": "10000w"
+    "profile": "10000w",
+    "description": [
+      "Shaper: Data Shaper (10000w) replays live-power input through the current shaper rather than solar-divert control.",
+      "Fixed high power-cap case where charger or EV limits are more likely to dominate than the shaper cap.",
+      "Compare live power, smoothed live power, shaper maximum, available charge power, and actual charge power to see how the limiter reacts.",
+      "Duration: 2 hours."
+    ]
   },
   "simulation": {
     "duration": 7200,

@@ -3,7 +3,13 @@
     "id": "shaper_data_shaper_5000w",
     "title": "Shaper: Data Shaper (5000w)",
     "category": "shaper",
-    "profile": "5000w"
+    "profile": "5000w",
+    "description": [
+      "Shaper: Data Shaper (5000w) replays live-power input through the current shaper rather than solar-divert control.",
+      "Fixed moderate power-cap case that should allow limited charging while still requiring shaping.",
+      "Compare live power, smoothed live power, shaper maximum, available charge power, and actual charge power to see how the limiter reacts.",
+      "Duration: 2 hours."
+    ]
   },
   "simulation": {
     "duration": 7200,

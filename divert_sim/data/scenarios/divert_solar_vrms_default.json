@@ -3,11 +3,18 @@
     "id": "divert_solar_vrms_default",
     "title": "Divert: Solar (Variable Vrms) (default)",
     "category": "divert",
-    "profile": "default"
+    "profile": "default",
+    "description": [
+      "Divert: Solar (Variable Vrms) (default) replays a solar feed with variable measured voltage, useful for checking watts-to-current conversion.",
+      "Default divert settings balance using surplus quickly with avoiding excessive import/export swings.",
+      "This variant is driven from solar input, so the main comparison is available charge power versus actual EV charge power.",
+      "Voltage varies during the run, so apparent power and available current conversion are part of what this scenario is exercising.",
+      "Duration: 1244 minutes."
+    ]
   },
   "simulation": {
     "duration": 74640,
-    "tick_interval": 60,
+    "tick_interval": 1,
     "start_time": "2020-03-27T01:00:00Z"
   },
   "peers": [

@@ -3,7 +3,6 @@
 #endif
 
 #include <Arduino.h>
-#include <errno.h>
 #include <Update.h>
 #include "certificates.h"
 
@@ -50,6 +49,8 @@ typedef const __FlashStringHelper *fstr_t;
 #include "home_battery.h"
 #include "evse_man.h"
 #include "limit.h"
+#include "loadsharing_types.h"
+#include "loadsharing_peer_poller.h"
 #include "boost.h"
 #include "web_auth.h"
 #include "web_auth_secret.h"
@@ -724,6 +725,64 @@ void buildStatus(DynamicJsonDocument &doc) {
   doc["ota_update"] = (int)Update.isRunning();
 
   doc["config_version"] = config_version();
+  doc["loadsharing_peers_version"] = loadsharing_peers_version;
+  doc["loadsharing_status_version"] = loadsharing_status_version;
+
+  // Add joined peers array with real-time status from peer poller
+  {
+    JsonArray peersArray = doc.createNestedArray("loadsharing_joined_peers");
+    double groupTotalAmp = 0.0;
+    
+    for (const auto& peer : loadSharingGroupState.getPeers()) {
+      // Only include joined peers (exclude discovered-but-not-joined)
+      if (!peer.isJoined()) {
+        continue;
+      }
+      
+      JsonObject peerObj = peersArray.createNestedObject();
+      peerObj["hostname"] = peer.getHost();
+      peerObj["id"] = peer.getId();
+      peerObj["name"] = peer.getName();
+
+      if (loadSharingGroupState.isLocalHost(peer.getHost())) {
+        // The local device is not polled over HTTP/WebSocket; report its
+        // values directly from the local EVSE (same sources as create_rapi_json
+        // so they match what remote peers publish on /status).
+        double localAmp = evse.getAmps() * AMPS_SCALE_FACTOR;
+        peerObj["amp"] = localAmp;
+        peerObj["voltage"] = evse.getVoltage() * VOLTS_SCALE_FACTOR;
+        peerObj["pilot"] = evse.getChargeCurrent();
+        peerObj["vehicle"] = evse.isVehicleConnected() ? 1 : 0;
+        peerObj["state"] = evse.getEvseState();
+        peerObj["min_current"] = evse.getMinCurrent();
+        peerObj["max_current"] = evse.getMaxConfiguredCurrent();
+        peerObj["priority"] = peer.getPriority();
+        groupTotalAmp += localAmp;
+        continue;
+      }
+
+      // Get real-time status from peer poller. min/max/priority are controller-
+      // owned (min/max learned from the peer's /config, priority stored on the
+      // group peer entry), not part of the polled status.
+      LoadSharingPeerStatus peerStatus;
+      if (loadSharingPeerPoller.getPeerStatus(peer.getHost(), peerStatus)) {
+        peerObj["amp"] = peerStatus.getAmp();
+        peerObj["voltage"] = peerStatus.getVoltage();
+        peerObj["pilot"] = peerStatus.getPilot();
+        peerObj["vehicle"] = peerStatus.getVehicle();
+        peerObj["state"] = peerStatus.getState();
+        peerObj["min_current"] = peer.getMinCurrent();
+        peerObj["max_current"] = peer.getMaxCurrent();
+        peerObj["priority"] = peer.getPriority();
+        groupTotalAmp += peerStatus.getAmp();
+      }
+    }
+
+    // The local device is included in the loop above (as a joined peer), so its
+    // current is already part of groupTotalAmp -- no separate self addition.
+    doc["loadsharing_group_current_total"] = groupTotalAmp;
+  }
+
   doc["claims_version"] = evse.getClaimsVersion();
   doc["override_version"] = manual.getVersion();
   doc["schedule_version"] = scheduler.getVersion();
@@ -988,8 +1047,9 @@ void handleStatusPost(MongooseHttpServerRequest *request, MongooseHttpServerResp
       DBUGF("shaper: live power:%dW", shaper.getLivePwr());
     }
     if(doc.containsKey("solar")) {
-      divert.setSolar(doc["solar"]);
-      DBUGF("solar:%dW", divert.getSolar());
+      int solar = doc["solar"];
+      divert.setSolar(solar);
+      DBUGF("solar:%dW", solar);
       divert.update_state();
       // recalculate shaper
       if (shaper.getState()) {
@@ -998,8 +1058,9 @@ void handleStatusPost(MongooseHttpServerRequest *request, MongooseHttpServerResp
       send_event = false; // Divert sends the event so no need to send here
     }
     else if(doc.containsKey("grid_ie")) {
-      divert.setGridIe(doc["grid_ie"]);
-      DBUGF("grid:%dW", divert.getGridIe());
+      int grid_ie = doc["grid_ie"];
+      divert.setGridIe(grid_ie);
+      DBUGF("grid:%dW", grid_ie);
       divert.update_state();
       // recalculate shaper
       if (shaper.getState()) {
@@ -1621,6 +1682,55 @@ void handleAddRFID(MongooseHttpServerRequest *request) {
   rfid.waitForTag();
 }
 
+// -------------------------------------------------------------------
+// Reset the relay contact-life health estimate ($FH via EvseManager,
+// requires the controller's RELAY_HEALTH feature) - use after a physical
+// relay replacement, so the accumulator doesn't carry over wear from the
+// old relay.
+// url: /relay/reset
+// -------------------------------------------------------------------
+void handleRelayHealthReset(MongooseHttpServerRequest *request) {
+  MongooseHttpServerResponseStream *response;
+  if(false == requestPreProcess(request, response, CONTENT_TYPE_JSON)) {
+    return;
+  }
+  if(!actuatorMethodAllowed(request, response)) {
+    return;
+  }
+
+  evse.resetRelayHealth([request, response](int ret) {
+    response->setCode(RAPI_RESPONSE_OK == ret ? 200 : 500);
+    response->print(RAPI_RESPONSE_OK == ret ? "{\"msg\":\"done\"}" : "{\"msg\":\"error\"}");
+    request->send(response);
+  });
+}
+
+// -------------------------------------------------------------------
+// Manually run the stuck-relay recovery cycle ($FK via EvseManager,
+// requires firmware 9.3.0+ / ADVPWR). NAK'd by the controller if an EV is
+// connected. Blocking on the controller side for up to ~30s - the HTTP
+// response is deferred until the async RAPI callback fires (EvseMonitor
+// pauses its own periodic polling for the duration, see
+// _relay_recovery_in_flight) rather than blocking this request thread, so
+// the rest of the server stays responsive while the cycle runs.
+// url: /relay/recovery
+// -------------------------------------------------------------------
+void handleRelayRecovery(MongooseHttpServerRequest *request) {
+  MongooseHttpServerResponseStream *response;
+  if(false == requestPreProcess(request, response, CONTENT_TYPE_JSON)) {
+    return;
+  }
+  if(!actuatorMethodAllowed(request, response)) {
+    return;
+  }
+
+  evse.runStuckRelayRecovery([request, response](int ret) {
+    response->setCode(RAPI_RESPONSE_OK == ret ? 200 : 500);
+    response->print(RAPI_RESPONSE_OK == ret ? "{\"msg\":\"done\"}" : "{\"msg\":\"error\"}");
+    request->send(response);
+  });
+}
+
 String delayTimer = "0 0 0 0";
 
 void
@@ -1799,7 +1909,7 @@ void handleHttpsRedirect(MongooseHttpServerRequest *request)
 void onWsFrame(MongooseHttpWebSocketConnection *connection, int flags, uint8_t *data, size_t len)
 {
   DBUGF("Got message %.*s", len, (const char *)data);
-  const size_t capacity = JSON_OBJECT_SIZE(1) + 16;
+  const size_t capacity = JSON_OBJECT_SIZE(3) + JSON_OBJECT_SIZE(2) + 128;
   DynamicJsonDocument doc(capacity);
   DeserializationError error = deserializeJson(doc, data, len);
   if (!error) {
@@ -1807,8 +1917,23 @@ void onWsFrame(MongooseHttpWebSocketConnection *connection, int flags, uint8_t *
       {
         // answer pong
         connection->send("{\"pong\": 1}");
-
       }
+
+    // Handle load sharing allocation from controller (member side)
+    if (doc.containsKey("loadsharing")) {
+      JsonObject ls = doc["loadsharing"];
+      if (ls.containsKey("target_current")) {
+        double targetCurrent = ls["target_current"].as<double>();
+        String reason = ls.containsKey("reason") ? ls["reason"].as<String>() : "allocation";
+
+        DBUGF("LoadSharing: Received allocation %.1fA (reason: %s)", targetCurrent, reason.c_str());
+
+        if (loadSharingGroupState.isMember()) {
+          loadSharingGroupState.recordAllocationReceived();
+          shaper.setLoadSharingLimit(targetCurrent, reason == "failsafe_disabled");
+        }
+      }
+    }
   }
 }
 
@@ -1945,6 +2070,8 @@ static void registerWebServerRoutes(MongooseHttpServer &server)
   server.on("/shaper", handleCurrentShaper);
   server.on("/emoncms/describe", handleDescribe);
   server.on("/rfid/add", handleAddRFID);
+  server.on("/relay/reset", handleRelayHealthReset);
+  server.on("/relay/recovery", handleRelayRecovery);
 
   server.on("/schedule/plan", handleSchedulePlan);
   server.on("/schedule", handleSchedule);
@@ -2064,10 +2191,10 @@ static void registerWebServerRoutes(MongooseHttpServer &server)
     request->send(response);
   });
 
-  server.on("/debug/console")
-    ->onRequest(onWsAuthenticate)
-    ->onFrame([](MongooseHttpWebSocketConnection *connection, int flags, uint8_t *data, size_t len) {
-      // Intentionally no-op: this endpoint is server-push only via SerialDebug.onWrite.
+  server.on("/debug/console", [](MongooseHttpWebSocketConnection *connection, int flags, uint8_t *data, size_t len) {
+    // Intentionally no-op: this endpoint is server-push only via SerialDebug.onWrite.
+  })->onConnect([](MongooseHttpWebSocketConnection *connection) {
+    wsAuthorise(connection);
   });
 
   SerialDebug.onWrite([](const uint8_t *buffer, size_t size)
@@ -2103,6 +2230,9 @@ static void registerWebServerRoutes(MongooseHttpServer &server)
 
   // onWsConnect() applies the auth gate; see wsAuthorise().
   server.on("/ws", onWsFrame)->onConnect(onWsConnect);
+
+  // Setup load sharing endpoints
+  web_server_load_sharing_setup(server);
 }
 
 void web_server_setup()
@@ -2113,9 +2243,19 @@ void web_server_setup()
   bool use_ssl = false;
   if(config_https_enabled() && www_certificate_id != "")
   {
-    uint64_t cert_id = std::stoull(www_certificate_id.c_str(), nullptr, 16);
-    const char *cert = certs.getCertificate(cert_id);
-    const char *key = certs.getKey(cert_id);
+    // This one sits on the boot path: a corrupted stored www_certificate_id
+    // parsed with a throwing conversion would abort inside web_server_setup()
+    // and boot-loop the unit with no way back in over the network. Fall through
+    // to plain HTTP instead, which at least leaves the device reachable to
+    // correct the config.
+    uint64_t cert_id = 0;
+    bool id_valid = certificate_id_from_string(www_certificate_id.c_str(), cert_id);
+    if(!id_valid) {
+      DEBUG.printf("Ignoring malformed www_certificate_id '%s', serving HTTPS disabled\n", www_certificate_id.c_str());
+    }
+
+    const char *cert = id_valid ? certs.getCertificate(cert_id) : NULL;
+    const char *key = id_valid ? certs.getKey(cert_id) : NULL;
     if(NULL != cert && NULL != key)
     {
       DEBUG.printf("Starting HTTPS server, https://0.0.0.0:%d\n", www_https_port);

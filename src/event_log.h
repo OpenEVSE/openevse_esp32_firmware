@@ -3,6 +3,7 @@
 
 #include <Arduino.h>
 #include "evse_state.h"
+#include "event_log_repeat.h"
 
 #ifndef EVENTLOG_ROTATE_SIZE
 #define EVENTLOG_ROTATE_SIZE        1024
@@ -15,6 +16,11 @@
 #ifndef EVENTLOG_BASE_DIRECTORY
 #define EVENTLOG_BASE_DIRECTORY     "/eventlog"
 #endif
+
+// Reported for entries written before the pilot state was recorded. Matches
+// the OpenEVSE library's OPENEVSE_STATE_INVALID narrowed to uint8_t, spelled
+// out here so EventLog stays independent of the EVSE library.
+#define EVENTLOG_PILOT_STATE_UNKNOWN 0xff
 
 class EventType
 {
@@ -67,6 +73,8 @@ private:
   uint32_t _min_log_index;
   uint32_t _max_log_index;
 
+  EventLogRepeatFilter _repeat;
+
   String filenameFromIndex(uint32_t index);
   uint32_t indexFromFilename(String &filename);
 
@@ -84,8 +92,8 @@ public:
     return _max_log_index;
   }
 
-  void log(EventType type, EvseState managerState, uint8_t evseState, uint32_t evseFlags, uint32_t pilot, double energy, uint32_t elapsed, double temperature, double temperatureMax, uint8_t divertMode, uint8_t shaper);
-  void enumerate(uint32_t index, std::function<void(String time, EventType type, const String &logEntry, EvseState managerState, uint8_t evseState, uint32_t evseFlags, uint32_t pilot, double energy, uint32_t elapsed, double temperature, double temperatureMax, uint8_t divertMode, uint8_t shaper)> callback);
+  void log(EventType type, EvseState managerState, uint8_t evseState, uint32_t evseFlags, uint8_t pilotState, uint32_t pilot, double energy, uint32_t elapsed, double temperature, double temperatureMax, uint8_t divertMode, uint8_t shaper);
+  void enumerate(uint32_t index, std::function<void(String time, EventType type, const String &logEntry, EvseState managerState, uint8_t evseState, uint32_t evseFlags, uint8_t pilotState, uint16_t changed, uint32_t pilot, double energy, uint32_t elapsed, double temperature, double temperatureMax, uint8_t divertMode, uint8_t shaper)> callback);
 };
 
 

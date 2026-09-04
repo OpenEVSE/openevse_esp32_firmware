@@ -38,6 +38,15 @@ public:
   // Whether a vehicle is currently plugged in.
   bool vehicle_connected = true;
 
+  // Whether the connected EV is currently requesting power. A vehicle can be
+  // plugged in but delay charging due to its own schedule or because charging
+  // has completed.
+  bool request_current = true;
+
+  // Optional non-battery load requested by the EV while connected, e.g. cabin
+  // pre-conditioning after the traction battery has finished charging.
+  double aux_load_kw = 0.0;
+
   // EV battery model
   double battery_capacity_kwh = 75.0;
   double max_charge_rate_kw = 7.2;

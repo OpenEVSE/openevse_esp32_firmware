@@ -72,6 +72,9 @@ node_modules
 .vagrant
 ubuntu-xenial-16.04-cloudimg-console.log
 
+# Claude Code / AI agent local overrides (personal, not shared)
+.claude/settings.local.json
+
 # VSCode stuff
 .vscode
 .vscode/browse.vc.db*

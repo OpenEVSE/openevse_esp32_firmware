@@ -77,7 +77,7 @@ void EventLog::begin()
   }
 }
 
-void EventLog::log(EventType type, EvseState managerState, uint8_t evseState, uint32_t evseFlags, uint32_t pilot, double energy, uint32_t elapsed, double temperature, double temperatureMax, uint8_t divertMode, uint8_t shaper)
+void EventLog::log(EventType type, EvseState managerState, uint8_t evseState, uint32_t evseFlags, uint8_t pilotState, uint32_t pilot, double energy, uint32_t elapsed, double temperature, double temperatureMax, uint8_t divertMode, uint8_t shaper)
 {
   time_t now = time(NULL);
   struct tm timeinfo;
@@ -86,6 +86,33 @@ void EventLog::log(EventType type, EvseState managerState, uint8_t evseState, ui
   // Check if we have a reasonable time, don't want to be logging events from 1970
   if(timeinfo.tm_year < (2021 - 1900)) {
     return;
+  }
+
+  EventLogEntryKey key = {
+    type.toInt(),
+    (uint8_t)managerState,
+    evseState,
+    eventLogSignificantFlags(evseFlags),
+    pilot,
+    divertMode,
+    shaper
+  };
+
+  // The type is part of the key, so the first entry of any new state - a fault
+  // above all - is always written. Only an exact repeat of what a reader has
+  // already been told is dropped, and warnings are not exempt: a fault that
+  // persists while the pilot flickers would otherwise flood the log with copies
+  // of itself and evict the very context needed to interpret it.
+  if(_repeat.isRepeat(key, now)) {
+    DBUGLN("EventLog: entry repeats the previous one, not logging");
+    return;
+  }
+
+  // Why this entry is here. Zero only survives the check above once the repeat
+  // interval has lapsed, which is the periodic sample of an unchanging state.
+  uint16_t changed = _repeat.changedFrom(key);
+  if(0 == changed) {
+    changed = EVENTLOG_CHANGE_PERIODIC;
   }
 
   // Guard against filling LittleFS — keep at least 8 KB free to prevent filesystem corruption.
@@ -114,7 +141,7 @@ void EventLog::log(EventType type, EvseState managerState, uint8_t evseState, ui
 
   if(eventFile)
   {
-    StaticJsonDocument<256> line;
+    StaticJsonDocument<320> line;
     char output[80];
     strftime(output, 80, "%FT%TZ", &timeinfo);
 
@@ -123,6 +150,8 @@ void EventLog::log(EventType type, EvseState managerState, uint8_t evseState, ui
     line["ms"] = managerState.toString();
     line["es"] = evseState;
     line["ef"] = evseFlags;
+    line["ps"] = pilotState;
+    line["ch"] = changed;
     line["p"] = pilot;
     line["e"] = energy;
     line["el"] = elapsed;
@@ -140,10 +169,12 @@ void EventLog::log(EventType type, EvseState managerState, uint8_t evseState, ui
     #endif
 
     eventFile.close();
+
+    _repeat.recordWritten(key, now);
   }
 }
 
-void EventLog::enumerate(uint32_t index, std::function<void(String time, EventType type, const String &logEntry, EvseState managerState, uint8_t evseState, uint32_t evseFlags, uint32_t pilot, double energy, uint32_t elapsed, double temperature, double temperatureMax, uint8_t divertMode, uint8_t shaper)> callback)
+void EventLog::enumerate(uint32_t index, std::function<void(String time, EventType type, const String &logEntry, EvseState managerState, uint8_t evseState, uint32_t evseFlags, uint8_t pilotState, uint16_t changed, uint32_t pilot, double energy, uint32_t elapsed, double temperature, double temperatureMax, uint8_t divertMode, uint8_t shaper)> callback)
 {
   String filename = filenameFromIndex(index);
   File eventFile = LittleFS.open(filename);
@@ -154,7 +185,7 @@ void EventLog::enumerate(uint32_t index, std::function<void(String time, EventTy
       String line = eventFile.readStringUntil('\n');
       if(line.length() > 0)
       {
-        StaticJsonDocument<256> json;
+        StaticJsonDocument<320> json;
         DeserializationError error = deserializeJson(json, line);
         if(error)
         {
@@ -169,6 +200,10 @@ void EventLog::enumerate(uint32_t index, std::function<void(String time, EventTy
         managerState.fromString(json["ms"]);
         uint8_t evseState = json["es"];
         uint32_t evseFlags = json["ef"];
+        // Entries written before "ps" existed have no pilot state to report.
+        uint8_t pilotState = json["ps"] | EVENTLOG_PILOT_STATE_UNKNOWN;
+        // Entries written before "ch" existed cannot say why they are there.
+        uint16_t changed = json["ch"] | 0;
         uint32_t pilot = json["p"];
         double energy = json["e"];
         uint32_t elapsed = json["el"];
@@ -177,7 +212,7 @@ void EventLog::enumerate(uint32_t index, std::function<void(String time, EventTy
         uint8_t divertMode = json["dm"];
         uint8_t shaper = json["sh"];
 
-        callback(time, type, line, managerState, evseState, evseFlags, pilot, energy, elapsed, temperature, temperatureMax, divertMode, shaper);
+        callback(time, type, line, managerState, evseState, evseFlags, pilotState, changed, pilot, energy, elapsed, temperature, temperatureMax, divertMode, shaper);
       }
     }
     eventFile.close();
