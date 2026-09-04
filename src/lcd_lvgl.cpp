@@ -218,6 +218,25 @@ int LcdTask::smoothedWifiPercent(int rssi)
 // line under the ring. Sized to fit the left column at 20px alongside "NN A · ".
 // EvseClient_NULL means no claim is active and the configured default applies,
 // which needs no explanation — hence "".
+// Date + clock line shared by the charge header and the standby screen.
+// 24-hour by default; tft_12h_clock switches to a 12-hour clock with AM/PM.
+static void formatPanelClock(char *buf, size_t len)
+{
+  timeval tv;
+  gettimeofday(&tv, NULL);
+  struct tm ti;
+  localtime_r(&tv.tv_sec, &ti);
+  if (config_tft_12h_clock()) {
+    int hour = ti.tm_hour % 12;
+    if (hour == 0) hour = 12;
+    snprintf(buf, len, "%04d-%02d-%02d  %d:%02d %s",
+             ti.tm_year + 1900, ti.tm_mon + 1, ti.tm_mday,
+             hour, ti.tm_min, ti.tm_hour < 12 ? "AM" : "PM");
+  } else {
+    strftime(buf, len, "%Y-%m-%d  %H:%M", &ti);
+  }
+}
+
 static const char *pilot_source_name(EvseClient client)
 {
   switch(client) {
@@ -477,11 +496,10 @@ unsigned long LcdTask::loop(MicroTasks::WakeReason reason)
     sd.week_kwh          = _evse->getTotalWeek();
     sd.total_kwh         = _evse->getTotalEnergy();
 
-    char ck[24];
-    timeval tv; gettimeofday(&tv, NULL);
-    struct tm ti; localtime_r(&tv.tv_sec, &ti);
-    strftime(ck, sizeof(ck), "%Y-%m-%d  %H:%M", &ti);  // match the charge screen header
+    char ck[32];
+    formatPanelClock(ck, sizeof(ck));  // match the charge screen header
     sd.clock = ck;
+    timeval tv;
 
     char ipbuf[20];
     IPAddress ip = _wifi_client ? WiFi.localIP() : WiFi.softAPIP();
@@ -549,12 +567,8 @@ unsigned long LcdTask::loop(MicroTasks::WakeReason reason)
   d.range             = _evse->getVehicleRange();
   d.range_miles       = config_vehicle_range_miles();
 
-  char dt[24];
-  timeval tv;
-  gettimeofday(&tv, NULL);
-  struct tm ti;
-  localtime_r(&tv.tv_sec, &ti);
-  strftime(dt, sizeof(dt), "%Y-%m-%d  %H:%M", &ti);
+  char dt[32];
+  formatPanelClock(dt, sizeof(dt));
   d.datetime = dt;
 
   // The address lives on the standby screen. Fall back to showing it here only
@@ -572,6 +586,7 @@ unsigned long LcdTask::loop(MicroTasks::WakeReason reason)
   lvgl_pump();
 
   // Next snapshot on the whole second, so the elapsed-time tile doesn't skip.
+  timeval tv;
   gettimeofday(&tv, NULL);
   uint32_t to_next = DATA_INTERVAL_MS - tv.tv_usec / 1000;
   _nextDataUpdate = millis() + to_next;
