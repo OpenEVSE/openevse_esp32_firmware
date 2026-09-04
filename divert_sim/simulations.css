@@ -1,20 +1,369 @@
 
 @media print
 {
-  .solar,.gridie
+  .solar, .gridie, .shaper, .loadsharing
   {
     page-break-inside: avoid;
   }
 }
 
-.solar
+div.solar
 {
   height: 370px;
   width: 100%;
 }
 
-.gridie
+div.shaper
+{
+  height: 370px;
+  width: 100%;
+}
+
+div.gridie
 {
   height: 740px;
   width: 100%;
+}
+
+div.loadsharing
+{
+  height: 420px;
+  width: 100%;
+}
+
+/* Legacy toggleCharts() rules kept for interactive.html */
+.hide-divert .solar,
+.hide-divert .gridie,
+.hide-divert tr.solar,
+.hide-divert tr.gridie
+{
+  display: none;
+}
+
+.hide-shaper .shaper,
+.hide-shaper tr.shaper
+{
+  display: none;
+}
+
+.hide-loadsharing .loadsharing,
+.hide-loadsharing tr.loadsharing
+{
+  display: none;
+}
+
+/* =============================================================================
+   view.html — tab-based layout
+   ============================================================================= */
+
+.sim-header {
+  padding: 10px 15px 0;
+}
+
+.sim-header h1 {
+  margin-top: 10px;
+}
+
+/* Attach tabs flush to the tab-content panel */
+.sim-tab-nav {
+  margin-top: 16px;
+  margin-bottom: 0;
+}
+
+.sim-tab-content {
+  border: 1px solid #ddd;
+  border-top: none;
+  padding: 16px;
+  border-radius: 0 0 4px 4px;
+}
+
+/* Summary section */
+.sim-summary-section {
+  margin-bottom: 12px;
+}
+
+.sim-summary-section h3 {
+  margin-top: 0;
+}
+
+.sim-summary-placeholder {
+  color: #888;
+  font-style: italic;
+  padding: 8px 0;
+}
+
+.sim-summary-table {
+  font-size: 12px;
+}
+
+/* Profile selector row */
+.sim-chart-controls {
+  margin-bottom: 12px;
+}
+
+.sim-profile-select {
+  display: inline-block;
+  width: auto;
+  min-width: 140px;
+  margin-left: 6px;
+  vertical-align: middle;
+}
+
+/* 2-column chart grid */
+.sim-charts-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 16px;
+}
+
+/* Load sharing charts span full width (multiple series, more visual space needed) */
+.sim-charts-grid div.loadsharing {
+  grid-column: span 2;
+}
+
+/* Gridie charts are taller; keep them full-width too */
+.sim-charts-grid div.gridie {
+  grid-column: span 2;
+}
+
+/* Loading indicator inside chart container */
+.sim-chart-loading {
+  grid-column: span 2;
+  padding: 32px;
+  text-align: center;
+  color: #555;
+  font-size: 16px;
+}
+
+/* Spinning animation for glyphicon-refresh */
+@keyframes sim-spin {
+  from { transform: rotate(0deg);   }
+  to   { transform: rotate(360deg); }
+}
+
+.sim-spinning {
+  display: inline-block;
+  animation: sim-spin 1s linear infinite;
+}
+
+
+/* Tabbed nav + summary table */
+.tabs {
+  display: flex;
+  gap: 4px;
+  border-bottom: 2px solid #ccc;
+  margin-bottom: 12px;
+}
+.tabs button {
+  padding: 8px 16px;
+  border: 1px solid #ccc;
+  border-bottom: none;
+  background: #f5f5f5;
+  cursor: pointer;
+  font-size: 14px;
+}
+.tabs button.active {
+  background: #fff;
+  border-bottom: 2px solid #fff;
+  margin-bottom: -2px;
+  font-weight: bold;
+}
+.tab-controls {
+  margin-bottom: 12px;
+}
+
+#profile[multiple] {
+  min-width: 160px;
+  min-height: 110px;
+  vertical-align: middle;
+}
+
+.profile-solo {
+  margin-bottom: 12px;
+}
+
+.profile-solo span {
+  margin-right: 8px;
+  font-weight: 600;
+}
+
+.profile-solo button {
+  margin-right: 6px;
+  margin-bottom: 6px;
+}
+
+table.summary-table {
+  border-collapse: collapse;
+  margin: 8px 0 16px 0;
+  font-size: 13px;
+}
+table.summary-table th,
+table.summary-table td {
+  border: 1px solid #ccc;
+  padding: 4px 8px;
+  text-align: right;
+}
+table.summary-table th {
+  background: #eee;
+  text-align: center;
+}
+table.summary-table td:nth-child(1),
+table.summary-table td:nth-child(2),
+table.summary-table td:nth-child(3) {
+  text-align: left;
+}
+
+.scenario-block {
+  margin: 0 0 8px;
+}
+
+.scenario-block + .scenario-block {
+  margin-top: 28px;
+  padding-top: 24px;
+  border-top: 2px solid #9e9e9e;
+}
+
+.scenario-description {
+  margin: 2px 0 8px;
+}
+
+.scenario-description-toggle {
+  display: inline-block;
+  margin-left: 12px;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: #1976d2;
+  cursor: pointer;
+  text-decoration: underline;
+  font-size: 11px;
+}
+
+.scenario-description-body {
+  margin-top: 6px;
+  color: #37474f;
+  font-size: 12px;
+  line-height: 1.4;
+}
+
+.scenario-description-body p {
+  margin: 0 0 4px;
+}
+
+.scenario-description-body h5,
+.peer-description h5 {
+  margin: 8px 0 4px;
+  font-size: 12px;
+  font-weight: 700;
+  color: #263238;
+}
+
+.peer-description {
+  margin: -4px 0 8px;
+  color: #37474f;
+  font-size: 12px;
+  line-height: 1.4;
+}
+
+.peer-description p {
+  margin: 0 0 4px;
+}
+
+.peer-timeline {
+  margin: 6px 0 8px;
+  --timeline-left-inset: 104px;
+  --timeline-track-width: minmax(0, 1fr);
+}
+
+.timeline-row {
+  display: grid;
+  grid-template-columns: var(--timeline-left-inset) var(--timeline-track-width);
+  gap: 0;
+  align-items: center;
+  margin: 0 0 6px;
+}
+
+.timeline-label {
+  position: relative;
+  z-index: 1;
+  font-size: 12px;
+  font-weight: 600;
+  margin: 0;
+  line-height: 16px;
+  padding-right: 8px;
+  text-align: right;
+  box-sizing: border-box;
+  overflow: visible;
+  white-space: nowrap;
+}
+
+.timeline-track {
+  position: relative;
+  z-index: 0;
+  height: 16px;
+  border-radius: 3px;
+  overflow: hidden;
+  background: #eef2f5;
+}
+
+.timeline-segment {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  border-right: 1px solid rgba(255, 255, 255, 0.35);
+  overflow: hidden;
+}
+
+.timeline-segment-label {
+  position: absolute;
+  left: 2px;
+  right: 2px;
+  top: 50%;
+  transform: translateY(-50%);
+  font-size: 10px;
+  font-weight: 600;
+  line-height: 1;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+  overflow: hidden;
+  pointer-events: none;
+}
+
+.timeline-segment.label-hidden .timeline-segment-label {
+  display: none;
+}
+
+/* Keep charging cyan and make sleeping visibly distinct. */
+.timeline-segment.state-charging,
+.timeline-segment[title*="(charging)"] {
+  background-color: #00ffff !important;
+}
+
+.timeline-segment.state-sleeping,
+.timeline-segment[title*="(sleeping)"] {
+  background-color: #2dd9e8 !important;
+  background-image: repeating-linear-gradient(
+    -45deg,
+    rgba(0, 88, 96, 0.5) 0,
+    rgba(0, 88, 96, 0.5) 3px,
+    rgba(45, 217, 232, 0.05) 3px,
+    rgba(45, 217, 232, 0.05) 6px
+  ) !important;
+  box-shadow: inset 0 0 0 1px rgba(0, 88, 96, 0.85);
+}
+
+.timeline-segment.claim-none {
+  background-color: #9e9e9e !important;
+}
+
+.timeline-segment.claim-active {
+  background-color: #43a047 !important;
+}
+
+.timeline-segment.claim-disabled {
+  background-color: #e53935 !important;
+}
+
+.timeline-segment.claim-other {
+  background-color: #fdd835 !important;
 }

@@ -7,8 +7,13 @@
     },
     {
       "type": "item",
+      "title": "Documentation Index",
+      "uri": "docs/index.md"
+    },
+    {
+      "type": "item",
       "title": "User Guide",
-      "uri": "docs/user-guide.md"
+      "uri": "docs/user/index.md"
     },
     {
       "type": "item",
@@ -17,8 +22,8 @@
     },
     {
       "type": "item",
-      "title": "Development Guide",
-      "uri": "docs/developer-guide.md"
+      "title": "Developer Guide",
+      "uri": "docs/developer/index.md"
     },
     {
       "type": "divider",

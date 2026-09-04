@@ -8,6 +8,18 @@
 #include "debug.h"
 #include "profile.h"
 
+// -------------------------------------------------------------------
+// Lock Screen Configuration
+// -------------------------------------------------------------------
+
+// Uncomment to enable lock screen when EVSE is disabled
+//#define ENABLE_LOCK_SCREEN
+
+// Default lock screen message displayed when EVSE is disabled
+#ifndef LOCK_SCREEN_MESSAGE
+#define LOCK_SCREEN_MESSAGE "STATION LOCKED"
+#endif
+
 #ifdef WIFI_LED
 #ifndef WIFI_LED_ON_STATE
 #define WIFI_LED_ON_STATE LOW
@@ -89,6 +101,14 @@
 #define DEFAULT_TIME_ZONE "Europe/London|GMT0BST,M3.5.0/1,M10.5.0"
 #endif
 
+#ifndef LIMIT_DEFAULT_TYPE_DEFAULT
+#define LIMIT_DEFAULT_TYPE_DEFAULT ""
+#endif
+
+#ifndef LIMIT_DEFAULT_VALUE_DEFAULT
+#define LIMIT_DEFAULT_VALUE_DEFAULT 0
+#endif
+
 #ifndef VOLTAGE_DEFAULT
 #define VOLTAGE_DEFAULT  240
 #endif
@@ -157,6 +177,14 @@
 
 #ifndef SCHEDULER_DEFAULT_START_WINDOW
 #define SCHEDULER_DEFAULT_START_WINDOW 600
+#endif
+
+#ifndef LCD_BACKLIGHT_TIMEOUT_DEFAULT
+#ifdef TFT_BACKLIGHT_TIMEOUT_MS
+#define LCD_BACKLIGHT_TIMEOUT_DEFAULT (TFT_BACKLIGHT_TIMEOUT_MS / 1000)
+#else
+#define LCD_BACKLIGHT_TIMEOUT_DEFAULT 0  // 0 = never timeout (disabled by default)
+#endif
 #endif
 
 #ifndef FORMAT_LITTLEFS_IF_FAILED

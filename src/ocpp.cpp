@@ -359,8 +359,16 @@ void OcppTask::loadEvseBehavior() {
     });
 
     addErrorCodeInput([this] () -> const char* {
-        if (evse->getEvseState() == OPENEVSE_STATE_STUCK_RELAY) {
+        if (evse->getEvseState() == OPENEVSE_STATE_STUCK_RELAY ||
+                evse->getEvseState() == OPENEVSE_STATE_RELAY_CLOSURE_FAULT) {
             return "PowerSwitchFailure";
+        }
+        return nullptr;
+    });
+
+    addErrorCodeInput([this] () -> const char* {
+        if (evse->getEvseState() == OPENEVSE_STATE_EEPROM_FAILURE) {
+            return "InternalError";
         }
         return nullptr;
     });
@@ -368,6 +376,22 @@ void OcppTask::loadEvseBehavior() {
     addErrorCodeInput([this] () -> const char* {
         if (rfid->communicationFails()) {
             return "ReaderFailure";
+        }
+        return nullptr;
+    });
+
+    addErrorDataInput([this] () -> MicroOcpp::ErrorData {
+        // The proximity pilot faults have no dedicated OCPP 1.6 error code, so
+        // report them as OtherError and let the free text carry the detail.
+        if (evse->getEvseState() == OPENEVSE_STATE_PP_SHORTED ||
+                evse->getEvseState() == OPENEVSE_STATE_PP_MISSING) {
+
+            MicroOcpp::ErrorData error = "OtherError";
+
+            //add free text error info
+            error.info = evse->getEvseState() == OPENEVSE_STATE_PP_SHORTED ? "proximity pilot shorted" :
+                                                                            "proximity pilot resistor missing";
+            return error;
         }
         return nullptr;
     });
@@ -633,7 +657,7 @@ void OcppTask::initializeDiagnosticsService() {
             for (uint32_t i = 0; i <= (eventLog->getMaxIndex() - eventLog->getMinIndex()) && !overflow; i++) {
                 uint32_t index = eventLog->getMinIndex() + i;
 
-                eventLog->enumerate(index, [this, startTime, stopTime, &body, SUFFIX_RESERVED_AREA, &firstEntry, &overflow] (String time, EventType type, const String &logEntry, EvseState managerState, uint8_t evseState, uint32_t evseFlags, uint32_t pilot, double energy, uint32_t elapsed, double temperature, double temperatureMax, uint8_t divertMode, uint8_t shaper) {
+                eventLog->enumerate(index, [this, startTime, stopTime, &body, SUFFIX_RESERVED_AREA, &firstEntry, &overflow] (String time, EventType type, const String &logEntry, EvseState managerState, uint8_t evseState, uint32_t evseFlags, uint8_t pilotState, uint16_t changed, uint32_t pilot, double energy, uint32_t elapsed, double temperature, double temperatureMax, uint8_t divertMode, uint8_t shaper) {
                     if (overflow) return;
                     MicroOcpp::Timestamp timestamp = MicroOcpp::Timestamp();
                     if (time.isEmpty() || !timestamp.setTime(time.c_str())) {

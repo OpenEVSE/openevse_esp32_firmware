@@ -6,6 +6,9 @@
 
 #include "emonesp.h"
 #include "evse_monitor.h"
+extern uint32_t voltage_cfg;
+extern uint32_t heartbeat_interval_cfg;
+extern uint32_t heartbeat_current_cfg;
 #include "event.h"
 #include "debug.h"
 
@@ -36,6 +39,14 @@
 #ifndef EVSE_MONITOR_TEMP_TIME
 #define EVSE_MONITOR_TEMP_TIME              30
 #endif // !EVSE_MONITOR_TEMP_TIME
+
+#ifndef EVSE_MONITOR_SETTINGS_TIME
+#define EVSE_MONITOR_SETTINGS_TIME          60
+#endif // !EVSE_MONITOR_SETTINGS_TIME
+
+#ifndef EVSE_MONITOR_SETTINGS_OFFSET
+#define EVSE_MONITOR_SETTINGS_OFFSET        7
+#endif // !EVSE_MONITOR_SETTINGS_OFFSET
 
 #ifndef EVSE_HEATBEAT_INTERVAL
 #define EVSE_HEATBEAT_INTERVAL              5
@@ -148,6 +159,8 @@ EvseMonitor::EvseMonitor(OpenEVSEClass &openevse) :
   _state(),
   _amp(0),
   _voltage(VOLTAGE_DEFAULT),
+  _mqtt_voltage(0),
+  _mqtt_voltage_time(0),
   _temps(),
   _gfci_count(0),
   _nognd_count(0),
@@ -165,7 +178,29 @@ EvseMonitor::EvseMonitor(OpenEVSEClass &openevse) :
 #ifdef ENABLE_MCP9808
   _mcp9808(),
 #endif
-  _settings_changed()
+  _settings_changed(),
+  _panic_temperature(72),
+  _heartbeat_interval(EVSE_HEATBEAT_INTERVAL),
+  _heartbeat_current(EVSE_HEARTBEAT_CURRENT),
+  _sender(nullptr),
+  _frequency(0),
+  _zero_cross_threshold_ma(OPENEVSE_RELAY_HEALTH_NOT_AVAILABLE),
+  _relay_dc1(true),
+  _relay_dc2(true),
+  _relay_ac(true),
+  _relay_status_known(false),
+  _chip_id(""),
+  _relay_health_known(false),
+  _relay_life_remaining_pct(0),
+  _relay_cold_open_count(0),
+  _relay_elec_damage_x1e6(0),
+  _relay_transit_baseline_ms(OPENEVSE_RELAY_HEALTH_NOT_AVAILABLE),
+  _relay_transit_drift_warning(false),
+  _relay_thermal_index_x100(OPENEVSE_RELAY_HEALTH_NOT_AVAILABLE),
+  _relay_thermal_baseline_x100(OPENEVSE_RELAY_HEALTH_NOT_AVAILABLE),
+  _relay_thermal_warning_level(0),
+  _relay_stuck_recovery_count(0),
+  _relay_recovery_in_flight(false)
 {
 }
 
@@ -199,6 +234,15 @@ void EvseMonitor::evseBoot(const char *firmware)
   DBUGF("EVSE boot v%s", firmware);
 
   snprintf(_firmware_version, sizeof(_firmware_version), "%s", firmware);
+
+  // Invalidate controller-reported state that has no "known" gate of its own
+  // and would otherwise keep serving the previous controller's values
+  // indefinitely if this one doesn't support/answer the query - e.g. a
+  // controller swapped in without an ESP32 reboot, or a non-D9 controller.
+  // _relay_health_known itself only ever latches true (readRelayHealth()'s
+  // callback simply no-ops when unsupported), so it needs the same reset.
+  _relay_health_known = false;
+  _zero_cross_threshold_ma = OPENEVSE_RELAY_HEALTH_NOT_AVAILABLE;
 
   _openevse.getFaultCounters([this](int ret, long gfci_count, long nognd_count, long stuck_count)
   {
@@ -249,9 +293,24 @@ void EvseMonitor::evseBoot(const char *firmware)
     }
   });
 
+  readChipId();
+  readRelayStatus();
+  readFrequency();
+  readRelayHealth();
+
+#ifndef DISABLE_HEARTBEAT
   _openevse.heartbeatEnable(EVSE_HEATBEAT_INTERVAL, EVSE_HEARTBEAT_CURRENT, [this](int ret, int interval, int current, int triggered) {
     _heartbeat = RAPI_RESPONSE_OK == ret;
+    // If heartbeat was triggered while WiFi module was rebooting, ack immediately to restore ampacity
+    if (_heartbeat && 2 == triggered) {
+      _openevse.heartbeatPulse([](int ret) {
+        if (RAPI_RESPONSE_OK != ret) {
+          DEBUG_PORT.println("Heartbeat ack failed");
+        }
+      });
+    }
   });
+#endif
 }
 
 void EvseMonitor::updateEvseState(uint8_t evse_state, uint8_t pilot_state, uint32_t vflags)
@@ -279,6 +338,14 @@ void EvseMonitor::updateEvseState(uint8_t evse_state, uint8_t pilot_state, uint3
     if(!isCharging()) {
       _amp = 0;
       _power = 0;
+      // Read voltage, frequency, and the relay-health estimate after relay
+      // opens - $GL is only meaningful once a relay open has occurred, since
+      // that's when the controller updates its cumulative-damage accumulator
+      if(_sender) {
+        getChargeCurrentAndVoltageFromEvse();
+        readFrequency();
+        readRelayHealth();
+      }
     }
     _session_complete.update(getFlags());
   }
@@ -318,6 +385,17 @@ unsigned long EvseMonitor::loop(MicroTasks::WakeReason reason)
   DBUG(", _count = ");
   DBUGLN(_count);
 
+  if(_relay_recovery_in_flight) {
+    // A stuck-relay recovery ($FK) is in flight and can hold the RAPI queue
+    // for up to ~30s on the controller side - every periodic poll below
+    // would just enqueue behind it and, once the queue (RAPI_MAX_COMMANDS
+    // deep) fills, get RAPI_RESPONSE_QUEUE_FULL, heartbeatPulse() included.
+    // Sit this cycle out rather than starve the queue and risk tripping the
+    // controller's heartbeat-supervision fallback current.
+    _count++;
+    return EVSE_MONITOR_POLL_TIME;
+  }
+
   // unlock openevse fw compiled with BOOTLOCK
   if (isBootLocked()) {
     unlock();
@@ -333,6 +411,22 @@ unsigned long EvseMonitor::loop(MicroTasks::WakeReason reason)
       }
     });
   }
+  else if(0 == _count % EVSE_MONITOR_STATE_TIME && _heartbeat_interval > 0)
+  {
+    // Heartbeat enable failed; retry with the configured values so WiFi module
+    // reboot resyncs. Gate on _heartbeat_interval > 0 so an explicit disable
+    // (interval==0) does not get overwritten by the retry.
+    _openevse.heartbeatEnable(_heartbeat_interval, _heartbeat_current, [this](int ret, int interval, int current, int triggered) {
+      _heartbeat = RAPI_RESPONSE_OK == ret;
+      if (_heartbeat && 2 == triggered) {
+        _openevse.heartbeatPulse([](int ret) {
+          if (RAPI_RESPONSE_OK != ret) {
+            DEBUG_PORT.println("Heartbeat ack failed");
+          }
+        });
+      }
+    });
+  }
 
   // Get the EVSE state
   if(0 == _count % EVSE_MONITOR_STATE_TIME) {
@@ -343,8 +437,18 @@ unsigned long EvseMonitor::loop(MicroTasks::WakeReason reason)
     getChargeCurrentAndVoltageFromEvse();
   }
 
+  // Re-resolve the reported voltage every cycle so a stale MQTT voltage falls
+  // back to the configured ($SV/$GV) or default value once it ages out.
+  updateEffectiveVoltage();
+
   if(0 == _count % EVSE_MONITOR_TEMP_TIME) {
     getTemperatureFromEvse();
+  }
+
+  // Offset off zero so this does not land on the same tick as the state and
+  // temperature polls, which share a 30-count cadence that 60 is a multiple of.
+  if(EVSE_MONITOR_SETTINGS_OFFSET == _count % EVSE_MONITOR_SETTINGS_TIME) {
+    getSettingsFromEvse();
   }
 
   // Check if pilot is wrong ( solve OpenEvse fw compiled with -D PP_AUTO_AMPACITY)
@@ -360,14 +464,29 @@ unsigned long EvseMonitor::loop(MicroTasks::WakeReason reason)
 
 bool EvseMonitor::begin(RapiSender &sender)
 {
+  _sender = &sender;
   _openevse.begin(sender, [this](bool connected, const char *firmware, const char *protocol)
   {
     if(connected)
     {
+      // Immediately tell all WebSocket clients we are connected so the GUI
+      // banner clears without waiting for the full data-ready chain.
+      JsonDocument connectedEvent;
+      connectedEvent["evse_connected"] = 1;
+      event_send(connectedEvent);
+
       _energyMeter.begin(this);
       _openevse.onState([this](uint8_t evse_state, uint8_t pilot_state, uint32_t current_capacity, uint32_t vflags)
       {
         DBUGF("evse_state = %02x, pilot_state = %02x, current_capacity = %d, vflags = %08x", evse_state, pilot_state, current_capacity, vflags);
+        // If the EVSE independently changed current capacity (e.g. heartbeat restore,
+        // temperature throttle recover), update _pilot so verifyPilot() doesn't fight
+        // the change, and trigger re-evaluation so setTargetState corrects if needed.
+        if(current_capacity > 0 && current_capacity != _pilot)
+        {
+          _pilot = current_capacity;
+          _settings_changed.Trigger();
+        }
         updateEvseState(evse_state, pilot_state, vflags);
       });
 
@@ -399,13 +518,10 @@ void EvseMonitor::updateFaultCounters(int ret, long gfci_count, long nognd_count
 
 EvseMonitor::ServiceLevel EvseMonitor::getServiceLevel()
 {
-  if(0 == (getSettingsFlags() & OPENEVSE_ECF_AUTO_SVC_LEVEL_DISABLED)) {
-    return ServiceLevel::Auto;
-  }
-
-  return (OPENEVSE_ECF_L2 == (getSettingsFlags() & OPENEVSE_ECF_L2)) ?
-    ServiceLevel::L2 :
-    ServiceLevel::L1;
+  // Auto service level is only supported by legacy non-WiFi controller builds
+  // ($SL A gets NK'd by the controllers this firmware ships with), so always
+  // report the actual L1/L2 level rather than a state the user cannot select.
+  return getActualServiceLevel();
 }
 
 EvseMonitor::ServiceLevel EvseMonitor::getActualServiceLevel()
@@ -432,7 +548,7 @@ void EvseMonitor::unlock()
 
 void EvseMonitor::enable()
 {
-  OpenEVSE.enable([this](int ret)
+  _openevse.enable([this](int ret)
   {
     DBUGF("EVSE: enable - complete %d", ret);
     if(RAPI_RESPONSE_OK == ret) {
@@ -445,7 +561,7 @@ void EvseMonitor::enable()
 
 void EvseMonitor::sleep()
 {
-  OpenEVSE.sleep([this](int ret)
+  _openevse.sleep([this](int ret)
   {
     DBUGF("EVSE: sleep - complete %d", ret);
     if(RAPI_RESPONSE_OK == ret) {
@@ -456,7 +572,7 @@ void EvseMonitor::sleep()
 
 void EvseMonitor::disable()
 {
-  OpenEVSE.disable([this](int ret)
+  _openevse.disable([this](int ret)
   {
     DBUGF("EVSE: disable - complete %d", ret);
     if(RAPI_RESPONSE_OK == ret) {
@@ -467,7 +583,7 @@ void EvseMonitor::disable()
 
 void EvseMonitor::restart()
 {
-  OpenEVSE.restart([this](int ret)
+  _openevse.restart([this](int ret)
   {
     DBUGF("EVSE: reboot - complete %d", ret);
     if(RAPI_RESPONSE_OK == ret) {
@@ -528,10 +644,9 @@ void EvseMonitor::setVoltage(double volts, std::function<void(int ret)> callback
     _openevse.setVoltage(volts, [this, volts, callback](int ret)
     {
       if(RAPI_RESPONSE_OK == ret) {
-        _voltage = volts;
-        JsonDocument event;
-        event["voltage"] = _voltage;
-        event_send(event);
+        // The voltage has been pushed to the OpenEVSE controller; refresh the
+        // resolved voltage we report/display (MQTT > configured ($SV/$GV) > default).
+        updateEffectiveVoltage();
       }
 
       if(callback) {
@@ -541,8 +656,67 @@ void EvseMonitor::setVoltage(double volts, std::function<void(int ret)> callback
   }
 }
 
+void EvseMonitor::setMqttVoltage(double volts)
+{
+  if(VOLTAGE_MINIMUM <= volts && volts <= VOLTAGE_MAXIMUM)
+  {
+    // Mark MQTT voltage as freshly available (highest-priority source).
+    _mqtt_voltage_time = millis();
+    if(volts != _mqtt_voltage)
+    {
+      _mqtt_voltage = volts;
+      // Keep pushing the live grid voltage to the OpenEVSE controller so its
+      // own power calculation tracks it, as before.
+      _openevse.setVoltage(volts, [](int) {});
+    }
+    updateEffectiveVoltage();
+  }
+}
+
+// Resolve the voltage we report/display, in priority order:
+//   1. live voltage received over MQTT (while still fresh)
+//   2. statically configured voltage from Settings > Charger ($SV/$GV)
+//   3. default
+// The OpenEVSE charging reading ($GG) is intentionally NOT used here.
+void EvseMonitor::updateEffectiveVoltage()
+{
+  double volts;
+  if(_mqtt_voltage_time != 0 &&
+     (millis() - _mqtt_voltage_time) < EVSE_MONITOR_MQTT_VOLTAGE_TIMEOUT_MS) {
+    volts = _mqtt_voltage;
+  } else if(voltage_cfg > 0) {
+    volts = (double)voltage_cfg / 100.0;
+  } else {
+    volts = VOLTAGE_DEFAULT;
+  }
+
+  if(volts != _voltage)
+  {
+    _voltage = volts;
+    _power = _amp * _voltage;
+    if(config_threephase_enabled()) {
+      _power = _power * 3;
+    }
+
+    JsonDocument event;
+    event["voltage"] = _voltage * VOLTS_SCALE_FACTOR;
+    event["power"] = _power * POWER_SCALE_FACTOR;
+    event_send(event);
+  }
+}
+
 void EvseMonitor::setServiceLevel(ServiceLevel level, std::function<void(int ret)> callback)
 {
+  // Auto is not supported by the controller builds this firmware ships with
+  // ($SL A answers NK); refuse it here so it never goes on the wire.
+  if(ServiceLevel::Auto == level)
+  {
+    if(callback) {
+      callback(RAPI_RESPONSE_NK);
+    }
+    return;
+  }
+
   if(level == getServiceLevel())
   {
     if(callback) {
@@ -659,6 +833,51 @@ void EvseMonitor::enableTemperatureCheck(bool enabled, std::function<void(int re
   }
 }
 
+void EvseMonitor::enableOvercurrentMonitor(bool enabled, std::function<void(int ret)> callback)
+{
+  if(isOvercurrentMonitorEnabled() != enabled) {
+    enableFeature('O', enabled, callback);
+  }
+}
+
+void EvseMonitor::enableFrontButton(bool enabled, std::function<void(int ret)> callback)
+{
+  if(isFrontButtonEnabled() != enabled) {
+    enableFeature(OPENEVSE_FEATURE_BUTTON, enabled, callback);
+  }
+}
+
+void EvseMonitor::setPanicTemperature(uint32_t tempC, std::function<void(int ret)> callback)
+{
+  _panic_temperature = tempC;
+  _openevse.setPanicTemperature(tempC, [callback](int ret) {
+    if(callback) callback(ret);
+  });
+}
+
+void EvseMonitor::enableBootLock(bool enabled, std::function<void(int ret)> callback)
+{
+  if(isBootLockEnabled() != enabled) {
+    enableFeature('L', enabled, callback);
+  }
+}
+
+void EvseMonitor::setHeartbeatSupervision(uint32_t interval, uint32_t current, std::function<void(int ret)> callback)
+{
+  // Disabling heartbeat (interval==0) must send current=0 so the EVSE falls
+  // back to 0 A on any pending missed-pulse condition rather than the
+  // configured restricted current.
+  uint32_t effective_current = (interval == 0) ? 0 : current;
+  _openevse.heartbeatEnable(interval, effective_current, [this, interval, effective_current, callback](int ret, int i, int c, int t) {
+    if(RAPI_RESPONSE_OK == ret) {
+      _heartbeat_interval = interval;
+      _heartbeat_current = effective_current;
+      _heartbeat = interval > 0;
+    }
+    if(callback) callback(ret);
+  });
+}
+
 void EvseMonitor::configureCurrentSensorScale(long scale, long offset, std::function<void(int ret)> callback)
 {
   _openevse.setAmmeterSettings(scale, offset, [this, scale, offset, callback](int ret)
@@ -699,6 +918,35 @@ void EvseMonitor::setMaxConfiguredCurrent(long amps)
   });
 }
 
+// This method will attempt to set the hardware current limit. This
+// can only be set once. If called subsequent times it will be ignored.
+// We will need to read back the hardware limit to know what it is.
+void EvseMonitor::setMaxHardwareCurrent(long amps)
+{
+  // limit `amps` to the hardware limit
+  if(amps > _max_hardware_current) {
+    amps = _max_hardware_current;
+  }
+  if(amps < _min_current && _min_current != 0) {
+    amps = _min_current;
+  }
+
+  _openevse.setCurrentCapacityFactoryLimit(amps, [this, amps](int ret, long pilot)
+  {
+    if(RAPI_RESPONSE_OK == ret)
+    {
+      _max_hardware_current = amps;
+      DBUGVAR(_max_hardware_current);
+
+      if(_max_configured_current > _max_hardware_current) {
+        setMaxConfiguredCurrent(_max_hardware_current);
+      }
+
+      _settings_changed.Trigger();
+    }
+  });
+}
+
 void EvseMonitor::getStatusFromEvse(bool allowStart)
 {
   DBUGLN("Get EVSE status");
@@ -718,6 +966,39 @@ void EvseMonitor::getStatusFromEvse(bool allowStart)
   });
 }
 
+// The settings flags are otherwise only read at evseBoot() and after we
+// ourselves write a setting, so any change the controller makes on its own --
+// or a boot read that landed before the controller finished loading its
+// settings -- leaves our cache permanently disagreeing with the hardware. That
+// showed up as the diode/vent checks reading disabled in the UI while $GE
+// reported them enabled, and it "fixed itself" only because toggling any
+// feature forces the refresh below. Re-read periodically so the two resync.
+void EvseMonitor::getSettingsFromEvse()
+{
+  _openevse.getSettings([this](int ret, long pilot, uint32_t flags)
+  {
+    if(RAPI_RESPONSE_OK == ret && flags != _settings_flags)
+    {
+      DBUGF("Settings flags changed behind us: %x -> %x", _settings_flags, flags);
+      _settings_flags = flags;
+      // Only on an actual change -- firing every poll would push a needless
+      // event to every WebSocket and MQTT subscriber once a minute.
+      _settings_changed.Trigger();
+    }
+  });
+
+  // Relay health/damage barely moves between charge sessions (it only
+  // updates on a relay open), and the zero-cross threshold only changes via
+  // an explicit $SZ, but re-reading both here on the same ~60s cadence as
+  // the rest of the settings keeps them in sync if something else on the
+  // RAPI bus changes them, and covers installations that stay connected for
+  // days without a session boundary.
+  if(_sender) {
+    readFrequency();
+  }
+  readRelayHealth();
+}
+
 void EvseMonitor::getChargeCurrentAndVoltageFromEvse()
 {
   if(_state.isCharging())
@@ -729,9 +1010,10 @@ void EvseMonitor::getChargeCurrentAndVoltageFromEvse()
       {
         DBUGF("amps = %.2f, volts = %.2f", a, volts);
         _amp = a;
-        if(VOLTAGE_MINIMUM <= volts && volts <= VOLTAGE_MAXIMUM) {
-          _voltage = volts;
-        }
+        // _voltage is resolved from MQTT > configured ($SV/$GV) > default in
+        // updateEffectiveVoltage(); the $GG charging voltage is intentionally
+        // ignored so the reported value tracks the configured setpoint.
+        (void)volts;
         _power = _amp * _voltage;
         if (config_threephase_enabled()) {
           _power = _power * 3;
@@ -812,5 +1094,166 @@ void EvseMonitor::getAmmeterSettings()
       _current_sensor_scale = scale;
       _current_sensor_offset = offset;
     }
+  });
+}
+
+void EvseMonitor::enablePPAutoAmpacity(bool enabled, std::function<void(int ret)> callback)
+{
+  if(!isD9Supported()) {
+    if(callback) callback(RAPI_RESPONSE_FEATURE_NOT_SUPPORTED);
+    return;
+  }
+  if(isPPAutoAmpacityEnabled() != enabled) {
+    enableFeature(OPENEVSE_FEATURE_PP_AUTO_AMPACITY, enabled, callback);
+  }
+}
+
+void EvseMonitor::enableZeroCrossSwitch(bool enabled, std::function<void(int ret)> callback)
+{
+  if(!isD9Supported()) {
+    if(callback) callback(RAPI_RESPONSE_FEATURE_NOT_SUPPORTED);
+    return;
+  }
+  if(isZeroCrossSwitchEnabled() != enabled) {
+    enableFeature(OPENEVSE_FEATURE_ZERO_CROSS_SWITCH, enabled, callback);
+  }
+}
+
+void EvseMonitor::setRelayEnable(int relay, bool enabled, std::function<void(int ret)> callback)
+{
+  _openevse.setRelayEnable(relay, enabled, [this, relay, enabled, callback](int ret) {
+    if(RAPI_RESPONSE_OK == ret) {
+      if(relay == 1) _relay_dc1 = enabled;
+      else if(relay == 2) _relay_dc2 = enabled;
+      else if(relay == 3) _relay_ac = enabled;
+    }
+    if(callback) callback(ret);
+  });
+}
+
+void EvseMonitor::resetFaultCounters(std::function<void(int ret)> callback)
+{
+  _openevse.resetFaultCounters([this, callback](int ret) {
+    if(RAPI_RESPONSE_OK == ret) {
+      _gfci_count = 0;
+      _nognd_count = 0;
+      _stuck_count = 0;
+    }
+    if(callback) callback(ret);
+  });
+}
+
+void EvseMonitor::readFrequency()
+{
+  // $GZ returns both AC line frequency and the relay-open current-zero
+  // threshold in one response; OpenEVSEClass::getFrequency() only exposes
+  // the first field, so read raw here rather than round-tripping $GZ twice
+  // (once via the library, once for the threshold). getFrequency() itself
+  // short-circuits on !isD9Supported() without touching the bus - replicate
+  // that gate here too, or a pre-D9 controller gets a $GZ (NAK'd every time)
+  // at boot and every settings-poll cycle.
+  if(!_sender || !_openevse.isD9Supported()) {
+    return;
+  }
+  _sender->sendCmd("$GZ", [this](int ret) {
+    if(RAPI_RESPONSE_OK == ret && _sender->getTokenCnt() >= 2) {
+      _frequency = strtoul(_sender->getToken(1), NULL, 10);
+      DBUGF("frequency = %u (×100 Hz)", _frequency);
+      if(_sender->getTokenCnt() >= 3) {
+        _zero_cross_threshold_ma = strtoul(_sender->getToken(2), NULL, 10);
+        DBUGF("zero_cross_threshold_ma = %u", _zero_cross_threshold_ma);
+      }
+    }
+  });
+}
+
+void EvseMonitor::readRelayStatus()
+{
+  _openevse.getRelayStatus([this](int ret, bool dc1, bool dc2, bool ac) {
+    if(RAPI_RESPONSE_OK == ret) {
+      _relay_dc1 = dc1;
+      _relay_dc2 = dc2;
+      _relay_ac  = ac;
+      _relay_status_known = true;
+      DBUGF("relay dc1=%d dc2=%d ac=%d", _relay_dc1, _relay_dc2, _relay_ac);
+    }
+  });
+}
+
+void EvseMonitor::readChipId()
+{
+  // $GI is the MCU serial/chip ID - reuse the library's getSerial()
+  _openevse.getSerial([this](int ret, const char *serial) {
+    if(RAPI_RESPONSE_OK == ret && serial) {
+      snprintf(_chip_id, sizeof(_chip_id), "%s", serial);
+      DBUGF("chip_id = %s", _chip_id);
+    }
+  });
+}
+
+void EvseMonitor::readRelayHealth()
+{
+  // $GL - relay contact-life health estimate (requires the controller's
+  // RELAY_HEALTH feature). Not gated on isD9Supported() here: the callback
+  // itself no-ops (leaves _relay_health_known false) on unsupported
+  // controllers, since getRelayHealth() already returns
+  // RAPI_RESPONSE_FEATURE_NOT_SUPPORTED for those.
+  _openevse.getRelayHealth([this](int ret, uint8_t life_remaining_pct, uint32_t cold_open_count,
+                                   uint32_t elec_damage_x1e6, uint32_t transit_baseline_ms,
+                                   bool transit_drift_warning, uint32_t thermal_index_x100,
+                                   uint32_t thermal_baseline_x100, uint8_t thermal_warning_level,
+                                   uint32_t stuck_relay_recovery_count)
+  {
+    if(RAPI_RESPONSE_OK == ret)
+    {
+      _relay_health_known = true;
+      _relay_life_remaining_pct = life_remaining_pct;
+      _relay_cold_open_count = cold_open_count;
+      _relay_elec_damage_x1e6 = elec_damage_x1e6;
+      _relay_transit_baseline_ms = transit_baseline_ms;
+      _relay_transit_drift_warning = transit_drift_warning;
+      _relay_thermal_index_x100 = thermal_index_x100;
+      _relay_thermal_baseline_x100 = thermal_baseline_x100;
+      _relay_thermal_warning_level = thermal_warning_level;
+      _relay_stuck_recovery_count = stuck_relay_recovery_count;
+      DBUGF("relay health: life=%u%% cold_opens=%u elec_damage=%u transit_drift=%d thermal_warn=%u stuck_recoveries=%u",
+            _relay_life_remaining_pct, _relay_cold_open_count, _relay_elec_damage_x1e6,
+            _relay_transit_drift_warning, _relay_thermal_warning_level, _relay_stuck_recovery_count);
+    }
+  });
+}
+
+void EvseMonitor::runStuckRelayRecovery(std::function<void(int ret)> callback)
+{
+  // $FK doesn't report whether the relay actually came free, only that the
+  // controller ran (or refused) the cycle - re-read $GL/$GR afterward so
+  // the cached recovery count and relay status reflect what just happened.
+  //
+  // _relay_recovery_in_flight pauses loop()'s own periodic RAPI traffic for
+  // the duration - see the guard there. Set unconditionally: an EV-connected
+  // refusal NAKs almost immediately (the controller checks before doing
+  // anything), so the pause is negligible on that path and only matters when
+  // the recovery genuinely runs (up to ~30s).
+  _relay_recovery_in_flight = true;
+  _openevse.runStuckRelayRecovery([this, callback](int ret) {
+    _relay_recovery_in_flight = false;
+    if(RAPI_RESPONSE_OK == ret) {
+      readRelayHealth();
+      readRelayStatus();
+    }
+    if(callback) callback(ret);
+  });
+}
+
+void EvseMonitor::resetRelayHealth(std::function<void(int ret)> callback)
+{
+  // $FH has no response payload beyond OK/NAK - re-read $GL afterward
+  // rather than guessing what a freshly-reset accumulator/baseline set
+  // looks like locally.
+  _openevse.resetRelayHealth([this, callback](int ret) {
+    if(RAPI_RESPONSE_OK == ret) {
+      readRelayHealth();
+    }
+    if(callback) callback(ret);
   });
 }

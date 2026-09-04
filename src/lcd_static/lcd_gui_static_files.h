@@ -7,6 +7,7 @@
 #include "lcd_gui.connected_png.h"
 #include "lcd_gui.disabled_png.h"
 #include "lcd_gui.error_png.h"
+#include "lcd_gui.lock_png.h"
 #include "lcd_gui.logo_png.h"
 #include "lcd_gui.no_wifi_png.h"
 #include "lcd_gui.not_connected_png.h"
@@ -23,6 +24,7 @@ StaticFile lcd_gui_static_files[] = {
   { "/connected.png", CONTENT_CONNECTED_PNG, sizeof(CONTENT_CONNECTED_PNG) - 1, _CONTENT_TYPE_PNG, CONTENT_CONNECTED_PNG_ETAG, false },
   { "/disabled.png", CONTENT_DISABLED_PNG, sizeof(CONTENT_DISABLED_PNG) - 1, _CONTENT_TYPE_PNG, CONTENT_DISABLED_PNG_ETAG, false },
   { "/error.png", CONTENT_ERROR_PNG, sizeof(CONTENT_ERROR_PNG) - 1, _CONTENT_TYPE_PNG, CONTENT_ERROR_PNG_ETAG, false },
+  { "/lock.png", CONTENT_LOCK_PNG, sizeof(CONTENT_LOCK_PNG) - 1, _CONTENT_TYPE_PNG, CONTENT_LOCK_PNG_ETAG, false },
   { "/logo.png", CONTENT_LOGO_PNG, sizeof(CONTENT_LOGO_PNG) - 1, _CONTENT_TYPE_PNG, CONTENT_LOGO_PNG_ETAG, false },
   { "/no_wifi.png", CONTENT_NO_WIFI_PNG, sizeof(CONTENT_NO_WIFI_PNG) - 1, _CONTENT_TYPE_PNG, CONTENT_NO_WIFI_PNG_ETAG, false },
   { "/not_connected.png", CONTENT_NOT_CONNECTED_PNG, sizeof(CONTENT_NOT_CONNECTED_PNG) - 1, _CONTENT_TYPE_PNG, CONTENT_NOT_CONNECTED_PNG_ETAG, false },

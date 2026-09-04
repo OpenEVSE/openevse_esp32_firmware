@@ -37,6 +37,15 @@ Adafruit_NeoPixel strip = Adafruit_NeoPixel(NEO_PIXEL_LENGTH, NEO_PIXEL_PIN, NEO
 #include <WS2812FX.h>
 WS2812FX ws2812fx = WS2812FX(NEO_PIXEL_LENGTH, NEO_PIXEL_PIN, NEO_GRB + NEO_KHZ800);
 
+// True once ws2812fx.init() has run. WS2812FX::setBrightness() calls show(),
+// and a show() before init() breaks the strip on core 3: NeoPixel's espShow()
+// caches the pin it has RMT-initialised, then init()'s pinMode(OUTPUT) makes
+// the Peripheral Manager destroy that RMT channel, and every later show()
+// trusts the stale cache, skips re-init and dies silently in rmtWrite().
+// config_load_settings() calls setBrightness() before setup() runs, so the
+// pre-init forward has to be suppressed (the value is applied in setup()).
+static bool neopixels_ready = false;
+
 class LedAnimatorTask : public MicroTasks::Task
 {
   public:
@@ -190,7 +199,10 @@ void LedManagerTask::setup()
 #elif defined(NEO_PIXEL_PIN) && defined(NEO_PIXEL_LENGTH) && defined(ENABLE_WS2812FX)
   DEBUG.printf("Initialising NeoPixels WS2812FX MODE...\n");
   ws2812fx.init();
-  ws2812fx.setBrightness(brightness);
+  neopixels_ready = true;
+  // apply the brightness stored by any pre-init setBrightness() call, with
+  // the same 0 = max mapping it uses
+  ws2812fx.setBrightness(0 == brightness ? 255 : brightness - 1);
   ws2812fx.setSpeed(DEFAULT_FX_SPEED);
   ws2812fx.setColor(BLACK);
   ws2812fx.setMode(FX_MODE_STATIC);
@@ -205,12 +217,19 @@ void LedManagerTask::setup()
 #if defined(RED_LED) && defined(GREEN_LED) && defined(BLUE_LED)
   DBUGF("Initialising RGB LEDs, %d, %d, %d", RED_LED, GREEN_LED, BLUE_LED);
   // configure LED PWM functionalitites
+#if ESP_ARDUINO_VERSION >= ESP_ARDUINO_VERSION_VAL(3,0,0)
+  // core 3.x unified LEDC API: attach pin directly with freq + resolution.
+  ledcAttach(RED_LED, LEDC_FREQUENCY, LEDC_RESOLUTION);
+  ledcAttach(GREEN_LED, LEDC_FREQUENCY, LEDC_RESOLUTION);
+  ledcAttach(BLUE_LED, LEDC_FREQUENCY, LEDC_RESOLUTION);
+#else
   ledcSetup(RED_LEDC_CHANNEL, LEDC_FREQUENCY, LEDC_RESOLUTION);
   ledcAttachPin(RED_LED, RED_LEDC_CHANNEL);
   ledcSetup(GREEN_LEDC_CHANNEL, LEDC_FREQUENCY, LEDC_RESOLUTION);
   ledcAttachPin(GREEN_LED, GREEN_LEDC_CHANNEL);
   ledcSetup(BLUE_LEDC_CHANNEL, LEDC_FREQUENCY, LEDC_RESOLUTION);
   ledcAttachPin(BLUE_LED, BLUE_LEDC_CHANNEL);
+#endif
 #endif
 
 #ifdef WIFI_LED
@@ -592,9 +611,15 @@ void LedManagerTask::setEvseAndWifiRGB(uint8_t evseRed, uint8_t evseGreen, uint8
   DBUGVAR(gamma8[wifiGreen]);
   DBUGVAR(gamma8[wifiBlue]);
 
+#if ESP_ARDUINO_VERSION >= ESP_ARDUINO_VERSION_VAL(3,0,0)
+  ledcWrite(RED_LED, gamma8[wifiRed]);
+  ledcWrite(GREEN_LED, gamma8[wifiGreen]);
+  ledcWrite(BLUE_LED, gamma8[wifiBlue]);
+#else
   ledcWrite(RED_LEDC_CHANNEL, gamma8[wifiRed]);
   ledcWrite(GREEN_LEDC_CHANNEL, gamma8[wifiGreen]);
   ledcWrite(BLUE_LEDC_CHANNEL, gamma8[wifiBlue]);
+#endif
 
 #ifdef WIFI_BUTTON_SHARE_LED
   #if RED_LED == WIFI_BUTTON_SHARE_LED
@@ -708,7 +733,11 @@ int LedManagerTask::getButtonPressed()
 {
 #if defined(WIFI_BUTTON_SHARE_LED)
   #ifdef RGB_LEDC_CHANNEL
+  #if ESP_ARDUINO_VERSION >= ESP_ARDUINO_VERSION_VAL(3,0,0)
+  ledcDetach(WIFI_BUTTON_SHARE_LED);
+  #else
   ledcDetachPin(WIFI_BUTTON_SHARE_LED);
+  #endif
   #else
   digitalWrite(WIFI_BUTTON_SHARE_LED, HIGH);
   #endif
@@ -721,7 +750,11 @@ int LedManagerTask::getButtonPressed()
 
 #if defined(WIFI_BUTTON_SHARE_LED)
   #ifdef WIFI_BUTTON_SHARE_LEDC_CHANNEL
+  #if ESP_ARDUINO_VERSION >= ESP_ARDUINO_VERSION_VAL(3,0,0)
+  ledcAttach(WIFI_BUTTON_SHARE_LED, LEDC_FREQUENCY, LEDC_RESOLUTION);
+  #else
   ledcAttachPin(WIFI_BUTTON_SHARE_LED, WIFI_BUTTON_SHARE_LEDC_CHANNEL);
+  #endif
   ledcWrite(WIFI_BUTTON_SHARE_LED, buttonShareState);
   #else
   pinMode(WIFI_BUTTON_SHARE_LED, OUTPUT);
@@ -745,13 +778,15 @@ void LedManagerTask::setBrightness(uint8_t brightness)
 #if defined(NEO_PIXEL_PIN) && defined(NEO_PIXEL_LENGTH) && defined(ENABLE_WS2812FX)
 // This controls changes on the limits of the web interface slidebar.
 // Otherwise it gets out of sync
-  if (this->brightness == 0){
-    ws2812fx.setBrightness(255);
+  if(neopixels_ready)
+  {
+    if (this->brightness == 0){
+      ws2812fx.setBrightness(255);
+    }
+    else {
+      ws2812fx.setBrightness(this->brightness-1);
+    }
   }
-  else {
-    ws2812fx.setBrightness(this->brightness-1);
-  }
-
 #endif
 
   DBUGVAR(this->brightness);

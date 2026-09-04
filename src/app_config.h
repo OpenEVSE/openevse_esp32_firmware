@@ -34,10 +34,30 @@ extern String www_username;
 extern String www_password;
 extern String www_certificate_id;
 
+// Session HMAC key — generated on first load, rotated on credential change.
+extern String server_secret;
+
+// Web server ports
+extern uint32_t www_http_port;
+extern uint32_t www_https_port;
+
 // Advanced settings
 extern String esp_hostname;
 extern String esp_hostname_default;
 extern String sntp_hostname;
+
+// Device-wide temperature display unit: "c" (Celsius) or "f" (Fahrenheit).
+// Source of truth for both the on-device display and the web UI.
+extern String temp_unit;
+
+// On-device LVGL TFT display theme: "dark" (nightshift) or "light".
+extern String tft_theme;
+extern uint32_t tft_brightness;
+extern uint32_t tft_standby_brightness;
+
+// LCD backlight timeout (in seconds, 0 = never timeout). Shared key with the
+// char-LCD / TFT_eSPI energy-saving timeout (upstream PR #1039).
+extern uint32_t lcd_backlight_timeout;
 
 // LIMIT Settings
 extern String limit_default_type;
@@ -63,6 +83,9 @@ extern String mqtt_live_pwr;
 extern String mqtt_vehicle_soc;
 extern String mqtt_vehicle_range;
 extern String mqtt_vehicle_eta;
+extern String mqtt_vehicle_charge_limit;
+extern String mqtt_home_battery_soc;
+extern String mqtt_home_battery_power;
 extern String mqtt_announce_topic;
 
 // OCPP 1.6 Settings
@@ -87,11 +110,41 @@ extern uint32_t divert_min_charge_time;
 // Scheduler settings
 extern uint32_t scheduler_start_window;
 
+// Load Sharing settings
+extern bool loadsharing_enabled;
+extern String loadsharing_group_id;
+extern double loadsharing_group_max_current;
+extern double loadsharing_safety_factor;
+extern uint32_t loadsharing_heartbeat_timeout;
+extern String loadsharing_failsafe_mode;
+extern double loadsharing_failsafe_safe_current;
+extern double loadsharing_failsafe_peer_assumed_current;
+extern uint32_t loadsharing_config_version;
+extern uint32_t loadsharing_config_updated_at;
+extern uint32_t loadsharing_peers_version;
+extern uint32_t loadsharing_status_version;
+extern String loadsharing_role;
+extern String loadsharing_controller_host;
+extern uint32_t loadsharing_rotation_interval;
+
 //Shaper settings
 extern uint32_t current_shaper_max_pwr;
 extern uint32_t current_shaper_smoothing_time;
 extern uint32_t current_shaper_min_pause_time;
 extern uint32_t current_shaper_data_maxinterval;
+
+// Temperature Throttle settings
+extern uint32_t temp_throttle_setpoint;
+
+// Heartbeat Supervision settings (stored in ESP32 config, applied to EVSE on boot)
+extern uint32_t heartbeat_interval_cfg;
+extern uint32_t heartbeat_current_cfg;
+
+// Over-temperature shutdown threshold (degrees C)
+extern uint32_t over_temp_shutdown;
+
+// Voltage for power calculations (centivolt, 0 = use EVSE default)
+extern uint32_t voltage_cfg;
 
 // Vehicle
 extern uint8_t vehicle_data_src;
@@ -108,7 +161,6 @@ extern uint32_t flags;
 
 #define CONFIG_SERVICE_EMONCMS      (1 << 0)
 #define CONFIG_SERVICE_MQTT         (1 << 1)
-#define CONFIG_SERVICE_OHM          (1 << 2)
 #define CONFIG_SERVICE_SNTP         (1 << 3)
 #define CONFIG_MQTT_PROTOCOL        (7 << 4) // Maybe leave a bit of space after for additional protocols
 #define CONFIG_MQTT_ALLOW_ANY_CERT  (1 << 7)
@@ -129,6 +181,11 @@ extern uint32_t flags;
 #define CONFIG_THREEPHASE           (1 << 24)
 #define CONFIG_WIZARD               (1 << 25)
 #define CONFIG_DEFAULT_STATE        (1 << 26)
+#define CONFIG_TEMP_THROTTLE        (1 << 27)
+#define CONFIG_LCD_NETWORK_INFO     (1 << 28)
+// Inverted sense: bit SET disables the $SYS/broker/version probe. Existing
+// installs have this bit clear, so they keep probing exactly as before.
+#define CONFIG_MQTT_NO_SYS_QUERY    (1 << 29) // next free bit after CONFIG_MQTT_NO_SYS_QUERY
 
 #define INITIAL_CONFIG_VERSION  1
 
@@ -138,10 +195,6 @@ inline bool config_emoncms_enabled() {
 
 inline bool config_mqtt_enabled() {
   return CONFIG_SERVICE_MQTT == (flags & CONFIG_SERVICE_MQTT);
-}
-
-inline bool config_ohm_enabled() {
-  return CONFIG_SERVICE_OHM == (flags & CONFIG_SERVICE_OHM);
 }
 
 inline bool config_sntp_enabled() {
@@ -154,6 +207,13 @@ inline uint8_t config_mqtt_protocol() {
 
 inline bool config_mqtt_retained() {
   return CONFIG_MQTT_RETAINED == (flags & CONFIG_MQTT_RETAINED);
+}
+
+// Query broker metadata via $SYS/broker/version. Must be off for managed
+// brokers (AWS IoT Core): they have no $SYS tree and answer an unauthorised
+// subscribe by closing the connection rather than failing the SUBACK.
+inline bool config_mqtt_sys_query() {
+  return 0 == (flags & CONFIG_MQTT_NO_SYS_QUERY);
 }
 
 inline bool config_mqtt_reject_unauthorized() {
@@ -222,8 +282,17 @@ inline EvseState config_default_state()
   return CONFIG_DEFAULT_STATE == (flags & CONFIG_DEFAULT_STATE) ? EvseState::Active : EvseState::Disabled;
 }
 
-// Ohm Connect Settings
-extern String ohm;
+inline bool config_temp_throttle_enabled()
+{
+  return CONFIG_TEMP_THROTTLE == (flags & CONFIG_TEMP_THROTTLE);
+}
+
+inline bool config_lcd_network_info_enabled()
+{
+  return CONFIG_LCD_NETWORK_INFO == (flags & CONFIG_LCD_NETWORK_INFO);
+}
+
+bool config_https_enabled();
 
 extern uint32_t config_version();
 
@@ -240,16 +309,22 @@ extern void config_load_v1_settings();
 // -------------------------------------------------------------------
 extern void config_reset();
 
-void config_set(const char *name, uint32_t val);
-void config_set(const char *name, String val);
-void config_set(const char *name, bool val);
-void config_set(const char *name, double val);
+bool config_set(const char *name, uint32_t val);
+bool config_set(const char *name, String val);
+bool config_set(const char *name, bool val);
+bool config_set(const char *name, double val);
+
+// Parse and set config value from string (used for command line arguments)
+// Tries to infer the value type from its string representation.
+// Returns true if applying the value modified the config (unknown keys or unchanged values return false).
+bool config_set_opt_string(const char *name, const char *value);
 
 // Read config settings from JSON object
 bool config_deserialize(String& json);
 bool config_deserialize(const char *json);
 bool config_deserialize(JsonDocument &doc);
 void config_commit(bool factory = false);
+void config_user_commit();  // persist user config without touching factory_write_lock
 
 // Write config settings to JSON object
 bool config_serialize(String& json, bool longNames = true, bool compactOutput = false, bool hideSecrets = false);

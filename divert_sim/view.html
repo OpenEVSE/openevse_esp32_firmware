@@ -1,54 +1,169 @@
 <!DOCTYPE html>
 <html>
-
 <head>
-  <title>OpenEVSE Solar Divert Simulations</title>
-  <script type="text/javascript" src="https://canvasjs.com/assets/script/jquery-1.11.1.min.js"></script>
-  <script type="text/javascript" src="https://canvasjs.com/assets/script/canvasjs.min.js"></script>
-  <script type="text/javascript" src="https://cdnjs.cloudflare.com/ajax/libs/moment.js/2.24.0/moment.min.js"></script>
-  <script type="text/javascript" src="simulations.js"></script>
-  <script type="text/javascript">
-    var profiles = [
-      "master",
-      "default",
-      "noimport",
-      "nowaste"
-    ];
+  <meta charset="utf-8" />
+  <title>OpenEVSE Simulations</title>
+  <script src="https://canvasjs.com/assets/script/canvasjs.min.js"></script>
+  <script src="simulations.js?v=20260715a"></script>
+  <link rel="stylesheet" href="simulations.css?v=20260715a" />
+</head>
+<body>
+  <h1>OpenEVSE Simulations</h1>
+  <p><a href="interactive.html">Interactive mode</a></p>
 
-    window.onload = function () {
-      init_summary(profiles);
-      loadSummary("output/summary_master.csv", () => {
-        loadSummary("output/summary.csv", () => {
-          generate_summary_table(profiles);
+  <div class="tab-controls">
+    <label for="profile">Profiles:</label>
+    <select id="profile" multiple size="5">
+      <option value="">loading...</option>
+    </select>
+    <button id="profiles-all" type="button">Select All</button>
+    <button id="profiles-clear" type="button">Clear</button>
+    <button id="refresh">Load</button>
+  </div>
+  <div id="profile-solo" class="profile-solo"></div>
+
+  <div class="tabs" id="tabs"></div>
+
+  <div id="status"></div>
+  <div id="content"></div>
+
+  <script>
+    let activeCategory = "divert";
+
+    function getSelectedProfiles() {
+      const select = document.getElementById("profile");
+      return Array.from(select.selectedOptions).map((o) => o.value).filter(Boolean);
+    }
+
+    function renderSoloButtons(profiles) {
+      const solo = document.getElementById("profile-solo");
+      solo.innerHTML = "";
+      if (!profiles.length) {
+        return;
+      }
+
+      const label = document.createElement("span");
+      label.textContent = "Solo:";
+      solo.appendChild(label);
+
+      profiles.forEach((p) => {
+        const btn = document.createElement("button");
+        btn.type = "button";
+        btn.textContent = p;
+        btn.addEventListener("click", async () => {
+          const select = document.getElementById("profile");
+          Array.from(select.options).forEach((opt) => {
+            opt.selected = opt.value === p;
+          });
+          await refresh();
         });
+        solo.appendChild(btn);
       });
     }
-  </script>
-  <link rel="stylesheet" href="https://maxcdn.bootstrapcdn.com/bootstrap/3.3.6/css/bootstrap.min.css" />
-  <link rel="stylesheet" href="simulations.css" />
-</head>
 
-<body>
-  <h1>OpenEVSE Solar Divert Simulations</h1>
+    async function repopulateProfilesForCategory(previousProfiles = []) {
+      const select = document.getElementById("profile");
+      const profiles = await fetchProfilesForCategory(activeCategory);
+      select.innerHTML = "";
 
-  <a href="interactive.html">Interactive Simulations</a>
+      if (profiles.length === 0) {
+        select.innerHTML = '<option value="">none</option>';
+        renderSoloButtons([]);
+        return;
+      }
 
-  <h2>Summary</h2>
-  <div id="summary_table">
-  </div>
+      profiles.forEach((p) => {
+        const opt = document.createElement("option");
+        opt.value = p;
+        opt.textContent = p;
+        opt.selected = previousProfiles.includes(p);
+        select.appendChild(opt);
+      });
 
-  <script type="text/javascript">
+      // Default to all selected for side-by-side comparison.
+      const hasSelection = Array.from(select.options).some((o) => o.selected);
+      if (!hasSelection) {
+        Array.from(select.options).forEach((o) => {
+          o.selected = true;
+        });
+      }
 
-    for (const dataset of datasets) {
-      for (const profile of profiles) {
-        var id = generate_chart(dataset, profile);
-        loadChart(id, "output/" + id + ".csv", dataset.title + " (" + profile + ")", dataset.class);
+      renderSoloButtons(profiles);
+    }
+
+    async function setActiveTab(category, categories) {
+      const previousProfiles = getSelectedProfiles();
+      activeCategory = category;
+      const tabs = document.getElementById("tabs");
+      Array.from(tabs.querySelectorAll("button")).forEach((button) => {
+        button.classList.toggle("active", button.dataset.category === category);
+      });
+      await repopulateProfilesForCategory(previousProfiles);
+      await refresh();
+    }
+
+    function renderTabs(categories) {
+      const tabs = document.getElementById("tabs");
+      tabs.innerHTML = "";
+      categories.forEach((category) => {
+        const button = document.createElement("button");
+        button.type = "button";
+        button.dataset.category = category;
+        button.textContent = category === "loadsharing" ? "Load Sharing" :
+          category.charAt(0).toUpperCase() + category.slice(1);
+        button.classList.toggle("active", category === activeCategory);
+        button.addEventListener("click", () => setActiveTab(category, categories));
+        tabs.appendChild(button);
+      });
+      if (!categories.includes(activeCategory) && categories.length > 0) {
+        activeCategory = categories[0];
       }
     }
-    //<div id="day1_default" style="width:100%; height:300px;" class="solar" csv="output/day1_default.csv" title="Day 1"></div>
 
+    async function initProfiles() {
+      const status = document.getElementById("status");
+      try {
+        const categories = await fetchCategories();
+        if (categories.length > 0 && !categories.includes(activeCategory)) {
+          activeCategory = categories[0];
+        }
+        renderTabs(categories);
+        await repopulateProfilesForCategory([]);
+        status.textContent = "";
+      } catch (err) {
+        status.textContent = String(err);
+      }
+    }
+
+    async function refresh() {
+      const profiles = getSelectedProfiles();
+      const status = document.getElementById("status");
+      try {
+        status.textContent = "";
+        await renderCategory("content", activeCategory, profiles);
+      } catch (err) {
+        status.textContent = String(err);
+      }
+    }
+
+    document.getElementById("profiles-all").addEventListener("click", async () => {
+      const select = document.getElementById("profile");
+      Array.from(select.options).forEach((o) => {
+        o.selected = true;
+      });
+      await refresh();
+    });
+
+    document.getElementById("profiles-clear").addEventListener("click", async () => {
+      const select = document.getElementById("profile");
+      Array.from(select.options).forEach((o) => {
+        o.selected = false;
+      });
+      await refresh();
+    });
+
+    document.getElementById("refresh").addEventListener("click", refresh);
+    initProfiles().then(refresh);
   </script>
-
 </body>
-
 </html>

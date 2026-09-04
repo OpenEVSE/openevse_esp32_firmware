@@ -4,11 +4,17 @@
 
 #include "debug.h"
 #include "scheduler.h"
+#include "scheduler_time.h"
+#include "fs_util.h"
 #include "time_man.h"
 #include "emonesp.h"
 #include "app_config.h"
 #include "event.h"
 #include "mqtt.h"
+#include "divert.h"
+#include "current_shaper.h"
+#include "rfid.h"
+#include "limit.h"
 
 #include <algorithm>
 #include <vector>
@@ -51,7 +57,10 @@ Scheduler::Event::Event(uint32_t id, uint8_t hour, uint8_t minute, uint8_t secon
 {
 }
 
-Scheduler::Event::Event(uint32_t id, uint32_t second, uint8_t days, EvseState state)
+Scheduler::Event::Event(uint32_t id, uint32_t second, uint8_t days, EvseState state) :
+  _id(id), _seconds(second), _days(days), _state(state), _next(0),
+  _feature(SchedulerFeature::None), _feature_value(0),
+  _limit_type(SchedulerLimitType::None), _limit_value(0)
 {
   if(id >= _next_id) {
     _next_id = id + 1;
@@ -118,18 +127,19 @@ bool Scheduler::Event::setState(const char *state)
 
 uint32_t Scheduler::EventInstance::getDuration()
 {
-  int lengthInDays = getNext()._day - _day;
-  if(lengthInDays < 0) {
-    lengthInDays += SCHEDULER_DAYS_IN_A_WEEK;
-  }
+  EventInstance &next = getNext();
 
-  uint32_t duration = (lengthInDays * 24 * 60 * 60) + (getNext().getStartOffset() - getStartOffset());
-  // Handle special case where the duration is 0 (IE only single event so the next event is this event)
-  if(0 == duration) {
-    // Event duration is a week
-    duration = 7 * 24 * 60 * 60;
-  }
-  return duration;
+  // Signed weekly-wheel maths (see scheduler_time.h; was an unsigned
+  // underflow that produced a week-long, never-ending window).  A
+  // non-positive span wraps to the following week: a lone event (its "next"
+  // is itself), OR the last event of a day wrapping back to an earlier event
+  // on the SAME day — e.g. a Sunday-only window where the 17:50 stop's next
+  // is the 17:49 start a week later.  Without this the disabled "gap"
+  // between windows is never current, so the feature looks active all week
+  // and never turns off.
+  return SchedulerTime::weeklySpan(_day, (int32_t)getStartOffset(),
+                                   next._day, (int32_t)next.getStartOffset(),
+                                   true);
 }
 
 int32_t Scheduler::EventInstance::getStartOffset(int fromDay, int dayOffset) {
@@ -139,13 +149,12 @@ int32_t Scheduler::EventInstance::getStartOffset(int fromDay, int dayOffset) {
 
 uint32_t Scheduler::EventInstance::getDelay(int fromDay, uint32_t fromOffset)
 {
-  int delayDays = _day - fromDay;
-  if(delayDays < 0) {
-    delayDays += SCHEDULER_DAYS_IN_A_WEEK;
-  }
-
-  uint32_t delay = (delayDays * 24 * 60 * 60) + (getStartOffset() - fromOffset);
-  return delay;
+  // Signed weekly-wheel maths (see scheduler_time.h): when the event already
+  // passed today the subtraction underflowed to ~49 days as uint32_t.  A
+  // delay of zero means "now" and does not wrap.
+  return SchedulerTime::weeklySpan(fromDay, (int32_t)fromOffset,
+                                   _day, (int32_t)getStartOffset(),
+                                   false);
 }
 
 uint32_t Scheduler::EventInstance::randomiseStartOffset()
@@ -155,7 +164,12 @@ uint32_t Scheduler::EventInstance::randomiseStartOffset()
   }
 
   int32_t offset = _event->getOffset();
-  if(_event->getState() == EvseState::Active) {
+  // scheduler_start_window staggers the start of plain charge sessions across a
+  // fleet to spread grid load. Feature windows (divert/shaper/rfid/ocpp and
+  // explicit charge-current windows) are precise control windows — randomising
+  // their start can push it past the window's stop event, inverting the window
+  // (see getDuration) and leaving the feature stuck on. Never stagger those.
+  if(_event->getState() == EvseState::Active && _event->getFeature() == SchedulerFeature::None) {
     offset += random(-min((int32_t)scheduler_start_window, offset), scheduler_start_window);
   }
   return offset;
@@ -166,10 +180,13 @@ Scheduler::Scheduler(EvseManager &evse) :
   _events(),
   _firstEvent(),
   _activeEvent(),
+  _active_event_dirty(false),
   _loading(false),
   _timeChangeListener(this),
   _version(0),
-  _plan_version(0)
+  _plan_version(0),
+  _activeFeature(SchedulerFeature::None),
+  _activeLimitType(SchedulerLimitType::None)
 {
 
 }
@@ -178,12 +195,21 @@ void Scheduler::setup()
 {
   _loading = true;
 
-  // Load the schedule from storage
+  // Load the schedule from storage.  Size the JSON doc to the actual file so
+  // schedules with per-event feature/limit fields don't overflow the old fixed
+  // 1024-byte budget and silently load as empty (ArduinoJson 6 NoMemory).
   File file = LittleFS.open(SCHEDULE_PATH);
   if(file)
   {
-    deserialize(file);
+    size_t capacity = max((size_t)file.size() * 2, (size_t)4096);
+    JsonDocument doc;
+    DeserializationError err = deserializeJson(doc, file);
     file.close();
+    if(err == DeserializationError::Code::Ok && !doc.overflowed()) {
+      deserialize(doc);
+    } else {
+      DBUGLN("Scheduler: failed to load schedule (parse error or doc overflow)");
+    }
   }
 
   timeManager.onTimeChange(&_timeChangeListener);
@@ -214,9 +240,24 @@ unsigned long Scheduler::loop(MicroTasks::WakeReason reason)
     _activeEvent.isValid() ? _activeEvent.getEvent()->getTime().c_str() : "none",
     _activeEvent.isValid() ? _activeEvent.getEvent()->getStateText() : "none");
 
-  if(currentEvent != _activeEvent)
+  // Editing an active event updates its Event object in place, so the
+  // EventInstance identity remains equal even when its current, feature or
+  // limit changed. Re-apply that event so its runtime claim follows the saved
+  // schedule immediately.
+  if(currentEvent != _activeEvent || _active_event_dirty)
   {
     DBUG("New event: ");
+
+    // Clean up any feature/limit applied by the previous active event
+    if(_activeFeature != SchedulerFeature::None) {
+      cleanupFeature(_activeFeature);
+      _activeFeature = SchedulerFeature::None;
+    }
+    if(_activeLimitType != SchedulerLimitType::None) {
+      // Restore the user's persistent default limit rather than wiping it.
+      limit.setDefaultLimit(limit_default_type.c_str(), limit_default_value);
+      _activeLimitType = SchedulerLimitType::None;
+    }
 
     // We need to change state
     if(currentEvent.isValid())
@@ -228,7 +269,24 @@ unsigned long Scheduler::loop(MicroTasks::WakeReason reason)
       if(EvseState::Active == currentEvent.getState())
       {
         priority = EvseManager_Priority_Timer;
-        properties.setChargeCurrent(_evse->getMaxHardwareCurrent());
+        Event *e = currentEvent.getEvent();
+
+        // Charge current: use feature_value if current feature selected, else hardware max
+        if(e->getFeature() == SchedulerFeature::Current && e->getFeatureValue() > 0) {
+          properties.setChargeCurrent(e->getFeatureValue());
+        } else {
+          properties.setChargeCurrent(_evse->getMaxHardwareCurrent());
+        }
+
+        // Apply feature (divert, shaper, rfid, etc.)
+        applyFeature(e);
+        _activeFeature = e->getFeature();
+
+        // Apply session limit (applyLimit returns false for Cost/unimplemented
+        // types so we don't mark them active and trigger a spurious cleanup).
+        if(e->getLimitType() != SchedulerLimitType::None && applyLimit(e)) {
+          _activeLimitType = e->getLimitType();
+        }
       }
       _evse->claim(EvseClient_OpenEVSE_Schedule, priority, properties);
     } else {
@@ -238,6 +296,7 @@ unsigned long Scheduler::loop(MicroTasks::WakeReason reason)
     }
 
     _activeEvent = currentEvent;
+    _active_event_dirty = false;
 
     JsonDocument doc;
     doc["schedule_plan_version"] = ++_plan_version;
@@ -280,12 +339,24 @@ bool Scheduler::commit()
     return true;
   }
 
+  // Serialize first and ensure there's room, so a full filesystem never
+  // truncates a previously-valid schedule file into a corrupt one.
+  JsonDocument doc;
+  if(!serialize(doc) || doc.overflowed() || !littlefs_has_space(measureJson(doc))) {
+    DBUGLN("Scheduler: insufficient space or doc overflow, keeping existing file");
+    return false;
+  }
+
   // Save the schedule to storage
   File file = LittleFS.open(SCHEDULE_PATH, FILE_WRITE);
   if(file)
   {
-    ret = serialize(file);
+    ret = serializeJson(doc, file) > 0;
     file.close();
+    if(!ret) {
+      // Write failed part-way — drop the corrupt file rather than keep it.
+      LittleFS.remove(SCHEDULE_PATH);
+    }
   }
 
   return ret;
@@ -462,7 +533,7 @@ bool Scheduler::findEvent(uint32_t id, Scheduler::Event **event)
   return false;
 }
 
-bool Scheduler::addEventInternal(uint32_t event_id, const char *time, uint8_t days, const char *state)
+Scheduler::Event *Scheduler::addEventInternal(uint32_t event_id, const char *time, uint8_t days, const char *state)
 {
   Event *event = NULL;
   bool foundEvent = findEvent(event_id, &event);
@@ -472,24 +543,32 @@ bool Scheduler::addEventInternal(uint32_t event_id, const char *time, uint8_t da
 
   if(foundEvent)
   {
+    const bool active_event_updated = _activeEvent.isValid() &&
+      _activeEvent.getEvent() == event;
+
     event->setId(event_id);
     event->setTime(time);
     event->setState(state);
-
     event->setDays(days);
-
-    return true;
+    // Clear feature/limit when event is overwritten
+    event->setFeature(SchedulerFeature::None);
+    event->setFeatureValue(0);
+    event->setLimitType(SchedulerLimitType::None);
+    event->setLimitValue(0);
+    if(active_event_updated) {
+      _active_event_dirty = true;
+    }
+    return event;
   }
 
-  return false;
+  return nullptr;
 }
 
 bool Scheduler::addEvent(uint32_t event_id, const char *time, uint8_t days, const char *state)
 {
-  if(addEventInternal(event_id, time, days, state))
+  if(addEventInternal(event_id, time, days, state) != nullptr)
   {
-    commit();
-    return true;
+    return commit();
   }
 
   return false;
@@ -505,6 +584,9 @@ bool Scheduler::addEvent(uint32_t event_id, int hour, int minute, int second, ui
 
   if(foundEvent)
   {
+    const bool active_event_updated = _activeEvent.isValid() &&
+      _activeEvent.getEvent() == event;
+
     event->setId(event_id);
     event->setHours(hour);
     event->setMinutes(minute);
@@ -512,6 +594,10 @@ bool Scheduler::addEvent(uint32_t event_id, int hour, int minute, int second, ui
     event->setState(state);
 
     event->setDays(days);
+
+    if(active_event_updated) {
+      _active_event_dirty = true;
+    }
 
     commit();
 
@@ -563,10 +649,13 @@ bool Scheduler::deserialize(String& json)
 
 bool Scheduler::deserialize(const char *json)
 {
+  // Parsing from const char* copies keys/values into the pool, so a
+  // multi-rule Charge Manager schedule overflows a fixed 1024 budget at
+  // ~2 events.  Size from the input instead (2x covers ArduinoJson overhead).
   JsonDocument doc;
 
   DeserializationError err = deserializeJson(doc, json);
-  if(DeserializationError::Code::Ok == err) {
+  if(DeserializationError::Code::Ok == err && !doc.overflowed()) {
     return Scheduler::deserialize(doc);
   }
 
@@ -575,10 +664,11 @@ bool Scheduler::deserialize(const char *json)
 
 bool Scheduler::deserialize(Stream &stream)
 {
+  // Size from the bytes remaining in the stream (see deserialize(const char*)).
   JsonDocument doc;
 
   DeserializationError err = deserializeJson(doc, stream);
-  if(DeserializationError::Code::Ok == err) {
+  if(DeserializationError::Code::Ok == err && !doc.overflowed()) {
     return Scheduler::deserialize(doc);
   }
 
@@ -623,6 +713,8 @@ bool Scheduler::deserialize(String& json, uint32_t event)
 
 bool Scheduler::deserialize(const char *json, uint32_t event)
 {
+  // Single event, but with feature/limit fields 1024 was borderline; size
+  // from the input like the bulk path.
   JsonDocument doc;
 
   DBUGVAR(json);
@@ -692,12 +784,41 @@ bool Scheduler::deserializeInternal(JsonObject &obj, uint32_t event_id)
 
     DBUGVAR(days);
 
-    if(addEventInternal(event_id, time, days, state)) {
+    Event *event = addEventInternal(event_id, time, days, state);
+    if(event != nullptr) {
+      if(obj["feature"].is<const char *>()) {
+        event->setFeature(obj["feature"].as<const char *>());
+      }
+      if(obj["feature_value"].is<uint32_t>()) {
+        event->setFeatureValue((uint32_t)obj["feature_value"]);
+      }
+      if(obj["limit"].is<const char *>()) {
+        event->setLimitType(obj["limit"].as<const char *>());
+      }
+      if(obj["limit_value"].is<uint32_t>()) {
+        event->setLimitValue((uint32_t)obj["limit_value"]);
+      }
       return true;
     }
   }
 
   return false;
+}
+
+size_t Scheduler::scheduleJsonCapacity()
+{
+  size_t count = 0;
+  for(int i = 0; i < SCHEDULER_MAX_EVENTS; i++)
+  {
+    if(_events[i].isValid()) {
+      count++;
+    }
+  }
+
+  // Per-event budget: object of up to 8 members (128) + days array of up to 7
+  // (112) + copied key/value strings (time/state/feature/limit names, ~100),
+  // rounded up to 384; 512 headroom for the enclosing array and slop.
+  return 512 + count * 384;
 }
 
 bool Scheduler::serialize(String& json)
@@ -739,7 +860,10 @@ bool Scheduler::serialize(JsonDocument &doc)
     }
   }
 
-  return true;
+  // On allocation failure add<JsonObject>() returns null objects and events are
+  // silently dropped from the output — report that as a failure rather than
+  // serving a truncated schedule.
+  return !doc.overflowed();
 }
 
 bool Scheduler::serialize(String& json, uint32_t event)
@@ -787,6 +911,16 @@ bool Scheduler::serialize(JsonObject &object, Scheduler::Event *event)
     if(event->getDays() & 1<<day) {
       days.add(days_of_the_week_strings[day]);
     }
+  }
+
+  if(event->getFeature() != SchedulerFeature::None) {
+    object["feature"] = event->getFeatureName();
+    object["feature_value"] = event->getFeatureValue();
+  }
+
+  if(event->getLimitType() != SchedulerLimitType::None) {
+    object["limit"] = event->getLimitName();
+    object["limit_value"] = event->getLimitValue();
   }
 
   return true;
@@ -876,4 +1010,146 @@ void Scheduler::getCurrentTime(int &day, int32_t &offset)
     (local_time.tm_hour * 3600) +
     (local_time.tm_min * 60) +
     local_time.tm_sec;
+}
+
+// ── Event feature/limit string converters ────────────────────────────────────
+
+static const char * const feature_names[] = {
+  "none", "divert", "shaper", "ocpp", "rfid", "current"
+};
+
+bool Scheduler::Event::setFeature(const char *name)
+{
+  for(uint8_t i = 0; i < sizeof(feature_names)/sizeof(feature_names[0]); i++) {
+    if(0 == strcmp(name, feature_names[i])) {
+      _feature = (SchedulerFeature)i;
+      return true;
+    }
+  }
+  _feature = SchedulerFeature::None;
+  return false;
+}
+
+const char *Scheduler::Event::getFeatureName()
+{
+  uint8_t idx = (uint8_t)_feature;
+  if(idx < sizeof(feature_names)/sizeof(feature_names[0])) {
+    return feature_names[idx];
+  }
+  return feature_names[0];
+}
+
+static const char * const limit_names[] = {
+  "none", "time", "energy", "soc", "cost"
+};
+
+bool Scheduler::Event::setLimitType(const char *name)
+{
+  for(uint8_t i = 0; i < sizeof(limit_names)/sizeof(limit_names[0]); i++) {
+    if(0 == strcmp(name, limit_names[i])) {
+      _limit_type = (SchedulerLimitType)i;
+      return true;
+    }
+  }
+  _limit_type = SchedulerLimitType::None;
+  return false;
+}
+
+const char *Scheduler::Event::getLimitName()
+{
+  uint8_t idx = (uint8_t)_limit_type;
+  if(idx < sizeof(limit_names)/sizeof(limit_names[0])) {
+    return limit_names[idx];
+  }
+  return limit_names[0];
+}
+
+// ── Scheduler feature/limit helpers ──────────────────────────────────────────
+
+void Scheduler::applyFeature(Event *event)
+{
+  switch(event->getFeature())
+  {
+    case SchedulerFeature::Divert:
+      // Enter eco mode at elevated priority (TimerFeature, 900) — above the
+      // base Timer claim but below Manual/RFID/OCPP so those still override
+      divert.setTimerDivertActive(true);
+      break;
+    case SchedulerFeature::Shaper:
+      shaper.setTimerEnabled(true);
+      break;
+    case SchedulerFeature::RFID:
+      // Re-probe at window start — the boot-time presence check can
+      // false-negative and never recovers on its own.
+      if(!rfid.probeReader()) {
+        // No reader — timer-RFID cannot function; skip enforcement so the
+        // rest of the scheduled event (state/current) still applies, but
+        // surface it: silently failing open is wrong for an access-control
+        // feature.
+        DBUGLN("Scheduler: no RFID reader present, skipping timer-RFID feature");
+        JsonDocument evt;
+        evt["schedule_feature_skipped"] = "rfid";
+        event_send(evt);
+        break;
+      }
+      rfid.setTimerRequired(true);
+      break;
+    case SchedulerFeature::OCPP:
+      // OCPP manages its own claim state; no additional action here
+      break;
+    case SchedulerFeature::Current:
+      // Handled above in loop(): charge current set in the EVSE claim
+      break;
+    case SchedulerFeature::None:
+    default:
+      break;
+  }
+}
+
+void Scheduler::cleanupFeature(SchedulerFeature feature)
+{
+  switch(feature)
+  {
+    case SchedulerFeature::Divert:
+      divert.setTimerDivertActive(false);
+      break;
+    case SchedulerFeature::Shaper:
+      shaper.setTimerEnabled(false);
+      break;
+    case SchedulerFeature::RFID:
+      rfid.setTimerRequired(false);
+      break;
+    case SchedulerFeature::Current:
+      // Charge current resets automatically when the schedule claim is re-made
+      // with getMaxHardwareCurrent() on the next active event or released here
+      break;
+    default:
+      break;
+  }
+}
+
+bool Scheduler::applyLimit(Event *event)
+{
+  LimitProperties props;
+  LimitType type;
+
+  switch(event->getLimitType())
+  {
+    case SchedulerLimitType::Time:   type = LimitType::Time;   break;
+    case SchedulerLimitType::Energy: type = LimitType::Energy; break;
+    case SchedulerLimitType::Soc:    type = LimitType::Soc;    break;
+    case SchedulerLimitType::Cost:
+      // Cost limit not yet enforced (requires tariff config); skip activation
+      // so _activeLimitType stays None and cleanup is never triggered.
+      DBUGLN("Scheduler: cost limit stored but not yet enforced");
+      return false;
+    default:
+      return false;
+  }
+
+  props.setType(type);
+  props.setValue(event->getLimitValue());
+  props.setAutoRelease(true);
+  limit.set(props);
+  return true;
 }

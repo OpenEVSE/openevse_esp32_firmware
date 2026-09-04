@@ -1,4 +1,4 @@
-#if defined(ENABLE_DEBUG) && !defined(ENABLE_DEBUG_LCD)
+#if defined(ENABLE_DEBUG) && !defined(ENABLE_DEBUG_SCREEN_MANAGER)
 #undef ENABLE_DEBUG
 #endif
 
@@ -8,6 +8,7 @@
 #include "screens/screen_manager.h"
 #include "screens/screen_boot.h"
 #include "screens/screen_charge.h"
+#include "screens/screen_lock.h"
 #include "lcd_common.h"
 
 ScreenManager::ScreenManager(TFT_eSPI &screen, EvseManager &evse, Scheduler &scheduler, ManualOverride &manual) :
@@ -46,6 +47,7 @@ void ScreenManager::initializeScreens()
 {
   _screens[SCREEN_BOOT] = new BootScreen(_screen, _evse, _scheduler, _manual);
   _screens[SCREEN_CHARGE] = new ChargeScreen(_screen, _evse, _scheduler, _manual);
+  _screens[SCREEN_LOCK] = new LockScreen(_screen, _evse, _scheduler, _manual);
   // Initialize additional screens as needed
 }
 
@@ -64,6 +66,8 @@ void ScreenManager::setScreen(ScreenType screen)
 
 unsigned long ScreenManager::update()
 {
+  unsigned long nextUpdate = 1000; // Default to 1 second
+
   // Handle special case: automatic transition from boot to charge screen
   if (_current_screen == SCREEN_BOOT) {
     BootScreen* bootScreen = static_cast<BootScreen*>(_screens[SCREEN_BOOT]);
@@ -72,9 +76,25 @@ unsigned long ScreenManager::update()
     }
   }
 
+
+#ifdef ENABLE_LOCK_SCREEN
+  // Check if EVSE has entered or exited the active state
+
+  // If EVSE is not active and we're not on the lock screen, switch to it
+  if (!_evse.isActive() && _current_screen != SCREEN_LOCK && _current_screen != SCREEN_BOOT) {
+    DBUGF("EVSE not active, switching to lock screen");
+    setScreen(SCREEN_LOCK);
+  }
+  // If EVSE is active again and we're on the lock screen, switch back to charge screen
+  else if (_evse.isActive() && _current_screen == SCREEN_LOCK) {
+    DBUGF("EVSE active, switching back to charge screen");
+    setScreen(SCREEN_CHARGE);
+  }
+#endif
+
   // Update the current screen
   if (_screens[_current_screen]) {
-    return _screens[_current_screen]->update();
+    nextUpdate = _screens[_current_screen]->update();
   }
 
 #ifdef TFT_BACKLIGHT_TIMEOUT_MS
@@ -83,15 +103,14 @@ unsigned long ScreenManager::update()
 
   if (_previous_evse_state != evse_state || _previous_vehicle_state != vehicle_state) {
     wakeBacklight();
-    _previous_vehicle_state = vehicle_state;
+    _previous_vehicle_state = vehicle_state;  
     _previous_evse_state = evse_state;
   } else {
     updateBacklight();
   }
 #endif //TFT_BACKLIGHT_TIMEOUT_MS
 
-
-  return 1000; // Default update interval if no screen is active
+  return nextUpdate; 
 }
 
 void ScreenManager::handleEvent(uint8_t event)
@@ -117,19 +136,26 @@ void ScreenManager::setWifiMode(bool client, bool connected)
 
 // Add backlight management implementations
 #ifdef TFT_BACKLIGHT_TIMEOUT_MS
-void ScreenManager::wakeBacklight() {
+void ScreenManager::wakeBacklight()
+{
+  DBUGLN("🔦 Waking backlight");
   digitalWrite(LCD_BACKLIGHT_PIN, HIGH);
-  _last_backlight_wakeup = millis();
+  _backlight_timeout = millis() + TFT_BACKLIGHT_TIMEOUT_MS;
 }
 
-void ScreenManager::timeoutBacklight() {
-  if (millis() - _last_backlight_wakeup >= TFT_BACKLIGHT_TIMEOUT_MS) {
+void ScreenManager::timeoutBacklight()
+{
+  if (millis() >= _backlight_timeout) 
+  {
+    DBUGLN("Timing out backlight");
     digitalWrite(LCD_BACKLIGHT_PIN, LOW);
   }
 }
 
 void ScreenManager::updateBacklight()
 {
+  DBUGF("Backlight timeout in %lu ms", _backlight_timeout - millis());
+
   bool timeout = true;
   if (_evse.isVehicleConnected()) {
     switch (_evse.getEvseState()) {
@@ -142,6 +168,10 @@ void ScreenManager::updateBacklight()
       case OPENEVSE_STATE_GFI_SELF_TEST_FAILED:
       case OPENEVSE_STATE_OVER_TEMPERATURE:
       case OPENEVSE_STATE_OVER_CURRENT:
+      case OPENEVSE_STATE_RELAY_CLOSURE_FAULT:
+      case OPENEVSE_STATE_PP_SHORTED:
+      case OPENEVSE_STATE_PP_MISSING:
+      case OPENEVSE_STATE_EEPROM_FAILURE:
         timeout = false;
         break;
       case OPENEVSE_STATE_NOT_CONNECTED:
@@ -165,6 +195,7 @@ void ScreenManager::updateBacklight()
         break;
     }
   }
+  DBUGVAR(timeout);
   if (timeout) {
     timeoutBacklight();
   }

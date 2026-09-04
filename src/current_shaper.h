@@ -30,6 +30,7 @@ class CurrentShaperTask: public MicroTasks::Task
     EvseManager *_evse;
     bool         _enabled;
     bool         _changed;
+    bool         _timer_controlled;  // true when enabled by a scheduler timer window
     int          _max_pwr;   // total current available from the grid
     int          _live_pwr;  // current available to EVSE
     double       _smoothed_live_pwr; // filtered live power for getting out of pause only
@@ -38,6 +39,9 @@ class CurrentShaperTask: public MicroTasks::Task
     uint32_t     _timer;
     uint32_t     _pause_timer;
     bool         _updated;
+    bool         _loadshare_limit_active;
+    double       _loadshare_max_cur;
+    bool         _loadshare_force_disabled;
     InputFilter  _inputFilter;
 
   protected:
@@ -55,11 +59,17 @@ class CurrentShaperTask: public MicroTasks::Task
     bool getState();
     int getMaxPwr();
     int getLivePwr();
+    int getSmoothedLivePwr();
     double getMaxCur();
     bool isActive();
     bool isUpdated();
+    void setLoadSharingLimit(double max_cur, bool force_disabled = false);
+    void clearLoadSharingLimit();
+    bool hasLoadSharingLimit();
 
     void notifyConfigChanged(bool enabled, uint32_t max_pwr);
+    // Enable shaper from a scheduler timer window (uses TimerFeature priority 900 instead of Safety 5000)
+    void setTimerEnabled(bool active);
 };
 
 extern CurrentShaperTask shaper;

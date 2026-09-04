@@ -7,6 +7,7 @@ CurrentShaperTask shaper;
 CurrentShaperTask::CurrentShaperTask() : MicroTasks::Task() {
 	_changed = false;
 	_enabled = false;
+	_timer_controlled = false;
 	_max_pwr = 0;
 	_live_pwr = 0;
 	_smoothed_live_pwr = 0;
@@ -15,11 +16,16 @@ CurrentShaperTask::CurrentShaperTask() : MicroTasks::Task() {
 	_pause_timer = 0;
 	_timer = 0;
 	_updated = false;
+	_loadshare_limit_active = false;
+	_loadshare_max_cur = 0;
+	_loadshare_force_disabled = false;
 }
 
 CurrentShaperTask::~CurrentShaperTask() {
 	// should be useless but just in case
-	evse.release(EvseClient_OpenEVSE_Shaper);
+	if (_evse) {
+		_evse->release(EvseClient_OpenEVSE_Shaper);
+	}
 }
 
 void CurrentShaperTask::setup() {
@@ -31,8 +37,12 @@ unsigned long CurrentShaperTask::loop(MicroTasks::WakeReason reason) {
 	if (_enabled) {
 			EvseProperties props;
 			if (_changed) {
-				props.setMaxCurrent(floor(_max_cur));
-				if (_max_cur < evse.getMinCurrent()) {
+				double effective_max_cur = _max_cur;
+				if (_loadshare_limit_active && _loadshare_max_cur < effective_max_cur) {
+					effective_max_cur = _loadshare_max_cur;
+				}
+				props.setMaxCurrent(floor(effective_max_cur));
+				if (_loadshare_force_disabled || effective_max_cur < _evse->getMinCurrent()) {
 					// pause temporary, not enough amps available
 					props.setState(EvseState::Disabled);
 					if (!_pause_timer)
@@ -41,7 +51,7 @@ unsigned long CurrentShaperTask::loop(MicroTasks::WakeReason reason) {
 					}
 
 				}
-				else if (millis() - _pause_timer >= current_shaper_min_pause_time * 1000 && (_max_cur - evse.getMinCurrent() >= EVSE_SHAPER_HYSTERESIS))
+				else if (millis() - _pause_timer >= current_shaper_min_pause_time * 1000 && (effective_max_cur - _evse->getMinCurrent() >= EVSE_SHAPER_HYSTERESIS))
 				{
 					_pause_timer = 0;
 					props.setState(EvseState::None);
@@ -49,9 +59,18 @@ unsigned long CurrentShaperTask::loop(MicroTasks::WakeReason reason) {
 				_timer = millis();
 				_changed = false;
 				// claim only if we have change
-				if (evse.getState() != props.getState() || evse.getChargeCurrent() != props.getChargeCurrent())
+				if (_evse->getState(EvseClient_OpenEVSE_Shaper) != props.getState() ||
+					_evse->getMaxCurrent(EvseClient_OpenEVSE_Shaper) != props.getMaxCurrent())
 				{
-					evse.claim(EvseClient_OpenEVSE_Shaper, EvseManager_Priority_Safety, props);
+					// Always-on shaper claims at Safety (5000); a shaper running *only*
+					// because of a timer window claims at TimerFeature (900) so a
+					// manual override can still beat it.  A window must never demote a
+					// config-enabled (always-on) shaper below Safety, and neither must
+					// it demote a load sharing limit.
+					int priority = (_timer_controlled && !config_current_shaper_enabled() &&
+					                !_loadshare_limit_active)
+					               ? EvseManager_Priority_TimerFeature : EvseManager_Priority_Safety;
+					_evse->claim(EvseClient_OpenEVSE_Shaper, priority, props);
 					JsonDocument event;
 					event["shaper"] = 1;
 					event["shaper_live_pwr"] = _live_pwr;
@@ -74,10 +93,14 @@ unsigned long CurrentShaperTask::loop(MicroTasks::WakeReason reason) {
 					_smoothed_live_pwr = _live_pwr;
 				}
 
-				if (evse.getState(EvseClient_OpenEVSE_Shaper) != EvseState::Disabled)
+				if (_evse->getState(EvseClient_OpenEVSE_Shaper) != EvseState::Disabled)
 				{
 					props.setState(EvseState::Disabled);
-					evse.claim(EvseClient_OpenEVSE_Shaper, EvseManager_Priority_Limit, props);
+					// Stale-data failsafe: overridable by Manual only when the shaper
+					// runs purely from a timer window, as above.
+					int failsafe_priority = (_timer_controlled && !config_current_shaper_enabled())
+					               ? EvseManager_Priority_TimerFeature : EvseManager_Priority_Limit;
+					_evse->claim(EvseClient_OpenEVSE_Shaper, failsafe_priority, props);
 					JsonDocument event;
 					event["shaper"] = 1;
 					event["shaper_live_pwr"] = _live_pwr;
@@ -90,10 +113,25 @@ unsigned long CurrentShaperTask::loop(MicroTasks::WakeReason reason) {
 			}
 	}
 	else {
-		//remove shaper claim
-		if (_evse->clientHasClaim(EvseClient_OpenEVSE_Shaper)) {
-			_evse->release(EvseClient_OpenEVSE_Shaper);
-			_smoothed_live_pwr = 0;
+		if (_loadshare_limit_active) {
+			EvseProperties props;
+			props.setMaxCurrent(floor(_loadshare_max_cur));
+			props.setState((_loadshare_force_disabled ||
+			                _loadshare_max_cur < _evse->getMinCurrent())
+			                 ? EvseState::Disabled : EvseState::None);
+
+			if (_changed ||
+				_evse->getState(EvseClient_OpenEVSE_Shaper) != props.getState() ||
+				_evse->getMaxCurrent(EvseClient_OpenEVSE_Shaper) != props.getMaxCurrent()) {
+				_evse->claim(EvseClient_OpenEVSE_Shaper, EvseManager_Priority_Safety, props);
+				_changed = false;
+			}
+		} else {
+			//remove shaper claim
+			if (_evse->clientHasClaim(EvseClient_OpenEVSE_Shaper)) {
+				_evse->release(EvseClient_OpenEVSE_Shaper);
+				_smoothed_live_pwr = 0;
+			}
 		}
 	}
 
@@ -117,9 +155,10 @@ void CurrentShaperTask::begin(EvseManager &evse) {
 
 void CurrentShaperTask::notifyConfigChanged( bool enabled, uint32_t max_pwr) {
 	DBUGF("CurrentShaper: got config changed");
-	_enabled = enabled;
+	// A timer window overrides the config setting; don't cancel it mid-window.
+	_enabled = enabled || _timer_controlled;
 	_max_pwr = max_pwr;
-	if (!enabled) evse.release(EvseClient_OpenEVSE_Shaper);
+	if (!_enabled && _evse) _evse->release(EvseClient_OpenEVSE_Shaper);
 	JsonDocument event;
 	event["shaper"] = enabled == true ? 1 : 0;
 	event["shaper_max_pwr"] = max_pwr;
@@ -141,10 +180,24 @@ void CurrentShaperTask::setState(bool state) {
 	_enabled = state;
 	if (!_enabled) {
 		//remove claim
-		evse.release(EvseClient_OpenEVSE_Shaper);
+		if (_evse) {
+			_evse->release(EvseClient_OpenEVSE_Shaper);
+		}
 	}
 	JsonDocument event;
 	event["shaper"]  = state?1:0;
+	event_send(event);
+}
+
+// Enable shaper from a scheduler timer window (priority 900 instead of 5000)
+void CurrentShaperTask::setTimerEnabled(bool active) {
+	_timer_controlled = active;
+	_enabled = active ? true : config_current_shaper_enabled();
+	if (!_enabled && _evse) {
+		_evse->release(EvseClient_OpenEVSE_Shaper);
+	}
+	JsonDocument event;
+	event["shaper"] = _enabled ? 1 : 0;
 	event_send(event);
 }
 
@@ -171,18 +224,18 @@ void CurrentShaperTask::shapeCurrent() {
 
 	if (config_divert_enabled() == true) {
 		if ( divert_type == DIVERT_TYPE_SOLAR ) {
-			max_pwr += solar;
+			max_pwr += divert.getSolar();
 		}
 	}
 //	if (livepwr > max_pwr) {
 //		livepwr = max_pwr;
 //	}
 	if(!config_threephase_enabled()) {
-		_max_cur = ((max_pwr - livepwr) / evse.getVoltage()) + evse.getAmps();
+		_max_cur = ((max_pwr - livepwr) / _evse->getVoltage()) + _evse->getAmps();
 	 }
 
 	else {
-		_max_cur = ((max_pwr - livepwr) / evse.getVoltage() / 3.0) + evse.getAmps();
+		_max_cur = ((max_pwr - livepwr) / _evse->getVoltage() / 3.0) + _evse->getAmps();
 	}
 
 
@@ -195,6 +248,9 @@ int CurrentShaperTask::getMaxPwr() {
 }
 int CurrentShaperTask::getLivePwr() {
 	return _live_pwr;
+}
+int CurrentShaperTask::getSmoothedLivePwr() {
+	return _smoothed_live_pwr;
 }
 
 double CurrentShaperTask::getMaxCur() {
@@ -210,4 +266,25 @@ bool CurrentShaperTask::isActive() {
 
 bool CurrentShaperTask::isUpdated() {
 	return _updated;
+}
+
+void CurrentShaperTask::setLoadSharingLimit(double max_cur, bool force_disabled) {
+	if (max_cur < 0) {
+		max_cur = 0;
+	}
+	_loadshare_limit_active = true;
+	_loadshare_max_cur = max_cur;
+	_loadshare_force_disabled = force_disabled;
+	_changed = true;
+}
+
+void CurrentShaperTask::clearLoadSharingLimit() {
+	_loadshare_limit_active = false;
+	_loadshare_max_cur = 0;
+	_loadshare_force_disabled = false;
+	_changed = true;
+}
+
+bool CurrentShaperTask::hasLoadSharingLimit() {
+	return _loadshare_limit_active;
 }

@@ -4,13 +4,34 @@
 
 #include <Arduino.h>
 #include <LittleFS.h>
+#include <memory>
 
 #include "emonesp.h"
 #include "certificates.h"
+#include "fs_util.h"
 #include "root_ca.h"
+#include "certificate_validator.h"
 
-#include "mbedtls/x509_crt.h"
-#include "mbedtls/pk.h"
+bool certificate_id_from_string(const char *str, uint64_t &id)
+{
+  if(NULL == str || '\0' == *str) {
+    return false;
+  }
+
+  // A 64-bit id is at most 16 hex digits; longer cannot be valid.
+  if(strlen(str) > 16) {
+    return false;
+  }
+
+  for(const char *c = str; '\0' != *c; c++) {
+    if(!isxdigit((unsigned char)*c)) {
+      return false;
+    }
+  }
+
+  id = strtoull(str, nullptr, 16);
+  return true;
+}
 
 bool CertificateStore::Certificate::deserialize(JsonObject &obj)
 {
@@ -18,43 +39,42 @@ bool CertificateStore::Certificate::deserialize(JsonObject &obj)
 
   std::string cert = obj["certificate"].as<std::string>();
 
-  // Check if the certificate is valid
-  mbedtls_x509_crt x509;
-  mbedtls_x509_crt_init(&x509);
-  int ret = mbedtls_x509_crt_parse(&x509, (const unsigned char *)cert.c_str(), cert.length() + 1);
-  if(ret != 0) {
-    DBUGVAR(ret);
+  // Get the certificate validator instance
+  std::unique_ptr<CertificateValidator> validator(createCertificateValidator());
+  if(!validator) {
+    DBUGLN("Failed to create certificate validator");
+    return false;
+  }
+
+  // Validate the certificate
+  CertificateValidator::ValidationResult result = validator->validateCertificate(cert);
+  if(!result.valid) {
+    DBUGF("Certificate validation failed: %s", result.error.c_str());
     DBUGVAR(cert.c_str());
     return false;
   }
 
 #if defined(ENABLE_DEBUG_CETRIFICATES)
-  char p[1024];
-  mbedtls_x509_dn_gets(p, sizeof(p), &x509.issuer);
-  DBUGF("issuer: %s", p);
-  mbedtls_x509_dn_gets(p, sizeof(p), &x509.subject);
-  DBUGF("subject: %s", p);
+  DBUGF("issuer: %s", result.issuer.c_str());
+  DBUGF("subject: %s", result.subject.c_str());
 #endif
 
   _cert = cert;
   if(obj["id"].is<const char*>()) {
-    _id = std::stoull(obj["id"].as<std::string>(), nullptr, 16);
-  } else {
-    uint64_t id = 0;
-    for(int i = 0; i < x509.serial.len; i++) {
-      id = id << 8 | x509.serial.p[i];
+    std::string id_str = obj["id"].as<std::string>();
+    if(!certificate_id_from_string(id_str.c_str(), _id)) {
+      DBUGF("Invalid certificate id '%s'", id_str.c_str());
+      return false;
     }
-    _id = id;
+  } else {
+    _id = result.serial;
   }
+
   if(obj["key"].is<const char*>())
   {
     std::string key = obj["key"].as<std::string>();
 
-    mbedtls_pk_context pk;
-    mbedtls_pk_init(&pk);
-    int ret = mbedtls_pk_parse_key(&pk, (const unsigned char *)key.c_str(), key.length() + 1, NULL, 0);
-    if(ret != 0) {
-      DBUGVAR(ret);
+    if(!validator->validatePrivateKey(key)) {
       DBUGVAR(key.c_str());
       return false;
     }
@@ -283,6 +303,26 @@ bool CertificateStore::serializeCertificate(JsonDocument &doc, uint64_t id, uint
   return false;
 }
 
+size_t CertificateStore::certificateCount()
+{
+  return _certs.size();
+}
+
+bool CertificateStore::serializeCertificateAt(JsonDocument &doc, size_t index, uint32_t flags)
+{
+  if(index >= _certs.size()) {
+    return false;
+  }
+
+  Certificate *cert = _certs[index];
+  if(nullptr == cert) {
+    return false;
+  }
+
+  JsonObject obj = doc.to<JsonObject>();
+  return cert->serialize(obj, flags);
+}
+
 bool CertificateStore::findCertificate(uint64_t id, Certificate *&cert)
 {
   for(auto &c : _certs)
@@ -423,18 +463,32 @@ bool CertificateStore::loadCertificate(String &name)
 bool CertificateStore::saveCertificate(Certificate *cert)
 {
   String name = String(CERTIFICATE_BASE_DIRECTORY) + "/" + String(cert->getId(), HEX) + ".json";
-  File file = LittleFS.open(name, "w");
-  if(file)
+
+  JsonDocument doc;
+  JsonObject object = doc.to<JsonObject>();
+  cert->serialize(object, Certificate::Flags::SHOW_PRIVATE_KEY);
+
+  // Don't truncate an existing valid cert if the new contents won't fit.
+  if(!littlefs_has_space(measureJson(doc)))
   {
-    JsonDocument doc;
-    JsonObject object = doc.to<JsonObject>();
-    cert->serialize(object, Certificate::Flags::SHOW_PRIVATE_KEY);
-    serializeJson(doc, file);
-    file.close();
-    return true;
+    DBUGLN("Certificates: insufficient space, not saving");
+    return false;
   }
 
-  return false;
+  File file = LittleFS.open(name, "w");
+  if(!file)
+  {
+    return false;
+  }
+
+  bool ok = serializeJson(doc, file) > 0;
+  file.close();
+  if(!ok)
+  {
+    // Partial write — remove the corrupt file rather than leave it.
+    LittleFS.remove(name);
+  }
+  return ok;
 }
 
 bool CertificateStore::removeCertificate(Certificate *cert)

@@ -1,4 +1,4 @@
-#if defined(ENABLE_DEBUG) && !defined(ENABLE_DEBUG_LCD)
+#if defined(ENABLE_DEBUG) && !defined(ENABLE_DEBUG_SCREEN_RENDERER)
 #undef ENABLE_DEBUG
 #endif
 

@@ -23,9 +23,14 @@ typedef const __FlashStringHelper *fstr_t;
 #endif
 
 //#include <FS.h>                       // SPIFFS file-system: store web server html, CSS etc.
+#include <LittleFS.h>
 
 #include "emonesp.h"
 #include "web_server.h"
+#include "diagnostics.h"
+#ifdef ENABLE_TSDB
+#include "tsdb_energy_logger.h"
+#endif
 #include "web_server_static.h"
 #include "app_config.h"
 #include "net_manager.h"
@@ -41,8 +46,14 @@ typedef const __FlashStringHelper *fstr_t;
 #include "scheduler.h"
 #include "rfid.h"
 #include "current_shaper.h"
+#include "home_battery.h"
 #include "evse_man.h"
 #include "limit.h"
+#include "loadsharing_types.h"
+#include "loadsharing_peer_poller.h"
+#include "boost.h"
+#include "web_auth.h"
+#include "web_auth_secret.h"
 
 MongooseHttpServer server;          // Create class for Web server
 MongooseHttpServer redirect;        // Server to redirect to HTTPS if enabled
@@ -80,8 +91,26 @@ void handleUpdateRequest(MongooseHttpServerRequest *request);
 size_t handleUpdateUpload(MongooseHttpServerRequest *request, int ev, MongooseString filename, uint64_t index, uint8_t *data, size_t len);
 void handleUpdateClose(MongooseHttpServerRequest *request);
 
+void handleMigrateExpand16mb(MongooseHttpServerRequest *request);
+void handleMigrateStatus(MongooseHttpServerRequest *request);
+void handleMigrateCoredump(MongooseHttpServerRequest *request);
+
 void handleTime(MongooseHttpServerRequest *request);
 void handleTimePost(MongooseHttpServerRequest *request, MongooseHttpServerResponseStream *response);
+void handleMqttAction(MongooseHttpServerRequest *request);
+
+#ifndef ENABLE_TSDB
+void handleEnergyRaw(MongooseHttpServerRequest *request);
+void handleEnergyDaily(MongooseHttpServerRequest *request);
+void handleEnergyMonthly(MongooseHttpServerRequest *request);
+void handleEnergyAnnual(MongooseHttpServerRequest *request);
+#else // ENABLE_TSDB
+void handleEnergyRaw(MongooseHttpServerRequest *request);
+void handleEnergyDaily(MongooseHttpServerRequest *request);
+void handleEnergyWeekly(MongooseHttpServerRequest *request);
+void handleEnergyMonthly(MongooseHttpServerRequest *request);
+void handleEnergyAnnual(MongooseHttpServerRequest *request);
+#endif // ENABLE_TSDB
 
 void dumpRequest(MongooseHttpServerRequest *request)
 {
@@ -142,16 +171,317 @@ void dumpRequest(MongooseHttpServerRequest *request)
 }
 
 // -------------------------------------------------------------------
+// Constant-time credential comparison
+//
+// Compares two NUL-terminated strings without an early exit on the first
+// differing byte, so the time taken does not leak how many leading bytes
+// matched (CWE-208). The length difference is folded in so a length mismatch
+// does not short-circuit either. Not a substitute for a slow hash, but removes
+// the trivial byte-by-byte timing signal from Basic-auth checks.
+// -------------------------------------------------------------------
+static bool credentialsMatch(const char *a, const char *b)
+{
+  size_t la = strlen(a);
+  size_t lb = strlen(b);
+  // Keep the length difference full-width: truncating to a narrow type could
+  // fold a length delta that is a nonzero multiple of the type's range to 0 and
+  // (with matching overlapping bytes) false-accept.
+  size_t diff = la ^ lb;
+  size_t n = la < lb ? la : lb;
+  for(size_t i = 0; i < n; i++) {
+    diff |= (unsigned char)(a[i] ^ b[i]);
+  }
+  return 0 == diff;
+}
+
+// -------------------------------------------------------------------
+// The ESP32 has no battery-backed RTC, so time(nullptr) returns ~0 from boot
+// until SNTP (or the EVSE controller, or a manual set) lands.  Session cookies
+// carry a wall-clock expiry, so they are meaningless — and unexpirable — until
+// the clock is real.  This floor (2023-11-14) is source-agnostic: any of SNTP,
+// the EVSE RTC, or a manual settimeofday() lifts time() above it, whereas a
+// timeManager "SNTP synced" flag would miss a clock set from the controller.
+// -------------------------------------------------------------------
+static const uint32_t AUTH_CLOCK_SANE_EPOCH = 1700000000UL;
+static bool clockIsSane()
+{
+  return (uint32_t)time(nullptr) > AUTH_CLOCK_SANE_EPOCH;
+}
+
+// Monotonic seconds for the failed-auth throttle, independent of the wall
+// clock (see web_auth.h) so an SNTP jump can't distort the decay window.
+static inline uint32_t authNowSecs()
+{
+  return (uint32_t)(millis() / 1000);
+}
+
+// Shared failed-credential throttle: fed by both the Basic-auth path in
+// isAuthenticated() and POST /login, so a brute force can't dodge it by
+// hammering GET /status instead of the login form.
+static AuthThrottle s_authThrottle;
+
+// The effective admin username.  Auth is keyed on the *password* being set;
+// when a password exists but the username was left blank, we fall back to a
+// non-obvious default rather than treating the device as open (F1).
+static String effectiveAdminUser()
+{
+  return www_username.length() > 0 ? www_username : String("openevseadmin");
+}
+
+// -------------------------------------------------------------------
+// Session-cookie auth helper (browser UI)
+//
+// Extracts the oevse_session cookie from the request, verifies its HMAC
+// signature and expiry against the current secret, and returns true when
+// the cookie is valid.  File-local; consumed by isAuthenticated() below
+// and the login handler (Task 7).
+// -------------------------------------------------------------------
+static bool hasValidSessionCookie(MongooseHttpServerRequest *request)
+{
+  // Cookies are inert until the wall clock is set: an unexpirable cookie is
+  // worse than none, and this closes the replay-after-reboot window (a
+  // captured cookie can't verify while time() is ~0).  Basic auth still works.
+  if(!clockIsSane()) {
+    return false;
+  }
+  String secret = web_auth_get_secret();
+  if(secret.length() == 0) {
+    return false;  // no secret yet — fail closed
+  }
+  MongooseString cookieHdr = request->headers("Cookie");
+  if(!cookieHdr) {
+    return false;
+  }
+  std::string tok = cookie_extract(
+    std::string(cookieHdr.c_str(), cookieHdr.length()), "oevse_session");
+  if(tok.empty()) {
+    return false;
+  }
+  return session_token_verify(
+    std::string(secret.c_str()), tok, (uint32_t)time(nullptr));
+}
+
+// -------------------------------------------------------------------
+// Single source of truth for HTTP authentication
+//
+// Used by both the REST path (requestPreProcess) and the WebSocket handshake
+// gate (onWsAuthenticate). Returns true when the request is permitted:
+//  - AP-only provisioning mode (captive portal, before credentials are set), or
+//  - no password configured (auth disabled), or
+//  - a valid Basic Authorization header (machine clients: HA, MQTT, app), or
+//  - a valid session cookie (browser UI).
+// Parsing reuses the library's tested Basic-auth parser; only the comparison is
+// swapped for a constant-time one. `badCredential` (optional) is set when a
+// Basic header carried the wrong password, so requestPreProcess can escalate
+// to a throttle response without re-parsing.
+// -------------------------------------------------------------------
+bool isAuthenticated(MongooseHttpServerRequest *request, bool *usedCookie, bool *badCredential)
+{
+  if(usedCookie) *usedCookie = false;
+  if(badCredential) *badCredential = false;
+
+  // Auth is keyed on the *password*: a blank password means "no auth" even if a
+  // username is set; a set password with a blank username uses a default user
+  // (effectiveAdminUser) rather than leaving the device open (F1).
+  if(net.isWifiModeApOnly() || www_password == "") {
+    return true;
+  }
+
+  String adminUser = effectiveAdminUser();
+
+  // Basic auth (machine clients: HA, MQTT, app, scripts)
+  MongooseString authHeader = request->headers("Authorization");
+  if(authHeader) {
+    mg_str hdr = authHeader.toMgStr();
+    char user_buf[64] = {0};
+    char pass_buf[64] = {0};
+    if(0 == mg_parse_http_basic_auth(&hdr, user_buf, sizeof(user_buf),
+                                     pass_buf, sizeof(pass_buf))) {
+      bool u = credentialsMatch(adminUser.c_str(), user_buf);
+      bool p = credentialsMatch(www_password.c_str(), pass_buf);
+      if(u && p) {
+        // Correct credentials always win and clear the throttle, so a flood of
+        // bad guesses can never lock out a machine client holding the password.
+        auth_throttle_record_success(s_authThrottle, authNowSecs());
+        return true;
+      }
+      // Wrong Basic credential — feed the same throttle as POST /login so a
+      // brute force can't dodge the counter by hammering GET /status.
+      auth_throttle_record_failure(s_authThrottle, authNowSecs());
+      if(badCredential) *badCredential = true;
+    }
+  }
+
+  // Session cookie (browser UI) — computed exactly once here
+  bool cookie = hasValidSessionCookie(request);
+  if(usedCookie) *usedCookie = cookie;
+  return cookie;
+}
+
+// -------------------------------------------------------------------
+// POST /login  — credential check + session cookie mint
+// POST /logout — session cookie clear
+//
+// Both handlers build their own response and intentionally do NOT call
+// requestPreProcess / isAuthenticated: an unauthenticated user must be
+// able to reach /login, and /logout should always succeed.
+// -------------------------------------------------------------------
+static const uint32_t REMEMBER_TTL = 2592000; // 30 days
+static const uint32_t SESSION_TTL  = 21600;   // 6 hours
+
+void handleLogin(MongooseHttpServerRequest *request)
+{
+  MongooseHttpServerResponseStream *response = request->beginResponseStream();
+  response->setContentType(CONTENT_TYPE_JSON);
+  response->addHeader(F("Cache-Control"), F("no-store"));
+
+  if(HTTP_POST != request->method()) {
+    response->setCode(405);
+    request->send(response);
+    return;
+  }
+
+  String body = request->body().toString();
+  JsonDocument doc;
+  if(deserializeJson(doc, body)) {
+    response->setCode(400);
+    response->print(F("{\"msg\":\"bad json\"}"));
+    request->send(response);
+    return;
+  }
+
+  String user = doc["user"] | "";
+  String pass = doc["pass"] | "";
+  bool remember = doc["remember"] | false;
+
+  // Evaluate both compares into locals before combining, so a username miss
+  // doesn't short-circuit the password compare (no timing oracle).
+  bool u_ok = auth_constant_time_equals(std::string(user.c_str()),
+                                        std::string(effectiveAdminUser().c_str()));
+  bool p_ok = auth_constant_time_equals(std::string(pass.c_str()),
+                                        std::string(www_password.c_str()));
+  bool ok = u_ok && p_ok;
+  uint32_t tnow = authNowSecs();
+  if(!ok) {
+    // Correct credentials are checked above and always pass, so the throttle
+    // only ever rejects *wrong* guesses — a soft lock can't shut out the admin
+    // or a machine client. 429 signals the lock; the counter decays on its own.
+    auth_throttle_record_failure(s_authThrottle, tnow);
+    bool locked = auth_throttle_locked(s_authThrottle, tnow);
+    response->setCode(locked ? 429 : 401);
+    response->print(locked ? F("{\"msg\":\"locked\"}") : F("{\"msg\":\"invalid\"}"));
+    request->send(response);
+    return;
+  }
+  auth_throttle_record_success(s_authThrottle, tnow);
+
+  // Cookies carry a wall-clock expiry, so the device needs a real clock to mint
+  // one. If it has none yet (no NTP reachable, no controller RTC), adopt the
+  // time the client sent with the login — the caller has just proven the
+  // password, and could set the clock via /settime anyway, so this is no new
+  // authority. Only ever bootstraps an *unset* clock; never moves a real one,
+  // and a bogus (pre-2023) value is ignored so it can't roll the clock back.
+  if(!clockIsSane()) {
+    uint32_t clientNow = doc["now"] | 0u;   // epoch seconds from the browser
+    if(clientNow > AUTH_CLOCK_SANE_EPOCH) {
+      struct timeval tv;
+      tv.tv_sec  = (time_t)clientNow;
+      tv.tv_usec = 0;
+      time_set_time(tv, "login");
+    }
+  }
+
+  // Still no usable clock (client sent nothing / a bad value) — can't date a
+  // cookie, so fall back to Basic rather than mint an unexpirable one.
+  if(!clockIsSane()) {
+    response->setCode(503);
+    response->print(F("{\"msg\":\"clock\"}"));
+    request->send(response);
+    return;
+  }
+
+  String secret = web_auth_get_secret();
+  if(secret.length() == 0) {
+    response->setCode(503);
+    response->print(F("{\"msg\":\"not ready\"}"));
+    request->send(response);
+    return;
+  }
+  uint32_t exp = (uint32_t)time(nullptr) + (remember ? REMEMBER_TTL : SESSION_TTL);
+  std::string token = session_token_mint(std::string(secret.c_str()), exp);
+
+  String cookie = "oevse_session=";
+  cookie += token.c_str();
+  cookie += "; Path=/; HttpOnly; SameSite=Strict";
+  if(remember) { cookie += "; Max-Age="; cookie += String(REMEMBER_TTL); }
+  // if(tls_active()) cookie += "; Secure";   // add when TLS status is known
+  response->addHeader(F("Set-Cookie"), cookie.c_str());
+  response->setCode(200);
+  response->print(F("{\"msg\":\"ok\"}"));
+  request->send(response);
+}
+
+void handleLogout(MongooseHttpServerRequest *request)
+{
+  MongooseHttpServerResponseStream *response = request->beginResponseStream();
+  response->setContentType(CONTENT_TYPE_JSON);
+  response->addHeader(F("Cache-Control"), F("no-store"));
+  if(HTTP_POST != request->method()) { response->setCode(405); request->send(response); return; }
+  response->addHeader(F("Set-Cookie"), F("oevse_session=; Path=/; HttpOnly; SameSite=Strict; Max-Age=0"));
+  response->setCode(200);
+  response->print(F("{\"msg\":\"ok\"}"));
+  request->send(response);
+}
+
+// -------------------------------------------------------------------
 // Helper function to perform the standard operations on a request
 // -------------------------------------------------------------------
 bool requestPreProcess(MongooseHttpServerRequest *request, MongooseHttpServerResponseStream *&response, fstr_t contentType)
 {
   dumpRequest(request);
 
-  if(!net.isWifiModeApOnly() && www_username!="" &&
-     false == request->authenticate(www_username, www_password)) {
-    request->requestAuthentication(esp_hostname);
+  bool usedCookie = false;
+  bool badCredential = false;
+  if(!isAuthenticated(request, &usedCookie, &badCredential)) {
+    // A wrong Basic credential presented while the throttle is hot gets 429
+    // (rate-limited), so brute forcing GET /status is throttled the same as
+    // POST /login. A request with no credential at all still gets the normal
+    // 401 challenge — the throttle only ever answers *failed* attempts.
+    if(badCredential && auth_throttle_locked(s_authThrottle, authNowSecs())) {
+      response = request->beginResponseStream();
+      response->setContentType(CONTENT_TYPE_JSON);
+      response->setCode(429);
+      response->print(F("{\"msg\":\"locked\"}"));
+      request->send(response);
+      return false;
+    }
+    MongooseString xrw = request->headers("X-Requested-With");
+    if(xrw.equals("OpenEVSE")) {
+      response = request->beginResponseStream();
+      response->setContentType(CONTENT_TYPE_JSON);
+      response->setCode(401);
+      response->print(F("{\"msg\":\"auth\"}"));
+      request->send(response);
+    } else {
+      request->requestAuthentication(esp_hostname);
+    }
     return false;
+  }
+
+  // CSRF: a browser session cookie is auto-attached cross-site, so any
+  // state-changing (non-GET) request authenticated via cookie must also carry
+  // the SPA's custom header, which a cross-origin form cannot set. Basic-auth
+  // (machine) clients never send our cookie and are unaffected.
+  if(request->method() != HTTP_GET && usedCookie) {
+    MongooseString xrw = request->headers("X-Requested-With");
+    if(!(xrw.equals("OpenEVSE"))) {
+      response = request->beginResponseStream();
+      response->setContentType(CONTENT_TYPE_JSON);
+      response->setCode(403);
+      response->print(F("{\"msg\":\"csrf\"}"));
+      request->send(response);
+      return false;
+    }
   }
 
   response = request->beginResponseStream();
@@ -181,9 +511,67 @@ bool isPositive(MongooseHttpServerRequest *request, const char *param) {
   return paramFound >= 0 && (0 == paramFound || isPositive(String(paramValue)));
 }
 
+// -------------------------------------------------------------------
+// Escape a string for safe inclusion in an HTML response body, so that
+// reflected user input cannot be interpreted as markup or script.
+// -------------------------------------------------------------------
+static String html_escape(const String &input) {
+  String out;
+  out.reserve(input.length());
+  for(size_t i = 0; i < input.length(); i++) {
+    char c = input.charAt(i);
+    switch(c) {
+      case '&':  out += F("&amp;");  break;
+      case '<':  out += F("&lt;");   break;
+      case '>':  out += F("&gt;");   break;
+      case '"':  out += F("&quot;"); break;
+      case '\'': out += F("&#39;");  break;
+      default:   out += c;           break;
+    }
+  }
+  return out;
+}
+
 //---------------------------------------------------------------------
 // Build status data
 // --------------------------------------------------------------------
+
+// LittleFS.totalBytes() and LittleFS.usedBytes() each run lfs_fs_size(), a
+// full traversal of every metadata pair and data block in the filesystem,
+// reading flash with the FS lock held. Arduino's wrapper discards whichever
+// half of esp_littlefs_info() you did not ask for, so reporting both numbers
+// cost three traversals per request.
+//
+// That made /status the most expensive poll on the device, and expensive in
+// proportion to how full the filesystem is: measured on hardware, a trivial
+// JSON endpoint answers in 11ms while /status took 94ms on a box with 57KB
+// used and 143ms on one with 237KB used. The TSDB store grows, so the cost
+// grows with it. With evcc and the Home Assistant integration polling, the
+// main loop was stalled on flash reads several percent of the time -- and
+// nothing drains the network stack while it is.
+//
+// These two numbers only move when something writes, so sample them on a
+// timer rather than per request.
+#define LFS_STATUS_SAMPLE_MS 30000
+
+static void status_littlefs_usage(uint32_t &free_bytes, uint32_t &used_bytes)
+{
+  static uint32_t sampled_at = 0;
+  static uint32_t cached_free = 0;
+  static uint32_t cached_used = 0;
+
+  uint32_t now = millis();
+  if(0 == sampled_at || (now - sampled_at) >= LFS_STATUS_SAMPLE_MS)
+  {
+    size_t total = LittleFS.totalBytes();
+    cached_used = (uint32_t)LittleFS.usedBytes();
+    cached_free = (uint32_t)(total - cached_used);
+    sampled_at = now;
+  }
+
+  free_bytes = cached_free;
+  used_bytes = cached_used;
+}
 
 void buildStatus(JsonDocument &doc) {
 
@@ -212,6 +600,7 @@ void buildStatus(JsonDocument &doc) {
   doc["eth_connected"] = (int)net.isWiredConnected();
   doc["net_connected"] = (int)net.isWifiClientConnected();
   doc["ipaddress"] = net.getIp();
+  doc["ipv6address"] = net.getIpv6();
   doc["macaddress"] = net.getMac();
 
   doc["emoncms_connected"] = (int)emoncms_connected;
@@ -219,16 +608,36 @@ void buildStatus(JsonDocument &doc) {
   doc["packets_success"] = packets_success;
 
   doc["mqtt_connected"] = (int)mqtt.isConnected();
+  doc["mqtt_status"]    = mqtt.getMqttStatus();
+  if (mqtt.getBrokerIp()[0] != '\0')
+    doc["mqtt_broker_ip"]      = mqtt.getBrokerIp();
+  if (mqtt.getBrokerVersion()[0] != '\0')
+    doc["mqtt_broker_version"] = mqtt.getBrokerVersion();
+  if (mqtt.getConnectedSince() > 0)
+    doc["mqtt_connected_since"] = (uint32_t)mqtt.getConnectedSince();
+  if (mqtt.getLastRxTime() > 0)
+    doc["mqtt_last_rx"]         = (uint32_t)mqtt.getLastRxTime();
+  if (mqtt.getErrorCategory()[0] != '\0') {
+    doc["mqtt_error"]        = mqtt.getErrorCategory();
+    doc["mqtt_error_detail"] = mqtt.getErrorDetail();
+  }
 
   doc["ocpp_connected"] = (int)OcppTask::isConnected();
 
 #if defined(ENABLE_PN532) || defined(ENABLE_RFID)
   doc["rfid_failure"] = (int) rfid.communicationFails();
+  doc["rfid_reader"] = (int) rfid.readerPresent();
 #endif
 
-  doc["ohm_hour"] = ohm_hour;
 
   doc["free_heap"] = ESPAL.getFreeHeap();
+  diagnostics_status(doc);
+  {
+    uint32_t lfs_free, lfs_used;
+    status_littlefs_usage(lfs_free, lfs_used);
+    doc["littlefs_free"] = lfs_free;
+    doc["littlefs_used"] = lfs_used;
+  }
 
   doc["comm_sent"] = rapiSender.getSent();
   doc["comm_success"] = rapiSender.getSuccess();
@@ -241,8 +650,8 @@ void buildStatus(JsonDocument &doc) {
   doc["nogndcount"] = evse.getFaultCountNoGround();
   doc["stuckcount"] = evse.getFaultCountStuckRelay();
 
-  doc["solar"] = solar;
-  doc["grid_ie"] = grid_ie;
+  doc["solar"] = divert.getSolar();
+  doc["grid_ie"] = divert.getGridIe();
   doc["charge_rate"] = divert.getChargeRate();
   doc["divert_update"] = (millis() - divert.getLastUpdate()) / 1000;
   doc["divert_active"] = divert.isActive();
@@ -253,15 +662,75 @@ void buildStatus(JsonDocument &doc) {
   doc["shaper_updated"] = shaper.isUpdated();
   doc["service_level"] = static_cast<uint8_t>(evse.getActualServiceLevel());
   doc["limit"] = limit.hasLimit();
+  doc["boost"] = boost.isActive();
 
   doc["ota_update"] = (int)Update.isRunning();
 
   doc["config_version"] = config_version();
+  doc["loadsharing_peers_version"] = loadsharing_peers_version;
+  doc["loadsharing_status_version"] = loadsharing_status_version;
+
+  // Add joined peers array with real-time status from peer poller
+  {
+    JsonArray peersArray = doc["loadsharing_joined_peers"].to<JsonArray>();
+    double groupTotalAmp = 0.0;
+    
+    for (const auto& peer : loadSharingGroupState.getPeers()) {
+      // Only include joined peers (exclude discovered-but-not-joined)
+      if (!peer.isJoined()) {
+        continue;
+      }
+      
+      JsonObject peerObj = peersArray.add<JsonObject>();
+      peerObj["hostname"] = peer.getHost();
+      peerObj["id"] = peer.getId();
+      peerObj["name"] = peer.getName();
+
+      if (loadSharingGroupState.isLocalHost(peer.getHost())) {
+        // The local device is not polled over HTTP/WebSocket; report its
+        // values directly from the local EVSE (same sources as create_rapi_json
+        // so they match what remote peers publish on /status).
+        double localAmp = evse.getAmps() * AMPS_SCALE_FACTOR;
+        peerObj["amp"] = localAmp;
+        peerObj["voltage"] = evse.getVoltage() * VOLTS_SCALE_FACTOR;
+        peerObj["pilot"] = evse.getChargeCurrent();
+        peerObj["vehicle"] = evse.isVehicleConnected() ? 1 : 0;
+        peerObj["state"] = evse.getEvseState();
+        peerObj["min_current"] = evse.getMinCurrent();
+        peerObj["max_current"] = evse.getMaxConfiguredCurrent();
+        peerObj["priority"] = peer.getPriority();
+        groupTotalAmp += localAmp;
+        continue;
+      }
+
+      // Get real-time status from peer poller. min/max/priority are controller-
+      // owned (min/max learned from the peer's /config, priority stored on the
+      // group peer entry), not part of the polled status.
+      LoadSharingPeerStatus peerStatus;
+      if (loadSharingPeerPoller.getPeerStatus(peer.getHost(), peerStatus)) {
+        peerObj["amp"] = peerStatus.getAmp();
+        peerObj["voltage"] = peerStatus.getVoltage();
+        peerObj["pilot"] = peerStatus.getPilot();
+        peerObj["vehicle"] = peerStatus.getVehicle();
+        peerObj["state"] = peerStatus.getState();
+        peerObj["min_current"] = peer.getMinCurrent();
+        peerObj["max_current"] = peer.getMaxCurrent();
+        peerObj["priority"] = peer.getPriority();
+        groupTotalAmp += peerStatus.getAmp();
+      }
+    }
+
+    // The local device is included in the loop above (as a joined peer), so its
+    // current is already part of groupTotalAmp -- no separate self addition.
+    doc["loadsharing_group_current_total"] = groupTotalAmp;
+  }
+
   doc["claims_version"] = evse.getClaimsVersion();
   doc["override_version"] = manual.getVersion();
   doc["schedule_version"] = scheduler.getVersion();
   doc["schedule_plan_version"] = scheduler.getPlanVersion();
   doc["limit_version"] = limit.getVersion();
+  doc["boost_version"] = boost.getVersion();
 
   doc["vehicle_state_update"] = (millis() - evse.getVehicleLastUpdated()) / 1000;
   if(teslaClient.getVehicleCnt() > 0) {
@@ -282,17 +751,23 @@ void buildStatus(JsonDocument &doc) {
     if(evse.isVehicleEtaValid()) {
       doc["time_to_full_charge"] = evse.getVehicleEta();
     }
+    if(evse.isVehicleChargeLimitValid()) {
+      doc["vehicle_charge_limit"] = evse.getVehicleChargeLimit();
+    }
   }
+
+#ifdef ENABLE_TSDB
+  doc["tsdb_ready"] = tsdbEnergyLogger.isReady() ? 1 : 0;
+  doc["tsdb_err"]   = tsdbEnergyLogger.initError();
+#endif
+  home_battery_add_status_fields(doc);
 
   DBUGF("/status ArduinoJson size: %dbytes", doc.size());
 }
 
 // -------------------------------------------------------------------
-// Wifi scan /scan not currently used
+// Wifi scan
 // url: /scan
-//
-// First request will return 0 results unless you start scan from somewhere else (loop/setup)
-// Do not request more often than 3-5 seconds
 // -------------------------------------------------------------------
 void
 handleScan(MongooseHttpServerRequest *request) {
@@ -302,23 +777,53 @@ handleScan(MongooseHttpServerRequest *request) {
   }
 
   DBUGF("Starting WiFi scan");
-  net.wifiScanNetworks([request, response](int networksFound) {
+  bool scanStarted = net.wifiScanNetworks([request, response](int networksFound) {
     DBUGF("%d networks found", networksFound);
-    String json = "[";
+    response->print("[");
     for (int i = 0; i < networksFound; ++i) {
-      if(i) json += ",";
-      json += "{";
-      json += "\"rssi\":"+String(WiFi.RSSI(i));
-      json += ",\"ssid\":\""+WiFi.SSID(i)+"\"";
-      json += ",\"bssid\":\""+WiFi.BSSIDstr(i)+"\"";
-      json += ",\"channel\":"+String(WiFi.channel(i));
-      json += ",\"secure\":"+String(WiFi.encryptionType(i));
-      json += "}";
+      if(i) response->print(",");
+      JsonDocument network;
+      network["rssi"] = WiFi.RSSI(i);
+      network["ssid"] = WiFi.SSID(i);
+      network["bssid"] = WiFi.BSSIDstr(i);
+      network["channel"] = WiFi.channel(i);
+      network["secure"] = WiFi.encryptionType(i);
+      serializeJson(network, *response);
     }
-    json += "]";
-    response->print(json);
+    response->print("]");
     request->send(response);
   });
+
+  if(!scanStarted) {
+    DBUGLN("WiFi scan failed to start");
+    response->print("[]");
+    request->send(response);
+  }
+}
+
+// -------------------------------------------------------------------
+// Destructive actuators (/reset, /restart, /apoff, /divertmode, /shaper,
+// /settime, /rfid/add) must not fire from a bare cross-site GET (e.g.
+// <img src="/reset">). Require either a non-GET method or
+// the SPA's custom header, which a cross-origin GET cannot set — defense in
+// depth beyond SameSite=Strict on the worst-consequence endpoints. Sends 403
+// and returns false when the request is a headerless GET; the caller's response
+// stream is already open (from requestPreProcess).
+// -------------------------------------------------------------------
+static bool actuatorMethodAllowed(MongooseHttpServerRequest *request,
+                                  MongooseHttpServerResponseStream *response)
+{
+  if(request->method() != HTTP_GET) {
+    return true;
+  }
+  MongooseString xrw = request->headers("X-Requested-With");
+  if(xrw.equals("OpenEVSE")) {
+    return true;
+  }
+  response->setCode(403);
+  response->print("Forbidden: use POST or the app");
+  request->send(response);
+  return false;
 }
 
 // -------------------------------------------------------------------
@@ -329,6 +834,9 @@ void
 handleAPOff(MongooseHttpServerRequest *request) {
   MongooseHttpServerResponseStream *response;
   if(false == requestPreProcess(request, response, CONTENT_TYPE_TEXT)) {
+    return;
+  }
+  if(!actuatorMethodAllowed(request, response)) {
     return;
   }
 
@@ -348,6 +856,10 @@ void
 handleDivertMode(MongooseHttpServerRequest *request){
   MongooseHttpServerResponseStream *response;
   if(false == requestPreProcess(request, response, CONTENT_TYPE_TEXT)) {
+    return;
+  }
+
+  if(!actuatorMethodAllowed(request, response)) {
     return;
   }
 
@@ -371,6 +883,10 @@ handleCurrentShaper(MongooseHttpServerRequest *request) {
   if(false == requestPreProcess(request, response, CONTENT_TYPE_TEXT)) {
     return;
   }
+  if(!actuatorMethodAllowed(request, response)) {
+    return;
+  }
+
   shaper.setState(request->getParam("shaper").toInt() == 1? true: false);
 
   response->setCode(200);
@@ -388,6 +904,10 @@ void handleSetTime(MongooseHttpServerRequest *request)
 {
   MongooseHttpServerResponseStream *response;
   if(false == requestPreProcess(request, response, CONTENT_TYPE_TEXT)) {
+    return;
+  }
+
+  if(!actuatorMethodAllowed(request, response)) {
     return;
   }
 
@@ -426,6 +946,22 @@ handleTeslaVeh(MongooseHttpServerRequest *request)
 }
 
 // -------------------------------------------------------------------
+// Whether vehicle telemetry pushed to POST /status should be accepted.
+//
+// The four vehicle fields below each repeated the same source comparison, which
+// is one copy-paste away from a field that quietly accepts a push it should
+// not, or rejects one it should. Naming the rule once means the next field
+// added here inherits it rather than restating it.
+//
+// Sources that own the vehicle data themselves are excluded on purpose: a push
+// must not be able to fight a source that is actively fetching the same values.
+// -------------------------------------------------------------------
+static bool vehiclePushAccepted()
+{
+  return VEHICLE_DATA_SRC_HTTP == vehicle_data_src;
+}
+
+// -------------------------------------------------------------------
 // Returns status json
 // url: /status
 // -------------------------------------------------------------------
@@ -452,7 +988,8 @@ void handleStatusPost(MongooseHttpServerRequest *request, MongooseHttpServerResp
       DBUGF("shaper: live power:%dW", shaper.getLivePwr());
     }
     if(doc["solar"].is<int>()) {
-      solar = doc["solar"];
+      int solar = doc["solar"];
+      divert.setSolar(solar);
       DBUGF("solar:%dW", solar);
       divert.update_state();
       // recalculate shaper
@@ -462,7 +999,8 @@ void handleStatusPost(MongooseHttpServerRequest *request, MongooseHttpServerResp
       send_event = false; // Divert sends the event so no need to send here
     }
     else if(doc["grid_ie"].is<int>()) {
-      grid_ie = doc["grid_ie"];
+      int grid_ie = doc["grid_ie"];
+      divert.setGridIe(grid_ie);
       DBUGF("grid:%dW", grid_ie);
       divert.update_state();
       // recalculate shaper
@@ -471,23 +1009,42 @@ void handleStatusPost(MongooseHttpServerRequest *request, MongooseHttpServerResp
       }
       send_event = false; // Divert sends the event so no need to send here
     }
-    if(doc["battery_level"].is<double>() && vehicle_data_src == VEHICLE_DATA_SRC_HTTP) {
+    if(doc["battery_level"].is<double>() && vehiclePushAccepted()) {
       double vehicle_soc = doc["battery_level"];
       DBUGF("vehicle_soc:%d%%", vehicle_soc);
       evse.setVehicleStateOfCharge(vehicle_soc);
       doc["vehicle_state_update"] = 0;
     }
-    if(doc["battery_range"].is<double>() && vehicle_data_src == VEHICLE_DATA_SRC_HTTP) {
+    if(doc["battery_range"].is<double>() && vehiclePushAccepted()) {
       double vehicle_range = doc["battery_range"];
       DBUGF("vehicle_range:%dKM", vehicle_range);
       evse.setVehicleRange(vehicle_range);
       doc["vehicle_state_update"] = 0;
     }
-    if(doc["time_to_full_charge"].is<double>() && vehicle_data_src == VEHICLE_DATA_SRC_HTTP){
+    if(doc["time_to_full_charge"].is<double>() && vehiclePushAccepted()){
       double vehicle_eta = doc["time_to_full_charge"];
       DBUGF("vehicle_eta:%d", vehicle_eta);
       evse.setVehicleEta(vehicle_eta);
       doc["vehicle_state_update"] = 0;
+    }
+    if(doc["vehicle_charge_limit"].is<int>() && vehiclePushAccepted()){
+      int vehicle_charge_limit = doc["vehicle_charge_limit"];
+      DBUGF("vehicle_charge_limit:%d%%", vehicle_charge_limit);
+      evse.setVehicleChargeLimit(vehicle_charge_limit);
+      doc["vehicle_state_update"] = 0;
+    }
+    // Display-only home/powerwall battery feeds. Like the solar/grid pushes
+    // above these are an explicit override (no data_src arbitration); they just
+    // surface in /status and on the display.
+    if(doc["home_battery_soc"].is<int>()) {
+      int soc = doc["home_battery_soc"];
+      DBUGF("home_battery_soc:%d%%", soc);
+      home_battery_set_soc(soc);
+    }
+    if(doc["home_battery_power"].is<int>()) {
+      int power = doc["home_battery_power"];
+      DBUGF("home_battery_power:%dW", power);
+      home_battery_set_power(power);
     }
     // send back new value to clients
     if(send_event) {
@@ -513,10 +1070,34 @@ handleStatus(MongooseHttpServerRequest *request)
 
   if(HTTP_GET == request->method()) {
 
-    JsonDocument doc;
+    // Allocated once and reused. Building a fresh multi-KB document per
+    // request, freed again immediately, is what fragments this heap: measured
+    // on hardware, sustained polling of /status alone drove the largest
+    // allocatable block from 61,428 down to 38,900 and it never recovered,
+    // while total free heap stayed above 70KB.
+    //
+    // Safe as a static because Mongoose is polled from loop() on a single
+    // task and each handler runs to completion inside its own event callback;
+    // this one calls nothing that re-enters the HTTP layer.
+    static JsonDocument doc;
+    doc.clear();
+
+    uint32_t probe = diagnostics_probe_begin();
     buildStatus(doc);
+    diagnostics_probe_end(0, probe);
+
     response->setCode(200);
-    serializeJson(doc, *response);
+    probe = diagnostics_probe_begin();
+    // Serialise into a right-sized buffer and hand the stream one write.
+    // Writing incrementally makes the stream's mbuf realloc up a 1.5x ladder
+    // (128->192->288->...->2187 for a 1.7KB body): eight ascending
+    // allocate/free pairs per request, which is what shreds the heap. One
+    // reserved String plus one write is two exact-sized allocations.
+    String json;
+    json.reserve(measureJson(doc) + 1);
+    serializeJson(doc, json);
+    response->write((const uint8_t *)json.c_str(), json.length());
+    diagnostics_probe_end(1, probe);
 
   } else if(HTTP_POST == request->method()) {
     handleStatusPost(request, response);
@@ -535,6 +1116,8 @@ handleStatus(MongooseHttpServerRequest *request)
 void
 handleScheduleGet(MongooseHttpServerRequest *request, MongooseHttpServerResponseStream *response, uint16_t event)
 {
+  // Sized from the stored event count — a fixed budget silently truncated
+  // multi-rule schedules (serialize() drops events once the doc overflows).
   JsonDocument doc;
 
   bool success = (SCHEDULER_EVENT_NULL == event) ?
@@ -708,6 +1291,76 @@ void handleLimit(MongooseHttpServerRequest *request)
 
 //----------------------------------------------------------
 //
+//            Boost
+//
+//----------------------------------------------------------
+
+void handleBoostGet(MongooseHttpServerRequest *request, MongooseHttpServerResponseStream *response)
+{
+  if(boost.isActive())
+  {
+    JsonDocument doc;
+    boost.serialize(doc);
+    response->setCode(200);
+    serializeJson(doc, *response);
+  } else {
+    // 200 + {} doubles as the capability probe: old firmware 404s /boost.
+    response->setCode(200);
+    response->print("{}");
+  }
+}
+
+void handleBoostPost(MongooseHttpServerRequest *request, MongooseHttpServerResponseStream *response)
+{
+  String body = request->body().toString();
+  int rc = boost.arm(body.c_str());
+
+  if(Boost_Armed == rc) {
+    response->setCode(201);
+    response->print("{\"msg\":\"done\"}");
+  } else if(Boost_Unsupported == rc) {
+    response->setCode(422);
+    response->print("{\"msg\":\"no vehicle data source for this boost type\"}");
+  } else {
+    response->setCode(400);
+    response->print("{\"msg\":\"failed to parse JSON\"}");
+  }
+}
+
+void handleBoostDelete(MongooseHttpServerRequest *request, MongooseHttpServerResponseStream *response)
+{
+  if(boost.cancel()) {
+    response->setCode(200);
+    response->print("{\"msg\":\"done\"}");
+  } else {
+    response->setCode(404);
+    response->print("{\"msg\":\"no boost\"}");
+  }
+}
+
+void handleBoost(MongooseHttpServerRequest *request)
+{
+  MongooseHttpServerResponseStream *response;
+  if(false == requestPreProcess(request, response)) {
+    return;
+  }
+
+  if(HTTP_GET == request->method()) {
+    handleBoostGet(request, response);
+  } else if(HTTP_POST == request->method()) {
+    handleBoostPost(request, response);
+  } else if(HTTP_DELETE == request->method()) {
+    handleBoostDelete(request, response);
+  } else {
+    response->setCode(405);
+    response->print("{\"msg\":\"Method not allowed\"}");
+  }
+
+  request->send(response);
+}
+
+//----------------------------------------------------------
+//
 //            Energy Meter
 //
 //----------------------------------------------------------
@@ -859,6 +1512,9 @@ handleRst(MongooseHttpServerRequest *request) {
   if(false == requestPreProcess(request, response, CONTENT_TYPE_TEXT)) {
     return;
   }
+  if(!actuatorMethodAllowed(request, response)) {
+    return;
+  }
 
   config_reset();
   ESPAL.eraseConfig();
@@ -879,6 +1535,9 @@ void
 handleRestart(MongooseHttpServerRequest *request) {
   MongooseHttpServerResponseStream *response;
   if(false == requestPreProcess(request, response, CONTENT_TYPE_TEXT)) {
+    return;
+  }
+  if(!actuatorMethodAllowed(request, response)) {
     return;
   }
 
@@ -950,12 +1609,65 @@ void handleAddRFID(MongooseHttpServerRequest *request) {
   if(false == requestPreProcess(request, response)) {
     return;
   }
+  if(!actuatorMethodAllowed(request, response)) {
+    return;
+  }
+
   response->setCode(200);
   response->addHeader("Access-Control-Allow-Origin", "*");
   response->print("{\"msg\":\"Waiting for badge\"}");
   request->send(response);
   yield();
   rfid.waitForTag();
+}
+
+// -------------------------------------------------------------------
+// Reset the relay contact-life health estimate ($FH via EvseManager,
+// requires the controller's RELAY_HEALTH feature) - use after a physical
+// relay replacement, so the accumulator doesn't carry over wear from the
+// old relay.
+// url: /relay/reset
+// -------------------------------------------------------------------
+void handleRelayHealthReset(MongooseHttpServerRequest *request) {
+  MongooseHttpServerResponseStream *response;
+  if(false == requestPreProcess(request, response, CONTENT_TYPE_JSON)) {
+    return;
+  }
+  if(!actuatorMethodAllowed(request, response)) {
+    return;
+  }
+
+  evse.resetRelayHealth([request, response](int ret) {
+    response->setCode(RAPI_RESPONSE_OK == ret ? 200 : 500);
+    response->print(RAPI_RESPONSE_OK == ret ? "{\"msg\":\"done\"}" : "{\"msg\":\"error\"}");
+    request->send(response);
+  });
+}
+
+// -------------------------------------------------------------------
+// Manually run the stuck-relay recovery cycle ($FK via EvseManager,
+// requires firmware 9.3.0+ / ADVPWR). NAK'd by the controller if an EV is
+// connected. Blocking on the controller side for up to ~30s - the HTTP
+// response is deferred until the async RAPI callback fires (EvseMonitor
+// pauses its own periodic polling for the duration, see
+// _relay_recovery_in_flight) rather than blocking this request thread, so
+// the rest of the server stays responsive while the cycle runs.
+// url: /relay/recovery
+// -------------------------------------------------------------------
+void handleRelayRecovery(MongooseHttpServerRequest *request) {
+  MongooseHttpServerResponseStream *response;
+  if(false == requestPreProcess(request, response, CONTENT_TYPE_JSON)) {
+    return;
+  }
+  if(!actuatorMethodAllowed(request, response)) {
+    return;
+  }
+
+  evse.runStuckRelayRecovery([request, response](int ret) {
+    response->setCode(RAPI_RESPONSE_OK == ret ? 200 : 500);
+    response->print(RAPI_RESPONSE_OK == ret ? "{\"msg\":\"done\"}" : "{\"msg\":\"error\"}");
+    request->send(response);
+  });
 }
 
 String delayTimer = "0 0 0 0";
@@ -1035,9 +1747,9 @@ handleRapi(MongooseHttpServerRequest *request) {
       if (json) {
         s = "{\"cmd\":\""+rapi+"\",\"ret\":\""+rapiString+"\"}";
       } else {
-        s += rapi;
+        s += html_escape(rapi);
         s += F("<p>&gt;");
-        s += rapiString;
+        s += html_escape(rapiString);
       }
     }
     else
@@ -1059,7 +1771,7 @@ handleRapi(MongooseHttpServerRequest *request) {
       if (json) {
         s = "{\"cmd\":\""+rapi+"\",\"error\":\""+errorString+"\"}";
       } else {
-        s += rapi;
+        s += html_escape(rapi);
         s += F("<p><strong>Error:</strong>");
         s += errorString;
       }
@@ -1143,18 +1855,63 @@ void onWsFrame(MongooseHttpWebSocketConnection *connection, int flags, uint8_t *
       {
         // answer pong
         connection->send("{\"pong\": 1}");
-
       }
+
+    // Handle load sharing allocation from controller (member side)
+    if (doc["loadsharing"].is<JsonObject>()) {
+      JsonObject ls = doc["loadsharing"];
+      if (ls["target_current"].is<double>()) {
+        double targetCurrent = ls["target_current"].as<double>();
+        String reason = ls["reason"].is<const char*>() ? ls["reason"].as<String>() : "allocation";
+
+        DBUGF("LoadSharing: Received allocation %.1fA (reason: %s)", targetCurrent, reason.c_str());
+
+        if (loadSharingGroupState.isMember()) {
+          loadSharingGroupState.recordAllocationReceived();
+          shaper.setLoadSharingLimit(targetCurrent, reason == "failsafe_disabled");
+        }
+      }
+    }
+  }
+}
+
+// WebSocket handshake authentication gate.
+//
+// Registered via ->onRequest() on every WebSocket endpoint, so it runs during
+// MG_EV_WEBSOCKET_HANDSHAKE_REQUEST — before the 101 Switching Protocols
+// response. On failure, requestAuthentication() sends a 401 and sets
+// MG_F_SEND_AND_CLOSE; mongoose then skips handshake completion (see
+// mongoose.c, MG_EV_WEBSOCKET_HANDSHAKE_REQUEST handling), so no onConnect
+// fires and no data is ever pushed to an unauthenticated client. On success we
+// return without sending a response and the handshake proceeds normally.
+//
+// Note: the library dispatches HANDSHAKE_REQUEST to the endpoint's onRequest
+// handler when one is set, and onConnect/onFrame at the later HANDSHAKE_DONE /
+// FRAME events, so gating here does not interfere with those callbacks.
+void onWsAuthenticate(MongooseHttpServerRequest *request)
+{
+  if(!isAuthenticated(request)) {
+    request->requestAuthentication(esp_hostname);
   }
 }
 
 void onWsConnect(MongooseHttpWebSocketConnection *connection)
 {
   DBUGF("New client connected over ws");
-  // pushing states to client
+
   JsonDocument doc;
   buildStatus(doc);
-  web_server_event(doc);
+
+  // Send only to the client that just connected. This used to call
+  // web_server_event(), which broadcasts to every open websocket -- so one
+  // client reconnecting pushed a full status to all of them. Under a
+  // reconnect storm (a Home Assistant integration retrying, say) that
+  // multiplies into a burst of full-status sends against connections that
+  // never asked for one, straight into send buffers with no backpressure.
+  String json;
+  json.reserve(measureJson(doc) + 1);
+  serializeJson(doc, json);
+  connection->send(json);
 }
 
 /*
@@ -1170,27 +1927,76 @@ void web_server_send_ascii_utf8(const char *endpoint, const uint8_t *buffer, siz
   server.sendAll(endpoint, WEBSOCKET_OP_TEXT, temp, size);
 }
 
+void handleMqttAction(MongooseHttpServerRequest *request) {
+  MongooseHttpServerResponseStream *response;
+  if (false == requestPreProcess(request, response)) return;
+
+  if (HTTP_GET == request->method()) {
+    JsonDocument doc;
+    doc["mqtt_connected"] = (int)mqtt.isConnected();
+    doc["mqtt_status"]    = mqtt.getMqttStatus();
+    if (mqtt.getBrokerIp()[0] != '\0')
+      doc["mqtt_broker_ip"]      = mqtt.getBrokerIp();
+    if (mqtt.getBrokerVersion()[0] != '\0')
+      doc["mqtt_broker_version"] = mqtt.getBrokerVersion();
+    if (mqtt.getConnectedSince() > 0)
+      doc["mqtt_connected_since"] = (uint32_t)mqtt.getConnectedSince();
+    if (mqtt.getLastRxTime() > 0)
+      doc["mqtt_last_rx"]         = (uint32_t)mqtt.getLastRxTime();
+    // Always include error fields (empty string when no failure) so the GUI can
+    // clear a previously-shown reason once reconnected.
+    doc["mqtt_error"]        = mqtt.getErrorCategory();
+    doc["mqtt_error_detail"] = mqtt.getErrorDetail();
+    response->setCode(200);
+    serializeJson(doc, *response);
+  } else if (HTTP_POST == request->method()) {
+    mqtt.restartConnection();
+    response->setCode(200);
+    response->print("{\"msg\":\"done\"}");
+  } else {
+    response->setCode(405);
+    response->print("{\"msg\":\"Method not allowed\"}");
+  }
+  request->send(response);
+}
+
 void web_server_setup()
 {
   bool use_ssl = false;
   if(www_certificate_id != "")
   {
-    uint64_t cert_id = std::stoull(www_certificate_id.c_str(), nullptr, 16);
-    const char *cert = certs.getCertificate(cert_id);
-    const char *key = certs.getKey(cert_id);
+    // This one sits on the boot path: a corrupted stored www_certificate_id
+    // parsed with a throwing conversion would abort inside web_server_setup()
+    // and boot-loop the unit with no way back in over the network. Fall through
+    // to plain HTTP instead, which at least leaves the device reachable to
+    // correct the config.
+    uint64_t cert_id = 0;
+    bool id_valid = certificate_id_from_string(www_certificate_id.c_str(), cert_id);
+    if(!id_valid) {
+      DEBUG.printf("Ignoring malformed www_certificate_id '%s', serving HTTP\n", www_certificate_id.c_str());
+    }
+
+    const char *cert = id_valid ? certs.getCertificate(cert_id) : NULL;
+    const char *key = id_valid ? certs.getKey(cert_id) : NULL;
     if(NULL != cert && NULL != key)
     {
-      server.begin(443, cert, key);
+      DEBUG.printf("Starting HTTPS server, https://0.0.0.0:%d\n", www_https_port);
+      server.begin(www_https_port, cert, key);
       use_ssl = true;
 
-      redirect.begin(80);
+      redirect.begin(www_http_port);
       redirect.on("/", handleHttpsRedirect);
     }
   }
 
   if(false == use_ssl) {
-    server.begin(80);
+    DEBUG.printf("Starting HTTP server, http://0.0.0.0:%d\n", www_http_port);
+    server.begin(www_http_port);
   }
+
+  // Session management (no auth gate — user must reach these unauthenticated)
+  server.on("/login$", handleLogin);
+  server.on("/logout$", handleLogout);
 
   // Handle status updates
   server.on("/status$", handleStatus);
@@ -1210,6 +2016,8 @@ void web_server_setup()
   server.on("/shaper$", handleCurrentShaper);
   server.on("/emoncms/describe$", handleDescribe);
   server.on("/rfid/add$", handleAddRFID);
+  server.on("/relay/reset$", handleRelayHealthReset);
+  server.on("/relay/recovery$", handleRelayRecovery);
 
   server.on("/schedule/plan$", handleSchedulePlan);
   server.on("/schedule", handleSchedule);
@@ -1222,14 +2030,34 @@ void web_server_setup()
   server.on("/logs", handleEventLogs);
   server.on("/certificates", handleCertificates);
   server.on("/limit", handleLimit);
+  server.on("/boost", handleBoost);
   server.on("/emeter", handleEmeter);
   server.on("/time", handleTime);
+  server.on("/mqtt$", handleMqttAction);
+
+#ifndef ENABLE_TSDB
+  server.on("/energy/raw$", handleEnergyRaw);
+  server.on("/energy/daily$", handleEnergyDaily);
+  server.on("/energy/monthly$", handleEnergyMonthly);
+  server.on("/energy/annual$", handleEnergyAnnual);
+#else // ENABLE_TSDB
+  server.on("/energy/raw$", handleEnergyRaw);
+  server.on("/energy/daily$", handleEnergyDaily);
+  server.on("/energy/weekly$", handleEnergyWeekly);
+  server.on("/energy/monthly$", handleEnergyMonthly);
+  server.on("/energy/annual$", handleEnergyAnnual);
+#endif // ENABLE_TSDB
 
   // Simple Firmware Update Form
   server.on("/update$")->
     onRequest(handleUpdateRequest)->
     onUpload(handleUpdateUpload)->
     onClose(handleUpdateClose);
+
+  // In-place 16MB flash repartition (16MB module flashed with 4MB layout)
+  server.on("/migrate/expand16mb$", handleMigrateExpand16mb);
+  server.on("/migrate/status$", handleMigrateStatus);
+  server.on("/migrate/coredump$", handleMigrateCoredump);
 
   server.on("/debug$", [](MongooseHttpServerRequest *request) {
     MongooseHttpServerResponseStream *response;
@@ -1244,7 +2072,71 @@ void web_server_setup()
     request->send(response);
   });
 
-  server.on("/debug/console$")->onFrame([](MongooseHttpWebSocketConnection *connection, int flags, uint8_t *data, size_t len) {
+  // -----------------------------------------------------------------
+  // Last-panic forensics. A crash on a deployed unit leaves a core dump in
+  // flash that outlives the reboot; these two endpoints are what make it
+  // reachable without a serial cable.
+  //
+  //   GET    /debug/crash      decoded summary (task, PC, backtrace)
+  //   DELETE /debug/crash      clear it, so the next panic is unambiguous
+  //   GET    /debug/crash/raw  the image itself, for esp-coredump
+  // -----------------------------------------------------------------
+  server.on("/debug/crash$", [](MongooseHttpServerRequest *request) {
+    MongooseHttpServerResponseStream *response;
+    if(false == requestPreProcess(request, response, CONTENT_TYPE_JSON)) {
+      return;
+    }
+
+    if(HTTP_DELETE == request->method()) {
+      bool erased = diagnostics_coredump_erase();
+      response->setCode(erased ? 200 : 500);
+      response->print(erased ? F("{\"msg\":\"erased\"}") : F("{\"msg\":\"error\"}"));
+      request->send(response);
+      return;
+    }
+
+    JsonDocument doc;
+    diagnostics_coredump_json(doc);
+    response->setCode(200);
+    serializeJson(doc, *response);
+    request->send(response);
+  });
+
+  server.on("/debug/crash/raw$", [](MongooseHttpServerRequest *request) {
+    dumpRequest(request);
+
+    // Not routed through requestPreProcess: that opens a buffered stream
+    // response, and the whole point here is to send from a flash mapping
+    // instead of buffering the image in a heap that has no room for it.
+    if(!isAuthenticated(request)) {
+      request->requestAuthentication(esp_hostname);
+      return;
+    }
+
+    const uint8_t *data = NULL;
+    size_t len = 0;
+    if(!diagnostics_coredump_image(&data, &len)) {
+      MongooseHttpServerResponseStream *response = request->beginResponseStream();
+      response->setContentType(CONTENT_TYPE_JSON);
+      response->setCode(404);
+      response->print(F("{\"msg\":\"none\"}"));
+      request->send(response);
+      return;
+    }
+
+    MongooseHttpServerResponseBasic *response = request->beginResponse();
+    response->setCode(200);
+    response->setContentType("application/octet-stream");
+    response->setContentLength(len);
+    response->addHeader(F("Content-Disposition"), F("attachment; filename=\"coredump.bin\""));
+    response->addHeader(F("Cache-Control"), F("no-store"));
+    response->setContent(data, len);
+    request->send(response);
+  });
+
+  server.on("/debug/console$")
+    ->onRequest(onWsAuthenticate)
+    ->onFrame([](MongooseHttpWebSocketConnection *connection, int flags, uint8_t *data, size_t len) {
   });
 
   SerialDebug.onWrite([](const uint8_t *buffer, size_t size)
@@ -1265,7 +2157,9 @@ void web_server_setup()
     request->send(response);
   });
 
-  server.on("/evse/console$")->onFrame([](MongooseHttpWebSocketConnection *connection, int flags, uint8_t *data, size_t len) {
+  server.on("/evse/console$")
+    ->onRequest(onWsAuthenticate)
+    ->onFrame([](MongooseHttpWebSocketConnection *connection, int flags, uint8_t *data, size_t len) {
   });
 
   SerialEvse.onWrite([](const uint8_t *buffer, size_t size) {
@@ -1276,11 +2170,16 @@ void web_server_setup()
   });
 
   server.on("/ws$")->
+    onRequest(onWsAuthenticate)
+    ->
     onFrame(onWsFrame)
     ->
     onConnect(onWsConnect);
 
   server.onNotFound(handleNotFound);
+
+  // Setup load sharing endpoints
+  web_server_load_sharing_setup();
 
   DEBUG.println("Server started");
 }
@@ -1307,6 +2206,14 @@ web_server_loop() {
 void web_server_event(JsonDocument &event)
 {
   String json;
+  // Reserve up front: the default String growth pattern reallocates on almost
+  // every append, and exact-fit reallocs at this frequency are what shreds the
+  // heap into unusable fragments.
+  json.reserve(measureJson(event) + 1);
   serializeJson(event, json);
+
+  // Drop any client that has stopped draining before adding to its backlog.
+  diagnostics_ws_reap();
+
   server.sendAll("/ws", json);
 }

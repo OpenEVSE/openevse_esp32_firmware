@@ -11,6 +11,13 @@
 #include <Adafruit_MCP9808.h>
 #endif
 
+#ifndef EVSE_HEATBEAT_INTERVAL
+#define EVSE_HEATBEAT_INTERVAL 5
+#endif
+#ifndef EVSE_HEARTBEAT_CURRENT
+#define EVSE_HEARTBEAT_CURRENT 6
+#endif
+
 #define EVSE_MONITOR_TEMP_MONITOR       0
 #define EVSE_MONITOR_TEMP_MAX           1
 #define EVSE_MONITOR_TEMP_EVSE_DS3232   2
@@ -19,6 +26,13 @@
 #define EVSE_MONITOR_TEMP_ESP_MCP9808   5
 
 #define EVSE_MONITOR_TEMP_COUNT         6
+
+// How long a voltage received over MQTT is considered "available" before we
+// fall back to the statically configured ($SV/$GV) voltage. Refreshed on every
+// MQTT voltage message.
+#ifndef EVSE_MONITOR_MQTT_VOLTAGE_TIMEOUT_MS
+#define EVSE_MONITOR_MQTT_VOLTAGE_TIMEOUT_MS  120000UL
+#endif
 
 class EvseMonitor : public MicroTasks::Task
 {
@@ -54,10 +68,43 @@ class EvseMonitor : public MicroTasks::Task
         bool isCharging() {
           return OPENEVSE_STATE_CHARGING == _evse_state;
         }
+        // Listed explicitly rather than as a range: the controller's fault
+        // states are not contiguous (0x0C/0x0D are reserved), so a range check
+        // silently treats anything added above it as a non-error. Keep in sync
+        // with the OPENEVSE_STATE_* fault values in the OpenEVSE library.
         bool isError() {
-          return OPENEVSE_STATE_VENT_REQUIRED <= _evse_state && _evse_state <= OPENEVSE_STATE_OVER_CURRENT;
+          switch(_evse_state)
+          {
+            case OPENEVSE_STATE_VENT_REQUIRED:
+            case OPENEVSE_STATE_DIODE_CHECK_FAILED:
+            case OPENEVSE_STATE_GFI_FAULT:
+            case OPENEVSE_STATE_NO_EARTH_GROUND:
+            case OPENEVSE_STATE_STUCK_RELAY:
+            case OPENEVSE_STATE_GFI_SELF_TEST_FAILED:
+            case OPENEVSE_STATE_OVER_TEMPERATURE:
+            case OPENEVSE_STATE_OVER_CURRENT:
+            case OPENEVSE_STATE_RELAY_CLOSURE_FAULT:
+            case OPENEVSE_STATE_PP_SHORTED:
+            case OPENEVSE_STATE_PP_MISSING:
+            case OPENEVSE_STATE_EEPROM_FAILURE:
+              return true;
+            default:
+              return false;
+          }
         }
         bool isVehicleConnected() {
+          // OPENEVSE_VFLAG_EV_CONNECTED is documented in the controller as
+          // "valid only when pilot not N12", and J1772EVSEController::Disable()
+          // sets exactly that -- so while the EVSE is DISABLED the controller
+          // cannot see a plug or unplug and simply leaves the flag at whatever
+          // it was when the pause started. Reporting that stale value showed a
+          // vehicle still connected long after it had been unplugged.
+          //
+          // SLEEPING is deliberately not covered: it holds the pilot at P12 and
+          // keeps detecting normally, so the flag stays trustworthy there.
+          if(OPENEVSE_STATE_DISABLED == getEvseState()) {
+            return false;
+          }
           return OPENEVSE_VFLAG_EV_CONNECTED == (getFlags() & OPENEVSE_VFLAG_EV_CONNECTED);
         }
         bool isBootLocked() {
@@ -124,7 +171,9 @@ class EvseMonitor : public MicroTasks::Task
 
     EvseStateEvent _state;            // OpenEVSE State
     double _amp;                      // OpenEVSE Current Sensor
-    double _voltage;                  // Voltage from OpenEVSE or MQTT
+    double _voltage;                  // Resolved voltage: MQTT > configured ($SV/$GV) > default
+    double _mqtt_voltage;             // Last voltage received over MQTT (0 = none received)
+    uint32_t _mqtt_voltage_time;      // millis() of last MQTT voltage (0 = never)
     double _power;                    // Calculated Power from _amp & _voltage & mono|threephase
     Temperature _temps[EVSE_MONITOR_TEMP_COUNT];
     EnergyMeter _energyMeter;
@@ -144,6 +193,41 @@ class EvseMonitor : public MicroTasks::Task
 
     // Settings
     uint32_t _settings_flags;
+    uint32_t _panic_temperature;
+    uint32_t _heartbeat_interval;
+    uint32_t _heartbeat_current;
+    RapiSender *_sender;
+
+    // Extended state (linco-work firmware)
+    uint32_t _frequency;          // AC line frequency × 100 (from $GZ); 0 = unknown/unsupported
+    // Relay-open current-zero threshold (mA), from $GZ's 2nd field: current
+    // below which the controller considers it safe to open the relay at a
+    // current zero. Runtime-configurable on the controller via $SZ.
+    // OPENEVSE_RELAY_HEALTH_NOT_AVAILABLE = unknown/unsupported controller.
+    uint32_t _zero_cross_threshold_ma;
+    bool _relay_dc1;              // DC relay 1 enabled (only valid when _relay_status_known)
+    bool _relay_dc2;              // DC relay 2 enabled (only valid when _relay_status_known)
+    bool _relay_ac;               // AC relay enabled (only valid when _relay_status_known)
+    bool _relay_status_known;     // true once $GR has been answered by the controller
+    char _chip_id[48];            // EVSE chip ID from $GI
+
+    // Relay contact-life health estimate (linco-work RELAY_HEALTH feature,
+    // from $GL). Only meaningful once _relay_health_known is true - the
+    // controller may predate the feature or have it compiled out.
+    bool _relay_health_known;
+    uint8_t  _relay_life_remaining_pct;
+    uint32_t _relay_cold_open_count;
+    uint32_t _relay_elec_damage_x1e6;
+    uint32_t _relay_transit_baseline_ms;   // OPENEVSE_RELAY_HEALTH_NOT_AVAILABLE = baseline not established
+    bool     _relay_transit_drift_warning;
+    uint32_t _relay_thermal_index_x100;    // OPENEVSE_RELAY_HEALTH_NOT_AVAILABLE = not available
+    uint32_t _relay_thermal_baseline_x100; // OPENEVSE_RELAY_HEALTH_NOT_AVAILABLE = not available
+    uint8_t  _relay_thermal_warning_level; // 0=ok/not available 1=watch 2=warn
+    uint32_t _relay_stuck_recovery_count;  // cumulative stuck-relay recovery attempts run; 0 against pre-9.3.0 controllers
+    // True while a $FK command is outstanding (up to ~30s) - pauses loop()'s
+    // own periodic RAPI traffic so it doesn't overflow the RAPI queue and
+    // drop heartbeat pulses for that long. See runStuckRelayRecovery().
+    bool _relay_recovery_in_flight;
 
     DataReady _data_ready;
     DataReady _boot_ready;
@@ -168,8 +252,14 @@ class EvseMonitor : public MicroTasks::Task
     void updateCurrentSettings(long min_current, long max_hardware_current, long pilot, long max_configured_current);
 
     void getStatusFromEvse(bool allowStart = true);
+    void getSettingsFromEvse();
     void getChargeCurrentAndVoltageFromEvse();
+    void updateEffectiveVoltage();
     void getTemperatureFromEvse();
+    void readFrequency();
+    void readRelayStatus();
+    void readChipId();
+    void readRelayHealth();
 
   protected:
     void setup();
@@ -197,9 +287,11 @@ class EvseMonitor : public MicroTasks::Task
     void disable();
     void restart();
     void setMaxConfiguredCurrent(long amps);
+    void setMaxHardwareCurrent(long amps);
 
     void setPilot(long amps, bool force=false, std::function<void(int ret)> callback = NULL);
     void setVoltage(double volts, std::function<void(int ret)> callback = NULL);
+    void setMqttVoltage(double volts);
     void setServiceLevel(ServiceLevel level, std::function<void(int ret)> callback = NULL);
     void configureCurrentSensorScale(long scale, long offset, std::function<void(int ret)> callback = NULL);
     void enableFeature(uint8_t feature, bool enabled, std::function<void(int ret)> callback = NULL);
@@ -209,6 +301,15 @@ class EvseMonitor : public MicroTasks::Task
     void enableStuckRelayCheck(bool enabled, std::function<void(int ret)> callback = NULL);
     void enableVentRequired(bool enabled, std::function<void(int ret)> callback = NULL);
     void enableTemperatureCheck(bool enabled, std::function<void(int ret)> callback = NULL);
+    void enableOvercurrentMonitor(bool enabled, std::function<void(int ret)> callback = NULL);
+    void setPanicTemperature(uint32_t tempC, std::function<void(int ret)> callback = NULL);
+    void enableFrontButton(bool enabled, std::function<void(int ret)> callback = NULL);
+    void enableBootLock(bool enabled, std::function<void(int ret)> callback = NULL);
+    void enablePPAutoAmpacity(bool enabled, std::function<void(int ret)> callback = NULL);
+    void enableZeroCrossSwitch(bool enabled, std::function<void(int ret)> callback = NULL);
+    void setRelayEnable(int relay, bool enabled, std::function<void(int ret)> callback = NULL);
+    void resetFaultCounters(std::function<void(int ret)> callback = NULL);
+    void setHeartbeatSupervision(uint32_t interval, uint32_t current, std::function<void(int ret)> callback = NULL);
     void verifyPilot();
 
     uint8_t getEvseState() {
@@ -343,9 +444,60 @@ class EvseMonitor : public MicroTasks::Task
     bool isTemperatureCheckEnabled() {
       return 0 == (getSettingsFlags() & OPENEVSE_ECF_TEMP_CHK_DISABLED);
     }
+    bool isOvercurrentMonitorEnabled() {
+      // NB: the controller aliases this to the temp-check bit (both 0x0400),
+      // so overcurrent and temperature monitoring cannot be toggled separately
+      return 0 == (getSettingsFlags() & OPENEVSE_ECF_OVERCURRENT_DISABLED);
+    }
+    uint32_t getPanicTemperature() { return _panic_temperature; }
+    bool isFrontButtonEnabled() { return !isButtonDisabled(); }
     bool isButtonDisabled() {
       return OPENEVSE_ECF_BUTTON_DISABLED == (getSettingsFlags() & OPENEVSE_ECF_BUTTON_DISABLED);
     }
+    bool isBootLockEnabled() {
+      return 0 == (getSettingsFlags() & OPENEVSE_ECF_BOOT_LOCK_DISABLED);
+    }
+    bool isPPAutoAmpacityEnabled() {
+      return OPENEVSE_ECF_PP_AUTO_AMPACITY == (getSettingsFlags() & OPENEVSE_ECF_PP_AUTO_AMPACITY);
+    }
+    bool isZeroCrossSwitchEnabled() {
+      return 0 == (getSettingsFlags() & OPENEVSE_ECF_RELAY_ZC_DISABLED);
+    }
+    bool isDC1RelayEnabled() { return _relay_dc1; }
+    bool isDC2RelayEnabled() { return _relay_dc2; }
+    bool isACRelayEnabled()  { return _relay_ac; }
+    bool isRelayStatusKnown() { return _relay_status_known; }
+    uint32_t getFrequency()  { return _frequency; }  // × 100 Hz (5000 = 50.00 Hz); 0 = unknown
+    // Relay-open current-zero threshold, mA. OPENEVSE_RELAY_HEALTH_NOT_AVAILABLE if unknown/unsupported
+    uint32_t getZeroCrossThresholdMa() { return _zero_cross_threshold_ma; }
+    const char *getChipId()  { return _chip_id; }
+
+    // Relay contact-life health estimate (requires the controller's
+    // RELAY_HEALTH feature; check isRelayHealthKnown() first)
+    bool isRelayHealthKnown() { return _relay_health_known; }
+    uint8_t getRelayLifeRemainingPct() { return _relay_life_remaining_pct; }
+    uint32_t getRelayColdOpenCount() { return _relay_cold_open_count; }
+    uint32_t getRelayElecDamageX1e6() { return _relay_elec_damage_x1e6; }
+    uint32_t getRelayTransitBaselineMs() { return _relay_transit_baseline_ms; }
+    bool isRelayTransitDriftWarning() { return _relay_transit_drift_warning; }
+    uint32_t getRelayThermalIndexX100() { return _relay_thermal_index_x100; }
+    uint32_t getRelayThermalBaselineX100() { return _relay_thermal_baseline_x100; }
+    uint8_t getRelayThermalWarningLevel() { return _relay_thermal_warning_level; }
+    uint32_t getRelayStuckRecoveryCount() { return _relay_stuck_recovery_count; }
+    // Manually run the controller's stuck-relay recovery cycle (requires
+    // firmware 9.3.0+ / ADVPWR). NAK'd by the controller if an EV is
+    // connected. Blocking on the controller side for up to ~30s.
+    void runStuckRelayRecovery(std::function<void(int ret)> callback = NULL);
+    // Reset the relay-health accumulator, self-learned baselines, and the
+    // stuck-relay recovery counter (requires the controller's RELAY_HEALTH
+    // feature) - use after a physical relay replacement, since the estimate
+    // is otherwise meaningless: it carries over wear from the old relay.
+    void resetRelayHealth(std::function<void(int ret)> callback = NULL);
+    // True if the controller's RAPI protocol supports the D9 command set
+    bool isD9Supported() { return _openevse.isD9Supported(); }
+    uint32_t getHeartbeatInterval() { return _heartbeat_interval; }
+    uint32_t getHeartbeatCurrent() { return _heartbeat_current; }
+    bool isHeartbeatEnabled() { return _heartbeat_current > 0; }
     bool isAutoStartDisabled() {
       return OPENEVSE_ECF_AUTO_START_DISABLED == (getSettingsFlags() & OPENEVSE_ECF_AUTO_START_DISABLED);
     }

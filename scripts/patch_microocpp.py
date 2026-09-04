@@ -10,7 +10,6 @@ This script patches the downloaded library source after PlatformIO resolves deps
 It can be removed once MicroOcpp releases a version compatible with ArduinoJson v7.
 """
 import os
-import re
 
 Import("env")
 
@@ -71,7 +70,7 @@ def patch_microocpp_lib(env):
     if patch_file(reserve_now, [
         (
             '!payload.containsKey("connectorId") ||\n            payload["connectorId"] < 0 ||',
-            '!(payload["connectorId"] | -1) >= 0 ||'
+            '(payload["connectorId"] | -1) < 0 ||'
         ),
         (
             '!payload.containsKey("expiryDate")',

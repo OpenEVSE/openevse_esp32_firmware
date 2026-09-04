@@ -1,0 +1,12 @@
+{
+  "config": {
+    "charge_mode": "eco",
+    "current_shaper_enabled": false,
+    "divert_enabled": true,
+    "divert_type": 0,
+    "divert_PV_ratio": 1.1,
+    "divert_attack_smoothing_time": 20,
+    "divert_decay_smoothing_time": 600,
+    "divert_min_charge_time": 600
+  }
+}

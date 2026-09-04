@@ -45,12 +45,24 @@ extern MongooseHttpServer server;
 
 extern void web_server_setup();
 extern void web_server_loop();
+extern void web_server_load_sharing_setup();
 
 extern void web_server_event(JsonDocument &event);
 
 typedef const __FlashStringHelper *fstr_t;
 
 bool requestPreProcess(MongooseHttpServerRequest *request, MongooseHttpServerResponseStream *&response, fstr_t contentType = CONTENT_TYPE_JSON);
+
+// Single source of truth for HTTP auth (Basic for machine clients, session
+// cookie for the browser UI). Shared by the REST path and the WebSocket
+// handshake gate. The static shell is served open (see web_server_static.cpp),
+// so it does not call this. `usedCookie`/`badCredential` are optional out-params
+// (see web_server.cpp); a wrong Basic credential feeds the failed-auth throttle.
+bool isAuthenticated(MongooseHttpServerRequest *request, bool *usedCookie = nullptr, bool *badCredential = nullptr);
+
 void dumpRequest(MongooseHttpServerRequest *request);
+
+void handleLogin(MongooseHttpServerRequest *request);
+void handleLogout(MongooseHttpServerRequest *request);
 
 #endif // _EMONESP_WEB_SERVER_H
