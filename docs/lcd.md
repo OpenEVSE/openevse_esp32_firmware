@@ -3,9 +3,8 @@
 This document describes how the ESP32 gateway drives the 2-line × 16-character
 text LCD on the OpenEVSE controller, and what is shown in each state.
 
-It applies to the character-LCD builds only. The TFT touchscreen
-(`ENABLE_SCREEN_LCD_TFT`) and LVGL (`ENABLE_SCREEN_LVGL_TFT`) variants have
-their own UI and are not covered here.
+It applies to the character-LCD builds only. The LVGL TFT variant
+(`ENABLE_SCREEN_LVGL_TFT`) has its own UI and is not covered here.
 
 ## Ownership model
 

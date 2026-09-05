@@ -22,6 +22,6 @@ Essentials, duplicated here for quick reference:
 - After any change: `cd gui-nightshift && npm run build && npm test`, and
   `cd divert_sim && pytest -v` must pass.
 - When a PR changes any user-visible screen (`gui-nightshift`, `gui-v2`,
-  `gui-tft`, `src/lvgl_tft/`), include fresh screenshots of each changed screen
+  `src/lvgl_tft/`), include fresh screenshots of each changed screen
   — for gui-nightshift run `npm run screenshots` and commit the regenerated
   images.
