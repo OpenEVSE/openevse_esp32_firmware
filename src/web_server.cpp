@@ -55,8 +55,9 @@ typedef const __FlashStringHelper *fstr_t;
 #include "web_auth.h"
 #include "web_auth_secret.h"
 
-static MongooseHttpServer http_server;   // Create class for HTTP server
-static MongooseHttpServer https_server;  // Create class for HTTPS server
+static MongooseHttpServer http_server;     // Create class for HTTP server
+static MongooseHttpServer https_server;    // Create class for HTTPS server
+static MongooseHttpServer redirect_server; // Redirects to HTTPS when HTTP is off
 static bool http_server_started = false;
 static bool https_server_started = false;
 
@@ -1889,8 +1890,23 @@ void handleHttpsRedirect(MongooseHttpServerRequest *request)
   MongooseHttpServerResponseStream *response = request->beginResponseStream();
   response->setContentType(CONTENT_TYPE_HTML);
 
+  // The Host header carries the port the client reached us on, which is the
+  // HTTP listener's -- redirecting to it verbatim would just bounce the browser
+  // back here. Keep the hostname the user typed (it has to match the
+  // certificate) and substitute the HTTPS port.
+  String host = request->host().toString();
+  int portSep = host.lastIndexOf(':');
+  // An unbracketed ':' in an IPv6 literal is part of the address, not a port.
+  if(portSep >= 0 && host.indexOf(']') < portSep) {
+    host.remove(portSep);
+  }
+
   String url = F("https://");
-  url += request->host().toString();
+  url += host;
+  if(443 != www_https_port) {
+    url += ":";
+    url += String(www_https_port);
+  }
   url += request->uri().toString();
 
   String s = F("<html>");
@@ -2276,6 +2292,18 @@ void web_server_setup()
       registerWebServerRoutes(http_server);
       http_server.onNotFound(handleNotFound);
       http_server_started = true;
+  } else if(use_ssl && should_bind_http_port) {
+      // HTTPS only. Leaving port 80 closed means anyone who types the bare
+      // hostname gets a connection refused with nothing to explain it, so keep
+      // a listener there that does nothing but point at the TLS one.
+      //
+      // "/#" rather than "/": Mongoose 7 matches with mg_match(), so a pattern
+      // without a wildcard is an exact comparison and "/" would only ever catch
+      // the root document.
+      DEBUG.printf("Starting HTTPS redirect, http://0.0.0.0:%d\n", www_http_port);
+      redirect_server.begin(www_http_port);
+      redirect_server.on("/#", handleHttpsRedirect);
+      redirect_server.onNotFound(handleHttpsRedirect);
   }
 
   DEBUG.println("Server started");
