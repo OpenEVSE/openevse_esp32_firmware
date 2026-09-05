@@ -288,7 +288,12 @@ class TestMongooseServices:
             time_status = api_get(f"{native_url}/time").json()
             if time_status["ntp_status"] == "disabled":
                 pytest.xfail("native TimeManager does not enable SNTP from integration config yet")
-            assert time_status["ntp_status"] == "connecting"
+            # "connecting" is a transient the sync passes through, not a state
+            # it parks in: an unresolvable hostname fails DNS in well under the
+            # HTTP round-trip above, so this poll legitimately arrives after the
+            # attempt has already landed in "retry". Assert only that the sync
+            # was accepted and is in one of the states it can be in by now.
+            assert time_status["ntp_status"] in ("connecting", "retry"), time_status
 
             def ntp_status_finished():
                 data = api_get(f"{native_url}/time").json()
