@@ -4,8 +4,14 @@ from pprint import pprint
 import hashlib
 import pathlib
 import glob
+import sys
 
 Import("env")
+
+# SCons execs this file without __file__, so locate the sibling module through
+# the project dir instead.
+sys.path.insert(0, join(env.subst("$PROJECT_DIR"), "scripts"))
+import web_assets
 
 # ---------------------------------------------------------------------------
 # Patch ArduinoMongoose's MongooseSntpClient so that:
@@ -143,19 +149,18 @@ def binary_to_header(source_file):
     output = "static const char CONTENT_"+filename+"[] PROGMEM = {\n  "
     count = 0
 
-    etag = hashlib.sha256()
+    # Re-encoded rather than read straight through: see scripts/web_assets.py.
+    # The ETag is taken over the bytes we actually embed, so re-encoding an
+    # asset also invalidates whatever clients had cached of the old one.
+    data = web_assets.optimise(source_file)
+    etag = hashlib.sha256(data)
 
-    with open(source_file, "rb") as source_fh:
-        byte = source_fh.read(1)
-        while byte != b"":
-            output += "0x{:02x}, ".format(ord(byte))
-            etag.update(byte)
-            count += 1
-            if 16 == count:
-                output += "\n  "
-                count = 0
-
-            byte = source_fh.read(1)
+    for byte in data:
+        output += "0x{:02x}, ".format(byte)
+        count += 1
+        if 16 == count:
+            output += "\n  "
+            count = 0
 
     output += "0x00 };\n"
     output += "static const char CONTENT_{}_ETAG[] PROGMEM = \"{}\";\n".format(filename, etag.hexdigest())
@@ -254,7 +259,10 @@ def make_static(env, target, source, prefix, files_dir):
 
         if filetype is not None:
             c_name = get_c_name(out_file)
-            output += "  { \"/"+out_file.replace(".gz","")+"\", CONTENT_"+c_name+", sizeof(CONTENT_"+c_name+") - 1, _CONTENT_TYPE_"+filetype+", CONTENT_"+c_name+"_ETAG, "+("true" if compress else "false")+" },\n"
+            # NULL means "served as-is"; otherwise this is the Content-Encoding
+            # the bytes were written with by web_assets.optimise().
+            encoding = "\"%s\"" % web_assets.selected_encoding() if compress else "NULL"
+            output += "  { \"/"+out_file.replace(".gz","")+"\", CONTENT_"+c_name+", sizeof(CONTENT_"+c_name+") - 1, _CONTENT_TYPE_"+filetype+", CONTENT_"+c_name+"_ETAG, "+encoding+" },\n"
         else:
             print("Warning: Could not detect filetype for %s" % (out_file))
 

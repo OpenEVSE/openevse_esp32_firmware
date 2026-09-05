@@ -1,0 +1,8 @@
+# Build-script dependencies (scripts/extra_script.py and friends).
+#
+# web_assets.py degrades gracefully without these -- it falls back to stdlib
+# gzip and skips PNG optimisation -- but the result is a noticeably larger
+# image, so CI installs them to keep local and CI builds byte-comparable.
+zopfli
+brotli
+Pillow
