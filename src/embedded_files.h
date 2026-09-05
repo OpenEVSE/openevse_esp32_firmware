@@ -14,7 +14,10 @@ struct StaticFile
   size_t length;
   const char *type;
   const char *etag;
-  bool compressed;
+  // Content-Encoding the bytes were stored with, or NULL to serve them as-is.
+  // Fixed when scripts/web_assets.py generated the header rather than
+  // negotiated per request -- there is only ever one copy of each asset.
+  const char *encoding;
 };
 
 bool embedded_get_file(String filename, StaticFile *index, size_t length, StaticFile **file);
