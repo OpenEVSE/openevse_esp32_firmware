@@ -28,6 +28,7 @@ def test_config_defaults_present():
     assert "hostname" in cfg
     assert "flags" in cfg
     assert cfg["sntp_enabled"] is True
+    assert cfg["lcd_backlight_timeout"] == 0
 
 
 def test_config_round_trip_commit_and_load():
