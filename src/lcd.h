@@ -13,9 +13,6 @@
 #if ENABLE_SCREEN_LVGL_TFT
 // LVGL renderer for the stock ILI9488 TFT (drop-in LcdTask, same public API).
 #include "lcd_lvgl.h"
-#elif ENABLE_SCREEN_LCD_TFT
-// HACK: This should be done in a much more C++ way
-#include "lcd_tft.h"
 #else
 
 #define LCD_MAX_LEN 16
@@ -169,7 +166,7 @@ class LcdTask : public MicroTasks::Task
     void setWifiMode(bool client, bool connected);
 };
 
-#endif // ENABLE_SCREEN_LCD_TFT
+#endif // !ENABLE_SCREEN_LVGL_TFT
 
 extern LcdTask lcd;
 

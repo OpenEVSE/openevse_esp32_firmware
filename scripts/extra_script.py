@@ -210,9 +210,6 @@ def make_safe(file):
 def make_static_web(env, target, source):
     return make_static(env, target, source, "web_server", dist_dir)
 
-def make_static_lcd(env, target, source):
-    return make_static(env, target, source, "lcd_gui", lcd_gui_dir)
-
 def make_static(env, target, source, prefix, files_dir):
     output = ""
 
@@ -309,10 +306,5 @@ if npm_installed:
         print("Warning: GUI files not found, run 'git submodule update --init' (%s)" % (gui_dir))
 else:
   print("Warning: Node.JS and NPM required to update the UI")
-
-# LCD GUI files
-lcd_gui_dir = join(env.subst("$PROJECT_DIR"), "gui-tft")
-headers_src = join(env.subst("$PROJECTSRC_DIR"), "lcd_static")
-process_html_app(lcd_gui_dir, headers_src, env, "lcd_gui", make_static_lcd)
 
 print("PATH="+env['ENV']['PATH'])
