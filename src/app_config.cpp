@@ -402,7 +402,7 @@ increment_config() {
   DBUGVAR(config_ver);
 
   #if ENABLE_CONFIG_CHANGE_NOTIFICATION
-  StaticJsonDocument<128> event;
+  JsonDocument event;
   event["config_version"] = config_ver;
   event_send(event);
   #endif
@@ -594,14 +594,14 @@ bool config_deserialize(const char *json)
   return user_config.deserialize(json);
 }
 
-bool config_deserialize(DynamicJsonDocument &doc)
+bool config_deserialize(JsonDocument &doc)
 {
   bool config_modified = user_config.deserialize(doc);
 
   #if ENABLE_CONFIG_CHANGE_NOTIFICATION
   // Update EVSE config
   // Update the EVSE setting flags, a little low level, may move later
-  if(doc.containsKey("diode_check"))
+  if(doc["diode_check"].is<bool>())
   {
     bool enable = doc["diode_check"];
     if(enable != evse.isDiodeCheckEnabled()) {
@@ -611,7 +611,7 @@ bool config_deserialize(DynamicJsonDocument &doc)
     }
   }
 
-  if(doc.containsKey("gfci_check"))
+  if(doc["gfci_check"].is<bool>())
   {
     bool enable = doc["gfci_check"];
     if(enable != evse.isGfiTestEnabled()) {
@@ -621,7 +621,7 @@ bool config_deserialize(DynamicJsonDocument &doc)
     }
   }
 
-  if(doc.containsKey("ground_check"))
+  if(doc["ground_check"].is<bool>())
   {
     bool enable = doc["ground_check"];
     if(enable != evse.isGroundCheckEnabled()) {
@@ -631,7 +631,7 @@ bool config_deserialize(DynamicJsonDocument &doc)
     }
   }
 
-  if(doc.containsKey("relay_check"))
+  if(doc["relay_check"].is<bool>())
   {
     bool enable = doc["relay_check"];
     if(enable != evse.isStuckRelayCheckEnabled()) {
@@ -641,7 +641,7 @@ bool config_deserialize(DynamicJsonDocument &doc)
     }
   }
 
-  if(doc.containsKey("vent_check"))
+  if(doc["vent_check"].is<bool>())
   {
     bool enable = doc["vent_check"];
     if(enable != evse.isVentRequiredEnabled()) {
@@ -651,7 +651,7 @@ bool config_deserialize(DynamicJsonDocument &doc)
     }
   }
 
-  if(doc.containsKey("temp_check"))
+  if(doc["temp_check"].is<bool>())
   {
     bool enable = doc["temp_check"];
     if(enable != evse.isTemperatureCheckEnabled()) {
@@ -661,7 +661,7 @@ bool config_deserialize(DynamicJsonDocument &doc)
     }
   }
 
-  if(doc.containsKey("overcurrent_monitor"))
+  if(doc["overcurrent_monitor"].is<bool>())
   {
     bool enable = doc["overcurrent_monitor"];
     if(enable != evse.isOvercurrentMonitorEnabled()) {
@@ -671,7 +671,7 @@ bool config_deserialize(DynamicJsonDocument &doc)
     }
   }
 
-  if(doc.containsKey("over_temp_shutdown"))
+  if(doc["over_temp_shutdown"].is<uint32_t>())
   {
     uint32_t val = doc["over_temp_shutdown"];
     if(val != over_temp_shutdown || val != evse.getPanicTemperature()) {
@@ -682,7 +682,7 @@ bool config_deserialize(DynamicJsonDocument &doc)
     }
   }
 
-  if(doc.containsKey("voltage"))
+  if(doc["voltage"].is<uint32_t>())
   {
     uint32_t val = doc["voltage"];
     if(val > 0) {
@@ -695,7 +695,7 @@ bool config_deserialize(DynamicJsonDocument &doc)
     }
   }
 
-  if(doc.containsKey("front_button"))
+  if(doc["front_button"].is<bool>())
   {
     bool enable = doc["front_button"];
     if(enable != evse.isFrontButtonEnabled()) {
@@ -705,7 +705,7 @@ bool config_deserialize(DynamicJsonDocument &doc)
     }
   }
 
-  if(doc.containsKey("boot_lock"))
+  if(doc["boot_lock"].is<bool>())
   {
     bool enable = doc["boot_lock"];
     if(enable != evse.isBootLockEnabled()) {
@@ -715,7 +715,7 @@ bool config_deserialize(DynamicJsonDocument &doc)
     }
   }
 
-  if(doc.containsKey("pp_auto"))
+  if(doc["pp_auto"].is<bool>())
   {
     bool enable = doc["pp_auto"];
     if(enable != evse.isPPAutoAmpacityEnabled()) {
@@ -725,7 +725,7 @@ bool config_deserialize(DynamicJsonDocument &doc)
     }
   }
 
-  if(doc.containsKey("zero_cross"))
+  if(doc["zero_cross"].is<bool>())
   {
     bool enable = doc["zero_cross"];
     if(enable != evse.isZeroCrossSwitchEnabled()) {
@@ -735,7 +735,7 @@ bool config_deserialize(DynamicJsonDocument &doc)
     }
   }
 
-  if(doc.containsKey("relay_dc1"))
+  if(doc["relay_dc1"].is<bool>())
   {
     bool enable = doc["relay_dc1"];
     if(enable != evse.isDC1RelayEnabled()) {
@@ -745,7 +745,7 @@ bool config_deserialize(DynamicJsonDocument &doc)
     }
   }
 
-  if(doc.containsKey("relay_dc2"))
+  if(doc["relay_dc2"].is<bool>())
   {
     bool enable = doc["relay_dc2"];
     if(enable != evse.isDC2RelayEnabled()) {
@@ -755,7 +755,7 @@ bool config_deserialize(DynamicJsonDocument &doc)
     }
   }
 
-  if(doc.containsKey("relay_ac"))
+  if(doc["relay_ac"].is<bool>())
   {
     bool enable = doc["relay_ac"];
     if(enable != evse.isACRelayEnabled()) {
@@ -765,10 +765,10 @@ bool config_deserialize(DynamicJsonDocument &doc)
     }
   }
 
-  if(doc.containsKey("heartbeat_interval") || doc.containsKey("heartbeat_current"))
+  if(doc["heartbeat_interval"].is<uint32_t>() || doc["heartbeat_current"].is<uint32_t>())
   {
-    uint32_t interval = doc.containsKey("heartbeat_interval") ? (uint32_t)doc["heartbeat_interval"] : heartbeat_interval_cfg;
-    uint32_t current  = doc.containsKey("heartbeat_current")  ? (uint32_t)doc["heartbeat_current"]  : heartbeat_current_cfg;
+    uint32_t interval = doc["heartbeat_interval"].is<uint32_t>() ? (uint32_t)doc["heartbeat_interval"] : heartbeat_interval_cfg;
+    uint32_t current  = doc["heartbeat_current"].is<uint32_t>()  ? (uint32_t)doc["heartbeat_current"]  : heartbeat_current_cfg;
     if(interval != evse.getHeartbeatInterval() || current != evse.getHeartbeatCurrent()) {
       heartbeat_interval_cfg = interval;
       heartbeat_current_cfg  = current;
@@ -778,7 +778,7 @@ bool config_deserialize(DynamicJsonDocument &doc)
     }
   }
 
-  if(doc.containsKey("service"))
+  if(doc["service"].is<uint8_t>())
   {
     // Only L1/L2 are valid; Auto (0, no longer offered) and anything else are
     // ignored so a stale stored value can't put $SL A on the wire.
@@ -794,7 +794,7 @@ bool config_deserialize(DynamicJsonDocument &doc)
     }
   }
 
-  if(doc.containsKey("max_current_soft"))
+  if(doc["max_current_soft"].is<long>())
   {
     long current = doc["max_current_soft"];
     if(current != evse.getMaxConfiguredCurrent()) {
@@ -804,7 +804,7 @@ bool config_deserialize(DynamicJsonDocument &doc)
     }
   }
 
-  if(doc.containsKey("max_current_hard"))
+  if(doc["max_current_hard"].is<long>())
   {
     // This value can only be written once so we need to check if the value has changed after setting
     long current = doc["max_current_hard"];
@@ -815,7 +815,7 @@ bool config_deserialize(DynamicJsonDocument &doc)
     }
   }
 
-  if(doc.containsKey("scale") && doc.containsKey("offset"))
+  if(doc["scale"].is<long>() && doc["offset"].is<long>())
   {
     long scale = doc["scale"];
     long offset = doc["offset"];
@@ -849,13 +849,13 @@ bool config_serialize(String& json, bool longNames, bool compactOutput, bool hid
   return user_config.serialize(json, longNames, compactOutput, hideSecrets);
 }
 
-bool config_serialize(DynamicJsonDocument &doc, bool longNames, bool compactOutput, bool hideSecrets)
+bool config_serialize(JsonDocument &doc, bool longNames, bool compactOutput, bool hideSecrets)
 {
   // Static supported protocols
-  JsonArray mqtt_supported_protocols = doc.createNestedArray("mqtt_supported_protocols");
+  JsonArray mqtt_supported_protocols = doc["mqtt_supported_protocols"].to<JsonArray>();
   mqtt_supported_protocols.add("mqtt");
   mqtt_supported_protocols.add("mqtts");
-  JsonArray http_supported_protocols = doc.createNestedArray("http_supported_protocols");
+  JsonArray http_supported_protocols = doc["http_supported_protocols"].to<JsonArray>();
   http_supported_protocols.add("http");
 
   #if ENABLE_CONFIG_CHANGE_NOTIFICATION
@@ -976,8 +976,7 @@ bool config_set_opt_string(const char *name, const char *value) {
   // For now, we'll try as string first, then try as integer
 
   // Create a JSON document with the value as a string
-  const size_t capacity = JSON_OBJECT_SIZE(1) +  strlen(value) + strlen(value) + 16;
-  DynamicJsonDocument doc(capacity);
+  JsonDocument doc;
   const String value_str(value);
   // Parse common scalar types from the string
   if(value_str.equalsIgnoreCase("true")) {

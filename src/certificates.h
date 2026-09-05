@@ -111,7 +111,7 @@ class CertificateStore
 
     bool addCertificate(const char *name, const char *cert, const char *key, uint64_t *id = nullptr);
     bool addCertificate(const char *name, const char *cert, uint64_t *id = nullptr);
-    bool addCertificate(DynamicJsonDocument &doc, uint64_t *id = nullptr, bool save = true);
+    bool addCertificate(JsonDocument &doc, uint64_t *id = nullptr, bool save = true);
 
     bool removeCertificate(uint64_t id);
 
@@ -121,15 +121,15 @@ class CertificateStore
     bool getCertificate(uint64_t id, std::string &certificate);
     bool getKey(uint64_t id, std::string &key);
 
-    bool serializeCertificates(DynamicJsonDocument &doc, uint32_t flags = Certificate::Flags::REDACT_PRIVATE_KEY);
-    bool serializeCertificate(DynamicJsonDocument &doc, uint64_t id, uint32_t flags = Certificate::Flags::REDACT_PRIVATE_KEY);
+    bool serializeCertificates(JsonDocument &doc, uint32_t flags = Certificate::Flags::REDACT_PRIVATE_KEY);
+    bool serializeCertificate(JsonDocument &doc, uint64_t id, uint32_t flags = Certificate::Flags::REDACT_PRIVATE_KEY);
 
     // Serialising the whole store into one document needs a buffer large
     // enough to hold every PEM body at once. These let a caller emit them one
     // at a time, so the peak allocation is a single certificate rather than
     // the entire store.
     size_t certificateCount();
-    bool serializeCertificateAt(DynamicJsonDocument &doc, size_t index, uint32_t flags = Certificate::Flags::REDACT_PRIVATE_KEY);
+    bool serializeCertificateAt(JsonDocument &doc, size_t index, uint32_t flags = Certificate::Flags::REDACT_PRIVATE_KEY);
 
   private:
     bool loadCertificates();

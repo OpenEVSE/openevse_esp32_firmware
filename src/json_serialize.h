@@ -6,12 +6,10 @@
 
 template <size_t CAPACITY> class JsonSerialize
 {
-  private:
-    static const size_t _capacity = CAPACITY;
   public:
     virtual bool deserialize(const char *json)
     {
-      DynamicJsonDocument doc(_capacity);
+      JsonDocument doc;
       DeserializationError err = deserializeJson(doc, json);
       if(DeserializationError::Code::Ok == err) {
         return deserialize(doc);
@@ -25,7 +23,7 @@ template <size_t CAPACITY> class JsonSerialize
 
     virtual bool deserialize(Stream &stream)
     {
-      DynamicJsonDocument doc(_capacity);
+      JsonDocument doc;
       DeserializationError err = deserializeJson(doc, stream);
       if(DeserializationError::Code::Ok == err) {
         return deserialize(doc);
@@ -33,7 +31,7 @@ template <size_t CAPACITY> class JsonSerialize
       return false;
     }
 
-    virtual bool deserialize(DynamicJsonDocument &doc)
+    virtual bool deserialize(JsonDocument &doc)
     {
       if (doc.is<JsonObject>())
       {
@@ -48,7 +46,7 @@ template <size_t CAPACITY> class JsonSerialize
 
     virtual bool serialize(String &json)
     {
-      DynamicJsonDocument doc(_capacity);
+      JsonDocument doc;
       if(serialize(doc))
       {
         serializeJson(doc, json);
@@ -69,7 +67,7 @@ template <size_t CAPACITY> class JsonSerialize
 
     virtual bool serialize(Stream &stream)
     {
-      DynamicJsonDocument doc(_capacity);
+      JsonDocument doc;
       if(serialize(doc))
       {
         serializeJson(doc, stream);
@@ -90,7 +88,7 @@ template <size_t CAPACITY> class JsonSerialize
 
     virtual bool serialize(Print &print)
     {
-      DynamicJsonDocument doc(_capacity);
+      JsonDocument doc;
       if(serialize(doc))
       {
         serializeJson(doc, print);
@@ -100,7 +98,7 @@ template <size_t CAPACITY> class JsonSerialize
       return true;
     }
 
-    virtual bool serialize(DynamicJsonDocument &doc)
+    virtual bool serialize(JsonDocument &doc)
     {
       JsonObject object = doc.to<JsonObject>();
       return serialize(object);

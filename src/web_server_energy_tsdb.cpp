@@ -75,7 +75,7 @@ void handleEnergyRaw(MongooseHttpServerRequest *request)
     }
 
     // ---- stream JSON directly into response ----
-    // Avoid a large DynamicJsonDocument: hand-build the array into the
+    // Avoid a large JsonDocument: hand-build the array into the
     // streaming response buffer (identical to what serializeJson would produce).
     response->setCode(200);
     response->print("{\"samples\":[");

@@ -87,12 +87,6 @@ void TsdbEnergyLogger::setup() {
 //   d1 = d0 + 86400 - 1  (inclusive, avoids boundary double-counting)
 // ---------------------------------------------------------------------------
 
-// JSON capacities (≤12 months/yr, small number of years)
-#define TSDB_MONTHLY_JSON_CAP \
-  (JSON_ARRAY_SIZE(13) + 13 * JSON_OBJECT_SIZE(4) + 13 * 12)
-#define TSDB_ANNUAL_JSON_CAP \
-  (JSON_ARRAY_SIZE(50) + 50 * JSON_OBJECT_SIZE(4))
-
 void TsdbEnergyLogger::rollup_yesterday() {
   time_t now = time(NULL);
 
@@ -156,7 +150,7 @@ void TsdbEnergyLogger::rollup_yesterday() {
   snprintf(month_key, sizeof(month_key), "%04d-%02d", yday_year, yday_month);
 
   {
-    DynamicJsonDocument mdoc(TSDB_MONTHLY_JSON_CAP);
+    JsonDocument mdoc;
     JsonArray marr = mdoc.to<JsonArray>();
 
     File mf = LittleFS.open(monthly_path, "r");
@@ -173,7 +167,7 @@ void TsdbEnergyLogger::rollup_yesterday() {
       if (strcmp(mo, month_key) == 0) { found = item; break; }
     }
     if (found.isNull()) {
-      found = marr.createNestedObject();
+      found = marr.add<JsonObject>();
       found["mo"] = (char *)month_key;
       found["pk"] = peak_c;
       found["mn"] = min_c;
@@ -205,7 +199,7 @@ void TsdbEnergyLogger::rollup_yesterday() {
 
   // ---- Update annual rollup file (/logs/annual.json) ----
   {
-    DynamicJsonDocument adoc(TSDB_ANNUAL_JSON_CAP);
+    JsonDocument adoc;
     JsonArray aarr = adoc.to<JsonArray>();
 
     File af = LittleFS.open(ENERGY_LOGGER_ANNUAL_FILE, "r");
@@ -221,7 +215,7 @@ void TsdbEnergyLogger::rollup_yesterday() {
       if ((int)(item["yr"] | 0) == yday_year) { found = item; break; }
     }
     if (found.isNull()) {
-      found = aarr.createNestedObject();
+      found = aarr.add<JsonObject>();
       found["yr"] = yday_year;
       found["pk"] = peak_c;
       found["mn"] = min_c;

@@ -110,7 +110,7 @@ unsigned long Mqtt::loop(MicroTasks::WakeReason reason) {
     _connecting = false;
     _nextMqttReconnectAttempt = millis() + MQTT_CONNECT_TIMEOUT;
     setError("timeout", "Server not responding");
-    StaticJsonDocument<160> doc;
+    JsonDocument doc;
     doc["mqtt_connected"]    = 0;
     doc["mqtt_status"]       = "disconnected";
     doc["mqtt_error"]        = _errorCategory;
@@ -158,7 +158,7 @@ unsigned long Mqtt::loop(MicroTasks::WakeReason reason) {
       }
       if (_brokerIp[0] != '\0') {
         // WebSocket only — this is a UI status field, not broker data
-        StaticJsonDocument<128> dns_event;
+        JsonDocument dns_event;
         dns_event["mqtt_broker_ip"] = _brokerIp;
         web_server_event(dns_event);
       }
@@ -170,7 +170,7 @@ unsigned long Mqtt::loop(MicroTasks::WakeReason reason) {
   // WebSocket only — do not re-publish status fields back to the broker.
   if (millis() - _lastStatusPush > 15000) {
     _lastStatusPush = millis();
-    StaticJsonDocument<128> status_event;
+    JsonDocument status_event;
     status_event["mqtt_connected"] = (int)_mqttclient.connected();
     status_event["mqtt_status"]    = getMqttStatus();
     web_server_event(status_event);
@@ -192,7 +192,7 @@ void Mqtt::attemptConnection() {
   String mqtt_host = mqtt_server + ":" + String(mqtt_port);
   DBUGF("MQTT Connecting to... %s://%s", MQTT_MQTT == config_mqtt_protocol() ? "mqtt" : "mqtts", mqtt_host.c_str());
 
-  DynamicJsonDocument willDoc(JSON_OBJECT_SIZE(3) + 60);
+  JsonDocument willDoc;
   willDoc["state"] = "disconnected";
   willDoc["id"] = ESPAL.getLongId();
   willDoc["name"] = esp_hostname;
@@ -252,7 +252,7 @@ void Mqtt::onMqttConnect() {
   _needsDnsLookup = true;
   MicroTask.wakeTask(this);
 
-  DynamicJsonDocument doc(JSON_OBJECT_SIZE(5) + 200);
+  JsonDocument doc;
   doc["state"] = "connected";
   doc["id"] = ESPAL.getLongId();
   doc["name"] = esp_hostname;
@@ -297,7 +297,7 @@ void Mqtt::onMqttDisconnect(int err, const char *reason) {
   }
   setError(category, reason);
 
-  DynamicJsonDocument doc(JSON_OBJECT_SIZE(6) + 160);
+  JsonDocument doc;
   doc["mqtt_connected"]    = 0;
   doc["mqtt_status"]       = "disconnected";
   doc["mqtt_close_code"]   = err;
@@ -437,7 +437,7 @@ void Mqtt::handleMqttMessage(MongooseString topic, MongooseString payload) {
     strncpy(_brokerVersion, payload_str.c_str(), sizeof(_brokerVersion) - 1);
     _brokerVersion[sizeof(_brokerVersion) - 1] = '\0';
     // WebSocket only — do not echo broker metadata back to the broker
-    StaticJsonDocument<128> ver_event;
+    JsonDocument ver_event;
     ver_event["mqtt_broker_version"] = _brokerVersion;
     web_server_event(ver_event);
     return;
@@ -474,34 +474,34 @@ void Mqtt::handleMqttMessage(MongooseString topic, MongooseString payload) {
   else if (topic_string == mqtt_vehicle_soc && vehicle_data_src == VEHICLE_DATA_SRC_MQTT) {
     int vehicle_soc = payload_str.toInt();
     _evse->setVehicleStateOfCharge(vehicle_soc);
-    StaticJsonDocument<128> event; event["battery_level"] = vehicle_soc; event_send(event);
+    JsonDocument event; event["battery_level"] = vehicle_soc; event_send(event);
   }
   else if (topic_string == mqtt_vehicle_range && vehicle_data_src == VEHICLE_DATA_SRC_MQTT) {
     int vehicle_range = payload_str.toInt();
     _evse->setVehicleRange(vehicle_range);
-    StaticJsonDocument<128> event; event["battery_range"] = vehicle_range; event_send(event);
+    JsonDocument event; event["battery_range"] = vehicle_range; event_send(event);
   }
   else if (topic_string == mqtt_vehicle_eta && vehicle_data_src == VEHICLE_DATA_SRC_MQTT) {
     int vehicle_eta = payload_str.toInt();
     _evse->setVehicleEta(vehicle_eta);
-    StaticJsonDocument<128> event; event["time_to_full_charge"] = vehicle_eta; event_send(event);
+    JsonDocument event; event["time_to_full_charge"] = vehicle_eta; event_send(event);
   }
   else if (topic_string == mqtt_vehicle_charge_limit && vehicle_data_src == VEHICLE_DATA_SRC_MQTT) {
     int vehicle_charge_limit = payload_str.toInt();
     _evse->setVehicleChargeLimit(vehicle_charge_limit);
-    StaticJsonDocument<128> event; event["vehicle_charge_limit"] = vehicle_charge_limit; event_send(event);
+    JsonDocument event; event["vehicle_charge_limit"] = vehicle_charge_limit; event_send(event);
   }
   // Home/powerwall battery is display-only with no source arbitration (mirrors its
   // POST /status path), so it is gated only on the topic being configured.
   else if (mqtt_home_battery_soc != "" && topic_string == mqtt_home_battery_soc) {
     int soc = payload_str.toInt();
     home_battery_set_soc(soc);
-    StaticJsonDocument<128> event; event["home_battery_soc"] = soc; event_send(event);
+    JsonDocument event; event["home_battery_soc"] = soc; event_send(event);
   }
   else if (mqtt_home_battery_power != "" && topic_string == mqtt_home_battery_power) {
     int power = payload_str.toInt();
     home_battery_set_power(power);
-    StaticJsonDocument<128> event; event["home_battery_power"] = power; event_send(event);
+    JsonDocument event; event["home_battery_power"] = power; event_send(event);
   }
   else if (topic_string == mqtt_topic + "/divertmode/set") {
     byte newdivert = payload_str.toInt();
@@ -557,7 +557,7 @@ void Mqtt::handleMqttMessage(MongooseString topic, MongooseString payload) {
     }
   }
   else if (topic_string == mqtt_topic + "/config/set") {
-    DynamicJsonDocument doc(4096); // Sufficiently large buffer
+    JsonDocument doc; // Sufficiently large buffer
     DeserializationError error = deserializeJson(doc, payload_str);
     if(!error) {
       if(config_deserialize(doc)) {
@@ -569,10 +569,9 @@ void Mqtt::handleMqttMessage(MongooseString topic, MongooseString payload) {
   }
   else if (topic_string == mqtt_topic + "/restart") {
     // This logic can reuse the existing mqtt_restart_device logic by making it a static helper or part of this class
-    const size_t capacity = JSON_OBJECT_SIZE(1) + 16;
-    DynamicJsonDocument doc(capacity);
+    JsonDocument doc;
     DeserializationError error = deserializeJson(doc, payload_str);
-    if(!error && doc.containsKey("device")){
+    if(!error && doc["device"].is<const char*>()){
         if (strcmp(doc["device"], "gateway") == 0 ) restart_system();
         else if (strcmp(doc["device"], "evse") == 0) _evse->restartEvse();
     }
@@ -624,7 +623,7 @@ void Mqtt::restartConnection() {
 
   // Push "connecting" status immediately so the UI reacts
   {
-    StaticJsonDocument<160> doc;
+    JsonDocument doc;
     doc["mqtt_connected"]    = 0;
     doc["mqtt_status"]       = "connecting";
     doc["mqtt_error"]        = "";
@@ -658,8 +657,7 @@ void Mqtt::publishConfig() {
   if (!isConnected() || _evse->getEvseState() == OPENEVSE_STATE_STARTING) {
     return;
   }
-  const size_t capacity = JSON_OBJECT_SIZE(128) + 1024;
-  DynamicJsonDocument doc(capacity);
+  JsonDocument doc;
   config_serialize(doc, true, false, true);
 
   String fulltopic = mqtt_topic + "/config";
@@ -688,8 +686,7 @@ void Mqtt::setClaim(bool override, EvseProperties &props) {
 
 void Mqtt::publishClaim() {
   if (!isConnected()) return;
-  const size_t capacity = JSON_OBJECT_SIZE(7) + 1024;
-  DynamicJsonDocument claimdata(capacity);
+  JsonDocument claimdata;
   if (_evse->clientHasClaim(EvseClient_OpenEVSE_MQTT)) {
     _evse->serializeClaim(claimdata, EvseClient_OpenEVSE_MQTT);
   } else {
@@ -703,8 +700,7 @@ void Mqtt::publishClaim() {
 
 void Mqtt::publishOverride() {
   if (!isConnected()) return;
-  const size_t capacity = JSON_OBJECT_SIZE(7) + 1024;
-  DynamicJsonDocument override_data(capacity);
+  JsonDocument override_data;
   if (_evse->clientHasClaim(EvseClient_OpenEVSE_Manual) || manual.isActive()) {
     EvseProperties props = _evse->getClaimProperties(EvseClient_OpenEVSE_Manual);
     props.serialize(override_data);
@@ -729,8 +725,7 @@ void Mqtt::clearSchedule(uint32_t eventId) {
 
 void Mqtt::publishSchedule() {
   if (!isConnected()) return;
-  const size_t capacity = JSON_OBJECT_SIZE(40) + 2048;
-  DynamicJsonDocument schedule_data(capacity);
+  JsonDocument schedule_data;
   if (scheduler.serialize(schedule_data)) {
     String fulltopic = mqtt_topic + "/schedule";
     String payload;
@@ -747,8 +742,7 @@ void Mqtt::setLimit(LimitProperties &limitProps) {
 void Mqtt::publishLimit() {
   if (!isConnected()) return;
   LimitProperties currentLimitProps = limit.get();
-  const size_t capacity = JSON_OBJECT_SIZE(3) + 512;
-  DynamicJsonDocument limit_data(capacity);
+  JsonDocument limit_data;
   if (currentLimitProps.serialize(limit_data)) {
     String fulltopic = mqtt_topic + "/limit";
     String payload;
@@ -760,7 +754,7 @@ void Mqtt::publishLimit() {
 void Mqtt::publishBoost() {
   String payload;
   if (boost.isActive()) {
-    StaticJsonDocument<192> boost_data;
+    JsonDocument boost_data;
     boost.serialize(boost_data);
     serializeJson(boost_data, payload);
   } else {
