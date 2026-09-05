@@ -1,5 +1,5 @@
-#ifndef _OPENEVSE_WIFI_ESP32_H
-#define _OPENEVSE_WIFI_ESP32_H
+#ifndef OPENEVSE_WIFI_ESP32_H
+#define OPENEVSE_WIFI_ESP32_H
 
 enum WiFiDisconnectReason 
 {

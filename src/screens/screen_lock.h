@@ -1,5 +1,5 @@
-#ifndef __SCREEN_LOCK_H
-#define __SCREEN_LOCK_H
+#ifndef SCREEN_LOCK_H
+#define SCREEN_LOCK_H
 
 #include "screen_base.h"
 
@@ -20,4 +20,4 @@ private:
   const char* _lockMessage;
 };
 
-#endif // __SCREEN_LOCK_H
+#endif // SCREEN_LOCK_H

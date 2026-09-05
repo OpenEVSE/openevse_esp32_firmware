@@ -1,5 +1,5 @@
-#ifndef _EMONESP_WEB_SERVER_STATIC_H
-#define _EMONESP_WEB_SERVER_STATIC_H
+#ifndef EMONESP_WEB_SERVER_STATIC_H
+#define EMONESP_WEB_SERVER_STATIC_H
 
 #include <MongooseHttpServer.h>
 
@@ -38,4 +38,4 @@ class StaticFileResponse: public AsyncWebServerResponse
 };
 */
 
-#endif // _EMONESP_WEB_SERVER_STATIC_H
+#endif // EMONESP_WEB_SERVER_STATIC_H

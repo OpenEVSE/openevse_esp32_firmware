@@ -142,7 +142,7 @@ void OcppTask::reconfigure() {
         }
 
         if (!ocpp_server.equals(connection->getBackendUrl()) ||
-                !ocpp_chargeBoxId.equals(connection->getChargeBoxId()) ||
+                !ocpp_charge_box_id.equals(connection->getChargeBoxId()) ||
                 !ocpp_authkey.equals(connection->getAuthKey())) {
             //OpenEVSE WS URL configs have been updated - these must be applied manually
             connection->reloadConfigs();
@@ -168,9 +168,9 @@ void OcppTask::initializeMicroOcpp() {
      * the OCPP server will be lost. The WebSocket URL is stored in the OpenEVSE configs is not affected
      */
     MicroOcpp::configuration_init(filesystem);
-    auto configVersion = MicroOcpp::declareConfiguration<const char*>("MicroOcppVersion", "0.x", MO_KEYVALUE_FN, false, false, false);
+    auto config_version = MicroOcpp::declareConfiguration<const char*>("MicroOcppVersion", "0.x", MO_KEYVALUE_FN, false, false, false);
     MicroOcpp::configuration_load(MO_KEYVALUE_FN);
-    if (configVersion && !strcmp(configVersion->getString(), "0.x")) {
+    if (config_version && !strcmp(config_version->getString(), "0.x")) {
         if (auto root = LittleFS.open("/")) {
             while (auto file = root.openNextFile()) {
                 if (!strcmp(file.name(), "arduino-ocpp.cnf") ||
@@ -210,7 +210,7 @@ void OcppTask::initializeMicroOcpp() {
     openEvseConfigs->add(OcppConfigAdapter::makeConfigString(*this,
             MO_CONFIG_EXT_PREFIX "ChargeBoxId",
             "ocpp_chargeBoxId",
-            ocpp_chargeBoxId));
+            ocpp_charge_box_id));
     openEvseConfigs->add(OcppConfigAdapter::makeConfigString(*this,
             "AuthorizationKey",
             "ocpp_authkey",

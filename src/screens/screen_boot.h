@@ -1,5 +1,5 @@
-#ifndef __SCREEN_BOOT_H
-#define __SCREEN_BOOT_H
+#ifndef SCREEN_BOOT_H
+#define SCREEN_BOOT_H
 
 #include "screen_base.h"
 #include "screen_renderer.h"
@@ -30,4 +30,4 @@ private:
   uint16_t _boot_progress;
 };
 
-#endif // __SCREEN_BOOT_H
+#endif // SCREEN_BOOT_H

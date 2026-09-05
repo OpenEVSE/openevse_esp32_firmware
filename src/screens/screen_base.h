@@ -1,5 +1,5 @@
-#ifndef __SCREEN_BASE_H
-#define __SCREEN_BASE_H
+#ifndef SCREEN_BASE_H
+#define SCREEN_BASE_H
 
 #include <TFT_eSPI.h>
 #include <PNGdec.h>
@@ -45,4 +45,4 @@ protected:
   bool _full_update;
 };
 
-#endif // __SCREEN_BASE_H
+#endif // SCREEN_BASE_H

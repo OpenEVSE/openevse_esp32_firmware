@@ -1,11 +1,11 @@
-# WiFi Disconnect Fixes — `WiFi_Dissconnect` Branch
+# WiFi Disconnect Fixes — `WiFi_Disconnect` Branch
 
-**Branch:** `WiFi_Dissconnect`  
+**Branch:** `WiFi_Disconnect`  
 **Base:** `master` (commit `696ccb9`)  
 **Commit:** `36837f2`  
 **File changed:** `src/net_manager.cpp` — 1 file, 26 insertions, 3 deletions  
 **Related issues:** #1004, #1003, #841, #628, #985, #730  
-**PR URL:** https://github.com/OpenEVSE/openevse_esp32_firmware/pull/new/WiFi_Dissconnect
+**PR URL:** https://github.com/OpenEVSE/openevse_esp32_firmware/pull/new/WiFi_Disconnect
 
 ---
 

@@ -116,7 +116,7 @@ String mqtt_announce_topic;
 
 // OCPP 1.6 Settings
 String ocpp_server;
-String ocpp_chargeBoxId;
+String ocpp_charge_box_id;
 String ocpp_authkey;
 String ocpp_idtag;
 
@@ -130,7 +130,7 @@ uint32_t flags_changed;
 
 // Divert settings
 int8_t divert_type;
-double divert_PV_ratio;
+double divert_pv_ratio;
 uint32_t divert_attack_smoothing_time;
 uint32_t divert_decay_smoothing_time;
 uint32_t divert_min_charge_time;
@@ -290,14 +290,14 @@ ConfigOpt *opts[] =
 
 // OCPP 1.6 Settings
   new ConfigOptDefinition<String>(ocpp_server, "", "ocpp_server", "ows"),
-  new ConfigOptDefinition<String>(ocpp_chargeBoxId, "", "ocpp_chargeBoxId", "cid"),
+  new ConfigOptDefinition<String>(ocpp_charge_box_id, "", "ocpp_chargeBoxId", "cid"),
   new ConfigOptDefinition<String>(ocpp_authkey, "", "ocpp_authkey", "oky"),
   new ConfigOptDefinition<String>(ocpp_idtag, "DefaultIdTag", "ocpp_idtag", "idt"),
 
 
 // Divert settings
   new ConfigOptDefinition<int8_t>(divert_type, -1, "divert_type", "dm"),
-  new ConfigOptDefinition<double>(divert_PV_ratio, 1.1, "divert_PV_ratio", "dpr"),
+  new ConfigOptDefinition<double>(divert_pv_ratio, 1.1, "divert_PV_ratio", "dpr"),
   new ConfigOptDefinition<uint32_t>(divert_attack_smoothing_time, 20, "divert_attack_smoothing_time", "das"),
   new ConfigOptDefinition<uint32_t>(divert_decay_smoothing_time, 600, "divert_decay_smoothing_time", "dds"),
   new ConfigOptDefinition<uint32_t>(divert_min_charge_time, 600, "divert_min_charge_time", "dt"),
@@ -1019,6 +1019,5 @@ void config_reset()
   LittleFS.format();
   config_load_settings();
 }
-
 
 

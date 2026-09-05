@@ -1,5 +1,5 @@
-#ifndef __SCREEN_FACTORY_H
-#define __SCREEN_FACTORY_H
+#ifndef SCREEN_FACTORY_H
+#define SCREEN_FACTORY_H
 
 #include "screen_manager.h"
 #include "screen_base.h"
@@ -25,4 +25,4 @@ public:
   }
 };
 
-#endif // __SCREEN_FACTORY_H
+#endif // SCREEN_FACTORY_H
