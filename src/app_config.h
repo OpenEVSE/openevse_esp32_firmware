@@ -185,9 +185,17 @@ extern uint32_t flags;
 #define CONFIG_LCD_NETWORK_INFO     (1 << 28)
 // Inverted sense: bit SET disables the $SYS/broker/version probe. Existing
 // installs have this bit clear, so they keep probing exactly as before.
-#define CONFIG_MQTT_NO_SYS_QUERY    (1UL << 29)
-// Bits 30/31: the Mongoose 7 HTTP/HTTPS listener controls.
-#define CONFIG_HTTP_ENABLED         (1UL << 30)
+#define CONFIG_MQTT_NO_SYS_QUERY    (1 << 29)
+// TFT panel clock in 12-hour form. Clear (the default) keeps the 24-hour clock.
+#define CONFIG_TFT_12H_CLOCK        (1 << 30)
+// HTTP/HTTPS listener controls.
+//
+// Bit 2 is reclaimed from CONFIG_SERVICE_OHM, removed in a93fa8f2. An install
+// that had OhmConnect enabled therefore comes up with this bit set, which reads
+// as "HTTP enabled" -- the default anyway, so nothing changes for them. The
+// remaining free bits are 4-6 and 10-12, which belong to the CONFIG_MQTT_PROTOCOL
+// and CONFIG_CHARGE_MODE multi-bit fields, and 31.
+#define CONFIG_HTTP_ENABLED         (1UL << 2)
 #define CONFIG_HTTPS_ENABLED        (1UL << 31)
 
 #define INITIAL_CONFIG_VERSION  1
@@ -301,6 +309,11 @@ inline bool config_temp_throttle_enabled()
 inline bool config_lcd_network_info_enabled()
 {
   return CONFIG_LCD_NETWORK_INFO == (flags & CONFIG_LCD_NETWORK_INFO);
+}
+
+inline bool config_tft_12h_clock()
+{
+  return CONFIG_TFT_12H_CLOCK == (flags & CONFIG_TFT_12H_CLOCK);
 }
 
 // True when the device is actually serving HTTPS: the user has enabled it and a
