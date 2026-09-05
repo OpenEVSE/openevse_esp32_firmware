@@ -71,6 +71,24 @@ method, and the two console endpoints have no `onConnect` handler at all.
 Gating at the request stage is one uniform mechanism that covers all three
 endpoints before any data flows.
 
+**On the Mongoose 7 branch this mechanism does not work and is not used.**
+There, `MongooseHttpWebSocketConnection`'s *constructor* calls
+`mg_ws_upgrade()`, and that constructor runs from `willHandleRequest()` during
+`MG_EV_HTTP_HDRS` — no endpoint request handler runs before it, so `onRequest`
+is never dispatched for a WebSocket route and `onWsAuthenticate()` is
+unreachable. A gate registered there would look present and enforce nothing.
+
+That branch gates at `onConnect` instead (`wsAuthorise()` in
+`src/web_server.cpp`). Two of the three objections above no longer apply to it:
+the connection can be dropped via `getConnection()->is_draining`, and both
+console endpoints now carry an `onConnect` handler. The third still applies and
+is the accepted trade-off — `onConnect` fires after the `101`, so an
+unauthenticated client sees the handshake succeed and the connection close
+immediately rather than a `401`. The gate runs before `onWsConnect()` pushes
+its status payload and before the connection can receive a broadcast, so no
+data reaches an unauthenticated client on either branch; only the shape of the
+rejection on the wire differs.
+
 ### 2. Single source of truth for auth + constant-time comparison
 
 The Basic-auth check was factored out of `requestPreProcess()` into a shared

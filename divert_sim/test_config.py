@@ -28,6 +28,8 @@ def test_config_defaults_present():
     assert "hostname" in cfg
     assert "flags" in cfg
     assert cfg["sntp_enabled"] is True
+    assert cfg["www_http_enabled"] is True
+    assert cfg["www_https_enabled"] is False
 
 
 def test_config_round_trip_commit_and_load():

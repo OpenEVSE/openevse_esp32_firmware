@@ -41,11 +41,10 @@ extern const char _CONTENT_TYPE_WOFF2[];
 extern const char _CONTENT_TYPE_MANIFEST[];
 #define CONTENT_TYPE_MANIFEST FPSTR(_CONTENT_TYPE_MANIFEST)
 
-extern MongooseHttpServer server;
 
 extern void web_server_setup();
 extern void web_server_loop();
-extern void web_server_load_sharing_setup();
+extern void web_server_load_sharing_setup(MongooseHttpServer &server);
 
 extern void web_server_event(JsonDocument &event);
 

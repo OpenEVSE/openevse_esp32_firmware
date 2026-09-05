@@ -209,6 +209,7 @@ void config_changed(String name);
 #define CONFIG_DEFAULT_FLAGS (CONFIG_SERVICE_SNTP | \
                               CONFIG_OCPP_AUTO_AUTH | \
                               CONFIG_OCPP_OFFLINE_AUTH | \
+                              CONFIG_HTTP_ENABLED | \
                               CONFIG_TEMP_THROTTLE_DEFAULT | \
                               CONFIG_DEFAULT_STATE_DEFAULT | \
                               CONFIG_LCD_NETWORK_INFO)
@@ -381,6 +382,8 @@ ConfigOpt *opts[] =
   new ConfigOptVirtualMaskedBool(flagsOpt, flagsChanged, CONFIG_TEMP_THROTTLE, CONFIG_TEMP_THROTTLE, "temp_throttle_enabled", "tte"),
   new ConfigOptVirtualMaskedBool(flagsOpt, flagsChanged, CONFIG_LCD_NETWORK_INFO, CONFIG_LCD_NETWORK_INFO, "lcd_network_info", "lni"),
   new ConfigOptVirtualMaskedBool(flagsOpt, flagsChanged, CONFIG_TFT_12H_CLOCK, CONFIG_TFT_12H_CLOCK, "tft_12h_clock", "t12"),
+  new ConfigOptVirtualMaskedBool(flagsOpt, flagsChanged, CONFIG_HTTP_ENABLED, CONFIG_HTTP_ENABLED, "www_http_enabled", "whe"),
+  new ConfigOptVirtualMaskedBool(flagsOpt, flagsChanged, CONFIG_HTTPS_ENABLED, CONFIG_HTTPS_ENABLED, "www_https_enabled", "wse"),
   new ConfigOptVirtualMqttProtocol(flagsOpt, flagsChanged, "mqtt_protocol", "mprt"),
   new ConfigOptVirtualChargeMode(flagsOpt, flagsChanged, "charge_mode", "chmd")
 };
@@ -563,17 +566,17 @@ void config_user_commit()
   user_config.commit();
 }
 
-bool config_https_enabled()
+bool config_https_active()
 {
 #ifndef DIVERT_SIM
-  if (www_certificate_id == "") {
+  if (!config_https_enabled() || www_certificate_id == "") {
     return false;
   }
   // This runs from mDNS setup during network bring-up, so a corrupt stored id
   // would crash-loop the firmware if it were parsed with a throwing conversion.
   uint64_t cert_id = 0;
   if (!certificate_id_from_string(www_certificate_id.c_str(), cert_id)) {
-    DBUGF("config_https_enabled: invalid www_certificate_id '%s'", www_certificate_id.c_str());
+    DBUGF("config_https_active: invalid www_certificate_id '%s'", www_certificate_id.c_str());
     return false;
   }
 
@@ -1019,6 +1022,5 @@ void config_reset()
   LittleFS.format();
   config_load_settings();
 }
-
 
 
