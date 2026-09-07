@@ -15,7 +15,7 @@ struct StaticFile
   const char *type;
   const char *etag;
   // Content-Encoding the bytes were stored with, or NULL to serve them as-is.
-  // Fixed when scripts/web_assets.py generated the header rather than
+  // Fixed at header-generation time (scripts/extra_script.py) rather than
   // negotiated per request -- there is only ever one copy of each asset.
   const char *encoding;
 };
