@@ -735,6 +735,21 @@ bool config_deserialize(DynamicJsonDocument &doc)
     }
   }
 
+#ifdef ENABLE_CABLE_TEMP
+  if(doc.containsKey("cable_temp"))
+  {
+    bool enable = doc["cable_temp"];
+    // No equality guard here, unlike its neighbours: the controller exposes no
+    // read-back for $FF C, so isCableTempEnabled() infers "on" from at least
+    // one source reporting something other than NOT_INSTALLED. With the
+    // feature on but no source assigned yet, that inference reads false, and a
+    // guard would then swallow the very write that turns it on.
+    evse.enableCableTemp(enable);
+    config_modified = true;
+    DBUGLN("cable_temp changed");
+  }
+#endif // ENABLE_CABLE_TEMP
+
   if(doc.containsKey("relay_dc1"))
   {
     bool enable = doc["relay_dc1"];
@@ -904,6 +919,15 @@ bool config_serialize(DynamicJsonDocument &doc, bool longNames, bool compactOutp
     if(evse.isD9Supported()) {
       doc["pp_auto"] = evse.isPPAutoAmpacityEnabled();
       doc["zero_cross"] = evse.isZeroCrossSwitchEnabled();
+#ifdef ENABLE_CABLE_TEMP
+      // Cable NTC monitoring: just the on/off state here. The per-source
+      // configuration is 20 more fields and this document's capacity is
+      // already noted as nearly exhausted (see handleConfigGet), so it lives
+      // on /cabletemp instead.
+      if(evse.isCableTempKnown()) {
+        doc["cable_temp"] = evse.isCableTempEnabled();
+      }
+#endif // ENABLE_CABLE_TEMP
       // Relay-open current-zero threshold (mA), configurable on the
       // controller via $SZ. Omitted (rather than a sentinel) when the
       // controller hasn't reported one yet.

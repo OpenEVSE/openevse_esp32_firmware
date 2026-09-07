@@ -201,6 +201,10 @@ EvseMonitor::EvseMonitor(OpenEVSEClass &openevse) :
   _relay_thermal_warning_level(0),
   _relay_stuck_recovery_count(0),
   _relay_recovery_in_flight(false)
+#ifdef ENABLE_CABLE_TEMP
+  ,_cable_temp_known(false)
+  ,_cable_temp_cfg_known(false)
+#endif // ENABLE_CABLE_TEMP
 {
 }
 
@@ -242,6 +246,15 @@ void EvseMonitor::evseBoot(const char *firmware)
   // _relay_health_known itself only ever latches true (readRelayHealth()'s
   // callback simply no-ops when unsupported), so it needs the same reset.
   _relay_health_known = false;
+#ifdef ENABLE_CABLE_TEMP
+  _cable_temp_known = false;
+  _cable_temp_cfg_known = false;
+  for(uint8_t i = 0; i < OPENEVSE_CABLE_TEMP_SOURCE_COUNT; i++) {
+    _cable_temps[i].invalidate();
+    _cable_temp_status[i] = OPENEVSE_CABLE_TEMP_STATUS_NOT_INSTALLED;
+    _cable_temp_pin[i] = OPENEVSE_CABLE_TEMP_PIN_NONE;
+  }
+#endif // ENABLE_CABLE_TEMP
   _zero_cross_threshold_ma = OPENEVSE_RELAY_HEALTH_NOT_AVAILABLE;
 
   _openevse.getFaultCounters([this](int ret, long gfci_count, long nognd_count, long stuck_count)
@@ -297,6 +310,10 @@ void EvseMonitor::evseBoot(const char *firmware)
   readRelayStatus();
   readFrequency();
   readRelayHealth();
+#ifdef ENABLE_CABLE_TEMP
+  readCableTemperatures();
+  readCableTempConfig();
+#endif // ENABLE_CABLE_TEMP
 
 #ifndef DISABLE_HEARTBEAT
   _openevse.heartbeatEnable(EVSE_HEATBEAT_INTERVAL, EVSE_HEARTBEAT_CURRENT, [this](int ret, int interval, int current, int triggered) {
@@ -443,6 +460,12 @@ unsigned long EvseMonitor::loop(MicroTasks::WakeReason reason)
 
   if(0 == _count % EVSE_MONITOR_TEMP_TIME) {
     getTemperatureFromEvse();
+#ifdef ENABLE_CABLE_TEMP
+    // Cable NTC readings are a safety signal (the controller faults on
+    // over-temperature), so they ride the same cadence as the enclosure
+    // sensors rather than the slower settings poll.
+    readCableTemperatures();
+#endif // ENABLE_CABLE_TEMP
   }
 
   // Offset off zero so this does not land on the same tick as the state and
@@ -1222,6 +1245,118 @@ void EvseMonitor::readRelayHealth()
     }
   });
 }
+
+#ifdef ENABLE_CABLE_TEMP
+void EvseMonitor::readCableTemperatures()
+{
+  // $GN - cable NTC thermistor temperatures (requires the controller's
+  // CABLE_TEMPERATURE_MONITORING feature). Not gated on isD9Supported()
+  // here for the same reason as readRelayHealth(): the library already
+  // returns RAPI_RESPONSE_FEATURE_NOT_SUPPORTED on controllers without it,
+  // so the callback simply leaves _cable_temp_known false.
+  _openevse.getCableTemperatures([this](int ret,
+      double ev1, uint8_t ev1_status,
+      double ev2, uint8_t ev2_status,
+      double in1, uint8_t in1_status,
+      double in2, uint8_t in2_status)
+  {
+    if(RAPI_RESPONSE_OK != ret) {
+      return;
+    }
+
+    _cable_temp_known = true;
+
+    const double temps[OPENEVSE_CABLE_TEMP_SOURCE_COUNT] = { ev1, ev2, in1, in2 };
+    const uint8_t states[OPENEVSE_CABLE_TEMP_SOURCE_COUNT] = { ev1_status, ev2_status, in1_status, in2_status };
+
+    for(uint8_t i = 0; i < OPENEVSE_CABLE_TEMP_SOURCE_COUNT; i++) {
+      _cable_temp_status[i] = states[i];
+      // Only _STATUS_OK carries a real number; the library reports 0 for the
+      // rest, and marking those valid would publish a bogus 0 C to MQTT.
+      if(OPENEVSE_CABLE_TEMP_STATUS_OK == states[i]) {
+        _cable_temps[i].set(temps[i]);
+      } else {
+        _cable_temps[i].invalidate();
+      }
+    }
+
+    DBUGF("cable temps: ev1=%.1f(%u) ev2=%.1f(%u) in1=%.1f(%u) in2=%.1f(%u)",
+          ev1, ev1_status, ev2, ev2_status, in1, in1_status, in2, in2_status);
+  });
+}
+
+void EvseMonitor::readCableTempConfig()
+{
+  // $GN idx, once per source. Configuration only changes when something
+  // writes it, so this is called on boot and after a successful write rather
+  // than polled - four extra RAPI round trips a minute would be wasteful.
+  for(uint8_t source = 0; source < OPENEVSE_CABLE_TEMP_SOURCE_COUNT; source++)
+  {
+    _openevse.getCableTemperatureConfig(source, [this, source](int ret, uint8_t pin,
+        uint32_t r25, uint32_t beta, int32_t offset_c10, int32_t panic_c10)
+    {
+      if(RAPI_RESPONSE_OK != ret) {
+        return;
+      }
+      _cable_temp_cfg_known = true;
+      _cable_temp_pin[source] = pin;
+      _cable_temp_r25[source] = r25;
+      _cable_temp_beta[source] = beta;
+      _cable_temp_offset_c10[source] = offset_c10;
+      _cable_temp_panic_c10[source] = panic_c10;
+      DBUGF("cable temp cfg %u: pin=%u r25=%u beta=%u offset=%d panic=%d",
+            source, pin, r25, beta, offset_c10, panic_c10);
+    });
+  }
+}
+
+void EvseMonitor::enableCableTemp(bool enabled, std::function<void(int ret)> callback)
+{
+  // $FF C. The controller keeps no readable flag for this, so refresh the
+  // readings afterward - with the feature off every source reports
+  // NOT_INSTALLED, which is what isCableTempEnabled() infers from.
+  enableFeature(OPENEVSE_FEATURE_CABLE_TEMPERATURE, enabled, [this, callback](int ret)
+  {
+    if(RAPI_RESPONSE_OK == ret) {
+      readCableTemperatures();
+    }
+    if(callback) callback(ret);
+  });
+}
+
+void EvseMonitor::setCableTempConfig(uint8_t source, uint8_t pin, uint32_t r25, uint32_t beta,
+                                     int32_t offset_c10, int32_t panic_c10,
+                                     std::function<void(int ret)> callback)
+{
+  _openevse.setCableTemperatureConfig(source, pin, r25, beta, offset_c10, panic_c10,
+                                      [this, callback](int ret)
+  {
+    if(RAPI_RESPONSE_OK == ret) {
+      // Read back rather than trusting the write: the controller clamps
+      // nothing but it *does* silently disable PP auto-ampacity when a source
+      // claims PP_READ, so the settings flags can change under us too.
+      readCableTempConfig();
+      readCableTemperatures();
+      getSettingsFromEvse();
+    }
+    if(callback) callback(ret);
+  });
+}
+
+void EvseMonitor::setCableTempPin(uint8_t source, uint8_t pin, std::function<void(int ret)> callback)
+{
+  _openevse.setCableTemperaturePin(source, pin, [this, callback](int ret)
+  {
+    if(RAPI_RESPONSE_OK == ret) {
+      readCableTempConfig();
+      readCableTemperatures();
+      getSettingsFromEvse();
+    }
+    if(callback) callback(ret);
+  });
+}
+
+#endif // ENABLE_CABLE_TEMP
 
 void EvseMonitor::runStuckRelayRecovery(std::function<void(int ret)> callback)
 {
