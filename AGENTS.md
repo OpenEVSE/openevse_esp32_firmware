@@ -30,7 +30,9 @@ two-core (IDF4/IDF5) subtleties: [docs/developer/building.md](docs/developer/bui
 Agent work can run behind Claude Code's built-in Bash sandbox — an egress allowlist plus
 filesystem/credential guards. That part is **opt-in and per-developer**: paste the starting
 point from [docs/ai/sandbox.md](docs/ai/sandbox.md) into your gitignored
-`.claude/settings.local.json`. On Linux/WSL2 first `sudo apt-get install bubblewrap socat`,
+`.claude/settings.local.json`. Running in a Claude Code on the web **cloud environment**
+instead? See [docs/ai/cloud-environment.md](docs/ai/cloud-environment.md) — a different,
+environment-level network policy that needs `*.platformio.org` allowed or every build fails. On Linux/WSL2 first `sudo apt-get install bubblewrap socat`,
 and on Ubuntu 24.04+ add the `bwrap` AppArmor profile or every command fails with a
 `nested userns` error (especially in the VS Code extension). The `/sandbox` panel (terminal
 CLI only) shows the resolved policy. With it on, build/test commands run without prompts;
