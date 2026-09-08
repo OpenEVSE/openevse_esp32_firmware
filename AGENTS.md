@@ -46,6 +46,7 @@ What *is* checked in — and applies whether or not you sandbox — is
 
 ```bash
 cd gui-nightshift && npm test && cd ..        # UI unit tests (vitest)
+pio run -e native_simulator                   # builds the binary divert_sim's pytest drives
 cd divert_sim && pip install -r requirements.txt && pytest -v && cd ..
 pio test -e native_test                       # host-side firmware unit tests
 ```
@@ -93,6 +94,7 @@ their CI cannot push — and `--pr` says so if you hit one.
 
 ```bash
 cd gui-nightshift && npm run build && npm test && cd ..
+pio run -e native_simulator                   # builds the binary divert_sim's pytest drives
 cd divert_sim && pytest -v && cd ..
 git submodule status        # must show a clean, pushed state
 ```
