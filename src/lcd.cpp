@@ -2,7 +2,7 @@
 #undef ENABLE_DEBUG
 #endif
 
-#if !defined(ENABLE_SCREEN_LCD_TFT) && !defined(ENABLE_SCREEN_LVGL_TFT)
+#if !defined(ENABLE_SCREEN_LVGL_TFT)
 
 #include "emonesp.h"
 #include "lcd.h"
@@ -929,4 +929,4 @@ void LcdTask::setWifiMode(bool client, bool connected)
 
 LcdTask lcd;
 
-#endif // ENABLE_SCREEN_LCD_TFT
+#endif // !ENABLE_SCREEN_LVGL_TFT
