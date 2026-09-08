@@ -112,7 +112,7 @@ update those assertions whenever changing defaults in `app_config.cpp`.
 | `ocpp.h/.cpp` | OCPP 1.6 via the MicroOcpp library |
 | `rfid.h/.cpp` | RFID card auth, PN532 NFC module (optional) |
 | `net_manager.h/.cpp` | WiFi / wired Ethernet, OTA capability |
-| `lcd.h/.cpp`, `lcd_tft.h/.cpp` | Character LCD and TFT touchscreen display |
+| `lcd.h/.cpp`, `lcd_lvgl.h/.cpp`, `src/lvgl_tft/` | Character LCD and LVGL TFT touchscreen display |
 | `time_man.h/.cpp` | SNTP sync, POSIX timezone strings |
 | `certificates.h/.cpp` | SSL cert store under `/certificates/` on LittleFS |
 | `tesla_client.h/.cpp` | Tesla API (SOC, range, ETA) |

@@ -2,8 +2,8 @@
 #define __LCD_LVGL_H
 
 // LVGL renderer for the stock OpenEVSE ILI9488 TFT. Drop-in LcdTask: same public
-// API as the TFT_eSPI LcdTask (lcd_tft.h) and the char-LCD LcdTask (lcd.cpp), so
-// main.cpp / net / ocpp link unchanged. Selected by ENABLE_SCREEN_LVGL_TFT.
+// API as the char-LCD LcdTask (lcd.cpp), so main.cpp / net / ocpp link
+// unchanged. Selected by ENABLE_SCREEN_LVGL_TFT.
 
 #define LCD_CHAR_STOP       1
 #define LCD_CHAR_PLAY       2

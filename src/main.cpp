@@ -309,7 +309,9 @@ void loop()
   web_server_loop();
   diagnostics_loop();
   flash_migrate_loop();
+#ifdef ENABLE_OTA
   ota_loop();
+#endif
   rapiSender.loop();
 
   Profile_Start(MicroTask);

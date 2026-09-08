@@ -185,7 +185,9 @@ extern uint32_t flags;
 #define CONFIG_LCD_NETWORK_INFO     (1 << 28)
 // Inverted sense: bit SET disables the $SYS/broker/version probe. Existing
 // installs have this bit clear, so they keep probing exactly as before.
-#define CONFIG_MQTT_NO_SYS_QUERY    (1 << 29) // next free bit after CONFIG_MQTT_NO_SYS_QUERY
+#define CONFIG_MQTT_NO_SYS_QUERY    (1 << 29)
+// TFT panel clock in 12-hour form. Clear (the default) keeps the 24-hour clock.
+#define CONFIG_TFT_12H_CLOCK        (1 << 30) // next free bit after CONFIG_TFT_12H_CLOCK
 
 #define INITIAL_CONFIG_VERSION  1
 
@@ -290,6 +292,11 @@ inline bool config_temp_throttle_enabled()
 inline bool config_lcd_network_info_enabled()
 {
   return CONFIG_LCD_NETWORK_INFO == (flags & CONFIG_LCD_NETWORK_INFO);
+}
+
+inline bool config_tft_12h_clock()
+{
+  return CONFIG_TFT_12H_CLOCK == (flags & CONFIG_TFT_12H_CLOCK);
 }
 
 bool config_https_enabled();
