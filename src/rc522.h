@@ -13,13 +13,13 @@
 #include <SPI.h>
 
 // Default chip-select (SS/SDA) and reset pins — override via build flags
-// (e.g. -D RC522_SS_PIN=5 -D RC522_RST_PIN=22) for other boards/wiring.
+// (e.g. -D RC522_SS_PIN=5 -D RC522_RST_PIN=4) for other boards/wiring.
 #ifndef RC522_SS_PIN
 #define RC522_SS_PIN 5
 #endif
 
 #ifndef RC522_RST_PIN
-#define RC522_RST_PIN 22
+#define RC522_RST_PIN 4
 #endif
 
 class RC522Reader : public RfidReader, public MicroTasks::Task {
