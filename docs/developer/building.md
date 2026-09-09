@@ -109,6 +109,25 @@ To route debug output to the main serial port instead, change
 `-DDEBUG_PORT=Serial1` to `-DDEBUG_PORT=Serial` in `platformio.ini` — note this
 interferes with RAPI communication to the controller.
 
+## Flash usage
+
+CI checks every built image against the size of the app partition it flashes
+into (`scripts/check_flash_size.py`, using the `partitions.bin` PlatformIO
+generates for that env): a build at 95% or more of its partition emits a
+`::warning::`, and a build that overflows the partition fails outright. Pull
+requests get a "Flash usage" comment summarising size and % used per env, and
+the change versus the base branch's last build
+(`scripts/report_flash_size.py`).
+
+To check locally after a build:
+
+```bash
+python scripts/check_flash_size.py --env openevse_wifi_v1 \
+  --bin .pio/build/openevse_wifi_v1/firmware.bin \
+  --partitions .pio/build/openevse_wifi_v1/partitions.bin \
+  --out /tmp/flash-size.json
+```
+
 ## Upload troubleshooting
 
 - Some boards need manual bootloader mode: hold **BOOT**, press **RESET**,

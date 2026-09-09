@@ -167,6 +167,7 @@ jobs:
         sudo apt-get install -y libavahi-client-dev libavahi-common-dev libssl-dev
 
     - name: Run PlatformIO
+      id: pio_build
       env:
         # Enforce signed OTA only when a signing key is configured AND this is a
         # signed-capable env. Dormant (unsigned, unchanged) until the
@@ -174,6 +175,26 @@ jobs:
         # fleet's update behaviour on its own.
         PLATFORMIO_BUILD_FLAGS: ${{ (env.SIGN_ENABLED == 'true' && contains(fromJSON(env.SIGNED_OTA_ENVS), matrix.env)) && '-DUPDATE_SIGN -DREQUIRE_SIGNED_OTA' || '' }}
       run: pio run -e ${{ matrix.env }}
+
+    - name: Check flash usage
+      # native_openevse builds a host binary, not a flashable image -- there's
+      # no partition table to check it against.
+      if: matrix.env != 'native_openevse'
+      run: |
+        python scripts/check_flash_size.py \
+          --env ${{ matrix.env }} \
+          --bin .pio/build/${{ matrix.env }}/firmware.bin \
+          --partitions .pio/build/${{ matrix.env }}/partitions.bin \
+          --out flash-size-${{ matrix.env }}.json
+
+    - name: Upload flash size report
+      # Runs even if the flash usage check above failed, so an over-budget
+      # build still shows up in the PR's flash size report.
+      if: always() && steps.pio_build.outcome == 'success' && matrix.env != 'native_openevse'
+      uses: actions/upload-artifact@v7
+      with:
+        name: flash-size-${{ matrix.env }}
+        path: flash-size-${{ matrix.env }}.json
 
     - name: Sign firmware image
       # Append the RSA-2048 PSS signature trailer expected by REQUIRE_SIGNED_OTA
@@ -198,6 +219,65 @@ jobs:
       with:
         name: ${{ matrix.env }}.program
         path: .pio/build/${{ matrix.env }}/program
+
+  flash-size-report:
+    name: Flash size report
+    runs-on: ubuntu-latest
+    needs: build
+    # Runs even if a build failed (e.g. over the flash budget) so the PR
+    # comment still shows the offending env's usage.
+    if: always() && github.event_name == 'pull_request'
+
+    permissions:
+      contents: read
+      actions: read
+      pull-requests: write
+
+    steps:
+    - uses: actions/checkout@v7
+
+    - name: Download flash size data for this PR
+      uses: actions/download-artifact@v8
+      with:
+        pattern: flash-size-*
+        path: current-flash-size
+        merge-multiple: true
+
+    - name: Download baseline flash size data from the base branch
+      # Best-effort: the base branch may not have a build with flash size
+      # artifacts yet (e.g. right after this feature is added), so a miss
+      # here just means the report shows sizes with no "change vs base".
+      uses: dawidd6/action-download-artifact@v6
+      continue-on-error: true
+      with:
+        workflow: build.yaml
+        workflow_conclusion: completed
+        branch: ${{ github.event.pull_request.base.ref }}
+        event: push
+        name: flash-size-.*
+        name_is_regexp: true
+        path: baseline-flash-size
+        search_artifacts: true
+        if_no_artifact_found: warn
+
+    - name: Set up Python
+      uses: actions/setup-python@v7
+      with:
+        python-version: '3.x'
+
+    - name: Build flash size report
+      run: |
+        python scripts/report_flash_size.py \
+          --current-dir current-flash-size \
+          --baseline-dir baseline-flash-size \
+          --out flash-size-report.md
+        cat flash-size-report.md >> "$GITHUB_STEP_SUMMARY"
+
+    - name: Comment on PR
+      uses: marocchino/sticky-pull-request-comment@v2
+      with:
+        header: flash-size-report
+        path: flash-size-report.md
 
   release:
     name: Upload release assets
