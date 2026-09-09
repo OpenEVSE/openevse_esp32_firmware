@@ -39,6 +39,36 @@ not pre-seeded. Without `*.platformio.org` allowed, every build or test fails wi
 `HTTPClientError`, even though `pip install platformio` itself succeeds (that only needs
 PyPI, a separate domain, which the "common package managers" default already allows).
 
+## Optional: emulator / integration tests (Docker image pulls)
+
+Only needed for `scripts/openevse_test.sh emulator`/`integration`/`launch` (the default
+`--emulator docker`, or `--firmware docker`/`--pr N`) — `unit`, `divert`, `gui`, `native`, and
+the [validation gate](../../AGENTS.md#validation-gate--run-after-any-change) above don't touch
+Docker at all. These pull prebuilt images from GitHub Container Registry:
+
+- `ghcr.io/jeremypoulter/openevse_emulator` — the emulator
+- `ghcr.io/openevse/openevse-wifi-native` — a PR's or tag's firmware build, for `--firmware
+  docker`/`--pr N`
+
+Add to Allowed domains:
+
+```
+ghcr.io
+pkg-containers.githubusercontent.com
+```
+
+`ghcr.io` resolves the manifest and auth, but the actual layer bytes are served from
+`pkg-containers.githubusercontent.com` — the Azure blob-storage host GHCR redirects downloads
+to. Confirmed by testing: a pull gets past the `ghcr.io` manifest fine and then fails with
+`403 Forbidden` from `pkg-containers.githubusercontent.com` if that second host isn't allowed —
+the same failure mode as the PlatformIO registry above, just one layer further into the
+request.
+
+The container **Docker daemon** itself is a separate prerequisite from network access, and the
+checked-in SessionStart hook below doesn't start it (it only bootstraps the native/PlatformIO/
+npm/pip path). If `docker info` reports no daemon running, start one before using `emulator`/
+`integration`/`launch`: `dockerd &`, then give it a few seconds to come up.
+
 ## The checked-in SessionStart hook
 
 [`.claude/hooks/session-start.sh`](../../.claude/hooks/session-start.sh) (registered in
