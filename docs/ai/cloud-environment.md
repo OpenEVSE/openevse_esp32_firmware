@@ -67,7 +67,27 @@ request.
 The container **Docker daemon** itself is a separate prerequisite from network access, and the
 checked-in SessionStart hook below doesn't start it (it only bootstraps the native/PlatformIO/
 npm/pip path). If `docker info` reports no daemon running, start one before using `emulator`/
-`integration`/`launch`: `dockerd &`, then give it a few seconds to come up.
+`integration`/`launch`: `dockerd &`, then give it a few seconds to come up. The daemon and any
+`launch`ed containers do not survive a session ending — a fresh session needs `dockerd &` again,
+and `socat` (used to bridge RAPI to the emulator's container) may need reinstalling too if the
+base image doesn't carry it.
+
+### Viewing the emulator's own web dashboard
+
+The emulator's JSON API (`/api/status` etc., what `pytest tests/integration/` and RAPI actually
+use) needs nothing beyond the two domains above. Its human-facing dashboard page is a separate
+concern: the page loads its Socket.IO client from `cdn.socket.io`, and that `<script>` tag is
+unconditional — if it's blocked, the whole inline script that follows throws on the now-undefined
+`io()` call and never runs, so every field on the page (state, current, power) stays frozen at
+its initial "Ready" values instead of live-updating, even though the backend is working
+correctly. Confirmed by testing: `curl` to `/api/status` shows real state changes while the
+rendered page does not, and the browser console shows a `ReferenceError`. Only relevant if you
+want to look at that dashboard yourself (e.g. taking a screenshot) rather than drive the emulator
+through its API — add to Allowed domains:
+
+```
+cdn.socket.io
+```
 
 ## The checked-in SessionStart hook
 
