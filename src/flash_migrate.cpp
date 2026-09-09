@@ -717,16 +717,17 @@ bool flash_migrate_start_16mb(const String &manifest_url, bool dry_run)
   mctx.app_url = ""; mctx.app_sha = "";
   mctx.migrator_url = ""; mctx.migrator_sha = "";
   mctx.buf.clear();
-  // Reserve the manifest buffer now, while the heap is unfragmented. Doing this
-  // lazily during a TLS download throws bad_alloc -> panic (the heap is
-  // fragmented by the active mbedTLS connection). bad_alloc is caught so a
-  // genuinely full heap fails cleanly instead of crashing.
-  try {
-    mctx.buf.reserve(MIGRATE_SCRATCH_CAP);
-  } catch(...) {
+  // Reserve the manifest buffer now, while the heap is unfragmented -- doing this
+  // lazily during a TLS download fails once the heap is fragmented by the active
+  // mbedTLS connection. Built with -fno-exceptions, so reserve() can't throw
+  // bad_alloc for us to catch: precheck the largest free block against
+  // MIGRATE_SCRATCH_CAP (vector needs one contiguous allocation) so a genuinely
+  // full/fragmented heap fails cleanly here instead of aborting inside reserve().
+  if(ESP.getMaxAllocHeap() < MIGRATE_SCRATCH_CAP) {
     DEBUG_PORT.println("[migrate] could not reserve manifest buffer");
     return false;
   }
+  mctx.buf.reserve(MIGRATE_SCRATCH_CAP);
   mctx.dl_total = 0;
   mctx.dl_pos = 0;
   mctx.last_percent = -1;
