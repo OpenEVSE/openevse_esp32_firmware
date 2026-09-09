@@ -54,7 +54,6 @@ const char *flash_migrate_partition_scheme()
 #include "web_server.h"
 #include <MongooseHttpClient.h>
 #include <ArduinoJson.h>
-#include <vector>
 #include <string.h>
 
 #include "esp_flash.h"       // esp_flash_* — stream the 16MB app to free flash @0x650000
@@ -110,7 +109,13 @@ struct MigrateCtx
   String app_url, migrator_url;
   String app_sha, migrator_sha;
 
-  std::vector<uint8_t> buf;          // buffered download (the manifest JSON)
+  // Buffered download (the manifest JSON). Fixed-size, not a std::vector:
+  // the manifest is always <= MIGRATE_SCRATCH_CAP (enforced below), so there
+  // is no dynamic allocation to fail/fragment/race in the first place --
+  // see the "MIGRATE_SCRATCH_CAP" comment above for why this needs to be
+  // robust to a fragmented heap.
+  uint8_t buf[MIGRATE_SCRATCH_CAP];
+  size_t buf_len = 0;
 
   size_t dl_total = 0;
   size_t dl_pos = 0;
@@ -305,12 +310,14 @@ static bool consume_chunk(const uint8_t *data, size_t len)
   }
   else
   {
-    // Buffered (the manifest JSON). Never reallocate mid-TLS: growing the vector
-    // fragments the heap and can throw bad_alloc -> panic. Reserved up front.
-    if(mctx.buf.size() + len > mctx.buf.capacity()) {
+    // Buffered (the manifest JSON), into the fixed-size scratch buffer -- a
+    // manifest bigger than MIGRATE_SCRATCH_CAP is rejected outright rather
+    // than growing anything.
+    if(mctx.buf_len + len > MIGRATE_SCRATCH_CAP) {
       return false;
     }
-    mctx.buf.insert(mctx.buf.end(), data, data + len);
+    memcpy(mctx.buf + mctx.buf_len, data, len);
+    mctx.buf_len += len;
   }
 
   mctx.dl_pos += len;
@@ -355,7 +362,7 @@ static void finalize_current()
     case ST_MANIFEST:
     {
       JsonDocument doc;
-      DeserializationError err = deserializeJson(doc, mctx.buf.data(), mctx.buf.size());
+      DeserializationError err = deserializeJson(doc, mctx.buf, mctx.buf_len);
       if(err) {
         migrate_fail(-20, "manifest json");
         return;
@@ -453,7 +460,7 @@ static void start_download(const String &url)
 {
   DBUGF("[migrate] GET %s", url.c_str());
 
-  mctx.buf.clear(); // manifest scratch (kept capacity)
+  mctx.buf_len = 0; // manifest scratch reset
   mctx.dl_total = 0;
   mctx.dl_pos = 0;
   mctx.last_dl_pos = 0;
@@ -716,18 +723,11 @@ bool flash_migrate_start_16mb(const String &manifest_url, bool dry_run)
 
   mctx.app_url = ""; mctx.app_sha = "";
   mctx.migrator_url = ""; mctx.migrator_sha = "";
-  mctx.buf.clear();
-  // Reserve the manifest buffer now, while the heap is unfragmented -- doing this
-  // lazily during a TLS download fails once the heap is fragmented by the active
-  // mbedTLS connection. Built with -fno-exceptions, so reserve() can't throw
-  // bad_alloc for us to catch: precheck the largest free block against
-  // MIGRATE_SCRATCH_CAP (vector needs one contiguous allocation) so a genuinely
-  // full/fragmented heap fails cleanly here instead of aborting inside reserve().
-  if(ESP.getMaxAllocHeap() < MIGRATE_SCRATCH_CAP) {
-    DEBUG_PORT.println("[migrate] could not reserve manifest buffer");
-    return false;
-  }
-  mctx.buf.reserve(MIGRATE_SCRATCH_CAP);
+  // mctx.buf is a fixed MIGRATE_SCRATCH_CAP-size array (see MigrateCtx), not
+  // a heap allocation -- so unlike the old std::vector::reserve() there is
+  // nothing here that can fail on a fragmented heap, race with a concurrent
+  // allocation, or need catching now exceptions are off (-fno-exceptions).
+  mctx.buf_len = 0;
   mctx.dl_total = 0;
   mctx.dl_pos = 0;
   mctx.last_percent = -1;
