@@ -139,6 +139,10 @@ void handleLogsExport(MongooseHttpServerRequest *request)
           userName = users[rfidTag].as<String>();
         }
 
+        // snprintf rather than String(double, decimals): the latter pulls in
+        // dtostrf, which nothing else in this build links in.
+        char numbers[32];
+
         // Build CSV line
         response->print(escapeCSVField(time));
         response->print(",");
@@ -146,15 +150,18 @@ void handleLogsExport(MongooseHttpServerRequest *request)
         response->print(",");
         response->print(escapeCSVField(managerState.toString()));
         response->print(",");
-        response->print(String(energyKwh, 3));
+        snprintf(numbers, sizeof(numbers), "%.3f", energyKwh);
+        response->print(numbers);
         response->print(",");
-        response->print(String(elapsedMin, 1));
+        snprintf(numbers, sizeof(numbers), "%.1f", elapsedMin);
+        response->print(numbers);
         response->print(",");
         response->print(escapeCSVField(rfidTag));
         response->print(",");
         response->print(escapeCSVField(userName));
         response->print(",");
-        response->print(String(temperature, 1));
+        snprintf(numbers, sizeof(numbers), "%.1f", temperature);
+        response->print(numbers);
         response->print("\r\n");
       });
     }
