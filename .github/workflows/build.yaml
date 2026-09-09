@@ -202,6 +202,9 @@ jobs:
       with:
         name: flash-size-${{ matrix.env }}
         path: flash-size-${{ matrix.env }}.json
+        # native_openevse (and any build that failed before linking) has no
+        # JSON to upload -- that's expected, not something to flag.
+        if-no-files-found: ignore
 
     - name: Sign firmware image
       # Append the RSA-2048 PSS signature trailer expected by REQUIRE_SIGNED_OTA

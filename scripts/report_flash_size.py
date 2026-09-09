@@ -99,11 +99,13 @@ def main():
         )
 
     total_delta = fmt_delta(total_size, total_baseline if total_baseline_known else None)
-    lines.append(f"| **Total** | **{fmt_bytes(total_size)} B** | | **{total_delta}** |")
+    lines.append(f"| **Total** | **{fmt_bytes(total_size)} B** | — | **{total_delta}** |")
     lines.append("")
     lines.append(
         f"Builds at or above {WARN_THRESHOLD_PCT:.0f}% of their app partition are flagged "
-        ":warning:; builds that exceed it (:rotating_light:) fail the build."
+        ":warning:; builds that exceed it (:rotating_light:) fail the build. The Total row "
+        "has no \"Flash used\" percent -- each env has a different app partition size, so a "
+        "combined percentage wouldn't correspond to any real flash budget."
     )
 
     with open(args.out, "w") as f:
