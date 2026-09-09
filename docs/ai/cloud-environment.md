@@ -11,6 +11,24 @@ on claude.ai (Edit cloud environment → Network access), which governs every se
 in that environment. See also the general docs at
 [code.claude.com/docs/en/claude-code-on-the-web](https://code.claude.com/docs/en/claude-code-on-the-web).
 
+## All domains, to paste in one go
+
+Everything below, for pasting into Network access → Custom → Allowed domains in one shot
+instead of adding domains section by section. Skip `cdn.socket.io` if you don't care about
+watching the emulator's own dashboard live (see that section for why it's separate).
+
+```
+*.platformio.org
+ghcr.io
+pkg-containers.githubusercontent.com
+cdn.socket.io
+```
+
+Also leave **"Also include default list of common package managers"** checked — it's a
+separate checkbox, not a domain to paste, and covers `github.com`, `registry.npmjs.org`,
+`pypi.org`, and `files.pythonhosted.org` (see below). The rest of this page explains what each
+domain above is for and what breaks without it.
+
 ## Required: Network access → Custom → Allowed domains
 
 ```
