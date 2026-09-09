@@ -111,20 +111,24 @@ interferes with RAPI communication to the controller.
 
 ## Flash usage
 
-CI checks every built image against the size of the app partition it flashes
-into (`scripts/check_flash_size.py`, using the `partitions.bin` PlatformIO
-generates for that env): a build at 95% or more of its partition emits a
-`::warning::`, and a build that overflows the partition fails outright. Pull
-requests get a "Flash usage" comment summarising size and % used per env, and
-the change versus the base branch's last build
-(`scripts/report_flash_size.py`).
+CI checks every build's flash usage against its app partition budget
+(`scripts/check_flash_size.py`), reading the same "Flash: NN.N% (used X bytes
+from Y bytes)" line PlatformIO itself prints after linking rather than
+recomputing it -- firmware.bin is padded larger than the code+data that line
+reports (esptool fills gaps between non-contiguous ELF sections), so
+measuring the file directly disagreed with, and was less correct than,
+PlatformIO's own number. A build at 95% or more of its partition emits a
+`::warning::`; PlatformIO's own check already fails the build outright on
+overflow, and this script does too as a backstop. Pull requests get a "Flash
+usage" comment summarising size and % used per env, and the change versus the
+base branch's last build (`scripts/report_flash_size.py`).
 
 To check locally after a build:
 
 ```bash
+pio run -e openevse_wifi_v1 | tee /tmp/pio-build.log
 python scripts/check_flash_size.py --env openevse_wifi_v1 \
-  --bin .pio/build/openevse_wifi_v1/firmware.bin \
-  --partitions .pio/build/openevse_wifi_v1/partitions.bin \
+  --log /tmp/pio-build.log \
   --out /tmp/flash-size.json
 ```
 

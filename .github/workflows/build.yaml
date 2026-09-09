@@ -167,30 +167,37 @@ jobs:
         sudo apt-get install -y libavahi-client-dev libavahi-common-dev libssl-dev
 
     - name: Run PlatformIO
-      id: pio_build
       env:
         # Enforce signed OTA only when a signing key is configured AND this is a
         # signed-capable env. Dormant (unsigned, unchanged) until the
         # OTA_SIGNING_KEY secret is added, so merging this does not alter the
         # fleet's update behaviour on its own.
         PLATFORMIO_BUILD_FLAGS: ${{ (env.SIGN_ENABLED == 'true' && contains(fromJSON(env.SIGNED_OTA_ENVS), matrix.env)) && '-DUPDATE_SIGN -DREQUIRE_SIGNED_OTA' || '' }}
-      run: pio run -e ${{ matrix.env }}
+      # Capture pio's own output (it prints the "Flash: NN.N% (used X bytes
+      # from Y bytes)" line the flash usage check reads) while still failing
+      # this step on pio's exit code, not tee's.
+      run: |
+        set -o pipefail
+        pio run -e ${{ matrix.env }} 2>&1 | tee pio-build-${{ matrix.env }}.log
 
     - name: Check flash usage
-      # native_openevse builds a host binary, not a flashable image -- there's
-      # no partition table to check it against.
-      if: matrix.env != 'native_openevse'
+      # Runs whether or not the build above succeeded: PlatformIO's own size
+      # check runs (and can fail the build) right after linking, before most
+      # compile/link failures would even occur, so an over-budget build's log
+      # still has a "Flash:" line worth reporting. check_flash_size.py is a
+      # no-op (exit 0) when there's no such line, e.g. native_openevse or a
+      # build that failed before linking.
+      if: always()
       run: |
         python scripts/check_flash_size.py \
           --env ${{ matrix.env }} \
-          --bin .pio/build/${{ matrix.env }}/firmware.bin \
-          --partitions .pio/build/${{ matrix.env }}/partitions.bin \
+          --log pio-build-${{ matrix.env }}.log \
           --out flash-size-${{ matrix.env }}.json
 
     - name: Upload flash size report
-      # Runs even if the flash usage check above failed, so an over-budget
-      # build still shows up in the PR's flash size report.
-      if: always() && steps.pio_build.outcome == 'success' && matrix.env != 'native_openevse'
+      # Same condition as the check above -- runs whenever it could have
+      # produced a report, including when it (or the build) failed.
+      if: always()
       uses: actions/upload-artifact@v7
       with:
         name: flash-size-${{ matrix.env }}

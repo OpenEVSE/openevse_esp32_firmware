@@ -1,80 +1,73 @@
 #!/usr/bin/env python3
 """
-Check a built firmware image against the flash budget of the app partition
-it will be flashed into, and record the result for the flash-size PR report.
+Check a build's flash usage against the app partition budget, and record the
+result for the flash-size PR report.
 
-The app partition size is read from the *compiled* partitions.bin PlatformIO
-produces alongside firmware.bin, rather than re-parsing the source CSV, so
-this always matches whatever partition table the env actually built with
-(no need to know which of the CSVs in platformio.ini a given env selected).
+The used/max byte counts are parsed straight out of PlatformIO's own build
+output (the "Flash: [====] NN.N% (used X bytes from Y bytes)" line it prints
+after linking), rather than recomputed from firmware.bin and the partition
+table. firmware.bin is bigger than the code+data PlatformIO reports: esptool's
+elf2image padding to cover gaps between non-contiguous ELF sections (worse on
+some chips, e.g. RISC-V esp32-c3, than others) can add well over a hundred KB
+that was never going to consume flash, which made a from-scratch recomputation
+disagree with -- and be less correct than -- the number PlatformIO already
+printed. Reading that line keeps this script in lockstep with what PlatformIO
+itself reports and enforces at link time by construction.
 
 Exit status:
+    0  no "Flash:" line found (nothing to check -- e.g. a native env, or the
+       build failed before reaching the size-check step)
     0  usage is below the warning threshold
     0  usage is within the warning threshold (a ::warning:: is emitted)
     1  usage exceeds the partition size (a ::error:: is emitted)
 
 Usage:
-    python check_flash_size.py --env NAME --bin firmware.bin \
-        --partitions partitions.bin --out flash-size-NAME.json
+    python check_flash_size.py --env NAME --log pio-build.log --out flash-size-NAME.json
 """
 import argparse
 import json
-import struct
+import re
 import sys
-
-PARTITION_ENTRY_SIZE = 32
-PARTITION_MAGIC = b"\xaa\x50"
-PARTITION_END_MARKER = b"\xff" * PARTITION_ENTRY_SIZE
-TYPE_APP = 0x00
 
 WARN_THRESHOLD_PCT = 95.0
 
-
-def app_partition_size(partitions_bin):
-    with open(partitions_bin, "rb") as f:
-        data = f.read()
-
-    for offset in range(0, len(data), PARTITION_ENTRY_SIZE):
-        entry = data[offset:offset + PARTITION_ENTRY_SIZE]
-        if len(entry) < PARTITION_ENTRY_SIZE or entry == PARTITION_END_MARKER:
-            break
-        if entry[0:2] != PARTITION_MAGIC:
-            continue
-        ptype = entry[2]
-        if ptype != TYPE_APP:
-            continue
-        size = struct.unpack_from("<I", entry, 8)[0]
-        # Multiple app slots (ota_0/ota_1) are always sized identically in
-        # this repo's partition tables, so the first one found is the budget.
-        return size
-
-    sys.exit(f"error: no app partition found in {partitions_bin}")
+FLASH_LINE_RE = re.compile(
+    r"^Flash:.*?([\d.]+)%\s*\(used (\d+) bytes from (\d+) bytes\)", re.MULTILINE
+)
 
 
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--env", required=True, help="PlatformIO environment name")
-    parser.add_argument("--bin", required=True, help="Path to the built firmware.bin")
-    parser.add_argument("--partitions", required=True, help="Path to the built partitions.bin")
+    parser.add_argument("--log", required=True, help="Captured `pio run` output")
     parser.add_argument("--out", required=True, help="Path to write the JSON size record")
     args = parser.parse_args()
 
-    with open(args.bin, "rb") as f:
-        size = len(f.read())
+    try:
+        with open(args.log, errors="replace") as f:
+            log = f.read()
+    except FileNotFoundError:
+        print(f"{args.env}: no build log at {args.log} -- skipping the flash size check")
+        return 0
 
-    max_size = app_partition_size(args.partitions)
-    percent = (size / max_size) * 100
+    match = FLASH_LINE_RE.search(log)
+    if not match:
+        print(f"{args.env}: no 'Flash:' usage line in the PlatformIO build output "
+              "-- skipping the flash size check (native env, or the build didn't reach linking)")
+        return 0
+
+    percent, size, max_size = float(match.group(1)), int(match.group(2)), int(match.group(3))
 
     record = {
         "env": args.env,
         "size": size,
         "max_size": max_size,
-        "percent": round(percent, 2),
+        "percent": percent,
     }
     with open(args.out, "w") as f:
         json.dump(record, f, indent=2)
 
-    print(f"{args.env}: {size} / {max_size} bytes ({percent:.1f}%)")
+    print(f"{args.env}: {size} / {max_size} bytes ({percent:.1f}%) -- from PlatformIO's own report")
 
     if size > max_size:
         over = size - max_size
