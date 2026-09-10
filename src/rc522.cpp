@@ -49,9 +49,9 @@ void RC522Reader::begin() {
 }
 
 bool RC522Reader::probeReader() {
-    if (_initialized && !_failure) {
+    if (_initialized) {
         // Already communicating — avoid resetting the chip mid-session.
-        return true;
+        return _present;
     }
 
     // Re-run the version-register read and refresh the cached result. The boot-time
