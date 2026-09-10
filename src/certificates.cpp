@@ -556,11 +556,25 @@ bool CertificateStore::saveCertificate(Certificate *cert)
 bool CertificateStore::removeCertificate(Certificate *cert)
 {
   std::string id = certificate_id_hex(cert->getId());
-  String name = String(CERTIFICATE_BASE_DIRECTORY) + "/" + id.c_str() + ".json";
-  if(LittleFS.remove(name))
-  {
-    return true;
+  String canonical = String(CERTIFICATE_BASE_DIRECTORY) + "/" + id.c_str() + ".json";
+  String legacy_id = id.c_str();
+  legacy_id.toLowerCase();
+  String legacy = String(CERTIFICATE_BASE_DIRECTORY) + "/" + legacy_id + ".json";
+
+  bool found = false;
+  if(LittleFS.exists(canonical)) {
+    found = true;
+    if(!LittleFS.remove(canonical)) {
+      return false;
+    }
   }
 
-  return false;
+  if(legacy != canonical && LittleFS.exists(legacy)) {
+    found = true;
+    if(!LittleFS.remove(legacy)) {
+      return false;
+    }
+  }
+
+  return found;
 }
