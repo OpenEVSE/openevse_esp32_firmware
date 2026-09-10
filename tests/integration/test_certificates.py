@@ -46,7 +46,7 @@ def write_extension(path: Path, content: str) -> None:
     path.write_text(content, encoding="ascii")
 
 
-def generate_ecdsa_chain(directory: Path) -> tuple[Path, Path]:
+def generate_ecdsa_chain(directory: Path) -> tuple[Path, Path, Path, Path]:
     root_key = directory / "root-x2.key"
     root_cert = directory / "root-x2.pem"
     cross_key = directory / "root-ye.key"
@@ -176,7 +176,19 @@ def generate_ecdsa_chain(directory: Path) -> tuple[Path, Path]:
         + cross_cert.read_text(encoding="ascii"),
         encoding="ascii",
     )
-    return chain, leaf_key
+    return chain, leaf_key, root_cert, cross_cert
+
+
+def compile_nothrow_failure_hook(directory: Path) -> Path:
+    source = Path(__file__).with_name("fail_nothrow_new.cpp")
+    library = directory / "fail-nothrow-new.so"
+    subprocess.run(
+        ["c++", "-shared", "-fPIC", source, "-ldl", "-o", library],
+        check=True,
+        stdout=subprocess.DEVNULL,
+        stderr=subprocess.DEVNULL,
+    )
+    return library
 
 
 def wait_for_url(url: str, *, verify: bool | str, timeout: float = 90) -> requests.Response:
@@ -215,7 +227,7 @@ def unused_tcp_port() -> int:
 def test_ecdsa_certificate_upload_and_delete_survive_restart(evse_instance, tmp_path):
     del evse_instance  # The session fixture ensures the native build prerequisites are available.
 
-    chain_path, key_path = generate_ecdsa_chain(tmp_path)
+    chain_path, key_path, _, _ = generate_ecdsa_chain(tmp_path)
     payload = {
         "name": "integration-ecdsa",
         "certificate": chain_path.read_text(encoding="ascii"),
@@ -288,5 +300,70 @@ def test_ecdsa_certificate_upload_and_delete_survive_restart(evse_instance, tmp_
         assert listed.status_code == 200
         assert listed.json() == []
         assert not list(runtime.rglob("*.tmp"))
+    finally:
+        stop_process(process)
+
+
+@pytest.mark.timeout(240)
+def test_root_delete_rolls_back_when_trust_bundle_allocation_fails(tmp_path):
+    _, _, root_path, cross_path = generate_ecdsa_chain(tmp_path)
+    hook = compile_nothrow_failure_hook(tmp_path)
+    marker = tmp_path / "fail-next-nothrow-new-array"
+    payloads = [
+        {"name": "root-x2", "certificate": root_path.read_text(encoding="ascii")},
+        {"name": "root-ye", "certificate": cross_path.read_text(encoding="ascii")},
+    ]
+
+    binary = get_native_binary_path()
+    runtime = tmp_path / "runtime"
+    runtime.mkdir()
+    filesystem = runtime / "epoxyfsdata"
+    log_path = tmp_path / "native.log"
+    process = None
+    http_port = unused_tcp_port()
+
+    def start() -> subprocess.Popen[bytes]:
+        environment = os.environ.copy()
+        environment["EPOXY_FS_ROOT"] = str(filesystem)
+        environment["OPENEVSE_FAIL_NOTHROW_NEW_ARRAY_MARKER"] = str(marker)
+        environment["LD_PRELOAD"] = str(hook)
+        with log_path.open("ab") as log:
+            return subprocess.Popen(
+                [str(binary), "--set-config", f"www_http_port={http_port}"],
+                cwd=runtime,
+                env=environment,
+                stdout=log,
+                stderr=subprocess.STDOUT,
+            )
+
+    http_base = f"http://127.0.0.1:{http_port}"
+    try:
+        process = start()
+        wait_for_url(f"{http_base}/config", verify=False)
+
+        certificate_ids = []
+        for payload in payloads:
+            uploaded = requests.post(f"{http_base}/certificates", json=payload, timeout=15)
+            assert uploaded.status_code == 200, uploaded.text
+            certificate_ids.append(uploaded.json()["id"])
+
+        marker.touch()
+        deleted = requests.delete(
+            f"{http_base}/certificates/{certificate_ids[0]}",
+            timeout=10,
+        )
+        assert deleted.status_code == 404, deleted.text
+        assert not marker.exists(), "allocation failure hook was not exercised"
+
+        listed = requests.get(f"{http_base}/certificates", timeout=10)
+        assert listed.status_code == 200
+        assert {certificate["id"] for certificate in listed.json()} == set(certificate_ids)
+
+        stop_process(process)
+        process = start()
+        wait_for_url(f"{http_base}/status", verify=False)
+        listed = requests.get(f"{http_base}/certificates", timeout=10)
+        assert listed.status_code == 200
+        assert {certificate["id"] for certificate in listed.json()} == set(certificate_ids)
     finally:
         stop_process(process)
