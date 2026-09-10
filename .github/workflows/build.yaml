@@ -150,9 +150,18 @@ jobs:
         python-version: '3.x'
 
     - name: Install PlatformIO
+      # Pinned: PlatformIO Core 6.2.0 bumped its bundled build engine to
+      # SCons 4.11.1 (tool-scons@4.41101.0), which fails every core-3.x
+      # (pioarduino, arduino+espidf hybrid) env at the final link step with
+      # `ModuleNotFoundError: No module named 'SCons.Tool.FortranCommon'`
+      # (openevse_wifi_v1_16mb, openevse_wifi_tft_v1[_dev]). 6.1.19 is the
+      # last release still on SCons 4.8.1 (tool-scons@4.40801.0), which
+      # works. Bump this once upstream ships a SCons/PlatformIO release that
+      # fixes it.
       run: |
         python -m pip install --upgrade pip
-        pip install --upgrade platformio
+        pip install -r scripts/requirements.txt
+        pip install --upgrade "platformio==6.1.19"
 
     - name: Install Avahi development libraries
       if: matrix.env == 'native_openevse'
