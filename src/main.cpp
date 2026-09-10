@@ -204,8 +204,8 @@ void setup()
   pn532.begin();
   rfid.begin(evse, pn532);
 #elif defined(ENABLE_RC522)
-  rfid.begin(evse, rc522);
   rc522.begin();
+  rfid.begin(evse, rc522);
 #else
   rfid.begin(evse, rfidNullDevice);
 #endif
