@@ -200,7 +200,7 @@ bool CertificateStore::addCertificate(Certificate *cert, uint64_t *id, bool save
   }
 
   const char *prepared_root_ca = nullptr;
-  if(cert->getType() == Certificate::Type::Root && !prepareRootCa(cert, prepared_root_ca)) {
+  if(cert->getType() == Certificate::Type::Root && !prepareRootCa(cert, nullptr, prepared_root_ca)) {
     return false;
   }
 
@@ -236,12 +236,23 @@ bool CertificateStore::removeCertificate(uint64_t id)
       DBUGF("Removing certificate %p", cert);
       DBUGVAR(cert->getId(), HEX);
 
-      _certs.erase(it);
-      if(cert->getType() == Certificate::Type::Root) {
-        buildRootCa();
+      const char *prepared_root_ca = nullptr;
+      if(cert->getType() == Certificate::Type::Root &&
+         !prepareRootCa(nullptr, cert, prepared_root_ca)) {
+        return false;
       }
 
-      removeCertificate(cert);
+      if(!removeCertificate(cert)) {
+        if(nullptr != prepared_root_ca && prepared_root_ca != root_ca) {
+          delete[] prepared_root_ca;
+        }
+        return false;
+      }
+
+      _certs.erase(it);
+      if(nullptr != prepared_root_ca) {
+        replaceRootCa(prepared_root_ca);
+      }
       delete cert;
 
       return true;
@@ -365,12 +376,13 @@ bool CertificateStore::findCertificate(uint64_t id, int &index)
   return false;
 }
 
-bool CertificateStore::prepareRootCa(Certificate *additional, const char *&prepared)
+bool CertificateStore::prepareRootCa(Certificate *additional, Certificate *excluded,
+                                     const char *&prepared)
 {
   size_t len = 1;
   for(auto &c : _certs)
   {
-    if(c->getType() == Certificate::Type::Root) {
+    if(c != excluded && c->getType() == Certificate::Type::Root) {
       len += c->getCert().length();
     }
   }
@@ -404,7 +416,7 @@ bool CertificateStore::prepareRootCa(Certificate *additional, const char *&prepa
 
   for(auto &c : _certs)
   {
-    if(c->getType() == Certificate::Type::Root) {
+    if(c != excluded && c->getType() == Certificate::Type::Root) {
       strcpy(ptr, c->getCert().c_str());
       ptr += c->getCert().length();
     }
@@ -426,16 +438,6 @@ void CertificateStore::replaceRootCa(const char *replacement)
     delete[] _root_ca;
   }
   _root_ca = replacement;
-}
-
-bool CertificateStore::buildRootCa()
-{
-  const char *prepared = nullptr;
-  if(!prepareRootCa(nullptr, prepared)) {
-    return false;
-  }
-  replaceRootCa(prepared);
-  return true;
 }
 
 bool CertificateStore::loadCertificates()
