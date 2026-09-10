@@ -159,7 +159,8 @@ def generate_ecdsa_chain(directory: Path) -> tuple[Path, Path, Path, Path]:
         issuer_cert.name,
         "-CAkey",
         issuer_key.name,
-        "-CAcreateserial",
+        "-set_serial",
+        "0xABCDEF1234567890",
         "-out",
         leaf_cert.name,
         "-days",
@@ -300,6 +301,69 @@ def test_ecdsa_certificate_upload_and_delete_survive_restart(evse_instance, tmp_
         assert listed.status_code == 200
         assert listed.json() == []
         assert not list(runtime.rglob("*.tmp"))
+    finally:
+        stop_process(process)
+
+
+@pytest.mark.timeout(240)
+@pytest.mark.parametrize("keep_canonical", [False, True], ids=["legacy-only", "both-names"])
+def test_certificate_delete_supports_legacy_lowercase_filename(tmp_path, keep_canonical):
+    chain_path, key_path, _, _ = generate_ecdsa_chain(tmp_path)
+    payload = {
+        "name": "legacy-lowercase",
+        "certificate": chain_path.read_text(encoding="ascii"),
+        "key": key_path.read_text(encoding="ascii"),
+    }
+
+    binary = get_native_binary_path()
+    runtime = tmp_path / "runtime"
+    runtime.mkdir()
+    filesystem = runtime / "epoxyfsdata"
+    log_path = tmp_path / "native.log"
+    process = None
+    http_port = unused_tcp_port()
+
+    def start() -> subprocess.Popen[bytes]:
+        environment = os.environ.copy()
+        environment["EPOXY_FS_ROOT"] = str(filesystem)
+        with log_path.open("ab") as log:
+            return subprocess.Popen(
+                [str(binary), "--set-config", f"www_http_port={http_port}"],
+                cwd=runtime,
+                env=environment,
+                stdout=log,
+                stderr=subprocess.STDOUT,
+            )
+
+    http_base = f"http://127.0.0.1:{http_port}"
+    try:
+        process = start()
+        wait_for_url(f"{http_base}/config", verify=False)
+        uploaded = requests.post(f"{http_base}/certificates", json=payload, timeout=15)
+        assert uploaded.status_code == 200, uploaded.text
+        certificate_id = uploaded.json()["id"]
+        assert certificate_id == "ABCDEF1234567890"
+
+        stop_process(process)
+        canonical = filesystem / "certificates" / f"{certificate_id}.json"
+        legacy = filesystem / "certificates" / f"{certificate_id.lower()}.json"
+        assert canonical.is_file()
+        if keep_canonical:
+            legacy.write_bytes(canonical.read_bytes())
+        else:
+            canonical.rename(legacy)
+
+        process = start()
+        wait_for_url(f"{http_base}/status", verify=False)
+        deleted = requests.delete(f"{http_base}/certificates/{certificate_id}", timeout=10)
+        assert deleted.status_code == 200, deleted.text
+
+        stop_process(process)
+        process = start()
+        wait_for_url(f"{http_base}/status", verify=False)
+        listed = requests.get(f"{http_base}/certificates", timeout=10)
+        assert listed.status_code == 200
+        assert certificate_id not in {certificate["id"] for certificate in listed.json()}
     finally:
         stop_process(process)
 
