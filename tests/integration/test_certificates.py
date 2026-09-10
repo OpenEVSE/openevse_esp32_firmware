@@ -369,6 +369,70 @@ def test_certificate_delete_supports_legacy_lowercase_filename(tmp_path, keep_ca
 
 
 @pytest.mark.timeout(240)
+def test_https_listener_failure_advertises_http_fallback(tmp_path):
+    chain_path, key_path, _, _ = generate_ecdsa_chain(tmp_path)
+    payload = {
+        "name": "https-fallback",
+        "certificate": chain_path.read_text(encoding="ascii"),
+        "key": key_path.read_text(encoding="ascii"),
+    }
+
+    binary = get_native_binary_path()
+    runtime = tmp_path / "runtime"
+    runtime.mkdir()
+    filesystem = runtime / "epoxyfsdata"
+    log_path = tmp_path / "native.log"
+    process = None
+    http_port = unused_tcp_port()
+    https_port = unused_tcp_port()
+    while https_port == http_port:
+        https_port = unused_tcp_port()
+
+    def start() -> subprocess.Popen[bytes]:
+        environment = os.environ.copy()
+        environment["EPOXY_FS_ROOT"] = str(filesystem)
+        with log_path.open("ab") as log:
+            return subprocess.Popen(
+                [
+                    str(binary),
+                    "--set-config",
+                    f"www_http_port={http_port}",
+                    "--set-config",
+                    f"www_https_port={https_port}",
+                ],
+                cwd=runtime,
+                env=environment,
+                stdout=log,
+                stderr=subprocess.STDOUT,
+            )
+
+    http_base = f"http://127.0.0.1:{http_port}"
+    try:
+        process = start()
+        wait_for_url(f"{http_base}/config", verify=False)
+        uploaded = requests.post(f"{http_base}/certificates", json=payload, timeout=15)
+        assert uploaded.status_code == 200, uploaded.text
+
+        configured = requests.post(
+            f"{http_base}/config",
+            json={"www_certificate_id": uploaded.json()["id"]},
+            timeout=10,
+        )
+        assert configured.status_code == 200, configured.text
+
+        stop_process(process)
+        process = start()
+        wait_for_url(f"{http_base}/status", verify=False)
+
+        peers = requests.get(f"{http_base}/loadsharing/peers", timeout=10)
+        assert peers.status_code == 200, peers.text
+        local = next(peer for peer in peers.json() if peer["isLocal"])
+        assert local["url"] == f"http://{local['host']}:{http_port}"
+    finally:
+        stop_process(process)
+
+
+@pytest.mark.timeout(240)
 def test_root_delete_rolls_back_when_trust_bundle_allocation_fails(tmp_path):
     _, _, root_path, cross_path = generate_ecdsa_chain(tmp_path)
     hook = compile_nothrow_failure_hook(tmp_path)
