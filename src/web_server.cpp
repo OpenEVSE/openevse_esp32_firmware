@@ -61,6 +61,7 @@ MongooseHttpServer redirect;        // Server to redirect to HTTPS if enabled
 
 bool enableCors = false;
 bool streamDebug = false;
+static bool web_server_https = false;
 
 // Event timeouts
 static unsigned long wifiRestartTime = 0;
@@ -2008,6 +2009,8 @@ void web_server_setup()
     DEBUG.printf("Starting HTTP server, http://0.0.0.0:%d\n", www_http_port);
     server.begin(www_http_port);
   }
+  web_server_https = use_ssl;
+  net.publishWebServer(use_ssl ? www_https_port : www_http_port, use_ssl);
 
   // Session management (no auth gate — user must reach these unauthenticated)
   server.on("/login$", handleLogin);
@@ -2198,6 +2201,11 @@ void web_server_setup()
   web_server_load_sharing_setup();
 
   DEBUG.println("Server started");
+}
+
+bool web_server_is_https()
+{
+  return web_server_https;
 }
 
 void

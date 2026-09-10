@@ -14,6 +14,7 @@
 #include "loadsharing_discovery_task.h"
 #include "app_config.h"
 #include "net_manager.h"
+#include "web_server.h"
 #include <Arduino.h>
 #include <ArduinoJson.h>
 #include <LittleFS.h>
@@ -398,7 +399,7 @@ void LoadSharingGroupState::addLocalPeer() {
   local.setId(ESPAL.getLongId());
   local.setName(String(esp_hostname));
   local.setIp(net.getIp());
-  bool ssl = config_https_enabled();
+  bool ssl = web_server_is_https();
   uint16_t port = ssl ? www_https_port : www_http_port;
   String localUrl = ssl ? "https://" : "http://";
   localUrl += localHostname;

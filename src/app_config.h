@@ -299,8 +299,6 @@ inline bool config_tft_12h_clock()
   return CONFIG_TFT_12H_CLOCK == (flags & CONFIG_TFT_12H_CLOCK);
 }
 
-bool config_https_enabled();
-
 extern uint32_t config_version();
 
 // -------------------------------------------------------------------
