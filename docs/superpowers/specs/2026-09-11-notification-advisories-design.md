@@ -410,3 +410,30 @@ turned off C++ exceptions (99d581b0, ~155 KB back) and dropped TFT_eSPI
    change. Ack expiry considered and left out.
 4. Does the HA integration want these as entities? Out of scope here, but the
    API shape should not make it awkward later.
+
+## 14. Delivery
+
+This ships as an upstream PR, not a fork branch. Two of them, separable:
+
+- **Firmware** → `OpenEVSE/openevse_esp32_firmware`. Carries the engine, the
+  API, and the LCD border and line. Stands alone: merged on its own it is a
+  complete, useful feature, because the border is the part that reaches someone
+  standing at the charger.
+- **GUI** → `OpenEVSE/openevse-gui-nightshift` (branch `RePartition`), where
+  `HealthTab.svelte` and the rest of Monitoring already live, so the inline
+  markers and the link target are in the same repo as the detail view they
+  point at.
+
+Consequences of going upstream rather than keeping it local:
+
+1. **The two `/status` fields will get scrutiny**, and should. They are the only
+   addition to a payload the HA integration already polls hard, and §7 keeps the
+   list on its own endpoint precisely so this stays a two-field conversation.
+2. **Degrade cleanly on every controller.** The `wear.*` and
+   `thermal.relay_*` rules vanish when `isRelayHealthKnown()` is false, the
+   safety and fault rules work on anything that answers `$GE` and `$GF`, and
+   there is no build flag to forget.
+3. **Nothing in the firmware half depends on the GUI half.** If the GUI PR sits,
+   the LCD still works and `/notifications` is still there for anyone who wants
+   it.
+
