@@ -15,15 +15,16 @@ life, temperature."
 
 ## 1. Why this is cheap
 
-Three of the four sources Chris named are already in the firmware and simply
-have nowhere to appear:
+**All four** of the sources Chris named are already in the firmware. None of
+them has anywhere to appear except the Monitoring → Health page, which you only
+see if you go looking:
 
 | Source | Today |
 |---|---|
 | Safety features | `EvseMonitor::isGfiTestEnabled()`, `isGroundCheckEnabled()`, `isStuckRelayCheckEnabled()`, `isDiodeCheckEnabled()`, `isVentRequiredEnabled()`, `isTemperatureCheckEnabled()` — all live, all already serialised into `/config` as `gfci_check`, `ground_check`, `relay_check`, `diode_check`, `vent_check`, `temp_check`. Nothing ever reads them back as an advisory. |
 | Earlier faults | `EvseMonitor` already polls `$GF` into `_gfci_count` / `_nognd_count` / `_stuck_count` and exposes `getFaultCountGFCI()` / `getFaultCountNoGround()` / `getFaultCountStuckRelay()`; the latched `OPENEVSE_VFLAG_GFI_TRIPPED`, `OPENEVSE_VFLAG_NOGND_TRIPPED` and `OPENEVSE_VFLAG_HARD_FAULT` bits are in `getFlags()`. |
 | Temperature | `EvseMonitor` temperature sensors plus `TempThrottle::isThrottling()` and `getPanicTemperature()`. |
-| Relay life | **Not available.** See §8. |
+| Relay life | **Already there too.** The controller's RELAY_HEALTH feature answers `$GL`, and `EvseMonitor` holds the lot: `getRelayLifeRemainingPct()`, `getRelayColdOpenCount()`, `getRelayElecDamageX1e6()`, `getRelayTransitBaselineMs()`, `isRelayTransitDriftWarning()`, `getRelayThermalIndexX100()`, `getRelayThermalWarningLevel()`, `getRelayStuckRecoveryCount()` — all already serialised into `/config` behind `isRelayHealthKnown()`. Relay switch count is separate and ESP-side: `EnergyMeter` counts closes into `total_switches`. |
 
 `event_log.h` already declares an unused `EventType::Notification`, so even the
 log slot is cut.
@@ -125,14 +126,25 @@ was acknowledged.
 | `fault.stuck_relay` | fault | critical | `getFaultCountStuckRelay() > 0`, token = count | no |
 | `thermal.throttling` | thermal | warning | `TempThrottle::isThrottling()` | yes (auto-clears) |
 | `thermal.high_temp` | thermal | warning | max `getTemperature(s)` over valid sensors ≥ `getPanicTemperature()` − margin | yes (auto-clears) |
-| `wear.relay_life` | wear | info → warning | cycles ≥ 80% → ≥ 100% of rating | no |
+| `wear.relay_life` | wear | info → warning | `getRelayLifeRemainingPct()` ≤ 20 → ≤ 5 | no |
+| `wear.relay_transit_drift` | wear | warning | `isRelayTransitDriftWarning()` | yes (auto-clears) |
+| `wear.relay_cold_open` | wear | warning | `getRelayColdOpenCount() > 0`, token = count | no |
+| `wear.stuck_relay_recovery` | wear | info | `getRelayStuckRecoveryCount() > 0`, token = count | no |
+| `thermal.relay_thermal` | thermal | info → warning | `getRelayThermalWarningLevel()` 1 → 2 | yes (auto-clears) |
+
+Every `wear.*` / `thermal.relay_*` rule is skipped entirely unless
+`isRelayHealthKnown()` — on a controller without the RELAY_HEALTH feature they
+simply do not exist, the same way `/config` omits the block rather than
+reporting a confident zero. Electrical damage is deliberately not its own rule:
+it is an input to life-remaining, and two advisories for one wear story is one
+too many.
 
 "sticky: yes" means acking mutes rather than clears (§4.1); the advisory only
 goes away when the condition does.
 
 **"Not all Required Safety Features are enabled" is not its own rule.** It is
 what the UI says when it has more than one `safety.*` advisory to summarise.
-Inventing a thirteenth advisory that duplicates the other six would mean two
+Inventing another advisory that duplicates the other six would mean two
 things to ack and two things to keep in sync.
 
 The six safety rules are deliberately not collapsed into one: the user has to
@@ -187,38 +199,40 @@ existing `event_send(doc)` path that `boost.cpp` and `current_shaper.cpp` use.
 Auth: same policy as the other `/status`-adjacent endpoints. `POST .../ack`
 is a state change and takes the same CSRF guard as `/divertmode` et al.
 
-## 8. Relay life — the one real gap
+## 8. Relay life — already solved, so do not restate it
 
-There is **no relay-cycle counter anywhere in the stack**. The controller
-exposes fault counters via `$GF` (`getFaultCounters()` → gfci / no-ground /
-stuck) and nothing else; the 0.0.23 OpenEVSE library has no command for relay
-closes.
+An earlier draft of this spec called relay life "the one real gap" and proposed
+either asking for a controller-side counter or counting relay closes on the
+ESP32. Both already exist. Recorded here because the wrong version was written
+down first:
 
-Two ways forward:
+- **Relay health** comes from the controller's RELAY_HEALTH feature over `$GL`
+  (9.3.0+). `EvseMonitor` caches life-remaining %, cold-open count, electrical
+  damage, contact-transit baseline and drift warning, thermal index / baseline /
+  warning level, and the stuck-relay recovery count. `/config` emits the whole
+  block, gated on `isRelayHealthKnown()` so it is omitted rather than defaulted
+  on controllers without the feature.
+- **Relay switch count** is ESP-side: `EvseMonitor` calls
+  `EnergyMeter::increment_switch_counter()` and it is published as
+  `total_switches`.
+- **Resetting after a physical relay swap** is handled: `resetRelayHealth()`
+  clears the accumulator, the self-learned baselines and the recovery counter.
 
-**(a) Controller-side counter — the right answer.** Chris adds a relay-close
-count to the controller and a RAPI read for it. The count then lives with the
-hardware it describes: it survives the ESP32 being reflashed, swapped, or
-factory-reset, which is the whole point of a wear counter. Pairs naturally with
-the existing `ClearCounters` command on 9.0.0.
+The GUI already renders all of it under **Monitoring → Health**.
 
-**(b) ESP32-side counting — the fallback.** Count rising edges of
-`OPENEVSE_VFLAG_CHARGING_ON` in the existing monitor poll and persist. Works
-today with no controller change, but on any charger already in the field the
-count starts at zero, so "relay life" is a fiction until the relay is replaced —
-and a reflash or a config wipe silently resets it.
+So the advisory's job here is **not** to restate any of these numbers. It is to
+tell someone who is not on that page that they should be. The rules in §5 read
+the cached values; the GUI entry links to Monitoring → Health rather than
+duplicating a single figure, and the LCD line names the condition, never a
+number.
 
-**Recommendation: ask Chris for (a), ship (b) behind the same advisory so the
-feature is not blocked, and treat (b) as authoritative only from the first boot
-that recorded it** (store a `since` timestamp and have the GUI say "since
-<date>" rather than implying a lifetime total).
+One consequence worth stating: because `resetRelayHealth()` exists, the relay
+advisories need no ack story of their own. Replacing the relay resets the
+health, which clears the condition, which retires the advisory. That is better
+than an ack, because it is tied to the physical act rather than to someone
+clicking.
 
-Persistence for (b): the count must **not** hit flash on every cycle. Write on
-session end and on a dirty-and-idle timer, batched — a charger doing several
-sessions a day should see a handful of writes a day, not one per relay close.
-
-Open: the cycle rating to compare against. It is hardware-dependent, so it
-belongs in config with a conservative default; needs a number from Chris.
+Thresholds are the only genuinely open part — see §13.
 
 ## 9. LCD
 
@@ -327,8 +341,11 @@ turned off C++ exceptions (99d581b0, ~155 KB back) and dropped TFT_eSPI
 
 ## 13. Open questions
 
-1. Relay cycle rating default, and whether Chris will add the controller-side
-   counter (§8).
+1. Relay thresholds. `relay_life_pct` ≤ 20 for a notice and ≤ 5 for a warning
+   are my numbers, not Chris's — he owns what "getting close" means for this
+   hardware. Same question for whether cold opens and stuck-relay recoveries
+   deserve to reach the user at all, or are service-only diagnostics that
+   should stay on the Monitoring → Health page.
 2. Should advisories also write `EventType::Notification` rows into the event
    log? It is free and the enum value is already there, but the log is already
    noisy and this could re-open the repeat-spam problem that #1216 fixed.
