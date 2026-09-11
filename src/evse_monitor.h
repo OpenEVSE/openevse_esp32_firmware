@@ -193,6 +193,11 @@ class EvseMonitor : public MicroTasks::Task
 
     // Settings
     uint32_t _settings_flags;
+    // False until $GE has answered at least once, so callers can tell "every
+    // safety check is enabled" from "we have not asked the controller yet".
+    // _settings_flags is otherwise 0 at boot, which reads as a perfectly
+    // healthy charger.
+    bool _settings_known;
     uint32_t _panic_temperature;
     uint32_t _heartbeat_interval;
     uint32_t _heartbeat_current;
@@ -423,6 +428,12 @@ class EvseMonitor : public MicroTasks::Task
     }
     uint32_t getSettingsFlags() {
       return _settings_flags;
+    }
+    // True once the controller has answered $GE at least once. Before that
+    // getSettingsFlags() is 0, which is indistinguishable from a controller
+    // reporting every check enabled.
+    bool isSettingsKnown() {
+      return _settings_known;
     }
     ServiceLevel getServiceLevel();
     ServiceLevel getActualServiceLevel();

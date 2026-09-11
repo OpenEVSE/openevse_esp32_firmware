@@ -22,7 +22,8 @@ Notifications::Notifications() :
   _evse(NULL),
   _count(0),
   _ack_count(0),
-  _logged_count(0)
+  _logged_count(0),
+  _snapshot_seen(false)
 {
   memset(_first_seen, 0, sizeof(_first_seen));
   memset(_last_seen, 0, sizeof(_last_seen));
@@ -172,10 +173,26 @@ unsigned long Notifications::loop(MicroTasks::WakeReason reason)
 
   // Acks for advisories that have gone away are dead weight; drop them so the
   // persisted blob cannot grow across a charger's lifetime.
-  size_t pruned = notification_acks_prune(_acks, _ack_count, _live, _count);
-  if(pruned != _ack_count) {
-    _ack_count = pruned;
-    saveAcks();
+  //
+  // DO NOT remove this gate. Every RAPI read is asynchronous, so on the first
+  // pass after boot - which runs within milliseconds of begin() - the monitor
+  // has answered nothing: the settings word is 0 (reads as "every check
+  // enabled"), the fault counters are 0 and relay health is unknown. The rule
+  // table therefore returns an empty list, prune() would find nothing live to
+  // keep, and every persisted ack would be erased before the controller had
+  // said a word - plus an EEPROM write on every single boot. Prune only once
+  // the controller has actually answered $GE, and not on the very first such
+  // pass: evseBoot() queues the relay-health read after $GE, so that one pass
+  // can still be racing it and would drop the wear.* acks.
+  if(_evse->isSettingsKnown()) {
+    if(_snapshot_seen) {
+      size_t pruned = notification_acks_prune(_acks, _ack_count, _live, _count);
+      if(pruned != _ack_count) {
+        _ack_count = pruned;
+        saveAcks();
+      }
+    }
+    _snapshot_seen = true;
   }
 
   if(changed) {

@@ -420,6 +420,9 @@ class EvseManager : public MicroTasks::Task
     bool isOvercurrentMonitorEnabled() {
       return _monitor.isOvercurrentMonitorEnabled();
     }
+    bool isSettingsKnown() {
+      return _monitor.isSettingsKnown();
+    }
     uint32_t getSettingsFlags() {
       return _monitor.getSettingsFlags();
     }
