@@ -242,7 +242,12 @@ void EvseMonitor::evseBoot(const char *firmware)
   // controller swapped in without an ESP32 reboot, or a non-D9 controller.
   // _relay_health_known itself only ever latches true (readRelayHealth()'s
   // callback simply no-ops when unsupported), so it needs the same reset.
+  // _settings_known latches the same way, and consumers gate real decisions on
+  // it - Notifications will not prune persisted acks until both are true - so
+  // it has to go back to false until this controller has answered $GE, not
+  // keep vouching for the previous one's settings word.
   _relay_health_known = false;
+  _settings_known = false;
   _zero_cross_threshold_ma = OPENEVSE_RELAY_HEALTH_NOT_AVAILABLE;
 
   _openevse.getFaultCounters([this](int ret, long gfci_count, long nognd_count, long stuck_count)

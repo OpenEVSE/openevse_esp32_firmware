@@ -39,8 +39,7 @@ Notifications::Notifications() :
   _evse(NULL),
   _count(0),
   _ack_count(0),
-  _logged_count(0),
-  _snapshot_seen(false)
+  _logged_count(0)
 {
   memset(_first_seen, 0, sizeof(_first_seen));
   memset(_last_seen, 0, sizeof(_last_seen));
@@ -236,19 +235,24 @@ unsigned long Notifications::loop(MicroTasks::WakeReason reason)
   // enabled"), the fault counters are 0 and relay health is unknown. The rule
   // table therefore returns an empty list, prune() would find nothing live to
   // keep, and every persisted ack would be erased before the controller had
-  // said a word - plus an EEPROM write on every single boot. Prune only once
-  // the controller has actually answered $GE, and not on the very first such
-  // pass: evseBoot() queues the relay-health read after $GE, so that one pass
-  // can still be racing it and would drop the wear.* acks.
-  if(_evse->isSettingsKnown()) {
-    if(_snapshot_seen) {
-      size_t pruned = notification_acks_prune(_acks, _ack_count, _live, _count);
-      if(pruned != _ack_count) {
-        _ack_count = pruned;
-        saveAcks();
-      }
+  // said a word - plus an EEPROM write on every single boot.
+  //
+  // Both reads are gated, not just $GE: the wear.* and thermal.relay_* rules
+  // are evaluated from the $GL relay-health snapshot, which evseBoot() queues
+  // separately, so pruning while that is still outstanding would drop exactly
+  // those acks. Both flags are cleared in evseBoot(), so a controller reboot -
+  // which this hardware does in normal operation - closes this gate again
+  // until the new controller has answered both. On a controller with no
+  // RELAY_HEALTH support the gate never opens and acks are never pruned; that
+  // is deliberate and harmless - the list is bounded at NOTIFICATION_ACK_MAX
+  // and stale acks only cost bytes, where an over-eager prune costs the user
+  // the mute they deliberately set.
+  if(_evse->isSettingsKnown() && _evse->isRelayHealthKnown()) {
+    size_t pruned = notification_acks_prune(_acks, _ack_count, _live, _count);
+    if(pruned != _ack_count) {
+      _ack_count = pruned;
+      saveAcks();
     }
-    _snapshot_seen = true;
   }
 
   if(changed) {

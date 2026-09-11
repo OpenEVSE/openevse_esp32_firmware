@@ -43,12 +43,6 @@ class Notifications : public MicroTasks::Task
     const char *_logged_ids[NOTIFICATION_MAX];
     size_t      _logged_count;
 
-    // True once a pass has run with the controller's settings actually read
-    // (EvseManager::isSettingsKnown()). Gates ack pruning - see the comment at
-    // the prune in loop(), which explains why pruning before this is true
-    // destroys every persisted ack on every boot.
-    bool _snapshot_seen;
-
     void gather(NotificationInputs &in);
     void saveAcks();
 
