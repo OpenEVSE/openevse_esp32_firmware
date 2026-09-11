@@ -368,6 +368,60 @@ def test_corrupt_certificate_record_can_be_replaced_by_upload(tmp_path):
 
 
 @pytest.mark.timeout(240)
+def test_maximum_uint64_certificate_id_is_addressable(tmp_path):
+    chain_path, key_path, _, _ = generate_ecdsa_chain(tmp_path)
+    certificate_id = "FFFFFFFFFFFFFFFF"
+    payload = {
+        "id": certificate_id,
+        "name": "maximum-id",
+        "certificate": chain_path.read_text(encoding="ascii"),
+        "key": key_path.read_text(encoding="ascii"),
+    }
+
+    binary = get_native_binary_path()
+    runtime = tmp_path / "runtime"
+    runtime.mkdir()
+    filesystem = runtime / "epoxyfsdata"
+    log_path = tmp_path / "native.log"
+    process = None
+    http_port = unused_tcp_port()
+
+    def start() -> subprocess.Popen[bytes]:
+        environment = os.environ.copy()
+        environment["EPOXY_FS_ROOT"] = str(filesystem)
+        with log_path.open("ab") as log:
+            return subprocess.Popen(
+                [str(binary), "--set-config", f"www_http_port={http_port}"],
+                cwd=runtime,
+                env=environment,
+                stdout=log,
+                stderr=subprocess.STDOUT,
+            )
+
+    http_base = f"http://127.0.0.1:{http_port}"
+    try:
+        process = start()
+        wait_for_url(f"{http_base}/config", verify=False)
+
+        uploaded = requests.post(f"{http_base}/certificates", json=payload, timeout=15)
+        assert uploaded.status_code == 200, uploaded.text
+        assert uploaded.json()["id"] == certificate_id
+
+        fetched = requests.get(f"{http_base}/certificates/{certificate_id}", timeout=10)
+        assert fetched.status_code == 200, fetched.text
+        assert fetched.json()["id"] == certificate_id
+
+        deleted = requests.delete(f"{http_base}/certificates/{certificate_id}", timeout=10)
+        assert deleted.status_code == 200, deleted.text
+
+        listed = requests.get(f"{http_base}/certificates", timeout=10)
+        assert listed.status_code == 200
+        assert certificate_id not in {certificate["id"] for certificate in listed.json()}
+    finally:
+        stop_process(process)
+
+
+@pytest.mark.timeout(240)
 @pytest.mark.parametrize("keep_canonical", [False, True], ids=["legacy-only", "both-names"])
 def test_certificate_delete_supports_legacy_lowercase_filename(tmp_path, keep_canonical):
     chain_path, key_path, _, _ = generate_ecdsa_chain(tmp_path)
