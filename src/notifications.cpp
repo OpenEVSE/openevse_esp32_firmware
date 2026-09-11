@@ -17,6 +17,23 @@
 
 Notifications notifications;
 
+// Epoch seconds, or 0 while the clock has not been synced yet. The spec's
+// first_seen / last_seen are epoch, and an advisory raised seconds after boot
+// - which is the common case for the safety rules - would otherwise be stamped
+// somewhere in 1970 and rendered as such. 0 is the documented "unknown", which
+// a consumer can tell apart from a real reading; the tm_year test is the same
+// one event_log.cpp uses to decide a clock is trustworthy.
+static uint32_t notification_epoch_now()
+{
+  time_t now = time(NULL);
+  struct tm timeinfo;
+  gmtime_r(&now, &timeinfo);
+  if(timeinfo.tm_year < (2021 - 1900)) {
+    return 0;
+  }
+  return (uint32_t)now;
+}
+
 Notifications::Notifications() :
   MicroTasks::Task(),
   _evse(NULL),
@@ -123,7 +140,7 @@ unsigned long Notifications::loop(MicroTasks::WakeReason reason)
   gather(in);
   _count = notifications_evaluate(in, _live, NOTIFICATION_MAX);
 
-  uint32_t now = (uint32_t)(millis() / 1000);
+  uint32_t now = notification_epoch_now();
   bool changed = (_count != previous_count);
 
   // At most one event-log row per pass. EventLog::log() costs two full
@@ -218,7 +235,7 @@ unsigned long Notifications::loop(MicroTasks::WakeReason reason)
     DynamicJsonDocument doc(1024);
     JsonObject o = doc.createNestedObject("notifications");
     o["count"] = count();
-    o["severity"] = maxSeverity();
+    o["severity"] = notification_severity_name(maxSeverity());
     event_send(doc);
   }
 
