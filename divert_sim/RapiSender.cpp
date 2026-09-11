@@ -134,9 +134,16 @@ RapiSender::sendCmdSync(String &cmd, unsigned long timeout)
         } break;
         case 'G':
         {
+          // Report the EV's actual draw so the firmware's energy meter
+          // integrates a real session energy (energy boosts depend on it).
+          static char buf_ma[16];
+          static char buf_mv[16];
+          sprintf(buf_ma, "%ld", (long)(sim->actualCurrent() * 1000.0));
+          sprintf(buf_mv, "%ld", (long)(sim->voltage * 1000.0));
           _tokens[0] = ok;
-          _tokens[1] = zero;
-          _tokenCnt = 2;
+          _tokens[1] = buf_ma;
+          _tokens[2] = buf_mv;
+          _tokenCnt = 3;
         } break;
         case 'V':
         {
@@ -216,8 +223,14 @@ RapiSender::sendCmdSync(String &cmd, unsigned long timeout)
         case 'C':
         {
           sscanf(cmd.c_str(), "$SC %ld V", &sim->pilot);
+          // Real hardware echoes the resultant current capacity as the first
+          // token ("$OK ampsset"); the firmware relies on this to update its
+          // pilot belief. Without it, EvseMonitor::setPilot never records the
+          // new pilot and skips subsequent identical-target re-sends.
+          sprintf(buf1, "%ld", sim->pilot);
           _tokens[0] = ok;
-          _tokenCnt = 1;
+          _tokens[1] = buf1;
+          _tokenCnt = 2;
         } break;
         case 'Y':
         {

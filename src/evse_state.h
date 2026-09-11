@@ -18,6 +18,14 @@ class EvseState
 
   bool fromString(const char *value)
   {
+    // Callers hand a JSON value straight in, e.g. evse_man.cpp does
+    // _state.fromString(obj["state"]). ArduinoJson yields nullptr when the key
+    // is absent or not a string, so a POST to /override or /claims carrying a
+    // non-string "state" dereferenced null here and rebooted the board.
+    if(nullptr == value) {
+      return false;
+    }
+
     // Cheat a bit and just check the first char
     if('a' == value[0] || 'd' == value[0]) {
       _value = 'a' == value[0] ? EvseState::Active : EvseState::Disabled;

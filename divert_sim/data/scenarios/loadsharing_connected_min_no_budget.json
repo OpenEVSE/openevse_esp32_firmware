@@ -1,0 +1,57 @@
+{
+  "meta": {
+    "id": "loadsharing_connected_min_no_budget",
+    "title": "Load Sharing Connected Member Gets Minimum Without Budget",
+    "category": "loadsharing",
+    "profile": "default",
+    "description": [
+      "One EV is charging while a second EV is connected but not requesting charge.",
+      "The connected EVSE should be offered its minimum current so the EV can start on demand,",
+      "but that minimum must not be taken out of the shared budget, so the charging EV keeps its full allocation."
+    ]
+  },
+  "group": {
+    "safety_factor": 1.0,
+    "failsafe_mode": "safe_current",
+    "failsafe_peer_assumed_current": 6.0
+  },
+  "simulation": {
+    "duration": 900,
+    "tick_interval": 1,
+    "nominal_voltage": 240
+  },
+  "supply": {
+    "max_pwr": 7680,
+    "live_pwr": 0
+  },
+  "peers": [
+    {
+      "id": "evse-001",
+      "min_current": 6,
+      "max_current": 32,
+      "voltage": 240,
+      "priority": 0,
+      "ev": {
+        "battery_capacity_kwh": 75,
+        "initial_soc": 40,
+        "max_charge_rate_kw": 20,
+        "request_current": true
+      },
+      "initial": {"online": true, "vehicle": true}
+    },
+    {
+      "id": "evse-002",
+      "min_current": 6,
+      "max_current": 32,
+      "voltage": 240,
+      "priority": 0,
+      "ev": {
+        "battery_capacity_kwh": 75,
+        "initial_soc": 40,
+        "max_charge_rate_kw": 20,
+        "request_current": false
+      },
+      "initial": {"online": true, "vehicle": true}
+    }
+  ]
+}

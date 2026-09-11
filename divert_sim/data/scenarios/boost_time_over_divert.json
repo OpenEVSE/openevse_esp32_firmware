@@ -1,0 +1,34 @@
+{
+  "meta": {
+    "id": "boost_time_over_divert",
+    "title": "Boost: time boost overrides eco divert",
+    "category": "boost",
+    "profile": "time"
+  },
+  "simulation": {
+    "duration": 7200,
+    "tick_interval": 5,
+    "start_time": "2020-03-22T08:00:00Z"
+  },
+  "peers": [
+    {
+      "id": "evse-001",
+      "voltage": 240,
+      "min_current": 6,
+      "max_current": 32,
+      "divert_mode": "eco",
+      "ev": {
+        "battery_capacity_kwh": 75.0,
+        "initial_soc": 20.0,
+        "max_charge_rate_kw": 7.2
+      },
+      "inputs": {
+        "solar": 300
+      },
+      "events": [
+        { "time": 1800, "boost": { "type": "time", "value": 900 } }
+      ]
+    }
+  ],
+  "config_include": "config-divert-default.json"
+}

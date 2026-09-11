@@ -12,6 +12,27 @@
 #include "root_ca.h"
 #include "certificate_validator.h"
 
+bool certificate_id_from_string(const char *str, uint64_t &id)
+{
+  if(NULL == str || '\0' == *str) {
+    return false;
+  }
+
+  // A 64-bit id is at most 16 hex digits; longer cannot be valid.
+  if(strlen(str) > 16) {
+    return false;
+  }
+
+  for(const char *c = str; '\0' != *c; c++) {
+    if(!isxdigit((unsigned char)*c)) {
+      return false;
+    }
+  }
+
+  id = strtoull(str, nullptr, 16);
+  return true;
+}
+
 bool CertificateStore::Certificate::deserialize(JsonObject &obj)
 {
   _name = obj["name"].as<std::string>();
@@ -40,7 +61,11 @@ bool CertificateStore::Certificate::deserialize(JsonObject &obj)
 
   _cert = cert;
   if(obj.containsKey("id")) {
-    _id = std::stoull(obj["id"].as<std::string>(), nullptr, 16);
+    std::string id_str = obj["id"].as<std::string>();
+    if(!certificate_id_from_string(id_str.c_str(), _id)) {
+      DBUGF("Invalid certificate id '%s'", id_str.c_str());
+      return false;
+    }
   } else {
     _id = result.serial;
   }
@@ -276,6 +301,26 @@ bool CertificateStore::serializeCertificate(DynamicJsonDocument &doc, uint64_t i
     return true;
   }
   return false;
+}
+
+size_t CertificateStore::certificateCount()
+{
+  return _certs.size();
+}
+
+bool CertificateStore::serializeCertificateAt(DynamicJsonDocument &doc, size_t index, uint32_t flags)
+{
+  if(index >= _certs.size()) {
+    return false;
+  }
+
+  Certificate *cert = _certs[index];
+  if(nullptr == cert) {
+    return false;
+  }
+
+  JsonObject obj = doc.to<JsonObject>();
+  return cert->serialize(obj, flags);
 }
 
 bool CertificateStore::findCertificate(uint64_t id, Certificate *&cert)

@@ -5,6 +5,11 @@
 #include <openevse.h>
 
 #include "evse_man.h"
+
+#include <algorithm>
+
+#define EVSE_CONNECT_RETRY_MIN_MS   1000
+#define EVSE_CONNECT_RETRY_MAX_MS  10000
 #include "debug.h"
 
 #include "event_log.h"
@@ -126,9 +131,9 @@ EvseManager::EvseManager(Stream &port, EventLog &eventLog) :
   _settingsChangedListener(this),
   _targetProperties(EvseState::Active),
   _hasClaims(false),
-  _sleepForDisable(true),
   _evaluateClaims(true),
   _evaluateTargetState(false),
+  _evseConnectRetryMs(EVSE_CONNECT_RETRY_MIN_MS),
   _vehicleValid(0),
   _vehicleUpdated(0),
   _vehicleLastUpdated(0),
@@ -256,7 +261,7 @@ bool EvseManager::setTargetState(EvseProperties &target)
     }
     else
     {
-      if(_sleepForDisable) {
+      if(sleepForDisable()) {
         DBUGLN("EVSE: sleep");
         _monitor.sleep();
       } else {
@@ -297,21 +302,45 @@ bool EvseManager::setTargetState(EvseProperties &target)
   return changeMade;
 }
 
+// Derived from config on every use rather than cached.
+//
+// The previous cached copy was only ever written from the config-change
+// handler, never at boot, so it kept the constructor default until some
+// unrelated flags key happened to be written. A value latched at the wrong
+// moment then stuck for the life of the boot, and pauses went to DISABLED when
+// the config asked for SLEEPING.
+//
+// That distinction is not cosmetic. J1772EVSEController::Disable() drives the
+// pilot to N12 while Sleep() holds it at P12, and the controller cannot detect
+// plug/unplug at N12 -- it leaves ECVF_EV_CONNECTED at whatever it was when the
+// pause began. So the wrong branch here freezes `vehicle` in /status until the
+// EVSE next wakes.
+bool EvseManager::sleepForDisable()
+{
+  return !config_pause_uses_disabled();
+}
+
 void EvseManager::setSleepForDisable(bool sleepForDisable)
 {
-  if(_sleepForDisable != sleepForDisable)
-  {
-    _sleepForDisable = sleepForDisable;
-    if(EvseState::Disabled == getActiveState())
-    {
-      if(_sleepForDisable) {
-        DBUGLN("EVSE: sleep");
-        _monitor.sleep();
-      } else {
-        DBUGLN("EVSE: disable");
-        _monitor.disable();
-      }
-    }
+  // config is the source of truth now; this only re-applies the choice to a
+  // pause that is already in progress.
+  if(EvseState::Disabled != getActiveState()) {
+    return;
+  }
+
+  // The config-change handler fires for every flags key, not just this one, so
+  // check the controller's actual state rather than re-issuing each time.
+  uint8_t want = sleepForDisable ? OPENEVSE_STATE_SLEEPING : OPENEVSE_STATE_DISABLED;
+  if(want == _monitor.getEvseState()) {
+    return;
+  }
+
+  if(sleepForDisable) {
+    DBUGLN("EVSE: sleep");
+    _monitor.sleep();
+  } else {
+    DBUGLN("EVSE: disable");
+    _monitor.disable();
   }
 }
 
@@ -338,8 +367,11 @@ unsigned long EvseManager::loop(MicroTasks::WakeReason reason)
   if(!_openevse.isConnected())
   {
     initialiseEvse();
-    return 10 * 1000;
+    unsigned long retry = _evseConnectRetryMs;
+    _evseConnectRetryMs = std::min<uint32_t>(_evseConnectRetryMs * 2, EVSE_CONNECT_RETRY_MAX_MS);
+    return retry;
   }
+  _evseConnectRetryMs = EVSE_CONNECT_RETRY_MIN_MS;
 
   DBUGVAR(_evseBootListener.IsTriggered());
   if(_evseBootListener.IsTriggered()) {
@@ -355,6 +387,7 @@ unsigned long EvseManager::loop(MicroTasks::WakeReason reason)
                   getState(),
                   _monitor.getEvseState(),
                   _monitor.getFlags(),
+                  _monitor.getPilotState(),
                   _monitor.getPilot(),
                   _monitor.getSessionEnergy(),
                   _monitor.getSessionElapsed(),

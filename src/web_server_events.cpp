@@ -44,7 +44,7 @@ void handleEventLogs(MongooseHttpServerRequest *request)
 
         response->print("[");
 
-        eventLog.enumerate(block, [&count, response](String time, EventType type, const String &logEntry, EvseState managerState, uint8_t evseState, uint32_t evseFlags, uint32_t pilot, double energy, uint32_t elapsed, double temperature, double temperatureMax, uint8_t divertMode, uint8_t shaper)
+        eventLog.enumerate(block, [&count, response](String time, EventType type, const String &logEntry, EvseState managerState, uint8_t evseState, uint32_t evseFlags, uint8_t pilotState, uint16_t changed, uint32_t pilot, double energy, uint32_t elapsed, double temperature, double temperatureMax, uint8_t divertMode, uint8_t shaper)
         {
           StaticJsonDocument<1024> event;
 
@@ -57,6 +57,22 @@ void handleEventLogs(MongooseHttpServerRequest *request)
           event["managerState"] = managerState.toString();
           event["evseState"] = evseState;
           event["evseFlags"] = evseFlags;
+          event["pilotState"] = pilotState;
+
+          // Why this entry is here. Without it a reader has to diff against the
+          // row above, which may have rotated away or sit in another block -
+          // and the fields that most often move, the pilot current and the
+          // status flags, are not ones the History view shows.
+          JsonArray why = event.createNestedArray("changed");
+          if(changed & EVENTLOG_CHANGE_FIRST)      { why.add("boot"); }
+          if(changed & EVENTLOG_CHANGE_TYPE)       { why.add("type"); }
+          if(changed & EVENTLOG_CHANGE_MANAGER)    { why.add("manager"); }
+          if(changed & EVENTLOG_CHANGE_EVSE_STATE) { why.add("state"); }
+          if(changed & EVENTLOG_CHANGE_FLAGS)      { why.add("flags"); }
+          if(changed & EVENTLOG_CHANGE_PILOT)      { why.add("pilot"); }
+          if(changed & EVENTLOG_CHANGE_DIVERT)     { why.add("divert"); }
+          if(changed & EVENTLOG_CHANGE_SHAPER)     { why.add("shaper"); }
+          if(changed & EVENTLOG_CHANGE_PERIODIC)   { why.add("periodic"); }
           event["pilot"] = pilot;
           event["energy"] = energy;
           event["elapsed"] = elapsed;

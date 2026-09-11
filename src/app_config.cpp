@@ -9,6 +9,7 @@
 #include "app_config.h"
 #include "app_config_mqtt.h"
 #include "app_config_mode.h"
+#include "certificates.h"
 #include "temp_throttle.h"
 #include "flash_migrate.h"
 
@@ -176,6 +177,23 @@ long max_current_soft;
 // Scheduler settings
 uint32_t scheduler_start_window;
 
+// Load Sharing settings
+bool loadsharing_enabled;
+String loadsharing_group_id;
+double loadsharing_group_max_current;
+double loadsharing_safety_factor;
+uint32_t loadsharing_heartbeat_timeout;
+String loadsharing_failsafe_mode;
+double loadsharing_failsafe_safe_current;
+double loadsharing_failsafe_peer_assumed_current;
+uint32_t loadsharing_config_version;
+uint32_t loadsharing_config_updated_at;
+uint32_t loadsharing_peers_version;
+uint32_t loadsharing_status_version;
+String loadsharing_role;
+String loadsharing_controller_host;
+uint32_t loadsharing_rotation_interval;
+
 String esp_hostname_default = "openevse-"+ESPAL.getShortId();
 
 void config_changed(String name);
@@ -315,6 +333,22 @@ ConfigOpt *opts[] =
   new ConfigOptDefinition<uint8_t>(led_brightness, LED_DEFAULT_BRIGHTNESS, "led_brightness", "lb"),
 #endif
 
+// Load Sharing settings
+  new ConfigOptDefinition<bool>(loadsharing_enabled, false, "loadsharing_enabled", "lse"),
+  new ConfigOptDefinition<String>(loadsharing_group_id, "", "loadsharing_group_id", "lsgi"),
+  new ConfigOptDefinition<double>(loadsharing_group_max_current, 0.0, "loadsharing_group_max_current", "lsgmc"),
+  new ConfigOptDefinition<double>(loadsharing_safety_factor, 1.0, "loadsharing_safety_factor", "lssf"),
+  new ConfigOptDefinition<uint32_t>(loadsharing_heartbeat_timeout, 30, "loadsharing_heartbeat_timeout", "lsht"),
+  new ConfigOptDefinition<String>(loadsharing_failsafe_mode, "safe_current", "loadsharing_failsafe_mode", "lsfm"),
+  new ConfigOptDefinition<double>(loadsharing_failsafe_safe_current, 6.0, "loadsharing_failsafe_safe_current", "lsfsc"),
+  new ConfigOptDefinition<double>(loadsharing_failsafe_peer_assumed_current, 6.0, "loadsharing_failsafe_peer_assumed_current", "lsfpac"),
+  new ConfigOptDefinition<uint32_t>(loadsharing_config_version, 0, "loadsharing_config_version", "lscv"),
+  new ConfigOptDefinition<uint32_t>(loadsharing_config_updated_at, 0, "loadsharing_config_updated_at", "lscua"),
+  new ConfigOptDefinition<String>(loadsharing_role, "", "loadsharing_role", "lsr"),
+  new ConfigOptDefinition<String>(loadsharing_controller_host, "", "loadsharing_controller_host", "lsch"),
+  // Rotation interval in seconds (0 disables). Effective max ~49 days on 32-bit millis; larger values wrap.
+  new ConfigOptDefinition<uint32_t>(loadsharing_rotation_interval, 1800, "loadsharing_rotation_interval", "lsri"),
+
 // Scheduler options
   new ConfigOptDefinition<uint32_t>(scheduler_start_window, SCHEDULER_DEFAULT_START_WINDOW, "scheduler_start_window", "ssw"),
 
@@ -327,6 +361,7 @@ ConfigOpt *opts[] =
   new ConfigOptVirtualMaskedBool(flagsOpt, flagsChanged, CONFIG_SERVICE_MQTT, CONFIG_SERVICE_MQTT, "mqtt_enabled", "me"),
   new ConfigOptVirtualMaskedBool(flagsOpt, flagsChanged, CONFIG_MQTT_ALLOW_ANY_CERT, 0, "mqtt_reject_unauthorized", "mru"),
   new ConfigOptVirtualMaskedBool(flagsOpt, flagsChanged, CONFIG_MQTT_RETAINED, CONFIG_MQTT_RETAINED, "mqtt_retained", "mrt"),
+  new ConfigOptVirtualMaskedBool(flagsOpt, flagsChanged, CONFIG_MQTT_NO_SYS_QUERY, 0, "mqtt_sys_query", "msq"),
   new ConfigOptVirtualMaskedBool(flagsOpt, flagsChanged, CONFIG_SERVICE_SNTP, CONFIG_SERVICE_SNTP, "sntp_enabled", "se"),
   new ConfigOptVirtualMaskedBool(flagsOpt, flagsChanged, CONFIG_SERVICE_TESLA, CONFIG_SERVICE_TESLA, "tesla_enabled", "te"),
   new ConfigOptVirtualMaskedBool(flagsOpt, flagsChanged, CONFIG_SERVICE_DIVERT, CONFIG_SERVICE_DIVERT, "divert_enabled", "de"),
@@ -345,6 +380,7 @@ ConfigOpt *opts[] =
   new ConfigOptVirtualMaskedBool(flagsOpt, flagsChanged, CONFIG_DEFAULT_STATE, CONFIG_DEFAULT_STATE, "default_state", "dfs"),
   new ConfigOptVirtualMaskedBool(flagsOpt, flagsChanged, CONFIG_TEMP_THROTTLE, CONFIG_TEMP_THROTTLE, "temp_throttle_enabled", "tte"),
   new ConfigOptVirtualMaskedBool(flagsOpt, flagsChanged, CONFIG_LCD_NETWORK_INFO, CONFIG_LCD_NETWORK_INFO, "lcd_network_info", "lni"),
+  new ConfigOptVirtualMaskedBool(flagsOpt, flagsChanged, CONFIG_TFT_12H_CLOCK, CONFIG_TFT_12H_CLOCK, "tft_12h_clock", "t12"),
   new ConfigOptVirtualMqttProtocol(flagsOpt, flagsChanged, "mqtt_protocol", "mprt"),
   new ConfigOptVirtualChargeMode(flagsOpt, flagsChanged, "charge_mode", "chmd")
 };
@@ -525,6 +561,28 @@ void config_commit(bool factory)
 void config_user_commit()
 {
   user_config.commit();
+}
+
+bool config_https_enabled()
+{
+#ifndef DIVERT_SIM
+  if (www_certificate_id == "") {
+    return false;
+  }
+  // This runs from mDNS setup during network bring-up, so a corrupt stored id
+  // would crash-loop the firmware if it were parsed with a throwing conversion.
+  uint64_t cert_id = 0;
+  if (!certificate_id_from_string(www_certificate_id.c_str(), cert_id)) {
+    DBUGF("config_https_enabled: invalid www_certificate_id '%s'", www_certificate_id.c_str());
+    return false;
+  }
+
+  const char *cert = certs.getCertificate(cert_id);
+  const char *key = certs.getKey(cert_id);
+  return (NULL != cert && NULL != key);
+#else
+  return false;
+#endif
 }
 
 bool config_deserialize(String& json) {
@@ -846,6 +904,12 @@ bool config_serialize(DynamicJsonDocument &doc, bool longNames, bool compactOutp
     if(evse.isD9Supported()) {
       doc["pp_auto"] = evse.isPPAutoAmpacityEnabled();
       doc["zero_cross"] = evse.isZeroCrossSwitchEnabled();
+      // Relay-open current-zero threshold (mA), configurable on the
+      // controller via $SZ. Omitted (rather than a sentinel) when the
+      // controller hasn't reported one yet.
+      if(evse.getZeroCrossThresholdMa() != OPENEVSE_RELAY_HEALTH_NOT_AVAILABLE) {
+        doc["zero_cross_threshold_ma"] = evse.getZeroCrossThresholdMa();
+      }
     }
     // Per-relay state is only emitted once $GR has actually been answered, so
     // an unknown state is omitted rather than defaulting to "enabled"
@@ -853,6 +917,29 @@ bool config_serialize(DynamicJsonDocument &doc, bool longNames, bool compactOutp
       doc["relay_dc1"] = evse.isDC1RelayEnabled();
       doc["relay_dc2"] = evse.isDC2RelayEnabled();
       doc["relay_ac"]  = evse.isACRelayEnabled();
+    }
+    // Relay contact-life health estimate (requires the controller's
+    // RELAY_HEALTH feature). Read only; the whole block is omitted rather
+    // than defaulting to 0% until $GL has actually been answered, same
+    // pattern as the per-relay state above.
+    if(evse.isRelayHealthKnown()) {
+      doc["relay_life_pct"] = evse.getRelayLifeRemainingPct();
+      doc["relay_cold_open_count"] = evse.getRelayColdOpenCount();
+      doc["relay_elec_damage_x1e6"] = evse.getRelayElecDamageX1e6();
+      doc["relay_transit_drift_warning"] = evse.isRelayTransitDriftWarning();
+      if(evse.getRelayTransitBaselineMs() != OPENEVSE_RELAY_HEALTH_NOT_AVAILABLE) {
+        doc["relay_transit_baseline_ms"] = evse.getRelayTransitBaselineMs();
+      }
+      doc["relay_thermal_warning_level"] = evse.getRelayThermalWarningLevel();
+      if(evse.getRelayThermalIndexX100() != OPENEVSE_RELAY_HEALTH_NOT_AVAILABLE) {
+        doc["relay_thermal_index_x100"] = evse.getRelayThermalIndexX100();
+      }
+      if(evse.getRelayThermalBaselineX100() != OPENEVSE_RELAY_HEALTH_NOT_AVAILABLE) {
+        doc["relay_thermal_baseline_x100"] = evse.getRelayThermalBaselineX100();
+      }
+      // 0 against firmware older than 9.3.0 (the field doesn't exist there),
+      // same as the controller-side default - no sentinel needed
+      doc["relay_stuck_recovery_count"] = evse.getRelayStuckRecoveryCount();
     }
     doc["chip_id"] = evse.getChipId();
     doc["heartbeat_interval"] = evse.getHeartbeatInterval();
@@ -887,7 +974,7 @@ bool config_set(const char *name, double val) {
 bool config_set_opt_string(const char *name, const char *value) {
   // Try to determine the type from the config option definition
   // For now, we'll try as string first, then try as integer
-  
+
   // Create a JSON document with the value as a string
   const size_t capacity = JSON_OBJECT_SIZE(1) +  strlen(value) + strlen(value) + 16;
   DynamicJsonDocument doc(capacity);
@@ -903,7 +990,7 @@ bool config_set_opt_string(const char *name, const char *value) {
     // Try parsing as integer
     char *endptr;
     long int_val = strtol(value, &endptr, 10);
-    
+
     if (*endptr == '\0' && value != endptr)
     {
       // Successfully parsed as integer
@@ -922,7 +1009,7 @@ bool config_set_opt_string(const char *name, const char *value) {
       }
     }
   }
-  
+
   return config_deserialize(doc);
 }
 

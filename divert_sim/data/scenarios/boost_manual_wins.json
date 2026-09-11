@@ -1,0 +1,36 @@
+{
+  "meta": {
+    "id": "boost_manual_wins",
+    "title": "Boost: a Manual Disabled claim outranks an active boost",
+    "category": "boost",
+    "profile": "manual"
+  },
+  "simulation": {
+    "duration": 3600,
+    "tick_interval": 5,
+    "start_time": "2020-03-22T08:00:00Z"
+  },
+  "peers": [
+    {
+      "id": "evse-001",
+      "voltage": 240,
+      "min_current": 6,
+      "max_current": 32,
+      "divert_mode": "eco",
+      "ev": {
+        "battery_capacity_kwh": 75.0,
+        "initial_soc": 20.0,
+        "max_charge_rate_kw": 7.2
+      },
+      "inputs": {
+        "solar": 300
+      },
+      "events": [
+        { "time": 600,  "boost": { "type": "time", "value": 2400 } },
+        { "time": 1200, "manual": "disabled" },
+        { "time": 1800, "manual": "release" }
+      ]
+    }
+  ],
+  "config_include": "config-divert-default.json"
+}

@@ -27,6 +27,7 @@ typedef const __FlashStringHelper *fstr_t;
 
 #include "emonesp.h"
 #include "web_server.h"
+#include "diagnostics.h"
 #ifdef ENABLE_TSDB
 #include "tsdb_energy_logger.h"
 #endif
@@ -48,6 +49,9 @@ typedef const __FlashStringHelper *fstr_t;
 #include "home_battery.h"
 #include "evse_man.h"
 #include "limit.h"
+#include "loadsharing_types.h"
+#include "loadsharing_peer_poller.h"
+#include "boost.h"
 #include "web_auth.h"
 #include "web_auth_secret.h"
 
@@ -532,6 +536,50 @@ static String html_escape(const String &input) {
 // Build status data
 // --------------------------------------------------------------------
 
+// Capacity for any document buildStatus() fills. Defined once because the two
+// call sites had drifted: onWsConnect sized its document for 40 members while
+// buildStatus emits around 95, so every websocket connect pushed a silently
+// truncated status. ArduinoJson does not signal that with an error -- it just
+// stops adding members.
+#define STATUS_JSON_CAPACITY (JSON_OBJECT_SIZE(128) + 2048)
+
+// LittleFS.totalBytes() and LittleFS.usedBytes() each run lfs_fs_size(), a
+// full traversal of every metadata pair and data block in the filesystem,
+// reading flash with the FS lock held. Arduino's wrapper discards whichever
+// half of esp_littlefs_info() you did not ask for, so reporting both numbers
+// cost three traversals per request.
+//
+// That made /status the most expensive poll on the device, and expensive in
+// proportion to how full the filesystem is: measured on hardware, a trivial
+// JSON endpoint answers in 11ms while /status took 94ms on a box with 57KB
+// used and 143ms on one with 237KB used. The TSDB store grows, so the cost
+// grows with it. With evcc and the Home Assistant integration polling, the
+// main loop was stalled on flash reads several percent of the time -- and
+// nothing drains the network stack while it is.
+//
+// These two numbers only move when something writes, so sample them on a
+// timer rather than per request.
+#define LFS_STATUS_SAMPLE_MS 30000
+
+static void status_littlefs_usage(uint32_t &free_bytes, uint32_t &used_bytes)
+{
+  static uint32_t sampled_at = 0;
+  static uint32_t cached_free = 0;
+  static uint32_t cached_used = 0;
+
+  uint32_t now = millis();
+  if(0 == sampled_at || (now - sampled_at) >= LFS_STATUS_SAMPLE_MS)
+  {
+    size_t total = LittleFS.totalBytes();
+    cached_used = (uint32_t)LittleFS.usedBytes();
+    cached_free = (uint32_t)(total - cached_used);
+    sampled_at = now;
+  }
+
+  free_bytes = cached_free;
+  used_bytes = cached_used;
+}
+
 void buildStatus(DynamicJsonDocument &doc) {
 
   // Get the current time
@@ -590,8 +638,13 @@ void buildStatus(DynamicJsonDocument &doc) {
 
 
   doc["free_heap"] = ESPAL.getFreeHeap();
-  doc["littlefs_free"] = (uint32_t)(LittleFS.totalBytes() - LittleFS.usedBytes());
-  doc["littlefs_used"] = (uint32_t)LittleFS.usedBytes();
+  diagnostics_status(doc);
+  {
+    uint32_t lfs_free, lfs_used;
+    status_littlefs_usage(lfs_free, lfs_used);
+    doc["littlefs_free"] = lfs_free;
+    doc["littlefs_used"] = lfs_used;
+  }
 
   doc["comm_sent"] = rapiSender.getSent();
   doc["comm_success"] = rapiSender.getSuccess();
@@ -616,15 +669,75 @@ void buildStatus(DynamicJsonDocument &doc) {
   doc["shaper_updated"] = shaper.isUpdated();
   doc["service_level"] = static_cast<uint8_t>(evse.getActualServiceLevel());
   doc["limit"] = limit.hasLimit();
+  doc["boost"] = boost.isActive();
 
   doc["ota_update"] = (int)Update.isRunning();
 
   doc["config_version"] = config_version();
+  doc["loadsharing_peers_version"] = loadsharing_peers_version;
+  doc["loadsharing_status_version"] = loadsharing_status_version;
+
+  // Add joined peers array with real-time status from peer poller
+  {
+    JsonArray peersArray = doc.createNestedArray("loadsharing_joined_peers");
+    double groupTotalAmp = 0.0;
+    
+    for (const auto& peer : loadSharingGroupState.getPeers()) {
+      // Only include joined peers (exclude discovered-but-not-joined)
+      if (!peer.isJoined()) {
+        continue;
+      }
+      
+      JsonObject peerObj = peersArray.createNestedObject();
+      peerObj["hostname"] = peer.getHost();
+      peerObj["id"] = peer.getId();
+      peerObj["name"] = peer.getName();
+
+      if (loadSharingGroupState.isLocalHost(peer.getHost())) {
+        // The local device is not polled over HTTP/WebSocket; report its
+        // values directly from the local EVSE (same sources as create_rapi_json
+        // so they match what remote peers publish on /status).
+        double localAmp = evse.getAmps() * AMPS_SCALE_FACTOR;
+        peerObj["amp"] = localAmp;
+        peerObj["voltage"] = evse.getVoltage() * VOLTS_SCALE_FACTOR;
+        peerObj["pilot"] = evse.getChargeCurrent();
+        peerObj["vehicle"] = evse.isVehicleConnected() ? 1 : 0;
+        peerObj["state"] = evse.getEvseState();
+        peerObj["min_current"] = evse.getMinCurrent();
+        peerObj["max_current"] = evse.getMaxConfiguredCurrent();
+        peerObj["priority"] = peer.getPriority();
+        groupTotalAmp += localAmp;
+        continue;
+      }
+
+      // Get real-time status from peer poller. min/max/priority are controller-
+      // owned (min/max learned from the peer's /config, priority stored on the
+      // group peer entry), not part of the polled status.
+      LoadSharingPeerStatus peerStatus;
+      if (loadSharingPeerPoller.getPeerStatus(peer.getHost(), peerStatus)) {
+        peerObj["amp"] = peerStatus.getAmp();
+        peerObj["voltage"] = peerStatus.getVoltage();
+        peerObj["pilot"] = peerStatus.getPilot();
+        peerObj["vehicle"] = peerStatus.getVehicle();
+        peerObj["state"] = peerStatus.getState();
+        peerObj["min_current"] = peer.getMinCurrent();
+        peerObj["max_current"] = peer.getMaxCurrent();
+        peerObj["priority"] = peer.getPriority();
+        groupTotalAmp += peerStatus.getAmp();
+      }
+    }
+
+    // The local device is included in the loop above (as a joined peer), so its
+    // current is already part of groupTotalAmp -- no separate self addition.
+    doc["loadsharing_group_current_total"] = groupTotalAmp;
+  }
+
   doc["claims_version"] = evse.getClaimsVersion();
   doc["override_version"] = manual.getVersion();
   doc["schedule_version"] = scheduler.getVersion();
   doc["schedule_plan_version"] = scheduler.getPlanVersion();
   doc["limit_version"] = limit.getVersion();
+  doc["boost_version"] = boost.getVersion();
 
   doc["vehicle_state_update"] = (millis() - evse.getVehicleLastUpdated()) / 1000;
   if(teslaClient.getVehicleCnt() > 0) {
@@ -696,8 +809,9 @@ handleScan(MongooseHttpServerRequest *request) {
 }
 
 // -------------------------------------------------------------------
-// Destructive actuators (/reset, /restart, /apoff) must not fire from a bare
-// cross-site GET (e.g. <img src="/reset">). Require either a non-GET method or
+// Destructive actuators (/reset, /restart, /apoff, /divertmode, /shaper,
+// /settime, /rfid/add) must not fire from a bare cross-site GET (e.g.
+// <img src="/reset">). Require either a non-GET method or
 // the SPA's custom header, which a cross-origin GET cannot set — defense in
 // depth beyond SameSite=Strict on the worst-consequence endpoints. Sends 403
 // and returns false when the request is a headerless GET; the caller's response
@@ -752,6 +866,10 @@ handleDivertMode(MongooseHttpServerRequest *request){
     return;
   }
 
+  if(!actuatorMethodAllowed(request, response)) {
+    return;
+  }
+
   DivertMode divertmode = (DivertMode)(request->getParam("divertmode").toInt());
   divert.setMode(divertmode);
 
@@ -772,6 +890,10 @@ handleCurrentShaper(MongooseHttpServerRequest *request) {
   if(false == requestPreProcess(request, response, CONTENT_TYPE_TEXT)) {
     return;
   }
+  if(!actuatorMethodAllowed(request, response)) {
+    return;
+  }
+
   shaper.setState(request->getParam("shaper").toInt() == 1? true: false);
 
   response->setCode(200);
@@ -789,6 +911,10 @@ void handleSetTime(MongooseHttpServerRequest *request)
 {
   MongooseHttpServerResponseStream *response;
   if(false == requestPreProcess(request, response, CONTENT_TYPE_TEXT)) {
+    return;
+  }
+
+  if(!actuatorMethodAllowed(request, response)) {
     return;
   }
 
@@ -827,6 +953,22 @@ handleTeslaVeh(MongooseHttpServerRequest *request)
 }
 
 // -------------------------------------------------------------------
+// Whether vehicle telemetry pushed to POST /status should be accepted.
+//
+// The four vehicle fields below each repeated the same source comparison, which
+// is one copy-paste away from a field that quietly accepts a push it should
+// not, or rejects one it should. Naming the rule once means the next field
+// added here inherits it rather than restating it.
+//
+// Sources that own the vehicle data themselves are excluded on purpose: a push
+// must not be able to fight a source that is actively fetching the same values.
+// -------------------------------------------------------------------
+static bool vehiclePushAccepted()
+{
+  return VEHICLE_DATA_SRC_HTTP == vehicle_data_src;
+}
+
+// -------------------------------------------------------------------
 // Returns status json
 // url: /status
 // -------------------------------------------------------------------
@@ -854,8 +996,9 @@ void handleStatusPost(MongooseHttpServerRequest *request, MongooseHttpServerResp
       DBUGF("shaper: live power:%dW", shaper.getLivePwr());
     }
     if(doc.containsKey("solar")) {
-      divert.setSolar(doc["solar"]);
-      DBUGF("solar:%dW", divert.getSolar());
+      int solar = doc["solar"];
+      divert.setSolar(solar);
+      DBUGF("solar:%dW", solar);
       divert.update_state();
       // recalculate shaper
       if (shaper.getState()) {
@@ -864,8 +1007,9 @@ void handleStatusPost(MongooseHttpServerRequest *request, MongooseHttpServerResp
       send_event = false; // Divert sends the event so no need to send here
     }
     else if(doc.containsKey("grid_ie")) {
-      divert.setGridIe(doc["grid_ie"]);
-      DBUGF("grid:%dW", divert.getGridIe());
+      int grid_ie = doc["grid_ie"];
+      divert.setGridIe(grid_ie);
+      DBUGF("grid:%dW", grid_ie);
       divert.update_state();
       // recalculate shaper
       if (shaper.getState()) {
@@ -873,25 +1017,25 @@ void handleStatusPost(MongooseHttpServerRequest *request, MongooseHttpServerResp
       }
       send_event = false; // Divert sends the event so no need to send here
     }
-    if(doc.containsKey("battery_level") && vehicle_data_src == VEHICLE_DATA_SRC_HTTP) {
+    if(doc.containsKey("battery_level") && vehiclePushAccepted()) {
       double vehicle_soc = doc["battery_level"];
       DBUGF("vehicle_soc:%d%%", vehicle_soc);
       evse.setVehicleStateOfCharge(vehicle_soc);
       doc["vehicle_state_update"] = 0;
     }
-    if(doc.containsKey("battery_range") && vehicle_data_src == VEHICLE_DATA_SRC_HTTP) {
+    if(doc.containsKey("battery_range") && vehiclePushAccepted()) {
       double vehicle_range = doc["battery_range"];
       DBUGF("vehicle_range:%dKM", vehicle_range);
       evse.setVehicleRange(vehicle_range);
       doc["vehicle_state_update"] = 0;
     }
-    if(doc.containsKey("time_to_full_charge") && vehicle_data_src == VEHICLE_DATA_SRC_HTTP){
+    if(doc.containsKey("time_to_full_charge") && vehiclePushAccepted()){
       double vehicle_eta = doc["time_to_full_charge"];
       DBUGF("vehicle_eta:%d", vehicle_eta);
       evse.setVehicleEta(vehicle_eta);
       doc["vehicle_state_update"] = 0;
     }
-    if(doc.containsKey("vehicle_charge_limit") && vehicle_data_src == VEHICLE_DATA_SRC_HTTP){
+    if(doc.containsKey("vehicle_charge_limit") && vehiclePushAccepted()){
       int vehicle_charge_limit = doc["vehicle_charge_limit"];
       DBUGF("vehicle_charge_limit:%d%%", vehicle_charge_limit);
       evse.setVehicleChargeLimit(vehicle_charge_limit);
@@ -934,11 +1078,34 @@ handleStatus(MongooseHttpServerRequest *request)
 
   if(HTTP_GET == request->method()) {
 
-    const size_t capacity = JSON_OBJECT_SIZE(128) + 2048;
-    DynamicJsonDocument doc(capacity);
+    // Allocated once and reused. Building a fresh multi-KB document per
+    // request, freed again immediately, is what fragments this heap: measured
+    // on hardware, sustained polling of /status alone drove the largest
+    // allocatable block from 61,428 down to 38,900 and it never recovered,
+    // while total free heap stayed above 70KB.
+    //
+    // Safe as a static because Mongoose is polled from loop() on a single
+    // task and each handler runs to completion inside its own event callback;
+    // this one calls nothing that re-enters the HTTP layer.
+    static DynamicJsonDocument doc(STATUS_JSON_CAPACITY);
+    doc.clear();
+
+    uint32_t probe = diagnostics_probe_begin();
     buildStatus(doc);
+    diagnostics_probe_end(0, probe);
+
     response->setCode(200);
-    serializeJson(doc, *response);
+    probe = diagnostics_probe_begin();
+    // Serialise into a right-sized buffer and hand the stream one write.
+    // Writing incrementally makes the stream's mbuf realloc up a 1.5x ladder
+    // (128->192->288->...->2187 for a 1.7KB body): eight ascending
+    // allocate/free pairs per request, which is what shreds the heap. One
+    // reserved String plus one write is two exact-sized allocations.
+    String json;
+    json.reserve(measureJson(doc) + 1);
+    serializeJson(doc, json);
+    response->write((const uint8_t *)json.c_str(), json.length());
+    diagnostics_probe_end(1, probe);
 
   } else if(HTTP_POST == request->method()) {
     handleStatusPost(request, response);
@@ -1123,6 +1290,76 @@ void handleLimit(MongooseHttpServerRequest *request)
     handleLimitPost(request, response);
   } else if(HTTP_DELETE == request->method()) {
     handleLimitDelete(request, response);
+  } else {
+    response->setCode(405);
+    response->print("{\"msg\":\"Method not allowed\"}");
+  }
+
+  request->send(response);
+}
+
+//----------------------------------------------------------
+//
+//            Boost
+//
+//----------------------------------------------------------
+
+void handleBoostGet(MongooseHttpServerRequest *request, MongooseHttpServerResponseStream *response)
+{
+  if(boost.isActive())
+  {
+    StaticJsonDocument<192> doc;
+    boost.serialize(doc);
+    response->setCode(200);
+    serializeJson(doc, *response);
+  } else {
+    // 200 + {} doubles as the capability probe: old firmware 404s /boost.
+    response->setCode(200);
+    response->print("{}");
+  }
+}
+
+void handleBoostPost(MongooseHttpServerRequest *request, MongooseHttpServerResponseStream *response)
+{
+  String body = request->body().toString();
+  int rc = boost.arm(body.c_str());
+
+  if(Boost_Armed == rc) {
+    response->setCode(201);
+    response->print("{\"msg\":\"done\"}");
+  } else if(Boost_Unsupported == rc) {
+    response->setCode(422);
+    response->print("{\"msg\":\"no vehicle data source for this boost type\"}");
+  } else {
+    response->setCode(400);
+    response->print("{\"msg\":\"failed to parse JSON\"}");
+  }
+}
+
+void handleBoostDelete(MongooseHttpServerRequest *request, MongooseHttpServerResponseStream *response)
+{
+  if(boost.cancel()) {
+    response->setCode(200);
+    response->print("{\"msg\":\"done\"}");
+  } else {
+    response->setCode(404);
+    response->print("{\"msg\":\"no boost\"}");
+  }
+}
+
+void handleBoost(MongooseHttpServerRequest *request)
+{
+  MongooseHttpServerResponseStream *response;
+  if(false == requestPreProcess(request, response)) {
+    return;
+  }
+
+  if(HTTP_GET == request->method()) {
+    handleBoostGet(request, response);
+  } else if(HTTP_POST == request->method()) {
+    handleBoostPost(request, response);
+  } else if(HTTP_DELETE == request->method()) {
+    handleBoostDelete(request, response);
   } else {
     response->setCode(405);
     response->print("{\"msg\":\"Method not allowed\"}");
@@ -1382,12 +1619,65 @@ void handleAddRFID(MongooseHttpServerRequest *request) {
   if(false == requestPreProcess(request, response)) {
     return;
   }
+  if(!actuatorMethodAllowed(request, response)) {
+    return;
+  }
+
   response->setCode(200);
   response->addHeader("Access-Control-Allow-Origin", "*");
   response->print("{\"msg\":\"Waiting for badge\"}");
   request->send(response);
   yield();
   rfid.waitForTag();
+}
+
+// -------------------------------------------------------------------
+// Reset the relay contact-life health estimate ($FH via EvseManager,
+// requires the controller's RELAY_HEALTH feature) - use after a physical
+// relay replacement, so the accumulator doesn't carry over wear from the
+// old relay.
+// url: /relay/reset
+// -------------------------------------------------------------------
+void handleRelayHealthReset(MongooseHttpServerRequest *request) {
+  MongooseHttpServerResponseStream *response;
+  if(false == requestPreProcess(request, response, CONTENT_TYPE_JSON)) {
+    return;
+  }
+  if(!actuatorMethodAllowed(request, response)) {
+    return;
+  }
+
+  evse.resetRelayHealth([request, response](int ret) {
+    response->setCode(RAPI_RESPONSE_OK == ret ? 200 : 500);
+    response->print(RAPI_RESPONSE_OK == ret ? "{\"msg\":\"done\"}" : "{\"msg\":\"error\"}");
+    request->send(response);
+  });
+}
+
+// -------------------------------------------------------------------
+// Manually run the stuck-relay recovery cycle ($FK via EvseManager,
+// requires firmware 9.3.0+ / ADVPWR). NAK'd by the controller if an EV is
+// connected. Blocking on the controller side for up to ~30s - the HTTP
+// response is deferred until the async RAPI callback fires (EvseMonitor
+// pauses its own periodic polling for the duration, see
+// _relay_recovery_in_flight) rather than blocking this request thread, so
+// the rest of the server stays responsive while the cycle runs.
+// url: /relay/recovery
+// -------------------------------------------------------------------
+void handleRelayRecovery(MongooseHttpServerRequest *request) {
+  MongooseHttpServerResponseStream *response;
+  if(false == requestPreProcess(request, response, CONTENT_TYPE_JSON)) {
+    return;
+  }
+  if(!actuatorMethodAllowed(request, response)) {
+    return;
+  }
+
+  evse.runStuckRelayRecovery([request, response](int ret) {
+    response->setCode(RAPI_RESPONSE_OK == ret ? 200 : 500);
+    response->print(RAPI_RESPONSE_OK == ret ? "{\"msg\":\"done\"}" : "{\"msg\":\"error\"}");
+    request->send(response);
+  });
 }
 
 String delayTimer = "0 0 0 0";
@@ -1568,7 +1858,7 @@ void handleHttpsRedirect(MongooseHttpServerRequest *request)
 void onWsFrame(MongooseHttpWebSocketConnection *connection, int flags, uint8_t *data, size_t len)
 {
   DBUGF("Got message %.*s", len, (const char *)data);
-  const size_t capacity = JSON_OBJECT_SIZE(1) + 16;
+  const size_t capacity = JSON_OBJECT_SIZE(3) + JSON_OBJECT_SIZE(2) + 128;
   DynamicJsonDocument doc(capacity);
   DeserializationError error = deserializeJson(doc, data, len);
   if (!error) {
@@ -1576,8 +1866,23 @@ void onWsFrame(MongooseHttpWebSocketConnection *connection, int flags, uint8_t *
       {
         // answer pong
         connection->send("{\"pong\": 1}");
-
       }
+
+    // Handle load sharing allocation from controller (member side)
+    if (doc.containsKey("loadsharing")) {
+      JsonObject ls = doc["loadsharing"];
+      if (ls.containsKey("target_current")) {
+        double targetCurrent = ls["target_current"].as<double>();
+        String reason = ls.containsKey("reason") ? ls["reason"].as<String>() : "allocation";
+
+        DBUGF("LoadSharing: Received allocation %.1fA (reason: %s)", targetCurrent, reason.c_str());
+
+        if (loadSharingGroupState.isMember()) {
+          loadSharingGroupState.recordAllocationReceived();
+          shaper.setLoadSharingLimit(targetCurrent, reason == "failsafe_disabled");
+        }
+      }
+    }
   }
 }
 
@@ -1604,11 +1909,20 @@ void onWsAuthenticate(MongooseHttpServerRequest *request)
 void onWsConnect(MongooseHttpWebSocketConnection *connection)
 {
   DBUGF("New client connected over ws");
-  // pushing states to client
-  const size_t capacity = JSON_OBJECT_SIZE(40) + 1024;
-  DynamicJsonDocument doc(capacity);
+
+  DynamicJsonDocument doc(STATUS_JSON_CAPACITY);
   buildStatus(doc);
-  web_server_event(doc);
+
+  // Send only to the client that just connected. This used to call
+  // web_server_event(), which broadcasts to every open websocket -- so one
+  // client reconnecting pushed a full status to all of them. Under a
+  // reconnect storm (a Home Assistant integration retrying, say) that
+  // multiplies into a burst of full-status sends against connections that
+  // never asked for one, straight into send buffers with no backpressure.
+  String json;
+  json.reserve(measureJson(doc) + 1);
+  serializeJson(doc, json);
+  connection->send(json);
 }
 
 /*
@@ -1662,9 +1976,19 @@ void web_server_setup()
   bool use_ssl = false;
   if(www_certificate_id != "")
   {
-    uint64_t cert_id = std::stoull(www_certificate_id.c_str(), nullptr, 16);
-    const char *cert = certs.getCertificate(cert_id);
-    const char *key = certs.getKey(cert_id);
+    // This one sits on the boot path: a corrupted stored www_certificate_id
+    // parsed with a throwing conversion would abort inside web_server_setup()
+    // and boot-loop the unit with no way back in over the network. Fall through
+    // to plain HTTP instead, which at least leaves the device reachable to
+    // correct the config.
+    uint64_t cert_id = 0;
+    bool id_valid = certificate_id_from_string(www_certificate_id.c_str(), cert_id);
+    if(!id_valid) {
+      DEBUG.printf("Ignoring malformed www_certificate_id '%s', serving HTTP\n", www_certificate_id.c_str());
+    }
+
+    const char *cert = id_valid ? certs.getCertificate(cert_id) : NULL;
+    const char *key = id_valid ? certs.getKey(cert_id) : NULL;
     if(NULL != cert && NULL != key)
     {
       DEBUG.printf("Starting HTTPS server, https://0.0.0.0:%d\n", www_https_port);
@@ -1703,6 +2027,8 @@ void web_server_setup()
   server.on("/shaper$", handleCurrentShaper);
   server.on("/emoncms/describe$", handleDescribe);
   server.on("/rfid/add$", handleAddRFID);
+  server.on("/relay/reset$", handleRelayHealthReset);
+  server.on("/relay/recovery$", handleRelayRecovery);
 
   server.on("/schedule/plan$", handleSchedulePlan);
   server.on("/schedule", handleSchedule);
@@ -1715,6 +2041,7 @@ void web_server_setup()
   server.on("/logs", handleEventLogs);
   server.on("/certificates", handleCertificates);
   server.on("/limit", handleLimit);
+  server.on("/boost", handleBoost);
   server.on("/emeter", handleEmeter);
   server.on("/time", handleTime);
   server.on("/mqtt$", handleMqttAction);
@@ -1753,6 +2080,69 @@ void web_server_setup()
     response->setContentType(CONTENT_TYPE_TEXT);
     response->addHeader("Access-Control-Allow-Origin", "*");
     SerialDebug.printBuffer(*response);
+    request->send(response);
+  });
+
+  // -----------------------------------------------------------------
+  // Last-panic forensics. A crash on a deployed unit leaves a core dump in
+  // flash that outlives the reboot; these two endpoints are what make it
+  // reachable without a serial cable.
+  //
+  //   GET    /debug/crash      decoded summary (task, PC, backtrace)
+  //   DELETE /debug/crash      clear it, so the next panic is unambiguous
+  //   GET    /debug/crash/raw  the image itself, for esp-coredump
+  // -----------------------------------------------------------------
+  server.on("/debug/crash$", [](MongooseHttpServerRequest *request) {
+    MongooseHttpServerResponseStream *response;
+    if(false == requestPreProcess(request, response, CONTENT_TYPE_JSON)) {
+      return;
+    }
+
+    if(HTTP_DELETE == request->method()) {
+      bool erased = diagnostics_coredump_erase();
+      response->setCode(erased ? 200 : 500);
+      response->print(erased ? F("{\"msg\":\"erased\"}") : F("{\"msg\":\"error\"}"));
+      request->send(response);
+      return;
+    }
+
+    const size_t capacity = JSON_OBJECT_SIZE(12) + JSON_ARRAY_SIZE(16) + 640;
+    DynamicJsonDocument doc(capacity);
+    diagnostics_coredump_json(doc);
+    response->setCode(200);
+    serializeJson(doc, *response);
+    request->send(response);
+  });
+
+  server.on("/debug/crash/raw$", [](MongooseHttpServerRequest *request) {
+    dumpRequest(request);
+
+    // Not routed through requestPreProcess: that opens a buffered stream
+    // response, and the whole point here is to send from a flash mapping
+    // instead of buffering the image in a heap that has no room for it.
+    if(!isAuthenticated(request)) {
+      request->requestAuthentication(esp_hostname);
+      return;
+    }
+
+    const uint8_t *data = NULL;
+    size_t len = 0;
+    if(!diagnostics_coredump_image(&data, &len)) {
+      MongooseHttpServerResponseStream *response = request->beginResponseStream();
+      response->setContentType(CONTENT_TYPE_JSON);
+      response->setCode(404);
+      response->print(F("{\"msg\":\"none\"}"));
+      request->send(response);
+      return;
+    }
+
+    MongooseHttpServerResponseBasic *response = request->beginResponse();
+    response->setCode(200);
+    response->setContentType("application/octet-stream");
+    response->setContentLength(len);
+    response->addHeader(F("Content-Disposition"), F("attachment; filename=\"coredump.bin\""));
+    response->addHeader(F("Cache-Control"), F("no-store"));
+    response->setContent(data, len);
     request->send(response);
   });
 
@@ -1800,6 +2190,9 @@ void web_server_setup()
 
   server.onNotFound(handleNotFound);
 
+  // Setup load sharing endpoints
+  web_server_load_sharing_setup();
+
   DEBUG.println("Server started");
 }
 
@@ -1825,6 +2218,14 @@ web_server_loop() {
 void web_server_event(JsonDocument &event)
 {
   String json;
+  // Reserve up front: the default String growth pattern reallocates on almost
+  // every append, and exact-fit reallocs at this frequency are what shreds the
+  // heap into unusable fragments.
+  json.reserve(measureJson(event) + 1);
   serializeJson(event, json);
+
+  // Drop any client that has stopped draining before adding to its backlog.
+  diagnostics_ws_reap();
+
   server.sendAll("/ws", json);
 }

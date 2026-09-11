@@ -3,8 +3,17 @@
 #endif
 
 #include "limit.h"
+#include "charge_threshold.h"
 #include "debug.h"
 #include "event.h"
+
+// ChargeThreshold assumes LimitType::Value's numeric codes (limit.h is
+// deliberately not included by charge_threshold.h); keep them in sync.
+static_assert(LimitType::None == 0, "ChargeThreshold assumes LimitType::None == 0");
+static_assert(LimitType::Time == 1, "ChargeThreshold assumes LimitType::Time == 1");
+static_assert(LimitType::Energy == 2, "ChargeThreshold assumes LimitType::Energy == 2");
+static_assert(LimitType::Soc == 3, "ChargeThreshold assumes LimitType::Soc == 3");
+static_assert(LimitType::Range == 4, "ChargeThreshold assumes LimitType::Range == 4");
 // ---------------------------------------------
 //
 //            LimitType Class
@@ -13,6 +22,15 @@
 
 uint8_t LimitType::fromString(const char *value)
 {
+  // Same hazard as EvseState::fromString: limit.cpp:111 passes obj["type"]
+  // straight in, which is nullptr for a missing or non-string key, so a POST
+  // to /limit carrying a non-string "type" dereferenced null and rebooted the
+  // board. Leave _value untouched, matching what already happens for an
+  // unrecognised string.
+  if(nullptr == value) {
+    return _value;
+  }
+
   // Cheat a bit and just check the first char
   switch (value[0]) {
     // None
@@ -241,51 +259,49 @@ unsigned long Limit::loop(MicroTasks::WakeReason reason)
 };
 
 bool Limit::limitTime(uint32_t val) {
+  // Limit's time base is session-elapsed charging minutes (NOT wall-clock —
+  // Boost handles wall-clock via deadline_timer.h).
   uint32_t elapsed = (uint32_t)_evse->getSessionElapsed()/60;
-  if ( val > 0 && elapsed >= val ) {
-    // Time limit done
+  bool reached = ChargeThreshold::reached(LimitType::Time, val, 0, elapsed);
+  if (reached) {
     DBUGLN("Time limit reached");
     DBUGVAR(val);
     DBUGVAR(elapsed);
-    return true;
   }
-  else return false;
+  return reached;
 };
 
 bool Limit::limitEnergy(uint32_t val) {
   uint32_t elapsed = _evse->getSessionEnergy();
-  if ( val > 0 && elapsed >= val ) {
-    // Energy limit done
+  bool reached = ChargeThreshold::reached(LimitType::Energy, val, 0, elapsed);
+  if (reached) {
     DBUGLN("Energy limit reached");
     DBUGVAR(val);
     DBUGVAR(elapsed);
-    return true;
   }
-  else return false;
+  return reached;
 };
 
 bool Limit::limitSoc(uint32_t val) {
   uint32_t soc = _evse->getVehicleStateOfCharge();
-  if ( val > 0  && soc >= val ) {
-    // SOC limit done
+  bool reached = ChargeThreshold::reached(LimitType::Soc, val, 0, soc);
+  if (reached) {
     DBUGLN("SOC limit reached");
     DBUGVAR(val);
     DBUGVAR(soc);
-    return true;
   }
-  else return false;
+  return reached;
 };
 
 bool Limit::limitRange(uint32_t val) {
   uint32_t rng = _evse->getVehicleRange();
-  if ( val > 0  && rng >= val ) {
-    // Range limit done
+  bool reached = ChargeThreshold::reached(LimitType::Range, val, 0, rng);
+  if (reached) {
     DBUGLN("Range limit reached");
     DBUGVAR(val);
     DBUGVAR(rng);
-    return true;
   }
-  else return false;
+  return reached;
 };
 
 

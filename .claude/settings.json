@@ -1,0 +1,44 @@
+{
+  "$schema": "https://json.schemastore.org/claude-code-settings.json",
+  "permissions": {
+    "deny": [
+      "Read(./*.pem)",
+      "Read(./*/*.pem)",
+      "Read(./*/*/*.pem)",
+      "Read(./.env)",
+      "Read(./.env.local)",
+      "Read(./*/.env)",
+      "Read(./*/.env.local)",
+      "Read(./*/*/.env)",
+      "Read(./*/*/.env.local)",
+      "Read(./.vscode/settings.json)",
+      "Read(./.vscode/settings.local.json)",
+      "Edit(./*.pem)",
+      "Edit(./*/*.pem)",
+      "Edit(./*/*/*.pem)",
+      "Edit(./.env)",
+      "Edit(./.env.local)",
+      "Edit(./*/.env)",
+      "Edit(./*/.env.local)",
+      "Edit(./*/*/.env)",
+      "Edit(./*/*/.env.local)",
+      "Edit(./.vscode/settings.json)",
+      "Edit(./.vscode/settings.local.json)",
+      "Write(./*.pem)",
+      "Write(./*/*.pem)",
+      "Write(./*/*/*.pem)",
+      "Write(./.env)",
+      "Write(./.env.local)",
+      "Write(./*/.env)",
+      "Write(./*/.env.local)",
+      "Write(./*/*/.env)",
+      "Write(./*/*/.env.local)",
+      "Write(./.vscode/settings.json)",
+      "Write(./.vscode/settings.local.json)"
+    ],
+    "ask": [
+      "Bash(git push:*)",
+      "Bash(curl *update*)"
+    ]
+  }
+}

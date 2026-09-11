@@ -3,7 +3,13 @@
     "id": "shaper_data_shaper_aggressive",
     "title": "Shaper: Data Shaper (aggressive)",
     "category": "shaper",
-    "profile": "aggressive"
+    "profile": "aggressive",
+    "description": [
+      "Shaper: Data Shaper (aggressive) replays live-power input through the current shaper rather than solar-divert control.",
+      "More responsive shaping profile. Look for quicker tracking of available power and potentially more frequent adjustments.",
+      "Compare live power, smoothed live power, shaper maximum, available charge power, and actual charge power to see how the limiter reacts.",
+      "Duration: 2 hours."
+    ]
   },
   "simulation": {
     "duration": 7200,

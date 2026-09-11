@@ -36,6 +36,7 @@ typedef uint32_t EvseClient;
 #define EvseClient_OpenEVSE_MQTT              EVC(EvseClient_Vendor_OpenEVSE, 0x000B)
 #define EvseClient_OpenEVSE_Shaper            EVC(EvseClient_Vendor_OpenEVSE, 0x000C)
 #define EvseClient_OpenEVSE_TempThrottle      EVC(EvseClient_Vendor_OpenEVSE, 0x000D)
+#define EvseClient_OpenEVSE_LoadSharing       EVC(EvseClient_Vendor_OpenEVSE, 0x000E)
 
 #define EvseClient_OpenEnergyMonitor_DemandShaper EVC(EvseClient_Vendor_OpenEnergyMonitor, 0x0001)
 
@@ -236,10 +237,13 @@ class EvseManager : public MicroTasks::Task
     EvseClient _charge_current_client;
     EvseClient _max_current_client;
 
-    bool _sleepForDisable;
-
     bool _evaluateClaims;
     bool _evaluateTargetState;
+
+    // Retry interval while the EVSE module has not answered yet: starts at
+    // 1 s and doubles to 10 s, so a probe lost during boot costs a second
+    // rather than the full steady-state interval.
+    uint32_t _evseConnectRetryMs;
 
     uint32_t _vehicleValid;
     uint32_t _vehicleUpdated;
@@ -264,6 +268,10 @@ class EvseManager : public MicroTasks::Task
     void setup();
     unsigned long loop(MicroTasks::WakeReason reason);
 
+    // Whether a pause should use the controller's SLEEPING state rather than
+    // DISABLED. Derived from config on each use -- see the definition.
+    bool sleepForDisable();
+
   public:
     EvseManager(Stream &port, EventLog &eventLog);
     ~EvseManager();
@@ -285,6 +293,9 @@ class EvseManager : public MicroTasks::Task
     EvseClient getStateClient() {
       return _state_client;
     }
+    // Which claim won the charge-current arbitration, or EvseClient_NULL when no
+    // claim is active and the configured default applies. Lets a UI answer "why
+    // am I limited to 12 A?" rather than just reporting the number.
     EvseClient getChargeCurrentClient() {
       return _charge_current_client;
     }
@@ -534,8 +545,27 @@ class EvseManager : public MicroTasks::Task
       _monitor.resetFaultCounters(callback);
     }
     uint32_t getFrequency() { return _monitor.getFrequency(); }
+    uint32_t getZeroCrossThresholdMa() { return _monitor.getZeroCrossThresholdMa(); }
     const char *getChipId() { return _monitor.getChipId(); }
     bool isD9Supported() { return _monitor.isD9Supported(); }
+
+    // Relay contact-life health estimate
+    bool isRelayHealthKnown() { return _monitor.isRelayHealthKnown(); }
+    uint8_t getRelayLifeRemainingPct() { return _monitor.getRelayLifeRemainingPct(); }
+    uint32_t getRelayColdOpenCount() { return _monitor.getRelayColdOpenCount(); }
+    uint32_t getRelayElecDamageX1e6() { return _monitor.getRelayElecDamageX1e6(); }
+    uint32_t getRelayTransitBaselineMs() { return _monitor.getRelayTransitBaselineMs(); }
+    bool isRelayTransitDriftWarning() { return _monitor.isRelayTransitDriftWarning(); }
+    uint32_t getRelayThermalIndexX100() { return _monitor.getRelayThermalIndexX100(); }
+    uint32_t getRelayThermalBaselineX100() { return _monitor.getRelayThermalBaselineX100(); }
+    uint8_t getRelayThermalWarningLevel() { return _monitor.getRelayThermalWarningLevel(); }
+    uint32_t getRelayStuckRecoveryCount() { return _monitor.getRelayStuckRecoveryCount(); }
+    void runStuckRelayRecovery(std::function<void(int ret)> callback = NULL) {
+      _monitor.runStuckRelayRecovery(callback);
+    }
+    void resetRelayHealth(std::function<void(int ret)> callback = NULL) {
+      _monitor.resetRelayHealth(callback);
+    }
     void restartEvse() {
       _monitor.restart();
     }
@@ -575,7 +605,7 @@ class EvseManager : public MicroTasks::Task
 
     // Get/set the 'disabled' mode
     bool isSleepForDisable() {
-      return _sleepForDisable;
+      return sleepForDisable();
     }
     void setSleepForDisable(bool sleepForDisable);
 

@@ -3,7 +3,13 @@
     "id": "shaper_data_shaper_threephase",
     "title": "Shaper: Data Shaper (threephase)",
     "category": "shaper",
-    "profile": "threephase"
+    "profile": "threephase",
+    "description": [
+      "Shaper: Data Shaper (threephase) replays live-power input through the current shaper rather than solar-divert control.",
+      "Three-phase shaping profile. Power limits should reflect the higher aggregate power available across phases.",
+      "Compare live power, smoothed live power, shaper maximum, available charge power, and actual charge power to see how the limiter reacts.",
+      "Duration: 2 hours."
+    ]
   },
   "simulation": {
     "duration": 7200,

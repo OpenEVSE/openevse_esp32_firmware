@@ -26,6 +26,11 @@ bool http_update_from_url(String url,
   std::function<void(int)> success,
   std::function<void(int)> error);
 
+// Starts redirects queued by the HTTP callbacks. Call once per main loop,
+// after Mongoose.poll(), so the previous TLS connection has been destroyed
+// before the next one is allocated.
+void http_update_loop();
+
 bool http_update_start(String source, size_t total);
 bool http_update_write(uint8_t *data, size_t len);
 bool http_update_end(bool evenIfRemaining = true);

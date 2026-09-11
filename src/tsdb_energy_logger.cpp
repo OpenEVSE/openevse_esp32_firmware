@@ -41,7 +41,8 @@ bool TsdbEnergyLogger::init_db() {
   // TSDB_ALLOC_INTERNAL_RAM strategy allocated block buffers with
   // MALLOC_CAP_INTERNAL only, which can land in IRAM (word-access only) and
   // faulted on the int16 block stores (LoadStoreError). Fixed to
-  // MALLOC_CAP_INTERNAL|MALLOC_CAP_8BIT in components/esp_tsdb/src/tsdb_buffer.c.
+  // MALLOC_CAP_INTERNAL|MALLOC_CAP_8BIT upstream (zakery292/esp_tsdb#3), in
+  // src/tsdb_buffer.c.
   cfg.alloc_strategy      = TSDB_ALLOC_INTERNAL_RAM;
   cfg.buffer_pool_size    = 12 * 1024;
   cfg.use_paged_allocation= false;

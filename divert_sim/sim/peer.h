@@ -10,7 +10,9 @@
 #include "divert.h"
 #include "current_shaper.h"
 #include "manual.h"
+#include "boost.h"
 #include "event_log.h"
+#include "loadsharing_algorithm.h"
 
 #include "scenario.h"
 #include "sim_evse.h"
@@ -51,6 +53,7 @@ public:
   EvseManager &evse() { return _evse; }
   DivertTask &divert() { return _divert; }
   CurrentShaperTask &shaper() { return _shaper; }
+  Boost &boost() { return _boost; }
 
   // Cached values used both for output and for load-share allocation.
   double last_solar_w = 0.0;
@@ -62,6 +65,17 @@ public:
   bool online = true;
   bool vehicle = true;
 
+  // Allocation handed to this peer by the load-sharing algorithm (amps).
+  // 0 = no constraint applied.
+  double loadshare_allocation_amps = 0.0;
+
+  // Persistent under-draw cap state (mirrors firmware peer poller).
+  LoadSharingDemandState demand_state;
+
+  // Reason text for the most recent reduction in pilot below max (filled by
+  // the runner before each row is written).
+  std::string reason;
+
 private:
   PeerScenario _scenario;
   SimEvse _sim;
@@ -70,6 +84,7 @@ private:
   DivertTask _divert;
   CurrentShaperTask _shaper;
   ManualOverride _manual;
+  Boost _boost;
 
   // Track which event-indices have already fired.
   size_t _next_event_idx = 0;

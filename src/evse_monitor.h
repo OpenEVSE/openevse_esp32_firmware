@@ -93,6 +93,18 @@ class EvseMonitor : public MicroTasks::Task
           }
         }
         bool isVehicleConnected() {
+          // OPENEVSE_VFLAG_EV_CONNECTED is documented in the controller as
+          // "valid only when pilot not N12", and J1772EVSEController::Disable()
+          // sets exactly that -- so while the EVSE is DISABLED the controller
+          // cannot see a plug or unplug and simply leaves the flag at whatever
+          // it was when the pause started. Reporting that stale value showed a
+          // vehicle still connected long after it had been unplugged.
+          //
+          // SLEEPING is deliberately not covered: it holds the pilot at P12 and
+          // keeps detecting normally, so the flag stays trustworthy there.
+          if(OPENEVSE_STATE_DISABLED == getEvseState()) {
+            return false;
+          }
           return OPENEVSE_VFLAG_EV_CONNECTED == (getFlags() & OPENEVSE_VFLAG_EV_CONNECTED);
         }
         bool isBootLocked() {
@@ -188,11 +200,34 @@ class EvseMonitor : public MicroTasks::Task
 
     // Extended state (linco-work firmware)
     uint32_t _frequency;          // AC line frequency × 100 (from $GZ); 0 = unknown/unsupported
+    // Relay-open current-zero threshold (mA), from $GZ's 2nd field: current
+    // below which the controller considers it safe to open the relay at a
+    // current zero. Runtime-configurable on the controller via $SZ.
+    // OPENEVSE_RELAY_HEALTH_NOT_AVAILABLE = unknown/unsupported controller.
+    uint32_t _zero_cross_threshold_ma;
     bool _relay_dc1;              // DC relay 1 enabled (only valid when _relay_status_known)
     bool _relay_dc2;              // DC relay 2 enabled (only valid when _relay_status_known)
     bool _relay_ac;               // AC relay enabled (only valid when _relay_status_known)
     bool _relay_status_known;     // true once $GR has been answered by the controller
     char _chip_id[48];            // EVSE chip ID from $GI
+
+    // Relay contact-life health estimate (linco-work RELAY_HEALTH feature,
+    // from $GL). Only meaningful once _relay_health_known is true - the
+    // controller may predate the feature or have it compiled out.
+    bool _relay_health_known;
+    uint8_t  _relay_life_remaining_pct;
+    uint32_t _relay_cold_open_count;
+    uint32_t _relay_elec_damage_x1e6;
+    uint32_t _relay_transit_baseline_ms;   // OPENEVSE_RELAY_HEALTH_NOT_AVAILABLE = baseline not established
+    bool     _relay_transit_drift_warning;
+    uint32_t _relay_thermal_index_x100;    // OPENEVSE_RELAY_HEALTH_NOT_AVAILABLE = not available
+    uint32_t _relay_thermal_baseline_x100; // OPENEVSE_RELAY_HEALTH_NOT_AVAILABLE = not available
+    uint8_t  _relay_thermal_warning_level; // 0=ok/not available 1=watch 2=warn
+    uint32_t _relay_stuck_recovery_count;  // cumulative stuck-relay recovery attempts run; 0 against pre-9.3.0 controllers
+    // True while a $FK command is outstanding (up to ~30s) - pauses loop()'s
+    // own periodic RAPI traffic so it doesn't overflow the RAPI queue and
+    // drop heartbeat pulses for that long. See runStuckRelayRecovery().
+    bool _relay_recovery_in_flight;
 
     DataReady _data_ready;
     DataReady _boot_ready;
@@ -217,12 +252,14 @@ class EvseMonitor : public MicroTasks::Task
     void updateCurrentSettings(long min_current, long max_hardware_current, long pilot, long max_configured_current);
 
     void getStatusFromEvse(bool allowStart = true);
+    void getSettingsFromEvse();
     void getChargeCurrentAndVoltageFromEvse();
     void updateEffectiveVoltage();
     void getTemperatureFromEvse();
     void readFrequency();
     void readRelayStatus();
     void readChipId();
+    void readRelayHealth();
 
   protected:
     void setup();
@@ -431,7 +468,31 @@ class EvseMonitor : public MicroTasks::Task
     bool isACRelayEnabled()  { return _relay_ac; }
     bool isRelayStatusKnown() { return _relay_status_known; }
     uint32_t getFrequency()  { return _frequency; }  // × 100 Hz (5000 = 50.00 Hz); 0 = unknown
+    // Relay-open current-zero threshold, mA. OPENEVSE_RELAY_HEALTH_NOT_AVAILABLE if unknown/unsupported
+    uint32_t getZeroCrossThresholdMa() { return _zero_cross_threshold_ma; }
     const char *getChipId()  { return _chip_id; }
+
+    // Relay contact-life health estimate (requires the controller's
+    // RELAY_HEALTH feature; check isRelayHealthKnown() first)
+    bool isRelayHealthKnown() { return _relay_health_known; }
+    uint8_t getRelayLifeRemainingPct() { return _relay_life_remaining_pct; }
+    uint32_t getRelayColdOpenCount() { return _relay_cold_open_count; }
+    uint32_t getRelayElecDamageX1e6() { return _relay_elec_damage_x1e6; }
+    uint32_t getRelayTransitBaselineMs() { return _relay_transit_baseline_ms; }
+    bool isRelayTransitDriftWarning() { return _relay_transit_drift_warning; }
+    uint32_t getRelayThermalIndexX100() { return _relay_thermal_index_x100; }
+    uint32_t getRelayThermalBaselineX100() { return _relay_thermal_baseline_x100; }
+    uint8_t getRelayThermalWarningLevel() { return _relay_thermal_warning_level; }
+    uint32_t getRelayStuckRecoveryCount() { return _relay_stuck_recovery_count; }
+    // Manually run the controller's stuck-relay recovery cycle (requires
+    // firmware 9.3.0+ / ADVPWR). NAK'd by the controller if an EV is
+    // connected. Blocking on the controller side for up to ~30s.
+    void runStuckRelayRecovery(std::function<void(int ret)> callback = NULL);
+    // Reset the relay-health accumulator, self-learned baselines, and the
+    // stuck-relay recovery counter (requires the controller's RELAY_HEALTH
+    // feature) - use after a physical relay replacement, since the estimate
+    // is otherwise meaningless: it carries over wear from the old relay.
+    void resetRelayHealth(std::function<void(int ret)> callback = NULL);
     // True if the controller's RAPI protocol supports the D9 command set
     bool isD9Supported() { return _openevse.isD9Supported(); }
     uint32_t getHeartbeatInterval() { return _heartbeat_interval; }

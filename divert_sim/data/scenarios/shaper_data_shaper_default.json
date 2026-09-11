@@ -3,7 +3,13 @@
     "id": "shaper_data_shaper_default",
     "title": "Shaper: Data Shaper (default)",
     "category": "shaper",
-    "profile": "default"
+    "profile": "default",
+    "description": [
+      "Shaper: Data Shaper (default) replays live-power input through the current shaper rather than solar-divert control.",
+      "Baseline current-shaper behavior using the standard smoothing, max-power, and pause settings.",
+      "Compare live power, smoothed live power, shaper maximum, available charge power, and actual charge power to see how the limiter reacts.",
+      "Duration: 2 hours."
+    ]
   },
   "simulation": {
     "duration": 7200,

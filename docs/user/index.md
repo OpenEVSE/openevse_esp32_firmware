@@ -20,7 +20,8 @@ UI — if your unit looks different, check
 ## Energy features
 
 - [Solar divert (Eco mode)](solar-divert.md) — charge from your solar excess
-- [Load shaper](load-shaper.md) — stay under your grid connection's limit
+- [Load shaper](load-shaper.md) — stay under your grid connection's limit,
+  plus the Labs preview of load sharing between chargers
 
 ## Integrations & access control
 

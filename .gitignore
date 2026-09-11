@@ -72,6 +72,9 @@ node_modules
 .vagrant
 ubuntu-xenial-16.04-cloudimg-console.log
 
+# Claude Code / AI agent local overrides (personal, not shared)
+.claude/settings.local.json
+
 # VSCode stuff
 .vscode
 .vscode/browse.vc.db*
@@ -114,3 +117,18 @@ tests/integration/output/test_results.xml
 .superpowers/
 divert_sim/data/scenarios/interactive_generated.json
 divert_sim/output/interactive.json
+
+# arduino+espidf hybrid build (framework = arduino, espidf) — resolved
+# outputs from the IDF component manager / cmake reconfigure, never
+# committed sources. See spike-report.md §2, §8.
+#
+# IMPORTANT: sdkconfig.<env> is the RESOLVED per-env config, generated once
+# from the committed sdkconfig.defaults* seed and then treated as authority
+# — after that, editing the seed does nothing until the stale
+# sdkconfig.<env> file is deleted (or `pio run -t fullclean`). This pattern
+# only matches the resolved `sdkconfig.openevse_*` outputs; it must never
+# swallow committed seed inputs such as `sdkconfig.defaults*`.
+sdkconfig.openevse_*
+dependencies.lock
+managed_components/
+.dummy/

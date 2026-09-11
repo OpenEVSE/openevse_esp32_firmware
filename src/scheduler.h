@@ -266,6 +266,7 @@ class Scheduler : public MicroTasks::Task
 
     EventInstance _firstEvent;
     EventInstance _activeEvent;
+    bool _active_event_dirty;
 
     bool _loading;
 

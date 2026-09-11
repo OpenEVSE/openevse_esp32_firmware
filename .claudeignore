@@ -1,0 +1,12 @@
+.pio/
+**/.pio/
+**/build/
+**/*.o
+**/*.a
+**/*.elf
+**/*.bin
+node_modules/
+**/node_modules/
+.venv/
+**/.venv/
+divert_sim/output/

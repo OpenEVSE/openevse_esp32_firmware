@@ -62,7 +62,6 @@ int main(int argc, char **argv)
   std::string scenario;
   std::string output;
   std::string config_json_arg;
-
   cxxopts::Options options(argv[0], "OpenEVSE multi-peer backend simulator");
   options.add_options()
     ("help", "Print help")
@@ -122,5 +121,4 @@ int main(int argc, char **argv)
   }
 
   exit_now(sim::run(scenario, output, result.count("config-check") != 0));
-  return 0;
 }

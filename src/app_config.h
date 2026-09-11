@@ -110,6 +110,23 @@ extern uint32_t divert_min_charge_time;
 // Scheduler settings
 extern uint32_t scheduler_start_window;
 
+// Load Sharing settings
+extern bool loadsharing_enabled;
+extern String loadsharing_group_id;
+extern double loadsharing_group_max_current;
+extern double loadsharing_safety_factor;
+extern uint32_t loadsharing_heartbeat_timeout;
+extern String loadsharing_failsafe_mode;
+extern double loadsharing_failsafe_safe_current;
+extern double loadsharing_failsafe_peer_assumed_current;
+extern uint32_t loadsharing_config_version;
+extern uint32_t loadsharing_config_updated_at;
+extern uint32_t loadsharing_peers_version;
+extern uint32_t loadsharing_status_version;
+extern String loadsharing_role;
+extern String loadsharing_controller_host;
+extern uint32_t loadsharing_rotation_interval;
+
 //Shaper settings
 extern uint32_t current_shaper_max_pwr;
 extern uint32_t current_shaper_smoothing_time;
@@ -165,7 +182,12 @@ extern uint32_t flags;
 #define CONFIG_WIZARD               (1 << 25)
 #define CONFIG_DEFAULT_STATE        (1 << 26)
 #define CONFIG_TEMP_THROTTLE        (1 << 27)
-#define CONFIG_LCD_NETWORK_INFO     (1 << 28) // next free bit after CONFIG_LCD_NETWORK_INFO
+#define CONFIG_LCD_NETWORK_INFO     (1 << 28)
+// Inverted sense: bit SET disables the $SYS/broker/version probe. Existing
+// installs have this bit clear, so they keep probing exactly as before.
+#define CONFIG_MQTT_NO_SYS_QUERY    (1 << 29)
+// TFT panel clock in 12-hour form. Clear (the default) keeps the 24-hour clock.
+#define CONFIG_TFT_12H_CLOCK        (1 << 30) // next free bit after CONFIG_TFT_12H_CLOCK
 
 #define INITIAL_CONFIG_VERSION  1
 
@@ -187,6 +209,13 @@ inline uint8_t config_mqtt_protocol() {
 
 inline bool config_mqtt_retained() {
   return CONFIG_MQTT_RETAINED == (flags & CONFIG_MQTT_RETAINED);
+}
+
+// Query broker metadata via $SYS/broker/version. Must be off for managed
+// brokers (AWS IoT Core): they have no $SYS tree and answer an unauthorised
+// subscribe by closing the connection rather than failing the SUBACK.
+inline bool config_mqtt_sys_query() {
+  return 0 == (flags & CONFIG_MQTT_NO_SYS_QUERY);
 }
 
 inline bool config_mqtt_reject_unauthorized() {
@@ -265,6 +294,12 @@ inline bool config_lcd_network_info_enabled()
   return CONFIG_LCD_NETWORK_INFO == (flags & CONFIG_LCD_NETWORK_INFO);
 }
 
+inline bool config_tft_12h_clock()
+{
+  return CONFIG_TFT_12H_CLOCK == (flags & CONFIG_TFT_12H_CLOCK);
+}
+
+bool config_https_enabled();
 
 extern uint32_t config_version();
 

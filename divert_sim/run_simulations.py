@@ -15,11 +15,12 @@ import json
 import os
 import subprocess
 import tempfile
+from concurrent.futures import ThreadPoolExecutor, as_completed
 from dataclasses import dataclass
 from datetime import datetime, timezone
 from glob import glob
 from pathlib import Path
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List, Optional, Tuple
 
 
 ROOT = Path(__file__).resolve().parent
@@ -29,14 +30,33 @@ OUTPUT_DIR = ROOT / "output"
 PIO_ENV = os.environ.get("DIVERT_SIM_PIO_ENV", "native_simulator")
 
 
+def default_jobs() -> int:
+    raw = os.environ.get("DIVERT_SIM_JOBS", "").strip()
+    if raw:
+        try:
+            return max(1, int(raw))
+        except ValueError:
+            raise ValueError(f"DIVERT_SIM_JOBS must be an integer, got {raw!r}")
+    return max(1, os.cpu_count() or 1)
+
+
 def resolve_binary() -> Path:
-    local_binary = ROOT / "divert_sim"
-    if local_binary.exists():
-        return local_binary
+    explicit_binary = os.environ.get("DIVERT_SIM_BINARY")
+    if explicit_binary:
+        path = Path(explicit_binary).expanduser().resolve()
+        if not path.exists():
+            raise FileNotFoundError(
+                f"DIVERT_SIM_BINARY points to missing file: {path}"
+            )
+        return path
 
     pio_binary = ROOT.parent / ".pio" / "build" / PIO_ENV / "program"
     if pio_binary.exists():
         return pio_binary
+
+    local_binary = ROOT / "divert_sim"
+    if local_binary.exists():
+        return local_binary
 
     raise FileNotFoundError(
         "divert_sim binary not found. Build with `pio run -e native_simulator` "
@@ -211,6 +231,7 @@ def build_index(
     index_name: str = "index.json",
     scenario_ids: Optional[List[str]] = None,
     scenario_sources: Optional[List[str]] = None,
+    jobs: Optional[int] = None,
 ) -> Dict[str, Any]:
     """Run all scenarios, write CSV outputs, and write an index file."""
     OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
@@ -226,9 +247,8 @@ def build_index(
             for scenario in scenarios
             if str(scenario.path.relative_to(ROOT)) in allowed_sources
         ]
-    entries: List[Dict[str, Any]] = []
 
-    for scenario in scenarios:
+    def run_entry(scenario: ScenarioMeta) -> Dict[str, Any]:
         if profile_suffix:
             profile = profile_suffix
             output_name = f"{scenario.id}_{profile}"
@@ -236,27 +256,148 @@ def build_index(
             profile = scenario.profile
             output_name = scenario.id
         rows = run_scenario(str(scenario.path), output=output_name, config_overrides=config_overrides)
-        row_count = len(rows)
-        entries.append(
-            {
-                "id": scenario.id,
-                "title": scenario.title,
-                "category": scenario.category,
-                "profile": profile,
-                "peers": scenario.peers,
-                "source": str(scenario.path.relative_to(ROOT)),
-                "csv": f"output/{output_name}.csv",
-                "row_count": row_count,
+        return {
+            "id": scenario.id,
+            "title": scenario.title,
+            "category": scenario.category,
+            "profile": profile,
+            "peers": scenario.peers,
+            "source": str(scenario.path.relative_to(ROOT)),
+            "csv": f"output/{output_name}.csv",
+            "row_count": len(rows),
+        }
+
+    worker_count = min(max(1, jobs if jobs is not None else default_jobs()), max(1, len(scenarios)))
+    entries: List[Optional[Dict[str, Any]]] = [None] * len(scenarios)
+
+    if worker_count == 1:
+        for idx, scenario in enumerate(scenarios):
+            entries[idx] = run_entry(scenario)
+    else:
+        with ThreadPoolExecutor(max_workers=worker_count) as executor:
+            futures: Dict[Any, Tuple[int, ScenarioMeta]] = {
+                executor.submit(run_entry, scenario): (idx, scenario)
+                for idx, scenario in enumerate(scenarios)
             }
-        )
+            for future in as_completed(futures):
+                idx, scenario = futures[future]
+                try:
+                    entries[idx] = future.result()
+                except Exception as exc:
+                    raise RuntimeError(f"Failed to run scenario {scenario.path}: {exc}") from exc
 
     index = {
         "generated_at": datetime.now(timezone.utc).isoformat().replace("+00:00", "Z"),
-        "scenarios": entries,
+        "scenarios": [entry for entry in entries if entry is not None],
     }
     with (OUTPUT_DIR / index_name).open("w") as f:
         json.dump(index, f, indent=2)
     return index
+
+
+def run_loadsharing_simulation(scenario_path: str, output: str = "") -> Dict[str, Any]:
+    """Run one load-sharing scenario and return translated metrics for tests."""
+    rows_raw = run_scenario(scenario_path, output)
+    if not rows_raw:
+        return {
+            "_rows": [],
+            "_physical_supply_exceeded": False,
+            "_offered_supply_exceeded": False,
+            "_max_total_demand_w": 0.0,
+        }
+
+    peer_ids: List[str] = []
+    for col in rows_raw[0].keys():
+        if col.endswith("_online"):
+            peer_ids.append(col[:-7])
+
+    t0 = _parse_time(rows_raw[0]["time"])
+    translated: List[Dict[str, Any]] = []
+    max_total_demand_w = 0.0
+    physical_supply_exceeded = False
+    offered_supply_exceeded = False
+    previous_states: Dict[str, str] = {}
+    transition_grace_until = -1
+
+    for raw in rows_raw:
+        row: Dict[str, Any] = {}
+        row["time"] = int((_parse_time(raw["time"]) - t0).total_seconds())
+
+        group_max_w = float(raw.get("group_max_w", 0) or 0)
+        group_total_actual_w = float(raw.get("group_total_actual_w", 0) or 0)
+        group_total_demand_w = float(raw.get("group_total_demand_w", 0) or 0)
+
+        row["available_a"] = group_max_w / 240.0 if group_max_w else 0.0
+        row["group_max_power_w"] = group_max_w
+        row["failsafe_active"] = raw.get("failsafe_active", "0") in ("1", "true", "True")
+
+        total_actual_w = 0.0
+        total_allocated_w = 0.0
+        for pid in peer_ids:
+            alloc_w = float(raw.get(f"{pid}_loadshare_allocated_w", 0) or 0)
+            actual_w = float(raw.get(f"{pid}_actual_charge_w", 0) or 0)
+            charge_available_w = float(
+                raw.get(f"{pid}_charge_available_w", raw.get(f"{pid}_pilot_w", 0)) or 0
+            )
+
+            row[f"{pid}_allocated"] = alloc_w / 240.0
+            row[f"{pid}_actual"] = actual_w / 240.0
+            row[f"{pid}_online"] = raw.get(f"{pid}_online", "0") in ("1", "true", "True")
+            row[f"{pid}_vehicle"] = raw.get(f"{pid}_vehicle", "0") in ("1", "true", "True")
+            row[f"{pid}_actual_power_w"] = actual_w
+            row[f"{pid}_available_power_w"] = charge_available_w
+            row[f"{pid}_soc"] = float(raw.get(f"{pid}_soc", 0) or 0)
+            row[f"{pid}_state"] = raw.get(f"{pid}_state", "")
+            row[f"{pid}_claim_state"] = raw.get(f"{pid}_claim_state", "")
+            row[f"{pid}_claim_details"] = raw.get(f"{pid}_claim_details", "")
+            row[f"{pid}_reason"] = raw.get(f"{pid}_reason", "")
+
+            total_actual_w += actual_w
+            total_allocated_w += alloc_w
+
+        row["total_actual"] = total_actual_w / 240.0
+        row["total_allocated"] = total_allocated_w / 240.0
+        row["total_pilot_demand"] = group_total_demand_w / 240.0
+        if (not previous_states and any(
+                row[f"{pid}_state"] == "charging" for pid in peer_ids
+            )) or any(
+                previous_states.get(pid) != "charging"
+                and row[f"{pid}_state"] == "charging"
+                for pid in peer_ids
+            ):
+            transition_grace_until = row["time"] + 5
+        row["budget_transition_grace"] = row["time"] <= transition_grace_until
+        previous_states = {
+            pid: row[f"{pid}_state"]
+            for pid in peer_ids
+        }
+
+        max_total_demand_w = max(max_total_demand_w, group_total_demand_w)
+        if (group_max_w > 0 and group_total_actual_w > group_max_w * 1.001
+                and not row["budget_transition_grace"]):
+            physical_supply_exceeded = True
+        if group_max_w > 0 and group_total_demand_w > group_max_w * 1.001:
+            offered_supply_exceeded = True
+
+        translated.append(row)
+
+    result: Dict[str, Any] = {
+        "_rows": translated,
+        "_peer_ids": peer_ids,
+        "_physical_supply_exceeded": physical_supply_exceeded,
+        "_offered_supply_exceeded": offered_supply_exceeded,
+        "_max_total_demand_w": max_total_demand_w,
+    }
+
+    for pid in peer_ids:
+        soc_values = [r[f"{pid}_soc"] for r in translated]
+        result[pid] = {
+            "initial_soc": soc_values[0] if soc_values else 0.0,
+            "final_soc": soc_values[-1] if soc_values else 0.0,
+            "soc_delta": (soc_values[-1] - soc_values[0]) if soc_values else 0.0,
+        }
+
+    return result
 
 
 if __name__ == "__main__":

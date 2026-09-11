@@ -3,11 +3,17 @@
     "id": "divert_day2_noimport",
     "title": "Divert: Day 2 (noimport)",
     "category": "divert",
-    "profile": "noimport"
+    "profile": "noimport",
+    "description": [
+      "Divert: Day 2 (noimport) replays the Day 2 solar trace used for repeatable divert tuning comparisons.",
+      "No-import settings should be more conservative, preferring to leave surplus unused rather than import from the grid.",
+      "This variant is driven from solar input, so the main comparison is available charge power versus actual EV charge power.",
+      "Duration: 12 hours."
+    ]
   },
   "simulation": {
     "duration": 43200,
-    "tick_interval": 60,
+    "tick_interval": 1,
     "start_time": "2019-09-18T05:55:00Z"
   },
   "peers": [

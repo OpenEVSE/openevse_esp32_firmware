@@ -4,8 +4,8 @@
   <meta charset="utf-8" />
   <title>OpenEVSE Simulations</title>
   <script src="https://canvasjs.com/assets/script/canvasjs.min.js"></script>
-  <script src="simulations.js?v=20260605a"></script>
-  <link rel="stylesheet" href="simulations.css" />
+  <script src="simulations.js?v=20260715a"></script>
+  <link rel="stylesheet" href="simulations.css?v=20260715a" />
 </head>
 <body>
   <h1>OpenEVSE Simulations</h1>
@@ -109,7 +109,8 @@
         const button = document.createElement("button");
         button.type = "button";
         button.dataset.category = category;
-        button.textContent = category.charAt(0).toUpperCase() + category.slice(1);
+        button.textContent = category === "loadsharing" ? "Load Sharing" :
+          category.charAt(0).toUpperCase() + category.slice(1);
         button.classList.toggle("active", category === activeCategory);
         button.addEventListener("click", () => setActiveTab(category, categories));
         tabs.appendChild(button);

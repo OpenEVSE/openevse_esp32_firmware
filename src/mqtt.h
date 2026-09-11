@@ -10,6 +10,7 @@
 #include "app_config.h"
 #include "evse_man.h" // For EvseProperties, EvseClient_OpenEVSE_MQTT etc.
 #include "limit.h"    // For LimitProperties
+#include "boost.h"
 #include "event.h"
 #include "scheduler.h" // For scheduler interaction
 #include "manual.h"    // For manual override interaction
@@ -42,6 +43,7 @@ class Mqtt : public MicroTasks::Task {
     uint8_t _overrideVersion = 0;
     uint8_t _scheduleVersion = 0;
     uint8_t _limitVersion = 0;
+    uint8_t _boostVersion = 0;
     uint32_t _configVersion = 0;
 
     String _lastWill = "";
@@ -115,6 +117,7 @@ class Mqtt : public MicroTasks::Task {
     void clearSchedule(uint32_t event);
     void publishLimit();
     void setLimit(LimitProperties &limitProps);
+    void publishBoost();
 
     // Method to be called by other services when their state changes
     void notifyEvseClaimChanged();

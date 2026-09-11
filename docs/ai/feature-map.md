@@ -15,10 +15,12 @@ relative to the configured base topic (see [mqtt.md](../mqtt.md)).
 | Charge rate / current control, charger hardware config | `evse_man.*`, `evse_monitor.*` | `/`, `/settings/evse` | `max_current_soft`, `service`, `scale`, `offset` | `/config`, `/override` | `charge_rate/set` | [dashboard.md](../user/dashboard.md) |
 | Local display & LEDs (character LCD, RGB pixels) | `lcd.*`, `led_manager.*` | `/settings/evse` | `lcd_backlight_timeout`, `led_brightness` | `/config` | — | [settings.md](../user/settings.md) |
 | Session limits (energy/time/SOC/range) | `limit.*` | `/` (limit pills) | `limit_default_type`, `limit_default_value` | `/limit` | `limit/set` | [dashboard.md](../user/dashboard.md) |
+| Boost (charge to a time/energy/SoC/range target, then release) | `boost.*`, `charge_threshold.*` | — | — | `/boost` | `boost/set` | — |
 | First-run setup wizard | — (UI only) | `/` until passed | `wizard_passed` | `/config` | — | [getting-started.md](../user/getting-started.md) |
 | Charge Manager (station defaults, always-active features, weekly rules; legacy timer list at `/schedule/legacy`) | `scheduler.*` | `/schedule` | `scheduler_start_window` | `/schedule`, `/schedule/plan` | `schedule/set` | [charge-manager.md](../user/charge-manager.md) |
 | Solar divert / Eco mode | `divert.*` | `/settings/solar` | `divert_*` (`divert_enabled`, `divert_type`, `divert_PV_ratio`, smoothing/attack/decay, min charge time) | `/config`, `/status` (`solar`, `grid_ie`) | `divertmode/set`, solar/grid topics | [solar-divert.md](../user/solar-divert.md) |
 | Current shaper (grid power cap) | `current_shaper.*` | `/settings/shaper` | `current_shaper_*` | `/config` | live power topic | [load-shaper.md](../user/load-shaper.md) |
+| Local load sharing (controller/member groups) | `loadsharing_*`, `web_server_loadsharing.cpp`, `current_shaper.cpp` | `/settings/loadsharing` | `loadsharing_*` | `/loadsharing/peers`, `/loadsharing/peers/{host}`, `/loadsharing/discover`, `/loadsharing/status`, `/config` | — | [load-sharing.md](../user/load-sharing.md) |
 | Temperature throttling | `temp_throttle.*` | `/settings/safety` | `temp_throttle_*`, `over_temp_shutdown` | `/config` | — | [safety.md](../user/safety.md) |
 | Safety checks (diode/GFCI/ground/relay/vent), boot lock, heartbeat | `evse_man.*`, controller | `/settings/safety` | `*_check` flags, `boot_lock`, `heartbeat_*` | `/config` | — | [safety.md](../user/safety.md) |
 | Energy metering (session/day/week/month/year) | `energy_meter.*` | `/monitoring`, `/history` | — | `/emeter`, `/status` | `session_energy`, `total_energy`, … | [monitoring.md](../user/monitoring.md) |
@@ -36,7 +38,7 @@ relative to the configured base topic (see [mqtt.md](../mqtt.md)).
 | Firmware update (web upload / GitHub OTA) | `web_server.*`, `ota.*` | `/settings/firmware` | — | `/update`, `/restart` | — | [firmware-update.md](../user/firmware-update.md) |
 | SSL certificates | `certificates.*` | `/settings/certificates` | `*_certificate_id` | `/certificates` | — | [settings.md](../user/settings.md) |
 | RAPI terminal / debug console | `web_server.*` | `/settings/terminal` | — | `/r`, WS consoles | — | [settings.md](../user/settings.md) |
-| On-device TFT display | `lcd_tft.*`, `src/lvgl_tft/` | `/settings/display` (gated on `tft_theme`) | `tft_*` | `/config` | — | [settings.md](../user/settings.md) |
+| On-device TFT display | `lcd_lvgl.*`, `src/lvgl_tft/` | `/settings/display` (gated on `tft_theme`) | `tft_*` | `/config` | — | [settings.md](../user/settings.md) |
 | Charger info / diagnostics | `evse_monitor.*` | `/monitoring`, `/settings/about` | — | `/status`, `/config` | telemetry topics | [monitoring.md](../user/monitoring.md) |
 
 ## Maintenance

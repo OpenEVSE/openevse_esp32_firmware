@@ -49,6 +49,11 @@ Limit:
 `<base-topic>/limit/set <json data>`        : set/update limit ( data as refered from API: <https://openevse.stoplight.io/docs/openevse-wifi-v4/c410fb5e48294-set-charge-limit>)
 `<base-topic>/limit/set clear`              : clear current limit
 
+Boost:
+`<base-topic>/boost/`                       : get boost data (retained [json data], `{}` when idle)
+`<base-topic>/boost/set <json data>`        : arm/replace boost (same schema as `POST /boost` in api.yml)
+`<base-topic>/boost/set off`                : cancel boost
+
 Main settings:
 
 `<base-topic>/divertmode/set [1 | 2]`       : normal (1)/ eco (2) divert mode  

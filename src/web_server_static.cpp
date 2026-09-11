@@ -66,15 +66,33 @@ bool web_static_handle(MongooseHttpServerRequest *request)
     // immutable by construction: a changed file gets a changed name. Telling
     // the browser so removes the revalidation round trip entirely. index.html
     // is NOT hashed -- it is what points at the current asset names -- so it
-    // keeps a short lifetime or a new build would never be picked up.
+    // gets a day lifetime instead: iOS 17 WebKit turns same-document #hash
+    // taps into full page reloads whenever the shell is cache-stale against a
+    // slow server (and this server is always slow), so the shell must stay
+    // fresh. The ETag/304 path below still lets an explicit browser refresh
+    // pick up a new build immediately.
     bool immutable = 0 == strncmp(file->filename, "/assets/", 8);
     response->addHeader(F("Cache-Control"),
                         immutable ? F("public, max-age=31536000, immutable")
-                                  : F("public, max-age=30, must-revalidate"));
+                                  : F("public, max-age=86400"));
 
     MongooseString ifNoneMatch = request->headers("If-None-Match");
     if(http_etag_matches(ifNoneMatch.c_str(), ifNoneMatch.length(), file->etag)) {
-      request->send(304);
+      // A 304's headers are what renew the cached entry's freshness lifetime
+      // (RFC 9111 s4.3.4). A bare 304 leaves the stored copy stale forever:
+      // max-age=86400 protects the shell for exactly one day after the last
+      // full 200, then iOS 17's stale-shell renavigation bug returns and no
+      // number of successful revalidations ever clears it. So send the 304
+      // through the response object carrying Cache-Control, plus the quoted
+      // ETag (RFC 7232 s4.1). Explicit zero length: the default -1 would
+      // serialize as Transfer-Encoding: chunked with no terminating chunk.
+      response->setCode(304);
+      response->setContentLength(0);
+      char etag[HTTP_ETAG_QUOTED_MAX];
+      if(http_etag_quote(file->etag, etag, sizeof(etag))) {
+        response->addHeader("Etag", etag);
+      }
+      request->send(response);
       return true;
     }
 

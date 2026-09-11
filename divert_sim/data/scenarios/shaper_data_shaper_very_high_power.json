@@ -3,7 +3,13 @@
     "id": "shaper_data_shaper_very_high_power",
     "title": "Shaper: Data Shaper (very_high_power)",
     "category": "shaper",
-    "profile": "very_high_power"
+    "profile": "very_high_power",
+    "description": [
+      "Shaper: Data Shaper (very_high_power) replays live-power input through the current shaper rather than solar-divert control.",
+      "High available-power edge case. The EVSE should cap at charger/vehicle limits rather than blindly follow the large input.",
+      "Compare live power, smoothed live power, shaper maximum, available charge power, and actual charge power to see how the limiter reacts.",
+      "Duration: 2 hours."
+    ]
   },
   "simulation": {
     "duration": 7200,
