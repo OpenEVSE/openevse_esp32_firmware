@@ -65,4 +65,13 @@ void dumpRequest(MongooseHttpServerRequest *request);
 void handleLogin(MongooseHttpServerRequest *request);
 void handleLogout(MongooseHttpServerRequest *request);
 
+// Shared by the destructive-actuator handlers in web_server.cpp and the
+// notifications ack handler in web_server_notifications.cpp: refuses a
+// bare cross-site GET (see the definition in web_server.cpp for why).
+bool actuatorMethodAllowed(MongooseHttpServerRequest *request,
+                           MongooseHttpServerResponseStream *response);
+
+void handleNotifications(MongooseHttpServerRequest *request);
+void handleNotificationAck(MongooseHttpServerRequest *request);
+
 #endif // _EMONESP_WEB_SERVER_H

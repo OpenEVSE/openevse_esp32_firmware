@@ -76,4 +76,9 @@ class Notifications : public MicroTasks::Task
 
 extern Notifications notifications;
 
+// "info" / "warning" / "critical" for a NotificationSeverity value. Shared by
+// Notifications::serialize() and the /status "notifications" object so both
+// endpoints name severities the same way.
+const char *notification_severity_name(uint8_t severity);
+
 #endif // _OPENEVSE_NOTIFICATIONS_H

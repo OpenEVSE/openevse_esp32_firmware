@@ -230,21 +230,29 @@ bool Notifications::ack(const char *id)
 
 void Notifications::serialize(JsonDocument &doc)
 {
-  static const char *severity_name[] = { "info", "warning", "critical" };
   static const char *category_name[] = { "safety", "fault", "wear", "thermal" };
 
   doc["count"] = count();
-  doc["max_severity"] = severity_name[maxSeverity()];
+  doc["max_severity"] = notification_severity_name(maxSeverity());
 
   JsonArray list = doc.createNestedArray("notifications");
   for(size_t i = 0; i < _count; i++) {
     JsonObject o = list.createNestedObject();
     o["id"] = _live[i].id;
     o["category"] = category_name[_live[i].category];
-    o["severity"] = severity_name[_live[i].severity];
+    o["severity"] = notification_severity_name(_live[i].severity);
     o["sticky"] = _live[i].sticky;
     o["acked"] = notification_acks_is_acked(_acks, _ack_count, _live[i].key, _live[i].token);
     o["first_seen"] = _first_seen[i];
     o["last_seen"] = _last_seen[i];
   }
+}
+
+const char *notification_severity_name(uint8_t severity)
+{
+  static const char *severity_name[] = { "info", "warning", "critical" };
+  if(severity >= (sizeof(severity_name) / sizeof(severity_name[0]))) {
+    return "info";
+  }
+  return severity_name[severity];
 }
