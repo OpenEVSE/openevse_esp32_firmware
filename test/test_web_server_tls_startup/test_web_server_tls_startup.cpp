@@ -48,3 +48,26 @@ TEST_CASE("HTTPS listener failure keeps HTTPS inactive")
                                      }));
   CHECK(listener.calls == 1);
 }
+
+TEST_CASE("failed HTTPS and HTTP listeners leave the web server inactive")
+{
+  unsigned int https_calls = 0;
+  unsigned int http_calls = 0;
+
+  WebServerListenerState state = web_server_start_listeners(
+    "certificate", "private key", 443, 80,
+    [&https_calls](const char *, const char *) {
+      ++https_calls;
+      return false;
+    },
+    [&http_calls]() {
+      ++http_calls;
+      return false;
+    });
+
+  CHECK(https_calls == 1);
+  CHECK(http_calls == 1);
+  CHECK_FALSE(state.started);
+  CHECK_FALSE(state.https);
+  CHECK(state.port == 0);
+}
