@@ -187,7 +187,16 @@ extern uint32_t flags;
 // installs have this bit clear, so they keep probing exactly as before.
 #define CONFIG_MQTT_NO_SYS_QUERY    (1 << 29)
 // TFT panel clock in 12-hour form. Clear (the default) keeps the 24-hour clock.
-#define CONFIG_TFT_12H_CLOCK        (1 << 30) // next free bit after CONFIG_TFT_12H_CLOCK
+#define CONFIG_TFT_12H_CLOCK        (1 << 30)
+// HTTP/HTTPS listener controls.
+//
+// Bit 2 is reclaimed from CONFIG_SERVICE_OHM, removed in a93fa8f2. An install
+// that had OhmConnect enabled therefore comes up with this bit set, which reads
+// as "HTTP enabled" -- the default anyway, so nothing changes for them. The
+// remaining free bits are 4-6 and 10-12, which belong to the CONFIG_MQTT_PROTOCOL
+// and CONFIG_CHARGE_MODE multi-bit fields, and 31.
+#define CONFIG_HTTP_ENABLED         (1UL << 2)
+#define CONFIG_HTTPS_ENABLED        (1UL << 31)
 
 #define INITIAL_CONFIG_VERSION  1
 
@@ -197,6 +206,14 @@ inline bool config_emoncms_enabled() {
 
 inline bool config_mqtt_enabled() {
   return CONFIG_SERVICE_MQTT == (flags & CONFIG_SERVICE_MQTT);
+}
+
+inline bool config_http_enabled() {
+  return CONFIG_HTTP_ENABLED == (flags & CONFIG_HTTP_ENABLED);
+}
+
+inline bool config_https_enabled() {
+  return CONFIG_HTTPS_ENABLED == (flags & CONFIG_HTTPS_ENABLED);
 }
 
 inline bool config_sntp_enabled() {
@@ -299,7 +316,10 @@ inline bool config_tft_12h_clock()
   return CONFIG_TFT_12H_CLOCK == (flags & CONFIG_TFT_12H_CLOCK);
 }
 
-bool config_https_enabled();
+// True when the device is actually serving HTTPS: the user has enabled it and a
+// usable certificate/key pair is stored. config_https_enabled() above only
+// reports the flag, which on its own does not mean the listener came up.
+bool config_https_active();
 
 extern uint32_t config_version();
 

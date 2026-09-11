@@ -55,8 +55,11 @@ typedef const __FlashStringHelper *fstr_t;
 #include "web_auth.h"
 #include "web_auth_secret.h"
 
-MongooseHttpServer server;          // Create class for Web server
-MongooseHttpServer redirect;        // Server to redirect to HTTPS if enabled
+static MongooseHttpServer http_server;     // Create class for HTTP server
+static MongooseHttpServer https_server;    // Create class for HTTPS server
+static MongooseHttpServer redirect_server; // Redirects to HTTPS when HTTP is off
+static bool http_server_started = false;
+static bool https_server_started = false;
 
 bool enableCors = false;
 bool streamDebug = false;
@@ -261,11 +264,60 @@ static bool hasValidSessionCookie(MongooseHttpServerRequest *request)
     std::string(secret.c_str()), tok, (uint32_t)time(nullptr));
 }
 
+// Decode a `Basic <base64>` Authorization header into user and password.
+//
+// Mongoose 7 dropped mg_parse_http_basic_auth(). Its replacement,
+// mg_http_creds(), needs the whole mg_http_message and additionally accepts
+// Bearer tokens and an ?access_token= query parameter — credentials in a URL
+// land in logs and Referer headers, and this gate has never honoured either
+// form, so decode the one header we do accept rather than widening the surface.
+//
+// Returns true only on a well-formed header that fit the caller's buffers.
+static bool parseBasicAuth(const mg_str &hdr, char *user, size_t userLen,
+                           char *pass, size_t passLen)
+{
+  const char *scheme = "Basic ";
+  const size_t schemeLen = 6;
+
+  if(hdr.len <= schemeLen ||
+     0 != mg_strcasecmp(mg_str_n(hdr.buf, schemeLen), mg_str(scheme))) {
+    return false;
+  }
+
+  // Sized for the 64-byte user and password buffers above, plus the separator.
+  char decoded[136];
+  size_t decodedLen = mg_base64_decode(hdr.buf + schemeLen, hdr.len - schemeLen,
+                                       decoded, sizeof(decoded));
+  if(0 == decodedLen) {
+    return false;
+  }
+
+  // "user:password" — a password may contain ':', a username may not, so split
+  // on the first one.
+  const char *sep = (const char *)memchr(decoded, ':', decodedLen);
+  if(nullptr == sep) {
+    return false;
+  }
+
+  size_t uLen = sep - decoded;
+  size_t pLen = decodedLen - uLen - 1;
+  if(uLen >= userLen || pLen >= passLen) {
+    return false;
+  }
+
+  memcpy(user, decoded, uLen);
+  user[uLen] = '\0';
+  memcpy(pass, sep + 1, pLen);
+  pass[pLen] = '\0';
+
+  return true;
+}
+
 // -------------------------------------------------------------------
 // Single source of truth for HTTP authentication
 //
-// Used by both the REST path (requestPreProcess) and the WebSocket handshake
-// gate (onWsAuthenticate). Returns true when the request is permitted:
+// Used by both the REST path (requestPreProcess) and the WebSocket connect
+// gate (wsAuthorise). Returns true when the request is permitted:
 //  - AP-only provisioning mode (captive portal, before credentials are set), or
 //  - no password configured (auth disabled), or
 //  - a valid Basic Authorization header (machine clients: HA, MQTT, app), or
@@ -295,8 +347,8 @@ bool isAuthenticated(MongooseHttpServerRequest *request, bool *usedCookie, bool 
     mg_str hdr = authHeader.toMgStr();
     char user_buf[64] = {0};
     char pass_buf[64] = {0};
-    if(0 == mg_parse_http_basic_auth(&hdr, user_buf, sizeof(user_buf),
-                                     pass_buf, sizeof(pass_buf))) {
+    if(parseBasicAuth(hdr, user_buf, sizeof(user_buf),
+                      pass_buf, sizeof(pass_buf))) {
       bool u = credentialsMatch(adminUser.c_str(), user_buf);
       bool p = credentialsMatch(www_password.c_str(), pass_buf);
       if(u && p) {
@@ -1838,8 +1890,23 @@ void handleHttpsRedirect(MongooseHttpServerRequest *request)
   MongooseHttpServerResponseStream *response = request->beginResponseStream();
   response->setContentType(CONTENT_TYPE_HTML);
 
+  // The Host header carries the port the client reached us on, which is the
+  // HTTP listener's -- redirecting to it verbatim would just bounce the browser
+  // back here. Keep the hostname the user typed (it has to match the
+  // certificate) and substitute the HTTPS port.
+  String host = request->host().toString();
+  int portSep = host.lastIndexOf(':');
+  // An unbracketed ':' in an IPv6 literal is part of the address, not a port.
+  if(portSep >= 0 && host.indexOf(']') < portSep) {
+    host.remove(portSep);
+  }
+
   String url = F("https://");
-  url += request->host().toString();
+  url += host;
+  if(443 != www_https_port) {
+    url += ":";
+    url += String(www_https_port);
+  }
   url += request->uri().toString();
 
   String s = F("<html>");
@@ -1886,28 +1953,38 @@ void onWsFrame(MongooseHttpWebSocketConnection *connection, int flags, uint8_t *
   }
 }
 
-// WebSocket handshake authentication gate.
+// Websocket auth gate.
 //
-// Registered via ->onRequest() on every WebSocket endpoint, so it runs during
-// MG_EV_WEBSOCKET_HANDSHAKE_REQUEST — before the 101 Switching Protocols
-// response. On failure, requestAuthentication() sends a 401 and sets
-// MG_F_SEND_AND_CLOSE; mongoose then skips handshake completion (see
-// mongoose.c, MG_EV_WEBSOCKET_HANDSHAKE_REQUEST handling), so no onConnect
-// fires and no data is ever pushed to an unauthenticated client. On success we
-// return without sending a response and the handshake proceeds normally.
+// On Mongoose 6 the library dispatched the handshake request to the endpoint's
+// onRequest handler, so onWsAuthenticate() could answer 401 before the upgrade.
+// The Mongoose 7 library performs mg_ws_upgrade() inside the connection's
+// constructor, so no request handler can run first and that gate is unreachable
+// here. The handshake request is duplicated into the connection though
+// (MG_COPY_HTTP_MESSAGE), so its Authorization/Cookie headers are still
+// readable at connect time — check them here and drop an unauthenticated client
+// before it is sent anything.
 //
-// Note: the library dispatches HANDSHAKE_REQUEST to the endpoint's onRequest
-// handler when one is set, and onConnect/onFrame at the later HANDSHAKE_DONE /
-// FRAME events, so gating here does not interfere with those callbacks.
-void onWsAuthenticate(MongooseHttpServerRequest *request)
+// Difference from the Mongoose 6 path: the client sees the 101 followed by an
+// immediate close rather than a 401. Nothing is served either way.
+static bool wsAuthorise(MongooseHttpWebSocketConnection *connection)
 {
-  if(!isAuthenticated(request)) {
-    request->requestAuthentication(esp_hostname);
+  if(isAuthenticated(connection)) {
+    return true;
   }
+
+  DBUGF("Rejecting unauthenticated websocket client");
+  // MongooseSocket::disconnect() is protected, so drain the underlying
+  // connection directly — same effect, and getConnection() is public.
+  connection->getConnection()->is_draining = 1;
+  return false;
 }
 
 void onWsConnect(MongooseHttpWebSocketConnection *connection)
 {
+  if(false == wsAuthorise(connection)) {
+    return;
+  }
+
   DBUGF("New client connected over ws");
 
   DynamicJsonDocument doc(STATUS_JSON_CAPACITY);
@@ -1929,13 +2006,23 @@ void onWsConnect(MongooseHttpWebSocketConnection *connection)
  * Really simple 'conversion' of ASCII to UTF-8, basically only a few places send >127 chars
  * so just filter those to be acceptable as UTF-8
  */
+static void web_server_send_all(const char *endpoint, const uint8_t *buffer, size_t size)
+{
+  if(http_server_started) {
+    http_server.sendAll(endpoint, WEBSOCKET_OP_TEXT, buffer, size);
+  }
+  if(https_server_started) {
+    https_server.sendAll(endpoint, WEBSOCKET_OP_TEXT, buffer, size);
+  }
+}
+
 void web_server_send_ascii_utf8(const char *endpoint, const uint8_t *buffer, size_t size)
 {
   char temp[size];
   for(int i = 0; i < size; i++) {
     temp[i] = buffer[i] & 0x7f;
   }
-  server.sendAll(endpoint, WEBSOCKET_OP_TEXT, temp, size);
+  web_server_send_all(endpoint, (const uint8_t *)temp, size);
 }
 
 void handleMqttAction(MongooseHttpServerRequest *request) {
@@ -1971,106 +2058,80 @@ void handleMqttAction(MongooseHttpServerRequest *request) {
   request->send(response);
 }
 
-void web_server_setup()
+static void registerWebServerRoutes(MongooseHttpServer &server)
 {
-  bool use_ssl = false;
-  if(www_certificate_id != "")
-  {
-    // This one sits on the boot path: a corrupted stored www_certificate_id
-    // parsed with a throwing conversion would abort inside web_server_setup()
-    // and boot-loop the unit with no way back in over the network. Fall through
-    // to plain HTTP instead, which at least leaves the device reachable to
-    // correct the config.
-    uint64_t cert_id = 0;
-    bool id_valid = certificate_id_from_string(www_certificate_id.c_str(), cert_id);
-    if(!id_valid) {
-      DEBUG.printf("Ignoring malformed www_certificate_id '%s', serving HTTP\n", www_certificate_id.c_str());
-    }
-
-    const char *cert = id_valid ? certs.getCertificate(cert_id) : NULL;
-    const char *key = id_valid ? certs.getKey(cert_id) : NULL;
-    if(NULL != cert && NULL != key)
-    {
-      DEBUG.printf("Starting HTTPS server, https://0.0.0.0:%d\n", www_https_port);
-      server.begin(www_https_port, cert, key);
-      use_ssl = true;
-
-      redirect.begin(www_http_port);
-      redirect.on("/", handleHttpsRedirect);
-    }
-  }
-
-  if(false == use_ssl) {
-    DEBUG.printf("Starting HTTP server, http://0.0.0.0:%d\n", www_http_port);
-    server.begin(www_http_port);
-  }
+  // Server startup (and the HTTP->HTTPS redirect) now lives in
+  // web_server_setup(), which registers these routes against both the HTTP and
+  // the HTTPS server, so it must not be repeated per-registration here.
 
   // Session management (no auth gate — user must reach these unauthenticated)
-  server.on("/login$", handleLogin);
-  server.on("/logout$", handleLogout);
+  server.on("/login", handleLogin);
+  server.on("/logout", handleLogout);
 
   // Handle status updates
-  server.on("/status$", handleStatus);
-  server.on("/config$", handleConfig);
+  server.on("/status", handleStatus);
+  server.on("/config", handleConfig);
 
   // Handle HTTP web interface button presses
-  server.on("/teslaveh$", handleTeslaVeh);
-  server.on("/tesla/vehicles$", handleTeslaVeh);
-  server.on("/settime$", handleSetTime);
-  server.on("/reset$", handleRst);
-  server.on("/restart$", handleRestart);
-  server.on("/rapi$", handleRapi);
-  server.on("/r$", handleRapi);
-  server.on("/scan$", handleScan);
-  server.on("/apoff$", handleAPOff);
-  server.on("/divertmode$", handleDivertMode);
-  server.on("/shaper$", handleCurrentShaper);
-  server.on("/emoncms/describe$", handleDescribe);
-  server.on("/rfid/add$", handleAddRFID);
-  server.on("/relay/reset$", handleRelayHealthReset);
-  server.on("/relay/recovery$", handleRelayRecovery);
+  server.on("/teslaveh", handleTeslaVeh);
+  server.on("/tesla/vehicles", handleTeslaVeh);
+  server.on("/settime", handleSetTime);
+  server.on("/reset", handleRst);
+  server.on("/restart", handleRestart);
+  server.on("/rapi", handleRapi);
+  server.on("/r", handleRapi);
+  server.on("/scan", handleScan);
+  server.on("/apoff", handleAPOff);
+  server.on("/divertmode", handleDivertMode);
+  server.on("/shaper", handleCurrentShaper);
+  server.on("/emoncms/describe", handleDescribe);
+  server.on("/rfid/add", handleAddRFID);
+  server.on("/relay/reset", handleRelayHealthReset);
+  server.on("/relay/recovery", handleRelayRecovery);
 
-  server.on("/schedule/plan$", handleSchedulePlan);
+  server.on("/schedule/plan", handleSchedulePlan);
   server.on("/schedule", handleSchedule);
 
-  server.on("/claims/target$", handleEvseClaimsTarget);
+  server.on("/claims/#", handleEvseClaims);
+  server.on("/claims/target", handleEvseClaimsTarget);
   server.on("/claims", handleEvseClaims);
 
-  server.on("/override$", handleOverride);
+  server.on("/override", handleOverride);
 
   server.on("/logs", handleEventLogs);
+  server.on("/certificates/#", handleCertificates);
   server.on("/certificates", handleCertificates);
   server.on("/limit", handleLimit);
   server.on("/boost", handleBoost);
   server.on("/emeter", handleEmeter);
   server.on("/time", handleTime);
-  server.on("/mqtt$", handleMqttAction);
+  server.on("/mqtt", handleMqttAction);
 
 #ifndef ENABLE_TSDB
-  server.on("/energy/raw$", handleEnergyRaw);
-  server.on("/energy/daily$", handleEnergyDaily);
-  server.on("/energy/monthly$", handleEnergyMonthly);
-  server.on("/energy/annual$", handleEnergyAnnual);
+  server.on("/energy/raw", handleEnergyRaw);
+  server.on("/energy/daily", handleEnergyDaily);
+  server.on("/energy/monthly", handleEnergyMonthly);
+  server.on("/energy/annual", handleEnergyAnnual);
 #else // ENABLE_TSDB
-  server.on("/energy/raw$", handleEnergyRaw);
-  server.on("/energy/daily$", handleEnergyDaily);
-  server.on("/energy/weekly$", handleEnergyWeekly);
-  server.on("/energy/monthly$", handleEnergyMonthly);
-  server.on("/energy/annual$", handleEnergyAnnual);
+  server.on("/energy/raw", handleEnergyRaw);
+  server.on("/energy/daily", handleEnergyDaily);
+  server.on("/energy/weekly", handleEnergyWeekly);
+  server.on("/energy/monthly", handleEnergyMonthly);
+  server.on("/energy/annual", handleEnergyAnnual);
 #endif // ENABLE_TSDB
 
   // Simple Firmware Update Form
-  server.on("/update$")->
+  server.on("/update")->
     onRequest(handleUpdateRequest)->
     onUpload(handleUpdateUpload)->
     onClose(handleUpdateClose);
 
   // In-place 16MB flash repartition (16MB module flashed with 4MB layout)
-  server.on("/migrate/expand16mb$", handleMigrateExpand16mb);
-  server.on("/migrate/status$", handleMigrateStatus);
-  server.on("/migrate/coredump$", handleMigrateCoredump);
+  server.on("/migrate/expand16mb", handleMigrateExpand16mb);
+  server.on("/migrate/status", handleMigrateStatus);
+  server.on("/migrate/coredump", handleMigrateCoredump);
 
-  server.on("/debug$", [](MongooseHttpServerRequest *request) {
+  server.on("/debug", [](MongooseHttpServerRequest *request) {
     MongooseHttpServerResponseStream *response;
     if(false == requestPreProcess(request, response, CONTENT_TYPE_TEXT)) {
       return;
@@ -2092,7 +2153,7 @@ void web_server_setup()
   //   DELETE /debug/crash      clear it, so the next panic is unambiguous
   //   GET    /debug/crash/raw  the image itself, for esp-coredump
   // -----------------------------------------------------------------
-  server.on("/debug/crash$", [](MongooseHttpServerRequest *request) {
+  server.on("/debug/crash", [](MongooseHttpServerRequest *request) {
     MongooseHttpServerResponseStream *response;
     if(false == requestPreProcess(request, response, CONTENT_TYPE_JSON)) {
       return;
@@ -2114,7 +2175,7 @@ void web_server_setup()
     request->send(response);
   });
 
-  server.on("/debug/crash/raw$", [](MongooseHttpServerRequest *request) {
+  server.on("/debug/crash/raw", [](MongooseHttpServerRequest *request) {
     dumpRequest(request);
 
     // Not routed through requestPreProcess: that opens a buffered stream
@@ -2146,17 +2207,18 @@ void web_server_setup()
     request->send(response);
   });
 
-  server.on("/debug/console$")
-    ->onRequest(onWsAuthenticate)
-    ->onFrame([](MongooseHttpWebSocketConnection *connection, int flags, uint8_t *data, size_t len) {
+  server.on("/debug/console", [](MongooseHttpWebSocketConnection *connection, int flags, uint8_t *data, size_t len) {
+    // Intentionally no-op: this endpoint is server-push only via SerialDebug.onWrite.
+  })->onConnect([](MongooseHttpWebSocketConnection *connection) {
+    wsAuthorise(connection);
   });
 
   SerialDebug.onWrite([](const uint8_t *buffer, size_t size)
   {
-    server.sendAll("/debug/console", WEBSOCKET_OP_TEXT, buffer, size);
+    web_server_send_all("/debug/console", buffer, size);
   });
 
-  server.on("/evse$", [](MongooseHttpServerRequest *request) {
+  server.on("/evse", [](MongooseHttpServerRequest *request) {
     MongooseHttpServerResponseStream *response;
     if(false == requestPreProcess(request, response, CONTENT_TYPE_TEXT)) {
       return;
@@ -2169,9 +2231,10 @@ void web_server_setup()
     request->send(response);
   });
 
-  server.on("/evse/console$")
-    ->onRequest(onWsAuthenticate)
-    ->onFrame([](MongooseHttpWebSocketConnection *connection, int flags, uint8_t *data, size_t len) {
+  server.on("/evse/console", [](MongooseHttpWebSocketConnection *connection, int flags, uint8_t *data, size_t len) {
+    // Intentionally no-op: this endpoint is server-push only via SerialEvse callbacks.
+  })->onConnect([](MongooseHttpWebSocketConnection *connection) {
+    wsAuthorise(connection);
   });
 
   SerialEvse.onWrite([](const uint8_t *buffer, size_t size) {
@@ -2181,17 +2244,67 @@ void web_server_setup()
     web_server_send_ascii_utf8("/evse/console", buffer, size);
   });
 
-  server.on("/ws$")->
-    onRequest(onWsAuthenticate)
-    ->
-    onFrame(onWsFrame)
-    ->
-    onConnect(onWsConnect);
-
-  server.onNotFound(handleNotFound);
+  // onWsConnect() applies the auth gate; see wsAuthorise().
+  server.on("/ws", onWsFrame)->onConnect(onWsConnect);
 
   // Setup load sharing endpoints
-  web_server_load_sharing_setup();
+  web_server_load_sharing_setup(server);
+}
+
+void web_server_setup()
+{
+  http_server_started = false;
+  https_server_started = false;
+
+  bool use_ssl = false;
+  if(config_https_enabled() && www_certificate_id != "")
+  {
+    // This one sits on the boot path: a corrupted stored www_certificate_id
+    // parsed with a throwing conversion would abort inside web_server_setup()
+    // and boot-loop the unit with no way back in over the network. Fall through
+    // to plain HTTP instead, which at least leaves the device reachable to
+    // correct the config.
+    uint64_t cert_id = 0;
+    bool id_valid = certificate_id_from_string(www_certificate_id.c_str(), cert_id);
+    if(!id_valid) {
+      DEBUG.printf("Ignoring malformed www_certificate_id '%s', serving HTTPS disabled\n", www_certificate_id.c_str());
+    }
+
+    const char *cert = id_valid ? certs.getCertificate(cert_id) : NULL;
+    const char *key = id_valid ? certs.getKey(cert_id) : NULL;
+    if(NULL != cert && NULL != key)
+    {
+      DEBUG.printf("Starting HTTPS server, https://0.0.0.0:%d\n", www_https_port);
+      https_server.begin(www_https_port, cert, key);
+      registerWebServerRoutes(https_server);
+      https_server.onNotFound(handleNotFound);
+      https_server_started = true;
+      use_ssl = true;
+    }
+  }
+
+  // Keep HTTP reachable whenever HTTPS is unavailable, so we never strand the UI.
+  const bool should_start_http = config_http_enabled() || false == use_ssl;
+  const bool should_bind_http_port = false == use_ssl || www_http_port != www_https_port;
+  if(should_start_http && should_bind_http_port) {
+      DEBUG.printf("Starting HTTP server, http://0.0.0.0:%d\n", www_http_port);
+      http_server.begin(www_http_port);
+      registerWebServerRoutes(http_server);
+      http_server.onNotFound(handleNotFound);
+      http_server_started = true;
+  } else if(use_ssl && should_bind_http_port) {
+      // HTTPS only. Leaving port 80 closed means anyone who types the bare
+      // hostname gets a connection refused with nothing to explain it, so keep
+      // a listener there that does nothing but point at the TLS one.
+      //
+      // "/#" rather than "/": Mongoose 7 matches with mg_match(), so a pattern
+      // without a wildcard is an exact comparison and "/" would only ever catch
+      // the root document.
+      DEBUG.printf("Starting HTTPS redirect, http://0.0.0.0:%d\n", www_http_port);
+      redirect_server.begin(www_http_port);
+      redirect_server.on("/#", handleHttpsRedirect);
+      redirect_server.onNotFound(handleHttpsRedirect);
+  }
 
   DEBUG.println("Server started");
 }
@@ -2227,5 +2340,10 @@ void web_server_event(JsonDocument &event)
   // Drop any client that has stopped draining before adding to its backlog.
   diagnostics_ws_reap();
 
-  server.sendAll("/ws", json);
+  if(http_server_started) {
+    http_server.sendAll("/ws", json);
+  }
+  if(https_server_started) {
+    https_server.sendAll("/ws", json);
+  }
 }

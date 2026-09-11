@@ -4,6 +4,7 @@
 
 #include <Arduino.h>
 #include <ArduinoJson.h>
+#include <memory>
 #include <MongooseString.h>
 #include <MongooseHttpClient.h>
 
@@ -25,6 +26,7 @@ static MongooseHttpClient client;
 
 struct EmonCmsClientState {
   bool connected;
+  String url;
 };
 
 static void emoncms_result(bool success, String message)
@@ -52,9 +54,17 @@ void emoncms_publish(JsonDocument &data)
     String json;
     serializeJson(data, json);
     url += "fulljson=";
-    MongooseString encodedJson = mg_url_encode(MongooseString(json));
-    url += (const char *)encodedJson;
-    mg_strfree(encodedJson);
+    // Worst-case URL encoding is 3x expansion ("%XX" per byte), plus NUL.
+    size_t encoded_len = (json.length() * 3) + 1;
+    std::unique_ptr<char[]> encoded_json(new char[encoded_len]);
+    size_t encoded_size = mg_url_encode(json.c_str(), json.length(), encoded_json.get(), encoded_len);
+    if(encoded_size == 0 && json.length() > 0) {
+      emoncms_result(false, String("URL encode failed"));
+      Profile_End(emoncms_publish, 10);
+      return;
+    }
+    encoded_json[encoded_size] = '\0';
+    url += encoded_json.get();
     url += "&node=";
     url += emoncms_node;
     url += "&apikey=";
@@ -63,11 +73,12 @@ void emoncms_publish(JsonDocument &data)
     DBUGVAR(url);
     packets_sent++;
 
-    auto state = new EmonCmsClientState;
-
+    auto state = std::make_shared<EmonCmsClientState>();
     state->connected = false;
+    state->url = url;
 
-    client.get(url, [state](MongooseHttpClientResponse *response)
+    MongooseHttpClientRequest *request = client.beginRequest(state->url.c_str());
+    request->onResponse([state](MongooseHttpClientResponse *response)
     {
       MongooseString result = response->body();
       DBUGF("result = %.*s", result.length(), result.c_str());
@@ -92,14 +103,20 @@ void emoncms_publish(JsonDocument &data)
         DEBUG.printf("%.*s\n", result.length(), (const char *)result);
         emoncms_result(false, result.toString());
       }
-    }, [state]()
+    });
+    request->onClose([state]()
     {
       DBUGF("onClose");
       if(false == state->connected) {
         emoncms_result(false, String("Failed to connect"));
       }
-      delete state;
     });
+    if(!request->send()) {
+      request->onResponse(MongooseHttpResponseHandler());
+      request->onClose(MongooseSocketCloseHandler());
+      delete request;
+      emoncms_result(false, String("Failed to connect"));
+    }
   } else {
     if(false != emoncms_connected) {
       emoncms_result(false, String("Disabled"));

@@ -225,7 +225,7 @@ bool http_update_from_url(String url,
       delete state;
     });
 
-    client.send(request);
+    request->send();
     return true;
   }
 

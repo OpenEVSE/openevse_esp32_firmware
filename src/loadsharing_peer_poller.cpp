@@ -441,7 +441,7 @@ void LoadSharingPeerPoller::startHttpBootstrap(const String& host, PeerConnectio
   });
 
   // Send the request
-  httpClient.send(conn.httpRequest);
+  conn.httpRequest->send();
 
   conn.state = PeerConnectionState::HTTP_FETCHING;
   conn.lastHttpTime = millis();
@@ -780,7 +780,7 @@ void LoadSharingPeerPoller::pushConfigToPeer(const String& host, PeerConnection&
     delete body;
   });
 
-  httpClient.send(req);
+  req->send();
 }
 
 void LoadSharingPeerPoller::fetchPeerConfig(const String& host) {
@@ -881,7 +881,7 @@ void LoadSharingPeerPoller::fetchPeerConfig(const String& host) {
     delete url;
   });
 
-  httpClient.send(req);
+  req->send();
 }
 
 void LoadSharingPeerPoller::pushConfigResetToPeer(const String& host) {
@@ -914,7 +914,7 @@ void LoadSharingPeerPoller::pushConfigResetToPeer(const String& host) {
     delete body;
   });
 
-  httpClient.send(req);
+  req->send();
 }
 
 void LoadSharingPeerPoller::pushConfigToAllPeers() {

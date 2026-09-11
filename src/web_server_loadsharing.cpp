@@ -49,7 +49,7 @@ static void syncPeerGroupMembership(const String &peerHost, const String &jsonBo
     delete body;
   });
 
-  loadSharingHttpClient.send(req);
+  req->send();
 }
 
 // Path prefix constants
@@ -455,13 +455,18 @@ void handleLoadSharingStatus(MongooseHttpServerRequest *request, MongooseHttpSer
   serializeJson(doc, *response);
 }
 
-void web_server_load_sharing_setup()
+void web_server_load_sharing_setup(MongooseHttpServer &server)
 {
-  // Register the /loadsharing/peers endpoint (GET, POST, DELETE)
-  server.on("/loadsharing/peers", handleLoadSharingPeers);
-
-  // Register the /loadsharing/peers/{host} endpoint (DELETE with path parameter)
-  server.on("/loadsharing/peers/", [](MongooseHttpServerRequest *request) {
+  // Register the /loadsharing/peers/{host} endpoint (DELETE/PUT with path
+  // parameter). Mongoose 7 matches with mg_match(), which is a glob rather than
+  // the prefix match Mongoose 6 did, so the trailing "/" alone only ever
+  // matched the bare "/loadsharing/peers/" and every {host} request 404'd. The
+  // "#" wildcard spans the rest of the path, including further "/".
+  //
+  // Endpoints are checked most-recently-registered first (the server pushes
+  // onto the front of its list), so the exact "/loadsharing/peers" below still
+  // wins for the collection itself.
+  server.on("/loadsharing/peers/#", [](MongooseHttpServerRequest *request) {
     MongooseHttpServerResponseStream *response;
     if(false == requestPreProcess(request, response)) {
       return;
@@ -500,6 +505,9 @@ void web_server_load_sharing_setup()
 
     request->send(response);
   });
+
+  // Register the /loadsharing/peers endpoint (GET, POST, DELETE)
+  server.on("/loadsharing/peers", handleLoadSharingPeers);
 
   // Register the /loadsharing/discover endpoint (POST for on-demand discovery)
   server.on("/loadsharing/discover", [](MongooseHttpServerRequest *request) {
