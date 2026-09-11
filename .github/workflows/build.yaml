@@ -167,6 +167,7 @@ jobs:
         sudo apt-get install -y libavahi-client-dev libavahi-common-dev libssl-dev
 
     - name: Run PlatformIO
+      id: pio_build
       env:
         # Enforce signed OTA only when a signing key is configured AND this is a
         # signed-capable env. Dormant (unsigned, unchanged) until the
@@ -184,14 +185,18 @@ jobs:
       # Runs whether or not the build above succeeded: PlatformIO's own size
       # check runs (and can fail the build) right after linking, before most
       # compile/link failures would even occur, so an over-budget build's log
-      # still has a "Flash:" line worth reporting. check_flash_size.py is a
-      # no-op (exit 0) when there's no such line, e.g. native_openevse or a
-      # build that failed before linking.
+      # still has a "Flash:" line worth reporting. check_flash_size.py skips
+      # (exit 0) when there's no such line AND the env is exempt (native, or
+      # the build didn't succeed) -- otherwise a missing line means something
+      # unexpected happened and it fails loudly instead of silently vanishing
+      # from the report.
       if: always()
       run: |
         python scripts/check_flash_size.py \
           --env ${{ matrix.env }} \
           --log pio-build-${{ matrix.env }}.log \
+          --build-outcome ${{ steps.pio_build.outcome }} \
+          ${{ matrix.env == 'native_openevse' && '--native' || '' }} \
           --out flash-size-${{ matrix.env }}.json
 
     - name: Upload flash size report

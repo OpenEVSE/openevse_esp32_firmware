@@ -17,14 +17,19 @@ for OTA) needs inspecting the actual built artifact, which wasn't practical
 to pin down here -- see the discussion on the PR that introduced this script.
 
 Exit status:
-    0  no "Flash:" line found (nothing to check -- e.g. a native env, or the
-       build failed before reaching the size-check step)
+    0  the env is exempt (native, or its build didn't succeed) and has no
+       "Flash:" line to check
     0  usage is below the warning threshold
     0  usage is within the warning threshold (a ::warning:: is emitted)
+    1  a non-exempt build succeeded but printed no "Flash:" line -- something
+       unexpected happened (e.g. a PlatformIO output format change) and this
+       build is otherwise invisible to the flash-size report (a ::error:: is
+       emitted)
     1  usage exceeds the partition size (a ::error:: is emitted)
 
 Usage:
-    python check_flash_size.py --env NAME --log pio-build.log --out flash-size-NAME.json
+    python check_flash_size.py --env NAME --log pio-build.log --out flash-size-NAME.json \
+        [--build-outcome success|failure|...] [--native]
 """
 import argparse
 import json
@@ -43,7 +48,12 @@ def main():
     parser.add_argument("--env", required=True, help="PlatformIO environment name")
     parser.add_argument("--log", required=True, help="Captured `pio run` output")
     parser.add_argument("--out", required=True, help="Path to write the JSON size record")
+    parser.add_argument("--build-outcome", default="success",
+                         help="Outcome of the 'Run PlatformIO' step (e.g. success/failure)")
+    parser.add_argument("--native", action="store_true",
+                         help="This env doesn't produce a flashable image (e.g. native_openevse)")
     args = parser.parse_args()
+    exempt = args.native or args.build_outcome != "success"
 
     try:
         with open(args.log, errors="replace") as f:
@@ -54,8 +64,13 @@ def main():
 
     match = FLASH_LINE_RE.search(log)
     if not match:
+        if not exempt:
+            print(f"::error::{args.env}: build succeeded but no 'Flash:' usage line was found "
+                  "in its output -- this build is invisible to the flash-size check and report; "
+                  "investigate the build log directly")
+            return 1
         print(f"{args.env}: no 'Flash:' usage line in the PlatformIO build output "
-              "-- skipping the flash size check (native env, or the build didn't reach linking)")
+              "-- skipping the flash size check (native env, or the build didn't succeed)")
         return 0
 
     percent, size, max_size = float(match.group(1)), int(match.group(2)), int(match.group(3))
