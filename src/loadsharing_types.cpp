@@ -365,10 +365,10 @@ std::vector<LoadSharingGroupState::PeerInfo> LoadSharingGroupState::getAllPeers(
   for (auto& peer : _peers) {
     bool isLocal = (peer.getHost() == localHostname);
 
-    // Refresh local peer with live network state (IP may have been empty at boot)
+    // Refresh the IP independently of whether the web listener started.
     if (isLocal) {
       const_cast<LoadSharingPeer&>(peer).setIp(net.getIp());
-      const_cast<LoadSharingPeer&>(peer).setOnline(net.getIp().length() > 0);
+      const_cast<LoadSharingPeer&>(peer).setOnline(web_server_is_running());
     }
 
     // Skip non-local online-only peers when includeDiscovered is false
