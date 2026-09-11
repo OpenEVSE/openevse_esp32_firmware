@@ -19,6 +19,7 @@ certificate validation, partial persistence, reload, deletion, and stale
 temporary files.
 """
 
+import inspect
 import json
 import os
 import socket
@@ -222,6 +223,12 @@ def unused_tcp_port() -> int:
     with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as listener:
         listener.bind(("127.0.0.1", 0))
         return listener.getsockname()[1]
+
+
+def test_certificate_persistence_test_has_no_evse_fixture_dependency():
+    parameters = inspect.signature(test_ecdsa_certificate_upload_and_delete_survive_restart).parameters
+
+    assert "evse_instance" not in parameters
 
 
 @pytest.mark.timeout(240)
