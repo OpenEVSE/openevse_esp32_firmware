@@ -77,7 +77,7 @@ void EventLog::begin()
   }
 }
 
-void EventLog::log(EventType type, EvseState managerState, uint8_t evseState, uint32_t evseFlags, uint8_t pilotState, uint32_t pilot, double energy, uint32_t elapsed, double temperature, double temperatureMax, uint8_t divertMode, uint8_t shaper)
+void EventLog::log(EventType type, EvseState managerState, uint8_t evseState, uint32_t evseFlags, uint8_t pilotState, uint32_t pilot, double energy, uint32_t elapsed, double temperature, double temperatureMax, uint8_t divertMode, uint8_t shaper, const char *notification)
 {
   time_t now = time(NULL);
   struct tm timeinfo;
@@ -159,6 +159,9 @@ void EventLog::log(EventType type, EvseState managerState, uint8_t evseState, ui
     line["tm"] = temperatureMax;
     line["dm"] = divertMode;
     line["sh"] = shaper;
+    if(notification) {
+      line["notification"] = notification;
+    }
 
     serializeJson(line, eventFile);
     eventFile.println("");
@@ -174,7 +177,7 @@ void EventLog::log(EventType type, EvseState managerState, uint8_t evseState, ui
   }
 }
 
-void EventLog::enumerate(uint32_t index, std::function<void(String time, EventType type, const String &logEntry, EvseState managerState, uint8_t evseState, uint32_t evseFlags, uint8_t pilotState, uint16_t changed, uint32_t pilot, double energy, uint32_t elapsed, double temperature, double temperatureMax, uint8_t divertMode, uint8_t shaper)> callback)
+void EventLog::enumerate(uint32_t index, std::function<void(String time, EventType type, const String &logEntry, EvseState managerState, uint8_t evseState, uint32_t evseFlags, uint8_t pilotState, uint16_t changed, uint32_t pilot, double energy, uint32_t elapsed, double temperature, double temperatureMax, uint8_t divertMode, uint8_t shaper, const char *notification)> callback)
 {
   String filename = filenameFromIndex(index);
   File eventFile = LittleFS.open(filename);
@@ -211,8 +214,11 @@ void EventLog::enumerate(uint32_t index, std::function<void(String time, EventTy
         double temperatureMax = json["tm"];
         uint8_t divertMode = json["dm"];
         uint8_t shaper = json["sh"];
+        // Entries written before "notification" existed (or that were never
+        // a notification row) have no advisory id to report.
+        const char *notification = json["notification"] | "";
 
-        callback(time, type, line, managerState, evseState, evseFlags, pilotState, changed, pilot, energy, elapsed, temperature, temperatureMax, divertMode, shaper);
+        callback(time, type, line, managerState, evseState, evseFlags, pilotState, changed, pilot, energy, elapsed, temperature, temperatureMax, divertMode, shaper, notification);
       }
     }
     eventFile.close();
