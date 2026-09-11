@@ -435,7 +435,10 @@ tables.
   sticky refusing an ack. This is the bulk of the risk and none of it needs
   hardware.
 - **Integration:** the emulator harness for `GET /notifications`, the ack round
-  trip, and the `/status` summary fields.
+  trip, and the `/status` summary fields — `tests/integration/test_notifications.py`,
+  following `test_boost.py`. The ack round trip deliberately uses the documented
+  URL form with no body: that exact request used to answer 400, and an
+  integration test is the only place that would have caught it.
 - **Hardware:** toggle each safety check via the existing config writes and
   confirm the chip and badge follow; force a thermal throttle; verify the chip
   is suppressed under a live fault.
