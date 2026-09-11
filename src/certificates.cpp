@@ -226,7 +226,7 @@ bool CertificateStore::addCertificate(Certificate *cert, uint64_t *id, bool save
   return true;
 }
 
-bool CertificateStore::removeCertificate(uint64_t id)
+CertificateStore::RemoveResult CertificateStore::removeCertificate(uint64_t id)
 {
   for(std::vector<Certificate *>::iterator it = _certs.begin(); it != _certs.end(); ++it)
   {
@@ -239,14 +239,14 @@ bool CertificateStore::removeCertificate(uint64_t id)
       const char *prepared_root_ca = nullptr;
       if(cert->getType() == Certificate::Type::Root &&
          !prepareRootCa(nullptr, cert, prepared_root_ca)) {
-        return false;
+        return RemoveResult::Error;
       }
 
       if(!removeCertificate(cert)) {
         if(nullptr != prepared_root_ca && prepared_root_ca != root_ca) {
           delete[] prepared_root_ca;
         }
-        return false;
+        return RemoveResult::Error;
       }
 
       _certs.erase(it);
@@ -255,11 +255,11 @@ bool CertificateStore::removeCertificate(uint64_t id)
       }
       delete cert;
 
-      return true;
+      return RemoveResult::Removed;
     }
   }
 
-  return false;
+  return RemoveResult::NotFound;
 }
 
 const char *CertificateStore::getCertificate(uint64_t id)
