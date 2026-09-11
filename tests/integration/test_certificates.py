@@ -549,6 +549,56 @@ def test_https_listener_failure_advertises_http_fallback(tmp_path):
 
 
 @pytest.mark.timeout(240)
+def test_upload_rolls_back_when_record_staging_allocation_fails(tmp_path):
+    chain_path, key_path, _, _ = generate_ecdsa_chain(tmp_path)
+    hook = compile_nothrow_failure_hook(tmp_path)
+    marker = tmp_path / "fail-next-nothrow-new-array"
+    payload = {
+        "name": "allocation-failure",
+        "certificate": chain_path.read_text(encoding="ascii"),
+        "key": key_path.read_text(encoding="ascii"),
+    }
+
+    binary = get_native_binary_path()
+    runtime = tmp_path / "runtime"
+    runtime.mkdir()
+    filesystem = runtime / "epoxyfsdata"
+    log_path = tmp_path / "native.log"
+    process = None
+    http_port = unused_tcp_port()
+
+    environment = os.environ.copy()
+    environment["EPOXY_FS_ROOT"] = str(filesystem)
+    environment["OPENEVSE_FAIL_NOTHROW_NEW_ARRAY_MARKER"] = str(marker)
+    environment["LD_PRELOAD"] = str(hook)
+
+    with log_path.open("ab") as log:
+        process = subprocess.Popen(
+            [str(binary), "--set-config", f"www_http_port={http_port}"],
+            cwd=runtime,
+            env=environment,
+            stdout=log,
+            stderr=subprocess.STDOUT,
+        )
+
+    http_base = f"http://127.0.0.1:{http_port}"
+    try:
+        wait_for_url(f"{http_base}/config", verify=False)
+
+        marker.touch()
+        uploaded = requests.post(f"{http_base}/certificates", json=payload, timeout=15)
+        assert uploaded.status_code == 400, uploaded.text
+        assert not marker.exists(), "allocation failure hook was not exercised"
+
+        listed = requests.get(f"{http_base}/certificates", timeout=10)
+        assert listed.status_code == 200
+        assert listed.json() == []
+        assert not list(runtime.rglob("*.tmp"))
+    finally:
+        stop_process(process)
+
+
+@pytest.mark.timeout(240)
 def test_root_delete_rolls_back_when_trust_bundle_allocation_fails(tmp_path):
     _, _, root_path, cross_path = generate_ecdsa_chain(tmp_path)
     hook = compile_nothrow_failure_hook(tmp_path)
