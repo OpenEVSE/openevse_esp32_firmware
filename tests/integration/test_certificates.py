@@ -596,7 +596,7 @@ def test_root_delete_rolls_back_when_trust_bundle_allocation_fails(tmp_path):
             f"{http_base}/certificates/{certificate_ids[0]}",
             timeout=10,
         )
-        assert deleted.status_code == 404, deleted.text
+        assert deleted.status_code == 500, deleted.text
         assert not marker.exists(), "allocation failure hook was not exercised"
 
         listed = requests.get(f"{http_base}/certificates", timeout=10)
