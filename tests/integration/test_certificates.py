@@ -232,9 +232,7 @@ def test_certificate_persistence_test_has_no_evse_fixture_dependency():
 
 
 @pytest.mark.timeout(240)
-def test_ecdsa_certificate_upload_and_delete_survive_restart(evse_instance, tmp_path):
-    del evse_instance  # The session fixture ensures the native build prerequisites are available.
-
+def test_ecdsa_certificate_upload_and_delete_survive_restart(tmp_path):
     chain_path, key_path, _, _ = generate_ecdsa_chain(tmp_path)
     payload = {
         "name": "integration-ecdsa",
