@@ -114,6 +114,13 @@ void standby_screen_build()
   lv_obj_set_style_bg_color(scr, COL_BG, 0);
   lv_obj_clear_flag(scr, LV_OBJ_FLAG_SCROLLABLE);
 
+  // Same amber perimeter as the charge screen, hidden until an advisory is
+  // active. See charge_screen.cpp for why it is amber and not red.
+  lv_obj_set_style_border_color(scr, COL_WARN, 0);
+  lv_obj_set_style_border_width(scr, 0, 0);
+  lv_obj_set_style_border_side(scr, LV_BORDER_SIDE_FULL, 0);
+  lv_obj_set_style_radius(scr, 0, 0);
+
   // --- Top strip, line 1: clock (left) + status chips (right) ---
   clock_lbl = lv_label_create(scr);
   lv_label_set_text(clock_lbl, "");
@@ -262,9 +269,24 @@ void standby_screen_update(const StandbyScreenData &d)
   format_kwh(buf, sizeof(buf), d.total_kwh);
   lv_label_set_text(tile_value[2], buf);
 
-  snprintf(buf, sizeof(buf), "%s  " LV_SYMBOL_BULLET "  %s",
-           d.hostname ? d.hostname : "", d.ip ? d.ip : "");
-  lv_label_set_text(hostip_lbl, buf);
+  // Footer line: the worst advisory when there is one, else the address. An
+  // advisory takes the line outright rather than sharing it -- a warning
+  // outranks knowing where to point a browser -- and the address returns as
+  // soon as the advisory clears.
+  if (d.notify_line && d.notify_line[0]) {
+    lv_label_set_text(hostip_lbl, d.notify_line);
+    lv_obj_set_style_text_color(hostip_lbl, COL_WARN, 0);
+  } else {
+    snprintf(buf, sizeof(buf), "%s  " LV_SYMBOL_BULLET "  %s",
+             d.hostname ? d.hostname : "", d.ip ? d.ip : "");
+    lv_label_set_text(hostip_lbl, buf);
+    lv_obj_set_style_text_color(hostip_lbl, COL_DIM, 0);
+  }
+
+  // The amber perimeter: the "is there anything wrong?" signal, legible from
+  // across the garage. Set unconditionally every update so it can never be
+  // left on. Never red -- that stays reserved for the fault screen.
+  lv_obj_set_style_border_width(standby_scr, d.notify_active ? 4 : 0, 0);
 }
 
 void standby_screen_destroy()

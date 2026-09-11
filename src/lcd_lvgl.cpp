@@ -515,6 +515,27 @@ unsigned long LcdTask::loop(MicroTasks::WakeReason reason)
     sd.hostname = esp_hostname.c_str();
     sd.ip = ipbuf;
 
+    // Advisory line: same rule as the charge screen, but here it replaces the
+    // address outright rather than sharing the strip with it -- see
+    // standby_screen.cpp.
+    const char *notify_id = NULL;
+    uint8_t notify_sev = 0;
+    size_t notify_count = notifications.count();
+    if(notifications.worst(notify_id, notify_sev)) {
+      if(notify_count > 1) {
+        snprintf(notify_buf, sizeof(notify_buf), LV_SYMBOL_WARNING " %s  +%u",
+                 notification_short_text(notify_id), (unsigned)(notify_count - 1));
+      } else {
+        snprintf(notify_buf, sizeof(notify_buf), LV_SYMBOL_WARNING " %s",
+                 notification_short_text(notify_id));
+      }
+      sd.notify_line = notify_buf;
+      sd.notify_active = true;
+    } else {
+      sd.notify_line = "";
+      sd.notify_active = false;
+    }
+
     standby_screen_update(sd);
     lvgl_pump();
     gettimeofday(&tv, NULL);
