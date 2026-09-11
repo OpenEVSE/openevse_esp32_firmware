@@ -18,8 +18,7 @@ typedef const __FlashStringHelper *fstr_t;
 void
 handleEvseClaimsGet(MongooseHttpServerRequest *request, MongooseHttpServerResponseStream *response, uint32_t client)
 {
-  const size_t capacity = JSON_OBJECT_SIZE(40) + 1024;
-  DynamicJsonDocument doc(capacity);
+  JsonDocument doc;
 
   bool success = (EvseClient_NULL == client) ?
     evse.serializeClaims(doc) :
@@ -122,8 +121,7 @@ void handleEvseClaimsTarget(MongooseHttpServerRequest *request)
     return;
   }
 
-  const size_t capacity = JSON_OBJECT_SIZE(40) + 1024;
-  DynamicJsonDocument doc(capacity);
+  JsonDocument doc;
 
   evse.serializeTarget(doc);
 

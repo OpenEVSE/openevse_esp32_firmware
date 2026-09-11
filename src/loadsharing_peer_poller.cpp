@@ -554,7 +554,7 @@ bool LoadSharingPeerPoller::mergeStatusPayload(const String& host, PeerConnectio
                                                const char* data, size_t len) {
   // Filter to just the fields we consume so the parse stays bounded regardless
   // of the full payload size (both /status and /ws frames carry ~90 keys).
-  StaticJsonDocument<256> filter;
+  JsonDocument filter;
   filter["amp"] = true;
   filter["voltage"] = true;
   filter["pilot"] = true;
@@ -563,7 +563,7 @@ bool LoadSharingPeerPoller::mergeStatusPayload(const String& host, PeerConnectio
   filter["config_version"] = true;
   filter["config_hash"] = true;
 
-  StaticJsonDocument<512> doc;
+  JsonDocument doc;
   DeserializationError error =
       deserializeJson(doc, data, len, DeserializationOption::Filter(filter));
 
@@ -573,25 +573,25 @@ bool LoadSharingPeerPoller::mergeStatusPayload(const String& host, PeerConnectio
   }
 
   // Merge fields into status cache (delta update)
-  if (doc.containsKey("amp")) {
+  if (doc["amp"].is<double>()) {
     conn.statusCache.setAmp(doc["amp"].as<double>());
   }
-  if (doc.containsKey("voltage")) {
+  if (doc["voltage"].is<double>()) {
     conn.statusCache.setVoltage(doc["voltage"].as<double>());
   }
-  if (doc.containsKey("pilot")) {
+  if (doc["pilot"].is<double>()) {
     conn.statusCache.setPilot(doc["pilot"].as<double>());
   }
-  if (doc.containsKey("vehicle")) {
+  if (doc["vehicle"].is<uint8_t>()) {
     conn.statusCache.setVehicle(doc["vehicle"].as<uint8_t>());
   }
-  if (doc.containsKey("state")) {
+  if (doc["state"].is<uint8_t>()) {
     conn.statusCache.setState(doc["state"].as<uint8_t>());
   }
-  if (doc.containsKey("config_version")) {
+  if (doc["config_version"].is<uint32_t>()) {
     conn.statusCache.setConfigVersion(doc["config_version"].as<uint32_t>());
   }
-  if (doc.containsKey("config_hash")) {
+  if (doc["config_hash"].is<const char*>()) {
     conn.statusCache.setConfigHash(doc["config_hash"].as<String>());
   }
 
@@ -738,7 +738,7 @@ void LoadSharingPeerPoller::pushConfigToPeer(const String& host, PeerConnection&
   DBUGF("LoadSharingPeerPoller: [%s] Pushing load sharing config", host.c_str());
 
   // Build config JSON
-  DynamicJsonDocument doc(1024);
+  JsonDocument doc;
   doc["loadsharing_enabled"] = true;
   doc["loadsharing_role"] = "member";
   doc["loadsharing_controller_host"] = _groupState->getLocalHostname();
@@ -804,14 +804,14 @@ void LoadSharingPeerPoller::fetchPeerConfig(const String& host) {
     MongooseString bodyStr = response->body();
     String body = bodyStr.toString();
 
-    StaticJsonDocument<128> filter;
+    JsonDocument filter;
     filter["wifi_serial"] = true;
     filter["hostname"] = true;
     filter["min_current_hard"] = true;
     filter["max_current_soft"] = true;
     filter["config_version"] = true;
 
-    StaticJsonDocument<384> doc;
+    JsonDocument doc;
     DeserializationError error =
         deserializeJson(doc, body, DeserializationOption::Filter(filter));
     if (error) {
@@ -832,7 +832,7 @@ void LoadSharingPeerPoller::fetchPeerConfig(const String& host) {
     // wifi_serial is ESPAL.getLongId() uppercased; the discovery/loadsharing id
     // is the lowercase form, so normalise before storing to match by id.
     bool idLearned = false;
-    if (doc.containsKey("wifi_serial")) {
+    if (doc["wifi_serial"].is<const char*>()) {
       String deviceId = doc["wifi_serial"].as<String>();
       deviceId.toLowerCase();
       if (!deviceId.isEmpty() && peer->getId() != deviceId) {
@@ -840,14 +840,14 @@ void LoadSharingPeerPoller::fetchPeerConfig(const String& host) {
         idLearned = true;
       }
     }
-    if (peer->getName().isEmpty() && doc.containsKey("hostname")) {
+    if (peer->getName().isEmpty() && doc["hostname"].is<const char*>()) {
       peer->setName(doc["hostname"].as<String>());
     }
     // Learn the peer's normal current limits for the allocation algorithm.
-    if (doc.containsKey("min_current_hard")) {
+    if (doc["min_current_hard"].is<double>()) {
       peer->setMinCurrent(doc["min_current_hard"].as<double>());
     }
-    if (doc.containsKey("max_current_soft")) {
+    if (doc["max_current_soft"].is<double>()) {
       peer->setMaxCurrent(doc["max_current_soft"].as<double>());
     }
 
@@ -856,7 +856,7 @@ void LoadSharingPeerPoller::fetchPeerConfig(const String& host) {
       it->second.identityFetched = true;
       // Record the config_version this fetch reflects so the WS_CONNECTED
       // handler only refetches when the peer's config actually changes.
-      if (doc.containsKey("config_version")) {
+      if (doc["config_version"].is<uint32_t>()) {
         it->second.configVersionFetched = doc["config_version"].as<uint32_t>();
       } else {
         it->second.configVersionFetched = it->second.statusCache.getConfigVersion();
@@ -888,7 +888,7 @@ void LoadSharingPeerPoller::pushConfigResetToPeer(const String& host) {
   DBUGF("LoadSharingPeerPoller: [%s] Pushing config reset (removing from group)", host.c_str());
 
   // Build reset config JSON
-  DynamicJsonDocument doc(256);
+  JsonDocument doc;
   doc["loadsharing_enabled"] = false;
   doc["loadsharing_role"] = "";
   doc["loadsharing_controller_host"] = "";
@@ -1090,8 +1090,8 @@ void LoadSharingPeerPoller::sendAllocationToPeer(const String& host, PeerConnect
   }
 
   // Build allocation JSON message
-  DynamicJsonDocument doc(256);
-  JsonObject ls = doc.createNestedObject("loadsharing");
+  JsonDocument doc;
+  JsonObject ls = doc["loadsharing"].to<JsonObject>();
   ls["target_current"] = alloc.getTargetCurrent();
   ls["reason"] = alloc.getReason();
 

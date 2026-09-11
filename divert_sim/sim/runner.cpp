@@ -76,13 +76,13 @@ std::string claimState(JsonObjectConst claim)
   const char *state = claim["state"] | "";
   if (std::string(state) == "disabled") return "disabled";
   if (std::string(state) == "active") return "active";
-  if (claim.containsKey("max_current") || claim.containsKey("charge_current")) return "other";
+  if (claim["max_current"].is<uint32_t>() || claim["charge_current"].is<uint32_t>()) return "other";
   return "none";
 }
 
 std::string formatClaimDetails(EvseManager &evse, std::string &aggregate_state)
 {
-  DynamicJsonDocument claims_doc(1024);
+  JsonDocument claims_doc;
   evse.serializeClaims(claims_doc);
   JsonArrayConst claims = claims_doc.as<JsonArrayConst>();
   if (claims.isNull() || claims.size() == 0) {
@@ -90,7 +90,7 @@ std::string formatClaimDetails(EvseManager &evse, std::string &aggregate_state)
     return "No active claims";
   }
 
-  DynamicJsonDocument target_doc(512);
+  JsonDocument target_doc;
   evse.serializeTarget(target_doc);
   JsonObjectConst winners = target_doc["claims"].as<JsonObjectConst>();
 
@@ -109,8 +109,8 @@ std::string formatClaimDetails(EvseManager &evse, std::string &aggregate_state)
     if (!first) details << " | ";
     first = false;
     details << clientName(client) << '@' << (int)(claim["priority"] | 0) << ':' << state;
-    if (claim.containsKey("charge_current")) details << " charge_current=" << (uint32_t) claim["charge_current"];
-    if (claim.containsKey("max_current")) details << " max_current=" << (uint32_t) claim["max_current"];
+    if (claim["charge_current"].is<uint32_t>()) details << " charge_current=" << (uint32_t) claim["charge_current"];
+    if (claim["max_current"].is<uint32_t>()) details << " max_current=" << (uint32_t) claim["max_current"];
   }
 
   if (!winners.isNull() && winners.size() > 0) {

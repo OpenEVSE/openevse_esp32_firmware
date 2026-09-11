@@ -60,7 +60,7 @@ bool CertificateStore::Certificate::deserialize(JsonObject &obj)
 #endif
 
   _cert = cert;
-  if(obj.containsKey("id")) {
+  if(obj["id"].is<const char*>()) {
     std::string id_str = obj["id"].as<std::string>();
     if(!certificate_id_from_string(id_str.c_str(), _id)) {
       DBUGF("Invalid certificate id '%s'", id_str.c_str());
@@ -70,7 +70,7 @@ bool CertificateStore::Certificate::deserialize(JsonObject &obj)
     _id = result.serial;
   }
 
-  if(obj.containsKey("key"))
+  if(obj["key"].is<const char*>())
   {
     std::string key = obj["key"].as<std::string>();
 
@@ -171,7 +171,7 @@ bool CertificateStore::addCertificate(const char *name, const char *certificate,
   return false;
 }
 
-bool CertificateStore::addCertificate(DynamicJsonDocument &doc, uint64_t *id, bool save)
+bool CertificateStore::addCertificate(JsonDocument &doc, uint64_t *id, bool save)
 {
   Certificate *cert = new Certificate();
   if(cert)
@@ -280,20 +280,20 @@ bool CertificateStore::getKey(uint64_t id, std::string &key)
   return false;
 }
 
-bool CertificateStore::serializeCertificates(DynamicJsonDocument &doc, uint32_t flags)
+bool CertificateStore::serializeCertificates(JsonDocument &doc, uint32_t flags)
 {
   doc.to<JsonArray>();
   for(auto &c : _certs)
   {
     DBUGF("c = %p", c);
     DBUGVAR(c->getId(), HEX);
-    JsonObject obj = doc.createNestedObject();
+    JsonObject obj = doc.add<JsonObject>();
     c->serialize(obj);
   }
   return true;
 }
 
-bool CertificateStore::serializeCertificate(DynamicJsonDocument &doc, uint64_t id, uint32_t flags)
+bool CertificateStore::serializeCertificate(JsonDocument &doc, uint64_t id, uint32_t flags)
 {
   Certificate *cert = nullptr;
   if(findCertificate(id, cert)) {
@@ -308,7 +308,7 @@ size_t CertificateStore::certificateCount()
   return _certs.size();
 }
 
-bool CertificateStore::serializeCertificateAt(DynamicJsonDocument &doc, size_t index, uint32_t flags)
+bool CertificateStore::serializeCertificateAt(JsonDocument &doc, size_t index, uint32_t flags)
 {
   if(index >= _certs.size()) {
     return false;
@@ -442,7 +442,7 @@ bool CertificateStore::loadCertificate(String &name)
   File file = LittleFS.open(path);
   if(file)
   {
-    DynamicJsonDocument doc(CERTIFICATE_JSON_BUFFER_SIZE);
+    JsonDocument doc;
     DeserializationError err = deserializeJson(doc, file);
     if(DeserializationError::Code::Ok == err)
     {
@@ -464,7 +464,7 @@ bool CertificateStore::saveCertificate(Certificate *cert)
 {
   String name = String(CERTIFICATE_BASE_DIRECTORY) + "/" + String(cert->getId(), HEX) + ".json";
 
-  DynamicJsonDocument doc(CERTIFICATE_JSON_BUFFER_SIZE);
+  JsonDocument doc;
   JsonObject object = doc.to<JsonObject>();
   cert->serialize(object, Certificate::Flags::SHOW_PRIVATE_KEY);
 

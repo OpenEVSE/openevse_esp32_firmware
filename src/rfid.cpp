@@ -44,7 +44,7 @@ void RfidTask::scanCard(String& uid){
         lcd.display("Tag detected", 0, 0, 0, LCD_CLEAR_LINE | LCD_DISPLAY_NOW);
         lcd.display(uid, 0, 1, 3000, LCD_CLEAR_LINE);
 
-        StaticJsonDocument<128> event;
+        JsonDocument event;
         event["rfid_input"] = uid;
         event["rfid_waiting"] = 0;
         event_send(event);
@@ -126,7 +126,7 @@ unsigned long RfidTask::loop(MicroTasks::WakeReason reason){
             lcd.display(msg, 0, 1, 1000, LCD_CLEAR_LINE);
         } else {
             waitingForTag = false;
-            StaticJsonDocument<128> event;
+            JsonDocument event;
             event["rfid_waiting"] = 0;
             event_send(event);
         }
@@ -157,7 +157,7 @@ String RfidTask::getAuthenticatedTag(){
 void RfidTask::resetAuthentication(){
     authenticatedTag.clear();
 
-    DynamicJsonDocument data{JSON_OBJECT_SIZE(1) + authenticatedTag.length() + 1};
+    JsonDocument data;
     data["rfid_auth"] = authenticatedTag;
     event_send(data);
 }
@@ -166,7 +166,7 @@ void RfidTask::setAuthentication(String &idTag){
     authenticatedTag = idTag;
     authentication_timestamp = millis();
 
-    DynamicJsonDocument data{JSON_OBJECT_SIZE(1) + authenticatedTag.length() + 1};
+    JsonDocument data;
     data["rfid_auth"] = authenticatedTag;
     event_send(data);
 }
@@ -178,7 +178,7 @@ void RfidTask::waitForTag(){
     waitingBegin = millis();
     //lcd.display("Waiting for Tag", 0, 0, RFID_ADD_WAITINGPERIOD, LCD_CLEAR_LINE);
 
-    StaticJsonDocument<128> event;
+    JsonDocument event;
     event["rfid_waiting"] = RFID_ADD_WAITINGPERIOD / 1000;
     event_send(event);
 }

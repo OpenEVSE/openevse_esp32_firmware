@@ -52,7 +52,7 @@ bool Scenario::loadFromFile(const std::string &path)
   buf << file.rdbuf();
   std::string text = buf.str();
 
-  DynamicJsonDocument doc(64 * 1024);
+  JsonDocument doc;
   DeserializationError err = deserializeJson(doc, text);
   if (err) {
     std::cerr << "Scenario: JSON parse error: " << err.c_str() << std::endl;
@@ -65,12 +65,12 @@ bool Scenario::loadFromFile(const std::string &path)
     duration_sec = sim["duration"] | duration_sec;
     tick_interval_sec = sim["tick_interval"] | tick_interval_sec;
     nominal_voltage = sim["nominal_voltage"] | nominal_voltage;
-    if (sim.containsKey("start_time")) {
+    if (sim["start_time"].is<const char *>()) {
       start_epoch = parseEpoch(sim["start_time"].as<const char *>());
     }
   }
 
-  if (root.containsKey("config")) {
+  if (!root["config"].isNull()) {
     // Re-serialise so we can hand it to config_deserialize.
     std::stringstream cfg;
     serializeJson(root["config"], cfg);
@@ -82,7 +82,7 @@ bool Scenario::loadFromFile(const std::string &path)
     group.enabled = grp["enabled"] | false;
     group.max_current = grp["max_current"] | 0.0;
     group.safety_factor = grp["safety_factor"] | 1.0;
-    if (grp.containsKey("failsafe_mode")) {
+    if (grp["failsafe_mode"].is<const char *>()) {
       group.failsafe_mode = grp["failsafe_mode"].as<const char *>();
     }
     group.failsafe_peer_assumed_current =
@@ -100,7 +100,7 @@ bool Scenario::loadFromFile(const std::string &path)
       group.max_current = supply_max_pwr_w / nominal_voltage;
       group.enabled = true;
     }
-    if (supply.containsKey("live_pwr")) {
+    if (!supply["live_pwr"].isNull()) {
       if (!supply_live_pwr.loadFromJson(supply["live_pwr"],
                                         scenario_dir,
                                         (long) start_epoch,
@@ -112,7 +112,7 @@ bool Scenario::loadFromFile(const std::string &path)
   }
   // If group section exists with max_current > 0, treat as enabled unless
   // explicitly set to false.
-  if (!grp.isNull() && group.max_current > 0.0 && !grp.containsKey("enabled")) {
+  if (!grp.isNull() && group.max_current > 0.0 && grp["enabled"].isNull()) {
     group.enabled = true;
   }
 
@@ -152,7 +152,7 @@ bool Scenario::loadFromFile(const std::string &path)
       // columns (e.g. day1/2/3_grid_ie.csv col1=solar, col2=grid_ie).
       // DivertTask reads them independently, so both inputs are applied each tick.
 
-      if (inputs.containsKey("solar")) {
+      if (!inputs["solar"].isNull()) {
         if (!p.solar.loadFromJson(inputs["solar"],
                                  scenario_dir,
                                  (long) start_epoch,
@@ -161,7 +161,7 @@ bool Scenario::loadFromFile(const std::string &path)
           return false;
         }
       }
-      if (inputs.containsKey("grid_ie")) {
+      if (!inputs["grid_ie"].isNull()) {
         if (!p.grid_ie.loadFromJson(inputs["grid_ie"],
                                    scenario_dir,
                                    (long) start_epoch,
@@ -170,7 +170,7 @@ bool Scenario::loadFromFile(const std::string &path)
           return false;
         }
       }
-      if (inputs.containsKey("live_pwr")) {
+      if (!inputs["live_pwr"].isNull()) {
         if (!p.live_pwr.loadFromJson(inputs["live_pwr"],
                                     scenario_dir,
                                     (long) start_epoch,
@@ -179,7 +179,7 @@ bool Scenario::loadFromFile(const std::string &path)
           return false;
         }
       }
-      if (inputs.containsKey("vrms")) {
+      if (!inputs["vrms"].isNull()) {
         if (!p.vrms.loadFromJson(inputs["vrms"],
                                 scenario_dir,
                                 (long) start_epoch,
@@ -190,10 +190,10 @@ bool Scenario::loadFromFile(const std::string &path)
       }
     }
 
-    if (pj.containsKey("divert_mode")) {
+    if (pj["divert_mode"].is<const char *>()) {
       p.divert_mode = pj["divert_mode"].as<const char *>();
     }
-    if (pj.containsKey("shaper_enabled")) {
+    if (pj["shaper_enabled"].is<bool>()) {
       p.shaper_enabled = pj["shaper_enabled"].as<bool>();
       p.shaper_enabled_set = true;
     }
@@ -203,19 +203,19 @@ bool Scenario::loadFromFile(const std::string &path)
       for (JsonObjectConst ej : events) {
         PeerEvent e;
         e.t_sec = ej["time"] | 0;
-        if (ej.containsKey("online")) {
+        if (ej["online"].is<bool>()) {
           e.set_online = true; e.online = ej["online"].as<bool>();
         }
-        if (ej.containsKey("vehicle")) {
+        if (ej["vehicle"].is<bool>()) {
           e.set_vehicle = true; e.vehicle = ej["vehicle"].as<bool>();
         }
-        if (ej.containsKey("request_current")) {
+        if (ej["request_current"].is<bool>()) {
           e.set_request_current = true; e.request_current = ej["request_current"].as<bool>();
         }
-        if (ej.containsKey("aux_load_kw")) {
+        if (ej["aux_load_kw"].is<double>()) {
           e.set_aux_load_kw = true; e.aux_load_kw = ej["aux_load_kw"].as<double>();
         }
-        if (ej.containsKey("boost")) {
+        if (!ej["boost"].isNull()) {
           e.set_boost = true;
           if (ej["boost"].is<const char *>()) {
             e.boost_cancel = (std::string(ej["boost"].as<const char *>()) == "cancel");
@@ -225,10 +225,10 @@ bool Scenario::loadFromFile(const std::string &path)
             e.boost_value = bj["value"] | 0;
           }
         }
-        // A non-string "manual" (null, number, object) still satisfies
-        // containsKey() but yields NULL from as<const char *>(), which is UB
-        // to feed to std::string. Ignore the event instead.
-        if (ej.containsKey("manual") && ej["manual"].is<const char *>()) {
+        // A non-string "manual" (null, number, object) is still present in
+        // the event but yields NULL from as<const char *>(), which is UB to
+        // feed to std::string. Ignore the event instead.
+        if (ej["manual"].is<const char *>()) {
           const char *ms = ej["manual"].as<const char *>();
           if (ms) {
             e.set_manual = true;

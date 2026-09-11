@@ -71,7 +71,7 @@ unsigned long CurrentShaperTask::loop(MicroTasks::WakeReason reason) {
 					                !_loadshare_limit_active)
 					               ? EvseManager_Priority_TimerFeature : EvseManager_Priority_Safety;
 					_evse->claim(EvseClient_OpenEVSE_Shaper, priority, props);
-					StaticJsonDocument<128> event;
+					JsonDocument event;
 					event["shaper"] = 1;
 					event["shaper_live_pwr"] = _live_pwr;
 					event["shaper_smoothed_live_pwr"] = _smoothed_live_pwr;
@@ -101,7 +101,7 @@ unsigned long CurrentShaperTask::loop(MicroTasks::WakeReason reason) {
 					int failsafe_priority = (_timer_controlled && !config_current_shaper_enabled())
 					               ? EvseManager_Priority_TimerFeature : EvseManager_Priority_Limit;
 					_evse->claim(EvseClient_OpenEVSE_Shaper, failsafe_priority, props);
-					StaticJsonDocument<128> event;
+					JsonDocument event;
 					event["shaper"] = 1;
 					event["shaper_live_pwr"] = _live_pwr;
 					event["shaper_smoothed_live_pwr"] = _smoothed_live_pwr;
@@ -148,7 +148,7 @@ void CurrentShaperTask::begin(EvseManager &evse) {
 	this -> _max_cur = 0;
 	this -> _updated = false;
 	MicroTask.startTask(this);
-	StaticJsonDocument<128> event;
+	JsonDocument event;
 	event["shaper"]  = 1;
 	event_send(event);
 }
@@ -159,7 +159,7 @@ void CurrentShaperTask::notifyConfigChanged( bool enabled, uint32_t max_pwr) {
 	_enabled = enabled || _timer_controlled;
 	_max_pwr = max_pwr;
 	if (!_enabled && _evse) _evse->release(EvseClient_OpenEVSE_Shaper);
-	StaticJsonDocument<128> event;
+	JsonDocument event;
 	event["shaper"] = enabled == true ? 1 : 0;
 	event["shaper_max_pwr"] = max_pwr;
 	event_send(event);
@@ -184,7 +184,7 @@ void CurrentShaperTask::setState(bool state) {
 			_evse->release(EvseClient_OpenEVSE_Shaper);
 		}
 	}
-	StaticJsonDocument<128> event;
+	JsonDocument event;
 	event["shaper"]  = state?1:0;
 	event_send(event);
 }
@@ -196,7 +196,7 @@ void CurrentShaperTask::setTimerEnabled(bool active) {
 	if (!_enabled && _evse) {
 		_evse->release(EvseClient_OpenEVSE_Shaper);
 	}
-	StaticJsonDocument<128> event;
+	JsonDocument event;
 	event["shaper"] = _enabled ? 1 : 0;
 	event_send(event);
 }

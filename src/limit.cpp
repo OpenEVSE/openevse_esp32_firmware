@@ -125,13 +125,13 @@ bool LimitProperties::getAutoRelease() {
 
 bool LimitProperties::deserialize(JsonObject &obj)
 {
-  if(obj.containsKey("type")) {
+  if(obj["type"].is<const char *>()) {
     _type.fromString(obj["type"]);
     }
-  if(obj.containsKey("value")) {
+  if(obj["value"].is<uint32_t>()) {
     _value = obj["value"];
     }
-  if(obj.containsKey("auto_release")) {
+  if(obj["auto_release"].is<bool>()) {
     _auto_release = obj["auto_release"];
     }
   return _type > 0 && _value > 0;
@@ -320,7 +320,7 @@ bool Limit::set(String json) {
 
 bool Limit::set(LimitProperties props) {
   _limit_properties = props;
-  StaticJsonDocument<32> doc;
+  JsonDocument doc;
   doc["limit"] = hasLimit();
   doc["limit_version"] = ++_version;
   event_send(doc);
@@ -333,7 +333,7 @@ LimitProperties Limit::get() {
 
 bool Limit::clear() {
   _limit_properties.init();
-  StaticJsonDocument<32> doc;
+  JsonDocument doc;
   doc["limit"] = false;
   doc["limit_version"] = ++_version;
   event_send(doc);

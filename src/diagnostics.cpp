@@ -368,7 +368,7 @@ void diagnostics_coredump_json(JsonDocument &doc)
     // image from /debug/crash/raw still carries the stack dump.
     doc["bt"] = "riscv-no-unwind";
 #else
-    JsonArray bt = doc.createNestedArray("bt");
+    JsonArray bt = doc["bt"].to<JsonArray>();
     for(uint32_t i = 0; i < s->exc_bt_info.depth && i < 16; i++) {
       snprintf(buf, sizeof(buf), "0x%08x", (unsigned)s->exc_bt_info.bt[i]);
       bt.add(buf);
