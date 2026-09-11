@@ -256,14 +256,19 @@ unsigned long Notifications::loop(MicroTasks::WakeReason reason)
   }
 
   if(changed) {
-    DynamicJsonDocument doc(1024);
-    JsonObject o = doc.createNestedObject("notifications");
-    o["count"] = count();
-    o["severity"] = notification_severity_name(maxSeverity());
-    event_send(doc);
+    pushEvent();
   }
 
   return EVSE_NOTIFICATIONS_LOOP_TIME;
+}
+
+void Notifications::pushEvent()
+{
+  DynamicJsonDocument doc(1024);
+  JsonObject o = doc.createNestedObject("notifications");
+  o["count"] = count();
+  o["severity"] = notification_severity_name(maxSeverity());
+  event_send(doc);
 }
 
 size_t Notifications::count()
@@ -299,6 +304,7 @@ bool Notifications::ack(const char *id)
       _ack_count = notification_acks_set(_acks, _ack_count, NOTIFICATION_ACK_MAX,
                                          _live[i].key, _live[i].token);
       saveAcks();
+      pushEvent();
       return true;
     }
   }

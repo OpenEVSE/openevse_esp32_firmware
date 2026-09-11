@@ -46,6 +46,14 @@ class Notifications : public MicroTasks::Task
     void gather(NotificationInputs &in);
     void saveAcks();
 
+    // Pushes the two /status fields on the websocket. Called from loop() when
+    // the live set moves, and from ack() -- an ack changes neither the live
+    // set nor its severities, but it does change count() and maxSeverity(),
+    // which are exactly the two values this event carries. Without it a
+    // second browser or phone shows a badge for an advisory another client
+    // muted until the set happens to change for some unrelated reason.
+    void pushEvent();
+
     // Compacts the currently-live advisories that are NOT acked into `out`
     // (sized NOTIFICATION_MAX by every caller). Shared by maxSeverity() and
     // worst() so the tie-break rule lives once, in notifications_rules.cpp.
