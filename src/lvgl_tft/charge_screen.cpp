@@ -85,6 +85,17 @@ static lv_obj_t *tile_value[3] = {nullptr, nullptr, nullptr};
 // idle <-> session transition rather than every second. -1 = not yet written.
 static int captioned_session = -1;
 
+// Last style values actually written, so an unchanged one is not written
+// again. lv_obj_set_local_style_prop() has no unchanged-value early-out: it
+// always refreshes the style and invalidates the object it is set on. For the
+// border that object is the SCREEN, so setting it every update would mark the
+// whole 480x320 panel dirty once a second - a full-frame flush, ~110 ms of
+// blocking SPI on this bus-limited display, in the same task that services
+// Mongoose and RAPI - whether or not any advisory is active. -1 = not yet
+// written, so the first update after a build always writes.
+static int applied_border_width = -1;
+static int applied_msg_colour   = -1;   // 0 = COL_ACCENT, 1 = COL_WARN
+
 // One stat tile: a rounded card with a dim caption and one big value.
 static void make_tile(lv_obj_t *parent, int idx, lv_coord_t y)
 {
@@ -163,6 +174,10 @@ void charge_screen_build()
   lv_obj_set_style_radius(scr, 0, 0);
 
   captioned_session = -1;  // force the tile captions to be written on first update
+  // A rebuild makes a brand-new screen object carrying the build defaults, so
+  // the caches above have to forget what the previous one was showing.
+  applied_border_width = -1;
+  applied_msg_colour = -1;
 
   // --- Top strip, line 1: clock (left) + status chips (right) ---
   // Fixed width so the clock does not shuffle as digit widths change.
@@ -521,8 +536,11 @@ void charge_screen_update(const ChargeScreenData &d)
                      (d.notify_line && d.notify_line[0]) ? d.notify_line : NULL;
   if (line) {
     lv_label_set_text(msg_lbl, line);
-    lv_obj_set_style_text_color(msg_lbl,
-        (d.msg_line && d.msg_line[0]) ? COL_ACCENT : COL_WARN, 0);
+    int want_msg_colour = (d.msg_line && d.msg_line[0]) ? 0 : 1;
+    if (want_msg_colour != applied_msg_colour) {
+      lv_obj_set_style_text_color(msg_lbl, want_msg_colour == 0 ? COL_ACCENT : COL_WARN, 0);
+      applied_msg_colour = want_msg_colour;
+    }
     lv_obj_clear_flag(msg_lbl, LV_OBJ_FLAG_HIDDEN);
     lv_obj_add_flag(hostip_lbl, LV_OBJ_FLAG_HIDDEN);
   } else {
@@ -539,7 +557,12 @@ void charge_screen_update(const ChargeScreenData &d)
 
   // The amber perimeter: the "is there anything wrong?" signal, legible from
   // across the garage. Never red -- that stays reserved for the fault screen.
-  lv_obj_set_style_border_width(charge_scr, d.notify_active ? 4 : 0, 0);
+  // Written only on change; see applied_border_width above for why.
+  int want_border = d.notify_active ? 4 : 0;
+  if (want_border != applied_border_width) {
+    lv_obj_set_style_border_width(charge_scr, want_border, 0);
+    applied_border_width = want_border;
+  }
 }
 
 void charge_screen_destroy()
