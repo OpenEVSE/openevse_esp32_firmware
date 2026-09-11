@@ -31,7 +31,14 @@ void handleNotifications(MongooseHttpServerRequest *request)
 // -------------------------------------------------------------------
 // Acknowledge one advisory. A sticky advisory is muted rather than
 // cleared - it stays in the list and keeps its settings-page marker.
-// url: /notifications/ack?id=safety.ground_check
+//
+// url: POST /notifications/ack?id=safety.ground_check
+//      (the id may equally be sent as an application/x-www-form-urlencoded
+//      body, "id=safety.ground_check")
+//
+// Both forms are accepted because ArduinoMongoose's getParam() reads the
+// query string ONLY for GET and the request body for every other method, so
+// the documented URL form with an empty body finds nothing there.
 // -------------------------------------------------------------------
 void handleNotificationAck(MongooseHttpServerRequest *request)
 {
@@ -43,7 +50,16 @@ void handleNotificationAck(MongooseHttpServerRequest *request)
     return;
   }
 
+  // Body first (what getParam() gives us on a POST), then the query string.
   String id = request->getParam("id");
+  if(0 == id.length()) {
+    char buf[64];
+    MongooseString query = request->queryString();
+    if(mg_get_http_var(query, "id", buf, sizeof(buf)) > 0) {
+      id = buf;
+    }
+  }
+
   if(0 == id.length()) {
     response->setCode(400);
     response->print("id required");
