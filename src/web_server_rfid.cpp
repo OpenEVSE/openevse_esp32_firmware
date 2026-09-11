@@ -14,12 +14,25 @@ typedef const __FlashStringHelper *fstr_t;
 // Helper function for CSV field escaping
 static String escapeCSVField(const String &field)
 {
-  if(field.indexOf(',') >= 0 || field.indexOf('"') >= 0 || field.indexOf('\n') >= 0) {
-    String escaped = field;
-    escaped.replace("\"", "\"\"");
-    return "\"" + escaped + "\"";
+  String value = field;
+
+  // CSV injection (CWE-1236): a leading formula character is interpreted by
+  // spreadsheet software when the export is opened (e.g. a user name of
+  // "=HYPERLINK(...)" set via POST /rfid/users). A leading apostrophe forces
+  // Excel/Sheets to treat the cell as text.
+  if(value.length() > 0) {
+    char first = value[0];
+    if(first == '=' || first == '+' || first == '-' || first == '@') {
+      value = "'" + value;
+    }
   }
-  return field;
+
+  if(value.indexOf(',') >= 0 || value.indexOf('"') >= 0 ||
+     value.indexOf('\r') >= 0 || value.indexOf('\n') >= 0) {
+    value.replace("\"", "\"\"");
+    return "\"" + value + "\"";
+  }
+  return value;
 }
 
 // -------------------------------------------------------------------

@@ -31,19 +31,33 @@ bool RfidUser::load(DynamicJsonDocument &doc)
 
 bool RfidUser::save(const DynamicJsonDocument &doc)
 {
-  File file = LittleFS.open(RFID_USERS_FILE, "w");
+  // Write-then-rename so a failed serialization or a reset mid-write can
+  // never leave /rfid_users.json truncated or empty.
+  const char* tempPath = "/rfid_users.json.tmp";
+
+  File file = LittleFS.open(tempPath, "w");
   if(!file) {
-    DBUGLN("Failed to open RFID users file for writing");
+    DBUGLN("Failed to open RFID users temp file for writing");
     return false;
   }
 
   if(serializeJson(doc, file) == 0) {
-    DBUGLN("Failed to write RFID users file");
+    DBUGLN("Failed to write RFID users temp file");
     file.close();
+    LittleFS.remove(tempPath);
     return false;
   }
 
   file.close();
+
+  if(LittleFS.exists(RFID_USERS_FILE)) {
+    LittleFS.remove(RFID_USERS_FILE);
+  }
+  if(!LittleFS.rename(tempPath, RFID_USERS_FILE)) {
+    DBUGLN("Failed to rename RFID users temp file into place");
+    return false;
+  }
+
   return true;
 }
 
@@ -73,7 +87,16 @@ bool RfidUser::setUserName(const String &rfidTag, const String &userName)
   }
 
   DynamicJsonDocument doc(RFID_USERS_DOC_SIZE);
-  load(doc); // Load existing data, ignore errors; a missing/invalid file starts empty
+  if(!load(doc) && LittleFS.exists(RFID_USERS_FILE)) {
+    // The file exists but didn't parse — corrupt JSON, or a mapping that has
+    // grown past RFID_USERS_DOC_SIZE (ArduinoJson reports NoMemory but still
+    // leaves a partially-populated doc). Saving that partial doc would
+    // silently drop the rest of the existing mappings, so refuse instead. A
+    // genuinely missing file is the normal "no mappings yet" case and still
+    // starts empty below.
+    DBUGLN("RfidUser: refusing to modify an unreadable mapping file");
+    return false;
+  }
 
   // doc.to<JsonObject>() would discard whatever load() just populated, so only
   // reset the root when it isn't already an object (missing file, corrupt JSON).
