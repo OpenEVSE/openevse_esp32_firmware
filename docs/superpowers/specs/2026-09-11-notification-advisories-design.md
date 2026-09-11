@@ -30,8 +30,9 @@ log slot is cut.
 
 ## 2. Scope
 
-**In:** an advisory engine in the firmware; an HTTP + websocket API; a chip on
-the LVGL screens; a badge and panel in the web UI (separate repo, separate PR).
+**In:** an advisory engine in the firmware; an HTTP + websocket API; a border
+and a status line on the LVGL screens; inline markers, a status strip and a
+badge in the web UI (separate repo, separate PR).
 
 **Out:** outbound push (email, HA notifications, MQTT topics beyond the existing
 state publish); any change to fault handling or the charge state machine; OCPP
@@ -42,8 +43,8 @@ status mapping; per-advisory user configuration beyond what §8 needs.
 This is the part most likely to go wrong, so it is a rule, not a guideline.
 
 ```
-live fault      fault_screen.cpp, full screen, blocks charging
-advisory        THIS — one chip, never blocks, never takes the screen
+live fault      fault_screen.cpp, full screen, red, blocks charging
+advisory        THIS — amber border + one line, never blocks, never takes the screen
 event log       history, only interesting when you go looking
 ```
 
@@ -53,8 +54,9 @@ screen owns it. `wear.relay_life` at 100% is an advisory; `OPENEVSE_STATE_STUCK_
 is a fault. `fault.gfci_tripped` is an advisory *because it has already
 cleared* — while the GFI fault is live, the fault screen has it.
 
-Consequence: the LCD chip is suppressed entirely while the fault screen is up.
-There is no case where both should be competing for the user's attention.
+Consequence: the amber border and its line are suppressed entirely while the
+fault screen is up. There is no case where both should be competing for the
+user's attention — and red stays reserved for "this charger has stopped" (§9.1).
 
 ## 4. Data model
 
@@ -66,11 +68,11 @@ struct Advisory {
   const char      *id;        // stable, dotted, e.g. "safety.ground_check"
   AdvisoryCategory category;
   AdvisorySeverity severity;
-  bool             sticky;    // true: cannot be acked while the condition holds
+  bool             sticky;    // true: acking mutes, it does not clear (§4.1)
   uint32_t         token;     // state token; an ack is void once this changes
   uint32_t         first_seen;
   uint32_t         last_seen;
-  bool             acked;
+  bool             acked;     // non-sticky: dismissed. sticky: muted.
 };
 ```
 
@@ -83,6 +85,30 @@ already does for fault states.
 is the counter value; ack it at `gfci_count == 3` and a fourth trip raises it
 again, because the stored ack no longer matches. For a sticky advisory the
 token is unused.
+
+### 4.1 Acking a sticky advisory mutes it, it does not dismiss it
+
+The first draft of this design made safety advisories un-ackable: the condition
+is real until the setting is changed, so why let anyone wave it away?
+
+Because some installs disable a check deliberately, and a charger that shows a
+permanent amber border for a configuration its installer chose is a charger
+whose owner learns to ignore the border. Crying wolf costs more here than
+under-reporting does — the LCD's whole job is to be believed at a glance, and it
+only gets to spend that credibility once.
+
+So acking a sticky advisory **demotes** it rather than clearing it:
+
+| | not acked | acked (muted) |
+|---|---|---|
+| LCD border + line (§9) | drives them | does not |
+| GUI notification list | listed, unmuted | listed, marked muted |
+| GUI settings inline marker (§10) | shown | **still shown** |
+
+Nothing is ever hidden — only the alarm is silenced, and only by a deliberate
+act. If the condition clears and later returns, `first_seen` resets and the
+advisory comes back unmuted, because that is a new event and not the one that
+was acknowledged.
 
 ## 5. Rules (v1)
 
@@ -100,6 +126,9 @@ token is unused.
 | `thermal.throttling` | thermal | warning | `TempThrottle::isThrottling()` | yes (auto-clears) |
 | `thermal.high_temp` | thermal | warning | max `getTemperature(s)` over valid sensors ≥ `getPanicTemperature()` − margin | yes (auto-clears) |
 | `wear.relay_life` | wear | info → warning | cycles ≥ 80% → ≥ 100% of rating | no |
+
+"sticky: yes" means acking mutes rather than clears (§4.1); the advisory only
+goes away when the condition does.
 
 **"Not all Required Safety Features are enabled" is not its own rule.** It is
 what the UI says when it has more than one `safety.*` advisory to summarise.
@@ -136,7 +165,9 @@ GET  /notifications
         "sticky": true, "acked": false, "first_seen": 1757548800, "last_seen": 1757552400 },
       ... ] }
 
-POST /notifications/<id>/ack     → 200, or 409 if sticky and still active
+POST /notifications/<id>/ack     → 200
+                                   non-sticky: dismissed until the token changes
+                                   sticky:     muted, still listed (§4.1)
 ```
 
 `/status` gains exactly two fields:
@@ -191,30 +222,86 @@ belongs in config with a conservative default; needs a number from Chris.
 
 ## 9. LCD
 
-`charge_screen.cpp` already builds a `chip_row` — a flex row of status chips
-(temp / wifi / car) aligned top-right — and `make_chip()` / `chip_set()` are
-already the house pattern for adding one. So: one more chip, glyph plus count,
-background coloured by max severity (info neutral, warning amber, critical red),
-hidden when `count == 0`.
+The panel is 480×320, read from across a garage. A pill in the top-right corner
+is close to invisible at three metres, so the corner cannot be where "something
+is wrong" lives. Severity picks the *form*, not just the colour.
 
-Same chip on `standby_screen.cpp`. Suppressed while `fault_screen` is up (§3).
+### 9.1 The border
 
-Not in v1: a browsable notification list on the LCD. The chip's job is to say
-"there is something to look at in the app". A list screen means input handling,
-scrolling and its own translations on a 320×480 panel, which is a second feature
-wearing the first one's clothes. Revisit once the chip is in and Chris has
-opinions.
+**When any advisory is active, the screen carries an amber perimeter border.**
+Four pixels, flush to the edge, no radius, `NS_WARNING` — which resolves the
+active palette, so it is correct in both the dark and light themes with no
+second definition.
+
+This is the whole point of the design: a 480×320 perimeter is legible from
+across the garage in a way nothing in the corner is. It costs no layout space,
+it does not move, and because it is a style on the screen object rather than a
+widget it is drawn with the screen background — no extra invalidation, nothing
+for the ~9 fps bus ceiling to care about.
+
+**Amber only. Never red.** Red belongs to the fault screen and means "this
+charger has stopped". If a critical advisory painted a red border, someone would
+read a working charger as a broken one — and the tier rule in §3 exists
+precisely so the two never blur. Amber means "still working, but look at me";
+severity is carried by the text, which you read once you have walked over. That
+also means the border is binary — present or absent — which is what makes it
+readable at a distance.
+
+Suppressed entirely on the fault, boot and setup screens: the fault screen is
+already shouting (§3), and during boot or setup there is nothing the user can
+act on.
+
+### 9.2 The line
+
+```
+ 14:32  Tue 11 Sep                      [28°C] [wifi 72] [⚡]
+ ⚠ GROUND CHECK OFF  +2                          ← worst item, named
+ ┌──────────────────────────────────────────────────────────┐  amber, 4px
+```
+
+At most one advisory is ever named, the highest-severity one, in the existing
+`msg_lbl` strip (charge screen top strip line 2 — already 18px, already
+positioned, unused most of the time). A `+N` suffix counts the rest. Glyph is a
+**warning triangle, not a bell**: a bell means "you have messages", and none of
+this is messages — it is the state of the user's charger.
+
+`standby_screen.cpp` has no message strip and needs one adding; it already has
+the `chip_row`, clock and the same `make_chip()` pattern, so this is a label and
+an alignment.
+
+**No notification chip, and nothing blinks.** The border already answers "is
+there anything?", so a counting chip in `chip_row` would be a third way of
+saying the same thing while crowding a row that exists for live telemetry
+(temp / wifi / car). And animation on a screen bolted to a garage wall is
+hostile — it also costs redraws we do not need to spend.
+
+### 9.3 Not in v1
+
+A browsable list on the LCD. The border plus the named line says "there is
+something, and here is the worst of it"; a list means input handling, scrolling
+and its own translations on a 480×320 panel — a second feature wearing the
+first one's clothes. Revisit once this is in and Chris has opinions.
 
 The legacy TFT_eSPI renderer was removed upstream in d28a01c7, so LVGL is the
 only screen stack to touch.
 
 ## 10. GUI
 
-Separate PR against gui-nightshift: a bell badge in the header showing count and
-severity colour, opening a panel that lists advisories newest-first with an ack
-button on the non-sticky ones. Sticky safety entries link to the setting that
-clears them, which is the single most useful thing the panel can do — "ground
-check is off" is only actionable if it is one tap from the switch.
+Separate PR against gui-nightshift. Three surfaces, in order of how much they
+actually matter:
+
+1. **Inline markers on the settings page** — a warning marker beside the very
+   switch that is off. This is the one that makes the feature useful: "ground
+   check is off" is only actionable if it is one tap from the control that
+   fixes it. These are drawn straight from the advisory list and are **not**
+   suppressed by muting (§4).
+2. **A strip on the status page** for critical advisories, dismissible.
+3. **A bell badge in the header** opening a panel that lists everything
+   newest-first, with ack buttons and links through to the relevant setting.
+
+The bell is the index, not the feature. A badge that only opens a list of
+complaints the user must then go hunting for is a worse version of the event
+log — which they already have.
 
 Titles and detail strings are looked up from `id` in the GUI's existing i18n
 tables.
