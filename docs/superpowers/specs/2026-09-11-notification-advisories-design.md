@@ -197,8 +197,11 @@ An advisory writes one `EventType::Notification` row when it transitions from
 absent to present, carrying its id and severity. Nothing on clear, nothing on
 ack, nothing while it persists.
 
-Guarded by a per-boot bitmask — one bit per advisory id, RAM only, not
-persisted — so an id can log at most once between restarts.
+Guarded by a per-boot list of the ids already written — RAM only, not
+persisted — so an id can log at most once between restarts. An id array
+rather than a bitmask: an id is stable, an array index is not, and keying the
+guard on a position would let a cleared advisory shuffle a later one into a
+slot that has already been marked logged.
 
 The guard is not belt-and-braces, it is the whole point. The counter-derived
 rules are already rate-limited by the physical event behind them, and the
@@ -206,8 +209,26 @@ rules are already rate-limited by the physical event behind them, and the
 `thermal.throttling` and `thermal.high_temp` raise and clear as temperature
 hunts around a setpoint, and logging every raise edge is precisely how the
 History flood that #1216 fixed would come back. A per-boot cap makes that
-impossible by construction rather than by tuning: thirteen rules, thirteen bits,
-a worst case of thirteen rows per boot however badly something flaps.
+impossible by construction rather than by tuning: sixteen rules (§5), so a
+worst case of sixteen rows per boot however badly something flaps. The guard
+array is sized to `NOTIFICATION_MAX`, which is 20 — the rule count with room to
+add a rule without revisiting every caller.
+
+Two further limits, both discovered in review rather than designed in:
+
+- **A row is only marked logged once it has actually been written.**
+  `EventLog::log()` builds its repeat key from the EVSE state fields, not from
+  the advisory id, and silently drops anything matching a key written inside its
+  300 s window — so two advisories raising on the same pass would see the second
+  discarded as a repeat of the first. It also drops entries when the clock has
+  not synced (likely for a raise edge seconds after boot) and when LittleFS is
+  nearly full. `log()` therefore reports whether the row landed, and the guard
+  records the id only then.
+- **At most one raise edge is logged per pass.** Each `log()` call runs
+  `LittleFS.totalBytes()` and `usedBytes()` for its free-space guard — two full
+  filesystem traversals, 30–140 ms each — and six to nine advisories can become
+  knowable on the same pass. The rest are still deduped by id and take their row
+  on a later 5 s tick.
 
 Asymmetry (raised but never cleared) is deliberate. The event log is a record of
 things that happened; what is true *now* lives on `/notifications`, which is
@@ -233,10 +254,27 @@ GET  /notifications
         "sticky": true, "acked": false, "first_seen": 1757548800, "last_seen": 1757552400 },
       ... ] }
 
-POST /notifications/<id>/ack     → 200
+POST /notifications/ack?id=<id>  → 200
                                    non-sticky: dismissed until the token changes
                                    sticky:     muted, still listed (§4.1)
+                                   400 no id, 404 no such active advisory
 ```
+
+The id rides on the query string rather than in the path, because the server's
+router matches fixed paths — `server.on("/notifications/ack$", ...)` — and has
+no path-parameter extraction to hang `/notifications/<id>/ack` on. The handler
+also accepts the same `id` in a form-encoded body: ArduinoMongoose's
+`getParam()` reads the query string only for GET and the request body for every
+other method, so a POST has to be given both readings explicitly or the
+documented URL form finds nothing and answers 400.
+
+`first_seen` and `last_seen` are **epoch seconds**, matching the event log next
+door, with **0 meaning unknown** — the gateway's clock had not synced when the
+reading was taken (the same `tm_year < 2021` test `event_log.cpp` uses). An
+advisory raised before the clock synced keeps `first_seen` 0 rather than being
+backdated to a time it was not seen; `last_seen` catches up on the next pass.
+A consumer can therefore tell "not known" from a real timestamp, which it could
+not if uptime seconds or a backfilled value were reported instead.
 
 `/status` gains exactly two fields:
 
@@ -251,6 +289,9 @@ way of the deferred `/status` heap-fields work.)
 
 A `notifications` websocket event fires on any change to the set, via the
 existing `event_send(doc)` path that `boost.cpp` and `current_shaper.cpp` use.
+It carries the same two fields as the `/status` object, in the same types:
+`severity` is the name, never the integer, so a GUI that seeds from `/status`
+and merges websocket deltas never sees the field change type under it.
 
 Auth: same policy as the other `/status`-adjacent endpoints. `POST .../ack`
 is a state change and takes the same CSRF guard as `/divertmode` et al.
@@ -335,9 +376,20 @@ positioned, unused most of the time). A `+N` suffix counts the rest. Glyph is a
 **warning triangle, not a bell**: a bell means "you have messages", and none of
 this is messages — it is the state of the user's charger.
 
-`standby_screen.cpp` has no message strip and needs one adding; it already has
-the `chip_row`, clock and the same `make_chip()` pattern, so this is a label and
-an alignment.
+`standby_screen.cpp` has no message strip, and rather than add one it hands the
+advisory its existing footer label — the one that otherwise carries
+`hostname · ip`. The advisory takes that line outright, in `NS_WARNING`, and the
+address returns the moment the advisory clears.
+
+Taking the line rather than adding one is deliberate. A second strip would push
+the tile row up or the footer down on a layout whose vertical budget is already
+spent, for a line that is blank most of the time; and standby is exactly where
+a warning outranks the address — a charger that is idle and has something wrong
+with it should say the wrong thing, not where to point a browser. The cost is
+real and accepted: **the IP address is not visible while an advisory is up.**
+Someone setting a charger up for the first time normally has nothing raised, and
+if they do, the advisory is the more useful of the two. The charge screen keeps
+its separate `msg_lbl` because it already had one.
 
 **No notification chip, and nothing blinks.** The border already answers "is
 there anything?", so a counting chip in `chip_row` would be a third way of
