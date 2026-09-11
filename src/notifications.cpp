@@ -126,6 +126,14 @@ unsigned long Notifications::loop(MicroTasks::WakeReason reason)
   uint32_t now = (uint32_t)(millis() / 1000);
   bool changed = (_count != previous_count);
 
+  // At most one event-log row per pass. EventLog::log() costs two full
+  // LittleFS traversals (totalBytes() + usedBytes(), 30-140 ms each) for its
+  // free-space guard, and six to nine advisories can become knowable on the
+  // same pass -- the boot pass, typically -- which would be seconds of
+  // blocking work in one MicroTask iteration. The rest are still deduped by
+  // id and get their row on a later 5 s tick.
+  bool logged_this_pass = false;
+
   for(size_t i = 0; i < _count; i++) {
     // Carry first_seen across from the previous pass; a rule that was absent
     // last pass is a raise edge.
@@ -157,16 +165,27 @@ unsigned long Notifications::loop(MicroTasks::WakeReason reason)
           break;
         }
       }
-      if(!already_logged && _logged_count < NOTIFICATION_MAX) {
-        _logged_ids[_logged_count++] = _live[i].id;
+      if(!already_logged && !logged_this_pass && _logged_count < NOTIFICATION_MAX) {
         // Argument list copied from EvseManager's own call site
         // (src/evse_man.cpp:386) so the row is shaped like every other row.
-        eventLog.log(EventType::Notification, _evse->getState(),
-                     _evse->getEvseState(), _evse->getFlags(), _evse->getPilotState(),
-                     _evse->getPilot(), _evse->getSessionEnergy(), _evse->getSessionElapsed(),
-                     _evse->getTemperature(EVSE_MONITOR_TEMP_MONITOR),
-                     _evse->getTemperature(EVSE_MONITOR_TEMP_MAX),
-                     divert.isActive(), shaper.getState(), _live[i].id);
+        bool written =
+          eventLog.log(EventType::Notification, _evse->getState(),
+                       _evse->getEvseState(), _evse->getFlags(), _evse->getPilotState(),
+                       _evse->getPilot(), _evse->getSessionEnergy(), _evse->getSessionElapsed(),
+                       _evse->getTemperature(EVSE_MONITOR_TEMP_MONITOR),
+                       _evse->getTemperature(EVSE_MONITOR_TEMP_MAX),
+                       divert.isActive(), shaper.getState(), _live[i].id);
+        // Only a row that actually reached the file counts as logged. log()
+        // drops entries silently in three cases that all apply here: the
+        // repeat filter (its key carries no advisory id, so a second advisory
+        // raised in the same 300 s window looks like a repeat of the first),
+        // an unsynced clock (likely for a raise edge seconds after boot) and
+        // low LittleFS space. Marking the id logged regardless would mean the
+        // advisory never got a row on this boot or any later one.
+        if(written) {
+          _logged_ids[_logged_count++] = _live[i].id;
+          logged_this_pass = true;
+        }
       }
     }
   }
