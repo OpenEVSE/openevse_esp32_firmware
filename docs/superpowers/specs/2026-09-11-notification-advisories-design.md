@@ -343,9 +343,10 @@ turned off C++ exceptions (99d581b0, ~155 KB back) and dropped TFT_eSPI
 
 1. ~~Relay life thresholds.~~ **Settled: notice at ≤ 20% life remaining,
    warning at ≤ 5%.** Worth a nod from Chris since he owns what "getting close"
-   means for this hardware, but not a blocker. Still open: whether cold opens
-   and stuck-relay recoveries should reach the owner at all, or are service
-   diagnostics that belong only on Monitoring → Health.
+   means for this hardware, but not a blocker. **Cold opens and stuck-relay
+   recoveries are also raised to the owner** — they are not service-only
+   diagnostics. Both stay as specified in §5: cold opens a warning, recoveries
+   informational, each tokened on its count so a later one re-raises.
 2. Should advisories also write `EventType::Notification` rows into the event
    log? It is free and the enum value is already there, but the log is already
    noisy and this could re-open the repeat-spam problem that #1216 fixed.
