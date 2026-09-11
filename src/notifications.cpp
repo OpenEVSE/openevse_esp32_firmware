@@ -58,9 +58,7 @@ void Notifications::setup()
   if(notification_acks_fw != currentfirmware) {
     DBUGF("Notifications: firmware changed (%s -> %s), dropping acks",
           notification_acks_fw.c_str(), currentfirmware.c_str());
-    notification_acks = "";
-    notification_acks_fw = currentfirmware;
-    config_commit();
+    config_save_notification_acks(String(""), currentfirmware);
   }
   _ack_count = notification_acks_decode(notification_acks.c_str(), _acks, NOTIFICATION_ACK_MAX);
 }
@@ -110,9 +108,11 @@ void Notifications::saveAcks()
   char buf[320];
   notification_acks_encode(_acks, _ack_count, buf, sizeof(buf));
   if(notification_acks != buf) {
-    notification_acks = buf;
-    notification_acks_fw = currentfirmware;
-    config_commit();
+    // Goes through the config layer rather than assigning the globals: those
+    // are ConfigOptDefinition-wrapped, and writing one does not mark the
+    // config modified, so commit() would return early and the ack would be
+    // lost at the next restart. Bench-confirmed on 10.75.0.28.
+    config_save_notification_acks(String(buf), currentfirmware);
   }
 }
 

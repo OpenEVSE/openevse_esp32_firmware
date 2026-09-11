@@ -575,6 +575,27 @@ void config_user_commit()
   user_config.commit();
 }
 
+// Persist the notification ack state.
+//
+// Assigning the notification_acks / notification_acks_fw globals directly and
+// then calling commit() does NOT write anything: ConfigJson::commit() returns
+// early unless its _modified flag is set, and that flag is only raised by
+// deserialize() (or reset()) - never by writing the underlying variable a
+// ConfigOptDefinition wraps. Nothing else in a quiet boot dirties the config,
+// so an ack made that way survives in RAM and is gone at the next restart.
+// Routing the write through deserialize() sets the flag, and only when a value
+// actually changed, so an unchanged ack list still costs no EEPROM write.
+void config_save_notification_acks(const String &acks, const String &fw)
+{
+  const size_t capacity = JSON_OBJECT_SIZE(2) + 512;
+  DynamicJsonDocument doc(capacity);
+  doc["notification_acks"] = acks;
+  doc["notification_acks_fw"] = fw;
+  if(user_config.deserialize(doc)) {
+    user_config.commit();
+  }
+}
+
 bool config_https_enabled()
 {
 #ifndef DIVERT_SIM
