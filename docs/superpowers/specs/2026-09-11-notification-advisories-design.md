@@ -158,6 +158,29 @@ A `MicroTask` on a 5 s loop (`EVSE_NOTIFICATIONS_LOOP_TIME`, same shape as
 so evaluation is pure reads — **no new RAPI traffic**, which matters given the
 queue pressure the RAPI layer is already under.
 
+### 6.1 Event log: raise edge only, once per id per boot
+
+An advisory writes one `EventType::Notification` row when it transitions from
+absent to present, carrying its id and severity. Nothing on clear, nothing on
+ack, nothing while it persists.
+
+Guarded by a per-boot bitmask — one bit per advisory id, RAM only, not
+persisted — so an id can log at most once between restarts.
+
+The guard is not belt-and-braces, it is the whole point. The counter-derived
+rules are already rate-limited by the physical event behind them, and the
+`safety.*` rules only move when a human changes a setting. But
+`thermal.throttling` and `thermal.high_temp` raise and clear as temperature
+hunts around a setpoint, and logging every raise edge is precisely how the
+History flood that #1216 fixed would come back. A per-boot cap makes that
+impossible by construction rather than by tuning: thirteen rules, thirteen bits,
+a worst case of thirteen rows per boot however badly something flaps.
+
+Asymmetry (raised but never cleared) is deliberate. The event log is a record of
+things that happened; what is true *now* lives on `/notifications`, which is
+always current. A clear row would add volume without adding an answer to any
+question the list does not already answer better.
+
 The rule set is written as a pure function over a snapshot struct:
 
 ```cpp
@@ -347,9 +370,8 @@ turned off C++ exceptions (99d581b0, ~155 KB back) and dropped TFT_eSPI
    recoveries are also raised to the owner** — they are not service-only
    diagnostics. Both stay as specified in §5: cold opens a warning, recoveries
    informational, each tokened on its count so a later one re-raises.
-2. Should advisories also write `EventType::Notification` rows into the event
-   log? It is free and the enum value is already there, but the log is already
-   noisy and this could re-open the repeat-spam problem that #1216 fixed.
+2. ~~Should advisories write event-log rows?~~ **Settled: yes, but only on the
+   raise edge and only once per id per boot — see §6.1.**
 3. Do acks survive a reboot? Proposed: yes, persisted with the token, because an
    ack that evaporates on every power cut is worse than no ack at all.
 4. Does the HA integration want these as entities? Out of scope here, but the
