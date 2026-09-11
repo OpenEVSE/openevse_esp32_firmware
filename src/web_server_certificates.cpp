@@ -27,9 +27,10 @@ void handleCertificatesGetRootCa(MongooseHttpServerRequest *request, MongooseHtt
 //
 // url: /certificates
 // -------------------------------------------------------------------
-void handleCertificatesGet(MongooseHttpServerRequest *request, MongooseHttpServerResponseStream *response, uint64_t certificate)
+void handleCertificatesGet(MongooseHttpServerRequest *request, MongooseHttpServerResponseStream *response,
+                           bool hasCertificate, uint64_t certificate)
 {
-  if(UINT64_MAX == certificate)
+  if(!hasCertificate)
   {
     // Emit the array one certificate at a time. Building it in a single
     // document required a buffer sized for every PEM body at once — 32KB here
@@ -70,12 +71,13 @@ void handleCertificatesGet(MongooseHttpServerRequest *request, MongooseHttpServe
   }
 }
 
-void handleCertificatesPost(MongooseHttpServerRequest *request, MongooseHttpServerResponseStream *response, uint64_t certificate)
+void handleCertificatesPost(MongooseHttpServerRequest *request, MongooseHttpServerResponseStream *response,
+                            bool hasCertificate)
 {
   String body = request->body().toString();
   DBUGVAR(body);
 
-  if(UINT64_MAX == certificate)
+  if(!hasCertificate)
   {
     DynamicJsonDocument doc(CERTIFICATE_JSON_BUFFER_SIZE);
     DeserializationError jsonError = deserializeJson(doc, body);
@@ -104,9 +106,10 @@ void handleCertificatesPost(MongooseHttpServerRequest *request, MongooseHttpServ
   }
 }
 
-void handleCertificatesDelete(MongooseHttpServerRequest *request, MongooseHttpServerResponseStream *response, uint64_t certificate)
+void handleCertificatesDelete(MongooseHttpServerRequest *request, MongooseHttpServerResponseStream *response,
+                              bool hasCertificate, uint64_t certificate)
 {
-  if(UINT64_MAX != certificate)
+  if(hasCertificate)
   {
     if(certs.removeCertificate(certificate)) {
       response->setCode(200);
@@ -131,6 +134,7 @@ void handleCertificates(MongooseHttpServerRequest *request)
   }
 
   uint64_t certificate = UINT64_MAX;
+  bool hasCertificate = false;
 
   String path = request->uri();
   if(path.length() > CERTIFICATES_PATH_LEN) {
@@ -158,17 +162,18 @@ void handleCertificates(MongooseHttpServerRequest *request)
         request->send(response);
         return;
       }
+      hasCertificate = true;
     }
   }
 
   DBUGVAR(certificate, HEX);
 
   if(HTTP_GET == request->method()) {
-    handleCertificatesGet(request, response, certificate);
+    handleCertificatesGet(request, response, hasCertificate, certificate);
   } else if(HTTP_POST == request->method()) {
-    handleCertificatesPost(request, response, certificate);
+    handleCertificatesPost(request, response, hasCertificate);
   } else if(HTTP_DELETE == request->method()) {
-    handleCertificatesDelete(request, response, certificate);
+    handleCertificatesDelete(request, response, hasCertificate, certificate);
   } else {
     response->setCode(405);
     response->print("{\"msg\":\"Method not allowed\"}");
