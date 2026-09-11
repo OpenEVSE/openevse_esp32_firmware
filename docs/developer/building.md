@@ -112,24 +112,20 @@ interferes with RAPI communication to the controller.
 ## Flash usage
 
 CI checks every build's flash usage against its app partition budget
-(`scripts/check_flash_size.py`), measuring the actual `firmware.bin` on disk
-(post-signing, where that applies) rather than PlatformIO's own "Flash: NN.N%
-(used X bytes from Y bytes)" line. That line is an ELF-section total; it
-excludes the padding esptool's elf2image step adds to cover gaps between
-non-contiguous ELF sections (which can be substantial -- over 100KB on some
-chips, e.g. RISC-V esp32-c3). That padding is still part of the file OTA
-serves, and `Update.begin(total)` (`src/http_update.cpp`) uses its full
-Content-Length to reject an oversized image before erasing the target
-partition -- so an image whose ELF sections fit under budget can still
-produce a `firmware.bin` too big to actually flash. The script still reads
-PlatformIO's "Flash:" line for the partition budget itself (`max_size`), so
-it can't disagree with PlatformIO about how big the partition is, only about
-whether the real artifact fits in it. A build at 95% or more of its partition
-emits a `::warning::`; a build whose actual `firmware.bin` exceeds the
-partition fails outright, even when PlatformIO's own link-time check (which
-only sees the smaller ELF total) reported it as fine. Pull requests get a
+(`scripts/check_flash_size.py`), reading the same "Flash: NN.N% (used X bytes
+from Y bytes)" line PlatformIO itself prints after linking -- the same number
+PlatformIO already relies on to decide whether a build fits, so this can't
+disagree with it. A build at 95% or more of its partition emits a
+`::warning::`; a build that exceeds it fails outright. Pull requests get a
 "Flash usage" comment summarising size and % used per env, and the change
 versus the base branch's last build (`scripts/report_flash_size.py`).
+
+Note: that line is an ELF-section total and doesn't include any padding
+esptool's elf2image step adds when writing the final `firmware.bin`, so in
+principle the on-disk file could be somewhat larger than what's checked here.
+Confirming whether that gap is significant (and for which chips) needs
+inspecting the actual built artifact; see the discussion on the PR that
+introduced this script if you're investigating that.
 
 To check locally after a build:
 
@@ -137,7 +133,6 @@ To check locally after a build:
 set -o pipefail
 pio run -e openevse_wifi_v1 | tee /tmp/pio-build.log
 python scripts/check_flash_size.py --env openevse_wifi_v1 \
-  --bin .pio/build/openevse_wifi_v1/firmware.bin \
   --log /tmp/pio-build.log \
   --out /tmp/flash-size.json
 ```
