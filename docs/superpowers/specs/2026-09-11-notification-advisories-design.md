@@ -191,11 +191,18 @@ A `MicroTask` on a 5 s loop (`EVSE_NOTIFICATIONS_LOOP_TIME`, same shape as
 so evaluation is pure reads — **no new RAPI traffic**, which matters given the
 queue pressure the RAPI layer is already under.
 
-### 6.1 Event log: raise edge only, once per id per boot
+### 6.1 Event log: once per id per boot
 
-An advisory writes one `EventType::Notification` row when it transitions from
-absent to present, carrying its id and severity. Nothing on clear, nothing on
-ack, nothing while it persists.
+An advisory writes one `EventType::Notification` row per boot, carrying its id
+and severity. Nothing on clear, nothing on ack, and never a second row for the
+same id.
+
+The row is attempted on the raise edge, but **eligibility is "this id has no
+row yet", not "this is the raise edge"**: `EventLog::log()` can refuse a row
+(see the two limits below), and a refused advisory does not raise again — it
+was already live and stays live. If eligibility were the edge, the refusal
+would be final for the whole boot. So every pass retries any live advisory
+that has not yet got its row, and stops trying the moment one lands.
 
 Guarded by a per-boot list of the ids already written — RAM only, not
 persisted — so an id can log at most once between restarts. An id array
@@ -224,11 +231,23 @@ Two further limits, both discovered in review rather than designed in:
   not synced (likely for a raise edge seconds after boot) and when LittleFS is
   nearly full. `log()` therefore reports whether the row landed, and the guard
   records the id only then.
-- **At most one raise edge is logged per pass.** Each `log()` call runs
-  `LittleFS.totalBytes()` and `usedBytes()` for its free-space guard — two full
-  filesystem traversals, 30–140 ms each — and six to nine advisories can become
-  knowable on the same pass. The rest are still deduped by id and take their row
-  on a later 5 s tick.
+- **At most one row is logged per pass.** Each row that gets past the repeat
+  filter runs `LittleFS.totalBytes()` and `usedBytes()` for the free-space
+  guard — two full filesystem traversals, 30–140 ms each — and six to nine
+  advisories can become knowable on the same pass. The rest are still deduped by
+  id and take their row on a later 5 s tick, one per tick, for as long as they
+  stay live. The worst case is therefore still sixteen rows per boot (§5),
+  spread over at least sixteen ticks.
+- **Nothing is attempted until the clock is trusted.** `log()`'s first guard is
+  `tm_year < 2021`, and at boot — when the safety rules become knowable, within
+  seconds — NTP has usually not synced, so it would refuse every advisory. With
+  eligibility keyed on “no row yet” that would become a retry every 5 s against
+  a clock that can only say no, so the engine tests the clock itself first
+  (`notification_epoch_now()` returns 0 for exactly this case). On a charger
+  whose clock never syncs, no notification rows are written at all — which is
+  what `log()` would do anyway, and what is true now is still on
+  `/notifications`. When the clock syncs late, the advisories still live at that
+  point take their rows from there, one per pass.
 
 Asymmetry (raised but never cleared) is deliberate. The event log is a record of
 things that happened; what is true *now* lives on `/notifications`, which is
@@ -458,8 +477,8 @@ turned off C++ exceptions (99d581b0, ~155 KB back) and dropped TFT_eSPI
    recoveries are also raised to the owner** — they are not service-only
    diagnostics. Both stay as specified in §5: cold opens a warning, recoveries
    informational, each tokened on its count so a later one re-raises.
-2. ~~Should advisories write event-log rows?~~ **Settled: yes, but only on the
-   raise edge and only once per id per boot — see §6.1.**
+2. ~~Should advisories write event-log rows?~~ **Settled: yes, but at most one
+   row per id per boot — see §6.1.**
 3. ~~Do acks survive a reboot?~~ **Settled: yes — see §4.2.** Voided by the
    token, by any settings change for `safety.*`, and by a firmware version
    change. Ack expiry considered and left out.
