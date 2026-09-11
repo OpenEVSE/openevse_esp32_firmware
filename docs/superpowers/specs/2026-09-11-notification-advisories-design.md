@@ -111,6 +111,39 @@ act. If the condition clears and later returns, `first_seen` resets and the
 advisory comes back unmuted, because that is a new event and not the one that
 was acknowledged.
 
+### 4.2 Acks persist across a restart
+
+Acks are stored and survive a reboot. A power cut changed nothing about the
+charger, so re-raising on the far side of one is the same crying-wolf failure
+4.1 exists to prevent — and it would bite hard here, because these units restart
+on every OTA. An advisory that comes back after every firmware push is one the
+owner stops reading.
+
+A restart is in any case a poor proxy for what we actually want to invalidate an
+ack: it fires when nothing happened (power cut) and does not fire when something
+did (a settings change). So the invalidations are tied to the real events:
+
+1. **The token**, as in §4. Any movement in the underlying counter or state
+   voids the ack, so persistence can never hide something new.
+2. **For `safety.*`, the settings-flags word is part of the token.** Changing
+   *any* EVSE setting voids a muted safety ack and re-raises it. That is the
+   right moment to re-show the full picture: someone is in the settings with
+   their hands on the config.
+3. **The stored firmware version.** Acks are dropped wholesale when the running
+   version differs from the one that wrote them. A firmware update is a genuine
+   service event; a power cut is not. One string comparison at boot, no
+   `esp_reset_reason()` plumbing.
+
+Net: a power cut or a panic keeps the mute; a firmware update or any settings
+change clears it.
+
+Considered and left out: expiring acks after ~90 days, to catch the charger that
+holds a years-old mute through no updates and no settings changes. It is the one
+case none of the three invalidations covers, but it costs a persisted timestamp
+per ack and an uptime-independent clock to compare against, to solve a scenario
+that only exists on a charger nobody has touched in a very long time. Easy to
+add later if that turns out to be a real charger rather than a hypothetical one.
+
 ## 5. Rules (v1)
 
 | id | category | severity | trigger | sticky |
@@ -372,7 +405,8 @@ turned off C++ exceptions (99d581b0, ~155 KB back) and dropped TFT_eSPI
    informational, each tokened on its count so a later one re-raises.
 2. ~~Should advisories write event-log rows?~~ **Settled: yes, but only on the
    raise edge and only once per id per boot — see §6.1.**
-3. Do acks survive a reboot? Proposed: yes, persisted with the token, because an
-   ack that evaporates on every power cut is worse than no ack at all.
+3. ~~Do acks survive a reboot?~~ **Settled: yes — see §4.2.** Voided by the
+   token, by any settings change for `safety.*`, and by a firmware version
+   change. Ack expiry considered and left out.
 4. Does the HA integration want these as entities? Out of scope here, but the
    API shape should not make it awkward later.
