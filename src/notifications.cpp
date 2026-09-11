@@ -148,8 +148,21 @@ unsigned long Notifications::loop(MicroTasks::WakeReason reason)
   // free-space guard, and six to nine advisories can become knowable on the
   // same pass -- the boot pass, typically -- which would be seconds of
   // blocking work in one MicroTask iteration. The rest are still deduped by
-  // id and get their row on a later 5 s tick.
+  // id and take their row on a later 5 s tick, because eligibility below is
+  // "this id has no row yet", not "this is the raise edge".
   bool logged_this_pass = false;
+
+  // Don't attempt a row until the clock is trusted. Eligibility is now "not
+  // yet logged" rather than "raise edge", so an advisory that log() refuses
+  // is retried on every pass until it lands -- and before NTP syncs, log()
+  // refuses all of them at its tm_year < 2021 check, which is the common case
+  // for the safety rules that are knowable within seconds of boot. Testing it
+  // here (notification_epoch_now() returns 0 for exactly that case, using the
+  // same test) keeps the retry loop from running against a clock that can
+  // only ever say no, and keeps the invariant in this function instead of
+  // depending on the order of the guards inside log(). Once the clock does
+  // sync, the advisories that are still live take their rows one per pass.
+  bool clock_trusted = (0 != now);
 
   for(size_t i = 0; i < _count; i++) {
     // Carry first_seen across from the previous pass; a rule that was absent
@@ -171,38 +184,45 @@ unsigned long Notifications::loop(MicroTasks::WakeReason reason)
     if(!was_live) {
       _first_seen[i] = now;
       changed = true;
+    }
 
-      // Raise edge: one event-log row, at most once per advisory id per boot.
-      // Keyed on id (not array index) so clearing an earlier advisory can
-      // never make a later one slide into a logged slot and re-log.
-      bool already_logged = false;
-      for(size_t l = 0; l < _logged_count; l++) {
-        if(0 == strcmp(_logged_ids[l], _live[i].id)) {
-          already_logged = true;
-          break;
-        }
+    // One event-log row per advisory id per boot. NOT conditional on the
+    // raise edge: log() can refuse a row (see below), and an advisory that is
+    // refused stays live, so a raise-edge-only attempt would be the only
+    // attempt this boot and the row would simply be lost. Eligibility is
+    // therefore "this id has no row yet", which an advisory keeps for as long
+    // as it stays live. Keyed on id (not array index) so clearing an earlier
+    // advisory can never make a later one slide into a logged slot and
+    // re-log.
+    bool already_logged = false;
+    for(size_t l = 0; l < _logged_count; l++) {
+      if(0 == strcmp(_logged_ids[l], _live[i].id)) {
+        already_logged = true;
+        break;
       }
-      if(!already_logged && !logged_this_pass && _logged_count < NOTIFICATION_MAX) {
-        // Argument list copied from EvseManager's own call site
-        // (src/evse_man.cpp:386) so the row is shaped like every other row.
-        bool written =
-          eventLog.log(EventType::Notification, _evse->getState(),
-                       _evse->getEvseState(), _evse->getFlags(), _evse->getPilotState(),
-                       _evse->getPilot(), _evse->getSessionEnergy(), _evse->getSessionElapsed(),
-                       _evse->getTemperature(EVSE_MONITOR_TEMP_MONITOR),
-                       _evse->getTemperature(EVSE_MONITOR_TEMP_MAX),
-                       divert.isActive(), shaper.getState(), _live[i].id);
-        // Only a row that actually reached the file counts as logged. log()
-        // drops entries silently in three cases that all apply here: the
-        // repeat filter (its key carries no advisory id, so a second advisory
-        // raised in the same 300 s window looks like a repeat of the first),
-        // an unsynced clock (likely for a raise edge seconds after boot) and
-        // low LittleFS space. Marking the id logged regardless would mean the
-        // advisory never got a row on this boot or any later one.
-        if(written) {
-          _logged_ids[_logged_count++] = _live[i].id;
-          logged_this_pass = true;
-        }
+    }
+    if(clock_trusted && !already_logged && !logged_this_pass &&
+       _logged_count < NOTIFICATION_MAX)
+    {
+      // Argument list copied from EvseManager's own call site
+      // (src/evse_man.cpp:386) so the row is shaped like every other row.
+      bool written =
+        eventLog.log(EventType::Notification, _evse->getState(),
+                     _evse->getEvseState(), _evse->getFlags(), _evse->getPilotState(),
+                     _evse->getPilot(), _evse->getSessionEnergy(), _evse->getSessionElapsed(),
+                     _evse->getTemperature(EVSE_MONITOR_TEMP_MONITOR),
+                     _evse->getTemperature(EVSE_MONITOR_TEMP_MAX),
+                     divert.isActive(), shaper.getState(), _live[i].id);
+      // Only a row that actually reached the file counts as logged. log()
+      // drops entries silently in two cases that still apply here: the repeat
+      // filter (its key carries no advisory id, so a second advisory logged
+      // inside the same 300 s window looks like a repeat of the first) and low
+      // LittleFS space. Marking the id logged regardless would mean the
+      // advisory never got a row on this boot or any later one; leaving it
+      // unmarked means the next pass tries again.
+      if(written) {
+        _logged_ids[_logged_count++] = _live[i].id;
+        logged_this_pass = true;
       }
     }
   }
