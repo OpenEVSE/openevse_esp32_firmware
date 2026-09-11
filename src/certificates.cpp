@@ -518,10 +518,17 @@ bool CertificateStore::saveCertificate(Certificate *cert)
   }
 
   size_t expected = measureJson(doc);
-  std::string record;
-  record.reserve(expected);
-  size_t serialized = serializeJson(doc, record);
-  if(0 == expected || serialized != expected) {
+  if(0 == expected) {
+    return false;
+  }
+
+  std::unique_ptr<char[]> record(new (std::nothrow) char[expected + 1]);
+  if(!record) {
+    return false;
+  }
+
+  size_t serialized = serializeJson(doc, record.get(), expected + 1);
+  if(serialized != expected) {
     return false;
   }
 
@@ -549,8 +556,8 @@ bool CertificateStore::saveCertificate(Certificate *cert)
   } storage;
 
   return certificate_storage_commit(storage, name.c_str(),
-                                    reinterpret_cast<const uint8_t *>(record.data()),
-                                    record.size());
+                                    reinterpret_cast<const uint8_t *>(record.get()),
+                                    serialized);
 }
 
 bool CertificateStore::removeCertificate(Certificate *cert)
