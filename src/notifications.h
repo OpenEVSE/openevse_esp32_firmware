@@ -81,4 +81,8 @@ extern Notifications notifications;
 // endpoints name severities the same way.
 const char *notification_severity_name(uint8_t severity);
 
+// Short, upper-case English for the LCD line. Never a number: the detail lives
+// on the GUI's Monitoring -> Health page, which this points people at.
+const char *notification_short_text(const char *id);
+
 #endif // _OPENEVSE_NOTIFICATIONS_H

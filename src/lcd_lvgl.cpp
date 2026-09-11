@@ -24,6 +24,7 @@
 #include "lvgl_tft/fault_screen.h"
 #include "fault_text.h"
 #include "lvgl_tft/backlight.h"
+#include "notifications.h"
 
 #ifndef LCD_BACKLIGHT_PIN
 #define LCD_BACKLIGHT_PIN TFT_BL
@@ -256,6 +257,13 @@ static const char *pilot_source_name(EvseClient client)
     default:                                       return "claim";
   }
 }
+
+// Advisory line (notifications.h): the worst unmuted advisory's short text,
+// with a "+N" suffix when there are more. File-scope, not block-scope inside
+// one screen's update function, because only one LVGL screen is ever loaded
+// at a time and both the charge screen and the standby screen point their
+// notify_line at this same buffer.
+static char notify_buf[48];
 
 // Resolve the tft_theme config into the active palette. Returns true if the theme
 // actually changed (so the caller can rebuild the on-screen widgets to repaint).
@@ -581,6 +589,26 @@ unsigned long LcdTask::loop(MicroTasks::WakeReason reason)
   d.ip = ipbuf;
   d.show_hostip = (0 == (uint32_t)lcd_backlight_timeout);
   d.msg_line = (!_msg_cleared && ml[0]) ? ml : "";
+
+  // Advisory line: the worst one, named, with a count of the rest. The border
+  // is the "is there anything?" signal; this says what.
+  const char *notify_id = NULL;
+  uint8_t notify_sev = 0;
+  size_t notify_count = notifications.count();
+  if(notifications.worst(notify_id, notify_sev)) {
+    if(notify_count > 1) {
+      snprintf(notify_buf, sizeof(notify_buf), LV_SYMBOL_WARNING " %s  +%u",
+               notification_short_text(notify_id), (unsigned)(notify_count - 1));
+    } else {
+      snprintf(notify_buf, sizeof(notify_buf), LV_SYMBOL_WARNING " %s",
+               notification_short_text(notify_id));
+    }
+    d.notify_line = notify_buf;
+    d.notify_active = true;
+  } else {
+    d.notify_line = "";
+    d.notify_active = false;
+  }
 
   charge_screen_update(d);
   lvgl_pump();

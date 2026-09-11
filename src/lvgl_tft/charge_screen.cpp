@@ -152,6 +152,16 @@ void charge_screen_build()
   lv_scr_load(scr);
   lv_obj_set_style_bg_color(scr, COL_BG, 0);
   lv_obj_clear_flag(scr, LV_OBJ_FLAG_SCROLLABLE);
+
+  // Amber perimeter, hidden until an advisory is active. A style on the screen
+  // object rather than a widget, so it is drawn with the screen background and
+  // costs no extra invalidation. Amber only: red belongs to the fault screen,
+  // and a red border here would read as "this charger has stopped".
+  lv_obj_set_style_border_color(scr, COL_WARN, 0);
+  lv_obj_set_style_border_width(scr, 0, 0);
+  lv_obj_set_style_border_side(scr, LV_BORDER_SIDE_FULL, 0);
+  lv_obj_set_style_radius(scr, 0, 0);
+
   captioned_session = -1;  // force the tile captions to be written on first update
 
   // --- Top strip, line 1: clock (left) + status chips (right) ---
@@ -503,11 +513,16 @@ void charge_screen_update(const ChargeScreenData &d)
     lv_label_set_text(tile_value[2], buf);
   }
 
-  // Top strip line 2 belongs to transient messages. The address is reference
-  // information, not status, so it lives on the standby screen instead -- unless
-  // standby can never appear, in which case it falls back to here.
-  if (d.msg_line && d.msg_line[0]) {
-    lv_label_set_text(msg_lbl, d.msg_line);
+  // Top strip line 2: transient message, else the worst advisory, else the
+  // address (reference information, shown here only when standby can never
+  // appear). A transient message outranks an advisory: OTA progress is
+  // time-critical, an advisory is not.
+  const char *line = (d.msg_line && d.msg_line[0]) ? d.msg_line :
+                     (d.notify_line && d.notify_line[0]) ? d.notify_line : NULL;
+  if (line) {
+    lv_label_set_text(msg_lbl, line);
+    lv_obj_set_style_text_color(msg_lbl,
+        (d.msg_line && d.msg_line[0]) ? COL_ACCENT : COL_WARN, 0);
     lv_obj_clear_flag(msg_lbl, LV_OBJ_FLAG_HIDDEN);
     lv_obj_add_flag(hostip_lbl, LV_OBJ_FLAG_HIDDEN);
   } else {
@@ -521,6 +536,10 @@ void charge_screen_update(const ChargeScreenData &d)
       lv_obj_add_flag(hostip_lbl, LV_OBJ_FLAG_HIDDEN);
     }
   }
+
+  // The amber perimeter: the "is there anything wrong?" signal, legible from
+  // across the garage. Never red -- that stays reserved for the fault screen.
+  lv_obj_set_style_border_width(charge_scr, d.notify_active ? 4 : 0, 0);
 }
 
 void charge_screen_destroy()

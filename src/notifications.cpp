@@ -256,3 +256,24 @@ const char *notification_severity_name(uint8_t severity)
   }
   return severity_name[severity];
 }
+
+const char *notification_short_text(const char *id)
+{
+  if(0 == strcmp(id, "safety.ground_check"))      return "GROUND CHECK OFF";
+  if(0 == strcmp(id, "safety.gfci_check"))        return "GFCI SELF TEST OFF";
+  if(0 == strcmp(id, "safety.relay_check"))       return "RELAY CHECK OFF";
+  if(0 == strcmp(id, "safety.diode_check"))       return "DIODE CHECK OFF";
+  if(0 == strcmp(id, "safety.vent_check"))        return "VENT CHECK OFF";
+  if(0 == strcmp(id, "safety.temp_check"))        return "TEMP MONITOR OFF";
+  if(0 == strcmp(id, "fault.gfci_tripped"))       return "GFCI HAS TRIPPED";
+  if(0 == strcmp(id, "fault.no_ground"))          return "GROUND FAULT LOGGED";
+  if(0 == strcmp(id, "fault.stuck_relay"))        return "STUCK RELAY LOGGED";
+  if(0 == strcmp(id, "thermal.throttling"))       return "REDUCING CURRENT - HOT";
+  if(0 == strcmp(id, "thermal.high_temp"))        return "TEMPERATURE HIGH";
+  if(0 == strcmp(id, "thermal.relay_thermal"))    return "RELAY RUNNING HOT";
+  if(0 == strcmp(id, "wear.relay_life"))          return "RELAY NEAR END OF LIFE";
+  if(0 == strcmp(id, "wear.relay_transit_drift")) return "RELAY SLOWING";
+  if(0 == strcmp(id, "wear.relay_cold_open"))     return "RELAY OPENED UNDER LOAD";
+  if(0 == strcmp(id, "wear.stuck_relay_recovery"))return "RELAY RECOVERY RUN";
+  return "CHECK THE APP";
+}
