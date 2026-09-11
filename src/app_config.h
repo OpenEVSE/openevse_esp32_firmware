@@ -127,6 +127,10 @@ extern String loadsharing_role;
 extern String loadsharing_controller_host;
 extern uint32_t loadsharing_rotation_interval;
 
+// Advisory acknowledgements (internal state, not a /config setting)
+extern String notification_acks;
+extern String notification_acks_fw;
+
 //Shaper settings
 extern uint32_t current_shaper_max_pwr;
 extern uint32_t current_shaper_smoothing_time;
