@@ -46,7 +46,9 @@ extern MongooseHttpServer server;
 extern void web_server_setup();
 extern void web_server_loop();
 extern void web_server_load_sharing_setup();
+extern bool web_server_is_running();
 extern bool web_server_is_https();
+extern uint16_t web_server_port();
 
 extern void web_server_event(JsonDocument &event);
 

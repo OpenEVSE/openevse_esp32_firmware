@@ -399,16 +399,20 @@ void LoadSharingGroupState::addLocalPeer() {
   local.setId(ESPAL.getLongId());
   local.setName(String(esp_hostname));
   local.setIp(net.getIp());
+  bool online = web_server_is_running();
   bool ssl = web_server_is_https();
-  uint16_t port = ssl ? www_https_port : www_http_port;
-  String localUrl = ssl ? "https://" : "http://";
-  localUrl += localHostname;
-  if ((ssl && port != 443) || (!ssl && port != 80)) {
-    localUrl += ":" + String(port);
+  uint16_t port = web_server_port();
+  String localUrl;
+  if(online) {
+    localUrl = ssl ? "https://" : "http://";
+    localUrl += localHostname;
+    if ((ssl && port != 443) || (!ssl && port != 80)) {
+      localUrl += ":" + String(port);
+    }
   }
   local.setUrl(localUrl);
   local.setPort(port);
-  local.setOnline(true);
+  local.setOnline(online);
   local.setJoined(true);
 
   // Insert at front so it's always first
