@@ -19,6 +19,8 @@ to pin down here -- see the discussion on the PR that introduced this script.
 Exit status:
     0  the env is exempt (native, or its build didn't succeed) and has no
        "Flash:" line to check
+    0  the env is exempt but its log has a "Flash:" line anyway (e.g. linking
+       succeeded before a later step failed) -- skipped, not recorded
     0  usage is below the warning threshold
     0  usage is within the warning threshold (a ::warning:: is emitted)
     1  a non-exempt build succeeded but printed no "Flash:" line -- something
@@ -71,6 +73,11 @@ def main():
             return 1
         print(f"{args.env}: no 'Flash:' usage line in the PlatformIO build output "
               "-- skipping the flash size check (native env, or the build didn't succeed)")
+        return 0
+
+    if exempt:
+        print(f"{args.env}: found a 'Flash:' usage line, but skipping it -- native env, "
+              "or the build didn't succeed, so this isn't a deliverable firmware image")
         return 0
 
     percent, size, max_size = float(match.group(1)), int(match.group(2)), int(match.group(3))
