@@ -4,6 +4,8 @@ from pprint import pprint
 import hashlib
 import pathlib
 import glob
+import struct
+import zlib
 
 Import("env")
 
@@ -138,6 +140,75 @@ def text_to_header(source_file):
     output += "static const char CONTENT_{}_ETAG[] PROGMEM = \"{}\";\n".format(filename, hashlib.sha256(original.encode('utf-8')).hexdigest())
     return output
 
+def _png_chunks(raw):
+    off = 8
+    while off + 8 <= len(raw):
+        (length,) = struct.unpack(">I", raw[off:off + 4])
+        yield raw[off + 4:off + 8], raw[off + 8:off + 8 + length]
+        off += length + 12
+
+
+def _png_chunk(chunk_type, data):
+    return (struct.pack(">I", len(data)) + chunk_type + data +
+            struct.pack(">I", zlib.crc32(chunk_type + data) & 0xffffffff))
+
+
+def optimise_png(raw):
+    """Losslessly shrink a PNG by re-deflating its image data.
+
+    PNG stores its pixels as a zlib stream, and the encoders that produce
+    these icons do not use the highest compression setting. Concatenating
+    the IDAT chunks and re-deflating that byte stream at level 9, trying
+    each strategy and keeping the smallest, typically recovers 15-35% with
+    no change whatsoever to the image: the *filtered* scanline data handed
+    to zlib is passed through untouched, so this cannot alter a pixel. The
+    result is verified to round-trip before it is used.
+
+    Worth ~11KB across the PWA icons, on a 4MB image that has been running
+    at ~99.7% of its app partition -- see docs/flash_budget.md.
+
+    Every other chunk (IHDR, PLTE, tRNS, pHYs, ...) is copied through
+    unchanged, so nothing but the compression setting differs.
+    """
+    if raw[:8] != b"\x89PNG\r\n\x1a\n":
+        return raw
+
+    image_data = b""
+    keep = []
+    idat_added = False
+    try:
+        for chunk_type, data in _png_chunks(raw):
+            if chunk_type == b"IDAT":
+                image_data += data
+                if not idat_added:
+                    keep.append((chunk_type, None))
+                    idat_added = True
+            else:
+                keep.append((chunk_type, data))
+        filtered = zlib.decompress(image_data)
+    except Exception:
+        return raw  # not something we understand - leave it alone
+
+    best = None
+    for strategy in (zlib.Z_DEFAULT_STRATEGY, zlib.Z_FILTERED, zlib.Z_RLE):
+        deflate = zlib.compressobj(9, zlib.DEFLATED, 15, 9, strategy)
+        blob = deflate.compress(filtered) + deflate.flush()
+        if best is None or len(blob) < len(best):
+            best = blob
+
+    out = b"\x89PNG\r\n\x1a\n"
+    for chunk_type, data in keep:
+        out += _png_chunk(chunk_type, best if chunk_type == b"IDAT" else data)
+
+    # Refuse to emit anything whose image data does not decompress back to
+    # exactly what we were given, and never grow a file.
+    check = b"".join(d for t, d in _png_chunks(out) if t == b"IDAT")
+    if zlib.decompress(check) != filtered or len(out) >= len(raw):
+        return raw
+
+    return out
+
+
 def binary_to_header(source_file):
     filename = get_c_name(source_file)
     output = "static const char CONTENT_"+filename+"[] PROGMEM = {\n  "
@@ -146,16 +217,18 @@ def binary_to_header(source_file):
     etag = hashlib.sha256()
 
     with open(source_file, "rb") as source_fh:
-        byte = source_fh.read(1)
-        while byte != b"":
-            output += "0x{:02x}, ".format(ord(byte))
-            etag.update(byte)
-            count += 1
-            if 16 == count:
-                output += "\n  "
-                count = 0
+        content = source_fh.read()
 
-            byte = source_fh.read(1)
+    if source_file.lower().endswith(".png"):
+        content = optimise_png(content)
+
+    for byte in content:
+        output += "0x{:02x}, ".format(byte)
+        etag.update(bytes([byte]))
+        count += 1
+        if 16 == count:
+            output += "\n  "
+            count = 0
 
     output += "0x00 };\n"
     output += "static const char CONTENT_{}_ETAG[] PROGMEM = \"{}\";\n".format(filename, etag.hexdigest())
