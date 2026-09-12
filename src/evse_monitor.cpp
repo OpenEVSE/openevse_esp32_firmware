@@ -178,6 +178,7 @@ EvseMonitor::EvseMonitor(OpenEVSEClass &openevse) :
 #ifdef ENABLE_MCP9808
   _mcp9808(),
 #endif
+  _settings_known(false),
   _settings_changed(),
   _panic_temperature(72),
   _heartbeat_interval(EVSE_HEATBEAT_INTERVAL),
@@ -241,7 +242,12 @@ void EvseMonitor::evseBoot(const char *firmware)
   // controller swapped in without an ESP32 reboot, or a non-D9 controller.
   // _relay_health_known itself only ever latches true (readRelayHealth()'s
   // callback simply no-ops when unsupported), so it needs the same reset.
+  // _settings_known latches the same way, and consumers gate real decisions on
+  // it - Notifications will not prune persisted acks until both are true - so
+  // it has to go back to false until this controller has answered $GE, not
+  // keep vouching for the previous one's settings word.
   _relay_health_known = false;
+  _settings_known = false;
   _zero_cross_threshold_ma = OPENEVSE_RELAY_HEALTH_NOT_AVAILABLE;
 
   _openevse.getFaultCounters([this](int ret, long gfci_count, long nognd_count, long stuck_count)
@@ -259,6 +265,7 @@ void EvseMonitor::evseBoot(const char *firmware)
     {
       DBUGF("pilot = %ld, flags = %x", pilot, flags);
       _settings_flags = flags;
+      _settings_known = true;
       _boot_ready.ready(EVSE_MONITOR_FLAGS_BOOT_READY);
     }
   });
@@ -742,6 +749,7 @@ void EvseMonitor::setServiceLevel(ServiceLevel level, std::function<void(int ret
         {
           DBUGF("pilot = %ld, flags = %x", pilot, flags);
           _settings_flags = flags;
+          _settings_known = true;
 
           _openevse.getCurrentCapacity([this, callback](int ret, long min_current, long max_hardware_current, long pilot, long max_configured_current)
           {
@@ -777,6 +785,7 @@ void EvseMonitor::enableFeature(uint8_t feature, bool enabled, std::function<voi
         if(RAPI_RESPONSE_OK == ret) {
           DBUGF("pilot = %ld, flags = %x", pilot, flags);
           _settings_flags = flags;
+          _settings_known = true;
         }
 
         _settings_changed.Trigger();
@@ -977,7 +986,15 @@ void EvseMonitor::getSettingsFromEvse()
 {
   _openevse.getSettings([this](int ret, long pilot, uint32_t flags)
   {
-    if(RAPI_RESPONSE_OK == ret && flags != _settings_flags)
+    if(RAPI_RESPONSE_OK != ret) {
+      return;
+    }
+
+    // Latch on any successful answer, not just a changed one: a controller
+    // whose settings never move still has to count as "we have asked".
+    _settings_known = true;
+
+    if(flags != _settings_flags)
     {
       DBUGF("Settings flags changed behind us: %x -> %x", _settings_flags, flags);
       _settings_flags = flags;

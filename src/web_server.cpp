@@ -52,6 +52,7 @@ typedef const __FlashStringHelper *fstr_t;
 #include "loadsharing_types.h"
 #include "loadsharing_peer_poller.h"
 #include "boost.h"
+#include "notifications.h"
 #include "web_auth.h"
 #include "web_auth_secret.h"
 
@@ -540,8 +541,9 @@ static String html_escape(const String &input) {
 // call sites had drifted: onWsConnect sized its document for 40 members while
 // buildStatus emits around 95, so every websocket connect pushed a silently
 // truncated status. ArduinoJson does not signal that with an error -- it just
-// stops adding members.
-#define STATUS_JSON_CAPACITY (JSON_OBJECT_SIZE(128) + 2048)
+// stops adding members. 131 = 128 plus the "notifications" object and its two
+// members (count, severity).
+#define STATUS_JSON_CAPACITY (JSON_OBJECT_SIZE(131) + 2048)
 
 // LittleFS.totalBytes() and LittleFS.usedBytes() each run lfs_fs_size(), a
 // full traversal of every metadata pair and data block in the filesystem,
@@ -769,6 +771,14 @@ void buildStatus(DynamicJsonDocument &doc) {
 #endif
   home_battery_add_status_fields(doc);
 
+  // Exactly two fields: both UIs need a badge without a second round trip,
+  // and nothing more belongs in a payload the HA integration already polls
+  // hard. The list lives on /notifications. severity is a name ("info" /
+  // "warning" / "critical"), matching how /notifications serialises it.
+  JsonObject notify = doc.createNestedObject("notifications");
+  notify["count"] = notifications.count();
+  notify["severity"] = notification_severity_name(notifications.maxSeverity());
+
   DBUGF("/status ArduinoJson size: %dbytes", doc.size());
 }
 
@@ -817,8 +827,8 @@ handleScan(MongooseHttpServerRequest *request) {
 // and returns false when the request is a headerless GET; the caller's response
 // stream is already open (from requestPreProcess).
 // -------------------------------------------------------------------
-static bool actuatorMethodAllowed(MongooseHttpServerRequest *request,
-                                  MongooseHttpServerResponseStream *response)
+bool actuatorMethodAllowed(MongooseHttpServerRequest *request,
+                           MongooseHttpServerResponseStream *response)
 {
   if(request->method() != HTTP_GET) {
     return true;
@@ -2042,6 +2052,8 @@ void web_server_setup()
   server.on("/certificates", handleCertificates);
   server.on("/limit", handleLimit);
   server.on("/boost", handleBoost);
+  server.on("/notifications/ack$", handleNotificationAck);
+  server.on("/notifications$", handleNotifications);
   server.on("/emeter", handleEmeter);
   server.on("/time", handleTime);
   server.on("/mqtt$", handleMqttAction);

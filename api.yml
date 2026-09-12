@@ -960,6 +960,137 @@ paths:
       operationId: boost_clear
       tags:
         - Boost
+  /notifications:
+    get:
+      summary: Get the advisory list
+      description: >
+        Returns every currently active advisory, acknowledged entries
+        included - a muted advisory is still listed, marked acked, so the GUI
+        can render it as muted rather than have it vanish. Advisories are
+        non-fault conditions the user should know about (a safety check
+        switched off, a fault that has already cleared, thermal state, relay
+        wear); anything stopping the EVSE charging right now is a fault, not
+        an advisory, and is reported through the state fields instead.
+        first_seen and last_seen are epoch seconds, or 0 when the gateway's
+        clock had not synced at the moment the reading was taken.
+      responses:
+        '200':
+          description: The advisory list
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  count:
+                    type: integer
+                    description: >
+                      Number of UNMUTED advisories - what a badge should show.
+                      The notifications array may be longer.
+                  max_severity:
+                    type: string
+                    enum: [info, warning, critical]
+                    description: Highest severity among the unmuted advisories
+                  notifications:
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        id:
+                          type: string
+                          description: >
+                            Stable dotted id, e.g. safety.ground_check. The
+                            only thing a UI keys on; titles and detail text are
+                            looked up from it.
+                        category:
+                          type: string
+                          enum: [safety, fault, wear, thermal]
+                        severity:
+                          type: string
+                          enum: [info, warning, critical]
+                        sticky:
+                          type: boolean
+                          description: >
+                            true when acknowledging mutes the advisory rather
+                            than dismissing it - it stays listed, and keeps its
+                            settings-page marker, until the condition clears.
+                        acked:
+                          type: boolean
+                        first_seen:
+                          type: integer
+                          description: Epoch seconds, 0 if unknown (clock not synced)
+                        last_seen:
+                          type: integer
+                          description: Epoch seconds, 0 if unknown (clock not synced)
+      operationId: notifications_get
+      tags:
+        - Notifications
+  /notifications/ack:
+    post:
+      summary: Acknowledge one advisory
+      description: >
+        Acknowledges the advisory named by id. A non-sticky advisory is
+        dismissed until its token changes - the token is the underlying
+        counter, so a later GFI trip raises it again. A sticky advisory is
+        muted instead: it stays in the list marked acked and keeps its
+        settings-page marker, but stops driving the LCD's amber border and
+        advisory line. The acknowledgement survives a reboot; it is voided by
+        any movement in the token, by any EVSE settings change for safety.*
+        advisories, and by a firmware update.
+
+        The id may be sent either on the query string
+        (POST /notifications/ack?id=safety.ground_check, no body) or as an
+        application/x-www-form-urlencoded body.
+      requestBody:
+        required: false
+        content:
+          application/x-www-form-urlencoded:
+            schema:
+              type: object
+              properties:
+                id:
+                  type: string
+                  description: >
+                    The advisory id. May instead be given as the `id` query
+                    parameter.
+      parameters:
+        - name: id
+          in: query
+          required: false
+          description: >
+            The advisory id, e.g. safety.ground_check. Required unless the
+            same name is sent in a form-encoded body.
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Acknowledged
+          content:
+            text/plain:
+              schema:
+                type: string
+        '400':
+          description: No id given, in either the query string or the body
+          content:
+            text/plain:
+              schema:
+                type: string
+        '403':
+          description: >
+            GET used without the X-Requested-With: OpenEVSE header, or a
+            cookie-authenticated request without it (CSRF guard)
+          content:
+            text/plain:
+              schema:
+                type: string
+        '404':
+          description: No advisory with that id is currently active
+          content:
+            text/plain:
+              schema:
+                type: string
+      operationId: notifications_ack
+      tags:
+        - Notifications
   /emeter:
     delete:
       summary: Reset Energy Meter
@@ -1352,6 +1483,13 @@ components:
           minimum: 1
           maximum: 2
           exclusiveMaximum: false
+        notification:
+          description: >-
+            For a "notification" entry, the advisory id that was raised (e.g.
+            safety.ground_check). Empty for every other entry type and for
+            entries written before this field existed. A row is written on the
+            raise edge only, at most once per advisory id per boot.
+          type: string
 
     LoadSharingPeerStatus:
       type: object
@@ -1510,6 +1648,7 @@ tags:
   - name: Tesla
   - name: Limit
   - name: Boost
+  - name: Notifications
   - name: Energy Meter
   - name: Time
   - name: Restart

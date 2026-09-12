@@ -18,6 +18,7 @@
 #include "standby_screen.h"
 #include "fault_screen.h"
 #include "fault_text.h"
+#include "notifications.h"
 
 // Advance LVGL until the screen has settled, then a few frames more.
 //
@@ -43,6 +44,25 @@ static bool write_capture(const char *out_dir, const char *name)
   char path[256];
   snprintf(path, sizeof(path), "%s/%s.ppm", out_dir, name);
   return lvgl_panel_write_ppm(path);
+}
+
+// Advisory line text, formatted exactly the way lcd_lvgl.cpp builds it: the
+// worst advisory's short text, with a "+N" suffix when more are live. A
+// separate buffer from lcd_lvgl.cpp's file-scope notify_buf -- this is
+// host-only capture code in its own translation unit, never linked into a
+// firmware image.
+static char cap_notify_buf[48];
+
+static const char *sample_notify_line(const char *id, size_t extra_count)
+{
+  if(extra_count > 0) {
+    snprintf(cap_notify_buf, sizeof(cap_notify_buf), LV_SYMBOL_WARNING " %s  +%u",
+             notification_short_text(id), (unsigned)extra_count);
+  } else {
+    snprintf(cap_notify_buf, sizeof(cap_notify_buf), LV_SYMBOL_WARNING " %s",
+             notification_short_text(id));
+  }
+  return cap_notify_buf;
 }
 
 static ChargeScreenData sample_charge_data()
@@ -152,6 +172,25 @@ bool lvgl_capture_write_samples(const char *out_dir)
     return false;
   }
 
+  // Advisory active while charging: the amber perimeter border plus the
+  // worst advisory named on the top strip's second line (a transient message
+  // would win that line instead - see charge_screen.cpp). Two advisories are
+  // live, so this also exercises the "+N" suffix. Neither --dump-lvgl-screens
+  // path was otherwise rendered anywhere in the tree.
+  d.msg_line = "";
+  d.notify_active = true;
+  d.notify_line = sample_notify_line("thermal.high_temp", 2);
+  charge_screen_update(d);
+  pump_frames();
+  if(!write_capture(out_dir, "charge-advisory")) {
+    return false;
+  }
+
+  // Clear the advisory before the remaining scenarios, which exercise
+  // unrelated screen states and must not carry the border over by accident.
+  d.notify_active = false;
+  d.notify_line = "";
+
   // Worst-case widths: the longest fault word, the longest claim name and
   // three-digit figures all at once.
   d.evse_state = OPENEVSE_STATE_GFI_SELF_TEST_FAILED;
@@ -196,6 +235,19 @@ bool lvgl_capture_write_samples(const char *out_dir)
   standby_screen_update(sd);
   pump_frames();
   if(!write_capture(out_dir, "standby")) {
+    return false;
+  }
+
+  // Advisory active on standby: the amber perimeter border, and the advisory
+  // takes the footer line outright in place of the hostname/IP -- a warning
+  // outranks knowing where to point a browser (see standby_screen.cpp). A
+  // single advisory here, so this also confirms the "+N" suffix is only
+  // added when there is more than one.
+  sd.notify_active = true;
+  sd.notify_line = sample_notify_line("safety.gfci_check", 0);
+  standby_screen_update(sd);
+  pump_frames();
+  if(!write_capture(out_dir, "standby-advisory")) {
     return false;
   }
 

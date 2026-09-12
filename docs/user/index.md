@@ -34,5 +34,6 @@ UI — if your unit looks different, check
 
 - [Settings reference](settings.md) — every configuration page
 - [Safety](safety.md) — protection checks, temperature throttling, boot lock
+- [Notifications](notifications.md) — what the bell and the amber border mean
 - [Firmware update](firmware-update.md)
 - [Troubleshooting & reset](troubleshooting.md)

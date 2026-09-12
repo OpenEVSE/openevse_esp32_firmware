@@ -194,6 +194,12 @@ String loadsharing_role;
 String loadsharing_controller_host;
 uint32_t loadsharing_rotation_interval;
 
+// Advisory acknowledgements: "key:hextoken;" repeated, plus the firmware
+// version that wrote them. A version change drops the lot - a firmware
+// update is a service event, where a power cut is not.
+String notification_acks;
+String notification_acks_fw;
+
 String esp_hostname_default = "openevse-"+ESPAL.getShortId();
 
 void config_changed(String name);
@@ -348,6 +354,12 @@ ConfigOpt *opts[] =
   new ConfigOptDefinition<String>(loadsharing_controller_host, "", "loadsharing_controller_host", "lsch"),
   // Rotation interval in seconds (0 disables). Effective max ~49 days on 32-bit millis; larger values wrap.
   new ConfigOptDefinition<uint32_t>(loadsharing_rotation_interval, 1800, "loadsharing_rotation_interval", "lsri"),
+
+// Advisory acknowledgements: "key:hextoken;" repeated, plus the firmware
+// version that wrote them. A version change drops the lot - a firmware
+// update is a service event, where a power cut is not.
+  new ConfigOptDefinition<String>(notification_acks, "", "notification_acks", "nak"),
+  new ConfigOptDefinition<String>(notification_acks_fw, "", "notification_acks_fw", "nkv"),
 
 // Scheduler options
   new ConfigOptDefinition<uint32_t>(scheduler_start_window, SCHEDULER_DEFAULT_START_WINDOW, "scheduler_start_window", "ssw"),
@@ -561,6 +573,27 @@ void config_commit(bool factory)
 void config_user_commit()
 {
   user_config.commit();
+}
+
+// Persist the notification ack state.
+//
+// Assigning the notification_acks / notification_acks_fw globals directly and
+// then calling commit() does NOT write anything: ConfigJson::commit() returns
+// early unless its _modified flag is set, and that flag is only raised by
+// deserialize() (or reset()) - never by writing the underlying variable a
+// ConfigOptDefinition wraps. Nothing else in a quiet boot dirties the config,
+// so an ack made that way survives in RAM and is gone at the next restart.
+// Routing the write through deserialize() sets the flag, and only when a value
+// actually changed, so an unchanged ack list still costs no EEPROM write.
+void config_save_notification_acks(const String &acks, const String &fw)
+{
+  const size_t capacity = JSON_OBJECT_SIZE(2) + 512;
+  DynamicJsonDocument doc(capacity);
+  doc["notification_acks"] = acks;
+  doc["notification_acks_fw"] = fw;
+  if(user_config.deserialize(doc)) {
+    user_config.commit();
+  }
 }
 
 bool config_https_enabled()
@@ -955,7 +988,18 @@ bool config_serialize(DynamicJsonDocument &doc, bool longNames, bool compactOutp
   }
   #endif
 
-  return user_config.serialize(doc, longNames, compactOutput, hideSecrets);
+  bool result = user_config.serialize(doc, longNames, compactOutput, hideSecrets);
+
+  // notification_acks / notification_acks_fw are internal state (the
+  // persisted advisory-ack blob), not a user-facing setting - they ride the
+  // same EEPROM-backed opts[] array for load/save, but must never show up in
+  // a /config response or an MQTT config publish.
+  doc.remove("notification_acks");
+  doc.remove("notification_acks_fw");
+  doc.remove("nak");
+  doc.remove("nkv");
+
+  return result;
 }
 
 bool config_set(const char *name, uint32_t val) {

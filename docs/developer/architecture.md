@@ -92,6 +92,14 @@ macros. Change notifications use `onChanged()` callbacks with prefix matching
 The divert simulator's `test_config.py` suite asserts default config values —
 update those assertions whenever changing defaults in `app_config.cpp`.
 
+Two options are internal state rather than user settings, and are stripped from
+the `/config` response: `notification_acks` (the acknowledged-advisory store)
+and `notification_acks_fw` (the firmware build those acknowledgements were made
+against, so a firmware update clears them). Write them through
+`config_save_notification_acks()` — assigning the globals and calling
+`commit()` does **not** persist, because `ConfigJson::commit()` returns early
+unless `deserialize()` has marked the config modified.
+
 ## Key subsystems
 
 | File(s) | Role |
@@ -109,6 +117,7 @@ update those assertions whenever changing defaults in `app_config.cpp`.
 | `limit.h/.cpp` | Session energy/time/SOC/range limits |
 | `current_shaper.h/.cpp` | Grid-level power cap enforcement with smoothing |
 | `temp_throttle.h/.cpp` | Current reduction on over-temperature |
+| `notifications.h/.cpp`, `notifications_rules.h/.cpp`, `notifications_acks.h/.cpp` | Non-fault advisories: a pure rule table over EvseManager state, a 5 s MicroTask, and a persisted acknowledgement store |
 | `ocpp.h/.cpp` | OCPP 1.6 via the MicroOcpp library |
 | `rfid.h/.cpp` | RFID card auth, PN532 NFC module (optional) |
 | `net_manager.h/.cpp` | WiFi / wired Ethernet, OTA capability |
