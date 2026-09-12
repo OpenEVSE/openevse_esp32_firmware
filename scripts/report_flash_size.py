@@ -70,20 +70,10 @@ def main():
     lines.append("| Environment | Size | Flash used | Change vs base |")
     lines.append("| --- | ---: | ---: | ---: |")
 
-    total_size = 0
-    total_baseline = 0
-    total_baseline_known = True
-
     for env in sorted(current):
         rec = current[env]
         base_rec = baseline.get(env)
         base_size = base_rec["size"] if base_rec else None
-
-        total_size += rec["size"]
-        if base_size is None:
-            total_baseline_known = False
-        else:
-            total_baseline += base_size
 
         percent = rec["percent"]
         flag = ""
@@ -98,14 +88,10 @@ def main():
             f"| {env} | {fmt_bytes(rec['size'])} B | {percent:.1f}%{flag} | {delta} |"
         )
 
-    total_delta = fmt_delta(total_size, total_baseline if total_baseline_known else None)
-    lines.append(f"| **Total** | **{fmt_bytes(total_size)} B** | — | **{total_delta}** |")
     lines.append("")
     lines.append(
         f"Builds at or above {WARN_THRESHOLD_PCT:.0f}% of their app partition are flagged "
-        ":warning:; builds that exceed it (:rotating_light:) fail the build. The Total row "
-        "has no \"Flash used\" percent -- each env has a different app partition size, so a "
-        "combined percentage wouldn't correspond to any real flash budget."
+        ":warning:; builds that exceed it (:rotating_light:) fail the build."
     )
 
     with open(args.out, "w") as f:
