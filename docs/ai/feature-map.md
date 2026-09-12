@@ -38,7 +38,7 @@ relative to the configured base topic (see [mqtt.md](../mqtt.md)).
 | Firmware update (web upload / GitHub OTA) | `web_server.*`, `ota.*` | `/settings/firmware` | — | `/update`, `/restart` | — | [firmware-update.md](../user/firmware-update.md) |
 | SSL certificates | `certificates.*` | `/settings/certificates` | `*_certificate_id` | `/certificates` | — | [settings.md](../user/settings.md) |
 | RAPI terminal / debug console | `web_server.*` | `/settings/terminal` | — | `/r`, WS consoles | — | [settings.md](../user/settings.md) |
-| On-device TFT display | `lcd_tft.*`, `src/lvgl_tft/` | `/settings/display` (gated on `tft_theme`) | `tft_*` | `/config` | — | [settings.md](../user/settings.md) |
+| On-device TFT display | `lcd_lvgl.*`, `src/lvgl_tft/` | `/settings/display` (gated on `tft_theme`) | `tft_*` | `/config` | — | [settings.md](../user/settings.md) |
 | Charger info / diagnostics | `evse_monitor.*` | `/monitoring`, `/settings/about` | — | `/status`, `/config` | telemetry topics | [monitoring.md](../user/monitoring.md) |
 
 ## Maintenance
