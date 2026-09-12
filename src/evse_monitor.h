@@ -236,6 +236,15 @@ class EvseMonitor : public MicroTasks::Task
     // _cable_temp_known is true - the controller may predate the feature or
     // have it compiled out.
     bool _cable_temp_known;
+    // Last enable/disable this session actually commanded and had the
+    // controller accept ($FF C). The controller has no read-back for that
+    // bit, so isCableTempEnabled() otherwise has to infer it from the
+    // sources - which reads "off" the moment the feature is turned on but
+    // before any source is assigned, since every source reports
+    // NOT_INSTALLED either way. This short-circuits that false negative for
+    // exactly the session that did the commanding; reset on boot since a
+    // fresh controller's actual state is unknown until re-inferred.
+    bool _cable_temp_commanded;
     // Live readings. The Temperature "valid" flag tracks _STATUS_OK only; the
     // parallel status array carries which of the three non-reading conditions
     // applies (unassigned / open circuit / shorted), which a bool cannot.
@@ -288,7 +297,13 @@ class EvseMonitor : public MicroTasks::Task
     void readRelayHealth();
 #ifdef ENABLE_CABLE_TEMP
     void readCableTemperatures();
+    // All 4 sources, boot-time only (see the call site) - $GN idx x4.
     void readCableTempConfig();
+    // One source, after a targeted write - $GN idx x1. Updates that source's
+    // cache directly without touching _cable_temp_cfg_known: that flag is a
+    // boot-time "have all 4 ever been read together" gate, and a single-
+    // source refresh has no bearing on it either way.
+    void readCableTempConfig(uint8_t source);
 #endif // ENABLE_CABLE_TEMP
 
   protected:
@@ -555,10 +570,12 @@ class EvseMonitor : public MicroTasks::Task
       return source < OPENEVSE_CABLE_TEMP_SOURCE_COUNT ? _cable_temp_panic_c10[source] : 0;
     }
     bool isCableTempEnabled() {
-      // The controller has no dedicated read-back flag for $FF C, so track it
-      // the only way it is observable: the feature reports NOT_INSTALLED on
-      // every source while it is off.
-      return _cable_temp_known && !isCableTempAllNotInstalled();
+      // The controller has no dedicated read-back flag for $FF C. Prefer
+      // what this session actually commanded and had accepted; fall back to
+      // inferring from the sources (reports NOT_INSTALLED on all of them
+      // while off) only when nothing has been commanded yet, e.g. fresh
+      // after boot.
+      return _cable_temp_known && (_cable_temp_commanded || !isCableTempAllNotInstalled());
     }
     bool isCableTempAllNotInstalled() {
       for(uint8_t i = 0; i < OPENEVSE_CABLE_TEMP_SOURCE_COUNT; i++) {

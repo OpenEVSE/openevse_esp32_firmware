@@ -12,6 +12,17 @@ Error: The program size (1968045 bytes) is greater than maximum allowed (1966080
 Only `openevse_wifi_tft_v1` (+`_dev`) and `openevse_wifi_v1_16mb` have 16MB
 partitions and room to spare.
 
+> **Update:** the numbers below were measured against master at the time this
+> was written. Master has since dropped the legacy TFT_eSPI renderer
+> (`chore: drop the legacy TFT_eSPI renderer and the Elecrow envs`, #1226),
+> which freed far more flash than this document's own trims did — a
+> CI-accurate build of current master (per the reproduction steps below)
+> measures **1,791,161 bytes (91.1%)**, not the 1,968,045 (over budget) this
+> page originally reported. The overflow that motivated this work is no
+> longer an active emergency. The PNG recompression itself is unaffected by
+> any of that — it is still a free, pixel-identical 11KB saving — so it's
+> kept below on its own merits, not as a crisis fix.
+
 ## Reproducing a CI-accurate build locally
 
 **A local `pio run` does not measure what CI measures.** `scripts/extra_script.py`
@@ -41,7 +52,9 @@ bundles are ~57KB of that, the main JS bundle ~102KB, vendor ~55KB.
 
 ## Trims measured on `openevse_wifi_v1`
 
-Baseline 1,968,045 (over by 1,965). Each measured independently:
+Baseline 1,968,045 (over by 1,965) *at the time these were measured* — see
+the update note above; current master is well clear of the limit regardless
+of these trims. Each measured independently:
 
 | Change | Saving | Cost |
 |---|---|---|
@@ -93,7 +106,10 @@ pixel raster — all 19 are byte-identical. The regeneration also re-emitted eac
 header from its *existing* bytes first and required that to reproduce the file
 exactly, so the generated format is provably unchanged.
 
-Result on `openevse_wifi_v1`: **1,957,345 bytes, 99.6%, 8,735 free.**
+Result on `openevse_wifi_v1` at the time: **1,957,345 bytes, 99.6%, 8,735
+free.** (Current master, with the legacy TFT renderer gone, sits at
+**1,791,161 bytes, 91.1%** regardless of this trim — see the update note
+above.)
 
 Because the optimisation lives in the header generator, any future GUI rebuild
 keeps it automatically — there is nothing to remember.

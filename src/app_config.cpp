@@ -739,14 +739,16 @@ bool config_deserialize(DynamicJsonDocument &doc)
   if(doc.containsKey("cable_temp"))
   {
     bool enable = doc["cable_temp"];
-    // No equality guard here, unlike its neighbours: the controller exposes no
-    // read-back for $FF C, so isCableTempEnabled() infers "on" from at least
-    // one source reporting something other than NOT_INSTALLED. With the
-    // feature on but no source assigned yet, that inference reads false, and a
-    // guard would then swallow the very write that turns it on.
-    evse.enableCableTemp(enable);
-    config_modified = true;
-    DBUGLN("cable_temp changed");
+    // isCableTempEnabled() now trusts EvseMonitor's cached commanded value
+    // over its NOT_INSTALLED inference (see _cable_temp_commanded), so it no
+    // longer misreports "off" immediately after a successful enable with no
+    // source assigned yet - the guard is safe here like it is for its
+    // neighbours.
+    if(enable != evse.isCableTempEnabled()) {
+      evse.enableCableTemp(enable);
+      config_modified = true;
+      DBUGLN("cable_temp changed");
+    }
   }
 #endif // ENABLE_CABLE_TEMP
 

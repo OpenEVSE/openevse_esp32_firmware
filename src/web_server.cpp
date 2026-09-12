@@ -1717,7 +1717,10 @@ void handleCableTemp(MongooseHttpServerRequest *request) {
 
   if(HTTP_GET == request->method())
   {
-    // 4 source objects of 8 members each, plus the two top-level flags
+    // 4 source objects of 9 members each (source, name, pin, status,
+    // temperature, r25, beta, offset_c10, panic_c10), plus the two
+    // top-level flags. JSON_OBJECT_SIZE(8) below undercounts that by one
+    // member per source; the +512 slack comfortably covers it.
     const size_t capacity = JSON_OBJECT_SIZE(3) +
                             JSON_ARRAY_SIZE(OPENEVSE_CABLE_TEMP_SOURCE_COUNT) +
                             OPENEVSE_CABLE_TEMP_SOURCE_COUNT * JSON_OBJECT_SIZE(8) + 512;

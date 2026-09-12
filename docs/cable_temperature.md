@@ -13,12 +13,9 @@ Spans three repos:
 | `OpenEVSE_Lib` (client library) | `OpenEVSE9` @ `df49497`, 0.0.23 | `getCableTemperatures()`, `getCableTemperatureConfig()`, `setCableTemperatureConfig()`, `setCableTemperaturePin()` |
 | `openevse_esp32_firmware` (this repo) | see below | Polls and caches the readings, `/cabletemp` endpoint, `cable_temp` config flag, telemetry keys |
 
-> **Blocked until the library is published.** `platformio.ini` pins
-> `openevse/OpenEVSE@0.0.23`, which does not exist in the PlatformIO registry
-> yet — `OpenEVSE_Lib` `df49497` is pushed but neither tagged `v0.0.23` nor
-> published. Until it is, dependency resolution fails and the build cannot
-> fetch the library. The measurements below were taken with that commit
-> staged into `.pio/libdeps/` locally.
+`openevse/OpenEVSE@0.0.23` resolves from the PlatformIO registry — the
+library has since been published and a plain `pio run` fetches it with no
+local staging needed.
 
 ## Build flag — not enabled by default
 
@@ -68,12 +65,19 @@ model, accuracy and the controller-side design decisions.
 - **Live readings** (`$GN`) are polled on the same cadence as the enclosure
   sensors (`getTemperatureFromEvse()`), not the slower ~60s settings poll —
   they are a safety signal and shouldn't lag `$GP`.
-- **Per-source configuration** (`$GN idx`, four calls) is read at boot and
-  after any successful write, never polled. It only changes when something
-  writes it, and four extra RAPI round trips a minute would be waste.
-- Both are invalidated on controller boot, alongside the relay-health state,
-  so a swapped or downgraded controller can't keep serving the old one's
-  values.
+- **Per-source configuration** (`$GN idx`) is read at boot — all four sources,
+  since nothing is known yet — and after a successful write, where only the
+  written source is re-read (one call, not four: a single-source write can't
+  change another source's own configuration). Never polled; it only changes
+  when something writes it.
+- Both are invalidated on controller boot, alongside the relay-health state
+  and the four calibration arrays themselves, so a swapped or downgraded
+  controller can't keep serving the old one's values.
+- Boot queues `heartbeatEnable` ahead of every read-only command here
+  (including cable-temp's, the largest single block of them) — losing
+  heartbeat supervision to a full RAPI queue would be worse than losing a
+  boot-time diagnostic reading, so if anything has to be the one that
+  doesn't fit, it isn't heartbeat.
 - Neither is gated on `isD9Supported()`: the library already returns
   `RAPI_RESPONSE_FEATURE_NOT_SUPPORTED` for controllers without the feature,
   so the callbacks simply leave `isCableTempKnown()` false.
@@ -140,17 +144,21 @@ Only the on/off flag, on D9+ controllers that report the feature:
 { "cable_temp": true }
 ```
 
-**Known limitation:** the controller has no read-back for `$FF C`, so
-`isCableTempEnabled()` infers it — the feature reports `NOT_INSTALLED` on
-every source while it is off. With the feature *on* but no source assigned
-yet, that inference reads `false`, so the flag can appear to flip back after
-being set until a source is assigned. Two consequences worth knowing:
-
-- The `POST /config` handler deliberately has **no** equality guard, unlike
-  its neighbours. With one, that false inference would swallow the very write
-  that turns the feature on.
-- The clean fix is controller-side: report the enable bit in the `$GN`
-  response. Worth doing in a future controller revision.
+The controller still has no read-back for `$FF C`, so `isCableTempEnabled()`
+still has to infer it from the sources when nothing has been commanded this
+session — the feature reports `NOT_INSTALLED` on every source while it is
+off, which used to read as `false` right after enabling it with no source
+assigned yet. `EvseMonitor` now caches the commanded value
+(`_cable_temp_commanded`) and trusts it over that inference, so the flag no
+longer flips back on the very GET that follows a successful enable/disable —
+and `POST /config`'s equality guard, previously withheld here specifically
+because of that false negative, applies to `cable_temp` like it does to its
+neighbours. The cache is session-local (reset on controller boot, alongside
+everything else in this feature), so a controller that already had it
+enabled from a prior session with zero sources assigned still reads `false`
+until a source is assigned or it's toggled again — the controller-side fix
+(reporting the bit in `$GN`) is the only way to close that remaining gap,
+and is still worth doing in a future controller revision.
 
 ## Telemetry (`/status`, WebSocket, MQTT, EmonCMS)
 
@@ -167,8 +175,16 @@ isn't reading.
 
 ## Not done
 
-- **No GUI.** Nothing in `gui-nightshift` consumes `/cabletemp` yet, and the
-  default 4MB build can't run this anyway. A Monitoring→Health-style panel
-  would be the natural home, alongside Relay Health.
 - **No dedicated MQTT config topic** — configuration is HTTP-only.
 - **No enable read-back**, see the `/config` limitation above.
+
+## GUI (gui-nightshift)
+
+A collapsible "Cable Temperature" section on the Safety page: the enable
+switch, then a pin-centric Input 1 (PP) / Input 2 (PP2) source picker (the 4
+logical sources + None, cross-disabled between the two inputs so a source
+can't be assigned to both), then per-source calibration fields and the live
+reading once a source is picked. Assigned sources also get their own box on
+the Monitoring Data tab. See `gui-nightshift/src/routes/settings/Safety.svelte`,
+`gui-nightshift/src/lib/stores/cabletemp.js` and
+`gui-nightshift/src/lib/cabletemp.js`.

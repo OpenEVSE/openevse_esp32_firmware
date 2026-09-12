@@ -203,6 +203,7 @@ EvseMonitor::EvseMonitor(OpenEVSEClass &openevse) :
   _relay_recovery_in_flight(false)
 #ifdef ENABLE_CABLE_TEMP
   ,_cable_temp_known(false)
+  ,_cable_temp_commanded(false)
   ,_cable_temp_cfg_known(false)
   ,_cable_temp_cfg_refresh(0)
   ,_cable_temp_cfg_responses(0)
@@ -251,11 +252,22 @@ void EvseMonitor::evseBoot(const char *firmware)
   _relay_health_known = false;
 #ifdef ENABLE_CABLE_TEMP
   _cable_temp_known = false;
+  _cable_temp_commanded = false;
   _cable_temp_cfg_known = false;
   for(uint8_t i = 0; i < OPENEVSE_CABLE_TEMP_SOURCE_COUNT; i++) {
     _cable_temps[i].invalidate();
     _cable_temp_status[i] = OPENEVSE_CABLE_TEMP_STATUS_NOT_INSTALLED;
     _cable_temp_pin[i] = OPENEVSE_CABLE_TEMP_PIN_NONE;
+    // _cable_temp_cfg_known above already keeps these from being served
+    // until a fresh readCableTempConfig() actually fills them back in, but
+    // reset them anyway rather than relying solely on that gate - a swapped
+    // controller shouldn't find its own EEPROM's values sitting in memory
+    // under any circumstance, gated or not. 0 is unambiguous: it isn't a
+    // value any real r25/beta/panic reading takes.
+    _cable_temp_r25[i] = 0;
+    _cable_temp_beta[i] = 0;
+    _cable_temp_offset_c10[i] = 0;
+    _cable_temp_panic_c10[i] = 0;
   }
 #endif // ENABLE_CABLE_TEMP
   _zero_cross_threshold_ma = OPENEVSE_RELAY_HEALTH_NOT_AVAILABLE;
@@ -309,15 +321,11 @@ void EvseMonitor::evseBoot(const char *firmware)
     }
   });
 
-  readChipId();
-  readRelayStatus();
-  readFrequency();
-  readRelayHealth();
-#ifdef ENABLE_CABLE_TEMP
-  readCableTemperatures();
-  readCableTempConfig();
-#endif // ENABLE_CABLE_TEMP
-
+  // Queued ahead of the read-only boot commands below (and specifically
+  // ahead of cable-temp's, the largest block of them): losing heartbeat
+  // supervision to a full RAPI queue is worse than losing a diagnostic
+  // reading, so if anything has to be the one that doesn't fit, it
+  // shouldn't be this.
 #ifndef DISABLE_HEARTBEAT
   _openevse.heartbeatEnable(EVSE_HEATBEAT_INTERVAL, EVSE_HEARTBEAT_CURRENT, [this](int ret, int interval, int current, int triggered) {
     _heartbeat = RAPI_RESPONSE_OK == ret;
@@ -331,6 +339,15 @@ void EvseMonitor::evseBoot(const char *firmware)
     }
   });
 #endif
+
+  readChipId();
+  readRelayStatus();
+  readFrequency();
+  readRelayHealth();
+#ifdef ENABLE_CABLE_TEMP
+  readCableTemperatures();
+  readCableTempConfig();
+#endif // ENABLE_CABLE_TEMP
 }
 
 void EvseMonitor::updateEvseState(uint8_t evse_state, uint8_t pilot_state, uint32_t vflags)
@@ -1329,14 +1346,38 @@ void EvseMonitor::readCableTempConfig()
   }
 }
 
+void EvseMonitor::readCableTempConfig(uint8_t source)
+{
+  if(source >= OPENEVSE_CABLE_TEMP_SOURCE_COUNT) {
+    return;
+  }
+
+  _openevse.getCableTemperatureConfig(source, [this, source](int ret, uint8_t pin,
+      uint32_t r25, uint32_t beta, int32_t offset_c10, int32_t panic_c10)
+  {
+    if(RAPI_RESPONSE_OK != ret) {
+      return;
+    }
+    _cable_temp_pin[source] = pin;
+    _cable_temp_r25[source] = r25;
+    _cable_temp_beta[source] = beta;
+    _cable_temp_offset_c10[source] = offset_c10;
+    _cable_temp_panic_c10[source] = panic_c10;
+    DBUGF("cable temp cfg %u: pin=%u r25=%u beta=%u offset=%d panic=%d",
+          source, pin, r25, beta, offset_c10, panic_c10);
+  });
+}
+
 void EvseMonitor::enableCableTemp(bool enabled, std::function<void(int ret)> callback)
 {
-  // $FF C. The controller keeps no readable flag for this, so refresh the
-  // readings afterward - with the feature off every source reports
-  // NOT_INSTALLED, which is what isCableTempEnabled() infers from.
-  enableFeature(OPENEVSE_FEATURE_CABLE_TEMPERATURE, enabled, [this, callback](int ret)
+  // $FF C. The controller keeps no readable flag for this, so isCableTempEnabled()
+  // trusts this commanded value over its NOT_INSTALLED inference (see the
+  // comment on _cable_temp_commanded) - set it here, only once the write is
+  // actually accepted, then refresh the readings so the sources catch up.
+  enableFeature(OPENEVSE_FEATURE_CABLE_TEMPERATURE, enabled, [this, enabled, callback](int ret)
   {
     if(RAPI_RESPONSE_OK == ret) {
+      _cable_temp_commanded = enabled;
       readCableTemperatures();
     }
     if(callback) callback(ret);
@@ -1348,13 +1389,16 @@ void EvseMonitor::setCableTempConfig(uint8_t source, uint8_t pin, uint32_t r25, 
                                      std::function<void(int ret)> callback)
 {
   _openevse.setCableTemperatureConfig(source, pin, r25, beta, offset_c10, panic_c10,
-                                      [this, callback](int ret)
+                                      [this, source, callback](int ret)
   {
     if(RAPI_RESPONSE_OK == ret) {
       // Read back rather than trusting the write: the controller clamps
       // nothing but it *does* silently disable PP auto-ampacity when a source
-      // claims PP_READ, so the settings flags can change under us too.
-      readCableTempConfig();
+      // claims PP_READ, so the settings flags can change under us too. Only
+      // the written source needs re-reading - a single-source write can't
+      // change another source's own configuration (see rapi.md's $SN entry:
+      // sources don't interact with each other, only with PP auto-ampacity).
+      readCableTempConfig(source);
       readCableTemperatures();
       getSettingsFromEvse();
     }
@@ -1364,10 +1408,10 @@ void EvseMonitor::setCableTempConfig(uint8_t source, uint8_t pin, uint32_t r25, 
 
 void EvseMonitor::setCableTempPin(uint8_t source, uint8_t pin, std::function<void(int ret)> callback)
 {
-  _openevse.setCableTemperaturePin(source, pin, [this, callback](int ret)
+  _openevse.setCableTemperaturePin(source, pin, [this, source, callback](int ret)
   {
     if(RAPI_RESPONSE_OK == ret) {
-      readCableTempConfig();
+      readCableTempConfig(source);
       readCableTemperatures();
       getSettingsFromEvse();
     }
