@@ -251,7 +251,10 @@ def make_static(env, target, source, prefix, files_dir):
 
         if filetype is not None:
             c_name = get_c_name(out_file)
-            output += "  { \"/"+out_file.replace(".gz","")+"\", CONTENT_"+c_name+", sizeof(CONTENT_"+c_name+") - 1, _CONTENT_TYPE_"+filetype+", CONTENT_"+c_name+"_ETAG, "+("true" if compress else "false")+" },\n"
+            # NULL means "served as-is"; otherwise this is the Content-Encoding
+            # the bytes on disk were written with.
+            encoding = "\"gzip\"" if compress else "NULL"
+            output += "  { \"/"+out_file.replace(".gz","")+"\", CONTENT_"+c_name+", sizeof(CONTENT_"+c_name+") - 1, _CONTENT_TYPE_"+filetype+", CONTENT_"+c_name+"_ETAG, "+encoding+" },\n"
         else:
             print("Warning: Could not detect filetype for %s" % (out_file))
 
