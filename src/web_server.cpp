@@ -78,6 +78,7 @@ const char _CONTENT_TYPE_ICO[]      PROGMEM = "image/vnd.microsoft.icon";
 const char _CONTENT_TYPE_WOFF[]     PROGMEM = "font/woff";
 const char _CONTENT_TYPE_WOFF2[]    PROGMEM = "font/woff2";
 const char _CONTENT_TYPE_MANIFEST[] PROGMEM = "application/manifest+json";
+const char _CONTENT_TYPE_CSV[]      PROGMEM = "text/csv";
 
 #define RAPI_RESPONSE_BLOCKED             -300
 
@@ -85,6 +86,8 @@ void handleConfig(MongooseHttpServerRequest *request);
 void handleEvseClaimsTarget(MongooseHttpServerRequest *request);
 void handleEvseClaims(MongooseHttpServerRequest *request);
 void handleEventLogs(MongooseHttpServerRequest *request);
+void handleLogsExport(MongooseHttpServerRequest *request);
+void handleRfidUsers(MongooseHttpServerRequest *request);
 void handleCertificates(MongooseHttpServerRequest *request);
 
 void handleUpdateRequest(MongooseHttpServerRequest *request);
@@ -2027,6 +2030,7 @@ void web_server_setup()
   server.on("/shaper$", handleCurrentShaper);
   server.on("/emoncms/describe$", handleDescribe);
   server.on("/rfid/add$", handleAddRFID);
+  server.on("/rfid/users$", handleRfidUsers);
   server.on("/relay/reset$", handleRelayHealthReset);
   server.on("/relay/recovery$", handleRelayRecovery);
 
@@ -2038,6 +2042,7 @@ void web_server_setup()
 
   server.on("/override$", handleOverride);
 
+  server.on("/logs/export$", handleLogsExport);
   server.on("/logs", handleEventLogs);
   server.on("/certificates", handleCertificates);
   server.on("/limit", handleLimit);
