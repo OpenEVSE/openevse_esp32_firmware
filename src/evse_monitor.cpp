@@ -840,6 +840,38 @@ void EvseMonitor::enableOvercurrentMonitor(bool enabled, std::function<void(int 
   }
 }
 
+void EvseMonitor::setLcdType(LcdType type, std::function<void(int ret)> callback)
+{
+  if(getLcdType() == type) {
+    if(callback) callback(RAPI_RESPONSE_OK);
+    return;
+  }
+
+  uint8_t rapi_type = (LcdType::Mono == type) ? OPENEVSE_LCD_TYPE_MONO : OPENEVSE_LCD_TYPE_RGB;
+  _openevse.setLcdType(rapi_type, [this, callback](int ret)
+  {
+    if(RAPI_RESPONSE_OK == ret)
+    {
+      // Refresh the flags
+      _openevse.getSettings([this, callback](int ret, long pilot, uint32_t flags)
+      {
+        if(RAPI_RESPONSE_OK == ret) {
+          DBUGF("pilot = %ld, flags = %x", pilot, flags);
+          _settings_flags = flags;
+        }
+
+        _settings_changed.Trigger();
+
+        if(callback){
+          callback(ret);
+        }
+      });
+    } else if(callback){
+      callback(ret);
+    }
+  });
+}
+
 void EvseMonitor::enableFrontButton(bool enabled, std::function<void(int ret)> callback)
 {
   if(isFrontButtonEnabled() != enabled) {

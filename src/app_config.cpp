@@ -715,6 +715,18 @@ bool config_deserialize(DynamicJsonDocument &doc)
     }
   }
 
+  if(doc.containsKey("lcd_type"))
+  {
+    const char *val = doc["lcd_type"];
+    EvseMonitor::LcdType type = (val && strcmp(val, "mono") == 0) ?
+      EvseMonitor::LcdType::Mono : EvseMonitor::LcdType::RGB;
+    if(type != evse.getLcdType()) {
+      evse.setLcdType(type);
+      config_modified = true;
+      DBUGLN("lcd_type changed");
+    }
+  }
+
   if(doc.containsKey("pp_auto"))
   {
     bool enable = doc["pp_auto"];
@@ -898,6 +910,10 @@ bool config_serialize(DynamicJsonDocument &doc, bool longNames, bool compactOutp
     }
     doc["front_button"] = evse.isFrontButtonEnabled();
     doc["boot_lock"] = evse.isBootLockEnabled();
+    // 2-line LCD backlight type. Only meaningful on controller builds with a
+    // physical character LCD (LCD16X2 + RGBLCD); other builds NAK the $S0 set
+    // and simply ignore this, same as other flags-word bits.
+    doc["lcd_type"] = (EvseMonitor::LcdType::Mono == evse.getLcdType()) ? "mono" : "rgb";
     // D9-only capability flag so clients can gate the controls below
     doc["d9_support"] = evse.isD9Supported();
     // PP auto-ampacity / zero-cross switching only exist on D9+ controllers

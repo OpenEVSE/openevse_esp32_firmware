@@ -302,6 +302,7 @@ class EvseMonitor : public MicroTasks::Task
     void enableVentRequired(bool enabled, std::function<void(int ret)> callback = NULL);
     void enableTemperatureCheck(bool enabled, std::function<void(int ret)> callback = NULL);
     void enableOvercurrentMonitor(bool enabled, std::function<void(int ret)> callback = NULL);
+    void setLcdType(LcdType type, std::function<void(int ret)> callback = NULL);
     void setPanicTemperature(uint32_t tempC, std::function<void(int ret)> callback = NULL);
     void enableFrontButton(bool enabled, std::function<void(int ret)> callback = NULL);
     void enableBootLock(bool enabled, std::function<void(int ret)> callback = NULL);
