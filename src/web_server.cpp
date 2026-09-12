@@ -28,6 +28,7 @@ typedef const __FlashStringHelper *fstr_t;
 #include "emonesp.h"
 #include "web_server.h"
 #include "diagnostics.h"
+#include "web_server_tls_startup.h"
 #ifdef ENABLE_TSDB
 #include "tsdb_energy_logger.h"
 #endif
@@ -60,6 +61,7 @@ MongooseHttpServer redirect;        // Server to redirect to HTTPS if enabled
 
 bool enableCors = false;
 bool streamDebug = false;
+static WebServerListenerState web_server_listener = {false, false, 0};
 
 // Event timeouts
 static unsigned long wifiRestartTime = 0;
@@ -1973,7 +1975,8 @@ void handleMqttAction(MongooseHttpServerRequest *request) {
 
 void web_server_setup()
 {
-  bool use_ssl = false;
+  const char *cert = NULL;
+  const char *key = NULL;
   if(www_certificate_id != "")
   {
     // This one sits on the boot path: a corrupted stored www_certificate_id
@@ -1987,22 +1990,31 @@ void web_server_setup()
       DEBUG.printf("Ignoring malformed www_certificate_id '%s', serving HTTP\n", www_certificate_id.c_str());
     }
 
-    const char *cert = id_valid ? certs.getCertificate(cert_id) : NULL;
-    const char *key = id_valid ? certs.getKey(cert_id) : NULL;
-    if(NULL != cert && NULL != key)
-    {
-      DEBUG.printf("Starting HTTPS server, https://0.0.0.0:%d\n", www_https_port);
-      server.begin(www_https_port, cert, key);
-      use_ssl = true;
-
-      redirect.begin(www_http_port);
-      redirect.on("/", handleHttpsRedirect);
-    }
+    cert = id_valid ? certs.getCertificate(cert_id) : NULL;
+    key = id_valid ? certs.getKey(cert_id) : NULL;
   }
 
-  if(false == use_ssl) {
-    DEBUG.printf("Starting HTTP server, http://0.0.0.0:%d\n", www_http_port);
-    server.begin(www_http_port);
+  web_server_listener = web_server_start_listeners(
+    cert, key, www_https_port, www_http_port,
+    [](const char *certificate, const char *private_key)
+    {
+      DEBUG.printf("Starting HTTPS server, https://0.0.0.0:%d\n", www_https_port);
+      return server.begin(www_https_port, certificate, private_key);
+    },
+    []()
+    {
+      DEBUG.printf("Starting HTTP server, http://0.0.0.0:%d\n", www_http_port);
+      return server.begin(www_http_port);
+    });
+
+  if(web_server_listener.started && web_server_listener.https)
+  {
+    redirect.begin(www_http_port);
+    redirect.on("/", handleHttpsRedirect);
+  }
+
+  if(web_server_listener.started) {
+    net.publishWebServer(web_server_listener.port, web_server_listener.https);
   }
 
   // Session management (no auth gate — user must reach these unauthenticated)
@@ -2193,7 +2205,22 @@ void web_server_setup()
   // Setup load sharing endpoints
   web_server_load_sharing_setup();
 
-  DEBUG.println("Server started");
+  DEBUG.println(web_server_listener.started ? "Server started" : "Server failed to start");
+}
+
+bool web_server_is_running()
+{
+  return web_server_listener.started;
+}
+
+bool web_server_is_https()
+{
+  return web_server_listener.started && web_server_listener.https;
+}
+
+uint16_t web_server_port()
+{
+  return web_server_listener.port;
 }
 
 void

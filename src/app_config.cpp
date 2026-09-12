@@ -9,7 +9,6 @@
 #include "app_config.h"
 #include "app_config_mqtt.h"
 #include "app_config_mode.h"
-#include "certificates.h"
 #include "temp_throttle.h"
 #include "flash_migrate.h"
 
@@ -563,28 +562,6 @@ void config_user_commit()
   user_config.commit();
 }
 
-bool config_https_enabled()
-{
-#ifndef DIVERT_SIM
-  if (www_certificate_id == "") {
-    return false;
-  }
-  // This runs from mDNS setup during network bring-up, so a corrupt stored id
-  // would crash-loop the firmware if it were parsed with a throwing conversion.
-  uint64_t cert_id = 0;
-  if (!certificate_id_from_string(www_certificate_id.c_str(), cert_id)) {
-    DBUGF("config_https_enabled: invalid www_certificate_id '%s'", www_certificate_id.c_str());
-    return false;
-  }
-
-  const char *cert = certs.getCertificate(cert_id);
-  const char *key = certs.getKey(cert_id);
-  return (NULL != cert && NULL != key);
-#else
-  return false;
-#endif
-}
-
 bool config_deserialize(String& json) {
   return user_config.deserialize(json.c_str());
 }
@@ -1019,6 +996,4 @@ void config_reset()
   LittleFS.format();
   config_load_settings();
 }
-
-
 
