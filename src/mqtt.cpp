@@ -8,6 +8,8 @@
 #include <netdb.h>
 #else
 #include <lwip/netdb.h>
+#include <lwip/dns.h>
+#include <lwip/tcpip.h>
 #endif
 #include "openevse.h"
 #include "divert.h"
@@ -29,6 +31,7 @@ Mqtt::Mqtt(EvseManager &evseManager) :
   _lastRxTime(0)
 {
   _brokerIp[0]      = '\0';
+  _dnsResult[0]     = '\0';
   _brokerVersion[0] = '\0';
   _errorCategory[0] = '\0';
   _errorDetail[0]   = '\0';
@@ -127,14 +130,14 @@ unsigned long Mqtt::loop(MicroTasks::WakeReason reason) {
     }
   }
 
-  // If connected, perform periodic checks and safe deferred DNS lookup
+  // If connected, perform periodic checks and the deferred broker IP lookup
   if (_mqttclient.connected()) {
     if (millis() - _loop_timer > MQTT_LOOP_INTERVAL) {
       _loop_timer = millis();
       checkAndPublishUpdates();
     }
 
-    // DNS lookup deferred from onMqttConnect (safe to block here, not in callback)
+    // Broker IP lookup, deferred from onMqttConnect and started without blocking
     if (_needsDnsLookup) {
       _needsDnsLookup = false;
       struct in_addr addr4; struct in6_addr addr6;
@@ -142,27 +145,15 @@ unsigned long Mqtt::loop(MicroTasks::WakeReason reason) {
                   (inet_pton(AF_INET6, mqtt_server.c_str(), &addr6) == 1);
       if (isIp) {
         strncpy(_brokerIp, mqtt_server.c_str(), sizeof(_brokerIp) - 1);
-      } else if (mqtt_server.length() > 0) {
-        struct addrinfo hints = {}, *res = nullptr;
-        hints.ai_family = AF_UNSPEC;
-        if (getaddrinfo(mqtt_server.c_str(), nullptr, &hints, &res) == 0 && res) {
-          void *addr = res->ai_family == AF_INET
-            ? (void *)&((struct sockaddr_in  *)res->ai_addr)->sin_addr
-            : (void *)&((struct sockaddr_in6 *)res->ai_addr)->sin6_addr;
-          inet_ntop(res->ai_family, addr, _brokerIp, sizeof(_brokerIp) - 1);
-          freeaddrinfo(res);
-        } else {
-          strncpy(_brokerIp, "failed", sizeof(_brokerIp) - 1);
-        }
         _brokerIp[sizeof(_brokerIp) - 1] = '\0';
+      } else if (mqtt_server.length() > 0) {
+        startDnsLookup();
       }
-      if (_brokerIp[0] != '\0') {
-        // WebSocket only — this is a UI status field, not broker data
-        StaticJsonDocument<128> dns_event;
-        dns_event["mqtt_broker_ip"] = _brokerIp;
-        web_server_event(dns_event);
-      }
+      publishBrokerIp();
     }
+
+    // An asynchronous lookup may land on any later pass
+    takeDnsResult();
   }
 
   // Periodic status push so GUI always reflects the real connection state
@@ -233,6 +224,96 @@ void Mqtt::attemptConnection() {
       // If connect() returns false, it means it couldn't even start the attempt.
       onMqttDisconnect(-100, "Initial connection failed"); // Custom error
   }
+}
+
+#ifndef EPOXY_DUINO
+// Runs on the LwIP TCP/IP thread, not on loopTask. Formats the answer and then
+// publishes the flag with a release store, so a loopTask that sees the flag set is
+// guaranteed to see the whole buffer.
+void Mqtt::dnsFoundCallback(const char *name, const ip_addr_t *ipaddr, void *arg)
+{
+  Mqtt *self = static_cast<Mqtt *>(arg);
+  if (nullptr != ipaddr) {
+    ipaddr_ntoa_r(ipaddr, self->_dnsResult, sizeof(self->_dnsResult));
+  } else {
+    // A null address means the query completed and the name does not resolve.
+    strncpy(self->_dnsResult, "failed", sizeof(self->_dnsResult) - 1);
+    self->_dnsResult[sizeof(self->_dnsResult) - 1] = '\0';
+  }
+  __atomic_store_n(&self->_dnsResultReady, true, __ATOMIC_RELEASE);
+}
+#endif
+
+// Starts resolving the broker hostname for the `mqtt_broker_ip` status field.
+//
+// This must not block. loop() runs on loopTask, which feeds the task watchdog, and
+// the synchronous resolvers wait out the full query: with LWIP_IPV6 enabled an
+// AF_UNSPEC getaddrinfo() asks for both A and AAAA, each up to DNS_MAX_RETRIES
+// times across every configured server, which overruns the 5 s watchdog and reboots
+// the charger. So ask LwIP for the answer and let it call back when it has one.
+void Mqtt::startDnsLookup()
+{
+#ifdef EPOXY_DUINO
+  // Host build: no LwIP resolver and no watchdog to trip, so resolve inline.
+  struct addrinfo hints = {}, *res = nullptr;
+  hints.ai_family = AF_UNSPEC;
+  if (getaddrinfo(mqtt_server.c_str(), nullptr, &hints, &res) == 0 && res) {
+    void *addr = res->ai_family == AF_INET
+      ? (void *)&((struct sockaddr_in  *)res->ai_addr)->sin_addr
+      : (void *)&((struct sockaddr_in6 *)res->ai_addr)->sin6_addr;
+    inet_ntop(res->ai_family, addr, _brokerIp, sizeof(_brokerIp) - 1);
+    freeaddrinfo(res);
+  } else {
+    strncpy(_brokerIp, "failed", sizeof(_brokerIp) - 1);
+  }
+  _brokerIp[sizeof(_brokerIp) - 1] = '\0';
+#else
+  ip_addr_t addr;
+
+  // Discard any answer still in flight from a previous connection
+  __atomic_store_n(&_dnsResultReady, false, __ATOMIC_RELAXED);
+
+  // dns_gethostbyname() is LwIP raw API, so it is only safe to call while holding
+  // the TCP/IP core lock. LwIP copies the name, so it need not outlive this call.
+  LOCK_TCPIP_CORE();
+  err_t err = dns_gethostbyname(mqtt_server.c_str(), &addr, dnsFoundCallback, this);
+  UNLOCK_TCPIP_CORE();
+
+  if (ERR_OK == err) {
+    // Already in LwIP's cache: answered here, and no callback will follow.
+    ipaddr_ntoa_r(&addr, _brokerIp, sizeof(_brokerIp));
+  } else if (ERR_INPROGRESS != err) {
+    // Could not even start the query (out of DNS table slots, no server set).
+    strncpy(_brokerIp, "failed", sizeof(_brokerIp) - 1);
+    _brokerIp[sizeof(_brokerIp) - 1] = '\0';
+  }
+  // ERR_INPROGRESS: dnsFoundCallback() will deliver it to takeDnsResult().
+#endif
+}
+
+// Picks up an answer left by dnsFoundCallback(), if one has arrived.
+void Mqtt::takeDnsResult()
+{
+#ifndef EPOXY_DUINO
+  if (!__atomic_load_n(&_dnsResultReady, __ATOMIC_ACQUIRE)) {
+    return;
+  }
+  __atomic_store_n(&_dnsResultReady, false, __ATOMIC_RELAXED);
+  strncpy(_brokerIp, _dnsResult, sizeof(_brokerIp) - 1);
+  _brokerIp[sizeof(_brokerIp) - 1] = '\0';
+  publishBrokerIp();
+#endif
+}
+
+void Mqtt::publishBrokerIp()
+{
+  if ('\0' == _brokerIp[0]) {
+    return;
+  }
+  // WebSocket only — this is a UI status field, not broker data
+  StaticJsonDocument<128> dns_event;
+  dns_event["mqtt_broker_ip"] = _brokerIp;
+  web_server_event(dns_event);
 }
 
 void Mqtt::onMqttConnect() {
@@ -617,6 +698,7 @@ void Mqtt::restartConnection() {
   }
   _connecting = false;
   _needsDnsLookup = false;
+  __atomic_store_n(&_dnsResultReady, false, __ATOMIC_RELAXED);
   _brokerIp[0] = '\0';
   _errorCategory[0] = '\0';   // clear stale failure reason on manual restart
   _errorDetail[0]   = '\0';
