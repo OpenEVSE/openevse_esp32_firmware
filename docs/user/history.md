@@ -8,7 +8,8 @@ energy delivered, temperature, and the RFID user where applicable.
 - **Charging** entries record the energy delivered in that session.
 - **Warnings** (e.g. *Stuck Relay*) are highlighted — repeated warnings are a
   hardware signal, see [Troubleshooting](troubleshooting.md).
-- **Export CSV** downloads the log for spreadsheets or record-keeping.
+- **Export CSV** downloads the log for spreadsheets or record-keeping, via
+  the device's `/logs/export` endpoint.
 
 ## How energy data is stored
 
