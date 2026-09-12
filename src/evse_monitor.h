@@ -237,13 +237,22 @@ class EvseMonitor : public MicroTasks::Task
     // have it compiled out.
     bool _cable_temp_known;
     // Last enable/disable this session actually commanded and had the
-    // controller accept ($FF C). The controller has no read-back for that
-    // bit, so isCableTempEnabled() otherwise has to infer it from the
-    // sources - which reads "off" the moment the feature is turned on but
-    // before any source is assigned, since every source reports
-    // NOT_INSTALLED either way. This short-circuits that false negative for
-    // exactly the session that did the commanding; reset on boot since a
-    // fresh controller's actual state is unknown until re-inferred.
+    // controller accept ($FF C); meaningful only when _cable_temp_commanded_known
+    // is true. The controller has no read-back for that bit, so
+    // isCableTempEnabled() otherwise has to infer it from the sources -
+    // which reads "off" the moment the feature is turned on but before any
+    // source is assigned, since every source reports NOT_INSTALLED either
+    // way. This short-circuits that false negative for exactly the session
+    // that did the commanding.
+    // _known deliberately starts false and stays false across a controller
+    // boot (reset alongside it): "unknown" and "commanded off" must stay
+    // distinguishable, or a controller that already has the feature on with
+    // zero sources assigned - from a prior session, before this ESP32
+    // rebooted - could never be turned off through the API. It would read
+    // as (falsely) already off, the /config equality guard would then match
+    // an incoming {"cable_temp": false} against that false reading and
+    // swallow the write, and $FF C 0 would never actually be sent.
+    bool _cable_temp_commanded_known;
     bool _cable_temp_commanded;
     // Live readings. The Temperature "valid" flag tracks _STATUS_OK only; the
     // parallel status array carries which of the three non-reading conditions
@@ -575,7 +584,20 @@ class EvseMonitor : public MicroTasks::Task
       // inferring from the sources (reports NOT_INSTALLED on all of them
       // while off) only when nothing has been commanded yet, e.g. fresh
       // after boot.
-      return _cable_temp_known && (_cable_temp_commanded || !isCableTempAllNotInstalled());
+      return _cable_temp_known &&
+        (_cable_temp_commanded_known ? _cable_temp_commanded : !isCableTempAllNotInstalled());
+    }
+    // Whether this session has actually commanded $FF C and had it accepted
+    // - i.e. whether isCableTempEnabled() above is reporting a real answer
+    // rather than its NOT_INSTALLED-inference fallback. app_config.cpp uses
+    // this to decide whether it's safe to skip resending an incoming
+    // {"cable_temp": ...} that matches the current reading: the same
+    // fallback that can make isCableTempEnabled() read "off" while the
+    // controller is genuinely on (see the comment on
+    // _cable_temp_commanded_known) would otherwise make an equality guard
+    // swallow the very write that would fix that.
+    bool isCableTempCommandKnown() {
+      return _cable_temp_commanded_known;
     }
     bool isCableTempAllNotInstalled() {
       for(uint8_t i = 0; i < OPENEVSE_CABLE_TEMP_SOURCE_COUNT; i++) {

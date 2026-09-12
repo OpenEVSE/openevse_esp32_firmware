@@ -203,6 +203,7 @@ EvseMonitor::EvseMonitor(OpenEVSEClass &openevse) :
   _relay_recovery_in_flight(false)
 #ifdef ENABLE_CABLE_TEMP
   ,_cable_temp_known(false)
+  ,_cable_temp_commanded_known(false)
   ,_cable_temp_commanded(false)
   ,_cable_temp_cfg_known(false)
   ,_cable_temp_cfg_refresh(0)
@@ -252,7 +253,7 @@ void EvseMonitor::evseBoot(const char *firmware)
   _relay_health_known = false;
 #ifdef ENABLE_CABLE_TEMP
   _cable_temp_known = false;
-  _cable_temp_commanded = false;
+  _cable_temp_commanded_known = false;
   _cable_temp_cfg_known = false;
   for(uint8_t i = 0; i < OPENEVSE_CABLE_TEMP_SOURCE_COUNT; i++) {
     _cable_temps[i].invalidate();
@@ -1370,16 +1371,35 @@ void EvseMonitor::readCableTempConfig(uint8_t source)
 
 void EvseMonitor::enableCableTemp(bool enabled, std::function<void(int ret)> callback)
 {
-  // $FF C. The controller keeps no readable flag for this, so isCableTempEnabled()
-  // trusts this commanded value over its NOT_INSTALLED inference (see the
-  // comment on _cable_temp_commanded) - set it here, only once the write is
-  // actually accepted, then refresh the readings so the sources catch up.
-  enableFeature(OPENEVSE_FEATURE_CABLE_TEMPERATURE, enabled, [this, enabled, callback](int ret)
+  // $FF C, called directly rather than through the shared enableFeature()
+  // helper: that helper's callback actually reports its follow-up $GE's
+  // result once the feature command itself succeeds (its getSettings()
+  // callback shadows the outer `ret`), not the feature command's own result.
+  // A $FF C success trailed by a $GE failure would then look like a
+  // cable_temp failure here - leaving _cable_temp_commanded unset and
+  // skipping the readings refresh below even though the enable itself
+  // worked. Recording the direct result and refreshing settings
+  // independently avoids that.
+  _openevse.feature(OPENEVSE_FEATURE_CABLE_TEMPERATURE, enabled, [this, enabled, callback](int ret)
   {
     if(RAPI_RESPONSE_OK == ret) {
+      _cable_temp_commanded_known = true;
       _cable_temp_commanded = enabled;
       readCableTemperatures();
     }
+
+    // Refresh settings independently of the above: assigning a source to
+    // PP_READ silently disables PP auto-ampacity, so the flags word can
+    // change under us on a successful enable too, and that refresh
+    // shouldn't be gated on itself the way enableFeature()'s was.
+    _openevse.getSettings([this](int ret, long pilot, uint32_t flags)
+    {
+      if(RAPI_RESPONSE_OK == ret) {
+        _settings_flags = flags;
+        _settings_changed.Trigger();
+      }
+    });
+
     if(callback) callback(ret);
   });
 }

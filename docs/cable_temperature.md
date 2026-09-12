@@ -149,16 +149,25 @@ still has to infer it from the sources when nothing has been commanded this
 session — the feature reports `NOT_INSTALLED` on every source while it is
 off, which used to read as `false` right after enabling it with no source
 assigned yet. `EvseMonitor` now caches the commanded value
-(`_cable_temp_commanded`) and trusts it over that inference, so the flag no
-longer flips back on the very GET that follows a successful enable/disable —
-and `POST /config`'s equality guard, previously withheld here specifically
-because of that false negative, applies to `cable_temp` like it does to its
-neighbours. The cache is session-local (reset on controller boot, alongside
-everything else in this feature), so a controller that already had it
-enabled from a prior session with zero sources assigned still reads `false`
-until a source is assigned or it's toggled again — the controller-side fix
-(reporting the bit in `$GN`) is the only way to close that remaining gap,
-and is still worth doing in a future controller revision.
+(`_cable_temp_commanded`, valid only once `_cable_temp_commanded_known` is
+true) and trusts it over that inference, so the flag no longer flips back on
+the very GET that follows a successful enable/disable. The cache is
+session-local — both reset on controller boot, alongside everything else in
+this feature — so a controller that already had it enabled from a prior
+session with zero sources assigned still *reads* `false` (GET) until a
+source is assigned or it's toggled again; the controller-side fix (reporting
+the bit in `$GN`) is the only way to close that specific read-side gap, and
+is still worth doing in a future controller revision.
+
+That said, `POST /config`'s equality guard for `cable_temp` — previously
+withheld entirely because of the false negative above — checks
+`isCableTempCommandKnown()` before comparing, and skips the comparison
+(sending unconditionally) whenever it's false. Without that, the exact
+scenario above would be doubly broken: a controller already on with zero
+sources assigned reads as off, an incoming `{"cable_temp": false}` would
+match that false reading, and `$FF C 0` would never actually reach the
+controller to *make* it off. The guard applies as normal once something has
+actually been commanded this session.
 
 ## Telemetry (`/status`, WebSocket, MQTT, EmonCMS)
 

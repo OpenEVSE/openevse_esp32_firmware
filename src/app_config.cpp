@@ -740,11 +740,17 @@ bool config_deserialize(DynamicJsonDocument &doc)
   {
     bool enable = doc["cable_temp"];
     // isCableTempEnabled() now trusts EvseMonitor's cached commanded value
-    // over its NOT_INSTALLED inference (see _cable_temp_commanded), so it no
-    // longer misreports "off" immediately after a successful enable with no
-    // source assigned yet - the guard is safe here like it is for its
-    // neighbours.
-    if(enable != evse.isCableTempEnabled()) {
+    // over its NOT_INSTALLED-inference fallback (see _cable_temp_commanded),
+    // so it no longer misreports "off" immediately after a successful
+    // enable with no source assigned yet - the guard is safe here like it
+    // is for its neighbours, PROVIDED that fallback hasn't actually been
+    // used: a controller that already had the feature on with zero sources
+    // assigned - from before this ESP32 last rebooted, so nothing has been
+    // commanded yet this session - would otherwise still read as (falsely)
+    // off, and an incoming {"cable_temp": false} would then match that false
+    // reading and never actually get sent. isCableTempCommandKnown() is
+    // false in exactly that situation, so send unconditionally then.
+    if(!evse.isCableTempCommandKnown() || enable != evse.isCableTempEnabled()) {
       evse.enableCableTemp(enable);
       config_modified = true;
       DBUGLN("cable_temp changed");

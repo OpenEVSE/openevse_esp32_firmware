@@ -574,6 +574,7 @@ class EvseManager : public MicroTasks::Task
     bool isCableTempKnown() { return _monitor.isCableTempKnown(); }
     bool isCableTempConfigKnown() { return _monitor.isCableTempConfigKnown(); }
     bool isCableTempEnabled() { return _monitor.isCableTempEnabled(); }
+    bool isCableTempCommandKnown() { return _monitor.isCableTempCommandKnown(); }
     bool isCableTempValid(uint8_t source) { return _monitor.isCableTempValid(source); }
     double getCableTemp(uint8_t source) { return _monitor.getCableTemp(source); }
     uint8_t getCableTempStatus(uint8_t source) { return _monitor.getCableTempStatus(source); }
