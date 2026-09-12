@@ -5,6 +5,9 @@
 #include <MicroTasks.h>
 #include <MicroTasksTask.h>
 #include <ArduinoJson.h>
+#ifndef EPOXY_DUINO
+#include <lwip/ip_addr.h>
+#endif
 
 // How long to wait for an in-flight SNTP reply before treating it as lost
 #ifndef SNTP_FETCH_TIMEOUT
@@ -25,6 +28,20 @@ class TimeManager : public MicroTasks::Task
     time_t _lastSyncTime;           // Unix timestamp of last successful sync
     char   _resolvedIp[46];         // last resolved IP, "failed", or ""
     bool   _syncRequested;          // set by checkNow(); shows "connecting" before fetch starts
+
+    // The NTP host is resolved asynchronously, because the synchronous resolvers
+    // block for as long as the query takes and loop() runs under the task
+    // watchdog. dnsFoundCallback() runs on the LwIP TCP/IP thread and hands the
+    // answer to loop() through these fields.
+    char   _dnsResult[46];                 // written by dnsFoundCallback() only
+    volatile bool _dnsResultReady = false; // release/acquire flag for _dnsResult
+    unsigned long _dnsDeadline = 0;        // 0 when no lookup is outstanding
+
+    void startDnsLookup();
+    void takeDnsResult();
+#ifndef EPOXY_DUINO
+    static void dnsFoundCallback(const char *name, const ip_addr_t *ipaddr, void *arg);
+#endif
 
     unsigned long retryDelay();     // exponential back-off based on _retryCount
 
@@ -62,6 +79,8 @@ class TimeManager : public MicroTasks::Task
       _retryCount    = 0;
       _syncRequested = true;          // show "connecting" immediately in the UI
       _resolvedIp[0] = '\0';          // drop stale DNS badge
+      // Discard any answer still in flight, so it cannot land on the new badge
+      __atomic_store_n(&_dnsResultReady, false, __ATOMIC_RELAXED);
       _nextCheckTime = millis();
       MicroTask.wakeTask(this);
     }
