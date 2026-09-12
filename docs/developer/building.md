@@ -39,6 +39,7 @@ pio run -e adafruit_huzzah32
 pio run -e nodemcu-32s
 pio run -e olimex_esp32-gateway-e      # wired Ethernet
 pio run -e openevse_wifi_tft_v1        # TFT touchscreen
+pio run -e openevse_wifi_v1_rc522      # MFRC522/RC522 on SPI (instead of PN532)
 pio run -e wt32-eth01                  # Ethernet (WT32)
 pio run -e olimex_esp32-poe-iso        # Ethernet + PoE
 ```
