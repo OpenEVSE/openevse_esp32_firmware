@@ -4,13 +4,6 @@
 
 #include "mqtt.h"
 #include "app_config.h"
-#ifdef EPOXY_DUINO
-#include <netdb.h>
-#else
-#include <lwip/netdb.h>
-#include <lwip/dns.h>
-#include <lwip/tcpip.h>
-#endif
 #include "openevse.h"
 #include "divert.h"
 #include "input.h"
@@ -31,7 +24,6 @@ Mqtt::Mqtt(EvseManager &evseManager) :
   _lastRxTime(0)
 {
   _brokerIp[0]      = '\0';
-  _dnsResult[0]     = '\0';
   _brokerVersion[0] = '\0';
   _errorCategory[0] = '\0';
   _errorDetail[0]   = '\0';
@@ -136,24 +128,6 @@ unsigned long Mqtt::loop(MicroTasks::WakeReason reason) {
       _loop_timer = millis();
       checkAndPublishUpdates();
     }
-
-    // Broker IP lookup, deferred from onMqttConnect and started without blocking
-    if (_needsDnsLookup) {
-      _needsDnsLookup = false;
-      struct in_addr addr4; struct in6_addr addr6;
-      bool isIp = (inet_pton(AF_INET,  mqtt_server.c_str(), &addr4) == 1) ||
-                  (inet_pton(AF_INET6, mqtt_server.c_str(), &addr6) == 1);
-      if (isIp) {
-        strncpy(_brokerIp, mqtt_server.c_str(), sizeof(_brokerIp) - 1);
-        _brokerIp[sizeof(_brokerIp) - 1] = '\0';
-      } else if (mqtt_server.length() > 0) {
-        startDnsLookup();
-      }
-      publishBrokerIp();
-    }
-
-    // An asynchronous lookup may land on any later pass
-    takeDnsResult();
   }
 
   // Periodic status push so GUI always reflects the real connection state
@@ -226,85 +200,6 @@ void Mqtt::attemptConnection() {
   }
 }
 
-#ifndef EPOXY_DUINO
-// Runs on the LwIP TCP/IP thread, not on loopTask. Formats the answer and then
-// publishes the flag with a release store, so a loopTask that sees the flag set is
-// guaranteed to see the whole buffer.
-void Mqtt::dnsFoundCallback(const char *name, const ip_addr_t *ipaddr, void *arg)
-{
-  Mqtt *self = static_cast<Mqtt *>(arg);
-  if (nullptr != ipaddr) {
-    ipaddr_ntoa_r(ipaddr, self->_dnsResult, sizeof(self->_dnsResult));
-  } else {
-    // A null address means the query completed and the name does not resolve.
-    strncpy(self->_dnsResult, "failed", sizeof(self->_dnsResult) - 1);
-    self->_dnsResult[sizeof(self->_dnsResult) - 1] = '\0';
-  }
-  __atomic_store_n(&self->_dnsResultReady, true, __ATOMIC_RELEASE);
-}
-#endif
-
-// Starts resolving the broker hostname for the `mqtt_broker_ip` status field.
-//
-// This must not block. loop() runs on loopTask, which feeds the task watchdog, and
-// the synchronous resolvers wait out the full query: with LWIP_IPV6 enabled an
-// AF_UNSPEC getaddrinfo() asks for both A and AAAA, each up to DNS_MAX_RETRIES
-// times across every configured server, which overruns the 5 s watchdog and reboots
-// the charger. So ask LwIP for the answer and let it call back when it has one.
-void Mqtt::startDnsLookup()
-{
-#ifdef EPOXY_DUINO
-  // Host build: no LwIP resolver and no watchdog to trip, so resolve inline.
-  struct addrinfo hints = {}, *res = nullptr;
-  hints.ai_family = AF_UNSPEC;
-  if (getaddrinfo(mqtt_server.c_str(), nullptr, &hints, &res) == 0 && res) {
-    void *addr = res->ai_family == AF_INET
-      ? (void *)&((struct sockaddr_in  *)res->ai_addr)->sin_addr
-      : (void *)&((struct sockaddr_in6 *)res->ai_addr)->sin6_addr;
-    inet_ntop(res->ai_family, addr, _brokerIp, sizeof(_brokerIp) - 1);
-    freeaddrinfo(res);
-  } else {
-    strncpy(_brokerIp, "failed", sizeof(_brokerIp) - 1);
-  }
-  _brokerIp[sizeof(_brokerIp) - 1] = '\0';
-#else
-  ip_addr_t addr;
-
-  // Discard any answer still in flight from a previous connection
-  __atomic_store_n(&_dnsResultReady, false, __ATOMIC_RELAXED);
-
-  // dns_gethostbyname() is LwIP raw API, so it is only safe to call while holding
-  // the TCP/IP core lock. LwIP copies the name, so it need not outlive this call.
-  LOCK_TCPIP_CORE();
-  err_t err = dns_gethostbyname(mqtt_server.c_str(), &addr, dnsFoundCallback, this);
-  UNLOCK_TCPIP_CORE();
-
-  if (ERR_OK == err) {
-    // Already in LwIP's cache: answered here, and no callback will follow.
-    ipaddr_ntoa_r(&addr, _brokerIp, sizeof(_brokerIp));
-  } else if (ERR_INPROGRESS != err) {
-    // Could not even start the query (out of DNS table slots, no server set).
-    strncpy(_brokerIp, "failed", sizeof(_brokerIp) - 1);
-    _brokerIp[sizeof(_brokerIp) - 1] = '\0';
-  }
-  // ERR_INPROGRESS: dnsFoundCallback() will deliver it to takeDnsResult().
-#endif
-}
-
-// Picks up an answer left by dnsFoundCallback(), if one has arrived.
-void Mqtt::takeDnsResult()
-{
-#ifndef EPOXY_DUINO
-  if (!__atomic_load_n(&_dnsResultReady, __ATOMIC_ACQUIRE)) {
-    return;
-  }
-  __atomic_store_n(&_dnsResultReady, false, __ATOMIC_RELAXED);
-  strncpy(_brokerIp, _dnsResult, sizeof(_brokerIp) - 1);
-  _brokerIp[sizeof(_brokerIp) - 1] = '\0';
-  publishBrokerIp();
-#endif
-}
-
 void Mqtt::publishBrokerIp()
 {
   if ('\0' == _brokerIp[0]) {
@@ -322,15 +217,17 @@ void Mqtt::onMqttConnect() {
   _nextMqttReconnectAttempt = 0;
   _connectedSince  = time(NULL);
   _brokerVersion[0] = '\0';   // fresh — will arrive via $SYS/broker/version
-  _brokerIp[0]     = '\0';   // cleared; DNS lookup scheduled for loop() below
   _errorCategory[0] = '\0';  // clear any prior failure reason
   _errorDetail[0]   = '\0';
 
-  // Do NOT call getaddrinfo() here — this is a Mongoose callback and getaddrinfo()
-  // uses LwIP's resolver (separate cache from Mongoose's), so it can block the
-  // event loop for hundreds of milliseconds, causing the broker to drop the TCP
-  // connection. Schedule it for loop() instead.
-  _needsDnsLookup = true;
+  // Mongoose resolved the broker to open this connection, so the address is
+  // already known. Reading it back costs nothing and cannot block, where a
+  // lookup of our own would either stall this callback until the broker drops
+  // the connection or have to be deferred and handed back across threads.
+  strncpy(_brokerIp, _mqttclient.remoteAddress(), sizeof(_brokerIp) - 1);
+  _brokerIp[sizeof(_brokerIp) - 1] = '\0';
+  publishBrokerIp();
+
   MicroTask.wakeTask(this);
 
   DynamicJsonDocument doc(JSON_OBJECT_SIZE(5) + 200);
@@ -359,9 +256,16 @@ void Mqtt::onMqttConnect() {
 void Mqtt::onMqttDisconnect(int err, const char *reason) {
   DBUGLN("MQTT disconnected");
   _connecting = false;
-  // Do NOT call getaddrinfo() here — this is a Mongoose callback and will
-  // block the entire event loop, delaying the reconnect attempt by the full
-  // DNS round-trip time. DNS is handled safely in loop() after reconnect.
+
+  // Mongoose clears the peer address when a name does not resolve, so an empty
+  // one here says the failure was DNS -- no lookup of our own needed to tell
+  // "never resolved" from "resolved, but the broker would not talk to us".
+  if ('\0' == _mqttclient.remoteAddress()[0]) {
+    strncpy(_brokerIp, "failed", sizeof(_brokerIp) - 1);
+    _brokerIp[sizeof(_brokerIp) - 1] = '\0';
+    publishBrokerIp();
+  }
+
   MicroTask.wakeTask(this);
 
   // Classify the failure so the UI can show an actionable reason. The CONNACK
@@ -697,8 +601,6 @@ void Mqtt::restartConnection() {
     _mqttclient.disconnect();
   }
   _connecting = false;
-  _needsDnsLookup = false;
-  __atomic_store_n(&_dnsResultReady, false, __ATOMIC_RELAXED);
   _brokerIp[0] = '\0';
   _errorCategory[0] = '\0';   // clear stale failure reason on manual restart
   _errorDetail[0]   = '\0';

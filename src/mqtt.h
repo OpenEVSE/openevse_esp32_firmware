@@ -4,9 +4,6 @@
 #include <Arduino.h>
 #include <ArduinoJson.h>
 #include <MongooseMqttClient.h>
-#ifndef EPOXY_DUINO
-#include <lwip/ip_addr.h>
-#endif
 #include <MicroTasks.h>
 
 #include "emonesp.h"
@@ -57,20 +54,8 @@ class Mqtt : public MicroTasks::Task {
     char   _brokerVersion[96];  // payload of $SYS/broker/version, or ""
     time_t _connectedSince;     // Unix ts when last connected (0 = never)
     time_t _lastRxTime;         // Unix ts of most recent broker traffic, sent or received (0 = never)
-    bool   _needsDnsLookup = false; // set in onMqttConnect; resolve started in loop()
 
-    // Broker DNS is resolved asynchronously, because the synchronous resolvers
-    // block for as long as the query takes and loop() runs under the task
-    // watchdog. dnsFoundCallback() runs on the LwIP TCP/IP thread and hands the
-    // answer to loop() through these two fields.
-    char   _dnsResult[46];            // written by dnsFoundCallback() only
-    volatile bool _dnsResultReady = false; // release/acquire flag for _dnsResult
-    void   startDnsLookup();
-    void   takeDnsResult();
     void   publishBrokerIp();
-#ifndef EPOXY_DUINO
-    static void dnsFoundCallback(const char *name, const ip_addr_t *ipaddr, void *arg);
-#endif
     unsigned long _lastStatusPush = 0; // millis() of last periodic status WebSocket push
 
     // Last failure cause, for troubleshooting in the UI

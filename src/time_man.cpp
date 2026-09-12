@@ -4,13 +4,6 @@
 
 #include <Arduino.h>
 #include <MongooseCore.h>
-#ifdef EPOXY_DUINO
-#include <netdb.h>
-#else
-#include <lwip/netdb.h>
-#include <lwip/dns.h>
-#include <lwip/tcpip.h>
-#endif
 
 #include "debug.h"
 #include "time_man.h"
@@ -25,15 +18,6 @@
 #define TIME_POLL_TIME 8 * 60 * 60 * 1000
 //#define TIME_POLL_TIME 10 * 1000
 #endif
-
-// How often to look for an asynchronous DNS answer while one is outstanding.
-// Only used while a lookup is in flight, so it does not affect the idle rate.
-#define DNS_TAKE_POLL_TIME 250
-
-// Give up waiting for a DNS callback after this long. LwIP always calls back,
-// found or not, so this only stops a lost callback pinning loop() to the poll
-// rate for the rest of the uptime.
-#define DNS_LOOKUP_TIMEOUT (30 * 1000UL)
 
 TimeManager timeManager;
 
@@ -50,7 +34,6 @@ TimeManager::TimeManager() :
   _syncRequested(false)
 {
   _resolvedIp[0] = '\0';
-  _dnsResult[0]  = '\0';
 }
 
 unsigned long TimeManager::retryDelay()
@@ -69,96 +52,16 @@ unsigned long TimeManager::retryDelay()
   return delays[idx];
 }
 
-#ifndef EPOXY_DUINO
-// Runs on the LwIP TCP/IP thread, not on loopTask. Formats the answer and then
-// publishes the flag with a release store, so a loopTask that sees the flag set
-// is guaranteed to see the whole buffer.
-void TimeManager::dnsFoundCallback(const char *name, const ip_addr_t *ipaddr, void *arg)
+// Records the address Mongoose resolved for the NTP request, if it has one.
+// Never clears _resolvedIp: checkNow() owns clearing it, and an in-flight
+// request has no address to report yet.
+void TimeManager::takeResolvedIp()
 {
-  TimeManager *self = static_cast<TimeManager *>(arg);
-  if(nullptr != ipaddr) {
-    ipaddr_ntoa_r(ipaddr, self->_dnsResult, sizeof(self->_dnsResult));
-  } else {
-    // A null address means the query completed and the name does not resolve.
-    strncpy(self->_dnsResult, "failed", sizeof(self->_dnsResult) - 1);
-    self->_dnsResult[sizeof(self->_dnsResult) - 1] = '\0';
-  }
-  __atomic_store_n(&self->_dnsResultReady, true, __ATOMIC_RELEASE);
-}
-#endif
-
-// Starts resolving _timeHost for the status display. An answer already in
-// LwIP's cache lands in _resolvedIp before this returns; anything else arrives
-// through dnsFoundCallback() and is collected by takeDnsResult(). Never blocks.
-void TimeManager::startDnsLookup()
-{
-  if(nullptr == _timeHost) {
-    return;
-  }
-
-#ifdef EPOXY_DUINO
-  // Host build: no LwIP resolver and no watchdog to trip, so resolve inline.
-  struct addrinfo hints = {}, *res = nullptr;
-  hints.ai_family = AF_UNSPEC;
-  if(getaddrinfo(_timeHost, nullptr, &hints, &res) == 0 && res) {
-    void *addr = res->ai_family == AF_INET
-      ? (void *)&((struct sockaddr_in  *)res->ai_addr)->sin_addr
-      : (void *)&((struct sockaddr_in6 *)res->ai_addr)->sin6_addr;
-    inet_ntop(res->ai_family, addr, _resolvedIp, sizeof(_resolvedIp) - 1);
-    freeaddrinfo(res);
-  } else {
-    strncpy(_resolvedIp, "failed", sizeof(_resolvedIp) - 1);
-  }
-  _resolvedIp[sizeof(_resolvedIp) - 1] = '\0';
-#else
-  ip_addr_t addr;
-
-  // Discard any answer still in flight from an earlier attempt
-  __atomic_store_n(&_dnsResultReady, false, __ATOMIC_RELAXED);
-  _dnsDeadline = 0;
-
-  // dns_gethostbyname() is LwIP raw API, so it is only safe to call while
-  // holding the TCP/IP core lock. LwIP copies the name, so it need not outlive
-  // this call.
-  LOCK_TCPIP_CORE();
-  err_t err = dns_gethostbyname(_timeHost, &addr, dnsFoundCallback, this);
-  UNLOCK_TCPIP_CORE();
-
-  if(ERR_OK == err) {
-    // Already in LwIP's cache: answered here, and no callback will follow.
-    ipaddr_ntoa_r(&addr, _resolvedIp, sizeof(_resolvedIp));
-    DBUGF("NTP: DNS cache hit, %s is %s", _timeHost, _resolvedIp);
-  } else if(ERR_INPROGRESS == err) {
-    // dnsFoundCallback() will hand the answer to takeDnsResult()
-    _dnsDeadline = millis() + DNS_LOOKUP_TIMEOUT;
-    if(0 == _dnsDeadline) {
-      _dnsDeadline = 1;     // 0 is the "nothing outstanding" sentinel
-    }
-  } else {
-    // Could not even start the query (no DNS server set, or the table is full)
-    strncpy(_resolvedIp, "failed", sizeof(_resolvedIp) - 1);
+  const char *addr = _sntp.remoteAddress();
+  if('\0' != addr[0]) {
+    strncpy(_resolvedIp, addr, sizeof(_resolvedIp) - 1);
     _resolvedIp[sizeof(_resolvedIp) - 1] = '\0';
   }
-#endif
-}
-
-// Picks up an answer left by dnsFoundCallback(), if one has arrived.
-void TimeManager::takeDnsResult()
-{
-#ifndef EPOXY_DUINO
-  if(__atomic_load_n(&_dnsResultReady, __ATOMIC_ACQUIRE)) {
-    __atomic_store_n(&_dnsResultReady, false, __ATOMIC_RELAXED);
-    _dnsDeadline = 0;
-    strncpy(_resolvedIp, _dnsResult, sizeof(_resolvedIp) - 1);
-    _resolvedIp[sizeof(_resolvedIp) - 1] = '\0';
-    DBUGF("NTP: DNS answer for %s is %s", _timeHost ? _timeHost : "", _resolvedIp);
-  } else if(0 != _dnsDeadline && (long)(millis() - _dnsDeadline) >= 0) {
-    // LwIP always calls back, found or not, so this should not happen. Stop
-    // polling for it rather than holding loop() at the poll rate forever.
-    DBUGLN("NTP: DNS callback never arrived");
-    _dnsDeadline = 0;
-  }
-#endif
 }
 
 const char *TimeManager::getNtpStatus()
@@ -190,8 +93,6 @@ void TimeManager::setHost(const char *host)
   _timeHost = host;
   _fetchingTime = false;
   _retryCount   = 0;
-  // Discard any answer in flight for the previous host
-  __atomic_store_n(&_dnsResultReady, false, __ATOMIC_RELAXED);
   // Allow 2 s for the DNS resolver to initialise after WiFi connects before
   // firing the first request.  Update Now / mode-change use checkNow()
   // directly and bypass this delay to stay fully responsive.
@@ -242,13 +143,13 @@ void TimeManager::setup()
     // Distinguish DNS failure from other NTP errors (firewall, bad server, etc.)
     // Only show "DNS failed" badge when DNS resolution itself fails.
     //
-    // Resolve asynchronously. This handler runs because the name did not
-    // resolve, so a synchronous lookup of that same name would take the full
-    // retry path — A and AAAA, DNS_MAX_RETRIES against every configured
-    // server — and outlast the task watchdog on loopTask.
-    if(_timeHost) {
-      startDnsLookup();
-    } else {
+    // Mongoose clears the peer address when a name does not resolve, so an
+    // empty one here says the failure was DNS. Resolving the name again to
+    // find that out would take the full retry path — A and AAAA,
+    // DNS_MAX_RETRIES against every configured server — and outlast the task
+    // watchdog on loopTask.
+    takeResolvedIp();
+    if('\0' == _resolvedIp[0]) {
       strncpy(_resolvedIp, "failed", sizeof(_resolvedIp) - 1);
       _resolvedIp[sizeof(_resolvedIp) - 1] = '\0';
     }
@@ -261,9 +162,6 @@ void TimeManager::setup()
 
 unsigned long TimeManager::loop(MicroTasks::WakeReason reason)
 {
-  // An asynchronous DNS answer may have landed since the last pass
-  takeDnsResult();
-
 #ifdef ENABLE_DEBUG
   DBUG("Time manager woke: ");
   DBUGLN(WakeReason_Scheduled == reason ? "WakeReason_Scheduled" :
@@ -334,20 +232,12 @@ unsigned long TimeManager::loop(MicroTasks::WakeReason reason)
     }
     else
     {
-      // Early DNS probe: populate _resolvedIp while the SNTP reply is still
-      // pending so the UI shows DNS status without waiting for the full cycle.
-      // Mongoose usually resolved the hostname before this fires, so the query
-      // is answered from LwIP's cache — but when Mongoose's own resolve failed
-      // the cache is empty, and a synchronous lookup would then block loopTask
-      // past the task watchdog. Start it asynchronously instead.
-      if(_resolvedIp[0] == '\0' && _timeHost) {
-        startDnsLookup();
-      }
-      // Wake when the full watchdog deadline expires, or sooner to collect an
-      // outstanding DNS answer
-      unsigned long remaining = (unsigned long)(SNTP_FETCH_TIMEOUT - elapsed);
-      return (0 != _dnsDeadline && remaining > DNS_TAKE_POLL_TIME)
-        ? DNS_TAKE_POLL_TIME : remaining;
+      // Show the DNS status while the SNTP reply is still pending, without
+      // waiting for the full cycle: by now Mongoose has resolved the hostname
+      // and sent the request, so it knows the address.
+      takeResolvedIp();
+      // Wake when the full watchdog deadline expires
+      return (unsigned long)(SNTP_FETCH_TIMEOUT - elapsed);
     }
   }
 
@@ -376,22 +266,19 @@ unsigned long TimeManager::loop(MicroTasks::WakeReason reason)
         _retryCount    = 0;
         _lastSyncTime  = newTime.tv_sec;   // use NTP ts directly
         _nextCheckTime = millis() + TIME_POLL_TIME;
-        // Resolve hostname → IP for status display. The sync just succeeded so
-        // the answer is in LwIP's cache and comes back from startDnsLookup()
-        // immediately; going through the same path keeps this off the blocking
-        // resolvers even if the cache entry has since expired.
-        if(_timeHost) {
-          startDnsLookup();
-        }
+        // The address the reply actually came from, which is what the status
+        // display should show — a fresh lookup of a pool hostname can return
+        // a different server than the one that answered.
+        takeResolvedIp();
         MicroTask.wakeTask(this);
       });
 
       if(started)
       {
-        // Wake in 1 s for an early DNS probe while the SNTP request is
-        // in-flight.  By then Mongoose will have resolved the hostname and
-        // sent the UDP packet, so the lookup is answered from LwIP's cache
-        // and we can show the DNS badge before the sync completes.
+        // Wake in 1 s to read back the resolved address while the SNTP
+        // request is in-flight.  By then Mongoose will have resolved the
+        // hostname and sent the UDP packet, so we can show the DNS badge
+        // before the sync completes.
         ret = 1000;
       }
       else
@@ -413,12 +300,6 @@ unsigned long TimeManager::loop(MicroTasks::WakeReason reason)
     } else {
       ret = delay > 0 ? (unsigned long)delay : 0;
     }
-  }
-
-  // While a DNS answer is outstanding, come back for it rather than sleeping
-  // out a retry back-off that can be minutes long
-  if(0 != _dnsDeadline && ret > DNS_TAKE_POLL_TIME) {
-    ret = DNS_TAKE_POLL_TIME;
   }
 
   return ret;
