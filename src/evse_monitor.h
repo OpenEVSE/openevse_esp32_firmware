@@ -245,6 +245,9 @@ class EvseMonitor : public MicroTasks::Task
     // after any successful write, not polled - it only changes when something
     // writes it.
     bool _cable_temp_cfg_known;
+    uint32_t _cable_temp_cfg_refresh;
+    uint8_t _cable_temp_cfg_responses;
+    bool _cable_temp_cfg_success;
     uint8_t  _cable_temp_pin[OPENEVSE_CABLE_TEMP_SOURCE_COUNT];
     uint32_t _cable_temp_r25[OPENEVSE_CABLE_TEMP_SOURCE_COUNT];
     uint32_t _cable_temp_beta[OPENEVSE_CABLE_TEMP_SOURCE_COUNT];

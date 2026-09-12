@@ -204,6 +204,9 @@ EvseMonitor::EvseMonitor(OpenEVSEClass &openevse) :
 #ifdef ENABLE_CABLE_TEMP
   ,_cable_temp_known(false)
   ,_cable_temp_cfg_known(false)
+  ,_cable_temp_cfg_refresh(0)
+  ,_cable_temp_cfg_responses(0)
+  ,_cable_temp_cfg_success(false)
 #endif // ENABLE_CABLE_TEMP
 {
 }
@@ -1290,22 +1293,38 @@ void EvseMonitor::readCableTempConfig()
   // $GN idx, once per source. Configuration only changes when something
   // writes it, so this is called on boot and after a successful write rather
   // than polled - four extra RAPI round trips a minute would be wasteful.
+  _cable_temp_cfg_known = false;
+  const uint32_t refresh = ++_cable_temp_cfg_refresh;
+  _cable_temp_cfg_responses = 0;
+  _cable_temp_cfg_success = true;
+
   for(uint8_t source = 0; source < OPENEVSE_CABLE_TEMP_SOURCE_COUNT; source++)
   {
-    _openevse.getCableTemperatureConfig(source, [this, source](int ret, uint8_t pin,
+    _openevse.getCableTemperatureConfig(source, [this, source, refresh](int ret, uint8_t pin,
         uint32_t r25, uint32_t beta, int32_t offset_c10, int32_t panic_c10)
     {
-      if(RAPI_RESPONSE_OK != ret) {
+      // Ignore callbacks from a superseded refresh: they must not make a
+      // newer, still-partial snapshot visible.
+      if(refresh != _cable_temp_cfg_refresh) {
         return;
       }
-      _cable_temp_cfg_known = true;
-      _cable_temp_pin[source] = pin;
-      _cable_temp_r25[source] = r25;
-      _cable_temp_beta[source] = beta;
-      _cable_temp_offset_c10[source] = offset_c10;
-      _cable_temp_panic_c10[source] = panic_c10;
-      DBUGF("cable temp cfg %u: pin=%u r25=%u beta=%u offset=%d panic=%d",
-            source, pin, r25, beta, offset_c10, panic_c10);
+
+      _cable_temp_cfg_responses++;
+      if(RAPI_RESPONSE_OK == ret) {
+        _cable_temp_pin[source] = pin;
+        _cable_temp_r25[source] = r25;
+        _cable_temp_beta[source] = beta;
+        _cable_temp_offset_c10[source] = offset_c10;
+        _cable_temp_panic_c10[source] = panic_c10;
+        DBUGF("cable temp cfg %u: pin=%u r25=%u beta=%u offset=%d panic=%d",
+              source, pin, r25, beta, offset_c10, panic_c10);
+      } else {
+        _cable_temp_cfg_success = false;
+      }
+
+      if(OPENEVSE_CABLE_TEMP_SOURCE_COUNT == _cable_temp_cfg_responses) {
+        _cable_temp_cfg_known = _cable_temp_cfg_success;
+      }
     });
   }
 }

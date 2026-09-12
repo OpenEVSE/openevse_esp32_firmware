@@ -175,12 +175,14 @@ def optimise_png(raw):
 
     image_data = b""
     keep = []
+    idat_added = False
     try:
         for chunk_type, data in _png_chunks(raw):
             if chunk_type == b"IDAT":
                 image_data += data
-            elif chunk_type == b"IEND":
-                pass
+                if not idat_added:
+                    keep.append((chunk_type, None))
+                    idat_added = True
             else:
                 keep.append((chunk_type, data))
         filtered = zlib.decompress(image_data)
@@ -196,8 +198,7 @@ def optimise_png(raw):
 
     out = b"\x89PNG\r\n\x1a\n"
     for chunk_type, data in keep:
-        out += _png_chunk(chunk_type, data)
-    out += _png_chunk(b"IDAT", best) + _png_chunk(b"IEND", b"")
+        out += _png_chunk(chunk_type, best if chunk_type == b"IDAT" else data)
 
     # Refuse to emit anything whose image data does not decompress back to
     # exactly what we were given, and never grow a file.
