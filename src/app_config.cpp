@@ -717,13 +717,17 @@ bool config_deserialize(DynamicJsonDocument &doc)
 
   if(doc.containsKey("lcd_type"))
   {
-    const char *val = doc["lcd_type"];
-    EvseMonitor::LcdType type = (val && strcmp(val, "mono") == 0) ?
-      EvseMonitor::LcdType::Mono : EvseMonitor::LcdType::RGB;
-    if(type != evse.getLcdType()) {
-      evse.setLcdType(type);
-      config_modified = true;
-      DBUGLN("lcd_type changed");
+    if(doc["lcd_type"].is<const char *>()) {
+      const char *val = doc["lcd_type"];
+      if(val && (strcmp(val, "mono") == 0 || strcmp(val, "rgb") == 0)) {
+        EvseMonitor::LcdType type = (strcmp(val, "mono") == 0) ?
+          EvseMonitor::LcdType::Mono : EvseMonitor::LcdType::RGB;
+        if(type != evse.getLcdType()) {
+          evse.setLcdType(type);
+          config_modified = true;
+          DBUGLN("lcd_type changed");
+        }
+      }
     }
   }
 
@@ -1035,6 +1039,5 @@ void config_reset()
   LittleFS.format();
   config_load_settings();
 }
-
 
 
