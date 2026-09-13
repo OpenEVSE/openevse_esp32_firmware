@@ -19,8 +19,9 @@ Live metrics from the charger, grouped into five tabs.
 - **Health** (`#/monitoring/health`) — relay contact wear as reported by the
   controller: estimated life remaining, cold opens, electrical damage, contact
   transit drift, thermal index, and stuck-relay recoveries. Blank on a
-  controller that does not report relay health; see
-  [relay health](../relay_health.md) for what each one measures.
+  controller that does not report relay health. Relay-wear
+  [notifications](notifications.md) link here rather than repeating the
+  figures; see [relay health](../relay_health.md) for what each one measures.
 
 ## Temperature sensors
 
