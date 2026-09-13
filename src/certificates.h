@@ -11,7 +11,7 @@
 class CertificateStore
 {
   public:
-    class Certificate : virtual public JsonSerialize<4096>
+    class Certificate : virtual public JsonSerialize
     {
       public:
         class Type
