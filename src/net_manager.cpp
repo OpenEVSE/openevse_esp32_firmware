@@ -232,7 +232,7 @@ void NetManagerTask::haveNetworkConnection(IPAddress myAddress, IPAddress netmas
   _macaddress = WiFi.macAddress();
 
   DEBUG.print("Connected, IP: ");
-  DEBUG.println(tmpStr);
+  DEBUG.println(_ipaddress);
 
   displayState();
 

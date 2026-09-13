@@ -24,6 +24,7 @@
 #include "lvgl_tft/fault_screen.h"
 #include "fault_text.h"
 #include "lvgl_tft/backlight.h"
+#include "notifications.h"
 
 #ifndef LCD_BACKLIGHT_PIN
 #define LCD_BACKLIGHT_PIN TFT_BL
@@ -218,6 +219,25 @@ int LcdTask::smoothedWifiPercent(int rssi)
 // line under the ring. Sized to fit the left column at 20px alongside "NN A · ".
 // EvseClient_NULL means no claim is active and the configured default applies,
 // which needs no explanation — hence "".
+// Date + clock line shared by the charge header and the standby screen.
+// 24-hour by default; tft_12h_clock switches to a 12-hour clock with AM/PM.
+static void formatPanelClock(char *buf, size_t len)
+{
+  timeval tv;
+  gettimeofday(&tv, NULL);
+  struct tm ti;
+  localtime_r(&tv.tv_sec, &ti);
+  if (config_tft_12h_clock()) {
+    int hour = ti.tm_hour % 12;
+    if (hour == 0) hour = 12;
+    snprintf(buf, len, "%04d-%02d-%02d  %d:%02d %s",
+             ti.tm_year + 1900, ti.tm_mon + 1, ti.tm_mday,
+             hour, ti.tm_min, ti.tm_hour < 12 ? "AM" : "PM");
+  } else {
+    strftime(buf, len, "%Y-%m-%d  %H:%M", &ti);
+  }
+}
+
 static const char *pilot_source_name(EvseClient client)
 {
   switch(client) {
@@ -237,6 +257,13 @@ static const char *pilot_source_name(EvseClient client)
     default:                                       return "claim";
   }
 }
+
+// Advisory line (notifications.h): the worst unmuted advisory's short text,
+// with a "+N" suffix when there are more. File-scope, not block-scope inside
+// one screen's update function, because only one LVGL screen is ever loaded
+// at a time and both the charge screen and the standby screen point their
+// notify_line at this same buffer.
+static char notify_buf[48];
 
 // Resolve the tft_theme config into the active palette. Returns true if the theme
 // actually changed (so the caller can rebuild the on-screen widgets to repaint).
@@ -477,17 +504,37 @@ unsigned long LcdTask::loop(MicroTasks::WakeReason reason)
     sd.week_kwh          = _evse->getTotalWeek();
     sd.total_kwh         = _evse->getTotalEnergy();
 
-    char ck[24];
-    timeval tv; gettimeofday(&tv, NULL);
-    struct tm ti; localtime_r(&tv.tv_sec, &ti);
-    strftime(ck, sizeof(ck), "%Y-%m-%d  %H:%M", &ti);  // match the charge screen header
+    char ck[32];
+    formatPanelClock(ck, sizeof(ck));  // match the charge screen header
     sd.clock = ck;
+    timeval tv;
 
     char ipbuf[20];
     IPAddress ip = _wifi_client ? WiFi.localIP() : WiFi.softAPIP();
     snprintf(ipbuf, sizeof(ipbuf), "%s", ip.toString().c_str());
     sd.hostname = esp_hostname.c_str();
     sd.ip = ipbuf;
+
+    // Advisory line: same rule as the charge screen, but here it replaces the
+    // address outright rather than sharing the strip with it -- see
+    // standby_screen.cpp.
+    const char *notify_id = NULL;
+    uint8_t notify_sev = 0;
+    size_t notify_count = notifications.count();
+    if(notifications.worst(notify_id, notify_sev)) {
+      if(notify_count > 1) {
+        snprintf(notify_buf, sizeof(notify_buf), LV_SYMBOL_WARNING " %s  +%u",
+                 notification_short_text(notify_id), (unsigned)(notify_count - 1));
+      } else {
+        snprintf(notify_buf, sizeof(notify_buf), LV_SYMBOL_WARNING " %s",
+                 notification_short_text(notify_id));
+      }
+      sd.notify_line = notify_buf;
+      sd.notify_active = true;
+    } else {
+      sd.notify_line = "";
+      sd.notify_active = false;
+    }
 
     standby_screen_update(sd);
     lvgl_pump();
@@ -549,12 +596,8 @@ unsigned long LcdTask::loop(MicroTasks::WakeReason reason)
   d.range             = _evse->getVehicleRange();
   d.range_miles       = config_vehicle_range_miles();
 
-  char dt[24];
-  timeval tv;
-  gettimeofday(&tv, NULL);
-  struct tm ti;
-  localtime_r(&tv.tv_sec, &ti);
-  strftime(dt, sizeof(dt), "%Y-%m-%d  %H:%M", &ti);
+  char dt[32];
+  formatPanelClock(dt, sizeof(dt));
   d.datetime = dt;
 
   // The address lives on the standby screen. Fall back to showing it here only
@@ -568,10 +611,31 @@ unsigned long LcdTask::loop(MicroTasks::WakeReason reason)
   d.show_hostip = (0 == (uint32_t)lcd_backlight_timeout);
   d.msg_line = (!_msg_cleared && ml[0]) ? ml : "";
 
+  // Advisory line: the worst one, named, with a count of the rest. The border
+  // is the "is there anything?" signal; this says what.
+  const char *notify_id = NULL;
+  uint8_t notify_sev = 0;
+  size_t notify_count = notifications.count();
+  if(notifications.worst(notify_id, notify_sev)) {
+    if(notify_count > 1) {
+      snprintf(notify_buf, sizeof(notify_buf), LV_SYMBOL_WARNING " %s  +%u",
+               notification_short_text(notify_id), (unsigned)(notify_count - 1));
+    } else {
+      snprintf(notify_buf, sizeof(notify_buf), LV_SYMBOL_WARNING " %s",
+               notification_short_text(notify_id));
+    }
+    d.notify_line = notify_buf;
+    d.notify_active = true;
+  } else {
+    d.notify_line = "";
+    d.notify_active = false;
+  }
+
   charge_screen_update(d);
   lvgl_pump();
 
   // Next snapshot on the whole second, so the elapsed-time tile doesn't skip.
+  timeval tv;
   gettimeofday(&tv, NULL);
   uint32_t to_next = DATA_INTERVAL_MS - tv.tv_usec / 1000;
   _nextDataUpdate = millis() + to_next;

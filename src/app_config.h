@@ -127,6 +127,10 @@ extern String loadsharing_role;
 extern String loadsharing_controller_host;
 extern uint32_t loadsharing_rotation_interval;
 
+// Advisory acknowledgements (internal state, not a /config setting)
+extern String notification_acks;
+extern String notification_acks_fw;
+
 //Shaper settings
 extern uint32_t current_shaper_max_pwr;
 extern uint32_t current_shaper_smoothing_time;
@@ -185,7 +189,9 @@ extern uint32_t flags;
 #define CONFIG_LCD_NETWORK_INFO     (1 << 28)
 // Inverted sense: bit SET disables the $SYS/broker/version probe. Existing
 // installs have this bit clear, so they keep probing exactly as before.
-#define CONFIG_MQTT_NO_SYS_QUERY    (1 << 29) // next free bit after CONFIG_MQTT_NO_SYS_QUERY
+#define CONFIG_MQTT_NO_SYS_QUERY    (1 << 29)
+// TFT panel clock in 12-hour form. Clear (the default) keeps the 24-hour clock.
+#define CONFIG_TFT_12H_CLOCK        (1 << 30) // next free bit after CONFIG_TFT_12H_CLOCK
 
 #define INITIAL_CONFIG_VERSION  1
 
@@ -292,6 +298,11 @@ inline bool config_lcd_network_info_enabled()
   return CONFIG_LCD_NETWORK_INFO == (flags & CONFIG_LCD_NETWORK_INFO);
 }
 
+inline bool config_tft_12h_clock()
+{
+  return CONFIG_TFT_12H_CLOCK == (flags & CONFIG_TFT_12H_CLOCK);
+}
+
 bool config_https_enabled();
 
 extern uint32_t config_version();
@@ -326,6 +337,9 @@ bool config_deserialize(DynamicJsonDocument &doc);
 void config_commit(bool factory = false);
 void config_user_commit();  // persist user config without touching factory_write_lock
 bool config_loaded_from_storage();  // false when boot found no stored config (defaults in use)
+// Persist notification_acks / notification_acks_fw. Writing those globals and
+// calling commit() is not enough - see the definition.
+void config_save_notification_acks(const String &acks, const String &fw);
 
 // Write config settings to JSON object
 bool config_serialize(String& json, bool longNames = true, bool compactOutput = false, bool hideSecrets = false);

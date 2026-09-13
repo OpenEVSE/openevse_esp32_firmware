@@ -59,6 +59,7 @@
 #include "limit.h"
 #include "diagnostics.h"
 #include "boost.h"
+#include "notifications.h"
 
 #if defined(ENABLE_PN532)
 #include "pn532.h"
@@ -256,6 +257,9 @@ void setup()
   boost.begin(evse);
   DBUGF("After boost.begin: %d", ESPAL.getFreeHeap());
 
+  notifications.begin(evse);
+  DBUGF("After notifications.begin: %d", ESPAL.getFreeHeap());
+
   lcd.begin(evse, scheduler, manual);
   DBUGF("After lcd.begin: %d", ESPAL.getFreeHeap());
 
@@ -367,7 +371,9 @@ void loop()
   diagnostics_loop();
   sd_card_loop();
   flash_migrate_loop();
+#ifdef ENABLE_OTA
   ota_loop();
+#endif
   rapiSender.loop();
 
 #ifdef HEAP_DEBUG_INTEGRITY

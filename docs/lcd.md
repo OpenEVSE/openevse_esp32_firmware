@@ -3,9 +3,8 @@
 This document describes how the ESP32 gateway drives the 2-line × 16-character
 text LCD on the OpenEVSE controller, and what is shown in each state.
 
-It applies to the character-LCD builds only. The TFT touchscreen
-(`ENABLE_SCREEN_LCD_TFT`) and LVGL (`ENABLE_SCREEN_LVGL_TFT`) variants have
-their own UI and are not covered here.
+It applies to the character-LCD builds only. The LVGL TFT variant
+(`ENABLE_SCREEN_LVGL_TFT`) has its own UI and is not covered here.
 
 ## Ownership model
 
@@ -109,6 +108,11 @@ controlled by the `lcd_network_info` config setting (boolean, default
 enabled; persisted in the config store). Disable via the config API/MQTT
 (`{"lcd_network_info": false}`) to remove them from the rotation. Fault
 states show fixed two-line error text and never rotate.
+
+The TFT panel's date/time line (charge header and standby screen) is a
+24-hour clock by default. Set `tft_12h_clock` (boolean, persisted in the
+config store; also on the web UI Display page) to show a 12-hour clock with
+AM/PM instead.
 
 Divert-related entries:
 

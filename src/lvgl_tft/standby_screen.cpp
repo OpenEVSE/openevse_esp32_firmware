@@ -53,6 +53,17 @@ static lv_obj_t *chip_wifi    = nullptr;
 static lv_obj_t *hostip_lbl   = nullptr;
 static lv_obj_t *tile_value[3] = {nullptr, nullptr, nullptr};
 
+// Last style values actually written, so an unchanged one is not written
+// again. lv_obj_set_local_style_prop() has no unchanged-value early-out: it
+// always refreshes the style and invalidates the object it is set on. For the
+// border that object is the SCREEN, so setting it every update would mark the
+// whole 480x320 panel dirty once a second - a full-frame flush, ~110 ms of
+// blocking SPI on this bus-limited display - whether or not any advisory is
+// active. -1 = not yet written, so the first update after a build always
+// writes.
+static int applied_border_width  = -1;
+static int applied_hostip_colour = -1;   // 0 = COL_WARN, 1 = COL_DIM
+
 // One stat tile: a rounded card with a dim caption and one big value. Matches
 // the charge screen's tiles so the column doesn't shift between screens.
 static void make_tile(lv_obj_t *parent, int idx, lv_coord_t y, const char *title)
@@ -113,6 +124,18 @@ void standby_screen_build()
   lv_scr_load(scr);
   lv_obj_set_style_bg_color(scr, COL_BG, 0);
   lv_obj_clear_flag(scr, LV_OBJ_FLAG_SCROLLABLE);
+
+  // Same amber perimeter as the charge screen, hidden until an advisory is
+  // active. See charge_screen.cpp for why it is amber and not red.
+  lv_obj_set_style_border_color(scr, COL_WARN, 0);
+  lv_obj_set_style_border_width(scr, 0, 0);
+  lv_obj_set_style_border_side(scr, LV_BORDER_SIDE_FULL, 0);
+  lv_obj_set_style_radius(scr, 0, 0);
+
+  // A rebuild makes a brand-new screen object carrying the build defaults, so
+  // the caches above have to forget what the previous one was showing.
+  applied_border_width = -1;
+  applied_hostip_colour = -1;
 
   // --- Top strip, line 1: clock (left) + status chips (right) ---
   clock_lbl = lv_label_create(scr);
@@ -262,9 +285,34 @@ void standby_screen_update(const StandbyScreenData &d)
   format_kwh(buf, sizeof(buf), d.total_kwh);
   lv_label_set_text(tile_value[2], buf);
 
-  snprintf(buf, sizeof(buf), "%s  " LV_SYMBOL_BULLET "  %s",
-           d.hostname ? d.hostname : "", d.ip ? d.ip : "");
-  lv_label_set_text(hostip_lbl, buf);
+  // Footer line: the worst advisory when there is one, else the address. An
+  // advisory takes the line outright rather than sharing it -- a warning
+  // outranks knowing where to point a browser -- and the address returns as
+  // soon as the advisory clears.
+  int want_hostip_colour;
+  if (d.notify_line && d.notify_line[0]) {
+    lv_label_set_text(hostip_lbl, d.notify_line);
+    want_hostip_colour = 0;
+  } else {
+    snprintf(buf, sizeof(buf), "%s  " LV_SYMBOL_BULLET "  %s",
+             d.hostname ? d.hostname : "", d.ip ? d.ip : "");
+    lv_label_set_text(hostip_lbl, buf);
+    want_hostip_colour = 1;
+  }
+  if (want_hostip_colour != applied_hostip_colour) {
+    lv_obj_set_style_text_color(hostip_lbl,
+        want_hostip_colour == 0 ? COL_WARN : COL_DIM, 0);
+    applied_hostip_colour = want_hostip_colour;
+  }
+
+  // The amber perimeter: the "is there anything wrong?" signal, legible from
+  // across the garage. Never red -- that stays reserved for the fault screen.
+  // Written only on change; see applied_border_width above for why.
+  int want_border = d.notify_active ? 4 : 0;
+  if (want_border != applied_border_width) {
+    lv_obj_set_style_border_width(standby_scr, want_border, 0);
+    applied_border_width = want_border;
+  }
 }
 
 void standby_screen_destroy()
