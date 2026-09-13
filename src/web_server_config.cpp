@@ -26,15 +26,14 @@ extern bool web_server_config_deserialise(JsonDocument &doc, bool factory);
 void
 handleConfigGet(MongooseHttpServerRequest *request, MongooseHttpServerResponseStream *response)
 {
-  // Allocated once and reused -- same reasoning as handleStatus. Measured on
-  // hardware, sustained polling of /config drove the largest allocatable block
-  // from 53,236 down to 32,756 and it did not recover, while total free heap
-  // stayed above 70KB. Safe as a static because handlers run to completion on
-  // the single task that polls Mongoose. ArduinoJson v7 grows the document on
-  // demand and clear() keeps the pool, so the reuse still pays off without a
-  // capacity to keep in step with the member count.
-  static JsonDocument doc;
-  doc.clear();
+  // Allocated fresh per request: in ArduinoJson v7, JsonDocument::clear()
+  // frees every pool (ResourceManager::clear() -> MemoryPoolList::clear()),
+  // so a static document here would not retain anything to reuse -- there's
+  // no capacity win left to chase. The earlier v6-era measurement (sustained
+  // /config polling drove the largest allocatable block from 53,236 down to
+  // 32,756 bytes on TFT hardware) should be re-taken on that hardware under
+  // v7's 1 KB pool allocation.
+  JsonDocument doc;
 
   config_serialize(doc, true, false, true);
 
