@@ -57,19 +57,19 @@ EvseProperties & EvseProperties::operator = (EvseProperties &rhs)
 
 bool EvseProperties::deserialize(JsonObject &obj)
 {
-  if(obj["state"].is<const char*>()) {
+  if(!obj["state"].isNull()) {
     obj["state"] == "clear" ? _state.None : _state.fromString(obj["state"]);
   }
 
-  if(obj["charge_current"].is<const char*>() || obj["charge_current"].is<uint32_t>()) {
+  if(!obj["charge_current"].isNull()) {
     obj["charge_current"] == "clear" ? _charge_current = UINT32_MAX :_charge_current = obj["charge_current"];
   }
 
-  if(obj["max_current"].is<const char*>() || obj["max_current"].is<uint32_t>()) {
+  if(!obj["max_current"].isNull()) {
     obj["max_current"] == "clear" ? _max_current = UINT32_MAX : _max_current = obj["max_current"];
   }
 
-  if(obj["auto_release"].is<bool>()) {
+  if(!obj["auto_release"].isNull()) {
     _auto_release = obj["auto_release"];
     _has_auto_release = true;
   }

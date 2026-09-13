@@ -125,16 +125,16 @@ bool LimitProperties::getAutoRelease() {
 
 bool LimitProperties::deserialize(JsonObject &obj)
 {
-	if(obj["type"].is<const char *>()) {
-		_type.fromString(obj["type"]);
-  	}
-	if(obj["value"].is<uint32_t>()) {
-		_value = obj["value"];
-  	}
-	if(obj["auto_release"].is<bool>()) {
-		_auto_release = obj["auto_release"];
-  	}
-	return _type > 0 && _value > 0;
+  if(!obj["type"].isNull()) {
+    _type.fromString(obj["type"]);
+    }
+  if(!obj["value"].isNull()) {
+    _value = obj["value"];
+    }
+  if(!obj["auto_release"].isNull()) {
+    _auto_release = obj["auto_release"];
+    }
+  return _type > 0 && _value > 0;
 
 };
 

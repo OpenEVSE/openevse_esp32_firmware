@@ -76,7 +76,7 @@ std::string claimState(JsonObjectConst claim)
   const char *state = claim["state"] | "";
   if (std::string(state) == "disabled") return "disabled";
   if (std::string(state) == "active") return "active";
-  if (claim.containsKey("max_current") || claim.containsKey("charge_current")) return "other";
+  if (!claim["max_current"].isNull() || !claim["charge_current"].isNull()) return "other";
   return "none";
 }
 
@@ -109,8 +109,8 @@ std::string formatClaimDetails(EvseManager &evse, std::string &aggregate_state)
     if (!first) details << " | ";
     first = false;
     details << clientName(client) << '@' << (int)(claim["priority"] | 0) << ':' << state;
-    if (claim.containsKey("charge_current")) details << " charge_current=" << (uint32_t) claim["charge_current"];
-    if (claim.containsKey("max_current")) details << " max_current=" << (uint32_t) claim["max_current"];
+    if (!claim["charge_current"].isNull()) details << " charge_current=" << (uint32_t) claim["charge_current"];
+    if (!claim["max_current"].isNull()) details << " max_current=" << (uint32_t) claim["max_current"];
   }
 
   if (!winners.isNull() && winners.size() > 0) {
