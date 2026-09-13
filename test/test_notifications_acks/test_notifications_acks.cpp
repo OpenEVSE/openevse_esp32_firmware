@@ -84,6 +84,33 @@ TEST_CASE("prune drops acks whose advisory is no longer live") {
   CHECK_FALSE(notification_acks_is_acked(acks, n, "fg", 2));
 }
 
+TEST_CASE("prune retires an ack whose token has moved, so a settings round trip cannot revive it") {
+  // Ack safety.ground_check under settings word A, change another setting
+  // (word B), then restore it (word A again). The ack must not come back.
+  NotificationAck acks[NOTIFICATION_ACK_MAX];
+  size_t n = notification_acks_decode("sg:a;", acks, NOTIFICATION_ACK_MAX);
+  REQUIRE(n == 1);
+
+  Notification live[1];
+  live[0].id = "safety.ground_check"; live[0].key = "sg";
+  live[0].category = NOTIFICATION_SAFETY; live[0].severity = NOTIFICATION_CRITICAL;
+  live[0].sticky = true;
+
+  live[0].token = 0xa;
+  n = notification_acks_prune(acks, n, live, 1);
+  CHECK(n == 1);
+  CHECK(notification_acks_is_acked(acks, n, "sg", 0xa));
+
+  live[0].token = 0xb;
+  n = notification_acks_prune(acks, n, live, 1);
+  CHECK(n == 0);
+
+  live[0].token = 0xa;
+  n = notification_acks_prune(acks, n, live, 1);
+  CHECK(n == 0);
+  CHECK_FALSE(notification_acks_is_acked(acks, n, "sg", 0xa));
+}
+
 TEST_CASE("encode stops cleanly when the buffer runs out") {
   NotificationAck acks[3] = { { "aa", 1 }, { "bb", 2 }, { "cc", 3 } };
   char buf[8];

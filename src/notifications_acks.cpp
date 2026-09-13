@@ -119,7 +119,14 @@ size_t notification_acks_prune(NotificationAck *acks, size_t count, const Notifi
   for(size_t i = 0; i < count; i++) {
     bool still_live = false;
     for(size_t j = 0; j < live_count; j++) {
-      if(0 == strcmp(acks[i].key, live[j].key)) {
+      // Key AND token: an ack whose token no longer matches is already
+      // inert, and keeping it would let it spring back to life if the
+      // token ever returned to the acked value - restore a setting, say,
+      // and a mute set under the previous settings word would silently
+      // re-apply. A settings change has to retire the ack for good.
+      if(0 == strcmp(acks[i].key, live[j].key) &&
+         acks[i].token == live[j].token)
+      {
         still_live = true;
         break;
       }

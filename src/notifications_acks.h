@@ -43,8 +43,10 @@ bool notification_acks_is_acked(const NotificationAck *acks, size_t count, const
 // count. A full store drops the request rather than evicting someone else's.
 size_t notification_acks_set(NotificationAck *acks, size_t count, size_t max, const char *key, uint32_t token);
 
-// Drop acks whose advisory is no longer live, so the blob cannot grow without
-// bound across a charger's lifetime. Returns the new count.
+// Drop acks whose advisory is no longer live, or whose token no longer matches
+// the live advisory's, so the blob cannot grow without bound across a charger's
+// lifetime and a stale ack can never re-apply if its token comes back round.
+// Returns the new count.
 size_t notification_acks_prune(NotificationAck *acks, size_t count, const Notification *live, size_t live_count);
 
 #endif // _OPENEVSE_NOTIFICATIONS_ACKS_H
