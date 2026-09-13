@@ -145,6 +145,29 @@ void create_rapi_json(JsonDocument &doc)
     doc["temp4"] = false;
   }
 #endif
+#ifdef ENABLE_CABLE_TEMP
+  // Cable NTC thermistor readings (controller firmware 9.4.0+). Only sources
+  // actually wired to an input are emitted - on the overwhelming majority of
+  // installations, which have no cable thermistors, this adds nothing to the
+  // payload, and this document is also the MQTT/EmonCMS telemetry.
+  // `false` for an assigned source that isn't reading, matching temp1..temp4;
+  // /cabletemp says *why* (unplugged cable vs open vs shorted sensor).
+  if(evse.isCableTempKnown()) {
+    static const char * const cable_temp_keys[OPENEVSE_CABLE_TEMP_SOURCE_COUNT] = {
+      "cable_temp_ev1", "cable_temp_ev2", "cable_temp_in1", "cable_temp_in2"
+    };
+    for(uint8_t i = 0; i < OPENEVSE_CABLE_TEMP_SOURCE_COUNT; i++) {
+      if(!evse.isCableTempAssigned(i)) {
+        continue;
+      }
+      if(evse.isCableTempValid(i)) {
+        doc[cable_temp_keys[i]] = evse.getCableTemp(i) * TEMP_SCALE_FACTOR;
+      } else {
+        doc[cable_temp_keys[i]] = false;
+      }
+    }
+  }
+#endif // ENABLE_CABLE_TEMP
   doc["state"] = evse.getEvseState();
   doc["status"] = evse.getState().toString();
   doc["flags"] = evse.getFlags();

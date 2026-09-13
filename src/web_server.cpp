@@ -1683,6 +1683,151 @@ void handleRelayRecovery(MongooseHttpServerRequest *request) {
   });
 }
 
+#ifdef ENABLE_CABLE_TEMP
+// -------------------------------------------------------------------
+// Cable NTC thermistor monitoring ($GN/$SN via EvseManager, controller
+// firmware 9.4.0+). Four logical sources - EV1/EV2 on the EV cable, IN1/IN2
+// on the input cable - each with its own reading, thermistor parameters,
+// calibration offset and shutdown threshold.
+//
+// Lives on its own endpoint rather than in /config because the per-source
+// configuration is 20 fields and /config's document capacity is documented
+// as nearly exhausted. /config keeps only the `cable_temp` on/off flag; the
+// live readings are also in /status for telemetry consumers.
+//
+// GET  /cabletemp -> {"supported":bool,"enabled":bool,"sources":[...]}
+// POST /cabletemp <- {"source":0-3,"pin":0-2[,"r25":..,"beta":..,
+//                     "offset_c10":..,"panic_c10":..]}
+//   Omitting the calibration fields reassigns the pin only, leaving the
+//   thermistor parameters alone. Ranges are enforced by the controller,
+//   which NAKs anything outside them.
+//   n.b. assigning a source to pin 1 (PP_READ) makes the controller turn PP
+//   auto-ampacity off - the two cannot share that pin.
+// url: /cabletemp
+// -------------------------------------------------------------------
+void handleCableTemp(MongooseHttpServerRequest *request) {
+  MongooseHttpServerResponseStream *response;
+  if(false == requestPreProcess(request, response, CONTENT_TYPE_JSON)) {
+    return;
+  }
+
+  static const char * const source_names[OPENEVSE_CABLE_TEMP_SOURCE_COUNT] = {
+    "ev1", "ev2", "in1", "in2"
+  };
+
+  if(HTTP_GET == request->method())
+  {
+    // 4 source objects of 9 members each (source, name, pin, status,
+    // temperature, r25, beta, offset_c10, panic_c10), plus the two
+    // top-level flags. JSON_OBJECT_SIZE(8) below undercounts that by one
+    // member per source; the +512 slack comfortably covers it.
+    const size_t capacity = JSON_OBJECT_SIZE(3) +
+                            JSON_ARRAY_SIZE(OPENEVSE_CABLE_TEMP_SOURCE_COUNT) +
+                            OPENEVSE_CABLE_TEMP_SOURCE_COUNT * JSON_OBJECT_SIZE(8) + 512;
+    DynamicJsonDocument doc(capacity);
+
+    doc["supported"] = evse.isCableTempKnown();
+    doc["enabled"] = evse.isCableTempEnabled();
+
+    JsonArray sources = doc.createNestedArray("sources");
+    for(uint8_t i = 0; i < OPENEVSE_CABLE_TEMP_SOURCE_COUNT; i++)
+    {
+      JsonObject src = sources.createNestedObject();
+      src["source"] = i;
+      src["name"] = source_names[i];
+      src["pin"] = evse.getCableTempPin(i);
+      // 0=ok 1=not installed/unassigned 2=open circuit 3=shorted
+      src["status"] = evse.getCableTempStatus(i);
+      // Omitted rather than sent as 0 when there is no reading, so a client
+      // can't mistake "no sensor" for "0 C" - status says which it is
+      if(evse.isCableTempValid(i)) {
+        src["temperature"] = evse.getCableTemp(i);
+      }
+      if(evse.isCableTempConfigKnown()) {
+        src["r25"] = evse.getCableTempR25(i);
+        src["beta"] = evse.getCableTempBeta(i);
+        src["offset_c10"] = evse.getCableTempOffsetC10(i);
+        src["panic_c10"] = evse.getCableTempPanicC10(i);
+      }
+    }
+
+    response->setCode(200);
+    serializeJson(doc, *response);
+    request->send(response);
+    return;
+  }
+
+  if(HTTP_POST != request->method()) {
+    response->setCode(405);
+    response->print("{\"msg\":\"Method not allowed\"}");
+    request->send(response);
+    return;
+  }
+
+  MongooseString body = request->body();
+  const size_t capacity = JSON_OBJECT_SIZE(8) + 256;
+  DynamicJsonDocument doc(capacity);
+  if(deserializeJson(doc, body.c_str(), body.length())) {
+    response->setCode(400);
+    response->print("{\"msg\":\"Could not parse JSON\"}");
+    request->send(response);
+    return;
+  }
+
+  if(!doc.containsKey("source") || !doc.containsKey("pin")) {
+    response->setCode(400);
+    response->print("{\"msg\":\"source and pin are required\"}");
+    request->send(response);
+    return;
+  }
+
+  // Bounds-check here as well as in the library: these index the cached
+  // per-source arrays on the way back out, and a bad index would otherwise
+  // only be caught after the RAPI round trip.
+  int source = doc["source"] | -1;
+  int pin = doc["pin"] | -1;
+  if(source < 0 || source >= OPENEVSE_CABLE_TEMP_SOURCE_COUNT ||
+     pin < 0 || pin > OPENEVSE_CABLE_TEMP_PIN_PP2) {
+    response->setCode(400);
+    response->print("{\"msg\":\"source must be 0-3 and pin 0-2\"}");
+    request->send(response);
+    return;
+  }
+
+  auto done = [request, response](int ret) {
+    response->setCode(RAPI_RESPONSE_OK == ret ? 200 : 500);
+    response->print(RAPI_RESPONSE_OK == ret ? "{\"msg\":\"done\"}" : "{\"msg\":\"error\"}");
+    request->send(response);
+  };
+
+  // All four calibration fields together, or none of them: the controller's
+  // full-configuration form is all-or-nothing, and filling the gaps from the
+  // local cache would silently write back a stale value if the cache were
+  // cold or another client had changed it.
+  bool hasCal = doc.containsKey("r25") && doc.containsKey("beta") &&
+                doc.containsKey("offset_c10") && doc.containsKey("panic_c10");
+  bool anyCal = doc.containsKey("r25") || doc.containsKey("beta") ||
+                doc.containsKey("offset_c10") || doc.containsKey("panic_c10");
+
+  if(anyCal && !hasCal) {
+    response->setCode(400);
+    response->print("{\"msg\":\"r25, beta, offset_c10 and panic_c10 must be set together\"}");
+    request->send(response);
+    return;
+  }
+
+  if(hasCal) {
+    evse.setCableTempConfig((uint8_t)source, (uint8_t)pin,
+                            doc["r25"].as<uint32_t>(), doc["beta"].as<uint32_t>(),
+                            doc["offset_c10"].as<int32_t>(), doc["panic_c10"].as<int32_t>(),
+                            done);
+  } else {
+    evse.setCableTempPin((uint8_t)source, (uint8_t)pin, done);
+  }
+}
+
+#endif // ENABLE_CABLE_TEMP
+
 String delayTimer = "0 0 0 0";
 
 void
@@ -2033,6 +2178,9 @@ void web_server_setup()
   server.on("/rfid/users$", handleRfidUsers);
   server.on("/relay/reset$", handleRelayHealthReset);
   server.on("/relay/recovery$", handleRelayRecovery);
+#ifdef ENABLE_CABLE_TEMP
+  server.on("/cabletemp$", handleCableTemp);
+#endif // ENABLE_CABLE_TEMP
 
   server.on("/schedule/plan$", handleSchedulePlan);
   server.on("/schedule", handleSchedule);
