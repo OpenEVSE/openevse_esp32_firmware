@@ -77,7 +77,7 @@ void EventLog::begin()
   }
 }
 
-bool EventLog::log(EventType type, EvseState managerState, uint8_t evseState, uint32_t evseFlags, uint8_t pilotState, uint32_t pilot, double energy, uint32_t elapsed, double temperature, double temperatureMax, uint8_t divertMode, uint8_t shaper, const char *notification)
+bool EventLog::log(EventType type, EvseState managerState, uint8_t evseState, uint32_t evseFlags, uint8_t pilotState, uint32_t pilot, double energy, uint32_t elapsed, double temperature, double temperatureMax, uint8_t divertMode, uint8_t shaper, const String &rfidTag, const char *notification)
 {
   time_t now = time(NULL);
   struct tm timeinfo;
@@ -141,7 +141,7 @@ bool EventLog::log(EventType type, EvseState managerState, uint8_t evseState, ui
 
   if(eventFile)
   {
-    // 512, not 320: notification is a variable-length field on this same
+    // 512, not 384: notification is a variable-length field on this same
     // record (advisory ids run up to ~26 chars, e.g.
     // "wear.stuck_relay_recovery"), so the budget carries deliberate margin
     // for it rather than being sized to the fixed-width fields alone. A
@@ -165,7 +165,10 @@ bool EventLog::log(EventType type, EvseState managerState, uint8_t evseState, ui
     line["tm"] = temperatureMax;
     line["dm"] = divertMode;
     line["sh"] = shaper;
-    if(notification) {
+    if(rfidTag.length() > 0) {
+      line["rfid"] = rfidTag;
+    }
+    if(notification && notification[0]) {
       line["notification"] = notification;
     }
 
@@ -187,7 +190,7 @@ bool EventLog::log(EventType type, EvseState managerState, uint8_t evseState, ui
   return false;
 }
 
-void EventLog::enumerate(uint32_t index, std::function<void(String time, EventType type, const String &logEntry, EvseState managerState, uint8_t evseState, uint32_t evseFlags, uint8_t pilotState, uint16_t changed, uint32_t pilot, double energy, uint32_t elapsed, double temperature, double temperatureMax, uint8_t divertMode, uint8_t shaper, const char *notification)> callback)
+void EventLog::enumerate(uint32_t index, std::function<void(String time, EventType type, const String &logEntry, EvseState managerState, uint8_t evseState, uint32_t evseFlags, uint8_t pilotState, uint16_t changed, uint32_t pilot, double energy, uint32_t elapsed, double temperature, double temperatureMax, uint8_t divertMode, uint8_t shaper, const String &rfidTag, const char *notification)> callback)
 {
   String filename = filenameFromIndex(index);
   File eventFile = LittleFS.open(filename);
@@ -198,7 +201,7 @@ void EventLog::enumerate(uint32_t index, std::function<void(String time, EventTy
       String line = eventFile.readStringUntil('\n');
       if(line.length() > 0)
       {
-        // 512, not 320: matches the write side in EventLog::log() above.
+        // 512, not 384: matches the write side in EventLog::log() above.
         // Parsing this String input duplicates every key and string value
         // into the document's own pool (unlike the write side's zero-copy
         // literals), so the notification id's variable length costs more
@@ -230,11 +233,14 @@ void EventLog::enumerate(uint32_t index, std::function<void(String time, EventTy
         double temperatureMax = json["tm"];
         uint8_t divertMode = json["dm"];
         uint8_t shaper = json["sh"];
+        // Entries written before "rfid" existed have no tag to report.
+        String rfidTag = json["rfid"] | "";
+
         // Entries written before "notification" existed (or that were never
         // a notification row) have no advisory id to report.
         const char *notification = json["notification"] | "";
 
-        callback(time, type, line, managerState, evseState, evseFlags, pilotState, changed, pilot, energy, elapsed, temperature, temperatureMax, divertMode, shaper, notification);
+        callback(time, type, line, managerState, evseState, evseFlags, pilotState, changed, pilot, energy, elapsed, temperature, temperatureMax, divertMode, shaper, rfidTag, notification);
       }
     }
     eventFile.close();

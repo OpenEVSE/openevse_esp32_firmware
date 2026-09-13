@@ -109,6 +109,34 @@ To route debug output to the main serial port instead, change
 `-DDEBUG_PORT=Serial1` to `-DDEBUG_PORT=Serial` in `platformio.ini` — note this
 interferes with RAPI communication to the controller.
 
+## Flash usage
+
+CI checks every build's flash usage against its app partition budget
+(`scripts/check_flash_size.py`), reading the same "Flash: NN.N% (used X bytes
+from Y bytes)" line PlatformIO itself prints after linking -- the same number
+PlatformIO already relies on to decide whether a build fits, so this can't
+disagree with it. A build at 95% or more of its partition emits a
+`::warning::`; a build that exceeds it fails outright. Pull requests get a
+"Flash usage" comment summarising size and % used per env, and the change
+versus the base branch's last build (`scripts/report_flash_size.py`).
+
+Note: that line is an ELF-section total and doesn't include any padding
+esptool's elf2image step adds when writing the final `firmware.bin`, so in
+principle the on-disk file could be somewhat larger than what's checked here.
+Confirming whether that gap is significant (and for which chips) needs
+inspecting the actual built artifact; see the discussion on the PR that
+introduced this script if you're investigating that.
+
+To check locally after a build:
+
+```bash
+set -o pipefail
+pio run -e openevse_wifi_v1 | tee /tmp/pio-build.log
+python scripts/check_flash_size.py --env openevse_wifi_v1 \
+  --log /tmp/pio-build.log \
+  --out /tmp/flash-size.json
+```
+
 ## Upload troubleshooting
 
 - Some boards need manual bootloader mode: hold **BOOT**, press **RESET**,

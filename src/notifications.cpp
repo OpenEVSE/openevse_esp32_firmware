@@ -211,7 +211,7 @@ unsigned long Notifications::loop(MicroTasks::WakeReason reason)
                      _evse->getPilot(), _evse->getSessionEnergy(), _evse->getSessionElapsed(),
                      _evse->getTemperature(EVSE_MONITOR_TEMP_MONITOR),
                      _evse->getTemperature(EVSE_MONITOR_TEMP_MAX),
-                     divert.isActive(), shaper.getState(), _live[i].id);
+                     divert.isActive(), shaper.getState(), "", _live[i].id);
       // Only a row that actually reached the file counts as logged. log()
       // drops entries silently in two cases that still apply here: the repeat
       // filter (its key carries no advisory id, so a second advisory logged
