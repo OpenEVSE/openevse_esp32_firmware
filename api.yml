@@ -548,6 +548,94 @@ paths:
         name: index
         in: path
         required: true
+  /logs/export:
+    get:
+      summary: Export session history as CSV
+      tags:
+        - Event Log
+      responses:
+        '200':
+          description: OK
+          content:
+            text/csv:
+              schema:
+                type: string
+      operationId: exportEventLogCsv
+      description: >-
+        Stream every stored log entry as a CSV file (Time, Type, State, Energy
+        (kWh), Elapsed (min), RFID Tag, User Name, Temperature (C)), one row
+        per event. The RFID Tag and User Name columns are blank for sessions
+        without RFID authentication.
+      parameters: []
+  /rfid/users:
+    get:
+      summary: List RFID user names
+      tags:
+        - RFID
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties:
+                  type: string
+                description: Map of RFID tag UID to the assigned user name.
+      operationId: getRfidUsers
+      description: Retrieve the UID → user name mapping used to attribute sessions in History and the CSV export.
+      parameters: []
+    post:
+      summary: Set an RFID user name
+      tags:
+        - RFID
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - rfid
+              properties:
+                rfid:
+                  type: string
+                name:
+                  type: string
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Message'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+      operationId: setRfidUser
+      description: >-
+        Assign a user name to an RFID tag UID. Sending an empty name removes
+        the mapping.
+    delete:
+      summary: Remove an RFID user name
+      tags:
+        - RFID
+      parameters:
+        - schema:
+            type: string
+          name: rfid
+          in: query
+          required: true
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Message'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+      operationId: removeRfidUser
+      description: Remove the user name mapping for an RFID tag UID.
+    parameters: []
   /restart:
     post:
       summary: restart gateway or evse modules
@@ -1352,6 +1440,12 @@ components:
           minimum: 1
           maximum: 2
           exclusiveMaximum: false
+        rfidTag:
+          description: >-
+            RFID tag UID authenticated for this session, when RFID was used.
+            Absent for entries with no RFID authentication or written before
+            this field was recorded.
+          type: string
 
     LoadSharingPeerStatus:
       type: object
@@ -1515,3 +1609,4 @@ tags:
   - name: Restart
   - name: Certificates
   - name: Load Sharing
+  - name: RFID
