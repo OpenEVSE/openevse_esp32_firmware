@@ -2,7 +2,7 @@
 
 **For:** whoever builds the web-UI side, in `OpenEVSE/openevse-gui-nightshift` (branch `RePartition`).
 
-**From:** the firmware half, complete on `feature/notifications` in `openevse_esp32_firmware` (28 commits off upstream master `af0c7649`). Code-complete, reviewed, builds on both envs, 15/15 native suites. **Not yet hardware-verified** — treat the API shapes below as authoritative (they are read from the source, not the spec), but expect the firmware branch to move if bench testing finds something.
+**From:** the firmware half, complete on `feature/notifications` in `openevse_esp32_firmware` (28 commits off upstream master `af0c7649`). Code-complete, reviewed, builds on both envs, 15/15 native suites. **Bench-validated** on an ESP32 driving an in-firmware fake controller: all six safety paths, the fault counters, the thermal rules, acknowledgement (count drops, entry stays listed and marked, `max_severity` recomputes) and an ack surviving a restart. **Not hardware-verified:** the `wear.*` rules, which need a real RELAY_HEALTH controller, and the LCD border. Treat the API shapes below as authoritative (they are read from the source, not the spec).
 
 **Read alongside:** `docs/superpowers/specs/2026-09-11-notification-advisories-design.md` in the firmware repo — §4.1, §9 and §10 are the ones that constrain your work.
 
@@ -155,7 +155,7 @@ To develop against it you'll want, in `dev/mock-plugin.js` and `dev/fixtures/`:
 
 Ask if you'd like the firmware side to supply those — it's a small job and it keeps the fixture honest against the real payloads.
 
-Real device to test against: the firmware branch flashes to any TFT unit, but as of this handoff no hardware has run it yet.
+Real device to test against: the firmware branch flashes to any TFT unit. The API and ack paths have been bench-validated (see the status at the top); the relay-wear advisories and the LCD border have not.
 
 ---
 
