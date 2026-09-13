@@ -52,6 +52,7 @@ typedef const __FlashStringHelper *fstr_t;
 #include "loadsharing_types.h"
 #include "loadsharing_peer_poller.h"
 #include "boost.h"
+#include "notifications.h"
 #include "web_auth.h"
 #include "web_auth_secret.h"
 
@@ -78,6 +79,7 @@ const char _CONTENT_TYPE_ICO[]      PROGMEM = "image/vnd.microsoft.icon";
 const char _CONTENT_TYPE_WOFF[]     PROGMEM = "font/woff";
 const char _CONTENT_TYPE_WOFF2[]    PROGMEM = "font/woff2";
 const char _CONTENT_TYPE_MANIFEST[] PROGMEM = "application/manifest+json";
+const char _CONTENT_TYPE_CSV[]      PROGMEM = "text/csv";
 
 #define RAPI_RESPONSE_BLOCKED             -300
 
@@ -85,6 +87,8 @@ void handleConfig(MongooseHttpServerRequest *request);
 void handleEvseClaimsTarget(MongooseHttpServerRequest *request);
 void handleEvseClaims(MongooseHttpServerRequest *request);
 void handleEventLogs(MongooseHttpServerRequest *request);
+void handleLogsExport(MongooseHttpServerRequest *request);
+void handleRfidUsers(MongooseHttpServerRequest *request);
 void handleCertificates(MongooseHttpServerRequest *request);
 
 void handleUpdateRequest(MongooseHttpServerRequest *request);
@@ -536,6 +540,12 @@ static String html_escape(const String &input) {
 // Build status data
 // --------------------------------------------------------------------
 
+// master fixed a real bug here (buildStatus()'s two call sites had drifted
+// capacities, silently truncating the status on connect) by defining a shared
+// STATUS_JSON_CAPACITY. Not needed after the v7 migration: both call sites
+// already use a bare JsonDocument, which grows on demand -- there's no fixed
+// capacity left for the two sites to drift against each other on.
+
 // LittleFS.totalBytes() and LittleFS.usedBytes() each run lfs_fs_size(), a
 // full traversal of every metadata pair and data block in the filesystem,
 // reading flash with the FS lock held. Arduino's wrapper discards whichever
@@ -762,6 +772,14 @@ void buildStatus(JsonDocument &doc) {
 #endif
   home_battery_add_status_fields(doc);
 
+  // Exactly two fields: both UIs need a badge without a second round trip,
+  // and nothing more belongs in a payload the HA integration already polls
+  // hard. The list lives on /notifications. severity is a name ("info" /
+  // "warning" / "critical"), matching how /notifications serialises it.
+  JsonObject notify = doc["notifications"].to<JsonObject>();
+  notify["count"] = notifications.count();
+  notify["severity"] = notification_severity_name(notifications.maxSeverity());
+
   DBUGF("/status ArduinoJson size: %dbytes", doc.size());
 }
 
@@ -810,8 +828,8 @@ handleScan(MongooseHttpServerRequest *request) {
 // and returns false when the request is a headerless GET; the caller's response
 // stream is already open (from requestPreProcess).
 // -------------------------------------------------------------------
-static bool actuatorMethodAllowed(MongooseHttpServerRequest *request,
-                                  MongooseHttpServerResponseStream *response)
+bool actuatorMethodAllowed(MongooseHttpServerRequest *request,
+                           MongooseHttpServerResponseStream *response)
 {
   if(request->method() != HTTP_GET) {
     return true;
@@ -1670,6 +1688,147 @@ void handleRelayRecovery(MongooseHttpServerRequest *request) {
   });
 }
 
+#ifdef ENABLE_CABLE_TEMP
+// -------------------------------------------------------------------
+// Cable NTC thermistor monitoring ($GN/$SN via EvseManager, controller
+// firmware 9.4.0+). Four logical sources - EV1/EV2 on the EV cable, IN1/IN2
+// on the input cable - each with its own reading, thermistor parameters,
+// calibration offset and shutdown threshold.
+//
+// Lives on its own endpoint rather than in /config because the per-source
+// configuration is 20 fields and /config's document capacity is documented
+// as nearly exhausted. /config keeps only the `cable_temp` on/off flag; the
+// live readings are also in /status for telemetry consumers.
+//
+// GET  /cabletemp -> {"supported":bool,"enabled":bool,"sources":[...]}
+// POST /cabletemp <- {"source":0-3,"pin":0-2[,"r25":..,"beta":..,
+//                     "offset_c10":..,"panic_c10":..]}
+//   Omitting the calibration fields reassigns the pin only, leaving the
+//   thermistor parameters alone. Ranges are enforced by the controller,
+//   which NAKs anything outside them.
+//   n.b. assigning a source to pin 1 (PP_READ) makes the controller turn PP
+//   auto-ampacity off - the two cannot share that pin.
+// url: /cabletemp
+// -------------------------------------------------------------------
+void handleCableTemp(MongooseHttpServerRequest *request) {
+  MongooseHttpServerResponseStream *response;
+  if(false == requestPreProcess(request, response, CONTENT_TYPE_JSON)) {
+    return;
+  }
+
+  static const char * const source_names[OPENEVSE_CABLE_TEMP_SOURCE_COUNT] = {
+    "ev1", "ev2", "in1", "in2"
+  };
+
+  if(HTTP_GET == request->method())
+  {
+    // v7's JsonDocument grows on demand -- no capacity to size for the 4
+    // source objects (source, name, pin, status, temperature, and the
+    // optional r25/beta/offset_c10/panic_c10 calibration fields) plus the
+    // two top-level flags.
+    JsonDocument doc;
+
+    doc["supported"] = evse.isCableTempKnown();
+    doc["enabled"] = evse.isCableTempEnabled();
+
+    JsonArray sources = doc["sources"].to<JsonArray>();
+    for(uint8_t i = 0; i < OPENEVSE_CABLE_TEMP_SOURCE_COUNT; i++)
+    {
+      JsonObject src = sources.add<JsonObject>();
+      src["source"] = i;
+      src["name"] = source_names[i];
+      src["pin"] = evse.getCableTempPin(i);
+      // 0=ok 1=not installed/unassigned 2=open circuit 3=shorted
+      src["status"] = evse.getCableTempStatus(i);
+      // Omitted rather than sent as 0 when there is no reading, so a client
+      // can't mistake "no sensor" for "0 C" - status says which it is
+      if(evse.isCableTempValid(i)) {
+        src["temperature"] = evse.getCableTemp(i);
+      }
+      if(evse.isCableTempConfigKnown()) {
+        src["r25"] = evse.getCableTempR25(i);
+        src["beta"] = evse.getCableTempBeta(i);
+        src["offset_c10"] = evse.getCableTempOffsetC10(i);
+        src["panic_c10"] = evse.getCableTempPanicC10(i);
+      }
+    }
+
+    response->setCode(200);
+    serializeJson(doc, *response);
+    request->send(response);
+    return;
+  }
+
+  if(HTTP_POST != request->method()) {
+    response->setCode(405);
+    response->print("{\"msg\":\"Method not allowed\"}");
+    request->send(response);
+    return;
+  }
+
+  MongooseString body = request->body();
+  JsonDocument doc;
+  if(deserializeJson(doc, body.c_str(), body.length())) {
+    response->setCode(400);
+    response->print("{\"msg\":\"Could not parse JSON\"}");
+    request->send(response);
+    return;
+  }
+
+  if(doc["source"].isNull() || doc["pin"].isNull()) {
+    response->setCode(400);
+    response->print("{\"msg\":\"source and pin are required\"}");
+    request->send(response);
+    return;
+  }
+
+  // Bounds-check here as well as in the library: these index the cached
+  // per-source arrays on the way back out, and a bad index would otherwise
+  // only be caught after the RAPI round trip.
+  int source = doc["source"] | -1;
+  int pin = doc["pin"] | -1;
+  if(source < 0 || source >= OPENEVSE_CABLE_TEMP_SOURCE_COUNT ||
+     pin < 0 || pin > OPENEVSE_CABLE_TEMP_PIN_PP2) {
+    response->setCode(400);
+    response->print("{\"msg\":\"source must be 0-3 and pin 0-2\"}");
+    request->send(response);
+    return;
+  }
+
+  auto done = [request, response](int ret) {
+    response->setCode(RAPI_RESPONSE_OK == ret ? 200 : 500);
+    response->print(RAPI_RESPONSE_OK == ret ? "{\"msg\":\"done\"}" : "{\"msg\":\"error\"}");
+    request->send(response);
+  };
+
+  // All four calibration fields together, or none of them: the controller's
+  // full-configuration form is all-or-nothing, and filling the gaps from the
+  // local cache would silently write back a stale value if the cache were
+  // cold or another client had changed it.
+  bool hasCal = !doc["r25"].isNull() && !doc["beta"].isNull() &&
+                !doc["offset_c10"].isNull() && !doc["panic_c10"].isNull();
+  bool anyCal = !doc["r25"].isNull() || !doc["beta"].isNull() ||
+                !doc["offset_c10"].isNull() || !doc["panic_c10"].isNull();
+
+  if(anyCal && !hasCal) {
+    response->setCode(400);
+    response->print("{\"msg\":\"r25, beta, offset_c10 and panic_c10 must be set together\"}");
+    request->send(response);
+    return;
+  }
+
+  if(hasCal) {
+    evse.setCableTempConfig((uint8_t)source, (uint8_t)pin,
+                            doc["r25"].as<uint32_t>(), doc["beta"].as<uint32_t>(),
+                            doc["offset_c10"].as<int32_t>(), doc["panic_c10"].as<int32_t>(),
+                            done);
+  } else {
+    evse.setCableTempPin((uint8_t)source, (uint8_t)pin, done);
+  }
+}
+
+#endif // ENABLE_CABLE_TEMP
+
 String delayTimer = "0 0 0 0";
 
 void
@@ -2016,8 +2175,12 @@ void web_server_setup()
   server.on("/shaper$", handleCurrentShaper);
   server.on("/emoncms/describe$", handleDescribe);
   server.on("/rfid/add$", handleAddRFID);
+  server.on("/rfid/users$", handleRfidUsers);
   server.on("/relay/reset$", handleRelayHealthReset);
   server.on("/relay/recovery$", handleRelayRecovery);
+#ifdef ENABLE_CABLE_TEMP
+  server.on("/cabletemp$", handleCableTemp);
+#endif // ENABLE_CABLE_TEMP
 
   server.on("/schedule/plan$", handleSchedulePlan);
   server.on("/schedule", handleSchedule);
@@ -2027,10 +2190,13 @@ void web_server_setup()
 
   server.on("/override$", handleOverride);
 
+  server.on("/logs/export$", handleLogsExport);
   server.on("/logs", handleEventLogs);
   server.on("/certificates", handleCertificates);
   server.on("/limit", handleLimit);
   server.on("/boost", handleBoost);
+  server.on("/notifications/ack$", handleNotificationAck);
+  server.on("/notifications$", handleNotifications);
   server.on("/emeter", handleEmeter);
   server.on("/time", handleTime);
   server.on("/mqtt$", handleMqttAction);

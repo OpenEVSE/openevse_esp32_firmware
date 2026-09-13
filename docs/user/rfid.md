@@ -7,7 +7,8 @@ parking.
 ![RFID settings](screenshots/settings-rfid-dark-desktop.png)
 
 - Enable RFID under Settings → RFID, then **scan a new card** to register it;
-  stored tags can be named so [History](history.md) shows who charged.
+  stored tags can be named (backed by the device's `/rfid/users` endpoint) so
+  [History](history.md) shows who charged.
 - With RFID enabled, the charger stays locked until a registered tag is
   presented; the session is attributed to that tag.
 - RFID authorisation acts above manual control but below OCPP in the

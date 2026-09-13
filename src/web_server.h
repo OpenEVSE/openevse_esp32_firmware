@@ -41,6 +41,9 @@ extern const char _CONTENT_TYPE_WOFF2[];
 extern const char _CONTENT_TYPE_MANIFEST[];
 #define CONTENT_TYPE_MANIFEST FPSTR(_CONTENT_TYPE_MANIFEST)
 
+extern const char _CONTENT_TYPE_CSV[];
+#define CONTENT_TYPE_CSV FPSTR(_CONTENT_TYPE_CSV)
+
 extern MongooseHttpServer server;
 
 extern void web_server_setup();
@@ -64,5 +67,14 @@ void dumpRequest(MongooseHttpServerRequest *request);
 
 void handleLogin(MongooseHttpServerRequest *request);
 void handleLogout(MongooseHttpServerRequest *request);
+
+// Shared by the destructive-actuator handlers in web_server.cpp and the
+// notifications ack handler in web_server_notifications.cpp: refuses a
+// bare cross-site GET (see the definition in web_server.cpp for why).
+bool actuatorMethodAllowed(MongooseHttpServerRequest *request,
+                           MongooseHttpServerResponseStream *response);
+
+void handleNotifications(MongooseHttpServerRequest *request);
+void handleNotificationAck(MongooseHttpServerRequest *request);
 
 #endif // _EMONESP_WEB_SERVER_H
