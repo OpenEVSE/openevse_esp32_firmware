@@ -766,6 +766,23 @@ void EvseMonitor::setServiceLevel(ServiceLevel level, std::function<void(int ret
   });
 }
 
+void EvseMonitor::refreshSettingsFlags(std::function<void(int ret)> callback)
+{
+  _openevse.getSettings([this, callback](int ret, long pilot, uint32_t flags)
+  {
+    if(RAPI_RESPONSE_OK == ret) {
+      DBUGF("pilot = %ld, flags = %x", pilot, flags);
+      _settings_flags = flags;
+    }
+
+    _settings_changed.Trigger();
+
+    if(callback){
+      callback(ret);
+    }
+  });
+}
+
 void EvseMonitor::enableFeature(uint8_t feature, bool enabled, std::function<void(int ret)> callback)
 {
   _openevse.feature(feature, enabled, [this, callback](int ret)
@@ -773,19 +790,7 @@ void EvseMonitor::enableFeature(uint8_t feature, bool enabled, std::function<voi
     if(RAPI_RESPONSE_OK == ret)
     {
       // Refresh the flags
-      _openevse.getSettings([this, callback](int ret, long pilot, uint32_t flags)
-      {
-        if(RAPI_RESPONSE_OK == ret) {
-          DBUGF("pilot = %ld, flags = %x", pilot, flags);
-          _settings_flags = flags;
-        }
-
-        _settings_changed.Trigger();
-
-        if(callback){
-          callback(ret);
-        }
-      });
+      refreshSettingsFlags(callback);
     } else if(callback){
       callback(ret);
     }
@@ -854,19 +859,7 @@ void EvseMonitor::setLcdType(LcdType type, std::function<void(int ret)> callback
     if(RAPI_RESPONSE_OK == ret)
     {
       // Refresh the flags
-      _openevse.getSettings([this, callback](int ret, long pilot, uint32_t flags)
-      {
-        if(RAPI_RESPONSE_OK == ret) {
-          DBUGF("pilot = %ld, flags = %x", pilot, flags);
-          _settings_flags = flags;
-        }
-
-        _settings_changed.Trigger();
-
-        if(callback){
-          callback(ret);
-        }
-      });
+      refreshSettingsFlags(callback);
     } else {
       // A real $NK (as opposed to a timeout/queue-full/disconnected
       // transport failure, none of which say anything about whether the

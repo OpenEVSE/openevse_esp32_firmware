@@ -304,6 +304,19 @@ class EvseMonitor : public MicroTasks::Task
     void setMqttVoltage(double volts);
     void setServiceLevel(ServiceLevel level, std::function<void(int ret)> callback = NULL);
     void configureCurrentSensorScale(long scale, long offset, std::function<void(int ret)> callback = NULL);
+    // Re-read the controller's settings flags ($GE), publish the change
+    // unconditionally, then hand the result to `callback`. Shared by
+    // enableFeature() and setLcdType(), which previously each carried a
+    // verbatim copy of it - one copy, so they cannot drift apart.
+    // Deliberately NOT used by the three other $GE readers: evseBoot()
+    // signals boot-readiness instead of triggering, setServiceLevel()
+    // chains a getCurrentCapacity() off the same response, and
+    // getSettingsFromEvse() only triggers on an actual change because it
+    // runs once a minute. Their differences are the point, not drift.
+    // n.b. `callback` is invoked with the *$GE's* result, not the result of
+    // whatever write preceded it - long-standing behaviour of this refresh,
+    // preserved verbatim by the extraction.
+    void refreshSettingsFlags(std::function<void(int ret)> callback = NULL);
     void enableFeature(uint8_t feature, bool enabled, std::function<void(int ret)> callback = NULL);
     void enableDiodeCheck(bool enabled, std::function<void(int ret)> callback = NULL);
     void enableGfiTestCheck(bool enabled, std::function<void(int ret)> callback = NULL);
