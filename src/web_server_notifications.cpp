@@ -46,6 +46,14 @@ void handleNotificationAck(MongooseHttpServerRequest *request)
   if(false == requestPreProcess(request, response, CONTENT_TYPE_TEXT)) {
     return;
   }
+  // The route is registered for any method; only POST and the guarded GET
+  // below are meant to change state.
+  if(HTTP_POST != request->method() && HTTP_GET != request->method()) {
+    response->setCode(405);
+    response->print("method not allowed");
+    request->send(response);
+    return;
+  }
   if(!actuatorMethodAllowed(request, response)) {
     return;
   }
