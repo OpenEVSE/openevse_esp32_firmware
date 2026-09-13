@@ -41,6 +41,9 @@ extern const char _CONTENT_TYPE_WOFF2[];
 extern const char _CONTENT_TYPE_MANIFEST[];
 #define CONTENT_TYPE_MANIFEST FPSTR(_CONTENT_TYPE_MANIFEST)
 
+extern const char _CONTENT_TYPE_CSV[];
+#define CONTENT_TYPE_CSV FPSTR(_CONTENT_TYPE_CSV)
+
 extern MongooseHttpServer server;
 
 extern void web_server_setup();

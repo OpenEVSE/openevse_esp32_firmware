@@ -715,6 +715,32 @@ bool config_deserialize(JsonDocument &doc)
     }
   }
 
+  // Skipped entirely once a $S0 write has actually been rejected with $NK:
+  // that means this controller build doesn't have LCD16X2+RGBLCD compiled
+  // in, getLcdType() can never change no matter what's requested, and
+  // retrying on every POST would just re-trigger a config-change
+  // notification for a write that can't take. See the comment on
+  // EvseMonitor::_lcd_type_supported.
+  if(!doc["lcd_type"].isNull() && evse.isLcdTypeSupported())
+  {
+    const char *val = doc["lcd_type"];
+    // ArduinoJson hands back nullptr for a non-string value, so this also
+    // covers {"lcd_type": true}/{"lcd_type": 0} etc. Anything other than
+    // exactly "mono" or "rgb" is ignored rather than silently treated as
+    // RGB - there's no existing precedent for a string-valued EVSE setting
+    // here to inherit a looser convention from.
+    bool isMono = val && 0 == strcmp(val, "mono");
+    bool isRgb  = val && 0 == strcmp(val, "rgb");
+    if(isMono || isRgb) {
+      EvseMonitor::LcdType type = isMono ? EvseMonitor::LcdType::Mono : EvseMonitor::LcdType::RGB;
+      if(type != evse.getLcdType()) {
+        evse.setLcdType(type);
+        config_modified = true;
+        DBUGLN("lcd_type changed");
+      }
+    }
+  }
+
   if(doc["pp_auto"].is<bool>())
   {
     bool enable = doc["pp_auto"];
@@ -734,6 +760,29 @@ bool config_deserialize(JsonDocument &doc)
       DBUGLN("zero_cross changed");
     }
   }
+
+#ifdef ENABLE_CABLE_TEMP
+  if(!doc["cable_temp"].isNull())
+  {
+    bool enable = doc["cable_temp"];
+    // isCableTempEnabled() now trusts EvseMonitor's cached commanded value
+    // over its NOT_INSTALLED-inference fallback (see _cable_temp_commanded),
+    // so it no longer misreports "off" immediately after a successful
+    // enable with no source assigned yet - the guard is safe here like it
+    // is for its neighbours, PROVIDED that fallback hasn't actually been
+    // used: a controller that already had the feature on with zero sources
+    // assigned - from before this ESP32 last rebooted, so nothing has been
+    // commanded yet this session - would otherwise still read as (falsely)
+    // off, and an incoming {"cable_temp": false} would then match that false
+    // reading and never actually get sent. isCableTempCommandKnown() is
+    // false in exactly that situation, so send unconditionally then.
+    if(!evse.isCableTempCommandKnown() || enable != evse.isCableTempEnabled()) {
+      evse.enableCableTemp(enable);
+      config_modified = true;
+      DBUGLN("cable_temp changed");
+    }
+  }
+#endif // ENABLE_CABLE_TEMP
 
   if(doc["relay_dc1"].is<bool>())
   {
@@ -898,12 +947,31 @@ bool config_serialize(JsonDocument &doc, bool longNames, bool compactOutput, boo
     }
     doc["front_button"] = evse.isFrontButtonEnabled();
     doc["boot_lock"] = evse.isBootLockEnabled();
+    // 2-line LCD backlight type. Only meaningful on controller builds with a
+    // physical character LCD (LCD16X2 + RGBLCD) - there's no RAPI capability
+    // bit for that, so support is only known once a $S0 write has actually
+    // been tried. Shown by default (nothing has been tried yet, so this is
+    // an optimistic guess, not a confirmed capability) and omitted once a
+    // write has actually come back $NK, so the GUI stops offering a control
+    // that can never take effect on this hardware.
+    if(evse.isLcdTypeSupported()) {
+      doc["lcd_type"] = (EvseMonitor::LcdType::Mono == evse.getLcdType()) ? "mono" : "rgb";
+    }
     // D9-only capability flag so clients can gate the controls below
     doc["d9_support"] = evse.isD9Supported();
     // PP auto-ampacity / zero-cross switching only exist on D9+ controllers
     if(evse.isD9Supported()) {
       doc["pp_auto"] = evse.isPPAutoAmpacityEnabled();
       doc["zero_cross"] = evse.isZeroCrossSwitchEnabled();
+#ifdef ENABLE_CABLE_TEMP
+      // Cable NTC monitoring: just the on/off state here. The per-source
+      // configuration is 20 more fields and this document's capacity is
+      // already noted as nearly exhausted (see handleConfigGet), so it lives
+      // on /cabletemp instead.
+      if(evse.isCableTempKnown()) {
+        doc["cable_temp"] = evse.isCableTempEnabled();
+      }
+#endif // ENABLE_CABLE_TEMP
       // Relay-open current-zero threshold (mA), configurable on the
       // controller via $SZ. Omitted (rather than a sentinel) when the
       // controller hasn't reported one yet.
@@ -1018,6 +1086,5 @@ void config_reset()
   LittleFS.format();
   config_load_settings();
 }
-
 
 

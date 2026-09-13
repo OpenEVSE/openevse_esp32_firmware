@@ -1,0 +1,189 @@
+#if defined(ENABLE_DEBUG) && !defined(ENABLE_DEBUG_WEB)
+#undef ENABLE_DEBUG
+#endif
+
+#include <Arduino.h>
+
+typedef const __FlashStringHelper *fstr_t;
+
+#include "emonesp.h"
+#include "web_server.h"
+#include "rfid_user.h"
+#include "input.h"
+
+// Helper function for CSV field escaping
+static String escapeCSVField(const String &field)
+{
+  String value = field;
+
+  // CSV injection (CWE-1236): a leading formula character is interpreted by
+  // spreadsheet software when the export is opened (e.g. a user name of
+  // "=HYPERLINK(...)" set via POST /rfid/users). A leading apostrophe forces
+  // Excel/Sheets to treat the cell as text.
+  if(value.length() > 0) {
+    char first = value[0];
+    if(first == '=' || first == '+' || first == '-' || first == '@') {
+      value = "'" + value;
+    }
+  }
+
+  if(value.indexOf(',') >= 0 || value.indexOf('"') >= 0 ||
+     value.indexOf('\r') >= 0 || value.indexOf('\n') >= 0) {
+    value.replace("\"", "\"\"");
+    return "\"" + value + "\"";
+  }
+  return value;
+}
+
+// -------------------------------------------------------------------
+// Handle RFID user management
+// GET /rfid/users - Get all RFID user mappings
+// POST /rfid/users - Set user name for RFID tag (body: {"rfid": "xxx", "name": "yyy"})
+// DELETE /rfid/users?rfid=xxx - Remove user name for RFID tag
+// -------------------------------------------------------------------
+void handleRfidUsers(MongooseHttpServerRequest *request)
+{
+  MongooseHttpServerResponseStream *response;
+  if(false == requestPreProcess(request, response)) {
+    return;
+  }
+
+  if(HTTP_GET == request->method())
+  {
+    DynamicJsonDocument doc(2048);
+    if(!RfidUser::load(doc) || !doc.is<JsonObject>()) {
+      // No mappings saved yet (or a corrupt file) - report an empty map
+      // rather than "null" so clients can treat this as "feature available,
+      // nothing set" instead of an error.
+      doc.to<JsonObject>();
+    }
+
+    response->setCode(200);
+    serializeJson(doc, *response);
+  }
+  else if(HTTP_POST == request->method())
+  {
+    String body = request->body().toString();
+
+    DynamicJsonDocument doc(512);
+    DeserializationError error = deserializeJson(doc, body);
+
+    if(error) {
+      response->setCode(400);
+      response->print("{\"msg\":\"Invalid JSON\"}");
+    } else {
+      String rfid = doc["rfid"] | "";
+      String name = doc["name"] | "";
+
+      if(rfid.length() == 0) {
+        response->setCode(400);
+        response->print("{\"msg\":\"RFID tag is required\"}");
+      } else {
+        if(RfidUser::setUserName(rfid, name)) {
+          response->setCode(200);
+          response->print("{\"msg\":\"User name saved\"}");
+        } else {
+          response->setCode(500);
+          response->print("{\"msg\":\"Failed to save user name\"}");
+        }
+      }
+    }
+  }
+  else if(HTTP_DELETE == request->method())
+  {
+    String rfid = request->getParam("rfid");
+
+    if(rfid.length() == 0) {
+      response->setCode(400);
+      response->print("{\"msg\":\"RFID tag parameter is required\"}");
+    } else {
+      if(RfidUser::removeUserName(rfid)) {
+        response->setCode(200);
+        response->print("{\"msg\":\"User name removed\"}");
+      } else {
+        response->setCode(500);
+        response->print("{\"msg\":\"Failed to remove user name\"}");
+      }
+    }
+  }
+  else
+  {
+    response->setCode(405);
+    response->print("{\"msg\":\"Method not allowed\"}");
+  }
+
+  request->send(response);
+}
+
+// -------------------------------------------------------------------
+// Export event logs as CSV
+// GET /logs/export - Export all logs as CSV
+// -------------------------------------------------------------------
+void handleLogsExport(MongooseHttpServerRequest *request)
+{
+  MongooseHttpServerResponseStream *response;
+  if(false == requestPreProcess(request, response, CONTENT_TYPE_CSV)) {
+    return;
+  }
+
+  if(HTTP_GET == request->method())
+  {
+    response->setCode(200);
+    response->addHeader(F("Content-Disposition"), F("attachment; filename=\"session_history.csv\""));
+
+    // CSV header
+    response->print("Time,Type,State,Energy (kWh),Elapsed (min),RFID Tag,User Name,Temperature (C)\r\n");
+
+    // Load RFID user mappings once before iterating, rather than per-entry
+    DynamicJsonDocument usersDoc(2048);
+    RfidUser::load(usersDoc);
+    JsonObject users = usersDoc.as<JsonObject>();
+
+    // Iterate through all log files
+    for(uint32_t i = eventLog.getMinIndex(); i <= eventLog.getMaxIndex(); i++)
+    {
+      eventLog.enumerate(i, [response, &users](String time, EventType type, const String &logEntry, EvseState managerState, uint8_t evseState, uint32_t evseFlags, uint8_t pilotState, uint16_t changed, uint32_t pilot, double energy, uint32_t elapsed, double temperature, double temperatureMax, uint8_t divertMode, uint8_t shaper, const String &rfidTag)
+      {
+        // Convert values
+        double energyKwh = energy / 1000.0;
+        double elapsedMin = elapsed / 60.0;
+        String userName = "";
+        if(rfidTag.length() > 0 && !users.isNull() && users.containsKey(rfidTag)) {
+          userName = users[rfidTag].as<String>();
+        }
+
+        // snprintf rather than String(double, decimals): the latter pulls in
+        // dtostrf, which nothing else in this build links in.
+        char numbers[32];
+
+        // Build CSV line
+        response->print(escapeCSVField(time));
+        response->print(",");
+        response->print(escapeCSVField(type.toString()));
+        response->print(",");
+        response->print(escapeCSVField(managerState.toString()));
+        response->print(",");
+        snprintf(numbers, sizeof(numbers), "%.3f", energyKwh);
+        response->print(numbers);
+        response->print(",");
+        snprintf(numbers, sizeof(numbers), "%.1f", elapsedMin);
+        response->print(numbers);
+        response->print(",");
+        response->print(escapeCSVField(rfidTag));
+        response->print(",");
+        response->print(escapeCSVField(userName));
+        response->print(",");
+        snprintf(numbers, sizeof(numbers), "%.1f", temperature);
+        response->print(numbers);
+        response->print("\r\n");
+      });
+    }
+  }
+  else
+  {
+    response->setCode(405);
+    response->print("{\"msg\":\"Method not allowed\"}");
+  }
+
+  request->send(response);
+}
