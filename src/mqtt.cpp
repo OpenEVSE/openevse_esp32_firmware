@@ -4,11 +4,6 @@
 
 #include "mqtt.h"
 #include "app_config.h"
-#ifdef EPOXY_DUINO
-#include <netdb.h>
-#else
-#include <lwip/netdb.h>
-#endif
 #include "openevse.h"
 #include "divert.h"
 #include "input.h"
@@ -127,41 +122,11 @@ unsigned long Mqtt::loop(MicroTasks::WakeReason reason) {
     }
   }
 
-  // If connected, perform periodic checks and safe deferred DNS lookup
+  // If connected, perform periodic checks and the deferred broker IP lookup
   if (_mqttclient.connected()) {
     if (millis() - _loop_timer > MQTT_LOOP_INTERVAL) {
       _loop_timer = millis();
       checkAndPublishUpdates();
-    }
-
-    // DNS lookup deferred from onMqttConnect (safe to block here, not in callback)
-    if (_needsDnsLookup) {
-      _needsDnsLookup = false;
-      struct in_addr addr4; struct in6_addr addr6;
-      bool isIp = (inet_pton(AF_INET,  mqtt_server.c_str(), &addr4) == 1) ||
-                  (inet_pton(AF_INET6, mqtt_server.c_str(), &addr6) == 1);
-      if (isIp) {
-        strncpy(_brokerIp, mqtt_server.c_str(), sizeof(_brokerIp) - 1);
-      } else if (mqtt_server.length() > 0) {
-        struct addrinfo hints = {}, *res = nullptr;
-        hints.ai_family = AF_UNSPEC;
-        if (getaddrinfo(mqtt_server.c_str(), nullptr, &hints, &res) == 0 && res) {
-          void *addr = res->ai_family == AF_INET
-            ? (void *)&((struct sockaddr_in  *)res->ai_addr)->sin_addr
-            : (void *)&((struct sockaddr_in6 *)res->ai_addr)->sin6_addr;
-          inet_ntop(res->ai_family, addr, _brokerIp, sizeof(_brokerIp) - 1);
-          freeaddrinfo(res);
-        } else {
-          strncpy(_brokerIp, "failed", sizeof(_brokerIp) - 1);
-        }
-        _brokerIp[sizeof(_brokerIp) - 1] = '\0';
-      }
-      if (_brokerIp[0] != '\0') {
-        // WebSocket only — this is a UI status field, not broker data
-        StaticJsonDocument<128> dns_event;
-        dns_event["mqtt_broker_ip"] = _brokerIp;
-        web_server_event(dns_event);
-      }
     }
   }
 
@@ -235,21 +200,34 @@ void Mqtt::attemptConnection() {
   }
 }
 
+void Mqtt::publishBrokerIp()
+{
+  if ('\0' == _brokerIp[0]) {
+    return;
+  }
+  // WebSocket only — this is a UI status field, not broker data
+  StaticJsonDocument<128> dns_event;
+  dns_event["mqtt_broker_ip"] = _brokerIp;
+  web_server_event(dns_event);
+}
+
 void Mqtt::onMqttConnect() {
   DBUGLN("MQTT connected");
   _connecting = false;
   _nextMqttReconnectAttempt = 0;
   _connectedSince  = time(NULL);
   _brokerVersion[0] = '\0';   // fresh — will arrive via $SYS/broker/version
-  _brokerIp[0]     = '\0';   // cleared; DNS lookup scheduled for loop() below
   _errorCategory[0] = '\0';  // clear any prior failure reason
   _errorDetail[0]   = '\0';
 
-  // Do NOT call getaddrinfo() here — this is a Mongoose callback and getaddrinfo()
-  // uses LwIP's resolver (separate cache from Mongoose's), so it can block the
-  // event loop for hundreds of milliseconds, causing the broker to drop the TCP
-  // connection. Schedule it for loop() instead.
-  _needsDnsLookup = true;
+  // Mongoose resolved the broker to open this connection, so the address is
+  // already known. Reading it back costs nothing and cannot block, where a
+  // lookup of our own would either stall this callback until the broker drops
+  // the connection or have to be deferred and handed back across threads.
+  strncpy(_brokerIp, _mqttclient.remoteAddress(), sizeof(_brokerIp) - 1);
+  _brokerIp[sizeof(_brokerIp) - 1] = '\0';
+  publishBrokerIp();
+
   MicroTask.wakeTask(this);
 
   DynamicJsonDocument doc(JSON_OBJECT_SIZE(5) + 200);
@@ -278,9 +256,16 @@ void Mqtt::onMqttConnect() {
 void Mqtt::onMqttDisconnect(int err, const char *reason) {
   DBUGLN("MQTT disconnected");
   _connecting = false;
-  // Do NOT call getaddrinfo() here — this is a Mongoose callback and will
-  // block the entire event loop, delaying the reconnect attempt by the full
-  // DNS round-trip time. DNS is handled safely in loop() after reconnect.
+
+  // Mongoose clears the peer address when a name does not resolve, so an empty
+  // one here says the failure was DNS -- no lookup of our own needed to tell
+  // "never resolved" from "resolved, but the broker would not talk to us".
+  if ('\0' == _mqttclient.remoteAddress()[0]) {
+    strncpy(_brokerIp, "failed", sizeof(_brokerIp) - 1);
+    _brokerIp[sizeof(_brokerIp) - 1] = '\0';
+    publishBrokerIp();
+  }
+
   MicroTask.wakeTask(this);
 
   // Classify the failure so the UI can show an actionable reason. The CONNACK
@@ -616,7 +601,6 @@ void Mqtt::restartConnection() {
     _mqttclient.disconnect();
   }
   _connecting = false;
-  _needsDnsLookup = false;
   _brokerIp[0] = '\0';
   _errorCategory[0] = '\0';   // clear stale failure reason on manual restart
   _errorDetail[0]   = '\0';

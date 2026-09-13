@@ -4,11 +4,6 @@
 
 #include <Arduino.h>
 #include <MongooseCore.h>
-#ifdef EPOXY_DUINO
-#include <netdb.h>
-#else
-#include <lwip/netdb.h>
-#endif
 
 #include "debug.h"
 #include "time_man.h"
@@ -55,6 +50,18 @@ unsigned long TimeManager::retryDelay()
                   ? _retryCount
                   : (uint8_t)(sizeof(delays) / sizeof(delays[0]) - 1);
   return delays[idx];
+}
+
+// Records the address Mongoose resolved for the NTP request, if it has one.
+// Never clears _resolvedIp: checkNow() owns clearing it, and an in-flight
+// request has no address to report yet.
+void TimeManager::takeResolvedIp()
+{
+  const char *addr = _sntp.remoteAddress();
+  if('\0' != addr[0]) {
+    strncpy(_resolvedIp, addr, sizeof(_resolvedIp) - 1);
+    _resolvedIp[sizeof(_resolvedIp) - 1] = '\0';
+  }
 }
 
 const char *TimeManager::getNtpStatus()
@@ -135,20 +142,14 @@ void TimeManager::setup()
     _fetchingTime = false;
     // Distinguish DNS failure from other NTP errors (firewall, bad server, etc.)
     // Only show "DNS failed" badge when DNS resolution itself fails.
-    if(_timeHost) {
-      struct addrinfo hints = {}, *res = nullptr;
-      hints.ai_family = AF_UNSPEC;
-      if(getaddrinfo(_timeHost, nullptr, &hints, &res) == 0 && res) {
-        void *addr = res->ai_family == AF_INET
-          ? (void *)&((struct sockaddr_in  *)res->ai_addr)->sin_addr
-          : (void *)&((struct sockaddr_in6 *)res->ai_addr)->sin6_addr;
-        inet_ntop(res->ai_family, addr, _resolvedIp, sizeof(_resolvedIp) - 1);
-        freeaddrinfo(res);
-      } else {
-        strncpy(_resolvedIp, "failed", sizeof(_resolvedIp) - 1);
-        _resolvedIp[sizeof(_resolvedIp) - 1] = '\0';
-      }
-    } else {
+    //
+    // Mongoose clears the peer address when a name does not resolve, so an
+    // empty one here says the failure was DNS. Resolving the name again to
+    // find that out would take the full retry path — A and AAAA,
+    // DNS_MAX_RETRIES against every configured server — and outlast the task
+    // watchdog on loopTask.
+    takeResolvedIp();
+    if('\0' == _resolvedIp[0]) {
       strncpy(_resolvedIp, "failed", sizeof(_resolvedIp) - 1);
       _resolvedIp[sizeof(_resolvedIp) - 1] = '\0';
     }
@@ -231,22 +232,10 @@ unsigned long TimeManager::loop(MicroTasks::WakeReason reason)
     }
     else
     {
-      // Early DNS probe: populate _resolvedIp while the SNTP reply is still
-      // pending so the UI shows DNS status without waiting for the full cycle.
-      // Mongoose will have resolved the hostname before this fires (the UDP
-      // packet was already sent), so getaddrinfo() hits LwIP's DNS cache.
-      if(_resolvedIp[0] == '\0' && _timeHost) {
-        struct addrinfo hints = {}, *res = nullptr;
-        hints.ai_family = AF_UNSPEC;
-        if(getaddrinfo(_timeHost, nullptr, &hints, &res) == 0 && res) {
-          void *addr = res->ai_family == AF_INET
-            ? (void *)&((struct sockaddr_in  *)res->ai_addr)->sin_addr
-            : (void *)&((struct sockaddr_in6 *)res->ai_addr)->sin6_addr;
-          inet_ntop(res->ai_family, addr, _resolvedIp, sizeof(_resolvedIp) - 1);
-          freeaddrinfo(res);
-          DBUGF("NTP: early DNS probe → %s", _resolvedIp);
-        }
-      }
+      // Show the DNS status while the SNTP reply is still pending, without
+      // waiting for the full cycle: by now Mongoose has resolved the hostname
+      // and sent the request, so it knows the address.
+      takeResolvedIp();
       // Wake when the full watchdog deadline expires
       return (unsigned long)(SNTP_FETCH_TIMEOUT - elapsed);
     }
@@ -277,27 +266,19 @@ unsigned long TimeManager::loop(MicroTasks::WakeReason reason)
         _retryCount    = 0;
         _lastSyncTime  = newTime.tv_sec;   // use NTP ts directly
         _nextCheckTime = millis() + TIME_POLL_TIME;
-        // Resolve hostname → IP for status display (DNS is cached at this point)
-        if(_timeHost) {
-          struct addrinfo hints = {}, *res = nullptr;
-          hints.ai_family = AF_UNSPEC;
-          if(getaddrinfo(_timeHost, nullptr, &hints, &res) == 0 && res) {
-            void *addr = res->ai_family == AF_INET
-              ? (void *)&((struct sockaddr_in  *)res->ai_addr)->sin_addr
-              : (void *)&((struct sockaddr_in6 *)res->ai_addr)->sin6_addr;
-            inet_ntop(res->ai_family, addr, _resolvedIp, sizeof(_resolvedIp) - 1);
-            freeaddrinfo(res);
-          }
-        }
+        // The address the reply actually came from, which is what the status
+        // display should show — a fresh lookup of a pool hostname can return
+        // a different server than the one that answered.
+        takeResolvedIp();
         MicroTask.wakeTask(this);
       });
 
       if(started)
       {
-        // Wake in 1 s for an early DNS probe while the SNTP request is
-        // in-flight.  By then Mongoose will have resolved the hostname and
-        // sent the UDP packet, so getaddrinfo() returns from LwIP's cache
-        // and we can show the DNS badge before the sync completes.
+        // Wake in 1 s to read back the resolved address while the SNTP
+        // request is in-flight.  By then Mongoose will have resolved the
+        // hostname and sent the UDP packet, so we can show the DNS badge
+        // before the sync completes.
         ret = 1000;
       }
       else
