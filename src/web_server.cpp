@@ -978,19 +978,19 @@ void handleStatusPost(MongooseHttpServerRequest *request, MongooseHttpServerResp
   {
     bool send_event = true;
 
-    if(doc["voltage"].is<double>())
+    if(!doc["voltage"].isNull())
     {
       double volts = doc["voltage"];
       DBUGF("voltage:%.1f", volts);
       evse.setVoltage(volts);
     }
-    if(doc["shaper_live_pwr"].is<double>())
+    if(!doc["shaper_live_pwr"].isNull())
     {
       double shaper_live_pwr = doc["shaper_live_pwr"];
       shaper.setLivePwr(shaper_live_pwr);
       DBUGF("shaper: live power:%dW", shaper.getLivePwr());
     }
-    if(doc["solar"].is<int>()) {
+    if(!doc["solar"].isNull()) {
       int solar = doc["solar"];
       divert.setSolar(solar);
       DBUGF("solar:%dW", solar);
@@ -1001,7 +1001,7 @@ void handleStatusPost(MongooseHttpServerRequest *request, MongooseHttpServerResp
       }
       send_event = false; // Divert sends the event so no need to send here
     }
-    else if(doc["grid_ie"].is<int>()) {
+    else if(!doc["grid_ie"].isNull()) {
       int grid_ie = doc["grid_ie"];
       divert.setGridIe(grid_ie);
       DBUGF("grid:%dW", grid_ie);
@@ -1012,25 +1012,25 @@ void handleStatusPost(MongooseHttpServerRequest *request, MongooseHttpServerResp
       }
       send_event = false; // Divert sends the event so no need to send here
     }
-    if(doc["battery_level"].is<double>() && vehiclePushAccepted()) {
+    if(!doc["battery_level"].isNull() && vehiclePushAccepted()) {
       double vehicle_soc = doc["battery_level"];
       DBUGF("vehicle_soc:%d%%", vehicle_soc);
       evse.setVehicleStateOfCharge(vehicle_soc);
       doc["vehicle_state_update"] = 0;
     }
-    if(doc["battery_range"].is<double>() && vehiclePushAccepted()) {
+    if(!doc["battery_range"].isNull() && vehiclePushAccepted()) {
       double vehicle_range = doc["battery_range"];
       DBUGF("vehicle_range:%dKM", vehicle_range);
       evse.setVehicleRange(vehicle_range);
       doc["vehicle_state_update"] = 0;
     }
-    if(doc["time_to_full_charge"].is<double>() && vehiclePushAccepted()){
+    if(!doc["time_to_full_charge"].isNull() && vehiclePushAccepted()){
       double vehicle_eta = doc["time_to_full_charge"];
       DBUGF("vehicle_eta:%d", vehicle_eta);
       evse.setVehicleEta(vehicle_eta);
       doc["vehicle_state_update"] = 0;
     }
-    if(doc["vehicle_charge_limit"].is<int>() && vehiclePushAccepted()){
+    if(!doc["vehicle_charge_limit"].isNull() && vehiclePushAccepted()){
       int vehicle_charge_limit = doc["vehicle_charge_limit"];
       DBUGF("vehicle_charge_limit:%d%%", vehicle_charge_limit);
       evse.setVehicleChargeLimit(vehicle_charge_limit);
@@ -1039,12 +1039,12 @@ void handleStatusPost(MongooseHttpServerRequest *request, MongooseHttpServerResp
     // Display-only home/powerwall battery feeds. Like the solar/grid pushes
     // above these are an explicit override (no data_src arbitration); they just
     // surface in /status and on the display.
-    if(doc["home_battery_soc"].is<int>()) {
+    if(!doc["home_battery_soc"].isNull()) {
       int soc = doc["home_battery_soc"];
       DBUGF("home_battery_soc:%d%%", soc);
       home_battery_set_soc(soc);
     }
-    if(doc["home_battery_power"].is<int>()) {
+    if(!doc["home_battery_power"].isNull()) {
       int power = doc["home_battery_power"];
       DBUGF("home_battery_power:%dW", power);
       home_battery_set_power(power);
@@ -1373,7 +1373,7 @@ void handleEmeterDelete(MongooseHttpServerRequest *request, MongooseHttpServerRe
   JsonDocument doc;
   DeserializationError err = deserializeJson(doc, body);
   if (DeserializationError::Code::Ok == err) {
-    if (doc["hard"].is<bool>() && doc["import"].is<bool>()) {
+    if (!doc["hard"].isNull() && !doc["import"].isNull()) {
       bool hardreset = (bool)doc["hard"];
       bool import = (bool)doc["import"];
       if (evse.resetEnergyMeter(hardreset,import)) {
@@ -1557,7 +1557,7 @@ handleRestart(MongooseHttpServerRequest *request) {
     DeserializationError error = deserializeJson(doc, body);
     if(!error)
     {
-      if(doc["device"].is<const char*>()){
+      if(!doc["device"].isNull()){
         if (strcmp(doc["device"], "gateway") == 0 ) {
           response->setCode(200);
           response->print("{\"msg\":\"restart gateway\"}");
@@ -2008,9 +2008,9 @@ void onWsFrame(MongooseHttpWebSocketConnection *connection, int flags, uint8_t *
     // Handle load sharing allocation from controller (member side)
     if (doc["loadsharing"].is<JsonObject>()) {
       JsonObject ls = doc["loadsharing"];
-      if (ls["target_current"].is<double>()) {
+      if (!ls["target_current"].isNull()) {
         double targetCurrent = ls["target_current"].as<double>();
-        String reason = ls["reason"].is<const char*>() ? ls["reason"].as<String>() : "allocation";
+        String reason = !ls["reason"].isNull() ? ls["reason"].as<String>() : "allocation";
 
         DBUGF("LoadSharing: Received allocation %.1fA (reason: %s)", targetCurrent, reason.c_str());
 

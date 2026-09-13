@@ -65,7 +65,7 @@ bool Scenario::loadFromFile(const std::string &path)
     duration_sec = sim["duration"] | duration_sec;
     tick_interval_sec = sim["tick_interval"] | tick_interval_sec;
     nominal_voltage = sim["nominal_voltage"] | nominal_voltage;
-    if (sim["start_time"].is<const char *>()) {
+    if (!sim["start_time"].isNull()) {
       start_epoch = parseEpoch(sim["start_time"].as<const char *>());
     }
   }
@@ -82,7 +82,7 @@ bool Scenario::loadFromFile(const std::string &path)
     group.enabled = grp["enabled"] | false;
     group.max_current = grp["max_current"] | 0.0;
     group.safety_factor = grp["safety_factor"] | 1.0;
-    if (grp["failsafe_mode"].is<const char *>()) {
+    if (!grp["failsafe_mode"].isNull()) {
       group.failsafe_mode = grp["failsafe_mode"].as<const char *>();
     }
     group.failsafe_peer_assumed_current =
@@ -190,10 +190,10 @@ bool Scenario::loadFromFile(const std::string &path)
       }
     }
 
-    if (pj["divert_mode"].is<const char *>()) {
+    if (!pj["divert_mode"].isNull()) {
       p.divert_mode = pj["divert_mode"].as<const char *>();
     }
-    if (pj["shaper_enabled"].is<bool>()) {
+    if (!pj["shaper_enabled"].isNull()) {
       p.shaper_enabled = pj["shaper_enabled"].as<bool>();
       p.shaper_enabled_set = true;
     }
@@ -203,16 +203,16 @@ bool Scenario::loadFromFile(const std::string &path)
       for (JsonObjectConst ej : events) {
         PeerEvent e;
         e.t_sec = ej["time"] | 0;
-        if (ej["online"].is<bool>()) {
+        if (!ej["online"].isNull()) {
           e.set_online = true; e.online = ej["online"].as<bool>();
         }
-        if (ej["vehicle"].is<bool>()) {
+        if (!ej["vehicle"].isNull()) {
           e.set_vehicle = true; e.vehicle = ej["vehicle"].as<bool>();
         }
-        if (ej["request_current"].is<bool>()) {
+        if (!ej["request_current"].isNull()) {
           e.set_request_current = true; e.request_current = ej["request_current"].as<bool>();
         }
-        if (ej["aux_load_kw"].is<double>()) {
+        if (!ej["aux_load_kw"].isNull()) {
           e.set_aux_load_kw = true; e.aux_load_kw = ej["aux_load_kw"].as<double>();
         }
         if (!ej["boost"].isNull()) {

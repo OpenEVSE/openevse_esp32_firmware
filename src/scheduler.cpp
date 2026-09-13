@@ -762,8 +762,8 @@ bool Scheduler::deserializeInternal(JsonObject &obj, uint32_t event_id)
     }
   }
 
-  if(obj["state"].is<const char*>() &&
-     obj["time"].is<const char*>() &&
+  if(!obj["state"].isNull() &&
+     !obj["time"].isNull() &&
      obj["days"].is<JsonArray>())
   {
     const char *time = obj["time"].as<const char *>();
@@ -786,16 +786,16 @@ bool Scheduler::deserializeInternal(JsonObject &obj, uint32_t event_id)
 
     Event *event = addEventInternal(event_id, time, days, state);
     if(event != nullptr) {
-      if(obj["feature"].is<const char *>()) {
+      if(!obj["feature"].isNull()) {
         event->setFeature(obj["feature"].as<const char *>());
       }
-      if(obj["feature_value"].is<uint32_t>()) {
+      if(!obj["feature_value"].isNull()) {
         event->setFeatureValue((uint32_t)obj["feature_value"]);
       }
-      if(obj["limit"].is<const char *>()) {
+      if(!obj["limit"].isNull()) {
         event->setLimitType(obj["limit"].as<const char *>());
       }
-      if(obj["limit_value"].is<uint32_t>()) {
+      if(!obj["limit_value"].isNull()) {
         event->setLimitValue((uint32_t)obj["limit_value"]);
       }
       return true;
