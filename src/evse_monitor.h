@@ -239,6 +239,16 @@ class EvseMonitor : public MicroTasks::Task
     char _firmware_version[32];
     char _serial[16];
 
+    // Whether $S0 (set LCD backlight type) is understood by this controller
+    // build. There's no RAPI capability query for this - LCD16X2/RGBLCD are
+    // compile-time flags on the controller with no wire-visible signal
+    // either way (see rapi.md's own "test commands for compatibility"
+    // note) - so this starts optimistic and latches false the first time a
+    // write is actually rejected with a real $NK, not a transport-level
+    // failure (timeout/queue-full/disconnected), which says nothing about
+    // whether the command itself exists.
+    bool _lcd_type_supported;
+
 #ifdef ENABLE_MCP9808
     Adafruit_MCP9808 _mcp9808;
 #endif
@@ -294,6 +304,19 @@ class EvseMonitor : public MicroTasks::Task
     void setMqttVoltage(double volts);
     void setServiceLevel(ServiceLevel level, std::function<void(int ret)> callback = NULL);
     void configureCurrentSensorScale(long scale, long offset, std::function<void(int ret)> callback = NULL);
+    // Re-read the controller's settings flags ($GE), publish the change
+    // unconditionally, then hand the result to `callback`. Shared by
+    // enableFeature() and setLcdType(), which previously each carried a
+    // verbatim copy of it - one copy, so they cannot drift apart.
+    // Deliberately NOT used by the three other $GE readers: evseBoot()
+    // signals boot-readiness instead of triggering, setServiceLevel()
+    // chains a getCurrentCapacity() off the same response, and
+    // getSettingsFromEvse() only triggers on an actual change because it
+    // runs once a minute. Their differences are the point, not drift.
+    // n.b. `callback` is invoked with the *$GE's* result, not the result of
+    // whatever write preceded it - long-standing behaviour of this refresh,
+    // preserved verbatim by the extraction.
+    void refreshSettingsFlags(std::function<void(int ret)> callback = NULL);
     void enableFeature(uint8_t feature, bool enabled, std::function<void(int ret)> callback = NULL);
     void enableDiodeCheck(bool enabled, std::function<void(int ret)> callback = NULL);
     void enableGfiTestCheck(bool enabled, std::function<void(int ret)> callback = NULL);
@@ -302,6 +325,7 @@ class EvseMonitor : public MicroTasks::Task
     void enableVentRequired(bool enabled, std::function<void(int ret)> callback = NULL);
     void enableTemperatureCheck(bool enabled, std::function<void(int ret)> callback = NULL);
     void enableOvercurrentMonitor(bool enabled, std::function<void(int ret)> callback = NULL);
+    void setLcdType(LcdType type, std::function<void(int ret)> callback = NULL);
     void setPanicTemperature(uint32_t tempC, std::function<void(int ret)> callback = NULL);
     void enableFrontButton(bool enabled, std::function<void(int ret)> callback = NULL);
     void enableBootLock(bool enabled, std::function<void(int ret)> callback = NULL);
@@ -508,6 +532,12 @@ class EvseMonitor : public MicroTasks::Task
       return (OPENEVSE_ECF_MONO_LCD == (getSettingsFlags() & OPENEVSE_ECF_MONO_LCD)) ?
         LcdType::Mono :
         LcdType::RGB;
+    }
+    // False once a $S0 write has actually been rejected with $NK this
+    // session - see the comment on _lcd_type_supported. Starts true: there
+    // is no way to know without trying.
+    bool isLcdTypeSupported() {
+      return _lcd_type_supported;
     }
     const char *getFirmwareVersion() {
       return _firmware_version;

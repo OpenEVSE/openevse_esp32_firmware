@@ -444,6 +444,12 @@ class EvseManager : public MicroTasks::Task
     EvseMonitor::LcdType getLcdType() {
       return _monitor.getLcdType();
     }
+    void setLcdType(EvseMonitor::LcdType type, std::function<void(int ret)> callback = NULL) {
+      _monitor.setLcdType(type, callback);
+    }
+    bool isLcdTypeSupported() {
+      return _monitor.isLcdTypeSupported();
+    }
     const char *getFirmwareVersion() {
       return _monitor.getFirmwareVersion();
     }
