@@ -77,7 +77,7 @@ void EventLog::begin()
   }
 }
 
-void EventLog::log(EventType type, EvseState managerState, uint8_t evseState, uint32_t evseFlags, uint8_t pilotState, uint32_t pilot, double energy, uint32_t elapsed, double temperature, double temperatureMax, uint8_t divertMode, uint8_t shaper, const String &rfidTag)
+bool EventLog::log(EventType type, EvseState managerState, uint8_t evseState, uint32_t evseFlags, uint8_t pilotState, uint32_t pilot, double energy, uint32_t elapsed, double temperature, double temperatureMax, uint8_t divertMode, uint8_t shaper, const String &rfidTag, const char *notification)
 {
   time_t now = time(NULL);
   struct tm timeinfo;
@@ -85,7 +85,7 @@ void EventLog::log(EventType type, EvseState managerState, uint8_t evseState, ui
 
   // Check if we have a reasonable time, don't want to be logging events from 1970
   if(timeinfo.tm_year < (2021 - 1900)) {
-    return;
+    return false;
   }
 
   EventLogEntryKey key = {
@@ -95,8 +95,12 @@ void EventLog::log(EventType type, EvseState managerState, uint8_t evseState, ui
     eventLogSignificantFlags(evseFlags),
     pilot,
     divertMode,
-    shaper
+    shaper,
+    ""
   };
+  if(notification) {
+    strncpy(key.notification, notification, sizeof(key.notification) - 1);
+  }
 
   // The type is part of the key, so the first entry of any new state - a fault
   // above all - is always written. Only an exact repeat of what a reader has
@@ -105,7 +109,7 @@ void EventLog::log(EventType type, EvseState managerState, uint8_t evseState, ui
   // of itself and evict the very context needed to interpret it.
   if(_repeat.isRepeat(key, now)) {
     DBUGLN("EventLog: entry repeats the previous one, not logging");
-    return;
+    return false;
   }
 
   // Why this entry is here. Zero only survives the check above once the repeat
@@ -118,7 +122,7 @@ void EventLog::log(EventType type, EvseState managerState, uint8_t evseState, ui
   // Guard against filling LittleFS — keep at least 8 KB free to prevent filesystem corruption.
   if (LittleFS.totalBytes() - LittleFS.usedBytes() < 8192) {
     DBUGLN("EventLog: Low SPIFFS space, skipping entry");
-    return;
+    return false;
   }
 
   String eventFilename = filenameFromIndex(_max_log_index);
@@ -141,7 +145,13 @@ void EventLog::log(EventType type, EvseState managerState, uint8_t evseState, ui
 
   if(eventFile)
   {
-    StaticJsonDocument<384> line;
+    // 512, not 384: notification is a variable-length field on this same
+    // record (advisory ids run up to ~26 chars, e.g.
+    // "wear.stuck_relay_recovery"), so the budget carries deliberate margin
+    // for it rather than being sized to the fixed-width fields alone. A
+    // StaticJsonDocument that runs out silently drops fields instead of
+    // erroring, so this margin is load-bearing, not decorative.
+    StaticJsonDocument<512> line;
     char output[80];
     strftime(output, 80, "%FT%TZ", &timeinfo);
 
@@ -162,6 +172,9 @@ void EventLog::log(EventType type, EvseState managerState, uint8_t evseState, ui
     if(rfidTag.length() > 0) {
       line["rfid"] = rfidTag;
     }
+    if(notification && notification[0]) {
+      line["notification"] = notification;
+    }
 
     serializeJson(line, eventFile);
     eventFile.println("");
@@ -174,10 +187,14 @@ void EventLog::log(EventType type, EvseState managerState, uint8_t evseState, ui
     eventFile.close();
 
     _repeat.recordWritten(key, now);
+    return true;
   }
+
+  // The file would not open - out of space, or a filesystem fault.
+  return false;
 }
 
-void EventLog::enumerate(uint32_t index, std::function<void(String time, EventType type, const String &logEntry, EvseState managerState, uint8_t evseState, uint32_t evseFlags, uint8_t pilotState, uint16_t changed, uint32_t pilot, double energy, uint32_t elapsed, double temperature, double temperatureMax, uint8_t divertMode, uint8_t shaper, const String &rfidTag)> callback)
+void EventLog::enumerate(uint32_t index, std::function<void(String time, EventType type, const String &logEntry, EvseState managerState, uint8_t evseState, uint32_t evseFlags, uint8_t pilotState, uint16_t changed, uint32_t pilot, double energy, uint32_t elapsed, double temperature, double temperatureMax, uint8_t divertMode, uint8_t shaper, const String &rfidTag, const char *notification)> callback)
 {
   String filename = filenameFromIndex(index);
   File eventFile = LittleFS.open(filename);
@@ -188,7 +205,13 @@ void EventLog::enumerate(uint32_t index, std::function<void(String time, EventTy
       String line = eventFile.readStringUntil('\n');
       if(line.length() > 0)
       {
-        StaticJsonDocument<384> json;
+        // 512, not 384: matches the write side in EventLog::log() above.
+        // Parsing this String input duplicates every key and string value
+        // into the document's own pool (unlike the write side's zero-copy
+        // literals), so the notification id's variable length costs more
+        // here than it does when the row is written -- the margin has to
+        // cover the read path, not just the write path.
+        StaticJsonDocument<512> json;
         DeserializationError error = deserializeJson(json, line);
         if(error)
         {
@@ -217,7 +240,11 @@ void EventLog::enumerate(uint32_t index, std::function<void(String time, EventTy
         // Entries written before "rfid" existed have no tag to report.
         String rfidTag = json["rfid"] | "";
 
-        callback(time, type, line, managerState, evseState, evseFlags, pilotState, changed, pilot, energy, elapsed, temperature, temperatureMax, divertMode, shaper, rfidTag);
+        // Entries written before "notification" existed (or that were never
+        // a notification row) have no advisory id to report.
+        const char *notification = json["notification"] | "";
+
+        callback(time, type, line, managerState, evseState, evseFlags, pilotState, changed, pilot, energy, elapsed, temperature, temperatureMax, divertMode, shaper, rfidTag, notification);
       }
     }
     eventFile.close();

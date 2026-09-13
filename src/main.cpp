@@ -55,6 +55,7 @@
 #include "limit.h"
 #include "diagnostics.h"
 #include "boost.h"
+#include "notifications.h"
 
 #if defined(ENABLE_PN532)
 #include "pn532.h"
@@ -198,6 +199,9 @@ void setup()
 
   boost.begin(evse);
   DBUGF("After boost.begin: %d", ESPAL.getFreeHeap());
+
+  notifications.begin(evse);
+  DBUGF("After notifications.begin: %d", ESPAL.getFreeHeap());
 
   lcd.begin(evse, scheduler, manual);
   DBUGF("After lcd.begin: %d", ESPAL.getFreeHeap());

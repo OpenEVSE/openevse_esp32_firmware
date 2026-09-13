@@ -127,6 +127,10 @@ extern String loadsharing_role;
 extern String loadsharing_controller_host;
 extern uint32_t loadsharing_rotation_interval;
 
+// Advisory acknowledgements (internal state, not a /config setting)
+extern String notification_acks;
+extern String notification_acks_fw;
+
 //Shaper settings
 extern uint32_t current_shaper_max_pwr;
 extern uint32_t current_shaper_smoothing_time;
@@ -332,6 +336,9 @@ bool config_deserialize(const char *json);
 bool config_deserialize(DynamicJsonDocument &doc);
 void config_commit(bool factory = false);
 void config_user_commit();  // persist user config without touching factory_write_lock
+// Persist notification_acks / notification_acks_fw. Writing those globals and
+// calling commit() is not enough - see the definition.
+void config_save_notification_acks(const String &acks, const String &fw);
 
 // Write config settings to JSON object
 bool config_serialize(String& json, bool longNames = true, bool compactOutput = false, bool hideSecrets = false);

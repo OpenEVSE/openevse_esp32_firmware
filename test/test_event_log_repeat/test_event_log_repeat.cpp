@@ -10,6 +10,8 @@
 
 #include "event_log_repeat.h"
 
+#include <string.h>
+
 // The charging row that flooded the live unit's log.
 static EventLogEntryKey charging()
 {
@@ -53,6 +55,28 @@ TEST_CASE("suppression is measured from the last entry written, not the last see
   CHECK(false == filter.isRepeat(charging(), 1000 + EVENTLOG_REPEAT_INTERVAL));
 }
 
+// Advisories are raised against whatever the EVSE happens to be doing, so two
+// of them in the same window share every state field. Only the id tells them
+// apart, and without it the second would be swallowed as a repeat of the first
+// and never reach the log at all.
+TEST_CASE("two different advisories against the same state are two entries")
+{
+  EventLogRepeatFilter filter;
+
+  EventLogEntryKey ground = charging();
+  ground.type = 4;
+  strcpy(ground.notification, "safety.ground_check");
+  filter.recordWritten(ground, 1000);
+
+  EventLogEntryKey gfci = ground;
+  strcpy(gfci.notification, "safety.gfci_check");
+  CHECK(false == filter.isRepeat(gfci, 1001));
+  CHECK((filter.changedFrom(gfci) & EVENTLOG_CHANGE_NOTIFICATION) != 0);
+
+  // The same advisory again is still a repeat.
+  CHECK(true == filter.isRepeat(ground, 1001));
+}
+
 TEST_CASE("any visible field differing makes it a new entry")
 {
   EventLogRepeatFilter filter;
@@ -65,6 +89,7 @@ TEST_CASE("any visible field differing makes it a new entry")
   SUBCASE("pilot")        { EventLogEntryKey k = charging(); k.pilot = 32;        CHECK(false == filter.isRepeat(k, 1001)); }
   SUBCASE("divertMode")   { EventLogEntryKey k = charging(); k.divertMode = 1;    CHECK(false == filter.isRepeat(k, 1001)); }
   SUBCASE("shaper")       { EventLogEntryKey k = charging(); k.shaper = 1;        CHECK(false == filter.isRepeat(k, 1001)); }
+  SUBCASE("notification") { EventLogEntryKey k = charging(); strcpy(k.notification, "safety.ground_check"); CHECK(false == filter.isRepeat(k, 1001)); }
 }
 
 TEST_CASE("a repeated fault is suppressed, but the fault itself is never lost")
