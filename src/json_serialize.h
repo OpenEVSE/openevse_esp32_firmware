@@ -4,7 +4,7 @@
 #include <Arduino.h>
 #include <ArduinoJson.h>
 
-template <size_t CAPACITY> class JsonSerialize
+class JsonSerialize
 {
   public:
     virtual bool deserialize(const char *json)
