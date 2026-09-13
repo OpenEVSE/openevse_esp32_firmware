@@ -214,9 +214,9 @@ unsigned long Notifications::loop(MicroTasks::WakeReason reason)
                      divert.isActive(), shaper.getState(), "", _live[i].id);
       // Only a row that actually reached the file counts as logged. log()
       // drops entries silently in two cases that still apply here: the repeat
-      // filter (its key carries no advisory id, so a second advisory logged
-      // inside the same 300 s window looks like a repeat of the first) and low
-      // LittleFS space. Marking the id logged regardless would mean the
+      // filter (the advisory id is part of its key, so only the same advisory
+      // logged twice inside the 300 s window is a repeat) and low LittleFS
+      // space. Marking the id logged regardless would mean the
       // advisory never got a row on this boot or any later one; leaving it
       // unmarked means the next pass tries again.
       if(written) {

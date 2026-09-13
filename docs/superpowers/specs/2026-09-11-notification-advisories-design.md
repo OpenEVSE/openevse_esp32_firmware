@@ -224,10 +224,10 @@ add a rule without revisiting every caller.
 Two further limits, both discovered in review rather than designed in:
 
 - **A row is only marked logged once it has actually been written.**
-  `EventLog::log()` builds its repeat key from the EVSE state fields, not from
-  the advisory id, and silently drops anything matching a key written inside its
-  300 s window — so two advisories raising on the same pass would see the second
-  discarded as a repeat of the first. It also drops entries when the clock has
+  `EventLog::log()` silently drops anything matching the key of the row
+  written inside its 300 s window. The advisory id is part of that key (it was
+  not, originally, and two advisories raising on the same pass saw the second
+  discarded as a repeat of the first). It also drops entries when the clock has
   not synced (likely for a raise edge seconds after boot) and when LittleFS is
   nearly full. `log()` therefore reports whether the row landed, and the guard
   records the id only then.

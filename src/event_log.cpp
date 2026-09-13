@@ -95,8 +95,12 @@ bool EventLog::log(EventType type, EvseState managerState, uint8_t evseState, ui
     eventLogSignificantFlags(evseFlags),
     pilot,
     divertMode,
-    shaper
+    shaper,
+    ""
   };
+  if(notification) {
+    strncpy(key.notification, notification, sizeof(key.notification) - 1);
+  }
 
   // The type is part of the key, so the first entry of any new state - a fault
   // above all - is always written. Only an exact repeat of what a reader has

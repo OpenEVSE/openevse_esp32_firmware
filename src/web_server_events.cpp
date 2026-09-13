@@ -73,6 +73,7 @@ void handleEventLogs(MongooseHttpServerRequest *request)
           if(changed & EVENTLOG_CHANGE_DIVERT)     { why.add("divert"); }
           if(changed & EVENTLOG_CHANGE_SHAPER)     { why.add("shaper"); }
           if(changed & EVENTLOG_CHANGE_PERIODIC)   { why.add("periodic"); }
+          if(changed & EVENTLOG_CHANGE_NOTIFICATION) { why.add("notification"); }
           event["pilot"] = pilot;
           event["energy"] = energy;
           event["elapsed"] = elapsed;
