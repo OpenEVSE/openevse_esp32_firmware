@@ -573,25 +573,25 @@ bool LoadSharingPeerPoller::mergeStatusPayload(const String& host, PeerConnectio
   }
 
   // Merge fields into status cache (delta update)
-  if (doc["amp"].is<double>()) {
+  if (!doc["amp"].isNull()) {
     conn.statusCache.setAmp(doc["amp"].as<double>());
   }
-  if (doc["voltage"].is<double>()) {
+  if (!doc["voltage"].isNull()) {
     conn.statusCache.setVoltage(doc["voltage"].as<double>());
   }
-  if (doc["pilot"].is<double>()) {
+  if (!doc["pilot"].isNull()) {
     conn.statusCache.setPilot(doc["pilot"].as<double>());
   }
-  if (doc["vehicle"].is<uint8_t>()) {
+  if (!doc["vehicle"].isNull()) {
     conn.statusCache.setVehicle(doc["vehicle"].as<uint8_t>());
   }
-  if (doc["state"].is<uint8_t>()) {
+  if (!doc["state"].isNull()) {
     conn.statusCache.setState(doc["state"].as<uint8_t>());
   }
-  if (doc["config_version"].is<uint32_t>()) {
+  if (!doc["config_version"].isNull()) {
     conn.statusCache.setConfigVersion(doc["config_version"].as<uint32_t>());
   }
-  if (doc["config_hash"].is<const char*>()) {
+  if (!doc["config_hash"].isNull()) {
     conn.statusCache.setConfigHash(doc["config_hash"].as<String>());
   }
 
@@ -832,7 +832,7 @@ void LoadSharingPeerPoller::fetchPeerConfig(const String& host) {
     // wifi_serial is ESPAL.getLongId() uppercased; the discovery/loadsharing id
     // is the lowercase form, so normalise before storing to match by id.
     bool idLearned = false;
-    if (doc["wifi_serial"].is<const char*>()) {
+    if (!doc["wifi_serial"].isNull()) {
       String deviceId = doc["wifi_serial"].as<String>();
       deviceId.toLowerCase();
       if (!deviceId.isEmpty() && peer->getId() != deviceId) {
@@ -840,14 +840,14 @@ void LoadSharingPeerPoller::fetchPeerConfig(const String& host) {
         idLearned = true;
       }
     }
-    if (peer->getName().isEmpty() && doc["hostname"].is<const char*>()) {
+    if (peer->getName().isEmpty() && !doc["hostname"].isNull()) {
       peer->setName(doc["hostname"].as<String>());
     }
     // Learn the peer's normal current limits for the allocation algorithm.
-    if (doc["min_current_hard"].is<double>()) {
+    if (!doc["min_current_hard"].isNull()) {
       peer->setMinCurrent(doc["min_current_hard"].as<double>());
     }
-    if (doc["max_current_soft"].is<double>()) {
+    if (!doc["max_current_soft"].isNull()) {
       peer->setMaxCurrent(doc["max_current_soft"].as<double>());
     }
 
@@ -856,7 +856,7 @@ void LoadSharingPeerPoller::fetchPeerConfig(const String& host) {
       it->second.identityFetched = true;
       // Record the config_version this fetch reflects so the WS_CONNECTED
       // handler only refetches when the peer's config actually changes.
-      if (doc["config_version"].is<uint32_t>()) {
+      if (!doc["config_version"].isNull()) {
         it->second.configVersionFetched = doc["config_version"].as<uint32_t>();
       } else {
         it->second.configVersionFetched = it->second.statusCache.getConfigVersion();

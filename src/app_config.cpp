@@ -601,7 +601,7 @@ bool config_deserialize(JsonDocument &doc)
   #if ENABLE_CONFIG_CHANGE_NOTIFICATION
   // Update EVSE config
   // Update the EVSE setting flags, a little low level, may move later
-  if(doc["diode_check"].is<bool>())
+  if(!doc["diode_check"].isNull())
   {
     bool enable = doc["diode_check"];
     if(enable != evse.isDiodeCheckEnabled()) {
@@ -611,7 +611,7 @@ bool config_deserialize(JsonDocument &doc)
     }
   }
 
-  if(doc["gfci_check"].is<bool>())
+  if(!doc["gfci_check"].isNull())
   {
     bool enable = doc["gfci_check"];
     if(enable != evse.isGfiTestEnabled()) {
@@ -621,7 +621,7 @@ bool config_deserialize(JsonDocument &doc)
     }
   }
 
-  if(doc["ground_check"].is<bool>())
+  if(!doc["ground_check"].isNull())
   {
     bool enable = doc["ground_check"];
     if(enable != evse.isGroundCheckEnabled()) {
@@ -631,7 +631,7 @@ bool config_deserialize(JsonDocument &doc)
     }
   }
 
-  if(doc["relay_check"].is<bool>())
+  if(!doc["relay_check"].isNull())
   {
     bool enable = doc["relay_check"];
     if(enable != evse.isStuckRelayCheckEnabled()) {
@@ -641,7 +641,7 @@ bool config_deserialize(JsonDocument &doc)
     }
   }
 
-  if(doc["vent_check"].is<bool>())
+  if(!doc["vent_check"].isNull())
   {
     bool enable = doc["vent_check"];
     if(enable != evse.isVentRequiredEnabled()) {
@@ -651,7 +651,7 @@ bool config_deserialize(JsonDocument &doc)
     }
   }
 
-  if(doc["temp_check"].is<bool>())
+  if(!doc["temp_check"].isNull())
   {
     bool enable = doc["temp_check"];
     if(enable != evse.isTemperatureCheckEnabled()) {
@@ -661,7 +661,7 @@ bool config_deserialize(JsonDocument &doc)
     }
   }
 
-  if(doc["overcurrent_monitor"].is<bool>())
+  if(!doc["overcurrent_monitor"].isNull())
   {
     bool enable = doc["overcurrent_monitor"];
     if(enable != evse.isOvercurrentMonitorEnabled()) {
@@ -671,7 +671,7 @@ bool config_deserialize(JsonDocument &doc)
     }
   }
 
-  if(doc["over_temp_shutdown"].is<uint32_t>())
+  if(!doc["over_temp_shutdown"].isNull())
   {
     uint32_t val = doc["over_temp_shutdown"];
     if(val != over_temp_shutdown || val != evse.getPanicTemperature()) {
@@ -682,7 +682,7 @@ bool config_deserialize(JsonDocument &doc)
     }
   }
 
-  if(doc["voltage"].is<uint32_t>())
+  if(!doc["voltage"].isNull())
   {
     uint32_t val = doc["voltage"];
     if(val > 0) {
@@ -695,7 +695,7 @@ bool config_deserialize(JsonDocument &doc)
     }
   }
 
-  if(doc["front_button"].is<bool>())
+  if(!doc["front_button"].isNull())
   {
     bool enable = doc["front_button"];
     if(enable != evse.isFrontButtonEnabled()) {
@@ -705,7 +705,7 @@ bool config_deserialize(JsonDocument &doc)
     }
   }
 
-  if(doc["boot_lock"].is<bool>())
+  if(!doc["boot_lock"].isNull())
   {
     bool enable = doc["boot_lock"];
     if(enable != evse.isBootLockEnabled()) {
@@ -715,7 +715,7 @@ bool config_deserialize(JsonDocument &doc)
     }
   }
 
-  if(doc["pp_auto"].is<bool>())
+  if(!doc["pp_auto"].isNull())
   {
     bool enable = doc["pp_auto"];
     if(enable != evse.isPPAutoAmpacityEnabled()) {
@@ -725,7 +725,7 @@ bool config_deserialize(JsonDocument &doc)
     }
   }
 
-  if(doc["zero_cross"].is<bool>())
+  if(!doc["zero_cross"].isNull())
   {
     bool enable = doc["zero_cross"];
     if(enable != evse.isZeroCrossSwitchEnabled()) {
@@ -735,7 +735,7 @@ bool config_deserialize(JsonDocument &doc)
     }
   }
 
-  if(doc["relay_dc1"].is<bool>())
+  if(!doc["relay_dc1"].isNull())
   {
     bool enable = doc["relay_dc1"];
     if(enable != evse.isDC1RelayEnabled()) {
@@ -745,7 +745,7 @@ bool config_deserialize(JsonDocument &doc)
     }
   }
 
-  if(doc["relay_dc2"].is<bool>())
+  if(!doc["relay_dc2"].isNull())
   {
     bool enable = doc["relay_dc2"];
     if(enable != evse.isDC2RelayEnabled()) {
@@ -755,7 +755,7 @@ bool config_deserialize(JsonDocument &doc)
     }
   }
 
-  if(doc["relay_ac"].is<bool>())
+  if(!doc["relay_ac"].isNull())
   {
     bool enable = doc["relay_ac"];
     if(enable != evse.isACRelayEnabled()) {
@@ -765,10 +765,10 @@ bool config_deserialize(JsonDocument &doc)
     }
   }
 
-  if(doc["heartbeat_interval"].is<uint32_t>() || doc["heartbeat_current"].is<uint32_t>())
+  if(!doc["heartbeat_interval"].isNull() || !doc["heartbeat_current"].isNull())
   {
-    uint32_t interval = doc["heartbeat_interval"].is<uint32_t>() ? (uint32_t)doc["heartbeat_interval"] : heartbeat_interval_cfg;
-    uint32_t current  = doc["heartbeat_current"].is<uint32_t>()  ? (uint32_t)doc["heartbeat_current"]  : heartbeat_current_cfg;
+    uint32_t interval = !doc["heartbeat_interval"].isNull() ? (uint32_t)doc["heartbeat_interval"] : heartbeat_interval_cfg;
+    uint32_t current  = !doc["heartbeat_current"].isNull()  ? (uint32_t)doc["heartbeat_current"]  : heartbeat_current_cfg;
     if(interval != evse.getHeartbeatInterval() || current != evse.getHeartbeatCurrent()) {
       heartbeat_interval_cfg = interval;
       heartbeat_current_cfg  = current;
@@ -778,7 +778,7 @@ bool config_deserialize(JsonDocument &doc)
     }
   }
 
-  if(doc["service"].is<uint8_t>())
+  if(!doc["service"].isNull())
   {
     // Only L1/L2 are valid; Auto (0, no longer offered) and anything else are
     // ignored so a stale stored value can't put $SL A on the wire.
@@ -794,7 +794,7 @@ bool config_deserialize(JsonDocument &doc)
     }
   }
 
-  if(doc["max_current_soft"].is<long>())
+  if(!doc["max_current_soft"].isNull())
   {
     long current = doc["max_current_soft"];
     if(current != evse.getMaxConfiguredCurrent()) {
@@ -804,7 +804,7 @@ bool config_deserialize(JsonDocument &doc)
     }
   }
 
-  if(doc["max_current_hard"].is<long>())
+  if(!doc["max_current_hard"].isNull())
   {
     // This value can only be written once so we need to check if the value has changed after setting
     long current = doc["max_current_hard"];
@@ -815,7 +815,7 @@ bool config_deserialize(JsonDocument &doc)
     }
   }
 
-  if(doc["scale"].is<long>() && doc["offset"].is<long>())
+  if(!doc["scale"].isNull() && !doc["offset"].isNull())
   {
     long scale = doc["scale"];
     long offset = doc["offset"];

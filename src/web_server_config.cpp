@@ -68,7 +68,7 @@ handleConfigPost(MongooseHttpServerRequest *request, MongooseHttpServerResponseS
     // If this device is a member, check if this is a controller config push
     // or a local request trying to change load sharing fields
     if (loadSharingGroupState.isMember()) {
-      bool isControllerPush = doc["loadsharing_role"].is<const char*>() &&
+      bool isControllerPush = !doc["loadsharing_role"].isNull() &&
                               (doc["loadsharing_role"].as<String>() == "member" ||
                                doc["loadsharing_role"].as<String>() == "");
       if (loadsharingConfigRequest && !isControllerPush) {
@@ -79,7 +79,7 @@ handleConfigPost(MongooseHttpServerRequest *request, MongooseHttpServerResponseS
     }
 
     // Validate load sharing config ranges
-    if (doc["loadsharing_group_max_current"].is<double>()) {
+    if (!doc["loadsharing_group_max_current"].isNull()) {
       double val = doc["loadsharing_group_max_current"].as<double>();
       if (val < 0) {
         response->setCode(400);
@@ -87,7 +87,7 @@ handleConfigPost(MongooseHttpServerRequest *request, MongooseHttpServerResponseS
         return;
       }
     }
-    if (doc["loadsharing_safety_factor"].is<double>()) {
+    if (!doc["loadsharing_safety_factor"].isNull()) {
       double val = doc["loadsharing_safety_factor"].as<double>();
       if (val < 0.0 || val > 1.0) {
         response->setCode(400);
@@ -95,7 +95,7 @@ handleConfigPost(MongooseHttpServerRequest *request, MongooseHttpServerResponseS
         return;
       }
     }
-    if (doc["loadsharing_heartbeat_timeout"].is<uint32_t>()) {
+    if (!doc["loadsharing_heartbeat_timeout"].isNull()) {
       uint32_t val = doc["loadsharing_heartbeat_timeout"].as<uint32_t>();
       if (val < 5 || val > 600) {
         response->setCode(400);
@@ -103,7 +103,7 @@ handleConfigPost(MongooseHttpServerRequest *request, MongooseHttpServerResponseS
         return;
       }
     }
-    if (doc["loadsharing_failsafe_safe_current"].is<double>()) {
+    if (!doc["loadsharing_failsafe_safe_current"].isNull()) {
       double val = doc["loadsharing_failsafe_safe_current"].as<double>();
       if (val < 0 || val > 80) {
         response->setCode(400);
@@ -111,7 +111,7 @@ handleConfigPost(MongooseHttpServerRequest *request, MongooseHttpServerResponseS
         return;
       }
     }
-    if (doc["loadsharing_failsafe_peer_assumed_current"].is<double>()) {
+    if (!doc["loadsharing_failsafe_peer_assumed_current"].isNull()) {
       double val = doc["loadsharing_failsafe_peer_assumed_current"].as<double>();
       if (val < 0 || val > 80) {
         response->setCode(400);
@@ -119,7 +119,7 @@ handleConfigPost(MongooseHttpServerRequest *request, MongooseHttpServerResponseS
         return;
       }
     }
-    if (doc["loadsharing_failsafe_mode"].is<const char*>()) {
+    if (!doc["loadsharing_failsafe_mode"].isNull()) {
       String val = doc["loadsharing_failsafe_mode"].as<String>();
       if (val != "safe_current" && val != "disable") {
         response->setCode(400);
@@ -131,10 +131,10 @@ handleConfigPost(MongooseHttpServerRequest *request, MongooseHttpServerResponseS
     // budget, otherwise a single islanded member can exceed the group max
     // on its own. Use incoming values when present, stored values otherwise.
     {
-      double failsafe = doc["loadsharing_failsafe_safe_current"].is<double>()
+      double failsafe = !doc["loadsharing_failsafe_safe_current"].isNull()
           ? doc["loadsharing_failsafe_safe_current"].as<double>()
           : loadsharing_failsafe_safe_current;
-      double groupMax = doc["loadsharing_group_max_current"].is<double>()
+      double groupMax = !doc["loadsharing_group_max_current"].isNull()
           ? doc["loadsharing_group_max_current"].as<double>()
           : loadsharing_group_max_current;
       if (groupMax > 0 && failsafe > groupMax) {
@@ -158,13 +158,13 @@ handleConfigPost(MongooseHttpServerRequest *request, MongooseHttpServerResponseS
     // rejected request never mutates group-membership state as a side effect.
     // resetRole() in particular also drops the controller peer and rewrites the
     // persisted peer list, which a 423 response must not leave behind.
-    if (doc["loadsharing_role"].is<const char*>() &&
+    if (!doc["loadsharing_role"].isNull() &&
         doc["loadsharing_role"].as<String>() == "member" &&
-        doc["loadsharing_controller_host"].is<const char*>()) {
+        !doc["loadsharing_controller_host"].isNull()) {
       String controllerHost = doc["loadsharing_controller_host"].as<String>();
       loadSharingGroupState.becomeMember(controllerHost);
     }
-    if (doc["loadsharing_role"].is<const char*>() &&
+    if (!doc["loadsharing_role"].isNull() &&
         doc["loadsharing_role"].as<String>() == "" &&
         loadSharingGroupState.isMember()) {
       // Drop the controller entry structurally rather than by

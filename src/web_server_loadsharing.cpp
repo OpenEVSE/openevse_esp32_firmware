@@ -154,7 +154,7 @@ void handleLoadSharingPeersPost(MongooseHttpServerRequest *request, MongooseHttp
   }
 
   // Get the host parameter
-  if (!doc["host"].is<const char *>()) {
+  if (doc["host"].isNull()) {
     DBUGLN("[LoadSharing] Missing 'host' parameter");
     response->setCode(400);
     response->print("{\"msg\":\"Missing required 'host' parameter\"}");
@@ -163,7 +163,7 @@ void handleLoadSharingPeersPost(MongooseHttpServerRequest *request, MongooseHttp
 
   String host = doc["host"].as<String>();
   host.trim();
-  bool reciprocal = doc["reciprocal"].is<bool>() ? doc["reciprocal"].as<bool>() : true;
+  bool reciprocal = !doc["reciprocal"].isNull() ? doc["reciprocal"].as<bool>() : true;
 
   if (loadSharingGroupState.isMember()) {
     response->setCode(403);
@@ -292,7 +292,7 @@ void handleLoadSharingPeersUpdateWithHost(MongooseHttpServerRequest *request, Mo
     return;
   }
 
-  if (!doc["priority"].is<int>()) {
+  if (doc["priority"].isNull()) {
     response->setCode(400);
     response->print("{\"msg\":\"Missing 'priority' field\"}");
     return;
