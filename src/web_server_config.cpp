@@ -26,6 +26,13 @@ extern bool web_server_config_deserialise(JsonDocument &doc, bool factory);
 void
 handleConfigGet(MongooseHttpServerRequest *request, MongooseHttpServerResponseStream *response)
 {
+  // Allocated fresh per request: in ArduinoJson v7, JsonDocument::clear()
+  // frees every pool (ResourceManager::clear() -> MemoryPoolList::clear()),
+  // so a static document here would not retain anything to reuse -- there's
+  // no capacity win left to chase. The earlier v6-era measurement (sustained
+  // /config polling drove the largest allocatable block from 53,236 down to
+  // 32,756 bytes on TFT hardware) should be re-taken on that hardware under
+  // v7's 1 KB pool allocation.
   JsonDocument doc;
 
   config_serialize(doc, true, false, true);
