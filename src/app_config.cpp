@@ -789,7 +789,7 @@ bool config_deserialize(JsonDocument &doc)
   // retrying on every POST would just re-trigger a config-change
   // notification for a write that can't take. See the comment on
   // EvseMonitor::_lcd_type_supported.
-  if(doc.containsKey("lcd_type") && evse.isLcdTypeSupported())
+  if(!doc["lcd_type"].isNull() && evse.isLcdTypeSupported())
   {
     const char *val = doc["lcd_type"];
     // ArduinoJson hands back nullptr for a non-string value, so this also
@@ -830,7 +830,7 @@ bool config_deserialize(JsonDocument &doc)
   }
 
 #ifdef ENABLE_CABLE_TEMP
-  if(doc.containsKey("cable_temp"))
+  if(!doc["cable_temp"].isNull())
   {
     bool enable = doc["cable_temp"];
     // isCableTempEnabled() now trusts EvseMonitor's cached commanded value

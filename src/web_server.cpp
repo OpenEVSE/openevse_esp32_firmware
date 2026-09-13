@@ -2106,7 +2106,7 @@ void onWsFrame(MongooseHttpWebSocketConnection *connection, int flags, uint8_t *
   JsonDocument doc;
   DeserializationError error = deserializeJson(doc, data, len);
   if (!error) {
-    if (doc["ping"].is<int8_t>())
+    if (!doc["ping"].isNull())
       {
         // answer pong
         connection->send("{\"pong\": 1}");

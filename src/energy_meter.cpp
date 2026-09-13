@@ -69,32 +69,32 @@ void EnergyMeterData::serialize(JsonDocument &doc)
 
 void EnergyMeterData::deserialize(JsonDocument &doc)
 {
-  if (doc["to"].is<double>())
+  if (!doc["to"].isNull())
   {
     // total
     total = doc["to"];
   }
-  if (doc["se"].is<double>())
+  if (!doc["se"].isNull())
   {
     // session
     session = doc["se"];
   }
-  if (doc["dy"].is<double>())
+  if (!doc["dy"].isNull())
   {
     // daily
     daily = doc["dy"];
   }
-  if (doc["wk"].is<double>())
+  if (!doc["wk"].isNull())
   {
     // weekly
     weekly = doc["wk"];
   }
-  if (doc["mo"].is<double>())
+  if (!doc["mo"].isNull())
   {
     // monthly
     monthly = doc["mo"];
   }
-  if (doc["yr"].is<double>())
+  if (!doc["yr"].isNull())
   {
     // yearly
     yearly = doc["yr"];
@@ -102,30 +102,30 @@ void EnergyMeterData::deserialize(JsonDocument &doc)
   if (doc["dt"].is<JsonObject>())
   {
     // date
-    if (doc["dt"]["dy"].is<uint8_t>())
+    if (!doc["dt"]["dy"].isNull())
     {
       date.day = doc["dt"]["dy"];
     }
-    if (doc["dt"]["mo"].is<uint8_t>())
+    if (!doc["dt"]["mo"].isNull())
     {
       date.month = doc["dt"]["mo"];
     }
-    if (doc["dt"]["yr"].is<uint16_t>())
+    if (!doc["dt"]["yr"].isNull())
     {
       date.year = doc["dt"]["yr"];
     }
   }
-  if (doc["im"].is<bool>())
+  if (!doc["im"].isNull())
   {
     // old OpenEvse total_energy imported flag
     imported = doc["im"];
   }
-  if (doc["el"].is<double>())
+  if (!doc["el"].isNull())
   {
     // elapsed
     elapsed = doc["el"];
   }
-  if (doc["sw"].is<uint32_t>())
+  if (!doc["sw"].isNull())
   {
     // switches
     switches = doc["sw"];
