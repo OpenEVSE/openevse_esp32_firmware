@@ -647,7 +647,11 @@ bool config_deserialize(const char *json)
     return false;
   }
   config_strip_internal(doc);
-  return user_config.deserialize(doc);
+  // True means "parsed", as ConfigJson::deserialize(const char *) reports it,
+  // not "something changed": divert_sim feeds its scenario config through
+  // here and treats false as a malformed file.
+  user_config.deserialize(doc);
+  return true;
 }
 
 bool config_deserialize(DynamicJsonDocument &doc)
