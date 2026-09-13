@@ -618,17 +618,41 @@ bool config_https_enabled()
 #endif
 }
 
+// notification_acks / notification_acks_fw ride the EEPROM-backed opts[]
+// array for load/save, but they are the persisted advisory-ack blob, not a
+// user-facing setting. They are stripped from every public path in both
+// directions: a /config POST, an MQTT config/set or a RAPI config command
+// must not be able to overwrite the ack state, and a /config response or an
+// MQTT config publish must not carry it. config_save_notification_acks() is
+// the one writer and goes to user_config directly.
+static void config_strip_internal(JsonDocument &doc)
+{
+  doc.remove("notification_acks");
+  doc.remove("notification_acks_fw");
+  doc.remove("nak");
+  doc.remove("nkv");
+}
+
 bool config_deserialize(String& json) {
-  return user_config.deserialize(json.c_str());
+  return config_deserialize(json.c_str());
 }
 
 bool config_deserialize(const char *json)
 {
-  return user_config.deserialize(json);
+  // Same capacity ConfigJson::deserialize(const char *) uses, so anything it
+  // could parse still parses here.
+  const size_t capacity = JSON_OBJECT_SIZE(sizeof(opts) / sizeof(opts[0])) + EEPROM_SIZE;
+  DynamicJsonDocument doc(capacity);
+  if(DeserializationError::Code::Ok != deserializeJson(doc, json)) {
+    return false;
+  }
+  config_strip_internal(doc);
+  return user_config.deserialize(doc);
 }
 
 bool config_deserialize(DynamicJsonDocument &doc)
 {
+  config_strip_internal(doc);
   bool config_modified = user_config.deserialize(doc);
 
   #if ENABLE_CONFIG_CHANGE_NOTIFICATION
@@ -879,7 +903,16 @@ bool config_deserialize(DynamicJsonDocument &doc)
 
 bool config_serialize(String& json, bool longNames, bool compactOutput, bool hideSecrets)
 {
-  return user_config.serialize(json, longNames, compactOutput, hideSecrets);
+  // Same capacity ConfigJson::serialize(String &) uses; the detour through a
+  // document is only so the internal keys can be stripped before rendering.
+  const size_t capacity = JSON_OBJECT_SIZE(30) + EEPROM_SIZE;
+  DynamicJsonDocument doc(capacity);
+  if(!user_config.serialize(doc, longNames, compactOutput, hideSecrets)) {
+    return false;
+  }
+  config_strip_internal(doc);
+  serializeJson(doc, json);
+  return true;
 }
 
 bool config_serialize(DynamicJsonDocument &doc, bool longNames, bool compactOutput, bool hideSecrets)
@@ -989,16 +1022,7 @@ bool config_serialize(DynamicJsonDocument &doc, bool longNames, bool compactOutp
   #endif
 
   bool result = user_config.serialize(doc, longNames, compactOutput, hideSecrets);
-
-  // notification_acks / notification_acks_fw are internal state (the
-  // persisted advisory-ack blob), not a user-facing setting - they ride the
-  // same EEPROM-backed opts[] array for load/save, but must never show up in
-  // a /config response or an MQTT config publish.
-  doc.remove("notification_acks");
-  doc.remove("notification_acks_fw");
-  doc.remove("nak");
-  doc.remove("nkv");
-
+  config_strip_internal(doc);
   return result;
 }
 
