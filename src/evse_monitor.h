@@ -229,6 +229,50 @@ class EvseMonitor : public MicroTasks::Task
     // drop heartbeat pulses for that long. See runStuckRelayRecovery().
     bool _relay_recovery_in_flight;
 
+#ifdef ENABLE_CABLE_TEMP
+    // Cable NTC thermistor monitoring (linco-work CABLE_TEMPERATURE_MONITORING
+    // feature, firmware 9.4.0+, from $GN/$SN). Four logical sources: EV1/EV2
+    // for the EV cable, IN1/IN2 for the input cable. Only meaningful once
+    // _cable_temp_known is true - the controller may predate the feature or
+    // have it compiled out.
+    bool _cable_temp_known;
+    // Last enable/disable this session actually commanded and had the
+    // controller accept ($FF C); meaningful only when _cable_temp_commanded_known
+    // is true. The controller has no read-back for that bit, so
+    // isCableTempEnabled() otherwise has to infer it from the sources -
+    // which reads "off" the moment the feature is turned on but before any
+    // source is assigned, since every source reports NOT_INSTALLED either
+    // way. This short-circuits that false negative for exactly the session
+    // that did the commanding.
+    // _known deliberately starts false and stays false across a controller
+    // boot (reset alongside it): "unknown" and "commanded off" must stay
+    // distinguishable, or a controller that already has the feature on with
+    // zero sources assigned - from a prior session, before this ESP32
+    // rebooted - could never be turned off through the API. It would read
+    // as (falsely) already off, the /config equality guard would then match
+    // an incoming {"cable_temp": false} against that false reading and
+    // swallow the write, and $FF C 0 would never actually be sent.
+    bool _cable_temp_commanded_known;
+    bool _cable_temp_commanded;
+    // Live readings. The Temperature "valid" flag tracks _STATUS_OK only; the
+    // parallel status array carries which of the three non-reading conditions
+    // applies (unassigned / open circuit / shorted), which a bool cannot.
+    Temperature _cable_temps[OPENEVSE_CABLE_TEMP_SOURCE_COUNT];
+    uint8_t _cable_temp_status[OPENEVSE_CABLE_TEMP_SOURCE_COUNT];
+    // Per-source configuration, cached from $GN idx. Refreshed on boot and
+    // after any successful write, not polled - it only changes when something
+    // writes it.
+    bool _cable_temp_cfg_known;
+    uint32_t _cable_temp_cfg_refresh;
+    uint8_t _cable_temp_cfg_responses;
+    bool _cable_temp_cfg_success;
+    uint8_t  _cable_temp_pin[OPENEVSE_CABLE_TEMP_SOURCE_COUNT];
+    uint32_t _cable_temp_r25[OPENEVSE_CABLE_TEMP_SOURCE_COUNT];
+    uint32_t _cable_temp_beta[OPENEVSE_CABLE_TEMP_SOURCE_COUNT];
+    int32_t  _cable_temp_offset_c10[OPENEVSE_CABLE_TEMP_SOURCE_COUNT];
+    int32_t  _cable_temp_panic_c10[OPENEVSE_CABLE_TEMP_SOURCE_COUNT];
+#endif // ENABLE_CABLE_TEMP
+
     DataReady _data_ready;
     DataReady _boot_ready;
     StateChangeEvent _session_complete;
@@ -260,6 +304,16 @@ class EvseMonitor : public MicroTasks::Task
     void readRelayStatus();
     void readChipId();
     void readRelayHealth();
+#ifdef ENABLE_CABLE_TEMP
+    void readCableTemperatures();
+    // All 4 sources, boot-time only (see the call site) - $GN idx x4.
+    void readCableTempConfig();
+    // One source, after a targeted write - $GN idx x1. Updates that source's
+    // cache directly without touching _cable_temp_cfg_known: that flag is a
+    // boot-time "have all 4 ever been read together" gate, and a single-
+    // source refresh has no bearing on it either way.
+    void readCableTempConfig(uint8_t source);
+#endif // ENABLE_CABLE_TEMP
 
   protected:
     void setup();
@@ -484,6 +538,82 @@ class EvseMonitor : public MicroTasks::Task
     uint32_t getRelayThermalBaselineX100() { return _relay_thermal_baseline_x100; }
     uint8_t getRelayThermalWarningLevel() { return _relay_thermal_warning_level; }
     uint32_t getRelayStuckRecoveryCount() { return _relay_stuck_recovery_count; }
+
+#ifdef ENABLE_CABLE_TEMP
+    // Cable NTC thermistor monitoring (requires the controller's
+    // CABLE_TEMPERATURE_MONITORING feature; check isCableTempKnown() first).
+    // source is an OPENEVSE_CABLE_TEMP_SOURCE_xxx index.
+    bool isCableTempKnown() { return _cable_temp_known; }
+    bool isCableTempConfigKnown() { return _cable_temp_cfg_known; }
+    // True when this source produced an actual reading. False covers all three
+    // non-reading conditions - use getCableTempStatus() to tell them apart.
+    bool isCableTempValid(uint8_t source) {
+      return source < OPENEVSE_CABLE_TEMP_SOURCE_COUNT && _cable_temps[source].isValid();
+    }
+    double getCableTemp(uint8_t source) {
+      return source < OPENEVSE_CABLE_TEMP_SOURCE_COUNT ? _cable_temps[source].get() : 0;
+    }
+    // OPENEVSE_CABLE_TEMP_STATUS_xxx: OK / NOT_INSTALLED / OPEN / SHORTED
+    uint8_t getCableTempStatus(uint8_t source) {
+      return source < OPENEVSE_CABLE_TEMP_SOURCE_COUNT ?
+        _cable_temp_status[source] : OPENEVSE_CABLE_TEMP_STATUS_NOT_INSTALLED;
+    }
+    // True if this source is wired to an input, i.e. it is actually in use.
+    bool isCableTempAssigned(uint8_t source) {
+      return source < OPENEVSE_CABLE_TEMP_SOURCE_COUNT &&
+             OPENEVSE_CABLE_TEMP_PIN_NONE != _cable_temp_pin[source];
+    }
+    uint8_t  getCableTempPin(uint8_t source) {
+      return source < OPENEVSE_CABLE_TEMP_SOURCE_COUNT ? _cable_temp_pin[source] : OPENEVSE_CABLE_TEMP_PIN_NONE;
+    }
+    uint32_t getCableTempR25(uint8_t source) {
+      return source < OPENEVSE_CABLE_TEMP_SOURCE_COUNT ? _cable_temp_r25[source] : 0;
+    }
+    uint32_t getCableTempBeta(uint8_t source) {
+      return source < OPENEVSE_CABLE_TEMP_SOURCE_COUNT ? _cable_temp_beta[source] : 0;
+    }
+    int32_t getCableTempOffsetC10(uint8_t source) {
+      return source < OPENEVSE_CABLE_TEMP_SOURCE_COUNT ? _cable_temp_offset_c10[source] : 0;
+    }
+    int32_t getCableTempPanicC10(uint8_t source) {
+      return source < OPENEVSE_CABLE_TEMP_SOURCE_COUNT ? _cable_temp_panic_c10[source] : 0;
+    }
+    bool isCableTempEnabled() {
+      // The controller has no dedicated read-back flag for $FF C. Prefer
+      // what this session actually commanded and had accepted; fall back to
+      // inferring from the sources (reports NOT_INSTALLED on all of them
+      // while off) only when nothing has been commanded yet, e.g. fresh
+      // after boot.
+      return _cable_temp_known &&
+        (_cable_temp_commanded_known ? _cable_temp_commanded : !isCableTempAllNotInstalled());
+    }
+    // Whether this session has actually commanded $FF C and had it accepted
+    // - i.e. whether isCableTempEnabled() above is reporting a real answer
+    // rather than its NOT_INSTALLED-inference fallback. app_config.cpp uses
+    // this to decide whether it's safe to skip resending an incoming
+    // {"cable_temp": ...} that matches the current reading: the same
+    // fallback that can make isCableTempEnabled() read "off" while the
+    // controller is genuinely on (see the comment on
+    // _cable_temp_commanded_known) would otherwise make an equality guard
+    // swallow the very write that would fix that.
+    bool isCableTempCommandKnown() {
+      return _cable_temp_commanded_known;
+    }
+    bool isCableTempAllNotInstalled() {
+      for(uint8_t i = 0; i < OPENEVSE_CABLE_TEMP_SOURCE_COUNT; i++) {
+        if(OPENEVSE_CABLE_TEMP_STATUS_NOT_INSTALLED != _cable_temp_status[i]) return false;
+      }
+      return true;
+    }
+    void enableCableTemp(bool enabled, std::function<void(int ret)> callback = NULL);
+    // Write one source's full configuration, then re-read it back so the
+    // cache reflects what the controller actually accepted.
+    void setCableTempConfig(uint8_t source, uint8_t pin, uint32_t r25, uint32_t beta,
+                            int32_t offset_c10, int32_t panic_c10,
+                            std::function<void(int ret)> callback = NULL);
+    // Reassign a source's input pin, leaving its calibration alone.
+    void setCableTempPin(uint8_t source, uint8_t pin, std::function<void(int ret)> callback = NULL);
+#endif // ENABLE_CABLE_TEMP
     // Manually run the controller's stuck-relay recovery cycle (requires
     // firmware 9.3.0+ / ADVPWR). NAK'd by the controller if an EV is
     // connected. Blocking on the controller side for up to ~30s.

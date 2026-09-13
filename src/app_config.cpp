@@ -735,6 +735,29 @@ bool config_deserialize(DynamicJsonDocument &doc)
     }
   }
 
+#ifdef ENABLE_CABLE_TEMP
+  if(doc.containsKey("cable_temp"))
+  {
+    bool enable = doc["cable_temp"];
+    // isCableTempEnabled() now trusts EvseMonitor's cached commanded value
+    // over its NOT_INSTALLED-inference fallback (see _cable_temp_commanded),
+    // so it no longer misreports "off" immediately after a successful
+    // enable with no source assigned yet - the guard is safe here like it
+    // is for its neighbours, PROVIDED that fallback hasn't actually been
+    // used: a controller that already had the feature on with zero sources
+    // assigned - from before this ESP32 last rebooted, so nothing has been
+    // commanded yet this session - would otherwise still read as (falsely)
+    // off, and an incoming {"cable_temp": false} would then match that false
+    // reading and never actually get sent. isCableTempCommandKnown() is
+    // false in exactly that situation, so send unconditionally then.
+    if(!evse.isCableTempCommandKnown() || enable != evse.isCableTempEnabled()) {
+      evse.enableCableTemp(enable);
+      config_modified = true;
+      DBUGLN("cable_temp changed");
+    }
+  }
+#endif // ENABLE_CABLE_TEMP
+
   if(doc.containsKey("relay_dc1"))
   {
     bool enable = doc["relay_dc1"];
@@ -904,6 +927,15 @@ bool config_serialize(DynamicJsonDocument &doc, bool longNames, bool compactOutp
     if(evse.isD9Supported()) {
       doc["pp_auto"] = evse.isPPAutoAmpacityEnabled();
       doc["zero_cross"] = evse.isZeroCrossSwitchEnabled();
+#ifdef ENABLE_CABLE_TEMP
+      // Cable NTC monitoring: just the on/off state here. The per-source
+      // configuration is 20 more fields and this document's capacity is
+      // already noted as nearly exhausted (see handleConfigGet), so it lives
+      // on /cabletemp instead.
+      if(evse.isCableTempKnown()) {
+        doc["cable_temp"] = evse.isCableTempEnabled();
+      }
+#endif // ENABLE_CABLE_TEMP
       // Relay-open current-zero threshold (mA), configurable on the
       // controller via $SZ. Omitted (rather than a sentinel) when the
       // controller hasn't reported one yet.

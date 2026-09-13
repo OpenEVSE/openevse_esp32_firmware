@@ -566,6 +566,36 @@ class EvseManager : public MicroTasks::Task
     void resetRelayHealth(std::function<void(int ret)> callback = NULL) {
       _monitor.resetRelayHealth(callback);
     }
+
+#ifdef ENABLE_CABLE_TEMP
+    // Cable NTC thermistor monitoring (controller firmware 9.4.0+, requires
+    // its CABLE_TEMPERATURE_MONITORING feature). source is an
+    // OPENEVSE_CABLE_TEMP_SOURCE_xxx index.
+    bool isCableTempKnown() { return _monitor.isCableTempKnown(); }
+    bool isCableTempConfigKnown() { return _monitor.isCableTempConfigKnown(); }
+    bool isCableTempEnabled() { return _monitor.isCableTempEnabled(); }
+    bool isCableTempCommandKnown() { return _monitor.isCableTempCommandKnown(); }
+    bool isCableTempValid(uint8_t source) { return _monitor.isCableTempValid(source); }
+    double getCableTemp(uint8_t source) { return _monitor.getCableTemp(source); }
+    uint8_t getCableTempStatus(uint8_t source) { return _monitor.getCableTempStatus(source); }
+    bool isCableTempAssigned(uint8_t source) { return _monitor.isCableTempAssigned(source); }
+    uint8_t getCableTempPin(uint8_t source) { return _monitor.getCableTempPin(source); }
+    uint32_t getCableTempR25(uint8_t source) { return _monitor.getCableTempR25(source); }
+    uint32_t getCableTempBeta(uint8_t source) { return _monitor.getCableTempBeta(source); }
+    int32_t getCableTempOffsetC10(uint8_t source) { return _monitor.getCableTempOffsetC10(source); }
+    int32_t getCableTempPanicC10(uint8_t source) { return _monitor.getCableTempPanicC10(source); }
+    void enableCableTemp(bool enabled, std::function<void(int ret)> callback = NULL) {
+      _monitor.enableCableTemp(enabled, callback);
+    }
+    void setCableTempConfig(uint8_t source, uint8_t pin, uint32_t r25, uint32_t beta,
+                            int32_t offset_c10, int32_t panic_c10,
+                            std::function<void(int ret)> callback = NULL) {
+      _monitor.setCableTempConfig(source, pin, r25, beta, offset_c10, panic_c10, callback);
+    }
+    void setCableTempPin(uint8_t source, uint8_t pin, std::function<void(int ret)> callback = NULL) {
+      _monitor.setCableTempPin(source, pin, callback);
+    }
+#endif // ENABLE_CABLE_TEMP
     void restartEvse() {
       _monitor.restart();
     }
