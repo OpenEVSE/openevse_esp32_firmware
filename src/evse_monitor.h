@@ -239,6 +239,16 @@ class EvseMonitor : public MicroTasks::Task
     char _firmware_version[32];
     char _serial[16];
 
+    // Whether $S0 (set LCD backlight type) is understood by this controller
+    // build. There's no RAPI capability query for this - LCD16X2/RGBLCD are
+    // compile-time flags on the controller with no wire-visible signal
+    // either way (see rapi.md's own "test commands for compatibility"
+    // note) - so this starts optimistic and latches false the first time a
+    // write is actually rejected with a real $NK, not a transport-level
+    // failure (timeout/queue-full/disconnected), which says nothing about
+    // whether the command itself exists.
+    bool _lcd_type_supported;
+
 #ifdef ENABLE_MCP9808
     Adafruit_MCP9808 _mcp9808;
 #endif
@@ -509,6 +519,12 @@ class EvseMonitor : public MicroTasks::Task
       return (OPENEVSE_ECF_MONO_LCD == (getSettingsFlags() & OPENEVSE_ECF_MONO_LCD)) ?
         LcdType::Mono :
         LcdType::RGB;
+    }
+    // False once a $S0 write has actually been rejected with $NK this
+    // session - see the comment on _lcd_type_supported. Starts true: there
+    // is no way to know without trying.
+    bool isLcdTypeSupported() {
+      return _lcd_type_supported;
     }
     const char *getFirmwareVersion() {
       return _firmware_version;

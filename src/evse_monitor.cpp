@@ -175,6 +175,7 @@ EvseMonitor::EvseMonitor(OpenEVSEClass &openevse) :
   _count(0),
   _heartbeat(false),
   _firmware_version(""),
+  _lcd_type_supported(true),
 #ifdef ENABLE_MCP9808
   _mcp9808(),
 #endif
@@ -866,8 +867,20 @@ void EvseMonitor::setLcdType(LcdType type, std::function<void(int ret)> callback
           callback(ret);
         }
       });
-    } else if(callback){
-      callback(ret);
+    } else {
+      // A real $NK (as opposed to a timeout/queue-full/disconnected
+      // transport failure, none of which say anything about whether the
+      // controller understands $S0 at all) means this build doesn't have
+      // LCD16X2+RGBLCD compiled in - there's no RAPI capability query for
+      // that, so this is the only way to find out. Latching it stops
+      // app_config.cpp from retrying (and re-triggering a config-change
+      // notification) on every subsequent POST that still carries lcd_type,
+      // since getLcdType() can never change on a controller that rejects
+      // the write that would change it.
+      if(RAPI_RESPONSE_NK == ret) {
+        _lcd_type_supported = false;
+      }
+      if(callback) callback(ret);
     }
   });
 }

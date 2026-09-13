@@ -715,15 +715,29 @@ bool config_deserialize(DynamicJsonDocument &doc)
     }
   }
 
-  if(doc.containsKey("lcd_type"))
+  // Skipped entirely once a $S0 write has actually been rejected with $NK:
+  // that means this controller build doesn't have LCD16X2+RGBLCD compiled
+  // in, getLcdType() can never change no matter what's requested, and
+  // retrying on every POST would just re-trigger a config-change
+  // notification for a write that can't take. See the comment on
+  // EvseMonitor::_lcd_type_supported.
+  if(doc.containsKey("lcd_type") && evse.isLcdTypeSupported())
   {
     const char *val = doc["lcd_type"];
-    EvseMonitor::LcdType type = (val && strcmp(val, "mono") == 0) ?
-      EvseMonitor::LcdType::Mono : EvseMonitor::LcdType::RGB;
-    if(type != evse.getLcdType()) {
-      evse.setLcdType(type);
-      config_modified = true;
-      DBUGLN("lcd_type changed");
+    // ArduinoJson hands back nullptr for a non-string value, so this also
+    // covers {"lcd_type": true}/{"lcd_type": 0} etc. Anything other than
+    // exactly "mono" or "rgb" is ignored rather than silently treated as
+    // RGB - there's no existing precedent for a string-valued EVSE setting
+    // here to inherit a looser convention from.
+    bool isMono = val && 0 == strcmp(val, "mono");
+    bool isRgb  = val && 0 == strcmp(val, "rgb");
+    if(isMono || isRgb) {
+      EvseMonitor::LcdType type = isMono ? EvseMonitor::LcdType::Mono : EvseMonitor::LcdType::RGB;
+      if(type != evse.getLcdType()) {
+        evse.setLcdType(type);
+        config_modified = true;
+        DBUGLN("lcd_type changed");
+      }
     }
   }
 
@@ -911,9 +925,15 @@ bool config_serialize(DynamicJsonDocument &doc, bool longNames, bool compactOutp
     doc["front_button"] = evse.isFrontButtonEnabled();
     doc["boot_lock"] = evse.isBootLockEnabled();
     // 2-line LCD backlight type. Only meaningful on controller builds with a
-    // physical character LCD (LCD16X2 + RGBLCD); other builds NAK the $S0 set
-    // and simply ignore this, same as other flags-word bits.
-    doc["lcd_type"] = (EvseMonitor::LcdType::Mono == evse.getLcdType()) ? "mono" : "rgb";
+    // physical character LCD (LCD16X2 + RGBLCD) - there's no RAPI capability
+    // bit for that, so support is only known once a $S0 write has actually
+    // been tried. Shown by default (nothing has been tried yet, so this is
+    // an optimistic guess, not a confirmed capability) and omitted once a
+    // write has actually come back $NK, so the GUI stops offering a control
+    // that can never take effect on this hardware.
+    if(evse.isLcdTypeSupported()) {
+      doc["lcd_type"] = (EvseMonitor::LcdType::Mono == evse.getLcdType()) ? "mono" : "rgb";
+    }
     // D9-only capability flag so clients can gate the controls below
     doc["d9_support"] = evse.isD9Supported();
     // PP auto-ampacity / zero-cross switching only exist on D9+ controllers
