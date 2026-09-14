@@ -118,9 +118,12 @@ bool generateSelfSignedCertificate(const String &commonName, const String &ipAdd
          0 == mbedtls_x509write_crt_set_issuer_name(&crt, dn.c_str()) &&
          0 == mbedtls_x509write_crt_set_validity(&crt, "20200101000000", "20460101000000");
 
+    uint8_t serialBytes[8];
     if(ok) {
-      uint8_t serialBytes[8];
-      RNG_FN(RNG_CTX, serialBytes, sizeof(serialBytes));
+      ok = (0 == RNG_FN(RNG_CTX, serialBytes, sizeof(serialBytes)));
+    }
+
+    if(ok) {
       serialBytes[0] &= 0x7F;
 
 #if MBEDTLS_VERSION_NUMBER >= 0x03000000

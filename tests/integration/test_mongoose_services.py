@@ -160,7 +160,10 @@ def websocket_connect(host, port, path):
     sock.sendall(request.encode("ascii"))
     response = b""
     while b"\r\n\r\n" not in response:
-        response += sock.recv(4096)
+        chunk = sock.recv(4096)
+        if not chunk:
+            raise AssertionError("connection closed before the WebSocket handshake completed")
+        response += chunk
     assert b" 101 " in response.split(b"\r\n", 1)[0], response.decode("latin1")
     accept = base64.b64encode(
         hashlib.sha1((key + "258EAFA5-E914-47DA-95CA-C5AB0DC85B11").encode("ascii")).digest()
@@ -183,25 +186,35 @@ def websocket_send_text(sock, message):
     sock.sendall(bytes(header) + mask + masked)
 
 
+def recv_exact(sock, size):
+    """recv() may return fewer bytes than asked for a segmented frame, and an
+    empty read means the peer closed -- both need to be handled explicitly or
+    a partial WebSocket frame silently corrupts the next field parsed from it.
+    """
+    buf = b""
+    while len(buf) < size:
+        chunk = sock.recv(size - len(buf))
+        if not chunk:
+            raise AssertionError("WebSocket closed mid-frame")
+        buf += chunk
+    return buf
+
+
 def websocket_read_text(sock, timeout=10):
     sock.settimeout(timeout)
     while True:
-        header = sock.recv(2)
-        if len(header) < 2:
-            raise AssertionError("WebSocket closed before a frame was received")
+        header = recv_exact(sock, 2)
         opcode = header[0] & 0x0F
         length = header[1] & 0x7F
         if length == 126:
-            length = struct.unpack("!H", sock.recv(2))[0]
+            length = struct.unpack("!H", recv_exact(sock, 2))[0]
         elif length == 127:
-            length = struct.unpack("!Q", sock.recv(8))[0]
+            length = struct.unpack("!Q", recv_exact(sock, 8))[0]
         if header[1] & 0x80:
-            mask = sock.recv(4)
+            mask = recv_exact(sock, 4)
         else:
             mask = None
-        payload = b""
-        while len(payload) < length:
-            payload += sock.recv(length - len(payload))
+        payload = recv_exact(sock, length) if length else b""
         if mask:
             payload = bytes(b ^ mask[i % 4] for i, b in enumerate(payload))
         if opcode == 1:

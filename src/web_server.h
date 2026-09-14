@@ -63,7 +63,7 @@ bool isAuthenticated(MongooseHttpServerRequest *request, bool *usedCookie = null
 
 void dumpRequest(MongooseHttpServerRequest *request);
 
-void handleLogin(MongooseHttpServerRequest *request);
+void handleLogin(MongooseHttpServerRequest *request, bool isHttps = false);
 void handleLogout(MongooseHttpServerRequest *request);
 
 // Shared by the destructive-actuator handlers in web_server.cpp and the

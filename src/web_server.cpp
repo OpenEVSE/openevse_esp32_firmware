@@ -385,7 +385,7 @@ bool isAuthenticated(MongooseHttpServerRequest *request, bool *usedCookie, bool 
 static const uint32_t REMEMBER_TTL = 2592000; // 30 days
 static const uint32_t SESSION_TTL  = 21600;   // 6 hours
 
-void handleLogin(MongooseHttpServerRequest *request)
+void handleLogin(MongooseHttpServerRequest *request, bool isHttps)
 {
   MongooseHttpServerResponseStream *response = request->beginResponseStream();
   response->setContentType(CONTENT_TYPE_JSON);
@@ -470,7 +470,11 @@ void handleLogin(MongooseHttpServerRequest *request)
   cookie += token.c_str();
   cookie += "; Path=/; HttpOnly; SameSite=Strict";
   if(remember) { cookie += "; Max-Age="; cookie += String(REMEMBER_TTL); }
-  // if(tls_active()) cookie += "; Secure";   // add when TLS status is known
+  // Only the HTTPS listener may mark the cookie Secure: browsers refuse a
+  // Secure cookie set over plain HTTP outright, and when both listeners are
+  // active this also stops an HTTPS-minted session cookie from being replayed
+  // over the plaintext HTTP listener.
+  if(isHttps) { cookie += "; Secure"; }
   response->addHeader(F("Set-Cookie"), cookie.c_str());
   response->setCode(200);
   response->print(F("{\"msg\":\"ok\"}"));
@@ -2216,14 +2220,16 @@ void handleMqttAction(MongooseHttpServerRequest *request) {
   request->send(response);
 }
 
-static void registerWebServerRoutes(MongooseHttpServer &server)
+static void registerWebServerRoutes(MongooseHttpServer &server, bool isHttps)
 {
   // Server startup (and the HTTP->HTTPS redirect) now lives in
   // web_server_setup(), which registers these routes against both the HTTP and
   // the HTTPS server, so it must not be repeated per-registration here.
 
   // Session management (no auth gate — user must reach these unauthenticated)
-  server.on("/login", handleLogin);
+  server.on("/login", [isHttps](MongooseHttpServerRequest *request) {
+    handleLogin(request, isHttps);
+  });
   server.on("/logout", handleLogout);
 
   // Handle status updates
@@ -2441,7 +2447,7 @@ void web_server_setup()
     {
       DEBUG.printf("Starting HTTPS server, https://0.0.0.0:%d\n", www_https_port);
       https_server.begin(www_https_port, cert, key);
-      registerWebServerRoutes(https_server);
+      registerWebServerRoutes(https_server, true);
       https_server.onNotFound(handleNotFound);
       https_server_started = true;
       use_ssl = true;
@@ -2454,7 +2460,7 @@ void web_server_setup()
   if(should_start_http && should_bind_http_port) {
       DEBUG.printf("Starting HTTP server, http://0.0.0.0:%d\n", www_http_port);
       http_server.begin(www_http_port);
-      registerWebServerRoutes(http_server);
+      registerWebServerRoutes(http_server, false);
       http_server.onNotFound(handleNotFound);
       http_server_started = true;
   } else if(use_ssl && should_bind_http_port) {

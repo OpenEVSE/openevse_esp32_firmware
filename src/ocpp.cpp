@@ -713,7 +713,13 @@ void OcppTask::initializeDiagnosticsService() {
                     diagFailure = true;
                 }
             });
-            request->send();
+            if (!request->send()) {
+                request->onResponse(MongooseHttpResponseHandler());
+                request->onClose(MongooseSocketCloseHandler());
+                delete request;
+                diagFailure = true;
+                return false;
+            }
 
             return true;
         });
