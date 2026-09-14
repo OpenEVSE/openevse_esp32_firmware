@@ -167,13 +167,49 @@ jobs:
         sudo apt-get install -y libavahi-client-dev libavahi-common-dev libssl-dev
 
     - name: Run PlatformIO
+      id: pio_build
       env:
         # Enforce signed OTA only when a signing key is configured AND this is a
         # signed-capable env. Dormant (unsigned, unchanged) until the
         # OTA_SIGNING_KEY secret is added, so merging this does not alter the
         # fleet's update behaviour on its own.
         PLATFORMIO_BUILD_FLAGS: ${{ (env.SIGN_ENABLED == 'true' && contains(fromJSON(env.SIGNED_OTA_ENVS), matrix.env)) && '-DUPDATE_SIGN -DREQUIRE_SIGNED_OTA' || '' }}
-      run: pio run -e ${{ matrix.env }}
+      # Capture pio's own output (it prints the "Flash: NN.N% (used X bytes
+      # from Y bytes)" line the flash usage check reads) while still failing
+      # this step on pio's exit code, not tee's.
+      run: |
+        set -o pipefail
+        pio run -e ${{ matrix.env }} 2>&1 | tee pio-build-${{ matrix.env }}.log
+
+    - name: Check flash usage
+      # Runs whether or not the build above succeeded: PlatformIO's own size
+      # check runs (and can fail the build) right after linking, before most
+      # compile/link failures would even occur, so an over-budget build's log
+      # still has a "Flash:" line worth reporting. check_flash_size.py skips
+      # (exit 0) when there's no such line AND the env is exempt (native, or
+      # the build didn't succeed) -- otherwise a missing line means something
+      # unexpected happened and it fails loudly instead of silently vanishing
+      # from the report.
+      if: always()
+      run: |
+        python scripts/check_flash_size.py \
+          --env ${{ matrix.env }} \
+          --log pio-build-${{ matrix.env }}.log \
+          --build-outcome ${{ steps.pio_build.outcome }} \
+          ${{ matrix.env == 'native_openevse' && '--native' || '' }} \
+          --out flash-size-${{ matrix.env }}.json
+
+    - name: Upload flash size report
+      # Same condition as the check above -- runs whenever it could have
+      # produced a report, including when it (or the build) failed.
+      if: always()
+      uses: actions/upload-artifact@v7
+      with:
+        name: flash-size-${{ matrix.env }}
+        path: flash-size-${{ matrix.env }}.json
+        # native_openevse (and any build that failed before linking) has no
+        # JSON to upload -- that's expected, not something to flag.
+        if-no-files-found: ignore
 
     - name: Sign firmware image
       # Append the RSA-2048 PSS signature trailer expected by REQUIRE_SIGNED_OTA
@@ -198,6 +234,70 @@ jobs:
       with:
         name: ${{ matrix.env }}.program
         path: .pio/build/${{ matrix.env }}/program
+
+  flash-size-report:
+    name: Flash size report
+    runs-on: ubuntu-latest
+    needs: build
+    # Runs even if a build failed (e.g. over the flash budget) so the PR
+    # comment still shows the offending env's usage.
+    if: always() && github.event_name == 'pull_request'
+
+    permissions:
+      contents: read
+      actions: read
+      pull-requests: write
+
+    steps:
+    - uses: actions/checkout@v7
+
+    - name: Download flash size data for this PR
+      uses: actions/download-artifact@v8
+      with:
+        pattern: flash-size-*
+        path: current-flash-size
+        merge-multiple: true
+
+    - name: Download baseline flash size data from the base branch
+      # Best-effort: the base branch may not have a build with flash size
+      # artifacts yet (e.g. right after this feature is added), so a miss
+      # here just means the report shows sizes with no "change vs base".
+      uses: dawidd6/action-download-artifact@v6
+      continue-on-error: true
+      with:
+        workflow: build.yaml
+        workflow_conclusion: completed
+        branch: ${{ github.event.pull_request.base.ref }}
+        event: push
+        name: flash-size-.*
+        name_is_regexp: true
+        path: baseline-flash-size
+        search_artifacts: true
+        if_no_artifact_found: warn
+
+    - name: Set up Python
+      uses: actions/setup-python@v7
+      with:
+        python-version: '3.x'
+
+    - name: Build flash size report
+      run: |
+        python scripts/report_flash_size.py \
+          --current-dir current-flash-size \
+          --baseline-dir baseline-flash-size \
+          --out flash-size-report.md
+        cat flash-size-report.md >> "$GITHUB_STEP_SUMMARY"
+
+    - name: Comment on PR
+      # Skipped for fork PRs: the pull_request event gives their GITHUB_TOKEN
+      # only read access, so posting a comment would just fail. Same pattern
+      # as native_docker.yaml's fork-excluded publish step. The report is
+      # still in the job summary above for a fork PR's author to read.
+      if: github.event.pull_request.head.repo.full_name == github.repository
+      uses: marocchino/sticky-pull-request-comment@v2
+      with:
+        header: flash-size-report
+        path: flash-size-report.md
 
   release:
     name: Upload release assets

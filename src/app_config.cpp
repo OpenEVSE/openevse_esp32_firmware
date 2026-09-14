@@ -194,6 +194,12 @@ String loadsharing_role;
 String loadsharing_controller_host;
 uint32_t loadsharing_rotation_interval;
 
+// Advisory acknowledgements: "key:hextoken;" repeated, plus the firmware
+// version that wrote them. A version change drops the lot - a firmware
+// update is a service event, where a power cut is not.
+String notification_acks;
+String notification_acks_fw;
+
 String esp_hostname_default = "openevse-"+ESPAL.getShortId();
 
 void config_changed(String name);
@@ -349,6 +355,12 @@ ConfigOpt *opts[] =
   new ConfigOptDefinition<String>(loadsharing_controller_host, "", "loadsharing_controller_host", "lsch"),
   // Rotation interval in seconds (0 disables). Effective max ~49 days on 32-bit millis; larger values wrap.
   new ConfigOptDefinition<uint32_t>(loadsharing_rotation_interval, 1800, "loadsharing_rotation_interval", "lsri"),
+
+// Advisory acknowledgements: "key:hextoken;" repeated, plus the firmware
+// version that wrote them. A version change drops the lot - a firmware
+// update is a service event, where a power cut is not.
+  new ConfigOptDefinition<String>(notification_acks, "", "notification_acks", "nak"),
+  new ConfigOptDefinition<String>(notification_acks_fw, "", "notification_acks_fw", "nkv"),
 
 // Scheduler options
   new ConfigOptDefinition<uint32_t>(scheduler_start_window, SCHEDULER_DEFAULT_START_WINDOW, "scheduler_start_window", "ssw"),
@@ -566,6 +578,27 @@ void config_user_commit()
   user_config.commit();
 }
 
+// Persist the notification ack state.
+//
+// Assigning the notification_acks / notification_acks_fw globals directly and
+// then calling commit() does NOT write anything: ConfigJson::commit() returns
+// early unless its _modified flag is set, and that flag is only raised by
+// deserialize() (or reset()) - never by writing the underlying variable a
+// ConfigOptDefinition wraps. Nothing else in a quiet boot dirties the config,
+// so an ack made that way survives in RAM and is gone at the next restart.
+// Routing the write through deserialize() sets the flag, and only when a value
+// actually changed, so an unchanged ack list still costs no EEPROM write.
+void config_save_notification_acks(const String &acks, const String &fw)
+{
+  const size_t capacity = JSON_OBJECT_SIZE(2) + 512;
+  DynamicJsonDocument doc(capacity);
+  doc["notification_acks"] = acks;
+  doc["notification_acks_fw"] = fw;
+  if(user_config.deserialize(doc)) {
+    user_config.commit();
+  }
+}
+
 bool config_https_active()
 {
 #ifndef DIVERT_SIM
@@ -588,17 +621,45 @@ bool config_https_active()
 #endif
 }
 
+// notification_acks / notification_acks_fw ride the EEPROM-backed opts[]
+// array for load/save, but they are the persisted advisory-ack blob, not a
+// user-facing setting. They are stripped from every public path in both
+// directions: a /config POST, an MQTT config/set or a RAPI config command
+// must not be able to overwrite the ack state, and a /config response or an
+// MQTT config publish must not carry it. config_save_notification_acks() is
+// the one writer and goes to user_config directly.
+static void config_strip_internal(JsonDocument &doc)
+{
+  doc.remove("notification_acks");
+  doc.remove("notification_acks_fw");
+  doc.remove("nak");
+  doc.remove("nkv");
+}
+
 bool config_deserialize(String& json) {
-  return user_config.deserialize(json.c_str());
+  return config_deserialize(json.c_str());
 }
 
 bool config_deserialize(const char *json)
 {
-  return user_config.deserialize(json);
+  // Same capacity ConfigJson::deserialize(const char *) uses, so anything it
+  // could parse still parses here.
+  const size_t capacity = JSON_OBJECT_SIZE(sizeof(opts) / sizeof(opts[0])) + EEPROM_SIZE;
+  DynamicJsonDocument doc(capacity);
+  if(DeserializationError::Code::Ok != deserializeJson(doc, json)) {
+    return false;
+  }
+  config_strip_internal(doc);
+  // True means "parsed", as ConfigJson::deserialize(const char *) reports it,
+  // not "something changed": divert_sim feeds its scenario config through
+  // here and treats false as a malformed file.
+  user_config.deserialize(doc);
+  return true;
 }
 
 bool config_deserialize(DynamicJsonDocument &doc)
 {
+  config_strip_internal(doc);
   bool config_modified = user_config.deserialize(doc);
 
   #if ENABLE_CONFIG_CHANGE_NOTIFICATION
@@ -718,6 +779,32 @@ bool config_deserialize(DynamicJsonDocument &doc)
     }
   }
 
+  // Skipped entirely once a $S0 write has actually been rejected with $NK:
+  // that means this controller build doesn't have LCD16X2+RGBLCD compiled
+  // in, getLcdType() can never change no matter what's requested, and
+  // retrying on every POST would just re-trigger a config-change
+  // notification for a write that can't take. See the comment on
+  // EvseMonitor::_lcd_type_supported.
+  if(doc.containsKey("lcd_type") && evse.isLcdTypeSupported())
+  {
+    const char *val = doc["lcd_type"];
+    // ArduinoJson hands back nullptr for a non-string value, so this also
+    // covers {"lcd_type": true}/{"lcd_type": 0} etc. Anything other than
+    // exactly "mono" or "rgb" is ignored rather than silently treated as
+    // RGB - there's no existing precedent for a string-valued EVSE setting
+    // here to inherit a looser convention from.
+    bool isMono = val && 0 == strcmp(val, "mono");
+    bool isRgb  = val && 0 == strcmp(val, "rgb");
+    if(isMono || isRgb) {
+      EvseMonitor::LcdType type = isMono ? EvseMonitor::LcdType::Mono : EvseMonitor::LcdType::RGB;
+      if(type != evse.getLcdType()) {
+        evse.setLcdType(type);
+        config_modified = true;
+        DBUGLN("lcd_type changed");
+      }
+    }
+  }
+
   if(doc.containsKey("pp_auto"))
   {
     bool enable = doc["pp_auto"];
@@ -737,6 +824,29 @@ bool config_deserialize(DynamicJsonDocument &doc)
       DBUGLN("zero_cross changed");
     }
   }
+
+#ifdef ENABLE_CABLE_TEMP
+  if(doc.containsKey("cable_temp"))
+  {
+    bool enable = doc["cable_temp"];
+    // isCableTempEnabled() now trusts EvseMonitor's cached commanded value
+    // over its NOT_INSTALLED-inference fallback (see _cable_temp_commanded),
+    // so it no longer misreports "off" immediately after a successful
+    // enable with no source assigned yet - the guard is safe here like it
+    // is for its neighbours, PROVIDED that fallback hasn't actually been
+    // used: a controller that already had the feature on with zero sources
+    // assigned - from before this ESP32 last rebooted, so nothing has been
+    // commanded yet this session - would otherwise still read as (falsely)
+    // off, and an incoming {"cable_temp": false} would then match that false
+    // reading and never actually get sent. isCableTempCommandKnown() is
+    // false in exactly that situation, so send unconditionally then.
+    if(!evse.isCableTempCommandKnown() || enable != evse.isCableTempEnabled()) {
+      evse.enableCableTemp(enable);
+      config_modified = true;
+      DBUGLN("cable_temp changed");
+    }
+  }
+#endif // ENABLE_CABLE_TEMP
 
   if(doc.containsKey("relay_dc1"))
   {
@@ -849,7 +959,16 @@ bool config_deserialize(DynamicJsonDocument &doc)
 
 bool config_serialize(String& json, bool longNames, bool compactOutput, bool hideSecrets)
 {
-  return user_config.serialize(json, longNames, compactOutput, hideSecrets);
+  // Same capacity ConfigJson::serialize(String &) uses; the detour through a
+  // document is only so the internal keys can be stripped before rendering.
+  const size_t capacity = JSON_OBJECT_SIZE(30) + EEPROM_SIZE;
+  DynamicJsonDocument doc(capacity);
+  if(!user_config.serialize(doc, longNames, compactOutput, hideSecrets)) {
+    return false;
+  }
+  config_strip_internal(doc);
+  serializeJson(doc, json);
+  return true;
 }
 
 bool config_serialize(DynamicJsonDocument &doc, bool longNames, bool compactOutput, bool hideSecrets)
@@ -901,12 +1020,31 @@ bool config_serialize(DynamicJsonDocument &doc, bool longNames, bool compactOutp
     }
     doc["front_button"] = evse.isFrontButtonEnabled();
     doc["boot_lock"] = evse.isBootLockEnabled();
+    // 2-line LCD backlight type. Only meaningful on controller builds with a
+    // physical character LCD (LCD16X2 + RGBLCD) - there's no RAPI capability
+    // bit for that, so support is only known once a $S0 write has actually
+    // been tried. Shown by default (nothing has been tried yet, so this is
+    // an optimistic guess, not a confirmed capability) and omitted once a
+    // write has actually come back $NK, so the GUI stops offering a control
+    // that can never take effect on this hardware.
+    if(evse.isLcdTypeSupported()) {
+      doc["lcd_type"] = (EvseMonitor::LcdType::Mono == evse.getLcdType()) ? "mono" : "rgb";
+    }
     // D9-only capability flag so clients can gate the controls below
     doc["d9_support"] = evse.isD9Supported();
     // PP auto-ampacity / zero-cross switching only exist on D9+ controllers
     if(evse.isD9Supported()) {
       doc["pp_auto"] = evse.isPPAutoAmpacityEnabled();
       doc["zero_cross"] = evse.isZeroCrossSwitchEnabled();
+#ifdef ENABLE_CABLE_TEMP
+      // Cable NTC monitoring: just the on/off state here. The per-source
+      // configuration is 20 more fields and this document's capacity is
+      // already noted as nearly exhausted (see handleConfigGet), so it lives
+      // on /cabletemp instead.
+      if(evse.isCableTempKnown()) {
+        doc["cable_temp"] = evse.isCableTempEnabled();
+      }
+#endif // ENABLE_CABLE_TEMP
       // Relay-open current-zero threshold (mA), configurable on the
       // controller via $SZ. Omitted (rather than a sentinel) when the
       // controller hasn't reported one yet.
@@ -958,7 +1096,9 @@ bool config_serialize(DynamicJsonDocument &doc, bool longNames, bool compactOutp
   }
   #endif
 
-  return user_config.serialize(doc, longNames, compactOutput, hideSecrets);
+  bool result = user_config.serialize(doc, longNames, compactOutput, hideSecrets);
+  config_strip_internal(doc);
+  return result;
 }
 
 bool config_set(const char *name, uint32_t val) {
@@ -1022,5 +1162,4 @@ void config_reset()
   LittleFS.format();
   config_load_settings();
 }
-
 
