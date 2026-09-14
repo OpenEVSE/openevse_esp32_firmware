@@ -236,3 +236,26 @@ def test_root_upload_allocation_failure_preserves_active_state(native, tmp_path)
     assert native.ids() == {"1"}
     assert native.get("/certificates/root").text == trust
     assert not (native.files / "2.json").exists()
+
+
+def test_corrupt_record_recovery_is_atomic(native, tmp_path):
+    payload = certificate_payload(tmp_path, 1, client=True)
+    native.files.mkdir(parents=True)
+    record = native.files / "1.json"
+    record.write_text("{", encoding="ascii")
+    native.start()
+    assert native.ids() == set()
+    # Failed recovery must leave the prior record untouched.
+    staging = native.files / "1.json.tmp"
+    staging.mkdir()
+    (staging / "occupied").write_text("dummy", encoding="ascii")
+    assert native.upload(payload).status_code == 400
+    assert record.read_text(encoding="ascii") == "{"
+    assert native.ids() == set()
+    (staging / "occupied").unlink()
+    staging.rmdir()
+    assert native.upload(payload).status_code == 200
+    assert json.loads(record.read_text(encoding="ascii"))["id"] == "1"
+    assert not list(native.files.glob("*.tmp"))
+    native.start()
+    assert native.ids() == {"1"}
