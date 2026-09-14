@@ -247,10 +247,16 @@ static bool sha_equals(const uint8_t digest[32], const String &expected_hex)
 // Erase one sector then write `len` bytes (region freshly erased).
 static bool flash_write_sector(uint32_t off, const uint8_t *buf, uint32_t len)
 {
-  if(esp_flash_erase_region(esp_flash_default_chip, off, FLASH_SECTOR) != ESP_OK) {
+  esp_err_t err = esp_flash_erase_region(esp_flash_default_chip, off, FLASH_SECTOR);
+  if(err != ESP_OK) {
+    DEBUG_PORT.printf("[migrate] erase @0x%06x: %s (0x%x), chip size=%u\n", off, esp_err_to_name(err), err, esp_flash_default_chip->size);
+    DBUGF("[migrate] erase @0x%06x: %s (0x%x), chip size=%u", off, esp_err_to_name(err), err, esp_flash_default_chip->size);
     return false;
   }
-  if(esp_flash_write(esp_flash_default_chip, buf, off, len) != ESP_OK) {
+  err = esp_flash_write(esp_flash_default_chip, buf, off, len);
+  if(err != ESP_OK) {
+    DEBUG_PORT.printf("[migrate] write @0x%06x: %s (0x%x)\n", off, esp_err_to_name(err), err);
+    DBUGF("[migrate] write @0x%06x: %s (0x%x)", off, esp_err_to_name(err), err);
     return false;
   }
   return true;
@@ -331,6 +337,13 @@ static bool finalize_streamed_image(const String &expected_sha, bool check_app_m
   // App only: flush the final partial sector (padded with 0xFF).
   if(mctx.streaming_app && mctx.sect_fill > 0 && !mctx.dry_run)
   {
+    // Same bound as the full-sector path in consume_chunk(): an image of
+    // NEW_APP1_SIZE + a few bytes gets through there and would land its tail
+    // in the region past the partition.
+    if(mctx.app_flash_off + FLASH_SECTOR > NEW_APP1_OFFSET + NEW_APP1_SIZE) {
+      DEBUG_PORT.println("[migrate] image larger than the target partition");
+      return false;
+    }
     memset(mctx.sect + mctx.sect_fill, 0xFF, FLASH_SECTOR - mctx.sect_fill);
     if(!flash_write_sector(mctx.app_flash_off, mctx.sect, FLASH_SECTOR)) {
       return false;
@@ -351,6 +364,19 @@ static bool finalize_streamed_image(const String &expected_sha, bool check_app_m
   if(!sha_equals(dig, expected_sha)) {
     DEBUG_PORT.println("[migrate] image sha mismatch");
     return false;
+  }
+  if(check_app_magic && !mctx.dry_run)
+  {
+    // The SHA above is of the stream, not the flash. Read the first byte back
+    // so a write that reported success but never landed is caught here, not
+    // by the migrator after it has been booted into.
+    uint8_t magic = 0;
+    esp_err_t err = esp_flash_read(esp_flash_default_chip, &magic, NEW_APP1_OFFSET, 1);
+    if(err != ESP_OK || magic != 0xE9) {
+      DEBUG_PORT.printf("[migrate] staged image read-back @0x%06x: %s magic=0x%02x\n", NEW_APP1_OFFSET, esp_err_to_name(err), magic);
+      DBUGF("[migrate] staged image read-back @0x%06x: %s magic=0x%02x", NEW_APP1_OFFSET, esp_err_to_name(err), magic);
+      return false;
+    }
   }
   return true;
 }
@@ -756,6 +782,22 @@ bool flash_migrate_start_16mb(const String &manifest_url, bool dry_run)
   mctx.active = true;
 
   DEBUG_PORT.printf("[migrate] starting 16MB expand, manifest=%s\n", mctx.manifest_url.c_str());
+
+  // esp_flash bounds every erase/write by esp_flash_t::size, which start-up
+  // takes from the bootloader's image header (g_rom_flashchip), not from the
+  // chip. A unit that has only ever been flashed as 4MB carries a 4MB header
+  // there, 0x650000 is past that bound, and the first sector write fails
+  // ESP_ERR_INVALID_ARG before anything reaches the flash. Eligibility has
+  // already established a 16MB part; lift the bound to what is there.
+  {
+    uint32_t phys = 0;
+    if(esp_flash_get_physical_size(esp_flash_default_chip, &phys) == ESP_OK &&
+       phys > esp_flash_default_chip->size)
+    {
+      DBUGF("[migrate] esp_flash size %u -> physical %u", esp_flash_default_chip->size, phys);
+      esp_flash_default_chip->size = phys;
+    }
+  }
   emit_state("staging");
   // The actual GET is launched from flash_migrate_loop() (main-loop context),
   // not here, so no connection is opened from the web request handler.
