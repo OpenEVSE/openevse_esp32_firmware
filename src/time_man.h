@@ -26,6 +26,10 @@ class TimeManager : public MicroTasks::Task
     char   _resolvedIp[46];         // last resolved IP, "failed", or ""
     bool   _syncRequested;          // set by checkNow(); shows "connecting" before fetch starts
 
+    // Mongoose resolves the NTP host to send the request, so the address is
+    // read back from the client rather than looked up again here.
+    void takeResolvedIp();
+
     unsigned long retryDelay();     // exponential back-off based on _retryCount
 
     class TimeChange : public MicroTasks::Event
