@@ -294,7 +294,7 @@ jobs:
       # as native_docker.yaml's fork-excluded publish step. The report is
       # still in the job summary above for a fork PR's author to read.
       if: github.event.pull_request.head.repo.full_name == github.repository
-      uses: marocchino/sticky-pull-request-comment@v2
+      uses: marocchino/sticky-pull-request-comment@v3
       with:
         header: flash-size-report
         path: flash-size-report.md
