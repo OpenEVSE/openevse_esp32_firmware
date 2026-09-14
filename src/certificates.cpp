@@ -60,7 +60,7 @@ bool CertificateStore::Certificate::deserialize(JsonObject &obj)
 #endif
 
   _cert = cert;
-  if(!obj["id"].isNull()) {
+  if(obj["id"].is<const char*>()) {
     std::string id_str = obj["id"].as<std::string>();
     if(!certificate_id_from_string(id_str.c_str(), _id)) {
       DBUGF("Invalid certificate id '%s'", id_str.c_str());
@@ -70,7 +70,7 @@ bool CertificateStore::Certificate::deserialize(JsonObject &obj)
     _id = result.serial;
   }
 
-  if(!obj["key"].isNull())
+  if(obj["key"].is<const char*>())
   {
     std::string key = obj["key"].as<std::string>();
 

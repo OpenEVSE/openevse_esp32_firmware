@@ -571,7 +571,7 @@ void Mqtt::handleMqttMessage(MongooseString topic, MongooseString payload) {
     // This logic can reuse the existing mqtt_restart_device logic by making it a static helper or part of this class
     JsonDocument doc;
     DeserializationError error = deserializeJson(doc, payload_str);
-    if(!error && !doc["device"].isNull()){
+    if(!error && doc["device"].is<const char*>()){
         if (strcmp(doc["device"], "gateway") == 0 ) restart_system();
         else if (strcmp(doc["device"], "evse") == 0) _evse->restartEvse();
     }

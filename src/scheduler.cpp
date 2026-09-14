@@ -786,13 +786,13 @@ bool Scheduler::deserializeInternal(JsonObject &obj, uint32_t event_id)
 
     Event *event = addEventInternal(event_id, time, days, state);
     if(event != nullptr) {
-      if(!obj["feature"].isNull()) {
+      if(obj["feature"].is<const char *>()) {
         event->setFeature(obj["feature"].as<const char *>());
       }
       if(!obj["feature_value"].isNull()) {
         event->setFeatureValue((uint32_t)obj["feature_value"]);
       }
-      if(!obj["limit"].isNull()) {
+      if(obj["limit"].is<const char *>()) {
         event->setLimitType(obj["limit"].as<const char *>());
       }
       if(!obj["limit_value"].isNull()) {

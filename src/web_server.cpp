@@ -1572,7 +1572,7 @@ handleRestart(MongooseHttpServerRequest *request) {
     DeserializationError error = deserializeJson(doc, body);
     if(!error)
     {
-      if(!doc["device"].isNull()){
+      if(doc["device"].is<const char*>()){
         if (strcmp(doc["device"], "gateway") == 0 ) {
           response->setCode(200);
           response->print("{\"msg\":\"restart gateway\"}");

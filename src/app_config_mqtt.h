@@ -50,9 +50,9 @@ public:
   }
 
   virtual bool deserialize(JsonDocument &doc) {
-    if(!doc[_long].isNull()) {
+    if(doc[_long].is<const char *>()) {
       return set(doc[_long].as<String>());
-    } else if(!doc[_short].isNull()) { \
+    } else if(doc[_short].is<const char *>()) { \
       return set(doc[_short].as<String>());
     }
 
