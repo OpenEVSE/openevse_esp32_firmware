@@ -145,13 +145,10 @@ bool EventLog::log(EventType type, EvseState managerState, uint8_t evseState, ui
 
   if(eventFile)
   {
-    // 512, not 384: notification is a variable-length field on this same
-    // record (advisory ids run up to ~26 chars, e.g.
-    // "wear.stuck_relay_recovery"), so the budget carries deliberate margin
-    // for it rather than being sized to the fixed-width fields alone. A
-    // StaticJsonDocument that runs out silently drops fields instead of
-    // erroring, so this margin is load-bearing, not decorative.
-    StaticJsonDocument<512> line;
+    // v7's JsonDocument grows on demand -- unlike v6's StaticJsonDocument, it
+    // doesn't have a fixed capacity to silently overflow, so no size budget
+    // to reason about here for the variable-length notification field.
+    JsonDocument line;
     char output[80];
     strftime(output, 80, "%FT%TZ", &timeinfo);
 
@@ -205,13 +202,10 @@ void EventLog::enumerate(uint32_t index, std::function<void(String time, EventTy
       String line = eventFile.readStringUntil('\n');
       if(line.length() > 0)
       {
-        // 512, not 384: matches the write side in EventLog::log() above.
-        // Parsing this String input duplicates every key and string value
-        // into the document's own pool (unlike the write side's zero-copy
-        // literals), so the notification id's variable length costs more
-        // here than it does when the row is written -- the margin has to
-        // cover the read path, not just the write path.
-        StaticJsonDocument<512> json;
+        // See the matching comment in EventLog::log() above: v7's JsonDocument
+        // grows on demand, so there's no fixed capacity to size for either
+        // side of this record.
+        JsonDocument json;
         DeserializationError error = deserializeJson(json, line);
         if(error)
         {

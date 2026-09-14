@@ -224,15 +224,14 @@ void EnergyLogger::save_raw_chunk()
 
   if (count == 0) return;
 
-  const size_t cap = JSON_ARRAY_SIZE(count + 1) + (count + 1) * JSON_OBJECT_SIZE(4) + 64;
-  DynamicJsonDocument doc(cap);
+  JsonDocument doc;
   JsonArray arr = doc.to<JsonArray>();
 
   for (int i = 0; i < _buffer_count; i++) {
     int idx = (_buffer_index - _buffer_count + i + ENERGY_LOGGER_BUFFER_SIZE) % ENERGY_LOGGER_BUFFER_SIZE;
     RawSample &s = _hourly_buffer[idx];
     if (s.timestamp >= chunk_start && s.timestamp < chunk_end) {
-      JsonObject obj = arr.createNestedObject();
+      JsonObject obj = arr.add<JsonObject>();
       obj["ts"] = (uint32_t)s.timestamp;
       obj["a"]  = s.amps;
       obj["t"]  = s.temperature;
@@ -382,10 +381,6 @@ void EnergyLogger::aggregate_daily()
 
 // ── Quarterly daily helpers ───────────────────────────────────────────────────
 
-// Capacity for one quarterly file: up to 92 days, each with a 10-char date string
-#define QUARTER_JSON_CAP \
-  (JSON_ARRAY_SIZE(93) + 93 * JSON_OBJECT_SIZE(4) + 93 * 16)
-
 bool EnergyLogger::append_daily_to_quarter(const DailyMetrics &metrics)
 {
   // Parse year + month from metrics.date ("YYYY-MM-DD")
@@ -397,7 +392,7 @@ bool EnergyLogger::append_daily_to_quarter(const DailyMetrics &metrics)
   snprintf(filepath, sizeof(filepath), "%s/%04d-Q%d.json",
            ENERGY_LOGGER_DAILY_DIR, year, quarter);
 
-  DynamicJsonDocument doc(QUARTER_JSON_CAP);
+  JsonDocument doc;
   JsonArray arr = doc.to<JsonArray>();
 
   File file = LittleFS.open(filepath, "r");
@@ -407,7 +402,7 @@ bool EnergyLogger::append_daily_to_quarter(const DailyMetrics &metrics)
     if (!doc.is<JsonArray>()) arr = doc.to<JsonArray>();
   }
 
-  JsonObject obj = arr.createNestedObject();
+  JsonObject obj = arr.add<JsonObject>();
   obj["dt"] = (char *)metrics.date;   // char* forces ArduinoJson to copy the string
   obj["pk"] = metrics.peak_temp;
   obj["mn"] = metrics.min_temp;
@@ -450,7 +445,7 @@ bool EnergyLogger::load_month_from_quarter(int year, int month,
   File file = LittleFS.open(filepath, "r");
   if (!file) return false;
 
-  DynamicJsonDocument doc(QUARTER_JSON_CAP);
+  JsonDocument doc;
   deserializeJson(doc, file);
   file.close();
   if (!doc.is<JsonArray>()) return false;
@@ -512,9 +507,6 @@ void EnergyLogger::aggregate_monthly_yearly()
 
 // ── Monthly file: /logs/monthly/YYYY.json (≤12 entries) ──────────────────────
 
-#define MONTHLY_JSON_CAP \
-  (JSON_ARRAY_SIZE(13) + 13 * JSON_OBJECT_SIZE(4) + 13 * 12)
-
 bool EnergyLogger::save_monthly(const MonthlyMetrics &metrics)
 {
   int year = 0, month = 0;
@@ -524,7 +516,7 @@ bool EnergyLogger::save_monthly(const MonthlyMetrics &metrics)
   snprintf(filepath, sizeof(filepath), "%s/%04d.json",
            ENERGY_LOGGER_MONTHLY_DIR, year);
 
-  DynamicJsonDocument doc(MONTHLY_JSON_CAP);
+  JsonDocument doc;
   JsonArray arr = doc.to<JsonArray>();
 
   File file = LittleFS.open(filepath, "r");
@@ -534,7 +526,7 @@ bool EnergyLogger::save_monthly(const MonthlyMetrics &metrics)
     if (!doc.is<JsonArray>()) arr = doc.to<JsonArray>();
   }
 
-  JsonObject obj = arr.createNestedObject();
+  JsonObject obj = arr.add<JsonObject>();
   obj["mo"] = (char *)metrics.month;
   obj["pk"] = metrics.peak_temp;
   obj["mn"] = metrics.min_temp;
@@ -565,7 +557,7 @@ bool EnergyLogger::save_monthly(const MonthlyMetrics &metrics)
 bool EnergyLogger::save_annual(const AnnualMetrics &metrics)
 {
   // Load existing data
-  DynamicJsonDocument doc(JSON_ARRAY_SIZE(100) + 100 * JSON_OBJECT_SIZE(4));
+  JsonDocument doc;
   JsonArray arr = doc.to<JsonArray>();
 
   File file = LittleFS.open(ENERGY_LOGGER_ANNUAL_FILE, "r");
@@ -578,7 +570,7 @@ bool EnergyLogger::save_annual(const AnnualMetrics &metrics)
   }
 
   // Append new metrics
-  JsonObject obj = arr.createNestedObject();
+  JsonObject obj = arr.add<JsonObject>();
   metrics.serialize(obj);
 
   // Save
@@ -696,7 +688,7 @@ AnnualMetrics AnnualMetrics::deserialize(const JsonObject &obj)
 
 void EnergyLogger::getRawSamples(JsonDocument &doc, int max_samples, time_t before)
 {
-  JsonArray arr = doc.createNestedArray("samples");
+  JsonArray arr = doc["samples"].to<JsonArray>();
 
   if (before > 0) {
     // Step back a full save-interval from 'before' to land in the previous
@@ -722,7 +714,7 @@ void EnergyLogger::getRawSamples(JsonDocument &doc, int max_samples, time_t befo
 
     File file = LittleFS.open(filepath, "r");
     if (file) {
-      DynamicJsonDocument file_doc(JSON_ARRAY_SIZE(ENERGY_LOGGER_BUFFER_SIZE + 1) + (ENERGY_LOGGER_BUFFER_SIZE + 1) * JSON_OBJECT_SIZE(4) + 128);
+      JsonDocument file_doc;
       DeserializationError err = deserializeJson(file_doc, file);
       file.close();
 
@@ -732,7 +724,7 @@ void EnergyLogger::getRawSamples(JsonDocument &doc, int max_samples, time_t befo
           // Return all samples in the chunk — no 'before' filter needed
           // because we are already pointing at the preceding block.
           if (max_samples > 0 && count >= max_samples) break;
-          JsonObject obj = arr.createNestedObject();
+          JsonObject obj = arr.add<JsonObject>();
           obj["ts"] = item["ts"];
           obj["a"]  = item["a"];
           obj["t"]  = item["t"];
@@ -747,7 +739,7 @@ void EnergyLogger::getRawSamples(JsonDocument &doc, int max_samples, time_t befo
         RawSample &s = _hourly_buffer[idx];
         if (s.timestamp < chunk_start || s.timestamp >= chunk_end) continue;
         if (max_samples > 0 && (int)arr.size() >= max_samples) break;
-        JsonObject obj = arr.createNestedObject();
+        JsonObject obj = arr.add<JsonObject>();
         obj["ts"] = (uint32_t)s.timestamp;
         obj["a"]  = s.amps;
         obj["t"]  = s.temperature;
@@ -770,7 +762,7 @@ void EnergyLogger::getRawSamples(JsonDocument &doc, int max_samples, time_t befo
     int idx = (_buffer_index - _buffer_count + i + ENERGY_LOGGER_BUFFER_SIZE) % ENERGY_LOGGER_BUFFER_SIZE;
     RawSample &sample = _hourly_buffer[idx];
 
-    JsonObject obj = arr.createNestedObject();
+    JsonObject obj = arr.add<JsonObject>();
     obj["ts"] = (uint32_t)sample.timestamp;
     obj["a"]  = sample.amps;
     obj["t"]  = sample.temperature;
@@ -789,7 +781,7 @@ void EnergyLogger::getDailyMetrics(JsonDocument &doc, int year, int quarter)
     if (quarter == 0) quarter = month_to_quarter(tm_now.tm_mon + 1);
   }
 
-  JsonArray arr = doc.createNestedArray("daily");
+  JsonArray arr = doc["daily"].to<JsonArray>();
 
   char filepath[64];
   snprintf(filepath, sizeof(filepath), "%s/%04d-Q%d.json",
@@ -798,13 +790,13 @@ void EnergyLogger::getDailyMetrics(JsonDocument &doc, int year, int quarter)
   File file = LittleFS.open(filepath, "r");
   if (!file) return;
 
-  DynamicJsonDocument file_doc(QUARTER_JSON_CAP);
+  JsonDocument file_doc;
   DeserializationError err = deserializeJson(file_doc, file);
   file.close();
   if (err || !file_doc.is<JsonArray>()) return;
 
   for (JsonObject item : file_doc.as<JsonArray>()) {
-    JsonObject obj = arr.createNestedObject();
+    JsonObject obj = arr.add<JsonObject>();
     const char *dt = item["dt"] | "";
     obj["dt"] = (char *)dt;   // force copy into doc's pool
     obj["pk"] = item["pk"] | 0.0;
@@ -826,18 +818,18 @@ void EnergyLogger::getMonthlyMetrics(JsonDocument &doc, int year)
   snprintf(filepath, sizeof(filepath), "%s/%04d.json",
            ENERGY_LOGGER_MONTHLY_DIR, year);
 
-  JsonArray arr = doc.createNestedArray("monthly");
+  JsonArray arr = doc["monthly"].to<JsonArray>();
 
   File file = LittleFS.open(filepath, "r");
   if (!file) return;
 
-  DynamicJsonDocument temp_doc(MONTHLY_JSON_CAP);
+  JsonDocument temp_doc;
   DeserializationError err = deserializeJson(temp_doc, file);
   file.close();
   if (err || !temp_doc.is<JsonArray>()) return;
 
   for (JsonObject item : temp_doc.as<JsonArray>()) {
-    JsonObject obj = arr.createNestedObject();
+    JsonObject obj = arr.add<JsonObject>();
     const char *mo = item["mo"] | "";
     obj["mo"] = (char *)mo;
     obj["pk"] = item["pk"] | 0.0;
@@ -848,15 +840,14 @@ void EnergyLogger::getMonthlyMetrics(JsonDocument &doc, int year)
 
 void EnergyLogger::getAnnualMetrics(JsonDocument &doc)
 {
-  JsonArray arr = doc.createNestedArray("annual");
+  JsonArray arr = doc["annual"].to<JsonArray>();
 
   File file = LittleFS.open(ENERGY_LOGGER_ANNUAL_FILE, "r");
   if (!file) {
     return;
   }
 
-  const size_t capacity = JSON_ARRAY_SIZE(100) + 100 * JSON_OBJECT_SIZE(4);
-  DynamicJsonDocument temp_doc(capacity);
+  JsonDocument temp_doc;
   DeserializationError error = deserializeJson(temp_doc, file);
   file.close();
 
@@ -870,7 +861,7 @@ void EnergyLogger::getAnnualMetrics(JsonDocument &doc)
   }
 
   for (JsonObject item : temp_doc.as<JsonArray>()) {
-    JsonObject obj = arr.createNestedObject();
+    JsonObject obj = arr.add<JsonObject>();
     // yr is a numeric field — no string-ownership issue, but copy explicitly
     // for consistency and to avoid any future regressions.
     obj["yr"] = item["yr"] | 0;
