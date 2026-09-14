@@ -49,7 +49,17 @@ static void syncPeerGroupMembership(const String &peerHost, const String &jsonBo
     delete body;
   });
 
-  req->send();
+  if (!req->send()) {
+    // send() failing means onClose() never fires (it's only reached via a
+    // live connection event), so the request and these buffers must be torn
+    // down here or they leak -- and the peer never learns of the add/remove.
+    DBUGF("[LoadSharing] Reciprocal sync to %s failed to send", peerHost.c_str());
+    req->onResponse(MongooseHttpResponseHandler());
+    req->onClose(MongooseSocketCloseHandler());
+    delete req;
+    delete url;
+    delete body;
+  }
 }
 
 // Path prefix constants

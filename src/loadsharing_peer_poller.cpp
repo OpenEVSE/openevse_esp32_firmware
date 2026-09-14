@@ -780,7 +780,17 @@ void LoadSharingPeerPoller::pushConfigToPeer(const String& host, PeerConnection&
     delete body;
   });
 
-  req->send();
+  if (!req->send()) {
+    // send() failing means onClose() never fires (it is only reached via a
+    // live connection event), so the request and these buffers must be torn
+    // down here or they leak.
+    DBUGF("LoadSharingPeerPoller: [%s] Config push failed to send", host.c_str());
+    req->onResponse(MongooseHttpResponseHandler());
+    req->onClose(MongooseSocketCloseHandler());
+    delete req;
+    delete url;
+    delete body;
+  }
 }
 
 void LoadSharingPeerPoller::fetchPeerConfig(const String& host) {
@@ -881,7 +891,13 @@ void LoadSharingPeerPoller::fetchPeerConfig(const String& host) {
     delete url;
   });
 
-  req->send();
+  if (!req->send()) {
+    DBUGF("LoadSharingPeerPoller: [%s] Config fetch failed to send", host.c_str());
+    req->onResponse(MongooseHttpResponseHandler());
+    req->onClose(MongooseSocketCloseHandler());
+    delete req;
+    delete url;
+  }
 }
 
 void LoadSharingPeerPoller::pushConfigResetToPeer(const String& host) {
@@ -914,7 +930,14 @@ void LoadSharingPeerPoller::pushConfigResetToPeer(const String& host) {
     delete body;
   });
 
-  req->send();
+  if (!req->send()) {
+    DBUGF("LoadSharingPeerPoller: [%s] Config reset failed to send", host.c_str());
+    req->onResponse(MongooseHttpResponseHandler());
+    req->onClose(MongooseSocketCloseHandler());
+    delete req;
+    delete url;
+    delete body;
+  }
 }
 
 void LoadSharingPeerPoller::pushConfigToAllPeers() {
