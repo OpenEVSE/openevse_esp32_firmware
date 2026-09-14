@@ -145,30 +145,19 @@ const char *CertificateStore::getRootCa()
 
 bool CertificateStore::addCertificate(const char *name, const char *certificate, const char *key, uint64_t *id)
 {
-  Certificate *cert = new Certificate(certificate, key);
-  if(cert)
-  {
-    if(addCertificate(cert, id)) {
-      return true;
-    }
-
-    delete cert;
-  }
-  return false;
+  DynamicJsonDocument doc(JSON_OBJECT_SIZE(3));
+  doc["name"] = name;
+  doc["certificate"] = certificate;
+  doc["key"] = key;
+  return addCertificate(doc, id);
 }
 
 bool CertificateStore::addCertificate(const char *name, const char *certificate, uint64_t *id)
 {
-  Certificate *cert = new Certificate(certificate);
-  if(cert)
-  {
-    if(addCertificate(cert, id)) {
-      return true;
-    }
-
-    delete cert;
-  }
-  return false;
+  DynamicJsonDocument doc(JSON_OBJECT_SIZE(2));
+  doc["name"] = name;
+  doc["certificate"] = certificate;
+  return addCertificate(doc, id);
 }
 
 bool CertificateStore::addCertificate(DynamicJsonDocument &doc, uint64_t *id, bool save)
