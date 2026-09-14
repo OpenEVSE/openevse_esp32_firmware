@@ -14,10 +14,6 @@ bool certificate_storage_commit(Storage &storage, const char *final_path,
     return false;
   }
 
-  if(storage.exists(final_path)) {
-    return false;
-  }
-
   std::string temporary_path(final_path);
   temporary_path += ".tmp";
 
