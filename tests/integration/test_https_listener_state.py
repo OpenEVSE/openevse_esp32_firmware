@@ -107,6 +107,20 @@ def test_failed_https_listener_serves_http_fallback(tmp_path):
 
 
 @pytest.mark.timeout(90)
+def test_http_fallback_peer_advertises_selected_listener(tmp_path):
+    with occupied_port() as https_port:
+        with occupied_port() as http_port:
+            pass
+        with native_server(tmp_path, http_port, https_port) as (process, _):
+            base = f"http://127.0.0.1:{http_port}"
+            response = wait_for_response(process, f"{base}/loadsharing/peers")
+            assert response.status_code == 200
+            local = next(peer for peer in response.json() if peer["isLocal"])
+            assert local["online"]
+            assert local["url"] == f"http://{local['host']}:{http_port}"
+
+
+@pytest.mark.timeout(90)
 def test_both_listener_failures_report_inactive_server(tmp_path):
     with occupied_port() as https_port, occupied_port() as http_port:
         with native_server(tmp_path, http_port, https_port) as (process, log_path):
