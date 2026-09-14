@@ -50,7 +50,7 @@ class FakeCertificateStorage
 
     bool rename(const char *from, const char *to)
     {
-      if(!rename_succeeds || !exists(from) || exists(to)) {
+      if(!rename_succeeds || !exists(from)) {
         return false;
       }
       files[to] = files[from];
@@ -83,10 +83,21 @@ TEST_CASE("invalid transaction arguments fail without mutation")
   CHECK(storage.files.empty());
 }
 
-TEST_CASE("existing final record is never replaced")
+TEST_CASE("complete certificate record atomically replaces an existing record")
 {
   FakeCertificateStorage storage;
   storage.files[FINAL_PATH] = "existing";
+
+  CHECK(certificate_storage_commit(storage, FINAL_PATH, RECORD, sizeof(RECORD)));
+  CHECK(storage.files[FINAL_PATH] == "{}\n");
+  CHECK_FALSE(storage.exists(TEMP_PATH));
+}
+
+TEST_CASE("failed replacement preserves the existing record")
+{
+  FakeCertificateStorage storage;
+  storage.files[FINAL_PATH] = "existing";
+  storage.reported_write = sizeof(RECORD) - 1;
 
   CHECK_FALSE(certificate_storage_commit(storage, FINAL_PATH, RECORD, sizeof(RECORD)));
   CHECK(storage.files[FINAL_PATH] == "existing");
