@@ -194,6 +194,12 @@ String loadsharing_role;
 String loadsharing_controller_host;
 uint32_t loadsharing_rotation_interval;
 
+// Advisory acknowledgements: "key:hextoken;" repeated, plus the firmware
+// version that wrote them. A version change drops the lot - a firmware
+// update is a service event, where a power cut is not.
+String notification_acks;
+String notification_acks_fw;
+
 String esp_hostname_default = "openevse-"+ESPAL.getShortId();
 
 void config_changed(String name);
@@ -348,6 +354,12 @@ ConfigOpt *opts[] =
   new ConfigOptDefinition<String>(loadsharing_controller_host, "", "loadsharing_controller_host", "lsch"),
   // Rotation interval in seconds (0 disables). Effective max ~49 days on 32-bit millis; larger values wrap.
   new ConfigOptDefinition<uint32_t>(loadsharing_rotation_interval, 1800, "loadsharing_rotation_interval", "lsri"),
+
+// Advisory acknowledgements: "key:hextoken;" repeated, plus the firmware
+// version that wrote them. A version change drops the lot - a firmware
+// update is a service event, where a power cut is not.
+  new ConfigOptDefinition<String>(notification_acks, "", "notification_acks", "nak"),
+  new ConfigOptDefinition<String>(notification_acks_fw, "", "notification_acks_fw", "nkv"),
 
 // Scheduler options
   new ConfigOptDefinition<uint32_t>(scheduler_start_window, SCHEDULER_DEFAULT_START_WINDOW, "scheduler_start_window", "ssw"),
@@ -563,6 +575,26 @@ void config_user_commit()
   user_config.commit();
 }
 
+// Persist the notification ack state.
+//
+// Assigning the notification_acks / notification_acks_fw globals directly and
+// then calling commit() does NOT write anything: ConfigJson::commit() returns
+// early unless its _modified flag is set, and that flag is only raised by
+// deserialize() (or reset()) - never by writing the underlying variable a
+// ConfigOptDefinition wraps. Nothing else in a quiet boot dirties the config,
+// so an ack made that way survives in RAM and is gone at the next restart.
+// Routing the write through deserialize() sets the flag, and only when a value
+// actually changed, so an unchanged ack list still costs no EEPROM write.
+void config_save_notification_acks(const String &acks, const String &fw)
+{
+  JsonDocument doc;
+  doc["notification_acks"] = acks;
+  doc["notification_acks_fw"] = fw;
+  if(user_config.deserialize(doc)) {
+    user_config.commit();
+  }
+}
+
 bool config_https_enabled()
 {
 #ifndef DIVERT_SIM
@@ -585,17 +617,42 @@ bool config_https_enabled()
 #endif
 }
 
+// notification_acks / notification_acks_fw ride the EEPROM-backed opts[]
+// array for load/save, but they are the persisted advisory-ack blob, not a
+// user-facing setting. They are stripped from every public path in both
+// directions: a /config POST, an MQTT config/set or a RAPI config command
+// must not be able to overwrite the ack state, and a /config response or an
+// MQTT config publish must not carry it. config_save_notification_acks() is
+// the one writer and goes to user_config directly.
+static void config_strip_internal(JsonDocument &doc)
+{
+  doc.remove("notification_acks");
+  doc.remove("notification_acks_fw");
+  doc.remove("nak");
+  doc.remove("nkv");
+}
+
 bool config_deserialize(String& json) {
-  return user_config.deserialize(json.c_str());
+  return config_deserialize(json.c_str());
 }
 
 bool config_deserialize(const char *json)
 {
-  return user_config.deserialize(json);
+  JsonDocument doc;
+  if(DeserializationError::Code::Ok != deserializeJson(doc, json)) {
+    return false;
+  }
+  config_strip_internal(doc);
+  // True means "parsed", as ConfigJson::deserialize(const char *) reports it,
+  // not "something changed": divert_sim feeds its scenario config through
+  // here and treats false as a malformed file.
+  user_config.deserialize(doc);
+  return true;
 }
 
 bool config_deserialize(JsonDocument &doc)
 {
+  config_strip_internal(doc);
   bool config_modified = user_config.deserialize(doc);
 
   #if ENABLE_CONFIG_CHANGE_NOTIFICATION
@@ -898,7 +955,15 @@ bool config_deserialize(JsonDocument &doc)
 
 bool config_serialize(String& json, bool longNames, bool compactOutput, bool hideSecrets)
 {
-  return user_config.serialize(json, longNames, compactOutput, hideSecrets);
+  // Detour through a document is only so the internal keys can be stripped
+  // before rendering; v7's JsonDocument grows on demand, no capacity to size.
+  JsonDocument doc;
+  if(!user_config.serialize(doc, longNames, compactOutput, hideSecrets)) {
+    return false;
+  }
+  config_strip_internal(doc);
+  serializeJson(doc, json);
+  return true;
 }
 
 bool config_serialize(JsonDocument &doc, bool longNames, bool compactOutput, bool hideSecrets)
@@ -1026,7 +1091,9 @@ bool config_serialize(JsonDocument &doc, bool longNames, bool compactOutput, boo
   }
   #endif
 
-  return user_config.serialize(doc, longNames, compactOutput, hideSecrets);
+  bool result = user_config.serialize(doc, longNames, compactOutput, hideSecrets);
+  config_strip_internal(doc);
+  return result;
 }
 
 bool config_set(const char *name, uint32_t val) {

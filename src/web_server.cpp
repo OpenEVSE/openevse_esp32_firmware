@@ -52,6 +52,7 @@ typedef const __FlashStringHelper *fstr_t;
 #include "loadsharing_types.h"
 #include "loadsharing_peer_poller.h"
 #include "boost.h"
+#include "notifications.h"
 #include "web_auth.h"
 #include "web_auth_secret.h"
 
@@ -539,6 +540,12 @@ static String html_escape(const String &input) {
 // Build status data
 // --------------------------------------------------------------------
 
+// master fixed a real bug here (buildStatus()'s two call sites had drifted
+// capacities, silently truncating the status on connect) by defining a shared
+// STATUS_JSON_CAPACITY. Not needed after the v7 migration: both call sites
+// already use a bare JsonDocument, which grows on demand -- there's no fixed
+// capacity left for the two sites to drift against each other on.
+
 // LittleFS.totalBytes() and LittleFS.usedBytes() each run lfs_fs_size(), a
 // full traversal of every metadata pair and data block in the filesystem,
 // reading flash with the FS lock held. Arduino's wrapper discards whichever
@@ -765,6 +772,14 @@ void buildStatus(JsonDocument &doc) {
 #endif
   home_battery_add_status_fields(doc);
 
+  // Exactly two fields: both UIs need a badge without a second round trip,
+  // and nothing more belongs in a payload the HA integration already polls
+  // hard. The list lives on /notifications. severity is a name ("info" /
+  // "warning" / "critical"), matching how /notifications serialises it.
+  JsonObject notify = doc["notifications"].to<JsonObject>();
+  notify["count"] = notifications.count();
+  notify["severity"] = notification_severity_name(notifications.maxSeverity());
+
   DBUGF("/status ArduinoJson size: %dbytes", doc.size());
 }
 
@@ -813,8 +828,8 @@ handleScan(MongooseHttpServerRequest *request) {
 // and returns false when the request is a headerless GET; the caller's response
 // stream is already open (from requestPreProcess).
 // -------------------------------------------------------------------
-static bool actuatorMethodAllowed(MongooseHttpServerRequest *request,
-                                  MongooseHttpServerResponseStream *response)
+bool actuatorMethodAllowed(MongooseHttpServerRequest *request,
+                           MongooseHttpServerResponseStream *response)
 {
   if(request->method() != HTTP_GET) {
     return true;
@@ -1707,22 +1722,19 @@ void handleCableTemp(MongooseHttpServerRequest *request) {
 
   if(HTTP_GET == request->method())
   {
-    // 4 source objects of 9 members each (source, name, pin, status,
-    // temperature, r25, beta, offset_c10, panic_c10), plus the two
-    // top-level flags. JSON_OBJECT_SIZE(8) below undercounts that by one
-    // member per source; the +512 slack comfortably covers it.
-    const size_t capacity = JSON_OBJECT_SIZE(3) +
-                            JSON_ARRAY_SIZE(OPENEVSE_CABLE_TEMP_SOURCE_COUNT) +
-                            OPENEVSE_CABLE_TEMP_SOURCE_COUNT * JSON_OBJECT_SIZE(8) + 512;
-    DynamicJsonDocument doc(capacity);
+    // v7's JsonDocument grows on demand -- no capacity to size for the 4
+    // source objects (source, name, pin, status, temperature, and the
+    // optional r25/beta/offset_c10/panic_c10 calibration fields) plus the
+    // two top-level flags.
+    JsonDocument doc;
 
     doc["supported"] = evse.isCableTempKnown();
     doc["enabled"] = evse.isCableTempEnabled();
 
-    JsonArray sources = doc.createNestedArray("sources");
+    JsonArray sources = doc["sources"].to<JsonArray>();
     for(uint8_t i = 0; i < OPENEVSE_CABLE_TEMP_SOURCE_COUNT; i++)
     {
-      JsonObject src = sources.createNestedObject();
+      JsonObject src = sources.add<JsonObject>();
       src["source"] = i;
       src["name"] = source_names[i];
       src["pin"] = evse.getCableTempPin(i);
@@ -1755,8 +1767,7 @@ void handleCableTemp(MongooseHttpServerRequest *request) {
   }
 
   MongooseString body = request->body();
-  const size_t capacity = JSON_OBJECT_SIZE(8) + 256;
-  DynamicJsonDocument doc(capacity);
+  JsonDocument doc;
   if(deserializeJson(doc, body.c_str(), body.length())) {
     response->setCode(400);
     response->print("{\"msg\":\"Could not parse JSON\"}");
@@ -1764,7 +1775,7 @@ void handleCableTemp(MongooseHttpServerRequest *request) {
     return;
   }
 
-  if(!doc.containsKey("source") || !doc.containsKey("pin")) {
+  if(doc["source"].isNull() || doc["pin"].isNull()) {
     response->setCode(400);
     response->print("{\"msg\":\"source and pin are required\"}");
     request->send(response);
@@ -1794,10 +1805,10 @@ void handleCableTemp(MongooseHttpServerRequest *request) {
   // full-configuration form is all-or-nothing, and filling the gaps from the
   // local cache would silently write back a stale value if the cache were
   // cold or another client had changed it.
-  bool hasCal = doc.containsKey("r25") && doc.containsKey("beta") &&
-                doc.containsKey("offset_c10") && doc.containsKey("panic_c10");
-  bool anyCal = doc.containsKey("r25") || doc.containsKey("beta") ||
-                doc.containsKey("offset_c10") || doc.containsKey("panic_c10");
+  bool hasCal = !doc["r25"].isNull() && !doc["beta"].isNull() &&
+                !doc["offset_c10"].isNull() && !doc["panic_c10"].isNull();
+  bool anyCal = !doc["r25"].isNull() || !doc["beta"].isNull() ||
+                !doc["offset_c10"].isNull() || !doc["panic_c10"].isNull();
 
   if(anyCal && !hasCal) {
     response->setCode(400);
@@ -1999,7 +2010,7 @@ void onWsFrame(MongooseHttpWebSocketConnection *connection, int flags, uint8_t *
   JsonDocument doc;
   DeserializationError error = deserializeJson(doc, data, len);
   if (!error) {
-    if (doc["ping"].is<int8_t>())
+    if (!doc["ping"].isNull())
       {
         // answer pong
         connection->send("{\"pong\": 1}");
@@ -2184,6 +2195,8 @@ void web_server_setup()
   server.on("/certificates", handleCertificates);
   server.on("/limit", handleLimit);
   server.on("/boost", handleBoost);
+  server.on("/notifications/ack$", handleNotificationAck);
+  server.on("/notifications$", handleNotifications);
   server.on("/emeter", handleEmeter);
   server.on("/time", handleTime);
   server.on("/mqtt$", handleMqttAction);

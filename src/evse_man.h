@@ -336,6 +336,9 @@ class EvseManager : public MicroTasks::Task
     double getAmps() {
       return _monitor.getAmps();
     }
+    long getPilot() {
+      return _monitor.getPilot();
+    }
     double getVoltage() {
       return _monitor.getVoltage();
     }
@@ -416,6 +419,12 @@ class EvseManager : public MicroTasks::Task
     }
     bool isOvercurrentMonitorEnabled() {
       return _monitor.isOvercurrentMonitorEnabled();
+    }
+    bool isSettingsKnown() {
+      return _monitor.isSettingsKnown();
+    }
+    uint32_t getSettingsFlags() {
+      return _monitor.getSettingsFlags();
     }
     uint32_t getPanicTemperature() {
       return _monitor.getPanicTemperature();

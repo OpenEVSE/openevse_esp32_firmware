@@ -763,7 +763,7 @@ bool Scheduler::deserializeInternal(JsonObject &obj, uint32_t event_id)
   }
 
   if(!obj["state"].isNull() &&
-     !obj["time"].isNull() &&
+     obj["time"].is<const char*>() &&
      obj["days"].is<JsonArray>())
   {
     const char *time = obj["time"].as<const char *>();

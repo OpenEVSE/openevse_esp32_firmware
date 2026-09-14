@@ -50,7 +50,7 @@ void handleRfidUsers(MongooseHttpServerRequest *request)
 
   if(HTTP_GET == request->method())
   {
-    DynamicJsonDocument doc(2048);
+    JsonDocument doc;
     if(!RfidUser::load(doc) || !doc.is<JsonObject>()) {
       // No mappings saved yet (or a corrupt file) - report an empty map
       // rather than "null" so clients can treat this as "feature available,
@@ -65,7 +65,7 @@ void handleRfidUsers(MongooseHttpServerRequest *request)
   {
     String body = request->body().toString();
 
-    DynamicJsonDocument doc(512);
+    JsonDocument doc;
     DeserializationError error = deserializeJson(doc, body);
 
     if(error) {
@@ -135,20 +135,20 @@ void handleLogsExport(MongooseHttpServerRequest *request)
     response->print("Time,Type,State,Energy (kWh),Elapsed (min),RFID Tag,User Name,Temperature (C)\r\n");
 
     // Load RFID user mappings once before iterating, rather than per-entry
-    DynamicJsonDocument usersDoc(2048);
+    JsonDocument usersDoc;
     RfidUser::load(usersDoc);
     JsonObject users = usersDoc.as<JsonObject>();
 
     // Iterate through all log files
     for(uint32_t i = eventLog.getMinIndex(); i <= eventLog.getMaxIndex(); i++)
     {
-      eventLog.enumerate(i, [response, &users](String time, EventType type, const String &logEntry, EvseState managerState, uint8_t evseState, uint32_t evseFlags, uint8_t pilotState, uint16_t changed, uint32_t pilot, double energy, uint32_t elapsed, double temperature, double temperatureMax, uint8_t divertMode, uint8_t shaper, const String &rfidTag)
+      eventLog.enumerate(i, [response, &users](String time, EventType type, const String &logEntry, EvseState managerState, uint8_t evseState, uint32_t evseFlags, uint8_t pilotState, uint16_t changed, uint32_t pilot, double energy, uint32_t elapsed, double temperature, double temperatureMax, uint8_t divertMode, uint8_t shaper, const String &rfidTag, const char *notification)
       {
         // Convert values
         double energyKwh = energy / 1000.0;
         double elapsedMin = elapsed / 60.0;
         String userName = "";
-        if(rfidTag.length() > 0 && !users.isNull() && users.containsKey(rfidTag)) {
+        if(rfidTag.length() > 0 && !users.isNull() && !users[rfidTag].isNull()) {
           userName = users[rfidTag].as<String>();
         }
 
