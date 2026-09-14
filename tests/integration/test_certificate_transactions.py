@@ -68,6 +68,17 @@ def chain_payload(directory):
     return payload
 
 
+def fail_next_array_allocation(native, directory):
+    library = directory / "fail-nothrow-new.so"
+    source = Path(__file__).with_name("fail_nothrow_new.cpp")
+    subprocess.run(["c++", "-shared", "-fPIC", str(source), "-ldl", "-o", str(library)],
+                   check=True, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+    marker = directory / "fail-next-array"
+    native.env["LD_PRELOAD"] = str(library)
+    native.env["OPENEVSE_FAIL_NOTHROW_NEW_ARRAY_MARKER"] = str(marker)
+    return marker
+
+
 @pytest.fixture
 def native(tmp_path):
     binary = Path(os.environ.get("NATIVE_BINARY_PATH", str(
@@ -180,3 +191,48 @@ def test_ecdsa_chain_upload_and_delete_survive_restart(native, tmp_path):
     native.start()
     assert native.ids() == set()
     assert native.delete("4").status_code == 404
+
+
+@pytest.mark.parametrize("failure", ["allocation", "storage"])
+def test_root_delete_failure_preserves_active_state(native, tmp_path, failure):
+    marker = fail_next_array_allocation(native, tmp_path)
+    payloads = [certificate_payload(tmp_path, serial) for serial in (1, 2)]
+    native.start()
+    for payload in payloads:
+        assert native.upload(payload).status_code == 200
+    trust = native.get("/certificates/root").text
+    record = native.files / "1.json"
+    saved = record.read_bytes()
+    if failure == "allocation":
+        marker.touch()
+    else:
+        record.unlink()
+        record.mkdir()
+        (record / "occupied").write_text("dummy", encoding="ascii")
+    assert native.delete("1").status_code == 404
+    if failure == "allocation":
+        assert not marker.exists(), "Allocation hook was not exercised"
+        assert record.read_bytes() == saved
+    assert native.ids() == {"1", "2"}
+    assert native.get("/certificates/root").text == trust
+    if failure == "storage":
+        (record / "occupied").unlink()
+        record.rmdir()
+        record.write_bytes(saved)
+    native.start()
+    assert native.ids() == {"1", "2"}
+
+
+def test_root_upload_allocation_failure_preserves_active_state(native, tmp_path):
+    marker = fail_next_array_allocation(native, tmp_path)
+    first = certificate_payload(tmp_path, 1)
+    second = certificate_payload(tmp_path, 2)
+    native.start()
+    assert native.upload(first).status_code == 200
+    trust = native.get("/certificates/root").text
+    marker.touch()
+    assert native.upload(second).status_code == 400
+    assert not marker.exists(), "Allocation hook was not exercised"
+    assert native.ids() == {"1"}
+    assert native.get("/certificates/root").text == trust
+    assert not (native.files / "2.json").exists()
