@@ -594,7 +594,8 @@ public:
 
   /**
    * @brief Get unified peer list (discovered + group offline peers + local node).
-   * The local node is always included first with joined=true, online=true.
+   * The local node is always included first with joined=true; its online status
+   * follows the running web listener.
    * Helper for GET /loadsharing/peers endpoint.
    *
    * @param includeDiscovered Include mDNS-discovered peers (default: true)
