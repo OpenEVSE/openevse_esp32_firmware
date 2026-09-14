@@ -7,6 +7,7 @@
 #include <memory>
 
 #include "emonesp.h"
+#include "certificate_id.h"
 #include "certificates.h"
 #include "fs_util.h"
 #include "root_ca.h"
@@ -96,7 +97,7 @@ bool CertificateStore::Certificate::deserialize(JsonObject &obj)
 
 bool CertificateStore::Certificate::serialize(JsonObject &doc, uint32_t flags)
 {
-  doc["id"] = String(_id, HEX);
+  doc["id"] = certificate_id_hex(_id);
   doc["type"] = _type.toString();
   doc["name"] = _name;
   doc["certificate"] = _cert;
@@ -462,7 +463,8 @@ bool CertificateStore::loadCertificate(String &name)
 
 bool CertificateStore::saveCertificate(Certificate *cert)
 {
-  String name = String(CERTIFICATE_BASE_DIRECTORY) + "/" + String(cert->getId(), HEX) + ".json";
+  std::string id = certificate_id_hex(cert->getId());
+  String name = String(CERTIFICATE_BASE_DIRECTORY) + "/" + id.c_str() + ".json";
 
   DynamicJsonDocument doc(CERTIFICATE_JSON_BUFFER_SIZE);
   JsonObject object = doc.to<JsonObject>();
@@ -493,11 +495,26 @@ bool CertificateStore::saveCertificate(Certificate *cert)
 
 bool CertificateStore::removeCertificate(Certificate *cert)
 {
-  String name = String(CERTIFICATE_BASE_DIRECTORY) + "/" + String(cert->getId(), HEX) + ".json";
-  if(LittleFS.remove(name))
-  {
-    return true;
+  std::string id = certificate_id_hex(cert->getId());
+  String canonical = String(CERTIFICATE_BASE_DIRECTORY) + "/" + id.c_str() + ".json";
+  String legacy_id = id.c_str();
+  legacy_id.toLowerCase();
+  String legacy = String(CERTIFICATE_BASE_DIRECTORY) + "/" + legacy_id + ".json";
+
+  bool found = false;
+  if(LittleFS.exists(canonical)) {
+    found = true;
+    if(!LittleFS.remove(canonical)) {
+      return false;
+    }
   }
 
-  return false;
+  if(legacy != canonical && LittleFS.exists(legacy)) {
+    found = true;
+    if(!LittleFS.remove(legacy)) {
+      return false;
+    }
+  }
+
+  return found;
 }
