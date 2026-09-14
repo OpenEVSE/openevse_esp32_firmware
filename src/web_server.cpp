@@ -2260,14 +2260,14 @@ static void registerWebServerRoutes(MongooseHttpServer &server)
 
   server.on("/override", handleOverride);
 
-  server.on("/logs/export$", handleLogsExport);
+  server.on("/logs/export", handleLogsExport);
   server.on("/logs", handleEventLogs);
   server.on("/certificates/#", handleCertificates);
   server.on("/certificates", handleCertificates);
   server.on("/limit", handleLimit);
   server.on("/boost", handleBoost);
-  server.on("/notifications/ack$", handleNotificationAck);
-  server.on("/notifications$", handleNotifications);
+  server.on("/notifications/ack", handleNotificationAck);
+  server.on("/notifications", handleNotifications);
   server.on("/emeter", handleEmeter);
   server.on("/time", handleTime);
   server.on("/mqtt", handleMqttAction);
