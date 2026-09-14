@@ -44,7 +44,7 @@ void handleEventLogs(MongooseHttpServerRequest *request)
 
         response->print("[");
 
-        eventLog.enumerate(block, [&count, response](String time, EventType type, const String &logEntry, EvseState managerState, uint8_t evseState, uint32_t evseFlags, uint8_t pilotState, uint16_t changed, uint32_t pilot, double energy, uint32_t elapsed, double temperature, double temperatureMax, uint8_t divertMode, uint8_t shaper, const String &rfidTag)
+        eventLog.enumerate(block, [&count, response](String time, EventType type, const String &logEntry, EvseState managerState, uint8_t evseState, uint32_t evseFlags, uint8_t pilotState, uint16_t changed, uint32_t pilot, double energy, uint32_t elapsed, double temperature, double temperatureMax, uint8_t divertMode, uint8_t shaper, const String &rfidTag, const char *notification)
         {
           StaticJsonDocument<1024> event;
 
@@ -73,6 +73,7 @@ void handleEventLogs(MongooseHttpServerRequest *request)
           if(changed & EVENTLOG_CHANGE_DIVERT)     { why.add("divert"); }
           if(changed & EVENTLOG_CHANGE_SHAPER)     { why.add("shaper"); }
           if(changed & EVENTLOG_CHANGE_PERIODIC)   { why.add("periodic"); }
+          if(changed & EVENTLOG_CHANGE_NOTIFICATION) { why.add("notification"); }
           event["pilot"] = pilot;
           event["energy"] = energy;
           event["elapsed"] = elapsed;
@@ -82,6 +83,9 @@ void handleEventLogs(MongooseHttpServerRequest *request)
           event["shaper"] = shaper == true?1:0;
           if(rfidTag.length() > 0) {
             event["rfidTag"] = rfidTag;
+          }
+          if(notification && notification[0]) {
+            event["notification"] = notification;
           }
           serializeJson(event, *response);
         });
