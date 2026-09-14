@@ -32,7 +32,7 @@ class RfidTask : public MicroTasks::Task {
         unsigned long waitingBegin = 0;
         void scanCard(String& uid);
         String authenticatedTag {'\0'};
-        ulong authentication_timestamp {0};
+        unsigned long authentication_timestamp {0};
         boolean isAuthenticated();
         bool authenticationTimeoutExpired();
         void resetAuthentication();
