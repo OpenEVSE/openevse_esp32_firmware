@@ -11,6 +11,12 @@
 class CertificateStore
 {
   public:
+    enum class RemoveResult : uint8_t {
+      Removed,
+      NotFound,
+      Error
+    };
+
     class Certificate : virtual public JsonSerialize<4096>
     {
       public:
@@ -113,7 +119,7 @@ class CertificateStore
     bool addCertificate(const char *name, const char *cert, uint64_t *id = nullptr);
     bool addCertificate(DynamicJsonDocument &doc, uint64_t *id = nullptr, bool save = true);
 
-    bool removeCertificate(uint64_t id);
+    RemoveResult removeCertificate(uint64_t id);
 
     const char *getCertificate(uint64_t id);
     const char *getKey(uint64_t id);
@@ -143,7 +149,8 @@ class CertificateStore
     bool findCertificate(uint64_t id, Certificate *&cert);
     bool findCertificate(uint64_t id, int &index);
 
-    bool buildRootCa();
+    bool prepareRootCa(Certificate *additional, Certificate *excluded, const char *&prepared);
+    void replaceRootCa(const char *replacement);
 };
 
 
