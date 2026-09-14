@@ -262,7 +262,7 @@ jobs:
       # Best-effort: the base branch may not have a build with flash size
       # artifacts yet (e.g. right after this feature is added), so a miss
       # here just means the report shows sizes with no "change vs base".
-      uses: dawidd6/action-download-artifact@v6
+      uses: dawidd6/action-download-artifact@v24
       continue-on-error: true
       with:
         workflow: build.yaml
