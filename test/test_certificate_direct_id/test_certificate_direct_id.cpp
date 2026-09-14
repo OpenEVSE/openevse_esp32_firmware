@@ -14,8 +14,11 @@
 
 #include "certificates.h"
 
-// Make an uninitialized Certificate ID reproducible instead of depending on
-// whichever bytes the allocator happened to leave behind.
+/**
+ * Allocate test memory, poisoning Certificate-sized blocks to expose unset IDs.
+ * @param size Requested allocation size in bytes.
+ * @return Allocated memory; throws std::bad_alloc if allocation fails.
+ */
 void *operator new(std::size_t size)
 {
   void *memory = std::malloc(size);
@@ -25,7 +28,9 @@ void *operator new(std::size_t size)
   }
   return memory;
 }
+/** Release memory obtained through the test's malloc-backed operator new. */
 void operator delete(void *memory) noexcept { std::free(memory); }
+/** Release a sized allocation through the same allocator as the unsized form. */
 void operator delete(void *memory, std::size_t) noexcept { std::free(memory); }
 
 namespace {
@@ -37,6 +42,7 @@ struct Fixture
   std::string certificate;
   std::string key;
 
+  /** Generate dummy PEM material with a fixed serial and mount an isolated EpoxyFS directory. */
   Fixture()
   {
     // Keys are generated in memory only, never read from a developer's files.
@@ -82,6 +88,7 @@ struct Fixture
     REQUIRE(LittleFS.begin());
   }
 
+  /** Unmount EpoxyFS, remove this fixture's directory and clear its root override. */
   ~Fixture()
   {
     LittleFS.end();
@@ -90,6 +97,10 @@ struct Fixture
   }
 };
 
+/**
+ * Check serial identity, duplicate rejection and persistence through a direct overload.
+ * @param client True selects the certificate-and-key overload; false selects the root overload.
+ */
 void check_direct_add(bool client)
 {
   Fixture fixture;
@@ -138,11 +149,13 @@ void check_direct_add(bool client)
 }
 }
 
+/** Verify the direct root overload preserves serial identity through storage and reload. */
 TEST_CASE("direct root add uses the validated serial for lookup and persistence")
 {
   check_direct_add(false);
 }
 
+/** Verify the direct client overload preserves serial identity and private-key persistence. */
 TEST_CASE("direct client add uses the validated serial for lookup and persistence")
 {
   check_direct_add(true);
