@@ -2171,6 +2171,10 @@ void web_server_setup()
     redirect.on("/", handleHttpsRedirect);
   }
 
+  if(web_server_listener.started) {
+    net.publishWebServer(web_server_listener.port, web_server_listener.https);
+  }
+
   // Session management (no auth gate — user must reach these unauthenticated)
   server.on("/login$", handleLogin);
   server.on("/logout$", handleLogout);
@@ -2367,6 +2371,21 @@ void web_server_setup()
   web_server_load_sharing_setup();
 
   DEBUG.println(web_server_listener.started ? "Server started" : "Server failed to start");
+}
+
+bool web_server_is_running()
+{
+  return web_server_listener.started;
+}
+
+bool web_server_is_https()
+{
+  return web_server_listener.started && web_server_listener.https;
+}
+
+uint16_t web_server_port()
+{
+  return web_server_listener.port;
 }
 
 void

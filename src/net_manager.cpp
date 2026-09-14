@@ -42,6 +42,7 @@
 NetManagerTask *NetManagerTask::_instance = NULL;
 
 NetManagerTask::NetManagerTask(LcdTask &lcd, LedManagerTask &led, TimeManager &time) :
+  _mdnsStarted(false),
   _dnsServerStarted(false),
   _dnsPort(53),
   _softAP_ssid("OpenEVSE"),
@@ -75,6 +76,20 @@ void NetManagerTask::begin()
     _instance = this;
     MicroTask.startTask(this);
   }
+}
+
+void NetManagerTask::publishWebServer(uint16_t port, bool ssl)
+{
+  if(!_mdnsStarted) {
+    return;
+  }
+
+  MDNS.addService("http", "tcp", port);
+  MDNS.addService("openevse", "tcp", port);
+  MDNS.addServiceTxt("openevse", "tcp", "type", buildenv.c_str());
+  MDNS.addServiceTxt("openevse", "tcp", "version", currentfirmware.c_str());
+  MDNS.addServiceTxt("openevse", "tcp", "id", ESPAL.getLongId());
+  MDNS.addServiceTxt("openevse", "tcp", "ssl", ssl ? "1" : "0");
 }
 
 // -------------------------------------------------------------------
@@ -625,17 +640,7 @@ void NetManagerTask::setup()
   // Initially startup the netwrok to kick things off
   manageState();
 
-  if (MDNS.begin(esp_hostname.c_str()))
-  {
-    bool ssl = config_https_enabled();
-    uint16_t svcPort = ssl ? www_https_port : www_http_port;
-    MDNS.addService("http", "tcp", svcPort);
-    MDNS.addService("openevse", "tcp", svcPort);
-    MDNS.addServiceTxt("openevse", "tcp", "type", buildenv.c_str());
-    MDNS.addServiceTxt("openevse", "tcp", "version", currentfirmware.c_str());
-    MDNS.addServiceTxt("openevse", "tcp", "id", ESPAL.getLongId());
-    MDNS.addServiceTxt("openevse", "tcp", "ssl", ssl ? "1" : "0");
-  }
+  _mdnsStarted = MDNS.begin(esp_hostname.c_str());
 }
 
 unsigned long NetManagerTask::handleMessage()
