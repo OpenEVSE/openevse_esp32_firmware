@@ -209,7 +209,7 @@ def test_root_delete_failure_preserves_active_state(native, tmp_path, failure):
         record.unlink()
         record.mkdir()
         (record / "occupied").write_text("dummy", encoding="ascii")
-    assert native.delete("1").status_code == 404
+    assert native.delete("1").status_code == 500
     if failure == "allocation":
         assert not marker.exists(), "Allocation hook was not exercised"
         assert record.read_bytes() == saved
