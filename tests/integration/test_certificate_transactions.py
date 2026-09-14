@@ -82,7 +82,7 @@ def fail_next_array_allocation(native, directory):
 @pytest.fixture
 def native(tmp_path):
     binary = Path(os.environ.get("NATIVE_BINARY_PATH", str(
-        Path(__file__).resolve().parents[2] / ".pio/build/native_openevse/program")))
+        Path(__file__).resolve().parents[2] / ".pio/build/native_openevse/program"))).resolve()
     assert binary.is_file(), "Build native_openevse before running these tests"
     runtime = tmp_path / "runtime"
     runtime.mkdir()
@@ -155,6 +155,7 @@ def test_root_upload_storage_failure_preserves_active_state(native, tmp_path):
     native.start()
     assert native.upload(first).status_code == 200
     trust = native.get("/certificates/root").text
+    assert first["certificate"] in trust
     # An occupied destination forces persistence to fail on both backends.
     blocked = native.files / "2.json"
     blocked.mkdir()
@@ -179,7 +180,8 @@ def test_stale_temporary_record_is_discarded_on_restart(native, tmp_path):
 def test_ecdsa_chain_upload_and_delete_survive_restart(native, tmp_path):
     payload = chain_payload(tmp_path)
     native.start()
-    assert native.upload(payload).status_code == 200
+    uploaded = native.upload(payload)
+    assert uploaded.status_code == 200
     assert native.ids() == {"4"}
     assert not list(native.files.glob("*.tmp"))
     native.start()
@@ -201,6 +203,7 @@ def test_root_delete_failure_preserves_active_state(native, tmp_path, failure):
     for payload in payloads:
         assert native.upload(payload).status_code == 200
     trust = native.get("/certificates/root").text
+    assert all(payload["certificate"] in trust for payload in payloads)
     record = native.files / "1.json"
     saved = record.read_bytes()
     if failure == "allocation":
@@ -230,6 +233,7 @@ def test_root_upload_allocation_failure_preserves_active_state(native, tmp_path)
     native.start()
     assert native.upload(first).status_code == 200
     trust = native.get("/certificates/root").text
+    assert first["certificate"] in trust
     marker.touch()
     assert native.upload(second).status_code == 400
     assert not marker.exists(), "Allocation hook was not exercised"
@@ -249,13 +253,38 @@ def test_corrupt_record_recovery_is_atomic(native, tmp_path):
     staging = native.files / "1.json.tmp"
     staging.mkdir()
     (staging / "occupied").write_text("dummy", encoding="ascii")
-    assert native.upload(payload).status_code == 400
+    uploaded = native.upload(payload)
+    assert uploaded.status_code == 400
     assert record.read_text(encoding="ascii") == "{"
     assert native.ids() == set()
     (staging / "occupied").unlink()
     staging.rmdir()
-    assert native.upload(payload).status_code == 200
+    uploaded = native.upload(payload)
+    assert uploaded.status_code == 200
     assert json.loads(record.read_text(encoding="ascii"))["id"] == "1"
     assert not list(native.files.glob("*.tmp"))
     native.start()
     assert native.ids() == {"1"}
+
+
+def test_record_staging_allocation_failure_preserves_active_state(native, tmp_path):
+    marker = fail_next_array_allocation(native, tmp_path)
+    root = certificate_payload(tmp_path, 1)
+    client = certificate_payload(tmp_path, 2, client=True)
+    native.start()
+    uploaded = native.upload(root)
+    assert uploaded.status_code == 200
+    trust = native.get("/certificates/root").text
+    assert root["certificate"] in trust
+    marker.touch()
+    uploaded = native.upload(client)
+    assert uploaded.status_code == 400
+    assert not marker.exists(), "Allocation hook was not exercised"
+    assert native.ids() == {"1"}
+    assert native.get("/certificates/root").text == trust
+    assert not (native.files / "2.json").exists()
+    assert not list(native.files.glob("*.tmp"))
+    uploaded = native.upload(client)
+    assert uploaded.status_code == 200
+    native.start()
+    assert native.ids() == {"1", "2"}
