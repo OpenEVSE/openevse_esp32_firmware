@@ -65,7 +65,7 @@ def wait_for_http_ready(url: str, timeout: float = 30, poll_interval: float = 0.
     start = time.time()
     while time.time() - start < timeout:
         try:
-            response = requests.get(url, timeout=2)
+            response = requests.get(url, timeout=2, allow_redirects=False)
             if response.status_code == 200:
                 return True
         except requests.RequestException:
@@ -94,7 +94,7 @@ def wait_for_evse_state(url: str, timeout: float = 30, poll_interval: float = 0.
     start = time.time()
     while time.time() - start < timeout:
         try:
-            response = requests.get(f"{url}/status", timeout=2)
+            response = requests.get(f"{url}/status", timeout=2, allow_redirects=False)
             if response.status_code == 200 and response.json().get("state", 0) >= 1:
                 return True
         except (requests.RequestException, ValueError):
@@ -442,6 +442,12 @@ def instance_pair(docker_client, emulator_image, tmp_path, request):
             f"www_http_port={native_port}",
             "--set-config",
             f"hostname=openevse-native-{port_offset}",
+            "--set-config",
+            "ssid=EPX_OK",
+            "--set-config",
+            "pass=integration",
+            "--set-config",
+            "sntp_enabled=true",
         ]
 
         # Give each instance a distinct device id. The EpoxyDuino ESPAL returns a

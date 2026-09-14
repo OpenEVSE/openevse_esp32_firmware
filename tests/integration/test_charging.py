@@ -15,18 +15,19 @@ import time
 REQUEST_TIMEOUT = 5
 # Matches app_config.h enum vehicle_data_src: VEHICLE_DATA_SRC_HTTP = 3.
 VEHICLE_DATA_SRC_HTTP = 3
+ROUTE_BINDING_CLAIM_ID = 9998
 
 
 def api_get(url):
-    return requests.get(url, timeout=REQUEST_TIMEOUT)
+    return requests.get(url, timeout=REQUEST_TIMEOUT, allow_redirects=False)
 
 
 def api_post(url, json):
-    return requests.post(url, json=json, timeout=REQUEST_TIMEOUT)
+    return requests.post(url, json=json, timeout=REQUEST_TIMEOUT, allow_redirects=False)
 
 
 def api_delete(url):
-    return requests.delete(url, timeout=REQUEST_TIMEOUT)
+    return requests.delete(url, timeout=REQUEST_TIMEOUT, allow_redirects=False)
 
 
 def wait_for_state(native_url, predicate, timeout=10, poll_interval=0.2):
@@ -38,7 +39,9 @@ def wait_for_state(native_url, predicate, timeout=10, poll_interval=0.2):
     deadline = time.time() + timeout
     while time.time() < deadline:
         try:
-            data = requests.get(f"{native_url}/status", timeout=2).json()
+            data = requests.get(
+                f"{native_url}/status", timeout=2, allow_redirects=False
+            ).json()
             last_state = data.get("state")
             if predicate(last_state):
                 return last_state
@@ -65,6 +68,62 @@ def wait_for_status_field(native_url, field, predicate, timeout=10, poll_interva
     if last_error is not None:
         print(f"wait_for_status_field({field}) last polling error: {last_error}")
     return last_value
+
+
+@pytest.mark.timeout(120)
+class TestMongooseRouting:
+    """Coverage for HTTP route binding through ArduinoMongoose."""
+
+    def test_core_api_routes_bind_without_legacy_dollar_suffix(self, evse_instance):
+        routes = [
+            "/status",
+            "/config",
+            "/override",
+            "/claims",
+            "/claims/target",
+        ]
+        for route in routes:
+            response = api_get(f"{evse_instance['native_url']}{route}")
+            assert response.status_code == 200, (
+                f"{route}: Expected 200, got {response.status_code}; "
+                f"Location={response.headers.get('Location')}, body={response.text}"
+            )
+
+    def test_override_and_claims_routes_accept_non_get_methods(self, evse_instance):
+        disable_response = api_post(
+            f"{evse_instance['native_url']}/override",
+            json={"state": "disabled"},
+        )
+        assert disable_response.status_code in (200, 201), (
+            f"/override POST: Expected 200/201, got {disable_response.status_code}; "
+            f"Location={disable_response.headers.get('Location')}, body={disable_response.text}"
+        )
+
+        clear_response = api_delete(f"{evse_instance['native_url']}/override")
+        assert clear_response.status_code in (200, 204), (
+            f"/override DELETE: Expected 200/204, got {clear_response.status_code}; "
+            f"Location={clear_response.headers.get('Location')}, body={clear_response.text}"
+        )
+
+        claim_url = f"{evse_instance['native_url']}/claims/{ROUTE_BINDING_CLAIM_ID}"
+        claim_response = api_post(
+            claim_url,
+            json={
+                "state": "active",
+                "charge_current": 20,
+                "auto_release": True,
+            },
+        )
+        assert claim_response.status_code in (200, 201), (
+            f"/claims/{{id}} POST: Expected 200/201, got {claim_response.status_code}; "
+            f"Location={claim_response.headers.get('Location')}, body={claim_response.text}"
+        )
+
+        release_response = api_delete(claim_url)
+        assert release_response.status_code == 200, (
+            f"/claims/{{id}} DELETE: Expected 200, got {release_response.status_code}; "
+            f"Location={release_response.headers.get('Location')}, body={release_response.text}"
+        )
 
 
 @pytest.mark.timeout(120)
