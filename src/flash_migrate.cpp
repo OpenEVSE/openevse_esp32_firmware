@@ -337,6 +337,13 @@ static bool finalize_streamed_image(const String &expected_sha, bool check_app_m
   // App only: flush the final partial sector (padded with 0xFF).
   if(mctx.streaming_app && mctx.sect_fill > 0 && !mctx.dry_run)
   {
+    // Same bound as the full-sector path in consume_chunk(): an image of
+    // NEW_APP1_SIZE + a few bytes gets through there and would land its tail
+    // in the region past the partition.
+    if(mctx.app_flash_off + FLASH_SECTOR > NEW_APP1_OFFSET + NEW_APP1_SIZE) {
+      DEBUG_PORT.println("[migrate] image larger than the target partition");
+      return false;
+    }
     memset(mctx.sect + mctx.sect_fill, 0xFF, FLASH_SECTOR - mctx.sect_fill);
     if(!flash_write_sector(mctx.app_flash_off, mctx.sect, FLASH_SECTOR)) {
       return false;
