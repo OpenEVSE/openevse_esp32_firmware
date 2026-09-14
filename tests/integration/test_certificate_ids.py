@@ -139,6 +139,43 @@ class CertificateIdTests(unittest.TestCase):
     def test_delete_both_filename_variants(self):
         self.check_legacy_delete(keep_canonical=True)
 
+    def test_maximum_id_get(self):
+        certificate_id = "FFFFFFFFFFFFFFFF"
+        self.assertEqual(self.upload(certificate_id), certificate_id)
+        fetched = requests.get(f"{self.base}/certificates/{certificate_id.lower()}", timeout=10)
+        self.assertEqual(fetched.status_code, 200)
+        self.assertTrue(isinstance(fetched.json(), dict), "An ID route must return one certificate")
+        self.assertEqual(fetched.json()["id"], certificate_id)
+
+    def test_maximum_id_delete(self):
+        certificate_id = "FFFFFFFFFFFFFFFF"
+        self.assertEqual(self.upload(certificate_id), certificate_id)
+        deleted = requests.delete(f"{self.base}/certificates/{certificate_id}", timeout=10)
+        self.assertEqual(deleted.status_code, 200)
+        self.restart()
+        fetched = requests.get(f"{self.base}/certificates/{certificate_id}", timeout=10)
+        self.assertEqual(fetched.status_code, 404)
+        listed = requests.get(f"{self.base}/certificates", timeout=10)
+        self.assertEqual(listed.status_code, 200)
+        self.assertEqual([item["id"] for item in listed.json()], [])
+
+    def test_maximum_id_post_is_not_collection_post(self):
+        response = requests.post(f"{self.base}/certificates/FFFFFFFFFFFFFFFF",
+                                 json=self.payload, timeout=10)
+        self.assertEqual(response.status_code, 405)
+        listed = requests.get(f"{self.base}/certificates", timeout=10)
+        self.assertEqual(listed.status_code, 200)
+        self.assertEqual([item["id"] for item in listed.json()], [])
+
+    def test_missing_maximum_id_is_not_collection_get(self):
+        fetched = requests.get(f"{self.base}/certificates/FFFFFFFFFFFFFFFF", timeout=10)
+        self.assertEqual(fetched.status_code, 404)
+        listed = requests.get(f"{self.base}/certificates", timeout=10)
+        self.assertEqual(listed.status_code, 200)
+        self.assertEqual([item["id"] for item in listed.json()], [])
+        deleted = requests.delete(f"{self.base}/certificates", timeout=10)
+        self.assertEqual(deleted.status_code, 405)
+
 
 if __name__ == "__main__":
     unittest.main(verbosity=2)
