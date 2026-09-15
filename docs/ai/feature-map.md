@@ -32,7 +32,6 @@ relative to the configured base topic (see [mqtt.md](../mqtt.md)).
 | OCPP 1.6 | `ocpp.*` | `/settings/ocpp` | `ocpp_*` | `/config` | — | [ocpp.md](../user/ocpp.md) |
 | RFID authentication | `rfid.*` | `/settings/rfid` | `rfid_enabled`, `rfid_storage` | `/config`, RFID endpoints | `rfid/…` | [rfid.md](../user/rfid.md) |
 | Vehicle SOC/range (Tesla / MQTT / OCPP sources) | `tesla_client.*`, `vehicle.*` | `/settings/vehicle` | `tesla_*`, `mqtt_vehicle_*`, `vehicle_data_src` | `/tesla/vehicles`, `/config` | vehicle topics | [vehicle.md](../user/vehicle.md) |
-| Ohm Connect demand response | `ohm.*` | `/settings/ohmconnect` | `ohm`, `ohm_enabled` | `/config` | — | [integrations.md](../user/integrations.md) |
 | WiFi / wired Ethernet / AP mode | `net_manager.*` | `/settings/network` | `ssid`, `pass`, `ap_*`, `hostname` | `/config`, `/scan`, `/status` | — | [getting-started.md](../user/getting-started.md) |
 | HTTP auth & web access | `web_server.*` | `/settings/http` | `www_*` | `/config` | — | [settings.md](../user/settings.md) |
 | Time & timezone (SNTP) | `time_man.*` | `/settings/time` | `sntp_*`, `time_zone` | `/time`, `/config` | — | [settings.md](../user/settings.md) |

@@ -41,8 +41,7 @@ hardware is present.
   [Solar divert](solar-divert.md).
 - **[Load Shaper](screenshots/settings-shaper-dark-desktop.png)** — see
   [Load shaper](load-shaper.md).
-- **[EmonCMS](screenshots/settings-emoncms-dark-desktop.png)** and
-  **[OhmConnect](screenshots/settings-ohmconnect-dark-desktop.png)** — see
+- **[EmonCMS](screenshots/settings-emoncms-dark-desktop.png)** — see
   [Integrations](integrations.md).
 
 ## System
