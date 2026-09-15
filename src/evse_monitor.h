@@ -241,6 +241,9 @@ class EvseMonitor : public MicroTasks::Task
     // _cable_temp_known is true - the controller may predate the feature or
     // have it compiled out.
     bool _cable_temp_known;
+    // millis() of the last successful $GN live-readings poll. A run of failed
+    // polls eventually invalidates the cached temperatures and statuses.
+    uint32_t _cable_temp_last_success;
     // Last enable/disable this session actually commanded and had the
     // controller accept ($FF C); meaningful only when _cable_temp_commanded_known
     // is true. The controller has no read-back for that bit, so
@@ -268,9 +271,8 @@ class EvseMonitor : public MicroTasks::Task
     // after any successful write, not polled - it only changes when something
     // writes it.
     bool _cable_temp_cfg_known;
-    uint32_t _cable_temp_cfg_refresh;
-    uint8_t _cable_temp_cfg_responses;
-    bool _cable_temp_cfg_success;
+    bool _cable_temp_cfg_valid[OPENEVSE_CABLE_TEMP_SOURCE_COUNT];
+    uint32_t _cable_temp_cfg_refresh[OPENEVSE_CABLE_TEMP_SOURCE_COUNT];
     uint8_t  _cable_temp_pin[OPENEVSE_CABLE_TEMP_SOURCE_COUNT];
     uint32_t _cable_temp_r25[OPENEVSE_CABLE_TEMP_SOURCE_COUNT];
     uint32_t _cable_temp_beta[OPENEVSE_CABLE_TEMP_SOURCE_COUNT];
@@ -321,12 +323,10 @@ class EvseMonitor : public MicroTasks::Task
     void readRelayHealth();
 #ifdef ENABLE_CABLE_TEMP
     void readCableTemperatures();
-    // All 4 sources, boot-time only (see the call site) - $GN idx x4.
+    // Refresh all 4 sources (used at boot) - $GN idx x4.
     void readCableTempConfig();
-    // One source, after a targeted write - $GN idx x1. Updates that source's
-    // cache directly without touching _cable_temp_cfg_known: that flag is a
-    // boot-time "have all 4 ever been read together" gate, and a single-
-    // source refresh has no bearing on it either way.
+    // Refresh one source after a targeted write or failed read. Its cached
+    // calibration is hidden until the matching response succeeds.
     void readCableTempConfig(uint8_t source);
 #endif // ENABLE_CABLE_TEMP
 
@@ -580,6 +580,9 @@ class EvseMonitor : public MicroTasks::Task
     // source is an OPENEVSE_CABLE_TEMP_SOURCE_xxx index.
     bool isCableTempKnown() { return _cable_temp_known; }
     bool isCableTempConfigKnown() { return _cable_temp_cfg_known; }
+    bool isCableTempConfigValid(uint8_t source) {
+      return source < OPENEVSE_CABLE_TEMP_SOURCE_COUNT && _cable_temp_cfg_valid[source];
+    }
     // True when this source produced an actual reading. False covers all three
     // non-reading conditions - use getCableTempStatus() to tell them apart.
     bool isCableTempValid(uint8_t source) {

@@ -7,10 +7,21 @@
 #include <LittleFS.h>
 
 const char* RfidUser::RFID_USERS_FILE = "/rfid_users.json";
+static const char* RFID_USERS_BACKUP_FILE = "/rfid_users.json.bak";
 
 bool RfidUser::load(JsonDocument &doc)
 {
-  File file = LittleFS.open(RFID_USERS_FILE, "r");
+  // Recover an interrupted replacement that moved the old file aside but did
+  // not commit the temp file. If restoration itself fails, the backup remains
+  // readable and is still preferable to silently treating the mapping as new.
+  const char* path = RFID_USERS_FILE;
+  if(!LittleFS.exists(RFID_USERS_FILE) && LittleFS.exists(RFID_USERS_BACKUP_FILE)) {
+    if(!LittleFS.rename(RFID_USERS_BACKUP_FILE, RFID_USERS_FILE)) {
+      path = RFID_USERS_BACKUP_FILE;
+    }
+  }
+
+  File file = LittleFS.open(path, "r");
   if(!file) {
     DBUGLN("RFID users file not found, starting with empty mapping");
     return false;
@@ -48,12 +59,30 @@ bool RfidUser::save(const JsonDocument &doc)
 
   file.close();
 
-  if(LittleFS.exists(RFID_USERS_FILE)) {
-    LittleFS.remove(RFID_USERS_FILE);
+  const bool hadExisting = LittleFS.exists(RFID_USERS_FILE);
+  if(hadExisting) {
+    // LittleFS rename does not provide a portable overwrite guarantee. Keep
+    // the old mapping recoverable until the new file has been committed.
+    if(LittleFS.exists(RFID_USERS_BACKUP_FILE)) {
+      LittleFS.remove(RFID_USERS_BACKUP_FILE);
+    }
+    if(!LittleFS.rename(RFID_USERS_FILE, RFID_USERS_BACKUP_FILE)) {
+      DBUGLN("Failed to back up RFID users file before replacement");
+      LittleFS.remove(tempPath);
+      return false;
+    }
   }
+
   if(!LittleFS.rename(tempPath, RFID_USERS_FILE)) {
     DBUGLN("Failed to rename RFID users temp file into place");
+    if(hadExisting && !LittleFS.rename(RFID_USERS_BACKUP_FILE, RFID_USERS_FILE)) {
+      DBUGLN("Failed to restore RFID users backup; backup retained");
+    }
     return false;
+  }
+
+  if(LittleFS.exists(RFID_USERS_BACKUP_FILE)) {
+    LittleFS.remove(RFID_USERS_BACKUP_FILE);
   }
 
   return true;

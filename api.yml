@@ -553,6 +553,9 @@ paths:
       summary: Export session history as CSV
       tags:
         - Event Log
+      security:
+        - BasicAuth: []
+        - SessionCookie: []
       responses:
         '200':
           description: OK
@@ -560,6 +563,10 @@ paths:
             text/csv:
               schema:
                 type: string
+        '401':
+          description: Basic credentials or a valid session cookie are required
+        '429':
+          description: Invalid Basic credentials have been temporarily rate-limited
       operationId: exportEventLogCsv
       description: >-
         Stream every stored log entry as a CSV file (Time, Type, State, Energy
@@ -1436,6 +1443,14 @@ paths:
         '404':
           $ref: '#/components/responses/NotFound'
 components:
+  securitySchemes:
+    BasicAuth:
+      type: http
+      scheme: basic
+    SessionCookie:
+      type: apiKey
+      in: cookie
+      name: oevse_session
   schemas:
     Message:
       title: Informational message
