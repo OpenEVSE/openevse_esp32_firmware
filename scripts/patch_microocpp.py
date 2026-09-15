@@ -97,7 +97,19 @@ def patch_microocpp_lib(env):
         ),
     ]
     matched = patch_file(reserve_now, reserve_now_replacements)
-    if matched is not None:
+    if matched is None:
+        # The library is installed but the file we patch is not where it
+        # was: the same drift as an unmatched pattern, and just as silent
+        # if let through.
+        sys.stderr.write(
+            "Error: scripts/patch_microocpp.py expected to patch %s for "
+            "ArduinoJson v7 but the file does not exist. MicroOcpp was "
+            "likely restructured in a new version; update the path in "
+            "scripts/patch_microocpp.py (or delete the marker file and "
+            "re-check if the patch is even still needed).\n" % reserve_now
+        )
+        env.Exit(1)
+    else:
         if all(matched):
             patched_count += 1
             print("  Patched ReserveNow.cpp")
