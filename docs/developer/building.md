@@ -57,7 +57,7 @@ The boards split across two PlatformIO platforms:
 
 | Boards | Platform | Arduino / IDF | Why |
 |---|---|---|---|
-| 4MB (`openevse_wifi_v1`, gateways, huzzah, …) — the default | `espressif32@6.12.0` | core **2.x** / IDF4 | Keeps the IDF4 image small enough for **dual-slot OTA** on 4MB flash. |
+| 4MB (`openevse_wifi_v1`, gateways, huzzah, …) — the default | `espressif32@7.1.3` | core **2.x** / IDF4 | Keeps the IDF4 image small enough for **dual-slot OTA** on 4MB flash. |
 | 16MB (`openevse_wifi_v1_16mb`) | `${common.platform_core3}` (pioarduino) | core **3.x** / IDF5 | Larger flash / newer silicon needs the core-3 toolchain; this env is `openevse_wifi_v1` rebuilt on core-3. |
 
 Shared `src/` code that touches APIs which changed between cores (e.g. LEDC,

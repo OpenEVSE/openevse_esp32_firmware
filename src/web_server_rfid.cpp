@@ -20,8 +20,14 @@ static String escapeCSVField(const String &field)
   // spreadsheet software when the export is opened (e.g. a user name of
   // "=HYPERLINK(...)" set via POST /rfid/users). A leading apostrophe forces
   // Excel/Sheets to treat the cell as text.
-  if(value.length() > 0) {
-    char first = value[0];
+  size_t firstIndex = 0;
+  while(firstIndex < value.length() &&
+        (value[firstIndex] == ' ' || value[firstIndex] == '\t' ||
+         value[firstIndex] == '\r' || value[firstIndex] == '\n')) {
+    firstIndex++;
+  }
+  if(firstIndex < value.length()) {
+    char first = value[firstIndex];
     if(first == '=' || first == '+' || first == '-' || first == '@') {
       value = "'" + value;
     }
