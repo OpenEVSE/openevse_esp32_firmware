@@ -68,7 +68,7 @@ typedef uint32_t EvseClient;
 #define EVSE_MANAGER_MAX_CLIENT_CLAIMS 10
 #endif // !EVSE_MANAGER_MAX_CLIENT_CLAIMS
 
-class EvseProperties : virtual public JsonSerialize<512>
+class EvseProperties : virtual public JsonSerialize
 {
   private:
     EvseState _state;

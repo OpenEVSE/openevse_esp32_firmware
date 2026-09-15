@@ -8,28 +8,39 @@ MicroOcpp 1.2.0 uses ArduinoJson v6 APIs that are incompatible with v7:
 
 This script patches the downloaded library source after PlatformIO resolves deps.
 It can be removed once MicroOcpp releases a version compatible with ArduinoJson v7.
+The proper long-term fix is an OpenEVSE-owned fork of MicroOcpp pinned by SHA, the
+way this repo already pins ArduinoMongoose.
 """
 import os
+import sys
 
 Import("env")
 
 def patch_file(filepath, replacements):
-    """Apply text replacements to a file. Returns True if any changes made."""
+    """Apply text replacements to a file.
+
+    Returns a list of booleans, one per entry in `replacements`, recording
+    whether that replacement's search string was found (and applied). Returns
+    None if the file does not exist.
+    """
     if not os.path.exists(filepath):
-        return False
+        return None
 
     with open(filepath, 'r') as f:
         content = f.read()
 
-    original = content
+    matched = []
     for old, new in replacements:
-        content = content.replace(old, new)
+        found = old in content
+        matched.append(found)
+        if found:
+            content = content.replace(old, new)
 
-    if content != original:
+    if any(matched):
         with open(filepath, 'w') as f:
             f.write(content)
-        return True
-    return False
+
+    return matched
 
 
 def patch_microocpp_lib(env):
@@ -67,7 +78,7 @@ def patch_microocpp_lib(env):
     reserve_now = os.path.join(
         microocpp_dir, "src", "MicroOcpp", "Operations", "ReserveNow.cpp"
     )
-    if patch_file(reserve_now, [
+    reserve_now_replacements = [
         (
             '!payload.containsKey("connectorId") ||\n            payload["connectorId"] < 0 ||',
             '(payload["connectorId"] | -1) < 0 ||'
@@ -84,9 +95,37 @@ def patch_microocpp_lib(env):
             '!payload.containsKey("reservationId")',
             '!payload["reservationId"].is<int>()'
         ),
-    ]):
-        patched_count += 1
-        print("  Patched ReserveNow.cpp")
+    ]
+    matched = patch_file(reserve_now, reserve_now_replacements)
+    if matched is None:
+        # The library is installed but the file we patch is not where it
+        # was: the same drift as an unmatched pattern, and just as silent
+        # if let through.
+        sys.stderr.write(
+            "Error: scripts/patch_microocpp.py expected to patch %s for "
+            "ArduinoJson v7 but the file does not exist. MicroOcpp was "
+            "likely restructured in a new version; update the path in "
+            "scripts/patch_microocpp.py (or delete the marker file and "
+            "re-check if the patch is even still needed).\n" % reserve_now
+        )
+        env.Exit(1)
+    else:
+        if all(matched):
+            patched_count += 1
+            print("  Patched ReserveNow.cpp")
+        else:
+            first_unmatched = reserve_now_replacements[matched.index(False)][0]
+            sys.stderr.write(
+                "Error: scripts/patch_microocpp.py could not apply the "
+                "ArduinoJson v7 patch to %s -- one or more expected search "
+                "strings no longer match the file. First unmatched pattern:\n"
+                "  %r\n"
+                "MicroOcpp was likely bumped to a new version; update the "
+                "replacements in scripts/patch_microocpp.py to match the new "
+                "source (or delete the marker file and re-check if the patch "
+                "is even still needed).\n" % (reserve_now, first_unmatched)
+            )
+            env.Exit(1)
 
     if patched_count > 0:
         # Create marker to avoid re-patching

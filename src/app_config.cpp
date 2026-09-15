@@ -658,6 +658,9 @@ bool config_deserialize(JsonDocument &doc)
   #if ENABLE_CONFIG_CHANGE_NOTIFICATION
   // Update EVSE config
   // Update the EVSE setting flags, a little low level, may move later
+  // Presence, not type: isNull() rather than is<T>() so a numeric string or
+  // a float still applies, as it did with v6's containsKey(). An explicit
+  // JSON null is the one case that is now ignored instead of read as 0.
   if(!doc["diode_check"].isNull())
   {
     bool enable = doc["diode_check"];
