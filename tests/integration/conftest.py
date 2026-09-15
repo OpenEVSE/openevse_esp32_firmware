@@ -9,7 +9,6 @@ import os
 import subprocess
 import time
 import socket
-import shutil
 import pytest
 import requests
 import docker
@@ -117,12 +116,12 @@ def get_pty_name(pty_path: str) -> str:
 
 
 @pytest.fixture(scope="session")
-def check_mdns_support():
+def prepare_integration_environment():
     """
-    Verify mDNS daemon is available.
+    Perform initial cleanup before running any tests.
 
-    Will skip all tests if mDNS tools are not available or not running.
-    Performs initial cleanup before running any tests.
+    Native firmware handles mDNS directly through ArduinoMongoose; no host
+    daemon or DNS-SD command-line tools are required.
     """
     # Cleanup stuck containers and PTY files from previous runs
     print("\n[Setup] Cleaning up stuck containers from previous test runs...")
@@ -145,21 +144,13 @@ def check_mdns_support():
     except Exception as e:
         print(f"Warning: Could not clean up PTY files: {e}")
 
-    # Now check for mDNS support
-    result = shutil.which("avahi-browse")
-    if not result:
-        result = shutil.which("dns-sd")
-
-    if not result:
-        pytest.skip("mDNS tools not available (avahi-browse or dns-sd)")
-
 
 @pytest.fixture(scope="session")
-def docker_client(check_mdns_support):
+def docker_client(prepare_integration_environment):
     """
     Get Docker client for managing emulator containers.
 
-    Depends on check_mdns_support to ensure environment is ready.
+    Depends on prepare_integration_environment to ensure environment is ready.
     """
     try:
         client = docker.from_env()
@@ -457,15 +448,23 @@ def instance_pair(docker_client, emulator_image, tmp_path, request):
         native_env = dict(os.environ)
         native_env["OPENEVSE_CHIP_ID"] = f"{0x1234567890AB0000 + port_offset:016x}"
 
+        def start_native():
+            # These are long-lived, chatty processes. Unread PIPEs eventually
+            # fill and block the firmware's event loop, masquerading as HTTP or
+            # discovery timeouts. Keep per-start logs in pytest's temp directory.
+            log_path = instance_workdir / f"firmware-{len(processes)}.log"
+            with log_path.open("w") as log:
+                return subprocess.Popen(
+                    native_command,
+                    stdout=log,
+                    stderr=subprocess.STDOUT,
+                    text=True,
+                    cwd=str(instance_workdir),
+                    env=native_env,
+                )
+
         try:
-            process = subprocess.Popen(
-                native_command,
-                stdout=subprocess.PIPE,
-                stderr=subprocess.PIPE,
-                text=True,
-                cwd=str(instance_workdir),  # Each instance gets unique storage
-                env=native_env,
-            )
+            process = start_native()
             processes.append(process)
         except Exception as e:
             try:
@@ -509,14 +508,7 @@ def instance_pair(docker_client, emulator_image, tmp_path, request):
             # link in place, and then unlink it from under the new process.
             stop_socat_bridge()
             start_socat_bridge()
-            restarted = subprocess.Popen(
-                native_command,
-                stdout=subprocess.PIPE,
-                stderr=subprocess.PIPE,
-                text=True,
-                cwd=str(instance_workdir),
-                env=native_env,
-            )
+            restarted = start_native()
             processes.append(restarted)
             if not wait_for_http_ready(native_url, timeout=30):
                 restarted.terminate()

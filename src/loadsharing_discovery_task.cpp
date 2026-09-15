@@ -9,12 +9,8 @@
 #include "net_manager.h"
 #include <Arduino.h>
 #include <espal.h>
-#include <ESPmDNS.h>
-#include <mdns.h>
+#include <MongooseMdns.h>
 #include <algorithm>
-#if __has_include(<esp_idf_version.h>)
-#include <esp_idf_version.h>
-#endif
 
 static String normalizeTxtField(const String& raw) {
   String value = raw;
@@ -80,7 +76,6 @@ LoadSharingDiscoveryTask::LoadSharingDiscoveryTask(unsigned long cacheTtl,
     _discovery_interval_ms(discovery_interval_ms),
     _query_timeout_ms(query_timeout_ms),
     _last_discovery_time(0),
-    _active_query(nullptr),
     _query_start_time(0),
     _query_in_progress(false),
     _manual_trigger(false),
@@ -101,20 +96,8 @@ unsigned long LoadSharingDiscoveryTask::loop(MicroTasks::WakeReason reason) {
   // If a query is currently in progress, poll its status
   if (_query_in_progress) {
     if (pollAsyncQuery()) {
-      // Query completed, results already processed in pollAsyncQuery(). The
-      // finished search object is still ours to free: mdns_query_async_delete
-      // is the only thing that releases it (struct, name strings, semaphore).
-      // Dropping the handle here leaked ~230 bytes every 10 s query and
-      // exhausted the heap in about an hour on no-PSRAM boards.
+      // Results are a snapshot; release the library's browse state.
       cleanupQuery();
-    } else {
-      // Query still in progress, check timeout
-      if (now - _query_start_time > _query_timeout_ms) {
-        // Query timed out
-        DBUGF("LoadSharingDiscoveryTask: Query timeout after %lu ms", _query_timeout_ms);
-        cleanupQuery();
-        _query_in_progress = false;
-      }
     }
   } else {
     // No query in progress, check if we should start a new one. Periodic
@@ -193,28 +176,7 @@ unsigned long LoadSharingDiscoveryTask::cacheTimeRemaining() const {
 }
 
 void LoadSharingDiscoveryTask::startAsyncQuery() {
-  // Start an async mDNS query for OpenEVSE services
-  // Parameters:
-  //   - name: NULL (search for all instances)
-  //   - service_type: "_openevse", proto: "_tcp". The raw IDF API takes the
-  //     DNS-SD labels verbatim (mdns.h: "_http", "_tcp"); only the Arduino
-  //     ESPmDNS wrapper prepends the underscores. Units advertise via
-  //     MDNS.addService("openevse", "tcp"), i.e. _openevse._tcp.local.
-  //   - type: MDNS_TYPE_PTR (PTR record for service discovery)
-  //   - timeout_ms: query timeout
-  //   - max_results: 20 (collect up to 20 results)
-  //   - notifier: NULL (we'll poll instead)
-  _active_query = (void*)mdns_query_async_new(
-      NULL,
-      "_openevse",
-      "_tcp",
-      MDNS_TYPE_PTR,
-      _query_timeout_ms,
-      20,
-      NULL
-  );
-
-  if (_active_query) {
+  if (Mdns.browse("_openevse._tcp")) {
     _query_in_progress = true;
     _query_start_time = millis();
     DBUGLN("LoadSharingDiscoveryTask: Async query started");
@@ -225,32 +187,13 @@ void LoadSharingDiscoveryTask::startAsyncQuery() {
 }
 
 bool LoadSharingDiscoveryTask::pollAsyncQuery() {
-  if (!_active_query) {
+  if (!_query_in_progress) {
     return false;
   }
 
-  mdns_result_t* results = nullptr;
-
-  // Poll for results with short timeout to avoid blocking
-  // Returns true when query is complete (whether or not results were found)
-  bool isComplete = false;
-#if defined(ESP_IDF_VERSION_MAJOR) && ESP_IDF_VERSION_MAJOR >= 5
-  uint8_t numResults = 0;
-  isComplete = mdns_query_async_get_results(
-      (mdns_search_once_t*)_active_query,
-      100,  // 100ms polling timeout
-      &results,
-      &numResults
-  );
-#else
-  isComplete = mdns_query_async_get_results(
-      (mdns_search_once_t*)_active_query,
-      100,  // 100ms polling timeout
-      &results
-  );
-#endif
-
-  if (isComplete) {
+  // Mongoose receives and assembles DNS-SD records in its normal event loop.
+  // Allow the whole browse window for additional peers and split responses.
+  if ((long)(millis() - (_query_start_time + _query_timeout_ms)) >= 0) {
     unsigned long elapsed = millis() - _query_start_time;
 
     auto hasUsableIp = [](const String& ip) -> bool {
@@ -281,63 +224,42 @@ bool LoadSharingDiscoveryTask::pollAsyncQuery() {
       }
     };
 
-    // Convert mdns_result_t linked list to our DiscoveredPeer vector
+    // Convert the library's DNS-SD snapshot into application peer records.
     std::vector<DiscoveredPeer> peers;
     std::vector<String> seenHostnames;  // Track to deduplicate/merge
 
-    for (mdns_result_t* r = results; r; r = r->next) {
+    for (const auto& r : Mdns.services()) {
       DiscoveredPeer peer;
 
-      // Build hostname
-      if (r->instance_name) {
-        peer.serviceName = String(r->instance_name);
-        peer.hostname = peer.serviceName + String(".local");
-      } else if (r->hostname) {
-        peer.hostname = String(r->hostname);
-        if (!peer.hostname.endsWith(".local")) {
-          peer.hostname += ".local";
-        }
-        peer.serviceName = r->hostname;
-      } else {
-        continue;  // Skip if no hostname
-      }
-
-      // Save resolved host target if available. In native builds this can be
-      // different from instance_name.local and is often not directly usable as
-      // a per-peer key, but it is useful for URL/IP fallback.
-      String resolvedHost;
-      if (r->hostname && strlen(r->hostname) > 0) {
-        resolvedHost = String(r->hostname);
-      }
+      if (r.hostname.empty() || r.port == 0) continue;
+      peer.hostname = r.hostname.c_str();
+      peer.serviceName = r.instance.c_str();
+      const String suffix = "._openevse._tcp.local";
+      if (peer.serviceName.endsWith(suffix))
+        peer.serviceName.remove(peer.serviceName.length() - suffix.length());
+      String resolvedHost = peer.hostname;
 
       // Extract IP address. A responder lists every address it has, IPv6
       // included (link-local and ULA AAAA records come back alongside the A
-      // record), and the list order is not ours to rely on. Take the first
-      // IPv4 entry; reading an IPv6 entry's first four bytes as IPv4 turned
-      // fd4b:288b:... into 253.75.40.139.
-      for (mdns_ip_addr_t* a = r->addr; a; a = a->next) {
-        if (a->addr.type != ESP_IPADDR_TYPE_V4) {
-          continue;
-        }
-        uint32_t ip = a->addr.u_addr.ip4.addr;
-        peer.ipAddress = String((ip & 0xFF)) + "." +
-                        String((ip >> 8) & 0xFF) + "." +
-                        String((ip >> 16) & 0xFF) + "." +
-                        String((ip >> 24) & 0xFF);
-        break;
+      // record), and the list order is not ours to rely on. Prefer a same-subnet
+      // IPv4 entry, falling back to the first IPv4 address.
+      for (const auto& address : r.addresses) {
+        if (address.is_ip6) continue;
+        char ip[16];
+        mg_snprintf(ip, sizeof(ip), "%M", mg_print_ip, &address);
+        if (!hasUsableIp(peer.ipAddress) || isSameSubnet(ip)) peer.ipAddress = ip;
+        if (isSameSubnet(peer.ipAddress)) break;
       }
 
-      peer.port = r->port;
+      peer.port = r.port;
       peer.discoveredAt = millis();
 
       // Extract TXT records
-      for (size_t i = 0; i < r->txt_count; i++) {
-        if (r->txt[i].key && r->txt[i].value) {
-          String key = normalizeTxtField(String(r->txt[i].key));
-          String value = normalizeTxtField(String(r->txt[i].value));
-          if (!key.isEmpty()) {
-            peer.txtRecords[key] = value;
-          }
+      for (const auto& txt : r.txt) {
+        String key = normalizeTxtField(String(txt.first.c_str()));
+        String value = normalizeTxtField(String(txt.second.c_str()));
+        if (!key.isEmpty()) {
+          peer.txtRecords[key] = value;
         }
       }
 
@@ -424,11 +346,6 @@ bool LoadSharingDiscoveryTask::pollAsyncQuery() {
     DBUGF("LoadSharingDiscoveryTask: Query complete in %lu ms, found %u peers",
           elapsed, (unsigned int)peers.size());
 
-    // Clean up mDNS results
-    if (results) {
-      mdns_query_results_free(results);
-    }
-
     // Update our cache with the new results
     _cachedPeers = peers;
     _lastDiscovery = millis();
@@ -453,11 +370,6 @@ void LoadSharingDiscoveryTask::processQueryResults(const std::vector<DiscoveredP
 }
 
 void LoadSharingDiscoveryTask::cleanupQuery() {
-  if (_active_query != nullptr) {
-    mdns_query_async_delete((mdns_search_once_t*)_active_query);
-    _active_query = nullptr;
-  }
+  Mdns.cancelBrowse();
   _query_in_progress = false;
 }
-
-

@@ -11,15 +11,14 @@
 #ifdef ESP32
 #include <WiFi.h>
 #include <esp_wifi.h>
-#include <ESPmDNS.h>              // Resolve URL for update server etc.
 #elif defined(ESP8266)
 #include <ESP8266WiFi.h>
-#include <ESP8266mDNS.h>              // Resolve URL for update server etc.
 #else
 #error Platform not supported
 #endif
 
 #include <MongooseCore.h>
+#include <MongooseMdns.h>
 
 #include <DNSServer.h>                // Required for captive portal
 
@@ -237,6 +236,7 @@ void NetManagerTask::haveNetworkConnection(IPAddress myAddress, IPAddress netmas
   displayState();
 
   Mongoose.ipConfigChanged();
+  _mdnsConfig = "";  // Rejoin multicast after DHCP/reconnect, even on the same IP.
 
   _led.setWifiMode(true, true);
   _lcd.setWifiMode(true, true);
@@ -625,16 +625,48 @@ void NetManagerTask::setup()
   // Initially startup the netwrok to kick things off
   manageState();
 
-  if (MDNS.begin(esp_hostname.c_str()))
-  {
-    bool ssl = config_https_active();
-    uint16_t svcPort = ssl ? www_https_port : www_http_port;
-    MDNS.addService("http", "tcp", svcPort);
-    MDNS.addService("openevse", "tcp", svcPort);
-    MDNS.addServiceTxt("openevse", "tcp", "type", buildenv.c_str());
-    MDNS.addServiceTxt("openevse", "tcp", "version", currentfirmware.c_str());
-    MDNS.addServiceTxt("openevse", "tcp", "id", ESPAL.getLongId());
-    MDNS.addServiceTxt("openevse", "tcp", "ssl", ssl ? "1" : "0");
+  updateMdns();
+}
+
+void NetManagerTask::updateMdns()
+{
+  if (!isConnected() && !isWifiModeAp()) {
+    Mdns.end();
+    _mdnsConfig = "";
+    return;
+  }
+
+  bool ssl = config_https_active();
+  uint16_t port = ssl ? www_https_port : www_http_port;
+  String signature = esp_hostname + ":" + _ipaddress + ":" + String(port) +
+                     (ssl ? ":ssl" : ":http") + (isWifiModeAp() ? ":ap" : "");
+  if (Mdns.isActive() && signature == _mdnsConfig) return;
+
+  // One Mongoose listener handles hostname resolution, advertising and browsing.
+  // Start only once an interface is up; begin() also clears stale address caches.
+  if (Mdns.begin(esp_hostname.c_str()) &&
+      Mdns.addService("_http._tcp", port) &&
+      Mdns.addService("_openevse._tcp", port) &&
+      Mdns.addServiceTxt("_openevse._tcp", "type", buildenv.c_str()) &&
+      Mdns.addServiceTxt("_openevse._tcp", "version", currentfirmware.c_str()) &&
+      Mdns.addServiceTxt("_openevse._tcp", "id", ESPAL.getLongId().c_str()) &&
+      Mdns.addServiceTxt("_openevse._tcp", "ssl", ssl ? "1" : "0")) {
+#if defined(ENABLE_OTA) && !defined(EPOXY_DUINO)
+    // Match ArduinoOTA's discovery contract without starting its IDF responder.
+    if (!Mdns.addService("_arduino._tcp", 3232) ||
+        !Mdns.addServiceTxt("_arduino._tcp", "board", ARDUINO_VARIANT) ||
+        !Mdns.addServiceTxt("_arduino._tcp", "tcp_check", "no") ||
+        !Mdns.addServiceTxt("_arduino._tcp", "ssh_upload", "no") ||
+        !Mdns.addServiceTxt("_arduino._tcp", "auth_upload", "no")) {
+      Mdns.end();
+      DBUGLN("Failed to advertise Arduino OTA");
+      return;
+    }
+#endif
+    _mdnsConfig = signature;
+  } else {
+    Mdns.end();
+    DBUGLN("Failed to start mDNS services");
   }
 }
 
@@ -816,6 +848,7 @@ unsigned long NetManagerTask::loop(MicroTasks::WakeReason reason)
   nextLoopDelay = min(serviceButton(), nextLoopDelay);
 
   nextLoopDelay = min(manageState(), nextLoopDelay);
+  updateMdns();
 
   if(_dnsServerStarted) {
     _dnsServer.processNextRequest(); // Captive portal DNS re-dierct
