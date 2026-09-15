@@ -100,6 +100,7 @@ class NetManagerTask : public MicroTasks::Task
     String _netmask;
     String _ipv6address;
     String _macaddress;
+    String _mdnsConfig;
 
     DNSServer _dnsServer;                  // Create class DNS server, captive portal re-direct
     bool _dnsServerStarted;
@@ -152,6 +153,7 @@ class NetManagerTask : public MicroTasks::Task
     #endif
 
     void displayState();
+    void updateMdns();
     void haveNetworkConnection(IPAddress myAddress, IPAddress netmask = IPAddress(0, 0, 0, 0));
 
     void wifiOnStationModeConnected(const WiFiEventStationModeConnected &event);

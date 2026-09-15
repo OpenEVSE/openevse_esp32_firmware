@@ -20,7 +20,7 @@ Tests are parametrized to run with 2, 3, and 4 paired instances to verify scalin
 1. **Native firmware build** - Build once before running tests:
    ```bash
    cd ../..
-   pio run -e native
+   pio run -e native_openevse
    ```
 
 2. **Docker image** - Pull the emulator image:
@@ -28,14 +28,9 @@ Tests are parametrized to run with 2, 3, and 4 paired instances to verify scalin
    docker pull ghcr.io/jeremypoulter/openevse_emulator:latest
    ```
 
-3. **mDNS daemon** - Avahi must be installed and running:
-   ```bash
-   # Ubuntu/Debian
-   sudo apt-get install avahi-daemon
-   sudo systemctl start avahi-daemon
-   
-   # macOS - mDNS is built-in (Bonjour)
-   ```
+3. **mDNS networking** - Allow UDP multicast to `224.0.0.251:5353` on the
+   host network. Each native instance advertises and resolves its own hostname
+   through ArduinoMongoose. Avahi/Bonjour is not required by the firmware or tests.
 
 4. **socat** - TCP-to-PTY bridge utility:
    ```bash
@@ -128,18 +123,11 @@ rm -f /tmp/rapi_pty_*
 
 If mDNS discovery fails (tests timeout):
 
-```bash
-# Check if Avahi is running
-ps aux | grep avahi-daemon
-
-# Check mDNS resolution manually
-avahi-browse -a -r  # List all mDNS services
-
-# Restart Avahi
-sudo systemctl restart avahi-daemon
-
-# On macOS, mDNS should work automatically
-```
+Check that the host interface is up and permits multicast UDP port 5353.
+All instances must use distinct configured hostnames and device IDs. Mongoose
+starts its listener after network bring-up and collects DNS-SD records without
+blocking the HTTP event loop. For optional independent inspection, use
+`avahi-browse -r _openevse._tcp` or macOS `dns-sd -B _openevse._tcp`.
 
 ### Docker Container Issues
 
@@ -246,11 +234,10 @@ Test results are published to the PR via `EnricoMi/publish-unit-test-result-acti
 | Issue | Cause | Solution |
 |-------|-------|----------|
 | "Port already in use" | Prior test or service using 8000-8003 / 8080-8083 | `docker ps -q --filter "name=emulator_" \| xargs -r docker stop && rm -f /tmp/rapi_pty_*` |
-| "mDNS not available" | Avahi not installed | `sudo apt-get install avahi-daemon` |
 | "Failed to pull image" | Network unreachable | Check internet connection, or `docker pull ghcr.io/jeremypoulter/openevse_emulator:latest` manually |
 | "Docker not available" | Docker daemon not running | `sudo systemctl start docker` or ensure Docker Desktop is running |
 | "PTY permission denied" | /tmp permissions too restrictive | `chmod 777 /tmp` or run tests with appropriate permissions |
-| "Peer discovery times out" | mDNS slower than expected | Increase timeout in conftest.py `wait_for_http_ready()` |
+| "Peer discovery times out" | Multicast blocked or duplicate hostnames | Allow UDP 5353 and use unique per-instance hostnames/device IDs |
 | "Binary not found" | Native firmware not built | `pio run -e native` from ESP32_WiFi_V3.x root |
 
 ## Expected Test Results

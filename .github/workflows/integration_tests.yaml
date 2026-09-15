@@ -36,7 +36,7 @@ jobs:
       - name: Install system dependencies
         run: |
           sudo apt-get update
-          sudo apt-get install -y libavahi-client-dev libavahi-common-dev avahi-utils socat
+          sudo apt-get install -y libssl-dev socat
 
       - name: Build native firmware locally
         run: |
