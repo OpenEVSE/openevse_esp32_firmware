@@ -69,17 +69,21 @@ const char *flash_migrate_partition_scheme()
 // the protected commit. See docs/flash_migrate_repartition.md and
 // https://github.com/OpenEVSE/openevse-16mb-migrator
 
-// Default release manifest. Points at this repo's GitHub releases, where the CI
-// (.github/workflows/build.yaml) publishes migrate_v1_16mb.json together with
-// the matching 16MB app/bootloader/migrator binaries. Override with
-// -D MIGRATE_MANIFEST_URL=... per build env if you publish elsewhere.
+// Release manifest. The CI (.github/workflows/build.yaml) publishes
+// migrate_v1_16mb.json next to the 16MB app and migrator it was built from,
+// under the release for the ref being built: the `latest` prerelease for
+// master, the tag's own release for a v* tag. A release build must migrate
+// onto ITS OWN 16MB app, not whatever some older release carried, so
+// scripts/auto_fw_version.py passes -D MIGRATE_MANIFEST_URL for the tag being
+// built and this default only covers builds with no release of their own
+// (local, pull requests), which get the development build.
 //
 // Use the literal-tag form (releases/download/<tag>/...), NOT releases/latest/
 // download/... : the CI marks its builds as prereleases, and GitHub's "latest"
 // redirect never resolves to a prerelease. The asset URLs the CI bakes into the
 // manifest use this same /releases/download/<tag>/ base, so the two agree.
 #ifndef MIGRATE_MANIFEST_URL
-#define MIGRATE_MANIFEST_URL "https://github.com/OpenEVSE/openevse_esp32_firmware/releases/download/vRePartition4MB/migrate_v1_16mb.json"
+#define MIGRATE_MANIFEST_URL "https://github.com/OpenEVSE/openevse_esp32_firmware/releases/download/latest/migrate_v1_16mb.json"
 #endif
 
 // The 16MB app is streamed to ota_1 of the 16MB layout, which is free, unused
