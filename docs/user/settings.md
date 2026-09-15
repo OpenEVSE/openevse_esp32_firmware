@@ -41,6 +41,8 @@ hardware is present.
   [Solar divert](solar-divert.md).
 - **[Load Shaper](screenshots/settings-shaper-dark-desktop.png)** — see
   [Load shaper](load-shaper.md).
+- **Load Sharing** (Labs; shown once *Enable Labs features* is on under
+  Terminal) — see [Load sharing](load-sharing.md).
 - **[EmonCMS](screenshots/settings-emoncms-dark-desktop.png)** — see
   [Integrations](integrations.md).
 
