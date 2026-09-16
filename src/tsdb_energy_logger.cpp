@@ -59,10 +59,44 @@ bool TsdbEnergyLogger::init_db() {
   return true;
 }
 
+// The writer shares core 1 with loopTask at the same priority, so a long
+// compaction time-slices against the main loop instead of stalling it. It must
+// not sit on core 0: the task watchdog also watches idle0, and a multi-second
+// write there would trip it just the same.
+#define TSDB_WRITER_STACK   6144
+#define TSDB_WRITER_QUEUE   4
+
+bool TsdbEnergyLogger::start_writer() {
+  _jobs = xQueueCreate(TSDB_WRITER_QUEUE, sizeof(TsdbWriteJob));
+  if (_jobs == nullptr) return false;
+  TaskHandle_t h = nullptr;
+  if (xTaskCreatePinnedToCore(writer_task, "tsdb_writer", TSDB_WRITER_STACK, this,
+                              1, &h, APP_CPU_NUM) != pdPASS) {
+    vQueueDelete(_jobs);
+    _jobs = nullptr;
+    return false;
+  }
+  return true;
+}
+
+void TsdbEnergyLogger::writer_task(void *arg) {
+  TsdbEnergyLogger *self = static_cast<TsdbEnergyLogger *>(arg);
+  TsdbWriteJob job;
+  for (;;) {
+    if (xQueueReceive(self->_jobs, &job, portMAX_DELAY) != pdTRUE) continue;
+    if (job.rollup) self->rollup_yesterday();
+    esp_err_t e = tsdb_write(job.ts, job.row);
+    if (e != ESP_OK) DBUGF("tsdb_write failed: %d", e);
+  }
+}
+
 void TsdbEnergyLogger::begin(EvseManager &evse) { _evse = &evse; MicroTask.startTask(this); }
 
 void TsdbEnergyLogger::setup() {
-  _ready = init_db();
+  _ready = init_db() && start_writer();
+  if (!_ready && _init_err == 0) {
+    DEBUG_PORT.println("[tsdb] writer task failed: energy history disabled");
+  }
   _last_session_wh = _evse ? _evse->getSessionEnergy() : 0;
 
   // Seed rollover tracker to TODAY so the first real rollup fires at the next
@@ -276,12 +310,13 @@ unsigned long TsdbEnergyLogger::loop(MicroTasks::WakeReason) {
       // -- Day-rollover: when local date has advanced, roll up yesterday --
       // _last_rolled_{yday,year} == -1 means setup() ran before NTP was valid;
       // seed it now and skip the rollup (partial day since boot).
+      bool rollup = false;
       if (_last_rolled_yday == -1) {
         _last_rolled_yday = now_tm.tm_yday;
         _last_rolled_year = now_tm.tm_year;
       } else if (now_tm.tm_yday  != _last_rolled_yday ||
                  now_tm.tm_year  != _last_rolled_year) {
-        rollup_yesterday();
+        rollup = true;   // done by the writer, ahead of this sample
         _last_rolled_yday = now_tm.tm_yday;
         _last_rolled_year = now_tm.tm_year;
       }
@@ -305,10 +340,16 @@ unsigned long TsdbEnergyLogger::loop(MicroTasks::WakeReason) {
         s.pilot_a = _evse->getChargeCurrent();
       }
 
-      int16_t row[TSDB_NUM_COLS];
-      tsdb_scale_sample(s, row);
-      esp_err_t e = tsdb_write((uint32_t)now, row);
-      if (e != ESP_OK) DBUGF("tsdb_write failed: %d", e);
+      TsdbWriteJob job;
+      job.ts = (uint32_t)now;
+      tsdb_scale_sample(s, job.row);
+      job.rollup = rollup;
+      // Never block here: if the writer is still inside a slow flash operation
+      // the sample is dropped, which costs one point of history, not a reboot.
+      if (xQueueSend(_jobs, &job, 0) != pdTRUE) {
+        _dropped++;
+        DBUGF("tsdb sample dropped, writer busy (%lu total)", (unsigned long)_dropped);
+      }
     }
   }
   return next_ms;
