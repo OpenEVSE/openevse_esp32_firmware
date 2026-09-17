@@ -68,7 +68,7 @@ typedef uint32_t EvseClient;
 #define EVSE_MANAGER_MAX_CLIENT_CLAIMS 10
 #endif // !EVSE_MANAGER_MAX_CLIENT_CLAIMS
 
-class EvseProperties : virtual public JsonSerialize<512>
+class EvseProperties : virtual public JsonSerialize
 {
   private:
     EvseState _state;
@@ -300,9 +300,9 @@ class EvseManager : public MicroTasks::Task
       return _charge_current_client;
     }
 
-    bool serializeClaims(DynamicJsonDocument &doc);
-    bool serializeClaim(DynamicJsonDocument &doc, EvseClient client);
-    bool serializeTarget(DynamicJsonDocument &doc);
+    bool serializeClaims(JsonDocument &doc);
+    bool serializeClaim(JsonDocument &doc, EvseClient client);
+    bool serializeTarget(JsonDocument &doc);
 
     // Evse Status
     bool isConnected() {

@@ -50,7 +50,7 @@ void handleRfidUsers(MongooseHttpServerRequest *request)
 
   if(HTTP_GET == request->method())
   {
-    DynamicJsonDocument doc(2048);
+    JsonDocument doc;
     if(!RfidUser::load(doc) || !doc.is<JsonObject>()) {
       // No mappings saved yet (or a corrupt file) - report an empty map
       // rather than "null" so clients can treat this as "feature available,
@@ -65,7 +65,7 @@ void handleRfidUsers(MongooseHttpServerRequest *request)
   {
     String body = request->body().toString();
 
-    DynamicJsonDocument doc(512);
+    JsonDocument doc;
     DeserializationError error = deserializeJson(doc, body);
 
     if(error) {
@@ -135,7 +135,7 @@ void handleLogsExport(MongooseHttpServerRequest *request)
     response->print("Time,Type,State,Energy (kWh),Elapsed (min),RFID Tag,User Name,Temperature (C)\r\n");
 
     // Load RFID user mappings once before iterating, rather than per-entry
-    DynamicJsonDocument usersDoc(2048);
+    JsonDocument usersDoc;
     RfidUser::load(usersDoc);
     JsonObject users = usersDoc.as<JsonObject>();
 
@@ -148,7 +148,7 @@ void handleLogsExport(MongooseHttpServerRequest *request)
         double energyKwh = energy / 1000.0;
         double elapsedMin = elapsed / 60.0;
         String userName = "";
-        if(rfidTag.length() > 0 && !users.isNull() && users.containsKey(rfidTag)) {
+        if(rfidTag.length() > 0 && !users.isNull() && !users[rfidTag].isNull()) {
           userName = users[rfidTag].as<String>();
         }
 
