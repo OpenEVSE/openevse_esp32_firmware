@@ -193,7 +193,7 @@ bool Scenario::loadFromFile(const std::string &path)
     if (pj["divert_mode"].is<const char *>()) {
       p.divert_mode = pj["divert_mode"].as<const char *>();
     }
-    if (pj["shaper_enabled"].is<bool>()) {
+    if (!pj["shaper_enabled"].isNull()) {
       p.shaper_enabled = pj["shaper_enabled"].as<bool>();
       p.shaper_enabled_set = true;
     }
@@ -203,16 +203,16 @@ bool Scenario::loadFromFile(const std::string &path)
       for (JsonObjectConst ej : events) {
         PeerEvent e;
         e.t_sec = ej["time"] | 0;
-        if (ej["online"].is<bool>()) {
+        if (!ej["online"].isNull()) {
           e.set_online = true; e.online = ej["online"].as<bool>();
         }
-        if (ej["vehicle"].is<bool>()) {
+        if (!ej["vehicle"].isNull()) {
           e.set_vehicle = true; e.vehicle = ej["vehicle"].as<bool>();
         }
-        if (ej["request_current"].is<bool>()) {
+        if (!ej["request_current"].isNull()) {
           e.set_request_current = true; e.request_current = ej["request_current"].as<bool>();
         }
-        if (ej["aux_load_kw"].is<double>()) {
+        if (!ej["aux_load_kw"].isNull()) {
           e.set_aux_load_kw = true; e.aux_load_kw = ej["aux_load_kw"].as<double>();
         }
         if (!ej["boost"].isNull()) {

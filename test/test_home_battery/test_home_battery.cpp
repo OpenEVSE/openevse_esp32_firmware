@@ -11,8 +11,10 @@ TEST_CASE("home_battery values omitted from /status until received") {
 
   JsonDocument doc;
   home_battery_add_status_fields(doc);
-  CHECK(doc["home_battery_soc"].isNull());
-  CHECK(doc["home_battery_power"].isNull());
+  String json;
+  serializeJson(doc, json);
+  CHECK(json.indexOf("\"home_battery_soc\"") < 0);
+  CHECK(json.indexOf("\"home_battery_power\"") < 0);
 }
 
 TEST_CASE("home_battery setters mark values valid and emit them") {
@@ -37,5 +39,7 @@ TEST_CASE("home_battery emits only the field that has been set") {
   JsonDocument doc;
   home_battery_add_status_fields(doc);
   CHECK(doc["home_battery_soc"].as<int>() == 50);
-  CHECK(doc["home_battery_power"].isNull());
+  String json;
+  serializeJson(doc, json);
+  CHECK(json.indexOf("\"home_battery_power\"") < 0);
 }

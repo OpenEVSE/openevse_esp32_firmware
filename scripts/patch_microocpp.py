@@ -36,7 +36,7 @@ def patch_file(filepath, replacements):
         if found:
             content = content.replace(old, new)
 
-    if any(matched):
+    if matched and all(matched):
         with open(filepath, 'w') as f:
             f.write(content)
 

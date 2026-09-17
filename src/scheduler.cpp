@@ -749,14 +749,14 @@ bool Scheduler::deserializeInternal(JsonObject &obj, uint32_t event_id)
   if(SCHEDULER_EVENT_NULL == event_id)
   {
     // Try and get the key from the JSON
-    if(obj["id"].is<uint32_t>()) {
-      event_id = obj["id"];
+    if(!obj["id"].isNull()) {
+      event_id = obj["id"].as<uint32_t>();
     }
   }
   else
   {
-    if(obj["id"].is<uint32_t>()) {
-      if(event_id != obj["id"]) {
+    if(!obj["id"].isNull()) {
+      if(event_id != obj["id"].as<uint32_t>()) {
         return false;
       }
     }

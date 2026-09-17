@@ -104,6 +104,11 @@ bool RfidUser::setUserName(const String &rfidTag, const String &userName)
     users.remove(rfidTag);
   }
 
+  if(doc.overflowed()) {
+    DBUGLN("RfidUser: mapping document overflowed, not saving");
+    return false;
+  }
+
   return save(doc);
 }
 
