@@ -553,7 +553,9 @@ bool CertificateStore::saveCertificate(Certificate *cert)
       }
   } storage;
 
-  return certificate_storage_commit(storage, name.c_str(),
+  // Include the configured directory and the largest 64-bit hex ID in the bound.
+  constexpr size_t MAX_FINAL_PATH_LENGTH = sizeof(CERTIFICATE_BASE_DIRECTORY "/FFFFFFFFFFFFFFFF.json") - 1;
+  return certificate_storage_commit<MAX_FINAL_PATH_LENGTH>(storage, name.c_str(),
                                     reinterpret_cast<const uint8_t *>(record.get()),
                                     serialized);
 }
