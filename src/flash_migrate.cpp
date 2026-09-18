@@ -573,7 +573,7 @@ static void start_download(const String &url)
     current_req = NULL;
   });
 
-  mclient.send(request);
+  request->send();
 }
 
 // Main-loop pump. Drives the whole download/verify/commit sequence so that

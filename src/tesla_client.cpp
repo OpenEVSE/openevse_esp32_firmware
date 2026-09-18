@@ -233,7 +233,7 @@ void TeslaClient::requestAccessToken()
       }
       _activeRequest = TAR_NONE;
     });
-  _client.send(req);
+  req->send();
 }
 */
 
@@ -329,7 +329,7 @@ void TeslaClient::requestVehicles()
       }
       _activeRequest = TAR_NONE;
     });
-    _client.send(req);
+    req->send();
 }
 
 
@@ -441,7 +441,7 @@ void TeslaClient::requestChargeState()
 
     _activeRequest = TAR_NONE;
   });
-  _client.send(req);
+  req->send();
 }
 
 void TeslaClient::getChargeInfoJson(JsonDocument &doc)

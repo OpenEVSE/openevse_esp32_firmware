@@ -195,24 +195,24 @@ int diagnostics_ws_reap()
   }
 
   struct mg_connection *next = nullptr;
-  for(struct mg_connection *c = mg_next(mgr, nullptr); nullptr != c; c = next)
+  for(struct mg_connection *c = mgr->conns; nullptr != c; c = next)
   {
     // Take the next pointer before we flag this one for close, so that
     // dropping a connection cannot strand the walk.
-    next = mg_next(mgr, c);
+    next = c->next;
 
-    if(!(c->flags & MG_F_IS_WEBSOCKET)) {
+    if(!c->is_websocket) {
       continue;
     }
     conns++;
 
-    uint32_t pending = (uint32_t)c->send_mbuf.len;
+    uint32_t pending = (uint32_t)c->send.len;
     if(pending > diag_ws_send_max) {
       diag_ws_send_max = pending;
     }
 
     if(pending > DIAG_WS_SEND_LIMIT) {
-      c->flags |= MG_F_CLOSE_IMMEDIATELY;
+      c->is_closing = 1;
       diag_ws_reaped++;
       reaped++;
     }
