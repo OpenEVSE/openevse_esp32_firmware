@@ -107,12 +107,20 @@ void handleCertificatesDelete(MongooseHttpServerRequest *request, MongooseHttpSe
 {
   if(UINT64_MAX != certificate)
   {
-    if(certs.removeCertificate(certificate)) {
-      response->setCode(200);
-      response->print("{\"msg\":\"done\"}");
-    } else {
-      response->setCode(404);
-      response->print("{\"msg\":\"Not found\"}");
+    switch(certs.removeCertificate(certificate))
+    {
+      case CertificateStore::RemoveResult::Removed:
+        response->setCode(200);
+        response->print("{\"msg\":\"done\"}");
+        break;
+      case CertificateStore::RemoveResult::NotFound:
+        response->setCode(404);
+        response->print("{\"msg\":\"Not found\"}");
+        break;
+      case CertificateStore::RemoveResult::Error:
+        response->setCode(500);
+        response->print("{\"msg\":\"Could not remove certificate\"}");
+        break;
     }
   } else {
     response->setCode(405);
