@@ -15,7 +15,7 @@ static bool count_allocations = false;
 static bool fail_allocations = false;
 static size_t allocation_count = 0;
 
-// Instrument ordinary C++ allocations, with a controlled failure for heap tests.
+/** Instrument ordinary C++ allocations, with a controlled failure for heap tests. */
 void *operator new(size_t size)
 {
   if(count_allocations) {
@@ -35,12 +35,14 @@ void *operator new(size_t size)
   return memory;
 }
 
-// Match the malloc-backed allocation hook, including sized C++14 deallocation.
+/** Match the malloc-backed allocation hook, including sized C++14 deallocation. */
 void operator delete(void *memory) noexcept { std::free(memory); }
 void operator delete(void *memory, size_t) noexcept { std::free(memory); }
 
-// Records storage calls without allocating, so measured heap requests belong
-// to certificate_storage_commit rather than the std::map-based storage fake.
+/**
+ * Record storage calls without allocating, so measured heap requests belong to
+ * certificate_storage_commit rather than the std::map-based storage fake.
+ */
 class PathRecordingStorage
 {
   public:
@@ -210,6 +212,42 @@ TEST_CASE("maximum certificate filename commits with an exhausted heap")
   CHECK(std::strcmp(storage.renamed_to, path) == 0);
 }
 
+
+TEST_CASE("configured directory bound includes the full ID suffix and terminator")
+{
+  // Match the production caller's capacity calculation for an overridden base.
+  const char path[] = "/custom/certificate/archive/FFFFFFFFFFFFFFFF.json";
+  PathRecordingStorage storage;
+  allocation_count = 0;
+  count_allocations = true;
+  fail_allocations = true;
+  const bool committed = certificate_storage_commit<sizeof(path) - 1>(storage, path, RECORD, sizeof(RECORD));
+  fail_allocations = false;
+  count_allocations = false;
+
+  CHECK(committed);
+  CHECK(allocation_count == 0);
+  CHECK(std::strcmp(storage.written_path, "/custom/certificate/archive/FFFFFFFFFFFFFFFF.json.tmp") == 0);
+  CHECK(std::strcmp(storage.renamed_from, storage.written_path) == 0);
+  CHECK(std::strcmp(storage.renamed_to, path) == 0);
+
+  PathRecordingStorage too_small;
+  CHECK_FALSE(certificate_storage_commit<sizeof(path) - 2>(too_small, path, RECORD, sizeof(RECORD)));
+  CHECK(too_small.calls == 0);
+}
+
+TEST_CASE("empty invalid and shortest paths respect the supplied bound")
+{
+  PathRecordingStorage storage;
+  CHECK_FALSE(certificate_storage_commit<1>(storage, nullptr, RECORD, sizeof(RECORD)));
+  CHECK_FALSE(certificate_storage_commit<1>(storage, "", RECORD, sizeof(RECORD)));
+  CHECK_FALSE(certificate_storage_commit<1>(storage, "a", nullptr, sizeof(RECORD)));
+  CHECK_FALSE(certificate_storage_commit<1>(storage, "a", RECORD, 0));
+  CHECK_FALSE(certificate_storage_commit<0>(storage, "a", RECORD, sizeof(RECORD)));
+  CHECK(storage.calls == 0);
+  CHECK(certificate_storage_commit<1>(storage, "a", RECORD, sizeof(RECORD)));
+  CHECK(std::strcmp(storage.written_path, "a.tmp") == 0);
+}
 
 TEST_CASE("complete certificate record commits by rename")
 {
