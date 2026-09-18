@@ -54,7 +54,8 @@ class Mqtt : public MicroTasks::Task {
     char   _brokerVersion[96];  // payload of $SYS/broker/version, or ""
     time_t _connectedSince;     // Unix ts when last connected (0 = never)
     time_t _lastRxTime;         // Unix ts of most recent broker traffic, sent or received (0 = never)
-    bool   _needsDnsLookup = false; // set in onMqttConnect; DNS done safely in loop()
+
+    void   publishBrokerIp();
     unsigned long _lastStatusPush = 0; // millis() of last periodic status WebSocket push
 
     // Last failure cause, for troubleshooting in the UI
