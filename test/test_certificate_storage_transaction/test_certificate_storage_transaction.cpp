@@ -3,8 +3,70 @@
 
 #include <map>
 #include <string>
+#include <cstdlib>
+#include <cstring>
+#include <new>
 
 #include "certificate_storage_transaction.h"
+
+// Count real heap requests only during the helper call. The rejection test can
+// also exhaust the heap; assertions and storage bookkeeping run outside it.
+static bool count_allocations = false;
+static bool fail_allocations = false;
+static size_t allocation_count = 0;
+
+// Instrument ordinary C++ allocations, with a controlled failure for heap tests.
+void *operator new(size_t size)
+{
+  if(count_allocations) {
+    ++allocation_count;
+  }
+  if(fail_allocations) {
+#if defined(__cpp_exceptions)
+    throw std::bad_alloc();
+#else
+    std::abort();
+#endif
+  }
+  void *memory = std::malloc(size == 0 ? 1 : size);
+  if(nullptr == memory) {
+    std::abort();
+  }
+  return memory;
+}
+
+// Match the malloc-backed allocation hook, including sized C++14 deallocation.
+void operator delete(void *memory) noexcept { std::free(memory); }
+void operator delete(void *memory, size_t) noexcept { std::free(memory); }
+
+// Records storage calls without allocating, so measured heap requests belong
+// to certificate_storage_commit rather than the std::map-based storage fake.
+class PathRecordingStorage
+{
+  public:
+    size_t calls = 0;
+    char written_path[128] = {};
+    char renamed_from[128] = {};
+    char renamed_to[128] = {};
+
+    bool exists(const char *) { ++calls; return false; }
+    bool remove(const char *) { ++calls; return true; }
+    bool hasSpace(size_t) { ++calls; return true; }
+    bool write(const char *path, const uint8_t *, size_t size, size_t &written)
+    {
+      ++calls;
+      std::strncpy(written_path, path, sizeof(written_path) - 1);
+      written = size;
+      return true;
+    }
+    bool rename(const char *from, const char *to)
+    {
+      ++calls;
+      std::strncpy(renamed_from, from, sizeof(renamed_from) - 1);
+      std::strncpy(renamed_to, to, sizeof(renamed_to) - 1);
+      return true;
+    }
+};
 
 class FakeCertificateStorage
 {
@@ -62,6 +124,92 @@ class FakeCertificateStorage
 static const char FINAL_PATH[] = "/certificates/1234.json";
 static const char TEMP_PATH[] = "/certificates/1234.json.tmp";
 static const uint8_t RECORD[] = {'{', '}', '\n'};
+
+TEST_CASE("maximum certificate filename commits without path allocation")
+{
+  const char path[] = "/certificates/FFFFFFFFFFFFFFFF.json";
+  PathRecordingStorage storage;
+  allocation_count = 0;
+  count_allocations = true;
+  const bool committed = certificate_storage_commit(storage, path, RECORD, sizeof(RECORD));
+  count_allocations = false;
+
+  CHECK(committed);
+  CHECK(allocation_count == 0);
+  CHECK(std::strcmp(storage.written_path, "/certificates/FFFFFFFFFFFFFFFF.json.tmp") == 0);
+  CHECK(std::strcmp(storage.renamed_from, storage.written_path) == 0);
+  CHECK(std::strcmp(storage.renamed_to, path) == 0);
+}
+
+TEST_CASE("oversized final path fails before allocation or storage mutation")
+{
+  const char path[] = "/certificates/FFFFFFFFFFFFFFFFF.json";
+  PathRecordingStorage storage;
+  allocation_count = 0;
+  count_allocations = true;
+  const bool committed = certificate_storage_commit(storage, path, RECORD, sizeof(RECORD));
+  count_allocations = false;
+
+  CHECK_FALSE(committed);
+  CHECK(allocation_count == 0);
+  CHECK(storage.calls == 0);
+}
+
+TEST_CASE("oversized path rejection works with an exhausted heap")
+{
+  const char path[] = "/certificates/FFFFFFFFFFFFFFFFF.json";
+  PathRecordingStorage storage;
+  bool committed = true;
+  bool escaped = false;
+  allocation_count = 0;
+  count_allocations = true;
+  fail_allocations = true;
+#if defined(__cpp_exceptions)
+  try {
+#endif
+    committed = certificate_storage_commit(storage, path, RECORD, sizeof(RECORD));
+#if defined(__cpp_exceptions)
+  } catch(const std::bad_alloc &) {
+    escaped = true;
+  }
+#endif
+  fail_allocations = false;
+  count_allocations = false;
+
+  CHECK_FALSE(escaped);
+  CHECK_FALSE(committed);
+  CHECK(allocation_count == 0);
+  CHECK(storage.calls == 0);
+}
+
+TEST_CASE("maximum certificate filename commits with an exhausted heap")
+{
+  const char path[] = "/certificates/FFFFFFFFFFFFFFFF.json";
+  PathRecordingStorage storage;
+  bool committed = false;
+  bool escaped = false;
+  allocation_count = 0;
+  count_allocations = true;
+  fail_allocations = true;
+#if defined(__cpp_exceptions)
+  try {
+#endif
+    committed = certificate_storage_commit(storage, path, RECORD, sizeof(RECORD));
+#if defined(__cpp_exceptions)
+  } catch(const std::bad_alloc &) {
+    escaped = true;
+  }
+#endif
+  fail_allocations = false;
+  count_allocations = false;
+
+  CHECK_FALSE(escaped);
+  CHECK(committed);
+  CHECK(allocation_count == 0);
+  CHECK(std::strcmp(storage.written_path, "/certificates/FFFFFFFFFFFFFFFF.json.tmp") == 0);
+  CHECK(std::strcmp(storage.renamed_to, path) == 0);
+}
+
 
 TEST_CASE("complete certificate record commits by rename")
 {
