@@ -1875,16 +1875,60 @@ static const char RAPI_PAGE_TAIL[] PROGMEM =
 // inline in a few words, so the request cannot be captured piecemeal.
 struct RapiRequest
 {
-  MongooseHttpServerRequest *request;
+  MongooseHttpServerRequest *request;   // NULL once the client has gone away
   MongooseHttpServerResponseStream *response;
   bool json;
   String rapi;
 };
 
+// /r requests waiting on the controller. Mongoose deletes the request when
+// the client closes, so the callback must not touch one that is no longer
+// here: handleRapiClose() unhooks it and rapiRespond() then just tidies up.
+// One slot per RapiSender queue entry is the most that can ever be waiting.
+static RapiRequest *rapiInFlight[RAPI_MAX_COMMANDS] = {};
+
+static bool rapiTrack(RapiRequest *req)
+{
+  for(auto &slot : rapiInFlight) {
+    if(nullptr == slot) {
+      slot = req;
+      return true;
+    }
+  }
+  return false;
+}
+
+static void rapiUntrack(RapiRequest *req)
+{
+  for(auto &slot : rapiInFlight) {
+    if(req == slot) {
+      slot = nullptr;
+    }
+  }
+}
+
+static void handleRapiClose(MongooseHttpServerRequest *request)
+{
+  for(auto &slot : rapiInFlight) {
+    if(slot && slot->request == request) {
+      DBUGF("Client gone before RAPI reply: %s", slot->rapi.c_str());
+      slot->request = nullptr;
+    }
+  }
+}
+
 // Finish a /r request: render the controller's answer (or the failure) as
 // JSON or as the legacy HTML page, send it, and release the context.
 static void rapiRespond(RapiRequest *req, int ret, const String &rapiString)
 {
+  rapiUntrack(req);
+  if(nullptr == req->request) {
+    // Nobody left to answer; the response was never handed to the request.
+    delete req->response;
+    delete req;
+    return;
+  }
+
   int code = 200;
   String page;
 
@@ -1976,6 +2020,12 @@ handleRapi(MongooseHttpServerRequest *request) {
   if(evse.isRapiCommandBlocked(req->rapi))
   {
     rapiRespond(req, RAPI_RESPONSE_BLOCKED, "");
+    return;
+  }
+
+  if(!rapiTrack(req))
+  {
+    rapiRespond(req, RAPI_RESPONSE_QUEUE_FULL, "");
     return;
   }
 
@@ -2236,8 +2286,8 @@ void web_server_setup()
   server.on("/settime$", handleSetTime);
   server.on("/reset$", handleRst);
   server.on("/restart$", handleRestart);
-  server.on("/rapi$", handleRapi);
-  server.on("/r$", handleRapi);
+  server.on("/rapi$")->onRequest(handleRapi)->onClose(handleRapiClose);
+  server.on("/r$")->onRequest(handleRapi)->onClose(handleRapiClose);
   server.on("/scan$", handleScan);
   server.on("/apoff$", handleAPOff);
   server.on("/divertmode$", handleDivertMode);
