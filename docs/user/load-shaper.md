@@ -32,7 +32,7 @@ allocation.
 This is a **Labs preview**: the firmware support is in, the feature is still
 settling. The page lives at **Settings → Load Sharing**
 (`/settings/loadsharing`) and is hidden until you turn on *Enable Labs
-features* under [Settings → Terminal](settings.md) → OpenEVSE Labs. Two
+features* under [Settings → Developer Tools](settings.md) → OpenEVSE Labs. Two
 things to know before you turn it on:
 
 - Every station in the group must run the same firmware release.

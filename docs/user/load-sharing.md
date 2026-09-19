@@ -5,7 +5,7 @@ limit over the local network. One station is the controller; the other
 stations are members.
 
 It is a **Labs preview**: the page is hidden until *Enable Labs features* is
-turned on under [Settings → Terminal](settings.md) → OpenEVSE Labs, every
+turned on under [Settings → Developer Tools](settings.md) → OpenEVSE Labs, every
 station in the group must run the same firmware release, and stations cannot
 yet authenticate to each other — a web password (`www_password`) on any
 station stops its peers connecting to it.
