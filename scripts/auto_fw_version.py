@@ -49,13 +49,37 @@ def get_build_flag():
     except Exception:
         return "-D BUILD_TAG=unknown -D BUILD_HASH=unknown"
 
-build_flags = get_build_flag()
+def get_manifest_flag():
+    """-D MIGRATE_MANIFEST_URL for a release build, else nothing.
+
+    The release job publishes migrate_v1_16mb.json (plus the 16MB app and the
+    migrator it names) under the release for the ref being built: `latest`
+    for master, the tag's own release for a v* tag. The firmware has to look
+    for its manifest in the same place, or "Expand to 16 MB" on a new release
+    would migrate a user onto whichever 16MB app an older release carried.
+    Only refs that get a release are handled here; every other build keeps
+    the compile-time default in src/flash_migrate.cpp (the development build).
+    """
+    ref_name = os.environ.get('GITHUB_REF_NAME')
+    if ref_name == 'master':
+        tag = 'latest'
+    elif ref_name and ref_name.startswith('v'):
+        tag = ref_name
+    else:
+        return ''
+
+    server = os.environ.get('GITHUB_SERVER_URL', 'https://github.com')
+    repo = os.environ.get('GITHUB_REPOSITORY', 'OpenEVSE/openevse_esp32_firmware')
+    url = '%s/%s/releases/download/%s/migrate_v1_16mb.json' % (server, repo, tag)
+    return ' -D MIGRATE_MANIFEST_URL=\\"%s\\"' % url
+
+build_flags = get_build_flag() + get_manifest_flag()
 
 if "SCons.Script" == __name__:
     print ("Firmware Revision: " + build_flags)
     Import("env")
     env.Append(
-        BUILD_FLAGS=[get_build_flag()]
+        BUILD_FLAGS=[build_flags]
     )
 elif "__main__" == __name__:
     print(build_flags)
