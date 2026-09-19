@@ -310,13 +310,12 @@ unsigned long TsdbEnergyLogger::loop(MicroTasks::WakeReason) {
       // -- Day-rollover: when local date has advanced, roll up yesterday --
       // _last_rolled_{yday,year} == -1 means setup() ran before NTP was valid;
       // seed it now and skip the rollup (partial day since boot).
-      bool rollup = false;
       if (_last_rolled_yday == -1) {
         _last_rolled_yday = now_tm.tm_yday;
         _last_rolled_year = now_tm.tm_year;
       } else if (now_tm.tm_yday  != _last_rolled_yday ||
                  now_tm.tm_year  != _last_rolled_year) {
-        rollup = true;   // done by the writer, ahead of this sample
+        _rollup_pending = true;   // done by the writer, ahead of the next sample it accepts
         _last_rolled_yday = now_tm.tm_yday;
         _last_rolled_year = now_tm.tm_year;
       }
@@ -343,10 +342,13 @@ unsigned long TsdbEnergyLogger::loop(MicroTasks::WakeReason) {
       TsdbWriteJob job;
       job.ts = (uint32_t)now;
       tsdb_scale_sample(s, job.row);
-      job.rollup = rollup;
+      job.rollup = _rollup_pending;
       // Never block here: if the writer is still inside a slow flash operation
       // the sample is dropped, which costs one point of history, not a reboot.
-      if (xQueueSend(_jobs, &job, 0) != pdTRUE) {
+      // A pending rollup stays pending until a job carrying it is accepted.
+      if (xQueueSend(_jobs, &job, 0) == pdTRUE) {
+        _rollup_pending = false;
+      } else {
         _dropped++;
         DBUGF("tsdb sample dropped, writer busy (%lu total)", (unsigned long)_dropped);
       }

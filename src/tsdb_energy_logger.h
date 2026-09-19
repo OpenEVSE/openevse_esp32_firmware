@@ -52,6 +52,7 @@ private:
   double       _last_session_wh = 0;   // for per-sample energy delta
   QueueHandle_t _jobs = nullptr;
   uint32_t     _dropped = 0;           // samples lost to a full queue (writer stalled)
+  bool         _rollup_pending = false; // day changed, rollup job not yet accepted by the queue
 
   // Day-rollover tracking: seeded to today at setup() so the first real
   // rollup fires at the next true midnight, not at boot.
