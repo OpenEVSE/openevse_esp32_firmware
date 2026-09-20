@@ -456,35 +456,40 @@ void OcppTask::loadEvseBehavior() {
     /*
      * Give the user feedback about the status of the OCPP transaction
      */
-    setTxNotificationOutput([this] (MicroOcpp::Transaction*, MicroOcpp::TxNotification notification) {
+    // MicroOcpp restructured TxNotification from a scoped MicroOcpp::TxNotification
+    // enum class (matth-x/MicroOcpp@1.2.0, the registry release) into a plain C
+    // enum with TxNotification_-prefixed values (current upstream master, which
+    // jeremypoulter/MicroOcpp's ArduinoJson v7 compat commit is based on) so the
+    // C API (MicroOcpp_c.h) can share it. Same values, C-style names.
+    setTxNotificationOutput([this] (MicroOcpp::Transaction*, TxNotification notification) {
         switch (notification) {
-            case MicroOcpp::TxNotification::AuthorizationRejected:
+            case TxNotification_AuthorizationRejected:
                 LCD_DISPLAY("Card unknown");
                 break;
-            case MicroOcpp::TxNotification::AuthorizationTimeout:
+            case TxNotification_AuthorizationTimeout:
                 LCD_DISPLAY("Server timeout");
                 break;
-            case MicroOcpp::TxNotification::Authorized:
+            case TxNotification_Authorized:
                 LCD_DISPLAY("Card accepted");
                 break;
-            case MicroOcpp::TxNotification::ConnectionTimeout:
+            case TxNotification_ConnectionTimeout:
                 LCD_DISPLAY("Aborted / no EV");
                 break;
-            case MicroOcpp::TxNotification::DeAuthorized:
+            case TxNotification_DeAuthorized:
                 LCD_DISPLAY("Card unknown");
                 break;
-            case MicroOcpp::TxNotification::RemoteStart:
+            case TxNotification_RemoteStart:
                 if (!evse->isVehicleConnected()) {
                     LCD_DISPLAY("Plug in cable");
                 }
                 break;
-            case MicroOcpp::TxNotification::ReservationConflict:
+            case TxNotification_ReservationConflict:
                 LCD_DISPLAY("EVSE reserved");
                 break;
-            case MicroOcpp::TxNotification::StartTx:
+            case TxNotification_StartTx:
                 LCD_DISPLAY("Tx started");
                 break;
-            case MicroOcpp::TxNotification::StopTx:
+            case TxNotification_StopTx:
                 LCD_DISPLAY("Tx stopped");
                 break;
             default:
