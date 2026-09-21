@@ -1745,7 +1745,7 @@ void handleCableTemp(MongooseHttpServerRequest *request) {
       if(evse.isCableTempValid(i)) {
         src["temperature"] = evse.getCableTemp(i);
       }
-      if(evse.isCableTempConfigKnown()) {
+      if(evse.isCableTempConfigValid(i)) {
         src["r25"] = evse.getCableTempR25(i);
         src["beta"] = evse.getCableTempBeta(i);
         src["offset_c10"] = evse.getCableTempOffsetC10(i);
