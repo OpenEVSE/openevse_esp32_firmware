@@ -627,7 +627,7 @@ void NetManagerTask::setup()
 
   if (MDNS.begin(esp_hostname.c_str()))
   {
-    bool ssl = config_https_enabled();
+    bool ssl = config_https_active();
     uint16_t svcPort = ssl ? www_https_port : www_http_port;
     MDNS.addService("http", "tcp", svcPort);
     MDNS.addService("openevse", "tcp", svcPort);

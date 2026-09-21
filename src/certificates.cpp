@@ -191,13 +191,20 @@ bool CertificateStore::addCertificate(DynamicJsonDocument &doc, uint64_t *id, bo
 bool CertificateStore::addCertificate(Certificate *cert, uint64_t *id, bool save)
 {
   uint64_t certId = cert->getId();
-  if(findCertificate(certId, cert)) {
+
+  // findCertificate() takes its result by reference and rebinds it to the
+  // stored certificate. Passing `cert` therefore overwrote the caller's own
+  // pointer on a duplicate id, and every caller deletes `cert` when we return
+  // false -- so a duplicate upload freed the certificate that was still in
+  // _certs. Hand it a scratch pointer instead.
+  Certificate *existing = nullptr;
+  if(findCertificate(certId, existing)) {
     DBUGF("Certificate already exists");
     return false;
   }
 
   if(id != nullptr) {
-    *id = cert->getId();
+    *id = certId;
   }
 
   _certs.push_back(cert);
@@ -206,8 +213,17 @@ bool CertificateStore::addCertificate(Certificate *cert, uint64_t *id, bool save
     buildRootCa();
   }
 
-  if(save) {
-    return saveCertificate(cert);
+  if(save && false == saveCertificate(cert))
+  {
+    // Same ownership rule: the caller deletes `cert` on false, so it must not
+    // be left in _certs. It was, which is how a failed save (a full
+    // filesystem, say) left a dangling pointer that GET /certificates then
+    // serialized -- serving freed heap over HTTP.
+    _certs.pop_back();
+    if(cert->getType() == Certificate::Type::Root) {
+      buildRootCa();
+    }
+    return false;
   }
 
   return true;
