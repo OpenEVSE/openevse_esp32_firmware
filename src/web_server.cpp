@@ -1623,6 +1623,14 @@ void handleAddRFID(MongooseHttpServerRequest *request) {
     return;
   }
 
+  if(!config_rfid_enabled()) {
+    response->setCode(400);
+    response->addHeader("Access-Control-Allow-Origin", "*");
+    response->print("{\"msg\":\"RFID is not enabled, add it in Charge Manager first\"}");
+    request->send(response);
+    return;
+  }
+
   response->setCode(200);
   response->addHeader("Access-Control-Allow-Origin", "*");
   response->print("{\"msg\":\"Waiting for badge\"}");
