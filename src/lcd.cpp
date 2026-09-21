@@ -12,6 +12,7 @@
 #include "app_config.h"
 #include "divert.h"
 #include "net_manager.h"
+#include "lvgl_tft/backlight.h"
 #include <sys/time.h>
 
 static void IGNORE(int ret) {
@@ -56,6 +57,8 @@ LcdTask::LcdTask() :
   _scheduler(NULL),
   _lastStateClient(EvseClient_NULL),
   _nextMessageTime(0),
+  _backlightOn(true),
+  _lastWake(0),
   _evseStateEvent(this),
   _evseSettingsEvent(this)
 {
@@ -250,8 +253,11 @@ unsigned long LcdTask::loop(MicroTasks::WakeReason reason)
   if(evseStateChanged || flagsChanged)
   {
     // Set the LCD background colour based on the EVSE state and deal with any
-    // resulting state changes
+    // resulting state changes. This also relights a blanked backlight, so it
+    // doubles as the wake for any state change.
     _evse->getOpenEVSE().lcdSetColour(_evse->getStateColour(), IGNORE);
+    _backlightOn = true;
+    _lastWake = millis();
     if(evseStateChanged) {
       setInfoLine(getNextInfoLine(LcdInfoLine::Off));
       _updateStateDisplay = true;
@@ -266,6 +272,7 @@ unsigned long LcdTask::loop(MicroTasks::WakeReason reason)
   if(_evseSettingsEvent.IsTriggered()) {
     _updateStateDisplay = true;
     _updateInfoLine = true;
+    wakeBacklight();
   }
 
   // Else display the status screen
@@ -288,8 +295,53 @@ unsigned long LcdTask::loop(MicroTasks::WakeReason reason)
     nextUpdate = nextInfoDelay;
   }
 
+  updateBacklight(nextUpdate);
+
   DBUGVAR(nextUpdate);
   return nextUpdate;
+}
+
+void LcdTask::wakeBacklight()
+{
+  _lastWake = millis();
+  if(!_backlightOn)
+  {
+    DBUGLN("LCD backlight on");
+    _backlightOn = true;
+    _evse->getOpenEVSE().lcdSetColour(_evse->getStateColour(), IGNORE);
+  }
+}
+
+void LcdTask::updateBacklight(unsigned long &nextUpdate)
+{
+  // Same policy as the TFT (bl_should_standby): `lcd_backlight_timeout` of 0
+  // never sleeps, and charging or a fault holds the backlight on - a fault
+  // nobody can read is no fault indication at all.
+  uint32_t timeout = lcd_backlight_timeout;
+  bool keepAwake = _evse->isCharging() || _evse->isError();
+  if(keepAwake || 0 == timeout)
+  {
+    wakeBacklight();
+    return;
+  }
+
+  uint32_t idle = millis() - _lastWake;
+  if(bl_should_standby(keepAwake, timeout, idle))
+  {
+    if(_backlightOn)
+    {
+      DBUGLN("LCD backlight off");
+      _backlightOn = false;
+      _evse->getOpenEVSE().lcdSetColour(0, IGNORE);
+    }
+    return;
+  }
+
+  // Still lit: come back when the timeout expires
+  uint64_t remaining = (uint64_t)timeout * 1000u - idle;
+  if(remaining < nextUpdate) {
+    nextUpdate = (unsigned long)remaining;
+  }
 }
 
 unsigned long LcdTask::displayNextMessage()
@@ -305,6 +357,7 @@ unsigned long LcdTask::displayNextMessage()
     }
 
     // Display the message
+    wakeBacklight();
     showText(msg->getX(), msg->getY(), msg->getMsg(), msg->getClear());
 
     _nextMessageTime = millis() + msg->getTime();
@@ -912,6 +965,7 @@ void LcdTask::showText(int x, int y, const char *msg, bool clear)
 void LcdTask::onButton(int long_press)
 {
   DBUGVAR(long_press);
+  wakeBacklight();
   if(long_press)
   {
     // Boost timer?

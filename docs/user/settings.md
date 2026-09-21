@@ -57,6 +57,11 @@ hardware is present.
   command reference: [rapi.md](../rapi.md).
 - **[Display](screenshots/settings-display-dark-desktop.png)** — theme,
   brightness, and sleep timeout for the on-device TFT touchscreen (only shown
-  on TFT-equipped hardware).
+  on TFT-equipped hardware). On chargers with the
+  [2-line character LCD](screenshots/settings-display-lcd-dark-desktop.png)
+  instead: the backlight type (RGB, or monochrome for a JuiceBox v2
+  conversion) and the same idle timeout, which switches the LCD backlight
+  off; it stays lit while charging or in a fault, and any state change or
+  button press lights it again. "Never" keeps it always on.
 - **[About](screenshots/settings-about-dark-desktop.png)** — versions, device
   info, and diagnostics.

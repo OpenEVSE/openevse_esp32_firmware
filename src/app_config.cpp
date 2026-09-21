@@ -25,6 +25,7 @@
 #include "emoncms.h"
 #include "input.h"
 #include "LedManagerTask.h"
+#include "lcd.h"
 #include "current_shaper.h"
 
 #include "limit.h"
@@ -556,6 +557,10 @@ void config_changed(String name)
     timeManager.setSntpEnabled(config_sntp_enabled());
   } else if(name == "sntp_hostname") {
     timeManager.setHost(sntp_hostname.c_str());
+  } else if(name == "lcd_backlight_timeout") {
+    // The display task sleeps until its next scheduled update; nudge it so a
+    // new timeout (or "never") applies now rather than at the next state change
+    MicroTask.wakeTask(&lcd);
   }
 #endif
 }
