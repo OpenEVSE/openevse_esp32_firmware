@@ -147,11 +147,14 @@ void TimeManager::setup()
     // empty one here says the failure was DNS. Resolving the name again to
     // find that out would take the full retry path — A and AAAA,
     // DNS_MAX_RETRIES against every configured server — and outlast the task
-    // watchdog on loopTask.
-    takeResolvedIp();
-    if('\0' == _resolvedIp[0]) {
+    // watchdog on loopTask. Test the client's address directly rather than
+    // _resolvedIp: only checkNow() clears that, so on a scheduled retry it
+    // still holds the last good address and would mask a fresh DNS failure.
+    if('\0' == _sntp.remoteAddress()[0]) {
       strncpy(_resolvedIp, "failed", sizeof(_resolvedIp) - 1);
       _resolvedIp[sizeof(_resolvedIp) - 1] = '\0';
+    } else {
+      takeResolvedIp();
     }
     unsigned long delay = retryDelay();
     _retryCount++;
