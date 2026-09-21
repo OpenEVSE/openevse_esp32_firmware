@@ -142,6 +142,7 @@ class LcdTask : public MicroTasks::Task
     void onButton(int event);
 
     void wakeBacklight();
+    void lightBacklight();
     void updateBacklight(unsigned long &nextUpdate);
 
     LcdInfoLine getNextInfoLine(LcdInfoLine info);

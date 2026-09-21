@@ -304,6 +304,11 @@ unsigned long LcdTask::loop(MicroTasks::WakeReason reason)
 void LcdTask::wakeBacklight()
 {
   _lastWake = millis();
+  lightBacklight();
+}
+
+void LcdTask::lightBacklight()
+{
   if(!_backlightOn)
   {
     DBUGLN("LCD backlight on");
@@ -337,7 +342,13 @@ void LcdTask::updateBacklight(unsigned long &nextUpdate)
     return;
   }
 
-  // Still lit: come back when the timeout expires
+  // Not in standby. Usually that means still lit, but a timeout raised while
+  // the display was dark lands here with it off: relight it without touching
+  // _lastWake, so it goes dark again at the new timeout from the last
+  // activity rather than from now.
+  lightBacklight();
+
+  // Come back when the timeout expires
   uint64_t remaining = (uint64_t)timeout * 1000u - idle;
   if(remaining < nextUpdate) {
     nextUpdate = (unsigned long)remaining;
