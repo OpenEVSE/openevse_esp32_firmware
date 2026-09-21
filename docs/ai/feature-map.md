@@ -35,7 +35,7 @@ relative to the configured base topic (see [mqtt.md](../mqtt.md)).
 | Ohm Connect demand response | `ohm.*` | `/settings/ohmconnect` | `ohm`, `ohm_enabled` | `/config` | — | [integrations.md](../user/integrations.md) |
 | WiFi / wired Ethernet / AP mode | `net_manager.*` | `/settings/network` | `ssid`, `pass`, `ap_*`, `hostname` | `/config`, `/scan`, `/status` | — | [getting-started.md](../user/getting-started.md) |
 | HTTP auth & web access | `web_server.*` | `/settings/http` | `www_*` | `/config` | — | [settings.md](../user/settings.md) |
-| Time & timezone (SNTP) | `time_man.*` | `/settings/time` | `sntp_*`, `time_zone` | `/time`, `/config` | — | [settings.md](../user/settings.md) |
+| Time & timezone (SNTP; DHCP option 42 preferred, configured host as fallback) | `time_man.*`, `net_manager.*` | `/settings/time` | `sntp_enabled`, `sntp_hostname`, `sntp_dhcp`, `time_zone` | `/time`, `/config` | — | [settings.md](../user/settings.md) |
 | Firmware update (web upload / GitHub OTA) | `web_server.*`, `ota.*` | `/settings/firmware` | — | `/update`, `/restart` | — | [firmware-update.md](../user/firmware-update.md) |
 | SSL certificates | `certificates.*` | `/settings/certificates` | `*_certificate_id` | `/certificates` | — | [settings.md](../user/settings.md) |
 | RAPI terminal / debug console | `web_server.*` | `/settings/terminal` | — | `/r`, WS consoles | — | [settings.md](../user/settings.md) |

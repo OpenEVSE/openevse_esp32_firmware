@@ -30,7 +30,11 @@ hardware is present.
 - **Time & Date** <a id="time--date"></a>
   ([screenshot](screenshots/settings-time-dark-desktop.png)) — SNTP time sync,
   timezone (POSIX rules, DST handled automatically), manual sync. Schedules
-  depend on this being right.
+  depend on this being right. If the DHCP server hands out an NTP server
+  (option 42) it is used in preference to the configured one — handy on
+  isolated networks — falling back to the configured host if it stops
+  answering; the page shows which server is in use. Turn off *Use NTP
+  server from DHCP* to always use the configured host.
 - **[RFID](screenshots/settings-rfid-dark-desktop.png)** — see [RFID](rfid.md).
 - **[Vehicle](screenshots/settings-vehicle-dark-desktop.png)** — see
   [Vehicle](vehicle.md).
