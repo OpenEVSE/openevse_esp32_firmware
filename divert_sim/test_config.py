@@ -28,6 +28,7 @@ def test_config_defaults_present():
     assert "hostname" in cfg
     assert "flags" in cfg
     assert cfg["sntp_enabled"] is True
+    assert cfg["sntp_hostname"] == "time.cloudflare.com"
     assert cfg["sntp_dhcp"] is True
 
 
