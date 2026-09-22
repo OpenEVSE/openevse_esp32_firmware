@@ -48,12 +48,12 @@ jobs:
 
       - name: Install dependencies
         run: |
-          cd gui-v2
+          cd gui-nightshift
           npm install
 
       - name: Build GUI
         run: |
-          cd gui-v2
+          cd gui-nightshift
           npm run build
 
       - name: Run PlatformIO
