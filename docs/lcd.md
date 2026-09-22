@@ -70,7 +70,7 @@ The status screen has two independently managed lines:
 | Sleeping — schedule/timer | `Paused Timer` | Bottom line rotation includes the next `Start` time |
 | Sleeping — manual override | `Paused Manual` | Front button or web/API manual stop |
 | Sleeping — session limit reached | `Limit Reached` | Energy/time/SOC/range limit |
-| Sleeping — remote pause | `Paused Remote` | OCPP, MQTT or Ohm Connect claim |
+| Sleeping — remote pause | `Paused Remote` | OCPP or MQTT claim |
 | Sleeping — other/unknown cause | `zzZ Sleeping Zzz` | E.g. paused directly on the controller |
 | Fault | Two fixed lines | e.g. `SAFETY ERROR` / `GROUND FAULT`, `VEHICLE ERROR` / `VENT REQUIRED` |
 
