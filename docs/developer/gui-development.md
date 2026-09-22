@@ -5,9 +5,6 @@ the `gui-nightshift/` git submodule ([repository](https://github.com/OpenEVSE/op
 It is a pure client of the device's HTTP + WebSocket API; the production build
 is a small gzipped static bundle embedded into the firmware image.
 
-`gui-v2` is the previous UI, kept as a submodule for reference; select it with
-`GUI_NAME=gui-v2` at firmware build time.
-
 ## Development workflow
 
 ```bash
