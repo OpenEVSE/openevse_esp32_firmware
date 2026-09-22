@@ -12,7 +12,7 @@ critical workflows. Read it first. Deeper context:
 
 Essentials, duplicated here for quick reference:
 
-- The default web UI is the **`gui-nightshift`** submodule (not `gui-v2`).
+- The default web UI is the **`gui-nightshift`** submodule.
   Build it before the firmware: `git submodule update --init --recursive &&
   cd gui-nightshift && npm install && npm run build`.
 - `pio run -e openevse_wifi_v1` builds the default board. First build downloads
@@ -22,7 +22,7 @@ Essentials, duplicated here for quick reference:
   bump to submodule commits that are already pushed.
 - After any change: `cd gui-nightshift && npm run build && npm test`, and
   `cd divert_sim && pytest -v` must pass.
-- When a PR changes any user-visible screen (`gui-nightshift`, `gui-v2`,
+- When a PR changes any user-visible screen (`gui-nightshift`,
   `src/lvgl_tft/`), include fresh screenshots of each changed screen
   — for gui-nightshift run `npm run screenshots` and commit the regenerated
   images.

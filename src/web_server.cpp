@@ -771,6 +771,7 @@ void buildStatus(DynamicJsonDocument &doc) {
 #ifdef ENABLE_TSDB
   doc["tsdb_ready"] = tsdbEnergyLogger.isReady() ? 1 : 0;
   doc["tsdb_err"]   = tsdbEnergyLogger.initError();
+  doc["tsdb_dropped"] = tsdbEnergyLogger.droppedSamples();
 #endif
   home_battery_add_status_fields(doc);
 
@@ -1840,121 +1841,230 @@ void handleCableTemp(MongooseHttpServerRequest *request) {
 
 String delayTimer = "0 0 0 0";
 
+static const __FlashStringHelper *rapiErrorName(int ret)
+{
+  return
+    RAPI_RESPONSE_QUEUE_FULL == ret ? F("RAPI_RESPONSE_QUEUE_FULL") :
+    RAPI_RESPONSE_BUFFER_OVERFLOW == ret ? F("RAPI_RESPONSE_BUFFER_OVERFLOW") :
+    RAPI_RESPONSE_TIMEOUT == ret ? F("RAPI_RESPONSE_TIMEOUT") :
+    RAPI_RESPONSE_OK == ret ? F("RAPI_RESPONSE_OK") :
+    RAPI_RESPONSE_NK == ret ? F("RAPI_RESPONSE_NK") :
+    RAPI_RESPONSE_INVALID_RESPONSE == ret ? F("RAPI_RESPONSE_INVALID_RESPONSE") :
+    RAPI_RESPONSE_CMD_TOO_LONG == ret ? F("RAPI_RESPONSE_CMD_TOO_LONG") :
+    RAPI_RESPONSE_BAD_CHECKSUM == ret ? F("RAPI_RESPONSE_BAD_CHECKSUM") :
+    RAPI_RESPONSE_BAD_SEQUENCE_ID == ret ? F("RAPI_RESPONSE_BAD_SEQUENCE_ID") :
+    RAPI_RESPONSE_ASYNC_EVENT == ret ? F("RAPI_RESPONSE_ASYNC_EVENT") :
+    RAPI_RESPONSE_BLOCKED == ret ? F("RAPI_RESPONSE_BLOCKED") :
+    F("UNKNOWN");
+}
+
+static const char RAPI_PAGE_HEAD[] PROGMEM =
+  "<html><font size='20'><font color=006666>Open</font><b>EVSE</b></font><p>"
+  "<b>Open Source Hardware</b><p>RAPI Command Sent<p>Common Commands:<p>"
+  "Set Current - $SC XX<p>Set Service Level - $SL 1 - $SL 2 - $SL A<p>"
+  "Get Real-time Current - $GG<p>Get Temperatures - $GP<p>"
+  "<p>"
+  "<form method='post' action='r'><label><b><i>RAPI Command:</b></i></label>"
+  "<input id='rapi' name='rapi' length=32><p><input type='submit'></form>";
+
+static const char RAPI_PAGE_TAIL[] PROGMEM =
+  "<script type='text/javascript'>document.getElementById('rapi').focus();</script>"
+  "<p></html>\r\n\r\n";
+
+// What a /r request needs once the controller has answered. Heap-allocated
+// and handed to the RAPI callback as one pointer: RapiSender stores handlers
+// inline in a few words, so the request cannot be captured piecemeal.
+struct RapiRequest
+{
+  MongooseHttpServerRequest *request;   // NULL once the client has gone away
+  MongooseHttpServerResponseStream *response;
+  bool json;
+  String rapi;
+};
+
+// /r requests waiting on the controller. Mongoose deletes the request when
+// the client closes, so the callback must not touch one that is no longer
+// here: handleRapiClose() unhooks it and rapiRespond() then just tidies up.
+// One slot per RapiSender queue entry is the most that can ever be waiting.
+static RapiRequest *rapiInFlight[RAPI_MAX_COMMANDS] = {};
+
+static bool rapiTrack(RapiRequest *req)
+{
+  for(auto &slot : rapiInFlight) {
+    if(nullptr == slot) {
+      slot = req;
+      return true;
+    }
+  }
+  return false;
+}
+
+static void rapiUntrack(RapiRequest *req)
+{
+  for(auto &slot : rapiInFlight) {
+    if(req == slot) {
+      slot = nullptr;
+    }
+  }
+}
+
+static void handleRapiClose(MongooseHttpServerRequest *request)
+{
+  for(auto &slot : rapiInFlight) {
+    if(slot && slot->request == request) {
+      DBUGF("Client gone before RAPI reply: %s", slot->rapi.c_str());
+      slot->request = nullptr;
+    }
+  }
+}
+
+// Finish a /r request: render the controller's answer (or the failure) as
+// JSON or as the legacy HTML page, send it, and release the context.
+static void rapiRespond(RapiRequest *req, int ret, const String &rapiString)
+{
+  rapiUntrack(req);
+  if(nullptr == req->request) {
+    // Nobody left to answer; the response was never handed to the request.
+    delete req->response;
+    delete req;
+    return;
+  }
+
+  int code = 200;
+  String page;
+
+  if(!req->json) {
+    page = FPSTR(RAPI_PAGE_HEAD);
+  }
+
+  if(RAPI_RESPONSE_OK == ret || RAPI_RESPONSE_NK == ret)
+  {
+    if(req->json) {
+      // Through the serializer, not string concatenation: the command is
+      // caller-supplied and a quote in it must not escape the value.
+      DynamicJsonDocument doc(512);
+      doc["cmd"] = req->rapi;
+      doc["ret"] = rapiString;
+      serializeJson(doc, page);
+    } else {
+      page += html_escape(req->rapi);
+      page += F("<p>&gt;");
+      page += html_escape(rapiString);
+    }
+  }
+  else
+  {
+    if(req->json) {
+      DynamicJsonDocument doc(512);
+      doc["cmd"] = req->rapi;
+      doc["error"] = rapiErrorName(ret);
+      serializeJson(doc, page);
+    } else {
+      page += html_escape(req->rapi);
+      page += F("<p><strong>Error:</strong>");
+      page += rapiErrorName(ret);
+    }
+    code = RAPI_RESPONSE_BLOCKED == ret ? 400 : 500;
+  }
+
+  if(!req->json) {
+    page += FPSTR(RAPI_PAGE_TAIL);
+  }
+
+  req->response->setCode(code);
+  req->response->print(page);
+  req->request->send(req->response);
+  delete req;
+}
+
+// -------------------------------------------------------------------
+// Send an arbitrary RAPI command to the controller.
+// url: /r, /rapi   params: rapi=<command>  json=1 for a JSON reply
+//
+// The command goes through the async RapiSender queue and the HTTP response
+// is deferred to its completion callback, the same way /relay/reset and
+// /relay/recovery work. The old sendCmdSync() spun on this task without
+// polling Mongoose or feeding the watchdog, so anything long already in the
+// queue ahead of it - a stuck-relay recovery ($FK) can take 30 s - held the
+// whole server and then tripped the 5 s task watchdog.
+// -------------------------------------------------------------------
 void
 handleRapi(MongooseHttpServerRequest *request) {
   bool json = isPositive(request, "json");
-
-  int code = 200;
 
   MongooseHttpServerResponseStream *response;
   if(false == requestPreProcess(request, response, json ? CONTENT_TYPE_JSON : CONTENT_TYPE_HTML)) {
     return;
   }
 
-  String s;
-
-  if(false == json) {
-    s = F("<html><font size='20'><font color=006666>Open</font><b>EVSE</b></font><p>"
-          "<b>Open Source Hardware</b><p>RAPI Command Sent<p>Common Commands:<p>"
-          "Set Current - $SC XX<p>Set Service Level - $SL 1 - $SL 2 - $SL A<p>"
-          "Get Real-time Current - $GG<p>Get Temperatures - $GP<p>"
-          "<p>"
-          "<form method='get' action='r'><label><b><i>RAPI Command:</b></i></label>"
-          "<input id='rapi' name='rapi' length=32><p><input type='submit'></form>");
-  }
-
-  if (request->hasParam("rapi"))
+  if(!request->hasParam("rapi"))
   {
-    String rapi = request->getParam("rapi");
-    int ret = RAPI_RESPONSE_NK;
-
-    if(!evse.isRapiCommandBlocked(rapi))
-    {
-      // BUG: Really we should do this in the main loop not here...
-      RAPI_PORT.flush();
-      DBUGVAR(rapi);
-      ret = rapiSender.sendCmdSync(rapi);
-      DBUGVAR(ret);
-    } else {
-      ret = RAPI_RESPONSE_BLOCKED;
+    // Just the page (or, in JSON mode, nothing): no command, nothing to gate.
+    response->setCode(200);
+    if(!json) {
+      response->print(FPSTR(RAPI_PAGE_HEAD));
+      response->print(FPSTR(RAPI_PAGE_TAIL));
     }
+    request->send(response);
+    return;
+  }
 
-    if(RAPI_RESPONSE_OK == ret ||
-       RAPI_RESPONSE_NK == ret)
+  // A RAPI command can change anything on the controller, so it is an
+  // actuator like /reset: no bare cross-site GET. The app sends the header;
+  // the form above posts.
+  if(!actuatorMethodAllowed(request, response)) {
+    return;
+  }
+
+  RapiRequest *req = new RapiRequest{request, response, json, request->getParam("rapi")};
+
+  if(evse.isRapiCommandBlocked(req->rapi))
+  {
+    rapiRespond(req, RAPI_RESPONSE_BLOCKED, "");
+    return;
+  }
+
+  if(!rapiTrack(req))
+  {
+    rapiRespond(req, RAPI_RESPONSE_QUEUE_FULL, "");
+    return;
+  }
+
+  DBUGVAR(req->rapi);
+  rapiSender.sendCmd(req->rapi, [req](int ret)
+  {
+    DBUGVAR(ret);
+    // Read the answer now, before anything else queued behind us overwrites
+    // the sender's buffer.
+    String rapiString = rapiSender.getResponse();
+
+    // Fake $GD if not supported by firmware
+    if(RAPI_RESPONSE_OK == ret && req->rapi.startsWith(F("$ST"))) {
+      delayTimer = req->rapi.substring(4);
+    }
+    if(RAPI_RESPONSE_NK == ret)
     {
-      String rapiString = rapiSender.getResponse();
-
-      // Fake $GD if not supported by firmware
-      if(RAPI_RESPONSE_OK == ret && rapi.startsWith(F("$ST"))) {
-        delayTimer = rapi.substring(4);
+      if(req->rapi.equals(F("$GD"))) {
+        ret = RAPI_RESPONSE_OK;
+        rapiString = F("$OK ");
+        rapiString += delayTimer;
       }
-      if(RAPI_RESPONSE_NK == ret)
+      else if(req->rapi.startsWith(F("$FF")))
       {
-        if(rapi.equals(F("$GD"))) {
-          ret = 0;
-          rapiString = F("$OK ");
-          rapiString += delayTimer;
-        }
-        else if (rapi.startsWith(F("$FF")))
-        {
-          DBUGF("Attempting legacy FF support");
+        // Legacy controllers without $FF take the same flag via $S.
+        String fallback = F("$S");
+        fallback += req->rapi.substring(4);
+        DBUGF("Attempting legacy FF support: %s", fallback.c_str());
 
-          String fallback = F("$S");
-          fallback += rapi.substring(4);
-
-          DBUGF("Attempting %s", fallback.c_str());
-
-          int ret = rapiSender.sendCmdSync(fallback.c_str());
-          if(RAPI_RESPONSE_OK == ret)
-          {
-            String rapiString = rapiSender.getResponse();
-          }
-        }
-      }
-
-      if (json) {
-        s = "{\"cmd\":\""+rapi+"\",\"ret\":\""+rapiString+"\"}";
-      } else {
-        s += html_escape(rapi);
-        s += F("<p>&gt;");
-        s += html_escape(rapiString);
+        rapiSender.sendCmd(fallback, [req](int ret) {
+          rapiRespond(req, ret, rapiSender.getResponse());
+        });
+        return;
       }
     }
-    else
-    {
-      String errorString =
-        RAPI_RESPONSE_QUEUE_FULL == ret ? F("RAPI_RESPONSE_QUEUE_FULL") :
-        RAPI_RESPONSE_BUFFER_OVERFLOW == ret ? F("RAPI_RESPONSE_BUFFER_OVERFLOW") :
-        RAPI_RESPONSE_TIMEOUT == ret ? F("RAPI_RESPONSE_TIMEOUT") :
-        RAPI_RESPONSE_OK == ret ? F("RAPI_RESPONSE_OK") :
-        RAPI_RESPONSE_NK == ret ? F("RAPI_RESPONSE_NK") :
-        RAPI_RESPONSE_INVALID_RESPONSE == ret ? F("RAPI_RESPONSE_INVALID_RESPONSE") :
-        RAPI_RESPONSE_CMD_TOO_LONG == ret ? F("RAPI_RESPONSE_CMD_TOO_LONG") :
-        RAPI_RESPONSE_BAD_CHECKSUM == ret ? F("RAPI_RESPONSE_BAD_CHECKSUM") :
-        RAPI_RESPONSE_BAD_SEQUENCE_ID == ret ? F("RAPI_RESPONSE_BAD_SEQUENCE_ID") :
-        RAPI_RESPONSE_ASYNC_EVENT == ret ? F("RAPI_RESPONSE_ASYNC_EVENT") :
-        RAPI_RESPONSE_BLOCKED == ret ? F("RAPI_RESPONSE_BLOCKED") :
-        F("UNKNOWN");
 
-      if (json) {
-        s = "{\"cmd\":\""+rapi+"\",\"error\":\""+errorString+"\"}";
-      } else {
-        s += html_escape(rapi);
-        s += F("<p><strong>Error:</strong>");
-        s += errorString;
-      }
-
-      code = RAPI_RESPONSE_BLOCKED == ret ? 400 : 500;
-    }
-  }
-  if (false == json) {
-    s += F("<script type='text/javascript'>document.getElementById('rapi').focus();</script>");
-    s += F("<p></html>\r\n\r\n");
-  }
-
-  response->setCode(code);
-  response->print(s);
-  request->send(response);
+    rapiRespond(req, ret, rapiString);
+  });
 }
 
 void handleNotFound(MongooseHttpServerRequest *request)
@@ -2177,8 +2287,8 @@ void web_server_setup()
   server.on("/settime$", handleSetTime);
   server.on("/reset$", handleRst);
   server.on("/restart$", handleRestart);
-  server.on("/rapi$", handleRapi);
-  server.on("/r$", handleRapi);
+  server.on("/rapi$")->onRequest(handleRapi)->onClose(handleRapiClose);
+  server.on("/r$")->onRequest(handleRapi)->onClose(handleRapiClose);
   server.on("/scan$", handleScan);
   server.on("/apoff$", handleAPOff);
   server.on("/divertmode$", handleDivertMode);
