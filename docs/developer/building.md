@@ -17,8 +17,7 @@ cd gui-nightshift && npm install && npm run build && cd ..
 ```
 
 Node.js 20+ and npm are required. The default UI is the **`gui-nightshift`**
-submodule; setting `GUI_NAME=gui-v2` (or any other checkout) selects an
-alternate GUI directory.
+submodule; setting `GUI_NAME=<dir>` selects an alternate GUI checkout.
 
 ## Quick start
 
