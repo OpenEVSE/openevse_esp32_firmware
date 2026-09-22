@@ -36,9 +36,62 @@ TimeManager::TimeManager() :
   _fetchingTime(false),
   _setTheTime(false),
   _lastSyncTime(0),
-  _syncRequested(false)
+  _syncRequested(false),
+  _dhcpEnabled(true),
+  _dhcpFailedOver(false),
+  _activeHost(NULL)
 {
   _resolvedIp[0] = '\0';
+  _dhcpHost[0] = '\0';
+}
+
+const char *TimeManager::pickHost()
+{
+  if(_dhcpEnabled && _dhcpHost[0] != '\0' && !_dhcpFailedOver) {
+    return _dhcpHost;
+  }
+  return _timeHost;
+}
+
+bool TimeManager::resolveActiveHost()
+{
+  if(NULL == _activeHost) {
+    return false;
+  }
+  struct addrinfo hints = {}, *res = nullptr;
+  hints.ai_family = AF_UNSPEC;
+  if(getaddrinfo(_activeHost, nullptr, &hints, &res) != 0 || !res) {
+    return false;
+  }
+  void *addr = res->ai_family == AF_INET
+    ? (void *)&((struct sockaddr_in  *)res->ai_addr)->sin_addr
+    : (void *)&((struct sockaddr_in6 *)res->ai_addr)->sin6_addr;
+  inet_ntop(res->ai_family, addr, _resolvedIp, sizeof(_resolvedIp) - 1);
+  freeaddrinfo(res);
+  return true;
+}
+
+void TimeManager::fetchFailed()
+{
+  _fetchingTime = false;
+  if(_activeHost == _dhcpHost && _retryCount + 1 >= SNTP_DHCP_FALLBACK_AFTER)
+  {
+    // The DHCP-supplied server isn't answering: switch to the configured
+    // host straight away for the rest of this cycle. The next scheduled poll
+    // (or a config change) goes back to trying DHCP first.
+    DBUGF("NTP: DHCP server %s not answering, falling back to %s", _dhcpHost, _timeHost ? _timeHost : "(none)");
+    _dhcpFailedOver = true;
+    _retryCount++;
+    _nextCheckTime = millis();
+    _resolvedIp[0] = '\0';   // the DNS badge now describes the configured host
+  }
+  else
+  {
+    unsigned long delay = retryDelay();
+    _retryCount++;
+    _nextCheckTime = millis() + delay;
+  }
+  MicroTask.wakeTask(this);
 }
 
 unsigned long TimeManager::retryDelay()
@@ -93,6 +146,38 @@ void TimeManager::setHost(const char *host)
   MicroTask.wakeTask(this);
 }
 
+void TimeManager::setDhcpServer(const char *ip)
+{
+  if(NULL == ip) {
+    ip = "";
+  }
+  if(0 == strcmp(ip, _dhcpHost)) {
+    return;
+  }
+  strncpy(_dhcpHost, ip, sizeof(_dhcpHost) - 1);
+  _dhcpHost[sizeof(_dhcpHost) - 1] = '\0';
+  DBUGF("NTP server from DHCP: %s", _dhcpHost[0] ? _dhcpHost : "(none)");
+  _dhcpFailedOver = false;
+  // A lease can change the server after boot; resync unless a fetch is
+  // already underway (that one finishes against the old host)
+  if(_sntpEnabled && !_fetchingTime) {
+    _nextCheckTime = millis() + 2000;
+    MicroTask.wakeTask(this);
+  }
+}
+
+void TimeManager::setDhcpEnabled(bool enabled)
+{
+  if(enabled != _dhcpEnabled)
+  {
+    _dhcpEnabled = enabled;
+    _dhcpFailedOver = false;
+    if(_sntpEnabled) {
+      checkNow();
+    }
+  }
+}
+
 bool TimeManager::setTimeZone(String tz)
 {
   const char *set_tz = tz.c_str();
@@ -132,30 +217,13 @@ void TimeManager::setup()
 
   _sntp.onError([this](uint8_t err) {
     DBUGF("NTP error %u (attempt %u)", err, _retryCount + 1);
-    _fetchingTime = false;
     // Distinguish DNS failure from other NTP errors (firewall, bad server, etc.)
     // Only show "DNS failed" badge when DNS resolution itself fails.
-    if(_timeHost) {
-      struct addrinfo hints = {}, *res = nullptr;
-      hints.ai_family = AF_UNSPEC;
-      if(getaddrinfo(_timeHost, nullptr, &hints, &res) == 0 && res) {
-        void *addr = res->ai_family == AF_INET
-          ? (void *)&((struct sockaddr_in  *)res->ai_addr)->sin_addr
-          : (void *)&((struct sockaddr_in6 *)res->ai_addr)->sin6_addr;
-        inet_ntop(res->ai_family, addr, _resolvedIp, sizeof(_resolvedIp) - 1);
-        freeaddrinfo(res);
-      } else {
-        strncpy(_resolvedIp, "failed", sizeof(_resolvedIp) - 1);
-        _resolvedIp[sizeof(_resolvedIp) - 1] = '\0';
-      }
-    } else {
+    if(!resolveActiveHost()) {
       strncpy(_resolvedIp, "failed", sizeof(_resolvedIp) - 1);
       _resolvedIp[sizeof(_resolvedIp) - 1] = '\0';
     }
-    unsigned long delay = retryDelay();
-    _retryCount++;
-    _nextCheckTime = millis() + delay;
-    MicroTask.wakeTask(this);
+    fetchFailed();
   });
 }
 
@@ -223,10 +291,7 @@ unsigned long TimeManager::loop(MicroTasks::WakeReason reason)
     if(elapsed >= SNTP_FETCH_TIMEOUT)
     {
       DBUGF("NTP fetch timed out after %lums", elapsed);
-      _fetchingTime = false;
-      unsigned long delay = retryDelay();
-      _retryCount++;
-      _nextCheckTime = millis() + delay;
+      fetchFailed();
       // fall through to the scheduling block below
     }
     else
@@ -235,17 +300,8 @@ unsigned long TimeManager::loop(MicroTasks::WakeReason reason)
       // pending so the UI shows DNS status without waiting for the full cycle.
       // Mongoose will have resolved the hostname before this fires (the UDP
       // packet was already sent), so getaddrinfo() hits LwIP's DNS cache.
-      if(_resolvedIp[0] == '\0' && _timeHost) {
-        struct addrinfo hints = {}, *res = nullptr;
-        hints.ai_family = AF_UNSPEC;
-        if(getaddrinfo(_timeHost, nullptr, &hints, &res) == 0 && res) {
-          void *addr = res->ai_family == AF_INET
-            ? (void *)&((struct sockaddr_in  *)res->ai_addr)->sin_addr
-            : (void *)&((struct sockaddr_in6 *)res->ai_addr)->sin6_addr;
-          inet_ntop(res->ai_family, addr, _resolvedIp, sizeof(_resolvedIp) - 1);
-          freeaddrinfo(res);
-          DBUGF("NTP: early DNS probe → %s", _resolvedIp);
-        }
+      if(_resolvedIp[0] == '\0' && resolveActiveHost()) {
+        DBUGF("NTP: early DNS probe → %s", _resolvedIp);
       }
       // Wake when the full watchdog deadline expires
       return (unsigned long)(SNTP_FETCH_TIMEOUT - elapsed);
@@ -267,28 +323,20 @@ unsigned long TimeManager::loop(MicroTasks::WakeReason reason)
       _fetchingTime  = true;
       _fetchStartTime = millis();
       _nextCheckTime = 0;
+      _activeHost = pickHost();
 
-      DBUGF("Trying to get time from %s", _timeHost);
-      bool started = _sntp.getTime(_timeHost, [this](struct timeval newTime)
+      DBUGF("Trying to get time from %s (%s)", _activeHost, _activeHost == _dhcpHost ? "DHCP" : "configured");
+      bool started = _sntp.getTime(_activeHost, [this](struct timeval newTime)
       {
-        setTime(newTime, _timeHost);
+        setTime(newTime, _activeHost);
 
         _fetchingTime  = false;
         _retryCount    = 0;
+        _dhcpFailedOver = false;           // next poll tries the DHCP server again
         _lastSyncTime  = newTime.tv_sec;   // use NTP ts directly
         _nextCheckTime = millis() + TIME_POLL_TIME;
         // Resolve hostname → IP for status display (DNS is cached at this point)
-        if(_timeHost) {
-          struct addrinfo hints = {}, *res = nullptr;
-          hints.ai_family = AF_UNSPEC;
-          if(getaddrinfo(_timeHost, nullptr, &hints, &res) == 0 && res) {
-            void *addr = res->ai_family == AF_INET
-              ? (void *)&((struct sockaddr_in  *)res->ai_addr)->sin_addr
-              : (void *)&((struct sockaddr_in6 *)res->ai_addr)->sin6_addr;
-            inet_ntop(res->ai_family, addr, _resolvedIp, sizeof(_resolvedIp) - 1);
-            freeaddrinfo(res);
-          }
-        }
+        resolveActiveHost();
         MicroTask.wakeTask(this);
       });
 
@@ -310,11 +358,8 @@ unsigned long TimeManager::loop(MicroTasks::WakeReason reason)
         // UI will show no DNS badge.  Increment _retryCount so status shows
         // "retry" rather than falsely maintaining "synchronized".
         DBUGLN("NTP: getTime() could not start (stale connection?), treating as failure");
-        _fetchingTime = false;
-        unsigned long delay = retryDelay();
-        _retryCount++;
-        _nextCheckTime = millis() + delay;
-        ret = delay;
+        fetchFailed();
+        ret = 0;
       }
     } else {
       ret = delay > 0 ? (unsigned long)delay : 0;
