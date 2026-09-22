@@ -45,9 +45,10 @@ done
 
 want_core3=0
 want_core2=0
+core3_env=""
 for e in $envs; do
   case " $CORE3_ENVS " in
-    *" $e "*) want_core3=1 ;;
+    *" $e "*) want_core3=1; [ -n "$core3_env" ] || core3_env="$e" ;;
     *)        want_core2=1 ;;
   esac
 done
@@ -75,7 +76,9 @@ if [ "$want_core3" = 1 ]; then
   export PLATFORMIO_CORE_DIR="$CORE3_DIR"
   echo "scripts/pio: core-3 -> PLATFORMIO_CORE_DIR=$PLATFORMIO_CORE_DIR" >&2
 
-  # Work around a pioarduino/platform-espressif32 bug (seen on 55.03.311):
+  # Work around a pioarduino/platform-espressif32 bug (seen on 55.03.311, and only
+  # with PlatformIO Core >= 6.2.0 -- older Core releases pin the same tool-scons
+  # version the platform expects, so the mismatch below never triggers):
   # platform.json pins tool-scons to its own "package-version" (e.g. 4.40801.0),
   # but PlatformIO Core independently hardcodes a DIFFERENT tool-scons requirement
   # (~4.41101.0, the official package) to run its own build engine -- and both
@@ -91,8 +94,23 @@ if [ "$want_core3" = 1 ]; then
   # tool-scons is present, then sync platform.json's expected version to whatever
   # actually landed on disk so the platform's exact-string version check never
   # sees a mismatch in the first place.
-  "$PIO_BIN" pkg install -g -t tool-scons >/dev/null 2>&1 || true
-  python3 - "$CORE3_DIR" <<'PYEOF' 2>/dev/null || true
+  #
+  # On a cold CORE3_DIR, platform.json doesn't exist until the espressif32
+  # platform itself is installed -- which otherwise happens for the first time
+  # inside the `pio run` below, in the very same process that then runs the
+  # version check above and deletes tool-scons. Install the platform metadata
+  # first (skipping its dependencies -- this is a metadata-only install) so the
+  # sync below can run before that happens.
+  platform_json="$CORE3_DIR/platforms/espressif32/platform.json"
+  if [ ! -f "$platform_json" ] && [ -n "$core3_env" ]; then
+    echo "scripts/pio: core-3 platform metadata not found, installing before tool-scons sync" >&2
+    "$PIO_BIN" pkg install -e "$core3_env" --skip-dependencies >/dev/null 2>&1 \
+      || echo "scripts/pio: warning: failed to pre-install core-3 platform metadata (tool-scons sync below will likely be skipped, and this run may hit the FortranCommon error described above)" >&2
+  fi
+
+  "$PIO_BIN" pkg install -g -t tool-scons >/dev/null 2>&1 \
+    || echo "scripts/pio: warning: failed to install/verify PIO Core's tool-scons (this run may hit the FortranCommon error described above)" >&2
+  python3 - "$CORE3_DIR" <<'PYEOF' 2>/dev/null || echo "scripts/pio: warning: tool-scons/platform.json version sync failed (this run may hit the FortranCommon error described above)" >&2
 import json, os, sys
 
 core_dir = sys.argv[1]
