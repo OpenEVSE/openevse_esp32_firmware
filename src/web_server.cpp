@@ -771,6 +771,7 @@ void buildStatus(DynamicJsonDocument &doc) {
 #ifdef ENABLE_TSDB
   doc["tsdb_ready"] = tsdbEnergyLogger.isReady() ? 1 : 0;
   doc["tsdb_err"]   = tsdbEnergyLogger.initError();
+  doc["tsdb_dropped"] = tsdbEnergyLogger.droppedSamples();
 #endif
   home_battery_add_status_fields(doc);
 
