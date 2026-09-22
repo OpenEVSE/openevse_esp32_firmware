@@ -12,7 +12,6 @@ on:
   pull_request:
     paths:
       - gui-nightshift
-      - gui-v2
 
 jobs:
   build:
