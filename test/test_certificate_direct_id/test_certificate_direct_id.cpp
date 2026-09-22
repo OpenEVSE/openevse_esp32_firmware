@@ -1,4 +1,4 @@
-// Run: pio test -e native_certificate_test
+// Run: pio test -e native_test -f test_certificate_direct_id
 // Real CertificateStore, OpenSSL validation and EpoxyFS persistence, with no
 // firmware process, network listener or shared integration cleanup fixture.
 #define DOCTEST_CONFIG_IMPLEMENT_WITH_MAIN
