@@ -1,6 +1,8 @@
 #ifdef ENABLE_SD_CARD
 
 #include <Arduino.h>
+#include <freertos/FreeRTOS.h>
+#include <freertos/semphr.h>
 #include <stdio.h>
 #include <string.h>
 
@@ -10,6 +12,32 @@
 #include "sdlog_ring.h"
 #include "sd_card.h"
 #include "debug.h"
+
+// The ring is reached from two tasks. tsdb's writer task appends to it, while
+// loopTask opens and closes it around card insertion/removal (sd_card.cpp) and
+// reads it to answer history queries from the web server. They share one FILE*
+// and one block cache, so every public entry point below takes this lock --
+// without it a card pulled mid-append lets loopTask fclose() the handle the
+// writer is still inside.
+//
+// Recursive because the query helpers call one another, and created in a global
+// initialiser so it exists before any caller can reach it: there is no module
+// init hook that is guaranteed to run first, and sdlog_store_ready() in
+// particular is called before begin().
+static SemaphoreHandle_t _lock = xSemaphoreCreateRecursiveMutex();
+
+namespace {
+// Scoped lock. Falls through un-held if the mutex could not be created, which
+// only happens if the allocation failed at boot; the module is then no worse
+// off than it was before the lock existed.
+struct SdlogLock {
+  bool held;
+  SdlogLock() : held(_lock && xSemaphoreTakeRecursive(_lock, portMAX_DELAY) == pdTRUE) { }
+  ~SdlogLock() { if(held) { xSemaphoreGiveRecursive(_lock); } }
+  SdlogLock(const SdlogLock &) = delete;
+  SdlogLock &operator=(const SdlogLock &) = delete;
+};
+}
 
 static FILE    *_fp = nullptr;
 static bool     _ready = false;
@@ -69,6 +97,7 @@ static bool slot_read(void *ctx, uint32_t index, uint8_t out[SDLOG_RECORD_BYTES]
 // a million 32-byte writes through the FAT layer would take minutes.
 bool sdlog_store_preallocate()
 {
+  SdlogLock lock;
   DBUGF("[sdlog] creating %lu-record ring (%lu MB), this takes a moment",
         (unsigned long)SDLOG_CAPACITY,
         (unsigned long)((uint64_t)SDLOG_CAPACITY * SDLOG_RECORD_BYTES / (1024 * 1024)));
@@ -116,6 +145,7 @@ bool sdlog_store_preallocate()
 
 bool sdlog_store_begin()
 {
+  SdlogLock lock;
   if(!sd_card_mounted()) {
     return false;
   }
@@ -179,17 +209,20 @@ bool sdlog_store_begin()
 
 bool sdlog_store_exists()
 {
+  SdlogLock lock;
   struct stat st;
   return stat(SDLOG_PATH, &st) == 0;
 }
 
 bool sdlog_store_ready()
 {
+  SdlogLock lock;
   return _ready;
 }
 
 bool sdlog_store_append(uint32_t timestamp, const int16_t cols[SDLOG_RECORD_COLS])
 {
+  SdlogLock lock;
   if(!_ready || _fp == nullptr) {
     return false;
   }
@@ -233,6 +266,7 @@ bool sdlog_store_append(uint32_t timestamp, const int16_t cols[SDLOG_RECORD_COLS
 
 void sdlog_store_end()
 {
+  SdlogLock lock;
   cache_drop();
   if(_fp != nullptr) {
     fclose(_fp);
@@ -259,6 +293,7 @@ static bool read_seq(uint32_t seq, SdlogRecord &rec)
 
 bool sdlog_store_range(uint32_t &oldest, uint32_t &newest)
 {
+  SdlogLock lock;
   if(!_ready || _next_seq == 0) {
     return false;
   }
@@ -328,6 +363,7 @@ static uint32_t seek_seq_for_ts(uint32_t ts)
 
 bool sdlog_query_init(SdlogQuery &q, uint32_t start_ts, uint32_t end_ts)
 {
+  SdlogLock lock;
   q.open = false;
   if(!_ready) {
     return false;
@@ -343,7 +379,14 @@ bool sdlog_query_init(SdlogQuery &q, uint32_t start_ts, uint32_t end_ts)
 
 bool sdlog_query_next(SdlogQuery &q, uint32_t &ts, int16_t cols[SDLOG_RECORD_COLS])
 {
+  SdlogLock lock;
   if(!q.open) {
+    return false;
+  }
+  if(!_ready) {
+    // Card pulled between calls. Every slot_read() would now fail and we would
+    // grind through the whole ring holding the lock to learn that. End it here.
+    q.open = false;
     return false;
   }
 
@@ -374,11 +417,13 @@ bool sdlog_query_next(SdlogQuery &q, uint32_t &ts, int16_t cols[SDLOG_RECORD_COL
 
 void sdlog_query_close(SdlogQuery &q)
 {
+  SdlogLock lock;
   q.open = false;
 }
 
 bool sdlog_query_count(uint32_t start_ts, uint32_t end_ts, uint32_t &count)
 {
+  SdlogLock lock;
   SdlogQuery q;
   if(!sdlog_query_init(q, start_ts, end_ts)) {
     return false;

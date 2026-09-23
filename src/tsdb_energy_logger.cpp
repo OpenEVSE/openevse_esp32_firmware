@@ -62,10 +62,71 @@ bool TsdbEnergyLogger::init_db() {
   return true;
 }
 
+// The writer shares core 1 with loopTask at the same priority, so a long
+// compaction time-slices against the main loop instead of stalling it. It must
+// not sit on core 0: the task watchdog also watches idle0, and a multi-second
+// write there would trip it just the same.
+#define TSDB_WRITER_STACK   6144
+#define TSDB_WRITER_QUEUE   4
+
+bool TsdbEnergyLogger::start_writer() {
+  _jobs = xQueueCreate(TSDB_WRITER_QUEUE, sizeof(TsdbWriteJob));
+  if (_jobs == nullptr) return false;
+  TaskHandle_t h = nullptr;
+  if (xTaskCreatePinnedToCore(writer_task, "tsdb_writer", TSDB_WRITER_STACK, this,
+                              1, &h, APP_CPU_NUM) != pdPASS) {
+    vQueueDelete(_jobs);
+    _jobs = nullptr;
+    return false;
+  }
+  return true;
+}
+
+void TsdbEnergyLogger::writer_task(void *arg) {
+  TsdbEnergyLogger *self = static_cast<TsdbEnergyLogger *>(arg);
+  TsdbWriteJob job;
+  for (;;) {
+    if (xQueueReceive(self->_jobs, &job, portMAX_DELAY) != pdTRUE) continue;
+    if (job.rollup) self->rollup_yesterday();
+
+    // Prefer the card when one is fitted and healthy; fall back to internal
+    // flash otherwise. Not both -- writing each sample twice would double the
+    // wear for no benefit, since only one store answers queries at a time.
+    //
+    // This runs on the writer task rather than loopTask, so a slow card costs
+    // history rather than a watchdog reset, exactly as the flash path does.
+    // The card branch compiles away entirely without ENABLE_SD_CARD, leaving
+    // the original tsdb_write() call and identical behaviour on the shipped
+    // boards.
+    bool logged = false;
+#ifdef ENABLE_SD_CARD
+    // sd_card_loop() owns the card and the ring, opening it once a card is
+    // mounted and closing it before an unmount -- both on loopTask, which is
+    // why sdlog_store takes its own lock rather than trusting "ready" to still
+    // be true by the time the append lands.
+    if (sdlog_store_ready()) {
+      logged = sdlog_store_append(job.ts, job.row);
+      if (!logged) {
+        // append() has already marked itself not-ready, so this falls through
+        // to flash now and stays there rather than retrying a broken card.
+        DBUGLN("card append failed, using internal flash for this sample");
+      }
+    }
+#endif
+    if (!logged) {
+      esp_err_t e = tsdb_write(job.ts, job.row);
+      if (e != ESP_OK) DBUGF("tsdb_write failed: %d", e);
+    }
+  }
+}
+
 void TsdbEnergyLogger::begin(EvseManager &evse) { _evse = &evse; MicroTask.startTask(this); }
 
 void TsdbEnergyLogger::setup() {
-  _ready = init_db();
+  _ready = init_db() && start_writer();
+  if (!_ready && _init_err == 0) {
+    DEBUG_PORT.println("[tsdb] writer task failed: energy history disabled");
+  }
   _last_session_wh = _evse ? _evse->getSessionEnergy() : 0;
 
   // Seed rollover tracker to TODAY so the first real rollup fires at the next
@@ -285,7 +346,7 @@ unsigned long TsdbEnergyLogger::loop(MicroTasks::WakeReason) {
         _last_rolled_year = now_tm.tm_year;
       } else if (now_tm.tm_yday  != _last_rolled_yday ||
                  now_tm.tm_year  != _last_rolled_year) {
-        rollup_yesterday();
+        _rollup_pending = true;   // done by the writer, ahead of the next sample it accepts
         _last_rolled_yday = now_tm.tm_yday;
         _last_rolled_year = now_tm.tm_year;
       }
@@ -309,33 +370,22 @@ unsigned long TsdbEnergyLogger::loop(MicroTasks::WakeReason) {
         s.pilot_a = _evse->getChargeCurrent();
       }
 
-      int16_t row[TSDB_NUM_COLS];
-      tsdb_scale_sample(s, row);
-
-      // Prefer the card when one is fitted and healthy; fall back to internal
-      // flash otherwise. Not both -- writing each sample twice would double the
-      // wear for no benefit, since only one store answers queries at a time.
+      TsdbWriteJob job;
+      job.ts = (uint32_t)now;
+      tsdb_scale_sample(s, job.row);
+      job.rollup = _rollup_pending;
+      // Never block here: if the writer is still inside a slow flash operation
+      // the sample is dropped, which costs one point of history, not a reboot.
+      // A pending rollup stays pending until a job carrying it is accepted.
       //
-      // The card branch compiles away entirely without ENABLE_SD_CARD, leaving
-      // the original tsdb_write() call and identical behaviour on the shipped
-      // boards.
-      bool logged = false;
-#ifdef ENABLE_SD_CARD
-      // sd_card_loop() owns the card and the ring: it opens the ring once a
-      // card is mounted and closes it before an unmount, so "ready" here means
-      // a live file on a live mount.
-      if (sdlog_store_ready()) {
-        logged = sdlog_store_append((uint32_t)now, row);
-        if (!logged) {
-          // append() has already marked itself not-ready, so this falls through
-          // to flash now and stays there rather than retrying a broken card.
-          DBUGLN("card append failed, using internal flash for this sample");
-        }
-      }
-#endif
-      if (!logged) {
-        esp_err_t e = tsdb_write((uint32_t)now, row);
-        if (e != ESP_OK) DBUGF("tsdb_write failed: %d", e);
+      // The card-or-flash choice is the writer's, not ours -- see writer_task().
+      // Queueing both the same way keeps the rollup bookkeeping in one place and
+      // gets card I/O off loopTask along with the flash writes.
+      if (xQueueSend(_jobs, &job, 0) == pdTRUE) {
+        _rollup_pending = false;
+      } else {
+        _dropped++;
+        DBUGF("tsdb sample dropped, writer busy (%lu total)", (unsigned long)_dropped);
       }
     }
   }

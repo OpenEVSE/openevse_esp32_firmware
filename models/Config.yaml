@@ -34,7 +34,7 @@ x-examples:
     www_username: ''
     www_password: ''
     hostname: openevse-a7d4
-    sntp_hostname: pool.ntp.org
+    sntp_hostname: time.cloudflare.com
     time_zone: 'Europe/London|GMT0BST,M3.5.0/1,M10.5.0'
     limit_default_type: none
     limit_default_value": 0

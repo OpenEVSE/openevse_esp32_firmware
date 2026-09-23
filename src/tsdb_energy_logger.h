@@ -3,7 +3,11 @@
 #ifdef ENABLE_TSDB
 #include <Arduino.h>
 #include <MicroTasks.h>
+#include <freertos/FreeRTOS.h>
+#include <freertos/queue.h>
+#include <freertos/task.h>
 #include "evse_man.h"
+#include "tsdb_sample.h"
 
 #define TSDB_ENERGY_FILE          "/littlefs/energy.tsdb"
 // Sample cadence and on-disk budget. Overridable via build flags so a debug
@@ -22,12 +26,26 @@
 // (ENERGY_LOGGER_MONTHLY_DIR / ENERGY_LOGGER_ANNUAL_FILE from energy_logger.h)
 // so the /energy/monthly + /energy/annual handlers just stream the files.
 
+// A sample is taken on loopTask but written from its own task: tsdb_write
+// fsyncs the database and its header sidecar, and either fsync can land on a
+// LittleFS metadata compaction that runs for seconds (O(tags^2) over the
+// directory, one cache-disabled flash read per tag). On loopTask that is a task
+// watchdog panic; on a worker it is just a slow write.
+struct TsdbWriteJob {
+  uint32_t ts;
+  int16_t  row[TSDB_NUM_COLS];
+  bool     rollup;      // roll up yesterday before writing this sample
+};
+
 class TsdbEnergyLogger : public MicroTasks::Task {
 private:
   EvseManager *_evse = nullptr;
   bool         _ready = false;
   int          _init_err = 0;          // esp_err_t from tsdb_init (0 = OK), for /status diag
   double       _last_session_wh = 0;   // for per-sample energy delta
+  QueueHandle_t _jobs = nullptr;
+  uint32_t     _dropped = 0;           // samples lost to a full queue (writer stalled)
+  bool         _rollup_pending = false; // day changed, rollup job not yet accepted by the queue
 
   // Day-rollover tracking: seeded to today at setup() so the first real
   // rollup fires at the next true midnight, not at boot.
@@ -36,6 +54,8 @@ private:
 
   bool init_db();
   void rollup_yesterday();
+  bool start_writer();
+  static void writer_task(void *arg);
 protected:
   void setup();
   unsigned long loop(MicroTasks::WakeReason reason);
@@ -43,6 +63,7 @@ public:
   void begin(EvseManager &evse);
   bool isReady() { return _ready; }
   int  initError() { return _init_err; }   // esp_err_t from tsdb_init (0 = OK)
+  uint32_t droppedSamples() { return _dropped; }
 };
 
 extern TsdbEnergyLogger tsdbEnergyLogger;

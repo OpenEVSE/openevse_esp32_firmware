@@ -347,6 +347,15 @@ jobs:
           mv artifacts/$env.bin/partitions.bin partitions_$name.bin
         done
 
+    - name: Drop the _dev images from the release
+      # The _dev environments are for bench work, not for users: olimex_*_dev
+      # use min_spiffs_debug.csv, a single-slot layout that can never OTA
+      # again once flashed; openevse_wifi_tft_v1_dev drops ENABLE_TSDB and the
+      # larger SCHEDULER_MAX_EVENTS; and every _dev env carries
+      # ENABLE_FULL_RAPI, which passes any RAPI command through /r. They stay
+      # in the build matrix (and as workflow artifacts) so they keep compiling.
+      run: rm -f ./*_dev.bin
+
     - name: Build the 16MB migrator
       # The protected bootloader/partition-table commit OpenEVSE-4MB cannot do
       # from Arduino is delegated to a tiny ESP-IDF migrator app built with
