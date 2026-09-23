@@ -60,6 +60,7 @@
 #include "diagnostics.h"
 #include "boost.h"
 #include "notifications.h"
+#include "rapi_activity_led.h"
 
 #if defined(ENABLE_PN532)
 #include "pn532.h"
@@ -83,7 +84,9 @@
 EventLog eventLog;
 CertificateStore certs;
 
-EvseManager evse(RAPI_PORT, eventLog);
+// RAPI_EVSE_STREAM is RAPI_PORT unless the board fits RAPI activity LEDs, in
+// which case it is the counting decorator wrapped around it.
+EvseManager evse(RAPI_EVSE_STREAM, eventLog);
 Scheduler scheduler(evse);
 ManualOverride manual(evse);
 DivertTask divert(evse);
@@ -244,6 +247,10 @@ void setup()
 
   evse.begin();
   DBUGF("After evse.begin: %d", ESPAL.getFreeHeap());
+
+#ifdef ENABLE_RAPI_ACTIVITY_LED
+  rapiActivityLed.begin(evse);
+#endif
 
   scheduler.begin();
   DBUGF("After scheduler.begin: %d", ESPAL.getFreeHeap());

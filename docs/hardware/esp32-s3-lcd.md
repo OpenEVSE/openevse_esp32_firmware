@@ -98,10 +98,13 @@ Two consequences worth carrying:
 | 44 | `S3_RXD0` | UART0 RX ← JP5.4 | ROM/bootloader console; `Serial0` in app |
 | 47 | `AUX_TX` | UART2 TX → JP2.5 | 220 Ω series (R38) |
 | 48 | `AUX_RX` | UART2 RX ← JP2.4 | **pull-up needed on v1.2** |
+| **45** | `RAPI_TX_LED` | **v1.6.1** — LED6, red | **active HIGH**, 1 kΩ to GND; strapping (VDD_SPI) |
+| **46** | `RAPI_RX_LED` | **v1.6.1** — LED7, yellow | **active HIGH**, 1 kΩ to GND; strapping (boot log) |
 | EN | `RESET` | RESET button | 10 kΩ + 1 µF, also JP5.6 |
 
-**Unrouted / unavailable:** IO3, IO4, IO5, IO6, IO7, IO13, IO45, IO46 exist on the
-module castellations but connect to nothing — bodge wire only. IO35–37 are consumed
+**Unrouted / unavailable:** IO3, IO4, IO5, IO6, IO7 and IO13 exist on the module
+castellations but connect to nothing — bodge wire only. **IO45 and IO46 were in that
+list until v1.6.1**, which spends them on the two RAPI activity LEDs below. IO35–37 are consumed
 by PSRAM. **IO16 and IO17 are also unrouted on v1.2**; they are spent in v1.3.
 
 There is **no** `PILOTREAD` and **no ADC input of any kind** on either version. Pilot
@@ -292,6 +295,37 @@ Moving them to 5 V is *not* available as a workaround: V<sub>IH</sub> would beco
 0.7 × 5 V = 3.5 V, which a 3.3 V GPIO cannot drive. The identified fix is a die
 revision — **`WS2812B-MINI-V6`, `C52941386`, rated 3.3 V–5.3 V**, same package and
 same 1.9 mm height — but it is not applied to any BOM yet. Assume V3/W in hand.
+
+### RAPI activity LEDs — v1.6.1 and later
+
+Three discrete LEDs sit beside the RAPI header. **LED5** (green, PWR) is hardwired
+across the 3.3 V rail after the buck and reaches no GPIO — deliberately, so that one
+glance proves the input, `U6` and `U2` all at once. Firmware cannot see it and should
+not model it.
+
+The other two are driven by `src/rapi_activity_led.cpp`:
+
+| | pin | colour | meaning |
+|---|---|---|---|
+| `LED6` | IO45 | red | RAPI **TX** — retriggerable 30 ms one-shot per byte |
+| `LED7` | IO46 | yellow | RAPI **RX** — same one-shot, **solid ON** while the link is down |
+
+Both drive the anode through 1 kΩ to GND, so both are **active HIGH, and that is a
+hardware constraint rather than a convention.** IO45 selects the VDD_SPI voltage and
+IO46 gates the ROM boot message; both must latch 0 at reset, and an LED to GND cannot
+lift either above its forward voltage, so the internal pull-downs still sample 0.
+Wired the other way — resistor to 3.3 V, cathode on the pin — **the board does not
+boot.** Never invert the sense and never add an external pull-up.
+
+The one-shot is not decoration. At 115200 baud a character lasts 87 µs against the
+~20 ms an eye needs, so lighting the raw UART line would be invisible — the same
+reason FTDI parts expose `TXLED#`/`RXLED#` through a one-shot instead of the line
+itself. On the RX side it would also be marginal electrically: the node's low is the
+controller's V_OL plus `D3`'s 0.7 V ≈ 0.9 V, which a yellow will not light at all.
+
+Solid-on-fault outranks the blink, because a dead link must not look like an idle
+bus: the gateway keeps transmitting into an unresponsive controller, so without it
+LED6 would flick merrily while LED7 sat dark.
 
 ## microSD — fitted
 
