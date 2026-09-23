@@ -84,6 +84,36 @@ void sdlog_query_close(SdlogQuery &q);
 // Count intact records in a range, without materialising them.
 bool sdlog_query_count(uint32_t start_ts, uint32_t end_ts, uint32_t &count);
 
+// --- Aggregation ---------------------------------------------------------
+// Deliberately mirrors esp_tsdb's tsdb_aggregate_multi() so the two stores can
+// be dispatched between without the caller restating the query. Kept as its own
+// enum rather than reusing tsdb_agg_type_t so this header stays free of
+// esp_tsdb, which the native ring tests do not link.
+
+typedef enum {
+  SDLOG_AGG_SUM,
+  SDLOG_AGG_AVG,
+  SDLOG_AGG_MIN,
+  SDLOG_AGG_MAX,
+  SDLOG_AGG_COUNT,
+  SDLOG_AGG_FIRST,
+  SDLOG_AGG_LAST
+} sdlog_agg_type_t;
+
+struct SdlogAggRequest {
+  uint8_t          col;      // index into the record's columns
+  sdlog_agg_type_t agg;
+  int32_t          result;   // filled in by sdlog_aggregate_multi()
+};
+
+// Run every request over [start_ts, end_ts] in ONE pass of the ring, so N
+// aggregations cost one scan rather than N. `scanned` receives the number of
+// intact records seen, which is how callers tell "no data" from "all zeroes".
+// Results for an empty range are left at 0 and scanned is 0.
+bool sdlog_aggregate_multi(uint32_t start_ts, uint32_t end_ts,
+                           SdlogAggRequest *reqs, uint8_t num_reqs,
+                           uint32_t &scanned);
+
 #else
 
 // No-op stubs so call sites stay free of #ifdefs, matching sd_card.h and

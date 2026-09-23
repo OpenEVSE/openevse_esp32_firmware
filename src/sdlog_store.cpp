@@ -441,6 +441,88 @@ void sdlog_query_close(SdlogQuery &q)
   q.open = false;
 }
 
+bool sdlog_aggregate_multi(uint32_t start_ts, uint32_t end_ts,
+                           SdlogAggRequest *reqs, uint8_t num_reqs,
+                           uint32_t &scanned)
+{
+  SdlogLock lock;
+  scanned = 0;
+  if(reqs == nullptr || num_reqs == 0) {
+    return false;
+  }
+
+  // Running state per request. AVG needs the sum and the count separately, and
+  // MIN/MAX need to know whether they have seen anything yet -- seeding them
+  // from the column's first value is the only way to avoid a sentinel that
+  // would be indistinguishable from a real reading.
+  int64_t acc[8]   = {0};
+  bool    seeded[8] = {false};
+  if(num_reqs > 8) {
+    num_reqs = 8;
+  }
+  for(uint8_t r = 0; r < num_reqs; r++) {
+    reqs[r].result = 0;
+  }
+
+  SdlogQuery q;
+  if(!sdlog_query_init(q, start_ts, end_ts)) {
+    return false;
+  }
+
+  uint32_t ts;
+  int16_t cols[SDLOG_RECORD_COLS];
+  while(sdlog_query_next(q, ts, cols))
+  {
+    scanned++;
+    for(uint8_t r = 0; r < num_reqs; r++)
+    {
+      if(reqs[r].col >= SDLOG_RECORD_COLS) {
+        continue;
+      }
+      int32_t v = cols[reqs[r].col];
+
+      switch(reqs[r].agg)
+      {
+        case SDLOG_AGG_SUM:
+        case SDLOG_AGG_AVG:
+          acc[r] += v;
+          break;
+        case SDLOG_AGG_COUNT:
+          acc[r]++;
+          break;
+        case SDLOG_AGG_MIN:
+          if(!seeded[r] || v < acc[r]) { acc[r] = v; }
+          break;
+        case SDLOG_AGG_MAX:
+          if(!seeded[r] || v > acc[r]) { acc[r] = v; }
+          break;
+        case SDLOG_AGG_FIRST:
+          if(!seeded[r]) { acc[r] = v; }
+          break;
+        case SDLOG_AGG_LAST:
+          acc[r] = v;
+          break;
+      }
+      seeded[r] = true;
+    }
+  }
+  sdlog_query_close(q);
+
+  for(uint8_t r = 0; r < num_reqs; r++) {
+    int64_t out = acc[r];
+    if(SDLOG_AGG_AVG == reqs[r].agg) {
+      out = (scanned > 0) ? (acc[r] / (int64_t)scanned) : 0;
+    }
+    // The column type is int16 but SUM over a day of samples is not, so the
+    // result is int32 like esp_tsdb's; clamp rather than wrap on a pathological
+    // range.
+    if(out > INT32_MAX) { out = INT32_MAX; }
+    if(out < INT32_MIN) { out = INT32_MIN; }
+    reqs[r].result = (int32_t)out;
+  }
+  return true;
+}
+
 bool sdlog_query_count(uint32_t start_ts, uint32_t end_ts, uint32_t &count)
 {
   SdlogLock lock;

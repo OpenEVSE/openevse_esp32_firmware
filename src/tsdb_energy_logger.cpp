@@ -82,6 +82,66 @@ bool TsdbEnergyLogger::start_writer() {
   return true;
 }
 
+bool energy_query_count_any(uint32_t start_ts, uint32_t end_ts, uint32_t &count)
+{
+  count = 0;
+#ifdef ENABLE_SD_CARD
+  if (sdlog_store_ready()) {
+    return sdlog_query_count(start_ts, end_ts, count);
+  }
+#endif
+  if (!tsdbEnergyLogger.isReady()) {
+    return false;
+  }
+  return tsdb_query_count(start_ts, end_ts, &count) == ESP_OK;
+}
+
+bool energy_aggregate_multi(uint32_t start_ts, uint32_t end_ts,
+                            tsdb_agg_request_t *reqs, uint8_t num_reqs,
+                            uint32_t &scanned)
+{
+  scanned = 0;
+  if (reqs == nullptr || num_reqs == 0) {
+    return false;
+  }
+
+#ifdef ENABLE_SD_CARD
+  if (sdlog_store_ready()) {
+    SdlogAggRequest sreqs[8];
+    if (num_reqs > 8) {
+      num_reqs = 8;
+    }
+    for (uint8_t r = 0; r < num_reqs; r++) {
+      sreqs[r].col    = reqs[r].param_index;
+      sreqs[r].result = 0;
+      switch (reqs[r].agg_type) {
+        case TSDB_AGG_SUM:   sreqs[r].agg = SDLOG_AGG_SUM;   break;
+        case TSDB_AGG_AVG:   sreqs[r].agg = SDLOG_AGG_AVG;   break;
+        case TSDB_AGG_MIN:   sreqs[r].agg = SDLOG_AGG_MIN;   break;
+        case TSDB_AGG_MAX:   sreqs[r].agg = SDLOG_AGG_MAX;   break;
+        case TSDB_AGG_COUNT: sreqs[r].agg = SDLOG_AGG_COUNT; break;
+        case TSDB_AGG_FIRST: sreqs[r].agg = SDLOG_AGG_FIRST; break;
+        case TSDB_AGG_LAST:  sreqs[r].agg = SDLOG_AGG_LAST;  break;
+        default:             return false;
+      }
+    }
+    if (!sdlog_aggregate_multi(start_ts, end_ts, sreqs, num_reqs, scanned)) {
+      return false;
+    }
+    for (uint8_t r = 0; r < num_reqs; r++) {
+      reqs[r].result = sreqs[r].result;
+    }
+    return true;
+  }
+#endif
+
+  // Guard on isReady(): with a failed tsdb_init the global handle is invalid.
+  if (!tsdbEnergyLogger.isReady()) {
+    return false;
+  }
+  return tsdb_aggregate_multi(start_ts, end_ts, reqs, num_reqs, &scanned) == ESP_OK;
+}
+
 void TsdbEnergyLogger::writer_task(void *arg) {
   TsdbEnergyLogger *self = static_cast<TsdbEnergyLogger *>(arg);
   TsdbWriteJob job;
@@ -176,7 +236,7 @@ void TsdbEnergyLogger::rollup_yesterday() {
 
   // Check record count cheaply; skip if no data
   uint32_t cnt = 0;
-  if (tsdb_query_count(d0u, d1u, &cnt) != ESP_OK || cnt == 0) {
+  if (!energy_query_count_any(d0u, d1u, cnt) || cnt == 0) {
     DBUGF("[tsdb rollup] no data for yesterday %04d-%02d-%02d, skipping",
           yday_year, yday_month, yday_tm.tm_mday);
     return;
@@ -189,9 +249,8 @@ void TsdbEnergyLogger::rollup_yesterday() {
     { TSDB_COL_TEMP,   TSDB_AGG_MIN, 0 },
   };
   uint32_t nscanned = 0;
-  esp_err_t err = tsdb_aggregate_multi(d0u, d1u, reqs, 3, &nscanned);
-  if (err != ESP_OK || nscanned == 0) {
-    DBUGF("[tsdb rollup] aggregate failed for yesterday, err=%d", (int)err);
+  if (!energy_aggregate_multi(d0u, d1u, reqs, 3, nscanned) || nscanned == 0) {
+    DBUGLN("[tsdb rollup] aggregate failed for yesterday");
     return;
   }
 

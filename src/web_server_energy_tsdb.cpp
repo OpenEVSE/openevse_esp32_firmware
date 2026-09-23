@@ -338,9 +338,10 @@ static void emit_bucketed_daily(MongooseHttpServerResponseStream *response,
       { TSDB_COL_TEMP,   TSDB_AGG_MIN, 0 },
     };
 
+    // Store-aware: with a card fitted the samples are on the card, and
+    // aggregating the flash tsdb here returned nothing for every bucket.
     uint32_t nscanned = 0;
-    esp_err_t err = tsdb_aggregate_multi(d0, d1_end, reqs, 3, &nscanned);
-    if (err != ESP_OK || nscanned == 0) {
+    if (!energy_aggregate_multi(d0, d1_end, reqs, 3, nscanned) || nscanned == 0) {
       continue;
     }
 
