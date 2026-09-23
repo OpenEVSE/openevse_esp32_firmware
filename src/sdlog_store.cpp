@@ -40,7 +40,7 @@ struct SdlogLock {
 }
 
 static FILE    *_fp = nullptr;
-static bool     _ready = false;
+static volatile bool _ready = false;   // read lock-free by sdlog_store_ready()
 static uint32_t _next_seq = 0;
 static uint32_t _oldest_seq = 0;   // lowest sequence still held
 static uint32_t _newest_ts = 0;
@@ -97,7 +97,16 @@ static bool slot_read(void *ctx, uint32_t index, uint8_t out[SDLOG_RECORD_BYTES]
 // a million 32-byte writes through the FAT layer would take minutes.
 bool sdlog_store_preallocate()
 {
-  SdlogLock lock;
+  // Deliberately NOT locked. This writes the whole ring (128 MB over 1-bit
+  // SDMMC -- minutes, not milliseconds) and runs on the sd_job task. Holding
+  // _lock across it would park every loopTask caller of sdlog_store_ready() on
+  // the mutex and trip the 5 s task watchdog, which is a reboot loop on a fresh
+  // card: panic, reboot, begin() discards the short file, job restarts.
+  //
+  // It needs no lock. start_job() calls sdlog_store_end() first and
+  // sd_card_mounted() reports false for the job's duration, so begin() and
+  // append() both refuse to touch the file while this runs. The only shared
+  // state here is the local FILE *fp.
   DBUGF("[sdlog] creating %lu-record ring (%lu MB), this takes a moment",
         (unsigned long)SDLOG_CAPACITY,
         (unsigned long)((uint64_t)SDLOG_CAPACITY * SDLOG_RECORD_BYTES / (1024 * 1024)));
@@ -209,14 +218,17 @@ bool sdlog_store_begin()
 
 bool sdlog_store_exists()
 {
-  SdlogLock lock;
+  // No lock: a bare stat() touching no shared state, polled from loopTask.
   struct stat st;
   return stat(SDLOG_PATH, &st) == 0;
 }
 
 bool sdlog_store_ready()
 {
-  SdlogLock lock;
+  // No lock: this is polled from loopTask (/status, /energy/*, the tsdb
+  // cadence) and must never block behind a card operation. A single volatile
+  // bool read is atomic on this target, and every caller already has to cope
+  // with the answer going stale the moment it returns.
   return _ready;
 }
 
@@ -251,7 +263,15 @@ bool sdlog_store_append(uint32_t timestamp, const int16_t cols[SDLOG_RECORD_COLS
   {
     // Do not keep trying into a broken card: drop to not-ready so the caller
     // falls back to internal flash on this and every later sample.
+    //
+    // Close the handle as well as clearing the flag. sd_card_loop() reopens the
+    // ring whenever it sees !ready && !gave_up, and begin() assigns straight
+    // over _fp -- so leaving this one open leaked a FILE* per failure until
+    // SD_MMC's maxOpenFiles (5) was exhausted and fopen() failed for good.
     DBUGLN("[sdlog] append failed, falling back to internal flash");
+    fclose(_fp);
+    _fp = nullptr;
+    cache_drop();
     _ready = false;
     return false;
   }

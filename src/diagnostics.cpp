@@ -467,7 +467,11 @@ bool diagnostics_coredump_erase()
 // ---------------------------------------------------------------------------
 // Internal-heap layout report
 // ---------------------------------------------------------------------------
-#if DIAG_HAVE_IDF
+// heap_caps_walk() and its walker_*_t types arrived in IDF 5.1. DIAG_HAVE_IDF
+// alone is not enough: the default [env] still builds against core 2.x / IDF
+// 4.4, where this whole block fails to compile. Keep the version test here
+// rather than at the call site so the "n/a" fallback below covers both.
+#if DIAG_HAVE_IDF && ESP_IDF_VERSION >= ESP_IDF_VERSION_VAL(5, 1, 0)
 namespace {
 struct HeapMapBlock { uintptr_t ptr; size_t size; };
 struct HeapMapState {
