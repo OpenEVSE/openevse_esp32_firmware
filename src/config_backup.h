@@ -33,11 +33,22 @@ bool config_backup_to_card();
 // starts from the restored settings.
 bool config_restore_from_card();
 
+// Write the mirror, but only when the card does not already carry one.
+//
+// Safe to call whenever a card turns up. It never overwrites an existing
+// mirror -- by the time this can do anything, boot has already decided not to
+// restore from that mirror, so replacing it with the running config would
+// throw away the better copy in the case where the running config is the
+// defaults. It is also inert until config_backup_arm() has run, which is what
+// makes it harmless on the boot mount.
+bool config_backup_ensure_on_card();
+
 #else
 
 static inline void config_backup_arm() { }
 static inline bool config_backup_to_card() { return false; }
 static inline bool config_restore_from_card() { return false; }
+static inline bool config_backup_ensure_on_card() { return false; }
 
 #endif // ENABLE_SD_CARD
 

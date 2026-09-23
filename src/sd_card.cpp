@@ -135,6 +135,12 @@ bool sd_card_begin()
   _status = "mounted";
   refresh_usage();
   DBUGF("[sd] mounted, %llu MB, %llu MB used", _size / (1024ULL * 1024ULL), _used / (1024ULL * 1024ULL));
+
+  // A card inserted while running may be a fresh one with nothing on it. This
+  // is inert on the boot mount, where the backup is not armed until after the
+  // restore decision -- boot gets its mirror from config_backup_arm() instead.
+  config_backup_ensure_on_card();
+
   return true;
 }
 

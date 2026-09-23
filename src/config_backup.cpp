@@ -15,6 +15,28 @@ static bool _armed = false;
 void config_backup_arm()
 {
   _armed = true;
+
+  // A card that has never seen a config change carries no mirror, and swapping
+  // in a fresh card is the ordinary way to end up with one -- which left the
+  // board silently unprotected until the user next happened to edit a setting.
+  // Write it now instead, so the backup exists from the first boot with a card
+  // in the slot.
+  config_backup_ensure_on_card();
+}
+
+bool config_backup_ensure_on_card()
+{
+  if(!_armed || !sd_card_mounted()) {
+    return false;
+  }
+
+  struct stat st;
+  if(stat(CONFIG_BACKUP_PATH, &st) == 0) {
+    return false;
+  }
+
+  DBUGLN("[config-backup] card has no mirror, writing one");
+  return config_backup_to_card();
 }
 
 bool config_backup_to_card()
