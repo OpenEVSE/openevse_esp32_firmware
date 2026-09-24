@@ -24,9 +24,44 @@
 # PLATFORMIO_BIN.
 set -euo pipefail
 
-# Envs that build on the core-3 (pioarduino) platform. Keep in sync with the
-# `platform = ${common.platform_core3}` envs in platformio.ini.
-CORE3_ENVS="openevse_wifi_v1_16mb"
+# Envs that build on the core-3 (pioarduino) platform, derived from
+# platformio.ini rather than listed here.
+#
+# This used to be a hand-maintained list, and it silently went stale when
+# openevse_wifi_tft_v1 moved to core-3: a core-3 env routed to the core-2
+# PLATFORMIO_CORE_DIR finds Arduino 2.x under the package name both platforms
+# share (framework-arduinoespressif32), get_package_dir() returns None on the
+# version mismatch, and the build dies with "Missing Arduino framework
+# directory 'None'" -- which says nothing about core dirs. Deriving it means a
+# new core-3 env is routed correctly the day it is added.
+#
+# `extends` is followed, so an env inherits its parent's platform.
+CORE3_ENVS="$(python3 - "$(dirname "$0")/../platformio.ini" <<'PYEOF'
+import re, sys
+text = open(sys.argv[1]).read()
+sections = dict(re.findall(r'^\[([^\]]+)\]\n(.*?)(?=^\[|\Z)', text, re.M | re.S))
+
+def platform_of(name, seen=()):
+    if name in seen or name not in sections:
+        return None
+    body = sections[name]
+    m = re.search(r'^platform\s*=\s*(.+)$', body, re.M)
+    if m:
+        return m.group(1).strip()
+    m = re.search(r'^extends\s*=\s*(.+)$', body, re.M)
+    if m:
+        return platform_of(m.group(1).strip(), seen + (name,))
+    return None
+
+print(' '.join(s[4:] for s in sections
+                if s.startswith('env:')
+                and platform_of(s) == '${common.platform_core3}'))
+PYEOF
+)"
+if [ -z "$CORE3_ENVS" ]; then
+  echo "scripts/pio: could not derive the core-3 env list from platformio.ini" >&2
+  exit 2
+fi
 CORE3_DIR="${PIO_CORE3_DIR:-$HOME/.platformio-core3}"
 
 # Pull the -e / --environment value(s) out of the args.
