@@ -102,6 +102,7 @@ class NetManagerTask : public MicroTasks::Task
     String _macaddress;
 
     DNSServer _dnsServer;                  // Create class DNS server, captive portal re-direct
+    bool _mdnsStarted;
     bool _dnsServerStarted;
     const byte _dnsPort;
 
@@ -176,6 +177,7 @@ class NetManagerTask : public MicroTasks::Task
     NetManagerTask(LcdTask &lcd, LedManagerTask &led, TimeManager &time);
 
     void begin();
+    void publishWebServer(uint16_t port, bool ssl);
 
     void wifiScan();
 
