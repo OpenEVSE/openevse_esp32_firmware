@@ -3,6 +3,9 @@
 
 #include <Arduino.h>
 #include <lvgl.h>
+#if defined(TFT_SPI_DRIVE_CAP) && !defined(EPOXY_DUINO)
+#include <driver/gpio.h>
+#endif
 
 #if defined(EPOXY_DUINO)
 #include <dlfcn.h>
@@ -448,6 +451,26 @@ static TFT_eSPI tft = TFT_eSPI();
 static bool lvgl_panel_prepare_begin(size_t buf_bytes)
 {
   tft.init();
+
+#ifdef TFT_SPI_DRIVE_CAP
+  // Bench experiment: weaken the SPI pad drive to slow the edges.
+  //
+  // At 80 MHz this panel garbles. Two candidate causes: reflections on ~70 mm
+  // of board trace plus the flex, or the ILI9488 die simply not accepting a
+  // serial write that fast (its cycle is specified around 50 ns / 20 MHz, so
+  // even 40 MHz is already 2x spec). Weaker drive attacks only the first one.
+  // If 80 MHz goes clean with slow edges the interconnect is the limit and
+  // source-series termination is worth adding; if it stays garbled the panel
+  // is the limit and no board change helps.
+  //
+  // Set after tft.init(): SPI.begin() runs the peripheral manager, which
+  // reconfigures the pad and would discard anything set before it.
+  gpio_set_drive_capability((gpio_num_t)TFT_SCLK, (gpio_drive_cap_t)TFT_SPI_DRIVE_CAP);
+  gpio_set_drive_capability((gpio_num_t)TFT_MOSI, (gpio_drive_cap_t)TFT_SPI_DRIVE_CAP);
+  gpio_set_drive_capability((gpio_num_t)TFT_DC,   (gpio_drive_cap_t)TFT_SPI_DRIVE_CAP);
+  Serial.printf("[panel] SPI pad drive set to %d on SCLK/MOSI/DC\n", (int)TFT_SPI_DRIVE_CAP);
+#endif
+
   tft.setRotation(1); // landscape, matches the original renderer
 #if ESP_ARDUINO_VERSION >= ESP_ARDUINO_VERSION_VAL(3, 0, 0)
   ledcAttach(TFT_BL, LCD_BL_PWM_FREQ, LCD_BL_PWM_RES);
