@@ -93,8 +93,9 @@ static int captioned_session = -1;
 // blocking SPI on this bus-limited display, in the same task that services
 // Mongoose and RAPI - whether or not any advisory is active. -1 = not yet
 // written, so the first update after a build always writes.
-static int applied_border_width = -1;
-static int applied_msg_colour   = -1;   // 0 = COL_ACCENT, 1 = COL_WARN
+// The centre state word: measured and realigned only when it actually changes.
+// state_word() returns string literals, so the pointer identifies the word.
+static const char *applied_state_word = NULL;
 
 // One stat tile: a rounded card with a dim caption and one big value.
 static void make_tile(lv_obj_t *parent, int idx, lv_coord_t y)
@@ -145,10 +146,10 @@ static lv_obj_t *make_chip(lv_obj_t *row)
 
 static void chip_set(lv_obj_t *c, const char *text, lv_color_t bg, lv_color_t fg)
 {
-  lv_label_set_text(c, text);
-  lv_obj_set_style_bg_color(c, bg, 0);
-  lv_obj_set_style_text_color(c, fg, 0);
-  lv_obj_clear_flag(c, LV_OBJ_FLAG_HIDDEN);
+  ui_set_text(c, text);
+  ui_set_bg_color(c, bg);
+  ui_set_text_color(c, fg);
+  ui_set_hidden(c, false);
 }
 
 void charge_screen_build()
@@ -175,9 +176,9 @@ void charge_screen_build()
 
   captioned_session = -1;  // force the tile captions to be written on first update
   // A rebuild makes a brand-new screen object carrying the build defaults, so
-  // the caches above have to forget what the previous one was showing.
-  applied_border_width = -1;
-  applied_msg_colour = -1;
+  // the cache above has to forget what the previous one was showing. The
+  // ui_set_* guards need no such reset: they read the live object back.
+  applied_state_word = NULL;
 
   // --- Top strip, line 1: clock (left) + status chips (right) ---
   // Fixed width so the clock does not shuffle as digit widths change.
@@ -378,32 +379,39 @@ void charge_screen_update(const ChargeScreenData &d)
   // the state word in the centre (the headline when there's no live power).
   lv_color_t accent;
   const char *word = state_word(d.evse_state, &accent);
-  lv_obj_set_style_arc_color(arc, accent, LV_PART_INDICATOR);
+  ui_set_arc_color(arc, accent, LV_PART_INDICATOR);
 
   if (d.charging) {
-    lv_obj_add_flag(center_state, LV_OBJ_FLAG_HIDDEN);
-    lv_obj_clear_flag(big_value, LV_OBJ_FLAG_HIDDEN);
-    lv_obj_clear_flag(big_unit, LV_OBJ_FLAG_HIDDEN);
+    ui_set_hidden(center_state, true);
+    ui_set_hidden(big_value, false);
+    ui_set_hidden(big_unit, false);
     if (d.power_kw < 10)       snprintf(buf, sizeof(buf), "%.2f", d.power_kw);
     else if (d.power_kw < 100) snprintf(buf, sizeof(buf), "%.1f", d.power_kw);
     else                       snprintf(buf, sizeof(buf), "%.0f", d.power_kw);
-    lv_label_set_text(big_value, buf);
+    ui_set_text(big_value, buf);
   } else {
-    lv_obj_add_flag(big_value, LV_OBJ_FLAG_HIDDEN);
-    lv_obj_add_flag(big_unit, LV_OBJ_FLAG_HIDDEN);
-    lv_obj_clear_flag(center_state, LV_OBJ_FLAG_HIDDEN);
+    ui_set_hidden(big_value, true);
+    ui_set_hidden(big_unit, true);
+    ui_set_hidden(center_state, false);
 
     // Length-adaptive font: keep the large size for words that render inside the
     // ring, drop one size for the wide ones so they stay on a single line.
-    lv_point_t sz;
-    lv_txt_get_size(&sz, word, &lv_font_montserrat_28, 0, 0, LV_COORD_MAX, LV_TEXT_FLAG_NONE);
-    const lv_font_t *font = (sz.x <= STATE_WORD_FIT_W) ? &lv_font_montserrat_28
-                                                       : &lv_font_montserrat_20;
-    lv_obj_set_style_text_font(center_state, font, 0);
-
-    lv_label_set_text(center_state, word);
-    lv_obj_set_style_text_color(center_state, accent, 0);
-    lv_obj_align_to(center_state, arc, LV_ALIGN_CENTER, 0, 0);
+    //
+    // Only when the word changes. Measuring is cheap, but lv_obj_align_to()
+    // unconditionally writes LV_STYLE_ALIGN, and a style write invalidates
+    // whether or not the value moved -- so realigning an unchanged word
+    // repainted the ring's centre on every tick.
+    if (word != applied_state_word) {
+      lv_point_t sz;
+      lv_txt_get_size(&sz, word, &lv_font_montserrat_28, 0, 0, LV_COORD_MAX, LV_TEXT_FLAG_NONE);
+      const lv_font_t *font = (sz.x <= STATE_WORD_FIT_W) ? &lv_font_montserrat_28
+                                                         : &lv_font_montserrat_20;
+      ui_set_font(center_state, font);
+      ui_set_text(center_state, word);
+      lv_obj_align_to(center_state, arc, LV_ALIGN_CENTER, 0, 0);
+      applied_state_word = word;
+    }
+    ui_set_text_color(center_state, accent);
   }
 
   // Ring: current actually being delivered, as % of full scale.
@@ -425,7 +433,7 @@ void charge_screen_update(const ChargeScreenData &d)
   if (d.soc_valid) {
     int soc = d.soc_percent;
     if (soc < 0) soc = 0; else if (soc > 100) soc = 100;
-    lv_obj_clear_flag(soc_arc, LV_OBJ_FLAG_HIDDEN);
+    ui_set_hidden(soc_arc, false);
     arc_set_animated(soc_arc, soc);
 
     if (d.range_valid) {
@@ -434,11 +442,11 @@ void charge_screen_update(const ChargeScreenData &d)
     } else {
       snprintf(buf, sizeof(buf), "%d%%", soc);
     }
-    lv_label_set_text(soc_lbl, buf);
-    lv_obj_clear_flag(soc_lbl, LV_OBJ_FLAG_HIDDEN);
+    ui_set_text(soc_lbl, buf);
+    ui_set_hidden(soc_lbl, false);
   } else {
-    lv_obj_add_flag(soc_arc, LV_OBJ_FLAG_HIDDEN);
-    lv_obj_add_flag(soc_lbl, LV_OBJ_FLAG_HIDDEN);
+    ui_set_hidden(soc_arc, true);
+    ui_set_hidden(soc_lbl, true);
   }
 
   // Pilot / allowed current, and which claim set it. Without the source this
@@ -448,10 +456,10 @@ void charge_screen_update(const ChargeScreenData &d)
   } else {
     snprintf(buf, sizeof(buf), "%d A pilot", d.pilot_a);
   }
-  lv_label_set_text(pilot_lbl, buf);
+  ui_set_text(pilot_lbl, buf);
 
   // Top strip line 1: date/time.
-  lv_label_set_text(datetime_lbl, d.datetime ? d.datetime : "");
+  ui_set_text(datetime_lbl, d.datetime ? d.datetime : "");
 
   // Status chips (top-right). Background carries the state, so the row is
   // readable as colour before it is readable as text.
@@ -476,7 +484,7 @@ void charge_screen_update(const ChargeScreenData &d)
       chip_set(chip_temp, buf, COL_CARD, COL_TEXT);
     }
   } else {
-    lv_obj_add_flag(chip_temp, LV_OBJ_FLAG_HIDDEN);
+    ui_set_hidden(chip_temp, true);
   }
 
   if (d.wifi_client) {
@@ -495,7 +503,7 @@ void charge_screen_update(const ChargeScreenData &d)
     chip_set(chip_car, LV_SYMBOL_CHARGE, d.charging ? COL_OK : COL_CARD,
              d.charging ? COL_BG : COL_TEXT);
   } else {
-    lv_obj_add_flag(chip_car, LV_OBJ_FLAG_HIDDEN);
+    ui_set_hidden(chip_car, true);
   }
 
   // Tiles: session figures while plugged in, lifetime totals when idle.
@@ -507,25 +515,25 @@ void charge_screen_update(const ChargeScreenData &d)
   if (d.session_active) {
     uint32_t h = d.elapsed_s / 3600, m = (d.elapsed_s % 3600) / 60, s = d.elapsed_s % 60;
     snprintf(buf, sizeof(buf), "%02u:%02u:%02u", (unsigned)h, (unsigned)m, (unsigned)s);
-    lv_label_set_text(tile_value[0], buf);
+    ui_set_text(tile_value[0], buf);
 
     if (d.session_wh >= 1000.0) snprintf(buf, sizeof(buf), "%.2f kWh", d.session_wh / 1000.0);
     else                        snprintf(buf, sizeof(buf), "%.0f Wh", d.session_wh);
-    lv_label_set_text(tile_value[1], buf);
+    ui_set_text(tile_value[1], buf);
 
     // Amps is the number that matters here; volts rides along in the caption so
     // the tile keeps to one big figure.
     snprintf(buf, sizeof(buf), "%.1f A", d.amps);
-    lv_label_set_text(tile_value[2], buf);
+    ui_set_text(tile_value[2], buf);
     snprintf(buf, sizeof(buf), "CURRENT  @ %.0f V", d.volts);
-    lv_label_set_text(tile_title[2], buf);
+    ui_set_text(tile_title[2], buf);
   } else {
     format_kwh(buf, sizeof(buf), d.total_day_kwh);
-    lv_label_set_text(tile_value[0], buf);
+    ui_set_text(tile_value[0], buf);
     format_kwh(buf, sizeof(buf), d.total_week_kwh);
-    lv_label_set_text(tile_value[1], buf);
+    ui_set_text(tile_value[1], buf);
     format_kwh(buf, sizeof(buf), d.total_kwh);
-    lv_label_set_text(tile_value[2], buf);
+    ui_set_text(tile_value[2], buf);
   }
 
   // Top strip line 2: transient message, else the worst advisory, else the
@@ -535,34 +543,25 @@ void charge_screen_update(const ChargeScreenData &d)
   const char *line = (d.msg_line && d.msg_line[0]) ? d.msg_line :
                      (d.notify_line && d.notify_line[0]) ? d.notify_line : NULL;
   if (line) {
-    lv_label_set_text(msg_lbl, line);
-    int want_msg_colour = (d.msg_line && d.msg_line[0]) ? 0 : 1;
-    if (want_msg_colour != applied_msg_colour) {
-      lv_obj_set_style_text_color(msg_lbl, want_msg_colour == 0 ? COL_ACCENT : COL_WARN, 0);
-      applied_msg_colour = want_msg_colour;
-    }
-    lv_obj_clear_flag(msg_lbl, LV_OBJ_FLAG_HIDDEN);
-    lv_obj_add_flag(hostip_lbl, LV_OBJ_FLAG_HIDDEN);
+    ui_set_text(msg_lbl, line);
+    ui_set_text_color(msg_lbl, (d.msg_line && d.msg_line[0]) ? COL_ACCENT : COL_WARN);
+    ui_set_hidden(msg_lbl, false);
+    ui_set_hidden(hostip_lbl, true);
   } else {
-    lv_obj_add_flag(msg_lbl, LV_OBJ_FLAG_HIDDEN);
+    ui_set_hidden(msg_lbl, true);
     if (d.show_hostip) {
       snprintf(buf, sizeof(buf), "%s  " LV_SYMBOL_BULLET "  %s",
                d.hostname ? d.hostname : "", d.ip ? d.ip : "");
-      lv_label_set_text(hostip_lbl, buf);
-      lv_obj_clear_flag(hostip_lbl, LV_OBJ_FLAG_HIDDEN);
+      ui_set_text(hostip_lbl, buf);
+      ui_set_hidden(hostip_lbl, false);
     } else {
-      lv_obj_add_flag(hostip_lbl, LV_OBJ_FLAG_HIDDEN);
+      ui_set_hidden(hostip_lbl, true);
     }
   }
 
   // The amber perimeter: the "is there anything wrong?" signal, legible from
   // across the garage. Never red -- that stays reserved for the fault screen.
-  // Written only on change; see applied_border_width above for why.
-  int want_border = d.notify_active ? 4 : 0;
-  if (want_border != applied_border_width) {
-    lv_obj_set_style_border_width(charge_scr, want_border, 0);
-    applied_border_width = want_border;
-  }
+  ui_set_border_width(charge_scr, d.notify_active ? 4 : 0);
 }
 
 void charge_screen_destroy()

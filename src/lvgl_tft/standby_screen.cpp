@@ -53,16 +53,9 @@ static lv_obj_t *chip_wifi    = nullptr;
 static lv_obj_t *hostip_lbl   = nullptr;
 static lv_obj_t *tile_value[3] = {nullptr, nullptr, nullptr};
 
-// Last style values actually written, so an unchanged one is not written
-// again. lv_obj_set_local_style_prop() has no unchanged-value early-out: it
-// always refreshes the style and invalidates the object it is set on. For the
-// border that object is the SCREEN, so setting it every update would mark the
-// whole 480x320 panel dirty once a second - a full-frame flush, ~110 ms of
-// blocking SPI on this bus-limited display - whether or not any advisory is
-// active. -1 = not yet written, so the first update after a build always
-// writes.
-static int applied_border_width  = -1;
-static int applied_hostip_colour = -1;   // 0 = COL_WARN, 1 = COL_DIM
+// The centre state word: measured and realigned only when it actually changes.
+// state_word() returns string literals, so the pointer identifies the word.
+static const char *applied_state_word = NULL;
 
 // One stat tile: a rounded card with a dim caption and one big value. Matches
 // the charge screen's tiles so the column doesn't shift between screens.
@@ -109,10 +102,10 @@ static lv_obj_t *make_chip(lv_obj_t *row)
 
 static void chip_set(lv_obj_t *c, const char *text, lv_color_t bg, lv_color_t fg)
 {
-  lv_label_set_text(c, text);
-  lv_obj_set_style_bg_color(c, bg, 0);
-  lv_obj_set_style_text_color(c, fg, 0);
-  lv_obj_clear_flag(c, LV_OBJ_FLAG_HIDDEN);
+  ui_set_text(c, text);
+  ui_set_bg_color(c, bg);
+  ui_set_text_color(c, fg);
+  ui_set_hidden(c, false);
 }
 
 void standby_screen_build()
@@ -133,9 +126,9 @@ void standby_screen_build()
   lv_obj_set_style_radius(scr, 0, 0);
 
   // A rebuild makes a brand-new screen object carrying the build defaults, so
-  // the caches above have to forget what the previous one was showing.
-  applied_border_width = -1;
-  applied_hostip_colour = -1;
+  // the cache above has to forget what the previous one was showing. The
+  // ui_set_* guards need no such reset: they read the live object back.
+  applied_state_word = NULL;
 
   // --- Top strip, line 1: clock (left) + status chips (right) ---
   clock_lbl = lv_label_create(scr);
@@ -230,17 +223,23 @@ void standby_screen_update(const StandbyScreenData &d)
   // Length-adaptive font, mirroring the charge screen: keep the large size for
   // words that render inside the ring, drop one size for the wide ones so they
   // stay on a single line.
-  lv_point_t sz;
-  lv_txt_get_size(&sz, word, &lv_font_montserrat_28, 0, 0, LV_COORD_MAX, LV_TEXT_FLAG_NONE);
-  const lv_font_t *font = (sz.x <= STATE_WORD_FIT_W) ? &lv_font_montserrat_28
-                                                     : &lv_font_montserrat_20;
-  lv_obj_set_style_text_font(state_lbl, font, 0);
+  //
+  // Only when the word changes: lv_obj_align_to() unconditionally writes
+  // LV_STYLE_ALIGN, and a style write invalidates whether or not the value
+  // moved, so realigning an unchanged word repainted it on every tick.
+  if (word != applied_state_word) {
+    lv_point_t sz;
+    lv_txt_get_size(&sz, word, &lv_font_montserrat_28, 0, 0, LV_COORD_MAX, LV_TEXT_FLAG_NONE);
+    const lv_font_t *font = (sz.x <= STATE_WORD_FIT_W) ? &lv_font_montserrat_28
+                                                       : &lv_font_montserrat_20;
+    ui_set_font(state_lbl, font);
+    ui_set_text(state_lbl, word);
+    lv_obj_align_to(state_lbl, wordmark_lbl, LV_ALIGN_OUT_BOTTOM_MID, 0, 6);
+    applied_state_word = word;
+  }
+  ui_set_text_color(state_lbl, accent);
 
-  lv_label_set_text(state_lbl, word);
-  lv_obj_set_style_text_color(state_lbl, accent, 0);
-  lv_obj_align_to(state_lbl, wordmark_lbl, LV_ALIGN_OUT_BOTTOM_MID, 0, 6);
-
-  lv_label_set_text(clock_lbl, d.clock ? d.clock : "");
+  ui_set_text(clock_lbl, d.clock ? d.clock : "");
 
   // Status chips, same semantics as the charge screen.
   if (d.temp_valid) {
@@ -263,7 +262,7 @@ void standby_screen_update(const StandbyScreenData &d)
       chip_set(chip_temp, buf, COL_CARD, COL_TEXT);
     }
   } else {
-    lv_obj_add_flag(chip_temp, LV_OBJ_FLAG_HIDDEN);
+    ui_set_hidden(chip_temp, true);
   }
 
   if (d.wifi_client) {
@@ -279,40 +278,29 @@ void standby_screen_update(const StandbyScreenData &d)
   }
 
   format_kwh(buf, sizeof(buf), d.today_kwh);
-  lv_label_set_text(tile_value[0], buf);
+  ui_set_text(tile_value[0], buf);
   format_kwh(buf, sizeof(buf), d.week_kwh);
-  lv_label_set_text(tile_value[1], buf);
+  ui_set_text(tile_value[1], buf);
   format_kwh(buf, sizeof(buf), d.total_kwh);
-  lv_label_set_text(tile_value[2], buf);
+  ui_set_text(tile_value[2], buf);
 
   // Footer line: the worst advisory when there is one, else the address. An
   // advisory takes the line outright rather than sharing it -- a warning
   // outranks knowing where to point a browser -- and the address returns as
   // soon as the advisory clears.
-  int want_hostip_colour;
   if (d.notify_line && d.notify_line[0]) {
-    lv_label_set_text(hostip_lbl, d.notify_line);
-    want_hostip_colour = 0;
+    ui_set_text(hostip_lbl, d.notify_line);
+    ui_set_text_color(hostip_lbl, COL_WARN);
   } else {
     snprintf(buf, sizeof(buf), "%s  " LV_SYMBOL_BULLET "  %s",
              d.hostname ? d.hostname : "", d.ip ? d.ip : "");
-    lv_label_set_text(hostip_lbl, buf);
-    want_hostip_colour = 1;
-  }
-  if (want_hostip_colour != applied_hostip_colour) {
-    lv_obj_set_style_text_color(hostip_lbl,
-        want_hostip_colour == 0 ? COL_WARN : COL_DIM, 0);
-    applied_hostip_colour = want_hostip_colour;
+    ui_set_text(hostip_lbl, buf);
+    ui_set_text_color(hostip_lbl, COL_DIM);
   }
 
   // The amber perimeter: the "is there anything wrong?" signal, legible from
   // across the garage. Never red -- that stays reserved for the fault screen.
-  // Written only on change; see applied_border_width above for why.
-  int want_border = d.notify_active ? 4 : 0;
-  if (want_border != applied_border_width) {
-    lv_obj_set_style_border_width(standby_scr, want_border, 0);
-    applied_border_width = want_border;
-  }
+  ui_set_border_width(standby_scr, d.notify_active ? 4 : 0);
 }
 
 void standby_screen_destroy()

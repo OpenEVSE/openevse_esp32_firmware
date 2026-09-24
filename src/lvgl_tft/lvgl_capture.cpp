@@ -171,6 +171,7 @@ bool lvgl_capture_write_samples(const char *out_dir)
   if(!write_capture(out_dir, "charge-charging")) {
     return false;
   }
+  const ChargeScreenData charging_snapshot = d;
 
   // Advisory active while charging: the amber perimeter border plus the
   // worst advisory named on the top strip's second line (a transient message
@@ -210,6 +211,24 @@ bool lvgl_capture_write_samples(const char *out_dir)
   charge_screen_update(d);
   pump_frames();
   if(!write_capture(out_dir, "charge-fault")) {
+    return false;
+  }
+
+  // Return to the state captured as charge-charging, on the SAME screen
+  // objects, after a detour through a different one. This must come out
+  // byte-identical to charge-charging.
+  //
+  // It is the regression test for the write-if-changed guards in
+  // screen_common.h: those skip an LVGL write when the value matches what the
+  // object already holds, so a guard that compared against the wrong thing --
+  // or a cached "last applied" value that a screen forgot to reset -- would
+  // leave a field showing the detour's value here while every from-scratch
+  // render still looked right. Comparing the two PPMs catches that; a
+  // single-shot render never can.
+  d = charging_snapshot;
+  charge_screen_update(d);
+  pump_frames();
+  if(!write_capture(out_dir, "charge-charging-again")) {
     return false;
   }
 
