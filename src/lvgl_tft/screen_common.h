@@ -44,5 +44,34 @@ int wifi_percent(int rssi);
 // the top-strip layout. Returns the number of characters written (like snprintf).
 int fmt_temp(char *buf, size_t n, float temp_c, bool fahrenheit);
 
+// --- Write-if-changed wrappers ----------------------------------------------
+//
+// LVGL never compares before invalidating. lv_label_set_text() calls
+// lv_obj_invalidate() as its FIRST statement, before it even looks at the
+// string, and lv_obj_set_local_style_prop() -> lv_obj_refresh_style() calls it
+// twice regardless of whether the property actually moved. lv_obj_add_flag()
+// does the same for LV_OBJ_FLAG_HIDDEN.
+//
+// These screens repaint on a 1 Hz data tick and rewrite every widget from the
+// snapshot, so without a guard the whole layout re-renders once a second to
+// show the two or three fields that genuinely changed -- and each redraw is a
+// blocking SPI push on a panel that cannot DMA (see lvgl_panel.cpp). Comparing
+// first turns that into just the dirty rects.
+//
+// Guarding the write rather than caching the value keeps the screens'
+// update functions unconditional and stateless: they still assign every field
+// every tick, and the comparison decides whether LVGL hears about it.
+//
+// Safe for these screens specifically because no label uses LV_LABEL_LONG_DOT,
+// which rewrites label->text in place and would make the stored text differ
+// from what was set. All of them are LONG_WRAP.
+void ui_set_text(lv_obj_t *label, const char *text);
+void ui_set_text_color(lv_obj_t *obj, lv_color_t colour);
+void ui_set_bg_color(lv_obj_t *obj, lv_color_t colour);
+void ui_set_arc_color(lv_obj_t *obj, lv_color_t colour, lv_style_selector_t selector);
+void ui_set_font(lv_obj_t *obj, const lv_font_t *font);
+void ui_set_hidden(lv_obj_t *obj, bool hidden);
+void ui_set_border_width(lv_obj_t *obj, lv_coord_t width);
+
 #endif // ENABLE_SCREEN_LVGL_TFT
 #endif // __SCREEN_COMMON_H

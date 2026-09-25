@@ -46,6 +46,59 @@ static bool write_capture(const char *out_dir, const char *name)
   return lvgl_panel_write_ppm(path);
 }
 
+// Compare two captures byte for byte, and say where they part company.
+//
+// Every other capture is judged against a baseline from a previous build, which
+// only a human diffing two directories can do. This one pair is different: both
+// images come out of the same run and are required to be identical to each
+// other, so the export can check it itself and fail. Without that the invariant
+// is only a comment, and the regression it guards is exactly the kind that goes
+// unnoticed -- a stale field on a screen that still renders correctly from
+// scratch.
+static bool captures_match(const char *out_dir, const char *a, const char *b)
+{
+  char pa[256], pb[256];
+  snprintf(pa, sizeof(pa), "%s/%s.ppm", out_dir, a);
+  snprintf(pb, sizeof(pb), "%s/%s.ppm", out_dir, b);
+
+  FILE *fa = fopen(pa, "rb");
+  FILE *fb = fopen(pb, "rb");
+  if(NULL == fa || NULL == fb) {
+    fprintf(stderr, "capture: cannot reopen %s for comparison: %s\n",
+            (NULL == fa) ? pa : pb, strerror(errno));
+    if(NULL != fa) { fclose(fa); }
+    if(NULL != fb) { fclose(fb); }
+    return false;
+  }
+
+  bool same = true;
+  size_t offset = 0;
+  for(;;) {
+    char ba[4096], bb[4096];
+    size_t na = fread(ba, 1, sizeof(ba), fa);
+    size_t nb = fread(bb, 1, sizeof(bb), fb);
+    if(na != nb || 0 != memcmp(ba, bb, na)) {
+      same = false;
+      break;
+    }
+    offset += na;
+    if(0 == na) {
+      break;
+    }
+  }
+
+  fclose(fa);
+  fclose(fb);
+
+  if(!same) {
+    fprintf(stderr,
+            "capture: %s.ppm and %s.ppm differ (from byte %zu) -- returning to a\n"
+            "         previously captured state left something stale on screen.\n",
+            a, b, offset);
+  }
+  return same;
+}
+
 // Advisory line text, formatted exactly the way lcd_lvgl.cpp builds it: the
 // worst advisory's short text, with a "+N" suffix when more are live. A
 // separate buffer from lcd_lvgl.cpp's file-scope notify_buf -- this is
@@ -171,6 +224,7 @@ bool lvgl_capture_write_samples(const char *out_dir)
   if(!write_capture(out_dir, "charge-charging")) {
     return false;
   }
+  const ChargeScreenData charging_snapshot = d;
 
   // Advisory active while charging: the amber perimeter border plus the
   // worst advisory named on the top strip's second line (a transient message
@@ -210,6 +264,27 @@ bool lvgl_capture_write_samples(const char *out_dir)
   charge_screen_update(d);
   pump_frames();
   if(!write_capture(out_dir, "charge-fault")) {
+    return false;
+  }
+
+  // Return to the state captured as charge-charging, on the SAME screen
+  // objects, after a detour through a different one. This must come out
+  // byte-identical to charge-charging.
+  //
+  // It is the regression test for the write-if-changed guards in
+  // screen_common.h: those skip an LVGL write when the value matches what the
+  // object already holds, so a guard that compared against the wrong thing --
+  // or a cached "last applied" value that a screen forgot to reset -- would
+  // leave a field showing the detour's value here while every from-scratch
+  // render still looked right. captures_match() below compares the two PPMs
+  // and fails the export if they differ; a single-shot render never could.
+  d = charging_snapshot;
+  charge_screen_update(d);
+  pump_frames();
+  if(!write_capture(out_dir, "charge-charging-again")) {
+    return false;
+  }
+  if(!captures_match(out_dir, "charge-charging", "charge-charging-again")) {
     return false;
   }
 
