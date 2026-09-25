@@ -1,3 +1,6 @@
+// Guard added by scripts/gen_lvgl_subset_fonts.sh -- see that script.
+#ifdef ENABLE_SCREEN_LVGL_TFT
+
 /*******************************************************************************
  * Size: 36 px
  * Bpp: 4
@@ -715,3 +718,5 @@ lv_font_t lv_font_oe_tile_36 = {
 
 #endif /*#if LV_FONT_OE_TILE_36*/
 
+
+#endif // ENABLE_SCREEN_LVGL_TFT

@@ -65,6 +65,23 @@ sed -i 's#\.line_height = [0-9]*,#.line_height = 52,#' "$OUT/lv_font_oe_display_
 sed -i 's#\.line_height = [0-9]*,#.line_height = 40,#; s#\.base_line = [0-9]*,#.base_line = 7,#' \
   "$OUT/lv_font_oe_tile_36.c"
 
+# Gate the whole file on ENABLE_SCREEN_LVGL_TFT, ahead of its include.
+#
+# PlatformIO compiles everything under src/ for every env, including the ones
+# with no display and so no LVGL in lib_deps -- native_openevse is the one CI
+# catches. lv_font_conv's output opens with `#include "lvgl/lvgl.h"` (or
+# "lvgl.h" under LV_LVGL_H_INCLUDE_SIMPLE), which those envs cannot resolve.
+# Same guard, in the same place, as src/lvgl_tft/mark_img.c.
+for f in "$OUT"/lv_font_oe_display_48.c "$OUT"/lv_font_oe_tile_36.c; do
+  { echo "// Guard added by scripts/gen_lvgl_subset_fonts.sh -- see that script."
+    echo "#ifdef ENABLE_SCREEN_LVGL_TFT"
+    echo
+    cat "$f"
+    echo
+    echo "#endif // ENABLE_SCREEN_LVGL_TFT"
+  } > "$f.tmp" && mv "$f.tmp" "$f"
+done
+
 # lv_font_conv records its own argv in a header comment, including the absolute
 # path it was handed for the TTF -- which differs per machine and per PIO env.
 # Rewrite it so regenerating on another box produces a byte-identical file.
