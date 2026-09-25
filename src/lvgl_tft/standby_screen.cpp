@@ -16,7 +16,8 @@
 #include <stdio.h>
 
 #include "standby_screen.h"
-#include "screen_common.h"   // state_word, fmt_temp, shared geometry
+#include "screen_common.h"
+#include "fonts/oe_fonts.h"   // state_word, fmt_temp, shared geometry
 #include "nightshift.h"
 #include "mark_img.h"
 
@@ -86,7 +87,7 @@ static void make_tile(lv_obj_t *parent, int idx, lv_coord_t y, const char *title
   lv_obj_t *v = lv_label_create(tile);
   lv_label_set_text(v, "--");
   lv_obj_set_style_text_color(v, COL_TEXT, 0);
-  lv_obj_set_style_text_font(v, &lv_font_montserrat_36, 0);
+  lv_obj_set_style_text_font(v, &lv_font_oe_tile_36, 0);
   lv_obj_set_width(v, TILE_W - 16);
   lv_obj_set_style_text_align(v, LV_TEXT_ALIGN_LEFT, 0);
   lv_obj_align(v, LV_ALIGN_BOTTOM_LEFT, 0, 0);
