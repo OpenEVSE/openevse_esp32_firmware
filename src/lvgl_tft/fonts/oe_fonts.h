@@ -19,9 +19,10 @@
 
 #include <lvgl.h>
 
-// Glyphs: space . 0-9 E O S V e n p
-// Drawn by: charge_screen big_value (the kW readout), boot_screen title
-// ("OpenEVSE"). Nothing else may use this face without regenerating it.
+// Glyphs: space - . 0-9 E O S V e n p
+// Drawn by: charge_screen big_value (the kW readout, which can carry a minus
+// sign -- $GG answers -1 mA without AMMETER), boot_screen title ("OpenEVSE").
+// Nothing else may use this face without regenerating it.
 LV_FONT_DECLARE(lv_font_oe_display_48);
 
 // Glyphs: space - . 0-9 : A W h k

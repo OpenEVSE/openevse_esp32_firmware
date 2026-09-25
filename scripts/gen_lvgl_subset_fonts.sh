@@ -34,10 +34,14 @@ if [ ! -f "$TTF" ]; then
   exit 1
 fi
 
-# 48 px -- charge_screen.cpp big_value (the kW readout: digits and '.') and
-# boot_screen.cpp title (the wordmark "OpenEVSE").
+# 48 px -- charge_screen.cpp big_value (the kW readout: digits, '.' and the
+# sign) and boot_screen.cpp title (the wordmark "OpenEVSE").
+#
+# The '-' is not decoration: $GG answers -1 mA on a controller built without
+# AMMETER, so power_kw goes slightly negative and the readout formats "-0.00".
+# Without the glyph LVGL draws nothing for it and the sign silently vanishes.
 lv_font_conv --no-compress --no-prefilter --bpp 4 --size 48 --font "$TTF" \
-  --symbols ' .0123456789EOSVenp' \
+  --symbols ' -.0123456789EOSVenp' \
   --format lvgl -o "$OUT/lv_font_oe_display_48.c" --force-fast-kern-format
 
 # 36 px -- the stat tile values on charge_screen.cpp and standby_screen.cpp:
