@@ -63,8 +63,10 @@
 #define LV_FONT_MONTSERRAT_20 1
 #define LV_FONT_MONTSERRAT_28 1
 #define LV_FONT_MONTSERRAT_32 1  // fault screen title
-#define LV_FONT_MONTSERRAT_36 1
-#define LV_FONT_MONTSERRAT_48 1
+// 36 and 48 are supplied as subset faces instead -- see
+// src/lvgl_tft/fonts/oe_fonts.h. Together that is ~76 KB of flash.
+#define LV_FONT_MONTSERRAT_36 0
+#define LV_FONT_MONTSERRAT_48 0
 #define LV_FONT_DEFAULT &lv_font_montserrat_14
 
 // lv_label_set_text_fmt()/lv_snprintf need this for %f.
