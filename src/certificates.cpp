@@ -143,32 +143,36 @@ const char *CertificateStore::getRootCa()
   return _root_ca;
 }
 
+/**
+ * Validate and store a client certificate using its serial as the store ID.
+ * @param name Display name stored with the certificate.
+ * @param certificate PEM certificate passed to the shared validation path.
+ * @param key PEM private key passed to the shared validation path.
+ * @param id Optional output for the validated certificate serial.
+ * @return True when the certificate is added and saved; false on rejection or failure.
+ */
 bool CertificateStore::addCertificate(const char *name, const char *certificate, const char *key, uint64_t *id)
 {
-  Certificate *cert = new Certificate(certificate, key);
-  if(cert)
-  {
-    if(addCertificate(cert, id)) {
-      return true;
-    }
-
-    delete cert;
-  }
-  return false;
+  DynamicJsonDocument doc(JSON_OBJECT_SIZE(3));
+  doc["name"] = name;
+  doc["certificate"] = certificate;
+  doc["key"] = key;
+  return addCertificate(doc, id);
 }
 
+/**
+ * Validate and store a root certificate using its serial as the store ID.
+ * @param name Display name stored with the certificate.
+ * @param certificate PEM certificate passed to the shared validation path.
+ * @param id Optional output for the validated certificate serial.
+ * @return True when the certificate is added and saved; false on rejection or failure.
+ */
 bool CertificateStore::addCertificate(const char *name, const char *certificate, uint64_t *id)
 {
-  Certificate *cert = new Certificate(certificate);
-  if(cert)
-  {
-    if(addCertificate(cert, id)) {
-      return true;
-    }
-
-    delete cert;
-  }
-  return false;
+  DynamicJsonDocument doc(JSON_OBJECT_SIZE(2));
+  doc["name"] = name;
+  doc["certificate"] = certificate;
+  return addCertificate(doc, id);
 }
 
 bool CertificateStore::addCertificate(DynamicJsonDocument &doc, uint64_t *id, bool save)
