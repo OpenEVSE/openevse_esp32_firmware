@@ -36,3 +36,13 @@ TEST_CASE("param names match column count and order") {
   CHECK(std::string(TSDB_PARAM_NAMES[TSDB_COL_AMPS])  == "amps");
   CHECK(std::string(TSDB_PARAM_NAMES[TSDB_COL_PILOT]) == "pilot");
 }
+
+TEST_CASE("sample cadence: card gets 6x the resolution of flash") {
+  CHECK(tsdb_sample_interval_ms(true,  false) == 60000UL);
+  CHECK(tsdb_sample_interval_ms(false, false) == 5UL * 60000UL);
+  CHECK(tsdb_sample_interval_ms(true,  true)  == 10000UL);
+  CHECK(tsdb_sample_interval_ms(false, true)  == 60000UL);
+  // Idle is never faster than charging on either store.
+  CHECK(tsdb_sample_interval_ms(false, true)  >= tsdb_sample_interval_ms(true, true));
+  CHECK(tsdb_sample_interval_ms(false, false) >= tsdb_sample_interval_ms(true, false));
+}

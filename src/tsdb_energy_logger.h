@@ -6,6 +6,7 @@
 #include <freertos/FreeRTOS.h>
 #include <freertos/queue.h>
 #include <freertos/task.h>
+#include <esp_tsdb.h>          // tsdb_agg_request_t, used by the dispatchers below
 #include "evse_man.h"
 #include "tsdb_sample.h"
 
@@ -13,15 +14,8 @@
 // Sample cadence and on-disk budget. Overridable via build flags so a debug
 // build can force a fast ring-wrap (e.g. -DTSDB_ENERGY_SAMPLE_MS=1000
 // -DTSDB_ENERGY_BYTES=4096UL) for bench testing the wrapped-ring query path.
-#ifndef TSDB_ENERGY_SAMPLE_MS
-#define TSDB_ENERGY_SAMPLE_MS     60000                 // 1/min while charging
-#endif
-// When the vehicle is not charging we only log slow-moving temperature (charge
-// current and SoC are meaningless, and reading SoC keeps the vehicle awake), so
-// we throttle the write cadence to cut flash wear ~5x during idle periods.
-#ifndef TSDB_ENERGY_IDLE_SAMPLE_MS
-#define TSDB_ENERGY_IDLE_SAMPLE_MS (5UL * 60000UL)      // 1/5min while idle
-#endif
+// The TSDB_ENERGY_*_SAMPLE_MS cadences live in tsdb_sample.h next to
+// tsdb_sample_interval_ms(), which picks between them.
 #ifndef TSDB_ENERGY_BYTES
 #define TSDB_ENERGY_BYTES         (2500UL * 1024UL)     // ~2.5 MB -> ~100 days
 #endif
@@ -72,6 +66,26 @@ public:
   int  initError() { return _init_err; }   // esp_err_t from tsdb_init (0 = OK)
   uint32_t droppedSamples() { return _dropped; }
 };
+
+// Count records in a range on whichever store currently holds the samples.
+// Same reasoning as energy_aggregate_multi() below: a count against the wrong
+// store reads zero and the caller skips a range that does have data.
+bool energy_query_count_any(uint32_t start_ts, uint32_t end_ts, uint32_t &count);
+
+// Aggregate over whichever store currently holds the samples.
+//
+// The write path sends each sample to exactly one store -- the card when a
+// card is fitted and healthy, internal flash otherwise -- so anything that
+// aggregates has to make the same choice or it reads an empty database. Takes
+// esp_tsdb's request type because both call sites already speak it; on the
+// card it is translated to the equivalent sdlog request.
+//
+// Returns false if the aggregation could not run at all. `scanned` is the
+// number of records seen, so callers can still distinguish "no data in this
+// range" from "data that sums to zero".
+bool energy_aggregate_multi(uint32_t start_ts, uint32_t end_ts,
+                            tsdb_agg_request_t *reqs, uint8_t num_reqs,
+                            uint32_t &scanned);
 
 extern TsdbEnergyLogger tsdbEnergyLogger;
 #endif

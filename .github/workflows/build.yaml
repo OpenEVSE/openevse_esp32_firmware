@@ -121,6 +121,9 @@ jobs:
           - openevse_wifi_tft_v1_dev
           # core-3.x (pioarduino / IDF5) — 16MB+ boards
           - openevse_wifi_v1_16mb
+          # core-3.x — ESP32-S3 (docs/hardware/esp32-s3-lcd.md)
+          - openevse_s3_lcd
+          - openevse_s3_lcd_dev
           - native_openevse
 
     steps:

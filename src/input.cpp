@@ -17,6 +17,7 @@
 #include "emoncms.h"
 #include "tesla_client.h"
 #include "manual.h"
+#include "rtc_ds3231.h"
 #include "mqtt.h"
 #include "rfid.h"
 
@@ -200,6 +201,15 @@ handleRapiRead()
       if(evse_time > local_time) {
         struct timeval set_time = { evse_time, 0 };
         settimeofday(&set_time, NULL);
+
+        // Persist it to the battery-backed RTC too, if the board has one. The
+        // controller's clock is a weaker source than SNTP -- it is often the one
+        // WE set -- but this is the case the coin cell exists for: WiFi down, NTP
+        // never answering, and the controller holding the only time either of us
+        // has. rtc_store_system_time() will not accept anything below the tsdb
+        // validity floor, so an unset controller cannot launder a 1970 into the
+        // cell. No-op on boards without an RTC.
+        rtc_store_system_time(evse_time);
       }
     }
   });

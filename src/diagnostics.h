@@ -48,6 +48,11 @@ void diagnostics_probe_end(int slot, uint32_t start);
 // culprit without ever pulling the image.
 void diagnostics_coredump_json(JsonDocument &doc);
 
+// Walk the INTERNAL heap and append a plain-text layout report: totals, the
+// largest live blocks, the largest free gaps and a log2 size histogram.
+// Answers "what is sitting in internal DRAM" without heap tracing.
+void diagnostics_heapmap(String &out);
+
 // Hand back the raw dump for the cases the summary cannot answer, mapped
 // straight out of flash so a 64KB image costs no heap. `data` stays valid for
 // the life of the boot -- responses are sent asynchronously, so the pointer

@@ -12,6 +12,7 @@
 
 #include "debug.h"
 #include "time_man.h"
+#include "rtc_ds3231.h"
 #include "input.h"
 #include "net_manager.h"
 #include "openevse.h"
@@ -380,6 +381,16 @@ void TimeManager::setTime(struct timeval setTime, const char *source)
   DBUGF("Time from %s: %s", source, time_format_time(setTime.tv_sec).c_str());
   DBUGF("Diff %.2f", diffTime(setTime, local_time));
   settimeofday(&setTime, &tz_utc);
+
+  // Push it to the battery-backed RTC, if the board has one, so the cell carries
+  // the freshest value we have across the next power loss. This is the choke point
+  // for the trusted sources -- SNTP here, plus the manual set (/time) and the
+  // browser-supplied time at login, both of which arrive via time_set_time().
+  //
+  // input.cpp's handleRapiRead() stores to the RTC separately, since it calls
+  // settimeofday() directly rather than coming through here. No-op on boards
+  // without an RTC.
+  rtc_store_system_time(setTime.tv_sec);
 
   // Set the time on the OpenEVSE, set from the local time as this could take several ms
   evse.getOpenEVSE().getTime([this](int ret, time_t evse_time)

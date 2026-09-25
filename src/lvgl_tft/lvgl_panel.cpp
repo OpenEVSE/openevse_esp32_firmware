@@ -3,6 +3,9 @@
 
 #include <Arduino.h>
 #include <lvgl.h>
+#if defined(TFT_SPI_DRIVE_CAP) && !defined(EPOXY_DUINO)
+#include <driver/gpio.h>
+#endif
 
 #if defined(EPOXY_DUINO)
 #include <dlfcn.h>
@@ -51,15 +54,48 @@ static bool bl_ready = false;
 static const uint16_t SCREEN_W = TFT_HEIGHT; // 480
 static const uint16_t SCREEN_H = TFT_WIDTH;  // 320
 
-// ONE partial buffer in INTERNAL DRAM — this board has no PSRAM. A single
-// buffer is correct: no DMA means flush_cb blocks the CPU, so a second buffer
-// could never overlap a flush.
+// ONE partial buffer in INTERNAL DRAM.
 //
-// 16 lines rather than 32. At 32 this took a 30KB contiguous block at boot out
-// of a heap with only ~60KB free; instrumentation on hardware showed the
+// 16 lines on the stock board: at 32 this took a 30KB contiguous block at boot
+// out of a heap with only ~60KB free; instrumentation on hardware showed the
 // largest allocatable block down at 11KB while total free sat flat at ~60KB.
-// Halving costs twice as many flush calls for the same total pixels — small
-// next to the blocking SPI write itself — and returns 15KB of contiguous DRAM.
+// Halving costs twice as many flush calls for the same total pixels -- small
+// next to the blocking SPI write itself -- and returns 15KB of contiguous DRAM.
+// openevse_s3_lcd overrides DRAW_BUF_LINES=32 from its env (its internal heap is
+// not under the same pressure because the network stack lives in PSRAM).
+//
+// Single-buffered because of the TFT_eSPI boundary noted above, not because of
+// anything about the ILI9488 or the S3: SPI_18BIT_DRIVER compiles the library's
+// whole DMA subsystem out (Processors/TFT_eSPI_ESP32.h -- ESP32_DMA is only defined
+// `#if !defined(TFT_PARALLEL_8_BIT) && !defined(SPI_18BIT_DRIVER)`), and
+// pushPixelsDMA() is hardwired to `trans.length = len * 16` regardless, while this
+// panel's path writes 3 bytes/pixel. DMA here would clock garbage into the panel.
+// So flush_cb blocks the CPU, and a second buffer could never overlap a flush.
+//
+// Internal DRAM, and on PSRAM boards (openevse_s3_lcd) that is enforced rather than
+// assumed -- see the note at the heap_caps_malloc() call. PSRAM is not idle on those
+// boards; mbedTLS and the LVGL object pool are routed there. What it must not hold is
+// this buffer, which the CPU reads. docs/hardware/esp32-s3-lcd.md has the detail.
+//
+// This also fixes the wire format: 18 bpp, with a CPU-side RGB565->RGB666 conversion
+// on every pixel. If the display link ever becomes the bottleneck, the fix is to port
+// this layer to esp_lcd (esp_lcd_ili9488 does the conversion AND DMA), not to patch
+// TFT_eSPI -- dmaHAL is private and initDMA() is compiled out, so it cannot be done
+// from the app side.
+//
+// !! THIS FILE IS SHARED WITH SHIPPED HARDWARE. !!
+// openevse_wifi_tft_v1 and openevse_s3_lcd both pull in lvgl_tft_renderer_flags;
+// there is no separate S3 panel layer. The constraint above is identical on both
+// (SPI_18BIT_DRIVER follows ILI9488_DRIVER, not the chip), so a DMA rework would pay
+// off on the stock board too -- but it must be conditioned on the board and proven on
+// the S3 first: the stock board has no PSRAM to stage a second buffer in, only ~320 KB
+// of internal heap already shared with WiFi and TLS, and it is in the field.
+// Treat a clock bump separately from the DMA rework. 80 MHz is available on the stock
+// board in principle (its TFT pins are the ESP32-classic HSPI IO_MUX set, so it also
+// bypasses the GPIO matrix), but that board is the QD354801 direct-solder part while
+// the S3 is an ER-TFT035-6 on FPC through a ZIF -- different trace lengths, different
+// flex path. A clean 80 MHz result on one is not evidence for the other, and on
+// shipped units there is no series termination to add and nothing to recall.
 #ifndef DRAW_BUF_LINES
 #define DRAW_BUF_LINES 16
 #endif
@@ -415,6 +451,26 @@ static TFT_eSPI tft = TFT_eSPI();
 static bool lvgl_panel_prepare_begin(size_t buf_bytes)
 {
   tft.init();
+
+#ifdef TFT_SPI_DRIVE_CAP
+  // Bench experiment: weaken the SPI pad drive to slow the edges.
+  //
+  // At 80 MHz this panel garbles. Two candidate causes: reflections on ~70 mm
+  // of board trace plus the flex, or the ILI9488 die simply not accepting a
+  // serial write that fast (its cycle is specified around 50 ns / 20 MHz, so
+  // even 40 MHz is already 2x spec). Weaker drive attacks only the first one.
+  // If 80 MHz goes clean with slow edges the interconnect is the limit and
+  // source-series termination is worth adding; if it stays garbled the panel
+  // is the limit and no board change helps.
+  //
+  // Set after tft.init(): SPI.begin() runs the peripheral manager, which
+  // reconfigures the pad and would discard anything set before it.
+  gpio_set_drive_capability((gpio_num_t)TFT_SCLK, (gpio_drive_cap_t)TFT_SPI_DRIVE_CAP);
+  gpio_set_drive_capability((gpio_num_t)TFT_MOSI, (gpio_drive_cap_t)TFT_SPI_DRIVE_CAP);
+  gpio_set_drive_capability((gpio_num_t)TFT_DC,   (gpio_drive_cap_t)TFT_SPI_DRIVE_CAP);
+  Serial.printf("[panel] SPI pad drive set to %d on SCLK/MOSI/DC\n", (int)TFT_SPI_DRIVE_CAP);
+#endif
+
   tft.setRotation(1); // landscape, matches the original renderer
 #if ESP_ARDUINO_VERSION >= ESP_ARDUINO_VERSION_VAL(3, 0, 0)
   ledcAttach(TFT_BL, LCD_BL_PWM_FREQ, LCD_BL_PWM_RES);
@@ -440,6 +496,13 @@ static bool lvgl_panel_prepare_begin(size_t buf_bytes)
 
   lv_init();
 
+  // MALLOC_CAP_INTERNAL is required, not a hint. On PSRAM boards a plain malloc()
+  // of ~30 KB is over the SDK's 4096-byte ALWAYSINTERNAL threshold and would be
+  // served from PSRAM -- which is exactly where the CPU-bound 3-byte-per-pixel
+  // flush must not read from. The failure branch is a real boot-time mode, not a
+  // formality: the SDK reserves no internal pool (SPIRAM_MALLOC_RESERVE_INTERNAL
+  // is 0), so this competes with everything else on a fragmented heap. Keep the
+  // largest-free-block report with it.
   buf1 = (lv_color_t *)heap_caps_malloc(buf_bytes, MALLOC_CAP_INTERNAL | MALLOC_CAP_8BIT);
   if(buf1 == nullptr) {
     Serial.printf("[panel] FATAL: draw-buffer alloc failed (%u B internal); largest free block=%u\n",
@@ -464,15 +527,130 @@ void lvgl_panel_set_backlight(uint8_t pct)
 #endif
 }
 
+// Convert a run of RGB565 pixels to the ILI9488's 18bpp wire format and push
+// them in batches, instead of TFT_eSPI::pushPixels().
+//
+// The library's 18-bit pushPixels() is `while(len--) tft_Write_16(*data++)` --
+// one whole SPI transaction per pixel, each programming mosi_dlen, writing the
+// data register, setting cmd.usr and busy-waiting, all to move 24 bits. Measured
+// on this board that is 4.48 us/px against 0.6 us of actual wire time at 40 MHz:
+// 669 KB/s out of a 5 MB/s bus, and ~688 ms for a full screen. The library's
+// non-18-bit path already batches into 512-bit FIFO writes; the 18-bit path
+// never got the same treatment.
+//
+// SPIClass::writeBytes() does the chunked FIFO transfers for us, so the cost per
+// pixel becomes the conversion plus a share of one transaction per chunk. A
+// bigger buffer does not help once the per-transaction overhead is amortised
+// over a couple of hundred pixels.
+//
+// The staging buffer is static, not on the stack. flush_cb() only ever runs on
+// loopTask -- LVGL is driven from there -- so a single shared buffer is safe,
+// and 768 B of BSS is the honest cost. On the stock TFT board the loop stack is
+// 8 KB and already shared with Mongoose request handlers; quietly taking 768 B
+// of it on a board that is in the field is not worth the cache locality.
+static uint8_t push_buf[256 * 3];
+
+static void push_pixels_batched(const uint16_t *src, uint32_t len)
+{
+  static const uint32_t CHUNK_PX = 256;          // 768 B staged per transfer
+  uint8_t *buf = push_buf;
+
+  SPIClass &spi = TFT_eSPI::getSPIinstance();
+
+  while(len)
+  {
+    uint32_t n = (len < CHUNK_PX) ? len : CHUNK_PX;
+    uint8_t *o = buf;
+    for(uint32_t i = 0; i < n; i++)
+    {
+      // The draw buffer is byte-swapped: lv_conf.h sets LV_COLOR_16_SWAP=1 on
+      // device, and TFT_eSPI's _swapBytes defaults to false, so pushPixels() was
+      // taking its tft_Write_16S branch -- swap first, then extract. Reading the
+      // halfword natively here scrambled every channel (inverted and grainy).
+      uint16_t c = (uint16_t)((src[i] >> 8) | (src[i] << 8));
+      // RGB565 -> RGB666, left-aligned in each byte exactly as tft_Write_16 does.
+      *o++ = (uint8_t)((c & 0xF800) >> 8);
+      *o++ = (uint8_t)((c & 0x07E0) >> 3);
+      *o++ = (uint8_t)((c & 0x001F) << 3);
+    }
+    spi.writeBytes(buf, n * 3);
+    src += n;
+    len -= n;
+  }
+}
+
+#ifdef LVGL_FLUSH_PROFILE
+#include "debug.h"   // route the report through StreamSpy so /debug/console sees it
+// Bench instrumentation for the display link, off unless -D LVGL_FLUSH_PROFILE.
+//
+// It splits the time inside pushPixels() -- the bytes actually clocked out, plus
+// the CPU-side RGB565->RGB666 conversion this panel forces -- from the
+// setAddrWindow()/startWrite() overhead around it. That is the measurement that
+// says which lever is worth pulling: if push_us is close to the theoretical bus
+// time for the bytes at SPI_FREQUENCY, the link is saturated and a clock bump is
+// the answer; if it is well above, the per-pixel conversion dominates and the
+// fix is esp_lcd, which converts and DMAs instead.
+static uint32_t prof_flushes = 0;
+static uint32_t prof_px      = 0;
+static uint32_t prof_push_us = 0;
+static uint32_t prof_win_us  = 0;
+static uint32_t prof_last_report = 0;
+
+static void flush_profile_report()
+{
+  uint32_t now = millis();
+  if(prof_last_report != 0 && (now - prof_last_report) < 2000) {
+    return;
+  }
+  prof_last_report = now;
+  if(0 == prof_flushes || 0 == prof_px) {
+    return;
+  }
+
+  // 3 bytes/pixel on the wire: this panel is 18bpp over SPI, RGB565 is not an
+  // option. A "frame" here is one full screen's worth of pixels, whether or not
+  // any single flush covered that much -- LVGL only ever flushes dirty areas.
+  uint32_t bytes   = prof_px * 3;
+  uint32_t total_us = prof_push_us + prof_win_us;
+  uint32_t kbps    = prof_push_us ? (uint32_t)(((uint64_t)bytes * 1000ULL) / prof_push_us) : 0;
+  uint32_t frame_ms = (uint32_t)(((uint64_t)total_us * SCREEN_W * SCREEN_H) / ((uint64_t)prof_px * 1000ULL));
+
+  DBUGF("[lvgl] %lu flushes, %lu px, push %lu us, win %lu us, %lu KB/s, full frame ~%lu ms (~%lu fps) @ %d Hz",
+        (unsigned long)prof_flushes, (unsigned long)prof_px,
+        (unsigned long)prof_push_us, (unsigned long)prof_win_us,
+        (unsigned long)kbps, (unsigned long)frame_ms,
+        (unsigned long)(frame_ms ? 1000 / frame_ms : 0), (int)SPI_FREQUENCY);
+
+  prof_flushes = 0; prof_px = 0; prof_push_us = 0; prof_win_us = 0;
+}
+#endif
+
 static void flush_cb(lv_disp_drv_t *drv, const lv_area_t *area, lv_color_t *color_p)
 {
   uint32_t w = (area->x2 - area->x1 + 1);
   uint32_t h = (area->y2 - area->y1 + 1);
 
+#ifdef LVGL_FLUSH_PROFILE
+  uint32_t t0 = micros();
+#endif
   tft.startWrite();
   tft.setAddrWindow(area->x1, area->y1, w, h);
-  tft.pushPixels((uint16_t *)&color_p->full, w * h);
+#ifdef LVGL_FLUSH_PROFILE
+  uint32_t t1 = micros();
+#endif
+  push_pixels_batched((uint16_t *)&color_p->full, w * h);
+#ifdef LVGL_FLUSH_PROFILE
+  uint32_t t2 = micros();
+#endif
   tft.endWrite();
+
+#ifdef LVGL_FLUSH_PROFILE
+  prof_flushes++;
+  prof_px      += w * h;
+  prof_win_us  += (t1 - t0);
+  prof_push_us += (t2 - t1);
+  flush_profile_report();
+#endif
 
   lv_disp_flush_ready(drv);
 }

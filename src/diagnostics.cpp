@@ -20,6 +20,17 @@
 #include <esp_idf_version.h>
 #include <esp_core_dump.h>
 #include <esp_partition.h>
+
+// heap_caps_walk() and its walker_*_t types arrived in IDF 5.1. This has to be
+// a nested test, not `DIAG_HAVE_IDF && ESP_IDF_VERSION >= ...`: the preprocessor
+// parses the whole #if expression even when the left side is 0, so on the host
+// build (no esp_idf_version.h) the undefined function-like ESP_IDF_VERSION_VAL
+// is a syntax error -- "missing binary operator before token (".
+#if ESP_IDF_VERSION >= ESP_IDF_VERSION_VAL(5, 1, 0)
+#define DIAG_HAVE_HEAP_WALK 1
+#else
+#define DIAG_HAVE_HEAP_WALK 0
+#endif
 #include <freertos/FreeRTOS.h>
 #include <freertos/task.h>
 
@@ -64,6 +75,12 @@ typedef spi_flash_mmap_handle_t diag_mmap_handle_t;
 
 // The transients worth catching are short. Sampling every 5s missed dips that
 // a request burst opens and closes well inside one interval, so sample often;
+// Internal DRAM only. On PSRAM boards MALLOC_CAP_8BIT alone answers with the
+// largest PSRAM block (8 MB on the S3 LCD board), which hides the number that
+// starves lwIP and TLS: the largest *internal* block. Identical on boards
+// without PSRAM.
+#define DIAG_HEAP_CAPS (MALLOC_CAP_INTERNAL | MALLOC_CAP_8BIT)
+
 // heap_caps_get_largest_free_block walks only the free list and is cheap
 // enough at this rate.
 #define DIAG_SAMPLE_INTERVAL 1000
@@ -121,6 +138,14 @@ static const char *diagnostics_reset_reason_name(uint32_t reason)
     case ESP_RST_DEEPSLEEP:return "deepsleep";
     case ESP_RST_BROWNOUT: return "brownout";
     case ESP_RST_SDIO:     return "sdio";
+    // IDF 5.x additions (enum values, so guard by IDF version, not #ifdef).
+#if ESP_IDF_VERSION >= ESP_IDF_VERSION_VAL(5, 0, 0)
+    case ESP_RST_USB:      return "usb";        // reset over USB-Serial-JTAG (esptool)
+    case ESP_RST_JTAG:     return "jtag";
+    case ESP_RST_EFUSE:    return "efuse";
+    case ESP_RST_PWR_GLITCH: return "pwr_glitch";
+    case ESP_RST_CPU_LOCKUP: return "cpu_lockup";
+#endif
     default:               return "unknown";
   }
 }
@@ -142,7 +167,7 @@ void diagnostics_loop()
   diag_last_sample = now;
 
 #if DIAG_HAVE_IDF
-  uint32_t largest = (uint32_t)heap_caps_get_largest_free_block(MALLOC_CAP_8BIT);
+  uint32_t largest = (uint32_t)heap_caps_get_largest_free_block(DIAG_HEAP_CAPS);
   if(largest < diag_largest_block_min) {
     diag_largest_block_min = largest;
   }
@@ -225,7 +250,7 @@ int diagnostics_ws_reap()
 uint32_t diagnostics_probe_begin()
 {
 #if DIAG_HAVE_IDF
-  return (uint32_t)heap_caps_get_largest_free_block(MALLOC_CAP_8BIT);
+  return (uint32_t)heap_caps_get_largest_free_block(DIAG_HEAP_CAPS);
 #else
   return 0;
 #endif
@@ -237,7 +262,7 @@ void diagnostics_probe_end(int slot, uint32_t start)
   if(slot < 0 || slot >= DIAG_PROBE_SLOTS) {
     return;
   }
-  uint32_t now = (uint32_t)heap_caps_get_largest_free_block(MALLOC_CAP_8BIT);
+  uint32_t now = (uint32_t)heap_caps_get_largest_free_block(DIAG_HEAP_CAPS);
   diag_probe_hits[slot]++;
   if(now < start) {
     uint32_t drop = start - now;
@@ -254,7 +279,7 @@ void diagnostics_status(JsonDocument &doc)
   // Fold this reading into the minimum as well. /status is itself one of the
   // heavier allocations, so a sample taken here is a sample taken under load —
   // exactly the moment the periodic sampler is least likely to have caught.
-  uint32_t largest = (uint32_t)heap_caps_get_largest_free_block(MALLOC_CAP_8BIT);
+  uint32_t largest = (uint32_t)heap_caps_get_largest_free_block(DIAG_HEAP_CAPS);
   if(largest < diag_largest_block_min) {
     diag_largest_block_min = largest;
   }
@@ -262,6 +287,13 @@ void diagnostics_status(JsonDocument &doc)
   doc["heap_largest"] = largest;
   doc["heap_largest_min"] = UINT32_MAX == diag_largest_block_min ? 0 : diag_largest_block_min;
   doc["heap_min"] = (uint32_t)esp_get_minimum_free_heap_size();
+  // PSRAM, only on boards that have it, so /status is unchanged elsewhere. The
+  // internal figures above deliberately exclude it; these show what the SDK is
+  // routing into external RAM (every allocation >= 4 KB on the S3 LCD board).
+  if(heap_caps_get_total_size(MALLOC_CAP_SPIRAM) > 0) {
+    doc["psram_free"] = (uint32_t)heap_caps_get_free_size(MALLOC_CAP_SPIRAM);
+    doc["psram_largest"] = (uint32_t)heap_caps_get_largest_free_block(MALLOC_CAP_SPIRAM);
+  }
   doc["reset_reason"] = diag_reset_reason;
   doc["reset_reason_name"] = diagnostics_reset_reason_name(diag_reset_reason);
   doc["stack_loop_min"] = UINT32_MAX == diag_stack_loop_min ? 0 : diag_stack_loop_min;
@@ -441,3 +473,92 @@ bool diagnostics_coredump_erase()
   return false;
 #endif
 }
+
+
+// ---------------------------------------------------------------------------
+// Internal-heap layout report
+// ---------------------------------------------------------------------------
+// Needs heap_caps_walk() (IDF 5.1+). The default [env] still builds against
+// core 2.x / IDF 4.4 and the host build has no IDF at all; the "n/a" fallback
+// below covers both.
+#if DIAG_HAVE_HEAP_WALK
+namespace {
+struct HeapMapBlock { uintptr_t ptr; size_t size; };
+struct HeapMapState {
+  size_t live_n = 0, live_b = 0, free_n = 0, free_b = 0;
+  uint16_t hist_live[24] = {0};
+  uint16_t hist_free[24] = {0};
+  HeapMapBlock top_live[12] = {};
+  HeapMapBlock top_free[8] = {};
+  uintptr_t region_start = 0, region_end = 0;
+  int regions = 0;
+};
+
+static void heapmap_insert(HeapMapBlock *arr, size_t n, uintptr_t ptr, size_t size)
+{
+  for(size_t i = 0; i < n; i++) {
+    if(size > arr[i].size) {
+      for(size_t j = n - 1; j > i; j--) arr[j] = arr[j - 1];
+      arr[i] = { ptr, size };
+      return;
+    }
+  }
+}
+
+static bool heapmap_walker(walker_heap_into_t heap, walker_block_info_t b, void *user)
+{
+  HeapMapState *st = (HeapMapState *)user;
+  if(heap.start != (intptr_t)st->region_start) {
+    st->regions++;
+    st->region_start = heap.start;
+    st->region_end = heap.end;
+  }
+  int bucket = 0;
+  for(size_t v = b.size; v > 1 && bucket < 23; v >>= 1) bucket++;
+  if(b.used) {
+    st->live_n++; st->live_b += b.size; st->hist_live[bucket]++;
+    heapmap_insert(st->top_live, 12, (uintptr_t)b.ptr, b.size);
+  } else {
+    st->free_n++; st->free_b += b.size; st->hist_free[bucket]++;
+    heapmap_insert(st->top_free, 8, (uintptr_t)b.ptr, b.size);
+  }
+  return true;
+}
+} // namespace
+
+void diagnostics_heapmap(String &out)
+{
+  HeapMapState *st = new HeapMapState();   // ~500 B; keep it off the stack
+  heap_caps_walk(MALLOC_CAP_INTERNAL | MALLOC_CAP_8BIT, heapmap_walker, st);
+
+  char line[96];
+  out.reserve(2048);
+  snprintf(line, sizeof(line), "internal heap: %d region(s), live %u blocks / %u B, free %u blocks / %u B\n",
+           st->regions, (unsigned)st->live_n, (unsigned)st->live_b, (unsigned)st->free_n, (unsigned)st->free_b);
+  out += line;
+  snprintf(line, sizeof(line), "largest free block: %u B (min since boot %u B)\n",
+           (unsigned)heap_caps_get_largest_free_block(DIAG_HEAP_CAPS),
+           (unsigned)(UINT32_MAX == diag_largest_block_min ? 0 : diag_largest_block_min));
+  out += line;
+
+  out += "\nlargest live blocks:\n";
+  for(int i = 0; i < 12 && st->top_live[i].size; i++) {
+    snprintf(line, sizeof(line), "  %08x  %6u B\n", (unsigned)st->top_live[i].ptr, (unsigned)st->top_live[i].size);
+    out += line;
+  }
+  out += "\nlargest free gaps:\n";
+  for(int i = 0; i < 8 && st->top_free[i].size; i++) {
+    snprintf(line, sizeof(line), "  %08x  %6u B\n", (unsigned)st->top_free[i].ptr, (unsigned)st->top_free[i].size);
+    out += line;
+  }
+  out += "\nsize histogram (log2 bucket: live / free):\n";
+  for(int i = 3; i < 24; i++) {
+    if(0 == st->hist_live[i] && 0 == st->hist_free[i]) continue;
+    snprintf(line, sizeof(line), "  >=%7u B: %4u / %4u\n", 1u << i, st->hist_live[i], st->hist_free[i]);
+    out += line;
+  }
+  delete st;
+}
+#else
+void diagnostics_heapmap(String &out) { out += "n/a\n"; }
+#endif
