@@ -58,6 +58,7 @@ NetManagerTask::NetManagerTask(LcdTask &lcd, LedManagerTask &led, TimeManager &t
   _wifiButtonState(!WIFI_BUTTON_PRESSED_STATE),
   _wifiButtonTimeOut(millis()),
   _apMessage(false),
+  _ipConfigChanged(false),
   #ifdef ENABLE_WIRED_ETHERNET
   _ethConnected(false),
   #endif
@@ -235,7 +236,7 @@ void NetManagerTask::haveNetworkConnection(IPAddress myAddress, IPAddress netmas
 
   displayState();
 
-  Mongoose.ipConfigChanged();
+  _ipConfigChanged = true;  // Applied from loop(), see net_manager.h
   _mdnsConfig = "";  // Rejoin multicast after DHCP/reconnect, even on the same IP.
 
   _led.setWifiMode(true, true);
@@ -848,6 +849,11 @@ unsigned long NetManagerTask::loop(MicroTasks::WakeReason reason)
   nextLoopDelay = min(serviceButton(), nextLoopDelay);
 
   nextLoopDelay = min(manageState(), nextLoopDelay);
+
+  if (_ipConfigChanged) {
+    _ipConfigChanged = false;
+    Mongoose.ipConfigChanged();
+  }
   updateMdns();
 
   if(_dnsServerStarted) {

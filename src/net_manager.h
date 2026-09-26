@@ -101,6 +101,12 @@ class NetManagerTask : public MicroTasks::Task
     String _ipv6address;
     String _macaddress;
     String _mdnsConfig;
+    // Set on the arduino_events task (haveNetworkConnection()), consumed on
+    // the loop task (loop()). Mongoose.ipConfigChanged() must not run on the
+    // event task: since ArduinoMongoose 1.1.0 it can reach the DNS resolver's
+    // closeResolver(), which walks the same connection/request lists
+    // Mongoose.poll() walks from loop() -- see jeremypoulter/ArduinoMongoose#121.
+    bool _ipConfigChanged;
 
     DNSServer _dnsServer;                  // Create class DNS server, captive portal re-direct
     bool _dnsServerStarted;
