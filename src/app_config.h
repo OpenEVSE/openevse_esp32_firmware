@@ -50,6 +50,9 @@ extern String sntp_hostname;
 // Source of truth for both the on-device display and the web UI.
 extern String temp_unit;
 
+// Web UI: reveal OpenEVSE Labs (in-development) features
+extern bool labs_enabled;
+
 // On-device LVGL TFT display theme: "dark" (nightshift) or "light".
 extern String tft_theme;
 extern uint32_t tft_brightness;
