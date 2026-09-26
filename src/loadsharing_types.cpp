@@ -23,21 +23,21 @@
 LoadSharingGroupState loadSharingGroupState;
 
 bool LoadSharingGroupState::isController() const {
-  return loadsharing_enabled && loadsharing_role == "controller";
+  return loadsharing_enabled && !loadsharing_role;
 }
 
 bool LoadSharingGroupState::isMember() const {
-  return loadsharing_enabled && loadsharing_role == "member";
+  return loadsharing_enabled && loadsharing_role;
 }
 
 void LoadSharingGroupState::becomeMember(const String& controllerHost) {
   loadsharing_enabled = true;
-  loadsharing_role = "member";
+  loadsharing_role = true;
   loadsharing_controller_host = controllerHost;
 }
 
 void LoadSharingGroupState::resetRole() {
-  loadsharing_role = "";
+  loadsharing_role = false;
   loadsharing_controller_host = "";
   _failsafe_active = false;
 }

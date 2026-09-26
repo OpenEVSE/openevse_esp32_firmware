@@ -740,7 +740,7 @@ void LoadSharingPeerPoller::pushConfigToPeer(const String& host, PeerConnection&
   // Build config JSON
   DynamicJsonDocument doc(1024);
   doc["loadsharing_enabled"] = true;
-  doc["loadsharing_role"] = "member";
+  doc["loadsharing_role"] = true;
   doc["loadsharing_controller_host"] = _groupState->getLocalHostname();
   doc["loadsharing_group_id"] = loadsharing_group_id;
   // loadsharing_group_max_current is the site budget -- a controller-only
@@ -890,7 +890,7 @@ void LoadSharingPeerPoller::pushConfigResetToPeer(const String& host) {
   // Build reset config JSON
   DynamicJsonDocument doc(256);
   doc["loadsharing_enabled"] = false;
-  doc["loadsharing_role"] = "";
+  doc["loadsharing_role"] = false;
   doc["loadsharing_controller_host"] = "";
 
   String* body = new String();

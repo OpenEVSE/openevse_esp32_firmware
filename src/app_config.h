@@ -123,7 +123,7 @@ extern uint32_t loadsharing_config_version;
 extern uint32_t loadsharing_config_updated_at;
 extern uint32_t loadsharing_peers_version;
 extern uint32_t loadsharing_status_version;
-extern String loadsharing_role;
+extern bool loadsharing_role;  // false = controller (default), true = member
 extern String loadsharing_controller_host;
 extern uint32_t loadsharing_rotation_interval;
 

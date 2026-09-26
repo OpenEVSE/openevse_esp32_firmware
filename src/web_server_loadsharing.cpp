@@ -373,6 +373,7 @@ void handleLoadSharingStatus(MongooseHttpServerRequest *request, MongooseHttpSer
     peerObj["ip"] = peerInfo.ipAddress;
     peerObj["online"] = peerInfo.online;
     peerObj["joined"] = peerInfo.joined;
+    peerObj["isLocal"] = peerInfo.isLocal;
 
     if (fullPeer) {
       peerObj["version"] = fullPeer->getVersion();
