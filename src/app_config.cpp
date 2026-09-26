@@ -190,7 +190,7 @@ uint32_t loadsharing_config_version;
 uint32_t loadsharing_config_updated_at;
 uint32_t loadsharing_peers_version;
 uint32_t loadsharing_status_version;
-String loadsharing_role;
+bool loadsharing_role;
 String loadsharing_controller_host;
 uint32_t loadsharing_rotation_interval;
 
@@ -350,7 +350,7 @@ ConfigOpt *opts[] =
   new ConfigOptDefinition<double>(loadsharing_failsafe_peer_assumed_current, 6.0, "loadsharing_failsafe_peer_assumed_current", "lsfpac"),
   new ConfigOptDefinition<uint32_t>(loadsharing_config_version, 0, "loadsharing_config_version", "lscv"),
   new ConfigOptDefinition<uint32_t>(loadsharing_config_updated_at, 0, "loadsharing_config_updated_at", "lscua"),
-  new ConfigOptDefinition<String>(loadsharing_role, "", "loadsharing_role", "lsr"),
+  new ConfigOptDefinition<bool>(loadsharing_role, false, "loadsharing_role", "lsr"),
   new ConfigOptDefinition<String>(loadsharing_controller_host, "", "loadsharing_controller_host", "lsch"),
   // Rotation interval in seconds (0 disables). Effective max ~49 days on 32-bit millis; larger values wrap.
   new ConfigOptDefinition<uint32_t>(loadsharing_rotation_interval, 1800, "loadsharing_rotation_interval", "lsri"),
