@@ -348,6 +348,11 @@ properties:
     type: boolean
     description: |
       OpenEVSE default state when no claims are running ( 0: disabled | 1: active)
+  labs_enabled:
+    type: boolean
+    default: false
+    description: |
+      Web UI: reveal OpenEVSE Labs (in-development) features. Stored on the device so it applies to every browser.
   loadsharing_enabled:
     type: boolean
     default: false
