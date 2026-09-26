@@ -210,8 +210,7 @@ void TeslaClient::requestAccessToken()
       else if (response->respCode() == 200) {
         const char *cjson = (const char *)response->body();
         if (cjson) {
-          const size_t capacity = JSON_OBJECT_SIZE(5) + 220;
-          DynamicJsonDocument doc(capacity);
+          JsonDocument doc;
           deserializeJson(doc, cjson);
           const char *token = (const char *)doc["access_token"];;
           if (token) {
@@ -296,8 +295,7 @@ void TeslaClient::requestVehicles()
             }
           }
 
-          const size_t capacity = _vehicleCnt*JSON_ARRAY_SIZE(2) + JSON_ARRAY_SIZE(_vehicleCnt) + JSON_OBJECT_SIZE(2) + _vehicleCnt*JSON_OBJECT_SIZE(14) + _vehicleCnt*700;
-          DynamicJsonDocument doc(capacity);
+          JsonDocument doc;
           deserializeJson(doc, json);
           JsonArray jresponse = doc["response"];
 
@@ -320,7 +318,7 @@ void TeslaClient::requestVehicles()
 
           _curVehId = _id[_curVehIdx];
 
-          DynamicJsonDocument data(128);
+          JsonDocument data;
           data["tesla_vehicle_count"] = _vehicleCnt;
           data["tesla_vehicle_id"] = _id[_curVehIdx];
           data["tesla_vehicle_name"] = _displayName[_curVehIdx];
@@ -366,8 +364,7 @@ void TeslaClient::requestChargeState()
     if (response->respCode() == 200)
     {
       const char *json = (const char *)response->body();
-      const size_t capacity = JSON_OBJECT_SIZE(1) + JSON_OBJECT_SIZE(43) + 1500;
-      DynamicJsonDocument doc(capacity);
+      JsonDocument doc;
       deserializeJson(doc, json);
 
       JsonObject jresponse = doc["response"];
@@ -423,18 +420,17 @@ void TeslaClient::requestChargeState()
       evse.setVehicleEta(_hoursToSeconds(_chargeInfo.timeToFullCharge));
       evse.setVoltage(_chargeInfo.chargerVoltage);
 
-      DynamicJsonDocument data(4096);
+      JsonDocument data;
       getChargeInfoJson(data);
       event_send(data);
     }
     else
     {
       const char *json = (const char *)response->body();
-      const size_t capacity = JSON_OBJECT_SIZE(1) + JSON_OBJECT_SIZE(43) + 1500;
-      DynamicJsonDocument doc(capacity);
+      JsonDocument doc;
       deserializeJson(doc, json);
 
-      DynamicJsonDocument data(4096);
+      JsonDocument data;
       data["tesla_error"] = doc["error"];
       event_send(data);
     }

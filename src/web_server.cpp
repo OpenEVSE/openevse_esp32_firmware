@@ -346,7 +346,7 @@ void handleLogin(MongooseHttpServerRequest *request)
   }
 
   String body = request->body().toString();
-  DynamicJsonDocument doc(512);
+  JsonDocument doc;
   if(deserializeJson(doc, body)) {
     response->setCode(400);
     response->print(F("{\"msg\":\"bad json\"}"));
@@ -540,13 +540,11 @@ static String html_escape(const String &input) {
 // Build status data
 // --------------------------------------------------------------------
 
-// Capacity for any document buildStatus() fills. Defined once because the two
-// call sites had drifted: onWsConnect sized its document for 40 members while
-// buildStatus emits around 95, so every websocket connect pushed a silently
-// truncated status. ArduinoJson does not signal that with an error -- it just
-// stops adding members. 131 = 128 plus the "notifications" object and its two
-// members (count, severity).
-#define STATUS_JSON_CAPACITY (JSON_OBJECT_SIZE(131) + 2048)
+// master fixed a real bug here (buildStatus()'s two call sites had drifted
+// capacities, silently truncating the status on connect) by defining a shared
+// STATUS_JSON_CAPACITY. Not needed after the v7 migration: both call sites
+// already use a bare JsonDocument, which grows on demand -- there's no fixed
+// capacity left for the two sites to drift against each other on.
 
 // LittleFS.totalBytes() and LittleFS.usedBytes() each run lfs_fs_size(), a
 // full traversal of every metadata pair and data block in the filesystem,
@@ -585,7 +583,7 @@ static void status_littlefs_usage(uint32_t &free_bytes, uint32_t &used_bytes)
   used_bytes = cached_used;
 }
 
-void buildStatus(DynamicJsonDocument &doc) {
+void buildStatus(JsonDocument &doc) {
 
   // Get the current time
   struct timeval local_time;
@@ -684,7 +682,7 @@ void buildStatus(DynamicJsonDocument &doc) {
 
   // Add joined peers array with real-time status from peer poller
   {
-    JsonArray peersArray = doc.createNestedArray("loadsharing_joined_peers");
+    JsonArray peersArray = doc["loadsharing_joined_peers"].to<JsonArray>();
     double groupTotalAmp = 0.0;
     
     for (const auto& peer : loadSharingGroupState.getPeers()) {
@@ -693,7 +691,7 @@ void buildStatus(DynamicJsonDocument &doc) {
         continue;
       }
       
-      JsonObject peerObj = peersArray.createNestedObject();
+      JsonObject peerObj = peersArray.add<JsonObject>();
       peerObj["hostname"] = peer.getHost();
       peerObj["id"] = peer.getId();
       peerObj["name"] = peer.getName();
@@ -779,7 +777,7 @@ void buildStatus(DynamicJsonDocument &doc) {
   // and nothing more belongs in a payload the HA integration already polls
   // hard. The list lives on /notifications. severity is a name ("info" /
   // "warning" / "critical"), matching how /notifications serialises it.
-  JsonObject notify = doc.createNestedObject("notifications");
+  JsonObject notify = doc["notifications"].to<JsonObject>();
   notify["count"] = notifications.count();
   notify["severity"] = notification_severity_name(notifications.maxSeverity());
 
@@ -803,7 +801,7 @@ handleScan(MongooseHttpServerRequest *request) {
     response->print("[");
     for (int i = 0; i < networksFound; ++i) {
       if(i) response->print(",");
-      StaticJsonDocument<256> network;
+      JsonDocument network;
       network["rssi"] = WiFi.RSSI(i);
       network["ssid"] = WiFi.SSID(i);
       network["bssid"] = WiFi.BSSIDstr(i);
@@ -949,14 +947,14 @@ handleTeslaVeh(MongooseHttpServerRequest *request)
     return;
   }
 
-  StaticJsonDocument<1024> doc;
+  JsonDocument doc;
   int count = teslaClient.getVehicleCnt();
   doc["count"] = count;
-  JsonArray vehicles = doc.createNestedArray("vehicles");
+  JsonArray vehicles = doc["vehicles"].to<JsonArray>();
 
   for (int i = 0; i < count; i++)
   {
-    JsonObject vehicle = vehicles.createNestedObject();
+    JsonObject vehicle = vehicles.add<JsonObject>();
     vehicle["id"] = teslaClient.getVehicleId(i);
     vehicle["name"] = teslaClient.getVehicleDisplayName(i);
   }
@@ -990,26 +988,25 @@ void handleStatusPost(MongooseHttpServerRequest *request, MongooseHttpServerResp
 {
   String body = request->body().toString();
   // Deserialize the JSON document
-  const size_t capacity = JSON_OBJECT_SIZE(32) + 1024;
-  DynamicJsonDocument doc(capacity);
+  JsonDocument doc;
   DeserializationError error = deserializeJson(doc, body);
   if(!error)
   {
     bool send_event = true;
 
-    if(doc.containsKey("voltage"))
+    if(!doc["voltage"].isNull())
     {
       double volts = doc["voltage"];
       DBUGF("voltage:%.1f", volts);
       evse.setVoltage(volts);
     }
-    if(doc.containsKey("shaper_live_pwr"))
+    if(!doc["shaper_live_pwr"].isNull())
     {
       double shaper_live_pwr = doc["shaper_live_pwr"];
       shaper.setLivePwr(shaper_live_pwr);
       DBUGF("shaper: live power:%dW", shaper.getLivePwr());
     }
-    if(doc.containsKey("solar")) {
+    if(!doc["solar"].isNull()) {
       int solar = doc["solar"];
       divert.setSolar(solar);
       DBUGF("solar:%dW", solar);
@@ -1020,7 +1017,7 @@ void handleStatusPost(MongooseHttpServerRequest *request, MongooseHttpServerResp
       }
       send_event = false; // Divert sends the event so no need to send here
     }
-    else if(doc.containsKey("grid_ie")) {
+    else if(!doc["grid_ie"].isNull()) {
       int grid_ie = doc["grid_ie"];
       divert.setGridIe(grid_ie);
       DBUGF("grid:%dW", grid_ie);
@@ -1031,25 +1028,25 @@ void handleStatusPost(MongooseHttpServerRequest *request, MongooseHttpServerResp
       }
       send_event = false; // Divert sends the event so no need to send here
     }
-    if(doc.containsKey("battery_level") && vehiclePushAccepted()) {
+    if(!doc["battery_level"].isNull() && vehiclePushAccepted()) {
       double vehicle_soc = doc["battery_level"];
       DBUGF("vehicle_soc:%d%%", vehicle_soc);
       evse.setVehicleStateOfCharge(vehicle_soc);
       doc["vehicle_state_update"] = 0;
     }
-    if(doc.containsKey("battery_range") && vehiclePushAccepted()) {
+    if(!doc["battery_range"].isNull() && vehiclePushAccepted()) {
       double vehicle_range = doc["battery_range"];
       DBUGF("vehicle_range:%dKM", vehicle_range);
       evse.setVehicleRange(vehicle_range);
       doc["vehicle_state_update"] = 0;
     }
-    if(doc.containsKey("time_to_full_charge") && vehiclePushAccepted()){
+    if(!doc["time_to_full_charge"].isNull() && vehiclePushAccepted()){
       double vehicle_eta = doc["time_to_full_charge"];
       DBUGF("vehicle_eta:%d", vehicle_eta);
       evse.setVehicleEta(vehicle_eta);
       doc["vehicle_state_update"] = 0;
     }
-    if(doc.containsKey("vehicle_charge_limit") && vehiclePushAccepted()){
+    if(!doc["vehicle_charge_limit"].isNull() && vehiclePushAccepted()){
       int vehicle_charge_limit = doc["vehicle_charge_limit"];
       DBUGF("vehicle_charge_limit:%d%%", vehicle_charge_limit);
       evse.setVehicleChargeLimit(vehicle_charge_limit);
@@ -1058,12 +1055,12 @@ void handleStatusPost(MongooseHttpServerRequest *request, MongooseHttpServerResp
     // Display-only home/powerwall battery feeds. Like the solar/grid pushes
     // above these are an explicit override (no data_src arbitration); they just
     // surface in /status and on the display.
-    if(doc.containsKey("home_battery_soc")) {
+    if(!doc["home_battery_soc"].isNull()) {
       int soc = doc["home_battery_soc"];
       DBUGF("home_battery_soc:%d%%", soc);
       home_battery_set_soc(soc);
     }
-    if(doc.containsKey("home_battery_power")) {
+    if(!doc["home_battery_power"].isNull()) {
       int power = doc["home_battery_power"];
       DBUGF("home_battery_power:%dW", power);
       home_battery_set_power(power);
@@ -1101,7 +1098,7 @@ handleStatus(MongooseHttpServerRequest *request)
     // Safe as a static because Mongoose is polled from loop() on a single
     // task and each handler runs to completion inside its own event callback;
     // this one calls nothing that re-enters the HTTP layer.
-    static DynamicJsonDocument doc(STATUS_JSON_CAPACITY);
+    static JsonDocument doc;
     doc.clear();
 
     uint32_t probe = diagnostics_probe_begin();
@@ -1140,7 +1137,7 @@ handleScheduleGet(MongooseHttpServerRequest *request, MongooseHttpServerResponse
 {
   // Sized from the stored event count — a fixed budget silently truncated
   // multi-rule schedules (serialize() drops events once the doc overflows).
-  DynamicJsonDocument doc(scheduler.scheduleJsonCapacity());
+  JsonDocument doc;
 
   bool success = (SCHEDULER_EVENT_NULL == event) ?
     scheduler.serialize(doc) :
@@ -1234,8 +1231,7 @@ handleSchedulePlan(MongooseHttpServerRequest *request)
     return;
   }
 
-  const size_t capacity = JSON_OBJECT_SIZE(40) + 2048;
-  DynamicJsonDocument doc(capacity);
+  JsonDocument doc;
 
   scheduler.serializePlan(doc);
   response->setCode(200);
@@ -1322,7 +1318,7 @@ void handleBoostGet(MongooseHttpServerRequest *request, MongooseHttpServerRespon
 {
   if(boost.isActive())
   {
-    StaticJsonDocument<192> doc;
+    JsonDocument doc;
     boost.serialize(doc);
     response->setCode(200);
     serializeJson(doc, *response);
@@ -1390,10 +1386,10 @@ void handleBoost(MongooseHttpServerRequest *request)
 void handleEmeterDelete(MongooseHttpServerRequest *request, MongooseHttpServerResponseStream *response)
 {
   String body = request->body().toString();
-  DynamicJsonDocument doc(512);
+  JsonDocument doc;
   DeserializationError err = deserializeJson(doc, body);
   if (DeserializationError::Code::Ok == err) {
-    if (doc.containsKey("hard") && doc.containsKey("import")) {
+    if (!doc["hard"].isNull() && !doc["import"].isNull()) {
       bool hardreset = (bool)doc["hard"];
       bool import = (bool)doc["import"];
       if (evse.resetEnergyMeter(hardreset,import)) {
@@ -1573,12 +1569,11 @@ handleRestart(MongooseHttpServerRequest *request) {
   else if (HTTP_POST == request->method()) {
     String body = request->body().toString();
     // Deserialize the JSON document
-    const size_t capacity = JSON_OBJECT_SIZE(1) + 16;
-    DynamicJsonDocument doc(capacity);
+    JsonDocument doc;
     DeserializationError error = deserializeJson(doc, body);
     if(!error)
     {
-      if(doc.containsKey("device")){
+      if(doc["device"].is<const char*>()){
         if (strcmp(doc["device"], "gateway") == 0 ) {
           response->setCode(200);
           response->print("{\"msg\":\"restart gateway\"}");
@@ -1728,22 +1723,19 @@ void handleCableTemp(MongooseHttpServerRequest *request) {
 
   if(HTTP_GET == request->method())
   {
-    // 4 source objects of 9 members each (source, name, pin, status,
-    // temperature, r25, beta, offset_c10, panic_c10), plus the two
-    // top-level flags. JSON_OBJECT_SIZE(8) below undercounts that by one
-    // member per source; the +512 slack comfortably covers it.
-    const size_t capacity = JSON_OBJECT_SIZE(3) +
-                            JSON_ARRAY_SIZE(OPENEVSE_CABLE_TEMP_SOURCE_COUNT) +
-                            OPENEVSE_CABLE_TEMP_SOURCE_COUNT * JSON_OBJECT_SIZE(8) + 512;
-    DynamicJsonDocument doc(capacity);
+    // v7's JsonDocument grows on demand -- no capacity to size for the 4
+    // source objects (source, name, pin, status, temperature, and the
+    // optional r25/beta/offset_c10/panic_c10 calibration fields) plus the
+    // two top-level flags.
+    JsonDocument doc;
 
     doc["supported"] = evse.isCableTempKnown();
     doc["enabled"] = evse.isCableTempEnabled();
 
-    JsonArray sources = doc.createNestedArray("sources");
+    JsonArray sources = doc["sources"].to<JsonArray>();
     for(uint8_t i = 0; i < OPENEVSE_CABLE_TEMP_SOURCE_COUNT; i++)
     {
-      JsonObject src = sources.createNestedObject();
+      JsonObject src = sources.add<JsonObject>();
       src["source"] = i;
       src["name"] = source_names[i];
       src["pin"] = evse.getCableTempPin(i);
@@ -1776,8 +1768,7 @@ void handleCableTemp(MongooseHttpServerRequest *request) {
   }
 
   MongooseString body = request->body();
-  const size_t capacity = JSON_OBJECT_SIZE(8) + 256;
-  DynamicJsonDocument doc(capacity);
+  JsonDocument doc;
   if(deserializeJson(doc, body.c_str(), body.length())) {
     response->setCode(400);
     response->print("{\"msg\":\"Could not parse JSON\"}");
@@ -1785,7 +1776,7 @@ void handleCableTemp(MongooseHttpServerRequest *request) {
     return;
   }
 
-  if(!doc.containsKey("source") || !doc.containsKey("pin")) {
+  if(doc["source"].isNull() || doc["pin"].isNull()) {
     response->setCode(400);
     response->print("{\"msg\":\"source and pin are required\"}");
     request->send(response);
@@ -1815,10 +1806,10 @@ void handleCableTemp(MongooseHttpServerRequest *request) {
   // full-configuration form is all-or-nothing, and filling the gaps from the
   // local cache would silently write back a stale value if the cache were
   // cold or another client had changed it.
-  bool hasCal = doc.containsKey("r25") && doc.containsKey("beta") &&
-                doc.containsKey("offset_c10") && doc.containsKey("panic_c10");
-  bool anyCal = doc.containsKey("r25") || doc.containsKey("beta") ||
-                doc.containsKey("offset_c10") || doc.containsKey("panic_c10");
+  bool hasCal = !doc["r25"].isNull() && !doc["beta"].isNull() &&
+                !doc["offset_c10"].isNull() && !doc["panic_c10"].isNull();
+  bool anyCal = !doc["r25"].isNull() || !doc["beta"].isNull() ||
+                !doc["offset_c10"].isNull() || !doc["panic_c10"].isNull();
 
   if(anyCal && !hasCal) {
     response->setCode(400);
@@ -2126,22 +2117,21 @@ void handleHttpsRedirect(MongooseHttpServerRequest *request)
 void onWsFrame(MongooseHttpWebSocketConnection *connection, int flags, uint8_t *data, size_t len)
 {
   DBUGF("Got message %.*s", len, (const char *)data);
-  const size_t capacity = JSON_OBJECT_SIZE(3) + JSON_OBJECT_SIZE(2) + 128;
-  DynamicJsonDocument doc(capacity);
+  JsonDocument doc;
   DeserializationError error = deserializeJson(doc, data, len);
   if (!error) {
-    if (doc.containsKey("ping") && doc["ping"].is<int8_t>())
+    if (!doc["ping"].isNull())
       {
         // answer pong
         connection->send("{\"pong\": 1}");
       }
 
     // Handle load sharing allocation from controller (member side)
-    if (doc.containsKey("loadsharing")) {
+    if (doc["loadsharing"].is<JsonObject>()) {
       JsonObject ls = doc["loadsharing"];
-      if (ls.containsKey("target_current")) {
+      if (!ls["target_current"].isNull()) {
         double targetCurrent = ls["target_current"].as<double>();
-        String reason = ls.containsKey("reason") ? ls["reason"].as<String>() : "allocation";
+        String reason = !ls["reason"].isNull() ? ls["reason"].as<String>() : "allocation";
 
         DBUGF("LoadSharing: Received allocation %.1fA (reason: %s)", targetCurrent, reason.c_str());
 
@@ -2178,7 +2168,7 @@ void onWsConnect(MongooseHttpWebSocketConnection *connection)
 {
   DBUGF("New client connected over ws");
 
-  DynamicJsonDocument doc(STATUS_JSON_CAPACITY);
+  JsonDocument doc;
   buildStatus(doc);
 
   // Send only to the client that just connected. This used to call
@@ -2211,7 +2201,7 @@ void handleMqttAction(MongooseHttpServerRequest *request) {
   if (false == requestPreProcess(request, response)) return;
 
   if (HTTP_GET == request->method()) {
-    DynamicJsonDocument doc(JSON_OBJECT_SIZE(8) + 384);
+    JsonDocument doc;
     doc["mqtt_connected"] = (int)mqtt.isConnected();
     doc["mqtt_status"]    = mqtt.getMqttStatus();
     if (mqtt.getBrokerIp()[0] != '\0')
@@ -2381,8 +2371,7 @@ void web_server_setup()
       return;
     }
 
-    const size_t capacity = JSON_OBJECT_SIZE(12) + JSON_ARRAY_SIZE(16) + 640;
-    DynamicJsonDocument doc(capacity);
+    JsonDocument doc;
     diagnostics_coredump_json(doc);
     response->setCode(200);
     serializeJson(doc, *response);
