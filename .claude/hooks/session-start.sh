@@ -24,9 +24,9 @@ else
   exit 1
 fi
 
-# Native firmware build/test needs Avahi (mDNS) and OpenSSL headers.
+# Native firmware build/test needs OpenSSL headers; Mongoose provides mDNS.
 $APT update -qq
-$APT install -y -qq libavahi-client-dev libavahi-common-dev libssl-dev
+$APT install -y -qq libssl-dev
 
 # Pinned to match .github/workflows/build.yaml: PlatformIO Core 6.2.0 bumped
 # its bundled SCons to 4.11.1, which fails every core-3.x (pioarduino,
