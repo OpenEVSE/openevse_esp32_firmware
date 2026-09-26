@@ -6,9 +6,9 @@
 #include "web_server.assets_fr_DBnZXcfM_js_gz.h"
 #include "web_server.assets_hu_I2vyf4dj_js_gz.h"
 #include "web_server.assets_index_7ZbzILuw_css_gz.h"
-#include "web_server.assets_index_D7TJ4K2F_js_gz.h"
+#include "web_server.assets_index_BE_8zFg8_js_gz.h"
 #include "web_server.assets_rolldown_runtime_CbXtAM7H_js_gz.h"
-#include "web_server.assets_vendor_D2E1JOXk_js_gz.h"
+#include "web_server.assets_vendor_C8ojbjLA_js_gz.h"
 #include "web_server.favicon_ico.h"
 #include "web_server.index_html_gz.h"
 #include "web_server.manifest_webmanifest.h"
@@ -25,9 +25,9 @@ StaticFile web_server_static_files[] = {
   { "/assets/fr-DBnZXcfM.js", CONTENT_FR_DBNZXCFM_JS_GZ, sizeof(CONTENT_FR_DBNZXCFM_JS_GZ) - 1, _CONTENT_TYPE_JS, CONTENT_FR_DBNZXCFM_JS_GZ_ETAG, "gzip" },
   { "/assets/hu-I2vyf4dj.js", CONTENT_HU_I2VYF4DJ_JS_GZ, sizeof(CONTENT_HU_I2VYF4DJ_JS_GZ) - 1, _CONTENT_TYPE_JS, CONTENT_HU_I2VYF4DJ_JS_GZ_ETAG, "gzip" },
   { "/assets/index-7ZbzILuw.css", CONTENT_INDEX_7ZBZILUW_CSS_GZ, sizeof(CONTENT_INDEX_7ZBZILUW_CSS_GZ) - 1, _CONTENT_TYPE_CSS, CONTENT_INDEX_7ZBZILUW_CSS_GZ_ETAG, "gzip" },
-  { "/assets/index-D7TJ4K2F.js", CONTENT_INDEX_D7TJ4K2F_JS_GZ, sizeof(CONTENT_INDEX_D7TJ4K2F_JS_GZ) - 1, _CONTENT_TYPE_JS, CONTENT_INDEX_D7TJ4K2F_JS_GZ_ETAG, "gzip" },
+  { "/assets/index-BE_8zFg8.js", CONTENT_INDEX_BE_8ZFG8_JS_GZ, sizeof(CONTENT_INDEX_BE_8ZFG8_JS_GZ) - 1, _CONTENT_TYPE_JS, CONTENT_INDEX_BE_8ZFG8_JS_GZ_ETAG, "gzip" },
   { "/assets/rolldown-runtime-CbXtAM7H.js", CONTENT_ROLLDOWN_RUNTIME_CBXTAM7H_JS_GZ, sizeof(CONTENT_ROLLDOWN_RUNTIME_CBXTAM7H_JS_GZ) - 1, _CONTENT_TYPE_JS, CONTENT_ROLLDOWN_RUNTIME_CBXTAM7H_JS_GZ_ETAG, "gzip" },
-  { "/assets/vendor-D2E1JOXk.js", CONTENT_VENDOR_D2E1JOXK_JS_GZ, sizeof(CONTENT_VENDOR_D2E1JOXK_JS_GZ) - 1, _CONTENT_TYPE_JS, CONTENT_VENDOR_D2E1JOXK_JS_GZ_ETAG, "gzip" },
+  { "/assets/vendor-C8ojbjLA.js", CONTENT_VENDOR_C8OJBJLA_JS_GZ, sizeof(CONTENT_VENDOR_C8OJBJLA_JS_GZ) - 1, _CONTENT_TYPE_JS, CONTENT_VENDOR_C8OJBJLA_JS_GZ_ETAG, "gzip" },
   { "/favicon.ico", CONTENT_FAVICON_ICO, sizeof(CONTENT_FAVICON_ICO) - 1, _CONTENT_TYPE_ICO, CONTENT_FAVICON_ICO_ETAG, NULL },
   { "/index.html", CONTENT_INDEX_HTML_GZ, sizeof(CONTENT_INDEX_HTML_GZ) - 1, _CONTENT_TYPE_HTML, CONTENT_INDEX_HTML_GZ_ETAG, "gzip" },
   { "/manifest.webmanifest", CONTENT_MANIFEST_WEBMANIFEST, sizeof(CONTENT_MANIFEST_WEBMANIFEST) - 1, _CONTENT_TYPE_MANIFEST, CONTENT_MANIFEST_WEBMANIFEST_ETAG, NULL },
