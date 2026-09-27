@@ -6,6 +6,7 @@
 
 #include "boot_screen.h"
 #include "nightshift.h"
+#include "fonts/oe_fonts.h"
 #include "mark_img.h"
 
 #define COL_BG     NS_SURFACE
@@ -44,7 +45,7 @@ void boot_screen_build()
   lv_obj_t *title = lv_label_create(boot_scr);
   lv_label_set_text(title, "OpenEVSE");
   lv_obj_set_style_text_color(title, COL_TEXT, 0);
-  lv_obj_set_style_text_font(title, &lv_font_montserrat_48, 0);
+  lv_obj_set_style_text_font(title, &lv_font_oe_display_48, 0);
   lv_obj_align(title, LV_ALIGN_CENTER, 0, -26);
 
   lv_obj_t *sub = lv_label_create(boot_scr);
