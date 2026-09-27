@@ -91,6 +91,12 @@ jobs:
       id-token: write   # OIDC exchange for the ELF archive step below
 
     env:
+      # Dormant until the crash service is deployed and its secrets are set.
+      # Without this the first master push after merge fails the OIDC exchange
+      # on an empty role-to-assume, failing all 19 device builds and the
+      # release job that needs them. Same shape as SIGN_ENABLED below.
+      CRASH_ARCHIVE_ENABLED: ${{ secrets.CRASH_ELF_ROLE_ARN != '' && secrets.CRASH_BUCKET != '' && vars.CRASH_AWS_REGION != '' }}
+
       # Environments whose Arduino core (core-3.x / pioarduino / IDF5) provides
       # the signed-update verifier. Signed OTA is only enforced on these; add
       # future core-3.x envs here. Older-core (4MB) envs cannot verify and are
@@ -236,19 +242,23 @@ jobs:
       # Pushes to this repo only. A fork PR runs in the base repo, so
       # `github.repository` is true there while secrets are empty -- gating on
       # the event is what keeps a fork's build from failing on a missing secret.
-      if: ${{ github.event_name == 'push' && github.repository == 'OpenEVSE/openevse_esp32_firmware' && matrix.env != 'native_openevse' }}
+      if: ${{ env.CRASH_ARCHIVE_ENABLED == 'true' && github.event_name == 'push' && matrix.env != 'native_openevse' }}
+      continue-on-error: true
       uses: aws-actions/configure-aws-credentials@v4
       with:
         role-to-assume: ${{ secrets.CRASH_ELF_ROLE_ARN }}
         aws-region: ${{ vars.CRASH_AWS_REGION }}
 
     - name: Archive firmware.elf under its own SHA-256
+      # Best-effort: a missing ELF archive costs a future backtrace, a failed
+      # release costs the release.
+      continue-on-error: true
       # A crash backtrace is a list of addresses; the ELF is what names them.
       # Keyed by the ELF's own hash, which the device reports as `elf_sha256`
       # in /debug/crash and which is byte-identical to sha256sum of the ELF.
       # No version string, so no escaping and no ambiguity between two builds
       # that share a branch and commit but differ.
-      if: ${{ github.event_name == 'push' && github.repository == 'OpenEVSE/openevse_esp32_firmware' && matrix.env != 'native_openevse' }}
+      if: ${{ env.CRASH_ARCHIVE_ENABLED == 'true' && github.event_name == 'push' && matrix.env != 'native_openevse' }}
       run: |
         set -euo pipefail
         ELF=".pio/build/${{ matrix.env }}/firmware.elf"
