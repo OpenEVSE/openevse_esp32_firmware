@@ -33,6 +33,26 @@ explicit dependencies. Order matters:
 `MicroTask.update()` (cooperative task scheduler), the RAPI sender, EmonCMS
 publishing, and a 30-second Ohm Connect check.
 
+## mDNS and peer discovery
+
+`NetManagerTask` starts ArduinoMongoose's `Mdns` listener after an interface is
+up. The same listener advertises `<hostname>.local`, `_http._tcp` and
+`_openevse._tcp`, resolves `.local` client destinations, and browses for peers.
+The OpenEVSE service retains its `type`, `version`, `id` and `ssl` TXT keys and
+the active HTTP/HTTPS port. Interface/reconnect and advertised configuration
+changes restart the listener and clear its address cache.
+
+`LoadSharingDiscoveryTask` uses `Mdns.browse()` and takes a `Mdns.services()`
+snapshot after its query window. Mongoose assembles DNS-SD responses and fetches
+missing records in the normal event loop; discovery does not wait on an IDF
+semaphore. The firmware uses the SRV target as the peer hostname, filters its
+own device ID, and prefers an IPv4 address on the local subnet.
+
+ArduinoOTA's built-in mDNS is disabled. When OTA is enabled on hardware,
+NetworkManager registers `_arduino._tcp:3232` and the Arduino IDE TXT fields on
+the shared listener. Native builds use the same Mongoose discovery path and
+do not link EpoxymDNS/Avahi or require a host mDNS daemon.
+
 ## EvseManager and the client/priority system
 
 `EvseManager` (`src/evse_man.h`) is the central arbiter for charging state.
