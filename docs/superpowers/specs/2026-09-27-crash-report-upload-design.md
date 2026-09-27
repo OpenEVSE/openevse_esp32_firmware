@@ -35,8 +35,10 @@ read it.
 Developer Tools; a CDK stack (broker, bucket, index, custom domain); CI
 retention of `firmware.elf` keyed by version; server-side symbolization.
 
-**Out:** automatic/unattended upload (§8); surfacing reports back to users;
-any change to how dumps are captured; OCPP or MQTT transport.
+**Out:** uploading a crash nobody offered (§8); the dedicated upload boot mode,
+documented as an escalation but deferred until measured (§6.3); surfacing
+reports back to users; any change to how dumps are captured; OCPP or MQTT
+transport.
 
 ## 3. Flow
 
@@ -102,18 +104,74 @@ config option.
 `version` is the ELF lookup key (`local_<branch>_<hash>` locally, a release tag
 from CI).
 
-## 6. Heap is the failure mode that will actually bite
+## 6. Heap, and when the upload runs
 
 A TLS handshake needs tens of KB contiguous. `heap_largest` collapses to ~13 KB
-after ~74 h uptime — the documented reason OTA fails then and succeeds after a
-reboot (see the heap-fragmentation work and `ota-fails-under-connection-pressure`).
+after ~74 h uptime on a live unit — the documented reason OTA fails then and
+succeeds after a reboot (see the heap-fragmentation work and
+`ota-fails-under-connection-pressure`). A user will click this button on a
+charger that has been up for weeks.
 
-A user will click this button on a charger that has been up for weeks.
+### 6.1 Three escalating windows
 
-So the endpoint **checks `heap_largest` before starting** and refuses with a
-clear "reboot and retry" rather than thrashing a failing handshake. That advice
-works because the dump survives reboots. The threshold is measured on the bench
-board, not guessed.
+**Tier 1 — immediately on click.** Check `heap_largest` first; if it clears the
+threshold, upload now. Most chargers, most of the time.
+
+**Tier 2 — first network-connect after the next boot.** If tier 1 fails or the
+heap check refuses, set a flag in NVS and tell the user it will go on the next
+restart. On the next boot the flagged dump uploads at first-connect: before MQTT
+connects, before OCPP, before tsdb writes, before the web UI has served
+anything. This automates what would otherwise be "reboot and retry" advice, and
+does not force a reboot on a charger that may be mid-charge.
+
+**Tier 3 — a dedicated upload boot mode.** Documented here as the escalation
+path, **not built initially** (§6.3). Boot, see the flag, bring up only WiFi and
+the uploader — no RAPI, LVGL, scheduler, divert, OCPP, MQTT or web server —
+upload against essentially the whole heap, then reboot normally.
+
+### 6.2 Why startup is not simply re-ordered
+
+`net.begin()` is second-to-last in `setup()` and `Mongoose.begin()` follows it.
+It could move earlier — it needs LittleFS and config, and must follow
+`lcd.begin()` because net calls back into `lcd.setWifiMode()` — but the
+obstacle is time, not order. Association and DHCP take seconds. Uploading into a
+pristine heap would mean **blocking `setup()` until the network is up**, which
+stalls RAPI, the display and everything else for seconds, or indefinitely if
+WiFi is down or the AP has moved. Blocking boot on network availability is not
+acceptable on a device whose job is to keep servicing a car. Hence tiers, not
+re-ordering.
+
+### 6.3 Tier 3 is deferred until measurement justifies it
+
+There is no evidence yet that tier 2 is insufficient. The 13 KB figure is from a
+different workload; this payload is 64 KB streamed from flash, so the only real
+consumer is the handshake. The bench S3 measured flat — 46 h cost 2 KB of
+contiguous heap (65,524 → 63,476) — but it runs a fake controller, so it says
+nothing about RAPI-driven fragmentation on the boards that matter.
+
+The measurement needs a controller-attached unit and is blocked on the garage
+EVSE replacement (see `tft-unit-addresses`). It is about half an hour's work
+once that lands.
+
+If tier 3 does prove necessary, the NVS flag from tier 2 already exists and the
+upgrade is contained — no change to the device API or the broker contract.
+Constraints it would have to meet, recorded now so they are not rediscovered:
+
+- **Clear the flag before attempting, not after.** A crash mid-upload must not
+  boot back into upload mode; that is a loop on a device that is not charging.
+- **Hard timeout (~60 s), then reboot normally regardless.**
+- **ESP-side features are absent while it runs.** The ATmega/SAMD controller is
+  autonomous and holds the real safety interlocks, so a car keeps charging — but
+  **temperature throttling is ESP-side** (`Priority_Safety` derate) and would not
+  apply. That is the argument for a tight timeout rather than a generous one.
+- **Needs a manual trigger** so a rarely-reached boot path can be tested rather
+  than only exercised after a panic.
+
+### 6.4 The upload must not block loopTask
+
+Whichever tier runs it, the upload is asynchronous, like the existing OTA
+client. A synchronous call on the connect path is the same shape as the MQTT DNS
+bug that tripped the 5 s task WDT and became upstream #1252.
 
 ## 7. Erase policy
 
@@ -124,16 +182,28 @@ where a user wants it gone.
 
 ## 8. Consent
 
-Click-only for now. No automatic or unattended upload in this design — that is a
-separate decision, and one Chris should make explicitly rather than have
-inferred, because it means credential-bearing memory images leaving devices
-without anyone present.
+**Nothing uploads that a user did not click.** That is the invariant, and the
+tiers in §6 are all downstream of one click.
+
+Tier 2 needs stating carefully, because it completes on a boot where nobody
+pressed anything: the *consent* happened at the click, and the NVS flag is only
+a deferred completion of that single authorised action. It is set only by a
+click, cleared once consumed, and never re-armed by the firmware. A dump that
+was never offered for upload is never uploaded — and a user who changes their
+mind can clear the flag, or erase the dump outright with the control that
+already exists.
+
+What is **not** in this design is uploading a crash nobody offered. That is a
+separate decision for Chris to make explicitly rather than have inferred,
+because it means credential-bearing memory images leaving devices with nobody
+present. The device endpoint and broker contract are shaped so such a caller
+could use them unchanged later, so excluding it now costs no rework.
 
 The confirm dialog states plainly that this is a memory image and may contain
 the WiFi password and other credentials — same shape as the existing erase
-confirmation. The device endpoint and broker contract are shaped so an automatic
-caller could use them unchanged later, so choosing click-only now costs no
-rework.
+confirmation. When the click defers to tier 2, the UI says so explicitly rather
+than reporting a silent success: the user should know the upload has not
+happened yet and what will make it happen.
 
 ## 9. The CDK stack
 
@@ -182,7 +252,9 @@ boards can drop it.
 | Risk | Handling |
 |---|---|
 | Dump contains credentials | §4 allowlist, §8 consent copy, §9 90-day lifecycle, private bucket |
-| Upload fails on a long-uptime charger | §6 pre-flight heap check with actionable advice |
+| Upload fails on a long-uptime charger | §6 tiered windows: heap check, then deferred to next boot's first-connect |
+| Tier 2 completes on an unattended boot | §8 flag is set only by a click, consumed once, never self-armed |
+| Tier 3 boot mode loops, or charges untended | §6.3 clear-flag-before-attempt, hard timeout, temp-throttle caveat |
 | Stack moves accounts, fleet breaks | §4 stable custom domain |
 | Reports arrive undecodable | §10 CI ELF retention keyed by the reported version |
 | 4 MB boards overflow | §11 measured cost, opt-out gate |
@@ -190,7 +262,10 @@ boards can drop it.
 
 ## 13. Open questions
 
-- Exact `heap_largest` threshold for §6 — measure on the bench S3 and a WROOM.
+- Exact `heap_largest` threshold for §6.1 tier 1, and whether tier 2 suffices or
+  tier 3 is needed. **Blocked on the garage EVSE replacement** — the only
+  controller-attached board available, and the bench S3's fake controller cannot
+  reproduce RAPI-driven fragmentation.
 - How much longer ELF retention should be than the 90-day report lifecycle
   (§10). It has to exceed it; the figure depends on how long a build stays in
   the field, which release cadence decides.
