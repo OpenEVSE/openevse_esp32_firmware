@@ -124,6 +124,16 @@ void handleTimeGet(MongooseHttpServerRequest *request, MongooseHttpServerRespons
   if(ip && ip[0] != '\0') {
     doc["ntp_server_ip"] = ip;
   }
+  // Which server the next sync goes to, and where it came from
+  const char *host = timeManager.getActiveHost();
+  if(host && host[0] != '\0') {
+    doc["ntp_server"] = host;
+    doc["ntp_server_source"] = timeManager.isUsingDhcpServer() ? "dhcp" : "config";
+  }
+  const char *dhcp = timeManager.getDhcpServer();
+  if(dhcp && dhcp[0] != '\0') {
+    doc["ntp_dhcp_server"] = dhcp;
+  }
   response->setCode(200);
   serializeJson(doc, *response);
 }

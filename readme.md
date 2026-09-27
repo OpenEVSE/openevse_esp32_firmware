@@ -59,7 +59,6 @@ The WiFi gateway uses an **ESP32** which communicates with the OpenEVSE controll
   household load stays within your supply capacity
 - [Vehicle integration](docs/user/vehicle.md) — SOC, range, and charge ETA
   from Tesla, MQTT (e.g. Home Assistant), OCPP, or HTTP; home-battery display
-- [OhmConnect](docs/user/integrations.md#ohmconnect) demand-response support
 
 ### Integrations & access control
 

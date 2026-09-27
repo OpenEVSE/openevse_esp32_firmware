@@ -39,7 +39,7 @@ $APT install -y -qq libavahi-client-dev libavahi-common-dev libssl-dev
 # different installs.
 python3 -m pip install --quiet --upgrade "platformio==6.1.19"
 
-# gui-nightshift (web UI), gui-v2 (legacy UI) and migrator submodules.
+# gui-nightshift (web UI) and migrator submodules.
 git submodule update --init --recursive
 
 if [ -d gui-nightshift ]; then
