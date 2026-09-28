@@ -37,19 +37,25 @@ TEST_CASE("the wrong shape is refused, including near misses") {
 
 TEST_CASE("the token for a dump matches only that dump") {
   char tok[CRASH_DEFER_TOKEN_LEN];
-  crash_defer_token(tok, 0xdeadbeef, 26084);
-  CHECK(crash_defer_token_matches(tok, 0xdeadbeef, 26084));
-  CHECK_FALSE(crash_defer_token_matches(tok, 0xdeadbeee, 26084));   // new crash, same size
-  CHECK_FALSE(crash_defer_token_matches(tok, 0xdeadbeef, 26088));   // same crc, new size
+  crash_defer_token(tok, 0x5633e718c3722dd1ULL, 26084);
+  CHECK(crash_defer_token_matches(tok, 0x5633e718c3722dd1ULL, 26084));
+  // The bench pair that broke a CRC32 identity: same size, different bytes.
+  CHECK_FALSE(crash_defer_token_matches(tok, 0x33d7fd072a0b6813ULL, 26084));
+  CHECK_FALSE(crash_defer_token_matches(tok, 0x5633e718c3722dd1ULL, 26088));
+  // Both 32-bit halves count -- a token built from only one would collide here.
+  CHECK_FALSE(crash_defer_token_matches(tok, 0x00000000c3722dd1ULL, 26084));
+  CHECK_FALSE(crash_defer_token_matches(tok, 0x5633e71800000000ULL, 26084));
 }
 
 TEST_CASE("an unreadable or legacy flag consents to nothing") {
   // A flag written by an older build held "1". Treating that as consent for
   // whatever dump exists now would reopen exactly the gap this closes.
-  CHECK_FALSE(crash_defer_token_matches("1", 0xdeadbeef, 26084));
-  CHECK_FALSE(crash_defer_token_matches("", 0xdeadbeef, 26084));
-  CHECK_FALSE(crash_defer_token_matches(NULL, 0xdeadbeef, 26084));
-  CHECK_FALSE(crash_defer_token_matches("deadbeef:26084junk", 0xdeadbeef, 26084));
+  CHECK_FALSE(crash_defer_token_matches("1", 0x5633e718c3722dd1ULL, 26084));
+  CHECK_FALSE(crash_defer_token_matches("", 0x5633e718c3722dd1ULL, 26084));
+  CHECK_FALSE(crash_defer_token_matches(NULL, 0x5633e718c3722dd1ULL, 26084));
+  CHECK_FALSE(crash_defer_token_matches("5633e718c3722dd1:26084junk", 0x5633e718c3722dd1ULL, 26084));
+  // A token written by the CRC32 version of this code consents to nothing.
+  CHECK_FALSE(crash_defer_token_matches("2144df1c:26084", 0x2144df1cULL, 26084));
 }
 
 // ---------------------------------------------------------------------------

@@ -19,11 +19,15 @@ bool crash_report_id_valid(const char *id);
 // The deferred-upload flag stores this token, not just "armed". At the next
 // boot the token is compared with the dump that is there: if the charger
 // crashed again after the click, that newer dump was never offered, and it is
-// not sent. "crc32:length" of the whole image -- two dumps agreeing on both is
-// not a case worth designing for.
-#define CRASH_DEFER_TOKEN_LEN 20   // "xxxxxxxx:" + up to 10 digits + NUL
-void crash_defer_token(char *out, uint32_t crc, size_t len);
-bool crash_defer_token_matches(const char *stored, uint32_t crc, size_t len);
+// not sent. The first 64 bits of the image's SHA-256, plus its length.
+//
+// NOT a CRC32. An ESP-IDF core dump ends with a CRC32 of itself, and the CRC32
+// of any message followed by its own CRC is a constant -- so every valid dump
+// has the same whole-image CRC32, and a CRC-based identity would match any
+// dump at all. Measured on the bench: two different dumps, CRC32 2144df1c both.
+#define CRASH_DEFER_TOKEN_LEN 32   // 16 hex + ':' + up to 10 digits + NUL
+void crash_defer_token(char *out, uint64_t id, size_t len);
+bool crash_defer_token_matches(const char *stored, uint64_t id, size_t len);
 
 // True if the dump's ELF hash (the 9-character prefix /debug/crash reports)
 // names the firmware that is running now. After an OTA it does not, and the

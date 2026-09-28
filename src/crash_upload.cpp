@@ -7,7 +7,7 @@
 #include <LittleFS.h>
 #include <MongooseCore.h>
 #include <esp_heap_caps.h>
-#include <esp_rom_crc.h>
+#include <mbedtls/sha256.h>
 
 #include "crash_host.h"
 #include "crash_payload.h"
@@ -367,15 +367,23 @@ static bool crash_running()
          CrashUpload_Completing == _state;
 }
 
-// crc32 of the whole stored image, or false if there is none. The identity a
-// deferred click consented to (spec section 8).
-static bool crash_dump_identity(uint32_t *crc, size_t *len)
+// The first 64 bits of the stored image's SHA-256, or false if there is none:
+// the identity a deferred click consented to (spec section 8). See
+// crash_report_id.h for why this cannot be a CRC32.
+static bool crash_dump_identity(uint64_t *id, size_t *len)
 {
   const uint8_t *img = NULL;
   if(!diagnostics_coredump_image(&img, len) || 0 == *len) {
     return false;
   }
-  *crc = esp_rom_crc32_le(0, img, *len);
+  uint8_t digest[32];
+  if(0 != mbedtls_sha256(img, *len, digest, 0)) {
+    return false;
+  }
+  *id = 0;
+  for(int i = 0; i < 8; i++) {
+    *id = (*id << 8) | digest[i];
+  }
   return true;
 }
 
@@ -384,11 +392,11 @@ static void crash_arm_deferred()
   // The flag records WHICH dump was offered, not just that one was. If the
   // charger crashes again before the next boot, that newer dump was never
   // offered and must not go (spec section 8).
-  uint32_t crc = 0;
+  uint64_t id = 0;
   size_t len = 0;
   char token[CRASH_DEFER_TOKEN_LEN] = "";
-  if(crash_dump_identity(&crc, &len)) {
-    crash_defer_token(token, crc, len);
+  if(crash_dump_identity(&id, &len)) {
+    crash_defer_token(token, id, len);
   }
   File f = LittleFS.open(CRASH_DEFER_FLAG, "w");
   if(f) {
@@ -529,10 +537,10 @@ void crash_upload_loop()
 
   // Spec section 8: only the dump the click offered. A crash after the click
   // leaves a different dump here, and nobody offered that one.
-  uint32_t crc = 0;
+  uint64_t id = 0;
   size_t len = 0;
-  if(!crash_dump_identity(&crc, &len) ||
-     !crash_defer_token_matches(offered.c_str(), crc, len)) {
+  if(!crash_dump_identity(&id, &len) ||
+     !crash_defer_token_matches(offered.c_str(), id, len)) {
     _triedThisBoot = true;
     _armedAtBoot = false;
     _state = CrashUpload_Failed;

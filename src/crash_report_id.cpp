@@ -33,18 +33,20 @@ bool crash_report_id_valid(const char *id)
   return true;
 }
 
-void crash_defer_token(char *out, uint32_t crc, size_t len)
+void crash_defer_token(char *out, uint64_t id, size_t len)
 {
-  snprintf(out, CRASH_DEFER_TOKEN_LEN, "%08x:%u", (unsigned)crc, (unsigned)len);
+  snprintf(out, CRASH_DEFER_TOKEN_LEN, "%08lx%08lx:%lu",
+           (unsigned long)(id >> 32), (unsigned long)(id & 0xffffffffUL),
+           (unsigned long)len);
 }
 
-bool crash_defer_token_matches(const char *stored, uint32_t crc, size_t len)
+bool crash_defer_token_matches(const char *stored, uint64_t id, size_t len)
 {
   if(!stored) {
     return false;
   }
   char want[CRASH_DEFER_TOKEN_LEN];
-  crash_defer_token(want, crc, len);
+  crash_defer_token(want, id, len);
   // Exact, whole-string: a legacy "1" or a truncated token consents to nothing.
   return 0 == strcmp(stored, want);
 }
