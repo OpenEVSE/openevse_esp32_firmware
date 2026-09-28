@@ -19,7 +19,7 @@
 Every task's requirements implicitly include this section.
 
 - **The broker host is compiled in, never a config value.** `CRASH_BROKER_HOST` defaults to `crash.openevse.com`; it is overridable only by a `-D` build flag, never by `/config`, NVS or LittleFS. (Spec §4)
-- **Every outbound URL passes a host allowlist**, on the first request and on any redirect, exactly as OTA does. (Spec §4)
+- **Every outbound URL passes a host allowlist.** Spec §4 also says redirects are re-checked; this client **follows no redirects at all** — any 3xx is a failure — which satisfies the requirement more strictly than re-checking would. Stated here so it is not mistaken for an omission.
 - **Redaction is an allowlist of config key names, never a blocklist.** (Spec §5)
 - **Nothing uploads that a user did not click.** The deferred flag is set only by the device endpoint, consumed once, and never re-armed by firmware. (Spec §8)
 - **The dump is erased only after a 2xx on the raw PUT *and* a 2xx on the completion POST.** Anything else leaves it in place. (Spec §7)
@@ -35,7 +35,11 @@ Every task's requirements implicitly include this section.
 
 Three, all decided here with reasons. Each is a ruling the executor inherits; do not re-litigate them mid-task.
 
-**D1 — the raw dump is PUT to the broker, not to a presigned S3 URL.** Spec §3 says the broker mints a presigned PUT and the device uploads straight to S3. That cannot coexist with spec §4: a presigned S3 URL lives on `*.s3.<region>.amazonaws.com`, so honouring §4's "the returned `upload_url` is allowlisted too" would mean allowlisting every S3 bucket on the internet — which is exactly the redirect-a-memory-image-to-an-attacker case §4 exists to prevent. Routing the 64 KB through the broker keeps the device pinned to one host, costs one Lambda invocation well inside the 10 MB HTTP API payload cap, and leaves the "device never holds an AWS credential" property intact. §3 of the spec should be amended to match.
+**D1 — the raw dump is PUT to the broker, not to a presigned S3 URL.** Spec §3 says the broker mints a presigned PUT and the device uploads straight to S3.
+
+The reason is **account portability, not the allowlist**. A presigned URL lives on `<bucket>.s3.<region>.amazonaws.com`, and that exact hostname could be compiled in and allowlisted just as the broker's is — so "we would have to allowlist all of S3" is wrong and is not the argument to rely on. What a presigned URL would really cost is the property spec §4 exists for: the bucket name and region would be baked into every flashed charger, so moving the stack to OpenEVSE's account would break the fleet exactly as pinning the API Gateway hostname would. Routing the 64 KB through the broker keeps **one** name in the firmware, costs one Lambda invocation well inside the 10 MB HTTP API payload cap, and leaves "the device never holds an AWS credential" intact. §3 of the spec should be amended to match.
+
+It does move the abuse surface, and Task 4 bounds it: the metadata POST is unauthenticated by design, so without a per-route limit anyone can declare `raw_bytes: 131072` and push 128 KB per report at the stage's 10 rps — roughly 110 GB a day, retained 90 days. The raw route therefore gets its own, much tighter throttle. Spec §13's per-chip limit stays open.
 
 **D2 — the completion POST marks the report whole; it does not run `esp-coredump`.** Spec §10 describes symbolization via `esp-coredump` against the archived ELF. Plan A shipped `addr2line` against the reported backtrace and it works, so the symbolized trace already exists by the time the raw dump arrives. Packaging `esp-coredump` and its ELF-tools dependency into the Lambda is a separate piece of work with its own failure modes, and the raw dump's value in the meantime is that a maintainer can download it and run `esp-coredump` locally against an ELF the archive now guarantees exists — which is today's workflow minus the hard part. Out of scope here; the completion route is shaped so it can trigger it later without a device-side change.
 
@@ -93,7 +97,7 @@ Input classes the spec implies that no task's tests exercise by default. Each ha
 | `platformio.ini` (modify) | `-DENABLE_CRASH_UPLOAD=1` on the three 16 MB envs |
 | `test/test_crash_url_allow/*` (create) | host allowlist, on the build host |
 | `test/test_crash_payload/*` (create) | redaction allowlist, on the build host |
-| `docs/user/developer_tools.md`, `docs/ai/feature-map.md` (modify) | the new endpoint and the consent copy |
+| `docs/user/troubleshooting.md`, `docs/ai/feature-map.md` (modify) | the new endpoint and the consent copy |
 
 **GUI — `gui-nightshift` submodule** (separate repo, separate PR)
 
@@ -107,6 +111,8 @@ Input classes the spec implies that no task's tests exercise by default. Each ha
 ### Task 1: The metadata POST hands out an upload ticket
 
 **Repo:** `/home/rar/oevse/openevse-crash-service`, branch `feat/upload-broker` off `main`.
+
+`main` has an uncommitted change in the working tree (the create-or-reference OIDC work in `lib/symbolize-stack.ts` and its test). Commit that first, or Task 4's diff lands on top of it and the review package conflates the two.
 
 **Files:**
 - Modify: `lambda/symbolize/handler.py`
@@ -135,6 +141,8 @@ def test_a_declared_dump_gets_an_upload_path(monkeypatch):
         {'bt': 'riscv-no-unwind', 'raw_bytes': 65536})}, None)
     out = json.loads(res['body'])
     assert out['upload']['path'] == '/v1/reports/%s/raw' % out['report_id']
+    # The device cannot parse a full symbolized trace and never reads one.
+    assert 'frames' not in out
     assert stored['item']['raw'] == 'expected'
     assert stored['item']['raw_bytes'] == 65536
 
@@ -148,6 +156,7 @@ def test_no_dump_declared_means_no_upload_path(monkeypatch):
                         lambda: (None, _FakeTable(stored)))
     res = handler.handler({'body': json.dumps({'bt': 'riscv-no-unwind'})}, None)
     assert 'upload' not in json.loads(res['body'])
+    assert 'frames' in json.loads(res['body'])   # the CLI still gets the trace
     assert stored['item']['raw'] == 'none'
     assert stored['item']['complete'] is True
 
@@ -169,9 +178,15 @@ def test_an_absurd_declared_size_is_refused_without_reserving_anything(monkeypat
         assert stored['item']['raw'] == 'none', bad
 ```
 
-and, at the top of the same file, the fake table the new tests share:
+and, at the top of the same file, `import json` (the file imports only two
+names from `handler` today, so the new tests will otherwise fail with
+`NameError: json` rather than the intended assertion) plus the fake table they
+share:
 
 ```python
+import json
+
+
 class _FakeTable:
     """Captures the single put_item the handler makes."""
     def __init__(self, sink):
@@ -184,7 +199,7 @@ class _FakeTable:
 - [ ] **Step 2: Run them to verify they fail**
 
 ```bash
-cd /home/rar/oevse/openevse-crash-service/lambda/symbolize && python -m pytest test_handler.py -v
+cd /home/rar/oevse/openevse-crash-service/lambda/symbolize && python3 -m pytest test_handler.py -v
 ```
 
 Expected: FAIL — `KeyError: 'upload'` on the first, `KeyError: 'raw'` on the second.
@@ -246,10 +261,17 @@ Then, in `handler()`, replace the `table.put_item(...)` call and the return with
         'expires_at': int((now + timedelta(days=RETENTION_DAYS)).timestamp()),
     })
 
-    out = {'report_id': report_id, 'status': status, 'frames': frames}
+    out = {'report_id': report_id, 'status': status}
     if raw_bytes:
+        # No frames for a device: a 16-frame symbolized trace carries full
+        # build-host paths and runs to 2-4 KB of JSON, which will not fit the
+        # parser on an ESP32 that is about to spend its heap on a TLS session.
+        # The device only ever reads report_id. The CLI, which declares no
+        # dump, still gets the trace it came for.
         out['upload'] = {'path': '/v1/reports/%s/raw' % report_id,
                          'expires_in': RAW_WINDOW_SECONDS}
+    else:
+        out['frames'] = frames
 
     return {
         'statusCode': 200,
@@ -261,7 +283,7 @@ Then, in `handler()`, replace the `table.put_item(...)` call and the return with
 - [ ] **Step 4: Run the tests to verify they pass**
 
 ```bash
-cd /home/rar/oevse/openevse-crash-service/lambda/symbolize && python -m pytest -v
+cd /home/rar/oevse/openevse-crash-service/lambda/symbolize && python3 -m pytest -v
 ```
 
 Expected: PASS, all tests in the directory (19 from Plan A plus the 3 new).
@@ -311,7 +333,7 @@ class FakeTable:
         self.item = item
         self.updated = None
 
-    def get_item(self, Key):
+    def get_item(self, **kw):
         return {'Item': self.item} if self.item else {}
 
     def update_item(self, **kw):
@@ -401,9 +423,21 @@ def test_undecodable_base64_is_400_not_a_500():
     assert code == 400 and s3.put is None
 
 
-def test_a_concurrent_duplicate_put_loses_the_race():
-    # Two PUTs pass the read check together; the conditional update is what
-    # actually serialises them, so the loser must not report success.
+def test_a_concurrent_duplicate_put_loses_the_race_at_the_condition():
+    # Both callers read 'expected' -- the pre-check cannot separate them, so
+    # this drives the case it misses: get_item still says expected while
+    # update_item has already been claimed. The loser must not write bytes.
+    class RacedTable(FakeTable):
+        def update_item(self, **kw):
+            raise raw.ConditionFailed()
+
+    t, s3 = RacedTable(live_item()), FakeS3()
+    code, _ = raw.handle_raw('r1', event(), NOW, s3, t, 'bkt')
+    assert code == 409
+    assert s3.put is None       # the loser must not overwrite the winner
+
+
+def test_a_sequential_retry_is_refused_at_the_pre_check():
     item = live_item()
     t, s3 = FakeTable(item), FakeS3()
     assert raw.handle_raw('r1', event(), NOW, s3, t, 'bkt')[0] == 200
@@ -414,7 +448,7 @@ def test_a_concurrent_duplicate_put_loses_the_race():
 - [ ] **Step 2: Run them to verify they fail**
 
 ```bash
-cd /home/rar/oevse/openevse-crash-service/lambda/symbolize && python -m pytest test_raw.py -v
+cd /home/rar/oevse/openevse-crash-service/lambda/symbolize && python3 -m pytest test_raw.py -v
 ```
 
 Expected: FAIL with `ModuleNotFoundError: No module named 'raw'`.
@@ -481,7 +515,12 @@ def handle_raw(report_id, event, now, s3, table, bucket):
     if data is None:
         return 400, {'msg': 'undecodable body'}
 
-    item = table.get_item(Key={'report_id': report_id}).get('Item')
+    # ConsistentRead: the device PUTs within one round trip of the metadata
+    # POST that wrote this row, and an eventually-consistent GetItem can miss a
+    # write that recent. The 404 that produces is intermittent, looks exactly
+    # like a firmware bug, and strands the dump.
+    item = table.get_item(Key={'report_id': report_id},
+                          ConsistentRead=True).get('Item')
     if not item:
         return 404, {'msg': 'no such report'}
 
@@ -504,12 +543,18 @@ def handle_raw(report_id, event, now, s3, table, bucket):
         # a whole one.
         return 400, {'msg': 'length mismatch'}
 
-    s3.put_object(Bucket=bucket, Key='reports/%s/coredump.bin' % report_id,
-                  Body=data, ContentType='application/octet-stream')
-
     try:
-        # The read above and this write are not atomic together; the condition
-        # is what actually serialises two simultaneous PUTs.
+        # Claim the row BEFORE writing the bytes. The read above and this write
+        # are not atomic together, so the condition is what actually serialises
+        # two simultaneous PUTs -- and doing it first means the loser of that
+        # race never reaches put_object and so cannot overwrite the winner's
+        # image with its own.
+        #
+        # The cost is the opposite failure: if put_object then fails, the row
+        # says 'stored' with no object behind it. That is the better half of
+        # the trade -- it is visible (the completion POST's caller gets a 503
+        # and the report stays incomplete), where a silently overwritten memory
+        # image is not.
         table.update_item(
             Key={'report_id': report_id},
             UpdateExpression='SET #r = :stored',
@@ -520,16 +565,19 @@ def handle_raw(report_id, event, now, s3, table, bucket):
     except ConditionFailed:
         return 409, {'msg': 'not expecting a dump'}
 
+    s3.put_object(Bucket=bucket, Key='reports/%s/coredump.bin' % report_id,
+                  Body=data, ContentType='application/octet-stream')
+
     return 200, {'stored': len(data)}
 ```
 
 - [ ] **Step 4: Run the tests to verify they pass**
 
 ```bash
-cd /home/rar/oevse/openevse-crash-service/lambda/symbolize && python -m pytest test_raw.py -v
+cd /home/rar/oevse/openevse-crash-service/lambda/symbolize && python3 -m pytest test_raw.py -v
 ```
 
-Expected: PASS, 9 tests.
+Expected: PASS, 10 tests.
 
 - [ ] **Step 5: Route it, in `handler.py`**
 
@@ -600,10 +648,10 @@ class _ConditionMapper:
 - [ ] **Step 6: Run the whole suite**
 
 ```bash
-cd /home/rar/oevse/openevse-crash-service/lambda/symbolize && python -m pytest -v
+cd /home/rar/oevse/openevse-crash-service/lambda/symbolize && python3 -m pytest -v
 ```
 
-Expected: PASS, 31 tests.
+Expected: PASS, 32 tests.
 
 - [ ] **Step 7: Commit**
 
@@ -641,7 +689,7 @@ class FakeTable:
     def __init__(self, item):
         self.item = item
 
-    def get_item(self, Key):
+    def get_item(self, **kw):
         return {'Item': self.item} if self.item else {}
 
     def update_item(self, **kw):
@@ -682,7 +730,7 @@ def test_completing_twice_is_idempotent():
 - [ ] **Step 2: Run them to verify they fail**
 
 ```bash
-cd /home/rar/oevse/openevse-crash-service/lambda/symbolize && python -m pytest test_complete.py -v
+cd /home/rar/oevse/openevse-crash-service/lambda/symbolize && python3 -m pytest test_complete.py -v
 ```
 
 Expected: FAIL with `ModuleNotFoundError: No module named 'complete'`.
@@ -704,7 +752,10 @@ only when the bytes are actually stored.
 
 def handle_complete(report_id, table):
     """(status_code, body_dict)."""
-    item = table.get_item(Key={'report_id': report_id}).get('Item')
+    # Consistent for the same reason as the raw PUT: this arrives one round
+    # trip after the write it is reading.
+    item = table.get_item(Key={'report_id': report_id},
+                          ConsistentRead=True).get('Item')
     if not item:
         return 404, {'msg': 'no such report'}
 
@@ -728,7 +779,7 @@ def handle_complete(report_id, table):
 - [ ] **Step 4: Run the tests to verify they pass**
 
 ```bash
-cd /home/rar/oevse/openevse-crash-service/lambda/symbolize && python -m pytest test_complete.py -v
+cd /home/rar/oevse/openevse-crash-service/lambda/symbolize && python3 -m pytest test_complete.py -v
 ```
 
 Expected: PASS, 4 tests.
@@ -751,10 +802,10 @@ In `handler.py`, inside `handler()`, immediately before the final `return handle
 - [ ] **Step 6: Run the whole suite**
 
 ```bash
-cd /home/rar/oevse/openevse-crash-service/lambda/symbolize && python -m pytest -v
+cd /home/rar/oevse/openevse-crash-service/lambda/symbolize && python3 -m pytest -v
 ```
 
-Expected: PASS, 35 tests.
+Expected: PASS, 36 tests.
 
 - [ ] **Step 7: Commit**
 
@@ -823,6 +874,20 @@ test('the lambda can read a report row back', () => {
   expect(JSON.stringify(template().findResources('AWS::IAM::Policy')))
     .toContain('dynamodb:GetItem');
 });
+
+test('the raw-dump route is throttled harder than the index', () => {
+  // 128 KB a call at the stage's default 10 rps is ~110 GB/day into a bucket
+  // that keeps it for 90 days, and the endpoint is unauthenticated by design.
+  // The stage-wide throttle does not bound that; this does.
+  template().hasResourceProperties('AWS::ApiGatewayV2::Stage', {
+    RouteSettings: {
+      'PUT /v1/reports/{report_id}/raw': {
+        ThrottlingBurstLimit: 5,
+        ThrottlingRateLimit: 1,
+      },
+    },
+  });
+});
 ```
 
 - [ ] **Step 2: Run them to verify they fail**
@@ -870,6 +935,18 @@ and replace the single `api.addRoutes({...})` call with:
       methods: [apigwv2.HttpMethod.POST],
       integration,
     });
+
+    // The raw route carries up to 128 KB a call, so the stage's own 10 rps
+    // would admit ~110 GB a day into a bucket that keeps it for 90 days. A
+    // charger uploads one dump, rarely; one a second across the whole fleet is
+    // already generous. `stage` is the CfnStage the default throttle is set on
+    // a few lines above.
+    stage.routeSettings = {
+      'PUT /v1/reports/{report_id}/raw': {
+        throttlingBurstLimit: 5,
+        throttlingRateLimit: 1,
+      },
+    };
 ```
 
 - [ ] **Step 4: Run the tests to verify they pass**
@@ -878,7 +955,7 @@ and replace the single `api.addRoutes({...})` call with:
 cd /home/rar/oevse/openevse-crash-service && npx jest
 ```
 
-Expected: PASS, 20 tests.
+Expected: PASS, 21 tests.
 
 - [ ] **Step 5: Deploy and exercise it end to end**
 
@@ -1120,14 +1197,18 @@ In `bin/openevse-crash-service.ts`, after the `SymbolizeStack` construction:
 const hostname = app.node.tryGetContext('hostname');
 const certificateArn = app.node.tryGetContext('certificateArn');
 const hostedZoneId = app.node.tryGetContext('hostedZoneId');
-if (hostname && (certificateArn || hostedZoneId)) {
+// hostedZoneId without zoneName would reach CertificateValidation.fromDns
+// (undefined), which falls back to manual validation and hangs the deploy for
+// half an hour before failing. Require the pair.
+const zoneName = app.node.tryGetContext('zoneName');
+if (hostname && (certificateArn || (hostedZoneId && zoneName))) {
   new DomainStack(app, 'CrashDomain', {
     env,
     api: symbolize.api,
     hostname,
     certificateArn,
     hostedZoneId,
-    zoneName: app.node.tryGetContext('zoneName'),
+    zoneName,
   });
 }
 ```
@@ -1140,7 +1221,7 @@ if (hostname && (certificateArn || hostedZoneId)) {
 cd /home/rar/oevse/openevse-crash-service && npx jest
 ```
 
-Expected: PASS, 24 tests.
+Expected: PASS, 25 tests.
 
 - [ ] **Step 5: Verify the default deploy is unchanged**
 
@@ -1163,7 +1244,9 @@ git -c user.name="Andrew Rankin" -c user.email="andrew@eiknet.com" \
 
 ### Task 6: The two pure pieces — host allowlist and config redaction
 
-**Repo:** `/home/rar/oevse/openevse_esp32_firmware`, branch `feat/crash-upload` off `oe-ssh/master`, in a worktree.
+**Repo:** `/home/rar/oevse/openevse_esp32_firmware`, branch `feat/crash-upload` off **`feat/crash-elf-archive`** (rebase that onto `oe-ssh/master` first), in a worktree.
+
+Not off master: `scripts/symbolize_crash.py` and the CI ELF-archive step exist only on `feat/crash-elf-archive` (Plan A, unpushed). Task 7 edits the first and Task 9's end-to-end run needs the second, so branching off master makes both unreachable.
 
 **Files:**
 - Create: `src/crash_host.h`
@@ -1249,7 +1332,13 @@ Create `test/test_crash_redact/test_crash_redact.cpp`:
 #include "crash_redact.h"
 
 TEST_CASE("every credential-bearing key in app_config is dropped") {
-  // Named individually rather than looped, so this reads as the list it is.
+  // These follow from the unknown-key case below rather than adding coverage
+  // to it -- the function says no to every string not in ALLOWED. They are a
+  // regression list: if someone ever "helpfully" widens the allowlist, this is
+  // the test that says which names must never be on it. (hideSecrets=true
+  // already masks most of them in config_serialize, but ocpp_authkey is a
+  // plain ConfigOptDefinition<String> and is NOT masked -- the allowlist is
+  // the only thing keeping it out.)
   const char *secrets[] = {
     "ap_pass", "pass", "www_password", "www_username", "server_secret",
     "mqtt_pass", "mqtt_user", "emoncms_apikey", "ocpp_authkey",
@@ -1708,6 +1797,7 @@ Create `src/crash_payload.cpp`:
 #include "app_config.h"
 #include "diagnostics.h"
 #include "crash_redact.h"
+#include "evse_man.h"
 #include <espal.h>
 
 void crash_payload_build(JsonDocument &doc, size_t rawBytes)
@@ -1720,6 +1810,13 @@ void crash_payload_build(JsonDocument &doc, size_t rawBytes)
   // absent controller onto one value and makes the by-chip index useless.
   doc["chip_id"] = serial;
   doc["espinfo"] = ESPAL.getChipInfo();
+  // The controller's own firmware version (spec §5). Absent, not empty, when
+  // no controller has answered -- an empty string here is indistinguishable
+  // from "an OpenEVSE running version ''".
+  const char *evseFw = evse.getFirmwareVersion();   // const char *, not String
+  if(evseFw && '\0' != evseFw[0]) {
+    doc["firmware"] = evseFw;
+  }
 
   // The decoded summary: panic reason, faulting task, PC, backtrace,
   // elf_sha256. This is what gets symbolized; the raw image is for the
@@ -1853,7 +1950,7 @@ Create `src/crash_upload.cpp`. The whole file:
 
 // Broker replies are a few hundred bytes. A reply that keeps growing is either
 // a bug or a hostile endpoint filling the heap of the device it is talking to.
-#define CRASH_MAX_REPLY          4096
+#define CRASH_MAX_REPLY          8192
 
 // A TLS handshake needs tens of KB contiguous, and heap_largest collapses on a
 // charger that has been up for weeks -- the documented reason OTA fails then
@@ -1868,10 +1965,13 @@ Create `src/crash_upload.cpp`. The whole file:
 #define CRASH_MIN_HEAP_LARGEST   (48 * 1024)
 #endif
 
-// Set by a click, consumed once, never re-armed by firmware (spec §8). A file
-// rather than a config option on purpose: a config option could be set by any
-// authenticated /config write, and then the consent invariant would be a
-// comment rather than a property.
+// Set by a click, consumed once, never re-armed by firmware (spec §8).
+//
+// A LittleFS file, where spec §6.1 says NVS. Same durability, and a file is
+// reachable from exactly one place in this firmware; nothing on master writes
+// an arbitrary LittleFS path from a request. A config option -- the obvious
+// alternative -- could be set by any authenticated /config write, which would
+// make the consent invariant a comment rather than a property.
 #define CRASH_DEFER_FLAG         "/crash_upload_pending"
 
 static CrashUploadState _state = CrashUpload_Idle;
@@ -1882,6 +1982,9 @@ static size_t _sent = 0;
 static size_t _reported = 0;       // last progress figure announced
 static uint32_t _deadline = 0;
 static bool _triedThisBoot = false;
+// The flag was on disk when this boot started. Only such a flag is a deferred
+// upload; one armed during this boot belongs to the next one.
+static bool _armedAtBoot = false;
 
 // ---------------------------------------------------------------------------
 // One request, used three times.
@@ -1934,6 +2037,12 @@ static void crash_pump(mg_connection *nc)
 static void crash_ev_handler(struct mg_connection *nc, int ev, void *p, void *u)
 {
   (void)u;
+  // One request struct serves three successive connections. A straggling
+  // MG_EV_SEND on a connection we have already moved past would otherwise pump
+  // the NEXT request's body into the old socket.
+  if(nc != _nc && MG_EV_CLOSE != ev) {
+    return;
+  }
   switch(ev)
   {
     case MG_EV_CONNECT:
@@ -2023,7 +2132,14 @@ static bool crash_send(const char *method, const String &path,
   const char *err = NULL;
   opts.error_string = &err;
 
-  String addr = String("ssl://") + CRASH_BROKER_HOST + ":443";
+  // "tcp://", NOT "ssl://" -- mg_parse_address strips only udp:// and tcp://
+  // (mongoose.c:2648), so an ssl:// address fails to parse and mg_connect_opt
+  // returns NULL with "cannot parse address". TLS is turned on by opts
+  // .ssl_ca_cert being non-NULL, which is exactly what mg_connect_http_base
+  // does (mongoose.c:8660). SNI and hostname verification come free: with a CA
+  // set and no ssl_server_name, mongoose uses the DNS host it parsed
+  // (mongoose.c:3158) and mbedtls_ssl_set_hostname checks the cert against it.
+  String addr = String("tcp://") + CRASH_BROKER_HOST + ":443";
   // Asynchronous, including the DNS lookup: mongoose resolves through its own
   // resolver rather than getaddrinfo, so nothing here blocks loopTask
   // (spec §6.4).
@@ -2080,8 +2196,15 @@ static void crash_reply(int status, const String &body)
         crash_fail("broker refused the report");
         return;
       }
-      DynamicJsonDocument doc(1024);
-      if(DeserializationError::Ok != deserializeJson(doc, body)) {
+      // Filtered, not parsed whole. The reply is small today because the
+      // broker omits `frames` for a device (Task 1), but a filter makes that
+      // a belt-and-braces property rather than a coupling: anything the broker
+      // grows later is discarded before it can exhaust this document.
+      StaticJsonDocument<64> filter;
+      filter["report_id"] = true;
+      StaticJsonDocument<128> doc;
+      if(DeserializationError::Ok !=
+         deserializeJson(doc, body, DeserializationOption::Filter(filter))) {
         crash_fail("bad reply");
         return;
       }
@@ -2160,6 +2283,12 @@ static void crash_arm_deferred()
     f.print("1");
     f.close();
   }
+  // Deferred means NEXT boot. Without this, crash_upload_loop() would see the
+  // Deferred state on its very next pass, consume the flag and retry
+  // immediately against the same starved heap that just failed the gate --
+  // turning "will upload after the next restart" into a lie and losing the
+  // flag in the process.
+  _triedThisBoot = true;
   _state = CrashUpload_Deferred;
   DynamicJsonDocument doc(128);
   doc["crash_upload"] = crash_upload_state_name();
@@ -2174,6 +2303,7 @@ bool crash_upload_deferred_armed()
 void crash_upload_cancel_deferred()
 {
   LittleFS.remove(CRASH_DEFER_FLAG);
+  _armedAtBoot = false;
   if(CrashUpload_Deferred == _state) {
     _state = CrashUpload_Idle;
   }
@@ -2233,6 +2363,7 @@ void crash_upload_begin()
 {
   // Nothing here touches the network; tier 2 waits for connectivity in loop().
   if(crash_upload_deferred_armed()) {
+    _armedAtBoot = true;
     _state = CrashUpload_Deferred;
   }
 }
@@ -2246,7 +2377,8 @@ void crash_upload_loop()
     return;
   }
 
-  if(CrashUpload_Deferred != _state || _triedThisBoot || !net.isConnected()) {
+  if(CrashUpload_Deferred != _state || _triedThisBoot || !net.isConnected() ||
+     !_armedAtBoot) {
     return;
   }
 
@@ -2261,8 +2393,15 @@ void crash_upload_loop()
   // loop. A failed attempt leaves the dump in place and the user can click
   // again.
   LittleFS.remove(CRASH_DEFER_FLAG);
+  // Set before the attempt, not after. crash_begin_now() returns false when
+  // the dump has since been erased, and without this the loop would call it --
+  // and esp_core_dump_image_get(), a flash read -- on every pass for the rest
+  // of the boot.
+  _triedThisBoot = true;
   String message;
-  crash_begin_now(message);
+  if(!crash_begin_now(message)) {
+    _state = CrashUpload_Idle;
+  }
 }
 
 CrashUploadState crash_upload_state() { return _state; }
@@ -2453,6 +2592,10 @@ In the existing `/debug/crash$` handler, inside the `HTTP_DELETE` branch, before
         request->send(response);
         return;
       }
+      // Erasing while an upload is deferred also withdraws the deferral: the
+      // dump it was queued to send is about to stop existing, and leaving the
+      // flag armed means the next boot consumes it and finds nothing.
+      crash_upload_cancel_deferred();
 ```
 
 - [ ] **Step 4: Wire it into the main loop**
@@ -2483,6 +2626,16 @@ cp .pio/build/openevse_wifi_v1_16mb/firmware.elf \
    /tmp/crash-upload-$(date +%Y%m%d).elf
 ```
 
+CI has never archived an ELF (the secrets are unset, deliberately), so put this
+build's ELF in the archive by hand or Task 9's run comes back `unsymbolized`
+rather than `symbolized`:
+
+```bash
+ELF=.pio/build/openevse_wifi_v1_16mb/firmware.elf
+aws s3 cp --region us-east-2 "$ELF" \
+  "s3://crashstorage-crashbucketed041c25-mulnvmsdrfn4/elf/$(sha256sum "$ELF" | cut -d" " -f1)"
+```
+
 Flash the bench unit over USB, then:
 
 ```bash
@@ -2510,7 +2663,7 @@ git -c user.name="Andrew Rankin" -c user.email="andrew@eiknet.com" \
 
 **Files:**
 - Modify: `platformio.ini`
-- Modify: `docs/user/developer_tools.md`
+- Modify: `docs/user/troubleshooting.md`
 - Modify: `docs/ai/feature-map.md`
 
 **Interfaces:**
@@ -2521,19 +2674,21 @@ Spec §11 says the flash cost is measured before it is claimed, and the user's d
 
 - [ ] **Step 1: Record the baseline**
 
-Build the merge-base in its own worktree, so the baseline is the same tree
-minus this branch and nothing else:
+Measure on **one** tree, by toggling the flag — not against a second worktree.
+Two worktrees differ for reasons unrelated to this feature:
+`scripts/auto_fw_version.py` bakes `local_<branch>_<hash>` into the binary (a
+detached-HEAD baseline gives a different-length string), and a local build
+embeds `gui-nightshift/dist` when it exists and the committed `web_static`
+when it does not. Either alone makes "byte-identical" a coin toss.
 
 ```bash
-BASE=$(git merge-base oe-ssh/master HEAD)
-git worktree add /tmp/crash-baseline "$BASE"
-cd /tmp/crash-baseline && git submodule update --init --recursive
-for e in openevse_wifi_v1 openevse_wifi_v1_16mb; do
-  /home/rar/oevse/openevse_esp32_firmware/scripts/pio run -e "$e" 2>&1 | grep -E 'Flash:|RAM:'
-done
+cd /home/rar/oevse/openevse_esp32_firmware
+scripts/pio run -e openevse_wifi_v1_16mb 2>&1 | grep -E 'Flash:|RAM:'   # gate ON
 ```
 
-Expected: two `Flash: [=====     ] nn.n% (used NNNNNN bytes ...)` lines. Write them into the ledger — they are the numbers Step 3 is measured against.
+Then with `-D ENABLE_CRASH_UPLOAD=1` removed from that env's `build_flags`,
+rebuild and record the same two lines. The difference is the feature's cost and
+the only figure worth quoting. Write both into the ledger.
 
 - [ ] **Step 2: Add the gate**
 
@@ -2555,7 +2710,17 @@ for e in openevse_wifi_v1 openevse_wifi_v1_16mb; do
 done
 ```
 
-Expected: `openevse_wifi_v1` is **byte-identical** to its baseline — the gate is off there, so an unchanged figure is the proof the gate works, not a coincidence. `openevse_wifi_v1_16mb` is larger; record the delta. If it exceeds 12 KB, stop and say so in the ledger rather than trimming quietly: the spec's promise was that the figure would be reported, not that it would be small.
+Expected: `openevse_wifi_v1` builds, and
+
+```bash
+nm -C .pio/build/openevse_wifi_v1/firmware.elf | grep crash_upload
+```
+
+lists only the stub symbols from the `#else` branch — that, not a size
+comparison, is the proof the gate is off there. Record the 16 MB delta from
+step 1. If it exceeds 12 KB, stop and say so in the ledger rather than trimming
+quietly: the spec's promise was that the figure would be reported, not that it
+would be small.
 
 - [ ] **Step 4: The end-to-end run on real hardware**
 
@@ -2614,15 +2779,15 @@ Expected: `second-click=409` (Review Focus 3) and `erase=409` (Review Focus 2).
 Temporarily raise the bar so tier 1 always refuses, and confirm the click defers rather than failing:
 
 ```bash
-scripts/pio run -e openevse_wifi_v1_16mb \
-  --project-option="build_flags=\${env.build_flags} -D CRASH_MIN_HEAP_LARGEST=0x7FFFFFFF"
+PLATFORMIO_BUILD_FLAGS="-D CRASH_MIN_HEAP_LARGEST=0x7FFFFFFF" \
+  scripts/pio run -e openevse_wifi_v1_16mb
 ```
 
 Flash it, induce a dump, click, and expect the POST to answer 200 with `"deferred":true` and a message naming the restart. Reboot and confirm the upload completes on its own with nobody pressing anything — and that `/crash_upload_pending` is gone afterwards. Then reflash the normal build.
 
 - [ ] **Step 7: Document it**
 
-In `docs/user/developer_tools.md`, under the crash section, add what the button does, that the image contains credentials, that the dump is erased only on success, and that on a long-uptime charger the upload may defer to the next restart. In `docs/ai/feature-map.md`, add the three routes and `src/crash_upload.cpp`. Then:
+In `docs/user/troubleshooting.md` (the existing `/debug/crash` copy is at lines 47-56; there is no `developer_tools.md` on this branch), under the crash section, add what the button does, that the image contains credentials, that the dump is erased only on success, and that on a long-uptime charger the upload may defer to the next restart. In `docs/ai/feature-map.md`, add the three routes and `src/crash_upload.cpp`. Then:
 
 ```bash
 cd /home/rar/oevse/openevse_esp32_firmware && python scripts/docs_coverage.py --strict
@@ -2634,7 +2799,7 @@ Expected: exit 0. It fails on an undocumented route, which is the point of runni
 
 ```bash
 cd /home/rar/oevse/openevse_esp32_firmware
-git add platformio.ini docs/user/developer_tools.md docs/ai/feature-map.md
+git add platformio.ini docs/user/troubleshooting.md docs/ai/feature-map.md
 git -c user.name="Andrew Rankin" -c user.email="andrew@eiknet.com" \
   commit -m "feat: enable crash upload on 16MB boards, and document it"
 ```
@@ -2803,6 +2968,8 @@ Do **not** commit the regenerated screenshots into the firmware repo as part of 
 ## Sequencing and what is blocked
 
 Tasks 1-4 are independent of everything else and are the right place to start: they extend a stack that is already deployed and can be exercised with `curl` alone.
+
+The firmware half branches off **`feat/crash-elf-archive`**, not master — Plan A's `scripts/symbolize_crash.py` and CI ELF step live only there and are still unpushed. Rebase that branch onto `oe-ssh/master` before cutting `feat/crash-upload` from it.
 
 Task 5 is **not** a blocker for anything. `crash.openevse.com` is not delegated to this account, and the domain stack is built so that absence is a configuration, not a failure. The firmware pins the hostname from day one and bench work uses `-D CRASH_BROKER_HOST=...` against the generated API hostname; no firmware change waits on DNS. What *is* blocked on DNS is the final production validation — a charger built with the default host cannot reach the broker until the record exists — and that is one bench run, not a task.
 
