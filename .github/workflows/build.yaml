@@ -95,7 +95,7 @@ jobs:
       # Without this the first master push after merge fails the OIDC exchange
       # on an empty role-to-assume, failing all 19 device builds and the
       # release job that needs them. Same shape as SIGN_ENABLED below.
-      CRASH_ARCHIVE_ENABLED: ${{ secrets.CRASH_ELF_ROLE_ARN != '' && secrets.CRASH_BUCKET != '' && vars.CRASH_AWS_REGION != '' }}
+      CRASH_ARCHIVE_ENABLED: ${{ secrets.CRASH_ELF_ROLE_ARN != '' && secrets.CRASH_BUCKET != '' && (vars.CRASH_AWS_REGION != '' || secrets.CRASH_AWS_REGION != '') }}
 
       # Environments whose Arduino core (core-3.x / pioarduino / IDF5) provides
       # the signed-update verifier. Signed OTA is only enforced on these; add
@@ -247,7 +247,9 @@ jobs:
       uses: aws-actions/configure-aws-credentials@v4
       with:
         role-to-assume: ${{ secrets.CRASH_ELF_ROLE_ARN }}
-        aws-region: ${{ vars.CRASH_AWS_REGION }}
+        # A variable or a secret: the region is not sensitive, but a
+        # collaborator may only be able to create secrets.
+        aws-region: ${{ vars.CRASH_AWS_REGION || secrets.CRASH_AWS_REGION }}
 
     - name: Archive firmware.elf under its own SHA-256
       # Best-effort: a missing ELF archive costs a future backtrace, a failed
