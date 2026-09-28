@@ -261,13 +261,16 @@ jobs:
       # No version string, so no escaping and no ambiguity between two builds
       # that share a branch and commit but differ.
       if: ${{ env.CRASH_ARCHIVE_ENABLED == 'true' && github.event_name == 'push' && matrix.env != 'native_openevse' }}
+      # As data, not script text: a branch named $(...) would otherwise run.
+      env:
+        REF_NAME: ${{ github.ref_name }}
       run: |
         set -euo pipefail
         ELF=".pio/build/${{ matrix.env }}/firmware.elf"
         SHA=$(sha256sum "$ELF" | cut -d' ' -f1)
         echo "elf/$SHA.elf  <- ${{ matrix.env }}"
         aws s3 cp "$ELF" "s3://${{ secrets.CRASH_BUCKET }}/elf/$SHA.elf" \
-          --metadata "buildenv=${{ matrix.env }},ref=${{ github.ref_name }},sha=${{ github.sha }}"
+          --metadata "buildenv=${{ matrix.env }},ref=$REF_NAME,sha=${{ github.sha }}"
 
     - name: Upload native output to GitHub
       if: matrix.env == 'native_openevse'

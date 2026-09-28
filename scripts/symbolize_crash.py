@@ -17,6 +17,10 @@ import json
 import sys
 import urllib.request
 
+# The broker's own work is capped at 29 s, and a device answers /config in well
+# under that; either read hanging past this is a failure worth reporting.
+TIMEOUT = 45
+
 
 def build_request(summary, config):
     return {
@@ -24,7 +28,12 @@ def build_request(summary, config):
         # crashed, which is not necessarily the build running now.
         'elf_sha256': summary.get('elf_sha256', ''),
         'bt': summary.get('bt'),
-        'version': config.get('version', ''),
+        # Neither the summary nor /config says which version crashed, and the
+        # device may have been updated since. The firmware's own uploader sends
+        # 'unknown' plus running_version in exactly this case; so does this.
+        'version': 'unknown',
+        'running_version': config.get('version', ''),
+        # The board, which an OTA update does not change.
         'buildenv': config.get('buildenv', ''),
         'chip_id': config.get('chip_id', 'unknown'),
         'summary': summary,
@@ -50,13 +59,14 @@ def main(argv=None):
     if args.config:
         config = json.load(open(args.config))
     elif args.host:
-        with urllib.request.urlopen('http://%s/config' % args.host) as r:
+        with urllib.request.urlopen('http://%s/config' % args.host,
+                                    timeout=TIMEOUT) as r:
             config = json.load(r)
 
     body = json.dumps(build_request(summary, config)).encode()
     rq = urllib.request.Request(args.endpoint, data=body,
                                 headers={'content-type': 'application/json'})
-    with urllib.request.urlopen(rq) as r:
+    with urllib.request.urlopen(rq, timeout=TIMEOUT) as r:
         result = json.load(r)
 
     print('status: %s' % result['status'])

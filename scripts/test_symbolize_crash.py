@@ -20,4 +20,30 @@ def test_riscv_summary_passes_the_string_through():
 def test_missing_fields_do_not_crash():
     req = build_request({}, {})
     assert req['elf_sha256'] == ''
-    assert req['version'] == ''
+    assert req['version'] == 'unknown'
+
+
+def test_the_running_version_is_not_reported_as_the_crashed_one():
+    # Neither the summary nor /config says which version crashed, and the
+    # device may have been updated since. The broker keeps the two apart.
+    req = build_request(SUMMARY, {'version': 'v9', 'buildenv': 'x'})
+    assert req['version'] == 'unknown'
+    assert req['running_version'] == 'v9'
+
+
+def test_every_network_read_has_a_timeout(monkeypatch, tmp_path):
+    import io, json, urllib.request
+    import symbolize_crash
+    timeouts = []
+
+    def fake_urlopen(url, *a, timeout=None, **kw):
+        timeouts.append(timeout)
+        body = {'status': 'symbolized', 'frames': []} if timeouts[1:] else {}
+        return io.BytesIO(json.dumps(body).encode())
+
+    monkeypatch.setattr(urllib.request, 'urlopen', fake_urlopen)
+    summary = tmp_path / 's.json'
+    summary.write_text(json.dumps(SUMMARY))
+    assert symbolize_crash.main([str(summary), '--endpoint', 'https://x/v1/reports',
+                                 '--host', '10.0.0.1']) == 0
+    assert len(timeouts) == 2 and all(timeouts)
