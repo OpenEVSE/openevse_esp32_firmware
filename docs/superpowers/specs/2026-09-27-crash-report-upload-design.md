@@ -6,7 +6,7 @@ a **symbolized backtrace** rather than chase a binary blob and a matching ELF.
 **Origin:** "May add a core dump upload tool they can click to grab them a hair
 easier." — Chris: "A core dump tool would be fantastic."
 
-**Status:** design, not yet approved for implementation.
+**Status:** implemented (2026-09-28); see §14 for where the build departs from this text.
 
 ---
 
@@ -271,3 +271,36 @@ boards can drop it.
   the field, which release cadence decides.
 - Whether the broker should rate-limit per chip id to bound a misbehaving or
   hostile device.
+
+## 14. As built
+
+Four deliberate departures, each recorded in the implementation plan
+(`docs/superpowers/plans/2026-09-28-crash-report-upload.md`):
+
+- **D1 — the raw dump goes to the broker, not a presigned S3 URL** (§3). A
+  presigned URL would bake the bucket name and region into every charger,
+  breaking the account handover §4 exists for. The broker's own domain carries
+  `PUT /v1/reports/{id}/raw` instead; the device still holds no AWS
+  credential, only the report's UUID.
+- **D2 — completion marks the report whole; it does not run `esp-coredump`**
+  (§10). Symbolization is `addr2line` on the reported backtrace at metadata
+  time. The raw image is kept for a maintainer to decode locally.
+- **D3 — tier 2 starts from `loop()` at first connectivity** (§6.1). It races
+  MQTT and OCPP rather than strictly preceding them; a hook inside the connect
+  path is where upstream #1252 came from.
+- **D4 — only the heap gate defers; a tier-1 failure mid-flight does not**
+  (§6.1). The device cannot tell heap starvation from a DNS, network or broker
+  failure, and deferring those behind "not enough memory, will send after
+  restart" would misinform. A failure keeps the dump and the user can retry.
+
+Also as built: the deferred flag is a LittleFS file, not NVS (§6.1) — nothing
+else on the device writes an arbitrary LittleFS path, so only the endpoint can
+arm it. It stores the offered dump's identity (SHA-256 prefix + length), so a
+crash after the click is never sent in its place (§8). The identity cannot be a
+CRC32: a core dump ends with its own CRC32, which makes the whole-image CRC32 a
+constant for every valid dump. The client follows no redirects at all (§4),
+which is stricter than re-checking them. When the dump predates an OTA the
+report's `version` is `unknown`, with `running_version` alongside.
+
+Measured cost on `openevse_wifi_v1_16mb`: +8,572 bytes of flash, +128 bytes of
+RAM. On for the three 16 MB envs, off elsewhere (§11).
