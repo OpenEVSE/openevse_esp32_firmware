@@ -24,7 +24,11 @@ static bool host_matches(const std::string &host, const char *suffix)
          host.compare(host.size() - dotted.size(), dotted.size(), dotted) == 0;
 }
 
-bool ota_url_host_allowed(const char *url_c)
+// Parse `url` to the host the HTTP client will actually connect to, or return
+// false. Shared by both allowlists so they can never disagree about what the
+// host is -- which is the bug class the "github.com:x@evil.example" tests exist
+// for.
+static bool url_host(const char *url_c, std::string &host_out)
 {
   if(!url_c) {
     return false;
@@ -77,9 +81,30 @@ bool ota_url_host_allowed(const char *url_c)
       return false;
     }
   }
-  host = to_lower(host);
+  host_out = to_lower(host);
+  return true;
+}
 
+bool ota_url_host_allowed(const char *url_c)
+{
+  std::string host;
+  if(!url_host(url_c, host)) {
+    return false;
+  }
   // Allowlist. Edit here to permit other trusted firmware hosts.
   return host_matches(host, "github.com") ||
          host_matches(host, "githubusercontent.com");
+}
+
+bool crash_url_host_allowed(const char *url_c)
+{
+  std::string host;
+  if(!url_host(url_c, host)) {
+    return false;
+  }
+  // Exact match, one entry, no subdomains -- deliberately stricter than the
+  // OTA list above. Firmware comes from a CDN that needs several hostnames; a
+  // memory image has exactly one destination, and admitting "*.the-zone" would
+  // hand it to anyone who can create a record there.
+  return host == CRASH_BROKER_HOST;
 }
