@@ -464,15 +464,130 @@ void lvgl_panel_set_backlight(uint8_t pct)
 #endif
 }
 
+// Convert a run of RGB565 pixels to the ILI9488's 18bpp wire format and push
+// them in batches, instead of TFT_eSPI::pushPixels().
+//
+// The library's 18-bit pushPixels() is `while(len--) tft_Write_16(*data++)` --
+// one whole SPI transaction per pixel, each programming mosi_dlen, writing the
+// data register, setting cmd.usr and busy-waiting, all to move 24 bits. Measured
+// on this board that is 4.48 us/px against 0.6 us of actual wire time at 40 MHz:
+// 669 KB/s out of a 5 MB/s bus, and ~688 ms for a full screen. The library's
+// non-18-bit path already batches into 512-bit FIFO writes; the 18-bit path
+// never got the same treatment.
+//
+// SPIClass::writeBytes() does the chunked FIFO transfers for us, so the cost per
+// pixel becomes the conversion plus a share of one transaction per chunk. A
+// bigger buffer does not help once the per-transaction overhead is amortised
+// over a couple of hundred pixels.
+//
+// The staging buffer is static, not on the stack. flush_cb() only ever runs on
+// loopTask -- LVGL is driven from there -- so a single shared buffer is safe,
+// and 768 B of BSS is the honest cost. On the stock TFT board the loop stack is
+// 8 KB and already shared with Mongoose request handlers; quietly taking 768 B
+// of it on a board that is in the field is not worth the cache locality.
+static uint8_t push_buf[256 * 3];
+
+static void push_pixels_batched(const uint16_t *src, uint32_t len)
+{
+  static const uint32_t CHUNK_PX = 256;          // 768 B staged per transfer
+  uint8_t *buf = push_buf;
+
+  SPIClass &spi = TFT_eSPI::getSPIinstance();
+
+  while(len)
+  {
+    uint32_t n = (len < CHUNK_PX) ? len : CHUNK_PX;
+    uint8_t *o = buf;
+    for(uint32_t i = 0; i < n; i++)
+    {
+      // The draw buffer is byte-swapped: lv_conf.h sets LV_COLOR_16_SWAP=1 on
+      // device, and TFT_eSPI's _swapBytes defaults to false, so pushPixels() was
+      // taking its tft_Write_16S branch -- swap first, then extract. Reading the
+      // halfword natively here scrambled every channel (inverted and grainy).
+      uint16_t c = (uint16_t)((src[i] >> 8) | (src[i] << 8));
+      // RGB565 -> RGB666, left-aligned in each byte exactly as tft_Write_16 does.
+      *o++ = (uint8_t)((c & 0xF800) >> 8);
+      *o++ = (uint8_t)((c & 0x07E0) >> 3);
+      *o++ = (uint8_t)((c & 0x001F) << 3);
+    }
+    spi.writeBytes(buf, n * 3);
+    src += n;
+    len -= n;
+  }
+}
+
+#ifdef LVGL_FLUSH_PROFILE
+#include "debug.h"   // route the report through StreamSpy so /debug/console sees it
+// Bench instrumentation for the display link, off unless -D LVGL_FLUSH_PROFILE.
+//
+// It splits the time inside pushPixels() -- the bytes actually clocked out, plus
+// the CPU-side RGB565->RGB666 conversion this panel forces -- from the
+// setAddrWindow()/startWrite() overhead around it. That is the measurement that
+// says which lever is worth pulling: if push_us is close to the theoretical bus
+// time for the bytes at SPI_FREQUENCY, the link is saturated and a clock bump is
+// the answer; if it is well above, the per-pixel conversion dominates and the
+// fix is esp_lcd, which converts and DMAs instead.
+static uint32_t prof_flushes = 0;
+static uint32_t prof_px      = 0;
+static uint32_t prof_push_us = 0;
+static uint32_t prof_win_us  = 0;
+static uint32_t prof_last_report = 0;
+
+static void flush_profile_report()
+{
+  uint32_t now = millis();
+  if(prof_last_report != 0 && (now - prof_last_report) < 2000) {
+    return;
+  }
+  prof_last_report = now;
+  if(0 == prof_flushes || 0 == prof_px) {
+    return;
+  }
+
+  // 3 bytes/pixel on the wire: this panel is 18bpp over SPI, RGB565 is not an
+  // option. A "frame" here is one full screen's worth of pixels, whether or not
+  // any single flush covered that much -- LVGL only ever flushes dirty areas.
+  uint32_t bytes   = prof_px * 3;
+  uint32_t total_us = prof_push_us + prof_win_us;
+  uint32_t kbps    = prof_push_us ? (uint32_t)(((uint64_t)bytes * 1000ULL) / prof_push_us) : 0;
+  uint32_t frame_ms = (uint32_t)(((uint64_t)total_us * SCREEN_W * SCREEN_H) / ((uint64_t)prof_px * 1000ULL));
+
+  DBUGF("[lvgl] %lu flushes, %lu px, push %lu us, win %lu us, %lu KB/s, full frame ~%lu ms (~%lu fps) @ %d Hz",
+        (unsigned long)prof_flushes, (unsigned long)prof_px,
+        (unsigned long)prof_push_us, (unsigned long)prof_win_us,
+        (unsigned long)kbps, (unsigned long)frame_ms,
+        (unsigned long)(frame_ms ? 1000 / frame_ms : 0), (int)SPI_FREQUENCY);
+
+  prof_flushes = 0; prof_px = 0; prof_push_us = 0; prof_win_us = 0;
+}
+#endif
+
 static void flush_cb(lv_disp_drv_t *drv, const lv_area_t *area, lv_color_t *color_p)
 {
   uint32_t w = (area->x2 - area->x1 + 1);
   uint32_t h = (area->y2 - area->y1 + 1);
 
+#ifdef LVGL_FLUSH_PROFILE
+  uint32_t t0 = micros();
+#endif
   tft.startWrite();
   tft.setAddrWindow(area->x1, area->y1, w, h);
-  tft.pushPixels((uint16_t *)&color_p->full, w * h);
+#ifdef LVGL_FLUSH_PROFILE
+  uint32_t t1 = micros();
+#endif
+  push_pixels_batched((uint16_t *)&color_p->full, w * h);
+#ifdef LVGL_FLUSH_PROFILE
+  uint32_t t2 = micros();
+#endif
   tft.endWrite();
+
+#ifdef LVGL_FLUSH_PROFILE
+  prof_flushes++;
+  prof_px      += w * h;
+  prof_win_us  += (t1 - t0);
+  prof_push_us += (t2 - t1);
+  flush_profile_report();
+#endif
 
   lv_disp_flush_ready(drv);
 }
