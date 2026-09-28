@@ -7,6 +7,7 @@
 #include <LittleFS.h>
 #include <MongooseCore.h>
 #include <esp_heap_caps.h>
+#include <esp_rom_crc.h>
 
 #include "crash_host.h"
 #include "crash_payload.h"
@@ -65,6 +66,15 @@ static bool _triedThisBoot = false;
 // The flag was on disk when this boot started. Only such a flag is a deferred
 // upload; one armed during this boot belongs to the next one.
 static bool _armedAtBoot = false;
+
+// The step to start on the next crash_upload_loop(), after Mongoose.poll() has
+// destroyed the connection that just answered. Starting it from inside that
+// connection's reply handler would allocate a second TLS context while the
+// first still holds its buffers -- the overlap main.cpp already avoids for OTA
+// redirects, and on a no-PSRAM board roughly double the peak the heap gate was
+// sized for.
+enum CrashNext { CrashNext_None, CrashNext_Raw, CrashNext_Complete };
+static CrashNext _next = CrashNext_None;
 
 // ---------------------------------------------------------------------------
 // One request, used three times.
@@ -297,7 +307,7 @@ static void crash_reply(int status, const String &body)
         return;
       }
       _reportId = id;
-      crash_step_raw();
+      _next = CrashNext_Raw;
       break;
     }
 
@@ -306,7 +316,7 @@ static void crash_reply(int status, const String &body)
         crash_fail("dump refused");
         return;
       }
-      crash_step_complete();
+      _next = CrashNext_Complete;
       break;
 
     case CrashUpload_Completing:
@@ -339,6 +349,7 @@ static void crash_fail(const char *why)
     _nc = NULL;
   }
   _state = CrashUpload_Failed;
+  _next = CrashNext_None;
   _image = NULL;
   DynamicJsonDocument doc(192);
   doc["crash_upload"] = crash_upload_state_name();
@@ -356,11 +367,32 @@ static bool crash_running()
          CrashUpload_Completing == _state;
 }
 
+// crc32 of the whole stored image, or false if there is none. The identity a
+// deferred click consented to (spec section 8).
+static bool crash_dump_identity(uint32_t *crc, size_t *len)
+{
+  const uint8_t *img = NULL;
+  if(!diagnostics_coredump_image(&img, len) || 0 == *len) {
+    return false;
+  }
+  *crc = esp_rom_crc32_le(0, img, *len);
+  return true;
+}
+
 static void crash_arm_deferred()
 {
+  // The flag records WHICH dump was offered, not just that one was. If the
+  // charger crashes again before the next boot, that newer dump was never
+  // offered and must not go (spec section 8).
+  uint32_t crc = 0;
+  size_t len = 0;
+  char token[CRASH_DEFER_TOKEN_LEN] = "";
+  if(crash_dump_identity(&crc, &len)) {
+    crash_defer_token(token, crc, len);
+  }
   File f = LittleFS.open(CRASH_DEFER_FLAG, "w");
   if(f) {
-    f.print("1");
+    f.print(token);
     f.close();
   }
   // Deferred means NEXT boot. Without this, crash_upload_loop() would see the
@@ -450,6 +482,19 @@ void crash_upload_begin()
 
 void crash_upload_loop()
 {
+  if(CrashNext_None != _next) {
+    // Called after Mongoose.poll(), so the previous step's connection -- and
+    // its TLS context -- is gone before this one allocates.
+    CrashNext n = _next;
+    _next = CrashNext_None;
+    if(CrashNext_Raw == n) {
+      crash_step_raw();
+    } else {
+      crash_step_complete();
+    }
+    return;
+  }
+
   if(crash_running()) {
     if((long)(millis() - _deadline) >= 0) {
       crash_fail("timed out");
@@ -472,7 +517,32 @@ void crash_upload_loop()
   // not boot back into uploading, which on a device that is not charging is a
   // loop. A failed attempt leaves the dump in place and the user can click
   // again.
+  String offered;
+  {
+    File f = LittleFS.open(CRASH_DEFER_FLAG, "r");
+    if(f) {
+      offered = f.readString();
+      f.close();
+    }
+  }
   LittleFS.remove(CRASH_DEFER_FLAG);
+
+  // Spec section 8: only the dump the click offered. A crash after the click
+  // leaves a different dump here, and nobody offered that one.
+  uint32_t crc = 0;
+  size_t len = 0;
+  if(!crash_dump_identity(&crc, &len) ||
+     !crash_defer_token_matches(offered.c_str(), crc, len)) {
+    _triedThisBoot = true;
+    _armedAtBoot = false;
+    _state = CrashUpload_Failed;
+    DynamicJsonDocument doc(160);
+    doc["crash_upload"] = crash_upload_state_name();
+    doc["crash_upload_error"] = "the stored crash is not the one that was offered";
+    event_send(doc);
+    return;
+  }
+
   // Set before the attempt, not after. crash_begin_now() returns false when
   // the dump has since been erased, and without this the loop would call it --
   // and esp_core_dump_image_get(), a flash read -- on every pass for the rest

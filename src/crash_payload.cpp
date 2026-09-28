@@ -1,15 +1,19 @@
 #include "crash_payload.h"
 
+#if ENABLE_CRASH_UPLOAD
+
+#include <esp_app_desc.h>
+
 #include "emonesp.h"          // buildenv, currentfirmware, serial
 #include "app_config.h"
 #include "diagnostics.h"
 #include "crash_redact.h"
+#include "crash_report_id.h"
 #include "input.h"             // evse
 #include <espal.h>
 
 void crash_payload_build(JsonDocument &doc, size_t rawBytes)
 {
-  doc["version"] = currentfirmware;
   doc["buildenv"] = buildenv;
 
   // The ESP's own id, not evse.getChipId(). The controller's chip id is what
@@ -38,6 +42,21 @@ void crash_payload_build(JsonDocument &doc, size_t rawBytes)
     // Hoisted to the top level: it is the ELF lookup key, and the broker
     // reads it there.
     doc["elf_sha256"] = sd["elf_sha256"];
+
+    // The version is the running firmware's, which is only the crashed
+    // build's if no update happened in between. After an OTA it would file
+    // the crash under a build that did not crash -- so say "unknown" then and
+    // keep the running one separately. The ELF lookup is unaffected either
+    // way: it keys on the dump's own hash.
+    char running[17] = "";
+    esp_app_get_elf_sha256(running, sizeof(running));
+    const char *dumpSha = sd["elf_sha256"] | "";
+    if(crash_dump_from_running_build(dumpSha, running)) {
+      doc["version"] = currentfirmware;
+    } else {
+      doc["version"] = "unknown";
+      doc["running_version"] = currentfirmware;
+    }
     doc["bt"] = sd["bt"];
   }
 
@@ -66,3 +85,5 @@ void crash_payload_build(JsonDocument &doc, size_t rawBytes)
     doc["raw_bytes"] = (uint32_t)rawBytes;
   }
 }
+
+#endif // ENABLE_CRASH_UPLOAD

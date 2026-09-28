@@ -1,5 +1,6 @@
 #include "crash_report_id.h"
 
+#include <stdio.h>
 #include <string.h>
 
 // 8-4-4-4-12
@@ -30,4 +31,36 @@ bool crash_report_id_valid(const char *id)
     }
   }
   return true;
+}
+
+void crash_defer_token(char *out, uint32_t crc, size_t len)
+{
+  snprintf(out, CRASH_DEFER_TOKEN_LEN, "%08x:%u", (unsigned)crc, (unsigned)len);
+}
+
+bool crash_defer_token_matches(const char *stored, uint32_t crc, size_t len)
+{
+  if(!stored) {
+    return false;
+  }
+  char want[CRASH_DEFER_TOKEN_LEN];
+  crash_defer_token(want, crc, len);
+  // Exact, whole-string: a legacy "1" or a truncated token consents to nothing.
+  return 0 == strcmp(stored, want);
+}
+
+// A 9-character prefix is what the firmware reports; 8 is the floor the broker
+// also uses for identifying a build.
+#define CRASH_MIN_SHA_PREFIX 8
+
+bool crash_dump_from_running_build(const char *dumpSha, const char *runningSha)
+{
+  if(!dumpSha || !runningSha) {
+    return false;
+  }
+  size_t n = strlen(dumpSha);
+  if(n < CRASH_MIN_SHA_PREFIX || strlen(runningSha) < n) {
+    return false;
+  }
+  return 0 == strncmp(dumpSha, runningSha, n);
 }
