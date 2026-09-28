@@ -6,7 +6,7 @@
 #include "web_server.assets_fr_CfBr3sWw_js_gz.h"
 #include "web_server.assets_hu_CS7rRPa4_js_gz.h"
 #include "web_server.assets_index_7ZbzILuw_css_gz.h"
-#include "web_server.assets_index_8WeX5e0__js_gz.h"
+#include "web_server.assets_index_COJPkneI_js_gz.h"
 #include "web_server.assets_rolldown_runtime_CbXtAM7H_js_gz.h"
 #include "web_server.assets_vendor_C8ojbjLA_js_gz.h"
 #include "web_server.favicon_ico.h"
@@ -25,7 +25,7 @@ StaticFile web_server_static_files[] = {
   { "/assets/fr-CfBr3sWw.js", CONTENT_FR_CFBR3SWW_JS_GZ, sizeof(CONTENT_FR_CFBR3SWW_JS_GZ) - 1, _CONTENT_TYPE_JS, CONTENT_FR_CFBR3SWW_JS_GZ_ETAG, "gzip" },
   { "/assets/hu-CS7rRPa4.js", CONTENT_HU_CS7RRPA4_JS_GZ, sizeof(CONTENT_HU_CS7RRPA4_JS_GZ) - 1, _CONTENT_TYPE_JS, CONTENT_HU_CS7RRPA4_JS_GZ_ETAG, "gzip" },
   { "/assets/index-7ZbzILuw.css", CONTENT_INDEX_7ZBZILUW_CSS_GZ, sizeof(CONTENT_INDEX_7ZBZILUW_CSS_GZ) - 1, _CONTENT_TYPE_CSS, CONTENT_INDEX_7ZBZILUW_CSS_GZ_ETAG, "gzip" },
-  { "/assets/index-8WeX5e0-.js", CONTENT_INDEX_8WEX5E0__JS_GZ, sizeof(CONTENT_INDEX_8WEX5E0__JS_GZ) - 1, _CONTENT_TYPE_JS, CONTENT_INDEX_8WEX5E0__JS_GZ_ETAG, "gzip" },
+  { "/assets/index-COJPkneI.js", CONTENT_INDEX_COJPKNEI_JS_GZ, sizeof(CONTENT_INDEX_COJPKNEI_JS_GZ) - 1, _CONTENT_TYPE_JS, CONTENT_INDEX_COJPKNEI_JS_GZ_ETAG, "gzip" },
   { "/assets/rolldown-runtime-CbXtAM7H.js", CONTENT_ROLLDOWN_RUNTIME_CBXTAM7H_JS_GZ, sizeof(CONTENT_ROLLDOWN_RUNTIME_CBXTAM7H_JS_GZ) - 1, _CONTENT_TYPE_JS, CONTENT_ROLLDOWN_RUNTIME_CBXTAM7H_JS_GZ_ETAG, "gzip" },
   { "/assets/vendor-C8ojbjLA.js", CONTENT_VENDOR_C8OJBJLA_JS_GZ, sizeof(CONTENT_VENDOR_C8OJBJLA_JS_GZ) - 1, _CONTENT_TYPE_JS, CONTENT_VENDOR_C8OJBJLA_JS_GZ_ETAG, "gzip" },
   { "/favicon.ico", CONTENT_FAVICON_ICO, sizeof(CONTENT_FAVICON_ICO) - 1, _CONTENT_TYPE_ICO, CONTENT_FAVICON_ICO_ETAG, NULL },
