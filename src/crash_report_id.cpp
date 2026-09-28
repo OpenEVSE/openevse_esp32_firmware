@@ -66,3 +66,8 @@ bool crash_dump_from_running_build(const char *dumpSha, const char *runningSha)
   }
   return 0 == strncmp(dumpSha, runningSha, n);
 }
+
+size_t crash_declared_raw_bytes(size_t imageLen)
+{
+  return CRASH_UPLOAD_RAW_DUMP ? imageLen : 0;
+}

@@ -77,3 +77,14 @@ TEST_CASE("a dump from any other build, or an unknown one, is not") {
   // Too short to identify a build: prefer "unknown" to a guess.
   CHECK_FALSE(crash_dump_from_running_build("c04", "c043b880d"));
 }
+
+// ---------------------------------------------------------------------------
+// What the metadata step promises to PUT afterwards. A shipped build sends the
+// decoded summary only: the raw image is a copy of RAM, and no redaction can
+// say what that copy holds.
+// ---------------------------------------------------------------------------
+
+TEST_CASE("a default build declares no raw dump") {
+  CHECK(crash_declared_raw_bytes(65536) == 0);
+  CHECK(crash_declared_raw_bytes(0) == 0);
+}

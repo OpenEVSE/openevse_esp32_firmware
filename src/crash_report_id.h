@@ -35,4 +35,14 @@ bool crash_defer_token_matches(const char *stored, uint64_t id, size_t len);
 // crash. Anything too short to identify a build answers false.
 bool crash_dump_from_running_build(const char *dumpSha, const char *runningSha);
 
+// How many bytes of the raw image the metadata step declares, and so PUTs
+// afterwards. 0 unless the build sets CRASH_UPLOAD_RAW_DUMP: the image is a copy
+// of RAM, which can hold Wi-Fi and MQTT credentials that no redaction reaches,
+// and the decoded summary alone is enough for the broker to name the frames.
+// Kept as a build option for a developer chasing a crash on their own unit.
+#ifndef CRASH_UPLOAD_RAW_DUMP
+#define CRASH_UPLOAD_RAW_DUMP 0
+#endif
+size_t crash_declared_raw_bytes(size_t imageLen);
+
 #endif // CRASH_REPORT_ID_H

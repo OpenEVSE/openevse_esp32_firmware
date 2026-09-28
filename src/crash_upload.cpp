@@ -252,7 +252,7 @@ static String _metaBody;      // must outlive the request
 static void crash_step_metadata()
 {
   DynamicJsonDocument doc(6144);
-  crash_payload_build(doc, _imageLen);
+  crash_payload_build(doc, crash_declared_raw_bytes(_imageLen));
   _metaBody = "";
   serializeJson(doc, _metaBody);
 
@@ -277,6 +277,17 @@ static void crash_step_complete()
              "application/json", (const uint8_t *)"", 0);
 }
 
+// The broker holds everything it was promised; erasing is safe now.
+static void crash_finish()
+{
+  diagnostics_coredump_erase();
+  _image = NULL;
+  _state = CrashUpload_Done;
+  DynamicJsonDocument doc(128);
+  doc["crash_upload"] = crash_upload_state_name();
+  event_send(doc);
+}
+
 static void crash_reply(int status, const String &body)
 {
   switch(_state)
@@ -286,10 +297,9 @@ static void crash_reply(int status, const String &body)
         crash_fail("broker refused the report");
         return;
       }
-      // Filtered, not parsed whole. The reply is small today because the
-      // broker omits `frames` for a device (Task 1), but a filter makes that
-      // a belt-and-braces property rather than a coupling: anything the broker
-      // grows later is discarded before it can exhaust this document.
+      // Filtered, not parsed whole. A summary-only report comes back with its
+      // symbolized `frames` (a few KB, bounded by CRASH_MAX_REPLY), and none
+      // of that is for the device: only report_id survives the filter.
       StaticJsonDocument<64> filter;
       filter["report_id"] = true;
       StaticJsonDocument<128> doc;
@@ -307,7 +317,13 @@ static void crash_reply(int status, const String &body)
         return;
       }
       _reportId = id;
-      _next = CrashNext_Raw;
+      if(crash_declared_raw_bytes(_imageLen) > 0) {
+        _next = CrashNext_Raw;
+      } else {
+        // Summary only: the broker marked the report complete when it indexed
+        // it, so this 200 is the whole upload.
+        crash_finish();
+      }
       break;
     }
 
@@ -326,14 +342,7 @@ static void crash_reply(int status, const String &body)
       }
       // Spec §7: both the PUT and the completion answered 2xx, and only now is
       // erasing safe. A dump erased on a partial upload is unrecoverable.
-      diagnostics_coredump_erase();
-      _image = NULL;
-      _state = CrashUpload_Done;
-      {
-        DynamicJsonDocument doc(128);
-        doc["crash_upload"] = crash_upload_state_name();
-        event_send(doc);
-      }
+      crash_finish();
       break;
 
     default:

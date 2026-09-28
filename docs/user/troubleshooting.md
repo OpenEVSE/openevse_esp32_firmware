@@ -61,18 +61,22 @@ that is.
 
 On 16 MB boards, **Developer Tools** has a **Send to OpenEVSE** button beside the
 stored report (or `curl -X POST -d '' http://<charger>/debug/crash/upload`). It
-sends the report and the raw dump to `crash.openevse.com`, where the maintainers
-see it decoded into a readable stack trace -- no need to find a matching
-`firmware.elf` or attach anything to an issue.
+sends the decoded report to `crash.openevse.com`, where the maintainers see it
+as a readable stack trace -- no need to find a matching `firmware.elf` or attach
+anything to an issue.
 
 Before you press it:
 
-- **The raw dump is a copy of the charger's memory.** It can contain your Wi-Fi
-  password, MQTT password and any stored access tokens. It travels over a
-  verified TLS connection to the one host compiled into the firmware -- that
-  destination cannot be changed from the settings -- is kept privately for 90
-  days, and is then deleted.
-- **The report is removed from the charger only once it has fully arrived.**
+- **Only the decoded summary is sent, never the raw dump.** That is the panic
+  reason, the crashed task, the program counter and the backtrace, plus the build,
+  the chip id, heap figures, and which features are switched on. Your Wi-Fi,
+  MQTT and other passwords, hostnames and addresses are not included. The raw
+  dump is a copy of the charger's memory and can hold those, so it stays on the
+  charger (fetch it yourself from `/debug/crash/raw` if a maintainer asks). The
+  report travels over a verified TLS connection to the one host compiled into
+  the firmware -- that destination cannot be changed from the settings -- is
+  kept privately for 90 days, and is then deleted.
+- **The report is removed from the charger only once it has arrived.**
   If anything fails part-way, it stays on the charger and you can try again.
 - **On a charger that has been up a long time the upload may wait for the next
   restart.** Sending needs a block of free memory that long uptimes can break
