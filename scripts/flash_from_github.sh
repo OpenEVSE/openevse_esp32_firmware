@@ -26,9 +26,15 @@
 #
 #   --env ENV       PlatformIO environment / board (default openevse_wifi_v1)
 #   --baud RATE     serial upload baud rate (default 460800)
+#   --with-bootloader   fetch a matching bootloader+partitions pair for --env
+#                   from the same branch/tag/PR's own CI run, even when the
+#                   release doesn't ship one (see below) -- implied by --erase,
+#                   which needs one to avoid leaving the device unbootable
 #   --erase         erase the WHOLE flash before writing (serial only) -- this
 #                   wipes the LittleFS partition too, so the device loses its
-#                   WiFi credentials and config and comes up as its factory AP
+#                   WiFi credentials and config and comes up as its factory AP.
+#                   Implies --with-bootloader; refuses to run if no matching
+#                   bootloader+partitions can be found anywhere
 #   --reset-boot-slot   erase just the otadata partition (0xe000, 0x2000 --
 #                   the same offset on every partition table this repo ships)
 #                   before writing (serial only). This board's OTA-enabled
@@ -53,11 +59,14 @@
 # Release assets only ship a matching bootloader.bin/partitions.bin for the
 # boards used by the 16MB flash-size migrator (openevse_wifi_v1,
 # openevse_wifi_v1_16mb, openevse_wifi_tft_v1); for any other --env from a
-# --branch/--tag source only the application image is written, which is fine
-# for updating a device that already has a bootloader and partition table
-# flashed. --pr artifacts always include everything the build produced
-# (bootloader.bin, partitions.bin, firmware.bin) since CI uploads the whole
-# build directory.
+# --branch/--tag source, by default only the application image is written,
+# which is fine for updating a device that already has a bootloader and
+# partition table flashed. --with-bootloader (or --erase) instead looks up
+# the CI run that built that branch/tag/PR and downloads its "$env.bin"
+# artifact, which CI uploads for every matrix env and always has all three
+# files -- the same thing --pr already does by default. This needs the run's
+# artifacts to still exist (GitHub's default retention is 90 days), so it can
+# fail for an old tag even though the release asset itself is still there.
 #
 # Needs the GitHub CLI (`gh`, already logged in) to resolve and download the
 # image, and depending on the target: esptool.py, curl, or espota.py. None of
@@ -117,6 +126,7 @@ http_host=
 ota_host=
 baud=460800
 erase=0
+with_bootloader=0
 reset_boot_slot=0
 bootloader_offset=0x1000
 partitions_offset=0x8000
@@ -138,6 +148,7 @@ while [ $# -gt 0 ]; do
     --http)                http_host=$(arg_value "$1" "${2:-}"); shift 2 ;;
     --ota)                 ota_host=$(arg_value "$1" "${2:-}"); shift 2 ;;
     --baud)                baud=$(arg_value "$1" "${2:-}"); shift 2 ;;
+    --with-bootloader)     with_bootloader=1; shift ;;
     --erase)               erase=1; shift ;;
     --reset-boot-slot)     reset_boot_slot=1; shift ;;
     --bootloader-offset)   bootloader_offset=$(arg_value "$1" "${2:-}"); shift 2 ;;
@@ -159,6 +170,7 @@ targets=0
 
 [ "$erase" -eq 1 ] && [ "$reset_boot_slot" -eq 1 ] && die "pass at most one of --erase, --reset-boot-slot"
 [ "$erase" -eq 1 ] && [ -z "$port" ] && die "--erase only makes sense with --port"
+[ "$with_bootloader" -eq 1 ] && [ -z "$port" ] && die "--with-bootloader only makes sense with --port"
 [ "$reset_boot_slot" -eq 1 ] && [ -z "$port" ] && die "--reset-boot-slot only makes sense with --port"
 
 command -v gh >/dev/null 2>&1 || die "the GitHub CLI ('gh') is required; see https://cli.github.com"
@@ -175,6 +187,9 @@ partitions_bin=
 
 fetch_release() {
   local release_tag=$1
+  case "$env" in
+    *_dev) log "WARNING: CI deliberately drops _dev builds from releases (build.yaml's \"Drop the _dev images from the release\" step) -- if '${env}.bin' exists on '$release_tag' anyway it's a stale leftover, not something this repo intends to publish. Use --pr for a _dev build instead." ;;
+  esac
   log "downloading '$env' from $repo release '$release_tag'"
   gh release download "$release_tag" -R "$repo" \
     --pattern "${env}.bin" --dir "$workdir" --clobber \
@@ -199,6 +214,20 @@ fetch_release() {
   fi
 }
 
+# find_ci_run REF EVENT -- prints the databaseId of the most recent completed,
+# successful build.yaml run for REF (a branch, tag, or PR head branch) whose
+# trigger matches EVENT ("push" or "pull_request"), or nothing (and fails) if
+# there isn't one.
+find_ci_run() {
+  local ref=$1 event=$2 run_id
+  run_id=$(gh run list -R "$repo" --workflow build.yaml --branch "$ref" \
+              --json databaseId,event,status,conclusion --jq \
+              "[.[] | select(.event == \"$event\" and .status == \"completed\" and .conclusion == \"success\")][0].databaseId") \
+    || return 1
+  [ -n "$run_id" ] && [ "$run_id" != "null" ] || return 1
+  printf '%s\n' "$run_id"
+}
+
 fetch_pr_artifact() {
   local pr_number=$1
   log "looking up the CI run for PR #$pr_number on $repo"
@@ -207,12 +236,8 @@ fetch_pr_artifact() {
     || die "could not find PR #$pr_number on $repo"
 
   local run_id
-  run_id=$(gh run list -R "$repo" --workflow build.yaml --branch "$head_ref" \
-              --json databaseId,event,status --jq \
-              '[.[] | select(.event == "pull_request" and .status == "completed")][0].databaseId') \
-    || die "could not list workflow runs for $repo"
-  [ -n "$run_id" ] && [ "$run_id" != "null" ] \
-    || die "no completed build.yaml run found for PR #$pr_number (branch '$head_ref')"
+  run_id=$(find_ci_run "$head_ref" pull_request) \
+    || die "no completed, successful build.yaml run found for PR #$pr_number (branch '$head_ref')"
 
   log "downloading '${env}.bin' artifact from run $run_id"
   gh run download "$run_id" -R "$repo" -n "${env}.bin" -D "$workdir" \
@@ -224,20 +249,70 @@ fetch_pr_artifact() {
   [ -f "$workdir/partitions.bin" ] && partitions_bin="$workdir/partitions.bin"
 }
 
+# fetch_bootloader_partitions_for_ref REF EVENT -- looks up REF's own CI run
+# and, if found, downloads its "$env.bin" artifact for a matching
+# bootloader+partitions (and, for consistency, uses its firmware.bin too, so
+# all three come from the exact same build). Non-fatal: leaves bootloader_bin/
+# partitions_bin/fw_bin untouched and returns 1 if the run or artifact isn't
+# there (e.g. its retention window has expired) -- the caller decides whether
+# that's acceptable.
+fetch_bootloader_partitions_for_ref() {
+  local ref=$1 event=$2 run_id bp_dir
+  log "looking up the CI run for '$ref' to fetch a matching bootloader+partitions for '$env'"
+  run_id=$(find_ci_run "$ref" "$event") || {
+    log "no completed, successful build.yaml run found for '$ref' -- can't fetch a bootloader+partitions this way"
+    return 1
+  }
+
+  bp_dir="$workdir/bootloader_partitions"
+  mkdir -p "$bp_dir"
+  gh run download "$run_id" -R "$repo" -n "${env}.bin" -D "$bp_dir" 2>/dev/null || {
+    log "no '${env}.bin' artifact on run $run_id -- can't fetch a bootloader+partitions this way"
+    return 1
+  }
+
+  if [ ! -f "$bp_dir/bootloader.bin" ] || [ ! -f "$bp_dir/partitions.bin" ]; then
+    log "run $run_id's '${env}.bin' artifact has no bootloader/partitions"
+    return 1
+  fi
+
+  bootloader_bin="$bp_dir/bootloader.bin"
+  partitions_bin="$bp_dir/partitions.bin"
+  [ -f "$bp_dir/firmware.bin" ] && fw_bin="$bp_dir/firmware.bin"
+}
+
 if [ -n "$pr" ]; then
   fetch_pr_artifact "$pr"
 elif [ -n "$tag" ]; then
   fetch_release "$tag"
+  ci_ref=$tag
 else
   release_tag=latest
   [ "$branch" = master ] || release_tag="$branch"
   fetch_release "$release_tag"
+  ci_ref=$branch
+fi
+
+# --pr already gets bootloader/partitions from the same CI run by default, so
+# this only has work to do for --branch/--tag.
+if [ -z "$pr" ] && { [ "$erase" -eq 1 ] || [ "$with_bootloader" -eq 1 ]; } \
+   && { [ -z "$bootloader_bin" ] || [ -z "$partitions_bin" ]; }; then
+  fetch_bootloader_partitions_for_ref "$ci_ref" push || true
 fi
 
 if [ -n "$keep_dir" ]; then
   mkdir -p "$keep_dir"
   cp "$workdir"/*.bin "$keep_dir"/
   log "downloaded images kept in $keep_dir"
+fi
+
+# --erase wipes the bootloader and partition table along with everything
+# else; writing only the app image back afterwards leaves the ROM bootloader
+# with nothing valid to boot -- not the recoverable "factory AP" state a
+# wiped config leaves, but a device with no boot code at all. Only proceed if
+# this fetch actually has a bootloader/partitions pair to restore.
+if [ "$erase" -eq 1 ] && { [ -z "$bootloader_bin" ] || [ -z "$partitions_bin" ]; }; then
+  die "--erase needs a bootloader+partitions image for '$env', and none could be found (including via its own CI run) -- writing only the app after a full erase leaves the device with no bootloader at all. Try --pr for a build whose CI artifacts still exist, or drop --erase and use --reset-boot-slot instead."
 fi
 
 log "flashing $fw_bin"
