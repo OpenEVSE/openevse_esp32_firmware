@@ -124,3 +124,14 @@ Content-Type: application/json
 
 # Clear the manual override
 DELETE {{baseUrl}}/override HTTP/1.1
+
+### Crash upload: state, with no dump stored
+GET {{baseUrl}}/debug/crash/upload HTTP/1.1
+
+### Crash upload: start (409 with a message when there is nothing to send)
+POST {{baseUrl}}/debug/crash/upload HTTP/1.1
+X-Requested-With: OpenEVSE
+
+### Crash upload: cancel a deferred upload
+DELETE {{baseUrl}}/debug/crash/upload HTTP/1.1
+X-Requested-With: OpenEVSE

@@ -28,6 +28,7 @@ typedef const __FlashStringHelper *fstr_t;
 #include "emonesp.h"
 #include "web_server.h"
 #include "diagnostics.h"
+#include "crash_upload.h"
 #ifdef ENABLE_TSDB
 #include "tsdb_energy_logger.h"
 #endif
@@ -2374,6 +2375,23 @@ void web_server_setup()
     }
 
     if(HTTP_DELETE == request->method()) {
+      // Erasing the partition an in-flight PUT is streaming out of does not
+      // fault -- the flash mapping stays valid -- it just turns the rest of
+      // the upload into 0xFF, which passes the broker's length check and is
+      // then stored as a genuine memory image. Refuse instead.
+      if(CrashUpload_Idle != crash_upload_state() &&
+         CrashUpload_Done != crash_upload_state() &&
+         CrashUpload_Failed != crash_upload_state() &&
+         CrashUpload_Deferred != crash_upload_state()) {
+        response->setCode(409);
+        response->print(F("{\"msg\":\"upload in progress\"}"));
+        request->send(response);
+        return;
+      }
+      // Erasing while an upload is deferred also withdraws the deferral: the
+      // dump it was queued to send is about to stop existing, and leaving the
+      // flag armed means the next boot consumes it and finds nothing.
+      crash_upload_cancel_deferred();
       bool erased = diagnostics_coredump_erase();
       response->setCode(erased ? 200 : 500);
       response->print(erased ? F("{\"msg\":\"erased\"}") : F("{\"msg\":\"error\"}"));
@@ -2418,6 +2436,54 @@ void web_server_setup()
     response->addHeader(F("Content-Disposition"), F("attachment; filename=\"coredump.bin\""));
     response->addHeader(F("Cache-Control"), F("no-store"));
     response->setContent(data, len);
+    request->send(response);
+  });
+
+  // One-click crash reporting (spec §3).
+  //
+  //   GET    /debug/crash/upload  where an upload has got to
+  //   POST   /debug/crash/upload  send the stored dump to the broker
+  //   DELETE /debug/crash/upload  forget an upload deferred to the next boot
+  //
+  // requestPreProcess carries the auth and the CSRF check, so this is
+  // authenticated exactly like a config write -- which is the bar a request
+  // that ships a memory image off the device should clear.
+  server.on("/debug/crash/upload$", [](MongooseHttpServerRequest *request) {
+    MongooseHttpServerResponseStream *response;
+    if(false == requestPreProcess(request, response, CONTENT_TYPE_JSON)) {
+      return;
+    }
+
+    if(HTTP_DELETE == request->method()) {
+      // Spec §8: the user changing their mind is a first-class case, not an
+      // edge case.
+      crash_upload_cancel_deferred();
+      response->setCode(200);
+      response->print(F("{\"msg\":\"cancelled\"}"));
+      request->send(response);
+      return;
+    }
+
+    if(HTTP_POST == request->method()) {
+      String message;
+      bool ok = crash_upload_request(message);
+      response->setCode(ok ? 200 : 409);
+      DynamicJsonDocument doc(256);
+      doc["msg"] = message;
+      doc["state"] = crash_upload_state_name();
+      doc["deferred"] = crash_upload_deferred_armed();
+      serializeJson(doc, *response);
+      request->send(response);
+      return;
+    }
+
+    DynamicJsonDocument doc(256);
+    doc["state"] = crash_upload_state_name();
+    doc["sent"] = (uint32_t)crash_upload_sent();
+    doc["total"] = (uint32_t)crash_upload_total();
+    doc["deferred"] = crash_upload_deferred_armed();
+    response->setCode(200);
+    serializeJson(doc, *response);
     request->send(response);
   });
 
