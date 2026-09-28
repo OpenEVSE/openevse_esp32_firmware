@@ -57,6 +57,34 @@ Developers chasing a crash can fetch the raw dump from
 `firmware.elf` the unit is running -- the `elf_sha256` field says which build
 that is.
 
+### Sending a crash report to OpenEVSE
+
+On 16 MB boards, **Developer Tools** has a **Send to OpenEVSE** button beside the
+stored report (or `curl -X POST -d '' http://<charger>/debug/crash/upload`). It
+sends the report and the raw dump to `crash.openevse.com`, where the maintainers
+see it decoded into a readable stack trace -- no need to find a matching
+`firmware.elf` or attach anything to an issue.
+
+Before you press it:
+
+- **The raw dump is a copy of the charger's memory.** It can contain your Wi-Fi
+  password, MQTT password and any stored access tokens. It travels over a
+  verified TLS connection to the one host compiled into the firmware -- that
+  destination cannot be changed from the settings -- is kept privately for 90
+  days, and is then deleted.
+- **The report is removed from the charger only once it has fully arrived.**
+  If anything fails part-way, it stays on the charger and you can try again.
+- **On a charger that has been up a long time the upload may wait for the next
+  restart.** Sending needs a block of free memory that long uptimes can break
+  up. The button then says so, and the report goes by itself shortly after the
+  next restart -- only because you pressed the button; nothing is ever sent
+  that you did not ask to send. To change your mind before then,
+  `curl -X DELETE http://<charger>/debug/crash/upload`, or erase the report.
+
+`GET /debug/crash/upload` reports progress: `state` is one of `idle`,
+`metadata`, `uploading`, `completing`, `done`, `failed` or `deferred`.
+While an upload is running, erasing the report answers `409`.
+
 ## Getting help
 
 - [OpenEVSE knowledge base & support](https://openevse.dozuki.com/)
