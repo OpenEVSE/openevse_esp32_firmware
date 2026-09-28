@@ -176,7 +176,7 @@ targets=0
 command -v gh >/dev/null 2>&1 || die "the GitHub CLI ('gh') is required; see https://cli.github.com"
 
 workdir=$(mktemp -d "${TMPDIR:-/tmp}/flash_from_github.XXXXXX")
-cleanup() { [ -n "$keep_dir" ] || rm -rf "$workdir"; }
+cleanup() { rm -rf "$workdir"; }
 trap cleanup EXIT
 
 # Resolves to the .bin files this run will flash, populating $fw_bin,
@@ -214,15 +214,16 @@ fetch_release() {
   fi
 }
 
-# find_ci_run REF EVENT -- prints the databaseId of the most recent completed,
-# successful build.yaml run for REF (a branch, tag, or PR head branch) whose
-# trigger matches EVENT ("push" or "pull_request"), or nothing (and fails) if
-# there isn't one.
+# find_ci_run FILTER_FLAG FILTER_VALUE EVENT -- prints the databaseId of the
+# most recent successful build.yaml run matching FILTER_FLAG/FILTER_VALUE
+# (--branch NAME or --commit SHA) and EVENT ("push" or "pull_request"), all
+# filtered server-side so a long run history can't hide an older match behind
+# gh's default 20-run page, or nothing (and fails) if there isn't one.
 find_ci_run() {
-  local ref=$1 event=$2 run_id
-  run_id=$(gh run list -R "$repo" --workflow build.yaml --branch "$ref" \
-              --json databaseId,event,status,conclusion --jq \
-              "[.[] | select(.event == \"$event\" and .status == \"completed\" and .conclusion == \"success\")][0].databaseId") \
+  local filter_flag=$1 filter_value=$2 event=$3 run_id
+  run_id=$(gh run list -R "$repo" --workflow build.yaml \
+              "$filter_flag" "$filter_value" --event "$event" --status success \
+              --json databaseId --jq '.[0].databaseId') \
     || return 1
   [ -n "$run_id" ] && [ "$run_id" != "null" ] || return 1
   printf '%s\n' "$run_id"
@@ -231,13 +232,13 @@ find_ci_run() {
 fetch_pr_artifact() {
   local pr_number=$1
   log "looking up the CI run for PR #$pr_number on $repo"
-  local head_ref
-  head_ref=$(gh pr view "$pr_number" -R "$repo" --json headRefName --jq .headRefName) \
+  local head_sha
+  head_sha=$(gh pr view "$pr_number" -R "$repo" --json headRefOid --jq .headRefOid) \
     || die "could not find PR #$pr_number on $repo"
 
   local run_id
-  run_id=$(find_ci_run "$head_ref" pull_request) \
-    || die "no completed, successful build.yaml run found for PR #$pr_number (branch '$head_ref')"
+  run_id=$(find_ci_run --commit "$head_sha" pull_request) \
+    || die "no completed, successful build.yaml run found for PR #$pr_number's current head ($head_sha) -- CI may still be running, or the PR needs a rebuild"
 
   log "downloading '${env}.bin' artifact from run $run_id"
   gh run download "$run_id" -R "$repo" -n "${env}.bin" -D "$workdir" \
@@ -259,7 +260,7 @@ fetch_pr_artifact() {
 fetch_bootloader_partitions_for_ref() {
   local ref=$1 event=$2 run_id bp_dir
   log "looking up the CI run for '$ref' to fetch a matching bootloader+partitions for '$env'"
-  run_id=$(find_ci_run "$ref" "$event") || {
+  run_id=$(find_ci_run --branch "$ref" "$event") || {
     log "no completed, successful build.yaml run found for '$ref' -- can't fetch a bootloader+partitions this way"
     return 1
   }
@@ -309,10 +310,12 @@ fi
 # --erase wipes the bootloader and partition table along with everything
 # else; writing only the app image back afterwards leaves the ROM bootloader
 # with nothing valid to boot -- not the recoverable "factory AP" state a
-# wiped config leaves, but a device with no boot code at all. Only proceed if
-# this fetch actually has a bootloader/partitions pair to restore.
-if [ "$erase" -eq 1 ] && { [ -z "$bootloader_bin" ] || [ -z "$partitions_bin" ]; }; then
-  die "--erase needs a bootloader+partitions image for '$env', and none could be found (including via its own CI run) -- writing only the app after a full erase leaves the device with no bootloader at all. Try --pr for a build whose CI artifacts still exist, or drop --erase and use --reset-boot-slot instead."
+# wiped config leaves, but a device with no boot code at all. --with-bootloader
+# is an explicit promise of its own that both images will be written. Refuse
+# either case rather than silently falling back to an app-only flash.
+if { [ "$erase" -eq 1 ] || [ "$with_bootloader" -eq 1 ]; } \
+   && { [ -z "$bootloader_bin" ] || [ -z "$partitions_bin" ]; }; then
+  die "no bootloader+partitions image could be found for '$env' (including via its own CI run), which --erase/--with-bootloader require -- writing only the app after a full erase leaves the device with no bootloader at all. Try --pr for a build whose CI artifacts still exist, or drop --erase and use --reset-boot-slot instead."
 fi
 
 log "flashing $fw_bin"
@@ -343,9 +346,21 @@ if [ -n "$port" ]; then
     log "no bootloader/partitions image for '$env' -- writing the application image only (fine for updating a device that is already flashed)"
   fi
 
-  "${esptool[@]}" --chip esp32 --port "$port" --baud "$baud" \
+  # No --chip: esptool auto-detects it over the serial connection (already
+  # relied on above for erase_flash/erase_region), which is what actually
+  # supports non-ESP32 --bootloader-offset targets like ESP32-C3.
+  "${esptool[@]}" --port "$port" --baud "$baud" \
     --before default_reset --after hard_reset \
     write_flash -z "${write_args[@]}"
+
+  # This always writes to ota_0 but never touches otadata, so a device that
+  # last booted ota_1 (this repo's partition tables give every OTA-capable
+  # board two full app slots) will keep booting that OLD image afterwards --
+  # esptool has no portable way to read otadata's current selection first to
+  # warn only when it matters, so just say so unconditionally.
+  if [ "$erase" -ne 1 ] && [ "$reset_boot_slot" -ne 1 ]; then
+    log "if the device doesn't come up on this build, it may have booted the OTHER OTA slot -- rerun with --reset-boot-slot"
+  fi
 
 elif [ -n "$http_host" ]; then
   command -v curl >/dev/null 2>&1 || die "curl is required for --http"
