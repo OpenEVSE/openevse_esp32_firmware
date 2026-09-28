@@ -17,8 +17,7 @@ cd gui-nightshift && npm install && npm run build && cd ..
 ```
 
 Node.js 20+ and npm are required. The default UI is the **`gui-nightshift`**
-submodule; setting `GUI_NAME=gui-v2` (or any other checkout) selects an
-alternate GUI directory.
+submodule; setting `GUI_NAME=<dir>` selects an alternate GUI checkout.
 
 ## Quick start
 
@@ -150,7 +149,10 @@ esptool.py erase_flash
 
 ## Host-side unit tests
 
-Pure, framework-free logic is tested on the build host via the `native_test` env:
+Host-side logic and certificate persistence are tested via the `native_test`
+environment. Install the OpenSSL development headers and library first (on
+Debian/Ubuntu: `sudo apt-get install libssl-dev`). Certificate tests use the real
+certificate store with OpenSSL and an isolated EpoxyFS directory.
 
 ```bash
 pio test -e native_test
@@ -158,6 +160,16 @@ pio test -e native_test
 
 Test suites live under `test/`. New host-testable logic should land with a
 doctest suite alongside it.
+
+To run just the direct certificate ID regression:
+
+```bash
+pio test -e native_test -f test_certificate_direct_id
+.pio/build/native_test/program
+```
+
+The direct binary prints the assertion totals. Run it before building another
+suite, since all suites in this environment share that output path.
 
 The full native firmware build is `native_openevse`. To build the host binary with
 the LVGL local UI path enabled, use `native_openevse_lvgl`:

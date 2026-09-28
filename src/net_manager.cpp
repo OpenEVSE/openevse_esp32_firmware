@@ -31,6 +31,40 @@
 #include "wifi_esp32.h"
 #endif
 
+// DHCP option 42 (NTP servers). lwIP parses it on every build we ship
+// (CONFIG_LWIP_DHCP_GET_NTP_SRV=y in both the core-2 and core-3 prebuilt
+// sdkconfigs) but only records it once esp_sntp_servermode_dhcp() has been
+// called; it then lands in lwIP's SNTP server slot 0, which we read back and
+// hand to our own (Mongoose) client - lwIP's SNTP app itself is never started.
+#if defined(ESP32) && !defined(EPOXY_DUINO)
+#include <esp_sntp.h>
+#define HAVE_DHCP_NTP LWIP_DHCP_GET_NTP_SRV
+#else
+#define HAVE_DHCP_NTP 0
+#endif
+
+static void netEnableDhcpNtp()
+{
+#if HAVE_DHCP_NTP
+  // Needs the TCP/IP stack up (it runs on the lwIP thread) and must precede
+  // the first DHCP exchange, so the interface START events are the spot
+  esp_sntp_servermode_dhcp(true);
+#endif
+}
+
+static String netDhcpNtpServer()
+{
+#if HAVE_DHCP_NTP
+  const ip_addr_t *server = esp_sntp_getserver(0);
+  if(server && !ip_addr_isany(server) && IP_IS_V4(server)) {
+    char buf[16];
+    ip4addr_ntoa_r(ip_2_ip4(server), buf, sizeof(buf));
+    return String(buf);
+  }
+#endif
+  return String("");
+}
+
 #ifndef WIRED_CONNECT_TIMEOUT
 #define WIRED_CONNECT_TIMEOUT (15 * 1000)
 #endif
@@ -241,6 +275,7 @@ void NetManagerTask::haveNetworkConnection(IPAddress myAddress, IPAddress netmas
   _led.setWifiMode(true, true);
   _lcd.setWifiMode(true, true);
   _time.setHost(sntp_hostname.c_str());
+  _time.setDhcpServer(netDhcpNtpServer().c_str());
   // Apply the persisted SNTP-enable to the running TimeManager. Its _sntpEnabled
   // starts false and is otherwise only updated by a runtime config change, so
   // without this a cold boot leaves NTP disabled even when the config has it on
@@ -427,6 +462,7 @@ void NetManagerTask::onNetEvent(WiFiEvent_t event, arduino_event_info_t &info)
 
     case ARDUINO_EVENT_WIFI_STA_START:
     {
+      netEnableDhcpNtp();
       if(WiFi.setHostname(esp_hostname.c_str())) {
         DBUGF("Set host name to %s", WiFi.getHostname());
       } else {
@@ -531,6 +567,7 @@ void NetManagerTask::onNetEvent(WiFiEvent_t event, arduino_event_info_t &info)
 #ifdef ENABLE_WIRED_ETHERNET
     case ARDUINO_EVENT_ETH_START:
       DBUGF("ETH Started, link %s", ETH.linkUp() ? "up" : "down");
+      netEnableDhcpNtp();
       if(ETH.linkUp())
       {
         //set eth hostname here

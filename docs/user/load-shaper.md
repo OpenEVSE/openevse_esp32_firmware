@@ -29,14 +29,18 @@ splits one supply between several OpenEVSE units: a *controller* keeps the sum
 of the group's charge currents under a site limit and hands each *member* an
 allocation.
 
-The UI for this ships ahead of the firmware. The page lives at
-**Settings → Load Sharing** (`/settings/loadsharing`) and is hidden until you
-turn on *Enable Labs features* under
-[Settings → Terminal](settings.md) → OpenEVSE Labs; leave it off unless you are
-running firmware with load-sharing support built in, otherwise the page has
-nothing to talk to.
+This is a **Labs preview**: the firmware support is in, the feature is still
+settling. The page lives at **Settings → Load Sharing**
+(`/settings/loadsharing`) and is hidden until you turn on *Enable Labs
+features* under [Settings → Developer Tools](settings.md) → OpenEVSE Labs. Two
+things to know before you turn it on:
 
-With matching firmware, the page covers:
+- Every station in the group must run the same firmware release.
+- Stations cannot yet authenticate to each other: if you have set a web
+  password (`www_password`), peers will fail to connect. Leave the password
+  off on load-sharing stations for now, or keep them on a trusted network.
+
+The page covers:
 
 - **Settings** — enable, group ID, role (controller or member), site max
   current, safety factor, and the controller host for members.
@@ -47,4 +51,5 @@ With matching firmware, the page covers:
   the reason it was given.
 
 Members surface their assigned limit on the [Dashboard](dashboard.md) alongside
-the shaper, since both arrive as claims on the charge current.
+the shaper, since both arrive as claims on the charge current. For the
+controller/member setup itself, see [Load sharing](load-sharing.md).

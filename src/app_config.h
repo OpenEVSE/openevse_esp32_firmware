@@ -191,7 +191,11 @@ extern uint32_t flags;
 // installs have this bit clear, so they keep probing exactly as before.
 #define CONFIG_MQTT_NO_SYS_QUERY    (1 << 29)
 // TFT panel clock in 12-hour form. Clear (the default) keeps the 24-hour clock.
-#define CONFIG_TFT_12H_CLOCK        (1 << 30) // next free bit after CONFIG_TFT_12H_CLOCK
+#define CONFIG_TFT_12H_CLOCK        (1 << 30)
+// Inverted sense: bit SET ignores the NTP server offered by DHCP (option 42)
+// and always uses sntp_hostname. Clear - the default, and what every existing
+// install already has stored - prefers the DHCP one. Last free bit.
+#define CONFIG_SNTP_NO_DHCP         (1u << 31)
 
 #define INITIAL_CONFIG_VERSION  1
 
@@ -218,6 +222,10 @@ inline bool config_mqtt_retained() {
 // Query broker metadata via $SYS/broker/version. Must be off for managed
 // brokers (AWS IoT Core): they have no $SYS tree and answer an unauthorised
 // subscribe by closing the connection rather than failing the SUBACK.
+inline bool config_sntp_dhcp() {
+  return 0 == (flags & CONFIG_SNTP_NO_DHCP);
+}
+
 inline bool config_mqtt_sys_query() {
   return 0 == (flags & CONFIG_MQTT_NO_SYS_QUERY);
 }

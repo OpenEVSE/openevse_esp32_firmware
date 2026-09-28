@@ -26,7 +26,8 @@
 #include "charge_screen.h"
 #include "openevse.h"     // OPENEVSE_STATE_*
 #include "nightshift.h"   // exact nightshift palette
-#include "screen_common.h" // state_word / fmt_temp, shared with standby
+#include "screen_common.h"
+#include "fonts/oe_fonts.h" // state_word / fmt_temp, shared with standby
 
 #define COL_BG      NS_SURFACE   // screen base
 #define COL_CARD    NS_SURFACE3  // tile surface
@@ -120,7 +121,7 @@ static void make_tile(lv_obj_t *parent, int idx, lv_coord_t y)
   lv_obj_t *v = lv_label_create(tile);
   lv_label_set_text(v, "--");
   lv_obj_set_style_text_color(v, COL_TEXT, 0);
-  lv_obj_set_style_text_font(v, &lv_font_montserrat_36, 0);
+  lv_obj_set_style_text_font(v, &lv_font_oe_tile_36, 0);
   lv_obj_set_width(v, TILE_W - 16);
   lv_obj_set_style_text_align(v, LV_TEXT_ALIGN_LEFT, 0);
   lv_obj_align(v, LV_ALIGN_BOTTOM_LEFT, 0, 0);
@@ -262,7 +263,7 @@ void charge_screen_build()
   big_value = lv_label_create(scr);
   lv_label_set_text(big_value, "0.00");
   lv_obj_set_style_text_color(big_value, COL_TEXT, 0);
-  lv_obj_set_style_text_font(big_value, &lv_font_montserrat_48, 0);
+  lv_obj_set_style_text_font(big_value, &lv_font_oe_display_48, 0);
   lv_obj_set_width(big_value, 140);
   lv_obj_set_style_text_align(big_value, LV_TEXT_ALIGN_CENTER, 0);
   lv_obj_align_to(big_value, arc, LV_ALIGN_CENTER, 0, -20);
