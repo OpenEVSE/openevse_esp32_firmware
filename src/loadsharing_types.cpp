@@ -22,14 +22,11 @@
 // Global instance
 LoadSharingGroupState loadSharingGroupState;
 
-bool loadSharingRoleFromJson(JsonVariant v) {
-  if (v.is<const char*>()) {
-    // Only the literal "member" was ever a member; "controller" and "" (the
-    // unset default) were both controller.
-    return String(v.as<const char*>()) == "member";
-  }
-  return v.as<bool>();
-}
+// loadSharingRoleFromJson() is defined in app_config.cpp, not here: this
+// file isn't compiled into the native_simulator build (see that env's
+// build_src_filter in platformio.ini -- load sharing was deliberately kept
+// out of the simulator), but app_config.cpp's loadsharing_role opt needs
+// the helper regardless of which firmware build it's in.
 
 bool LoadSharingGroupState::isController() const {
   return loadsharing_enabled && !loadsharing_role;

@@ -15,6 +15,13 @@
 
 #include "web_auth_secret.h"
 
+// Needed unconditionally: ConfigOptLoadSharingRole (below) uses
+// loadSharingRoleFromJson() to register the loadsharing_role opt, and that
+// registration isn't gated by ENABLE_CONFIG_CHANGE_NOTIFICATION -- unlike
+// this file's other loadsharing-adjacent includes, which are only for
+// config_changed()'s notification body.
+#include "loadsharing_types.h"
+
 #if ENABLE_CONFIG_CHANGE_NOTIFICATION
 #include <esp_ota_ops.h>
 #include "divert.h"
@@ -26,7 +33,6 @@
 #include "input.h"
 #include "LedManagerTask.h"
 #include "current_shaper.h"
-#include "loadsharing_types.h"
 
 #include "limit.h"
 #endif
@@ -223,14 +229,27 @@ void config_changed(String name);
 ConfigOptDefinition<uint32_t> flagsOpt = ConfigOptDefinition<uint32_t>(flags, CONFIG_DEFAULT_FLAGS, "flags", "f");
 ConfigOptDefinition<uint32_t> flagsChanged = ConfigOptDefinition<uint32_t>(flags_changed, 0, "flags_changed", "c");
 
+// Defined here rather than in loadsharing_types.cpp (its natural home)
+// because that file isn't compiled into the native_simulator build (see its
+// build_src_filter in platformio.ini) -- load sharing was deliberately kept
+// out of the simulator -- but this opt needs the helper in every build.
+bool loadSharingRoleFromJson(JsonVariant v) {
+  if (v.is<const char*>()) {
+    // Only the literal "member" was ever a member; "controller" and "" (the
+    // unset default) were both controller.
+    return String(v.as<const char*>()) == "member";
+  }
+  return v.as<bool>();
+}
+
 // loadsharing_role was a String ("", "controller", "member") before it became
 // a bool. ArduinoJson's asBoolean() returns true for any string value,
 // including "" and "controller" (VariantImpl.hpp's default case), so a plain
 // ConfigOptDefinition<bool> deserializing an already-persisted legacy string
 // -- on the very next boot load, via ConfigJson::load() -> deserialize() --
 // would read every existing controller as a member. This subclass routes
-// through loadSharingRoleFromJson() (loadsharing_types.h) so a legacy value
-// maps to the exact same role it always meant, on both the boot-time load
+// through loadSharingRoleFromJson() so a legacy value maps to the exact same
+// role it always meant, on both the boot-time load
 // and POST /config paths (they share this one deserialize()).
 class ConfigOptLoadSharingRole : public ConfigOpt
 {

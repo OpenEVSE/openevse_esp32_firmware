@@ -26,6 +26,9 @@ struct DiscoveredPeer;
  *
  * @param v The loadsharing_role field's JsonVariant (may be absent/null).
  * @return true for member, false for controller.
+ *
+ * Defined in app_config.cpp, not loadsharing_types.cpp -- see the comment
+ * there.
  */
 bool loadSharingRoleFromJson(JsonVariant v);
 
