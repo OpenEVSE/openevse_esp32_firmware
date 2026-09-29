@@ -2240,6 +2240,20 @@ void handleMqttAction(MongooseHttpServerRequest *request) {
   request->send(response);
 }
 
+// The erasure half of crash reporting, as the GUI reads it: the reporter id
+// (null until this charger has sent a report) and where a deletion has got to.
+static void crash_reports_describe(JsonDocument &doc)
+{
+  char rid[33];
+  if(crash_reporter_id(rid)) {
+    doc["reporter_id"] = rid;
+  } else {
+    doc["reporter_id"] = nullptr;
+  }
+  doc["forget"] = crash_forget_state_name();
+  doc["forget_deleted"] = crash_forget_deleted();
+}
+
 void web_server_setup()
 {
   bool use_ssl = false;
@@ -2477,12 +2491,39 @@ void web_server_setup()
       return;
     }
 
-    DynamicJsonDocument doc(256);
+    DynamicJsonDocument doc(384);
     doc["state"] = crash_upload_state_name();
     doc["sent"] = (uint32_t)crash_upload_sent();
     doc["total"] = (uint32_t)crash_upload_total();
     doc["deferred"] = crash_upload_deferred_armed();
+    crash_reports_describe(doc);
     response->setCode(200);
+    serializeJson(doc, *response);
+    request->send(response);
+  });
+
+  // Erasure (GDPR Art. 17; Art. 7(3)).
+  //
+  //   GET    /debug/crash/reports  this charger's reporter id, if it has one
+  //   DELETE /debug/crash/reports  erase every report this charger has sent
+  //
+  // Authenticated like the upload: the device holds the delete key and
+  // presents it itself, so the browser never sees it.
+  server.on("/debug/crash/reports$", [](MongooseHttpServerRequest *request) {
+    MongooseHttpServerResponseStream *response;
+    if(false == requestPreProcess(request, response, CONTENT_TYPE_JSON)) {
+      return;
+    }
+    DynamicJsonDocument doc(256);
+    if(HTTP_DELETE == request->method()) {
+      String message;
+      bool ok = crash_forget_request(message);
+      response->setCode(ok ? 200 : 409);
+      doc["msg"] = message;
+    } else {
+      response->setCode(200);
+    }
+    crash_reports_describe(doc);
     serializeJson(doc, *response);
     request->send(response);
   });

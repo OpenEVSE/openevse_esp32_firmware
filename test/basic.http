@@ -135,3 +135,10 @@ X-Requested-With: OpenEVSE
 ### Crash upload: cancel a deferred upload
 DELETE {{baseUrl}}/debug/crash/upload HTTP/1.1
 X-Requested-With: OpenEVSE
+
+### Crash reports: this charger's reporter id (null until it has sent one)
+GET {{baseUrl}}/debug/crash/reports HTTP/1.1
+
+### Crash reports: erase everything this charger sent (409 if it never sent one)
+DELETE {{baseUrl}}/debug/crash/reports HTTP/1.1
+X-Requested-With: OpenEVSE

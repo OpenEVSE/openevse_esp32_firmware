@@ -7,6 +7,8 @@
 
 #include "crash_report_id.h"
 
+#include <string>
+
 TEST_CASE("a real report id is accepted") {
   CHECK(crash_report_id_valid("3f2504e0-4f89-41d3-9a0c-0305e82c3301"));
   CHECK(crash_report_id_valid("00000000-0000-0000-0000-000000000000"));
@@ -87,4 +89,55 @@ TEST_CASE("a dump from any other build, or an unknown one, is not") {
 TEST_CASE("a default build declares no raw dump") {
   CHECK(crash_declared_raw_bytes(65536) == 0);
   CHECK(crash_declared_raw_bytes(0) == 0);
+}
+
+// ---------------------------------------------------------------------------
+// The reporter identity: a random id sent in place of the chip id, and a
+// random delete key that never leaves the device except to erase.
+// ---------------------------------------------------------------------------
+
+static const char *RID = "0123456789abcdef0123456789abcdef";
+static const char *KEY = "00112233445566778899aabbccddeeff00112233445566778899aabbccddeeff";
+
+TEST_CASE("hex encoding is lower-case and exact") {
+  const uint8_t b[] = { 0x00, 0x0f, 0xa5, 0xff };
+  char out[9];
+  crash_hex(b, sizeof(b), out);
+  CHECK(std::string(out) == "000fa5ff");
+}
+
+TEST_CASE("reporter ids and delete keys are fixed-length lower-case hex") {
+  CHECK(crash_reporter_id_valid(RID));
+  CHECK_FALSE(crash_reporter_id_valid("0123456789ABCDEF0123456789abcdef"));
+  CHECK_FALSE(crash_reporter_id_valid("0123456789abcdef0123456789abcde"));
+  CHECK_FALSE(crash_reporter_id_valid("0123456789abcdef0123456789abcdef0"));
+  CHECK_FALSE(crash_reporter_id_valid(NULL));
+  CHECK(crash_delete_key_valid(KEY));
+  CHECK_FALSE(crash_delete_key_valid(RID));
+  CHECK_FALSE(crash_delete_key_valid(NULL));
+}
+
+TEST_CASE("the delete key hash is the SHA-256 of the key's hex text") {
+  // What the broker computes from the key the device later presents
+  // (hashlib.sha256(key.encode()).hexdigest()).
+  char out[65];
+  crash_delete_key_hash(KEY, out);
+  CHECK(std::string(out) == "2a8abfa8cb9906290437854193ca6bca41d4d4e26d1d454bd66a35158095e737");
+}
+
+TEST_CASE("the identity file round-trips, and anything else is rejected") {
+  char text[CRASH_IDENTITY_LEN];
+  crash_identity_format(RID, KEY, text, sizeof(text));
+  char rid[33], key[65];
+  REQUIRE(crash_identity_parse(text, rid, key));
+  CHECK(std::string(rid) == RID);
+  CHECK(std::string(key) == KEY);
+
+  CHECK_FALSE(crash_identity_parse("", rid, key));
+  CHECK_FALSE(crash_identity_parse(NULL, rid, key));
+  CHECK_FALSE(crash_identity_parse(RID, rid, key));
+  std::string swapped = std::string(KEY) + "\n" + RID + "\n";
+  CHECK_FALSE(crash_identity_parse(swapped.c_str(), rid, key));
+  std::string trailing = std::string(text) + "junk";
+  CHECK_FALSE(crash_identity_parse(trailing.c_str(), rid, key));
 }

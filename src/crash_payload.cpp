@@ -12,14 +12,16 @@
 #include "input.h"             // evse
 #include <espal.h>
 
-void crash_payload_build(JsonDocument &doc, size_t rawBytes)
+void crash_payload_build(JsonDocument &doc, size_t rawBytes,
+                         const char *reporterId, const char *deleteKeyHash)
 {
   doc["buildenv"] = buildenv;
 
-  // The ESP's own id, not evse.getChipId(). The controller's chip id is what
-  // scripts/symbolize_crash.py sent, which collapses every unit with a fake or
-  // absent controller onto one value and makes the by-chip index useless.
-  doc["chip_id"] = serial;
+  // No hardware id. The chip id is MAC-derived, and a hash of it brute-forces
+  // back; a random reporter id groups this charger's reports without naming
+  // it (crash_report_id.h).
+  doc["reporter_id"] = reporterId;
+  doc["delete_key_hash"] = deleteKeyHash;
   doc["espinfo"] = ESPAL.getChipInfo();
   // The controller's own firmware version (spec §5). Absent, not empty, when
   // no controller has answered -- an empty string here is indistinguishable

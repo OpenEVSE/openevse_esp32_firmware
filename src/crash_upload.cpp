@@ -7,6 +7,7 @@
 #include <LittleFS.h>
 #include <MongooseCore.h>
 #include <esp_heap_caps.h>
+#include <esp_random.h>
 #include <mbedtls/sha256.h>
 
 #include "crash_host.h"
@@ -35,15 +36,16 @@
 
 // A TLS handshake needs tens of KB contiguous, and heap_largest collapses on a
 // charger that has been up for weeks -- the documented reason OTA fails then
-// and succeeds after a reboot. Below this, the upload defers to tier 2 rather
-// than failing in the middle of a handshake.
+// and succeeds after a reboot. Below this, an upload defers to tier 2 rather
+// than failing in the middle of a handshake, and a deletion asks for a retry.
 //
-// PROVISIONAL. Spec §13 leaves the figure open; it needs a controller-attached
-// unit to measure, and the bench S3's fake controller cannot reproduce
-// RAPI-driven fragmentation. Chosen to be safely above a handshake plus the
-// send buffer, not measured.
+// Measured on a no-PSRAM WROOM (openevse_wifi_tft_v1_dev): one request dips
+// the largest free block by ~30 KB at its peak, and the first TLS use of a boot
+// leaves it ~8 KB lower for good (55.3 KB -> 47.1 KB). At the earlier
+// provisional 48 KB, deleting right after sending was always refused; 40 KB
+// keeps ~10 KB of margin over the measured peak.
 #ifndef CRASH_MIN_HEAP_LARGEST
-#define CRASH_MIN_HEAP_LARGEST   (48 * 1024)
+#define CRASH_MIN_HEAP_LARGEST   (40 * 1024)
 #endif
 
 // Set by a click, consumed once, never re-armed by firmware (spec §8).
@@ -55,7 +57,19 @@
 // make the consent invariant a comment rather than a property.
 #define CRASH_DEFER_FLAG         "/crash_upload_pending"
 
+// The reporter identity (crash_report_id.h): random id + delete key. A file,
+// not a config option, for the same reason as the defer flag -- and so the key
+// never appears in GET /config.
+#define CRASH_IDENTITY_FILE      "/crash_reporter"
+
 static CrashUploadState _state = CrashUpload_Idle;
+
+// Erasure runs on the same connection machinery as an upload, but its outcome
+// is its own: a deletion must not read as an upload failing or finishing.
+enum CrashForget { CrashForget_Idle, CrashForget_Running, CrashForget_Deleted, CrashForget_Failed };
+static CrashForget _forget = CrashForget_Idle;
+static String _forgetBody;           // holds the key only while the request runs
+static uint32_t _forgetDeleted = 0;
 static String _reportId;
 static const uint8_t *_image = NULL;
 static size_t _imageLen = 0;
@@ -249,10 +263,55 @@ static bool crash_send(const char *method, const String &path,
 
 static String _metaBody;      // must outlive the request
 
+static bool crash_identity_load(char rid[33], char key[65])
+{
+  if(!LittleFS.exists(CRASH_IDENTITY_FILE)) {
+    return false;
+  }
+  File f = LittleFS.open(CRASH_IDENTITY_FILE, "r");
+  if(!f) {
+    return false;
+  }
+  String text = f.readString();
+  f.close();
+  return crash_identity_parse(text.c_str(), rid, key);
+}
+
+static bool crash_identity_create(char rid[33], char key[65])
+{
+  // Only ever called with the network up, so the RF noise source is running
+  // and esp_fill_random is a true RNG.
+  uint8_t r[CRASH_REPORTER_ID_HEX / 2];
+  uint8_t k[CRASH_DELETE_KEY_HEX / 2];
+  esp_fill_random(r, sizeof(r));
+  esp_fill_random(k, sizeof(k));
+  crash_hex(r, sizeof(r), rid);
+  crash_hex(k, sizeof(k), key);
+  char text[CRASH_IDENTITY_LEN];
+  crash_identity_format(rid, key, text, sizeof(text));
+  File f = LittleFS.open(CRASH_IDENTITY_FILE, "w");
+  if(!f) {
+    return false;
+  }
+  size_t n = f.print(text);
+  f.close();
+  return n == strlen(text);
+}
+
 static void crash_step_metadata()
 {
+  // Created on first use, so a charger that never sends a report never has
+  // one. If it cannot be stored, nothing is sent: a report without a stored
+  // key is one the user could never erase.
+  char rid[33], key[65], keyHash[65];
+  if(!crash_identity_load(rid, key) && !crash_identity_create(rid, key)) {
+    crash_fail("could not store the reporter id");
+    return;
+  }
+  crash_delete_key_hash(key, keyHash);
+
   DynamicJsonDocument doc(6144);
-  crash_payload_build(doc, crash_declared_raw_bytes(_imageLen));
+  crash_payload_build(doc, crash_declared_raw_bytes(_imageLen), rid, keyHash);
   _metaBody = "";
   serializeJson(doc, _metaBody);
 
@@ -288,8 +347,34 @@ static void crash_finish()
   event_send(doc);
 }
 
+static void crash_forget_reply(int status, const String &body)
+{
+  _forgetBody = "";
+  if(200 != status) {
+    crash_fail("the broker refused the deletion");
+    return;
+  }
+  StaticJsonDocument<32> filter;
+  filter["deleted"] = true;
+  StaticJsonDocument<64> doc;
+  deserializeJson(doc, body, DeserializationOption::Filter(filter));
+  _forgetDeleted = doc["deleted"] | 0;
+  // A fresh identity next time, so a later report is not linkable to the ones
+  // just erased.
+  LittleFS.remove(CRASH_IDENTITY_FILE);
+  _forget = CrashForget_Deleted;
+  DynamicJsonDocument ev(128);
+  ev["crash_forget"] = crash_forget_state_name();
+  ev["crash_forget_deleted"] = _forgetDeleted;
+  event_send(ev);
+}
+
 static void crash_reply(int status, const String &body)
 {
+  if(CrashForget_Running == _forget) {
+    crash_forget_reply(status, body);
+    return;
+  }
   switch(_state)
   {
     case CrashUpload_Metadata: {
@@ -357,6 +442,16 @@ static void crash_fail(const char *why)
     _nc->flags |= MG_F_CLOSE_IMMEDIATELY;
     _nc = NULL;
   }
+  if(CrashForget_Running == _forget) {
+    // The identity stays, so the user can simply try again.
+    _forgetBody = "";
+    _forget = CrashForget_Failed;
+    DynamicJsonDocument doc(192);
+    doc["crash_forget"] = crash_forget_state_name();
+    doc["crash_forget_error"] = why;
+    event_send(doc);
+    return;
+  }
   _state = CrashUpload_Failed;
   _next = CrashNext_None;
   _image = NULL;
@@ -373,7 +468,7 @@ static void crash_fail(const char *why)
 static bool crash_running()
 {
   return CrashUpload_Metadata == _state || CrashUpload_Raw == _state ||
-         CrashUpload_Completing == _state;
+         CrashUpload_Completing == _state || CrashForget_Running == _forget;
 }
 
 // The first 64 bits of the stored image's SHA-256, or false if there is none:
@@ -571,6 +666,70 @@ void crash_upload_loop()
   }
 }
 
+bool crash_reporter_id(char out[33])
+{
+  char key[65];
+  bool ok = crash_identity_load(out, key);
+  memset(key, 0, sizeof(key));
+  return ok;
+}
+
+bool crash_forget_request(String &message)
+{
+  if(crash_running()) {
+    message = F("an upload is running -- try again when it has finished");
+    return false;
+  }
+  // Withdrawing consent covers the report that has not gone yet, too.
+  crash_upload_cancel_deferred();
+
+  char rid[33], key[65];
+  if(!crash_identity_load(rid, key)) {
+    message = F("nothing has been sent from this charger");
+    return false;
+  }
+  if(!net.isConnected()) {
+    message = F("no network");
+    return false;
+  }
+  uint32_t largest = (uint32_t)heap_caps_get_largest_free_block(MALLOC_CAP_8BIT);
+  if(largest < CRASH_MIN_HEAP_LARGEST) {
+    message = F("not enough free memory right now -- try again after a restart");
+    return false;
+  }
+
+  _forgetBody = String("{\"delete_key\":\"") + key + "\"}";
+  memset(key, 0, sizeof(key));
+  _forget = CrashForget_Running;
+  _forgetDeleted = 0;
+  _deadline = millis() + CRASH_TIMEOUT_MS;
+  {
+    DynamicJsonDocument doc(96);
+    doc["crash_forget"] = crash_forget_state_name();
+    event_send(doc);
+  }
+  if(!crash_send("POST", String("/v1/reporters/") + rid + "/delete",
+                 "application/json", (const uint8_t *)_forgetBody.c_str(),
+                 _forgetBody.length())) {
+    message = F("could not reach OpenEVSE");
+    return false;
+  }
+  message = F("deleting");
+  return true;
+}
+
+uint32_t crash_forget_deleted() { return _forgetDeleted; }
+
+const char *crash_forget_state_name()
+{
+  switch(_forget) {
+    case CrashForget_Running: return "deleting";
+    case CrashForget_Deleted: return "deleted";
+    case CrashForget_Failed:  return "failed";
+    default:                  return "idle";
+  }
+}
+
 CrashUploadState crash_upload_state() { return _state; }
 size_t crash_upload_sent() { return _sent; }
 size_t crash_upload_total() { return _imageLen; }
@@ -605,5 +764,13 @@ size_t crash_upload_sent() { return 0; }
 size_t crash_upload_total() { return 0; }
 bool crash_upload_deferred_armed() { return false; }
 void crash_upload_cancel_deferred() {}
+bool crash_forget_request(String &message)
+{
+  message = F("not supported on this build");
+  return false;
+}
+const char *crash_forget_state_name() { return "unsupported"; }
+uint32_t crash_forget_deleted() { return 0; }
+bool crash_reporter_id(char out[33]) { out[0] = '\0'; return false; }
 
 #endif // ENABLE_CRASH_UPLOAD

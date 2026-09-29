@@ -76,6 +76,16 @@ Before you press it:
   report travels over a verified TLS connection to the one host compiled into
   the firmware -- that destination cannot be changed from the settings -- is
   kept privately for 90 days, and is then deleted.
+- **Nothing in it names the charger.** Instead of the chip id (which is derived
+  from the network MAC address), the first report creates a random reporter id
+  on the charger, shown under Developer Tools.
+- **You can erase everything this charger has sent.** **Delete my reports from
+  OpenEVSE** (or `curl -X DELETE http://<charger>/debug/crash/reports`) removes
+  every report the charger sent, cancels one that is waiting for a restart, and
+  forgets the reporter id, so a later report is not linked to the old ones. The
+  charger proves it is the sender with a secret key it keeps and never sends
+  with a report, so nobody else can delete your reports -- and nobody can
+  delete them from here without the charger.
 - **The report is removed from the charger only once it has arrived.**
   If anything fails part-way, it stays on the charger and you can try again.
 - **On a charger that has been up a long time the upload may wait for the next
@@ -87,7 +97,9 @@ Before you press it:
 
 `GET /debug/crash/upload` reports progress: `state` is one of `idle`,
 `metadata`, `uploading`, `completing`, `done`, `failed` or `deferred`.
-While an upload is running, erasing the report answers `409`.
+While an upload is running, erasing the report answers `409`. It also carries
+`reporter_id` (null until a report has been sent) and `forget`, where a
+deletion has got to: `idle`, `deleting`, `deleted` or `failed`.
 
 ## Getting help
 
