@@ -75,21 +75,32 @@ handleConfigPost(MongooseHttpServerRequest *request, MongooseHttpServerResponseS
     // If this device is a member, check if this is a controller config push
     // or a local request trying to change load sharing fields
     if (loadSharingGroupState.isMember()) {
-      // A legitimate member write is exactly one of the two role
-      // transitions -- controller re-affirming membership (role=true +
-      // controller_host), or this device leaving the group on its own
-      // (role=false) -- and nothing else. Checking only for the
-      // loadsharing_role *key* isn't enough: {"loadsharing_role": true,
+      // A legitimate member write is one of two shapes: a controller
+      // re-affirming membership (role=true + controller_host -- the exact
+      // shape LoadSharingPeerPoller::pushConfigToPeer() sends, which
+      // legitimately carries the rest of the group config alongside, so
+      // other loadsharing_* fields are expected here), or this device
+      // leaving the group -- either the controller's own reset push
+      // (pushConfigResetToPeer: role=false + enabled=false +
+      // controller_host="") or the narrower self-triggered leave the GUI
+      // sends (role=false alone). Checking only for the loadsharing_role
+      // *key* isn't enough: {"loadsharing_role": true,
       // "loadsharing_safety_factor": 0.5} would then let safety_factor
-      // ride along unchecked once the gate below is skipped.
+      // ride along unchecked without a controller_host to show it actually
+      // came from a real push.
       bool isControllerPush = false;
       if (doc.containsKey("loadsharing_role")) {
         bool wantsMember = loadSharingRoleFromJson(doc["loadsharing_role"]);
-        isControllerPush = wantsMember ? doc.containsKey("loadsharing_controller_host") : true;
-        if (isControllerPush) {
+        if (wantsMember) {
+          isControllerPush = doc.containsKey("loadsharing_controller_host");
+        } else {
+          isControllerPush = true;
           for (JsonPairConst field : doc.as<JsonObjectConst>()) {
             String key = String(field.key().c_str());
-            if (key.startsWith("loadsharing_") && key != "loadsharing_role" && key != "loadsharing_controller_host") {
+            if (key.startsWith("loadsharing_") &&
+                key != "loadsharing_role" &&
+                key != "loadsharing_enabled" &&
+                key != "loadsharing_controller_host") {
               isControllerPush = false;
               break;
             }
