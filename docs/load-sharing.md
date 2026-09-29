@@ -106,6 +106,13 @@ with no config step of its own. A member can leave on its own (e.g. if the
 controller is unreachable) by POSTing `{"loadsharing_role": false}` to its own
 `/config`, which resets it back to a standalone controller.
 
+`loadsharing_role` was a string (`""`, `"controller"`, `"member"`) before this
+change; a device already carrying a persisted legacy value normalizes it to
+the equivalent bool on load, and a peer still sending the legacy string
+(mixed old/new firmware during a rolling upgrade) is read the same way on
+receipt — see `loadSharingRoleFromJson()` in `loadsharing_types.h`. This is
+an alpha feature, so no other backward-compatibility is provided.
+
 Key config fields (see theory doc §4.1 for the full table):
 
 | Key | Default | Notes |
@@ -214,10 +221,13 @@ manually; automatic election is future work.
 
 When `loadsharing_role == true` (member):
 
-- Local `POST /config` **strips** `loadsharing_*` keys unless the post sets
-  `loadsharing_role`, which covers both legitimate cases: a controller
-  re-affirming membership (`true`) and this device leaving the group on its
-  own (`false`) — see "Group configuration (controller)" above.
+- Local `POST /config` **rejects the whole request with HTTP 403** if it
+  contains any `loadsharing_*` key, unless the body is exactly one of the two
+  legitimate role transitions: a controller re-affirming membership
+  (`loadsharing_role: true` + `loadsharing_controller_host`) or this device
+  leaving the group on its own (`loadsharing_role: false`), with no other
+  `loadsharing_*` keys riding along — see "Group configuration (controller)"
+  above. It's all-or-nothing: a rejected request never partially applies.
 - Intended behaviour (theory INV-7): peer management writes on members should
   be rejected. Treat hard HTTP 403 on `/loadsharing/peers` as a target; verify
   against current firmware if relying on it.

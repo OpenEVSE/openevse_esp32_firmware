@@ -22,6 +22,15 @@
 // Global instance
 LoadSharingGroupState loadSharingGroupState;
 
+bool loadSharingRoleFromJson(JsonVariant v) {
+  if (v.is<const char*>()) {
+    // Only the literal "member" was ever a member; "controller" and "" (the
+    // unset default) were both controller.
+    return String(v.as<const char*>()) == "member";
+  }
+  return v.as<bool>();
+}
+
 bool LoadSharingGroupState::isController() const {
   return loadsharing_enabled && !loadsharing_role;
 }

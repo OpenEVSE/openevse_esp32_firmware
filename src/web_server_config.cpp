@@ -75,11 +75,27 @@ handleConfigPost(MongooseHttpServerRequest *request, MongooseHttpServerResponseS
     // If this device is a member, check if this is a controller config push
     // or a local request trying to change load sharing fields
     if (loadSharingGroupState.isMember()) {
-      // loadsharing_role is a bool now, so any value posted for it is one of
-      // the two legitimate role transitions (controller re-affirming
-      // membership, or this device leaving the group) -- there is no
-      // third value that would make this an illegitimate member write.
-      bool isControllerPush = doc.containsKey("loadsharing_role");
+      // A legitimate member write is exactly one of the two role
+      // transitions -- controller re-affirming membership (role=true +
+      // controller_host), or this device leaving the group on its own
+      // (role=false) -- and nothing else. Checking only for the
+      // loadsharing_role *key* isn't enough: {"loadsharing_role": true,
+      // "loadsharing_safety_factor": 0.5} would then let safety_factor
+      // ride along unchecked once the gate below is skipped.
+      bool isControllerPush = false;
+      if (doc.containsKey("loadsharing_role")) {
+        bool wantsMember = loadSharingRoleFromJson(doc["loadsharing_role"]);
+        isControllerPush = wantsMember ? doc.containsKey("loadsharing_controller_host") : true;
+        if (isControllerPush) {
+          for (JsonPairConst field : doc.as<JsonObjectConst>()) {
+            String key = String(field.key().c_str());
+            if (key.startsWith("loadsharing_") && key != "loadsharing_role" && key != "loadsharing_controller_host") {
+              isControllerPush = false;
+              break;
+            }
+          }
+        }
+      }
       if (loadsharingConfigRequest && !isControllerPush) {
         response->setCode(403);
         response->print("{\"msg\":\"Load sharing configuration is read-only on members\"}");
@@ -168,13 +184,13 @@ handleConfigPost(MongooseHttpServerRequest *request, MongooseHttpServerResponseS
     // resetRole() in particular also drops the controller peer and rewrites the
     // persisted peer list, which a 423 response must not leave behind.
     if (doc.containsKey("loadsharing_role") &&
-        doc["loadsharing_role"].as<bool>() == true &&
+        loadSharingRoleFromJson(doc["loadsharing_role"]) == true &&
         doc.containsKey("loadsharing_controller_host")) {
       String controllerHost = doc["loadsharing_controller_host"].as<String>();
       loadSharingGroupState.becomeMember(controllerHost);
     }
     if (doc.containsKey("loadsharing_role") &&
-        doc["loadsharing_role"].as<bool>() == false &&
+        loadSharingRoleFromJson(doc["loadsharing_role"]) == false &&
         loadSharingGroupState.isMember()) {
       // Drop the controller entry structurally rather than by
       // loadsharing_controller_host: discovery may have re-keyed it under the
