@@ -163,6 +163,9 @@ enum vehicle_data_src {
 // 24-bits of Flags
 extern uint32_t flags;
 
+// HTTPS listener toggle, stored outside flags
+extern bool www_https_enabled;
+
 #define CONFIG_SERVICE_EMONCMS      (1 << 0)
 #define CONFIG_SERVICE_MQTT         (1 << 1)
 #define CONFIG_SERVICE_SNTP         (1 << 3)
@@ -192,15 +195,17 @@ extern uint32_t flags;
 #define CONFIG_MQTT_NO_SYS_QUERY    (1 << 29)
 // TFT panel clock in 12-hour form. Clear (the default) keeps the 24-hour clock.
 #define CONFIG_TFT_12H_CLOCK        (1 << 30)
-// HTTP/HTTPS listener controls.
+// HTTP listener control. HTTPS is a plain bool (www_https_enabled) because
+// bit 31 below took the last free flag bit.
 //
 // Bit 2 is reclaimed from CONFIG_SERVICE_OHM, removed in a93fa8f2. An install
 // that had OhmConnect enabled therefore comes up with this bit set, which reads
-// as "HTTP enabled" -- the default anyway, so nothing changes for them. The
-// remaining free bits are 4-6 and 10-12, which belong to the CONFIG_MQTT_PROTOCOL
-// and CONFIG_CHARGE_MODE multi-bit fields, and 31.
+// as "HTTP enabled" -- the default anyway, so nothing changes for them.
 #define CONFIG_HTTP_ENABLED         (1UL << 2)
-#define CONFIG_HTTPS_ENABLED        (1UL << 31)
+// Inverted sense: bit SET ignores the NTP server offered by DHCP (option 42)
+// and always uses sntp_hostname. Clear - the default, and what every existing
+// install already has stored - prefers the DHCP one. Last free bit.
+#define CONFIG_SNTP_NO_DHCP         (1u << 31)
 
 #define INITIAL_CONFIG_VERSION  1
 
@@ -217,7 +222,7 @@ inline bool config_http_enabled() {
 }
 
 inline bool config_https_enabled() {
-  return CONFIG_HTTPS_ENABLED == (flags & CONFIG_HTTPS_ENABLED);
+  return www_https_enabled;
 }
 
 inline bool config_sntp_enabled() {
@@ -235,6 +240,10 @@ inline bool config_mqtt_retained() {
 // Query broker metadata via $SYS/broker/version. Must be off for managed
 // brokers (AWS IoT Core): they have no $SYS tree and answer an unauthorised
 // subscribe by closing the connection rather than failing the SUBACK.
+inline bool config_sntp_dhcp() {
+  return 0 == (flags & CONFIG_SNTP_NO_DHCP);
+}
+
 inline bool config_mqtt_sys_query() {
   return 0 == (flags & CONFIG_MQTT_NO_SYS_QUERY);
 }

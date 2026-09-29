@@ -30,8 +30,28 @@ explicit dependencies. Order matters:
 7. `energyLogger.begin()`, `mqtt.begin()`, `ocpp.begin()`, `shaper.begin()`, `tempThrottle.begin()`
 
 `loop()` drives: `Mongoose.poll(0)` (non-blocking network I/O),
-`MicroTask.update()` (cooperative task scheduler), the RAPI sender, EmonCMS
-publishing, and a 30-second Ohm Connect check.
+`MicroTask.update()` (cooperative task scheduler), the RAPI sender and EmonCMS
+publishing.
+
+## mDNS and peer discovery
+
+`NetManagerTask` starts ArduinoMongoose's `Mdns` listener after an interface is
+up. The same listener advertises `<hostname>.local`, `_http._tcp` and
+`_openevse._tcp`, resolves `.local` client destinations, and browses for peers.
+The OpenEVSE service retains its `type`, `version`, `id` and `ssl` TXT keys and
+the active HTTP/HTTPS port. Interface/reconnect and advertised configuration
+changes restart the listener and clear its address cache.
+
+`LoadSharingDiscoveryTask` uses `Mdns.browse()` and takes a `Mdns.services()`
+snapshot after its query window. Mongoose assembles DNS-SD responses and fetches
+missing records in the normal event loop; discovery does not wait on an IDF
+semaphore. The firmware uses the SRV target as the peer hostname, filters its
+own device ID, and prefers an IPv4 address on the local subnet.
+
+ArduinoOTA's built-in mDNS is disabled. When OTA is enabled on hardware,
+NetworkManager registers `_arduino._tcp:3232` and the Arduino IDE TXT fields on
+the shared listener. Native builds use the same Mongoose discovery path and
+do not link EpoxymDNS/Avahi or require a host mDNS daemon.
 
 ## EvseManager and the client/priority system
 
@@ -45,7 +65,7 @@ numeric priority (higher number = higher authority):
 | 50 | Divert |
 | 100 | Timer / Scheduler |
 | 200 | Boost |
-| 500 | API / MQTT / Ohm |
+| 500 | API / MQTT |
 | 1000 | Manual |
 | 1030 | RFID |
 | 1050 | OCPP |
@@ -125,7 +145,6 @@ unless `deserialize()` has marked the config modified.
 | `time_man.h/.cpp` | SNTP sync, POSIX timezone strings |
 | `certificates.h/.cpp` | SSL cert store under `/certificates/` on LittleFS |
 | `tesla_client.h/.cpp` | Tesla API (SOC, range, ETA) |
-| `ohm.h/.cpp` | Ohm Connect demand-response integration |
 
 ## Energy logging
 

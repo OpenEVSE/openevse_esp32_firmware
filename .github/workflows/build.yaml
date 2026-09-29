@@ -52,10 +52,10 @@ jobs:
         python -m pip install --upgrade pip
         pip install --upgrade platformio
 
-    - name: Install Avahi development libraries
+    - name: Install native development libraries
       run: |
         sudo apt-get update
-        sudo apt-get install -y libavahi-client-dev libavahi-common-dev libssl-dev
+        sudo apt-get install -y libssl-dev
 
     - name: Run native unit tests
       run: |
@@ -86,7 +86,17 @@ jobs:
     name: Build ${{ matrix.env }}
     runs-on: ubuntu-latest
 
+    permissions:
+      contents: read
+      id-token: write   # OIDC exchange for the ELF archive step below
+
     env:
+      # Dormant until the crash service is deployed and its secrets are set.
+      # Without this the first master push after merge fails the OIDC exchange
+      # on an empty role-to-assume, failing all 19 device builds and the
+      # release job that needs them. Same shape as SIGN_ENABLED below.
+      CRASH_ARCHIVE_ENABLED: ${{ secrets.CRASH_ELF_ROLE_ARN != '' && secrets.CRASH_BUCKET != '' && (vars.CRASH_AWS_REGION != '' || secrets.CRASH_AWS_REGION != '') }}
+
       # Environments whose Arduino core (core-3.x / pioarduino / IDF5) provides
       # the signed-update verifier. Signed OTA is only enforced on these; add
       # future core-3.x envs here. Older-core (4MB) envs cannot verify and are
@@ -164,7 +174,7 @@ jobs:
       if: matrix.env == 'native_openevse'
       run: |
         sudo apt-get update
-        sudo apt-get install -y libavahi-client-dev libavahi-common-dev libssl-dev
+        sudo apt-get install -y libssl-dev
 
     - name: Run PlatformIO
       id: pio_build
@@ -228,6 +238,40 @@ jobs:
         name: ${{ matrix.env }}.bin
         path: .pio/build/${{ matrix.env }}/*.bin
 
+    - name: Configure AWS credentials for the ELF archive
+      # Pushes to this repo only. A fork PR runs in the base repo, so
+      # `github.repository` is true there while secrets are empty -- gating on
+      # the event is what keeps a fork's build from failing on a missing secret.
+      if: ${{ env.CRASH_ARCHIVE_ENABLED == 'true' && github.event_name == 'push' && matrix.env != 'native_openevse' }}
+      continue-on-error: true
+      uses: aws-actions/configure-aws-credentials@v4
+      with:
+        role-to-assume: ${{ secrets.CRASH_ELF_ROLE_ARN }}
+        # A variable or a secret: the region is not sensitive, but a
+        # collaborator may only be able to create secrets.
+        aws-region: ${{ vars.CRASH_AWS_REGION || secrets.CRASH_AWS_REGION }}
+
+    - name: Archive firmware.elf under its own SHA-256
+      # Best-effort: a missing ELF archive costs a future backtrace, a failed
+      # release costs the release.
+      continue-on-error: true
+      # A crash backtrace is a list of addresses; the ELF is what names them.
+      # Keyed by the ELF's own hash, which the device reports as `elf_sha256`
+      # in /debug/crash and which is byte-identical to sha256sum of the ELF.
+      # No version string, so no escaping and no ambiguity between two builds
+      # that share a branch and commit but differ.
+      if: ${{ env.CRASH_ARCHIVE_ENABLED == 'true' && github.event_name == 'push' && matrix.env != 'native_openevse' }}
+      # As data, not script text: a branch named $(...) would otherwise run.
+      env:
+        REF_NAME: ${{ github.ref_name }}
+      run: |
+        set -euo pipefail
+        ELF=".pio/build/${{ matrix.env }}/firmware.elf"
+        SHA=$(sha256sum "$ELF" | cut -d' ' -f1)
+        echo "elf/$SHA.elf  <- ${{ matrix.env }}"
+        aws s3 cp "$ELF" "s3://${{ secrets.CRASH_BUCKET }}/elf/$SHA.elf" \
+          --metadata "buildenv=${{ matrix.env }},ref=$REF_NAME,sha=${{ github.sha }}"
+
     - name: Upload native output to GitHub
       if: matrix.env == 'native_openevse'
       uses: actions/upload-artifact@v7
@@ -262,7 +306,7 @@ jobs:
       # Best-effort: the base branch may not have a build with flash size
       # artifacts yet (e.g. right after this feature is added), so a miss
       # here just means the report shows sizes with no "change vs base".
-      uses: dawidd6/action-download-artifact@v6
+      uses: dawidd6/action-download-artifact@v25
       continue-on-error: true
       with:
         workflow: build.yaml
@@ -343,6 +387,15 @@ jobs:
           mv artifacts/$env.bin/bootloader.bin bootloader_$name.bin
           mv artifacts/$env.bin/partitions.bin partitions_$name.bin
         done
+
+    - name: Drop the _dev images from the release
+      # The _dev environments are for bench work, not for users: olimex_*_dev
+      # use min_spiffs_debug.csv, a single-slot layout that can never OTA
+      # again once flashed; openevse_wifi_tft_v1_dev drops ENABLE_TSDB and the
+      # larger SCHEDULER_MAX_EVENTS; and every _dev env carries
+      # ENABLE_FULL_RAPI, which passes any RAPI command through /r. They stay
+      # in the build matrix (and as workflow artifacts) so they keep compiling.
+      run: rm -f ./*_dev.bin
 
     - name: Build the 16MB migrator
       # The protected bootloader/partition-table commit OpenEVSE-4MB cannot do

@@ -11,15 +11,14 @@
 #ifdef ESP32
 #include <WiFi.h>
 #include <esp_wifi.h>
-#include <ESPmDNS.h>              // Resolve URL for update server etc.
 #elif defined(ESP8266)
 #include <ESP8266WiFi.h>
-#include <ESP8266mDNS.h>              // Resolve URL for update server etc.
 #else
 #error Platform not supported
 #endif
 
 #include <MongooseCore.h>
+#include <MongooseMdns.h>
 
 #include <DNSServer.h>                // Required for captive portal
 
@@ -30,6 +29,40 @@
 #ifdef ESP32
 #include "wifi_esp32.h"
 #endif
+
+// DHCP option 42 (NTP servers). lwIP parses it on every build we ship
+// (CONFIG_LWIP_DHCP_GET_NTP_SRV=y in both the core-2 and core-3 prebuilt
+// sdkconfigs) but only records it once esp_sntp_servermode_dhcp() has been
+// called; it then lands in lwIP's SNTP server slot 0, which we read back and
+// hand to our own (Mongoose) client - lwIP's SNTP app itself is never started.
+#if defined(ESP32) && !defined(EPOXY_DUINO)
+#include <esp_sntp.h>
+#define HAVE_DHCP_NTP LWIP_DHCP_GET_NTP_SRV
+#else
+#define HAVE_DHCP_NTP 0
+#endif
+
+static void netEnableDhcpNtp()
+{
+#if HAVE_DHCP_NTP
+  // Needs the TCP/IP stack up (it runs on the lwIP thread) and must precede
+  // the first DHCP exchange, so the interface START events are the spot
+  esp_sntp_servermode_dhcp(true);
+#endif
+}
+
+static String netDhcpNtpServer()
+{
+#if HAVE_DHCP_NTP
+  const ip_addr_t *server = esp_sntp_getserver(0);
+  if(server && !ip_addr_isany(server) && IP_IS_V4(server)) {
+    char buf[16];
+    ip4addr_ntoa_r(ip_2_ip4(server), buf, sizeof(buf));
+    return String(buf);
+  }
+#endif
+  return String("");
+}
 
 #ifndef WIRED_CONNECT_TIMEOUT
 #define WIRED_CONNECT_TIMEOUT (15 * 1000)
@@ -59,6 +92,7 @@ NetManagerTask::NetManagerTask(LcdTask &lcd, LedManagerTask &led, TimeManager &t
   _wifiButtonState(!WIFI_BUTTON_PRESSED_STATE),
   _wifiButtonTimeOut(millis()),
   _apMessage(false),
+  _ipConfigChanged(false),
   #ifdef ENABLE_WIRED_ETHERNET
   _ethConnected(false),
   #endif
@@ -236,11 +270,13 @@ void NetManagerTask::haveNetworkConnection(IPAddress myAddress, IPAddress netmas
 
   displayState();
 
-  Mongoose.ipConfigChanged();
+  _ipConfigChanged = true;  // Applied from loop(), see net_manager.h
+  _mdnsConfig = "";  // Rejoin multicast after DHCP/reconnect, even on the same IP.
 
   _led.setWifiMode(true, true);
   _lcd.setWifiMode(true, true);
   _time.setHost(sntp_hostname.c_str());
+  _time.setDhcpServer(netDhcpNtpServer().c_str());
   // Apply the persisted SNTP-enable to the running TimeManager. Its _sntpEnabled
   // starts false and is otherwise only updated by a runtime config change, so
   // without this a cold boot leaves NTP disabled even when the config has it on
@@ -427,6 +463,7 @@ void NetManagerTask::onNetEvent(WiFiEvent_t event, arduino_event_info_t &info)
 
     case ARDUINO_EVENT_WIFI_STA_START:
     {
+      netEnableDhcpNtp();
       if(WiFi.setHostname(esp_hostname.c_str())) {
         DBUGF("Set host name to %s", WiFi.getHostname());
       } else {
@@ -531,6 +568,7 @@ void NetManagerTask::onNetEvent(WiFiEvent_t event, arduino_event_info_t &info)
 #ifdef ENABLE_WIRED_ETHERNET
     case ARDUINO_EVENT_ETH_START:
       DBUGF("ETH Started, link %s", ETH.linkUp() ? "up" : "down");
+      netEnableDhcpNtp();
       if(ETH.linkUp())
       {
         //set eth hostname here
@@ -625,16 +663,48 @@ void NetManagerTask::setup()
   // Initially startup the netwrok to kick things off
   manageState();
 
-  if (MDNS.begin(esp_hostname.c_str()))
-  {
-    bool ssl = config_https_active();
-    uint16_t svcPort = ssl ? www_https_port : www_http_port;
-    MDNS.addService("http", "tcp", svcPort);
-    MDNS.addService("openevse", "tcp", svcPort);
-    MDNS.addServiceTxt("openevse", "tcp", "type", buildenv.c_str());
-    MDNS.addServiceTxt("openevse", "tcp", "version", currentfirmware.c_str());
-    MDNS.addServiceTxt("openevse", "tcp", "id", ESPAL.getLongId());
-    MDNS.addServiceTxt("openevse", "tcp", "ssl", ssl ? "1" : "0");
+  updateMdns();
+}
+
+void NetManagerTask::updateMdns()
+{
+  if (!isConnected() && !isWifiModeAp()) {
+    Mdns.end();
+    _mdnsConfig = "";
+    return;
+  }
+
+  bool ssl = config_https_active();
+  uint16_t port = ssl ? www_https_port : www_http_port;
+  String signature = esp_hostname + ":" + _ipaddress + ":" + String(port) +
+                     (ssl ? ":ssl" : ":http") + (isWifiModeAp() ? ":ap" : "");
+  if (Mdns.isActive() && signature == _mdnsConfig) return;
+
+  // One Mongoose listener handles hostname resolution, advertising and browsing.
+  // Start only once an interface is up; begin() also clears stale address caches.
+  if (Mdns.begin(esp_hostname.c_str()) &&
+      Mdns.addService("_http._tcp", port) &&
+      Mdns.addService("_openevse._tcp", port) &&
+      Mdns.addServiceTxt("_openevse._tcp", "type", buildenv.c_str()) &&
+      Mdns.addServiceTxt("_openevse._tcp", "version", currentfirmware.c_str()) &&
+      Mdns.addServiceTxt("_openevse._tcp", "id", ESPAL.getLongId().c_str()) &&
+      Mdns.addServiceTxt("_openevse._tcp", "ssl", ssl ? "1" : "0")) {
+#if defined(ENABLE_OTA) && !defined(EPOXY_DUINO)
+    // Match ArduinoOTA's discovery contract without starting its IDF responder.
+    if (!Mdns.addService("_arduino._tcp", 3232) ||
+        !Mdns.addServiceTxt("_arduino._tcp", "board", ARDUINO_VARIANT) ||
+        !Mdns.addServiceTxt("_arduino._tcp", "tcp_check", "no") ||
+        !Mdns.addServiceTxt("_arduino._tcp", "ssh_upload", "no") ||
+        !Mdns.addServiceTxt("_arduino._tcp", "auth_upload", "no")) {
+      Mdns.end();
+      DBUGLN("Failed to advertise Arduino OTA");
+      return;
+    }
+#endif
+    _mdnsConfig = signature;
+  } else {
+    Mdns.end();
+    DBUGLN("Failed to start mDNS services");
   }
 }
 
@@ -816,6 +886,12 @@ unsigned long NetManagerTask::loop(MicroTasks::WakeReason reason)
   nextLoopDelay = min(serviceButton(), nextLoopDelay);
 
   nextLoopDelay = min(manageState(), nextLoopDelay);
+
+  if (_ipConfigChanged) {
+    _ipConfigChanged = false;
+    Mongoose.ipConfigChanged();
+  }
+  updateMdns();
 
   if(_dnsServerStarted) {
     _dnsServer.processNextRequest(); // Captive portal DNS re-dierct

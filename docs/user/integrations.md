@@ -1,4 +1,4 @@
-# Integrations — MQTT, Home Assistant, EmonCMS, OhmConnect
+# Integrations — MQTT, Home Assistant, EmonCMS
 
 ## MQTT
 
@@ -37,13 +37,6 @@ or a self-hosted EmonCMS/emonPi (HTTP or HTTPS) — long-term, full-resolution
 energy logging and dashboards.
 
 ![EmonCMS settings](screenshots/settings-emoncms-dark-desktop.png)
-
-## OhmConnect
-
-For OhmConnect participants (California): the charger checks your Ohm Hour
-status every 30 seconds and pauses charging during demand-response events.
-
-![OhmConnect settings](screenshots/settings-ohmconnect-dark-desktop.png)
 
 ## Plain HTTP
 

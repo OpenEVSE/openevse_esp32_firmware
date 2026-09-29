@@ -19,6 +19,7 @@ typedef uint32_t EvseClient;
 #define EvseClient_Vendor_OpenEVSE            0x0001
 #define EvseClient_Vendor_OpenEnergyMonitor   0x0002
 #define EvseClient_Vendor_BigJungle           0x0003
+#define EvseClient_Vendor_evcc                0x0004
 
 #define EvseClient_Vendor_Unregistered        0xFFFE
 #define EvseClient_Vendor_Reserved            0xFFFF
@@ -39,6 +40,10 @@ typedef uint32_t EvseClient;
 #define EvseClient_OpenEVSE_LoadSharing       EVC(EvseClient_Vendor_OpenEVSE, 0x000E)
 
 #define EvseClient_OpenEnergyMonitor_DemandShaper EVC(EvseClient_Vendor_OpenEnergyMonitor, 0x0001)
+
+// evcc (https://github.com/evcc-io/evcc) via github.com/OpenEVSE/go-openevse:
+// 262145, the default client id its driver claims with.
+#define EvseClient_evcc                       EVC(EvseClient_Vendor_evcc, 0x0001)
 
 #define EvseClient_NULL                       ((EvseClient)UINT32_MAX)
 

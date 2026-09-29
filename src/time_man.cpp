@@ -31,9 +31,44 @@ TimeManager::TimeManager() :
   _fetchingTime(false),
   _setTheTime(false),
   _lastSyncTime(0),
-  _syncRequested(false)
+  _syncRequested(false),
+  _dhcpEnabled(true),
+  _dhcpFailedOver(false),
+  _activeHost(NULL)
 {
   _resolvedIp[0] = '\0';
+  _dhcpHost[0] = '\0';
+}
+
+const char *TimeManager::pickHost()
+{
+  if(_dhcpEnabled && _dhcpHost[0] != '\0' && !_dhcpFailedOver) {
+    return _dhcpHost;
+  }
+  return _timeHost;
+}
+
+void TimeManager::fetchFailed()
+{
+  _fetchingTime = false;
+  if(_activeHost == _dhcpHost && _retryCount + 1 >= SNTP_DHCP_FALLBACK_AFTER)
+  {
+    // The DHCP-supplied server isn't answering: switch to the configured
+    // host straight away for the rest of this cycle. The next scheduled poll
+    // (or a config change) goes back to trying DHCP first.
+    DBUGF("NTP: DHCP server %s not answering, falling back to %s", _dhcpHost, _timeHost ? _timeHost : "(none)");
+    _dhcpFailedOver = true;
+    _retryCount++;
+    _nextCheckTime = millis();
+    _resolvedIp[0] = '\0';   // the DNS badge now describes the configured host
+  }
+  else
+  {
+    unsigned long delay = retryDelay();
+    _retryCount++;
+    _nextCheckTime = millis() + delay;
+  }
+  MicroTask.wakeTask(this);
 }
 
 unsigned long TimeManager::retryDelay()
@@ -100,6 +135,38 @@ void TimeManager::setHost(const char *host)
   MicroTask.wakeTask(this);
 }
 
+void TimeManager::setDhcpServer(const char *ip)
+{
+  if(NULL == ip) {
+    ip = "";
+  }
+  if(0 == strcmp(ip, _dhcpHost)) {
+    return;
+  }
+  strncpy(_dhcpHost, ip, sizeof(_dhcpHost) - 1);
+  _dhcpHost[sizeof(_dhcpHost) - 1] = '\0';
+  DBUGF("NTP server from DHCP: %s", _dhcpHost[0] ? _dhcpHost : "(none)");
+  _dhcpFailedOver = false;
+  // A lease can change the server after boot; resync unless a fetch is
+  // already underway (that one finishes against the old host)
+  if(_sntpEnabled && !_fetchingTime) {
+    _nextCheckTime = millis() + 2000;
+    MicroTask.wakeTask(this);
+  }
+}
+
+void TimeManager::setDhcpEnabled(bool enabled)
+{
+  if(enabled != _dhcpEnabled)
+  {
+    _dhcpEnabled = enabled;
+    _dhcpFailedOver = false;
+    if(_sntpEnabled) {
+      checkNow();
+    }
+  }
+}
+
 bool TimeManager::setTimeZone(String tz)
 {
   const char *set_tz = tz.c_str();
@@ -156,10 +223,7 @@ void TimeManager::setup()
     } else {
       takeResolvedIp();
     }
-    unsigned long delay = retryDelay();
-    _retryCount++;
-    _nextCheckTime = millis() + delay;
-    MicroTask.wakeTask(this);
+    fetchFailed();
   });
 }
 
@@ -227,10 +291,7 @@ unsigned long TimeManager::loop(MicroTasks::WakeReason reason)
     if(elapsed >= SNTP_FETCH_TIMEOUT)
     {
       DBUGF("NTP fetch timed out after %lums", elapsed);
-      _fetchingTime = false;
-      unsigned long delay = retryDelay();
-      _retryCount++;
-      _nextCheckTime = millis() + delay;
+      fetchFailed();
       // fall through to the scheduling block below
     }
     else
@@ -259,14 +320,16 @@ unsigned long TimeManager::loop(MicroTasks::WakeReason reason)
       _fetchingTime  = true;
       _fetchStartTime = millis();
       _nextCheckTime = 0;
+      _activeHost = pickHost();
 
-      DBUGF("Trying to get time from %s", _timeHost);
-      bool started = _sntp.getTime(_timeHost, [this](struct timeval newTime)
+      DBUGF("Trying to get time from %s (%s)", _activeHost, _activeHost == _dhcpHost ? "DHCP" : "configured");
+      bool started = _sntp.getTime(_activeHost, [this](struct timeval newTime)
       {
-        setTime(newTime, _timeHost);
+        setTime(newTime, _activeHost);
 
         _fetchingTime  = false;
         _retryCount    = 0;
+        _dhcpFailedOver = false;           // next poll tries the DHCP server again
         _lastSyncTime  = newTime.tv_sec;   // use NTP ts directly
         _nextCheckTime = millis() + TIME_POLL_TIME;
         // The address the reply actually came from, which is what the status
@@ -294,11 +357,8 @@ unsigned long TimeManager::loop(MicroTasks::WakeReason reason)
         // UI will show no DNS badge.  Increment _retryCount so status shows
         // "retry" rather than falsely maintaining "synchronized".
         DBUGLN("NTP: getTime() could not start (stale connection?), treating as failure");
-        _fetchingTime = false;
-        unsigned long delay = retryDelay();
-        _retryCount++;
-        _nextCheckTime = millis() + delay;
-        ret = delay;
+        fetchFailed();
+        ret = 0;
       }
     } else {
       ret = delay > 0 ? (unsigned long)delay : 0;

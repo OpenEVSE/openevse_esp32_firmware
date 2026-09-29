@@ -61,6 +61,7 @@ String lang;
 String www_username;
 String www_password;
 String www_certificate_id;
+bool www_https_enabled;
 
 // Session HMAC key — generated on first load, rotated on credential change.
 String server_secret;
@@ -238,6 +239,7 @@ ConfigOpt *opts[] =
   new ConfigOptDefinition<String>(www_username, "", "www_username", "au"),
   new ConfigOptSecret(www_password, "", "www_password", "ap"),
   new ConfigOptDefinition<String>(www_certificate_id, "", "www_certificate_id", "wc"),
+  new ConfigOptDefinition<bool>(www_https_enabled, false, "www_https_enabled", "wse"),
   new ConfigOptSecret(server_secret, "", "server_secret", "wsk"),
 
 // Web server ports
@@ -376,6 +378,7 @@ ConfigOpt *opts[] =
   new ConfigOptVirtualMaskedBool(flagsOpt, flagsChanged, CONFIG_MQTT_RETAINED, CONFIG_MQTT_RETAINED, "mqtt_retained", "mrt"),
   new ConfigOptVirtualMaskedBool(flagsOpt, flagsChanged, CONFIG_MQTT_NO_SYS_QUERY, 0, "mqtt_sys_query", "msq"),
   new ConfigOptVirtualMaskedBool(flagsOpt, flagsChanged, CONFIG_SERVICE_SNTP, CONFIG_SERVICE_SNTP, "sntp_enabled", "se"),
+  new ConfigOptVirtualMaskedBool(flagsOpt, flagsChanged, CONFIG_SNTP_NO_DHCP, 0, "sntp_dhcp", "sd"),
   new ConfigOptVirtualMaskedBool(flagsOpt, flagsChanged, CONFIG_SERVICE_TESLA, CONFIG_SERVICE_TESLA, "tesla_enabled", "te"),
   new ConfigOptVirtualMaskedBool(flagsOpt, flagsChanged, CONFIG_SERVICE_DIVERT, CONFIG_SERVICE_DIVERT, "divert_enabled", "de"),
   new ConfigOptVirtualMaskedBool(flagsOpt, flagsChanged, CONFIG_SERVICE_CUR_SHAPER, CONFIG_SERVICE_CUR_SHAPER, "current_shaper_enabled", "cse"),
@@ -395,7 +398,6 @@ ConfigOpt *opts[] =
   new ConfigOptVirtualMaskedBool(flagsOpt, flagsChanged, CONFIG_LCD_NETWORK_INFO, CONFIG_LCD_NETWORK_INFO, "lcd_network_info", "lni"),
   new ConfigOptVirtualMaskedBool(flagsOpt, flagsChanged, CONFIG_TFT_12H_CLOCK, CONFIG_TFT_12H_CLOCK, "tft_12h_clock", "t12"),
   new ConfigOptVirtualMaskedBool(flagsOpt, flagsChanged, CONFIG_HTTP_ENABLED, CONFIG_HTTP_ENABLED, "www_http_enabled", "whe"),
-  new ConfigOptVirtualMaskedBool(flagsOpt, flagsChanged, CONFIG_HTTPS_ENABLED, CONFIG_HTTPS_ENABLED, "www_https_enabled", "wse"),
   new ConfigOptVirtualMqttProtocol(flagsOpt, flagsChanged, "mqtt_protocol", "mprt"),
   new ConfigOptVirtualChargeMode(flagsOpt, flagsChanged, "charge_mode", "chmd")
 };
@@ -525,6 +527,7 @@ void config_changed(String name)
       emoncms_updated = true;
     }
     timeManager.setSntpEnabled(config_sntp_enabled());
+    timeManager.setDhcpEnabled(config_sntp_dhcp());
     OcppTask::notifyConfigChanged();
     evse.setSleepForDisable(!config_pause_uses_disabled());
   } else if(name.startsWith("mqtt_")) {
@@ -557,6 +560,8 @@ void config_changed(String name)
     limit.setDefaultLimit(limit_default_type.c_str(), limit_default_value);
   } else if(name == "sntp_enabled") {
     timeManager.setSntpEnabled(config_sntp_enabled());
+  } else if(name == "sntp_dhcp") {
+    timeManager.setDhcpEnabled(config_sntp_dhcp());
   } else if(name == "sntp_hostname") {
     timeManager.setHost(sntp_hostname.c_str());
   }
