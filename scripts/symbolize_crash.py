@@ -35,7 +35,6 @@ def build_request(summary, config):
         'running_version': config.get('version', ''),
         # The board, which an OTA update does not change.
         'buildenv': config.get('buildenv', ''),
-        'chip_id': config.get('chip_id', 'unknown'),
         'summary': summary,
     }
 

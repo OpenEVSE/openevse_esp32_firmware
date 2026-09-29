@@ -47,3 +47,11 @@ def test_every_network_read_has_a_timeout(monkeypatch, tmp_path):
     assert symbolize_crash.main([str(summary), '--endpoint', 'https://x/v1/reports',
                                  '--host', '10.0.0.1']) == 0
     assert len(timeouts) == 2 and all(timeouts)
+
+
+def test_no_hardware_identifier_is_sent():
+    # The chip id is MAC-derived: personal data, and a hash of it brute-forces
+    # back. The broker drops it anyway; it should not leave this machine.
+    req = build_request(SUMMARY, {'chip_id': 'DEADBEEF01', 'wifi_serial': '3076F5EC2760'})
+    assert 'chip_id' not in req
+    assert '3076F5EC2760' not in str(req) and 'DEADBEEF01' not in str(req)
