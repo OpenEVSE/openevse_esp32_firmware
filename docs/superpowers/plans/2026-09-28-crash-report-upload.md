@@ -69,7 +69,7 @@ Input classes the spec implies that no task's tests exercise by default. Each ha
 
 ## File Structure
 
-**Service — `/home/rar/oevse/openevse-crash-service`** (repo `git@github.com:RAR/openevse-crash-service.git`, branch off `main`)
+**Service — `/home/rar/oevse/openevse-crash-service`** (repo `git@github.com:OpenEVSE/openevse-crash-service.git`, branch off `main`)
 
 | File | Responsibility |
 |---|---|
