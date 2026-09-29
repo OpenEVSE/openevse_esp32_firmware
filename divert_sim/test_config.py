@@ -30,6 +30,8 @@ def test_config_defaults_present():
     assert cfg["sntp_enabled"] is True
     assert cfg["www_http_enabled"] is True
     assert cfg["www_https_enabled"] is False
+    assert cfg["sntp_hostname"] == "time.cloudflare.com"
+    assert cfg["sntp_dhcp"] is True
 
 
 def test_config_round_trip_commit_and_load():

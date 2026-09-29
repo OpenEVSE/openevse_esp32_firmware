@@ -214,7 +214,7 @@ def get_native_binary_path() -> Path:
 
     raise FileNotFoundError(
         "Native firmware binary not found. Set NATIVE_BINARY_PATH or run "
-        "'pio run -e native' to build locally."
+        "'pio run -e native_openevse' to build locally."
     )
 
 

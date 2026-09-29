@@ -238,7 +238,7 @@ Test results are published to the PR via `EnricoMi/publish-unit-test-result-acti
 | "Docker not available" | Docker daemon not running | `sudo systemctl start docker` or ensure Docker Desktop is running |
 | "PTY permission denied" | /tmp permissions too restrictive | `chmod 777 /tmp` or run tests with appropriate permissions |
 | "Peer discovery times out" | Multicast blocked or duplicate hostnames | Allow UDP 5353 and use unique per-instance hostnames/device IDs |
-| "Binary not found" | Native firmware not built | `pio run -e native` from ESP32_WiFi_V3.x root |
+| "Binary not found" | Native firmware not built | `pio run -e native_openevse` from ESP32_WiFi_V3.x root |
 
 ## Expected Test Results
 

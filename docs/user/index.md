@@ -20,12 +20,13 @@ UI — if your unit looks different, check
 ## Energy features
 
 - [Solar divert (Eco mode)](solar-divert.md) — charge from your solar excess
-- [Load shaper](load-shaper.md) — stay under your grid connection's limit,
-  plus the Labs preview of load sharing between chargers
+- [Load shaper](load-shaper.md) — stay under your grid connection's limit
+- [Load sharing](load-sharing.md) — split one supply between several chargers
+  (Labs preview)
 
 ## Integrations & access control
 
-- [MQTT, Home Assistant, EmonCMS, OhmConnect](integrations.md)
+- [MQTT, Home Assistant, EmonCMS](integrations.md)
 - [OCPP](ocpp.md) — connect to a charge-point management system
 - [RFID](rfid.md) — card-based authorisation
 - [Vehicle](vehicle.md) — state of charge and range from your car

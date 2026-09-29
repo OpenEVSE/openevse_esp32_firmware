@@ -10,8 +10,7 @@ references: [docs/developer/architecture.md](docs/developer/architecture.md),
 ESP32 WiFi gateway firmware for OpenEVSE charging stations. It talks RAPI
 (serial) to an ATmega/SAMD controller and provides the web UI, HTTP/WebSocket
 API, MQTT, solar divert, OCPP 1.6, scheduling, and energy logging. The web UI
-is the **`gui-nightshift` git submodule** (Svelte 5) — `gui-v2` is the legacy
-UI, only used if explicitly selected.
+is the **`gui-nightshift` git submodule** (Svelte 5).
 
 ## Bootstrap and build
 

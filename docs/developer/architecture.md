@@ -30,8 +30,8 @@ explicit dependencies. Order matters:
 7. `energyLogger.begin()`, `mqtt.begin()`, `ocpp.begin()`, `shaper.begin()`, `tempThrottle.begin()`
 
 `loop()` drives: `Mongoose.poll(0)` (non-blocking network I/O),
-`MicroTask.update()` (cooperative task scheduler), the RAPI sender, EmonCMS
-publishing, and a 30-second Ohm Connect check.
+`MicroTask.update()` (cooperative task scheduler), the RAPI sender and EmonCMS
+publishing.
 
 ## mDNS and peer discovery
 
@@ -65,7 +65,7 @@ numeric priority (higher number = higher authority):
 | 50 | Divert |
 | 100 | Timer / Scheduler |
 | 200 | Boost |
-| 500 | API / MQTT / Ohm |
+| 500 | API / MQTT |
 | 1000 | Manual |
 | 1030 | RFID |
 | 1050 | OCPP |
@@ -145,7 +145,6 @@ unless `deserialize()` has marked the config modified.
 | `time_man.h/.cpp` | SNTP sync, POSIX timezone strings |
 | `certificates.h/.cpp` | SSL cert store under `/certificates/` on LittleFS |
 | `tesla_client.h/.cpp` | Tesla API (SOC, range, ETA) |
-| `ohm.h/.cpp` | Ohm Connect demand-response integration |
 
 ## Energy logging
 
