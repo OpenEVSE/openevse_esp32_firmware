@@ -1,0 +1,39 @@
+{
+  "meta": {
+    "id": "loadsharing_3peer_staggered",
+    "title": "Load Sharing 3 Peer Staggered",
+    "category": "loadsharing",
+    "profile": "default",
+    "description": [
+      "Three-EVSE case where vehicles connect at different times.",
+      "The first EVSE starts alone, then allocation is redistributed as the second and third vehicles arrive. The chart should show each new participant taking a fair share without exceeding the shared supply.",
+      "Group setup: 3 peers, 11,520 W shared supply, safety factor 1.0. Failsafe mode: safe_current.",
+      "Duration: 20 minutes."
+    ]
+  },
+  "group": {
+    "safety_factor": 1.0,
+    "failsafe_mode": "safe_current",
+    "failsafe_peer_assumed_current": 6.0
+  },
+  "simulation": {
+    "duration": 1200,
+    "tick_interval": 1,
+    "nominal_voltage": 240
+  },
+  "supply": {
+    "max_pwr": 11520,
+    "live_pwr": 0
+  },
+  "peers": [
+    {"id": "evse-001", "min_current": 6, "max_current": 32, "voltage": 240, "priority": 0,
+      "ev": {"battery_capacity_kwh": 75, "initial_soc": 30, "max_charge_rate_kw": 7.2},
+      "initial": {"online": true, "vehicle": true}, "events": []},
+    {"id": "evse-002", "min_current": 6, "max_current": 32, "voltage": 240, "priority": 0,
+      "ev": {"battery_capacity_kwh": 75, "initial_soc": 45, "max_charge_rate_kw": 7.2},
+      "initial": {"online": true, "vehicle": false}, "events": [{"time": 300, "vehicle": true}]},
+    {"id": "evse-003", "min_current": 6, "max_current": 32, "voltage": 240, "priority": 0,
+      "ev": {"battery_capacity_kwh": 75, "initial_soc": 55, "max_charge_rate_kw": 7.2},
+      "initial": {"online": true, "vehicle": false}, "events": [{"time": 600, "vehicle": true}]}
+  ]
+}

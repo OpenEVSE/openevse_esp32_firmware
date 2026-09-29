@@ -21,7 +21,11 @@ cleanup() {
 trap cleanup INT TERM EXIT
 
 echo "Starting serial bridge: ${EMULATOR_HOST}:${EMULATOR_PORT} -> ${RAPI_PTY_PATH}"
-socat -d -d \
+# No -d: socat prints fatal/error/warning by default, which keeps the useful
+# diagnostics (a refused connection to the emulator, say). -d -d adds notice
+# level, which logs a line per write — two per RAPI poll, forever — and buries
+# the firmware's own console.
+socat \
   PTY,link="${RAPI_PTY_PATH}",raw,echo=0,waitslave \
   TCP:"${EMULATOR_HOST}:${EMULATOR_PORT}" &
 SOCAT_PID=$!

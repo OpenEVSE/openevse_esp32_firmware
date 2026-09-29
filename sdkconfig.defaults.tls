@@ -1,0 +1,47 @@
+#
+# mbedTLS overlay — layered ON TOP of sdkconfig.defaults for the envs that
+# select it via `board_build.cmake_extra_args = -DSDKCONFIG_DEFAULTS=...`
+# in platformio.ini (currently openevse_wifi_tft_v1 and its _dev sibling).
+#
+# SEEDED FROM: nothing — these are project deltas against the values already
+# present in sdkconfig.defaults, which came from
+# framework-arduinoespressif32-libs 5.5.4+sha.735507283d (ESP-IDF 5.5.4).
+#
+# WHY: the no-PSRAM TFT board runs out of contiguous heap when a TLS session
+# (MQTTS / HTTPS OTA) allocates its static in/out record buffers. IDF's
+# CONFIG_MBEDTLS_DYNAMIC_BUFFER makes mbedtls allocate and free those buffers
+# around each record instead, but the option only works if mbedtls is compiled
+# from source: the component's CMakeLists emits the `-Wl,--wrap=mbedtls_ssl_*`
+# link flags that redirect the callers to the dynamic-buffer shims. The
+# prebuilt Arduino-libs path cannot do that, which is why this fork previously
+# carried 12 hand-written `-Wl,--wrap` flags that pioarduino dropped.
+#
+# HAZARD: editing this file does NOT by itself trigger a cmake reconfigure —
+# PlatformIO only stats sdkconfig.defaults. Delete the generated
+# sdkconfig.<env> (e.g. sdkconfig.openevse_wifi_tft_v1) after any change here.
+#
+
+# DTLS is unused (no datagram TLS anywhere in this firmware) and its record
+# handling is what forces the static buffers; turning it off is a prerequisite
+# for the dynamic-buffer path and saves code space.
+# CONFIG_MBEDTLS_SSL_PROTO_DTLS is not set
+
+# The point of the exercise: per-record alloc/free of the TLS I/O buffers.
+CONFIG_MBEDTLS_DYNAMIC_BUFFER=y
+
+# Free the mbedtls_ssl_config certificate/key material once the handshake has
+# consumed it.
+CONFIG_MBEDTLS_DYNAMIC_FREE_CONFIG_DATA=y
+
+# We never inspect the peer certificate after the handshake, so do not keep a
+# copy of it for the life of the session.
+# CONFIG_MBEDTLS_SSL_KEEP_PEER_CERTIFICATE is not set
+
+# Asymmetric record sizes. IN stays at the TLS maximum 16384 because HTTPS OTA
+# servers legitimately send full-size records and a smaller inbound buffer
+# breaks the download. OUT drops to 4096 — this firmware never sends a record
+# anywhere near 16K (MQTT publishes and HTTP requests are small) — which is
+# where most of the RAM saving comes from.
+CONFIG_MBEDTLS_ASYMMETRIC_CONTENT_LEN=y
+CONFIG_MBEDTLS_SSL_IN_CONTENT_LEN=16384
+CONFIG_MBEDTLS_SSL_OUT_CONTENT_LEN=4096

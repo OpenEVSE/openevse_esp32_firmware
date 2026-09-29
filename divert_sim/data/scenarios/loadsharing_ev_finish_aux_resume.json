@@ -1,0 +1,50 @@
+{
+  "meta": {
+    "id": "loadsharing_ev_finish_aux_resume",
+    "title": "Load Sharing EV Finish And Aux Resume",
+    "category": "loadsharing",
+    "profile": "default",
+    "description": [
+      "EV1 starts near full and tapers to completion while EV2 continues charging.",
+      "After EV1 has stopped drawing current and returned to connected, it requests a small auxiliary load while still plugged in."
+    ]
+  },
+  "group": {
+    "safety_factor": 1.0,
+    "failsafe_mode": "safe_current",
+    "failsafe_peer_assumed_current": 6.0
+  },
+  "simulation": {
+    "duration": 2400,
+    "tick_interval": 1,
+    "nominal_voltage": 240
+  },
+  "supply": {
+    "max_pwr": 7680,
+    "live_pwr": 0
+  },
+  "peers": [
+    {
+      "id": "evse-001",
+      "min_current": 6,
+      "max_current": 32,
+      "voltage": 240,
+      "priority": 0,
+      "ev": {"battery_capacity_kwh": 4, "initial_soc": 99, "max_charge_rate_kw": 7.2},
+      "initial": {"online": true, "vehicle": true},
+      "events": [
+        {"time": 1800, "request_current": true, "aux_load_kw": 2.0}
+      ]
+    },
+    {
+      "id": "evse-002",
+      "min_current": 6,
+      "max_current": 32,
+      "voltage": 240,
+      "priority": 0,
+      "ev": {"battery_capacity_kwh": 75, "initial_soc": 35, "max_charge_rate_kw": 7.2},
+      "initial": {"online": true, "vehicle": true},
+      "events": []
+    }
+  ]
+}

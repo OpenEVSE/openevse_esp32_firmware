@@ -20,7 +20,7 @@
 #define EEPROM_EMON_FINGERPRINT_SIZE  60
 #define EEPROM_WWW_USER_SIZE          15
 #define EEPROM_WWW_PASS_SIZE          15
-#define EEPROM_OHM_KEY_SIZE           10
+#define EEPROM_OHM_KEY_SIZE           10  // retired (OhmConnect); offset retained
 #define EEPROM_FLAGS_SIZE             4
 #define EEPROM_HOSTNAME_SIZE          32
 #define EEPROM_MQTT_PORT_SIZE         4
@@ -54,6 +54,8 @@
 #define EEPROM_WWW_USER_END           (EEPROM_WWW_USER_START + EEPROM_WWW_USER_SIZE)
 #define EEPROM_WWW_PASS_START         EEPROM_WWW_USER_END
 #define EEPROM_WWW_PASS_END           (EEPROM_WWW_PASS_START + EEPROM_WWW_PASS_SIZE)
+// The OhmConnect key is no longer read, but every field after it is placed
+// relative to this gap -- keep the arithmetic so v1 configs still import.
 #define EEPROM_OHM_KEY_START          EEPROM_WWW_PASS_END
 #define EEPROM_OHM_KEY_END            (EEPROM_OHM_KEY_START + EEPROM_OHM_KEY_SIZE)
 #define EEPROM_FLAGS_START            EEPROM_OHM_KEY_END
@@ -171,9 +173,6 @@ config_load_v1_settings() {
                      www_username);
   EEPROM_read_string(EEPROM_WWW_PASS_START, EEPROM_WWW_PASS_SIZE,
                      www_password);
-
-  // Ohm Connect Settings
-  EEPROM_read_string(EEPROM_OHM_KEY_START, EEPROM_OHM_KEY_SIZE, ohm);
 
   // Flags
   EEPROM_read_uint24(EEPROM_FLAGS_START, flags);

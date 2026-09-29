@@ -8,8 +8,30 @@
 
 #include "emonesp.h"
 #include "certificates.h"
+#include "fs_util.h"
 #include "root_ca.h"
 #include "certificate_validator.h"
+
+bool certificate_id_from_string(const char *str, uint64_t &id)
+{
+  if(NULL == str || '\0' == *str) {
+    return false;
+  }
+
+  // A 64-bit id is at most 16 hex digits; longer cannot be valid.
+  if(strlen(str) > 16) {
+    return false;
+  }
+
+  for(const char *c = str; '\0' != *c; c++) {
+    if(!isxdigit((unsigned char)*c)) {
+      return false;
+    }
+  }
+
+  id = strtoull(str, nullptr, 16);
+  return true;
+}
 
 bool CertificateStore::Certificate::deserialize(JsonObject &obj)
 {
@@ -39,7 +61,11 @@ bool CertificateStore::Certificate::deserialize(JsonObject &obj)
 
   _cert = cert;
   if(obj.containsKey("id")) {
-    _id = std::stoull(obj["id"].as<std::string>(), nullptr, 16);
+    std::string id_str = obj["id"].as<std::string>();
+    if(!certificate_id_from_string(id_str.c_str(), _id)) {
+      DBUGF("Invalid certificate id '%s'", id_str.c_str());
+      return false;
+    }
   } else {
     _id = result.serial;
   }
@@ -117,32 +143,36 @@ const char *CertificateStore::getRootCa()
   return _root_ca;
 }
 
+/**
+ * Validate and store a client certificate using its serial as the store ID.
+ * @param name Display name stored with the certificate.
+ * @param certificate PEM certificate passed to the shared validation path.
+ * @param key PEM private key passed to the shared validation path.
+ * @param id Optional output for the validated certificate serial.
+ * @return True when the certificate is added and saved; false on rejection or failure.
+ */
 bool CertificateStore::addCertificate(const char *name, const char *certificate, const char *key, uint64_t *id)
 {
-  Certificate *cert = new Certificate(certificate, key);
-  if(cert)
-  {
-    if(addCertificate(cert, id)) {
-      return true;
-    }
-
-    delete cert;
-  }
-  return false;
+  DynamicJsonDocument doc(JSON_OBJECT_SIZE(3));
+  doc["name"] = name;
+  doc["certificate"] = certificate;
+  doc["key"] = key;
+  return addCertificate(doc, id);
 }
 
+/**
+ * Validate and store a root certificate using its serial as the store ID.
+ * @param name Display name stored with the certificate.
+ * @param certificate PEM certificate passed to the shared validation path.
+ * @param id Optional output for the validated certificate serial.
+ * @return True when the certificate is added and saved; false on rejection or failure.
+ */
 bool CertificateStore::addCertificate(const char *name, const char *certificate, uint64_t *id)
 {
-  Certificate *cert = new Certificate(certificate);
-  if(cert)
-  {
-    if(addCertificate(cert, id)) {
-      return true;
-    }
-
-    delete cert;
-  }
-  return false;
+  DynamicJsonDocument doc(JSON_OBJECT_SIZE(2));
+  doc["name"] = name;
+  doc["certificate"] = certificate;
+  return addCertificate(doc, id);
 }
 
 bool CertificateStore::addCertificate(DynamicJsonDocument &doc, uint64_t *id, bool save)
@@ -275,6 +305,26 @@ bool CertificateStore::serializeCertificate(DynamicJsonDocument &doc, uint64_t i
     return true;
   }
   return false;
+}
+
+size_t CertificateStore::certificateCount()
+{
+  return _certs.size();
+}
+
+bool CertificateStore::serializeCertificateAt(DynamicJsonDocument &doc, size_t index, uint32_t flags)
+{
+  if(index >= _certs.size()) {
+    return false;
+  }
+
+  Certificate *cert = _certs[index];
+  if(nullptr == cert) {
+    return false;
+  }
+
+  JsonObject obj = doc.to<JsonObject>();
+  return cert->serialize(obj, flags);
 }
 
 bool CertificateStore::findCertificate(uint64_t id, Certificate *&cert)
@@ -417,18 +467,32 @@ bool CertificateStore::loadCertificate(String &name)
 bool CertificateStore::saveCertificate(Certificate *cert)
 {
   String name = String(CERTIFICATE_BASE_DIRECTORY) + "/" + String(cert->getId(), HEX) + ".json";
-  File file = LittleFS.open(name, "w");
-  if(file)
+
+  DynamicJsonDocument doc(CERTIFICATE_JSON_BUFFER_SIZE);
+  JsonObject object = doc.to<JsonObject>();
+  cert->serialize(object, Certificate::Flags::SHOW_PRIVATE_KEY);
+
+  // Don't truncate an existing valid cert if the new contents won't fit.
+  if(!littlefs_has_space(measureJson(doc)))
   {
-    DynamicJsonDocument doc(CERTIFICATE_JSON_BUFFER_SIZE);
-    JsonObject object = doc.to<JsonObject>();
-    cert->serialize(object, Certificate::Flags::SHOW_PRIVATE_KEY);
-    serializeJson(doc, file);
-    file.close();
-    return true;
+    DBUGLN("Certificates: insufficient space, not saving");
+    return false;
   }
 
-  return false;
+  File file = LittleFS.open(name, "w");
+  if(!file)
+  {
+    return false;
+  }
+
+  bool ok = serializeJson(doc, file) > 0;
+  file.close();
+  if(!ok)
+  {
+    // Partial write — remove the corrupt file rather than leave it.
+    LittleFS.remove(name);
+  }
+  return ok;
 }
 
 bool CertificateStore::removeCertificate(Certificate *cert)

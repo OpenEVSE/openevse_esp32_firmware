@@ -26,10 +26,6 @@ const char root_ca[] = ""
 #define CA_DIGICERT_HIGH_ASSURANCE_EV 0
 #endif
 
-#ifndef CA_OHMHOUR
-#define CA_OHMHOUR 1
-#endif
-
 #ifndef CA_GITHUB
 #define CA_GITHUB 1
 #endif
@@ -73,7 +69,7 @@ const char root_ca[] = ""
 "emyPxgcYxn/eR44/KJ4EBs+lVDR3veyJm+kXQ99b21/+jh5Xos1AnX5iItreGCc=\r\n"
 "-----END CERTIFICATE-----\r\n"
 #endif
-#if CA_DIGICERT_HIGH_ASSURANCE_EV || CA_OHMHOUR || CA_GITHUB
+#if CA_DIGICERT_HIGH_ASSURANCE_EV || CA_GITHUB
 "-----BEGIN CERTIFICATE-----\r\n"
 "MIIDxTCCAq2gAwIBAgIQAqxcJmoLQJuPC3nyrkYldzANBgkqhkiG9w0BAQUFADBs\r\n"
 "MQswCQYDVQQGEwJVUzEVMBMGA1UEChMMRGlnaUNlcnQgSW5jMRkwFwYDVQQLExB3\r\n"

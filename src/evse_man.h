@@ -19,6 +19,7 @@ typedef uint32_t EvseClient;
 #define EvseClient_Vendor_OpenEVSE            0x0001
 #define EvseClient_Vendor_OpenEnergyMonitor   0x0002
 #define EvseClient_Vendor_BigJungle           0x0003
+#define EvseClient_Vendor_evcc                0x0004
 
 #define EvseClient_Vendor_Unregistered        0xFFFE
 #define EvseClient_Vendor_Reserved            0xFFFF
@@ -31,14 +32,18 @@ typedef uint32_t EvseClient;
 #define EvseClient_OpenEVSE_Schedule          EVC(EvseClient_Vendor_OpenEVSE, 0x0004)
 #define EvseClient_OpenEVSE_Limit             EVC(EvseClient_Vendor_OpenEVSE, 0x0006)
 #define EvseClient_OpenEVSE_Error             EVC(EvseClient_Vendor_OpenEVSE, 0x0007)
-#define EvseClient_OpenEVSE_Ohm               EVC(EvseClient_Vendor_OpenEVSE, 0x0008)
 #define EvseClient_OpenEVSE_OCPP              EVC(EvseClient_Vendor_OpenEVSE, 0x0009)
 #define EvseClient_OpenEVSE_RFID              EVC(EvseClient_Vendor_OpenEVSE, 0x000A)
 #define EvseClient_OpenEVSE_MQTT              EVC(EvseClient_Vendor_OpenEVSE, 0x000B)
 #define EvseClient_OpenEVSE_Shaper            EVC(EvseClient_Vendor_OpenEVSE, 0x000C)
 #define EvseClient_OpenEVSE_TempThrottle      EVC(EvseClient_Vendor_OpenEVSE, 0x000D)
+#define EvseClient_OpenEVSE_LoadSharing       EVC(EvseClient_Vendor_OpenEVSE, 0x000E)
 
 #define EvseClient_OpenEnergyMonitor_DemandShaper EVC(EvseClient_Vendor_OpenEnergyMonitor, 0x0001)
+
+// evcc (https://github.com/evcc-io/evcc) via github.com/OpenEVSE/go-openevse:
+// 262145, the default client id its driver claims with.
+#define EvseClient_evcc                       EVC(EvseClient_Vendor_evcc, 0x0001)
 
 #define EvseClient_NULL                       ((EvseClient)UINT32_MAX)
 
@@ -48,7 +53,10 @@ typedef uint32_t EvseClient;
 #define EvseManager_Priority_Boost     200
 #define EvseManager_Priority_API       500
 #define EvseManager_Priority_MQTT      500
-#define EvseManager_Priority_Ohm       500
+// Schedule-activated divert/shaper: must outrank the scheduler's base Timer
+// claim (100) and API pokes (500), but stay below Manual/RFID/OCPP so an
+// explicit human action can always override a timer window.
+#define EvseManager_Priority_TimerFeature 900
 #define EvseManager_Priority_Manual   1000
 #define EvseManager_Priority_RFID     1030
 #define EvseManager_Priority_OCPP     1050
@@ -215,6 +223,7 @@ class EvseManager : public MicroTasks::Task
     };
 
     RapiSender _sender;
+    OpenEVSEClass _openevse;
     EvseMonitor _monitor;
     EventLog &_eventLog;
 
@@ -233,10 +242,13 @@ class EvseManager : public MicroTasks::Task
     EvseClient _charge_current_client;
     EvseClient _max_current_client;
 
-    bool _sleepForDisable;
-
     bool _evaluateClaims;
     bool _evaluateTargetState;
+
+    // Retry interval while the EVSE module has not answered yet: starts at
+    // 1 s and doubles to 10 s, so a probe lost during boot costs a second
+    // rather than the full steady-state interval.
+    uint32_t _evseConnectRetryMs;
 
     uint32_t _vehicleValid;
     uint32_t _vehicleUpdated;
@@ -261,6 +273,10 @@ class EvseManager : public MicroTasks::Task
     void setup();
     unsigned long loop(MicroTasks::WakeReason reason);
 
+    // Whether a pause should use the controller's SLEEPING state rather than
+    // DISABLED. Derived from config on each use -- see the definition.
+    bool sleepForDisable();
+
   public:
     EvseManager(Stream &port, EventLog &eventLog);
     ~EvseManager();
@@ -277,13 +293,25 @@ class EvseManager : public MicroTasks::Task
     uint32_t getChargeCurrent(EvseClient client = EvseClient_NULL);
     uint32_t getMaxCurrent(EvseClient client = EvseClient_NULL);
 
+    // Get the client whose claim is currently setting the state/charge current,
+    // EvseClient_NULL if no active claim sets the property
+    EvseClient getStateClient() {
+      return _state_client;
+    }
+    // Which claim won the charge-current arbitration, or EvseClient_NULL when no
+    // claim is active and the configured default applies. Lets a UI answer "why
+    // am I limited to 12 A?" rather than just reporting the number.
+    EvseClient getChargeCurrentClient() {
+      return _charge_current_client;
+    }
+
     bool serializeClaims(DynamicJsonDocument &doc);
     bool serializeClaim(DynamicJsonDocument &doc, EvseClient client);
     bool serializeTarget(DynamicJsonDocument &doc);
 
     // Evse Status
     bool isConnected() {
-      return OpenEVSE.isConnected();
+      return _openevse.isConnected();
     }
     bool isActive() {
       return getActiveState() == EvseState::Active;
@@ -312,6 +340,9 @@ class EvseManager : public MicroTasks::Task
     }
     double getAmps() {
       return _monitor.getAmps();
+    }
+    long getPilot() {
+      return _monitor.getPilot();
     }
     double getVoltage() {
       return _monitor.getVoltage();
@@ -394,6 +425,12 @@ class EvseManager : public MicroTasks::Task
     bool isOvercurrentMonitorEnabled() {
       return _monitor.isOvercurrentMonitorEnabled();
     }
+    bool isSettingsKnown() {
+      return _monitor.isSettingsKnown();
+    }
+    uint32_t getSettingsFlags() {
+      return _monitor.getSettingsFlags();
+    }
     uint32_t getPanicTemperature() {
       return _monitor.getPanicTemperature();
     }
@@ -420,6 +457,12 @@ class EvseManager : public MicroTasks::Task
     }
     EvseMonitor::LcdType getLcdType() {
       return _monitor.getLcdType();
+    }
+    void setLcdType(EvseMonitor::LcdType type, std::function<void(int ret)> callback = NULL) {
+      _monitor.setLcdType(type, callback);
+    }
+    bool isLcdTypeSupported() {
+      return _monitor.isLcdTypeSupported();
     }
     const char *getFirmwareVersion() {
       return _monitor.getFirmwareVersion();
@@ -522,8 +565,57 @@ class EvseManager : public MicroTasks::Task
       _monitor.resetFaultCounters(callback);
     }
     uint32_t getFrequency() { return _monitor.getFrequency(); }
+    uint32_t getZeroCrossThresholdMa() { return _monitor.getZeroCrossThresholdMa(); }
     const char *getChipId() { return _monitor.getChipId(); }
     bool isD9Supported() { return _monitor.isD9Supported(); }
+
+    // Relay contact-life health estimate
+    bool isRelayHealthKnown() { return _monitor.isRelayHealthKnown(); }
+    uint8_t getRelayLifeRemainingPct() { return _monitor.getRelayLifeRemainingPct(); }
+    uint32_t getRelayColdOpenCount() { return _monitor.getRelayColdOpenCount(); }
+    uint32_t getRelayElecDamageX1e6() { return _monitor.getRelayElecDamageX1e6(); }
+    uint32_t getRelayTransitBaselineMs() { return _monitor.getRelayTransitBaselineMs(); }
+    bool isRelayTransitDriftWarning() { return _monitor.isRelayTransitDriftWarning(); }
+    uint32_t getRelayThermalIndexX100() { return _monitor.getRelayThermalIndexX100(); }
+    uint32_t getRelayThermalBaselineX100() { return _monitor.getRelayThermalBaselineX100(); }
+    uint8_t getRelayThermalWarningLevel() { return _monitor.getRelayThermalWarningLevel(); }
+    uint32_t getRelayStuckRecoveryCount() { return _monitor.getRelayStuckRecoveryCount(); }
+    void runStuckRelayRecovery(std::function<void(int ret)> callback = NULL) {
+      _monitor.runStuckRelayRecovery(callback);
+    }
+    void resetRelayHealth(std::function<void(int ret)> callback = NULL) {
+      _monitor.resetRelayHealth(callback);
+    }
+
+#ifdef ENABLE_CABLE_TEMP
+    // Cable NTC thermistor monitoring (controller firmware 9.4.0+, requires
+    // its CABLE_TEMPERATURE_MONITORING feature). source is an
+    // OPENEVSE_CABLE_TEMP_SOURCE_xxx index.
+    bool isCableTempKnown() { return _monitor.isCableTempKnown(); }
+    bool isCableTempConfigKnown() { return _monitor.isCableTempConfigKnown(); }
+    bool isCableTempEnabled() { return _monitor.isCableTempEnabled(); }
+    bool isCableTempCommandKnown() { return _monitor.isCableTempCommandKnown(); }
+    bool isCableTempValid(uint8_t source) { return _monitor.isCableTempValid(source); }
+    double getCableTemp(uint8_t source) { return _monitor.getCableTemp(source); }
+    uint8_t getCableTempStatus(uint8_t source) { return _monitor.getCableTempStatus(source); }
+    bool isCableTempAssigned(uint8_t source) { return _monitor.isCableTempAssigned(source); }
+    uint8_t getCableTempPin(uint8_t source) { return _monitor.getCableTempPin(source); }
+    uint32_t getCableTempR25(uint8_t source) { return _monitor.getCableTempR25(source); }
+    uint32_t getCableTempBeta(uint8_t source) { return _monitor.getCableTempBeta(source); }
+    int32_t getCableTempOffsetC10(uint8_t source) { return _monitor.getCableTempOffsetC10(source); }
+    int32_t getCableTempPanicC10(uint8_t source) { return _monitor.getCableTempPanicC10(source); }
+    void enableCableTemp(bool enabled, std::function<void(int ret)> callback = NULL) {
+      _monitor.enableCableTemp(enabled, callback);
+    }
+    void setCableTempConfig(uint8_t source, uint8_t pin, uint32_t r25, uint32_t beta,
+                            int32_t offset_c10, int32_t panic_c10,
+                            std::function<void(int ret)> callback = NULL) {
+      _monitor.setCableTempConfig(source, pin, r25, beta, offset_c10, panic_c10, callback);
+    }
+    void setCableTempPin(uint8_t source, uint8_t pin, std::function<void(int ret)> callback = NULL) {
+      _monitor.setCableTempPin(source, pin, callback);
+    }
+#endif // ENABLE_CABLE_TEMP
     void restartEvse() {
       _monitor.restart();
     }
@@ -563,7 +655,7 @@ class EvseManager : public MicroTasks::Task
 
     // Get/set the 'disabled' mode
     bool isSleepForDisable() {
-      return _sleepForDisable;
+      return sleepForDisable();
     }
     void setSleepForDisable(bool sleepForDisable);
 
@@ -578,9 +670,11 @@ class EvseManager : public MicroTasks::Task
       return _sender;
     }
 
-    // Get the OpenEVSE API
+    // Get the OpenEVSE API. Must be the instance the monitor initialised with
+    // the RAPI sender; the global OpenEVSE object is never begin()-ed so its
+    // commands are silently dropped.
     OpenEVSEClass &getOpenEVSE() {
-      return OpenEVSE;
+      return _openevse;
     }
 
     // Register for events

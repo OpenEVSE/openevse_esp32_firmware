@@ -49,9 +49,12 @@ StreamSpy SerialEvse(RAPI_PORT);
 
 void debug_setup()
 {
+  // 1KB rings rather than 2KB. These are scrollback for the debug and RAPI
+  // consoles; on a board this tight the 2KB of contiguous heap is worth more
+  // than the extra history.
   DEBUG_PORT.begin(115200);
-  SerialDebug.begin(2048);
+  SerialDebug.begin(1024);
 
   RAPI_PORT.begin(115200);
-  SerialEvse.begin(2048);
+  SerialEvse.begin(1024);
 }

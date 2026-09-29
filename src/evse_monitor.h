@@ -68,10 +68,43 @@ class EvseMonitor : public MicroTasks::Task
         bool isCharging() {
           return OPENEVSE_STATE_CHARGING == _evse_state;
         }
+        // Listed explicitly rather than as a range: the controller's fault
+        // states are not contiguous (0x0C/0x0D are reserved), so a range check
+        // silently treats anything added above it as a non-error. Keep in sync
+        // with the OPENEVSE_STATE_* fault values in the OpenEVSE library.
         bool isError() {
-          return OPENEVSE_STATE_VENT_REQUIRED <= _evse_state && _evse_state <= OPENEVSE_STATE_OVER_CURRENT;
+          switch(_evse_state)
+          {
+            case OPENEVSE_STATE_VENT_REQUIRED:
+            case OPENEVSE_STATE_DIODE_CHECK_FAILED:
+            case OPENEVSE_STATE_GFI_FAULT:
+            case OPENEVSE_STATE_NO_EARTH_GROUND:
+            case OPENEVSE_STATE_STUCK_RELAY:
+            case OPENEVSE_STATE_GFI_SELF_TEST_FAILED:
+            case OPENEVSE_STATE_OVER_TEMPERATURE:
+            case OPENEVSE_STATE_OVER_CURRENT:
+            case OPENEVSE_STATE_RELAY_CLOSURE_FAULT:
+            case OPENEVSE_STATE_PP_SHORTED:
+            case OPENEVSE_STATE_PP_MISSING:
+            case OPENEVSE_STATE_EEPROM_FAILURE:
+              return true;
+            default:
+              return false;
+          }
         }
         bool isVehicleConnected() {
+          // OPENEVSE_VFLAG_EV_CONNECTED is documented in the controller as
+          // "valid only when pilot not N12", and J1772EVSEController::Disable()
+          // sets exactly that -- so while the EVSE is DISABLED the controller
+          // cannot see a plug or unplug and simply leaves the flag at whatever
+          // it was when the pause started. Reporting that stale value showed a
+          // vehicle still connected long after it had been unplugged.
+          //
+          // SLEEPING is deliberately not covered: it holds the pilot at P12 and
+          // keeps detecting normally, so the flag stays trustworthy there.
+          if(OPENEVSE_STATE_DISABLED == getEvseState()) {
+            return false;
+          }
           return OPENEVSE_VFLAG_EV_CONNECTED == (getFlags() & OPENEVSE_VFLAG_EV_CONNECTED);
         }
         bool isBootLocked() {
@@ -160,6 +193,11 @@ class EvseMonitor : public MicroTasks::Task
 
     // Settings
     uint32_t _settings_flags;
+    // False until $GE has answered at least once, so callers can tell "every
+    // safety check is enabled" from "we have not asked the controller yet".
+    // _settings_flags is otherwise 0 at boot, which reads as a perfectly
+    // healthy charger.
+    bool _settings_known;
     uint32_t _panic_temperature;
     uint32_t _heartbeat_interval;
     uint32_t _heartbeat_current;
@@ -167,11 +205,78 @@ class EvseMonitor : public MicroTasks::Task
 
     // Extended state (linco-work firmware)
     uint32_t _frequency;          // AC line frequency × 100 (from $GZ); 0 = unknown/unsupported
+    // Relay-open current-zero threshold (mA), from $GZ's 2nd field: current
+    // below which the controller considers it safe to open the relay at a
+    // current zero. Runtime-configurable on the controller via $SZ.
+    // OPENEVSE_RELAY_HEALTH_NOT_AVAILABLE = unknown/unsupported controller.
+    uint32_t _zero_cross_threshold_ma;
     bool _relay_dc1;              // DC relay 1 enabled (only valid when _relay_status_known)
     bool _relay_dc2;              // DC relay 2 enabled (only valid when _relay_status_known)
     bool _relay_ac;               // AC relay enabled (only valid when _relay_status_known)
     bool _relay_status_known;     // true once $GR has been answered by the controller
     char _chip_id[48];            // EVSE chip ID from $GI
+
+    // Relay contact-life health estimate (linco-work RELAY_HEALTH feature,
+    // from $GL). Only meaningful once _relay_health_known is true - the
+    // controller may predate the feature or have it compiled out.
+    bool _relay_health_known;
+    uint8_t  _relay_life_remaining_pct;
+    uint32_t _relay_cold_open_count;
+    uint32_t _relay_elec_damage_x1e6;
+    uint32_t _relay_transit_baseline_ms;   // OPENEVSE_RELAY_HEALTH_NOT_AVAILABLE = baseline not established
+    bool     _relay_transit_drift_warning;
+    uint32_t _relay_thermal_index_x100;    // OPENEVSE_RELAY_HEALTH_NOT_AVAILABLE = not available
+    uint32_t _relay_thermal_baseline_x100; // OPENEVSE_RELAY_HEALTH_NOT_AVAILABLE = not available
+    uint8_t  _relay_thermal_warning_level; // 0=ok/not available 1=watch 2=warn
+    uint32_t _relay_stuck_recovery_count;  // cumulative stuck-relay recovery attempts run; 0 against pre-9.3.0 controllers
+    // True while a $FK command is outstanding (up to ~30s) - pauses loop()'s
+    // own periodic RAPI traffic so it doesn't overflow the RAPI queue and
+    // drop heartbeat pulses for that long. See runStuckRelayRecovery().
+    bool _relay_recovery_in_flight;
+
+#ifdef ENABLE_CABLE_TEMP
+    // Cable NTC thermistor monitoring (linco-work CABLE_TEMPERATURE_MONITORING
+    // feature, firmware 9.4.0+, from $GN/$SN). Four logical sources: EV1/EV2
+    // for the EV cable, IN1/IN2 for the input cable. Only meaningful once
+    // _cable_temp_known is true - the controller may predate the feature or
+    // have it compiled out.
+    bool _cable_temp_known;
+    // Last enable/disable this session actually commanded and had the
+    // controller accept ($FF C); meaningful only when _cable_temp_commanded_known
+    // is true. The controller has no read-back for that bit, so
+    // isCableTempEnabled() otherwise has to infer it from the sources -
+    // which reads "off" the moment the feature is turned on but before any
+    // source is assigned, since every source reports NOT_INSTALLED either
+    // way. This short-circuits that false negative for exactly the session
+    // that did the commanding.
+    // _known deliberately starts false and stays false across a controller
+    // boot (reset alongside it): "unknown" and "commanded off" must stay
+    // distinguishable, or a controller that already has the feature on with
+    // zero sources assigned - from a prior session, before this ESP32
+    // rebooted - could never be turned off through the API. It would read
+    // as (falsely) already off, the /config equality guard would then match
+    // an incoming {"cable_temp": false} against that false reading and
+    // swallow the write, and $FF C 0 would never actually be sent.
+    bool _cable_temp_commanded_known;
+    bool _cable_temp_commanded;
+    // Live readings. The Temperature "valid" flag tracks _STATUS_OK only; the
+    // parallel status array carries which of the three non-reading conditions
+    // applies (unassigned / open circuit / shorted), which a bool cannot.
+    Temperature _cable_temps[OPENEVSE_CABLE_TEMP_SOURCE_COUNT];
+    uint8_t _cable_temp_status[OPENEVSE_CABLE_TEMP_SOURCE_COUNT];
+    // Per-source configuration, cached from $GN idx. Refreshed on boot and
+    // after any successful write, not polled - it only changes when something
+    // writes it.
+    bool _cable_temp_cfg_known;
+    uint32_t _cable_temp_cfg_refresh;
+    uint8_t _cable_temp_cfg_responses;
+    bool _cable_temp_cfg_success;
+    uint8_t  _cable_temp_pin[OPENEVSE_CABLE_TEMP_SOURCE_COUNT];
+    uint32_t _cable_temp_r25[OPENEVSE_CABLE_TEMP_SOURCE_COUNT];
+    uint32_t _cable_temp_beta[OPENEVSE_CABLE_TEMP_SOURCE_COUNT];
+    int32_t  _cable_temp_offset_c10[OPENEVSE_CABLE_TEMP_SOURCE_COUNT];
+    int32_t  _cable_temp_panic_c10[OPENEVSE_CABLE_TEMP_SOURCE_COUNT];
+#endif // ENABLE_CABLE_TEMP
 
     DataReady _data_ready;
     DataReady _boot_ready;
@@ -182,6 +287,16 @@ class EvseMonitor : public MicroTasks::Task
 
     char _firmware_version[32];
     char _serial[16];
+
+    // Whether $S0 (set LCD backlight type) is understood by this controller
+    // build. There's no RAPI capability query for this - LCD16X2/RGBLCD are
+    // compile-time flags on the controller with no wire-visible signal
+    // either way (see rapi.md's own "test commands for compatibility"
+    // note) - so this starts optimistic and latches false the first time a
+    // write is actually rejected with a real $NK, not a transport-level
+    // failure (timeout/queue-full/disconnected), which says nothing about
+    // whether the command itself exists.
+    bool _lcd_type_supported;
 
 #ifdef ENABLE_MCP9808
     Adafruit_MCP9808 _mcp9808;
@@ -196,12 +311,24 @@ class EvseMonitor : public MicroTasks::Task
     void updateCurrentSettings(long min_current, long max_hardware_current, long pilot, long max_configured_current);
 
     void getStatusFromEvse(bool allowStart = true);
+    void getSettingsFromEvse();
     void getChargeCurrentAndVoltageFromEvse();
     void updateEffectiveVoltage();
     void getTemperatureFromEvse();
     void readFrequency();
     void readRelayStatus();
     void readChipId();
+    void readRelayHealth();
+#ifdef ENABLE_CABLE_TEMP
+    void readCableTemperatures();
+    // All 4 sources, boot-time only (see the call site) - $GN idx x4.
+    void readCableTempConfig();
+    // One source, after a targeted write - $GN idx x1. Updates that source's
+    // cache directly without touching _cable_temp_cfg_known: that flag is a
+    // boot-time "have all 4 ever been read together" gate, and a single-
+    // source refresh has no bearing on it either way.
+    void readCableTempConfig(uint8_t source);
+#endif // ENABLE_CABLE_TEMP
 
   protected:
     void setup();
@@ -236,6 +363,19 @@ class EvseMonitor : public MicroTasks::Task
     void setMqttVoltage(double volts);
     void setServiceLevel(ServiceLevel level, std::function<void(int ret)> callback = NULL);
     void configureCurrentSensorScale(long scale, long offset, std::function<void(int ret)> callback = NULL);
+    // Re-read the controller's settings flags ($GE), publish the change
+    // unconditionally, then hand the result to `callback`. Shared by
+    // enableFeature() and setLcdType(), which previously each carried a
+    // verbatim copy of it - one copy, so they cannot drift apart.
+    // Deliberately NOT used by the three other $GE readers: evseBoot()
+    // signals boot-readiness instead of triggering, setServiceLevel()
+    // chains a getCurrentCapacity() off the same response, and
+    // getSettingsFromEvse() only triggers on an actual change because it
+    // runs once a minute. Their differences are the point, not drift.
+    // n.b. `callback` is invoked with the *$GE's* result, not the result of
+    // whatever write preceded it - long-standing behaviour of this refresh,
+    // preserved verbatim by the extraction.
+    void refreshSettingsFlags(std::function<void(int ret)> callback = NULL);
     void enableFeature(uint8_t feature, bool enabled, std::function<void(int ret)> callback = NULL);
     void enableDiodeCheck(bool enabled, std::function<void(int ret)> callback = NULL);
     void enableGfiTestCheck(bool enabled, std::function<void(int ret)> callback = NULL);
@@ -244,6 +384,7 @@ class EvseMonitor : public MicroTasks::Task
     void enableVentRequired(bool enabled, std::function<void(int ret)> callback = NULL);
     void enableTemperatureCheck(bool enabled, std::function<void(int ret)> callback = NULL);
     void enableOvercurrentMonitor(bool enabled, std::function<void(int ret)> callback = NULL);
+    void setLcdType(LcdType type, std::function<void(int ret)> callback = NULL);
     void setPanicTemperature(uint32_t tempC, std::function<void(int ret)> callback = NULL);
     void enableFrontButton(bool enabled, std::function<void(int ret)> callback = NULL);
     void enableBootLock(bool enabled, std::function<void(int ret)> callback = NULL);
@@ -366,6 +507,12 @@ class EvseMonitor : public MicroTasks::Task
     uint32_t getSettingsFlags() {
       return _settings_flags;
     }
+    // True once the controller has answered $GE at least once. Before that
+    // getSettingsFlags() is 0, which is indistinguishable from a controller
+    // reporting every check enabled.
+    bool isSettingsKnown() {
+      return _settings_known;
+    }
     ServiceLevel getServiceLevel();
     ServiceLevel getActualServiceLevel();
     bool isDiodeCheckEnabled() {
@@ -410,7 +557,107 @@ class EvseMonitor : public MicroTasks::Task
     bool isACRelayEnabled()  { return _relay_ac; }
     bool isRelayStatusKnown() { return _relay_status_known; }
     uint32_t getFrequency()  { return _frequency; }  // × 100 Hz (5000 = 50.00 Hz); 0 = unknown
+    // Relay-open current-zero threshold, mA. OPENEVSE_RELAY_HEALTH_NOT_AVAILABLE if unknown/unsupported
+    uint32_t getZeroCrossThresholdMa() { return _zero_cross_threshold_ma; }
     const char *getChipId()  { return _chip_id; }
+
+    // Relay contact-life health estimate (requires the controller's
+    // RELAY_HEALTH feature; check isRelayHealthKnown() first)
+    bool isRelayHealthKnown() { return _relay_health_known; }
+    uint8_t getRelayLifeRemainingPct() { return _relay_life_remaining_pct; }
+    uint32_t getRelayColdOpenCount() { return _relay_cold_open_count; }
+    uint32_t getRelayElecDamageX1e6() { return _relay_elec_damage_x1e6; }
+    uint32_t getRelayTransitBaselineMs() { return _relay_transit_baseline_ms; }
+    bool isRelayTransitDriftWarning() { return _relay_transit_drift_warning; }
+    uint32_t getRelayThermalIndexX100() { return _relay_thermal_index_x100; }
+    uint32_t getRelayThermalBaselineX100() { return _relay_thermal_baseline_x100; }
+    uint8_t getRelayThermalWarningLevel() { return _relay_thermal_warning_level; }
+    uint32_t getRelayStuckRecoveryCount() { return _relay_stuck_recovery_count; }
+
+#ifdef ENABLE_CABLE_TEMP
+    // Cable NTC thermistor monitoring (requires the controller's
+    // CABLE_TEMPERATURE_MONITORING feature; check isCableTempKnown() first).
+    // source is an OPENEVSE_CABLE_TEMP_SOURCE_xxx index.
+    bool isCableTempKnown() { return _cable_temp_known; }
+    bool isCableTempConfigKnown() { return _cable_temp_cfg_known; }
+    // True when this source produced an actual reading. False covers all three
+    // non-reading conditions - use getCableTempStatus() to tell them apart.
+    bool isCableTempValid(uint8_t source) {
+      return source < OPENEVSE_CABLE_TEMP_SOURCE_COUNT && _cable_temps[source].isValid();
+    }
+    double getCableTemp(uint8_t source) {
+      return source < OPENEVSE_CABLE_TEMP_SOURCE_COUNT ? _cable_temps[source].get() : 0;
+    }
+    // OPENEVSE_CABLE_TEMP_STATUS_xxx: OK / NOT_INSTALLED / OPEN / SHORTED
+    uint8_t getCableTempStatus(uint8_t source) {
+      return source < OPENEVSE_CABLE_TEMP_SOURCE_COUNT ?
+        _cable_temp_status[source] : OPENEVSE_CABLE_TEMP_STATUS_NOT_INSTALLED;
+    }
+    // True if this source is wired to an input, i.e. it is actually in use.
+    bool isCableTempAssigned(uint8_t source) {
+      return source < OPENEVSE_CABLE_TEMP_SOURCE_COUNT &&
+             OPENEVSE_CABLE_TEMP_PIN_NONE != _cable_temp_pin[source];
+    }
+    uint8_t  getCableTempPin(uint8_t source) {
+      return source < OPENEVSE_CABLE_TEMP_SOURCE_COUNT ? _cable_temp_pin[source] : OPENEVSE_CABLE_TEMP_PIN_NONE;
+    }
+    uint32_t getCableTempR25(uint8_t source) {
+      return source < OPENEVSE_CABLE_TEMP_SOURCE_COUNT ? _cable_temp_r25[source] : 0;
+    }
+    uint32_t getCableTempBeta(uint8_t source) {
+      return source < OPENEVSE_CABLE_TEMP_SOURCE_COUNT ? _cable_temp_beta[source] : 0;
+    }
+    int32_t getCableTempOffsetC10(uint8_t source) {
+      return source < OPENEVSE_CABLE_TEMP_SOURCE_COUNT ? _cable_temp_offset_c10[source] : 0;
+    }
+    int32_t getCableTempPanicC10(uint8_t source) {
+      return source < OPENEVSE_CABLE_TEMP_SOURCE_COUNT ? _cable_temp_panic_c10[source] : 0;
+    }
+    bool isCableTempEnabled() {
+      // The controller has no dedicated read-back flag for $FF C. Prefer
+      // what this session actually commanded and had accepted; fall back to
+      // inferring from the sources (reports NOT_INSTALLED on all of them
+      // while off) only when nothing has been commanded yet, e.g. fresh
+      // after boot.
+      return _cable_temp_known &&
+        (_cable_temp_commanded_known ? _cable_temp_commanded : !isCableTempAllNotInstalled());
+    }
+    // Whether this session has actually commanded $FF C and had it accepted
+    // - i.e. whether isCableTempEnabled() above is reporting a real answer
+    // rather than its NOT_INSTALLED-inference fallback. app_config.cpp uses
+    // this to decide whether it's safe to skip resending an incoming
+    // {"cable_temp": ...} that matches the current reading: the same
+    // fallback that can make isCableTempEnabled() read "off" while the
+    // controller is genuinely on (see the comment on
+    // _cable_temp_commanded_known) would otherwise make an equality guard
+    // swallow the very write that would fix that.
+    bool isCableTempCommandKnown() {
+      return _cable_temp_commanded_known;
+    }
+    bool isCableTempAllNotInstalled() {
+      for(uint8_t i = 0; i < OPENEVSE_CABLE_TEMP_SOURCE_COUNT; i++) {
+        if(OPENEVSE_CABLE_TEMP_STATUS_NOT_INSTALLED != _cable_temp_status[i]) return false;
+      }
+      return true;
+    }
+    void enableCableTemp(bool enabled, std::function<void(int ret)> callback = NULL);
+    // Write one source's full configuration, then re-read it back so the
+    // cache reflects what the controller actually accepted.
+    void setCableTempConfig(uint8_t source, uint8_t pin, uint32_t r25, uint32_t beta,
+                            int32_t offset_c10, int32_t panic_c10,
+                            std::function<void(int ret)> callback = NULL);
+    // Reassign a source's input pin, leaving its calibration alone.
+    void setCableTempPin(uint8_t source, uint8_t pin, std::function<void(int ret)> callback = NULL);
+#endif // ENABLE_CABLE_TEMP
+    // Manually run the controller's stuck-relay recovery cycle (requires
+    // firmware 9.3.0+ / ADVPWR). NAK'd by the controller if an EV is
+    // connected. Blocking on the controller side for up to ~30s.
+    void runStuckRelayRecovery(std::function<void(int ret)> callback = NULL);
+    // Reset the relay-health accumulator, self-learned baselines, and the
+    // stuck-relay recovery counter (requires the controller's RELAY_HEALTH
+    // feature) - use after a physical relay replacement, since the estimate
+    // is otherwise meaningless: it carries over wear from the old relay.
+    void resetRelayHealth(std::function<void(int ret)> callback = NULL);
     // True if the controller's RAPI protocol supports the D9 command set
     bool isD9Supported() { return _openevse.isD9Supported(); }
     uint32_t getHeartbeatInterval() { return _heartbeat_interval; }
@@ -426,6 +673,12 @@ class EvseMonitor : public MicroTasks::Task
       return (OPENEVSE_ECF_MONO_LCD == (getSettingsFlags() & OPENEVSE_ECF_MONO_LCD)) ?
         LcdType::Mono :
         LcdType::RGB;
+    }
+    // False once a $S0 write has actually been rejected with $NK this
+    // session - see the comment on _lcd_type_supported. Starts true: there
+    // is no way to know without trying.
+    bool isLcdTypeSupported() {
+      return _lcd_type_supported;
     }
     const char *getFirmwareVersion() {
       return _firmware_version;

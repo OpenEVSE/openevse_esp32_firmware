@@ -2,8 +2,8 @@
 #define __LCD_LVGL_H
 
 // LVGL renderer for the stock OpenEVSE ILI9488 TFT. Drop-in LcdTask: same public
-// API as the TFT_eSPI LcdTask (lcd_tft.h) and the char-LCD LcdTask (lcd.cpp), so
-// main.cpp / net / ocpp link unchanged. Selected by ENABLE_SCREEN_LVGL_TFT.
+// API as the char-LCD LcdTask (lcd.cpp), so main.cpp / net / ocpp link
+// unchanged. Selected by ENABLE_SCREEN_LVGL_TFT.
 
 #define LCD_CHAR_STOP       1
 #define LCD_CHAR_PLAY       2
@@ -57,7 +57,12 @@ class LcdTask : public MicroTasks::Task
     bool _displayOk = false;
     bool _booting = false;       // showing the boot splash before the main screen
     uint32_t _bootStart = 0;
-    uint8_t _activeScreen = 0;   // 0 = boot, 1 = setup (AP), 2 = charge
+    uint8_t _activeScreen = 0;   // SCR_* (lcd_lvgl.cpp)
+    // Fault takeover. _faultState is the last fault seen, held across the
+    // minimum dwell so the page doesn't blank when a transient fault clears
+    // under it; _faultHoldUntil is when that dwell expires.
+    uint8_t  _faultState = 0;
+    uint32_t _faultHoldUntil = 0;
     bool _wifiModeKnown = false; // has setWifiMode() been called yet?
 
     // Transient message lines (set via display(); auto-cleared after their time).
@@ -68,18 +73,37 @@ class LcdTask : public MicroTasks::Task
     bool _wifi_client = false;
     bool _wifi_connected = false;
 
+    // Smoothed signal strength. Raw RSSI wanders several dB sample to sample, so
+    // an undamped percentage flickers continuously on an otherwise static screen.
+    // See smoothedWifiPercent().
+    float _rssi_avg = 0.0f;
+    bool  _rssi_avg_valid = false;
+    int   _wifi_pct = 0;
+    int smoothedWifiPercent(int rssi);
+
+    // Next time the data snapshot is due (ms). Between snapshots loop() may still
+    // run, but only to pump LVGL while the ring tween finishes.
+    uint32_t _nextDataUpdate = 0;
+
     // Active display theme last applied from the tft_theme config (-1 = none yet,
     // 0 = dark/nightshift, 1 = light). Polled in loop(); a change repaints.
     int8_t _themeLight = -1;
     bool applyThemeFromConfig();  // sets the palette; true if it changed
 
-#ifdef TFT_BACKLIGHT_TIMEOUT_MS
-    uint32_t _backlight_timeout = 0;
+    // Backlight + standby (PWM). Brightness 0..100; idle measured from _lastWake.
+    uint32_t _lastWake = 0;
     uint8_t  _prev_state = 0xff;
     bool     _prev_vehicle = false;
-    void wakeBacklight();
-    void updateBacklight();
-#endif
+    bool     _standby = false;          // currently dimmed to the standby screen/level
+    // int32_t with a -1 sentinel = "not read yet"; only -1 until the first
+    // applyDisplayConfig() in init() (a uint32 config cast can't go negative after).
+    int32_t  _activeBrightness = -1;
+    int32_t  _standbyBrightness = -1;
+    int32_t  _timeoutS = -1;
+    void wakeBacklight();               // active brightness, exit standby, re-arm idle
+    void enterStandby();                // standby brightness (+ standby screen if >0)
+    bool stateKeepsAwake(uint8_t state, bool vehicle, double amps);  // charging/fault force-bright
+    void applyDisplayConfig();          // refresh cached brightness/timeout + apply live
 
     void display(Message *msg, uint32_t flags);
     unsigned long displayNextMessage();

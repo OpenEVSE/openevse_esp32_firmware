@@ -41,16 +41,40 @@ extern const char _CONTENT_TYPE_WOFF2[];
 extern const char _CONTENT_TYPE_MANIFEST[];
 #define CONTENT_TYPE_MANIFEST FPSTR(_CONTENT_TYPE_MANIFEST)
 
+extern const char _CONTENT_TYPE_CSV[];
+#define CONTENT_TYPE_CSV FPSTR(_CONTENT_TYPE_CSV)
+
 extern MongooseHttpServer server;
 
 extern void web_server_setup();
 extern void web_server_loop();
+extern void web_server_load_sharing_setup();
 
 extern void web_server_event(JsonDocument &event);
 
 typedef const __FlashStringHelper *fstr_t;
 
 bool requestPreProcess(MongooseHttpServerRequest *request, MongooseHttpServerResponseStream *&response, fstr_t contentType = CONTENT_TYPE_JSON);
+
+// Single source of truth for HTTP auth (Basic for machine clients, session
+// cookie for the browser UI). Shared by the REST path and the WebSocket
+// handshake gate. The static shell is served open (see web_server_static.cpp),
+// so it does not call this. `usedCookie`/`badCredential` are optional out-params
+// (see web_server.cpp); a wrong Basic credential feeds the failed-auth throttle.
+bool isAuthenticated(MongooseHttpServerRequest *request, bool *usedCookie = nullptr, bool *badCredential = nullptr);
+
 void dumpRequest(MongooseHttpServerRequest *request);
+
+void handleLogin(MongooseHttpServerRequest *request);
+void handleLogout(MongooseHttpServerRequest *request);
+
+// Shared by the destructive-actuator handlers in web_server.cpp and the
+// notifications ack handler in web_server_notifications.cpp: refuses a
+// bare cross-site GET (see the definition in web_server.cpp for why).
+bool actuatorMethodAllowed(MongooseHttpServerRequest *request,
+                           MongooseHttpServerResponseStream *response);
+
+void handleNotifications(MongooseHttpServerRequest *request);
+void handleNotificationAck(MongooseHttpServerRequest *request);
 
 #endif // _EMONESP_WEB_SERVER_H

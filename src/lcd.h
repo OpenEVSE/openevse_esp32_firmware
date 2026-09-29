@@ -13,9 +13,6 @@
 #if ENABLE_SCREEN_LVGL_TFT
 // LVGL renderer for the stock ILI9488 TFT (drop-in LcdTask, same public API).
 #include "lcd_lvgl.h"
-#elif ENABLE_SCREEN_LCD_TFT
-// HACK: This should be done in a much more C++ way
-#include "lcd_tft.h"
 #else
 
 #define LCD_MAX_LEN 16
@@ -97,6 +94,10 @@ class LcdTask : public MicroTasks::Task
       TimerStart,     // Start 10:00PM
       TimerStop,      // Stop 06:00AM
       TimerRemaining, // Remaining 6:23
+      SolarPower,     // Solar 3.41kW / Grid IE -500W
+      DivertRate,     // Divert 16A / Avail 4.2A
+      Hostname,       // openevse-55ad
+      IPAddress,      // 192.168.100.100
       ManualOverride
     };
 
@@ -112,6 +113,8 @@ class LcdTask : public MicroTasks::Task
     EvseManager *_evse;
     Scheduler *_scheduler;
     ManualOverride *_manual;
+
+    EvseClient _lastStateClient;
 
     uint32_t _nextMessageTime;
     uint32_t _infoLineChageTime;
@@ -143,6 +146,7 @@ class LcdTask : public MicroTasks::Task
     void displayInfoLine(LcdInfoLine info, unsigned long &nextUpdate);
     void displayNumberValue(int line, const char *name, double value, int precision, const char *unit);
     void displayScaledNumberValue(int line, const char *name, double value, int precision, const char *unit);
+    void displayPowerValue(int line, const char *name, double watts);
     void displayInfoEventTime(const char *name, Scheduler::EventInstance &event);
     void displayNameValue(int line, const char *name, const char *value);
     void displayStopWatchTime(const char *name, uint32_t time);
@@ -162,7 +166,7 @@ class LcdTask : public MicroTasks::Task
     void setWifiMode(bool client, bool connected);
 };
 
-#endif // ENABLE_SCREEN_LCD_TFT
+#endif // !ENABLE_SCREEN_LVGL_TFT
 
 extern LcdTask lcd;
 

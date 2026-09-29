@@ -14,7 +14,10 @@ struct StaticFile
   size_t length;
   const char *type;
   const char *etag;
-  bool compressed;
+  // Content-Encoding the bytes were stored with, or NULL to serve them as-is.
+  // A string rather than a bool so a future encoding (e.g. brotli) is just a
+  // different literal here, with no plumbing change.
+  const char *encoding;
 };
 
 bool embedded_get_file(String filename, StaticFile *index, size_t length, StaticFile **file);

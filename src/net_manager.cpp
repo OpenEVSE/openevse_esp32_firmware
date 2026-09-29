@@ -31,6 +31,40 @@
 #include "wifi_esp32.h"
 #endif
 
+// DHCP option 42 (NTP servers). lwIP parses it on every build we ship
+// (CONFIG_LWIP_DHCP_GET_NTP_SRV=y in both the core-2 and core-3 prebuilt
+// sdkconfigs) but only records it once esp_sntp_servermode_dhcp() has been
+// called; it then lands in lwIP's SNTP server slot 0, which we read back and
+// hand to our own (Mongoose) client - lwIP's SNTP app itself is never started.
+#if defined(ESP32) && !defined(EPOXY_DUINO)
+#include <esp_sntp.h>
+#define HAVE_DHCP_NTP LWIP_DHCP_GET_NTP_SRV
+#else
+#define HAVE_DHCP_NTP 0
+#endif
+
+static void netEnableDhcpNtp()
+{
+#if HAVE_DHCP_NTP
+  // Needs the TCP/IP stack up (it runs on the lwIP thread) and must precede
+  // the first DHCP exchange, so the interface START events are the spot
+  esp_sntp_servermode_dhcp(true);
+#endif
+}
+
+static String netDhcpNtpServer()
+{
+#if HAVE_DHCP_NTP
+  const ip_addr_t *server = esp_sntp_getserver(0);
+  if(server && !ip_addr_isany(server) && IP_IS_V4(server)) {
+    char buf[16];
+    ip4addr_ntoa_r(ip_2_ip4(server), buf, sizeof(buf));
+    return String(buf);
+  }
+#endif
+  return String("");
+}
+
 #ifndef WIRED_CONNECT_TIMEOUT
 #define WIRED_CONNECT_TIMEOUT (15 * 1000)
 #endif
@@ -51,6 +85,7 @@ NetManagerTask::NetManagerTask(LcdTask &lcd, LedManagerTask &led, TimeManager &t
   _apClients(0),
   _state(NetState::Starting),
   _ipaddress(""),
+  _ipv6address(""),
   _macaddress(""),
   _clientDisconnects(0),
   _clientRetry(false),
@@ -171,6 +206,13 @@ void NetManagerTask::wifiClientConnect()
   WiFi.setSleep(WIFI_PS_NONE);
   WiFi.setScanMethod(WIFI_ALL_CHANNEL_SCAN);
   WiFi.setSortMethod(WIFI_CONNECT_AP_BY_SIGNAL);
+#if defined(ESP32) && !defined(EPOXY_DUINO)
+#if ESP_ARDUINO_VERSION_MAJOR >= 3
+  WiFi.enableIPv6();
+#else
+  WiFi.enableIpV6();
+#endif
+#endif
   WiFi.begin(esid.c_str(), epass.c_str());
 
   _clientRetryTime = millis() + WIFI_CLIENT_RETRY_TIMEOUT;
@@ -214,15 +256,17 @@ void NetManagerTask::displayState()
   _lcd.display(_ipaddress.c_str(), 0, 1, 5000, LCD_CLEAR_LINE);
 }
 
-void NetManagerTask::haveNetworkConnection(IPAddress myAddress)
+void NetManagerTask::haveNetworkConnection(IPAddress myAddress, IPAddress netmask)
 {
   char tmpStr[40];
   sprintf(tmpStr, "%d.%d.%d.%d", myAddress[0], myAddress[1], myAddress[2], myAddress[3]);
   _ipaddress = tmpStr;
+  sprintf(tmpStr, "%d.%d.%d.%d", netmask[0], netmask[1], netmask[2], netmask[3]);
+  _netmask = tmpStr;
   _macaddress = WiFi.macAddress();
 
   DEBUG.print("Connected, IP: ");
-  DEBUG.println(tmpStr);
+  DEBUG.println(_ipaddress);
 
   displayState();
 
@@ -231,6 +275,12 @@ void NetManagerTask::haveNetworkConnection(IPAddress myAddress)
   _led.setWifiMode(true, true);
   _lcd.setWifiMode(true, true);
   _time.setHost(sntp_hostname.c_str());
+  _time.setDhcpServer(netDhcpNtpServer().c_str());
+  // Apply the persisted SNTP-enable to the running TimeManager. Its _sntpEnabled
+  // starts false and is otherwise only updated by a runtime config change, so
+  // without this a cold boot leaves NTP disabled even when the config has it on
+  // (masked on real hardware by the controller's RTC, exposed on a bare ESP32).
+  _time.setSntpEnabled(config_sntp_enabled());
 
   _apAutoApStopTime = millis() + ACCESS_POINT_AUTO_STOP_TIMEOUT;
 
@@ -243,7 +293,7 @@ void NetManagerTask::wifiOnStationModeConnected(const WiFiEventStationModeConnec
 
 void NetManagerTask::wifiOnStationModeGotIP(const WiFiEventStationModeGotIP &event)
 {
-  haveNetworkConnection(WiFi.localIP());
+  haveNetworkConnection(WiFi.localIP(), WiFi.subnetMask());
   _macaddress = WiFi.macAddress();
   StaticJsonDocument<128> doc;
   doc["wifi_client_connected"] = (int)net.isWifiClientConnected();
@@ -412,6 +462,7 @@ void NetManagerTask::onNetEvent(WiFiEvent_t event, arduino_event_info_t &info)
 
     case ARDUINO_EVENT_WIFI_STA_START:
     {
+      netEnableDhcpNtp();
       if(WiFi.setHostname(esp_hostname.c_str())) {
         DBUGF("Set host name to %s", WiFi.getHostname());
       } else {
@@ -462,6 +513,27 @@ void NetManagerTask::onNetEvent(WiFiEvent_t event, arduino_event_info_t &info)
       }
     } break;
 
+    case ARDUINO_EVENT_WIFI_STA_GOT_IP6:
+    {
+#if defined(ESP32) && !defined(EPOXY_DUINO)
+#if ESP_ARDUINO_VERSION_MAJOR >= 3
+      _ipv6address = WiFi.linkLocalIPv6().toString();
+#else
+      _ipv6address = WiFi.localIPv6().toString();
+#endif
+#endif
+      DBUGF("WiFi STA IPv6: %s", _ipv6address.c_str());
+
+      StaticJsonDocument<256> doc;
+      doc["wifi_client_connected"] = (int)net.isWifiClientConnected();
+      doc["eth_connected"] = (int)net.isWiredConnected();
+      doc["net_connected"] = (int)net.isWifiClientConnected();
+      doc["ipaddress"] = net.getIp();
+      doc["ipv6address"] = net.getIpv6();
+      doc["macaddress"] = net.getMac();
+      event_send(doc);
+    } break;
+
     case ARDUINO_EVENT_WIFI_AP_STACONNECTED:
     {
       auto& src = info.wifi_ap_staconnected;
@@ -495,6 +567,7 @@ void NetManagerTask::onNetEvent(WiFiEvent_t event, arduino_event_info_t &info)
 #ifdef ENABLE_WIRED_ETHERNET
     case ARDUINO_EVENT_ETH_START:
       DBUGF("ETH Started, link %s", ETH.linkUp() ? "up" : "down");
+      netEnableDhcpNtp();
       if(ETH.linkUp())
       {
         //set eth hostname here
@@ -509,6 +582,11 @@ void NetManagerTask::onNetEvent(WiFiEvent_t event, arduino_event_info_t &info)
       break;
     case ARDUINO_EVENT_ETH_CONNECTED:
       DBUGLN("ETH Connected");
+#if ESP_ARDUINO_VERSION_MAJOR >= 3
+      ETH.enableIPv6();
+#else
+      ETH.enableIpV6();
+#endif
       break;
     case ARDUINO_EVENT_ETH_GOT_IP:
       DBUG("ETH MAC: ");
@@ -521,10 +599,18 @@ void NetManagerTask::onNetEvent(WiFiEvent_t event, arduino_event_info_t &info)
       DBUG(", ");
       DBUG(ETH.linkSpeed());
       DBUGLN("Mbps");
-      haveNetworkConnection(ETH.localIP());
+      haveNetworkConnection(ETH.localIP(), ETH.subnetMask());
       _macaddress = ETH.macAddress();
       _ethConnected = true;
       wifiStop();
+      break;
+    case ARDUINO_EVENT_ETH_GOT_IP6:
+#if ESP_ARDUINO_VERSION_MAJOR >= 3
+      _ipv6address = ETH.linkLocalIPv6().toString();
+#else
+      _ipv6address = ETH.localIPv6().toString();
+#endif
+      DBUGF("ETH IPv6: %s", _ipv6address.c_str());
       break;
     case ARDUINO_EVENT_ETH_DISCONNECTED:
       DBUGLN("ETH Disconnected");
@@ -578,12 +664,14 @@ void NetManagerTask::setup()
 
   if (MDNS.begin(esp_hostname.c_str()))
   {
-    MDNS.addService("http", "tcp", www_http_port);
-    MDNS.addService("openevse", "tcp", www_http_port);
+    bool ssl = config_https_enabled();
+    uint16_t svcPort = ssl ? www_https_port : www_http_port;
+    MDNS.addService("http", "tcp", svcPort);
+    MDNS.addService("openevse", "tcp", svcPort);
     MDNS.addServiceTxt("openevse", "tcp", "type", buildenv.c_str());
     MDNS.addServiceTxt("openevse", "tcp", "version", currentfirmware.c_str());
     MDNS.addServiceTxt("openevse", "tcp", "id", ESPAL.getLongId());
-    
+    MDNS.addServiceTxt("openevse", "tcp", "ssl", ssl ? "1" : "0");
   }
 }
 

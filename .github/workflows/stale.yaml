@@ -1,0 +1,43 @@
+# yaml-language-server: $schema=https://json.schemastore.org/github-workflow.json
+
+name: Close stale issues and PRs
+
+permissions:
+  issues: write
+  pull-requests: write
+
+on:
+  schedule:
+    - cron: '30 4 * * *'
+  workflow_dispatch:
+
+jobs:
+  stale:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/stale@v11
+        with:
+          operations-per-run: 200
+          days-before-issue-stale: 180
+          days-before-issue-close: 30
+          days-before-pr-stale: 90
+          days-before-pr-close: 30
+          stale-issue-label: stale
+          stale-pr-label: stale
+          exempt-issue-labels: 'pinned,security,bug confirmed'
+          exempt-pr-labels: 'pinned,security'
+          exempt-all-milestones: true
+          stale-issue-message: >
+            This issue has had no activity for 6 months. It will be closed in 30
+            days unless there is further activity. Comment or add more detail to
+            keep it open.
+          stale-pr-message: >
+            This pull request has had no activity for 3 months. It will be closed
+            in 30 days unless there is further activity. Comment or rebase to
+            keep it open.
+          close-issue-message: >
+            Closing due to inactivity. Feel free to reopen or file a new issue if
+            this is still a problem on the latest firmware.
+          close-pr-message: >
+            Closing due to inactivity. Feel free to reopen once the branch is
+            ready to move forward.

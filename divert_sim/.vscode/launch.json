@@ -10,7 +10,7 @@
       "request": "launch",
       "program": "${workspaceFolder}/divert_sim",
       "args": [
-        "-c", "data/test_shaper.json",
+        "--config", "{\"current_shaper_max_pwr\":5000}",
         "-l", "1",
         "--sep", "\\;",
         "<", "${workspaceFolder}/data/data_shaper.csv"
@@ -36,7 +36,7 @@
       "request": "launch",
       "program": "${workspaceFolder}/divert_sim",
       "args": [
-        "-c", "data/test_config.json",
+        "--config", "{\"divert_PV_ratio\":1.1,\"divert_attack_smoothing_time\":20,\"divert_decay_smoothing_time\":600,\"divert_min_charge_time\":600}",
         "-s", "1",
         "<", "${workspaceFolder}/data/day1.csv"
       ],

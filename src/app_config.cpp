@@ -9,7 +9,11 @@
 #include "app_config.h"
 #include "app_config_mqtt.h"
 #include "app_config_mode.h"
+#include "certificates.h"
 #include "temp_throttle.h"
+#include "flash_migrate.h"
+
+#include "web_auth_secret.h"
 
 #if ENABLE_CONFIG_CHANGE_NOTIFICATION
 #include <esp_ota_ops.h>
@@ -58,6 +62,9 @@ String www_username;
 String www_password;
 String www_certificate_id;
 
+// Session HMAC key — generated on first load, rotated on credential change.
+String server_secret;
+
 // Web server ports
 uint32_t www_http_port;
 uint32_t www_https_port;
@@ -66,8 +73,17 @@ uint32_t www_https_port;
 String esp_hostname;
 String sntp_hostname;
 
+// Device-wide temperature display unit ("c" | "f").
+String temp_unit;
+
 // On-device LVGL TFT display theme ("dark" | "light").
 String tft_theme;
+uint32_t tft_brightness;
+uint32_t tft_standby_brightness;
+
+// LCD backlight timeout (in seconds, 0 = never timeout). Shared key with the
+// char-LCD / TFT_eSPI energy-saving timeout (upstream PR #1039).
+uint32_t lcd_backlight_timeout;
 
 // LIMIT Settings
 String limit_default_type;
@@ -111,8 +127,6 @@ String time_zone;
 uint32_t flags;
 uint32_t flags_changed;
 
-// Ohm Connect Settings
-String ohm;
 
 // Divert settings
 int8_t divert_type;
@@ -163,6 +177,29 @@ long max_current_soft;
 // Scheduler settings
 uint32_t scheduler_start_window;
 
+// Load Sharing settings
+bool loadsharing_enabled;
+String loadsharing_group_id;
+double loadsharing_group_max_current;
+double loadsharing_safety_factor;
+uint32_t loadsharing_heartbeat_timeout;
+String loadsharing_failsafe_mode;
+double loadsharing_failsafe_safe_current;
+double loadsharing_failsafe_peer_assumed_current;
+uint32_t loadsharing_config_version;
+uint32_t loadsharing_config_updated_at;
+uint32_t loadsharing_peers_version;
+uint32_t loadsharing_status_version;
+String loadsharing_role;
+String loadsharing_controller_host;
+uint32_t loadsharing_rotation_interval;
+
+// Advisory acknowledgements: "key:hextoken;" repeated, plus the firmware
+// version that wrote them. A version change drops the lot - a firmware
+// update is a service event, where a power cut is not.
+String notification_acks;
+String notification_acks_fw;
+
 String esp_hostname_default = "openevse-"+ESPAL.getShortId();
 
 void config_changed(String name);
@@ -171,10 +208,16 @@ void config_changed(String name);
 #define CONFIG_DEFAULT_STATE_DEFAULT CONFIG_DEFAULT_STATE
 #endif
 
+#ifndef CONFIG_TEMP_THROTTLE_DEFAULT
+#define CONFIG_TEMP_THROTTLE_DEFAULT CONFIG_TEMP_THROTTLE
+#endif
+
 #define CONFIG_DEFAULT_FLAGS (CONFIG_SERVICE_SNTP | \
                               CONFIG_OCPP_AUTO_AUTH | \
                               CONFIG_OCPP_OFFLINE_AUTH | \
-                              CONFIG_DEFAULT_STATE_DEFAULT)
+                              CONFIG_TEMP_THROTTLE_DEFAULT | \
+                              CONFIG_DEFAULT_STATE_DEFAULT | \
+                              CONFIG_LCD_NETWORK_INFO)
 
 ConfigOptDefinition<uint32_t> flagsOpt = ConfigOptDefinition<uint32_t>(flags, CONFIG_DEFAULT_FLAGS, "flags", "f");
 ConfigOptDefinition<uint32_t> flagsChanged = ConfigOptDefinition<uint32_t>(flags_changed, 0, "flags_changed", "c");
@@ -194,6 +237,7 @@ ConfigOpt *opts[] =
   new ConfigOptDefinition<String>(www_username, "", "www_username", "au"),
   new ConfigOptSecret(www_password, "", "www_password", "ap"),
   new ConfigOptDefinition<String>(www_certificate_id, "", "www_certificate_id", "wc"),
+  new ConfigOptSecret(server_secret, "", "server_secret", "wsk"),
 
 // Web server ports
   new ConfigOptDefinition<uint32_t>(www_http_port, HTTP_SERVER_PORT, "www_http_port", "whp"),
@@ -203,11 +247,20 @@ ConfigOpt *opts[] =
   new ConfigOptDefinition<String>(esp_hostname, esp_hostname_default, "hostname", "hn"),
   new ConfigOptDefinition<String>(sntp_hostname, SNTP_DEFAULT_HOST, "sntp_hostname", "sh"),
 
+// Temperature display unit ("c" | "f") — device-wide, read by the display and
+// the web UI so both agree. Default Celsius (the device always reports °C).
+  new ConfigOptDefinition<String>(temp_unit, "c", "temp_unit", "tu"),
+
 #ifdef ENABLE_SCREEN_LVGL_TFT
 // On-device display theme (only present on LVGL-TFT builds; its presence in
 // /config is the GUI's capability signal that this device has the panel).
   new ConfigOptDefinition<String>(tft_theme, "dark", "tft_theme", "tt"),
+  new ConfigOptDefinition<uint32_t>(tft_brightness, 100, "tft_brightness", "tb"),
+  new ConfigOptDefinition<uint32_t>(tft_standby_brightness, 15, "tft_standby_brightness", "tsb"),
 #endif
+
+// LCD backlight timeout
+  new ConfigOptDefinition<uint32_t>(lcd_backlight_timeout, LCD_BACKLIGHT_TIMEOUT_DEFAULT, "lcd_backlight_timeout", "lbt"),
 
 // Time
   new ConfigOptDefinition<String>(time_zone, DEFAULT_TIME_ZONE, "time_zone", "tz"),
@@ -217,21 +270,21 @@ ConfigOpt *opts[] =
   new ConfigOptDefinition<uint32_t>(limit_default_value, LIMIT_DEFAULT_VALUE_DEFAULT, "limit_default_value", "ldv"),
 
 // EMONCMS SERVER strings
-  new ConfigOptDefinition<String>(emoncms_server, "https://data.openevse.com/emoncms", "emoncms_server", "es"),
+  new ConfigOptDefinition<String>(emoncms_server, "https://emoncms.org", "emoncms_server", "es"),
   new ConfigOptDefinition<String>(emoncms_node, esp_hostname, "emoncms_node", "en"),
   new ConfigOptSecret(emoncms_apikey, "", "emoncms_apikey", "ea"),
   new ConfigOptDefinition<String>(emoncms_fingerprint, "", "emoncms_fingerprint", "ef"),
 
 // MQTT Settings
-  new ConfigOptDefinition<String>(mqtt_server, "emonpi", "mqtt_server", "ms"),
+  new ConfigOptDefinition<String>(mqtt_server, "", "mqtt_server", "ms"),
   new ConfigOptDefinition<uint32_t>(mqtt_port, 1883, "mqtt_port", "mpt"),
   new ConfigOptDefinition<String>(mqtt_topic, esp_hostname, "mqtt_topic", "mt"),
-  new ConfigOptDefinition<String>(mqtt_user, "emonpi", "mqtt_user", "mu"),
-  new ConfigOptSecret(mqtt_pass, "emonpimqtt2016", "mqtt_pass", "mp"),
+  new ConfigOptDefinition<String>(mqtt_user, "", "mqtt_user", "mu"),
+  new ConfigOptSecret(mqtt_pass, "", "mqtt_pass", "mp"),
   new ConfigOptDefinition<String>(mqtt_certificate_id, "", "mqtt_certificate_id", "mct"),
   new ConfigOptDefinition<String>(mqtt_solar, "", "mqtt_solar", "mo"),
-  new ConfigOptDefinition<String>(mqtt_grid_ie, "emon/emonpi/power1", "mqtt_grid_ie", "mg"),
-  new ConfigOptDefinition<String>(mqtt_vrms, "emon/emonpi/vrms", "mqtt_vrms", "mv"),
+  new ConfigOptDefinition<String>(mqtt_grid_ie, "", "mqtt_grid_ie", "mg"),
+  new ConfigOptDefinition<String>(mqtt_vrms, "", "mqtt_vrms", "mv"),
   new ConfigOptDefinition<String>(mqtt_live_pwr, "", "mqtt_live_pwr", "map"),
   new ConfigOptDefinition<String>(mqtt_vehicle_soc, "", "mqtt_vehicle_soc", "mc"),
   new ConfigOptDefinition<String>(mqtt_vehicle_range, "", "mqtt_vehicle_range", "mr"),
@@ -247,8 +300,6 @@ ConfigOpt *opts[] =
   new ConfigOptDefinition<String>(ocpp_authkey, "", "ocpp_authkey", "oky"),
   new ConfigOptDefinition<String>(ocpp_idtag, "DefaultIdTag", "ocpp_idtag", "idt"),
 
-// Ohm Connect Settings
-  new ConfigOptDefinition<String>(ohm, "", "ohm", "o"),
 
 // Divert settings
   new ConfigOptDefinition<int8_t>(divert_type, -1, "divert_type", "dm"),
@@ -288,6 +339,28 @@ ConfigOpt *opts[] =
   new ConfigOptDefinition<uint8_t>(led_brightness, LED_DEFAULT_BRIGHTNESS, "led_brightness", "lb"),
 #endif
 
+// Load Sharing settings
+  new ConfigOptDefinition<bool>(loadsharing_enabled, false, "loadsharing_enabled", "lse"),
+  new ConfigOptDefinition<String>(loadsharing_group_id, "", "loadsharing_group_id", "lsgi"),
+  new ConfigOptDefinition<double>(loadsharing_group_max_current, 0.0, "loadsharing_group_max_current", "lsgmc"),
+  new ConfigOptDefinition<double>(loadsharing_safety_factor, 1.0, "loadsharing_safety_factor", "lssf"),
+  new ConfigOptDefinition<uint32_t>(loadsharing_heartbeat_timeout, 30, "loadsharing_heartbeat_timeout", "lsht"),
+  new ConfigOptDefinition<String>(loadsharing_failsafe_mode, "safe_current", "loadsharing_failsafe_mode", "lsfm"),
+  new ConfigOptDefinition<double>(loadsharing_failsafe_safe_current, 6.0, "loadsharing_failsafe_safe_current", "lsfsc"),
+  new ConfigOptDefinition<double>(loadsharing_failsafe_peer_assumed_current, 6.0, "loadsharing_failsafe_peer_assumed_current", "lsfpac"),
+  new ConfigOptDefinition<uint32_t>(loadsharing_config_version, 0, "loadsharing_config_version", "lscv"),
+  new ConfigOptDefinition<uint32_t>(loadsharing_config_updated_at, 0, "loadsharing_config_updated_at", "lscua"),
+  new ConfigOptDefinition<String>(loadsharing_role, "", "loadsharing_role", "lsr"),
+  new ConfigOptDefinition<String>(loadsharing_controller_host, "", "loadsharing_controller_host", "lsch"),
+  // Rotation interval in seconds (0 disables). Effective max ~49 days on 32-bit millis; larger values wrap.
+  new ConfigOptDefinition<uint32_t>(loadsharing_rotation_interval, 1800, "loadsharing_rotation_interval", "lsri"),
+
+// Advisory acknowledgements: "key:hextoken;" repeated, plus the firmware
+// version that wrote them. A version change drops the lot - a firmware
+// update is a service event, where a power cut is not.
+  new ConfigOptDefinition<String>(notification_acks, "", "notification_acks", "nak"),
+  new ConfigOptDefinition<String>(notification_acks_fw, "", "notification_acks_fw", "nkv"),
+
 // Scheduler options
   new ConfigOptDefinition<uint32_t>(scheduler_start_window, SCHEDULER_DEFAULT_START_WINDOW, "scheduler_start_window", "ssw"),
 
@@ -300,8 +373,9 @@ ConfigOpt *opts[] =
   new ConfigOptVirtualMaskedBool(flagsOpt, flagsChanged, CONFIG_SERVICE_MQTT, CONFIG_SERVICE_MQTT, "mqtt_enabled", "me"),
   new ConfigOptVirtualMaskedBool(flagsOpt, flagsChanged, CONFIG_MQTT_ALLOW_ANY_CERT, 0, "mqtt_reject_unauthorized", "mru"),
   new ConfigOptVirtualMaskedBool(flagsOpt, flagsChanged, CONFIG_MQTT_RETAINED, CONFIG_MQTT_RETAINED, "mqtt_retained", "mrt"),
-  new ConfigOptVirtualMaskedBool(flagsOpt, flagsChanged, CONFIG_SERVICE_OHM, CONFIG_SERVICE_OHM, "ohm_enabled", "oe"),
+  new ConfigOptVirtualMaskedBool(flagsOpt, flagsChanged, CONFIG_MQTT_NO_SYS_QUERY, 0, "mqtt_sys_query", "msq"),
   new ConfigOptVirtualMaskedBool(flagsOpt, flagsChanged, CONFIG_SERVICE_SNTP, CONFIG_SERVICE_SNTP, "sntp_enabled", "se"),
+  new ConfigOptVirtualMaskedBool(flagsOpt, flagsChanged, CONFIG_SNTP_NO_DHCP, 0, "sntp_dhcp", "sd"),
   new ConfigOptVirtualMaskedBool(flagsOpt, flagsChanged, CONFIG_SERVICE_TESLA, CONFIG_SERVICE_TESLA, "tesla_enabled", "te"),
   new ConfigOptVirtualMaskedBool(flagsOpt, flagsChanged, CONFIG_SERVICE_DIVERT, CONFIG_SERVICE_DIVERT, "divert_enabled", "de"),
   new ConfigOptVirtualMaskedBool(flagsOpt, flagsChanged, CONFIG_SERVICE_CUR_SHAPER, CONFIG_SERVICE_CUR_SHAPER, "current_shaper_enabled", "cse"),
@@ -318,6 +392,8 @@ ConfigOpt *opts[] =
   new ConfigOptVirtualMaskedBool(flagsOpt, flagsChanged, CONFIG_WIZARD, CONFIG_WIZARD, "wizard_passed", "wzp"),
   new ConfigOptVirtualMaskedBool(flagsOpt, flagsChanged, CONFIG_DEFAULT_STATE, CONFIG_DEFAULT_STATE, "default_state", "dfs"),
   new ConfigOptVirtualMaskedBool(flagsOpt, flagsChanged, CONFIG_TEMP_THROTTLE, CONFIG_TEMP_THROTTLE, "temp_throttle_enabled", "tte"),
+  new ConfigOptVirtualMaskedBool(flagsOpt, flagsChanged, CONFIG_LCD_NETWORK_INFO, CONFIG_LCD_NETWORK_INFO, "lcd_network_info", "lni"),
+  new ConfigOptVirtualMaskedBool(flagsOpt, flagsChanged, CONFIG_TFT_12H_CLOCK, CONFIG_TFT_12H_CLOCK, "tft_12h_clock", "t12"),
   new ConfigOptVirtualMqttProtocol(flagsOpt, flagsChanged, "mqtt_protocol", "mprt"),
   new ConfigOptVirtualChargeMode(flagsOpt, flagsChanged, "charge_mode", "chmd")
 };
@@ -397,6 +473,18 @@ config_load_settings()
     }
 #endif
 
+#if CONFIG_TEMP_THROTTLE_DEFAULT != 0
+    // Temperature throttle default flipped from 0 to 1: a current 0 is treated
+    // as the old default (not an intentional change) so it becomes enabled on
+    // upgrade; a current 1 is kept as an intentional setting.
+    new_changed &= ~CONFIG_TEMP_THROTTLE;
+    if(flags != CONFIG_DEFAULT_FLAGS &&
+       CONFIG_TEMP_THROTTLE == (flags & CONFIG_TEMP_THROTTLE))
+    {
+      new_changed |= CONFIG_TEMP_THROTTLE;
+    }
+#endif
+
     // Save any changes
     if(flagsChanged.set(new_changed)) {
       user_config.commit();
@@ -405,17 +493,29 @@ config_load_settings()
 
   // now lets apply any default flags that have not explicitly been set by the user
   flags |= CONFIG_DEFAULT_FLAGS & ~flags_changed;
+
+  // Generate server_secret on first boot (empty after load means the key was
+  // never stored). web_auth_ensure_secret() persists via user_config.commit().
+  web_auth_ensure_secret();
 }
 
 void config_changed(String name)
 {
   DBUGF("%s changed", name.c_str());
 
+  // Security: invalidate all sessions whenever credentials change.
+  // This must run regardless of ENABLE_CONFIG_CHANGE_NOTIFICATION.
+  if(name == "www_password" || name == "www_username") {
+    web_auth_rotate_secret();
+  }
+
 #if ENABLE_CONFIG_CHANGE_NOTIFICATION
   if(name == "time_zone") {
     timeManager.setTimeZone(time_zone);
   } else if(name == "flags") {
-    divert.setMode((config_divert_enabled() && 1 == config_charge_mode()) ? DivertMode::Eco : DivertMode::Normal);
+    if(!divert.isTimerDivertActive()) {
+      divert.setMode((config_divert_enabled() && 1 == config_charge_mode()) ? DivertMode::Eco : DivertMode::Normal);
+    }
     if(mqtt.isConnected() != config_mqtt_enabled()) {
       mqtt.restartConnection();
     }
@@ -423,6 +523,7 @@ void config_changed(String name)
       emoncms_updated = true;
     }
     timeManager.setSntpEnabled(config_sntp_enabled());
+    timeManager.setDhcpEnabled(config_sntp_dhcp());
     OcppTask::notifyConfigChanged();
     evse.setSleepForDisable(!config_pause_uses_disabled());
   } else if(name.startsWith("mqtt_")) {
@@ -436,7 +537,9 @@ void config_changed(String name)
   } else if(name == "divert_enabled" || name == "charge_mode") {
     DBUGVAR(config_divert_enabled());
     DBUGVAR(config_charge_mode());
-    divert.setMode((config_divert_enabled() && 1 == config_charge_mode()) ? DivertMode::Eco : DivertMode::Normal);
+    if(!divert.isTimerDivertActive()) {
+      divert.setMode((config_divert_enabled() && 1 == config_charge_mode()) ? DivertMode::Eco : DivertMode::Normal);
+    }
   } else if(name.startsWith("current_shaper_")) {
     shaper.notifyConfigChanged(config_current_shaper_enabled()?1:0,current_shaper_max_pwr);
   } else if(name.startsWith("temp_throttle_")) {
@@ -453,6 +556,8 @@ void config_changed(String name)
     limit.setDefaultLimit(limit_default_type.c_str(), limit_default_value);
   } else if(name == "sntp_enabled") {
     timeManager.setSntpEnabled(config_sntp_enabled());
+  } else if(name == "sntp_dhcp") {
+    timeManager.setDhcpEnabled(config_sntp_dhcp());
   } else if(name == "sntp_hostname") {
     timeManager.setHost(sntp_hostname.c_str());
   }
@@ -466,17 +571,96 @@ void config_commit(bool factory)
   config.commit();
 }
 
+// Persist user config without touching the factory_write_lock flag.
+// Use this from code that writes individual fields (e.g. server_secret) and
+// must not inadvertently lock the factory partition.
+void config_user_commit()
+{
+  user_config.commit();
+}
+
+// Persist the notification ack state.
+//
+// Assigning the notification_acks / notification_acks_fw globals directly and
+// then calling commit() does NOT write anything: ConfigJson::commit() returns
+// early unless its _modified flag is set, and that flag is only raised by
+// deserialize() (or reset()) - never by writing the underlying variable a
+// ConfigOptDefinition wraps. Nothing else in a quiet boot dirties the config,
+// so an ack made that way survives in RAM and is gone at the next restart.
+// Routing the write through deserialize() sets the flag, and only when a value
+// actually changed, so an unchanged ack list still costs no EEPROM write.
+void config_save_notification_acks(const String &acks, const String &fw)
+{
+  const size_t capacity = JSON_OBJECT_SIZE(2) + 512;
+  DynamicJsonDocument doc(capacity);
+  doc["notification_acks"] = acks;
+  doc["notification_acks_fw"] = fw;
+  if(user_config.deserialize(doc)) {
+    user_config.commit();
+  }
+}
+
+bool config_https_enabled()
+{
+#ifndef DIVERT_SIM
+  if (www_certificate_id == "") {
+    return false;
+  }
+  // This runs from mDNS setup during network bring-up, so a corrupt stored id
+  // would crash-loop the firmware if it were parsed with a throwing conversion.
+  uint64_t cert_id = 0;
+  if (!certificate_id_from_string(www_certificate_id.c_str(), cert_id)) {
+    DBUGF("config_https_enabled: invalid www_certificate_id '%s'", www_certificate_id.c_str());
+    return false;
+  }
+
+  const char *cert = certs.getCertificate(cert_id);
+  const char *key = certs.getKey(cert_id);
+  return (NULL != cert && NULL != key);
+#else
+  return false;
+#endif
+}
+
+// notification_acks / notification_acks_fw ride the EEPROM-backed opts[]
+// array for load/save, but they are the persisted advisory-ack blob, not a
+// user-facing setting. They are stripped from every public path in both
+// directions: a /config POST, an MQTT config/set or a RAPI config command
+// must not be able to overwrite the ack state, and a /config response or an
+// MQTT config publish must not carry it. config_save_notification_acks() is
+// the one writer and goes to user_config directly.
+static void config_strip_internal(JsonDocument &doc)
+{
+  doc.remove("notification_acks");
+  doc.remove("notification_acks_fw");
+  doc.remove("nak");
+  doc.remove("nkv");
+}
+
 bool config_deserialize(String& json) {
-  return user_config.deserialize(json.c_str());
+  return config_deserialize(json.c_str());
 }
 
 bool config_deserialize(const char *json)
 {
-  return user_config.deserialize(json);
+  // Same capacity ConfigJson::deserialize(const char *) uses, so anything it
+  // could parse still parses here.
+  const size_t capacity = JSON_OBJECT_SIZE(sizeof(opts) / sizeof(opts[0])) + EEPROM_SIZE;
+  DynamicJsonDocument doc(capacity);
+  if(DeserializationError::Code::Ok != deserializeJson(doc, json)) {
+    return false;
+  }
+  config_strip_internal(doc);
+  // True means "parsed", as ConfigJson::deserialize(const char *) reports it,
+  // not "something changed": divert_sim feeds its scenario config through
+  // here and treats false as a malformed file.
+  user_config.deserialize(doc);
+  return true;
 }
 
 bool config_deserialize(DynamicJsonDocument &doc)
 {
+  config_strip_internal(doc);
   bool config_modified = user_config.deserialize(doc);
 
   #if ENABLE_CONFIG_CHANGE_NOTIFICATION
@@ -596,6 +780,32 @@ bool config_deserialize(DynamicJsonDocument &doc)
     }
   }
 
+  // Skipped entirely once a $S0 write has actually been rejected with $NK:
+  // that means this controller build doesn't have LCD16X2+RGBLCD compiled
+  // in, getLcdType() can never change no matter what's requested, and
+  // retrying on every POST would just re-trigger a config-change
+  // notification for a write that can't take. See the comment on
+  // EvseMonitor::_lcd_type_supported.
+  if(doc.containsKey("lcd_type") && evse.isLcdTypeSupported())
+  {
+    const char *val = doc["lcd_type"];
+    // ArduinoJson hands back nullptr for a non-string value, so this also
+    // covers {"lcd_type": true}/{"lcd_type": 0} etc. Anything other than
+    // exactly "mono" or "rgb" is ignored rather than silently treated as
+    // RGB - there's no existing precedent for a string-valued EVSE setting
+    // here to inherit a looser convention from.
+    bool isMono = val && 0 == strcmp(val, "mono");
+    bool isRgb  = val && 0 == strcmp(val, "rgb");
+    if(isMono || isRgb) {
+      EvseMonitor::LcdType type = isMono ? EvseMonitor::LcdType::Mono : EvseMonitor::LcdType::RGB;
+      if(type != evse.getLcdType()) {
+        evse.setLcdType(type);
+        config_modified = true;
+        DBUGLN("lcd_type changed");
+      }
+    }
+  }
+
   if(doc.containsKey("pp_auto"))
   {
     bool enable = doc["pp_auto"];
@@ -615,6 +825,29 @@ bool config_deserialize(DynamicJsonDocument &doc)
       DBUGLN("zero_cross changed");
     }
   }
+
+#ifdef ENABLE_CABLE_TEMP
+  if(doc.containsKey("cable_temp"))
+  {
+    bool enable = doc["cable_temp"];
+    // isCableTempEnabled() now trusts EvseMonitor's cached commanded value
+    // over its NOT_INSTALLED-inference fallback (see _cable_temp_commanded),
+    // so it no longer misreports "off" immediately after a successful
+    // enable with no source assigned yet - the guard is safe here like it
+    // is for its neighbours, PROVIDED that fallback hasn't actually been
+    // used: a controller that already had the feature on with zero sources
+    // assigned - from before this ESP32 last rebooted, so nothing has been
+    // commanded yet this session - would otherwise still read as (falsely)
+    // off, and an incoming {"cable_temp": false} would then match that false
+    // reading and never actually get sent. isCableTempCommandKnown() is
+    // false in exactly that situation, so send unconditionally then.
+    if(!evse.isCableTempCommandKnown() || enable != evse.isCableTempEnabled()) {
+      evse.enableCableTemp(enable);
+      config_modified = true;
+      DBUGLN("cable_temp changed");
+    }
+  }
+#endif // ENABLE_CABLE_TEMP
 
   if(doc.containsKey("relay_dc1"))
   {
@@ -661,11 +894,17 @@ bool config_deserialize(DynamicJsonDocument &doc)
 
   if(doc.containsKey("service"))
   {
-    EvseMonitor::ServiceLevel service = static_cast<EvseMonitor::ServiceLevel>(doc["service"].as<uint8_t>());
-    if(service != evse.getServiceLevel()) {
-      evse.setServiceLevel(service);
-      config_modified = true;
-      DBUGLN("service changed");
+    // Only L1/L2 are valid; Auto (0, no longer offered) and anything else are
+    // ignored so a stale stored value can't put $SL A on the wire.
+    uint8_t value = doc["service"].as<uint8_t>();
+    if(1 == value || 2 == value)
+    {
+      EvseMonitor::ServiceLevel service = static_cast<EvseMonitor::ServiceLevel>(value);
+      if(service != evse.getServiceLevel()) {
+        evse.setServiceLevel(service);
+        config_modified = true;
+        DBUGLN("service changed");
+      }
     }
   }
 
@@ -721,7 +960,16 @@ bool config_deserialize(DynamicJsonDocument &doc)
 
 bool config_serialize(String& json, bool longNames, bool compactOutput, bool hideSecrets)
 {
-  return user_config.serialize(json, longNames, compactOutput, hideSecrets);
+  // Same capacity ConfigJson::serialize(String &) uses; the detour through a
+  // document is only so the internal keys can be stripped before rendering.
+  const size_t capacity = JSON_OBJECT_SIZE(30) + EEPROM_SIZE;
+  DynamicJsonDocument doc(capacity);
+  if(!user_config.serialize(doc, longNames, compactOutput, hideSecrets)) {
+    return false;
+  }
+  config_strip_internal(doc);
+  serializeJson(doc, json);
+  return true;
 }
 
 bool config_serialize(DynamicJsonDocument &doc, bool longNames, bool compactOutput, bool hideSecrets)
@@ -742,11 +990,16 @@ bool config_serialize(DynamicJsonDocument &doc, bool longNames, bool compactOutp
   doc["espflash"] = ESPAL.getFlashChipSize();
   doc["heap_size"] = (uint32_t)ESP.getHeapSize();
   doc["littlefs_size"] = (uint32_t)LittleFS.totalBytes();
+  doc["littlefs_used"] = (uint32_t)LittleFS.usedBytes();
   {
     const esp_partition_t *p = esp_ota_get_running_partition();
     doc["app0_size"]   = p ? (uint32_t)p->size : 0;
     doc["sketch_size"] = (uint32_t)ESP.getSketchSize();
   }
+  // Flash repartition migration: lets the UI offer "Expand to 16MB" on a 16MB
+  // module that was flashed with the 4MB partition layout.
+  doc["partition_scheme"] = flash_migrate_partition_scheme();
+  doc["can_expand_16mb"]  = flash_migrate_can_expand_16mb();
 
   // EVSE information are only evailable when config_version is incremented
   if(config_ver > 0) {
@@ -768,12 +1021,37 @@ bool config_serialize(DynamicJsonDocument &doc, bool longNames, bool compactOutp
     }
     doc["front_button"] = evse.isFrontButtonEnabled();
     doc["boot_lock"] = evse.isBootLockEnabled();
+    // 2-line LCD backlight type. Only meaningful on controller builds with a
+    // physical character LCD (LCD16X2 + RGBLCD) - there's no RAPI capability
+    // bit for that, so support is only known once a $S0 write has actually
+    // been tried. Shown by default (nothing has been tried yet, so this is
+    // an optimistic guess, not a confirmed capability) and omitted once a
+    // write has actually come back $NK, so the GUI stops offering a control
+    // that can never take effect on this hardware.
+    if(evse.isLcdTypeSupported()) {
+      doc["lcd_type"] = (EvseMonitor::LcdType::Mono == evse.getLcdType()) ? "mono" : "rgb";
+    }
     // D9-only capability flag so clients can gate the controls below
     doc["d9_support"] = evse.isD9Supported();
     // PP auto-ampacity / zero-cross switching only exist on D9+ controllers
     if(evse.isD9Supported()) {
       doc["pp_auto"] = evse.isPPAutoAmpacityEnabled();
       doc["zero_cross"] = evse.isZeroCrossSwitchEnabled();
+#ifdef ENABLE_CABLE_TEMP
+      // Cable NTC monitoring: just the on/off state here. The per-source
+      // configuration is 20 more fields and this document's capacity is
+      // already noted as nearly exhausted (see handleConfigGet), so it lives
+      // on /cabletemp instead.
+      if(evse.isCableTempKnown()) {
+        doc["cable_temp"] = evse.isCableTempEnabled();
+      }
+#endif // ENABLE_CABLE_TEMP
+      // Relay-open current-zero threshold (mA), configurable on the
+      // controller via $SZ. Omitted (rather than a sentinel) when the
+      // controller hasn't reported one yet.
+      if(evse.getZeroCrossThresholdMa() != OPENEVSE_RELAY_HEALTH_NOT_AVAILABLE) {
+        doc["zero_cross_threshold_ma"] = evse.getZeroCrossThresholdMa();
+      }
     }
     // Per-relay state is only emitted once $GR has actually been answered, so
     // an unknown state is omitted rather than defaulting to "enabled"
@@ -781,6 +1059,29 @@ bool config_serialize(DynamicJsonDocument &doc, bool longNames, bool compactOutp
       doc["relay_dc1"] = evse.isDC1RelayEnabled();
       doc["relay_dc2"] = evse.isDC2RelayEnabled();
       doc["relay_ac"]  = evse.isACRelayEnabled();
+    }
+    // Relay contact-life health estimate (requires the controller's
+    // RELAY_HEALTH feature). Read only; the whole block is omitted rather
+    // than defaulting to 0% until $GL has actually been answered, same
+    // pattern as the per-relay state above.
+    if(evse.isRelayHealthKnown()) {
+      doc["relay_life_pct"] = evse.getRelayLifeRemainingPct();
+      doc["relay_cold_open_count"] = evse.getRelayColdOpenCount();
+      doc["relay_elec_damage_x1e6"] = evse.getRelayElecDamageX1e6();
+      doc["relay_transit_drift_warning"] = evse.isRelayTransitDriftWarning();
+      if(evse.getRelayTransitBaselineMs() != OPENEVSE_RELAY_HEALTH_NOT_AVAILABLE) {
+        doc["relay_transit_baseline_ms"] = evse.getRelayTransitBaselineMs();
+      }
+      doc["relay_thermal_warning_level"] = evse.getRelayThermalWarningLevel();
+      if(evse.getRelayThermalIndexX100() != OPENEVSE_RELAY_HEALTH_NOT_AVAILABLE) {
+        doc["relay_thermal_index_x100"] = evse.getRelayThermalIndexX100();
+      }
+      if(evse.getRelayThermalBaselineX100() != OPENEVSE_RELAY_HEALTH_NOT_AVAILABLE) {
+        doc["relay_thermal_baseline_x100"] = evse.getRelayThermalBaselineX100();
+      }
+      // 0 against firmware older than 9.3.0 (the field doesn't exist there),
+      // same as the controller-side default - no sentinel needed
+      doc["relay_stuck_recovery_count"] = evse.getRelayStuckRecoveryCount();
     }
     doc["chip_id"] = evse.getChipId();
     doc["heartbeat_interval"] = evse.getHeartbeatInterval();
@@ -796,7 +1097,9 @@ bool config_serialize(DynamicJsonDocument &doc, bool longNames, bool compactOutp
   }
   #endif
 
-  return user_config.serialize(doc, longNames, compactOutput, hideSecrets);
+  bool result = user_config.serialize(doc, longNames, compactOutput, hideSecrets);
+  config_strip_internal(doc);
+  return result;
 }
 
 bool config_set(const char *name, uint32_t val) {
@@ -815,7 +1118,7 @@ bool config_set(const char *name, double val) {
 bool config_set_opt_string(const char *name, const char *value) {
   // Try to determine the type from the config option definition
   // For now, we'll try as string first, then try as integer
-  
+
   // Create a JSON document with the value as a string
   const size_t capacity = JSON_OBJECT_SIZE(1) +  strlen(value) + strlen(value) + 16;
   DynamicJsonDocument doc(capacity);
@@ -831,7 +1134,7 @@ bool config_set_opt_string(const char *name, const char *value) {
     // Try parsing as integer
     char *endptr;
     long int_val = strtol(value, &endptr, 10);
-    
+
     if (*endptr == '\0' && value != endptr)
     {
       // Successfully parsed as integer
@@ -850,7 +1153,7 @@ bool config_set_opt_string(const char *name, const char *value) {
       }
     }
   }
-  
+
   return config_deserialize(doc);
 }
 
@@ -860,6 +1163,5 @@ void config_reset()
   LittleFS.format();
   config_load_settings();
 }
-
 
 

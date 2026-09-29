@@ -124,6 +124,13 @@ class CertificateStore
     bool serializeCertificates(DynamicJsonDocument &doc, uint32_t flags = Certificate::Flags::REDACT_PRIVATE_KEY);
     bool serializeCertificate(DynamicJsonDocument &doc, uint64_t id, uint32_t flags = Certificate::Flags::REDACT_PRIVATE_KEY);
 
+    // Serialising the whole store into one document needs a buffer large
+    // enough to hold every PEM body at once. These let a caller emit them one
+    // at a time, so the peak allocation is a single certificate rather than
+    // the entire store.
+    size_t certificateCount();
+    bool serializeCertificateAt(DynamicJsonDocument &doc, size_t index, uint32_t flags = Certificate::Flags::REDACT_PRIVATE_KEY);
+
   private:
     bool loadCertificates();
 
@@ -142,5 +149,16 @@ class CertificateStore
 
 
 extern CertificateStore certs;
+
+// Parse a certificate id as written by CertificateStore::Certificate::serialize()
+// -- a bare hex string of 1 to 16 digits. Returns false, leaving id untouched,
+// for anything else.
+//
+// std::stoull() throws on a malformed value and nothing on the paths that parse
+// these ids catches it, so an uncaught exception reboots the device: a corrupt
+// stored id would boot-loop the unit and a bad id in a POSTed certificate would
+// reboot it from the API. Every parse of a stored or user-supplied id goes
+// through here instead.
+bool certificate_id_from_string(const char *str, uint64_t &id);
 
 # endif // CERTIFICATES_h

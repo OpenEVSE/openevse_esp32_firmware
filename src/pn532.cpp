@@ -50,7 +50,23 @@ PN532::PN532() : MicroTasks::Task() {
 
 void PN532::begin() {
     Wire.begin(I2C_SDA, I2C_SCL);
+    // I2C presence probe: a reader ACKs its address even when RFID isn't
+    // enabled, so the UI can report whether one is connected.
+    probeReader();
     MicroTask.startTask(this);
+}
+
+bool PN532::probeReader() {
+    if (status == DeviceStatus::ACTIVE) {
+        // Actively communicating — no need to disturb the bus.
+        return true;
+    }
+    // Re-run the ACK probe and refresh the cached result: the boot-time
+    // one-shot can false-negative (reader still powering up) and would
+    // otherwise report absent until reboot.
+    Wire.beginTransmission(PN532_I2C_ADDRESS);
+    _reader_present = (Wire.endTransmission() == 0);
+    return _reader_present;
 }
 
 unsigned long PN532::loop(MicroTasks::WakeReason reason){
@@ -62,7 +78,10 @@ unsigned long PN532::loop(MicroTasks::WakeReason reason){
         return SCAN_DELAY;
     }
 
-    if (!config_rfid_enabled()) {
+    // Allow scanning when a scheduler timer window requires RFID even if the
+    // global rfid_enabled setting is off — without this, the PN532 stays
+    // NOT_ACTIVE and no badge can ever be read during the window.
+    if (!config_rfid_enabled() && !_timer_scanning) {
         status = DeviceStatus::NOT_ACTIVE;
         return SCAN_DELAY;
     }
@@ -94,6 +113,11 @@ unsigned long PN532::loop(MicroTasks::WakeReason reason){
 
 bool PN532::readerFailure() {
     return config_rfid_enabled() && status == DeviceStatus::FAILED;
+}
+
+bool PN532::readerPresent() {
+    // Detected at boot, or currently responding (ACTIVE) while RFID is enabled.
+    return _reader_present || status == DeviceStatus::ACTIVE;
 }
 
 void PN532::initialize() {

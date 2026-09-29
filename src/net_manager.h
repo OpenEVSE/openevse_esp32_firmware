@@ -97,6 +97,8 @@ class NetManagerTask : public MicroTasks::Task
     // Network state
     NetState _state;
     String _ipaddress;
+    String _netmask;
+    String _ipv6address;
     String _macaddress;
 
     DNSServer _dnsServer;                  // Create class DNS server, captive portal re-direct
@@ -150,7 +152,7 @@ class NetManagerTask : public MicroTasks::Task
     #endif
 
     void displayState();
-    void haveNetworkConnection(IPAddress myAddress);
+    void haveNetworkConnection(IPAddress myAddress, IPAddress netmask = IPAddress(0, 0, 0, 0));
 
     void wifiOnStationModeConnected(const WiFiEventStationModeConnected &event);
     void wifiOnStationModeGotIP(const WiFiEventStationModeGotIP &event);
@@ -215,6 +217,15 @@ class NetManagerTask : public MicroTasks::Task
 
     String getIp() {
       return _ipaddress;
+    }
+    // IPv4 subnet mask of the active connection (e.g. "255.255.255.0"), or
+    // empty before a connection is established. Used to prefer a same-subnet
+    // peer address among the many an mDNS host may advertise.
+    String getNetmask() {
+      return _netmask;
+    }
+    String getIpv6() {
+      return _ipv6address;
     }
     String getMac() {
       return _macaddress;

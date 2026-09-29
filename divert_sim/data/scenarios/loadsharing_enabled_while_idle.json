@@ -1,0 +1,40 @@
+{
+  "meta": {
+    "id": "loadsharing_enabled_while_idle",
+    "title": "Load Sharing Enabled While Idle",
+    "category": "loadsharing",
+    "profile": "default",
+    "description": [
+      "Load sharing is enabled before any vehicle is plugged in, then both vehicles arrive.",
+      "Load sharing is a safety feature and must be safe to leave enabled permanently. An idle member is offered its minimum (keep-awake) rather than 0 A: a 0 A offer makes the shaper disable the port, a disabled port reports no vehicle, and the member could then never become demanding again.",
+      "Both peers must start charging after plugging in and settle on an equal share.",
+      "Group setup: 2 peers, 7,680 W shared supply, safety factor 1.0. Failsafe mode: safe_current.",
+      "Duration: 40 minutes."
+    ]
+  },
+  "group": {
+    "safety_factor": 1.0,
+    "failsafe_mode": "safe_current",
+    "failsafe_peer_assumed_current": 6.0,
+    "failsafe_safe_current": 6.0
+  },
+  "simulation": {
+    "duration": 2400,
+    "tick_interval": 1,
+    "nominal_voltage": 240
+  },
+  "supply": {
+    "max_pwr": 7680,
+    "live_pwr": 0
+  },
+  "peers": [
+    {"id": "evse-001", "min_current": 6, "max_current": 32, "voltage": 240, "priority": 0,
+      "ev": {"battery_capacity_kwh": 75, "initial_soc": 20, "max_charge_rate_kw": 7.2},
+      "initial": {"online": true, "vehicle": false},
+      "events": [{"time": 600, "vehicle": true}]},
+    {"id": "evse-002", "min_current": 6, "max_current": 32, "voltage": 240, "priority": 0,
+      "ev": {"battery_capacity_kwh": 75, "initial_soc": 20, "max_charge_rate_kw": 7.2},
+      "initial": {"online": true, "vehicle": false},
+      "events": [{"time": 600, "vehicle": true}]}
+  ]
+}

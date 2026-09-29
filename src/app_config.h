@@ -34,6 +34,9 @@ extern String www_username;
 extern String www_password;
 extern String www_certificate_id;
 
+// Session HMAC key — generated on first load, rotated on credential change.
+extern String server_secret;
+
 // Web server ports
 extern uint32_t www_http_port;
 extern uint32_t www_https_port;
@@ -43,8 +46,18 @@ extern String esp_hostname;
 extern String esp_hostname_default;
 extern String sntp_hostname;
 
+// Device-wide temperature display unit: "c" (Celsius) or "f" (Fahrenheit).
+// Source of truth for both the on-device display and the web UI.
+extern String temp_unit;
+
 // On-device LVGL TFT display theme: "dark" (nightshift) or "light".
 extern String tft_theme;
+extern uint32_t tft_brightness;
+extern uint32_t tft_standby_brightness;
+
+// LCD backlight timeout (in seconds, 0 = never timeout). Shared key with the
+// char-LCD / TFT_eSPI energy-saving timeout (upstream PR #1039).
+extern uint32_t lcd_backlight_timeout;
 
 // LIMIT Settings
 extern String limit_default_type;
@@ -97,6 +110,27 @@ extern uint32_t divert_min_charge_time;
 // Scheduler settings
 extern uint32_t scheduler_start_window;
 
+// Load Sharing settings
+extern bool loadsharing_enabled;
+extern String loadsharing_group_id;
+extern double loadsharing_group_max_current;
+extern double loadsharing_safety_factor;
+extern uint32_t loadsharing_heartbeat_timeout;
+extern String loadsharing_failsafe_mode;
+extern double loadsharing_failsafe_safe_current;
+extern double loadsharing_failsafe_peer_assumed_current;
+extern uint32_t loadsharing_config_version;
+extern uint32_t loadsharing_config_updated_at;
+extern uint32_t loadsharing_peers_version;
+extern uint32_t loadsharing_status_version;
+extern String loadsharing_role;
+extern String loadsharing_controller_host;
+extern uint32_t loadsharing_rotation_interval;
+
+// Advisory acknowledgements (internal state, not a /config setting)
+extern String notification_acks;
+extern String notification_acks_fw;
+
 //Shaper settings
 extern uint32_t current_shaper_max_pwr;
 extern uint32_t current_shaper_smoothing_time;
@@ -131,7 +165,6 @@ extern uint32_t flags;
 
 #define CONFIG_SERVICE_EMONCMS      (1 << 0)
 #define CONFIG_SERVICE_MQTT         (1 << 1)
-#define CONFIG_SERVICE_OHM          (1 << 2)
 #define CONFIG_SERVICE_SNTP         (1 << 3)
 #define CONFIG_MQTT_PROTOCOL        (7 << 4) // Maybe leave a bit of space after for additional protocols
 #define CONFIG_MQTT_ALLOW_ANY_CERT  (1 << 7)
@@ -152,7 +185,17 @@ extern uint32_t flags;
 #define CONFIG_THREEPHASE           (1 << 24)
 #define CONFIG_WIZARD               (1 << 25)
 #define CONFIG_DEFAULT_STATE        (1 << 26)
-#define CONFIG_TEMP_THROTTLE        (1 << 27) // next free bit after CONFIG_DEFAULT_STATE
+#define CONFIG_TEMP_THROTTLE        (1 << 27)
+#define CONFIG_LCD_NETWORK_INFO     (1 << 28)
+// Inverted sense: bit SET disables the $SYS/broker/version probe. Existing
+// installs have this bit clear, so they keep probing exactly as before.
+#define CONFIG_MQTT_NO_SYS_QUERY    (1 << 29)
+// TFT panel clock in 12-hour form. Clear (the default) keeps the 24-hour clock.
+#define CONFIG_TFT_12H_CLOCK        (1 << 30)
+// Inverted sense: bit SET ignores the NTP server offered by DHCP (option 42)
+// and always uses sntp_hostname. Clear - the default, and what every existing
+// install already has stored - prefers the DHCP one. Last free bit.
+#define CONFIG_SNTP_NO_DHCP         (1u << 31)
 
 #define INITIAL_CONFIG_VERSION  1
 
@@ -162,10 +205,6 @@ inline bool config_emoncms_enabled() {
 
 inline bool config_mqtt_enabled() {
   return CONFIG_SERVICE_MQTT == (flags & CONFIG_SERVICE_MQTT);
-}
-
-inline bool config_ohm_enabled() {
-  return CONFIG_SERVICE_OHM == (flags & CONFIG_SERVICE_OHM);
 }
 
 inline bool config_sntp_enabled() {
@@ -178,6 +217,17 @@ inline uint8_t config_mqtt_protocol() {
 
 inline bool config_mqtt_retained() {
   return CONFIG_MQTT_RETAINED == (flags & CONFIG_MQTT_RETAINED);
+}
+
+// Query broker metadata via $SYS/broker/version. Must be off for managed
+// brokers (AWS IoT Core): they have no $SYS tree and answer an unauthorised
+// subscribe by closing the connection rather than failing the SUBACK.
+inline bool config_sntp_dhcp() {
+  return 0 == (flags & CONFIG_SNTP_NO_DHCP);
+}
+
+inline bool config_mqtt_sys_query() {
+  return 0 == (flags & CONFIG_MQTT_NO_SYS_QUERY);
 }
 
 inline bool config_mqtt_reject_unauthorized() {
@@ -251,8 +301,17 @@ inline bool config_temp_throttle_enabled()
   return CONFIG_TEMP_THROTTLE == (flags & CONFIG_TEMP_THROTTLE);
 }
 
-// Ohm Connect Settings
-extern String ohm;
+inline bool config_lcd_network_info_enabled()
+{
+  return CONFIG_LCD_NETWORK_INFO == (flags & CONFIG_LCD_NETWORK_INFO);
+}
+
+inline bool config_tft_12h_clock()
+{
+  return CONFIG_TFT_12H_CLOCK == (flags & CONFIG_TFT_12H_CLOCK);
+}
+
+bool config_https_enabled();
 
 extern uint32_t config_version();
 
@@ -284,6 +343,10 @@ bool config_deserialize(String& json);
 bool config_deserialize(const char *json);
 bool config_deserialize(DynamicJsonDocument &doc);
 void config_commit(bool factory = false);
+void config_user_commit();  // persist user config without touching factory_write_lock
+// Persist notification_acks / notification_acks_fw. Writing those globals and
+// calling commit() is not enough - see the definition.
+void config_save_notification_acks(const String &acks, const String &fw);
 
 // Write config settings to JSON object
 bool config_serialize(String& json, bool longNames = true, bool compactOutput = false, bool hideSecrets = false);

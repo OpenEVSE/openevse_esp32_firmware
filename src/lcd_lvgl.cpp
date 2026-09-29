@@ -13,12 +13,18 @@
 #include "emonesp.h"
 #include "lcd.h"
 #include "openevse.h"
+#include "espal.h"
 #include "app_config.h"   // esp_hostname, tft_theme
 #include "lvgl_tft/lvgl_panel.h"
 #include "lvgl_tft/nightshift.h"
 #include "lvgl_tft/boot_screen.h"
 #include "lvgl_tft/setup_screen.h"
 #include "lvgl_tft/charge_screen.h"
+#include "lvgl_tft/standby_screen.h"
+#include "lvgl_tft/fault_screen.h"
+#include "fault_text.h"
+#include "lvgl_tft/backlight.h"
+#include "notifications.h"
 
 #ifndef LCD_BACKLIGHT_PIN
 #define LCD_BACKLIGHT_PIN TFT_BL
@@ -27,10 +33,48 @@
 // How long the startup splash shows before handing off to the main screen.
 #define BOOT_SPLASH_MS 4000
 
+// How often the data snapshot is reassembled. Between snapshots loop() only
+// pumps LVGL, and only while the power-ring tween is still running.
+#define DATA_INTERVAL_MS 1000
+#define ANIM_PUMP_MS       33
+
+// Signal-strength smoothing. RSSI is noisy enough that a raw percentage
+// repaints the chip every second on a screen that is otherwise still. A ~8 s
+// exponential average takes the jitter out, and the 5-point quantisation stops
+// the label changing at all unless the signal has genuinely moved.
+#define RSSI_SMOOTH_ALPHA 0.125f
+#define WIFI_PCT_STEP     5
+
 // _activeScreen values.
 #define SCR_BOOT   0
 #define SCR_SETUP  1
 #define SCR_CHARGE 2
+#define SCR_STANDBY 3
+#define SCR_FAULT   4
+
+// Minimum time the fault screen stays up once a fault has been seen. The
+// contactor-chatter investigation had VENT REQUIRED appearing and clearing on
+// a 12V sag; without a dwell that becomes a strobe between two full-screen
+// layouts, which reads as a broken display rather than an intermittent fault.
+#define FAULT_MIN_DWELL_MS 5000
+
+#ifdef EPOXY_DUINO
+static uint32_t g_lvgl_last_tick = 0;
+
+static void lvgl_pump()
+{
+  uint32_t now = millis();
+  lv_tick_inc(now - g_lvgl_last_tick);
+  g_lvgl_last_tick = now;
+  lv_timer_handler();
+  lvgl_panel_pump();
+}
+#else
+static void lvgl_pump()
+{
+  lv_timer_handler();
+}
+#endif
 
 // --- Message inner class (mechanics identical to the TFT_eSPI LcdTask) ---
 
@@ -120,9 +164,7 @@ unsigned long LcdTask::displayNextMessage()
       _tail = NULL;
     }
 
-#ifdef TFT_BACKLIGHT_TIMEOUT_MS
     wakeBacklight();
-#endif
 
     int line = msg->getY();
     if(line >= 0 && line < LCD_MAX_LINES) {
@@ -143,10 +185,85 @@ void LcdTask::setWifiMode(bool client, bool connected)
   _wifi_client = client;
   _wifi_connected = connected;
   _wifiModeKnown = true;
-#ifdef TFT_BACKLIGHT_TIMEOUT_MS
   wakeBacklight();
-#endif
 }
+
+// RSSI (dBm) -> signal %, the usual piecewise mapping.
+static int wifi_percent(int rssi)
+{
+  if (rssi <= -100) return 0;
+  if (rssi >= -50)  return 100;
+  return 2 * (rssi + 100);
+}
+
+// Exponentially averaged, then snapped to WIFI_PCT_STEP. The snap is what the
+// eye actually notices: without it the average still drifts a point at a time.
+int LcdTask::smoothedWifiPercent(int rssi)
+{
+  if(!_rssi_avg_valid) {
+    _rssi_avg = (float)rssi;
+    _rssi_avg_valid = true;
+  } else {
+    _rssi_avg += RSSI_SMOOTH_ALPHA * ((float)rssi - _rssi_avg);
+  }
+
+  int pct = wifi_percent((int)lroundf(_rssi_avg));
+  _wifi_pct = ((pct + WIFI_PCT_STEP / 2) / WIFI_PCT_STEP) * WIFI_PCT_STEP;
+  if(_wifi_pct > 100) {
+    _wifi_pct = 100;
+  }
+  return _wifi_pct;
+}
+
+// Short label for whichever claim won the charge-current arbitration, for the
+// line under the ring. Sized to fit the left column at 20px alongside "NN A · ".
+// EvseClient_NULL means no claim is active and the configured default applies,
+// which needs no explanation — hence "".
+// Date + clock line shared by the charge header and the standby screen.
+// 24-hour by default; tft_12h_clock switches to a 12-hour clock with AM/PM.
+static void formatPanelClock(char *buf, size_t len)
+{
+  timeval tv;
+  gettimeofday(&tv, NULL);
+  struct tm ti;
+  localtime_r(&tv.tv_sec, &ti);
+  if (config_tft_12h_clock()) {
+    int hour = ti.tm_hour % 12;
+    if (hour == 0) hour = 12;
+    snprintf(buf, len, "%04d-%02d-%02d  %d:%02d %s",
+             ti.tm_year + 1900, ti.tm_mon + 1, ti.tm_mday,
+             hour, ti.tm_min, ti.tm_hour < 12 ? "AM" : "PM");
+  } else {
+    strftime(buf, len, "%Y-%m-%d  %H:%M", &ti);
+  }
+}
+
+static const char *pilot_source_name(EvseClient client)
+{
+  switch(client) {
+    case EvseClient_NULL:                          return "";
+    case EvseClient_OpenEVSE_Manual:               return "manual";
+    case EvseClient_OpenEVSE_Divert:               return "solar divert";
+    case EvseClient_OpenEVSE_Boost:                return "boost";
+    case EvseClient_OpenEVSE_Schedule:             return "schedule";
+    case EvseClient_OpenEVSE_Limit:                return "session limit";
+    case EvseClient_OpenEVSE_Error:                return "fault hold";
+    case EvseClient_OpenEVSE_OCPP:                 return "ocpp";
+    case EvseClient_OpenEVSE_RFID:                 return "rfid";
+    case EvseClient_OpenEVSE_MQTT:                 return "mqtt";
+    case EvseClient_OpenEVSE_Shaper:               return "grid limit";
+    case EvseClient_OpenEVSE_TempThrottle:         return "temp limit";
+    case EvseClient_OpenEnergyMonitor_DemandShaper:return "demand shaper";
+    default:                                       return "claim";
+  }
+}
+
+// Advisory line (notifications.h): the worst unmuted advisory's short text,
+// with a "+N" suffix when there are more. File-scope, not block-scope inside
+// one screen's update function, because only one LVGL screen is ever loaded
+// at a time and both the charge screen and the standby screen point their
+// notify_line at this same buffer.
+static char notify_buf[48];
 
 // Resolve the tft_theme config into the active palette. Returns true if the theme
 // actually changed (so the caller can rebuild the on-screen widgets to repaint).
@@ -198,15 +315,16 @@ unsigned long LcdTask::loop(MicroTasks::WakeReason reason)
     _displayOk = lvgl_panel_begin();
     if(_displayOk) {
       applyThemeFromConfig();  // pick the palette before the first screen is built
+      applyDisplayConfig();    // cache brightness/timeout before the first wake
       boot_screen_build();
       _booting = true;
       _bootStart = millis();
-      pinMode(LCD_BACKLIGHT_PIN, OUTPUT);
-#ifdef TFT_BACKLIGHT_TIMEOUT_MS
-      wakeBacklight();
-#else
-      digitalWrite(LCD_BACKLIGHT_PIN, HIGH);
+#ifdef EPOXY_DUINO
+      g_lvgl_last_tick = _bootStart;
 #endif
+      // lvgl_panel_begin() already owns the backlight pin via LEDC; a raw
+      // pinMode here would detach the PWM binding on core 3.x (perimanager).
+      wakeBacklight();
     }
     _initialise = false;
   }
@@ -237,7 +355,7 @@ unsigned long LcdTask::loop(MicroTasks::WakeReason reason)
   if(_booting) {
     uint32_t el = millis() - _bootStart;
     boot_screen_update((int)(el * 100 / BOOT_SPLASH_MS), ml);
-    lv_timer_handler();
+    lvgl_pump();
     if(el >= BOOT_SPLASH_MS) {
       // Show the QR setup screen only if we KNOW we're in AP mode; otherwise the
       // charge screen (default), and switch later if AP mode is reported.
@@ -250,6 +368,7 @@ unsigned long LcdTask::loop(MicroTasks::WakeReason reason)
       }
       boot_screen_destroy();
       _booting = false;
+      lvgl_pump();
       return 50;
     }
     return 120;
@@ -258,6 +377,10 @@ unsigned long LcdTask::loop(MicroTasks::WakeReason reason)
   // Switch screens if the WiFi mode resolved differently than what's showing
   // (e.g. AP -> STA once the user completes setup via the QR).
   bool wantSetup = _wifiModeKnown && !_wifi_client;
+  // The setup screen owns the whole display; never run standby in AP mode.
+  if(wantSetup && _standby) {
+    wakeBacklight();  // exits standby, rebuilds the charge screen, so the swap below works
+  }
   if(wantSetup && _activeScreen == SCR_CHARGE) {
     buildSetupScreen();
     charge_screen_destroy();
@@ -268,121 +391,335 @@ unsigned long LcdTask::loop(MicroTasks::WakeReason reason)
     _activeScreen = SCR_CHARGE;
   }
 
-  // Live theme switch: if tft_theme changed (e.g. the web GUI wrote /config),
-  // swap the palette and rebuild the current screen so the new colours take.
-  // build() loads the new screen BEFORE deleting the old one, so we must NOT
-  // destroy first here — deleting the active screen would dangle LVGL and panic.
+  // Live theme switch: swap palette + rebuild whichever screen is showing.
   if(applyThemeFromConfig()) {
     if(_activeScreen == SCR_CHARGE) {
       charge_screen_build();
     } else if(_activeScreen == SCR_SETUP) {
       buildSetupScreen();
+    } else if(_activeScreen == SCR_STANDBY) {
+      standby_screen_build();
+    } else if(_activeScreen == SCR_FAULT) {
+      fault_screen_build();
     }
+    lvgl_pump();
   }
 
   // The setup screen is static — just pump LVGL and idle.
   if(_activeScreen == SCR_SETUP) {
-    lv_timer_handler();
+    lvgl_pump();
     return 1000;
+  }
+
+  // --- Backlight / standby decision (chooses which screen we render) ---
+  uint8_t state = _evse->getEvseState();
+  bool vehicle = _evse->isVehicleConnected();
+  applyDisplayConfig();   // pick up live /config changes; also applies brightness now
+                          // so slider changes take effect without waiting for a wake
+
+  if(_prev_state != state || _prev_vehicle != vehicle) {
+    wakeBacklight();      // any state change -> full brightness, exit standby, re-arm
+    _prev_state = state;
+    _prev_vehicle = vehicle;
+  }
+
+  bool keepAwake = stateKeepsAwake(state, vehicle, _evse->getAmps());
+  if(keepAwake) {
+    _lastWake = millis(); // keep re-arming so we never time out while charging/fault
+    if(_standby) {
+      wakeBacklight();
+    }
+  }
+  // bl_should_standby returns false when keepAwake, so this is a plain guard.
+  if(bl_should_standby(keepAwake, (uint32_t)_timeoutS, millis() - _lastWake)) {
+    if(!_standby) {
+      enterStandby();
+    }
+  }
+
+  // --- Fault takeover ---
+  // A fault owns the whole screen: the charge screen can only name it, and a
+  // name alone leaves whoever is standing here with nothing to do next.
+  if(state_is_fault(state)) {
+    _faultState = state;
+    _faultHoldUntil = millis() + FAULT_MIN_DWELL_MS;
+  }
+  bool wantFault = state_is_fault(state) ||
+                   (_activeScreen == SCR_FAULT &&
+                    (int32_t)(millis() - _faultHoldUntil) < 0);
+  if(wantFault && _standby) {
+    wakeBacklight();  // exits standby (rebuilding charge) so the swap below works
+  }
+  if(wantFault && _activeScreen != SCR_FAULT) {
+    fault_screen_build();
+    if(_activeScreen == SCR_CHARGE) {
+      charge_screen_destroy();
+    } else if(_activeScreen == SCR_STANDBY) {
+      standby_screen_destroy();
+    }
+    _activeScreen = SCR_FAULT;
+  } else if(!wantFault && _activeScreen == SCR_FAULT) {
+    charge_screen_build();
+    fault_screen_destroy();
+    _activeScreen = SCR_CHARGE;
+  }
+
+  if(_activeScreen == SCR_FAULT) {
+    FaultScreenData fd = {};
+    // _faultState, not state: during the dwell the fault has already cleared,
+    // and re-reading state here would blank the page we are holding up.
+    fd.evse_state     = _faultState;
+    fd.wifi_client    = _wifi_client;
+    fd.wifi_connected = _wifi_connected;
+    fd.wifi_pct       = smoothedWifiPercent(WiFi.RSSI());
+    fd.sta_count      = WiFi.softAPgetStationNum();
+
+    timeval tv;
+    char ipbuf[20];
+    IPAddress ip = _wifi_client ? WiFi.localIP() : WiFi.softAPIP();
+    snprintf(ipbuf, sizeof(ipbuf), "%s", ip.toString().c_str());
+    fd.hostname = esp_hostname.c_str();
+    fd.ip = ipbuf;
+
+    fault_screen_update(fd);
+    lvgl_pump();
+    gettimeofday(&tv, NULL);
+    return 1000 - tv.tv_usec / 1000;
+  }
+
+  // Render the standby screen when dimmed-with-screen; otherwise fall through to charge.
+  if(_activeScreen == SCR_STANDBY) {
+    StandbyScreenData sd = {};
+    sd.evse_state        = state;
+    sd.temp_valid        = _evse->isTemperatureValid(EVSE_MONITOR_TEMP_MONITOR);
+    sd.temp_c            = sd.temp_valid ? _evse->getTemperature(EVSE_MONITOR_TEMP_MONITOR) : 0.0f;
+    sd.temp_fahrenheit   = temp_unit.equals("f");
+    sd.temp_throttle_setpoint = config_temp_throttle_enabled() ? (int)temp_throttle_setpoint : 0;
+    sd.temp_throttling        = (EvseClient_OpenEVSE_TempThrottle == _evse->getChargeCurrentClient());
+    sd.wifi_client       = _wifi_client;
+    sd.wifi_connected    = _wifi_connected;
+    sd.wifi_pct          = smoothedWifiPercent(WiFi.RSSI());
+    sd.sta_count         = WiFi.softAPgetStationNum();
+    sd.today_kwh         = _evse->getTotalDay();
+    sd.week_kwh          = _evse->getTotalWeek();
+    sd.total_kwh         = _evse->getTotalEnergy();
+
+    char ck[32];
+    formatPanelClock(ck, sizeof(ck));  // match the charge screen header
+    sd.clock = ck;
+    timeval tv;
+
+    char ipbuf[20];
+    IPAddress ip = _wifi_client ? WiFi.localIP() : WiFi.softAPIP();
+    snprintf(ipbuf, sizeof(ipbuf), "%s", ip.toString().c_str());
+    sd.hostname = esp_hostname.c_str();
+    sd.ip = ipbuf;
+
+    // Advisory line: same rule as the charge screen, but here it replaces the
+    // address outright rather than sharing the strip with it -- see
+    // standby_screen.cpp.
+    const char *notify_id = NULL;
+    uint8_t notify_sev = 0;
+    size_t notify_count = notifications.count();
+    if(notifications.worst(notify_id, notify_sev)) {
+      if(notify_count > 1) {
+        snprintf(notify_buf, sizeof(notify_buf), LV_SYMBOL_WARNING " %s  +%u",
+                 notification_short_text(notify_id), (unsigned)(notify_count - 1));
+      } else {
+        snprintf(notify_buf, sizeof(notify_buf), LV_SYMBOL_WARNING " %s",
+                 notification_short_text(notify_id));
+      }
+      sd.notify_line = notify_buf;
+      sd.notify_active = true;
+    } else {
+      sd.notify_line = "";
+      sd.notify_active = false;
+    }
+
+    standby_screen_update(sd);
+    lvgl_pump();
+    gettimeofday(&tv, NULL);
+    return 1000 - tv.tv_usec / 1000;
+  }
+
+  // The data snapshot is only worth reassembling once a second, but the power
+  // ring tweens between values and LVGL has to be pumped far faster than that
+  // for the tween to render as motion. Between snapshots, do only the pump.
+  //
+  // Charge screen only: the standby branch above has already returned, and
+  // nothing on it animates. Backlight and standby timing stay on the 1 Hz
+  // path above, which is the cadence they were written for.
+  uint32_t now = millis();
+  if((int32_t)(now - _nextDataUpdate) < 0) {
+    lvgl_pump();
+    if(charge_screen_animating()) {
+      return ANIM_PUMP_MS;
+    }
+    return _nextDataUpdate - now;
   }
 
   // Assemble a full snapshot from EvseManager + WiFi + clock.
   ChargeScreenData d = {};
-  uint8_t state = _evse->getEvseState();
   d.evse_state        = state;
   d.charging          = (state == OPENEVSE_STATE_CHARGING);
-  d.vehicle_connected = _evse->isVehicleConnected();
+  d.vehicle_connected = vehicle;
   d.power_kw          = _evse->getPower() / 1000.0f;
   d.pilot_a           = (int)_evse->getChargeCurrent();
+  d.pilot_source      = pilot_source_name(_evse->getChargeCurrentClient());
+  d.max_a             = (int)_evse->getMaxConfiguredCurrent();
   d.volts             = _evse->getVoltage();
   d.amps              = _evse->getAmps();
   d.elapsed_s         = _evse->getSessionElapsed();
   d.session_wh        = _evse->getSessionEnergy();
   d.temp_valid        = _evse->isTemperatureValid(EVSE_MONITOR_TEMP_MONITOR);
   d.temp_c            = d.temp_valid ? _evse->getTemperature(EVSE_MONITOR_TEMP_MONITOR) : 0.0f;
+  d.temp_fahrenheit   = temp_unit.equals("f");
+  d.temp_throttle_setpoint = config_temp_throttle_enabled() ? (int)temp_throttle_setpoint : 0;
+  d.temp_throttling       = (EvseClient_OpenEVSE_TempThrottle == _evse->getChargeCurrentClient());
   d.wifi_client       = _wifi_client;
   d.wifi_connected    = _wifi_connected;
-  d.rssi              = WiFi.RSSI();
+  d.wifi_pct          = smoothedWifiPercent(WiFi.RSSI());
   d.sta_count         = WiFi.softAPgetStationNum();
 
-  char dt[24];
-  timeval tv;
-  gettimeofday(&tv, NULL);
-  struct tm ti;
-  localtime_r(&tv.tv_sec, &ti);
-  strftime(dt, sizeof(dt), "%Y-%m-%d  %H:%M:%S", &ti);
+  // Tile column: session figures only mean something with a vehicle attached.
+  // The rest of the time show the running totals instead of three dashes.
+  d.session_active    = d.vehicle_connected;
+  d.total_day_kwh     = _evse->getTotalDay();
+  d.total_week_kwh    = _evse->getTotalWeek();
+  d.total_kwh         = _evse->getTotalEnergy();
+
+  // Vehicle data arrives from the Home Assistant / MQTT push path and simply
+  // isn't there for most setups; the ring and readout stay hidden until it is.
+  d.soc_valid         = _evse->isVehicleStateOfChargeValid();
+  d.soc_percent       = _evse->getVehicleStateOfCharge();
+  d.range_valid       = _evse->isVehicleRangeValid();
+  d.range             = _evse->getVehicleRange();
+  d.range_miles       = config_vehicle_range_miles();
+
+  char dt[32];
+  formatPanelClock(dt, sizeof(dt));
   d.datetime = dt;
 
-  // Bottom row: hostname (left) + IP (right). A transient message overrides both.
+  // The address lives on the standby screen. Fall back to showing it here only
+  // when standby can never appear -- bl_should_standby() returns false outright
+  // for a timeout of 0, so otherwise the address would be nowhere on the panel.
   char ipbuf[20];
   IPAddress ip = _wifi_client ? WiFi.localIP() : WiFi.softAPIP();
   snprintf(ipbuf, sizeof(ipbuf), "%s", ip.toString().c_str());
   d.hostname = esp_hostname.c_str();
   d.ip = ipbuf;
+  d.show_hostip = (0 == (uint32_t)lcd_backlight_timeout);
   d.msg_line = (!_msg_cleared && ml[0]) ? ml : "";
 
-  charge_screen_update(d);
-
-#ifdef TFT_BACKLIGHT_TIMEOUT_MS
-  if(_prev_state != state || _prev_vehicle != d.vehicle_connected) {
-    wakeBacklight();
-    _prev_state = state;
-    _prev_vehicle = d.vehicle_connected;
+  // Advisory line: the worst one, named, with a count of the rest. The border
+  // is the "is there anything?" signal; this says what.
+  const char *notify_id = NULL;
+  uint8_t notify_sev = 0;
+  size_t notify_count = notifications.count();
+  if(notifications.worst(notify_id, notify_sev)) {
+    if(notify_count > 1) {
+      snprintf(notify_buf, sizeof(notify_buf), LV_SYMBOL_WARNING " %s  +%u",
+               notification_short_text(notify_id), (unsigned)(notify_count - 1));
+    } else {
+      snprintf(notify_buf, sizeof(notify_buf), LV_SYMBOL_WARNING " %s",
+               notification_short_text(notify_id));
+    }
+    d.notify_line = notify_buf;
+    d.notify_active = true;
   } else {
-    updateBacklight();
+    d.notify_line = "";
+    d.notify_active = false;
   }
-#endif
 
-  lv_timer_handler();
+  charge_screen_update(d);
+  lvgl_pump();
 
-  // Wake on the next whole second so the clock doesn't skip.
+  // Next snapshot on the whole second, so the elapsed-time tile doesn't skip.
+  timeval tv;
   gettimeofday(&tv, NULL);
-  return 1000 - tv.tv_usec / 1000;
+  uint32_t to_next = DATA_INTERVAL_MS - tv.tv_usec / 1000;
+  _nextDataUpdate = millis() + to_next;
+
+  // Come back sooner than that if the ring is still travelling.
+  return charge_screen_animating() ? ANIM_PUMP_MS : to_next;
 }
 
-#ifdef TFT_BACKLIGHT_TIMEOUT_MS
+void LcdTask::applyDisplayConfig()
+{
+  _activeBrightness  = (int32_t)tft_brightness;
+  _standbyBrightness = (int32_t)tft_standby_brightness;
+  _timeoutS          = (int32_t)lcd_backlight_timeout;
+  if(_activeBrightness < 10) _activeBrightness = 10;  // never black out the active screen
+  // Apply live so brightness-slider changes take effect without waiting for a wake.
+  lvgl_panel_set_backlight((uint8_t)(_standby ? (_standbyBrightness < 0 ? 0 : _standbyBrightness)
+                                              : (_activeBrightness  < 0 ? 100 : _activeBrightness)));
+}
+
 void LcdTask::wakeBacklight()
 {
-  digitalWrite(LCD_BACKLIGHT_PIN, HIGH);
-  _backlight_timeout = millis() + TFT_BACKLIGHT_TIMEOUT_MS;
-}
-
-void LcdTask::updateBacklight()
-{
-  bool timeout = true;
-  if(_evse->isVehicleConnected()) {
-    switch(_evse->getEvseState()) {
-      case OPENEVSE_STATE_STARTING:
-      case OPENEVSE_STATE_VENT_REQUIRED:
-      case OPENEVSE_STATE_DIODE_CHECK_FAILED:
-      case OPENEVSE_STATE_GFI_FAULT:
-      case OPENEVSE_STATE_NO_EARTH_GROUND:
-      case OPENEVSE_STATE_STUCK_RELAY:
-      case OPENEVSE_STATE_GFI_SELF_TEST_FAILED:
-      case OPENEVSE_STATE_OVER_TEMPERATURE:
-      case OPENEVSE_STATE_OVER_CURRENT:
-        timeout = false;
-        break;
-      case OPENEVSE_STATE_CHARGING:
-#ifdef TFT_BACKLIGHT_CHARGING_THRESHOLD
-        if(_evse->getAmps() >= TFT_BACKLIGHT_CHARGING_THRESHOLD) {
-          wakeBacklight();
-          timeout = false;
-        }
-#else
-        timeout = false;
-#endif
-        break;
-      default:
-        timeout = true;
-        break;
+  _lastWake = millis();
+  if(_activeBrightness < 0) _activeBrightness = (int32_t)tft_brightness;  // boot safety
+  lvgl_panel_set_backlight((uint8_t)_activeBrightness);
+  if(_standby) {
+    _standby = false;
+    if(_activeScreen == SCR_STANDBY) {
+      charge_screen_build();
+      standby_screen_destroy();
+      _activeScreen = SCR_CHARGE;
     }
   }
-  if(timeout && millis() >= _backlight_timeout) {
-    digitalWrite(LCD_BACKLIGHT_PIN, LOW);
+}
+
+void LcdTask::enterStandby()
+{
+  _standby = true;
+  if(_standbyBrightness > 0) {
+    standby_screen_build();
+    if(_activeScreen == SCR_CHARGE) {
+      charge_screen_destroy();
+    }
+    _activeScreen = SCR_STANDBY;
+  }
+  lvgl_panel_set_backlight((uint8_t)(_standbyBrightness < 0 ? 0 : _standbyBrightness));
+}
+
+bool LcdTask::stateKeepsAwake(uint8_t state, bool vehicle, double amps)
+{
+  // Faults keep the screen up whether or not a vehicle is plugged in. Several
+  // of them -- no ground, a failed GFCI self-test, a stuck relay, EEPROM --
+  // are reported with nothing connected, and a fault page that dims itself away
+  // before anyone reads it is no better than no fault page.
+  if(state_is_fault(state)) {
+    return true;
+  }
+  if(!vehicle) {
+    return false;
+  }
+  switch(state) {
+    case OPENEVSE_STATE_STARTING:
+    case OPENEVSE_STATE_VENT_REQUIRED:
+    case OPENEVSE_STATE_DIODE_CHECK_FAILED:
+    case OPENEVSE_STATE_GFI_FAULT:
+    case OPENEVSE_STATE_NO_EARTH_GROUND:
+    case OPENEVSE_STATE_STUCK_RELAY:
+    case OPENEVSE_STATE_GFI_SELF_TEST_FAILED:
+    case OPENEVSE_STATE_OVER_TEMPERATURE:
+    case OPENEVSE_STATE_OVER_CURRENT:
+    case OPENEVSE_STATE_RELAY_CLOSURE_FAULT:
+    case OPENEVSE_STATE_PP_SHORTED:
+    case OPENEVSE_STATE_PP_MISSING:
+    case OPENEVSE_STATE_EEPROM_FAILURE:
+      return true;
+    case OPENEVSE_STATE_CHARGING:
+#ifdef TFT_BACKLIGHT_CHARGING_THRESHOLD
+      return amps >= TFT_BACKLIGHT_CHARGING_THRESHOLD;
+#else
+      return true;
+#endif
+    default:
+      return false;
   }
 }
-#endif // TFT_BACKLIGHT_TIMEOUT_MS
 
 LcdTask lcd;
 

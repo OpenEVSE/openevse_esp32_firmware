@@ -1,0 +1,36 @@
+{
+  "meta": {
+    "id": "loadsharing_ev_limited",
+    "title": "Load Sharing EV Limited",
+    "category": "loadsharing",
+    "profile": "default",
+    "description": [
+      "Two-EVSE case where one vehicle cannot consume its full allocation.",
+      "The EV-limited peer should draw less actual power than allocated, leaving unused headroom visible between allocation and actual charge.",
+      "Group setup: 2 peers, 7,680 W shared supply, safety factor 1.0. Failsafe mode: safe_current.",
+      "Duration: 10 minutes."
+    ]
+  },
+  "group": {
+    "safety_factor": 1.0,
+    "failsafe_mode": "safe_current",
+    "failsafe_peer_assumed_current": 6.0
+  },
+  "simulation": {
+    "duration": 600,
+    "tick_interval": 1,
+    "nominal_voltage": 240
+  },
+  "supply": {
+    "max_pwr": 7680,
+    "live_pwr": 0
+  },
+  "peers": [
+    {"id": "evse-001", "min_current": 6, "max_current": 32, "voltage": 240, "priority": 0,
+      "ev": {"battery_capacity_kwh": 75, "initial_soc": 25, "max_charge_rate_kw": 7.2},
+      "initial": {"online": true, "vehicle": true}, "events": []},
+    {"id": "evse-002", "min_current": 6, "max_current": 32, "voltage": 240, "priority": 0,
+      "ev": {"battery_capacity_kwh": 75, "initial_soc": 25, "max_charge_rate_kw": 3.6},
+      "initial": {"online": true, "vehicle": true}, "events": []}
+  ]
+}

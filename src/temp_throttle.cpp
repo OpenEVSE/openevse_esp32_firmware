@@ -19,6 +19,9 @@ TempThrottleTask::~TempThrottleTask() {
 void TempThrottleTask::setup() {}
 
 unsigned long TempThrottleTask::loop(MicroTasks::WakeReason reason) {
+  if (!_evse) {
+    return TEMP_THROTTLE_LOOP_TIME;
+  }
   if (!_enabled) {
     if (_evse->clientHasClaim(EvseClient_OpenEVSE_TempThrottle)) {
       _evse->release(EvseClient_OpenEVSE_TempThrottle);
@@ -99,7 +102,8 @@ void TempThrottleTask::notifyConfigChanged(bool enabled, uint32_t setpoint) {
   DBUGF("TempThrottle: config changed, enabled=%d setpoint=%u", enabled, setpoint);
   _enabled  = enabled;
   _setpoint = setpoint;
-  if (!enabled && _evse->clientHasClaim(EvseClient_OpenEVSE_TempThrottle)) {
+  // _evse may still be null if a config callback fires before begin() at boot.
+  if (!enabled && _evse && _evse->clientHasClaim(EvseClient_OpenEVSE_TempThrottle)) {
     _evse->release(EvseClient_OpenEVSE_TempThrottle);
     _start_current    = 0;
     _throttled_current = 0;
