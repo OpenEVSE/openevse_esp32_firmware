@@ -62,7 +62,6 @@ String www_username;
 String www_password;
 String www_certificate_id;
 bool www_https_enabled;
-bool www_https_migrated;
 
 // Session HMAC key — generated on first load, rotated on credential change.
 String server_secret;
@@ -241,7 +240,6 @@ ConfigOpt *opts[] =
   new ConfigOptSecret(www_password, "", "www_password", "ap"),
   new ConfigOptDefinition<String>(www_certificate_id, "", "www_certificate_id", "wc"),
   new ConfigOptDefinition<bool>(www_https_enabled, false, "www_https_enabled", "wse"),
-  new ConfigOptDefinition<bool>(www_https_migrated, false, "www_https_migrated", "wsm"),
   new ConfigOptSecret(server_secret, "", "server_secret", "wsk"),
 
 // Web server ports
@@ -499,15 +497,6 @@ config_load_settings()
 
   // now lets apply any default flags that have not explicitly been set by the user
   flags |= CONFIG_DEFAULT_FLAGS & ~flags_changed;
-
-  // Before www_https_enabled existed a stored certificate meant HTTPS was
-  // served, so carry that over once on upgrade.
-  if(!www_https_migrated)
-  {
-    www_https_migrated = true;
-    www_https_enabled = www_https_enabled || www_certificate_id != "";
-    user_config.commit();
-  }
 
   // Generate server_secret on first boot (empty after load means the key was
   // never stored). web_auth_ensure_secret() persists via user_config.commit().

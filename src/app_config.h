@@ -163,9 +163,8 @@ enum vehicle_data_src {
 // 24-bits of Flags
 extern uint32_t flags;
 
-// HTTPS listener toggle (and one-shot upgrade marker), stored outside flags
+// HTTPS listener toggle, stored outside flags
 extern bool www_https_enabled;
-extern bool www_https_migrated;
 
 #define CONFIG_SERVICE_EMONCMS      (1 << 0)
 #define CONFIG_SERVICE_MQTT         (1 << 1)
