@@ -141,3 +141,23 @@ TEST_CASE("the identity file round-trips, and anything else is rejected") {
   std::string trailing = std::string(text) + "junk";
   CHECK_FALSE(crash_identity_parse(trailing.c_str(), rid, key));
 }
+
+// ---------------------------------------------------------------------------
+// What a "Delete my reports" click does. Withdrawing consent should be as easy
+// as giving it, so a charger that cannot do it right now (no network, or the
+// heap too fragmented for a TLS session, which is normal straight after an
+// upload on a no-PSRAM board) defers to the next boot instead of refusing.
+// ---------------------------------------------------------------------------
+
+TEST_CASE("a delete starts when it can, and defers when it cannot yet") {
+  CHECK(crash_forget_decide(false, true, true, 60000, 40960) == CrashForget_Start);
+  CHECK(crash_forget_decide(false, true, false, 60000, 40960) == CrashForget_Defer);
+  CHECK(crash_forget_decide(false, true, true, 36852, 40960) == CrashForget_Defer);
+}
+
+TEST_CASE("a delete is refused only when there is nothing to do or an upload holds the connection") {
+  CHECK(crash_forget_decide(true, true, true, 60000, 40960) == CrashForget_Busy);
+  CHECK(crash_forget_decide(false, false, true, 60000, 40960) == CrashForget_Nothing);
+  // Nothing sent beats no network: there is nothing to defer.
+  CHECK(crash_forget_decide(false, false, false, 1000, 40960) == CrashForget_Nothing);
+}

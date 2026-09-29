@@ -62,12 +62,21 @@
 // never appears in GET /config.
 #define CRASH_IDENTITY_FILE      "/crash_reporter"
 
+// A "Delete my reports" click that could not run yet (no network, or the heap
+// too fragmented for TLS -- normal straight after an upload on a no-PSRAM
+// board) runs at the next boot instead. Same shape as the upload's defer flag.
+#define CRASH_FORGET_FLAG        "/crash_forget_pending"
+
 static CrashUploadState _state = CrashUpload_Idle;
 
 // Erasure runs on the same connection machinery as an upload, but its outcome
 // is its own: a deletion must not read as an upload failing or finishing.
-enum CrashForget { CrashForget_Idle, CrashForget_Running, CrashForget_Deleted, CrashForget_Failed };
+enum CrashForget { CrashForget_Idle, CrashForget_Running, CrashForget_Deleted,
+                   CrashForget_Failed, CrashForget_Deferred };
 static CrashForget _forget = CrashForget_Idle;
+static bool _forgetArmedAtBoot = false;
+static bool _forgetTriedThisBoot = false;
+static bool crash_forget_start(String &message);
 static String _forgetBody;           // holds the key only while the request runs
 static uint32_t _forgetDeleted = 0;
 static String _reportId;
@@ -554,6 +563,12 @@ bool crash_upload_request(String &message)
     message = F("an upload is already running");
     return false;
   }
+  if(LittleFS.exists(CRASH_FORGET_FLAG)) {
+    // A report sent now would be filed under the id about to be erased, and
+    // the deletion the user asked for first would take it too.
+    message = F("a deletion is waiting for the next restart");
+    return false;
+  }
 
   const uint8_t *img = NULL;
   size_t len = 0;
@@ -590,6 +605,10 @@ void crash_upload_begin()
     _armedAtBoot = true;
     _state = CrashUpload_Deferred;
   }
+  if(LittleFS.exists(CRASH_FORGET_FLAG)) {
+    _forgetArmedAtBoot = true;
+    _forget = CrashForget_Deferred;
+  }
 }
 
 void crash_upload_loop()
@@ -610,6 +629,26 @@ void crash_upload_loop()
   if(crash_running()) {
     if((long)(millis() - _deadline) >= 0) {
       crash_fail("timed out");
+    }
+    return;
+  }
+
+  // A deletion asked for in an earlier boot, at the first moment the network
+  // is up. The flag goes only once the request is actually on its way; a heap
+  // still too tight keeps it for the boot after.
+  if(CrashForget_Deferred == _forget && _forgetArmedAtBoot && !_forgetTriedThisBoot &&
+     net.isConnected()) {
+    _forgetTriedThisBoot = true;
+    uint32_t largest = (uint32_t)heap_caps_get_largest_free_block(MALLOC_CAP_8BIT);
+    if(largest < CRASH_MIN_HEAP_LARGEST) {
+      return;
+    }
+    LittleFS.remove(CRASH_FORGET_FLAG);
+    _forgetArmedAtBoot = false;
+    String message;
+    if(!crash_forget_start(message) && CrashForget_Failed != _forget) {
+      // Nothing left to delete (the identity is gone): the request is moot.
+      _forget = CrashForget_Idle;
     }
     return;
   }
@@ -674,30 +713,29 @@ bool crash_reporter_id(char out[33])
   return ok;
 }
 
-bool crash_forget_request(String &message)
+static void crash_forget_arm()
 {
-  if(crash_running()) {
-    message = F("an upload is running -- try again when it has finished");
-    return false;
+  File f = LittleFS.open(CRASH_FORGET_FLAG, "w");
+  if(f) {
+    f.print("1");
+    f.close();
   }
-  // Withdrawing consent covers the report that has not gone yet, too.
-  crash_upload_cancel_deferred();
+  // Next boot, not this one: the heap that just refused will not have
+  // recovered by the next loop pass.
+  _forgetTriedThisBoot = true;
+  _forget = CrashForget_Deferred;
+  DynamicJsonDocument doc(96);
+  doc["crash_forget"] = crash_forget_state_name();
+  event_send(doc);
+}
 
+static bool crash_forget_start(String &message)
+{
   char rid[33], key[65];
   if(!crash_identity_load(rid, key)) {
     message = F("nothing has been sent from this charger");
     return false;
   }
-  if(!net.isConnected()) {
-    message = F("no network");
-    return false;
-  }
-  uint32_t largest = (uint32_t)heap_caps_get_largest_free_block(MALLOC_CAP_8BIT);
-  if(largest < CRASH_MIN_HEAP_LARGEST) {
-    message = F("not enough free memory right now -- try again after a restart");
-    return false;
-  }
-
   _forgetBody = String("{\"delete_key\":\"") + key + "\"}";
   memset(key, 0, sizeof(key));
   _forget = CrashForget_Running;
@@ -718,6 +756,37 @@ bool crash_forget_request(String &message)
   return true;
 }
 
+bool crash_forget_request(String &message)
+{
+  char rid[33], key[65];
+  bool hasIdentity = crash_identity_load(rid, key);
+  memset(key, 0, sizeof(key));
+  uint32_t largest = (uint32_t)heap_caps_get_largest_free_block(MALLOC_CAP_8BIT);
+
+  switch(crash_forget_decide(crash_running(), hasIdentity, net.isConnected(),
+                             largest, CRASH_MIN_HEAP_LARGEST)) {
+    case CrashForget_Busy:
+      message = F("an upload is running -- try again when it has finished");
+      return false;
+    case CrashForget_Nothing:
+      // Withdrawing consent covers the report that has not gone yet, too.
+      crash_upload_cancel_deferred();
+      message = F("nothing has been sent from this charger");
+      return false;
+    case CrashForget_Defer:
+      crash_upload_cancel_deferred();
+      crash_forget_arm();
+      message = net.isConnected()
+        ? F("not enough free memory right now -- will delete after the next restart")
+        : F("no network -- will delete after the next restart");
+      return true;
+    case CrashForget_Start:
+    default:
+      crash_upload_cancel_deferred();
+      return crash_forget_start(message);
+  }
+}
+
 uint32_t crash_forget_deleted() { return _forgetDeleted; }
 
 const char *crash_forget_state_name()
@@ -726,6 +795,7 @@ const char *crash_forget_state_name()
     case CrashForget_Running: return "deleting";
     case CrashForget_Deleted: return "deleted";
     case CrashForget_Failed:  return "failed";
+    case CrashForget_Deferred: return "deferred";
     default:                  return "idle";
   }
 }

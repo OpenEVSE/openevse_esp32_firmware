@@ -133,3 +133,18 @@ bool crash_identity_parse(const char *text, char rid[33], char key[65])
   key[CRASH_DELETE_KEY_HEX] = '\0';
   return crash_reporter_id_valid(rid) && crash_delete_key_valid(key);
 }
+
+CrashForgetDecision crash_forget_decide(bool running, bool hasIdentity, bool netUp,
+                                        uint32_t largestBlock, uint32_t minLargest)
+{
+  if(!hasIdentity) {
+    return CrashForget_Nothing;
+  }
+  if(running) {
+    return CrashForget_Busy;
+  }
+  if(!netUp || largestBlock < minLargest) {
+    return CrashForget_Defer;
+  }
+  return CrashForget_Start;
+}

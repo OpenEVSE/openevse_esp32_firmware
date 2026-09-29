@@ -86,6 +86,10 @@ Before you press it:
   charger proves it is the sender with a secret key it keeps and never sends
   with a report, so nobody else can delete your reports -- and nobody can
   delete them from here without the charger.
+  If the charger has no network, or too little free memory right then (common
+  straight after sending on boards without PSRAM), the page says so and the
+  deletion runs by itself shortly after the next restart. Sending a new report
+  is refused until it has.
 - **The report is removed from the charger only once it has arrived.**
   If anything fails part-way, it stays on the charger and you can try again.
 - **On a charger that has been up a long time the upload may wait for the next
@@ -99,7 +103,8 @@ Before you press it:
 `metadata`, `uploading`, `completing`, `done`, `failed` or `deferred`.
 While an upload is running, erasing the report answers `409`. It also carries
 `reporter_id` (null until a report has been sent) and `forget`, where a
-deletion has got to: `idle`, `deleting`, `deleted` or `failed`.
+deletion has got to: `idle`, `deleting`, `deleted`, `failed` or `deferred`
+(waiting for the next restart).
 
 ## Getting help
 

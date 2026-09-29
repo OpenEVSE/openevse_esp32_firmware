@@ -45,9 +45,11 @@ void crash_upload_cancel_deferred();
 // Erase every report this charger has sent (GDPR Art. 17; Art. 7(3): withdrawing
 // consent as easy as giving it). The device presents its delete key to the
 // broker, then discards its identity so any later report starts unlinked.
-// Also cancels a deferred upload. `message` is user-facing.
+// Also cancels a deferred upload. When it cannot go now it defers to the next
+// boot and returns true. `message` is user-facing.
 bool crash_forget_request(String &message);
-// "idle" | "deleting" | "deleted" | "failed" ("unsupported" when built out).
+// "idle" | "deleting" | "deleted" | "failed" | "deferred" (to the next boot:
+// no network, or too little heap right now) -- "unsupported" when built out.
 const char *crash_forget_state_name();
 uint32_t crash_forget_deleted();
 // This charger's reporter id, if it has ever sent a report.

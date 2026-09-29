@@ -66,4 +66,14 @@ void crash_delete_key_hash(const char *key, char out[65]);
 void crash_identity_format(const char *rid, const char *key, char *out, size_t len);
 bool crash_identity_parse(const char *text, char rid[33], char key[65]);
 
+// What a "Delete my reports" click should do now.
+enum CrashForgetDecision {
+  CrashForget_Start,     // go now
+  CrashForget_Defer,     // no network or too little heap: run after the next boot
+  CrashForget_Busy,      // an upload holds the one connection
+  CrashForget_Nothing,   // this charger has never sent a report
+};
+CrashForgetDecision crash_forget_decide(bool running, bool hasIdentity, bool netUp,
+                                        uint32_t largestBlock, uint32_t minLargest);
+
 #endif // CRASH_REPORT_ID_H
