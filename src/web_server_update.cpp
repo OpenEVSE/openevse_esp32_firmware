@@ -50,7 +50,7 @@ void handleUpdateFileFetch(MongooseHttpServerRequest *request)
       [](int) { },
       [](int errorCode) {
         DEBUG_PORT.printf("HTTP OTA failed: %d\n", errorCode);
-        StaticJsonDocument<128> event;
+        JsonDocument event;
         event["ota"] = "failed";
         event["ota_error"] = errorCode;
         web_server_event(event);

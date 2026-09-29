@@ -118,7 +118,7 @@ void check_direct_add(bool client)
   CHECK(std::string(store.getKey(id)) == (client ? fixture.key : ""));
   CHECK((std::string(store.getRootCa()).find(fixture.certificate) != std::string::npos) == !client);
 
-  DynamicJsonDocument doc(4096);
+  JsonDocument doc;
   REQUIRE(store.serializeCertificate(doc, id));
   CHECK(doc["id"].as<std::string>() == "12345678");
   CHECK(doc["type"].as<std::string>() == (client ? "client" : "root"));

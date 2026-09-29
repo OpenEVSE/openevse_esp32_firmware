@@ -82,7 +82,7 @@ std::string claimState(JsonObjectConst claim)
 
 std::string formatClaimDetails(EvseManager &evse, std::string &aggregate_state)
 {
-  DynamicJsonDocument claims_doc(1024);
+  JsonDocument claims_doc;
   evse.serializeClaims(claims_doc);
   JsonArrayConst claims = claims_doc.as<JsonArrayConst>();
   if (claims.isNull() || claims.size() == 0) {
@@ -90,7 +90,7 @@ std::string formatClaimDetails(EvseManager &evse, std::string &aggregate_state)
     return "No active claims";
   }
 
-  DynamicJsonDocument target_doc(512);
+  JsonDocument target_doc;
   evse.serializeTarget(target_doc);
   JsonObjectConst winners = target_doc["claims"].as<JsonObjectConst>();
 

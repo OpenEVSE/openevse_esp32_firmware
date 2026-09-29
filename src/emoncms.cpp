@@ -74,7 +74,6 @@ void emoncms_publish(JsonDocument &data)
 
       state->connected = true;
 
-      const size_t capacity = result.length();
       JsonDocument doc;
       if(DeserializationError::Code::Ok == deserializeJson(doc, result.c_str(), result.length()))
       {

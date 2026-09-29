@@ -195,14 +195,11 @@ void Scheduler::setup()
 {
   _loading = true;
 
-  // Load the schedule from storage.  Size the JSON doc to the actual file so
-  // schedules with per-event feature/limit fields don't overflow the old fixed
-  // 1024-byte budget and silently load as empty (ArduinoJson 6 NoMemory).
+  // Load the schedule from storage.
   File file = LittleFS.open(SCHEDULE_PATH);
   if(file)
   {
-    size_t capacity = max((size_t)file.size() * 2, (size_t)4096);
-    DynamicJsonDocument doc(capacity);
+    JsonDocument doc;
     DeserializationError err = deserializeJson(doc, file);
     file.close();
     if(err == DeserializationError::Code::Ok && !doc.overflowed()) {
@@ -341,7 +338,7 @@ bool Scheduler::commit()
 
   // Serialize first and ensure there's room, so a full filesystem never
   // truncates a previously-valid schedule file into a corrupt one.
-  DynamicJsonDocument doc(scheduleJsonCapacity());
+  JsonDocument doc;
   if(!serialize(doc) || doc.overflowed() || !littlefs_has_space(measureJson(doc))) {
     DBUGLN("Scheduler: insufficient space or doc overflow, keeping existing file");
     return false;
@@ -799,22 +796,6 @@ bool Scheduler::deserializeInternal(JsonObject &obj, uint32_t event_id)
   return false;
 }
 
-size_t Scheduler::scheduleJsonCapacity()
-{
-  size_t count = 0;
-  for(int i = 0; i < SCHEDULER_MAX_EVENTS; i++)
-  {
-    if(_events[i].isValid()) {
-      count++;
-    }
-  }
-
-  // Per-event budget: object of up to 8 members (128) + days array of up to 7
-  // (112) + copied key/value strings (time/state/feature/limit names, ~100),
-  // rounded up to 384; 512 headroom for the enclosing array and slop.
-  return 512 + count * 384;
-}
-
 bool Scheduler::serialize(String& json)
 {
   JsonDocument doc;
@@ -1081,7 +1062,7 @@ void Scheduler::applyFeature(Event *event)
         // surface it: silently failing open is wrong for an access-control
         // feature.
         DBUGLN("Scheduler: no RFID reader present, skipping timer-RFID feature");
-        StaticJsonDocument<64> evt;
+        JsonDocument evt;
         evt["schedule_feature_skipped"] = "rfid";
         event_send(evt);
         break;

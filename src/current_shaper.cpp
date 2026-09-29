@@ -196,7 +196,7 @@ void CurrentShaperTask::setTimerEnabled(bool active) {
 	if (!_enabled && _evse) {
 		_evse->release(EvseClient_OpenEVSE_Shaper);
 	}
-	StaticJsonDocument<128> event;
+	JsonDocument event;
 	event["shaper"] = _enabled ? 1 : 0;
 	event_send(event);
 }

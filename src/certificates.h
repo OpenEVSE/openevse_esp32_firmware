@@ -129,7 +129,7 @@ class CertificateStore
     // at a time, so the peak allocation is a single certificate rather than
     // the entire store.
     size_t certificateCount();
-    bool serializeCertificateAt(DynamicJsonDocument &doc, size_t index, uint32_t flags = Certificate::Flags::REDACT_PRIVATE_KEY);
+    bool serializeCertificateAt(JsonDocument &doc, size_t index, uint32_t flags = Certificate::Flags::REDACT_PRIVATE_KEY);
 
   private:
     bool loadCertificates();

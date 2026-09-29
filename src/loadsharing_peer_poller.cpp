@@ -554,7 +554,7 @@ bool LoadSharingPeerPoller::mergeStatusPayload(const String& host, PeerConnectio
                                                const char* data, size_t len) {
   // Filter to just the fields we consume so the parse stays bounded regardless
   // of the full payload size (both /status and /ws frames carry ~90 keys).
-  StaticJsonDocument<256> filter;
+  JsonDocument filter;
   filter["amp"] = true;
   filter["voltage"] = true;
   filter["pilot"] = true;
@@ -563,7 +563,7 @@ bool LoadSharingPeerPoller::mergeStatusPayload(const String& host, PeerConnectio
   filter["config_version"] = true;
   filter["config_hash"] = true;
 
-  StaticJsonDocument<512> doc;
+  JsonDocument doc;
   DeserializationError error =
       deserializeJson(doc, data, len, DeserializationOption::Filter(filter));
 
@@ -738,7 +738,7 @@ void LoadSharingPeerPoller::pushConfigToPeer(const String& host, PeerConnection&
   DBUGF("LoadSharingPeerPoller: [%s] Pushing load sharing config", host.c_str());
 
   // Build config JSON
-  DynamicJsonDocument doc(1024);
+  JsonDocument doc;
   doc["loadsharing_enabled"] = true;
   doc["loadsharing_role"] = "member";
   doc["loadsharing_controller_host"] = _groupState->getLocalHostname();
@@ -804,14 +804,14 @@ void LoadSharingPeerPoller::fetchPeerConfig(const String& host) {
     MongooseString bodyStr = response->body();
     String body = bodyStr.toString();
 
-    StaticJsonDocument<128> filter;
+    JsonDocument filter;
     filter["wifi_serial"] = true;
     filter["hostname"] = true;
     filter["min_current_hard"] = true;
     filter["max_current_soft"] = true;
     filter["config_version"] = true;
 
-    StaticJsonDocument<384> doc;
+    JsonDocument doc;
     DeserializationError error =
         deserializeJson(doc, body, DeserializationOption::Filter(filter));
     if (error) {
@@ -888,7 +888,7 @@ void LoadSharingPeerPoller::pushConfigResetToPeer(const String& host) {
   DBUGF("LoadSharingPeerPoller: [%s] Pushing config reset (removing from group)", host.c_str());
 
   // Build reset config JSON
-  DynamicJsonDocument doc(256);
+  JsonDocument doc;
   doc["loadsharing_enabled"] = false;
   doc["loadsharing_role"] = "";
   doc["loadsharing_controller_host"] = "";
@@ -1090,8 +1090,8 @@ void LoadSharingPeerPoller::sendAllocationToPeer(const String& host, PeerConnect
   }
 
   // Build allocation JSON message
-  DynamicJsonDocument doc(256);
-  JsonObject ls = doc.createNestedObject("loadsharing");
+  JsonDocument doc;
+  JsonObject ls = doc["loadsharing"].to<JsonObject>();
   ls["target_current"] = alloc.getTargetCurrent();
   ls["reason"] = alloc.getReason();
 

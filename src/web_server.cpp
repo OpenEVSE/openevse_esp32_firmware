@@ -346,7 +346,7 @@ void handleLogin(MongooseHttpServerRequest *request)
   }
 
   String body = request->body().toString();
-  DynamicJsonDocument doc(512);
+  JsonDocument doc;
   if(deserializeJson(doc, body)) {
     response->setCode(400);
     response->print(F("{\"msg\":\"bad json\"}"));
@@ -676,7 +676,7 @@ void buildStatus(JsonDocument &doc) {
 
   // Add joined peers array with real-time status from peer poller
   {
-    JsonArray peersArray = doc.createNestedArray("loadsharing_joined_peers");
+    JsonArray peersArray = doc["loadsharing_joined_peers"].to<JsonArray>();
     double groupTotalAmp = 0.0;
     
     for (const auto& peer : loadSharingGroupState.getPeers()) {
@@ -685,7 +685,7 @@ void buildStatus(JsonDocument &doc) {
         continue;
       }
       
-      JsonObject peerObj = peersArray.createNestedObject();
+      JsonObject peerObj = peersArray.add<JsonObject>();
       peerObj["hostname"] = peer.getHost();
       peerObj["id"] = peer.getId();
       peerObj["name"] = peer.getName();
@@ -771,7 +771,7 @@ void buildStatus(JsonDocument &doc) {
   // and nothing more belongs in a payload the HA integration already polls
   // hard. The list lives on /notifications. severity is a name ("info" /
   // "warning" / "critical"), matching how /notifications serialises it.
-  JsonObject notify = doc.createNestedObject("notifications");
+  JsonObject notify = doc["notifications"].to<JsonObject>();
   notify["count"] = notifications.count();
   notify["severity"] = notification_severity_name(notifications.maxSeverity());
 
@@ -795,7 +795,7 @@ handleScan(MongooseHttpServerRequest *request) {
     response->print("[");
     for (int i = 0; i < networksFound; ++i) {
       if(i) response->print(",");
-      StaticJsonDocument<256> network;
+      JsonDocument network;
       network["rssi"] = WiFi.RSSI(i);
       network["ssid"] = WiFi.SSID(i);
       network["bssid"] = WiFi.BSSIDstr(i);
@@ -1300,7 +1300,7 @@ void handleBoostGet(MongooseHttpServerRequest *request, MongooseHttpServerRespon
 {
   if(boost.isActive())
   {
-    StaticJsonDocument<192> doc;
+    JsonDocument doc;
     boost.serialize(doc);
     response->setCode(200);
     serializeJson(doc, *response);
@@ -1705,22 +1705,15 @@ void handleCableTemp(MongooseHttpServerRequest *request) {
 
   if(HTTP_GET == request->method())
   {
-    // 4 source objects of 9 members each (source, name, pin, status,
-    // temperature, r25, beta, offset_c10, panic_c10), plus the two
-    // top-level flags. JSON_OBJECT_SIZE(8) below undercounts that by one
-    // member per source; the +512 slack comfortably covers it.
-    const size_t capacity = JSON_OBJECT_SIZE(3) +
-                            JSON_ARRAY_SIZE(OPENEVSE_CABLE_TEMP_SOURCE_COUNT) +
-                            OPENEVSE_CABLE_TEMP_SOURCE_COUNT * JSON_OBJECT_SIZE(8) + 512;
-    DynamicJsonDocument doc(capacity);
+    JsonDocument doc;
 
     doc["supported"] = evse.isCableTempKnown();
     doc["enabled"] = evse.isCableTempEnabled();
 
-    JsonArray sources = doc.createNestedArray("sources");
+    JsonArray sources = doc["sources"].to<JsonArray>();
     for(uint8_t i = 0; i < OPENEVSE_CABLE_TEMP_SOURCE_COUNT; i++)
     {
-      JsonObject src = sources.createNestedObject();
+      JsonObject src = sources.add<JsonObject>();
       src["source"] = i;
       src["name"] = source_names[i];
       src["pin"] = evse.getCableTempPin(i);
@@ -1753,8 +1746,7 @@ void handleCableTemp(MongooseHttpServerRequest *request) {
   }
 
   MongooseString body = request->body();
-  const size_t capacity = JSON_OBJECT_SIZE(8) + 256;
-  DynamicJsonDocument doc(capacity);
+  JsonDocument doc;
   if(deserializeJson(doc, body.c_str(), body.length())) {
     response->setCode(400);
     response->print("{\"msg\":\"Could not parse JSON\"}");
@@ -1762,7 +1754,7 @@ void handleCableTemp(MongooseHttpServerRequest *request) {
     return;
   }
 
-  if(!doc.containsKey("source") || !doc.containsKey("pin")) {
+  if(doc["source"].isNull() || doc["pin"].isNull()) {
     response->setCode(400);
     response->print("{\"msg\":\"source and pin are required\"}");
     request->send(response);
@@ -1792,10 +1784,10 @@ void handleCableTemp(MongooseHttpServerRequest *request) {
   // full-configuration form is all-or-nothing, and filling the gaps from the
   // local cache would silently write back a stale value if the cache were
   // cold or another client had changed it.
-  bool hasCal = doc.containsKey("r25") && doc.containsKey("beta") &&
-                doc.containsKey("offset_c10") && doc.containsKey("panic_c10");
-  bool anyCal = doc.containsKey("r25") || doc.containsKey("beta") ||
-                doc.containsKey("offset_c10") || doc.containsKey("panic_c10");
+  bool hasCal = !doc["r25"].isNull() && !doc["beta"].isNull() &&
+                !doc["offset_c10"].isNull() && !doc["panic_c10"].isNull();
+  bool anyCal = !doc["r25"].isNull() || !doc["beta"].isNull() ||
+                !doc["offset_c10"].isNull() || !doc["panic_c10"].isNull();
 
   if(anyCal && !hasCal) {
     response->setCode(400);
@@ -1919,7 +1911,7 @@ static void rapiRespond(RapiRequest *req, int ret, const String &rapiString)
     if(req->json) {
       // Through the serializer, not string concatenation: the command is
       // caller-supplied and a quote in it must not escape the value.
-      DynamicJsonDocument doc(512);
+      JsonDocument doc;
       doc["cmd"] = req->rapi;
       doc["ret"] = rapiString;
       serializeJson(doc, page);
@@ -1932,9 +1924,9 @@ static void rapiRespond(RapiRequest *req, int ret, const String &rapiString)
   else
   {
     if(req->json) {
-      DynamicJsonDocument doc(512);
+      JsonDocument doc;
       doc["cmd"] = req->rapi;
-      doc["error"] = rapiErrorName(ret);
+      doc["error"] = String(rapiErrorName(ret));
       serializeJson(doc, page);
     } else {
       page += html_escape(req->rapi);
@@ -2113,7 +2105,7 @@ void onWsFrame(MongooseHttpWebSocketConnection *connection, int flags, uint8_t *
       }
 
     // Handle load sharing allocation from controller (member side)
-    if (doc.containsKey("loadsharing")) {
+    if (!doc["loadsharing"].isNull()) {
       JsonObject ls = doc["loadsharing"];
       if (!ls["target_current"].isNull()) {
         double targetCurrent = ls["target_current"].as<double>();
@@ -2187,7 +2179,7 @@ void handleMqttAction(MongooseHttpServerRequest *request) {
   if (false == requestPreProcess(request, response)) return;
 
   if (HTTP_GET == request->method()) {
-    DynamicJsonDocument doc(JSON_OBJECT_SIZE(8) + 384);
+    JsonDocument doc;
     doc["mqtt_connected"] = (int)mqtt.isConnected();
     doc["mqtt_status"]    = mqtt.getMqttStatus();
     if (mqtt.getBrokerIp()[0] != '\0')
@@ -2357,8 +2349,7 @@ void web_server_setup()
       return;
     }
 
-    const size_t capacity = JSON_OBJECT_SIZE(12) + JSON_ARRAY_SIZE(16) + 640;
-    DynamicJsonDocument doc(capacity);
+    JsonDocument doc;
     diagnostics_coredump_json(doc);
     response->setCode(200);
     serializeJson(doc, *response);

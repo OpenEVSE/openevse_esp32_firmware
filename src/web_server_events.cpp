@@ -63,7 +63,7 @@ void handleEventLogs(MongooseHttpServerRequest *request)
           // row above, which may have rotated away or sit in another block -
           // and the fields that most often move, the pilot current and the
           // status flags, are not ones the History view shows.
-          JsonArray why = event.createNestedArray("changed");
+          JsonArray why = event["changed"].to<JsonArray>();
           if(changed & EVENTLOG_CHANGE_FIRST)      { why.add("boot"); }
           if(changed & EVENTLOG_CHANGE_TYPE)       { why.add("type"); }
           if(changed & EVENTLOG_CHANGE_MANAGER)    { why.add("manager"); }

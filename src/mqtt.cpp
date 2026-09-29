@@ -110,7 +110,7 @@ unsigned long Mqtt::loop(MicroTasks::WakeReason reason) {
     _connecting = false;
     _nextMqttReconnectAttempt = millis() + MQTT_CONNECT_TIMEOUT;
     setError("timeout", "Server not responding");
-    StaticJsonDocument<160> doc;
+    JsonDocument doc;
     doc["mqtt_connected"]    = 0;
     doc["mqtt_status"]       = "disconnected";
     doc["mqtt_error"]        = _errorCategory;
@@ -158,7 +158,7 @@ unsigned long Mqtt::loop(MicroTasks::WakeReason reason) {
       }
       if (_brokerIp[0] != '\0') {
         // WebSocket only — this is a UI status field, not broker data
-        StaticJsonDocument<128> dns_event;
+        JsonDocument dns_event;
         dns_event["mqtt_broker_ip"] = _brokerIp;
         web_server_event(dns_event);
       }
@@ -170,7 +170,7 @@ unsigned long Mqtt::loop(MicroTasks::WakeReason reason) {
   // WebSocket only — do not re-publish status fields back to the broker.
   if (millis() - _lastStatusPush > 15000) {
     _lastStatusPush = millis();
-    StaticJsonDocument<128> status_event;
+    JsonDocument status_event;
     status_event["mqtt_connected"] = (int)_mqttclient.connected();
     status_event["mqtt_status"]    = getMqttStatus();
     web_server_event(status_event);
@@ -437,7 +437,7 @@ void Mqtt::handleMqttMessage(MongooseString topic, MongooseString payload) {
     strncpy(_brokerVersion, payload_str.c_str(), sizeof(_brokerVersion) - 1);
     _brokerVersion[sizeof(_brokerVersion) - 1] = '\0';
     // WebSocket only — do not echo broker metadata back to the broker
-    StaticJsonDocument<128> ver_event;
+    JsonDocument ver_event;
     ver_event["mqtt_broker_version"] = _brokerVersion;
     web_server_event(ver_event);
     return;
@@ -489,19 +489,19 @@ void Mqtt::handleMqttMessage(MongooseString topic, MongooseString payload) {
   else if (topic_string == mqtt_vehicle_charge_limit && vehicle_data_src == VEHICLE_DATA_SRC_MQTT) {
     int vehicle_charge_limit = payload_str.toInt();
     _evse->setVehicleChargeLimit(vehicle_charge_limit);
-    StaticJsonDocument<128> event; event["vehicle_charge_limit"] = vehicle_charge_limit; event_send(event);
+    JsonDocument event; event["vehicle_charge_limit"] = vehicle_charge_limit; event_send(event);
   }
   // Home/powerwall battery is display-only with no source arbitration (mirrors its
   // POST /status path), so it is gated only on the topic being configured.
   else if (mqtt_home_battery_soc != "" && topic_string == mqtt_home_battery_soc) {
     int soc = payload_str.toInt();
     home_battery_set_soc(soc);
-    StaticJsonDocument<128> event; event["home_battery_soc"] = soc; event_send(event);
+    JsonDocument event; event["home_battery_soc"] = soc; event_send(event);
   }
   else if (mqtt_home_battery_power != "" && topic_string == mqtt_home_battery_power) {
     int power = payload_str.toInt();
     home_battery_set_power(power);
-    StaticJsonDocument<128> event; event["home_battery_power"] = power; event_send(event);
+    JsonDocument event; event["home_battery_power"] = power; event_send(event);
   }
   else if (topic_string == mqtt_topic + "/divertmode/set") {
     byte newdivert = payload_str.toInt();
@@ -622,7 +622,7 @@ void Mqtt::restartConnection() {
 
   // Push "connecting" status immediately so the UI reacts
   {
-    StaticJsonDocument<160> doc;
+    JsonDocument doc;
     doc["mqtt_connected"]    = 0;
     doc["mqtt_status"]       = "connecting";
     doc["mqtt_error"]        = "";
@@ -753,7 +753,7 @@ void Mqtt::publishLimit() {
 void Mqtt::publishBoost() {
   String payload;
   if (boost.isActive()) {
-    StaticJsonDocument<192> boost_data;
+    JsonDocument boost_data;
     boost.serialize(boost_data);
     serializeJson(boost_data, payload);
   } else {

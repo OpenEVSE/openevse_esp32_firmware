@@ -591,8 +591,7 @@ void config_user_commit()
 // actually changed, so an unchanged ack list still costs no EEPROM write.
 void config_save_notification_acks(const String &acks, const String &fw)
 {
-  const size_t capacity = JSON_OBJECT_SIZE(2) + 512;
-  DynamicJsonDocument doc(capacity);
+  JsonDocument doc;
   doc["notification_acks"] = acks;
   doc["notification_acks_fw"] = fw;
   if(user_config.deserialize(doc)) {
@@ -645,8 +644,7 @@ bool config_deserialize(const char *json)
 {
   // Same capacity ConfigJson::deserialize(const char *) uses, so anything it
   // could parse still parses here.
-  const size_t capacity = JSON_OBJECT_SIZE(sizeof(opts) / sizeof(opts[0])) + EEPROM_SIZE;
-  DynamicJsonDocument doc(capacity);
+  JsonDocument doc;
   if(DeserializationError::Code::Ok != deserializeJson(doc, json)) {
     return false;
   }
@@ -965,8 +963,7 @@ bool config_serialize(String& json, bool longNames, bool compactOutput, bool hid
 {
   // Same capacity ConfigJson::serialize(String &) uses; the detour through a
   // document is only so the internal keys can be stripped before rendering.
-  const size_t capacity = JSON_OBJECT_SIZE(30) + EEPROM_SIZE;
-  DynamicJsonDocument doc(capacity);
+  JsonDocument doc;
   if(!user_config.serialize(doc, longNames, compactOutput, hideSecrets)) {
     return false;
   }
@@ -1123,8 +1120,7 @@ bool config_set_opt_string(const char *name, const char *value) {
   // For now, we'll try as string first, then try as integer
 
   // Create a JSON document with the value as a string
-  const size_t capacity = JSON_OBJECT_SIZE(1) +  strlen(value) + strlen(value) + 16;
-  DynamicJsonDocument doc(capacity);
+  JsonDocument doc;
   const String value_str(value);
   // Parse common scalar types from the string
   if(value_str.equalsIgnoreCase("true")) {
