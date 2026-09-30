@@ -125,20 +125,19 @@ Content-Type: application/json
 # Clear the manual override
 DELETE {{baseUrl}}/override HTTP/1.1
 
-### Crash upload: state, with no dump stored
-GET {{baseUrl}}/debug/crash/upload HTTP/1.1
+### Crash reporting: reporter identity and broker URL (nulls until set)
+GET {{baseUrl}}/debug/crash/identity HTTP/1.1
 
-### Crash upload: start (409 with a message when there is nothing to send)
-POST {{baseUrl}}/debug/crash/upload HTTP/1.1
+### Crash reporting: set the identity (the GUI generates it with crypto.getRandomValues)
+POST {{baseUrl}}/debug/crash/identity HTTP/1.1
 X-Requested-With: OpenEVSE
+Content-Type: application/json
 
-### Crash upload: cancel a deferred upload
-DELETE {{baseUrl}}/debug/crash/upload HTTP/1.1
-X-Requested-With: OpenEVSE
+{"reporter_id": "0123456789abcdef0123456789abcdef", "delete_key": "00112233445566778899aabbccddeeff00112233445566778899aabbccddeeff"}
 
-### Crash reports: this charger's reporter id (null until it has sent one)
-GET {{baseUrl}}/debug/crash/reports HTTP/1.1
+### Crash reporting: the report as the browser sends it (404 no dump, 409 no identity)
+GET {{baseUrl}}/debug/crash/report HTTP/1.1
 
-### Crash reports: erase everything this charger sent (409 if it never sent one)
-DELETE {{baseUrl}}/debug/crash/reports HTTP/1.1
+### Crash reporting: forget the identity, after the reports are erased
+DELETE {{baseUrl}}/debug/crash/identity HTTP/1.1
 X-Requested-With: OpenEVSE

@@ -1,69 +1,12 @@
-// Host-side tests for the one piece of the uploader that is pure: deciding
-// whether the id a broker handed back may be built into a request path.
-// Review Focus 1 -- the broker's reply is attacker-controlled once the broker
-// is, and this id is the only part of it the device acts on.
+// Host-side tests for the pure parts of crash reporting: the reporter
+// identity the browser stores on the charger, and whether a dump came from
+// the running build.
 #define DOCTEST_CONFIG_IMPLEMENT_WITH_MAIN
 #include "doctest.h"
 
 #include "crash_report_id.h"
 
 #include <string>
-
-TEST_CASE("a real report id is accepted") {
-  CHECK(crash_report_id_valid("3f2504e0-4f89-41d3-9a0c-0305e82c3301"));
-  CHECK(crash_report_id_valid("00000000-0000-0000-0000-000000000000"));
-}
-
-TEST_CASE("anything that could escape the path is refused") {
-  CHECK_FALSE(crash_report_id_valid("../../../elf/firmware.elf"));
-  CHECK_FALSE(crash_report_id_valid("3f2504e0-4f89-41d3-9a0c-0305e82c3301/.."));
-  CHECK_FALSE(crash_report_id_valid("3f2504e0 4f89 41d3 9a0c 0305e82c3301"));
-  CHECK_FALSE(crash_report_id_valid("3f2504e0-4f89-41d3-9a0c-0305e82c33\r\nX: y"));
-  CHECK_FALSE(crash_report_id_valid("?X-Amz-Signature=abc"));
-}
-
-TEST_CASE("the wrong shape is refused, including near misses") {
-  CHECK_FALSE(crash_report_id_valid(""));
-  CHECK_FALSE(crash_report_id_valid(NULL));
-  CHECK_FALSE(crash_report_id_valid("3f2504e0-4f89-41d3-9a0c-0305e82c330"));   // short
-  CHECK_FALSE(crash_report_id_valid("3f2504e0-4f89-41d3-9a0c-0305e82c33011")); // long
-  CHECK_FALSE(crash_report_id_valid("3F2504E0-4F89-41D3-9A0C-0305E82C3301"));  // upper
-  CHECK_FALSE(crash_report_id_valid("3f2504e04f8941d39a0c0305e82c3301"));      // no dashes
-}
-
-// ---------------------------------------------------------------------------
-// Which dump a deferred click consented to (spec section 8). The flag records
-// the offered dump's identity; a different dump at the next boot -- a crash
-// AFTER the click -- was never offered and must not be sent.
-// ---------------------------------------------------------------------------
-
-TEST_CASE("the token for a dump matches only that dump") {
-  char tok[CRASH_DEFER_TOKEN_LEN];
-  crash_defer_token(tok, 0x5633e718c3722dd1ULL, 26084);
-  CHECK(crash_defer_token_matches(tok, 0x5633e718c3722dd1ULL, 26084));
-  // The bench pair that broke a CRC32 identity: same size, different bytes.
-  CHECK_FALSE(crash_defer_token_matches(tok, 0x33d7fd072a0b6813ULL, 26084));
-  CHECK_FALSE(crash_defer_token_matches(tok, 0x5633e718c3722dd1ULL, 26088));
-  // Both 32-bit halves count -- a token built from only one would collide here.
-  CHECK_FALSE(crash_defer_token_matches(tok, 0x00000000c3722dd1ULL, 26084));
-  CHECK_FALSE(crash_defer_token_matches(tok, 0x5633e71800000000ULL, 26084));
-}
-
-TEST_CASE("an unreadable or legacy flag consents to nothing") {
-  // A flag written by an older build held "1". Treating that as consent for
-  // whatever dump exists now would reopen exactly the gap this closes.
-  CHECK_FALSE(crash_defer_token_matches("1", 0x5633e718c3722dd1ULL, 26084));
-  CHECK_FALSE(crash_defer_token_matches("", 0x5633e718c3722dd1ULL, 26084));
-  CHECK_FALSE(crash_defer_token_matches(NULL, 0x5633e718c3722dd1ULL, 26084));
-  CHECK_FALSE(crash_defer_token_matches("5633e718c3722dd1:26084junk", 0x5633e718c3722dd1ULL, 26084));
-  // A token written by the CRC32 version of this code consents to nothing.
-  CHECK_FALSE(crash_defer_token_matches("2144df1c:26084", 0x2144df1cULL, 26084));
-}
-
-// ---------------------------------------------------------------------------
-// Whether the stored dump came from the firmware that is running now. After an
-// OTA it does not, and the running version would misfile the crash.
-// ---------------------------------------------------------------------------
 
 TEST_CASE("a dump from the running build is recognised as such") {
   CHECK(crash_dump_from_running_build("c043b880d", "c043b880d"));
@@ -84,16 +27,6 @@ TEST_CASE("a dump from any other build, or an unknown one, is not") {
 // What the metadata step promises to PUT afterwards. A shipped build sends the
 // decoded summary only: the raw image is a copy of RAM, and no redaction can
 // say what that copy holds.
-// ---------------------------------------------------------------------------
-
-TEST_CASE("a default build declares no raw dump") {
-  CHECK(crash_declared_raw_bytes(65536) == 0);
-  CHECK(crash_declared_raw_bytes(0) == 0);
-}
-
-// ---------------------------------------------------------------------------
-// The reporter identity: a random id sent in place of the chip id, and a
-// random delete key that never leaves the device except to erase.
 // ---------------------------------------------------------------------------
 
 static const char *RID = "0123456789abcdef0123456789abcdef";
@@ -149,15 +82,3 @@ TEST_CASE("the identity file round-trips, and anything else is rejected") {
 // upload on a no-PSRAM board) defers to the next boot instead of refusing.
 // ---------------------------------------------------------------------------
 
-TEST_CASE("a delete starts when it can, and defers when it cannot yet") {
-  CHECK(crash_forget_decide(false, true, true, 60000, 40960) == CrashForget_Start);
-  CHECK(crash_forget_decide(false, true, false, 60000, 40960) == CrashForget_Defer);
-  CHECK(crash_forget_decide(false, true, true, 36852, 40960) == CrashForget_Defer);
-}
-
-TEST_CASE("a delete is refused only when there is nothing to do or an upload holds the connection") {
-  CHECK(crash_forget_decide(true, true, true, 60000, 40960) == CrashForget_Busy);
-  CHECK(crash_forget_decide(false, false, true, 60000, 40960) == CrashForget_Nothing);
-  // Nothing sent beats no network: there is nothing to defer.
-  CHECK(crash_forget_decide(false, false, false, 1000, 40960) == CrashForget_Nothing);
-}

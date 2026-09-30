@@ -54,7 +54,6 @@
 #include "temp_throttle.h"
 #include "limit.h"
 #include "diagnostics.h"
-#include "crash_upload.h"
 #include "boost.h"
 #include "notifications.h"
 
@@ -232,9 +231,6 @@ void setup()
 
   // Bring up the web server
   web_server_setup();
-  // Reads a LittleFS flag only; nothing here touches the network. A deferred
-  // upload waits for connectivity in loop() (spec section 6.1 tier 2).
-  crash_upload_begin();
   DBUGF("After web_server_setup: %d", ESPAL.getFreeHeap());
 
   // Initialize load sharing group state:
@@ -313,7 +309,6 @@ void loop()
   // Follow HTTP OTA redirects only after Mongoose.poll() has destroyed the
   // previous TLS connection, avoiding two simultaneous TLS contexts.
   http_update_loop();
-  crash_upload_loop();
 
   web_server_loop();
   diagnostics_loop();

@@ -12,8 +12,8 @@
 #include "input.h"             // evse
 #include <espal.h>
 
-void crash_payload_build(JsonDocument &doc, size_t rawBytes,
-                         const char *reporterId, const char *deleteKeyHash)
+void crash_payload_build(JsonDocument &doc, const char *reporterId,
+                         const char *deleteKeyHash)
 {
   doc["buildenv"] = buildenv;
 
@@ -32,8 +32,7 @@ void crash_payload_build(JsonDocument &doc, size_t rawBytes,
   }
 
   // The decoded summary: panic reason, faulting task, PC, backtrace,
-  // elf_sha256. This is what gets symbolized; the raw image is for the
-  // questions it cannot answer.
+  // elf_sha256. This is what gets symbolized.
   JsonObject summary = doc.createNestedObject("summary");
   {
     DynamicJsonDocument sd(JSON_OBJECT_SIZE(12) + JSON_ARRAY_SIZE(16) + 640);
@@ -81,10 +80,6 @@ void crash_payload_build(JsonDocument &doc, size_t rawBytes,
                      /*hideSecrets*/ true);
     JsonObject redacted = doc.createNestedObject("config");
     crash_redact_config(cfg.as<JsonObjectConst>(), redacted);
-  }
-
-  if(rawBytes > 0) {
-    doc["raw_bytes"] = (uint32_t)rawBytes;
   }
 }
 

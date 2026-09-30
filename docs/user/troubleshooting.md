@@ -60,51 +60,46 @@ that is.
 ### Sending a crash report to OpenEVSE
 
 On 16 MB boards, **Developer Tools** has a **Send to OpenEVSE** button beside the
-stored report (or `curl -X POST -d '' http://<charger>/debug/crash/upload`). It
-sends the decoded report to `crash.openevse.com`, where the maintainers see it
-as a readable stack trace -- no need to find a matching `firmware.elf` or attach
-anything to an issue.
+stored report. Your browser sends the decoded report to `crash.openevse.com`,
+where the maintainers see it as a readable stack trace -- no need to find a
+matching `firmware.elf` or attach anything to an issue. The browser does the
+sending, so it is the browser that needs internet access, not the charger.
 
 Before you press it:
 
 - **Only the decoded summary is sent, never the raw dump.** That is the panic
-  reason, the crashed task, the program counter and the backtrace, plus the build,
-  the chip id, heap figures, and which features are switched on. Your Wi-Fi,
-  MQTT and other passwords, hostnames and addresses are not included. The raw
-  dump is a copy of the charger's memory and can hold those, so it stays on the
-  charger (fetch it yourself from `/debug/crash/raw` if a maintainer asks). The
-  report travels over a verified TLS connection to the one host compiled into
-  the firmware -- that destination cannot be changed from the settings -- is
+  reason, the crashed task, the program counter and the backtrace, plus the
+  build, the chip model, heap figures, and which features are switched on. Your
+  Wi-Fi, MQTT and other passwords, hostnames and addresses are not included:
+  the charger builds the report from an allowlist of settings. The raw dump is a
+  copy of the charger's memory and can hold those, so it stays on the charger
+  (fetch it yourself from `/debug/crash/raw` if a maintainer asks). The report is
   kept privately for 90 days, and is then deleted.
 - **Nothing in it names the charger.** Instead of the chip id (which is derived
-  from the network MAC address), the first report creates a random reporter id
-  on the charger, shown under Developer Tools.
+  from the network MAC address), the first report creates a random reporter id,
+  stored on the charger and shown under Developer Tools.
 - **You can erase everything this charger has sent.** **Delete my reports from
-  OpenEVSE** (or `curl -X DELETE http://<charger>/debug/crash/reports`) removes
-  every report the charger sent, cancels one that is waiting for a restart, and
-  forgets the reporter id, so a later report is not linked to the old ones. The
-  charger proves it is the sender with a secret key it keeps and never sends
-  with a report, so nobody else can delete your reports -- and nobody can
-  delete them from here without the charger.
-  If the charger has no network, or too little free memory right then (common
-  straight after sending on boards without PSRAM), the page says so and the
-  deletion runs by itself shortly after the next restart. Sending a new report
-  is refused until it has.
-- **The report is removed from the charger only once it has arrived.**
-  If anything fails part-way, it stays on the charger and you can try again.
-- **On a charger that has been up a long time the upload may wait for the next
-  restart.** Sending needs a block of free memory that long uptimes can break
-  up. The button then says so, and the report goes by itself shortly after the
-  next restart -- only because you pressed the button; nothing is ever sent
-  that you did not ask to send. To change your mind before then,
-  `curl -X DELETE http://<charger>/debug/crash/upload`, or erase the report.
+  OpenEVSE** removes every report the charger sent and forgets the reporter id,
+  so a later report is not linked to the old ones. It works with a secret delete
+  key stored on the charger alongside the reporter id and never sent with a
+  report, so nobody else can delete your reports.
+- **The report is removed from the charger only once it has arrived.** If the
+  browser cannot reach `crash.openevse.com` (for example a phone connected to
+  the charger's own hotspot), nothing is lost: try again from a browser that is
+  online.
 
-`GET /debug/crash/upload` reports progress: `state` is one of `idle`,
-`metadata`, `uploading`, `completing`, `done`, `failed` or `deferred`.
-While an upload is running, erasing the report answers `409`. It also carries
-`reporter_id` (null until a report has been sent) and `forget`, where a
-deletion has got to: `idle`, `deleting`, `deleted`, `failed` or `deferred`
-(waiting for the next restart).
+The page uses these endpoints; with a password set, add `-u openevseadmin:<password>`
+to each -- `-u <user>:<password>` if you set a user name:
+
+```sh
+curl http://<charger>/debug/crash/identity         # reporter id, delete key, broker URL
+curl http://<charger>/debug/crash/report           # the report, exactly as sent
+curl -X DELETE http://<charger>/debug/crash/identity  # forget the identity
+```
+
+`/debug/crash/report` answers `404` with no dump stored, and `409` until a
+reporter identity has been set (`POST /debug/crash/identity` with
+`{"reporter_id": <32 hex>, "delete_key": <64 hex>}`; the page does this for you).
 
 ## Getting help
 

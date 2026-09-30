@@ -39,7 +39,7 @@ relative to the configured base topic (see [mqtt.md](../mqtt.md)).
 | SSL certificates | `certificates.*` | `/settings/certificates` | `*_certificate_id` | `/certificates` | — | [settings.md](../user/settings.md) |
 | RAPI terminal / debug console | `web_server.*` | `/settings/terminal` | — | `/r`, WS consoles | — | [settings.md](../user/settings.md) |
 | On-device TFT display | `lcd_lvgl.*`, `src/lvgl_tft/` | `/settings/display` (gated on `tft_theme`) | `tft_*` | `/config` | — | [settings.md](../user/settings.md) |
-| Crash report upload (one click: summary + raw dump to the broker; 16 MB boards) | `crash_upload.*`, `crash_payload.*`, `crash_redact.*`, `crash_report_id.*`, `crash_host.h`, `ota_url_allow.*`, `diagnostics.*` | `/settings/terminal` (paired GUI PR) | — (broker host is compiled in, `CRASH_BROKER_HOST`; build gate `ENABLE_CRASH_UPLOAD`) | `/debug/crash`, `/debug/crash/raw`, `/debug/crash/upload`, `/ws` (`crash_upload*` events) | — | [troubleshooting.md](../user/troubleshooting.md) |
+| Crash report upload (one click: the browser sends the decoded summary to the broker; 16 MB boards) | `crash_report.*`, `crash_payload.*`, `crash_redact.*`, `crash_report_id.*`, `diagnostics.*` | `/settings/terminal` (paired GUI PR) | — (broker URL is compiled in, `CRASH_BROKER_URL`; build gate `ENABLE_CRASH_UPLOAD`) | `/debug/crash`, `/debug/crash/raw`, `/debug/crash/report`, `/debug/crash/identity` | — | [troubleshooting.md](../user/troubleshooting.md) |
 | Charger info / diagnostics | `evse_monitor.*` | `/monitoring`, `/settings/about` | — | `/status`, `/config` | telemetry topics | [monitoring.md](../user/monitoring.md) |
 
 ## Maintenance

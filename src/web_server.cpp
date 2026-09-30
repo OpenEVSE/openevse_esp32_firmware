@@ -28,7 +28,9 @@ typedef const __FlashStringHelper *fstr_t;
 #include "emonesp.h"
 #include "web_server.h"
 #include "diagnostics.h"
-#include "crash_upload.h"
+#include "crash_report.h"
+#include "crash_report_id.h"
+#include "crash_payload.h"
 #ifdef ENABLE_TSDB
 #include "tsdb_energy_logger.h"
 #endif
@@ -2240,20 +2242,6 @@ void handleMqttAction(MongooseHttpServerRequest *request) {
   request->send(response);
 }
 
-// The erasure half of crash reporting, as the GUI reads it: the reporter id
-// (null until this charger has sent a report) and where a deletion has got to.
-static void crash_reports_describe(JsonDocument &doc)
-{
-  char rid[33];
-  if(crash_reporter_id(rid)) {
-    doc["reporter_id"] = rid;
-  } else {
-    doc["reporter_id"] = nullptr;
-  }
-  doc["forget"] = crash_forget_state_name();
-  doc["forget_deleted"] = crash_forget_deleted();
-}
-
 void web_server_setup()
 {
   bool use_ssl = false;
@@ -2389,23 +2377,6 @@ void web_server_setup()
     }
 
     if(HTTP_DELETE == request->method()) {
-      // Erasing the partition an in-flight PUT is streaming out of does not
-      // fault -- the flash mapping stays valid -- it just turns the rest of
-      // the upload into 0xFF, which passes the broker's length check and is
-      // then stored as a genuine memory image. Refuse instead.
-      if(CrashUpload_Idle != crash_upload_state() &&
-         CrashUpload_Done != crash_upload_state() &&
-         CrashUpload_Failed != crash_upload_state() &&
-         CrashUpload_Deferred != crash_upload_state()) {
-        response->setCode(409);
-        response->print(F("{\"msg\":\"upload in progress\"}"));
-        request->send(response);
-        return;
-      }
-      // Erasing while an upload is deferred also withdraws the deferral: the
-      // dump it was queued to send is about to stop existing, and leaving the
-      // flag armed means the next boot consumes it and finds nothing.
-      crash_upload_cancel_deferred();
       bool erased = diagnostics_coredump_erase();
       response->setCode(erased ? 200 : 500);
       response->print(erased ? F("{\"msg\":\"erased\"}") : F("{\"msg\":\"error\"}"));
@@ -2453,80 +2424,89 @@ void web_server_setup()
     request->send(response);
   });
 
-  // One-click crash reporting (spec §3).
+#if ENABLE_CRASH_UPLOAD
+  // Crash reporting (spec §3). The browser sends the report to the broker
+  // itself; the charger only builds it and keeps the reporter identity.
   //
-  //   GET    /debug/crash/upload  where an upload has got to
-  //   POST   /debug/crash/upload  send the stored dump to the broker
-  //   DELETE /debug/crash/upload  forget an upload deferred to the next boot
+  //   GET    /debug/crash/report    the report, exactly as the broker takes it
+  //   GET    /debug/crash/identity  reporter id + delete key (if set), broker URL
+  //   POST   /debug/crash/identity  store the identity the browser generated
+  //   DELETE /debug/crash/identity  forget it, once the reports are erased
   //
-  // requestPreProcess carries the auth and the CSRF check, so this is
-  // authenticated exactly like a config write -- which is the bar a request
-  // that ships a memory image off the device should clear.
-  server.on("/debug/crash/upload$", [](MongooseHttpServerRequest *request) {
+  // requestPreProcess carries the auth and the CSRF check: the delete key is
+  // what erases this charger's reports, so it is guarded like a config write.
+  server.on("/debug/crash/report$", [](MongooseHttpServerRequest *request) {
     MongooseHttpServerResponseStream *response;
     if(false == requestPreProcess(request, response, CONTENT_TYPE_JSON)) {
       return;
     }
-
-    if(HTTP_DELETE == request->method()) {
-      // Spec §8: the user changing their mind is a first-class case, not an
-      // edge case.
-      crash_upload_cancel_deferred();
-      response->setCode(200);
-      response->print(F("{\"msg\":\"cancelled\"}"));
+    const uint8_t *image;
+    size_t imageLen;
+    if(!diagnostics_coredump_image(&image, &imageLen) || 0 == imageLen) {
+      response->setCode(404);
+      response->print(F("{\"msg\":\"no crash dump stored\"}"));
       request->send(response);
       return;
     }
-
-    if(HTTP_POST == request->method()) {
-      String message;
-      bool ok = crash_upload_request(message);
-      response->setCode(ok ? 200 : 409);
-      DynamicJsonDocument doc(256);
-      doc["msg"] = message;
-      doc["state"] = crash_upload_state_name();
-      doc["deferred"] = crash_upload_deferred_armed();
-      serializeJson(doc, *response);
+    char rid[33], key[65], keyHash[65];
+    if(!crash_identity_load(rid, key)) {
+      response->setCode(409);
+      response->print(F("{\"msg\":\"no reporter identity\"}"));
       request->send(response);
       return;
     }
-
-    DynamicJsonDocument doc(384);
-    doc["state"] = crash_upload_state_name();
-    doc["sent"] = (uint32_t)crash_upload_sent();
-    doc["total"] = (uint32_t)crash_upload_total();
-    doc["deferred"] = crash_upload_deferred_armed();
-    crash_reports_describe(doc);
+    crash_delete_key_hash(key, keyHash);
+    // Sent as-is: the body the browser POSTs to the broker. Where to POST it
+    // comes from /debug/crash/identity, which the browser reads first.
+    DynamicJsonDocument doc(6144);
+    crash_payload_build(doc, rid, keyHash);
     response->setCode(200);
     serializeJson(doc, *response);
     request->send(response);
   });
 
-  // Erasure (GDPR Art. 17; Art. 7(3)).
-  //
-  //   GET    /debug/crash/reports  this charger's reporter id, if it has one
-  //   DELETE /debug/crash/reports  erase every report this charger has sent
-  //
-  // Authenticated like the upload: the device holds the delete key and
-  // presents it itself, so the browser never sees it.
-  server.on("/debug/crash/reports$", [](MongooseHttpServerRequest *request) {
+  server.on("/debug/crash/identity$", [](MongooseHttpServerRequest *request) {
     MongooseHttpServerResponseStream *response;
     if(false == requestPreProcess(request, response, CONTENT_TYPE_JSON)) {
       return;
     }
-    DynamicJsonDocument doc(256);
-    if(HTTP_DELETE == request->method()) {
-      String message;
-      bool ok = crash_forget_request(message);
+    if(HTTP_POST == request->method()) {
+      DynamicJsonDocument in(256);
+      if(deserializeJson(in, request->body().toString())) {
+        response->setCode(400);
+        response->print(F("{\"msg\":\"bad json\"}"));
+        request->send(response);
+        return;
+      }
+      bool ok = crash_identity_store(in["reporter_id"] | "", in["delete_key"] | "");
       response->setCode(ok ? 200 : 409);
-      doc["msg"] = message;
-    } else {
-      response->setCode(200);
+      response->print(ok ? F("{\"msg\":\"stored\"}")
+                         : F("{\"msg\":\"invalid, or a different identity is already set\"}"));
+      request->send(response);
+      return;
     }
-    crash_reports_describe(doc);
+    if(HTTP_DELETE == request->method()) {
+      bool ok = crash_identity_forget();
+      response->setCode(ok ? 200 : 500);
+      response->print(ok ? F("{\"msg\":\"forgotten\"}") : F("{\"msg\":\"error\"}"));
+      request->send(response);
+      return;
+    }
+    DynamicJsonDocument doc(256);
+    char rid[33], key[65];
+    if(crash_identity_load(rid, key)) {
+      doc["reporter_id"] = rid;
+      doc["delete_key"] = key;
+    } else {
+      doc["reporter_id"] = nullptr;
+      doc["delete_key"] = nullptr;
+    }
+    doc["broker"] = CRASH_BROKER_URL;
+    response->setCode(200);
     serializeJson(doc, *response);
     request->send(response);
   });
+#endif // ENABLE_CRASH_UPLOAD
 
   server.on("/debug/console$")
     ->onRequest(onWsAuthenticate)
