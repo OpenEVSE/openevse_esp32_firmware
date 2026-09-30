@@ -22,6 +22,10 @@
 # Target (exactly one of):
 #   --port PATH     flash over serial with esptool.py
 #   --http HOST     POST to http://HOST/update (the firmware's own updater)
+#   --http-user USER:PASS   HTTP Basic credentials for --http, needed when the
+#                   device has a web username/password set (otherwise /update
+#                   answers 401). Can also be given via $OPENEVSE_HTTP_USER
+#                   to keep the password out of your shell history
 #   --ota HOST      push over ArduinoOTA with espota.py (port 3232, no password)
 #
 #   --env ENV       PlatformIO environment / board (default openevse_wifi_v1)
@@ -123,6 +127,7 @@ pr=
 env=openevse_wifi_v1
 port=
 http_host=
+http_user=${OPENEVSE_HTTP_USER:-}
 ota_host=
 baud=460800
 erase=0
@@ -146,6 +151,7 @@ while [ $# -gt 0 ]; do
     --env)                 env=$(arg_value "$1" "${2:-}"); shift 2 ;;
     --port)                port=$(arg_value "$1" "${2:-}"); shift 2 ;;
     --http)                http_host=$(arg_value "$1" "${2:-}"); shift 2 ;;
+    --http-user)           http_user=$(arg_value "$1" "${2:-}"); shift 2 ;;
     --ota)                 ota_host=$(arg_value "$1" "${2:-}"); shift 2 ;;
     --baud)                baud=$(arg_value "$1" "${2:-}"); shift 2 ;;
     --with-bootloader)     with_bootloader=1; shift ;;
@@ -171,6 +177,7 @@ targets=0
 [ "$erase" -eq 1 ] && [ "$reset_boot_slot" -eq 1 ] && die "pass at most one of --erase, --reset-boot-slot"
 [ "$erase" -eq 1 ] && [ -z "$port" ] && die "--erase only makes sense with --port"
 [ "$with_bootloader" -eq 1 ] && [ -z "$port" ] && die "--with-bootloader only makes sense with --port"
+[ -n "$http_user" ] && [ -z "$http_host" ] && die "--http-user only makes sense with --http"
 [ "$reset_boot_slot" -eq 1 ] && [ -z "$port" ] && die "--reset-boot-slot only makes sense with --port"
 
 command -v gh >/dev/null 2>&1 || die "the GitHub CLI ('gh') is required; see https://cli.github.com"
@@ -364,7 +371,12 @@ if [ -n "$port" ]; then
 
 elif [ -n "$http_host" ]; then
   command -v curl >/dev/null 2>&1 || die "curl is required for --http"
-  curl -f -F "firmware=@${fw_bin}" "http://${http_host}/update" --progress-bar | cat
+  # Credentials go in via a curl config on stdin so the password never shows
+  # up in the process list.
+  curl_auth=()
+  [ -n "$http_user" ] && curl_auth=(-K -)
+  { [ -n "$http_user" ] && printf 'user = "%s"\n' "$(printf '%s' "$http_user" | sed 's/[\\"]/\\&/g')"; :; } |
+    curl -f "${curl_auth[@]}" -F "firmware=@${fw_bin}" "http://${http_host}/update" --progress-bar | cat
 
 else
   espota_bin=$(command -v espota.py 2>/dev/null) \
