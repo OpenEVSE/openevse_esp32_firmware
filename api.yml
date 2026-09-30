@@ -3,6 +3,28 @@ info:
   title: OpenEVSE WiFi API
   description: |
     The API for the OpenEVSE WiFi module
+
+    ## Authentication
+
+    Authentication is only enforced when an admin password is configured. With no
+    password set (or while the device is in AP-only provisioning mode) every
+    operation is open and none of the credentials below are needed. When a password
+    is set, every operation except `/login` and `/logout` requires **one** of:
+
+    * **HTTP Basic** credentials (`Authorization` header) - intended for machine
+      clients such as scripts and integrations. If the username is left blank in the
+      configuration a default admin user is used.
+    * A **session cookie** (`oevse_session`) obtained from [`POST /login`](#tag/Authentication)
+      - intended for the browser UI. Sessions last 6 hours, or 30 days if `remember`
+      was requested.
+
+    ### Authentication failures
+
+    | Status | Meaning |
+    |---|---|
+    | `401` | No valid credentials were supplied. Clients that send `X-Requested-With: OpenEVSE` get a JSON body `{"msg":"auth"}`; any other client gets a `WWW-Authenticate` Basic challenge so browsers prompt for credentials. |
+    | `429` | A *wrong* Basic password, or a failed `/login`, was presented while the brute-force throttle is active (`{"msg":"locked"}`). Correct credentials are never throttled, and the counter decays on its own. Requests with no credentials at all still get `401`. |
+    | `403` | CSRF guard: a state-changing (non-`GET`) request authenticated by session cookie must also send `X-Requested-With: OpenEVSE`. Basic-auth clients are unaffected. A few `GET` endpoints also require this header and are documented on the operation. |
   version: '1.0'
   contact:
     email: jeremy@bigjungle.net
@@ -17,6 +39,10 @@ servers:
       server:
         default: 'http://openevse.local'
   - url: 'http://localhost:8080'
+security:
+  - {}
+  - BasicAuth: []
+  - SessionCookie: []
 paths:
   /status:
     get:
@@ -553,9 +579,6 @@ paths:
       summary: Export session history as CSV
       tags:
         - Event Log
-      security:
-        - BasicAuth: []
-        - SessionCookie: []
       responses:
         '200':
           description: OK
@@ -564,9 +587,9 @@ paths:
               schema:
                 type: string
         '401':
-          description: Basic credentials or a valid session cookie are required
+          $ref: '#/components/responses/Unauthorized'
         '429':
-          description: Invalid Basic credentials have been temporarily rate-limited
+          $ref: '#/components/responses/TooManyRequests'
       operationId: exportEventLogCsv
       description: >-
         Stream every stored log entry as a CSV file (Time, Type, State, Energy
@@ -643,6 +666,91 @@ paths:
       operationId: removeRfidUser
       description: Remove the user name mapping for an RFID tag UID.
     parameters: []
+  /login:
+    post:
+      operationId: login
+      summary: Log in and obtain a session cookie
+      description: |
+        Checks the admin credentials and, on success, sets the `oevse_session`
+        cookie (`HttpOnly`, `SameSite=Strict`). Only needed for browser-style
+        clients; machine clients can use HTTP Basic on every request instead.
+
+        This operation is reachable without authentication. Wrong credentials count
+        towards the same brute-force throttle as a wrong Basic password.
+      tags:
+        - Authentication
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - user
+                - pass
+              properties:
+                user:
+                  type: string
+                pass:
+                  type: string
+                remember:
+                  type: boolean
+                  description: Issue a 30 day cookie instead of a 6 hour one
+                now:
+                  type: integer
+                  description: >-
+                    Client time in epoch seconds. Only used to bootstrap the
+                    device clock when it has none, so the cookie can be dated.
+      responses:
+        '200':
+          description: Logged in; `Set-Cookie` carries the session
+          headers:
+            Set-Cookie:
+              schema:
+                type: string
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Message'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          description: Wrong username or password
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Message'
+              examples:
+                Invalid:
+                  value:
+                    msg: invalid
+        '429':
+          $ref: '#/components/responses/TooManyRequests'
+        '503':
+          description: >-
+            A session cannot be issued yet (`clock`: the device has no valid
+            time and the client did not supply one; `not ready`: no signing
+            secret). Use HTTP Basic instead.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Message'
+  /logout:
+    post:
+      operationId: logout
+      summary: Clear the session cookie
+      description: Always succeeds and does not require authentication.
+      tags:
+        - Authentication
+      security: []
+      responses:
+        '200':
+          description: Cookie cleared
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Message'
   /restart:
     post:
       summary: restart gateway or evse modules
@@ -1447,10 +1555,14 @@ components:
     BasicAuth:
       type: http
       scheme: basic
+      description: Admin username and password, sent on every request.
     SessionCookie:
       type: apiKey
       in: cookie
       name: oevse_session
+      description: >-
+        Session cookie issued by `POST /login`. State-changing requests that use
+        it must also send `X-Requested-With: OpenEVSE`.
   schemas:
     Message:
       title: Informational message
@@ -1738,6 +1850,31 @@ components:
             Not found:
               value:
                 msg: Not found
+    Unauthorized:
+      description: >-
+        Authentication is required and no valid credentials were supplied.
+        Requests with `X-Requested-With: OpenEVSE` get a JSON body; others get a
+        `WWW-Authenticate` Basic challenge.
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Message'
+          examples:
+            Auth required:
+              value:
+                msg: auth
+    TooManyRequests:
+      description: >-
+        A wrong password was presented while the brute-force throttle is active.
+        Correct credentials are never throttled.
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Message'
+          examples:
+            Locked:
+              value:
+                msg: locked
     BadRequest:
       description: Example response
       content:
@@ -1750,6 +1887,7 @@ components:
                 msg: Could not parse JSON
   parameters: {}
 tags:
+  - name: Authentication
   - name: Claims
   - name: Config
   - name: Event Log
