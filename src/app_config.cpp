@@ -75,7 +75,6 @@ String sntp_hostname;
 
 // Device-wide temperature display unit ("c" | "f").
 String temp_unit;
-bool labs_enabled;
 
 // On-device LVGL TFT display theme ("dark" | "light").
 String tft_theme;
@@ -251,7 +250,6 @@ ConfigOpt *opts[] =
 // Temperature display unit ("c" | "f") — device-wide, read by the display and
 // the web UI so both agree. Default Celsius (the device always reports °C).
   new ConfigOptDefinition<String>(temp_unit, "c", "temp_unit", "tu"),
-  new ConfigOptDefinition<bool>(labs_enabled, false, "labs_enabled", "labs"),
 
 #ifdef ENABLE_SCREEN_LVGL_TFT
 // On-device display theme (only present on LVGL-TFT builds; its presence in
@@ -396,6 +394,7 @@ ConfigOpt *opts[] =
   new ConfigOptVirtualMaskedBool(flagsOpt, flagsChanged, CONFIG_TEMP_THROTTLE, CONFIG_TEMP_THROTTLE, "temp_throttle_enabled", "tte"),
   new ConfigOptVirtualMaskedBool(flagsOpt, flagsChanged, CONFIG_LCD_NETWORK_INFO, CONFIG_LCD_NETWORK_INFO, "lcd_network_info", "lni"),
   new ConfigOptVirtualMaskedBool(flagsOpt, flagsChanged, CONFIG_TFT_12H_CLOCK, CONFIG_TFT_12H_CLOCK, "tft_12h_clock", "t12"),
+  new ConfigOptVirtualMaskedBool(flagsOpt, flagsChanged, CONFIG_LABS_ENABLED, CONFIG_LABS_ENABLED, "labs_enabled", "labs"),
   new ConfigOptVirtualMqttProtocol(flagsOpt, flagsChanged, "mqtt_protocol", "mprt"),
   new ConfigOptVirtualChargeMode(flagsOpt, flagsChanged, "charge_mode", "chmd")
 };

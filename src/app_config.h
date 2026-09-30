@@ -50,9 +50,6 @@ extern String sntp_hostname;
 // Source of truth for both the on-device display and the web UI.
 extern String temp_unit;
 
-// Web UI: reveal OpenEVSE Labs (in-development) features
-extern bool labs_enabled;
-
 // On-device LVGL TFT display theme: "dark" (nightshift) or "light".
 extern String tft_theme;
 extern uint32_t tft_brightness;
@@ -168,6 +165,9 @@ extern uint32_t flags;
 
 #define CONFIG_SERVICE_EMONCMS      (1 << 0)
 #define CONFIG_SERVICE_MQTT         (1 << 1)
+// Web UI: reveal OpenEVSE Labs (in-development) features. Stored on the
+// device so it applies to every browser.
+#define CONFIG_LABS_ENABLED         (1 << 2)
 #define CONFIG_SERVICE_SNTP         (1 << 3)
 #define CONFIG_MQTT_PROTOCOL        (7 << 4) // Maybe leave a bit of space after for additional protocols
 #define CONFIG_MQTT_ALLOW_ANY_CERT  (1 << 7)
@@ -279,6 +279,10 @@ inline bool config_vehicle_range_miles() {
 
 inline bool config_rfid_enabled() {
   return CONFIG_RFID == (flags & CONFIG_RFID);
+}
+
+inline bool config_labs_enabled() {
+  return CONFIG_LABS_ENABLED == (flags & CONFIG_LABS_ENABLED);
 }
 
 inline bool config_factory_write_lock() {
