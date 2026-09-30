@@ -402,12 +402,11 @@ if [ "$monitor" -eq 1 ]; then
     command -v websocat >/dev/null 2>&1 \
       || die "--monitor over the network needs 'websocat' on PATH -- or connect yourself to ws://$monitor_host/debug/console"
     log "attaching to ws://$monitor_host/debug/console (Ctrl-C to exit)"
-    # websocat wants the credential already base64-encoded, and reads it from
-    # WEBSOCAT_BASIC_AUTH (websocat 1.14+) so it stays out of the process list.
+    # websocat base64-encodes the value itself (despite its help text saying
+    # otherwise), so pass it raw, via WEBSOCAT_BASIC_AUTH (websocat 1.14+) to
+    # keep it out of the process list.
     if [ -n "$http_user" ]; then
-      command -v base64 >/dev/null 2>&1 || die "base64 is required for --http-user with --monitor"
-      WEBSOCAT_BASIC_AUTH=$(printf '%s' "$http_user" | base64 | tr -d '\n') \
-        websocat "ws://$monitor_host/debug/console"
+      WEBSOCAT_BASIC_AUTH="$http_user" websocat "ws://$monitor_host/debug/console"
     else
       websocat "ws://$monitor_host/debug/console"
     fi
