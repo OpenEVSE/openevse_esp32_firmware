@@ -447,6 +447,10 @@ unsigned long EvseMonitor::loop(MicroTasks::WakeReason reason)
   DBUG(", _count = ");
   DBUGLN(_count);
 
+#ifdef ENABLE_CABLE_TEMP
+  expireCableTemperatures();
+#endif // ENABLE_CABLE_TEMP
+
   if(_relay_recovery_in_flight) {
     // A stuck-relay recovery ($FK) is in flight and can hold the RAPI queue
     // for up to ~30s on the controller side - every periodic poll below
@@ -1363,6 +1367,22 @@ void EvseMonitor::readRelayHealth()
 }
 
 #ifdef ENABLE_CABLE_TEMP
+void EvseMonitor::expireCableTemperatures()
+{
+  // Called every loop, before the relay-recovery early return, so cached
+  // readings stop being served once they reach the max age even when polls
+  // are failing, delayed or paused - not only when a failed callback happens
+  // to land after the deadline.
+  if(_cable_temp_known &&
+     (long)(millis() - (_cable_temp_last_success + EVSE_MONITOR_CABLE_TEMP_MAX_AGE_MS)) >= 0) {
+    _cable_temp_known = false;
+    for(uint8_t i = 0; i < OPENEVSE_CABLE_TEMP_SOURCE_COUNT; i++) {
+      _cable_temps[i].invalidate();
+      _cable_temp_status[i] = OPENEVSE_CABLE_TEMP_STATUS_NOT_INSTALLED;
+    }
+  }
+}
+
 void EvseMonitor::readCableTemperatures()
 {
   // $GN - cable NTC thermistor temperatures (requires the controller's
@@ -1377,14 +1397,6 @@ void EvseMonitor::readCableTemperatures()
       double in2, uint8_t in2_status)
   {
     if(RAPI_RESPONSE_OK != ret) {
-      if(_cable_temp_known &&
-         (long)(millis() - (_cable_temp_last_success + EVSE_MONITOR_CABLE_TEMP_MAX_AGE_MS)) >= 0) {
-        _cable_temp_known = false;
-        for(uint8_t i = 0; i < OPENEVSE_CABLE_TEMP_SOURCE_COUNT; i++) {
-          _cable_temps[i].invalidate();
-          _cable_temp_status[i] = OPENEVSE_CABLE_TEMP_STATUS_NOT_INSTALLED;
-        }
-      }
       return;
     }
 

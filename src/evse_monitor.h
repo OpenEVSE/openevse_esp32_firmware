@@ -323,6 +323,7 @@ class EvseMonitor : public MicroTasks::Task
     void readRelayHealth();
 #ifdef ENABLE_CABLE_TEMP
     void readCableTemperatures();
+    void expireCableTemperatures();
     // Refresh all 4 sources (used at boot) - $GN idx x4.
     void readCableTempConfig();
     // Refresh one source after a targeted write or failed read. Its cached
