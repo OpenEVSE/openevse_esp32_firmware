@@ -257,6 +257,7 @@ void EvseMonitor::evseBoot(const char *firmware)
   // it has to go back to false until this controller has answered $GE, not
   // keep vouching for the previous one's settings word.
   _relay_health_known = false;
+  _lcd_type_supported = true;
   _settings_known = false;
 #ifdef ENABLE_CABLE_TEMP
   _cable_temp_known = false;
