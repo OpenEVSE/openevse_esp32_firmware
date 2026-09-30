@@ -310,7 +310,9 @@ fi
 
 if [ -n "$keep_dir" ]; then
   mkdir -p "$keep_dir"
-  cp "$workdir"/*.bin "$keep_dir"/
+  for f in "$fw_bin" "$bootloader_bin" "$partitions_bin"; do
+    [ -n "$f" ] && cp "$f" "$keep_dir"/
+  done
   log "downloaded images kept in $keep_dir"
 fi
 
