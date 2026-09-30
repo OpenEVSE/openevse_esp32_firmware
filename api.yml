@@ -955,6 +955,48 @@ paths:
       tags:
         - Load Sharing
   '/loadsharing/peers/{host}':
+    put:
+      summary: Change the priority of a peer
+      description: >-
+        Only allowed on the group leader; members answer `403`.
+      parameters:
+        - in: path
+          name: host
+          required: true
+          schema:
+            type: string
+          description: Hostname or IP address of the peer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - priority
+              properties:
+                priority:
+                  type: integer
+      responses:
+        '200':
+          $ref: '#/components/responses/UpdateSuccessful'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '403':
+          description: Load sharing configuration is read-only on members
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Message'
+        '404':
+          description: Peer not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Message'
+      operationId: updateLoadSharingPeer
+      tags:
+        - Load Sharing
     delete:
       summary: Remove a peer from the load sharing group
       description: |
@@ -1550,6 +1592,1092 @@ paths:
           $ref: '#/components/responses/BadRequest'
         '404':
           $ref: '#/components/responses/NotFound'
+  /reset:
+    get:
+      operationId: factoryReset
+      summary: Factory reset and reboot the gateway
+      description: |
+        Erases the stored configuration and reboots the WiFi module. Also accepts
+        `POST`. A `GET` must send `X-Requested-With: OpenEVSE`, see
+        [Authentication](#section/Authentication).
+      tags:
+        - System
+      responses:
+        '200':
+          description: Reset accepted, the device is rebooting
+          content:
+            text/plain:
+              schema:
+                type: string
+                example: '1'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '429':
+          $ref: '#/components/responses/TooManyRequests'
+  /apoff:
+    get:
+      operationId: accessPointOff
+      summary: Turn the WiFi access point off
+      description: |
+        Switches off the access point after one second. Also accepts `POST`. A
+        `GET` must send `X-Requested-With: OpenEVSE`.
+      tags:
+        - Network
+      responses:
+        '200':
+          description: OK
+          content:
+            text/plain:
+              schema:
+                type: string
+                example: Turning AP Off
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '429':
+          $ref: '#/components/responses/TooManyRequests'
+  /scan:
+    get:
+      operationId: scanWifi
+      summary: Scan for WiFi networks
+      description: >-
+        Starts a scan and returns the networks found. Returns an empty array if
+        the scan could not be started.
+      tags:
+        - Network
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  type: object
+                  properties:
+                    rssi:
+                      type: integer
+                      description: Signal strength in dBm
+                    ssid:
+                      type: string
+                    bssid:
+                      type: string
+                    channel:
+                      type: integer
+                    secure:
+                      type: integer
+                      description: Encryption type, `0` for an open network
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '429':
+          $ref: '#/components/responses/TooManyRequests'
+  /divertmode:
+    get:
+      operationId: setDivertMode
+      summary: Set the solar divert mode
+      description: |
+        Changes the divert mode. Also accepts `POST`. A `GET` must send
+        `X-Requested-With: OpenEVSE`.
+      tags:
+        - Status
+      parameters:
+        - in: query
+          name: divertmode
+          required: true
+          schema:
+            type: integer
+            enum:
+              - 1
+              - 2
+          description: '`1` Normal (default), `2` Eco'
+      responses:
+        '200':
+          description: OK
+          content:
+            text/plain:
+              schema:
+                type: string
+                example: Divert Mode changed
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '429':
+          $ref: '#/components/responses/TooManyRequests'
+  /shaper:
+    get:
+      operationId: setCurrentShaper
+      summary: Enable or disable the current shaper
+      description: |
+        Also accepts `POST`. A `GET` must send `X-Requested-With: OpenEVSE`.
+      tags:
+        - Status
+      parameters:
+        - in: query
+          name: shaper
+          required: true
+          schema:
+            type: integer
+            enum:
+              - 0
+              - 1
+          description: '`1` enables the shaper, any other value disables it'
+      responses:
+        '200':
+          description: OK
+          content:
+            text/plain:
+              schema:
+                type: string
+                example: Current Shaper state changed
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '429':
+          $ref: '#/components/responses/TooManyRequests'
+  /rfid/add:
+    get:
+      operationId: rfidAddTag
+      summary: Wait for an RFID badge to be presented
+      description: |
+        Puts the RFID reader into learn mode; the tag id is reported over the
+        websocket once a badge is scanned. Also accepts `POST`. A `GET` must send
+        `X-Requested-With: OpenEVSE`.
+      tags:
+        - RFID
+      responses:
+        '200':
+          description: Waiting for a badge
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Message'
+              examples:
+                Waiting:
+                  value:
+                    msg: Waiting for badge
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '429':
+          $ref: '#/components/responses/TooManyRequests'
+  /settime:
+    post:
+      operationId: setTimeLegacy
+      summary: Set the time (legacy alias of POST /time)
+      description: |
+        Same as `POST /time`. Accepts either a JSON body or a
+        form-encoded body (`tz`, `ntp`, `time`). Kept for older clients; new
+        code should use [`/time`](#tag/Time).
+      tags:
+        - Time
+      responses:
+        '200':
+          description: OK
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '429':
+          $ref: '#/components/responses/TooManyRequests'
+  /teslaveh:
+    get:
+      operationId: getTeslaVehiclesLegacy
+      summary: List Tesla vehicles (legacy alias of /tesla/vehicles)
+      description: Returns the same data as [`/tesla/vehicles`](#operation/getTeslaVehicles).
+      tags:
+        - Tesla
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  count:
+                    type: integer
+                  vehicles:
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        id:
+                          type: string
+                        name:
+                          type: string
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '429':
+          $ref: '#/components/responses/TooManyRequests'
+  /rapi:
+    get:
+      operationId: rapi
+      summary: Send a RAPI command to the EVSE controller
+      description: |
+        Sends an arbitrary RAPI command and returns the controller's reply. `/r`
+        is an alias. Without the `rapi` parameter it returns an HTML test page
+        (or an empty body when `json=1`). Because a RAPI command can change
+        anything on the controller, a `GET` with `rapi` must send
+        `X-Requested-With: OpenEVSE`; `POST` is also accepted.
+
+        Some commands are blocked by the firmware.
+      tags:
+        - RAPI
+      parameters:
+        - in: query
+          name: rapi
+          required: false
+          schema:
+            type: string
+            example: $GS
+          description: The RAPI command, including the leading `$`
+        - in: query
+          name: json
+          required: false
+          schema:
+            type: integer
+            enum:
+              - 0
+              - 1
+          description: '`1` for a JSON reply rather than an HTML one'
+      responses:
+        '200':
+          description: >-
+            The controller answered (`$OK` or `$NK`). With `json=1` the body is
+            `{"cmd": ..., "ret": ...}` where `ret` is the raw reply.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  cmd:
+                    type: string
+                  ret:
+                    type: string
+            text/html:
+              schema:
+                type: string
+        '400':
+          description: >-
+            The command is blocked by the firmware. With `json=1` the body is
+            `{"cmd": ..., "error": ...}`.
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '429':
+          $ref: '#/components/responses/TooManyRequests'
+        '500':
+          description: >-
+            The command failed (timeout, queue full, ...). With `json=1` the body is
+            `{"cmd": ..., "error": ...}`.
+  /emoncms/describe:
+    get:
+      operationId: emoncmsDescribe
+      summary: Device discovery for emoncms
+      description: >-
+        Returns the string `openevse` so the device can be found by
+        [emoncms/find](https://github.com/emoncms/find). This is the only operation
+        that never requires authentication and it allows any CORS origin.
+      tags:
+        - System
+      security: []
+      responses:
+        '200':
+          description: OK
+          content:
+            text/plain:
+              schema:
+                type: string
+                example: openevse
+  /mqtt:
+    get:
+      operationId: getMqttStatus
+      summary: Get the MQTT connection status
+      description: Connection state of the MQTT client, including the last error.
+      tags:
+        - MQTT
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  mqtt_connected:
+                    type: integer
+                    enum:
+                      - 0
+                      - 1
+                  mqtt_status:
+                    type: string
+                  mqtt_broker_ip:
+                    type: string
+                    description: Only present once known
+                  mqtt_broker_version:
+                    type: string
+                    description: Only present once known
+                  mqtt_connected_since:
+                    type: integer
+                    description: Epoch seconds, only present while connected
+                  mqtt_last_rx:
+                    type: integer
+                    description: Epoch seconds of the last message received
+                  mqtt_error:
+                    type: string
+                    description: Error category, empty when there is no failure
+                  mqtt_error_detail:
+                    type: string
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '429':
+          $ref: '#/components/responses/TooManyRequests'
+    post:
+      operationId: restartMqtt
+      summary: Restart the MQTT connection
+      description: Drops and re-establishes the connection to the broker.
+      tags:
+        - MQTT
+      responses:
+        '200':
+          $ref: '#/components/responses/UpdateSuccessful'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '429':
+          $ref: '#/components/responses/TooManyRequests'
+  /relay/reset:
+    get:
+      operationId: resetRelayHealth
+      summary: Reset the relay contact-life estimate
+      description: |
+        Use after a physical relay replacement so wear from the old relay is not
+        carried over. Requires the controller's relay health feature. Also
+        accepts `POST`. A `GET` must send `X-Requested-With: OpenEVSE`.
+      tags:
+        - Relay
+      responses:
+        '200':
+          $ref: '#/components/responses/UpdateSuccessful'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '429':
+          $ref: '#/components/responses/TooManyRequests'
+        '500':
+          description: The controller rejected the command
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Message'
+              examples:
+                Error:
+                  value:
+                    msg: error
+  /relay/recovery:
+    get:
+      operationId: runRelayRecovery
+      summary: Run the stuck-relay recovery cycle
+      description: |
+        Requires controller firmware 9.3.0+. The controller rejects the command
+        if an EV is connected. The response is deferred until the cycle finishes,
+        which can take up to about 30 seconds. Also accepts `POST`. A `GET` must
+        send `X-Requested-With: OpenEVSE`.
+      tags:
+        - Relay
+      responses:
+        '200':
+          $ref: '#/components/responses/UpdateSuccessful'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '429':
+          $ref: '#/components/responses/TooManyRequests'
+        '500':
+          description: The controller rejected the command, for example an EV is connected
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Message'
+              examples:
+                Error:
+                  value:
+                    msg: error
+  /cabletemp:
+    get:
+      operationId: getCableTemperatures
+      summary: Get the cable thermistor readings and configuration
+      description: |
+        Four logical sources: `ev1`/`ev2` on the EV cable and `in1`/`in2` on the
+        input cable. Requires controller firmware 9.4.0+. The live readings are
+        also included in `/status`.
+      tags:
+        - Cable Temperature
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  supported:
+                    type: boolean
+                  enabled:
+                    type: boolean
+                  sources:
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        source:
+                          type: integer
+                          minimum: 0
+                          maximum: 3
+                        name:
+                          type: string
+                          enum:
+                            - ev1
+                            - ev2
+                            - in1
+                            - in2
+                        pin:
+                          type: integer
+                          minimum: 0
+                          maximum: 2
+                        status:
+                          type: integer
+                          description: '`0` ok, `1` not installed or unassigned, `2` open circuit, `3` shorted'
+                        temperature:
+                          type: number
+                          description: Omitted when there is no reading, so it is never confused with 0 C
+                        r25:
+                          type: integer
+                        beta:
+                          type: integer
+                        offset_c10:
+                          type: integer
+                        panic_c10:
+                          type: integer
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '429':
+          $ref: '#/components/responses/TooManyRequests'
+    post:
+      operationId: setCableTemperatureSource
+      summary: Assign a pin and optionally set the thermistor parameters
+      description: |
+        Omitting the calibration fields reassigns the pin only. `r25`, `beta`,
+        `offset_c10` and `panic_c10` must be supplied together. Ranges are
+        enforced by the controller. Assigning a source to pin `1` (PP_READ) makes
+        the controller turn PP auto-ampacity off.
+      tags:
+        - Cable Temperature
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - source
+                - pin
+              properties:
+                source:
+                  type: integer
+                  minimum: 0
+                  maximum: 3
+                pin:
+                  type: integer
+                  minimum: 0
+                  maximum: 2
+                r25:
+                  type: integer
+                beta:
+                  type: integer
+                offset_c10:
+                  type: integer
+                panic_c10:
+                  type: integer
+      responses:
+        '200':
+          $ref: '#/components/responses/UpdateSuccessful'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '429':
+          $ref: '#/components/responses/TooManyRequests'
+        '500':
+          description: The controller rejected the values
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Message'
+  /claims/target:
+    get:
+      operationId: getClaimsTarget
+      summary: Get the resolved target state
+      description: >-
+        The properties that are currently in effect after all
+        [claims](#tag/Claims) have been resolved, and which client holds each one.
+      tags:
+        - Claims
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  properties:
+                    type: object
+                    description: The effective properties
+                  claims:
+                    type: object
+                    description: The client id that owns each of `state`, `charge_current` and `max_current`
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '429':
+          $ref: '#/components/responses/TooManyRequests'
+  /energy/raw:
+    get:
+      operationId: getEnergyRaw
+      summary: Raw energy log samples
+      description: |
+        Recent samples at the logging interval. Builds with the time series
+        database return the last three hours, wrapped as `{"samples": [...]}`;
+        `before` pages back one window at a time.
+      tags:
+        - Energy
+      parameters:
+        - in: query
+          name: max
+          schema:
+            type: integer
+          description: Return at most this many samples
+        - in: query
+          name: before
+          schema:
+            type: integer
+          description: Epoch seconds. Return the window immediately before this time
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  samples:
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        ts:
+                          type: integer
+                          description: Epoch seconds
+                        a:
+                          type: number
+                          description: Current (A)
+                        t:
+                          type: number
+                          description: Temperature (C)
+                        e:
+                          type: number
+                          description: Session energy
+                        s:
+                          type: integer
+                          description: State of charge, `-1` when unknown
+                        v:
+                          type: number
+                          description: Voltage (V), time series builds only
+                        p:
+                          type: number
+                          description: Power (W), time series builds only
+                        pilot:
+                          type: number
+                          description: Pilot current (A), time series builds only
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '429':
+          $ref: '#/components/responses/TooManyRequests'
+  /energy/daily:
+    get:
+      operationId: getEnergyDaily
+      summary: Daily energy totals
+      description: |
+        Time series builds take `days` (1-365, default 30). Other builds take `year` and
+        `quarter` (`1`-`4`).
+      tags:
+        - Energy
+      parameters:
+        - in: query
+          name: days
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 365
+            default: 30
+        - in: query
+          name: year
+          schema:
+            type: integer
+            minimum: 2020
+            maximum: 2100
+        - in: query
+          name: quarter
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 4
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  daily:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/EnergyBucketDate'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '429':
+          $ref: '#/components/responses/TooManyRequests'
+  /energy/weekly:
+    get:
+      operationId: getEnergyWeekly
+      summary: Weekly energy totals
+      description: Only available in builds with the time series database.
+      tags:
+        - Energy
+      parameters:
+        - in: query
+          name: weeks
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 104
+            default: 12
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  weekly:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/EnergyBucketDate'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '429':
+          $ref: '#/components/responses/TooManyRequests'
+  /energy/monthly:
+    get:
+      operationId: getEnergyMonthly
+      summary: Monthly energy totals
+      description: Totals per month for one year, defaulting to the current year.
+      tags:
+        - Energy
+      parameters:
+        - in: query
+          name: year
+          schema:
+            type: integer
+            minimum: 2020
+            maximum: 2100
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  monthly:
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        mo:
+                          type: string
+                          description: Month
+                        pk:
+                          type: number
+                          description: Peak temperature (C)
+                        mn:
+                          type: number
+                          description: Minimum temperature (C)
+                        en:
+                          type: number
+                          description: Energy (kWh)
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '429':
+          $ref: '#/components/responses/TooManyRequests'
+  /energy/annual:
+    get:
+      operationId: getEnergyAnnual
+      summary: Annual energy totals
+      description: Totals per year.
+      tags:
+        - Energy
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  annual:
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        yr:
+                          type: integer
+                        pk:
+                          type: number
+                          description: Peak temperature (C)
+                        mn:
+                          type: number
+                          description: Minimum temperature (C)
+                        en:
+                          type: number
+                          description: Energy (kWh)
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '429':
+          $ref: '#/components/responses/TooManyRequests'
+  /update:
+    post:
+      operationId: updateFirmware
+      summary: Update the firmware
+      description: |
+        Either upload the firmware image as a multipart form, or send a JSON body
+        naming a URL for the device to fetch it from (answered with
+        `{"msg": "started"}`; progress is reported over `/ws`). `GET` is not
+        supported and returns `405`.
+      tags:
+        - Firmware Update
+      requestBody:
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              properties:
+                firmware:
+                  type: string
+                  format: binary
+                  description: The firmware image; the part name is not significant
+          application/json:
+            schema:
+              type: object
+              properties:
+                url:
+                  type: string
+                  description: Location of the firmware image to fetch
+      responses:
+        '200':
+          $ref: '#/components/responses/UpdateSuccessful'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '405':
+          description: Only `POST` is accepted
+        '429':
+          $ref: '#/components/responses/TooManyRequests'
+        '500':
+          description: The update failed
+  /migrate/status:
+    get:
+      operationId: getMigrateStatus
+      summary: Flash migration progress and diagnostics
+      description: >-
+        State of an in-place 16MB repartition. Progress is also pushed over `/ws`.
+        On builds without migration support it returns `{"active": false}`.
+      tags:
+        - Diagnostics
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  active:
+                    type: boolean
+                  state:
+                    type: string
+                    enum:
+                      - idle
+                      - manifest
+                      - app
+                      - migrator
+                  conn_open:
+                    type: boolean
+                  awaiting:
+                    type: boolean
+                  body_complete:
+                    type: boolean
+                  has_redirect:
+                    type: boolean
+                  has_pending:
+                    type: boolean
+                  dl_pos:
+                    type: integer
+                  dl_total:
+                    type: integer
+                  app_off:
+                    type: integer
+                  failed:
+                    type: boolean
+                  fail_code:
+                    type: integer
+                  fail_where:
+                    type: string
+                  free_heap:
+                    type: integer
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '429':
+          $ref: '#/components/responses/TooManyRequests'
+  /migrate/coredump:
+    get:
+      operationId: getMigrateCoredump
+      summary: Summary of the last panic, as seen by the migrator
+      description: Decoded summary of the last panic, read by the flash migration code.
+      tags:
+        - Diagnostics
+      responses:
+        '200':
+          description: >-
+            `task`, `pc`, `bt` and `corrupted` when a core dump exists, otherwise
+            `coredump` set to `none` (or `n/a` on unsupported builds).
+          content:
+            application/json:
+              schema:
+                type: object
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '429':
+          $ref: '#/components/responses/TooManyRequests'
+  /migrate/expand16mb:
+    post:
+      operationId: expandTo16mb
+      summary: Repartition a 16MB module that was flashed with the 4MB layout
+      description: Starts the migration; progress is available from `/migrate/status` and `/ws`.
+      tags:
+        - Diagnostics
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                url:
+                  type: string
+                  description: Release manifest to use instead of the default
+                dry_run:
+                  type: boolean
+                  default: false
+      responses:
+        '200':
+          description: Migration started
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Message'
+              examples:
+                Started:
+                  value:
+                    msg: started
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '405':
+          description: Only `POST` is accepted
+        '409':
+          description: A migration is already in progress
+        '412':
+          description: This device is not eligible for the migration
+        '429':
+          $ref: '#/components/responses/TooManyRequests'
+        '500':
+          description: The migration could not be started
+  /debug:
+    get:
+      operationId: getDebugLog
+      summary: Buffered debug log
+      description: The recent debug output of the WiFi module. Allows any CORS origin.
+      tags:
+        - Diagnostics
+      responses:
+        '200':
+          description: OK
+          content:
+            text/plain:
+              schema:
+                type: string
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '429':
+          $ref: '#/components/responses/TooManyRequests'
+  /debug/console:
+    get:
+      operationId: debugConsole
+      summary: Live debug console
+      description: >-
+        WebSocket that streams the debug output as text frames. The upgrade request
+        is authenticated like any other.
+      tags:
+        - Diagnostics
+      responses:
+        '101':
+          description: Switching protocols
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+  /debug/crash:
+    get:
+      operationId: getCrashSummary
+      summary: Decoded summary of the last panic
+      description: >-
+        A core dump survives a reboot in flash. `present` is `false` when there is
+        none. The remaining keys depend on the CPU architecture.
+      tags:
+        - Diagnostics
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  present:
+                    type: boolean
+                  size:
+                    type: integer
+                  addr:
+                    type: integer
+                  valid:
+                    type: boolean
+                  task:
+                    type: string
+                  pc:
+                    type: string
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '429':
+          $ref: '#/components/responses/TooManyRequests'
+    delete:
+      operationId: clearCrashSummary
+      summary: Clear the stored core dump
+      description: Clears the stored core dump so the next panic is unambiguous.
+      tags:
+        - Diagnostics
+      responses:
+        '200':
+          description: Erased
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Message'
+              examples:
+                Erased:
+                  value:
+                    msg: erased
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '429':
+          $ref: '#/components/responses/TooManyRequests'
+        '500':
+          description: The core dump could not be erased
+  /debug/crash/raw:
+    get:
+      operationId: getCrashImage
+      summary: Download the raw core dump
+      description: >-
+        For use with `esp-coredump`. Unlike other operations this one always
+        answers an unauthenticated request with a `WWW-Authenticate` Basic
+        challenge (never the JSON `401`), and is not subject to the throttle.
+      tags:
+        - Diagnostics
+      responses:
+        '200':
+          description: OK
+          content:
+            application/octet-stream:
+              schema:
+                type: string
+                format: binary
+        '401':
+          description: Credentials are required, answered with a `WWW-Authenticate` challenge
+        '404':
+          description: There is no core dump
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Message'
+  /evse:
+    get:
+      operationId: getEvseSerialLog
+      summary: Buffered serial traffic with the EVSE controller
+      description: Allows any CORS origin.
+      tags:
+        - Diagnostics
+      responses:
+        '200':
+          description: OK
+          content:
+            text/plain:
+              schema:
+                type: string
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '429':
+          $ref: '#/components/responses/TooManyRequests'
+  /evse/console:
+    get:
+      operationId: evseConsole
+      summary: Live EVSE serial console
+      description: >-
+        WebSocket that streams the serial traffic to and from the EVSE controller
+        as text frames. The upgrade request is authenticated like any other.
+      tags:
+        - Diagnostics
+      responses:
+        '101':
+          description: Switching protocols
+        '401':
+          $ref: '#/components/responses/Unauthorized'
 components:
   securitySchemes:
     BasicAuth:
@@ -1564,6 +2692,22 @@ components:
         Session cookie issued by `POST /login`. State-changing requests that use
         it must also send `X-Requested-With: OpenEVSE`.
   schemas:
+    EnergyBucketDate:
+      type: object
+      properties:
+        dt:
+          type: string
+          format: date
+          description: First day of the bucket
+        pk:
+          type: number
+          description: Peak temperature (C)
+        mn:
+          type: number
+          description: Minimum temperature (C)
+        en:
+          type: number
+          description: Energy (Wh)
     Message:
       title: Informational message
       type: object
@@ -1875,6 +3019,24 @@ components:
             Locked:
               value:
                 msg: locked
+    Forbidden:
+      description: >-
+        Rejected by the CSRF guard. A state-changing request authenticated by
+        session cookie, or a `GET` to an operation that changes state, is missing
+        `X-Requested-With: OpenEVSE`. Session-cookie requests get the JSON body;
+        `GET` actuators get plain text.
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Message'
+          examples:
+            CSRF:
+              value:
+                msg: csrf
+        text/plain:
+          schema:
+            type: string
+            example: 'Forbidden: use POST or the app'
     BadRequest:
       description: Example response
       content:
@@ -1904,3 +3066,12 @@ tags:
   - name: Certificates
   - name: Load Sharing
   - name: RFID
+  - name: Cable Temperature
+  - name: Diagnostics
+  - name: Energy
+  - name: Firmware Update
+  - name: MQTT
+  - name: Network
+  - name: RAPI
+  - name: Relay
+  - name: System

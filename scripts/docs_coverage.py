@@ -31,6 +31,9 @@ def extract_config_options():
     src = (ROOT / "src" / "app_config.cpp").read_text(encoding="utf-8", errors="replace")
     opts = set(re.findall(
         r'ConfigOptDefinition<[^>]+>\s*\([^,]+,[^,]+(?:\([^)]*\))?[^,]*,\s*"([^"]+)"', src))
+    # ConfigOptVirtual* options (bit flags in `flags`, etc.) are separate config
+    # keys in /config and the UI, so they need documenting too.
+    opts |= set(re.findall(r'new ConfigOptVirtual\w+\([^"]*"([a-z][a-z0-9_]*)"', src))
     return sorted(opts - IGNORED_OPTIONS)
 
 
