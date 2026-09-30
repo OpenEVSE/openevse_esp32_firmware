@@ -244,7 +244,7 @@ jobs:
       # the event is what keeps a fork's build from failing on a missing secret.
       if: ${{ env.CRASH_ARCHIVE_ENABLED == 'true' && github.event_name == 'push' && matrix.env != 'native_openevse' }}
       continue-on-error: true
-      uses: aws-actions/configure-aws-credentials@v4
+      uses: aws-actions/configure-aws-credentials@v6
       with:
         role-to-assume: ${{ secrets.CRASH_ELF_ROLE_ARN }}
         # A variable or a secret: the region is not sensitive, but a
