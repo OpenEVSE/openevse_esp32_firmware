@@ -303,6 +303,8 @@ properties:
     type: number
   flags:
     type: number
+  flags2:
+    type: number
   emoncms_enabled:
     type: boolean
   mqtt_enabled:
