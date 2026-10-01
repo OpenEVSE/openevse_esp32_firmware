@@ -10,7 +10,10 @@
 //
 // `reporterId` and `deleteKeyHash` stand in for any hardware identifier: a
 // random id, and the SHA-256 of the delete key that erases these reports.
-void crash_payload_build(JsonDocument &doc, const char *reporterId,
+//
+// False if anything did not fit: a truncated report would be filed as if it
+// were whole, missing whatever was added last (the feature flags).
+bool crash_payload_build(JsonDocument &doc, const char *reporterId,
                          const char *deleteKeyHash);
 
 #endif // CRASH_PAYLOAD_H

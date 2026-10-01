@@ -35,4 +35,24 @@ void crash_delete_key_hash(const char *key, char out[65]);
 void crash_identity_format(const char *rid, const char *key, char *out, size_t len);
 bool crash_identity_parse(const char *text, char rid[33], char key[65]);
 
+// Whether to store the identity the browser sent, given what is stored
+// (`have`: the identity file's text, or NULL if there is none). A charger
+// keeps the identity it has: replacing it would orphan the reports sent under
+// it, and let whoever replaced it delete everything sent afterwards.
+enum CrashIdentityStore {
+  CrashIdentity_Write,     // nothing (valid) stored yet: write it
+  CrashIdentity_Same,      // already stored, identical: nothing to do
+  CrashIdentity_Conflict,  // a different identity is stored: refuse
+  CrashIdentity_Invalid,   // not a reporter id + delete key: refuse
+  CrashIdentity_WriteFailed, // (crash_identity_store only) the file write failed
+};
+CrashIdentityStore crash_identity_store_decide(const char *have, const char *rid,
+                                               const char *key);
+
+// True only for the GUI's own requests (X-Requested-With: OpenEVSE). With no
+// password set there is no auth and so no cookie-based CSRF check, and a
+// cross-site text/plain form can POST a JSON-shaped body -- but it cannot set
+// a custom header. Required on every identity route.
+bool crash_gui_request(const char *xRequestedWith);
+
 #endif // CRASH_REPORT_ID_H

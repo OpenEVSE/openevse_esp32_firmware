@@ -80,3 +80,22 @@ bool crash_identity_parse(const char *text, char rid[33], char key[65])
   key[CRASH_DELETE_KEY_HEX] = '\0';
   return crash_reporter_id_valid(rid) && crash_delete_key_valid(key);
 }
+
+CrashIdentityStore crash_identity_store_decide(const char *have, const char *rid,
+                                               const char *key)
+{
+  if(!crash_reporter_id_valid(rid) || !crash_delete_key_valid(key)) {
+    return CrashIdentity_Invalid;
+  }
+  char haveRid[33], haveKey[65];
+  if(!crash_identity_parse(have, haveRid, haveKey)) {
+    return CrashIdentity_Write;
+  }
+  return (0 == strcmp(haveRid, rid) && 0 == strcmp(haveKey, key))
+    ? CrashIdentity_Same : CrashIdentity_Conflict;
+}
+
+bool crash_gui_request(const char *xRequestedWith)
+{
+  return NULL != xRequestedWith && 0 == strcmp(xRequestedWith, "OpenEVSE");
+}

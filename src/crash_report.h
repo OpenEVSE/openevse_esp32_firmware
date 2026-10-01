@@ -10,6 +10,8 @@
 
 #if ENABLE_CRASH_UPLOAD
 
+#include "crash_report_id.h"
+
 // Where the browser sends reports. Given to the GUI rather than built into it,
 // so a bench build can point at a test broker with one -D flag.
 #ifndef CRASH_BROKER_URL
@@ -19,11 +21,9 @@
 // The stored reporter identity (crash_report_id.h), if the browser has set one.
 bool crash_identity_load(char rid[33], char key[65]);
 
-// Store an identity the browser generated. Checked for shape first; a charger
-// that already has one keeps it (two tabs racing to set one must not orphan
-// the reports sent under the first). True if `rid`/`key` are what is stored
-// afterwards.
-bool crash_identity_store(const char *rid, const char *key);
+// Store an identity the browser generated (crash_identity_store_decide says
+// what may happen). Write and Same leave `rid`/`key` stored.
+CrashIdentityStore crash_identity_store(const char *rid, const char *key);
 
 // Forget the identity, after the browser has had its reports erased. True if
 // none is stored afterwards.

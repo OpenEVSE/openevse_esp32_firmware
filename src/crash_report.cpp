@@ -23,24 +23,30 @@ bool crash_identity_load(char rid[33], char key[65])
   return crash_identity_parse(text.c_str(), rid, key);
 }
 
-bool crash_identity_store(const char *rid, const char *key)
+CrashIdentityStore crash_identity_store(const char *rid, const char *key)
 {
-  if(!crash_reporter_id_valid(rid) || !crash_delete_key_valid(key)) {
-    return false;
+  String have;
+  if(LittleFS.exists(CRASH_IDENTITY_FILE)) {
+    File f = LittleFS.open(CRASH_IDENTITY_FILE, "r");
+    if(f) {
+      have = f.readString();
+      f.close();
+    }
   }
-  char haveRid[33], haveKey[65];
-  if(crash_identity_load(haveRid, haveKey)) {
-    return 0 == strcmp(haveRid, rid) && 0 == strcmp(haveKey, key);
+  CrashIdentityStore decision =
+    crash_identity_store_decide(have.length() ? have.c_str() : nullptr, rid, key);
+  if(CrashIdentity_Write != decision) {
+    return decision;
   }
   char text[CRASH_IDENTITY_LEN];
   crash_identity_format(rid, key, text, sizeof(text));
   File f = LittleFS.open(CRASH_IDENTITY_FILE, "w");
   if(!f) {
-    return false;
+    return CrashIdentity_WriteFailed;
   }
   size_t n = f.print(text);
   f.close();
-  return n == strlen(text);
+  return n == strlen(text) ? CrashIdentity_Write : CrashIdentity_WriteFailed;
 }
 
 bool crash_identity_forget()

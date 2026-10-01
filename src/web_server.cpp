@@ -2429,7 +2429,7 @@ void web_server_setup()
   // itself; the charger only builds it and keeps the reporter identity.
   //
   //   GET    /debug/crash/report    the report, exactly as the broker takes it
-  //   GET    /debug/crash/identity  reporter id + delete key (if set), broker URL
+  //   GET    /debug/crash/identity  reporter id (if set), broker URL; ?key=1 adds the delete key
   //   POST   /debug/crash/identity  store the identity the browser generated
   //   DELETE /debug/crash/identity  forget it, once the reports are erased
   //
@@ -2459,7 +2459,12 @@ void web_server_setup()
     // Sent as-is: the body the browser POSTs to the broker. Where to POST it
     // comes from /debug/crash/identity, which the browser reads first.
     DynamicJsonDocument doc(6144);
-    crash_payload_build(doc, rid, keyHash);
+    if(!crash_payload_build(doc, rid, keyHash)) {
+      response->setCode(500);
+      response->print(F("{\"msg\":\"report too large\"}"));
+      request->send(response);
+      return;
+    }
     response->setCode(200);
     serializeJson(doc, *response);
     request->send(response);
@@ -2470,6 +2475,15 @@ void web_server_setup()
     if(false == requestPreProcess(request, response, CONTENT_TYPE_JSON)) {
       return;
     }
+    // Every method, GUI only (crash_report_id.h): with no password set this
+    // is the only thing between a cross-site form and the identity.
+    MongooseString xrw = request->headers("X-Requested-With");
+    if(!crash_gui_request(xrw.toString().c_str())) {
+      response->setCode(403);
+      response->print(F("{\"msg\":\"csrf\"}"));
+      request->send(response);
+      return;
+    }
     if(HTTP_POST == request->method()) {
       DynamicJsonDocument in(256);
       if(deserializeJson(in, request->body().toString())) {
@@ -2478,10 +2492,26 @@ void web_server_setup()
         request->send(response);
         return;
       }
-      bool ok = crash_identity_store(in["reporter_id"] | "", in["delete_key"] | "");
-      response->setCode(ok ? 200 : 409);
-      response->print(ok ? F("{\"msg\":\"stored\"}")
-                         : F("{\"msg\":\"invalid, or a different identity is already set\"}"));
+      switch(crash_identity_store(in["reporter_id"] | "", in["delete_key"] | "")) {
+        case CrashIdentity_Write:
+        case CrashIdentity_Same:
+          response->setCode(200);
+          response->print(F("{\"msg\":\"stored\"}"));
+          break;
+        case CrashIdentity_Conflict:
+          // The GUI re-reads the identity and carries on with the stored one.
+          response->setCode(409);
+          response->print(F("{\"msg\":\"a different identity is already set\"}"));
+          break;
+        case CrashIdentity_Invalid:
+          response->setCode(400);
+          response->print(F("{\"msg\":\"invalid reporter id or delete key\"}"));
+          break;
+        default:
+          response->setCode(500);
+          response->print(F("{\"msg\":\"error\"}"));
+          break;
+      }
       request->send(response);
       return;
     }
@@ -2492,14 +2522,20 @@ void web_server_setup()
       request->send(response);
       return;
     }
+    // The delete key only on request (?key=1), which the GUI makes from its
+    // Delete action alone, so the key is not on the wire every time the page
+    // opens.
+    char want[4];
+    bool withKey = request->getParam("key", want, sizeof(want)) >= 0;
     DynamicJsonDocument doc(256);
     char rid[33], key[65];
     if(crash_identity_load(rid, key)) {
       doc["reporter_id"] = rid;
-      doc["delete_key"] = key;
+      if(withKey) {
+        doc["delete_key"] = key;
+      }
     } else {
       doc["reporter_id"] = nullptr;
-      doc["delete_key"] = nullptr;
     }
     doc["broker"] = CRASH_BROKER_URL;
     response->setCode(200);

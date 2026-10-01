@@ -89,12 +89,16 @@ Before you press it:
   online.
 
 The page uses these endpoints; with a password set, add `-u openevseadmin:<password>`
-to each -- `-u <user>:<password>` if you set a user name:
+to each -- `-u <user>:<password>` if you set a user name. The identity routes
+answer only requests carrying `X-Requested-With: OpenEVSE`, as the page's do,
+so another web page cannot change the identity behind your back:
 
 ```sh
-curl http://<charger>/debug/crash/identity         # reporter id, delete key, broker URL
-curl http://<charger>/debug/crash/report           # the report, exactly as sent
-curl -X DELETE http://<charger>/debug/crash/identity  # forget the identity
+H='X-Requested-With: OpenEVSE'
+curl -H "$H" http://<charger>/debug/crash/identity          # reporter id, broker URL
+curl -H "$H" 'http://<charger>/debug/crash/identity?key=1'  # ... and the delete key
+curl http://<charger>/debug/crash/report                    # the report, exactly as sent
+curl -H "$H" -X DELETE http://<charger>/debug/crash/identity  # forget the identity
 ```
 
 `/debug/crash/report` answers `404` with no dump stored, and `409` until a

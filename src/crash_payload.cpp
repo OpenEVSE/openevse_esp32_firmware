@@ -12,7 +12,7 @@
 #include "input.h"             // evse
 #include <espal.h>
 
-void crash_payload_build(JsonDocument &doc, const char *reporterId,
+bool crash_payload_build(JsonDocument &doc, const char *reporterId,
                          const char *deleteKeyHash)
 {
   doc["buildenv"] = buildenv;
@@ -33,10 +33,12 @@ void crash_payload_build(JsonDocument &doc, const char *reporterId,
 
   // The decoded summary: panic reason, faulting task, PC, backtrace,
   // elf_sha256. This is what gets symbolized.
+  bool fit = true;
   JsonObject summary = doc.createNestedObject("summary");
   {
     DynamicJsonDocument sd(JSON_OBJECT_SIZE(12) + JSON_ARRAY_SIZE(16) + 640);
     diagnostics_coredump_json(sd);
+    fit = fit && !sd.overflowed();
     for(JsonPair kv : sd.as<JsonObject>()) {
       summary[kv.key()] = kv.value();
     }
@@ -65,6 +67,7 @@ void crash_payload_build(JsonDocument &doc, const char *reporterId,
   {
     DynamicJsonDocument dd(1024);
     diagnostics_status(dd);
+    fit = fit && !dd.overflowed();
     for(JsonPair kv : dd.as<JsonObject>()) {
       diag[kv.key()] = kv.value();
     }
@@ -78,9 +81,12 @@ void crash_payload_build(JsonDocument &doc, const char *reporterId,
     DynamicJsonDocument cfg(4096);
     config_serialize(cfg, /*longNames*/ true, /*compactOutput*/ false,
                      /*hideSecrets*/ true);
+    fit = fit && !cfg.overflowed();
     JsonObject redacted = doc.createNestedObject("config");
     crash_redact_config(cfg.as<JsonObjectConst>(), redacted);
   }
+
+  return fit && !doc.overflowed();
 }
 
 #endif // ENABLE_CRASH_UPLOAD

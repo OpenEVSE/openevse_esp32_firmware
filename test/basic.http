@@ -125,10 +125,21 @@ Content-Type: application/json
 # Clear the manual override
 DELETE {{baseUrl}}/override HTTP/1.1
 
-### Crash reporting: reporter identity and broker URL (nulls until set)
+### Crash reporting: reporter identity and broker URL (null until set)
 GET {{baseUrl}}/debug/crash/identity HTTP/1.1
+X-Requested-With: OpenEVSE
 
-### Crash reporting: set the identity (the GUI generates it with crypto.getRandomValues)
+### Crash reporting: the same, with the delete key
+GET {{baseUrl}}/debug/crash/identity?key=1 HTTP/1.1
+X-Requested-With: OpenEVSE
+
+### Crash reporting: refused without the GUI header (403)
+POST {{baseUrl}}/debug/crash/identity HTTP/1.1
+Content-Type: text/plain
+
+{"reporter_id": "0123456789abcdef0123456789abcdef", "delete_key": "00112233445566778899aabbccddeeff00112233445566778899aabbccddeeff"}
+
+### Crash reporting: set the identity (the GUI generates it; 409 if a different one is set)
 POST {{baseUrl}}/debug/crash/identity HTTP/1.1
 X-Requested-With: OpenEVSE
 Content-Type: application/json
