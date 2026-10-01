@@ -1,5 +1,12 @@
 # Crash Report Upload Implementation Plan
 
+> **Historical.** This plan built the device-side uploader as first designed.
+> After review the charger stopped sending: the browser sends the decoded
+> summary, and the uploader, raw-dump PUT, heap gate and deferral described
+> below are gone. See §15 of
+> `docs/superpowers/specs/2026-09-27-crash-report-upload-design.md` for what
+> was built instead.
+
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
 **Goal:** a user clicks one button and a maintainer gets a symbolized crash report plus the raw memory image, without either of them touching a serial cable.

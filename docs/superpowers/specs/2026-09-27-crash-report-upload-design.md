@@ -6,7 +6,11 @@ a **symbolized backtrace** rather than chase a binary blob and a matching ELF.
 **Origin:** "May add a core dump upload tool they can click to grab them a hair
 easier." — Chris: "A core dump tool would be fantastic."
 
-**Status:** implemented (2026-09-28); see §14 for where the build departs from this text.
+**Status:** implemented (2026-09-28), then revised after review (2026-09-29 to
+10-01). **The browser now sends the report, not the charger, and only the
+decoded summary goes; read §15 first.** It supersedes the device-side flow in
+§3, the heap tiers and deferral in §6, and D1, D3 and D4 in §14. The rest
+stands as the reasoning behind the design.
 
 ---
 
@@ -304,3 +308,83 @@ report's `version` is `unknown`, with `running_version` alongside.
 
 Measured cost on `openevse_wifi_v1_16mb`: +8,572 bytes of flash, +128 bytes of
 RAM. On for the three 16 MB envs, off elsewhere (§11).
+
+## 15. Revisions after review
+
+Three changes, each from review on the PRs. Together they move the sending
+off the charger.
+
+### R1 — the decoded summary only, never the raw dump (2026-09-28)
+
+The raw image is a copy of RAM. Config redaction (§5) never reaches what is in
+memory, so Wi-Fi and MQTT credentials can be in it (review on #1307). The
+summary alone names every frame, because symbolization is `addr2line` on the
+backtrace (D2). Released firmware sends no image. The broker's `raw` and
+`complete` routes (D1) remain, but nothing released calls them.
+
+### R2 — a random reporter id in place of the chip id, and erasure (2026-09-29)
+
+The chip id is MAC-derived: personal data under GDPR. Only about 24 bits of it
+are unknown within Espressif's OUIs, so even a hash of it brute-forces back
+quickly. Reports instead carry a random **reporter id** (16 bytes) and the
+SHA-256 of a random **delete key** (32 bytes), never the key itself. Presenting
+the key to `POST /v1/reporters/{id}/delete` erases every report filed under
+that id: GDPR Art. 17, and Art. 7(3) (withdrawing consent as easy as giving
+it). The broker answers `200 {deleted: n}` either way, so a guessed id learns
+nothing. The by-chip index was dropped, and `chip_id` was stripped from the
+rows already stored. After an erasure the id is discarded, so later reports
+are not linked to the erased ones.
+
+### R3 — the browser sends, not the charger (2026-09-30, review on #1306)
+
+**Design.** The charger only builds the report and keeps the identity. The
+GUI, in the user's browser, does all the network work:
+
+- **Send:** read the identity → if none, generate one (below) and store it →
+  `GET /debug/crash/report` → `POST` it to the broker with `fetch()` → on
+  200, `DELETE /debug/crash`.
+- **Delete:** `GET /debug/crash/identity?key=1` → `POST` the key to the
+  broker's delete route → on 200, `DELETE /debug/crash/identity`.
+
+**Charger routes** (all behind `requestPreProcess`):
+
+| Route | Purpose |
+|---|---|
+| `GET /debug/crash/report` | The report exactly as the broker takes it. 404 with no dump, 409 with no identity, 500 if it would not fit (never sent truncated). |
+| `GET /debug/crash/identity` | The reporter id and broker URL. The delete key only with `?key=1`, which the GUI asks for only from Delete. |
+| `POST /debug/crash/identity` | Store the identity the browser generated. Same → 200, different → 409 (a second tab carries on with the stored one), malformed → 400. |
+| `DELETE /debug/crash/identity` | Forget the identity, once the reports are erased. |
+
+**What this removes.** The on-device TLS client, upload and delete state
+machines, the heap gate, and deferral to the next boot (§6). One TLS request
+cost a no-PSRAM board about 30 KB of its largest free block, which is what
+forced the gate and the deferral. It also removes the compiled-in host
+allowlist (§4). The broker URL is still a build constant
+(`CRASH_BROKER_URL`), but now the charger hands it to the GUI rather than
+dialling it. The charger needs no internet access; the browser does.
+
+**Decisions inside R3:**
+
+- **The browser generates the identity,** with `crypto.getRandomValues()`.
+  That is a CSPRNG and works on plain-HTTP pages; `crypto.subtle` does not. The
+  ESP32's RNG is only truly random with the radio on, an Ethernet charger may
+  have Wi-Fi off, and `bootloader_random_enable()` must not run while Wi-Fi is
+  up.
+- **Every identity route requires `X-Requested-With: OpenEVSE`.** With no
+  password set there is no auth and so no cookie CSRF check. A cross-site
+  `text/plain` form could otherwise POST a JSON-shaped body and plant an
+  identity, which the charger would then keep, letting that site erase
+  everything sent afterwards. A cross-site form cannot set the header.
+- **The broker allows CORS from `*`,** POST only, `content-type` only, no
+  credentials. The charger is served from any address, and no broker route
+  takes a cookie or credential.
+- **Partial failures are said as such.** A report sent but not erased says so,
+  rather than "removed", which would invite a duplicate. Reports erased but
+  the id kept says so, and keeps Delete: a reused id would link later reports
+  to the erased ones.
+
+**Validated** on a no-PSRAM WROOM, in headless Chromium: the report was sent
+and symbolized, then deleted (`{deleted: 1}`), and the key was fetched once, at
+deletion. PRs: firmware #1306, GUI openevse-gui-nightshift#157, broker
+openevse-crash-service#8.
+
