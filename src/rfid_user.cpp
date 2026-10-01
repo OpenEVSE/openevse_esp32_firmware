@@ -11,7 +11,7 @@ static const char* RFID_USERS_BACKUP_FILE = "/rfid_users.json.bak";
 
 #define RFID_USERS_DOC_SIZE 2048
 
-bool RfidUser::load(DynamicJsonDocument &doc)
+bool RfidUser::load(JsonDocument &doc)
 {
   // Recover an interrupted replacement that moved the old file aside but did
   // not commit the temp file. If restoration itself fails, the backup remains
@@ -40,7 +40,7 @@ bool RfidUser::load(DynamicJsonDocument &doc)
   return true;
 }
 
-bool RfidUser::save(const DynamicJsonDocument &doc)
+bool RfidUser::save(const JsonDocument &doc)
 {
   // Write-then-rename so a failed serialization or a reset mid-write can
   // never leave /rfid_users.json truncated or empty.
@@ -96,13 +96,13 @@ String RfidUser::getUserName(const String &rfidTag)
     return "";
   }
 
-  DynamicJsonDocument doc(RFID_USERS_DOC_SIZE);
+  JsonDocument doc;
   if(!load(doc)) {
     return "";
   }
 
   JsonObject users = doc.as<JsonObject>();
-  if(users.containsKey(rfidTag)) {
+  if(!users[rfidTag].isNull()) {
     return users[rfidTag].as<String>();
   }
 
@@ -115,7 +115,7 @@ bool RfidUser::setUserName(const String &rfidTag, const String &userName)
     return false;
   }
 
-  DynamicJsonDocument doc(RFID_USERS_DOC_SIZE);
+  JsonDocument doc;
   if(!load(doc) && LittleFS.exists(RFID_USERS_FILE)) {
     // The file exists but didn't parse — corrupt JSON, or a mapping that has
     // grown past RFID_USERS_DOC_SIZE (ArduinoJson reports NoMemory but still
@@ -137,6 +137,11 @@ bool RfidUser::setUserName(const String &rfidTag, const String &userName)
     users.remove(rfidTag);
   }
 
+  if(doc.overflowed()) {
+    DBUGLN("RfidUser: mapping document overflowed, not saving");
+    return false;
+  }
+
   return save(doc);
 }
 
@@ -147,7 +152,7 @@ bool RfidUser::removeUserName(const String &rfidTag)
 
 bool RfidUser::clearAll()
 {
-  DynamicJsonDocument doc(RFID_USERS_DOC_SIZE);
+  JsonDocument doc;
   doc.to<JsonObject>();
   return save(doc);
 }

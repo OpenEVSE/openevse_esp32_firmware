@@ -295,7 +295,7 @@ void NetManagerTask::wifiOnStationModeGotIP(const WiFiEventStationModeGotIP &eve
 {
   haveNetworkConnection(WiFi.localIP(), WiFi.subnetMask());
   _macaddress = WiFi.macAddress();
-  StaticJsonDocument<128> doc;
+  JsonDocument doc;
   doc["wifi_client_connected"] = (int)net.isWifiClientConnected();
   doc["eth_connected"] = (int)net.isWiredConnected();
   doc["net_connected"] = (int)net.isWifiClientConnected();
@@ -524,7 +524,7 @@ void NetManagerTask::onNetEvent(WiFiEvent_t event, arduino_event_info_t &info)
 #endif
       DBUGF("WiFi STA IPv6: %s", _ipv6address.c_str());
 
-      StaticJsonDocument<256> doc;
+      JsonDocument doc;
       doc["wifi_client_connected"] = (int)net.isWifiClientConnected();
       doc["eth_connected"] = (int)net.isWiredConnected();
       doc["net_connected"] = (int)net.isWifiClientConnected();
