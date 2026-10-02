@@ -282,6 +282,9 @@ void EvseMonitor::evseBoot(const char *firmware)
     _cable_temps[i].invalidate();
     _cable_temp_status[i] = OPENEVSE_CABLE_TEMP_STATUS_NOT_INSTALLED;
     _cable_temp_cfg_valid[i] = false;
+    // Supersede any $GN idx reply still in flight from the previous
+    // controller, so it cannot mark this source valid with stale calibration.
+    _cable_temp_cfg_refresh[i]++;
     _cable_temp_pin[i] = OPENEVSE_CABLE_TEMP_PIN_NONE;
     // _cable_temp_cfg_known above already keeps these from being served
     // until a fresh readCableTempConfig() actually fills them back in, but
@@ -517,8 +520,11 @@ unsigned long EvseMonitor::loop(MicroTasks::WakeReason reason)
     readCableTemperatures();
     // A failed boot-time or targeted configuration read leaves only that
     // source invalid. Retry invalid sources on this bounded cadence without
-    // hiding successful siblings or spending four RAPI round trips again.
-    if(_count > 0 && !_cable_temp_cfg_known) {
+    // hiding successful siblings. Gated on _cable_temp_known - a live $GN has
+    // succeeded, so the controller has the feature - because one without it
+    // NAKs every $GN idx and would otherwise be retried (4 RAPI round trips,
+    // on the busiest tick) forever.
+    if(_count > 0 && _cable_temp_known && !_cable_temp_cfg_known) {
       for(uint8_t source = 0; source < OPENEVSE_CABLE_TEMP_SOURCE_COUNT; source++) {
         if(!_cable_temp_cfg_valid[source]) {
           readCableTempConfig(source);
