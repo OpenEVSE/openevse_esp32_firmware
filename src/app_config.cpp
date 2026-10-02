@@ -134,6 +134,10 @@ String time_zone;
 uint32_t flags;
 uint32_t flags_changed;
 
+// Second flags word (flags above is full)
+uint32_t flags2;
+uint32_t flags2_changed;
+
 
 // Divert settings
 int8_t divert_type;
@@ -228,6 +232,12 @@ void config_changed(String name);
 
 ConfigOptDefinition<uint32_t> flagsOpt = ConfigOptDefinition<uint32_t>(flags, CONFIG_DEFAULT_FLAGS, "flags", "f");
 ConfigOptDefinition<uint32_t> flagsChanged = ConfigOptDefinition<uint32_t>(flags_changed, 0, "flags_changed", "c");
+
+// No CONFIG2_* default is on yet, so flags2 needs none of flags' upgrade
+// migration dance (see config_load_settings()) - it starts out all zero.
+#define CONFIG_DEFAULT_FLAGS2 0
+ConfigOptDefinition<uint32_t> flags2Opt = ConfigOptDefinition<uint32_t>(flags2, CONFIG_DEFAULT_FLAGS2, "flags2", "f2");
+ConfigOptDefinition<uint32_t> flags2Changed = ConfigOptDefinition<uint32_t>(flags2_changed, 0, "flags2_changed", "c2");
 
 // Defined here rather than in loadsharing_types.cpp (its natural home)
 // because that file isn't compiled into the native_simulator build (see its
@@ -452,6 +462,8 @@ ConfigOpt *opts[] =
 // Flags
   &flagsOpt,
   &flagsChanged,
+  &flags2Opt,
+  &flags2Changed,
 
 // Virtual Options
   new ConfigOptVirtualMaskedBool(flagsOpt, flagsChanged, CONFIG_SERVICE_EMONCMS, CONFIG_SERVICE_EMONCMS, "emoncms_enabled", "ee"),
@@ -480,7 +492,10 @@ ConfigOpt *opts[] =
   new ConfigOptVirtualMaskedBool(flagsOpt, flagsChanged, CONFIG_LCD_NETWORK_INFO, CONFIG_LCD_NETWORK_INFO, "lcd_network_info", "lni"),
   new ConfigOptVirtualMaskedBool(flagsOpt, flagsChanged, CONFIG_TFT_12H_CLOCK, CONFIG_TFT_12H_CLOCK, "tft_12h_clock", "t12"),
   new ConfigOptVirtualMqttProtocol(flagsOpt, flagsChanged, "mqtt_protocol", "mprt"),
-  new ConfigOptVirtualChargeMode(flagsOpt, flagsChanged, "charge_mode", "chmd")
+  new ConfigOptVirtualChargeMode(flagsOpt, flagsChanged, "charge_mode", "chmd"),
+
+// flags2 virtual options
+  new ConfigOptVirtualMaskedBool(flags2Opt, flags2Changed, CONFIG2_LABS_ENABLED, CONFIG2_LABS_ENABLED, "labs_enabled", "labs")
 };
 
 ConfigJson user_config(opts, sizeof(opts) / sizeof(opts[0]), EEPROM_SIZE, CONFIG_OFFSET);
