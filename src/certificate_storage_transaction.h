@@ -11,8 +11,10 @@
  * fits /certificates/<16 hex digits>.json; configured directories must supply
  * their corresponding bound. The buffer also reserves ".tmp" and its NUL.
  * @return True after publication by rename, false on invalid arguments or storage
- * failure. Oversized paths fail before any storage call; failed writes/renames
- * retain the existing final record.
+ * failure reported by Storage. Oversized paths fail before any storage call;
+ * rejected writes/renames retain the existing final record under the Storage
+ * contract. Staging cleanup is best effort. This helper cannot detect errors
+ * that a backend's write/flush/close implementation does not report.
  */
 template <size_t MaxFinalPathLength = sizeof("/certificates/FFFFFFFFFFFFFFFF.json") - 1,
           typename Storage>

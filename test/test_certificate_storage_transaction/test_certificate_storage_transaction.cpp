@@ -35,8 +35,9 @@ void *operator new(size_t size)
   return memory;
 }
 
-/** Match the malloc-backed allocation hook, including sized C++14 deallocation. */
+/** Release memory from the malloc-backed allocation hook. */
 void operator delete(void *memory) noexcept { std::free(memory); }
+/** Release a sized C++14 allocation through the same malloc-backed hook. */
 void operator delete(void *memory, size_t) noexcept { std::free(memory); }
 
 /**
@@ -51,9 +52,13 @@ class PathRecordingStorage
     char renamed_from[128] = {};
     char renamed_to[128] = {};
 
+    /** Count a lookup while reporting no pre-existing staging record. */
     bool exists(const char *) { ++calls; return false; }
+    /** Count a successful removal without allocating bookkeeping storage. */
     bool remove(const char *) { ++calls; return true; }
+    /** Count a space check and permit the requested write. */
     bool hasSpace(size_t) { ++calls; return true; }
+    /** Capture the staging path and report a complete write without allocation. */
     bool write(const char *path, const uint8_t *, size_t size, size_t &written)
     {
       ++calls;
@@ -61,6 +66,7 @@ class PathRecordingStorage
       written = size;
       return true;
     }
+    /** Capture both publication paths without requesting heap storage. */
     bool rename(const char *from, const char *to)
     {
       ++calls;
@@ -70,6 +76,7 @@ class PathRecordingStorage
     }
 };
 
+/** Model staged and committed bytes with configurable storage operation failures. */
 class FakeCertificateStorage
 {
   public:
@@ -80,11 +87,13 @@ class FakeCertificateStorage
     size_t reported_write = SIZE_MAX;
     std::map<std::string, std::string> files;
 
+    /** Report whether the fake filesystem contains a path. */
     bool exists(const char *path) const
     {
       return files.find(path) != files.end();
     }
 
+    /** Erase a path unless removal failure is configured. */
     bool remove(const char *path)
     {
       if(!remove_succeeds) {
@@ -94,11 +103,13 @@ class FakeCertificateStorage
       return true;
     }
 
+    /** Return the configured space result independently of the requested size. */
     bool hasSpace(size_t) const
     {
       return has_space;
     }
 
+    /** Simulate open/short-write results, storing at most the supplied data size. */
     bool write(const char *path, const uint8_t *data, size_t size, size_t &written)
     {
       if(!write_starts) {
@@ -112,6 +123,7 @@ class FakeCertificateStorage
       return true;
     }
 
+    /** Replace the destination from staging, or preserve both paths on failure. */
     bool rename(const char *from, const char *to)
     {
       if(!rename_succeeds || !exists(from)) {
@@ -127,6 +139,7 @@ static const char FINAL_PATH[] = "/certificates/1234.json";
 static const char TEMP_PATH[] = "/certificates/1234.json.tmp";
 static const uint8_t RECORD[] = {'{', '}', '\n'};
 
+/** Verify the full 64-bit filename and .tmp suffix require no path allocation. */
 TEST_CASE("maximum certificate filename commits without path allocation")
 {
   const char path[] = "/certificates/FFFFFFFFFFFFFFFF.json";
@@ -143,6 +156,7 @@ TEST_CASE("maximum certificate filename commits without path allocation")
   CHECK(std::strcmp(storage.renamed_to, path) == 0);
 }
 
+/** Reject a filename one byte beyond the bound before contacting storage. */
 TEST_CASE("oversized final path fails before allocation or storage mutation")
 {
   const char path[] = "/certificates/FFFFFFFFFFFFFFFFF.json";
@@ -157,6 +171,7 @@ TEST_CASE("oversized final path fails before allocation or storage mutation")
   CHECK(storage.calls == 0);
 }
 
+/** Ensure invalid-length rejection remains safe when heap requests fail. */
 TEST_CASE("oversized path rejection works with an exhausted heap")
 {
   const char path[] = "/certificates/FFFFFFFFFFFFFFFFF.json";
@@ -184,6 +199,7 @@ TEST_CASE("oversized path rejection works with an exhausted heap")
   CHECK(storage.calls == 0);
 }
 
+/** Commit a supported maximum-length path while all heap requests fail. */
 TEST_CASE("maximum certificate filename commits with an exhausted heap")
 {
   const char path[] = "/certificates/FFFFFFFFFFFFFFFF.json";
@@ -213,6 +229,7 @@ TEST_CASE("maximum certificate filename commits with an exhausted heap")
 }
 
 
+/** Check a longer directory's exact capacity, NUL reservation and undersized bound. */
 TEST_CASE("configured directory bound includes the full ID suffix and terminator")
 {
   // Match the production caller's capacity calculation for an overridden base.
@@ -236,6 +253,7 @@ TEST_CASE("configured directory bound includes the full ID suffix and terminator
   CHECK(too_small.calls == 0);
 }
 
+/** Reject missing inputs and zero capacity while allowing an exact one-byte path. */
 TEST_CASE("empty invalid and shortest paths respect the supplied bound")
 {
   PathRecordingStorage storage;
@@ -249,6 +267,7 @@ TEST_CASE("empty invalid and shortest paths respect the supplied bound")
   CHECK(std::strcmp(storage.written_path, "a.tmp") == 0);
 }
 
+/** Publish the exact complete record and leave no staging path. */
 TEST_CASE("complete certificate record commits by rename")
 {
   FakeCertificateStorage storage;
@@ -258,6 +277,7 @@ TEST_CASE("complete certificate record commits by rename")
   CHECK_FALSE(storage.exists(TEMP_PATH));
 }
 
+/** Confirm invalid path/data arguments leave the fake filesystem untouched. */
 TEST_CASE("invalid transaction arguments fail without mutation")
 {
   FakeCertificateStorage storage;
@@ -269,6 +289,7 @@ TEST_CASE("invalid transaction arguments fail without mutation")
   CHECK(storage.files.empty());
 }
 
+/** Replace existing bytes only through a successful staging rename. */
 TEST_CASE("complete certificate record atomically replaces an existing record")
 {
   FakeCertificateStorage storage;
@@ -279,6 +300,7 @@ TEST_CASE("complete certificate record atomically replaces an existing record")
   CHECK_FALSE(storage.exists(TEMP_PATH));
 }
 
+/** Keep the committed bytes when a replacement write is short. */
 TEST_CASE("failed replacement preserves the existing record")
 {
   FakeCertificateStorage storage;
@@ -290,6 +312,7 @@ TEST_CASE("failed replacement preserves the existing record")
   CHECK_FALSE(storage.exists(TEMP_PATH));
 }
 
+/** Clear a previous staging record before successfully publishing a new one. */
 TEST_CASE("stale temporary record is removed before a new attempt")
 {
   FakeCertificateStorage storage;
@@ -300,6 +323,7 @@ TEST_CASE("stale temporary record is removed before a new attempt")
   CHECK_FALSE(storage.exists(TEMP_PATH));
 }
 
+/** Refuse publication when an old staging record cannot be removed. */
 TEST_CASE("stale temporary cleanup failure fails closed")
 {
   FakeCertificateStorage storage;
@@ -311,6 +335,7 @@ TEST_CASE("stale temporary cleanup failure fails closed")
   CHECK(storage.files[TEMP_PATH] == "stale");
 }
 
+/** Refuse staging when the storage space check fails. */
 TEST_CASE("insufficient space fails before writing")
 {
   FakeCertificateStorage storage;
@@ -320,6 +345,7 @@ TEST_CASE("insufficient space fails before writing")
   CHECK(storage.files.empty());
 }
 
+/** Keep both paths absent when the staging write cannot start. */
 TEST_CASE("write startup failure leaves no certificate")
 {
   FakeCertificateStorage storage;
@@ -330,6 +356,7 @@ TEST_CASE("write startup failure leaves no certificate")
   CHECK_FALSE(storage.exists(TEMP_PATH));
 }
 
+/** Accept only the exact requested byte count before publication. */
 TEST_CASE("zero partial and over-reported writes never commit")
 {
   for(size_t reported : {size_t(0), sizeof(RECORD) - 1, sizeof(RECORD) + 1})
@@ -344,6 +371,7 @@ TEST_CASE("zero partial and over-reported writes never commit")
   }
 }
 
+/** Clean a fully written staging record when publication fails. */
 TEST_CASE("rename failure removes the complete temporary record")
 {
   FakeCertificateStorage storage;
@@ -354,6 +382,7 @@ TEST_CASE("rename failure removes the complete temporary record")
   CHECK_FALSE(storage.exists(TEMP_PATH));
 }
 
+/** Leave failed staging uncommitted even if its cleanup also fails. */
 TEST_CASE("cleanup failure never publishes a failed write")
 {
   FakeCertificateStorage storage;

@@ -17,6 +17,7 @@ import requests
 
 
 def certificate_payload(directory, serial, *, client=False):
+    """Generate a dummy EC root or client payload with a small explicit store ID."""
     key = directory / f"dummy-{serial}.key"
     cert = directory / f"dummy-{serial}.pem"
     subprocess.run(
@@ -36,6 +37,7 @@ def certificate_payload(directory, serial, *, client=False):
 def chain_payload(directory):
     """P-256 leaf, P-384 issuer and cross-signed root, beneath a P-384 root."""
     def openssl(*args):
+        """Run a checked OpenSSL command inside the isolated fixture directory."""
         subprocess.run(["openssl", *args], cwd=directory, check=True,
                        stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
 
@@ -69,6 +71,7 @@ def chain_payload(directory):
 
 
 def fail_next_array_allocation(native, directory):
+    """Install the one-shot nothrow-array allocation hook and return its trigger path."""
     library = directory / "fail-nothrow-new.so"
     source = Path(__file__).with_name("fail_nothrow_new.cpp")
     subprocess.run(["c++", "-shared", "-fPIC", str(source), "-ldl", "-o", str(library)],
@@ -81,6 +84,7 @@ def fail_next_array_allocation(native, directory):
 
 @pytest.fixture
 def native(tmp_path):
+    """Yield an isolated firmware process wrapper and stop its process on teardown."""
     binary = Path(os.environ.get("NATIVE_BINARY_PATH", str(
         Path(__file__).resolve().parents[2] / ".pio/build/native_openevse/program"))).resolve()
     assert binary.is_file(), "Build native_openevse before running these tests"
@@ -95,11 +99,13 @@ def native(tmp_path):
     process = None
 
     class Native:
+        """Operate one native instance with its own port, filesystem and environment."""
         files = filesystem / "certificates"
         base = f"http://127.0.0.1:{port}"
         env = environment
 
         def stop(self):
+            """Stop this fixture's process, escalating only if graceful exit times out."""
             nonlocal process
             if process is not None and process.poll() is None:
                 process.terminate()
@@ -110,6 +116,7 @@ def native(tmp_path):
                     process.wait(timeout=5)
 
         def start(self):
+            """Restart with the existing filesystem and wait for HTTP readiness."""
             nonlocal process
             self.stop()
             with (tmp_path / "native.log").open("ab") as log:
@@ -129,15 +136,19 @@ def native(tmp_path):
             pytest.fail("Native firmware did not become ready")
 
         def get(self, path):
+            """Fetch an instance-relative API path with a bounded request timeout."""
             return requests.get(self.base + path, timeout=3)
 
         def upload(self, payload):
+            """Post a certificate payload and return the response for assertions."""
             return requests.post(self.base + "/certificates", json=payload, timeout=10)
 
         def delete(self, serial):
+            """Delete one explicit certificate ID and return the HTTP response."""
             return requests.delete(self.base + f"/certificates/{serial}", timeout=10)
 
         def ids(self):
+            """Return the IDs from a successful certificate-list response."""
             response = self.get("/certificates")
             assert response.status_code == 200
             return {record["id"] for record in response.json()}
@@ -150,6 +161,7 @@ def native(tmp_path):
 
 
 def test_root_upload_storage_failure_preserves_active_state(native, tmp_path):
+    """A blocked destination leaves the existing root and persisted list unchanged."""
     first = certificate_payload(tmp_path, 1)
     second = certificate_payload(tmp_path, 2)
     native.start()
@@ -241,6 +253,7 @@ def test_stale_temporary_records_preserve_valid_records_on_restart(
 
 
 def test_ecdsa_chain_upload_and_delete_survive_restart(native, tmp_path):
+    """Persist and retrieve the full ECDSA chain, then keep it deleted across restart."""
     payload = chain_payload(tmp_path)
     native.start()
     uploaded = native.upload(payload)
@@ -260,6 +273,7 @@ def test_ecdsa_chain_upload_and_delete_survive_restart(native, tmp_path):
 
 @pytest.mark.parametrize("failure", ["allocation", "storage"])
 def test_root_delete_failure_preserves_active_state(native, tmp_path, failure):
+    """Trust preparation or record removal failure retains both live roots."""
     marker = fail_next_array_allocation(native, tmp_path)
     payloads = [certificate_payload(tmp_path, serial) for serial in (1, 2)]
     native.start()
@@ -290,6 +304,7 @@ def test_root_delete_failure_preserves_active_state(native, tmp_path, failure):
 
 
 def test_root_upload_allocation_failure_preserves_active_state(native, tmp_path):
+    """Failure to prepare new root trust rejects the upload without publishing it."""
     marker = fail_next_array_allocation(native, tmp_path)
     first = certificate_payload(tmp_path, 1)
     second = certificate_payload(tmp_path, 2)
@@ -306,6 +321,7 @@ def test_root_upload_allocation_failure_preserves_active_state(native, tmp_path)
 
 
 def test_corrupt_record_recovery_is_atomic(native, tmp_path):
+    """Failed staging preserves a corrupt record; a successful retry replaces it."""
     payload = certificate_payload(tmp_path, 1, client=True)
     native.files.mkdir(parents=True)
     record = native.files / "1.json"
@@ -331,6 +347,7 @@ def test_corrupt_record_recovery_is_atomic(native, tmp_path):
 
 
 def test_record_staging_allocation_failure_preserves_active_state(native, tmp_path):
+    """Record buffer allocation failure keeps live trust and permits a later retry."""
     marker = fail_next_array_allocation(native, tmp_path)
     root = certificate_payload(tmp_path, 1)
     client = certificate_payload(tmp_path, 2, client=True)

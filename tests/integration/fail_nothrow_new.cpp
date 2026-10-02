@@ -4,6 +4,10 @@
 #include <new>
 #include <unistd.h>
 
+/**
+ * Fail one nothrow array allocation when the isolated test's marker exists.
+ * Consume the marker on failure; otherwise delegate to the real array allocator.
+ */
 void *operator new[](std::size_t size, const std::nothrow_t &tag) noexcept
 {
   using Allocator = void *(*)(std::size_t, const std::nothrow_t &) noexcept;

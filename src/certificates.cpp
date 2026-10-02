@@ -116,6 +116,7 @@ CertificateStore::CertificateStore() :
 {
 }
 
+/** Release owned certificate objects and any dynamically allocated root bundle. */
 CertificateStore::~CertificateStore()
 {
   if(begin())
@@ -195,6 +196,14 @@ bool CertificateStore::addCertificate(DynamicJsonDocument &doc, uint64_t *id, bo
   return false;
 }
 
+/**
+ * Add a validated certificate, publishing prepared trust only after storage succeeds.
+ * @param cert Certificate whose ownership transfers to the store on success.
+ * @param id Optional output written only after the addition succeeds.
+ * @param save False when loading an existing record; true to persist an upload.
+ * @return False for duplicates or reported preparation/storage failures; the caller
+ * retains ownership of cert on failure.
+ */
 bool CertificateStore::addCertificate(Certificate *cert, uint64_t *id, bool save)
 {
   uint64_t certId = cert->getId();
@@ -230,6 +239,12 @@ bool CertificateStore::addCertificate(Certificate *cert, uint64_t *id, bool save
   return true;
 }
 
+/**
+ * Prepare replacement trust and remove backing records before removing a live ID.
+ * @return Removed on success, NotFound if no live ID matches, or Error on a
+ * reported preparation/storage failure. Error retains the live certificate and
+ * trust; it does not restore aliases already deleted by the storage operation.
+ */
 CertificateStore::RemoveResult CertificateStore::removeCertificate(uint64_t id)
 {
   for(std::vector<Certificate *>::iterator it = _certs.begin(); it != _certs.end(); ++it)
@@ -380,6 +395,14 @@ bool CertificateStore::findCertificate(uint64_t id, int &index)
   return false;
 }
 
+/**
+ * Prepare default and custom roots without replacing the active bundle.
+ * @param additional Optional root to include before it enters the live list.
+ * @param excluded Optional live root to omit from the prepared bundle.
+ * @param prepared Receives root_ca or a new array on success; unchanged on failure.
+ * The caller must publish the array with replaceRootCa or release it with delete[].
+ * @return False if the replacement array cannot be allocated.
+ */
 bool CertificateStore::prepareRootCa(Certificate *additional, Certificate *excluded,
                                      const char *&prepared)
 {
@@ -436,6 +459,7 @@ bool CertificateStore::prepareRootCa(Certificate *additional, Certificate *exclu
   return true;
 }
 
+/** Take ownership of a prepared bundle (or root_ca), releasing the old owned array. */
 void CertificateStore::replaceRootCa(const char *replacement)
 {
   if(_root_ca != root_ca) {
@@ -444,6 +468,11 @@ void CertificateStore::replaceRootCa(const char *replacement)
   _root_ca = replacement;
 }
 
+/**
+ * Load committed records and attempt to discard .tmp entries without loading them.
+ * @return False if an encountered record fails to load or stale-file removal fails;
+ * iteration continues so other valid records can still enter the live store.
+ */
 bool CertificateStore::loadCertificates()
 {
   bool loaded = true;
@@ -508,6 +537,11 @@ bool CertificateStore::loadCertificate(String &name)
   return loaded;
 }
 
+/**
+ * Serialize a complete private record, stage it, and publish through rename.
+ * @return False on reported serialization, allocation or storage failure.
+ * The Arduino flush/close APIs do not expose their failures through this path.
+ */
 bool CertificateStore::saveCertificate(Certificate *cert)
 {
   std::string id = certificate_id_hex(cert->getId());
@@ -539,11 +573,21 @@ bool CertificateStore::saveCertificate(Certificate *cert)
   class LittleFsCertificateStorage
   {
     public:
+      /** Return the backend's boolean lookup result, which cannot classify errors. */
       bool exists(const char *path) const { return LittleFS.exists(path); }
+      /** Attempt to remove a staging path and return the backend's result. */
       bool remove(const char *path) { return LittleFS.remove(path); }
+      /** Check record space plus the filesystem helper's metadata margin. */
       bool hasSpace(size_t needed) const { return littlefs_has_space(needed); }
+      /** Publish the staged path using the backend's rename result. */
       bool rename(const char *from, const char *to) { return LittleFS.rename(from, to); }
 
+      /**
+       * Open staging storage and report the number of bytes accepted by write.
+       * @return False if opening fails; true otherwise, even for a short write.
+       * The caller checks written. Flush and close are invoked but their void
+       * APIs cannot report a late failure.
+       */
       bool write(const char *path, const uint8_t *data, size_t size, size_t &written)
       {
         File file = LittleFS.open(path, "w");
