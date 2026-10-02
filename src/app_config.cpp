@@ -15,6 +15,13 @@
 
 #include "web_auth_secret.h"
 
+// Needed unconditionally: ConfigOptLoadSharingRole (below) uses
+// loadSharingRoleFromJson() to register the loadsharing_role opt, and that
+// registration isn't gated by ENABLE_CONFIG_CHANGE_NOTIFICATION -- unlike
+// this file's other loadsharing-adjacent includes, which are only for
+// config_changed()'s notification body.
+#include "loadsharing_types.h"
+
 #if ENABLE_CONFIG_CHANGE_NOTIFICATION
 #include <esp_ota_ops.h>
 #include "divert.h"
@@ -194,7 +201,7 @@ uint32_t loadsharing_config_version;
 uint32_t loadsharing_config_updated_at;
 uint32_t loadsharing_peers_version;
 uint32_t loadsharing_status_version;
-String loadsharing_role;
+bool loadsharing_role;
 String loadsharing_controller_host;
 uint32_t loadsharing_rotation_interval;
 
@@ -231,6 +238,84 @@ ConfigOptDefinition<uint32_t> flagsChanged = ConfigOptDefinition<uint32_t>(flags
 #define CONFIG_DEFAULT_FLAGS2 0
 ConfigOptDefinition<uint32_t> flags2Opt = ConfigOptDefinition<uint32_t>(flags2, CONFIG_DEFAULT_FLAGS2, "flags2", "f2");
 ConfigOptDefinition<uint32_t> flags2Changed = ConfigOptDefinition<uint32_t>(flags2_changed, 0, "flags2_changed", "c2");
+
+// Defined here rather than in loadsharing_types.cpp (its natural home)
+// because that file isn't compiled into the native_simulator build (see its
+// build_src_filter in platformio.ini) -- load sharing was deliberately kept
+// out of the simulator -- but this opt needs the helper in every build.
+bool loadSharingRoleFromJson(JsonVariant v) {
+  if (v.is<const char*>()) {
+    // Only the literal "member" was ever a member; "controller" and "" (the
+    // unset default) were both controller.
+    return String(v.as<const char*>()) == "member";
+  }
+  return v.as<bool>();
+}
+
+// loadsharing_role was a String ("", "controller", "member") before it became
+// a bool. ArduinoJson's asBoolean() returns true for any string value,
+// including "" and "controller" (VariantImpl.hpp's default case), so a plain
+// ConfigOptDefinition<bool> deserializing an already-persisted legacy string
+// -- on the very next boot load, via ConfigJson::load() -> deserialize() --
+// would read every existing controller as a member. This subclass routes
+// through loadSharingRoleFromJson() so a legacy value maps to the exact same
+// role it always meant, on both the boot-time load
+// and POST /config paths (they share this one deserialize()).
+class ConfigOptLoadSharingRole : public ConfigOpt
+{
+protected:
+  bool &_val;
+  bool _default;
+
+public:
+  ConfigOptLoadSharingRole(bool &v, bool d, const char *l, const char *s) :
+    ConfigOpt(l, s), _val(v), _default(d)
+  {
+  }
+
+  bool get() { return _val; }
+
+  bool set(bool value) {
+    if(_val != value) {
+      _val = value;
+      return true;
+    }
+    return false;
+  }
+
+  virtual bool serialize(CONFIG_JSON_DOC &doc, bool longNames, bool compactOutput, bool hideSecrets) {
+    if(!compactOutput || _val != _default) {
+      doc[name(longNames)] = _val;
+      return true;
+    }
+    return false;
+  }
+
+  virtual bool deserialize(CONFIG_JSON_DOC &doc) {
+    JsonVariant v;
+#if ARDUINOJSON_VERSION_MAJOR >= 7
+    if(!doc[_long].isNull()) {
+      v = doc[_long];
+    } else if(!doc[_short].isNull()) {
+      v = doc[_short];
+    } else {
+      return false;
+    }
+#else
+    if(doc.containsKey(_long)) {
+      v = doc[_long];
+    } else if(doc.containsKey(_short)) {
+      v = doc[_short];
+    } else {
+      return false;
+    }
+#endif
+    return set(loadSharingRoleFromJson(v));
+  }
+
+  virtual void setDefault() { _val = _default; }
+};
+ConfigOptLoadSharingRole loadsharingRoleOpt = ConfigOptLoadSharingRole(loadsharing_role, false, "loadsharing_role", "lsr");
 
 ConfigOpt *opts[] =
 {
@@ -360,7 +445,7 @@ ConfigOpt *opts[] =
   new ConfigOptDefinition<double>(loadsharing_failsafe_peer_assumed_current, 6.0, "loadsharing_failsafe_peer_assumed_current", "lsfpac"),
   new ConfigOptDefinition<uint32_t>(loadsharing_config_version, 0, "loadsharing_config_version", "lscv"),
   new ConfigOptDefinition<uint32_t>(loadsharing_config_updated_at, 0, "loadsharing_config_updated_at", "lscua"),
-  new ConfigOptDefinition<String>(loadsharing_role, "", "loadsharing_role", "lsr"),
+  &loadsharingRoleOpt,
   new ConfigOptDefinition<String>(loadsharing_controller_host, "", "loadsharing_controller_host", "lsch"),
   // Rotation interval in seconds (0 disables). Effective max ~49 days on 32-bit millis; larger values wrap.
   new ConfigOptDefinition<uint32_t>(loadsharing_rotation_interval, 1800, "loadsharing_rotation_interval", "lsri"),
