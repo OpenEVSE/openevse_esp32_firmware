@@ -106,8 +106,12 @@ Every config option appears in exactly three places:
 3. **`ConfigOptDefinition` entry** in the `opts[]` array in `src/app_config.cpp`
 
 Boolean flags use bit positions in a `uint32_t flags` variable with `#define`
-macros. Change notifications use `onChanged()` callbacks with prefix matching
-(e.g. `name.startsWith("mqtt_")`) to fan out updates to affected subsystems.
+macros, exposed individually via `ConfigOptVirtualMaskedBool`. All 32 bits of
+`flags` are now in use (one, bit 2, is permanently retired rather than reused —
+see [invariants.md](../ai/invariants.md)), so new flags go in a second
+`flags2` word instead. Change notifications use `onChanged()` callbacks with
+prefix matching (e.g. `name.startsWith("mqtt_")`) to fan out updates to
+affected subsystems.
 
 The divert simulator's `test_config.py` suite asserts default config values —
 update those assertions whenever changing defaults in `app_config.cpp`.
