@@ -168,13 +168,76 @@ def test_root_upload_storage_failure_preserves_active_state(native, tmp_path):
     assert native.ids() == {"1"}
 
 
-def test_stale_temporary_record_is_discarded_on_restart(native, tmp_path):
-    payload = certificate_payload(tmp_path, 1)
-    native.files.mkdir(parents=True)
-    (native.files / "1.json.tmp").write_text(json.dumps(payload), encoding="ascii")
+@pytest.mark.parametrize("creation_order", [
+    ("1.json.tmp", "2.json", "5.json.tmp", "1.json", "6.json.tmp", "3.json"),
+    ("3.json", "6.json.tmp", "1.json", "5.json.tmp", "2.json", "1.json.tmp"),
+    ("5.json.tmp", "3.json", "1.json.tmp", "2.json", "1.json", "6.json.tmp"),
+], ids=["alternating", "reversed", "mixed"])
+@pytest.mark.parametrize("cleanup_blocked", [False, True], ids=["writable", "read-only"])
+def test_stale_temporary_records_preserve_valid_records_on_restart(
+        native, tmp_path, creation_order, cleanup_blocked):
+    """Exercise EpoxyFS cleanup/retry across creation orders and repeated starts.
+
+    Creation order does not imply readdir order. The read-only cases exercise a
+    real unlink failure without preventing reads of neighboring valid records.
+    Native filesystem behavior does not establish ESP32 LittleFS iteration safety.
+    """
+    payloads = {serial: certificate_payload(tmp_path, serial, client=serial in (3, 6))
+                for serial in range(1, 7)}
+    records = {f"{serial}.json": json.dumps(payloads[serial]).encode("ascii")
+               for serial in (1, 2, 3)}
+    stale = {name: json.dumps(payloads[serial]).encode("ascii")
+             for name, serial in (("1.json.tmp", 4), ("5.json.tmp", 5), ("6.json.tmp", 6))}
     native.start()
-    assert native.ids() == set()
-    assert not list(native.files.glob("*.tmp"))
+    default_trust = native.get("/certificates/root").text
+    native.stop()
+    for name in creation_order:
+        (native.files / name).write_bytes({**records, **stale}[name])
+
+    def check_loaded_records():
+        """Check exact persisted bytes, live identities and root-only trust contents."""
+        assert native.ids() == {"1", "2", "3"}
+        for serial in (1, 2, 3):
+            response = native.get(f"/certificates/{serial}")
+            assert response.status_code == 200
+            assert response.json()["certificate"] == payloads[serial]["certificate"]
+        for name, contents in records.items():
+            assert (native.files / name).read_bytes() == contents
+        trust = native.get("/certificates/root").text
+        assert default_trust in trust
+        assert all(payloads[serial]["certificate"] in trust for serial in (1, 2))
+        assert all(payloads[serial]["certificate"] not in trust for serial in (3, 4, 5, 6))
+        return trust
+
+    original_mode = native.files.stat().st_mode & 0o777
+    try:
+        if cleanup_blocked:
+            native.files.chmod(0o555)
+            if os.access(native.files, os.W_OK):
+                pytest.skip("Directory permissions cannot deny unlink for this user")
+        previous_trust = None
+        for _ in range(2):
+            native.start()
+            trust = check_loaded_records()
+            if previous_trust is not None:
+                assert trust == previous_trust
+            previous_trust = trust
+            remaining = {path.name for path in native.files.glob("*.tmp")}
+            assert remaining == (set(stale) if cleanup_blocked else set())
+            if cleanup_blocked:
+                for name, contents in stale.items():
+                    assert (native.files / name).read_bytes() == contents
+        if cleanup_blocked:
+            native.files.chmod(original_mode)
+            native.start()
+            assert check_loaded_records() == previous_trust
+            assert not list(native.files.glob("*.tmp"))
+            native.start()
+            assert check_loaded_records() == previous_trust
+            assert not list(native.files.glob("*.tmp"))
+    finally:
+        native.stop()
+        native.files.chmod(original_mode)
 
 
 def test_ecdsa_chain_upload_and_delete_survive_restart(native, tmp_path):
