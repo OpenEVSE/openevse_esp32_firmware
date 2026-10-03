@@ -32,6 +32,10 @@ class TimeManager : public MicroTasks::Task
     char   _resolvedIp[46];         // last resolved IP, "failed", or ""
     bool   _syncRequested;          // set by checkNow(); shows "connecting" before fetch starts
 
+    // Mongoose resolves the NTP host to send the request, so the address is
+    // read back from the client rather than looked up again here.
+    void takeResolvedIp();
+
     // NTP server learnt from DHCP (option 42), preferred over _timeHost while
     // sntp_dhcp is on. If it stops answering we fall back to the configured
     // host until the next scheduled poll, which tries DHCP again.
@@ -43,7 +47,6 @@ class TimeManager : public MicroTasks::Task
     unsigned long retryDelay();     // exponential back-off based on _retryCount
     const char *pickHost();         // DHCP server if usable, else _timeHost
     void fetchFailed();             // shared failure path: back off or fall back
-    bool resolveActiveHost();       // populate _resolvedIp from _activeHost; false if unresolved
 
     class TimeChange : public MicroTasks::Event
     {

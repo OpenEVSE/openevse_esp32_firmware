@@ -12,7 +12,7 @@
 
 #include <stddef.h>
 
-// The stored etags are 64-char hex; +2 quotes +NUL.
+// The stored etags are 64-char hex; +2 quotes +NUL, with headroom.
 #define HTTP_ETAG_QUOTED_MAX 80
 
 // True if an If-None-Match header value matches `etag`, per RFC 7232 section 3.2.

@@ -163,6 +163,9 @@ enum vehicle_data_src {
 // 24-bits of Flags
 extern uint32_t flags;
 
+// HTTPS listener toggle, stored outside flags
+extern bool www_https_enabled;
+
 // Second word of flags: `flags` above is full (every bit spoken for, see the
 // retired-bit note at CONFIG_SERVICE_SNTP), so new on/off settings go here.
 extern uint32_t flags2;
@@ -200,6 +203,13 @@ extern uint32_t flags2;
 #define CONFIG_MQTT_NO_SYS_QUERY    (1 << 29)
 // TFT panel clock in 12-hour form. Clear (the default) keeps the 24-hour clock.
 #define CONFIG_TFT_12H_CLOCK        (1 << 30)
+// HTTP listener control. HTTPS is a plain bool (www_https_enabled) because
+// bit 31 below took the last free flag bit.
+//
+// Bit 2 is reclaimed from CONFIG_SERVICE_OHM, removed in a93fa8f2. An install
+// that had OhmConnect enabled therefore comes up with this bit set, which reads
+// as "HTTP enabled" -- the default anyway, so nothing changes for them.
+#define CONFIG_HTTP_ENABLED         (1UL << 2)
 // Inverted sense: bit SET ignores the NTP server offered by DHCP (option 42)
 // and always uses sntp_hostname. Clear - the default, and what every existing
 // install already has stored - prefers the DHCP one. Last free bit.
@@ -219,6 +229,14 @@ inline bool config_emoncms_enabled() {
 
 inline bool config_mqtt_enabled() {
   return CONFIG_SERVICE_MQTT == (flags & CONFIG_SERVICE_MQTT);
+}
+
+inline bool config_http_enabled() {
+  return CONFIG_HTTP_ENABLED == (flags & CONFIG_HTTP_ENABLED);
+}
+
+inline bool config_https_enabled() {
+  return www_https_enabled;
 }
 
 inline bool config_sntp_enabled() {
@@ -329,7 +347,10 @@ inline bool config_tft_12h_clock()
   return CONFIG_TFT_12H_CLOCK == (flags & CONFIG_TFT_12H_CLOCK);
 }
 
-bool config_https_enabled();
+// True when the device is actually serving HTTPS: the user has enabled it and a
+// usable certificate/key pair is stored. config_https_enabled() above only
+// reports the flag, which on its own does not mean the listener came up.
+bool config_https_active();
 
 extern uint32_t config_version();
 

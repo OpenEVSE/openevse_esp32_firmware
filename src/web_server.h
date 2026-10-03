@@ -44,11 +44,9 @@ extern const char _CONTENT_TYPE_MANIFEST[];
 extern const char _CONTENT_TYPE_CSV[];
 #define CONTENT_TYPE_CSV FPSTR(_CONTENT_TYPE_CSV)
 
-extern MongooseHttpServer server;
-
 extern void web_server_setup();
 extern void web_server_loop();
-extern void web_server_load_sharing_setup();
+extern void web_server_load_sharing_setup(MongooseHttpServer &server);
 
 extern void web_server_event(JsonDocument &event);
 
@@ -65,7 +63,7 @@ bool isAuthenticated(MongooseHttpServerRequest *request, bool *usedCookie = null
 
 void dumpRequest(MongooseHttpServerRequest *request);
 
-void handleLogin(MongooseHttpServerRequest *request);
+void handleLogin(MongooseHttpServerRequest *request, bool isHttps = false);
 void handleLogout(MongooseHttpServerRequest *request);
 
 // Shared by the destructive-actuator handlers in web_server.cpp and the
