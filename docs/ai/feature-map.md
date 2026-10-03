@@ -13,7 +13,7 @@ relative to the configured base topic (see [mqtt.md](../mqtt.md)).
 |---|---|---|---|---|---|---|
 | Charge state & mode (Auto/Eco/On/Off), manual override | `evse_man.*`, `manual.*` | `/` | `default_state`, `pause_uses_disabled` | `/status`, `/ws` (live stream), `/override`, `/claims` | `override/set`, `status` | [dashboard.md](../user/dashboard.md) |
 | Charge rate / current control, charger hardware config | `evse_man.*`, `evse_monitor.*` | `/`, `/settings/evse` | `max_current_soft`, `service`, `scale`, `offset` | `/config`, `/override` | `charge_rate/set` | [dashboard.md](../user/dashboard.md) |
-| Local display & LEDs (character LCD, RGB pixels) | `lcd.*`, `led_manager.*` | `/settings/evse` | `lcd_backlight_timeout`, `led_brightness` | `/config` | — | [settings.md](../user/settings.md) |
+| Local display & LEDs (character LCD, RGB pixels) | `lcd.*`, `led_manager.*` | `/settings/display` (gated on `lcd_type`), `/settings/evse` | `lcd_type`, `lcd_backlight_timeout`, `led_brightness` | `/config` | — | [settings.md](../user/settings.md) |
 | Session limits (energy/time/SOC/range) | `limit.*` | `/` (limit pills) | `limit_default_type`, `limit_default_value` | `/limit` | `limit/set` | [dashboard.md](../user/dashboard.md) |
 | Boost (charge to a time/energy/SoC/range target, then release) | `boost.*`, `charge_threshold.*` | — | — | `/boost` | `boost/set` | — |
 | First-run setup wizard | — (UI only) | `/` until passed | `wizard_passed` | `/config` | — | [getting-started.md](../user/getting-started.md) |
@@ -39,6 +39,7 @@ relative to the configured base topic (see [mqtt.md](../mqtt.md)).
 | SSL certificates | `certificates.*` | `/settings/certificates` | `*_certificate_id` | `/certificates` | — | [settings.md](../user/settings.md) |
 | RAPI terminal / debug console, OpenEVSE Labs switch | `web_server.*` | `/settings/terminal` | `labs_enabled` | `/r`, WS consoles | — | [settings.md](../user/settings.md) |
 | On-device TFT display | `lcd_lvgl.*`, `src/lvgl_tft/` | `/settings/display` (gated on `tft_theme`) | `tft_*` | `/config` | — | [settings.md](../user/settings.md) |
+| Crash report upload (one click: the browser sends the decoded summary to the broker; 16 MB boards) | `crash_report.*`, `crash_payload.*`, `crash_redact.*`, `crash_report_id.*`, `diagnostics.*` | `/settings/terminal` (paired GUI PR) | — (broker URL is compiled in, `CRASH_BROKER_URL`; build gate `ENABLE_CRASH_UPLOAD`) | `/debug/crash`, `/debug/crash/raw`, `/debug/crash/report`, `/debug/crash/identity` | — | [troubleshooting.md](../user/troubleshooting.md) |
 | Charger info / diagnostics | `evse_monitor.*` | `/monitoring`, `/settings/about` | — | `/status`, `/config` | telemetry topics | [monitoring.md](../user/monitoring.md) |
 
 ## Maintenance
