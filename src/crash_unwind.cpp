@@ -119,3 +119,16 @@ size_t crash_unwind_xtensa(const uint8_t *stack, uint32_t vaddr, uint32_t size,
   *corrupted = bad;
   return n;
 }
+
+bool crash_unwind_extends(const uint32_t *deep, size_t depth,
+                          const uint32_t *idf, uint32_t idfDepth,
+                          uint32_t idfCap)
+{
+  if(idfDepth > idfCap) {
+    idfDepth = idfCap;
+  }
+  if(depth <= idfDepth) {
+    return false;
+  }
+  return 0 == memcmp(deep, idf, idfDepth * sizeof(uint32_t));
+}

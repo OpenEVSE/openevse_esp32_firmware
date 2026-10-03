@@ -201,3 +201,32 @@ TEST_CASE("rejects a missing TCB, a bad magic and out-of-bounds segments") {
 
   CHECK_FALSE(crash_unwind_find_stack(e.img.data(), 20, 0x3ffc0000, &stack, &vaddr, &size));
 }
+
+// --- choosing between the IDF's list and the deep one ------------------------
+
+TEST_CASE("the deep walk is used when it extends the IDF's list") {
+  uint32_t idf[16], deep[30];
+  for(uint32_t i = 0; i < 30; i++) deep[i] = 0x400d0000 + i;
+  for(uint32_t i = 0; i < 16; i++) idf[i] = deep[i];
+  CHECK(crash_unwind_extends(deep, 30, idf, 16, 16));
+}
+
+TEST_CASE("an IDF depth past its own array is clamped, not compared") {
+  // The IDF's walk starts its count at 1 and then allows 16 more, so a long
+  // stack reports depth 17 with nothing real in a 17th slot.
+  uint32_t idf[17], deep[30];
+  for(uint32_t i = 0; i < 30; i++) deep[i] = 0x400d0000 + i;
+  for(uint32_t i = 0; i < 16; i++) idf[i] = deep[i];
+  idf[16] = 17;   // what really sits there: the depth field
+  CHECK(crash_unwind_extends(deep, 30, idf, 17, 16));
+}
+
+TEST_CASE("a deep walk that disagrees or is no longer is not used") {
+  uint32_t idf[16], deep[30];
+  for(uint32_t i = 0; i < 30; i++) deep[i] = 0x400d0000 + i;
+  for(uint32_t i = 0; i < 16; i++) idf[i] = deep[i];
+  CHECK_FALSE(crash_unwind_extends(deep, 16, idf, 16, 16));
+  CHECK_FALSE(crash_unwind_extends(deep, 5, idf, 16, 16));
+  idf[3] = 0x400e0000;
+  CHECK_FALSE(crash_unwind_extends(deep, 30, idf, 16, 16));
+}

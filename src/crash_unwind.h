@@ -40,4 +40,11 @@ size_t crash_unwind_xtensa(const uint8_t *stack, uint32_t vaddr, uint32_t size,
                            crash_pc_ok_fn pc_ok, uint32_t *out, size_t max,
                            bool *corrupted);
 
+// Should the deep walk replace the IDF's list? Only when it is longer and
+// matches it frame for frame. `idfDepth` is clamped to `idfCap`, the IDF's
+// array size: its walk can report one frame more than the array holds.
+bool crash_unwind_extends(const uint32_t *deep, size_t depth,
+                          const uint32_t *idf, uint32_t idfDepth,
+                          uint32_t idfCap);
+
 #endif // _OPENEVSE_CRASH_UNWIND_H

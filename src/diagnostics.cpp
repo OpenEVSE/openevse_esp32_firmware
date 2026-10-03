@@ -414,10 +414,9 @@ void diagnostics_coredump_json(JsonDocument &doc)
     bool deepCorrupted = true;
     size_t depth = deep ? diag_coredump_deep_bt(s->exc_tcb, deep, DIAG_COREDUMP_BT_MAX,
                                                 &deepCorrupted) : 0;
-    bool useDeep = depth > s->exc_bt_info.depth;
-    for(uint32_t i = 0; useDeep && i < s->exc_bt_info.depth; i++) {
-      useDeep = deep[i] == s->exc_bt_info.bt[i];
-    }
+    const uint32_t idfCap = sizeof(s->exc_bt_info.bt) / sizeof(s->exc_bt_info.bt[0]);
+    bool useDeep = crash_unwind_extends(deep, depth, s->exc_bt_info.bt,
+                                        s->exc_bt_info.depth, idfCap);
 
     JsonArray bt = doc.createNestedArray("bt");
     if(useDeep) {
