@@ -18,13 +18,15 @@ on:
 # Serialize runs per PR so a quick succession of pushes can't race to update
 # the shared flash-size PR comment (a slow, older run finishing last used to
 # clobber a newer run's report). A new push cancels the in-flight run for the
-# same PR. Only pull_request runs are cancelled: master pushes and tag builds
-# get a unique group per ref and are never cancelled, so a release run is never
+# same PR. Only pull_request runs are grouped: master pushes and tag builds get
+# a unique group per run (not per ref -- a shared group would make GitHub drop
+# the older *pending* run even without cancel-in-progress, skipping a commit's
+# build), so they are never cancelled or replaced and a release run is never
 # interrupted by a later commit. build_gui.yml is a separate workflow and is
 # unaffected; its bot commit simply starts a fresh run here that supersedes the
 # stale one.
 concurrency:
-  group: build-${{ github.event.pull_request.number || github.ref }}
+  group: build-${{ github.event_name == 'pull_request' && github.event.pull_request.number || github.run_id }}
   cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 jobs:
