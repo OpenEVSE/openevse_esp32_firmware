@@ -676,7 +676,9 @@ class EvseMonitor : public MicroTasks::Task
     }
     // False once a $S0 write has actually been rejected with $NK this
     // session - see the comment on _lcd_type_supported. Starts true: there
-    // is no way to know without trying.
+    // is no way to know without trying - except on LVGL-TFT builds, where
+    // the TFT stands in for the character LCD and this starts false so
+    // /config never offers a backlight type for a display the unit lacks.
     bool isLcdTypeSupported() {
       return _lcd_type_supported;
     }
