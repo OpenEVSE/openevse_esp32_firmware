@@ -1640,6 +1640,14 @@ void handleAddRFID(MongooseHttpServerRequest *request) {
     return;
   }
 
+  if(!config_rfid_enabled()) {
+    response->setCode(400);
+    response->addHeader("Access-Control-Allow-Origin", "*");
+    response->print("{\"msg\":\"RFID is not enabled, add it in Charge Manager first\"}");
+    request->send(response);
+    return;
+  }
+
   response->setCode(200);
   response->addHeader("Access-Control-Allow-Origin", "*");
   response->print("{\"msg\":\"Waiting for badge\"}");
@@ -1757,7 +1765,7 @@ void handleCableTemp(MongooseHttpServerRequest *request) {
       if(evse.isCableTempValid(i)) {
         src["temperature"] = evse.getCableTemp(i);
       }
-      if(evse.isCableTempConfigKnown()) {
+      if(evse.isCableTempConfigValid(i)) {
         src["r25"] = evse.getCableTempR25(i);
         src["beta"] = evse.getCableTempBeta(i);
         src["offset_c10"] = evse.getCableTempOffsetC10(i);
