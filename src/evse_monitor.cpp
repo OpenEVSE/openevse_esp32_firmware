@@ -48,6 +48,10 @@ extern uint32_t heartbeat_current_cfg;
 #define EVSE_MONITOR_SETTINGS_OFFSET        7
 #endif // !EVSE_MONITOR_SETTINGS_OFFSET
 
+#ifndef EVSE_MONITOR_CABLE_TEMP_MAX_AGE_MS
+#define EVSE_MONITOR_CABLE_TEMP_MAX_AGE_MS  120000UL
+#endif
+
 #ifndef EVSE_HEATBEAT_INTERVAL
 #define EVSE_HEATBEAT_INTERVAL              5
 #endif
@@ -211,14 +215,24 @@ EvseMonitor::EvseMonitor(OpenEVSEClass &openevse) :
   _relay_recovery_in_flight(false)
 #ifdef ENABLE_CABLE_TEMP
   ,_cable_temp_known(false)
+  ,_cable_temp_last_success(0)
   ,_cable_temp_commanded_known(false)
   ,_cable_temp_commanded(false)
   ,_cable_temp_cfg_known(false)
-  ,_cable_temp_cfg_refresh(0)
-  ,_cable_temp_cfg_responses(0)
-  ,_cable_temp_cfg_success(false)
 #endif // ENABLE_CABLE_TEMP
 {
+#ifdef ENABLE_CABLE_TEMP
+  for(uint8_t i = 0; i < OPENEVSE_CABLE_TEMP_SOURCE_COUNT; i++) {
+    _cable_temp_status[i] = OPENEVSE_CABLE_TEMP_STATUS_NOT_INSTALLED;
+    _cable_temp_cfg_valid[i] = false;
+    _cable_temp_cfg_refresh[i] = 0;
+    _cable_temp_pin[i] = OPENEVSE_CABLE_TEMP_PIN_NONE;
+    _cable_temp_r25[i] = 0;
+    _cable_temp_beta[i] = 0;
+    _cable_temp_offset_c10[i] = 0;
+    _cable_temp_panic_c10[i] = 0;
+  }
+#endif // ENABLE_CABLE_TEMP
 }
 
 EvseMonitor::~EvseMonitor()
@@ -267,11 +281,16 @@ void EvseMonitor::evseBoot(const char *firmware)
   _settings_known = false;
 #ifdef ENABLE_CABLE_TEMP
   _cable_temp_known = false;
+  _cable_temp_last_success = 0;
   _cable_temp_commanded_known = false;
   _cable_temp_cfg_known = false;
   for(uint8_t i = 0; i < OPENEVSE_CABLE_TEMP_SOURCE_COUNT; i++) {
     _cable_temps[i].invalidate();
     _cable_temp_status[i] = OPENEVSE_CABLE_TEMP_STATUS_NOT_INSTALLED;
+    _cable_temp_cfg_valid[i] = false;
+    // Supersede any $GN idx reply still in flight from the previous
+    // controller, so it cannot mark this source valid with stale calibration.
+    _cable_temp_cfg_refresh[i]++;
     _cable_temp_pin[i] = OPENEVSE_CABLE_TEMP_PIN_NONE;
     // _cable_temp_cfg_known above already keeps these from being served
     // until a fresh readCableTempConfig() actually fills them back in, but
@@ -438,6 +457,10 @@ unsigned long EvseMonitor::loop(MicroTasks::WakeReason reason)
   DBUG(", _count = ");
   DBUGLN(_count);
 
+#ifdef ENABLE_CABLE_TEMP
+  expireCableTemperatures();
+#endif // ENABLE_CABLE_TEMP
+
   if(_relay_recovery_in_flight) {
     // A stuck-relay recovery ($FK) is in flight and can hold the RAPI queue
     // for up to ~30s on the controller side - every periodic poll below
@@ -501,6 +524,19 @@ unsigned long EvseMonitor::loop(MicroTasks::WakeReason reason)
     // over-temperature), so they ride the same cadence as the enclosure
     // sensors rather than the slower settings poll.
     readCableTemperatures();
+    // A failed boot-time or targeted configuration read leaves only that
+    // source invalid. Retry invalid sources on this bounded cadence without
+    // hiding successful siblings. Gated on _cable_temp_known - a live $GN has
+    // succeeded, so the controller has the feature - because one without it
+    // NAKs every $GN idx and would otherwise be retried (4 RAPI round trips,
+    // on the busiest tick) forever.
+    if(_count > 0 && _cable_temp_known && !_cable_temp_cfg_known) {
+      for(uint8_t source = 0; source < OPENEVSE_CABLE_TEMP_SOURCE_COUNT; source++) {
+        if(!_cable_temp_cfg_valid[source]) {
+          readCableTempConfig(source);
+        }
+      }
+    }
 #endif // ENABLE_CABLE_TEMP
   }
 
@@ -1344,6 +1380,22 @@ void EvseMonitor::readRelayHealth()
 }
 
 #ifdef ENABLE_CABLE_TEMP
+void EvseMonitor::expireCableTemperatures()
+{
+  // Called every loop, before the relay-recovery early return, so cached
+  // readings stop being served once they reach the max age even when polls
+  // are failing, delayed or paused - not only when a failed callback happens
+  // to land after the deadline.
+  if(_cable_temp_known &&
+     (long)(millis() - (_cable_temp_last_success + EVSE_MONITOR_CABLE_TEMP_MAX_AGE_MS)) >= 0) {
+    _cable_temp_known = false;
+    for(uint8_t i = 0; i < OPENEVSE_CABLE_TEMP_SOURCE_COUNT; i++) {
+      _cable_temps[i].invalidate();
+      _cable_temp_status[i] = OPENEVSE_CABLE_TEMP_STATUS_NOT_INSTALLED;
+    }
+  }
+}
+
 void EvseMonitor::readCableTemperatures()
 {
   // $GN - cable NTC thermistor temperatures (requires the controller's
@@ -1362,6 +1414,7 @@ void EvseMonitor::readCableTemperatures()
     }
 
     _cable_temp_known = true;
+    _cable_temp_last_success = millis();
 
     const double temps[OPENEVSE_CABLE_TEMP_SOURCE_COUNT] = { ev1, ev2, in1, in2 };
     const uint8_t states[OPENEVSE_CABLE_TEMP_SOURCE_COUNT] = { ev1_status, ev2_status, in1_status, in2_status };
@@ -1384,42 +1437,13 @@ void EvseMonitor::readCableTemperatures()
 
 void EvseMonitor::readCableTempConfig()
 {
-  // $GN idx, once per source. Configuration only changes when something
-  // writes it, so this is called on boot and after a successful write rather
-  // than polled - four extra RAPI round trips a minute would be wasteful.
+  // $GN idx, once per source. Each source has its own validity and generation
+  // so a partial failure cannot expose old calibration or hide successful
+  // siblings while retries are in progress.
   _cable_temp_cfg_known = false;
-  const uint32_t refresh = ++_cable_temp_cfg_refresh;
-  _cable_temp_cfg_responses = 0;
-  _cable_temp_cfg_success = true;
-
   for(uint8_t source = 0; source < OPENEVSE_CABLE_TEMP_SOURCE_COUNT; source++)
   {
-    _openevse.getCableTemperatureConfig(source, [this, source, refresh](int ret, uint8_t pin,
-        uint32_t r25, uint32_t beta, int32_t offset_c10, int32_t panic_c10)
-    {
-      // Ignore callbacks from a superseded refresh: they must not make a
-      // newer, still-partial snapshot visible.
-      if(refresh != _cable_temp_cfg_refresh) {
-        return;
-      }
-
-      _cable_temp_cfg_responses++;
-      if(RAPI_RESPONSE_OK == ret) {
-        _cable_temp_pin[source] = pin;
-        _cable_temp_r25[source] = r25;
-        _cable_temp_beta[source] = beta;
-        _cable_temp_offset_c10[source] = offset_c10;
-        _cable_temp_panic_c10[source] = panic_c10;
-        DBUGF("cable temp cfg %u: pin=%u r25=%u beta=%u offset=%d panic=%d",
-              source, pin, r25, beta, offset_c10, panic_c10);
-      } else {
-        _cable_temp_cfg_success = false;
-      }
-
-      if(OPENEVSE_CABLE_TEMP_SOURCE_COUNT == _cable_temp_cfg_responses) {
-        _cable_temp_cfg_known = _cable_temp_cfg_success;
-      }
-    });
+    readCableTempConfig(source);
   }
 }
 
@@ -1429,9 +1453,16 @@ void EvseMonitor::readCableTempConfig(uint8_t source)
     return;
   }
 
-  _openevse.getCableTemperatureConfig(source, [this, source](int ret, uint8_t pin,
+  _cable_temp_cfg_valid[source] = false;
+  _cable_temp_cfg_known = false;
+  const uint32_t refresh = ++_cable_temp_cfg_refresh[source];
+
+  _openevse.getCableTemperatureConfig(source, [this, source, refresh](int ret, uint8_t pin,
       uint32_t r25, uint32_t beta, int32_t offset_c10, int32_t panic_c10)
   {
+    if(refresh != _cable_temp_cfg_refresh[source]) {
+      return;
+    }
     if(RAPI_RESPONSE_OK != ret) {
       return;
     }
@@ -1440,6 +1471,14 @@ void EvseMonitor::readCableTempConfig(uint8_t source)
     _cable_temp_beta[source] = beta;
     _cable_temp_offset_c10[source] = offset_c10;
     _cable_temp_panic_c10[source] = panic_c10;
+    _cable_temp_cfg_valid[source] = true;
+    _cable_temp_cfg_known = true;
+    for(uint8_t i = 0; i < OPENEVSE_CABLE_TEMP_SOURCE_COUNT; i++) {
+      if(!_cable_temp_cfg_valid[i]) {
+        _cable_temp_cfg_known = false;
+        break;
+      }
+    }
     DBUGF("cable temp cfg %u: pin=%u r25=%u beta=%u offset=%d panic=%d",
           source, pin, r25, beta, offset_c10, panic_c10);
   });
