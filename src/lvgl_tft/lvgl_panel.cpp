@@ -20,12 +20,6 @@
 #else
 #include <TFT_eSPI.h>
 #include <esp_heap_caps.h>
-// DBUGF/DEBUG_PORT, so panel diagnostics cannot land on the RAPI UART: this
-// env sets RAPI_PORT=Serial and DEBUG_PORT=Serial2 (openevse_wifi_tft_v1_dev
-// has them the other way round, which is why a raw Serial.printf here looks
-// harmless in dev and corrupts the controller link in the release build).
-// debug.h also redirects DEBUG_PORT to the SerialDebug StreamSpy, so this
-// output reaches /debug/console as well as the UART.
 #include "debug.h"
 #endif
 
