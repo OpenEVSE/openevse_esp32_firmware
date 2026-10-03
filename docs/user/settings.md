@@ -59,9 +59,16 @@ hardware is present.
   broker and servers.
 - **[Developer Tools](screenshots/settings-terminal-dark-desktop.png)** — a
   live RAPI terminal to the controller and the gateway debug console. RAPI
-  command reference: [rapi.md](../rapi.md).
+  command reference: [rapi.md](../rapi.md). Its **OpenEVSE Labs** switch
+  (`labs_enabled`, off by default) reveals in-development features — Load
+  Sharing, RFID tag names, and heap fragmentation probes — and lists them with
+  links once on. It is stored on the charger, so it applies to every browser.
 - **[Display](screenshots/settings-display-dark-desktop.png)** — theme,
   brightness, and sleep timeout for the on-device TFT touchscreen (only shown
-  on TFT-equipped hardware).
+  on TFT-equipped hardware). On chargers with the 2-line character LCD
+  instead: the backlight type (RGB, or monochrome for a JuiceBox v2
+  conversion) and the same idle timeout, which switches the LCD backlight
+  off; it stays lit while charging or in a fault, and any state change or
+  button press lights it again. "Never" keeps it always on.
 - **[About](screenshots/settings-about-dark-desktop.png)** — versions, device
   info, and diagnostics.
