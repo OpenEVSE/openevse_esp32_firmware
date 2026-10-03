@@ -20,6 +20,13 @@
 #else
 #include <TFT_eSPI.h>
 #include <esp_heap_caps.h>
+// DBUGF/DEBUG_PORT, so panel diagnostics cannot land on the RAPI UART: this
+// env sets RAPI_PORT=Serial and DEBUG_PORT=Serial2 (openevse_wifi_tft_v1_dev
+// has them the other way round, which is why a raw Serial.printf here looks
+// harmless in dev and corrupts the controller link in the release build).
+// debug.h also redirects DEBUG_PORT to the SerialDebug StreamSpy, so this
+// output reaches /debug/console as well as the UART.
+#include "debug.h"
 #endif
 
 #include "lvgl_panel.h"
@@ -442,9 +449,13 @@ static bool lvgl_panel_prepare_begin(size_t buf_bytes)
 
   buf1 = (lv_color_t *)heap_caps_malloc(buf_bytes, MALLOC_CAP_INTERNAL | MALLOC_CAP_8BIT);
   if(buf1 == nullptr) {
-    Serial.printf("[panel] FATAL: draw-buffer alloc failed (%u B internal); largest free block=%u\n",
-                  (unsigned)buf_bytes,
-                  (unsigned)heap_caps_get_largest_free_block(MALLOC_CAP_INTERNAL));
+    // DEBUG_PORT.printf rather than DBUGF: DBUGF compiles to nothing without
+    // ENABLE_DEBUG, which the release openevse_wifi_tft_v1 does not set, and
+    // this is the only record of why the panel never came up - lvgl_panel_begin()
+    // just returns false and LcdTask leaves _displayOk clear without logging.
+    DEBUG_PORT.printf("[panel] FATAL: draw-buffer alloc failed (%u B internal); largest free block=%u\n",
+                      (unsigned)buf_bytes,
+                      (unsigned)heap_caps_get_largest_free_block(MALLOC_CAP_INTERNAL));
     return false;
   }
 
@@ -616,9 +627,10 @@ bool lvgl_panel_begin()
                 lvgl_panel_get_display_mode_name(display_mode),
                 SCREEN_W, SCREEN_H, (unsigned)buf_bytes);
 #else
-  Serial.printf("[panel] display up %ux%u, 1 buf %u B internal, free internal heap=%u\n",
-                SCREEN_W, SCREEN_H, (unsigned)buf_bytes,
-                (unsigned)heap_caps_get_free_size(MALLOC_CAP_INTERNAL));
+  // n.b. DBUGF appends its own newline
+  DBUGF("[panel] display up %ux%u, 1 buf %u B internal, free internal heap=%u",
+        SCREEN_W, SCREEN_H, (unsigned)buf_bytes,
+        (unsigned)heap_caps_get_free_size(MALLOC_CAP_INTERNAL));
 #endif
   return true;
 }
