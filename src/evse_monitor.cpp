@@ -175,7 +175,13 @@ EvseMonitor::EvseMonitor(OpenEVSEClass &openevse) :
   _count(0),
   _heartbeat(false),
   _firmware_version(""),
+  // A TFT gateway replaces the character LCD, so the controller's $S0 may
+  // well be accepted but sets a backlight type for a panel that isn't there
+#ifdef ENABLE_SCREEN_LVGL_TFT
+  _lcd_type_supported(false),
+#else
   _lcd_type_supported(true),
+#endif
 #ifdef ENABLE_MCP9808
   _mcp9808(),
 #endif

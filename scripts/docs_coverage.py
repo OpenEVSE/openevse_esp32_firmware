@@ -24,7 +24,7 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parent.parent
 
 # Internal plumbing, not user-facing features.
-IGNORED_OPTIONS = {"flags", "flags_changed"}
+IGNORED_OPTIONS = {"flags", "flags_changed", "flags2", "flags2_changed"}
 
 
 def extract_config_options():
