@@ -142,17 +142,30 @@ void handleCertificatesPost(MongooseHttpServerRequest *request, MongooseHttpServ
   }
 }
 
+/**
+ * Delete an explicit ID: respond 200 for removal, 404 for no live match, or 500
+ * for a reported transaction error. A collection DELETE receives 405.
+ * @param hasCertificate Distinguishes an ID route, including UINT64_MAX, from the collection.
+ */
 void handleCertificatesDelete(MongooseHttpServerRequest *request, MongooseHttpServerResponseStream *response,
                               bool hasCertificate, uint64_t certificate)
 {
   if(hasCertificate)
   {
-    if(certs.removeCertificate(certificate)) {
-      response->setCode(200);
-      response->print("{\"msg\":\"done\"}");
-    } else {
-      response->setCode(404);
-      response->print("{\"msg\":\"Not found\"}");
+    switch(certs.removeCertificate(certificate))
+    {
+      case CertificateStore::RemoveResult::Removed:
+        response->setCode(200);
+        response->print("{\"msg\":\"done\"}");
+        break;
+      case CertificateStore::RemoveResult::NotFound:
+        response->setCode(404);
+        response->print("{\"msg\":\"Not found\"}");
+        break;
+      case CertificateStore::RemoveResult::Error:
+        response->setCode(500);
+        response->print("{\"msg\":\"Could not remove certificate\"}");
+        break;
     }
   } else {
     response->setCode(405);
