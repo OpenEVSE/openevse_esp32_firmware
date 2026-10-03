@@ -449,11 +449,7 @@ static bool lvgl_panel_prepare_begin(size_t buf_bytes)
 
   buf1 = (lv_color_t *)heap_caps_malloc(buf_bytes, MALLOC_CAP_INTERNAL | MALLOC_CAP_8BIT);
   if(buf1 == nullptr) {
-    // DEBUG_PORT.printf rather than DBUGF: DBUGF compiles to nothing without
-    // ENABLE_DEBUG, which the release openevse_wifi_tft_v1 does not set, and
-    // this is the only record of why the panel never came up - lvgl_panel_begin()
-    // just returns false and LcdTask leaves _displayOk clear without logging.
-    DEBUG_PORT.printf("[panel] FATAL: draw-buffer alloc failed (%u B internal); largest free block=%u\n",
+    DBUGF("[panel] FATAL: draw-buffer alloc failed (%u B internal); largest free block=%u\n",
                       (unsigned)buf_bytes,
                       (unsigned)heap_caps_get_largest_free_block(MALLOC_CAP_INTERNAL));
     return false;
