@@ -2,6 +2,7 @@
 #define _LOADSHARING_TYPES_H
 
 #include <Arduino.h>
+#include <ArduinoJson.h>
 #include <vector>
 
 // Forward declarations
@@ -10,6 +11,26 @@ class LoadSharingPeer;
 class LoadSharingAllocation;
 class LoadSharingGroupState;
 struct DiscoveredPeer;
+
+/**
+ * @brief Coerce a loadsharing_role JSON value to bool.
+ *
+ * Accepts both the current wire format (a plain bool) and the pre-alpha
+ * string encoding ("", "controller", "member") so a legacy-spelled value --
+ * already persisted on a device from before that field became a bool, or
+ * sent by an old client/peer -- normalizes to the exact role it always
+ * meant. This matters because ArduinoJson's JsonVariant::as<bool>() returns
+ * true for any string value (including "" and "controller"), so reading a
+ * legacy value with a plain .as<bool>() would read every existing
+ * controller as a member.
+ *
+ * @param v The loadsharing_role field's JsonVariant (may be absent/null).
+ * @return true for member, false for controller.
+ *
+ * Defined in app_config.cpp, not loadsharing_types.cpp -- see the comment
+ * there.
+ */
+bool loadSharingRoleFromJson(JsonVariant v);
 
 /**
  * @brief Minimal peer status snapshot used for load sharing allocation decisions.
