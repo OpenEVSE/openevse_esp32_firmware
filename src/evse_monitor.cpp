@@ -263,6 +263,7 @@ void EvseMonitor::evseBoot(const char *firmware)
   // it has to go back to false until this controller has answered $GE, not
   // keep vouching for the previous one's settings word.
   _relay_health_known = false;
+  _lcd_type_supported = true;
   _settings_known = false;
 #ifdef ENABLE_CABLE_TEMP
   _cable_temp_known = false;
@@ -673,12 +674,20 @@ void EvseMonitor::setPilot(long amps, bool force, std::function<void(int ret)> c
 
   _openevse.setCurrentCapacity(amps, false, [this, callback](int ret, long pilot)
   {
-    if(RAPI_RESPONSE_OK == ret) {
-      _pilot = pilot;
-      _settings_changed.Trigger();
-      StaticJsonDocument<128> event;
-      event["pilot"] = _pilot;
-      event_send(event);
+    // The controller echoes the capacity it actually applied, on $NK as well
+    // as $OK (it clamps to the EEPROM cap, and refuses raises while over
+    // temperature). Adopt that value either way, and only wake the manager
+    // when it changed: waking on every reply while the controller keeps
+    // answering the same clamp turned into a retry loop at the RAPI
+    // round-trip rate.
+    if((RAPI_RESPONSE_OK == ret || RAPI_RESPONSE_NK == ret) && pilot > 0) {
+      if(pilot != _pilot) {
+        _pilot = pilot;
+        _settings_changed.Trigger();
+        StaticJsonDocument<128> event;
+        event["pilot"] = _pilot;
+        event_send(event);
+      }
     }
 
     if(callback) {
@@ -1004,7 +1013,13 @@ void EvseMonitor::setMaxConfiguredCurrent(long amps)
   {
     if(RAPI_RESPONSE_OK == ret)
     {
-      _max_configured_current = amps;
+      // Record what the controller applied, not what was asked for. It
+      // clamps to its own limits and echoes the result; recording `amps`
+      // left the manager targeting a current the controller kept refusing.
+      if(pilot != amps) {
+        DBUGF("Max configured current clamped by controller: asked %ld, got %ld", amps, pilot);
+      }
+      _max_configured_current = pilot;
       DBUGVAR(_max_configured_current);
 
       _pilot = pilot;

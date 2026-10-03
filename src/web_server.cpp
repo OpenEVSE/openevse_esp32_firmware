@@ -28,6 +28,9 @@ typedef const __FlashStringHelper *fstr_t;
 #include "emonesp.h"
 #include "web_server.h"
 #include "diagnostics.h"
+#include "crash_report.h"
+#include "crash_report_id.h"
+#include "crash_payload.h"
 #ifdef ENABLE_TSDB
 #include "tsdb_energy_logger.h"
 #endif
@@ -1637,6 +1640,14 @@ void handleAddRFID(MongooseHttpServerRequest *request) {
     return;
   }
 
+  if(!config_rfid_enabled()) {
+    response->setCode(400);
+    response->addHeader("Access-Control-Allow-Origin", "*");
+    response->print("{\"msg\":\"RFID is not enabled, add it in Charge Manager first\"}");
+    request->send(response);
+    return;
+  }
+
   response->setCode(200);
   response->addHeader("Access-Control-Allow-Origin", "*");
   response->print("{\"msg\":\"Waiting for badge\"}");
@@ -1841,121 +1852,230 @@ void handleCableTemp(MongooseHttpServerRequest *request) {
 
 String delayTimer = "0 0 0 0";
 
+static const __FlashStringHelper *rapiErrorName(int ret)
+{
+  return
+    RAPI_RESPONSE_QUEUE_FULL == ret ? F("RAPI_RESPONSE_QUEUE_FULL") :
+    RAPI_RESPONSE_BUFFER_OVERFLOW == ret ? F("RAPI_RESPONSE_BUFFER_OVERFLOW") :
+    RAPI_RESPONSE_TIMEOUT == ret ? F("RAPI_RESPONSE_TIMEOUT") :
+    RAPI_RESPONSE_OK == ret ? F("RAPI_RESPONSE_OK") :
+    RAPI_RESPONSE_NK == ret ? F("RAPI_RESPONSE_NK") :
+    RAPI_RESPONSE_INVALID_RESPONSE == ret ? F("RAPI_RESPONSE_INVALID_RESPONSE") :
+    RAPI_RESPONSE_CMD_TOO_LONG == ret ? F("RAPI_RESPONSE_CMD_TOO_LONG") :
+    RAPI_RESPONSE_BAD_CHECKSUM == ret ? F("RAPI_RESPONSE_BAD_CHECKSUM") :
+    RAPI_RESPONSE_BAD_SEQUENCE_ID == ret ? F("RAPI_RESPONSE_BAD_SEQUENCE_ID") :
+    RAPI_RESPONSE_ASYNC_EVENT == ret ? F("RAPI_RESPONSE_ASYNC_EVENT") :
+    RAPI_RESPONSE_BLOCKED == ret ? F("RAPI_RESPONSE_BLOCKED") :
+    F("UNKNOWN");
+}
+
+static const char RAPI_PAGE_HEAD[] PROGMEM =
+  "<html><font size='20'><font color=006666>Open</font><b>EVSE</b></font><p>"
+  "<b>Open Source Hardware</b><p>RAPI Command Sent<p>Common Commands:<p>"
+  "Set Current - $SC XX<p>Set Service Level - $SL 1 - $SL 2 - $SL A<p>"
+  "Get Real-time Current - $GG<p>Get Temperatures - $GP<p>"
+  "<p>"
+  "<form method='post' action='r'><label><b><i>RAPI Command:</b></i></label>"
+  "<input id='rapi' name='rapi' length=32><p><input type='submit'></form>";
+
+static const char RAPI_PAGE_TAIL[] PROGMEM =
+  "<script type='text/javascript'>document.getElementById('rapi').focus();</script>"
+  "<p></html>\r\n\r\n";
+
+// What a /r request needs once the controller has answered. Heap-allocated
+// and handed to the RAPI callback as one pointer: RapiSender stores handlers
+// inline in a few words, so the request cannot be captured piecemeal.
+struct RapiRequest
+{
+  MongooseHttpServerRequest *request;   // NULL once the client has gone away
+  MongooseHttpServerResponseStream *response;
+  bool json;
+  String rapi;
+};
+
+// /r requests waiting on the controller. Mongoose deletes the request when
+// the client closes, so the callback must not touch one that is no longer
+// here: handleRapiClose() unhooks it and rapiRespond() then just tidies up.
+// One slot per RapiSender queue entry is the most that can ever be waiting.
+static RapiRequest *rapiInFlight[RAPI_MAX_COMMANDS] = {};
+
+static bool rapiTrack(RapiRequest *req)
+{
+  for(auto &slot : rapiInFlight) {
+    if(nullptr == slot) {
+      slot = req;
+      return true;
+    }
+  }
+  return false;
+}
+
+static void rapiUntrack(RapiRequest *req)
+{
+  for(auto &slot : rapiInFlight) {
+    if(req == slot) {
+      slot = nullptr;
+    }
+  }
+}
+
+static void handleRapiClose(MongooseHttpServerRequest *request)
+{
+  for(auto &slot : rapiInFlight) {
+    if(slot && slot->request == request) {
+      DBUGF("Client gone before RAPI reply: %s", slot->rapi.c_str());
+      slot->request = nullptr;
+    }
+  }
+}
+
+// Finish a /r request: render the controller's answer (or the failure) as
+// JSON or as the legacy HTML page, send it, and release the context.
+static void rapiRespond(RapiRequest *req, int ret, const String &rapiString)
+{
+  rapiUntrack(req);
+  if(nullptr == req->request) {
+    // Nobody left to answer; the response was never handed to the request.
+    delete req->response;
+    delete req;
+    return;
+  }
+
+  int code = 200;
+  String page;
+
+  if(!req->json) {
+    page = FPSTR(RAPI_PAGE_HEAD);
+  }
+
+  if(RAPI_RESPONSE_OK == ret || RAPI_RESPONSE_NK == ret)
+  {
+    if(req->json) {
+      // Through the serializer, not string concatenation: the command is
+      // caller-supplied and a quote in it must not escape the value.
+      DynamicJsonDocument doc(512);
+      doc["cmd"] = req->rapi;
+      doc["ret"] = rapiString;
+      serializeJson(doc, page);
+    } else {
+      page += html_escape(req->rapi);
+      page += F("<p>&gt;");
+      page += html_escape(rapiString);
+    }
+  }
+  else
+  {
+    if(req->json) {
+      DynamicJsonDocument doc(512);
+      doc["cmd"] = req->rapi;
+      doc["error"] = rapiErrorName(ret);
+      serializeJson(doc, page);
+    } else {
+      page += html_escape(req->rapi);
+      page += F("<p><strong>Error:</strong>");
+      page += rapiErrorName(ret);
+    }
+    code = RAPI_RESPONSE_BLOCKED == ret ? 400 : 500;
+  }
+
+  if(!req->json) {
+    page += FPSTR(RAPI_PAGE_TAIL);
+  }
+
+  req->response->setCode(code);
+  req->response->print(page);
+  req->request->send(req->response);
+  delete req;
+}
+
+// -------------------------------------------------------------------
+// Send an arbitrary RAPI command to the controller.
+// url: /r, /rapi   params: rapi=<command>  json=1 for a JSON reply
+//
+// The command goes through the async RapiSender queue and the HTTP response
+// is deferred to its completion callback, the same way /relay/reset and
+// /relay/recovery work. The old sendCmdSync() spun on this task without
+// polling Mongoose or feeding the watchdog, so anything long already in the
+// queue ahead of it - a stuck-relay recovery ($FK) can take 30 s - held the
+// whole server and then tripped the 5 s task watchdog.
+// -------------------------------------------------------------------
 void
 handleRapi(MongooseHttpServerRequest *request) {
   bool json = isPositive(request, "json");
-
-  int code = 200;
 
   MongooseHttpServerResponseStream *response;
   if(false == requestPreProcess(request, response, json ? CONTENT_TYPE_JSON : CONTENT_TYPE_HTML)) {
     return;
   }
 
-  String s;
-
-  if(false == json) {
-    s = F("<html><font size='20'><font color=006666>Open</font><b>EVSE</b></font><p>"
-          "<b>Open Source Hardware</b><p>RAPI Command Sent<p>Common Commands:<p>"
-          "Set Current - $SC XX<p>Set Service Level - $SL 1 - $SL 2 - $SL A<p>"
-          "Get Real-time Current - $GG<p>Get Temperatures - $GP<p>"
-          "<p>"
-          "<form method='get' action='r'><label><b><i>RAPI Command:</b></i></label>"
-          "<input id='rapi' name='rapi' length=32><p><input type='submit'></form>");
-  }
-
-  if (request->hasParam("rapi"))
+  if(!request->hasParam("rapi"))
   {
-    String rapi = request->getParam("rapi");
-    int ret = RAPI_RESPONSE_NK;
-
-    if(!evse.isRapiCommandBlocked(rapi))
-    {
-      // BUG: Really we should do this in the main loop not here...
-      RAPI_PORT.flush();
-      DBUGVAR(rapi);
-      ret = rapiSender.sendCmdSync(rapi);
-      DBUGVAR(ret);
-    } else {
-      ret = RAPI_RESPONSE_BLOCKED;
+    // Just the page (or, in JSON mode, nothing): no command, nothing to gate.
+    response->setCode(200);
+    if(!json) {
+      response->print(FPSTR(RAPI_PAGE_HEAD));
+      response->print(FPSTR(RAPI_PAGE_TAIL));
     }
+    request->send(response);
+    return;
+  }
 
-    if(RAPI_RESPONSE_OK == ret ||
-       RAPI_RESPONSE_NK == ret)
+  // A RAPI command can change anything on the controller, so it is an
+  // actuator like /reset: no bare cross-site GET. The app sends the header;
+  // the form above posts.
+  if(!actuatorMethodAllowed(request, response)) {
+    return;
+  }
+
+  RapiRequest *req = new RapiRequest{request, response, json, request->getParam("rapi")};
+
+  if(evse.isRapiCommandBlocked(req->rapi))
+  {
+    rapiRespond(req, RAPI_RESPONSE_BLOCKED, "");
+    return;
+  }
+
+  if(!rapiTrack(req))
+  {
+    rapiRespond(req, RAPI_RESPONSE_QUEUE_FULL, "");
+    return;
+  }
+
+  DBUGVAR(req->rapi);
+  rapiSender.sendCmd(req->rapi, [req](int ret)
+  {
+    DBUGVAR(ret);
+    // Read the answer now, before anything else queued behind us overwrites
+    // the sender's buffer.
+    String rapiString = rapiSender.getResponse();
+
+    // Fake $GD if not supported by firmware
+    if(RAPI_RESPONSE_OK == ret && req->rapi.startsWith(F("$ST"))) {
+      delayTimer = req->rapi.substring(4);
+    }
+    if(RAPI_RESPONSE_NK == ret)
     {
-      String rapiString = rapiSender.getResponse();
-
-      // Fake $GD if not supported by firmware
-      if(RAPI_RESPONSE_OK == ret && rapi.startsWith(F("$ST"))) {
-        delayTimer = rapi.substring(4);
+      if(req->rapi.equals(F("$GD"))) {
+        ret = RAPI_RESPONSE_OK;
+        rapiString = F("$OK ");
+        rapiString += delayTimer;
       }
-      if(RAPI_RESPONSE_NK == ret)
+      else if(req->rapi.startsWith(F("$FF")))
       {
-        if(rapi.equals(F("$GD"))) {
-          ret = 0;
-          rapiString = F("$OK ");
-          rapiString += delayTimer;
-        }
-        else if (rapi.startsWith(F("$FF")))
-        {
-          DBUGF("Attempting legacy FF support");
+        // Legacy controllers without $FF take the same flag via $S.
+        String fallback = F("$S");
+        fallback += req->rapi.substring(4);
+        DBUGF("Attempting legacy FF support: %s", fallback.c_str());
 
-          String fallback = F("$S");
-          fallback += rapi.substring(4);
-
-          DBUGF("Attempting %s", fallback.c_str());
-
-          int ret = rapiSender.sendCmdSync(fallback.c_str());
-          if(RAPI_RESPONSE_OK == ret)
-          {
-            String rapiString = rapiSender.getResponse();
-          }
-        }
-      }
-
-      if (json) {
-        s = "{\"cmd\":\""+rapi+"\",\"ret\":\""+rapiString+"\"}";
-      } else {
-        s += html_escape(rapi);
-        s += F("<p>&gt;");
-        s += html_escape(rapiString);
+        rapiSender.sendCmd(fallback, [req](int ret) {
+          rapiRespond(req, ret, rapiSender.getResponse());
+        });
+        return;
       }
     }
-    else
-    {
-      String errorString =
-        RAPI_RESPONSE_QUEUE_FULL == ret ? F("RAPI_RESPONSE_QUEUE_FULL") :
-        RAPI_RESPONSE_BUFFER_OVERFLOW == ret ? F("RAPI_RESPONSE_BUFFER_OVERFLOW") :
-        RAPI_RESPONSE_TIMEOUT == ret ? F("RAPI_RESPONSE_TIMEOUT") :
-        RAPI_RESPONSE_OK == ret ? F("RAPI_RESPONSE_OK") :
-        RAPI_RESPONSE_NK == ret ? F("RAPI_RESPONSE_NK") :
-        RAPI_RESPONSE_INVALID_RESPONSE == ret ? F("RAPI_RESPONSE_INVALID_RESPONSE") :
-        RAPI_RESPONSE_CMD_TOO_LONG == ret ? F("RAPI_RESPONSE_CMD_TOO_LONG") :
-        RAPI_RESPONSE_BAD_CHECKSUM == ret ? F("RAPI_RESPONSE_BAD_CHECKSUM") :
-        RAPI_RESPONSE_BAD_SEQUENCE_ID == ret ? F("RAPI_RESPONSE_BAD_SEQUENCE_ID") :
-        RAPI_RESPONSE_ASYNC_EVENT == ret ? F("RAPI_RESPONSE_ASYNC_EVENT") :
-        RAPI_RESPONSE_BLOCKED == ret ? F("RAPI_RESPONSE_BLOCKED") :
-        F("UNKNOWN");
 
-      if (json) {
-        s = "{\"cmd\":\""+rapi+"\",\"error\":\""+errorString+"\"}";
-      } else {
-        s += html_escape(rapi);
-        s += F("<p><strong>Error:</strong>");
-        s += errorString;
-      }
-
-      code = RAPI_RESPONSE_BLOCKED == ret ? 400 : 500;
-    }
-  }
-  if (false == json) {
-    s += F("<script type='text/javascript'>document.getElementById('rapi').focus();</script>");
-    s += F("<p></html>\r\n\r\n");
-  }
-
-  response->setCode(code);
-  response->print(s);
-  request->send(response);
+    rapiRespond(req, ret, rapiString);
+  });
 }
 
 void handleNotFound(MongooseHttpServerRequest *request)
@@ -2178,8 +2298,8 @@ void web_server_setup()
   server.on("/settime$", handleSetTime);
   server.on("/reset$", handleRst);
   server.on("/restart$", handleRestart);
-  server.on("/rapi$", handleRapi);
-  server.on("/r$", handleRapi);
+  server.on("/rapi$")->onRequest(handleRapi)->onClose(handleRapiClose);
+  server.on("/r$")->onRequest(handleRapi)->onClose(handleRapiClose);
   server.on("/scan$", handleScan);
   server.on("/apoff$", handleAPOff);
   server.on("/divertmode$", handleDivertMode);
@@ -2311,6 +2431,126 @@ void web_server_setup()
     response->setContent(data, len);
     request->send(response);
   });
+
+#if ENABLE_CRASH_UPLOAD
+  // Crash reporting (spec §3). The browser sends the report to the broker
+  // itself; the charger only builds it and keeps the reporter identity.
+  //
+  //   GET    /debug/crash/report    the report, exactly as the broker takes it
+  //   GET    /debug/crash/identity  reporter id (if set), broker URL; ?key=1 adds the delete key
+  //   POST   /debug/crash/identity  store the identity the browser generated
+  //   DELETE /debug/crash/identity  forget it, once the reports are erased
+  //
+  // requestPreProcess carries the auth and the CSRF check: the delete key is
+  // what erases this charger's reports, so it is guarded like a config write.
+  server.on("/debug/crash/report$", [](MongooseHttpServerRequest *request) {
+    MongooseHttpServerResponseStream *response;
+    if(false == requestPreProcess(request, response, CONTENT_TYPE_JSON)) {
+      return;
+    }
+    const uint8_t *image;
+    size_t imageLen;
+    if(!diagnostics_coredump_image(&image, &imageLen) || 0 == imageLen) {
+      response->setCode(404);
+      response->print(F("{\"msg\":\"no crash dump stored\"}"));
+      request->send(response);
+      return;
+    }
+    char rid[33], key[65], keyHash[65];
+    if(!crash_identity_load(rid, key)) {
+      response->setCode(409);
+      response->print(F("{\"msg\":\"no reporter identity\"}"));
+      request->send(response);
+      return;
+    }
+    crash_delete_key_hash(key, keyHash);
+    // Sent as-is: the body the browser POSTs to the broker. Where to POST it
+    // comes from /debug/crash/identity, which the browser reads first.
+    DynamicJsonDocument doc(6144);
+    if(!crash_payload_build(doc, rid, keyHash)) {
+      response->setCode(500);
+      response->print(F("{\"msg\":\"report too large\"}"));
+      request->send(response);
+      return;
+    }
+    response->setCode(200);
+    serializeJson(doc, *response);
+    request->send(response);
+  });
+
+  server.on("/debug/crash/identity$", [](MongooseHttpServerRequest *request) {
+    MongooseHttpServerResponseStream *response;
+    if(false == requestPreProcess(request, response, CONTENT_TYPE_JSON)) {
+      return;
+    }
+    // Every method, GUI only (crash_report_id.h): with no password set this
+    // is the only thing between a cross-site form and the identity.
+    MongooseString xrw = request->headers("X-Requested-With");
+    if(!crash_gui_request(xrw.toString().c_str())) {
+      response->setCode(403);
+      response->print(F("{\"msg\":\"csrf\"}"));
+      request->send(response);
+      return;
+    }
+    if(HTTP_POST == request->method()) {
+      DynamicJsonDocument in(256);
+      if(deserializeJson(in, request->body().toString())) {
+        response->setCode(400);
+        response->print(F("{\"msg\":\"bad json\"}"));
+        request->send(response);
+        return;
+      }
+      switch(crash_identity_store(in["reporter_id"] | "", in["delete_key"] | "")) {
+        case CrashIdentity_Write:
+        case CrashIdentity_Same:
+          response->setCode(200);
+          response->print(F("{\"msg\":\"stored\"}"));
+          break;
+        case CrashIdentity_Conflict:
+          // The GUI re-reads the identity and carries on with the stored one.
+          response->setCode(409);
+          response->print(F("{\"msg\":\"a different identity is already set\"}"));
+          break;
+        case CrashIdentity_Invalid:
+          response->setCode(400);
+          response->print(F("{\"msg\":\"invalid reporter id or delete key\"}"));
+          break;
+        default:
+          response->setCode(500);
+          response->print(F("{\"msg\":\"error\"}"));
+          break;
+      }
+      request->send(response);
+      return;
+    }
+    if(HTTP_DELETE == request->method()) {
+      bool ok = crash_identity_forget();
+      response->setCode(ok ? 200 : 500);
+      response->print(ok ? F("{\"msg\":\"forgotten\"}") : F("{\"msg\":\"error\"}"));
+      request->send(response);
+      return;
+    }
+    // The delete key only on request (?key=1), which the GUI makes from its
+    // Delete action alone, so the key is not on the wire every time the page
+    // opens.
+    char want[4];
+    bool withKey = request->getParam("key", want, sizeof(want)) >= 0;
+    DynamicJsonDocument doc(256);
+    char rid[33], key[65];
+    if(crash_identity_load(rid, key)) {
+      doc["reporter_id"] = rid;
+      if(withKey) {
+        doc["delete_key"] = key;
+      }
+    } else {
+      doc["reporter_id"] = nullptr;
+    }
+    doc["broker"] = CRASH_BROKER_URL;
+    response->setCode(200);
+    serializeJson(doc, *response);
+    request->send(response);
+  });
+#endif // ENABLE_CRASH_UPLOAD
 
   server.on("/debug/console$")
     ->onRequest(onWsAuthenticate)

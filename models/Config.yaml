@@ -34,7 +34,7 @@ x-examples:
     www_username: ''
     www_password: ''
     hostname: openevse-a7d4
-    sntp_hostname: pool.ntp.org
+    sntp_hostname: time.cloudflare.com
     time_zone: 'Europe/London|GMT0BST,M3.5.0/1,M10.5.0'
     limit_default_type: none
     limit_default_value": 0
@@ -303,6 +303,8 @@ properties:
     type: number
   flags:
     type: number
+  flags2:
+    type: number
   emoncms_enabled:
     type: boolean
   mqtt_enabled:
@@ -348,6 +350,11 @@ properties:
     type: boolean
     description: |
       OpenEVSE default state when no claims are running ( 0: disabled | 1: active)
+  labs_enabled:
+    type: boolean
+    default: false
+    description: |
+      Web UI: reveal OpenEVSE Labs (in-development) features. Stored on the device so it applies to every browser.
   loadsharing_enabled:
     type: boolean
     default: false
