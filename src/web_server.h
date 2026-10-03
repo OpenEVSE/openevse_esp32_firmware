@@ -77,4 +77,13 @@ bool actuatorMethodAllowed(MongooseHttpServerRequest *request,
 void handleNotifications(MongooseHttpServerRequest *request);
 void handleNotificationAck(MongooseHttpServerRequest *request);
 
+// Constant-time comparison of two NUL-terminated credentials.
+bool credentialsMatch(const char *a, const char *b);
+
+// Installer tools (web_server_installer.cpp): all POST, GUI-only, behind the
+// normal login plus the installer password.
+void handleInstallerVerify(MongooseHttpServerRequest *request);
+void handleInstallerPassword(MongooseHttpServerRequest *request);
+void handleInstallerMaxCurrent(MongooseHttpServerRequest *request);
+
 #endif // _EMONESP_WEB_SERVER_H

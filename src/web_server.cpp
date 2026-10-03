@@ -186,7 +186,7 @@ void dumpRequest(MongooseHttpServerRequest *request)
 // does not short-circuit either. Not a substitute for a slow hash, but removes
 // the trivial byte-by-byte timing signal from Basic-auth checks.
 // -------------------------------------------------------------------
-static bool credentialsMatch(const char *a, const char *b)
+bool credentialsMatch(const char *a, const char *b)
 {
   size_t la = strlen(a);
   size_t lb = strlen(b);
@@ -2328,6 +2328,9 @@ void web_server_setup()
   server.on("/boost", handleBoost);
   server.on("/notifications/ack$", handleNotificationAck);
   server.on("/notifications$", handleNotifications);
+  server.on("/installer/verify$", handleInstallerVerify);
+  server.on("/installer/password$", handleInstallerPassword);
+  server.on("/installer/maxcurrent$", handleInstallerMaxCurrent);
   server.on("/emeter", handleEmeter);
   server.on("/time", handleTime);
   server.on("/mqtt$", handleMqttAction);
