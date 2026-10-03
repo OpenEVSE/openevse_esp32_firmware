@@ -2392,8 +2392,7 @@ void web_server_setup()
       return;
     }
 
-    const size_t capacity = JSON_OBJECT_SIZE(12) + JSON_ARRAY_SIZE(16) + 640;
-    DynamicJsonDocument doc(capacity);
+    DynamicJsonDocument doc(DIAG_COREDUMP_JSON_CAPACITY);
     diagnostics_coredump_json(doc);
     response->setCode(200);
     serializeJson(doc, *response);
@@ -2466,7 +2465,8 @@ void web_server_setup()
     crash_delete_key_hash(key, keyHash);
     // Sent as-is: the body the browser POSTs to the broker. Where to POST it
     // comes from /debug/crash/identity, which the browser reads first.
-    DynamicJsonDocument doc(6144);
+    // 8 KB: the deep backtrace appears twice, in the summary and hoisted.
+    DynamicJsonDocument doc(8192);
     if(!crash_payload_build(doc, rid, keyHash)) {
       response->setCode(500);
       response->print(F("{\"msg\":\"report too large\"}"));

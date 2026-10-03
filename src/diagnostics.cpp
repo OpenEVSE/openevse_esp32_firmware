@@ -1,4 +1,5 @@
 #include "diagnostics.h"
+#include "crash_unwind.h"
 
 #include <Arduino.h>
 #include <MongooseCore.h>
@@ -20,6 +21,11 @@
 #include <esp_idf_version.h>
 #include <esp_core_dump.h>
 #include <esp_partition.h>
+#if __has_include(<esp_memory_utils.h>)
+#include <esp_memory_utils.h>       // esp_ptr_executable, IDF 5
+#else
+#include <soc/soc_memory_layout.h>  // ... and its IDF 4.4 home
+#endif
 #include <freertos/FreeRTOS.h>
 #include <freertos/task.h>
 
@@ -288,6 +294,39 @@ void diagnostics_status(JsonDocument &doc)
 #endif
 }
 
+#if DIAG_COREDUMP_SUMMARY && !defined(__riscv)
+static bool diag_pc_executable(uint32_t pc)
+{
+  return esp_ptr_executable((void *)pc);
+}
+
+// Walk the crashed task's stack out of the stored image. The image starts
+// with the IDF's core_dump_header_t, whose size has changed between IDF
+// versions, so find the ELF by its magic rather than by sizeof.
+static size_t diag_coredump_deep_bt(uint32_t tcb, uint32_t *out, size_t max,
+                                    bool *corrupted)
+{
+  const uint8_t *img;
+  size_t len;
+  if(!diagnostics_coredump_image(&img, &len)) {
+    return 0;
+  }
+  for(size_t off = 0; off <= 64 && off + 4 <= len; off += 4) {
+    if(0 != memcmp(img + off, "\x7f" "ELF", 4)) {
+      continue;
+    }
+    const uint8_t *stack;
+    uint32_t vaddr, size;
+    if(!crash_unwind_find_stack(img + off, len - off, tcb, &stack, &vaddr, &size)) {
+      return 0;
+    }
+    return crash_unwind_xtensa(stack, vaddr, size, diag_pc_executable, out, max,
+                               corrupted);
+  }
+  return 0;
+}
+#endif
+
 void diagnostics_coredump_json(JsonDocument &doc)
 {
 #if DIAG_HAVE_IDF
@@ -368,12 +407,33 @@ void diagnostics_coredump_json(JsonDocument &doc)
     // image from /debug/crash/raw still carries the stack dump.
     doc["bt"] = "riscv-no-unwind";
 #else
-    JsonArray bt = doc.createNestedArray("bt");
-    for(uint32_t i = 0; i < s->exc_bt_info.depth && i < 16; i++) {
-      snprintf(buf, sizeof(buf), "0x%08x", (unsigned)s->exc_bt_info.bt[i]);
-      bt.add(buf);
+    // The IDF's walk, carried on past its 16 frames. Used only when it
+    // agrees with the IDF's frame for frame and goes further; anything else
+    // falls back to the IDF's own list.
+    uint32_t *deep = (uint32_t *)malloc(DIAG_COREDUMP_BT_MAX * sizeof(uint32_t));
+    bool deepCorrupted = true;
+    size_t depth = deep ? diag_coredump_deep_bt(s->exc_tcb, deep, DIAG_COREDUMP_BT_MAX,
+                                                &deepCorrupted) : 0;
+    bool useDeep = depth > s->exc_bt_info.depth;
+    for(uint32_t i = 0; useDeep && i < s->exc_bt_info.depth; i++) {
+      useDeep = deep[i] == s->exc_bt_info.bt[i];
     }
-    doc["bt_corrupted"] = s->exc_bt_info.corrupted;
+
+    JsonArray bt = doc.createNestedArray("bt");
+    if(useDeep) {
+      for(size_t i = 0; i < depth; i++) {
+        snprintf(buf, sizeof(buf), "0x%08x", (unsigned)deep[i]);
+        bt.add(buf);
+      }
+      doc["bt_corrupted"] = deepCorrupted;
+    } else {
+      for(uint32_t i = 0; i < s->exc_bt_info.depth && i < 16; i++) {
+        snprintf(buf, sizeof(buf), "0x%08x", (unsigned)s->exc_bt_info.bt[i]);
+        bt.add(buf);
+      }
+      doc["bt_corrupted"] = s->exc_bt_info.corrupted;
+    }
+    free(deep);
 #endif
   }
   else
