@@ -63,6 +63,10 @@ hardware is present.
   (`labs_enabled`, off by default) reveals in-development features — Load
   Sharing, RFID tag names, and heap fragmentation probes — and lists them with
   links once on. It is stored on the charger, so it applies to every browser.
+- **Installer Tools** (`/settings/installer`) — password-protected
+  commissioning controls: the one-time hardware maximum current, the safety
+  check switches, and the installer password. See
+  [Installer tools](installer-tools.md).
 - **[Display](screenshots/settings-display-dark-desktop.png)** — theme,
   brightness, and sleep timeout for the on-device TFT touchscreen (only shown
   on TFT-equipped hardware).

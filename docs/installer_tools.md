@@ -1,6 +1,6 @@
 # Installer Tools
 
-Settings → System → **Installer Tools** (directly below Developer Tools) holds the commissioning controls an installer sets once and an owner should not casually change. The page is locked behind an installer password.
+Settings → System → **Installer Tools** (`/settings/installer`, directly below Developer Tools) holds the commissioning controls an installer sets once and an owner should not casually change. The page is locked behind an installer password. This is the design note; the user-facing page is [Installer tools](user/installer-tools.md).
 
 ## Why a password
 
