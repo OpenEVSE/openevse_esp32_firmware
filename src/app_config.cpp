@@ -595,6 +595,14 @@ config_load_settings()
   // now lets apply any default flags that have not explicitly been set by the user
   flags |= CONFIG_DEFAULT_FLAGS & ~flags_changed;
 
+  // Upgrade migration: firmware that predates the wizard flag never recorded
+  // it. A device that already has a WiFi network configured has obviously been
+  // set up, so don't show the first-run wizard again.
+  if(!config_wizard_passed() && esid != "") {
+    user_config.set("wizard_passed", true);
+    user_config.commit();
+  }
+
   // Generate server_secret on first boot (empty after load means the key was
   // never stored). web_auth_ensure_secret() persists via user_config.commit().
   web_auth_ensure_secret();
