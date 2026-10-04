@@ -36,7 +36,7 @@ bool crash_payload_build(JsonDocument &doc, const char *reporterId,
   bool fit = true;
   JsonObject summary = doc.createNestedObject("summary");
   {
-    DynamicJsonDocument sd(JSON_OBJECT_SIZE(12) + JSON_ARRAY_SIZE(16) + 640);
+    DynamicJsonDocument sd(DIAG_COREDUMP_JSON_CAPACITY);
     diagnostics_coredump_json(sd);
     fit = fit && !sd.overflowed();
     for(JsonPair kv : sd.as<JsonObject>()) {
