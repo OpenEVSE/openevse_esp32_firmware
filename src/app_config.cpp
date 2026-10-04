@@ -36,6 +36,7 @@
 #include "current_shaper.h"
 
 #include "limit.h"
+#include "shelly_lnm.h"
 #endif
 
 #ifndef HTTP_SERVER_PORT
@@ -146,6 +147,14 @@ double divert_PV_ratio;
 uint32_t divert_attack_smoothing_time;
 uint32_t divert_decay_smoothing_time;
 uint32_t divert_min_charge_time;
+
+// Shelly LNM settings
+bool shelly_lnm_enabled;
+String shelly_lnm_addr;
+uint16_t shelly_lnm_port;
+String shelly_lnm_power_field;
+String shelly_lnm_voltage_field;
+String shelly_lnm_device;
 
 // Current Shaper settings
 uint32_t current_shaper_max_pwr;
@@ -404,6 +413,14 @@ ConfigOpt *opts[] =
   new ConfigOptDefinition<uint32_t>(divert_decay_smoothing_time, 600, "divert_decay_smoothing_time", "dds"),
   new ConfigOptDefinition<uint32_t>(divert_min_charge_time, 600, "divert_min_charge_time", "dt"),
 
+// Shelly LNM settings
+  new ConfigOptDefinition<bool>(shelly_lnm_enabled, false, "shelly_lnm_enabled", "sle"),
+  new ConfigOptDefinition<String>(shelly_lnm_addr, "239.255.55.55", "shelly_lnm_addr", "sla"),
+  new ConfigOptDefinition<uint16_t>(shelly_lnm_port, 5555, "shelly_lnm_port", "slpt"),
+  new ConfigOptDefinition<String>(shelly_lnm_power_field, "act_power", "shelly_lnm_power_field", "slpf"),
+  new ConfigOptDefinition<String>(shelly_lnm_voltage_field, "voltage", "shelly_lnm_voltage_field", "slvf"),
+  new ConfigOptDefinition<String>(shelly_lnm_device, "", "shelly_lnm_device", "sld"),
+
 // Current Shaper settings
   new ConfigOptDefinition<uint32_t>(current_shaper_max_pwr, 0, "current_shaper_max_pwr", "smp"),
   new ConfigOptDefinition<uint32_t>(current_shaper_smoothing_time, 60, "current_shaper_smoothing_time", "sst"),
@@ -629,6 +646,11 @@ void config_changed(String name)
     evse.setSleepForDisable(!config_pause_uses_disabled());
   } else if(name.startsWith("mqtt_")) {
     mqtt.restartConnection();
+  } else if(name.startsWith("shelly_lnm_")) {
+    shelly_lnm.notifyConfigChanged();
+    if(name == "shelly_lnm_enabled") {
+      mqtt.restartConnection();
+    }
   } else if(name.startsWith("ocpp_")) {
     OcppTask::notifyConfigChanged();
   } else if(name.startsWith("emoncms_")) {
