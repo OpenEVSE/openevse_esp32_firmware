@@ -170,13 +170,22 @@ void handleInstallerMaxCurrent(MongooseHttpServerRequest *request)
     return;
   }
 
+  // The valid range is what the controller will actually write. Its setter
+  // clamps to [min current, current hardware maximum] rather than refusing,
+  // and the write is once only: a request outside that range would spend it
+  // on a value nobody asked for. So refuse here instead -- in practice the
+  // limit can only come down.
+  long previous = evse.getMaxHardwareCurrent();
+  long lo = max((long)INSTALLER_MIN_AMPS, evse.getMinCurrent());
+  long hi = previous > 0 ? min((long)INSTALLER_MAX_AMPS, previous) : (long)INSTALLER_MAX_AMPS;
+
   long amps = in["amps"] | 0L;
-  if(amps < INSTALLER_MIN_AMPS || amps > INSTALLER_MAX_AMPS) {
-    installerReply(request, response, 400, "amps out of range");
+  if(amps < lo || amps > hi) {
+    response->setCode(400);
+    response->printf("{\"msg\":\"amps out of range\",\"min\":%ld,\"max\":%ld}", lo, hi);
+    request->send(response);
     return;
   }
-
-  long previous = evse.getMaxHardwareCurrent();
 
   // OpenEVSE_Lib: setCurrentCapacityFactoryLimit() -> "$SC <amps> M". The
   // controller accepts it once; later writes return $NK and are ignored, so the

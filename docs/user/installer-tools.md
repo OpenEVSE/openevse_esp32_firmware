@@ -28,9 +28,10 @@ It sends `$SC xx M` to the controller (see [rapi.md](../rapi.md)).
 > the station maximum or the circuit maximum, whichever is lower.
 
 The circuit maximum is the branch-circuit breaker rating reduced to 80%,
-because an EV charging load is a continuous load (NEC 210.19(A)(1),
-210.20(A), 625.42). Accepted values are 6–80 A. You are asked to confirm
-before anything is sent. The page then reads the value back from the charger and
+because an EV charging load is a continuous load (NEC 210.19(A)(1), 210.20(A),
+625.42). Accepted values run from 6 A up to the current hardware maximum (at
+most 80 A): the limit can only be lowered. You are asked to confirm before
+anything is sent. The page then reads the value back from the charger and
 tells you whether it took; if the controller has already been set once it
 keeps the old value, and the page says the change was not accepted.
 
