@@ -71,6 +71,8 @@ void DivertTask::begin()
 {
   // remove this after few versions
   initDivertType();
+  // Restore the persisted charge mode (eco is runtime state otherwise)
+  setMode((config_divert_enabled() && 1 == config_charge_mode()) ? DivertMode::Eco : DivertMode::Normal);
   // 
   MicroTask.startTask(this);
 }
