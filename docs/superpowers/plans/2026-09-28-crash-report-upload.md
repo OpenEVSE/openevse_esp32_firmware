@@ -1380,13 +1380,13 @@ TEST_CASE("the feature flags that explain a crash are kept") {
 }
 
 TEST_CASE("copying a whole config carries the flags and nothing else") {
-  StaticJsonDocument<512> full;
+  JsonDocument full;
   full["mqtt_enabled"] = true;
   full["mqtt_pass"] = "hunter2";
   full["mqtt_server"] = "mqtt.example";   // not a secret, but not on the list
   full["version"] = "4.2.0";
 
-  StaticJsonDocument<512> out;
+  JsonDocument out;
   JsonObject o = out.to<JsonObject>();
   crash_redact_config(full.as<JsonObjectConst>(), o);
 
@@ -1828,9 +1828,9 @@ void crash_payload_build(JsonDocument &doc, size_t rawBytes)
   // The decoded summary: panic reason, faulting task, PC, backtrace,
   // elf_sha256. This is what gets symbolized; the raw image is for the
   // questions it cannot answer.
-  JsonObject summary = doc.createNestedObject("summary");
+  JsonObject summary = doc["summary"].to<JsonObject>();
   {
-    DynamicJsonDocument sd(JSON_OBJECT_SIZE(12) + JSON_ARRAY_SIZE(16) + 640);
+    JsonDocument sd(JSON_OBJECT_SIZE(12) + JSON_ARRAY_SIZE;
     diagnostics_coredump_json(sd);
     for(JsonPair kv : sd.as<JsonObject>()) {
       summary[kv.key()] = kv.value();
@@ -1841,9 +1841,9 @@ void crash_payload_build(JsonDocument &doc, size_t rawBytes)
     doc["bt"] = sd["bt"];
   }
 
-  JsonObject diag = doc.createNestedObject("diagnostics");
+  JsonObject diag = doc["diagnostics"].to<JsonObject>();
   {
-    DynamicJsonDocument dd(1024);
+    JsonDocument dd;
     diagnostics_status(dd);
     for(JsonPair kv : dd.as<JsonObject>()) {
       diag[kv.key()] = kv.value();
@@ -1855,10 +1855,10 @@ void crash_payload_build(JsonDocument &doc, size_t rawBytes)
     // actually keeps credentials out, because it names what may leave rather
     // than what may not (spec §5) -- but there is no reason to materialise
     // them in a document at all on the way past.
-    DynamicJsonDocument cfg(4096);
+    JsonDocument cfg;
     config_serialize(cfg, /*longNames*/ true, /*compactOutput*/ false,
                      /*hideSecrets*/ true);
-    JsonObject redacted = doc.createNestedObject("config");
+    JsonObject redacted = doc["config"].to<JsonObject>();
     crash_redact_config(cfg.as<JsonObjectConst>(), redacted);
   }
 
@@ -2032,7 +2032,7 @@ static void crash_pump(mg_connection *nc)
     // than the upload.
     if(_sent - _reported >= 8192 || _sent == _imageLen) {
       _reported = _sent;
-      DynamicJsonDocument doc(128);
+      JsonDocument doc;
       doc["crash_upload"] = crash_upload_state_name();
       doc["crash_upload_sent"] = (uint32_t)_sent;
       doc["crash_upload_total"] = (uint32_t)_imageLen;
@@ -2168,7 +2168,7 @@ static String _metaBody;      // must outlive the request
 
 static void crash_step_metadata()
 {
-  DynamicJsonDocument doc(6144);
+  JsonDocument doc;
   crash_payload_build(doc, _imageLen);
   _metaBody = "";
   serializeJson(doc, _metaBody);
@@ -2207,9 +2207,9 @@ static void crash_reply(int status, const String &body)
       // broker omits `frames` for a device (Task 1), but a filter makes that
       // a belt-and-braces property rather than a coupling: anything the broker
       // grows later is discarded before it can exhaust this document.
-      StaticJsonDocument<64> filter;
+      JsonDocument filter;
       filter["report_id"] = true;
-      StaticJsonDocument<128> doc;
+      JsonDocument doc;
       if(DeserializationError::Ok !=
          deserializeJson(doc, body, DeserializationOption::Filter(filter))) {
         crash_fail("bad reply");
@@ -2247,7 +2247,7 @@ static void crash_reply(int status, const String &body)
       _image = NULL;
       _state = CrashUpload_Done;
       {
-        DynamicJsonDocument doc(128);
+        JsonDocument doc;
         doc["crash_upload"] = crash_upload_state_name();
         event_send(doc);
       }
@@ -2267,7 +2267,7 @@ static void crash_fail(const char *why)
   }
   _state = CrashUpload_Failed;
   _image = NULL;
-  DynamicJsonDocument doc(192);
+  JsonDocument doc;
   doc["crash_upload"] = crash_upload_state_name();
   doc["crash_upload_error"] = why;
   event_send(doc);
@@ -2297,7 +2297,7 @@ static void crash_arm_deferred()
   // flag in the process.
   _triedThisBoot = true;
   _state = CrashUpload_Deferred;
-  DynamicJsonDocument doc(128);
+  JsonDocument doc;
   doc["crash_upload"] = crash_upload_state_name();
   event_send(doc);
 }
@@ -2559,7 +2559,7 @@ In `src/web_server.cpp`, after the `/debug/crash/raw$` handler, add:
       String message;
       bool ok = crash_upload_request(message);
       response->setCode(ok ? 200 : 409);
-      DynamicJsonDocument doc(256);
+      JsonDocument doc;
       doc["msg"] = message;
       doc["state"] = crash_upload_state_name();
       doc["deferred"] = crash_upload_deferred_armed();
@@ -2568,7 +2568,7 @@ In `src/web_server.cpp`, after the `/debug/crash/raw$` handler, add:
       return;
     }
 
-    DynamicJsonDocument doc(256);
+    JsonDocument doc;
     doc["state"] = crash_upload_state_name();
     doc["sent"] = (uint32_t)crash_upload_sent();
     doc["total"] = (uint32_t)crash_upload_total();

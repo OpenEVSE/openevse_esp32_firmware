@@ -108,7 +108,7 @@ the other side (`HealthTab.svelte` currently reads all of it from
 rather you make that call than have us commit to a direction unprompted.
 
 Did the concrete, low-risk part: added a comment at the `/config`
-`DynamicJsonDocument` allocation site (`web_server_config.cpp`) noting the
+`JsonDocument` allocation site (`web_server_config.cpp`) noting the
 headroom is thinner now — measured against a live TFT unit's ~135 members,
 the ~11 new keys fit, but it's worth rechecking before the next addition
 rather than assuming.

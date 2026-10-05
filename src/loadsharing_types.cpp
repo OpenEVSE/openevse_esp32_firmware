@@ -439,7 +439,7 @@ bool LoadSharingGroupState::loadGroupPeers() {
     return false;
   }
 
-  DynamicJsonDocument doc(1024);
+  JsonDocument doc;
   DeserializationError error = deserializeJson(doc, file);
   file.close();
 
@@ -514,8 +514,8 @@ bool LoadSharingGroupState::saveGroupPeers() {
     return false;
   }
 
-  DynamicJsonDocument doc(1024);
-  JsonArray peers = doc.createNestedArray("peers");
+  JsonDocument doc;
+  JsonArray peers = doc["peers"].to<JsonArray>();
   for (const auto& peer : _peers) {
     // Persist joined peers AND the local device entry. The local row carries
     // the controller's own priority, which is managed the same way as every
@@ -525,7 +525,7 @@ bool LoadSharingGroupState::saveGroupPeers() {
       // after a restart (discovery may re-key it under a different reachable
       // host), plus the controller-managed priority. Legacy entries stored a
       // bare host string.
-      JsonObject obj = peers.createNestedObject();
+      JsonObject obj = peers.add<JsonObject>();
       obj["id"] = peer.getId();
       obj["host"] = peer.getHost();
       obj["priority"] = peer.getPriority();

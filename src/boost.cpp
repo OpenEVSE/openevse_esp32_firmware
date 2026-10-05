@@ -40,7 +40,7 @@ void Boost::begin(EvseManager &evse)
 
 void Boost::sendEvent(bool active, const char *reason)
 {
-  StaticJsonDocument<96> doc;
+  JsonDocument doc;
   doc["boost"] = active;
   doc["boost_version"] = _version;
   if(reason) {
@@ -146,9 +146,9 @@ int Boost::arm(LimitType type, uint32_t value)
 
 int Boost::arm(const char *json)
 {
-  StaticJsonDocument<128> doc;
+  JsonDocument doc;
   DeserializationError err = deserializeJson(doc, json);
-  if(err || !doc.containsKey("type") || !doc.containsKey("value")) {
+  if(err || !doc["type"].is<const char *>() || !doc["value"].is<uint32_t>()) {
     return Boost_BadRequest;
   }
   // "type" must be a string: JSON null, a number or an object all satisfy

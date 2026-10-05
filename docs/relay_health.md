@@ -187,7 +187,7 @@ existing status/config split better, but is a real API change with GUI
 implications on the other side (`gui-nightshift` currently reads all of
 this from `config_store`) — deliberately not done here.
 
-`/config`'s `DynamicJsonDocument` capacity (`JSON_OBJECT_SIZE(128) + 1024`,
+`/config`'s `JsonDocument` capacity (`JSON_OBJECT_SIZE(128) + 1024`,
 `web_server_config.cpp`) has headroom for these ~11 new keys on hardware
 (measured: a live TFT unit already serves ~135 members within this budget),
 but it's thinner now — see the comment at the allocation site.

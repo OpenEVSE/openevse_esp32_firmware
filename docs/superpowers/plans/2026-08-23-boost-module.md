@@ -559,7 +559,7 @@ void Boost::begin(EvseManager &evse)
 
 void Boost::sendEvent(bool active, const char *reason)
 {
-  StaticJsonDocument<96> doc;
+  JsonDocument doc;
   doc["boost"] = active;
   doc["boost_version"] = _version;
   if(reason) {
@@ -615,7 +615,7 @@ int Boost::arm(LimitType type, uint32_t value)
 
 int Boost::arm(const char *json)
 {
-  StaticJsonDocument<128> doc;
+  JsonDocument doc;
   DeserializationError err = deserializeJson(doc, json);
   if(err || !doc.containsKey("type") || !doc.containsKey("value")) {
     return Boost_BadRequest;
@@ -886,7 +886,7 @@ void handleBoostGet(MongooseHttpServerRequest *request, MongooseHttpServerRespon
 {
   if(boost.isActive())
   {
-    StaticJsonDocument<192> doc;
+    JsonDocument doc;
     boost.serialize(doc);
     response->setCode(200);
     serializeJson(doc, *response);
@@ -1089,7 +1089,7 @@ Publish — beside `Mqtt::publishLimit()` (~line 714):
 
 ```cpp
 void Mqtt::publishBoost() {
-  StaticJsonDocument<192> boost_data;
+  JsonDocument boost_data;
   if (boost.isActive()) {
     boost.serialize(boost_data);
   }
@@ -1101,13 +1101,13 @@ void Mqtt::publishBoost() {
 }
 ```
 
-(Serializing an empty StaticJsonDocument yields `null`, not `{}` — guard it: if `!boost.isActive()`, set `payload = "{}"` directly instead of serializing. Implement as:)
+(Serializing an empty JsonDocument yields `null`, not `{}` — guard it: if `!boost.isActive()`, set `payload = "{}"` directly instead of serializing. Implement as:)
 
 ```cpp
 void Mqtt::publishBoost() {
   String payload;
   if (boost.isActive()) {
-    StaticJsonDocument<192> boost_data;
+    JsonDocument boost_data;
     boost.serialize(boost_data);
     serializeJson(boost_data, payload);
   } else {

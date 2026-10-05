@@ -51,18 +51,18 @@ TEST_CASE("the feature flags that explain a crash are kept") {
 }
 
 TEST_CASE("copying a whole config carries the flags and nothing else") {
-  StaticJsonDocument<512> full;
+  JsonDocument full;
   full["mqtt_enabled"] = true;
   full["mqtt_pass"] = "hunter2";
   full["mqtt_server"] = "mqtt.example";   // not a secret, but not on the list
   full["version"] = "4.2.0";
 
-  StaticJsonDocument<512> out;
+  JsonDocument out;
   JsonObject o = out.to<JsonObject>();
   crash_redact_config(full.as<JsonObjectConst>(), o);
 
   CHECK(o["mqtt_enabled"].as<bool>() == true);
   CHECK(o["version"].as<const char *>() == std::string("4.2.0"));
-  CHECK_FALSE(o.containsKey("mqtt_pass"));
-  CHECK_FALSE(o.containsKey("mqtt_server"));
+  CHECK_FALSE(o["mqtt_pass"].is<const char *>());
+  CHECK_FALSE(o["mqtt_server"].is<const char *>());
 }

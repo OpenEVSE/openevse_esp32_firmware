@@ -11,10 +11,10 @@ private:
 
 public:
   // Load RFID user mappings from file
-  static bool load(DynamicJsonDocument &doc);
+  static bool load(JsonDocument &doc);
 
   // Save RFID user mappings to file
-  static bool save(const DynamicJsonDocument &doc);
+  static bool save(const JsonDocument &doc);
 
   // Get user name for an RFID tag
   static String getUserName(const String &rfidTag);

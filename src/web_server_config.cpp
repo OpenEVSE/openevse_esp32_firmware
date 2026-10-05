@@ -17,7 +17,7 @@ typedef const __FlashStringHelper *fstr_t;
 #include <vector>
 
 extern bool isPositive(MongooseHttpServerRequest *request, const char *param);
-extern bool web_server_config_deserialise(DynamicJsonDocument &doc, bool factory);
+extern bool web_server_config_deserialise(JsonDocument &doc, bool factory);
 
 // -------------------------------------------------------------------
 // Returns OpenEVSE Config json
@@ -39,7 +39,7 @@ handleConfigGet(MongooseHttpServerRequest *request, MongooseHttpServerResponseSt
   // siblings) still fits, but there isn't much room left for the next
   // addition -- worth rechecking on hardware (or just bumping the constant)
   // before adding more.
-  static DynamicJsonDocument doc(JSON_OBJECT_SIZE(128) + 1024);
+  static JsonDocument doc;
   doc.clear();
 
   config_serialize(doc, true, false, true);
@@ -59,8 +59,7 @@ handleConfigPost(MongooseHttpServerRequest *request, MongooseHttpServerResponseS
   MongooseString body = request->body();
 
   // Deserialize the JSON document
-  const size_t capacity = JSON_OBJECT_SIZE(128) + 1024;
-  DynamicJsonDocument doc(capacity);
+  JsonDocument doc;
   DeserializationError error = deserializeJson(doc, body.c_str(), body.length());
   if(!error)
   {
@@ -89,10 +88,10 @@ handleConfigPost(MongooseHttpServerRequest *request, MongooseHttpServerResponseS
       // ride along unchecked without a controller_host to show it actually
       // came from a real push.
       bool isControllerPush = false;
-      if (doc.containsKey("loadsharing_role")) {
+      if (doc["loadsharing_role"].is<JsonVariant>()) {
         bool wantsMember = loadSharingRoleFromJson(doc["loadsharing_role"]);
         if (wantsMember) {
-          isControllerPush = doc.containsKey("loadsharing_controller_host");
+          isControllerPush = doc["loadsharing_controller_host"].is<JsonVariant>();
         } else {
           isControllerPush = true;
           for (JsonPairConst field : doc.as<JsonObjectConst>()) {
@@ -115,7 +114,7 @@ handleConfigPost(MongooseHttpServerRequest *request, MongooseHttpServerResponseS
     }
 
     // Validate load sharing config ranges
-    if (doc.containsKey("loadsharing_group_max_current")) {
+    if (doc["loadsharing_group_max_current"].is<double>()) {
       double val = doc["loadsharing_group_max_current"].as<double>();
       if (val < 0) {
         response->setCode(400);
@@ -123,7 +122,7 @@ handleConfigPost(MongooseHttpServerRequest *request, MongooseHttpServerResponseS
         return;
       }
     }
-    if (doc.containsKey("loadsharing_safety_factor")) {
+    if (doc["loadsharing_safety_factor"].is<double>()) {
       double val = doc["loadsharing_safety_factor"].as<double>();
       if (val < 0.0 || val > 1.0) {
         response->setCode(400);
@@ -131,7 +130,7 @@ handleConfigPost(MongooseHttpServerRequest *request, MongooseHttpServerResponseS
         return;
       }
     }
-    if (doc.containsKey("loadsharing_heartbeat_timeout")) {
+    if (doc["loadsharing_heartbeat_timeout"].is<uint32_t>()) {
       uint32_t val = doc["loadsharing_heartbeat_timeout"].as<uint32_t>();
       if (val < 5 || val > 600) {
         response->setCode(400);
@@ -139,7 +138,7 @@ handleConfigPost(MongooseHttpServerRequest *request, MongooseHttpServerResponseS
         return;
       }
     }
-    if (doc.containsKey("loadsharing_failsafe_safe_current")) {
+    if (doc["loadsharing_failsafe_safe_current"].is<double>()) {
       double val = doc["loadsharing_failsafe_safe_current"].as<double>();
       if (val < 0 || val > 80) {
         response->setCode(400);
@@ -147,7 +146,7 @@ handleConfigPost(MongooseHttpServerRequest *request, MongooseHttpServerResponseS
         return;
       }
     }
-    if (doc.containsKey("loadsharing_failsafe_peer_assumed_current")) {
+    if (doc["loadsharing_failsafe_peer_assumed_current"].is<double>()) {
       double val = doc["loadsharing_failsafe_peer_assumed_current"].as<double>();
       if (val < 0 || val > 80) {
         response->setCode(400);
@@ -155,7 +154,7 @@ handleConfigPost(MongooseHttpServerRequest *request, MongooseHttpServerResponseS
         return;
       }
     }
-    if (doc.containsKey("loadsharing_failsafe_mode")) {
+    if (doc["loadsharing_failsafe_mode"].is<String>()) {
       String val = doc["loadsharing_failsafe_mode"].as<String>();
       if (val != "safe_current" && val != "disable") {
         response->setCode(400);
@@ -167,10 +166,10 @@ handleConfigPost(MongooseHttpServerRequest *request, MongooseHttpServerResponseS
     // budget, otherwise a single islanded member can exceed the group max
     // on its own. Use incoming values when present, stored values otherwise.
     {
-      double failsafe = doc.containsKey("loadsharing_failsafe_safe_current")
+      double failsafe = doc["loadsharing_failsafe_safe_current"].is<double>()
           ? doc["loadsharing_failsafe_safe_current"].as<double>()
           : loadsharing_failsafe_safe_current;
-      double groupMax = doc.containsKey("loadsharing_group_max_current")
+      double groupMax = doc["loadsharing_group_max_current"].is<double>()
           ? doc["loadsharing_group_max_current"].as<double>()
           : loadsharing_group_max_current;
       if (groupMax > 0 && failsafe > groupMax) {
@@ -194,13 +193,13 @@ handleConfigPost(MongooseHttpServerRequest *request, MongooseHttpServerResponseS
     // rejected request never mutates group-membership state as a side effect.
     // resetRole() in particular also drops the controller peer and rewrites the
     // persisted peer list, which a 423 response must not leave behind.
-    if (doc.containsKey("loadsharing_role") &&
+    if (doc["loadsharing_role"].is<JsonVariant>() &&
         loadSharingRoleFromJson(doc["loadsharing_role"]) == true &&
-        doc.containsKey("loadsharing_controller_host")) {
+        doc["loadsharing_controller_host"].is<JsonVariant>()) {
       String controllerHost = doc["loadsharing_controller_host"].as<String>();
       loadSharingGroupState.becomeMember(controllerHost);
     }
-    if (doc.containsKey("loadsharing_role") &&
+    if (doc["loadsharing_role"].is<JsonVariant>() &&
         loadSharingRoleFromJson(doc["loadsharing_role"]) == false &&
         loadSharingGroupState.isMember()) {
       // Drop the controller entry structurally rather than by
@@ -218,7 +217,7 @@ handleConfigPost(MongooseHttpServerRequest *request, MongooseHttpServerResponseS
       loadSharingPeerPoller.pushConfigToAllPeers();
     }
 
-    StaticJsonDocument<128> reply;
+    JsonDocument reply;
     reply["config_version"] = config_version();
     reply["msg"] = config_modified ? "done" : "no change";
 
@@ -250,7 +249,7 @@ void handleConfig(MongooseHttpServerRequest *request)
   request->send(response);
 }
 
-bool web_server_config_deserialise(DynamicJsonDocument &doc, bool factory)
+bool web_server_config_deserialise(JsonDocument &doc, bool factory)
 {
   bool config_modified = config_deserialize(doc);
 

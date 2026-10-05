@@ -1271,8 +1271,8 @@ unsigned long Notifications::loop(MicroTasks::WakeReason reason)
   }
 
   if(changed) {
-    DynamicJsonDocument doc(1024);
-    JsonObject o = doc.createNestedObject("notifications");
+    JsonDocument doc;
+    JsonObject o = doc["notifications"].to<JsonObject>();
     o["count"] = count();
     o["severity"] = maxSeverity();
     event_send(doc);
@@ -1346,9 +1346,9 @@ void Notifications::serialize(JsonDocument &doc)
   doc["count"] = count();
   doc["max_severity"] = severity_name[maxSeverity()];
 
-  JsonArray list = doc.createNestedArray("notifications");
+  JsonArray list = doc["notifications"].to<JsonArray>();
   for(size_t i = 0; i < _count; i++) {
-    JsonObject o = list.createNestedObject();
+    JsonObject o = list.add<JsonObject>();
     o["id"] = _live[i].id;
     o["category"] = category_name[_live[i].category];
     o["severity"] = severity_name[_live[i].severity];
@@ -1437,10 +1437,7 @@ void handleNotifications(MongooseHttpServerRequest *request)
     return;
   }
 
-  const size_t capacity = JSON_ARRAY_SIZE(NOTIFICATION_MAX) +
-                          NOTIFICATION_MAX * JSON_OBJECT_SIZE(7) +
-                          JSON_OBJECT_SIZE(3) + 512;
-  DynamicJsonDocument doc(capacity);
+  JsonDocument doc;
   notifications.serialize(doc);
   response->setCode(200);
   serializeJson(doc, *response);
@@ -1516,7 +1513,7 @@ In `src/web_server.cpp`, inside `buildStatus()`, beside the other module blocks:
   // Exactly two fields: both UIs need a badge without a second round trip,
   // and nothing more belongs in a payload the HA integration already polls
   // hard. The list lives on /notifications.
-  JsonObject notify = doc.createNestedObject("notifications");
+  JsonObject notify = doc["notifications"].to<JsonObject>();
   notify["count"] = notifications.count();
   notify["severity"] = notifications.maxSeverity();
 ```

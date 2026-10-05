@@ -18,10 +18,7 @@ void handleNotifications(MongooseHttpServerRequest *request)
     return;
   }
 
-  const size_t capacity = JSON_ARRAY_SIZE(NOTIFICATION_MAX) +
-                          NOTIFICATION_MAX * JSON_OBJECT_SIZE(7) +
-                          JSON_OBJECT_SIZE(3) + 512;
-  DynamicJsonDocument doc(capacity);
+  JsonDocument doc;
   notifications.serialize(doc);
   response->setCode(200);
   serializeJson(doc, *response);
