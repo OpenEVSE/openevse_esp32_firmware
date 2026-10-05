@@ -2279,11 +2279,13 @@ void web_server_setup()
 
   web_server_listener = web_server_start_listeners(
     cert, key, www_https_port, www_http_port,
+    /** Attempt the configured TLS bind and propagate its actual result. */
     [](const char *certificate, const char *private_key)
     {
       DEBUG.printf("Starting HTTPS server, https://0.0.0.0:%d\n", www_https_port);
       return server.begin(www_https_port, certificate, private_key);
     },
+    /** Attempt the configured HTTP bind after TLS is unavailable or fails. */
     []()
     {
       DEBUG.printf("Starting HTTP server, http://0.0.0.0:%d\n", www_http_port);

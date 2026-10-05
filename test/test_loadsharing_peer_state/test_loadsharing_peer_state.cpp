@@ -81,7 +81,9 @@ TEST_CASE("local peer refresh preserves failed listener state despite an IP") {
   EmptyPeerFilesystem filesystem;
   listener = web_server_start_listeners(
     "certificate", "key", 443, 80,
+    /** Model failed TLS startup for the local peer. */
     [](const char *, const char *) { return false; },
+    /** Model failed HTTP fallback for the local peer. */
     []() { return false; });
   net.ip = "127.0.0.1";
 
@@ -106,7 +108,9 @@ TEST_CASE("local peer refresh reports the running fallback and preserves remote 
   EmptyPeerFilesystem filesystem;
   listener = web_server_start_listeners(
     "certificate", "key", 443, 8000,
+    /** Reject TLS so the local peer must describe HTTP instead. */
     [](const char *, const char *) { return false; },
+    /** Select the working HTTP fallback for the local peer. */
     []() { return true; });
   net.ip = "";
 

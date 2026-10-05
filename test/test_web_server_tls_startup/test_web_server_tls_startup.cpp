@@ -32,6 +32,7 @@ TEST_CASE("HTTPS requires non-empty certificate and private key")
                       nullptr != private_key && '\0' != private_key[0];
 
       CHECK(web_server_start_https(certificate, private_key,
+                                   /** Count a TLS attempt for this material combination. */
                                    [&listener](const char *cert, const char *key) {
                                      return listener.begin(cert, key);
                                    }) == expected);
@@ -47,6 +48,7 @@ TEST_CASE("HTTPS listener failure keeps HTTPS inactive")
   listener.start_succeeds = false;
 
   CHECK_FALSE(web_server_start_https("certificate", "private key",
+                                     /** Return the fake listener's rejected startup. */
                                      [&listener](const char *cert, const char *key) {
                                        return listener.begin(cert, key);
                                      }));
@@ -61,10 +63,12 @@ TEST_CASE("failed HTTPS and HTTP listeners leave the web server inactive")
 
   WebServerListenerState state = web_server_start_listeners(
     "certificate", "private key", 443, 80,
+    /** Count and reject the TLS attempt. */
     [&https_calls](const char *, const char *) {
       ++https_calls;
       return false;
     },
+    /** Count and reject the HTTP fallback attempt. */
     [&http_calls]() {
       ++http_calls;
       return false;
@@ -83,7 +87,9 @@ TEST_CASE("successful HTTPS selects its port without starting an HTTP fallback")
   unsigned int http_calls = 0;
   WebServerListenerState state = web_server_start_listeners(
     "certificate", "private key", 8443, 8080,
+    /** Model a successful TLS bind. */
     [](const char *, const char *) { return true; },
+    /** Count any unexpected HTTP fallback after successful TLS. */
     [&http_calls]() {
       ++http_calls;
       return true;
@@ -104,10 +110,12 @@ TEST_CASE("HTTP fallback selects its port after missing material or failed TLS")
     unsigned int http_calls = 0;
     WebServerListenerState state = web_server_start_listeners(
       certificate, "private key", 8443, 8080,
+      /** Count and reject TLS when the supplied material permits an attempt. */
       [&https_calls](const char *, const char *) {
         ++https_calls;
         return false;
       },
+      /** Count and accept the HTTP fallback. */
       [&http_calls]() {
         ++http_calls;
         return true;
