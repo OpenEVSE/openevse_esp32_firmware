@@ -184,7 +184,6 @@ properties:
     readOnly: true
   ssid:
     type: string
-    minLength: 1
   pass:
     type: string
   ap_ssid:
@@ -287,6 +286,8 @@ properties:
     type: number
   flags:
     type: number
+  flags2:
+    type: number
   emoncms_enabled:
     type: boolean
   mqtt_enabled:
@@ -332,6 +333,11 @@ properties:
     type: boolean
     description: |
       OpenEVSE default state when no claims are running ( 0: disabled | 1: active)
+  labs_enabled:
+    type: boolean
+    default: false
+    description: |
+      Web UI: reveal OpenEVSE Labs (in-development) features. Stored on the device so it applies to every browser.
   loadsharing_enabled:
     type: boolean
     default: false
@@ -405,16 +411,13 @@ properties:
     description: |
       Unix timestamp of last load sharing configuration update, used for conflict resolution
   loadsharing_role:
-    type: string
-    enum:
-      - ''
-      - controller
-      - member
-    default: ''
+    type: boolean
+    default: false
     description: |
-      Role of this device in the load sharing group. Empty string means load sharing is not configured.
-      'controller' means this device manages the group and pushes allocations.
-      'member' means this device receives allocations from a controller.
+      Role of this device in the load sharing group: `false` is a controller (the default), which
+      manages the group and pushes allocations, and `true` is a member, which receives allocations
+      from a controller. The pre-alpha string spellings (`""`, `"controller"`, `"member"`) are still
+      accepted on input and map to the same roles.
   loadsharing_controller_host:
     type: string
     default: ''
@@ -444,7 +447,7 @@ properties:
     description: Current the controller falls back to if the heartbeat is lost, in A
   voltage:
     type: integer
-    description: Configured supply voltage, in V. `0` means use the measured or default value
+    description: Configured supply voltage, in centivolts, so `23000` means 230 V. `0` means use the measured or default value
   lang:
     type: string
     description: User interface language, empty for the default
@@ -465,7 +468,6 @@ properties:
     enum:
       - mono
       - rgb
-    readOnly: true
     description: Type of LCD fitted. Only present when the controller reports it
   tft_12h_clock:
     type: boolean
@@ -528,12 +530,6 @@ properties:
   server_secret:
     type: string
     description: Signing secret for session cookies. Returned masked, never the real value
-  notification_acks:
-    type: string
-    description: Notifications the user has acknowledged
-  notification_acks_fw:
-    type: string
-    description: Firmware version the acknowledgements were recorded against
   pp_auto:
     type: boolean
     description: Automatic ampacity from the proximity pilot. Only present when the controller supports it
@@ -612,3 +608,7 @@ properties:
     type: integer
     readOnly: true
     description: Bit mask of the flag bits that have been changed from their defaults
+  flags2_changed:
+    type: integer
+    readOnly: true
+    description: Bit mask of the second flags word (for example `labs_enabled`) that has been changed from its defaults

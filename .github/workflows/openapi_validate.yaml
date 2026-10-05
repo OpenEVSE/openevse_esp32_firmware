@@ -17,7 +17,9 @@ jobs:
 
       # Every route registered in src/web_server*.cpp must have an api.yml path
       - name: Check routes are documented
-        run: python3 scripts/check_api_routes.py
+        run: |
+          python3 -m pip install --quiet pyyaml
+          python3 scripts/check_api_routes.py
 
       # Run Spectral
       - uses: stoplightio/spectral-action@latest

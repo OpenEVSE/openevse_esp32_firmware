@@ -12,6 +12,11 @@ import re
 import sys
 from pathlib import Path
 
+try:
+    import yaml
+except ImportError:
+    sys.exit("check_api_routes.py needs PyYAML: pip install pyyaml")
+
 ROOT = Path(__file__).resolve().parent.parent
 
 EXCLUDED = {
@@ -28,8 +33,8 @@ def source_routes():
 
 
 def spec_paths():
-    api = (ROOT / "api.yml").read_text(errors="replace")
-    return set(re.findall(r"^  ['\"]?(/[^\s:'\"]*)['\"]?:", api, re.M))
+    api = yaml.safe_load((ROOT / "api.yml").read_text(errors="replace"))
+    return set(api.get("paths", {}))
 
 
 def main():

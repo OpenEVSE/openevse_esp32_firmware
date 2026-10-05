@@ -33,7 +33,7 @@ throttle is active) and `403` (CSRF guard). The details are in the
 | Integrations | `/mqtt`, `/tesla/vehicles`, `/teslaveh` (legacy alias), `/emoncms/describe` |
 | Network and system | `/scan`, `/apoff`, `/restart`, `/reset`, `/certificates` |
 | Firmware | `/update`, `/migrate/status`, `/migrate/coredump`, `/migrate/expand16mb` |
-| Diagnostics | `/debug`, `/debug/console`, `/debug/crash`, `/debug/crash/raw`, `/evse`, `/evse/console`, `/rapi` (`/r` is an alias) |
+| Diagnostics | `/debug`, `/debug/console`, `/debug/crash`, `/debug/crash/raw`, `/debug/crash/report`, `/debug/crash/identity`, `/evse`, `/evse/console`, `/rapi` (`/r` is an alias) |
 | Events | `/ws` |
 
 Operations that change state (`/reset`, `/restart`, `/apoff`, `/divertmode`,
