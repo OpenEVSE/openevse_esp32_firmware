@@ -239,10 +239,11 @@ jobs:
         path: .pio/build/${{ matrix.env }}/*.bin
 
     - name: Configure AWS credentials for the ELF archive
-      # Pushes to this repo only. A fork PR runs in the base repo, so
-      # `github.repository` is true there while secrets are empty -- gating on
-      # the event is what keeps a fork's build from failing on a missing secret.
-      if: ${{ env.CRASH_ARCHIVE_ENABLED == 'true' && github.event_name == 'push' && matrix.env != 'native_openevse' }}
+      # Pushes, and PRs from branches in this repo: PR artifacts are what
+      # testers flash, and a dump from an unarchived build can never be
+      # symbolized. A fork PR runs in the base repo with empty secrets, so it
+      # is excluded by its head repo rather than left to fail on them.
+      if: ${{ env.CRASH_ARCHIVE_ENABLED == 'true' && (github.event_name == 'push' || github.event.pull_request.head.repo.full_name == github.repository) && matrix.env != 'native_openevse' }}
       continue-on-error: true
       uses: aws-actions/configure-aws-credentials@v6
       with:
@@ -260,7 +261,7 @@ jobs:
       # in /debug/crash and which is byte-identical to sha256sum of the ELF.
       # No version string, so no escaping and no ambiguity between two builds
       # that share a branch and commit but differ.
-      if: ${{ env.CRASH_ARCHIVE_ENABLED == 'true' && github.event_name == 'push' && matrix.env != 'native_openevse' }}
+      if: ${{ env.CRASH_ARCHIVE_ENABLED == 'true' && (github.event_name == 'push' || github.event.pull_request.head.repo.full_name == github.repository) && matrix.env != 'native_openevse' }}
       # As data, not script text: a branch named $(...) would otherwise run.
       env:
         REF_NAME: ${{ github.ref_name }}
