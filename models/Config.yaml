@@ -411,13 +411,19 @@ properties:
     description: |
       Unix timestamp of last load sharing configuration update, used for conflict resolution
   loadsharing_role:
-    type: boolean
+    oneOf:
+      - type: boolean
+      - type: string
+        enum:
+          - ''
+          - controller
+          - member
     default: false
     description: |
       Role of this device in the load sharing group: `false` is a controller (the default), which
       manages the group and pushes allocations, and `true` is a member, which receives allocations
-      from a controller. The pre-alpha string spellings (`""`, `"controller"`, `"member"`) are still
-      accepted on input and map to the same roles.
+      from a controller. The device always reports a boolean. The pre-alpha string spellings
+      (`""`, `"controller"`, `"member"`) are still accepted in a request and map to the same roles.
   loadsharing_controller_host:
     type: string
     default: ''
@@ -477,14 +483,10 @@ properties:
     description: TFT display theme, for example `dark`. Only present on builds with a TFT
   tft_brightness:
     type: integer
-    minimum: 10
-    maximum: 100
-    description: TFT active brightness, in %. Only present on builds with a TFT
+    description: TFT active brightness, in %. The web app offers 10 to 100. Only present on builds with a TFT
   tft_standby_brightness:
     type: integer
-    minimum: 0
-    maximum: 100
-    description: TFT standby brightness, in %, `0` turns the screen off. Only present on builds with a TFT
+    description: TFT standby brightness, in %, `0` turns the screen off. The web app offers 0 to 100. Only present on builds with a TFT
   temp_throttle_enabled:
     type: boolean
     description: Reduce the charge current as the temperature approaches the setpoint

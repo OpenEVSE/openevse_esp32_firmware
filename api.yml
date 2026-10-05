@@ -18,6 +18,10 @@ info:
       - intended for the browser UI. Sessions last 6 hours, or 30 days if `remember`
       was requested.
 
+    Over plain HTTP, Basic credentials and the session cookie are sent without
+    transport encryption. Use HTTPS, which the device serves once a certificate is
+    configured, to protect them in transit.
+
     ### Authentication failures
 
     | Status | Meaning |
@@ -2863,7 +2867,9 @@ components:
     BasicAuth:
       type: http
       scheme: basic
-      description: Admin username and password, sent on every request.
+      description: >-
+        Admin username and password, sent on every request. Over plain HTTP they
+        are not encrypted; use HTTPS to protect them in transit.
     SessionCookie:
       type: apiKey
       in: cookie
