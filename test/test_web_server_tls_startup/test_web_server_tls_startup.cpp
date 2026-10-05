@@ -3,12 +3,14 @@
 
 #include "web_server_tls_startup.h"
 
+/** Count TLS startup attempts and return a configurable success result. */
 class FakeHttpsListener
 {
   public:
     bool start_succeeds = true;
     unsigned int calls = 0;
 
+    /** Record an attempted listener start without opening a socket. */
     bool begin(const char *, const char *)
     {
       ++calls;
@@ -16,6 +18,7 @@ class FakeHttpsListener
     }
 };
 
+/** Missing or empty material must prevent the TLS callback from running. */
 TEST_CASE("HTTPS requires non-empty certificate and private key")
 {
   for(const char *certificate : {static_cast<const char *>(nullptr), "", "certificate"})
@@ -37,6 +40,7 @@ TEST_CASE("HTTPS requires non-empty certificate and private key")
   }
 }
 
+/** A rejected TLS startup must not be reported as an active HTTPS listener. */
 TEST_CASE("HTTPS listener failure keeps HTTPS inactive")
 {
   FakeHttpsListener listener;
@@ -49,6 +53,7 @@ TEST_CASE("HTTPS listener failure keeps HTTPS inactive")
   CHECK(listener.calls == 1);
 }
 
+/** Both failed attempts must yield inactive state and no advertised port. */
 TEST_CASE("failed HTTPS and HTTP listeners leave the web server inactive")
 {
   unsigned int https_calls = 0;
@@ -72,6 +77,7 @@ TEST_CASE("failed HTTPS and HTTP listeners leave the web server inactive")
   CHECK(state.port == 0);
 }
 
+/** Successful TLS selects its configured port without invoking the fallback. */
 TEST_CASE("successful HTTPS selects its port without starting an HTTP fallback")
 {
   unsigned int http_calls = 0;
@@ -89,6 +95,7 @@ TEST_CASE("successful HTTPS selects its port without starting an HTTP fallback")
   CHECK(http_calls == 0);
 }
 
+/** Missing material and failed TLS must both select the working HTTP listener. */
 TEST_CASE("HTTP fallback selects its port after missing material or failed TLS")
 {
   for(const char *certificate : {static_cast<const char *>(nullptr), "", "certificate"})

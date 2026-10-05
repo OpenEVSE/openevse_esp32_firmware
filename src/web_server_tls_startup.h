@@ -3,6 +3,7 @@
 
 #include <stdint.h>
 
+/** Result of startup: selected protocol/port, or an inactive listener with port zero. */
 struct WebServerListenerState
 {
   bool started;
@@ -10,6 +11,10 @@ struct WebServerListenerState
   uint16_t port;
 };
 
+/**
+ * Attempt TLS startup only when both certificate and key are nonempty.
+ * @return The supplied startup callback's result, or false for missing material.
+ */
 template <typename StartHttps>
 bool web_server_start_https(const char *certificate, const char *private_key,
                             StartHttps start_https)
@@ -22,6 +27,10 @@ bool web_server_start_https(const char *certificate, const char *private_key,
   return start_https(certificate, private_key);
 }
 
+/**
+ * Select HTTPS after successful startup, otherwise attempt the HTTP fallback.
+ * @return The running listener's protocol/port, or an inactive state if both fail.
+ */
 template <typename StartHttps, typename StartHttp>
 WebServerListenerState web_server_start_listeners(
   const char *certificate, const char *private_key,

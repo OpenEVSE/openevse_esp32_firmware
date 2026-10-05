@@ -9,13 +9,17 @@
 #define _EMONESP_WIFI_H
 static struct {
   String ip;
+  /** Return this test's independently controlled network address. */
   String getIp() { return ip; }
 } net;
 
 #define _EMONESP_WEB_SERVER_H
 static WebServerListenerState listener;
+/** Expose the selected test listener's availability to the real peer code. */
 bool web_server_is_running() { return listener.started; }
+/** Expose TLS only when the selected test listener actually started. */
 bool web_server_is_https() { return listener.started && listener.https; }
+/** Expose the selected test listener's port to the real peer code. */
 uint16_t web_server_port() { return listener.port; }
 
 #define LOADSHARING_DISCOVERY_TASK_H
@@ -34,6 +38,7 @@ String loadsharing_controller_host;
 uint32_t loadsharing_heartbeat_timeout = 10;
 uint32_t loadsharing_peers_version = 0;
 
+/** Repeated peer refresh must not turn an IP address into listener availability. */
 TEST_CASE("local peer refresh preserves failed listener state despite an IP") {
   listener = web_server_start_listeners(
     "certificate", "key", 443, 80,
@@ -57,6 +62,7 @@ TEST_CASE("local peer refresh preserves failed listener state despite an IP") {
   }
 }
 
+/** HTTP fallback remains available across IP refresh without changing remote peers. */
 TEST_CASE("local peer refresh reports the running fallback and preserves remote state") {
   listener = web_server_start_listeners(
     "certificate", "key", 443, 8000,

@@ -75,6 +75,7 @@ static String netDhcpNtpServer()
 
 NetManagerTask *NetManagerTask::_instance = NULL;
 
+/** Initialize network-task state and collaborators before network/mDNS startup. */
 NetManagerTask::NetManagerTask(LcdTask &lcd, LedManagerTask &led, TimeManager &time) :
   _mdnsStarted(false),
   _dnsServerStarted(false),
@@ -112,6 +113,10 @@ void NetManagerTask::begin()
   }
 }
 
+/**
+ * Advertise a running web listener's port and TLS state when mDNS is available.
+ * NetManagerTask::begin runs setup synchronously before web_server_setup calls this.
+ */
 void NetManagerTask::publishWebServer(uint16_t port, bool ssl)
 {
   if(!_mdnsStarted) {
@@ -643,6 +648,7 @@ void NetManagerTask::onNetEvent(WiFiEvent_t event, arduino_event_info_t &info)
 }
 #endif
 
+/** Initialize the configured network and mDNS before web-listener publication. */
 void NetManagerTask::setup()
 {
   DBUGLN("Starting Network Manager");

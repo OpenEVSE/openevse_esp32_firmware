@@ -2252,6 +2252,10 @@ void handleMqttAction(MongooseHttpServerRequest *request) {
   request->send(response);
 }
 
+/**
+ * Start the web listener, publish its selected protocol/port, and register routes.
+ * A failed TLS listener falls back to HTTP; total failure keeps listener state inactive.
+ */
 void web_server_setup()
 {
   const char *cert = NULL;
@@ -2614,16 +2618,19 @@ void web_server_setup()
   DEBUG.println(web_server_listener.started ? "Server started" : "Server failed to start");
 }
 
+/** Return whether startup established a primary web listener. */
 bool web_server_is_running()
 {
   return web_server_listener.started;
 }
 
+/** Return whether the successfully started primary listener uses TLS. */
 bool web_server_is_https()
 {
   return web_server_listener.started && web_server_listener.https;
 }
 
+/** Return the selected primary listener port, or zero when startup failed. */
 uint16_t web_server_port()
 {
   return web_server_listener.port;

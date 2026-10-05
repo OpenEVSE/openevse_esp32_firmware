@@ -177,6 +177,7 @@ class NetManagerTask : public MicroTasks::Task
     NetManagerTask(LcdTask &lcd, LedManagerTask &led, TimeManager &time);
 
     void begin();
+    /** Publish an already-started web listener through initialized mDNS. */
     void publishWebServer(uint16_t port, bool ssl);
 
     void wifiScan();

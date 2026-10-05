@@ -362,6 +362,10 @@ String LoadSharingGroupState::getLocalHostname() const {
   return esp_hostname + String(".local");
 }
 
+/**
+ * Build the filtered peer view, refreshing local IP and web-listener availability.
+ * Remote peer state is retained; the local peer is included regardless of filters.
+ */
 std::vector<LoadSharingGroupState::PeerInfo> LoadSharingGroupState::getAllPeers(
     bool includeDiscovered, bool includeGroup) const {
 
@@ -397,6 +401,7 @@ std::vector<LoadSharingGroupState::PeerInfo> LoadSharingGroupState::getAllPeers(
   return result;
 }
 
+/** Prepend a joined local peer whose URL, port and availability follow the listener. */
 void LoadSharingGroupState::addLocalPeer() {
   String localHostname = getLocalHostname();
 

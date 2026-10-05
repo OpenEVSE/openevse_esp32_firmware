@@ -1,4 +1,7 @@
-"""HTTP fallback and listener-state checks against standalone native firmware."""
+"""HTTP fallback and listener-state checks against standalone native firmware.
+
+Run with pytest --noconftest; NATIVE_BINARY_PATH can select a preserved native build.
+"""
 
 import json
 import os
@@ -51,6 +54,7 @@ def occupied_port():
 
 @contextmanager
 def native_server(directory, http_port, https_port):
+    """Run one isolated instance with a dummy TLS certificate and explicit ports."""
     binary = Path(os.environ.get("NATIVE_BINARY_PATH", str(
         Path(__file__).resolve().parents[2] / ".pio/build/native_openevse/program"))).resolve()
     assert binary.is_file(), "Build native_openevse before running these tests"
@@ -87,6 +91,7 @@ def native_server(directory, http_port, https_port):
 
 
 def wait_for_response(process, url):
+    """Wait for an HTTP response without following a potentially incorrect redirect."""
     deadline = time.monotonic() + 45
     while time.monotonic() < deadline:
         assert process.poll() is None, "native firmware exited during startup"
@@ -99,6 +104,7 @@ def wait_for_response(process, url):
 
 @pytest.mark.timeout(90)
 def test_failed_https_listener_serves_http_fallback(tmp_path):
+    """A blocked TLS port must leave the primary API reachable through HTTP."""
     with occupied_port() as https_port:
         with occupied_port() as http_port:
             pass  # Release only the HTTP port before starting the firmware.
@@ -110,6 +116,7 @@ def test_failed_https_listener_serves_http_fallback(tmp_path):
 
 @pytest.mark.timeout(90)
 def test_http_fallback_peer_advertises_selected_listener(tmp_path):
+    """The local peer URL must advertise the serving HTTP fallback and its port."""
     with occupied_port() as https_port:
         with occupied_port() as http_port:
             pass
@@ -124,6 +131,7 @@ def test_http_fallback_peer_advertises_selected_listener(tmp_path):
 
 @pytest.mark.timeout(90)
 def test_both_listener_failures_report_inactive_server(tmp_path):
+    """Blocked HTTP and TLS ports must produce an inactive-startup diagnostic."""
     with occupied_port() as https_port, occupied_port() as http_port:
         with native_server(tmp_path, http_port, https_port) as (process, log_path):
             deadline = time.monotonic() + 45
