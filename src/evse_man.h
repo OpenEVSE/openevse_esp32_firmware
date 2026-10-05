@@ -593,6 +593,7 @@ class EvseManager : public MicroTasks::Task
     // OPENEVSE_CABLE_TEMP_SOURCE_xxx index.
     bool isCableTempKnown() { return _monitor.isCableTempKnown(); }
     bool isCableTempConfigKnown() { return _monitor.isCableTempConfigKnown(); }
+    bool isCableTempConfigValid(uint8_t source) { return _monitor.isCableTempConfigValid(source); }
     bool isCableTempEnabled() { return _monitor.isCableTempEnabled(); }
     bool isCableTempCommandKnown() { return _monitor.isCableTempCommandKnown(); }
     bool isCableTempValid(uint8_t source) { return _monitor.isCableTempValid(source); }
