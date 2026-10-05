@@ -71,3 +71,45 @@ TEST_CASE("failed HTTPS and HTTP listeners leave the web server inactive")
   CHECK_FALSE(state.https);
   CHECK(state.port == 0);
 }
+
+TEST_CASE("successful HTTPS selects its port without starting an HTTP fallback")
+{
+  unsigned int http_calls = 0;
+  WebServerListenerState state = web_server_start_listeners(
+    "certificate", "private key", 8443, 8080,
+    [](const char *, const char *) { return true; },
+    [&http_calls]() {
+      ++http_calls;
+      return true;
+    });
+
+  CHECK(state.started);
+  CHECK(state.https);
+  CHECK(state.port == 8443);
+  CHECK(http_calls == 0);
+}
+
+TEST_CASE("HTTP fallback selects its port after missing material or failed TLS")
+{
+  for(const char *certificate : {static_cast<const char *>(nullptr), "", "certificate"})
+  {
+    unsigned int https_calls = 0;
+    unsigned int http_calls = 0;
+    WebServerListenerState state = web_server_start_listeners(
+      certificate, "private key", 8443, 8080,
+      [&https_calls](const char *, const char *) {
+        ++https_calls;
+        return false;
+      },
+      [&http_calls]() {
+        ++http_calls;
+        return true;
+      });
+
+    CHECK(state.started);
+    CHECK_FALSE(state.https);
+    CHECK(state.port == 8080);
+    CHECK(https_calls == (certificate != nullptr && certificate[0] != '\0' ? 1U : 0U));
+    CHECK(http_calls == 1);
+  }
+}

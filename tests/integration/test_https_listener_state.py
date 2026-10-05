@@ -6,11 +6,10 @@ import socket
 import subprocess
 import time
 from contextlib import contextmanager
+from pathlib import Path
 
 import pytest
 import requests
-
-from .conftest import get_native_binary_path
 
 
 def seed_server_certificate(filesystem, directory):
@@ -52,6 +51,9 @@ def occupied_port():
 
 @contextmanager
 def native_server(directory, http_port, https_port):
+    binary = Path(os.environ.get("NATIVE_BINARY_PATH", str(
+        Path(__file__).resolve().parents[2] / ".pio/build/native_openevse/program"))).resolve()
+    assert binary.is_file(), "Build native_openevse before running these tests"
     runtime = directory / "runtime"
     runtime.mkdir()
     filesystem = runtime / "epoxyfsdata"
@@ -62,7 +64,7 @@ def native_server(directory, http_port, https_port):
     with log_path.open("wb") as log:
         process = subprocess.Popen(
             [
-                str(get_native_binary_path()),
+                str(binary),
                 "--set-config", f"www_http_port={http_port}",
                 "--set-config", f"www_https_port={https_port}",
                 "--set-config", "www_certificate_id=1234",
