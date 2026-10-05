@@ -33,7 +33,7 @@ struct DiscoveredPeer {
 
 String esp_hostname = "dummy-evse";
 bool loadsharing_enabled = false;
-String loadsharing_role;
+bool loadsharing_role = false;
 String loadsharing_controller_host;
 uint32_t loadsharing_heartbeat_timeout = 10;
 uint32_t loadsharing_peers_version = 0;
