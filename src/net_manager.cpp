@@ -5,6 +5,7 @@
 #include "espal.h"
 #include "time_man.h"
 #include "event.h"
+#include "web_server_mdns.h"
 
 #include "LedManagerTask.h"
 
@@ -123,12 +124,18 @@ void NetManagerTask::publishWebServer(uint16_t port, bool ssl)
     return;
   }
 
-  MDNS.addService("http", "tcp", port);
-  MDNS.addService("openevse", "tcp", port);
-  MDNS.addServiceTxt("openevse", "tcp", "type", buildenv.c_str());
-  MDNS.addServiceTxt("openevse", "tcp", "version", currentfirmware.c_str());
-  MDNS.addServiceTxt("openevse", "tcp", "id", ESPAL.getLongId());
-  MDNS.addServiceTxt("openevse", "tcp", "ssl", ssl ? "1" : "0");
+  web_server_publish_mdns(MDNS, port,
+    /** Add selected-listener metadata after registering the OpenEVSE service. */
+    [ssl]() {
+      MDNS.addServiceTxt("openevse", "tcp", "type", buildenv.c_str());
+      MDNS.addServiceTxt("openevse", "tcp", "version", currentfirmware.c_str());
+      MDNS.addServiceTxt("openevse", "tcp", "id", ESPAL.getLongId());
+      MDNS.addServiceTxt("openevse", "tcp", "ssl", ssl ? "1" : "0");
+    },
+    /** Identify failed service publication without stopping the working listener. */
+    [](const char *service, uint16_t listener_port) {
+      DEBUG.printf("mDNS service %s.tcp failed on port %u\n", service, listener_port);
+    });
 }
 
 // -------------------------------------------------------------------
