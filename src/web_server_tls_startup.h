@@ -48,4 +48,13 @@ WebServerListenerState web_server_start_listeners(
   return {false, false, 0};
 }
 
+/** Start the optional HTTP redirect, registering its handler or reporting the failed port. */
+template <typename StartRedirect, typename RegisterRedirect, typename ReportFailure>
+void web_server_start_redirect(uint16_t port, StartRedirect start_redirect,
+                               RegisterRedirect register_redirect, ReportFailure report_failure)
+{
+  start_redirect(port);
+  register_redirect();
+}
+
 #endif // WEB_SERVER_TLS_STARTUP_H

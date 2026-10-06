@@ -2294,8 +2294,13 @@ void web_server_setup()
 
   if(web_server_listener.started && web_server_listener.https)
   {
-    redirect.begin(www_http_port);
-    redirect.on("/", handleHttpsRedirect);
+    web_server_start_redirect(www_http_port,
+      /** Bind the optional HTTP-to-HTTPS redirect and return the actual result. */
+      [](uint16_t port) { return redirect.begin(port); },
+      /** Install the redirect handler after its listener starts. */
+      []() { redirect.on("/", handleHttpsRedirect); },
+      /** Identify a failed redirect bind without changing the primary HTTPS listener. */
+      [](uint16_t port) { DEBUG.printf("HTTP->HTTPS redirect failed on port %u\n", port); });
   }
 
   if(web_server_listener.started) {

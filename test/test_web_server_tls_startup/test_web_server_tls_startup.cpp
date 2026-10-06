@@ -128,3 +128,37 @@ TEST_CASE("HTTP fallback selects its port after missing material or failed TLS")
     CHECK(http_calls == 1);
   }
 }
+
+/** A failed redirect bind must report its port without registering an unreachable handler. */
+TEST_CASE("redirect startup handles both bind results")
+{
+  for(bool start_succeeds : {false, true}) {
+    CAPTURE(start_succeeds);
+    unsigned int starts = 0;
+    unsigned int registrations = 0;
+    unsigned int failures = 0;
+    uint16_t attempted_port = 0;
+    uint16_t failed_port = 0;
+
+    web_server_start_redirect(8080,
+      /** Model a redirect bind and preserve the attempted port. */
+      [&](uint16_t port) {
+        ++starts;
+        attempted_port = port;
+        return start_succeeds;
+      },
+      /** Count handlers registered for the redirect listener. */
+      [&]() { ++registrations; },
+      /** Capture the failed port passed to the production diagnostic callback. */
+      [&](uint16_t port) {
+        ++failures;
+        failed_port = port;
+      });
+
+    CHECK(starts == 1);
+    CHECK(attempted_port == 8080);
+    CHECK(registrations == (start_succeeds ? 1U : 0U));
+    CHECK(failures == (start_succeeds ? 0U : 1U));
+    CHECK(failed_port == (start_succeeds ? 0 : 8080));
+  }
+}
