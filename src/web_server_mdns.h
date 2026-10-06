@@ -11,8 +11,13 @@ template <typename Responder, typename PublishMetadata, typename ReportFailure>
 void web_server_publish_mdns(Responder &responder, uint16_t port,
                              PublishMetadata publish_metadata, ReportFailure report_failure)
 {
-  responder.addService("http", "tcp", port);
-  responder.addService("openevse", "tcp", port);
+  if(!responder.addService("http", "tcp", port)) {
+    report_failure("http", port);
+  }
+  if(!responder.addService("openevse", "tcp", port)) {
+    report_failure("openevse", port);
+    return;
+  }
   publish_metadata();
 }
 
