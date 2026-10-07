@@ -6,6 +6,9 @@
 #include "debug.h"
 #include <LittleFS.h>
 #include <time.h>
+#include "sd_card.h"
+#include "sdlog_store.h"
+
 
 TsdbEnergyLogger tsdbEnergyLogger;
 
@@ -31,7 +34,7 @@ bool TsdbEnergyLogger::init_db() {
     cfg.max_records = TSDB_CALC_MAX_RECORDS(budget, TSDB_NUM_COLS);
   }
   cfg.index_stride = 380;
-#if defined(CONFIG_IDF_TARGET_ESP32P4)        // P4 has PSRAM
+#if defined(CONFIG_IDF_TARGET_ESP32P4) || defined(BOARD_HAS_PSRAM)   // P4, S3 LCD board
   cfg.alloc_strategy      = TSDB_ALLOC_PSRAM;
   cfg.buffer_pool_size    = 16 * 1024;
   cfg.use_paged_allocation= true;
@@ -79,14 +82,101 @@ bool TsdbEnergyLogger::start_writer() {
   return true;
 }
 
+bool energy_query_count_any(uint32_t start_ts, uint32_t end_ts, uint32_t &count)
+{
+  count = 0;
+#ifdef ENABLE_SD_CARD
+  if (sdlog_store_ready()) {
+    return sdlog_query_count(start_ts, end_ts, count);
+  }
+#endif
+  if (!tsdbEnergyLogger.isReady()) {
+    return false;
+  }
+  return tsdb_query_count(start_ts, end_ts, &count) == ESP_OK;
+}
+
+bool energy_aggregate_multi(uint32_t start_ts, uint32_t end_ts,
+                            tsdb_agg_request_t *reqs, uint8_t num_reqs,
+                            uint32_t &scanned)
+{
+  scanned = 0;
+  if (reqs == nullptr || num_reqs == 0) {
+    return false;
+  }
+
+#ifdef ENABLE_SD_CARD
+  if (sdlog_store_ready()) {
+    SdlogAggRequest sreqs[8];
+    if (num_reqs > 8) {
+      num_reqs = 8;
+    }
+    for (uint8_t r = 0; r < num_reqs; r++) {
+      sreqs[r].col    = reqs[r].param_index;
+      sreqs[r].result = 0;
+      switch (reqs[r].agg_type) {
+        case TSDB_AGG_SUM:   sreqs[r].agg = SDLOG_AGG_SUM;   break;
+        case TSDB_AGG_AVG:   sreqs[r].agg = SDLOG_AGG_AVG;   break;
+        case TSDB_AGG_MIN:   sreqs[r].agg = SDLOG_AGG_MIN;   break;
+        case TSDB_AGG_MAX:   sreqs[r].agg = SDLOG_AGG_MAX;   break;
+        case TSDB_AGG_COUNT: sreqs[r].agg = SDLOG_AGG_COUNT; break;
+        case TSDB_AGG_FIRST: sreqs[r].agg = SDLOG_AGG_FIRST; break;
+        case TSDB_AGG_LAST:  sreqs[r].agg = SDLOG_AGG_LAST;  break;
+        default:             return false;
+      }
+    }
+    if (!sdlog_aggregate_multi(start_ts, end_ts, sreqs, num_reqs, scanned)) {
+      return false;
+    }
+    for (uint8_t r = 0; r < num_reqs; r++) {
+      reqs[r].result = sreqs[r].result;
+    }
+    return true;
+  }
+#endif
+
+  // Guard on isReady(): with a failed tsdb_init the global handle is invalid.
+  if (!tsdbEnergyLogger.isReady()) {
+    return false;
+  }
+  return tsdb_aggregate_multi(start_ts, end_ts, reqs, num_reqs, &scanned) == ESP_OK;
+}
+
 void TsdbEnergyLogger::writer_task(void *arg) {
   TsdbEnergyLogger *self = static_cast<TsdbEnergyLogger *>(arg);
   TsdbWriteJob job;
   for (;;) {
     if (xQueueReceive(self->_jobs, &job, portMAX_DELAY) != pdTRUE) continue;
     if (job.rollup) self->rollup_yesterday();
-    esp_err_t e = tsdb_write(job.ts, job.row);
-    if (e != ESP_OK) DBUGF("tsdb_write failed: %d", e);
+
+    // Prefer the card when one is fitted and healthy; fall back to internal
+    // flash otherwise. Not both -- writing each sample twice would double the
+    // wear for no benefit, since only one store answers queries at a time.
+    //
+    // This runs on the writer task rather than loopTask, so a slow card costs
+    // history rather than a watchdog reset, exactly as the flash path does.
+    // The card branch compiles away entirely without ENABLE_SD_CARD, leaving
+    // the original tsdb_write() call and identical behaviour on the shipped
+    // boards.
+    bool logged = false;
+#ifdef ENABLE_SD_CARD
+    // sd_card_loop() owns the card and the ring, opening it once a card is
+    // mounted and closing it before an unmount -- both on loopTask, which is
+    // why sdlog_store takes its own lock rather than trusting "ready" to still
+    // be true by the time the append lands.
+    if (sdlog_store_ready()) {
+      logged = sdlog_store_append(job.ts, job.row);
+      if (!logged) {
+        // append() has already marked itself not-ready, so this falls through
+        // to flash now and stays there rather than retrying a broken card.
+        DBUGLN("card append failed, using internal flash for this sample");
+      }
+    }
+#endif
+    if (!logged) {
+      esp_err_t e = tsdb_write(job.ts, job.row);
+      if (e != ESP_OK) DBUGF("tsdb_write failed: %d", e);
+    }
   }
 }
 
@@ -146,7 +236,7 @@ void TsdbEnergyLogger::rollup_yesterday() {
 
   // Check record count cheaply; skip if no data
   uint32_t cnt = 0;
-  if (tsdb_query_count(d0u, d1u, &cnt) != ESP_OK || cnt == 0) {
+  if (!energy_query_count_any(d0u, d1u, cnt) || cnt == 0) {
     DBUGF("[tsdb rollup] no data for yesterday %04d-%02d-%02d, skipping",
           yday_year, yday_month, yday_tm.tm_mday);
     return;
@@ -159,9 +249,8 @@ void TsdbEnergyLogger::rollup_yesterday() {
     { TSDB_COL_TEMP,   TSDB_AGG_MIN, 0 },
   };
   uint32_t nscanned = 0;
-  esp_err_t err = tsdb_aggregate_multi(d0u, d1u, reqs, 3, &nscanned);
-  if (err != ESP_OK || nscanned == 0) {
-    DBUGF("[tsdb rollup] aggregate failed for yesterday, err=%d", (int)err);
+  if (!energy_aggregate_multi(d0u, d1u, reqs, 3, nscanned) || nscanned == 0) {
+    DBUGLN("[tsdb rollup] aggregate failed for yesterday");
     return;
   }
 
@@ -286,11 +375,12 @@ void TsdbEnergyLogger::rollup_yesterday() {
 }
 
 unsigned long TsdbEnergyLogger::loop(MicroTasks::WakeReason) {
-  // Throttle to the idle cadence whenever we are not actively charging.
-  unsigned long next_ms = TSDB_ENERGY_SAMPLE_MS;
+  // Cadence depends on what we are writing to (card vs flash) and whether a
+  // session is running; see tsdb_sample_interval_ms().
+  unsigned long next_ms = tsdb_sample_interval_ms(true, false);
   if (_ready && _evse) {
     bool charging = _evse->isCharging();
-    if (!charging) next_ms = TSDB_ENERGY_IDLE_SAMPLE_MS;
+    next_ms = tsdb_sample_interval_ms(charging, sdlog_store_ready());
 
     // Advance the energy baseline every wake (even when we skip the write below),
     // so deltas stay honest once logging resumes. A session reset to 0 on vehicle
@@ -346,6 +436,10 @@ unsigned long TsdbEnergyLogger::loop(MicroTasks::WakeReason) {
       // Never block here: if the writer is still inside a slow flash operation
       // the sample is dropped, which costs one point of history, not a reboot.
       // A pending rollup stays pending until a job carrying it is accepted.
+      //
+      // The card-or-flash choice is the writer's, not ours -- see writer_task().
+      // Queueing both the same way keeps the rollup bookkeeping in one place and
+      // gets card I/O off loopTask along with the flash writes.
       if (xQueueSend(_jobs, &job, 0) == pdTRUE) {
         _rollup_pending = false;
       } else {

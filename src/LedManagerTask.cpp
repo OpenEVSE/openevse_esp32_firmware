@@ -46,6 +46,63 @@ WS2812FX ws2812fx = WS2812FX(NEO_PIXEL_LENGTH, NEO_PIXEL_PIN, NEO_GRB + NEO_KHZ8
 // pre-init forward has to be suppressed (the value is applied in setup()).
 static bool neopixels_ready = false;
 
+// Travelling breath: the whole strip holds the EVSE state colour and only the
+// brightness moves, each LED a fixed fraction of a cycle behind the one before
+// it, so the glow flows along the chain instead of the strip blinking as one.
+//
+// Registered as a WS2812FX custom mode rather than driven from our own task, so
+// it runs inside the existing service() tick and keeps setColor/setSpeed/
+// setBrightness working exactly as they do for the stock effects. Returning the
+// frame interval is the library's contract for how soon to be called again.
+//
+// A raised cosine, not a triangle: a linear ramp reads as a mechanical pulse
+// because the eye's response is roughly logarithmic, and it visibly "corners" at
+// the top and bottom of every cycle. The squaring is a cheap gamma step -- the
+// dim end of a WS2812 is where banding shows, and without it the tail of each
+// breath stutters between a handful of discrete levels.
+#define BREATH_FRAME_MS      20     // 50 fps; below ~30 the ramp starts to step
+#define BREATH_FLOOR         24     // never fully dark: a charging EVSE stays visibly lit
+// Cycle fraction spanned by the whole strip. This MUST be 1.0 (or a whole
+// number); it is not a free aesthetic knob. At any other value the wave
+// finishes sweeping the strip part-way through the cycle and the rest is dead
+// time before it restarts at LED 0, which reads as a jerk at the wrap. At 1.0
+// the last LED's phase runs straight into the first's and the loop is seamless.
+#define BREATH_PHASE_SPREAD  1.0f
+
+// Mode index handed back by setCustomMode(); not assumed to be FX_MODE_CUSTOM_0.
+static uint8_t breathMode = FX_MODE_STATIC;
+
+static uint16_t ledBreathEffect()
+{
+  uint32_t period = ws2812fx.getSpeed();
+  if(period < 200) {
+    period = 200;              // guard: a zero speed would divide by zero below
+  }
+
+  uint32_t color = ws2812fx.getColor();
+  uint8_t  r = (uint8_t)(color >> 16), g = (uint8_t)(color >> 8), b = (uint8_t)color;
+  uint16_t n = ws2812fx.getLength();
+
+  float base = (float)(millis() % period) / (float)period;   // 0..1 through the cycle
+
+  for(uint16_t i = 0; i < n; i++)
+  {
+    // Each LED sits further round the same cycle, so the peak walks the chain.
+    float phase = base - ((float)i * BREATH_PHASE_SPREAD / (float)(n ? n : 1));
+    phase -= floorf(phase);
+
+    float wave = 0.5f * (1.0f - cosf(phase * 2.0f * (float)M_PI));   // 0..1, smooth
+    wave *= wave;                                                     // gamma
+    uint8_t level = BREATH_FLOOR + (uint8_t)((255 - BREATH_FLOOR) * wave);
+
+    ws2812fx.setPixelColor(i, (uint8_t)(r * level / 255),
+                              (uint8_t)(g * level / 255),
+                              (uint8_t)(b * level / 255));
+  }
+
+  return BREATH_FRAME_MS;
+}
+
 class LedAnimatorTask : public MicroTasks::Task
 {
   public:
@@ -205,6 +262,7 @@ void LedManagerTask::setup()
   ws2812fx.setBrightness(0 == brightness ? 255 : brightness - 1);
   ws2812fx.setSpeed(DEFAULT_FX_SPEED);
   ws2812fx.setColor(BLACK);
+  breathMode = ws2812fx.setCustomMode(F("Breath"), ledBreathEffect);
   ws2812fx.setMode(FX_MODE_STATIC);
   //ws2812fx.setBrightness(this->brightness);
   DBUGF("Brightness: %d ", this->brightness);
@@ -309,7 +367,19 @@ unsigned long LedManagerTask::loop(MicroTasks::WakeReason reason)
       //DBUGF("Color: %x\n", col);
       bool isCharging, isError;
       u_int16_t speed;
-      speed = 2000 - ((_evse->getChargeCurrent()/_evse->getMaxHardwareCurrent())*1000);
+      // Breathe faster the harder it is charging. Deliberately scaled BEFORE
+      // dividing: getChargeCurrent()/getMaxHardwareCurrent() is integer
+      // division, so it was 0 at every current below the hardware maximum and
+      // 1 only at exactly the maximum -- the rate never actually tracked the
+      // current, it just sat at 2000 ms. Clamped because a zero period would
+      // divide by zero in the effect, and getMaxHardwareCurrent() can read 0
+      // before the controller has answered.
+      {
+        long maxCur = _evse->getMaxHardwareCurrent();
+        long frac   = (maxCur > 0) ? ((long)_evse->getChargeCurrent() * 1000 / maxCur) : 0;
+        if(frac > 1000) { frac = 1000; }
+        speed = (u_int16_t)(2000 - frac);
+      }
       DBUGF("Speed: %d ",speed);
       DBUGF("Amps: %d ", _evse->getAmps());
       DBUGF("ChargeCurrent: %d ", _evse->getChargeCurrent());
@@ -326,7 +396,10 @@ unsigned long LedManagerTask::loop(MicroTasks::WakeReason reason)
           isCharging = _evse->isCharging();
           isError = _evse->isError();
           if(isCharging){
-            setAllRGB(col, FX_MODE_COLOR_WIPE, speed);
+            // Travelling breath rather than FX_MODE_COLOR_WIPE: the wipe fills
+            // the strip and snaps back to the start, and that hard restart is
+            // what reads as a blink rather than as charging.
+            setAllRGB(col, breathMode, speed);
           } else if(isError){
             setAllRGB(col, FX_MODE_FADE, DEFAULT_FX_SPEED);
           } else {
