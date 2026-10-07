@@ -122,6 +122,11 @@ struct PeerScenario
   // Empty = inherit the scenario-level schedule.
   std::string schedule_json;
 
+  // Treat inputs.live_pwr as the rest of the house and add this EV's own draw
+  // to it, as a whole-site meter would see. Without it, live_pwr is used
+  // as-is (recorded site data that already includes the EV).
+  bool live_pwr_add_ev = false;
+
   // Whether an RFID reader is present on the bus.
   bool rfid_reader = true;
 
@@ -153,6 +158,10 @@ struct Scenario
 
   // raw config JSON to apply to app_config (or empty)
   std::string config_json;
+
+  // Station current (config max_current_soft). It lives in the controller,
+  // so it seeds each SimEvse rather than app_config. -1 = hardware max.
+  long max_current_soft = -1;
 
   GroupScenario group;
   double supply_max_pwr_w = 0.0;

@@ -201,7 +201,7 @@ int run(const std::string &scenario_path,
   peer_ids.reserve(scenario.peers.size());
 
   for (const auto &ps : scenario.peers) {
-    auto p = std::make_unique<Peer>(ps, eventLog);
+    auto p = std::make_unique<Peer>(ps, eventLog, scenario.max_current_soft);
     p->begin();
     peer_ids.push_back(p->id());
     peers.push_back(std::move(p));
@@ -364,6 +364,7 @@ int run(const std::string &scenario_path,
       writer.addString(limitSummary(p->limit()));
       writer.addBool(p->rfid().getAuthenticatedTag().length() > 0);
       writer.addInt(currentScheduleEvent(p->scheduler()));
+      writer.addDouble(p->evse().getSessionEnergy(), 1);
     }
     writer.addDouble(group_max_current * scenario.nominal_voltage, 1);
     writer.addDouble(group_total_actual_w, 1);

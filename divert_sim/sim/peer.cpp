@@ -7,7 +7,7 @@
 
 namespace sim {
 
-Peer::Peer(const PeerScenario &scenario, EventLog &eventLog) :
+Peer::Peer(const PeerScenario &scenario, EventLog &eventLog, long max_current_soft) :
     _scenario(scenario),
     _sim(),
     _stream(),
@@ -26,6 +26,9 @@ Peer::Peer(const PeerScenario &scenario, EventLog &eventLog) :
   _sim.voltage = _scenario.voltage;
   _sim.min_current = _scenario.min_current;
   _sim.max_current_hw = _scenario.max_current;
+  _sim.max_configured = (max_current_soft > 0 && max_current_soft < _scenario.max_current)
+                          ? max_current_soft
+                          : (long) _scenario.max_current;
   _sim.battery_capacity_kwh = _scenario.battery_capacity_kwh;
   _sim.max_charge_rate_kw = _scenario.max_charge_rate_kw;
   _sim.soc = _scenario.initial_soc;
@@ -109,6 +112,12 @@ void Peer::applyInputs(long t_sec)
 
   if (!_scenario.live_pwr.empty()) {
     last_live_pwr_w = _scenario.live_pwr.valueAt(t_sec);
+    if (_scenario.live_pwr_add_ev) {
+      // Use the firmware's own ammeter reading for the EV share: the shaper
+      // adds that reading back, so an ideal site meter in step with the
+      // ammeter cancels exactly instead of chasing a one-poll lag.
+      last_live_pwr_w += _evse.getAmps() * _evse.getVoltage();
+    }
     _shaper.setLivePwr((int) last_live_pwr_w);
   }
   if (!_scenario.temperature.empty()) {

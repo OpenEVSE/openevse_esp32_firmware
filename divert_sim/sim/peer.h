@@ -59,7 +59,7 @@ private:
 class Peer
 {
 public:
-  Peer(const PeerScenario &scenario, EventLog &eventLog);
+  Peer(const PeerScenario &scenario, EventLog &eventLog, long max_current_soft = -1);
   ~Peer();
 
   void begin();

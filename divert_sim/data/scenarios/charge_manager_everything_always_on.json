@@ -1,0 +1,134 @@
+{
+  "meta": {
+    "id": "charge_manager_everything_always_on",
+    "title": "Charge Manager: every feature always active",
+    "category": "charge_manager",
+    "profile": "everything_always_on"
+  },
+  "simulation": {
+    "duration": 18000,
+    "tick_interval": 5,
+    "start_time": "2024-01-15T08:00:00Z"
+  },
+  "config": {
+    "time_zone": "UTC|UTC0",
+    "scheduler_start_window": 0,
+    "default_state": true,
+    "max_current_soft": 32,
+    "charge_mode": "eco",
+    "divert_enabled": true,
+    "divert_type": 0,
+    "divert_PV_ratio": 1.1,
+    "divert_attack_smoothing_time": 20,
+    "divert_decay_smoothing_time": 120,
+    "divert_min_charge_time": 300,
+    "current_shaper_enabled": true,
+    "current_shaper_max_pwr": 6500,
+    "current_shaper_smoothing_time": 30,
+    "current_shaper_min_pause_time": 60,
+    "current_shaper_data_maxinterval": 600,
+    "rfid_enabled": true,
+    "rfid_storage": "DEADBEEF",
+    "ocpp_enabled": true,
+    "limit_default_type": "energy",
+    "limit_default_value": 6000,
+    "temp_throttle_enabled": true,
+    "temp_throttle_setpoint": 60
+  },
+  "peers": [
+    {
+      "id": "evse-001",
+      "voltage": 240,
+      "min_current": 6,
+      "max_current": 32,
+      "ev": {
+        "battery_capacity_kwh": 75.0,
+        "initial_soc": 30.0,
+        "max_charge_rate_kw": 7.2
+      },
+      "inputs": {
+        "solar": [
+          {
+            "time": 0,
+            "value": 0
+          },
+          {
+            "time": 1800,
+            "value": 3600
+          },
+          {
+            "time": 9000,
+            "value": 0
+          }
+        ],
+        "live_pwr": [
+          {
+            "time": 0,
+            "value": 2000
+          },
+          {
+            "time": 7200,
+            "value": 4500
+          },
+          {
+            "time": 9000,
+            "value": 2000
+          }
+        ]
+      },
+      "live_pwr_add_ev": true,
+      "events": [
+        {
+          "time": 0,
+          "claim": {
+            "client": "ocpp",
+            "state": "disabled"
+          }
+        },
+        {
+          "time": 1200,
+          "rfid": "DEADBEEF"
+        },
+        {
+          "time": 2400,
+          "claim": {
+            "client": "ocpp",
+            "state": "active",
+            "charge_current": 16
+          }
+        },
+        {
+          "time": 5400,
+          "temperature": 70
+        },
+        {
+          "time": 6600,
+          "temperature": 25
+        },
+        {
+          "time": 12600,
+          "vehicle": false
+        },
+        {
+          "time": 12600,
+          "claim": {
+            "client": "ocpp",
+            "state": "disabled"
+          }
+        },
+        {
+          "time": 13200,
+          "vehicle": true
+        },
+        {
+          "time": 13800,
+          "claim": {
+            "client": "ocpp",
+            "state": "active",
+            "charge_current": 16
+          }
+        }
+      ]
+    }
+  ]
+}
