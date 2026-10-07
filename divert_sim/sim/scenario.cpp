@@ -8,6 +8,8 @@
 
 #include <ArduinoJson.h>
 
+#include "evse_man.h"
+
 namespace sim {
 
 namespace {
@@ -36,7 +38,48 @@ std::time_t parseEpoch(const std::string &s)
   return 0;
 }
 
+std::string toJson(JsonVariantConst v)
+{
+  std::stringstream out;
+  serializeJson(v, out);
+  return out.str();
+}
+
 } // namespace
+
+bool lookupClient(const std::string &name, uint32_t &client, int &priority)
+{
+  struct Entry { const char *name; uint32_t client; int priority; };
+  static const Entry entries[] = {
+    { "manual",       EvseClient_OpenEVSE_Manual,       EvseManager_Priority_Manual },
+    { "ocpp",         EvseClient_OpenEVSE_OCPP,         EvseManager_Priority_OCPP },
+    { "mqtt",         EvseClient_OpenEVSE_MQTT,         EvseManager_Priority_MQTT },
+    { "evcc",         EvseClient_evcc,                  EvseManager_Priority_API },
+    { "demandshaper", EvseClient_OpenEnergyMonitor_DemandShaper, EvseManager_Priority_API },
+    { "divert",       EvseClient_OpenEVSE_Divert,       EvseManager_Priority_Divert },
+    { "boost",        EvseClient_OpenEVSE_Boost,        EvseManager_Priority_Boost },
+    { "schedule",     EvseClient_OpenEVSE_Schedule,     EvseManager_Priority_Timer },
+    { "limit",        EvseClient_OpenEVSE_Limit,        EvseManager_Priority_Limit },
+    { "rfid",         EvseClient_OpenEVSE_RFID,         EvseManager_Priority_RFID },
+    { "shaper",       EvseClient_OpenEVSE_Shaper,       EvseManager_Priority_Safety },
+    { "temp_throttle", EvseClient_OpenEVSE_TempThrottle, EvseManager_Priority_Safety },
+    { "loadsharing",  EvseClient_OpenEVSE_LoadSharing,  EvseManager_Priority_Safety },
+  };
+  for (const auto &e : entries) {
+    if (name == e.name) {
+      client = e.client;
+      priority = e.priority;
+      return true;
+    }
+  }
+  // Numeric client id (as reported by /claims) — default to API priority.
+  if (!name.empty() && name.find_first_not_of("0123456789") == std::string::npos) {
+    client = (uint32_t) std::strtoul(name.c_str(), nullptr, 10);
+    priority = EvseManager_Priority_API;
+    return true;
+  }
+  return false;
+}
 
 bool Scenario::loadFromFile(const std::string &path)
 {
@@ -52,7 +95,9 @@ bool Scenario::loadFromFile(const std::string &path)
   buf << file.rdbuf();
   std::string text = buf.str();
 
-  DynamicJsonDocument doc(64 * 1024);
+  // Replay scenarios inline thousands of samples; size the document to the
+  // file rather than a fixed budget.
+  DynamicJsonDocument doc(64 * 1024 + text.size() * 4);
   DeserializationError err = deserializeJson(doc, text);
   if (err) {
     std::cerr << "Scenario: JSON parse error: " << err.c_str() << std::endl;
@@ -75,6 +120,10 @@ bool Scenario::loadFromFile(const std::string &path)
     std::stringstream cfg;
     serializeJson(root["config"], cfg);
     config_json = cfg.str();
+  }
+
+  if (root.containsKey("schedule")) {
+    schedule_json = toJson(root["schedule"]);
   }
 
   JsonObjectConst grp = root["group"].as<JsonObjectConst>();
@@ -138,6 +187,11 @@ bool Scenario::loadFromFile(const std::string &path)
       p.max_charge_rate_kw = ev["max_charge_rate_kw"] | 7.2;
       p.initial_request_current = ev["request_current"] | true;
       p.initial_aux_load_kw = ev["aux_load_kw"] | 0.0;
+      p.report_soc = ev["report_soc"] | false;
+    }
+    p.rfid_reader = pj["rfid_reader"] | true;
+    if (pj.containsKey("schedule")) {
+      p.schedule_json = toJson(pj["schedule"]);
     }
 
     JsonObjectConst init = pj["initial"].as<JsonObjectConst>();
@@ -176,6 +230,15 @@ bool Scenario::loadFromFile(const std::string &path)
                                     (long) start_epoch,
                                     duration_sec)) {
           std::cerr << "Scenario: invalid inputs.live_pwr for peer " << p.id << std::endl;
+          return false;
+        }
+      }
+      if (inputs.containsKey("temperature")) {
+        if (!p.temperature.loadFromJson(inputs["temperature"],
+                                        scenario_dir,
+                                        (long) start_epoch,
+                                        duration_sec)) {
+          std::cerr << "Scenario: invalid inputs.temperature for peer " << p.id << std::endl;
           return false;
         }
       }
@@ -234,6 +297,58 @@ bool Scenario::loadFromFile(const std::string &path)
             e.set_manual = true;
             e.manual_state = ms;
           }
+        }
+        if (ej.containsKey("rfid") && ej["rfid"].is<const char *>()) {
+          e.set_rfid = true;
+          e.rfid_tag = ej["rfid"].as<const char *>();
+        }
+        if (ej.containsKey("temperature")) {
+          e.set_temperature = true;
+          e.temperature = ej["temperature"].as<double>();
+        }
+        if (ej.containsKey("soc")) {
+          e.set_soc = true;
+          e.soc = ej["soc"].as<double>();
+        }
+        if (ej.containsKey("claim")) {
+          JsonObjectConst cj = ej["claim"].as<JsonObjectConst>();
+          std::string name = cj["client"] | "";
+          if (cj["client"].is<long>()) name = std::to_string(cj["client"].as<long>());
+          if (!lookupClient(name, e.claim_client, e.claim_priority)) {
+            std::cerr << "Scenario: unknown claim client '" << name << "'" << std::endl;
+            return false;
+          }
+          e.set_claim = true;
+          e.claim_priority = cj["priority"] | e.claim_priority;
+          e.claim_state = cj["state"] | "";
+          e.claim_charge_current = cj["charge_current"] | -1L;
+          e.claim_max_current = cj["max_current"] | -1L;
+          e.claim_auto_release = cj["auto_release"] | false;
+        }
+        if (ej.containsKey("release")) {
+          std::string name = ej["release"] | "";
+          if (ej["release"].is<long>()) name = std::to_string(ej["release"].as<long>());
+          int unused_priority;
+          if (!lookupClient(name, e.release_client, unused_priority)) {
+            std::cerr << "Scenario: unknown release client '" << name << "'" << std::endl;
+            return false;
+          }
+          e.set_release = true;
+        }
+        if (ej.containsKey("limit")) {
+          e.set_limit = true;
+          if (ej["limit"].is<const char *>()) {
+            e.limit_clear = true;
+          } else {
+            JsonObjectConst lj = ej["limit"].as<JsonObjectConst>();
+            e.limit_type = lj["type"] | "none";
+            e.limit_value = lj["value"] | 0;
+            e.limit_auto_release = lj["auto_release"] | true;
+          }
+        }
+        if (ej.containsKey("schedule")) {
+          e.set_schedule = true;
+          e.schedule_json = toJson(ej["schedule"]);
         }
         p.events.push_back(e);
       }

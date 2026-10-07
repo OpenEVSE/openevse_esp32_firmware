@@ -6,11 +6,16 @@
 #include "scheduler.h"
 #include "scheduler_time.h"
 #include "fs_util.h"
-#include "time_man.h"
 #include "emonesp.h"
 #include "app_config.h"
 #include "event.h"
+#ifndef DIVERT_SIM
+#include "time_man.h"
 #include "mqtt.h"
+#else
+// divert_sim drives the scheduler from simulated wall-clock time.
+extern time_t divertmode_get_time();
+#endif
 #include "divert.h"
 #include "current_shaper.h"
 #include "rfid.h"
@@ -175,8 +180,13 @@ uint32_t Scheduler::EventInstance::randomiseStartOffset()
   return offset;
 }
 
-Scheduler::Scheduler(EvseManager &evse) :
+Scheduler::Scheduler(EvseManager &evse, DivertTask &divert, CurrentShaperTask &shaper,
+                     RfidTask &rfid, Limit &limit) :
   _evse(&evse),
+  _divert(&divert),
+  _shaper(&shaper),
+  _rfid(&rfid),
+  _limit(&limit),
   _events(),
   _firstEvent(),
   _activeEvent(),
@@ -212,7 +222,9 @@ void Scheduler::setup()
     }
   }
 
+#ifndef DIVERT_SIM
   timeManager.onTimeChange(&_timeChangeListener);
+#endif
 
   _loading = false;
 }
@@ -255,7 +267,7 @@ unsigned long Scheduler::loop(MicroTasks::WakeReason reason)
     }
     if(_activeLimitType != SchedulerLimitType::None) {
       // Restore the user's persistent default limit rather than wiping it.
-      limit.setDefaultLimit(limit_default_type.c_str(), limit_default_value);
+      _limit->setDefaultLimit(limit_default_type.c_str(), limit_default_value);
       _activeLimitType = SchedulerLimitType::None;
     }
 
@@ -443,8 +455,10 @@ void Scheduler::buildSchedule()
   doc["schedule_plan_version"] = ++_plan_version;
   event_send(doc);
 
+#ifndef DIVERT_SIM
   // publish updated schedule to mqtt
   mqtt.publishSchedule();
+#endif
 
   // wake the main task to see if we actually need to do something
   MicroTask.wakeTask(this);
@@ -1003,7 +1017,12 @@ void Scheduler::notifyConfigChanged()
 void Scheduler::getCurrentTime(int &day, int32_t &offset)
 {
   timeval utc_time;
+#ifdef DIVERT_SIM
+  utc_time.tv_sec = divertmode_get_time();
+  utc_time.tv_usec = 0;
+#else
   gettimeofday(&utc_time, NULL);
+#endif
 
   tm local_time;
   localtime_r(&utc_time.tv_sec, &local_time);
@@ -1078,15 +1097,15 @@ void Scheduler::applyFeature(Event *event)
     case SchedulerFeature::Divert:
       // Enter eco mode at elevated priority (TimerFeature, 900) — above the
       // base Timer claim but below Manual/RFID/OCPP so those still override
-      divert.setTimerDivertActive(true);
+      _divert->setTimerDivertActive(true);
       break;
     case SchedulerFeature::Shaper:
-      shaper.setTimerEnabled(true);
+      _shaper->setTimerEnabled(true);
       break;
     case SchedulerFeature::RFID:
       // Re-probe at window start — the boot-time presence check can
       // false-negative and never recovers on its own.
-      if(!rfid.probeReader()) {
+      if(!_rfid->probeReader()) {
         // No reader — timer-RFID cannot function; skip enforcement so the
         // rest of the scheduled event (state/current) still applies, but
         // surface it: silently failing open is wrong for an access-control
@@ -1097,7 +1116,7 @@ void Scheduler::applyFeature(Event *event)
         event_send(evt);
         break;
       }
-      rfid.setTimerRequired(true);
+      _rfid->setTimerRequired(true);
       break;
     case SchedulerFeature::OCPP:
       // OCPP manages its own claim state; no additional action here
@@ -1116,13 +1135,13 @@ void Scheduler::cleanupFeature(SchedulerFeature feature)
   switch(feature)
   {
     case SchedulerFeature::Divert:
-      divert.setTimerDivertActive(false);
+      _divert->setTimerDivertActive(false);
       break;
     case SchedulerFeature::Shaper:
-      shaper.setTimerEnabled(false);
+      _shaper->setTimerEnabled(false);
       break;
     case SchedulerFeature::RFID:
-      rfid.setTimerRequired(false);
+      _rfid->setTimerRequired(false);
       break;
     case SchedulerFeature::Current:
       // Charge current resets automatically when the schedule claim is re-made
@@ -1155,6 +1174,6 @@ bool Scheduler::applyLimit(Event *event)
   props.setType(type);
   props.setValue(event->getLimitValue());
   props.setAutoRelease(true);
-  limit.set(props);
+  _limit->set(props);
   return true;
 }

@@ -3,6 +3,8 @@
 #include "app_config.h"
 #include "openevse.h"
 
+#include <iostream>
+
 namespace sim {
 
 Peer::Peer(const PeerScenario &scenario, EventLog &eventLog) :
@@ -12,7 +14,13 @@ Peer::Peer(const PeerScenario &scenario, EventLog &eventLog) :
     _evse(_stream, eventLog),
     _divert(_evse),
     _shaper(),
-    _manual(_evse)
+    _manual(_evse),
+    _boost(),
+    _limit(),
+    _temp_throttle(),
+    _rfid_reader(),
+    _rfid(),
+    _scheduler(_evse, _divert, _shaper, _rfid, _limit)
 {
   _sim.id = _scenario.id;
   _sim.voltage = _scenario.voltage;
@@ -28,6 +36,8 @@ Peer::Peer(const PeerScenario &scenario, EventLog &eventLog) :
   _sim.state = _scenario.initial_vehicle
                    ? OPENEVSE_STATE_CONNECTED
                    : OPENEVSE_STATE_NOT_CONNECTED;
+
+  _rfid_reader.present = _scenario.rfid_reader;
 
   online = _scenario.initial_online;
   vehicle = _scenario.initial_vehicle;
@@ -54,6 +64,35 @@ void Peer::begin()
 
   _shaper.begin(_evse);
   _boost.begin(_evse);
+  _limit.begin(_evse);
+  _temp_throttle.begin(_evse);
+  _rfid.begin(_evse, _rfid_reader);
+  _scheduler.begin();
+}
+
+void Peer::loadSchedule(const std::string &scenario_default)
+{
+  const std::string &json = _scenario.schedule_json.empty()
+                              ? scenario_default
+                              : _scenario.schedule_json;
+  if (!json.empty()) {
+    replaceSchedule(json);
+  }
+}
+
+void Peer::replaceSchedule(const std::string &json)
+{
+  // /schedule POSTs add or update events; a Charge Manager edit that drops a
+  // rule DELETEs its timers. Mirror that by removing every existing event
+  // before adding the new set.
+  DynamicJsonDocument current(_scheduler.scheduleJsonCapacity());
+  _scheduler.serialize(current);
+  for (JsonObjectConst e : current.as<JsonArrayConst>()) {
+    _scheduler.removeEvent(e["id"] | 0U);
+  }
+  if (!_scheduler.deserialize(json.c_str())) {
+    std::cerr << "Peer " << id() << ": failed to load schedule" << std::endl;
+  }
 }
 
 void Peer::applyInputs(long t_sec)
@@ -71,6 +110,12 @@ void Peer::applyInputs(long t_sec)
   if (!_scenario.live_pwr.empty()) {
     last_live_pwr_w = _scenario.live_pwr.valueAt(t_sec);
     _shaper.setLivePwr((int) last_live_pwr_w);
+  }
+  if (!_scenario.temperature.empty()) {
+    _sim.temperature = _scenario.temperature.valueAt(t_sec);
+  }
+  if (_scenario.report_soc && vehicle) {
+    _evse.setVehicleStateOfCharge((int) _sim.soc);
   }
   if (!_scenario.vrms.empty()) {
     double v = _scenario.vrms.valueAt(t_sec);
@@ -108,6 +153,33 @@ void Peer::applyEvents(long t_sec)
         _manual.claim(props);
       }
     }
+    if (e.set_rfid) _rfid_reader.presentCard(e.rfid_tag);
+    if (e.set_temperature) _sim.temperature = e.temperature;
+    if (e.set_soc) _sim.soc = e.soc;
+    if (e.set_claim) {
+      EvseProperties props;
+      if (e.claim_state == "active") props.setState(EvseState::Active);
+      else if (e.claim_state == "disabled") props.setState(EvseState::Disabled);
+      if (e.claim_charge_current >= 0) props.setChargeCurrent((uint32_t) e.claim_charge_current);
+      if (e.claim_max_current >= 0) props.setMaxCurrent((uint32_t) e.claim_max_current);
+      props.setAutoRelease(e.claim_auto_release);
+      _evse.claim((EvseClient) e.claim_client, e.claim_priority, props);
+    }
+    if (e.set_release) _evse.release((EvseClient) e.release_client);
+    if (e.set_limit) {
+      if (e.limit_clear) {
+        _limit.clear();
+      } else {
+        LimitProperties props;
+        LimitType type = LimitType::None;
+        type.fromString(e.limit_type.c_str());
+        props.setType(type);
+        props.setValue(e.limit_value);
+        props.setAutoRelease(e.limit_auto_release);
+        _limit.set(props);
+      }
+    }
+    if (e.set_schedule) replaceSchedule(e.schedule_json);
     _next_event_idx++;
   }
 }

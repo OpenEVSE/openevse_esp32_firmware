@@ -80,7 +80,7 @@ EventLog eventLog;
 CertificateStore certs;
 
 EvseManager evse(RAPI_PORT, eventLog);
-Scheduler scheduler(evse);
+Scheduler scheduler(evse, divert, shaper, rfid, limit);
 ManualOverride manual(evse);
 DivertTask divert(evse);
 #ifndef ENABLE_TSDB

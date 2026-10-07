@@ -18,6 +18,9 @@
 #include "loadsharing_algorithm.h"
 #include "openevse.h"
 
+#include <cstdlib>
+#include <cstring>
+
 #include "csv_writer.h"
 #include "peer.h"
 #include "scenario.h"
@@ -67,6 +70,13 @@ const char *clientName(EvseClient client)
     case EvseClient_OpenEVSE_Manual:      return "manual";
     case EvseClient_OpenEVSE_Schedule:    return "schedule";
     case EvseClient_OpenEVSE_Limit:       return "limit";
+    case EvseClient_OpenEVSE_Boost:       return "boost";
+    case EvseClient_OpenEVSE_RFID:        return "rfid";
+    case EvseClient_OpenEVSE_OCPP:        return "ocpp";
+    case EvseClient_OpenEVSE_MQTT:        return "mqtt";
+    case EvseClient_OpenEVSE_TempThrottle: return "temp_throttle";
+    case EvseClient_OpenEVSE_Error:       return "error";
+    case EvseClient_evcc:                 return "evcc";
     default:                              return "client";
   }
 }
@@ -125,6 +135,36 @@ std::string formatClaimDetails(EvseManager &evse, std::string &aggregate_state)
   return details.str();
 }
 
+// "<type>:<value>" for an active session limit, "none" otherwise.
+std::string limitSummary(Limit &limit)
+{
+  if (!limit.hasLimit()) return "none";
+  LimitProperties props = limit.get();
+  std::ostringstream s;
+  s << props.getType().toString() << ':' << props.getValue();
+  return s.str();
+}
+
+// Id of the schedule event the firmware considers current, or 0.
+long currentScheduleEvent(Scheduler &scheduler)
+{
+  DynamicJsonDocument plan(1024);
+  scheduler.serializePlan(plan);
+  JsonVariantConst current = plan["current_event"];
+  if (!current.is<JsonObjectConst>()) return 0;
+  return current["id"] | 0L;
+}
+
+// Point the C library at the configured time zone, as TimeManager does on
+// the device (config "time_zone" is "<name>|<POSIX TZ>").
+void applyTimeZone()
+{
+  const char *tz = time_zone.c_str();
+  const char *split = strchr(tz, '|');
+  setenv("TZ", split ? split + 1 : tz, 1);
+  tzset();
+}
+
 } // namespace
 
 int run(const std::string &scenario_path,
@@ -152,6 +192,8 @@ int run(const std::string &scenario_path,
     return 0;
   }
 
+  applyTimeZone();
+
   // Build peers
   std::vector<std::unique_ptr<Peer>> peers;
   peers.reserve(scenario.peers.size());
@@ -165,13 +207,19 @@ int run(const std::string &scenario_path,
     peers.push_back(std::move(p));
   }
 
-  CsvWriter writer;
-  if (!writer.open(output_path)) return 2;
-  writer.writeHeader(peer_ids);
-
+  // The schedulers read the simulated clock, which must be set before their
+  // first loop; setup() already ran inside begin().
   std::time_t t_start = scenario.start_epoch != 0
                           ? scenario.start_epoch
                           : std::time(nullptr);
+  simulated_time = t_start;
+  for (auto &p : peers) {
+    p->loadSchedule(scenario.schedule_json);
+  }
+
+  CsvWriter writer;
+  if (!writer.open(output_path)) return 2;
+  writer.writeHeader(peer_ids);
 
   // Run the simulation loop.
   long t_sec = 0;
@@ -311,6 +359,11 @@ int run(const std::string &scenario_path,
       writer.addString(claim_state);
       writer.addString(claim_details);
       writer.addString(p->reason);
+      writer.addInt(s.pilot);
+      writer.addDouble(s.temperature, 1);
+      writer.addString(limitSummary(p->limit()));
+      writer.addBool(p->rfid().getAuthenticatedTag().length() > 0);
+      writer.addInt(currentScheduleEvent(p->scheduler()));
     }
     writer.addDouble(group_max_current * scenario.nominal_voltage, 1);
     writer.addDouble(group_total_actual_w, 1);

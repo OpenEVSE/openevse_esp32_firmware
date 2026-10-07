@@ -32,7 +32,54 @@ struct PeerEvent
   // (priority 1000), which outranks Boost (200).
   bool set_manual = false;
   std::string manual_state;
+
+  // {"rfid": "<tag uid>"} presents a card to the simulated reader.
+  bool set_rfid = false;
+  std::string rfid_tag;
+
+  // {"temperature": 70.5} sets the EVSE temperature (deg C) reported on $GP.
+  bool set_temperature = false;
+  double temperature = 0.0;
+
+  // {"soc": 80} sets the EV battery SoC (also reported to the firmware when
+  // the peer's ev.report_soc is set).
+  bool set_soc = false;
+  double soc = 0.0;
+
+  // {"claim": {"client": "ocpp", "priority": 1050, "state": "disabled",
+  //            "charge_current": 16, "max_current": 20, "auto_release": false}}
+  // registers an EvseManager claim on behalf of a client the simulator does
+  // not model itself (OCPP backend, MQTT, HTTP API, evcc, ...).
+  bool set_claim = false;
+  uint32_t claim_client = 0;
+  int claim_priority = 0;
+  std::string claim_state;        // "", "active" or "disabled"
+  long claim_charge_current = -1; // -1 = not set
+  long claim_max_current = -1;    // -1 = not set
+  bool claim_auto_release = false;
+
+  // {"release": "ocpp"} drops that client's claim.
+  bool set_release = false;
+  uint32_t release_client = 0;
+
+  // {"limit": {"type": "energy", "value": 5000, "auto_release": true}} sets a
+  // session limit as /limit would; {"limit": "clear"} removes it.
+  bool set_limit = false;
+  bool limit_clear = false;
+  std::string limit_type;
+  uint32_t limit_value = 0;
+  bool limit_auto_release = true;
+
+  // {"schedule": [ ...timers... ]} replaces the peer's schedule mid-run, as a
+  // Charge Manager edit would.
+  bool set_schedule = false;
+  std::string schedule_json;
 };
+
+// Map a client name ("ocpp", "mqtt", "manual", ...) or a numeric id to an
+// EvseClient id, plus the priority that client normally claims at. Returns
+// false for an unknown name.
+bool lookupClient(const std::string &name, uint32_t &client, int &priority);
 
 struct PeerScenario
 {
@@ -68,6 +115,20 @@ struct PeerScenario
   bool shaper_enabled = false;
   bool shaper_enabled_set = false;
 
+  // EVSE temperature (deg C) over time; feeds temperature throttling.
+  TimeSeries temperature;
+
+  // Charge Manager schedule: timer events in the firmware /schedule format.
+  // Empty = inherit the scenario-level schedule.
+  std::string schedule_json;
+
+  // Whether an RFID reader is present on the bus.
+  bool rfid_reader = true;
+
+  // Push the simulated SoC into the firmware's vehicle data each tick (as a
+  // vehicle SoC source would), enabling SoC limits.
+  bool report_soc = false;
+
   std::vector<PeerEvent> events;
 };
 
@@ -97,6 +158,9 @@ struct Scenario
   double supply_max_pwr_w = 0.0;
   TimeSeries supply_live_pwr;
   std::vector<PeerScenario> peers;
+
+  // Default Charge Manager schedule for peers that do not define their own.
+  std::string schedule_json;
 
   // Directory containing the scenario file (used to resolve CSV refs).
   std::string scenario_dir;
