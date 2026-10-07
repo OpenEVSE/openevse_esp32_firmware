@@ -11,6 +11,10 @@
 #include "current_shaper.h"
 #include "manual.h"
 #include "boost.h"
+#include "limit.h"
+#include "rfid.h"
+#include "scheduler.h"
+#include "temp_throttle.h"
 #include "event_log.h"
 #include "loadsharing_algorithm.h"
 
@@ -19,6 +23,31 @@
 #include "sim_stream.h"
 
 namespace sim {
+
+// RFID reader stand-in: scenario "rfid" events present a card.
+class SimRfidReader : public RfidReader
+{
+public:
+  bool present = true;
+
+  void setOnCardDetected(std::function<void(String&)> onCardDet) override {
+    _onCard = onCardDet;
+  }
+  bool readerFailure() override { return !present; }
+  bool readerPresent() override { return present; }
+  void setTimerScanning(bool active) override { _scanning = active; }
+
+  void presentCard(const std::string &uid) {
+    if (present && _onCard) {
+      String tag(uid.c_str());
+      _onCard(tag);
+    }
+  }
+
+private:
+  std::function<void(String&)> _onCard;
+  bool _scanning = false;
+};
 
 // A simulated charge point: per-peer SimEvse + SimStream + EvseManager +
 // DivertTask + CurrentShaperTask + scenario reference.
@@ -54,6 +83,14 @@ public:
   DivertTask &divert() { return _divert; }
   CurrentShaperTask &shaper() { return _shaper; }
   Boost &boost() { return _boost; }
+  Limit &limit() { return _limit; }
+  TempThrottleTask &tempThrottle() { return _temp_throttle; }
+  RfidTask &rfid() { return _rfid; }
+  Scheduler &scheduler() { return _scheduler; }
+
+  // Load the scenario's Charge Manager schedule (call after begin(), once
+  // the scheduler's setup() has run).
+  void loadSchedule(const std::string &scenario_default);
 
   // Cached values used both for output and for load-share allocation.
   double last_solar_w = 0.0;
@@ -85,6 +122,13 @@ private:
   CurrentShaperTask _shaper;
   ManualOverride _manual;
   Boost _boost;
+  Limit _limit;
+  TempThrottleTask _temp_throttle;
+  SimRfidReader _rfid_reader;
+  RfidTask _rfid;
+  Scheduler _scheduler;
+
+  void replaceSchedule(const std::string &json);
 
   // Track which event-indices have already fired.
   size_t _next_event_idx = 0;

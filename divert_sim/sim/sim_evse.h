@@ -47,6 +47,9 @@ public:
   // pre-conditioning after the traction battery has finished charging.
   double aux_load_kw = 0.0;
 
+  // EVSE temperature (deg C) reported over $GP; drives temperature throttling.
+  double temperature = 20.0;
+
   // EV battery model
   double battery_capacity_kwh = 75.0;
   double max_charge_rate_kw = 7.2;

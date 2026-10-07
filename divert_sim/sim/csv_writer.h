@@ -35,6 +35,11 @@ inline const std::vector<std::string> &peerColumns()
       "claim_state",
       "claim_details",
       "reason",
+      "pilot_a",
+      "temperature_c",
+      "limit",
+      "rfid_auth",
+      "schedule_event",
   };
   return cols;
 }
