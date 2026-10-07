@@ -124,6 +124,33 @@ Use the default 5 s `tick_interval` for Charge Manager scenarios: the firmware
 monitor counts RAPI polls (one per second on hardware), and longer ticks
 stretch its poll-counted intervals.
 
+## Replaying a charger's recording
+
+The firmware keeps the last hour of what the charger saw and decided, and
+serves it at `/debug/replay` (see `docs/user/troubleshooting.md`). Turn a
+downloaded package into a scenario, run it, and compare:
+
+```bash
+python3 replay.py openevse-replay-openevse-1234.json
+python3 replay.py package.json -o scenario.json --compare compare.csv
+python3 replay.py package.json --install   # also add it to the viewer
+```
+
+The scenario gets the charger's configuration and schedule, its solar, grid,
+site power, voltage and temperature readings as inputs, plug-in/out and
+EV-paused events, RFID authorisations as card taps, user session limits and
+boosts, and the claims of every client the simulator does not run itself
+(manual override, OCPP, MQTT, evcc, ...) exactly as recorded. Divert, shaper,
+schedule, limit, RFID and temperature claims are left to the firmware modules,
+which is what the comparison tests. The report lists where the simulated
+charger's state or pilot differs from the recorded one, plus anything the
+replay cannot reproduce (a config or schedule edit during the hour, no clock,
+an overwritten event log).
+
+`data/replay/native_eco_manual_override.json` is a real capture from the
+native firmware build against the OpenEVSE emulator; `test_replay.py` replays
+it and checks the converter's rules.
+
 ## Unified CSV Schema
 
 Columns are generated dynamically by peer id.

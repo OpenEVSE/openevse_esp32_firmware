@@ -105,6 +105,40 @@ curl -H "$H" -X DELETE http://<charger>/debug/crash/identity  # forget the ident
 reporter identity has been set (`POST /debug/crash/identity` with
 `{"reporter_id": <32 hex>, "delete_key": <64 hex>}`; the page does this for you).
 
+## Sharing a charging problem as a replay
+
+When the charger does something unexpected -- a schedule that did not start,
+solar divert that stopped too early, a session limit that cut out, a feature
+fighting another -- download a **replay package** right after it happens and
+attach it to your GitHub issue:
+
+```bash
+curl -u openevse:<password> -o replay.json 'http://<charger>/debug/replay?download=1'
+```
+
+(or open `http://<charger>/debug/replay?download=1` in a browser). The charger
+keeps the **last hour**: every 10 seconds the solar, grid and site power, the
+voltage, the EVSE temperature, whether a car is plugged in, the charger state,
+the pilot and the current drawn; and every change of the claims that decide
+what the charger does (schedule, solar divert, grid shaping, RFID, OCPP,
+manual override, ...), session limit, boost, RFID authorisation, schedule and
+configuration. The recording restarts when the charger reboots.
+
+Maintainers replay it through the firmware's own logic in the simulator
+(`divert_sim/replay.py`), which shows where the firmware's decisions differ
+from what was expected.
+
+What is and is not in it:
+
+- **Included:** the firmware version, the time zone, the Charge Manager
+  schedule, and the settings that change charging behaviour (station defaults,
+  session limit, solar divert, grid shaping, temperature protection, which
+  features are on).
+- **Not included:** Wi-Fi, MQTT, OCPP, emoncms and web passwords and keys,
+  hostnames, server addresses and MQTT topics -- the package is built from an
+  allowlist of settings, so anything not on it stays on the charger. Stored
+  RFID card numbers are replaced by placeholders.
+
 ## Getting help
 
 - [OpenEVSE knowledge base & support](https://openevse.dozuki.com/)

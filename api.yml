@@ -1443,6 +1443,148 @@ paths:
                 $ref: '#/components/schemas/Message'
               example:
                 msg: Could not remove certificate
+  /debug/replay:
+    get:
+      summary: Download a replay package
+      description: |
+        The last hour of what the charger saw and decided -- solar, grid and site
+        power, voltage, temperature, plug state, EVSE state, pilot and current every
+        10 s, plus every claim, limit, boost, RFID, schedule and config change --
+        with the configuration and schedule. `divert_sim/replay.py` replays it
+        through the firmware logic in the simulator.
+
+        The configuration is reduced to an allowlist of behaviour settings
+        (`src/replay_redact.cpp`): no passwords, keys, hostnames, server addresses
+        or MQTT topics, and stored RFID tags are replaced by placeholders.
+      parameters:
+        - name: download
+          in: query
+          required: false
+          description: '1 adds Content-Disposition: attachment, so a browser saves the file'
+          schema:
+            type: integer
+            enum: [1]
+      responses:
+        '200':
+          description: Replay package (format version 1)
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  format:
+                    type: string
+                    enum: [openevse-replay]
+                  version:
+                    type: integer
+                    example: 1
+                  firmware:
+                    type: string
+                  buildenv:
+                    type: string
+                  evse_firmware:
+                    type: string
+                  uptime:
+                    type: integer
+                    description: Seconds since boot when the package was built
+                  generated:
+                    type: integer
+                    nullable: true
+                    description: Unix time the package was built; null without a clock
+                  boot_epoch:
+                    type: integer
+                    nullable: true
+                    description: Unix time at uptime 0; null without a clock
+                  time_zone:
+                    type: string
+                  hardware:
+                    type: object
+                    properties:
+                      min_current:
+                        type: integer
+                      max_current:
+                        type: integer
+                      max_configured:
+                        type: integer
+                      voltage:
+                        type: number
+                  config:
+                    type: object
+                    description: Allowlisted configuration options
+                  schedule:
+                    type: array
+                    description: The schedule, as GET /schedule returns it
+                    items:
+                      type: object
+                  state:
+                    type: object
+                    description: Current limit, boost, claims and target
+                  samples:
+                    type: object
+                    properties:
+                      interval:
+                        type: integer
+                        description: Seconds between samples
+                      columns:
+                        type: array
+                        items:
+                          type: string
+                        example: [up, solar_w, grid_ie_w, live_pwr_w, volts, amps, temp_c, session_wh, pilot, state, soc, target_current, flags]
+                      overwritten:
+                        type: integer
+                        description: Older samples dropped from the ring
+                      truncated:
+                        type: integer
+                        description: Oldest samples left out to fit the charger's free memory
+                      data:
+                        type: array
+                        description: One array per sample, in column order
+                        items:
+                          type: array
+                          items:
+                            type: number
+                            nullable: true
+                  events:
+                    type: object
+                    properties:
+                      overwritten:
+                        type: integer
+                      truncated:
+                        type: integer
+                      data:
+                        type: array
+                        items:
+                          type: object
+                          properties:
+                            up:
+                              type: integer
+                            type:
+                              type: string
+                              enum: [boot, claim, release, rfid_auth, rfid_deauth, limit, boost, schedule, config]
+                            client:
+                              type: integer
+                            priority:
+                              type: integer
+                            state:
+                              type: string
+                              enum: [active, disabled]
+                            charge_current:
+                              type: integer
+                            max_current:
+                              type: integer
+                            auto_release:
+                              type: boolean
+                            limit_type:
+                              type: string
+                            value:
+                              type: integer
+        '405':
+          description: Only GET is supported
+        '503':
+          description: The recorder could not allocate its buffers
+      operationId: replay_get
+      tags:
+        - Diagnostics
 components:
   schemas:
     Message:
@@ -1744,6 +1886,7 @@ components:
   parameters: {}
 tags:
   - name: Claims
+  - name: Diagnostics
   - name: Config
   - name: Event Log
   - name: Manual Override

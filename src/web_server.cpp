@@ -27,6 +27,7 @@ typedef const __FlashStringHelper *fstr_t;
 
 #include "emonesp.h"
 #include "web_server.h"
+#include "replay_recorder.h"
 #include "diagnostics.h"
 #include "crash_report.h"
 #include "crash_report_id.h"
@@ -2368,6 +2369,48 @@ void web_server_setup()
     SerialDebug.printBuffer(*response);
     request->send(response);
   });
+
+#if ENABLE_REPLAY_RECORDER
+  // Replay package: the last hour of inputs, claims and outcomes plus the
+  // (redacted) configuration and schedule, for divert_sim/replay.py.
+  server.on("/debug/replay$", [](MongooseHttpServerRequest *request) {
+    MongooseHttpServerResponseStream *response;
+    if(false == requestPreProcess(request, response, CONTENT_TYPE_JSON)) {
+      return;
+    }
+    if(HTTP_GET != request->method()) {
+      response->setCode(405);
+      response->print(F("{\"msg\":\"Method not allowed\"}"));
+      request->send(response);
+      return;
+    }
+    if(!replayRecorder.ready()) {
+      response->setCode(503);
+      response->print(F("{\"msg\":\"replay recorder not running\"}"));
+      request->send(response);
+      return;
+    }
+    response->setCode(200);
+    // ?download=1 asks the browser to save it rather than show it.
+    char download[4] = {0};
+    if(request->getParam("download", download, sizeof(download)) > 0 && '1' == download[0]) {
+      char disposition[96];
+      snprintf(disposition, sizeof(disposition),
+               "attachment; filename=\"openevse-replay-%s.json\"", esp_hostname.c_str());
+      response->addHeader(F("Content-Disposition"), disposition);
+    }
+    // The response is buffered in one growing heap block (grown 1.5x at a
+    // time), so keep the package to what the largest free block can hold.
+    size_t budget = SIZE_MAX;
+    uint32_t largest = diagnostics_probe_begin();
+    if(largest > 0) {
+      budget = largest * 2 / 3;
+      budget = budget > 8192 ? budget - 8192 : 0;
+    }
+    replayRecorder.serialize(*response, budget);
+    request->send(response);
+  });
+#endif
 
   // -----------------------------------------------------------------
   // Last-panic forensics. A crash on a deployed unit leaves a core dump in
