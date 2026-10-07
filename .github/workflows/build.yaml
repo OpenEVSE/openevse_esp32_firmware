@@ -15,6 +15,20 @@ on:
       - 'v*'
   pull_request:
 
+# Serialize runs per PR so a quick succession of pushes can't race to update
+# the shared flash-size PR comment (a slow, older run finishing last used to
+# clobber a newer run's report). A new push cancels the in-flight run for the
+# same PR. Only pull_request runs are grouped: master pushes and tag builds get
+# a unique group per run (not per ref -- a shared group would make GitHub drop
+# the older *pending* run even without cancel-in-progress, skipping a commit's
+# build), so they are never cancelled or replaced and a release run is never
+# interrupted by a later commit. build_gui.yml is a separate workflow and is
+# unaffected; its bot commit simply starts a fresh run here that supersedes the
+# stale one.
+concurrency:
+  group: build-${{ github.event_name == 'pull_request' && github.event.pull_request.number || github.run_id }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
 jobs:
   debug:
     runs-on: ubuntu-latest
@@ -86,7 +100,17 @@ jobs:
     name: Build ${{ matrix.env }}
     runs-on: ubuntu-latest
 
+    permissions:
+      contents: read
+      id-token: write   # OIDC exchange for the ELF archive step below
+
     env:
+      # Dormant until the crash service is deployed and its secrets are set.
+      # Without this the first master push after merge fails the OIDC exchange
+      # on an empty role-to-assume, failing all 19 device builds and the
+      # release job that needs them. Same shape as SIGN_ENABLED below.
+      CRASH_ARCHIVE_ENABLED: ${{ secrets.CRASH_ELF_ROLE_ARN != '' && secrets.CRASH_BUCKET != '' && (vars.CRASH_AWS_REGION != '' || secrets.CRASH_AWS_REGION != '') }}
+
       # Environments whose Arduino core (core-3.x / pioarduino / IDF5) provides
       # the signed-update verifier. Signed OTA is only enforced on these; add
       # future core-3.x envs here. Older-core (4MB) envs cannot verify and are
@@ -231,6 +255,41 @@ jobs:
         name: ${{ matrix.env }}.bin
         path: .pio/build/${{ matrix.env }}/*.bin
 
+    - name: Configure AWS credentials for the ELF archive
+      # Pushes, and PRs from branches in this repo: PR artifacts are what
+      # testers flash, and a dump from an unarchived build can never be
+      # symbolized. A fork PR runs in the base repo with empty secrets, so it
+      # is excluded by its head repo rather than left to fail on them.
+      if: ${{ env.CRASH_ARCHIVE_ENABLED == 'true' && (github.event_name == 'push' || github.event.pull_request.head.repo.full_name == github.repository) && matrix.env != 'native_openevse' }}
+      continue-on-error: true
+      uses: aws-actions/configure-aws-credentials@v6
+      with:
+        role-to-assume: ${{ secrets.CRASH_ELF_ROLE_ARN }}
+        # A variable or a secret: the region is not sensitive, but a
+        # collaborator may only be able to create secrets.
+        aws-region: ${{ vars.CRASH_AWS_REGION || secrets.CRASH_AWS_REGION }}
+
+    - name: Archive firmware.elf under its own SHA-256
+      # Best-effort: a missing ELF archive costs a future backtrace, a failed
+      # release costs the release.
+      continue-on-error: true
+      # A crash backtrace is a list of addresses; the ELF is what names them.
+      # Keyed by the ELF's own hash, which the device reports as `elf_sha256`
+      # in /debug/crash and which is byte-identical to sha256sum of the ELF.
+      # No version string, so no escaping and no ambiguity between two builds
+      # that share a branch and commit but differ.
+      if: ${{ env.CRASH_ARCHIVE_ENABLED == 'true' && (github.event_name == 'push' || github.event.pull_request.head.repo.full_name == github.repository) && matrix.env != 'native_openevse' }}
+      # As data, not script text: a branch named $(...) would otherwise run.
+      env:
+        REF_NAME: ${{ github.ref_name }}
+      run: |
+        set -euo pipefail
+        ELF=".pio/build/${{ matrix.env }}/firmware.elf"
+        SHA=$(sha256sum "$ELF" | cut -d' ' -f1)
+        echo "elf/$SHA.elf  <- ${{ matrix.env }}"
+        aws s3 cp "$ELF" "s3://${{ secrets.CRASH_BUCKET }}/elf/$SHA.elf" \
+          --metadata "buildenv=${{ matrix.env }},ref=$REF_NAME,sha=${{ github.sha }}"
+
     - name: Upload native output to GitHub
       if: matrix.env == 'native_openevse'
       uses: actions/upload-artifact@v7
@@ -243,8 +302,10 @@ jobs:
     runs-on: ubuntu-latest
     needs: build
     # Runs even if a build failed (e.g. over the flash budget) so the PR
-    # comment still shows the offending env's usage.
-    if: always() && github.event_name == 'pull_request'
+    # comment still shows the offending env's usage. !cancelled() rather than
+    # always(): a run superseded by a newer push (see concurrency above) must
+    # not go on to post a stale report.
+    if: ${{ !cancelled() && github.event_name == 'pull_request' }}
 
     permissions:
       contents: read
@@ -265,7 +326,7 @@ jobs:
       # Best-effort: the base branch may not have a build with flash size
       # artifacts yet (e.g. right after this feature is added), so a miss
       # here just means the report shows sizes with no "change vs base".
-      uses: dawidd6/action-download-artifact@v6
+      uses: dawidd6/action-download-artifact@v27
       continue-on-error: true
       with:
         workflow: build.yaml
@@ -291,13 +352,33 @@ jobs:
           --out flash-size-report.md
         cat flash-size-report.md >> "$GITHUB_STEP_SUMMARY"
 
+    - name: Check this run is for the PR's current head
+      # Backstop for the concurrency group above: if a newer commit has landed
+      # since this run started (cancellation not yet delivered, or this job
+      # finished in the gap), don't let it overwrite a fresher report.
+      id: head_check
+      if: github.event.pull_request.head.repo.full_name == github.repository
+      env:
+        GH_TOKEN: ${{ github.token }}
+        PR_NUMBER: ${{ github.event.pull_request.number }}
+        RUN_SHA: ${{ github.event.pull_request.head.sha }}
+      run: |
+        current=$(gh api "repos/${{ github.repository }}/pulls/${PR_NUMBER}" --jq .head.sha)
+        if [ "$current" = "$RUN_SHA" ]; then
+          echo "current=true" >> "$GITHUB_OUTPUT"
+        else
+          echo "current=false" >> "$GITHUB_OUTPUT"
+          echo "::notice::Skipping PR comment: run is for ${RUN_SHA}, PR head is now ${current}."
+        fi
+
     - name: Comment on PR
       # Skipped for fork PRs: the pull_request event gives their GITHUB_TOKEN
       # only read access, so posting a comment would just fail. Same pattern
       # as native_docker.yaml's fork-excluded publish step. The report is
       # still in the job summary above for a fork PR's author to read.
-      if: github.event.pull_request.head.repo.full_name == github.repository
-      uses: marocchino/sticky-pull-request-comment@v2
+      # Also skipped when a newer commit has superseded this run (see above).
+      if: github.event.pull_request.head.repo.full_name == github.repository && steps.head_check.outputs.current == 'true'
+      uses: marocchino/sticky-pull-request-comment@v3
       with:
         header: flash-size-report
         path: flash-size-report.md

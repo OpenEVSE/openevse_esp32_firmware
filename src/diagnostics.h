@@ -53,6 +53,16 @@ void diagnostics_coredump_json(JsonDocument &doc);
 // Answers "what is sitting in internal DRAM" without heap tracing.
 void diagnostics_heapmap(String &out);
 
+// How far the backtrace goes. The IDF's own summary stops at 16, which on a
+// LittleFS watchdog is still inside littlefs; past it is the caller.
+#define DIAG_COREDUMP_BT_MAX 48
+
+// Capacity for a document holding diagnostics_coredump_json() alone: the
+// summary fields, plus a 0x%08x string (11 bytes, rounded up) per frame.
+#define DIAG_COREDUMP_JSON_CAPACITY \
+  (JSON_OBJECT_SIZE(12) + JSON_ARRAY_SIZE(DIAG_COREDUMP_BT_MAX) + 640 + \
+   12 * (DIAG_COREDUMP_BT_MAX - 16))
+
 // Hand back the raw dump for the cases the summary cannot answer, mapped
 // straight out of flash so a 64KB image costs no heap. `data` stays valid for
 // the life of the boot -- responses are sent asynchronously, so the pointer

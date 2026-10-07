@@ -28,6 +28,9 @@ typedef const __FlashStringHelper *fstr_t;
 #include "emonesp.h"
 #include "web_server.h"
 #include "diagnostics.h"
+#include "crash_report.h"
+#include "crash_report_id.h"
+#include "crash_payload.h"
 #ifdef ENABLE_TSDB
 #include "tsdb_energy_logger.h"
 #include "sd_card.h"
@@ -1677,6 +1680,14 @@ void handleAddRFID(MongooseHttpServerRequest *request) {
     return;
   }
 
+  if(!config_rfid_enabled()) {
+    response->setCode(400);
+    response->addHeader("Access-Control-Allow-Origin", "*");
+    response->print("{\"msg\":\"RFID is not enabled, add it in Charge Manager first\"}");
+    request->send(response);
+    return;
+  }
+
   response->setCode(200);
   response->addHeader("Access-Control-Allow-Origin", "*");
   response->print("{\"msg\":\"Waiting for badge\"}");
@@ -1794,7 +1805,7 @@ void handleCableTemp(MongooseHttpServerRequest *request) {
       if(evse.isCableTempValid(i)) {
         src["temperature"] = evse.getCableTemp(i);
       }
-      if(evse.isCableTempConfigKnown()) {
+      if(evse.isCableTempConfigValid(i)) {
         src["r25"] = evse.getCableTempR25(i);
         src["beta"] = evse.getCableTempBeta(i);
         src["offset_c10"] = evse.getCableTempOffsetC10(i);
@@ -2424,8 +2435,7 @@ void web_server_setup()
       return;
     }
 
-    const size_t capacity = JSON_OBJECT_SIZE(12) + JSON_ARRAY_SIZE(16) + 640;
-    DynamicJsonDocument doc(capacity);
+    DynamicJsonDocument doc(DIAG_COREDUMP_JSON_CAPACITY);
     diagnostics_coredump_json(doc);
     response->setCode(200);
     serializeJson(doc, *response);
@@ -2478,6 +2488,127 @@ void web_server_setup()
     response->setContent(data, len);
     request->send(response);
   });
+
+#if ENABLE_CRASH_UPLOAD
+  // Crash reporting (spec §3). The browser sends the report to the broker
+  // itself; the charger only builds it and keeps the reporter identity.
+  //
+  //   GET    /debug/crash/report    the report, exactly as the broker takes it
+  //   GET    /debug/crash/identity  reporter id (if set), broker URL; ?key=1 adds the delete key
+  //   POST   /debug/crash/identity  store the identity the browser generated
+  //   DELETE /debug/crash/identity  forget it, once the reports are erased
+  //
+  // requestPreProcess carries the auth and the CSRF check: the delete key is
+  // what erases this charger's reports, so it is guarded like a config write.
+  server.on("/debug/crash/report$", [](MongooseHttpServerRequest *request) {
+    MongooseHttpServerResponseStream *response;
+    if(false == requestPreProcess(request, response, CONTENT_TYPE_JSON)) {
+      return;
+    }
+    const uint8_t *image;
+    size_t imageLen;
+    if(!diagnostics_coredump_image(&image, &imageLen) || 0 == imageLen) {
+      response->setCode(404);
+      response->print(F("{\"msg\":\"no crash dump stored\"}"));
+      request->send(response);
+      return;
+    }
+    char rid[33], key[65], keyHash[65];
+    if(!crash_identity_load(rid, key)) {
+      response->setCode(409);
+      response->print(F("{\"msg\":\"no reporter identity\"}"));
+      request->send(response);
+      return;
+    }
+    crash_delete_key_hash(key, keyHash);
+    // Sent as-is: the body the browser POSTs to the broker. Where to POST it
+    // comes from /debug/crash/identity, which the browser reads first.
+    // 8 KB: the deep backtrace appears twice, in the summary and hoisted.
+    DynamicJsonDocument doc(8192);
+    if(!crash_payload_build(doc, rid, keyHash)) {
+      response->setCode(500);
+      response->print(F("{\"msg\":\"report too large\"}"));
+      request->send(response);
+      return;
+    }
+    response->setCode(200);
+    serializeJson(doc, *response);
+    request->send(response);
+  });
+
+  server.on("/debug/crash/identity$", [](MongooseHttpServerRequest *request) {
+    MongooseHttpServerResponseStream *response;
+    if(false == requestPreProcess(request, response, CONTENT_TYPE_JSON)) {
+      return;
+    }
+    // Every method, GUI only (crash_report_id.h): with no password set this
+    // is the only thing between a cross-site form and the identity.
+    MongooseString xrw = request->headers("X-Requested-With");
+    if(!crash_gui_request(xrw.toString().c_str())) {
+      response->setCode(403);
+      response->print(F("{\"msg\":\"csrf\"}"));
+      request->send(response);
+      return;
+    }
+    if(HTTP_POST == request->method()) {
+      DynamicJsonDocument in(256);
+      if(deserializeJson(in, request->body().toString())) {
+        response->setCode(400);
+        response->print(F("{\"msg\":\"bad json\"}"));
+        request->send(response);
+        return;
+      }
+      switch(crash_identity_store(in["reporter_id"] | "", in["delete_key"] | "")) {
+        case CrashIdentity_Write:
+        case CrashIdentity_Same:
+          response->setCode(200);
+          response->print(F("{\"msg\":\"stored\"}"));
+          break;
+        case CrashIdentity_Conflict:
+          // The GUI re-reads the identity and carries on with the stored one.
+          response->setCode(409);
+          response->print(F("{\"msg\":\"a different identity is already set\"}"));
+          break;
+        case CrashIdentity_Invalid:
+          response->setCode(400);
+          response->print(F("{\"msg\":\"invalid reporter id or delete key\"}"));
+          break;
+        default:
+          response->setCode(500);
+          response->print(F("{\"msg\":\"error\"}"));
+          break;
+      }
+      request->send(response);
+      return;
+    }
+    if(HTTP_DELETE == request->method()) {
+      bool ok = crash_identity_forget();
+      response->setCode(ok ? 200 : 500);
+      response->print(ok ? F("{\"msg\":\"forgotten\"}") : F("{\"msg\":\"error\"}"));
+      request->send(response);
+      return;
+    }
+    // The delete key only on request (?key=1), which the GUI makes from its
+    // Delete action alone, so the key is not on the wire every time the page
+    // opens.
+    char want[4];
+    bool withKey = request->getParam("key", want, sizeof(want)) >= 0;
+    DynamicJsonDocument doc(256);
+    char rid[33], key[65];
+    if(crash_identity_load(rid, key)) {
+      doc["reporter_id"] = rid;
+      if(withKey) {
+        doc["delete_key"] = key;
+      }
+    } else {
+      doc["reporter_id"] = nullptr;
+    }
+    doc["broker"] = CRASH_BROKER_URL;
+    response->setCode(200);
+    serializeJson(doc, *response);
+    request->send(response);
+  });
+#endif // ENABLE_CRASH_UPLOAD
 
   server.on("/debug/console$")
     ->onRequest(onWsAuthenticate)

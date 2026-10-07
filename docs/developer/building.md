@@ -57,7 +57,7 @@ The boards split across two PlatformIO platforms:
 
 | Boards | Platform | Arduino / IDF | Why |
 |---|---|---|---|
-| 4MB (`openevse_wifi_v1`, gateways, huzzah, …) — the default | `espressif32@6.12.0` | core **2.x** / IDF4 | Keeps the IDF4 image small enough for **dual-slot OTA** on 4MB flash. |
+| 4MB (`openevse_wifi_v1`, gateways, huzzah, …) — the default | `espressif32@7.1.3` | core **2.x** / IDF4 | Keeps the IDF4 image small enough for **dual-slot OTA** on 4MB flash. |
 | 16MB (`openevse_wifi_v1_16mb`, `openevse_wifi_tft_v1`) | `${common.platform_core3}` (pioarduino) | core **3.x** / IDF5 | Larger flash / newer silicon needs the core-3 toolchain; `openevse_wifi_v1_16mb` is `openevse_wifi_v1` rebuilt on core-3. |
 | ESP32-S3 (`openevse_s3_lcd`) | `${common.platform_core3}` (pioarduino) | core **3.x** / IDF5 | S3 silicon only exists on core-3; there is no core-2 fallback. Custom board definition in `boards/openevse_s3_lcd.json`. See [ESP32-S3 LCD board](../hardware/esp32-s3-lcd.md). |
 
@@ -151,7 +151,10 @@ esptool.py erase_flash
 
 ## Host-side unit tests
 
-Pure, framework-free logic is tested on the build host via the `native_test` env:
+Host-side logic and certificate persistence are tested via the `native_test`
+environment. Install the OpenSSL development headers and library first (on
+Debian/Ubuntu: `sudo apt-get install libssl-dev`). Certificate tests use the real
+certificate store with OpenSSL and an isolated EpoxyFS directory.
 
 ```bash
 pio test -e native_test
@@ -159,6 +162,16 @@ pio test -e native_test
 
 Test suites live under `test/`. New host-testable logic should land with a
 doctest suite alongside it.
+
+To run just the direct certificate ID regression:
+
+```bash
+pio test -e native_test -f test_certificate_direct_id
+.pio/build/native_test/program
+```
+
+The direct binary prints the assertion totals. Run it before building another
+suite, since all suites in this environment share that output path.
 
 The full native firmware build is `native_openevse`. To build the host binary with
 the LVGL local UI path enabled, use `native_openevse_lvgl`:

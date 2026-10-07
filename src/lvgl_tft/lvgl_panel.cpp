@@ -23,6 +23,7 @@
 #else
 #include <TFT_eSPI.h>
 #include <esp_heap_caps.h>
+#include "debug.h"
 #endif
 
 #include "lvgl_panel.h"
@@ -505,9 +506,9 @@ static bool lvgl_panel_prepare_begin(size_t buf_bytes)
   // largest-free-block report with it.
   buf1 = (lv_color_t *)heap_caps_malloc(buf_bytes, MALLOC_CAP_INTERNAL | MALLOC_CAP_8BIT);
   if(buf1 == nullptr) {
-    Serial.printf("[panel] FATAL: draw-buffer alloc failed (%u B internal); largest free block=%u\n",
-                  (unsigned)buf_bytes,
-                  (unsigned)heap_caps_get_largest_free_block(MALLOC_CAP_INTERNAL));
+    DBUGF("[panel] FATAL: draw-buffer alloc failed (%u B internal); largest free block=%u\n",
+                      (unsigned)buf_bytes,
+                      (unsigned)heap_caps_get_largest_free_block(MALLOC_CAP_INTERNAL));
     return false;
   }
 
@@ -679,9 +680,10 @@ bool lvgl_panel_begin()
                 lvgl_panel_get_display_mode_name(display_mode),
                 SCREEN_W, SCREEN_H, (unsigned)buf_bytes);
 #else
-  Serial.printf("[panel] display up %ux%u, 1 buf %u B internal, free internal heap=%u\n",
-                SCREEN_W, SCREEN_H, (unsigned)buf_bytes,
-                (unsigned)heap_caps_get_free_size(MALLOC_CAP_INTERNAL));
+  // n.b. DBUGF appends its own newline
+  DBUGF("[panel] display up %ux%u, 1 buf %u B internal, free internal heap=%u",
+        SCREEN_W, SCREEN_H, (unsigned)buf_bytes,
+        (unsigned)heap_caps_get_free_size(MALLOC_CAP_INTERNAL));
 #endif
   return true;
 }
