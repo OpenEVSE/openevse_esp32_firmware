@@ -9,7 +9,8 @@ info:
     Authentication is only enforced when an admin password is configured. With no
     password set (or while the device is in AP-only provisioning mode) every
     operation is open and none of the credentials below are needed. When a password
-    is set, every operation except `/login` and `/logout` requires **one** of:
+    is set, every operation except `/login`, `/logout` and `/emoncms/describe`
+    requires **one** of:
 
     * **HTTP Basic** credentials (`Authorization` header) - intended for machine
       clients such as scripts and integrations. If the username is left blank in the
