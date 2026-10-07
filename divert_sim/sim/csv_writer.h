@@ -40,6 +40,7 @@ inline const std::vector<std::string> &peerColumns()
       "limit",
       "rfid_auth",
       "schedule_event",
+      "session_wh",
   };
   return cols;
 }

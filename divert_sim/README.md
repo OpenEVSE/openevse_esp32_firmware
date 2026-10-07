@@ -68,6 +68,62 @@ Scenarios are stored in:
 
 Legacy top-level load-sharing scenario files under `data/` have been removed in favor of this unified location.
 
+## Charge Manager
+
+Each simulated peer runs the firmware's Charge Manager machinery: the
+`Scheduler` (scheduled rules), `Limit` (session limits), `TempThrottleTask`
+(temperature protection) and `RfidTask` (card authorisation, with a simulated
+reader), alongside divert, the current shaper, manual override and boost.
+
+Scenario keys for it:
+
+- `schedule` (top level, or per peer): timer events in the firmware
+  `/schedule` format — what the Charge Manager writes for scheduled rules.
+- `config`: the always-on features are config options, exactly as the
+  Charge Manager saves them (`limit_default_type`/`limit_default_value`,
+  `divert_enabled` + `charge_mode`, `current_shaper_enabled`, `rfid_enabled`
+  + `rfid_storage`, `ocpp_enabled`, `temp_throttle_enabled`,
+  `default_state`, `max_current_soft`). Set `time_zone` and
+  `scheduler_start_window: 0` for deterministic rule times.
+- Peer options: `rfid_reader` (reader present, default true),
+  `ev.report_soc` (feed the simulated SoC to the firmware, enabling SoC
+  limits), `live_pwr_add_ev` (treat `inputs.live_pwr` as the rest of the
+  house and add this EV's draw, as a site meter would).
+- Peer input `temperature` (deg C time series).
+- Peer events: `{"rfid": "<uid>"}`, `{"temperature": 70}`, `{"soc": 80}`,
+  `{"limit": {"type": "energy", "value": 5000}}` / `{"limit": "clear"}`,
+  `{"schedule": [...]}` (a Charge Manager edit), and
+  `{"claim": {"client": "ocpp", "state": "disabled", "charge_current": 16}}` /
+  `{"release": "ocpp"}` for claim sources the simulator does not run
+  (OCPP backend, MQTT, evcc, ...; a numeric client id also works).
+
+The RAPI shim answers as a protocol 5 controller (vflags for EV connected and
+charging), reports the simulated temperature on `$GP`, and holds the station
+current (`$GC` cmaxamps, `$SC <amps> M`).
+
+Each scenario run uses a private EpoxyFS/EEPROM directory, so runs in parallel
+do not share the persisted schedule or config.
+
+### Charge Manager tests
+
+- `charge_manager.py` builds scenarios the way the Charge Manager screen
+  configures the station (a port of the GUI's `rulesToTimers`), parses the
+  claim columns, and provides an arbitration oracle.
+- `test_charge_manager.py` covers each feature on its own: station defaults,
+  every always-on feature, temperature protection, every scheduled rule
+  action, rule current/limit, midnight wrap, day filters, manual override and
+  live rule edits. Known gaps are strict `xfail`s, so they fail loudly once
+  fixed.
+- `test_charge_manager_combinations.py` runs every combination the Charge
+  Manager allows (417 of them) through one scripted day and checks each
+  feature's contract and the claim arbitration on every row.
+- `python3 charge_manager.py` regenerates the `charge_manager_*` showcase
+  scenarios for the viewer.
+
+Use the default 5 s `tick_interval` for Charge Manager scenarios: the firmware
+monitor counts RAPI polls (one per second on hardware), and longer ticks
+stretch its poll-counted intervals.
+
 ## Unified CSV Schema
 
 Columns are generated dynamically by peer id.
@@ -89,7 +145,16 @@ Per-peer columns:
 - `<id>_ev_max_charge_w`
 - `<id>_actual_charge_w`
 - `<id>_soc`
+- `<id>_boost`
+- `<id>_claim_state`
+- `<id>_claim_details` (every claim as `client@priority:state`, plus the winners)
 - `<id>_reason`
+- `<id>_pilot_a`
+- `<id>_temperature_c`
+- `<id>_limit` (`<type>:<value>` or `none`)
+- `<id>_rfid_auth`
+- `<id>_schedule_event` (id of the schedule event in force, 0 = none)
+- `<id>_session_wh` (the firmware's session energy)
 
 Group columns:
 

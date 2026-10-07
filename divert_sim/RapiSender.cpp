@@ -165,12 +165,16 @@ RapiSender::sendCmdSync(String &cmd, unsigned long timeout)
         } break;
         case 'C':
         {
+          static char buf_hw[16];
+          static char buf_cmax[16];
           sprintf(buf1, "%ld", sim->pilot);
+          sprintf(buf_hw, "%ld", (long) sim->max_current_hw);
+          sprintf(buf_cmax, "%ld", sim->max_configured);
           _tokens[0] = ok;
           _tokens[1] = "6";
-          _tokens[2] = "32";
+          _tokens[2] = buf_hw;
           _tokens[3] = buf1;
-          _tokens[4] = "32";
+          _tokens[4] = buf_cmax;
           _tokenCnt = 5;
         } break;
         case 'A':
@@ -238,7 +242,15 @@ RapiSender::sendCmdSync(String &cmd, unsigned long timeout)
       {
         case 'C':
         {
-          sscanf(cmd.c_str(), "$SC %ld V", &sim->pilot);
+          long amps = 0;
+          char mode = 0;
+          int n = sscanf(cmd.c_str(), "$SC %ld %c", &amps, &mode);
+          if (n >= 1 && 'M' == mode) {
+            // Set the configured maximum (station current).
+            sim->max_configured = amps;
+          } else if (n >= 1) {
+            sim->pilot = amps;
+          }
           // Real hardware echoes the resultant current capacity as the first
           // token ("$OK ampsset"); the firmware relies on this to update its
           // pilot belief. Without it, EvseMonitor::setPilot never records the

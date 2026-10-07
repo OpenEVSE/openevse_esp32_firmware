@@ -118,6 +118,7 @@ bool Scenario::loadFromFile(const std::string &path)
     std::stringstream cfg;
     serializeJson(root["config"], cfg);
     config_json = cfg.str();
+    max_current_soft = root["config"]["max_current_soft"] | -1L;
   }
 
   if (!root["schedule"].isNull()) {
@@ -188,6 +189,7 @@ bool Scenario::loadFromFile(const std::string &path)
       p.report_soc = ev["report_soc"] | false;
     }
     p.rfid_reader = pj["rfid_reader"] | true;
+    p.live_pwr_add_ev = pj["live_pwr_add_ev"] | false;
     if (!pj["schedule"].isNull()) {
       p.schedule_json = toJson(pj["schedule"]);
     }
