@@ -1,0 +1,27 @@
+# UI routes that do not have an end-to-end scenario yet (docs/ai/feature-map.md).
+#
+# This is a backlog, not a place to hide new work: the list may only shrink.
+# When you add a feature file tagged @route:<path>, delete the route here
+# (scripts/e2e_coverage.py --strict fails if you forget). A new route must ship
+# with a scenario instead of being added to this list.
+/history
+/monitoring
+/schedule
+/settings/about
+/settings/certificates
+/settings/display
+/settings/emoncms
+/settings/evse
+/settings/firmware
+/settings/http
+/settings/loadsharing
+/settings/mqtt
+/settings/network
+/settings/ocpp
+/settings/rfid
+/settings/safety
+/settings/shaper
+/settings/solar
+/settings/terminal
+/settings/time
+/settings/vehicle

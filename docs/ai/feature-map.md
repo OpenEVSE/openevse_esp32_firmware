@@ -46,6 +46,9 @@ relative to the configured base topic (see [mqtt.md](../mqtt.md)).
 
 - Adding a feature? Add a row **in the same PR**, plus the user-doc page it
   points to.
+- Every UI route also needs an end-to-end scenario in `tests/e2e/features/`
+  tagged `@route:<path>` (see AGENTS.md → End-to-end UI tests); the
+  `scripts/e2e_coverage.py --strict` check in CI enforces it.
 - The screenshot manifest (`gui-nightshift/scripts/screenshots.config.js`)
   should have a capture for every UI route listed here.
 - `scripts/docs_coverage.py` (see CI) cross-checks config options and UI routes
