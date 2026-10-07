@@ -52,6 +52,7 @@
 #include "rfid.h"
 #include "current_shaper.h"
 #include "temp_throttle.h"
+#include "replay_recorder.h"
 #include "limit.h"
 #include "diagnostics.h"
 #include "boost.h"
@@ -298,6 +299,11 @@ void setup()
 
   shelly_lnm.begin();
   DBUGF("After shelly_lnm.begin: %d", ESPAL.getFreeHeap());
+
+#if ENABLE_REPLAY_RECORDER
+  replayRecorder.begin(evse, divert, shaper, limit, boost, rfid, scheduler);
+  DBUGF("After replayRecorder.begin: %d", ESPAL.getFreeHeap());
+#endif
 
   lcd.display(F("OpenEVSE WiFI"), 0, 0, 0, LCD_CLEAR_LINE);
   lcd.display(currentfirmware, 0, 1, 5 * 1000, LCD_CLEAR_LINE);
