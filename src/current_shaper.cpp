@@ -28,6 +28,22 @@ CurrentShaperTask::~CurrentShaperTask() {
 	}
 }
 
+// Publish the shaper's live status over websocket / MQTT.
+//
+// JsonDocument grows to fit all six keys, so no fixed capacity can silently
+// drop shaper_cur or shaper_updated from the status feed.
+void CurrentShaperTask::publishShaperEvent()
+{
+	JsonDocument event;
+	event["shaper"] = 1;
+	event["shaper_live_pwr"] = _live_pwr;
+	event["shaper_smoothed_live_pwr"] = _smoothed_live_pwr;
+	event["shaper_max_pwr"] = _max_pwr;
+	event["shaper_cur"] = _max_cur;
+	event["shaper_updated"] = _updated;
+	event_send(event);
+}
+
 void CurrentShaperTask::setup() {
 
 }
@@ -71,28 +87,30 @@ unsigned long CurrentShaperTask::loop(MicroTasks::WakeReason reason) {
 					                !_loadshare_limit_active)
 					               ? EvseManager_Priority_TimerFeature : EvseManager_Priority_Safety;
 					_evse->claim(EvseClient_OpenEVSE_Shaper, priority, props);
-					JsonDocument event;
-					event["shaper"] = 1;
-					event["shaper_live_pwr"] = _live_pwr;
-					event["shaper_smoothed_live_pwr"] = _smoothed_live_pwr;
-					event["shaper_max_pwr"] = _max_pwr;
-					event["shaper_cur"] = _max_cur;
-					event["shaper_updated"] = _updated;
-					event_send(event);
 				}
+				// Publish the live status on every data update, like the divert task
+				// does. Gating this on the claim change above starved the status feed
+				// (websocket + MQTT) whenever the house load was stable: the
+				// shaper_live_pwr topic then stayed quiet for minutes, which surfaces
+				// as "unavailable" in consumers with a data expiry (e.g. Home
+				// Assistant) and as a frozen readout in the web UI.
+				publishShaperEvent();
 			}
 			else if ( !_updated || millis() - _timer > current_shaper_data_maxinterval * 1000 )
 			{
 				//available power has not been updated since EVSE_SHAPER_FAILSAFE_TIME, pause charge
 				DBUGF("shaper_live_pwr has not been updated in time, pausing charge");
 
+				bool wentStale = false;
 				if (_updated)
 				{
 					_pause_timer = millis();
 					_updated = false;
 					_smoothed_live_pwr = _live_pwr;
+					wentStale = true;
 				}
 
+				bool claimed = false;
 				if (_evse->getState(EvseClient_OpenEVSE_Shaper) != EvseState::Disabled)
 				{
 					props.setState(EvseState::Disabled);
@@ -101,14 +119,15 @@ unsigned long CurrentShaperTask::loop(MicroTasks::WakeReason reason) {
 					int failsafe_priority = (_timer_controlled && !config_current_shaper_enabled())
 					               ? EvseManager_Priority_TimerFeature : EvseManager_Priority_Limit;
 					_evse->claim(EvseClient_OpenEVSE_Shaper, failsafe_priority, props);
-					JsonDocument event;
-					event["shaper"] = 1;
-					event["shaper_live_pwr"] = _live_pwr;
-					event["shaper_smoothed_live_pwr"] = _smoothed_live_pwr;
-					event["shaper_max_pwr"] = _max_pwr;
-					event["shaper_cur"] = _max_cur;
-					event["shaper_updated"] = _updated;
-					event_send(event);
+					claimed = true;
+				}
+
+				// Announce the stale transition even when the claim was already
+				// Disabled (e.g. paused for insufficient current), so consumers see
+				// shaper_updated=false instead of the last "updating" values.
+				if (wentStale || claimed)
+				{
+					publishShaperEvent();
 				}
 			}
 	}
