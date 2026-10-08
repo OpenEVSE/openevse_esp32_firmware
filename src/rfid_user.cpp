@@ -117,10 +117,9 @@ bool RfidUser::setUserName(const String &rfidTag, const String &userName)
 
   JsonDocument doc;
   if(!load(doc) && LittleFS.exists(RFID_USERS_FILE)) {
-    // The file exists but didn't parse — corrupt JSON, or a mapping that has
-    // grown past RFID_USERS_DOC_SIZE (ArduinoJson reports NoMemory but still
-    // leaves a partially-populated doc). Saving that partial doc would
-    // silently drop the rest of the existing mappings, so refuse instead. A
+    // The file exists but didn't parse — corrupt JSON, or the heap ran out
+    // while loading it. Saving a partially-populated doc would silently drop
+    // the rest of the existing mappings, so refuse instead. A
     // genuinely missing file is the normal "no mappings yet" case and still
     // starts empty below.
     DBUGLN("RfidUser: refusing to modify an unreadable mapping file");
@@ -137,8 +136,11 @@ bool RfidUser::setUserName(const String &rfidTag, const String &userName)
     users.remove(rfidTag);
   }
 
-  if(doc.overflowed()) {
-    DBUGLN("RfidUser: mapping document overflowed, not saving");
+  // ArduinoJson v7 grows the document on demand, so the fixed-capacity limit
+  // v6 enforced is gone. Re-apply it here, otherwise the file and every tag
+  // scan's load of it would grow without bound.
+  if(doc.overflowed() || measureJson(doc) > RFID_USERS_DOC_SIZE) {
+    DBUGLN("RfidUser: mapping document too large, not saving");
     return false;
   }
 
