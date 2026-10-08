@@ -47,6 +47,12 @@ extern const char _CONTENT_TYPE_CSV[];
 extern void web_server_setup();
 extern void web_server_loop();
 extern void web_server_load_sharing_setup(MongooseHttpServer &server);
+/** Report whether startup established a primary web listener. */
+extern bool web_server_is_running();
+/** Report TLS only for a successfully started primary listener. */
+extern bool web_server_is_https();
+/** Return the running primary listener port, or zero if startup failed. */
+extern uint16_t web_server_port();
 
 extern void web_server_event(JsonDocument &event);
 

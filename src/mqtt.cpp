@@ -300,7 +300,8 @@ void Mqtt::subscribeTopics() {
   if (divert_type == DIVERT_TYPE_SOLAR && mqtt_solar != "") {
     _mqttclient.subscribe(mqtt_solar); yield();
   }
-  if (divert_type == DIVERT_TYPE_GRID && mqtt_grid_ie != "") {
+  // Shelly LNM provides the grid excess feed when enabled
+  if (divert_type == DIVERT_TYPE_GRID && mqtt_grid_ie != "" && !shelly_lnm_enabled) {
     _mqttclient.subscribe(mqtt_grid_ie); yield();
   }
 
@@ -315,7 +316,8 @@ void Mqtt::subscribeTopics() {
   if (mqtt_vehicle_charge_limit != "") { _mqttclient.subscribe(mqtt_vehicle_charge_limit); yield(); }
   if (mqtt_home_battery_soc != "") { _mqttclient.subscribe(mqtt_home_battery_soc); yield(); }
   if (mqtt_home_battery_power != "") { _mqttclient.subscribe(mqtt_home_battery_power); yield(); }
-  if (mqtt_vrms != "") { _mqttclient.subscribe(mqtt_vrms); yield(); }
+  // Shelly LNM provides the voltage feed when enabled
+  if (mqtt_vrms != "" && !shelly_lnm_enabled) { _mqttclient.subscribe(mqtt_vrms); yield(); }
 
   // Settable topics
   _mqttclient.subscribe(mqtt_topic + "/divertmode/set"); yield();
@@ -431,7 +433,7 @@ void Mqtt::handleMqttMessage(MongooseString topic, MongooseString payload) {
       shaper.shapeCurrent();
     }
   }
-  else if (topic_string == mqtt_grid_ie) {
+  else if (topic_string == mqtt_grid_ie && !shelly_lnm_enabled) {
     int grid_ie = payload_str.toInt();
     divert.setGridIe(grid_ie);
     DBUGF("grid:%dW", grid_ie);
@@ -444,7 +446,7 @@ void Mqtt::handleMqttMessage(MongooseString topic, MongooseString payload) {
       shaper.setLivePwr(payload_str.toInt());
       DBUGF("shaper: Live Pwr:%dW", shaper.getLivePwr());
   }
-  else if (topic_string == mqtt_vrms) {
+  else if (topic_string == mqtt_vrms && !shelly_lnm_enabled) {
     double volts = payload_str.toFloat();
     DBUGF("voltage:%.1f", volts);
     _evse->setMqttVoltage(volts);

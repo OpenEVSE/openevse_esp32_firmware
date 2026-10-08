@@ -9,7 +9,6 @@
 #include "app_config.h"
 #include "app_config_mqtt.h"
 #include "app_config_mode.h"
-#include "certificates.h"
 #include "temp_throttle.h"
 #include "flash_migrate.h"
 
@@ -36,6 +35,7 @@
 #include "current_shaper.h"
 
 #include "limit.h"
+#include "shelly_lnm.h"
 #endif
 
 #ifndef HTTP_SERVER_PORT
@@ -147,6 +147,14 @@ double divert_PV_ratio;
 uint32_t divert_attack_smoothing_time;
 uint32_t divert_decay_smoothing_time;
 uint32_t divert_min_charge_time;
+
+// Shelly LNM settings
+bool shelly_lnm_enabled;
+String shelly_lnm_addr;
+uint16_t shelly_lnm_port;
+String shelly_lnm_power_field;
+String shelly_lnm_voltage_field;
+String shelly_lnm_device;
 
 // Current Shaper settings
 uint32_t current_shaper_max_pwr;
@@ -407,6 +415,14 @@ ConfigOpt *opts[] =
   new ConfigOptDefinition<uint32_t>(divert_decay_smoothing_time, 600, "divert_decay_smoothing_time", "dds"),
   new ConfigOptDefinition<uint32_t>(divert_min_charge_time, 600, "divert_min_charge_time", "dt"),
 
+// Shelly LNM settings
+  new ConfigOptDefinition<bool>(shelly_lnm_enabled, false, "shelly_lnm_enabled", "sle"),
+  new ConfigOptDefinition<String>(shelly_lnm_addr, "239.255.55.55", "shelly_lnm_addr", "sla"),
+  new ConfigOptDefinition<uint16_t>(shelly_lnm_port, 5555, "shelly_lnm_port", "slpt"),
+  new ConfigOptDefinition<String>(shelly_lnm_power_field, "act_power", "shelly_lnm_power_field", "slpf"),
+  new ConfigOptDefinition<String>(shelly_lnm_voltage_field, "voltage", "shelly_lnm_voltage_field", "slvf"),
+  new ConfigOptDefinition<String>(shelly_lnm_device, "", "shelly_lnm_device", "sld"),
+
 // Current Shaper settings
   new ConfigOptDefinition<uint32_t>(current_shaper_max_pwr, 0, "current_shaper_max_pwr", "smp"),
   new ConfigOptDefinition<uint32_t>(current_shaper_smoothing_time, 60, "current_shaper_smoothing_time", "sst"),
@@ -633,6 +649,11 @@ void config_changed(String name)
     evse.setSleepForDisable(!config_pause_uses_disabled());
   } else if(name.startsWith("mqtt_")) {
     mqtt.restartConnection();
+  } else if(name.startsWith("shelly_lnm_")) {
+    shelly_lnm.notifyConfigChanged();
+    if(name == "shelly_lnm_enabled") {
+      mqtt.restartConnection();
+    }
   } else if(name.startsWith("ocpp_")) {
     OcppTask::notifyConfigChanged();
   } else if(name.startsWith("emoncms_")) {
@@ -707,28 +728,6 @@ void config_save_notification_acks(const String &acks, const String &fw)
   if(user_config.deserialize(doc)) {
     user_config.commit();
   }
-}
-
-bool config_https_active()
-{
-#ifndef DIVERT_SIM
-  if (!config_https_enabled() || www_certificate_id == "") {
-    return false;
-  }
-  // This runs from mDNS setup during network bring-up, so a corrupt stored id
-  // would crash-loop the firmware if it were parsed with a throwing conversion.
-  uint64_t cert_id = 0;
-  if (!certificate_id_from_string(www_certificate_id.c_str(), cert_id)) {
-    DBUGF("config_https_active: invalid www_certificate_id '%s'", www_certificate_id.c_str());
-    return false;
-  }
-
-  const char *cert = certs.getCertificate(cert_id);
-  const char *key = certs.getKey(cert_id);
-  return (NULL != cert && NULL != key);
-#else
-  return false;
-#endif
 }
 
 // notification_acks / notification_acks_fw ride the EEPROM-backed opts[]

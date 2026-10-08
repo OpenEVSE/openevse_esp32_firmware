@@ -184,6 +184,8 @@ class NetManagerTask : public MicroTasks::Task
     NetManagerTask(LcdTask &lcd, LedManagerTask &led, TimeManager &time);
 
     void begin();
+    /** Re-advertise mDNS now that the web listener has bound its port. */
+    void publishWebServer(uint16_t port, bool ssl);
 
     void wifiScan();
 

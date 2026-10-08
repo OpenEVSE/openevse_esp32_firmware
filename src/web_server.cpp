@@ -31,6 +31,7 @@ typedef const __FlashStringHelper *fstr_t;
 #include "crash_report.h"
 #include "crash_report_id.h"
 #include "crash_payload.h"
+#include "web_server_tls_startup.h"
 #ifdef ENABLE_TSDB
 #include "tsdb_energy_logger.h"
 #endif
@@ -58,6 +59,7 @@ typedef const __FlashStringHelper *fstr_t;
 #include "notifications.h"
 #include "web_auth.h"
 #include "web_auth_secret.h"
+#include "shelly_lnm.h"
 
 static MongooseHttpServer http_server;     // Create class for HTTP server
 static MongooseHttpServer https_server;    // Create class for HTTPS server
@@ -67,6 +69,7 @@ static bool https_server_started = false;
 
 bool enableCors = false;
 bool streamDebug = false;
+static WebServerListenerState web_server_listener = {false, false, 0};
 
 // Event timeouts
 static unsigned long wifiRestartTime = 0;
@@ -731,6 +734,10 @@ void buildStatus(DynamicJsonDocument &doc) {
   // doc["shaper_cur"] = shaper.getChgCur();
   doc["shaper_cur"] = shaper.getMaxCur();
   doc["shaper_updated"] = shaper.isUpdated();
+  doc["shelly_lnm_listening"] = shelly_lnm.isListening()?1:0;
+  doc["shelly_lnm_data_age"] = shelly_lnm.getDataAge();
+  doc["shelly_lnm_power"] = shelly_lnm.getPower();
+  doc["shelly_lnm_voltage"] = shelly_lnm.getVoltage();
   doc["service_level"] = static_cast<uint8_t>(evse.getActualServiceLevel());
   doc["limit"] = limit.hasLimit();
   doc["boost"] = boost.isActive();
@@ -2668,12 +2675,19 @@ static void registerWebServerRoutes(MongooseHttpServer &server, bool isHttps)
   web_server_load_sharing_setup(server);
 }
 
+/**
+ * Start the HTTP and/or HTTPS listeners, publish the primary one's protocol and
+ * port, and register routes. A TLS listener that fails to bind falls back to
+ * HTTP; total failure keeps the listener state inactive.
+ */
 void web_server_setup()
 {
   http_server_started = false;
   https_server_started = false;
+  web_server_listener = {false, false, 0};
 
-  bool use_ssl = false;
+  const char *cert = NULL;
+  const char *key = NULL;
   if(config_https_enabled() && www_certificate_id != "")
   {
     // This one sits on the boot path: a corrupted stored www_certificate_id
@@ -2687,28 +2701,37 @@ void web_server_setup()
       DEBUG.printf("Ignoring malformed www_certificate_id '%s', serving HTTPS disabled\n", www_certificate_id.c_str());
     }
 
-    const char *cert = id_valid ? certs.getCertificate(cert_id) : NULL;
-    const char *key = id_valid ? certs.getKey(cert_id) : NULL;
-    if(NULL != cert && NULL != key)
+    cert = id_valid ? certs.getCertificate(cert_id) : NULL;
+    key = id_valid ? certs.getKey(cert_id) : NULL;
+  }
+
+  // Only a listener that actually bound counts: a blocked or failed TLS port
+  // must not suppress the HTTP fallback, or be advertised to peers and mDNS.
+  const bool use_ssl = web_server_start_https(cert, key,
+    [](const char *certificate, const char *private_key)
     {
       DEBUG.printf("Starting HTTPS server, https://0.0.0.0:%d\n", www_https_port);
-      https_server.begin(www_https_port, cert, key);
+      if(!https_server.begin(www_https_port, certificate, private_key)) {
+        return false;
+      }
       registerWebServerRoutes(https_server, true);
       https_server.onNotFound(handleNotFound);
       https_server_started = true;
-      use_ssl = true;
-    }
-  }
+      return true;
+    });
 
   // Keep HTTP reachable whenever HTTPS is unavailable, so we never strand the UI.
   const bool should_start_http = config_http_enabled() || false == use_ssl;
   const bool should_bind_http_port = false == use_ssl || www_http_port != www_https_port;
   if(should_start_http && should_bind_http_port) {
       DEBUG.printf("Starting HTTP server, http://0.0.0.0:%d\n", www_http_port);
-      http_server.begin(www_http_port);
-      registerWebServerRoutes(http_server, false);
-      http_server.onNotFound(handleNotFound);
-      http_server_started = true;
+      if(http_server.begin(www_http_port)) {
+        registerWebServerRoutes(http_server, false);
+        http_server.onNotFound(handleNotFound);
+        http_server_started = true;
+      } else {
+        DEBUG.printf("HTTP server failed on port %u\n", (unsigned)www_http_port);
+      }
   } else if(use_ssl && should_bind_http_port) {
       // HTTPS only. Leaving port 80 closed means anyone who types the bare
       // hostname gets a connection refused with nothing to explain it, so keep
@@ -2718,12 +2741,48 @@ void web_server_setup()
       // without a wildcard is an exact comparison and "/" would only ever catch
       // the root document.
       DEBUG.printf("Starting HTTPS redirect, http://0.0.0.0:%d\n", www_http_port);
-      redirect_server.begin(www_http_port);
-      redirect_server.on("/#", handleHttpsRedirect);
-      redirect_server.onNotFound(handleHttpsRedirect);
+      web_server_start_redirect(www_http_port,
+        /** Bind the optional HTTP-to-HTTPS redirect and return the actual result. */
+        [](uint16_t port) { return redirect_server.begin(port); },
+        /** Install the redirect handler after its listener starts. */
+        []() {
+          redirect_server.on("/#", handleHttpsRedirect);
+          redirect_server.onNotFound(handleHttpsRedirect);
+        },
+        /** Identify a failed redirect bind without changing the primary HTTPS listener. */
+        [](uint16_t port) { DEBUG.printf("HTTP->HTTPS redirect failed on port %u\n", port); });
   }
 
-  DEBUG.println("Server started");
+  // The primary listener is HTTPS when it came up, otherwise HTTP.
+  if(use_ssl) {
+    web_server_listener = {true, true, (uint16_t)www_https_port};
+  } else if(http_server_started) {
+    web_server_listener = {true, false, (uint16_t)www_http_port};
+  }
+
+  if(web_server_listener.started) {
+    net.publishWebServer(web_server_listener.port, web_server_listener.https);
+  }
+
+  DEBUG.println(web_server_listener.started ? "Server started" : "Server failed to start");
+}
+
+/** Return whether startup established a primary web listener. */
+bool web_server_is_running()
+{
+  return web_server_listener.started;
+}
+
+/** Return whether the successfully started primary listener uses TLS. */
+bool web_server_is_https()
+{
+  return web_server_listener.started && web_server_listener.https;
+}
+
+/** Return the selected primary listener port, or zero when startup failed. */
+uint16_t web_server_port()
+{
+  return web_server_listener.port;
 }
 
 void

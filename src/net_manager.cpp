@@ -5,6 +5,7 @@
 #include "espal.h"
 #include "time_man.h"
 #include "event.h"
+#include "web_server.h"
 
 #include "LedManagerTask.h"
 
@@ -74,6 +75,7 @@ static String netDhcpNtpServer()
 
 NetManagerTask *NetManagerTask::_instance = NULL;
 
+/** Initialize network-task state and collaborators before network/mDNS startup. */
 NetManagerTask::NetManagerTask(LcdTask &lcd, LedManagerTask &led, TimeManager &time) :
   _dnsServerStarted(false),
   _dnsPort(53),
@@ -109,6 +111,18 @@ void NetManagerTask::begin()
     _instance = this;
     MicroTask.startTask(this);
   }
+}
+
+/**
+ * Re-advertise mDNS once the web listener is up, so the services carry the port
+ * and TLS state it actually bound. Runs on the loop task, like web_server_setup().
+ */
+void NetManagerTask::publishWebServer(uint16_t port, bool ssl)
+{
+  (void)port;
+  (void)ssl;
+  _mdnsConfig = "";
+  updateMdns();
 }
 
 // -------------------------------------------------------------------
@@ -629,6 +643,7 @@ void NetManagerTask::onNetEvent(WiFiEvent_t event, arduino_event_info_t &info)
 }
 #endif
 
+/** Initialize the configured network and mDNS before web-listener publication. */
 void NetManagerTask::setup()
 {
   DBUGLN("Starting Network Manager");
@@ -674,21 +689,26 @@ void NetManagerTask::updateMdns()
     return;
   }
 
-  bool ssl = config_https_active();
-  uint16_t port = ssl ? www_https_port : www_http_port;
+  // Advertise what web_server_setup() actually bound. mDNS can come up before
+  // the web server does, so only publish the services once a listener is
+  // running; publishWebServer() re-runs this once it is.
+  const bool running = web_server_is_running();
+  const bool ssl = web_server_is_https();
+  const uint16_t port = web_server_port();
   String signature = esp_hostname + ":" + _ipaddress + ":" + String(port) +
-                     (ssl ? ":ssl" : ":http") + (isWifiModeAp() ? ":ap" : "");
+                     (running ? (ssl ? ":ssl" : ":http") : ":idle") + (isWifiModeAp() ? ":ap" : "");
   if (Mdns.isActive() && signature == _mdnsConfig) return;
 
   // One Mongoose listener handles hostname resolution, advertising and browsing.
   // Start only once an interface is up; begin() also clears stale address caches.
   if (Mdns.begin(esp_hostname.c_str()) &&
-      Mdns.addService("_http._tcp", port) &&
-      Mdns.addService("_openevse._tcp", port) &&
-      Mdns.addServiceTxt("_openevse._tcp", "type", buildenv.c_str()) &&
-      Mdns.addServiceTxt("_openevse._tcp", "version", currentfirmware.c_str()) &&
-      Mdns.addServiceTxt("_openevse._tcp", "id", ESPAL.getLongId().c_str()) &&
-      Mdns.addServiceTxt("_openevse._tcp", "ssl", ssl ? "1" : "0")) {
+      (!running ||
+       (Mdns.addService("_http._tcp", port) &&
+        Mdns.addService("_openevse._tcp", port) &&
+        Mdns.addServiceTxt("_openevse._tcp", "type", buildenv.c_str()) &&
+        Mdns.addServiceTxt("_openevse._tcp", "version", currentfirmware.c_str()) &&
+        Mdns.addServiceTxt("_openevse._tcp", "id", ESPAL.getLongId().c_str()) &&
+        Mdns.addServiceTxt("_openevse._tcp", "ssl", ssl ? "1" : "0")))) {
 #if defined(ENABLE_OTA) && !defined(EPOXY_DUINO)
     // Match ArduinoOTA's discovery contract without starting its IDF responder.
     if (!Mdns.addService("_arduino._tcp", 3232) ||
