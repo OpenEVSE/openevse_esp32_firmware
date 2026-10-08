@@ -59,6 +59,7 @@ typedef const __FlashStringHelper *fstr_t;
 #include "notifications.h"
 #include "web_auth.h"
 #include "web_auth_secret.h"
+#include "shelly_lnm.h"
 
 MongooseHttpServer server;          // Create class for Web server
 MongooseHttpServer redirect;        // Server to redirect to HTTPS if enabled
@@ -677,6 +678,10 @@ void buildStatus(DynamicJsonDocument &doc) {
   // doc["shaper_cur"] = shaper.getChgCur();
   doc["shaper_cur"] = shaper.getMaxCur();
   doc["shaper_updated"] = shaper.isUpdated();
+  doc["shelly_lnm_listening"] = shelly_lnm.isListening()?1:0;
+  doc["shelly_lnm_data_age"] = shelly_lnm.getDataAge();
+  doc["shelly_lnm_power"] = shelly_lnm.getPower();
+  doc["shelly_lnm_voltage"] = shelly_lnm.getVoltage();
   doc["service_level"] = static_cast<uint8_t>(evse.getActualServiceLevel());
   doc["limit"] = limit.hasLimit();
   doc["boost"] = boost.isActive();

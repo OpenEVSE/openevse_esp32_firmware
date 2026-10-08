@@ -38,6 +38,29 @@ energy logging and dashboards.
 
 ![EmonCMS settings](screenshots/settings-emoncms-dark-desktop.png)
 
+## Shelly LNM
+
+Shelly Local Network Messaging (LNM) can provide the live grid power and voltage measurements used by OpenEVSE. Configure it from **Settings → Connectivity → Shelly LNM** (`/settings/shellylnm`).
+
+| Option | Default | Description |
+|--------|---------|-------------|
+| `shelly_lnm_enabled` | `false` | Listen to Shelly LNM messages |
+| `shelly_lnm_addr` | `239.255.55.55` | Multicast address, same as configured on the Shelly device |
+| `shelly_lnm_port` | `5555` | UDP port, same as configured on the Shelly device |
+| `shelly_lnm_device` | empty | Only accept messages from this device ID (e.g. `shellypro3em-8813bfe1ab68`). Empty accepts any device |
+| `shelly_lnm_power_field` | `act_power` | JSON field holding the grid power: `act_power` for a Shelly EM / EM Pro / EM Mini, or `total_act_power`, `a_act_power`, `b_act_power`, `c_act_power` for a 3EM (total or per phase) |
+| `shelly_lnm_voltage_field` | `voltage` | JSON field holding the voltage: `voltage` for EM / EM Pro / EM Mini, or `a_voltage`, `b_voltage`, `c_voltage` for a 3EM phase |
+
+While enabled, these measurements replace the MQTT inputs for:
+
+* the grid voltage (`mqtt_vrms`);
+* the Solar divert grid excess (`mqtt_grid_ie`, grid mode only);
+* the Load Shaper live power, unless a dedicated `mqtt_live_pwr` topic (different from `mqtt_grid_ie`) is configured, in which case that MQTT topic keeps feeding the shaper.
+
+The replaced MQTT topics are not subscribed to. Values are applied at most every 5 seconds, and voltage changes below 1 V are ignored. If the Shelly stops sending, the last value is kept (as with MQTT); the Load Shaper has its own data timeout. The listener state, data age, power and voltage are shown live in the Shelly LNM settings.
+
+**Security:** LNM messages are unauthenticated UDP multicast. Anyone on the local network can send packets that set the grid power and voltage seen by OpenEVSE, which is comparable to an unauthenticated MQTT broker. Use `shelly_lnm_device` to ignore other devices' messages, and only enable this on a trusted network.
+
 ## Plain HTTP
 
 Everything MQTT can feed in, HTTP can too: POST JSON to the device's `/status`
