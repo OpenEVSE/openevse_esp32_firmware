@@ -31,6 +31,7 @@ typedef const __FlashStringHelper *fstr_t;
 #include "crash_report.h"
 #include "crash_report_id.h"
 #include "crash_payload.h"
+#include "web_server_tls_startup.h"
 #ifdef ENABLE_TSDB
 #include "tsdb_energy_logger.h"
 #endif
@@ -58,12 +59,14 @@ typedef const __FlashStringHelper *fstr_t;
 #include "notifications.h"
 #include "web_auth.h"
 #include "web_auth_secret.h"
+#include "shelly_lnm.h"
 
 MongooseHttpServer server;          // Create class for Web server
 MongooseHttpServer redirect;        // Server to redirect to HTTPS if enabled
 
 bool enableCors = false;
 bool streamDebug = false;
+static WebServerListenerState web_server_listener = {false, false, 0};
 
 // Event timeouts
 static unsigned long wifiRestartTime = 0;
@@ -675,6 +678,10 @@ void buildStatus(DynamicJsonDocument &doc) {
   // doc["shaper_cur"] = shaper.getChgCur();
   doc["shaper_cur"] = shaper.getMaxCur();
   doc["shaper_updated"] = shaper.isUpdated();
+  doc["shelly_lnm_listening"] = shelly_lnm.isListening()?1:0;
+  doc["shelly_lnm_data_age"] = shelly_lnm.getDataAge();
+  doc["shelly_lnm_power"] = shelly_lnm.getPower();
+  doc["shelly_lnm_voltage"] = shelly_lnm.getVoltage();
   doc["service_level"] = static_cast<uint8_t>(evse.getActualServiceLevel());
   doc["limit"] = limit.hasLimit();
   doc["boost"] = boost.isActive();
@@ -2250,9 +2257,14 @@ void handleMqttAction(MongooseHttpServerRequest *request) {
   request->send(response);
 }
 
+/**
+ * Start the web listener, publish its selected protocol/port, and register routes.
+ * A failed TLS listener falls back to HTTP; total failure keeps listener state inactive.
+ */
 void web_server_setup()
 {
-  bool use_ssl = false;
+  const char *cert = NULL;
+  const char *key = NULL;
   if(www_certificate_id != "")
   {
     // This one sits on the boot path: a corrupted stored www_certificate_id
@@ -2266,22 +2278,38 @@ void web_server_setup()
       DEBUG.printf("Ignoring malformed www_certificate_id '%s', serving HTTP\n", www_certificate_id.c_str());
     }
 
-    const char *cert = id_valid ? certs.getCertificate(cert_id) : NULL;
-    const char *key = id_valid ? certs.getKey(cert_id) : NULL;
-    if(NULL != cert && NULL != key)
-    {
-      DEBUG.printf("Starting HTTPS server, https://0.0.0.0:%d\n", www_https_port);
-      server.begin(www_https_port, cert, key);
-      use_ssl = true;
-
-      redirect.begin(www_http_port);
-      redirect.on("/", handleHttpsRedirect);
-    }
+    cert = id_valid ? certs.getCertificate(cert_id) : NULL;
+    key = id_valid ? certs.getKey(cert_id) : NULL;
   }
 
-  if(false == use_ssl) {
-    DEBUG.printf("Starting HTTP server, http://0.0.0.0:%d\n", www_http_port);
-    server.begin(www_http_port);
+  web_server_listener = web_server_start_listeners(
+    cert, key, www_https_port, www_http_port,
+    /** Attempt the configured TLS bind and propagate its actual result. */
+    [](const char *certificate, const char *private_key)
+    {
+      DEBUG.printf("Starting HTTPS server, https://0.0.0.0:%d\n", www_https_port);
+      return server.begin(www_https_port, certificate, private_key);
+    },
+    /** Attempt the configured HTTP bind after TLS is unavailable or fails. */
+    []()
+    {
+      DEBUG.printf("Starting HTTP server, http://0.0.0.0:%d\n", www_http_port);
+      return server.begin(www_http_port);
+    });
+
+  if(web_server_listener.started && web_server_listener.https)
+  {
+    web_server_start_redirect(www_http_port,
+      /** Bind the optional HTTP-to-HTTPS redirect and return the actual result. */
+      [](uint16_t port) { return redirect.begin(port); },
+      /** Install the redirect handler after its listener starts. */
+      []() { redirect.on("/", handleHttpsRedirect); },
+      /** Identify a failed redirect bind without changing the primary HTTPS listener. */
+      [](uint16_t port) { DEBUG.printf("HTTP->HTTPS redirect failed on port %u\n", port); });
+  }
+
+  if(web_server_listener.started) {
+    net.publishWebServer(web_server_listener.port, web_server_listener.https);
   }
 
   // Session management (no auth gate — user must reach these unauthenticated)
@@ -2599,7 +2627,25 @@ void web_server_setup()
   // Setup load sharing endpoints
   web_server_load_sharing_setup();
 
-  DEBUG.println("Server started");
+  DEBUG.println(web_server_listener.started ? "Server started" : "Server failed to start");
+}
+
+/** Return whether startup established a primary web listener. */
+bool web_server_is_running()
+{
+  return web_server_listener.started;
+}
+
+/** Return whether the successfully started primary listener uses TLS. */
+bool web_server_is_https()
+{
+  return web_server_listener.started && web_server_listener.https;
+}
+
+/** Return the selected primary listener port, or zero when startup failed. */
+uint16_t web_server_port()
+{
+  return web_server_listener.port;
 }
 
 void
