@@ -122,6 +122,11 @@ class LcdTask : public MicroTasks::Task
     bool _updateStateDisplay;
     bool _updateInfoLine;
 
+    // Backlight energy saving (`lcd_backlight_timeout`, 0 = never). `$FB 0`
+    // blanks the RGB backlight; any activity re-sends the state colour.
+    bool _backlightOn;
+    uint32_t _lastWake;
+
     MicroTasks::EventListener _evseStateEvent;
     MicroTasks::EventListener _evseSettingsEvent;
 
@@ -135,7 +140,10 @@ class LcdTask : public MicroTasks::Task
     void setInfoLine(LcdInfoLine info);
 
     void onButton(int event);
-    
+
+    void wakeBacklight();
+    void lightBacklight();
+    void updateBacklight(unsigned long &nextUpdate);
 
     LcdInfoLine getNextInfoLine(LcdInfoLine info);
 

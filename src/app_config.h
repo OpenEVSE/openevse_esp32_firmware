@@ -107,6 +107,14 @@ extern uint32_t divert_attack_smoothing_time;
 extern uint32_t divert_decay_smoothing_time;
 extern uint32_t divert_min_charge_time;
 
+// Shelly LNM settings (local grid power / voltage source)
+extern bool shelly_lnm_enabled;
+extern String shelly_lnm_addr;
+extern uint16_t shelly_lnm_port;
+extern String shelly_lnm_power_field;
+extern String shelly_lnm_voltage_field;
+extern String shelly_lnm_device;
+
 // Scheduler settings
 extern uint32_t scheduler_start_window;
 
@@ -123,7 +131,7 @@ extern uint32_t loadsharing_config_version;
 extern uint32_t loadsharing_config_updated_at;
 extern uint32_t loadsharing_peers_version;
 extern uint32_t loadsharing_status_version;
-extern String loadsharing_role;
+extern bool loadsharing_role;  // false = controller (default), true = member
 extern String loadsharing_controller_host;
 extern uint32_t loadsharing_rotation_interval;
 
@@ -163,8 +171,16 @@ enum vehicle_data_src {
 // 24-bits of Flags
 extern uint32_t flags;
 
+// Second word of flags: `flags` above is full (every bit spoken for, see the
+// retired-bit note at CONFIG_SERVICE_SNTP), so new on/off settings go here.
+extern uint32_t flags2;
+
 #define CONFIG_SERVICE_EMONCMS      (1 << 0)
 #define CONFIG_SERVICE_MQTT         (1 << 1)
+// Bit 2 was CONFIG_SERVICE_OHM (OhmConnect), removed in #1186. Leave it
+// retired rather than reuse it: devices that had Ohm enabled still carry
+// that bit set in their stored `flags`, and repurposing it would make
+// their upgrade silently flip on whatever moves in.
 #define CONFIG_SERVICE_SNTP         (1 << 3)
 #define CONFIG_MQTT_PROTOCOL        (7 << 4) // Maybe leave a bit of space after for additional protocols
 #define CONFIG_MQTT_ALLOW_ANY_CERT  (1 << 7)
@@ -196,6 +212,12 @@ extern uint32_t flags;
 // and always uses sntp_hostname. Clear - the default, and what every existing
 // install already has stored - prefers the DHCP one. Last free bit.
 #define CONFIG_SNTP_NO_DHCP         (1u << 31)
+
+// flags2: a second flags word for new on/off settings now that `flags` above
+// is full.
+// Web UI: reveal OpenEVSE Labs (in-development) features. Stored on the
+// device so it applies to every browser.
+#define CONFIG2_LABS_ENABLED        (1 << 0)
 
 #define INITIAL_CONFIG_VERSION  1
 
@@ -278,6 +300,10 @@ inline bool config_rfid_enabled() {
   return CONFIG_RFID == (flags & CONFIG_RFID);
 }
 
+inline bool config_labs_enabled() {
+  return CONFIG2_LABS_ENABLED == (flags2 & CONFIG2_LABS_ENABLED);
+}
+
 inline bool config_factory_write_lock() {
   return CONFIG_FACTORY_WRITE_LOCK == (flags & CONFIG_FACTORY_WRITE_LOCK);
 }
@@ -310,8 +336,6 @@ inline bool config_tft_12h_clock()
 {
   return CONFIG_TFT_12H_CLOCK == (flags & CONFIG_TFT_12H_CLOCK);
 }
-
-bool config_https_enabled();
 
 extern uint32_t config_version();
 
