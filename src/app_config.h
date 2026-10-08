@@ -107,6 +107,14 @@ extern uint32_t divert_attack_smoothing_time;
 extern uint32_t divert_decay_smoothing_time;
 extern uint32_t divert_min_charge_time;
 
+// Shelly LNM settings (local grid power / voltage source)
+extern bool shelly_lnm_enabled;
+extern String shelly_lnm_addr;
+extern uint16_t shelly_lnm_port;
+extern String shelly_lnm_power_field;
+extern String shelly_lnm_voltage_field;
+extern String shelly_lnm_device;
+
 // Scheduler settings
 extern uint32_t scheduler_start_window;
 
@@ -328,8 +336,6 @@ inline bool config_tft_12h_clock()
 {
   return CONFIG_TFT_12H_CLOCK == (flags & CONFIG_TFT_12H_CLOCK);
 }
-
-bool config_https_enabled();
 
 extern uint32_t config_version();
 

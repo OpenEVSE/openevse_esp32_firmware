@@ -37,7 +37,8 @@ double InputFilter::filter(double input, double filtered, uint32_t tau)
   uint32_t delta = (millis() - _last_data_time)/1000;
   DBUGVAR(delta);
   DBUGVAR(tau);
-  _last_data_time = millis();
+  // Only consume whole seconds so frequent updates still accumulate time
+  _last_data_time += delta * 1000;
   double factor = getFactor(delta, tau);
   filtered = ((input * factor) + (filtered * (1 - factor)));
   DBUGVAR(filtered);
