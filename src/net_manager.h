@@ -100,9 +100,15 @@ class NetManagerTask : public MicroTasks::Task
     String _netmask;
     String _ipv6address;
     String _macaddress;
+    String _mdnsConfig;
+    // Set on the arduino_events task (haveNetworkConnection()), consumed on
+    // the loop task (loop()). Mongoose.ipConfigChanged() must not run on the
+    // event task: since ArduinoMongoose 1.1.0 it can reach the DNS resolver's
+    // closeResolver(), which walks the same connection/request lists
+    // Mongoose.poll() walks from loop() -- see jeremypoulter/ArduinoMongoose#121.
+    bool _ipConfigChanged;
 
     DNSServer _dnsServer;                  // Create class DNS server, captive portal re-direct
-    bool _mdnsStarted;
     bool _dnsServerStarted;
     const byte _dnsPort;
 
@@ -153,6 +159,7 @@ class NetManagerTask : public MicroTasks::Task
     #endif
 
     void displayState();
+    void updateMdns();
     void haveNetworkConnection(IPAddress myAddress, IPAddress netmask = IPAddress(0, 0, 0, 0));
 
     void wifiOnStationModeConnected(const WiFiEventStationModeConnected &event);
@@ -177,7 +184,7 @@ class NetManagerTask : public MicroTasks::Task
     NetManagerTask(LcdTask &lcd, LedManagerTask &led, TimeManager &time);
 
     void begin();
-    /** Publish an already-started web listener through initialized mDNS. */
+    /** Re-advertise mDNS now that the web listener has bound its port. */
     void publishWebServer(uint16_t port, bool ssl);
 
     void wifiScan();

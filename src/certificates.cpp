@@ -207,7 +207,14 @@ bool CertificateStore::addCertificate(DynamicJsonDocument &doc, uint64_t *id, bo
 bool CertificateStore::addCertificate(Certificate *cert, uint64_t *id, bool save)
 {
   uint64_t certId = cert->getId();
-  if(findCertificate(certId, cert)) {
+
+  // findCertificate() takes its result by reference and rebinds it to the
+  // stored certificate. Passing `cert` therefore overwrote the caller's own
+  // pointer on a duplicate id, and every caller deletes `cert` when we return
+  // false -- so a duplicate upload freed the certificate that was still in
+  // _certs. Hand it a scratch pointer instead.
+  Certificate *existing = nullptr;
+  if(findCertificate(certId, existing)) {
     DBUGF("Certificate already exists");
     return false;
   }
@@ -219,6 +226,9 @@ bool CertificateStore::addCertificate(Certificate *cert, uint64_t *id, bool save
 
   _certs.push_back(cert);
 
+  // The caller deletes `cert` when we return false, so it must not be left in
+  // _certs: a failed save (a full filesystem, say) would otherwise leave a
+  // dangling pointer that GET /certificates then serializes.
   if(save && !saveCertificate(cert))
   {
     _certs.pop_back();

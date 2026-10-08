@@ -72,6 +72,9 @@ def native_server(directory, http_port, https_port):
                 "--set-config", f"www_http_port={http_port}",
                 "--set-config", f"www_https_port={https_port}",
                 "--set-config", "www_certificate_id=1234",
+                # HTTPS only starts when enabled; the bind failures below are what
+                # these tests exercise.
+                "--set-config", "www_https_enabled=true",
             ],
             cwd=runtime,
             env=environment,

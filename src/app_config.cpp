@@ -69,6 +69,7 @@ String lang;
 String www_username;
 String www_password;
 String www_certificate_id;
+bool www_https_enabled;
 
 // Session HMAC key — generated on first load, rotated on credential change.
 String server_secret;
@@ -235,6 +236,7 @@ void config_changed(String name);
 #define CONFIG_DEFAULT_FLAGS (CONFIG_SERVICE_SNTP | \
                               CONFIG_OCPP_AUTO_AUTH | \
                               CONFIG_OCPP_OFFLINE_AUTH | \
+                              CONFIG_HTTP_ENABLED | \
                               CONFIG_TEMP_THROTTLE_DEFAULT | \
                               CONFIG_DEFAULT_STATE_DEFAULT | \
                               CONFIG_LCD_NETWORK_INFO)
@@ -341,6 +343,7 @@ ConfigOpt *opts[] =
   new ConfigOptDefinition<String>(www_username, "", "www_username", "au"),
   new ConfigOptSecret(www_password, "", "www_password", "ap"),
   new ConfigOptDefinition<String>(www_certificate_id, "", "www_certificate_id", "wc"),
+  new ConfigOptDefinition<bool>(www_https_enabled, false, "www_https_enabled", "wse"),
   new ConfigOptSecret(server_secret, "", "server_secret", "wsk"),
 
 // Web server ports
@@ -508,6 +511,7 @@ ConfigOpt *opts[] =
   new ConfigOptVirtualMaskedBool(flagsOpt, flagsChanged, CONFIG_TEMP_THROTTLE, CONFIG_TEMP_THROTTLE, "temp_throttle_enabled", "tte"),
   new ConfigOptVirtualMaskedBool(flagsOpt, flagsChanged, CONFIG_LCD_NETWORK_INFO, CONFIG_LCD_NETWORK_INFO, "lcd_network_info", "lni"),
   new ConfigOptVirtualMaskedBool(flagsOpt, flagsChanged, CONFIG_TFT_12H_CLOCK, CONFIG_TFT_12H_CLOCK, "tft_12h_clock", "t12"),
+  new ConfigOptVirtualMaskedBool(flagsOpt, flagsChanged, CONFIG_HTTP_ENABLED, CONFIG_HTTP_ENABLED, "www_http_enabled", "whe"),
   new ConfigOptVirtualMqttProtocol(flagsOpt, flagsChanged, "mqtt_protocol", "mprt"),
   new ConfigOptVirtualChargeMode(flagsOpt, flagsChanged, "charge_mode", "chmd"),
 
