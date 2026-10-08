@@ -5,6 +5,7 @@
 #include <openevse.h>
 
 #include "evse_man.h"
+#include "input.h"
 
 #include <algorithm>
 
@@ -379,6 +380,7 @@ unsigned long EvseManager::loop(MicroTasks::WakeReason reason)
   DBUGVAR(_evseBootListener.IsTriggered());
   if(_evseBootListener.IsTriggered()) {
     _evaluateTargetState = true;
+    handleRapiRead();
   }
 
   DBUGVAR(_evseStateListener.IsTriggered());

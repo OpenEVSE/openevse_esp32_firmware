@@ -201,8 +201,12 @@ handleRapiRead()
       // Use evse_time_to_utc() to recover the actual UTC epoch.
       time_t evse_utc = evse_time_to_utc(evse_time);
 
+      // Only bootstrap when the system clock has no real time yet, so the RTC
+      // can never override SNTP.  CLOCK_SANE_EPOCH matches AUTH_CLOCK_SANE_EPOCH
+      // in web_server.cpp.
+      static const time_t CLOCK_SANE_EPOCH = 1700000000;
       time_t local_time = time(NULL);
-      if(evse_utc > local_time) {
+      if(local_time <= CLOCK_SANE_EPOCH && evse_utc > CLOCK_SANE_EPOCH) {
         struct timeval set_time = { evse_utc, 0 };
         settimeofday(&set_time, NULL);
       }
