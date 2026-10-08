@@ -5,6 +5,7 @@
 #include "espal.h"
 #include "time_man.h"
 #include "event.h"
+#include "web_server_mdns.h"
 
 #include "LedManagerTask.h"
 
@@ -75,7 +76,9 @@ static String netDhcpNtpServer()
 
 NetManagerTask *NetManagerTask::_instance = NULL;
 
+/** Initialize network-task state and collaborators before network/mDNS startup. */
 NetManagerTask::NetManagerTask(LcdTask &lcd, LedManagerTask &led, TimeManager &time) :
+  _mdnsStarted(false),
   _dnsServerStarted(false),
   _dnsPort(53),
   _softAP_ssid("OpenEVSE"),
@@ -109,6 +112,30 @@ void NetManagerTask::begin()
     _instance = this;
     MicroTask.startTask(this);
   }
+}
+
+/**
+ * Advertise a running web listener's port and TLS state when mDNS is available.
+ * NetManagerTask::begin runs setup synchronously before web_server_setup calls this.
+ */
+void NetManagerTask::publishWebServer(uint16_t port, bool ssl)
+{
+  if(!_mdnsStarted) {
+    return;
+  }
+
+  web_server_publish_mdns(MDNS, port,
+    /** Add selected-listener metadata after registering the OpenEVSE service. */
+    [ssl]() {
+      MDNS.addServiceTxt("openevse", "tcp", "type", buildenv.c_str());
+      MDNS.addServiceTxt("openevse", "tcp", "version", currentfirmware.c_str());
+      MDNS.addServiceTxt("openevse", "tcp", "id", ESPAL.getLongId());
+      MDNS.addServiceTxt("openevse", "tcp", "ssl", ssl ? "1" : "0");
+    },
+    /** Identify failed service publication without stopping the working listener. */
+    [](const char *service, uint16_t listener_port) {
+      DEBUG.printf("mDNS service %s.tcp failed on port %u\n", service, listener_port);
+    });
 }
 
 // -------------------------------------------------------------------
@@ -628,6 +655,7 @@ void NetManagerTask::onNetEvent(WiFiEvent_t event, arduino_event_info_t &info)
 }
 #endif
 
+/** Initialize the configured network and mDNS before web-listener publication. */
 void NetManagerTask::setup()
 {
   DBUGLN("Starting Network Manager");
@@ -662,17 +690,7 @@ void NetManagerTask::setup()
   // Initially startup the netwrok to kick things off
   manageState();
 
-  if (MDNS.begin(esp_hostname.c_str()))
-  {
-    bool ssl = config_https_enabled();
-    uint16_t svcPort = ssl ? www_https_port : www_http_port;
-    MDNS.addService("http", "tcp", svcPort);
-    MDNS.addService("openevse", "tcp", svcPort);
-    MDNS.addServiceTxt("openevse", "tcp", "type", buildenv.c_str());
-    MDNS.addServiceTxt("openevse", "tcp", "version", currentfirmware.c_str());
-    MDNS.addServiceTxt("openevse", "tcp", "id", ESPAL.getLongId());
-    MDNS.addServiceTxt("openevse", "tcp", "ssl", ssl ? "1" : "0");
-  }
+  _mdnsStarted = MDNS.begin(esp_hostname.c_str());
 }
 
 unsigned long NetManagerTask::handleMessage()

@@ -56,6 +56,7 @@
 #include "diagnostics.h"
 #include "boost.h"
 #include "notifications.h"
+#include "shelly_lnm.h"
 
 #if defined(ENABLE_PN532)
 #include "pn532.h"
@@ -276,6 +277,9 @@ void setup()
 
   tempThrottle.begin(evse);
   DBUGF("After tempThrottle.begin: %d", ESPAL.getFreeHeap());
+
+  shelly_lnm.begin();
+  DBUGF("After shelly_lnm.begin: %d", ESPAL.getFreeHeap());
 
   lcd.display(F("OpenEVSE WiFI"), 0, 0, 0, LCD_CLEAR_LINE);
   lcd.display(currentfirmware, 0, 1, 5 * 1000, LCD_CLEAR_LINE);
