@@ -215,7 +215,7 @@ properties:
     description: Instantaneous power, in W
   watthour:
     type: number
-    description: Energy delivered in the current session, in Wh
+    description: Total accumulated energy, in Wh
   wattsec:
     type: number
     description: Energy delivered in the current session, in watt-seconds
@@ -264,7 +264,7 @@ properties:
     description: Epoch seconds, only present while connected
   mqtt_last_rx:
     type: integer
-    description: Epoch seconds of the last message received
+    description: Epoch seconds of the last MQTT broker traffic, sent or received
   mqtt_error:
     type: string
     description: Error category, empty when there is no failure
