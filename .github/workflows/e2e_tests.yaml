@@ -19,6 +19,27 @@ env:
   EMULATOR_REF: claude/laughing-johnson-btb28l
 
 jobs:
+  # Runs alongside the scenarios, not before them: a UI route without a scenario
+  # fails the workflow but never stops the existing scenarios from running.
+  route_coverage:
+    name: Every UI route has a scenario
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+
+    steps:
+      - name: Checkout the firmware
+        uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+
+      - name: Set up Python
+        uses: actions/setup-python@v7
+        with:
+          python-version: '3.12'
+
+      - name: Check route coverage
+        run: python scripts/e2e_coverage.py --strict
+
   e2e:
     name: Playwright scenarios
     runs-on: ubuntu-latest
@@ -49,9 +70,6 @@ jobs:
           node-version: '22'
           cache: npm
           cache-dependency-path: tests/e2e/package-lock.json
-
-      - name: Check every UI route has a scenario
-        run: python scripts/e2e_coverage.py --strict
 
       - name: Install system dependencies
         run: |
