@@ -40,7 +40,10 @@ def mapped_routes():
 def tested_routes():
     routes = set()
     for feature in FEATURES.rglob("*.feature"):
-        routes.update(re.findall(r"@route:(/\S*)", feature.read_text(encoding="utf-8")))
+        for line in feature.read_text(encoding="utf-8").splitlines():
+            # Only tag lines count: a comment mentioning a tag is not coverage.
+            if line.lstrip().startswith("@"):
+                routes.update(re.findall(r"@route:(/\S*)", line))
     return routes
 
 

@@ -83,8 +83,12 @@ Then('the setup wizard shows step {int} of {int} {string}', async ({ page }, n: 
 When('I continue to the {string} step', async ({ page }, title: string) => {
   const target = WIZARD_STEPS.indexOf(title);
   if (target < 0) throw new Error(`Unknown wizard step "${title}"`);
-  await page.getByRole('button', { name: 'Next' }).click();
-  await expect(page.getByRole('heading', { level: 1, name: title })).toBeVisible();
+  const banner = (await page.getByRole('banner').innerText()).match(/Step (\d+) of/);
+  if (!banner) throw new Error('Not on a setup wizard step');
+  for (let current = Number(banner[1]) - 1; current < target; current++) {
+    await page.getByRole('button', { name: 'Next' }).click();
+    await expect(page.getByRole('heading', { level: 1, name: WIZARD_STEPS[current + 1] })).toBeVisible();
+  }
 });
 
 When('I set the maximum current to {int} A', async ({ page }, amps: number) => {

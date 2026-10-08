@@ -27,10 +27,13 @@ jobs:
     steps:
       - name: Checkout the firmware
         uses: actions/checkout@v7
+        with:
+          persist-credentials: false
 
       - name: Checkout the emulator
         uses: actions/checkout@v7
         with:
+          persist-credentials: false
           repository: ${{ env.EMULATOR_REPO }}
           ref: ${{ env.EMULATOR_REF }}
           path: emulator
