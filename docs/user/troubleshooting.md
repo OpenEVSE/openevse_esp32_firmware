@@ -57,6 +57,54 @@ Developers chasing a crash can fetch the raw dump from
 `firmware.elf` the unit is running -- the `elf_sha256` field says which build
 that is.
 
+### Sending a crash report to OpenEVSE
+
+On 16 MB boards, **Developer Tools** has a **Send to OpenEVSE** button beside the
+stored report. Your browser sends the decoded report to `crash.openevse.com`,
+where the maintainers see it as a readable stack trace -- no need to find a
+matching `firmware.elf` or attach anything to an issue. The browser does the
+sending, so it is the browser that needs internet access, not the charger.
+
+Before you press it:
+
+- **Only the decoded summary is sent, never the raw dump.** That is the panic
+  reason, the crashed task, the program counter and the backtrace, plus the
+  build, the chip model, heap figures, and which features are switched on. Your
+  Wi-Fi, MQTT and other passwords, hostnames and addresses are not included:
+  the charger builds the report from an allowlist of settings. The raw dump is a
+  copy of the charger's memory and can hold those, so it stays on the charger
+  (fetch it yourself from `/debug/crash/raw` if a maintainer asks). The report is
+  kept privately for 90 days, and is then deleted.
+- **Nothing in it names the charger.** Instead of the chip id (which is derived
+  from the network MAC address), the first report creates a random reporter id,
+  stored on the charger and shown under Developer Tools.
+- **You can erase everything this charger has sent.** **Delete my reports from
+  OpenEVSE** removes every report the charger sent and forgets the reporter id,
+  so a later report is not linked to the old ones. It works with a secret delete
+  key stored on the charger alongside the reporter id and never sent with a
+  report, so nobody else can delete your reports.
+- **The report is removed from the charger only once it has arrived.** If the
+  browser cannot reach `crash.openevse.com` (for example a phone connected to
+  the charger's own hotspot), nothing is lost: try again from a browser that is
+  online.
+
+The page uses these endpoints; with a password set, add `-u openevseadmin:<password>`
+to each -- `-u <user>:<password>` if you set a user name. The identity routes
+answer only requests carrying `X-Requested-With: OpenEVSE`, as the page's do,
+so another web page cannot change the identity behind your back:
+
+```sh
+H='X-Requested-With: OpenEVSE'
+curl -H "$H" http://<charger>/debug/crash/identity          # reporter id, broker URL
+curl -H "$H" 'http://<charger>/debug/crash/identity?key=1'  # ... and the delete key
+curl http://<charger>/debug/crash/report                    # the report, exactly as sent
+curl -H "$H" -X DELETE http://<charger>/debug/crash/identity  # forget the identity
+```
+
+`/debug/crash/report` answers `404` with no dump stored, and `409` until a
+reporter identity has been set (`POST /debug/crash/identity` with
+`{"reporter_id": <32 hex>, "delete_key": <64 hex>}`; the page does this for you).
+
 ## Getting help
 
 - [OpenEVSE knowledge base & support](https://openevse.dozuki.com/)

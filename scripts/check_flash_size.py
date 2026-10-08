@@ -17,10 +17,10 @@ for OTA) needs inspecting the actual built artifact, which wasn't practical
 to pin down here -- see the discussion on the PR that introduced this script.
 
 Exit status:
-    0  the env is exempt (native, or its build didn't succeed) and has no
-       "Flash:" line to check
-    0  the env is exempt but its log has a "Flash:" line anyway (e.g. linking
-       succeeded before a later step failed) -- skipped, not recorded
+    0  the env is exempt (native), or its failed build has no "Flash:" line
+       to check
+    0  the env is native but its log has a "Flash:" line -- skipped, not
+       recorded
     0  usage is below the warning threshold
     0  usage is within the warning threshold (a ::warning:: is emitted)
     1  a non-exempt build succeeded but printed no "Flash:" line -- something
@@ -55,8 +55,6 @@ def main():
     parser.add_argument("--native", action="store_true",
                          help="This env doesn't produce a flashable image (e.g. native_openevse)")
     args = parser.parse_args()
-    exempt = args.native or args.build_outcome != "success"
-
     try:
         with open(args.log, errors="replace") as f:
             log = f.read()
@@ -66,7 +64,7 @@ def main():
 
     match = FLASH_LINE_RE.search(log)
     if not match:
-        if not exempt:
+        if not args.native and args.build_outcome == "success":
             print(f"::error::{args.env}: build succeeded but no 'Flash:' usage line was found "
                   "in its output -- this build is invisible to the flash-size check and report; "
                   "investigate the build log directly")
@@ -75,9 +73,9 @@ def main():
               "-- skipping the flash size check (native env, or the build didn't succeed)")
         return 0
 
-    if exempt:
-        print(f"{args.env}: found a 'Flash:' usage line, but skipping it -- native env, "
-              "or the build didn't succeed, so this isn't a deliverable firmware image")
+    if args.native:
+        print(f"{args.env}: found a 'Flash:' usage line, but skipping it -- native envs "
+              "do not produce deliverable firmware images")
         return 0
 
     percent, size, max_size = float(match.group(1)), int(match.group(2)), int(match.group(3))

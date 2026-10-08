@@ -9,11 +9,17 @@
 #include "app_config.h"
 #include "app_config_mqtt.h"
 #include "app_config_mode.h"
-#include "certificates.h"
 #include "temp_throttle.h"
 #include "flash_migrate.h"
 
 #include "web_auth_secret.h"
+
+// Needed unconditionally: ConfigOptLoadSharingRole (below) uses
+// loadSharingRoleFromJson() to register the loadsharing_role opt, and that
+// registration isn't gated by ENABLE_CONFIG_CHANGE_NOTIFICATION -- unlike
+// this file's other loadsharing-adjacent includes, which are only for
+// config_changed()'s notification body.
+#include "loadsharing_types.h"
 
 #if ENABLE_CONFIG_CHANGE_NOTIFICATION
 #include <esp_ota_ops.h>
@@ -25,9 +31,11 @@
 #include "emoncms.h"
 #include "input.h"
 #include "LedManagerTask.h"
+#include "lcd.h"
 #include "current_shaper.h"
 
 #include "limit.h"
+#include "shelly_lnm.h"
 #endif
 
 #ifndef HTTP_SERVER_PORT
@@ -127,6 +135,10 @@ String time_zone;
 uint32_t flags;
 uint32_t flags_changed;
 
+// Second flags word (flags above is full)
+uint32_t flags2;
+uint32_t flags2_changed;
+
 
 // Divert settings
 int8_t divert_type;
@@ -134,6 +146,14 @@ double divert_PV_ratio;
 uint32_t divert_attack_smoothing_time;
 uint32_t divert_decay_smoothing_time;
 uint32_t divert_min_charge_time;
+
+// Shelly LNM settings
+bool shelly_lnm_enabled;
+String shelly_lnm_addr;
+uint16_t shelly_lnm_port;
+String shelly_lnm_power_field;
+String shelly_lnm_voltage_field;
+String shelly_lnm_device;
 
 // Current Shaper settings
 uint32_t current_shaper_max_pwr;
@@ -190,7 +210,7 @@ uint32_t loadsharing_config_version;
 uint32_t loadsharing_config_updated_at;
 uint32_t loadsharing_peers_version;
 uint32_t loadsharing_status_version;
-String loadsharing_role;
+bool loadsharing_role;
 String loadsharing_controller_host;
 uint32_t loadsharing_rotation_interval;
 
@@ -221,6 +241,90 @@ void config_changed(String name);
 
 ConfigOptDefinition<uint32_t> flagsOpt = ConfigOptDefinition<uint32_t>(flags, CONFIG_DEFAULT_FLAGS, "flags", "f");
 ConfigOptDefinition<uint32_t> flagsChanged = ConfigOptDefinition<uint32_t>(flags_changed, 0, "flags_changed", "c");
+
+// No CONFIG2_* default is on yet, so flags2 needs none of flags' upgrade
+// migration dance (see config_load_settings()) - it starts out all zero.
+#define CONFIG_DEFAULT_FLAGS2 0
+ConfigOptDefinition<uint32_t> flags2Opt = ConfigOptDefinition<uint32_t>(flags2, CONFIG_DEFAULT_FLAGS2, "flags2", "f2");
+ConfigOptDefinition<uint32_t> flags2Changed = ConfigOptDefinition<uint32_t>(flags2_changed, 0, "flags2_changed", "c2");
+
+// Defined here rather than in loadsharing_types.cpp (its natural home)
+// because that file isn't compiled into the native_simulator build (see its
+// build_src_filter in platformio.ini) -- load sharing was deliberately kept
+// out of the simulator -- but this opt needs the helper in every build.
+bool loadSharingRoleFromJson(JsonVariant v) {
+  if (v.is<const char*>()) {
+    // Only the literal "member" was ever a member; "controller" and "" (the
+    // unset default) were both controller.
+    return String(v.as<const char*>()) == "member";
+  }
+  return v.as<bool>();
+}
+
+// loadsharing_role was a String ("", "controller", "member") before it became
+// a bool. ArduinoJson's asBoolean() returns true for any string value,
+// including "" and "controller" (VariantImpl.hpp's default case), so a plain
+// ConfigOptDefinition<bool> deserializing an already-persisted legacy string
+// -- on the very next boot load, via ConfigJson::load() -> deserialize() --
+// would read every existing controller as a member. This subclass routes
+// through loadSharingRoleFromJson() so a legacy value maps to the exact same
+// role it always meant, on both the boot-time load
+// and POST /config paths (they share this one deserialize()).
+class ConfigOptLoadSharingRole : public ConfigOpt
+{
+protected:
+  bool &_val;
+  bool _default;
+
+public:
+  ConfigOptLoadSharingRole(bool &v, bool d, const char *l, const char *s) :
+    ConfigOpt(l, s), _val(v), _default(d)
+  {
+  }
+
+  bool get() { return _val; }
+
+  bool set(bool value) {
+    if(_val != value) {
+      _val = value;
+      return true;
+    }
+    return false;
+  }
+
+  virtual bool serialize(CONFIG_JSON_DOC &doc, bool longNames, bool compactOutput, bool hideSecrets) {
+    if(!compactOutput || _val != _default) {
+      doc[name(longNames)] = _val;
+      return true;
+    }
+    return false;
+  }
+
+  virtual bool deserialize(CONFIG_JSON_DOC &doc) {
+    JsonVariant v;
+#if ARDUINOJSON_VERSION_MAJOR >= 7
+    if(!doc[_long].isNull()) {
+      v = doc[_long];
+    } else if(!doc[_short].isNull()) {
+      v = doc[_short];
+    } else {
+      return false;
+    }
+#else
+    if(doc.containsKey(_long)) {
+      v = doc[_long];
+    } else if(doc.containsKey(_short)) {
+      v = doc[_short];
+    } else {
+      return false;
+    }
+#endif
+    return set(loadSharingRoleFromJson(v));
+  }
+
+  virtual void setDefault() { _val = _default; }
+};
+ConfigOptLoadSharingRole loadsharingRoleOpt = ConfigOptLoadSharingRole(loadsharing_role, false, "loadsharing_role", "lsr");
 
 ConfigOpt *opts[] =
 {
@@ -308,6 +412,14 @@ ConfigOpt *opts[] =
   new ConfigOptDefinition<uint32_t>(divert_decay_smoothing_time, 600, "divert_decay_smoothing_time", "dds"),
   new ConfigOptDefinition<uint32_t>(divert_min_charge_time, 600, "divert_min_charge_time", "dt"),
 
+// Shelly LNM settings
+  new ConfigOptDefinition<bool>(shelly_lnm_enabled, false, "shelly_lnm_enabled", "sle"),
+  new ConfigOptDefinition<String>(shelly_lnm_addr, "239.255.55.55", "shelly_lnm_addr", "sla"),
+  new ConfigOptDefinition<uint16_t>(shelly_lnm_port, 5555, "shelly_lnm_port", "slpt"),
+  new ConfigOptDefinition<String>(shelly_lnm_power_field, "act_power", "shelly_lnm_power_field", "slpf"),
+  new ConfigOptDefinition<String>(shelly_lnm_voltage_field, "voltage", "shelly_lnm_voltage_field", "slvf"),
+  new ConfigOptDefinition<String>(shelly_lnm_device, "", "shelly_lnm_device", "sld"),
+
 // Current Shaper settings
   new ConfigOptDefinition<uint32_t>(current_shaper_max_pwr, 0, "current_shaper_max_pwr", "smp"),
   new ConfigOptDefinition<uint32_t>(current_shaper_smoothing_time, 60, "current_shaper_smoothing_time", "sst"),
@@ -350,7 +462,7 @@ ConfigOpt *opts[] =
   new ConfigOptDefinition<double>(loadsharing_failsafe_peer_assumed_current, 6.0, "loadsharing_failsafe_peer_assumed_current", "lsfpac"),
   new ConfigOptDefinition<uint32_t>(loadsharing_config_version, 0, "loadsharing_config_version", "lscv"),
   new ConfigOptDefinition<uint32_t>(loadsharing_config_updated_at, 0, "loadsharing_config_updated_at", "lscua"),
-  new ConfigOptDefinition<String>(loadsharing_role, "", "loadsharing_role", "lsr"),
+  &loadsharingRoleOpt,
   new ConfigOptDefinition<String>(loadsharing_controller_host, "", "loadsharing_controller_host", "lsch"),
   // Rotation interval in seconds (0 disables). Effective max ~49 days on 32-bit millis; larger values wrap.
   new ConfigOptDefinition<uint32_t>(loadsharing_rotation_interval, 1800, "loadsharing_rotation_interval", "lsri"),
@@ -367,6 +479,8 @@ ConfigOpt *opts[] =
 // Flags
   &flagsOpt,
   &flagsChanged,
+  &flags2Opt,
+  &flags2Changed,
 
 // Virtual Options
   new ConfigOptVirtualMaskedBool(flagsOpt, flagsChanged, CONFIG_SERVICE_EMONCMS, CONFIG_SERVICE_EMONCMS, "emoncms_enabled", "ee"),
@@ -395,7 +509,10 @@ ConfigOpt *opts[] =
   new ConfigOptVirtualMaskedBool(flagsOpt, flagsChanged, CONFIG_LCD_NETWORK_INFO, CONFIG_LCD_NETWORK_INFO, "lcd_network_info", "lni"),
   new ConfigOptVirtualMaskedBool(flagsOpt, flagsChanged, CONFIG_TFT_12H_CLOCK, CONFIG_TFT_12H_CLOCK, "tft_12h_clock", "t12"),
   new ConfigOptVirtualMqttProtocol(flagsOpt, flagsChanged, "mqtt_protocol", "mprt"),
-  new ConfigOptVirtualChargeMode(flagsOpt, flagsChanged, "charge_mode", "chmd")
+  new ConfigOptVirtualChargeMode(flagsOpt, flagsChanged, "charge_mode", "chmd"),
+
+// flags2 virtual options
+  new ConfigOptVirtualMaskedBool(flags2Opt, flags2Changed, CONFIG2_LABS_ENABLED, CONFIG2_LABS_ENABLED, "labs_enabled", "labs")
 };
 
 ConfigJson user_config(opts, sizeof(opts) / sizeof(opts[0]), EEPROM_SIZE, CONFIG_OFFSET);
@@ -528,6 +645,11 @@ void config_changed(String name)
     evse.setSleepForDisable(!config_pause_uses_disabled());
   } else if(name.startsWith("mqtt_")) {
     mqtt.restartConnection();
+  } else if(name.startsWith("shelly_lnm_")) {
+    shelly_lnm.notifyConfigChanged();
+    if(name == "shelly_lnm_enabled") {
+      mqtt.restartConnection();
+    }
   } else if(name.startsWith("ocpp_")) {
     OcppTask::notifyConfigChanged();
   } else if(name.startsWith("emoncms_")) {
@@ -560,6 +682,10 @@ void config_changed(String name)
     timeManager.setDhcpEnabled(config_sntp_dhcp());
   } else if(name == "sntp_hostname") {
     timeManager.setHost(sntp_hostname.c_str());
+  } else if(name == "lcd_backlight_timeout") {
+    // The display task sleeps until its next scheduled update; nudge it so a
+    // new timeout (or "never") applies now rather than at the next state change
+    MicroTask.wakeTask(&lcd);
   }
 #endif
 }
@@ -598,28 +724,6 @@ void config_save_notification_acks(const String &acks, const String &fw)
   if(user_config.deserialize(doc)) {
     user_config.commit();
   }
-}
-
-bool config_https_enabled()
-{
-#ifndef DIVERT_SIM
-  if (www_certificate_id == "") {
-    return false;
-  }
-  // This runs from mDNS setup during network bring-up, so a corrupt stored id
-  // would crash-loop the firmware if it were parsed with a throwing conversion.
-  uint64_t cert_id = 0;
-  if (!certificate_id_from_string(www_certificate_id.c_str(), cert_id)) {
-    DBUGF("config_https_enabled: invalid www_certificate_id '%s'", www_certificate_id.c_str());
-    return false;
-  }
-
-  const char *cert = certs.getCertificate(cert_id);
-  const char *key = certs.getKey(cert_id);
-  return (NULL != cert && NULL != key);
-#else
-  return false;
-#endif
 }
 
 // notification_acks / notification_acks_fw ride the EEPROM-backed opts[]
@@ -1163,5 +1267,4 @@ void config_reset()
   LittleFS.format();
   config_load_settings();
 }
-
 

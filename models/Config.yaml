@@ -249,6 +249,35 @@ properties:
   mqtt_vrms:
     type: string
     minLength: 1
+  shelly_lnm_enabled:
+    type: boolean
+    description: Use Shelly Local Network Messaging (LNM) as the grid power and voltage source instead of the MQTT topics
+  shelly_lnm_addr:
+    type: string
+    description: Multicast address to listen on, same as configured on the Shelly device
+  shelly_lnm_port:
+    type: integer
+    description: UDP port to listen on, same as configured on the Shelly device
+  shelly_lnm_power_field:
+    type: string
+    description: JSON field holding the grid power
+    enum:
+      - act_power
+      - total_act_power
+      - a_act_power
+      - b_act_power
+      - c_act_power
+  shelly_lnm_voltage_field:
+    type: string
+    description: JSON field holding the grid voltage
+    enum:
+      - voltage
+      - a_voltage
+      - b_voltage
+      - c_voltage
+  shelly_lnm_device:
+    type: string
+    description: Only accept messages from this Shelly device ID, empty accepts any device
   mqtt_vehicle_soc:
     type: string
   mqtt_vehicle_range:
@@ -303,6 +332,8 @@ properties:
     type: number
   flags:
     type: number
+  flags2:
+    type: number
   emoncms_enabled:
     type: boolean
   mqtt_enabled:
@@ -348,6 +379,11 @@ properties:
     type: boolean
     description: |
       OpenEVSE default state when no claims are running ( 0: disabled | 1: active)
+  labs_enabled:
+    type: boolean
+    default: false
+    description: |
+      Web UI: reveal OpenEVSE Labs (in-development) features. Stored on the device so it applies to every browser.
   loadsharing_enabled:
     type: boolean
     default: false
