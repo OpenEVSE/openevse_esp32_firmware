@@ -41,7 +41,9 @@ private:
     bool _has_contact = false;    // card still in field — suppress repeat callbacks
     String _last_uid;
 
-    ulong _last_response = 0;
+    ulong _last_response = 0; // Updated only after a verified SPI read.
+    unsigned long _next_retry_at = 0;
+    uint8_t _invalid_version_reads = 0;
 
     void initialize();
     void poll();

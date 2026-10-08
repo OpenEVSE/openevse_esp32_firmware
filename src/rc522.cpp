@@ -14,16 +14,20 @@
 #include "lcd.h"
 
 #define SCAN_DELAY 1000
-#define POLL_DELAY 50
-
-// After this period without a successful SPI exchange the reader is offline.
-#define MAXIMUM_UNRESPONSIVE_TIME 60000UL
+#define POLL_DELAY 250
+#define RETRY_DELAY 5000UL
+#define MAX_INVALID_VERSION_READS 3
 
 // MFRC522 firmware version bytes (see NXP MFRC522 datasheet, version register).
 #define MFRC522_VERSION_0x91 0x91
 #define MFRC522_VERSION_0x92 0x92
 // FM17522 and other MFRC522-compatible clones often report 0x88.
 #define MFRC522_VERSION_0x88 0x88
+
+static bool isSupportedVersion(byte version) {
+    return version == MFRC522_VERSION_0x91 || version == MFRC522_VERSION_0x92 ||
+           version == MFRC522_VERSION_0x88;
+}
 
 RC522Reader::RC522Reader()
     : _mfrc522(RC522_SS_PIN, RC522_RST_PIN),
@@ -50,42 +54,32 @@ void RC522Reader::begin() {
 
 bool RC522Reader::probeReader() {
     if (_initialized) {
-        // Already communicating — avoid resetting the chip mid-session.
+        // Avoid resetting a reader during an active RFID session.
         return _present;
     }
 
-    // Re-run the version-register read and refresh the cached result. The boot-time
-    // one-shot can false-negative (reader still powering up) and would otherwise
-    // report absent until reboot. readerPresent() returns this cached flag; probeReader()
-    // actively refreshes it over SPI.
-#if defined(RC522_SPI_SCK) && defined(RC522_SPI_MISO) && defined(RC522_SPI_MOSI)
-    _spi->begin(RC522_SPI_SCK, RC522_SPI_MISO, RC522_SPI_MOSI, _ss_pin);
-#else
-    _spi->begin();
-#endif
-
-    _mfrc522.PCD_Init(_ss_pin, _rst_pin);
-    byte version = _mfrc522.PCD_ReadRegister(MFRC522::VersionReg);
-    _present = (version == MFRC522_VERSION_0x91 || version == MFRC522_VERSION_0x92 ||
-                version == MFRC522_VERSION_0x88);
-
-    if (_present) {
-        DBUGF("[rfid] RC522 probe OK, version=0x%02X", version);
-    } else {
-        DBUGF("[rfid] RC522 probe failed, version=0x%02X", version);
+    // One initialization path for both the boot probe and scanning.
+    if (_next_retry_at != 0 && (long)(millis() - _next_retry_at) < 0) {
+        return _present;
     }
+    initialize();
 
+    if (_initialized && !config_rfid_enabled() && !_timer_scanning) {
+        // Presence can be checked at boot while scanning remains disabled.
+        _mfrc522.PCD_AntennaOff();
+        _initialized = false;
+    }
     return _present;
 }
 
 bool RC522Reader::readerPresent() {
     // Cached probe result from boot or the last probeReader() call, or currently
     // initialized and responding while RFID is active.
-    return _present || (_initialized && !_failure);
+    return _present;
 }
 
 bool RC522Reader::readerFailure() {
-    return config_rfid_enabled() && _failure;
+    return (config_rfid_enabled() || _timer_scanning) && _failure;
 }
 
 void RC522Reader::initialize() {
@@ -95,23 +89,25 @@ void RC522Reader::initialize() {
     _spi->begin();
 #endif
 
-    // PCD_Init drives RST, configures SPI chip-select, and verifies the MFRC522
-    // version register over the shared SPI bus.
+    // PCD_Init may block for 50+ ms; retry only after RETRY_DELAY.
     _mfrc522.PCD_Init(_ss_pin, _rst_pin);
-    _mfrc522.PCD_AntennaOn();
-
     byte version = _mfrc522.PCD_ReadRegister(MFRC522::VersionReg);
-    if (version == MFRC522_VERSION_0x91 || version == MFRC522_VERSION_0x92 ||
-        version == MFRC522_VERSION_0x88) {
-        DBUGLN(F("[rfid] connection to RC522 active"));
-        _initialized = true;
-        _failure = false;
-        _present = true;
+
+    _present = isSupportedVersion(version);
+    _initialized = _present;
+    _failure = !_present;
+    _invalid_version_reads = 0;
+    _has_contact = false;
+    _last_uid.clear();
+
+    if (_initialized) {
+        _mfrc522.PCD_AntennaOn();
         _last_response = millis();
+        _next_retry_at = 0;
+        DBUGF("[rfid] RC522 connected, version=0x%02X", version);
     } else {
+        _next_retry_at = millis() + RETRY_DELAY;
         DBUGF("[rfid] RC522 init failed, version=0x%02X", version);
-        _initialized = false;
-        _present = false;
     }
 }
 
@@ -136,29 +132,41 @@ void RC522Reader::poll() {
         return;
     }
 
-    // PICC_IsNewCardPresent() performs a short SPI exchange to detect a tag in
-    // the RF field. When the tag leaves, clear contact so the same card can be
-    // presented again later. Any completed PCD exchange shows the reader is alive.
+    // PICC_IsNewCardPresent() returns false for both no-card and SPI timeout.
+    // Verify the SPI VersionReg response independently to detect disconnection.
+    byte version = _mfrc522.PCD_ReadRegister(MFRC522::VersionReg);
+    if (!isSupportedVersion(version)) {
+        if (++_invalid_version_reads >= MAX_INVALID_VERSION_READS) {
+            DBUGF("[rfid] RC522 disconnected, version=0x%02X", version);
+            lcd.display("RFID chip not found", 0, 1, 5 * 1000, LCD_CLEAR_LINE);
+            _failure = true;
+            _initialized = false;
+            _present = false;
+            _has_contact = false;
+            _last_uid.clear();
+            _next_retry_at = millis() + RETRY_DELAY;
+        }
+        return;
+    }
+
+    _invalid_version_reads = 0;
+    _last_response = millis(); // Proven SPI register response, not absent card.
+    _present = true;
+
     if (!_mfrc522.PICC_IsNewCardPresent()) {
-        _last_response = millis();
         _has_contact = false;
         _last_uid.clear();
         return;
     }
 
-    _last_response = millis();
-
     if (!_mfrc522.PICC_ReadCardSerial()) {
-        // Leave the RF field in a clean state after a partial select/read failure.
         _mfrc522.PICC_HaltA();
         _mfrc522.PCD_StopCrypto1();
         return;
     }
 
     String uid = uidToString(_mfrc522.uid);
-
     if (_has_contact && uid == _last_uid) {
-        // Valid card already reported while still in the field — nothing to do.
         return;
     }
 
@@ -170,7 +178,6 @@ void RC522Reader::poll() {
     _last_uid = uid;
     onCardDetected(uid);
 
-    // Halt the PICC so removal/re-tap can be detected on the next poll cycle.
     _mfrc522.PICC_HaltA();
     _mfrc522.PCD_StopCrypto1();
 }
@@ -178,30 +185,27 @@ void RC522Reader::poll() {
 unsigned long RC522Reader::loop(MicroTasks::WakeReason reason) {
     (void)reason;
 
-    // Allow scanning when a scheduler timer window requires RFID even if the
-    // global rfid_enabled setting is off.
+    // A scheduled timer may require scanning with global RFID disabled.
     if (!config_rfid_enabled() && !_timer_scanning) {
         if (_initialized) {
             _mfrc522.PCD_AntennaOff();
         }
         _initialized = false;
         _has_contact = false;
+        _last_uid.clear();
+        _next_retry_at = 0; // An enable event gets an immediate retry.
         return SCAN_DELAY;
     }
 
-    if (_initialized && (long)(millis() - _last_response) >= (long)MAXIMUM_UNRESPONSIVE_TIME) {
-        DBUGLN(F("[rfid] connection to RC522 lost"));
-        lcd.display("RFID chip not found", 0, 1, 5 * 1000, LCD_CLEAR_LINE);
-        _failure = true;
-        _initialized = false;
-        _present = false;
+    if (!_initialized) {
+        // No repeated reset stalls in the cooperative main loop.
+        if (_next_retry_at == 0 || (long)(millis() - _next_retry_at) >= 0) {
+            initialize();
+        }
+        return SCAN_DELAY;
     }
 
-    if (!_initialized || _failure) {
-        initialize();
-        return POLL_DELAY;
-    }
-
+    // Reduce worst-case blocking from no-card polls (~25 ms per call).
     poll();
     return POLL_DELAY;
 }
