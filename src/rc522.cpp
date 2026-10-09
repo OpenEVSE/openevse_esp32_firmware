@@ -19,14 +19,16 @@
 #define MAX_INVALID_VERSION_READS 3
 
 // MFRC522 firmware version bytes (see NXP MFRC522 datasheet, version register).
+// Firmware version 0.0 is supported by the MFRC522 1.4.12 library.
+#define MFRC522_VERSION_0x90 0x90
 #define MFRC522_VERSION_0x91 0x91
 #define MFRC522_VERSION_0x92 0x92
 // FM17522 and other MFRC522-compatible clones often report 0x88.
 #define MFRC522_VERSION_0x88 0x88
 
 static bool isSupportedVersion(byte version) {
-    return version == MFRC522_VERSION_0x91 || version == MFRC522_VERSION_0x92 ||
-           version == MFRC522_VERSION_0x88;
+    return version == MFRC522_VERSION_0x90 || version == MFRC522_VERSION_0x91 ||
+           version == MFRC522_VERSION_0x92 || version == MFRC522_VERSION_0x88;
 }
 
 RC522Reader::RC522Reader()
