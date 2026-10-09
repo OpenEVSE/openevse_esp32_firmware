@@ -233,6 +233,10 @@ class EvseMonitor : public MicroTasks::Task
     // own periodic RAPI traffic so it doesn't overflow the RAPI queue and
     // drop heartbeat pulses for that long. See runStuckRelayRecovery().
     bool _relay_recovery_in_flight;
+    // True while a heartbeat pulse sent during that window is unanswered, so
+    // at most one is ever queued behind the blocked $FK (the RAPI queue is only
+    // RAPI_MAX_COMMANDS deep). See loop().
+    bool _relay_recovery_pulse_pending;
 
 #ifdef ENABLE_CABLE_TEMP
     // Cable NTC thermistor monitoring (linco-work CABLE_TEMPERATURE_MONITORING

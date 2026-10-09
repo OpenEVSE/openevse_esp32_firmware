@@ -212,7 +212,8 @@ EvseMonitor::EvseMonitor(OpenEVSEClass &openevse) :
   _relay_thermal_baseline_x100(OPENEVSE_RELAY_HEALTH_NOT_AVAILABLE),
   _relay_thermal_warning_level(0),
   _relay_stuck_recovery_count(0),
-  _relay_recovery_in_flight(false)
+  _relay_recovery_in_flight(false),
+  _relay_recovery_pulse_pending(false)
 #ifdef ENABLE_CABLE_TEMP
   ,_cable_temp_known(false)
   ,_cable_temp_last_success(0)
@@ -362,8 +363,21 @@ void EvseMonitor::evseBoot(const char *firmware)
   // reading, so if anything has to be the one that doesn't fit, it
   // shouldn't be this.
 #ifndef DISABLE_HEARTBEAT
-  _openevse.heartbeatEnable(EVSE_HEATBEAT_INTERVAL, EVSE_HEARTBEAT_CURRENT, [this](int ret, int interval, int current, int triggered) {
-    _heartbeat = RAPI_RESPONSE_OK == ret;
+  // Send what the user configured, not the compile-time defaults: the
+  // controller keeps its own interval/current in EEPROM across a reboot, so
+  // pushing the defaults here would silently undo a changed current, and
+  // re-arm supervision the user had switched off (interval 0).
+  //
+  // A configured interval of 0 is still sent, as an explicit disable. It is
+  // idempotent (the controller only writes EEPROM when the value differs) and
+  // it is what stops a controller that was left armed - say a disable that
+  // never reached it - from supervising a gateway that has stopped pulsing.
+  _heartbeat_interval = heartbeat_interval_cfg;
+  _heartbeat_current = heartbeat_interval_cfg > 0 ? heartbeat_current_cfg : 0;
+  _heartbeat = false;
+  _openevse.heartbeatEnable(_heartbeat_interval, _heartbeat_current, [this](int ret, int interval, int current, int triggered) {
+    // Pulse only when supervision is actually armed.
+    _heartbeat = RAPI_RESPONSE_OK == ret && _heartbeat_interval > 0;
     // If heartbeat was triggered while WiFi module was rebooting, ack immediately to restore ampacity
     if (_heartbeat && 2 == triggered) {
       _openevse.heartbeatPulse([](int ret) {
@@ -466,8 +480,20 @@ unsigned long EvseMonitor::loop(MicroTasks::WakeReason reason)
     // for up to ~30s on the controller side - every periodic poll below
     // would just enqueue behind it and, once the queue (RAPI_MAX_COMMANDS
     // deep) fills, get RAPI_RESPONSE_QUEUE_FULL, heartbeatPulse() included.
-    // Sit this cycle out rather than starve the queue and risk tripping the
-    // controller's heartbeat-supervision fallback current.
+    // Sit this cycle out rather than starve the queue - except for the
+    // heartbeat pulse, kept to one outstanding at a time. The controller is
+    // blocked in its own loop and cannot answer $SY until $FK returns, so
+    // this does not prevent supervision tripping during a long recovery; what
+    // it does is leave a pulse waiting that the controller services the moment
+    // it is free, rather than the next pulse being up to a poll period away.
+    // A $FK that is NAK'd straight away (an EV is connected) gets its pulses
+    // answered normally.
+    if(_heartbeat && !_relay_recovery_pulse_pending) {
+      _relay_recovery_pulse_pending = true;
+      _openevse.heartbeatPulse([this](int ret) {
+        _relay_recovery_pulse_pending = false;
+      });
+    }
     _count++;
     return EVSE_MONITOR_POLL_TIME;
   }

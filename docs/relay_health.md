@@ -119,12 +119,28 @@ instead.
   than guessing what a freshly-reset accumulator looks like locally.
 - **`runStuckRelayRecovery()`** — wraps `$FK`; re-reads `$GL`/`$GR` on
   success. Sets `_relay_recovery_in_flight` for the duration, which
-  `loop()` checks to skip its own periodic RAPI traffic (heartbeat pulse,
-  state/amp/temp/settings polls) — `$FK` can hold the RAPI queue for up to
-  ~30s, and without this guard everything `loop()` would otherwise enqueue
-  during that window gets `RAPI_RESPONSE_QUEUE_FULL`, heartbeat pulses
-  included, which risks tripping the controller's heartbeat-supervision
-  fallback current if enough consecutive pulses are dropped.
+  `loop()` checks to skip its own periodic RAPI traffic (state/amp/temp/
+  settings polls) — `$FK` can hold the RAPI queue for up to ~30s, and
+  without this guard everything `loop()` would otherwise enqueue during that
+  window gets `RAPI_RESPONSE_QUEUE_FULL` (the queue is only
+  `RAPI_MAX_COMMANDS` = 10 deep). The heartbeat pulse is the exception: it is
+  still sent, but only one at a time (`_relay_recovery_pulse_pending`), so a
+  pulse is always waiting for the controller the moment it is free again
+  without the pulses themselves filling the queue.
+- **Heartbeat supervision during `$FK` (known limitation).** While the
+  controller runs the recovery cycle it is blocked in its own loop and cannot
+  service `$SY`, so supervision *will* trip to `heartbeat_current` if the
+  cycle outlasts `heartbeat_interval`, whatever the ESP32 does. Recovery only
+  runs with no EV connected, so the fallback current has nothing to limit and
+  the trip is harmless; the controller restores the ampacity on the first
+  acknowledged pulse afterwards. Fixing it properly means servicing the
+  heartbeat timer inside `AttemptStuckRelayRecovery()` in the controller
+  firmware (`open_evse`); the ESP32 side cannot.
+- **Heartbeat at `evseBoot()`** — `evseBoot()` sends the *configured*
+  `heartbeat_interval` / `heartbeat_current`, not the compile-time defaults,
+  so a changed current survives a controller reboot and an interval of 0 stays
+  disabled (it is sent as an explicit disable, not skipped, so a controller
+  left armed is brought back in line with the configuration).
 - **Cache invalidation at `evseBoot()`** — `_relay_health_known` and
   `_zero_cross_threshold_ma` are reset at the top of `evseBoot()` (which
   runs on every controller connect, not just ESP32 power-on). Without this,
