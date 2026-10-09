@@ -51,7 +51,7 @@ class InputTask : public MicroTasks::Task
       {
         if(!Update.isRunning())
         {
-          DynamicJsonDocument data(4096);
+          JsonDocument data;
 
           create_rapi_json(data); // create JSON Strings for EmonCMS and MQTT
           event_send(data);
@@ -68,7 +68,7 @@ class InputTask : public MicroTasks::Task
       if(_evseState.IsTriggered())
       {
         // Send to all clients
-        StaticJsonDocument<512> event;
+        JsonDocument event;
         event["state"] = evse.getEvseState();
         event["flags"] = evse.getFlags();
         event["vehicle"] = evse.isVehicleConnected() ? 1 : 0;
