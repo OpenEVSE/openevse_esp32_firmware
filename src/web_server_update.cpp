@@ -40,7 +40,7 @@ void handleUpdateFileFetch(MongooseHttpServerRequest *request)
   }
 
   String body = request->body().toString();
-  StaticJsonDocument<1024> doc;
+  JsonDocument doc;
   DeserializationError error = deserializeJson(doc, body);
   if(DeserializationError::Code::Ok == error)
   {
@@ -50,7 +50,7 @@ void handleUpdateFileFetch(MongooseHttpServerRequest *request)
       [](int) { },
       [](int errorCode) {
         DEBUG_PORT.printf("HTTP OTA failed: %d\n", errorCode);
-        StaticJsonDocument<128> event;
+        JsonDocument event;
         event["ota"] = "failed";
         event["ota_error"] = errorCode;
         web_server_event(event);

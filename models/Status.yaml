@@ -149,6 +149,20 @@ properties:
   divert_update:
     type: number
     description: The time since the last update of the divert feed
+  shelly_lnm_listening:
+    type: integer
+    description: '`1` if the Shelly LNM listener is running, `0` if not'
+  shelly_lnm_data_age:
+    type: number
+    description: Time in milliseconds since the last Shelly LNM packet with a usable value, `4294967295` if none received yet
+  shelly_lnm_power:
+    type: number
+    nullable: true
+    description: Last grid active power received from Shelly LNM in W, `null` until the first packet
+  shelly_lnm_voltage:
+    type: number
+    nullable: true
+    description: Last grid voltage received from Shelly LNM in V, `null` until the first packet
   divert_active:
     type: boolean
     description: '`true` if divert is actively enabling charging, `false` if not'

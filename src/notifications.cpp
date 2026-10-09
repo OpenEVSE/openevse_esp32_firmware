@@ -264,8 +264,8 @@ unsigned long Notifications::loop(MicroTasks::WakeReason reason)
 
 void Notifications::pushEvent()
 {
-  DynamicJsonDocument doc(1024);
-  JsonObject o = doc.createNestedObject("notifications");
+  JsonDocument doc;
+  JsonObject o = doc["notifications"].to<JsonObject>();
   o["count"] = count();
   o["severity"] = notification_severity_name(maxSeverity());
   event_send(doc);
@@ -318,9 +318,9 @@ void Notifications::serialize(JsonDocument &doc)
   doc["count"] = count();
   doc["max_severity"] = notification_severity_name(maxSeverity());
 
-  JsonArray list = doc.createNestedArray("notifications");
+  JsonArray list = doc["notifications"].to<JsonArray>();
   for(size_t i = 0; i < _count; i++) {
-    JsonObject o = list.createNestedObject();
+    JsonObject o = list.add<JsonObject>();
     o["id"] = _live[i].id;
     o["category"] = category_name[_live[i].category];
     o["severity"] = notification_severity_name(_live[i].severity);

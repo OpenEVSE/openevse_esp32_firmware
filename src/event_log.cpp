@@ -190,7 +190,7 @@ bool EventLog::log(EventType type, EvseState managerState, uint8_t evseState, ui
     // for it rather than being sized to the fixed-width fields alone. A
     // StaticJsonDocument that runs out silently drops fields instead of
     // erroring, so this margin is load-bearing, not decorative.
-    StaticJsonDocument<512> line;
+    JsonDocument line;
     char output[80];
     strftime(output, 80, "%FT%TZ", &timeinfo);
 
@@ -251,7 +251,7 @@ void EventLog::enumerate(uint32_t index, std::function<void(String time, EventTy
         // literals), so the notification id's variable length costs more
         // here than it does when the row is written -- the margin has to
         // cover the read path, not just the write path.
-        StaticJsonDocument<512> json;
+        JsonDocument json;
         DeserializationError error = deserializeJson(json, line);
         if(error)
         {

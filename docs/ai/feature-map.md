@@ -30,6 +30,7 @@ relative to the configured base topic (see [mqtt.md](../mqtt.md)).
 | MQTT integration (incl. Home Assistant) | `mqtt.*` | `/settings/mqtt` | `mqtt_*` | `/config`, `/status` | everything | [integrations.md](../user/integrations.md) |
 | EmonCMS logging | `emoncms.*` | `/settings/emoncms` | `emoncms_*` | `/config`, `/status` | — | [integrations.md](../user/integrations.md) |
 | OCPP 1.6 | `ocpp.*` | `/settings/ocpp` | `ocpp_*` | `/config` | — | [ocpp.md](../user/ocpp.md) |
+| Shelly LNM grid power / voltage source | `shelly_lnm.*`, `shelly_lnm_parser.*` | `/settings/shellylnm` | `shelly_lnm_*` | `/config`, `/status` (`shelly_lnm_*`) | Shelly LNM UDP multicast | [integrations.md](../user/integrations.md) |
 | RFID authentication | `rfid.*` | `/settings/rfid` | `rfid_enabled`, `rfid_storage` | `/config`, RFID endpoints | `rfid/…` | [rfid.md](../user/rfid.md) |
 | Vehicle SOC/range (Tesla / MQTT / OCPP sources) | `tesla_client.*`, `vehicle.*` | `/settings/vehicle` | `tesla_*`, `mqtt_vehicle_*`, `vehicle_data_src` | `/tesla/vehicles`, `/config` | vehicle topics | [vehicle.md](../user/vehicle.md) |
 | WiFi / wired Ethernet / AP mode | `net_manager.*` | `/settings/network` | `ssid`, `pass`, `ap_*`, `hostname` | `/config`, `/scan`, `/status` | — | [getting-started.md](../user/getting-started.md) |

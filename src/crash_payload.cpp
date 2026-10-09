@@ -34,9 +34,9 @@ bool crash_payload_build(JsonDocument &doc, const char *reporterId,
   // The decoded summary: panic reason, faulting task, PC, backtrace,
   // elf_sha256. This is what gets symbolized.
   bool fit = true;
-  JsonObject summary = doc.createNestedObject("summary");
+  JsonObject summary = doc["summary"].to<JsonObject>();
   {
-    DynamicJsonDocument sd(JSON_OBJECT_SIZE(12) + JSON_ARRAY_SIZE(16) + 640);
+    JsonDocument sd;
     diagnostics_coredump_json(sd);
     fit = fit && !sd.overflowed();
     for(JsonPair kv : sd.as<JsonObject>()) {
@@ -63,9 +63,9 @@ bool crash_payload_build(JsonDocument &doc, const char *reporterId,
     doc["bt"] = sd["bt"];
   }
 
-  JsonObject diag = doc.createNestedObject("diagnostics");
+  JsonObject diag = doc["diagnostics"].to<JsonObject>();
   {
-    DynamicJsonDocument dd(1024);
+    JsonDocument dd;
     diagnostics_status(dd);
     fit = fit && !dd.overflowed();
     for(JsonPair kv : dd.as<JsonObject>()) {
@@ -78,11 +78,11 @@ bool crash_payload_build(JsonDocument &doc, const char *reporterId,
     // actually keeps credentials out, because it names what may leave rather
     // than what may not (spec §5) -- but there is no reason to materialise
     // them in a document at all on the way past.
-    DynamicJsonDocument cfg(4096);
+    JsonDocument cfg;
     config_serialize(cfg, /*longNames*/ true, /*compactOutput*/ false,
                      /*hideSecrets*/ true);
     fit = fit && !cfg.overflowed();
-    JsonObject redacted = doc.createNestedObject("config");
+    JsonObject redacted = doc["config"].to<JsonObject>();
     crash_redact_config(cfg.as<JsonObjectConst>(), redacted);
   }
 

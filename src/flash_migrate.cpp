@@ -187,7 +187,7 @@ static void schedule_download(const String &url)
 
 static void emit_state(const char *s)
 {
-  StaticJsonDocument<128> e;
+  JsonDocument e;
   e["migrate"] = s;
   web_server_event(e);
   yield();
@@ -199,7 +199,7 @@ static void emit_progress(int percent)
     return;
   }
   mctx.last_percent = percent;
-  StaticJsonDocument<128> e;
+  JsonDocument e;
   e["migrate_progress"] = percent;
   web_server_event(e);
   yield();
@@ -221,7 +221,7 @@ static void migrate_fail(int err, const char *where)
     esp_ota_abort(mctx.ota_handle);
     mctx.ota_handle = 0;
   }
-  StaticJsonDocument<128> e;
+  JsonDocument e;
   e["migrate"] = "failed";
   e["migrate_error"] = err;
   web_server_event(e);
@@ -391,7 +391,7 @@ static void finalize_current()
   {
     case ST_MANIFEST:
     {
-      StaticJsonDocument<1024> doc;
+      JsonDocument doc;
       DeserializationError err = deserializeJson(doc, mctx.buf, mctx.buf_len);
       if(err) {
         migrate_fail(-20, "manifest json");
@@ -719,7 +719,7 @@ void flash_migrate_coredump_json(JsonDocument &doc)
     doc["task"] = s->exc_task;
     snprintf(buf, sizeof(buf), "0x%08x", (unsigned)s->exc_pc);
     doc["pc"] = String(buf);
-    JsonArray bt = doc.createNestedArray("bt");
+    JsonArray bt = doc["bt"].to<JsonArray>();
     for(uint32_t i = 0; i < s->exc_bt_info.depth && i < 16; i++) {
       snprintf(buf, sizeof(buf), "0x%08x", (unsigned)s->exc_bt_info.bt[i]);
       bt.add(String(buf));

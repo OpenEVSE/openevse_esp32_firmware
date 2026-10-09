@@ -25,8 +25,7 @@ void handleMigrateStatus(MongooseHttpServerRequest *request)
   if(false == requestPreProcess(request, response, CONTENT_TYPE_JSON)) {
     return;
   }
-  const size_t capacity = JSON_OBJECT_SIZE(16) + 256;
-  DynamicJsonDocument doc(capacity);
+  JsonDocument doc;
   flash_migrate_status_json(doc);
   response->setCode(200);
   serializeJson(doc, *response);
@@ -40,7 +39,7 @@ void handleMigrateCoredump(MongooseHttpServerRequest *request)
   if(false == requestPreProcess(request, response, CONTENT_TYPE_JSON)) {
     return;
   }
-  DynamicJsonDocument doc(1024);
+  JsonDocument doc;
   flash_migrate_coredump_json(doc);
   response->setCode(200);
   serializeJson(doc, *response);
@@ -80,7 +79,7 @@ void handleMigrateExpand16mb(MongooseHttpServerRequest *request)
   String body = request->body().toString();
   if(body.length() > 0)
   {
-    StaticJsonDocument<512> doc;
+    JsonDocument doc;
     DeserializationError error = deserializeJson(doc, body);
     if(DeserializationError::Code::Ok == error) {
       manifest_url = (const char *)(doc["url"] | "");
