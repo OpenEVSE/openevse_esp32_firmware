@@ -262,7 +262,7 @@ void ShellyLnmTask::applyPending()
   }
   _pendingPower = false;
 
-  StaticJsonDocument<128> doc;
+  JsonDocument doc;
   doc["shelly_lnm_listening"] = _listening ? 1 : 0;
   doc["shelly_lnm_data_age"] = getDataAge();
   doc["shelly_lnm_power"] = _power;

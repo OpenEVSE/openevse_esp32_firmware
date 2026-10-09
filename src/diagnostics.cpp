@@ -418,7 +418,7 @@ void diagnostics_coredump_json(JsonDocument &doc)
     bool useDeep = crash_unwind_extends(deep, depth, s->exc_bt_info.bt,
                                         s->exc_bt_info.depth, idfCap);
 
-    JsonArray bt = doc.createNestedArray("bt");
+    JsonArray bt = doc["bt"].to<JsonArray>();
     if(useDeep) {
       for(size_t i = 0; i < depth; i++) {
         snprintf(buf, sizeof(buf), "0x%08x", (unsigned)deep[i]);
