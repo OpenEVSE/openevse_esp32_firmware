@@ -154,8 +154,16 @@ if [ "$want_core3" = 1 ]; then
       || echo "scripts/pio: warning: failed to pre-install core-3 platform metadata (tool-scons sync below will likely be skipped, and this run may hit the FortranCommon error described above)" >&2
   fi
 
-  "$PIO_BIN" pkg install -g -t tool-scons >/dev/null 2>&1 \
-    || echo "scripts/pio: warning: failed to install/verify PIO Core's tool-scons (this run may hit the FortranCommon error described above)" >&2
+  # Pin to the tool-scons requirement the active PlatformIO Core declares, so an
+  # unpinned install never fetches a newer SCons than the one Core runs with.
+  core_pio_py="$(sed -n '1s/^#!//p' "$PIO_BIN")"
+  core_scons_req="$("$core_pio_py" -c 'from platformio.dependencies import get_core_dependencies as d; print(d()["tool-scons"])' 2>/dev/null || true)"
+  if [ -n "$core_scons_req" ]; then
+    "$PIO_BIN" pkg install -g -t "tool-scons@$core_scons_req" >/dev/null 2>&1 \
+      || echo "scripts/pio: warning: failed to install/verify PIO Core's tool-scons $core_scons_req (this run may hit the FortranCommon error described above)" >&2
+  else
+    echo "scripts/pio: warning: could not read PIO Core's tool-scons requirement (this run may hit the FortranCommon error described above)" >&2
+  fi
   python3 - "$CORE3_DIR" <<'PYEOF' 2>/dev/null || echo "scripts/pio: warning: tool-scons/platform.json version sync failed (this run may hit the FortranCommon error described above)" >&2
 import json, os, sys
 
