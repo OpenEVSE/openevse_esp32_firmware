@@ -69,7 +69,7 @@ TEST_CASE("two different advisories against the same state are two entries")
   filter.recordWritten(ground, 1000);
 
   EventLogEntryKey gfci = ground;
-  strcpy(gfci.notification, "safety.gfci_check");
+  strcpy(gfci.notification, "safety.relay_check");
   CHECK(false == filter.isRepeat(gfci, 1001));
   CHECK((filter.changedFrom(gfci) & EVENTLOG_CHANGE_NOTIFICATION) != 0);
 
