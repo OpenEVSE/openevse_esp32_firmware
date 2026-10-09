@@ -18,7 +18,7 @@ a colour display it draws an amber border around the screen.
 - **A strip on the dashboard** for anything critical.
 - **A marker beside the control that caused it** — a notification about ground
   check being off appears next to the ground-check switch on
-  [Settings → Safety](safety.md), so the fix is one tap away.
+  [Settings → Installer Tools](installer-tools.md), so the fix is one tap away.
 - **On a colour display**, an amber border around the whole screen and one line
   naming the condition.
 
@@ -29,7 +29,7 @@ Relay-wear notifications link through to
 
 | | |
 |---|---|
-| **Safety** | Any of the six controller checks — ground, GFCI self-test, stuck relay, diode, vent, temperature — being switched **off**. |
+| **Safety** | Any of five controller checks — ground, stuck relay, diode, vent, temperature — being switched **off**. The GFCI self-test is deliberately not raised: it is legitimately off on a GFCI-protected circuit. |
 | **Faults** | GFCI trips, no-ground trips and stuck-relay faults that have happened and cleared. |
 | **Thermal** | The charger throttling on temperature, running close to its shutdown threshold, or reporting a rising relay thermal index. |
 | **Relay wear** | Relay life remaining (a notice at 20%, a warning at 5%), contact transit drift, cold opens, and stuck-relay recoveries. |

@@ -35,6 +35,7 @@ UI — if your unit looks different, check
 
 - [Settings reference](settings.md) — every configuration page
 - [Safety](safety.md) — protection checks, temperature throttling, boot lock
+- [Installer tools](installer-tools.md) — hardware current limit and safety check switches, behind the installer password
 - [Notifications](notifications.md) — what the bell and the amber border mean
 - [Firmware update](firmware-update.md)
 - [Troubleshooting & reset](troubleshooting.md)
