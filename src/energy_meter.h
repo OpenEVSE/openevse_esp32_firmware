@@ -16,9 +16,6 @@
 #define ENERGY_METER_FILE "/emeter.json"
 #endif
 
-// to do calculate this correctly
-const size_t capacity = JSON_OBJECT_SIZE(9) + JSON_OBJECT_SIZE(4) + 256;
-
 // Forward declaration
 class EvseMonitor;
 
@@ -45,8 +42,8 @@ public:
   EnergyMeterDate date;
 
   void reset(bool fullreset, bool import); // fullreset : set total_energy & total_switches to 0 , import: allows to reimport from evse
-  void serialize(StaticJsonDocument<capacity> &doc);
-  void deserialize(StaticJsonDocument<capacity> &doc);
+  void serialize(JsonDocument &doc);
+  void deserialize(JsonDocument &doc);
 };
 
 class EnergyMeter
