@@ -56,6 +56,7 @@
 #include "diagnostics.h"
 #include "boost.h"
 #include "notifications.h"
+#include "shelly_lnm.h"
 
 #if defined(ENABLE_PN532)
 #include "pn532.h"
@@ -277,6 +278,9 @@ void setup()
   tempThrottle.begin(evse);
   DBUGF("After tempThrottle.begin: %d", ESPAL.getFreeHeap());
 
+  shelly_lnm.begin();
+  DBUGF("After shelly_lnm.begin: %d", ESPAL.getFreeHeap());
+
   lcd.display(F("OpenEVSE WiFI"), 0, 0, 0, LCD_CLEAR_LINE);
   lcd.display(currentfirmware, 0, 1, 5 * 1000, LCD_CLEAR_LINE);
 
@@ -338,8 +342,7 @@ void loop()
     if(emoncms_updated)
     {
       // Send the current state to check the config
-      const size_t capacity = JSON_OBJECT_SIZE(33) + 1024;
-      DynamicJsonDocument data(capacity);
+      JsonDocument data;
       create_rapi_json(data);
       emoncms_publish(data);
       emoncms_updated = false;
@@ -368,7 +371,7 @@ void loop()
 
 void event_send(String &json)
 {
-  StaticJsonDocument<512> event;
+  JsonDocument event;
   deserializeJson(event, json);
   event_send(event);
 }
@@ -425,8 +428,7 @@ void handle_serial()
     DBUGVAR(command);
     DBUGVAR(json);
 
-    const size_t capacity = JSON_OBJECT_SIZE(50) + 1024;
-    DynamicJsonDocument doc(capacity);
+    JsonDocument doc;
     DeserializationError error = deserializeJson(doc, json);
     if(error) {
       DEBUG_PORT.println("{\"code\":400,\"msg\":\"Could not parse JSON\"}");

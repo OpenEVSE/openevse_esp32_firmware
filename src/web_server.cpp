@@ -31,6 +31,7 @@ typedef const __FlashStringHelper *fstr_t;
 #include "crash_report.h"
 #include "crash_report_id.h"
 #include "crash_payload.h"
+#include "web_server_tls_startup.h"
 #ifdef ENABLE_TSDB
 #include "tsdb_energy_logger.h"
 #endif
@@ -58,12 +59,14 @@ typedef const __FlashStringHelper *fstr_t;
 #include "notifications.h"
 #include "web_auth.h"
 #include "web_auth_secret.h"
+#include "shelly_lnm.h"
 
 MongooseHttpServer server;          // Create class for Web server
 MongooseHttpServer redirect;        // Server to redirect to HTTPS if enabled
 
 bool enableCors = false;
 bool streamDebug = false;
+static WebServerListenerState web_server_listener = {false, false, 0};
 
 // Event timeouts
 static unsigned long wifiRestartTime = 0;
@@ -349,7 +352,7 @@ void handleLogin(MongooseHttpServerRequest *request)
   }
 
   String body = request->body().toString();
-  DynamicJsonDocument doc(512);
+  JsonDocument doc;
   if(deserializeJson(doc, body)) {
     response->setCode(400);
     response->print(F("{\"msg\":\"bad json\"}"));
@@ -543,14 +546,6 @@ static String html_escape(const String &input) {
 // Build status data
 // --------------------------------------------------------------------
 
-// Capacity for any document buildStatus() fills. Defined once because the two
-// call sites had drifted: onWsConnect sized its document for 40 members while
-// buildStatus emits around 95, so every websocket connect pushed a silently
-// truncated status. ArduinoJson does not signal that with an error -- it just
-// stops adding members. 131 = 128 plus the "notifications" object and its two
-// members (count, severity).
-#define STATUS_JSON_CAPACITY (JSON_OBJECT_SIZE(131) + 2048)
-
 // LittleFS.totalBytes() and LittleFS.usedBytes() each run lfs_fs_size(), a
 // full traversal of every metadata pair and data block in the filesystem,
 // reading flash with the FS lock held. Arduino's wrapper discards whichever
@@ -588,7 +583,7 @@ static void status_littlefs_usage(uint32_t &free_bytes, uint32_t &used_bytes)
   used_bytes = cached_used;
 }
 
-void buildStatus(DynamicJsonDocument &doc) {
+void buildStatus(JsonDocument &doc) {
 
   // Get the current time
   struct timeval local_time;
@@ -675,6 +670,10 @@ void buildStatus(DynamicJsonDocument &doc) {
   // doc["shaper_cur"] = shaper.getChgCur();
   doc["shaper_cur"] = shaper.getMaxCur();
   doc["shaper_updated"] = shaper.isUpdated();
+  doc["shelly_lnm_listening"] = shelly_lnm.isListening()?1:0;
+  doc["shelly_lnm_data_age"] = shelly_lnm.getDataAge();
+  doc["shelly_lnm_power"] = shelly_lnm.getPower();
+  doc["shelly_lnm_voltage"] = shelly_lnm.getVoltage();
   doc["service_level"] = static_cast<uint8_t>(evse.getActualServiceLevel());
   doc["limit"] = limit.hasLimit();
   doc["boost"] = boost.isActive();
@@ -687,7 +686,7 @@ void buildStatus(DynamicJsonDocument &doc) {
 
   // Add joined peers array with real-time status from peer poller
   {
-    JsonArray peersArray = doc.createNestedArray("loadsharing_joined_peers");
+    JsonArray peersArray = doc["loadsharing_joined_peers"].to<JsonArray>();
     double groupTotalAmp = 0.0;
     
     for (const auto& peer : loadSharingGroupState.getPeers()) {
@@ -696,7 +695,7 @@ void buildStatus(DynamicJsonDocument &doc) {
         continue;
       }
       
-      JsonObject peerObj = peersArray.createNestedObject();
+      JsonObject peerObj = peersArray.add<JsonObject>();
       peerObj["hostname"] = peer.getHost();
       peerObj["id"] = peer.getId();
       peerObj["name"] = peer.getName();
@@ -782,7 +781,7 @@ void buildStatus(DynamicJsonDocument &doc) {
   // and nothing more belongs in a payload the HA integration already polls
   // hard. The list lives on /notifications. severity is a name ("info" /
   // "warning" / "critical"), matching how /notifications serialises it.
-  JsonObject notify = doc.createNestedObject("notifications");
+  JsonObject notify = doc["notifications"].to<JsonObject>();
   notify["count"] = notifications.count();
   notify["severity"] = notification_severity_name(notifications.maxSeverity());
 
@@ -806,7 +805,7 @@ handleScan(MongooseHttpServerRequest *request) {
     response->print("[");
     for (int i = 0; i < networksFound; ++i) {
       if(i) response->print(",");
-      StaticJsonDocument<256> network;
+      JsonDocument network;
       network["rssi"] = WiFi.RSSI(i);
       network["ssid"] = WiFi.SSID(i);
       network["bssid"] = WiFi.BSSIDstr(i);
@@ -952,14 +951,14 @@ handleTeslaVeh(MongooseHttpServerRequest *request)
     return;
   }
 
-  StaticJsonDocument<1024> doc;
+  JsonDocument doc;
   int count = teslaClient.getVehicleCnt();
   doc["count"] = count;
-  JsonArray vehicles = doc.createNestedArray("vehicles");
+  JsonArray vehicles = doc["vehicles"].to<JsonArray>();
 
   for (int i = 0; i < count; i++)
   {
-    JsonObject vehicle = vehicles.createNestedObject();
+    JsonObject vehicle = vehicles.add<JsonObject>();
     vehicle["id"] = teslaClient.getVehicleId(i);
     vehicle["name"] = teslaClient.getVehicleDisplayName(i);
   }
@@ -993,26 +992,25 @@ void handleStatusPost(MongooseHttpServerRequest *request, MongooseHttpServerResp
 {
   String body = request->body().toString();
   // Deserialize the JSON document
-  const size_t capacity = JSON_OBJECT_SIZE(32) + 1024;
-  DynamicJsonDocument doc(capacity);
+  JsonDocument doc;
   DeserializationError error = deserializeJson(doc, body);
   if(!error)
   {
     bool send_event = true;
 
-    if(doc.containsKey("voltage"))
+    if(!doc["voltage"].isNull())
     {
       double volts = doc["voltage"];
       DBUGF("voltage:%.1f", volts);
       evse.setVoltage(volts);
     }
-    if(doc.containsKey("shaper_live_pwr"))
+    if(!doc["shaper_live_pwr"].isNull())
     {
       double shaper_live_pwr = doc["shaper_live_pwr"];
       shaper.setLivePwr(shaper_live_pwr);
       DBUGF("shaper: live power:%dW", shaper.getLivePwr());
     }
-    if(doc.containsKey("solar")) {
+    if(!doc["solar"].isNull()) {
       int solar = doc["solar"];
       divert.setSolar(solar);
       DBUGF("solar:%dW", solar);
@@ -1023,7 +1021,7 @@ void handleStatusPost(MongooseHttpServerRequest *request, MongooseHttpServerResp
       }
       send_event = false; // Divert sends the event so no need to send here
     }
-    else if(doc.containsKey("grid_ie")) {
+    else if(!doc["grid_ie"].isNull()) {
       int grid_ie = doc["grid_ie"];
       divert.setGridIe(grid_ie);
       DBUGF("grid:%dW", grid_ie);
@@ -1034,25 +1032,25 @@ void handleStatusPost(MongooseHttpServerRequest *request, MongooseHttpServerResp
       }
       send_event = false; // Divert sends the event so no need to send here
     }
-    if(doc.containsKey("battery_level") && vehiclePushAccepted()) {
+    if(!doc["battery_level"].isNull() && vehiclePushAccepted()) {
       double vehicle_soc = doc["battery_level"];
       DBUGF("vehicle_soc:%d%%", vehicle_soc);
       evse.setVehicleStateOfCharge(vehicle_soc);
       doc["vehicle_state_update"] = 0;
     }
-    if(doc.containsKey("battery_range") && vehiclePushAccepted()) {
+    if(!doc["battery_range"].isNull() && vehiclePushAccepted()) {
       double vehicle_range = doc["battery_range"];
       DBUGF("vehicle_range:%dKM", vehicle_range);
       evse.setVehicleRange(vehicle_range);
       doc["vehicle_state_update"] = 0;
     }
-    if(doc.containsKey("time_to_full_charge") && vehiclePushAccepted()){
+    if(!doc["time_to_full_charge"].isNull() && vehiclePushAccepted()){
       double vehicle_eta = doc["time_to_full_charge"];
       DBUGF("vehicle_eta:%d", vehicle_eta);
       evse.setVehicleEta(vehicle_eta);
       doc["vehicle_state_update"] = 0;
     }
-    if(doc.containsKey("vehicle_charge_limit") && vehiclePushAccepted()){
+    if(!doc["vehicle_charge_limit"].isNull() && vehiclePushAccepted()){
       int vehicle_charge_limit = doc["vehicle_charge_limit"];
       DBUGF("vehicle_charge_limit:%d%%", vehicle_charge_limit);
       evse.setVehicleChargeLimit(vehicle_charge_limit);
@@ -1061,12 +1059,12 @@ void handleStatusPost(MongooseHttpServerRequest *request, MongooseHttpServerResp
     // Display-only home/powerwall battery feeds. Like the solar/grid pushes
     // above these are an explicit override (no data_src arbitration); they just
     // surface in /status and on the display.
-    if(doc.containsKey("home_battery_soc")) {
+    if(!doc["home_battery_soc"].isNull()) {
       int soc = doc["home_battery_soc"];
       DBUGF("home_battery_soc:%d%%", soc);
       home_battery_set_soc(soc);
     }
-    if(doc.containsKey("home_battery_power")) {
+    if(!doc["home_battery_power"].isNull()) {
       int power = doc["home_battery_power"];
       DBUGF("home_battery_power:%dW", power);
       home_battery_set_power(power);
@@ -1095,17 +1093,7 @@ handleStatus(MongooseHttpServerRequest *request)
 
   if(HTTP_GET == request->method()) {
 
-    // Allocated once and reused. Building a fresh multi-KB document per
-    // request, freed again immediately, is what fragments this heap: measured
-    // on hardware, sustained polling of /status alone drove the largest
-    // allocatable block from 61,428 down to 38,900 and it never recovered,
-    // while total free heap stayed above 70KB.
-    //
-    // Safe as a static because Mongoose is polled from loop() on a single
-    // task and each handler runs to completion inside its own event callback;
-    // this one calls nothing that re-enters the HTTP layer.
-    static DynamicJsonDocument doc(STATUS_JSON_CAPACITY);
-    doc.clear();
+    JsonDocument doc;
 
     uint32_t probe = diagnostics_probe_begin();
     buildStatus(doc);
@@ -1141,9 +1129,7 @@ handleStatus(MongooseHttpServerRequest *request)
 void
 handleScheduleGet(MongooseHttpServerRequest *request, MongooseHttpServerResponseStream *response, uint16_t event)
 {
-  // Sized from the stored event count — a fixed budget silently truncated
-  // multi-rule schedules (serialize() drops events once the doc overflows).
-  DynamicJsonDocument doc(scheduler.scheduleJsonCapacity());
+  JsonDocument doc;
 
   bool success = (SCHEDULER_EVENT_NULL == event) ?
     scheduler.serialize(doc) :
@@ -1237,8 +1223,7 @@ handleSchedulePlan(MongooseHttpServerRequest *request)
     return;
   }
 
-  const size_t capacity = JSON_OBJECT_SIZE(40) + 2048;
-  DynamicJsonDocument doc(capacity);
+  JsonDocument doc;
 
   scheduler.serializePlan(doc);
   response->setCode(200);
@@ -1325,7 +1310,7 @@ void handleBoostGet(MongooseHttpServerRequest *request, MongooseHttpServerRespon
 {
   if(boost.isActive())
   {
-    StaticJsonDocument<192> doc;
+    JsonDocument doc;
     boost.serialize(doc);
     response->setCode(200);
     serializeJson(doc, *response);
@@ -1393,10 +1378,10 @@ void handleBoost(MongooseHttpServerRequest *request)
 void handleEmeterDelete(MongooseHttpServerRequest *request, MongooseHttpServerResponseStream *response)
 {
   String body = request->body().toString();
-  DynamicJsonDocument doc(512);
+  JsonDocument doc;
   DeserializationError err = deserializeJson(doc, body);
   if (DeserializationError::Code::Ok == err) {
-    if (doc.containsKey("hard") && doc.containsKey("import")) {
+    if (!doc["hard"].isNull() && !doc["import"].isNull()) {
       bool hardreset = (bool)doc["hard"];
       bool import = (bool)doc["import"];
       if (evse.resetEnergyMeter(hardreset,import)) {
@@ -1576,12 +1561,11 @@ handleRestart(MongooseHttpServerRequest *request) {
   else if (HTTP_POST == request->method()) {
     String body = request->body().toString();
     // Deserialize the JSON document
-    const size_t capacity = JSON_OBJECT_SIZE(1) + 16;
-    DynamicJsonDocument doc(capacity);
+    JsonDocument doc;
     DeserializationError error = deserializeJson(doc, body);
     if(!error)
     {
-      if(doc.containsKey("device")){
+      if(doc["device"].is<const char*>()){
         if (strcmp(doc["device"], "gateway") == 0 ) {
           response->setCode(200);
           response->print("{\"msg\":\"restart gateway\"}");
@@ -1739,22 +1723,15 @@ void handleCableTemp(MongooseHttpServerRequest *request) {
 
   if(HTTP_GET == request->method())
   {
-    // 4 source objects of 9 members each (source, name, pin, status,
-    // temperature, r25, beta, offset_c10, panic_c10), plus the two
-    // top-level flags. JSON_OBJECT_SIZE(8) below undercounts that by one
-    // member per source; the +512 slack comfortably covers it.
-    const size_t capacity = JSON_OBJECT_SIZE(3) +
-                            JSON_ARRAY_SIZE(OPENEVSE_CABLE_TEMP_SOURCE_COUNT) +
-                            OPENEVSE_CABLE_TEMP_SOURCE_COUNT * JSON_OBJECT_SIZE(8) + 512;
-    DynamicJsonDocument doc(capacity);
+    JsonDocument doc;
 
     doc["supported"] = evse.isCableTempKnown();
     doc["enabled"] = evse.isCableTempEnabled();
 
-    JsonArray sources = doc.createNestedArray("sources");
+    JsonArray sources = doc["sources"].to<JsonArray>();
     for(uint8_t i = 0; i < OPENEVSE_CABLE_TEMP_SOURCE_COUNT; i++)
     {
-      JsonObject src = sources.createNestedObject();
+      JsonObject src = sources.add<JsonObject>();
       src["source"] = i;
       src["name"] = source_names[i];
       src["pin"] = evse.getCableTempPin(i);
@@ -1787,8 +1764,7 @@ void handleCableTemp(MongooseHttpServerRequest *request) {
   }
 
   MongooseString body = request->body();
-  const size_t capacity = JSON_OBJECT_SIZE(8) + 256;
-  DynamicJsonDocument doc(capacity);
+  JsonDocument doc;
   if(deserializeJson(doc, body.c_str(), body.length())) {
     response->setCode(400);
     response->print("{\"msg\":\"Could not parse JSON\"}");
@@ -1796,7 +1772,7 @@ void handleCableTemp(MongooseHttpServerRequest *request) {
     return;
   }
 
-  if(!doc.containsKey("source") || !doc.containsKey("pin")) {
+  if(doc["source"].isNull() || doc["pin"].isNull()) {
     response->setCode(400);
     response->print("{\"msg\":\"source and pin are required\"}");
     request->send(response);
@@ -1826,10 +1802,10 @@ void handleCableTemp(MongooseHttpServerRequest *request) {
   // full-configuration form is all-or-nothing, and filling the gaps from the
   // local cache would silently write back a stale value if the cache were
   // cold or another client had changed it.
-  bool hasCal = doc.containsKey("r25") && doc.containsKey("beta") &&
-                doc.containsKey("offset_c10") && doc.containsKey("panic_c10");
-  bool anyCal = doc.containsKey("r25") || doc.containsKey("beta") ||
-                doc.containsKey("offset_c10") || doc.containsKey("panic_c10");
+  bool hasCal = !doc["r25"].isNull() && !doc["beta"].isNull() &&
+                !doc["offset_c10"].isNull() && !doc["panic_c10"].isNull();
+  bool anyCal = !doc["r25"].isNull() || !doc["beta"].isNull() ||
+                !doc["offset_c10"].isNull() || !doc["panic_c10"].isNull();
 
   if(anyCal && !hasCal) {
     response->setCode(400);
@@ -1953,7 +1929,7 @@ static void rapiRespond(RapiRequest *req, int ret, const String &rapiString)
     if(req->json) {
       // Through the serializer, not string concatenation: the command is
       // caller-supplied and a quote in it must not escape the value.
-      DynamicJsonDocument doc(512);
+      JsonDocument doc;
       doc["cmd"] = req->rapi;
       doc["ret"] = rapiString;
       serializeJson(doc, page);
@@ -1966,9 +1942,9 @@ static void rapiRespond(RapiRequest *req, int ret, const String &rapiString)
   else
   {
     if(req->json) {
-      DynamicJsonDocument doc(512);
+      JsonDocument doc;
       doc["cmd"] = req->rapi;
-      doc["error"] = rapiErrorName(ret);
+      doc["error"] = String(rapiErrorName(ret));
       serializeJson(doc, page);
     } else {
       page += html_escape(req->rapi);
@@ -2137,22 +2113,21 @@ void handleHttpsRedirect(MongooseHttpServerRequest *request)
 void onWsFrame(MongooseHttpWebSocketConnection *connection, int flags, uint8_t *data, size_t len)
 {
   DBUGF("Got message %.*s", len, (const char *)data);
-  const size_t capacity = JSON_OBJECT_SIZE(3) + JSON_OBJECT_SIZE(2) + 128;
-  DynamicJsonDocument doc(capacity);
+  JsonDocument doc;
   DeserializationError error = deserializeJson(doc, data, len);
   if (!error) {
-    if (doc.containsKey("ping") && doc["ping"].is<int8_t>())
+    if (!doc["ping"].isNull())
       {
         // answer pong
         connection->send("{\"pong\": 1}");
       }
 
     // Handle load sharing allocation from controller (member side)
-    if (doc.containsKey("loadsharing")) {
+    if (!doc["loadsharing"].isNull()) {
       JsonObject ls = doc["loadsharing"];
-      if (ls.containsKey("target_current")) {
+      if (!ls["target_current"].isNull()) {
         double targetCurrent = ls["target_current"].as<double>();
-        String reason = ls.containsKey("reason") ? ls["reason"].as<String>() : "allocation";
+        String reason = !ls["reason"].isNull() ? ls["reason"].as<String>() : "allocation";
 
         DBUGF("LoadSharing: Received allocation %.1fA (reason: %s)", targetCurrent, reason.c_str());
 
@@ -2188,8 +2163,8 @@ void onWsAuthenticate(MongooseHttpServerRequest *request)
 void onWsConnect(MongooseHttpWebSocketConnection *connection)
 {
   DBUGF("New client connected over ws");
-
-  DynamicJsonDocument doc(STATUS_JSON_CAPACITY);
+  // pushing states to client
+  JsonDocument doc;
   buildStatus(doc);
 
   // Send only to the client that just connected. This used to call
@@ -2222,7 +2197,7 @@ void handleMqttAction(MongooseHttpServerRequest *request) {
   if (false == requestPreProcess(request, response)) return;
 
   if (HTTP_GET == request->method()) {
-    DynamicJsonDocument doc(JSON_OBJECT_SIZE(8) + 384);
+    JsonDocument doc;
     doc["mqtt_connected"] = (int)mqtt.isConnected();
     doc["mqtt_status"]    = mqtt.getMqttStatus();
     if (mqtt.getBrokerIp()[0] != '\0')
@@ -2250,9 +2225,14 @@ void handleMqttAction(MongooseHttpServerRequest *request) {
   request->send(response);
 }
 
+/**
+ * Start the web listener, publish its selected protocol/port, and register routes.
+ * A failed TLS listener falls back to HTTP; total failure keeps listener state inactive.
+ */
 void web_server_setup()
 {
-  bool use_ssl = false;
+  const char *cert = NULL;
+  const char *key = NULL;
   if(www_certificate_id != "")
   {
     // This one sits on the boot path: a corrupted stored www_certificate_id
@@ -2266,22 +2246,38 @@ void web_server_setup()
       DEBUG.printf("Ignoring malformed www_certificate_id '%s', serving HTTP\n", www_certificate_id.c_str());
     }
 
-    const char *cert = id_valid ? certs.getCertificate(cert_id) : NULL;
-    const char *key = id_valid ? certs.getKey(cert_id) : NULL;
-    if(NULL != cert && NULL != key)
-    {
-      DEBUG.printf("Starting HTTPS server, https://0.0.0.0:%d\n", www_https_port);
-      server.begin(www_https_port, cert, key);
-      use_ssl = true;
-
-      redirect.begin(www_http_port);
-      redirect.on("/", handleHttpsRedirect);
-    }
+    cert = id_valid ? certs.getCertificate(cert_id) : NULL;
+    key = id_valid ? certs.getKey(cert_id) : NULL;
   }
 
-  if(false == use_ssl) {
-    DEBUG.printf("Starting HTTP server, http://0.0.0.0:%d\n", www_http_port);
-    server.begin(www_http_port);
+  web_server_listener = web_server_start_listeners(
+    cert, key, www_https_port, www_http_port,
+    /** Attempt the configured TLS bind and propagate its actual result. */
+    [](const char *certificate, const char *private_key)
+    {
+      DEBUG.printf("Starting HTTPS server, https://0.0.0.0:%d\n", www_https_port);
+      return server.begin(www_https_port, certificate, private_key);
+    },
+    /** Attempt the configured HTTP bind after TLS is unavailable or fails. */
+    []()
+    {
+      DEBUG.printf("Starting HTTP server, http://0.0.0.0:%d\n", www_http_port);
+      return server.begin(www_http_port);
+    });
+
+  if(web_server_listener.started && web_server_listener.https)
+  {
+    web_server_start_redirect(www_http_port,
+      /** Bind the optional HTTP-to-HTTPS redirect and return the actual result. */
+      [](uint16_t port) { return redirect.begin(port); },
+      /** Install the redirect handler after its listener starts. */
+      []() { redirect.on("/", handleHttpsRedirect); },
+      /** Identify a failed redirect bind without changing the primary HTTPS listener. */
+      [](uint16_t port) { DEBUG.printf("HTTP->HTTPS redirect failed on port %u\n", port); });
+  }
+
+  if(web_server_listener.started) {
+    net.publishWebServer(web_server_listener.port, web_server_listener.https);
   }
 
   // Session management (no auth gate — user must reach these unauthenticated)
@@ -2392,7 +2388,7 @@ void web_server_setup()
       return;
     }
 
-    DynamicJsonDocument doc(DIAG_COREDUMP_JSON_CAPACITY);
+    JsonDocument doc;
     diagnostics_coredump_json(doc);
     response->setCode(200);
     serializeJson(doc, *response);
@@ -2465,8 +2461,7 @@ void web_server_setup()
     crash_delete_key_hash(key, keyHash);
     // Sent as-is: the body the browser POSTs to the broker. Where to POST it
     // comes from /debug/crash/identity, which the browser reads first.
-    // 8 KB: the deep backtrace appears twice, in the summary and hoisted.
-    DynamicJsonDocument doc(8192);
+    JsonDocument doc;
     if(!crash_payload_build(doc, rid, keyHash)) {
       response->setCode(500);
       response->print(F("{\"msg\":\"report too large\"}"));
@@ -2493,7 +2488,7 @@ void web_server_setup()
       return;
     }
     if(HTTP_POST == request->method()) {
-      DynamicJsonDocument in(256);
+      JsonDocument in;
       if(deserializeJson(in, request->body().toString())) {
         response->setCode(400);
         response->print(F("{\"msg\":\"bad json\"}"));
@@ -2535,7 +2530,7 @@ void web_server_setup()
     // opens.
     char want[4];
     bool withKey = request->getParam("key", want, sizeof(want)) >= 0;
-    DynamicJsonDocument doc(256);
+    JsonDocument doc;
     char rid[33], key[65];
     if(crash_identity_load(rid, key)) {
       doc["reporter_id"] = rid;
@@ -2599,7 +2594,25 @@ void web_server_setup()
   // Setup load sharing endpoints
   web_server_load_sharing_setup();
 
-  DEBUG.println("Server started");
+  DEBUG.println(web_server_listener.started ? "Server started" : "Server failed to start");
+}
+
+/** Return whether startup established a primary web listener. */
+bool web_server_is_running()
+{
+  return web_server_listener.started;
+}
+
+/** Return whether the successfully started primary listener uses TLS. */
+bool web_server_is_https()
+{
+  return web_server_listener.started && web_server_listener.https;
+}
+
+/** Return the selected primary listener port, or zero when startup failed. */
+uint16_t web_server_port()
+{
+  return web_server_listener.port;
 }
 
 void
