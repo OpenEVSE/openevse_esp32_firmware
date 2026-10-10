@@ -64,19 +64,39 @@ properties:
     type: integer
     description: 'the actual max current value defined either by max_current_soft or a running claim'
   temp:
-    type: number
+    oneOf:
+      - type: number
+      - type: boolean
+        enum:
+          - false
     description: 'the derived temperature, in 1/10th °C'
   temp1:
-    type: number
+    oneOf:
+      - type: number
+      - type: boolean
+        enum:
+          - false
     description: 'the DS3232 temperature, in 1/10th °C, if fitted or `false` if not'
   temp2:
-    type: number
+    oneOf:
+      - type: number
+      - type: boolean
+        enum:
+          - false
     description: 'the MCP9808 (on the LCD) temperature, in 1/10th °C, if fitted or `false` if not'
   temp3:
-    type: number
+    oneOf:
+      - type: number
+      - type: boolean
+        enum:
+          - false
     description: 'the TMP007 temperature, in 1/10th °C, if fitted or `false` if not'
   temp4:
-    type: number
+    oneOf:
+      - type: number
+      - type: boolean
+        enum:
+          - false
     description: 'the MCP9808 (on the WiFi module) temperature, in 1/10th °C, if fitted or `false` if not'
   state:
     type: integer
@@ -108,7 +128,7 @@ properties:
   total_month:
     type: number
     description: 'The total amount of energy accumulated this month (in kwh)'
-  total_yaer:
+  total_year:
     type: number
     description: 'The total amount of energy accumulated the year (in kwh)'
   gfcicount:
@@ -175,7 +195,7 @@ properties:
   offset:
     type: string
     description: The current timezone
-  has_limit:
+  limit:
     type: boolean
     description: A limit has been set
   limit_version:
@@ -184,3 +204,236 @@ properties:
   uptime:
     type: integer
     description: EVSE gateway uptime, in seconds
+  status:
+    type: string
+    description: The EVSE state as text, for example `active` or `sleeping`
+  flags:
+    type: integer
+    description: The raw EVSE flags word
+  power:
+    type: number
+    description: Instantaneous power, in W
+  watthour:
+    type: number
+    description: Total accumulated energy, in Wh
+  wattsec:
+    type: number
+    description: Energy delivered in the current session, in watt-seconds
+  session_elapsed:
+    type: integer
+    description: Duration of the current session, in seconds
+  total_switches:
+    type: integer
+    description: The number of times the relay has switched
+  temp_max:
+    oneOf:
+      - type: number
+      - type: boolean
+        enum:
+          - false
+    description: 'The highest temperature seen by the controller, in 1/10th C, or `false` if not available'
+  freeram:
+    type: integer
+    description: Free heap on the WiFi module, in bytes
+  local_time:
+    type: string
+    description: Local time of the device, ISO 8601 with UTC offset
+  littlefs_free:
+    type: integer
+    description: Free space on the LittleFS filesystem, in bytes
+  littlefs_used:
+    type: integer
+    description: Used space on the LittleFS filesystem, in bytes
+  macaddress:
+    type: string
+    description: MAC address of the active network interface
+  ipv6address:
+    type: string
+    description: IPv6 address, empty when there is none
+  mqtt_status:
+    type: string
+    description: Short text state of the MQTT client, for example `disabled` or `connected`
+  mqtt_broker_ip:
+    type: string
+    description: Address of the broker, only present once known
+  mqtt_broker_version:
+    type: string
+    description: Broker software version, only present once known
+  mqtt_connected_since:
+    type: integer
+    description: Epoch seconds, only present while connected
+  mqtt_last_rx:
+    type: integer
+    description: Epoch seconds of the last MQTT broker traffic, sent or received
+  mqtt_error:
+    type: string
+    description: Error category, empty when there is no failure
+  mqtt_error_detail:
+    type: string
+    description: Detail for `mqtt_error`
+  ocpp_connected:
+    type: integer
+    description: '`1` when the OCPP central system connection is up'
+  notifications:
+    type: object
+    description: Summary of the active notifications
+    properties:
+      count:
+        type: integer
+      severity:
+        type: string
+        description: Highest severity present, for example `info`
+  boost:
+    type: boolean
+    description: A boost is active
+  boost_version:
+    type: integer
+    description: /boost endpoint current version
+  claims_version:
+    type: integer
+    description: /claims endpoint current version
+  config_version:
+    type: integer
+    description: /config current version
+  override_version:
+    type: integer
+    description: /override endpoint current version
+  schedule_version:
+    type: integer
+    description: /schedule endpoint current version
+  schedule_plan_version:
+    type: integer
+    description: /schedule/plan current version
+  shaper:
+    type: integer
+    description: '`1` when the current shaper is enabled'
+  shaper_cur:
+    type: number
+    description: Current limit applied by the current shaper, in A
+  shaper_live_pwr:
+    type: number
+    description: Live power reading used by the current shaper, in W
+  shaper_updated:
+    type: boolean
+    description: The shaper has received a fresh reading
+  loadsharing_group_current_total:
+    type: number
+    description: Total current drawn by the load sharing group, in A
+  loadsharing_peers_version:
+    type: integer
+    description: /loadsharing/peers current version
+  loadsharing_status_version:
+    type: integer
+    description: /loadsharing/status current version
+  loadsharing_joined_peers:
+    type: array
+    description: Members of the load sharing group and their live state
+    items:
+      type: object
+      properties:
+        hostname:
+          type: string
+        id:
+          type: string
+        name:
+          type: string
+        amp:
+          type: number
+        voltage:
+          type: number
+        pilot:
+          type: number
+        vehicle:
+          type: integer
+        state:
+          type: integer
+        min_current:
+          type: number
+        max_current:
+          type: number
+        priority:
+          type: integer
+  tesla_vehicle_count:
+    oneOf:
+      - type: integer
+      - type: boolean
+        enum:
+          - false
+    description: 'The number of Tesla vehicles found, or `false` if not available'
+  tesla_vehicle_id:
+    oneOf:
+      - type: string
+      - type: boolean
+        enum:
+          - false
+    description: 'The selected Tesla vehicle id, or `false` if not available'
+  tesla_vehicle_name:
+    oneOf:
+      - type: string
+      - type: boolean
+        enum:
+          - false
+    description: 'The selected Tesla vehicle name, or `false` if not available'
+  battery_level:
+    type: number
+    description: Vehicle state of charge, in %. Only present when known
+  battery_range:
+    type: number
+    description: Vehicle range. Only present when known
+  time_to_full_charge:
+    type: number
+    description: Vehicle estimate of the time to full charge. Only present when known
+  vehicle_charge_limit:
+    type: number
+    description: Vehicle charge limit, in %. Only present when known
+  vehicle_state_update:
+    type: integer
+    description: Seconds since the vehicle data was last updated
+  rfid_reader:
+    type: integer
+    description: '`1` when an RFID reader is present. Only on builds with RFID'
+  rfid_failure:
+    type: integer
+    description: Number of RFID reader communication failures. Only on builds with RFID
+  tsdb_ready:
+    type: integer
+    description: '`1` when the time series database is usable. Only on builds with it'
+  tsdb_err:
+    type: integer
+    description: Initialisation error code of the time series database
+  tsdb_dropped:
+    type: integer
+    description: Samples dropped by the time series database
+  ws_conns:
+    type: integer
+    description: Open websocket connections
+  ws_reaped:
+    type: integer
+    description: Websocket connections closed for being unresponsive
+  ws_send_max:
+    type: integer
+    description: Largest websocket send time seen
+  probe0_n:
+    type: integer
+    description: Diagnostic timing probe 0, number of samples
+  probe0_max:
+    type: integer
+    description: Diagnostic timing probe 0, maximum
+  probe1_n:
+    type: integer
+    description: Diagnostic timing probe 1, number of samples
+  probe1_max:
+    type: integer
+    description: Diagnostic timing probe 1, maximum
+  probe2_n:
+    type: integer
+    description: Diagnostic timing probe 2, number of samples
+  probe2_max:
+    type: integer
+    description: Diagnostic timing probe 2, maximum
+  probe3_n:
+    type: integer
+    description: Diagnostic timing probe 3, number of samples
+  probe3_max:
+    type: integer
+    description: Diagnostic timing probe 3, maximum

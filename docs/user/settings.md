@@ -24,7 +24,12 @@ hardware is present.
 ## Charger
 
 - **[Charger](screenshots/settings-evse-dark-desktop.png)** — service level,
-  maximum current, LCD/LED options, button behaviour, three-phase mode.
+  maximum current, LCD/LED options, button behaviour, three-phase mode
+  (`is_threephase`). Two related keys in `/config` have no control of their
+  own: `charge_mode` is the divert mode, the string `"fast"` (Normal) or
+  `"eco"`, which the [divert](solar-divert.md) mode is restored from at boot,
+  and `factory_write_lock` is set by the firmware once the factory settings
+  have been written, to stop them being overwritten.
 - **[Safety](screenshots/settings-safety-dark-desktop.png)** — see
   [Safety](safety.md).
 - **Time & Date** <a id="time--date"></a>

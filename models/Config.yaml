@@ -116,7 +116,6 @@ x-tags:
 properties:
   firmware:
     type: string
-    minLength: 1
     readOnly: true
   protocol:
     type: string
@@ -185,16 +184,12 @@ properties:
     readOnly: true
   ssid:
     type: string
-    minLength: 1
   pass:
     type: string
-    minLength: 1
   ap_ssid:
     type: string
-    minLength: 1
   ap_pass:
     type: string
-    minLength: 1
   www_username:
     type: string
   www_password:
@@ -210,7 +205,6 @@ properties:
     minLength: 1
   limit_default_type:
     type: string
-    minLength: 1
   limit_default_value:
     type: integer
     minLength: 1
@@ -219,36 +213,28 @@ properties:
     minLength: 1
   emoncms_node:
     type: string
-    minLength: 1
   emoncms_apikey:
     type: string
-    minLength: 1
   emoncms_fingerprint:
     type: string
   mqtt_server:
     type: string
-    minLength: 1
   mqtt_port:
     type: integer
   mqtt_topic:
     type: string
-    minLength: 1
   mqtt_retained:
     type: boolean
   mqtt_user:
     type: string
-    minLength: 1
   mqtt_pass:
     type: string
-    minLength: 1
   mqtt_solar:
     type: string
   mqtt_grid_ie:
     type: string
-    minLength: 1
   mqtt_vrms:
     type: string
-    minLength: 1
   shelly_lnm_enabled:
     type: boolean
     description: Use Shelly Local Network Messaging (LNM) as the grid power and voltage source instead of the MQTT topics
@@ -317,17 +303,14 @@ properties:
     type: number
   tesla_access_token:
     type: string
-    minLength: 1
   tesla_refresh_token:
     type: string
-    minLength: 1
   tesla_created_at:
     type: number
   tesla_expires_in:
     type: number
   tesla_vehicle_id:
     type: string
-    minLength: 1
   led_brightness:
     type: number
   flags:
@@ -457,19 +440,206 @@ properties:
     description: |
       Unix timestamp of last load sharing configuration update, used for conflict resolution
   loadsharing_role:
-    type: string
-    enum:
-      - ''
-      - controller
-      - member
-    default: ''
+    oneOf:
+      - type: boolean
+      - type: string
+        enum:
+          - ''
+          - controller
+          - member
+    default: false
     description: |
-      Role of this device in the load sharing group. Empty string means load sharing is not configured.
-      'controller' means this device manages the group and pushes allocations.
-      'member' means this device receives allocations from a controller.
+      Role of this device in the load sharing group: `false` is a controller (the default), which
+      manages the group and pushes allocations, and `true` is a member, which receives allocations
+      from a controller. The device always reports a boolean. The pre-alpha string spellings
+      (`""`, `"controller"`, `"member"`) are still accepted in a request and map to the same roles.
   loadsharing_controller_host:
     type: string
     default: ''
     description: |
       Hostname or IP of the controller device. Set automatically on members when the controller pushes config.
 
+  current_shaper_enabled:
+    type: boolean
+    description: The current shaper is enabled
+  current_shaper_min_pause_time:
+    type: integer
+    description: Minimum time to pause charging before re-enabling after an undercurrent, in seconds
+  current_shaper_smoothing_time:
+    type: integer
+    description: Smoothing time applied to the live power reading, in seconds
+  current_shaper_data_maxinterval:
+    type: integer
+    description: Maximum time allowed between live power readings before the data is considered stale, in seconds
+  factory_write_lock:
+    type: boolean
+    description: Lock the factory settings of the controller against writes
+  heartbeat_interval:
+    type: integer
+    description: Heartbeat supervision interval, in seconds, `0` disables it
+  heartbeat_current:
+    type: integer
+    description: Current the controller falls back to if the heartbeat is lost, in A
+  voltage:
+    type: integer
+    description: Configured supply voltage, in centivolts, so `23000` means 230 V. `0` means use the measured or default value
+  lang:
+    type: string
+    description: User interface language, empty for the default
+  temp_unit:
+    type: string
+    enum:
+      - c
+      - f
+    description: Temperature unit used by the user interfaces
+  lcd_backlight_timeout:
+    type: integer
+    description: Display idle timeout in seconds. `0` means never
+  lcd_network_info:
+    type: boolean
+    description: Show network information on the display
+  lcd_type:
+    type: string
+    enum:
+      - mono
+      - rgb
+    description: Type of LCD fitted. Only present when the controller reports it
+  tft_12h_clock:
+    type: boolean
+    description: Use a 12 hour clock on the TFT display
+  tft_theme:
+    type: string
+    description: TFT display theme, for example `dark`. Only present on builds with a TFT
+  tft_brightness:
+    type: integer
+    description: TFT active brightness, in %. The web app offers 10 to 100. Only present on builds with a TFT
+  tft_standby_brightness:
+    type: integer
+    description: TFT standby brightness, in %, `0` turns the screen off. The web app offers 0 to 100. Only present on builds with a TFT
+  temp_throttle_enabled:
+    type: boolean
+    description: Reduce the charge current as the temperature approaches the setpoint
+  temp_throttle_setpoint:
+    type: integer
+    description: Temperature at which throttling starts, in C
+  over_temp_shutdown:
+    type: integer
+    description: Temperature at which the controller shuts down charging, in C. Only present when the controller supports it
+  mqtt_sys_query:
+    type: boolean
+    description: Query the broker `$SYS` topics for status information
+  mqtt_certificate_id:
+    type: string
+    description: Id of the certificate used to verify the MQTT broker
+  mqtt_live_pwr:
+    type: string
+    description: MQTT topic that supplies the live power used by the current shaper
+  mqtt_home_battery_soc:
+    type: string
+    description: MQTT topic that supplies the home battery state of charge
+  mqtt_home_battery_power:
+    type: string
+    description: MQTT topic that supplies the home battery power
+  mqtt_vehicle_charge_limit:
+    type: string
+    description: MQTT topic that supplies the vehicle charge limit
+  sntp_dhcp:
+    type: boolean
+    description: Take the NTP server from DHCP
+  rfid_storage:
+    type: string
+    description: Stored RFID tags
+  www_certificate_id:
+    type: string
+    description: Id of the certificate used for HTTPS, empty to serve plain HTTP
+  www_http_port:
+    type: integer
+    description: Port the web server listens on for HTTP
+  www_https_port:
+    type: integer
+    description: Port the web server listens on for HTTPS
+  server_secret:
+    type: string
+    description: Signing secret for session cookies. Returned masked, never the real value
+  pp_auto:
+    type: boolean
+    description: Automatic ampacity from the proximity pilot. Only present when the controller supports it
+  zero_cross:
+    type: boolean
+    description: Zero-cross relay switching. Only present when the controller supports it
+  zero_cross_threshold_ma:
+    type: integer
+    description: Zero-cross threshold, in mA. Only present when the controller reports it
+  cable_temp:
+    type: boolean
+    description: Cable temperature monitoring is enabled. See `/cabletemp` for the per-source settings
+  relay_dc1:
+    type: boolean
+    description: DC relay 1 is enabled. Only present when the controller reports relay status
+  relay_dc2:
+    type: boolean
+    description: DC relay 2 is enabled. Only present when the controller reports relay status
+  relay_ac:
+    type: boolean
+    description: AC relay is enabled. Only present when the controller reports relay status
+  overcurrent_monitor:
+    type: boolean
+    description: Overcurrent monitoring is enabled
+  front_button:
+    type: boolean
+    description: The front button is enabled
+  boot_lock:
+    type: boolean
+    description: The boot lock is enabled
+  d9_support:
+    type: boolean
+    readOnly: true
+    description: The controller supports the D9 feature set
+  evse_serial:
+    type: string
+    readOnly: true
+    description: Serial number of the EVSE controller
+  chip_id:
+    type: string
+    readOnly: true
+    description: Chip id of the EVSE controller
+  wifi_serial:
+    type: string
+    readOnly: true
+    description: Serial number of the WiFi module
+  heap_size:
+    type: integer
+    readOnly: true
+    description: Total heap size of the WiFi module, in bytes
+  littlefs_size:
+    type: integer
+    readOnly: true
+    description: Size of the LittleFS filesystem, in bytes
+  littlefs_used:
+    type: integer
+    readOnly: true
+    description: Used space on the LittleFS filesystem, in bytes
+  app0_size:
+    type: integer
+    readOnly: true
+    description: Size of the application partition, in bytes
+  sketch_size:
+    type: integer
+    readOnly: true
+    description: Size of the running firmware, in bytes
+  partition_scheme:
+    type: string
+    readOnly: true
+    description: Flash partition scheme in use
+  can_expand_16mb:
+    type: boolean
+    readOnly: true
+    description: The device can be repartitioned in place to use 16MB of flash, see `/migrate/expand16mb`
+  flags_changed:
+    type: integer
+    readOnly: true
+    description: Bit mask of the flag bits that have been changed from their defaults
+  flags2_changed:
+    type: integer
+    readOnly: true
+    description: Bit mask of the second flags word (for example `labs_enabled`) that has been changed from its defaults
