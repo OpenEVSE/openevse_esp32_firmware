@@ -207,8 +207,10 @@ handleRapiRead()
       static const time_t CLOCK_SANE_EPOCH = 1700000000;
       time_t local_time = time(NULL);
       if(local_time <= CLOCK_SANE_EPOCH && evse_utc > CLOCK_SANE_EPOCH) {
+        // Through TimeManager, not settimeofday(): the scheduler only
+        // re-plans when told the time changed, and it last planned at 1970.
         struct timeval set_time = { evse_utc, 0 };
-        settimeofday(&set_time, NULL);
+        time_set_time(set_time, "EVSE");
       }
     }
   });
