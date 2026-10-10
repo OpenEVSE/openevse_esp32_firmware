@@ -43,7 +43,7 @@ There are two cooperating programs:
    the network work and all the *non-protected* writes while charging/WiFi keep
    running. It never touches a protected region.
 2. **The migrator** (`migrator/` submodule →
-   [OpenEVSE/openevse-16mb-migrator](https://github.com/OpenEVSE/openevse-16mb-migrator))
+   [RAR/openevse-16mb-migrator](https://github.com/RAR/openevse-16mb-migrator))
    — a ~130-line ESP-IDF app built with
    **`CONFIG_SPI_FLASH_DANGEROUS_WRITE_ALLOWED=y`**. It does *only* the protected
    commit, then reboots into the new firmware. It carries the 16 MB bootloader and
@@ -239,4 +239,4 @@ agree.
 The migrator approach — recognising the guard as the compile-time
 `CONFIG_SPI_FLASH_DANGEROUS_WRITE_ALLOWED` Kconfig and delegating the protected
 commit to a small IDF app — and the original migrator implementation come from
-[openevse-16mb-migrator](https://github.com/OpenEVSE/openevse-16mb-migrator).
+[openevse-16mb-migrator](https://github.com/RAR/openevse-16mb-migrator).
