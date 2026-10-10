@@ -17,6 +17,7 @@
 #include "current_shaper.h"
 #include "manual.h"
 #ifndef DIVERT_SIM
+#include "input.h"
 #include "rfid.h"
 #endif
 
@@ -378,6 +379,9 @@ unsigned long EvseManager::loop(MicroTasks::WakeReason reason)
   DBUGVAR(_evseBootListener.IsTriggered());
   if(_evseBootListener.IsTriggered()) {
     _evaluateTargetState = true;
+#ifndef DIVERT_SIM
+    handleRapiRead();
+#endif
   }
 
   DBUGVAR(_evseStateListener.IsTriggered());

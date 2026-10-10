@@ -326,12 +326,10 @@ void loop()
   MicroTask.update();
   Profile_End(MicroTask, 10);
 
-  // NOTE: the legacy first-connect block (handleRapiRead() + import_timers())
-  // was removed: both call through the sender-less global OpenEVSE object and
-  // have been silent no-ops since the EvseManager refactor.  Reviving
-  // import_timers() would auto-import (and clear) the controller's delay timer
-  // into Charge Manager rules — a deliberate decision for a separate change,
-  // along with routing time_man/input off the dead global.
+  // NOTE: import_timers() was removed from the first-connect block; reviving it
+  // would auto-import (and clear) the controller's delay timer into Charge
+  // Manager rules — a deliberate decision for a separate change.  The clock
+  // read (handleRapiRead) is now driven from EvseManager on boot-ready.
 
   if(net.isConnected())
   {
