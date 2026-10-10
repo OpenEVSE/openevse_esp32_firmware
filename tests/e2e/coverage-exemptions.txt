@@ -1,0 +1,33 @@
+# UI routes that do not have an end-to-end scenario yet (docs/ai/feature-map.md).
+#
+# This is a backlog, not a place to hide new work: the list may only shrink.
+# When you add a feature file tagged @route:<path>, delete the route here
+# (scripts/e2e_coverage.py --strict fails if you forget). A new route must ship
+# with a scenario instead of being added to this list. The one exception is a
+# route whose UI is not in the embedded gui-nightshift build yet (paired GUI PR
+# pending): list it under "Waiting for the UI" below, and write its scenario
+# when the UI lands.
+/history
+/monitoring
+/schedule
+/settings/about
+/settings/certificates
+/settings/display
+/settings/emoncms
+/settings/evse
+/settings/firmware
+/settings/http
+/settings/loadsharing
+/settings/mqtt
+/settings/network
+/settings/ocpp
+/settings/rfid
+/settings/safety
+/settings/shaper
+/settings/solar
+/settings/terminal
+/settings/time
+/settings/vehicle
+
+# Waiting for the UI (not in the embedded build yet; "Page not found" today)
+/settings/shellylnm  # Shelly LNM, firmware merged in #1340 without the GUI page

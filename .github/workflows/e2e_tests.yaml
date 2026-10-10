@@ -1,0 +1,118 @@
+# yaml-language-server: $schema=https://json.schemastore.org/github-workflow.json
+
+name: End-to-end UI tests
+
+# Gherkin scenarios (tests/e2e) driven through the real web UI with Playwright,
+# against the native firmware build paired with the OpenEVSE emulator.
+
+on:
+  workflow_dispatch:
+  pull_request:
+
+permissions:
+  contents: read
+
+env:
+  # The emulator checkout provides the /api/test/* control endpoints.
+  # TODO: switch to `main` once those land there.
+  EMULATOR_REPO: jeremypoulter/OpenEVSE_Emulator
+  EMULATOR_REF: claude/laughing-johnson-btb28l
+
+jobs:
+  # Runs alongside the scenarios, not before them: a UI route without a scenario
+  # fails the workflow but never stops the existing scenarios from running.
+  route_coverage:
+    name: Every UI route has a scenario
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+
+    steps:
+      - name: Checkout the firmware
+        uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+
+      - name: Set up Python
+        uses: actions/setup-python@v7
+        with:
+          python-version: '3.12'
+
+      - name: Check route coverage
+        run: python scripts/e2e_coverage.py --strict
+
+  e2e:
+    name: Playwright scenarios
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+
+    steps:
+      - name: Checkout the firmware
+        uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+
+      - name: Checkout the emulator
+        uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+          repository: ${{ env.EMULATOR_REPO }}
+          ref: ${{ env.EMULATOR_REF }}
+          path: emulator
+
+      - name: Set up Python
+        uses: actions/setup-python@v7
+        with:
+          python-version: '3.12'
+
+      - name: Set up Node
+        uses: actions/setup-node@v7
+        with:
+          node-version: '22'
+          cache: npm
+          cache-dependency-path: tests/e2e/package-lock.json
+
+      - name: Install system dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libavahi-client-dev libavahi-common-dev
+
+      - name: Cache PlatformIO
+        uses: actions/cache@v6
+        with:
+          path: |
+            ~/.platformio
+            .pio/libdeps
+          key: ${{ runner.os }}-pio-native-${{ hashFiles('platformio.ini') }}
+          restore-keys: ${{ runner.os }}-pio-native-
+
+      - name: Build the native firmware
+        run: |
+          pip install --upgrade platformio
+          pio run -e native_openevse
+          echo "NATIVE_BINARY_PATH=$PWD/.pio/build/native_openevse/program" >> "$GITHUB_ENV"
+
+      - name: Install the emulator
+        run: pip install -r emulator/requirements.txt
+
+      - name: Install the test dependencies
+        working-directory: tests/e2e
+        run: |
+          npm ci
+          npx playwright install --with-deps chromium
+
+      - name: Run the scenarios
+        working-directory: tests/e2e
+        env:
+          EMULATOR_DIR: ${{ github.workspace }}/emulator
+        run: npm test
+
+      - name: Upload the report and device logs
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: e2e-report
+          path: |
+            tests/e2e/playwright-report/
+            tests/e2e/test-results/
+            tests/e2e/output/
+          if-no-files-found: ignore

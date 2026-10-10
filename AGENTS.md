@@ -95,8 +95,43 @@ their CI cannot push — and `--pr` says so if you hit one.
 cd gui-nightshift && npm run build && npm test && cd ..
 pio run -e native_simulator                   # builds the binary divert_sim's pytest drives
 cd divert_sim && pytest -v && cd ..
+python scripts/e2e_coverage.py --strict       # every UI route has an e2e scenario
 git submodule status        # must show a clean, pushed state
 ```
+
+If you changed user-visible behaviour, also run the UI end-to-end scenarios (see
+[End-to-end UI tests](#end-to-end-ui-tests)): `pio run -e native_openevse`, then
+`cd tests/e2e && npm test` (`npm run test:smoke` for a quick pass).
+
+## End-to-end UI tests
+
+`tests/e2e/` holds Gherkin scenarios (playwright-bdd) that drive the **real web
+UI** against the native firmware and the OpenEVSE emulator, and assert on the UI
+*and* the backend. How to run and write them: [tests/e2e/README.md](tests/e2e/README.md).
+They are the executable spec of user-visible behaviour, so keep them current:
+
+- **Same-PR rule.** A change to user-visible behaviour, a UI route, or an API
+  the UI relies on adds or updates the matching `.feature` file in the same PR.
+  A bug fix for a UI-visible regression starts with a scenario that fails.
+- **Every UI route in [feature-map.md](docs/ai/feature-map.md) needs a scenario.**
+  Tag the feature `@route:<path>`. `python scripts/e2e_coverage.py --strict`
+  (run by CI) fails for a route with none. `tests/e2e/coverage-exemptions.txt`
+  is a shrinking backlog: delete a route from it when you cover it, never add a
+  new route to it (unless its UI is not in the embedded build yet; say so in
+  the file).
+- **Scenarios are written for people.** Features contain user-level language
+  only; selectors, URLs and JSON belong in `tests/e2e/steps/` and `support/`.
+  Reuse an existing step before writing a new one.
+- **Check the backend, not just the screen**: the firmware's HTTP API and the
+  emulator state, so a UI that only *looks* right fails.
+- **Missing emulator capability?** Add it to the emulator repo (`/api/test/*`
+  control endpoints, documented in its `openapi.yaml`) rather than faking it in
+  the test. Note the emulator ref in `.github/workflows/e2e_tests.yaml`.
+- **Never skip, `@wip`-quarantine, retry or loosen a failing scenario to get
+  green.** Work out whether the firmware, UI, emulator or scenario is wrong.
+  An assertion changes only when the *intended behaviour* changed.
+- **Prefer stable locators** (roles, labels). If the UI has none, add an
+  `aria-label` or `data-testid` in `gui-nightshift` rather than a CSS path.
 
 ## Critical workflows
 
