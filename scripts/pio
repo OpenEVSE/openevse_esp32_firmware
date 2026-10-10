@@ -159,7 +159,14 @@ if [ "$want_core3" = 1 ]; then
   core_pio_py="$(sed -n '1s/^#!//p' "$PIO_BIN")"
   core_scons_req="$("$core_pio_py" -c 'from platformio.dependencies import get_core_dependencies as d; print(d()["tool-scons"])' 2>/dev/null || true)"
   if [ -n "$core_scons_req" ]; then
-    "$PIO_BIN" pkg install -g -t "tool-scons@$core_scons_req" >/dev/null 2>&1 \
+    # pioarduino's Core fork declares a download URL rather than a version, and
+    # pio only accepts a URL as name=url; name@url fails with "Unknown repository
+    # type".
+    case "$core_scons_req" in
+      *://*) scons_spec="tool-scons=$core_scons_req" ;;
+      *)     scons_spec="tool-scons@$core_scons_req" ;;
+    esac
+    "$PIO_BIN" pkg install -g -t "$scons_spec" >/dev/null 2>&1 \
       || echo "scripts/pio: warning: failed to install/verify PIO Core's tool-scons $core_scons_req (this run may hit the FortranCommon error described above)" >&2
   else
     echo "scripts/pio: warning: could not read PIO Core's tool-scons requirement (this run may hit the FortranCommon error described above)" >&2
