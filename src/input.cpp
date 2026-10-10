@@ -205,8 +205,12 @@ handleRapiRead()
       // can never override SNTP.  CLOCK_SANE_EPOCH matches AUTH_CLOCK_SANE_EPOCH
       // in web_server.cpp.
       static const time_t CLOCK_SANE_EPOCH = 1700000000;
+      // RTC support built in but no chip fitted reads all 0xFF, which
+      // decodes to around 2165; anything past 2100 is not a real clock.
+      static const time_t CLOCK_MAX_EPOCH = 4102444800; // 2100-01-01
       time_t local_time = time(NULL);
-      if(local_time <= CLOCK_SANE_EPOCH && evse_utc > CLOCK_SANE_EPOCH) {
+      if(local_time <= CLOCK_SANE_EPOCH &&
+         evse_utc > CLOCK_SANE_EPOCH && evse_utc < CLOCK_MAX_EPOCH) {
         // Through TimeManager, not settimeofday(): the scheduler only
         // re-plans when told the time changed, and it last planned at 1970.
         struct timeval set_time = { evse_utc, 0 };
