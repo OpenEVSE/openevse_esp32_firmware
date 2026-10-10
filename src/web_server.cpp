@@ -634,7 +634,7 @@ void buildStatus(JsonDocument &doc) {
 
   doc["ocpp_connected"] = (int)OcppTask::isConnected();
 
-#if defined(ENABLE_PN532) || defined(ENABLE_RFID)
+#if defined(ENABLE_PN532) || defined(ENABLE_RC522) || defined(ENABLE_RFID)
   doc["rfid_failure"] = (int) rfid.communicationFails();
   doc["rfid_reader"] = (int) rfid.readerPresent();
 #endif
