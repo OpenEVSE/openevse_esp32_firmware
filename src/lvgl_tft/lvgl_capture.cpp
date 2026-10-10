@@ -319,7 +319,7 @@ bool lvgl_capture_write_samples(const char *out_dir)
   // single advisory here, so this also confirms the "+N" suffix is only
   // added when there is more than one.
   sd.notify_active = true;
-  sd.notify_line = sample_notify_line("safety.gfci_check", 0);
+  sd.notify_line = sample_notify_line("safety.relay_check", 0);
   standby_screen_update(sd);
   pump_frames();
   if(!write_capture(out_dir, "standby-advisory")) {

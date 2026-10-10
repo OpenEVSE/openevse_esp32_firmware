@@ -66,7 +66,6 @@ void Notifications::setup()
 void Notifications::gather(NotificationInputs &in)
 {
   in.ground_check = _evse->isGroundCheckEnabled();
-  in.gfci_check   = _evse->isGfiTestEnabled();
   in.relay_check  = _evse->isStuckRelayCheckEnabled();
   in.diode_check  = _evse->isDiodeCheckEnabled();
   in.vent_check   = _evse->isVentRequiredEnabled();
@@ -264,8 +263,8 @@ unsigned long Notifications::loop(MicroTasks::WakeReason reason)
 
 void Notifications::pushEvent()
 {
-  DynamicJsonDocument doc(1024);
-  JsonObject o = doc.createNestedObject("notifications");
+  JsonDocument doc;
+  JsonObject o = doc["notifications"].to<JsonObject>();
   o["count"] = count();
   o["severity"] = notification_severity_name(maxSeverity());
   event_send(doc);
@@ -318,9 +317,9 @@ void Notifications::serialize(JsonDocument &doc)
   doc["count"] = count();
   doc["max_severity"] = notification_severity_name(maxSeverity());
 
-  JsonArray list = doc.createNestedArray("notifications");
+  JsonArray list = doc["notifications"].to<JsonArray>();
   for(size_t i = 0; i < _count; i++) {
-    JsonObject o = list.createNestedObject();
+    JsonObject o = list.add<JsonObject>();
     o["id"] = _live[i].id;
     o["category"] = category_name[_live[i].category];
     o["severity"] = notification_severity_name(_live[i].severity);
@@ -343,7 +342,6 @@ const char *notification_severity_name(uint8_t severity)
 const char *notification_short_text(const char *id)
 {
   if(0 == strcmp(id, "safety.ground_check"))      return "GROUND CHECK OFF";
-  if(0 == strcmp(id, "safety.gfci_check"))        return "GFCI SELF TEST OFF";
   if(0 == strcmp(id, "safety.relay_check"))       return "RELAY CHECK OFF";
   if(0 == strcmp(id, "safety.diode_check"))       return "DIODE CHECK OFF";
   if(0 == strcmp(id, "safety.vent_check"))        return "VENT CHECK OFF";

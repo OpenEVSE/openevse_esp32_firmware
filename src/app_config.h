@@ -365,15 +365,21 @@ bool config_set_opt_string(const char *name, const char *value);
 // Read config settings from JSON object
 bool config_deserialize(String& json);
 bool config_deserialize(const char *json);
-bool config_deserialize(DynamicJsonDocument &doc);
+bool config_deserialize(JsonDocument &doc);
 void config_commit(bool factory = false);
 void config_user_commit();  // persist user config without touching factory_write_lock
 // Persist notification_acks / notification_acks_fw. Writing those globals and
 // calling commit() is not enough - see the definition.
 void config_save_notification_acks(const String &acks, const String &fw);
 
+// Installer-tools password. Never serialised or accepted through the public
+// config paths; the web server's /installer/* handlers are the only users.
+#define INSTALLER_PASSWORD_DEFAULT "installer"
+const String &config_installer_password();
+bool config_installer_password_set(const char *password);
+
 // Write config settings to JSON object
 bool config_serialize(String& json, bool longNames = true, bool compactOutput = false, bool hideSecrets = false);
-bool config_serialize(DynamicJsonDocument &doc, bool longNames = true, bool compactOutput = false, bool hideSecrets = false);
+bool config_serialize(JsonDocument &doc, bool longNames = true, bool compactOutput = false, bool hideSecrets = false);
 
 #endif // _EMONESP_CONFIG_H

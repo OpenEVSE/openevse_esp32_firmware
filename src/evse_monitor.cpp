@@ -71,7 +71,6 @@ extern uint32_t heartbeat_current_cfg;
 #define EVSE_MONITOR_FAULT_COUNT_BOOT_READY     (1 << 0)
 #define EVSE_MONITOR_FLAGS_BOOT_READY           (1 << 1)
 #define EVSE_MONITOR_CURRENT_BOOT_READY         (1 << 2)
-#define EVSE_MONITOR_ENERGY_BOOT_READY          (1 << 3)
 #define EVSE_MONITOR_CURRENT_SENSOR_BOOT_READY  (1 << 4)
 #define EVSE_MONITOR_SERIAL_BOOT_READY          (1 << 5)
 
@@ -79,7 +78,6 @@ extern uint32_t heartbeat_current_cfg;
         EVSE_MONITOR_FAULT_COUNT_BOOT_READY | \
         EVSE_MONITOR_FLAGS_BOOT_READY | \
         EVSE_MONITOR_CURRENT_BOOT_READY | \
-        EVSE_MONITOR_ENERGY_BOOT_READY | \
         EVSE_MONITOR_CURRENT_SENSOR_BOOT_READY | \
         EVSE_MONITOR_SERIAL_BOOT_READY \
 )
@@ -566,7 +564,7 @@ bool EvseMonitor::begin(RapiSender &sender)
     {
       // Immediately tell all WebSocket clients we are connected so the GUI
       // banner clears without waiting for the full data-ready chain.
-      StaticJsonDocument<32> connectedEvent;
+      JsonDocument connectedEvent;
       connectedEvent["evse_connected"] = 1;
       event_send(connectedEvent);
 
@@ -720,7 +718,7 @@ void EvseMonitor::setPilot(long amps, bool force, std::function<void(int ret)> c
       if(pilot != _pilot) {
         _pilot = pilot;
         _settings_changed.Trigger();
-        StaticJsonDocument<128> event;
+        JsonDocument event;
         event["pilot"] = _pilot;
         event_send(event);
       }
@@ -801,7 +799,7 @@ void EvseMonitor::updateEffectiveVoltage()
       _power = _power * 3;
     }
 
-    StaticJsonDocument<64> event;
+    JsonDocument event;
     event["voltage"] = _voltage * VOLTS_SCALE_FACTOR;
     event["power"] = _power * POWER_SCALE_FACTOR;
     event_send(event);
@@ -1175,7 +1173,7 @@ void EvseMonitor::getChargeCurrentAndVoltageFromEvse()
           _power = _power * 3;
         }
 
-        StaticJsonDocument<64> event;
+        JsonDocument event;
         event["amp"] = _amp * AMPS_SCALE_FACTOR;;
         event["voltage"] = _voltage * VOLTS_SCALE_FACTOR;
         event["power"] = _power * POWER_SCALE_FACTOR;
