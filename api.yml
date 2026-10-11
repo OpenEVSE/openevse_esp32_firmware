@@ -2394,6 +2394,15 @@ paths:
         is active). Sends `X-Requested-With: OpenEVSE` as for any non-GET request.
       tags:
         - Installer
+      parameters:
+        - name: X-Requested-With
+          in: header
+          required: true
+          description: Required on every installer call, including Basic-auth clients. Any other value gets `403` with `{"msg":"csrf"}`.
+          schema:
+            type: string
+            enum:
+              - OpenEVSE
       requestBody:
         required: true
         content:
@@ -2416,10 +2425,18 @@ paths:
                 OK:
                   value:
                     msg: ok
+        '400':
+          description: Body is not valid JSON (`{"msg":"bad json"}`)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Message'
         '401':
           $ref: '#/components/responses/Unauthorized'
         '403':
-          description: Wrong password (`{"msg":"wrong password"}`)
+          description: >-
+            Wrong password (`{"msg":"wrong password"}`), or the `X-Requested-With`
+            header is missing or not `OpenEVSE` (`{"msg":"csrf"}`).
           content:
             application/json:
               schema:
@@ -2435,6 +2452,15 @@ paths:
         printable ASCII characters. Sends `X-Requested-With: OpenEVSE`.
       tags:
         - Installer
+      parameters:
+        - name: X-Requested-With
+          in: header
+          required: true
+          description: Required on every installer call, including Basic-auth clients. Any other value gets `403` with `{"msg":"csrf"}`.
+          schema:
+            type: string
+            enum:
+              - OpenEVSE
       requestBody:
         required: true
         content:
@@ -2463,7 +2489,9 @@ paths:
                   value:
                     msg: changed
         '400':
-          description: New password is not 4 to 32 printable ASCII characters
+          description: >-
+            Body is not valid JSON (`bad json`), or the new password is not 4 to 32
+            printable ASCII characters (`invalid password`)
           content:
             application/json:
               schema:
@@ -2475,7 +2503,9 @@ paths:
         '401':
           $ref: '#/components/responses/Unauthorized'
         '403':
-          description: Wrong current password (`{"msg":"wrong password"}`)
+          description: >-
+            Wrong current password (`{"msg":"wrong password"}`), or the `X-Requested-With`
+            header is missing or not `OpenEVSE` (`{"msg":"csrf"}`).
           content:
             application/json:
               schema:
@@ -2501,10 +2531,21 @@ paths:
         controller accepts it once; later writes are ignored, so a `200` only
         means the command was sent. Re-read `GET /config` to see whether
         `max_current_hard` changed. `amps` must lie between the minimum current
-        (at least 6) and the lower of 80 and the current hardware maximum. Sends
+        (at least 6) and the upper bound. The upper bound is the lower of 80 and the
+        current hardware maximum; if the controller reports no hardware maximum (zero
+        or less), it is 80. Sends
         `X-Requested-With: OpenEVSE`.
       tags:
         - Installer
+      parameters:
+        - name: X-Requested-With
+          in: header
+          required: true
+          description: Required on every installer call, including Basic-auth clients. Any other value gets `403` with `{"msg":"csrf"}`.
+          schema:
+            type: string
+            enum:
+              - OpenEVSE
       requestBody:
         required: true
         content:
@@ -2522,7 +2563,8 @@ paths:
                   minimum: 6
                   maximum: 80
                   description: >-
-                    Runtime limits come from the device and may be narrower.
+                    Runtime limits come from the device and may be narrower. The upper bound is
+                    the lower of 80 and the current hardware maximum, or 80 when none is reported.
       responses:
         '200':
           description: Command sent
@@ -2539,7 +2581,9 @@ paths:
                   previous:
                     type: integer
         '400':
-          description: Amps out of range
+          description: >-
+            Body is not valid JSON (`bad json`), or amps out of range (`amps out of range`,
+            with the allowed `min` and `max`)
           content:
             application/json:
               schema:
@@ -2555,7 +2599,9 @@ paths:
         '401':
           $ref: '#/components/responses/Unauthorized'
         '403':
-          description: Wrong password (`{"msg":"wrong password"}`)
+          description: >-
+            Wrong password (`{"msg":"wrong password"}`), or the `X-Requested-With`
+            header is missing or not `OpenEVSE` (`{"msg":"csrf"}`).
           content:
             application/json:
               schema:
