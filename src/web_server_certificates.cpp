@@ -80,7 +80,7 @@ void handleCertificatesGet(MongooseHttpServerRequest *request, MongooseHttpServe
     size_t emitted = 0;
     for(size_t i = 0; i < count; i++)
     {
-      DynamicJsonDocument doc(CERTIFICATE_JSON_BUFFER_SIZE);
+      JsonDocument doc;
       if(!certs.serializeCertificateAt(doc, i)) {
         continue;
       }
@@ -97,7 +97,7 @@ void handleCertificatesGet(MongooseHttpServerRequest *request, MongooseHttpServe
     return;
   }
 
-  DynamicJsonDocument doc(CERTIFICATE_JSON_BUFFER_SIZE);
+  JsonDocument doc;
   if(certs.serializeCertificate(doc, certificate)) {
     response->setCode(200);
     serializeJson(doc, *response);
@@ -115,7 +115,7 @@ void handleCertificatesPost(MongooseHttpServerRequest *request, MongooseHttpServ
 
   if(!hasCertificate)
   {
-    DynamicJsonDocument doc(CERTIFICATE_JSON_BUFFER_SIZE);
+    JsonDocument doc;
     DeserializationError jsonError = deserializeJson(doc, body);
     if(DeserializationError::Ok == jsonError)
     {

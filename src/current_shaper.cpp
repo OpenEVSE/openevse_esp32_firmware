@@ -30,16 +30,11 @@ CurrentShaperTask::~CurrentShaperTask() {
 
 // Publish the shaper's live status over websocket / MQTT.
 //
-// The document must hold all six keys. The previous hardcoded 128-byte
-// document was too small once the event grew to six fields: ArduinoJson
-// silently drops the key/value pairs that don't fit (on the 64-bit host
-// builds used by divert_sim, six slots alone need 192 bytes), so
-// shaper_cur and shaper_updated never reached the status feed. 256 bytes
-// covers six slots on both the 32-bit ESP32 (16-byte slots) and 64-bit
-// hosts (32-byte slots), with keys stored as linked pointers.
+// JsonDocument grows to fit all six keys, so no fixed capacity can silently
+// drop shaper_cur or shaper_updated from the status feed.
 void CurrentShaperTask::publishShaperEvent()
 {
-	StaticJsonDocument<256> event;
+	JsonDocument event;
 	event["shaper"] = 1;
 	event["shaper_live_pwr"] = _live_pwr;
 	event["shaper_smoothed_live_pwr"] = _smoothed_live_pwr;
@@ -172,7 +167,7 @@ void CurrentShaperTask::begin(EvseManager &evse) {
 	this -> _max_cur = 0;
 	this -> _updated = false;
 	MicroTask.startTask(this);
-	StaticJsonDocument<128> event;
+	JsonDocument event;
 	event["shaper"]  = 1;
 	event_send(event);
 }
@@ -183,7 +178,7 @@ void CurrentShaperTask::notifyConfigChanged( bool enabled, uint32_t max_pwr) {
 	_enabled = enabled || _timer_controlled;
 	_max_pwr = max_pwr;
 	if (!_enabled && _evse) _evse->release(EvseClient_OpenEVSE_Shaper);
-	StaticJsonDocument<128> event;
+	JsonDocument event;
 	event["shaper"] = enabled == true ? 1 : 0;
 	event["shaper_max_pwr"] = max_pwr;
 	event_send(event);
@@ -208,7 +203,7 @@ void CurrentShaperTask::setState(bool state) {
 			_evse->release(EvseClient_OpenEVSE_Shaper);
 		}
 	}
-	StaticJsonDocument<128> event;
+	JsonDocument event;
 	event["shaper"]  = state?1:0;
 	event_send(event);
 }
@@ -220,7 +215,7 @@ void CurrentShaperTask::setTimerEnabled(bool active) {
 	if (!_enabled && _evse) {
 		_evse->release(EvseClient_OpenEVSE_Shaper);
 	}
-	StaticJsonDocument<128> event;
+	JsonDocument event;
 	event["shaper"] = _enabled ? 1 : 0;
 	event_send(event);
 }
