@@ -5,6 +5,7 @@
 #include "emonesp.h"
 #include "debug.h"
 #include "flash_migrate.h"
+#include "ota_url_allow.h"
 
 #if defined(ESP32) && !defined(EPOXY_DUINO)
 
@@ -95,6 +96,7 @@ static const uint32_t NEW_APP1_SIZE         = 0x640000;
 // download never reallocates mid-TLS-transfer.
 static const size_t MIGRATE_SCRATCH_CAP     = 4 * 1024;
 static const uint32_t MIGRATE_STALL_MS      = 25000;      // no-progress timeout
+static const uint8_t MIGRATE_MAX_REDIRECTS  = 5;          // per file, like http_update
 
 enum {
   ST_IDLE = 0,
@@ -137,6 +139,7 @@ struct MigrateCtx
   bool body_complete = false;   // current resource fully received
   bool has_redirect = false;    // onResponse saw a 3xx; follow redirect_url
   String redirect_url;
+  uint8_t redirects = 0;        // hops followed for the current file
   bool has_pending = false;     // next file queued
   String pending_url;
   bool failed = false;          // a callback flagged failure; loop reports it
@@ -181,6 +184,7 @@ static void schedule_download(const String &url)
 {
   mctx.pending_url = url;
   mctx.has_pending = true;
+  mctx.redirects = 0;
 }
 
 // ---- helpers ------------------------------------------------------------
@@ -490,6 +494,13 @@ static void start_download(const String &url)
 {
   DBUGF("[migrate] GET %s", url.c_str());
 
+  // Every fetch goes through here: the manifest, both images, and each
+  // redirect hop. Same host allowlist as http_update.
+  if(!ota_url_host_allowed(url.c_str())) {
+    flag_fail(-15, "url not allowed");
+    return;
+  }
+
   mctx.buf_len = 0; // manifest scratch reset
   mctx.dl_total = 0;
   mctx.dl_pos = 0;
@@ -657,6 +668,10 @@ void flash_migrate_loop()
   // No connection open — act on the result of the one that just closed.
   if(mctx.has_redirect) {
     mctx.has_redirect = false;
+    if(++mctx.redirects > MIGRATE_MAX_REDIRECTS) {
+      flag_fail(-16, "too many redirects");
+      return;
+    }
     start_download(mctx.redirect_url); // same state
     return;
   }
@@ -747,6 +762,11 @@ bool flash_migrate_start_16mb(const String &manifest_url, bool dry_run)
     return false;
   }
   if(!flash_migrate_can_expand_16mb()) {
+    return false;
+  }
+  // Reject a caller-supplied manifest up front so the HTTP request fails,
+  // rather than starting and failing later over the websocket.
+  if(manifest_url.length() && !ota_url_host_allowed(manifest_url.c_str())) {
     return false;
   }
   mctx.dry_run = dry_run;

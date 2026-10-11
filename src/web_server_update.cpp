@@ -9,6 +9,7 @@
 #include "web_server.h"
 #include "lcd.h"
 #include "http_update.h"
+#include "ota_signing.h"
 
 
 static MongooseHttpServerResponseStream *upgradeResponse = NULL;
@@ -24,6 +25,19 @@ void handleUpdateFileUpload(MongooseHttpServerRequest *request)
   }
 
   if(false == requestPreProcess(request, upgradeResponse, CONTENT_TYPE_TEXT)) {
+    return;
+  }
+
+  // A multipart Content-Length counts the boundaries too, so it is not the image
+  // size: a signed build would hash the signature trailer into the image and
+  // always fail. Signed builds take the raw body instead, where Content-Length
+  // is exact. Rejected here, before any part is read.
+  if(ota_signing_required() &&
+     request->headers("Content-Type").toString().indexOf("boundary=") >= 0) {
+    upgradeResponse->setCode(400);
+    upgradeResponse->print(F("Error: signed firmware must be POSTed as a raw body, not multipart"));
+    request->send(upgradeResponse);
+    upgradeResponse = NULL;
     return;
   }
 

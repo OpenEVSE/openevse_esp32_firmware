@@ -14,6 +14,11 @@ void ota_setup()
 {
   // Start local OTA update server
   ArduinoOTA.setHostname(esp_hostname.c_str());
+  // Without a password ArduinoOTA stays open, as before; with one, it must
+  // match the web password instead of accepting any LAN client.
+  if(www_password.length()) {
+    ArduinoOTA.setPassword(www_password.c_str());
+  }
   ArduinoOTA.begin();
 
   ArduinoOTA.onStart([]() {
