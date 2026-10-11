@@ -13,6 +13,7 @@
 #include "event.h"
 #include "net_manager.h"
 #include "openevse.h"
+#include "time_man.h"
 #include "espal.h"
 #include "emoncms.h"
 #include "tesla_client.h"
@@ -50,7 +51,7 @@ class InputTask : public MicroTasks::Task
       {
         if(!Update.isRunning())
         {
-          DynamicJsonDocument data(4096);
+          JsonDocument data;
 
           create_rapi_json(data); // create JSON Strings for EmonCMS and MQTT
           event_send(data);
@@ -67,7 +68,7 @@ class InputTask : public MicroTasks::Task
       if(_evseState.IsTriggered())
       {
         // Send to all clients
-        StaticJsonDocument<512> event;
+        JsonDocument event;
         event["state"] = evse.getEvseState();
         event["flags"] = evse.getFlags();
         event["vehicle"] = evse.isVehicleConnected() ? 1 : 0;
@@ -196,10 +197,24 @@ handleRapiRead()
   {
     if(RAPI_RESPONSE_OK == ret)
     {
+      // The EVSE stores UTC but getTime() returns mktime(utc_fields_as_local).
+      // Use evse_time_to_utc() to recover the actual UTC epoch.
+      time_t evse_utc = evse_time_to_utc(evse_time);
+
+      // Only bootstrap when the system clock has no real time yet, so the RTC
+      // can never override SNTP.  CLOCK_SANE_EPOCH matches AUTH_CLOCK_SANE_EPOCH
+      // in web_server.cpp.
+      static const time_t CLOCK_SANE_EPOCH = 1700000000;
+      // RTC support built in but no chip fitted reads all 0xFF, which
+      // decodes to around 2165; anything past 2100 is not a real clock.
+      static const time_t CLOCK_MAX_EPOCH = 4102444800; // 2100-01-01
       time_t local_time = time(NULL);
-      if(evse_time > local_time) {
-        struct timeval set_time = { evse_time, 0 };
-        settimeofday(&set_time, NULL);
+      if(local_time <= CLOCK_SANE_EPOCH &&
+         evse_utc > CLOCK_SANE_EPOCH && evse_utc < CLOCK_MAX_EPOCH) {
+        // Through TimeManager, not settimeofday(): the scheduler only
+        // re-plans when told the time changed, and it last planned at 1970.
+        struct timeval set_time = { evse_utc, 0 };
+        time_set_time(set_time, "EVSE");
       }
     }
   });
