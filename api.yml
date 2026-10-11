@@ -2382,6 +2382,182 @@ paths:
           $ref: '#/components/responses/Unauthorized'
         '429':
           $ref: '#/components/responses/TooManyRequests'
+  /installer/verify:
+    post:
+      operationId: installerVerify
+      summary: Check the installer password
+      description: |
+        Commissioning gate for the installer tools. The password lives on the
+        charger and is never sent to the browser, so the GUI asks here. Wrong
+        passwords count towards a throttle shared by all installer calls that
+        take a password (`{"msg":"locked","retry_after":N}` with `429` while it
+        is active). Sends `X-Requested-With: OpenEVSE` as for any non-GET request.
+      tags:
+        - Installer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - password
+              properties:
+                password:
+                  type: string
+      responses:
+        '200':
+          description: Password accepted
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Message'
+              examples:
+                OK:
+                  value:
+                    msg: ok
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          description: Wrong password (`{"msg":"wrong password"}`)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Message'
+        '429':
+          $ref: '#/components/responses/TooManyRequests'
+  /installer/password:
+    post:
+      operationId: installerChangePassword
+      summary: Change the installer password
+      description: |
+        Requires the current installer password. The new password must be 4 to 32
+        printable ASCII characters. Sends `X-Requested-With: OpenEVSE`.
+      tags:
+        - Installer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - current
+                - new
+              properties:
+                current:
+                  type: string
+                new:
+                  type: string
+                  minLength: 4
+                  maxLength: 32
+      responses:
+        '200':
+          description: Password changed
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Message'
+              examples:
+                Changed:
+                  value:
+                    msg: changed
+        '400':
+          description: New password is not 4 to 32 printable ASCII characters
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Message'
+              examples:
+                Invalid:
+                  value:
+                    msg: invalid password
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          description: Wrong current password (`{"msg":"wrong password"}`)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Message'
+        '429':
+          $ref: '#/components/responses/TooManyRequests'
+        '500':
+          description: The password could not be stored
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Message'
+              examples:
+                Error:
+                  value:
+                    msg: error
+  /installer/maxcurrent:
+    post:
+      operationId: installerSetHardwareMaxCurrent
+      summary: Set the hardware maximum current (once)
+      description: |
+        Sends the controller's one-time factory limit (`$SC <amps> M`). The
+        controller accepts it once; later writes are ignored, so a `200` only
+        means the command was sent. Re-read `GET /config` to see whether
+        `max_current_hard` changed. `amps` must lie between the minimum current
+        (at least 6) and the lower of 80 and the current hardware maximum. Sends
+        `X-Requested-With: OpenEVSE`.
+      tags:
+        - Installer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - password
+                - amps
+              properties:
+                password:
+                  type: string
+                amps:
+                  type: integer
+      responses:
+        '200':
+          description: Command sent
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  msg:
+                    type: string
+                    example: sent
+                  requested:
+                    type: integer
+                  previous:
+                    type: integer
+        '400':
+          description: Amps out of range
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  msg:
+                    type: string
+                    example: amps out of range
+                  min:
+                    type: integer
+                  max:
+                    type: integer
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          description: Wrong password (`{"msg":"wrong password"}`)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Message'
+        '429':
+          $ref: '#/components/responses/TooManyRequests'
   /update:
     post:
       operationId: updateFirmware
@@ -3257,6 +3433,7 @@ tags:
   - name: Diagnostics
   - name: Energy
   - name: Firmware Update
+  - name: Installer
   - name: MQTT
   - name: Network
   - name: RAPI
