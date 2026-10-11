@@ -2,8 +2,9 @@
 """Fail when a route registered in src/web_server*.cpp has no path in api.yml.
 
 Routes come from `server.on("<path>"...)`. The `$` end anchor is dropped, and a
-trailing `/` (prefix route, e.g. "/loadsharing/peers/") is matched against any
-api.yml path that starts with it (e.g. "/loadsharing/peers/{host}").
+trailing `/` or Mongoose 7 `#` wildcard (prefix route, e.g. "/loadsharing/peers/"
+or "/loadsharing/peers/#") is matched against any api.yml path that starts with
+it (e.g. "/loadsharing/peers/{host}").
 Routes that are intentionally undocumented go in EXCLUDED with the reason.
 
     python scripts/check_api_routes.py
@@ -21,6 +22,7 @@ ROOT = Path(__file__).resolve().parent.parent
 
 EXCLUDED = {
     "/r": "alias of /rapi",
+    "/#": "HTTP->HTTPS redirect catch-all on the plain-HTTP port, not an API route",
 }
 
 
@@ -43,6 +45,9 @@ def main():
     for route, src in source_routes().items():
         if route in EXCLUDED:
             continue
+        # Mongoose 7 spells a prefix route "/x/#"; treat it like "/x/".
+        if route.endswith("#"):
+            route = route[:-1]
         if route.endswith("/"):
             ok = any(p.startswith(route) for p in spec)
         else:
