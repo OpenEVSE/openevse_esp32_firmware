@@ -64,7 +64,6 @@ private:
   unsigned long _query_timeout_ms;           // How long to wait for query results (default 5000ms)
 
   // Async query state
-  void* _active_query;                       // Opaque mdns_search_once_t handle (void* for compatibility)
   unsigned long _query_start_time;           // When current async query started
   bool _query_in_progress;                   // True while query is running
   bool _manual_trigger;                      // A one-shot query was requested via triggerDiscovery()

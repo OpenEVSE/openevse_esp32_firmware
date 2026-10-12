@@ -326,12 +326,10 @@ void loop()
   MicroTask.update();
   Profile_End(MicroTask, 10);
 
-  // NOTE: the legacy first-connect block (handleRapiRead() + import_timers())
-  // was removed: both call through the sender-less global OpenEVSE object and
-  // have been silent no-ops since the EvseManager refactor.  Reviving
-  // import_timers() would auto-import (and clear) the controller's delay timer
-  // into Charge Manager rules — a deliberate decision for a separate change,
-  // along with routing time_man/input off the dead global.
+  // NOTE: import_timers() was removed from the first-connect block; reviving it
+  // would auto-import (and clear) the controller's delay timer into Charge
+  // Manager rules — a deliberate decision for a separate change.  The clock
+  // read (handleRapiRead) is now driven from EvseManager on boot-ready.
 
   if(net.isConnected())
   {
@@ -342,8 +340,7 @@ void loop()
     if(emoncms_updated)
     {
       // Send the current state to check the config
-      const size_t capacity = JSON_OBJECT_SIZE(33) + 1024;
-      DynamicJsonDocument data(capacity);
+      JsonDocument data;
       create_rapi_json(data);
       emoncms_publish(data);
       emoncms_updated = false;
@@ -372,7 +369,7 @@ void loop()
 
 void event_send(String &json)
 {
-  StaticJsonDocument<512> event;
+  JsonDocument event;
   deserializeJson(event, json);
   event_send(event);
 }
@@ -429,8 +426,7 @@ void handle_serial()
     DBUGVAR(command);
     DBUGVAR(json);
 
-    const size_t capacity = JSON_OBJECT_SIZE(50) + 1024;
-    DynamicJsonDocument doc(capacity);
+    JsonDocument doc;
     DeserializationError error = deserializeJson(doc, json);
     if(error) {
       DEBUG_PORT.println("{\"code\":400,\"msg\":\"Could not parse JSON\"}");

@@ -55,14 +55,14 @@ ShellyLnmParseResult shelly_lnm_parse(const uint8_t *data, size_t len,
 
   // Only keep the device name and the two requested fields so the document
   // stays small whatever the size of the datagram.
-  StaticJsonDocument<192> filter;
+  JsonDocument filter;
   filter["device"] = true;
   filter["status"]["*"][powerField] = true;
   if(haveVoltageField) {
     filter["status"]["*"][voltageField] = true;
   }
 
-  StaticJsonDocument<512> doc;
+  JsonDocument doc;
   DeserializationError err = deserializeJson(doc, data + SHELLY_LNM_HEADER_LEN, payloadLen,
                                              DeserializationOption::Filter(filter));
   if(err) {
