@@ -31,3 +31,4 @@
 
 # Waiting for the UI (not in the embedded build yet; "Page not found" today)
 /settings/shellylnm  # Shelly LNM, firmware merged in #1340 without the GUI page
+/settings/installer  # Installer tools, firmware merged in #1334; the embedded GUI build has no page yet
