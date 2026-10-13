@@ -150,14 +150,29 @@ if [ "$want_core3" = 1 ]; then
   platform_json="$CORE3_DIR/platforms/espressif32/platform.json"
   if [ ! -f "$platform_json" ] && [ -n "$core3_env" ]; then
     echo "scripts/pio: core-3 platform metadata not found, installing before tool-scons sync" >&2
-    "$PIO_BIN" pkg install -e "$core3_env" --skip-dependencies >/dev/null 2>&1 \
-      || echo "scripts/pio: warning: failed to pre-install core-3 platform metadata (tool-scons sync below will likely be skipped, and this run may hit the FortranCommon error described above)" >&2
+    core3_platform="$("$PIO_BIN" project config --json-output 2>/dev/null | python3 -c '
+import json, sys
+env = "env:" + sys.argv[1]
+for section, items in json.load(sys.stdin):
+    if section == env:
+        print(next((v for k, v in items if k == "platform"), ""))
+' "$core3_env" 2>/dev/null || true)"
+    if [ -n "$core3_platform" ]; then
+      "$PIO_BIN" pkg install -p "$core3_platform" --no-save --skip-dependencies >/dev/null 2>&1 \
+        || echo "scripts/pio: warning: failed to pre-install core-3 platform metadata (tool-scons sync below will likely be skipped, and this run may hit the FortranCommon error described above)" >&2
+    else
+      echo "scripts/pio: warning: could not resolve the platform for $core3_env (tool-scons sync below will likely be skipped)" >&2
+    fi
   fi
 
   # Pin to the tool-scons requirement the active PlatformIO Core declares, so an
   # unpinned install never fetches a newer SCons than the one Core runs with.
-  core_pio_py="$(sed -n '1s/^#!//p' "$PIO_BIN")"
-  core_scons_req="$("$core_pio_py" -c 'from platformio.dependencies import get_core_dependencies as d; print(d()["tool-scons"])' 2>/dev/null || true)"
+  core_scons_req=""
+  for core_pio_py in "$(sed -n '1s/^#!//p' "$PIO_BIN")" "$(dirname "$PIO_BIN")/python"; do
+    [ -x "$core_pio_py" ] || continue
+    core_scons_req="$("$core_pio_py" -c 'from platformio.dependencies import get_core_dependencies as d; print(d()["tool-scons"])' 2>/dev/null || true)"
+    [ -n "$core_scons_req" ] && break
+  done
   if [ -n "$core_scons_req" ]; then
     # pioarduino's Core fork declares a download URL rather than a version, and
     # pio only accepts a URL as name=url; name@url fails with "Unknown repository
