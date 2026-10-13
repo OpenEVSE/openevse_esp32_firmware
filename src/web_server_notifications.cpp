@@ -18,10 +18,7 @@ void handleNotifications(MongooseHttpServerRequest *request)
     return;
   }
 
-  const size_t capacity = JSON_ARRAY_SIZE(NOTIFICATION_MAX) +
-                          NOTIFICATION_MAX * JSON_OBJECT_SIZE(7) +
-                          JSON_OBJECT_SIZE(3) + 512;
-  DynamicJsonDocument doc(capacity);
+  JsonDocument doc;
   notifications.serialize(doc);
   response->setCode(200);
   serializeJson(doc, *response);
@@ -63,7 +60,9 @@ void handleNotificationAck(MongooseHttpServerRequest *request)
   if(0 == id.length()) {
     char buf[64];
     MongooseString query = request->queryString();
-    if(mg_get_http_var(query, "id", buf, sizeof(buf)) > 0) {
+    // A request with no query string converts to a null mg_str*; mg_http_get_var()
+    // dereferences it unconditionally, so skip the call rather than crash.
+    if(query && mg_http_get_var(query, "id", buf, sizeof(buf)) > 0) {
       id = buf;
     }
   }

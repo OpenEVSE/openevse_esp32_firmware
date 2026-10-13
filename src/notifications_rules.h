@@ -41,7 +41,8 @@ enum NotificationCategory : uint8_t {
 struct NotificationInputs {
   // Safety checks. true = the check is ENABLED (EvseMonitor's sense).
   bool     ground_check;
-  bool     gfci_check;
+  // No gfci_check: the GFCI self-test is legitimately off where the circuit is
+  // itself GFCI protected, so it is not advisory material.
   bool     relay_check;
   bool     diode_check;
   bool     vent_check;
