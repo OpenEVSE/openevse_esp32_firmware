@@ -3848,3 +3848,24 @@ CONFIG_ESP_WIFI_DYNAMIC_TX_BUFFER_NUM=16
 # the ESPHome-proven mechanism). Guarded at runtime by whoever calls it; no
 # behavior change for normal operation.
 CONFIG_SPI_FLASH_DANGEROUS_WRITE_ALLOWED=y
+
+# PPP: the seed enables lwIP PPP for Arduino's PPP (cellular modem) library,
+# which this firmware never uses. lwIP's init.c calls ppp_init() whenever it
+# is compiled in, so the whole stack (LCP/IPCP/PAP/VJ, ~17KB) was linked
+# regardless (openevse_wifi_v1_16mb firmware.bin: 2,194,768 -> 2,170,080
+# bytes with this off). Arduino's PPP.cpp is guarded by
+# CONFIG_LWIP_PPP_SUPPORT, so it compiles to nothing with this off. esp_modem (pulled in unconditionally by
+# arduino-esp32's idf_component.yml) `select`s LWIP_PPP_SUPPORT from
+# ESP_MODEM_USE_PPP_MODE, so that has to go too or the select silently
+# re-enables PPP; esp_modem supports AT-command-only mode without it.
+CONFIG_ESP_MODEM_USE_PPP_MODE=n
+CONFIG_LWIP_PPP_SUPPORT=n
+
+# C++ exceptions off, matching [env]'s -fno-exceptions. With this =y (seed)
+# IDF compiles its C++ components with -fexceptions, and esp_modem (which uses
+# try/catch when this is =y) then fails once our -fno-exceptions reaches
+# it. With =n IDF builds everything with -fno-exceptions and esp_modem's
+# exception_stub.hpp compiles its TRY_CATCH blocks as plain code. That lets
+# the hybrid envs drop their `-fexceptions` / empty `build_unflags`, which
+# only existed to paper over that mismatch.
+CONFIG_COMPILER_CXX_EXCEPTIONS=n
