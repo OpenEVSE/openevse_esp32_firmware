@@ -3089,6 +3089,130 @@ paths:
           description: Switching protocols
         '401':
           $ref: '#/components/responses/Unauthorized'
+  /installer/verify:
+    post:
+      description: |
+        Check the installer password. Requires `X-Requested-With: OpenEVSE` and a
+        JSON body. Wrong passwords are throttled; a locked-out client gets 429 with
+        `retry_after` seconds.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [password]
+              properties:
+                password:
+                  type: string
+      responses:
+        '200':
+          description: Password accepted
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  msg:
+                    type: string
+                    example: ok
+        '400':
+          description: Body is not valid JSON
+        '403':
+          description: Missing CSRF header, or wrong password
+        '405':
+          description: Not a POST request
+        '429':
+          description: Locked out after too many failures
+      operationId: verifyInstaller
+      tags:
+        - Installer
+      summary: Verify the installer password
+  /installer/password:
+    post:
+      description: |
+        Change the installer password. Requires the current password. The new
+        password must be 8 to 32 printable ASCII characters.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [current, new]
+              properties:
+                current:
+                  type: string
+                new:
+                  type: string
+      responses:
+        '200':
+          description: Password changed
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  msg:
+                    type: string
+                    example: changed
+        '400':
+          description: New password is missing its length or characters
+        '403':
+          description: Missing CSRF header, or wrong current password
+        '429':
+          description: Locked out after too many failures
+        '500':
+          description: Password could not be stored
+      operationId: changeInstallerPassword
+      tags:
+        - Installer
+      summary: Change the installer password
+  /installer/maxcurrent:
+    post:
+      description: |
+        Set the hardware maximum current. The controller accepts this only once,
+        so the reply confirms the command was sent; re-read `/config` to see whether
+        `max_current_hard` took the new value. Amps must lie between the minimum
+        current and the lower of the hardware maximum and the installer limit, and
+        can only come down in practice.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [password, amps]
+              properties:
+                password:
+                  type: string
+                amps:
+                  type: integer
+      responses:
+        '200':
+          description: Command sent to the controller
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  msg:
+                    type: string
+                    example: sent
+                  requested:
+                    type: integer
+                  previous:
+                    type: integer
+        '400':
+          description: Amps out of range (the body gives the allowed min and max), or bad JSON
+        '403':
+          description: Missing CSRF header, or wrong password
+        '429':
+          description: Locked out after too many failures
+      operationId: setInstallerMaxCurrent
+      tags:
+        - Installer
+      summary: Set the hardware maximum current
 components:
   securitySchemes:
     BasicAuth:
@@ -3512,3 +3636,4 @@ tags:
   - name: RAPI
   - name: Relay
   - name: System
+  - name: Installer
