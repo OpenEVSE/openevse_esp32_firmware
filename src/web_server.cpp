@@ -2423,7 +2423,7 @@ static void registerWebServerRoutes(MongooseHttpServer &server, bool isHttps)
 #if ENABLE_REPLAY_RECORDER
   // Replay package: the last hour of inputs, claims and outcomes plus the
   // (redacted) configuration and schedule, for divert_sim/replay.py.
-  server.on("/debug/replay$", [](MongooseHttpServerRequest *request) {
+  server.on("/debug/replay", [](MongooseHttpServerRequest *request) {
     MongooseHttpServerResponseStream *response;
     if(false == requestPreProcess(request, response, CONTENT_TYPE_JSON)) {
       return;
