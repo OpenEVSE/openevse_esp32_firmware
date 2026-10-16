@@ -273,11 +273,20 @@ void ReplayRecorder::writeEvents(Print &out, size_t max_events)
   out.print(F("]}"));
 }
 
+// The scheduler sizes its JSON document as it grows, so measure the stored
+// schedule for the budget instead of asking it for a capacity.
+static size_t scheduleJsonBytes(Scheduler *scheduler)
+{
+  JsonDocument probe;
+  scheduler->serialize(probe);
+  return measureJson(probe);
+}
+
 void ReplayRecorder::serialize(Print &out, size_t budget)
 {
   // Split what is left after the fixed sections between events (claims are
   // what a replay can least do without) and samples, newest first.
-  size_t schedule_bytes = _scheduler->scheduleJsonCapacity() / 2;
+  size_t schedule_bytes = scheduleJsonBytes(_scheduler) / 2;
   size_t fixed = REPLAY_FIXED_JSON_BYTES + schedule_bytes;
   size_t room = budget > fixed ? budget - fixed : 0;
   size_t max_events = room / 2 / REPLAY_EVENT_JSON_BYTES;
@@ -325,7 +334,7 @@ void ReplayRecorder::serialize(Print &out, size_t budget)
   }
 
   {
-    DynamicJsonDocument schedule(_scheduler->scheduleJsonCapacity());
+    JsonDocument schedule;
     _scheduler->serialize(schedule);
     out.print(F(",\"schedule\":"));
     serializeJson(schedule, out);

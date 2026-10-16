@@ -8,7 +8,7 @@
 static NotificationInputs clean()
 {
   NotificationInputs in = {};
-  in.ground_check = in.gfci_check = in.relay_check = true;
+  in.ground_check = in.relay_check = true;
   in.diode_check = in.vent_check = in.temp_check = true;
   in.temp_valid = true;
   in.temp_c_x10 = 250;
@@ -47,9 +47,6 @@ TEST_CASE("each safety check raises its own advisory when disabled") {
   NotificationInputs in = clean(); in.ground_check = false;
   CHECK(has(out, notifications_evaluate(in, out, NOTIFICATION_MAX), "safety.ground_check"));
 
-  in = clean(); in.gfci_check = false;
-  CHECK(has(out, notifications_evaluate(in, out, NOTIFICATION_MAX), "safety.gfci_check"));
-
   in = clean(); in.relay_check = false;
   CHECK(has(out, notifications_evaluate(in, out, NOTIFICATION_MAX), "safety.relay_check"));
 
@@ -63,15 +60,14 @@ TEST_CASE("each safety check raises its own advisory when disabled") {
   CHECK(has(out, notifications_evaluate(in, out, NOTIFICATION_MAX), "safety.temp_check"));
 }
 
-TEST_CASE("ground and gfci are critical, the other four are warnings") {
+TEST_CASE("ground is critical, the other four are warnings") {
   Notification out[NOTIFICATION_MAX];
   NotificationInputs in = clean();
-  in.ground_check = in.gfci_check = in.relay_check = false;
+  in.ground_check = in.relay_check = false;
   in.diode_check = in.vent_check = in.temp_check = false;
   size_t n = notifications_evaluate(in, out, NOTIFICATION_MAX);
-  CHECK(n == 6);
+  CHECK(n == 5);
   CHECK(find(out, n, "safety.ground_check")->severity == NOTIFICATION_CRITICAL);
-  CHECK(find(out, n, "safety.gfci_check")->severity == NOTIFICATION_CRITICAL);
   CHECK(find(out, n, "safety.relay_check")->severity == NOTIFICATION_WARNING);
   CHECK(find(out, n, "safety.diode_check")->severity == NOTIFICATION_WARNING);
   CHECK(find(out, n, "safety.vent_check")->severity == NOTIFICATION_WARNING);
@@ -270,7 +266,7 @@ TEST_CASE("worst picks highest severity, earliest in table order among equals") 
 TEST_CASE("evaluate never writes past max") {
   Notification out[3];
   NotificationInputs in = clean();
-  in.ground_check = in.gfci_check = in.relay_check = false;
+  in.ground_check = in.relay_check = false;
   in.diode_check = in.vent_check = in.temp_check = false;
   CHECK(notifications_evaluate(in, out, 3) == 3);
 }
@@ -279,7 +275,7 @@ TEST_CASE("every id and storage key is unique") {
   // The ack blob is keyed on `key`; a duplicate would silently mute two things.
   Notification out[NOTIFICATION_MAX];
   NotificationInputs in = clean();
-  in.ground_check = in.gfci_check = in.relay_check = false;
+  in.ground_check = in.relay_check = false;
   in.diode_check = in.vent_check = in.temp_check = false;
   in.gfci_count = in.no_ground_count = in.stuck_relay_count = 1;
   in.temp_throttling = true;
@@ -290,7 +286,7 @@ TEST_CASE("every id and storage key is unique") {
   in.relay_stuck_recovery_count = 1;
   in.relay_thermal_warning_level = 2;
   size_t n = notifications_evaluate(in, out, NOTIFICATION_MAX);
-  CHECK(n == 16);
+  CHECK(n == 15);
   for(size_t i = 0; i < n; i++) {
     for(size_t j = i + 1; j < n; j++) {
       CHECK(0 != strcmp(out[i].id, out[j].id));

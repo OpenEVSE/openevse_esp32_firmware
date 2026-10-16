@@ -48,6 +48,9 @@ curl -u openevse:<password> http://<charger>/debug/crash
 ```
 
 The response names the panic reason, the task that faulted and a backtrace.
+For a task watchdog it also names the task that starved the watchdog
+(`wdt_task`) with that task's own backtrace (`wdt_bt`): the panic itself
+usually lands on an idle task, whose backtrace says nothing.
 Paste it into your GitHub issue along with the firmware version; it is the
 single most useful thing you can attach. `curl -X DELETE` on the same URL
 clears the stored report, so the next one is unambiguously new.

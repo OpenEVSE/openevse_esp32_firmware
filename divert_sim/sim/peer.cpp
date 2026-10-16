@@ -88,7 +88,7 @@ void Peer::replaceSchedule(const std::string &json)
   // /schedule POSTs add or update events; a Charge Manager edit that drops a
   // rule DELETEs its timers. Mirror that by removing every existing event
   // before adding the new set.
-  DynamicJsonDocument current(_scheduler.scheduleJsonCapacity());
+  JsonDocument current;
   _scheduler.serialize(current);
   for (JsonObjectConst e : current.as<JsonArrayConst>()) {
     _scheduler.removeEvent(e["id"] | 0U);
