@@ -65,6 +65,8 @@ export class Stack {
   private workdir?: string;
   private readonly ptyPath: string;
   private readonly logDir: string;
+  /** Where the native build records the OTA image it received (see src/ota_test_sink.h). */
+  readonly otaSinkDir: string;
 
   private constructor(
     readonly workerIndex: number,
@@ -75,7 +77,8 @@ export class Stack {
     this.device = new Device(`http://127.0.0.1:${nativePort}`);
     this.ptyPath = path.join(tmpdir(), `openevse_e2e_pty_${process.pid}_${workerIndex}`);
     this.logDir = path.join(e2eRoot, 'output', `worker-${workerIndex}`);
-    mkdirSync(this.logDir, { recursive: true });
+    this.otaSinkDir = path.join(this.logDir, 'ota-sink');
+    mkdirSync(this.otaSinkDir, { recursive: true });
   }
 
   get deviceUrl() {
@@ -95,10 +98,12 @@ export class Stack {
     return stack;
   }
 
-  /** Clean slate for the next scenario: car, faults, time scale and device config. */
+  /** Clean slate for the next scenario: car, faults, time scale, device config and OTA record. */
   async reset() {
     await stop(this.nativeProc);
     await this.emulator.reset();
+    rmSync(this.otaSinkDir, { recursive: true, force: true });
+    mkdirSync(this.otaSinkDir, { recursive: true });
     await this.startNative();
   }
 
@@ -159,7 +164,11 @@ export class Stack {
       ],
       {
         cwd: this.workdir,
-        env: { ...process.env, OPENEVSE_CHIP_ID: `1234567890ab${this.workerIndex.toString(16).padStart(4, '0')}` },
+        env: {
+          ...process.env,
+          OPENEVSE_CHIP_ID: `1234567890ab${this.workerIndex.toString(16).padStart(4, '0')}`,
+          OPENEVSE_OTA_SINK_DIR: this.otaSinkDir,
+        },
       },
     );
     this.pipeOutput(this.nativeProc, 'firmware');

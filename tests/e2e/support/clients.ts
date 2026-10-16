@@ -80,6 +80,26 @@ export class Device {
   clearOverride() {
     return request(`${this.url}/override`, json('DELETE'));
   }
+  /** Upload a firmware image the way the web UI and `curl -F` do (multipart POST). */
+  async uploadFirmware(image: Buffer, filename = 'firmware.bin'): Promise<{ status: number; body: string }> {
+    const form = new FormData();
+    form.append('file', new Blob([new Uint8Array(image)]), filename);
+    const res = await fetch(`${this.url}/update`, {
+      method: 'POST',
+      headers: { 'X-Requested-With': 'OpenEVSE' },
+      body: form,
+    });
+    return { status: res.status, body: await res.text() };
+  }
+  /** Ask the device to fetch and flash firmware from a URL (POST /update with JSON). */
+  async updateFromUrl(url: string): Promise<{ status: number; body: string }> {
+    const res = await fetch(`${this.url}/update`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'X-Requested-With': 'OpenEVSE' },
+      body: JSON.stringify({ url }),
+    });
+    return { status: res.status, body: await res.text() };
+  }
   limit() {
     return request(`${this.url}/limit`);
   }

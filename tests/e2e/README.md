@@ -41,6 +41,40 @@ npm run report                                  # open the HTML report
 
 Firmware and emulator logs for each worker land in `output/worker-N/`.
 
+## Firmware upgrade tests (`@ota`)
+
+`features/ota/` checks that a firmware upgrade is delivered correctly, through
+each path a device can be upgraded by:
+
+- **Upload** (`features/ota/upload.feature`): a multipart POST to `/update`, the
+  same request the web UI and `curl -F` make.
+- **URL fetch** (`features/ota/url.feature`): `POST /update {"url": ...}`. Only
+  `https://github.com` (and `*.githubusercontent.com`) may be fetched from.
+- **Live release** (`@live`): the release asset GitHub publishes right now, which
+  is compared with the size and SHA-256 GitHub reports for it.
+
+The native build's flash library is a stub, so the suite cannot see what real
+flash would hold. Instead, the build compiled with `-DOTA_TEST_SINK` (see
+`src/ota_test_sink.h`) records what the OTA path gave the updater: the size it
+passed to `Update.begin()`, the source, and every byte written. The suite reads
+that record from `output/worker-N/ota-sink/`. Flash erase, partition and
+signature behaviour still need a real board. Those paths are not covered here.
+
+The live scenario needs network access to GitHub. Behind an HTTP proxy, Node's
+`fetch` needs `NODE_USE_ENV_PROXY=1` (Node 22+) to honour `HTTPS_PROXY`.
+
+Some `@ota` scenarios are expected to fail until the bugs they reproduce are
+fixed. They are not skipped or quarantined, on purpose: a green run would hide
+the bug. As of this writing:
+
+- **Upload, exact size** (`tells the updater its exact size`): the multipart
+  request's full length is passed to `Update.begin()` instead of the image size.
+  Byte-for-byte delivery passes.
+- **URL fetch** (`refuses to fetch`, `starts a download, not an upload`, `@live`):
+  `/update` registers `onUpload`, so every POST, including a JSON `{"url": ...}`,
+  is treated as an upload. The JSON body is written to the updater as firmware,
+  and the URL is never fetched.
+
 ## How it is organised
 
 - `features/` — the scenarios, grouped by area. **This is the spec.** No
