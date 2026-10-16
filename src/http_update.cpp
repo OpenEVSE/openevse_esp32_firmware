@@ -82,6 +82,9 @@ bool http_update_from_url(String url,
     state->error = error;
 
     request->setMethod(HTTP_GET);
+    // Hand the image over chunk by chunk; the client would otherwise buffer the
+    // whole download in RAM, which an ESP32 cannot do.
+    request->setStreaming();
 
     DBUGF("Trying to fetch firmware from %s", url.c_str());
 
