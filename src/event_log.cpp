@@ -8,6 +8,7 @@
 #include "debug.h"
 #include "emonesp.h"
 #include "event_log.h"
+#include "event_log_space.h"
 
 EventLog::EventLog() :
   _min_log_index(0),
@@ -77,44 +78,15 @@ void EventLog::begin()
   }
 }
 
-// Free-space guard. LittleFS.totalBytes() + usedBytes() are two full filesystem
-// traversals (30-140 ms each, flash reads under the FS lock), which stalled the
-// main loop on every log() call. Free space only moves when something writes,
-// so sample it on a timer and, between samples, deduct the worst-case size of
-// each entry written here. Writes by other users are picked up at the next
-// sample, and the figure is always re-measured before refusing an entry, so the
-// estimate can only make the guard slower to open, never let it write past 8 KB.
-#define EVENTLOG_FREE_SAMPLE_MS   30000
-#define EVENTLOG_MIN_FREE_BYTES   8192
-#define EVENTLOG_ENTRY_MAX_BYTES  512
-
-static uint32_t freeSampledAt = 0;
-static int32_t  freeEstimate = 0;
-
-static void sampleFreeSpace()
+// Free-space guard: see event_log_space.h for when it measures and what it trusts.
+static size_t measureFreeSpace()
 {
   size_t total = LittleFS.totalBytes();
   size_t used = LittleFS.usedBytes();
-  freeEstimate = total > used ? (int32_t)(total - used) : 0;
-  freeSampledAt = millis() | 1;   // never 0, which means "not sampled"
+  return total > used ? total - used : 0;
 }
 
-static bool hasFreeSpace()
-{
-  if(0 == freeSampledAt || (millis() - freeSampledAt) >= EVENTLOG_FREE_SAMPLE_MS) {
-    sampleFreeSpace();
-  }
-  if(freeEstimate < EVENTLOG_MIN_FREE_BYTES) {
-    // Looks full: confirm with a real measurement before dropping the entry.
-    sampleFreeSpace();
-  }
-  return freeEstimate >= EVENTLOG_MIN_FREE_BYTES;
-}
-
-static void noteBytesWritten(int32_t bytes)
-{
-  freeEstimate -= bytes;
-}
+static EventLogSpaceGuard freeSpace(measureFreeSpace);
 
 bool EventLog::log(EventType type, EvseState managerState, uint8_t evseState, uint32_t evseFlags, uint8_t pilotState, uint32_t pilot, double energy, uint32_t elapsed, double temperature, double temperatureMax, uint8_t divertMode, uint8_t shaper, const String &rfidTag, const char *notification)
 {
@@ -159,7 +131,7 @@ bool EventLog::log(EventType type, EvseState managerState, uint8_t evseState, ui
   }
 
   // Guard against filling LittleFS — keep at least 8 KB free to prevent filesystem corruption.
-  if (!hasFreeSpace()) {
+  if (!freeSpace.canWrite(millis())) {
     DBUGLN("EventLog: Low SPIFFS space, skipping entry");
     return false;
   }
@@ -215,8 +187,9 @@ bool EventLog::log(EventType type, EvseState managerState, uint8_t evseState, ui
       line["notification"] = notification;
     }
 
-    serializeJson(line, eventFile);
-    eventFile.println("");
+    // Count what actually went out: rfid and notification have no length cap.
+    size_t written = serializeJson(line, eventFile);
+    written += eventFile.println("");
 
     #ifdef ENABLE_DEBUG
     serializeJson(line, DEBUG_PORT);
@@ -225,7 +198,7 @@ bool EventLog::log(EventType type, EvseState managerState, uint8_t evseState, ui
 
     eventFile.close();
 
-    noteBytesWritten(EVENTLOG_ENTRY_MAX_BYTES);
+    freeSpace.noteWritten(written);
     _repeat.recordWritten(key, now);
     return true;
   }
