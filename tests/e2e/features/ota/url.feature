@@ -19,7 +19,7 @@ Feature: Firmware fetched from a URL comes only from GitHub
   Scenario: A GitHub release URL starts a download, not an upload
     When I ask the device to update from "https://github.com/OpenEVSE/openevse_esp32_firmware/releases/download/v5.1.5/openevse_wifi_v1.bin"
     Then the device starts the update
-    And the updater was started from that URL
+    And the updater was started from GitHub
 
   @live
   Scenario: The published release downloads intact from GitHub

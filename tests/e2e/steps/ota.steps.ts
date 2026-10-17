@@ -87,14 +87,18 @@ Then('the device starts the update', async ({ world }) => {
   expect(world.ota.response?.status, world.ota.response?.body).toBe(200);
 });
 
-Then('the updater was started from that URL', async ({ world, stack }) => {
+Then('the updater was started from GitHub', async ({ stack }) => {
   const begin = await waitFor('the updater to be started', async () =>
     existsSync(sinkFile(stack.otaSinkDir, 'ota_begin.json')) ? readSinkJson(stack.otaSinkDir, 'ota_begin.json') : undefined,
   );
-  // A download is recorded under the URL it came from; an upload has no source
-  expect(begin.source, 'source the updater was started from').toBe(
-    'https://github.com/OpenEVSE/openevse_esp32_firmware/releases/download/v5.1.5/openevse_wifi_v1.bin',
-  );
+  // A download is recorded under the URL it came from; an upload has no source.
+  // GitHub answers a release download with a redirect to its asset host, and the
+  // updater records the URL it finally downloaded from, so either host is fine.
+  expect(begin.source, 'source the updater was started from').toBeTruthy();
+  const source = new URL(begin.source);
+  expect(source.protocol, 'source uses HTTPS').toBe('https:');
+  const fromGitHub = source.hostname === 'github.com' || source.hostname.endsWith('.githubusercontent.com');
+  expect(fromGitHub, `source host ${source.hostname} is GitHub`).toBe(true);
 });
 
 Then('the device did not start writing an image', async ({ stack }) => {
