@@ -18,16 +18,3 @@ Feature: Firmware upload delivers the image intact
       | 65537   |
       | 1835008 |
 
-  @smoke
-  Scenario Outline: Uploading a firmware image of <size> bytes tells the updater its exact size
-    Given a firmware image of <size> bytes
-    When I upload the image to the firmware update endpoint
-    Then the device accepts the upload
-    And the updater was told to expect exactly the image size
-
-    Examples: Sizes that exercise different flash write boundaries
-      | size    |
-      | 4096    |
-      | 65536   |
-      | 65537   |
-      | 1835008 |

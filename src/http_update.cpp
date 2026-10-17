@@ -9,7 +9,6 @@
 #include "web_server.h"
 #include "ota_signing.h"
 #include "ota_url_allow.h"
-#include "ota_test_sink.h"
 #include <MongooseHttpClient.h>
 #include <Update.h>
 
@@ -98,6 +97,10 @@ bool http_update_from_url(String url,
       {
         size_t total = response->contentLength();
         DBUGVAR(total);
+#if defined(EPOXY_DUINO)
+        // Host builds record the URL the update came from (see EpoxyUpdate)
+        EpoxyUpdateSetSource(state->sourceUrl.c_str());
+#endif
         if(Update.isRunning() || http_update_start(state->sourceUrl, total))
         {
           state->startedUpdate = true;
@@ -283,9 +286,7 @@ bool http_update_start(String source, size_t total)
   // Pass the expected size so the library can (a) reject an oversized binary
   // before erasing the target partition, and (b) validate completeness at end().
   // Fall back to UPDATE_SIZE_UNKNOWN only when Content-Length is absent.
-  size_t beginSize = total > 0 ? total : UPDATE_SIZE_UNKNOWN;
-  ota_test_sink_begin(source.c_str(), beginSize, total);
-  if(Update.begin(beginSize))
+  if(Update.begin(total > 0 ? total : UPDATE_SIZE_UNKNOWN))
   {
     DEBUG_PORT.printf("Update Start: %s %zu\n", source.c_str(), total);
 
@@ -312,7 +313,6 @@ bool http_update_write(uint8_t *data, size_t len)
   DBUGVAR(written);
   if(written == len)
   {
-    ota_test_sink_write(data, len);
     update_position += len;
     if(update_total_size > 0)
     {
@@ -344,9 +344,7 @@ bool http_update_write(uint8_t *data, size_t len)
 bool http_update_end(bool evenIfRemaining)
 {
   DBUGLN("Upload finished");
-  bool ok = Update.end(evenIfRemaining);
-  ota_test_sink_end(ok, update_position);
-  if(ok)
+  if(Update.end(evenIfRemaining))
   {
     DBUGF("Update Success: %u", update_position);
     lcd.display(F("Complete"), 0, 1, 10 * 1000, LCD_CLEAR_LINE | LCD_DISPLAY_NOW);

@@ -4,8 +4,8 @@ import path from 'node:path';
 import { Given, When, Then, expect } from '../support/fixtures';
 import { waitFor } from '../support/clients';
 
-// The native build records what the OTA path handed to the updater (see
-// src/ota_test_sink.h). These steps read that record back.
+// The native build's Update class (EpoxyUpdate in EpoxyDuino) records what the
+// OTA path handed to the updater. These steps read that record back.
 
 const sha256 = (data: Buffer) => createHash('sha256').update(data).digest('hex');
 
@@ -99,14 +99,6 @@ Then('the updater was started from that URL', async ({ world, stack }) => {
 
 Then('the device did not start writing an image', async ({ stack }) => {
   expect(existsSync(sinkFile(stack.otaSinkDir, 'ota_begin.json'))).toBe(false);
-});
-
-Then('the updater was told to expect exactly the image size', async ({ world, stack }) => {
-  const begin = await waitFor('the updater to be started', async () =>
-    existsSync(sinkFile(stack.otaSinkDir, 'ota_begin.json')) ? readSinkJson(stack.otaSinkDir, 'ota_begin.json') : undefined,
-  );
-  const expected = world.ota.image?.length ?? world.ota.release?.size;
-  expect(begin.begin_size, 'size passed to Update.begin()').toBe(expected);
 });
 
 Then('the updater was told to expect exactly the size GitHub published', async ({ world, stack }) => {

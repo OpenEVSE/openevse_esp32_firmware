@@ -65,7 +65,7 @@ export class Stack {
   private workdir?: string;
   private readonly ptyPath: string;
   private readonly logDir: string;
-  /** Where the native build records the OTA image it received (see src/ota_test_sink.h). */
+  /** Where the native build records the OTA image it received (EpoxyUpdate, see its README). */
   readonly otaSinkDir: string;
 
   private constructor(
@@ -167,7 +167,7 @@ export class Stack {
         env: {
           ...process.env,
           OPENEVSE_CHIP_ID: `1234567890ab${this.workerIndex.toString(16).padStart(4, '0')}`,
-          OPENEVSE_OTA_SINK_DIR: this.otaSinkDir,
+          EPOXY_UPDATE_SINK_DIR: this.otaSinkDir,
         },
       },
     );
