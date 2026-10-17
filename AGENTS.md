@@ -116,9 +116,9 @@ They are the executable spec of user-visible behaviour, so keep them current:
 - **Every UI route in [feature-map.md](docs/ai/feature-map.md) needs a scenario.**
   Tag the feature `@route:<path>`. `python scripts/e2e_coverage.py --strict`
   (run by CI) fails for a route with none. `tests/e2e/coverage-exemptions.txt`
-  is a shrinking backlog: delete a route from it when you cover it, never add a
-  new route to it (unless its UI is not in the embedded build yet; say so in
-  the file).
+  is a shrinking backlog: delete a route from it when you cover it. Entries are
+  only ever removed; CI rejects any route added to it compared with the base
+  branch, so a new route must ship with a scenario.
 - **Scenarios are written for people.** Features contain user-level language
   only; selectors, URLs and JSON belong in `tests/e2e/steps/` and `support/`.
   Reuse an existing step before writing a new one.

@@ -37,8 +37,14 @@ jobs:
         with:
           python-version: '3.12'
 
+      # Manual runs have no base branch, so they compare against master.
+      - name: Fetch the base branch
+        env:
+          BASE_REF: ${{ github.base_ref || 'master' }}
+        run: git fetch --no-tags --depth=1 origin "$BASE_REF"
+
       - name: Check route coverage
-        run: python scripts/e2e_coverage.py --strict
+        run: python scripts/e2e_coverage.py --strict --base FETCH_HEAD
 
   e2e:
     name: Playwright scenarios

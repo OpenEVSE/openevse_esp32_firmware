@@ -3,10 +3,8 @@
 # This is a backlog, not a place to hide new work: the list may only shrink.
 # When you add a feature file tagged @route:<path>, delete the route here
 # (scripts/e2e_coverage.py --strict fails if you forget). A new route must ship
-# with a scenario instead of being added to this list. The one exception is a
-# route whose UI is not in the embedded gui-nightshift build yet (paired GUI PR
-# pending): list it under "Waiting for the UI" below, and write its scenario
-# when the UI lands.
+# with a scenario instead of being added to this list. CI (--base) rejects any
+# entry that is not already on the base branch, so entries are only ever removed.
 /history
 /monitoring
 /schedule
