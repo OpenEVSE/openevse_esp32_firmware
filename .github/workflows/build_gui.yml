@@ -58,7 +58,7 @@ jobs:
       - name: Install dependencies
         run: |
           cd gui-nightshift
-          npm install
+          npm ci
 
       - name: Build GUI
         run: |
