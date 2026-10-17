@@ -223,6 +223,13 @@ void setup()
   certs.begin();
   DBUGF("After net_setup: %d", ESPAL.getFreeHeap());
 
+  // Mongoose 7 logs at MG_LL_DEBUG to stdout by default, and stdout is UART0:
+  // the RAPI link to the EVSE controller on the OpenEVSE WiFi boards. Send
+  // errors to the debug port instead and drop the rest. Set before begin(),
+  // which already logs.
+  mg_log_set_fn([](char c, void *) { DEBUG_PORT.write(c); }, nullptr);
+  mg_log_set(MG_LL_ERROR);
+
   // Initialise Mongoose networking library
   Mongoose.begin();
   Mongoose.setRootCaCallback([]() -> const char *{
