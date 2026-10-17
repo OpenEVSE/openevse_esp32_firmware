@@ -67,14 +67,12 @@ are not covered here.
 The live scenario needs network access to GitHub. Behind an HTTP proxy, Node's
 `fetch` needs `NODE_USE_ENV_PROXY=1` (Node 22+) to honour `HTTPS_PROXY`.
 
-Some `@ota` scenarios are expected to fail until the bugs they reproduce are
-fixed. They are not skipped or quarantined, on purpose: a green run would hide
-the bug. As of this writing:
-
-- **URL fetch** (`refuses to fetch`, `starts a download, not an upload`, `@live`):
-  `/update` registers `onUpload`, so every POST, including a JSON `{"url": ...}`,
-  is treated as an upload. The JSON body is written to the updater as firmware,
-  and the URL is never fetched.
+The `@ota` scenarios all pass on `master` as of this writing. They were written
+to fail on the bugs they reproduce, so a regression shows up as a red run rather
+than a silent pass. Two of the fixes they reproduced landed in the firmware
+(JSON `POST /update` routing and the GitHub redirect) and one in the native
+`Update` class (`isRunning()` must be true during an update, or every chunk
+restarts the download).
 
 ## How it is organised
 
