@@ -19,6 +19,10 @@ void ota_setup()
   if(www_password.length()) {
     ArduinoOTA.setPassword(www_password.c_str());
   }
+#ifndef EPOXY_DUINO
+  // NetworkManager advertises OTA through the shared Mongoose responder.
+  ArduinoOTA.setMdnsEnabled(false);
+#endif
   ArduinoOTA.begin();
 
   ArduinoOTA.onStart([]() {
