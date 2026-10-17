@@ -24,6 +24,7 @@ struct HttpUpdateRequestState
   bool responseComplete = false;
   bool redirected = false;
   bool errorReported = false;
+  int redirects = 0;
   String sourceUrl;
   String redirectUrl;
   std::function<void(size_t complete, size_t total)> progress;
@@ -53,7 +54,8 @@ bool http_update_url_allowed(const String &url)
 bool http_update_from_url(String url,
   std::function<void(size_t complete, size_t total)> progress,
   std::function<void(int)> success,
-  std::function<void(int)> error)
+  std::function<void(int)> error,
+  int redirects)
 {
   DBUGF("Update from URL: %s", url.c_str());
 
@@ -63,6 +65,12 @@ bool http_update_from_url(String url,
   if(!http_update_url_allowed(url)) {
     DEBUG_PORT.printf("OTA URL not allowed: %s\n", url.c_str());
     error(HTTP_UPDATE_ERROR_URL_NOT_ALLOWED);
+    return false;
+  }
+
+  if(redirects > HTTP_UPDATE_MAX_REDIRECTS) {
+    DEBUG_PORT.printf("OTA too many redirects: %s\n", url.c_str());
+    error(HTTP_UPDATE_ERROR_TOO_MANY_REDIRECTS);
     return false;
   }
 
@@ -77,6 +85,7 @@ bool http_update_from_url(String url,
       return false;
     }
     state->sourceUrl = url;
+    state->redirects = redirects;
     state->progress = progress;
     state->success = success;
     state->error = error;
@@ -250,9 +259,10 @@ void http_update_loop()
   auto progress = redirect->progress;
   auto success = redirect->success;
   auto error = redirect->error;
+  int redirects = redirect->redirects + 1;
   delete redirect;
 
-  http_update_from_url(url, progress, success, error);
+  http_update_from_url(url, progress, success, error, redirects);
 }
 
 bool http_update_start(String source, size_t total)
