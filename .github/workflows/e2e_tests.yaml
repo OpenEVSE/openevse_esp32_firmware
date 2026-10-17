@@ -11,6 +11,8 @@ on:
 
 permissions:
   contents: read
+  checks: write
+  pull-requests: write
 
 env:
   # The emulator checkout provides the /api/test/* control endpoints.
@@ -112,6 +114,13 @@ jobs:
           EMULATOR_DIR: ${{ github.workspace }}/emulator
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: npm test
+
+      - name: Publish End-to-end Test Results
+        if: always()
+        uses: EnricoMi/publish-unit-test-result-action@v2
+        with:
+          files: tests/e2e/output/junit.xml
+          check_name: End-to-end Tests
 
       - name: Upload the report and device logs
         if: always()
