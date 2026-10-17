@@ -276,7 +276,7 @@ if npm_installed:
             else:
                 print("Warning: GUI not built, run 'cd %s; npm run build'" % (gui_dir))
         else:
-            print("Warning: GUI dependencies not found, run 'cd %s; npm install'" % (gui_dir))
+            print("Warning: GUI dependencies not found, run 'cd %s; npm ci'" % (gui_dir))
     else:
         print("Warning: GUI files not found, run 'git submodule update --init' (%s)" % (gui_dir))
 else:
