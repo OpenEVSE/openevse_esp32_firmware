@@ -6,8 +6,11 @@
 
 #include <iostream>
 #include <string>
+#include <vector>
 #include <cstdio>   // std::remove
-#include <cstdlib>  // std::_Exit
+#include <cstdlib>  // std::_Exit, mkdtemp, setenv
+#include <ftw.h>
+#include <unistd.h>
 
 #include <Arduino.h>
 #include <MicroTasks.h>
@@ -51,11 +54,38 @@ void event_send(String) {}
 void event_send(JsonDocument &) {}
 void emoncms_publish(JsonDocument &) {}
 
+static std::string g_private_root;
+
+static int remove_entry(const char *path, const struct stat *, int, struct FTW *)
+{
+  return ::remove(path);
+}
+
+// Give a scenario run its own EpoxyFS/EEPROM directory. Scenario runs happen
+// in parallel from the same working directory, and the scheduler persists
+// /schedule.json, so a shared store would leak one run's schedule into
+// another. The --config-load/--config-commit flows keep the shared store on
+// purpose (they test persistence across invocations).
+static void use_private_storage()
+{
+  const char *tmp = getenv("TMPDIR");
+  std::string tmpl = std::string(tmp && *tmp ? tmp : "/tmp") + "/divert_sim.XXXXXX";
+  std::vector<char> buf(tmpl.begin(), tmpl.end());
+  buf.push_back('\0');
+  if (!mkdtemp(buf.data())) return;
+  g_private_root = buf.data();
+  setenv("EPOXY_FS_ROOT", (g_private_root + "/fs").c_str(), 1);
+  setenv("EPOXY_EEPROM_DATA", (g_private_root + "/eeprom").c_str(), 1);
+}
+
 int main(int argc, char **argv)
 {
   auto exit_now = [](int code) -> void {
     std::cout.flush();
     std::cerr.flush();
+    if (!g_private_root.empty()) {
+      nftw(g_private_root.c_str(), remove_entry, 8, FTW_DEPTH | FTW_PHYS);
+    }
     std::_Exit(code);
   };
 
@@ -79,12 +109,16 @@ int main(int argc, char **argv)
     exit_now(0);
   }
 
+  if (!scenario.empty() && !result.count("config-load") && !result.count("config-commit")) {
+    use_private_storage();
+  }
+
   EpoxyTest::set_millis(0);
   fs::EpoxyFS.begin();
 
   if (result.count("config-load")) {
     // Already have the EEPROM file — let config_load_settings read it.
-  } else {
+  } else if (g_private_root.empty()) {
     // Start clean: erase any EEPROM data left by a previous subprocess so
     // factory_config state doesn't leak between test runs.
     std::remove("epoxyeepromdata");

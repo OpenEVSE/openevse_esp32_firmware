@@ -148,8 +148,11 @@ RapiSender::sendCmdSync(String &cmd, unsigned long timeout)
         case 'V':
         {
           _tokens[0] = ok;
-          _tokens[1] = "1.2.3";
-          _tokens[2] = "1.2.3";
+          // Report a protocol >= 5.0.0 controller so the firmware parses the
+          // $GS vflags (EV connected / charging) like it does on hardware;
+          // RFID de-auth on unplug and session-complete handling depend on it.
+          _tokens[1] = "8.2.3";
+          _tokens[2] = "5.2.0";
           _tokenCnt = 3;
         } break;
         case 'F':
@@ -162,12 +165,16 @@ RapiSender::sendCmdSync(String &cmd, unsigned long timeout)
         } break;
         case 'C':
         {
+          static char buf_hw[16];
+          static char buf_cmax[16];
           sprintf(buf1, "%ld", sim->pilot);
+          sprintf(buf_hw, "%ld", (long) sim->max_current_hw);
+          sprintf(buf_cmax, "%ld", sim->max_configured);
           _tokens[0] = ok;
           _tokens[1] = "6";
-          _tokens[2] = "32";
+          _tokens[2] = buf_hw;
           _tokens[3] = buf1;
-          _tokens[4] = "32";
+          _tokens[4] = buf_cmax;
           _tokenCnt = 5;
         } break;
         case 'A':
@@ -185,21 +192,34 @@ RapiSender::sendCmdSync(String &cmd, unsigned long timeout)
         } break;
         case 'S':
         {
-          char *ptr = buf1;
+          // $OK <evsestate hex> <elapsed> <pilotstate hex> <vflags hex>
+          static char buf_gs[48];
+          char *ptr = buf_gs;
+          long pilot_state = sim->vehicle_connected
+                               ? (OPENEVSE_STATE_CHARGING == sim->state
+                                    ? OPENEVSE_STATE_CHARGING
+                                    : OPENEVSE_STATE_CONNECTED)
+                               : OPENEVSE_STATE_NOT_CONNECTED;
+          uint32_t vflags = 0;
+          if(sim->vehicle_connected) vflags |= OPENEVSE_VFLAG_EV_CONNECTED;
+          if(OPENEVSE_STATE_CHARGING == sim->state) vflags |= OPENEVSE_VFLAG_CHARGING_ON;
 
           _tokens[0] = ok;
           _tokens[1] = ptr;
-          ptr += sprintf(ptr, "%ld", sim->state) + 1;
+          ptr += sprintf(ptr, "%02lx", sim->state) + 1;
           _tokens[2] = zero;
           _tokens[3] = ptr;
-          ptr += sprintf(ptr, "%ld", sim->state) + 1; // Should not reflect the Sleep/Disabled state
-          _tokens[4] = zero;
+          ptr += sprintf(ptr, "%02lx", pilot_state) + 1;
+          _tokens[4] = ptr;
+          ptr += sprintf(ptr, "%04x", vflags) + 1;
           _tokenCnt = 5;
         } break;
         case 'P':
         {
           _tokens[0] = ok;
-          _tokens[1] = "200";
+          static char buf_temp[16];
+          sprintf(buf_temp, "%ld", (long)(sim->temperature * 10.0));
+          _tokens[1] = buf_temp;
           _tokens[2] = "-2560";
           _tokens[3] = "-2560";
           _tokenCnt = 4;
@@ -222,7 +242,15 @@ RapiSender::sendCmdSync(String &cmd, unsigned long timeout)
       {
         case 'C':
         {
-          sscanf(cmd.c_str(), "$SC %ld V", &sim->pilot);
+          long amps = 0;
+          char mode = 0;
+          int n = sscanf(cmd.c_str(), "$SC %ld %c", &amps, &mode);
+          if (n >= 1 && 'M' == mode) {
+            // Set the configured maximum (station current).
+            sim->max_configured = amps;
+          } else if (n >= 1) {
+            sim->pilot = amps;
+          }
           // Real hardware echoes the resultant current capacity as the first
           // token ("$OK ampsset"); the firmware relies on this to update its
           // pilot belief. Without it, EvseMonitor::setPilot never records the
