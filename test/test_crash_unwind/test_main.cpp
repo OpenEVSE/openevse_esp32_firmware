@@ -3,6 +3,7 @@
 #include "doctest.h"
 
 #include <string.h>
+#include <string>
 #include <vector>
 
 #include "crash_unwind.h"
@@ -229,4 +230,92 @@ TEST_CASE("a deep walk that disagrees or is no longer is not used") {
   CHECK_FALSE(crash_unwind_extends(deep, 5, idf, 16, 16));
   idf[3] = 0x400e0000;
   CHECK_FALSE(crash_unwind_extends(deep, 30, idf, 16, 16));
+}
+
+// --- Task watchdog: the starved task, not the one the panic interrupted -----
+
+namespace {
+
+const char *WDT_REASON =
+  "Task watchdog got triggered. The following tasks/users did not reset the "
+  "watchdog in time:\n - loopTask (CPU 1)";
+
+// Byte offset of segment i's data in an image built by elf().
+size_t seg_data(const std::vector<std::pair<uint32_t, uint32_t>> &segs, size_t i) {
+  size_t off = 52 + 32 * segs.size();
+  for(size_t k = 0; k < i; k++) off += segs[k].second;
+  return off;
+}
+
+// Four tasks, TCB then stack, each TCB with its name at 0x34 the way
+// FreeRTOS lays out pcTaskName on the ESP32.
+const std::vector<std::pair<uint32_t, uint32_t>> TASKS = {
+  {0x3ffcdc90, 0x160}, {0x3ffcdaa0, 0x1a0},   // IDLE1
+  {0x3ffd562c, 0x160}, {0x3ffd5310, 0x210},   // tiT
+  {0x3ffd1950, 0x160}, {0x3ffd0fd0, 0x770},   // loopTask
+};
+
+Elf tasks(const char *third = "loopTask") {
+  Elf e = elf(TASKS);
+  const char *names[] = {"IDLE1", "tiT", third};
+  for(size_t t = 0; t < 3; t++) {
+    memcpy(&e.img[seg_data(TASKS, 2 * t) + 0x34], names[t], strlen(names[t]) + 1);
+  }
+  return e;
+}
+
+} // namespace
+
+TEST_CASE("the starved task is the first one the reason lists") {
+  char name[16];
+  REQUIRE(crash_unwind_wdt_task(WDT_REASON, "IDLE1", name, sizeof(name)));
+  CHECK(std::string(name) == "loopTask");
+}
+
+TEST_CASE("idle tasks and the crashed task itself are skipped") {
+  char name[16];
+  const char *r = "Task watchdog got triggered. The following tasks/users did not reset "
+                  "the watchdog in time:\n - IDLE0 (CPU 0)\n - async_tcp (CPU 0)";
+  REQUIRE(crash_unwind_wdt_task(r, "IDLE1", name, sizeof(name)));
+  CHECK(std::string(name) == "async_tcp");
+  // The panic landed on the starved task: its backtrace is already the bt.
+  CHECK_FALSE(crash_unwind_wdt_task(WDT_REASON, "loopTask", name, sizeof(name)));
+}
+
+TEST_CASE("anything but a task watchdog names no task") {
+  char name[16];
+  CHECK_FALSE(crash_unwind_wdt_task("abort() was called at PC 0x4008323b on core 0",
+                                    "tiT", name, sizeof(name)));
+  CHECK_FALSE(crash_unwind_wdt_task(nullptr, "tiT", name, sizeof(name)));
+  CHECK_FALSE(crash_unwind_wdt_task("Task watchdog got triggered.", "IDLE1", name, sizeof(name)));
+  // A name that does not fit is not truncated into some other task's name.
+  char tiny[4];
+  CHECK_FALSE(crash_unwind_wdt_task(WDT_REASON, "IDLE1", tiny, sizeof(tiny)));
+}
+
+TEST_CASE("finds another task's TCB by name, learning the offset from the crashed one") {
+  Elf e = tasks();
+  uint32_t tcb = 0;
+  REQUIRE(crash_unwind_find_tcb(e.img.data(), e.img.size(), 0x3ffcdc90, "IDLE1",
+                                "loopTask", &tcb));
+  CHECK(tcb == 0x3ffd1950);
+  const uint8_t *stack; uint32_t vaddr, size;
+  REQUIRE(crash_unwind_find_stack(e.img.data(), e.img.size(), tcb, &stack, &vaddr, &size));
+  CHECK(vaddr == 0x3ffd0fd0);
+}
+
+TEST_CASE("a TCB is matched on the whole name, never a prefix") {
+  Elf e = tasks("loopTask2");
+  uint32_t tcb = 0;
+  CHECK_FALSE(crash_unwind_find_tcb(e.img.data(), e.img.size(), 0x3ffcdc90, "IDLE1",
+                                    "loopTask", &tcb));
+}
+
+TEST_CASE("no TCB is found when the crashed task's own name is not in its TCB") {
+  Elf e = tasks();
+  uint32_t tcb = 0;
+  CHECK_FALSE(crash_unwind_find_tcb(e.img.data(), e.img.size(), 0x3ffcdc90, "IDLE0",
+                                    "loopTask", &tcb));
+  CHECK_FALSE(crash_unwind_find_tcb(e.img.data(), e.img.size(), 0x3ff00000, "IDLE1",
+                                    "loopTask", &tcb));
 }

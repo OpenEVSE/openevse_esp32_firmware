@@ -120,6 +120,102 @@ size_t crash_unwind_xtensa(const uint8_t *stack, uint32_t vaddr, uint32_t size,
   return n;
 }
 
+bool crash_unwind_wdt_task(const char *reason, const char *crashed,
+                           char *out, size_t outLen)
+{
+  static const char WDT[] = "Task watchdog";
+  if(!reason || 0 != strncmp(reason, WDT, sizeof(WDT) - 1) || !out || 0 == outLen) {
+    return false;
+  }
+  // The reason string is truncated to fit the caller's buffer, so a line is
+  // used only when its " (CPU" survived: a cut-off name is not a name.
+  for(const char *line = strstr(reason, "\n - "); line; line = strstr(line + 1, "\n - ")) {
+    const char *name = line + 4;
+    const char *end = strstr(name, " (CPU");
+    const char *nl = strchr(name, '\n');
+    if(!end || (nl && nl < end)) {
+      continue;
+    }
+    size_t n = end - name;
+    if(0 == n || n >= outLen) {
+      continue;
+    }
+    if(0 == strncmp(name, "IDLE", 4) ||
+       (crashed && strlen(crashed) == n && 0 == strncmp(name, crashed, n))) {
+      continue;
+    }
+    memcpy(out, name, n);
+    out[n] = '\0';
+    return true;
+  }
+  return false;
+}
+
+bool crash_unwind_find_tcb(const uint8_t *elf, size_t len, uint32_t knownTcb,
+                           const char *knownName, const char *name,
+                           uint32_t *tcb)
+{
+  if(!elf || len < EH_SIZE || 0 != memcmp(elf, "\x7f" "ELF", 4) ||
+     !knownName || !name || '\0' == knownName[0] || '\0' == name[0]) {
+    return false;
+  }
+  uint32_t phoff = rd32(elf + EH_PHOFF);
+  uint16_t phentsize = rd16(elf + EH_PHENTSIZE);
+  uint16_t phnum = rd16(elf + EH_PHNUM);
+  if(phentsize != PH_SIZE || phoff > len || (size_t)phnum * PH_SIZE > len - phoff) {
+    return false;
+  }
+
+  // Bounds-checked data of LOAD segment i, or null.
+  auto seg = [&](uint16_t i, uint32_t *va, uint32_t *sz) -> const uint8_t * {
+    const uint8_t *ph = elf + phoff + (size_t)i * PH_SIZE;
+    if(PT_LOAD != rd32(ph + PH_TYPE)) {
+      return nullptr;
+    }
+    uint32_t off = rd32(ph + PH_OFFSET);
+    *sz = rd32(ph + PH_FILESZ);
+    *va = rd32(ph + PH_VADDR);
+    return (off > len || *sz > len - off) ? nullptr : elf + off;
+  };
+
+  // Where the name lives in a TCB: find the crashed task's, NUL included.
+  size_t knownLen = strlen(knownName) + 1, nameLen = strlen(name) + 1;
+  uint32_t tcbSize = 0;
+  size_t nameOff = 0;
+  bool found = false;
+  for(uint16_t i = 0; i < phnum && !found; i++) {
+    uint32_t va, sz;
+    const uint8_t *d = seg(i, &va, &sz);
+    if(!d || va != knownTcb) {
+      continue;
+    }
+    for(size_t o = 0; o + knownLen <= sz; o++) {
+      if(0 == memcmp(d + o, knownName, knownLen)) {
+        tcbSize = sz;
+        nameOff = o;
+        found = true;
+        break;
+      }
+    }
+    if(!found) {
+      return false;
+    }
+  }
+  if(!found || nameOff + nameLen > tcbSize) {
+    return false;
+  }
+
+  for(uint16_t i = 0; i < phnum; i++) {
+    uint32_t va, sz;
+    const uint8_t *d = seg(i, &va, &sz);
+    if(d && sz == tcbSize && 0 == memcmp(d + nameOff, name, nameLen)) {
+      *tcb = va;
+      return true;
+    }
+  }
+  return false;
+}
+
 bool crash_unwind_extends(const uint32_t *deep, size_t depth,
                           const uint32_t *idf, uint32_t idfDepth,
                           uint32_t idfCap)

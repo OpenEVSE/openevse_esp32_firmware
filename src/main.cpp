@@ -56,6 +56,7 @@
 #include "diagnostics.h"
 #include "boost.h"
 #include "notifications.h"
+#include "shelly_lnm.h"
 
 #if defined(ENABLE_PN532)
 #include "pn532.h"
@@ -222,6 +223,13 @@ void setup()
   certs.begin();
   DBUGF("After net_setup: %d", ESPAL.getFreeHeap());
 
+  // Mongoose 7 logs at MG_LL_DEBUG to stdout by default, and stdout is UART0:
+  // the RAPI link to the EVSE controller on the OpenEVSE WiFi boards. Send
+  // errors to the debug port instead and drop the rest. Set before begin(),
+  // which already logs.
+  mg_log_set_fn([](char c, void *) { DEBUG_PORT.write(c); }, nullptr);
+  mg_log_set(MG_LL_ERROR);
+
   // Initialise Mongoose networking library
   Mongoose.begin();
   Mongoose.setRootCaCallback([]() -> const char *{
@@ -277,6 +285,9 @@ void setup()
   tempThrottle.begin(evse);
   DBUGF("After tempThrottle.begin: %d", ESPAL.getFreeHeap());
 
+  shelly_lnm.begin();
+  DBUGF("After shelly_lnm.begin: %d", ESPAL.getFreeHeap());
+
   lcd.display(F("OpenEVSE WiFI"), 0, 0, 0, LCD_CLEAR_LINE);
   lcd.display(currentfirmware, 0, 1, 5 * 1000, LCD_CLEAR_LINE);
 
@@ -322,12 +333,10 @@ void loop()
   MicroTask.update();
   Profile_End(MicroTask, 10);
 
-  // NOTE: the legacy first-connect block (handleRapiRead() + import_timers())
-  // was removed: both call through the sender-less global OpenEVSE object and
-  // have been silent no-ops since the EvseManager refactor.  Reviving
-  // import_timers() would auto-import (and clear) the controller's delay timer
-  // into Charge Manager rules — a deliberate decision for a separate change,
-  // along with routing time_man/input off the dead global.
+  // NOTE: import_timers() was removed from the first-connect block; reviving it
+  // would auto-import (and clear) the controller's delay timer into Charge
+  // Manager rules — a deliberate decision for a separate change.  The clock
+  // read (handleRapiRead) is now driven from EvseManager on boot-ready.
 
   if(net.isConnected())
   {
@@ -338,8 +347,7 @@ void loop()
     if(emoncms_updated)
     {
       // Send the current state to check the config
-      const size_t capacity = JSON_OBJECT_SIZE(33) + 1024;
-      DynamicJsonDocument data(capacity);
+      JsonDocument data;
       create_rapi_json(data);
       emoncms_publish(data);
       emoncms_updated = false;
@@ -368,7 +376,7 @@ void loop()
 
 void event_send(String &json)
 {
-  StaticJsonDocument<512> event;
+  JsonDocument event;
   deserializeJson(event, json);
   event_send(event);
 }
@@ -425,8 +433,7 @@ void handle_serial()
     DBUGVAR(command);
     DBUGVAR(json);
 
-    const size_t capacity = JSON_OBJECT_SIZE(50) + 1024;
-    DynamicJsonDocument doc(capacity);
+    JsonDocument doc;
     DeserializationError error = deserializeJson(doc, json);
     if(error) {
       DEBUG_PORT.println("{\"code\":400,\"msg\":\"Could not parse JSON\"}");

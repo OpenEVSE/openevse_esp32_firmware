@@ -14,7 +14,7 @@ Essentials, duplicated here for quick reference:
 
 - The default web UI is the **`gui-nightshift`** submodule.
   Build it before the firmware: `git submodule update --init --recursive &&
-  cd gui-nightshift && npm install && npm run build`.
+  cd gui-nightshift && npm ci && npm run build`.
 - `pio run -e openevse_wifi_v1` builds the default board. First build downloads
   ~500 MB and takes 15–45 minutes — **never cancel**.
 - `src/web_static/` is generated from `gui-nightshift/dist` — never edit by

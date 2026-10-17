@@ -37,9 +37,6 @@ size_t notifications_evaluate(const NotificationInputs &in, Notification *out, s
   if(!in.ground_check) {
     s.add("safety.ground_check", "sg", NOTIFICATION_SAFETY, NOTIFICATION_CRITICAL, true, in.settings_flags);
   }
-  if(!in.gfci_check) {
-    s.add("safety.gfci_check", "sf", NOTIFICATION_SAFETY, NOTIFICATION_CRITICAL, true, in.settings_flags);
-  }
   if(!in.relay_check) {
     s.add("safety.relay_check", "sr", NOTIFICATION_SAFETY, NOTIFICATION_WARNING, true, in.settings_flags);
   }

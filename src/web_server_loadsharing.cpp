@@ -49,7 +49,17 @@ static void syncPeerGroupMembership(const String &peerHost, const String &jsonBo
     delete body;
   });
 
-  loadSharingHttpClient.send(req);
+  if (!req->send()) {
+    // send() failing means onClose() never fires (it's only reached via a
+    // live connection event), so the request and these buffers must be torn
+    // down here or they leak -- and the peer never learns of the add/remove.
+    DBUGF("[LoadSharing] Reciprocal sync to %s failed to send", peerHost.c_str());
+    req->onResponse(MongooseHttpResponseHandler());
+    req->onClose(MongooseSocketCloseHandler());
+    delete req;
+    delete url;
+    delete body;
+  }
 }
 
 // Path prefix constants
@@ -100,8 +110,7 @@ void handleLoadSharingPeersGet(MongooseHttpServerRequest *request, MongooseHttpS
   DBUGLN("[LoadSharing] GET /loadsharing/peers");
 
   // Build JSON response array
-  const size_t capacity = JSON_ARRAY_SIZE(20) + JSON_OBJECT_SIZE(7) * 20 + 1024;
-  DynamicJsonDocument doc(capacity);
+  JsonDocument doc;
   JsonArray peerArray = doc.to<JsonArray>();
 
   // Get unified peer list from group state
@@ -115,7 +124,7 @@ void handleLoadSharingPeersGet(MongooseHttpServerRequest *request, MongooseHttpS
           peer.hostname.c_str(), peer.online ? "yes" : "no", peer.joined ? "yes" : "no",
           peer.isLocal ? "yes" : "no");
 
-    JsonObject peerObj = peerArray.createNestedObject();
+    JsonObject peerObj = peerArray.add<JsonObject>();
     peerObj["id"] = peer.id;
     peerObj["name"] = peer.name;
     peerObj["host"] = peer.hostname;
@@ -144,8 +153,7 @@ void handleLoadSharingPeersPost(MongooseHttpServerRequest *request, MongooseHttp
   String body = request->body().toString();
   DBUGF("[LoadSharing] Request body: %s", body.c_str());
 
-  const size_t capacity = JSON_OBJECT_SIZE(3) + 256;
-  DynamicJsonDocument doc(capacity);
+  JsonDocument doc;
   DeserializationError error = deserializeJson(doc, body);
 
   if (error) {
@@ -156,7 +164,7 @@ void handleLoadSharingPeersPost(MongooseHttpServerRequest *request, MongooseHttp
   }
 
   // Get the host parameter
-  if (!doc.containsKey("host")) {
+  if (doc["host"].isNull()) {
     DBUGLN("[LoadSharing] Missing 'host' parameter");
     response->setCode(400);
     response->print("{\"msg\":\"Missing required 'host' parameter\"}");
@@ -165,7 +173,7 @@ void handleLoadSharingPeersPost(MongooseHttpServerRequest *request, MongooseHttp
 
   String host = doc["host"].as<String>();
   host.trim();
-  bool reciprocal = doc.containsKey("reciprocal") ? doc["reciprocal"].as<bool>() : true;
+  bool reciprocal = !doc["reciprocal"].isNull() ? doc["reciprocal"].as<bool>() : true;
 
   if (loadSharingGroupState.isMember()) {
     response->setCode(403);
@@ -218,7 +226,7 @@ void handleLoadSharingPeersPost(MongooseHttpServerRequest *request, MongooseHttp
   // Reciprocal sync: add local device on the remote peer's group (unless this
   // is itself a reciprocal call, indicated by reciprocal=false)
   if (reciprocal) {
-    DynamicJsonDocument syncDoc(256);
+    JsonDocument syncDoc;
     syncDoc["host"] = loadSharingGroupState.getLocalHostname();
     syncDoc["reciprocal"] = false;
     String syncBody;
@@ -285,7 +293,7 @@ void handleLoadSharingPeersUpdateWithHost(MongooseHttpServerRequest *request, Mo
   }
 
   String body = request->body().toString();
-  DynamicJsonDocument doc(JSON_OBJECT_SIZE(2) + 128);
+  JsonDocument doc;
   DeserializationError error = deserializeJson(doc, body);
   if (error) {
     DBUGF("[LoadSharing] JSON parse error: %s", error.c_str());
@@ -294,7 +302,7 @@ void handleLoadSharingPeersUpdateWithHost(MongooseHttpServerRequest *request, Mo
     return;
   }
 
-  if (!doc.containsKey("priority")) {
+  if (doc["priority"].isNull()) {
     response->setCode(400);
     response->print("{\"msg\":\"Missing 'priority' field\"}");
     return;
@@ -331,14 +339,7 @@ void handleLoadSharingStatus(MongooseHttpServerRequest *request, MongooseHttpSer
   DBUGLN("[LoadSharing] GET /loadsharing/status");
 
   // Build LoadSharingStatus response
-  const size_t capacity = JSON_OBJECT_SIZE(10) +
-                          JSON_ARRAY_SIZE(20) +  // peers array
-                          JSON_ARRAY_SIZE(20) +  // allocations array
-                          JSON_ARRAY_SIZE(10) +  // config_issues array
-                          JSON_OBJECT_SIZE(4) * 20 +  // peer objects
-                          JSON_OBJECT_SIZE(3) * 20 +  // allocation objects
-                          2048;  // extra buffer
-  DynamicJsonDocument doc(capacity);
+  JsonDocument doc;
 
   // Get current timestamp in ISO 8601 format
   time_t now = time(nullptr);
@@ -355,13 +356,13 @@ void handleLoadSharingStatus(MongooseHttpServerRequest *request, MongooseHttpSer
   doc["offline_count"] = loadSharingGroupState.getOfflineCount();
 
   // Add peers array
-  JsonArray peersArray = doc.createNestedArray("peers");
+  JsonArray peersArray = doc["peers"].to<JsonArray>();
 
   // Get all peers (discovered and configured)
   std::vector<LoadSharingGroupState::PeerInfo> peersList = loadSharingGroupState.getAllPeers();
 
   for (const auto& peerInfo : peersList) {
-    JsonObject peerObj = peersArray.createNestedObject();
+    JsonObject peerObj = peersArray.add<JsonObject>();
 
     // Find the full peer object to get more details
     LoadSharingPeer* fullPeer = loadSharingGroupState.getPeerByHost(peerInfo.hostname);
@@ -384,7 +385,7 @@ void handleLoadSharingStatus(MongooseHttpServerRequest *request, MongooseHttpSer
         // The local device is not polled over HTTP/WebSocket; report its
         // status directly from the local EVSE (same sources as create_rapi_json
         // so it matches what remote peers publish on /status).
-        JsonObject statusObj = peerObj.createNestedObject("status");
+        JsonObject statusObj = peerObj["status"].to<JsonObject>();
         statusObj["amp"] = evse.getAmps() * AMPS_SCALE_FACTOR;
         statusObj["voltage"] = evse.getVoltage() * VOLTS_SCALE_FACTOR;
         statusObj["pilot"] = evse.getChargeCurrent();
@@ -410,7 +411,7 @@ void handleLoadSharingStatus(MongooseHttpServerRequest *request, MongooseHttpSer
         LoadSharingPeerStatus peerStatus;
         if (loadSharingPeerPoller.getPeerStatus(peerInfo.hostname, peerStatus)) {
           // Add nested status object from peer poller
-          JsonObject statusObj = peerObj.createNestedObject("status");
+          JsonObject statusObj = peerObj["status"].to<JsonObject>();
           statusObj["amp"] = peerStatus.getAmp();
           statusObj["voltage"] = peerStatus.getVoltage();
           statusObj["pilot"] = peerStatus.getPilot();
@@ -442,11 +443,11 @@ void handleLoadSharingStatus(MongooseHttpServerRequest *request, MongooseHttpSer
   }
 
   // Add allocations array
-  JsonArray allocationsArray = doc.createNestedArray("allocations");
+  JsonArray allocationsArray = doc["allocations"].to<JsonArray>();
   const std::vector<LoadSharingAllocation>& allocations = loadSharingGroupState.getAllocations();
 
   for (const auto& alloc : allocations) {
-    JsonObject allocObj = allocationsArray.createNestedObject();
+    JsonObject allocObj = allocationsArray.add<JsonObject>();
     allocObj["id"] = alloc.getId();
     allocObj["target_current"] = alloc.getTargetCurrent();
     allocObj["reason"] = alloc.getReason();
@@ -456,13 +457,18 @@ void handleLoadSharingStatus(MongooseHttpServerRequest *request, MongooseHttpSer
   serializeJson(doc, *response);
 }
 
-void web_server_load_sharing_setup()
+void web_server_load_sharing_setup(MongooseHttpServer &server)
 {
-  // Register the /loadsharing/peers endpoint (GET, POST, DELETE)
-  server.on("/loadsharing/peers", handleLoadSharingPeers);
-
-  // Register the /loadsharing/peers/{host} endpoint (DELETE with path parameter)
-  server.on("/loadsharing/peers/", [](MongooseHttpServerRequest *request) {
+  // Register the /loadsharing/peers/{host} endpoint (DELETE/PUT with path
+  // parameter). Mongoose 7 matches with mg_match(), which is a glob rather than
+  // the prefix match Mongoose 6 did, so the trailing "/" alone only ever
+  // matched the bare "/loadsharing/peers/" and every {host} request 404'd. The
+  // "#" wildcard spans the rest of the path, including further "/".
+  //
+  // Endpoints are checked most-recently-registered first (the server pushes
+  // onto the front of its list), so the exact "/loadsharing/peers" below still
+  // wins for the collection itself.
+  server.on("/loadsharing/peers/#", [](MongooseHttpServerRequest *request) {
     MongooseHttpServerResponseStream *response;
     if(false == requestPreProcess(request, response)) {
       return;
@@ -501,6 +507,9 @@ void web_server_load_sharing_setup()
 
     request->send(response);
   });
+
+  // Register the /loadsharing/peers endpoint (GET, POST, DELETE)
+  server.on("/loadsharing/peers", handleLoadSharingPeers);
 
   // Register the /loadsharing/discover endpoint (POST for on-demand discovery)
   server.on("/loadsharing/discover", [](MongooseHttpServerRequest *request) {
