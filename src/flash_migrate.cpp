@@ -67,7 +67,7 @@ const char *flash_migrate_partition_scheme()
 // to ota_1 (0x650000) and OTA a tiny IDF "migrator" app (built with DANGEROUS_
 // WRITE_ALLOWED) into the inactive 4MB OTA slot; on reboot the migrator performs
 // the protected commit. See docs/flash_migrate_repartition.md and
-// https://github.com/OpenEVSE/openevse-16mb-migrator
+// https://github.com/RAR/openevse-16mb-migrator (the `migrator` submodule)
 
 // Release manifest. The CI (.github/workflows/build.yaml) publishes
 // migrate_v1_16mb.json next to the 16MB app and migrator it was built from,

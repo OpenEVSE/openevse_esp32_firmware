@@ -8,6 +8,7 @@
 #include "debug.h"
 #include "emonesp.h"
 #include "event_log.h"
+#include "event_log_space.h"
 
 EventLog::EventLog() :
   _min_log_index(0),
@@ -77,6 +78,16 @@ void EventLog::begin()
   }
 }
 
+// Free-space guard: see event_log_space.h for when it measures and what it trusts.
+static size_t measureFreeSpace()
+{
+  size_t total = LittleFS.totalBytes();
+  size_t used = LittleFS.usedBytes();
+  return total > used ? total - used : 0;
+}
+
+static EventLogSpaceGuard freeSpace(measureFreeSpace);
+
 bool EventLog::log(EventType type, EvseState managerState, uint8_t evseState, uint32_t evseFlags, uint8_t pilotState, uint32_t pilot, double energy, uint32_t elapsed, double temperature, double temperatureMax, uint8_t divertMode, uint8_t shaper, const String &rfidTag, const char *notification)
 {
   time_t now = time(NULL);
@@ -120,7 +131,7 @@ bool EventLog::log(EventType type, EvseState managerState, uint8_t evseState, ui
   }
 
   // Guard against filling LittleFS — keep at least 8 KB free to prevent filesystem corruption.
-  if (LittleFS.totalBytes() - LittleFS.usedBytes() < 8192) {
+  if (!freeSpace.canWrite(millis())) {
     DBUGLN("EventLog: Low SPIFFS space, skipping entry");
     return false;
   }
@@ -176,8 +187,9 @@ bool EventLog::log(EventType type, EvseState managerState, uint8_t evseState, ui
       line["notification"] = notification;
     }
 
-    serializeJson(line, eventFile);
-    eventFile.println("");
+    // Count what actually went out: rfid and notification have no length cap.
+    size_t written = serializeJson(line, eventFile);
+    written += eventFile.println("");
 
     #ifdef ENABLE_DEBUG
     serializeJson(line, DEBUG_PORT);
@@ -186,6 +198,7 @@ bool EventLog::log(EventType type, EvseState managerState, uint8_t evseState, ui
 
     eventFile.close();
 
+    freeSpace.noteWritten(written);
     _repeat.recordWritten(key, now);
     return true;
   }
