@@ -63,7 +63,14 @@ def exempted_routes():
 
 
 def base_exempted_routes(ref):
+    """Exemptions at ref, or None when the list does not exist there yet."""
     relative = EXEMPTIONS.relative_to(ROOT).as_posix()
+    listed = subprocess.run(
+        ["git", "ls-tree", "--name-only", ref, "--", relative],
+        cwd=ROOT, capture_output=True, text=True, check=True,
+    ).stdout.strip()
+    if not listed:
+        return None
     shown = subprocess.run(
         ["git", "show", f"{ref}:{relative}"],
         cwd=ROOT, capture_output=True, text=True, check=True,
@@ -84,7 +91,9 @@ def main() -> int:
     stale = sorted(exempt & tested)
     unknown_tags = sorted(tested - mapped)
     unknown_exempt = sorted(exempt - mapped)
-    added = sorted(exempt - base_exempted_routes(args.base)) if args.base else []
+    base_exempt = base_exempted_routes(args.base) if args.base else None
+    # A base without the list (the PR that introduces it) has nothing to compare.
+    added = sorted(exempt - base_exempt) if base_exempt is not None else []
 
     print(f"UI routes in feature map: {len(mapped)}")
     print(f"  with e2e scenarios:     {len(mapped & tested)}")
