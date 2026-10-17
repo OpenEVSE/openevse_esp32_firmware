@@ -2,7 +2,13 @@
 
 #if ENABLE_CRASH_UPLOAD
 
+#if __has_include(<esp_app_desc.h>)
 #include <esp_app_desc.h>
+#else
+// IDF 4.4 (core 2): the same call, under its older name.
+#include <esp_ota_ops.h>
+#define esp_app_get_elf_sha256 esp_ota_get_app_elf_sha256
+#endif
 
 #include "emonesp.h"          // buildenv, currentfirmware, serial
 #include "app_config.h"

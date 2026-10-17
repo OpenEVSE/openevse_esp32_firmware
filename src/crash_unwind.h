@@ -40,6 +40,24 @@ size_t crash_unwind_xtensa(const uint8_t *stack, uint32_t vaddr, uint32_t size,
                            crash_pc_ok_fn pc_ok, uint32_t *out, size_t max,
                            bool *corrupted);
 
+// A task watchdog panics in whatever task its interrupt lands on -- with the
+// starved task blocked, usually an idle task -- so the summary's backtrace is
+// of a task that did nothing wrong. These find the starved one, whose stack is
+// in the same image.
+//
+// The first task the watchdog's panic reason lists (" - NAME (CPU n)") that is
+// neither an idle task nor `crashed`. False for any other reason, or when the
+// name does not fit in `outLen`.
+bool crash_unwind_wdt_task(const char *reason, const char *crashed,
+                           char *out, size_t outLen);
+
+// The TCB of the task called `name`. Where the name sits inside a TCB is
+// learned from the crashed task's own (`knownTcb`, `knownName`) rather than
+// assumed, and only segments of that TCB's size are searched.
+bool crash_unwind_find_tcb(const uint8_t *elf, size_t len, uint32_t knownTcb,
+                           const char *knownName, const char *name,
+                           uint32_t *tcb);
+
 // Should the deep walk replace the IDF's list? Only when it is longer and
 // matches it frame for frame. `idfDepth` is clamped to `idfCap`, the IDF's
 // array size: its walk can report one frame more than the array holds.

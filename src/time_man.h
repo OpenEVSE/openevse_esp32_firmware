@@ -32,6 +32,10 @@ class TimeManager : public MicroTasks::Task
     char   _resolvedIp[46];         // last resolved IP, "failed", or ""
     bool   _syncRequested;          // set by checkNow(); shows "connecting" before fetch starts
 
+    // Mongoose resolves the NTP host to send the request, so the address is
+    // read back from the client rather than looked up again here.
+    void takeResolvedIp();
+
     // NTP server learnt from DHCP (option 42), preferred over _timeHost while
     // sntp_dhcp is on. If it stops answering we fall back to the configured
     // host until the next scheduled poll, which tries DHCP again.
@@ -43,7 +47,6 @@ class TimeManager : public MicroTasks::Task
     unsigned long retryDelay();     // exponential back-off based on _retryCount
     const char *pickHost();         // DHCP server if usable, else _timeHost
     void fetchFailed();             // shared failure path: back off or fall back
-    bool resolveActiveHost();       // populate _resolvedIp from _activeHost; false if unresolved
 
     class TimeChange : public MicroTasks::Event
     {
@@ -107,6 +110,17 @@ class TimeManager : public MicroTasks::Task
 extern TimeManager timeManager;
 
 extern void time_set_time(struct timeval set_time, const char *source);
+
+// Convert the raw time_t returned by OpenEVSE.getTime() to the actual UTC epoch.
+//
+// The EVSE stores time as UTC calendar fields (year/month/day/hour/min/sec).
+// However the library's getTime() reconstructs a time_t by calling mktime(),
+// which treats those fields as *local* time, introducing a timezone offset error.
+// This function undoes that offset so callers always work with true UTC.
+//
+// The compensation is computed using only evse_time itself as the reference,
+// so it is self-consistent even on first boot before the WiFi clock is set.
+extern time_t evse_time_to_utc(time_t evse_time);
 
 extern String time_format_time(time_t time, bool local_time = true);
 extern String time_format_time(tm &time);
