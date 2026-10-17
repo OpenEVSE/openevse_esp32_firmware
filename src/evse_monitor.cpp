@@ -176,6 +176,7 @@ EvseMonitor::EvseMonitor(OpenEVSEClass &openevse) :
   _session_complete(EVSE_MONITOR_SESSION_COMPLETE_MASK, EVSE_MONITOR_SESSION_COMPLETE_TRIGGER),
   _count(0),
   _heartbeat(false),
+  _heartbeat_synced(false),
   _firmware_version(""),
   // A TFT gateway replaces the character LCD, so the controller's $S0 may
   // well be accepted but sets a backlight type for a panel that isn't there
@@ -373,18 +374,8 @@ void EvseMonitor::evseBoot(const char *firmware)
   _heartbeat_interval = heartbeat_interval_cfg;
   _heartbeat_current = heartbeat_interval_cfg > 0 ? heartbeat_current_cfg : 0;
   _heartbeat = false;
-  _openevse.heartbeatEnable(_heartbeat_interval, _heartbeat_current, [this](int ret, int interval, int current, int triggered) {
-    // Pulse only when supervision is actually armed.
-    _heartbeat = RAPI_RESPONSE_OK == ret && _heartbeat_interval > 0;
-    // If heartbeat was triggered while WiFi module was rebooting, ack immediately to restore ampacity
-    if (_heartbeat && 2 == triggered) {
-      _openevse.heartbeatPulse([](int ret) {
-        if (RAPI_RESPONSE_OK != ret) {
-          DEBUG_PORT.println("Heartbeat ack failed");
-        }
-      });
-    }
-  });
+  _heartbeat_synced = false;
+  sendHeartbeatConfig();
 #endif
 
   readChipId();
@@ -511,21 +502,12 @@ unsigned long EvseMonitor::loop(MicroTasks::WakeReason reason)
       }
     });
   }
-  else if(0 == _count % EVSE_MONITOR_STATE_TIME && _heartbeat_interval > 0)
+  else if(0 == _count % EVSE_MONITOR_STATE_TIME && !_heartbeat_synced)
   {
-    // Heartbeat enable failed; retry with the configured values so WiFi module
-    // reboot resyncs. Gate on _heartbeat_interval > 0 so an explicit disable
-    // (interval==0) does not get overwritten by the retry.
-    _openevse.heartbeatEnable(_heartbeat_interval, _heartbeat_current, [this](int ret, int interval, int current, int triggered) {
-      _heartbeat = RAPI_RESPONSE_OK == ret;
-      if (_heartbeat && 2 == triggered) {
-        _openevse.heartbeatPulse([](int ret) {
-          if (RAPI_RESPONSE_OK != ret) {
-            DEBUG_PORT.println("Heartbeat ack failed");
-          }
-        });
-      }
-    });
+    // The last heartbeat config was not acknowledged; resend it. This covers an
+    // explicit disable (interval 0) too: one that failed leaves the controller
+    // armed and supervising a gateway that will never pulse.
+    sendHeartbeatConfig();
   }
 
   // Get the EVSE state
@@ -1028,6 +1010,30 @@ void EvseMonitor::enableBootLock(bool enabled, std::function<void(int ret)> call
   }
 }
 
+void EvseMonitor::sendHeartbeatConfig()
+{
+  uint32_t interval = _heartbeat_interval;
+  uint32_t current = _heartbeat_current;
+  _openevse.heartbeatEnable(interval, current, [this, interval, current](int ret, int i, int c, int triggered) {
+    // setHeartbeatSupervision() changed the config while this was queued; its
+    // own response is the one that counts.
+    if(interval != _heartbeat_interval || current != _heartbeat_current) {
+      return;
+    }
+    _heartbeat_synced = RAPI_RESPONSE_OK == ret;
+    // Pulse only when supervision is actually armed.
+    _heartbeat = _heartbeat_synced && interval > 0;
+    // If heartbeat was triggered while WiFi module was rebooting, ack immediately to restore ampacity
+    if (_heartbeat && 2 == triggered) {
+      _openevse.heartbeatPulse([](int ret) {
+        if (RAPI_RESPONSE_OK != ret) {
+          DEBUG_PORT.println("Heartbeat ack failed");
+        }
+      });
+    }
+  });
+}
+
 void EvseMonitor::setHeartbeatSupervision(uint32_t interval, uint32_t current, std::function<void(int ret)> callback)
 {
   // Disabling heartbeat (interval==0) must send current=0 so the EVSE falls
@@ -1039,6 +1045,7 @@ void EvseMonitor::setHeartbeatSupervision(uint32_t interval, uint32_t current, s
       _heartbeat_interval = interval;
       _heartbeat_current = effective_current;
       _heartbeat = interval > 0;
+      _heartbeat_synced = true;
     }
     if(callback) callback(ret);
   });
