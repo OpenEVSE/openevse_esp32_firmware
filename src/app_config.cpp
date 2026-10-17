@@ -69,9 +69,15 @@ String lang;
 String www_username;
 String www_password;
 String www_certificate_id;
+bool www_https_enabled;
 
 // Session HMAC key — generated on first load, rotated on credential change.
 String server_secret;
+
+// Installer-tools password (gates the GUI's Installer Tools page and the
+// one-time hardware-current write). Not a public setting: see
+// config_strip_internal().
+String installer_password;
 
 // Web server ports
 uint32_t www_http_port;
@@ -235,6 +241,7 @@ void config_changed(String name);
 #define CONFIG_DEFAULT_FLAGS (CONFIG_SERVICE_SNTP | \
                               CONFIG_OCPP_AUTO_AUTH | \
                               CONFIG_OCPP_OFFLINE_AUTH | \
+                              CONFIG_HTTP_ENABLED | \
                               CONFIG_TEMP_THROTTLE_DEFAULT | \
                               CONFIG_DEFAULT_STATE_DEFAULT | \
                               CONFIG_LCD_NETWORK_INFO)
@@ -341,7 +348,11 @@ ConfigOpt *opts[] =
   new ConfigOptDefinition<String>(www_username, "", "www_username", "au"),
   new ConfigOptSecret(www_password, "", "www_password", "ap"),
   new ConfigOptDefinition<String>(www_certificate_id, "", "www_certificate_id", "wc"),
+  new ConfigOptDefinition<bool>(www_https_enabled, false, "www_https_enabled", "wse"),
   new ConfigOptSecret(server_secret, "", "server_secret", "wsk"),
+
+// Installer password; the default is what a fresh or factory-reset unit uses.
+  new ConfigOptSecret(installer_password, INSTALLER_PASSWORD_DEFAULT, "installer_password", "ipw"),
 
 // Web server ports
   new ConfigOptDefinition<uint32_t>(www_http_port, HTTP_SERVER_PORT, "www_http_port", "whp"),
@@ -508,6 +519,7 @@ ConfigOpt *opts[] =
   new ConfigOptVirtualMaskedBool(flagsOpt, flagsChanged, CONFIG_TEMP_THROTTLE, CONFIG_TEMP_THROTTLE, "temp_throttle_enabled", "tte"),
   new ConfigOptVirtualMaskedBool(flagsOpt, flagsChanged, CONFIG_LCD_NETWORK_INFO, CONFIG_LCD_NETWORK_INFO, "lcd_network_info", "lni"),
   new ConfigOptVirtualMaskedBool(flagsOpt, flagsChanged, CONFIG_TFT_12H_CLOCK, CONFIG_TFT_12H_CLOCK, "tft_12h_clock", "t12"),
+  new ConfigOptVirtualMaskedBool(flagsOpt, flagsChanged, CONFIG_HTTP_ENABLED, CONFIG_HTTP_ENABLED, "www_http_enabled", "whe"),
   new ConfigOptVirtualMqttProtocol(flagsOpt, flagsChanged, "mqtt_protocol", "mprt"),
   new ConfigOptVirtualChargeMode(flagsOpt, flagsChanged, "charge_mode", "chmd"),
 
@@ -732,12 +744,36 @@ void config_save_notification_acks(const String &acks, const String &fw)
 // must not be able to overwrite the ack state, and a /config response or an
 // MQTT config publish must not carry it. config_save_notification_acks() is
 // the one writer and goes to user_config directly.
+//
+// installer_password gets the same treatment: only POST /installer/password,
+// which checks the current password first, may change it, and it is never
+// sent back to the browser (not even masked).
 static void config_strip_internal(JsonDocument &doc)
 {
   doc.remove("notification_acks");
   doc.remove("notification_acks_fw");
   doc.remove("nak");
   doc.remove("nkv");
+  doc.remove("installer_password");
+  doc.remove("ipw");
+}
+
+const String &config_installer_password()
+{
+  return installer_password;
+}
+
+bool config_installer_password_set(const char *password)
+{
+  // Same route as the ack blob: deserialize() raises the modified flag that
+  // commit() requires, and only when the value really changed.
+  const size_t capacity = JSON_OBJECT_SIZE(1) + 128;
+  DynamicJsonDocument doc(capacity);
+  doc["installer_password"] = password;
+  if(user_config.deserialize(doc)) {
+    user_config.commit();
+  }
+  return installer_password == password;
 }
 
 bool config_deserialize(String& json) {

@@ -66,7 +66,6 @@ void Notifications::setup()
 void Notifications::gather(NotificationInputs &in)
 {
   in.ground_check = _evse->isGroundCheckEnabled();
-  in.gfci_check   = _evse->isGfiTestEnabled();
   in.relay_check  = _evse->isStuckRelayCheckEnabled();
   in.diode_check  = _evse->isDiodeCheckEnabled();
   in.vent_check   = _evse->isVentRequiredEnabled();
@@ -343,7 +342,6 @@ const char *notification_severity_name(uint8_t severity)
 const char *notification_short_text(const char *id)
 {
   if(0 == strcmp(id, "safety.ground_check"))      return "GROUND CHECK OFF";
-  if(0 == strcmp(id, "safety.gfci_check"))        return "GFCI SELF TEST OFF";
   if(0 == strcmp(id, "safety.relay_check"))       return "RELAY CHECK OFF";
   if(0 == strcmp(id, "safety.diode_check"))       return "DIODE CHECK OFF";
   if(0 == strcmp(id, "safety.vent_check"))        return "VENT CHECK OFF";

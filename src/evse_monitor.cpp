@@ -71,7 +71,6 @@ extern uint32_t heartbeat_current_cfg;
 #define EVSE_MONITOR_FAULT_COUNT_BOOT_READY     (1 << 0)
 #define EVSE_MONITOR_FLAGS_BOOT_READY           (1 << 1)
 #define EVSE_MONITOR_CURRENT_BOOT_READY         (1 << 2)
-#define EVSE_MONITOR_ENERGY_BOOT_READY          (1 << 3)
 #define EVSE_MONITOR_CURRENT_SENSOR_BOOT_READY  (1 << 4)
 #define EVSE_MONITOR_SERIAL_BOOT_READY          (1 << 5)
 
@@ -79,7 +78,6 @@ extern uint32_t heartbeat_current_cfg;
         EVSE_MONITOR_FAULT_COUNT_BOOT_READY | \
         EVSE_MONITOR_FLAGS_BOOT_READY | \
         EVSE_MONITOR_CURRENT_BOOT_READY | \
-        EVSE_MONITOR_ENERGY_BOOT_READY | \
         EVSE_MONITOR_CURRENT_SENSOR_BOOT_READY | \
         EVSE_MONITOR_SERIAL_BOOT_READY \
 )
