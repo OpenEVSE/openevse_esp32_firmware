@@ -41,9 +41,11 @@ Given(
   'the latest published firmware {string} from GitHub',
   async ({ world }, assetName: string) => {
     // Use the release GitHub itself publishes: its size and SHA-256 are the reference.
-    const res = await fetch('https://api.github.com/repos/OpenEVSE/openevse_esp32_firmware/releases/latest', {
-      headers: { Accept: 'application/vnd.github+json' },
-    });
+    // Unauthenticated API calls share a low rate limit on CI runners; use the
+    // workflow token when there is one.
+    const headers: Record<string, string> = { Accept: 'application/vnd.github+json' };
+    if (process.env.GITHUB_TOKEN) headers.Authorization = `Bearer ${process.env.GITHUB_TOKEN}`;
+    const res = await fetch('https://api.github.com/repos/OpenEVSE/openevse_esp32_firmware/releases/latest', { headers });
     expect(res.status, 'GitHub release lookup').toBe(200);
     const release = await res.json();
     const asset = release.assets.find((a: any) => a.name === assetName);
