@@ -233,6 +233,10 @@ class EvseMonitor : public MicroTasks::Task
     // own periodic RAPI traffic so it doesn't overflow the RAPI queue and
     // drop heartbeat pulses for that long. See runStuckRelayRecovery().
     bool _relay_recovery_in_flight;
+    // True while a heartbeat pulse sent during that window is unanswered, so
+    // at most one is ever queued behind the blocked $FK (the RAPI queue is only
+    // RAPI_MAX_COMMANDS deep). See loop().
+    bool _relay_recovery_pulse_pending;
 
 #ifdef ENABLE_CABLE_TEMP
     // Cable NTC thermistor monitoring (linco-work CABLE_TEMPERATURE_MONITORING
@@ -286,6 +290,9 @@ class EvseMonitor : public MicroTasks::Task
 
     uint32_t _count;
     bool _heartbeat;
+    // The controller has acknowledged the configured heartbeat state, armed or
+    // disabled. Until it has, loop() keeps resending it.
+    bool _heartbeat_synced;
 
     char _firmware_version[32];
     char _serial[16];
@@ -310,6 +317,7 @@ class EvseMonitor : public MicroTasks::Task
 
     void evseBoot(const char *firmware_version);
     void updateEvseState(uint8_t evse_state, uint8_t pilot_state, uint32_t vflags);
+    void sendHeartbeatConfig();
     void updateCurrentSettings(long min_current, long max_hardware_current, long pilot, long max_configured_current);
 
     void getStatusFromEvse(bool allowStart = true);
