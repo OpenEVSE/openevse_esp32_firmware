@@ -15,10 +15,9 @@ permissions:
   pull-requests: write
 
 env:
-  # The emulator checkout provides the /api/test/* control endpoints.
-  # TODO: switch to `main` once those land there.
+  # The emulator checkout provides the /api/test/* control endpoints (merged to main).
   EMULATOR_REPO: jeremypoulter/OpenEVSE_Emulator
-  EMULATOR_REF: claude/laughing-johnson-btb28l
+  EMULATOR_REF: main
 
 jobs:
   # Runs alongside the scenarios, not before them: a UI route without a scenario
