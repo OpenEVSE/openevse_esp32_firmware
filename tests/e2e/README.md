@@ -65,7 +65,7 @@ erase, partition and signature behaviour still need a real board. Those paths
 are not covered here.
 
 The live scenario needs network access to GitHub. Behind an HTTP proxy, Node's
-`fetch` needs `NODE_USE_ENV_PROXY=1` (Node 22+) to honour `HTTPS_PROXY`.
+`fetch` needs `NODE_USE_ENV_PROXY=1` (Node 22.21.0+) to honour `HTTPS_PROXY`.
 
 The `@ota` scenarios all pass on `master` as of this writing. They were written
 to fail on the bugs they reproduce, so a regression shows up as a red run rather
