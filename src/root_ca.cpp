@@ -95,9 +95,34 @@ const char root_ca[] = ""
 "-----END CERTIFICATE-----\r\n"
 #endif
 #if CA_GITHUB
-// github.com chains to Sectigo Public Server Authentication Root E46, which
-// is cross-signed by USERTrust ECC Certification Authority. Carry both: with
-// E46 in the bundle the chain is anchored one P-384 signature check earlier.
+// github.com chains to Sectigo Public Server Authentication CA DV E36, then
+// Sectigo Public Server Authentication Root E46, which is cross-signed by
+// USERTrust ECC Certification Authority. E36 itself is carried first: it has
+// a P-256 key, so anchoring there means the handshake never checks E46's
+// P-384 signature, which the built-in TLS takes ~19 s to do on an ESP32 -
+// long enough that the loop stalls and the UI loses its websocket. The two
+// roots stay as the fallback if GitHub moves to another intermediate.
+"-----BEGIN CERTIFICATE-----\r\n"
+"MIIDXzCCAuagAwIBAgIQNuBZ7YiN1Xrt1XC2cn+b2jAKBggqhkjOPQQDAzBfMQsw\r\n"
+"CQYDVQQGEwJHQjEYMBYGA1UEChMPU2VjdGlnbyBMaW1pdGVkMTYwNAYDVQQDEy1T\r\n"
+"ZWN0aWdvIFB1YmxpYyBTZXJ2ZXIgQXV0aGVudGljYXRpb24gUm9vdCBFNDYwHhcN\r\n"
+"MjEwMzIyMDAwMDAwWhcNMzYwMzIxMjM1OTU5WjBgMQswCQYDVQQGEwJHQjEYMBYG\r\n"
+"A1UEChMPU2VjdGlnbyBMaW1pdGVkMTcwNQYDVQQDEy5TZWN0aWdvIFB1YmxpYyBT\r\n"
+"ZXJ2ZXIgQXV0aGVudGljYXRpb24gQ0EgRFYgRTM2MFkwEwYHKoZIzj0CAQYIKoZI\r\n"
+"zj0DAQcDQgAEaKGnbAUnBYljHDmn/yUhxe3TLxKYuyzc9VXoSaCEV5F73Fhfa/Si\r\n"
+"/RMsmwTFW3R9s7J6JpYZFmu4do3vk/Vgl6OCAYEwggF9MB8GA1UdIwQYMBaAFNEi\r\n"
+"2kxZ8UtfJjiqndbu6w3D+6lhMB0GA1UdDgQWBBQXmagEwW/kLXCoChA9A9PpGrgm\r\n"
+"YzAOBgNVHQ8BAf8EBAMCAYYwEgYDVR0TAQH/BAgwBgEB/wIBADAdBgNVHSUEFjAU\r\n"
+"BggrBgEFBQcDAQYIKwYBBQUHAwIwGwYDVR0gBBQwEjAGBgRVHSAAMAgGBmeBDAEC\r\n"
+"ATBUBgNVHR8ETTBLMEmgR6BFhkNodHRwOi8vY3JsLnNlY3RpZ28uY29tL1NlY3Rp\r\n"
+"Z29QdWJsaWNTZXJ2ZXJBdXRoZW50aWNhdGlvblJvb3RFNDYuY3JsMIGEBggrBgEF\r\n"
+"BQcBAQR4MHYwTwYIKwYBBQUHMAKGQ2h0dHA6Ly9jcnQuc2VjdGlnby5jb20vU2Vj\r\n"
+"dGlnb1B1YmxpY1NlcnZlckF1dGhlbnRpY2F0aW9uUm9vdEU0Ni5wN2MwIwYIKwYB\r\n"
+"BQUHMAGGF2h0dHA6Ly9vY3NwLnNlY3RpZ28uY29tMAoGCCqGSM49BAMDA2cAMGQC\r\n"
+"MFsKnBQDh64l+v+aUYWjDCJKQMxHUUGmcwAYDIjJ9pbRYItMCIx5xu0oUb6sIfTX\r\n"
+"qQIwPddcsDE4KdeLu1hJdpHgdLvsHAK3vygyLGujMU9xBJCDackRT93VHEE0gppg\r\n"
+"NqdV\r\n"
+"-----END CERTIFICATE-----\r\n"
 "-----BEGIN CERTIFICATE-----\r\n"
 "MIICOjCCAcGgAwIBAgIQQvLM2htpN0RfFf51KBC49DAKBggqhkjOPQQDAzBfMQsw\r\n"
 "CQYDVQQGEwJHQjEYMBYGA1UEChMPU2VjdGlnbyBMaW1pdGVkMTYwNAYDVQQDEy1T\r\n"
