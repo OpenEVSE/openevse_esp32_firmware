@@ -59,7 +59,7 @@ jobs:
     - name: Set up Python
       uses: actions/setup-python@v7
       with:
-        python-version: '3.x'
+        python-version: '3.14'
 
     - name: Install PlatformIO
       run: |
@@ -169,7 +169,7 @@ jobs:
     - name: Set up Python
       uses: actions/setup-python@v7
       with:
-        python-version: '3.x'
+        python-version: '3.14'
 
     - name: Install PlatformIO
       # Pinned: PlatformIO Core 6.2.0 bumped its bundled build engine to
@@ -339,7 +339,7 @@ jobs:
     - name: Set up Python
       uses: actions/setup-python@v7
       with:
-        python-version: '3.x'
+        python-version: '3.14'
 
     - name: Build flash size report
       run: |
@@ -395,7 +395,7 @@ jobs:
     - name: Set up Python
       uses: actions/setup-python@v7
       with:
-        python-version: '3.x'
+        python-version: '3.14'
 
     - name: Install PlatformIO
       run: |
