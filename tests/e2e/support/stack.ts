@@ -1,29 +1,34 @@
-import { ChildProcess, spawn } from 'node:child_process';
+import { ChildProcess, execFile, spawn } from 'node:child_process';
 import { existsSync, mkdirSync, mkdtempSync, rmSync, createWriteStream } from 'node:fs';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
+import { promisify } from 'node:util';
 import { Device, Emulator, waitFor } from './clients';
 
 /**
  * One firmware + emulator pair.
  *
- *   browser ──HTTP──▶ native firmware ──RAPI over a PTY──▶ emulator (EVSE + car)
+ *   browser ──HTTP──▶ native firmware ──RAPI over a PTY──▶ socat ──TCP──▶ emulator container (EVSE + car)
  *
  * The native firmware is the real firmware compiled for Linux (`pio run -e
- * native_openevse`) and serves the real embedded web UI. The emulator is run
- * from a source checkout so it always has the test-control endpoints
- * (/api/test/*) this suite relies on.
+ * native_openevse`) and serves the real embedded web UI. The emulator is the
+ * published Docker image, the same one the integration tests use, so it has
+ * the test-control endpoints (/api/test/*) this suite relies on. As there, the
+ * container serves RAPI over TCP and socat gives the firmware a PTY.
  *
  * Environment:
- *   NATIVE_BINARY_PATH  firmware binary  (default ../../.pio/build/native_openevse/program)
- *   EMULATOR_DIR        emulator checkout (default ../../../OpenEVSE_Emulator)
- *   EMULATOR_PYTHON     python with the emulator's requirements installed (default python3)
- *   E2E_PORT_BASE       first TCP port; each worker uses a block of 10 (default 18000)
- *   E2E_VERBOSE=1       mirror firmware/emulator console output to the terminal
+ *   NATIVE_BINARY_PATH   firmware binary (default ../../.pio/build/native_openevse/program)
+ *   E2E_EMULATOR_IMAGE   emulator image (default ghcr.io/jeremypoulter/openevse_emulator:latest)
+ *   E2E_PORT_BASE        first TCP port; each worker uses a block of 10 (default 18000)
+ *   E2E_VERBOSE=1        mirror firmware/emulator console output to the terminal
+ *
+ * Needs Docker and socat on the host.
  */
 
 const e2eRoot = path.resolve(__dirname, '..');
 const repoRoot = path.resolve(e2eRoot, '..', '..');
+const emulatorImage = process.env.E2E_EMULATOR_IMAGE ?? 'ghcr.io/jeremypoulter/openevse_emulator:latest';
+const execFileAsync = promisify(execFile);
 
 function resolveBinary(): string {
   const candidates = [
@@ -40,14 +45,6 @@ function resolveBinary(): string {
   return found;
 }
 
-function resolveEmulator(): string {
-  const dir = path.resolve(process.env.EMULATOR_DIR ?? path.join(repoRoot, '..', 'OpenEVSE_Emulator'));
-  if (!existsSync(path.join(dir, 'src', 'main.py'))) {
-    throw new Error(`OpenEVSE emulator checkout not found at ${dir}. Set EMULATOR_DIR.`);
-  }
-  return dir;
-}
-
 async function stop(proc: ChildProcess | undefined) {
   if (!proc || proc.exitCode !== null) return;
   const exited = new Promise<void>((resolve) => proc.once('exit', () => resolve()));
@@ -60,7 +57,9 @@ async function stop(proc: ChildProcess | undefined) {
 export class Stack {
   readonly emulator: Emulator;
   readonly device: Device;
-  private emulatorProc?: ChildProcess;
+  private readonly containerName: string;
+  private emulatorLogs?: ChildProcess;
+  private serialBridge?: ChildProcess;
   private nativeProc?: ChildProcess;
   private workdir?: string;
   private readonly ptyPath: string;
@@ -72,9 +71,11 @@ export class Stack {
     readonly workerIndex: number,
     private readonly nativePort: number,
     private readonly emulatorPort: number,
+    private readonly rapiPort: number,
   ) {
     this.emulator = new Emulator(`http://127.0.0.1:${emulatorPort}`);
     this.device = new Device(`http://127.0.0.1:${nativePort}`);
+    this.containerName = `openevse_e2e_emulator_${process.pid}_${workerIndex}`;
     this.ptyPath = path.join(tmpdir(), `openevse_e2e_pty_${process.pid}_${workerIndex}`);
     this.logDir = path.join(e2eRoot, 'output', `worker-${workerIndex}`);
     this.otaSinkDir = path.join(this.logDir, 'ota-sink');
@@ -87,7 +88,7 @@ export class Stack {
 
   static async start(workerIndex: number): Promise<Stack> {
     const base = Number(process.env.E2E_PORT_BASE ?? 18000) + workerIndex * 10;
-    const stack = new Stack(workerIndex, base, base + 1);
+    const stack = new Stack(workerIndex, base, base + 1, base + 2);
     try {
       await stack.startEmulator();
       await stack.startNative();
@@ -115,7 +116,9 @@ export class Stack {
 
   async stop() {
     await stop(this.nativeProc);
-    await stop(this.emulatorProc);
+    await stop(this.serialBridge);
+    await execFileAsync('docker', ['rm', '-f', this.containerName]).catch(() => undefined);
+    await stop(this.emulatorLogs);
     if (this.workdir) rmSync(this.workdir, { recursive: true, force: true });
     rmSync(this.ptyPath, { force: true });
   }
@@ -132,21 +135,28 @@ export class Stack {
   }
 
   private async startEmulator() {
-    const dir = resolveEmulator();
     rmSync(this.ptyPath, { force: true });
-    this.emulatorProc = spawn(
-      process.env.EMULATOR_PYTHON ?? 'python3',
-      [
-        path.join(dir, 'src', 'main.py'),
-        '--serial-mode', 'pty',
-        '--serial-pty-path', this.ptyPath,
-        '--web-host', '127.0.0.1',
-        '--web-port', String(this.emulatorPort),
-      ],
-      { cwd: dir, env: { ...process.env, PYTHONUNBUFFERED: '1' } },
-    );
-    this.pipeOutput(this.emulatorProc, 'emulator');
+    // Same container setup as tests/integration/conftest.py: RAPI over TCP,
+    // published on loopback only, since these are test instances with no auth.
+    await execFileAsync('docker', ['rm', '-f', this.containerName]).catch(() => undefined);
+    await execFileAsync('docker', [
+      'run', '-d', '--name', this.containerName,
+      '-p', `127.0.0.1:${this.emulatorPort}:8080`,
+      '-p', `127.0.0.1:${this.rapiPort}:8023`,
+      '-e', 'WEB_PORT=8080',
+      '-e', 'SERIAL_MODE=tcp',
+      '-e', 'SERIAL_TCP_PORT=8023',
+      '-e', 'PYTHONUNBUFFERED=1',
+      emulatorImage,
+    ]);
+    this.emulatorLogs = spawn('docker', ['logs', '-f', '--tail=all', this.containerName]);
+    this.pipeOutput(this.emulatorLogs, 'emulator');
     await waitFor('emulator HTTP API', async () => (await this.emulator.status()).evse, 30_000);
+    // Bridge the emulator's TCP RAPI port to the PTY the firmware opens, as the
+    // integration harness does. Dialling only after the HTTP API is up means the
+    // TCP side is ready before the firmware's first RAPI probe.
+    this.serialBridge = spawn('socat', [`PTY,link=${this.ptyPath},rawer`, `TCP:127.0.0.1:${this.rapiPort}`]);
+    this.pipeOutput(this.serialBridge, 'serial');
     await waitFor('emulator PTY', async () => existsSync(this.ptyPath), 10_000);
   }
 

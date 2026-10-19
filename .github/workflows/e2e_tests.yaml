@@ -15,9 +15,8 @@ permissions:
   pull-requests: write
 
 env:
-  # The emulator checkout provides the /api/test/* control endpoints (merged to main).
-  EMULATOR_REPO: jeremypoulter/OpenEVSE_Emulator
-  EMULATOR_REF: main
+  # The emulator image is the same one the integration tests run. It provides the /api/test/* control endpoints.
+  E2E_EMULATOR_IMAGE: ghcr.io/jeremypoulter/openevse_emulator:latest
 
 jobs:
   # Runs alongside the scenarios, not before them: a UI route without a scenario
@@ -58,19 +57,6 @@ jobs:
         with:
           persist-credentials: false
 
-      - name: Checkout the emulator
-        uses: actions/checkout@v7
-        with:
-          persist-credentials: false
-          repository: ${{ env.EMULATOR_REPO }}
-          ref: ${{ env.EMULATOR_REF }}
-          path: emulator
-
-      - name: Set up Python
-        uses: actions/setup-python@v7
-        with:
-          python-version: '3.12'
-
       - name: Set up Node
         uses: actions/setup-node@v7
         with:
@@ -81,7 +67,7 @@ jobs:
       - name: Install system dependencies
         run: |
           sudo apt-get update
-          sudo apt-get install -y libavahi-client-dev libavahi-common-dev
+          sudo apt-get install -y libavahi-client-dev libavahi-common-dev socat
 
       - name: Cache PlatformIO
         uses: actions/cache@v6
@@ -98,8 +84,8 @@ jobs:
           pio run -e native_openevse
           echo "NATIVE_BINARY_PATH=$PWD/.pio/build/native_openevse/program" >> "$GITHUB_ENV"
 
-      - name: Install the emulator
-        run: pip install -r emulator/requirements.txt
+      - name: Pull emulator Docker image
+        run: docker pull "$E2E_EMULATOR_IMAGE"
 
       - name: Install the test dependencies
         working-directory: tests/e2e
@@ -110,7 +96,6 @@ jobs:
       - name: Run the scenarios
         working-directory: tests/e2e
         env:
-          EMULATOR_DIR: ${{ github.workspace }}/emulator
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: npm test
 

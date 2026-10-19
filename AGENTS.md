@@ -126,7 +126,8 @@ They are the executable spec of user-visible behaviour, so keep them current:
   emulator state, so a UI that only *looks* right fails.
 - **Missing emulator capability?** Add it to the emulator repo (`/api/test/*`
   control endpoints, documented in its `openapi.yaml`) rather than faking it in
-  the test. Note the emulator ref in `.github/workflows/e2e_tests.yaml`.
+  the test. Note the emulator image in `.github/workflows/e2e_tests.yaml`
+  (`E2E_EMULATOR_IMAGE`).
 - **Never skip, `@wip`-quarantine, retry or loosen a failing scenario to get
   green.** Work out whether the firmware, UI, emulator or scenario is wrong.
   An assertion changes only when the *intended behaviour* changed.

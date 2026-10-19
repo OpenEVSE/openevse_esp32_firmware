@@ -16,9 +16,10 @@ right but did not change the charger fails.
 
 ## Running
 
-Prerequisites: Node 20+, Python 3.10+, `libavahi-client-dev` (native build),
-a checkout of [OpenEVSE_Emulator](https://github.com/jeremypoulter/OpenEVSE_Emulator)
-next to this repo (or `EMULATOR_DIR`) with `pip install -r requirements.txt`.
+Prerequisites: Node 20+, Docker, `socat`, `libavahi-client-dev` (native build).
+The emulator runs from its published image (`ghcr.io/jeremypoulter/openevse_emulator`),
+the same one the [integration tests](../integration/README.md) use. Pull it once with
+`docker pull ghcr.io/jeremypoulter/openevse_emulator:latest`.
 
 ```bash
 pio run -e native_openevse                      # once, and after firmware/UI changes
@@ -33,8 +34,7 @@ npm run report                                  # open the HTML report
 | Variable | Default | |
 |---|---|---|
 | `NATIVE_BINARY_PATH` | `.pio/build/native_openevse/program` | firmware binary |
-| `EMULATOR_DIR` | `../OpenEVSE_Emulator` (sibling of this repo) | emulator checkout |
-| `EMULATOR_PYTHON` | `python3` | interpreter with the emulator's requirements |
+| `E2E_EMULATOR_IMAGE` | `ghcr.io/jeremypoulter/openevse_emulator:latest` | emulator image |
 | `CHROMIUM_PATH` | Playwright's own download | use a system Chromium |
 | `E2E_PORT_BASE` | `18000` | each worker uses a block of 10 ports |
 | `E2E_VERBOSE` | unset | mirror firmware/emulator output to the terminal |
@@ -124,5 +124,6 @@ Feature: Safety faults
 
 Add it to the emulator repo (it has a `/api/test/*` control surface for exactly
 this), document it in its `openapi.yaml`, then add a client method in
-`support/clients.ts`. CI checks the emulator out from `EMULATOR_REF` in
-`.github/workflows/e2e_tests.yaml`.
+`support/clients.ts`. CI runs the emulator from the image in `E2E_EMULATOR_IMAGE`
+(set in `.github/workflows/e2e_tests.yaml`), so the image must be published from a
+build that has the endpoint.
