@@ -14,6 +14,7 @@
 #include "loadsharing_discovery_task.h"
 #include "app_config.h"
 #include "net_manager.h"
+#include "web_server.h"
 #include <Arduino.h>
 #include <ArduinoJson.h>
 #include <LittleFS.h>
@@ -361,6 +362,10 @@ String LoadSharingGroupState::getLocalHostname() const {
   return esp_hostname + String(".local");
 }
 
+/**
+ * Build the filtered peer view, refreshing local IP and web-listener availability.
+ * Remote peer state is retained; the local peer is included regardless of filters.
+ */
 std::vector<LoadSharingGroupState::PeerInfo> LoadSharingGroupState::getAllPeers(
     bool includeDiscovered, bool includeGroup) const {
 
@@ -370,10 +375,10 @@ std::vector<LoadSharingGroupState::PeerInfo> LoadSharingGroupState::getAllPeers(
   for (auto& peer : _peers) {
     bool isLocal = (peer.getHost() == localHostname);
 
-    // Refresh local peer with live network state (IP may have been empty at boot)
+    // Refresh the IP independently of whether the web listener started.
     if (isLocal) {
       const_cast<LoadSharingPeer&>(peer).setIp(net.getIp());
-      const_cast<LoadSharingPeer&>(peer).setOnline(net.getIp().length() > 0);
+      const_cast<LoadSharingPeer&>(peer).setOnline(web_server_is_running());
     }
 
     // Skip non-local online-only peers when includeDiscovered is false
@@ -396,6 +401,7 @@ std::vector<LoadSharingGroupState::PeerInfo> LoadSharingGroupState::getAllPeers(
   return result;
 }
 
+/** Prepend a joined local peer whose URL, port and availability follow the listener. */
 void LoadSharingGroupState::addLocalPeer() {
   String localHostname = getLocalHostname();
 
@@ -404,16 +410,20 @@ void LoadSharingGroupState::addLocalPeer() {
   local.setId(ESPAL.getLongId());
   local.setName(String(esp_hostname));
   local.setIp(net.getIp());
-  bool ssl = config_https_enabled();
-  uint16_t port = ssl ? www_https_port : www_http_port;
-  String localUrl = ssl ? "https://" : "http://";
-  localUrl += localHostname;
-  if ((ssl && port != 443) || (!ssl && port != 80)) {
-    localUrl += ":" + String(port);
+  bool online = web_server_is_running();
+  bool ssl = web_server_is_https();
+  uint16_t port = web_server_port();
+  String localUrl;
+  if(online) {
+    localUrl = ssl ? "https://" : "http://";
+    localUrl += localHostname;
+    if ((ssl && port != 443) || (!ssl && port != 80)) {
+      localUrl += ":" + String(port);
+    }
   }
   local.setUrl(localUrl);
   local.setPort(port);
-  local.setOnline(true);
+  local.setOnline(online);
   local.setJoined(true);
 
   // Insert at front so it's always first
@@ -439,7 +449,7 @@ bool LoadSharingGroupState::loadGroupPeers() {
     return false;
   }
 
-  DynamicJsonDocument doc(1024);
+  JsonDocument doc;
   DeserializationError error = deserializeJson(doc, file);
   file.close();
 
@@ -514,8 +524,8 @@ bool LoadSharingGroupState::saveGroupPeers() {
     return false;
   }
 
-  DynamicJsonDocument doc(1024);
-  JsonArray peers = doc.createNestedArray("peers");
+  JsonDocument doc;
+  JsonArray peers = doc["peers"].to<JsonArray>();
   for (const auto& peer : _peers) {
     // Persist joined peers AND the local device entry. The local row carries
     // the controller's own priority, which is managed the same way as every
@@ -525,7 +535,7 @@ bool LoadSharingGroupState::saveGroupPeers() {
       // after a restart (discovery may re-key it under a different reachable
       // host), plus the controller-managed priority. Legacy entries stored a
       // bare host string.
-      JsonObject obj = peers.createNestedObject();
+      JsonObject obj = peers.add<JsonObject>();
       obj["id"] = peer.getId();
       obj["host"] = peer.getHost();
       obj["priority"] = peer.getPriority();

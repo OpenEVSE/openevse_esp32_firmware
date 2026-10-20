@@ -16,7 +16,7 @@ is the **`gui-nightshift` git submodule** (Svelte 5).
 
 ```bash
 git submodule update --init --recursive
-cd gui-nightshift && npm install && npm run build && cd ..
+cd gui-nightshift && npm ci && npm run build && cd ..
 pio run -e openevse_wifi_v1        # default 4MB board
 ```
 

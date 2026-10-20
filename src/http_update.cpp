@@ -24,6 +24,7 @@ struct HttpUpdateRequestState
   bool responseComplete = false;
   bool redirected = false;
   bool errorReported = false;
+  int redirects = 0;
   String sourceUrl;
   String redirectUrl;
   std::function<void(size_t complete, size_t total)> progress;
@@ -37,6 +38,33 @@ struct HttpUpdateRequestState
 // second context can exhaust the ESP32 heap. Queue it until after the current
 // Mongoose.poll() returns instead.
 static HttpUpdateRequestState *pendingRedirect = nullptr;
+
+// Mongoose 7's built-in TLS verifies the certificate chain in software on
+// loopTask. GitHub's chain has a P-384 intermediate, and checking that
+// signature takes longer than the 5 s task watchdog, so the unit reset in the
+// middle of every GitHub download (#1359). Take loopTask off the watchdog
+// from sending the request until the first response event, i.e. for the
+// handshake only, and put it back as soon as data starts to flow.
+static bool otaWdtSuspended = false;
+static unsigned long otaWdtSuspendedAt = 0;
+
+static void ota_wdt_suspend()
+{
+  if(!otaWdtSuspended) {
+    disableLoopWDT();
+    otaWdtSuspended = true;
+    otaWdtSuspendedAt = millis();
+  }
+}
+
+static void ota_wdt_resume()
+{
+  if(otaWdtSuspended) {
+    enableLoopWDT();
+    otaWdtSuspended = false;
+    DEBUG_PORT.printf("OTA: TLS handshake took %lu ms\n", millis() - otaWdtSuspendedAt);
+  }
+}
 
 static bool isRedirectStatus(int status)
 {
@@ -53,7 +81,8 @@ bool http_update_url_allowed(const String &url)
 bool http_update_from_url(String url,
   std::function<void(size_t complete, size_t total)> progress,
   std::function<void(int)> success,
-  std::function<void(int)> error)
+  std::function<void(int)> error,
+  int redirects)
 {
   DBUGF("Update from URL: %s", url.c_str());
 
@@ -63,6 +92,12 @@ bool http_update_from_url(String url,
   if(!http_update_url_allowed(url)) {
     DEBUG_PORT.printf("OTA URL not allowed: %s\n", url.c_str());
     error(HTTP_UPDATE_ERROR_URL_NOT_ALLOWED);
+    return false;
+  }
+
+  if(redirects > HTTP_UPDATE_MAX_REDIRECTS) {
+    DEBUG_PORT.printf("OTA too many redirects: %s\n", url.c_str());
+    error(HTTP_UPDATE_ERROR_TOO_MANY_REDIRECTS);
     return false;
   }
 
@@ -77,17 +112,22 @@ bool http_update_from_url(String url,
       return false;
     }
     state->sourceUrl = url;
+    state->redirects = redirects;
     state->progress = progress;
     state->success = success;
     state->error = error;
 
     request->setMethod(HTTP_GET);
+    // Hand the image over chunk by chunk; the client would otherwise buffer the
+    // whole download in RAM, which an ESP32 cannot do.
+    request->setStreaming();
 
     DBUGF("Trying to fetch firmware from %s", url.c_str());
 
     request->onBody([request,state](MongooseHttpClientResponse *response)
     {
       DBUGF("Update onBody %d", response->respCode());
+      ota_wdt_resume();
       if(state->updateComplete)
       {
         return;
@@ -144,6 +184,7 @@ bool http_update_from_url(String url,
     request->onResponse([request,state](MongooseHttpClientResponse *response)
     {
       DBUGF("Update onResponse %d", response->respCode());
+      ota_wdt_resume();
       if(isRedirectStatus(response->respCode()))
       {
         state->redirected = true;
@@ -194,6 +235,7 @@ bool http_update_from_url(String url,
     request->onClose([state]()
     {
       DBUGLN("Update onClose");
+      ota_wdt_resume();
       if(state->redirected)
       {
         if(pendingRedirect)
@@ -225,7 +267,8 @@ bool http_update_from_url(String url,
       delete state;
     });
 
-    client.send(request);
+    ota_wdt_suspend();
+    request->send();
     return true;
   }
 
@@ -250,9 +293,10 @@ void http_update_loop()
   auto progress = redirect->progress;
   auto success = redirect->success;
   auto error = redirect->error;
+  int redirects = redirect->redirects + 1;
   delete redirect;
 
-  http_update_from_url(url, progress, success, error);
+  http_update_from_url(url, progress, success, error, redirects);
 }
 
 bool http_update_start(String source, size_t total)
@@ -288,7 +332,7 @@ bool http_update_start(String source, size_t total)
 
     lcd.display(F("Updating WiFi"), 0, 0, 10 * 1000, LCD_CLEAR_LINE | LCD_DISPLAY_NOW);
     lcd.display(F(""), 0, 1, 10 * 1000, LCD_CLEAR_LINE | LCD_DISPLAY_NOW);
-    StaticJsonDocument<128> event;
+    JsonDocument event;
     event["ota"] = "started";
     web_server_event(event);
     return true;
@@ -323,7 +367,7 @@ bool http_update_write(uint8_t *data, size_t len)
 
         DEBUG_PORT.printf("Update: %d%%\n", percent);
 
-        StaticJsonDocument<128> event;
+        JsonDocument event;
         event["ota_progress"] = percent;
         web_server_event(event);
         yield();
@@ -344,14 +388,14 @@ bool http_update_end(bool evenIfRemaining)
   {
     DBUGF("Update Success: %u", update_position);
     lcd.display(F("Complete"), 0, 1, 10 * 1000, LCD_CLEAR_LINE | LCD_DISPLAY_NOW);
-    StaticJsonDocument<128> event;
+    JsonDocument event;
     event["ota"] = "completed";
     web_server_event(event);
     yield();
     return true;
   } else {
     DEBUG_PORT.printf("Update failed: %d (%s)\n", Update.getError(), Update.errorString());
-    StaticJsonDocument<128> event;
+    JsonDocument event;
     event["ota"] = "failed";
     web_server_event(event);
     yield();
