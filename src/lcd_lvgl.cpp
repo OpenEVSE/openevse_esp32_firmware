@@ -25,6 +25,7 @@
 #include "fault_text.h"
 #include "lvgl_tft/backlight.h"
 #include "notifications.h"
+#include "LedManagerTask.h"
 
 #ifndef LCD_BACKLIGHT_PIN
 #define LCD_BACKLIGHT_PIN TFT_BL
@@ -653,6 +654,14 @@ void LcdTask::applyDisplayConfig()
   // Apply live so brightness-slider changes take effect without waiting for a wake.
   lvgl_panel_set_backlight((uint8_t)(_standby ? (_standbyBrightness < 0 ? 0 : _standbyBrightness)
                                               : (_activeBrightness  < 0 ? 100 : _activeBrightness)));
+  applyLedStandby();
+}
+
+void LcdTask::applyLedStandby()
+{
+#if RGB_LED
+  ledManager.setStandbyDark(bl_leds_dark(_standby, tft_standby_leds_off));
+#endif
 }
 
 void LcdTask::wakeBacklight()
@@ -667,6 +676,7 @@ void LcdTask::wakeBacklight()
       standby_screen_destroy();
       _activeScreen = SCR_CHARGE;
     }
+    applyLedStandby();
   }
 }
 
@@ -681,6 +691,7 @@ void LcdTask::enterStandby()
     _activeScreen = SCR_STANDBY;
   }
   lvgl_panel_set_backlight((uint8_t)(_standbyBrightness < 0 ? 0 : _standbyBrightness));
+  applyLedStandby();
 }
 
 bool LcdTask::stateKeepsAwake(uint8_t state, bool vehicle, double amps)

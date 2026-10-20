@@ -104,6 +104,7 @@ class LcdTask : public MicroTasks::Task
     void enterStandby();                // standby brightness (+ standby screen if >0)
     bool stateKeepsAwake(uint8_t state, bool vehicle, double amps);  // charging/fault force-bright
     void applyDisplayConfig();          // refresh cached brightness/timeout + apply live
+    void applyLedStandby();             // blank/restore the status LEDs to match standby
 
     void display(Message *msg, uint32_t flags);
     unsigned long displayNextMessage();
