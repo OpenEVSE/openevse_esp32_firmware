@@ -127,7 +127,6 @@ jobs:
         env:
           - nodemcu-32s
           - espressif_esp-wrover-kit
-          - espressif_esp-wrover-kit_latest
           - adafruit_huzzah32_dev
           - adafruit_huzzah32
           - adafruit_featheresp32
@@ -164,12 +163,20 @@ jobs:
       uses: actions/cache@v6
       with:
         path: ~/.platformio
-        key: ${{ runner.os }}-${{ hashFiles('**/lockfiles') }}
+        # Include the Python version: the ESP-IDF venv under here is built
+        # for whichever interpreter created it, so a 3.15 cache must not be
+        # restored into the 3.14 build.
+        key: ${{ runner.os }}-python-3.14-${{ hashFiles('**/lockfiles') }}
 
     - name: Set up Python
       uses: actions/setup-python@v7
       with:
-        python-version: '3.x'
+        # Pinned: '3.x' resolves to 3.15 on the runner, and the ESP-IDF
+        # toolchain espressif32 installs for the core-3.x (espidf) envs
+        # rejects anything newer than 3.14 ("Python version must be 3.10
+        # ... 3.14"), so openevse_wifi_v1_16mb fails before it compiles.
+        # Unpin once the toolchain accepts 3.15.
+        python-version: '3.14'
 
     - name: Install PlatformIO
       # Pinned: PlatformIO Core 6.2.0 bumped its bundled build engine to
