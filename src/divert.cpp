@@ -122,7 +122,7 @@ void DivertTask::setMode(DivertMode mode)
   {
     _mode = mode;
 
-    StaticJsonDocument<128> event;
+    JsonDocument event;
     event["divertmode"] = (uint8_t)_mode;
     _state = EvseState::None;
     event["divert_active"] = false;
@@ -163,7 +163,7 @@ void DivertTask::update_state()
 {
   Profile_Start(DivertTask::update_state);
 
-  StaticJsonDocument<256> event;
+  JsonDocument event;
   event["divert_update"] = 0;
 
   if (divert_type == DIVERT_TYPE_GRID)
@@ -360,7 +360,7 @@ void DivertTask::initDivertType() {
     else {
       divert_type = DIVERT_TYPE_SOLAR;
     }
-    DynamicJsonDocument doc(JSON_OBJECT_SIZE(1) + 1); // use JSON in no-copy mode
+    JsonDocument doc;
     doc["divert_type"] = divert_type;
     config_deserialize(doc);
     config_commit();

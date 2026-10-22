@@ -195,14 +195,11 @@ void Scheduler::setup()
 {
   _loading = true;
 
-  // Load the schedule from storage.  Size the JSON doc to the actual file so
-  // schedules with per-event feature/limit fields don't overflow the old fixed
-  // 1024-byte budget and silently load as empty (ArduinoJson 6 NoMemory).
+  // Load the schedule from storage.
   File file = LittleFS.open(SCHEDULE_PATH);
   if(file)
   {
-    size_t capacity = max((size_t)file.size() * 2, (size_t)4096);
-    DynamicJsonDocument doc(capacity);
+    JsonDocument doc;
     DeserializationError err = deserializeJson(doc, file);
     file.close();
     if(err == DeserializationError::Code::Ok && !doc.overflowed()) {
@@ -298,7 +295,7 @@ unsigned long Scheduler::loop(MicroTasks::WakeReason reason)
     _activeEvent = currentEvent;
     _active_event_dirty = false;
 
-    StaticJsonDocument<128> doc;
+    JsonDocument doc;
     doc["schedule_plan_version"] = ++_plan_version;
     event_send(doc);
   }
@@ -341,7 +338,7 @@ bool Scheduler::commit()
 
   // Serialize first and ensure there's room, so a full filesystem never
   // truncates a previously-valid schedule file into a corrupt one.
-  DynamicJsonDocument doc(scheduleJsonCapacity());
+  JsonDocument doc;
   if(!serialize(doc) || doc.overflowed() || !littlefs_has_space(measureJson(doc))) {
     DBUGLN("Scheduler: insufficient space or doc overflow, keeping existing file");
     return false;
@@ -438,7 +435,7 @@ void Scheduler::buildSchedule()
     #endif // ENABLE_DEBUG
   }
 
-  StaticJsonDocument<128> doc;
+  JsonDocument doc;
   doc["schedule_version"] = ++_version;
   doc["schedule_plan_version"] = ++_plan_version;
   event_send(doc);
@@ -618,7 +615,7 @@ bool Scheduler::addEvent(const char *json)
   return deserialize(json, SCHEDULER_EVENT_NULL);
 }
 
-bool Scheduler::addEvent(DynamicJsonDocument &doc)
+bool Scheduler::addEvent(JsonDocument &doc)
 {
   return deserialize(doc, SCHEDULER_EVENT_NULL);
 }
@@ -649,11 +646,7 @@ bool Scheduler::deserialize(String& json)
 
 bool Scheduler::deserialize(const char *json)
 {
-  // Parsing from const char* copies keys/values into the pool, so a
-  // multi-rule Charge Manager schedule overflows a fixed 1024 budget at
-  // ~2 events.  Size from the input instead (2x covers ArduinoJson overhead).
-  const size_t capacity = max((size_t)4096, strlen(json) * 2);
-  DynamicJsonDocument doc(capacity);
+  JsonDocument doc;
 
   DeserializationError err = deserializeJson(doc, json);
   if(DeserializationError::Code::Ok == err && !doc.overflowed()) {
@@ -665,9 +658,7 @@ bool Scheduler::deserialize(const char *json)
 
 bool Scheduler::deserialize(Stream &stream)
 {
-  // Size from the bytes remaining in the stream (see deserialize(const char*)).
-  const size_t capacity = max((size_t)4096, (size_t)stream.available() * 2);
-  DynamicJsonDocument doc(capacity);
+  JsonDocument doc;
 
   DeserializationError err = deserializeJson(doc, stream);
   if(DeserializationError::Code::Ok == err && !doc.overflowed()) {
@@ -679,7 +670,7 @@ bool Scheduler::deserialize(Stream &stream)
   return false;
 }
 
-bool Scheduler::deserialize(DynamicJsonDocument &doc)
+bool Scheduler::deserialize(JsonDocument &doc)
 {
   if (doc.is<JsonObject>())
   {
@@ -715,10 +706,7 @@ bool Scheduler::deserialize(String& json, uint32_t event)
 
 bool Scheduler::deserialize(const char *json, uint32_t event)
 {
-  // Single event, but with feature/limit fields 1024 was borderline; size
-  // from the input like the bulk path.
-  const size_t capacity = max((size_t)2048, strlen(json) * 2);
-  DynamicJsonDocument doc(capacity);
+  JsonDocument doc;
 
   DBUGVAR(json);
 
@@ -730,7 +718,7 @@ bool Scheduler::deserialize(const char *json, uint32_t event)
   return false;
 }
 
-bool Scheduler::deserialize(DynamicJsonDocument &doc, uint32_t event)
+bool Scheduler::deserialize(JsonDocument &doc, uint32_t event)
 {
   JsonObject object = doc.as<JsonObject>();
 
@@ -752,22 +740,22 @@ bool Scheduler::deserializeInternal(JsonObject &obj, uint32_t event_id)
   if(SCHEDULER_EVENT_NULL == event_id)
   {
     // Try and get the key from the JSON
-    if(obj.containsKey("id")) {
-      event_id = obj["id"];
+    if(!obj["id"].isNull()) {
+      event_id = obj["id"].as<uint32_t>();
     }
   }
   else
   {
-    if(obj.containsKey("id")) {
-      if(event_id != obj["id"]) {
+    if(!obj["id"].isNull()) {
+      if(event_id != obj["id"].as<uint32_t>()) {
         return false;
       }
     }
   }
 
-  if(obj.containsKey("state") &&
-     obj.containsKey("time") &&
-     obj.containsKey("days"))
+  if(!obj["state"].isNull() &&
+     obj["time"].is<const char*>() &&
+     obj["days"].is<JsonArray>())
   {
     const char *time = obj["time"].as<const char *>();
     const char *state = obj["state"].as<const char *>();
@@ -789,16 +777,16 @@ bool Scheduler::deserializeInternal(JsonObject &obj, uint32_t event_id)
 
     Event *event = addEventInternal(event_id, time, days, state);
     if(event != nullptr) {
-      if(obj.containsKey("feature")) {
+      if(obj["feature"].is<const char *>()) {
         event->setFeature(obj["feature"].as<const char *>());
       }
-      if(obj.containsKey("feature_value")) {
+      if(!obj["feature_value"].isNull()) {
         event->setFeatureValue((uint32_t)obj["feature_value"]);
       }
-      if(obj.containsKey("limit")) {
+      if(obj["limit"].is<const char *>()) {
         event->setLimitType(obj["limit"].as<const char *>());
       }
-      if(obj.containsKey("limit_value")) {
+      if(!obj["limit_value"].isNull()) {
         event->setLimitValue((uint32_t)obj["limit_value"]);
       }
       return true;
@@ -808,25 +796,9 @@ bool Scheduler::deserializeInternal(JsonObject &obj, uint32_t event_id)
   return false;
 }
 
-size_t Scheduler::scheduleJsonCapacity()
-{
-  size_t count = 0;
-  for(int i = 0; i < SCHEDULER_MAX_EVENTS; i++)
-  {
-    if(_events[i].isValid()) {
-      count++;
-    }
-  }
-
-  // Per-event budget: object of up to 8 members (128) + days array of up to 7
-  // (112) + copied key/value strings (time/state/feature/limit names, ~100),
-  // rounded up to 384; 512 headroom for the enclosing array and slop.
-  return 512 + count * 384;
-}
-
 bool Scheduler::serialize(String& json)
 {
-  DynamicJsonDocument doc(scheduleJsonCapacity());
+  JsonDocument doc;
 
   if(Scheduler::serialize(doc))
   {
@@ -839,7 +811,7 @@ bool Scheduler::serialize(String& json)
 
 bool Scheduler::serialize(Stream &stream)
 {
-  DynamicJsonDocument doc(scheduleJsonCapacity());
+  JsonDocument doc;
 
   if(Scheduler::serialize(doc))
   {
@@ -850,7 +822,7 @@ bool Scheduler::serialize(Stream &stream)
   return false;
 }
 
-bool Scheduler::serialize(DynamicJsonDocument &doc)
+bool Scheduler::serialize(JsonDocument &doc)
 {
   doc.to<JsonArray>();
 
@@ -858,7 +830,7 @@ bool Scheduler::serialize(DynamicJsonDocument &doc)
   {
     if(_events[i].isValid())
     {
-      JsonObject obj = doc.createNestedObject();
+      JsonObject obj = doc.add<JsonObject>();
       serialize(obj, &_events[i]);
     }
   }
@@ -871,9 +843,7 @@ bool Scheduler::serialize(DynamicJsonDocument &doc)
 
 bool Scheduler::serialize(String& json, uint32_t event)
 {
-  // IMPROVE: do a better calculation of required space
-  const size_t capacity = 4096;
-  DynamicJsonDocument doc(capacity);
+  JsonDocument doc;
 
   if(Scheduler::serialize(doc, event))
   {
@@ -884,7 +854,7 @@ bool Scheduler::serialize(String& json, uint32_t event)
   return false;
 }
 
-bool Scheduler::serialize(DynamicJsonDocument &doc, uint32_t event)
+bool Scheduler::serialize(JsonDocument &doc, uint32_t event)
 {
   JsonObject object = doc.to<JsonObject>();
   return serialize(object, event);
@@ -911,7 +881,7 @@ bool Scheduler::serialize(JsonObject &object, Scheduler::Event *event)
   object["id"] = event->getId();
   object["state"] = event->getStateText();
   object["time"] = event->getTime();
-  JsonArray days = object.createNestedArray("days");
+  JsonArray days = object["days"].to<JsonArray>();
   for(int day = 0; day < SCHEDULER_DAYS_IN_A_WEEK; day++) {
     if(event->getDays() & 1<<day) {
       days.add(days_of_the_week_strings[day]);
@@ -943,7 +913,7 @@ void Scheduler::serializeEventInstance(JsonObject &object, Scheduler::EventInsta
   object["duration"] = e->getDuration();
 }
 
-bool Scheduler::serializePlan(DynamicJsonDocument &doc)
+bool Scheduler::serializePlan(JsonDocument &doc)
 {
   JsonObject root = doc.to<JsonObject>();
 
@@ -959,10 +929,10 @@ bool Scheduler::serializePlan(DynamicJsonDocument &doc)
   {
     root["next_event_delay"] = e->getNext().getDelay(currentDay, currentOffset);
 
-    JsonObject object = root.createNestedObject("current_event");
+    JsonObject object = root["current_event"].to<JsonObject>();
     serializeEventInstance(object, e, true);
     e = &e->getNext();
-    object = root.createNestedObject("next_event");
+    object = root["next_event"].to<JsonObject>();
     serializeEventInstance(object, e, true);
   } else {
     root["next_event_delay"] = false;
@@ -974,7 +944,7 @@ bool Scheduler::serializePlan(DynamicJsonDocument &doc)
   if(e->isValid())
   {
     int day = e->getDay();
-    JsonArray currentDay = root.createNestedArray(days_of_the_week_strings[day]);
+    JsonArray currentDay = root[days_of_the_week_strings[day]].to<JsonArray>();
 
     do
     {
@@ -982,10 +952,10 @@ bool Scheduler::serializePlan(DynamicJsonDocument &doc)
       if(e->getDay() != day)
       {
         day = e->getDay();
-        currentDay = root.createNestedArray(days_of_the_week_strings[day]);
+        currentDay = root[days_of_the_week_strings[day]].to<JsonArray>();
       }
 
-      JsonObject object = currentDay.createNestedObject();
+      JsonObject object = currentDay.add<JsonObject>();
       serializeEventInstance(object, e);
 
       e = &e->getNext();
@@ -1092,7 +1062,7 @@ void Scheduler::applyFeature(Event *event)
         // surface it: silently failing open is wrong for an access-control
         // feature.
         DBUGLN("Scheduler: no RFID reader present, skipping timer-RFID feature");
-        StaticJsonDocument<64> evt;
+        JsonDocument evt;
         evt["schedule_feature_skipped"] = "rfid";
         event_send(evt);
         break;
