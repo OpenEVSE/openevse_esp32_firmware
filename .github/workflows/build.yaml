@@ -127,7 +127,6 @@ jobs:
         env:
           - nodemcu-32s
           - espressif_esp-wrover-kit
-          - espressif_esp-wrover-kit_latest
           - adafruit_huzzah32_dev
           - adafruit_huzzah32
           - adafruit_featheresp32
