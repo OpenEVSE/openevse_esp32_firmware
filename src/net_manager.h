@@ -82,9 +82,9 @@ class NetManagerTask : public MicroTasks::Task
         arduino_event_info_t _info;
       public:
         NetworkEventMessage(WiFiEvent_t event, arduino_event_info_t info) :
+          NetMessage(NetMessage::NetworkEvent),
           _event(event),
-          _info(info),
-          NetMessage(NetMessage::NetworkEvent)
+          _info(info)
         { }
         WiFiEvent_t event() { return _event; };
         arduino_event_info_t &info() { return _info; };
