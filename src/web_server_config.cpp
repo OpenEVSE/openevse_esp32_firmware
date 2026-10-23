@@ -64,6 +64,7 @@ handleConfigPost(MongooseHttpServerRequest *request, MongooseHttpServerResponseS
       }
     }
 
+#ifndef DISABLE_LOADSHARING
     // If this device is a member, check if this is a controller config push
     // or a local request trying to change load sharing fields
     if (loadSharingGroupState.isMember()) {
@@ -105,6 +106,8 @@ handleConfigPost(MongooseHttpServerRequest *request, MongooseHttpServerResponseS
         return;
       }
     }
+
+#endif // !DISABLE_LOADSHARING
 
     // Validate load sharing config ranges
     if (!doc["loadsharing_group_max_current"].isNull()) {
@@ -181,6 +184,7 @@ handleConfigPost(MongooseHttpServerRequest *request, MongooseHttpServerResponseS
       return;
     }
 
+#ifndef DISABLE_LOADSHARING
     // Role transitions are applied after every check that can reject the
     // request -- both the validation above and the factory write lock -- so a
     // rejected request never mutates group-membership state as a side effect.
@@ -204,11 +208,15 @@ handleConfigPost(MongooseHttpServerRequest *request, MongooseHttpServerResponseS
       loadSharingGroupState.resetRole();
     }
 
+#endif // !DISABLE_LOADSHARING
+
     bool config_modified = web_server_config_deserialise(doc, storage.equals("factory"));
+#ifndef DISABLE_LOADSHARING
     if (config_modified && loadsharingConfigRequest &&
         loadSharingGroupState.isController()) {
       loadSharingPeerPoller.pushConfigToAllPeers();
     }
+#endif
 
     JsonDocument reply;
     reply["config_version"] = config_version();

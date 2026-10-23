@@ -241,6 +241,7 @@ void setup()
   web_server_setup();
   DBUGF("After web_server_setup: %d", ESPAL.getFreeHeap());
 
+#ifndef DISABLE_LOADSHARING
   // Initialize load sharing group state:
   // - Load persisted group peers from LittleFS
   // - Register callback to wake poller when peer list changes
@@ -259,6 +260,7 @@ void setup()
   // Maintains WebSocket connections to group peers for real-time status updates
   loadSharingPeerPoller.begin(loadSharingGroupState);
   DBUGF("After loadSharingPeerPoller.begin: %d", ESPAL.getFreeHeap());
+#endif // !DISABLE_LOADSHARING
 #ifdef ENABLE_TSDB
   tsdbEnergyLogger.begin(evse);
   DBUGF("After tsdbEnergyLogger.begin: %d", ESPAL.getFreeHeap());
