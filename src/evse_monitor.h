@@ -293,6 +293,7 @@ class EvseMonitor : public MicroTasks::Task
     // The controller has acknowledged the configured heartbeat state, armed or
     // disabled. Until it has, loop() keeps resending it.
     bool _heartbeat_synced;
+    uint32_t _heartbeat_generation;
 
     char _firmware_version[32];
     char _serial[16];

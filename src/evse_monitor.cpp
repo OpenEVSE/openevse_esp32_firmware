@@ -177,6 +177,7 @@ EvseMonitor::EvseMonitor(OpenEVSEClass &openevse) :
   _count(0),
   _heartbeat(false),
   _heartbeat_synced(false),
+  _heartbeat_generation(0),
   _firmware_version(""),
   // A TFT gateway replaces the character LCD, so the controller's $S0 may
   // well be accepted but sets a backlight type for a panel that isn't there
@@ -375,6 +376,7 @@ void EvseMonitor::evseBoot(const char *firmware)
   _heartbeat_current = heartbeat_interval_cfg > 0 ? heartbeat_current_cfg : 0;
   _heartbeat = false;
   _heartbeat_synced = false;
+  _heartbeat_generation++;
   sendHeartbeatConfig();
 #endif
 
@@ -1014,10 +1016,11 @@ void EvseMonitor::sendHeartbeatConfig()
 {
   uint32_t interval = _heartbeat_interval;
   uint32_t current = _heartbeat_current;
-  _openevse.heartbeatEnable(interval, current, [this, interval, current](int ret, int i, int c, int triggered) {
-    // setHeartbeatSupervision() changed the config while this was queued; its
-    // own response is the one that counts.
-    if(interval != _heartbeat_interval || current != _heartbeat_current) {
+  uint32_t generation = _heartbeat_generation;
+  _openevse.heartbeatEnable(interval, current, [this, interval, current, generation](int ret, int i, int c, int triggered) {
+    // The wanted config changed while this was queued; the response to the
+    // newer request is the one that counts.
+    if(generation != _heartbeat_generation) {
       return;
     }
     _heartbeat_synced = RAPI_RESPONSE_OK == ret;
@@ -1040,12 +1043,21 @@ void EvseMonitor::setHeartbeatSupervision(uint32_t interval, uint32_t current, s
   // back to 0 A on any pending missed-pulse condition rather than the
   // configured restricted current.
   uint32_t effective_current = (interval == 0) ? 0 : current;
-  _openevse.heartbeatEnable(interval, effective_current, [this, interval, effective_current, callback](int ret, int i, int c, int t) {
-    if(RAPI_RESPONSE_OK == ret) {
-      _heartbeat_interval = interval;
-      _heartbeat_current = effective_current;
-      _heartbeat = interval > 0;
-      _heartbeat_synced = true;
+
+  // Record what is wanted before it is acknowledged. A request that fails
+  // leaves _heartbeat_synced false, so loop() keeps resending it; and bumping
+  // the generation makes any older request still in flight (a boot config or
+  // a retry carrying the previous values) ignore its response, so it cannot
+  // re-arm a controller that has just been disabled.
+  _heartbeat_interval = interval;
+  _heartbeat_current = effective_current;
+  _heartbeat_synced = false;
+  uint32_t generation = ++_heartbeat_generation;
+
+  _openevse.heartbeatEnable(interval, effective_current, [this, interval, generation, callback](int ret, int i, int c, int t) {
+    if(generation == _heartbeat_generation) {
+      _heartbeat_synced = RAPI_RESPONSE_OK == ret;
+      _heartbeat = _heartbeat_synced && interval > 0;
     }
     if(callback) callback(ret);
   });
