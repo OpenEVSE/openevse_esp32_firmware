@@ -17,6 +17,8 @@ the web UI, with screenshots.
 - [Web UI development](developer/gui-development.md) — gui-nightshift workflow,
   mock mode, screenshots, submodule rules
 - [Wired Ethernet](wired-ethernet.md)
+- [ESP32-S3 LCD board](hardware/esp32-s3-lcd.md) — pin map, the v1.2/v1.3
+  revision split, and the hardware quirks firmware has to live with
 
 ## API references
 

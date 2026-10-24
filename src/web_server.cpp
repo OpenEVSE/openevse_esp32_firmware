@@ -34,6 +34,8 @@ typedef const __FlashStringHelper *fstr_t;
 #include "web_server_tls_startup.h"
 #ifdef ENABLE_TSDB
 #include "tsdb_energy_logger.h"
+#include "sd_card.h"
+#include "sdlog_store.h"
 #endif
 #include "web_server_static.h"
 #include "app_config.h"
@@ -831,6 +833,13 @@ void buildStatus(JsonDocument &doc) {
   doc["tsdb_err"]   = tsdbEnergyLogger.initError();
   doc["tsdb_dropped"] = tsdbEnergyLogger.droppedSamples();
 #endif
+#ifdef ENABLE_SD_CARD
+  // Which store is actually taking the samples, and why. On a board where the
+  // card lives behind a sealed enclosure, "is it logging to the card or has it
+  // quietly fallen back to flash?" is not answerable by looking at it.
+  doc["sd_status"] = sd_card_status();
+  doc["sd_log"]    = sdlog_store_ready() ? 1 : 0;
+#endif
   home_battery_add_status_fields(doc);
 
   // Exactly two fields: both UIs need a badge without a second round trip,
@@ -1598,6 +1607,37 @@ handleRst(MongooseHttpServerRequest *request) {
 // Restart (Reboot gateway or evse)
 // url: /restart
 // -------------------------------------------------------------------
+
+#ifdef ENABLE_SD_CARD
+// POST /sdcard/format: wipe the microSD card and re-provision it (energy-log
+// ring + config mirror). Asynchronous: returns {"msg":"started"} at once and
+// /status sd_status walks "formatting" -> "creating log" -> "mounted".
+static void
+handleSdCardFormat(MongooseHttpServerRequest *request) {
+  MongooseHttpServerResponseStream *response;
+  if(false == requestPreProcess(request, response)) {
+    return;
+  }
+  if(HTTP_POST != request->method()) {
+    response->setCode(405);
+    response->print("{\"msg\":\"POST only\"}");
+  } else if(sd_card_busy()) {
+    response->setCode(409);
+    response->print("{\"msg\":\"busy\"}");
+  } else if(!sd_card_mounted()) {
+    response->setCode(404);
+    response->print("{\"msg\":\"no card\"}");
+  } else if(sd_card_request_format()) {
+    response->setCode(200);
+    response->print("{\"msg\":\"started\"}");
+  } else {
+    response->setCode(500);
+    response->print("{\"msg\":\"failed\"}");
+  }
+  request->send(response);
+}
+#endif
+
 void
 handleRestart(MongooseHttpServerRequest *request) {
   MongooseHttpServerResponseStream *response;
@@ -2341,6 +2381,9 @@ static void registerWebServerRoutes(MongooseHttpServer &server, bool isHttps)
   server.on("/settime", handleSetTime);
   server.on("/reset", handleRst);
   server.on("/restart", handleRestart);
+#ifdef ENABLE_SD_CARD
+  server.on("/sdcard/format", handleSdCardFormat);
+#endif
   server.on("/rapi")->onRequest(handleRapi)->onClose(handleRapiClose);
   server.on("/r")->onRequest(handleRapi)->onClose(handleRapiClose);
   server.on("/scan", handleScan);
@@ -2446,6 +2489,21 @@ static void registerWebServerRoutes(MongooseHttpServer &server, bool isHttps)
     diagnostics_coredump_json(doc);
     response->setCode(200);
     serializeJson(doc, *response);
+    request->send(response);
+  });
+
+  // GET /debug/heapmap  plain-text layout of the INTERNAL heap (largest live
+  // blocks, largest free gaps, size histogram) via heap_caps_walk(). For
+  // answering "what is fragmenting DRAM" without heap tracing.
+  server.on("/debug/heapmap", [](MongooseHttpServerRequest *request) {
+    MongooseHttpServerResponseStream *response;
+    if(false == requestPreProcess(request, response, CONTENT_TYPE_TEXT)) {
+      return;
+    }
+    String report;
+    diagnostics_heapmap(report);
+    response->setCode(200);
+    response->print(report);
     request->send(response);
   });
 

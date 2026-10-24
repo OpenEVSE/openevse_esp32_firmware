@@ -1,0 +1,9 @@
+# Heap-corruption trap overlay. Stacks after the board overlays in the
+# openevse_s3_lcd_heapdebug env only: comprehensive poisoning fills freed
+# blocks with 0xFEFE and checks them (plus block headers) on every alloc/free
+# and on heap_caps_check_integrity_all(); the HEAP_DEBUG_INTEGRITY tick in
+# loop() walks every heap every 10 s so a corrupter aborts near the write,
+# not hours later when the block is reused. Costs ~8 B/block and CPU; not for
+# release builds.
+# CONFIG_HEAP_POISONING_LIGHT is not set
+CONFIG_HEAP_POISONING_COMPREHENSIVE=y

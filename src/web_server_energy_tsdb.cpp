@@ -7,6 +7,7 @@
 #include <Arduino.h>
 #include "web_server.h"
 #include "esp_tsdb.h"
+#include "sdlog_store.h"
 #include "tsdb_sample.h"
 #include "energy_logger.h"        // ENERGY_LOGGER_MONTHLY_DIR, ENERGY_LOGGER_ANNUAL_FILE (legacy rollup paths)
 #include "tsdb_energy_logger.h"   // tsdbEnergyLogger.isReady() guard
@@ -14,6 +15,99 @@
 #include <time.h>
 #include <stdio.h>
 #include <LittleFS.h>
+
+// ---------------------------------------------------------------------------
+// Energy query cursor.
+//
+// The samples can live in either of two stores -- the card when one is fitted,
+// the internal tsdb otherwise -- and they hold identical rows, so the JSON
+// serialisation below is shared and only the source is dispatched. Without
+// ENABLE_SD_CARD every branch here compiles out and the calls are the same tsdb
+// calls as before, so shipped behaviour is unchanged -- though not the binary:
+// the indirection costs ~900 bytes of flash on ENABLE_TSDB boards, which is
+// noise against their 6 MB slot. The 4 MB boards never compile this file.
+// ---------------------------------------------------------------------------
+struct EnergyCursor {
+  bool         on_card = false;
+  bool         open    = false;
+  tsdb_query_t tq;
+#ifdef ENABLE_SD_CARD
+  SdlogQuery   sq;
+#endif
+};
+
+// True when the card currently owns the samples. Matches the write path's
+// choice in tsdb_energy_logger, so reads and writes never disagree about which
+// store is live.
+static bool energy_on_card()
+{
+#ifdef ENABLE_SD_CARD
+  return sdlog_store_ready();
+#else
+  return false;
+#endif
+}
+
+static bool energy_query_open(EnergyCursor &c, uint32_t start_ts, uint32_t end_ts)
+{
+  c.open = false;
+  c.on_card = energy_on_card();
+
+#ifdef ENABLE_SD_CARD
+  if (c.on_card) {
+    c.open = sdlog_query_init(c.sq, start_ts, end_ts);
+    return c.open;
+  }
+#endif
+
+  // Guard on isReady(): if tsdb_init failed, the global DB handle is invalid and
+  // tsdb_query_init would dereference it.
+  if (tsdbEnergyLogger.isReady() &&
+      tsdb_query_init(&c.tq, start_ts, end_ts, NULL, TSDB_NUM_COLS) == ESP_OK) {
+    c.open = true;
+  }
+  return c.open;
+}
+
+static bool energy_query_next(EnergyCursor &c, uint32_t &ts, int16_t v[TSDB_NUM_COLS])
+{
+  if (!c.open) {
+    return false;
+  }
+#ifdef ENABLE_SD_CARD
+  if (c.on_card) {
+    return sdlog_query_next(c.sq, ts, v);
+  }
+#endif
+  return tsdb_query_next(&c.tq, &ts, v) == ESP_OK;
+}
+
+static void energy_query_close(EnergyCursor &c)
+{
+  if (!c.open) {
+    return;
+  }
+#ifdef ENABLE_SD_CARD
+  if (c.on_card) {
+    sdlog_query_close(c.sq);
+    c.open = false;
+    return;
+  }
+#endif
+  tsdb_query_close(&c.tq);
+  c.open = false;
+}
+
+static bool energy_query_count(uint32_t start_ts, uint32_t end_ts, uint32_t &count)
+{
+#ifdef ENABLE_SD_CARD
+  if (energy_on_card()) {
+    return sdlog_query_count(start_ts, end_ts, count);
+  }
+#endif
+  return tsdb_query_count(start_ts, end_ts, &count) == ESP_OK;
+}
+
 
 // ---------------------------------------------------------------------------
 // /energy/raw – tsdb-backed handler
@@ -80,20 +174,24 @@ void handleEnergyRaw(MongooseHttpServerRequest *request)
     response->setCode(200);
     response->print("{\"samples\":[");
 
-    tsdb_query_t q;
-    bool opened = false;
+    EnergyCursor q;
     bool first  = true;
     int  count  = 0;
 
-    // Guard on isReady(): if tsdb_init failed, the global DB handle is invalid and
-    // tsdb_query_init would dereference it. Return a valid empty {"samples":[]}.
-    if (tsdbEnergyLogger.isReady() &&
-        tsdb_query_init(&q, start_ts, end_ts, NULL, TSDB_NUM_COLS) == ESP_OK) {
-      opened = true;
+    // The response stream reallocates its buffer on every print(), so pushing
+    // one record at a time makes a 500-point reply quadratic (measured: most of
+    // a 1.8 s response). Batch records into a chunk and hand over whole chunks.
+    static const size_t CHUNK = 2048;
+    char   chunk[CHUNK];
+    size_t chunk_used = 0;
+
+    // Either store, or neither -- a failed open returns a valid empty
+    // {"samples":[]} rather than an error.
+    if (energy_query_open(q, start_ts, end_ts)) {
       uint32_t ts;
       int16_t  v[TSDB_NUM_COLS];
 
-      while (tsdb_query_next(&q, &ts, v) == ESP_OK) {
+      while (energy_query_next(q, ts, v)) {
         if (max_samples > 0 && count >= max_samples) break;
 
         double amps     = tsdb_unscale(TSDB_COL_AMPS,   v[TSDB_COL_AMPS]);
@@ -121,14 +219,22 @@ void handleEnergyRaw(MongooseHttpServerRequest *request)
             (unsigned long)ts, amps, temp_c, energy,
             volts, power_w, pilot_a);
         }
-        response->print(buf);
+        size_t n = strlen(buf);
+        if (chunk_used + n > CHUNK) {
+          response->write((const uint8_t *)chunk, chunk_used);
+          chunk_used = 0;
+        }
+        memcpy(chunk + chunk_used, buf, n);
+        chunk_used += n;
         first = false;
         count++;
       }
     }
 
-    if (opened) {
-      tsdb_query_close(&q);
+    energy_query_close(q);
+
+    if (chunk_used > 0) {
+      response->write((const uint8_t *)chunk, chunk_used);
     }
 
     response->print("]}");
@@ -215,7 +321,7 @@ static void emit_bucketed_daily(MongooseHttpServerResponseStream *response,
 
     // --- check record count first to skip empty buckets cheaply ---
     uint32_t cnt = 0;
-    if (tsdb_query_count(d0, d1_end, &cnt) != ESP_OK || cnt == 0) {
+    if (!energy_query_count(d0, d1_end, cnt) || cnt == 0) {
       continue;
     }
 
@@ -232,9 +338,10 @@ static void emit_bucketed_daily(MongooseHttpServerResponseStream *response,
       { TSDB_COL_TEMP,   TSDB_AGG_MIN, 0 },
     };
 
+    // Store-aware: with a card fitted the samples are on the card, and
+    // aggregating the flash tsdb here returned nothing for every bucket.
     uint32_t nscanned = 0;
-    esp_err_t err = tsdb_aggregate_multi(d0, d1_end, reqs, 3, &nscanned);
-    if (err != ESP_OK || nscanned == 0) {
+    if (!energy_aggregate_multi(d0, d1_end, reqs, 3, nscanned) || nscanned == 0) {
       continue;
     }
 

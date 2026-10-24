@@ -48,6 +48,11 @@ void diagnostics_probe_end(int slot, uint32_t start);
 // culprit without ever pulling the image.
 void diagnostics_coredump_json(JsonDocument &doc);
 
+// Walk the INTERNAL heap and append a plain-text layout report: totals, the
+// largest live blocks, the largest free gaps and a log2 size histogram.
+// Answers "what is sitting in internal DRAM" without heap tracing.
+void diagnostics_heapmap(String &out);
+
 // How far the backtrace goes. The IDF's own summary stops at 16, which on a
 // LittleFS watchdog is still inside littlefs; past it is the caller.
 #define DIAG_COREDUMP_BT_MAX 48
