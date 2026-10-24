@@ -52,6 +52,7 @@
 #include "rfid.h"
 #include "current_shaper.h"
 #include "temp_throttle.h"
+#include "replay_recorder.h"
 #include "limit.h"
 #include "diagnostics.h"
 #include "boost.h"
@@ -81,7 +82,7 @@ EventLog eventLog;
 CertificateStore certs;
 
 EvseManager evse(RAPI_PORT, eventLog);
-Scheduler scheduler(evse);
+Scheduler scheduler(evse, divert, shaper, rfid, limit);
 ManualOverride manual(evse);
 DivertTask divert(evse);
 #ifndef ENABLE_TSDB
@@ -285,6 +286,10 @@ void setup()
   tempThrottle.begin(evse);
   DBUGF("After tempThrottle.begin: %d", ESPAL.getFreeHeap());
 
+#if ENABLE_REPLAY_RECORDER
+  replayRecorder.begin(evse, divert, shaper, limit, boost, rfid, scheduler);
+  DBUGF("After replayRecorder.begin: %d", ESPAL.getFreeHeap());
+#endif
   shelly_lnm.begin();
   DBUGF("After shelly_lnm.begin: %d", ESPAL.getFreeHeap());
 
