@@ -106,3 +106,39 @@ class TestHeartbeatSurvivesReboot:
         heartbeat_instance["restart_native"]()
         hb = wait_for_hb(url, lambda h: h["interval"] == 120)
         assert hb["current_limit"] == 10, hb
+
+
+@pytest.mark.timeout(240)
+class TestTrippedControllerAfterGatewayReboot:
+    """A gateway reboot while the controller is tripped must restore ampacity.
+
+    The controller holds the trip, and it only restores ampacity on a missed
+    pulse's acknowledgement. The gateway sends that acknowledgement before its
+    heartbeat setpoint, because the setpoint itself clears the trip without
+    restoring anything.
+    """
+
+    def test_boot_acknowledges_a_trip_before_configuring(self, heartbeat_instance):
+        url = heartbeat_instance["emulator_url"]
+        native_url = heartbeat_instance["native_url"]
+        set_config(native_url, heartbeat_interval=5, heartbeat_current=6)
+        wait_for_hb(url, lambda h: h["interval"] == 5 and h["current_limit"] == 6)
+        requests.post(f"{url}/api/evse/current", json={"amps": 32},
+                      timeout=REQUEST_TIMEOUT).raise_for_status()
+
+        # Stop the gateway, so the controller misses pulses and trips.
+        heartbeat_instance["native_process"].terminate()
+        heartbeat_instance["native_process"].wait(timeout=10)
+        wait_for_hb(url, lambda h: h["missed"], timeout=30)
+        assert offered_current(url) == 6
+
+        heartbeat_instance["restart_native"]()
+
+        hb = wait_for_hb(url, lambda h: not h["missed"] and h["interval"] == 5)
+        assert offered_current(url) == 32, f"ampacity not restored after boot: {hb}"
+
+
+def offered_current(emulator_url):
+    r = requests.get(f"{emulator_url}/api/evse/status", timeout=REQUEST_TIMEOUT)
+    r.raise_for_status()
+    return r.json()["current_capacity"]

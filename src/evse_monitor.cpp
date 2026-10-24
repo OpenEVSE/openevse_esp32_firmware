@@ -357,11 +357,11 @@ void EvseMonitor::evseBoot(const char *firmware)
     }
   });
 
-  // Queued ahead of the read-only boot commands below (and specifically
-  // ahead of cable-temp's, the largest block of them): losing heartbeat
-  // supervision to a full RAPI queue is worse than losing a diagnostic
-  // reading, so if anything has to be the one that doesn't fit, it
-  // shouldn't be this.
+  // The missed-pulse acknowledgement is queued here, ahead of the read-only
+  // boot commands below (and specifically ahead of cable-temp's, the largest
+  // block of them). The heartbeat setpoint follows the acknowledgement's reply,
+  // so it queues behind those commands: if the queue is full by then, the
+  // setpoint fails and loop() resends it, leaving supervision unarmed until then.
 #ifndef DISABLE_HEARTBEAT
   // Send what the user configured, not the compile-time defaults: the
   // controller keeps its own interval/current in EEPROM across a reboot, so
@@ -1012,28 +1012,50 @@ void EvseMonitor::enableBootLock(bool enabled, std::function<void(int ret)> call
   }
 }
 
+// Send a heartbeat supervision setpoint, acknowledging any missed pulse first.
+//
+// Every $SY <interval> <current> clears the controller's trip flag, and only an
+// acknowledgement (or $SY 0) restores ampacity. A setpoint sent while tripped
+// would therefore leave the controller at its fallback current, answering
+// pulses with OK and with nothing left to restore it. $SY 165 is a no-op when
+// nothing is missed, so it is always sent first. The setpoint follows only once
+// the acknowledgement succeeded: if the restore is blocked (say by
+// over-temperature) the trip stays pending for a later attempt.
+//
+// Requests are queued in order, so the acknowledgement always runs before the
+// setpoint. A request superseded while it was waiting is dropped, so an older
+// setpoint cannot overwrite a newer one; the newer request reports its own result.
+void EvseMonitor::sendHeartbeatSetpoint(uint32_t interval, uint32_t current, uint32_t generation, std::function<void(int ret)> callback)
+{
+  if(!_sender) {
+    if(callback) callback(RAPI_RESPONSE_NOT_CONNECTED);
+    return;
+  }
+  _sender->sendCmd("$SY 165", [this, interval, current, generation, callback](int ret) {
+    if(generation != _heartbeat_generation) {
+      return;
+    }
+    if(RAPI_RESPONSE_OK != ret) {
+      if(callback) callback(ret);
+      return;
+    }
+    _openevse.heartbeatEnable(interval, current, [callback](int ret, int i, int c, int triggered) {
+      if(callback) callback(ret);
+    });
+  });
+}
+
 void EvseMonitor::sendHeartbeatConfig()
 {
   uint32_t interval = _heartbeat_interval;
-  uint32_t current = _heartbeat_current;
   uint32_t generation = _heartbeat_generation;
-  _openevse.heartbeatEnable(interval, current, [this, interval, current, generation](int ret, int i, int c, int triggered) {
-    // The wanted config changed while this was queued; the response to the
-    // newer request is the one that counts.
+  sendHeartbeatSetpoint(interval, _heartbeat_current, generation, [this, interval, generation](int ret) {
     if(generation != _heartbeat_generation) {
       return;
     }
     _heartbeat_synced = RAPI_RESPONSE_OK == ret;
     // Pulse only when supervision is actually armed.
     _heartbeat = _heartbeat_synced && interval > 0;
-    // If heartbeat was triggered while WiFi module was rebooting, ack immediately to restore ampacity
-    if (_heartbeat && 2 == triggered) {
-      _openevse.heartbeatPulse([](int ret) {
-        if (RAPI_RESPONSE_OK != ret) {
-          DEBUG_PORT.println("Heartbeat ack failed");
-        }
-      });
-    }
   });
 }
 
@@ -1054,7 +1076,7 @@ void EvseMonitor::setHeartbeatSupervision(uint32_t interval, uint32_t current, s
   _heartbeat_synced = false;
   uint32_t generation = ++_heartbeat_generation;
 
-  _openevse.heartbeatEnable(interval, effective_current, [this, interval, generation, callback](int ret, int i, int c, int t) {
+  sendHeartbeatSetpoint(interval, effective_current, generation, [this, interval, generation, callback](int ret) {
     if(generation == _heartbeat_generation) {
       _heartbeat_synced = RAPI_RESPONSE_OK == ret;
       _heartbeat = _heartbeat_synced && interval > 0;

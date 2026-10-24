@@ -318,6 +318,7 @@ class EvseMonitor : public MicroTasks::Task
 
     void evseBoot(const char *firmware_version);
     void updateEvseState(uint8_t evse_state, uint8_t pilot_state, uint32_t vflags);
+    void sendHeartbeatSetpoint(uint32_t interval, uint32_t current, uint32_t generation, std::function<void(int ret)> callback);
     void sendHeartbeatConfig();
     void updateCurrentSettings(long min_current, long max_hardware_current, long pilot, long max_configured_current);
 
