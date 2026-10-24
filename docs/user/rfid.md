@@ -1,8 +1,18 @@
 # RFID
 
-With a PN532 NFC module fitted, the charger can require a card/tag scan before
-it will charge — useful for shared driveways, workplaces, and multi-tenant
-parking.
+With an NFC reader fitted (PN532 on I2C, or MFRC522/RC522 on SPI), the charger
+can require a card/tag scan before it will charge — useful for shared driveways,
+workplaces, and multi-tenant parking.
+
+Stock `openevse_wifi_v1` builds use the PN532. For RC522, build with
+`pio run -e openevse_wifi_v1_rc522` (SPI pins configurable via `RC522_*` build
+flags in `platformio.ini`). The stock env defaults `RC522_RST_PIN` to GPIO4 so
+RC522 reset does not share GPIO22 (I2C SCL / MCP9808).
+
+The reader's SPI version register is checked independently of card detection.
+Polling is spaced by 250 ms; three invalid version reads indicate a lost reader,
+and failed initialization is retried after 5 seconds. Verify these timings and
+reader recovery with real hardware before production deployment.
 
 ![RFID settings](screenshots/settings-rfid-dark-desktop.png)
 
