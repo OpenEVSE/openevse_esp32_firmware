@@ -504,7 +504,10 @@ unsigned long EvseMonitor::loop(MicroTasks::WakeReason reason)
       }
     });
   }
-  else if(0 == _count % EVSE_MONITOR_STATE_TIME && !_heartbeat_synced)
+
+  // Not an else: a failed change keeps pulsing (see sendHeartbeatConfig()) and
+  // must still be retried.
+  if(0 == _count % EVSE_MONITOR_STATE_TIME && !_heartbeat_synced)
   {
     // The last heartbeat config was not acknowledged; resend it. This covers an
     // explicit disable (interval 0) too: one that failed leaves the controller
@@ -1053,10 +1056,18 @@ void EvseMonitor::sendHeartbeatConfig()
     if(generation != _heartbeat_generation) {
       return;
     }
-    _heartbeat_synced = RAPI_RESPONSE_OK == ret;
-    // Pulse only when supervision is actually armed.
-    _heartbeat = _heartbeat_synced && interval > 0;
+    updateHeartbeatState(interval, ret);
   });
+}
+
+// Once the controller has acknowledged a setpoint, pulse only if it is armed.
+// After a failure the controller holds either the old setpoint or the new one,
+// so keep pulsing if either could be armed: a pulse to a disarmed controller is
+// harmless, but missing one trips an armed controller to its fallback current.
+void EvseMonitor::updateHeartbeatState(uint32_t interval, int ret)
+{
+  _heartbeat_synced = RAPI_RESPONSE_OK == ret;
+  _heartbeat = _heartbeat_synced ? interval > 0 : (_heartbeat || interval > 0);
 }
 
 void EvseMonitor::setHeartbeatSupervision(uint32_t interval, uint32_t current, std::function<void(int ret)> callback)
@@ -1078,8 +1089,7 @@ void EvseMonitor::setHeartbeatSupervision(uint32_t interval, uint32_t current, s
 
   sendHeartbeatSetpoint(interval, effective_current, generation, [this, interval, generation, callback](int ret) {
     if(generation == _heartbeat_generation) {
-      _heartbeat_synced = RAPI_RESPONSE_OK == ret;
-      _heartbeat = _heartbeat_synced && interval > 0;
+      updateHeartbeatState(interval, ret);
     }
     if(callback) callback(ret);
   });

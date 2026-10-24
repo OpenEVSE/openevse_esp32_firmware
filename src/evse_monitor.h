@@ -289,6 +289,8 @@ class EvseMonitor : public MicroTasks::Task
     StateChangeEvent _session_complete;
 
     uint32_t _count;
+    // Send $SY pulses. True while supervision may be armed on the controller,
+    // which includes after a setpoint change that failed.
     bool _heartbeat;
     // The controller has acknowledged the configured heartbeat state, armed or
     // disabled. Until it has, loop() keeps resending it.
@@ -320,6 +322,7 @@ class EvseMonitor : public MicroTasks::Task
     void updateEvseState(uint8_t evse_state, uint8_t pilot_state, uint32_t vflags);
     void sendHeartbeatSetpoint(uint32_t interval, uint32_t current, uint32_t generation, std::function<void(int ret)> callback);
     void sendHeartbeatConfig();
+    void updateHeartbeatState(uint32_t interval, int ret);
     void updateCurrentSettings(long min_current, long max_hardware_current, long pilot, long max_configured_current);
 
     void getStatusFromEvse(bool allowStart = true);
