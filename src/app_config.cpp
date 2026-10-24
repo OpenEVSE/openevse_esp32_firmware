@@ -26,7 +26,9 @@
 #include "divert.h"
 #include "net_manager.h"
 #include "mqtt.h"
+#ifndef DISABLE_OCPP
 #include "ocpp.h"
+#endif
 #include "tesla_client.h"
 #include "emoncms.h"
 #include "input.h"
@@ -653,7 +655,9 @@ void config_changed(String name)
     }
     timeManager.setSntpEnabled(config_sntp_enabled());
     timeManager.setDhcpEnabled(config_sntp_dhcp());
+#ifndef DISABLE_OCPP
     OcppTask::notifyConfigChanged();
+#endif
     evse.setSleepForDisable(!config_pause_uses_disabled());
   } else if(name.startsWith("mqtt_")) {
     mqtt.restartConnection();
@@ -663,7 +667,9 @@ void config_changed(String name)
       mqtt.restartConnection();
     }
   } else if(name.startsWith("ocpp_")) {
+#ifndef DISABLE_OCPP
     OcppTask::notifyConfigChanged();
+#endif
   } else if(name.startsWith("emoncms_")) {
     emoncms_updated = true;
   } else if(name.startsWith("scheduler_")) {

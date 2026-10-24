@@ -39,7 +39,9 @@ typedef const __FlashStringHelper *fstr_t;
 #include "app_config.h"
 #include "net_manager.h"
 #include "mqtt.h"
+#ifndef DISABLE_OCPP
 #include "ocpp.h"
+#endif
 #include "input.h"
 #include "emoncms.h"
 #include "divert.h"
@@ -688,7 +690,9 @@ void buildStatus(JsonDocument &doc) {
     doc["mqtt_error_detail"] = mqtt.getErrorDetail();
   }
 
+#ifndef DISABLE_OCPP
   doc["ocpp_connected"] = (int)OcppTask::isConnected();
+#endif
 
 #if defined(ENABLE_PN532) || defined(ENABLE_RFID)
   doc["rfid_failure"] = (int) rfid.communicationFails();
