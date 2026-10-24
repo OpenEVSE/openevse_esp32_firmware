@@ -50,50 +50,34 @@ If *"GUI files not found"* appears, the submodule is missing or unbuilt — run
 the bootstrap steps above. If `HTTPClientError` appears, PlatformIO cannot
 reach its package registry (network restriction).
 
-## Two-core tree
+## Platform
 
-The boards split across two PlatformIO platforms:
+Every firmware env builds on the official PlatformIO `espressif32` platform,
+pinned once in `[env]` in `platformio.ini` (currently `espressif32@8.0.0`, which
+ships Arduino-ESP32 **3.x** on ESP-IDF 5.x). There is no separate core-2 / core-3
+split: envs inherit the platform and must not override it (the `native_*` host
+test envs aside).
 
-| Boards | Platform | Arduino / IDF | Why |
-|---|---|---|---|
-| 4MB (`openevse_wifi_v1`, gateways, huzzah, …) — the default | `espressif32@7.1.3` | core **2.x** / IDF4 | Keeps the IDF4 image small enough for **dual-slot OTA** on 4MB flash. |
-| 16MB (`openevse_wifi_v1_16mb`) | `${common.platform_core3}` (pioarduino) | core **3.x** / IDF5 | Larger flash / newer silicon needs the core-3 toolchain; this env is `openevse_wifi_v1` rebuilt on core-3. |
+Shared `src/` code that touches APIs which changed between Arduino cores (e.g.
+LEDC, mbedTLS cert parsing) is still version-guarded on `ESP_ARDUINO_VERSION` /
+`MBEDTLS_VERSION_NUMBER`; those guards are harmless on core 3 and can be removed
+as the old-core paths are retired.
 
-Shared `src/` code that touches APIs which changed between cores (e.g. LEDC,
-mbedTLS cert parsing) is version-guarded on `ESP_ARDUINO_VERSION` /
-`MBEDTLS_VERSION_NUMBER` so it compiles on both.
+Because the 4MB boards moved onto Arduino core 3 / IDF5, watch the flash-usage
+check in CI for the 4MB envs: the old core-2 / IDF4 image was what kept them
+inside **dual-slot OTA** limits on 4MB flash.
 
-### Local builds: use `scripts/pio`
-
-The two platforms declare ~13 package names in common (the Arduino framework,
-esp-idf, the toolchains, several `tool-*`) but pin **different versions**. They
-all install into one `PLATFORMIO_CORE_DIR` (`~/.platformio`), so building a
-core-2 env right after a core-3 env — or vice versa — **evicts and re-downloads**
-those packages every time you switch. (CI is immune: each job runs on a fresh,
-isolated runner.)
-
-To avoid the thrash locally, build through the wrapper, which routes each core to
-its own `PLATFORMIO_CORE_DIR`:
+### Local builds
 
 ```bash
-scripts/pio run -e openevse_wifi_v1_16mb   # core-3  -> ~/.platformio-core3
-scripts/pio run -e openevse_wifi_v1        # core-2  -> ~/.platformio (default)
-scripts/pio device monitor                 # any other pio subcommand, passed through
+pio run -e openevse_wifi_v1_16mb
+pio run -e openevse_wifi_v1
 ```
 
-`scripts/pio` is a transparent `pio` drop-in: it reads `-e <env>`, picks the
-matching core dir, and execs the real `pio` with your args unchanged. Notes:
-
-- **core-2 stays in the default `~/.platformio`**, so bare `pio`, CI, and IDE
-  integrations are unaffected.
-- **core-3 goes to `~/.platformio-core3`** (override with `PIO_CORE3_DIR`). The
-  first core-3 build populates it once (downloads its toolchain/framework); after
-  that, switching cores never re-downloads.
-- It **refuses** to build core-2 and core-3 envs in a single invocation (they
-  can't share a core dir) — split them into two commands.
-
-Trade-off: the separate core-3 dir costs a few GB of disk. That's the price of
-never re-downloading on a core switch.
+`scripts/pio` is kept as a transparent `pio` drop-in (it just locates and execs
+the real `pio` binary), so existing commands keep working. Since all envs share
+one platform, they share one `PLATFORMIO_CORE_DIR` (`~/.platformio`) and switching
+envs no longer re-downloads packages.
 
 ## Debug builds
 

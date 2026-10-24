@@ -1,3 +1,4 @@
+#ifndef DISABLE_LOADSHARING
 #if defined(ENABLE_DEBUG) && !defined(ENABLE_DEBUG_WEB)
 #undef ENABLE_DEBUG
 #endif
@@ -545,3 +546,4 @@ void web_server_load_sharing_setup(MongooseHttpServer &server)
     request->send(response);
   });
 }
+#endif // !DISABLE_LOADSHARING

@@ -111,10 +111,8 @@ jobs:
       # release job that needs them. Same shape as SIGN_ENABLED below.
       CRASH_ARCHIVE_ENABLED: ${{ secrets.CRASH_ELF_ROLE_ARN != '' && secrets.CRASH_BUCKET != '' && (vars.CRASH_AWS_REGION != '' || secrets.CRASH_AWS_REGION != '') }}
 
-      # Environments whose Arduino core (core-3.x / pioarduino / IDF5) provides
-      # the signed-update verifier. Signed OTA is only enforced on these; add
-      # future core-3.x envs here. Older-core (4MB) envs cannot verify and are
-      # left unsigned.
+      # Environments on which signed OTA is enforced; add future envs here once
+      # they are ready to require signed updates. All other envs are left unsigned.
       SIGNED_OTA_ENVS: '["openevse_wifi_v1_16mb"]'
       # 'true' only when the image-signing key is configured. Keeps signed OTA
       # dormant (builds unchanged, unsigned) until the OTA_SIGNING_KEY secret is
@@ -142,7 +140,7 @@ jobs:
           - esp32-c3-devkitc-02
           - openevse_wifi_tft_v1
           - openevse_wifi_tft_v1_dev
-          # core-3.x (pioarduino / IDF5) — 16MB+ boards
+          # 16MB+ boards
           - openevse_wifi_v1_16mb
           - native_openevse
 
