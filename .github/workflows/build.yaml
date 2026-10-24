@@ -15,6 +15,20 @@ on:
       - 'v*'
   pull_request:
 
+# Serialize runs per PR so a quick succession of pushes can't race to update
+# the shared flash-size PR comment (a slow, older run finishing last used to
+# clobber a newer run's report). A new push cancels the in-flight run for the
+# same PR. Only pull_request runs are grouped: master pushes and tag builds get
+# a unique group per run (not per ref -- a shared group would make GitHub drop
+# the older *pending* run even without cancel-in-progress, skipping a commit's
+# build), so they are never cancelled or replaced and a release run is never
+# interrupted by a later commit. build_gui.yml is a separate workflow and is
+# unaffected; its bot commit simply starts a fresh run here that supersedes the
+# stale one.
+concurrency:
+  group: build-${{ github.event_name == 'pull_request' && github.event.pull_request.number || github.run_id }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
 jobs:
   debug:
     runs-on: ubuntu-latest
@@ -52,10 +66,10 @@ jobs:
         python -m pip install --upgrade pip
         pip install --upgrade platformio
 
-    - name: Install Avahi development libraries
+    - name: Install native development libraries
       run: |
         sudo apt-get update
-        sudo apt-get install -y libavahi-client-dev libavahi-common-dev libssl-dev
+        sudo apt-get install -y libssl-dev
 
     - name: Run native unit tests
       run: |
@@ -113,7 +127,6 @@ jobs:
         env:
           - nodemcu-32s
           - espressif_esp-wrover-kit
-          - espressif_esp-wrover-kit_latest
           - adafruit_huzzah32_dev
           - adafruit_huzzah32
           - adafruit_featheresp32
@@ -151,12 +164,20 @@ jobs:
       uses: actions/cache@v6
       with:
         path: ~/.platformio
-        key: ${{ runner.os }}-${{ hashFiles('**/lockfiles') }}
+        # Include the Python version: the ESP-IDF venv under here is built
+        # for whichever interpreter created it, so a 3.15 cache must not be
+        # restored into the 3.14 build.
+        key: ${{ runner.os }}-python-3.14-${{ hashFiles('**/lockfiles') }}
 
     - name: Set up Python
       uses: actions/setup-python@v7
       with:
-        python-version: '3.x'
+        # Pinned: '3.x' resolves to 3.15 on the runner, and the ESP-IDF
+        # toolchain espressif32 installs for the core-3.x (espidf) envs
+        # rejects anything newer than 3.14 ("Python version must be 3.10
+        # ... 3.14"), so openevse_wifi_v1_16mb fails before it compiles.
+        # Unpin once the toolchain accepts 3.15.
+        python-version: '3.14'
 
     - name: Install PlatformIO
       # Pinned: PlatformIO Core 6.2.0 bumped its bundled build engine to
@@ -175,7 +196,7 @@ jobs:
       if: matrix.env == 'native_openevse'
       run: |
         sudo apt-get update
-        sudo apt-get install -y libavahi-client-dev libavahi-common-dev libssl-dev
+        sudo apt-get install -y libssl-dev
 
     - name: Run PlatformIO
       id: pio_build
@@ -240,10 +261,11 @@ jobs:
         path: .pio/build/${{ matrix.env }}/*.bin
 
     - name: Configure AWS credentials for the ELF archive
-      # Pushes to this repo only. A fork PR runs in the base repo, so
-      # `github.repository` is true there while secrets are empty -- gating on
-      # the event is what keeps a fork's build from failing on a missing secret.
-      if: ${{ env.CRASH_ARCHIVE_ENABLED == 'true' && github.event_name == 'push' && matrix.env != 'native_openevse' }}
+      # Pushes, and PRs from branches in this repo: PR artifacts are what
+      # testers flash, and a dump from an unarchived build can never be
+      # symbolized. A fork PR runs in the base repo with empty secrets, so it
+      # is excluded by its head repo rather than left to fail on them.
+      if: ${{ env.CRASH_ARCHIVE_ENABLED == 'true' && (github.event_name == 'push' || github.event.pull_request.head.repo.full_name == github.repository) && matrix.env != 'native_openevse' }}
       continue-on-error: true
       uses: aws-actions/configure-aws-credentials@v6
       with:
@@ -261,7 +283,7 @@ jobs:
       # in /debug/crash and which is byte-identical to sha256sum of the ELF.
       # No version string, so no escaping and no ambiguity between two builds
       # that share a branch and commit but differ.
-      if: ${{ env.CRASH_ARCHIVE_ENABLED == 'true' && github.event_name == 'push' && matrix.env != 'native_openevse' }}
+      if: ${{ env.CRASH_ARCHIVE_ENABLED == 'true' && (github.event_name == 'push' || github.event.pull_request.head.repo.full_name == github.repository) && matrix.env != 'native_openevse' }}
       # As data, not script text: a branch named $(...) would otherwise run.
       env:
         REF_NAME: ${{ github.ref_name }}
@@ -285,8 +307,10 @@ jobs:
     runs-on: ubuntu-latest
     needs: build
     # Runs even if a build failed (e.g. over the flash budget) so the PR
-    # comment still shows the offending env's usage.
-    if: always() && github.event_name == 'pull_request'
+    # comment still shows the offending env's usage. !cancelled() rather than
+    # always(): a run superseded by a newer push (see concurrency above) must
+    # not go on to post a stale report.
+    if: ${{ !cancelled() && github.event_name == 'pull_request' }}
 
     permissions:
       contents: read
@@ -333,12 +357,32 @@ jobs:
           --out flash-size-report.md
         cat flash-size-report.md >> "$GITHUB_STEP_SUMMARY"
 
+    - name: Check this run is for the PR's current head
+      # Backstop for the concurrency group above: if a newer commit has landed
+      # since this run started (cancellation not yet delivered, or this job
+      # finished in the gap), don't let it overwrite a fresher report.
+      id: head_check
+      if: github.event.pull_request.head.repo.full_name == github.repository
+      env:
+        GH_TOKEN: ${{ github.token }}
+        PR_NUMBER: ${{ github.event.pull_request.number }}
+        RUN_SHA: ${{ github.event.pull_request.head.sha }}
+      run: |
+        current=$(gh api "repos/${{ github.repository }}/pulls/${PR_NUMBER}" --jq .head.sha)
+        if [ "$current" = "$RUN_SHA" ]; then
+          echo "current=true" >> "$GITHUB_OUTPUT"
+        else
+          echo "current=false" >> "$GITHUB_OUTPUT"
+          echo "::notice::Skipping PR comment: run is for ${RUN_SHA}, PR head is now ${current}."
+        fi
+
     - name: Comment on PR
       # Skipped for fork PRs: the pull_request event gives their GITHUB_TOKEN
       # only read access, so posting a comment would just fail. Same pattern
       # as native_docker.yaml's fork-excluded publish step. The report is
       # still in the job summary above for a fork PR's author to read.
-      if: github.event.pull_request.head.repo.full_name == github.repository
+      # Also skipped when a newer commit has superseded this run (see above).
+      if: github.event.pull_request.head.repo.full_name == github.repository && steps.head_check.outputs.current == 'true'
       uses: marocchino/sticky-pull-request-comment@v3
       with:
         header: flash-size-report

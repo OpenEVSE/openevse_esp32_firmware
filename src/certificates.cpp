@@ -5,9 +5,11 @@
 #include <Arduino.h>
 #include <LittleFS.h>
 #include <memory>
+#include <new>
 
 #include "emonesp.h"
 #include "certificate_id.h"
+#include "certificate_storage_transaction.h"
 #include "certificates.h"
 #include "fs_util.h"
 #include "root_ca.h"
@@ -61,7 +63,7 @@ bool CertificateStore::Certificate::deserialize(JsonObject &obj)
 #endif
 
   _cert = cert;
-  if(obj.containsKey("id")) {
+  if(obj["id"].is<const char*>()) {
     std::string id_str = obj["id"].as<std::string>();
     if(!certificate_id_from_string(id_str.c_str(), _id)) {
       DBUGF("Invalid certificate id '%s'", id_str.c_str());
@@ -71,7 +73,7 @@ bool CertificateStore::Certificate::deserialize(JsonObject &obj)
     _id = result.serial;
   }
 
-  if(obj.containsKey("key"))
+  if(obj["key"].is<const char*>())
   {
     std::string key = obj["key"].as<std::string>();
 
@@ -114,6 +116,7 @@ CertificateStore::CertificateStore() :
 {
 }
 
+/** Release owned certificate objects and any dynamically allocated root bundle. */
 CertificateStore::~CertificateStore()
 {
   if(begin())
@@ -126,7 +129,7 @@ CertificateStore::~CertificateStore()
   }
 
   if(_root_ca != root_ca) {
-    delete _root_ca;
+    delete[] _root_ca;
   }
 }
 
@@ -154,7 +157,7 @@ const char *CertificateStore::getRootCa()
  */
 bool CertificateStore::addCertificate(const char *name, const char *certificate, const char *key, uint64_t *id)
 {
-  DynamicJsonDocument doc(JSON_OBJECT_SIZE(3));
+  JsonDocument doc;
   doc["name"] = name;
   doc["certificate"] = certificate;
   doc["key"] = key;
@@ -170,13 +173,13 @@ bool CertificateStore::addCertificate(const char *name, const char *certificate,
  */
 bool CertificateStore::addCertificate(const char *name, const char *certificate, uint64_t *id)
 {
-  DynamicJsonDocument doc(JSON_OBJECT_SIZE(2));
+  JsonDocument doc;
   doc["name"] = name;
   doc["certificate"] = certificate;
   return addCertificate(doc, id);
 }
 
-bool CertificateStore::addCertificate(DynamicJsonDocument &doc, uint64_t *id, bool save)
+bool CertificateStore::addCertificate(JsonDocument &doc, uint64_t *id, bool save)
 {
   Certificate *cert = new Certificate();
   if(cert)
@@ -193,32 +196,66 @@ bool CertificateStore::addCertificate(DynamicJsonDocument &doc, uint64_t *id, bo
   return false;
 }
 
+/**
+ * Add a validated certificate, publishing prepared trust only after storage succeeds.
+ * @param cert Certificate whose ownership transfers to the store on success.
+ * @param id Optional output written only after the addition succeeds.
+ * @param save False when loading an existing record; true to persist an upload.
+ * @return False for duplicates or reported preparation/storage failures; the caller
+ * retains ownership of cert on failure.
+ */
 bool CertificateStore::addCertificate(Certificate *cert, uint64_t *id, bool save)
 {
   uint64_t certId = cert->getId();
-  if(findCertificate(certId, cert)) {
+
+  // findCertificate() takes its result by reference and rebinds it to the
+  // stored certificate. Passing `cert` therefore overwrote the caller's own
+  // pointer on a duplicate id, and every caller deletes `cert` when we return
+  // false -- so a duplicate upload freed the certificate that was still in
+  // _certs. Hand it a scratch pointer instead.
+  Certificate *existing = nullptr;
+  if(findCertificate(certId, existing)) {
     DBUGF("Certificate already exists");
     return false;
+  }
+
+  const char *prepared_root_ca = nullptr;
+  if(cert->getType() == Certificate::Type::Root && !prepareRootCa(cert, nullptr, prepared_root_ca)) {
+    return false;
+  }
+
+  _certs.push_back(cert);
+
+  // The caller deletes `cert` when we return false, so it must not be left in
+  // _certs: a failed save (a full filesystem, say) would otherwise leave a
+  // dangling pointer that GET /certificates then serializes.
+  if(save && !saveCertificate(cert))
+  {
+    _certs.pop_back();
+    if(nullptr != prepared_root_ca && prepared_root_ca != root_ca) {
+      delete[] prepared_root_ca;
+    }
+    return false;
+  }
+
+  if(nullptr != prepared_root_ca) {
+    replaceRootCa(prepared_root_ca);
   }
 
   if(id != nullptr) {
     *id = cert->getId();
   }
 
-  _certs.push_back(cert);
-
-  if(cert->getType() == Certificate::Type::Root) {
-    buildRootCa();
-  }
-
-  if(save) {
-    return saveCertificate(cert);
-  }
-
   return true;
 }
 
-bool CertificateStore::removeCertificate(uint64_t id)
+/**
+ * Prepare replacement trust and remove backing records before removing a live ID.
+ * @return Removed on success, NotFound if no live ID matches, or Error on a
+ * reported preparation/storage failure. Error retains the live certificate and
+ * trust; it does not restore aliases already deleted by the storage operation.
+ */
+CertificateStore::RemoveResult CertificateStore::removeCertificate(uint64_t id)
 {
   for(std::vector<Certificate *>::iterator it = _certs.begin(); it != _certs.end(); ++it)
   {
@@ -228,19 +265,30 @@ bool CertificateStore::removeCertificate(uint64_t id)
       DBUGF("Removing certificate %p", cert);
       DBUGVAR(cert->getId(), HEX);
 
-      _certs.erase(it);
-      if(cert->getType() == Certificate::Type::Root) {
-        buildRootCa();
+      const char *prepared_root_ca = nullptr;
+      if(cert->getType() == Certificate::Type::Root &&
+         !prepareRootCa(nullptr, cert, prepared_root_ca)) {
+        return RemoveResult::Error;
       }
 
-      removeCertificate(cert);
+      if(!removeCertificate(cert)) {
+        if(nullptr != prepared_root_ca && prepared_root_ca != root_ca) {
+          delete[] prepared_root_ca;
+        }
+        return RemoveResult::Error;
+      }
+
+      _certs.erase(it);
+      if(nullptr != prepared_root_ca) {
+        replaceRootCa(prepared_root_ca);
+      }
       delete cert;
 
-      return true;
+      return RemoveResult::Removed;
     }
   }
 
-  return false;
+  return RemoveResult::NotFound;
 }
 
 const char *CertificateStore::getCertificate(uint64_t id)
@@ -285,20 +333,20 @@ bool CertificateStore::getKey(uint64_t id, std::string &key)
   return false;
 }
 
-bool CertificateStore::serializeCertificates(DynamicJsonDocument &doc, uint32_t flags)
+bool CertificateStore::serializeCertificates(JsonDocument &doc, uint32_t flags)
 {
   doc.to<JsonArray>();
   for(auto &c : _certs)
   {
     DBUGF("c = %p", c);
     DBUGVAR(c->getId(), HEX);
-    JsonObject obj = doc.createNestedObject();
+    JsonObject obj = doc.add<JsonObject>();
     c->serialize(obj);
   }
   return true;
 }
 
-bool CertificateStore::serializeCertificate(DynamicJsonDocument &doc, uint64_t id, uint32_t flags)
+bool CertificateStore::serializeCertificate(JsonDocument &doc, uint64_t id, uint32_t flags)
 {
   Certificate *cert = nullptr;
   if(findCertificate(id, cert)) {
@@ -313,7 +361,7 @@ size_t CertificateStore::certificateCount()
   return _certs.size();
 }
 
-bool CertificateStore::serializeCertificateAt(DynamicJsonDocument &doc, size_t index, uint32_t flags)
+bool CertificateStore::serializeCertificateAt(JsonDocument &doc, size_t index, uint32_t flags)
 {
   if(index >= _certs.size()) {
     return false;
@@ -357,38 +405,45 @@ bool CertificateStore::findCertificate(uint64_t id, int &index)
   return false;
 }
 
-bool CertificateStore::buildRootCa()
+/**
+ * Prepare default and custom roots without replacing the active bundle.
+ * @param additional Optional root to include before it enters the live list.
+ * @param excluded Optional live root to omit from the prepared bundle.
+ * @param prepared Receives root_ca or a new array on success; unchanged on failure.
+ * The caller must publish the array with replaceRootCa or release it with delete[].
+ * @return False if the replacement array cannot be allocated.
+ */
+bool CertificateStore::prepareRootCa(Certificate *additional, Certificate *excluded,
+                                     const char *&prepared)
 {
   size_t len = 1;
   for(auto &c : _certs)
   {
-    if(c->getType() == Certificate::Type::Root) {
+    if(c != excluded && c->getType() == Certificate::Type::Root) {
       len += c->getCert().length();
     }
   }
 
-  DBUGVAR(len);
-  DBUGF("%p != %p", _root_ca, root_ca);
-
-  if(_root_ca != root_ca) {
-    delete _root_ca;
+  if(nullptr != additional && additional->getType() == Certificate::Type::Root) {
+    len += additional->getCert().length();
   }
+
+  DBUGVAR(len);
 
   if(len <= 1)
   {
     DBUGLN("Using default root certificates");
-    _root_ca = root_ca;
+    prepared = root_ca;
     return true;
   }
 
   len += root_ca_len;
   DBUGVAR(len);
 
-  char *new_root_ca = new char[len];
+  char *new_root_ca = new (std::nothrow) char[len];
   if(new_root_ca == nullptr)
   {
-    DBUGLN("Memmory allocation failed, using default root certificates");
-    _root_ca = root_ca;
+    DBUGLN("Memory allocation failed while preparing root certificates");
     return false;
   }
 
@@ -398,17 +453,36 @@ bool CertificateStore::buildRootCa()
 
   for(auto &c : _certs)
   {
-    if(c->getType() == Certificate::Type::Root) {
+    if(c != excluded && c->getType() == Certificate::Type::Root) {
       strcpy(ptr, c->getCert().c_str());
       ptr += c->getCert().length();
     }
   }
 
+  if(nullptr != additional && additional->getType() == Certificate::Type::Root)
+  {
+    strcpy(ptr, additional->getCert().c_str());
+  }
+
   DBUGLN("Using custom root certificates");
-  _root_ca = new_root_ca;
+  prepared = new_root_ca;
   return true;
 }
 
+/** Take ownership of a prepared bundle (or root_ca), releasing the old owned array. */
+void CertificateStore::replaceRootCa(const char *replacement)
+{
+  if(_root_ca != root_ca) {
+    delete[] _root_ca;
+  }
+  _root_ca = replacement;
+}
+
+/**
+ * Load committed records and attempt to discard .tmp entries without loading them.
+ * @return False if an encountered record fails to load or stale-file removal fails;
+ * iteration continues so other valid records can still enter the live store.
+ */
 bool CertificateStore::loadCertificates()
 {
   bool loaded = true;
@@ -423,7 +497,15 @@ bool CertificateStore::loadCertificates()
       {
         String name = file.name();
         DBUGVAR(name.c_str());
-        if(false == loadCertificate(name)) {
+        if(name.endsWith(".tmp"))
+        {
+          file.close();
+          String path = String(CERTIFICATE_BASE_DIRECTORY) + "/" + name;
+          if(!LittleFS.remove(path)) {
+            loaded = false;
+          }
+        }
+        else if(false == loadCertificate(name)) {
           loaded = false;
         }
       }
@@ -447,7 +529,7 @@ bool CertificateStore::loadCertificate(String &name)
   File file = LittleFS.open(path);
   if(file)
   {
-    DynamicJsonDocument doc(CERTIFICATE_JSON_BUFFER_SIZE);
+    JsonDocument doc;
     DeserializationError err = deserializeJson(doc, file);
     if(DeserializationError::Code::Ok == err)
     {
@@ -465,36 +547,77 @@ bool CertificateStore::loadCertificate(String &name)
   return loaded;
 }
 
+/**
+ * Serialize a complete private record, stage it, and publish through rename.
+ * @return False on reported serialization, allocation or storage failure.
+ * The Arduino flush/close APIs do not expose their failures through this path.
+ */
 bool CertificateStore::saveCertificate(Certificate *cert)
 {
   std::string id = certificate_id_hex(cert->getId());
   String name = String(CERTIFICATE_BASE_DIRECTORY) + "/" + id.c_str() + ".json";
 
-  DynamicJsonDocument doc(CERTIFICATE_JSON_BUFFER_SIZE);
+  JsonDocument doc;
   JsonObject object = doc.to<JsonObject>();
   cert->serialize(object, Certificate::Flags::SHOW_PRIVATE_KEY);
 
-  // Don't truncate an existing valid cert if the new contents won't fit.
-  if(!littlefs_has_space(measureJson(doc)))
-  {
-    DBUGLN("Certificates: insufficient space, not saving");
+  if(doc.overflowed()) {
     return false;
   }
 
-  File file = LittleFS.open(name, "w");
-  if(!file)
-  {
+  size_t expected = measureJson(doc);
+  if(0 == expected) {
     return false;
   }
 
-  bool ok = serializeJson(doc, file) > 0;
-  file.close();
-  if(!ok)
-  {
-    // Partial write — remove the corrupt file rather than leave it.
-    LittleFS.remove(name);
+  std::unique_ptr<char[]> record(new (std::nothrow) char[expected + 1]);
+  if(!record) {
+    return false;
   }
-  return ok;
+
+  size_t serialized = serializeJson(doc, record.get(), expected + 1);
+  if(serialized != expected) {
+    return false;
+  }
+
+  class LittleFsCertificateStorage
+  {
+    public:
+      /** Return the backend's boolean lookup result, which cannot classify errors. */
+      bool exists(const char *path) const { return LittleFS.exists(path); }
+      /** Attempt to remove a staging path and return the backend's result. */
+      bool remove(const char *path) { return LittleFS.remove(path); }
+      /** Check record space plus the filesystem helper's metadata margin. */
+      bool hasSpace(size_t needed) const { return littlefs_has_space(needed); }
+      /** Publish the staged path using the backend's rename result. */
+      bool rename(const char *from, const char *to) { return LittleFS.rename(from, to); }
+
+      /**
+       * Open staging storage and report the number of bytes accepted by write.
+       * @return False if opening fails; true otherwise, even for a short write.
+       * The caller checks written. Flush and close are invoked but their void
+       * APIs cannot report a late failure.
+       */
+      bool write(const char *path, const uint8_t *data, size_t size, size_t &written)
+      {
+        File file = LittleFS.open(path, "w");
+        if(!file) {
+          written = 0;
+          return false;
+        }
+
+        written = file.write(data, size);
+        file.flush();
+        file.close();
+        return true;
+      }
+  } storage;
+
+  // Include the configured directory and the largest 64-bit hex ID in the bound.
+  constexpr size_t MAX_FINAL_PATH_LENGTH = sizeof(CERTIFICATE_BASE_DIRECTORY "/FFFFFFFFFFFFFFFF.json") - 1;
+  return certificate_storage_commit<MAX_FINAL_PATH_LENGTH>(storage, name.c_str(),
+                                    reinterpret_cast<const uint8_t *>(record.get()),
+                                    serialized);
 }
 
 bool CertificateStore::removeCertificate(Certificate *cert)

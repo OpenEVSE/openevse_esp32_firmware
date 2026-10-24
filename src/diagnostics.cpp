@@ -1,4 +1,5 @@
 #include "diagnostics.h"
+#include "crash_unwind.h"
 
 #include <Arduino.h>
 #include <MongooseCore.h>
@@ -20,6 +21,11 @@
 #include <esp_idf_version.h>
 #include <esp_core_dump.h>
 #include <esp_partition.h>
+#if __has_include(<esp_memory_utils.h>)
+#include <esp_memory_utils.h>       // esp_ptr_executable, IDF 5
+#else
+#include <soc/soc_memory_layout.h>  // ... and its IDF 4.4 home
+#endif
 #include <freertos/FreeRTOS.h>
 #include <freertos/task.h>
 
@@ -195,24 +201,24 @@ int diagnostics_ws_reap()
   }
 
   struct mg_connection *next = nullptr;
-  for(struct mg_connection *c = mg_next(mgr, nullptr); nullptr != c; c = next)
+  for(struct mg_connection *c = mgr->conns; nullptr != c; c = next)
   {
     // Take the next pointer before we flag this one for close, so that
     // dropping a connection cannot strand the walk.
-    next = mg_next(mgr, c);
+    next = c->next;
 
-    if(!(c->flags & MG_F_IS_WEBSOCKET)) {
+    if(!c->is_websocket) {
       continue;
     }
     conns++;
 
-    uint32_t pending = (uint32_t)c->send_mbuf.len;
+    uint32_t pending = (uint32_t)c->send.len;
     if(pending > diag_ws_send_max) {
       diag_ws_send_max = pending;
     }
 
     if(pending > DIAG_WS_SEND_LIMIT) {
-      c->flags |= MG_F_CLOSE_IMMEDIATELY;
+      c->is_closing = 1;
       diag_ws_reaped++;
       reaped++;
     }
@@ -288,6 +294,48 @@ void diagnostics_status(JsonDocument &doc)
 #endif
 }
 
+#if DIAG_COREDUMP_SUMMARY && !defined(__riscv)
+static bool diag_pc_executable(uint32_t pc)
+{
+  return esp_ptr_executable((void *)pc);
+}
+
+// The ELF inside the stored image. The image starts with the IDF's
+// core_dump_header_t, whose size has changed between IDF versions, so find
+// the ELF by its magic rather than by sizeof.
+static bool diag_coredump_elf(const uint8_t **elf, size_t *elfLen)
+{
+  const uint8_t *img;
+  size_t len;
+  if(!diagnostics_coredump_image(&img, &len)) {
+    return false;
+  }
+  for(size_t off = 0; off <= 64 && off + 4 <= len; off += 4) {
+    if(0 == memcmp(img + off, "\x7f" "ELF", 4)) {
+      *elf = img + off;
+      *elfLen = len - off;
+      return true;
+    }
+  }
+  return false;
+}
+
+// Walk one task's stack out of the stored image.
+static size_t diag_coredump_deep_bt(uint32_t tcb, uint32_t *out, size_t max,
+                                    bool *corrupted)
+{
+  const uint8_t *elf, *stack;
+  size_t len;
+  uint32_t vaddr, size;
+  if(!diag_coredump_elf(&elf, &len) ||
+     !crash_unwind_find_stack(elf, len, tcb, &stack, &vaddr, &size)) {
+    return 0;
+  }
+  return crash_unwind_xtensa(stack, vaddr, size, diag_pc_executable, out, max,
+                             corrupted);
+}
+#endif
+
 void diagnostics_coredump_json(JsonDocument &doc)
 {
 #if DIAG_HAVE_IDF
@@ -313,7 +361,8 @@ void diagnostics_coredump_json(JsonDocument &doc)
 #if DIAG_COREDUMP_SUMMARY
 #if DIAG_COREDUMP_PANIC_REASON
   char reason[128];
-  if(ESP_OK == esp_core_dump_get_panic_reason(reason, sizeof(reason))) {
+  bool haveReason = (ESP_OK == esp_core_dump_get_panic_reason(reason, sizeof(reason)));
+  if(haveReason) {
     doc["panic_reason"] = reason;
   }
 #endif
@@ -368,12 +417,61 @@ void diagnostics_coredump_json(JsonDocument &doc)
     // image from /debug/crash/raw still carries the stack dump.
     doc["bt"] = "riscv-no-unwind";
 #else
-    JsonArray bt = doc.createNestedArray("bt");
-    for(uint32_t i = 0; i < s->exc_bt_info.depth && i < 16; i++) {
-      snprintf(buf, sizeof(buf), "0x%08x", (unsigned)s->exc_bt_info.bt[i]);
-      bt.add(buf);
+    // The IDF's walk, carried on past its 16 frames. Used only when it
+    // agrees with the IDF's frame for frame and goes further; anything else
+    // falls back to the IDF's own list.
+    uint32_t *deep = (uint32_t *)malloc(DIAG_COREDUMP_BT_MAX * sizeof(uint32_t));
+    bool deepCorrupted = true;
+    size_t depth = deep ? diag_coredump_deep_bt(s->exc_tcb, deep, DIAG_COREDUMP_BT_MAX,
+                                                &deepCorrupted) : 0;
+    const uint32_t idfCap = sizeof(s->exc_bt_info.bt) / sizeof(s->exc_bt_info.bt[0]);
+    bool useDeep = crash_unwind_extends(deep, depth, s->exc_bt_info.bt,
+                                        s->exc_bt_info.depth, idfCap);
+
+    JsonArray bt = doc["bt"].to<JsonArray>();
+    if(useDeep) {
+      for(size_t i = 0; i < depth; i++) {
+        snprintf(buf, sizeof(buf), "0x%08x", (unsigned)deep[i]);
+        bt.add(buf);
+      }
+      doc["bt_corrupted"] = deepCorrupted;
+    } else {
+      for(uint32_t i = 0; i < s->exc_bt_info.depth && i < 16; i++) {
+        snprintf(buf, sizeof(buf), "0x%08x", (unsigned)s->exc_bt_info.bt[i]);
+        bt.add(buf);
+      }
+      doc["bt_corrupted"] = s->exc_bt_info.corrupted;
     }
-    doc["bt_corrupted"] = s->exc_bt_info.corrupted;
+
+#if DIAG_COREDUMP_PANIC_REASON
+    // A task watchdog panics in whatever task its interrupt lands on. With
+    // the starved task blocked rather than spinning that is an idle task,
+    // and `bt` above is four frames of it waiting for an interrupt. The
+    // starved task's stack is in the same image: walk that too.
+    char wdtTask[configMAX_TASK_NAME_LEN];
+    uint32_t wdtTcb;
+    const uint8_t *elf;
+    size_t elfLen;
+    if(deep && haveReason &&
+       crash_unwind_wdt_task(reason, s->exc_task, wdtTask, sizeof(wdtTask)) &&
+       diag_coredump_elf(&elf, &elfLen) &&
+       crash_unwind_find_tcb(elf, elfLen, s->exc_tcb, s->exc_task, wdtTask, &wdtTcb))
+    {
+      bool wdtCorrupted = true;
+      size_t wdtDepth = diag_coredump_deep_bt(wdtTcb, deep, DIAG_COREDUMP_BT_MAX,
+                                              &wdtCorrupted);
+      if(wdtDepth > 0) {
+        doc["wdt_task"] = wdtTask;   // a local buffer: copied, never pointed to
+        JsonArray wbt = doc["wdt_bt"].to<JsonArray>();
+        for(size_t i = 0; i < wdtDepth; i++) {
+          snprintf(buf, sizeof(buf), "0x%08x", (unsigned)deep[i]);
+          wbt.add(buf);
+        }
+        doc["wdt_bt_corrupted"] = wdtCorrupted;
+      }
+    }
+#endif
+    free(deep);
 #endif
   }
   else

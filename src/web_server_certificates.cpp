@@ -10,6 +10,9 @@ typedef const __FlashStringHelper *fstr_t;
 #include "certificate_id.h"
 #include "web_server.h"
 #include "certificates.h"
+#include "self_signed_cert.h"
+#include "app_config.h"
+#include "net_manager.h"
 
 // -------------------------------------------------------------------
 //
@@ -20,6 +23,39 @@ void handleCertificatesGetRootCa(MongooseHttpServerRequest *request, MongooseHtt
   response->setCode(200);
   response->setContentType(CONTENT_TYPE_TEXT);
   response->print(certs.getRootCa());
+}
+
+void handleCertificatesGenerateSelfSigned(MongooseHttpServerRequest *request, MongooseHttpServerResponseStream *response)
+{
+  (void)request;
+#if defined(CERT_VALIDATOR_OPENSSL)
+  response->setCode(501);
+  response->print("{\"msg\":\"Self-signed certificate generation is not available in native builds.\"}");
+#else
+  String certPem, keyPem;
+  if(!generateSelfSignedCertificate(esp_hostname, net.getIp(), certPem, keyPem)) {
+    response->setCode(500);
+    response->print("{\"msg\":\"Failed to generate certificate\"}");
+    return;
+  }
+
+  DynamicJsonDocument doc(CERTIFICATE_JSON_BUFFER_SIZE);
+  doc["name"] = "Self-signed (" + esp_hostname + ")";
+  doc["certificate"] = certPem;
+  doc["key"] = keyPem;
+
+  uint64_t id = UINT64_MAX;
+  if(certs.addCertificate(doc, &id)) {
+    doc.clear();
+    doc["id"] = String(id, HEX);
+    doc["msg"] = "done";
+    serializeJson(doc, *response);
+    response->setCode(200);
+  } else {
+    response->setCode(400);
+    response->print("{\"msg\":\"Could not add certificate\"}");
+  }
+#endif
 }
 
 
@@ -44,7 +80,7 @@ void handleCertificatesGet(MongooseHttpServerRequest *request, MongooseHttpServe
     size_t emitted = 0;
     for(size_t i = 0; i < count; i++)
     {
-      DynamicJsonDocument doc(CERTIFICATE_JSON_BUFFER_SIZE);
+      JsonDocument doc;
       if(!certs.serializeCertificateAt(doc, i)) {
         continue;
       }
@@ -61,7 +97,7 @@ void handleCertificatesGet(MongooseHttpServerRequest *request, MongooseHttpServe
     return;
   }
 
-  DynamicJsonDocument doc(CERTIFICATE_JSON_BUFFER_SIZE);
+  JsonDocument doc;
   if(certs.serializeCertificate(doc, certificate)) {
     response->setCode(200);
     serializeJson(doc, *response);
@@ -79,7 +115,7 @@ void handleCertificatesPost(MongooseHttpServerRequest *request, MongooseHttpServ
 
   if(!hasCertificate)
   {
-    DynamicJsonDocument doc(CERTIFICATE_JSON_BUFFER_SIZE);
+    JsonDocument doc;
     DeserializationError jsonError = deserializeJson(doc, body);
     if(DeserializationError::Ok == jsonError)
     {
@@ -106,17 +142,30 @@ void handleCertificatesPost(MongooseHttpServerRequest *request, MongooseHttpServ
   }
 }
 
+/**
+ * Delete an explicit ID: respond 200 for removal, 404 for no live match, or 500
+ * for a reported transaction error. A collection DELETE receives 405.
+ * @param hasCertificate Distinguishes an ID route, including UINT64_MAX, from the collection.
+ */
 void handleCertificatesDelete(MongooseHttpServerRequest *request, MongooseHttpServerResponseStream *response,
                               bool hasCertificate, uint64_t certificate)
 {
   if(hasCertificate)
   {
-    if(certs.removeCertificate(certificate)) {
-      response->setCode(200);
-      response->print("{\"msg\":\"done\"}");
-    } else {
-      response->setCode(404);
-      response->print("{\"msg\":\"Not found\"}");
+    switch(certs.removeCertificate(certificate))
+    {
+      case CertificateStore::RemoveResult::Removed:
+        response->setCode(200);
+        response->print("{\"msg\":\"done\"}");
+        break;
+      case CertificateStore::RemoveResult::NotFound:
+        response->setCode(404);
+        response->print("{\"msg\":\"Not found\"}");
+        break;
+      case CertificateStore::RemoveResult::Error:
+        response->setCode(500);
+        response->print("{\"msg\":\"Could not remove certificate\"}");
+        break;
     }
   } else {
     response->setCode(405);
@@ -146,6 +195,17 @@ void handleCertificates(MongooseHttpServerRequest *request)
       if(HTTP_GET == request->method())
       {
         handleCertificatesGetRootCa(request, response);
+        request->send(response);
+        return;
+      } else {
+        response->setCode(405);
+        response->print("{\"msg\":\"Method not allowed\"}");
+      }
+    } else if(clientStr == "self-signed")
+    {
+      if(HTTP_POST == request->method())
+      {
+        handleCertificatesGenerateSelfSigned(request, response);
         request->send(response);
         return;
       } else {

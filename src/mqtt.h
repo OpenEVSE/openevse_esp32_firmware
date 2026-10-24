@@ -32,7 +32,10 @@ class Mqtt : public MicroTasks::Task {
     EvseManager *_evse; // Pointer to EvseManager instance
 
     // MQTT connection state and timing
-    long _nextMqttReconnectAttempt = 0;
+    // Elapsed-time based, so retries keep working across the millis() wrap
+    // (see mqtt_reconnect.h, issue #1367).
+    unsigned long _lastMqttConnectAttempt = 0; // millis() of the last attempt
+    bool _reconnectNow = true;                 // retry on the next loop pass
     unsigned long _mqttRestartTime = 0;
     bool _connecting = false;
     unsigned long _connectStartTime = 0;  // When the current connection attempt started
@@ -54,7 +57,8 @@ class Mqtt : public MicroTasks::Task {
     char   _brokerVersion[96];  // payload of $SYS/broker/version, or ""
     time_t _connectedSince;     // Unix ts when last connected (0 = never)
     time_t _lastRxTime;         // Unix ts of most recent broker traffic, sent or received (0 = never)
-    bool   _needsDnsLookup = false; // set in onMqttConnect; DNS done safely in loop()
+
+    void   publishBrokerIp();
     unsigned long _lastStatusPush = 0; // millis() of last periodic status WebSocket push
 
     // Last failure cause, for troubleshooting in the UI

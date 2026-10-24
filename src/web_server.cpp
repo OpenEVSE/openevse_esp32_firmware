@@ -31,6 +31,7 @@ typedef const __FlashStringHelper *fstr_t;
 #include "crash_report.h"
 #include "crash_report_id.h"
 #include "crash_payload.h"
+#include "web_server_tls_startup.h"
 #ifdef ENABLE_TSDB
 #include "tsdb_energy_logger.h"
 #endif
@@ -58,12 +59,17 @@ typedef const __FlashStringHelper *fstr_t;
 #include "notifications.h"
 #include "web_auth.h"
 #include "web_auth_secret.h"
+#include "shelly_lnm.h"
 
-MongooseHttpServer server;          // Create class for Web server
-MongooseHttpServer redirect;        // Server to redirect to HTTPS if enabled
+static MongooseHttpServer http_server;     // Create class for HTTP server
+static MongooseHttpServer https_server;    // Create class for HTTPS server
+static MongooseHttpServer redirect_server; // Redirects to HTTPS when HTTP is off
+static bool http_server_started = false;
+static bool https_server_started = false;
 
 bool enableCors = false;
 bool streamDebug = false;
+static WebServerListenerState web_server_listener = {false, false, 0};
 
 // Event timeouts
 static unsigned long wifiRestartTime = 0;
@@ -186,7 +192,7 @@ void dumpRequest(MongooseHttpServerRequest *request)
 // does not short-circuit either. Not a substitute for a slow hash, but removes
 // the trivial byte-by-byte timing signal from Basic-auth checks.
 // -------------------------------------------------------------------
-static bool credentialsMatch(const char *a, const char *b)
+bool credentialsMatch(const char *a, const char *b)
 {
   size_t la = strlen(a);
   size_t lb = strlen(b);
@@ -268,11 +274,60 @@ static bool hasValidSessionCookie(MongooseHttpServerRequest *request)
     std::string(secret.c_str()), tok, (uint32_t)time(nullptr));
 }
 
+// Decode a `Basic <base64>` Authorization header into user and password.
+//
+// Mongoose 7 dropped mg_parse_http_basic_auth(). Its replacement,
+// mg_http_creds(), needs the whole mg_http_message and additionally accepts
+// Bearer tokens and an ?access_token= query parameter — credentials in a URL
+// land in logs and Referer headers, and this gate has never honoured either
+// form, so decode the one header we do accept rather than widening the surface.
+//
+// Returns true only on a well-formed header that fit the caller's buffers.
+static bool parseBasicAuth(const mg_str &hdr, char *user, size_t userLen,
+                           char *pass, size_t passLen)
+{
+  const char *scheme = "Basic ";
+  const size_t schemeLen = 6;
+
+  if(hdr.len <= schemeLen ||
+     0 != mg_strcasecmp(mg_str_n(hdr.buf, schemeLen), mg_str(scheme))) {
+    return false;
+  }
+
+  // Sized for the 64-byte user and password buffers above, plus the separator.
+  char decoded[136];
+  size_t decodedLen = mg_base64_decode(hdr.buf + schemeLen, hdr.len - schemeLen,
+                                       decoded, sizeof(decoded));
+  if(0 == decodedLen) {
+    return false;
+  }
+
+  // "user:password" — a password may contain ':', a username may not, so split
+  // on the first one.
+  const char *sep = (const char *)memchr(decoded, ':', decodedLen);
+  if(nullptr == sep) {
+    return false;
+  }
+
+  size_t uLen = sep - decoded;
+  size_t pLen = decodedLen - uLen - 1;
+  if(uLen >= userLen || pLen >= passLen) {
+    return false;
+  }
+
+  memcpy(user, decoded, uLen);
+  user[uLen] = '\0';
+  memcpy(pass, sep + 1, pLen);
+  pass[pLen] = '\0';
+
+  return true;
+}
+
 // -------------------------------------------------------------------
 // Single source of truth for HTTP authentication
 //
-// Used by both the REST path (requestPreProcess) and the WebSocket handshake
-// gate (onWsAuthenticate). Returns true when the request is permitted:
+// Used by both the REST path (requestPreProcess) and the WebSocket connect
+// gate (wsAuthorise). Returns true when the request is permitted:
 //  - AP-only provisioning mode (captive portal, before credentials are set), or
 //  - no password configured (auth disabled), or
 //  - a valid Basic Authorization header (machine clients: HA, MQTT, app), or
@@ -302,8 +357,8 @@ bool isAuthenticated(MongooseHttpServerRequest *request, bool *usedCookie, bool 
     mg_str hdr = authHeader.toMgStr();
     char user_buf[64] = {0};
     char pass_buf[64] = {0};
-    if(0 == mg_parse_http_basic_auth(&hdr, user_buf, sizeof(user_buf),
-                                     pass_buf, sizeof(pass_buf))) {
+    if(parseBasicAuth(hdr, user_buf, sizeof(user_buf),
+                      pass_buf, sizeof(pass_buf))) {
       bool u = credentialsMatch(adminUser.c_str(), user_buf);
       bool p = credentialsMatch(www_password.c_str(), pass_buf);
       if(u && p) {
@@ -336,7 +391,7 @@ bool isAuthenticated(MongooseHttpServerRequest *request, bool *usedCookie, bool 
 static const uint32_t REMEMBER_TTL = 2592000; // 30 days
 static const uint32_t SESSION_TTL  = 21600;   // 6 hours
 
-void handleLogin(MongooseHttpServerRequest *request)
+void handleLogin(MongooseHttpServerRequest *request, bool isHttps)
 {
   MongooseHttpServerResponseStream *response = request->beginResponseStream();
   response->setContentType(CONTENT_TYPE_JSON);
@@ -349,7 +404,7 @@ void handleLogin(MongooseHttpServerRequest *request)
   }
 
   String body = request->body().toString();
-  DynamicJsonDocument doc(512);
+  JsonDocument doc;
   if(deserializeJson(doc, body)) {
     response->setCode(400);
     response->print(F("{\"msg\":\"bad json\"}"));
@@ -421,7 +476,11 @@ void handleLogin(MongooseHttpServerRequest *request)
   cookie += token.c_str();
   cookie += "; Path=/; HttpOnly; SameSite=Strict";
   if(remember) { cookie += "; Max-Age="; cookie += String(REMEMBER_TTL); }
-  // if(tls_active()) cookie += "; Secure";   // add when TLS status is known
+  // Only the HTTPS listener may mark the cookie Secure: browsers refuse a
+  // Secure cookie set over plain HTTP outright, and when both listeners are
+  // active this also stops an HTTPS-minted session cookie from being replayed
+  // over the plaintext HTTP listener.
+  if(isHttps) { cookie += "; Secure"; }
   response->addHeader(F("Set-Cookie"), cookie.c_str());
   response->setCode(200);
   response->print(F("{\"msg\":\"ok\"}"));
@@ -543,14 +602,6 @@ static String html_escape(const String &input) {
 // Build status data
 // --------------------------------------------------------------------
 
-// Capacity for any document buildStatus() fills. Defined once because the two
-// call sites had drifted: onWsConnect sized its document for 40 members while
-// buildStatus emits around 95, so every websocket connect pushed a silently
-// truncated status. ArduinoJson does not signal that with an error -- it just
-// stops adding members. 131 = 128 plus the "notifications" object and its two
-// members (count, severity).
-#define STATUS_JSON_CAPACITY (JSON_OBJECT_SIZE(131) + 2048)
-
 // LittleFS.totalBytes() and LittleFS.usedBytes() each run lfs_fs_size(), a
 // full traversal of every metadata pair and data block in the filesystem,
 // reading flash with the FS lock held. Arduino's wrapper discards whichever
@@ -588,7 +639,7 @@ static void status_littlefs_usage(uint32_t &free_bytes, uint32_t &used_bytes)
   used_bytes = cached_used;
 }
 
-void buildStatus(DynamicJsonDocument &doc) {
+void buildStatus(JsonDocument &doc) {
 
   // Get the current time
   struct timeval local_time;
@@ -675,6 +726,10 @@ void buildStatus(DynamicJsonDocument &doc) {
   // doc["shaper_cur"] = shaper.getChgCur();
   doc["shaper_cur"] = shaper.getMaxCur();
   doc["shaper_updated"] = shaper.isUpdated();
+  doc["shelly_lnm_listening"] = shelly_lnm.isListening()?1:0;
+  doc["shelly_lnm_data_age"] = shelly_lnm.getDataAge();
+  doc["shelly_lnm_power"] = shelly_lnm.getPower();
+  doc["shelly_lnm_voltage"] = shelly_lnm.getVoltage();
   doc["service_level"] = static_cast<uint8_t>(evse.getActualServiceLevel());
   doc["limit"] = limit.hasLimit();
   doc["boost"] = boost.isActive();
@@ -687,7 +742,7 @@ void buildStatus(DynamicJsonDocument &doc) {
 
   // Add joined peers array with real-time status from peer poller
   {
-    JsonArray peersArray = doc.createNestedArray("loadsharing_joined_peers");
+    JsonArray peersArray = doc["loadsharing_joined_peers"].to<JsonArray>();
     double groupTotalAmp = 0.0;
     
     for (const auto& peer : loadSharingGroupState.getPeers()) {
@@ -696,7 +751,7 @@ void buildStatus(DynamicJsonDocument &doc) {
         continue;
       }
       
-      JsonObject peerObj = peersArray.createNestedObject();
+      JsonObject peerObj = peersArray.add<JsonObject>();
       peerObj["hostname"] = peer.getHost();
       peerObj["id"] = peer.getId();
       peerObj["name"] = peer.getName();
@@ -782,7 +837,7 @@ void buildStatus(DynamicJsonDocument &doc) {
   // and nothing more belongs in a payload the HA integration already polls
   // hard. The list lives on /notifications. severity is a name ("info" /
   // "warning" / "critical"), matching how /notifications serialises it.
-  JsonObject notify = doc.createNestedObject("notifications");
+  JsonObject notify = doc["notifications"].to<JsonObject>();
   notify["count"] = notifications.count();
   notify["severity"] = notification_severity_name(notifications.maxSeverity());
 
@@ -806,7 +861,7 @@ handleScan(MongooseHttpServerRequest *request) {
     response->print("[");
     for (int i = 0; i < networksFound; ++i) {
       if(i) response->print(",");
-      StaticJsonDocument<256> network;
+      JsonDocument network;
       network["rssi"] = WiFi.RSSI(i);
       network["ssid"] = WiFi.SSID(i);
       network["bssid"] = WiFi.BSSIDstr(i);
@@ -952,14 +1007,14 @@ handleTeslaVeh(MongooseHttpServerRequest *request)
     return;
   }
 
-  StaticJsonDocument<1024> doc;
+  JsonDocument doc;
   int count = teslaClient.getVehicleCnt();
   doc["count"] = count;
-  JsonArray vehicles = doc.createNestedArray("vehicles");
+  JsonArray vehicles = doc["vehicles"].to<JsonArray>();
 
   for (int i = 0; i < count; i++)
   {
-    JsonObject vehicle = vehicles.createNestedObject();
+    JsonObject vehicle = vehicles.add<JsonObject>();
     vehicle["id"] = teslaClient.getVehicleId(i);
     vehicle["name"] = teslaClient.getVehicleDisplayName(i);
   }
@@ -993,26 +1048,25 @@ void handleStatusPost(MongooseHttpServerRequest *request, MongooseHttpServerResp
 {
   String body = request->body().toString();
   // Deserialize the JSON document
-  const size_t capacity = JSON_OBJECT_SIZE(32) + 1024;
-  DynamicJsonDocument doc(capacity);
+  JsonDocument doc;
   DeserializationError error = deserializeJson(doc, body);
   if(!error)
   {
     bool send_event = true;
 
-    if(doc.containsKey("voltage"))
+    if(!doc["voltage"].isNull())
     {
       double volts = doc["voltage"];
       DBUGF("voltage:%.1f", volts);
       evse.setVoltage(volts);
     }
-    if(doc.containsKey("shaper_live_pwr"))
+    if(!doc["shaper_live_pwr"].isNull())
     {
       double shaper_live_pwr = doc["shaper_live_pwr"];
       shaper.setLivePwr(shaper_live_pwr);
       DBUGF("shaper: live power:%dW", shaper.getLivePwr());
     }
-    if(doc.containsKey("solar")) {
+    if(!doc["solar"].isNull()) {
       int solar = doc["solar"];
       divert.setSolar(solar);
       DBUGF("solar:%dW", solar);
@@ -1023,7 +1077,7 @@ void handleStatusPost(MongooseHttpServerRequest *request, MongooseHttpServerResp
       }
       send_event = false; // Divert sends the event so no need to send here
     }
-    else if(doc.containsKey("grid_ie")) {
+    else if(!doc["grid_ie"].isNull()) {
       int grid_ie = doc["grid_ie"];
       divert.setGridIe(grid_ie);
       DBUGF("grid:%dW", grid_ie);
@@ -1034,25 +1088,25 @@ void handleStatusPost(MongooseHttpServerRequest *request, MongooseHttpServerResp
       }
       send_event = false; // Divert sends the event so no need to send here
     }
-    if(doc.containsKey("battery_level") && vehiclePushAccepted()) {
+    if(!doc["battery_level"].isNull() && vehiclePushAccepted()) {
       double vehicle_soc = doc["battery_level"];
       DBUGF("vehicle_soc:%d%%", vehicle_soc);
       evse.setVehicleStateOfCharge(vehicle_soc);
       doc["vehicle_state_update"] = 0;
     }
-    if(doc.containsKey("battery_range") && vehiclePushAccepted()) {
+    if(!doc["battery_range"].isNull() && vehiclePushAccepted()) {
       double vehicle_range = doc["battery_range"];
       DBUGF("vehicle_range:%dKM", vehicle_range);
       evse.setVehicleRange(vehicle_range);
       doc["vehicle_state_update"] = 0;
     }
-    if(doc.containsKey("time_to_full_charge") && vehiclePushAccepted()){
+    if(!doc["time_to_full_charge"].isNull() && vehiclePushAccepted()){
       double vehicle_eta = doc["time_to_full_charge"];
       DBUGF("vehicle_eta:%d", vehicle_eta);
       evse.setVehicleEta(vehicle_eta);
       doc["vehicle_state_update"] = 0;
     }
-    if(doc.containsKey("vehicle_charge_limit") && vehiclePushAccepted()){
+    if(!doc["vehicle_charge_limit"].isNull() && vehiclePushAccepted()){
       int vehicle_charge_limit = doc["vehicle_charge_limit"];
       DBUGF("vehicle_charge_limit:%d%%", vehicle_charge_limit);
       evse.setVehicleChargeLimit(vehicle_charge_limit);
@@ -1061,12 +1115,12 @@ void handleStatusPost(MongooseHttpServerRequest *request, MongooseHttpServerResp
     // Display-only home/powerwall battery feeds. Like the solar/grid pushes
     // above these are an explicit override (no data_src arbitration); they just
     // surface in /status and on the display.
-    if(doc.containsKey("home_battery_soc")) {
+    if(!doc["home_battery_soc"].isNull()) {
       int soc = doc["home_battery_soc"];
       DBUGF("home_battery_soc:%d%%", soc);
       home_battery_set_soc(soc);
     }
-    if(doc.containsKey("home_battery_power")) {
+    if(!doc["home_battery_power"].isNull()) {
       int power = doc["home_battery_power"];
       DBUGF("home_battery_power:%dW", power);
       home_battery_set_power(power);
@@ -1095,17 +1149,7 @@ handleStatus(MongooseHttpServerRequest *request)
 
   if(HTTP_GET == request->method()) {
 
-    // Allocated once and reused. Building a fresh multi-KB document per
-    // request, freed again immediately, is what fragments this heap: measured
-    // on hardware, sustained polling of /status alone drove the largest
-    // allocatable block from 61,428 down to 38,900 and it never recovered,
-    // while total free heap stayed above 70KB.
-    //
-    // Safe as a static because Mongoose is polled from loop() on a single
-    // task and each handler runs to completion inside its own event callback;
-    // this one calls nothing that re-enters the HTTP layer.
-    static DynamicJsonDocument doc(STATUS_JSON_CAPACITY);
-    doc.clear();
+    JsonDocument doc;
 
     uint32_t probe = diagnostics_probe_begin();
     buildStatus(doc);
@@ -1141,9 +1185,7 @@ handleStatus(MongooseHttpServerRequest *request)
 void
 handleScheduleGet(MongooseHttpServerRequest *request, MongooseHttpServerResponseStream *response, uint16_t event)
 {
-  // Sized from the stored event count — a fixed budget silently truncated
-  // multi-rule schedules (serialize() drops events once the doc overflows).
-  DynamicJsonDocument doc(scheduler.scheduleJsonCapacity());
+  JsonDocument doc;
 
   bool success = (SCHEDULER_EVENT_NULL == event) ?
     scheduler.serialize(doc) :
@@ -1237,8 +1279,7 @@ handleSchedulePlan(MongooseHttpServerRequest *request)
     return;
   }
 
-  const size_t capacity = JSON_OBJECT_SIZE(40) + 2048;
-  DynamicJsonDocument doc(capacity);
+  JsonDocument doc;
 
   scheduler.serializePlan(doc);
   response->setCode(200);
@@ -1325,7 +1366,7 @@ void handleBoostGet(MongooseHttpServerRequest *request, MongooseHttpServerRespon
 {
   if(boost.isActive())
   {
-    StaticJsonDocument<192> doc;
+    JsonDocument doc;
     boost.serialize(doc);
     response->setCode(200);
     serializeJson(doc, *response);
@@ -1393,10 +1434,10 @@ void handleBoost(MongooseHttpServerRequest *request)
 void handleEmeterDelete(MongooseHttpServerRequest *request, MongooseHttpServerResponseStream *response)
 {
   String body = request->body().toString();
-  DynamicJsonDocument doc(512);
+  JsonDocument doc;
   DeserializationError err = deserializeJson(doc, body);
   if (DeserializationError::Code::Ok == err) {
-    if (doc.containsKey("hard") && doc.containsKey("import")) {
+    if (!doc["hard"].isNull() && !doc["import"].isNull()) {
       bool hardreset = (bool)doc["hard"];
       bool import = (bool)doc["import"];
       if (evse.resetEnergyMeter(hardreset,import)) {
@@ -1576,12 +1617,11 @@ handleRestart(MongooseHttpServerRequest *request) {
   else if (HTTP_POST == request->method()) {
     String body = request->body().toString();
     // Deserialize the JSON document
-    const size_t capacity = JSON_OBJECT_SIZE(1) + 16;
-    DynamicJsonDocument doc(capacity);
+    JsonDocument doc;
     DeserializationError error = deserializeJson(doc, body);
     if(!error)
     {
-      if(doc.containsKey("device")){
+      if(doc["device"].is<const char*>()){
         if (strcmp(doc["device"], "gateway") == 0 ) {
           response->setCode(200);
           response->print("{\"msg\":\"restart gateway\"}");
@@ -1739,22 +1779,15 @@ void handleCableTemp(MongooseHttpServerRequest *request) {
 
   if(HTTP_GET == request->method())
   {
-    // 4 source objects of 9 members each (source, name, pin, status,
-    // temperature, r25, beta, offset_c10, panic_c10), plus the two
-    // top-level flags. JSON_OBJECT_SIZE(8) below undercounts that by one
-    // member per source; the +512 slack comfortably covers it.
-    const size_t capacity = JSON_OBJECT_SIZE(3) +
-                            JSON_ARRAY_SIZE(OPENEVSE_CABLE_TEMP_SOURCE_COUNT) +
-                            OPENEVSE_CABLE_TEMP_SOURCE_COUNT * JSON_OBJECT_SIZE(8) + 512;
-    DynamicJsonDocument doc(capacity);
+    JsonDocument doc;
 
     doc["supported"] = evse.isCableTempKnown();
     doc["enabled"] = evse.isCableTempEnabled();
 
-    JsonArray sources = doc.createNestedArray("sources");
+    JsonArray sources = doc["sources"].to<JsonArray>();
     for(uint8_t i = 0; i < OPENEVSE_CABLE_TEMP_SOURCE_COUNT; i++)
     {
-      JsonObject src = sources.createNestedObject();
+      JsonObject src = sources.add<JsonObject>();
       src["source"] = i;
       src["name"] = source_names[i];
       src["pin"] = evse.getCableTempPin(i);
@@ -1765,7 +1798,7 @@ void handleCableTemp(MongooseHttpServerRequest *request) {
       if(evse.isCableTempValid(i)) {
         src["temperature"] = evse.getCableTemp(i);
       }
-      if(evse.isCableTempConfigKnown()) {
+      if(evse.isCableTempConfigValid(i)) {
         src["r25"] = evse.getCableTempR25(i);
         src["beta"] = evse.getCableTempBeta(i);
         src["offset_c10"] = evse.getCableTempOffsetC10(i);
@@ -1787,8 +1820,7 @@ void handleCableTemp(MongooseHttpServerRequest *request) {
   }
 
   MongooseString body = request->body();
-  const size_t capacity = JSON_OBJECT_SIZE(8) + 256;
-  DynamicJsonDocument doc(capacity);
+  JsonDocument doc;
   if(deserializeJson(doc, body.c_str(), body.length())) {
     response->setCode(400);
     response->print("{\"msg\":\"Could not parse JSON\"}");
@@ -1796,7 +1828,7 @@ void handleCableTemp(MongooseHttpServerRequest *request) {
     return;
   }
 
-  if(!doc.containsKey("source") || !doc.containsKey("pin")) {
+  if(doc["source"].isNull() || doc["pin"].isNull()) {
     response->setCode(400);
     response->print("{\"msg\":\"source and pin are required\"}");
     request->send(response);
@@ -1826,10 +1858,10 @@ void handleCableTemp(MongooseHttpServerRequest *request) {
   // full-configuration form is all-or-nothing, and filling the gaps from the
   // local cache would silently write back a stale value if the cache were
   // cold or another client had changed it.
-  bool hasCal = doc.containsKey("r25") && doc.containsKey("beta") &&
-                doc.containsKey("offset_c10") && doc.containsKey("panic_c10");
-  bool anyCal = doc.containsKey("r25") || doc.containsKey("beta") ||
-                doc.containsKey("offset_c10") || doc.containsKey("panic_c10");
+  bool hasCal = !doc["r25"].isNull() && !doc["beta"].isNull() &&
+                !doc["offset_c10"].isNull() && !doc["panic_c10"].isNull();
+  bool anyCal = !doc["r25"].isNull() || !doc["beta"].isNull() ||
+                !doc["offset_c10"].isNull() || !doc["panic_c10"].isNull();
 
   if(anyCal && !hasCal) {
     response->setCode(400);
@@ -1953,7 +1985,7 @@ static void rapiRespond(RapiRequest *req, int ret, const String &rapiString)
     if(req->json) {
       // Through the serializer, not string concatenation: the command is
       // caller-supplied and a quote in it must not escape the value.
-      DynamicJsonDocument doc(512);
+      JsonDocument doc;
       doc["cmd"] = req->rapi;
       doc["ret"] = rapiString;
       serializeJson(doc, page);
@@ -1966,9 +1998,9 @@ static void rapiRespond(RapiRequest *req, int ret, const String &rapiString)
   else
   {
     if(req->json) {
-      DynamicJsonDocument doc(512);
+      JsonDocument doc;
       doc["cmd"] = req->rapi;
-      doc["error"] = rapiErrorName(ret);
+      doc["error"] = String(rapiErrorName(ret));
       serializeJson(doc, page);
     } else {
       page += html_escape(req->rapi);
@@ -2117,8 +2149,23 @@ void handleHttpsRedirect(MongooseHttpServerRequest *request)
   MongooseHttpServerResponseStream *response = request->beginResponseStream();
   response->setContentType(CONTENT_TYPE_HTML);
 
+  // The Host header carries the port the client reached us on, which is the
+  // HTTP listener's -- redirecting to it verbatim would just bounce the browser
+  // back here. Keep the hostname the user typed (it has to match the
+  // certificate) and substitute the HTTPS port.
+  String host = request->host().toString();
+  int portSep = host.lastIndexOf(':');
+  // An unbracketed ':' in an IPv6 literal is part of the address, not a port.
+  if(portSep >= 0 && host.indexOf(']') < portSep) {
+    host.remove(portSep);
+  }
+
   String url = F("https://");
-  url += request->host().toString();
+  url += host;
+  if(443 != www_https_port) {
+    url += ":";
+    url += String(www_https_port);
+  }
   url += request->uri().toString();
 
   String s = F("<html>");
@@ -2137,22 +2184,21 @@ void handleHttpsRedirect(MongooseHttpServerRequest *request)
 void onWsFrame(MongooseHttpWebSocketConnection *connection, int flags, uint8_t *data, size_t len)
 {
   DBUGF("Got message %.*s", len, (const char *)data);
-  const size_t capacity = JSON_OBJECT_SIZE(3) + JSON_OBJECT_SIZE(2) + 128;
-  DynamicJsonDocument doc(capacity);
+  JsonDocument doc;
   DeserializationError error = deserializeJson(doc, data, len);
   if (!error) {
-    if (doc.containsKey("ping") && doc["ping"].is<int8_t>())
+    if (!doc["ping"].isNull())
       {
         // answer pong
         connection->send("{\"pong\": 1}");
       }
 
     // Handle load sharing allocation from controller (member side)
-    if (doc.containsKey("loadsharing")) {
+    if (!doc["loadsharing"].isNull()) {
       JsonObject ls = doc["loadsharing"];
-      if (ls.containsKey("target_current")) {
+      if (!ls["target_current"].isNull()) {
         double targetCurrent = ls["target_current"].as<double>();
-        String reason = ls.containsKey("reason") ? ls["reason"].as<String>() : "allocation";
+        String reason = !ls["reason"].isNull() ? ls["reason"].as<String>() : "allocation";
 
         DBUGF("LoadSharing: Received allocation %.1fA (reason: %s)", targetCurrent, reason.c_str());
 
@@ -2165,31 +2211,43 @@ void onWsFrame(MongooseHttpWebSocketConnection *connection, int flags, uint8_t *
   }
 }
 
-// WebSocket handshake authentication gate.
+// Websocket auth gate.
 //
-// Registered via ->onRequest() on every WebSocket endpoint, so it runs during
-// MG_EV_WEBSOCKET_HANDSHAKE_REQUEST — before the 101 Switching Protocols
-// response. On failure, requestAuthentication() sends a 401 and sets
-// MG_F_SEND_AND_CLOSE; mongoose then skips handshake completion (see
-// mongoose.c, MG_EV_WEBSOCKET_HANDSHAKE_REQUEST handling), so no onConnect
-// fires and no data is ever pushed to an unauthenticated client. On success we
-// return without sending a response and the handshake proceeds normally.
+// On Mongoose 6 the library dispatched the handshake request to the endpoint's
+// onRequest handler, so onWsAuthenticate() could answer 401 before the upgrade.
+// The Mongoose 7 library performs mg_ws_upgrade() inside the connection's
+// constructor, so no request handler can run first and that gate is unreachable
+// here. The handshake request is duplicated into the connection though
+// (MG_COPY_HTTP_MESSAGE), so its Authorization/Cookie headers are still
+// readable at connect time — check them here and drop an unauthenticated client
+// before it is sent anything.
 //
-// Note: the library dispatches HANDSHAKE_REQUEST to the endpoint's onRequest
-// handler when one is set, and onConnect/onFrame at the later HANDSHAKE_DONE /
-// FRAME events, so gating here does not interfere with those callbacks.
-void onWsAuthenticate(MongooseHttpServerRequest *request)
+// Difference from the Mongoose 6 path: the client sees the 101 followed by an
+// immediate close rather than a 401. Nothing is served either way.
+static bool wsAuthorise(MongooseHttpWebSocketConnection *connection)
 {
-  if(!isAuthenticated(request)) {
-    request->requestAuthentication(esp_hostname);
+  if(isAuthenticated(connection)) {
+    return true;
   }
+
+  DBUGF("Rejecting unauthenticated websocket client");
+  // MongooseSocket::disconnect() is protected, so close the underlying
+  // connection directly. is_closing rather than is_draining: draining flushes
+  // queued data first and sendAll() (e.g. the DBUGF above feeding
+  // /debug/console) would still write to this rejected client.
+  connection->getConnection()->is_closing = 1;
+  return false;
 }
 
 void onWsConnect(MongooseHttpWebSocketConnection *connection)
 {
-  DBUGF("New client connected over ws");
+  if(false == wsAuthorise(connection)) {
+    return;
+  }
 
-  DynamicJsonDocument doc(STATUS_JSON_CAPACITY);
+  DBUGF("New client connected over ws");
+  // pushing states to client
+  JsonDocument doc;
   buildStatus(doc);
 
   // Send only to the client that just connected. This used to call
@@ -2208,13 +2266,24 @@ void onWsConnect(MongooseHttpWebSocketConnection *connection)
  * Really simple 'conversion' of ASCII to UTF-8, basically only a few places send >127 chars
  * so just filter those to be acceptable as UTF-8
  */
+static void web_server_send_all(const char *endpoint, const uint8_t *buffer, size_t size)
+{
+  // sendAll() walks the shared Mongoose manager's connections, so one call
+  // reaches clients on both listeners; calling it per server sends twice.
+  if(http_server_started) {
+    http_server.sendAll(endpoint, WEBSOCKET_OP_TEXT, buffer, size);
+  } else if(https_server_started) {
+    https_server.sendAll(endpoint, WEBSOCKET_OP_TEXT, buffer, size);
+  }
+}
+
 void web_server_send_ascii_utf8(const char *endpoint, const uint8_t *buffer, size_t size)
 {
   char temp[size];
   for(int i = 0; i < size; i++) {
     temp[i] = buffer[i] & 0x7f;
   }
-  server.sendAll(endpoint, WEBSOCKET_OP_TEXT, temp, size);
+  web_server_send_all(endpoint, (const uint8_t *)temp, size);
 }
 
 void handleMqttAction(MongooseHttpServerRequest *request) {
@@ -2222,7 +2291,7 @@ void handleMqttAction(MongooseHttpServerRequest *request) {
   if (false == requestPreProcess(request, response)) return;
 
   if (HTTP_GET == request->method()) {
-    DynamicJsonDocument doc(JSON_OBJECT_SIZE(8) + 384);
+    JsonDocument doc;
     doc["mqtt_connected"] = (int)mqtt.isConnected();
     doc["mqtt_status"]    = mqtt.getMqttStatus();
     if (mqtt.getBrokerIp()[0] != '\0')
@@ -2250,113 +2319,94 @@ void handleMqttAction(MongooseHttpServerRequest *request) {
   request->send(response);
 }
 
-void web_server_setup()
+static void registerWebServerRoutes(MongooseHttpServer &server, bool isHttps)
 {
-  bool use_ssl = false;
-  if(www_certificate_id != "")
-  {
-    // This one sits on the boot path: a corrupted stored www_certificate_id
-    // parsed with a throwing conversion would abort inside web_server_setup()
-    // and boot-loop the unit with no way back in over the network. Fall through
-    // to plain HTTP instead, which at least leaves the device reachable to
-    // correct the config.
-    uint64_t cert_id = 0;
-    bool id_valid = certificate_id_from_string(www_certificate_id.c_str(), cert_id);
-    if(!id_valid) {
-      DEBUG.printf("Ignoring malformed www_certificate_id '%s', serving HTTP\n", www_certificate_id.c_str());
-    }
-
-    const char *cert = id_valid ? certs.getCertificate(cert_id) : NULL;
-    const char *key = id_valid ? certs.getKey(cert_id) : NULL;
-    if(NULL != cert && NULL != key)
-    {
-      DEBUG.printf("Starting HTTPS server, https://0.0.0.0:%d\n", www_https_port);
-      server.begin(www_https_port, cert, key);
-      use_ssl = true;
-
-      redirect.begin(www_http_port);
-      redirect.on("/", handleHttpsRedirect);
-    }
-  }
-
-  if(false == use_ssl) {
-    DEBUG.printf("Starting HTTP server, http://0.0.0.0:%d\n", www_http_port);
-    server.begin(www_http_port);
-  }
+  // Server startup (and the HTTP->HTTPS redirect) now lives in
+  // web_server_setup(), which registers these routes against both the HTTP and
+  // the HTTPS server, so it must not be repeated per-registration here.
 
   // Session management (no auth gate — user must reach these unauthenticated)
-  server.on("/login$", handleLogin);
-  server.on("/logout$", handleLogout);
+  server.on("/login", [isHttps](MongooseHttpServerRequest *request) {
+    handleLogin(request, isHttps);
+  });
+  server.on("/logout", handleLogout);
 
   // Handle status updates
-  server.on("/status$", handleStatus);
-  server.on("/config$", handleConfig);
+  server.on("/status", handleStatus);
+  server.on("/config", handleConfig);
 
   // Handle HTTP web interface button presses
-  server.on("/teslaveh$", handleTeslaVeh);
-  server.on("/tesla/vehicles$", handleTeslaVeh);
-  server.on("/settime$", handleSetTime);
-  server.on("/reset$", handleRst);
-  server.on("/restart$", handleRestart);
-  server.on("/rapi$")->onRequest(handleRapi)->onClose(handleRapiClose);
-  server.on("/r$")->onRequest(handleRapi)->onClose(handleRapiClose);
-  server.on("/scan$", handleScan);
-  server.on("/apoff$", handleAPOff);
-  server.on("/divertmode$", handleDivertMode);
-  server.on("/shaper$", handleCurrentShaper);
-  server.on("/emoncms/describe$", handleDescribe);
-  server.on("/rfid/add$", handleAddRFID);
-  server.on("/rfid/users$", handleRfidUsers);
-  server.on("/relay/reset$", handleRelayHealthReset);
-  server.on("/relay/recovery$", handleRelayRecovery);
+  server.on("/teslaveh", handleTeslaVeh);
+  server.on("/tesla/vehicles", handleTeslaVeh);
+  server.on("/settime", handleSetTime);
+  server.on("/reset", handleRst);
+  server.on("/restart", handleRestart);
+  server.on("/rapi")->onRequest(handleRapi)->onClose(handleRapiClose);
+  server.on("/r")->onRequest(handleRapi)->onClose(handleRapiClose);
+  server.on("/scan", handleScan);
+  server.on("/apoff", handleAPOff);
+  server.on("/divertmode", handleDivertMode);
+  server.on("/shaper", handleCurrentShaper);
+  server.on("/emoncms/describe", handleDescribe);
+  server.on("/rfid/add", handleAddRFID);
+  server.on("/rfid/users", handleRfidUsers);
+  server.on("/relay/reset", handleRelayHealthReset);
+  server.on("/relay/recovery", handleRelayRecovery);
 #ifdef ENABLE_CABLE_TEMP
-  server.on("/cabletemp$", handleCableTemp);
+  server.on("/cabletemp", handleCableTemp);
 #endif // ENABLE_CABLE_TEMP
 
-  server.on("/schedule/plan$", handleSchedulePlan);
+  server.on("/schedule/plan", handleSchedulePlan);
   server.on("/schedule", handleSchedule);
+  server.on("/schedule/#", handleSchedule); // sub-path is the event id (exact match otherwise)
 
-  server.on("/claims/target$", handleEvseClaimsTarget);
+  server.on("/claims/#", handleEvseClaims);
+  server.on("/claims/target", handleEvseClaimsTarget);
   server.on("/claims", handleEvseClaims);
 
-  server.on("/override$", handleOverride);
+  server.on("/override", handleOverride);
 
-  server.on("/logs/export$", handleLogsExport);
+  server.on("/logs/export", handleLogsExport);
   server.on("/logs", handleEventLogs);
+  server.on("/logs/#", handleEventLogs); // sub-path is the page (exact match otherwise)
+  server.on("/certificates/#", handleCertificates);
   server.on("/certificates", handleCertificates);
   server.on("/limit", handleLimit);
   server.on("/boost", handleBoost);
-  server.on("/notifications/ack$", handleNotificationAck);
-  server.on("/notifications$", handleNotifications);
+  server.on("/notifications/ack", handleNotificationAck);
+  server.on("/notifications", handleNotifications);
+  server.on("/installer/verify", handleInstallerVerify);
+  server.on("/installer/password", handleInstallerPassword);
+  server.on("/installer/maxcurrent", handleInstallerMaxCurrent);
   server.on("/emeter", handleEmeter);
   server.on("/time", handleTime);
-  server.on("/mqtt$", handleMqttAction);
+  server.on("/mqtt", handleMqttAction);
 
 #ifndef ENABLE_TSDB
-  server.on("/energy/raw$", handleEnergyRaw);
-  server.on("/energy/daily$", handleEnergyDaily);
-  server.on("/energy/monthly$", handleEnergyMonthly);
-  server.on("/energy/annual$", handleEnergyAnnual);
+  server.on("/energy/raw", handleEnergyRaw);
+  server.on("/energy/daily", handleEnergyDaily);
+  server.on("/energy/monthly", handleEnergyMonthly);
+  server.on("/energy/annual", handleEnergyAnnual);
 #else // ENABLE_TSDB
-  server.on("/energy/raw$", handleEnergyRaw);
-  server.on("/energy/daily$", handleEnergyDaily);
-  server.on("/energy/weekly$", handleEnergyWeekly);
-  server.on("/energy/monthly$", handleEnergyMonthly);
-  server.on("/energy/annual$", handleEnergyAnnual);
+  server.on("/energy/raw", handleEnergyRaw);
+  server.on("/energy/daily", handleEnergyDaily);
+  server.on("/energy/weekly", handleEnergyWeekly);
+  server.on("/energy/monthly", handleEnergyMonthly);
+  server.on("/energy/annual", handleEnergyAnnual);
 #endif // ENABLE_TSDB
 
   // Simple Firmware Update Form
-  server.on("/update$")->
+  server.on("/update")->
     onRequest(handleUpdateRequest)->
     onUpload(handleUpdateUpload)->
     onClose(handleUpdateClose);
 
   // In-place 16MB flash repartition (16MB module flashed with 4MB layout)
-  server.on("/migrate/expand16mb$", handleMigrateExpand16mb);
-  server.on("/migrate/status$", handleMigrateStatus);
-  server.on("/migrate/coredump$", handleMigrateCoredump);
+  server.on("/migrate/expand16mb", handleMigrateExpand16mb);
+  server.on("/migrate/status", handleMigrateStatus);
+  server.on("/migrate/coredump", handleMigrateCoredump);
 
-  server.on("/debug$", [](MongooseHttpServerRequest *request) {
+  server.on("/debug", [](MongooseHttpServerRequest *request) {
     MongooseHttpServerResponseStream *response;
     if(false == requestPreProcess(request, response, CONTENT_TYPE_TEXT)) {
       return;
@@ -2378,7 +2428,7 @@ void web_server_setup()
   //   DELETE /debug/crash      clear it, so the next panic is unambiguous
   //   GET    /debug/crash/raw  the image itself, for esp-coredump
   // -----------------------------------------------------------------
-  server.on("/debug/crash$", [](MongooseHttpServerRequest *request) {
+  server.on("/debug/crash", [](MongooseHttpServerRequest *request) {
     MongooseHttpServerResponseStream *response;
     if(false == requestPreProcess(request, response, CONTENT_TYPE_JSON)) {
       return;
@@ -2392,15 +2442,14 @@ void web_server_setup()
       return;
     }
 
-    const size_t capacity = JSON_OBJECT_SIZE(12) + JSON_ARRAY_SIZE(16) + 640;
-    DynamicJsonDocument doc(capacity);
+    JsonDocument doc;
     diagnostics_coredump_json(doc);
     response->setCode(200);
     serializeJson(doc, *response);
     request->send(response);
   });
 
-  server.on("/debug/crash/raw$", [](MongooseHttpServerRequest *request) {
+  server.on("/debug/crash/raw", [](MongooseHttpServerRequest *request) {
     dumpRequest(request);
 
     // Not routed through requestPreProcess: that opens a buffered stream
@@ -2443,7 +2492,7 @@ void web_server_setup()
   //
   // requestPreProcess carries the auth and the CSRF check: the delete key is
   // what erases this charger's reports, so it is guarded like a config write.
-  server.on("/debug/crash/report$", [](MongooseHttpServerRequest *request) {
+  server.on("/debug/crash/report", [](MongooseHttpServerRequest *request) {
     MongooseHttpServerResponseStream *response;
     if(false == requestPreProcess(request, response, CONTENT_TYPE_JSON)) {
       return;
@@ -2466,7 +2515,7 @@ void web_server_setup()
     crash_delete_key_hash(key, keyHash);
     // Sent as-is: the body the browser POSTs to the broker. Where to POST it
     // comes from /debug/crash/identity, which the browser reads first.
-    DynamicJsonDocument doc(6144);
+    JsonDocument doc;
     if(!crash_payload_build(doc, rid, keyHash)) {
       response->setCode(500);
       response->print(F("{\"msg\":\"report too large\"}"));
@@ -2478,7 +2527,7 @@ void web_server_setup()
     request->send(response);
   });
 
-  server.on("/debug/crash/identity$", [](MongooseHttpServerRequest *request) {
+  server.on("/debug/crash/identity", [](MongooseHttpServerRequest *request) {
     MongooseHttpServerResponseStream *response;
     if(false == requestPreProcess(request, response, CONTENT_TYPE_JSON)) {
       return;
@@ -2493,7 +2542,7 @@ void web_server_setup()
       return;
     }
     if(HTTP_POST == request->method()) {
-      DynamicJsonDocument in(256);
+      JsonDocument in;
       if(deserializeJson(in, request->body().toString())) {
         response->setCode(400);
         response->print(F("{\"msg\":\"bad json\"}"));
@@ -2535,7 +2584,7 @@ void web_server_setup()
     // opens.
     char want[4];
     bool withKey = request->getParam("key", want, sizeof(want)) >= 0;
-    DynamicJsonDocument doc(256);
+    JsonDocument doc;
     char rid[33], key[65];
     if(crash_identity_load(rid, key)) {
       doc["reporter_id"] = rid;
@@ -2552,17 +2601,18 @@ void web_server_setup()
   });
 #endif // ENABLE_CRASH_UPLOAD
 
-  server.on("/debug/console$")
-    ->onRequest(onWsAuthenticate)
-    ->onFrame([](MongooseHttpWebSocketConnection *connection, int flags, uint8_t *data, size_t len) {
+  server.on("/debug/console", [](MongooseHttpWebSocketConnection *connection, int flags, uint8_t *data, size_t len) {
+    // Intentionally no-op: this endpoint is server-push only via SerialDebug.onWrite.
+  })->onConnect([](MongooseHttpWebSocketConnection *connection) {
+    wsAuthorise(connection);
   });
 
   SerialDebug.onWrite([](const uint8_t *buffer, size_t size)
   {
-    server.sendAll("/debug/console", WEBSOCKET_OP_TEXT, buffer, size);
+    web_server_send_all("/debug/console", buffer, size);
   });
 
-  server.on("/evse$", [](MongooseHttpServerRequest *request) {
+  server.on("/evse", [](MongooseHttpServerRequest *request) {
     MongooseHttpServerResponseStream *response;
     if(false == requestPreProcess(request, response, CONTENT_TYPE_TEXT)) {
       return;
@@ -2575,9 +2625,10 @@ void web_server_setup()
     request->send(response);
   });
 
-  server.on("/evse/console$")
-    ->onRequest(onWsAuthenticate)
-    ->onFrame([](MongooseHttpWebSocketConnection *connection, int flags, uint8_t *data, size_t len) {
+  server.on("/evse/console", [](MongooseHttpWebSocketConnection *connection, int flags, uint8_t *data, size_t len) {
+    // Intentionally no-op: this endpoint is server-push only via SerialEvse callbacks.
+  })->onConnect([](MongooseHttpWebSocketConnection *connection) {
+    wsAuthorise(connection);
   });
 
   SerialEvse.onWrite([](const uint8_t *buffer, size_t size) {
@@ -2587,19 +2638,121 @@ void web_server_setup()
     web_server_send_ascii_utf8("/evse/console", buffer, size);
   });
 
-  server.on("/ws$")->
-    onRequest(onWsAuthenticate)
-    ->
-    onFrame(onWsFrame)
-    ->
-    onConnect(onWsConnect);
-
-  server.onNotFound(handleNotFound);
+  // onWsConnect() applies the auth gate; see wsAuthorise().
+  server.on("/ws", onWsFrame)->onConnect(onWsConnect);
 
   // Setup load sharing endpoints
-  web_server_load_sharing_setup();
+  web_server_load_sharing_setup(server);
+}
 
-  DEBUG.println("Server started");
+/**
+ * Start the HTTP and/or HTTPS listeners, publish the primary one's protocol and
+ * port, and register routes. A TLS listener that fails to bind falls back to
+ * HTTP; total failure keeps the listener state inactive.
+ */
+void web_server_setup()
+{
+  http_server_started = false;
+  https_server_started = false;
+  web_server_listener = {false, false, 0};
+
+  const char *cert = NULL;
+  const char *key = NULL;
+  if(config_https_enabled() && www_certificate_id != "")
+  {
+    // This one sits on the boot path: a corrupted stored www_certificate_id
+    // parsed with a throwing conversion would abort inside web_server_setup()
+    // and boot-loop the unit with no way back in over the network. Fall through
+    // to plain HTTP instead, which at least leaves the device reachable to
+    // correct the config.
+    uint64_t cert_id = 0;
+    bool id_valid = certificate_id_from_string(www_certificate_id.c_str(), cert_id);
+    if(!id_valid) {
+      DEBUG.printf("Ignoring malformed www_certificate_id '%s', serving HTTPS disabled\n", www_certificate_id.c_str());
+    }
+
+    cert = id_valid ? certs.getCertificate(cert_id) : NULL;
+    key = id_valid ? certs.getKey(cert_id) : NULL;
+  }
+
+  // Only a listener that actually bound counts: a blocked or failed TLS port
+  // must not suppress the HTTP fallback, or be advertised to peers and mDNS.
+  const bool use_ssl = web_server_start_https(cert, key,
+    [](const char *certificate, const char *private_key)
+    {
+      DEBUG.printf("Starting HTTPS server, https://0.0.0.0:%d\n", www_https_port);
+      if(!https_server.begin(www_https_port, certificate, private_key)) {
+        return false;
+      }
+      registerWebServerRoutes(https_server, true);
+      https_server.onNotFound(handleNotFound);
+      https_server_started = true;
+      return true;
+    });
+
+  // Keep HTTP reachable whenever HTTPS is unavailable, so we never strand the UI.
+  const bool should_start_http = config_http_enabled() || false == use_ssl;
+  const bool should_bind_http_port = false == use_ssl || www_http_port != www_https_port;
+  if(should_start_http && should_bind_http_port) {
+      DEBUG.printf("Starting HTTP server, http://0.0.0.0:%d\n", www_http_port);
+      if(http_server.begin(www_http_port)) {
+        registerWebServerRoutes(http_server, false);
+        http_server.onNotFound(handleNotFound);
+        http_server_started = true;
+      } else {
+        DEBUG.printf("HTTP server failed on port %u\n", (unsigned)www_http_port);
+      }
+  } else if(use_ssl && should_bind_http_port) {
+      // HTTPS only. Leaving port 80 closed means anyone who types the bare
+      // hostname gets a connection refused with nothing to explain it, so keep
+      // a listener there that does nothing but point at the TLS one.
+      //
+      // "/#" rather than "/": Mongoose 7 matches with mg_match(), so a pattern
+      // without a wildcard is an exact comparison and "/" would only ever catch
+      // the root document.
+      DEBUG.printf("Starting HTTPS redirect, http://0.0.0.0:%d\n", www_http_port);
+      web_server_start_redirect(www_http_port,
+        /** Bind the optional HTTP-to-HTTPS redirect and return the actual result. */
+        [](uint16_t port) { return redirect_server.begin(port); },
+        /** Install the redirect handler after its listener starts. */
+        []() {
+          redirect_server.on("/#", handleHttpsRedirect);
+          redirect_server.onNotFound(handleHttpsRedirect);
+        },
+        /** Identify a failed redirect bind without changing the primary HTTPS listener. */
+        [](uint16_t port) { DEBUG.printf("HTTP->HTTPS redirect failed on port %u\n", port); });
+  }
+
+  // The primary listener is HTTPS when it came up, otherwise HTTP.
+  if(use_ssl) {
+    web_server_listener = {true, true, (uint16_t)www_https_port};
+  } else if(http_server_started) {
+    web_server_listener = {true, false, (uint16_t)www_http_port};
+  }
+
+  if(web_server_listener.started) {
+    net.publishWebServer(web_server_listener.port, web_server_listener.https);
+  }
+
+  DEBUG.println(web_server_listener.started ? "Server started" : "Server failed to start");
+}
+
+/** Return whether startup established a primary web listener. */
+bool web_server_is_running()
+{
+  return web_server_listener.started;
+}
+
+/** Return whether the successfully started primary listener uses TLS. */
+bool web_server_is_https()
+{
+  return web_server_listener.started && web_server_listener.https;
+}
+
+/** Return the selected primary listener port, or zero when startup failed. */
+uint16_t web_server_port()
+{
+  return web_server_listener.port;
 }
 
 void
@@ -2633,5 +2786,10 @@ void web_server_event(JsonDocument &event)
   // Drop any client that has stopped draining before adding to its backlog.
   diagnostics_ws_reap();
 
-  server.sendAll("/ws", json);
+  // One call covers both listeners (shared manager), see web_server_send_all()
+  if(http_server_started) {
+    http_server.sendAll("/ws", json);
+  } else if(https_server_started) {
+    https_server.sendAll("/ws", json);
+  }
 }

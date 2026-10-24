@@ -5,6 +5,7 @@
 #include "emonesp.h"
 #include "debug.h"
 #include "flash_migrate.h"
+#include "ota_url_allow.h"
 
 #if defined(ESP32) && !defined(EPOXY_DUINO)
 
@@ -95,6 +96,7 @@ static const uint32_t NEW_APP1_SIZE         = 0x640000;
 // download never reallocates mid-TLS-transfer.
 static const size_t MIGRATE_SCRATCH_CAP     = 4 * 1024;
 static const uint32_t MIGRATE_STALL_MS      = 25000;      // no-progress timeout
+static const uint8_t MIGRATE_MAX_REDIRECTS  = 5;          // per file, like http_update
 
 enum {
   ST_IDLE = 0,
@@ -137,6 +139,7 @@ struct MigrateCtx
   bool body_complete = false;   // current resource fully received
   bool has_redirect = false;    // onResponse saw a 3xx; follow redirect_url
   String redirect_url;
+  uint8_t redirects = 0;        // hops followed for the current file
   bool has_pending = false;     // next file queued
   String pending_url;
   bool failed = false;          // a callback flagged failure; loop reports it
@@ -181,13 +184,14 @@ static void schedule_download(const String &url)
 {
   mctx.pending_url = url;
   mctx.has_pending = true;
+  mctx.redirects = 0;
 }
 
 // ---- helpers ------------------------------------------------------------
 
 static void emit_state(const char *s)
 {
-  StaticJsonDocument<128> e;
+  JsonDocument e;
   e["migrate"] = s;
   web_server_event(e);
   yield();
@@ -199,7 +203,7 @@ static void emit_progress(int percent)
     return;
   }
   mctx.last_percent = percent;
-  StaticJsonDocument<128> e;
+  JsonDocument e;
   e["migrate_progress"] = percent;
   web_server_event(e);
   yield();
@@ -221,7 +225,7 @@ static void migrate_fail(int err, const char *where)
     esp_ota_abort(mctx.ota_handle);
     mctx.ota_handle = 0;
   }
-  StaticJsonDocument<128> e;
+  JsonDocument e;
   e["migrate"] = "failed";
   e["migrate_error"] = err;
   web_server_event(e);
@@ -391,7 +395,7 @@ static void finalize_current()
   {
     case ST_MANIFEST:
     {
-      StaticJsonDocument<1024> doc;
+      JsonDocument doc;
       DeserializationError err = deserializeJson(doc, mctx.buf, mctx.buf_len);
       if(err) {
         migrate_fail(-20, "manifest json");
@@ -489,6 +493,13 @@ static MongooseHttpClientRequest *current_req = NULL;
 static void start_download(const String &url)
 {
   DBUGF("[migrate] GET %s", url.c_str());
+
+  // Every fetch goes through here: the manifest, both images, and each
+  // redirect hop. Same host allowlist as http_update.
+  if(!ota_url_host_allowed(url.c_str())) {
+    flag_fail(-15, "url not allowed");
+    return;
+  }
 
   mctx.buf_len = 0; // manifest scratch reset
   mctx.dl_total = 0;
@@ -603,7 +614,7 @@ static void start_download(const String &url)
     current_req = NULL;
   });
 
-  mclient.send(request);
+  request->send();
 }
 
 // Main-loop pump. Drives the whole download/verify/commit sequence so that
@@ -657,6 +668,10 @@ void flash_migrate_loop()
   // No connection open — act on the result of the one that just closed.
   if(mctx.has_redirect) {
     mctx.has_redirect = false;
+    if(++mctx.redirects > MIGRATE_MAX_REDIRECTS) {
+      flag_fail(-16, "too many redirects");
+      return;
+    }
     start_download(mctx.redirect_url); // same state
     return;
   }
@@ -719,7 +734,7 @@ void flash_migrate_coredump_json(JsonDocument &doc)
     doc["task"] = s->exc_task;
     snprintf(buf, sizeof(buf), "0x%08x", (unsigned)s->exc_pc);
     doc["pc"] = String(buf);
-    JsonArray bt = doc.createNestedArray("bt");
+    JsonArray bt = doc["bt"].to<JsonArray>();
     for(uint32_t i = 0; i < s->exc_bt_info.depth && i < 16; i++) {
       snprintf(buf, sizeof(buf), "0x%08x", (unsigned)s->exc_bt_info.bt[i]);
       bt.add(String(buf));
@@ -747,6 +762,11 @@ bool flash_migrate_start_16mb(const String &manifest_url, bool dry_run)
     return false;
   }
   if(!flash_migrate_can_expand_16mb()) {
+    return false;
+  }
+  // Reject a caller-supplied manifest up front so the HTTP request fails,
+  // rather than starting and failing later over the websocket.
+  if(manifest_url.length() && !ota_url_host_allowed(manifest_url.c_str())) {
     return false;
   }
   mctx.dry_run = dry_run;
