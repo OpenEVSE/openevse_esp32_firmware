@@ -21,6 +21,7 @@ the monitor goes quiet for good after the first recovery.
 """
 
 import time
+from concurrent.futures import ThreadPoolExecutor
 
 import pytest
 import requests
@@ -130,12 +131,27 @@ class TestRelayRouteReply:
 
     @pytest.mark.parametrize("route", ROUTES)
     def test_repeated_requests_each_get_an_answer(self, evse_instance, route):
-        """Back-to-back calls (the case where a second arrives while the first
-        is still outstanding on a slow controller) must all be answered rather
-        than queue forever or be dropped."""
+        """Back-to-back calls must each be answered rather than queue forever
+        or be dropped."""
         native_url = evse_instance["native_url"]
         for _ in range(3):
             r = post_route(native_url, route, headers=HEADERS)
+            assert r.status_code in (200, 500), f"{route}: {r.status_code}: {r.text}"
+
+    @pytest.mark.parametrize("route", ROUTES)
+    def test_overlapping_requests_each_get_an_answer(self, evse_instance, route):
+        """Requests that arrive while the first is still outstanding (a slow
+        $FK holds the controller) must all be answered too. Which of them are
+        refused as busy is the firmware's call, so only that every one gets a
+        well-formed 200/500 reply is asserted."""
+        native_url = evse_instance["native_url"]
+        with ThreadPoolExecutor(max_workers=3) as pool:
+            futures = [
+                pool.submit(post_route, native_url, route, headers=HEADERS)
+                for _ in range(3)
+            ]
+            responses = [f.result() for f in futures]
+        for r in responses:
             assert r.status_code in (200, 500), f"{route}: {r.status_code}: {r.text}"
 
 
@@ -151,23 +167,36 @@ class TestRecoveryDoesNotWedgeTheMonitor:
 
     def test_status_keeps_updating_after_a_recovery(self, evse_instance):
         native_url = evse_instance["native_url"]
-        before = status_state(native_url)
-        assert before >= 1
+        emulator_url = evse_instance["emulator_url"]
+        assert status_state(native_url) >= 1
 
         post_route(native_url, "/relay/recovery", headers=HEADERS)
 
-        # The monitor polls state every EVSE_MONITOR_STATE_TIME (30) poll
-        # periods of 1 s, so allow it comfortably more than one. What must
-        # still be true afterwards is that the RAPI link works at all and
-        # /status reports a real state.
-        deadline = time.time() + 45
-        state = 0
+        # Start a charge on the emulated vehicle, then wait for /status to show
+        # current flowing. The charging current ("amp") is only ever learned by
+        # the monitor polling the controller (every poll period), unlike the
+        # EVSE state the controller also pushes to the gateway unprompted. So
+        # /status can only report it if polling resumed after $FK; a monitor
+        # still stuck in recovery would keep showing zero.
+        for path in ("/api/ev/connect", "/api/ev/request_charge"):
+            r = requests.post(
+                f"{emulator_url}{path}", timeout=REQUEST_TIMEOUT
+            )
+            assert r.status_code == 200, f"{path}: {r.status_code}: {r.text}"
+
+        deadline = time.time() + 60
+        amp = 0
         while time.time() < deadline:
-            state = status_state(native_url)
-            if state >= 1:
+            amp = requests.get(
+                f"{native_url}/status", timeout=REQUEST_TIMEOUT
+            ).json().get("amp", 0)
+            if amp > 0:
                 break
             time.sleep(1)
-        assert state >= 1, "status never recovered to a valid EVSE state after $FK"
+        assert amp > 0, (
+            "/status never showed charging current after $FK: "
+            "monitor polling is stuck"
+        )
 
     def test_controller_still_answers_raw_rapi_after_a_recovery(self, evse_instance):
         native_url = evse_instance["native_url"]
