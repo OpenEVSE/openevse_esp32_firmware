@@ -32,7 +32,10 @@ class Mqtt : public MicroTasks::Task {
     EvseManager *_evse; // Pointer to EvseManager instance
 
     // MQTT connection state and timing
-    long _nextMqttReconnectAttempt = 0;
+    // Elapsed-time based, so retries keep working across the millis() wrap
+    // (see mqtt_reconnect.h, issue #1367).
+    unsigned long _lastMqttConnectAttempt = 0; // millis() of the last attempt
+    bool _reconnectNow = true;                 // retry on the next loop pass
     unsigned long _mqttRestartTime = 0;
     bool _connecting = false;
     unsigned long _connectStartTime = 0;  // When the current connection attempt started
