@@ -1,4 +1,3 @@
-#ifndef DISABLE_LOADSHARING
 /*
  * MIT License
  * Copyright (c) 2025 Jeremy Poulter
@@ -1127,4 +1126,3 @@ void LoadSharingPeerPoller::sendAllocationToPeer(const String& host, PeerConnect
 
   conn.wsClient->sendTXT(msg.c_str(), msg.length());
 }
-#endif // !DISABLE_LOADSHARING

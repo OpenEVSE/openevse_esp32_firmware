@@ -1,4 +1,3 @@
-#ifndef DISABLE_LOADSHARING
 /*
  * MIT License
  * Copyright (c) 2025 Jeremy Poulter
@@ -562,4 +561,3 @@ bool LoadSharingGroupState::saveGroupPeers() {
   DBUGF("LoadSharingGroupState: Saved group peers");
   return true;
 }
-#endif // !DISABLE_LOADSHARING

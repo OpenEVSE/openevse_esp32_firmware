@@ -48,9 +48,7 @@
 #include "time_man.h"
 #include "tesla_client.h"
 #include "event.h"
-#ifndef DISABLE_OCPP
 #include "ocpp.h"
-#endif
 #include "rfid.h"
 #include "current_shaper.h"
 #include "temp_throttle.h"
@@ -106,9 +104,7 @@ String currentfirmware = ESCAPEQUOTE(BUILD_TAG);
 String buildenv = ESCAPEQUOTE(BUILD_ENV_NAME);
 String serial;
 
-#ifndef DISABLE_OCPP
 OcppTask ocpp = OcppTask();
-#endif
 
 static void hardware_setup();
 static void handle_serial();
@@ -245,7 +241,6 @@ void setup()
   web_server_setup();
   DBUGF("After web_server_setup: %d", ESPAL.getFreeHeap());
 
-#ifndef DISABLE_LOADSHARING
   // Initialize load sharing group state:
   // - Load persisted group peers from LittleFS
   // - Register callback to wake poller when peer list changes
@@ -264,7 +259,6 @@ void setup()
   // Maintains WebSocket connections to group peers for real-time status updates
   loadSharingPeerPoller.begin(loadSharingGroupState);
   DBUGF("After loadSharingPeerPoller.begin: %d", ESPAL.getFreeHeap());
-#endif // !DISABLE_LOADSHARING
 #ifdef ENABLE_TSDB
   tsdbEnergyLogger.begin(evse);
   DBUGF("After tsdbEnergyLogger.begin: %d", ESPAL.getFreeHeap());
@@ -282,10 +276,8 @@ void setup()
 
   mqtt.begin();
 
-#ifndef DISABLE_OCPP
   ocpp.begin(evse, lcd, eventLog, rfid);
   DBUGF("After ocpp.begin: %d", ESPAL.getFreeHeap());
-#endif
 
   shaper.begin(evse);
   DBUGF("After shaper.begin: %d", ESPAL.getFreeHeap());

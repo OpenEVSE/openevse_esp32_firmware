@@ -277,7 +277,7 @@ static bool consume_chunk(const uint8_t *data, size_t len)
   if(mctx.streaming_app || mctx.streaming_migrator)
   {
     if(len) {
-      mbedtls_sha256_update(&mctx.dlsha, data, len);
+      mbedtls_sha256_update_ret(&mctx.dlsha, data, len);
     }
     if(!mctx.seen_first && len > 0) {
       mctx.first_byte = data[0];
@@ -361,7 +361,7 @@ static bool finalize_streamed_image(const String &expected_sha, bool check_app_m
   }
 
   uint8_t dig[32];
-  mbedtls_sha256_finish(&mctx.dlsha, dig);
+  mbedtls_sha256_finish_ret(&mctx.dlsha, dig);
   mbedtls_sha256_free(&mctx.dlsha);
   mctx.dlsha_init = false;
 
@@ -521,7 +521,7 @@ static void start_download(const String &url)
       mbedtls_sha256_free(&mctx.dlsha);
     }
     mbedtls_sha256_init(&mctx.dlsha);
-    mbedtls_sha256_starts(&mctx.dlsha, 0);
+    mbedtls_sha256_starts_ret(&mctx.dlsha, 0);
     mctx.dlsha_init = true;
 
     if(mctx.state == ST_APP) {

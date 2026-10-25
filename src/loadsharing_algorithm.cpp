@@ -1,4 +1,3 @@
-#ifndef DISABLE_LOADSHARING
 /*
  * MIT License
  * Copyright (c) 2025 Jeremy Poulter
@@ -365,4 +364,3 @@ std::vector<LoadSharingAllocation> computeAllocations(
 
   return result;
 }
-#endif // !DISABLE_LOADSHARING

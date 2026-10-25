@@ -1,4 +1,3 @@
-#ifndef DISABLE_LOADSHARING
 #if defined(ENABLE_DEBUG) && !defined(ENABLE_DEBUG_LOADSHARING_DISCOVERY)
 #undef ENABLE_DEBUG
 #endif
@@ -374,4 +373,3 @@ void LoadSharingDiscoveryTask::cleanupQuery() {
   Mdns.cancelBrowse();
   _query_in_progress = false;
 }
-#endif // !DISABLE_LOADSHARING

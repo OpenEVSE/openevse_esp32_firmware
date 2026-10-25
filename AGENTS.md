@@ -21,8 +21,8 @@ pio run -e openevse_wifi_v1        # default 4MB board
 ```
 
 First firmware build downloads ~500 MB of toolchain and takes 15–45 minutes —
-**never cancel it**; incremental builds take 2–5 minutes. Full env list and
-platform notes: [docs/developer/building.md](docs/developer/building.md).
+**never cancel it**; incremental builds take 2–5 minutes. Full env list and the
+two-core (IDF4/IDF5) subtleties: [docs/developer/building.md](docs/developer/building.md).
 
 ## Sandbox
 

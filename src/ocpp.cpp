@@ -1,4 +1,3 @@
-#ifndef DISABLE_OCPP
 /*
  * Author: Matthias Akstaller
  * Created: 2021-04-09
@@ -773,4 +772,3 @@ bool OcppTask::isConnected() {
 void OcppTask::setSynchronizationLock(bool locked) {
     synchronizationLock = locked;
 }
-#endif // !DISABLE_OCPP

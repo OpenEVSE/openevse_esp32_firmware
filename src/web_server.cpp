@@ -39,9 +39,7 @@ typedef const __FlashStringHelper *fstr_t;
 #include "app_config.h"
 #include "net_manager.h"
 #include "mqtt.h"
-#ifndef DISABLE_OCPP
 #include "ocpp.h"
-#endif
 #include "input.h"
 #include "emoncms.h"
 #include "divert.h"
@@ -690,9 +688,7 @@ void buildStatus(JsonDocument &doc) {
     doc["mqtt_error_detail"] = mqtt.getErrorDetail();
   }
 
-#ifndef DISABLE_OCPP
   doc["ocpp_connected"] = (int)OcppTask::isConnected();
-#endif
 
 #if defined(ENABLE_PN532) || defined(ENABLE_RFID)
   doc["rfid_failure"] = (int) rfid.communicationFails();
@@ -741,7 +737,6 @@ void buildStatus(JsonDocument &doc) {
   doc["ota_update"] = (int)Update.isRunning();
 
   doc["config_version"] = config_version();
-#ifndef DISABLE_LOADSHARING
   doc["loadsharing_peers_version"] = loadsharing_peers_version;
   doc["loadsharing_status_version"] = loadsharing_status_version;
 
@@ -799,7 +794,6 @@ void buildStatus(JsonDocument &doc) {
     // current is already part of groupTotalAmp -- no separate self addition.
     doc["loadsharing_group_current_total"] = groupTotalAmp;
   }
-#endif // !DISABLE_LOADSHARING
 
   doc["claims_version"] = evse.getClaimsVersion();
   doc["override_version"] = manual.getVersion();
@@ -2199,7 +2193,6 @@ void onWsFrame(MongooseHttpWebSocketConnection *connection, int flags, uint8_t *
         connection->send("{\"pong\": 1}");
       }
 
-#ifndef DISABLE_LOADSHARING
     // Handle load sharing allocation from controller (member side)
     if (!doc["loadsharing"].isNull()) {
       JsonObject ls = doc["loadsharing"];
@@ -2215,7 +2208,6 @@ void onWsFrame(MongooseHttpWebSocketConnection *connection, int flags, uint8_t *
         }
       }
     }
-#endif // !DISABLE_LOADSHARING
   }
 }
 
@@ -2649,10 +2641,8 @@ static void registerWebServerRoutes(MongooseHttpServer &server, bool isHttps)
   // onWsConnect() applies the auth gate; see wsAuthorise().
   server.on("/ws", onWsFrame)->onConnect(onWsConnect);
 
-#ifndef DISABLE_LOADSHARING
   // Setup load sharing endpoints
   web_server_load_sharing_setup(server);
-#endif
 }
 
 /**

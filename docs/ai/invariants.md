@@ -40,8 +40,8 @@ reviewers should verify each relevant item before proposing a change.
    documented priorities (see [architecture](../developer/architecture.md)) —
    subsystems never command the controller directly.
 10. The 4MB default env (`openevse_wifi_v1`) must keep fitting dual-slot OTA —
-    all envs now build on Arduino core 3.x / IDF5 (`espressif32@8.0.0`), so check
-    the CI flash-usage report for the 4MB envs; avoid changes that bloat the image.
+    stay on Arduino core 2.x / IDF4 for those boards; core-3-only APIs must be
+    version-guarded (`ESP_ARDUINO_VERSION`).
 11. Energy logging under `/logs/` has a hard 20 KB total budget on LittleFS —
     changes to `energy_logger` retention must respect it.
 
