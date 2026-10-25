@@ -296,8 +296,11 @@ def instance_pair(docker_client, emulator_image, tmp_path, request):
         # Wait a bit for resources to be released
         time.sleep(1)
 
-    def create_pair(port_offset: int = 0) -> Dict[str, Any]:
-        """Spawn one emulator+native pair."""
+    def create_pair(port_offset: int = 0, emulator_env: Dict[str, str] = None) -> Dict[str, Any]:
+        """Spawn one emulator+native pair.
+
+        emulator_env adds/overrides environment variables of the emulator container.
+        """
         emulator_port = 8080 + port_offset
         emulator_rapi_port = 8023 + port_offset
         native_port = 8000 + port_offset
@@ -330,6 +333,7 @@ def instance_pair(docker_client, emulator_image, tmp_path, request):
                     "WEB_PORT": "8080",
                     "SERIAL_MODE": "tcp",  # Use TCP mode instead of PTY
                     "SERIAL_TCP_PORT": "8023",
+                    **(emulator_env or {}),
                 },
             )
             containers.append(container)
@@ -666,3 +670,18 @@ def instance_pair_auto(instance_pair, unique_port_offset):
 def evse_instance(instance_pair_auto):
     """Backward-compatible single-instance fixture for charging integration tests."""
     return instance_pair_auto()
+
+
+@pytest.fixture
+def heartbeat_instance(instance_pair, unique_port_offset):
+    """Emulator + native firmware where the emulator supervises the heartbeat.
+
+    The native build keeps heartbeat support compiled in, so these tests can
+    watch what the firmware tells the controller via the emulator's
+    /api/evse/status "heartbeat" block. $FK is shortened so recovery tests
+    do not wait the real ~30 s.
+    """
+    return instance_pair(
+        port_offset=unique_port_offset,
+        emulator_env={"OPENEVSE_EMU_FK_SECONDS": "2"},
+    )
