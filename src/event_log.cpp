@@ -9,6 +9,7 @@
 #include "emonesp.h"
 #include "event_log.h"
 #include "event_log_space.h"
+#include "fs_util.h"
 
 EventLog::EventLog() :
   _min_log_index(0),
@@ -79,14 +80,7 @@ void EventLog::begin()
 }
 
 // Free-space guard: see event_log_space.h for when it measures and what it trusts.
-static size_t measureFreeSpace()
-{
-  size_t total = LittleFS.totalBytes();
-  size_t used = LittleFS.usedBytes();
-  return total > used ? total - used : 0;
-}
-
-static EventLogSpaceGuard freeSpace(measureFreeSpace);
+static EventLogSpaceGuard freeSpace(littlefs_free_bytes);
 
 bool EventLog::log(EventType type, EvseState managerState, uint8_t evseState, uint32_t evseFlags, uint8_t pilotState, uint32_t pilot, double energy, uint32_t elapsed, double temperature, double temperatureMax, uint8_t divertMode, uint8_t shaper, const String &rfidTag, const char *notification)
 {
