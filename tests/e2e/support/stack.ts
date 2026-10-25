@@ -58,7 +58,8 @@ function assertPortFree(port: number): Promise<void> {
 }
 
 async function stop(proc: ChildProcess | undefined) {
-  if (!proc || proc.exitCode !== null) return;
+  // A process killed by a signal has a null exitCode and an exit event that has already fired.
+  if (!proc || proc.exitCode !== null || proc.signalCode !== null) return;
   const exited = new Promise<void>((resolve) => proc.once('exit', () => resolve()));
   proc.kill('SIGTERM');
   const timer = setTimeout(() => proc.kill('SIGKILL'), 5000);

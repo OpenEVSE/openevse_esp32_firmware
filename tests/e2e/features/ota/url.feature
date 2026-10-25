@@ -3,22 +3,22 @@ Feature: Firmware fetched from a URL comes only from GitHub
   The device can fetch an update from a URL. It must only ever fetch from
   GitHub over HTTPS, and must install exactly the release GitHub published.
 
-  Scenario Outline: The device refuses to fetch firmware from <url>
-    When I ask the device to update from "<url>"
+  Scenario Outline: The device refuses to fetch firmware from <case>
+    When I ask the device to update from the refused URL "<case>"
     Then the device refuses the update
     And the device did not start writing an image
 
     Examples: URLs outside the allowed origin
-      | url                                                                                   |
-      | http://github.com/OpenEVSE/openevse_esp32_firmware/releases/download/v5.1.5/a.bin     |
-      | https://evil.example.com/openevse_wifi_v1.bin                                         |
-      | https://github.com.evil.example/openevse_wifi_v1.bin                                  |
-      | https://github.com:x@evil.example/openevse_wifi_v1.bin                                |
-      | ftp://github.com/openevse_wifi_v1.bin                                                 |
+      | case                                       |
+      | plain HTTP to GitHub                       |
+      | another host                               |
+      | a host that starts with github.com         |
+      | a host that puts github.com in the login   |
+      | a non-HTTP scheme                          |
 
   @network
   Scenario: A GitHub release URL starts a download, not an upload
-    When I ask the device to update from "https://github.com/OpenEVSE/openevse_esp32_firmware/releases/download/v5.1.5/openevse_wifi_v1.bin"
+    When I ask the device to update from the published v5.1.5 release asset
     Then the device starts the update
     And the updater was started from GitHub
 

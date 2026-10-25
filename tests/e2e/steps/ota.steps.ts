@@ -66,8 +66,24 @@ When('I upload the image to the firmware update endpoint', async ({ world }) => 
   world.ota.response = await world.device.uploadFirmware(world.ota.image!, 'openevse_wifi_v1.bin');
 });
 
-When('I ask the device to update from {string}', async ({ world }, url: string) => {
+// The URLs live here, not in the feature, so the feature reads in user-level language.
+const refusedUrls: Record<string, string> = {
+  'plain HTTP to GitHub': 'http://github.com/OpenEVSE/openevse_esp32_firmware/releases/download/v5.1.5/a.bin',
+  'another host': 'https://evil.example.com/openevse_wifi_v1.bin',
+  'a host that starts with github.com': 'https://github.com.evil.example/openevse_wifi_v1.bin',
+  'a host that puts github.com in the login': 'https://github.com:x@evil.example/openevse_wifi_v1.bin',
+  'a non-HTTP scheme': 'ftp://github.com/openevse_wifi_v1.bin',
+};
+const v515Asset = 'https://github.com/OpenEVSE/openevse_esp32_firmware/releases/download/v5.1.5/openevse_wifi_v1.bin';
+
+When('I ask the device to update from the refused URL {string}', async ({ world }, name: string) => {
+  const url = refusedUrls[name];
+  expect(url, `a refused URL named "${name}"`).toBeTruthy();
   world.ota.response = await world.device.updateFromUrl(url);
+});
+
+When('I ask the device to update from the published v5.1.5 release asset', async ({ world }) => {
+  world.ota.response = await world.device.updateFromUrl(v515Asset);
 });
 
 When('I ask the device to update from that release asset', async ({ world }) => {
@@ -80,7 +96,9 @@ Then('the device accepts the upload', async ({ world }) => {
 });
 
 Then('the device refuses the update', async ({ world }) => {
-  expect(world.ota.response?.status, world.ota.response?.body).not.toBe(200);
+  // A URL outside the allowlist fails the start of the download, which the
+  // handler reports as 500. Any other status means the request was not refused there.
+  expect(world.ota.response?.status, world.ota.response?.body).toBe(500);
 });
 
 Then('the device starts the update', async ({ world }) => {
