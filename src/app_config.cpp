@@ -5,6 +5,7 @@
 #include <EEPROM.h>             // Save config settings
 #include <ConfigJson.h>
 #include <LittleFS.h>
+#include "fs_usage.h"
 
 #include "app_config.h"
 #include "app_config_mqtt.h"
@@ -1129,8 +1130,13 @@ bool config_serialize(JsonDocument &doc, bool longNames, bool compactOutput, boo
   doc["espinfo"] = ESPAL.getChipInfo();
   doc["espflash"] = ESPAL.getFlashChipSize();
   doc["heap_size"] = (uint32_t)ESP.getHeapSize();
-  doc["littlefs_size"] = (uint32_t)LittleFS.totalBytes();
-  doc["littlefs_used"] = (uint32_t)LittleFS.usedBytes();
+  {
+    // Cached: see fs_usage.h for why this must not touch the filesystem here.
+    uint32_t lfs_total, lfs_used;
+    littlefs_usage.get(millis(), lfs_total, lfs_used);
+    doc["littlefs_size"] = lfs_total;
+    doc["littlefs_used"] = lfs_used;
+  }
   {
     const esp_partition_t *p = esp_ota_get_running_partition();
     doc["app0_size"]   = p ? (uint32_t)p->size : 0;

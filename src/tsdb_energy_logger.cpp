@@ -4,6 +4,7 @@
 #include "esp_tsdb.h"
 #include "energy_logger.h"   // MonthlyMetrics, AnnualMetrics, serialize/deserialize
 #include "debug.h"
+#include "fs_usage.h"
 #include <LittleFS.h>
 #include <time.h>
 
@@ -76,17 +77,22 @@ bool TsdbEnergyLogger::start_writer() {
     _jobs = nullptr;
     return false;
   }
+  // This task holds the FS lock for the length of each write, so it keeps the
+  // /status and /config usage numbers fresh and loopTask never waits on it.
+  littlefs_usage.setBackgroundSampler();
   return true;
 }
 
 void TsdbEnergyLogger::writer_task(void *arg) {
   TsdbEnergyLogger *self = static_cast<TsdbEnergyLogger *>(arg);
   TsdbWriteJob job;
+  littlefs_usage.refresh(millis());
   for (;;) {
     if (xQueueReceive(self->_jobs, &job, portMAX_DELAY) != pdTRUE) continue;
     if (job.rollup) self->rollup_yesterday();
     esp_err_t e = tsdb_write(job.ts, job.row);
     if (e != ESP_OK) DBUGF("tsdb_write failed: %d", e);
+    littlefs_usage.refresh(millis());
   }
 }
 
