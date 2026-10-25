@@ -231,13 +231,13 @@ Two further limits, both discovered in review rather than designed in:
   not synced (likely for a raise edge seconds after boot) and when LittleFS is
   nearly full. `log()` therefore reports whether the row landed, and the guard
   records the id only then.
-- **At most one row is logged per pass.** Each row that gets past the repeat
-  filter runs `LittleFS.totalBytes()` and `usedBytes()` for the free-space
-  guard — two full filesystem traversals, 30–140 ms each — and six to nine
-  advisories can become knowable on the same pass. The rest are still deduped by
-  id and take their row on a later 5 s tick, one per tick, for as long as they
-  stay live. The worst case is therefore still sixteen rows per boot (§5),
-  spread over at least sixteen ticks.
+- **Every eligible advisory is logged on the same pass.** The event log's
+  free-space guard measures LittleFS (`totalBytes()` + `usedBytes()`, two full
+  traversals of 30–140 ms each) on a timer rather than per call, so the six to
+  nine advisories that can become knowable on one pass cost one append each plus
+  at most one measurement. (Before that guard, each row paid for both
+  traversals, and logging was throttled to one row per pass.) The worst case is
+  still sixteen rows per boot (§5).
 - **Nothing is attempted until the clock is trusted.** `log()`'s first guard is
   `tm_year < 2021`, and at boot — when the safety rules become knowable, within
   seconds — NTP has usually not synced, so it would refuse every advisory. With
@@ -247,7 +247,7 @@ Two further limits, both discovered in review rather than designed in:
   whose clock never syncs, no notification rows are written at all — which is
   what `log()` would do anyway, and what is true now is still on
   `/notifications`. When the clock syncs late, the advisories still live at that
-  point take their rows from there, one per pass.
+  point take their rows on the next pass.
 
 Asymmetry (raised but never cleared) is deliberate. The event log is a record of
 things that happened; what is true *now* lives on `/notifications`, which is
